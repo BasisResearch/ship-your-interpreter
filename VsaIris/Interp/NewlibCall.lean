@@ -216,6 +216,60 @@ theorem ms_callNewlib (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
+/-- **A newlib call that may abort, from a run** (`jal entry` at `i`,
+`fnSpecAbort`): the return branch is `ms_callNewlib`'s; on abort, the
+continuation receives the abort resource, the run's owned bytes, and the stack
+below `s` the call did not take. Both branches come from the caller's one
+context (`∧`). -/
+theorem ms_callNewlibAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
+    (hexec : JalExec (vsaModel live) i code entry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    {P Q : BitVec 64 → IProp GF} {A : IProp GF} {vs : List (BitVec 64)} {X Y : IProp GF}
+    {s : BitVec 64} {need n : Nat} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem}
+    (hlen : vs.length ≤ 8) (hvs : ∀ i (h : i < vs.length), R (10 + i) = vs[i]) (hs : R 2 = s)
+    (hn : n ≤ s.toNat) (hneed : need ≤ n)
+    (hP : ∀ r, iprop(argsAt vs ∗ X ∗ callFrame s need Newlib.calleeSaved R) ⊢ P r)
+    (hQ : ∀ r, Q r ⊢ iprop(clobbered argRegs ∗ Y ∗ callFrame s need Newlib.calleeSaved R)) :
+    fnSpecAbort Wp entry P Q A ∗ codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ X ∗ stackScratch s n ∗
+      gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗
+      ((∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ Y -∗
+          ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+          stackScratch s n -∗ Wp.W Φ) ∧
+        (A -∗ blockOwn (s.toNat - n) (n - need) -∗ ownSet S (fun a => a ↦ₘ imgM Mt a) -∗ Wp.W Φ))
+    ⊢ Wp.W Φ := by
+  unfold ms
+  iintro ⟨#Hspec, #Hcode, ⟨Hpc, Hra, Hregs, HS⟩, HX, Hst, #Hgp, #Himg, Hk⟩
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hneed $$ Hst
+  ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib R).1 $$ Hregs
+  ihave Hargs := argsAt_of_regs R vs hlen hvs $$ Hargs
+  ihave Htmp := clobbered_of_fn _ R $$ Htmp
+  rw [hs]
+  iapply wp_callAbort Wp hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hargs HX Hsp Hcs Htmp Hst]
+  · iapply hP
+    unfold callFrame
+    iframe Hargs HX Hsp Hcs Hst Hgp Himg Htmp
+  isplit
+  · iintro Hpc Hra HQ
+    ihave Hk := and_elim_l $$ Hk
+    ihave ⟨Hargs, HY, Hcf⟩ := hQ _ $$ HQ
+    unfold callFrame
+    icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
+    ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
+    · iframe Hslack Hst
+    ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
+    · iframe Hargs Htmp Hsp Hcs
+    iapply Hk $$ %R' %hk HY [Hpc Hra Hregs HS] Hst
+    rw [regFile_upd_ra]
+    simp only [upd_same]
+    iframe Hpc Hra Hregs HS
+  · iintro HA
+    ihave Hk := and_elim_r $$ Hk
+    iapply Hk $$ HA Hslack HS
+
 /-- A tracked part of a run's owned bytes, out of its state. -/
 theorem ms_split {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
     (hd : ∀ a, S a → ¬ T a) :

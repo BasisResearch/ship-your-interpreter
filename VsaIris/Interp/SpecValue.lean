@@ -1,6 +1,7 @@
 import VsaIris.Interp.SpecEval
 import VsaIris.Interp.Abort
 import VsaIris.Vsa.NewlibOut
+import VsaIris.Vsa.RuntimeError
 
 /-!
 # The value helpers and the natives: the statements (lane H2)
@@ -63,6 +64,8 @@ abbrev callerSaved : List Nat := [5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 2
 def printNeed : Nat := fprintfNeed
 def nativePrintNeed : Nat := 80 + printNeed
 def nativePrintlnNeed : Nat := 48 + nativePrintNeed
+/-- `native_assert`'s frame and `runtime_error`'s stack (H5). -/
+def nativeAssertNeed : Nat := 80 + Newlib.RtErr.rtErrNeed
 
 /-- The machine entry addresses of the natives are distinct (the concrete
 image's: `InterpRunPhysicalFacts`). `value_equal` compares natives by them. -/
@@ -204,6 +207,31 @@ def nativePrintlnSpec (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs :
       stackAt s nativePrintlnNeed)
     (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
       consoleOwn (o ++ printArgs st vs ++ "\n") ∗ stackAt s nativePrintlnNeed))
+
+/-- `native_assert(sret, in, argc, args, line)`, a function that returns OR
+aborts (`fnSpecAbort`). With one or two arguments, the first truthy, it
+returns `null`: the premise of `Call.assertOk`. Otherwise it calls
+`runtime_error(in, line, …)` (H5's `rtErr_spec`: the arity message, or `"%s"`
+with `"assertion failed"` or the second argument's string), which never
+returns: the abort branch receives H5's `abortRes` over the whole stack below
+`s`, and the result slot and the arguments back. The world and the `jmp_buf`
+(read-only at `jb`, its `ra` word aligned) are `runtime_error`'s. -/
+def nativeAssertSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred)
+    (sret inp args s line : BitVec 64) (vs : List Value) (ρ : Regime) (st : St) (d : Nat)
+    (jb : Nat → BitVec 8) : IProp GF :=
+  iprop(∀ rv : Nat → BitVec 64, fnSpecAbort Wp nativeAssertPC
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ regFile rv ∗
+      ⌜rv 10 = sret ∧ rv 11 = inp ∧ rv 12 = BitVec.ofNat 64 vs.length ∧ rv 13 = args ∧
+        rv 14 = line ∧ rv 2 = s⌝ ∗ codeRes ∗ slot24 sret.toNat ∗
+      ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31 ∧ Newlib.RtErr.InpGeom inp ∧
+        (jbWord inp.toNat jb 0).toNat % 4 = 0⌝ ∗
+      valsAt N args.toNat vs ∗ binImg ∗ jmpRO inp.toNat jb ∗ world N L Room inp.toNat ρ st d ∗
+      stackAt s nativeAssertNeed))
+    (fun _ => iprop(∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
+      ⌜∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true⌝ ∗ valAt N sret.toNat .null ∗
+      valsAt N args.toNat vs ∗ world N L Room inp.toNat ρ st d ∗ stackAt s nativeAssertNeed))
+    iprop(abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
+      valsAt N args.toNat vs))
 
 end Specs
 
