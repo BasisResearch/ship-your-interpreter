@@ -168,6 +168,117 @@ namespace VsaIris.Interp
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
+/-! ## The `EX_FN` node -/
+
+/-- A signed word load equal to a small value pins the stored word. -/
+theorem ldvf_lw_eq_small {f : Nat → BitVec 8} {a k j : Nat} (h : imgLE f a 4 = k) (hj : j < 2 ^ 31)
+    (he : ldvf .lw f a = BitVec.ofNat 64 j) : k = j := by
+  by_cases hk : k < 2 ^ 31
+  · rw [ldvf_lw_imgLE h hk] at he
+    have := congrArg BitVec.toNat he
+    simp only [BitVec.toNat_ofNat] at this
+    rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at this
+    exact this
+  · exfalso
+    have hw := toNat_append4 f a
+    rw [h] at hw
+    have hk32 : k < 2 ^ 32 := by have := imgLE_lt f a 4; omega
+    have := congrArg BitVec.toNat he
+    simp only [ldvf, bytesAt4, bytesVal, widthOfM, List.getD_cons_zero, List.getD_cons_succ,
+      LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.toNat_signExtend] at this
+    have hmsb : ((((f (a + 3)).append (f (a + 2))).append (f (a + 1))).append (f a) :
+        BitVec (8 * 4)).msb = true := by
+      rw [BitVec.msb_eq_decide]; simp only [decide_eq_true_eq]; omega
+    rw [hmsb] at this
+    simp only [ite_true, BitVec.toNat_setWidth, BitVec.toNat_ofNat] at this
+    rw [hw] at this
+    omega
+
+theorem paramsRepr_length {m : Mem} {P : Nat → Prop} :
+    ∀ {a n : Nat} {ps : List String}, ParamsReprWithin m P a n ps → ps.length = n
+  | _, _, _, .nil => rfl
+  | _, _, _, .cons _ _ _ hrest => by simp [paramsRepr_length hrest]
+
+/-- The bytes of an `EX_FN` node the call reads: the name, parameter array
+and count words, and the body pointer (not the tag). -/
+abbrev fnView (q : Nat) : List Nat := accAddrs (q + 8) 20 ++ accAddrs (q + 32) 8
+
+/-- What an `EX_FN` node gives the call's runs. -/
+structure FnNode (m : Mem) (P : Nat → Prop) (q : BitVec 64) (paramc : Nat) (prm bod nam : BitVec 64) :
+    Prop where
+  pcr : imgLE (imgM m) (q + 24#64).toNat 4 = paramc
+  prm : ldv .ld m (q + 16#64).toNat = prm
+  bod : ldv .ld m (q + 32#64).toNat = bod
+  nam : ldv .ld m (q + 8#64).toNat = nam
+  lo : 0x80000000 ≤ q.toNat
+  hi : q.toNat + 40 ≤ 0x100000000
+  off : q.toNat + 40 ≤ tohostAddr ∨ tohostAddr + 16 ≤ q.toNat
+  view : ∀ a ∈ fnView q.toNat, P a ∧ (m[a]?).isSome
+
+theorem readLE_imgM {m : Mem} {a n v : Nat} (h : readLE m a n = some v) : imgLE (imgM m) a n = v := by
+  have := readLE_of_img (m := m) (img := imgM m) (a := a) (n := n) (fun i hi => by
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 (isSome_of_readLE h hi)
+    rw [hb]; simp [imgM, hb])
+  rw [this] at h; cases h; rfl
+
+/-- An `EX_FN` node's facts, from its representation over a geometric view. -/
+theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option String}
+    {ps : List String} {ss : List Stmt}
+    (h : ExprReprWithin m P q.toNat (.fn name ps ss)) (hg : ∀ k, P k → ReadOK k) :
+    ∃ prm bod nam : Nat, FnNode m P q ps.length (BitVec.ofNat 64 prm) (BitVec.ofNat 64 bod)
+        (BitVec.ofNat 64 nam) ∧ prm < 2 ^ 64 ∧ bod < 2 ^ 64 ∧ nam < 2 ^ 64 ∧
+      ParamsReprWithin m P prm ps.length ps ∧ StmtReprWithin m P bod (.block ss) ∧
+      (name = none ∧ nam = 0 ∨ ∃ x, name = some x ∧ nam ≠ 0 ∧ CStringWithin m P nam x) := by
+  have core : ∀ (nam prm pc bod : Nat), read32 m q.toNat = some 10 → Covers P q.toNat 4 →
+      read64 m (q.toNat + 8) = some nam → Covers P (q.toNat + 8) 8 →
+      read64 m (q.toNat + 16) = some prm → Covers P (q.toNat + 16) 8 →
+      read32 m (q.toNat + 24) = some pc → Covers P (q.toNat + 24) 4 →
+      ParamsReprWithin m P prm pc ps →
+      read64 m (q.toNat + 32) = some bod → Covers P (q.toNat + 32) 8 →
+      StmtReprWithin m P bod (.block ss) →
+      FnNode m P q ps.length (BitVec.ofNat 64 prm) (BitVec.ofNat 64 bod) (BitVec.ofNat 64 nam) ∧
+        prm < 2 ^ 64 ∧ bod < 2 ^ 64 ∧ nam < 2 ^ 64 ∧ ParamsReprWithin m P prm ps.length ps := by
+    intro nam prm pc bod hk ck hn cn hp cp hc cc hps hb cb _
+    have hlen := paramsRepr_length hps
+    subst hlen
+    have g0 := hg _ (ck 0 (by omega)); have g39 := hg _ (cb 7 (by omega))
+    have e : ∀ c, c ≤ 32 → (q + BitVec.ofNat 64 c).toNat = q.toNat + c := fun c hc => by
+      have := g39.hi; simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega
+    refine ⟨⟨?_, ?_, ?_, ?_, g0.lo, ?_, ?_, ?_⟩, readLE_lt hp, readLE_lt hb, readLE_lt hn, hps⟩
+    · rw [e 24 (by omega)]; exact readLE_imgM hc
+    · rw [e 16 (by omega)]; exact ldv_ld_read64 hp
+    · rw [e 32 (by omega)]; exact ldv_ld_read64 hb
+    · rw [e 8 (by omega)]; exact ldv_ld_read64 hn
+    · have := g39.hi; omega
+    · have h0 := g0.off; have h8 := (hg _ (cn 0 (by omega))).off; have h15 := (hg _ (cn 7 (by omega))).off
+      have h16 := (hg _ (cp 0 (by omega))).off; have h23 := (hg _ (cp 7 (by omega))).off
+      have h24 := (hg _ (cc 0 (by omega))).off; have h27 := (hg _ (cc 3 (by omega))).off
+      have h32 := (hg _ (cb 0 (by omega))).off; have h39 := g39.off
+      have h3 := (hg _ (ck 3 (by omega))).off
+      simp only [Nat.add_zero] at *; omega
+    · intro a ha
+      simp only [List.mem_append, mem_accAddrs_iff] at ha
+      rcases ha with ⟨h1, h2⟩ | ⟨h1, h2⟩
+      · by_cases j1 : a < q.toNat + 16
+        · obtain ⟨j, rfl⟩ : ∃ j, a = q.toNat + 8 + j := ⟨a - (q.toNat + 8), by omega⟩
+          exact ⟨cn j (by omega), isSome_of_readLE hn (by omega)⟩
+        · by_cases j2 : a < q.toNat + 24
+          · obtain ⟨j, rfl⟩ : ∃ j, a = q.toNat + 16 + j := ⟨a - (q.toNat + 16), by omega⟩
+            exact ⟨cp j (by omega), isSome_of_readLE hp (by omega)⟩
+          · obtain ⟨j, rfl⟩ : ∃ j, a = q.toNat + 24 + j := ⟨a - (q.toNat + 24), by omega⟩
+            exact ⟨cc j (by omega), isSome_of_readLE hc (by omega)⟩
+      · obtain ⟨j, rfl⟩ : ∃ j, a = q.toNat + 32 + j := ⟨a - (q.toNat + 32), by omega⟩
+        exact ⟨cb j (by omega), isSome_of_readLE hb (by omega)⟩
+  cases h with
+  | fnNamed hk ck hn cn hne hstr hp cp hc cc hps hb cb hbody =>
+    rename_i nam prm pc bod x
+    obtain ⟨f, h1, h2, h3, h4⟩ := core nam prm pc bod hk ck hn cn hp cp hc cc hps hb cb hbody
+    exact ⟨prm, bod, nam, f, h1, h2, h3, h4, hbody, .inr ⟨x, rfl, hne, hstr⟩⟩
+  | fnAnon hk ck hn cn hp cp hc cc hps hb cb hbody =>
+    rename_i prm pc bod
+    obtain ⟨f, h1, h2, h3, h4⟩ := core 0 prm pc bod hk ck hn cn hp cp hc cc hps hb cb hbody
+    exact ⟨prm, bod, 0, f, h1, h2, h3, h4, hbody, .inl ⟨rfl, rfl⟩⟩
+
 -- Run K1a: the kind tests (`4`: a closure), the callee copied to `sp+120`,
 -- the line; stop before the closure object's load.
 #ix_seg CallK_runA {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
