@@ -138,4 +138,126 @@ theorem free_nt {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n b
     rw [BitVec.toNat_and, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnnlt,
       show (1#64 : BitVec 64).toNat = 2 ^ 1 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod]
 
+/-- Facts every path below the top reads off `FNt`: the geometry of `x` and
+`d`, and `d`'s header. -/
+structure FNtGeo (C : MCtx) (Mt : Mem) (d : Chunk) (x sz : Nat) : Prop where
+  x16 : x % 16 = 0
+  xlo : 0x8001c170 ≤ x
+  sz16 : sz % 16 = 0
+  sz32 : 32 ≤ sz
+  d16 : (x + sz) % 16 = 0
+  dsz16 : d.size % 16 = 0
+  dsz32 : 32 ≤ d.size
+  dend : x + sz + d.size ≤ C.top0
+  top : C.top0 + 16 ≤ heapEnd
+  dhdr : ∃ hd, read64 Mt (x + sz + 8) = some hd ∧ chunkSize hd = d.size ∧ hd % 4 < 2
+  xfoot : ∀ a, x + 8 ≤ a → a < x + sz + 8 → vsaFoot C.H a
+  hfoot : ∀ k, k < 8 → vsaFoot C.H (x + 8 + k)
+  nfoot : ∀ k, k < 8 → vsaFoot C.H (x + sz + 8 + k)
+
+theorem FNt.geo {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₁ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    (N : FNt C R Mt Mt1 brkv cs₁ cs₃ d bins x sz hdr0 hnn w) : FNtGeo C Mt d x sz := by
+  have HH := N.heap.heap.heap
+  have hX : (⟨x, sz, true⟩ : Chunk) ∈ cs₁ ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  have hD : d ∈ cs₁ ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  have hXb := HH.walk.chunk_bounds _ hX
+  have hDb := HH.walk.chunk_bounds _ hD
+  obtain ⟨hal, _⟩ := HH.aligned
+  have hx16 := hal _ hX; have hd16 := hal _ hD
+  have hs := walk_sizes HH.walk _ hX; have hds := walk_sizes HH.walk _ hD
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := N.heap.heap.top_room
+  simp only at hXb hx16 hs
+  rw [N.daddr] at hd16 hDb
+  obtain ⟨hd, hdr, hds', hdl⟩ := walk_header HH.walk d hD
+  rw [N.daddr] at hdr
+  unfold heapStart at hXb
+  exact ⟨hx16, hXb.1, hs.1, hs.2, hd16, hds.1, hds.2, hDb.2.1, by omega, ⟨hd, hdr, hds', hdl⟩,
+    fun a h1 h2 => foot_of_chunk N.heap hX N.hno h1 h2,
+    foot_header N.heap.heap (.inr ⟨_, hX, rfl⟩),
+    by rw [← N.daddr]; exact foot_header N.heap.heap (.inr ⟨_, hD, rfl⟩)⟩
+
+/-- A footprint doubleword lies wholly below or above the stack window. -/
+theorem off_stack_of {C : MCtx} {a : Nat}
+    (hd : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a)
+    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) : a + 8 ≤ C.s.toNat - 256 ∨ C.s.toNat ≤ a := by
+  refine Classical.byContradiction fun hc => ?_
+  have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
+    unfold mHead; split <;> omega
+  exact hd _ (by unfold mHead at *; split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
+
+/-- **Both neighbours in use** (`0x80007484`): `x`'s header keeps its
+`PREV_INUSE`, its footer is written, and it goes to its bin. -/
+theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat}
+    {cs₁ cs₃ : List Chunk} {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    (N : FNt C R Mt Mt1 brkv cs₁ cs₃ d bins x sz hdr0 hnn w) (hprev : hdr0 % 2 = 1)
+    (hdin : d.inuse = true) :
+    AW C.live C.S C.Q 0x80007484#64 R Mt1 := by
+  have G := N.geo
+  have hx16 := G.x16; have hxlo := G.xlo; have hs16 := G.sz16; have hs32 := G.sz32
+  have hdend := G.dend; have htop := G.top; have hds32 := G.dsz32
+  unfold heapEnd at htop
+  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
+  obtain ⟨hd0, hd0r, hd0s, _⟩ := G.dhdr
+  have ha1 := N.a1; have ha2 := N.a2; have ha0 := N.a0
+  have hdrlt := Vsa.Sim.read64_lt _ _ _ N.hdr
+  have hor : (hdr0 ||| 1) = hdr0 := by
+    have h1 : (hdr0 ||| 1) / 2 = hdr0 / 2 := by
+      have := Nat.or_div_two_pow (a := hdr0) (b := 1) (n := 1); simpa using this
+    have h2 : (hdr0 ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
+    have := Nat.div_add_mod (hdr0 ||| 1) 2; have := Nat.div_add_mod hdr0 2
+    omega
+  refine st_80007484 O.live ?_
+  have hE8 : (R 11 + sign_extend (m := 64) (0xff8#12)).toNat = x + 8 := by
+    sx_norm; rw [BitVec.toNat_add, ha1]; simp; omega
+  have hEn : (R 12 + sign_extend (m := 64) (0x000#12)).toNat = x + sz := by
+    sx_norm; rw [ha2]
+  have hof := off_stack_of N.disj G.hfoot
+  have hoF := off_stack_of (a := x + sz) N.disj (fun k hk => G.xfoot _ (by omega) (by omega))
+  refine st_80007488 O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  · rw [hE8]; unfold StOK Vsa.Sim.tohostAddr; omega
+  · rw [hE8]; exact O.foot G.hfoot
+  rw [hE8]
+  refine st_8000748c O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · rw [hEn]; unfold StOK Vsa.Sim.tohostAddr; omega
+  · rw [hEn]; exact O.foot (fun k hk => G.xfoot _ (by omega) (by omega))
+  rw [hEn]
+  have hval : (R 10 ||| sign_extend (m := 64) (0x001#12)).toNat = hdr0 := by
+    sx_norm; rw [BitVec.toNat_or, ha0]; simpa using hor
+  generalize hMp : writeLog (writeLog Mt1 [(x + 8, 8, R 10 ||| sign_extend (m := 64) (0x001#12))])
+    [(x + sz, 8, R 15)] = Mp
+  have hM1 := N.mem
+  have B : FBin C Mp Mt x sz C.top0 brkv cs₁ (d :: cs₃) bins := by
+    refine ⟨N.heap, Nat.le_refl _, N.hno, fun h0 hh0 => ?_, fun d' hd' => ?_, by omega,
+      ?_, ?_, fun hd hr => ?_, ?_, N.disj, ?_⟩
+    · rw [N.hdr] at hh0; cases hh0; exact hprev
+    · simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hd'; rw [← hd']; exact hdin
+    · intro w0 hw0 hr0
+      refine agree_of_words (P := fun a => vsaFoot C.H a ∧ ¬ (x + sz ≤ a ∧ a < x + sz + 16)) [x + 8]
+        (fun w' hw' => ?_) (fun a ha hout => ?_) w0 ⟨hw0, hr0⟩
+      · simp only [List.mem_singleton] at hw'; subst hw'
+        refine ⟨hdr0, ?_, N.hdr⟩
+        rw [← hMp, rd_miss (by omega), read64_store_hit, hval]
+      · simp only [List.mem_singleton, forall_eq] at hout
+        have := ha.2
+        rw [← hMp, hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+    · rw [← hMp, read64_store_hit, N.a5]
+    · rw [hd0r] at hr; cases hr
+      have hds16 := G.dsz16
+      refine ⟨d.size, ?_, by unfold chunkSize at hd0s ⊢; omega, by omega,
+        by unfold prevInuse; simp; omega⟩
+      rw [← hMp, rd_miss (by omega), rd_miss (by omega), hM1, read64_store_hit, N.wv]
+    · intro a ha
+      rw [← hMp]; exact writeLog_present _ _ _ (writeLog_present _ _ _ (N.pres a ha))
+    · rw [← hMp]
+      exact frame_store (fun b h1 h2 => .inl (G.xfoot b (by omega) (by omega)))
+        (frame_store (win_foot G.hfoot) N.frameM)
+  have F : FFrame C (upd R 10 (R 10 ||| sign_extend (m := 64) (0x001#12))) Mp := by
+    rw [← hMp]
+    exact ((N.frame.store (a := x + 8) (w := 8) (by omega)).store (a := x + sz) (w := 8)
+      (by omega)).of_regs (upd_other _ _ (by decide)) (upd_other _ _ (by decide))
+      (upd_other _ _ (by decide)) (upd_other _ _ (by decide))
+  exact free_bin2 O F B (by rw [upd_other _ _ (by decide)]; exact N.a7)
+    (by rw [upd_other _ _ (by decide)]; exact N.a4) (by rw [upd_other _ _ (by decide)]; exact N.a5)
+
 end VsaIris.VsaHeap
