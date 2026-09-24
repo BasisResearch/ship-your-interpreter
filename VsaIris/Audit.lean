@@ -17,6 +17,7 @@ import VsaIris.Interp.ProofValueEqual
 import VsaIris.Interp.ProofValuePrint
 import VsaIris.Interp.ProofNativePrint
 import VsaIris.Interp.ProofNativePrintln
+import VsaIris.Interp.ProofNativeAssert
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -128,3 +129,5 @@ import VsaIris.Interp.ProofNativePrintln
 #print axioms VsaIris.Interp.valuePrint_spec
 #print axioms VsaIris.Interp.nativePrint_spec
 #print axioms VsaIris.Interp.nativePrintln_spec
+#print axioms VsaIris.Interp.nativeAssert_spec
+#print axioms VsaIris.Interp.ms_callNewlibAbort

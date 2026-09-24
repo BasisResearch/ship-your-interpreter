@@ -1064,6 +1064,61 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   exact ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
     by ix_reg; exact f.h2, f.hargs⟩
 
+theorem kindTag_str {v : Value} (h : Vsa.RuntimeRepr.kindTag v = 3) : ∃ t, v = .str t := by
+  cases v <;> simp only [Vsa.RuntimeRepr.kindTag] at h <;> first | exact ⟨_, rfl⟩ | omega
+
+/-- **`native_assert`**, for either WP, given H5's `NewlibHoles`: with one or
+two arguments, the first truthy, it returns `null`; otherwise it aborts
+through `runtime_error`. -/
+theorem nativeAssert_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
+    (HN : NewlibHoles) (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs) (L : DlLayout)
+    (Room : RoomPred) (sret inp args s line : BitVec 64) (vs : List Value) (ρ : Regime) (st : St)
+    (d : Nat) (jb : Nat → BitVec 8) :
+    ⊢ nativeAssertSpec (vsaModel live) N Wp L Room sret inp args s line vs ρ st d jb := by
+  unfold nativeAssertSpec fnSpecAbort
+  iintro %rv !> %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨h10, h11, h12, h13, h14, h2⟩, #Hcode, Hsl,
+    %⟨hg, ha, hn, hinp, hjb⟩, Hvs, #Himg, #Hjb, Hw, ⟨Hst, %hsg⟩⟩ Hk
+  have hs1 := hsg.le; have hs2 := hsg.lo; have hs3 := hsg.hi; have hs4 := hsg.al
+  simp only [Vsa.Sim.LayoutInstance.stackSL] at hs2 hs3
+  have hs0 : 0x87800000 + nativeAssertNeed ≤ s.toNat := by
+    unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1 hs2 ⊢
+    show 2273312768 + (80 + (224 + 1024)) ≤ s.toNat
+    omega
+  ihave ⟨%Margs, HA, #Hv⟩ := valsAt_tracked N vs args.toNat $$ Hvs
+  ihave ⟨Hst, HF⟩ := naFrame_split (s := s) hs1 $$ Hst
+  ihave ⟨%f, HF⟩ := ownSet_fn _ $$ HF
+  ihave ⟨%Mf, HF⟩ := ownSet_mem _ f $$ HF
+  ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [HF HA]
+  · iframe HF HA
+  have c : NaCtx live sret inp args s line r vs.length rv jb :=
+    ⟨hlive, hal, h10, h11, h12, h13, h14, h2, hs0, hs3, hs4, hg, ha, hn, hinp, hjb, hdfa⟩
+  have hms : ms (GF := GF) nativeAssertPC (upd rv 1 r) (npF s args vs.length) M =
+      iprop(PC ↦ᵣ nativeAssertPC ∗ ra ↦ᵣ r ∗ regFile rv ∗
+        ownSet (fun a => InExt (s.toNat - 80, 80) a ∨ InExt (args.toNat, 24 * vs.length) a)
+          (fun a => a ↦ₘ imgM M a)) := by
+    unfold ms; rw [regFile_upd_ra]; simp only [upd_same]
+  by_cases hok : vs.length = 1 ∨ vs.length = 2
+  · have hB : ∀ R' M', NaFacts sret inp args s line r vs.length (vs[0]'(by omega)) rv R' M' Margs →
+        NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs ∗
+          ms 0x80002e48#64 R' (npF s args vs.length) M' ⊢ Wp.W Φ := by
+      intro R' M' f
+      cases htr : (vs[0]'(by omega)).truthy
+      · rcases hok with h1 | h2
+        · exact na_falsy1 Wp HN hcl c rfl (.inl h1) f htr h1
+        · by_cases hk3 : Vsa.RuntimeRepr.kindTag (vs[1]'(by omega)) = 3
+          · obtain ⟨t, ht⟩ := kindTag_str hk3
+            exact na_falsy2s Wp HN hcl c rfl (.inr h2) f htr h2 ht
+          · exact na_falsy2o Wp HN hcl c rfl (.inr h2) f htr h2 hk3
+      · exact na_truthyPath Wp c rfl hok f htr
+    iapply na_head Wp c rfl hok hMa hB
+    unfold NaRest
+    rw [hms]
+    iframe Hcode Himg Hsl Hv Hjb Hw Hst Hk Hpc Hra Hregs HM
+  · iapply na_badPath Wp HN hcl c rfl hok hMa
+    unfold NaRest
+    rw [hms]
+    iframe Hcode Himg Hsl Hv Hjb Hw Hst Hk Hpc Hra Hregs HM
+
 end Glue
 
 end VsaIris.Interp

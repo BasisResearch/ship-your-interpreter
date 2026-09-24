@@ -111,3 +111,4 @@ import VsaIris.Interp.NewlibCall
 import VsaIris.Interp.ProofValuePrint
 import VsaIris.Interp.ProofNativePrint
 import VsaIris.Interp.ProofNativePrintln
+import VsaIris.Interp.ProofNativeAssert
