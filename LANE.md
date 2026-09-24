@@ -70,45 +70,35 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   `alloc.freeLocalRun` and their HOLES rows are deleted.
 
 ## Holes
-- Left: `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
+- None left in `IrisHoles.alloc`: the field is deleted (`VsaIris/Interp/Specs.lean`), and
+  `allocSpecs` (`VsaIris/Vsa/AllocHoles.lean`) builds every allocator spec from the six
+  proved runs. `check_iris_holes.py`: 4 ledgered holes, all `newlib.*` (H5).
 
 - **`sltu` step** (`Vsa/AllocSltu.lean`): `swp_alu` (any observational ALU step as one `SWP`
   step) and `st_800052d0`.
 
-- **`_realloc_r` in progress**: interface correction (`ReallocLocalRun` needs `nNew < 2^64`,
+- **`realloc` discharged**: `reallocChgRun_proved`, `reallocLocalRun_proved`
+  (`Vsa/ReallocRunAll.lean`: the wrapper `realloc_entry`, `realloc_body`, the entry heap
+  `rHeap_entry` over `ft0`, the contexts `rLocCtx`/`rChgCtx` with `rOK_loc`/`rOK_chg`; the
+  counted regime refutes NULL through `Starved`). Axioms: propext, Classical.choice,
+  Quot.sound (`HeapAudit.lean`).
+- **`_realloc_r` in detail**: interface correction (`ReallocLocalRun` needs `nNew < 2^64`,
   `PROOF_CLOSURE_PLAN.md`); context `ReallocCtx.lean` (`ROK`, `RRet`, `RNull`, `RHeap`, epilogue
   `repi`), prologue and error return (`ReallocPro.lean`), nested calls `rcall_malloc`/`rcall_free`
-  (`ReallocCall.lean`), heap edits `PHeapAt.cut`/`reblock`/`growTop`/`fresh_of_block`
-  (`HeapRealloc.lean`), the tail join `realloc_tail` (`ReallocTail.lean`), the dispatch
-  `realloc_dec` (`ReallocDec.lean`: a chunk already big enough), word copies `copyW`/`copyW_spec`
-  (`ReallocCopy.lean`), `memmove_fwd` (`ReallocMove.lean`); the whole malloc path
-  `realloc_mal` (`ReallocMal.lean`: inline copies, `memmove`, nested `_malloc_r`/`_free_r`,
-  the merge with a new chunk right after the old one); `realloc_next` (a free successor,
-  `ReallocNext.lean`); `realloc_topgrow` (into the top, `ReallocTop.lean`).
+  (`ReallocCall.lean`), heap edits `PHeapAt.cut`/`reblock`/`growTop`/`setTop`/`fresh_of_block`/
+  `addBlock` (`HeapRealloc.lean`), the tail join `realloc_tail` (`ReallocTail.lean`), the dispatch
+  `realloc_dec` (`ReallocDec.lean`), word copies `copyW`/`copyW_spec`/`copyW_agreeOn`
+  (`ReallocCopy.lean`, `ReallocPrev.lean`), `memmove_fwd` (`ReallocMove.lean`); the malloc path
+  `realloc_mal` (`ReallocMal.lean`); `realloc_next` over `next_absorb` (`ReallocNext.lean`);
+  `realloc_topgrow` (`ReallocTop.lean`); the predecessor paths `realloc_pvX`, `realloc_pvXN`,
+  `realloc_pvT` (`ReallocPrev{,N,T}.lean`, sharing `pvG_rt` over a virtual pre-state `PvIn`);
+  the growth dispatch `realloc_grow` (`ReallocGrow.lean`).
 - **Strengthened contract** (`PROOF_CLOSURE_PLAN.md`): `MRet`/`MHeap`/`TakeRet` carry
   `LiveKeep` (live blocks' chunks survive `_malloc_r`), which the merge path needs.
-- The three predecessor paths: `realloc_pvX` (`ReallocPrev.lean`), `realloc_pvXN`
-  (`ReallocPrevN.lean`), `realloc_pvT` (`ReallocPrevT.lean`). Shared: `pvG_rt` (the tail over
-  a virtual pre-state `PvIn`), `next_absorb` (`NAbs`, factored out of `realloc_next`), the
-  copies `pv{A,N,T}_inline`/`pv*_mm`, the heap edit `PHeapAt.setTop` (`growTop` generalised to
-  shrinking).
-- The growth dispatch `realloc_grow` (`ReallocGrow.lean`: `grow_top`, `grow_free`, `grow_used`,
-  `grow_pvX`, `prev_load`); `realloc_dec` hands it `a3 = hdr0` (`RD` no longer carries `a3`).
-- Left for realloc: the wrapper `realloc` (`0x8000527c`), the top-level contexts and runs,
-  the field deletion.
 
-## Next: `_realloc_r` (`0x80005290`, wrapper `realloc` `0x8000527c`)
-Paths (X = p-16 of size S, nb = normalized request, T = tail `0x80005414`):
-- error (`nb` < `nNew` or `nb` ≥ 2^31, `0x800054b8`): errno, NULL, no unlock; counted refutes.
-- S ≥ nb → T. Next free and S+ns ≥ nb → unlink next (`0x80005400`) → T.
-- next is top (`0x800054dc`): S+ts ≥ nb+32 → grow into top (`0x80005740`, return p);
-  else prev free and ps+S+ts ≥ nb+32 → unlink prev, copy to prev+16, top at prev+nb (`0x80005510`).
-- prev free (and next free) with enough room: `0x8000566c` (prev+X+next) / `0x800055e4`
-  (prev+X): unlink, copy to prev+16 → T.
-- else malloc (`0x80005350`, nested `_malloc_r(nNew)`, `MCtx` with H := (p,nOld)::H):
-  NULL → unlock, return 0 (`0x800057c8`); newp = next chunk → merge (`0x800055b0`) → T;
-  else copy (inline ≤ 72 bytes or `memmove` `0x800069c4`), nested `_free_r(p)`, return newp.
-- T: remainder > 31 → split, `_free_r(rem+16)` nested (a zero-length live block at rem+16);
-  else no split; next header |= 1; unlock; return s0.
-Copies are forward word copies (dst ≤ src or disjoint): one `copyW` memory for inline and
-`memmove` (forward path only: its backward branch is refuted).
+## Next
+- `AllocSpecs` exposes the uncounted realloc spec only; `reallocChgRun_proved` is ready for a
+  counted `DlReallocChgImpl` field when a consumer needs it (`reallocChgSpec_of_run`).
+- The three predecessor copies (`pv{A,N,T}_inline`) are one unrolled shape at three code
+  addresses, generated here by address substitution; a copy descriptor over step lemmas
+  would replace them if a fourth site appears.
