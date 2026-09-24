@@ -330,4 +330,220 @@ theorem pvT_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : M
       (fun i hi => by omega) a ha
   · rw [hK.s1]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
 
+/-- The machine memory after unlinking the free predecessor `P` agrees with
+the coalesced virtual heap `coalW` over the same memory off `P`'s header. -/
+theorem pv_agree_self {C : MCtx} {Mt : Mem} {P ps S hdr0 predP succP : Nat}
+    (G : PvGeo C P ps S predP succP) (hdr : read64 Mt (P + ps + 8) = some hdr0)
+    {v1 v2 : BitVec 64} (h1 : v1.toNat = predP) (h2 : v2.toNat = succP) :
+    ∀ w0, ¬ (P + 8 ≤ w0 ∧ w0 < P + 16) →
+      (writeLog (writeLog Mt [(succP + 24, 8, v1)]) [(predP + 16, 8, v2)])[w0]? =
+      (coalW Mt P ps S hdr0 hdr0 predP succP)[w0]? := by
+  have hp16 := G.p16; have hplo := G.plo; have hps16 := G.psz16; have hps32 := G.psz32
+  have hpp16 := G.pp16; have hsp16 := G.sp16; have hpplo := G.pplo; have hsplo := G.splo
+  have sP := G.sP; have sX := G.sX; have pP := G.pP; have pX := G.pX
+  have hdlt := Vsa.Sim.read64_lt _ _ _ hdr
+  intro w0 h1'
+  refine agree_of_words (P := fun x => ¬ (P + 8 ≤ x ∧ x < P + 16))
+    [succP + 24, predP + 16, P + ps + 8] (fun w' hw' => ?_) (fun x hx hout => ?_) w0 h1'
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · refine ⟨predP, ?_, ?_⟩
+      · rw [rd_miss (by omega), read64_store_hit, h1]
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit,
+          BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · refine ⟨succP, ?_, ?_⟩
+      · rw [read64_store_hit, h2]
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · refine ⟨hdr0, ?_, ?_⟩
+      · rw [rd_miss (by omega), rd_miss (by omega)]; exact hdr
+      · rw [read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdlt]
+  · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq] at hout
+    rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
+      writeLog_out] <;> simp only [OutL, and_true] <;> omega
+
+/-- What the prev+X+top path hands `_realloc_r`'s return: the heap with `P`
+of `nb` bytes before the top at `P + nb`, the new block at `P + 16` holding
+the old contents. -/
+structure PvTRet (C : MCtx) (B : RB) (Mf : Mem) (P nb brkv : Nat) (cs₀ : List Chunk)
+    (bins : Nat → List Nat) : Prop where
+  heap : PHeapAt Mf ((P + 16, C.n.toNat) :: C.H) (P + nb) brkv (cs₀ ++ [⟨P, nb, true⟩]) bins
+  starts : Starts ((P + 16, C.n.toNat) :: C.H)
+  top_le : P + nb ≤ C.top0 + physSize C.n.toNat
+  pres : ∀ a, vsaFoot C.H a → (Mf[a]?).isSome
+  data : ∀ k, k < B.nOld → Mf[P + 16 + k]? = some (B.old (B.p + k))
+  align : (P + 16) % 16 = 0
+
+/-- **The heap of the prev+X+top path**: `P` absorbs the old chunk
+(`coalPrev`), the payload is copied down, and `P` takes `nb` bytes with the top
+right after it (`setTop`); the machine memory, with the stack spill at `sp`,
+agrees with that heap on the footprint. -/
+theorem pvT_heap {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
+    (D : RD C B R Mt brkv chunks bins X S hdr0 nb)
+    {cs₀ : List Chunk} {P ps i : Nat} {pre post : List Nat} {predP succP : Nat}
+    (hsp : chunks = (cs₀ ++ [⟨P, ps, false⟩]) ++ [⟨X, S, true⟩])
+    (PV : FPv Mt (cs₀ ++ [⟨P, ps, false⟩]) bins X cs₀ P ps i pre post predP succP)
+    (hXt : X + S = C.top0) (hroom : nb + 32 ≤ ps + S + (brkv - C.top0))
+    {Mc : Mem}
+    (hMc : ∀ a, (a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) →
+      Mc[a]? = (copyW (writeLog (writeLog Mt [(succP + 24, 8, BitVec.ofNat 64 predP)])
+        [(predP + 16, 8, BitVec.ofNat 64 succP)]) (P + 16) (X + 16) ((S - 8) / 8))[a]?)
+    {vT vH vS vP : BitVec 64} (hvT : vT.toNat = P + nb)
+    (hvH : vH.toNat = ps + S + (brkv - C.top0) - nb + 1) (hvP : vP.toNat = nb + 1) :
+    PvTRet C B (writeLog (writeLog (writeLog (writeLog Mc [(0x8001ad20, 8, vT)])
+      [(P + nb + 8, 8, vH)]) [(C.s.toNat - 64, 8, vS)]) [(P + 8, 8, vP)]) P nb brkv cs₀
+      (updBins bins i (pre ++ post)) := by
+  have Hp := D.heap
+  have H0 := Hp.heap
+  rw [hsp] at H0
+  have HH := H0.heap.heap
+  let C' : MCtx := { C with H := (B.p, B.nOld) :: C.H }
+  have G : PvGeo C' P ps S predP succP := PvGeo.of_heap (C := C') (rest := []) H0 PV
+  have hpend : X = P + ps := PV.pend.symm
+  have hspan := pv_span D (rest := []) hsp hpend
+  subst hpend
+  have hp16 := G.p16; have hplo := G.plo; have hps16 := G.psz16; have hps32 := G.psz32
+  have hs16 := G.sz16; have hs32 := G.sz32
+  have htop : C.top0 + 16 ≤ 0x87800000 := G.top
+  have hpp16 := G.pp16; have hsp16 := G.sp16; have hpplo := G.pplo; have hsplo := G.splo
+  have hpphi : predP + 32 ≤ C.top0 := G.pphi; have hsphi : succP + 32 ≤ C.top0 := G.sphi
+  have sP := G.sP; have sX := G.sX; have pP := G.pP; have pX := G.pX
+  have haddr := D.addr
+  have hnb := D.nbok.eq
+  have hnbv : C.n.toNat + 8 ≤ nb ∧ nb % 16 = 0 ∧ 32 ≤ nb := by rw [hnb]; unfold physSize; omega
+  have hlt := D.lt
+  have hbrk := HH.brk_le; have hroom0 := H0.heap.top_room
+  unfold heapEnd at hbrk
+  obtain ⟨ts, rfl⟩ : ∃ ts, brkv = C.top0 + ts := ⟨brkv - C.top0, by omega⟩
+  rw [Nat.add_sub_cancel_left] at hroom hvH
+  have hlo := O.spA.lo; unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
+  have hdisj := Hp.disjD
+  unfold allocHeadroom at hdisj
+  have hstk : ∀ a, vsaFoot C.H a → a < C.s.toNat - 512 ∨ C.s.toNat ≤ a := fun a ha =>
+    Classical.byContradiction fun hc => hdisj a (by omega) (by omega) ha
+  -- the bin nodes around `P`
+  have hXm : (⟨P + ps, S, true⟩ : Chunk) ∈ (cs₀ ++ [⟨P, ps, false⟩]) ++ [⟨P + ps, S, true⟩] := by simp
+  have hpm : predP = binAt i ∨ predP ∈ bins i := by
+    have := List.mem_of_getLast? PV.hpred
+    rcases List.mem_cons.mp this with h1 | h1
+    · exact .inl h1
+    · exact .inr (by rw [PV.bin]; exact List.mem_append_left _ h1)
+  have hsm : succP = binAt i ∨ succP ∈ bins i := by
+    have := List.mem_of_head? PV.hsucc
+    rcases List.mem_append.mp this with h1 | h1
+    · exact .inr (by rw [PV.bin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
+    · exact .inl (List.mem_singleton.mp h1)
+  obtain ⟨_, hpnode⟩ := HH.node PV.i0 PV.i1 hpm
+  obtain ⟨_, hsnode⟩ := HH.node PV.i0 PV.i1 hsm
+  -- the old payload's bytes are no node word
+  have hnd : ∀ a, P + ps ≤ a → a < P + ps + S + 8 →
+      (writeLog (writeLog Mt [(succP + 24, 8, BitVec.ofNat 64 predP)])
+        [(predP + 16, 8, BitVec.ofNat 64 succP)])[a]? = Mt[a]? := fun a h1 h2 => by
+    have n1 := node_off_inuse HH PV.i1 hsnode hXm rfl a h1 h2
+    have n2 := node_off_inuse HH PV.i1 hpnode hXm rfl a h1 h2
+    rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+  clear hpnode hsnode hpm hsm
+  -- the virtual heap: coalesce, a block over the copy, the copy, `P` resized, the request's block
+  have Hd := H0.drop
+  simp only [List.append_assoc, List.singleton_append] at Hd
+  have hst := Hp.starts
+  unfold Starts at hst
+  rw [List.map_cons, List.nodup_cons] at hst
+  have hnoX : ∀ e ∈ C.H, e.1 ≠ P + ps + 16 := fun e he heq =>
+    hst.1 (List.mem_map.2 ⟨e, he, by rw [heq]; exact haddr⟩)
+  obtain ⟨hP, hPr⟩ : ∃ hP, read64 Mt (P + 8) = some hP := by
+    obtain ⟨hh, hhr, _, _⟩ := walk_header HH.walk ⟨P, ps, false⟩ (by simp)
+    exact ⟨hh, hhr⟩
+  have Hc := Hd.coalPrev (cs₂ := []) (b := S) hnoX PV.i0 PV.i1 PV.bin PV.hpred PV.hsucc D.hdr
+    (h' := ps + S + 1) (by unfold chunkSize; omega) (by omega)
+    (fun h0 hr => by
+      have := PV.prev h0 hr; unfold prevInuse; rw [show (ps + S + 1) % 2 = 1 by omega, this])
+    (BitVec.ofNat 64 hdr0)
+  have hPm : (⟨P, ps + S, true⟩ : Chunk) ∈ cs₀ ++ [⟨P, ps + S, true⟩] := by simp
+  have Ha := Hc.addBlock (q := P + 16) (n := S - 8) hPm rfl rfl (by simp only; omega)
+  generalize hV : copyW (coalW Mt P ps S hdr0 hdr0 predP succP) (P + 16) (P + ps + 16) ((S - 8) / 8) = V
+  have hLw : 8 * ((S - 8) / 8) = S - 8 := by omega
+  have HV : PHeapAt V ((P + 16, S - 8) :: C.H) C.top0 (C.top0 + ts) (cs₀ ++ [⟨P, ps + S, true⟩])
+      (updBins bins i (pre ++ post)) := by
+    refine Ha.transport_read fun a ha => ?_
+    rw [← hV]
+    refine (copyW_out ?_).symm
+    rcases ha.1 with hg | ⟨_, _, h3⟩
+    · have := allocGlobal_off_arena _ hg; unfold heapStart heapEnd at this; omega
+    · have := h3 _ List.mem_cons_self; unfold InExt at this; simp only at this; omega
+  have hVP : read64 V (P + 8) = some (ps + S + 1) := by
+    rw [← hV, read64_keep (m := coalW Mt P ps S hdr0 hdr0 predP succP) fun k hk => copyW_out (by omega),
+      rd_miss (by omega), read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  have hPno : ∀ e ∈ C.H, e.1 ≠ P + 16 := fun e he heq => by
+    have he' : e ∈ (B.p, B.nOld) :: C.H := List.mem_cons_of_mem _ he
+    obtain ⟨c0, hc0, hu, hc0a, _⟩ := HH.exact e he' he'
+    have := HH.chunk_eq hc0 (show (⟨P, ps, false⟩ : Chunk) ∈
+      (cs₀ ++ [⟨P, ps, false⟩]) ++ [⟨P + ps, S, true⟩] by simp) (by simp only; omega)
+    rw [this] at hu; cases hu
+  have HcH := Hc.heap.heap
+  have hfit : ∀ e ∈ (P + 16, S - 8) :: C.H, P + 16 ≤ e.1 → e.1 + e.2 ≤ P + (ps + S) + 8 →
+      e.1 + e.2 ≤ P + nb + 8 := by
+    intro e he h1 h2
+    rcases List.mem_cons.mp he with rfl | he
+    · simp only; omega
+    obtain ⟨c, hc, _, hca, hcn⟩ := HcH.exact e he he
+    rcases HcH.walk.chunk_sep c hc _ hPm with rfl | h3 | h3
+    · exact absurd (by simp only at hca; omega) (hPno e he)
+    · simp only at h3; omega
+    · have := HcH.walk.chunk_bounds c hc; simp only at h3 this; omega
+  generalize hV3 : writeLog (writeLog (writeLog V [(0x8001ad20, 8, vT)]) [(P + nb + 8, 8, vH)])
+    [(P + 8, 8, vP)] = V3
+  have HG := HV.setTop (m' := V3) (x := P) (a := ps + S) (a' := nb) hnbv.2.1 hnbv.2.2 (by omega)
+    (h' := nb + 1) (by rw [← hV3, read64_store_hit, hvP]) (by unfold chunkSize; omega) (by omega)
+    (fun h0 hr => by
+      rw [hVP] at hr; cases hr; unfold prevInuse
+      rw [show (nb + 1) % 2 = 1 by omega, show (ps + S + 1) % 2 = 1 by omega])
+    (by rw [← hV3]; unfold topAddr avAddr; rw [rd_miss (by omega), rd_miss (by omega), read64_store_hit, hvT])
+    (by rw [← hV3, rd_miss (by omega), read64_store_hit, hvH]; congr 1; omega)
+    (fun w hw h1 h2 h3 => by
+      unfold topAddr avAddr at h2
+      rw [← hV3, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
+    hfit
+  have Hr2 := HG.reblock (c := ⟨P, nb, true⟩) (by simp) rfl rfl (n' := C.n.toNat) (by simp only; omega)
+  -- the machine memory
+  have hpl := Vsa.Sim.read64_lt _ _ _ PV.bk
+  have hsl := Vsa.Sim.read64_lt _ _ _ PV.fd
+  have hv1 : (BitVec.ofNat 64 predP).toNat = predP := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl]
+  have hv2 : (BitVec.ofNat 64 succP).toNat = succP := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl]
+  generalize hM1 : writeLog (writeLog Mt [(succP + 24, 8, BitVec.ofNat 64 predP)])
+    [(predP + 16, 8, BitVec.ofNat 64 succP)] = M1 at hMc hnd
+  have hag1 : ∀ w, ¬ (P + 8 ≤ w ∧ w < P + 16) → M1[w]? = (coalW Mt P ps S hdr0 hdr0 predP succP)[w]? :=
+    fun w h => by rw [← hM1]; exact pv_agree_self G D.hdr hv1 hv2 w h
+  have hMV : ∀ a, vsaFoot C.H a → ¬ (P + 8 ≤ a ∧ a < P + 16) → Mc[a]? = V[a]? := fun a ha h => by
+    rw [hMc a (by have := hstk a ha; omega), ← hV]
+    exact copyW_agreeOn (Pr := fun a => ¬ (P + 8 ≤ a ∧ a < P + 16)) (fun a h => hag1 a h)
+      (fun i hi => by omega) a h
+  have hpres1 : ∀ a, vsaFoot C.H a → (M1[a]?).isSome := fun a ha => by
+    rw [← hM1]; exact writeLog_present _ _ _ (writeLog_present _ _ _ (Hp.pres a ha))
+  have hsz8 : B.nOld + 8 ≤ S := by
+    obtain ⟨c0, hc0, _, hc0a, hc0n⟩ := HH.exact _ List.mem_cons_self List.mem_cons_self
+    have := HH.chunk_eq hc0 hXm (by simp only at hc0a ⊢; omega)
+    subst this; simpa using hc0n
+  refine ⟨Hr2.transport_read fun a ha => ?_, Starts.cons hst.2 hPno, by omega, fun a ha => ?_,
+    fun k hk => ?_, by omega⟩
+  · have hf : vsaFoot C.H a := vsaFoot_of_cons ha.1
+    rw [← hV3]
+    refine wl1_congr fun _ => ?_
+    have ho : OutL [(C.s.toNat - 64, 8, vS)] a := ⟨by have := hstk a hf; simp only; omega, trivial⟩
+    rw [writeLog_out _ _ _ ho]
+    exact wl1_congr fun _ => wl1_congr fun _ => (hMV a hf (by omega)).symm
+  · refine writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
+      (writeLog_present _ _ _ ?_)))
+    rw [hMc a (by have := hstk a ha; omega)]
+    exact copyW_present (hpres1 a ha)
+  · have hf := hspan (P + 16 + k) (by omega) (by omega)
+    have := hstk _ hf
+    rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out]
+    · rw [hMc _ (by omega), copyW_spec (.inl (by omega))
+        (fun i hi => hpres1 _ (hspan _ (by omega) (by omega))) k (by omega),
+        hnd _ (by omega) (by omega), show P + ps + 16 + k = B.p + k by omega]
+      exact Hp.data k hk
+    all_goals simp only [OutL, and_true]; omega
+
 end VsaIris.VsaHeap
