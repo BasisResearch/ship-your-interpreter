@@ -2806,9 +2806,12 @@ take composed with `PHeapAt.carve` through a virtual intermediate memory).
 The small re-binning of a too-small last remainder (`rebin`,
 `VsaIris/Vsa/MallocRebin.lean`, over the new `PHeapAt.moveBinAt`: a move to any
 insertion point of the target bin) continues into the block search's test
-(`bb_entry`). Three joins remain, and are exactly `malloc_paths`' hypotheses:
-the large-bin scan (`0x80004884`), the sorted re-binning of a large remainder
-(`0x80004c70`) and the block walk (`0x80004978`).
+(`bb_entry`); a large one is linked into its sorted bin (`rebinL`,
+`VsaIris/Vsa/MallocRebinL.lean`: the six-way `binIndex` cascade `lbin_idx`, the
+empty-bin case, and the walk `rebinL_walk`, an induction over the bin's
+unvisited members). Two joins remain, and are exactly `malloc_paths`'
+hypotheses: the large-bin scan (`0x80004884`) and the block walk
+(`0x80004978`).
 
 CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
 `heapEnd < top0 + physSize n + extendSlack`, which the code does not

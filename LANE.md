@@ -34,10 +34,13 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   the block search's test `bb_entry` (factored out of `bb_check`). `t4 = bin 1` is now
   threaded from the last-remainder check to the block walk.
 
+- **The large re-binning** (`0x80004c70`, `rebinL` in `Vsa/MallocRebinL.lean`): the
+  `binIndex` cascade (`lbin_idx`), the empty-bin case, and the sorted walk (`rebinL_walk`, an
+  induction over the unvisited members), all onto `rebin_link` / `rebin_at_heap`.
+
 ## In flight
-- The three residual malloc joins (`malloc_paths`' hypotheses): the large-bin scan
-  (`0x80004884`), the sorted large re-binning (`0x80004c70`) and the block walk
-  (`0x80004978`).
+- The two residual malloc joins (`malloc_paths`' hypotheses): the large-bin scan
+  (`0x80004884`) and the block walk (`0x80004978`).
 
 ## Holes
 - Unchanged: `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`,
