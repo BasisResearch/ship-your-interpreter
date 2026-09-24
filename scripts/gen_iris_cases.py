@@ -284,10 +284,12 @@ def subst_call1(arm: Arm, mode: str) -> dict[str, str]:
     for i, d in enumerate(arm.errors, 1):
         out[f"E{i}AT"] = f"{d.at:08x}"
         out[f"E{i}TO"] = f"{d.to:08x}"
-    for k in ("ej", "fmtok"):
+    for k in ("ej", "fmtok", "br", "oom"):
         if k in arm.params:
             v = arm.params[k]
-            out[k.upper()] = f"{int(v, 0):08x}" if k == "ej" else v
+            out[k.upper()] = v if k == "fmtok" else f"{int(v, 0):08x}"
+    if "br" in arm.params:
+        out["R3"] = f"{int(arm.params['br'], 0) + 4:08x}"
     return out
 
 
@@ -316,7 +318,7 @@ def subst_assign(arm: Arm, mode: str) -> dict[str, str]:
 
 
 FAMILIES = {"binInt": subst_binInt, "leaf": subst_leaf, "var": subst_call1,
-            "assign": subst_assign}
+            "assign": subst_assign, "fnLit": subst_call1}
 
 
 def emit(arm: Arm, mode: str) -> str:

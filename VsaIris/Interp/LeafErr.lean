@@ -1,5 +1,6 @@
 import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.ProofNativeAssert
+import VsaIris.Vsa.OomSites
 
 /-!
 # `runtime_error` from an `eval_expr` arm (lane E1)
@@ -234,5 +235,54 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iexact HA
 
 end Call
+
+/-! ## Out of memory -/
+
+section Oom
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop}
+
+/-- **An `eval_expr` arm's out-of-memory block** (H5's `wp_oomBlock` at site
+`S`, from its head with `sp = s - 1088`): the arm's frame and the stack below
+it become `exit(1)`'s region; the abort core widens to `evalCore` and the
+result slot is handed back. -/
+theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} (HN : NewlibHoles)
+    (hcl : CodeLive live) {S : Oom.OomSite} (hS : S.OK) {s sret : BitVec 64} {n : Nat} {o : String}
+    (hsg : StackGeom s n) (hsp : Oom.OomBlockSp S s n (evalSP s))
+    (hdj : ∀ b, InExt (s.toNat - 1088, 1088) b → ¬ InExt (sret.toNat, 24) b)
+    {R : Nat → BitVec 64} {M : Mem} (hR2 : R 2 = evalSP s) :
+    errCtx inp ∗ codeRes ∗ ms (BitVec.ofNat 64 S.head) R (frS (s.toNat - 1088) sret.toNat) M ∗
+      stackScratch (evalSP s) (n - 1088) ∗ Stdio.stdioOwn ∗ consoleOwn o ∗
+      (abortAt (evalCore N L Room inp) s n ∗ slot24 sret.toNat -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  unfold errCtx
+  iintro ⟨⟨#Himg, -⟩, #Hcode, Hms, Hst, Hstd, Hcon, Hk⟩
+  have hs1 := hsg.le; have hs2 := hsg.lo; have hs3 := hsg.hi
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3
+  simp only at hs2 hs3
+  have hf := hsp.frame; have hfit := hsp.fits
+  have hsf : (evalSP s).toNat = s.toNat - 1088 := by
+    rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  unfold fwriteNeed at hfit
+  ihave ⟨Hpc, Hra, Hregs, HS, Hsl⟩ := ms_exit_sretAny hdj $$ Hms
+  ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [Hst HS]
+  · iframe Hst HS
+  ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
+  ihave Htmp := clobbered_of_fn _ _ $$ Htmp
+  ihave Hargs := clobbered_of_fn _ _ $$ Hargs
+  ihave #Hgp := codeRes_gp $$ Hcode
+  rw [hR2]
+  iapply Oom.wp_oomBlock HN live hcl Wp N L Room inp S hS s (evalSP s) _ n hsp _ o
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hcon
+  iintro HA
+  unfold abortRes abortAt
+  icases HA with ⟨Hcore, Hst⟩
+  ihave Hcore := evalCore_of N L Room inp (s := s) (n := n) hs1 (by omega) hs3 $$ Hcore
+  iapply Hk
+  iframe Hcore Hst Hsl
+
+end Oom
 
 end VsaIris.Interp

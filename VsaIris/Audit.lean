@@ -38,6 +38,8 @@ import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.AssignP
+import VsaIris.Interp.Case.FnLitT
+import VsaIris.Interp.Case.FnLitP
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -190,5 +192,8 @@ import VsaIris.Interp.Case.AssignP
 #print axioms VsaIris.Interp.caseP_Var
 #print axioms VsaIris.Interp.caseT_Assign
 #print axioms VsaIris.Interp.caseP_Assign
+#print axioms VsaIris.Interp.caseT_FnLit
+#print axioms VsaIris.Interp.caseP_FnLit
+#print axioms VsaIris.Interp.ev_oom
 #print axioms VsaIris.Interp.ev_rtErr
 #print axioms VsaIris.Interp.ms_callEnv3
