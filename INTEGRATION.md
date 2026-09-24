@@ -1,7 +1,7 @@
 # Integration: lanes BG, H4, H2 (with G, H1), G, H1 into `iris-main`
 
 Status: `lake build Vsa VsaIris VsaIris.Audit` is green. `python3 scripts/check_iris_holes.py` reports
-`ok: 12 ledgered holes`. All 135 `#print axioms` in `VsaIris/Audit.lean` report a subset of
+`ok: 10 ledgered holes` (12 at the integration push, then `reallocNull.*` was discharged; see Follow-ups). All `#print axioms` in `VsaIris/Audit.lean` report a subset of
 {propext, Classical.choice, Quot.sound}.
 
 ## What merged
@@ -79,9 +79,22 @@ added hole is an `IrisHoles` field with a `HOLES.md` row.
 
 ## Open
 
-- `reallocNull.*` is now inexpensive to discharge. `realloc_entry` (`ReallocRunAll.lean`) covers the first
-  four instructions, and the `_malloc_r` run it tail-calls is proved. The remaining work is the step lemmas for the NULL branch
-  (`0x80005290` `beqz a1`, `0x80005480`, `0x80005484` `j _malloc_r`) plus the join to `mallocChgRun_proved`.
 - `scripts/check_discipline.py` (stage a4) already failed on `399253a`, all on Vsa-side legacy files.
   Integration adds no finding. `LayoutInstance.lean`'s ∃ count rose from 20 to 22 through BG's `boot`
   field.
+
+## Follow-ups (after the integration push)
+
+- **Q8 (user decision): the semantics cuts a named closure's rendering** (`d0d2609`).
+  `Value.catDisplay` renders `.closure` with a name as `fnCatRender n` (`"<fn " ++ n ++ ">"`, first 63
+  characters), the same as `Newlib.fnRender` (`fnRender_eq`, `rfl`). `strRender_eq : strRender st v =
+  v.catDisplay st`, so `stringify` renders exactly the concatenation form. `Validation.lean` and `c/tests`
+  needed no change. Recorded under Decisions in `INTERP_DESIGN.md` and in `PROOF_CLOSURE_PLAN.md`.
+- **`reallocNull.chgRun` and `reallocNull.localRun` are discharged** (`VsaIris/Interp/ReallocNullRun.lean`).
+  `reallocNull_entry` runs `realloc`'s five entry steps, the taken `beqz a1` (the pointer is NULL),
+  `mv a1, a2` and `j _malloc_r`, then H4's `malloc_all`. `reallocNullChgRun_proved` and
+  `reallocNullLocalRun_proved` reuse the malloc contexts (`mChgCtx`/`mLocCtx`). H4's `mOK_chg`/`mOK_loc`
+  now accept entry registers at any entry PC and `a0`, because they only use the saved registers. The
+  `IrisHoles.reallocNull` field and its two `HOLES.md` rows are deleted, and the `NH` premise is gone from
+  `reallocNullRho_spec`, `wp_call_reallocNull`, `wp_call_reallocOpt`, `def_grow` and `envDefine_spec`.
+  Ledger: 12 → 10 (`newlib.*` 4, `out.*` 6).

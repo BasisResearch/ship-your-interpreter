@@ -194,3 +194,6 @@ import VsaIris.Interp.Case.LeafBoolP
 -- E4 (errCtx clash, LANE.md): #print axioms VsaIris.Interp.caseP_Assign
 -- E4 (errCtx clash, LANE.md): #print axioms VsaIris.Interp.ev_rtErr
 #print axioms VsaIris.Interp.ms_callEnv3
+#print axioms VsaIris.Interp.reallocNullChgRun_proved
+#print axioms VsaIris.Interp.reallocNullLocalRun_proved
+#print axioms VsaIris.Interp.reallocNullHoles_proved

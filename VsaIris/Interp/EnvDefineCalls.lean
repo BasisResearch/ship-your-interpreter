@@ -299,7 +299,7 @@ theorem wp_call_realloc (hlive : AllocLive live)
 omit I in
 /-- **`jal realloc` from NULL**, regime `ρ`, charged `c` credits for the
 size in `a1`. -/
-theorem wp_call_reallocNull (NH : ReallocNullHoles) (hlive : AllocLive live)
+theorem wp_call_reallocNull (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code reallocEntryBV)
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) (ρ : Regime) (H : List (Nat × Nat))
@@ -314,7 +314,7 @@ theorem wp_call_reallocNull (NH : ReallocNullHoles) (hlive : AllocLive live)
         stackScratch (R 2) allocHeadroom -∗ mallocRes ρ H (R 11).toNat p' -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   iintro ⟨#Hi, #Hat, #Hgp, Hpc, HR, Hstk, Hh, Hk⟩
-  ihave #Hs := reallocNullRho_spec NH hlive Wp ρ H (R 11) (R 2) c hc (savedOf R)
+  ihave #Hs := reallocNullRho_spec hlive Wp ρ H (R 11) (R 2) c hc (savedOf R)
     (savedOf_fst R) $$ Hat
   iapply wp_call_allocKs Wp hexec (R := R)
     (X := iprop(gp ↦ᵣ□ gpV ∗ stackScratch (R 2) allocHeadroom ∗
@@ -376,7 +376,7 @@ def reallocOptRes (ρ : Regime) (H : List (Nat × Nat)) (ob : Option (Nat × Nat
 omit I in
 /-- **`jal realloc` from an optional old block** (`wp_call_reallocNull` or
 `wp_call_realloc`). -/
-theorem wp_call_reallocOpt (NH : ReallocNullHoles) (hlive : AllocLive live)
+theorem wp_call_reallocOpt (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code reallocEntryBV)
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) (ρ : Regime) (H : List (Nat × Nat))
@@ -396,7 +396,7 @@ theorem wp_call_reallocOpt (NH : ReallocNullHoles) (hlive : AllocLive live)
   cases ob with
   | none =>
     have h0 : R 10 = 0#64 := BitVec.eq_of_toNat_eq (by rw [h10]; rfl)
-    iapply wp_call_reallocNull NH hlive Wp hexec hi4 ρ H c (R := R) (by rw [h11n]; exact hc) h0 hsp
+    iapply wp_call_reallocNull hlive Wp hexec hi4 ρ H c (R := R) (by rw [h11n]; exact hc) h0 hsp
     simp only [Option.toList_none, List.nil_append]
     iframe Hi Hat Hgp Hpc HR Hstk Hh
     iintro %R' %p' %hR' Hpc HR Hstk Hres

@@ -84,7 +84,7 @@ theorem mallocLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
       allocHeadroom allocText := by
   intro H n s r saved rv mv hsv hsp hral he hshape hdisj
   obtain ⟨hst, m1, top, brkv, chunks, bins, him, hheap⟩ := hshape
-  have O := mOK_loc (H := H) (Mt0 := mt0 m1 s mv) (top0 := top) hl hsv hsp hral he hst
+  have O := mOK_loc (H := H) (n := n) (Mt0 := mt0 m1 s mv) (top0 := top) hl hsv hsp hral he hst
   have Hp := mHeap_entry (C := mLocCtx live H n r s saved rv (mt0 m1 s mv) top) rfl
     (by simp only [mLocCtx]) hsp him hheap hdisj
   have hra : rv 1 = r := he.ra

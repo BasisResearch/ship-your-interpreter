@@ -26,7 +26,7 @@ value slots `valAt`/`slot24`, and the allocator's `heapRes` in either regime
 
 Callee specs taken as hypotheses (proved by other lanes): `strcmpSpec`,
 `strlenSpec`, `memcpySpec` (H3), the allocator (`VsaHeap.allocSpecs`, proved by H4) and
-`realloc(NULL, n)` (`ReallocNullRuns`, an `IrisHoles` field, H4).
+`realloc(NULL, n)` (`ReallocNullHoles`, proved in `ReallocNullRun.lean`).
 -/
 
 namespace VsaIris.Interp
@@ -255,16 +255,16 @@ def envDefineSpec (Wp : MachWP (GF := GF) M) (N : NativeAddrs) : IProp GF :=
 
 end Store
 
-/-! ## `realloc(NULL, n)` (an `IrisHoles` field)
+/-! ## `realloc(NULL, n)`
 
 `env_define`'s first growth calls `realloc(NULL, 64)` and `realloc(NULL, 192)`
 (`names`/`vals` are NULL while `cap = 0`). `_realloc_r` tail-calls
 `_malloc_r` on a NULL pointer (`0x80005290: beqz a1`, `0x80005484: j
 _malloc_r`), so the run is `malloc`'s from `realloc`'s entry with the
 request in `a1`. H4's proved runs cover only the grow path of a live block;
-these two runs are stated like `MallocChgRun`/`MallocLocalRun` and H4
-discharges them with seven step lemmas (`st_8000527c` …) and its
-`_malloc_r` entry lemma. -/
+these two runs are stated like `MallocChgRun`/`MallocLocalRun`;
+`ReallocNullRun.lean` proves them (the entry steps, the taken NULL test, then
+H4's `malloc_all`). -/
 
 /-- The register values at a `realloc(NULL, n)` entry. -/
 structure ReallocNullRegs (rv : Nat → BitVec 64) (r n s : BitVec 64)
@@ -294,7 +294,7 @@ def ReallocNullLocalRun (M : MachineModel) : Prop :=
     ∃ fuel, LocalRun M [(gp, gpV)] allocText (allocRegs vsaClob vsaSaved)
       (mallocBytes vsaLayoutP H s allocHeadroom) (MallocEnd vsaLayoutP H n r s saved) fuel rv mv
 
-/-- **`realloc(NULL, n)` at the binary** (`IrisHoles.reallocNull`). -/
+/-- **`realloc(NULL, n)` at the binary** (`reallocNullHoles_proved`). -/
 structure ReallocNullHoles : Prop where
   /-- Counted: a charged request returns a fresh block. -/
   chgRun : ∀ live, AllocLive live → ReallocNullChgRun (vsaModel live)
