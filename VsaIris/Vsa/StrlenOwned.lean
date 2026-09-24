@@ -1,4 +1,5 @@
 import VsaIris.Vsa.StrlenSpec
+import VsaIris.Vsa.BinImg
 
 /-!
 # Read-only bytes of a local run, owned instead; `strlen` on an owned buffer
@@ -44,7 +45,7 @@ end VsaIris
 namespace VsaIris.Inst.Strlen
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
-open Vsa.Sim Vsa.MemRepr
+open Vsa.Sim Vsa.MemRepr VsaIris.Newlib
 
 section Spec
 
@@ -129,6 +130,51 @@ theorem strlen_specOwnedW {Φ : Nat × String → IProp GF} (live : Nat → Prop
         obtain ⟨k, _, rfl⟩ := hq; rfl) $$ HS'
   ihave HS3 := ownSet_iff _ (fun a => ownedStr_iff P.toNat len bv a) $$ HS2
   iapply Hk $$ Hpc Hra Ha0 HC HS3
+
+/-- `strlen`'s code is the image's. -/
+theorem strlenCode_text : TextAt codeBase strlenCode := by decide +kernel
+
+/-- **`strlen` on an owned buffer as a function spec**, for a call from a
+run: the string's window `[P, P + len + 8)` owned (the string, its NUL, the
+word loop's over-read), handed back unchanged, the length in `a0`. `live`
+must hold the code (`CodeLive`) and the window. -/
+theorem strlenOwned_fn (live : Nat → Prop) (hcl : CodeLive live)
+    (Wp : MachWP (GF := GF) (vsaModel live)) {P : BitVec 64} {len : Nat} {bv : Nat → BitVec 8}
+    (hreg : ReadRegions P len) (hstr : StrBytes P.toNat len bv)
+    (hlv : ∀ k, k < len + 8 → live (P.toNat + k)) :
+    binImg (GF := GF) ⊢ fnSpecW Wp 0x80006cf0#64
+      (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ (10 : Nat) ↦ᵣ P ∗ clobbered [11, 12, 13, 14, 15] ∗
+        ownSet (ownedStr P.toNat len) (fun a => a ↦ₘ bv a)))
+      (fun _ => iprop((10 : Nat) ↦ᵣ BitVec.ofNat 64 len ∗ clobbered [11, 12, 13, 14, 15] ∗
+        ownSet (ownedStr P.toNat len) (fun a => a ↦ₘ bv a))) := by
+  have hcodeL : ∀ q ∈ strlenMR P.toNat len bv, live q.1 := by
+    intro q hq
+    unfold strlenMR memFoot at hq
+    simp only [List.map_append, List.mem_append, List.mem_map] at hq
+    rcases hq with ⟨t, ht, rfl⟩ | ⟨t, ht, rfl⟩
+    · unfold codeText at ht
+      simp only [List.mem_map] at ht
+      obtain ⟨z, hz, rfl⟩ := ht
+      exact hcl _ (strlenCode_text z hz).1
+    · unfold regionText at ht
+      simp only [List.mem_map, List.mem_range] at ht
+      obtain ⟨k, hk, rfl⟩ := ht
+      exact hlv k hk
+  iintro #Himg
+  ihave #Hcode := instrAt_of_binImg strlenCode_text $$ Himg
+  unfold fnSpecW
+  imodintro
+  iintro %r %Φ Hpc Hra ⟨%hal, Ha0, Hcl, HS⟩ Hk
+  have ctx : Ctx live P r len bv := ⟨hreg, hstr, hal, hcodeL⟩
+  ihave ⟨%f, Hcl⟩ := clobbered_fn [11, 12, 13, 14, 15] (by decide) $$ Hcl
+  simp only [sepL_cons, sepL_nil]
+  icases Hcl with ⟨H11, H12, H13, H14, H15, -⟩
+  unfold VsaIris.ra
+  iapply strlen_specOwnedW live Wp ctx (f 11) (f 12) (f 13) (f 14) (f 15)
+  iframe Hcode Hpc Hra Ha0 H11 H12 H13 H14 H15 HS
+  iintro Hpc Hra Ha0 Hcl HS
+  iapply Hk $$ Hpc Hra
+  iframe Ha0 Hcl HS
 
 end Spec
 
