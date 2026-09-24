@@ -260,13 +260,12 @@ theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
   exact free_bin2 O F B (by rw [upd_other _ _ (by decide)]; exact N.a7)
     (by rw [upd_other _ _ (by decide)]; exact N.a4) (by rw [upd_other _ _ (by decide)]; exact N.a5)
 
-/-- The state at the forward coalescing (`0x80007458`): the machine memory
-`Mc` and a virtual heap `Mv` in which `Y` (size `a`) is in use and followed
-by the free chunk `Y + a` (size `b`); they agree but on `Y`'s header and the
-free chunk's, which the machine left holding its size. -/
-structure FFwd (C : MCtx) (R : Nat → BitVec 64) (Mc Mv : Mem) (brkv : Nat) (cs cs' : List Chunk)
+/-- The memory of a forward coalescing: the machine memory `Mc` and a virtual
+heap `Mv` in which `Y` (size `a`) is in use and followed by the free chunk
+`Y + a` (size `b`); they agree but on `Y`'s header and the free chunk's, which
+the machine left holding its size. -/
+structure FFwdMem (C : MCtx) (Mc Mv : Mem) (brkv : Nat) (cs cs' : List Chunk)
     (bins : Nat → List Nat) (Y a b : Nat) : Prop where
-  frame : FFrame C R Mc
   heap : PHeapAt Mv C.H C.top0 brkv (cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs') bins
   hno : ∀ e ∈ C.H, e.1 ≠ Y + 16
   prev : ∀ h0, read64 Mv (Y + 8) = some h0 → h0 % 2 = 1
@@ -276,6 +275,13 @@ structure FFwd (C : MCtx) (R : Nat → BitVec 64) (Mc Mv : Mem) (brkv : Nat) (cs
   pres : ∀ x, vsaFoot C.H x → (Mc[x]?).isSome
   disj : ∀ x, C.s.toNat - mHead ≤ x → x < C.s.toNat → ¬ vsaFoot C.H x
   frameM : ∀ x, ¬ MWin C.H C.s x → Mc[x]? = C.Mt0[x]?
+
+/-- The state at the forward coalescing (`0x80007458`): its memory, the frame,
+and `av`, `Y`, the combined size, the free chunk and bin 1's header in `a7`,
+`a4`, `a5`, `a2`, `a0`. -/
+structure FFwd (C : MCtx) (R : Nat → BitVec 64) (Mc Mv : Mem) (brkv : Nat) (cs cs' : List Chunk)
+    (bins : Nat → List Nat) (Y a b : Nat) : Prop extends FFwdMem C Mc Mv brkv cs cs' bins Y a b where
+  frame : FFrame C R Mc
   a7 : R 17 = 0x8001ad10#64
   a4 : (R 14).toNat = Y
   a5 : (R 15).toNat = a + b
@@ -297,8 +303,8 @@ structure FwdNx (Mv : Mem) (top : Nat) (cs' : List Chunk) (bins : Nat → List N
   dlow : hdn % 4 < 2
   dflag : prevInuse hdn = false
 
-theorem FFwd.nx {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
-    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b) :
+theorem FFwdMem.nx {C : MCtx} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwdMem C Mc Mv brkv cs cs' bins Y a b) :
     ∃ i pre post d' cs'' hdn, FwdNx Mv C.top0 cs' bins Y a b i pre post d' cs'' hdn := by
   have HH := V.heap.heap.heap
   have hN : (⟨Y + a, b, false⟩ : Chunk) ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs' := by simp
@@ -350,8 +356,8 @@ structure FwdGeo (C : MCtx) (Y a b pred succ : Nat) : Prop where
   sfoot : ∀ k, 16 ≤ k → k < 32 → vsaFoot C.H (succ + k)
   dfoot : ∀ k, k < 8 → vsaFoot C.H (Y + a + b + 8 + k)
 
-theorem FwdNx.geo {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
-    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b)
+theorem FwdNx.geo {C : MCtx} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwdMem C Mc Mv brkv cs cs' bins Y a b)
     {i : Nat} {pre post : List Nat} {d' : Chunk} {cs'' : List Chunk} {hdn : Nat}
     (X : FwdNx Mv C.top0 cs' bins Y a b i pre post d' cs'' hdn) {pred succ : Nat}
     (hpred : (binAt i :: pre).getLast? = some pred) (hsucc : (post ++ [binAt i]).head? = some succ) :
@@ -446,8 +452,8 @@ theorem fwd_agree {C : MCtx} {Mc Mv : Mem} {Y a b pred succ hdn : Nat} (G : FwdG
 /-- **The heap for the insertion after a forward coalescing.** The machine's
 unlink of the free chunk and `Y`'s header and footer give an insertion state
 over the virtual heap in which `Y` absorbed it (`PHeapAt.coalNext`). -/
-theorem fwd_fbin {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
-    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b)
+theorem fwd_fbin {C : MCtx} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwdMem C Mc Mv brkv cs cs' bins Y a b)
     {i : Nat} {pre post : List Nat} {d' : Chunk} {cs'' : List Chunk} {hdn : Nat}
     (X : FwdNx Mv C.top0 cs' bins Y a b i pre post d' cs'' hdn) {pred succ : Nat}
     (hpred : (binAt i :: pre).getLast? = some pred) (hsucc : (post ++ [binAt i]).head? = some succ)
@@ -521,8 +527,8 @@ theorem FwdNx.lr {Mv : Mem} {top : Nat} {cs' : List Chunk} {bins : Nat → List 
 /-- **The insertion state of a forward coalescing into the last remainder**,
 over a virtual memory: the coalesced heap with the footer and the original
 next header. -/
-theorem fwd_lr_core {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
-    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b)
+theorem fwd_lr_core {C : MCtx} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwdMem C Mc Mv brkv cs cs' bins Y a b)
     {d' : Chunk} {cs'' : List Chunk} {hdn : Nat}
     (X : FwdNx Mv C.top0 cs' bins Y a b 1 [] [] d' cs'' hdn) :
     FBinCore C
@@ -617,8 +623,8 @@ theorem fwd_lr_agree {C : MCtx} {Mc Mv : Mem} {Y a b hdn : Nat} (G : FwdGeo C Y 
 
 /-- **A forward coalescing into the last remainder** (`0x800075d0`): `Y`
 replaces the free chunk as bin 1's only member; the heap is done. -/
-theorem fwd_lr_done {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
-    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b)
+theorem fwd_lr_done {C : MCtx} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwdMem C Mc Mv brkv cs cs' bins Y a b)
     {d' : Chunk} {cs'' : List Chunk} {hdn : Nat}
     (X : FwdNx Mv C.top0 cs' bins Y a b 1 [] [] d' cs'' hdn)
     {v1 v2 v3 v4 : BitVec 64} (h1 : v1.toNat = Y) (h2 : v2.toNat = binAt 1)
@@ -698,12 +704,12 @@ theorem free_fwd {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mc Mv : Mem} {b
     {cs cs' : List Chunk} {bins : Nat → List Nat} {Y a b : Nat}
     (V : FFwd C R Mc Mv brkv cs cs' bins Y a b) :
     AW C.live C.S C.Q 0x80007458#64 R Mc := by
-  obtain ⟨i, pre, post, d', cs'', hdn, X⟩ := V.nx
+  obtain ⟨i, pre, post, d', cs'', hdn, X⟩ := V.toFFwdMem.nx
   have HH := V.heap.heap.heap
   obtain ⟨pred, hpred⟩ : ∃ p, (binAt i :: pre).getLast? = some p := ⟨_, List.getLast?_cons⟩
   obtain ⟨succ, hsucc⟩ : ∃ q, (post ++ [binAt i]).head? = some q := by
     rcases post with _ | ⟨z, zs⟩ <;> simp
-  have G := X.geo V hpred hsucc
+  have G := X.geo V.toFFwdMem hpred hsucc
   have hi0 := X.i0; have hi := X.i1
   have hY16 := G.Y16; have ha16 := G.a16; have ha32 := G.a32; have hb16 := G.b16; have hb32 := G.b32
   have hYlo := G.Ylo; have hdend := G.dend; have htop := G.top
@@ -765,7 +771,7 @@ theorem free_fwd {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mc Mv : Mem} {b
     have hi1 : i = 1 := hlr.1 hs1
     subst hi1
     obtain ⟨rfl, rfl⟩ := X.lr HH.remainder
-    have K := fwd_lr_core V X
+    have K := fwd_lr_core V.toFFwdMem X
     have hYf : ∀ x, Y + 8 ≤ x → x < Y + (a + b) + 8 → vsaFoot C.H x :=
       fun x h1 h2 => foot_of_chunk K.heap (by simp) V.hno h1 h2
     have ha7 := V.a7
@@ -814,7 +820,7 @@ theorem free_fwd {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mc Mv : Mem} {b
       have h2' : (a + b ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
       have := Nat.div_add_mod (a + b ||| 1) 2
       simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-    have D := fwd_lr_done V X ha4 ha0 hv3 ha5
+    have D := fwd_lr_done V.toFFwdMem X ha4 ha0 hv3 ha5
     have F := V.frame
     have o1 := off_stack_of (a := binAt 1 + 24) V.disj (fun k hk => .inl (.inl ⟨by rw [hb1]; omega, by rw [hb1]; omega⟩))
     have o2 := off_stack_of (a := binAt 1 + 16) V.disj (fun k hk => .inl (.inl ⟨by rw [hb1]; omega, by rw [hb1]; omega⟩))
@@ -840,7 +846,7 @@ theorem free_fwd {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mc Mv : Mem} {b
       have h2' : (a + b ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
       have := Nat.div_add_mod (a + b ||| 1) 2
       simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-    have B := fwd_fbin V X hpred hsucc (v1 := BitVec.ofNat 64 pred) (v2 := BitVec.ofNat 64 succ)
+    have B := fwd_fbin V.toFFwdMem X hpred hsucc (v1 := BitVec.ofNat 64 pred) (v2 := BitVec.ofNat 64 succ)
       (BitVec.toNat_ofNat .. ▸ Nat.mod_eq_of_lt hpv) (BitVec.toNat_ofNat .. ▸ Nat.mod_eq_of_lt hsv)
       hv3 ha5
     have hYf : ∀ x, Y + 8 ≤ x → x < Y + (a + b) + 8 → vsaFoot C.H x :=
@@ -911,8 +917,8 @@ theorem free_b1b {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
   refine st_8000744c O.live ?_
   refine st_80007450 O.live ?_
   refine st_80007454 O.live ?_
-  refine free_fwd O ⟨N.frame.of_regs rfl rfl rfl rfl, N.heap, N.hno, fun h0 hr => ?_, fun w0 hw0 h1 h2 => ?_,
-    ?_, N.pres, N.disj, N.frameM, ?_, ?_, ?_, ?_, ?_⟩
+  refine free_fwd O ⟨⟨N.heap, N.hno, fun h0 hr => ?_, fun w0 hw0 h1 h2 => ?_,
+    ?_, N.pres, N.disj, N.frameM⟩, N.frame.of_regs rfl rfl rfl rfl, ?_, ?_, ?_, ?_, ?_⟩
   · rw [N.hdr] at hr; cases hr; exact hprev
   · rw [hM1, writeLog_out]; simp only [OutL, and_true]; omega
   · rw [hM1, read64_store_hit, N.wv]
@@ -1439,9 +1445,7 @@ theorem free_b2nl {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
     simp only at hA hdend hd16 hd32 ha3 HP
     refine st_8000757c O.live ?_
     refine st_80007580 O.live ?_
-    refine free_fwd O (Y := p) (a := psz + sz) (b := ds) ⟨F2.of_regs (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]),
+    refine free_fwd O (Y := p) (a := psz + sz) (b := ds) ⟨⟨
       by rw [show p + (psz + sz) = p + psz + sz by omega]; exact HP, hno, fun h0 hr => ?_,
       fun w0 hw0 h1' h2' => hA w0 hw0 h1' (by omega), ?_,
       fun a ha => writeLog_present _ _ _ (writeLog_present _ _ _ (B.pres a ha)), B.disj,
@@ -1449,7 +1453,10 @@ theorem free_b2nl {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
           have := hppf (a - predP) (by omega) (by omega); rwa [show predP + (a - predP) = a by omega] at this))
         (frame_store (fun a h1 h2 => .inl (by
           have := hspf (a - succP) (by omega) (by omega); rwa [show succP + (a - succP) = a by omega] at this))
-          B.frameM), ?_, ?_, ?_, ?_, ?_⟩ <;> (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+          B.frameM)⟩, F2.of_regs (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]), ?_, ?_, ?_, ?_, ?_⟩ <;>
+      (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     · rw [rd_miss (by omega), read64_store_hit] at hr
       cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
     · rw [show p + (psz + sz) + 8 = p + psz + sz + 8 by omega, rd_miss (by omega), rd_miss (by omega),
