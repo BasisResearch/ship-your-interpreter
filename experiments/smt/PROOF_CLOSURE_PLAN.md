@@ -4203,3 +4203,27 @@ every byte it reads. `stringify_spec` therefore takes
 `hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a`, a condition on the
 top-level `live` like `CodeLive`. Its supplier is the instantiation of
 `vsaModel live` at the boundary, which chooses `live`.
+
+## The call arm's natives need stack room at the deepest call level (lane E4, 2026-09-24)
+
+- Declarations: `caseT_CallPrint`/`caseT_CallPrintln` and their partial twins
+  (premise `hroom : nativePrint(ln)Need + 1088 ≤ evalNeed (.call f args) d`).
+- `native_print` needs `nativePrintNeed = 80 + fprintfNeed = 4176` bytes below
+  the call arm's frame (`nativePrintlnNeed = 4224`). A call node at depth `d`
+  owns `evalNeed (.call f args) d - 1088 = stackNeed (.call f args) +
+  (maxCallDepth - d) * perCallBudget ≥ 2176 + (1000 - d) * 6144` bytes below
+  its frame: enough for `d < maxCallDepth`, not at `d = maxCallDepth` (a
+  1000-deep recursion that prints at the bottom). Supplier: the budget
+  (`StackNeed`'s leaf headroom, Q7's decision); A discharges `hroom` from
+  `d < maxCallDepth` (`stackBudget` arithmetic) otherwise.
+- `assert` (`nativeAssertNeed = 1328`) and `runtime_error` (`1088 + rtErrNeed
+  = 2336`) fit at every depth (`evalNeed_call_rtErr`).
+
+## Closure display geometry for `print` (lane E4, 2026-09-24)
+
+- Declaration: `DispSupply N` (`VsaIris/Interp/CallNative.lean`), a premise
+  of the printing native cases: `storeRepr N s B ∗ closAt ca p ⊢ storeRepr N s
+  B ∗ dispRes s (.closure ca)`.
+- Missing supplier: `closOwn` carries no `ReadOK`/`SharedWin` geometry (the
+  H2 entry above). Once `closOwn` carries it (from the `EX_FN` arm), the lemma
+  is a projection of `storeRepr`'s closure list.
