@@ -260,4 +260,251 @@ theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
   exact free_bin2 O F B (by rw [upd_other _ _ (by decide)]; exact N.a7)
     (by rw [upd_other _ _ (by decide)]; exact N.a4) (by rw [upd_other _ _ (by decide)]; exact N.a5)
 
+/-- The state at the forward coalescing (`0x80007458`): the machine memory
+`Mc` and a virtual heap `Mv` in which `Y` (size `a`) is in use and followed
+by the free chunk `Y + a` (size `b`); they agree but on `Y`'s header and the
+free chunk's, which the machine left holding its size. -/
+structure FFwd (C : MCtx) (R : Nat → BitVec 64) (Mc Mv : Mem) (brkv : Nat) (cs cs' : List Chunk)
+    (bins : Nat → List Nat) (Y a b : Nat) : Prop where
+  frame : FFrame C R Mc
+  heap : PHeapAt Mv C.H C.top0 brkv (cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs') bins
+  hno : ∀ e ∈ C.H, e.1 ≠ Y + 16
+  prev : ∀ h0, read64 Mv (Y + 8) = some h0 → h0 % 2 = 1
+  agree : ∀ w, vsaFoot C.H w → ¬ (Y + 8 ≤ w ∧ w < Y + 16) → ¬ (Y + a + 8 ≤ w ∧ w < Y + a + 16) →
+    Mc[w]? = Mv[w]?
+  nxh : read64 Mc (Y + a + 8) = some b
+  pres : ∀ x, vsaFoot C.H x → (Mc[x]?).isSome
+  disj : ∀ x, C.s.toNat - mHead ≤ x → x < C.s.toNat → ¬ vsaFoot C.H x
+  frameM : ∀ x, ¬ MWin C.H C.s x → Mc[x]? = C.Mt0[x]?
+  a7 : R 17 = 0x8001ad10#64
+  a4 : (R 14).toNat = Y
+  a5 : (R 15).toNat = a + b
+  a2 : (R 12).toNat = Y + a
+  a0 : (R 10).toNat = binAt 1
+
+/-- The free chunk at the forward coalescing: on its bin, followed by an in-use
+chunk that is not the top. -/
+structure FwdNx (Mv : Mem) (top : Nat) (cs' : List Chunk) (bins : Nat → List Nat) (Y a b : Nat)
+    (i : Nat) (pre post : List Nat) (d' : Chunk) (cs'' : List Chunk) (hdn : Nat) : Prop where
+  i0 : 0 < i
+  i1 : i < numBins
+  bin : bins i = pre ++ (Y + a) :: post
+  tail : cs' = d' :: cs''
+  daddr : d'.addr = Y + a + b
+  dinuse : d'.inuse = true
+  not_top : Y + a + b ≠ top
+  dhdr : read64 Mv (Y + a + b + 8) = some hdn
+  dlow : hdn % 4 < 2
+  dflag : prevInuse hdn = false
+
+theorem FFwd.nx {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b) :
+    ∃ i pre post d' cs'' hdn, FwdNx Mv C.top0 cs' bins Y a b i pre post d' cs'' hdn := by
+  have HH := V.heap.heap.heap
+  have hN : (⟨Y + a, b, false⟩ : Chunk) ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs' := by simp
+  obtain ⟨i, hi0, hi, hm, _⟩ := HH.free_binned _ hN rfl
+  simp only at hm
+  obtain ⟨pre, post, hbin⟩ := List.append_of_mem hm
+  have hw : ChunkWalk Mv heapStart C.top0 ((cs ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: cs') := by
+    simpa using HH.walk
+  have HH' : HeapAt Mv C.H (fun e => e ∈ C.H) C.top0 brkv ((cs ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: cs') bins := by
+    simpa using HH
+  have NB := HH'.freeNbrs
+  obtain ⟨⟨hdn, hdnr, hdnf⟩, hnext⟩ := walk_next_of hw
+  simp only at hdnr hdnf
+  obtain ⟨d', cs'', rfl, hda⟩ : ∃ d' cs'', cs' = d' :: cs'' ∧ d'.addr = Y + a + b := by
+    rcases hnext with ⟨he, _⟩ | ⟨d', cs'', h1, h2⟩
+    · exact absurd he NB.not_top
+    · exact ⟨d', cs'', h1, h2⟩
+  have hdm : d' ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'' := by simp
+  obtain ⟨hd0, hd0r, _, hd0l⟩ := walk_header HH.walk d' hdm
+  rw [hda, hdnr] at hd0r
+  obtain rfl : hdn = hd0 := Option.some.inj hd0r
+  exact ⟨i, pre, post, d', cs'', hdn, hi0, hi, hbin, rfl, hda, NB.next d' rfl, NB.not_top, hdnr,
+    hd0l, hdnf⟩
+
+/-- The numbers of a forward coalescing: alignment, sizes, and where the
+unlink's nodes lie relative to the chunk boundaries. -/
+structure FwdGeo (C : MCtx) (Y a b pred succ : Nat) : Prop where
+  Y16 : Y % 16 = 0
+  a16 : a % 16 = 0
+  a32 : 32 ≤ a
+  b16 : b % 16 = 0
+  b32 : 32 ≤ b
+  Ylo : 0x8001c170 ≤ Y
+  dend : Y + a + b + 32 ≤ C.top0
+  top : C.top0 + 16 ≤ 0x87800000
+  p16 : pred % 16 = 0
+  s16 : succ % 16 = 0
+  plo : 0x8001ad20 ≤ pred
+  slo : 0x8001ad20 ≤ succ
+  phi : pred + 32 ≤ C.top0
+  shi : succ + 32 ≤ C.top0
+  sY : Y ≠ succ + 16
+  sN : Y + a ≠ succ + 16
+  sD : Y + a + b ≠ succ + 16
+  pD : Y + a + b ≠ pred + 16
+  pY : Y ≠ pred + 8
+  pN : Y + a ≠ pred + 8
+  pfoot : ∀ k, 16 ≤ k → k < 32 → vsaFoot C.H (pred + k)
+  sfoot : ∀ k, 16 ≤ k → k < 32 → vsaFoot C.H (succ + k)
+  dfoot : ∀ k, k < 8 → vsaFoot C.H (Y + a + b + 8 + k)
+
+theorem FwdNx.geo {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b)
+    {i : Nat} {pre post : List Nat} {d' : Chunk} {cs'' : List Chunk} {hdn : Nat}
+    (X : FwdNx Mv C.top0 cs' bins Y a b i pre post d' cs'' hdn) {pred succ : Nat}
+    (hpred : (binAt i :: pre).getLast? = some pred) (hsucc : (post ++ [binAt i]).head? = some succ) :
+    FwdGeo C Y a b pred succ := by
+  obtain ⟨hi0, hi, hbin, htail, hda, hdin, hnt, hdnr, hdnl, hdnf⟩ := X
+  subst htail
+  have HH := V.heap.heap.heap
+  obtain ⟨hal, htop16⟩ := HH.aligned
+  have hX : (⟨Y, a, true⟩ : Chunk) ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'' := by simp
+  have hN : (⟨Y + a, b, false⟩ : Chunk) ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'' := by simp
+  have hdm : d' ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'' := by simp
+  have hXb := HH.walk.chunk_bounds _ hX; have hDb := HH.walk.chunk_bounds _ hdm
+  have hY16 := hal _ hX
+  have ha := walk_sizes HH.walk _ hX; have hb := walk_sizes HH.walk _ hN
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := V.heap.heap.top_room
+  rw [hda] at hDb
+  have hpredm : pred = binAt i ∨ pred ∈ bins i := by
+    have := List.mem_of_getLast? hpred
+    rcases List.mem_cons.mp this with h1 | h1
+    · exact .inl h1
+    · exact .inr (by rw [hbin]; exact List.mem_append_left _ h1)
+  have hsuccm : succ = binAt i ∨ succ ∈ bins i := by
+    have := List.mem_of_head? hsucc
+    rcases List.mem_append.mp this with h1 | h1
+    · exact .inr (by rw [hbin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
+    · exact .inl (List.mem_singleton.mp h1)
+  obtain ⟨hp16, hpnode⟩ := HH.node hi0 hi hpredm
+  obtain ⟨hs16, hsnode⟩ := HH.node hi0 hi hsuccm
+  have bY : (Y = C.top0 ∨ ∃ c ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'', c.addr = Y) :=
+    .inr ⟨_, hX, rfl⟩
+  have bN : (Y + a = C.top0 ∨ ∃ c ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'', c.addr = Y + a) :=
+    .inr ⟨_, hN, rfl⟩
+  have bD : (Y + a + b = C.top0 ∨ ∃ c ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'', c.addr = Y + a + b) :=
+    .inr ⟨_, hdm, hda⟩
+  have hloc : ∀ z, (z = binAt i ∨ ∃ cx ∈ cs ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d' :: cs'',
+      cx.addr = z ∧ cx.inuse = false ∧ z ∈ bins i) → 0x8001ad20 ≤ z ∧ z + 32 ≤ C.top0 := by
+    rintro z (rfl | ⟨cx, hcx, rfl, _, _⟩)
+    · have := binAt_geo i hi; have := HH.walk.le; unfold binAt avAddr heapStart at *; omega
+    · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; omega
+  simp only at hXb hY16 ha hb hDb
+  unfold heapStart heapEnd at *
+  exact ⟨hY16, ha.1, ha.2, hb.1, hb.2, hXb.1, by have := hDb.2.2; omega, by omega, hp16, hs16,
+    (hloc _ hpnode).1, (hloc _ hsnode).1, (hloc _ hpnode).2, (hloc _ hsnode).2,
+    HH.bnd_ne_node hi hsnode bY 16 (by omega) (by omega), HH.bnd_ne_node hi hsnode bN 16 (by omega) (by omega),
+    HH.bnd_ne_node hi hsnode bD 16 (by omega) (by omega), HH.bnd_ne_node hi hpnode bD 16 (by omega) (by omega),
+    HH.bnd_ne_node hi hpnode bY 8 (by omega) (by omega), HH.bnd_ne_node hi hpnode bN 8 (by omega) (by omega),
+    V.heap.heap.node_foot hi0 hi hpredm, V.heap.heap.node_foot hi0 hi hsuccm, foot_header V.heap.heap bD⟩
+
+/-- The machine memory and the coalesced virtual heap agree off the merged
+chunk's footer and the next header. -/
+theorem fwd_agree {C : MCtx} {Mc Mv : Mem} {Y a b pred succ hdn : Nat} (G : FwdGeo C Y a b pred succ)
+    (hag : ∀ w, vsaFoot C.H w → ¬ (Y + 8 ≤ w ∧ w < Y + 16) → ¬ (Y + a + 8 ≤ w ∧ w < Y + a + 16) →
+      Mc[w]? = Mv[w]?) (hnxh : read64 Mc (Y + a + 8) = some b)
+    {v1 v2 v3 v4 : BitVec 64} (h1 : v1.toNat = pred) (h2 : v2.toNat = succ)
+    (h3 : v3.toNat = a + b + 1) :
+    ∀ w, vsaFoot C.H w → ¬ (Y + (a + b) ≤ w ∧ w < Y + (a + b) + 16) →
+      (writeLog (writeLog (writeLog (writeLog Mc [(succ + 24, 8, v1)]) [(pred + 16, 8, v2)])
+        [(Y + 8, 8, v3)]) [(Y + a + b, 8, v4)])[w]? =
+      (writeLog (writeLog (writeLog (writeLog (writeLog Mv
+        [(pred + 16, 8, BitVec.ofNat 64 succ)]) [(succ + 24, 8, BitVec.ofNat 64 pred)])
+        [(Y + a + b + 8, 8, BitVec.ofNat 64 (hdn ||| 1))]) [(Y + 8, 8, BitVec.ofNat 64 (a + b + 1))])
+        [(Y + a + 8, 8, BitVec.ofNat 64 b)])[w]? := by
+  obtain ⟨hY16, ha16, ha32, hb16, hb32, hYlo, hdend, htop, hp16, hs16, hplo, hslo, hphi, hshi,
+    sY, sN, sD, pD, pY, pN, _, _, _⟩ := G
+  intro w0 hw0 hr0
+  refine agree_of_words (P := fun x => vsaFoot C.H x ∧ ¬ (Y + (a + b) ≤ x ∧ x < Y + (a + b) + 16))
+    [succ + 24, pred + 16, Y + 8, Y + a + 8] (fun w' hw' => ?_) (fun x hx hout => ?_) w0 ⟨hw0, hr0⟩
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl | rfl
+    · refine ⟨pred, ?_, ?_⟩
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit, h1]
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit,
+          BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · refine ⟨succ, ?_, ?_⟩
+      · rw [rd_miss (by omega), rd_miss (by omega), read64_store_hit, h2]
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · refine ⟨a + b + 1, ?_, ?_⟩
+      · rw [rd_miss (by omega), read64_store_hit, h3]
+      · rw [rd_miss (by omega), read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · refine ⟨b, ?_, ?_⟩
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega)]
+        exact hnxh
+      · rw [read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq] at hout
+    obtain ⟨hx1, hx2⟩ := hx
+    rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
+      writeLog_out, writeLog_out, writeLog_out, writeLog_out]
+    · exact hag x hx1 (by omega) (by omega)
+    all_goals simp only [OutL, and_true]; omega
+
+/-- **The heap for the insertion after a forward coalescing.** The machine's
+unlink of the free chunk and `Y`'s header and footer give an insertion state
+over the virtual heap in which `Y` absorbed it (`PHeapAt.coalNext`). -/
+theorem fwd_fbin {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {cs cs' : List Chunk}
+    {bins : Nat → List Nat} {Y a b : Nat} (V : FFwd C R Mc Mv brkv cs cs' bins Y a b)
+    {i : Nat} {pre post : List Nat} {d' : Chunk} {cs'' : List Chunk} {hdn : Nat}
+    (X : FwdNx Mv C.top0 cs' bins Y a b i pre post d' cs'' hdn) {pred succ : Nat}
+    (hpred : (binAt i :: pre).getLast? = some pred) (hsucc : (post ++ [binAt i]).head? = some succ)
+    {v1 v2 v3 v4 : BitVec 64} (h1 : v1.toNat = pred) (h2 : v2.toNat = succ)
+    (h3 : v3.toNat = a + b + 1) (h4 : v4.toNat = a + b) :
+    FBin C (writeLog (writeLog (writeLog (writeLog Mc [(succ + 24, 8, v1)]) [(pred + 16, 8, v2)])
+      [(Y + 8, 8, v3)]) [(Y + a + b, 8, v4)])
+      (writeLog (writeLog (writeLog (writeLog (writeLog Mv
+        [(pred + 16, 8, BitVec.ofNat 64 succ)]) [(succ + 24, 8, BitVec.ofNat 64 pred)])
+        [(Y + a + b + 8, 8, BitVec.ofNat 64 (hdn ||| 1))]) [(Y + 8, 8, BitVec.ofNat 64 (a + b + 1))])
+        [(Y + a + 8, 8, BitVec.ofNat 64 b)])
+      Y (a + b) C.top0 brkv cs cs' (updBins bins i (pre ++ post)) := by
+  have G := X.geo V hpred hsucc
+  obtain ⟨hi0, hi, hbin, htail, hda, hdin, hnt, hdnr, hdnl, hdnf⟩ := X
+  have hY16 := G.Y16; have ha16 := G.a16; have ha32 := G.a32; have hb16 := G.b16; have hb32 := G.b32
+  have hYlo := G.Ylo; have hdend := G.dend; have htop := G.top; have hphi := G.phi; have hshi := G.shi
+  have hp16 := G.p16; have hs16 := G.s16; have hplo := G.plo; have hslo := G.slo
+  have sY := G.sY; have sN := G.sN; have sD := G.sD; have pD := G.pD; have pY := G.pY; have pN := G.pN
+  have hY8 : ∀ h0, read64 Mv (Y + 8) = some h0 → prevInuse (a + b + 1) = prevInuse h0 := by
+    intro h0 hr
+    have := V.prev h0 hr
+    unfold prevInuse; rw [show (a + b + 1) % 2 = 1 by omega, this]
+  have hcs : chunkSize (a + b + 1) = a + b := by unfold chunkSize; omega
+  have hcl : (a + b + 1) % 4 < 2 := by omega
+  have HP := V.heap.coalNext hi0 hi hbin hpred hsucc hdnr hcs hcl hY8 (BitVec.ofNat 64 b)
+  subst htail
+  have hYfoot : ∀ x, Y + 8 ≤ x → x < Y + (a + b) + 8 → vsaFoot C.H x :=
+    fun x h1 h2 => foot_of_chunk HP (by simp) V.hno h1 h2
+  refine ⟨HP, Nat.le_refl _, V.hno, fun h0 hr => ?_, fun d0 hd0 => ?_, by omega,
+    fwd_agree G V.agree V.nxh h1 h2 h3, ?_, fun hd hr => ?_, fun x hx => ?_, V.disj, ?_⟩
+  · rw [rd_miss (by omega), read64_store_hit] at hr
+    cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
+  · simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hd0; rw [← hd0]; exact hdin
+  · rw [show Y + (a + b) = Y + a + b from (Nat.add_assoc _ _ _).symm, read64_store_hit, h4]
+  · rw [show Y + (a + b) + 8 = Y + a + b + 8 by omega, rd_miss (by omega), rd_miss (by omega),
+      read64_store_hit] at hr
+    cases hr
+    rw [show Y + (a + b) + 8 = Y + a + b + 8 by omega]
+    have hdlt := Vsa.Sim.read64_lt _ _ _ hdnr
+    have h1' : (hdn ||| 1) / 2 = hdn / 2 := by
+      have := Nat.or_div_two_pow (a := hdn) (b := 1) (n := 1); simpa using this
+    have h2' : (hdn ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
+    have := Nat.div_add_mod (hdn ||| 1) 2
+    refine ⟨hdn, ?_, ?_, hdnl, hdnf⟩
+    · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+        read64_keep (fun k hk => V.agree _ (G.dfoot k hk) (by omega) (by omega))]
+      exact hdnr
+    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+      unfold chunkSize; omega
+  · exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
+      (writeLog_present _ _ _ (V.pres x hx))))
+  · refine frame_store (fun x h1 h2 => .inl (hYfoot x (by omega) (by omega)))
+      (frame_store (fun x h1 h2 => .inl (hYfoot x (by omega) (by omega)))
+        (frame_store (fun x h1 h2 => .inl (by
+          have := G.pfoot (x - pred) (by omega) (by omega); rwa [show pred + (x - pred) = x by omega] at this))
+          (frame_store (fun x h1 h2 => .inl (by
+            have := G.sfoot (x - succ) (by omega) (by omega); rwa [show succ + (x - succ) = x by omega] at this))
+            V.frameM)))
+
 end VsaIris.VsaHeap
