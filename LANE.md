@@ -63,13 +63,15 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   (`Vsa/FreePaths.lean`, `free_split`: both neighbours in use, forward, backward and double
   coalescing, the last remainder on either side).
 
+- **`free` discharged**: the top merge (`free_top`, `Vsa/FreeTop.lean`), `_malloc_trim_r`
+  (`trim_run`, `Vsa/FreeTrim.lean`), the whole body `free_body`, and the runs
+  `freeChgRun_proved`/`freeLocalRun_proved` (`Vsa/FreeRunAll.lean`, over the tracking memory
+  `ft0` with the block's bytes inserted). The fields `alloc.freeChgRun` and
+  `alloc.freeLocalRun` and their HOLES rows are deleted.
+
 ## Holes
-- Left: `alloc.freeChgRun`, `alloc.freeLocalRun`, `alloc.reallocChgRun`,
-  `alloc.reallocLocalRun`.
+- Left: `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
 
 ## Next
-1. `_free_r`'s top merge (`0x80007534`: `toTop`, with `coalPrev` for a free predecessor) and
-   `_malloc_trim_r` (over `sbrk_r_gen` and `topResize`); then the entry wrapper and the
-   `alloc.freeChgRun`/`freeLocalRun` fields.
-2. `_realloc_r` (the `sltu` at `0x800052d0` needs a hand step lemma), whose nested
-   `_malloc_r` call reuses `malloc_all` with its own `MCtx`.
+1. `_realloc_r` (the `sltu` at `0x800052d0` needs a hand step lemma), whose nested
+   `_malloc_r` and `_free_r` calls reuse `malloc_all`/`free_body` with their own `MCtx`.

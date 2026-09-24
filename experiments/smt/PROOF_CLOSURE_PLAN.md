@@ -2822,7 +2822,22 @@ blocks left). `malloc_all` is `_malloc_r` closed on every path;
 `mallocChgRun_proved` and `mallocLocalRun_proved`
 (`VsaIris/Vsa/MallocRunAll.lean`) are the counted and uncounted runs from
 `malloc`'s entry, and the fields `alloc.mallocChgRun`/`alloc.mallocLocalRun`
-are deleted. `free` and `realloc` remain (`AllocHoles`).
+are deleted.
+
+`_free_r` is closed on every path (`free_body`, `VsaIris/Vsa/FreeTop.lean`): the
+prologue and dispatch (`free_pro`, `FreePro.lean`); below the top, every
+combination of in-use or free neighbours, forward and backward coalescing and
+the last remainder on either side, into the small bins or the large cascade and
+sorted walk (`free_split`, `FreePaths.lean`, over `fb_release`, `FreeBin.lean`,
+and `free_bin`, `FreeLarge.lean`); the top merge with or without a free
+predecessor (`free_top`, over `PHeapAt.toTop` and `PHeapAt.coalPrev` in
+`HeapFree.lean`) and, at the trim threshold, `_malloc_trim_r` (`trim_run`,
+`FreeTrim.lean`: `sbrk(0)` then `sbrk(-extra)` through `sbrk_r_gen`, the top
+lowered by `PHeapAt.topResize`). `freeChgRun_proved` and `freeLocalRun_proved`
+(`FreeRunAll.lean`) are the counted and uncounted runs from `free`'s entry, over
+the tracking memory `ft0` (the witness with the block and stack window
+inserted); the fields `alloc.freeChgRun`/`alloc.freeLocalRun` are deleted.
+`realloc` remains (`AllocHoles`).
 
 CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
 `heapEnd < top0 + physSize n + extendSlack`, which the code does not

@@ -504,8 +504,8 @@ theorem mChg_own {H : List (Nat × Nat)} {s : BitVec 64} (hsp : SpOKA s) (a : Na
 
 /-- The callee-saved registers the caller passed are back at a return. -/
 theorem saved_of_regs {C : MCtx} {R : Nat → BitVec 64} {saved : List (Nat × BitVec 64)}
-    {r n s : BitVec 64} (hsv : saved.map Prod.fst = vsaSaved)
-    (hE : EntryRegs C.rv0 mallocEntryBV r n s saved) (h : MRegs C R) :
+    {e r n s : BitVec 64} (hsv : saved.map Prod.fst = vsaSaved)
+    (hE : EntryRegs C.rv0 e r n s saved) (h : MRegs C R) :
     ∀ p ∈ saved, R p.1 = p.2 := by
   intro p hp
   have hk : p.1 ∈ vsaSaved := by rw [← hsv]; exact List.mem_map_of_mem hp

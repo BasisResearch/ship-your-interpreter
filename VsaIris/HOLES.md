@@ -4,8 +4,6 @@ Every assumption left in the Iris route is a field of `structure IrisHoles` and 
 
 | field | what it assumes | owner | satisfiability evidence | discharge plan |
 |---|---|---|---|---|
-| `alloc.freeChgRun` | counted `_free_r` (coalescing, bins, trim) keeps `vsaRoomB` | H4 | top merge proved (`freeRoomRun_fast`) | `SWP` paths: top merge, backward/forward coalescing, small/large `frontlink`, `_malloc_trim_r` |
-| `alloc.freeLocalRun` | uncounted `_free_r` meets `FreeEnd` | H4 | as `freeChgRun` | shares `freeChgRun`'s paths |
 | `alloc.reallocChgRun` | counted `_realloc_r` grow path meets `ReallocChgEnd` (never NULL) | H4 | `reallocChgSpec_of_run` consumers | `SWP` paths: in place (top, free next), malloc-copy-free; `sltu` at `0x800052d0` needs a hand step lemma |
 | `alloc.reallocLocalRun` | uncounted `_realloc_r` grow path meets `ReallocEnd` | H4 | `reallocSpec_of_localRun` consumers | as `reallocChgRun`, plus the NULL arm |
 | `newlib.snprintf` | `snprintf(dst, n, fmt, a3…a7)` with `0 < n < 2^31` and a `%s`/`%d` format (`FmtArgsOK`) writes a NUL-terminated string into `dst[0,n)`, keeps `stdioOwn`, prints nothing, returns with the ABI frame, in 1024 bytes of stack (`Newlib.snprintfSpec`) | H5; scheduled after E1–E6 (user, Q4) | `%lld` success path proved (VSA M3, `SnprintfSpec*`); measured frames 272 + 592 + 64 | M3 format-parser and digit-loop segments; `%s` copy loop |
