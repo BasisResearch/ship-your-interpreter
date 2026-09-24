@@ -47,7 +47,9 @@ wand captures the arm's frame).
   (structure) — theorems, no hypothesis for the consumer to discharge beyond
   `evalSpecsP`/`execSpecsP`.
 
-## Done (no holes; axioms ⊆ {propext, Classical.choice, Quot.sound})
+## Done (no holes; axioms ⊆ {propext, Classical.choice, Quot.sound}, `Interp/LoopAudit.lean`)
+
+The whole family is proved in both modes.
 
 | lemma | file | mode |
 |---|---|---|
@@ -55,26 +57,43 @@ wand captures the arm's frame).
 | `whileP_all` (Löb: `whilePI_loeb`) | `Interp/LoopWhile.lean` | partial |
 | `forLoopT_condFalse`, `_bodyBreak`, `_bodyRet`, `_loop`; `forCondT_none`/`_some`; `execStepT_none`/`_some`; `execInitT_none`/`_some` | `Interp/LoopFor.lean` | total |
 | `forLoopP_all` (Löb: `forLoopPI_loeb`), `execInitP_all` | `Interp/LoopFor.lean` | partial |
+| `evalArgsT_nil`, `evalArgsT_cons` | `Interp/LoopArgs.lean` | total |
+| `evalArgsP_all` (structural) | `Interp/LoopArgs.lean` | partial |
 
-- Helper premise of the while/for lemmas: `htr : ⊢ ∀ p v, valueTruthySpec … Wp p v`
-  (H2's `valueTruthy_spec` supplies it; taken as a hypothesis so no proof
-  imports another proof).
+For A (the recursor): `evalArgsT_cons` takes the tail's `EvalArgsCost`
+derivation beside its motive (the D-free motive alone cannot tell that an
+empty tail returned `[]`). The while/for lemmas and `whileP_all`/`forLoopP_all`
+take `htr : ⊢ ∀ p v, valueTruthySpec … Wp p v` (H2's `valueTruthy_spec`
+supplies it), so no proof imports another proof.
+
 - Structure (CLAUDE.md law 3): each loop's runs (`#ix_seg`) are glued by
   WP-generic pieces (`whileStage`, `whileCopy`, `whileExitFalse`,
   `whileStageBody`, `whileRoute`; `forInitNone`/`Stage`, `forJoin`,
   `forCondNone`/`Stage`, `forCopy`, `forBranch`, `forStageBody`, `forRoute`,
-  `forStepNone`/`Stage`); the total and partial proofs differ only in the call
-  steps (`ms_callEvalT`/`ms_callExecT` vs `ms_callEvalPx`/`ms_callExecP(x)`).
+  `forStepNone`/`Stage`; `argsStage`, `argsCopy`). The total and partial
+  proofs differ only in the call steps (`ms_callEvalT`/`ms_callExecT` vs
+  `ms_callEvalP(x)`/`ms_callExecP(x)`).
 - Löb: the while loop strips its hypothesis at the condition's
   `jal eval_expr`, the for loop at the body's `jal exec_stmt` (an iteration
   may have no condition). `wp_callAbort_laterX` (`LoopKit.lean`) is
   `wp_callAbort_later` with one more later-guarded resource.
-- Shared kit (`Interp/LoopKit.lean`): `ms_callEvalPx` (eval call from
-  `exec_stmt`'s frame, partial; E5's `if` can use it), `ms_callExecPx`,
-  `ms_truthyCall` (`value_truthy` on a frame slot, either WP), `execSlot`,
-  `execSP_off`, `Untouched.*`, `astSG_elim`/`astSG_of_view`, `keep_upd`,
-  `KeepRegs.of_helper`, `statusRet_slot`. `ms_iff`/`ms_carveVal`/
-  `ms_uncarveVal` moved from H2's proof files to `NewlibCall.lean`.
+- Shared kit (`Interp/LoopKit.lean`), usable by E5's `if` arm:
+  `ms_callEvalPx` (eval call from `exec_stmt`'s frame, partial),
+  `ms_callExecPx`, `ms_truthyCall` (`value_truthy` on a frame slot, either
+  WP), `execSlot`, `execSP_off`, `Untouched.*`, `astSG_elim`/`astEG_elim`/
+  `astSG_of_view`, `keep_upd`, `KeepRegs.of_helper`/`upd_right`,
+  `statusRet_slot`/`_brk`/`_cont`. `ms_iff`/`ms_carveVal`/`ms_uncarveVal`
+  moved from H2's proof files to `NewlibCall.lean`.
+
+## Line counts (all hand-written; the generator has no rows for this family, see below)
+
+| part | runs (`#ix_seg`) + node lemma | WP-generic glue | total mode | partial mode |
+|---|---|---|---|---|
+| `while` (`LoopWhile.lean`, 766) | 87 | 220 | 221 (call pieces 89 + cases 132) | 221 |
+| `for` (`LoopFor.lean`, 1294) | 162 | 411 | 294 | 392 |
+| `EvalArgs` (`LoopArgs.lean`, 697) | 118 | 244 (+125 `argVals`) | ~90 | ~95 |
+| shared kit (`LoopKit.lean`) | | 373 | | |
+| statements (`SpecLoop.lean`) | | | 410 (both modes) | |
 
 ## Generator
 The loops are block lemmas at a loop head, not arms from a function entry
@@ -82,10 +101,14 @@ The loops are block lemmas at a loop head, not arms from a function entry
 `scripts/iris_arms/arms.d/e6-loops.tsv` has no rows. Like G's `seqLoop`, they
 are `#ix_seg` runs plus `#ix_piece` glue.
 
-## In flight
-- `Interp/LoopArgs.lean`: `evalArgsT_cons` (total; takes the tail's
-  `EvalArgsCost` derivation beside its motive), `evalArgsP_all` (partial,
-  structural). Merged `hub/iris-main` (INTEGRATION.md); rebuilding.
+## Next
+- A: the recursor motives (`ExecSCost`: `execSpecT_body D ∧ ∀ c b, sm =
+  .whileStmt c b → whileT_body …`; `ForLoopCost`/`ForCondCost`/
+  `ExecStepCost`/`ExecInitCost`/`EvalArgsCost`: the motives above) and the
+  two Löb proofs pass `evalSpecsP`/`execSpecsP` to `whileP_all`,
+  `forLoopP_all`, `execInitP_all` and `evalArgsP_all`.
+- Merged `hub/iris-main` (INTEGRATION.md). A git rename artifact moved this
+  LANE.md onto `LANES-h2.md` during that merge; I restored both files.
 
 ## Holes
 None added.
