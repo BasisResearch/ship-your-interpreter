@@ -946,11 +946,12 @@ structure FPv (Mt : Mem) (cs₁ : List Chunk) (bins : Nat → List Nat) (x : Nat
   bk : read64 Mt (p + 24) = some predP
   prev : ∀ h0, read64 Mt (p + 8) = some h0 → h0 % 2 = 1
 
-theorem FNt.pv {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₁ cs₃ : List Chunk}
-    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
-    (N : FNt C R Mt Mt1 brkv cs₁ cs₃ d bins x sz hdr0 hnn w) (hpf : hdr0 % 2 = 0) :
+theorem pv_of_heap {C : MCtx} {Mt : Mem} {brkv : Nat} {cs₁ rest : List Chunk}
+    {bins : Nat → List Nat} {x sz hdr0 : Nat}
+    (h : PHeapAt Mt C.H C.top0 brkv (cs₁ ++ ⟨x, sz, true⟩ :: rest) bins)
+    (hdr : read64 Mt (x + 8) = some hdr0) (hpf : hdr0 % 2 = 0) :
     ∃ cs₀ p psz i pre post predP succP, FPv Mt cs₁ bins x cs₀ p psz i pre post predP succP := by
-  have HH := N.heap.heap.heap
+  have HH := h.heap.heap
   -- `x` is not the first chunk: its header lacks `PREV_INUSE`
   obtain ⟨cs₀, c, hc⟩ : ∃ cs₀ c, cs₁ = cs₀ ++ [c] := by
     rcases List.eq_nil_or_concat cs₁ with rfl | ⟨cs₀, c, rfl⟩
@@ -958,7 +959,7 @@ theorem FNt.pv {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {c
       have hv : x = heapStart := by
         have := (walkHead (by simpa using HH.walk)).addr; exact this
       have := HH.first_prev
-      rw [← hv, N.hdr] at this
+      rw [← hv, hdr] at this
       simp only [Option.any, beq_iff_eq] at this; omega
     · exact ⟨cs₀, c, List.concat_eq_append ..⟩
   subst hc
@@ -969,14 +970,14 @@ theorem FNt.pv {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {c
     rcases hn with ⟨_, h1⟩ | ⟨d', cs', h1, h2⟩
     · cases h1
     · simp only [List.cons.injEq] at h1; rw [← h2, ← h1.1]
-  rw [hca, N.hdr] at hr
+  rw [hca, hdr] at hr
   cases hr
   have hcf : c.inuse = false := by
     rw [← hp]; unfold prevInuse; simp; omega
   obtain ⟨p, psz, ci⟩ := c
   simp only at hca hcf
   subst hcf
-  have hcm : (⟨p, psz, false⟩ : Chunk) ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  have hcm : (⟨p, psz, false⟩ : Chunk) ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: rest := by simp
   obtain ⟨i, hi0, hi, hm, _⟩ := HH.free_binned _ hcm rfl
   simp only at hm
   obtain ⟨pre, post, hbin⟩ := List.append_of_mem hm
@@ -988,10 +989,16 @@ theorem FNt.pv {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {c
   have hft := HH.footer _ hcm rfl
   simp only at hft
   rw [hca] at hft
-  have HH' : HeapAt Mt C.H (fun e => e ∈ C.H) C.top0 brkv (cs₀ ++ ⟨p, psz, false⟩ :: ⟨x, sz, true⟩ :: d :: cs₃) bins := by
+  have HH' : HeapAt Mt C.H (fun e => e ∈ C.H) C.top0 brkv (cs₀ ++ ⟨p, psz, false⟩ :: ⟨x, sz, true⟩ :: rest) bins := by
     simpa using HH
   exact ⟨cs₀, p, psz, i, pre, post, predP, succP, rfl, hca, hi0, hi, hbin, hpred, hsucc, hft,
     (ring_member hring hpred hsucc).1, (ring_member hring hpred hsucc).2, HH'.freeNbrs.prev⟩
+
+theorem FNt.pv {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₁ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    (N : FNt C R Mt Mt1 brkv cs₁ cs₃ d bins x sz hdr0 hnn w) (hpf : hdr0 % 2 = 0) :
+    ∃ cs₀ p psz i pre post predP succP, FPv Mt cs₁ bins x cs₀ p psz i pre post predP succP :=
+  pv_of_heap N.heap N.hdr hpf
 
 /-- The state after reading the free predecessor (`0x800073c8`): the memory
 facts of `FNt` with `cs₁` split at `p`, and `p` in `a4`, the combined size
