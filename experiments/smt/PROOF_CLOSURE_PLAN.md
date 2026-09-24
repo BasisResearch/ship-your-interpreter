@@ -2772,9 +2772,8 @@ So `InitialAllocatorAt.capacity` does not imply allocation success, and no
 allocator contract with a success arm holds of every `InitialAllocatorAt`
 state. The Iris shape adds `brkv % 4096 = 0`. It is preserved by every path:
 the simple extension adds a page-rounded size, and `_malloc_trim_r` releases
-whole pages. Supplier: the boundary (the loader leaves the break page-aligned
-after the parser's first `malloc`); it is not derivable from
-`InterpRunPhysicalFacts`. Affected: `InitialAllocatorAt`, A0's
+whole pages. Supplied (2026-09-24) by `InterpRunReadyFacts.boot`
+(`BootHeapFacts.brk_page`, see A0 below). Affected: `InitialAllocatorAt`, A0's
 `world_of_boundary`, and every malloc success claim.
 
 MISSING BOUNDARY FACT (lane H4, the same shape): `binblocks` (bin 0's size
@@ -2787,21 +2786,136 @@ clears the bitmap lazily, so a set bit need not have a nonempty block), so
 nothing bounds the top set bit. A bit at 32 or above walks the index past bin
 127 and out of `__malloc_av_`. The Iris shape therefore adds
 `read64 m binblocksAddr = some bb -> bb < 2 ^ 32` (`PHeapAt.bb_lt`). Every
-path preserves it: the bits written are `1 << (i / 4)` for `i < 128`. Supplier:
-the boundary, beside the page-aligned break. Affected: `InitialAllocatorAt`,
+path preserves it: the bits written are `1 << (i / 4)` for `i < 128`. Supplied
+by `BootHeapFacts.binblocks`, beside the page-aligned break. Affected: `InitialAllocatorAt`,
 A0's `world_of_boundary`, `roomB_of_initial` (which takes it as `hbb`).
+
+BOUNDARY FACTS (lane A0; SUPPLIED by lane BG, 2026-09-24, user decision): the
+boundary world (`VsaIris/Interp/World.lean`, `world_of_boundary`) needs
+`BootGap b b.G`. Its fields are not derivable from the other
+`InterpRunReadyFacts` fields, so `Loaded` now states them
+(`InterpRunReadyFacts.boot : ∃ D top brkv chunks bins F, BootHeap …`, with
+`BootHeap.facts : BootHeapFacts`, `Vsa/Sim/LayoutInstance.lean`) and
+`Boot.gap` derives `BootGap`; `world_of_boundary` has no gap premise:
+- `frame : FrameChunks …`: the global frame's `Env` struct, names array and
+  values array are three DISTINCT whole in-use chunk payloads holding no
+  shared byte. `HeapAt.live` puts each live extent inside some in-use chunk,
+  not alone in it, but §3's `world` needs the store's blocks to be members of
+  the heap's block list (`⌜∀ b ∈ B, b ∈ H⌝`). `interp_init` allocates each by
+  its own `malloc`.
+- `top_room : top + 16 ≤ brkv` (`BlockHeapAt.top_room`; dlmalloc keeps the
+  top chunk at least `MINSIZE`).
+- `brk_page`, `binblocks`: the two H4 facts above (`PHeapAt`).
+- `stderr : read64 m 0x8001b550 = some 0x8001bbd8` (`_impure_data._stderr`,
+  INTERP_DESIGN.md Q6): `Stdio.StdioOK` requires it. The ELF's `.data` holds
+  it (`_stdin`/`_stdout`/`_stderr` = `&__sf[0..2]`); the control snapshot
+  zeroed `_stdin` and `_stderr` until `Vsa/Sim/OutputAliasSnapshot.lean` gained
+  the two ELF words (A0).
+Satisfiability: `Control.bootHeap` (`Vsa/Sim/NativeNameAudit/ControlBootHeap.lean`)
+inside `Control.readyFacts`; `ctl_bootGap` (`VsaIris/Interp/WorldVacuity.lean`).
+No field mentions the program, so there is no per-program check at
+`c/tests/*.wl` (unlike `ProgramStackFits`). Statement change recorded in
+INTERP_DESIGN.md ("STATEMENT CHANGE (lane BG)").
 
 Machine-checked `malloc` paths (`VsaIris`, lane H4): `VsaIris.VsaHeap.malloc_paths`
 (`VsaIris/Vsa/MallocChain.lean`) runs `_malloc_r` from its entry `0x800047a8`
 over the generated `SWP` step table. Proved: the prologue and the ENOMEM return
 (`malloc_pro`, `malloc_errno`), the small-bin check and take (`j_small`,
 `small_take`, over `PHeapAt.take`), the last-remainder check and its exact-fit
-return (`lr_check`, `lr_take`), the block search's entry (`bb_check`) and the
-top split (`top_path`, over the new `PHeapAt.topSplit`). Five joins remain, and
-are exactly `malloc_paths`' hypotheses: the large-bin scan (`0x80004884`), the
-last-remainder split (`0x80004da0`), the re-binding of a too-small remainder
-(`0x8000491c`), the block walk (`0x80004978`) and `malloc_extend_top`
-(`0x80004a48`).
+return (`lr_check`, `lr_take`), the block search's entry (`bb_check`), the
+top split (`top_path`, `top_split`, over the new `PHeapAt.topSplit`) and
+`malloc_extend_top` (`extend_top`, `VsaIris/Vsa/MallocExtend.lean`: the
+`_sbrk_r` call as one step `sbrk_r_run`, the in-place growth over
+`PHeapAt.topGrow`, and the NULL return), and the last remainder's split
+(`lr_split`, `VsaIris/Vsa/MallocSplit.lean`, over `PHeapAt.splitFree`: the
+take composed with `PHeapAt.carve` through a virtual intermediate memory).
+The small re-binning of a too-small last remainder (`rebin`,
+`VsaIris/Vsa/MallocRebin.lean`, over the new `PHeapAt.moveBinAt`: a move to any
+insertion point of the target bin) continues into the block search's test
+(`bb_entry`); a large one is linked into its sorted bin (`rebinL`,
+`VsaIris/Vsa/MallocRebinL.lean`: the six-way `binIndex` cascade `lbin_idx`, the
+empty-bin case, and the walk `rebinL_walk`, an induction over the bin's
+unvisited members). A large request scans its bin (`lscan`,
+`VsaIris/Vsa/MallocLarge.lean`: the cascade `lscan_idx`, the backward walk
+`lscan_walk`, the take `lscan_take` over the general `take_ret`). The block
+walk (`0x80004978`, `bw_find` in `VsaIris/Vsa/MallocBlocks2.lean`) discharges
+`malloc_paths`' last hypothesis: the initial bitmap search (`bw_find_loop`),
+each block's bin loop and member walk (`bw_block`, `bw_bins`, `bw_member`; take
+`bw_take`, split `bw_split` over `PHeapAt.splitFree`), the clearing of an
+exhausted block's bit (`bw_clear`, over `PHeapAt.clearBlock`), and the
+next-block search (`bw_next`), folded by `bw_walk` (an induction over the
+blocks left). `malloc_all` is `_malloc_r` closed on every path;
+`mallocChgRun_proved` and `mallocLocalRun_proved`
+(`VsaIris/Vsa/MallocRunAll.lean`) are the counted and uncounted runs from
+`malloc`'s entry, and the fields `alloc.mallocChgRun`/`alloc.mallocLocalRun`
+are deleted.
+
+`_free_r` is closed on every path (`free_body`, `VsaIris/Vsa/FreeTop.lean`): the
+prologue and dispatch (`free_pro`, `FreePro.lean`); below the top, every
+combination of in-use or free neighbours, forward and backward coalescing and
+the last remainder on either side, into the small bins or the large cascade and
+sorted walk (`free_split`, `FreePaths.lean`, over `fb_release`, `FreeBin.lean`,
+and `free_bin`, `FreeLarge.lean`); the top merge with or without a free
+predecessor (`free_top`, over `PHeapAt.toTop` and `PHeapAt.coalPrev` in
+`HeapFree.lean`) and, at the trim threshold, `_malloc_trim_r` (`trim_run`,
+`FreeTrim.lean`: `sbrk(0)` then `sbrk(-extra)` through `sbrk_r_gen`, the top
+lowered by `PHeapAt.topResize`). `freeChgRun_proved` and `freeLocalRun_proved`
+(`FreeRunAll.lean`) are the counted and uncounted runs from `free`'s entry, over
+the tracking memory `ft0` (the witness with the block and stack window
+inserted); the fields `alloc.freeChgRun`/`alloc.freeLocalRun` are deleted.
+
+`_realloc_r` is closed on every path (`realloc_body`, `VsaIris/Vsa/ReallocRunAll.lean`):
+the prologue and error return (`realloc_pro`, `realloc_errno`), a chunk already big enough
+(`realloc_dec` into the tail `realloc_tail`), and the growth dispatch `realloc_grow`
+(`ReallocGrow.lean`) into the top (`realloc_topgrow`), a free successor (`realloc_next`,
+over `next_absorb`), a free predecessor alone, with the successor, or with the top
+(`realloc_pvX`, `realloc_pvXN`, `realloc_pvT`: `coalPrev` and a forward copy, the tail
+over a virtual pre-state `pvG_rt`, or the top moved to `P + nb` by `PHeapAt.setTop`), and
+otherwise a fresh block (`realloc_mal`: nested `_malloc_r`, inline copy or `memmove`,
+nested `_free_r`, the merge with a block right after). `reallocChgRun_proved` and
+`reallocLocalRun_proved` are the counted and uncounted runs from `realloc`'s entry; the
+fields `alloc.reallocChgRun`/`alloc.reallocLocalRun` are deleted, and with them
+`IrisHoles.alloc` (`allocSpecs` needs no hole).
+
+CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
+`heapEnd < top0 + physSize n + extendSlack`, which the code does not
+guarantee. `malloc_extend_top` asks `sbrk` for `roundUp4096(nb + 32)` on top of
+a top chunk of up to `nb + 16` bytes, so a failed `sbrk` only bounds the arena
+by `heapEnd < top0 + 2 nb + 4128`. The reason is now `Starved top0 n`
+(`heapEnd + 4096 < top0 + 2 physSize n + extendSlack`); the counted regime still
+refutes it because a charge `c` backs `physSize n ≤ c + 16`
+(`physSize_le_chg16`, `mOK_chg`).
+
+CORRECTED INTERFACE (lane H4, `free`): `alloc.freeLocalRun` and `alloc.freeChgRun`
+were unsatisfiable as stated. `HeapAt` admits two live extents with one start (its
+`exact` field maps each to the same in-use chunk), so `pShape mv ((q, n) :: H)`
+holds with `(q, n') ∈ H`. `_free_r(q)` then releases the chunk below `q`, and no
+in-use chunk holds `(q, n')` afterwards, so `FreeEnd`'s `pShape mv' H` fails for every
+final image. The block-level `FreshBlock` does not exclude this: a zero-length
+extent is disjoint from everything. The fix is in the allocator's own invariant:
+`pShape` and `vsaRoomB` (`VsaIris/Vsa/HeapRoom.lean`) now carry `Starts H` (distinct
+starts). `malloc` maintains it through `FreshAt.start` (`PHeapAt.take_fresh`,
+`topSplit_fresh`: the handed-out chunk was free or the top, so no in-use payload
+starts there), and the initial heap has it by `starts_inuseBlocks`. Clients are
+unaffected: `isHeap` is the only producer of the shape.
+
+CORRECTED INTERFACE (lane H4, `realloc`): `ReallocLocalRun` (`VsaIris/MallocRun.lean`) had
+no bound on `nNew`, while the machine receives `a1 = BitVec.ofNat 64 nNew`. For
+`nNew = 2^64 + 64` and `nOld = 16`, `_realloc_r` grows the block to 64 bytes and returns
+it non-NULL whenever the arena has room, but `ReallocEnd`'s success arm demands
+`FreshBlock L H p' nNew` (`p' + nNew ≤ heapEnd`), so the run was false in such states.
+`ReallocLocalRun` and `reallocSpec`'s precondition now carry `nNew < 2 ^ 64`; the counted
+`ReallocChgRun` already bounds `nNew` through its charge. `reallocSpec` has no consumer
+beyond the audit.
+
+STRENGTHENED CONTRACT (lane H4, nested `_malloc_r`): `_realloc_r`'s merge path
+(`0x800055b0`, the new block right after the old chunk) sets the merged size from the
+old chunk size it spilled before calling `_malloc_r`, so it needs that `_malloc_r` did not
+resize the chunk holding a live block. `MRet` (and `MHeap`, `TakeRet`) now carry
+`LiveKeep C chunks` (`MallocCtx.lean`): the in-use chunk of each live block, as the entry
+memory's header records it, is in the final chunk list. `_malloc_r`'s internal steps keep
+the chunk list; each block-producing exit only re-flags or splits a free chunk
+(`LiveKeep.map_reflag`, `LiveKeep.split`) or appends the top split.
 
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
@@ -4045,7 +4159,7 @@ the observation (`stepObs_alu` + the decode table + `execute_rtype_sltu_char`/
 `SymObs.swp_alu`, so symbolic runs (`ix_run`) take `snez`/`seqz` like any other
 instruction. The `MKind` extension would retire these too.
 
-## `stringify` cuts a closure's rendering at 63 characters (lane H2, 2026-09-24)
+## `stringify` cuts a closure's rendering at 63 characters (lane H2, 2026-09-24; RESOLVED)
 
 `stringify` (`interp.c:84-106`) renders a named closure with
 `snprintf(buf, sizeof buf, "<fn %s>", name)` into `char buf[64]`, then copies
@@ -4064,10 +4178,11 @@ evidence is below.
   the loaded AST is not bounded by the parser.
 - **Affected.** `EvalE`'s concat rule, hence `term_sim_iris`/`stuck_sim_iris`.
   H2 states `stringify` against the machine (`Newlib.fnRender`).
-- **Fix options (needs the user, INTERP_DESIGN.md Q8).** Either
-  `Value.catDisplay` cuts the closure rendering at 63 characters (the machine's
-  behaviour), or `Loaded` bounds function-name lengths (a boundary field like
-  `stack_admissible`).
+- **Resolved (user decision Q8, 2026-09-24).** `Value.catDisplay` cuts:
+  a named closure renders as `Vsa.While.fnCatRender` (`"<fn " ++ n ++ ">"`,
+  first 63 characters), definitionally `Newlib.fnRender` (`fnRender_eq`);
+  `strRender_eq : strRender st v = v.catDisplay st`. `Validation.lean` and the
+  `c/tests` expectations are unchanged (their names are short).
 
 ## Closure objects carry no read geometry on the Iris side (lane H2, 2026-09-24)
 

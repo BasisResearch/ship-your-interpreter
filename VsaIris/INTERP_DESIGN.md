@@ -16,6 +16,74 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q2: `IrisHoles` replaces `RemainingWork`.** Do not keep both. Package A deletes `RemainingWork`, `TermResidualsBase`, `DivWork`, `ErrWork` and their suppliers once `endToEnd_refinement` is re-proved from `IrisHoles`; the name `endToEnd_refinement` is kept.
 - **Q3: two WPs** (`mTWP` total, `mWP` partial) behind `MachWP`.
 - **Q4: newlib `snprintf`/`fprintf` safety specs stay as named holes for now,** scheduled after E1–E6. They must not be forgotten: every hole lives as a field of `IrisHoles` (so it appears in the final theorem's hypothesis) AND has an entry in `VsaIris/HOLES.md` with owner package, satisfiability evidence and discharge plan. `scripts/check_iris_holes.py` fails if the two disagree.
+- **A0's `BootGap` moves into `Loaded` (2026-09-24).** The boundary heap facts become `InterpRunReadyFacts` fields, as Q1 did with `stack_admissible`; `world_of_boundary` no longer takes them as a premise. (lane BG; see the next STATEMENT CHANGE)
+
+- **Two more boundary facts in `Loaded` (2026-09-24, integration).** H1's frame invariant (`FrameLayout`/`FrameBridge`: canonical capacity, `SharedWin` for string reads) needs them at the global frame; `Loaded` did not state them. (see the next STATEMENT CHANGE)
+
+- **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
+- **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
+
+## STATEMENT CHANGE (integration): the global frame's capacity and the shared bytes' geometry
+
+`BootFrameChunks` gains `cap_canon : F.cap = 8` (the capacity `env_define`
+reaches for `interp_init`'s three natives, `capFor 3`), and `BootHeapFacts`
+gains `shared_geom : SharedGeom shared stackSL` (every shared byte is RAM with
+8 bytes of slack, off the HTIF words and the stack; VSA's own `SharedGeom`).
+
+- **Why.** H1 made the frame invariant exact: `FrameLayout.cap_canon`
+  (`cap = capFor n`, which the counted regime's growth charges follow) and
+  `frameBody_of_frameRepr`'s `SharedWin P` (the string routines' read
+  window). Neither follows from the ownership data: `FrameArraysOwned.bound`
+  only gives `3 ≤ cap`, and `Immutable.readable` only `k < 2^32`.
+- **What narrowed.** `Loaded interpRunLayout p c`, as in lane BG.
+- **Not vacuous.** The control has `cap = 8` (`rfl`) and shared bytes at
+  `0x81000200…` and in the AST page (`Control.sharedGeom`, `omega`).
+- **Consumer.** `World.lean`: `BootGap.sharedWin` (`sharedWin_of_geom`),
+  `FrameChunks.cap_canon`. The array blocks are the chunk payloads cut to
+  `8 cap`/`24 cap` bytes (`trimArrays`, H1's exact `FrameLayout.arrays`); the
+  boundary heap's live list `Boot.H` trims them the same way
+  (`BlockHeapAt.shrink`), so the store's blocks stay live-list members.
+
+## STATEMENT CHANGE (lane BG): `Loaded interpRunLayout` now carries the boundary heap facts
+
+`Vsa/Sim/LayoutInstance.lean` `InterpRunReadyFacts` replaced the field
+`ownership : ∃ D, InitialOwned … D` by
+
+```lean
+boot : ∃ D top brkv chunks bins F,
+  BootHeap c.σ.mem A φf φc stmts count D top brkv chunks bins F
+structure BootHeap … : Prop where
+  owned : InitialOwned m A stackSL φf φc stmts count D
+  alloc : InitialAllocatorAt m D.exts (ReallocExtent D.allocations) stmts count top brkv chunks bins
+  facts : BootHeapFacts m D.shared (φf 0) top brkv chunks F
+structure BootHeapFacts … : Prop where
+  top_room  : top + 16 ≤ brkv                    -- dlmalloc's MINSIZE top
+  brk_page  : brkv % 4096 = 0                    -- Q5
+  binblocks : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32   -- Q5b
+  frame     : BootFrameChunks m chunks shared e F  -- global frame: 3 distinct whole unshared chunk payloads, cap 8
+  stderr    : read64 m impureStderrAddr = some exitStderr            -- Q6
+  shared_geom : SharedGeom shared stackSL                            -- (integration)
+```
+
+- **What narrowed.** `interpRunLayout.atInterpRun`, hence `Loaded
+  interpRunLayout p c` and the hypothesis of `endToEnd_refinement`.
+  `Refinement.lean` is unchanged. `InterpRunReadyFacts.ownership` is now a
+  theorem projecting `boot`, with the old field's type, so its consumers are
+  unchanged.
+- **Why these witnesses together.** The facts are about the ownership
+  data's `shared` set and one allocator walk (`top`, `brkv`, `chunks`), which
+  `ownership` and `InitialOwned.allocator` bound existentially. Stating them
+  as separate fields would let the gap talk about different witnesses.
+- **Consumer.** `VsaIris/Interp/World.lean`: `boot_of_loaded` fills
+  `Boot.frame`/`Boot.heapFacts` from `boot`; `Boot.G` is the frame geometry
+  and `Boot.gap : BootGap b b.G` projects the old premise.
+  `world_of_boundary b ρ hρ` has no gap argument and carves `b.bytes b.G`.
+- **Not vacuous.** The control: `Vsa/Sim/NativeNameAudit/ControlBootHeap.lean`
+  (`Control.bootHeap`: kernel `decide`s over the chunk list and reads through
+  the heap log), consumed by `Control.readyFacts`, hence `Control.loaded`.
+  No field mentions the program, so unlike `ProgramStackFits` there is no
+  per-program predicate to decide at `c/tests/*.wl`. No checked `Loaded`
+  configuration has been built for those programs, for any field.
 
 ## STATEMENT CHANGE (S1, Q1 landed): `Loaded interpRunLayout` now carries stack admissibility
 
@@ -446,21 +514,43 @@ initSt 0 0 p st' .normal`, which is `BigStep p st'.out`.
 
 ## 5. Assembly (work package A)
 
-### 5.1 The boundary (A0)
+### 5.1 The boundary (A0, landed)
 
-`world_of_boundary : InterpRunReady c a n → ProgramRepr c.σ.mem a n p → ⊢ |==> …`
-allocates the ghost state from the initial memory:
+`VsaIris/Interp/World.lean`:
 
-- the γf/γc maps at `initSt`'s frame 0;
-- the console at `output c.σ`;
-- `isHeapRoom … (capacity p)` for total, or `isHeap` for partial, from
-  `InitialOwned.allocator` + `vsaRoom`;
-- `□ codeImage`, `□ astSs a n p`, `interpCtx 0`, and the top stack region.
+```lean
+theorem world_of_boundary (b : Boot c p) (ρ : Regime) (hρ : RegimeOK b.top ρ) :
+    ([∗map] k ↦ v ∈ b.bytes b.G, k ↦ₘ v) ∗ consoleOwn (output c.σ) ⊢
+      |==> ∃ γf γc, (letI : InterpGS GF := ⟨γf, γc⟩; bootRes b ρ)
+```
 
-It reuses `blockHeapAt_of_heapAt` and `HeapShape`. This is also the place for
-xv6iris's vacuity check (`durable-notes.md` "Vacuity"): prove the boundary
-bundle is satisfiable at the concrete control program (the `ControlWitness`
-image), not only that it typechecks.
+- `Boot c p` names every witness of `Loaded interpRunLayout p c`
+  (`boot_of_loaded`). `b.bytes b.G` is the byte map adequacy hands the client
+  (`Boot.bytes_agree`: it agrees with the configuration). Its address list is
+  sealed behind `Classical.choose` so the kernel never unfolds the
+  `2 ^ 32`-element range it is cut from.
+- `bootRes b ρ`: `worldPre` (the allocator `heapRes vsaLayoutP vsaRoomB ρ`,
+  the store `initSt.store` in one frame, the console, `Stdio.stdioOwn`, and
+  `interpCtxPre`: `world` with the `jmp_buf` still exclusive), frame 0's
+  address, `astSs`, `roOn CodeByte` (text and rodata; `textOwn_of_roOn`
+  projects any `textOwn`), `roOn shared`, the stack below `interp_run`'s entry
+  (F3's `stackScratch_boundary` carves from it), `main`'s frame outside
+  `struct Interp` (480 bytes), and the writable statics outside the allocator
+  and newlib.
+- The heap is `vsaLayoutP`/`vsaRoomB`, the layout and room of
+  `IrisHoles.alloc` (H4), not S1's `vsaLayout`/`costRoom`.
+  `RegimeOK top (.counted k)` is `2k + extendSlack ≤ heapEnd - top`;
+  `Boot.regime_of_bigStep` gives it at the derivation's cost from
+  `InitialAllocatorAt.capacity`.
+- `Boot.gap : BootGap b b.G` supplies the boundary heap facts (the three
+  frame chunks, `top_room`, Q5, Q5b, Q6) from `InterpRunReadyFacts.boot`
+  (see "STATEMENT CHANGE (lane BG)").
+- `WorldStdio.stdioOK_of_mem`: `StdioOK (memImg m)` from `ConsoleStream m`,
+  `ExitRuntimeData m` and the `stderr` word.
+
+Vacuity (`VsaIris/Interp/WorldVacuity.lean`): `ctlBoot`, `ctl_bootGap`, and
+`ctl_world_counted`/`ctl_world_uncounted` instantiate `world_of_boundary` at
+the control program in both regimes.
 
 ### 5.1b The heap credits: Room ↔ Cost (S1, landed)
 
@@ -893,7 +983,7 @@ binary or by what the proofs consume:
   (`interpText`, `codeRes`) covers the value helpers, the natives and
   `stringify`, so a helper spec needs no second code resource and lane G's
   `helperSpec` shape is used as is. `sltu`/`sltiu` get `itO_<pc>` step lemmas
-  (`SymObs.swp_alu`), which `ix_run` tries.
+  (`SymObs.swp_alu`, over H4's `swp_aluRR`), which `ix_run` tries.
 - **`IrisHoles.out`** (`VsaIris/Vsa/NewlibOut.lean`): newlib's stdout calls
   (`fputs`, `fputc`, `fwrite`, `fprintf` on `stdout`) exact about what they
   print, and `stringify`'s `snprintf(buf, 64, "<fn %s>", name)`. VSA assumed
@@ -927,7 +1017,7 @@ binary or by what the proofs consume:
 
 ## 11. Open questions for the user
 
-- **Q5 (lane H4, needs the user): a page-aligned break at the boundary.** `malloc_extend_top`
+- **Q5 (lane H4; resolved 2026-09-24: `BootHeapFacts.brk_page`): a page-aligned break at the boundary.** `malloc_extend_top`
   grows the top in place only when the old heap end is page-aligned (`0x80004f70`). Otherwise it
   returns NULL when the old top is under 32 bytes (`0x80004f94`), or it fenceposts and frees the
   old top, which `ChunkWalk` cannot describe. `InitialAllocatorAt` does not rule this out, so its
@@ -936,7 +1026,7 @@ binary or by what the proofs consume:
   whole pages). A0 needs it at the boundary, which means a new `Loaded` field beside `capacity`,
   or a proof from the loader. Recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
-- **Q5b (lane H4, needs the user): a 32-bit `binblocks` word at the boundary.** `_malloc_r`'s
+- **Q5b (lane H4; resolved 2026-09-24: `BootHeapFacts.binblocks`): a 32-bit `binblocks` word at the boundary.** `_malloc_r`'s
   block search shifts a mask up to the next set bit of `binblocks` and advances the bin index by
   four each shift (`0x80004994`-`0x800049a0`). `HeapAt.binblocks` bounds only the bits of nonempty
   blocks, and dlmalloc clears the bitmap lazily, so a bit at 32 or above would walk the index past
@@ -960,7 +1050,7 @@ binary or by what the proofs consume:
 - **Q4: newlib safety holes.** `snprintf`/`fprintf` on the error paths are
   needed only so that partial mode is "never stuck". Leave them as named
   holes, or schedule proofs? (`vfprintf` is large.)
-- **Q6 (lane H5, needs the user): `_impure_data._stderr` at the boundary.**
+- **Q6 (lane H5; resolved 2026-09-24: `BootHeapFacts.stderr`): `_impure_data._stderr` at the boundary.**
   `main`'s error line (`0x80004600`) loads its stream with `ld a5,0(s0);
   ld a0,24(a5)`, i.e. from the reentrancy record's `_stderr` field
   (`0x8001b550`). `InterpRunPhysicalFacts` pins stdout (`ConsoleStream`) and
@@ -969,7 +1059,12 @@ binary or by what the proofs consume:
   path's safety is unprovable. `Stdio.StdioOK` requires it
   (`read64 m stderrPtrAddr = some exitStderr`); the supplier is one more
   `ExitRuntimeData` field, read off the same snapshot
-  (`Vsa/Sim/OutputAliasSnapshot.lean`).
+  (`Vsa/Sim/OutputAliasSnapshot.lean`). A0: the ELF's `.data` holds it
+  (`_impure_data` initializes `_stdin`/`_stdout`/`_stderr` to `&__sf[0..2]`).
+  The control snapshot had zeroed `_stdin` and `_stderr`; it now carries the
+  two ELF words. Resolved: `Loaded` states the pointer
+  (`BootHeapFacts.stderr`, lane BG), and `Boot.gap` hands it to
+  `world_of_boundary` as `BootGap.stderr`.
 - **Q7 (lane H5, needs the user): the error path's stack at the deepest call.**
   `runtime_error` needs 224 bytes plus `snprintf`'s chain (272 + 592 + 64 =
   928, `IrisHoles.newlib.snprintf` claims 1024). The budget's leaf headroom is
@@ -980,7 +1075,7 @@ binary or by what the proofs consume:
   below the program's need, or `perCallBudget` accounting leaves it at depth
   `maxCallDepth`. H5 states `runtime_error`'s spec with its real need; E1–E6
   must supply it at each error site.
-- **Q8 (lane H2, needs the user): `stringify` cuts a named closure's rendering
+- **Q8 (lane H2; decided 2026-09-24: the semantics cuts, see Decisions): `stringify` cuts a named closure's rendering
   at 63 characters.** `stringify` renders a closure with
   `snprintf(buf, 64, "<fn %s>", name)` and copies the buffer, so the string
   `+` of a closure whose name is longer than 58 characters yields

@@ -6,7 +6,7 @@ import VsaIris.Interp.HeapCall
 `env_define` grows a frame's two arrays with `realloc`: from `NULL` on the
 first growth (`reallocNullRho_spec`, from the `ReallocNullHoles` runs) and
 from a live block afterwards (`reallocRho_spec`, from H4's
-`AllocHoles.reallocChgRun` and `AllocSpecs.reallocUncounted`). As for
+`reallocChgRun_proved` and `AllocSpecs.reallocUncounted`). As for
 `malloc` (`mallocRho_spec`), one spec covers both regimes; NULL is possible
 only uncounted.
 -/
@@ -16,7 +16,7 @@ namespace VsaIris.Interp
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.VsaHeap VsaIris.MallocFast VsaIris.Sym
 
-/-! ## The heap depends on its live list only through membership -/
+/-! ## The heap depends on its live list only up to permutation -/
 
 section Congr
 
@@ -47,24 +47,27 @@ theorem pHeapAt_congr {m : Vsa.MemRepr.Mem} {H H' : List (Nat × Nat)} {top brkv
     (h : PHeapAt m H top brkv chunks bins) : PHeapAt m H' top brkv chunks bins :=
   { h with heap := { h.heap with heap := heapAt_congr hx hx h.heap.heap } }
 
-theorem pShape_congr {img : Nat → BitVec 8} {H H' : List (Nat × Nat)} (hx : ∀ e, e ∈ H ↔ e ∈ H')
+theorem pShape_congr {img : Nat → BitVec 8} {H H' : List (Nat × Nat)} (hp : H.Perm H')
     (h : pShape img H) : pShape img H' := by
-  obtain ⟨m, top, brkv, chunks, bins, hm, hs⟩ := h
-  exact ⟨m, top, brkv, chunks, bins, vsaFoot_congr hx ▸ hm, pHeapAt_congr hx hs⟩
+  obtain ⟨hst, m, top, brkv, chunks, bins, hm, hs⟩ := h
+  exact ⟨(hp.map Prod.fst).nodup_iff.1 hst, m, top, brkv, chunks, bins,
+    vsaFoot_congr (fun _ => hp.mem_iff) ▸ hm, pHeapAt_congr (fun _ => hp.mem_iff) hs⟩
 
 theorem vsaRoomB_congr {img : Nat → BitVec 8} {H H' : List (Nat × Nat)} {k : Nat}
-    (hx : ∀ e, e ∈ H ↔ e ∈ H') (h : vsaRoomB img H k) : vsaRoomB img H' k := by
-  obtain ⟨m, top, brkv, chunks, bins, hm, hs, hk⟩ := h
-  exact ⟨m, top, brkv, chunks, bins, vsaFoot_congr hx ▸ hm, pHeapAt_congr hx hs, hk⟩
+    (hp : H.Perm H') (h : vsaRoomB img H k) : vsaRoomB img H' k := by
+  obtain ⟨hst, m, top, brkv, chunks, bins, hm, hs, hk⟩ := h
+  exact ⟨(hp.map Prod.fst).nodup_iff.1 hst, m, top, brkv, chunks, bins,
+    vsaFoot_congr (fun _ => hp.mem_iff) ▸ hm, pHeapAt_congr (fun _ => hp.mem_iff) hs, hk⟩
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The heap resource up to its live list's membership** (e.g. a
-permutation bringing a block to the front for `realloc`). -/
-theorem heapRes_congr {ρ : Regime} {H H' : List (Nat × Nat)} (hx : ∀ e, e ∈ H ↔ e ∈ H') :
+/-- **The heap resource up to a permutation of its live list** (e.g. bringing
+a block to the front for `realloc`). A permutation, not only membership: the
+shape keeps the live starts distinct (`Starts`). -/
+theorem heapRes_congr {ρ : Regime} {H H' : List (Nat × Nat)} (hx : H.Perm H') :
     heapRes (GF := GF) vsaLayoutP vsaRoomB ρ H ⊢ heapRes vsaLayoutP vsaRoomB ρ H' := by
   have hf : heapFoot vsaLayoutP H = heapFoot vsaLayoutP H' := by
-    rw [heapFoot_vsaLayoutP, heapFoot_vsaLayoutP]; exact vsaFoot_congr hx
+    rw [heapFoot_vsaLayoutP, heapFoot_vsaLayoutP]; exact vsaFoot_congr fun _ => hx.mem_iff
   cases ρ with
   | counted k =>
     simp only [heapRes]
@@ -224,10 +227,10 @@ def reallocRes (ρ : Regime) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew 
 omit I in
 /-- **`realloc` of a live block in regime `ρ`**, charged `c` credits for the
 new size when counted. -/
-theorem reallocRho_spec (AH : AllocHoles) (hlive : AllocLive live)
+theorem reallocRho_spec (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (ρ : Regime) (H : List (Nat × Nat)) (p : BitVec 64)
     (nOld nNew : Nat) (s : BitVec 64) (old : Nat → BitVec 8) (c : Nat) (hc : vsaChg nNew c)
-    (saved : List (Nat × BitVec 64)) (hsv : saved.map Prod.fst = vsaSaved) :
+    (hn : nNew < 2 ^ 64) (saved : List (Nat × BitVec 64)) (hsv : saved.map Prod.fst = vsaSaved) :
     textOwn (GF := GF) allocText ⊢ fnSpecW Wp reallocEntryBV
       (fun r => iprop(⌜SpOKA s ∧ r.toNat % 4 = 0 ∧ nOld < nNew⌝ ∗ a0 ↦ᵣ p ∗
         clobberedArg vsaClob a1 (BitVec.ofNat 64 nNew) ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpV ∗ savedOwn saved ∗
@@ -238,7 +241,7 @@ theorem reallocRho_spec (AH : AllocHoles) (hlive : AllocLive live)
   cases ρ with
   | counted k =>
     iintro #Ht
-    ihave #Hs := reallocChgSpec_of_run Wp (AH.reallocChgRun live hlive) shapeLocal_vsaLayoutP
+    ihave #Hs := reallocChgSpec_of_run Wp (reallocChgRun_proved live hlive) shapeLocal_vsaLayoutP
       roomLocal_vsaRoomB vsaAllocRegs_nodup (by decide) H p nOld nNew s old k c saved hsv $$ Ht
     unfold reallocChgSpec fnSpecW
     imodintro
@@ -258,7 +261,7 @@ theorem reallocRho_spec (AH : AllocHoles) (hlive : AllocLive live)
     iexact Hpost
   | uncounted =>
     iintro #Ht
-    ihave #Hs := (allocSpecs AH live hlive).reallocUncounted.realloc Wp H p nOld nNew s old saved hsv
+    ihave #Hs := (allocSpecs live hlive).reallocUncounted.realloc Wp H p nOld nNew s old saved hsv
       $$ Ht
     unfold reallocSpec fnSpecW
     imodintro
@@ -266,7 +269,7 @@ theorem reallocRho_spec (AH : AllocHoles) (hlive : AllocLive live)
     simp only [Regime.plus_uncounted, heapRes]
     iapply Hs $$ %r %Φ Hpc Hra [Ha0 Hcl Hsp Hsv Hstk Hh Hb]
     · isplitr
-      · ipureintro; exact ⟨hsp, hr, hlt⟩
+      · ipureintro; exact ⟨hsp, hr, hlt, hn⟩
       iframe Ha0 Hcl Hsp Hgp Hsv Hstk Hh Hb
     iintro Hpc Hra ⟨%p', Ha0, Hsp, Hcl, Hsv, Hstk, Hpost⟩
     iapply Hk $$ Hpc Hra
