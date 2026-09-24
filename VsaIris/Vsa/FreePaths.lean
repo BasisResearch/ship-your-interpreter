@@ -1146,4 +1146,88 @@ theorem free_b2 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {b
     have e1 := B.a1; have e0 := B.a0
     apply BitVec.eq_of_toNat_eq; rw [e1, e0]; exact hLR.2 he
 
+/-- The numbers of a backward coalescing: `p`, `x = p + psz` and the chunk
+`d` after `x`, and where `p`'s bin nodes lie. -/
+structure B2Geo (C : MCtx) (p psz sz dsz predP succP : Nat) : Prop where
+  p16 : p % 16 = 0
+  plo : 0x8001c170 ≤ p
+  psz16 : psz % 16 = 0
+  psz32 : 32 ≤ psz
+  sz16 : sz % 16 = 0
+  sz32 : 32 ≤ sz
+  dsz16 : dsz % 16 = 0
+  dsz32 : 32 ≤ dsz
+  dend : p + psz + sz + dsz ≤ C.top0
+  top : C.top0 + 16 ≤ 0x87800000
+  pp16 : predP % 16 = 0
+  sp16 : succP % 16 = 0
+  pplo : 0x8001ad20 ≤ predP
+  splo : 0x8001ad20 ≤ succP
+  pphi : predP + 32 ≤ C.top0
+  sphi : succP + 32 ≤ C.top0
+  sP : p ≠ succP + 16
+  sX : p + psz ≠ succP + 16
+  sD : p + psz + sz ≠ succP + 16
+  pD : p + psz + sz ≠ predP + 16
+  pP : p ≠ predP + 8
+  pX : p + psz ≠ predP + 8
+  ppfoot : ∀ k, 16 ≤ k → k < 32 → vsaFoot C.H (predP + k)
+  spfoot : ∀ k, 16 ≤ k → k < 32 → vsaFoot C.H (succP + k)
+
+theorem FB2.geo {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    {p psz i : Nat} {pre post : List Nat} {predP succP : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ d bins x sz hdr0 hnn w p psz i pre post predP succP) :
+    B2Geo C p psz sz d.size predP succP := by
+  have HH := B.heap.heap.heap
+  have P := B.pv
+  obtain ⟨hal, _⟩ := HH.aligned
+  have hpm : (⟨p, psz, false⟩ : Chunk) ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  have hxm : (⟨x, sz, true⟩ : Chunk) ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  have hdm : d ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  have hpb := HH.walk.chunk_bounds _ hpm; have hdb := HH.walk.chunk_bounds _ hdm
+  have hp16 := hal _ hpm
+  have hps := walk_sizes HH.walk _ hpm; have hxs := walk_sizes HH.walk _ hxm
+  have hds := walk_sizes HH.walk _ hdm
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := B.heap.heap.top_room
+  have hpend := P.pend
+  have hda := B.daddr
+  simp only at hpb hp16 hps hxs
+  rw [hda] at hdb
+  have hpredm : predP = binAt i ∨ predP ∈ bins i := by
+    have := List.mem_of_getLast? P.hpred
+    rcases List.mem_cons.mp this with h1 | h1
+    · exact .inl h1
+    · exact .inr (by rw [P.bin]; exact List.mem_append_left _ h1)
+  have hsuccm : succP = binAt i ∨ succP ∈ bins i := by
+    have := List.mem_of_head? P.hsucc
+    rcases List.mem_append.mp this with h1 | h1
+    · exact .inr (by rw [P.bin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
+    · exact .inl (List.mem_singleton.mp h1)
+  obtain ⟨hpp16, hpnode⟩ := HH.node P.i0 P.i1 hpredm
+  obtain ⟨hsp16, hsnode⟩ := HH.node P.i0 P.i1 hsuccm
+  have bP : (p = C.top0 ∨ ∃ c ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃, c.addr = p) :=
+    .inr ⟨_, hpm, rfl⟩
+  have bX : (x = C.top0 ∨ ∃ c ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃, c.addr = x) :=
+    .inr ⟨_, hxm, rfl⟩
+  have bD : (x + sz = C.top0 ∨ ∃ c ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃, c.addr = x + sz) :=
+    .inr ⟨_, hdm, hda⟩
+  have hloc : ∀ z, (z = binAt i ∨ ∃ cx ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃,
+      cx.addr = z ∧ cx.inuse = false ∧ z ∈ bins i) →
+      0x8001ad20 ≤ z ∧ z + 32 ≤ C.top0 := by
+    rintro z (rfl | ⟨cx, hcx, rfl, _, _⟩)
+    · have := binAt_geo i P.i1; have := HH.walk.le; have hi0 := P.i0
+      unfold binAt avAddr heapStart at *; omega
+    · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; omega
+  unfold heapStart heapEnd at *
+  exact ⟨hp16, hpb.1, hps.1, hps.2, hxs.1, hxs.2, hds.1, hds.2, by have := hdb.2.1; omega, by omega,
+    hpp16, hsp16, (hloc _ hpnode).1, (hloc _ hsnode).1, (hloc _ hpnode).2, (hloc _ hsnode).2,
+    HH.bnd_ne_node P.i1 hsnode bP 16 (by omega) (by omega),
+    by rw [hpend]; exact HH.bnd_ne_node P.i1 hsnode bX 16 (by omega) (by omega),
+    by rw [hpend]; exact HH.bnd_ne_node P.i1 hsnode bD 16 (by omega) (by omega),
+    by rw [hpend]; exact HH.bnd_ne_node P.i1 hpnode bD 16 (by omega) (by omega),
+    HH.bnd_ne_node P.i1 hpnode bP 8 (by omega) (by omega),
+    by rw [hpend]; exact HH.bnd_ne_node P.i1 hpnode bX 8 (by omega) (by omega),
+    B.heap.heap.node_foot P.i0 P.i1 hpredm, B.heap.heap.node_foot P.i0 P.i1 hsuccm⟩
+
 end VsaIris.VsaHeap
