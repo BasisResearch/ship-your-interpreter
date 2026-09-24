@@ -26,6 +26,13 @@ theorem evalNeed_call_rtErr (f : Expr) (args : List Expr) (d : Nat) :
   have := evalNeed_call_fn f args d; have := Expr.stackNeed_ge f
   unfold evalNeed stackBudget at *; unfold RtErr.rtErrNeed snprintfNeed evalFrame at *; omega
 
+/-- A call node's budget: its own frame, a child's frame, and the leaf
+headroom (`3 * evalFrame`). -/
+theorem evalNeed_call_ge (f : Expr) (args : List Expr) (d : Nat) :
+    3264 ≤ evalNeed (.call f args) d := by
+  have := evalNeed_call_fn f args d; have := Expr.stackNeed_ge f
+  unfold evalNeed stackBudget at *; unfold evalFrame at *; omega
+
 section Defs
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
