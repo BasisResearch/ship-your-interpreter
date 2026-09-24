@@ -1029,7 +1029,9 @@ binary or by what the proofs consume:
   can name it; `binImg` itself is defined in `Repr.lean` (namespace
   `VsaIris.Newlib`, name unchanged). Consumers adjusted: `world_heapStore`
   (the image on the right), `world_blocks_off_heap`, `rtErr_spec` (rebuilds
-  the landing's world with its own `binImg`), `wp_abortLanding`. A supplies it
+  the landing's world with its own `binImg`), `wp_abortLanding`, E1's
+  `var`/`assign`/`fnLit` templates and E2's `catRest` (it keeps the image for
+  `world_of_catRest`). A supplies it
   at `setjmp` from the boundary's `roOn CodeByte` (`bootRes`).
 - **`interpCtxE` carries the `jmp_buf`'s aligned `ra` word**
   (`∃ jb, jmpRO inp jb ∗ ⌜(imgW jb (inp + interpJmpOff)).toNat % 4 = 0⌝`).
