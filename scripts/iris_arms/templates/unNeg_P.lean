@@ -1,14 +1,17 @@
 import VsaIris.Interp.Case.{ARM}T
+import VsaIris.Interp.ErrArm
 
 /-!
 # `{ARM}`, partial mode (family `unNeg`, INTERP_DESIGN.md §6, §4.2)
 
-`caseP_{ARM}`: from the Löb hypothesis `evalSpecsP`, `eval_expr` on
+`caseP_{ARM}Int`: from the Löb hypothesis `evalSpecsP`, `eval_expr` on
 `.unary .neg e` meets its partial, outcome-quantified spec on the int row. The
 operand is called through the Löb hypothesis (`ms_callEvalP`); an int finishes
 as in total mode (the run lemmas `{ARM}T_run*`) with the derivation
 `EvalE.neg`; any other kind leaves the row (the type-error row, which calls
-`runtime_error`), exported by `#ix_chain` as the hypothesis `hx_1`.
+`runtime_error`), exported by `#ix_chain` as the hypothesis `hx_1`, which the type-error row
+discharges (`caseP_{ARM}`, closed, is in that row's file). The error premises
+(`valueKindNameSpec`, `ErrEnv`, `errCtx`) are that row's.
 Template: `scripts/iris_arms/templates/unNeg_P.lean`.
 -/
 
@@ -22,10 +25,12 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
     {st : St} {d env : Nat} {e : Expr}
-    (hvi : ⊢ ∀ p n, valueIntSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p n) :
-    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
+    (hvi : ⊢ ∀ p n, valueIntSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p n)
+    (hvk : ⊢ ∀ p Mt v, valueKindNameSpec (GF := GF) (vsaModel live) (wpW (vsaModel live)) p Mt v)
+    (hErr : ErrEnv (GF := GF) N L Room inp live Core) :
+    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ∗ errCtx (GF := GF) inp ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.unary .neg e) by
-  iintro #IH
+  iintro ⟨#IH, #HE⟩
   unfold evalSpecP_body fnSpecAbort
   iintro %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
@@ -63,11 +68,11 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
           (wpW (vsaModel live)).W Φ) ∧
         (abortAt Core s (evalNeed (.unary .neg e) d) ∗ slot24 sret.toNat -∗
           (wpW (vsaModel live)).W Φ)) ∗
-      evalSpecsP (vsaModel live) N L Room inp Core))
+      evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp))
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms; isplitr [IH]
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH HE]
     · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
-    · iexact IH
+    · iframe IH HE
   intro F'
   unfold evalEntryPC
   refine {ARM}T_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
@@ -79,7 +84,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   have hsv1 : EvalSaved3 Mt1 s ret (rv 8) (rv 9) (rv 18) := by
     subst hMt1; constructor <;> (ix_fwd using [hoff]; ix_reg)
   unfold F' evalArmF
-  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH⟩, Hms⟩
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH, #HE⟩, Hms⟩
   -- the operand, through the Löb hypothesis
   ihave He := evalSpecsP_at Core st d env e $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800035e8)
@@ -202,6 +207,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep3, hkeep1]
 
-#ix_chain caseP_{ARM} := [{ARM}P_p1, {ARM}P_p2, {ARM}P_p3]
+#ix_chain caseP_{ARM}Int := [{ARM}P_p1, {ARM}P_p2, {ARM}P_p3]
 
 end VsaIris.Interp

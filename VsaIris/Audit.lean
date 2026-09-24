@@ -29,7 +29,7 @@ import VsaIris.Interp.ProofEnvDefine
 import VsaIris.Interp.Case.LogicalAndFalseP
 import VsaIris.Interp.Case.LogicalOrTrueP
 import VsaIris.Interp.Case.UnaryNotP
-import VsaIris.Interp.Case.UnaryNegP
+import VsaIris.Interp.Case.UnaryNegTypeP
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -179,3 +179,4 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Interp.caseP_UnaryNot
 #print axioms VsaIris.Interp.caseT_UnaryNeg
 #print axioms VsaIris.Interp.caseP_UnaryNeg
+#print axioms VsaIris.Interp.caseP_UnaryNegType

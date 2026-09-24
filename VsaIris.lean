@@ -157,6 +157,8 @@ import VsaIris.Interp.Case.UnaryNotT
 import VsaIris.Interp.Case.UnaryNotP
 import VsaIris.Interp.Case.UnaryNegT
 import VsaIris.Interp.Case.UnaryNegP
+import VsaIris.Interp.Case.UnaryNegTypeP
+import VsaIris.Interp.CaseE2
 import VsaIris.Vsa.SymObs
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Interp.SpecValue
