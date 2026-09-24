@@ -53,9 +53,74 @@ theorem FBin.read {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : L
     read64 Mt w = read64 M2 w :=
   read64_keep fun k hk => B.agree _ (hf k hk) (by omega)
 
+/-- A footprint range lies wholly below or above the stack window. -/
+theorem FBin.off_stack {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
+    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) :
+    a + 8 ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ a := by
+  refine Classical.byContradiction fun hc => ?_
+  have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
+    split <;> omega
+  exact B.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
+
+/-- The chunk's interior is footprint of the heap without the block: no live
+block lies in it. -/
+theorem FBin.foot_chunk {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
+    (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot C.H a := by
+  have HH := B.heap.heap.heap
+  have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
+  have hb := HH.walk.chunk_bounds _ hX
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := B.heap.heap.top_room
+  simp only at hb
+  refine .inr ⟨by omega, by omega, fun e he hin => ?_⟩
+  obtain ⟨c, hc, hu, hce, hcs⟩ := HH.exact e he he
+  have hcb := HH.walk.chunk_bounds c hc
+  unfold InExt at hin
+  rcases HH.walk.chunk_sep c hc _ hX with rfl | h3 | h3
+  · exact B.hno e he (by simp only at hce; omega)
+  · simp only at h3; omega
+  · simp only at h3; omega
+
 /-- A read through a store to another doubleword. -/
 theorem read64_miss' {Mt : Mem} {a b : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + 8 ≤ a) :
     read64 (writeLog Mt [(b, 8, v)]) a = read64 Mt a := read64_store_miss Mt v h
+
+/-- **The heap after an insertion**, in any store order: the final memory
+`Mf` has `X` linked between `pred` and `succ` of bin `j`, the bitmap `bb'`,
+and otherwise the memory before the insertion (`hag`), in particular `X`'s
+footer and the next header (`hkeep`). -/
+theorem fb_release {C : MCtx} {Mt M2 Mf : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins)
+    {j pred succ bb' : Nat} {pre' post' : List Nat}
+    (hj0 : 0 < j) (hj : j < numBins) (hidx : 1 < j → binIndex S = j) (hj1 : j = 1 → bins 1 = [])
+    (hpos : bins j = pre' ++ post')
+    (hpred : (binAt j :: pre').getLast? = some pred) (hsucc : (post' ++ [binAt j]).head? = some succ)
+    (hV1 : fdOf Mf X = some succ) (hV2 : bkOf Mf X = some pred)
+    (hP : fdOf Mf pred = some X) (hSb : bkOf Mf succ = some X)
+    (hbbr : read64 Mf binblocksAddr = some bb') (hbblt : bb' < 2 ^ 32)
+    (hbbset : 1 < j → bb' / 2 ^ (j / 4) % 2 = 1)
+    (hbbkeep : ∀ bb, read64 M2 binblocksAddr = some bb →
+      ∀ k, bb / 2 ^ k % 2 = 1 → bb' / 2 ^ k % 2 = 1)
+    (hag : ∀ w, vsaFoot C.H w → ¬ RelW X S pred succ w → Mf[w]? = Mt[w]?)
+    (hkeep : ∀ w, X + S ≤ w → w < X + S + 16 → Mf[w]? = Mt[w]?)
+    (hpres : ∀ a, vsaFoot C.H a → (Mf[a]?).isSome)
+    (hframe : ∀ a, ¬ MWin C.H C.s a → Mf[a]? = C.Mt0[a]?) :
+    FDone C Mf := by
+  have eF : read64 Mf (X + S) = some S := by
+    rw [read64_keep (fun k hk => hkeep _ (by omega) (by omega))]; exact B.foot
+  have eN : ∀ hd, read64 M2 (X + S + 8) = some hd → ∃ hd', read64 Mf (X + S + 8) = some hd' ∧
+      chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2 ∧ prevInuse hd' = false := by
+    intro hd hr
+    obtain ⟨hd', h1', h2', h3', h4'⟩ := B.nx hd hr
+    exact ⟨hd', by rw [read64_keep (fun k hk => hkeep _ (by omega) (by omega))]; exact h1', h2', h3', h4'⟩
+  have hag' : ∀ w, vsaFoot C.H w → ¬ RelW X S pred succ w → Mf[w]? = M2[w]? := by
+    intro w hw hna
+    rw [hag w hw hna]
+    exact B.agree w hw (fun h => hna (.inr (.inr (.inr (.inr h)))))
+  have HP := B.heap.release B.hno B.prev B.next B.not_top hj0 hj hidx hj1 hpos hpred hsucc
+    hV1 hV2 hP hSb eF eN hbbr hbblt hbbset hbbkeep hag'
+  exact ⟨⟨_, _, _, _, HP, B.top_le⟩, hpres, hframe⟩
 
 /-- **The heap after a small-bin insertion.** The machine's five stores (`X`'s
 links, `binblocks` with bin `j`'s block bit, bin `j`'s `fd`, and the old first
@@ -129,34 +194,21 @@ theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂
   have eB : read64 Mf binblocksAddr = some (bb ||| 2 ^ (j / 4)) := by
     unfold binblocksAddr avAddr
     rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_store_hit, h2]
-  have eF : read64 Mf (X + S) = some S := by
-    rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_miss' (by omega),
-      read64_miss' (by omega), read64_miss' (by omega)]
-    exact B.foot
-  have eN : ∀ hd, read64 M2 (X + S + 8) = some hd → ∃ hd', read64 Mf (X + S + 8) = some hd' ∧
-      chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2 ∧ prevInuse hd' = false := by
-    intro hd hr
-    obtain ⟨hd', h1', h2', h3', h4'⟩ := B.nx hd hr
-    refine ⟨hd', ?_, h2', h3', h4'⟩
-    rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_miss' (by omega),
-      read64_miss' (by omega), read64_miss' (by omega)]
-    exact h1'
-  have hag : ∀ w, vsaFoot C.H w → ¬ RelW X S (binAt j) first w → Mf[w]? = M2[w]? := by
+  have hag : ∀ w, vsaFoot C.H w → ¬ RelW X S (binAt j) first w → Mf[w]? = Mt[w]? := by
     intro w hw hna
     unfold RelW binAt binblocksAddr avAddr at hna
     rw [← hMf, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
-      try (simp only [OutL, and_true]; omega)
-    exact B.agree w hw (by omega)
-  have HP := Hh.release B.hno B.prev B.next B.not_top (j := j) (pre' := []) (post' := bins j)
-    (by omega) hjn
+      simp only [OutL, and_true] <;> omega
+  have hkeep : ∀ w, X + S ≤ w → w < X + S + 16 → Mf[w]? = Mt[w]? := by
+    intro w h1 h2
+    rw [← hMf, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
+      simp only [OutL, and_true] <;> omega
+  have hvf : ∀ k, k < 16 → vsaFoot C.H (X + 16 + k) := fun k hk => B.foot_chunk (by omega) (by omega)
+  refine fb_release B (j := j) (pre' := []) (post' := bins j) (by omega) hjn
     (fun _ => by unfold binIndex; rw [ite_eq_left_iff.2 (fun h => absurd (by omega) h)]; omega)
-    (fun h => absurd h (by omega)) rfl rfl hfirst eV1 eV2 eP eS eF eN eB
+    (fun h => absurd h (by omega)) rfl rfl hfirst eV1 eV2 eP eS eB
     (lor_lt bb _ hbbl (by omega)) (fun _ => lor_bit_set bb _) (fun bb0 hbb0 k hk => by
-      rw [hbb] at hbb0; cases hbb0; exact lor_bit_keep bb _ k hk) hag
-  simp only [List.nil_append] at HP
-  have BP := HP.heap
-  have hXf : (⟨X, S, false⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, false⟩ :: cs₂ := by simp
-  refine ⟨⟨_, _, _, _, HP, B.top_le⟩, fun a ha => ?_, fun a ha => ?_⟩
+      rw [hbb] at hbb0; cases hbb0; exact lor_bit_keep bb _ k hk) hag hkeep (fun a ha => ?_) (fun a ha => ?_)
   · rw [← hMf]
     exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
       (writeLog_present _ _ _ (writeLog_present _ _ _ (B.pres a ha)))))
@@ -164,44 +216,15 @@ theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂
     rw [← hMf, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out]
     · exact B.frame a ha
     all_goals simp only [OutL, and_true]
-    · exact out_of_foot hnf (fun k hk => (foot_free BP hXf rfl).1 k (by omega))
+    · exact out_of_foot hnf (fun k hk => hvf k (by omega))
     · exact out_of_foot hnf (fun k hk => by
-        have := (foot_free BP hXf rfl).1 (8 + k) (by omega)
+        have := hvf (8 + k) (by omega)
         rwa [show X + 16 + (8 + k) = X + 24 + k by omega] at this)
     · exact out_of_foot hnf (fun k hk => .inl (.inl ⟨by omega, by omega⟩))
     · exact out_of_foot hnf (fun k hk => .inl (.inl ⟨by omega, by omega⟩))
     · exact out_of_foot hnf (fun k hk => by
         have := BB.node_foot (x := first) (by omega) hjn hofm (24 + k) (by omega) (by omega)
         rwa [show first + (24 + k) = first + 24 + k by omega] at this)
-
-/-- A footprint range lies wholly below or above the stack window. -/
-theorem FBin.off_stack {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
-    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
-    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) :
-    a + 8 ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ a := by
-  refine Classical.byContradiction fun hc => ?_
-  have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
-    split <;> omega
-  exact B.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
-
-/-- The chunk's interior is footprint of the heap without the block: no live
-block lies in it. -/
-theorem FBin.foot_chunk {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
-    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
-    (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot C.H a := by
-  have HH := B.heap.heap.heap
-  have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
-  have hb := HH.walk.chunk_bounds _ hX
-  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := B.heap.heap.top_room
-  simp only at hb
-  refine .inr ⟨by omega, by omega, fun e he hin => ?_⟩
-  obtain ⟨c, hc, hu, hce, hcs⟩ := HH.exact e he he
-  have hcb := HH.walk.chunk_bounds c hc
-  unfold InExt at hin
-  rcases HH.walk.chunk_sep c hc _ hX with rfl | h3 | h3
-  · exact B.hno e he (by simp only at hce; omega)
-  · simp only at h3; omega
-  · simp only at h3; omega
 
 /-- **The small-bin insertion** (`0x800073f0`): `X` of `S ≤ 511` bytes goes to
 the head of bin `S / 8`, whose block bit is set; then the epilogue. -/
