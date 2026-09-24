@@ -276,4 +276,30 @@ theorem TrimSt.sbrk {C : MCtx} {R R' : Nat → BitVec 64} {M M' : Mem} {Y brkv :
     | (rw [rslot _ (by omega) (by omega)]; exact S.ss2)
     | (rw [rslot _ (by omega) (by omega)]; exact S.ss3)
 
+/-- The call-site conditions of a `_sbrk_r` call from `_malloc_trim_r`. -/
+theorem TrimSt.sbrkPre {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
+    {Rc : Nat → BitVec 64} (h2 : Rc 2 = R 2) (h1 : (Rc 1).toNat % 4 = 0) {nbrk : Nat}
+    (hsum : (BitVec.ofNat 64 brkv + Rc 11).toNat = nbrk) :
+    SbrkPreG C.S Rc M brkv nbrk := by
+  have HH := S.heap.heap.heap
+  have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
+  unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hs2 : (Rc 2).toNat = C.s.toNat - 80 := by
+    rw [h2, S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  have hbrkle := HH.brk_le; have hlo' := HH.walk.le; have htle := HH.top_le
+  unfold heapEnd at hbrkle; unfold heapStart at hlo'
+  obtain ⟨g1, g2⟩ := glob_off_of S.disj
+  unfold mHead at g1 g2
+  refine ⟨hsum, HH.brk, by omega, HH.brk_le, ?_, ?_, ?_, h1, ?_, ?_, ?_⟩
+  all_goals try (rw [hs2]; (try unfold Vsa.Sim.tohostAddr); omega)
+  intro a ha
+  rw [hs2] at ha
+  unfold SbrkW brkAddr at ha
+  rcases ha with ha | ha | ha | ha
+  · exact O.stack (a := a) (w := 1) (by unfold mHead; omega) (by omega) a (by simp [accAddrs])
+  · exact O.foot (a := a) (w := 1) (fun k hk => .inl (by unfold allocGlobal InRange; omega)) a (by simp [accAddrs])
+  · exact O.foot (a := a) (w := 1) (fun k hk => .inl (by unfold allocGlobal InRange; omega)) a (by simp [accAddrs])
+  · exact O.foot (a := a) (w := 1) (fun k hk => .inl (by unfold allocGlobal InRange; omega)) a (by simp [accAddrs])
+
 end VsaIris.VsaHeap
