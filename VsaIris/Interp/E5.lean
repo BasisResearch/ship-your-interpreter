@@ -22,6 +22,8 @@ import VsaIris.Interp.Case.ExecWhileP
 import VsaIris.Interp.ExecEnv
 import VsaIris.Interp.ExecBlock
 import VsaIris.Interp.Case.ExecBlockT
+import VsaIris.Interp.ExecOom
+import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.ExecForT
 import VsaIris.Interp.ExecVar
 import VsaIris.Interp.Case.ExecVarInitT
