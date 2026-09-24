@@ -228,8 +228,8 @@ theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
     [(x + sz, 8, R 15)] = Mp
   have hM1 := N.mem
   have B : FBin C Mp Mt x sz C.top0 brkv cs₁ (d :: cs₃) bins := by
-    refine ⟨N.heap, Nat.le_refl _, N.hno, fun h0 hh0 => ?_, fun d' hd' => ?_, by omega,
-      ?_, ?_, fun hd hr => ?_, ?_, N.disj, ?_⟩
+    refine ⟨⟨N.heap, Nat.le_refl _, N.hno, fun h0 hh0 => ?_, fun d' hd' => ?_, by omega,
+      ?_, ?_, fun hd hr => ?_⟩, ?_, N.disj, ?_⟩
     · rw [N.hdr] at hh0; cases hh0; exact hprev
     · simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hd'; rw [← hd']; exact hdin
     · intro w0 hw0 hr0
@@ -476,8 +476,8 @@ theorem fwd_fbin {C : MCtx} {R : Nat → BitVec 64} {Mc Mv : Mem} {brkv : Nat} {
   subst htail
   have hYfoot : ∀ x, Y + 8 ≤ x → x < Y + (a + b) + 8 → vsaFoot C.H x :=
     fun x h1 h2 => foot_of_chunk HP (by simp) V.hno h1 h2
-  refine ⟨HP, Nat.le_refl _, V.hno, fun h0 hr => ?_, fun d0 hd0 => ?_, by omega,
-    fwd_agree G V.agree V.nxh h1 h2 h3, ?_, fun hd hr => ?_, fun x hx => ?_, V.disj, ?_⟩
+  refine ⟨⟨HP, Nat.le_refl _, V.hno, fun h0 hr => ?_, fun d0 hd0 => ?_, by omega,
+    fwd_agree G V.agree V.nxh h1 h2 h3, ?_, fun hd hr => ?_⟩, fun x hx => ?_, V.disj, ?_⟩
   · rw [rd_miss (by omega), read64_store_hit] at hr
     cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
   · simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hd0; rw [← hd0]; exact hdin

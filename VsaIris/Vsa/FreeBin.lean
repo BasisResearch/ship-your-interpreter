@@ -25,11 +25,11 @@ structure FDone (C : MCtx) (Mt : Mem) : Prop where
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
-/-- The state before the bin insertion: the virtual heap `M2` with `X` an
+/-- The heap facts of an insertion state: the virtual heap `M2` with `X` an
 in-use chunk of size `S` holding no block, between in-use neighbours and below
-a top no higher than at entry; the actual memory `Mt` agrees with `M2` but on
-`X`'s footer (written, `S`) and the next header (`PREV_INUSE` cleared). -/
-structure FBin (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : List Chunk)
+a top no higher than at entry; `Mt` agrees with `M2` but on `X`'s footer
+(written, `S`) and the next header (`PREV_INUSE` cleared). -/
+structure FBinCore (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : List Chunk)
     (bins : Nat → List Nat) : Prop where
   heap : PHeapAt M2 C.H top brkv (cs₁ ++ ⟨X, S, true⟩ :: cs₂) bins
   top_le : top ≤ C.top0
@@ -41,6 +41,12 @@ structure FBin (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : List
   foot : read64 Mt (X + S) = some S
   nx : ∀ hd, read64 M2 (X + S + 8) = some hd → ∃ hd', read64 Mt (X + S + 8) = some hd' ∧
     chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2 ∧ prevInuse hd' = false
+
+/-- The state before the bin insertion: the heap facts, with the actual
+memory's footprint present, off the stack, and at its entry value outside the
+write window. -/
+structure FBin (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : List Chunk)
+    (bins : Nat → List Nat) : Prop extends FBinCore C Mt M2 X S top brkv cs₁ cs₂ bins where
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
@@ -96,7 +102,7 @@ theorem read64_miss' {Mt : Mem} {a b : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨
 and otherwise the memory before the insertion (`hag`), in particular `X`'s
 footer and the next header (`hkeep`). -/
 theorem fb_release {C : MCtx} {Mt M2 Mf : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
-    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins)
+    {bins : Nat → List Nat} (B : FBinCore C Mt M2 X S top brkv cs₁ cs₂ bins)
     {j pred succ bb' : Nat} {pre' post' : List Nat}
     (hj0 : 0 < j) (hj : j < numBins) (hidx : 1 < j → binIndex S = j) (hj1 : j = 1 → bins 1 = [])
     (hpos : bins j = pre' ++ post')
@@ -209,7 +215,7 @@ theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂
     rw [← hMf, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
       simp only [OutL, and_true] <;> omega
   have hvf : ∀ k, k < 16 → vsaFoot C.H (X + 16 + k) := fun k hk => B.foot_chunk (by omega) (by omega)
-  refine fb_release B (j := j) (pre' := []) (post' := bins j) (by omega) hjn
+  refine fb_release B.toFBinCore (j := j) (pre' := []) (post' := bins j) (by omega) hjn
     (fun _ => by unfold binIndex; rw [ite_eq_left_iff.2 (fun h => absurd (by omega) h)]; omega)
     (fun h => absurd h (by omega)) rfl rfl hfirst eV1 eV2 eP eS eB
     (lor_lt bb _ hbbl (by omega)) (fun _ => lor_bit_set bb _) (fun bb0 hbb0 k hk => by
@@ -538,7 +544,7 @@ theorem fl_link {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mb M2 : Mem}
     rw [← hMf, writeLog_out, writeLog_out, writeLog_out, writeLog_out]
     · exact hMb w (by unfold binblocksAddr avAddr; omega)
     all_goals simp only [OutL, and_true]; omega
-  have D := fb_release B (j := j) (by omega) hj (fun _ => hidx) (fun h => absurd h (by omega))
+  have D := fb_release B.toFBinCore (j := j) (by omega) hj (fun _ => hidx) (fun h => absurd h (by omega))
     hpos hpred hsucc eV1 eV2 eP eS eB hbblt (fun _ => hbbset) hbbkeep hag hkeep
     (fun a ha => by
       rw [← hMf]
