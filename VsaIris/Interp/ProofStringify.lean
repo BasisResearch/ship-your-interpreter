@@ -1131,6 +1131,95 @@ theorem sg_natArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
        simp (disch := omega) only [imgM_store_miss]
        exact hslot k (by simp only [InExt]; omega))
 
+/-- At a call's return into the buffer arms (`strcpy`, `snprintf`): the
+buffer is out of the run's bytes. -/
+structure SgTB (s p r : BitVec 64) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
+  h9 : R 9 = s + 18446744073709551504#64 + 16#64
+  h2 : R 2 = s + 18446744073709551504#64
+  hk : ∀ y ∈ fRegs, y ∉ callerSaved → y ≠ 2 → y ≠ 9 → R y = rv y
+  sra : ldv .ld M (s + 18446744073709551504#64 + 104#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551504#64 + 96#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
+  hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
+
+/-- The run's bytes without the buffer `[sp + 16, sp + 80)`. -/
+abbrev sgFnb (s p : BitVec 64) (k : Nat) : Prop :=
+  sgF s p k ∧ ¬ InExt (s.toNat - 96, 64) k
+
+/-- **The buffer filled by a call**: back in, the run to `jal strlen`, the
+shared tail. -/
+theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hc : vsaChg (x.toList.length + 1) c)
+    (hlen : x.toList.length ≤ 63) {pc : BitVec 64}
+    (hpc : pc = 0x80003010#64 ∨ pc = 0x800030dc#64 ∨ pc = 0x80003044#64)
+    {R : Nat → BitVec 64} {M : Mem} (f : SgTB s p r rv R M Mp) :
+    SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms pc R (sgFnb s p) M ∗
+      (∃ img, ownImg (InExt (s.toNat - 96, 64)) img ∗ ⌜CStrImg img (s.toNat - 96) x⌝) ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hsl : ∀ k, (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) ↔ sgF s p k := fun k => by
+    constructor
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact .inl (by simp only [InExt] at h ⊢; omega)
+    · intro h; by_cases h' : InExt (s.toNat - 96, 64) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+  iintro ⟨Hrest, Hms, ⟨%img, HB, %hx⟩⟩
+  ihave ⟨%Mi, HB, %hMi⟩ := ownSet_trackedAt _ img $$ HB
+  ihave ⟨%M1, Hms, %⟨h1a, h1b, -⟩⟩ := ms_join $$ [Hms HB]
+  · iframe Hms HB
+  ihave Hms := ms_iff hsl $$ Hms
+  have hoff := sg_offs (s := s) (by omega)
+  have hld : ∀ o, 16 ≤ o → o + 8 ≤ 112 → (o + 8 ≤ 16 ∨ 80 ≤ o) →
+      ldv .ld M1 (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat =
+      ldv .ld M (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat := fun o h1 h2 h3 => by
+    rw [hoff o (by omega)]
+    exact ldv_agree fun j hj => h1a _ ⟨.inl (by simp only [InExt]; omega),
+      by simp only [InExt]; omega⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M1) (pc := pc)
+    (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
+  rotate_left
+  · unfold SgRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  have gl : (0x87800000 + 112 ≤ s.toNat) ∧ p.toNat % 8 = 0 ∧ 0x8001ad00 + 16 ≤ p.toNat ∧
+      p.toNat + 24 ≤ 0x100000000 :=
+    ⟨by omega, cx.hg.al, by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega, cx.hg.hi⟩
+  have kont : ∀ R' : Nat → BitVec 64, R' 10 = R 9 → (∀ y, y ≠ 10 → y ≠ 1 → R' y = R y) →
+      SWP live (interpText ++ dataOf ∅ []) iRegs (sgF s p)
+        (RunK Wp Φ F' (sgF s p)) 0x80003048#64 R' M1 := fun R' h10 h' => by
+    apply swp_closeF
+    dsimp only [F']
+    refine sg_tail Wp A HN cx hmc hc ⟨by rw [h10, f.h9], by rw [h' 9 (by decide) (by decide), f.h9],
+      by rw [h' 2 (by decide) (by decide), f.h2], fun y hy hc' hy2 hy9 => ?_,
+      by rw [hld 104 (by omega) (by omega) (by omega)]; exact f.sra,
+      by rw [hld 96 (by omega) (by omega) (by omega)]; exact f.ss0,
+      by rw [hld 88 (by omega) (by omega) (by omega)]; exact f.ss1,
+      fun k hk => ?_, ?_, hlen⟩
+    · have hy10 : y ≠ 10 := fun e => hc' (by rw [e]; decide)
+      have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+      rw [h' y hy10 hy1]; exact f.hk y hy hc' hy2 hy9
+    · have hn := cx.hdsp k
+      rw [h1a k ⟨.inr hk, fun h => hn (by simp only [InExt] at h ⊢; omega) hk⟩]
+      exact f.hslot k hk
+    · exact cstrImg_congr hx fun i hi => by
+        rw [h1b _ (by simp only [InExt]; omega)]; exact hMi _ (by simp only [InExt]; omega)
+  rcases hpc with rfl | rfl | rfl
+  · exact sg_back cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
+      kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
+  · exact sg_backInt cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
+      kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
+  · exact sg_backFn cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
+      kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
+
 end Glue
 
 end VsaIris.Interp
