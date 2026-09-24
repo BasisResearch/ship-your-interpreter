@@ -586,6 +586,14 @@ difference. -/
 theorem toInt_sub_wrap (x y : BitVec 64) : (x - y).toInt = wrap64 (x.toInt - y.toInt) := by
   unfold wrap64; rw [BitVec.toInt_sub, BitVec.toInt_ofInt]
 
+/-- Split a `KeepRegs` goal over a literal register list into one goal per
+register. -/
+macro "keep_split" : tactic => `(tactic| (intro x hx; simp only [calleeSaved, List.mem_cons,
+  List.not_mem_nil, _root_.or_false] at hx; repeat' (first | subst hx | rcases hx with hx | hx)))
+
+theorem KeepRegs.sub {ks ks' : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R')
+    (hs : ∀ x ∈ ks', x ∈ ks) : KeepRegs ks' R R' := fun x hx => h x (hs x hx)
+
 /-! ## `eval_expr`'s frame -/
 
 /-- `eval_expr`'s stack pointer after its prologue (`addi sp,sp,-1088`), in the
