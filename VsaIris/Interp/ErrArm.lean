@@ -74,6 +74,20 @@ theorem operand_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     · exact h2
     · simp only [List.length_cons, List.length_nil] at hi; omega
 
+/-- A `.rodata` message with no conversion: any arguments. -/
+theorem plain_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
+    (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p : BitVec 64) (n : Nat)
+    (hb : ∀ i, i < n → rodataDom (p.toNat + i) ∧ rodataByte (p.toNat + i) ≠ 0)
+    (hn : rodataDom (p.toNat + n) ∧ rodataByte (p.toNat + n) = 0)
+    (hp : parseFmt ((List.range n).map (fun i => rodataByte (p.toNat + i))) = some [])
+    (args : List (BitVec 64)) : FmtArgsOK R rd p args :=
+  ⟨(List.range n).map (fun i => rodataByte (p.toNat + i)), [],
+    ⟨cstrCov_rodata hro (fun i h => by
+      simp only [List.length_map, List.length_range] at h
+      obtain ⟨h1, h2⟩ := hb i h
+      exact ⟨h1, by simp, by simpa using h2⟩) (by simpa using hn), hp, by simp,
+      fun i hi => absurd hi (Nat.not_lt_zero _)⟩⟩
+
 /-- A message whose format and arguments are all `.rodata`. -/
 theorem readable_rodata_fmt {fmt : BitVec 64} {args : List (BitVec 64)}
     (h : ∀ {R : Nat → Prop} {rd : Nat → BitVec 8}, (∀ a, rodataDom a → R a ∧ rd a = rodataByte a) →

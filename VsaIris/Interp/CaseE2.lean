@@ -19,6 +19,12 @@ import VsaIris.Interp.Case.BinaryLtP
 import VsaIris.Interp.Case.BinaryLeP
 import VsaIris.Interp.Case.BinaryGtP
 import VsaIris.Interp.Case.BinaryGeP
+import VsaIris.Interp.Case.BinaryMulIntT
+import VsaIris.Interp.Case.BinaryDivIntT
+import VsaIris.Interp.Case.BinaryModIntT
+import VsaIris.Interp.Case.BinaryMulP
+import VsaIris.Interp.Case.BinaryDivP
+import VsaIris.Interp.Case.BinaryModP
 
 /-!
 # Lane E2's cases (the binary operators), in the build

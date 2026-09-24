@@ -27,3 +27,9 @@ import VsaIris.Interp.CaseE2
 #print axioms VsaIris.Interp.mul_iw
 #print axioms VsaIris.Interp.divdi3_iw
 #print axioms VsaIris.Interp.moddi3_iw
+#print axioms VsaIris.Interp.caseT_BinaryMulInt
+#print axioms VsaIris.Interp.caseT_BinaryDivInt
+#print axioms VsaIris.Interp.caseT_BinaryModInt
+#print axioms VsaIris.Interp.caseP_BinaryMul
+#print axioms VsaIris.Interp.caseP_BinaryDiv
+#print axioms VsaIris.Interp.caseP_BinaryMod

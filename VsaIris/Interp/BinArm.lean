@@ -289,3 +289,26 @@ theorem cmpRows (lv rv : Value) :
   cases lv <;> cases rv <;> simp [valTag]
 
 end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+/-- Machine multiplication of two 64-bit integers is the source's wrapping
+product. -/
+theorem toInt_mul_wrap (x y : BitVec 64) : (x * y).toInt = Vsa.While.wrap64 (x.toInt * y.toInt) := by
+  unfold Vsa.While.wrap64; rw [BitVec.toInt_mul, BitVec.toInt_ofInt]
+
+end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+open Vsa.While
+
+/-- The rows of `/` and `%`: two ints with a nonzero divisor; a zero divisor;
+a non-int left operand; an int beside a non-int right operand. -/
+theorem divRows (lv rv : Value) :
+    (∃ a b, lv = .int a ∧ rv = .int b ∧ b ≠ 0) ∨ (∃ a, lv = .int a ∧ rv = .int 0) ∨
+    valTag lv ≠ 2 ∨ (∃ a, lv = .int a ∧ valTag rv ≠ 2) := by
+  cases lv <;> cases rv <;> simp [valTag]
+  rename_i b; by_cases h : b = 0 <;> simp [h]
+
+end VsaIris.Interp

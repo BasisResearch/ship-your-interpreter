@@ -347,6 +347,9 @@ E2_CMP_SPLIT = ("cmpRows",
                 "int/int; string/string; a non-int left operand beside a non-string; a non-int, "
                 "non-string left operand beside a string; an int beside a non-int, non-string; "
                 "an int beside a string")
+E2_DIV_SPLIT = ("divRows", "⟨a, b, rfl, rfl, hb0⟩ | ⟨a, rfl, rfl⟩ | hL | ⟨a, rfl, hR⟩",
+                "int/int with a nonzero divisor; a zero divisor; a non-int left operand; an int "
+                "beside a non-int right operand")
 E2_INT_SPLIT = ("intRows", "⟨a, b, rfl, rfl⟩ | hL | ⟨a, rfl, hR⟩",
                 "int/int; a non-int left operand; an int beside a non-int right operand")
 
@@ -373,6 +376,18 @@ E2_POPS = {
                                       "(w1 - u1).toInt = ((wrap64 (a - b)))",
                                       "rw [toInt_sub_wrap, hw1, hu1]", "(.int ((wrap64 (a - b))))")),
                       ("eL", "typeErr", ("L", 0x80003eec)), ("eR", "typeErr", ("R", 0x80003ec4))]),
+    "mul": dict(entry=0x80003834, vkn=0x80003c5c, rt=0x80003c7c, name=(0x80019418, 1), rtload=False,
+                split=E2_INT_SPLIT,
+                rows=[("ok", "arith", None), ("eL", "typeErr", ("L", 0x80003c80)),
+                      ("eR", "typeErr", ("R", 0x80003c38))]),
+    "div": dict(entry=0x800037dc, vkn=0x80003f38, rt=0x80003f58, name=(0x80019420, 1), rtload=False,
+                split=E2_DIV_SPLIT,
+                rows=[("ok", "arith", None), ("z", "zero", (0x80003d14, 0x80019428, 16, "division by zero")),
+                      ("eL", "typeErr", ("L", 0x80003f5c)), ("eR", "typeErr", ("R", 0x80003f14))]),
+    "mod": dict(entry=0x80003784, vkn=0x80003bf0, rt=0x80003c10, name=(0x80019440, 2), rtload=False,
+                split=E2_DIV_SPLIT,
+                rows=[("ok", "arith", None), ("z", "zero", (0x80003bc8, 0x80019448, 14, "modulo by zero")),
+                      ("eL", "typeErr", ("L", 0x80003c14)), ("eR", "typeErr", ("R", 0x80003bcc))]),
     "lt": e2_cmp_op("lt", 0x80003e9c, 0x80003e54),
     "le": e2_cmp_op("le", 0x80003e9c, 0x80003e54),
     "gt": e2_cmp_op("gt", 0x80003e9c, 0x80003e54),
@@ -460,6 +475,34 @@ def subst_binP(arm, mode):
                 "TOK": str(tok), "JSC": f"{E2_STRCMP_JAL:08x}", "JVB": f"{jvb:08x}", "ARGW": argw,
                 "SUMB": bit, "SUMPF": lem}))
             tree.append(f"{arm.name}P_{row}1 [{arm.name}P_{row}2 [{arm.name}P_{row}3]]")
+        elif kind == "arith":
+            trun = f"Binary{op.capitalize()}IntT"
+            imports.append(f"import VsaIris.Interp.Case.{trun}\n")
+            hyps.append(E2_HYPS["valueInt"])
+            (jl, lib, nkeep, lx, ly, b10, b11, j3, res, resi, sumpf, zero) = E2_ARITH[op]
+            pieces.append(e2_fill("binP_arith.lean", {
+                "ARM": arm.name, "OP": "." + op, "ROW": row, "K": str(k), "TRUN": trun, "RES": res,
+                "HSPEC": "valueIntSpec", "HNAME": "hvi", "HELPERC": "value_int", "J3": f"{j3:08x}",
+                "ZEROHOLE": " ?_" if zero else "",
+                "ZEROBULLET": ("\n  · ix_fwd; exact fun h => hb0 (by rw [← hu1, h]; rfl)" if zero else ""),
+                "JL": f"{jl:08x}", "LIBIW": lib, "LX": lx, "LY": ly, "RETA": f"{jl + 4:08x}",
+                "LIBHY": ("(fun h => hb0 (by rw [← hu1, h]; rfl)) " if zero else ""),
+                "B10": b10, "B11": b11, "KEEPARGS": " ".join(["(by decide)"] * nkeep),
+                "RESI": resi, "SUMPF": sumpf,
+                "EVPF": "(by simp [binOpSem, hb0])" if zero else "rfl"}))
+            tree.append(f"{arm.name}P_{row}1 [{arm.name}P_{row}2]")
+        elif kind == "zero":
+            rtz, fmt, flen, msg = spec
+            kf = ("    (hKL : ldv .ld Mt (s.toNat - 1088) = 2#64)\n"
+                  "    (hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = 2#64)\n"
+                  "    (hZ : ldv .ld Mt (s + 18446744073709550528#64 + 152#64).toNat = 0#64)")
+            hdr = E2_SEG_HDR.format(name="{name}", kvar="", tok=tok, kfacts=kf)
+            runs.append(e2_chain(f"{arm.name}P_{row}_run", hdr,
+                                 "h8, h2, h9, h19, hop, hKL, hKR, hZ, hsf", [d["entry"], rtz]))
+            pieces.append(e2_fill("binP_zero.lean", {
+                "ARM": arm.name, "OP": "." + op, "ROW": row, "K": str(k), "MSG": msg,
+                "RT": f"{rtz:08x}", "FMT": f"{fmt:08x}", "FLEN": str(flen)}))
+            tree.append(f"{arm.name}P_{row}1")
         else:
             variant, target = spec
             runs.append(e2_te_run(arm.name, row, tok, variant, d["entry"], target, d["vkn"]))
@@ -487,3 +530,50 @@ def subst_binP(arm, mode):
 
 
 FAMILIES_WHOLE_EXT["binP"] = subst_binP
+
+
+# ------------------------------------------------------------------ `*`, `/`, `%`, total mode
+# `binArith`: the int/int row whose operation is libgcc's (`ProofArith.lean`),
+# followed inside the arm's run (`iw_jal` + the routine's continuation lemma),
+# then `value_int`.
+E2_ARITH = {
+    # op: (jal libgcc, its lemma, its keep-argument proofs, a0 := , a1 :=, proofs of the two
+    #      argument pins, jal value_int, result, reading of the word, zero check?)
+    "mul": (0x80003870, "mul_iw", 4, "u1", "w1", "ix_reg; ix_fwd", "ix_reg; ix_keep [hkeep2]",
+            0x8000387c, "(.int ((wrap64 (a * b))))", "(wrap64 (a * b))",
+            "rw [hq, toInt_mul_wrap, hw1, hu1, Int.mul_comm]", False),
+    "div": (0x8000381c, "divdi3_iw", 6, "w1", "u1", "ix_reg; ix_keep [hkeep2]", "ix_reg; ix_fwd",
+            0x80003828, "(.int ((wrap64 (a.tdiv b))))", "(wrap64 (a.tdiv b))", "rw [hq, hw1, hu1]", True),
+    "mod": (0x800037c4, "moddi3_iw", 6, "w1", "u1", "ix_reg; ix_keep [hkeep2]", "ix_reg; ix_fwd",
+            0x800037d0, "(.int ((wrap64 (a.tmod b))))", "(wrap64 (a.tmod b))", "rw [hq, hw1, hu1]", True),
+}
+E2_ARITH_ENTRY = {"mul": 0x80003834, "div": 0x800037dc, "mod": 0x80003784}
+
+
+def subst_binArith(arm, mode):
+    """Family `binArith` (total mode): `*`, `/`, `%` on two ints. Params: `op`."""
+    if mode != "T":
+        raise NotImplementedError
+    op = arm.params["op"]
+    (jl, lib, nkeep, lx, ly, b10, b11, j3, res, resi, sumpf, zero) = E2_ARITH[op]
+    reta = jl + 4
+    runs = run_steps(arm)
+    r3name, r3tail = seg_split(f"{arm.name}T_run3",
+                               "h8, h2, h9, h19, hop, hKL, hKR, hsf", runs[2])
+    run3b = e2_mid_run(f"{arm.name}T_run3b", reta, j3).replace(f"#ix_seg {arm.name}T_run3b", f"\n#ix_seg {arm.name}T_run3b")
+    keepargs = " ".join(["(by decide)"] * nkeep)
+    hb0 = "\n    (hb0 : b ≠ 0)" if zero else ""
+    return {
+        "R3NAME": r3name, "R3TAIL": r3tail, "RUN3B": run3b, "ARM": arm.name, "OP": "." + op,
+        "TOK": str(E2_TOK[op]), "J3": f"{j3:08x}", "R4": f"{j3 + 4:08x}", "RES": res,
+        "HSPEC": "valueIntSpec", "HNAME": "hvi", "HELPERC": "value_int",
+        "HBBIND": ("\n    (hb : ldv .ld Mt (s + 18446744073709550528#64 + 152#64).toNat ≠ 0#64)"
+                   if zero else ""),
+        "ZEROHOLE": " ?_" if zero else "",
+        "ZEROBULLET": ("\n  · ix_fwd; exact fun h => hb0 (by rw [← hu1, h]; rfl)" if zero else ""),
+        "JL": f"{jl:08x}", "LIBIW": lib, "LX": lx, "LY": ly, "RETA": f"{reta:08x}",
+        "LIBHY": ("(fun h => hb0 (by rw [← hu1, h]; rfl)) " if zero else ""),
+        "B10": b10, "B11": b11, "KEEPARGS": keepargs, "RESI": resi, "SUMPF": sumpf, "HB0": hb0}
+
+
+FAMILIES_EXT["binArith"] = subst_binArith
