@@ -527,6 +527,21 @@ macro_rules
     IW live m DA (fun a => InExt (s.toNat - 176, 176) a ∨ InExt (aRet.toNat, 24) a) Q 0x80004138#64 R Mt
   by ix_run hlive using [h2, h18, hRA, hS0, hS1, hS2, hS3, hsf, hal]
 
+#ix_seg ExecEpiRet_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
+    {DA : List Nat} {s ret v8 v9 v18 v19 : BitVec 64}
+    (hsf : (s + 18446744073709551440#64).toNat = s.toNat - 176)
+    (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hal : ret.toNat % 4 = 0)
+    (h2 : R 2 = s + 18446744073709551440#64)
+    (hRA : ldv .ld Mt (s + 18446744073709551440#64 + 168#64).toNat = ret)
+    (hS0 : ldv .ld Mt (s + 18446744073709551440#64 + 160#64).toNat = v8)
+    (hS1 : ldv .ld Mt (s + 18446744073709551440#64 + 152#64).toNat = v9)
+    (hS2 : ldv .ld Mt (s + 18446744073709551440#64 + 144#64).toNat = v18)
+    (hS3 : ldv .ld Mt (s + 18446744073709551440#64 + 136#64).toNat = v19) :
+    IW live m DA (InExt (s.toNat - 176, 176)) Q 0x80004150#64 R Mt
+  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
+
 section Exits
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -670,6 +685,50 @@ theorem wp_execRetCopy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
   · iframe Hms Hv
   iapply hfin
   iframe Hms Hst Hw HK Hval
+
+/-- **The `ret` exit without a copy `0x80004150`**, for either WP (a loop
+left with a returned value already in the `ret` slot): `li a0,3` and the
+epilogue. -/
+theorem wp_execEpiRet (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
+    {Φ : Nat × String → IProp GF} {ρ : Regime} {st' : St} {d : Nat} {sm : Stmt} {v : Value}
+    {aRet s ret v8 v9 v18 v19 : BitVec 64} {R0 R : Nat → BitVec 64} {Mt : Mem}
+    (hsg : StackGeom s (execNeed sm d)) (hal : ret.toNat % 4 = 0)
+    (h2 : R 2 = execSP s)
+    (hsv : ExecSaved Mt s ret v8 v9 v18 v19) (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R0 R) :
+    codeRes ∗ ms 0x80004150#64 R (InExt (s.toNat - 176, 176)) Mt ∗
+      stackScratch (execSP s) (execNeed sm d - 176) ∗
+      statusRet N aRet.toNat (.ret v) ∗ world N L Room inp ρ st' d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm (.ret v) aRet s R0 ret v8 v9 v18 v19
+    ⊢ Wp.W Φ := by
+  obtain ⟨hfg, _⟩ := execFrameGeom_of hsg
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
+  iintro ⟨#Hcode, Hms, Hst, Hret, Hw, HK⟩
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
+    (F := iprop(stackScratch (execSP s) (execNeed sm d - 176) ∗ statusRet N aRet.toNat (.ret v) ∗
+      world N L Room inp ρ st' d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm (.ret v) aRet s R0 ret v8 v9 v18 v19))
+  rotate_left
+  · iframe Hms Hst Hret Hw HK
+    iapply codeRes_text $$ Hcode
+  intro F'
+  refine ExecEpiRet_run (m := ∅) (DA := []) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) hlive
+    hfg.sf hfg.lo hfg.hi hfg.al hal h2 ?_ ?_ ?_ ?_ ?_ ?_
+  · rw [hoff _ (by decide)]; exact hsv.ra
+  · rw [hoff _ (by decide)]; exact hsv.s0
+  · rw [hoff _ (by decide)]; exact hsv.s1
+  · rw [hoff _ (by decide)]; exact hsv.s2
+  · rw [hoff _ (by decide)]; exact hsv.s3
+  intros
+  apply swp_closeRM
+  intro R' Mt' hR' _
+  have hfin := execDisp_finish (N := N) (L := L) (Room := Room) (inp := inp) Wp
+    (Φ := Φ) (ρ := ρ) (st' := st') (d := d) (sm := sm) (status := .ret v) (aRet := aRet) (s := s)
+    (ret := ret) (R := R0) (R' := R') (Mt := Mt') (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19)
+    (pc := ret) hsg rfl (by subst hR'; ix_reg) (by subst hR'; ix_execRet hk)
+  unfold F'
+  iintro ⟨⟨Hst, Hret, Hw, HK⟩, Hms⟩
+  iapply hfin
+  iframe Hms Hst Hret Hw HK
 
 end Exits
 

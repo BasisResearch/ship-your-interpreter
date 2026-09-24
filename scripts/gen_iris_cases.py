@@ -279,7 +279,8 @@ def subst_execIf(arm: Arm, mode: str) -> dict[str, str]:
 
 FAMILIES = {"binInt": subst_binInt, "execConst": subst_execConst, "execEval1": subst_execEval1,
             "execNullRet": subst_execNullRet, "execIfTrue": subst_execIf,
-            "execIfFalse": subst_execIf, "execIfNone": subst_execIf, "execIfAll": subst_execIf}
+            "execIfFalse": subst_execIf, "execIfNone": subst_execIf, "execIfAll": subst_execIf,
+            "execWhile": lambda arm, mode: {"ARM": arm.name}}
 
 
 def emit(arm: Arm, mode: str) -> str:

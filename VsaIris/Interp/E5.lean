@@ -16,5 +16,8 @@ import VsaIris.Interp.Case.ExecIfTrueT
 import VsaIris.Interp.Case.ExecIfFalseT
 import VsaIris.Interp.Case.ExecIfNoneT
 import VsaIris.Interp.Case.ExecIfP
+import VsaIris.Interp.ExecLoops
+import VsaIris.Interp.Case.ExecWhileT
+import VsaIris.Interp.Case.ExecWhileP
 
 /-! Lane E5's modules (statement arms of `exec_stmt`), one import for the build. -/

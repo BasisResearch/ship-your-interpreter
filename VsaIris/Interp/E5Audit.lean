@@ -25,3 +25,6 @@ import VsaIris.Interp.E5
 #print axioms VsaIris.Interp.caseP_ExecIf
 #print axioms VsaIris.Interp.wp_swpF_later
 #print axioms VsaIris.Interp.ifRedispatch
+#print axioms VsaIris.Interp.caseT_ExecWhile
+#print axioms VsaIris.Interp.caseP_ExecWhile
+#print axioms VsaIris.Interp.wp_loopExit
