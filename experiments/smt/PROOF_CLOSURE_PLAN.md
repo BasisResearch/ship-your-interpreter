@@ -2833,6 +2833,19 @@ by `heapEnd < top0 + 2 nb + 4128`. The reason is now `Starved top0 n`
 refutes it because a charge `c` backs `physSize n ≤ c + 16`
 (`physSize_le_chg16`, `mOK_chg`).
 
+CORRECTED INTERFACE (lane H4, `free`): `alloc.freeLocalRun` and `alloc.freeChgRun`
+were unsatisfiable as stated. `HeapAt` admits two live extents with one start (its
+`exact` field maps each to the same in-use chunk), so `pShape mv ((q, n) :: H)`
+holds with `(q, n') ∈ H`. `_free_r(q)` then releases the chunk below `q`, and no
+in-use chunk holds `(q, n')` afterwards, so `FreeEnd`'s `pShape mv' H` fails for every
+final image. The block-level `FreshBlock` does not exclude this: a zero-length
+extent is disjoint from everything. The fix is in the allocator's own invariant:
+`pShape` and `vsaRoomB` (`VsaIris/Vsa/HeapRoom.lean`) now carry `Starts H` (distinct
+starts). `malloc` maintains it through `FreshAt.start` (`PHeapAt.take_fresh`,
+`topSplit_fresh`: the handed-out chunk was free or the top, so no in-use payload
+starts there), and the initial heap has it by `starts_inuseBlocks`. Clients are
+unaffected: `isHeap` is the only producer of the shape.
+
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
 The heap half is `VsaIris.VsaHeap.FastAt.merge`. `realloc` has an Iris spec,

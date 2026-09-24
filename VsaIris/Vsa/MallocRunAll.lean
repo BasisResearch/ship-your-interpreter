@@ -64,9 +64,10 @@ theorem malloc_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv : Nat}
 theorem mallocChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     MallocChgRun (vsaModel live) vsaLayoutP vsaRoomB vsaChg SpOKA mallocEntryBV gpV vsaClob
       vsaSaved allocHeadroom allocText := by
-  refine mallocChgRun_of_aw fun H n s r saved rv mv k c m1 top _ _ _ hsv hchg hsp hral he him hheap
-      hcap hdisj => ?_
-  have O := mOK_chg (H := H) (k := k) (Mt0 := mt0 m1 s mv) (top0 := top) hl hsv hchg hsp hral he hcap
+  refine mallocChgRun_of_aw fun H n s r saved rv mv k c m1 top _ _ _ hsv hchg hsp hral he hst him
+      hheap hcap hdisj => ?_
+  have O := mOK_chg (H := H) (k := k) (Mt0 := mt0 m1 s mv) (top0 := top) hl hsv hchg hsp hral he
+    hst hcap
   have Hp := mHeap_entry (C := mChgCtx live H n r s saved k rv (mt0 m1 s mv) top) rfl
     (by simp only [mChgCtx]) hsp him hheap hdisj
   have hra : rv 1 = r := he.ra
@@ -81,8 +82,8 @@ theorem mallocLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     MallocLocalRun (vsaModel live) vsaLayoutP SpOKA mallocEntryBV gpV vsaClob vsaSaved
       allocHeadroom allocText := by
   intro H n s r saved rv mv hsv hsp hral he hshape hdisj
-  obtain ⟨m1, top, brkv, chunks, bins, him, hheap⟩ := hshape
-  have O := mOK_loc (H := H) (Mt0 := mt0 m1 s mv) (top0 := top) hl hsv hsp hral he
+  obtain ⟨hst, m1, top, brkv, chunks, bins, him, hheap⟩ := hshape
+  have O := mOK_loc (H := H) (Mt0 := mt0 m1 s mv) (top0 := top) hl hsv hsp hral he hst
   have Hp := mHeap_entry (C := mLocCtx live H n r s saved rv (mt0 m1 s mv) top) rfl
     (by simp only [mLocCtx]) hsp him hheap hdisj
   have hra : rv 1 = r := he.ra

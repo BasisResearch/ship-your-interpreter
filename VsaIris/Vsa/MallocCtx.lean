@@ -76,7 +76,7 @@ most the block's chunk, the footprint present, and every byte outside the
 write window at its entry value. -/
 structure MRet (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   regs : MRegs C R
-  fresh : FreshBlock vsaLayoutP C.H (R 10).toNat C.n.toNat
+  fresh : FreshAt C.H (R 10).toNat C.n.toNat
   align : (R 10).toNat % 16 = 0
   heap : ∃ top brkv chunks bins,
     PHeapAt Mt (((R 10).toNat, C.n.toNat) :: C.H) top brkv chunks bins ∧
@@ -396,7 +396,7 @@ theorem epi_core {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
 
 /-- The epilogue's end with a fresh block in `a0`. -/
 theorem MOK.fin_ok {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
-    (hfresh : FreshBlock vsaLayoutP C.H (R 10).toNat C.n.toNat) (hal : (R 10).toNat % 16 = 0)
+    (hfresh : FreshAt C.H (R 10).toNat C.n.toNat) (hal : (R 10).toNat % 16 = 0)
     (hheap : ∃ top brkv chunks bins,
       PHeapAt Mt (((R 10).toNat, C.n.toNat) :: C.H) top brkv chunks bins ∧
         top ≤ C.top0 + physSize C.n.toNat)
@@ -426,7 +426,7 @@ footprint is present, and every byte outside the write window is at its entry
 value. Every path that hands out a block — a small-bin take, the exact-fit
 last remainder, the top split, a large-bin take — produces exactly this. -/
 structure TakeRet (C : MCtx) (Mt : Mem) (v : Nat) : Prop where
-  fresh : FreshBlock vsaLayoutP C.H (v + 16) C.n.toNat
+  fresh : FreshAt C.H (v + 16) C.n.toNat
   align : (v + 16) % 16 = 0
   heap : ∃ top brkv chunks bins,
     PHeapAt Mt ((v + 16, C.n.toNat) :: C.H) top brkv chunks bins ∧
@@ -507,7 +507,7 @@ theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
     {saved : List (Nat × BitVec 64)} {k c : Nat} {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat}
     (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hchg : vsaChg n.toNat c)
     (hsp : SpOKA s) (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved)
-    (hcap : 2 * (k + c) + extendSlack ≤ heapEnd - top0) :
+    (hst : Starts H) (hcap : 2 * (k + c) + extendSlack ≤ heapEnd - top0) :
     MOK (mChgCtx live H n r s saved k rv0 Mt0 top0) where
   live := hlive
   sp := MSp.of_spOKA hsp
@@ -518,7 +518,7 @@ theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
     have hP := physSize_le_chg hchg
     obtain ⟨top, brkv, chunks, bins, hheap, htop⟩ := h.heap
     exact malloc_exit (brkv := brkv) (chunks := chunks) (bins := bins) hsv h.regs.ra h.regs.sp
-      (saved_of_regs hsv hE h.regs) h.fresh h.align hheap (by simp only [mChgCtx] at htop; omega)
+      (saved_of_regs hsv hE h.regs) h.fresh hst h.align hheap (by simp only [mChgCtx] at htop; omega)
       h.pres
   null := by
     intro R Mt h
@@ -541,7 +541,7 @@ NULL return keeps the heap. -/
 theorem mOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
     {saved : List (Nat × BitVec 64)} {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat}
     (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hsp : SpOKA s)
-    (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved) :
+    (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved) (hst : Starts H) :
     MOK (mLocCtx live H n r s saved rv0 Mt0 top0) where
   live := hlive
   sp := MSp.of_spOKA hsp
@@ -553,14 +553,14 @@ theorem mOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
     refine malloc_ret (F := vsaFoot (((R 10).toNat, n.toNat) :: H)) hsv h.regs.ra h.regs.sp
       (saved_of_regs hsv hE h.regs) (fun a ha => .inr (vsaFoot_cons_sub a ha)) (fun a ha => h.pres a (vsaFoot_cons_sub a ha))
       fun rv mv hfr ha0 him => ⟨hfr, .inr ⟨?_, ?_, ?_⟩⟩ <;> rw [ha0]
-    · exact h.fresh
+    · exact h.fresh.block
     · exact h.align
-    · exact ⟨Mt, top, brkv, chunks, bins, him, hheap⟩
+    · exact ⟨hst.cons h.fresh.start, Mt, top, brkv, chunks, bins, him, hheap⟩
   null := by
     intro R Mt h
     obtain ⟨top, brkv, chunks, bins, hheap⟩ := h.heap
     exact malloc_ret hsv h.regs.ra h.regs.sp (saved_of_regs hsv hE h.regs) (fun a ha => .inr ha)
       h.pres fun rv mv hfr ha0 him =>
-        ⟨hfr, .inl ⟨ha0.trans h.a0, ⟨Mt, top, brkv, chunks, bins, him, hheap⟩⟩⟩
+        ⟨hfr, .inl ⟨ha0.trans h.a0, ⟨hst, Mt, top, brkv, chunks, bins, him, hheap⟩⟩⟩
 
 end VsaIris.VsaHeap

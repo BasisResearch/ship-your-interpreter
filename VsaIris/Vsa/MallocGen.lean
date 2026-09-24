@@ -67,7 +67,7 @@ theorem mallocChgRun_of_aw {live : Nat → Prop}
       (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k c : Nat) (m1 : Mem) (top brkv : Nat)
       (chunks : List Chunk) (bins : Nat → List Nat),
       saved.map Prod.fst = vsaSaved → vsaChg n.toNat c → SpOKA s → r.toNat % 4 = 0 →
-      EntryRegs rv mallocEntryBV r n s saved →
+      EntryRegs rv mallocEntryBV r n s saved → Starts H →
       ImgOn (vsaFoot H) mv m1 → PHeapAt m1 H top brkv chunks bins →
       2 * (k + c) + extendSlack ≤ heapEnd - top →
       (∀ a, stackWin s allocHeadroom a → ¬ vsaFoot H a) →
@@ -75,9 +75,9 @@ theorem mallocChgRun_of_aw {live : Nat → Prop}
     MallocChgRun (vsaModel live) vsaLayoutP vsaRoomB vsaChg SpOKA mallocEntryBV gpV vsaClob vsaSaved
       allocHeadroom allocText := by
   intro H n s r saved rv mv k c hsv hchg hsp hral he _ hroom hdisj
-  obtain ⟨m1, top, brkv, chunks, bins, him, hheap, hcap⟩ := hroom
+  obtain ⟨hst, m1, top, brkv, chunks, bins, him, hheap, hcap⟩ := hroom
   exact aw_run (hrun H n s r saved rv mv k c m1 top brkv chunks bins hsv hchg hsp hral he
-    him hheap hcap hdisj) he.pc him hdisj
+    hst him hheap hcap hdisj) he.pc him hdisj
 
 /-- **A return.** At the return address with the ABI frame restored and the
 bytes `F` of the owned set present, the run is done in every final state
@@ -123,7 +123,7 @@ theorem malloc_exit {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVe
     {top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (hsv : saved.map Prod.fst = vsaSaved)
     (hra : R 1 = r) (hsp : R 2 = s) (hsaved : ∀ p ∈ saved, R p.1 = p.2)
-    (hfresh : FreshBlock vsaLayoutP H (R 10).toNat n.toNat) (hal : (R 10).toNat % 16 = 0)
+    (hfresh : FreshAt H (R 10).toNat n.toNat) (hst : Starts H) (hal : (R 10).toNat % 16 = 0)
     (hheap : PHeapAt Mt (((R 10).toNat, n.toNat) :: H) top brkv chunks bins)
     (hcap : 2 * k + extendSlack ≤ heapEnd - top)
     (hpres : ∀ a, vsaFoot H a → (Mt[a]?).isSome) :
@@ -131,9 +131,9 @@ theorem malloc_exit {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVe
   malloc_ret hsv hra hsp hsaved (fun a ha => .inr (vsaFoot_cons_sub a ha))
     (fun a ha => hpres a (vsaFoot_cons_sub a ha)) fun rv mv hfr ha0 him => by
       refine ⟨hfr, ?_, ?_, ?_, ?_⟩ <;> rw [ha0]
-      · exact hfresh
+      · exact hfresh.block
       · exact hal
-      · exact ⟨Mt, top, brkv, chunks, bins, him, hheap⟩
-      · exact ⟨Mt, top, brkv, chunks, bins, him, hheap, hcap⟩
+      · exact ⟨hst.cons hfresh.start, Mt, top, brkv, chunks, bins, him, hheap⟩
+      · exact ⟨hst.cons hfresh.start, Mt, top, brkv, chunks, bins, him, hheap, hcap⟩
 
 end VsaIris.VsaHeap

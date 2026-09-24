@@ -650,19 +650,31 @@ theorem PHeapAt.take {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chun
       exact ⟨_, reflag_mem hc1, reflag_inuse_true hu, by rw [reflag_addr]; exact h1,
         by rw [reflag_size]; exact h2⟩
 
-/-- **The taken block is fresh**: inside the arena, 16-aligned, and disjoint
-from every live extent, which all lie in in-use chunks. -/
+/-- A block handed out fresh: disjoint from every live extent, and starting
+where none does. -/
+structure FreshAt (H : List (Nat × Nat)) (p n : Nat) : Prop where
+  block : FreshBlock vsaLayoutP H p n
+  start : ∀ e ∈ H, e.1 ≠ p
+
+/-- **The taken block is fresh**: inside the arena, 16-aligned, disjoint
+from every live extent, which all lie in in-use chunks, and starting where
+none does. -/
 theorem PHeapAt.take_fresh {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {c : Chunk} (hc : c ∈ chunks) (hf : c.inuse = false) {n : Nat} (hn : n + 8 ≤ c.size) :
-    FreshBlock vsaLayoutP H (c.addr + 16) n ∧ (c.addr + 16) % 16 = 0 := by
+    FreshAt H (c.addr + 16) n ∧ (c.addr + 16) % 16 = 0 := by
   have HH := h.heap.heap
   have hb := HH.walk.chunk_bounds c hc
   have hbrk := HH.brk_le
   have htle := HH.top_le
   have hal := HH.aligned.1 c hc
   have hroom := h.heap.top_room
-  refine ⟨⟨?_, ?_, ?_, fun e he a ha hea => ?_⟩, by omega⟩
+  refine ⟨⟨⟨?_, ?_, ?_, fun e he a ha hea => ?_⟩, fun e he heq => ?_⟩, by omega⟩
+  rotate_right
+  · obtain ⟨c1, hc1, hu, h1, _⟩ := HH.exact e he he
+    have := HH.chunk_eq hc1 hc (by omega)
+    subst this
+    rw [hu] at hf; cases hf
   · unfold heapStart at hb; omega
   · show heapStart ≤ _; omega
   · show _ ≤ heapEnd; omega
