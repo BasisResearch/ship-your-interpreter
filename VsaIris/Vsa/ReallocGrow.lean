@@ -310,4 +310,128 @@ theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   · exact grow_pvX O D' hsp PV (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
 
+/-- **The growth dispatch** (`0x800052f0`): read the top pointer and the
+header after `X`; the top (`grow_top`), an in-use successor (`grow_used`) or a
+free one (`grow_free`). -/
+theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
+    (D : RD C B R Mt brkv chunks bins X S hdr0 nb) (h13 : (R 13).toNat = hdr0) :
+    AW C.live C.S C.Q 0x800052f0#64 R Mt := by
+  have Hp := D.heap
+  have HB := Hp.heap.heap
+  have HH := HB.heap
+  have hXm := D.mem
+  have hXb := HH.walk.chunk_bounds _ hXm
+  have hx16 := HH.aligned.1 _ hXm; have hS16 := (walk_sizes HH.walk _ hXm).1
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hts := HH.top_size
+  simp only at hXb hx16 hS16
+  unfold heapStart heapEnd at *
+  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
+  obtain ⟨cs₁, cs₂, hsp⟩ := List.append_of_mem hXm
+  have hw := HH.walk
+  rw [hsp] at hw
+  obtain ⟨⟨hn, hnr, _⟩, hnext⟩ := walk_next_of hw
+  simp only at hnr hnext
+  have hnl := Vsa.Sim.read64_lt _ _ _ hnr
+  -- the top pointer
+  have hgT : ∀ k, k < 8 → vsaFoot C.H (0x8001ad20 + k) := fun k hk => .inl (by unfold allocGlobal InRange; omega)
+  have eT : ((0x800052f0#64) + (sign_extend (m := 64) ((0x00016#20) +++ (0x000#12))) +
+      sign_extend (m := 64) (0xa30#12)).toNat = 0x8001ad20 := by decide
+  have htp : read64 Mt 0x8001ad20 = some C.top0 := HH.top_ptr
+  refine st_800052f0 O.live ?_
+  refine st_800052f4 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; rw [eT]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; rw [eT]; exact O.foot hgT) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true]
+  rw [eT, ldv_at htp _ rfl]
+  refine st_800052f8 O.live ?_
+  -- the header after `X`
+  have hbE : X + S = C.top0 ∨ ∃ c ∈ chunks, c.addr = X + S := by
+    rcases hnext with ⟨h1, _⟩ | ⟨d, cs₃, h1, h2⟩
+    · exact .inl h1
+    · exact .inr ⟨d, by rw [hsp, h1]; simp, h2⟩
+  have hfE : ∀ k, k < 8 → vsaFoot C.H (X + S + 8 + k) := fun k hk =>
+    vsaFoot_cons_sub _ (foot_header HB hbE k hk)
+  have e16 : (R 12 + R 14).toNat = X + S := by rw [BitVec.toNat_add, D.a2, D.a4]; omega
+  have eE : (R 12 + R 14 + sign_extend (m := 64) (0x008#12)).toNat = X + S + 8 := by
+    rw [BitVec.toNat_add, e16]; simp; omega
+  refine st_800052fc O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eE]
+        unfold LdOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eE]; exact O.foot hfE) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  rw [eE, ldv_at hnr _ rfl]
+  have hv10 : (BitVec.ofNat 64 hn).toNat = hn := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnl]
+  have htl : C.top0 < 2 ^ 64 := by omega
+  refine st_80005300 O.live (fun hc => ?_) (fun hc => ?_) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
+  · -- the top
+    have hXt : X + S = C.top0 := by
+      have := congrArg BitVec.toNat hc
+      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt htl, e16] at this; omega
+    rcases hnext with ⟨_, rfl⟩ | ⟨d, cs₃, rfl, h2⟩
+    · have hth := HH.top_header
+      rw [← hXt, hnr] at hth
+      cases hth
+      refine grow_top O (by rd_regs D) hsp hXt ?_ ?_ <;>
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      · exact h13
+      · rw [hv10, hXt]
+    · exfalso
+      have := HH.walk.chunk_bounds d (by rw [hsp]; simp)
+      omega
+  · -- a chunk after `X`
+    rcases hnext with ⟨h1, _⟩ | ⟨d, cs₃, rfl, h2⟩
+    · exact absurd (by rw [← h1]; exact BitVec.eq_of_toNat_eq (by
+        rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), e16])) hc
+    obtain ⟨dA, ns, b⟩ := d
+    simp only at h2
+    subst h2
+    have hdm : (⟨X + S, ns, b⟩ : Chunk) ∈ chunks := by rw [hsp]; simp
+    obtain ⟨hd, hdr', hds, hdl⟩ := walk_header HH.walk _ hdm
+    simp only at hdr' hds
+    rw [hnr] at hdr'
+    cases hdr'
+    have hdb := HH.walk.chunk_bounds _ hdm
+    simp only at hdb
+    have hw2 := HH.walk
+    rw [hsp] at hw2
+    obtain ⟨⟨hnn, hnnr, hnnp⟩, hnext2⟩ :=
+      walk_next_of (cs₁ := cs₁ ++ [⟨X, S, true⟩]) (by simpa using hw2)
+    simp only at hnnr hnnp hnext2
+    have hbN : X + S + ns = C.top0 ∨ ∃ c ∈ chunks, c.addr = X + S + ns := by
+      rcases hnext2 with ⟨h1, _⟩ | ⟨d, cs₄, h1, h3⟩
+      · exact .inl h1
+      · exact .inr ⟨d, by rw [hsp, h1]; simp, h3⟩
+    have hfN : ∀ k, k < 8 → vsaFoot C.H (X + S + ns + 8 + k) := fun k hk =>
+      vsaFoot_cons_sub _ (foot_header HB hbN k hk)
+    have e17 : (R 12 + R 14 + (BitVec.ofNat 64 hn &&& sign_extend (m := 64) (0xffe#12))).toNat =
+        X + S + ns := by
+      rw [BitVec.toNat_add, e16, and_m2_toNat, hv10]; unfold chunkSize at hds; omega
+    have eN : (R 12 + R 14 + (BitVec.ofNat 64 hn &&& sign_extend (m := 64) (0xffe#12)) +
+        sign_extend (m := 64) (0x008#12)).toNat = X + S + ns + 8 := by
+      rw [BitVec.toNat_add, e17]; simp; omega
+    have hnnl := Vsa.Sim.read64_lt _ _ _ hnnr
+    refine st_80005304 O.live (st_80005308 O.live ?_)
+    refine st_8000530c O.live
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eN]
+          unfold LdOK Vsa.Sim.tohostAddr; omega)
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eN]; exact O.foot hfN) ?_
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    rw [eN, ldv_at hnnr _ rfl]
+    refine st_80005310 O.live (st_80005314 O.live (fun hu => ?_) (fun hu => ?_)) <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hu
+    · exact grow_used O (by rd_regs D) (rest := ⟨X + S, ns, b⟩ :: cs₃) (by rw [hsp]; try simp)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h13)
+    · have hb : b = false := by
+        have := prev_bit (x := BitVec.ofNat 64 hnn) (h := hnn)
+          (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnnl]) hu
+        unfold prevInuse at hnnp; rw [← hnnp]; simp [this]
+      subst hb
+      refine grow_free O (by rd_regs D) (cs₁ := cs₁) (cs₃ := cs₃) (by rw [hsp]; try simp) ?_ ?_ hds ?_ <;>
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      · exact h13
+      · exact hv10
+      · exact e16
+
 end VsaIris.VsaHeap

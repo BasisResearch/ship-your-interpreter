@@ -40,7 +40,7 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     {nb brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (F : RFrame C R Mt) (Hp : RHeap C B Mt brkv chunks bins) (hnb : NbOK C.n nb) (hnb31 : nb < 2 ^ 31)
     (h8 : (R 8).toNat = B.p) (h9 : R 9 = reentV) (h11 : R 11 = C.n) (h15 : (R 15).toNat = nb)
-    (hk : ∀ R' X S hdr0, RD C B R' Mt brkv chunks bins X S hdr0 nb →
+    (hk : ∀ R' X S hdr0, RD C B R' Mt brkv chunks bins X S hdr0 nb → (R' 13).toNat = hdr0 →
       AW C.live C.S C.Q 0x800052f0#64 R' Mt) :
     AW C.live C.S C.Q 0x800052e0#64 R Mt := by
   have HH := Hp.heap.heap.heap
@@ -103,12 +103,13 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     · exact h15
   · -- the chunk must grow
     refine hk _ X S hdr0 ⟨F.of_regs ?_ ?_ ?_, Hp, hnb, hnb31, hc, hca, hdr, hsz, hlow, by omega,
-      ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [h8, hca]
     · exact h9
     · exact h11
     · exact hX
     · exact hSv
     · exact h15
+    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdrlt]
 
 end VsaIris.VsaHeap
