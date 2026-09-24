@@ -102,6 +102,10 @@ import VsaIris.Interp.Case.BinarySubIntT
 import VsaIris.Interp.Case.BinaryAddIntP
 import VsaIris.Interp.Case.BinarySubIntP
 import VsaIris.Interp.LeafArm
+import VsaIris.Interp.LeafCalls
+import VsaIris.Interp.LeafErr
+import VsaIris.Interp.Case.VarT
+import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntT

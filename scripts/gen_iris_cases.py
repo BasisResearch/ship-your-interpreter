@@ -267,7 +267,31 @@ def subst_leaf(arm: Arm, mode: str) -> dict[str, str]:
             "RULE": k["rule"]}
 
 
-FAMILIES = {"binInt": subst_binInt, "leaf": subst_leaf}
+def subst_call1(arm: Arm, mode: str) -> dict[str, str]:
+    """Families with one helper call between two runs and no child (lane E1:
+    `var`, `fnLit`): the run to the call, the call, the run from its return
+    to `ret`."""
+    runs = run_steps(arm)
+    helpers = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 2 or len(helpers) != 1 or arm.children:
+        raise SystemExit(f"{arm.name}: family {arm.family} needs 2 runs, 1 helper, no children")
+    j = int(helpers[0].args[1], 0)
+    r2 = int(runs[1].args[0], 0)
+    if int(runs[0].args[1], 0) != j or r2 != j + 4:
+        raise SystemExit(f"{arm.name}: the runs must meet the helper call at {j:#x}")
+    out = {"ARM": arm.name, "TAG": str(arm.tag), "J": f"{j:08x}", "R2": f"{r2:08x}",
+           "R2N": f"{r2 + 4:08x}"}
+    for i, d in enumerate(arm.errors, 1):
+        out[f"E{i}AT"] = f"{d.at:08x}"
+        out[f"E{i}TO"] = f"{d.to:08x}"
+    for k in ("ej", "fmtok"):
+        if k in arm.params:
+            v = arm.params[k]
+            out[k.upper()] = f"{int(v, 0):08x}" if k == "ej" else v
+    return out
+
+
+FAMILIES = {"binInt": subst_binInt, "leaf": subst_leaf, "var": subst_call1}
 
 
 def emit(arm: Arm, mode: str) -> str:

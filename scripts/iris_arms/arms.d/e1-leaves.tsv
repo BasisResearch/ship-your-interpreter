@@ -6,3 +6,4 @@ LeafNull	eval	3	.null		.null	run 0x80003164 0x8000342c; helper valueNull 0x80003
 LeafInt	eval	0	(.int n)		(.int n)	run 0x80003164 0x8000340c; helper valueInt 0x8000340c; run 0x80003410 ret		leaf kind=int
 LeafStr	eval	1	(.str x)		(.str x)	run 0x80003164 0x80003418; helper valueStr 0x80003418; run 0x8000341c ret		leaf kind=str
 LeafBool	eval	2	(.bool b)		(.bool b)	run 0x80003164 0x80003424; helper valueBool 0x80003424; run 0x80003428 ret		leaf kind=bool
+Var	eval	4	(.var x)		v	run 0x80003164 0x80003440; helper envGet 0x80003440; run 0x80003444 ret	unbound:0x80003444:0x80003f80	var ej=0x80003fac fmtok=varFmt_ok

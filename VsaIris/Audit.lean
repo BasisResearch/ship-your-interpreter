@@ -28,6 +28,8 @@ import VsaIris.Interp.Case.LeafStrT
 import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.LeafBoolT
 import VsaIris.Interp.Case.LeafBoolP
+import VsaIris.Interp.Case.VarT
+import VsaIris.Interp.Case.VarP
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -154,3 +156,7 @@ import VsaIris.Interp.Case.LeafBoolP
 #print axioms VsaIris.Interp.caseP_LeafStr
 #print axioms VsaIris.Interp.caseT_LeafBool
 #print axioms VsaIris.Interp.caseP_LeafBool
+#print axioms VsaIris.Interp.caseT_Var
+#print axioms VsaIris.Interp.caseP_Var
+#print axioms VsaIris.Interp.ev_rtErr
+#print axioms VsaIris.Interp.ms_callEnv3
