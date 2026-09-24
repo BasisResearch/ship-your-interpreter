@@ -182,12 +182,12 @@ theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
 omit I in
 /-- **Close them again**, unchanged by the run. -/
 theorem ms_ioClose {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M : Mem}
-    {img : Nat → BitVec 8} (hok : StdioOK img) (hd : ∀ k, S k → ¬ ioW k)
-    (hio : ∀ k, ioW k → imgM M k = img k) :
+    {img : Nat → BitVec 8} (hok : StdioOK img) (hd : ∀ k, S k → ¬ ioW k) :
     ms (GF := GF) pc R (fun k => S k ∨ ioW k) M ∗
-        ownSet (fun k => stdioFoot k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ⊢
+        ownSet (fun k => stdioFoot k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ∗
+        ⌜∀ k, ioW k → imgM M k = img k⌝ ⊢
       ms pc R S M ∗ stdioOwn := by
-  iintro ⟨Hms, H2⟩
+  iintro ⟨Hms, H2, %hio⟩
   ihave ⟨Hms, H1⟩ := ms_split hd $$ Hms
   iframe Hms
   iapply stdioAt_close StdioOK ioW img hok
@@ -301,6 +301,72 @@ end Vals
   by
     ix_run hlive using [h2, hra, hs4, hal]
 
+/-! ## What the loop prints -/
+
+/-- What `native_print` has printed at the head of iteration `i`: the first
+`i` arguments and, after the first, the separator. -/
+def npOut (st : Store) (vs : List Value) (i : Nat) : String :=
+  if i = 0 then "" else printArgs st (vs.take i) ++ " "
+
+theorem intercalate_snoc (a : String) (l : List String) (x : String) :
+    String.intercalate " " (a :: (l ++ [x])) = String.intercalate " " (a :: l) ++ " " ++ x := by
+  induction l generalizing a with
+  | nil => simp [String.intercalate_cons_cons, String.intercalate_singleton]
+  | cons b l ih =>
+    rw [List.cons_append, String.intercalate_cons_cons, ih, String.intercalate_cons_cons]
+    simp [String.append_assoc]
+
+theorem npOut_step (st : Store) (vs : List Value) (i : Nat) (h : i < vs.length) :
+    npOut st vs i ++ (vs[i]).display st = printArgs st (vs.take (i + 1)) := by
+  unfold npOut printArgs
+  rw [List.take_succ_eq_append_getElem h, List.map_append]
+  by_cases h0 : i = 0
+  · subst h0; simp
+  · simp only [h0, ite_false, List.map_cons, List.map_nil]
+    obtain ⟨a, l, hal⟩ : ∃ a l, List.map (Value.display st) (List.take i vs) = a :: l := by
+      cases e : List.map (Value.display st) (List.take i vs) with
+      | nil =>
+        have := congrArg List.length e
+        rw [List.length_map, List.length_take, List.length_nil] at this
+        have hm : min i vs.length = i := Nat.min_eq_left (by omega)
+        omega
+      | cons a l => exact ⟨a, l, rfl⟩
+    rw [hal, List.cons_append, intercalate_snoc]
+
+theorem npOut_succ (st : Store) (vs : List Value) (i : Nat) (h : i < vs.length) :
+    npOut st vs i ++ (vs[i]).display st ++ " " = npOut st vs (i + 1) := by
+  rw [npOut_step st vs i h]; unfold npOut; simp
+
+theorem npOut_last (st : Store) (vs : List Value) (i : Nat) (h : i + 1 = vs.length) :
+    npOut st vs i ++ (vs[i]'(by omega)).display st = printArgs st vs := by
+  rw [npOut_step st vs i (by omega), h, List.take_length]
+
+/-! ## Words through stores -/
+
+theorem imgW_store_hit (Mt : Mem) (a : Nat) (w : BitVec 64) :
+    imgW (imgM (writeLog Mt [(a, 8, w)])) a = w := by
+  unfold imgW; rw [imgLE_imgM_store]; simp
+
+theorem imgW_store_miss (Mt : Mem) {a b wd : Nat} (v : BitVec 64) (h : a + 8 ≤ b ∨ b + wd ≤ a) :
+    imgW (imgM (writeLog Mt [(b, wd, v)])) a = imgW (imgM Mt) a := by
+  unfold imgW; rw [imgLE_store_miss _ _ h]
+
+theorem ldv_agree {M M' : Mem} {a : Nat} (h : ∀ j, j < 8 → imgM M (a + j) = imgM M' (a + j)) :
+    ldv .ld M a = ldv .ld M' a := by
+  rw [ldv_ld_imgW, ldv_ld_imgW, imgW_agree h]
+
+/-- `addiw s1,s1,1` on a small count. -/
+theorem sx32_succ (i : Nat) (h : i + 1 < 2 ^ 31) :
+    BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 i + 1#64)) = BitVec.ofNat 64 (i + 1) := by
+  apply BitVec.eq_of_toNat_eq
+  have h1 : (BitVec.ofNat 64 i + 1#64).toNat = i + 1 := by simp; omega
+  have he : (BitVec.extractLsb 31 0 (BitVec.ofNat 64 i + 1#64)).toNat = i + 1 := by
+    rw [BitVec.extractLsb_toNat, h1]; simp; omega
+  have hm : (BitVec.extractLsb 31 0 (BitVec.ofNat 64 i + 1#64)).msb = false := by
+    rw [BitVec.msb_eq_false_iff_two_mul_lt, he]; omega
+  rw [BitVec.signExtend_eq_setWidth_of_msb_false hm, BitVec.toNat_setWidth, he]
+  simp
+
 /-! ## The Iris glue -/
 
 section Glue
@@ -340,7 +406,44 @@ structure NpCtx (live : Nat → Prop) (sret args s r : BitVec 64) (n : Nat) (rv 
   hg : SlotGeom sret
   ha : ArgsGeom args n
   hn : n < 2 ^ 31
+  hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k
 
+/-- The pure state of the loop: `s0 = args + 24 i8`, `s1 = i9`, the other
+saved registers, the frame's saved words, the arguments' bytes. -/
+structure NpFacts (sret args s r : BitVec 64) (n i8 i9 : Nat) (rv R : Nat → BitVec 64)
+    (M Margs : Mem) : Prop where
+  h8 : R 8 = args + BitVec.ofNat 64 (24 * i8)
+  h9 : R 9 = BitVec.ofNat 64 i9
+  h18 : R 18 = 0x8001b970#64
+  h19 : R 19 = BitVec.ofNat 64 n
+  h20 : R 20 = sret
+  h2 : R 2 = s + 18446744073709551536#64
+  hk : ∀ x ∈ fRegs, x ∉ callerSaved → x ∉ [2, 8, 9, 18, 19, 20] → R x = rv x
+  sra : ldv .ld M (s + 18446744073709551536#64 + 72#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551536#64 + 64#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551536#64 + 56#64).toNat = rv 9
+  ss2 : ldv .ld M (s + 18446744073709551536#64 + 48#64).toNat = rv 18
+  ss3 : ldv .ld M (s + 18446744073709551536#64 + 40#64).toNat = rv 19
+  ss4 : ldv .ld M (s + 18446744073709551536#64 + 32#64).toNat = rv 20
+  hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k
+
+omit I in
+/-- A run's state over an equivalent owned set. -/
+theorem ms_iff {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
+    (h : ∀ k, S k ↔ T k) : ms (GF := GF) pc R S M ⊢ ms pc R T M := by
+  unfold ms
+  iintro ⟨Hpc, Hra, Hregs, HS⟩
+  iframe Hpc Hra Hregs
+  iapply ownSet_iff _ h $$ HS
+
+/-- The rest a `native_print` loop carries. -/
+def NpRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
+    (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64)
+    (Margs : Mem) : IProp GF :=
+  iprop(codeRes ∗ slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ dispResL st vs ∗
+    binImg ∗ stackScratch (s - 80#64) printNeed ∗ NpK Wp Φ N sret args s r vs st o rv)
+
+omit I in
 /-- The frame of `native_print` as a stack region below `s`. -/
 theorem npFrame_join {s : BitVec 64} (hs : 80 + printNeed ≤ s.toNat) :
     stackScratch (GF := GF) (s - 80#64) printNeed ∗
@@ -432,6 +535,220 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     exact ⟨by unfold nativePrintNeed printNeed fprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativePrintNeed printNeed fprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+
+/-- The frame of the loop-body run. -/
+def FnpA (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
+    (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o o' : String) (rv : Nat → BitVec 64)
+    (Margs : Mem) (img : Nat → BitVec 8) : IProp GF :=
+  iprop(NpRest Wp Φ N sret args s r vs st o rv Margs ∗ consoleOwn o' ∗
+    ownSet (fun k => stdioFoot k ∧ ¬ ioW k) (fun k => k ↦ₘ img k))
+
+/-- **An iteration's first half**: the loop head, the copy of argument `i`,
+`value_print`. -/
+theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
+    {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
+    (hvp : ∀ v o', ⊢ valuePrintSpec (vsaModel live) N Wp (s - 80#64) (s - 80#64) v st o')
+    (hlen : vs.length = n) {i : Nat} (hi : i < n) {R : Nat → BitVec 64} {M : Mem}
+    (f : NpFacts sret args s r n i i rv R M Margs)
+    (hB : ∀ R' M', NpFacts sret args s r n i (i + 1) rv R' M' Margs →
+      NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R' (npF s args n) M' ∗ stdioOwn ∗
+        consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ) :
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R (npF s args n) M ∗ stdioOwn ∗
+      consoleOwn (o ++ npOut st vs i) ⊢ Wp.W Φ := by
+  iintro ⟨Hrest, Hms, Hstd, Hcon⟩
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
+  · iframe Hms Hstd
+  have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
+  unfold nativePrintNeed printNeed fprintfNeed at hs1
+  have ha1 := c.ha.al; have ha2 := c.ha.lo; have ha3 := c.ha.hi
+  have ea : (args + BitVec.ofNat 64 (24 * i)).toNat = args.toNat + 24 * i := by
+    rw [BitVec.toNat_add]; simp; omega
+  have hA : ∀ k, InExt (args.toNat, 24 * n) k → imgM M1 k = imgM Margs k := fun k hk =>
+    (hM1 k (.inr hk)).trans (f.hargs k hk)
+  have hw : ∀ o, o ≤ 16 → imgW (imgM M1) (args.toNat + 24 * i + o) =
+      imgW (imgM Margs) (args.toNat + 24 * i + o) := fun o ho =>
+    imgW_agree (fun j hj => hA _ (by simp [InExt]; omega))
+  have hw0 : ldv .ld M1 (args.toNat + 24 * i) = imgW (imgM Margs) (args.toNat + 24 * i) := by
+    rw [ldv_ld_imgW]; simpa using hw 0 (by omega)
+  have hw1 : ldv .ld M1 (args + BitVec.ofNat 64 (24 * i) + 8#64).toNat =
+      imgW (imgM Margs) (args.toNat + 24 * i + 8) := by
+    rw [ldv_ld_imgW, show (args + BitVec.ofNat 64 (24 * i) + 8#64).toNat = args.toNat + 24 * i + 8 by
+      rw [BitVec.toNat_add, ea]; simp; omega]
+    exact hw 8 (by omega)
+  have hw2 : ldv .ld M1 (args + BitVec.ofNat 64 (24 * i) + 16#64).toNat =
+      imgW (imgM Margs) (args.toNat + 24 * i + 16) := by
+    rw [ldv_ld_imgW, show (args + BitVec.ofNat 64 (24 * i) + 16#64).toNat = args.toNat + 24 * i + 16 by
+      rw [BitVec.toNat_add, ea]; simp; omega]
+    exact hw 16 (by omega)
+  have hio1 : ldv .ld M1 0x8001b970 = 0x8001b538#64 := by
+    rw [ldv_ld_imgW]; unfold imgW
+    rw [imgLE_congr (img' := img) (fun j hj => hio _ (by simp [ioW, InExt]; omega))]
+    exact hok.impure
+  have hio2 : ldv .ld M1 0x8001b548 = 0x8001bb20#64 := by
+    rw [ldv_ld_imgW]; unfold imgW
+    rw [imgLE_congr (img' := img) (fun j hj => hio _ (by simp [ioW, InExt]; omega))]
+    exact StdioOK.stdout hok
+  iapply wp_swpF Wp (S := npS s args n) (R := R) (Mt := M1) (pc := 0x80002f1c#64)
+    (F := FnpA Wp Φ N sret args s r vs st o (o ++ npOut st vs i) rv Margs img)
+  rotate_left
+  · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+      unfold codeRes; simp [dataOf]
+    unfold NpRest
+    icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
+    rw [hro]
+    unfold FnpA NpRest
+    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hms
+  intro F'
+  refine np_body c.hlive f.h8 f.h9 f.h18 f.h2 (by omega) hs2 hs3 ha1 ha2 ha3 hi ea hw0 hw1 hw2 hio1
+    hio2 ?_
+  apply swp_closeF
+  dsimp only [F']
+  unfold FnpA
+  iintro ⟨⟨Hrest, Hcon, Hio⟩, Hms⟩
+  have hsm : s - 80#64 = s + 18446744073709551536#64 := by
+    rw [BitVec.sub_eq_add_neg]; rfl
+  have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
+    rw [BitVec.toNat_add]; simp; omega
+  have e8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
+    rw [BitVec.toNat_add, hsf]; simp; omega
+  have e16 : (s + 18446744073709551536#64 + 16#64).toNat = s.toNat - 80 + 16 := by
+    rw [BitVec.toNat_add, hsf]; simp; omega
+  rw [e8, e16]
+  ihave ⟨Hms, Hstd⟩ := ms_ioClose hok hd $$ [Hms Hio]
+  · iframe Hms Hio
+    ipureintro
+    intro k hk
+    simp only [ioW, InExt] at hk
+    simp (disch := omega) only [imgM_store_miss]
+    exact hio k (by simp only [ioW, InExt]; omega)
+  -- the copy slot out of the frame
+  have hsl : ∀ k, npF s args n k ↔
+      ((npF s args n k ∧ ¬ InExt (s.toNat - 80, 24) k) ∨ InExt (s.toNat - 80, 24) k) := fun k => by
+    constructor
+    · intro h; by_cases h' : InExt (s.toNat - 80, 24) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · left; simp only [InExt] at h ⊢; omega
+  ihave Hms := ms_iff hsl $$ Hms
+  ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  -- its three words are argument `i`'s
+  have hv0 : imgW (imgM (writeLog (writeLog (writeLog M1 [(s.toNat - 80, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i))]) [(s.toNat - 80 + 8, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i + 8))]) [(s.toNat - 80 + 16, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i + 16))])) (s.toNat - 80) =
+      imgW (imgM Margs) (args.toNat + 24 * i) := by
+    rw [imgW_store_miss _ _ (by omega), imgW_store_miss _ _ (by omega), imgW_store_hit]
+  have hv8 : imgW (imgM (writeLog (writeLog (writeLog M1 [(s.toNat - 80, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i))]) [(s.toNat - 80 + 8, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i + 8))]) [(s.toNat - 80 + 16, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i + 16))])) (s.toNat - 80 + 8) =
+      imgW (imgM Margs) (args.toNat + 24 * i + 8) := by
+    rw [imgW_store_miss _ _ (by omega), imgW_store_hit]
+  have hv16 : imgW (imgM (writeLog (writeLog (writeLog M1 [(s.toNat - 80, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i))]) [(s.toNat - 80 + 8, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i + 8))]) [(s.toNat - 80 + 16, 8,
+      imgW (imgM Margs) (args.toNat + 24 * i + 16))])) (s.toNat - 80 + 16) =
+      imgW (imgM Margs) (args.toNat + 24 * i + 16) := by
+    rw [imgW_store_hit]
+  unfold NpRest
+  icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
+  ihave #Hvi := valsImg_get N (imgM Margs) vs args.toNat i (by omega) $$ Hv
+  rw [← valImg_words (GF := GF) hv0 hv8 hv16] at *
+  have hst80 : (s - 80#64).toNat = s.toNat - 80 := by rw [hsm, hsf]
+  ihave Hval := valAt_of_img N $$ [Hvi Hslot]
+  · iframe Hvi Hslot
+  ihave #Hdi := (show dispResL (GF := GF) st vs ⊢ dispRes st (vs[i]'(by omega)) from by
+    unfold dispResL
+    exact sepL_elem_persist (dispRes st) (List.getElem_mem (show i < vs.length by omega))) $$ Hd
+  ihave #Hvp := hvp (vs[i]'(by omega)) (o ++ npOut st vs i)
+  unfold valuePrintSpec
+  have hsg80 : StackGeom (s - 80#64) printNeed := ⟨by rw [hst80]; unfold printNeed fprintfNeed; omega,
+    by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL printNeed fprintfNeed; simp; omega,
+    by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega,
+    by rw [hst80]; omega⟩
+  have hslg : SlotGeom (s - 80#64) := ⟨by rw [hst80]; omega,
+    by rw [hst80]; unfold Vsa.Sim.tohostAddr; omega, by rw [hst80]; omega⟩
+  iapply ms_callHelper Wp (i := 0x80002f44)
+    (jalx_80002f44 live (fun p hp => c.hlive _ (interp_code_80002f44 p hp))) interp_code_80002f44
+    (by decide) (clob := callerSaved)
+    (pins := fun rv => rv 10 = s - 80#64 ∧ rv 11 = stdoutFile ∧ rv 2 = s - 80#64)
+    (Pre := iprop(valAt N (s - 80#64).toNat (vs[i]'(by omega)) ∗ ⌜SlotGeom (s - 80#64)⌝ ∗
+      dispRes st (vs[i]'(by omega)) ∗ binImg ∗ stdioOwn ∗ consoleOwn (o ++ npOut st vs i) ∗
+      stackAt (s - 80#64) printNeed))
+    (Post := fun _ => iprop(valAt N (s - 80#64).toNat (vs[i]'(by omega)) ∗ stdioOwn ∗
+      consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ∗
+      stackAt (s - 80#64) printNeed))
+  iframe Hvp Hcode Hms
+  isplitl []
+  · ipureintro; refine ⟨?_, ?_, ?_⟩
+    · ix_reg; exact hsm.symm
+    · ix_reg; rfl
+    · ix_reg; rw [f.h2, hsm]
+  isplitl [Hval Hstd Hcon Hst]
+  · rw [hst80]
+    iframe Hval Hdi Himg Hstd Hcon
+    unfold stackAt
+    iframe Hst
+    ipureintro; exact ⟨hslg, hsg80⟩
+  iintro %R2 %hk2 ⟨Hval, Hstd, Hcon, ⟨Hst, -⟩⟩ Hms
+  rw [hst80]
+  ihave ⟨%Ms, HsS, #Hw⟩ := valAt_tracked N _ _ $$ Hval
+  ihave ⟨%M3, Hms, %⟨h3a, h3b, _⟩⟩ := ms_join $$ [Hms HsS]
+  · iframe Hms HsS
+  ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
+  -- the frame's saved words and the arguments' bytes survive
+  have hsv : ∀ o, 24 ≤ o → o + 8 ≤ 80 →
+      ldv .ld M3 (s.toNat - 80 + o) = ldv .ld M (s.toNat - 80 + o) := fun o h1 h2 =>
+    ldv_agree fun j hj => by
+      rw [h3a _ ⟨.inl (by simp only [InExt]; omega), by simp only [InExt]; omega⟩]
+      simp (disch := omega) only [imgM_store_miss]
+      exact hM1 _ (.inl (by simp only [InExt]; omega))
+  have hsvo : ∀ o, 24 ≤ o → o + 8 ≤ 80 →
+      (s + 18446744073709551536#64 + BitVec.ofNat 64 o).toNat = s.toNat - 80 + o := fun o h1 h2 => by
+    rw [BitVec.toNat_add, hsf]; simp; omega
+  have hA3 : ∀ k, InExt (args.toNat, 24 * n) k → imgM M3 k = imgM Margs k := fun k hk => by
+    have hnf : ¬ InExt (s.toNat - 80, 80) k := fun h => c.hdfa k h hk
+    rw [h3a _ ⟨.inr hk, fun h => hnf (by simp only [InExt] at h ⊢; omega)⟩]
+    simp (disch := (simp only [InExt] at hnf; omega)) only [imgM_store_miss]
+    exact hA k hk
+  iapply hB (upd R2 1 (BitVec.ofNat 64 (0x80002f44 + 4))) M3 ?_
+  rotate_left
+  · unfold NpRest
+    iframe Hcode Hsl Hv Hd Himg Hst Hk Hms Hstd Hcon
+  have k2 := fun x (hx : x ∈ fRegs) (hc : x ∉ callerSaved) => hk2 x hx hc
+  have sw : ∀ o, 24 ≤ o → o + 8 ≤ 80 →
+      ldv .ld M3 (s + 18446744073709551536#64 + BitVec.ofNat 64 o).toNat =
+        ldv .ld M (s + 18446744073709551536#64 + BitVec.ofNat 64 o).toNat := fun o h1 h2 => by
+    rw [hsvo o h1 h2]; exact hsv o h1 h2
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hA3⟩
+  · ix_reg; rw [k2 8 (by decide) (by decide)]; ix_reg; exact f.h8
+  · ix_reg; rw [k2 9 (by decide) (by decide)]; ix_reg
+    exact sx32_succ i (by have := c.hn; omega)
+  · ix_reg; rw [k2 18 (by decide) (by decide)]; ix_reg; exact f.h18
+  · ix_reg; rw [k2 19 (by decide) (by decide)]; ix_reg; exact f.h19
+  · ix_reg; rw [k2 20 (by decide) (by decide)]; ix_reg; exact f.h20
+  · ix_reg; rw [k2 2 (by decide) (by decide)]; ix_reg; exact f.h2
+  · intro x hx hc hn
+    have hx1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+    have e9 : x ≠ 9 := fun e => hn (by simp [e])
+    have e10 : x ≠ 10 := fun e => hc (by simp [e])
+    have e11 : x ≠ 11 := fun e => hc (by simp [e])
+    have e13 : x ≠ 13 := fun e => hc (by simp [e])
+    have e14 : x ≠ 14 := fun e => hc (by simp [e])
+    have e15 : x ≠ 15 := fun e => hc (by simp [e])
+    simp only [upd, hx1, ite_false]
+    rw [k2 x hx hc]
+    simp only [upd, e9, e10, e11, e13, e14, e15, ite_false]
+    exact f.hk x hx hc hn
+  · rw [sw 72 (by omega) (by omega)]; exact f.sra
+  · rw [sw 64 (by omega) (by omega)]; exact f.ss0
+  · rw [sw 56 (by omega) (by omega)]; exact f.ss1
+  · rw [sw 48 (by omega) (by omega)]; exact f.ss2
+  · rw [sw 40 (by omega) (by omega)]; exact f.ss3
+  · rw [sw 32 (by omega) (by omega)]; exact f.ss4
 
 end Glue
 
