@@ -84,25 +84,43 @@ theorem def_pro {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
   have := hw.lo; have := hw.hi; have := hw.htif
   have hld : ldv .lw Mt (R 10).toNat = BitVec.ofNat 64 n := by
     rw [he]; exact ldv_lw_img Mt _ n hn hlay.count
+  have hes := hsep G.e (by unfold frameS InExt; exact .inl ⟨hsb.1, by omega⟩)
+  clear hsep hlay
   sx_run hl at 0x80002a90
   refine hk _ _ _ ⟨rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, fun a ha => ?_⟩
   all_goals clear hk
   all_goals (try sx_norm)
-  all_goals (try sx_mem)
   · rw [BitVec.toNat_add, h2]; simp only [BitVec.reduceToNat]; omega
-  · exact hra
-  · exact hsv 8 (by decide)
-  · exact hsv 9 (by decide)
-  · exact hsv 18 (by decide)
-  · exact hsv 19 (by decide)
-  · exact hsv 20 (by decide)
-  · exact hsv 21 (by decide)
-  · exact hsv 22 (by decide)
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hra
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hsv 8 (by decide)
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hsv 9 (by decide)
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hsv 18 (by decide)
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hsv 19 (by decide)
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hsv 20 (by decide)
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hsv 21 (by decide)
+  · clear hld hw hsb he hn hes
+    simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss]
+    exact hsv 22 (by decide)
   · have hb : (R 2 + 18446744073709551552#64 + 24#64).toNat = s - 40 := by
       rw [BitVec.toNat_add, BitVec.toNat_add, h2]; simp only [BitVec.reduceToNat]; omega
-    have hes := hsep G.e (by unfold frameS InExt; exact .inl ⟨hsb.1, by omega⟩)
-    rw [hb, ldv_store_miss _ _ _ (by simp only [widthOfM]; omega), hld]
-  · clear hsep hlay hld hw hsb hsv hra he hn
+    first
+      | exact hld
+      | (rw [hb, ldv_store_miss _ _ _ (by simp only [widthOfM]; omega), hld])
+  · clear hld hw hsb hsv hra he hn hes
     generalize hB : R 2 + 18446744073709551552#64 = B
     have hBn : B.toNat = s - 64 := by
       rw [← hB, BitVec.toNat_add, h2]; simp only [BitVec.reduceToNat]; omega

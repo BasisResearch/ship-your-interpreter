@@ -35,10 +35,14 @@ macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro b hb; simp only [mem_accAddrs_iff, List.mem_append, VsaIris.InExt] at *; sx_addr))
 
-/-- Store forwarding for `ix_run` (default `sx_mem`; `Arm.lean` extends it
-to word loads). -/
+/-- Store forwarding for `ix_run`: doubleword loads (`Arm.lean` extends it
+to word loads). Not `sx_mem`, whose word-load rules (`ldv_lw_miss`) the
+allocator's runs need: in an interpreter run a word load off a pointer the
+context does not separate from the stack fails its discharge at every step. -/
 syntax "ix_mem" : tactic
-macro_rules | `(tactic| ix_mem) => `(tactic| sx_mem)
+macro_rules
+  | `(tactic| ix_mem) =>
+    `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss] at *)
 
 /-- Closed side conditions (a jump-table byte at a literal address is in
 `interpRO`). -/

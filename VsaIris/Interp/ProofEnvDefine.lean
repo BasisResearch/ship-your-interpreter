@@ -5,7 +5,7 @@ import VsaIris.Interp.EnvDefineGrow
 
 `envDefine_spec : textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗
 strlenSpec Wp ∗ memcpySpec Wp ⊢ envDefineSpec Wp N`, for every `MachWP`, in both
-regimes, given H4's allocator (`AllocHoles`) and `realloc(NULL, n)`
+regimes, given H4's proved allocator (`allocSpecs`) and `realloc(NULL, n)`
 (`ReallocNullHoles`).
 
 The entry opens frame `fa` (`storeRepr_openAt`), runs the prologue and the
@@ -45,7 +45,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 
 /-- **`env_define`** (`env.c:22`), for every `MachWP`, both regimes. -/
 theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ envText, live p.1)
-    (AH : AllocHoles) (NH : ReallocNullHoles) (hlive : AllocLive live) (N : NativeAddrs) :
+    (NH : ReallocNullHoles) (hlive : AllocLive live) (N : NativeAddrs) :
     textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strlenSpec Wp ∗
       memcpySpec Wp ⊢ envDefineSpec Wp N := by
   iintro ⟨#Ht, #Hat, #Hgp, #Hcmp, #Hsl, #Hmc⟩
@@ -172,7 +172,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
         arr := hg.arr }
     rw [defineCost_miss hf hmiss, show growthCost f.vars.length =
       arrayReallocCost (nextCap f.vars.length) by rw [hn0]; rfl]
-    iapply def_grow Wp hl AH NH hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
+    iapply def_grow Wp hl NH hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
     iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose
     unfold defK; iexact HK
   · -- the name loop
@@ -229,7 +229,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
               names := by rw [hg.names, hnc]
               arr := hg.arr }
           rw [hgc]
-          iapply def_grow Wp hl AH NH hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
+          iapply def_grow Wp hl NH hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
           iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose
           unfold defK; iexact HK
         · exact absurd (hF3.lay.cap_canon.trans hc1) hcn
@@ -250,7 +250,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
               sepStk := hF3.sepStk
               slot := hF3.slot }
           rw [hgc, Nat.add_zero]
-          iapply def_append Wp hl (allocSpecs AH live hlive) N hC hAR hf hinv hmiss hdisj hBH'
+          iapply def_append Wp hl (allocSpecs live hlive) N hC hAR hf hinv hmiss hdisj hBH'
           iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose
           unfold defK; iexact HK
     · -- `x` bound: replace its value

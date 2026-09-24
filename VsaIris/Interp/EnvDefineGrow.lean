@@ -41,13 +41,17 @@ theorem ne_of_pairwise_disj {B₁ B₂ bs : List (Nat × Nat)} {b c : Nat × Nat
   · exact hd.1.2.2 b hb b hc b.1 hin hin
   · exact hd.2.2 b (List.mem_append_right _ hc) b hb b.1 hin hin
 
-theorem obRest_mem {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
-    (hob : ∀ b, ob = some b → b ∈ H) (e : Nat × Nat) : e ∈ H ↔ e ∈ ob.toList ++ obRest ob H := by
+theorem obRest_perm {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
+    (hob : ∀ b, ob = some b → b ∈ H) : H.Perm (ob.toList ++ obRest ob H) := by
   cases ob with
   | none => simp [obRest]
   | some b =>
     simp only [Option.toList_some, List.singleton_append, obRest]
-    exact (List.perm_cons_erase (hob b rfl)).mem_iff
+    exact List.perm_cons_erase (hob b rfl)
+
+theorem obRest_mem {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
+    (hob : ∀ b, ob = some b → b ∈ H) (e : Nat × Nat) : e ∈ H ↔ e ∈ ob.toList ++ obRest ob H :=
+  (obRest_perm hob).mem_iff
 
 theorem obRest_sub {ob : Option (Nat × Nat)} {H : List (Nat × Nat)} {e : Nat × Nat}
     (he : e ∈ H) (hne : ∀ b, ob = some b → e ≠ b) : e ∈ obRest ob H := by
@@ -65,7 +69,7 @@ theorem heapRes_obFront {ρ : Regime} {ob : Option (Nat × Nat)} {H : List (Nat 
     (hob : ∀ b, ob = some b → b ∈ H) :
     heapRes (GF := GF) vsaLayoutP vsaRoomB ρ H ⊢
       heapRes vsaLayoutP vsaRoomB ρ (ob.toList ++ obRest ob H) :=
-  heapRes_congr (obRest_mem hob)
+  heapRes_congr (obRest_perm hob)
 
 /-- The owned set without the arrays: the base bytes and the struct block. -/
 def growS (s out : Nat) (G : FrameGeom) (a : Nat) : Prop := baseS s out a ∨ InExt G.sblk a
@@ -269,7 +273,7 @@ theorem roundUp16_32 (c : Nat) : roundUp16 (32 * c) = 8 * c + 24 * c := by
 /-- **The growth** `0x80002b98`: both arrays `realloc`ed to the next cap,
 then the append at the grown geometry; NULL from either aborts. -/
 theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    (hl : ∀ p ∈ envText, live p.1) (AH : AllocHoles) (NH : ReallocNullHoles)
+    (hl : ∀ p ∈ envText, live p.1) (NH : ReallocNullHoles)
     (hlive : AllocLive live) (N : NativeAddrs) {C : DefCall} (hC : C.OK) {ρ : Regime}
     {st : Store} {fa : Addr} {f : Frame} {G : FrameGeom} {img : Nat → BitVec 8}
     {R : Nat → BitVec 64} {Mt : Mem} {H B₁ B₂ : List (Nat × Nat)}
@@ -339,7 +343,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     · simp only [obOf, h0, ite_false, obLen]; rw [(hlay.arrays (by omega)).1]; simp only; omega
   have hsp1 : SpOKA (R1 2) := def_spOK hC (by rw [hk1 2 (by decide)]; exact h2)
   rw [← def_sp hC (show (R1 2).toNat = C.s.toNat - 64 by rw [hk1 2 (by decide)]; exact h2)]
-  iapply wp_call_reallocOpt AH NH hlive Wp (i := 0x80002ba0)
+  iapply wp_call_reallocOpt NH hlive Wp (i := 0x80002ba0)
     (jalx_80002ba0 live fun p hp => hl _ (env_code_80002ba0 p hp)) (by decide)
     ((ρ.plus (nameCopyCost C.x)).plus (24 * nextCap f.vars.length)) (obRest (obOf G.cap G.nblk) H)
     (obOf G.cap G.nblk) (8 * nextCap f.vars.length) (imgM Mt) (8 * nextCap f.vars.length)
@@ -402,7 +406,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have h32 : R3 2 = R1 2 := by rw [hk3 2 (by decide) (by decide) (by decide), e2 2 (by omega), hk1 2 (by decide)]
   have hsp3 : SpOKA (R3 2) := by rw [h32]; exact hsp1
   rw [← h32]
-  iapply wp_call_reallocOpt AH NH hlive Wp (i := 0x80002bbc)
+  iapply wp_call_reallocOpt NH hlive Wp (i := 0x80002bbc)
     (jalx_80002bbc live fun p hp => hl _ (env_code_80002bbc p hp)) (by decide)
     (ρ.plus (nameCopyCost C.x)) (obRest (obOf G.cap G.vblk) Hx)
     (obOf G.cap G.vblk) (24 * nextCap f.vars.length) (imgM Mt) (24 * nextCap f.vars.length)
@@ -660,7 +664,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
           fun c hc => ne_of_pairwise_disj hBd (.inr hb) (hn0 c hc).1 (hn0 c hc).2)
           fun c hc => ne_of_pairwise_disj hBd (.inr hb) (hv0 c hc).1 (hv0 c hc).2
     rw [show R3 2 = C.s - 64#64 from h52.symm.trans (def_sp hC h52n)]
-    iapply def_append Wp hl (allocSpecs AH live hlive) N hC hAR hf hinv hmiss hdisj' hBH'
+    iapply def_append Wp hl (allocSpecs live hlive) N hC hAR hf hinv hmiss hdisj' hBH'
     iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose HK
   · -- NULL from either `realloc`: out of memory
     ihave %hρ : ⌜ρ = .uncounted⌝ $$ [Hrest1 Hrest2]

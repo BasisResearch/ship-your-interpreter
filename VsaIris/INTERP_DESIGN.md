@@ -956,7 +956,7 @@ binary or by what the proofs consume:
   (`interpText`, `codeRes`) covers the value helpers, the natives and
   `stringify`, so a helper spec needs no second code resource and lane G's
   `helperSpec` shape is used as is. `sltu`/`sltiu` get `itO_<pc>` step lemmas
-  (`SymObs.swp_alu`), which `ix_run` tries.
+  (`SymObs.swp_alu`, over H4's `swp_aluRR`), which `ix_run` tries.
 - **`IrisHoles.out`** (`VsaIris/Vsa/NewlibOut.lean`): newlib's stdout calls
   (`fputs`, `fputc`, `fwrite`, `fprintf` on `stdout`) exact about what they
   print, and `stringify`'s `snprintf(buf, 64, "<fn %s>", name)`. VSA assumed

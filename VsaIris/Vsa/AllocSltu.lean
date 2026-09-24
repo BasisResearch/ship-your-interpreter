@@ -9,7 +9,7 @@ import Vsa.Sim.DecodeTable.Batch04Part25
 `gen_alloc_steps.py` emits no step lemma for it. As for `strlen`'s `snez`
 (`Strlen.lean`), the instruction is VSA's observational ALU step
 (`stepObs_alu` with the decode-table entry `decode_00e7b733`), turned into a
-one-step run by `Inst.runFact_of_aluStep`; `swp_alu` makes any such step one
+one-step run by `Inst.runFact_of_aluStep`; `swp_aluRR` makes any such step one
 `SWP` step, and `st_800052d0` is the lemma the generator would emit.
 -/
 
@@ -27,7 +27,7 @@ variable {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat} {
 
 /-- **One observational ALU step**: `rd` takes the value and the run
 continues at the next instruction. -/
-theorem swp_alu {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
+theorem swp_aluRR {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (i : Nat) (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (rd : Nat) (val : BitVec 64) (hexec : AluStep live i RR MR rd val)
     (hMR : ∀ p ∈ MR, (p.1, p.2.2) ∈ text)
@@ -194,7 +194,7 @@ theorem st_800052d0 {live : Nat → Prop} {S : Nat → Prop}
     (hk : AW live S Q 0x800052d4#64
       (upd R 14 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (R 15) (R 14))))) Mt) :
     AW live S Q 0x800052d0#64 R Mt :=
-  swp_alu 0x800052d0 _ _ 14 _ (sltuAluStep hlive (R 14) (R 15)) alloc_code_800052d0
+  swp_aluRR 0x800052d0 _ _ 14 _ (sltuAluStep hlive (R 14) (R 15)) alloc_code_800052d0
     (fun p hp => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
       rcases hp with rfl | rfl <;> exact ⟨by dsimp only; decide, by dsimp only; decide, rfl⟩)
