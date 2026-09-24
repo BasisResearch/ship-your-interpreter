@@ -869,4 +869,142 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
       show X + 16 + k = B.p + k by rw [M.addr]]
     exact M.data k hk
 
+/-- **The malloc path** (`0x80005350`): spill `S`, `X` and `nb`, call
+`_malloc_r(n)`, and continue on its result (`mal_ok`, `mal_null`). -/
+theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
+    (D : RD C B R Mt brkv chunks bins X S hdr0 nb) :
+    AW C.live C.S C.Q 0x80005350#64 R Mt := by
+  have hs64 := sp64_toNat O.spA
+  have hlo := O.spA.lo; have hhi := O.spA.hi; have hal := O.spA.align
+  unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
+  have hsp := D.frame.sp
+  have e : ∀ c : Nat, c ≤ 16 → (R 2 + BitVec.ofNat 64 c).toNat = C.s.toNat - 64 + c := fun c hc => by
+    rw [hsp, BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.toNat_ofNat]; omega
+  have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
+  have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
+  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
+  refine st_80005350 O.live ?_
+  refine st_80005354 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
+        unfold StOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
+        exact O.stack (by unfold mHead; omega) (by omega)) ?_
+  refine st_80005358 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
+        unfold StOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
+        exact O.stack (by unfold mHead; omega) (by omega)) ?_
+  refine st_8000535c O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n0, e 0 (by omega)]
+        unfold StOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n0, e 0 (by omega)]
+        exact O.stack (by unfold mHead; omega) (by omega)) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  rw [n16, e 16 (by omega), n8, e 8 (by omega), n0, e 0 (by omega)]
+  refine st_80005360 O.live ?_
+  simp only [VsaIris.ra]
+  have Hp := ((D.heap.store_stack (a := C.s.toNat - 64 + 16) (w := 8) (v := R 14) (by unfold mHead; omega)
+    (by omega)).store_stack (a := C.s.toNat - 64 + 8) (w := 8) (v := R 12) (by unfold mHead; omega)
+    (by omega)).store_stack (a := C.s.toNat - 64 + 0) (w := 8) (v := R 15) (by unfold mHead; omega)
+    (by omega)
+  generalize hM1 : writeLog (writeLog (writeLog Mt [(C.s.toNat - 64 + 16, 8, R 14)])
+    [(C.s.toNat - 64 + 8, 8, R 12)]) [(C.s.toNat - 64 + 0, 8, R 15)] = M1 at Hp ⊢
+  have hrd : ∀ a, a + 8 ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ a → read64 M1 a = read64 Mt a := fun a ha => by
+    rw [← hM1, rd_miss (by omega), rd_miss (by omega), rd_miss (by omega)]
+  have hX8 : read64 M1 (B.p - 8) = some hdr0 := by
+    have := D.addr; have := D.hdr
+    rw [hrd _ (by
+      have hf := foot_header D.heap.heap.heap (.inr ⟨_, D.mem, rfl⟩)
+      have := off_stack_of D.heap.disj fun k hk => vsaFoot_cons_sub _ (hf k hk)
+      simp only at this; omega), show B.p - 8 = X + 8 by omega]
+    exact D.hdr
+  -- the spills and the frame words are off the callee's window
+  have hwin : ∀ a, C.s.toNat - 64 ≤ a → a < C.s.toNat → ¬ MWin ((B.p, B.nOld) :: C.H)
+      (C.s + 18446744073709551552#64) a := fun a h1 h2 hw => by
+    rcases hw with hf | ⟨h3, h4⟩
+    · exact D.heap.disj a (by unfold mHead; omega) h2 (vsaFoot_cons_sub a hf)
+    · rw [hs64] at h4; omega
+  have hFr : ∀ (Mt' : Mem), (∀ a, ¬ MWin ((B.p, B.nOld) :: C.H) (C.s + 18446744073709551552#64) a →
+      Mt'[a]? = M1[a]?) → ∀ a, C.s.toNat - 64 ≤ a → a + 8 ≤ C.s.toNat → read64 Mt' a = read64 M1 a :=
+    fun Mt' hf a h1 h2 => read64_keep fun k hk => hf _ (hwin _ (by omega) (by omega))
+  -- block bytes are off the callee's window too
+  have hbA : ∀ k, k < B.nOld → heapStart ≤ B.p + k ∧ B.p + k < heapEnd := by
+    obtain ⟨c, hc, _, h8, h9⟩ := D.heap.heap.heap.heap.live _ List.mem_cons_self
+    have := D.heap.heap.heap.heap.walk.chunk_bounds c hc
+    have := D.heap.heap.heap.heap.brk_le; have := D.heap.heap.heap.heap.top_le
+    have := D.heap.heap.heap.top_room
+    simp only at h8 h9; intro k hk; unfold heapStart heapEnd at *; omega
+  have hblkw : ∀ k, k < B.nOld → ¬ MWin ((B.p, B.nOld) :: C.H) (C.s + 18446744073709551552#64) (B.p + k) :=
+    fun k hk hw => by
+      obtain ⟨hA1, hA2⟩ := hbA k hk
+      rcases hw with hf' | ⟨h3, h4⟩
+      · rcases hf' with hg | ⟨_, _, h5⟩
+        · have := allocGlobal_off_arena _ hg; omega
+        · exact h5 _ List.mem_cons_self ⟨by simp only; omega, by simp only; omega⟩
+      · rw [hs64] at h3 h4
+        exact D.heap.disjD _ (win64_le h3) (by omega) (D.heap.blk k hk)
+  have hbd : ∀ k, k < B.nOld → M1[B.p + k]? = some (B.old (B.p + k)) := fun k hk => by
+    exact Hp.data k hk
+  have hsl : ∀ Mt' : Mem, (∀ a, ¬ MWin ((B.p, B.nOld) :: C.H) (C.s + 18446744073709551552#64) a →
+      Mt'[a]? = M1[a]?) → ∀ a, vsaFoot C.H a → ¬ vsaFoot ((B.p, B.nOld) :: C.H) a →
+      (Mt'[a]?).isSome ∧ ∀ k, k < B.nOld → Mt'[B.p + k]? = some (B.old (B.p + k)) :=
+    fun Mt' hf a ha hna => ⟨by
+      rw [hf a fun hw => ?_]
+      · exact Hp.pres a ha
+      rcases hw with hf' | ⟨h3, h4⟩
+      · exact hna hf'
+      · rw [hs64] at h3 h4; exact D.heap.disjD _ (win64_le h3) (by omega) ha,
+      fun k hk => by rw [hf _ (hblkw k hk)]; exact hbd k hk⟩
+  have hpres' : ∀ Mt' : Mem, (∀ a, ¬ MWin ((B.p, B.nOld) :: C.H) (C.s + 18446744073709551552#64) a →
+      Mt'[a]? = M1[a]?) → (∀ a, vsaFoot ((B.p, B.nOld) :: C.H) a → (Mt'[a]?).isSome) →
+      ∀ a, vsaFoot C.H a → (Mt'[a]?).isSome := fun Mt' hf hp a ha => by
+    by_cases h : vsaFoot ((B.p, B.nOld) :: C.H) a
+    · exact hp a h
+    · exact (hsl Mt' hf a ha h).1
+  have hdata' : ∀ Mt' : Mem, (∀ a, ¬ MWin ((B.p, B.nOld) :: C.H) (C.s + 18446744073709551552#64) a →
+      Mt'[a]? = M1[a]?) → ∀ k, k < B.nOld → Mt'[B.p + k]? = some (B.old (B.p + k)) :=
+    fun Mt' hf k hk => by rw [hf _ (hblkw k hk)]; exact hbd k hk
+  have hF : ∀ (R' : Nat → BitVec 64) (Mt' : Mem), R' 2 = R 2 → R' 18 = R 18 → R' 19 = R 19 →
+      (∀ a, ¬ MWin ((B.p, B.nOld) :: C.H) (C.s + 18446744073709551552#64) a → Mt'[a]? = M1[a]?) →
+      RFrame C R' Mt' := fun R' Mt' g2 g18 g19 hf => by
+    have F := D.frame
+    refine ⟨g2.trans hsp, ?_, ?_, ?_, g18.trans F.s2, g19.trans F.s3⟩ <;>
+      rw [hFr Mt' hf _ (by omega) (by omega), ← hM1, rd_miss (by omega), rd_miss (by omega),
+        rd_miss (by omega)]
+    · exact F.s0
+    · exact F.s1
+    · exact F.ra
+  refine rcall_malloc O (n := C.n) (link := 0x80005364#64) (by decide) (fun a ha => vsaFoot_cons_sub a ha) ?_ ?_ ?_ ?_
+    Hp.heap (fun a ha => Hp.pres a (vsaFoot_cons_sub a ha)) D.heap.disjD
+    (fun R' Mt' g1 g2 g8 g9 g18 g19 hfr hal' hheap' hpres'' hframe' => ?_)
+    (fun R' Mt' g1 g2 g8 g9 g18 g19 h10 hheap' hpres'' hframe' hst => ?_) <;>
+    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · exact hsp
+  · rw [D.s1]; rfl
+  · exact D.a1
+  · -- a fresh block
+    obtain ⟨top', brkv', chunks', bins', H', htop', hkeep⟩ := hheap'
+    simp only [upd_apply, Nat.reduceEqDiff, ite_false] at g2 g8 g9 g18 g19
+    have F' := hF R' Mt' g2 g18 g19 hframe'
+    have hkX : (⟨X, S, true⟩ : Chunk) ∈ chunks' := by
+      have := hkeep (B.p, B.nOld) List.mem_cons_self hdr0 hX8
+      have ha := D.addr; have hs := D.hsz
+      simp only at this
+      rwa [show B.p - 16 = X by omega, hs] at this
+    refine mal_ok O (X := X) (S := S) (nb := nb) (p' := (R' 10).toNat)
+      ⟨F', ?_, ?_, ?_, H', by omega, hfr, hal', hkX, D.addr, D.heap.starts, hpres' Mt' hframe' hpres'',
+        D.heap.disj, D.heap.disjD, hdata' Mt' hframe', D.nbok, D.nb31, D.lt, D.heap.grow, ?_, ?_, rfl⟩
+    · rw [hFr Mt' hframe' _ (by omega) (by omega), ← hM1,
+        show C.s.toNat - 64 = C.s.toNat - 64 + 0 by omega, read64_store_hit, D.a5]
+    · rw [hFr Mt' hframe' _ (by omega) (by omega), ← hM1, rd_miss (by omega), read64_store_hit, D.a2]
+    · rw [hFr Mt' hframe' _ (by omega) (by omega), ← hM1, rd_miss (by omega), rd_miss (by omega),
+        read64_store_hit, D.a4]
+    · rw [g8, D.s0]
+    · rw [g9, D.s1]
+  · -- NULL
+    simp only [upd_apply, Nat.reduceEqDiff, ite_false] at g2 g8 g9 g18 g19
+    exact mal_null O (hF R' Mt' g2 g18 g19 hframe') h10 hheap' (hpres' Mt' hframe' hpres'')
+      (hdata' Mt' hframe') hst
+
 end VsaIris.VsaHeap
