@@ -30,10 +30,10 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     (D : EvalECost st d env (.binary {OP} l r) st2 {RES} ({COST}))
     (hl : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env l st1 {LV} nl Dl)
     (hr : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st1 d env r st2 {RV} nr Dr)
-{HYPS}    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary {OP} l r) st2
+{HYPS}    {LHS}⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary {OP} l r) st2
         {RES} ({COST}) D by
   unfold evalSpecT_body fnSpecW
-  iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
+  iintro {INTRO0}%k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
   icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
   unfold astEG
@@ -67,13 +67,13 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   -- run 1: prologue, kind dispatch, stage the left child
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := evalArmF P m env aE (s + 18446744073709550528#64)
+  iapply wp_swpF (twpW _) (F := {CTXO}evalArmF P m env aE (s + 18446744073709550528#64)
       (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
       (world N L Room inp (.counted (k + ({COST}))) st d)
       iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary {OP} l r)
-        {RES} sret s rv -∗ (twpW (vsaModel live)).W Φ))
+        {RES} sret s rv -∗ (twpW (vsaModel live)).W Φ){CTXC})
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact Hk
+  · unfold evalArmF; {CTXI}iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact Hk
   intro F'
   unfold evalEntryPC
   refine BinaryAddIntT_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
@@ -86,7 +86,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     subst hMt1; constructor <;> (ix_fwd using [hoff]; ix_reg)
   have hA1 : ldv .ld Mt1 (s.toNat - 1088) = aE := by subst hMt1; ix_fwd
   unfold F' evalArmF
-  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, Hms⟩
+  iintro ⟨{CTXP}⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩{CTXQ}, Hms⟩
   -- the left child
   ihave Hl := hl
   rw [show k + ({COST}) = {KTAIL} + nr + nl by omega]
@@ -117,11 +117,11 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
       (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
       (world N L Room inp (.counted ({KTAIL} + nr)) st1 d)
       iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary {OP} l r)
-        {RES} sret s rv -∗ (twpW (vsaModel live)).W Φ) ∗ □ valOf N {LV} w0 w1 w2))
+        {RES} sret s rv -∗ (twpW (vsaModel live)).W Φ) ∗ □ valOf N {LV} w0 w1 w2{CTXF}))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms; isplitr [Hv1]
     · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
-    · iexact Hv1
+    · {CTXI}iexact Hv1
   intro F'
   refine BinaryAddIntT_run2 (aE := aE) (inp := BitVec.ofNat 64 inp) (w1 := w1) (kL := BitVec.ofNat 64 (w0.toNat % 2 ^ 32)) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ hn.right ?_ ?_ ?_ ?_
   · ix_keep [hkeep1]
@@ -136,7 +136,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   have hsv2 : EvalSaved Mt2 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
     rw [hMt2]; ix_saved hsv1 using hoff
   unfold F' evalArmF
-  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #Hv1⟩, Hms⟩
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #Hv1{CTXD}⟩, Hms⟩
   -- the right child
   ihave Hr := hr
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)

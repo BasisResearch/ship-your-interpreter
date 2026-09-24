@@ -271,4 +271,13 @@ theorem slotWrite_ld_miss (Mt : Mem) {a c : Nat} (w0 w1 w2 : BitVec 64) (h : c +
   unfold slotWrite
   rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega)]
 
+/-- A word's low half is its first four bytes (a `sw` into a value slot's tag). -/
+theorem imgW_low4 (img : Nat → BitVec 8) (a : Nat) :
+    (imgW img a).toNat % 2 ^ 32 = imgLE img a 4 := by
+  rw [imgW_toNat]
+  simp only [imgLE]
+  have h0 := (img a).isLt; have h1 := (img (a + 1)).isLt; have h2 := (img (a + 1 + 1)).isLt
+  have h3 := (img (a + 1 + 1 + 1)).isLt
+  omega
+
 end VsaIris.Interp

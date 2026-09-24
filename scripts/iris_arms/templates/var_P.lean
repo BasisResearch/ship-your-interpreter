@@ -8,7 +8,7 @@ import VsaIris.Interp.LeafErr
 spec. After `env_get` the case splits on the lookup: found, the total case's
 tail (`{ARM}T_run2`) returns with `EvalE.var`; unbound, the `beqz` goes to
 `runtime_error(in, line, "undefined variable '%s'", name, 0)` (`ev_rtErr`),
-which aborts. The error arm needs `errCtx` and `ErrRoom` (`LeafErr.lean`,
+which aborts. The error arm needs `leafErrCtx` and `ErrRoom` (`LeafErr.lean`,
 INTERP_DESIGN.md Q7), and the case is stated at `Core := evalCore`.
 Template: `scripts/iris_arms/templates/var_P.lean`.
 -/
@@ -39,7 +39,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     {st : St} {d env : Nat} {x : String} (HN : NewlibHoles) (hcl : CodeLive live)
     (hroom : ErrRoom (.var x) d)
     (hget : ⊢ envGetSpec (GF := GF) (wpW (vsaModel live)) N) :
-    errCtx inp ∗ evalSpecsP (GF := GF) (vsaModel live) N L Room inp (evalCore N L Room inp) ⊢
+    leafErrCtx inp ∗ evalSpecsP (GF := GF) (vsaModel live) N L Room inp (evalCore N L Room inp) ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N L Room inp (evalCore N L Room inp) st d env
         (.var x) by
   iintro ⟨#HE, #-⟩
@@ -71,7 +71,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   -- run 1: prologue, kind dispatch, `env_get(env, name, sp + 240)`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
-  iapply wp_swpF (wpW _) (F := iprop(errCtx inp ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
+  iapply wp_swpF (wpW _) (F := iprop(leafErrCtx inp ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (s + 18446744073709550528#64) (evalNeed (.var x) d - 1088) ∗
       world N L Room inp .uncounted st d ∗
       ((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.var x) st' v⌝ ∗
@@ -154,7 +154,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     · iframe Hms Hout
     ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
     · iframe Hcode Hro
-    iapply wp_swpF (wpW _) (F := iprop(errCtx inp ∗ codeRes ∗ strAt q x ∗
+    iapply wp_swpF (wpW _) (F := iprop(leafErrCtx inp ∗ codeRes ∗ strAt q x ∗
         stackScratch (s + 18446744073709550528#64) (evalNeed (.var x) d - 1088) ∗
         world N L Room inp .uncounted st d ∗
         (abortAt (evalCore N L Room inp) s (evalNeed (.var x) d) ∗ slot24 sret.toNat -∗

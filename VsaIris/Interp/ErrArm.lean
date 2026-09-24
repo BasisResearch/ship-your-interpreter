@@ -110,6 +110,30 @@ structure RtErrEvalAt (R : Nat → BitVec 64) (inp : Nat) (line fmt x1 x2 s : Bi
   h14 : R 14 = x2
   h2 : R 2 = evalSP s
 
+/-- **A callee's abort below an `eval_expr` arm** (`sp = s - 1088`, the callee
+entered with `need` bytes below `sp`): the arm's own `abortAt Core s n`. -/
+theorem abortAt_of_evalCallee {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+    {Core : IProp GF} (hC : CoreOK N L Room inp Core) {s : BitVec 64} {n need : Nat}
+    (hsg : StackGeom s n) (hn : 1088 + need ≤ n) :
+    abortRes N L Room inp (evalSP s) need ∗ blockOwn (s.toNat - n) (n - 1088 - need) ∗
+      ownSet (InExt (s.toNat - 1088, 1088)) byteAny ⊢ abortAt Core s n := by
+  have hs1 := hsg.lo; have hs2 := hsg.hi; have hs4 := hsg.le
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs1 hs2
+  simp only at hs1 hs2
+  have hsf : (evalSP s).toNat = s.toNat - 1088 := by
+    rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  iintro ⟨HA, Hslack, HS⟩
+  unfold abortRes abortAt
+  icases HA with ⟨Hcore, Hst⟩
+  ihave Hcore := hC (evalSP s) need (by rw [hsf]; omega) (by rw [hsf]; omega) (by rw [hsf]; omega)
+    $$ Hcore
+  ihave Hst := stackScratch_widen (s := evalSP s) (n := n - 1088) (m := need)
+    (by rw [hsf]; omega) (by omega) $$ [Hslack Hst]
+  · rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]; iframe Hslack Hst
+  ihave Hst := evalFrame_join hs4 (by omega) $$ [Hst HS]
+  · iframe Hst HS
+  iframe Hcore Hst
+
 /-- **`runtime_error` from an eval arm** (`jal` at `i`, `sp = s - 1088`): it
 never returns; on abort, H5's resource becomes the arm's `abortAt Core s n`:
 the call's stack, the slack below it and the frame bytes rejoin the stack
@@ -176,19 +200,11 @@ theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   · iintro %R' %_ Hf
     iexfalso; iexact Hf
   · iintro HA Hslack HS
-    unfold abortRes abortAt
-    icases HA with ⟨Hcore, Hst⟩
-    ihave Hcore := hE.core (evalSP s) RtErr.rtErrNeed
-      (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega)
-      (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega) (by rw [hsf]; omega) $$ Hcore
-    ihave Hst := stackScratch_widen (s := evalSP s) (n := n - 1088) (m := RtErr.rtErrNeed)
-      (by rw [hsf]; omega) (by unfold RtErr.rtErrNeed snprintfNeed; omega) $$ [Hslack Hst]
-    · iframe Hslack Hst
     ihave HS := ownSet_forget _ _ $$ HS
-    ihave Hst := evalFrame_join hs4 (by omega) $$ [Hst HS]
-    · iframe Hst HS
     iapply Hab
-    iframe Hcore Hst
+    iapply abortAt_of_evalCallee hE.core hsg (need := RtErr.rtErrNeed) (by unfold RtErr.rtErrNeed snprintfNeed; omega)
+    rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]
+    iframe HA Hslack HS
 
 
 /-- A binary node's budget leaves `runtime_error` room below the arm's frame:

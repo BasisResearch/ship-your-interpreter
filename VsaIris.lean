@@ -176,15 +176,13 @@ import VsaIris.Interp.Case.BinarySubIntP
 import VsaIris.Interp.CaseE2
 import VsaIris.Interp.LeafArm
 import VsaIris.Interp.LeafCalls
--- Lane E4 (merge of E5, which carried E1): E1's `LeafErr` and E2's `SpecErr` both
--- define `VsaIris.Interp.errCtx`; the two cannot be imported together. Integration
--- picks one; this branch builds with E2's (the call errors use `ErrEnv`), so E1's
--- `LeafErr` and the `var`/`assign` cases over it stay out of the root import:
--- import VsaIris.Interp.LeafErr
--- import VsaIris.Interp.Case.VarT
--- import VsaIris.Interp.Case.VarP
--- import VsaIris.Interp.Case.AssignT
--- import VsaIris.Interp.Case.AssignP
+import VsaIris.Interp.LeafErr
+import VsaIris.Interp.Case.VarT
+import VsaIris.Interp.Case.VarP
+import VsaIris.Interp.Case.AssignT
+import VsaIris.Interp.Case.AssignP
+import VsaIris.Interp.Case.FnLitT
+import VsaIris.Interp.Case.FnLitP
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntT
@@ -193,6 +191,20 @@ import VsaIris.Interp.Case.LeafStrT
 import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.LeafBoolT
 import VsaIris.Interp.Case.LeafBoolP
+import VsaIris.Interp.ArmLogical
+import VsaIris.Interp.Case.LogicalAndTrueT
+import VsaIris.Interp.Case.LogicalAndTrueP
+import VsaIris.Interp.Case.LogicalAndFalseT
+import VsaIris.Interp.Case.LogicalAndFalseP
+import VsaIris.Interp.Case.LogicalOrFalseT
+import VsaIris.Interp.Case.LogicalOrFalseP
+import VsaIris.Interp.Case.LogicalOrTrueT
+import VsaIris.Interp.Case.LogicalOrTrueP
+import VsaIris.Interp.Case.UnaryNotT
+import VsaIris.Interp.Case.UnaryNotP
+import VsaIris.Interp.Case.UnaryNegT
+import VsaIris.Interp.Case.UnaryNegP
+import VsaIris.Interp.Case.UnaryNegTypeP
 import VsaIris.Vsa.SymObs
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Interp.SpecValue

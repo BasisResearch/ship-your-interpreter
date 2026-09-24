@@ -131,8 +131,10 @@ def validate(arm: Arm, code: dict[int, tuple[int, str, str]]) -> None:
     runs = [s for s in arm.steps if s.op == "run"]
     if not runs or int(runs[0].args[0], 0) not in STARTS[arm.fn]:
         err("the first step must be a run from the function entry (exec: or its dispatch point)")
-    if arm.steps[-1].op != "run" or arm.steps[-1].args[1] != "ret":
-        err("the last step must be a run ending in ret")
+    # (lane E3) an error row may instead end in `abort <Spec> <jalPC>`: a call
+    # that never returns (`runtime_error`), whose abort ends the arm
+    if not (arm.steps[-1].op == "run" and arm.steps[-1].args[1] == "ret") and arm.steps[-1].op != "abort":
+        err("the last step must be a run ending in ret, or an abort call")
     names = {c.var for c in arm.children}
     for s in arm.steps:
         if s.op == "run":
@@ -150,7 +152,7 @@ def validate(arm: Arm, code: dict[int, tuple[int, str, str]]) -> None:
             want = EVAL_ENTRY if kind == "E" else EXEC_ENTRY
             if tgt != want:
                 err(f"child call at {pc:#x} is not `jal {want:#x}`")
-        elif s.op == "helper":
+        elif s.op in ("helper", "abort"):
             pc = int(s.args[1], 0)
             if pc not in code or jal_target(code[pc][0], pc) is None:
                 err(f"helper call at {pc:#x} is not a linking jal")
@@ -379,10 +381,12 @@ def subst_call1(arm: Arm, mode: str) -> dict[str, str]:
     for i, d in enumerate(arm.errors, 1):
         out[f"E{i}AT"] = f"{d.at:08x}"
         out[f"E{i}TO"] = f"{d.to:08x}"
-    for k in ("ej", "fmtok"):
+    for k in ("ej", "fmtok", "br", "oom"):
         if k in arm.params:
             v = arm.params[k]
-            out[k.upper()] = f"{int(v, 0):08x}" if k == "ej" else v
+            out[k.upper()] = v if k == "fmtok" else f"{int(v, 0):08x}"
+    if "br" in arm.params:
+        out["R3"] = f"{int(arm.params['br'], 0) + 4:08x}"
     return out
 
 
@@ -426,7 +430,8 @@ FAMILIES = {
     "execVarNull": subst_execBlock,
     "leaf": subst_leaf,
     "var": subst_call1,
-    "assign": subst_assign}
+    "assign": subst_assign,
+    "fnLit": subst_call1}
 
 
 # Families that compose their own text from template fragments (a lane module

@@ -37,11 +37,49 @@ import VsaIris.Interp.Case.LeafStrT
 import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.LeafBoolT
 import VsaIris.Interp.Case.LeafBoolP
--- E4: errCtx clash (E1 LeafErr vs E2 SpecErr), see LANE.md: import VsaIris.Interp.Case.VarT
--- E4: errCtx clash (E1 LeafErr vs E2 SpecErr), see LANE.md: import VsaIris.Interp.Case.VarP
--- E4: errCtx clash (E1 LeafErr vs E2 SpecErr), see LANE.md: import VsaIris.Interp.Case.AssignT
--- E4: errCtx clash (E1 LeafErr vs E2 SpecErr), see LANE.md: import VsaIris.Interp.Case.AssignP
+import VsaIris.Interp.Case.VarT
+import VsaIris.Interp.Case.VarP
+import VsaIris.Interp.Case.AssignT
+import VsaIris.Interp.Case.AssignP
+import VsaIris.Interp.Case.FnLitT
+import VsaIris.Interp.Case.FnLitP
+import VsaIris.Interp.Case.LogicalAndFalseP
+import VsaIris.Interp.Case.LogicalOrTrueP
+import VsaIris.Interp.Case.UnaryNotP
+import VsaIris.Interp.Case.UnaryNegTypeP
 
+import VsaIris.Interp.CaseE2
+import VsaIris.Interp.Case.BinaryAddIntP
+import VsaIris.Interp.Case.BinaryAddIntT
+import VsaIris.Interp.Case.BinarySubIntP
+import VsaIris.Interp.Case.BinarySubIntT
+import VsaIris.Interp.Case.ExecBlockP
+import VsaIris.Interp.Case.ExecBlockT
+import VsaIris.Interp.Case.ExecBrkP
+import VsaIris.Interp.Case.ExecBrkT
+import VsaIris.Interp.Case.ExecContP
+import VsaIris.Interp.Case.ExecContT
+import VsaIris.Interp.Case.ExecExprP
+import VsaIris.Interp.Case.ExecExprT
+import VsaIris.Interp.Case.ExecForP
+import VsaIris.Interp.Case.ExecForT
+import VsaIris.Interp.Case.ExecIfFalseT
+import VsaIris.Interp.Case.ExecIfNoneT
+import VsaIris.Interp.Case.ExecIfP
+import VsaIris.Interp.Case.ExecIfTrueT
+import VsaIris.Interp.Case.ExecRetNullP
+import VsaIris.Interp.Case.ExecRetNullT
+import VsaIris.Interp.Case.ExecRetP
+import VsaIris.Interp.Case.ExecRetT
+import VsaIris.Interp.Case.ExecVarInitP
+import VsaIris.Interp.Case.ExecVarInitT
+import VsaIris.Interp.Case.ExecVarNullP
+import VsaIris.Interp.Case.ExecVarNullT
+import VsaIris.Interp.Case.ExecWhileP
+import VsaIris.Interp.Case.ExecWhileT
+import VsaIris.Interp.Case.LogicalAndTrueP
+import VsaIris.Interp.Case.LogicalOrFalseP
+import VsaIris.Interp.Case.UnaryNegP
 /-! Axiom audit: every headline result, printed. -/
 
 #print axioms VsaIris.wp_exec_step
@@ -179,6 +217,9 @@ import VsaIris.Interp.Case.LeafBoolP
 #print axioms VsaIris.Interp.envDefine_spec
 #print axioms VsaIris.Interp.reallocRho_spec
 #print axioms Vsa.Sim.NativeNameAudit.Control.sharedGeom
+#print axioms VsaIris.Interp.reallocNullChgRun_proved
+#print axioms VsaIris.Interp.reallocNullLocalRun_proved
+#print axioms VsaIris.Interp.reallocNullHoles_proved
 
 -- lane E1: eval_expr's leaf, var, assign and fn arms
 #print axioms VsaIris.Interp.caseT_LeafNull
@@ -189,12 +230,102 @@ import VsaIris.Interp.Case.LeafBoolP
 #print axioms VsaIris.Interp.caseP_LeafStr
 #print axioms VsaIris.Interp.caseT_LeafBool
 #print axioms VsaIris.Interp.caseP_LeafBool
--- E4 (errCtx clash, LANE.md): #print axioms VsaIris.Interp.caseT_Var
--- E4 (errCtx clash, LANE.md): #print axioms VsaIris.Interp.caseP_Var
--- E4 (errCtx clash, LANE.md): #print axioms VsaIris.Interp.caseT_Assign
--- E4 (errCtx clash, LANE.md): #print axioms VsaIris.Interp.caseP_Assign
--- E4 (errCtx clash, LANE.md): #print axioms VsaIris.Interp.ev_rtErr
+#print axioms VsaIris.Interp.caseT_Var
+#print axioms VsaIris.Interp.caseP_Var
+#print axioms VsaIris.Interp.caseT_Assign
+#print axioms VsaIris.Interp.caseP_Assign
+#print axioms VsaIris.Interp.caseT_FnLit
+#print axioms VsaIris.Interp.caseP_FnLit
+#print axioms VsaIris.Interp.ev_oom
+#print axioms VsaIris.Interp.ev_rtErr
 #print axioms VsaIris.Interp.ms_callEnv3
-#print axioms VsaIris.Interp.reallocNullChgRun_proved
-#print axioms VsaIris.Interp.reallocNullLocalRun_proved
-#print axioms VsaIris.Interp.reallocNullHoles_proved
+-- lane E3: logical and unary arms (generated from scripts/iris_arms/arms.d/e3-logical.tsv)
+#print axioms VsaIris.Interp.caseT_LogicalAndTrue
+#print axioms VsaIris.Interp.caseT_LogicalAndFalse
+#print axioms VsaIris.Interp.caseT_LogicalOrFalse
+#print axioms VsaIris.Interp.caseT_LogicalOrTrue
+#print axioms VsaIris.Interp.caseP_LogicalAnd
+#print axioms VsaIris.Interp.caseP_LogicalOr
+#print axioms VsaIris.Interp.caseT_UnaryNot
+#print axioms VsaIris.Interp.caseP_UnaryNot
+#print axioms VsaIris.Interp.caseT_UnaryNeg
+#print axioms VsaIris.Interp.caseP_UnaryNeg
+#print axioms VsaIris.Interp.caseP_UnaryNegType
+
+-- lane E2 (also VsaIris/AuditE2.lean)
+#print axioms VsaIris.Interp.caseT_BinaryLtInt
+#print axioms VsaIris.Interp.caseT_BinaryLeInt
+#print axioms VsaIris.Interp.caseT_BinaryGtInt
+#print axioms VsaIris.Interp.caseT_BinaryGeInt
+#print axioms VsaIris.Interp.valueKindName_spec
+#print axioms VsaIris.Interp.ms_rtErrEval
+#print axioms VsaIris.Interp.ms_callKindName
+#print axioms VsaIris.Interp.coreOK_top
+#print axioms VsaIris.Interp.caseT_BinaryEq
+#print axioms VsaIris.Interp.caseT_BinaryNe
+#print axioms VsaIris.Interp.caseP_BinaryEq
+#print axioms VsaIris.Interp.caseP_BinaryNe
+#print axioms VsaIris.Interp.caseP_BinarySub
+#print axioms VsaIris.Interp.ms_callValueEqual
+#print axioms VsaIris.Interp.caseT_BinaryLtStr
+#print axioms VsaIris.Interp.caseT_BinaryLeStr
+#print axioms VsaIris.Interp.caseT_BinaryGtStr
+#print axioms VsaIris.Interp.caseT_BinaryGeStr
+#print axioms VsaIris.Interp.caseP_BinaryLt
+#print axioms VsaIris.Interp.caseP_BinaryLe
+#print axioms VsaIris.Interp.caseP_BinaryGt
+#print axioms VsaIris.Interp.caseP_BinaryGe
+#print axioms VsaIris.Interp.mul_iw
+#print axioms VsaIris.Interp.divdi3_iw
+#print axioms VsaIris.Interp.moddi3_iw
+#print axioms VsaIris.Interp.caseT_BinaryMulInt
+#print axioms VsaIris.Interp.caseT_BinaryDivInt
+#print axioms VsaIris.Interp.caseT_BinaryModInt
+#print axioms VsaIris.Interp.caseP_BinaryMul
+#print axioms VsaIris.Interp.caseP_BinaryDiv
+#print axioms VsaIris.Interp.caseP_BinaryMod
+#print axioms VsaIris.Interp.caseT_BinaryConcat
+#print axioms VsaIris.Interp.ms_callFree
+#print axioms VsaIris.Interp.ms_callHelperA
+#print axioms VsaIris.Interp.abortAt_of_evalCallee
+#print axioms VsaIris.Interp.ms_callMemcpyOwned
+#print axioms VsaIris.Interp.ownImg_cat
+#print axioms VsaIris.Interp.concat_route
+#print axioms VsaIris.Interp.caseP_BinaryAdd
+#print axioms VsaIris.Interp.ms_evalOom
+#print axioms VsaIris.Interp.abortAt_of_stringify
+
+-- wave 4: generated binInt rows (G), logical rows (E3), exec arms (E5), loops (E6)
+#print axioms VsaIris.Interp.caseP_BinaryAddInt
+#print axioms VsaIris.Interp.caseP_BinarySubInt
+#print axioms VsaIris.Interp.caseP_ExecBlock
+#print axioms VsaIris.Interp.caseP_ExecBrk
+#print axioms VsaIris.Interp.caseP_ExecCont
+#print axioms VsaIris.Interp.caseP_ExecExpr
+#print axioms VsaIris.Interp.caseP_ExecFor
+#print axioms VsaIris.Interp.caseP_ExecIf
+#print axioms VsaIris.Interp.caseP_ExecRet
+#print axioms VsaIris.Interp.caseP_ExecRetNull
+#print axioms VsaIris.Interp.caseP_ExecVarInit
+#print axioms VsaIris.Interp.caseP_ExecVarNull
+#print axioms VsaIris.Interp.caseP_ExecWhile
+#print axioms VsaIris.Interp.caseP_LogicalAndFalse
+#print axioms VsaIris.Interp.caseP_LogicalAndTrue
+#print axioms VsaIris.Interp.caseP_LogicalOrFalse
+#print axioms VsaIris.Interp.caseP_LogicalOrTrue
+#print axioms VsaIris.Interp.caseP_UnaryNegInt
+#print axioms VsaIris.Interp.caseT_BinaryAddInt
+#print axioms VsaIris.Interp.caseT_BinarySubInt
+#print axioms VsaIris.Interp.caseT_ExecBlock
+#print axioms VsaIris.Interp.caseT_ExecBrk
+#print axioms VsaIris.Interp.caseT_ExecCont
+#print axioms VsaIris.Interp.caseT_ExecExpr
+#print axioms VsaIris.Interp.caseT_ExecFor
+#print axioms VsaIris.Interp.caseT_ExecIfFalse
+#print axioms VsaIris.Interp.caseT_ExecIfNone
+#print axioms VsaIris.Interp.caseT_ExecIfTrue
+#print axioms VsaIris.Interp.caseT_ExecRet
+#print axioms VsaIris.Interp.caseT_ExecRetNull
+#print axioms VsaIris.Interp.caseT_ExecVarInit
+#print axioms VsaIris.Interp.caseT_ExecVarNull
+#print axioms VsaIris.Interp.caseT_ExecWhile

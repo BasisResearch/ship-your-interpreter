@@ -1057,6 +1057,35 @@ binary or by what the proofs consume:
   entry specs G's closure loop takes. The recursor's partial case supplies both
   hypotheses; the other eval arms keep `evalSpecsP ∗ errCtx`.
 
+### STATEMENT CHANGES (E2)
+
+- **An eval error arm carries `errCtx inp` and `ErrEnv`** (`SpecErr.lean`).
+  `runtime_error` needs `binImg` (its `callFrame`, the format strings) and
+  the `jmp_buf`'s aligned `ra` word (`rtErr_spec`'s `hjb`); `evalPre` has
+  neither, and `world` has the `jmp_buf` without the alignment. The partial
+  cases are `evalSpecsP … Core ∗ errCtx inp ⊢ evalSpecP_body …` with
+  `ErrEnv` (NewlibHoles, CodeLive, `InpGeom`, `inp < 2^64`, `CoreOK Core`) a
+  Lean premise. `CoreOK Core`: the landing core absorbs H5's `abortCore` at
+  any region inside the stack segment (`coreOK_top`).
+- **String comparisons take `strcmpOrdSpec`**, the sign class of `strcmp`'s
+  result (`StrcmpSign`). H1's `strcmpSpecV` only says zero iff equal, which
+  does not decide `<`. Supplier: H3's `strcmp` run.
+- **String `+` takes its callee specs over OWNED heap strings**
+  (`SpecConcat.lean`). The two renderings are fresh blocks the arm frees, so
+  `strlen`/`strcpy` cannot read them through the persistent `strAt`:
+  `strlenHeapSpec`/`strcpyHeapSpec` own the string and lend `heapRes` (the
+  word loads read up to seven bytes past the NUL, inside the chunk, which
+  `heapFoot` owns). `stringifySpecT` is `stringifySpec`'s return branch in the
+  counted regime (a total-mode caller cannot discharge `fnSpecAbort`'s abort
+  branch); `stringifySpecP` is `stringifySpec` whose abort also returns the
+  value's slot (an eval arm's abort rebuilds its whole stack). Both cases
+  take `binImg`/`textOwn allocText` (the allocator's code for `malloc`/`free`)
+  and fix `L = vsaLayoutP`, `Room = vsaRoomB` (the layout `stringifySpec` is
+  stated at). `CatDispSupply` is lane E4's `DispSupply`.
+- **The concatenation's cost** is `binOpCost` = `concatCost` = two
+  `stringifyCost` + `catBufCost` (`binOpCost_concat`); `free` keeps the
+  credits (`freeRoomSpec`).
+
 ## 11. Open questions for the user
 
 - **Q5 (lane H4; resolved 2026-09-24: `BootHeapFacts.brk_page`): a page-aligned break at the boundary.** `malloc_extend_top`
@@ -1187,6 +1216,26 @@ without the fact and no other resource carries it:
   (`sharedWin_of_readOK`, `LeafArm.lean`). The supplier is A0, which already
   establishes `SharedWin` at the boundary (`ctl_sharedWin`); no existing
   construction of `ReadOK` changed (all consumers project fields).
+- **The error context of the partial cases (E1, no statement change to
+  `evalPre`).** An error arm's `runtime_error` needs the binary image
+  (`binImg`), the `jmp_buf` read-only at an image whose `ra` word is aligned,
+  and `in`'s placement; `world` has the `jmp_buf` only existentially and no
+  alignment. The partial cases with error arms therefore take the persistent
+  `errCtx inp` (`LeafErr.lean`) beside the Löb hypothesis:
+  `errCtx inp ∗ evalSpecsP … ⊢ evalSpecP_body …`. A holds all three at
+  `interp_run`'s `jal exec_stmt` (`TopLanding`).
+- **One landing core.** Each abort site's `abortCore s n` depends on its
+  region; every region inside the stack segment widens to
+  `evalCore := abortCore 0x88000000 0x800000` (`evalCore_of`), so the
+  partial cases with error arms are stated at `Core := evalCore`; G's
+  generic-`Core` cases instantiate at it.
+- **Q7 as a named premise.** `ErrRoom e d` (`rtErrNeed + evalFrame ≤
+  evalNeed e d`) is the `var`/`assign` partial cases' premise; it holds for
+  `d < maxCallDepth` (`errRoom_of_lt`) and is exactly Q7 at the deepest level.
+- **`fn` is stated at `vsaLayoutP`/`vsaRoomB`**, `malloc`'s heap, with
+  `AllocSpecs live` and `textOwn allocText` (H4's `allocSpecs` supplies the
+  former).
+
 
 ### STATEMENT CHANGES (E5)
 
