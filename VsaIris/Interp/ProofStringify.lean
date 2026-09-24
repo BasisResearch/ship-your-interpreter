@@ -271,6 +271,32 @@ macro_rules
     ix_run1 hlive using [h2, hal, hra, hs0, hs1']
 
 
+/-! ## Bytes a run's stores leave -/
+
+theorem imgM_sw (Mt : Mem) (a : Nat) (v : BitVec 64) (i : Nat) (hi : i < 4) :
+    imgM (writeLog Mt [(a, 4, v)]) (a + i) = (swData v).extractLsb' (8 * i) 8 := by
+  unfold imgM writeLog
+  simp only [List.foldl, applyW, writeMap4, Std.ExtHashMap.getElem?_insert]
+  rcases i with _ | _ | _ | _ | i
+  all_goals first
+    | omega
+    | simp
+
+theorem imgM_sb (Mt : Mem) (a : Nat) (v : BitVec 64) :
+    imgM (writeLog Mt [(a, 1, v)]) a = sbData v := by
+  unfold imgM writeLog
+  simp only [List.foldl, applyW, Std.ExtHashMap.getElem?_insert]
+  simp
+
+theorem imgM_sd (Mt : Mem) (a : Nat) (v : BitVec 64) (i : Nat) (hi : i < 8) :
+    imgM (writeLog Mt [(a, 8, v)]) (a + i) = (sdData_val v).extractLsb' (8 * i) 8 := by
+  unfold imgM writeLog
+  simp only [List.foldl, applyW, writeMap8, Std.ExtHashMap.getElem?_insert]
+  rcases i with _ | _ | _ | _ | _ | _ | _ | _ | i
+  all_goals first
+    | omega
+    | simp
+
 /-! ## The Iris glue -/
 
 section Glue
@@ -297,7 +323,7 @@ newlib's data and the console, the stack below the frame, the continuation. -/
 def SgRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (inp : Nat) (p s r : BitVec 64) (v : Value) (x : String) (ρ : Regime)
     (H : List (Nat × Nat)) (c : Nat) (o : String) (rv : Nat → BitVec 64) (Mp : Mem) : IProp GF :=
-  iprop(codeRes ∗ binImg ∗ valImg N (imgM Mp) p.toNat v ∗
+  iprop(codeRes ∗ binImg ∗ textOwn allocText ∗ valImg N (imgM Mp) p.toNat v ∗
     heapRes vsaLayoutP vsaRoomB (ρ.plus c) H ∗ stdioOwn ∗ consoleOwn o ∗
     stackScratch (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
     SgK Wp Φ N inp p s r v x ρ H o rv)
@@ -397,7 +423,7 @@ theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave Hms := ms_iff hsl $$ Hms
   ihave ⟨Hms, HB⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
   unfold SgRest
-  icases Hrest with ⟨#Hcode, #Himg, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
   ihave #Hsl := Strlen.strlenOwned_fn live cx.hcl Wp (bv := imgM M) hreg
     (by rw [eP]; exact strBytes_of_cstrImg f.hbuf) hlv $$ Himg
   rw [eP]
@@ -453,7 +479,7 @@ theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
   rotate_left
   · rw [hro]; unfold SgRest
-    iframe Hcode Himg Hv Hh Hstd Hcon Hst Hk Hms
+    iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
   intro F'
   refine sg_len cx.hlive (by ix_reg; exact f.h2) (by omega) hs2 hs3 cx.hg.al
     (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi ?_
@@ -550,7 +576,7 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
     rw [BitVec.toNat_add]; simp; omega
   unfold SgRest
-  iintro ⟨⟨#Hcode, #Himg, -, -, Hstd, Hcon, Hst, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hcode, #Himg, -, -, -, Hstd, Hcon, Hst, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave ⟨HF, -⟩ := ownSet_split _ (InExt (s.toNat - 112, 112)) _ $$ HS
   ihave HF := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ HF
@@ -908,7 +934,7 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
     (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hc : vsaChg (x.toList.length + 1) c)
     {R : Nat → BitVec 64} {M : Mem} (f : SgT2 s p r x rv R M Mp) :
-    textOwn allocText ∗ SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗
+    SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗
       ms 0x80003058#64 R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
@@ -918,9 +944,9 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hn : stringifyNeed - 112 ≤ (s + 18446744073709551504#64).toNat := by
     rw [e112]; unfold stringifyNeed snprintfNeed; omega
   have hm : allocHeadroom ≤ stringifyNeed - 112 := by unfold allocHeadroom stringifyNeed snprintfNeed; omega
-  iintro ⟨#Hat, Hrest, Hms⟩
+  iintro ⟨Hrest, Hms⟩
   unfold SgRest
-  icases Hrest with ⟨#Hcode, #Himg, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hm $$ Hst
   rw [← f.h2]
   iapply (ms_callMalloc A Wp (i := 0x80003058)
@@ -943,7 +969,7 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       (by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2) (by ix_reg; exact h0)
     unfold SgRest
     rw [Regime.plus_uncounted]
-    iframe Hcode Himg Hv Hh Hstd Hcon Hst Hk Hms
+    iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
   · iapply sg_memcpy Wp cx hmc (q := R' 10) (R := upd R' 1 (BitVec.ofNat 64 (0x80003058 + 4)))
       (M := M) (f := ⟨by ix_reg, by ix_reg; rw [k' 9 (by decide) (by decide)]; exact f.h9,
         by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2,
@@ -955,6 +981,17 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       (fun R2 M2 img f4 => sg_finish Wp cx f4 _ (.inl rfl))
     unfold SgRestB
     iframe Hcode Himg Hv Hh Hb Hstd Hcon Hst Hk Hms
+
+/-- **The buffer arms' shared tail**, from `jal strlen` to the return or the
+out-of-memory abort. -/
+theorem sg_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hc : vsaChg (x.toList.length + 1) c)
+    {R : Nat → BitVec 64} {M : Mem} (f : SgT1 s p r x rv R M Mp) :
+    SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms 0x80003048#64 R (sgF s p) M ⊢ Wp.W Φ :=
+  sg_strlen Wp cx f fun _ _ f2 => sg_malloc Wp A HN cx hmc hc f2
 
 end Glue
 
