@@ -1,5 +1,5 @@
 import VsaIris.Interp.SpecStringify
-import VsaIris.Interp.CallRegs
+import VsaIris.Interp.CallMalloc
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Vsa.OomSites
@@ -899,6 +899,62 @@ theorem sg_finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     apply swp_closeF
     dsimp only [F']
     exact sg_ret cx f
+
+/-- **`malloc(len + 1)`**, then the out-of-memory abort or the copy, the
+epilogue and the return (the buffer arms' shared tail from `jal malloc`). -/
+theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hc : vsaChg (x.toList.length + 1) c)
+    {R : Nat → BitVec 64} {M : Mem} (f : SgT2 s p r x rv R M Mp) :
+    textOwn allocText ∗ SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗
+      ms 0x80003058#64 R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hlen := f.hlen
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+    rw [BitVec.toNat_add]; simp; omega
+  have hn : stringifyNeed - 112 ≤ (s + 18446744073709551504#64).toNat := by
+    rw [e112]; unfold stringifyNeed snprintfNeed; omega
+  have hm : allocHeadroom ≤ stringifyNeed - 112 := by unfold allocHeadroom stringifyNeed snprintfNeed; omega
+  iintro ⟨#Hat, Hrest, Hms⟩
+  unfold SgRest
+  icases Hrest with ⟨#Hcode, #Himg, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hm $$ Hst
+  rw [← f.h2]
+  iapply (ms_callMalloc A Wp (i := 0x80003058)
+    (jalx_80003058 live (fun q hq => cx.hlive _ (interp_code_80003058 q hq))) interp_code_80003058
+    (by decide) ρ H c (R := R) (by rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; exact hc)
+    ⟨by rw [f.h2, e112]; unfold Vsa.Sim.tohostAddr allocHeadroom; omega,
+      by rw [f.h2, e112]; omega, by rw [f.h2, e112]; omega⟩)
+  iframe Hat Hcode Hms Hst Hh
+  iintro %R' %hk' Hst Hres Hms
+  rw [f.h2]
+  ihave Hst := stackScratch_widen hn hm $$ [Hslack Hst]
+  · iframe Hslack Hst
+  rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show x.toList.length + 1 < 2 ^ 64 by omega)]
+  have k' : ∀ y ∈ fRegs, y ∉ callerSaved → R' y = R y := fun y hy hc => hk' y hy hc
+  unfold mallocRes
+  icases Hres with (⟨%⟨h0, hρ⟩, Hh⟩ | ⟨%hf, Hh, Hb⟩)
+  · subst hρ
+    iapply sg_oomPath Wp HN cx (c := c) (pc := 0x8000305c) (.inl rfl)
+      (R := upd R' 1 (BitVec.ofNat 64 (0x80003058 + 4))) (M := M)
+      (by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2) (by ix_reg; exact h0)
+    unfold SgRest
+    rw [Regime.plus_uncounted]
+    iframe Hcode Himg Hv Hh Hstd Hcon Hst Hk Hms
+  · iapply sg_memcpy Wp cx hmc (q := R' 10) (R := upd R' 1 (BitVec.ofNat 64 (0x80003058 + 4)))
+      (M := M) (f := ⟨by ix_reg, by ix_reg; rw [k' 9 (by decide) (by decide)]; exact f.h9,
+        by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2,
+        fun y hy hc hy2 hy9 => by
+          have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+          simp only [upd, hy1, ite_false]
+          rw [k' y hy hc]; exact f.hk y hy hc hy2 hy9,
+        f.sra, f.ss0, f.ss1, f.sn, f.hslot, f.hbuf, f.hlen, hf⟩)
+      (fun R2 M2 img f4 => sg_finish Wp cx f4 _ (.inl rfl))
+    unfold SgRestB
+    iframe Hcode Himg Hv Hh Hb Hstd Hcon Hst Hk Hms
 
 end Glue
 
