@@ -58,6 +58,7 @@ structure FDec (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) (q n brkv : Nat) (c
   chunk : FChunk Mt q chunks x sz hdr0 nh
   s0 : R 8 = reentV
   a7 : R 17 = 0x8001ad10#64
+  a1 : (R 11).toNat = q
   a6 : (R 16).toNat = C.top0
   a4 : (R 14).toNat = x
   a5 : (R 15).toNat = sz
@@ -146,13 +147,14 @@ theorem free_pro {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {q n brkv : Nat}
   subst hcu
   have h9 := E.s1; have h18 := E.s2; have h19 := E.s3; have h10 := E.a0
   refine hk _ Mt1 cx csz hdr0 nh ⟨⟨?_, hS0, hRA, ?_, ?_, ?_⟩, Hp1, ⟨hc, hca, hdr0r, hdr0s, hdr0l, nhr⟩,
-    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · rw [hs2]
   · exact h9
   · exact h18
   · exact h19
   · exact h10
+  · exact hq
   · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   · exact hx
   · exact hsz
