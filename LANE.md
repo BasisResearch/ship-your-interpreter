@@ -22,7 +22,13 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   - `valuePrint_spec` (`ProofValuePrint.lean`), given `IrisHoles.out`: every
     arm tail-calls newlib (`ms_tailNewlib`, `NewlibCall.lean`); the closure
     arm reads the closure object and the `EX_FN` name field through a data
-    view (`roOwn_clod`).
+    view (`roOwn_clod`);
+  - `nativePrint_spec` (`ProofNativePrint.lean`), given `IrisHoles.out`: six
+    `#ix_seg` runs; the loop is a Lean induction over the arguments left
+    (`np_loop`: `np_A` = head, copy, `value_print`; `np_B_more`/`np_B_last`);
+    newlib's two stdio words enter a run through `ms_ioOpen`/`ms_ioClose`;
+  - `nativePrintln_spec` (`ProofNativePrintln.lean`): `native_print` into its
+    own frame slot (by `nativePrint_spec`), `fputc('\n')`, `value_null`.
 - **Generator** (`scripts/gen_interp_steps.py`, shared with G): the step table
   covers the value helpers, the natives and `stringify` (their kind tables and
   `stringify`'s `.rodata` constant as table words); `sltu`/`sltiu` get
@@ -33,8 +39,9 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   `(by decide)` at the call site; G's template and cases regenerated.
 
 ## In flight
-- natives `print`/`println`/`assert`, `stringify` (strlen/malloc/memcpy/
-  snprintf, OOM through H5's `wp_oomBlock`; `strcpy` run symbolically inline).
+- `native_assert` (`fnSpecAbort`, `runtime_error` through H5's `rtErr_spec`).
+- `stringify` (strlen/malloc/memcpy/snprintf, OOM through H5's
+  `wp_oomBlock`; `strcpy` run symbolically inline).
 
 ## Holes (`VsaIris/HOLES.md`, `IrisHoles.out`, `VsaIris/Vsa/NewlibOut.lean`)
 - `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`: newlib's stdout
