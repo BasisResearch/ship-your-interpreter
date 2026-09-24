@@ -1754,6 +1754,126 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
        simp (disch := omega) only [imgM_store_miss]
        exact hslot k (by simp only [InExt]; omega))
 
+/-- The string arm at `malloc`'s return (`0x800030fc`) with the block `q`. -/
+structure SgS3 (s p r sw : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : BitVec 64)
+    (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
+  h10 : R 10 = q
+  h9 : R 9 = BitVec.ofNat 64 (x.toList.length + 1)
+  h2 : R 2 = s + 18446744073709551504#64
+  hk : ∀ y ∈ fRegs, y ∉ callerSaved → y ≠ 2 → y ≠ 9 → R y = rv y
+  sra : ldv .ld M (s + 18446744073709551504#64 + 104#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551504#64 + 96#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
+  sn : ldv .ld M (s + 18446744073709551504#64 + 8#64).toNat = sw
+  hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
+  hfresh : FreshBlock vsaLayoutP H q.toNat (x.toList.length + 1) ∧ q.toNat % 16 = 0
+
+/-- **`memcpy(q, s, len + 1)`** from the string's read-only bytes (H1's
+`memcpySpec`), then the epilogue and the return. -/
+theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
+    {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (cx : SgCtx live p s r rv) (hmcr : ⊢ memcpySpec (GF := GF) Wp) {t : String} {q : BitVec 64}
+    {R : Nat → BitVec 64} {M : Mem} (f : SgS3 s p r (imgW (imgM Mp) (p.toNat + 8)) t H q rv R M Mp) :
+    SgRestB Wp Φ N inp p s r (.str t) t ρ H o rv Mp q ∗ ms 0x800030fc#64 R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hq0 : q ≠ 0#64 := fun h => f.hfresh.1.nonzero (by rw [h]; rfl)
+  have hfr := f.hfresh.1
+  have hq1 := hfr.lo; have hq2 := hfr.hi
+  simp only [vsaLayoutP, Vsa.Sim.DlHeap.heapStart, Vsa.Sim.DlHeap.heapEnd] at hq1 hq2
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := 0x800030fc#64)
+    (F := SgRestB Wp Φ N inp p s r (.str t) t ρ H o rv Mp q)
+  rotate_left
+  · unfold SgRestB
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine sg_scopy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
+    (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi
+    (by rw [f.h10]; exact hq0) ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  rw [f.sn]
+  unfold SgRestB
+  iintro ⟨⟨#Hcode, #Himg, #Hv, Hh, Hblk, Hstd, Hcon, Hst, Hk⟩, Hms⟩
+  ihave #Hs := valImg_str_strAt $$ Hv
+  unfold strAt
+  icases Hs with ⟨%img, %⟨hci, hw⟩, #Hro⟩
+  ihave #Hmc0 := hmcr
+  unfold memcpySpec
+  ihave #Hmcs := Hmc0 $$ %q %(imgW (imgM Mp) (p.toNat + 8)) %(t.toList.length + 1) %img
+  unfold memcpyPC
+  iapply (ms_callRegs Wp (i := 0x8000310c)
+    (jalx_8000310c live (fun q hq => cx.hlive _ (interp_code_8000310c q hq))) interp_code_8000310c
+    (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
+    (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
+    (by decide)
+    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin q.toNat (t.toList.length + 1) ∧
+        RamWin (imgW (imgM Mp) (p.toNat + 8)).toNat (t.toList.length + 1)⌝ ∗
+      (10 : Nat) ↦ᵣ q ∗ (11 : Nat) ↦ᵣ imgW (imgM Mp) (p.toNat + 8) ∗
+      (12 : Nat) ↦ᵣ BitVec.ofNat 64 (t.toList.length + 1) ∗ clobbered argClob ∗
+      blockOwn q.toNat (t.toList.length + 1) ∗
+      roImg (InExt ((imgW (imgM Mp) (p.toNat + 8)).toNat, t.toList.length + 1)) img))
+    (Q := fun _ => iprop((10 : Nat) ↦ᵣ q ∗ clobbered retClob ∗
+      ownImg (InExt (q.toNat, t.toList.length + 1))
+        (fun a => img (a - q.toNat + (imgW (imgM Mp) (p.toNat + 8)).toNat))))
+    (X := iprop(blockOwn q.toNat (t.toList.length + 1) ∗
+      roImg (InExt ((imgW (imgM Mp) (p.toNat + 8)).toNat, t.toList.length + 1)) img))
+    (Y := fun g => iprop(⌜g 10 = q⌝ ∗ ownImg (InExt (q.toNat, t.toList.length + 1))
+        (fun a => img (a - q.toNat + (imgW (imgM Mp) (p.toNat + 8)).toNat))))
+    (R := upd (upd (upd R 11 (imgW (imgM Mp) (p.toNat + 8))) 8 (R 10)) 12 (R 9))
+    (S := sgF s p) (Mt := M) ?hP ?hQ)
+  case hP =>
+    simp only [sepL_cons, sepL_nil]
+    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, #Hr⟩
+    iframe Hbk Hr
+    isplitl []
+    · ipureintro
+      have w1 := hw.lo; have w2 := hw.hi; have w3 := hw.htif
+      refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩,
+        ⟨by omega, by omega, by omega⟩⟩
+    isplitl [H10]
+    · ix_reg; rw [f.h10]; iexact H10
+    isplitl [H11]
+    · ix_reg; iexact H11
+    isplitl [H12]
+    · ix_reg; rw [f.h9]; iexact H12
+    iapply clobbered_of_fn argClob _
+    unfold argClob
+    simp only [sepL_cons, sepL_nil]
+    iframe H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
+  case hQ =>
+    iintro ⟨H10, Hcl, Hd⟩
+    ihave ⟨%g, Hcl⟩ := clobbered_fn retClob (by decide) $$ Hcl
+    iexists (fun y => if y = 10 then q else g y)
+    unfold retClob argClob
+    simp only [sepL_cons, sepL_nil]
+    icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
+    simp only [ite_true]
+    simp (config := { decide := true }) only [ite_false]
+    iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd
+  iframe Hmcs Hcode Hms Hblk Hro
+  iintro %g ⟨%hg10, Hd⟩ Hms
+  iapply sg_finish Wp cx (img := fun a => img (a - q.toNat + (imgW (imgM Mp) (p.toNat + 8)).toNat))
+    (R := upd (fun y => if y ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] then g y else
+      upd (upd (upd R 11 (imgW (imgM Mp) (p.toNat + 8))) 8 (R 10)) 12 (R 9) y) 1
+      (BitVec.ofNat 64 (0x8000310c + 4))) (M := M)
+    ⟨by simp [upd, f.h10], by simp [upd, f.h2], fun y hy hc' hy2 hy8 hy9 => by
+        have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+        have hK : y ∉ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] := fun h => hc' ((show ∀ z ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31],
+          z ∈ callerSaved by decide) y h)
+        have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc' (e ▸ hz)
+        simp only [upd, hy1, hK, hy8, hcl 11 (by decide), hcl 12 (by decide), ite_false]
+        exact f.hk y hy hc' hy2 hy9,
+      f.sra, f.ss0, f.ss1, f.hslot, cstrImg_shift hci, f.hfresh⟩ _ (.inr rfl)
+  unfold SgRestC
+  iframe Hcode Hv Hh Hd Hstd Hcon Hst Hk Hms
+
 end Glue
 
 end VsaIris.Interp
