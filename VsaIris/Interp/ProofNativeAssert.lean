@@ -772,6 +772,124 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
            hoff 48 (by omega)]
          simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit])
 
+/-- One or two values, the first truthy: `Call.assertOk`'s premise. -/
+theorem na_shape {vs : List Value} (h : vs.length = 1 ∨ vs.length = 2)
+    (ht : (vs[0]'(by omega)).truthy = true) :
+    ∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true := by
+  rcases vs with _ | ⟨a, _ | ⟨b, _ | ⟨c, t⟩⟩⟩
+  · simp at h
+  · exact ⟨a, a, .inl rfl, ht⟩
+  · exact ⟨a, b, .inr rfl, ht⟩
+  · simp at h
+
+/-- **Truthy**: `value_null(sret)`, the epilogue, the return with
+`Call.assertOk`'s premise. -/
+theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
+    {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
+    {d : Nat} {jb : Nat → BitVec 8} {rv R : Nat → BitVec 64} {M Margs : Mem}
+    (c : NaCtx live sret inp args s line r n rv jb) (hlen : vs.length = n)
+    (hok : n = 1 ∨ n = 2)
+    (f : NaFacts sret inp args s line r n (vs[0]'(by omega)) rv R M Margs)
+    (ht : (vs[0]'(by omega)).truthy = true) :
+    NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs ∗
+      ms 0x80002e48#64 R (npF s args n) M ⊢ Wp.W Φ := by
+  have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
+  unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have h10 : R 10 ≠ 0#64 := by rw [f.h10, ht]; decide
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002e48#64)
+    (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
+  rotate_left
+  · unfold NaRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine na_ok c.hlive f.h2 h10 (by omega) hs2 hs3 ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  unfold NaRest
+  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
+  -- `value_null(sret)`
+  ihave #Hvn := valueNull_spec c.hlive Wp N sret
+  unfold valueNullSpec
+  iapply ms_callHelper Wp (i := 0x80002e58)
+    (jalx_80002e58 live (fun p hp => c.hlive _ (interp_code_80002e58 p hp))) interp_code_80002e58
+    (by decide) (clob := []) (pins := fun rv => rv 10 = sret)
+    (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝)) (Post := fun _ => valAt N sret.toNat .null)
+  iframe Hcode Hms
+  isplitl []
+  · ipureintro; ix_reg; exact f.h8
+  isplitl []
+  · iexact Hvn
+  isplitl [Hsl]
+  · iframe Hsl; ipureintro; exact c.hg
+  iintro %R5 %hk5 Hnull Hms
+  have k5 : ∀ x ∈ fRegs, R5 x = _ := fun x hx => hk5 x hx (by simp)
+  -- the epilogue
+  iapply wp_swpF Wp (S := npF s args n) (R := upd R5 1 (BitVec.ofNat 64 (0x80002e58 + 4)))
+    (Mt := M) (pc := 0x80002e5c#64)
+    (F := iprop(codeRes ∗ valAt N sret.toNat .null ∗ valsImg N (imgM Margs) args.toNat vs ∗
+      world N L Room inp.toNat ρ st d ∗ stackScratch (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
+      NaK Wp Φ N L Room sret inp args s r vs ρ st d rv))
+  rotate_left
+  · rw [hro]; iframe Hcode Hnull Hv Hw Hst Hk Hms
+  intro F'
+  refine na_epi c.hlive (by ix_reg; rw [k5 2 (by decide)]; ix_reg; exact f.h2) (by omega) hs2 hs3
+    c.hal f.sra f.ss0 f.ss1 f.ss2 ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  iintro ⟨⟨#Hcode, Hnull, #Hv, Hw, Hst, Hk⟩, Hms⟩
+  unfold ms
+  icases Hms with ⟨Hpc, Hra, Hregs, HS⟩
+  ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M c.hdfa $$ HS
+  ihave HF := ownSet_forget _ _ $$ HF
+  ihave Hst := naFrame_join (s := s)
+    (by unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega) $$ [Hst HF]
+  · iframe Hst HF
+  have hsh := na_shape (hlen ▸ hok) ht
+  subst hlen
+  ihave #Hv' := valsImg_agree N vs args.toNat (fun k hk => (f.hargs k hk).symm) $$ Hv
+  ihave Hvs := valsAt_of_tracked N M vs args.toNat $$ [HA Hv']
+  · iframe HA Hv'
+  ihave Hra := ptsto_eq (show _ = r by ix_reg) $$ Hra
+  ihave Hk := and_elim_l $$ Hk
+  iapply Hk $$ Hpc Hra
+  iexists _
+  iframe Hregs Hnull Hvs Hw
+  isplitl []
+  · ipureintro
+    intro x hx hc
+    have hx1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+    have hcl : ∀ y ∈ callerSaved, x ≠ y := fun y hy e => hc (e ▸ hy)
+    have hx10 := hcl 10 (by decide); have hx12 := hcl 12 (by decide)
+    have hx13 := hcl 13 (by decide)
+    by_cases h2 : x = 2
+    · subst h2; ix_reg
+      rw [BitVec.add_assoc, show (18446744073709551536#64 : BitVec 64) + 80#64 = 0#64 by decide,
+        BitVec.add_zero, c.h2]
+    by_cases h8 : x = 8
+    · subst h8; ix_reg
+    by_cases h9 : x = 9
+    · subst h9; ix_reg
+    by_cases h18 : x = 18
+    · subst h18; ix_reg
+    simp only [upd, hx1, h2, h8, h9, h18, hx10, ite_false]
+    rw [k5 x hx]
+    simp only [upd, hx10, hx12, hx13, ite_false]
+    exact f.hk x hx hc (by simp [h2, h8, h9, h18])
+  isplitl []
+  · ipureintro; exact hsh
+  · unfold stackAt
+    iframe Hst
+    ipureintro
+    exact ⟨by unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega,
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega,
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+
 end Glue
 
 end VsaIris.Interp
