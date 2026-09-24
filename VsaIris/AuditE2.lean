@@ -33,3 +33,10 @@ import VsaIris.Interp.CaseE2
 #print axioms VsaIris.Interp.caseP_BinaryMul
 #print axioms VsaIris.Interp.caseP_BinaryDiv
 #print axioms VsaIris.Interp.caseP_BinaryMod
+#print axioms VsaIris.Interp.caseT_BinaryConcat
+#print axioms VsaIris.Interp.ms_callFree
+#print axioms VsaIris.Interp.ms_callHelperA
+#print axioms VsaIris.Interp.abortAt_of_evalCallee
+#print axioms VsaIris.Interp.ms_callMemcpyOwned
+#print axioms VsaIris.Interp.ownImg_cat
+#print axioms VsaIris.Interp.concat_route
