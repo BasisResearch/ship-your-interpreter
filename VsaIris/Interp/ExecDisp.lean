@@ -18,7 +18,7 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
 /-- A frame address as a plain sum (`evalSP_off` for the 176-byte frame). -/
-theorem execSP_off {s : BitVec 64} (hsf : (execSP s).toNat = s.toNat - 176)
+theorem execSP_offF {s : BitVec 64} (hsf : (execSP s).toNat = s.toNat - 176)
     (hs : s.toNat ≤ 0x100000000) (c : Nat) (hc : c < 4096) :
     (execSP s + BitVec.ofNat 64 c).toNat = s.toNat - 176 + c := by
   rw [BitVec.toNat_add, hsf, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := c) (by omega)]
@@ -84,7 +84,7 @@ theorem wp_execProl (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
     F ∗ codeRes ∗ PC ↦ᵣ execEntryPC ∗ ra ↦ᵣ ret ∗ regFile rv ∗ stackScratch s (execNeed sm d) ⊢
       Wp.W Φ := by
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hsg
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   iintro ⟨HF, #Hcode, Hpc, Hra, Hregs, Hst⟩
   ihave ⟨Hst, Hfr⟩ := stackScratch_frame (f := 176#64) hsg.le hneed $$ Hst
   rw [execSP_eq, hfg.sf, show (176#64).toNat = 176 from rfl]

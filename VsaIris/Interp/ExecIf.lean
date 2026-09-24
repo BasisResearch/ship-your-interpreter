@@ -95,7 +95,7 @@ theorem wp_ifTruthy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
       F ∗ codeRes ∗ ms 0x8000421c#64 R3 (InExt (s.toNat - 176, 176)) M3 ⊢ Wp.W Φ) :
     F ∗ codeRes ∗ ms 0x800041fc#64 R0 (InExt (s.toNat - 176, 176)) M ∗ □ valOf N v w0 w1 w2 ∗
       valueTruthySpec (vsaModel live) N Wp (execSP s + 16#64) v ⊢ Wp.W Φ := by
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   have g16 : (execSP s + 16#64).toNat = s.toNat - 176 + 16 := hoff 16 (by decide)
   have hslg : SlotGeom (execSP s + 16#64) := by
     have := hfg.lo; have := hfg.hi; have := hfg.al
@@ -193,7 +193,7 @@ theorem ifPrefixT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨pc, pt, pe, hn⟩ := ifNode_of hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   have g := callGeomF (f := 176) (o := 56) hf.stack hfg.sf (execNeed_if_cond c t eo d) (by decide)
     (by decide) (by decide)
   have g1 : (execSP s + 56#64).toNat = s.toNat - 176 + 56 := g.slot
@@ -482,7 +482,7 @@ theorem ifPrefixP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨pc, pt, pe, hn⟩ := ifNode_of hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   have g := callGeomF (f := 176) (o := 56) hf.stack hfg.sf (execNeed_if_cond c t eo d) (by decide)
     (by decide) (by decide)
   have g1 : (execSP s + 56#64).toNat = s.toNat - 176 + 56 := g.slot

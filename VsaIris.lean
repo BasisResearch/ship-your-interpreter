@@ -140,6 +140,10 @@ import VsaIris.Interp.Arm
 import VsaIris.Interp.SeqLoop
 import VsaIris.Interp.SeqLoopClosure
 import VsaIris.Interp.SeqLoopInterp
+import VsaIris.Interp.SpecLoop
+import VsaIris.Interp.LoopKit
+import VsaIris.Interp.LoopWhile
+import VsaIris.Interp.LoopFor
 import VsaIris.Interp.Case.BinaryAddIntT
 import VsaIris.Interp.Case.BinarySubIntT
 import VsaIris.Interp.Case.BinaryAddIntP

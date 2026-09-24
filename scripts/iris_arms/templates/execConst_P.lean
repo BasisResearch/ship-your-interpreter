@@ -30,7 +30,7 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
     cases hrepr with
     | {CTOR} h c => exact stmtNode_of hgeo h c (by decide) (Or.inl rfl) (fun j h1 h2 => by omega)
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   ihave HK := and_elim_l $$ HK
   ihave HK := HK $$ %st %Status.{CTOR} %(ExecS.{CTOR} st d env)
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

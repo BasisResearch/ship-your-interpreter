@@ -54,7 +54,7 @@ theorem caseT_ExecCont {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     cases hrepr with
     | cont h c => exact stmtNode_of hgeo h c (by decide) (Or.inl rfl) (fun j h1 h2 => by omega)
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   simp only [Nat.add_zero]
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro

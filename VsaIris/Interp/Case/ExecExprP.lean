@@ -34,7 +34,7 @@ theorem caseP_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨p, hn⟩ := exprNode_of hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   have g := callGeomF (f := 176) (o := 16) hf.stack hfg.sf (execNeed_expr e d) (by decide)
     (by decide) (by decide)
   have g1 : (execSP s + 16#64).toNat = s.toNat - 176 + 16 := g.slot

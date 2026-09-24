@@ -56,7 +56,7 @@ theorem caseT_ExecRetNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨hn, hc⟩ := retNullNode_of hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   have g1 : (execSP s + 16#64).toNat = s.toNat - 176 + 16 := hoff 16 (by decide)
   have hslg : SlotGeom (execSP s + 16#64) := by
     have := hfg.lo; have := hfg.hi; have := hfg.al

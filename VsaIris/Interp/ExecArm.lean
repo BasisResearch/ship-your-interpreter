@@ -572,7 +572,7 @@ theorem wp_execEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
       execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm status aRet s R0 ret v8 v9 v18 v19
     ⊢ Wp.W Φ := by
   obtain ⟨hfg, _⟩ := execFrameGeom_of hsg
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   iintro ⟨#Hcode, Hms, Hst, Hret, Hw, HK⟩
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
     (F := iprop(stackScratch (execSP s) (execNeed sm d - 176) ∗ statusRet N aRet.toNat status ∗
@@ -619,7 +619,7 @@ theorem wp_execRetCopy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
       execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm (.ret v) aRet s R0 ret v8 v9 v18 v19
     ⊢ Wp.W Φ := by
   obtain ⟨hfg, _⟩ := execFrameGeom_of hsg
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   iintro ⟨#Hcode, Hms, Hslot, #Hv, Hst, Hw, HK⟩
   ihave ⟨%M2, Hms, %⟨hag, hd⟩⟩ := ms_slotIn $$ [Hms Hslot]
   · iframe Hms Hslot

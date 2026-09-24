@@ -31,7 +31,7 @@ theorem caseP_ExecBrk {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
     cases hrepr with
     | brk h c => exact stmtNode_of hgeo h c (by decide) (Or.inl rfl) (fun j h1 h2 => by omega)
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   ihave HK := and_elim_l $$ HK
   ihave HK := HK $$ %st %Status.brk %(ExecS.brk st d env)
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
