@@ -1,6 +1,23 @@
 import VsaIris.Interp.CallNotCallable
 import VsaIris.Interp.CallPrefixP
 
+/-!
+# `{ARM}`, partial mode (family `callArm`, INTERP_DESIGN.md §6, §4.2)
+
+`caseP_{ARM}`: from the Löb hypothesis `evalSpecsP` and the error context,
+`eval_expr` on `.call f args` meets its partial, outcome-quantified spec, over
+every outcome of the arm:
+
+* the prefix (`callPrefixP`): the callee through the Löb hypothesis, the count
+  test (more than 32 arguments: `runtime_error`), E6's argument loop;
+* the kind dispatch on the callee's actual value: `print`/`println`
+  (`callNativeOut`), `assert` (`callNativeAssert`, returning or aborting),
+  a closure (`CallCloP`, the closure call: arity, depth, the body, the
+  exits), anything else (`callNotCallable`: `runtime_error`).
+
+Template: `scripts/iris_arms/templates/callArm_P.lean`.
+-/
+
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
@@ -8,126 +25,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr
 
-theorem caseT_CallPrint {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {st st1 st2 : St} {d env : Nat} {f : Expr} {args : List Expr} {vs : List Value} {nf na : Nat}
-    (hN : NativeEntries N) (hd : DispSupply (GF := GF) N)
-    (Df : EvalECost st d env f st1 (.native .print) nf) (hlen : args.length ≤ maxArgs)
-    (Da : EvalArgsCost st1 d env args st2 vs na)
-    (hf : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env f st1 (.native .print) nf Df)
-    (ha : evalArgsT_body (GF := GF) live N L Room inp st1 d env args st2 vs na)
-    (hnp : ∀ sret args s vs st o,
-      ⊢ nativePrintSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) sret args s vs st o)
-    (hroom : nativePrintNeed + 1088 ≤ evalNeed (.call f args) d) :
-    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.call f args)
-        ⟨st2.store, st2.out ++ printArgs st2.store vs⟩ .null (nf + na + 0)
-        (.call st d env f args st1 st2 _ (.native .print) vs .null nf na 0 Df hlen Da
-          (.print st2 d vs)) := by
-  have hspec : ⊢ NatOutSpecs (GF := GF) live N (twpW (vsaModel live)) nativePrintPC nativePrintNeed
-      (fun st vs o => o ++ printArgs st vs) :=
-    natOutSpecs_of N _ (fun a b c vs st o => by rw [← nativePrintSpec_eq]; exact hnp a b c vs st o)
-  have hvl : vs.length = args.length := evalArgsCost_length Da
-  unfold evalSpecT_body fnSpecW
-  iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
-  unfold evalPre
-  icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
-  have hneed : 1088 ≤ evalNeed (.call f args) d := by
-    have := Expr.stackNeed_ge (.call f args); unfold evalNeed stackBudget; unfold evalFrame at this; omega
-  rw [Nat.add_zero]
-  ihave #Hsp := hspec
-  iapply callPrefixT hlive Df hlen Da hf ha hregs hsg hbb hal
-  iframe Hpc Hra Hregs Hcode Hast Hfb Hst Hw
-  unfold CallK254T
-  iintro %R %Mt %w0 %w1 %w2 %hcall #Hv Hav Hms Hst Hw
-  rw [← hvl] at hcall
-  iapply callNativeOut hlive (twpW (vsaModel live)) (nf := .print) (entry := nativePrintPC)
-    (by show N.print = _; rw [hN.print]; rfl) (by decide) (by unfold maxArgs at hlen; omega) hsg hneed hroom hslg hal hd
-    hregs.sp hcall
-  iframe Hsp Hcode Hast Hv Hav Hms Hst Hw Hslot
-  unfold CallExitK
-  iintro %rv' %hkeep Hregs Hst Hval Hw Hpc Hra
-  iapply Hk $$ Hpc Hra
-  unfold evalPost
-  iexists rv'
-  iframe Hregs Hst Hval Hw
-  ipureintro; exact hkeep
-
-
-theorem caseT_CallAssert {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {st st1 st2 : St} {d env : Nat} {f : Expr} {args : List Expr} {vs : List Value} {nf na : Nat}
-    {v m : Value} (hvm : vs = [v] ∨ vs = [v, m]) (htr : v.truthy = true)
-    (hN : NativeEntries N) (hinp : Newlib.RtErr.InpGeom (BitVec.ofNat 64 inp)) (hinpLt : inp < 2 ^ 64)
-    (Df : EvalECost st d env f st1 (.native .assert) nf) (hlen : args.length ≤ maxArgs)
-    (Da : EvalArgsCost st1 d env args st2 vs na)
-    (hf : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env f st1 (.native .assert) nf Df)
-    (ha : evalArgsT_body (GF := GF) live N L Room inp st1 d env args st2 vs na)
-    (hna : ∀ sret inp args s line vs ρ st d jb,
-      ⊢ nativeAssertSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) L Room sret inp args s
-        line vs ρ st d jb) :
-    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.call f args) st2 .null (nf + na + 0)
-        (.call st d env f args st1 st2 _ (.native .assert) vs .null nf na 0 Df hlen Da
-          (.assertOk st2 d vs v m hvm htr)) := by
-  have hvl : vs.length = args.length := evalArgsCost_length Da
-  unfold evalSpecT_body fnSpecW
-  iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
-  unfold evalPre
-  icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
-  have hneed := evalNeed_call_ge f args d
-  rw [Nat.add_zero]
-  iapply callPrefixT hlive Df hlen Da hf ha hregs hsg hbb hal
-  iframe Hpc Hra Hregs Hcode Hast Hfb Hst Hw
-  unfold CallK254T
-  iintro %R %Mt %w0 %w1 %w2 %hcall #Hv Hav Hms Hst Hw
-  rw [← hvl] at hcall
-  iapply callNativeAssert hlive (twpW (vsaModel live)) hna hN.assert hinp hinpLt
-    (by unfold maxArgs at hlen; omega) hsg
-    (by unfold nativeAssertNeed Newlib.RtErr.rtErrNeed Newlib.snprintfNeed; omega)
-    hslg hal hregs.sp hcall
-  iframe Hcode Hast Hv Hav Hms Hst Hw Hslot
-  isplit
-  · iintro %rv' %_ %hkeep Hregs Hst Hval Hw Hpc Hra
-    iapply Hk $$ Hpc Hra
-    unfold evalPost
-    iexists rv'
-    iframe Hregs Hst Hval Hw
-    ipureintro; exact hkeep
-  · iintro %hno
-    exfalso; exact hno ⟨v, m, hvm, htr⟩
-
-
-section CloP
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-
-/-- **The closure call from the kind dispatch, partial mode** (the call arm's
-closure branch; proved by the closure tail). -/
-def CallCloP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
-    (Core : IProp GF) : Prop :=
-  ∀ (Φ : Nat × String → IProp GF) (st : St) (d env : Nat) (f : Expr) (args : List Expr)
-    (sret aE aX s ret w0 w1 w2 : BitVec 64) (rv R : Nat → BitVec 64) (Mt : Mem) (st1 st2 : St)
-    (vs : List Value) (ca : Nat),
-    EvalRegs rv sret (BitVec.ofNat 64 inp) aX aE s → StackGeom s (evalNeed (.call f args) d) →
-    (Expr.call f args).bodiesBound perCallBudget = true → ret.toNat % 4 = 0 → SlotGeom sret →
-    EvalE st d env f st1 (.closure ca) → EvalArgs st1 d env args st2 vs → args.length ≤ maxArgs →
-    CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 args.length →
-    (evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp ∗ codeRes ∗
-      □ astEG aX.toNat (.call f args) ∗ □ frameAt env aE.toNat ∗ □ valOf N (.closure ca) w0 w1 w2 ∗
-      argVals N (imgM Mt) (argsBase s) 0 vs ∗ ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
-      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
-      world N L Room inp .uncounted st2 d ∗ slot24 sret.toNat ∗
-      ((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.call f args) st' v⌝ ∗
-          evalPost N L Room inp .uncounted st' d (.call f args) v sret s rv) -∗
-          (wpW (vsaModel live)).W Φ) ∧
-        (iprop(abortAt Core s (evalNeed (.call f args) d) ∗ slot24 sret.toNat) -∗
-          (wpW (vsaModel live)).W Φ))
-      ⊢ (wpW (vsaModel live)).W Φ)
-
-end CloP
-
-theorem caseP_Call {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
     {st : St} {d env : Nat} {f : Expr} {args : List Expr}

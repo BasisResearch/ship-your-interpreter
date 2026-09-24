@@ -149,6 +149,16 @@ def validate(arm: Arm, code: dict[int, tuple[int, str, str]]) -> None:
             pc = int(s.args[1], 0)
             if pc not in code or jal_target(code[pc][0], pc) is None:
                 err(f"helper call at {pc:#x} is not a linking jal")
+        elif s.op == "helperR":
+            # lane E4: an indirect call (`jalr ra, 0(rs)`, the native dispatch)
+            pc = int(s.args[1], 0)
+            if pc not in code or code[pc][1] != "jalr":
+                err(f"indirect call at {pc:#x} is not a jalr")
+        elif s.op == "loop":
+            # lane E4: a loop lemma (`loop <name> <head> <exit>`, e.g. E6's argument loop)
+            for a in s.args[1:3]:
+                if int(a, 0) not in code:
+                    err(f"loop point {a} is not an instruction")
         else:
             err(f"unknown step {s.op}")
     for d in arm.errors:

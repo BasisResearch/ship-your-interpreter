@@ -148,6 +148,10 @@ import VsaIris.Interp.CallNative
 import VsaIris.Interp.CallNativeOut
 import VsaIris.Interp.CallNativeSeg
 import VsaIris.Interp.CallNotCallable
+import VsaIris.Interp.Case.CallArmP
+import VsaIris.Interp.Case.CallAssertT
+import VsaIris.Interp.Case.CallPrintlnT
+import VsaIris.Interp.Case.CallPrintT
 import VsaIris.Interp.CallPrefixP
 import VsaIris.Interp.CallErr
 import VsaIris.Interp.CallSeg

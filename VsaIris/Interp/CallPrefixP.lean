@@ -57,6 +57,35 @@ def CallK254P (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : Roo
 
 end Defs
 
+section CloP
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+
+/-- **The closure call from the kind dispatch, partial mode** (the call arm's
+closure branch; proved by the closure tail). -/
+def CallCloP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
+    (Core : IProp GF) : Prop :=
+  ∀ (Φ : Nat × String → IProp GF) (st : St) (d env : Nat) (f : Expr) (args : List Expr)
+    (sret aE aX s ret w0 w1 w2 : BitVec 64) (rv R : Nat → BitVec 64) (Mt : Mem) (st1 st2 : St)
+    (vs : List Value) (ca : Nat),
+    EvalRegs rv sret (BitVec.ofNat 64 inp) aX aE s → StackGeom s (evalNeed (.call f args) d) →
+    (Expr.call f args).bodiesBound perCallBudget = true → ret.toNat % 4 = 0 → SlotGeom sret →
+    EvalE st d env f st1 (.closure ca) → EvalArgs st1 d env args st2 vs → args.length ≤ maxArgs →
+    CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 args.length →
+    (evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp ∗ codeRes ∗
+      □ astEG aX.toNat (.call f args) ∗ □ frameAt env aE.toNat ∗ □ valOf N (.closure ca) w0 w1 w2 ∗
+      argVals N (imgM Mt) (argsBase s) 0 vs ∗ ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
+      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
+      world N L Room inp .uncounted st2 d ∗ slot24 sret.toNat ∗
+      ((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.call f args) st' v⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.call f args) v sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (iprop(abortAt Core s (evalNeed (.call f args) d) ∗ slot24 sret.toNat) -∗
+          (wpW (vsaModel live)).W Φ))
+      ⊢ (wpW (vsaModel live)).W Φ)
+
+end CloP
+
 #ix_piece callPrefixP_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
