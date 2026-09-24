@@ -151,6 +151,7 @@ import VsaIris.Interp.CallNotCallable
 import VsaIris.Interp.CallCloHead
 import VsaIris.Interp.CallCloRuns
 import VsaIris.Interp.CallCloBind
+import VsaIris.Interp.CallCloBody
 import VsaIris.Interp.CallClosure
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.Case.CallAssertT

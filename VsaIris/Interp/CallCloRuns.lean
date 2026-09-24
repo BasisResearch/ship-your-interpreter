@@ -82,8 +82,8 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     {S : Nat → Prop} {q bod : BitVec 64} {count : Nat}
     (hq1 : 0x80000000 ≤ q.toNat) (hq2 : q.toNat + 40 ≤ 0x100000000)
     (hq3 : q.toNat + 40 ≤ tohostAddr ∨ tohostAddr + 16 ≤ q.toNat)
-    (hb1 : 0x80000000 ≤ bod.toNat) (hb2 : bod.toNat + 24 ≤ 0x100000000)
-    (hb3 : bod.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ bod.toNat) (hcnt : count < 2 ^ 31)
+    (hb1 : 0x80000000 ≤ bod.toNat) (hb2 : bod.toNat + 20 ≤ 0x100000000)
+    (hb3 : bod.toNat + 20 ≤ tohostAddr ∨ tohostAddr + 16 ≤ bod.toNat) (hcnt : count < 2 ^ 31)
     (h21 : R 21 = q)
     (hbod : ldv .ld m (q + 32#64).toNat = bod)
     (hct : ldv .lw m (bod + 16#64).toNat = BitVec.ofNat 64 count) :
@@ -100,8 +100,9 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hi3 : inp.toNat + 12 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp.toNat + 8) (hia : inp.toNat % 8 = 0)
     (h18 : R 18 = inp) (h2 : R 2 = s + 18446744073709550528#64)
     (hdep : ldv .lw Mt (inp + 8#64).toNat = BitVec.ofNat 64 dep) :
-    IW live m [] (fun b => closureS s b ∨ InExt (inp.toNat + 8, 4) b) Q 0x80003954#64 R Mt
-  by ix_run hlive using [h18, h2, hdep, hsf, closureS] at 0x80003964
+    IW live m [] (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q
+      0x80003954#64 R Mt
+  by ix_run hlive using [h18, h2, hdep, hsf] at 0x80003964
 
 -- After `value_null(sret)`: `s3`, `s5`, `s7` reloaded, the shared epilogue.
 #ix_seg CloX_runE {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
