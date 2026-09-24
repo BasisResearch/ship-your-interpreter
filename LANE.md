@@ -47,6 +47,35 @@ wand captures the arm's frame).
   (structure) — theorems, no hypothesis for the consumer to discharge beyond
   `evalSpecsP`/`execSpecsP`.
 
+## Done (no holes; axioms ⊆ {propext, Classical.choice, Quot.sound})
+
+| lemma | file | mode |
+|---|---|---|
+| `whileT_false`, `whileT_break`, `whileT_ret`, `whileT_loop` | `Interp/LoopWhile.lean` | total (one per `ExecSCost` while constructor) |
+| `whileP_all` (Löb: `whilePI_loeb`) | `Interp/LoopWhile.lean` | partial |
+| `forLoopT_condFalse`, `_bodyBreak`, `_bodyRet`, `_loop`; `forCondT_none`/`_some`; `execStepT_none`/`_some`; `execInitT_none`/`_some` | `Interp/LoopFor.lean` | total |
+| `forLoopP_all` (Löb: `forLoopPI_loeb`), `execInitP_all` | `Interp/LoopFor.lean` | partial |
+
+- Helper premise of the while/for lemmas: `htr : ⊢ ∀ p v, valueTruthySpec … Wp p v`
+  (H2's `valueTruthy_spec` supplies it; taken as a hypothesis so no proof
+  imports another proof).
+- Structure (CLAUDE.md law 3): each loop's runs (`#ix_seg`) are glued by
+  WP-generic pieces (`whileStage`, `whileCopy`, `whileExitFalse`,
+  `whileStageBody`, `whileRoute`; `forInitNone`/`Stage`, `forJoin`,
+  `forCondNone`/`Stage`, `forCopy`, `forBranch`, `forStageBody`, `forRoute`,
+  `forStepNone`/`Stage`); the total and partial proofs differ only in the call
+  steps (`ms_callEvalT`/`ms_callExecT` vs `ms_callEvalPx`/`ms_callExecP(x)`).
+- Löb: the while loop strips its hypothesis at the condition's
+  `jal eval_expr`, the for loop at the body's `jal exec_stmt` (an iteration
+  may have no condition). `wp_callAbort_laterX` (`LoopKit.lean`) is
+  `wp_callAbort_later` with one more later-guarded resource.
+- Shared kit (`Interp/LoopKit.lean`): `ms_callEvalPx` (eval call from
+  `exec_stmt`'s frame, partial; E5's `if` can use it), `ms_callExecPx`,
+  `ms_truthyCall` (`value_truthy` on a frame slot, either WP), `execSlot`,
+  `execSP_off`, `Untouched.*`, `astSG_elim`/`astSG_of_view`, `keep_upd`,
+  `KeepRegs.of_helper`, `statusRet_slot`. `ms_iff`/`ms_carveVal`/
+  `ms_uncarveVal` moved from H2's proof files to `NewlibCall.lean`.
+
 ## Generator
 The loops are block lemmas at a loop head, not arms from a function entry
 (G's row format requires a run from the entry and a final `ret`), so
@@ -54,7 +83,9 @@ The loops are block lemmas at a loop head, not arms from a function entry
 are `#ix_seg` runs plus `#ix_piece` glue.
 
 ## In flight
-- Proofs: `Interp/LoopWhile.lean`, `Interp/LoopFor.lean`, `Interp/LoopArgs.lean`.
+- `Interp/LoopArgs.lean`: `evalArgsT_cons` (total; takes the tail's
+  `EvalArgsCost` derivation beside its motive), `evalArgsP_all` (partial,
+  structural). Merged `hub/iris-main` (INTEGRATION.md); rebuilding.
 
 ## Holes
 None added.
