@@ -898,6 +898,18 @@ binary or by what the proofs consume:
   (`fputs`, `fputc`, `fwrite`, `fprintf` on `stdout`) exact about what they
   print, and `stringify`'s `snprintf(buf, 64, "<fn %s>", name)`. VSA assumed
   the same (`CallIOContracts`).
+- **`nativeAssertSpec` is a `fnSpecAbort`** (`SpecValue.lean`). Its return
+  branch hands back `Call.assertOk`'s premise
+  (`∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy`). Its abort branch hands
+  back H5's `abortRes s nativeAssertNeed`, the result slot and the arguments.
+  `runtime_error` needs the `jmp_buf` read-only at a named image `jb` with its
+  `ra` word aligned (`rtErr_spec`'s `hjb`). `world` only gives `∃ jb`, so the
+  spec takes `jb`, `jmpRO inp jb` and the alignment as premises. The caller's
+  error arms need the same facts for their own `runtime_error` calls.
+- **`ix_run1`** (`ITac.lean`) is `ix_run` stopping at a branch it cannot
+  decide, leaving `cond → …` for each side. Lane G's `ix_run` explores both
+  sides. H2's scripts resolve each side themselves. The two share
+  `ixRunCore`.
 
 ## 11. Open questions for the user
 

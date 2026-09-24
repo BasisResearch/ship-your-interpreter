@@ -4068,3 +4068,13 @@ evidence is below.
   `Value.catDisplay` cuts the closure rendering at 63 characters (the machine's
   behaviour), or `Loaded` bounds function-name lengths (a boundary field like
   `stack_admissible`).
+
+## Closure objects carry no read geometry on the Iris side (lane H2, 2026-09-24)
+
+`value_print`'s closure arm loads the closure object (`ca`'s 16 bytes) and
+its `EX_FN` node's name field. `closOwn`/`astE` (`VsaIris/Interp/Repr.lean`)
+give the bytes' values but no `ReadOK` geometry (RAM, off the HTIF window),
+so a symbolic run cannot load them. `SpecValue.dispRes` carries the geometry
+as a premise of `valuePrintSpec`/`nativePrintSpec`. Its supplier is the
+`EX_FN` arm (heap block, program AST) or a geometry field on `closOwn`. The
+`call` arm needs the same field when it reads a callee closure.

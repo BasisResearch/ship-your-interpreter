@@ -9,7 +9,8 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   form (`helperSpec`): `valueNullSpec`, `valueBoolSpec`, `valueStrSpec`
   (+ G's `valueIntSpec`), `valueTruthySpec`, `valueEqualSpec`,
   `valuePrintSpec`, `nativePrintSpec`, `nativePrintlnSpec`; callee spec
-  `strcmpSpecV` (H3). `native_assert` and `stringify` statements: in flight.
+  `strcmpSpecV` (H3), `nativeAssertSpec` (`fnSpecAbort`). `stringify`: in
+  flight.
 - **Proved, for either WP** (axioms ⊆ {propext, Classical.choice, Quot.sound},
   `VsaIris/Audit.lean`):
   - `valueNull_spec`, `valueBool_spec`, `valueInt_spec` (discharges G's stub),
@@ -28,7 +29,14 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
     (`np_loop`: `np_A` = head, copy, `value_print`; `np_B_more`/`np_B_last`);
     newlib's two stdio words enter a run through `ms_ioOpen`/`ms_ioClose`;
   - `nativePrintln_spec` (`ProofNativePrintln.lean`): `native_print` into its
-    own frame slot (by `nativePrint_spec`), `fputc('\n')`, `value_null`.
+    own frame slot (by `nativePrint_spec`), `fputc('\n')`, `value_null`;
+  - `nativeAssert_spec` (`ProofNativeAssert.lean`), given H5's `NewlibHoles`:
+    a `fnSpecAbort`. Seven `#ix_seg` runs. `runtime_error` is called through
+    `ms_callNewlibAbort` (`NewlibCall.lean`) against `rtErr_spec`. The abort
+    rebuilds `abortRes s nativeAssertNeed` (`na_rtErr`). The messages are
+    `FmtArgsOK` over `.rodata` or the second argument's string
+    (`readable_str`). The first argument's copy uses `ms_carveVal`/
+    `ms_uncarveVal`.
 - **Generator** (`scripts/gen_interp_steps.py`, shared with G): the step table
   covers the value helpers, the natives and `stringify` (their kind tables and
   `stringify`'s `.rodata` constant as table words); `sltu`/`sltiu` get
@@ -39,7 +47,6 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   `(by decide)` at the call site; G's template and cases regenerated.
 
 ## In flight
-- `native_assert` (`fnSpecAbort`, `runtime_error` through H5's `rtErr_spec`).
 - `stringify` (strlen/malloc/memcpy/snprintf, OOM through H5's
   `wp_oomBlock`; `strcpy` run symbolically inline).
 
@@ -58,6 +65,12 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   concat rule disagrees with the machine for names longer than 58 characters
   (`PROOF_CLOSURE_PLAN.md`).
 - G's `helperSpec` lacked the return-address alignment (fixed, above).
+- `runtime_error` needs the `jmp_buf` at a named image with an aligned `ra`
+  word; `world` gives only `∃ jb` (INTERP_DESIGN.md §10, H2).
+- Tooling: after merging G, `ix_run` explores undecided branches; H2's scripts
+  use `ix_run1` (the stopping variant). `simpa`/`omega` over `k % 2^64` with a
+  variable `k` can produce kernel deep recursion; explicit `Nat.mod_eq_of_lt`
+  rewrites avoid it.
 
 ## Interface for other lanes
 - E lanes call the helpers with `ms_callHelper` (G) against the specs above.
