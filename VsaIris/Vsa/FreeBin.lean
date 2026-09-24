@@ -174,4 +174,174 @@ theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂
         have := BB.node_foot (x := first) (by omega) hjn hofm (24 + k) (by omega) (by omega)
         rwa [show first + (24 + k) = first + 24 + k by omega] at this)
 
+/-- A footprint range lies wholly below or above the stack window. -/
+theorem FBin.off_stack {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
+    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) :
+    a + 8 ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ a := by
+  refine Classical.byContradiction fun hc => ?_
+  have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
+    split <;> omega
+  exact B.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
+
+/-- The chunk's interior is footprint of the heap without the block: no live
+block lies in it. -/
+theorem FBin.foot_chunk {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
+    (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot C.H a := by
+  have HH := B.heap.heap.heap
+  have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
+  have hb := HH.walk.chunk_bounds _ hX
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := B.heap.heap.top_room
+  simp only at hb
+  refine .inr ⟨by omega, by omega, fun e he hin => ?_⟩
+  obtain ⟨c, hc, hu, hce, hcs⟩ := HH.exact e he he
+  have hcb := HH.walk.chunk_bounds c hc
+  unfold InExt at hin
+  rcases HH.walk.chunk_sep c hc _ hX with rfl | h3 | h3
+  · exact B.hno e he (by simp only at hce; omega)
+  · simp only at h3; omega
+  · simp only at h3; omega
+
+/-- **The small-bin insertion** (`0x800073f0`): `X` of `S ≤ 511` bytes goes to
+the head of bin `S / 8`, whose block bit is set; then the epilogue. -/
+theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
+    {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat}
+    (F : FFrame C R Mt) (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) (hS : S ≤ 511)
+    (h17 : R 17 = 0x8001ad10#64) (h14 : (R 14).toNat = X) (h15 : (R 15).toNat = S) :
+    AW C.live C.S C.Q 0x800073f0#64 R Mt := by
+  have Hh := B.heap
+  have BB := Hh.heap
+  have HH := BB.heap
+  have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
+  have hbnd := HH.walk.chunk_bounds _ hX
+  obtain ⟨hal0, htop16⟩ := HH.aligned
+  have hX16 := hal0 _ hX
+  obtain ⟨hS16, hS32⟩ := walk_sizes HH.walk _ hX
+  simp only at hbnd hX16 hS16 hS32
+  unfold heapStart at hbnd
+  have hbrk := HH.brk_le; have htle := HH.top_le
+  unfold heapEnd at hbrk
+  obtain ⟨bb, hbb⟩ : ∃ bb, read64 M2 binblocksAddr = some bb :=
+    Option.isSome_iff_exists.1 HH.binblocks_present
+  have hbb' : read64 Mt binblocksAddr = some bb := by
+    rw [B.read (fun k hk => .inl (.inl ⟨by unfold binblocksAddr avAddr; omega,
+      by unfold binblocksAddr avAddr; omega⟩)) (by unfold binblocksAddr avAddr; omega)]
+    exact hbb
+  have hbblt := Hh.bb_lt bb hbb
+  have hjn : S / 8 < numBins := by unfold numBins; omega
+  have hgj := binAt_geo (S / 8) hjn
+  have hringJ := (binList_iff_ring.1 (HH.bins_list (S / 8) (by omega) hjn)).1
+  obtain ⟨first, hof⟩ : ∃ f, (bins (S / 8) ++ [binAt (S / 8)]).head? = some f := by
+    rcases h : bins (S / 8) with _ | ⟨x, xs⟩ <;> simp
+  have hfdJ := ring_fd_head hringJ hof
+  have hfdJ' : read64 Mt (binAt (S / 8) + 16) = some first := by
+    rw [B.read (fun k hk => .inl (.inl ⟨by omega, by omega⟩)) (by unfold binAt avAddr at hgj ⊢; omega)]
+    exact hfdJ
+  have hoflt := Vsa.Sim.read64_lt _ _ _ hfdJ
+  rw [← upd_self_eq h17]
+  refine st_800073f0 O.live ?_
+  refine st_800073f4 O.live ?_
+  refine st_800073f8 O.live ?_
+  refine st_800073fc O.live ?_
+  sx_norm
+  refine st_80007400 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
+  sx_norm
+  simp (disch := decide) only [ldv_at hbb']
+  have hbbv : (BitVec.ofNat 64 bb).toNat = bb := by
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  have hj8 : (R 15 >>> 3).toNat = S / 8 := by
+    rw [BitVec.toNat_ushiftRight, h15, Nat.shiftRight_eq_div_pow]
+  have hA3 := binfd_toNat hj8 (by omega)
+  refine st_80007404 O.live ?_
+  refine st_80007408 O.live ?_ ?_ ?_
+  · sx_norm; rw [hA3]; unfold LdOK Vsa.Sim.tohostAddr; omega
+  · sx_norm; rw [hA3]; exact O.toWOK.bin_link hjn (.inl rfl)
+  sx_norm
+  rw [hA3, ldv_at hfdJ' _ rfl]
+  refine st_8000740c O.live ?_
+  refine st_80007410 O.live ?_
+  refine st_80007414 O.live ?_
+  refine st_80007418 O.live ?_
+  refine st_8000741c O.live ?_
+  sx_norm
+  have hq := sraiw2_toNat hj8 (by omega)
+  have hbit := shl_one hq (by omega)
+  have hor : (1#64 <<< (BitVec.extractLsb 5 0 (BitVec.signExtend 64
+      (shift_bits_right_arith (BitVec.extractLsb 31 0 (R 15 >>> 3)) 2#5))).toNat |||
+      BitVec.ofNat 64 bb).toNat = bb ||| 2 ^ (S / 8 / 4) := by
+    rw [BitVec.toNat_or, hbbv, hbit, Nat.or_comm]
+  have hA2 : (2147593488#64 + BitVec.signExtend 64 (BitVec.extractLsb 31 0 (R 15 >>> 3 <<< 1 + 2#64))
+      <<< 3 + 18446744073709551600#64) = BitVec.ofNat 64 (binAt (S / 8)) := by
+    apply BitVec.eq_of_toNat_eq
+    rw [BitVec.toNat_add, hA3, BitVec.toNat_ofNat, BitVec.toNat_ofNat]
+    unfold binAt avAddr at hgj ⊢; omega
+  have hofm : first = binAt (S / 8) ∨ first ∈ bins (S / 8) := by
+    have := List.mem_of_mem_head? hof
+    rcases List.mem_append.mp this with hm | hm
+    · exact .inr hm
+    · exact .inl (by simpa using hm)
+  have hof16 : ∀ k, 16 ≤ k → k < 32 → vsaFoot C.H (first + k) := BB.node_foot (by omega) hjn hofm
+  obtain ⟨ho16, honode⟩ := HH.node (by omega) hjn hofm
+  have holoc : first = binAt (S / 8) ∨ (0x8001c170 ≤ first ∧ first + 32 ≤ top) := by
+    rcases honode with h | ⟨cx, hcx, rfl, _, _⟩
+    · exact .inl h
+    · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; exact .inr ⟨this.1, by omega⟩
+  have hvf : ∀ k, k < 16 → vsaFoot C.H (X + 16 + k) := fun k hk => B.foot_chunk (by omega) (by omega)
+  -- `sd a1,16(a4); sd a2,24(a4)`: `X`'s links
+  refine st_80007420 O.live ?_ ?_ ?_
+  · sx_norm; rw [BitVec.toNat_add, h14]; unfold StOK Vsa.Sim.tohostAddr; simp; omega
+  · sx_norm; rw [BitVec.toNat_add, h14]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+    rw [Nat.mod_eq_of_lt (by omega)]; exact O.foot (fun k hk => hvf k (by omega))
+  sx_norm
+  rw [show (R 14 + 16#64).toNat = X + 16 by rw [BitVec.toNat_add, h14]; simp; omega]
+  refine st_80007424 O.live ?_ ?_ ?_
+  · sx_norm; rw [BitVec.toNat_add, h14]; unfold StOK Vsa.Sim.tohostAddr; simp; omega
+  · sx_norm; rw [BitVec.toNat_add, h14]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+    rw [Nat.mod_eq_of_lt (by omega)]
+    exact O.foot (fun k hk => by have := hvf (8 + k) (by omega); rwa [show X + 16 + (8 + k) = X + 24 + k by omega] at this)
+  sx_norm
+  rw [show (R 14 + 24#64).toNat = X + 24 by rw [BitVec.toNat_add, h14]; simp; omega, hA2]
+  -- `sd a5,8(a7)`: the bitmap
+  refine st_80007428 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
+  sx_norm
+  -- `sd a4,0(a3); sd a4,24(a1)`: bin `j`'s `fd` and the old first member's `bk`
+  refine st_8000742c O.live ?_ ?_ ?_
+  · sx_norm; rw [hA3]; unfold StOK Vsa.Sim.tohostAddr; unfold binAt avAddr at hgj ⊢; omega
+  · sx_norm; rw [hA3]; exact O.toWOK.bin_link hjn (.inl rfl)
+  sx_norm
+  rw [hA3]
+  have hEo : (BitVec.ofNat 64 first + 24#64).toNat = first + 24 := by
+    rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hoflt]
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+    unfold binAt avAddr at holoc; omega
+  refine st_80007430 O.live ?_ ?_ ?_
+  · sx_norm; rw [hEo]; unfold StOK Vsa.Sim.tohostAddr; unfold binAt avAddr at holoc; omega
+  · sx_norm; rw [hEo]; exact O.foot (fun k hk => by
+      have := hof16 (24 + k) (by omega) (by omega)
+      rwa [show first + (24 + k) = first + 24 + k by omega] at this)
+  sx_norm
+  rw [hEo]
+  have hofflt : binAt (S / 8) < 2 ^ 64 := by unfold binAt avAddr at hgj ⊢; omega
+  have D := fb_small_heap B hS rfl hof hbb
+    (w0 := BitVec.ofNat 64 first) (w1 := BitVec.ofNat 64 (binAt (S / 8))) (w3 := R 14)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hoflt])
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hofflt]) hor h14
+  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hoV := B.off_stack (fun k hk => hvf k (by omega))
+  have hoV' := B.off_stack (a := X + 24) (fun k hk => by
+    have := hvf (8 + k) (by omega); rwa [show X + 16 + (8 + k) = X + 24 + k by omega] at this)
+  have hoJ := B.off_stack (a := binAt (S / 8) + 16) (fun k hk => .inl (.inl ⟨by omega, by omega⟩))
+  have hoO := B.off_stack (a := first + 24) (fun k hk => by
+    have := hof16 (24 + k) (by omega) (by omega)
+    rwa [show first + (24 + k) = first + 24 + k by omega] at this)
+  have hoB := B.off_stack (a := 2147593496) (fun k hk => .inl (.inl ⟨by omega, by omega⟩))
+  unfold mHead at hoV hoV' hoJ hoO hoB
+  have h9 := F.s1; have h18 := F.s2; have h19 := F.s3; have h2 := F.sp
+  exact free_epi O ((((((F.store (by omega)).store (by omega)).store (by omega)).store (by omega)).store
+      (by omega)).of_regs (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])) D.heap D.pres D.frame
+
 end VsaIris.VsaHeap
