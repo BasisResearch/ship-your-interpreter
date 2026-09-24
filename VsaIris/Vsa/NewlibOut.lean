@@ -77,6 +77,17 @@ def snprintfFnSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)
       (∃ img, ownImg (InExt (buf.toNat, 64)) img ∗ ⌜CStrImg img buf.toNat (fnRender x)⌝) ∗
       stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
 
+/-- `snprintf(buf, 64, "%lld", i)`: the decimal digits and a NUL in
+`buf[0, 64)` (at most 20 characters, so never cut). -/
+def snprintfIntSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
+    (s buf i : BitVec 64) (cs : Nat → BitVec 64) : IProp GF :=
+  fnSpecW Wp snprintfEntry
+    (fun _ => iprop(argsAt [buf, 64#64, 0x800192c0#64, i] ∗ blockOwn buf.toNat 64 ∗
+      stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
+    (fun _ => iprop(clobbered argRegs ∗
+      (∃ img, ownImg (InExt (buf.toNat, 64)) img ∗ ⌜CStrImg img buf.toNat (intToString i.toInt)⌝) ∗
+      stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
+
 end Specs
 
 /-- **newlib's stdout calls at the binary** (`IrisHoles.out`), for every Iris
@@ -110,5 +121,9 @@ structure OutHoles : Prop where
     (Wp : MachWP (GF := GF) (vsaModel live)) (s buf name : BitVec 64) (x : String)
     (cs : Nat → BitVec 64), CodeLive live → SpIn s snprintfNeed →
     ⊢ snprintfFnSpec live Wp s buf name x cs
+  /-- `snprintf(buf, 64, "%lld", i)` renders the integer into the buffer. -/
+  snprintfInt : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
+    (Wp : MachWP (GF := GF) (vsaModel live)) (s buf i : BitVec 64) (cs : Nat → BitVec 64),
+    CodeLive live → SpIn s snprintfNeed → ⊢ snprintfIntSpec live Wp s buf i cs
 
 end VsaIris.Newlib
