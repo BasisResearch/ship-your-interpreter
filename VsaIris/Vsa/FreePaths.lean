@@ -1291,4 +1291,80 @@ theorem b2_agree {C : MCtx} {Mt Mt1 : Mem} {p psz sz dsz hdr0 predP succP : Nat}
     rw [hM1, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
       writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
 
+/-- No live block starts in the free predecessor. -/
+theorem FB2.hnoP {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    {p psz i : Nat} {pre post : List Nat} {predP succP : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ d bins x sz hdr0 hnn w p psz i pre post predP succP) :
+    ∀ e ∈ C.H, e.1 ≠ p + 16 := by
+  have HH := B.heap.heap.heap
+  have hpm : (⟨p, psz, false⟩ : Chunk) ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  intro e he heq
+  obtain ⟨c, hc, hu, h1, _⟩ := HH.exact e he he
+  have := HH.chunk_eq hc hpm (by simp only; omega)
+  rw [this] at hu; cases hu
+
+/-- **The insertion state after a backward coalescing with an in-use
+successor** (`0x800073dc`): the machine's unlink of `p`, its header and
+footer, over the virtual heap in which `p` absorbed `x`. -/
+theorem b2_fbin {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    {p psz i : Nat} {pre post : List Nat} {predP succP : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ d bins x sz hdr0 hnn w p psz i pre post predP succP)
+    (hdin : d.inuse = true) {v1 v2 v3 v4 : BitVec 64} (h1 : v1.toNat = predP) (h2 : v2.toNat = succP)
+    (h3 : v3.toNat = psz + sz + 1) (h4 : v4.toNat = psz + sz) :
+    FBin C (writeLog (writeLog (writeLog (writeLog Mt1 [(succP + 24, 8, v1)]) [(predP + 16, 8, v2)])
+      [(p + 8, 8, v3)]) [(p + psz + sz, 8, v4)])
+      (b2Mem Mt p psz sz hdr0 predP succP) p (psz + sz) C.top0 brkv cs₀ (d :: cs₃)
+      (updBins bins i (pre ++ post)) := by
+  have G := B.geo
+  have P := B.pv
+  have hpend := P.pend
+  subst hpend
+  have HP := B.coal
+  have hA := b2_agree G B.mem B.hdr h1 h2
+  obtain ⟨hp16, hplo, hps16, hps32, hs16, hs32, hd16, hd32, hdend, htop, hpp16, hsp16, hpplo, hsplo,
+    hpphi, hsphi, sP, sX, sD, pD, pP, pX, hppf, hspf⟩ := G
+  have HH := B.heap.heap.heap
+  have hdm : d ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨p + psz, sz, true⟩ :: d :: cs₃ := by simp
+  obtain ⟨hd0, hd0r, hd0s, hd0l⟩ := walk_header HH.walk d hdm
+  rw [B.daddr] at hd0r
+  have hno := B.hnoP
+  have hPf : ∀ a, p + 8 ≤ a → a < p + (psz + sz) + 8 → vsaFoot C.H a :=
+    fun a h1 h2 => foot_of_chunk HP (by simp) hno h1 h2
+  have hM1 := B.mem
+  refine ⟨⟨HP, Nat.le_refl _, hno, fun h0 hr => ?_, fun d0 hd0 => ?_, by omega, fun w0 hw0 hr0 => ?_,
+    ?_, fun hd hr => ?_⟩, fun a ha => ?_, B.disj, ?_⟩
+  · rw [rd_miss (by omega), read64_store_hit] at hr
+    cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
+  · simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hd0; rw [← hd0]; exact hdin
+  · refine agree_of_words (P := fun a => vsaFoot C.H a ∧ ¬ (p + (psz + sz) ≤ a ∧ a < p + (psz + sz) + 16))
+      [p + 8] (fun w' hw' => ?_) (fun a ha hout => ?_) w0 ⟨hw0, hr0⟩
+    · simp only [List.mem_singleton] at hw'; subst hw'
+      refine ⟨psz + sz + 1, ?_, ?_⟩
+      · rw [rd_miss (by omega), read64_store_hit, h3]
+      · rw [rd_miss (by omega), read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · simp only [List.mem_singleton, forall_eq] at hout
+      obtain ⟨ha1, ha2⟩ := ha
+      rw [writeLog_out, writeLog_out]
+      · exact hA a ha1 (by omega) (by omega)
+      all_goals simp only [OutL, and_true]; omega
+  · rw [show p + (psz + sz) = p + psz + sz by omega, read64_store_hit, h4]
+  · rw [show p + (psz + sz) + 8 = p + psz + sz + 8 by omega, rd_miss (by omega), rd_miss (by omega),
+      rd_miss (by omega), rd_miss (by omega), rd_miss (by omega)] at hr
+    rw [hd0r] at hr; cases hr
+    refine ⟨w.toNat, ?_, by rw [B.wv, hd0s]; unfold chunkSize; omega, by rw [B.wv]; omega,
+      by rw [B.wv]; unfold prevInuse; simp; omega⟩
+    rw [show p + (psz + sz) + 8 = p + psz + sz + 8 by omega, rd_miss (by omega), rd_miss (by omega),
+      rd_miss (by omega), rd_miss (by omega), hM1, read64_store_hit]
+  · exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
+      (writeLog_present _ _ _ (B.pres a ha))))
+  · refine frame_store (fun a h1 h2 => .inl (hPf a (by omega) (by omega)))
+      (frame_store (fun a h1 h2 => .inl (hPf a (by omega) (by omega)))
+        (frame_store (fun a h1 h2 => .inl (by
+          have := hppf (a - predP) (by omega) (by omega); rwa [show predP + (a - predP) = a by omega] at this))
+          (frame_store (fun a h1 h2 => .inl (by
+            have := hspf (a - succP) (by omega) (by omega); rwa [show succP + (a - succP) = a by omega] at this))
+            B.frameM)))
+
 end VsaIris.VsaHeap
