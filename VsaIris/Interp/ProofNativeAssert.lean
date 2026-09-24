@@ -504,8 +504,22 @@ abbrev NaK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
         ⌜∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true⌝ ∗ valAt N sret.toNat .null ∗
         valsAt N args.toNat vs ∗ world N L Room inp.toNat ρ st d ∗
         stackAt s nativeAssertNeed) -∗ Wp.W Φ) ∧
-    (abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
+    (⌜¬ AssertOk vs⌝ ∗ abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
       valsAt N args.toNat vs -∗ Wp.W Φ))
+
+/-- An abort continuation that wants the abort's reason, given it. -/
+theorem wand_pure_apply {φ : Prop} {P Q : IProp GF} (h : φ) : iprop(⌜φ⌝ ∗ P -∗ Q) ⊢ iprop(P -∗ Q) := by
+  iintro H HP
+  iapply H
+  iframe HP
+  ipureintro; exact h
+
+theorem not_assertOk_len {vs : List Value} (h : ¬ (vs.length = 1 ∨ vs.length = 2)) : ¬ AssertOk vs := by
+  rintro ⟨v, m, (rfl | rfl), -⟩ <;> simp at h
+
+theorem not_assertOk_falsy {vs : List Value} (h0 : 0 < vs.length) (ht : (vs[0]'h0).truthy = false) :
+    ¬ AssertOk vs := by
+  rintro ⟨v, m, (rfl | rfl), hv⟩ <;> simp_all
 
 /-- What a `native_assert` run carries. -/
 def NaRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
@@ -571,6 +585,7 @@ theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_len (by rw [hlen]; exact hbad)) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002e90 live (fun p hp => c.hlive _ (interp_code_80002e90 p hp)))
     interp_code_80002e90 (naArity_fmt (fun a ha => ⟨.inl ha, rfl⟩) 0#64 0#64) c.hinp c.hjb c.hs1 hs2 hs3
     hlen c.hdfa)
@@ -922,6 +937,7 @@ theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
     interp_code_80002ebc (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
       0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
@@ -987,6 +1003,7 @@ theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
     interp_code_80002ebc (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
       0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
@@ -1057,6 +1074,7 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     naS_fmt (fun a ha => ⟨Or.inl (Or.inl ha), hrd.1 a ha⟩)
       ⟨_, cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2⟩ 0#64
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
     interp_code_80002ebc hfmt c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
   iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk

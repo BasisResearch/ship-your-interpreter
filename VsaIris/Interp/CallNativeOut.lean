@@ -70,6 +70,21 @@ theorem ms_callNatOut {live : Nat → Prop} (N : NativeAddrs) (Wp : MachWP (GF :
   iframe Hsp Hcode Hms Hpre Hk
   ipureintro; exact hpins
 
+/-- The argument loop yields one value per argument. -/
+theorem evalArgsCost_length : ∀ {st d env es st' vs n},
+    EvalArgsCost st d env es st' vs n → vs.length = es.length
+  | _, _, _, _, _, _, _, .nil .. => rfl
+  | _, _, _, _, _, _, _, .cons _ _ _ _ _ _ _ _ _ _ _ _ h => by
+    simp [evalArgsCost_length h]
+
+/-- The partial argument loop yields one value per argument. -/
+theorem evalArgs_length : ∀ {st d env es st' vs},
+    EvalArgs st d env es st' vs → vs.length = es.length
+  | _, _, _, _, _, _, .nil .. => rfl
+  | _, _, _, _, _, _, .cons _ _ _ _ _ _ _ _ _ _ h => by
+    simp [evalArgs_length h]
+
+
 end Lemmas
 
 
@@ -98,6 +113,15 @@ instance (live : Nat → Prop) (N : NativeAddrs) (Wp : MachWP (GF := GF) (vsaMod
     (entry : BitVec 64) (need : Nat) (out : Store → List Value → String → String) :
     Persistent (NatOutSpecs live N Wp entry need out) := by
   unfold NatOutSpecs; infer_instance
+
+/-- A printing native's spec at every argument, from its proof at each. -/
+theorem natOutSpecs_of {live : Nat → Prop} (N : NativeAddrs) (Wp : MachWP (GF := GF) (vsaModel live))
+    {entry : BitVec 64} {need : Nat} {out : Store → List Value → String → String}
+    (h : ∀ a b c vs st o, ⊢ natOutSpec (vsaModel live) N Wp entry need a b c vs st o (out st vs o)) :
+    ⊢ NatOutSpecs live N Wp entry need out := by
+  unfold NatOutSpecs
+  iintro !> %a %b %c %vs %st %o
+  iapply h
 
 end Defs
 
