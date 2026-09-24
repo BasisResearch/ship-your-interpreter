@@ -1,6 +1,7 @@
 import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.OomSites
+import VsaIris.Interp.SpecErr
 
 /-!
 # `runtime_error` from an `eval_expr` arm (lane E1)
@@ -14,12 +15,12 @@ the landing core to the stack segment's (`evalCore`).
 
 What the call needs beyond `evalPre`, named:
 
-* `errCtx inp` (persistent): the binary image (`binImg`: `runtime_error` and
+* `leafErrCtx inp` (persistent): the binary image (`binImg`: `runtime_error` and
   `snprintf` run from it) and the `jmp_buf` read-only at an image whose `ra`
   word is aligned, with `in`'s placement (`ErrCtxOK`). `world` has the
   `jmp_buf` only existentially and no alignment; the supplier is A
   (`interp_run`'s `setjmp` wrote it, `TopLanding`), which holds all three at
-  the top, so the partial cases take `errCtx` as a persistent premise beside
+  the top, so the partial cases take `leafErrCtx` as a persistent premise beside
   the Löb hypothesis.
 * `ErrRoom e d`: `runtime_error`'s stack below the arm's frame. It holds for
   `d < maxCallDepth` (`errRoom_of_lt`); at the deepest level it is
@@ -62,10 +63,22 @@ section Res
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
 /-- The error context the partial cases' error arms need (see the module doc). -/
-def errCtx (inp : Nat) : IProp GF :=
+def leafErrCtx (inp : Nat) : IProp GF :=
   iprop(binImg ∗ ∃ jb, jmpRO inp jb ∗ ⌜ErrCtxOK inp jb⌝)
 
-instance (inp : Nat) : Persistent (errCtx (GF := GF) inp) := by unfold errCtx; infer_instance
+instance (inp : Nat) : Persistent (leafErrCtx (GF := GF) inp) := by unfold leafErrCtx; infer_instance
+
+/-- E2's error context (`SpecErr.errCtx`) with `in`'s placement (E2's
+`ErrEnv.inpGeom`/`.inpLt`) is E1's. -/
+theorem leafErrCtx_of_errCtx {inp : Nat} (hg : RtErr.InpGeom (BitVec.ofNat 64 inp))
+    (hlt : inp < 2 ^ 64) : errCtx (GF := GF) inp ⊢ leafErrCtx inp := by
+  unfold errCtx leafErrCtx
+  iintro ⟨#Hb, %jb, #Hj, %hra⟩
+  iframe Hb
+  iexists jb
+  iframe Hj
+  ipureintro
+  exact ⟨hra, hg, hlt⟩
 
 variable (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
 
@@ -151,12 +164,12 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     {R : Nat → BitVec 64} {M : Mem}
     (hR : R 10 = BitVec.ofNat 64 inp ∧ R 11 = line ∧ R 12 = fmt ∧ R 13 = BitVec.ofNat 64 p ∧
       R 14 = 0#64 ∧ R 2 = evalSP s) :
-    errCtx inp ∗ codeRes ∗ strAt p x ∗ ms (BitVec.ofNat 64 i) R (frS (s.toNat - 1088) sret.toNat) M ∗
+    leafErrCtx inp ∗ codeRes ∗ strAt p x ∗ ms (BitVec.ofNat 64 i) R (frS (s.toNat - 1088) sret.toNat) M ∗
       stackScratch (evalSP s) (n - 1088) ∗ world N L Room inp ρ st d ∗
       (abortAt (evalCore N L Room inp) s n ∗ slot24 sret.toNat -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   obtain ⟨hR10, hR11, hR12, hR13, hR14, hR2⟩ := hR
-  unfold errCtx
+  unfold leafErrCtx
   iintro ⟨⟨#Himg, %jb, #Hjb, %hok⟩, #Hcode, #Hx, Hms, Hst, Hw, Hab⟩
   have hs1 := hsg.le; have hs2 := hsg.lo; have hs3 := hsg.hi; have hs4 := hsg.al
   unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3
@@ -253,11 +266,11 @@ theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
     (hsg : StackGeom s n) (hsp : Oom.OomBlockSp S s n (evalSP s))
     (hdj : ∀ b, InExt (s.toNat - 1088, 1088) b → ¬ InExt (sret.toNat, 24) b)
     {R : Nat → BitVec 64} {M : Mem} (hR2 : R 2 = evalSP s) :
-    errCtx inp ∗ codeRes ∗ ms (BitVec.ofNat 64 S.head) R (frS (s.toNat - 1088) sret.toNat) M ∗
+    leafErrCtx inp ∗ codeRes ∗ ms (BitVec.ofNat 64 S.head) R (frS (s.toNat - 1088) sret.toNat) M ∗
       stackScratch (evalSP s) (n - 1088) ∗ Stdio.stdioOwn ∗ consoleOwn o ∗
       (abortAt (evalCore N L Room inp) s n ∗ slot24 sret.toNat -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  unfold errCtx
+  unfold leafErrCtx
   iintro ⟨⟨#Himg, -⟩, #Hcode, Hms, Hst, Hstd, Hcon, Hk⟩
   have hs1 := hsg.le; have hs2 := hsg.lo; have hs3 := hsg.hi
   unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3

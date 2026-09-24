@@ -21,11 +21,13 @@ import VsaIris.Interp.ProofNativePrintln
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Interp.ProofStringify
+import VsaIris.Interp.E5Audit
 import VsaIris.Vsa.AllocHoles
 import VsaIris.Interp.ProofEnvNew
 import VsaIris.Interp.ProofEnvGet
 import VsaIris.Interp.ProofEnvSet
 import VsaIris.Interp.ProofEnvDefine
+import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntT
@@ -45,6 +47,7 @@ import VsaIris.Interp.Case.LogicalOrTrueP
 import VsaIris.Interp.Case.UnaryNotP
 import VsaIris.Interp.Case.UnaryNegTypeP
 
+import VsaIris.Interp.CaseE2
 /-! Axiom audit: every headline result, printed. -/
 
 #print axioms VsaIris.wp_exec_step
@@ -216,3 +219,46 @@ import VsaIris.Interp.Case.UnaryNegTypeP
 #print axioms VsaIris.Interp.caseT_UnaryNeg
 #print axioms VsaIris.Interp.caseP_UnaryNeg
 #print axioms VsaIris.Interp.caseP_UnaryNegType
+
+-- lane E2 (also VsaIris/AuditE2.lean)
+#print axioms VsaIris.Interp.caseT_BinaryLtInt
+#print axioms VsaIris.Interp.caseT_BinaryLeInt
+#print axioms VsaIris.Interp.caseT_BinaryGtInt
+#print axioms VsaIris.Interp.caseT_BinaryGeInt
+#print axioms VsaIris.Interp.valueKindName_spec
+#print axioms VsaIris.Interp.ms_rtErrEval
+#print axioms VsaIris.Interp.ms_callKindName
+#print axioms VsaIris.Interp.coreOK_top
+#print axioms VsaIris.Interp.caseT_BinaryEq
+#print axioms VsaIris.Interp.caseT_BinaryNe
+#print axioms VsaIris.Interp.caseP_BinaryEq
+#print axioms VsaIris.Interp.caseP_BinaryNe
+#print axioms VsaIris.Interp.caseP_BinarySub
+#print axioms VsaIris.Interp.ms_callValueEqual
+#print axioms VsaIris.Interp.caseT_BinaryLtStr
+#print axioms VsaIris.Interp.caseT_BinaryLeStr
+#print axioms VsaIris.Interp.caseT_BinaryGtStr
+#print axioms VsaIris.Interp.caseT_BinaryGeStr
+#print axioms VsaIris.Interp.caseP_BinaryLt
+#print axioms VsaIris.Interp.caseP_BinaryLe
+#print axioms VsaIris.Interp.caseP_BinaryGt
+#print axioms VsaIris.Interp.caseP_BinaryGe
+#print axioms VsaIris.Interp.mul_iw
+#print axioms VsaIris.Interp.divdi3_iw
+#print axioms VsaIris.Interp.moddi3_iw
+#print axioms VsaIris.Interp.caseT_BinaryMulInt
+#print axioms VsaIris.Interp.caseT_BinaryDivInt
+#print axioms VsaIris.Interp.caseT_BinaryModInt
+#print axioms VsaIris.Interp.caseP_BinaryMul
+#print axioms VsaIris.Interp.caseP_BinaryDiv
+#print axioms VsaIris.Interp.caseP_BinaryMod
+#print axioms VsaIris.Interp.caseT_BinaryConcat
+#print axioms VsaIris.Interp.ms_callFree
+#print axioms VsaIris.Interp.ms_callHelperA
+#print axioms VsaIris.Interp.abortAt_of_evalCallee
+#print axioms VsaIris.Interp.ms_callMemcpyOwned
+#print axioms VsaIris.Interp.ownImg_cat
+#print axioms VsaIris.Interp.concat_route
+#print axioms VsaIris.Interp.caseP_BinaryAdd
+#print axioms VsaIris.Interp.ms_evalOom
+#print axioms VsaIris.Interp.abortAt_of_stringify

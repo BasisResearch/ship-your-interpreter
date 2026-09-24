@@ -9,7 +9,7 @@ uncounted regime. `malloc(16)` may return NULL: the `beqz` goes to the arm's
 out-of-memory block (`oom80003e28`, H5's `wp_oomBlock` through `ev_oom`),
 which aborts with `exit(1)`; otherwise the total case's runs build the
 closure and return with `EvalE.fn`. Stated at `Core := evalCore` with
-`errCtx` (the binary image `exit` runs from). Template:
+`leafErrCtx` (the binary image `exit` runs from). Template:
 `scripts/iris_arms/templates/fnLit_P.lean`.
 -/
 
@@ -47,7 +47,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
     {N : NativeAddrs} {inp : Nat}
     (HN : NewlibHoles) (hcl : CodeLive live)
     {st : St} {d env : Nat} {nm : Option String} {ps : List String} {body : List Stmt} :
-    textOwn allocText ∗ errCtx inp ∗
+    textOwn allocText ∗ leafErrCtx inp ∗
       evalSpecsP (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp (evalCore N vsaLayoutP vsaRoomB inp) ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp
         (evalCore N vsaLayoutP vsaRoomB inp) st d env (.fn nm ps body) by
@@ -79,7 +79,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   -- run 1: prologue, kind dispatch, `malloc(16)`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
-  iapply wp_swpF (wpW _) (F := iprop(textOwn allocText ∗ errCtx inp ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
+  iapply wp_swpF (wpW _) (F := iprop(textOwn allocText ∗ leafErrCtx inp ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (s + 18446744073709550528#64) (evalNeed (.fn nm ps body) d - 1088) ∗
       world N vsaLayoutP vsaRoomB inp .uncounted st d ∗
       ((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.fn nm ps body) st' v⌝ ∗
@@ -146,7 +146,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   · -- NULL: `beqz` to the out-of-memory block
     ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
     · iframe Hcode Hro
-    iapply wp_swpF (wpW _) (F := iprop(errCtx inp ∗ codeRes ∗
+    iapply wp_swpF (wpW _) (F := iprop(leafErrCtx inp ∗ codeRes ∗
         stackScratch (s + 18446744073709550528#64) (evalNeed (.fn nm ps body) d - 1088) ∗
         Stdio.stdioOwn ∗ consoleOwn st.out ∗
         (abortAt (evalCore N vsaLayoutP vsaRoomB inp) s (evalNeed (.fn nm ps body) d) ∗

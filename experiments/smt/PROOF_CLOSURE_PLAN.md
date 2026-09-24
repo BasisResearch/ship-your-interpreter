@@ -4237,3 +4237,36 @@ callee specs from `VsaIris/Interp/SpecConcat.lean`:
 - The cases take `binImg ∗ textOwn allocText` (T) or `textOwn allocText`
   beside `errCtx` (P): no lemma derives `textOwn allocText` from `binImg`;
   the boundary has both (`textOwn_of_roOn`).
+
+## `exec_stmt`'s `if` arm re-dispatches in its frame (lane E5, 2026-09-24)
+
+- **Affected:** the recursor motive of `ExecSCost` (lane A) and every exec arm.
+- **Evidence:** `0x8000422c ld s0,16(s0); 0x80004230 j 0x80004014` (then
+  branch) and `0x800042cc ld s0,24(s0); 0x800042d0 bnez s0,0x80004014` (else
+  branch) after `li a6,8; auipc a4` (`0x8000421c`): gcc turned
+  `return exec_stmt(in, branch, env, ret)` into a jump back to the kind
+  dispatch inside the same frame. The branch statement never runs from
+  `exec_stmt`'s entry, so the entry spec `execSpecT_body` of the branch cannot
+  discharge the `if` arm.
+- **Resolution (landed):** `VsaIris/Interp/SpecExecDisp.lean` states
+  `exec_stmt` at the dispatch point (`execDispT_body`, `execDispP_body`,
+  `execDispsP`); `ExecDisp.lean` recovers the entry specs by running the
+  prologue (`execSpecT_of_disp`, `execSpecP_of_disp`, `execSpecsP_of_disps`).
+  The recursor's motive is `execDispT_body`.
+
+## The partial specs' abort core is not site-indexed (lane E5, 2026-09-24)
+
+- **Status: resolved by convention (lane E2's `CoreOK`).** The partial specs
+  keep a fixed `Core`; an arm that can abort on its own (a runtime error, out
+  of memory) takes `CoreOK N L Room inp Core` (`SpecErr.lean`): every region
+  inside the stack segment's `abortCore` enters `Core`, and
+  `coreOK_top` shows the whole segment's `abortCore … 0x88000000 0x800000`
+  is such a core. E5's allocating arms (block, `for`, `var`) take it
+  (`ms_callEnvNewP`, `ms_callEnvDefineP`).
+- **Remaining obligation (lane A):** with `Core := abortCore … 0x88000000
+  0x800000`, the top-level handler at `interp_run` receives
+  `abortAt Core sI nI`; its out-of-memory case must run `exit` from an `sp`
+  that `OomSp` places anywhere in the stack segment, while `interp_run` owns
+  only `[sI - nI, sI)`. Either the top owns (or rebuilds) the frames above
+  `sI` for `exit`, or the core is narrowed to `interp_run`'s region and
+  `StackGeom` bounds every site by it.

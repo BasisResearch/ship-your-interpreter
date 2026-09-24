@@ -221,3 +221,4 @@ import VsaIris.Interp.EnvNewSpans
 import VsaIris.Interp.HeapCall
 import VsaIris.Interp.EnvCalls
 import VsaIris.Interp.ProofEnvNew
+import VsaIris.Interp.E5

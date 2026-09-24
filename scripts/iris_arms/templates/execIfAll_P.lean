@@ -1,0 +1,58 @@
+import VsaIris.Interp.ExecIf
+
+/-!
+# `{ARM}`, partial mode (family `execIfAll`, lane E5)
+
+`caseP_{ARM}`: from the Löb hypotheses (`evalSpecsP` for the condition,
+`execDispsP` for the branch), `exec_stmt` on `.ifStmt c t eo` meets its
+partial dispatch-point spec on every outcome: the prefix (`ifPrefixP`) returns
+the condition's value with its derivation; a truthy value re-dispatches the
+then branch (`ifRouteThenP`: the route's run pays the later), a falsy one the
+else branch (`ifRouteElseP`) or returns normally (`ifRouteNone`,
+`ExecS.ifNone`). An abort of the condition or the branch aborts the arm.
+Template: `scripts/iris_arms/templates/execIfAll_P.lean`.
+-/
+
+namespace VsaIris.Interp
+
+open VsaIris VsaIris.Sym VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
+    {st : St} {d env : Nat} {c : Expr} {t : Stmt} {eo : Option Stmt}
+    (hvt : ⊢ ∀ p w, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p w) :
+    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ∗
+      execDispsP (vsaModel live) N L Room inp Core ⊢
+      execDispP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.ifStmt c t eo) := by
+  iintro ⟨#IHe, #IHx⟩
+  unfold execDispP_body
+  iintro !> %Φ %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+  unfold execDispPre
+  icases Hpre with ⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩
+  have hK : ∀ (P : Nat → Prop) (m : Mem) (R3 : Nat → BitVec 64) (M3 : Mem) (st' : St) (v : Value),
+      EvalE st d env c st' v → IfRoute m P aS c t eo R R3 M3 s ret v8 v9 v18 v19 v →
+      execDispsP (vsaModel live) N L Room inp Core ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
+        ms 0x8000421c#64 R3 (InExt (s.toNat - 176, 176)) M3 ∗
+        stackScratch (execSP s) (execNeed (.ifStmt c t eo) d - 176) ∗ slot24 aRet.toNat ∗
+        world N L Room inp .uncounted st' d ∗
+        IfKP (live := live) (N := N) (L := L) (Room := Room) (inp := inp) Φ Core st d env
+          (.ifStmt c t eo) aRet s R ret v8 v9 v18 v19 ⊢ (wpW (vsaModel live)).W Φ := by
+    intro P m R3 M3 st' v hEc hr
+    cases hv : v.truthy
+    · cases eo with
+      | none =>
+        iintro ⟨-, #Hcode, #Hro, #Hfb, Hms, Hst, Hslot, Hw, HK⟩
+        ihave HK := and_elim_l $$ HK
+        ihave HK := HK $$ %st' %Status.normal %(ExecS.ifNone st d env c t st' v hEc hv)
+        iapply ifRouteNone hlive (wpW _) hf hr hv
+        iframe HK Hcode Hro Hfb Hms Hst Hslot Hw
+      | some e => exact ifRouteElseP hlive hEc hf hr hv
+    · exact ifRouteThenP hlive hEc hf hr hv
+  iapply ifPrefixP hlive hvt hf hK
+  iframe IHe IHx Hms Hcode Hast Hfb Hst Hslot Hw HK
+
+end VsaIris.Interp

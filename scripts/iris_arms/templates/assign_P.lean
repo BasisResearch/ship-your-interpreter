@@ -9,7 +9,7 @@ outcome-quantified spec. The child is called through the Löb hypothesis
 splits on `Store.set?`: bound, the shared tail returns with `EvalE.assign`;
 unbound, the `bnez` falls to `runtime_error(in, line, "cannot assign to
 undefined variable '%s' …", name, 0)` (`ev_rtErr`), which aborts. Stated at
-`Core := evalCore` with `errCtx`/`ErrRoom` (`LeafErr.lean`). Template:
+`Core := evalCore` with `leafErrCtx`/`ErrRoom` (`LeafErr.lean`). Template:
 `scripts/iris_arms/templates/assign_P.lean`.
 -/
 
@@ -39,7 +39,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     {st : St} {d env : Nat} {x : String} {e : Expr} (HN : NewlibHoles) (hcl : CodeLive live)
     (hroom : ErrRoom (.assign x e) d)
     (hsetS : ⊢ envSetSpec (GF := GF) (wpW (vsaModel live)) N) :
-    errCtx inp ∗ evalSpecsP (GF := GF) (vsaModel live) N L Room inp (evalCore N L Room inp) ⊢
+    leafErrCtx inp ∗ evalSpecsP (GF := GF) (vsaModel live) N L Room inp (evalCore N L Room inp) ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N L Room inp (evalCore N L Room inp) st d env
         (.assign x e) by
   iintro ⟨#HE, #IH⟩
@@ -86,7 +86,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
           evalPost N L Room inp .uncounted st'' d (.assign x e) v' sret s rv) -∗
           (wpW (vsaModel live)).W Φ) ∧
         (abortAt (evalCore N L Room inp) s (evalNeed (.assign x e) d) ∗ slot24 sret.toNat -∗
-          (wpW (vsaModel live)).W Φ)) ∗ errCtx inp ∗
+          (wpW (vsaModel live)).W Φ)) ∗ leafErrCtx inp ∗
       evalSpecsP (vsaModel live) N L Room inp (evalCore N L Room inp)))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms; isplitr [HE IH]
@@ -144,7 +144,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
           evalPost N L Room inp .uncounted st'' d (.assign x e) v' sret s rv) -∗
           (wpW (vsaModel live)).W Φ) ∧
         (abortAt (evalCore N L Room inp) s (evalNeed (.assign x e) d) ∗ slot24 sret.toNat -∗
-          (wpW (vsaModel live)).W Φ)) ∗ □ valOf N v w0 w1 w2 ∗ errCtx inp))
+          (wpW (vsaModel live)).W Φ)) ∗ □ valOf N v w0 w1 w2 ∗ leafErrCtx inp))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms Hv HE; iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
   intro F'
@@ -247,7 +247,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     icases Hso with ⟨%hres, Hs⟩
     ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
     · iframe Hcode Hro
-    iapply wp_swpF (wpW _) (F := iprop(errCtx inp ∗ codeRes ∗ strAt q x ∗
+    iapply wp_swpF (wpW _) (F := iprop(leafErrCtx inp ∗ codeRes ∗ strAt q x ∗
         stackScratch (s + 18446744073709550528#64) (evalNeed (.assign x e) d - 1088) ∗
         world N L Room inp .uncounted st' d ∗
         (abortAt (evalCore N L Room inp) s (evalNeed (.assign x e) d) ∗ slot24 sret.toNat -∗
