@@ -63,24 +63,29 @@ theorem FBin.off_stack {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs�
     split <;> omega
   exact B.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
 
-/-- The chunk's interior is footprint of the heap without the block: no live
-block lies in it. -/
-theorem FBin.foot_chunk {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
-    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
-    (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot C.H a := by
-  have HH := B.heap.heap.heap
-  have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
+/-- An in-use chunk holding no block: its interior is footprint. -/
+theorem foot_of_chunk {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) {X S : Nat}
+    (hX : (⟨X, S, true⟩ : Chunk) ∈ chunks) (hno : ∀ e ∈ H, e.1 ≠ X + 16) {a : Nat}
+    (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot H a := by
+  have HH := h.heap.heap
   have hb := HH.walk.chunk_bounds _ hX
-  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := B.heap.heap.top_room
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := h.heap.top_room
   simp only at hb
   refine .inr ⟨by omega, by omega, fun e he hin => ?_⟩
   obtain ⟨c, hc, hu, hce, hcs⟩ := HH.exact e he he
   have hcb := HH.walk.chunk_bounds c hc
   unfold InExt at hin
   rcases HH.walk.chunk_sep c hc _ hX with rfl | h3 | h3
-  · exact B.hno e he (by simp only at hce; omega)
+  · exact hno e he (by simp only at hce; omega)
   · simp only at h3; omega
   · simp only at h3; omega
+
+/-- The chunk's interior is footprint of the heap without the block. -/
+theorem FBin.foot_chunk {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
+    (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot C.H a :=
+  foot_of_chunk B.heap (by simp) B.hno h1 h2
 
 /-- A read through a store to another doubleword. -/
 theorem read64_miss' {Mt : Mem} {a b : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + 8 ≤ a) :

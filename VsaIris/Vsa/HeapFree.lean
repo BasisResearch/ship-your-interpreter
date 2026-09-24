@@ -1277,3 +1277,28 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
 
 end VsaIris.VsaHeap
+
+namespace VsaIris.VsaHeap
+
+open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast VsaIris.Sym
+
+/-- **Two memories agree** on a set of bytes when they read the same word at
+each of a list of doublewords and agree on the bytes outside them. -/
+theorem agree_of_words {m1 m2 : Mem} {P : Nat → Prop} (W : List Nat)
+    (hw : ∀ w ∈ W, ∃ v, read64 m1 w = some v ∧ read64 m2 w = some v)
+    (hout : ∀ a, P a → (∀ w ∈ W, a < w ∨ w + 8 ≤ a) → m1[a]? = m2[a]?) :
+    ∀ a, P a → m1[a]? = m2[a]? := by
+  intro a ha
+  by_cases hin : ∃ w ∈ W, w ≤ a ∧ a < w + 8
+  · obtain ⟨w, hwW, h1, h2⟩ := hin
+    obtain ⟨v, hv1, hv2⟩ := hw w hwW
+    have := bytes_of_read64_eq hv2 hv1 (a - w) (by omega)
+    rwa [show w + (a - w) = a by omega] at this
+  · exact hout a ha fun w hwW => Classical.byContradiction fun hc =>
+      hin ⟨w, hwW, by omega, by omega⟩
+
+/-- A doubleword read through a store elsewhere. -/
+theorem rd_miss {Mt : Mem} {a b w : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + w ≤ a) :
+    read64 (writeLog Mt [(b, w, v)]) a = read64 Mt a := read64_store_miss Mt v h
+
+end VsaIris.VsaHeap

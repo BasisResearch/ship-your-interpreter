@@ -580,4 +580,39 @@ theorem free_bin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
       (by rw [upd_other _ _ (by decide)]; exact h17) (by rw [upd_other _ _ (by decide)]; exact h14)
       (by rw [upd_other _ _ (by decide)]; exact h15)
 
+/-- **The bin insertion's second entry** (`0x80007490`): the same test as
+`free_bin`, reached with the chunk's header and footer just written. -/
+theorem free_bin2 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
+    {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat}
+    (F : FFrame C R Mt) (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins)
+    (h17 : R 17 = 0x8001ad10#64) (h14 : (R 14).toNat = X) (h15 : (R 15).toNat = S) :
+    AW C.live C.S C.Q 0x80007490#64 R Mt := by
+  have HH := B.heap.heap.heap
+  have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
+  have hXb := HH.walk.chunk_bounds _ hX
+  have htle := HH.top_le; have hbrk := HH.brk_le
+  simp only at hXb
+  unfold heapStart heapEnd at *
+  refine st_80007490 O.live ?_
+  refine st_80007494 O.live (fun hs => ?_) (fun hl => ?_)
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h15] at hs
+    exact fb_small O (F.of_regs (upd_other _ _ (by decide)) (upd_other _ _ (by decide))
+      (upd_other _ _ (by decide)) (upd_other _ _ (by decide))) B
+      (by first | omega | (sx_norm; done) | (sx_norm; omega))
+      (by rw [upd_other _ _ (by decide)]; exact h17) (by rw [upd_other _ _ (by decide)]; exact h14)
+      (by rw [upd_other _ _ (by decide)]; exact h15)
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h15] at hl
+    have hl' : 511 < S := by first | omega | (sx_norm; done) | (sx_norm; omega)
+    refine fl_idx O (S := S) (by rw [upd_other _ _ (by decide)]; exact h15) (by omega) (by omega)
+      fun R' I => ?_
+    have hk := I.keep
+    have e : ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → R' x = R x := fun x h1 h2 h3 => by
+      rw [hk x h1 h2 h3, upd_other _ _ h3]
+    exact fl_head O ⟨F.of_regs (e 2 (by decide) (by decide) (by decide))
+      (e 9 (by decide) (by decide) (by decide)) (e 18 (by decide) (by decide) (by decide))
+      (e 19 (by decide) (by decide) (by decide)), B, hl', rfl,
+      by rw [e 17 (by decide) (by decide) (by decide)]; exact h17,
+      by rw [e 14 (by decide) (by decide) (by decide)]; exact h14,
+      by rw [e 15 (by decide) (by decide) (by decide)]; exact h15⟩ I.a1 I.a2
+
 end VsaIris.VsaHeap
