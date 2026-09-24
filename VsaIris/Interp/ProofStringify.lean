@@ -371,6 +371,20 @@ structure SgCtx (live : Nat → Prop) (p s r : BitVec 64) (rv : Nat → BitVec 6
   hg : SlotGeom p
   hdsp : ∀ k, InExt (s.toNat - 112, 112) k → ¬ InExt (p.toNat, 24) k
 
+/-- The frame and the value's slot are apart, numerically. -/
+theorem SgCtx.sep {live : Nat → Prop} {p s r : BitVec 64} {rv : Nat → BitVec 64}
+    (cx : SgCtx live p s r rv) : p.toNat + 24 ≤ s.toNat - 112 ∨ s.toNat ≤ p.toNat := by
+  have hs1 := cx.hs1
+  unfold stringifyNeed snprintfNeed at hs1
+  by_cases h1 : p.toNat + 24 ≤ s.toNat - 112
+  · exact .inl h1
+  by_cases h2 : s.toNat ≤ p.toNat
+  · exact .inr h2
+  exfalso
+  by_cases h3 : p.toNat ≤ s.toNat - 112
+  · exact cx.hdsp (s.toNat - 112) (by simp only [InExt]; omega) (by simp only [InExt]; omega)
+  · exact cx.hdsp p.toNat (by simp only [InExt]; omega) (by simp only [InExt]; omega)
+
 /-- At `jal strlen` (`0x80003048`): the rendering `x` in the buffer
 `sp + 16`, which `s1` and `a0` point at. -/
 structure SgT1 (s p r : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
@@ -1310,6 +1324,84 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       f.sra, f.ss0, f.ss1, f.hslot⟩
   unfold SgRest
   iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
+
+
+/-- **A bool**: `strcpy(buf, b ? "true" : "false")`, then the shared tail. -/
+theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp)
+    {b : Bool} (hc : vsaChg ((if b then "true" else "false").toList.length + 1) c) {M : Mem}
+    (hk : ldv .lw M p.toNat = 1#64) (hb : ldv .lw M (p + 8#64).toNat = if b then 1#64 else 0#64)
+    (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k) :
+    SgRest Wp Φ N inp p s r (.bool b) (if b then "true" else "false") ρ H c o rv Mp ∗
+      ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hoff := sg_offs (s := s) (by omega)
+  have hsep := cx.sep
+  have hp1 := cx.hg.al; have hp2 := cx.hg.lo; have hp3 := cx.hg.hi
+  unfold Vsa.Sim.tohostAddr at hp2
+  have ep8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
+  have hb' : ldv .lw (writeLog (writeLog (writeLog M
+      [((s + 18446744073709551504#64 + 104#64).toNat, 8, r)])
+      [((s + 18446744073709551504#64 + 96#64).toNat, 8, rv 8)])
+      [((s + 18446744073709551504#64 + 88#64).toNat, 8, rv 9)]) (p.toNat + 8) =
+      if b then 1#64 else 0#64 := by
+    rw [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+    simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss]
+    rw [← ep8]; exact hb
+  have fB : ∀ (R' : Nat → BitVec 64), R' 9 = s + 18446744073709551504#64 + 16#64 →
+      R' 2 = s + 18446744073709551504#64 →
+      (∀ y, y ≠ 1 → y ≠ 2 → y ≠ 9 → y ≠ 10 → y ≠ 11 → y ≠ 14 → y ≠ 15 → R' y = rv y) →
+      SgTB s p r rv R' (writeLog (writeLog (writeLog M
+        [((s + 18446744073709551504#64 + 104#64).toNat, 8, r)])
+        [((s + 18446744073709551504#64 + 96#64).toNat, 8, rv 8)])
+        [((s + 18446744073709551504#64 + 88#64).toNat, 8, rv 9)]) Mp := fun R' h9 h2 hk' => by
+    refine ⟨h9, h2, fun y hy hc' hy2 hy9 => ?_, ?_, ?_, ?_, fun k hk => ?_⟩
+    · have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc' (e ▸ hz)
+      exact hk' y (fun e => by subst e; revert hy; decide) hy2 hy9 (hcl 10 (by decide))
+        (hcl 11 (by decide)) (hcl 14 (by decide)) (hcl 15 (by decide))
+    all_goals first
+      | (simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+         simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit])
+      | (simp only [InExt] at hk
+         simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+         simp (disch := omega) only [imgM_store_miss]
+         exact hslot k (by simp only [InExt]; omega))
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
+    (F := SgRest Wp Φ N inp p s r (.bool b) (if b then "true" else "false") ρ H c o rv Mp)
+  rotate_left
+  · unfold SgRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine sg_bool cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 hp1 (by omega) hp3 hk hb ?_ ?_
+  · intro _ _ _ _ _ _ hz
+    cases b
+    · apply swp_closeF
+      dsimp only [F']
+      exact sg_strcpy Wp A HN cx hmc hsc (x := "false") hc (by decide) (src := 0x80019010#64)
+        (strAt_rodata (by rw [str_false]; decide) (by unfold CStrImg; rw [str_false]; decide)
+          (by rw [str_false]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩))
+        (by ix_reg) (by ix_reg) (fB _ (by ix_reg) (by ix_reg) (fun y h1 h2 h9 h10 h11 h14 h15 => by
+          simp [upd, h1, h2, h9, h10, h11, h14, h15]))
+    · exfalso; rw [hb'] at hz; exact absurd hz (by decide)
+  · intro _ _ _ _ _ _ hz
+    cases b
+    · exfalso; rw [hb'] at hz; exact hz rfl
+    · apply swp_closeF
+      dsimp only [F']
+      exact sg_strcpy Wp A HN cx hmc hsc (x := "true") hc (by decide) (src := 0x80019008#64)
+        (strAt_rodata (by rw [str_true]; decide) (by unfold CStrImg; rw [str_true]; decide)
+          (by rw [str_true]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩))
+        (by ix_reg) (by ix_reg) (fB _ (by ix_reg) (by ix_reg) (fun y h1 h2 h9 h10 h11 h14 h15 => by
+          simp [upd, h1, h2, h9, h10, h11, h14, h15]))
 
 end Glue
 
