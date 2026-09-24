@@ -4151,3 +4151,54 @@ That retires `StrlenLastRun.lean`, the `site_80006d64`/`site_80006bd8`
 batteries, and the `AluStep` bridge, and makes both blocks ordinary
 `gen_fn.py` output. It is a core-model change, so it needs a full rebuild and
 should be scheduled where it does not block a lane.
+
+**Step-table form (lane H2, 2026-09-24).** `gen_interp_steps.py` emits, per
+`sltu`/`sltiu` instruction of the interpreter's code, an `itO_<pc>` step lemma:
+the observation (`stepObs_alu` + the decode table + `execute_rtype_sltu_char`/
+`execute_itype_sltiu_char`) through the generic `SymObs.aluStep_of_obs` and
+`SymObs.swp_alu`, so symbolic runs (`ix_run`) take `snez`/`seqz` like any other
+instruction. The `MKind` extension would retire these too.
+
+## `stringify` cuts a closure's rendering at 63 characters (lane H2, 2026-09-24)
+
+`stringify` (`interp.c:84-106`) renders a named closure with
+`snprintf(buf, sizeof buf, "<fn %s>", name)` into `char buf[64]`, then copies
+`strlen(buf) + 1` bytes: the result is `"<fn " ++ name ++ ">"` cut to 63
+characters. `Value.catDisplay` (`Vsa/While/Semantics.lean:212`) renders it
+uncut, and `EvalE`'s string `+` rule uses `catDisplay`. For a program whose
+function name is longer than 58 characters and that concatenates the function
+to a string, the machine's output differs from `BigStep`'s, so `InterpSim`
+as stated is false for it. Not yet machine-checked as a falsity proof; the
+evidence is below.
+
+- **Evidence.** The disassembly at `0x8000302c`-`0x80003040` (`li a1,64`,
+  `a2 = 0x800192c8`, `jal snprintf`) and the common tail `0x80003044` (`strlen`
+  of the buffer). C99 7.19.6.5: `snprintf` writes at most `n - 1` characters.
+  Names are arbitrary identifiers (`ExprRepr.fnNamed`: any `CString`), and
+  the loaded AST is not bounded by the parser.
+- **Affected.** `EvalE`'s concat rule, hence `term_sim_iris`/`stuck_sim_iris`.
+  H2 states `stringify` against the machine (`Newlib.fnRender`).
+- **Fix options (needs the user, INTERP_DESIGN.md Q8).** Either
+  `Value.catDisplay` cuts the closure rendering at 63 characters (the machine's
+  behaviour), or `Loaded` bounds function-name lengths (a boundary field like
+  `stack_admissible`).
+
+## Closure objects carry no read geometry on the Iris side (lane H2, 2026-09-24)
+
+`value_print`'s closure arm loads the closure object (`ca`'s 16 bytes) and
+its `EX_FN` node's name field. `closOwn`/`astE` (`VsaIris/Interp/Repr.lean`)
+give the bytes' values but no `ReadOK` geometry (RAM, off the HTIF window),
+so a symbolic run cannot load them. `SpecValue.dispRes` carries the geometry
+as a premise of `valuePrintSpec`/`nativePrintSpec`. Its supplier is the
+`EX_FN` arm (heap block, program AST) or a geometry field on `closOwn`. The
+`call` arm needs the same field when it reads a callee closure.
+
+## `strlen` on a stack buffer needs the stack region live (lane H2, 2026-09-24)
+
+`stringify` (`VsaIris/Interp/ProofStringify.lean`) calls `strlen` on its own
+stack buffer (`sp + 16`). H3's `strlen_specOwnedW` (`VsaIris/Vsa/StrlenOwned.lean`)
+runs its step lemmas under the context's `live` predicate, which must hold at
+every byte it reads. `stringify_spec` therefore takes
+`hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a`, a condition on the
+top-level `live` like `CodeLive`. Its supplier is the instantiation of
+`vsaModel live` at the boundary, which chooses `live`.

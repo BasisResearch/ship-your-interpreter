@@ -12,6 +12,15 @@ import VsaIris.Vsa.OomSites
 import VsaIris.Vsa.Setjmp
 import VsaIris.Vsa.TopAbrupt
 import VsaIris.Interp.WorldVacuity
+import VsaIris.Interp.ProofValueCons
+import VsaIris.Interp.ProofValueTruthy
+import VsaIris.Interp.ProofValueEqual
+import VsaIris.Interp.ProofValuePrint
+import VsaIris.Interp.ProofNativePrint
+import VsaIris.Interp.ProofNativePrintln
+import VsaIris.Interp.ProofNativeAssert
+import VsaIris.Vsa.StrlenOwned
+import VsaIris.Interp.ProofStringify
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -120,3 +129,20 @@ import VsaIris.Interp.WorldVacuity
 #print axioms VsaIris.Interp.ctl_bootGap
 #print axioms VsaIris.Interp.ctl_world_counted
 #print axioms VsaIris.Interp.ctl_world_uncounted
+#print axioms VsaIris.Sym.swp_alu
+#print axioms VsaIris.Interp.helper_leaf
+#print axioms VsaIris.Interp.valueNull_spec
+#print axioms VsaIris.Interp.valueBool_spec
+#print axioms VsaIris.Interp.valueInt_spec
+#print axioms VsaIris.Interp.valueStr_spec
+#print axioms VsaIris.Interp.valueTruthy_spec
+#print axioms VsaIris.Interp.valueEqual_spec
+#print axioms VsaIris.Interp.ms_tailNewlib
+#print axioms VsaIris.Interp.valuePrint_spec
+#print axioms VsaIris.Interp.nativePrint_spec
+#print axioms VsaIris.Interp.nativePrintln_spec
+#print axioms VsaIris.Interp.nativeAssert_spec
+#print axioms VsaIris.Interp.stringify_spec
+#print axioms VsaIris.Interp.ms_callNewlibAbort
+#print axioms VsaIris.LocalRun.promote
+#print axioms VsaIris.Inst.Strlen.strlen_specOwnedW

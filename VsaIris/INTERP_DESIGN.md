@@ -883,6 +883,111 @@ interpreter control's dlmalloc heap and stays with H4/A0.
   `exit(70)` (`wp_abortLanding` → `Landing.wp_landing` → `MainErr.wp_mainErrTail`
   → `Exit.wp_exitCall`) or `exit(1)` (`wp_abortOom`), for either WP.
 
+### STATEMENT CHANGES (G, landed)
+
+`eval_expr`'s specs are stated in `VsaIris/Interp/SpecEval.lean` (it
+supersedes §D of `Specs.lean` for `eval_expr`). Each change is forced by the
+binary or by what the proofs consume:
+
+- **ABI: `a0 = sret`, `a1 = in`, `a2 = e`, `a3 = env`**, not `a1 = env,
+  a2 = e`. The C signature is `eval_expr(Interp *in, Expr *e, Env *env)` with
+  an `sret` result. Evidence: the prologue keeps `a1` in `s2` and passes it
+  unchanged to both children and to `runtime_error` (`0x80003184 mv s2,a1`,
+  `0x8000350c mv a1,s2`, `0x80003b2c mv a0,s2`); the binary arm spills `a3`
+  for the right child (`0x800034f4 sd a3,0(sp)`, `0x80003500 ld a3,0(sp)`);
+  the var arm passes `a3` to `env_get` (`0x80003438 mv a0,a3`).
+- **Registers are one valuation.** The skeleton quantified over arbitrary
+  `saved`/`clobE` lists; no body meets that (it spills `s0`-`s3` whatever the
+  caller passed). The pre owns every register but `PC`/`ra` (which `fnSpecW`
+  handles) and `gp`/`tp` as `regFile rv`, with named argument pins
+  `EvalRegs`; the post returns some `rv'` with `KeepRegs calleeSaved rv rv'`.
+  This is also exactly the shape a symbolic run (`SWP`) consumes.
+- **`codeRes`** (the code, the jump tables, `gp`, persistent) is in the pre:
+  every segment fetches its instructions from it.
+- **`astEG`** = `astE` plus the read set's address facts (`ReadOK`: RAM, off
+  the HTIF words), which every load side condition needs. A0 supplies them
+  from `ast_readable`; `astEG_astE` forgets them.
+- **`StackGeom`/`SlotGeom`** name the stack and result-slot geometry.
+- **The line field is not read-owned.** `0x80003524 lw s0,4(s0)` reads the
+  node's line number, outside `ExprReprWithin`'s read set; the step is a
+  havoc load (`swp_havocD`): the run continues for every loaded value.
+- Helpers are stated with `helperSpec` (registers kept but a clobber list);
+  `valueIntSpec` is the stub for `value_int` (H2).
+- **The partial spec's abort also hands back the result slot**:
+  `evalSpecP_body Core …`'s abort resource is `abortAt Core s (evalNeed e d) ∗
+  slot24 sret`, not `abortRes s (evalNeed e d)` alone. The caller lends its
+  child a result slot inside the caller's own frame; to rebase its abort
+  (`abort_rebase`, §10.2) it must rebuild that whole frame, slot included
+  (`ms_callEvalP`). The landing core is a parameter `Core` (H5 fixes it).
+- **`seqLoop` is three loop motives, not one lemma.** The three sites differ in
+  more than PCs: the block arm indexes with `a6` (spilled at `sp+8`) and passes
+  its own `ret` slot through; the closure body indexes with the callee-saved
+  `s0` inside `eval_expr`'s frame and lends the slot `sp+144`; `interp_run`
+  walks a cursor to a bound, calls `value_null` before each statement, reads
+  the global frame from `in->globals`, and routes `ret`/`brk`/`cont` to two
+  runtime errors. Each site is the recursor motive of `ExecSeqCost` in total
+  mode (`blockSeqT_body`, `closureSeqT_body`, `interpSeqT_body`: cases
+  `consNormal`/`consAbrupt`/`nil`) and a structural motive in partial mode
+  (`*SeqP_body`, `*SeqP_all`), over a named loop-head invariant; the exits are
+  continuations indexed by status (`closureExit`, `interpExit`).
+- **`interp_run`'s loop assumes `repl = 0`** (`InterpFrame.flag`): `main`
+  passes `li a3,0` (`0x800045e0`), and the REPL path (evaluate and print
+  expression statements) has no source counterpart. The loop reads the
+  statement array and `in->globals` through one merged view (`InterpData`);
+  their disjointness and the view's construction from `astSs` and
+  `interpCore`'s `wordRO` are A's.
+- **Partial cases split on the children's actual values.** A row's partial
+  case runs the shared prefix (children through the Löb hypothesis
+  `evalSpecsP`), then case-splits on the returned values: the row's kinds
+  finish (with the derivation), the others are exported by `#ix_chain` as
+  hypotheses of the case, which the rows they belong to discharge
+  (`#ix_piece … from <piece> at k`). Machine kind tests are then decided by
+  facts (`valOf_tag`), never by case analysis inside a run.
+
+### STATEMENT CHANGES (H2)
+
+- **`helperSpec` hands the callee an aligned return address.** Lane G's
+  `SpecEval.helperSpec` had no `⌜r.toNat % 4 = 0⌝` in its precondition, so no
+  helper could run its `ret` (the step needs the target word-aligned), and
+  G's stub `valueIntSpec` was unprovable. The fact is now in the
+  precondition, and `ms_callHelper` takes it at the call site (`by decide` on
+  the literal return address); G's `binInt` template passes it.
+- **The helpers' code is the interpreter's.** `gen_interp_steps.py`'s code
+  (`interpText`, `codeRes`) covers the value helpers, the natives and
+  `stringify`, so a helper spec needs no second code resource and lane G's
+  `helperSpec` shape is used as is. `sltu`/`sltiu` get `itO_<pc>` step lemmas
+  (`SymObs.swp_alu`), which `ix_run` tries.
+- **`IrisHoles.out`** (`VsaIris/Vsa/NewlibOut.lean`): newlib's stdout calls
+  (`fputs`, `fputc`, `fwrite`, `fprintf` on `stdout`) exact about what they
+  print, and `stringify`'s `snprintf(buf, 64, "<fn %s>", name)`. VSA assumed
+  the same (`CallIOContracts`).
+- **`nativeAssertSpec` is a `fnSpecAbort`** (`SpecValue.lean`). Its return
+  branch hands back `Call.assertOk`'s premise
+  (`∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy`). Its abort branch hands
+  back H5's `abortRes s nativeAssertNeed`, the result slot and the arguments.
+  `runtime_error` needs the `jmp_buf` read-only at a named image `jb` with its
+  `ra` word aligned (`rtErr_spec`'s `hjb`). `world` only gives `∃ jb`, so the
+  spec takes `jb`, `jmpRO inp jb` and the alignment as premises. The caller's
+  error arms need the same facts for their own `runtime_error` calls.
+- **`stringifySpec` is a `fnSpecAbort`** (`SpecStringify.lean`). Its return
+  branch hands back a fresh heap block (`strOwn`, `FreshBlock`, the regime's
+  `heapRes` with the block pushed) holding `strRender st v`: `catDisplay`,
+  except that a named closure renders as `Newlib.fnRender` (Q8). Its abort
+  branch is H5's `abortRes s stringifyNeed` (partial-mode `malloc` NULL,
+  `oom80003140`). The closure arm needs `dispRes st v` (read geometry of the
+  closure object and its `EX_FN` node), as `value_print` does.
+  `stringify_spec` takes as premises: `textOwn allocText` (as H1's
+  `malloc`/`realloc` specs), `AllocSpecs`, H5's `NewlibHoles`,
+  `IrisHoles.out`, H1's `strlenSpec`/`memcpySpec`, and two callee specs for
+  the stack buffer, `memcpySpecOwned` (owned source) and `strcpySpec`, whose
+  supplier is the string-function lane (H3). It also takes
+  `hstk : ∀ a ∈ [0x87800000, 0x88000000), live a`: H3's `strlen` reads the
+  stack buffer, and its step lemmas need `live` on those bytes.
+- **`ix_run1`** (`ITac.lean`) is `ix_run` stopping at a branch it cannot
+  decide, leaving `cond → …` for each side. Lane G's `ix_run` explores both
+  sides. H2's scripts resolve each side themselves. The two share
+  `ixRunCore`.
+
 ## 11. Open questions for the user
 
 - **Q5 (lane H4; resolved 2026-09-24: `BootHeapFacts.brk_page`): a page-aligned break at the boundary.** `malloc_extend_top`
@@ -943,4 +1048,61 @@ interpreter control's dlmalloc heap and stays with H4/A0.
   below the program's need, or `perCallBudget` accounting leaves it at depth
   `maxCallDepth`. H5 states `runtime_error`'s spec with its real need; E1–E6
   must supply it at each error site.
+- **Q8 (lane H2, needs the user): `stringify` cuts a named closure's rendering
+  at 63 characters.** `stringify` renders a closure with
+  `snprintf(buf, 64, "<fn %s>", name)` and copies the buffer, so the string
+  `+` of a closure whose name is longer than 58 characters yields
+  `("<fn " ++ name ++ ">")` cut to 63 characters, while `Value.catDisplay`
+  (and so `EvalE`'s concat rule) renders it uncut: `InterpSim` is false for
+  such programs. Either the semantics cuts (`catDisplay` of `.closure` is
+  `Newlib.fnRender name`), or `Loaded` bounds name lengths. H2 states
+  `stringify` against the machine (`Newlib.fnRender`); evidence in
+  `PROOF_CLOSURE_PLAN.md` ("`stringify` cuts a closure's rendering").
 
+### STATEMENT CHANGES (H1)
+
+Two changes to R's predicates, both because an `env_*` spec cannot be proved
+without the fact and no other resource carries it:
+
+- **`storeRepr` carries `Vsa.Sim.StoreInvariant`** (unique names per frame,
+  parents point to older frames), in the named pure part `StorePure`
+  (`maps`, `blocks`, `bodies`, `inv`). `env_get`/`env_set` walk the parent
+  chain: `parents` makes the walk terminate (the total WP needs it) and
+  bounds its length by `frames.size` (so the machine's answer is
+  `Store.get?`'s). `env_define` updates the FIRST matching slot, which is
+  `Store.define`'s update only when names are unique. VSA carried the same
+  pair in `HeapRepr` (`Vsa/Sim/HeapOps.lean`). Consequences: the generic
+  closer of `storeRepr_open` takes `StoreInvariant s'`;
+  `storeRepr_open_define` takes `StoreInvariant s` and re-establishes it
+  (`StoreInvariant.define`); `storeRepr_allocFrame` takes `StoreInvariant s'`
+  (from `StoreInvariant.allocFrame`, the parent being an allocated frame).
+- **`strAt p s` carries `StrWin p s.length`**: `[p, p + len + 8)` is RAM and
+  off the HTIF words. `strcmp` and `strlen` load whole aligned words and read
+  up to 7 bytes past the NUL (`0x80006eb8`, `strlen`'s word scan), so every
+  caller of either needs the window, and the window is a property of where
+  the string lives, not of the call. Producers: `strAt_of_owned` takes it
+  (heap strings: arena geometry); `strAt_of_cstringWithin` and the
+  `valOf`/`bindings`/`frameBody` bridges take `SharedWin P` — every byte of
+  the shared read view has its 8-byte window — which A0 establishes once at
+  the boundary (`ctl_sharedWin` at the control program). The over-read bytes
+  themselves are NOT owned by the string: their values never decide the
+  result, so the H3 runs read them as total reads (`readByte = getD 0`).
+- **`FrameLayout` gains `win`, `e_align`, `cap_canon`.** `win`: every block
+  of a frame is RAM above the HTIF words and 16-aligned (`BlockWin`), which
+  every `env_*` load and store into the struct and arrays needs (`LdOK`,
+  `StOK`), and which only the frame knows (`env_get`/`env_set` hold the store,
+  not the heap). `cap_canon`: `cap = capFor count` (`0, 8, 16, 32, …`,
+  `env.c`'s growth policy). The counted regime charges `defineCost`, which
+  pays for array growth exactly when the count sits on a canonical cap; a
+  frame with `count = cap` off that sequence would grow without credits.
+  `capForAux` mirrors `arrayCostAux`'s fuel recursion. `FrameBridge` carries
+  the three facts at the boundary (`ctl_frameBridge`: cap 8 for 3 natives).
+- **`FrameLayout.arrays` states the arrays' exact extents**: with `cap > 0`,
+  `nblk = (pn, 8 * cap)` and `vblk = (pv, 24 * cap)` (was: lower bounds).
+  `env_define`'s growth `realloc`s each array from its live extent
+  (`realloc(names, 16 * cap)`), and `realloc`'s spec takes the live block
+  `(p, nOld)` at its heap entry with `nOld < nNew`; the heap's entries are the
+  exact requests (`env_define` allocates `8 * cap` and `24 * cap`), so only
+  the equality gives `nOld = 8 * cap < 16 * cap`. `FrameLayout.arrays_le`
+  recovers the componentwise bounds; `FrameBridge.arrays` carries the same
+  equality (`ctl_frameBridge`: 64 and 192 bytes at cap 8).
