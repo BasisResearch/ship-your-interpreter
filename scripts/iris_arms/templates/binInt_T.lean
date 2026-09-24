@@ -136,6 +136,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   refine {ARM}T_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
     (by ix_reg; exact hregs.a1) (by ix_reg; exact hregs.a2) (by ix_reg; exact hregs.a3)
     (by ix_reg; exact hregs.sp) hn.kind hn.kindu ?_
+  intros
   apply swp_closeM
   intro Mt1 hMt1
   have hsv1 : EvalSaved Mt1 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
@@ -184,6 +185,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   · ix_fwd; exact hA1
   · ix_fwd; exact hk0
   · ix_fwd
+  intros
   apply swp_closeM
   intro Mt2 hMt2
   have hsv2 : EvalSaved Mt2 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
@@ -230,7 +232,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   · ix_keep [hkeep2]
   · ix_fwd; rw [hMt2]; ix_fwd
   · ix_fwd; exact hk0'
-  intro _
+  intros
   apply swp_closeM
   intro Mt3 hMt3
   have hsv3 : EvalSaved Mt3 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
@@ -272,6 +274,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   · rw [hoff _ (by decide)]; exact hsv3.s1
   · rw [hoff _ (by decide)]; exact hsv3.s2
   · rw [hoff _ (by decide)]; exact hsv3.s3
+  intros
   apply swp_closeF
   unfold F' evalArmF
   iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hval, Hw, Hk⟩, Hms⟩

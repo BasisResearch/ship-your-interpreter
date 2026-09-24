@@ -253,7 +253,9 @@ def pieceVars (xs : Array Expr) : MetaM Nat := do
 /-- `#ix_seg name binders : goal by tac` runs `tac` (an `ix_run`) on `goal`
 (an `IW … Q pc R Mt` start state) and defines the theorem
 `name : ∀ binders, <end goal> → goal`, whose end goal is the symbolic state
-the run reached (quantified over the values the run havoc-loaded). -/
+the run reached, quantified over every local the run introduced (havoc-loaded
+values, the conditions of the branches it took). A run that stops at a branch
+it cannot decide leaves both sides: one hypothesis each. -/
 syntax (name := ixSeg) "#ix_seg " ident bracketedBinder* " : " term " by " tacticSeq : command
 
 @[command_elab ixSeg] def elabIxSeg : CommandElab := fun stx => do
@@ -262,7 +264,7 @@ syntax (name := ixSeg) "#ix_seg " ident bracketedBinder* " : " term " by " tacti
     Term.elabBinders stx[2].getArgs fun vars => do
       let T ← Term.elabType stx[4]
       Term.synthesizeSyntheticMVarsNoPostponing
-      ixAddPiece declName vars (← instantiateMVars T) stx[6] false
+      ixAddPiece declName vars (← instantiateMVars T) stx[6] true
 
 /-- `#ix_piece name binders : goal by tac` is `#ix_seg` for any proof step:
 the leftover goal keeps EVERY local the script introduced.

@@ -774,6 +774,51 @@ theorem ms_callEvalT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
+/-- **A child call into `exec_stmt`, total mode.** The arm passes its own
+`ret` slot through (the block arm's `mv a3,s2`), so the frame bytes stay with
+the arm untouched; it gets back the callee-saved registers, the status in
+`a0`, and the slot as `statusRet`. -/
+theorem ms_callExecT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code execEntryPC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {st : St} {d env : Nat} {sm : Stmt} {st' : St} {status : Status} {n : Nat}
+    (D : ExecSCost st d env sm st' status n)
+    {k : Nat} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {aS aE aRet s : BitVec 64} {m : Nat}
+    (hsg : StackGeom s (execNeed sm d)) (hm : execNeed sm d ≤ m) (hms : m ≤ s.toNat)
+    (hslg : SlotGeom aRet) (hbb : sm.bodiesBound perCallBudget = true) :
+    ⌜ExecRegs R (BitVec.ofNat 64 inp) aS aE aRet s⌝ ∗
+      execSpecT_body (vsaModel live) N L Room inp st d env sm st' status n D ∗ codeRes ∗
+      □ astSG aS.toNat sm ∗ □ frameAt env aE.toNat ∗
+      ms (BitVec.ofNat 64 i) R S Mt ∗ stackScratch s m ∗ slot24 aRet.toNat ∗
+      world N L Room inp (.counted (k + n)) st d ∗
+      (∀ R' : Nat → BitVec 64, ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status⌝ -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s m -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)
+    ⊢ (twpW (vsaModel live)).W Φ := by
+  unfold ms execSpecT_body
+  iintro ⟨%hregs, Hspec, #Hcode, #Hast, #Hfr, ⟨Hpc, Hra, Hregs, HS⟩, Hst, Hslot, Hw, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hms hm $$ Hst
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave Hspec := Hspec $$ %k %aS %aE %aRet %s %R
+  iapply wp_callW (twpW (vsaModel live)) hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hregs Hst Hslot Hw]
+  · unfold execPre
+    iframe Hregs Hst Hslot Hw Hcode Hast Hfr
+    ipureintro
+    exact ⟨hal, hregs, hsg, hslg, hbb⟩
+  iintro Hpc Hra Hpost
+  unfold execPost
+  icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
+  ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+  · iframe Hslack Hst
+  iapply Hk $$ %R' %hkeep [Hpc Hra Hregs HS] Hst Hret Hw
+  rw [regFile_upd_ra]
+  simp only [upd_same]
+  iframe Hpc Hra Hregs HS
+
 /-- **A helper call**, for either WP: at the `jal` at `i` into a helper meeting
 `helperSpec`, the arm hands over the body's registers (the helper's argument
 facts `pins` on them) and `Pre`; it gets back the registers the helper keeps
