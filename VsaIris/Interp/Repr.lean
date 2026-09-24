@@ -1,5 +1,6 @@
 import VsaIris.MallocRun
 import VsaIris.Vsa.Stdio
+import VsaIris.Vsa.BinDom
 import Vsa.RuntimeRepr
 import Vsa.MemReprWithin
 import Vsa.While.StackNeed
@@ -176,6 +177,13 @@ def roImg (S : Nat → Prop) (img : Nat → BitVec 8) : IProp GF :=
 
 instance (S : Nat → Prop) (img : Nat → BitVec 8) : Persistent (roImg (GF := GF) S img) := by
   unfold roImg; infer_instance
+
+/-- The binary's `.text` and `.rodata`, persistent (newlib's code and every
+constant a helper reads; `world` owns it). -/
+def _root_.VsaIris.Newlib.binImg : IProp GF :=
+  iprop(roImg Newlib.textDom Newlib.textByte ∗ roImg Newlib.rodataDom Newlib.rodataByte)
+
+instance : Persistent (Newlib.binImg (GF := GF)) := by unfold Newlib.binImg; infer_instance
 
 /-- The bytes of a C string: ASCII, nonzero, then a NUL (`CStr`). -/
 def CStrImg (img : Nat → BitVec 8) (p : Nat) (s : String) : Prop :=
@@ -516,12 +524,26 @@ blocks are live, so `free`/`realloc` of a frame array finds its block in
 def worldE (E : IProp GF) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
   iprop(∃ H B, heapRes L Room ρ H ∗ storeRepr N st.store B ∗ consoleOwn st.out ∗
-    Stdio.stdioOwn ∗ interpCtxE inp d E ∗ ⌜∀ b ∈ B, b ∈ H⌝)
+    Stdio.stdioOwn ∗ interpCtxE inp d E ∗ ⌜∀ b ∈ B, b ∈ H⌝ ∗ Newlib.binImg)
 
 /-- Everything an evaluation threads. -/
 def world (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
   worldE (errAny inp) N L Room inp ρ st d
+
+/-- The binary's image, out of the world (persistent). -/
+theorem worldE_binImg (E : IProp GF) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
+    (inp : Nat) (ρ : Regime) (st : St) (d : Nat) :
+    worldE E N L Room inp ρ st d ⊢ worldE E N L Room inp ρ st d ∗ Newlib.binImg := by
+  unfold worldE
+  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
+  isplitl [Hh Hs Hc Hio Hi]
+  · iexists H, B
+    iframe Hh Hs Hc Hio Hi
+    isplitr
+    · ipureintro; exact hB
+    · iexact Hb
+  · iexact Hb
 
 end Repr
 

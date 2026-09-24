@@ -1012,6 +1012,23 @@ binary or by what the proofs consume:
   sides. H2's scripts resolve each side themselves. The two share
   `ixRunCore`.
 
+### STATEMENT CHANGES (E4)
+
+- **`world` owns the binary's image `Newlib.binImg`** (persistent: `.text`
+  and `.rodata` of the fixed ELF, `worldE`'s last conjunct; projection
+  `worldE_binImg`). Every native (`nativePrintSpec`, `nativePrintlnSpec`,
+  `nativeAssertSpec`), `stringifySpec`, `runtime_error` (`rtErr_spec`) and the
+  abort landing take `binImg` (newlib's code), but no recursive spec carried
+  it: `evalPre`/`execPre` have only `codeRes` (the interpreter's own code), so
+  no call arm could call a native and no error arm could call `runtime_error`.
+  Precedent: H5 put `Stdio.stdioOwn` into `world` for the same callees. The
+  definitions of its domain moved below `Repr` (`Vsa/BinDom.lean`) so `worldE`
+  can name it; `binImg` itself is defined in `Repr.lean` (namespace
+  `VsaIris.Newlib`, name unchanged). Consumers adjusted: `world_heapStore`
+  (the image on the right), `world_blocks_off_heap`, `rtErr_spec` (rebuilds
+  the landing's world with its own `binImg`), `wp_abortLanding`. A supplies it
+  at `setjmp` from the boundary's `roOn CodeByte` (`bootRes`).
+
 ## 11. Open questions for the user
 
 - **Q5 (lane H4; resolved 2026-09-24: `BootHeapFacts.brk_page`): a page-aligned break at the boundary.** `malloc_extend_top`

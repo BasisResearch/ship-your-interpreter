@@ -17,15 +17,6 @@ namespace VsaIris.Newlib
 open Iris Iris.BI Iris.Std Iris.ProofMode
 open VsaIris.Interp
 
-def textDom (a : Nat) : Prop := 0x80000000 ≤ a ∧ a < 0x80018be0
-def rodataDom (a : Nat) : Prop := 0x80018be0 ≤ a ∧ a < 0x8001acf0
-
-instance (a : Nat) : Decidable (textDom a) := by unfold textDom; infer_instance
-instance (a : Nat) : Decidable (rodataDom a) := by unfold rodataDom; infer_instance
-
-def textByte (a : Nat) : BitVec 8 := Vsa.Sim.Code.fixedTextByte (a - 0x80000000)
-def rodataByte (a : Nat) : BitVec 8 := Vsa.Sim.Code.fixedRodataByte (a - 0x80018be0)
-
 /-- The code bytes the binary fetches are present. -/
 def CodeLive (live : Nat → Prop) : Prop := ∀ a, textDom a → live a
 
@@ -64,11 +55,6 @@ theorem TextAt.live {live : Nat → Prop} (hl : CodeLive live) {i : Nat} {code :
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-/-- The binary's `.text` and `.rodata`, persistent. -/
-def binImg : IProp GF := iprop(roImg textDom textByte ∗ roImg rodataDom rodataByte)
-
-instance : Persistent (binImg (GF := GF)) := by unfold binImg; infer_instance
 
 theorem roImg_sepL (S : Nat → Prop) (img : Nat → BitVec 8) :
     ∀ l : List (BitVec 8 × Nat) , ∀ (f : Nat → Nat), (∀ p ∈ l, S (f p.2) ∧ img (f p.2) = p.1) →

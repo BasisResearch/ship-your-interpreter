@@ -113,18 +113,21 @@ def heapStore (N : NativeAddrs) (ρ : Regime) (s : Store) : IProp GF :=
 /-- `world` is the heap and store beside the console and the context. -/
 theorem world_heapStore (N : NativeAddrs) (inp : Nat) (ρ : Regime) (st : St) (d : Nat) :
     world (GF := GF) N vsaLayoutP vsaRoomB inp ρ st d ⊣⊢
-      heapStore N ρ st.store ∗ consoleOwn st.out ∗ Stdio.stdioOwn ∗ interpCtx inp d := by
+      heapStore N ρ st.store ∗ consoleOwn st.out ∗ Stdio.stdioOwn ∗ interpCtx inp d ∗
+        Newlib.binImg := by
   unfold world worldE heapStore interpCtx
   constructor
-  · iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
-    iframe Hc Hio Hi
+  · iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
+    iframe Hc Hio Hi Hb
     iexists H, B
     iframe Hh Hs
     ipureintro; exact hB
-  · iintro ⟨⟨%H, %B, Hh, Hs, %hB⟩, Hc, Hio, Hi⟩
+  · iintro ⟨⟨%H, %B, Hh, Hs, %hB⟩, Hc, Hio, Hi, #Hb⟩
     iexists H, B
     iframe Hh Hs Hc Hio Hi
-    ipureintro; exact hB
+    isplitr
+    · ipureintro; exact hB
+    · iexact Hb
 
 /-- What `env_get` leaves in its `out` slot and `a0`: the value found through
 the parent chain (`Store.get?`), or nothing and `0`. -/

@@ -557,7 +557,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   iintro Hpc ⟨Hsp, Hs0, Hs1, Ha0, Ha1, Hra, -⟩ Hfr -
   -- open the world: newlib's data and `err_msg`
   unfold world worldE interpCtxE interpCoreE errAny
-  icases Hw with ⟨%Hh, %B, Hheap, Hstore, Hcon, Hstd, ⟨⟨%g, Hg, Hfa, Hd, Hpad, Herr⟩, Hjb'⟩, %hBH⟩
+  icases Hw with ⟨%Hh, %B, Hheap, Hstore, Hcon, Hstd, ⟨⟨%g, Hg, Hfa, Hd, Hpad, Herr⟩, Hjb'⟩, %hBH, -⟩
   -- `snprintf(body, 192, fmt, a1, a2)`
   let cs1 : Nat → BitVec 64 := fun q => if q = 8 then inp else if q = 9 then line else cs q
   have hsp1 : SpIn (s - 224#64) snprintfNeed :=
@@ -823,7 +823,9 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
         ipureintro
         obtain ⟨k, hk, h0⟩ := hnul
         exact ⟨k, hk, by rw [← h0, herrp]; rfl⟩
-      ipureintro; exact hBH
+      isplitr
+      · ipureintro; exact hBH
+      · iexact Himg
     · unfold landingRegs VsaIris.sp VsaIris.ra jbSaved
       simp only [sepL_cons, sepL_nil, jbWord, interpJmpOff, Nat.reduceMul]
       iframe Hpc Hra Hsp Ha0 Htmp Hs0 H9 H18 H19 H20 H21 H22 H23 H24 H25 H26 H27
