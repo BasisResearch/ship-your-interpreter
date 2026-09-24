@@ -97,7 +97,8 @@ theorem rcall_malloc {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
       R' 19 = R 19 → FreshAt H' (R' 10).toNat n.toNat → (R' 10).toNat % 16 = 0 →
       (∃ top' brkv' chunks' bins',
         PHeapAt Mt' (((R' 10).toNat, n.toNat) :: H') top' brkv' chunks' bins' ∧
-          top' ≤ top + physSize n.toNat) →
+          top' ≤ top + physSize n.toNat ∧
+          LiveKeep ⟨C.live, C.S, C.Q, H', n, link, C.s + 18446744073709551552#64, R, Mt, top⟩ chunks') →
       (∀ a, vsaFoot H' a → (Mt'[a]?).isSome) →
       (∀ a, ¬ MWin H' (C.s + 18446744073709551552#64) a → Mt'[a]? = Mt[a]?) →
       AW C.live C.S C.Q link R' Mt')
@@ -120,6 +121,7 @@ theorem rcall_malloc {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   exact malloc_all (C := Cm) Om ⟨hra, hsp, ha0, ha1, rfl, rfl, rfl, rfl⟩
     ⟨hheap, hpres, fun a h1 h2 hf => hdisjD a (by
       simp only [Cm] at h1; rw [hs] at h1; exact win64_le h1)
-      (by simp only [Cm] at h2; rw [hs] at h2; omega) (hH' a hf), fun _ _ => rfl⟩
+      (by simp only [Cm] at h2; rw [hs] at h2; omega) (hH' a hf), fun _ _ => rfl,
+      LiveKeep.of_heap (C := Cm) hheap⟩
 
 end VsaIris.VsaHeap

@@ -71,6 +71,52 @@ structure MRegs (C : MCtx) (R : Nat → BitVec 64) : Prop where
   s2 : R 18 = C.rv0 18
   s3 : R 19 = C.rv0 19
 
+/-- **The live chunks survive**: the in-use chunk holding each live block, as
+the entry memory's header records it, is in `chunks`. `_malloc_r` resizes
+no chunk that holds a live block; `_realloc_r` relies on this after its
+nested `_malloc_r`. -/
+def LiveKeep (C : MCtx) (chunks : List Chunk) : Prop :=
+  ∀ e ∈ C.H, ∀ h0, read64 C.Mt0 (e.1 - 8) = some h0 →
+    (⟨e.1 - 16, chunkSize h0, true⟩ : Chunk) ∈ chunks
+
+theorem LiveKeep.mono {C : MCtx} {l l' : List Chunk} (h : LiveKeep C l)
+    (hs : ∀ c ∈ l, c.inuse = true → c ∈ l') : LiveKeep C l' :=
+  fun e he h0 hr => hs _ (h e he h0 hr) rfl
+
+theorem LiveKeep.map_reflag {C : MCtx} {l : List Chunk} (h : LiveKeep C l) (q : Nat) :
+    LiveKeep C (l.map (reflag q true)) :=
+  h.mono fun c hc hu => List.mem_map.2 ⟨c, hc, by
+    obtain ⟨a, sz, i⟩ := c
+    simp only at hu; subst hu
+    unfold reflag; split <;> rfl⟩
+
+/-- Splitting a free chunk keeps the live chunks. -/
+theorem LiveKeep.split {C : MCtx} {chunks cs₁ cs₂ : List Chunk} {v sz : Nat} (h : LiveKeep C chunks)
+    (hsp : chunks = cs₁ ++ ⟨v, sz, false⟩ :: cs₂) (X Y : Chunk) :
+    LiveKeep C (cs₁ ++ X :: Y :: cs₂) :=
+  h.mono fun c hc hu => by
+    rw [hsp] at hc
+    rcases List.mem_append.1 hc with h1 | h1
+    · exact List.mem_append_left _ h1
+    · rcases List.mem_cons.1 h1 with rfl | h1
+      · cases hu
+      · exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h1))
+
+/-- The live chunks of the heap at the entry memory. -/
+theorem LiveKeep.of_heap {C : MCtx} {top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
+    (h : PHeapAt C.Mt0 C.H top brkv chunks bins) : LiveKeep C chunks := by
+  intro e he h0 hr
+  have HH := h.heap.heap
+  obtain ⟨c, hc, hu, hca, _⟩ := HH.exact e he he
+  obtain ⟨hh, hhr, hhs, _⟩ := walk_header HH.walk c hc
+  rw [show c.addr + 8 = e.1 - 8 by omega, hr] at hhr
+  cases hhr
+  obtain ⟨a, sz, i⟩ := c
+  simp only at hu hca hhs
+  subst hu
+  rw [hhs, show e.1 - 16 = a by omega]
+  exact hc
+
 /-- A return with a fresh block: the heap extended by it, the top grown by at
 most the block's chunk, the footprint present, and every byte outside the
 write window at its entry value. -/
@@ -80,7 +126,7 @@ structure MRet (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   align : (R 10).toNat % 16 = 0
   heap : ∃ top brkv chunks bins,
     PHeapAt Mt (((R 10).toNat, C.n.toNat) :: C.H) top brkv chunks bins ∧
-      top ≤ C.top0 + physSize C.n.toNat
+      top ≤ C.top0 + physSize C.n.toNat ∧ LiveKeep C chunks
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
@@ -140,6 +186,7 @@ structure MHeap (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk)
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
+  live : LiveKeep C chunks
 
 /-! ## Ownership -/
 
@@ -301,6 +348,7 @@ theorem MHeap.store_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chun
   pres := pres_store Hp.pres
   disj := Hp.disj
   frame := frame_store (win_stack h1 h2) Hp.frame
+  live := Hp.live
 
 /-- The heap invariant through a store to `_errno`, which `HeapAt` never reads. -/
 theorem MHeap.store_errno {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
@@ -314,6 +362,7 @@ theorem MHeap.store_errno {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chun
   pres := pres_store Hp.pres
   disj := Hp.disj
   frame := frame_store (fun b h1 h2 => .inl (.inl (.inr (.inl ⟨h1, h2⟩)))) Hp.frame
+  live := Hp.live
 
 /-- The frame through a register write other than `sp` and `s1-s3`. -/
 theorem MFrame.upd {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt) {k : Nat}
@@ -416,7 +465,7 @@ theorem MOK.fin_ok {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (hfresh : FreshAt C.H (R 10).toNat C.n.toNat) (hal : (R 10).toNat % 16 = 0)
     (hheap : ∃ top brkv chunks bins,
       PHeapAt Mt (((R 10).toNat, C.n.toNat) :: C.H) top brkv chunks bins ∧
-        top ≤ C.top0 + physSize C.n.toNat)
+        top ≤ C.top0 + physSize C.n.toNat ∧ LiveKeep C chunks)
     (hpres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome)
     (hframe : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?) :
     ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →
@@ -447,7 +496,7 @@ structure TakeRet (C : MCtx) (Mt : Mem) (v : Nat) : Prop where
   align : (v + 16) % 16 = 0
   heap : ∃ top brkv chunks bins,
     PHeapAt Mt ((v + 16, C.n.toNat) :: C.H) top brkv chunks bins ∧
-      top ≤ C.top0 + physSize C.n.toNat
+      top ≤ C.top0 + physSize C.n.toNat ∧ LiveKeep C chunks
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
@@ -533,7 +582,7 @@ theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
   ok := by
     intro R Mt h
     have hP := physSize_le_chg hchg
-    obtain ⟨top, brkv, chunks, bins, hheap, htop⟩ := h.heap
+    obtain ⟨top, brkv, chunks, bins, hheap, htop, _⟩ := h.heap
     exact malloc_exit (brkv := brkv) (chunks := chunks) (bins := bins) hsv h.regs.ra h.regs.sp
       (saved_of_regs hsv hE h.regs) h.fresh hst h.align hheap (by simp only [mChgCtx] at htop; omega)
       h.pres

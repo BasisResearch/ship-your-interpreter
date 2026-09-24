@@ -413,7 +413,7 @@ theorem take_ret {C : MCtx} {Mt M : Mem} {brkv : Nat} {chunks : List Chunk}
     (hhdr hd hdr) (fun hd' hd'r => by rw [hdr] at hd'r; cases hd'r; exact ⟨by unfold chunkSize; omega, by omega⟩)
     (by unfold prevInuse; rw [beq_iff_eq]; omega) hag
   obtain ⟨hfr, hal16⟩ := PHeapAt.take_fresh Hp.heap hfree rfl (n := C.n.toNat) hn8
-  exact ⟨hfr, hal16, ⟨_, _, _, _, hheap, by omega⟩, hpres, hframe⟩
+  exact ⟨hfr, hal16, ⟨_, _, _, _, hheap, by omega, Hp.live.map_reflag _⟩, hpres, hframe⟩
 
 /-- The end of a take's inline epilogue: at the caller's `ra` with the
 caller's registers and the block in `a0`. -/

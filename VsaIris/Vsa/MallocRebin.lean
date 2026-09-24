@@ -165,7 +165,7 @@ theorem rebin_small_heap {C : MCtx} {Mt Mt' : Mem} {brkv : Nat} {chunks : List C
     (lor_lt bb _ hbbl (by omega)) (lor_bit_set bb _) (fun bb0 hbb0 k hk => by
       rw [hbb] at hbb0; cases hbb0; exact lor_bit_keep bb _ k hk) hag
   simp only [List.nil_append] at HP
-  refine ⟨HP, fun a ha => ?_, Hp.disj, fun a ha => ?_⟩
+  refine ⟨HP, fun a ha => ?_, Hp.disj, fun a ha => ?_, Hp.live⟩
   · exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
       (writeLog_present _ _ _ (writeLog_present _ _ _ (D.pres a ha)))))
   · have hnf : ¬ vsaFoot C.H a := fun h => ha (.inl h)

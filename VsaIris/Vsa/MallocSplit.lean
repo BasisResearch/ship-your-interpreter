@@ -114,7 +114,7 @@ theorem lr_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
       writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
   obtain ⟨hfr, hal16⟩ := PHeapAt.take_fresh Hp.heap hfree rfl (n := C.n.toNat) (by simp only; omega)
-  refine ⟨hfr, hal16, ⟨_, _, _, _, Hs, by omega⟩,
+  refine ⟨hfr, hal16, ⟨_, _, _, _, Hs, by omega, Hp.live.split hsp _ _⟩,
     pres_store (pres_store (pres_store (pres_store (pres_store (pres_store (pres_store
       (pres_store Hp.pres))))))), ?_⟩
   have hw : ∀ a w, v + 8 ≤ a → a + w ≤ v + sz + 16 → ∀ b, a ≤ b → b < a + w → MWin C.H C.s b :=

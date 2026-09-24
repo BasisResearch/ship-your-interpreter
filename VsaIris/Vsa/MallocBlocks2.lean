@@ -243,7 +243,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
         BitVec.ofNat 64 bb)]) brkv chunks bins := by
       refine ⟨W.heap.heap.clearBlock (b := start / 4) ?_ (by rw [hbbA]; exact read64_store_hit _ _ _)
         ?_ (by omega) ?_, pres_store W.heap.pres, W.heap.disj,
-        frame_store (fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))) W.heap.frame⟩
+        frame_store (fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))) W.heap.frame, W.heap.live⟩
       · intro i hi1 hi hib
         exact hemp i (by omega) (by omega)
       · intro bb0 hbb0 t ht hbit

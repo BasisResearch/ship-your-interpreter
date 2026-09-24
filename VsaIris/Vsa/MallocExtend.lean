@@ -350,7 +350,7 @@ theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
   have Hp' : MHeap C M' (brkv + sbReq nb) chunks bins := by
     refine ⟨Hp.heap.topGrow (m' := M') (by omega) (by unfold heapEnd; omega) (by omega) ?_ ?_ ?_ hms' ?_,
       fun a ha => hP a (writeLog_present _ _ _ (writeLog_present _ _ _ (E.pres a (Hp.pres a ha)))),
-      Hp.disj, fun a ha => ?_⟩
+      Hp.disj, fun a ha => ?_, Hp.live⟩
     · rw [read64_keep fun k hk => hM' _ (by unfold brkAddr; omega) (by unfold brkAddr; omega)
         (by unfold brkAddr; omega)]
       exact E.brk
@@ -413,7 +413,7 @@ theorem ext_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
   -- the heap is the entry heap: `sbrk` failed and left the break alone
   have Hp' : MHeap C M brkv chunks bins := by
     refine ⟨Hp.heap.transport_read fun a ha => ?_, fun a ha => E.pres a (Hp.pres a ha), Hp.disj,
-      fun a ha => ?_⟩
+      fun a ha => ?_, Hp.live⟩
     · obtain ⟨hf, hn1, hn2⟩ := ha
       by_cases hb : brkAddr ≤ a ∧ a < brkAddr + 8
       · have := bytes_of_read64_eq HH.brk E.brk (a - brkAddr) (by omega)

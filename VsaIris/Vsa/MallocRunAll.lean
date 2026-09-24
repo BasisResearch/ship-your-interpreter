@@ -30,8 +30,9 @@ theorem mHeap_entry {C : MCtx} {m1 : Mem} {s : BitVec 64} {mv : Nat → BitVec 8
     intro a ha
     rw [hMt]; unfold mt0
     rw [stackBase_get, ite_eq_right_iff.2 fun h => absurd ha (hdisj a ⟨h.1, by simp only; omega⟩)]
-  refine ⟨hheap.transport_read fun a ha => (hag a ha.1).symm, fun a ha => by
-    rw [hag a ha, him a ha]; rfl, fun a h1 h2 hf => hdisj a ?_ hf, fun a _ => rfl⟩
+  have H0 := hheap.transport_read (m' := C.Mt0) fun a ha => (hag a ha.1).symm
+  refine ⟨H0, fun a ha => by
+    rw [hag a ha, him a ha]; rfl, fun a h1 h2 hf => hdisj a ?_ hf, fun a _ => rfl, LiveKeep.of_heap H0⟩
   unfold mHead at h1
   refine ⟨?_, ?_⟩ <;> simp only [allocHeadroom]
   · exact Nat.le_trans (Nat.sub_le_sub_left (by decide : 256 ≤ 512) _) h1

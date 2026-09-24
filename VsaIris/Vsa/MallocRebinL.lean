@@ -279,7 +279,7 @@ theorem rebin_at_heap {C : MCtx} {Mt Mt' M0 : Mem} {brkv : Nat} {chunks : List C
   have HP := Hp.heap.moveBinAt (i := 1) (j := j) (by decide) (by unfold numBins; decide) (by omega)
     hj (by omega) (by omega) D.bin hfree (fun _ => hidx) hpos hpred hsucc e1 e2 e3 e4 e5 e6 e7
     hbblt hbbset (fun bb0 hbb0 k hk => by rw [hbb] at hbb0; cases hbb0; exact hbbkeep k hk) hag
-  refine ⟨HP, fun a ha => ?_, Hp.disj, fun a ha => ?_⟩
+  refine ⟨HP, fun a ha => ?_, Hp.disj, fun a ha => ?_, Hp.live⟩
   · exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
       (writeLog_present _ _ _ (hP0 a (D.pres a ha)))))
   · have hnf : ¬ vsaFoot C.H a := fun h => ha (.inl h)

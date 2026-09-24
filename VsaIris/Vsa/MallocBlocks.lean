@@ -244,7 +244,7 @@ theorem bw_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
       writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
   obtain ⟨hfr, hal16⟩ := PHeapAt.take_fresh Hp.heap hfree rfl (n := C.n.toNat) (by simp only; omega)
-  refine ⟨hfr, hal16, ⟨_, _, _, _, Hs, by omega⟩, fun a ha => ?_, ?_⟩
+  refine ⟨hfr, hal16, ⟨_, _, _, _, Hs, by omega, Hp.live.split hsp' _ _⟩, fun a ha => ?_, ?_⟩
   · repeat (apply writeLog_present)
     exact Hp.pres a ha
   have hw : ∀ a w, x + 8 ≤ a → a + w ≤ x + sz + 16 → ∀ b, a ≤ b → b < a + w → MWin C.H C.s b :=
