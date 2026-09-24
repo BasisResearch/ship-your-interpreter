@@ -524,4 +524,32 @@ theorem PHeapAt.block_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     by show _ < heapEnd; exact Nat.lt_of_lt_of_le (by omega) hhi,
     fun e he hin => hdj e he (q + k) ⟨by simp only; omega, by simp only; omega⟩ hin⟩
 
+/-- The heap shape depends only on which blocks are live. -/
+theorem PHeapAt.perm {m : Mem} {H H' : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) (hp : ∀ e, e ∈ H' ↔ e ∈ H) :
+    PHeapAt m H' top brkv chunks bins := by
+  obtain ⟨B, hpage, hbbl⟩ := h
+  have HH := B.heap
+  refine ⟨⟨{ HH with live := (fun e he => HH.live e ((hp e).1 he))
+                     exact := (fun e he _ => HH.exact e ((hp e).1 he) ((hp e).1 he)) }, B.top_room⟩,
+    hpage, hbbl⟩
+
+theorem vsaFoot_perm {H H' : List (Nat × Nat)} (hp : ∀ e, e ∈ H' ↔ e ∈ H) {a : Nat}
+    (h : vsaFoot H a) : vsaFoot H' a := by
+  rcases h with hg | ⟨h1, h2, h3⟩
+  · exact .inl hg
+  · exact .inr ⟨h1, h2, fun e he => h3 e ((hp e).1 he)⟩
+
+theorem mem_swap {a b : Nat × Nat} {H : List (Nat × Nat)} :
+    ∀ e, e ∈ a :: b :: H ↔ e ∈ b :: a :: H := by
+  intro e; simp only [List.mem_cons]
+  constructor <;> intro h <;> rcases h with h | h | h <;> simp [h]
+
+theorem Starts.swap {a b : Nat × Nat} {H : List (Nat × Nat)} (h : Starts (a :: b :: H)) :
+    Starts (b :: a :: H) := by
+  unfold Starts at *
+  simp only [List.map_cons, List.nodup_cons, List.mem_cons, not_or] at *
+  obtain ⟨⟨h1, h2⟩, h3, h4⟩ := h
+  exact ⟨⟨Ne.symm h1, h3⟩, h2, h4⟩
+
 end VsaIris.VsaHeap
