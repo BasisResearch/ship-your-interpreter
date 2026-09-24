@@ -1031,6 +1031,17 @@ binary or by what the proofs consume:
   (the image on the right), `world_blocks_off_heap`, `rtErr_spec` (rebuilds
   the landing's world with its own `binImg`), `wp_abortLanding`. A supplies it
   at `setjmp` from the boundary's `roOn CodeByte` (`bootRes`).
+- **`interpCtxE` carries the `jmp_buf`'s aligned `ra` word**
+  (`∃ jb, jmpRO inp jb ∗ ⌜(imgW jb (inp + interpJmpOff)).toNat % 4 = 0⌝`).
+  `runtime_error` (`rtErr_spec`'s `hjb`) and `nativeAssertSpec` need it; E2's
+  `errCtx` supplied it as a partial-mode premise, which a total-mode `assert`
+  call cannot have. With it in the world, `world_errCtx` derives `errCtx` in
+  either mode. Supplier: A, after `setjmp` (the saved `ra` is `0x80004428`).
+- **`nativeAssertSpec`'s abort carries its reason**, `⌜¬ AssertOk vs⌝`
+  (`AssertOk vs := ∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy`): total mode
+  must prove the abort continuation of the `∧`, and refutes it with
+  `Call.assertOk`'s premise. H2's abort paths (`na_badPath`, `na_falsy*`)
+  supply it (`not_assertOk_len`, `not_assertOk_falsy`).
 
 ## 11. Open questions for the user
 
