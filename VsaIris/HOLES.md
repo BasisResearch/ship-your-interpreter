@@ -4,8 +4,6 @@ Every assumption left in the Iris route is a field of `structure IrisHoles` and 
 
 | field | what it assumes | owner | satisfiability evidence | discharge plan |
 |---|---|---|---|---|
-| `alloc.reallocChgRun` | counted `_realloc_r` grow path meets `ReallocChgEnd` (never NULL) | H4 | `reallocChgSpec_of_run` consumers | `SWP` paths: in place (top, free next), malloc-copy-free; `sltu` at `0x800052d0` needs a hand step lemma |
-| `alloc.reallocLocalRun` | uncounted `_realloc_r` grow path meets `ReallocEnd` | H4 | `reallocSpec_of_localRun` consumers | as `reallocChgRun`, plus the NULL arm |
 | `newlib.snprintf` | `snprintf(dst, n, fmt, a3…a7)` with `0 < n < 2^31` and a `%s`/`%d` format (`FmtArgsOK`) writes a NUL-terminated string into `dst[0,n)`, keeps `stdioOwn`, prints nothing, returns with the ABI frame, in 1024 bytes of stack (`Newlib.snprintfSpec`) | H5; scheduled after E1–E6 (user, Q4) | `%lld` success path proved (VSA M3, `SnprintfSpec*`); measured frames 272 + 592 + 64 | M3 format-parser and digit-loop segments; `%s` copy loop |
 | `newlib.fprintf` | `fprintf(stderr, fmt, a2…a7)` with a `%s`/`%d` format prints some string, moves newlib's data from `StdioOK` to `Ierr`, returns, in 4096 bytes of stack (`Newlib.fprintfSpec`) | H5; scheduled after E1–E6 (user, Q4) | `stderr` idle at the boundary (`ExitRuntimeData.stderr`); frames ≈ 3200 | `_vfprintf_r` → `__sbprintf` → `__sfvwrite_r` → `_write` segments |
 | `newlib.fwrite` | `fwrite(ptr, 1, n, stderr)` on readable bytes prints some string, moves newlib's data from `StdioOK` to `Ierr`, returns, in 768 bytes of stack (`Newlib.fwriteSpec`) | H5; scheduled after E1–E6 (user, Q4) | frames 592 measured | `__sfvwrite_r` unbuffered path segments |

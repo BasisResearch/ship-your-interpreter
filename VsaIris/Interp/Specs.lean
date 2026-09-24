@@ -290,13 +290,9 @@ theorem seqLoop_obligation (_site : SeqSite) : True := trivial
 
 /-- The named holes the final theorem keeps (INTERP_DESIGN.md §9). Every
 field must come with a satisfiability witness (xv6iris durable-notes
-"Vacuity"): the allocator runs at the control image (`ControlEnd`), the
-newlib specs at a concrete call. -/
+"Vacuity"): the newlib specs at a concrete call. The allocator's runs are
+proved (`VsaHeap.allocSpecs`, `VsaIris/Vsa/AllocHoles.lean`). -/
 structure IrisHoles : Prop where
-  /-- The allocator's first-order runs at the binary, both regimes
-  (`VsaIris/Vsa/AllocHoles.lean`); `VsaHeap.allocSpecs` turns them into the
-  Iris specs. H4 discharges them field by field. -/
-  alloc : VsaHeap.AllocHoles
   /-- The newlib calls on the error and exit paths, exact Iris statements
   (`VsaIris/Vsa/Newlib.lean`, H5): `snprintf` and `fprintf` with `%s`/`%d`
   formats, `fwrite` of the out-of-memory message, and `exit`'s newlib

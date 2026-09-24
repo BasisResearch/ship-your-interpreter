@@ -84,3 +84,5 @@ import VsaIris.Vsa.AllocTac
 #print axioms VsaIris.VsaHeap.mallocLocalRun_proved
 #print axioms VsaIris.VsaHeap.freeChgRun_proved
 #print axioms VsaIris.VsaHeap.freeLocalRun_proved
+#print axioms VsaIris.VsaHeap.reallocChgRun_proved
+#print axioms VsaIris.VsaHeap.reallocLocalRun_proved

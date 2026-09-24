@@ -2837,7 +2837,19 @@ lowered by `PHeapAt.topResize`). `freeChgRun_proved` and `freeLocalRun_proved`
 (`FreeRunAll.lean`) are the counted and uncounted runs from `free`'s entry, over
 the tracking memory `ft0` (the witness with the block and stack window
 inserted); the fields `alloc.freeChgRun`/`alloc.freeLocalRun` are deleted.
-`realloc` remains (`AllocHoles`).
+
+`_realloc_r` is closed on every path (`realloc_body`, `VsaIris/Vsa/ReallocRunAll.lean`):
+the prologue and error return (`realloc_pro`, `realloc_errno`), a chunk already big enough
+(`realloc_dec` into the tail `realloc_tail`), and the growth dispatch `realloc_grow`
+(`ReallocGrow.lean`) into the top (`realloc_topgrow`), a free successor (`realloc_next`,
+over `next_absorb`), a free predecessor alone, with the successor, or with the top
+(`realloc_pvX`, `realloc_pvXN`, `realloc_pvT`: `coalPrev` and a forward copy, the tail
+over a virtual pre-state `pvG_rt`, or the top moved to `P + nb` by `PHeapAt.setTop`), and
+otherwise a fresh block (`realloc_mal`: nested `_malloc_r`, inline copy or `memmove`,
+nested `_free_r`, the merge with a block right after). `reallocChgRun_proved` and
+`reallocLocalRun_proved` are the counted and uncounted runs from `realloc`'s entry; the
+fields `alloc.reallocChgRun`/`alloc.reallocLocalRun` are deleted, and with them
+`IrisHoles.alloc` (`allocSpecs` needs no hole).
 
 CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
 `heapEnd < top0 + physSize n + extendSlack`, which the code does not
