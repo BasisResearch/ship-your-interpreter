@@ -52,13 +52,21 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   `alloc.mallocChgRun` and `alloc.mallocLocalRun` and their HOLES rows are deleted.
   `AllocBase.lean` holds the calling conditions so `AllocHoles.lean` can import the proofs.
 
+- **Interface correction** (`PROOF_CLOSURE_PLAN.md`): `pShape`/`vsaRoomB` carry `Starts H`
+  (distinct block starts); without it `alloc.freeLocalRun`/`freeChgRun` were unsatisfiable.
+- **`_free_r` in progress**: heap edits `Vsa/HeapFree.lean` (`drop`, `unlink`, `absorb`,
+  `toTop`, `release`), `PHeapAt.topResize` (trim's shrink), `sbrk_r_gen` (any increment word),
+  the context `Vsa/FreeCtx.lean` (`FOK` over the shared `WOK`, `FRet`, `FFrame`), and the
+  prologue `free_pro` (`Vsa/FreePro.lean`) up to the first branch.
+
 ## Holes
 - Left: `alloc.freeChgRun`, `alloc.freeLocalRun`, `alloc.reallocChgRun`,
   `alloc.reallocLocalRun`.
 
 ## Next
-1. `_free_r`: the context `MCtx`/`MOK` analogue for `free`, then the paths (top merge,
-   backward/forward coalescing, small/large frontlink — the sorted insert is
-   `PHeapAt.moveBinAt`), and `_malloc_trim_r` over `sbrk_r_run`.
+1. `_free_r`'s paths from `free_pro`: the top merge (`toTop`, then `_malloc_trim_r` over
+   `sbrk_r_gen` and `topResize`), the coalescing cases (`unlink` + `absorb` through virtual
+   memories), and the bin insertion `0x800073e8` (`release`: small bins, the large cascade and
+   the sorted walk).
 2. `_realloc_r` (the `sltu` at `0x800052d0` needs a hand step lemma), whose nested
    `_malloc_r` call reuses `malloc_all` with its own `MCtx`.

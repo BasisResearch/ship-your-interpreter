@@ -70,6 +70,9 @@ import VsaIris.Vsa.MallocBlocks
 import VsaIris.Vsa.MallocChain
 import VsaIris.Vsa.MallocBlocks2
 import VsaIris.Vsa.MallocRunAll
+import VsaIris.Vsa.HeapFree
+import VsaIris.Vsa.FreeCtx
+import VsaIris.Vsa.FreePro
 import VsaIris.Vsa.CostRoom
 import VsaIris.Stack
 import VsaIris.Interp.Need
