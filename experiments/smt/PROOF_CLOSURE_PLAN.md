@@ -4159,7 +4159,7 @@ the observation (`stepObs_alu` + the decode table + `execute_rtype_sltu_char`/
 `SymObs.swp_alu`, so symbolic runs (`ix_run`) take `snez`/`seqz` like any other
 instruction. The `MKind` extension would retire these too.
 
-## `stringify` cuts a closure's rendering at 63 characters (lane H2, 2026-09-24)
+## `stringify` cuts a closure's rendering at 63 characters (lane H2, 2026-09-24; RESOLVED)
 
 `stringify` (`interp.c:84-106`) renders a named closure with
 `snprintf(buf, sizeof buf, "<fn %s>", name)` into `char buf[64]`, then copies
@@ -4178,10 +4178,11 @@ evidence is below.
   the loaded AST is not bounded by the parser.
 - **Affected.** `EvalE`'s concat rule, hence `term_sim_iris`/`stuck_sim_iris`.
   H2 states `stringify` against the machine (`Newlib.fnRender`).
-- **Fix options (needs the user, INTERP_DESIGN.md Q8).** Either
-  `Value.catDisplay` cuts the closure rendering at 63 characters (the machine's
-  behaviour), or `Loaded` bounds function-name lengths (a boundary field like
-  `stack_admissible`).
+- **Resolved (user decision Q8, 2026-09-24).** `Value.catDisplay` cuts:
+  a named closure renders as `Vsa.While.fnCatRender` (`"<fn " ++ n ++ ">"`,
+  first 63 characters), definitionally `Newlib.fnRender` (`fnRender_eq`);
+  `strRender_eq : strRender st v = v.catDisplay st`. `Validation.lean` and the
+  `c/tests` expectations are unchanged (their names are short).
 
 ## Closure objects carry no read geometry on the Iris side (lane H2, 2026-09-24)
 
