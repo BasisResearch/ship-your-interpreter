@@ -1,60 +1,49 @@
-# Lane A0: the boundary world — PAUSED (moving to aws-dev), WIP
+# Lane A0: the boundary world — DONE (one user decision pending)
 
-Package A0 of `VsaIris/INTERP_DESIGN.md` §5.1/§9. All work is in
-`VsaIris/Interp/World.lean`. That file is NOT yet imported from `VsaIris.lean`,
-so `lake build Vsa VsaIris` is unaffected. No holes added: `check_iris_holes.py` passes.
+Package A0 of `VsaIris/INTERP_DESIGN.md` §5.1/§9. Imported from `VsaIris.lean`;
+`lake build Vsa VsaIris VsaIris.Audit` is green; `check_iris_holes.py` passes. No holes added.
+Axioms of every theorem ⊆ {propext, Classical.choice, Quot.sound} (`VsaIris/Audit.lean`).
 
-## Done (elaborates, axioms ⊆ {propext, Classical.choice, Quot.sound})
-§1–§8 of World.lean, up to and including `closSupply_frame0` / `freeStack_disj` / `interp_disj`:
-- `fillMem`, `MemGrows`, `HeapAt.grow` (+ `ChunkWalk.grow`, `BinChain.grow`): the boundary
-  does not assert that every arena byte is present, so the heap image `memImg m` is read at the
-  filled memory. `imgShape_of_blockHeapAt`, `costRoom_of_reserve`.
-- `Boot c p`: every witness of `Loaded interpRunLayout` named (`boot_of_loaded`); `Boot.fits`
-  (S1 stack admissibility), `frameRepr`, `frameOwned`, `env_ne`, `H := inuseBlocks chunks`.
-- `FrameChunks` + `BootGap` (the named premise, see Findings). `inuseBlocks_disj`,
-  `FrameChunks.disjoint`, `payloadShared_of_valueOwned`, `Boot.frameBridge`.
-- The byte partition `BootByte = RoByte ∨ store blocks ∨ heapFoot ∨ StackByte ∨ StaticByte`
-  (stack further = `FreeStackByte ∨ InterpByte ∨ CallerByte`), all pairwise-disjointness
-  lemmas (`ro_disj`, `store_disj`, `heap_disj`, `stack_disj`, `stack_parts`, `bootByte_lt`).
-- `bootAddrs`/`Boot.bytes` (the `mm` for adequacy) and `Boot.bytes_agree` (MemAgree).
-- `RegimeOK`, `Boot.regime_of_bigStep` (counted regime from BigStep via S1's cost),
-  `heapRes_of_bytes` (both regimes), `freeStack_carve`, `interpCtxPre_of_bytes`, `ownImg_ext_split`.
+## Interface for A (`term_sim_iris`, `stuck_sim_iris`)
 
-## In flight (exact resume point)
-§9 `boot_of_bytes` and `world_of_boundary`, plus `worldPre`/`bootRes` defs (these defs elaborate).
-- Up to the `ihave #Hsh := roOn_mono (Q := …) (P := …) …` line, the proof steps check
-  (tested by truncating before `world_of_boundary`: 2s).
-- With the explicit `roOn_mono` arguments, the FULL file now runs past 5 min. It is not yet
-  known whether the hang is in the rest of `boot_of_bytes` (storeRepr_empty /
-  frameBody_of_frameRepr / storeRepr_allocFrame with `(by rfl)` / heapRes / astSs steps) or
-  in `world_of_boundary` (`iapply (boot_of_bytes (I := ⟨γf, γc⟩) …)`: the unification of
-  `I.frameName` with `γf` may be the culprit). Bisect by truncating with a python script
-  into the scratchpad, as done so far. Do NOT raise heartbeats (Law 1).
-- Lesson: IntoWand does not unfold defs. Give `ownSet_unglue`/`ownSet_iff`/`roOn_mono`
-  explicit set arguments whose syntactic form matches the hypothesis. `set_option
-  autoImplicit false` is on in the file. (Earlier hang: `output` was auto-bound.)
+```lean
+-- VsaIris/Interp/World.lean
+theorem world_of_boundary (b : Boot c p) {G : FrameGeom} (gap : BootGap b G)
+    (ρ : Regime) (hρ : RegimeOK b.top ρ) :
+    ([∗map] k ↦ v ∈ b.bytes G, k ↦ₘ v) ∗ consoleOwn (output c.σ) ⊢
+      |==> ∃ γf γc, (letI : InterpGS GF := ⟨γf, γc⟩; bootRes b ρ)
+```
 
-## Next
-1. Finish §9, then add `VsaIris/Interp/WorldVacuity.lean`: `Boot` at `Control.loaded`
-   (`Vsa/Sim/NativeNameAudit/ControlLoaded`), `BootGap` at the control: blocks
-   (0x81000000,0x38), (0x81000040,0x48), (0x81000100,0xc8) are in-use payloads of
-   `heapChunks`; top_room from heapTop/heapBrk. Then `world_of_boundary` inhabited in both
-   regimes (counted via `Control.costReserve`).
-2. Add a `textOwn_of_roOn` projection (mentioned in the `bootRes` doc).
-3. Import World (+ Vacuity) from `VsaIris.lean`, add `#print axioms` to `Audit.lean`, full build
-   under the lock, record in INTERP_DESIGN.md §5.1 and PROOF_CLOSURE_PLAN.md (the gap below).
-4. Ask the user: add `BootGap` as an `InterpRunReadyFacts` field (like S1's
-   `stack_admissible`), or relax §3's `world` (store blocks ⊆ heap blocks instead of ∈)?
+- `boot_of_loaded : Loaded interpRunLayout p c → Nonempty (Boot c p)`.
+- `Boot.bytes G` is adequacy's `mm`; `Boot.bytes_agree` gives `MemAgree`.
+- `bootRes b ρ` = `worldPre … ρ initSt 0` (heap `heapRes vsaLayoutP vsaRoomB ρ`, store, console,
+  `Stdio.stdioOwn`, `interpCtxPre`) ∗ `frameAt 0 (φf 0)` ∗ `astSs` ∗ `roOn CodeByte m` ∗
+  `roOn shared m` ∗ stack below `spEntry` ∗ `main`'s frame outside `struct Interp` ∗ other statics.
+  `setjmp` (H5) turns `worldPre` into `world`.
+- Heap layout/room are H4's `vsaLayoutP`/`vsaRoomB` (what `IrisHoles.alloc` consumes).
+  `Boot.regime_of_bigStep` gives `RegimeOK b.top (.counted n)` at the derivation's cost;
+  `regimeOK_uncounted` for partial mode.
+- `textOwn_of_roOn`: any `textOwn` a block lemma needs, from `roOn CodeByte m`.
+- `freeStack_carve` splits the stack for `interp_run`'s 176-byte frame; F3's
+  `stackScratch_boundary` + `Boot.fits` carve the rest.
+
+## Vacuity (`VsaIris/Interp/WorldVacuity.lean`)
+`ctlBoot`, `ctl_bootGap`, `ctl_world_counted` (2^20 credits), `ctl_world_uncounted`:
+`world_of_boundary` applies at the control program in both regimes.
 
 ## Findings
-- **Boundary gap (`BootGap`).** `InitialOwned` puts each live extent inside SOME in-use chunk
-  (`HeapAt.live`), but not alone: the global frame's `Env` struct may share a chunk with a
-  binding name, and arrays may share their chunk's tail. §3's `world` needs the store's blocks
-  to be members of the heap's live-block list (whole payloads, user ruling), exclusively
-  owned, so it needs the three chunks distinct and holding no shared byte. Also `BlockHeapAt`'s
-  `top_room` (top + 16 ≤ brk) is not stated by `HeapAt`. Both carried as the named premise
-  `BootGap` of `world_of_boundary`; true at the control. Not yet recorded in
-  PROOF_CLOSURE_PLAN.md (do it at step 3).
+- **`BootGap` (named premise, not derivable from `Loaded`)**: the global frame's three blocks are
+  distinct whole unshared chunk payloads (`FrameChunks`), `top_room`, H4's Q5 page-aligned break and
+  Q5b 32-bit `binblocks`, and Q6 `_impure_data._stderr = &__sf[2]`. Recorded in
+  PROOF_CLOSURE_PLAN.md §2 ("MISSING BOUNDARY FACTS (lane A0)") and INTERP_DESIGN §5.1.
+- **Control snapshot fix**: `Vsa/Sim/OutputAliasSnapshot.lean` zeroed `_impure_data._stdin`/`_stderr`,
+  while the ELF's `.data` holds `&__sf[0]`/`&__sf[2]` (`decide` proved `BootGap.stderr` false at the
+  old control). Added the two ELF words to `snapshotWords`; everything downstream rebuilds green.
+- Kernel hang (previous session): `bootAddrs` was `(List.range (2^32)).filter …`, which the kernel
+  unfolded. It is now sealed behind `Classical.choose`; World.lean checks in ~2 s.
+- After the hub merge `struct Interp` is 480 bytes (jmp_buf 208, `err_msg` @224); VSA's
+  `interp_geom : ObjGeom (inp, 384)` undercounts but is only a geometry bound.
 
-## Holes
-None added.
+## Pending (user)
+Supply `BootGap` as `InterpRunReadyFacts` fields (a statement change like S1's
+`stack_admissible`), or keep it as a premise of the Iris theorems?

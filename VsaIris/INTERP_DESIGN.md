@@ -446,21 +446,44 @@ initSt 0 0 p st' .normal`, which is `BigStep p st'.out`.
 
 ## 5. Assembly (work package A)
 
-### 5.1 The boundary (A0)
+### 5.1 The boundary (A0, landed)
 
-`world_of_boundary : InterpRunReady c a n → ProgramRepr c.σ.mem a n p → ⊢ |==> …`
-allocates the ghost state from the initial memory:
+`VsaIris/Interp/World.lean`:
 
-- the γf/γc maps at `initSt`'s frame 0;
-- the console at `output c.σ`;
-- `isHeapRoom … (capacity p)` for total, or `isHeap` for partial, from
-  `InitialOwned.allocator` + `vsaRoom`;
-- `□ codeImage`, `□ astSs a n p`, `interpCtx 0`, and the top stack region.
+```lean
+theorem world_of_boundary (b : Boot c p) {G : FrameGeom} (gap : BootGap b G)
+    (ρ : Regime) (hρ : RegimeOK b.top ρ) :
+    ([∗map] k ↦ v ∈ b.bytes G, k ↦ₘ v) ∗ consoleOwn (output c.σ) ⊢
+      |==> ∃ γf γc, (letI : InterpGS GF := ⟨γf, γc⟩; bootRes b ρ)
+```
 
-It reuses `blockHeapAt_of_heapAt` and `HeapShape`. This is also the place for
-xv6iris's vacuity check (`durable-notes.md` "Vacuity"): prove the boundary
-bundle is satisfiable at the concrete control program (the `ControlWitness`
-image), not only that it typechecks.
+- `Boot c p` names every witness of `Loaded interpRunLayout p c`
+  (`boot_of_loaded`). `b.bytes G` is the byte map adequacy hands the client
+  (`Boot.bytes_agree`: it agrees with the configuration). Its address list is
+  sealed behind `Classical.choose` so the kernel never unfolds the
+  `2 ^ 32`-element range it is cut from.
+- `bootRes b ρ`: `worldPre` (the allocator `heapRes vsaLayoutP vsaRoomB ρ`,
+  the store `initSt.store` in one frame, the console, `Stdio.stdioOwn`, and
+  `interpCtxPre`: `world` with the `jmp_buf` still exclusive), frame 0's
+  address, `astSs`, `roOn CodeByte` (text and rodata; `textOwn_of_roOn`
+  projects any `textOwn`), `roOn shared`, the stack below `interp_run`'s entry
+  (F3's `stackScratch_boundary` carves from it), `main`'s frame outside
+  `struct Interp` (480 bytes), and the writable statics outside the allocator
+  and newlib.
+- The heap is `vsaLayoutP`/`vsaRoomB`, the layout and room of
+  `IrisHoles.alloc` (H4), not S1's `vsaLayout`/`costRoom`.
+  `RegimeOK top (.counted k)` is `2k + extendSlack ≤ heapEnd - top`;
+  `Boot.regime_of_bigStep` gives it at the derivation's cost from
+  `InitialAllocatorAt.capacity`.
+- `BootGap b G` is the named premise of facts the boundary does not state
+  (the three frame chunks, `top_room`, Q5, Q5b, Q6); `PROOF_CLOSURE_PLAN.md`
+  §2 lists them.
+- `WorldStdio.stdioOK_of_mem`: `StdioOK (memImg m)` from `ConsoleStream m`,
+  `ExitRuntimeData m` and the `stderr` word.
+
+Vacuity (`VsaIris/Interp/WorldVacuity.lean`): `ctlBoot`, `ctl_bootGap`, and
+`ctl_world_counted`/`ctl_world_uncounted` instantiate `world_of_boundary` at
+the control program in both regimes.
 
 ### 5.1b The heap credits: Room ↔ Cost (S1, landed)
 
@@ -864,7 +887,11 @@ interpreter control's dlmalloc heap and stays with H4/A0.
   path's safety is unprovable. `Stdio.StdioOK` requires it
   (`read64 m stderrPtrAddr = some exitStderr`); the supplier is one more
   `ExitRuntimeData` field, read off the same snapshot
-  (`Vsa/Sim/OutputAliasSnapshot.lean`).
+  (`Vsa/Sim/OutputAliasSnapshot.lean`). A0: the ELF's `.data` holds it
+  (`_impure_data` initializes `_stdin`/`_stdout`/`_stderr` to `&__sf[0..2]`).
+  The control snapshot had zeroed `_stdin` and `_stderr`; it now carries the
+  two ELF words, and `world_of_boundary` takes the pointer as
+  `BootGap.stderr`, checked at the control.
 - **Q7 (lane H5, needs the user): the error path's stack at the deepest call.**
   `runtime_error` needs 224 bytes plus `snprintf`'s chain (272 + 592 + 64 =
   928, `IrisHoles.newlib.snprintf` claims 1024). The budget's leaf headroom is

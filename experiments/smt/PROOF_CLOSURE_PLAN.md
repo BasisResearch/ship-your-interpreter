@@ -2791,6 +2791,29 @@ path preserves it: the bits written are `1 << (i / 4)` for `i < 128`. Supplier:
 the boundary, beside the page-aligned break. Affected: `InitialAllocatorAt`,
 A0's `world_of_boundary`, `roomB_of_initial` (which takes it as `hbb`).
 
+MISSING BOUNDARY FACTS (lane A0, machine-checked at the control): the
+boundary world (`VsaIris/Interp/World.lean`, `world_of_boundary`) takes the
+named premise `BootGap b G`. Its fields are not derivable from
+`Loaded interpRunLayout`:
+- `frame : FrameChunks …`: the global frame's `Env` struct, names array and
+  values array are three DISTINCT whole in-use chunk payloads holding no
+  shared byte. `HeapAt.live` puts each live extent inside some in-use chunk,
+  not alone in it, but §3's `world` needs the store's blocks to be members of
+  the heap's block list (`⌜∀ b ∈ B, b ∈ H⌝`). `interp_init` allocates each by
+  its own `malloc`.
+- `top_room : top + 16 ≤ brkv` (`BlockHeapAt.top_room`; dlmalloc keeps the
+  top chunk at least `MINSIZE`).
+- `brk_page`, `binblocks`: the two H4 facts above (`PHeapAt`).
+- `stderr : read64 m 0x8001b550 = some 0x8001bbd8` (`_impure_data._stderr`,
+  INTERP_DESIGN.md Q6): `Stdio.StdioOK` requires it. The ELF's `.data` holds
+  it (`_stdin`/`_stdout`/`_stderr` = `&__sf[0..2]`); the control snapshot
+  zeroed `_stdin` and `_stderr` until `Vsa/Sim/OutputAliasSnapshot.lean` gained
+  the two ELF words (A0).
+Satisfiability: `ctl_bootGap` (`VsaIris/Interp/WorldVacuity.lean`).
+Supplier: new `InterpRunReadyFacts` fields (a statement change like S1's
+`stack_admissible`; the user's decision). Affected: `world_of_boundary`, hence
+A's `term_sim_iris`/`stuck_sim_iris`.
+
 Machine-checked `malloc` paths (`VsaIris`, lane H4): `VsaIris.VsaHeap.malloc_paths`
 (`VsaIris/Vsa/MallocChain.lean`) runs `_malloc_r` from its entry `0x800047a8`
 over the generated `SWP` step table. Proved: the prologue and the ENOMEM return

@@ -75,6 +75,9 @@ import VsaIris.Vsa.StdioRead
 import VsaIris.Vsa.MainErr
 import VsaIris.Vsa.Landing
 import VsaIris.Interp.Abort
+import VsaIris.Interp.WorldStdio
+import VsaIris.Interp.World
+import VsaIris.Interp.WorldVacuity
 import VsaIris.Vsa.AluStep
 import VsaIris.Vsa.RuntimeError
 import VsaIris.Vsa.SegRO

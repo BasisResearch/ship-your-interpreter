@@ -1,6 +1,7 @@
 import VsaIris.Interp.Boundary
 import VsaIris.Interp.Need
-import VsaIris.Vsa.CostRoom
+import VsaIris.Vsa.HeapRoom
+import Vsa.While.CostExists
 import VsaIris.Vsa.Instance
 import Vsa.Sim.LayoutInstance
 import VsaIris.Vsa.Newlib
@@ -165,21 +166,41 @@ theorem vsaFoot_lt {H : List (Nat × Nat)} {a : Nat} (h : vsaFoot H a) : a < 0x8
   · unfold allocGlobal InRange at hg; omega
   · unfold heapEnd at h2; omega
 
-/-- **The Iris heap shape of the boundary memory's image**, read at the
-filled memory. -/
-theorem imgShape_of_blockHeapAt {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
-    {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins) :
-    vsaLayout.Shape (memImg m) H :=
-  ⟨fillMem m 0x88000000, fillMem_imgOn (fun _ ha => vsaFoot_lt ha),
-    ⟨top, brkv, chunks, bins, ⟨h.heap.grow (fun _ _ hb => fillMem_extends hb), h.top_room⟩⟩⟩
+/-- **The page-aligned heap at the filled memory.** `HeapAt` reads only
+present words; the `binblocks` word is one of them (`binblocks_present`), so
+the filled memory reads the same word. -/
+theorem pHeapAt_fill {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
+    (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32) :
+    PHeapAt (fillMem m 0x88000000) H top brkv chunks bins where
+  heap := ⟨h.heap.grow (fun _ _ hb => fillMem_extends hb), h.top_room⟩
+  brk_page := hpage
+  bb_lt := by
+    intro bb hr
+    cases h0 : read64 m binblocksAddr with
+    | none => have := h.heap.binblocks_present; rw [h0] at this; cases this
+    | some bb0 =>
+      have h2 := read64_grow (m' := fillMem m 0x88000000) (fun _ _ hb => fillMem_extends hb) h0
+      rw [hr] at h2
+      obtain rfl := Option.some.inj h2
+      exact hbb _ h0
 
-/-- **The counted regime's capacity of the boundary image**, from a reserve
-at the machine memory. -/
-theorem costRoom_of_reserve {m : Mem} {H : List (Nat × Nat)} {k : Nat} (h : CostReserve m k) :
-    costRoom (memImg m) H k := by
-  obtain ⟨top, t⟩ := h
-  exact ⟨fillMem m 0x88000000, fillMem_imgOn (fun _ ha => vsaFoot_lt ha), top,
-    read64_grow (fun _ _ hb => fillMem_extends hb) t.top_pointer, t.fits⟩
+/-- **The page-aligned Iris heap shape of the boundary memory's image**
+(`vsaLayoutP`, the layout of `IrisHoles.alloc`), read at the filled memory. -/
+theorem pShape_of_blockHeapAt {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
+    (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32) :
+    vsaLayoutP.Shape (memImg m) H :=
+  ⟨fillMem m 0x88000000, top, brkv, chunks, bins, fillMem_imgOn (fun _ ha => vsaFoot_lt ha),
+    pHeapAt_fill h hpage hbb⟩
+
+/-- **The counted regime's capacity of the boundary image** (`vsaRoomB`). -/
+theorem roomB_of_blockHeapAt {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
+    (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32)
+    {k : Nat} (hk : 2 * k + extendSlack ≤ heapEnd - top) : vsaRoomB (memImg m) H k :=
+  ⟨fillMem m 0x88000000, top, brkv, chunks, bins, fillMem_imgOn (fun _ ha => vsaFoot_lt ha),
+    pHeapAt_fill h hpage hbb, hk⟩
 
 /-! ## 3. The boundary data
 
@@ -251,7 +272,7 @@ abbrev H : List (Nat × Nat) := inuseBlocks b.chunks
 
 end Boot
 
-/-! ## 4. The one fact the boundary does not state
+/-! ## 4. The facts the boundary does not state (`BootGap`)
 
 `InitialOwned` places every live extent inside SOME in-use chunk
 (`HeapAt.live`), but not alone in it: the `Env` struct of the global frame
@@ -259,16 +280,16 @@ may, as far as the boundary says, share a chunk with a binding name, and the
 two arrays may share their chunk's tail with other extents. §3's `world`
 needs the store's blocks to be members of the heap's live-block list (whole
 chunk payloads, the user's ruling), exclusively owned, so the three chunks must
-be distinct and hold no shared byte. `interp_init` allocates each by its own
-`malloc` and nothing else into them, so the fact is true of every real
-boundary, and it is checked at the control program
-(`VsaIris/Interp/WorldVacuity.lean`). It is also where `BlockHeapAt`'s
-`top_room` (dlmalloc keeps the top chunk at least `MINSIZE`) enters: the
-boundary's `HeapAt` does not state it.
+be distinct and hold no shared byte (`FrameChunks`). `interp_init` allocates
+each by its own `malloc` and nothing else into them. The other fields:
+`BlockHeapAt.top_room`, H4's page-aligned break and 32-bit `binblocks` word
+(`PHeapAt`, INTERP_DESIGN.md Q5/Q5b), and `_impure_data._stderr`
+(`Stdio.StdioOK`, Q6). All hold at the control program
+(`VsaIris/Interp/WorldVacuity.lean`, `ctl_bootGap`).
 
-Supplier: an `InterpRunReadyFacts` field (a statement change like S1's
+Supplier: `InterpRunReadyFacts` fields (a statement change like S1's
 `stack_admissible`, the user's decision), recorded in
-`experiments/smt/PROOF_CLOSURE_PLAN.md`. -/
+`experiments/smt/PROOF_CLOSURE_PLAN.md` §2. -/
 
 /-- The global frame's geometry against the boundary heap walk. -/
 structure FrameChunks (m : Mem) (chunks : List Chunk) (shared : Nat → Prop) (e : Nat)
@@ -289,9 +310,16 @@ structure FrameChunks (m : Mem) (chunks : List Chunk) (shared : Nat → Prop) (e
   unshared : ∀ k, BlocksCover G.blocks k → ¬ shared k
 
 /-- **The boundary gap** (named premise; see §4 above). -/
-structure BootGap {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) : Prop where
+structure BootGap {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) (G : FrameGeom) :
+    Prop where
+  /-- dlmalloc keeps the top chunk at least `MINSIZE`. -/
   top_room : b.top + 16 ≤ b.brkv
-  frame : ∃ G, FrameChunks c.σ.mem b.chunks b.D.shared b.env G
+  /-- The break is page-aligned (INTERP_DESIGN.md Q5, `PHeapAt.brk_page`). -/
+  brk_page : b.brkv % 4096 = 0
+  /-- `binblocks` fits in 32 bits (INTERP_DESIGN.md Q5b, `PHeapAt.bb_lt`). -/
+  binblocks : ∀ bb, read64 c.σ.mem binblocksAddr = some bb → bb < 2 ^ 32
+  /-- The global frame's three blocks are whole, distinct, unshared chunk payloads. -/
+  frame : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G
   /-- `_impure_data._stderr` points at `__sf[2]` (INTERP_DESIGN.md Q6):
   `Stdio.StdioOK` needs it and `ExitRuntimeData` does not state it. -/
   stderr : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr
@@ -437,7 +465,7 @@ def RoByte (shared : Nat → Prop) (k : Nat) : Prop := shared k ∨ CodeByte k
 
 /-- Every byte the boundary world owns. -/
 def BootByte (shared : Nat → Prop) (G : FrameGeom) (H : List (Nat × Nat)) (k : Nat) : Prop :=
-  RoByte shared k ∨ BlocksCover G.blocks k ∨ heapFoot vsaLayout H k ∨ StackByte k ∨ StaticByte k
+  RoByte shared k ∨ BlocksCover G.blocks k ∨ heapFoot vsaLayoutP H k ∨ StackByte k ∨ StaticByte k
 
 namespace Boot
 
@@ -462,7 +490,7 @@ theorem shared_lt (b : Boot c p) {k : Nat} (hk : b.D.shared k) : k < 2 ^ 32 := b
 /-- Shared arena bytes lie in a live block, so the allocator does not own them. -/
 theorem shared_not_heapFoot (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {k : Nat}
     (hk : b.D.shared k) :
-    ¬ heapFoot vsaLayout b.H k := by
+    ¬ heapFoot vsaLayoutP b.H k := by
   rintro (hg | ⟨hlo, hhi, hout⟩)
   · apply b.shared_not_write hk
     left
@@ -482,7 +510,7 @@ theorem stackSL_hi : stackSL.hi = 0x88000000 := rfl
 theorem spEntry_eq : spEntry = 0x87fffd00 := rfl
 theorem interpObject_eq : interpObject = 0x87fffe10 := rfl
 
-theorem heapFoot_cases {H : List (Nat × Nat)} {k : Nat} (h : heapFoot vsaLayout H k) :
+theorem heapFoot_cases {H : List (Nat × Nat)} {k : Nat} (h : heapFoot vsaLayoutP H k) :
     (0x8001ad10 ≤ k ∧ k < 0x8001ba68 ∧ allocGlobal k) ∨
       (heapStart ≤ k ∧ k < heapEnd ∧ ∀ e ∈ H, ¬ InExt e k) := by
   rcases h with hg | h
@@ -504,7 +532,7 @@ theorem store_arena (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeo
 
 theorem store_not_heapFoot (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
     (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) {k : Nat}
-    (hk : BlocksCover G.blocks k) : ¬ heapFoot vsaLayout b.H k := by
+    (hk : BlocksCover G.blocks k) : ¬ heapFoot vsaLayoutP b.H k := by
   have ha := b.store_arena hroom hG hk
   intro hf
   rcases heapFoot_cases hf with ⟨_, h2, _⟩ | ⟨_, _, hout⟩
@@ -531,7 +559,7 @@ carving peels them). -/
 theorem ro_disj (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
     (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) (k : Nat)
     (hk : RoByte b.D.shared k) :
-    ¬ (BlocksCover G.blocks k ∨ heapFoot vsaLayout b.H k ∨ StackByte k ∨ StaticByte k) := by
+    ¬ (BlocksCover G.blocks k ∨ heapFoot vsaLayoutP b.H k ∨ StackByte k ∨ StaticByte k) := by
   rcases hk with hs | hc
   · have hw := b.shared_not_write hs
     unfold InitialWriteByte at hw
@@ -552,7 +580,7 @@ theorem ro_disj (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
 theorem store_disj (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
     (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) (k : Nat)
     (hk : BlocksCover G.blocks k) :
-    ¬ (heapFoot vsaLayout b.H k ∨ StackByte k ∨ StaticByte k) := by
+    ¬ (heapFoot vsaLayoutP b.H k ∨ StackByte k ∨ StaticByte k) := by
   have ha := b.store_arena hroom hG hk
   unfold heapStart heapEnd at ha
   rintro (hh | hstk | hsta)
@@ -562,7 +590,7 @@ theorem store_disj (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom
 
 end Boot
 
-theorem heap_disj {H : List (Nat × Nat)} (k : Nat) (hk : heapFoot vsaLayout H k) :
+theorem heap_disj {H : List (Nat × Nat)} (k : Nat) (hk : heapFoot vsaLayoutP H k) :
     ¬ (StackByte k ∨ StaticByte k) := by
   rintro (hstk | hsta)
   · unfold StackByte at hstk; rw [stackSL_lo] at hstk
@@ -635,12 +663,13 @@ theorem Boot.bytes_agree {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
 
 /-! ## 8. Regimes
 
-Total mode starts `isHeapRoom` at the cost of the program's derivation
-(S1's `costRoom_of_bigStep`); partial mode starts `isHeap`. -/
+Total mode starts `isHeapRoom vsaLayoutP vsaRoomB` at the cost of the
+program's derivation (`InitialAllocatorAt.capacity`, as H4's
+`roomB_of_initial`); partial mode starts `isHeap vsaLayoutP`. -/
 
-/-- The pure side condition a regime needs at the boundary memory. -/
-def RegimeOK (m : Mem) : Regime → Prop
-  | .counted k => CostReserve m k
+/-- The pure side condition a regime needs at the boundary top chunk. -/
+def RegimeOK (top : Nat) : Regime → Prop
+  | .counted k => 2 * k + extendSlack ≤ heapEnd - top
   | .uncounted => True
 
 /-- **The counted regime's start**: a big-step behaviour has a costed
@@ -648,11 +677,11 @@ derivation whose cost the boundary heap covers. -/
 theorem Boot.regime_of_bigStep {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
     {out : String} (hb : BigStep p out) :
     ∃ st' n, ExecSeqCost initSt 0 0 p st' .normal n ∧ st'.out = out ∧
-      RegimeOK c.σ.mem (.counted n) := by
+      RegimeOK b.top (.counted n) := by
   obtain ⟨st', n, hn, hout⟩ := BigStep.cost hb
-  exact ⟨st', n, hn, hout, b.top, costReserve_of_initial b.alloc b.repr hn⟩
+  exact ⟨st', n, hn, hout, b.alloc.capacity p b.repr st' n hn⟩
 
-theorem regimeOK_uncounted (m : Mem) : RegimeOK m .uncounted := trivial
+theorem regimeOK_uncounted (top : Nat) : RegimeOK top .uncounted := trivial
 
 section Iris
 
@@ -664,8 +693,29 @@ theorem Boot.bytes_own {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
     (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) :
     ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ⊢
       ownImg (GF := GF) (fun k => RoByte b.D.shared k ∨ BlocksCover G.blocks k ∨
-        heapFoot vsaLayout b.H k ∨ StackByte k ∨ StaticByte k) (memImg c.σ.mem) :=
+        heapFoot vsaLayoutP b.H k ∨ StackByte k ∨ StaticByte k) (memImg c.σ.mem) :=
   ownImg_of_memMap (bootAddrs_nodup _ _ _) (mem_bootAddrs fun _ hk => b.bootByte_lt hroom hG hk)
+
+/-- **Text out of a read-only view**: every `textOwn` a block lemma needs is
+a projection of `roOn CodeByte m` (the fixed binary is in the memory). -/
+theorem textOwn_of_roOn {P : Nat → Prop} {m : Mem} :
+    ∀ {text : List (Nat × BitVec 8)}, (∀ q ∈ text, P q.1 ∧ m[q.1]? = some q.2) →
+      roOn (GF := GF) P m ⊢ textOwn text
+  | [], _ => by
+    unfold textOwn
+    iintro _
+    simp only [sepL_nil]
+    iempintro
+  | q :: text, h => by
+    unfold textOwn
+    iintro #H
+    simp only [sepL_cons]
+    isplitl []
+    · iapply roOn_byte (h q (.head _)).1 (h q (.head _)).2 $$ H
+    · have ht := textOwn_of_roOn (P := P) (m := m) (text := text)
+        (fun q' hq' => h q' (.tail _ hq'))
+      unfold textOwn at ht
+      iapply ht $$ H
 
 /-- Cut an owned extent at `k`. -/
 theorem ownImg_ext_split (a n k q r : Nat) (img : Nat → BitVec 8) (hk : k ≤ n)
@@ -683,9 +733,11 @@ theorem ownImg_ext_split (a n k q r : Nat) (img : Nat → BitVec 8) (hk : k ≤ 
 
 /-- **The allocator in either regime**, from its footprint's bytes at the
 boundary image. -/
-theorem heapRes_of_bytes {m : Mem} {H : List (Nat × Nat)} {ρ : Regime}
-    (hshape : vsaLayout.Shape (memImg m) H) (hρ : RegimeOK m ρ) :
-    ownImg (GF := GF) (heapFoot vsaLayout H) (memImg m) ⊢ heapRes vsaLayout costRoom ρ H := by
+theorem heapRes_of_bytes {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
+    (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32)
+    {ρ : Regime} (hρ : RegimeOK top ρ) :
+    ownImg (GF := GF) (heapFoot vsaLayoutP H) (memImg m) ⊢ heapRes vsaLayoutP vsaRoomB ρ H := by
   cases ρ with
   | counted k =>
     unfold heapRes isHeapRoom
@@ -693,14 +745,14 @@ theorem heapRes_of_bytes {m : Mem} {H : List (Nat × Nat)} {ρ : Regime}
     iexists memImg m
     iframe Hb
     ipureintro
-    exact ⟨hshape, costRoom_of_reserve hρ⟩
+    exact ⟨pShape_of_blockHeapAt h hpage hbb, roomB_of_blockHeapAt h hpage hbb hρ⟩
   | uncounted =>
     unfold heapRes isHeap
     iintro Hb
     iexists memImg m
     iframe Hb
     ipureintro
-    exact hshape
+    exact pShape_of_blockHeapAt h hpage hbb
 
 /-- The boundary stack below `interp_run`'s entry, cut where `interp_run`
 spills its 176-byte frame; the rest is what `stackScratch_boundary` carves
@@ -786,7 +838,7 @@ def worldPre [InterpGS GF] (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (i
 * `main`'s frame above `sp` (outside `struct Interp`) and the writable ELF
   statics outside the allocator's globals, both at their boundary values. -/
 def bootRes [InterpGS GF] (b : Boot c p) (ρ : Regime) : IProp GF :=
-  iprop(worldPre b.N vsaLayout costRoom b.inp.toNat ρ initSt 0 ∗
+  iprop(worldPre b.N vsaLayoutP vsaRoomB b.inp.toNat ρ initSt 0 ∗
     frameAt 0 (b.φf 0) ∗ astSs b.stmts b.count p ∗ roOn CodeByte c.σ.mem ∗
     roOn b.D.shared c.σ.mem ∗ blockOwn stackSL.lo (spEntry - stackSL.lo) ∗
     ownImg (CallerByte b.inp.toNat) (memImg c.σ.mem) ∗ ownImg OtherStaticByte (memImg c.σ.mem))
@@ -803,14 +855,14 @@ theorem interp_disj (inp k : Nat) (hk : InterpByte inp k) : ¬ CallerByte inp k 
   fun h => h.2 hk
 
 /-- **The carving, at fixed ghost names.** -/
-theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv)
-    {G : FrameGeom} (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G)
-    (hstd : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr)
-    (ρ : Regime) (hρ : RegimeOK c.σ.mem ρ) :
+theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) {G : FrameGeom} (gap : BootGap b G)
+    (ρ : Regime) (hρ : RegimeOK b.top ρ) :
     ghost_map_auth (GF := GF) I.frameName (DFrac.own 1) (∅ : NatMap Nat) ∗
       ghost_map_auth I.closName (DFrac.own 1) (∅ : NatMap Nat) ∗
       ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ∗ consoleOwn (Vsa.Machine.output c.σ) ⊢
       |==> bootRes b ρ := by
+  have hroom := gap.top_room
+  have hG := gap.frame
   have hout : Vsa.Machine.output c.σ = initSt.out := b.ready.out
   have hg : imgLE (memImg c.σ.mem) b.inp.toNat 8 = G.e := by
     rw [hG.env]; exact readLE_memImg b.ready.globals
@@ -855,13 +907,13 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b
   · iexists b.H, ([] ++ G.blocks)
     iframe Hs Hcon Hi
     isplitl [Hh]
-    · iapply heapRes_of_bytes (imgShape_of_blockHeapAt (b.blockHeapAt hroom)) hρ $$ Hh
+    · iapply heapRes_of_bytes (b.blockHeapAt hroom) gap.brk_page gap.binblocks hρ $$ Hh
     isplitl [Hstd]
     · unfold Stdio.stdioOwn Stdio.stdioAt
       iexists memImg c.σ.mem
       iframe Hstd
       ipureintro
-      exact stdioOK_of_mem b.ready.console b.ready.exit_runtime hstd
+      exact stdioOK_of_mem b.ready.console b.ready.exit_runtime gap.stderr
     · ipureintro
       intro blk hblk
       exact hG.live blk (by simpa using hblk)
@@ -877,17 +929,15 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b
 hands the client (`Boot.bytes`, which agrees with the configuration:
 `Boot.bytes_agree`) and the console cell at the initial output, allocate the
 two `InterpGS` ghost maps and carve the boundary world in regime `ρ`. -/
-theorem world_of_boundary (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
-    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G)
-    (hstd : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr)
-    (ρ : Regime) (hρ : RegimeOK c.σ.mem ρ) :
+theorem world_of_boundary (b : Boot c p) {G : FrameGeom} (gap : BootGap b G)
+    (ρ : Regime) (hρ : RegimeOK b.top ρ) :
     ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ∗ consoleOwn (GF := GF) (Vsa.Machine.output c.σ) ⊢
       |==> ∃ γf γc : GName, (letI : InterpGS GF := ⟨γf, γc⟩; bootRes b ρ) := by
   iintro ⟨Hm, Hcon⟩
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γf, Hf⟩
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γc, Hc⟩
   iexists γf, γc
-  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b hroom hG hstd ρ hρ) $$ [Hf Hc Hm Hcon]
+  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b gap ρ hρ) $$ [Hf Hc Hm Hcon]
   iframe Hf Hc Hm Hcon
 
 end Assembly
@@ -897,7 +947,7 @@ end Assembly
 
 #print axioms Boot.frameBridge
 #print axioms Vsa.Sim.DlHeap.HeapAt.grow
-#print axioms imgShape_of_blockHeapAt
-#print axioms costRoom_of_reserve
+#print axioms pShape_of_blockHeapAt
+#print axioms roomB_of_blockHeapAt
 
 end VsaIris.Interp

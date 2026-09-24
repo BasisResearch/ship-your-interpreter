@@ -11,6 +11,7 @@ import VsaIris.Vsa.RuntimeError
 import VsaIris.Vsa.OomSites
 import VsaIris.Vsa.Setjmp
 import VsaIris.Vsa.TopAbrupt
+import VsaIris.Interp.WorldVacuity
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -110,3 +111,10 @@ import VsaIris.Vsa.TopAbrupt
 #print axioms VsaIris.Newlib.TopAbrupt.topRet_ok
 #print axioms VsaIris.Newlib.TopAbrupt.topBrk_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003e28_ok
+#print axioms VsaIris.Interp.stdioOK_of_mem
+#print axioms VsaIris.Interp.textOwn_of_roOn
+#print axioms VsaIris.Interp.boot_of_bytes
+#print axioms VsaIris.Interp.world_of_boundary
+#print axioms VsaIris.Interp.ctl_bootGap
+#print axioms VsaIris.Interp.ctl_world_counted
+#print axioms VsaIris.Interp.ctl_world_uncounted
