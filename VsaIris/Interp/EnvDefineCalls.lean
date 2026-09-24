@@ -349,6 +349,97 @@ theorem wp_call_reallocNull (NH : ReallocNullHoles) (hlive : AllocLive live)
   iintro %R' %p' %hR' Hpc HR ⟨Hstk, Hres⟩
   iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 
+/-- A `realloc`'s old block: none (`realloc(NULL, _)`) or a live extent. -/
+def obPtr : Option (Nat × Nat) → Nat
+  | none => 0
+  | some b => b.1
+
+def obLen : Option (Nat × Nat) → Nat
+  | none => 0
+  | some b => b.2
+
+/-- The old block's bytes. -/
+def obOwn : Option (Nat × Nat) → (Nat → BitVec 8) → IProp GF
+  | none, _ => iprop(emp)
+  | some b, old => blockOwnAt b.1 b.2 old
+
+/-- `realloc`'s outcome from an optional old block, in regime `ρ`. -/
+def reallocOptRes (ρ : Regime) (H : List (Nat × Nat)) (ob : Option (Nat × Nat)) (nNew : Nat)
+    (old : Nat → BitVec 8) (p' : BitVec 64) : IProp GF :=
+  iprop((⌜p' = 0#64 ∧ ρ = .uncounted⌝ ∗ heapRes vsaLayoutP vsaRoomB ρ (ob.toList ++ H) ∗
+      obOwn ob old) ∨
+    (⌜FreshBlock vsaLayoutP H p'.toNat nNew ∧ p'.toNat % 16 = 0⌝ ∗
+      heapRes vsaLayoutP vsaRoomB ρ ((p'.toNat, nNew) :: H) ∗
+      ∃ v : Nat → BitVec 8, ⌜Copies old v (obPtr ob) p'.toNat (obLen ob)⌝ ∗
+        blockOwnAt p'.toNat nNew v))
+
+omit I in
+/-- **`jal realloc` from an optional old block** (`wp_call_reallocNull` or
+`wp_call_realloc`). -/
+theorem wp_call_reallocOpt (AH : AllocHoles) (NH : ReallocNullHoles) (hlive : AllocLive live)
+    (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF} {i : Nat}
+    {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code reallocEntryBV)
+    (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) (ρ : Regime) (H : List (Nat × Nat))
+    (ob : Option (Nat × Nat)) (nNew : Nat) (old : Nat → BitVec 8) (c : Nat) (hc : vsaChg nNew c)
+    (hn : nNew < 2 ^ 32) {R : Nat → BitVec 64} (h10 : (R 10).toNat = obPtr ob)
+    (h11 : R 11 = BitVec.ofNat 64 nNew) (hsp : SpOKA (R 2)) (hlt : obLen ob < nNew) :
+    instrAt i code ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 i ∗
+      regsOf gprs R ∗ stackScratch (R 2) allocHeadroom ∗
+      heapRes vsaLayoutP vsaRoomB (ρ.plus c) (ob.toList ++ H) ∗ obOwn ob old ∗
+      (∀ (R' : Nat → BitVec 64) (p' : BitVec 64), ⌜R' 10 = p' ∧ R' 1 = BitVec.ofNat 64 (i + 4) ∧
+          ∀ k, k ∉ VsaIris.ra :: 10 :: vsaClob → R' k = R k⌝ -∗
+        VsaIris.PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ regsOf gprs R' -∗
+        stackScratch (R 2) allocHeadroom -∗ reallocOptRes ρ H ob nNew old p' -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  iintro ⟨#Hi, #Hat, #Hgp, Hpc, HR, Hstk, Hh, Hob, Hk⟩
+  have h11n : (R 11).toNat = nNew := by rw [h11, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  cases ob with
+  | none =>
+    have h0 : R 10 = 0#64 := BitVec.eq_of_toNat_eq (by rw [h10]; rfl)
+    iapply wp_call_reallocNull NH hlive Wp hexec hi4 ρ H c (R := R) (by rw [h11n]; exact hc) h0 hsp
+    simp only [Option.toList_none, List.nil_append]
+    iframe Hi Hat Hgp Hpc HR Hstk Hh
+    iintro %R' %p' %hR' Hpc HR Hstk Hres
+    iapply Hk $$ %R' %p' %hR' Hpc HR Hstk
+    unfold mallocRes reallocOptRes
+    rw [h11n]
+    simp only [Option.toList_none, List.nil_append]
+    icases Hres with (⟨%h, Hh⟩ | ⟨%hf, Hh, Hb⟩)
+    · ileft
+      iframe Hh
+      isplitl []
+      · ipureintro; exact h
+      unfold obOwn; iempintro
+    · iright
+      iframe Hh
+      isplitl []
+      · ipureintro; exact hf
+      unfold blockOwn
+      ihave ⟨%v, Hb⟩ := ownSet_fn _ $$ Hb
+      iexists v
+      unfold blockOwnAt
+      iframe Hb
+      ipureintro
+      intro k hk; simp [obLen] at hk
+  | some b =>
+    obtain ⟨bp, bn⟩ := b
+    simp only [obPtr, obLen] at h10 hlt
+    have hb : ((R 10).toNat, bn) = (bp, bn) := by rw [h10]
+    iapply wp_call_realloc AH hlive Wp hexec hi4 ρ H bn nNew old c hc (R := R) h11 hsp hlt
+    iframe Hi Hat Hgp Hpc HR Hstk
+    rw [hb]
+    simp only [Option.toList_some, List.singleton_append]
+    isplitl [Hh]
+    · iexact Hh
+    isplitl [Hob]
+    · unfold obOwn; rw [h10]; iexact Hob
+    iintro %R' %p' %hR' Hpc HR Hstk Hres
+    iapply Hk $$ %R' %p' %hR' Hpc HR Hstk
+    unfold reallocRes reallocOptRes
+    rw [h10]
+    simp only [Option.toList_some, List.singleton_append, obOwn, obPtr, obLen]
+    iexact Hres
+
 end Calls
 
 end VsaIris.Interp
