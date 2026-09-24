@@ -1,6 +1,7 @@
 import VsaIris.Interp.BinArm
 import VsaIris.Interp.ErrArm
 import VsaIris.Interp.ProofValueKindName
+import VsaIris.Interp.ProofArith
 import VsaIris.Interp.Case.BinaryLtIntT
 import VsaIris.Interp.Case.BinaryLeIntT
 import VsaIris.Interp.Case.BinaryGtIntT
