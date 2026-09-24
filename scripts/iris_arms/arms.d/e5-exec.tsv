@@ -7,3 +7,7 @@ ExecCont	exec	8	.cont		.cont	run 0x80004014 ret		execConst ctor=cont a0=2
 ExecExpr	exec	0	.expr e	e:E:v:16	.normal	run 0x80004014 0x80004180; child e 0x80004180; run 0x80004184 ret		execEval1 node=exprNode_of need=execNeed_expr sem=expr tail=epi
 ExecRet	exec	6	.ret (some e)	e:E:v:16	.ret v	run 0x80004014 0x80004134; child e 0x80004134; run 0x80004138 ret		execEval1 node=retNode_of need=execNeed_ret sem=ret tail=ret
 ExecRetNull	exec	6	.ret none		.ret .null	run 0x80004014 0x800042f4; helper valueNull 0x800042f4; run 0x800042f8 ret		execNullRet node=retNullNode_of sem=retNull foff=8 w=16
+ExecIfTrue	exec	3	.ifStmt c t eo	c:E:v:56; t:S:status:0	status	run 0x80004014 0x800041f8; child c 0x800041f8; run 0x800041fc 0x80004218; helper valueTruthy 0x80004218; run 0x8000421c ret		execIfTrue
+ExecIfFalse	exec	3	.ifStmt c t (some e)	c:E:v:56; e:S:status:0	status	run 0x80004014 0x800041f8; child c 0x800041f8; run 0x800041fc 0x80004218; helper valueTruthy 0x80004218; run 0x8000421c ret		execIfFalse
+ExecIfNone	exec	3	.ifStmt c t none	c:E:v:56	.normal	run 0x80004014 0x800041f8; child c 0x800041f8; run 0x800041fc 0x80004218; helper valueTruthy 0x80004218; run 0x8000421c ret		execIfNone
+ExecIf	exec	3	.ifStmt c t eo	c:E:v:56; t:S:status:0	status	run 0x80004014 0x800041f8; child c 0x800041f8; run 0x800041fc 0x80004218; helper valueTruthy 0x80004218; run 0x8000421c ret	kind:0x80004228:0x800042cc	execIfAll

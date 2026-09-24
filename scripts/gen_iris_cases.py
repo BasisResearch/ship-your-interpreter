@@ -263,8 +263,23 @@ def subst_execNullRet(arm: Arm, mode: str) -> dict[str, str]:
             "FOFF": p["foff"], "W": p["w"], "J1": f"{j1:08x}", "J1N": f"{j1 + 4:08x}"}
 
 
+def subst_execIf(arm: Arm, mode: str) -> dict[str, str]:
+    """Families `execIfTrue`/`execIfFalse`/`execIfNone` (total mode, one per
+    `ExecSCost` constructor) and `execIfAll` (partial mode, every outcome):
+    `exec_stmt`'s `if` arm over the hand layer `ExecIf.lean` (its runs are
+    shared by the four cases). Steps: the condition's staging run, `child c`,
+    the copy to `value_truthy`, `helper valueTruthy`, the route to the
+    re-dispatch (`run 0x8000421c ret`: the branch returns through the parent's
+    epilogue)."""
+    kids = [s for s in arm.steps if s.op == "child"]
+    if len(kids) != 1 or int(kids[0].args[1], 0) != 0x800041F8:
+        raise SystemExit(f"{arm.name}: the if families share ExecIf.lean's runs")
+    return {"ARM": arm.name}
+
+
 FAMILIES = {"binInt": subst_binInt, "execConst": subst_execConst, "execEval1": subst_execEval1,
-            "execNullRet": subst_execNullRet}
+            "execNullRet": subst_execNullRet, "execIfTrue": subst_execIf,
+            "execIfFalse": subst_execIf, "execIfNone": subst_execIf, "execIfAll": subst_execIf}
 
 
 def emit(arm: Arm, mode: str) -> str:
