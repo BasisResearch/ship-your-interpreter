@@ -1495,4 +1495,115 @@ theorem free_b2nl {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact ha4)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [ha5]; omega)
 
+/-- The last remainder `p`: bin 1's header links to it. -/
+theorem FB2.lr_links {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64} {p psz : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ d bins x sz hdr0 hnn w p psz 1 [] [] (binAt 1) (binAt 1)) :
+    read64 Mt (binAt 1 + 16) = some p ∧ read64 Mt (binAt 1 + 24) = some p := by
+  have HH := B.heap.heap.heap
+  have hring := (binList_iff_ring.1 (HH.bins_list 1 (by decide) (by unfold numBins; decide))).1
+  rw [B.pv.bin] at hring
+  exact ⟨ring_fd_head hring (f := p) (by simp), ring_bk_head hring (l := p) (by simp)⟩
+
+/-- **The last remainder grows by `x`** (`0x800075ac`): the heap after `p`'s
+header and footer, `p` staying bin 1's only member. -/
+theorem lr_a_done {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64} {p psz : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ d bins x sz hdr0 hnn w p psz 1 [] [] (binAt 1) (binAt 1))
+    (hdin : d.inuse = true) {v3 v4 : BitVec 64} (h3 : v3.toNat = psz + sz + 1)
+    (h4 : v4.toNat = psz + sz) :
+    FDone C (writeLog (writeLog Mt1 [(p + 8, 8, v3)]) [(p + psz + sz, 8, v4)]) := by
+  have G := B.geo
+  have P := B.pv
+  have hpend := P.pend
+  subst hpend
+  obtain ⟨hp16, hplo, hps16, hps32, hs16, hs32, hd16, hd32, hdend, htop, hpp16, hsp16, hpplo, hsplo,
+    hpphi, hsphi, sP, sX, sD, pD, pP, pX, hppf, hspf⟩ := G
+  have hb1 : binAt 1 = 2147593504 := rfl
+  have HH := B.heap.heap.heap
+  have hdm : d ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨p + psz, sz, true⟩ :: d :: cs₃ := by simp
+  obtain ⟨hd0, hd0r, hd0s, hd0l⟩ := walk_header HH.walk d hdm
+  rw [B.daddr] at hd0r
+  have hM1 := B.mem
+  have hno := B.hnoP
+  have HP := B.coal
+  obtain ⟨hfd1, hbk1⟩ := B.lr_links
+  have hwlt : w.toNat < 2 ^ 64 := w.isLt
+  -- the virtual insertion state: the coalesced heap with the footer and the next header
+  have K : FBinCore C (writeLog (writeLog (b2Mem Mt p psz sz hdr0 (binAt 1) (binAt 1))
+      [(p + (psz + sz), 8, BitVec.ofNat 64 (psz + sz))]) [(p + (psz + sz) + 8, 8, w)])
+      (b2Mem Mt p psz sz hdr0 (binAt 1) (binAt 1)) p (psz + sz) C.top0 brkv cs₀ (d :: cs₃)
+      (updBins bins 1 ([] ++ [])) := by
+    refine ⟨HP, Nat.le_refl _, hno, fun h0 hr => ?_, fun d0 hd0 => ?_, by omega,
+      fun w0 hw0 hr0 => ?_, ?_, fun hd hr => ?_⟩
+    · rw [rd_miss (by omega), read64_store_hit] at hr
+      cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
+    · simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hd0; rw [← hd0]; exact hdin
+    · rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+    · rw [rd_miss (by omega), read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · rw [show p + (psz + sz) + 8 = p + psz + sz + 8 by omega, rd_miss (by omega), rd_miss (by omega),
+        rd_miss (by omega), rd_miss (by omega), rd_miss (by omega)] at hr
+      rw [hd0r] at hr; cases hr
+      refine ⟨w.toNat, read64_store_hit _ _ _, by rw [B.wv, hd0s]; unfold chunkSize; omega,
+        by rw [B.wv]; omega, by rw [B.wv]; unfold prevInuse; simp; omega⟩
+  have hPf : ∀ a, p + 8 ≤ a → a < p + (psz + sz) + 8 → vsaFoot C.H a :=
+    fun a h1 h2 => foot_of_chunk HP (by simp) hno h1 h2
+  obtain ⟨bb, hbb⟩ : ∃ bb, read64 Mt binblocksAddr = some bb :=
+    Option.isSome_iff_exists.1 HH.binblocks_present
+  have hA : binblocksAddr = 0x8001ad18 := rfl
+  refine fb_release K (j := 1) (pre' := []) (post' := []) (pred := binAt 1) (succ := binAt 1) (bb' := bb)
+    (by decide) (by unfold numBins; decide) (fun h => absurd h (by decide)) (fun _ => by simp [updBins])
+    (by simp [updBins]) rfl rfl ?_ ?_ ?_ ?_ ?_ (B.heap.bb_lt bb hbb) (fun h => absurd h (by decide)) ?_ ?_ ?_ ?_ ?_
+  · show read64 _ (p + 16) = _
+    rw [rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega)]; exact P.fd
+  · show read64 _ (p + 24) = _
+    rw [rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega)]; exact P.bk
+  · show read64 _ (binAt 1 + 16) = _
+    rw [rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega)]; exact hfd1
+  · show read64 _ (binAt 1 + 24) = _
+    rw [rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega)]; exact hbk1
+  · rw [hA, rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega), ← hA]; exact hbb
+  · intro bb0 hbb0 k hk
+    rw [hA, rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+      rd_miss (by omega), ← hA, hbb] at hbb0
+    cases hbb0; exact hk
+  · intro w0 hw0 hr0
+    unfold RelW at hr0
+    refine agree_of_words (P := fun a => vsaFoot C.H a ∧ ¬ RelW p (psz + sz) (binAt 1) (binAt 1) a)
+      [p + 8, p + psz + 8] (fun w' hw' => ?_) (fun a ha hout => ?_) w0 ⟨hw0, by unfold RelW; exact hr0⟩
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
+      rcases hw' with rfl | rfl
+      · refine ⟨psz + sz + 1, ?_, ?_⟩
+        · rw [rd_miss (by omega), read64_store_hit, h3]
+        · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit,
+            BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+      · refine ⟨hdr0, ?_, ?_⟩
+        · rw [rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega)]; exact B.hdr
+        · rw [rd_miss (by omega), rd_miss (by omega), read64_store_hit, BitVec.toNat_ofNat,
+            Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ B.hdr)]
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq] at hout
+      obtain ⟨ha1, ha2⟩ := ha
+      unfold RelW binblocksAddr avAddr at ha2
+      rw [hM1, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
+        writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+  · intro w0 h1' h2'
+    refine agree_of_words (P := fun a => p + (psz + sz) ≤ a ∧ a < p + (psz + sz) + 16)
+      [p + psz + sz, p + psz + sz + 8] (fun w' hw' => ?_) (fun a ha hout => ?_) w0 ⟨h1', h2'⟩
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
+      rcases hw' with rfl | rfl
+      · refine ⟨psz + sz, ?_, ?_⟩
+        · rw [read64_store_hit, h4]
+        · rw [rd_miss (by omega), show p + (psz + sz) = p + psz + sz by omega, read64_store_hit,
+            BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+      · refine ⟨w.toNat, ?_, ?_⟩
+        · rw [rd_miss (by omega), rd_miss (by omega), hM1, read64_store_hit]
+        · rw [show p + (psz + sz) + 8 = p + psz + sz + 8 by omega, read64_store_hit]
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq] at hout
+      obtain ⟨ha1, ha2⟩ := ha
+      omega
+  · intro a ha
+    exact writeLog_present _ _ _ (writeLog_present _ _ _ (B.pres a ha))
+  · exact frame_store (fun a h1 h2 => .inl (hPf a (by omega) (by omega)))
+      (frame_store (fun a h1 h2 => .inl (hPf a (by omega) (by omega))) B.frameM)
+
 end VsaIris.VsaHeap
