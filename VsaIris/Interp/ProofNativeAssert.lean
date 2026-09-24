@@ -402,6 +402,19 @@ theorem ms_uncarveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64}
   · iapply ms_iff hsl $$ Hms
   · ipureintro; exact fun k hk hn => h1 k ⟨hk, hn⟩
 
+/-- The registers and memory at a `native_assert` `jal runtime_error`:
+`runtime_error(in, line, fmt, x1, 0)` with `sp = s - 80`, the arguments'
+bytes unchanged. -/
+structure NaRtErrAt (R : Nat → BitVec 64) (M Margs : Mem) (inp line fmt x1 s args : BitVec 64)
+    (n : Nat) : Prop where
+  h10 : R 10 = inp
+  h11 : R 11 = line
+  h12 : R 12 = fmt
+  h13 : R 13 = x1
+  h14 : R 14 = 0#64
+  h2 : R 2 = s + 18446744073709551536#64
+  hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k
+
 /-- **`runtime_error` from a `native_assert` run** (`jal` at `i`, `sp = s - 80`):
 it never returns; on abort, H5's resource at `runtime_error`'s stack becomes
 `native_assert`'s: the frame rejoins the stack below `s`, the arguments'
@@ -417,18 +430,17 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (hs1 : 0x87800000 + nativeAssertNeed ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000)
     (hs3 : s.toNat % 16 = 0) (hlen : vs.length = n)
     (hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k)
-    {R : Nat → BitVec 64} {M Margs : Mem}
-    (hR10 : R 10 = inp) (hR11 : R 11 = line) (hR12 : R 12 = fmt) (hR13 : R 13 = x1)
-    (hR14 : R 14 = 0#64) (hR2 : R 2 = s + 18446744073709551536#64)
-    (hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k) :
-    codeRes ∗ binImg ∗ ms (BitVec.ofNat 64 i) R (npF s args n) M ∗
+    {R : Nat → BitVec 64} {M Margs : Mem} :
+    ⌜NaRtErrAt R M Margs inp line fmt x1 s args n⌝ ∗
+      codeRes ∗ binImg ∗ ms (BitVec.ofNat 64 i) R (npF s args n) M ∗
       stackScratch (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
       readable Sro (fun _ => False) rd ∗ jmpRO inp.toNat jb ∗ world N L Room inp.toNat ρ st d ∗
       slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗
       (abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
         valsAt N args.toNat vs -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  iintro ⟨#Hcode, #Himg, Hms, Hst, Hrd, #Hjb, Hw, Hsl, #Hv, Hab⟩
+  iintro ⟨%hR, #Hcode, #Himg, Hms, Hst, Hrd, #Hjb, Hw, Hsl, #Hv, Hab⟩
+  obtain ⟨hR10, hR11, hR12, hR13, hR14, hR2, hargs⟩ := hR
   unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
   have e80 : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
     rw [BitVec.toNat_add]; simp; omega
@@ -482,6 +494,95 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     · iframe HA Hv'
     iapply Hab
     iframe Hsl Hvs Hcore Hst
+
+/-- `native_assert`'s continuation pair (its `fnSpecAbort` post and abort). -/
+abbrev NaK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
+    (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (sret inp args s r : BitVec 64)
+    (vs : List Value) (ρ : Regime) (st : St) (d : Nat) (rv : Nat → BitVec 64) : IProp GF :=
+  iprop((PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
+      (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
+        ⌜∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true⌝ ∗ valAt N sret.toNat .null ∗
+        valsAt N args.toNat vs ∗ world N L Room inp.toNat ρ st d ∗
+        stackAt s nativeAssertNeed) -∗ Wp.W Φ) ∧
+    (abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
+      valsAt N args.toNat vs -∗ Wp.W Φ))
+
+/-- What a `native_assert` run carries. -/
+def NaRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
+    (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (sret inp args s r : BitVec 64)
+    (vs : List Value) (ρ : Regime) (st : St) (d : Nat) (rv : Nat → BitVec 64)
+    (jb : Nat → BitVec 8) (Margs : Mem) : IProp GF :=
+  iprop(codeRes ∗ binImg ∗ slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗
+    jmpRO inp.toNat jb ∗ world N L Room inp.toNat ρ st d ∗
+    stackScratch (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
+    NaK Wp Φ N L Room sret inp args s r vs ρ st d rv)
+
+/-- The shared pure facts of a `native_assert` run. -/
+structure NaCtx (live : Nat → Prop) (sret inp args s line r : BitVec 64) (n : Nat)
+    (rv : Nat → BitVec 64) (jb : Nat → BitVec 8) : Prop where
+  hlive : ∀ p ∈ interpText, live p.1
+  hal : r.toNat % 4 = 0
+  h10 : rv 10 = sret
+  h11 : rv 11 = inp
+  h12 : rv 12 = BitVec.ofNat 64 n
+  h13 : rv 13 = args
+  h14 : rv 14 = line
+  h2 : rv 2 = s
+  hs1 : 0x87800000 + nativeAssertNeed ≤ s.toNat
+  hs2 : s.toNat ≤ 0x88000000
+  hs3 : s.toNat % 16 = 0
+  hg : SlotGeom sret
+  ha : ArgsGeom args n
+  hn : n < 2 ^ 31
+  hinp : RtErr.InpGeom inp
+  hjb : (jbWord inp.toNat jb 0).toNat % 4 = 0
+  hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k
+
+/-- **Wrong argument count**: the arity message through `runtime_error`. -/
+theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
+    {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
+    {d : Nat} {jb : Nat → BitVec 8} {rv : Nat → BitVec 64} {M Margs : Mem}
+    (c : NaCtx live sret inp args s line r n rv jb) (hlen : vs.length = n)
+    (hbad : ¬ (n = 1 ∨ n = 2))
+    (hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k) :
+    NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs ∗
+      ms nativeAssertPC (upd rv 1 r) (npF s args n) M ⊢ Wp.W Φ := by
+  have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
+  unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hoff : ∀ k, k < 80 → (s + 18446744073709551536#64 + BitVec.ofNat 64 k).toNat =
+      s.toNat - 80 + k := by
+    intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := npF s args n) (R := upd rv 1 r) (Mt := M) (pc := nativeAssertPC)
+    (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
+  rotate_left
+  · unfold NaRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine na_bad c.hlive c.h12 c.h2 (by omega) hs2 hs3 hbad c.hn ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  unfold NaRest
+  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
+  ihave #Hrd := readable_rodata $$ Himg
+  ihave Hk := and_elim_r $$ Hk
+  iapply (na_rtErr Wp HN hcl (jalx_80002e90 live (fun p hp => c.hlive _ (interp_code_80002e90 p hp)))
+    interp_code_80002e90 (naArity_fmt (fun a ha => ⟨.inl ha, rfl⟩) 0#64 0#64) c.hinp c.hjb c.hs1 hs2 hs3
+    hlen c.hdfa)
+  iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
+  ipureintro
+  refine ⟨by ix_reg; exact c.h11, by ix_reg; exact c.h14, by ix_reg, by ix_reg, by ix_reg,
+    by ix_reg, fun k hk => ?_⟩
+  have hk' := c.hdfa k
+  simp only [InExt] at hk hk'
+  simp only [hoff 72 (by omega), hoff 64 (by omega), hoff 56 (by omega), hoff 48 (by omega)]
+  simp (disch := omega) only [imgM_store_miss]
+  exact hargs k hk
 
 end Glue
 
