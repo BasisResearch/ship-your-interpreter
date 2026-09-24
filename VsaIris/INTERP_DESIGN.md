@@ -1015,6 +1015,35 @@ binary or by what the proofs consume:
   sides. H2's scripts resolve each side themselves. The two share
   `ixRunCore`.
 
+### STATEMENT CHANGES (E2)
+
+- **An eval error arm carries `errCtx inp` and `ErrEnv`** (`SpecErr.lean`).
+  `runtime_error` needs `binImg` (its `callFrame`, the format strings) and
+  the `jmp_buf`'s aligned `ra` word (`rtErr_spec`'s `hjb`); `evalPre` has
+  neither, and `world` has the `jmp_buf` without the alignment. The partial
+  cases are `evalSpecsP … Core ∗ errCtx inp ⊢ evalSpecP_body …` with
+  `ErrEnv` (NewlibHoles, CodeLive, `InpGeom`, `inp < 2^64`, `CoreOK Core`) a
+  Lean premise. `CoreOK Core`: the landing core absorbs H5's `abortCore` at
+  any region inside the stack segment (`coreOK_top`).
+- **String comparisons take `strcmpOrdSpec`**, the sign class of `strcmp`'s
+  result (`StrcmpSign`). H1's `strcmpSpecV` only says zero iff equal, which
+  does not decide `<`. Supplier: H3's `strcmp` run.
+- **String `+` takes its callee specs over OWNED heap strings**
+  (`SpecConcat.lean`). The two renderings are fresh blocks the arm frees, so
+  `strlen`/`strcpy` cannot read them through the persistent `strAt`:
+  `strlenHeapSpec`/`strcpyHeapSpec` own the string and lend `heapRes` (the
+  word loads read up to seven bytes past the NUL, inside the chunk, which
+  `heapFoot` owns). `stringifySpecT` is `stringifySpec`'s return branch in the
+  counted regime (a total-mode caller cannot discharge `fnSpecAbort`'s abort
+  branch); `stringifySpecP` is `stringifySpec` whose abort also returns the
+  value's slot (an eval arm's abort rebuilds its whole stack). Both cases
+  take `binImg`/`textOwn allocText` (the allocator's code for `malloc`/`free`)
+  and fix `L = vsaLayoutP`, `Room = vsaRoomB` (the layout `stringifySpec` is
+  stated at). `CatDispSupply` is lane E4's `DispSupply`.
+- **The concatenation's cost** is `binOpCost` = `concatCost` = two
+  `stringifyCost` + `catBufCost` (`binOpCost_concat`); `free` keeps the
+  credits (`freeRoomSpec`).
+
 ## 11. Open questions for the user
 
 - **Q5 (lane H4; resolved 2026-09-24: `BootHeapFacts.brk_page`): a page-aligned break at the boundary.** `malloc_extend_top`

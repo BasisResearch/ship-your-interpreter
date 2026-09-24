@@ -341,6 +341,7 @@ E2_TE = {
     "Lb": (["KLv", "kl2", "kl3", "KR3"], "lv"),
     "Ra": (["KL2", "KRv", "kr2", "kr3"], "rv'"),
     "Rb": (["KL2", "KR3"], "(.str y)"),
+    "Lc": (["KLv", "kl2", "kl3", "KRv", "kr3"], "lv"),
 }
 E2_SIDEW = {"lv": ("w0", "rw [hMt3]; e2_fwd hoff; rw [hMt2]; e2_fwd hoff", "htl"),
             "rv'": ("u0", "rw [hMt3]; e2_fwd hoff", "htr"),
@@ -355,6 +356,9 @@ E2_CMP_SPLIT = ("cmpRows",
 E2_DIV_SPLIT = ("divRows", "⟨a, b, rfl, rfl, hb0⟩ | ⟨a, rfl, rfl⟩ | hL | ⟨a, rfl, hR⟩",
                 "int/int with a nonzero divisor; a zero divisor; a non-int left operand; an int "
                 "beside a non-int right operand")
+E2_ADD_SPLIT = ("addRows", "⟨a, b, rfl, rfl⟩ | hcat | ⟨hR3, hL, hL3⟩ | ⟨a, rfl, hR, hR3⟩",
+                "int/int; a string operand; a non-int, non-string left operand beside a non-string; "
+                "an int beside a non-int, non-string")
 E2_INT_SPLIT = ("intRows", "⟨a, b, rfl, rfl⟩ | hL | ⟨a, rfl, hR⟩",
                 "int/int; a non-int left operand; an int beside a non-int right operand")
 
@@ -375,6 +379,13 @@ def e2_cmp_op(op, eL, eR):
 
 
 E2_POPS = {
+    "add": dict(entry=0x80003888, vkn=0x80003d3c, rt=0x80003d5c, name=(0x800193e8, 1), rtload=False,
+                split=E2_ADD_SPLIT,
+                rows=[("ok", "int1", ("BinaryAddIntT", "valueInt", 0x800038d4, "w1 + u1",
+                                      "(w1 + u1).toInt = ((wrap64 (a + b)))",
+                                      "rw [toInt_add_wrap, hw1, hu1]", "(.int ((wrap64 (a + b))))")),
+                      ("cat", "concat", None),
+                      ("eL", "typeErr", ("Lc", 0x80003df8)), ("eR", "typeErr", ("Ra", 0x80003d18))]),
     "sub": dict(entry=0x800038e0, vkn=0x80003b7c, rt=0x80003b9c, name=(0x800196e8, 1), rtload=False,
                 split=E2_INT_SPLIT,
                 rows=[("ok", "int1", ("BinarySubIntT", "valueInt", 0x8000391c, "w1 - u1",
@@ -460,6 +471,7 @@ def subst_binP(arm, mode):
     tok = E2_TOK[op]
     runs, pieces, tree, imports = [], [], [], []
     hyps = ["    (hE : ErrEnv (GF := GF) N L Room inp live Core)\n"]
+    ctx = {}
     for k, (row, kind, spec) in enumerate(d["rows"], start=1):
         if kind == "int1":
             trun, helper, j3, argw, sumeq, sumpf, res = spec
@@ -480,6 +492,19 @@ def subst_binP(arm, mode):
                 "TOK": str(tok), "JSC": f"{E2_STRCMP_JAL:08x}", "JVB": f"{jvb:08x}", "ARGW": argw,
                 "SUMB": bit, "SUMPF": lem}))
             tree.append(f"{arm.name}P_{row}1 [{arm.name}P_{row}2 [{arm.name}P_{row}3]]")
+        elif kind == "concat":
+            imports.append("import VsaIris.Interp.Case.BinaryConcatT\n")
+            hyps.append(E2_CAT_PHYPS)
+            runs.append(E2_CAT_SEG.format(name=f"{arm.name}P_run8z", start=0x80003a94, stop=0x80003e28,
+                                          extra=" (hq : R 10 = 0#64)", facts="hq, "))
+            sub = dict(E2_CAT_SUB, ARM=arm.name, ROW=row, K=str(k), TARM="BinaryConcat", KP=E2_CAT_KP,
+                       RWREAD=E2_CAT_RWREAD)
+            pieces.append(e2_fill("binP_concat.lean", sub))
+            t = f"{arm.name}P_{row}11"
+            for j in range(10, 0, -1):
+                t = f"{arm.name}P_{row}{j} [{t}]"
+            tree.append(t)
+            ctx = E2_CAT_PCTX
         elif kind == "arith":
             trun = f"Binary{op.capitalize()}IntT"
             imports.append(f"import VsaIris.Interp.Case.{trun}\n")
@@ -527,7 +552,8 @@ def subst_binP(arm, mode):
     split = (f"  -- the rows ({doc})\n  rcases {lemma} lv rv' with {pat}\n" + E2_INT_PREP)
     text = e2_fill("binP_prefix.lean", {
         "IMPORTS": "".join(dict.fromkeys(imports)), "ARM": arm.name, "OP": "." + op,
-        "ROWSDOC": doc, "RUNS": "\n".join(runs), "HYPS": "".join(hyps), "SPLIT": split})
+        "ROWSDOC": doc, "RUNS": ("open VsaIris.VsaHeap\n\n" if ctx else "") + "\n".join(runs),
+        "HYPS": "".join(hyps), "SPLIT": split, **ctx})
     text += "\n" + "\n".join(pieces)
     text += (f"\n#ix_tree caseP_{arm.name} := {arm.name}P_p1 [{arm.name}P_p2 [\n  "
              + ",\n  ".join(tree) + "]]\n\nend VsaIris.Interp\n")
@@ -664,6 +690,28 @@ def e2_cat_runs(arm):
     ])
 
 
+# partial mode: the concatenation row of `binP` (`binP_concat`), the allocator's
+# text carried through the prefix's runs
+E2_CAT_KP = ("iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.binary .add l r) st' v⌝ ∗\n"
+             "          evalPost N vsaLayoutP vsaRoomB inp .uncounted st' d (.binary .add l r) v sret s rv) -∗\n"
+             "          (wpW (vsaModel live)).W Φ) ∧\n"
+             "        (abortAt Core s (evalNeed (.binary .add l r) d) ∗ slot24 sret.toNat -∗\n"
+             "          (wpW (vsaModel live)).W Φ))")
+E2_CAT_PHYPS = ("    (hL : L = vsaLayoutP) (hRoom : Room = vsaRoomB) (A : AllocSpecs live)\n"
+                "    (hsgy : ⊢ ∀ p s v st ρ H c o, stringifySpecP (GF := GF) (vsaModel live) N\n"
+                "      (wpW (vsaModel live)) inp p s v st ρ H c o)\n"
+                "    (hsl : ⊢ ∀ q x ρ H, strlenHeapSpec (GF := GF) (vsaModel live) (wpW (vsaModel live)) q x ρ H)\n"
+                "    (hmc : ⊢ memcpySpecOwned (GF := GF) (vsaModel live) (wpW (vsaModel live)))\n"
+                "    (hsc : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (vsaModel live) (wpW (vsaModel live)) d q y ρ H)\n"
+                "    (hvs : ⊢ ∀ p q x, valueStrSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p q x)\n"
+                "    (hd : CatDispSupply (GF := GF) N)\n")
+E2_CAT_PCTX = {"LHSX": " ∗ textOwn (GF := GF) allocText", "INTROX": ", #Hat", "CTXF": " ∗ textOwn allocText",
+               "CTXI": "iframe Hat; ", "CTXD": ", #Hat"}
+E2_CAT_RWREAD = ("rw [ldv_agree (fun j hj => hM4 _ (by simp only [VsaIris.InExt]; omega)\n"
+                 "      (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega))]\n"
+                 "    rw [hMt3]; e2_fwd hoff")
+
+
 def subst_binConcat(arm, mode):
     """Family `binConcat` (total mode): string `+`."""
     if mode != "T":
@@ -687,9 +735,7 @@ def subst_binConcat(arm, mode):
         "LHS": "binImg (GF := GF) ∗ textOwn (GF := GF) allocText ", "INTRO0": "⟨#Hbin, #Hat⟩ ",
         **E2_CAT_CTX})
     sub = dict(E2_CAT_SUB, ARM=arm.name)
-    sub["RWREAD"] = ("rw [ldv_agree (fun j hj => hM4 _ (by simp only [VsaIris.InExt]; omega)\n"
-                     "      (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega))]\n"
-                     "    rw [hMt3]; e2_fwd hoff")
+    sub["RWREAD"] = E2_CAT_RWREAD
     body = e2_fill("binConcat_T.lean", sub)
     pieces = re.findall(rf"#ix_piece ({arm.name}T_p\d+) ", text + body)
     text += body

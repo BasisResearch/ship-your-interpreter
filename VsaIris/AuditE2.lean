@@ -40,3 +40,6 @@ import VsaIris.Interp.CaseE2
 #print axioms VsaIris.Interp.ms_callMemcpyOwned
 #print axioms VsaIris.Interp.ownImg_cat
 #print axioms VsaIris.Interp.concat_route
+#print axioms VsaIris.Interp.caseP_BinaryAdd
+#print axioms VsaIris.Interp.ms_evalOom
+#print axioms VsaIris.Interp.abortAt_of_stringify

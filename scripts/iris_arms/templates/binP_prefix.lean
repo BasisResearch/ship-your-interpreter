@@ -74,11 +74,11 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
           (wpW (vsaModel live)).W Φ) ∧
         (abortAt Core s (evalNeed (.binary {OP} l r) d) ∗ slot24 sret.toNat -∗
           (wpW (vsaModel live)).W Φ)) ∗
-      evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp))
+      evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp{CTXF}))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms; isplitr [IH HE]
     · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
-    · iframe IH; iexact HE
+    · {CTXI}iframe IH; iexact HE
   intro F'
   unfold evalEntryPC
   refine BinaryAddIntT_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
@@ -91,7 +91,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     subst hMt1; constructor <;> (ix_fwd using [hoff]; ix_reg)
   have hA1 : ldv .ld Mt1 (s.toNat - 1088) = aE := by subst hMt1; ix_fwd
   unfold F' evalArmF
-  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH, #HE⟩, Hms⟩
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH, #HE{CTXD}⟩, Hms⟩
   -- the left child, through the Löb hypothesis
   ihave Hl := evalSpecsP_at Core st d env l $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800034f8)
@@ -129,11 +129,11 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
           (wpW (vsaModel live)).W Φ) ∧
         (abortAt Core s (evalNeed (.binary {OP} l r) d) ∗ slot24 sret.toNat -∗
           (wpW (vsaModel live)).W Φ)) ∗
-      evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp ∗ □ valOf N lv w0 w1 w2))
+      evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp ∗ □ valOf N lv w0 w1 w2{CTXF}))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms; isplitr [IH HE Hv1]
     · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
-    · iframe IH HE; iexact Hv1
+    · {CTXI}iframe IH HE; iexact Hv1
   intro F'
   refine BinaryAddIntT_run2 (aE := aE) (inp := BitVec.ofNat 64 inp) (w1 := w1)
     (kL := BitVec.ofNat 64 (w0.toNat % 2 ^ 32)) hlive hsf hs' hs2 hs3 hx1 hx2 hx3
@@ -150,7 +150,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   have hsv2 : EvalSaved Mt2 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
     rw [hMt2]; ix_saved hsv1 using hoff
   unfold F' evalArmF
-  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH, #HE, #Hv1⟩, Hms⟩
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH, #HE, #Hv1{CTXD}⟩, Hms⟩
   -- the right child, through the Löb hypothesis
   ihave Hr := evalSpecsP_at Core st1 d env r $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)

@@ -168,6 +168,20 @@ theorem fresh_arena {H : List (Nat × Nat)} {q n : Nat} (h : FreshBlock vsaLayou
   unfold Vsa.Sim.DlHeap.heapStart at hlo'; unfold Vsa.Sim.DlHeap.heapEnd at hhi'
   exact ⟨hlo', hhi'⟩
 
+/-- String `+` evaluates to the concatenation of the two renderings. -/
+theorem binOpSem_concat {st : Store} {lv rv : Value} (h : valTag lv = 3 ∨ valTag rv = 3) :
+    binOpSem st .add lv rv = some (.str (lv.catDisplay st ++ rv.catDisplay st)) := by
+  cases lv <;> cases rv <;> simp_all [valTag, binOpSem]
+
+/-- The rows of `+`, in the machine's order of tests after the int row: a
+string operand (right, then left); a non-int left operand beside a
+non-string; an int beside a non-int, non-string. -/
+theorem addRows (lv rv : Value) :
+    (∃ a b, lv = .int a ∧ rv = .int b) ∨ (valTag lv = 3 ∨ valTag rv = 3) ∨
+    (valTag rv ≠ 3 ∧ valTag lv ≠ 2 ∧ valTag lv ≠ 3) ∨
+    (∃ a, lv = .int a ∧ valTag rv ≠ 2 ∧ valTag rv ≠ 3) := by
+  cases lv <;> cases rv <;> simp [valTag]
+
 /-- String `+` is charged `concatCost`. -/
 theorem binOpCost_concat {st : Store} {lv rv : Value} (h : valTag lv = 3 ∨ valTag rv = 3) :
     binOpCost st .add lv rv = concatCost st lv rv := by
