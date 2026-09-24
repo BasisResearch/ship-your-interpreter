@@ -28,9 +28,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
     {st : St} {d env : Nat} {l r : Expr}
-{HYPS}    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ∗ errCtx inp ⊢
+{HYPS}    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ∗ errCtx inp{LHSX} ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.binary {OP} l r) by
-  iintro ⟨#IH, #HE⟩
+  iintro ⟨#IH, #HE{INTROX}⟩
   unfold evalSpecP_body fnSpecAbort
   iintro %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre

@@ -161,8 +161,6 @@ theorem udiv_loop2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hF.hal => rw [hR1]; exact hal
     case refine_2.hF.hal => rw [hR1]; exact hal
-    case refine_1.hT hz => exact absurd h3z hz
-    case refine_2.hT hz => exact absurd h3z hz
     case refine_1.hF.hk =>
       rw [hR1]
       have := div_of_inv hd0 (n := n.toNat) (q := (R 10).toNat) (r := (R 11).toNat) hn (by omega)

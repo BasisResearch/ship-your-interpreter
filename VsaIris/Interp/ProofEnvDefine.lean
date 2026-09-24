@@ -5,8 +5,8 @@ import VsaIris.Interp.EnvDefineGrow
 
 `envDefine_spec : textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗
 strlenSpec Wp ∗ memcpySpec Wp ⊢ envDefineSpec Wp N`, for every `MachWP`, in both
-regimes, given H4's proved allocator (`allocSpecs`) and `realloc(NULL, n)`
-(`ReallocNullHoles`).
+regimes, from H4's proved allocator (`allocSpecs`) and `realloc(NULL, n)`
+(`reallocNullHoles_proved`).
 
 The entry opens frame `fa` (`storeRepr_openAt`), runs the prologue and the
 count test, then: an empty frame grows (`def_empty`, `def_grow`); otherwise the
@@ -45,7 +45,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 
 /-- **`env_define`** (`env.c:22`), for every `MachWP`, both regimes. -/
 theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ envText, live p.1)
-    (NH : ReallocNullHoles) (hlive : AllocLive live) (N : NativeAddrs) :
+    (hlive : AllocLive live) (N : NativeAddrs) :
     textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strlenSpec Wp ∗
       memcpySpec Wp ⊢ envDefineSpec Wp N := by
   iintro ⟨#Ht, #Hat, #Hgp, #Hcmp, #Hsl, #Hmc⟩
@@ -172,7 +172,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
         arr := hg.arr }
     rw [defineCost_miss hf hmiss, show growthCost f.vars.length =
       arrayReallocCost (nextCap f.vars.length) by rw [hn0]; rfl]
-    iapply def_grow Wp hl NH hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
+    iapply def_grow Wp hl hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
     iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose
     unfold defK; iexact HK
   · -- the name loop
@@ -229,7 +229,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
               names := by rw [hg.names, hnc]
               arr := hg.arr }
           rw [hgc]
-          iapply def_grow Wp hl NH hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
+          iapply def_grow Wp hl hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
           iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose
           unfold defK; iexact HK
         · exact absurd (hF3.lay.cap_canon.trans hc1) hcn

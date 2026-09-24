@@ -190,6 +190,7 @@ import VsaIris.Interp.EnvSetHit
 import VsaIris.Interp.EnvDefineSpans
 import VsaIris.Interp.CallKs
 import VsaIris.Interp.HeapRealloc
+import VsaIris.Interp.ReallocNullRun
 import VsaIris.Interp.EnvDefineCalls
 import VsaIris.Interp.DefineCost
 import VsaIris.Interp.EnvDefineArms

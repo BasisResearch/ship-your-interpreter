@@ -25,6 +25,7 @@ import VsaIris.Interp.Case.BinaryModIntT
 import VsaIris.Interp.Case.BinaryMulP
 import VsaIris.Interp.Case.BinaryDivP
 import VsaIris.Interp.Case.BinaryModP
+import VsaIris.Interp.Case.BinaryConcatT
 
 /-!
 # Lane E2's cases (the binary operators), in the build

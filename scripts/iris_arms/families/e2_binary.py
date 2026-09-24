@@ -1,6 +1,8 @@
 # Lane E2: the binary operators' case families (INTERP_DESIGN.md §6, §8).
 # Loaded by gen_iris_cases.py (`FAMILIES_EXT`); rows in scripts/iris_arms/arms.d/e2-binary.tsv.
 
+import re
+
 # Operator token the dispatch reads (`binOpTok`, `lexer.h`).
 E2_TOK = {"add": 11, "sub": 12, "mul": 13, "div": 14, "mod": 15, "ne": 17, "eq": 19,
           "lt": 20, "le": 21, "gt": 22, "ge": 23}
@@ -116,6 +118,9 @@ def e2_chain(name, stmt_hdr, facts, stops):
 
 
 def e2_fill(name, subst):
+    # the prefixes' context placeholders are empty unless a family sets them
+    subst = {"LHS": "", "INTRO0": "", "LHSX": "", "INTROX": "", "CTXO": "", "CTXC": "", "CTXI": "",
+             "CTXP": "", "CTXQ": "", "CTXF": "", "CTXD": "", **subst}
     return fill((E2_TEMPLATES / name).read_text(), subst)  # noqa: F821
 
 
@@ -577,3 +582,119 @@ def subst_binArith(arm, mode):
 
 
 FAMILIES_EXT["binArith"] = subst_binArith
+
+
+# ------------------------------------------------------------------ string `+`, total mode
+# `binConcat`: the row where either operand is a string (`interp.c:117-123`).
+# After the dispatch (`concat_route`: the right operand's kind, then the left
+# one's), the tail is eleven calls: `stringify` twice, `strlen` twice,
+# `malloc`, `memcpy`, `strcpy`, `free` twice, `value_str`. Callee specs:
+# `SpecConcat.lean`; the byte facts: `ConcatArm.lean`.
+E2_CAT_SEG = """#ix_seg {name} {{live : Nat → Prop}} (hlive : ∀ p ∈ interpText, live p.1)
+    {{Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}} {{m : Mem}} {{DA : List Nat}} {{Mt : Mem}}
+    {{R : Nat → BitVec 64}} {{s : BitVec 64}}
+    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (h2 : R 2 = s + 18446744073709550528#64){extra} :
+    IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x{start:08x}#64 R Mt
+  by ix_run hlive using [h2, {facts}hsf] at 0x{stop:08x}
+"""
+
+E2_CAT_EPI = """#ix_seg {name} {{live : Nat → Prop}} (hlive : ∀ p ∈ interpText, live p.1)
+    {{Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}} {{m Mt : Mem}} {{R : Nat → BitVec 64}}
+    {{aX s ret v8 v9 v18 v19 v20 v21 : BitVec 64}}
+    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hal : ret.toNat % 4 = 0)
+    (h2 : R 2 = s + 18446744073709550528#64)
+    (hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret)
+    (hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8)
+    (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
+    (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18)
+    (hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19)
+    (hS4 : ldv .ld Mt (s + 18446744073709550528#64 + 1040#64).toNat = v20)
+    (hS5 : ldv .ld Mt (s + 18446744073709550528#64 + 1032#64).toNat = v21) :
+    IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003ad4#64 R Mt
+  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hS4, hS5, hsf, hal]
+"""
+
+# The persistent context the prefix's runs carry (`binImg`, the allocator's text).
+E2_CAT_CTX = {"CTXO": "iprop(", "CTXC": " ∗ binImg ∗ textOwn allocText)", "CTXI": "iframe Hbin Hat; ",
+              "CTXP": "⟨", "CTXQ": ", #Hbin, #Hat⟩", "CTXF": " ∗ binImg ∗ textOwn allocText",
+              "CTXD": ", #Hbin, #Hat"}
+E2_CAT_SUB = {
+    "SP": "(s + 18446744073709550528#64)",
+    "XR": "(strRender st2.store lv)",
+    "YR": "(strRender st2.store rv')",
+    "Q1": "(R4 10)",
+    "Q2": "(R6 10)",
+    "H2": ("(((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::\n"
+           "          ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)"),
+    "XL": "(strRender st2.store lv).toList.length",
+    "YL": "(strRender st2.store rv').toList.length",
+    "Q": "(R12 10)",
+    "SLACK": ("blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))\n"
+              "          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed)"),
+    "RES": "(.str (lv.catDisplay st2.store ++ rv'.catDisplay st2.store))",
+}
+E2_CAT_SUB["H3"] = ("((" + E2_CAT_SUB["Q"] + ".toNat, " + E2_CAT_SUB["XL"] + " + " + E2_CAT_SUB["YL"]
+                    + " + 1) ::\n          " + E2_CAT_SUB["H2"] + ")")
+E2_CAT_SUB["KT"] = ("iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N vsaLayoutP vsaRoomB inp (.counted k) st2 d\n"
+                    "        (.binary .add l r) " + E2_CAT_SUB["RES"] + " sret s rv -∗ (twpW (vsaModel live)).W Φ)")
+
+
+def e2_cat_runs(arm):
+    kf = [E2_KF["KLv"][0], E2_KF["KRv"][0]]
+    hdr = E2_SEG_HDR.format(name="{name}", kvar="kL kR", tok=E2_TOK["add"], kfacts="    " + " ".join(kf))
+    seg = lambda n, a, b, extra="", facts="": E2_CAT_SEG.format(
+        name=f"{arm}T_{n}", start=a, stop=b, extra=extra, facts=facts)
+    return "\n".join([
+        e2_chain(f"{arm}T_run3", hdr, "h8, h2, h9, h19, hop, hKL, hKR, hsf", [0x80003888]),
+        seg("run3b", 0x80003a20, 0x80003a40),
+        seg("run4", 0x80003a44, 0x80003a68),
+        e2_mid_run(f"{arm}T_run5", 0x80003a6c, 0x80003a78),
+        e2_mid_run(f"{arm}T_run6", 0x80003a7c, 0x80003a84),
+        e2_mid_run(f"{arm}T_run7", 0x80003a88, 0x80003a90),
+        seg("run8", 0x80003a94, 0x80003aa8, extra=" (hq : R 10 ≠ 0#64)", facts="hq, "),
+        e2_mid_run(f"{arm}T_run9", 0x80003aac, 0x80003ab4),
+        e2_mid_run(f"{arm}T_run10", 0x80003ab8, 0x80003abc),
+        e2_mid_run(f"{arm}T_run11", 0x80003ac0, 0x80003ac4),
+        e2_mid_run(f"{arm}T_run12", 0x80003ac8, 0x80003ad0),
+        E2_CAT_EPI.format(name=f"{arm}T_run13"),
+    ])
+
+
+def subst_binConcat(arm, mode):
+    """Family `binConcat` (total mode): string `+`."""
+    if mode != "T":
+        raise NotImplementedError
+    hyps = ("    (hL : L = vsaLayoutP) (hRoom : Room = vsaRoomB)\n"
+            "    (hcat : valTag lv = 3 ∨ valTag rv' = 3) (A : AllocSpecs live)\n"
+            "    (hsgy : ⊢ ∀ p s v st k H c o, stringifySpecT (GF := GF) (vsaModel live) N\n"
+            "      (twpW (vsaModel live)) p s v st k H c o)\n"
+            "    (hsl : ⊢ ∀ q x ρ H, strlenHeapSpec (GF := GF) (vsaModel live) (twpW (vsaModel live)) q x ρ H)\n"
+            "    (hmc : ⊢ memcpySpecOwned (GF := GF) (vsaModel live) (twpW (vsaModel live)))\n"
+            "    (hsc : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (vsaModel live) (twpW (vsaModel live)) d q y ρ H)\n"
+            "    (hvs : ⊢ ∀ p q x, valueStrSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) p q x)\n"
+            "    (hd : CatDispSupply (GF := GF) N) :\n")
+    text = e2_fill("binT_prefix.lean", {
+        "IMPORTS": "import VsaIris.Interp.ConcatArm\n", "ARM": arm.name, "FAMILY": "binConcat",
+        "OP": ".add", "ROWDOC": "where either operand is a string (`hcat`)",
+        "RUNS": "open VsaIris.VsaHeap VsaIris.Newlib\n\n" + e2_cat_runs(arm.name),
+        "VARS": "{lv rv' : Value}", "LV": "lv", "RV": "rv'", "RES": E2_CAT_SUB["RES"],
+        "COST": "nl + nr + binOpCost st2.store .add lv rv'", "KTAIL": "k + binOpCost st2.store .add lv rv'",
+        "PREP": "  subst hL hRoom\n  rw [binOpCost_concat hcat]", "HYPS": hyps,
+        "LHS": "binImg (GF := GF) ∗ textOwn (GF := GF) allocText ", "INTRO0": "⟨#Hbin, #Hat⟩ ",
+        **E2_CAT_CTX})
+    sub = dict(E2_CAT_SUB, ARM=arm.name)
+    sub["RWREAD"] = ("rw [ldv_agree (fun j hj => hM4 _ (by simp only [VsaIris.InExt]; omega)\n"
+                     "      (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega))]\n"
+                     "    rw [hMt3]; e2_fwd hoff")
+    body = e2_fill("binConcat_T.lean", sub)
+    pieces = re.findall(rf"#ix_piece ({arm.name}T_p\d+) ", text + body)
+    text += body
+    text += (f"\n#ix_chain caseT_{arm.name} := [{', '.join(pieces)}]\n\nend VsaIris.Interp\n")
+    return text
+
+
+FAMILIES_WHOLE_EXT["binConcat"] = subst_binConcat
