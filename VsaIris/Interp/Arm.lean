@@ -828,6 +828,77 @@ theorem ms_callExecT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
+/-- The Löb hypothesis at one statement. -/
+theorem execSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) :
+    execSpecsP (vsaModel live) N L Room inp Core ⊢
+      ▷ execSpecP_body (vsaModel live) N L Room inp Core st d env sm := by
+  unfold execSpecsP
+  iintro #H
+  inext
+  iapply H
+
+/-- **A child call into `exec_stmt`, partial mode**, through the Löb
+hypothesis. The return branch is `ms_callExecT`'s, with the child's
+derivation. On abort, the arm hands its abort continuation the stack below
+its `sp`, the `ret` slot (the child's, handed back) and its frame bytes. -/
+theorem ms_callExecP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code execEntryPC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {Core : IProp GF} {st : St} {d env : Nat} {sm : Stmt}
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {aS aE aRet s : BitVec 64} {m : Nat}
+    {Kret : IProp GF}
+    (hsg : StackGeom s (execNeed sm d)) (hm : execNeed sm d ≤ m) (hms : m ≤ s.toNat)
+    (hslg : SlotGeom aRet) (hbb : sm.bodiesBound perCallBudget = true) :
+    ⌜ExecRegs R (BitVec.ofNat 64 inp) aS aE aRet s⌝ ∗
+      ▷ execSpecP_body (vsaModel live) N L Room inp Core st d env sm ∗ codeRes ∗
+      □ astSG aS.toNat sm ∗ □ frameAt env aE.toNat ∗
+      ms (BitVec.ofNat 64 i) R S Mt ∗ stackScratch s m ∗ slot24 aRet.toNat ∗
+      world N L Room inp .uncounted st d ∗
+      (Kret ∧ (iprop(abortAt Core s m ∗ slot24 aRet.toNat ∗ ownSet S byteAny) -∗
+        (wpW (vsaModel live)).W Φ)) ∗
+      (∀ (R' : Nat → BitVec 64) (st' : St) (status : Status), ⌜ExecS st d env sm st' status⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status⌝ -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s m -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp .uncounted st' d -∗
+        (Kret ∧ (iprop(abortAt Core s m ∗ slot24 aRet.toNat ∗ ownSet S byteAny) -∗
+          (wpW (vsaModel live)).W Φ)) -∗
+        (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  unfold ms execSpecP_body
+  iintro ⟨%hregs, Hspec, #Hcode, #Hast, #Hfr, ⟨Hpc, Hra, Hregs, HS⟩, Hst, Hslot, Hw, HK, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hms hm $$ Hst
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave Hspec := Hspec $$ %aS %aE %aRet %s %R
+  simp only [wpW_W]
+  iapply wp_callAbort_later hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hregs Hst Hslot Hw]
+  · unfold execPre
+    iframe Hregs Hst Hslot Hw Hcode Hast Hfr
+    ipureintro
+    exact ⟨hal, hregs, hsg, hslg, hbb⟩
+  isplit
+  · iintro Hpc Hra ⟨%st', %status, %hE, Hpost⟩
+    unfold execPost
+    icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    iapply Hk $$ %R' %st' %status %hE %hkeep [Hpc Hra Hregs HS] Hst Hret Hw HK
+    rw [regFile_upd_ra]
+    simp only [upd_same]
+    iframe Hpc Hra Hregs HS
+  · iintro ⟨HA, Hslot⟩
+    unfold abortAt
+    icases HA with ⟨HC, Hst⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    ihave HS := ownSet_forget _ _ $$ HS
+    ihave HK := and_elim_r $$ HK
+    iapply HK
+    iframe HC Hst Hslot HS
+
 /-- **A helper call**, for either WP: at the `jal` at `i` into a helper meeting
 `helperSpec`, the arm hands over the body's registers (the helper's argument
 facts `pins` on them) and `Pre`; it gets back the registers the helper keeps
