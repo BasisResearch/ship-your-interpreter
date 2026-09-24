@@ -301,4 +301,138 @@ end Vals
   by
     ix_run hlive using [h2, hra, hs4, hal]
 
+/-! ## The Iris glue -/
+
+section Glue
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop}
+
+/-- `native_print`'s return continuation (its `helperSpec` post). -/
+abbrev NpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
+    (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64) :
+    IProp GF :=
+  iprop(PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
+    (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
+      (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
+        consoleOwn (o ++ printArgs st vs) ∗ stackAt s nativePrintNeed)) -∗ Wp.W Φ)
+
+/-- The frame of the epilogue run. -/
+def FnpE (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
+    (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64)
+    (Margs : Mem) : IProp GF :=
+  iprop(valsImg N (imgM Margs) args.toNat vs ∗ valAt N sret.toNat .null ∗ stdioOwn ∗
+    consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
+    NpK Wp Φ N sret args s r vs st o rv)
+
+/-- The shared pure facts of a `native_print` run. -/
+structure NpCtx (live : Nat → Prop) (sret args s r : BitVec 64) (n : Nat) (rv : Nat → BitVec 64) :
+    Prop where
+  hlive : ∀ p ∈ interpText, live p.1
+  hal : r.toNat % 4 = 0
+  h10 : rv 10 = sret
+  h12 : rv 12 = BitVec.ofNat 64 n
+  h13 : rv 13 = args
+  h2 : rv 2 = s
+  hs1 : 0x87800000 + nativePrintNeed ≤ s.toNat
+  hs2 : s.toNat ≤ 0x88000000
+  hs3 : s.toNat % 16 = 0
+  hg : SlotGeom sret
+  ha : ArgsGeom args n
+  hn : n < 2 ^ 31
+
+/-- The frame of `native_print` as a stack region below `s`. -/
+theorem npFrame_join {s : BitVec 64} (hs : 80 + printNeed ≤ s.toNat) :
+    stackScratch (GF := GF) (s - 80#64) printNeed ∗
+      ownSet (InExt (s.toNat - 80, 80)) byteAny ⊢ stackScratch s nativePrintNeed := by
+  have h := stackScratch_unframe (GF := GF) (s := s) (f := 80#64) (n := nativePrintNeed)
+    (by unfold nativePrintNeed; omega) (by unfold nativePrintNeed; simp)
+  have e : (s - 80#64).toNat = s.toNat - 80 := toNat_sub_frame (by simp; omega)
+  rw [e, show (80#64 : BitVec 64).toNat = 80 from rfl,
+    show nativePrintNeed - 80 = printNeed by unfold nativePrintNeed; omega] at h
+  unfold blockOwn at h
+  exact h
+
+/-- **`native_print`'s tail**: `value_null`, the epilogue, the return. -/
+theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
+    {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
+    (hvn : ⊢ valueNullSpec (vsaModel live) N Wp sret) (hlen : vs.length = n)
+    {R : Nat → BitVec 64} {M : Mem}
+    (hR10 : R 10 = sret) (hR20 : R 20 = sret) (hR2 : R 2 = s + 18446744073709551536#64)
+    (hkeep : ∀ x ∈ fRegs, x ∉ callerSaved → x ≠ 2 → x ≠ 20 → R x = rv x)
+    (hra : ldv .ld M (s + 18446744073709551536#64 + 72#64).toNat = r)
+    (hs4 : ldv .ld M (s + 18446744073709551536#64 + 32#64).toNat = rv 20)
+    (hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k)
+    (hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k) :
+    codeRes ∗ ms 0x80002f64#64 R (npF s args n) M ∗ slot24 sret.toNat ∗
+      valsImg N (imgM Margs) args.toNat vs ∗ stdioOwn ∗ consoleOwn (o ++ printArgs st vs) ∗
+      stackScratch (s - 80#64) printNeed ∗ NpK Wp Φ N sret args s r vs st o rv ⊢ Wp.W Φ := by
+  iintro ⟨#Hcode, Hms, Hsl, #Hv, Hstd, Hcon, Hst, Hk⟩
+  ihave #Hvn := hvn
+  unfold valueNullSpec
+  iapply ms_callHelper Wp (i := 0x80002f64)
+    (jalx_80002f64 live (fun p hp => c.hlive _ (interp_code_80002f64 p hp))) interp_code_80002f64
+    (by decide) (clob := []) (pins := fun rv => rv 10 = sret)
+    (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝)) (Post := fun _ => valAt N sret.toNat .null)
+  isplitl []
+  · ipureintro; exact hR10
+  isplitl []
+  · iexact Hvn
+  iframe Hcode Hms
+  isplitl [Hsl]
+  · iframe Hsl; ipureintro; exact c.hg
+  iintro %R' %hk' Hnull Hms
+  have hR' : ∀ x ∈ fRegs, R' x = R x := fun x hx => hk' x hx (by simp)
+  iapply wp_swpF Wp (S := npF s args n) (F := FnpE Wp Φ N sret args s r vs st o rv Margs)
+  rotate_left
+  · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+      unfold codeRes; simp [dataOf]
+    rw [hro]
+    unfold FnpE
+    iframe Hcode Hv Hnull Hstd Hcon Hst Hk Hms
+  intro F'
+  have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
+  unfold nativePrintNeed printNeed fprintfNeed at hs1
+  refine np_epi c.hlive (by ix_reg; rw [hR' 2 (by decide), hR2]) (by omega) hs2 hs3 c.hal hra hs4 ?_
+  apply swp_closeF
+  dsimp only [F']
+  unfold FnpE
+  iintro ⟨⟨#Hv, Hnull, Hstd, Hcon, Hst, Hk⟩, Hms⟩
+  unfold ms
+  icases Hms with ⟨Hpc, Hra, Hregs, HS⟩
+  ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M hdfa $$ HS
+  ihave HF := ownSet_forget _ _ $$ HF
+  ihave Hst := npFrame_join (s := s) (by unfold printNeed fprintfNeed; omega) $$ [Hst HF]
+  · iframe Hst HF
+  subst hlen
+  ihave #Hv' := valsImg_agree N vs args.toNat (fun k hk => (hargs k hk).symm) $$ Hv
+  ihave Hvs := valsAt_of_tracked N M vs args.toNat $$ [HA Hv']
+  · iframe HA Hv'
+  ihave Hra := ptsto_eq (show _ = r by ix_reg) $$ Hra
+  iapply Hk $$ Hpc Hra
+  iexists _
+  iframe Hregs Hnull Hvs Hstd Hcon
+  isplitr
+  · ipureintro
+    intro x hx hc
+    have h1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+    have h10 : x ≠ 10 := fun e => by subst e; exact hc (by decide)
+    by_cases h2 : x = 2
+    · subst h2; ix_reg
+      rw [BitVec.add_assoc, show (18446744073709551536#64 : BitVec 64) + 80#64 = 0#64 by decide,
+        BitVec.add_zero, c.h2]
+    · by_cases h20 : x = 20
+      · subst h20; ix_reg
+      · simp only [upd, h1, h10, h2, h20, ite_false]
+        rw [hR' x hx]; exact hkeep x hx hc h2 h20
+  · unfold stackAt
+    iframe Hst
+    ipureintro
+    exact ⟨by unfold nativePrintNeed printNeed fprintfNeed; omega,
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativePrintNeed printNeed fprintfNeed; omega,
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+
+end Glue
+
 end VsaIris.Interp
