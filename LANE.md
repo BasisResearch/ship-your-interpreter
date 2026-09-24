@@ -100,6 +100,17 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
   `evalFrame_join`, `roOwn_data`, `BinNode`, `evalCallGeom`, `evalSP_off`,
   the seam invariant `EvalSaved` (+ `ix_saved`), `ix_reg`/`ix_keep`/`ix_fwd`.
 
+- `exec_stmt`'s statement (SpecEval): `ExecRegs`, `astSG`, `statusRet`,
+  `execPre`/`execPost`, `execSpecT_body`, `execSpecP_body`, `execSpecsP`; the
+  exec call steps `ms_callExecT`/`ms_callExecP` (the `ret` slot passes through).
+- **`seqLoop`, block site, both modes** (`Interp/SeqLoop.lean`): the loop is
+  the recursor motive of `ExecSeqCost` in total mode (`blockSeqT_body`, cases
+  `blockSeqT_consNormal`/`_consAbrupt`/`_nil`) and a structural motive in
+  partial mode (`blockSeqP_body`, `blockSeqP_all`); loop-head invariant
+  `BlockHead`, node/array facts `BlockNode`, frame invariant `Inv` preserved by
+  the index spill. Runs `BlockLoop_runA`/`_runB` (`ix_run` explores undecided
+  branches: the back edge's three outcomes are three hypotheses).
+
 ## Recipe for a new family (E lanes)
 1. Write the runs as `#ix_seg` lemmas with the facts they need as binders
    (register pins, data-view reads from the node facts, frame reads); iterate
@@ -115,8 +126,13 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
   type-error rows' starting point (`#ix_piece … from BinaryAddIntP_p2 at 2`);
   their families (and `*` through `__muldi3`, `/`, `%`) are E-lane work on
   this layer. `runtime_error`'s spec is H5's; a stub is not in the tree.
-- `exec_stmt`'s spec statement (`execSpecT/P_body`) beside `evalSpec*` in
-  SpecEval, and `seqLoop` for the three statement-sequence sites.
+- `seqLoop` at the other two sites, same recipe as the block site: the
+  closure body in the call arm (`0x80003354`..`0x80003378`: index in `s0`, the
+  body node spilled at `sp+0`, the result slot `sp+144`, exits to
+  `0x80003954` normal / `0x8000337c` abrupt with the call-depth decrement and
+  brk/cont/ret routing) and `interp_run`'s loop (`0x8000448c`..`0x80004488`:
+  a cursor `s0` to the bound `s2`, `value_null` before each statement, status
+  routing to `0x80004540`/`0x80004564`).
 
 ## Holes
 None added. `python3 scripts/check_iris_holes.py` passes.
