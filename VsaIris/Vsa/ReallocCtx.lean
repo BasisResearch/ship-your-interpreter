@@ -1,5 +1,6 @@
 import VsaIris.Vsa.FreeRunAll
 import VsaIris.Vsa.AllocSltu
+import VsaIris.Vsa.HeapRealloc
 
 /-!
 # The context of a `_realloc_r` run
@@ -50,8 +51,12 @@ structure RNull (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) : Prop wh
   data : ∀ k, k < B.nOld → Mt[B.p + k]? = some (B.old (B.p + k))
   starved : Starved C.top0 C.n.toNat
 
-/-- The obligations of a `_realloc_r` call context. -/
+/-- The obligations of a `_realloc_r` call context. Its nested `_malloc_r` and
+`_free_r` calls run 64 bytes down, so the caller's whole scratch window is
+owned (`spA`, `deep`). -/
 structure ROK (C : MCtx) (B : RB) : Prop extends WOK C where
+  spA : SpOKA C.s
+  deep : ∀ a, C.s.toNat - allocHeadroom ≤ a → a < C.s.toNat → C.S a
   ok : ∀ R Mt, RRet C B R Mt → AW C.live C.S C.Q C.r R Mt
   null : ∀ R Mt, RNull C B R Mt → AW C.live C.S C.Q C.r R Mt
 
@@ -116,6 +121,7 @@ structure RHeap (C : MCtx) (B : RB) (Mt : Mem) (brkv : Nat) (chunks : List Chunk
   starts : Starts ((B.p, B.nOld) :: C.H)
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
+  disjD : ∀ a, C.s.toNat - allocHeadroom ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
   blk : ∀ k, k < B.nOld → vsaFoot C.H (B.p + k)
   data : ∀ k, k < B.nOld → Mt[B.p + k]? = some (B.old (B.p + k))
@@ -134,6 +140,7 @@ theorem RHeap.store_stack {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : 
   starts := Hp.starts
   pres := pres_store Hp.pres
   disj := Hp.disj
+  disjD := Hp.disjD
   frame := frame_store (win_stack h1 h2) Hp.frame
   blk := Hp.blk
   data := fun k hk => by
@@ -155,6 +162,7 @@ theorem RHeap.store_errno {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : 
   starts := Hp.starts
   pres := pres_store Hp.pres
   disj := Hp.disj
+  disjD := Hp.disjD
   frame := frame_store (fun b h1 h2 => .inl (.inl (.inr (.inl ⟨h1, h2⟩)))) Hp.frame
   blk := Hp.blk
   data := fun k hk => by

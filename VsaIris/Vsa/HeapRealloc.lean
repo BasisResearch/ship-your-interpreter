@@ -482,4 +482,46 @@ theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact ⟨c, hin_new c h3, hu, h1, h2⟩
     · exact ⟨_, hXm, rfl, h1, by simp only at h2 ⊢; omega⟩
 
+/-- **A live block is fresh among the others.** A block at the payload start
+of its in-use chunk, starting where no other live block does, lies in the
+arena and is disjoint from every other live extent. -/
+theorem PHeapAt.fresh_of_block {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} {q n : Nat}
+    (h : PHeapAt m ((q, n) :: H) top brkv chunks bins) (hst : Starts ((q, n) :: H)) :
+    FreshAt H q n := by
+  have HH := h.heap.heap
+  have hbrk := HH.brk_le
+  have htle := HH.top_le
+  have hroom := h.heap.top_room
+  obtain ⟨c, hc, hu, hca, hcn⟩ := HH.exact (q, n) List.mem_cons_self List.mem_cons_self
+  simp only at hca hcn
+  have hb := HH.walk.chunk_bounds c hc
+  unfold Starts at hst
+  rw [List.map_cons, List.nodup_cons] at hst
+  have hne : ∀ e ∈ H, e.1 ≠ q := fun e he heq => hst.1 (List.mem_map.2 ⟨e, he, heq⟩)
+  refine ⟨⟨?_, ?_, ?_, fun e he a ha hea => ?_⟩, hne⟩
+  · unfold heapStart at hb; omega
+  · show heapStart ≤ _; omega
+  · show _ ≤ heapEnd; omega
+  · obtain ⟨c1, hc1, hu1, h1, h2⟩ := HH.exact e (List.mem_cons_of_mem _ he) (List.mem_cons_of_mem _ he)
+    unfold InExt at ha hea
+    simp only at ha
+    have hb1 := HH.walk.chunk_bounds c1 hc1
+    rcases HH.walk.chunk_sep c hc c1 hc1 with rfl | h3 | h3
+    · exact hne e he (by omega)
+    · omega
+    · omega
+
+/-- The bytes of a live block other than those listed are footprint. -/
+theorem PHeapAt.block_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} {q n : Nat}
+    (h : PHeapAt m ((q, n) :: H) top brkv chunks bins) (hst : Starts ((q, n) :: H)) :
+    ∀ k, k < n → vsaFoot H (q + k) := by
+  have F := h.fresh_of_block hst
+  obtain ⟨_, hlo, hhi, hdj⟩ := F.block
+  intro k hk
+  exact .inr ⟨by show heapStart ≤ _; exact Nat.le_trans hlo (Nat.le_add_right _ _),
+    by show _ < heapEnd; exact Nat.lt_of_lt_of_le (by omega) hhi,
+    fun e he hin => hdj e he (q + k) ⟨by simp only; omega, by simp only; omega⟩ hin⟩
+
 end VsaIris.VsaHeap
