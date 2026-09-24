@@ -149,7 +149,7 @@ theorem vp_null (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     · ix_reg; rfl
     · ix_reg; rfl
     · ix_reg; rw [str_null]; rfl
-    · simp [upd, h11]
+    · simp [upd]
     · omega
   case hX =>
     iintro ⟨-, -, -, #Hi⟩
@@ -177,7 +177,7 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   have hg1 := c.hg.al; have hg2 := c.hg.lo; have hg3 := c.hg.hi
   unfold VpGoal valuePrintPC
   cases b
-  · simp only [cond_false] at hb
+  · simp only [Bool.cond_false] at hb
     ix_run c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019010 "false") (frag := "false")
       (H.fputs live Wp 0x80019010#64 s _ "false" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
@@ -193,7 +193,7 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     case hX =>
       iintro ⟨-, -, -, #Hi⟩
       iapply strAt_rodata (by rw [str_false]; decide) (by unfold CStrImg; rw [str_false]; decide) $$ Hi
-  · simp only [cond_true] at hb
+  · simp only [Bool.cond_true] at hb
     ix_run c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019008 "true") (frag := "true")
       (H.fputs live Wp 0x80019008#64 s _ "true" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
@@ -233,7 +233,7 @@ theorem vp_int (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
     intro i h
     simp only [List.length_cons, List.length_nil] at h
     rcases i with _ | _ | _ | i
-    · simp [upd, h11]
+    · simp [upd]
     · ix_reg; rfl
     · ix_reg; rfl
     · omega
@@ -291,7 +291,7 @@ theorem vp_native (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     intro i h
     simp only [List.length_cons, List.length_nil] at h
     rcases i with _ | _ | _ | i
-    · simp [upd, h11]
+    · simp [upd]
     · ix_reg; rfl
     · ix_reg; rfl
     · omega
@@ -356,7 +356,7 @@ theorem vp_clo_anon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
     · ix_reg; rfl
     · ix_reg; rfl
     · ix_reg; rw [str_fn]; rfl
-    · simp [upd, h11]
+    · simp [upd]
     · omega
   case hX =>
     iintro ⟨-, -, -, #Hi⟩
@@ -396,7 +396,7 @@ theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     intro i h
     simp only [List.length_cons, List.length_nil] at h
     rcases i with _ | _ | _ | i
-    · simp [upd, h11]
+    · simp [upd]
     · ix_reg; rfl
     · ix_reg; rfl
     · omega
@@ -409,6 +409,230 @@ theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     · ipureintro; exact ⟨rfl, rfl⟩
     rw [show (BitVec.ofNat 64 nm).toNat = nm by simp; omega]
     iapply hE $$ HE
+
+omit I in
+/-- A read-only image and a read-only view agree where both own a byte. -/
+theorem roImg_roOn_agree {S P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem} :
+    roImg (GF := GF) S img ∗ roOn P m ⊢ ⌜∀ a b, S a → P a → m[a]? = some b → img a = b⌝ := by
+  iintro ⟨#H1, #H2⟩
+  iintro %a %b %hs %hp %hm
+  unfold roImg roOn
+  ihave #Ha := H1 $$ %a %hs
+  ihave #Hb := H2 $$ %a %b %hp %hm
+  iapply memRO_agree a (img a) b $$ [Ha Hb]
+  iframe Ha Hb
+
+omit I in
+/-- **The closure arm's data view** from the closure object and the `EX_FN`
+node's view: a memory `Dt` agreeing with each on its bytes. -/
+theorem roOwn_clod {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {cp q : Nat}
+    (hP : ∀ k, q + 8 ≤ k → k < q + 16 → P k ∧ (m[k]?).isSome) :
+    codeRes (GF := GF) ∗ roImg (InExt (cp, 16)) img ∗ roOn P m ⊢
+      ∃ Dt : Mem, roOwn roR (interpText ++ dataOf Dt (clodA cp q)) ∗
+        ⌜(∀ k, cp ≤ k → k < cp + 8 → imgM Dt k = img k) ∧
+          ∀ k, q + 8 ≤ k → k < q + 16 → m[k]? = some (imgM Dt k)⌝ := by
+  classical
+  iintro ⟨#Hc, #H1, #H2⟩
+  ihave %hag := roImg_roOn_agree $$ [H1 H2]
+  · iframe H1 H2
+  let f : Nat → BitVec 8 := fun k => if cp ≤ k ∧ k < cp + 16 then img k else (m[k]?).getD 0
+  obtain ⟨Dt, hDt⟩ := exists_mem_img f (clodA cp q)
+  have hc : ∀ k, cp ≤ k → k < cp + 8 → imgM Dt k = img k := fun k h1 h2 => by
+    rw [hDt k (List.mem_append_left _ (mem_accAddrs_iff.2 ⟨h1, h2⟩))]
+    simp [f, h1, show k < cp + 16 by omega]
+  have hn : ∀ k, q + 8 ≤ k → k < q + 16 → m[k]? = some (imgM Dt k) := fun k h1 h2 => by
+    rw [hDt k (List.mem_append_right _ (mem_accAddrs_iff.2 ⟨h1, h2⟩))]
+    obtain ⟨hPk, hsome⟩ := hP k h1 h2
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 hsome
+    by_cases hin : cp ≤ k ∧ k < cp + 16
+    · simp only [f, hin]; rw [hb, hag k b (by simp [InExt]; omega) hPk hb]; simp
+    · simp only [f, hin, ite_false]; rw [hb]; rfl
+  iexists Dt
+  isplitl
+  · unfold codeRes roOwn at *
+    icases Hc with ⟨#Hgp, #Htx⟩
+    iframe Hgp
+    iapply (sepL_append _ _ _).2
+    iframe Htx
+    unfold dataOf
+    rw [sepL_map]
+    iapply (sepL_append _ _ _).2
+    isplitl
+    · iapply sepL_of_persistent (roImg (InExt (cp, 16)) img) _ _ (fun k hk => by
+        obtain ⟨h1, h2⟩ := mem_accAddrs_iff.1 hk
+        rw [hc k h1 h2]
+        unfold roImg
+        iintro #H
+        iapply H $$ %k %(show InExt (cp, 16) k by simp [InExt]; omega)) $$ H1
+    · iapply sepL_of_persistent (roOn P m) _ _ (fun k hk => by
+        obtain ⟨h1, h2⟩ := mem_accAddrs_iff.1 hk
+        unfold roOn
+        iintro #H
+        iapply H $$ %k %(imgM Dt k) %(hP k h1 h2).1 %(hn k h1 h2)) $$ H2
+  · ipureintro; exact ⟨hc, hn⟩
+
+/-- An unsigned word load of a slot's kind. -/
+theorem ldv_lwu_kind {Mt : Mem} {a k : Nat} (h : (imgW (imgM Mt) a).toNat % 2 ^ 32 = k) :
+    ldv .lwu Mt a = BitVec.ofNat 64 k :=
+  ldvf_lwu_imgLE (by rw [← imgW_lo32]; exact h)
+
+/-- **The run of `value_print`** for every value but a closure. -/
+theorem vp_run (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {p s r : BitVec 64} {v : Value} {st : Store} {o : String}
+    {rv : Nat → BitVec 64} {Ma : Mem} (H : OutHoles) (c : VpCtx live p s r rv Ma Ma)
+    (hp : ValPure N v (imgW (imgM Ma) p.toNat) (imgW (imgM Ma) (p.toNat + 8))
+      (imgW (imgM Ma) (p.toNat + 16)))
+    (hnc : ∀ ca, v ≠ .closure ca) : VpGoal Wp Φ N p s r v st o rv Ma Ma := by
+  have hk := ldv_lw_kind (Mt := Ma) hp.kind (by cases v <;> simp [kindTag])
+  have hku := ldv_lwu_kind (Mt := Ma) hp.kind
+  have hg3 := c.hg.hi
+  cases v with
+  | null => exact vp_null Wp H c hk hku
+  | bool b =>
+    refine vp_bool Wp H c hk hku ?_
+    have e8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
+    refine ldv_lw_kind (k := cond b 1 0) ?_ (by cases b <;> decide)
+    rw [e8]; exact hp.2
+  | int n => exact vp_int Wp H c hk hku hp.2
+  | str x => exact vp_str Wp H c hk hku
+  | closure ca => exact absurd rfl (hnc ca)
+  | native f => exact vp_native Wp H c hk hku
+
+/-- The name field of an `EX_FN` node. -/
+theorem fnName_facts {m : Mem} {P : Nat → Prop} {q : Nat} {name : Option String} {ps : List String}
+    {ss : List Stmt} (h : ExprReprWithin m P q (.fn name ps ss)) :
+    ∃ w, read64 m (q + 8) = some w ∧ Covers P (q + 8) 8 ∧
+      ((name = none ∧ w = 0) ∨ ∃ x, name = some x ∧ w ≠ 0 ∧ CStringWithin m P w x) := by
+  cases h with
+  | fnNamed _ _ hr hc hne hs => exact ⟨_, hr, hc, .inr ⟨_, rfl, hne, hs⟩⟩
+  | fnAnon _ _ hr hc => exact ⟨_, hr, hc, .inl ⟨rfl, rfl⟩⟩
+
+/-- `read64`'s value is a 64-bit word. -/
+theorem read64_lt {m : Mem} {a w : Nat} (h : read64 m a = some w) : w < 2 ^ 64 := by
+  have := readLE_memImg h
+  have := imgLE_lt (memImg m) a 8
+  omega
+
+/-- A closure value's payload is its closure's address. -/
+theorem valImg_clos {N : NativeAddrs} {f : Nat → BitVec 8} {a ca : Nat} :
+    valImg (GF := GF) N f a (.closure ca) ⊢ closAt ca (imgW f (a + 8)).toNat := by
+  unfold valImg valOf
+  iintro ⟨-, #H⟩
+  iexact H
+
+/-- A closure's display resources, opened. -/
+theorem dispRes_clos {st : Store} {ca : Nat} :
+    dispRes (GF := GF) st (.closure ca) ⊢ ∃ (cd : ClosureData) (p q : Nat) (img : Nat → BitVec 8)
+      (P : Nat → Prop) (m : Mem), ⌜st.closures[ca]? = some cd ∧ imgLE img p 8 = q ∧
+        (∀ k, InExt (p, 16) k → ReadOK k) ∧ ExprReprWithin m P q (.fn cd.name cd.params cd.body) ∧
+        (∀ k, P k → ReadOK k)⌝ ∗
+      closAt ca p ∗ roImg (InExt (p, 16)) img ∗ roOn P m := by
+  unfold dispRes; exact .rfl
+
+/-- The continuation `value_print`'s frame hands its caller. -/
+abbrev VpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
+    (p s r : BitVec 64) (v : Value) (st : Store) (o : String) (rv : Nat → BitVec 64) : IProp GF :=
+  iprop(PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
+    (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
+      (valAt N p.toNat v ∗ stdioOwn ∗ consoleOwn (o ++ v.display st) ∗ stackAt s printNeed)) -∗
+    Wp.W Φ)
+
+/-- **`value_print` on a closure**: the data view from `dispRes`, then the
+named or anonymous arm. -/
+theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {p s r : BitVec 64} {ca : Nat} {st : Store} {o : String}
+    {rv : Nat → BitVec 64} {Ma : Mem} (H : OutHoles) (c : VpCtx live p s r rv Ma Ma)
+    (hp : ValPure N (.closure ca) (imgW (imgM Ma) p.toNat) (imgW (imgM Ma) (p.toNat + 8))
+      (imgW (imgM Ma) (p.toNat + 16))) :
+    codeRes ∗ valImg N (imgM Ma) p.toNat (.closure ca) ∗ dispRes st (.closure ca) ∗ binImg ∗
+      stdioOwn ∗ consoleOwn o ∗ stackScratch s printNeed ∗ VpK Wp Φ N p s r (.closure ca) st o rv ∗
+      ms valuePrintPC (upd rv 1 r) (InExt (p.toNat, 24)) Ma
+    ⊢ Wp.W Φ := by
+  iintro ⟨#Hcode, #Hw, #Hd, #Himg, Hstd, Hcon, Hst, Hk, Hms⟩
+  ihave #Hd2 := dispRes_clos $$ Hd
+  icases Hd2 with ⟨%cd, %cp, %q, %img, %P, %m, %⟨hcd, hqimg, hcR, hrep, hPR⟩, #Hca, #Hro, #Hon⟩
+  ihave #Hca' := valImg_clos $$ Hw
+  ihave %hcp := closAt_agree ca cp (imgW (imgM Ma) (p.toNat + 8)).toNat $$ [Hca Hca']
+  · iframe Hca Hca'
+  obtain ⟨w, hrw, hcov, hname⟩ := fnName_facts hrep
+  have hP : ∀ k, q + 8 ≤ k → k < q + 16 → P k ∧ (m[k]?).isSome := fun k h1 h2 => by
+    refine ⟨by have := hcov (k - (q + 8)) (by omega); rwa [show q + 8 + (k - (q + 8)) = k by omega] at this, ?_⟩
+    have := read64_bytes_present hrw (k - (q + 8)) (by omega)
+    rw [show q + 8 + (k - (q + 8)) = k by omega] at this
+    rw [this]; rfl
+  ihave ⟨%Dt, #Hview, %⟨hc, hn⟩⟩ := roOwn_clod hP $$ [Hcode Hro Hon]
+  · iframe Hcode Hro Hon
+  have f : CloFacts Ma Ma Dt p cp q w := {
+    hk := ldv_lw_kind hp.kind (by decide)
+    hku := ldv_lwu_kind hp.kind
+    hw := by rw [hcp]; simp
+    hc0 := hcR cp (by simp [InExt])
+    hc7 := hcR (cp + 7) (by simp [InExt])
+    hq := by
+      rw [ldv_ld_imgW]; unfold imgW
+      rw [imgLE_congr (img' := img) (fun i hi => hc (cp + i) (by omega) (by omega)), hqimg]
+    hq0 := hPR (q + 8) (by have := hcov 0 (by omega); simpa using this)
+    hq7 := hPR (q + 15) (by have := hcov 7 (by omega); simpa using this)
+    hnm := by
+      rw [ldv_ld_imgW]; unfold imgW
+      have h8 : readLE m (q + 8) 8 = some (imgLE (imgM Dt) (q + 8) 8) :=
+        readLE_of_img (fun i hi => hn (q + 8 + i) (by omega) (by omega))
+      have : read64 m (q + 8) = readLE m (q + 8) 8 := rfl
+      rw [this, h8] at hrw
+      cases hrw; rfl }
+  have hdisp : Value.display st (.closure ca) =
+      match cd.name with | some x => "<fn " ++ x ++ ">" | none => "<fn>" := by
+    simp only [Value.display, hcd]
+    cases cd.name <;> rfl
+  rcases hname with ⟨hn0, rfl⟩ | ⟨x, hnx, hnz, hcs⟩
+  · iapply wp_swpF Wp (text := interpText ++ dataOf Dt (clodA cp q)) (S := InExt (p.toNat, 24))
+      (R := upd rv 1 r) (Mt := Ma) (pc := valuePrintPC)
+      (F := Fvp Wp Φ N p s r (.closure ca) st o rv Ma iprop(emp))
+    rotate_left
+    · unfold Fvp
+      iframe Hview Hw Hd Himg Hstd Hcon Hst Hcode Hk Hms
+    intro F'
+    exact vp_clo_anon Wp H c f (by rw [hdisp, hn0])
+  · ihave #Hx := strAt_of_cstringWithin hcs $$ Hon
+    iapply wp_swpF Wp (text := interpText ++ dataOf Dt (clodA cp q)) (S := InExt (p.toNat, 24))
+      (R := upd rv 1 r) (Mt := Ma) (pc := valuePrintPC)
+      (F := Fvp Wp Φ N p s r (.closure ca) st o rv Ma (strAt w x))
+    rotate_left
+    · unfold Fvp
+      iframe Hview Hw Hd Hx Himg Hstd Hcon Hst Hcode Hk Hms
+    intro F'
+    exact vp_clo_named Wp H c f hnz (read64_lt hrw) .rfl (by rw [hdisp, hnx])
+
+/-- **`value_print`**, for either WP, given newlib's stdout calls. -/
+theorem valuePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live) (H : OutHoles)
+    (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs) (p s : BitVec 64) (v : Value)
+    (st : Store) (o : String) : ⊢ valuePrintSpec (vsaModel live) N Wp p s v st o := by
+  unfold valuePrintSpec helperSpec fnSpecW
+  iintro %rv !> %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨h10, h11, h2⟩, #Hcode, Hv, %hg, #Hd, #Himg, Hstd, Hcon,
+    ⟨Hst, %hsg⟩⟩ Hk
+  ihave ⟨%Ma, HA, #Hw⟩ := valAt_tracked N _ v $$ Hv
+  ihave %hpv := valOf_pure N v _ _ _ $$ Hw
+  have c : VpCtx live p s r rv Ma Ma := ⟨hlive, hcl, hal, h10, h11, h2, hg, hsg, fun _ _ => rfl⟩
+  have hms : ms (GF := GF) valuePrintPC (upd rv 1 r) (InExt (p.toNat, 24)) Ma =
+      iprop(PC ↦ᵣ valuePrintPC ∗ ra ↦ᵣ r ∗ regFile rv ∗
+        ownSet (InExt (p.toNat, 24)) (fun a => a ↦ₘ imgM Ma a)) := by
+    unfold ms; rw [regFile_upd_ra]; simp only [upd_same]
+  by_cases hclo : ∃ ca, v = .closure ca
+  · obtain ⟨ca, rfl⟩ := hclo
+    iapply vp_closure Wp H c hpv
+    rw [hms]
+    iframe Hcode Hw Hd Himg Hstd Hcon Hst Hk Hpc Hra Hregs HA
+  · iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (S := InExt (p.toNat, 24))
+      (R := upd rv 1 r) (Mt := Ma) (pc := valuePrintPC)
+      (F := Fvp Wp Φ N p s r v st o rv Ma iprop(emp))
+    rotate_left
+    · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+        unfold codeRes; simp [dataOf]
+      rw [hro, hms]
+      unfold Fvp
+      iframe Hcode Hw Hd Himg Hstd Hcon Hst Hk Hpc Hra Hregs HA
+    intro F'
+    exact vp_run Wp H c hpv (fun ca h => hclo ⟨ca, h⟩)
 
 end
 

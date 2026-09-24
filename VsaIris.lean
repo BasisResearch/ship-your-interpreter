@@ -102,3 +102,5 @@ import VsaIris.Interp.HelperRun
 import VsaIris.Interp.ProofValueCons
 import VsaIris.Interp.ProofValueTruthy
 import VsaIris.Interp.ProofValueEqual
+import VsaIris.Interp.NewlibCall
+import VsaIris.Interp.ProofValuePrint
