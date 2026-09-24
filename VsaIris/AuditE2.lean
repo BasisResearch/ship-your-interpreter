@@ -16,3 +16,11 @@ import VsaIris.Interp.CaseE2
 #print axioms VsaIris.Interp.caseP_BinaryNe
 #print axioms VsaIris.Interp.caseP_BinarySub
 #print axioms VsaIris.Interp.ms_callValueEqual
+#print axioms VsaIris.Interp.caseT_BinaryLtStr
+#print axioms VsaIris.Interp.caseT_BinaryLeStr
+#print axioms VsaIris.Interp.caseT_BinaryGtStr
+#print axioms VsaIris.Interp.caseT_BinaryGeStr
+#print axioms VsaIris.Interp.caseP_BinaryLt
+#print axioms VsaIris.Interp.caseP_BinaryLe
+#print axioms VsaIris.Interp.caseP_BinaryGt
+#print axioms VsaIris.Interp.caseP_BinaryGe

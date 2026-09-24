@@ -37,7 +37,7 @@
   iframe Hcode Hms
   isplitl []
   · ipureintro; ix_reg
-  iintro %R4 %M4 %hkeep4 %hk4 Hms
+  iintro %R4 %M4 %hkeep4 %hk4 %hag4 Hms
 
 #ix_piece {ARM}P_{ROW}3 from {ARM}P_{ROW}2 by
   -- stage `runtime_error(in, line, "operand of '%s' must be an int, got %s", op, name)`
@@ -56,7 +56,7 @@
     · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
     · iexact HE
   intro F'
-  refine {ARM}P_rt_run hlive hsf hs' hs2 hs3 ?_
+{RTREFINE}
   intros
   apply swp_closeM
   intro Mt5 hMt5

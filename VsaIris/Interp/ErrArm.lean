@@ -202,7 +202,7 @@ theorem ms_callKindName (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
     (h0 : ldv .ld Mt p.toNat = w0) (htag : w0.toNat % 2 ^ 32 = valTag v) :
     ⌜R 10 = p⌝ ∗ codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗
       (∀ (R' : Nat → BitVec 64) (M' : Mem), ⌜∀ x ∈ fRegs, x ∉ [10, 14, 15] → R' x = R x⌝ -∗
-        ⌜R' 10 = kindNamePtr v⌝ -∗
+        ⌜R' 10 = kindNamePtr v⌝ -∗ ⌜∀ k, S k → imgM M' k = imgM Mt k⌝ -∗
         ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S M' -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   iintro ⟨%h10, #Hcode, Hms, Hk⟩
@@ -226,10 +226,13 @@ theorem ms_callKindName (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
   isplitl [Hslot]
   · iframe Hslot; ipureintro; exact ⟨hg, by rw [h0]; exact htag⟩
   iintro %R' %hkeep ⟨Hslot, %h10'⟩ Hms
-  ihave ⟨%M', Hms, -⟩ := ms_join $$ [Hms Hslot]
+  ihave ⟨%M', Hms, %⟨hag1, hag2, -⟩⟩ := ms_join $$ [Hms Hslot]
   · iframe Hms Hslot
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
-  iapply Hk $$ %R' %M' %hkeep %h10' Hms
+  iapply Hk $$ %R' %M' %hkeep %h10' %(fun k hk => by
+    by_cases h : InExt (p.toNat, 24) k
+    · exact hag2 k h
+    · exact hag1 k ⟨hk, h⟩) Hms
 end
 
 end VsaIris.Interp

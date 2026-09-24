@@ -12,7 +12,7 @@ import VsaIris.Interp.BinArm
 outcome-quantified spec, for EVERY outcome of the operands: the case has no
 exported branch. The children are called through the Löb hypothesis
 (`ms_callEvalP`); after both return, the case splits on their actual kinds
-(int/int, a non-int left operand, a non-int right operand), and `#ix_tree` joins the rows. A success row runs as in total mode
+(int/int; a non-int left operand; an int beside a non-int right operand), and `#ix_tree` joins the rows. A success row runs as in total mode
 (the same run lemmas) and ends with `EvalE.binary`; an error row calls
 `value_kind_name` and `runtime_error` (`ms_rtErrEval`: the arm aborts with
 `abortAt Core s n ∗ slot24 sret`). Template:
@@ -55,8 +55,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     (hx3 : aX.toNat + 32 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64) (h9 : R 9 = sret) (h19 : R 19 = w1)
     (hop : ldv .lw m (aX + 8#64).toNat = 12#64)
-    (hKL : ldv .ld Mt (s.toNat - 1088) = 2#64)
-    (hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = kR) (hkr : kR ≠ 2#64) :
+    (hKL : ldv .ld Mt (s.toNat - 1088) = 2#64) (hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = kR) (hkr : kR ≠ 2#64) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x8000351c#64 R Mt
   by ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x800038e0
 
@@ -229,7 +228,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave #Hv2c := Hv2
   ihave %htr := valOf_tag N rv' u0 u1 u2 $$ Hv2c
   have htr' : u0.toNat % 2 ^ 32 < 2 ^ 31 := by rw [htr]; cases rv' <;> simp [valTag]
-  -- the rows: int/int, the left operand not an int, the right one not an int
+  -- the rows (int/int; a non-int left operand; an int beside a non-int right operand)
   rcases intRows lv rv' with ⟨a, b, rfl, rfl⟩ | hL | ⟨a, rfl, hR⟩
   unfold valOf
   icases Hv1 with %⟨hw0, hw1⟩
@@ -337,7 +336,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
 
 #ix_piece BinarySubP_eL1 from BinarySubP_p2 at 2 by
-  -- the left operand is not an int: the type error's first run, to `value_kind_name`
+  -- type error (L): the type error's first run, to `value_kind_name`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
@@ -382,7 +381,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   iframe Hcode Hms
   isplitl []
   · ipureintro; ix_reg
-  iintro %R4 %M4 %hkeep4 %hk4 Hms
+  iintro %R4 %M4 %hkeep4 %hk4 %hag4 Hms
 
 #ix_piece BinarySubP_eL3 from BinarySubP_eL2 by
   -- stage `runtime_error(in, line, "operand of '%s' must be an int, got %s", op, name)`
@@ -428,7 +427,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   iframe HA Hslot
 
 #ix_piece BinarySubP_eR1 from BinarySubP_p2 at 3 by
-  -- the right operand is not an int: the type error's first run, to `value_kind_name`
+  -- type error (R): the type error's first run, to `value_kind_name`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
@@ -474,7 +473,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   iframe Hcode Hms
   isplitl []
   · ipureintro; ix_reg
-  iintro %R4 %M4 %hkeep4 %hk4 Hms
+  iintro %R4 %M4 %hkeep4 %hk4 %hag4 Hms
 
 #ix_piece BinarySubP_eR3 from BinarySubP_eR2 by
   -- stage `runtime_error(in, line, "operand of '%s' must be an int, got %s", op, name)`
