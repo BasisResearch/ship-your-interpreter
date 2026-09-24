@@ -284,7 +284,8 @@ theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
         ⌜EvalRegs R1 (s + 18446744073709550528#64 + 64#64) (BitVec.ofNat 64 inp) aA aE
             (s + 18446744073709550528#64) ∧ KeepRegs calleeSaved R R1 ∧
           ArgsSpill Mt1 s aE idx all.length ∧
-          Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt Mt1⌝ -∗
+          Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt Mt1 ∧
+          ∀ a, argsBase s ≤ a → imgM Mt1 a = imgM Mt a⌝ -∗
         □ astEG aA.toNat all[idx] -∗ ms 0x80003220#64 R1 (InExt (s.toNat - 1088, 1088)) Mt1 -∗
         Wp.W Φ)
     ⊢ Wp.W Φ := by
@@ -302,7 +303,8 @@ theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
         ⌜EvalRegs R1 (s + 18446744073709550528#64 + 64#64) (BitVec.ofNat 64 inp) aA aE
             (s + 18446744073709550528#64) ∧ KeepRegs calleeSaved R R1 ∧
           ArgsSpill Mt1 s aE idx all.length ∧
-          Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt Mt1⌝ -∗
+          Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt Mt1 ∧
+          ∀ a, argsBase s ≤ a → imgM Mt1 a = imgM Mt a⌝ -∗
         □ astEG aA.toNat all[idx] -∗ ms 0x80003220#64 R1 (InExt (s.toNat - 1088, 1088)) Mt1 -∗
         Wp.W Φ)))
   rotate_left
@@ -336,7 +338,14 @@ theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
       (Untouched.store' _ _ (hW 24 (by omega))) (Untouched.store' _ _ (hW 16 (by omega))))
       (Untouched.store' _ _ (hW 8 (by omega)))) (Untouched.store' _ _ ?_)
     intro a h1 h2; left; simp only [InExt]; omega
-  iapply Hk $$ %R1 %Mt1 %(BitVec.ofNat 64 p) %⟨hregs, hk1, hsp1, hut⟩ [] Hms
+  have hlo : ∀ a, argsBase s ≤ a → imgM Mt1 a = imgM Mt a := by
+    intro a ha
+    subst hMt1
+    unfold argsBase at ha
+    rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by rw [hoff 8 (by omega)]; omega),
+      imgM_store_miss _ _ (by rw [hoff 16 (by omega)]; omega),
+      imgM_store_miss _ _ (by rw [hoff 24 (by omega)]; omega)]
+  iapply Hk $$ %R1 %Mt1 %(BitVec.ofNat 64 p) %⟨hregs, hk1, hsp1, hut, hlo⟩ [] Hms
   imodintro; rw [ofNat_toNat_lt hpl]; iapply astEG_of_view hsp hgeo $$ Hro
 
 end Glue
@@ -499,6 +508,190 @@ theorem argsCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ int
 
 end Copy
 
--- @@PROOFS@@
+/-! ## Both modes -/
+
+section Modes
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+
+/-- The next head's registers and the argument values after one copy. -/
+theorem ArgsCopied.head {R R' : Nat → BitVec 64} {Mt0 Mt' : Mem} {s aX aE : BitVec 64}
+    {idx argc : Nat} {w0 w1 w2 : BitVec 64} {Rh : Nat → BitVec 64}
+    (hc : ArgsCopied R R' Mt0 Mt' s aE idx argc w0 w1 w2) (hk : KeepRegs calleeSaved Rh R)
+    (hh : ArgsHead Rh s aX (BitVec.ofNat 64 inp) aE idx argc) :
+    ArgsHead R' s aX (BitVec.ofNat 64 inp) aE (idx + 1) argc ∧ KeepRegs argsKeep Rh R' := by
+  have hk' := KeepRegs.trans hk hc.keep
+  refine ⟨⟨(hk' 2 (by decide)).trans hh.sp, (hk' 8 (by decide)).trans hh.s0,
+    (hk' 18 (by decide)).trans hh.s2, hc.a3, hc.a6, hc.a5⟩, ?_⟩
+  intro x hx
+  simp only [argsKeep, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+  rcases hx with rfl | hx
+  · exact hc.a5.trans hh.a5.symm
+  · exact hk' x (by simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false]; exact hx)
+
+omit I in
+/-- The argument values after one copy: the earlier ones unchanged, the new
+one in `args[idx]`. -/
+theorem argVals_step [InterpGS GF] {R R' : Nat → BitVec 64} {Mt0 Mt' : Mem} {s aE : BitVec 64}
+    {idx argc : Nat} {w0 w1 w2 : BitVec 64} (N : NativeAddrs) {pre : List Value} {v : Value}
+    (hc : ArgsCopied R R' Mt0 Mt' s aE idx argc w0 w1 w2) (hpre : pre.length = idx) :
+    argVals (GF := GF) N (imgM Mt0) (argsBase s) 0 pre ∗ □ valOf N v w0 w1 w2 ⊢
+      argVals N (imgM Mt') (argsBase s) 0 (pre ++ [v]) := by
+  iintro ⟨#Ha, #Hv⟩
+  iapply argVals_snoc N (imgM Mt') (argsBase s) v 0 pre
+  isplitl []
+  · iapply argVals_congr N (argsBase s) 0 pre (fun j hj => by
+      rw [hc.earlier _ (by omega) (by rw [← hpre]; omega)]) $$ Ha
+  · unfold valImg
+    rw [show argsBase s + 24 * (0 + pre.length) = argsBase s + 24 * idx by rw [hpre]; omega,
+      hc.w0, hc.w1, hc.w2]
+    iexact Hv
+
+/-- `EvalArgsCost.cons`, total mode: argument `idx` through its derivation
+`De`, its copy, then the rest (the tail's motive `hr`, over its derivation
+`D2`). -/
+theorem evalArgsT_cons (hlive : ∀ p ∈ interpText, live p.1)
+    {st : St} {d env : Nat} {e : Expr} {es : List Expr} {st1 st2 : St} {v : Value}
+    {vs : List Value} {ne nes : Nat}
+    (De : EvalECost st d env e st1 v ne) (D2 : EvalArgsCost st1 d env es st2 vs nes)
+    (he : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env e st1 v ne De)
+    (hr : evalArgsT_body (GF := GF) live N L Room inp st1 d env es st2 vs nes) :
+    evalArgsT_body (GF := GF) live N L Room inp st d env (e :: es) st2 (v :: vs) (ne + nes) := by
+  intro Φ k idx f all pre aX aE s R Mt m' _ hdrop hpre hlen hh hfg hsg hall
+  obtain ⟨hl, hat, hrest⟩ := drop_cons_facts hdrop
+  subst hat
+  obtain ⟨hneed, hbb⟩ := hall _ (List.getElem_mem hl)
+  have hsl := evalSlot hfg (o := 64) (by omega) rfl
+  rw [show k + (ne + nes) = k + nes + ne by omega]
+  iintro ⟨Hms, #Hcode, #Hast, #Hfr, Hst, #Hargs, Hw, Hk⟩
+  iapply argsStage (twpW _) hlive hh hfg hl hlen
+  iframe Hms Hcode Hast
+  iintro %R1 %Mt1 %aA %⟨hregs, hk1, hsp1, hut1, hlo1⟩ #Hae Hms
+  ihave He := he
+  iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003220)
+    (jalx_80003220 live (fun p hp => hlive _ (interp_code_80003220 p hp)))
+    interp_code_80003220 (by decide) De (k := k + nes) (hsg.narrow hneed) hneed hsg.le hsl.2 hbb
+  iframe He Hcode Hae Hfr Hms Hst Hw
+  isplitl []
+  · ipureintro
+    refine ⟨hregs, fun b hb => ?_⟩
+    rw [hsl.1] at hb; simp only [InExt] at hb ⊢; have := hfg.lo; omega
+  iintro %R2 %w0 %w1 %w2 %hk2 #Hv Hms Hst Hw
+  have hk2' := hk2.calleeSaved_upd (x := 1) (by decide) (BitVec.ofNat 64 (0x80003220 + 4))
+  iapply argsCopy (twpW _) (R := upd R2 1 (BitVec.ofNat 64 (0x80003220 + 4))) (Mt0 := Mt) hlive hfg
+    (by ix_reg; rw [keep_reg hk2 (by decide)]; exact hregs.sp) hsp1 hut1
+    (fun a h1 _ => hlo1 a h1) hl hlen
+  iframe Hms Hcode
+  have hkR : KeepRegs calleeSaved R (upd R2 1 (BitVec.ofNat 64 (0x80003220 + 4))) :=
+    KeepRegs.trans hk1 hk2'
+  isplit
+  · iintro %R3 %Mt3 %hne %hcp Hms
+    obtain ⟨hh3, hk3⟩ := hcp.head hkR hh
+    cases es with
+    | nil =>
+      exfalso
+      have := List.drop_eq_nil_iff.mp hrest.symm
+      omega
+    | cons e2 es2 =>
+      iapply hr Φ k (idx + 1) f all (pre ++ [v]) aX aE s R3 Mt3 m' (List.cons_ne_nil _ _) hrest
+        (by simp [hpre]) hlen hh3 hfg hsg hall
+      iframe Hms Hcode Hast Hfr Hst Hw
+      isplitl []
+      · iapply argVals_step N hcp hpre
+        iframe Hargs Hv
+      iintro %R4 %Mt4 %⟨hk4, h16, hut4⟩ Hms Hvals Hst Hw
+      rw [List.append_assoc, List.singleton_append] at *
+      iapply Hk $$ %R4 %Mt4 %⟨KeepRegs.trans hk3 hk4, h16, hcp.untouched.trans hut4⟩ Hms Hvals Hst Hw
+  · iintro %R3 %Mt3 %heq %hcp Hms
+    obtain ⟨_, hk3⟩ := hcp.head hkR hh
+    have hes : es = [] := by rw [hrest]; exact List.drop_eq_nil_of_le (by omega)
+    subst hes
+    cases D2
+    iapply Hk $$ %R3 %Mt3 %⟨hk3, by rw [hcp.a6, heq], hcp.untouched⟩ Hms [] Hst Hw
+    iapply argVals_step N hcp hpre
+    iframe Hargs Hv
+
+/-- **The argument loop, partial mode** (`evalArgsP_body`), for every
+argument list: each argument through the Löb hypothesis (`ms_callEvalP`,
+whose abort rebuilds `eval_expr`'s frame), by structure on the list. -/
+theorem evalArgsP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF) (d env : Nat) :
+    ∀ es, evalArgsP_body (GF := GF) live N L Room inp Core d env es
+  | [] => evalArgsP_nil live N L Room inp Core d env
+  | e :: es => by
+    intro Φ st idx f all pre aX aE s sret0 R Mt m' n0 Out _ hdrop hpre hlen hh hfg hsg hn0 hall hOut
+    obtain ⟨hl, hat, hrest⟩ := drop_cons_facts hdrop
+    subst hat
+    obtain ⟨hneed, hbb⟩ := hall _ (List.getElem_mem hl)
+    have hsl := evalSlot hfg (o := 64) (by omega) rfl
+    have hsp' := hsg.le
+    have hsf := hfg.sf
+    have hslo := hfg.lo
+    iintro ⟨Hms, #Hcode, #Hast, #Hfr, Hst, #Hargs, Hw, HOut, #HE, HK⟩
+    iapply argsStage (wpW _) hlive hh hfg hl hlen
+    iframe Hms Hcode Hast
+    iintro %R1 %Mt1 %aA %⟨hregs, hk1, hsp1, hut1, hlo1⟩ #Hae Hms
+    ihave He := evalSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env all[idx] $$ HE
+    iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003220)
+      (Kret := iprop(∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St) (vs : List Value),
+        ⌜EvalArgs st d env (all[idx] :: es) st' vs⌝ -∗
+        ⌜KeepRegs argsKeep R R' ∧ R' 16 = BitVec.ofNat 64 all.length ∧
+          Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt Mt'⌝ -∗
+        ms 0x80003254#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗
+        argVals N (imgM Mt') (argsBase s) 0 (pre ++ vs) -∗
+        stackScratch (s + 18446744073709550528#64) m' -∗
+        world N L Room inp .uncounted st' d -∗ Out -∗ (wpW (vsaModel live)).W Φ))
+      (jalx_80003220 live (fun p hp => hlive _ (interp_code_80003220 p hp)))
+      interp_code_80003220 (by decide) hOut (hsg.narrow hneed) hneed hsg.le hn0 (by omega)
+      hsl.2 hbb
+    iframe He Hcode Hae Hfr Hms Hst Hw HOut HK
+    isplitl []
+    · ipureintro
+      refine ⟨hregs, fun b hb => ?_⟩
+      rw [hsl.1] at hb; simp only [InExt] at hb ⊢; have := hfg.lo; omega
+    iintro %R2 %w0 %w1 %w2 %st1 %v %hE %hk2 #Hv Hms Hst Hw HOut HK
+    have hk2' := hk2.calleeSaved_upd (x := 1) (by decide) (BitVec.ofNat 64 (0x80003220 + 4))
+    have hkR : KeepRegs calleeSaved R (upd R2 1 (BitVec.ofNat 64 (0x80003220 + 4))) :=
+      KeepRegs.trans hk1 hk2'
+    iapply argsCopy (wpW _) (R := upd R2 1 (BitVec.ofNat 64 (0x80003220 + 4))) (Mt0 := Mt) hlive hfg
+      (by ix_reg; rw [keep_reg hk2 (by decide)]; exact hregs.sp) hsp1 hut1
+      (fun a h1 _ => hlo1 a h1) hl hlen
+    iframe Hms Hcode
+    isplit
+    · iintro %R3 %Mt3 %hne %hcp Hms
+      obtain ⟨hh3, hk3⟩ := hcp.head hkR hh
+      cases es with
+      | nil =>
+        exfalso
+        have := List.drop_eq_nil_iff.mp hrest.symm
+        omega
+      | cons e2 es2 =>
+        iapply evalArgsP_all hlive Core d env (e2 :: es2) Φ st1 (idx + 1) f all (pre ++ [v]) aX aE s
+          sret0 R3 Mt3 m' n0 Out (List.cons_ne_nil _ _) hrest (by simp [hpre]) hlen hh3 hfg hsg hn0
+          hall hOut
+        iframe Hms Hcode Hast Hfr Hst Hw HOut HE
+        isplitl []
+        · iapply argVals_step N hcp hpre
+          iframe Hargs Hv
+        isplit
+        · iintro %R4 %Mt4 %st4 %vs %hA %⟨hk4, h16, hut4⟩ Hms Hvals Hst Hw HOut
+          ihave HK := and_elim_l $$ HK
+          rw [List.append_assoc, List.singleton_append]
+          iapply HK $$ %R4 %Mt4 %st4 %(v :: vs) %(EvalArgs.cons _ _ _ _ _ _ _ _ _ hE hA)
+            %⟨KeepRegs.trans hk3 hk4, h16, hcp.untouched.trans hut4⟩ Hms Hvals Hst Hw HOut
+        · iapply and_elim_r $$ HK
+    · iintro %R3 %Mt3 %heq %hcp Hms
+      obtain ⟨_, hk3⟩ := hcp.head hkR hh
+      have hes : es = [] := by rw [hrest]; exact List.drop_eq_nil_of_le (by omega)
+      subst hes
+      ihave HK := and_elim_l $$ HK
+      iapply HK $$ %R3 %Mt3 %st1 %([v] : List Value) %(EvalArgs.cons _ _ _ _ _ _ _ _ _ hE (EvalArgs.nil _ _ _))
+        %⟨hk3, by rw [hcp.a6, heq], hcp.untouched⟩ Hms [] Hst Hw HOut
+      iapply argVals_step N hcp hpre
+      iframe Hargs Hv
+
+end Modes
+
 
 end VsaIris.Interp

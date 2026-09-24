@@ -144,6 +144,8 @@ import VsaIris.Interp.SpecLoop
 import VsaIris.Interp.LoopKit
 import VsaIris.Interp.LoopWhile
 import VsaIris.Interp.LoopFor
+import VsaIris.Interp.LoopArgs
+import VsaIris.Interp.LoopAudit
 import VsaIris.Interp.Case.BinaryAddIntT
 import VsaIris.Interp.Case.BinarySubIntT
 import VsaIris.Interp.Case.BinaryAddIntP
