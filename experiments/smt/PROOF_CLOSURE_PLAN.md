@@ -2861,6 +2861,15 @@ starts). `malloc` maintains it through `FreshAt.start` (`PHeapAt.take_fresh`,
 starts there), and the initial heap has it by `starts_inuseBlocks`. Clients are
 unaffected: `isHeap` is the only producer of the shape.
 
+CORRECTED INTERFACE (lane H4, `realloc`): `ReallocLocalRun` (`VsaIris/MallocRun.lean`) had
+no bound on `nNew`, while the machine receives `a1 = BitVec.ofNat 64 nNew`. For
+`nNew = 2^64 + 64` and `nOld = 16`, `_realloc_r` grows the block to 64 bytes and returns
+it non-NULL whenever the arena has room, but `ReallocEnd`'s success arm demands
+`FreshBlock L H p' nNew` (`p' + nNew ≤ heapEnd`), so the run was false in such states.
+`ReallocLocalRun` and `reallocSpec`'s precondition now carry `nNew < 2 ^ 64`; the counted
+`ReallocChgRun` already bounds `nNew` through its charge. `reallocSpec` has no consumer
+beyond the audit.
+
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
 The heap half is `VsaIris.VsaHeap.FastAt.merge`. `realloc` has an Iris spec,
