@@ -1,5 +1,6 @@
 import VsaIris.Vsa.SegRun
 import VsaIris.Vsa.SymRun
+import VsaIris.Vsa.AllocSltu
 import Vsa.Sim.Muldi3Spec
 import VsaIris.Vsa.Console
 
@@ -158,35 +159,10 @@ theorem swp_alu {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List
     (i : Nat) (code : List (BitVec 8)) (rd : Nat) (ks : List Nat) (val : BitVec 64)
     (hstep : AluStep live i (ks.map fun k => (k, DFrac.own 1, R k)) (codeFoot i code) rd val)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ text)
-    (hPC : VsaIris.PC ∈ rs) (hrd : rd ∈ rs) (hrdPC : rd ≠ VsaIris.PC)
+    (hPC : VsaIris.PC ∈ rs) (hrd : rd ∈ rs) (_hrdPC : rd ≠ VsaIris.PC)
     (hks : ∀ k ∈ ks, k ∈ rs ∧ k ≠ VsaIris.PC) (hpc : pc = BitVec.ofNat 64 i)
     (hk : SWP live text rs S Q (BitVec.ofNat 64 (i + 4)) (upd R rd val) Mt) :
-    SWP live text rs S Q pc R Mt := by
-  subst hpc
-  obtain ⟨n, hn⟩ := hk
-  refine ⟨n + 1, fun rv mv hm => .inr ⟨0, segFrom_of_runFact (MW := [])
-    (runFact_of_aluStep (old := rv rd) hstep) ?_ (fun p hp => .inl (hcode p hp)) ?_
-    (fun p hp => by cases hp) ?_⟩⟩
-  · intro p hp
+    SWP live text rs S Q pc R Mt :=
+  swp_aluRR i _ _ rd val hstep hcode (fun p hp => by
     obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hp
-    exact .inr ⟨(hks k hk).1, hm.regs k (hks k hk).1 (hks k hk).2⟩
-  · intro p hp
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl
-    · exact .inl ⟨hPC, hm.pc⟩
-    · exact .inl ⟨hrd, rfl⟩
-  · intro rv' mv' h1 h2 _ h4
-    refine hn rv' mv' ⟨h1 _ List.mem_cons_self, fun r hr hne => ?_, fun a ha => ?_⟩
-    · by_cases hr1 : r = rd
-      · subst hr1
-        rw [upd_same]
-        exact h1 (r, rv r, val) (by simp)
-      · rw [upd_other _ _ hr1]
-        refine (h2 r hr fun p hp => ?_).trans (hm.regs r hr hne)
-        simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
-        rcases hp with rfl | rfl
-        · exact fun e => hne e.symm
-        · exact fun e => hr1 e.symm
-    · rw [h4 a ha (fun p hp => by cases hp), hm.img a ha]
-
-end VsaIris.Sym
+    exact ⟨(hks k hk).1, (hks k hk).2, rfl⟩) hPC hrd hpc hk

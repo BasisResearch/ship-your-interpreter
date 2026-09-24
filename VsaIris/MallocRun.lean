@@ -923,7 +923,7 @@ def ReallocLocalRun (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop
     (saved : List (Nat × BitVec 64)) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8)
     (old : Nat → BitVec 8),
     saved.map Prod.fst = savedRegs → SpOK s → r.toNat % 4 = 0 → EntryRegs rv entry r p s saved →
-    rv a1 = BitVec.ofNat 64 nNew → nOld < nNew →
+    rv a1 = BitVec.ofNat 64 nNew → nOld < nNew → nNew < 2 ^ 64 →
     L.Shape mv ((p.toNat, nOld) :: H) → Copies old mv p.toNat p.toNat nOld →
     (∀ a, stackWin s headroom a → ¬ (heapFoot L ((p.toNat, nOld) :: H) a ∨ InExt (p.toNat, nOld) a)) →
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H p nOld s headroom)
@@ -942,7 +942,7 @@ def reallocSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (SpOK : BitVec 64 → 
     (saved : List (Nat × BitVec 64)) (headroom : Nat) (H : List (Nat × Nat)) (p : BitVec 64)
     (nOld nNew : Nat) (s : BitVec 64) (old : Nat → BitVec 8) : IProp GF :=
   fnSpecW Wp entry
-    (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0 ∧ nOld < nNew⌝ ∗ a0 ↦ᵣ p ∗
+    (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0 ∧ nOld < nNew ∧ nNew < 2 ^ 64⌝ ∗ a0 ↦ᵣ p ∗
       clobberedArg clob a1 (BitVec.ofNat 64 nNew) ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L ((p.toNat, nOld) :: H) ∗ blockOwnAt p.toNat nOld old))
     (fun _ => iprop(∃ p', a0 ↦ᵣ p' ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
@@ -962,7 +962,7 @@ theorem reallocSpec_of_localRun (Wp : MachWP (GF := GF) M) {L : DlLayout} {SpOK 
   unfold reallocSpec fnSpecW blockOwnAt clobberedArg
   iintro #Htext
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%⟨hspok, hral, hlt⟩, Ha0, Hclob, Hsp, #Hgp, Hsv, Hstk, Hheap, Hblk⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%⟨hspok, hral, hlt, hlt64⟩, Ha0, Hclob, Hsp, #Hgp, Hsv, Hstk, Hheap, Hblk⟩ Hk
   ihave ⟨%img, %hsh, Hheap⟩ := isHeap_unfold L _ $$ Hheap
   ihave ⟨⟨Hheap, Hblk⟩, %hHB⟩ := keep_pure
     (ownSet_disj (heapFoot L ((p.toNat, nOld) :: H)) (InExt (p.toNat, nOld)) img old) $$ [Hheap Hblk]
@@ -983,7 +983,7 @@ theorem reallocSpec_of_localRun (Wp : MachWP (GF := GF) M) {L : DlLayout} {SpOK 
         L.Shape mv' (((rv' a0).toNat, nNew) :: H) ∧ Copies old mv' p.toNat (rv' a0).toNat nOld))
     (fun p' => reallocPost L H p nOld nNew old p') ?_
     (fun rv mv he hargs hs hdj => (hrun H p nOld nNew s r saved rv mv old rfl hspok hral he hargs hlt
-      hs.1 hs.2 hdj).imp fun _ h => LocalRun.mono (fun _ _ he => ⟨he.frame, he.result⟩) _ _ _ h)
+      hlt64 hs.1 hs.2 hdj).imp fun _ h => LocalRun.mono (fun _ _ he => ⟨he.frame, he.result⟩) _ _ _ h)
   · intro rv' mv' hE
     unfold reallocPost blockOwnAt
     rcases hE with ⟨h0, hsh', hcp⟩ | ⟨hf, hal, hsh', hcp⟩

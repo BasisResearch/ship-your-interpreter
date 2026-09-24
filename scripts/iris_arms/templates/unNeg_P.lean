@@ -1,0 +1,207 @@
+import VsaIris.Interp.Case.{ARM}T
+
+/-!
+# `{ARM}`, partial mode (family `unNeg`, INTERP_DESIGN.md §6, §4.2)
+
+`caseP_{ARM}`: from the Löb hypothesis `evalSpecsP`, `eval_expr` on
+`.unary .neg e` meets its partial, outcome-quantified spec on the int row. The
+operand is called through the Löb hypothesis (`ms_callEvalP`); an int finishes
+as in total mode (the run lemmas `{ARM}T_run*`) with the derivation
+`EvalE.neg`; any other kind leaves the row (the type-error row, which calls
+`runtime_error`), exported by `#ix_chain` as the hypothesis `hx_1`.
+Template: `scripts/iris_arms/templates/unNeg_P.lean`.
+-/
+
+namespace VsaIris.Interp
+open VsaIris VsaIris.Sym VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+#ix_piece {ARM}P_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
+    {st : St} {d env : Nat} {e : Expr}
+    (hvi : ⊢ ∀ p n, valueIntSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p n) :
+    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
+      evalSpecP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.unary .neg e) by
+  iintro #IH
+  unfold evalSpecP_body fnSpecAbort
+  iintro %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
+  unfold evalPre
+  icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
+  unfold astEG
+  icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
+  obtain ⟨aC, hn, hrc, haC⟩ := unNode_of_repr hrepr hgeo
+  have hneed : 1088 ≤ evalNeed (.unary .neg e) d := by
+    have := Expr.stackNeed_ge (.unary .neg e); unfold evalNeed stackBudget; unfold evalFrame at this; omega
+  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
+  simp only at hs hs2
+  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
+  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
+  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
+    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  have gC := evalCallGeom (o := 144) hsg
+    (by have := evalNeed_unary .neg e d; unfold evalFrame at this; omega) (by decide) (by decide)
+  have hbc : e.bodiesBound perCallBudget = true := Expr.bodiesBound_unary hbb
+  have hCt : (BitVec.ofNat 64 aC).toNat = aC := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt haC]
+  have hx1 := hn.lo; have hx2 := hn.hi; have hx3 := hn.off
+  have hoff := evalSP_off (s := s) hsf (by omega)
+  ihave ⟨Hst, HF⟩ := stackScratch_frame (f := 1088#64) hsg.le hneed $$ Hst
+  rw [hsF, hsf, show (1088#64).toNat = 1088 from rfl]
+  ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
+  · iframe Hpc Hra Hregs; unfold blockOwn; iexact HF
+  -- run 1: prologue, kind dispatch, stage the operand
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
+      (evalNeed (.unary .neg e) d - 1088) (slot24 sret.toNat)
+      (world N L Room inp .uncounted st d)
+      iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v', ⌜EvalE st d env (.unary .neg e) st' v'⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.unary .neg e) v' sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortAt Core s (evalNeed (.unary .neg e) d) ∗ slot24 sret.toNat -∗
+          (wpW (vsaModel live)).W Φ)) ∗
+      evalSpecsP (vsaModel live) N L Room inp Core))
+  rotate_left
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH]
+    · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
+    · iexact IH
+  intro F'
+  unfold evalEntryPC
+  refine {ARM}T_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
+    (by ix_reg; exact hregs.a1) (by ix_reg; exact hregs.a2) (by ix_reg; exact hregs.a3)
+    (by ix_reg; exact hregs.sp) hn.kind hn.kindu ?_
+  intros
+  apply swp_closeM
+  intro Mt1 hMt1
+  have hsv1 : EvalSaved3 Mt1 s ret (rv 8) (rv 9) (rv 18) := by
+    subst hMt1; constructor <;> (ix_fwd using [hoff]; ix_reg)
+  unfold F' evalArmF
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH⟩, Hms⟩
+  -- the operand, through the Löb hypothesis
+  ihave He := evalSpecsP_at Core st d env e $$ IH
+  iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800035e8)
+    (jalx_800035e8 live (fun p hp => hlive _ (interp_code_800035e8 p hp)))
+    interp_code_800035e8 (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := e)
+    (slot := s + 18446744073709550528#64 + 144#64) (aC := BitVec.ofNat 64 aC) (aE := aE)
+    (s0 := s) (sret0 := sret) (m := evalNeed (.unary .neg e) d - 1088)
+    (n0 := evalNeed (.unary .neg e) d) (Out := slot24 sret.toNat)
+    (Kret := iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v', ⌜EvalE st d env (.unary .neg e) st' v'⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.unary .neg e) v' sret s rv) -∗
+          (wpW (vsaModel live)).W Φ)) .rfl
+    gC.child gC.fits gC.below (by omega) hsg.le gC.slotGeom hbc
+  iframe He Hcode Hfb Hms Hst Hw Hslot Hk
+  isplitl []
+  · ipureintro
+    refine ⟨⟨by ix_reg, by ix_reg; exact hregs.a1, by ix_reg; exact hn.child,
+      by ix_reg; exact hregs.a3, by ix_reg⟩, fun b hb => ?_⟩
+    have g1 := gC.slot; have g2 := gC.sp; simp only [VsaIris.InExt, evalSP] at hb g1 g2 ⊢; omega
+  isplitl []
+  · imodintro; rw [hCt]; iapply astEG_of_view hrc hgeo $$ Hro
+  iintro %R1 %w0 %w1 %w2 %st1 %v %hE %hkeep1 #Hv1 Hms Hst Hw Hslot Hk
+  -- the int row; any other kind leaves it (the type-error row)
+  by_cases hi : ∃ a, v = .int a
+  obtain ⟨a, rfl⟩ := hi
+  unfold valOf
+  icases Hv1 with %⟨hw0, hw1⟩
+  have hk0 := ofNat_lo32 hw0
+
+
+#ix_piece {ARM}P_p2 from {ARM}P_p1 by
+  -- run 2: operator test, int kind test, negation
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
+      (evalNeed (.unary .neg e) d - 1088) (slot24 sret.toNat)
+      (world N L Room inp .uncounted st1 d)
+      iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v', ⌜EvalE st d env (.unary .neg e) st' v'⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.unary .neg e) v' sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortAt Core s (evalNeed (.unary .neg e) d) ∗ slot24 sret.toNat -∗
+          (wpW (vsaModel live)).W Φ)) ∗
+      evalSpecsP (vsaModel live) N L Room inp Core))
+  rotate_left
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH]
+    · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
+    · iexact IH
+  intro F'
+  refine {ARM}T_run2 (aX := aX) (s := s) (sret := sret) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ hn.op ?_ ?_
+  · ix_keep [hkeep1]
+  · ix_keep [hkeep1]
+  · ix_keep [hkeep1]
+  · ix_fwd; exact hk0
+  intros
+  apply swp_closeM
+  intro Mt2 hMt2
+  have hsv2 : EvalSaved3 Mt2 s ret (rv 8) (rv 9) (rv 18) := by
+    rw [hMt2]; ix_saved3 hsv1 using hoff
+  unfold F' evalArmF
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH⟩, Hms⟩
+  -- value_int
+  ihave Hvi := hvi $$ %sret %(-w1)
+  unfold valueIntSpec
+  iapply ms_callHelper (wpW _) (i := 0x800039d8)
+    (jalx_800039d8 live (fun p hp => hlive _ (interp_code_800039d8 p hp)))
+    interp_code_800039d8 (by decide)
+  iframe Hvi Hcode Hms
+  isplitl []
+  · ipureintro; exact ⟨by ix_keep [hkeep1], by ix_reg; ix_fwd; rw [BitVec.zero_sub]⟩
+  isplitl [Hslot]
+  · iframe Hslot; ipureintro; exact hslg
+  iintro %R3 %hkeep3 Hval Hms
+  have hneg : (-w1).toInt = wrap64 (-a) := by rw [toInt_neg_wrap, hw1]
+  rw [hneg]
+
+#ix_piece {ARM}P_p3 from {ARM}P_p2 by
+  -- run 4: the epilogue
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
+      (evalNeed (.unary .neg e) d - 1088) (valAt N sret.toNat (.int (wrap64 (-a))))
+      (world N L Room inp .uncounted st1 d)
+      iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v', ⌜EvalE st d env (.unary .neg e) st' v'⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.unary .neg e) v' sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortAt Core s (evalNeed (.unary .neg e) d) ∗ slot24 sret.toNat -∗
+          (wpW (vsaModel live)).W Φ)) ∗
+      evalSpecsP (vsaModel live) N L Room inp Core))
+  rotate_left
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH]
+    · iframe Hcode Hro Hfb Hst Hval Hw; iexact Hk
+    · iexact IH
+  intro F'
+  refine {ARM}T_run3 (aX := aX) (s := s) (ret := ret) (v8 := rv 8) (v9 := rv 9)
+    (v18 := rv 18) hlive hsf hs' hs2 hs3 hal ?_ ?_ ?_ ?_ ?_ ?_
+  · ix_keep [hkeep3, hkeep1]
+  · rw [hoff _ (by decide)]; exact hsv2.ra
+  · rw [hoff _ (by decide)]; exact hsv2.s0
+  · rw [hoff _ (by decide)]; exact hsv2.s1
+  · rw [hoff _ (by decide)]; exact hsv2.s2
+  intros
+  apply swp_closeF
+  unfold F' evalArmF
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hval, Hw, Hk⟩, #IH⟩, Hms⟩
+  ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
+  ihave Hst := evalFrame_join hsg.le hneed $$ [Hst HS]
+  · iframe Hst HS
+  ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
+  ihave Hk := and_elim_l $$ Hk
+  iapply Hk $$ Hpc Hra
+  iexists st1, (.int (wrap64 (-a)))
+  isplitl []
+  · ipureintro; exact EvalE.neg st d env e st1 a hE
+  unfold evalPost
+  iexists _
+  iframe Hregs Hst Hval Hw
+  ipureintro
+  intro x hx
+  simp only [calleeSaved, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
+  all_goals ix_keep [hkeep3, hkeep1]
+
+#ix_chain caseP_{ARM} := [{ARM}P_p1, {ARM}P_p2, {ARM}P_p3]
+
+end VsaIris.Interp
