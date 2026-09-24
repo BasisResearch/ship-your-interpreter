@@ -805,6 +805,23 @@ binary or by what the proofs consume:
   child a result slot inside the caller's own frame; to rebase its abort
   (`abort_rebase`, §10.2) it must rebuild that whole frame, slot included
   (`ms_callEvalP`). The landing core is a parameter `Core` (H5 fixes it).
+- **`seqLoop` is three loop motives, not one lemma.** The three sites differ in
+  more than PCs: the block arm indexes with `a6` (spilled at `sp+8`) and passes
+  its own `ret` slot through; the closure body indexes with the callee-saved
+  `s0` inside `eval_expr`'s frame and lends the slot `sp+144`; `interp_run`
+  walks a cursor to a bound, calls `value_null` before each statement, reads
+  the global frame from `in->globals`, and routes `ret`/`brk`/`cont` to two
+  runtime errors. Each site is the recursor motive of `ExecSeqCost` in total
+  mode (`blockSeqT_body`, `closureSeqT_body`, `interpSeqT_body`: cases
+  `consNormal`/`consAbrupt`/`nil`) and a structural motive in partial mode
+  (`*SeqP_body`, `*SeqP_all`), over a named loop-head invariant; the exits are
+  continuations indexed by status (`closureExit`, `interpExit`).
+- **`interp_run`'s loop assumes `repl = 0`** (`InterpFrame.flag`): `main`
+  passes `li a3,0` (`0x800045e0`), and the REPL path (evaluate and print
+  expression statements) has no source counterpart. The loop reads the
+  statement array and `in->globals` through one merged view (`InterpData`);
+  their disjointness and the view's construction from `astSs` and
+  `interpCore`'s `wordRO` are A's.
 - **Partial cases split on the children's actual values.** A row's partial
   case runs the shared prefix (children through the Löb hypothesis
   `evalSpecsP`), then case-splits on the returned values: the row's kinds

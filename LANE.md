@@ -121,18 +121,33 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
 3. Replace the row-specific literals by `{PLACEHOLDER}`s, save as
    `templates/<family>_T.lean`, add `FAMILIES[<family>]`, add the rows.
 
-## Next
-- The exported other-kinds branch of the binary arms is the concat and
-  type-error rows' starting point (`#ix_piece … from BinaryAddIntP_p2 at 2`);
-  their families (and `*` through `__muldi3`, `/`, `%`) are E-lane work on
-  this layer. `runtime_error`'s spec is H5's; a stub is not in the tree.
-- `seqLoop` at the other two sites, same recipe as the block site: the
-  closure body in the call arm (`0x80003354`..`0x80003378`: index in `s0`, the
-  body node spilled at `sp+0`, the result slot `sp+144`, exits to
-  `0x80003954` normal / `0x8000337c` abrupt with the call-depth decrement and
-  brk/cont/ret routing) and `interp_run`'s loop (`0x8000448c`..`0x80004488`:
-  a cursor `s0` to the bound `s2`, `value_null` before each statement, status
-  routing to `0x80004540`/`0x80004564`).
+## Status
+Lane G's package (INTERP_DESIGN.md §6, §9 G) is done: the row format and
+emitter interface (above), the emitters for both modes (family templates), the
+worked example proved end to end from generated output in both modes (plus
+`-`), the stage-a3 drift gate, and `seqLoop` at all three sites in both modes:
+
+| site | file | total | partial |
+|---|---|---|---|
+| block arm (`exec_stmt`) | `Interp/SeqLoop.lean` | `blockSeqT_consNormal`/`_consAbrupt`/`_nil` | `blockSeqP_all` |
+| closure body (call arm) | `Interp/SeqLoopClosure.lean` | `closureSeqT_*` | `closureSeqP_all` |
+| `interp_run` | `Interp/SeqLoopInterp.lean` | `interpSeqT_*` | `interpSeqP_all` |
+
+All axioms ⊆ {propext, Classical.choice, Quot.sound}; no holes added.
+
+## For the consumers
+- **E lanes**: new rows of an existing family are one TSV line; a new arm
+  shape is a new family (recipe above). The exported other-kinds branch of the
+  binary rows (`hx_1` of `caseP_BinaryAddInt`) is the concat and type-error
+  rows' start: `#ix_piece … from BinaryAddIntP_p2 at 2`.
+- **H2**: `valueIntSpec`, `valueNullSpec` (SpecEval) are the helper
+  statements the cases take as hypotheses (`helperSpec`, any `Wp`).
+- **H5**: the partial specs abort with `abortAt Core s need ∗ slot24 ret`; the
+  landing core `Core` is a parameter.
+- **A**: the loop motives are the recursor's `ExecSeqCost` motives at the
+  three sites; `interp_run`'s loop needs `InterpFrame`/`InterpData` at its
+  head (the `repl = 0` spill, `in`, the merged view of the program array and
+  `in->globals`).
 
 ## Holes
 None added. `python3 scripts/check_iris_holes.py` passes.
