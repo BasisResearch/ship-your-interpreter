@@ -1220,6 +1220,97 @@ theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   · exact sg_backFn cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
       kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
 
+/-- **`strcpy(buf, src)`** of a read-only C string (the bool arm), then the
+buffer-filled continuation. -/
+theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp)
+    (hc : vsaChg (x.toList.length + 1) c) (hlen : x.toList.length ≤ 63) {src : BitVec 64}
+    (hsrc : binImg (GF := GF) ⊢ strAt src.toNat x)
+    {R : Nat → BitVec 64} {M : Mem} (h10 : R 10 = s + 18446744073709551504#64 + 16#64)
+    (h11 : R 11 = src) (f : SgTB s p r rv R M Mp) :
+    SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms 0x8000300c#64 R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have eB : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
+    rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have hsl : ∀ k, sgF s p k ↔ (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) := fun k => by
+    constructor
+    · intro h; by_cases h' : InExt (s.toNat - 96, 64) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact .inl (by simp only [InExt] at h ⊢; omega)
+  iintro ⟨Hrest, Hms⟩
+  ihave Hms := ms_iff hsl $$ Hms
+  ihave ⟨Hms, HB⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  ihave HB := ownSet_forget _ _ $$ HB
+  unfold SgRest
+  icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  ihave #Hs := hsrc $$ Himg
+  ihave #Hsc0 := hsc
+  unfold strcpySpec
+  ihave #Hscs := Hsc0 $$ %(s + 18446744073709551504#64 + 16#64) %src %x %64
+  rw [eB]
+  iapply (ms_callRegs Wp (i := 0x8000300c)
+    (jalx_8000300c live (fun q hq => cx.hlive _ (interp_code_8000300c q hq))) interp_code_8000300c
+    (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
+    (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
+    (by decide)
+    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin (s.toNat - 96) 64 ∧ x.toList.length + 1 ≤ 64⌝ ∗
+      (10 : Nat) ↦ᵣ (s + 18446744073709551504#64 + 16#64) ∗ (11 : Nat) ↦ᵣ src ∗
+      clobbered (12 :: argClob) ∗ blockOwn (s.toNat - 96) 64 ∗ strAt src.toNat x))
+    (Q := fun _ => iprop((10 : Nat) ↦ᵣ (s + 18446744073709551504#64 + 16#64) ∗ clobbered retClob ∗
+      (∃ img, ownImg (InExt (s.toNat - 96, 64)) img ∗ ⌜CStrImg img (s.toNat - 96) x⌝)))
+    (X := iprop(blockOwn (s.toNat - 96) 64 ∗ strAt src.toNat x))
+    (Y := fun g => iprop(⌜g 10 = s + 18446744073709551504#64 + 16#64⌝ ∗
+      (∃ img, ownImg (InExt (s.toNat - 96, 64)) img ∗ ⌜CStrImg img (s.toNat - 96) x⌝)))
+    (R := R) (S := sgFnb s p) (Mt := M) ?hP ?hQ)
+  case hP =>
+    simp only [sepL_cons, sepL_nil]
+    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, #Hs'⟩
+    iframe Hbk Hs'
+    isplitl []
+    · ipureintro
+      refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩, by omega⟩
+    isplitl [H10]
+    · rw [h10]; iexact H10
+    isplitl [H11]
+    · rw [h11]; iexact H11
+    iapply clobbered_of_fn (12 :: argClob) R
+    unfold argClob
+    simp only [sepL_cons, sepL_nil]
+    iframe H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
+  case hQ =>
+    iintro ⟨H10, Hcl, Hd⟩
+    ihave ⟨%g, Hcl⟩ := clobbered_fn retClob (by decide) $$ Hcl
+    iexists (fun y => if y = 10 then s + 18446744073709551504#64 + 16#64 else g y)
+    unfold retClob argClob
+    simp only [sepL_cons, sepL_nil]
+    icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
+    simp only [ite_true]
+    simp (config := { decide := true }) only [ite_false]
+    iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd
+  unfold blockOwn
+  iframe Hscs Hcode Hms HB Hs
+  iintro %g ⟨%hg10, Hd⟩ Hms
+  iapply sg_filled Wp A HN cx hmc hc hlen (pc := 0x80003010#64) (.inl rfl)
+    (R := upd (fun y => if y ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] then g y
+      else R y) 1 (BitVec.ofNat 64 (0x8000300c + 4))) (M := M)
+    ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h2, fun y hy hc' hy2 hy9 => by
+        have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+        have hK : y ∉ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] :=
+          fun h => hc' ((show ∀ z ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31],
+            z ∈ callerSaved by decide) y h)
+        simp only [upd, hy1, hK, ite_false]
+        exact f.hk y hy hc' hy2 hy9,
+      f.sra, f.ss0, f.ss1, f.hslot⟩
+  unfold SgRest
+  iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
+
 end Glue
 
 end VsaIris.Interp
