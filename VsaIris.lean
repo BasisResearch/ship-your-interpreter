@@ -115,6 +115,7 @@ import VsaIris.Interp.ProofNativePrintln
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Interp.SpecStringify
 import VsaIris.Interp.CallRegs
+import VsaIris.Interp.CallMalloc
 import VsaIris.Interp.EnvSteps
 import VsaIris.Interp.SpecEnv
 import VsaIris.Interp.EnvSpan

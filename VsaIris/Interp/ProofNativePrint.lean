@@ -446,13 +446,6 @@ def NpRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
 
 omit I in
 omit I in
-/-- `gp` from the code resource. -/
-theorem codeRes_gp : codeRes (GF := GF) ⊢ gp ↦ᵣ□ Newlib.gpV := by
-  unfold codeRes roOwn; simp only [sepL_cons, sepL_nil]
-  iintro ⟨⟨#H, -⟩, -⟩
-  rw [show Newlib.gpV = MallocFast.gpV from rfl]; iexact H
-
-omit I in
 /-- A newlib stdout spec is a function spec. -/
 theorem outSpec_fn {live : Nat → Prop} {Wp : MachWP (GF := GF) (vsaModel live)} {entry : BitVec 64}
     {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need : Nat} {cs : Nat → BitVec 64}

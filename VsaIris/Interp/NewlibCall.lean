@@ -95,6 +95,12 @@ theorem spIn_of_stackGeom {s : BitVec 64} {n need : Nat} (h : StackGeom s n) (hl
 
 variable {live : Nat → Prop}
 
+/-- `gp` from the code resource. -/
+theorem codeRes_gp : codeRes (GF := GF) ⊢ gp ↦ᵣ□ Newlib.gpV := by
+  unfold codeRes roOwn; simp only [sepL_cons, sepL_nil]
+  iintro ⟨⟨#H, -⟩, -⟩
+  rw [show Newlib.gpV = MallocFast.gpV from rfl]; iexact H
+
 /-- The registers after a newlib call: the arguments and temporaries at new
 values, `sp` and the callee-saved registers as before. -/
 theorem regFile_after (R : Nat → BitVec 64) (s : BitVec 64) (hs : R 2 = s) :
