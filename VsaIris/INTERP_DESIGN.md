@@ -1181,3 +1181,35 @@ without the fact and no other resource carries it:
   (`sharedWin_of_readOK`, `LeafArm.lean`). The supplier is A0, which already
   establishes `SharedWin` at the boundary (`ctl_sharedWin`); no existing
   construction of `ReadOK` changed (all consumers project fields).
+
+### STATEMENT CHANGES (E5)
+
+- **`exec_stmt`'s specs are stated at its dispatch point** (`Interp/SpecExecDisp.lean`).
+  gcc compiled the `if` arm's `return exec_stmt(in, branch, env, ret)` as a tail
+  call inside the frame: after `li a6,8; auipc a4` it jumps back to the kind
+  dispatch (`0x8000422c ld s0,16(s0); j 0x80004014`, `0x800042cc ld s0,24(s0);
+  bnez s0,0x80004014`). The branch never runs from `exec_stmt`'s entry, so the
+  entry spec `execSpecT_body` of the branch cannot discharge the arm, and no
+  entry-shaped motive can.
+  - `execDispT_body … D` (total) and `execDispP_body Core …` (partial) state the
+    arm from `0x80004014` with the 176-byte frame spilled (`DispFacts`:
+    `DispRegs` — `sp = s-176`, `s0` the statement, `s1` `in`, `s2` the `ret`
+    slot, `s3` the frame, `a6 = 8`, `a4` the jump table; `ExecSaved` — the
+    spills), the frame bytes as the tracking memory of `ms`, the stack below the
+    frame. The continuation (`execDispK`) receives the state after the
+    epilogue's `ret` (`ExecRet`).
+  - **The recursor motive of `ExecSCost` is `execDispT_body`** (A); the partial
+    Löb hypothesis is `execDispsP`. `ExecDisp.lean` recovers the entry specs by
+    running the prologue: `execSpecT_of_disp`, `execSpecP_of_disp`,
+    `execSpecsP_of_disps` (every `jal exec_stmt` caller: block/while/for bodies,
+    closure bodies, `interp_run`).
+  - The partial `if` re-dispatch is a jump, not a `jal`, so the Löb later is paid
+    by the route's run (`SymLater.lean`: `wp_swpF_later`, a symbolic run that
+    takes a step strips a `▷` from a hypothesis).
+- **Out-of-memory arms follow E2's core convention**: the partial cases of the
+  allocating arms (block, `for`: `env_new`; `var`: `env_define`) take
+  `CoreOK N L Room inp Core` and `errCtx inp`; out of memory, H5's
+  `wp_oomBlock` (`oom80002a38`, `oom80002bd0`) runs over the arm's lowered
+  stack and the resulting `abortRes` enters `Core` (`ms_callEnvNewP`,
+  `ms_callEnvDefineP`, `ExecOom.lean`). The arms fix `L`/`Room` to
+  `vsaLayoutP`/`vsaRoomB` (the `env_*` specs' heap).

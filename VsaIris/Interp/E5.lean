@@ -22,9 +22,14 @@ import VsaIris.Interp.Case.ExecWhileP
 import VsaIris.Interp.ExecEnv
 import VsaIris.Interp.ExecBlock
 import VsaIris.Interp.Case.ExecBlockT
+import VsaIris.Interp.ExecOom
+import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.ExecForT
+import VsaIris.Interp.Case.ExecForP
 import VsaIris.Interp.ExecVar
 import VsaIris.Interp.Case.ExecVarInitT
 import VsaIris.Interp.Case.ExecVarNullT
+import VsaIris.Interp.Case.ExecVarInitP
+import VsaIris.Interp.Case.ExecVarNullP
 
 /-! Lane E5's modules (statement arms of `exec_stmt`), one import for the build. -/

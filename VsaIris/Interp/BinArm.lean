@@ -1,6 +1,7 @@
 import VsaIris.Interp.Arm
 import VsaIris.Interp.ITacTree
 import VsaIris.Interp.SpecValue
+import VsaIris.Interp.SpecErr
 
 /-!
 # The binary arm's shared facts (lane E2)
@@ -138,5 +139,176 @@ the int tag. -/
 theorem kind_ne_int {w : BitVec 64} {v : Value} (h : w.toNat % 2 ^ 32 = valTag v) (hv : valTag v ≠ 2) :
     BitVec.ofNat 64 (w.toNat % 2 ^ 32) ≠ 2#64 := by
   rw [h]; cases v <;> simp [valTag] at hv ⊢ <;> decide
+
+end VsaIris.Interp
+
+/-- A load fact over a run's tracking memory, cheaply: the frame addresses are
+first rewritten to plain sums by the arm's `hoff` (`evalSP_off`), then every
+store is forwarded with `omega` alone on the goal (lane G's `ix_fwd` simps the
+whole context at each store, which a long run's memory equation makes
+expensive). -/
+syntax "e2_fwd " term : tactic
+macro_rules
+  | `(tactic| e2_fwd $h) =>
+    `(tactic| ((try simp (disch := decide) only [$h:term]); simp (disch := first | rfl | omega) only [VsaIris.Interp.slotWrite, VsaIris.Sym.ldv_store_hit, VsaIris.Sym.ldv_ld_hit_eq, VsaIris.Sym.ldv_ld_miss, VsaIris.Interp.ldv_lw_miss, VsaIris.Interp.ldv_lw_store8]))
+
+namespace VsaIris.Interp
+
+/-- A kind tag is small (a signed word load reads it back unchanged). -/
+theorem valTag_lt (v : Vsa.While.Value) : valTag v < 2 ^ 31 := by cases v <;> simp [valTag]
+
+end VsaIris.Interp
+
+
+namespace VsaIris.Sym
+
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
+
+/-! ## The comparison tail on a sign (`strcmp`'s result) -/
+
+theorem toInt_neg_iff' (res : BitVec 64) : res.toInt < 0 ↔ 2 ^ 63 ≤ res.toNat := by
+  rw [BitVec.toInt_eq_toNat_cond]; split <;> omega
+theorem sign_lt_bit (res : BitVec 64) : (res >>> 63 != 0#64) = decide (res.toInt < 0) := by
+  simp only [decide_eq_decide.mpr (toInt_neg_iff' res)]
+  have e : (res >>> 63).toNat = res.toNat / 2 ^ 63 := by
+    rw [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow]
+  have hlt := res.isLt
+  by_cases h : 2 ^ 63 ≤ res.toNat
+  · have : res >>> 63 ≠ 0#64 := fun h0 => by
+      have := congrArg BitVec.toNat h0; rw [e] at this; simp at this; omega
+    simp [this, h]
+  · have : res >>> 63 = 0#64 := by
+      apply BitVec.eq_of_toNat_eq; rw [e]; simp; omega
+    simp [this, h]
+theorem sign_le_bit (res : BitVec 64) : (sltiV res 1#64 != 0#64) = decide (res.toInt < 1) := by
+  rw [show sltiV res 1#64 = sltV res 1#64 from rfl, sltV_eq]
+  by_cases h : res.toInt < (1#64 : BitVec 64).toInt
+  · have h' : res.toInt < 1 := by simpa using h
+    simp [h']
+  · have h' : ¬ res.toInt < 1 := by simpa using h
+    simp [h']
+theorem sign_gt_bit (res : BitVec 64) : (sltV 0#64 res != 0#64) = decide (0 < res.toInt) := by
+  rw [sltV_eq]
+  by_cases h : (0#64 : BitVec 64).toInt < res.toInt
+  · have h' : 0 < res.toInt := by simpa using h
+    simp [h']
+  · have h' : ¬ 0 < res.toInt := by simpa using h
+    simp [h']
+theorem sign_ge_bit (res : BitVec 64) :
+    ((res ^^^ 0xffffffffffffffff#64) >>> 63 != 0#64) = decide (0 ≤ res.toInt) := by
+  rw [sign_lt_bit]
+  have : (res ^^^ 0xffffffffffffffff#64).toInt < 0 ↔ ¬ res.toInt < 0 := by
+    rw [toInt_neg_iff', toInt_neg_iff']
+    rw [show (0xffffffffffffffff#64 : BitVec 64) = BitVec.allOnes 64 from rfl, BitVec.xor_allOnes,
+      BitVec.toNat_not]
+    have := res.isLt; omega
+  simp only [decide_eq_decide.mpr this]; simp
+
+end VsaIris.Sym
+
+namespace VsaIris.Interp
+
+open Vsa.While VsaIris.Sym
+
+/-- `<` on strings from `strcmp`'s sign. -/
+theorem str_lt_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
+    (res >>> 63 != 0#64) = decide (x < y) := by
+  rw [sign_lt_bit]; exact decide_eq_decide.mpr h.lt
+
+/-- `<=` on strings (`binOpSem`: `a < b || a == b`). -/
+theorem str_le_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
+    (sltiV res 1#64 != 0#64) = (decide (x < y) || x == y) := by
+  rw [sign_le_bit]
+  have e1 := h.eq; have e2 := h.lt
+  by_cases h1 : res.toInt < 0
+  · have : x < y := e2.mp h1
+    simp [this, show res.toInt < 1 by omega]
+  · by_cases h2 : res = 0#64
+    · have : x = y := e1.mp h2
+      subst h2; simp [this]
+    · have hne : x ≠ y := fun e => h2 (e1.mpr e)
+      have hlt : ¬ x < y := fun e => h1 (e2.mpr e)
+      have : ¬ res.toInt < 1 := by
+        intro h3
+        have : res.toInt = 0 := by omega
+        exact h2 (BitVec.eq_of_toInt_eq (by simpa using this))
+      simp [this, hlt, hne]
+
+/-- `>` on strings (`binOpSem`: `b < a`). -/
+theorem str_gt_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
+    (sltV 0#64 res != 0#64) = decide (y < x) := by
+  rw [sign_gt_bit]; exact decide_eq_decide.mpr h.gt
+
+/-- `>=` on strings (`binOpSem`: `b < a || a == b`). -/
+theorem str_ge_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
+    ((res ^^^ 0xffffffffffffffff#64) >>> 63 != 0#64) = (decide (y < x) || x == y) := by
+  rw [sign_ge_bit]
+  have e1 := h.eq; have e3 := h.gt
+  by_cases h1 : 0 < res.toInt
+  · have : y < x := e3.mp h1
+    simp [this, show 0 ≤ res.toInt by omega]
+  · by_cases h2 : res = 0#64
+    · have : x = y := e1.mp h2
+      subst h2; simp [this]
+    · have hne : x ≠ y := fun e => h2 (e1.mpr e)
+      have hlt : ¬ y < x := fun e => h1 (e3.mpr e)
+      have : ¬ 0 ≤ res.toInt := by
+        intro h3
+        have : res.toInt = 0 := by omega
+        exact h2 (BitVec.eq_of_toInt_eq (by simpa using this))
+      simp [this, hlt, hne]
+
+end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+open Vsa.While
+
+theorem small_ne_three {k : Nat} (hk : k < 2 ^ 31) (hv : k ≠ 3) :
+    BitVec.ofNat 64 k + 18446744073709551613#64 ≠ 0#64 := by
+  intro h0
+  have e := congrArg BitVec.toNat h0
+  rw [BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.toNat_ofNat] at e
+  simp only [BitVec.toNat_ofNat] at e
+  omega
+
+/-- A kind word read back from a value's first word is not the string tag,
+in the form the comparison arm tests it (`addi a5,a0,-3; bnez a5`). -/
+theorem kind_ne_str {w : BitVec 64} {v : Value} (h : w.toNat % 2 ^ 32 = valTag v) (hv : valTag v ≠ 3) :
+    BitVec.ofNat 64 (w.toNat % 2 ^ 32) + 18446744073709551613#64 ≠ 0#64 := by
+  rw [h]; exact small_ne_three (valTag_lt v) hv
+
+/-- The rows of a comparison (`<`, `<=`, `>`, `>=`), in the machine's order of
+tests: two ints; two strings; a non-int left operand with the right one not a
+string; a non-int, non-string left operand with a string right one; an int
+left operand with a non-int, non-string right one; an int and a string. -/
+theorem cmpRows (lv rv : Value) :
+    (∃ a b, lv = .int a ∧ rv = .int b) ∨ (∃ x y, lv = .str x ∧ rv = .str y) ∨
+    (valTag rv ≠ 3 ∧ valTag lv ≠ 2) ∨ (∃ y, rv = .str y ∧ valTag lv ≠ 2 ∧ valTag lv ≠ 3) ∨
+    (∃ a, lv = .int a ∧ valTag rv ≠ 2 ∧ valTag rv ≠ 3) ∨ (∃ a y, lv = .int a ∧ rv = .str y) := by
+  cases lv <;> cases rv <;> simp [valTag]
+
+end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+/-- Machine multiplication of two 64-bit integers is the source's wrapping
+product. -/
+theorem toInt_mul_wrap (x y : BitVec 64) : (x * y).toInt = Vsa.While.wrap64 (x.toInt * y.toInt) := by
+  unfold Vsa.While.wrap64; rw [BitVec.toInt_mul, BitVec.toInt_ofInt]
+
+end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+open Vsa.While
+
+/-- The rows of `/` and `%`: two ints with a nonzero divisor; a zero divisor;
+a non-int left operand; an int beside a non-int right operand. -/
+theorem divRows (lv rv : Value) :
+    (∃ a b, lv = .int a ∧ rv = .int b ∧ b ≠ 0) ∨ (∃ a, lv = .int a ∧ rv = .int 0) ∨
+    valTag lv ≠ 2 ∨ (∃ a, lv = .int a ∧ valTag rv ≠ 2) := by
+  cases lv <;> cases rv <;> simp [valTag]
+  rename_i b; by_cases h : b = 0 <;> simp [h]
 
 end VsaIris.Interp

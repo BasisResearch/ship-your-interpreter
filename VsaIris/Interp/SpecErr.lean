@@ -60,6 +60,35 @@ def valueKindNameSpec (Wp : MachWP (GF := GF) M) (p : BitVec 64) (Mt : Mem) (v :
     (fun rv' => iprop(ownSet (InExt (p.toNat, 24)) (fun a => a ↦ₘ imgM Mt a) ∗
       ⌜rv' 10 = kindNamePtr v⌝))
 
+/-- The sign class of `strcmp`'s result (newlib's lane-compare tail returns a
+multiple of the first difference, so only the sign is the contract: H3's
+finding, `Vsa/Sim/StrcmpSpecW.lean`'s sign-class `Q`). The strings are ASCII
+(`CStrImg`), so byte order is `String`'s order. -/
+structure StrcmpSign (res : BitVec 64) (x y : String) : Prop where
+  eq : res = 0#64 ↔ x = y
+  lt : res.toInt < 0 ↔ x < y
+  gt : 0 < res.toInt ↔ y < x
+
+/-- `strcmp(p, q)` with its result's sign (the ordering comparisons need
+more than `strcmpSpecV`'s equality). Callee spec: H3's `strcmp` proof supplies
+it. -/
+def strcmpOrdSpec (Wp : MachWP (GF := GF) M) : IProp GF :=
+  iprop(□ ∀ (p q : BitVec 64) (x y : String),
+    helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
+      iprop(strAt p.toNat x ∗ strAt q.toNat y)
+      (fun rv' => iprop(⌜StrcmpSign (rv' 10) x y⌝)))
+
+instance (Wp : MachWP (GF := GF) M) : Persistent (strcmpOrdSpec M Wp) := by
+  unfold strcmpOrdSpec; infer_instance
+
+/-- One instance of `strcmpOrdSpec`. -/
+theorem strcmpOrdSpec_at {Wp : MachWP (GF := GF) M} (p q : BitVec 64) (x y : String) :
+    strcmpOrdSpec M Wp ⊢ helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
+      iprop(strAt p.toNat x ∗ strAt q.toNat y) (fun rv' => iprop(⌜StrcmpSign (rv' 10) x y⌝)) := by
+  unfold strcmpOrdSpec
+  iintro #H
+  iapply H
+
 /-- The persistent resources of an error arm: the binary's image and the
 `jmp_buf` read-only with its `ra` word 4-aligned. -/
 def errCtx (inp : Nat) : IProp GF :=

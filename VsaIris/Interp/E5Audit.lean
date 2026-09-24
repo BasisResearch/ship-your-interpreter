@@ -35,3 +35,10 @@ import VsaIris.Interp.E5
 #print axioms VsaIris.Interp.caseT_ExecVarNull
 #print axioms VsaIris.Interp.varTail
 #print axioms VsaIris.Interp.ms_callEnvDefine
+#print axioms VsaIris.Interp.caseP_ExecBlock
+#print axioms VsaIris.Interp.ms_callEnvNewP
+#print axioms VsaIris.Interp.caseP_ExecFor
+#print axioms VsaIris.Interp.caseP_ExecVarInit
+#print axioms VsaIris.Interp.caseP_ExecVarNull
+#print axioms VsaIris.Interp.varTailP
+#print axioms VsaIris.Interp.ms_callEnvDefineP
