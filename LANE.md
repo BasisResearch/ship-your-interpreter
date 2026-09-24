@@ -24,18 +24,22 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   first `simp` closes; `upd_self_eq` pins a register's known value into the file.
   `MHeap.glob_off`: the stack window misses the allocator globals.
 
+- **The last remainder's split** (`0x80004da0`, `lr_split` in `Vsa/MallocSplit.lean`),
+  over the new heap edit `PHeapAt.splitFree` (`Vsa/HeapCarve.lean`): `PHeapAt.take` into a
+  virtual intermediate memory, then `PHeapAt.carve` (shrink an in-use chunk, the tail alone
+  on bin 1). `lr_split_ret` is the heap half, reusable by the block walk's split.
+
 ## In flight
-- The four residual malloc joins (`malloc_paths`' hypotheses): the large-bin scan
-  (`0x80004884`), the last-remainder split (`0x80004da0`), the re-binding (`0x8000491c`)
-  and the block walk (`0x80004978`).
+- The three residual malloc joins (`malloc_paths`' hypotheses): the large-bin scan
+  (`0x80004884`), the re-binding (`0x8000491c`) and the block walk (`0x80004978`).
 
 ## Holes
 - Unchanged: `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`,
   `alloc.freeLocalRun`, `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
 
 ## Next
-1. The last-remainder split and the block-walk split share one heap edit (a free chunk split
-   in the middle of the walk, remainder to bin 1); build it once (`PHeapAt.splitFree`).
+1. The block walk's split (`0x80004d14`) reuses `PHeapAt.splitFree` with `i` the victim's
+   bin; its exact fit (`0x800049e8`) is `PHeapAt.take`.
 2. The re-binding and `_free_r`'s frontlink share a sorted insert into a large bin; generalize
    `PHeapAt.moveBin` to an insertion point.
 3. The large-bin scan and the block walk are loops: inductions over the bin list with `AW` as

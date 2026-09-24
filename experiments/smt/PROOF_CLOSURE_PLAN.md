@@ -2800,10 +2800,12 @@ return (`lr_check`, `lr_take`), the block search's entry (`bb_check`), the
 top split (`top_path`, `top_split`, over the new `PHeapAt.topSplit`) and
 `malloc_extend_top` (`extend_top`, `VsaIris/Vsa/MallocExtend.lean`: the
 `_sbrk_r` call as one step `sbrk_r_run`, the in-place growth over
-`PHeapAt.topGrow`, and the NULL return). Four joins remain, and are exactly
-`malloc_paths`' hypotheses: the large-bin scan (`0x80004884`), the
-last-remainder split (`0x80004da0`), the re-binding of a too-small remainder
-(`0x8000491c`) and the block walk (`0x80004978`).
+`PHeapAt.topGrow`, and the NULL return), and the last remainder's split
+(`lr_split`, `VsaIris/Vsa/MallocSplit.lean`, over `PHeapAt.splitFree`: the
+take composed with `PHeapAt.carve` through a virtual intermediate memory).
+Three joins remain, and are exactly `malloc_paths`' hypotheses: the large-bin
+scan (`0x80004884`), the re-binding of a too-small remainder (`0x8000491c`)
+and the block walk (`0x80004978`).
 
 CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
 `heapEnd < top0 + physSize n + extendSlack`, which the code does not

@@ -1,4 +1,4 @@
-import VsaIris.Vsa.MallocExtend
+import VsaIris.Vsa.MallocSplit
 
 /-!
 # `_malloc_r` from its entry, on the proved paths
@@ -6,8 +6,8 @@ import VsaIris.Vsa.MallocExtend
 `malloc_paths` chains every `_malloc_r` join proved so far — the prologue and
 error return (`malloc_pro`), the small-bin check and take (`j_small`,
 `small_take`), the last-remainder check and its exact-fit return (`lr_last`),
-the block search's entry, the top split and `malloc_extend_top` (`bb_top`,
-`extend_top`) — into one statement
+the last remainder's split (`lr_split`), the block search's entry, the top
+split and `malloc_extend_top` (`bb_top`, `extend_top`) — into one statement
 from the function's entry `0x800047a8`.
 
 Its hypotheses are exactly the joins still to prove, so the file is the
@@ -16,7 +16,6 @@ residual ledger for `IrisHoles.alloc`'s malloc half:
 | PC | what runs there |
 |---|---|
 | `0x80004884` | the large-bin index and scan |
-| `0x80004da0` | splitting the last remainder |
 | `0x8000491c` | putting a too-small remainder back on its own bin |
 | `0x80004978` | the block walk over `binblocks` |
 -/
@@ -25,9 +24,9 @@ namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 
-/-- **`_malloc_r` on its proved paths.** From the entry, with the four joins
+/-- **`_malloc_r` on its proved paths.** From the entry, with the three joins
 still open as hypotheses, a request either returns a block off a small bin,
-off the exact-fit last remainder, or off the top (split in place or after
+off the last remainder (whole or split), or off the top (split in place or after
 `sbrk` grew it) — or returns NULL because the arena cannot hold it. -/
 theorem malloc_paths {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
@@ -35,9 +34,6 @@ theorem malloc_paths {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     (hlarge : ∀ R' Mt nb, MFrame C R' Mt → MHeap C Mt brkv chunks bins → NbOK C.n nb →
       503 < nb → nb < 2 ^ 31 → (R' 14).toNat = nb → R' 8 = reentV →
       AW C.live C.S C.Q 0x80004884#64 R' Mt)
-    (hsplit : ∀ R' Mt nb idx v sz, MFrame C R' Mt → MHeap C Mt brkv chunks bins →
-      LRRegs nb idx R' → LRVictim nb sz v R' → R' 8 = reentV → bins 1 = [v] →
-      FreeAt chunks v sz → nb + 32 ≤ sz → AW C.live C.S C.Q 0x80004da0#64 R' Mt)
     (hrebin : ∀ R' Mt Mt' nb idx v sz, MFrame C R' Mt' → MHeap C Mt brkv chunks bins →
       MDetach C Mt Mt' bins 1 v → LRRegs nb idx R' → LRVictim nb sz v R' → R' 8 = reentV →
       FreeAt chunks v sz → sz < nb → AW C.live C.S C.Q 0x8000491c#64 R' Mt')
@@ -58,8 +54,7 @@ theorem malloc_paths {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
   have hidx : nb / 8 + 2 < numBins := by
     have := hnb.al; have := hnb.lo; unfold numBins; omega
   refine lr_last O F2 Hp1 G2 h82 hnb hnb31 (fun _ R3 F3 G3 h83 => ?_)
-    (fun v sz hbin hfree hle R3 F3 G3 V3 h83 => hsplit R3 Mt1 nb _ v sz F3 Hp1 G3 V3 h83
-      hbin hfree hle)
+    (fun v sz hbin hfree hle R3 F3 G3 V3 _ => lr_split O F3 Hp1 G3 V3 hnb hbin hfree hle)
     (fun v sz hfree hlt R3 Mt3 F3 D3 G3 V3 h83 =>
       hrebin R3 Mt1 Mt3 nb _ v sz F3 Hp1 D3 G3 V3 h83 hfree hlt)
   exact bb_top O F3 Hp1 G3 h83 hidx hnb hnb31
