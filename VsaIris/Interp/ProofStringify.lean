@@ -433,6 +433,16 @@ theorem intToString_len_le (i : Int) (h1 : -(2 ^ 63) ≤ i) (h2 : i < 2 ^ 63) :
     have := natDigits_len (m + 1 + 1) (m + 1) 19 (by omega) (by decide)
     simp; omega
 
+/-- `"<fn>"` as the anonymous-closure arm stores it: one word and a NUL. -/
+theorem cstr_fn (Mt : Mem) (a : Nat) :
+    CStrImg (imgM (writeLog (writeLog Mt [(a, 4, 1047422524#64)]) [(a + 4, 1, 0#64)])) a "<fn>" := by
+  refine ⟨fun i hi => ?_, ?_⟩
+  · have hi' : i < 4 := by simpa using hi
+    rw [imgM_store_miss _ _ (by omega), imgM_sw _ _ _ _ hi']
+    rcases i with _ | _ | _ | _ | i
+    all_goals first | omega | (revert hi hi'; decide)
+  · rw [show a + "<fn>".toList.length = a + 4 from rfl, imgM_sb]; decide
+
 /-! ## The Iris glue -/
 
 section Glue
@@ -2002,6 +2012,80 @@ theorem sg_strArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp ∗
       ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ :=
   sg_strHead Wp cx hsl hk hslot fun _ _ f2 => sg_strMalloc Wp A HN cx hmcr hc hlt f2
+
+/-- A closure's arm entry (`0x8000301c`): the prologue's frame words saved,
+the value's slot untouched. -/
+structure SgC0 (s p r : BitVec 64) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
+  h10 : R 10 = p
+  h2 : R 2 = s + 18446744073709551504#64
+  hk : ∀ y ∈ fRegs, y ∉ callerSaved → y ≠ 2 → R y = rv y
+  sra : ldv .ld M (s + 18446744073709551504#64 + 104#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551504#64 + 96#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
+  hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
+
+/-- The closure object's and name field's facts the arm's loads need. -/
+structure SgClo (M Dt : Mem) (p : BitVec 64) (cp q nm : Nat) : Prop where
+  hw8 : ldv .ld M (p + 8#64).toNat = BitVec.ofNat 64 cp
+  hc0 : ReadOK cp
+  hc7 : ReadOK (cp + 7)
+  hq : ldv .ld Dt cp = BitVec.ofNat 64 q
+  hq0 : ReadOK (q + 8)
+  hq7 : ReadOK (q + 15)
+  hnm : ldv .ld Dt (q + 8) = BitVec.ofNat 64 nm
+  hcp : cp < 2 ^ 64
+  hql : q + 8 < 2 ^ 64
+
+/-- **An anonymous closure**: `"<fn>"` stored inline, then the shared tail. -/
+theorem sg_cloAnon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hc : vsaChg ("<fn>".toList.length + 1) c)
+    {Dt : Mem} {cp q : Nat} {R : Nat → BitVec 64} {M : Mem} (f0 : SgC0 s p r rv R M Mp)
+    (fc : SgClo M Dt p cp q 0) :
+    roOwn roR (interpText ++ dataOf Dt (clodA cp q)) ∗
+      SgRest Wp Φ N inp p s r v "<fn>" ρ H c o rv Mp ∗ ms 0x8000301c#64 R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hoff := sg_offs (s := s) (by omega)
+  have hsep := cx.sep
+  have e16 : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
+    rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have e20 : (s + 18446744073709551504#64 + 16#64 + 4#64).toNat = s.toNat - 96 + 4 := by
+    rw [BitVec.toNat_add, e16]; simp; omega
+  iintro ⟨#Hview, Hrest, Hms⟩
+  iapply wp_swpF Wp (text := interpText ++ dataOf Dt (clodA cp q)) (S := sgF s p) (R := R)
+    (Mt := M) (pc := 0x8000301c#64) (F := SgRest Wp Φ N inp p s r v "<fn>" ρ H c o rv Mp)
+  rotate_left
+  · iframe Hview Hrest Hms
+  intro F'
+  refine sg_cloA cx.hlive f0.h10 f0.h2 (by omega) hs2 hs3 cx.hg.al
+    (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi fc.hw8 fc.hc0 fc.hc7
+    fc.hq fc.hq0 fc.hq7 fc.hnm fc.hcp fc.hql ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  refine sg_tail Wp A HN cx hmc hc ⟨by ix_reg, by ix_reg, by ix_reg; exact f0.h2, ?_, ?_, ?_, ?_, ?_,
+    by rw [e20, e16]; exact cstr_fn _ _, by decide⟩
+  · intro y hy hc' hy2 hy9
+    have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+    have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc' (e ▸ hz)
+    simp only [upd, hy9, hcl 10 (by decide), hcl 13 (by decide), hcl 15 (by decide), ite_false]
+    exact f0.hk y hy hc' hy2
+  · rw [e20, e16, hoff 104 (by omega)]
+    simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss]
+    rw [← hoff 104 (by omega)]; exact f0.sra
+  · rw [e20, e16, hoff 96 (by omega)]
+    simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss]
+    rw [← hoff 96 (by omega)]; exact f0.ss0
+  · rw [e20, e16, hoff 88 (by omega)]
+    simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss]
+    rw [← hoff 88 (by omega)]; exact f0.ss1
+  · intro k hk
+    simp only [InExt] at hk
+    rw [e20, e16]
+    simp (disch := omega) only [imgM_store_miss]
+    exact f0.hslot k (by simp only [InExt]; omega)
 
 end Glue
 
