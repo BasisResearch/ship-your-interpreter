@@ -146,6 +146,7 @@ import VsaIris.Interp.CallArm
 import VsaIris.Interp.CallPrefix
 import VsaIris.Interp.CallNative
 import VsaIris.Interp.CallNativeOut
+import VsaIris.Interp.CallNativeSeg
 import VsaIris.Interp.CallPrefixP
 import VsaIris.Interp.CallErr
 import VsaIris.Interp.CallSeg

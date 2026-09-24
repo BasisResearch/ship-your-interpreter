@@ -485,9 +485,12 @@ instance (inp : Nat) (jb : Nat → BitVec 8) : Persistent (jmpRO (GF := GF) inp 
   unfold jmpRO; infer_instance
 
 /-- The context inside `interp_run`, after `setjmp`, with `err_msg` as `E`:
-the `jmp_buf` is read-only (H5 reads the landing registers off it). -/
+the `jmp_buf` is read-only (H5 reads the landing registers off it), its saved
+`ra` word 4-aligned (`runtime_error`'s `longjmp` returns there; `setjmp`
+stored `0x80004428`; lane E4: every `runtime_error` site needs it, in either
+mode). -/
 def interpCtxE (inp d : Nat) (E : IProp GF) : IProp GF :=
-  iprop(interpCoreE inp d E ∗ ∃ jb, jmpRO inp jb)
+  iprop(interpCoreE inp d E ∗ ∃ jb, jmpRO inp jb ∗ ⌜(imgW jb (inp + interpJmpOff)).toNat % 4 = 0⌝)
 
 /-- The context inside `interp_run`, after `setjmp`. -/
 def interpCtx (inp d : Nat) : IProp GF := interpCtxE inp d (errAny inp)
