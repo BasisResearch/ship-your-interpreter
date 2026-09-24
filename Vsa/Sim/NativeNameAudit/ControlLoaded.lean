@@ -1,18 +1,18 @@
-import Vsa.Sim.NativeNameAudit.ControlOwnership
+import Vsa.Sim.NativeNameAudit.ControlBootHeap
 
 namespace Vsa.Sim.NativeNameAudit.Control
 open Vsa.Sim.OutputAliasLoaded Vsa.Sim.LayoutInstance
 
 /-- A concrete dense snapshot with a consistent dlmalloc heap inhabits the live
-ownership boundary. -/
+ownership boundary, including the boundary heap facts (`bootHeap`). -/
 theorem readyFacts : InterpRunReadyFacts heapConfig 0x82000000 2 fixedInp
     Nfixed heapArena phif phic 0 where
   toInterpRunPhysicalFacts := heapPhysicalFactsAt
-  ownership := ⟨ownershipData, by
-    show RuntimeOwnership.InitialOwned (physicalConfig heapMem).σ.mem heapArena stackSL phif phic
-      0x82000000 2 ownershipData
+  boot := ⟨ownershipData, heapTop, heapBrk, heapChunks, fun _ => [], bootFrame, by
+    show BootHeap (physicalConfig heapMem).σ.mem heapArena phif phic 0x82000000 2 ownershipData
+      heapTop heapBrk heapChunks (fun _ => []) bootFrame
     rw [physicalConfig_mem]
-    exact initialOwned⟩
+    exact bootHeap⟩
   stack_admissible := by
     intro p hp
     change Vsa.MemRepr.ProgramRepr (physicalConfig heapMem).σ.mem 0x82000000 2 p at hp

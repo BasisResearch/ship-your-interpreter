@@ -25,7 +25,7 @@ value slots `valAt`/`slot24`, and the allocator's `heapRes` in either regime
   caller discharges the abort branch by that pure fact.
 
 Callee specs taken as hypotheses (proved by other lanes): `strcmpSpec`,
-`strlenSpec`, `memcpySpec` (H3), the allocator (`VsaHeap.AllocHoles`, H4) and
+`strlenSpec`, `memcpySpec` (H3), the allocator (`VsaHeap.allocSpecs`, proved by H4) and
 `realloc(NULL, n)` (`ReallocNullRuns`, an `IrisHoles` field, H4).
 -/
 
@@ -258,7 +258,7 @@ end Store
 (`names`/`vals` are NULL while `cap = 0`). `_realloc_r` tail-calls
 `_malloc_r` on a NULL pointer (`0x80005290: beqz a1`, `0x80005484: j
 _malloc_r`), so the run is `malloc`'s from `realloc`'s entry with the
-request in `a1`. `AllocHoles` covers only the grow path of a live block;
+request in `a1`. H4's proved runs cover only the grow path of a live block;
 these two runs are stated like `MallocChgRun`/`MallocLocalRun` and H4
 discharges them with seven step lemmas (`st_8000527c` …) and its
 `_malloc_r` entry lemma. -/

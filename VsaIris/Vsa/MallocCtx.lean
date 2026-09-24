@@ -71,35 +71,99 @@ structure MRegs (C : MCtx) (R : Nat → BitVec 64) : Prop where
   s2 : R 18 = C.rv0 18
   s3 : R 19 = C.rv0 19
 
+/-- **The live chunks survive**: the in-use chunk holding each live block, as
+the entry memory's header records it, is in `chunks`. `_malloc_r` resizes
+no chunk that holds a live block; `_realloc_r` relies on this after its
+nested `_malloc_r`. -/
+def LiveKeep (C : MCtx) (chunks : List Chunk) : Prop :=
+  ∀ e ∈ C.H, ∀ h0, read64 C.Mt0 (e.1 - 8) = some h0 →
+    (⟨e.1 - 16, chunkSize h0, true⟩ : Chunk) ∈ chunks
+
+theorem LiveKeep.mono {C : MCtx} {l l' : List Chunk} (h : LiveKeep C l)
+    (hs : ∀ c ∈ l, c.inuse = true → c ∈ l') : LiveKeep C l' :=
+  fun e he h0 hr => hs _ (h e he h0 hr) rfl
+
+theorem LiveKeep.map_reflag {C : MCtx} {l : List Chunk} (h : LiveKeep C l) (q : Nat) :
+    LiveKeep C (l.map (reflag q true)) :=
+  h.mono fun c hc hu => List.mem_map.2 ⟨c, hc, by
+    obtain ⟨a, sz, i⟩ := c
+    simp only at hu; subst hu
+    unfold reflag; split <;> rfl⟩
+
+/-- Splitting a free chunk keeps the live chunks. -/
+theorem LiveKeep.split {C : MCtx} {chunks cs₁ cs₂ : List Chunk} {v sz : Nat} (h : LiveKeep C chunks)
+    (hsp : chunks = cs₁ ++ ⟨v, sz, false⟩ :: cs₂) (X Y : Chunk) :
+    LiveKeep C (cs₁ ++ X :: Y :: cs₂) :=
+  h.mono fun c hc hu => by
+    rw [hsp] at hc
+    rcases List.mem_append.1 hc with h1 | h1
+    · exact List.mem_append_left _ h1
+    · rcases List.mem_cons.1 h1 with rfl | h1
+      · cases hu
+      · exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h1))
+
+/-- The live chunks of the heap at the entry memory. -/
+theorem LiveKeep.of_heap {C : MCtx} {top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
+    (h : PHeapAt C.Mt0 C.H top brkv chunks bins) : LiveKeep C chunks := by
+  intro e he h0 hr
+  have HH := h.heap.heap
+  obtain ⟨c, hc, hu, hca, _⟩ := HH.exact e he he
+  obtain ⟨hh, hhr, hhs, _⟩ := walk_header HH.walk c hc
+  rw [show c.addr + 8 = e.1 - 8 by omega, hr] at hhr
+  cases hhr
+  obtain ⟨a, sz, i⟩ := c
+  simp only at hu hca hhs
+  subst hu
+  rw [hhs, show e.1 - 16 = a by omega]
+  exact hc
+
 /-- A return with a fresh block: the heap extended by it, the top grown by at
 most the block's chunk, the footprint present, and every byte outside the
 write window at its entry value. -/
 structure MRet (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   regs : MRegs C R
-  fresh : FreshBlock vsaLayoutP C.H (R 10).toNat C.n.toNat
+  fresh : FreshAt C.H (R 10).toNat C.n.toNat
   align : (R 10).toNat % 16 = 0
   heap : ∃ top brkv chunks bins,
     PHeapAt Mt (((R 10).toNat, C.n.toNat) :: C.H) top brkv chunks bins ∧
-      top ≤ C.top0 + physSize C.n.toNat
+      top ≤ C.top0 + physSize C.n.toNat ∧ LiveKeep C chunks
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
+/-- **Starvation**: the arena above the entry top cannot hold twice the
+request's chunk with a page to spare. `malloc_extend_top` asks `sbrk` for the
+chunk plus `MINSIZE`, rounded up to a page, on top of a top chunk that may
+already hold up to the chunk plus `MINSIZE`, so a failed `sbrk` bounds the
+arena by this much. The counted regime's credits refute it (`mOK_chg`). -/
+def Starved (top0 n : Nat) : Prop := heapEnd + 4096 < top0 + 2 * physSize n + extendSlack
+
+/-- A request whose chunk alone overruns the arena starves. -/
+theorem Starved.of_lt {top0 n : Nat} (h : heapEnd < top0 + physSize n) : Starved top0 n :=
+  Nat.lt_of_lt_of_le (Nat.add_lt_add_right h 4096) (by
+    generalize physSize n = P
+    unfold extendSlack; omega)
+
 /-- A NULL return: the heap in shape at the same live blocks, and the reason,
-the arena cannot hold the request's chunk above the entry top. -/
+the arena cannot hold the request (`Starved`). -/
 structure MNull (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   regs : MRegs C R
   a0 : R 10 = 0
   heap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
-  starved : heapEnd < C.top0 + physSize C.n.toNat + extendSlack
+  starved : Starved C.top0 C.n.toNat
 
-/-- The obligations of a `_malloc_r` call context. -/
-structure MOK (C : MCtx) : Prop where
+/-- The obligations every allocator call context shares: the code is live,
+the caller's `sp` has room, the write window is owned, and the return
+address is word-aligned. -/
+structure WOK (C : MCtx) : Prop where
   live : AllocLive C.live
   sp : MSp C.s
   own : ∀ a, MWin C.H C.s a → C.S a
   ral : C.r.toNat % 4 = 0
+
+/-- The obligations of a `_malloc_r` call context. -/
+structure MOK (C : MCtx) : Prop extends WOK C where
   ok : ∀ R Mt, MRet C R Mt → AW C.live C.S C.Q C.r R Mt
   null : ∀ R Mt, MNull C R Mt → AW C.live C.S C.Q C.r R Mt
 
@@ -122,42 +186,54 @@ structure MHeap (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk)
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
+  live : LiveKeep C chunks
 
 /-! ## Ownership -/
 
 /-- Stack bytes of the window are owned. -/
-theorem MOK.stack {C : MCtx} (O : MOK C) {a w : Nat} (h1 : C.s.toNat - mHead ≤ a)
+theorem WOK.stack {C : MCtx} (O : WOK C) {a w : Nat} (h1 : C.s.toNat - mHead ≤ a)
     (h2 : a + w ≤ C.s.toNat) : ∀ b ∈ accAddrs a w, C.S b := by
   intro b hb
   have := of_mem_accAddrs hb
   exact O.own b (.inr ⟨by omega, by omega⟩)
 
 /-- Footprint bytes are owned. -/
-theorem MOK.foot {C : MCtx} (O : MOK C) {a w : Nat} (h : ∀ k, k < w → vsaFoot C.H (a + k)) :
+theorem WOK.foot {C : MCtx} (O : WOK C) {a w : Nat} (h : ∀ k, k < w → vsaFoot C.H (a + k)) :
     ∀ b ∈ accAddrs a w, C.S b := by
   intro b hb
   obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hb
   exact O.own _ (.inl (h j (List.mem_range.mp hj)))
 
 /-- An owned footprint doubleword at an address equal to `a'`. -/
-theorem MOK.foot_at {C : MCtx} (O : MOK C) {a' : Nat} (h : ∀ k, k < 8 → vsaFoot C.H (a' + k)) :
+theorem WOK.foot_at {C : MCtx} (O : WOK C) {a' : Nat} (h : ∀ k, k < 8 → vsaFoot C.H (a' + k)) :
     ∀ a, a = a' → ∀ b ∈ accAddrs a 8, C.S b := by
   intro a he; subst he; exact O.foot h
 
 /-- An allocator-global doubleword is owned. -/
-theorem MOK.glob {C : MCtx} (O : MOK C) {a : Nat} (h1 : 0x8001ad10 ≤ a) (h2 : a + 8 ≤ 0x8001b520) :
+theorem WOK.glob {C : MCtx} (O : WOK C) {a : Nat} (h1 : 0x8001ad10 ≤ a) (h2 : a + 8 ≤ 0x8001b520) :
     ∀ b ∈ accAddrs a 8, C.S b :=
   O.foot fun k hk => .inl (.inl ⟨by omega, by omega⟩)
 
 /-- The bin headers' link words are owned. -/
-theorem MOK.bin_link {C : MCtx} (O : MOK C) {j a : Nat} (hj : j < numBins)
+theorem WOK.bin_link {C : MCtx} (O : WOK C) {j a : Nat} (hj : j < numBins)
     (ha : a = binAt j + 16 ∨ a = binAt j + 24) : ∀ b ∈ accAddrs a 8, C.S b := by
   have := binAt_geo j hj
   rcases ha with rfl | rfl <;> exact O.glob (by omega) (by omega)
 
+theorem MOK.stack {C : MCtx} (O : MOK C) {a w : Nat} (h1 : C.s.toNat - mHead ≤ a)
+    (h2 : a + w ≤ C.s.toNat) : ∀ b ∈ accAddrs a w, C.S b := O.toWOK.stack h1 h2
+
+theorem MOK.foot {C : MCtx} (O : MOK C) {a w : Nat} (h : ∀ k, k < w → vsaFoot C.H (a + k)) :
+    ∀ b ∈ accAddrs a w, C.S b := O.toWOK.foot h
+
 /-- Frame bytes are owned: the `sx_side` rule for stack accesses. -/
 macro_rules
   | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.stack ‹VsaIris.VsaHeap.MOK _› ?_ ?_ <;> ((try unfold VsaIris.VsaHeap.mHead) ; sx_addr)))
+
+/-- Allocator globals are owned: the `sx_side` rule for accesses at a literal
+global address. -/
+macro_rules
+  | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.foot ‹VsaIris.VsaHeap.MOK _› (fun k hk => Or.inl ?_); unfold VsaIris.VsaHeap.allocGlobal VsaIris.VsaHeap.InRange; omega))
 
 /-! ## Stack arithmetic -/
 
@@ -178,6 +254,31 @@ theorem MHeap.off_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
   have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
     split <;> omega
   exact Hp.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
+
+/-- The stack window misses the `_errno` word and the run of allocator
+globals from `__malloc_sbrk_base` to `__malloc_current_mallinfo`: every gap
+between them is narrower than the window. -/
+theorem glob_off_of {H : List (Nat × Nat)} {s : BitVec 64}
+    (hd : ∀ a, s.toNat - mHead ≤ a → a < s.toNat → ¬ vsaFoot H a) :
+    (s.toNat ≤ 0x8001b538 ∨ 0x8001b53c + mHead ≤ s.toNat) ∧
+      (s.toNat ≤ 0x8001b960 ∨ 0x8001ba68 + mHead ≤ s.toNat) := by
+  have g : ∀ a, allocGlobal a → ¬ (s.toNat - mHead ≤ a ∧ a < s.toNat) :=
+    fun a ha hw => hd a hw.1 hw.2 (.inl ha)
+  have h1 := g 0x8001b538 (by unfold allocGlobal InRange; omega)
+  have h2 := g 0x8001b53b (by unfold allocGlobal InRange; omega)
+  have h3 := g 0x8001b960 (by unfold allocGlobal InRange; omega)
+  have h4 := g 0x8001b990 (by unfold allocGlobal InRange; omega)
+  have h5 := g 0x8001ba08 (by unfold allocGlobal InRange; omega)
+  have h6 := g 0x8001ba18 (by unfold allocGlobal InRange; omega)
+  have h7 := g 0x8001ba67 (by unfold allocGlobal InRange; omega)
+  unfold mHead at *
+  omega
+
+theorem MHeap.glob_off {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) :
+    (C.s.toNat ≤ 0x8001b538 ∨ 0x8001b53c + mHead ≤ C.s.toNat) ∧
+      (C.s.toNat ≤ 0x8001b960 ∨ 0x8001ba68 + mHead ≤ C.s.toNat) :=
+  glob_off_of Hp.disj
 
 /-- A footprint range of positive width lies wholly below or above the stack window. -/
 theorem MHeap.off_stack_w {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
@@ -247,6 +348,7 @@ theorem MHeap.store_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chun
   pres := pres_store Hp.pres
   disj := Hp.disj
   frame := frame_store (win_stack h1 h2) Hp.frame
+  live := Hp.live
 
 /-- The heap invariant through a store to `_errno`, which `HeapAt` never reads. -/
 theorem MHeap.store_errno {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
@@ -260,6 +362,7 @@ theorem MHeap.store_errno {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chun
   pres := pres_store Hp.pres
   disj := Hp.disj
   frame := frame_store (fun b h1 h2 => .inl (.inl (.inr (.inl ⟨h1, h2⟩)))) Hp.frame
+  live := Hp.live
 
 /-- The frame through a register write other than `sp` and `s1-s3`. -/
 theorem MFrame.upd {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt) {k : Nat}
@@ -359,10 +462,10 @@ theorem epi_core {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
 
 /-- The epilogue's end with a fresh block in `a0`. -/
 theorem MOK.fin_ok {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
-    (hfresh : FreshBlock vsaLayoutP C.H (R 10).toNat C.n.toNat) (hal : (R 10).toNat % 16 = 0)
+    (hfresh : FreshAt C.H (R 10).toNat C.n.toNat) (hal : (R 10).toNat % 16 = 0)
     (hheap : ∃ top brkv chunks bins,
       PHeapAt Mt (((R 10).toNat, C.n.toNat) :: C.H) top brkv chunks bins ∧
-        top ≤ C.top0 + physSize C.n.toNat)
+        top ≤ C.top0 + physSize C.n.toNat ∧ LiveKeep C chunks)
     (hpres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome)
     (hframe : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?) :
     ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →
@@ -376,7 +479,7 @@ theorem MOK.fin_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (h0 : R 10 = 0) (hheap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins)
     (hpres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome)
     (hframe : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?)
-    (hst : heapEnd < C.top0 + physSize C.n.toNat + extendSlack) :
+    (hst : Starved C.top0 C.n.toNat) :
     ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →
       AW C.live C.S C.Q C.r R' Mt := by
   intro R' hR hk
@@ -389,11 +492,11 @@ footprint is present, and every byte outside the write window is at its entry
 value. Every path that hands out a block — a small-bin take, the exact-fit
 last remainder, the top split, a large-bin take — produces exactly this. -/
 structure TakeRet (C : MCtx) (Mt : Mem) (v : Nat) : Prop where
-  fresh : FreshBlock vsaLayoutP C.H (v + 16) C.n.toNat
+  fresh : FreshAt C.H (v + 16) C.n.toNat
   align : (v + 16) % 16 = 0
   heap : ∃ top brkv chunks bins,
     PHeapAt Mt ((v + 16, C.n.toNat) :: C.H) top brkv chunks bins ∧
-      top ≤ C.top0 + physSize C.n.toNat
+      top ≤ C.top0 + physSize C.n.toNat ∧ LiveKeep C chunks
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
@@ -448,13 +551,29 @@ theorem mChg_own {H : List (Nat × Nat)} {s : BitVec 64} (hsp : SpOKA s) (a : Na
     · exact Nat.le_trans (Nat.sub_le_sub_left (by decide : 256 ≤ 512) _) h1
     · rw [Nat.sub_add_cancel hs]; exact h2
 
+/-- The callee-saved registers the caller passed are back at a return. -/
+theorem saved_of_regs {C : MCtx} {R : Nat → BitVec 64} {saved : List (Nat × BitVec 64)}
+    {e r n s : BitVec 64} (hsv : saved.map Prod.fst = vsaSaved)
+    (hE : EntryRegs C.rv0 e r n s saved) (h : MRegs C R) :
+    ∀ p ∈ saved, R p.1 = p.2 := by
+  intro p hp
+  have hk : p.1 ∈ vsaSaved := by rw [← hsv]; exact List.mem_map_of_mem hp
+  have hv := hE.saved p hp
+  unfold vsaSaved at hk
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
+  rcases hk with h' | h' | h' | h' <;> rw [h'] at hv ⊢ <;> rw [← hv]
+  · exact h.s0
+  · exact h.s1
+  · exact h.s2
+  · exact h.s3
+
 /-- **The counted context's obligations.** A return's top grows by at most
 the request's chunk, which the credits cover; NULL is refuted by them. -/
 theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
     {saved : List (Nat × BitVec 64)} {k c : Nat} {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat}
     (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hchg : vsaChg n.toNat c)
     (hsp : SpOKA s) (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved)
-    (hcap : 2 * (k + c) + extendSlack ≤ heapEnd - top0) :
+    (hst : Starts H) (hcap : 2 * (k + c) + extendSlack ≤ heapEnd - top0) :
     MOK (mChgCtx live H n r s saved k rv0 Mt0 top0) where
   live := hlive
   sp := MSp.of_spOKA hsp
@@ -463,24 +582,51 @@ theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
   ok := by
     intro R Mt h
     have hP := physSize_le_chg hchg
-    obtain ⟨top, brkv, chunks, bins, hheap, htop⟩ := h.heap
-    refine malloc_exit (brkv := brkv) (chunks := chunks) (bins := bins) hsv h.regs.ra h.regs.sp
-      (fun p hp => ?_) h.fresh h.align hheap (by simp only [mChgCtx] at htop; omega) h.pres
-    have hk : p.1 ∈ vsaSaved := by rw [← hsv]; exact List.mem_map_of_mem hp
-    have hv := hE.saved p hp
-    unfold vsaSaved at hk
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
-    rcases hk with h' | h' | h' | h' <;> rw [h'] at hv ⊢ <;> rw [← hv]
-    · exact h.regs.s0
-    · exact h.regs.s1
-    · exact h.regs.s2
-    · exact h.regs.s3
+    obtain ⟨top, brkv, chunks, bins, hheap, htop, _⟩ := h.heap
+    exact malloc_exit (brkv := brkv) (chunks := chunks) (bins := bins) hsv h.regs.ra h.regs.sp
+      (saved_of_regs hsv hE h.regs) h.fresh hst h.align hheap (by simp only [mChgCtx] at htop; omega)
+      h.pres
   null := by
     intro R Mt h
-    have hP := physSize_le_chg hchg
+    have hP := physSize_le_chg16 hchg
     have := h.starved
     simp only [mChgCtx] at this
-    unfold extendSlack at *
+    unfold Starved extendSlack at *
     omega
+
+/-! ## The uncounted top-level context -/
+
+/-- The context of an uncounted `malloc` run at the binary: the owned bytes
+and postcondition of `MallocLocalRun`. -/
+def mLocCtx (live : Nat → Prop) (H : List (Nat × Nat)) (n r s : BitVec 64)
+    (saved : List (Nat × BitVec 64)) (rv0 : Nat → BitVec 64) (Mt0 : Mem) (top0 : Nat) : MCtx :=
+  ⟨live, mS H s, MallocEnd vsaLayoutP H n r s saved, H, n, r, s, rv0, Mt0, top0⟩
+
+/-- **The uncounted context's obligations.** A return hands out the block; a
+NULL return keeps the heap. -/
+theorem mOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
+    {saved : List (Nat × BitVec 64)} {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat}
+    (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hsp : SpOKA s)
+    (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved) (hst : Starts H) :
+    MOK (mLocCtx live H n r s saved rv0 Mt0 top0) where
+  live := hlive
+  sp := MSp.of_spOKA hsp
+  own := mChg_own hsp
+  ral := hral
+  ok := by
+    intro R Mt h
+    obtain ⟨top, brkv, chunks, bins, hheap, _⟩ := h.heap
+    refine malloc_ret (F := vsaFoot (((R 10).toNat, n.toNat) :: H)) hsv h.regs.ra h.regs.sp
+      (saved_of_regs hsv hE h.regs) (fun a ha => .inr (vsaFoot_cons_sub a ha)) (fun a ha => h.pres a (vsaFoot_cons_sub a ha))
+      fun rv mv hfr ha0 him => ⟨hfr, .inr ⟨?_, ?_, ?_⟩⟩ <;> rw [ha0]
+    · exact h.fresh.block
+    · exact h.align
+    · exact ⟨hst.cons h.fresh.start, Mt, top, brkv, chunks, bins, him, hheap⟩
+  null := by
+    intro R Mt h
+    obtain ⟨top, brkv, chunks, bins, hheap⟩ := h.heap
+    exact malloc_ret hsv h.regs.ra h.regs.sp (saved_of_regs hsv hE h.regs) (fun a ha => .inr ha)
+      h.pres fun rv mv hfr ha0 him =>
+        ⟨hfr, .inl ⟨ha0.trans h.a0, ⟨hst, Mt, top, brkv, chunks, bins, him, hheap⟩⟩⟩
 
 end VsaIris.VsaHeap
