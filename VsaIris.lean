@@ -79,6 +79,7 @@ import VsaIris.Vsa.FreePaths
 import VsaIris.Vsa.FreeTrim
 import VsaIris.Vsa.FreeTop
 import VsaIris.Vsa.FreeRunAll
+import VsaIris.Vsa.AllocSltu
 import VsaIris.Vsa.CostRoom
 import VsaIris.Stack
 import VsaIris.Interp.Need
