@@ -149,6 +149,8 @@ import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.LeafErr
 import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.VarP
+import VsaIris.Interp.Case.AssignT
+import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntT

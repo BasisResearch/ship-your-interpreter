@@ -291,7 +291,32 @@ def subst_call1(arm: Arm, mode: str) -> dict[str, str]:
     return out
 
 
-FAMILIES = {"binInt": subst_binInt, "leaf": subst_leaf, "var": subst_call1}
+def subst_assign(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `assign` (lane E1): a run to the child call, the child, a run to
+    a helper call, the helper, the tail run (param `tail`: where the tail's
+    straight-line code starts after the branch on the helper's result)."""
+    runs = run_steps(arm)
+    kids = [s for s in arm.steps if s.op == "child"]
+    helpers = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 3 or len(kids) != 1 or len(helpers) != 1:
+        raise SystemExit(f"{arm.name}: family assign needs 3 runs, 1 child, 1 helper")
+    jc = int(kids[0].args[1], 0)
+    j = int(helpers[0].args[1], 0)
+    out = {"ARM": arm.name, "TAG": str(arm.tag), "JC": f"{jc:08x}", "J": f"{j:08x}",
+           "R2": f"{int(runs[1].args[0], 0):08x}", "R2N": f"{int(runs[2].args[0], 0):08x}",
+           "TAIL": f"{int(arm.params['tail'], 0):08x}"}
+    for i, d in enumerate(arm.errors, 1):
+        out[f"E{i}AT"] = f"{d.at:08x}"
+        out[f"E{i}TO"] = f"{d.to:08x}"
+    for k in ("ej", "fmtok"):
+        if k in arm.params:
+            v = arm.params[k]
+            out[k.upper()] = f"{int(v, 0):08x}" if k == "ej" else v
+    return out
+
+
+FAMILIES = {"binInt": subst_binInt, "leaf": subst_leaf, "var": subst_call1,
+            "assign": subst_assign}
 
 
 def emit(arm: Arm, mode: str) -> str:

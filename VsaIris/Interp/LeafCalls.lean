@@ -119,7 +119,33 @@ theorem ms_unslot {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
   iexists M
   iframe Hpc Hra Hregs HS
 
+/-- **Joining the result slot later** (an arm that calls a child first): the
+frame's machine state takes the slot in, at a tracking memory agreeing on the
+frame. -/
+theorem ms_join_sret {pc : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} {Mt : Mem} :
+    ms pc R (InExt (f, 1088)) Mt ∗ slot24 a ⊢@{IProp GF}
+      ∃ M', ms pc R (frS f a) M' ∗ ⌜(∀ b, InExt (f, 1088) b → imgM M' b = imgM Mt b) ∧
+        ∀ b, InExt (f, 1088) b → ¬ InExt (a, 24) b⌝ := by
+  unfold slot24 blockOwn
+  iintro ⟨Hms, HA⟩
+  ihave ⟨%g, HA⟩ := ownSet_fn _ $$ HA
+  ihave ⟨%M2, HA⟩ := ownSet_mem _ g $$ HA
+  ihave ⟨%M, Hms, %⟨h1, -, hd⟩⟩ := ms_join $$ [Hms HA]
+  · iframe Hms HA
+  iexists M
+  iframe Hms
+  ipureintro; exact ⟨h1, hd⟩
+
 end Slots
+
+/-- A doubleword load through memories agreeing on its bytes. -/
+theorem ldv_ld_agree {M M' : Mem} {a : Nat} (h : ∀ i, i < 8 → imgM M' (a + i) = imgM M (a + i)) :
+    ldv .ld M' a = ldv .ld M a := by
+  show ldvf .ld (imgM M') a = ldvf .ld (imgM M) a
+  simp only [ldvf, Vsa.Sim.widthOfM, bytesAt8]
+  have h0 := h 0 (by omega); simp only [Nat.add_zero] at h0
+  rw [h0, h 1 (by omega), h 2 (by omega), h 3 (by omega),
+    h 4 (by omega), h 5 (by omega), h 6 (by omega), h 7 (by omega)]
 
 section Env
 
@@ -222,5 +248,27 @@ theorem ms_callEnv3 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   iapply Hk $$ %(fun x => if x ∈ env3L then f x else R x) %hkeep HY Hms
 
 end Env
+
+/-! ## Loads through a child's result slot -/
+
+theorem slotWrite_ld0 (Mt : Mem) (a : Nat) (w0 w1 w2 : BitVec 64) :
+    ldv .ld (slotWrite Mt a w0 w1 w2) a = w0 := by
+  unfold slotWrite
+  rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_store_hit]
+
+theorem slotWrite_ld8 (Mt : Mem) (a : Nat) (w0 w1 w2 : BitVec 64) :
+    ldv .ld (slotWrite Mt a w0 w1 w2) (a + 8) = w1 := by
+  unfold slotWrite
+  rw [ldv_ld_miss _ _ (by omega), ldv_store_hit]
+
+theorem slotWrite_ld16 (Mt : Mem) (a : Nat) (w0 w1 w2 : BitVec 64) :
+    ldv .ld (slotWrite Mt a w0 w1 w2) (a + 16) = w2 := by
+  unfold slotWrite
+  rw [ldv_store_hit]
+
+theorem slotWrite_ld_miss (Mt : Mem) {a c : Nat} (w0 w1 w2 : BitVec 64) (h : c + 8 ≤ a ∨ a + 24 ≤ c) :
+    ldv .ld (slotWrite Mt a w0 w1 w2) c = ldv .ld Mt c := by
+  unfold slotWrite
+  rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega)]
 
 end VsaIris.Interp
