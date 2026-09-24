@@ -125,6 +125,7 @@ structure RHeap (C : MCtx) (B : RB) (Mt : Mem) (brkv : Nat) (chunks : List Chunk
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
   blk : ∀ k, k < B.nOld → vsaFoot C.H (B.p + k)
   data : ∀ k, k < B.nOld → Mt[B.p + k]? = some (B.old (B.p + k))
+  grow : B.nOld < C.n.toNat
 
 /-- The heap invariant through a store to the run's stack. -/
 theorem RHeap.store_stack {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
@@ -143,6 +144,7 @@ theorem RHeap.store_stack {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : 
   disjD := Hp.disjD
   frame := frame_store (win_stack h1 h2) Hp.frame
   blk := Hp.blk
+  grow := Hp.grow
   data := fun k hk => by
     have hd := Hp.disj (B.p + k)
     have ho : OutL [(a, w, v)] (B.p + k) := ⟨Classical.byContradiction fun hc => by
@@ -165,6 +167,7 @@ theorem RHeap.store_errno {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : 
   disjD := Hp.disjD
   frame := frame_store (fun b h1 h2 => .inl (.inl (.inr (.inl ⟨h1, h2⟩)))) Hp.frame
   blk := Hp.blk
+  grow := Hp.grow
   data := fun k hk => by
     have hb := Hp.heap.heap.heap.live (B.p, B.nOld) List.mem_cons_self
     obtain ⟨c, hc, _, h1, h2⟩ := hb
