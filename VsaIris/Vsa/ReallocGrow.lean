@@ -245,4 +245,69 @@ theorem grow_top {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [e16']; omega
 
+/-- **A free successor** (`0x80005318`, `a0` its header): absorb it
+(`realloc_next`), or with a free predecessor take both (`realloc_pvXN`) or the
+predecessor alone (`grow_pvX`); else a fresh block. -/
+theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns hn : Nat}
+    (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ cs₃ : List Chunk}
+    (hsp : chunks = cs₁ ++ ⟨X, S, true⟩ :: ⟨X + S, ns, false⟩ :: cs₃)
+    (h13 : (R 13).toNat = hdr0) (h10 : (R 10).toNat = hn) (hns : hn / 4 * 4 = ns)
+    (h16 : (R 16).toNat = X + S) :
+    AW C.live C.S C.Q 0x80005318#64 R Mt := by
+  have HB := D.heap.heap.heap
+  have HH := HB.heap
+  have hbrk := HH.brk_le; have htle := HH.top_le
+  unfold heapEnd at hbrk
+  have hN : (⟨X + S, ns, false⟩ : Chunk) ∈ chunks := by rw [hsp]; simp
+  have hNb := HH.walk.chunk_bounds _ hN
+  simp only at hNb
+  have hnb31 := D.nb31
+  have e0 : (R 10 &&& sign_extend (m := 64) (0xffc#12)).toNat = ns := by
+    rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
+      toNat_and_m4, h10, hns]
+  have e17 : (R 14 + (R 10 &&& sign_extend (m := 64) (0xffc#12))).toNat = S + ns := by
+    rw [BitVec.toNat_add, e0, D.a4]; omega
+  refine st_80005318 O.live (st_8000531c O.live (st_80005320 O.live (fun hc => ?_) (fun hc => ?_))) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc <;>
+    rw [toInt_small D.a5 (by omega), toInt_small e17 (by omega), Int.ofNat_le] at hc
+  · -- the successor holds the rest
+    refine realloc_next O (by rd_regs D) hN hc ?_ ?_ <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · exact h16
+    · exact e17
+  refine st_80005324 O.live (st_80005328 O.live (fun _ => realloc_mal O (by rd_regs D)) (fun hc' => ?_))
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true] at hc'
+  have hpf := prev_bit h13 hc'
+  obtain ⟨cs₀, P, ps, i, pre, post, predP, succP, hh, rfl, PV, hhr, hhs⟩ := grow_prev D hsp hpf
+  have hPb := HH.walk.chunk_bounds ⟨P, ps, false⟩ (by rw [hsp]; simp)
+  simp only at hPb
+  have hpend := PV.pend
+  refine prev_load O (by rd_regs D) ⟨_, hsp⟩ PV hhr hhs (st_8000532c O.live) (st_80005330 O.live)
+    (st_80005334 O.live) (st_80005338 O.live) fun R' hK h6 h17 => ?_
+  have k10 := hK 10 (by decide) (by decide); have k14 := hK 14 (by decide) (by decide)
+  have k16 := hK 16 (by decide) (by decide); have k15 := hK 15 (by decide) (by decide)
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at k10 k14 k16 k15
+  have e10 : (R' 10 + R' 17).toNat = ns + ps := by rw [BitVec.toNat_add, k10, e0, h17]; omega
+  have e13 : (R' 10 + R' 17 + R' 14).toNat = ps + (S + ns) := by
+    rw [BitVec.toNat_add, e10, k14, D.a4]; omega
+  have e15 : (R' 15).toNat = nb := by rw [k15, D.a5]
+  refine st_8000533c O.live (st_80005340 O.live (st_80005344 O.live (fun hc'' => ?_) (fun hc'' => ?_))) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc'' <;>
+    rw [toInt_small e15 (by omega), toInt_small e13 (by omega), Int.ofNat_le] at hc''
+  all_goals
+    have D' : RD C B (upd (upd R' 10 (R' 10 + R' 17)) 13 (R' 10 + R' 17 + R' 14)) Mt brkv
+        chunks bins X S hdr0 nb := by
+      refine RD.of_regs D ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false] <;>
+        (rw [hK _ (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+  · -- both neighbours
+    obtain ⟨iN, preN, postN, pred, succ, FB⟩ := free_bin_at D.heap.heap hN rfl
+    refine realloc_pvXN O D' hsp hpf FB hc'' ?_ ?_ ?_ <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · exact h6
+    · exact e13
+    · rw [k16, h16]
+  · exact grow_pvX O D' hsp PV (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6)
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
+
 end VsaIris.VsaHeap
