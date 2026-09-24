@@ -14,3 +14,5 @@ ExecIf	exec	3	.ifStmt c t eo	c:E:v:56; t:S:status:0	status	run 0x80004014 0x8000
 ExecWhile	exec	4	.whileStmt c b	c:E:v:80; b:S:status:0	status	run 0x80004014 0x8000403c; run 0x8000403c ret		execWhile
 ExecBlock	exec	2	.block ss		status	run 0x80004014 0x80004190; helper envNew 0x80004190; run 0x80004194 0x800041a4; run 0x800041a4 ret		execBlock
 ExecFor	exec	5	.forStmt init cnd step b		status	run 0x80004014 0x80004238; helper envNew 0x80004238; run 0x8000423c ret		execFor
+ExecVarInit	exec	1	.varDecl x (some e)	e:E:v:104	.normal	run 0x80004014 0x800040ec; child e 0x800040ec; run 0x800040f0 0x80004114; helper envDefine 0x80004114; run 0x80004118 ret		execVarInit
+ExecVarNull	exec	1	.varDecl x none		.normal	run 0x80004014 0x80004300; helper valueNull 0x80004300; run 0x80004304 0x800040f0; run 0x800040f0 0x80004114; helper envDefine 0x80004114; run 0x80004118 ret		execVarNull

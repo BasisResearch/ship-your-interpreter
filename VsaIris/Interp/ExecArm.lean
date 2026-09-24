@@ -799,6 +799,53 @@ theorem ms_iffE {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
   iframe Hpc Hra Hregs
   iapply ownSet_iff _ h $$ HS
 
+/-- **A value slot out of a run's owned bytes**: its three words mean `v`. -/
+theorem ms_valCarve (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
+    {M : Mem} {a : Nat} {v : Value} {w0 w1 w2 : BitVec 64}
+    (hS : ∀ b, InExt (a, 24) b → S b)
+    (h0 : ldv .ld M a = w0) (h8 : ldv .ld M (a + 8) = w1) (h16 : ldv .ld M (a + 16) = w2) :
+    ms (GF := GF) pc R S M ∗ □ valOf N v w0 w1 w2 ⊢
+      ms pc R (fun k => S k ∧ ¬ InExt (a, 24) k) M ∗ valAt N a v := by
+  have hsl1 : ∀ k, S k ↔ ((S k ∧ ¬ InExt (a, 24) k) ∨ InExt (a, 24) k) := fun k => by
+    constructor
+    · intro h; by_cases h' : InExt (a, 24) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact hS k h
+  iintro ⟨Hms, #Hv⟩
+  ihave Hms := ms_iffE hsl1 $$ Hms
+  ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  iframe Hms
+  iapply valAt_of_img N (a := a) (v := v) (mv := imgM M) $$ [Hslot]
+  iframe Hslot
+  unfold valImg
+  rw [imgW_eq_ldv, imgW_eq_ldv, imgW_eq_ldv, h0, h8, h16]
+  iexact Hv
+
+/-- **And back in**, at a tracking memory agreeing on the run's other bytes. -/
+theorem ms_valUncarve (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
+    {M : Mem} {a : Nat} {v : Value} (hS : ∀ b, InExt (a, 24) b → S b) :
+    ms (GF := GF) pc R (fun k => S k ∧ ¬ InExt (a, 24) k) M ∗ valAt N a v ⊢
+      ∃ M', ms pc R S M' ∗ ⌜∀ x, S x → ¬ InExt (a, 24) x → imgM M' x = imgM M x⌝ := by
+  have hsl1 : ∀ k, ((S k ∧ ¬ InExt (a, 24) k) ∨ InExt (a, 24) k) ↔ S k := fun k => by
+    constructor
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact hS k h
+    · intro h; by_cases h' : InExt (a, 24) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+  iintro ⟨Hms, Hval⟩
+  ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
+  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HsS]
+  · iframe Hms HsS
+  iexists M'
+  isplitl
+  · iapply ms_iffE hsl1 $$ Hms
+  · ipureintro; exact fun x hx hn => h1 x ⟨hx, hn⟩
+
 /-- **A helper reading a value in a frame slot**, for either WP
 (`value_truthy` on the arm's copy at `sp+16`): the slot's three words `w0 w1
 w2` mean `v`; the slot is lent to the helper as `valAt` and handed back, the
