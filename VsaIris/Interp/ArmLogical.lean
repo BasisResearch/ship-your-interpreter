@@ -13,8 +13,9 @@ INTERP_DESIGN.md §6, §8 (family "logical/unary"). What the `EX_LOGICAL`
   binary arm's `EvalSaved` adds `s3`, which these arms never spill), with its
   transport through stores (`ix_saved3`) and through a helper that hands back
   bytes agreeing outside a slot (`EvalSaved3.agree`);
-* `ms_callTruthy`: a `value_truthy` call on a value the run copied into a
-  frame slot. The slot is carved out of the run's bytes as `valAt` (its three
+* `ms_callValRef` (and `ms_callTruthy`): a call to a helper taking a value by
+  reference (`value_truthy`, `value_kind_name`) on a value the run copied into
+  a frame slot. The slot is carved out of the run's bytes as `valAt` (its three
   words are those of a represented value), handed to `valueTruthySpec`, and
   joined back; the continuation gets the truthiness bit in `a0` and bytes that
   agree with the old ones outside the slot.
@@ -203,12 +204,66 @@ theorem ms_congrSet {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop
   iframe Hpc Hra Hregs
   iapply ownSet_iff _ h $$ HS
 
-/-- **A `value_truthy` call on a value in the run's own bytes**, for either
-WP. At the `jal` at `i`, `a0` points at a 24-byte slot of the run's bytes `S`
-whose three words carry `valOf N v`: the slot is lent to the helper as
-`valAt`, and joined back after it. The continuation gets the registers the
-helper keeps, the truthiness bit in `a0`, and bytes agreeing with the old ones
-outside the slot. -/
+/-- **A call to a helper that takes a value by reference**, for either WP
+(`value_truthy`, `value_kind_name`: `helperSpec` with `Pre = valAt p v ∗
+⌜SlotGeom p⌝` and `Post rv' = valAt p v ∗ ⌜Res rv'⌝`). At the `jal` at `i`,
+`a0` points at a 24-byte slot of the run's bytes `S` whose three words carry
+`valOf N v`: the slot is lent to the helper as `valAt` and joined back after
+it. The continuation gets the registers the helper keeps, `Res`, and bytes
+agreeing with the old ones outside the slot. -/
+theorem ms_callValRef (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64} {clob : List Nat}
+    {Res : (Nat → BitVec 64) → Prop}
+    (hexec : JalExec (vsaModel live) i code entry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {p w0 w1 w2 : BitVec 64} {v : Value}
+    {a0 a8 a16 : Nat} (ha : p.toNat = a0 ∧ a8 = a0 + 8 ∧ a16 = a0 + 16)
+    (hS : ∀ k, InExt (p.toNat, 24) k → S k) (hg : SlotGeom p)
+    (h0 : ldv .ld Mt a0 = w0) (h8 : ldv .ld Mt a8 = w1) (h16 : ldv .ld Mt a16 = w2) :
+    ⌜R 10 = p⌝ ∗
+      helperSpec (vsaModel live) Wp entry clob (fun rv => rv 10 = p)
+        iprop(valAt N p.toNat v ∗ ⌜SlotGeom p⌝)
+        (fun rv' => iprop(valAt N p.toNat v ∗ ⌜Res rv'⌝)) ∗
+      codeRes ∗ □ valOf N v w0 w1 w2 ∗ ms (BitVec.ofNat 64 i) R S Mt ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
+        ⌜(∀ x ∈ fRegs, x ∉ clob → R' x = R x) ∧ Res R' ∧
+          ∀ k, S k → ¬ InExt (p.toNat, 24) k → imgM Mt' k = imgM Mt k⌝ -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt' -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  obtain ⟨e0, rfl, rfl⟩ := ha
+  subst e0
+  have hsl : ∀ k, S k ↔ ((S k ∧ ¬ InExt (p.toNat, 24) k) ∨ InExt (p.toNat, 24) k) := fun k => by
+    constructor
+    · intro h; by_cases h' : InExt (p.toNat, 24) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact hS k h
+  iintro ⟨%h10, Hspec, #Hcode, #Hv, Hms, Hk⟩
+  ihave Hms := ms_congrSet hsl $$ Hms
+  ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  ihave Hval := valAt_of_img N (a := p.toNat) (v := v) (mv := imgM Mt) $$ [Hslot]
+  · iframe Hslot
+    unfold valImg
+    rw [← ldv_ld_imgW, ← ldv_ld_imgW, ← ldv_ld_imgW, h0, h8, h16]
+    iexact Hv
+  iapply ms_callHelper Wp hexec hcode hal
+  iframe Hspec Hcode Hms
+  isplitl []
+  · ipureintro; exact h10
+  isplitl [Hval]
+  · iframe Hval; ipureintro; exact hg
+  iintro %R' %hkeep ⟨Hval, %hres⟩ Hms
+  ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
+  ihave ⟨%M', Hms, %⟨hM1, -, -⟩⟩ := ms_join $$ [Hms HsS]
+  · iframe Hms HsS
+  ihave Hms := ms_congrSet (fun k => (hsl k).symm) $$ Hms
+  iapply Hk $$ %R' %M' %⟨hkeep, hres, fun k hk hn => hM1 k ⟨hk, hn⟩⟩ Hms
+
+/-- **A `value_truthy` call on a value in the run's own bytes** (`ms_callValRef`
+at `valueTruthySpec`): the continuation gets the truthiness bit in `a0`. -/
 theorem ms_callTruthy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code valueTruthyPC)
@@ -226,37 +281,9 @@ theorem ms_callTruthy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
           ∀ k, S k → ¬ InExt (p.toNat, 24) k → imgM Mt' k = imgM Mt k⌝ -∗
         ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt' -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsl : ∀ k, S k ↔ ((S k ∧ ¬ InExt (p.toNat, 24) k) ∨ InExt (p.toNat, 24) k) := fun k => by
-    constructor
-    · intro h; by_cases h' : InExt (p.toNat, 24) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact hS k h
-  obtain ⟨e0, rfl, rfl⟩ := ha
-  subst e0
-  iintro ⟨%h10, Hspec, #Hcode, #Hv, Hms, Hk⟩
-  ihave Hms := ms_congrSet hsl $$ Hms
-  ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
-  ihave Hval := valAt_of_img N (a := p.toNat) (v := v) (mv := imgM Mt) $$ [Hslot]
-  · iframe Hslot
-    unfold valImg
-    rw [← ldv_ld_imgW, ← ldv_ld_imgW, ← ldv_ld_imgW, h0, h8, h16]
-    iexact Hv
   unfold valueTruthySpec
-  iapply ms_callHelper Wp hexec hcode hal
-  iframe Hspec Hcode Hms
-  isplitl []
-  · ipureintro; exact h10
-  isplitl [Hval]
-  · iframe Hval; ipureintro; exact hg
-  iintro %R' %hkeep ⟨Hval, %hbit⟩ Hms
-  ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M', Hms, %⟨hM1, -, -⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
-  ihave Hms := ms_congrSet (fun k => (hsl k).symm) $$ Hms
-  iapply Hk $$ %R' %M' %⟨hkeep, hbit, fun k hk hn => hM1 k ⟨hk, hn⟩⟩ Hms
+  exact ms_callValRef Wp (Res := fun rv' => rv' 10 = if v.truthy then 1#64 else 0#64)
+    hexec hcode hal ha hS hg h0 h8 h16
 
 end Truthy
 
