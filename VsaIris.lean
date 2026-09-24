@@ -86,6 +86,7 @@ import VsaIris.Vsa.SegRun
 import VsaIris.Vsa.StrlenSeg
 import VsaIris.Vsa.Strlen
 import VsaIris.Vsa.StrlenSpec
+import VsaIris.Vsa.StrlenOwned
 import VsaIris.Vsa.StrcmpSeg
 import VsaIris.Vsa.SymData
 import VsaIris.Interp.IRun
