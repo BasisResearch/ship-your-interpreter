@@ -154,6 +154,7 @@ import VsaIris.Interp.CallCloBind
 import VsaIris.Interp.CallCloBody
 import VsaIris.Interp.CallCloExit
 import VsaIris.Interp.CallCloT
+import VsaIris.Interp.CallCloP
 import VsaIris.Interp.CallClosure
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.Case.CallAssertT
