@@ -1,0 +1,6 @@
+# Lane E6: the shared loop lemmas (INTERP_DESIGN.md §4.3).
+# The loops are block lemmas at a loop HEAD inside an arm's frame, not arms from
+# a function entry, so they have no rows here (the row format requires a run
+# from the entry and a final `ret`; see LANE.md). Their statements are
+# VsaIris/Interp/SpecLoop.lean; the arms that enter them (E5: while/for, E4:
+# the call arm) are rows in their own tables and take the motives as hypotheses.

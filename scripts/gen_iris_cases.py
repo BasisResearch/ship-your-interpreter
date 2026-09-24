@@ -159,7 +159,10 @@ def validate(arm: Arm, code: dict[int, tuple[int, str, str]]) -> None:
 def load_rows() -> list[Arm]:
     code = load_disasm()
     rows = []
-    for line in ARMS.read_text().splitlines():
+    # arms.tsv plus one table per case family in arms.d/ (so parallel lanes do not
+    # edit the same file); rows are read in file order, arms.d sorted by name.
+    tables = [ARMS] + sorted((ARMS.parent / "arms.d").glob("*.tsv"))
+    for line in (l for t in tables for l in t.read_text().splitlines()):
         if not line.strip() or line.startswith("#"):
             continue
         arm = parse_row(line.split("\t"))
