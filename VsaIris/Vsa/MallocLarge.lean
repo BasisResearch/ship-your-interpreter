@@ -201,8 +201,10 @@ theorem LScan.upd {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins
 
 /-- The scan's exit to the last-remainder check, with the block search to
 start at `idx`. -/
-abbrev LScanLR (C : MCtx) (Mt : Mem) (nb : Nat) : Prop :=
-  ∀ R' idx, idx < numBins → MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
+abbrev LScanLR (C : MCtx) (Mt : Mem) (chunks : List Chunk) (bins : Nat → List Nat)
+    (nb : Nat) : Prop :=
+  ∀ R' idx, idx < numBins → 1 < idx → ScanFrom chunks bins nb idx → MFrame C R' Mt →
+    LRRegs nb idx R' → R' 8 = reentV →
     AW C.live C.S C.Q 0x800048ec#64 R' Mt
 
 /-- The scan's take: member `x` of bin `j`, between `pred` (in `a1`) and its
@@ -226,7 +228,7 @@ moves on to its predecessor (or leaves at the header, with the search at
 theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb j x : Nat} {pre post : List Nat}
     (L : LScan C Mt brkv chunks bins nb j R) (hj : j < numBins) (hmem : bins j = pre ++ x :: post)
-    (h15 : (R 15).toNat = x) (hlr : LScanLR C Mt nb) (htake : LScanTake C Mt brkv chunks bins nb j)
+    (h15 : (R 15).toNat = x) (hlr : LScanLR C Mt chunks bins nb) (htake : LScanTake C Mt brkv chunks bins nb j)
     (hprev : ∀ pre' y, pre = pre' ++ [y] → ∀ R', LScan C Mt brkv chunks bins nb j R' →
       (R' 15).toNat = y → AW C.live C.S C.Q 0x800048d8#64 R' Mt) :
     AW C.live C.S C.Q 0x800048d8#64 R Mt := by
@@ -314,7 +316,8 @@ theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {br
       · simp only [List.getLast?_singleton, Option.some.injEq] at hpred
         subst hpred
         refine st_800048d0 O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
-        · refine hlr _ (j + 1) (by unfold numBins; omega) L'.frame ⟨L'.a4, L'.a7, L'.a6⟩ L'.s0
+        · refine hlr _ (j + 1) (by unfold numBins; omega) (by omega)
+            (.inl (by rw [L.bin_idx]; omega)) L'.frame ⟨L'.a4, L'.a7, L'.a6⟩ L'.s0
         · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
           apply BitVec.eq_of_toNat_eq
           rw [L.a0, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]
@@ -341,7 +344,11 @@ theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {br
             rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt])
   · -- more than `MINSIZE` over: the last-remainder check, the block search at `j`
     refine st_800048e8 O.live ?_
-    refine hlr _ j hj (L.frame.of_regs rfl rfl rfl rfl) ⟨?_, ?_, ?_⟩ ?_ <;>
+    have hgt := hcmp.1.1 (by
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hgt
+      rw [h31']; omega)
+    refine hlr _ j hj hj0 (.inr ⟨cxa, sz, hx, hcx, by omega⟩)
+      (L.frame.of_regs rfl rfl rfl rfl) ⟨?_, ?_, ?_⟩ ?_ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact L.a4
     · sx_norm; exact L.t3
@@ -351,7 +358,7 @@ theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {br
 /-- **The large-request scan** (`0x800048d8`): at member `x` of bin `j`, with
 the members after it (smaller than `nb`) passed. -/
 theorem lscan_walk {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} {nb j : Nat} (hj : j < numBins) (hlr : LScanLR C Mt nb)
+    {bins : Nat → List Nat} {nb j : Nat} (hj : j < numBins) (hlr : LScanLR C Mt chunks bins nb)
     (htake : LScanTake C Mt brkv chunks bins nb j) :
     ∀ (rpre : List Nat) (x : Nat) (post : List Nat) (R : Nat → BitVec 64),
       LScan C Mt brkv chunks bins nb j R → bins j = rpre.reverse ++ x :: post →
@@ -664,7 +671,7 @@ theorem lscan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : 
     {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb)
     (h503 : 503 < nb) (hnb31 : nb < 2 ^ 31) (h14 : (R 14).toNat = nb) (h8 : R 8 = reentV)
-    (hlr : LScanLR C Mt nb) :
+    (hlr : LScanLR C Mt chunks bins nb) :
     AW C.live C.S C.Q 0x80004884#64 R Mt := by
   have HH := Hp.heap.heap.heap
   have hnb16 := hnb.al
@@ -705,7 +712,7 @@ theorem lscan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : 
   have hbl : binAt (binIndex nb) < 2 ^ 64 := by omega
   refine st_800048bc O.live (fun heq => ?_) (fun hne => ?_)
   · -- an empty bin: the last-remainder check, the block search at the next bin
-    refine hlr _ (binIndex nb + 1) (by unfold numBins; omega)
+    refine hlr _ (binIndex nb + 1) (by unfold numBins; omega) (by omega) (.inl (by omega))
       (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ?_ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact hk2

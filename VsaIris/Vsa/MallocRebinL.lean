@@ -49,6 +49,20 @@ theorem binIndex_large {sz : Nat} (h : 512 ≤ sz) : 57 ≤ binIndex sz ∧ binI
   repeat' split
   all_goals omega
 
+/-- `binIndex` is monotone. -/
+theorem binIndex_mono {a b : Nat} (h : a ≤ b) : binIndex a ≤ binIndex b := by
+  unfold binIndex
+  repeat' split
+  all_goals omega
+
+/-- **Where the block search may start.** Every nonempty bin from `idx` up
+holds a chunk of at least `nb` bytes: either `idx` is above the request's own
+bin (so, by `binIndex_mono`, every chunk from there up is larger), or bin `idx`
+has such a chunk. The search clears the bit of a block it exhausted, which
+keeps `HeapAt.binblocks` only because of this. -/
+def ScanFrom (chunks : List Chunk) (bins : Nat → List Nat) (nb idx : Nat) : Prop :=
+  binIndex nb < idx ∨ ∃ x sz, x ∈ bins idx ∧ FreeAt chunks x sz ∧ nb ≤ sz
+
 /-- **The large-bin cascade** (`0x80004c70`): from the chunk size in `t1`,
 `binIndex sz` and its bin's `fd` offset. -/
 theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz : Nat}
@@ -287,8 +301,10 @@ theorem rebin_at_heap {C : MCtx} {Mt Mt' M0 : Mem} {brkv : Nat} {chunks : List C
 /-- The re-binning continuation: the block search's test, entered with any
 heap at the entry break and chunks, the request's registers, `t4 = bin 1`, and
 the bitmap in `a1`. -/
-abbrev RebinNext (C : MCtx) (brkv : Nat) (chunks : List Chunk) (nb idx : Nat) : Prop :=
+abbrev RebinNext (C : MCtx) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
+    (nb idx : Nat) : Prop :=
   ∀ R'' Mt'' bins'' bb'', MFrame C R'' Mt'' → MHeap C Mt'' brkv chunks bins'' →
+    bins'' 1 = [] → (∀ k, k ≠ 1 → ∀ x ∈ bins k, x ∈ bins'' k) →
     LRRegs nb idx R'' → (R'' 29).toNat = binAt 1 → R'' 8 = reentV →
     read64 Mt'' binblocksAddr = some bb'' → (R'' 11).toNat = bb'' →
     AW C.live C.S C.Q 0x80004968#64 R'' Mt''
@@ -309,7 +325,7 @@ theorem rebin_link {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' M0 : M
     (hbbset : bb' / 2 ^ (j / 4) % 2 = 1) (hbbkeep : ∀ k, bb / 2 ^ k % 2 = 1 → bb' / 2 ^ k % 2 = 1)
     (G : LRRegs nb idx R) (h29 : (R 29).toNat = binAt 1) (h8 : R 8 = reentV)
     (h10 : (R 10).toNat = pred) (h13 : (R 13).toNat = succ) (h15 : (R 15).toNat = v)
-    (h11 : (R 11).toNat = bb') (hnext : RebinNext C brkv chunks nb idx) :
+    (h11 : (R 11).toNat = bb') (hnext : RebinNext C brkv chunks bins nb idx) :
     AW C.live C.S C.Q 0x80004cc0#64 R M0 := by
   have HH := Hp.heap.heap.heap
   have B := Hp.heap.heap
@@ -392,7 +408,14 @@ theorem rebin_link {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' M0 : M
   have Hp'' := rebin_at_heap Hp D hfree hj0 hj hidx hpos hpred hsucc hbb hM0 hP0 hbb0 hbblt
     hbbset hbbkeep (w0 := R 10) (w1 := R 13) (w2 := R 15) h10 h13 h15
   refine hnext _ _ _ bb' ((((F.store (by omega)).store (by omega)).store (by omega)).store
-    (by omega)) Hp'' G h29 h8 ?_ h11
+    (by omega)) Hp'' (by rw [updBins_other _ _ (by omega : (1 : Nat) ≠ j), updBins_same])
+    (fun k hk y hy => ?_) G h29 h8 ?_ h11
+  · by_cases hkj : k = j
+    · subst hkj; rw [updBins_same]; rw [hpos] at hy
+      rcases List.mem_append.mp hy with h1 | h1
+      · exact List.mem_append_left _ h1
+      · exact List.mem_append_right _ (List.mem_cons_of_mem _ h1)
+    · rw [updBins_other _ _ hkj, updBins_other _ _ hk]; exact hy
   have hbbA : binblocksAddr = 2147593496 := rfl
   rw [hbbA]
   rw [read64_miss _ _ (by omega), read64_miss _ _ (by omega), read64_miss _ _ (by omega),
@@ -447,7 +470,7 @@ theorem rebinL_exit {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem
     {pre' post' : List Nat} (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R)
     (hj : j < numBins) (hne : bins j ≠ []) (hpos : bins j = pre' ++ post')
     (hsucc : (post' ++ [binAt j]).head? = some succ) (h13 : (R 13).toNat = succ)
-    (hnext : RebinNext C brkv chunks nb idx) :
+    (hnext : RebinNext C brkv chunks bins nb idx) :
     AW C.live C.S C.Q 0x80004cbc#64 R Mt' := by
   have HH := L.heap.heap.heap.heap
   have B := L.heap.heap.heap
@@ -553,7 +576,7 @@ theorem rebinL_cmp {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz j bb x : Nat}
     {pre rest : List Nat} (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R)
     (hj : j < numBins) (hmem : bins j = pre ++ x :: rest)
-    (h13 : (R 13).toNat = x) (h6 : (R 6).toNat = sz) (hnext : RebinNext C brkv chunks nb idx)
+    (h13 : (R 13).toNat = x) (h6 : (R 6).toNat = sz) (hnext : RebinNext C brkv chunks bins nb idx)
     (hpass : ∀ R', RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R' → (R' 13).toNat = x →
       R' 10 = R 10 → (R' 6).toNat = sz → AW C.live C.S C.Q 0x80004ca8#64 R' Mt') :
     AW C.live C.S C.Q 0x80004cb0#64 R Mt' := by
@@ -594,7 +617,7 @@ theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {pre rest : List Nat} (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R)
     (hj : j < numBins) (hmem : bins j = pre ++ x :: rest)
     (h13 : (R 13).toNat = x) (h10 : (R 10).toNat = binAt j) (h6 : (R 6).toNat = sz)
-    (hnext : RebinNext C brkv chunks nb idx)
+    (hnext : RebinNext C brkv chunks bins nb idx)
     (hloop : ∀ y rest', rest = y :: rest' → ∀ R', RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R' →
       (R' 13).toNat = y → (R' 10).toNat = binAt j → (R' 6).toNat = sz →
       AW C.live C.S C.Q 0x80004cb0#64 R' Mt') :
@@ -663,7 +686,7 @@ members before it passed over. A member larger than the remainder is passed
 not is the insertion point. -/
 theorem rebinL_walk {C : MCtx} (O : MOK C) {Mt Mt' : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb idx v sz j bb : Nat} (hj : j < numBins)
-    (hnext : RebinNext C brkv chunks nb idx) :
+    (hnext : RebinNext C brkv chunks bins nb idx) :
     ∀ (rest pre : List Nat) (x : Nat) (R : Nat → BitVec 64),
       RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R → bins j = pre ++ x :: rest →
       (R 13).toNat = x → (R 10).toNat = binAt j → (R 6).toNat = sz →
@@ -686,7 +709,7 @@ theorem rebinL_empty {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Me
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz j bb : Nat}
     (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R) (hj : j < numBins)
     (hemp : bins j = []) (h12 : (R 12).toNat = j) (h10 : (R 10).toNat = binAt j)
-    (h13 : (R 13).toNat = binAt j) (hnext : RebinNext C brkv chunks nb idx) :
+    (h13 : (R 13).toNat = binAt j) (hnext : RebinNext C brkv chunks bins nb idx) :
     AW C.live C.S C.Q 0x80004e98#64 R Mt' := by
   have HH := L.heap.heap.heap.heap
   have hj0 : 1 < j := by
@@ -739,7 +762,7 @@ nonempty one is walked for the insertion point. -/
 theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz bb : Nat}
     (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz (binIndex sz) bb R)
-    (h6 : (R 6).toNat = sz) (hnext : RebinNext C brkv chunks nb idx) :
+    (h6 : (R 6).toNat = sz) (hnext : RebinNext C brkv chunks bins nb idx) :
     AW C.live C.S C.Q 0x80004c70#64 R Mt' := by
   have HH := L.heap.heap.heap.heap
   have hbi := binIndex_large (sz := sz) (by have := L.large; omega)

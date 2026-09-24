@@ -194,6 +194,7 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
       read64 Mt binblocksAddr = some bb → (R' 11).toNat = bb →
       AW C.live C.S C.Q 0x80004c70#64 R' Mt')
     (hnext : ∀ R'' Mt'' bins'' bb'', MFrame C R'' Mt'' → MHeap C Mt'' brkv chunks bins'' →
+      bins'' 1 = [] → (∀ k, k ≠ 1 → ∀ x ∈ bins k, x ∈ bins'' k) →
       LRRegs nb idx R'' → (R'' 29).toNat = binAt 1 → R'' 8 = reentV →
       read64 Mt'' binblocksAddr = some bb'' → (R'' 11).toNat = bb'' →
       AW C.live C.S C.Q 0x80004968#64 R'' Mt'') :
@@ -347,7 +348,13 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     unfold mHead at hoV hoV' hoJ hoO hoB
     refine hnext _ _ _ (bb ||| 2 ^ (sz / 8 / 4))
       ((((((F.store (by omega)).store (by omega)).store (by omega)).store (by omega)).store
-        (by omega)).of_regs ?_ ?_ ?_ ?_) Hp'' ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ <;>
+        (by omega)).of_regs ?_ ?_ ?_ ?_) Hp''
+      (by rw [updBins_other _ _ (by omega : (1 : Nat) ≠ sz / 8), updBins_same])
+      (fun k hk y hy => by
+        by_cases hkj : k = sz / 8
+        · subst hkj; rw [updBins_same]; exact List.mem_cons_of_mem _ hy
+        · rw [updBins_other _ _ hkj, updBins_other _ _ hk]; exact hy)
+      ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ <;>
       try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact ha4
     · exact ha7
