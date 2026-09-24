@@ -573,4 +573,19 @@ theorem PHeapAt.payload_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   · omega
   · omega
 
+/-- **A new live block at an in-use chunk's payload.** -/
+theorem PHeapAt.addBlock {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) {q n : Nat}
+    {c : Chunk} (hc : c ∈ chunks) (hu : c.inuse = true) (hca : c.addr + 16 = q)
+    (hn : n + 8 ≤ c.size) : PHeapAt m ((q, n) :: H) top brkv chunks bins := by
+  obtain ⟨B, hpage, hbbl⟩ := h
+  have HH := B.heap
+  refine ⟨⟨{ HH with live := fun e he => ?_, exact := fun e he _ => ?_ }, B.top_room⟩, hpage, hbbl⟩
+  · rcases List.mem_cons.mp he with rfl | he
+    · exact ⟨c, hc, hu, by simp only; omega, by simp only; omega⟩
+    · exact HH.live e he
+  · rcases List.mem_cons.mp he with rfl | he
+    · exact ⟨c, hc, hu, hca, hn⟩
+    · exact HH.exact e he he
+
 end VsaIris.VsaHeap
