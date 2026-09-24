@@ -1613,4 +1613,58 @@ theorem lr_a_done {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat}
   · exact frame_store (fun a h1 h2 => .inl (hPf a (by omega) (by omega)))
       (frame_store (fun a h1 h2 => .inl (hPf a (by omega) (by omega))) B.frameM)
 
+/-- The machine memory with `p` unlinked from bin 1 (virtually). -/
+abbrev lrMem (Mt1 : Mem) : Mem :=
+  writeLog (writeLog Mt1 [(binAt 1 + 16, 8, BitVec.ofNat 64 (binAt 1))])
+    [(binAt 1 + 24, 8, BitVec.ofNat 64 (binAt 1))]
+
+/-- **A last remainder absorbing `x` and a free successor**: the forward
+coalescing's memory over the virtually unlinked last remainder. -/
+theorem lr_b_mem {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {bins : Nat → List Nat} {sz hdr0 hnn : Nat} {w : BitVec 64} {p psz ds : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ ⟨p + psz + sz, ds, false⟩ bins (p + psz) sz hdr0 hnn w p psz 1 [] []
+      (binAt 1) (binAt 1)) :
+    FFwdMem C (lrMem Mt1) (b2Mem Mt p psz sz hdr0 (binAt 1) (binAt 1)) brkv cs₀ cs₃
+      (updBins bins 1 ([] ++ [])) p (psz + sz) ds := by
+  have G := B.geo
+  obtain ⟨hp16, hplo, hps16, hps32, hs16, hs32, hd16, hd32, hdend, htop, hpp16, hsp16, hpplo, hsplo,
+    hpphi, hsphi, sP, sX, sD, pD, pP, pX, hppf, hspf⟩ := G
+  simp only at hd16 hd32 hdend
+  have hb1 : binAt 1 = 2147593504 := rfl
+  have hM1 := B.mem
+  have HP := B.coal
+  try simp only at HP
+  have hdlt := Vsa.Sim.read64_lt _ _ _ B.hdr
+  have hPf : ∀ a, p + 8 ≤ a → a < p + (psz + sz) + 8 → vsaFoot C.H a :=
+    fun a h1 h2 => foot_of_chunk HP (by simp) B.hnoP h1 h2
+  refine ⟨by rw [show p + (psz + sz) = p + psz + sz by omega]; exact HP, B.hnoP, fun h0 hr => ?_,
+    fun w0 hw0 h1' h2' => ?_, ?_, fun a ha => ?_, B.disj, ?_⟩
+  · rw [rd_miss (by omega), read64_store_hit] at hr
+    cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
+  · refine agree_of_words (P := fun a => vsaFoot C.H a ∧ ¬ (p + 8 ≤ a ∧ a < p + 16) ∧
+        ¬ (p + (psz + sz) + 8 ≤ a ∧ a < p + (psz + sz) + 16))
+      [binAt 1 + 16, binAt 1 + 24, p + psz + 8] (fun w' hw' => ?_) (fun a ha hout => ?_) w0 ⟨hw0, h1', h2'⟩
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
+      rcases hw' with rfl | rfl | rfl
+      · refine ⟨binAt 1, ?_, ?_⟩
+        · rw [rd_miss (by omega), read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+        · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+            read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+      · refine ⟨binAt 1, ?_, ?_⟩
+        · rw [read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+        · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit,
+            BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+      · refine ⟨hdr0, ?_, ?_⟩
+        · rw [rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega)]; exact B.hdr
+        · rw [read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdlt]
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq] at hout
+      obtain ⟨ha1, ha2, ha3⟩ := ha
+      rw [hM1, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
+        writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+  · rw [show p + (psz + sz) + 8 = p + psz + sz + 8 by omega, rd_miss (by omega), rd_miss (by omega),
+      hM1, read64_store_hit, B.wv]
+  · exact writeLog_present _ _ _ (writeLog_present _ _ _ (B.pres a ha))
+  · exact frame_store (fun a h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩)))
+      (frame_store (fun a h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))) B.frameM)
+
 end VsaIris.VsaHeap
