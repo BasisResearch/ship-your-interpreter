@@ -262,6 +262,12 @@ def valueIntSpec (Wp : MachWP (GF := GF) M) (p n : BitVec 64) : IProp GF :=
   helperSpec M Wp 0x8000280c#64 [15] (fun rv => rv 10 = p ∧ rv 11 = n)
     iprop(slot24 p.toNat ∗ ⌜SlotGeom p⌝) (fun _ => valAt N p.toNat (.int n.toInt))
 
+/-- `value_null` (`0x800027ec`: `sw zero,0(a0); sd zero,8(a0); ret`): the
+slot at `a0` holds `null`; clobbers nothing. Stub statement for H2. -/
+def valueNullSpec (Wp : MachWP (GF := GF) M) (p : BitVec 64) : IProp GF :=
+  helperSpec M Wp 0x800027ec#64 [] (fun rv => rv 10 = p)
+    iprop(slot24 p.toNat ∗ ⌜SlotGeom p⌝) (fun _ => valAt N p.toNat .null)
+
 end Specs
 
 end VsaIris.Interp
