@@ -81,7 +81,15 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   (`ReallocCall.lean`), heap edits `PHeapAt.cut`/`reblock`/`growTop`/`fresh_of_block`
   (`HeapRealloc.lean`), the tail join `realloc_tail` (`ReallocTail.lean`), the dispatch
   `realloc_dec` (`ReallocDec.lean`: a chunk already big enough), word copies `copyW`/`copyW_spec`
-  (`ReallocCopy.lean`), `memmove_fwd` (`ReallocMove.lean`).
+  (`ReallocCopy.lean`), `memmove_fwd` (`ReallocMove.lean`); the whole malloc path
+  `realloc_mal` (`ReallocMal.lean`: inline copies, `memmove`, nested `_malloc_r`/`_free_r`,
+  the merge with a new chunk right after the old one); `realloc_next` (a free successor,
+  `ReallocNext.lean`); `realloc_topgrow` (into the top, `ReallocTop.lean`).
+- **Strengthened contract** (`PROOF_CLOSURE_PLAN.md`): `MRet`/`MHeap`/`TakeRet` carry
+  `LiveKeep` (live blocks' chunks survive `_malloc_r`), which the merge path needs.
+- Left for realloc: the three predecessor paths (`0x800055e4` prev+X, `0x8000566c`
+  prev+X+next, `0x80005510` prev+X+top: unlink, `coalPrev`, backward copy), the growth
+  dispatch at `0x800052f0`, the wrapper `realloc` (`0x8000527c`) and the top-level contexts.
 
 ## Next: `_realloc_r` (`0x80005290`, wrapper `realloc` `0x8000527c`)
 Paths (X = p-16 of size S, nb = normalized request, T = tail `0x80005414`):
