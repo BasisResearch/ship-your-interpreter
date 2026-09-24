@@ -2198,6 +2198,123 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   unfold SgRest
   iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
 
+/-- `strRender` of a closure: its name cut, or `"<fn>"`. -/
+theorem strRender_clos {st : Store} {ca : Nat} {cd : ClosureData} (hcd : st.closures[ca]? = some cd) :
+    strRender st (.closure ca) = match cd.name with | some x => fnRender x | none => "<fn>" := by
+  cases h : cd.name with
+  | some x => simp [strRender, closName, hcd, h]
+  | none => simp [strRender, closName, hcd, h, Value.catDisplay, Value.display]
+
+/-- **A closure**: the object's `EX_FN` node and its name field through a data
+view (`dispRes`, as `value_print`), then the named or anonymous path. -/
+theorem sg_cloArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) {ca : Nat} {st : Store}
+    (hc : vsaChg ((strRender st (.closure ca)).toList.length + 1) c) {M : Mem}
+    (hk : ldv .lw M p.toNat = 4#64) (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k) :
+    dispRes st (.closure ca) ∗
+      SgRest Wp Φ N inp p s r (.closure ca) (strRender st (.closure ca)) ρ H c o rv Mp ∗
+      ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hoff := sg_offs (s := s) (by omega)
+  have hsep := cx.sep
+  have hp1 := cx.hg.al; have hp2 := cx.hg.lo; have hp3 := cx.hg.hi
+  unfold Vsa.Sim.tohostAddr at hp2
+  have ep8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
+  iintro ⟨#Hd, Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
+    (F := iprop(dispRes st (.closure ca) ∗
+      SgRest Wp Φ N inp p s r (.closure ca) (strRender st (.closure ca)) ρ H c o rv Mp))
+  rotate_left
+  · unfold SgRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hd Hrest Hms
+  intro F'
+  refine sg_cloH cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 hp1 (by omega) hp3 hk ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  iintro ⟨⟨#Hd, Hrest⟩, Hms⟩
+  unfold SgRest
+  icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  ihave #Hd2 := dispRes_clos $$ Hd
+  icases Hd2 with ⟨%cd, %cp, %q, %img, %P, %m, %⟨hcd, hqimg, hcR, hrep, hPR, hPW⟩, #Hca, #Hro, #Hon⟩
+  ihave #Hca' := valImg_clos $$ Hv
+  ihave %hcp := closAt_agree ca cp (imgW (imgM Mp) (p.toNat + 8)).toNat $$ [Hca Hca']
+  · iframe Hca Hca'
+  obtain ⟨w, hrw, hcov, hname⟩ := fnName_facts hrep
+  have hP : ∀ k, q + 8 ≤ k → k < q + 16 → P k ∧ (m[k]?).isSome := fun k h1 h2 => by
+    refine ⟨by have := hcov (k - (q + 8)) (by omega); rwa [show q + 8 + (k - (q + 8)) = k by omega] at this, ?_⟩
+    have := read64_bytes_present hrw (k - (q + 8)) (by omega)
+    rw [show q + 8 + (k - (q + 8)) = k by omega] at this
+    rw [this]; rfl
+  ihave ⟨%Dt, #Hview, %⟨hc', hn⟩⟩ := roOwn_clod hP $$ [Hcode Hro Hon]
+  · iframe Hcode Hro Hon
+  have hq0 := hPR (q + 8) (by have := hcov 0 (by omega); simpa using this)
+  have hq01 := hq0.lo; have hq02 := hq0.hi
+  have hcpl : cp < 2 ^ 64 := by rw [hcp]; exact (imgW (imgM Mp) (p.toNat + 8)).isLt
+  have fc : SgClo (writeLog (writeLog (writeLog M
+      [((s + 18446744073709551504#64 + 104#64).toNat, 8, r)])
+      [((s + 18446744073709551504#64 + 96#64).toNat, 8, rv 8)])
+      [((s + 18446744073709551504#64 + 88#64).toNat, 8, rv 9)]) Dt p cp q w := {
+    hw8 := by
+      rw [ep8, hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+      simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss]
+      rw [ldv_ld_imgW, imgW_agree (g := imgM Mp) (fun j hj => hslot _ (by simp only [InExt]; omega)),
+        hcp, BitVec.ofNat_toNat, BitVec.setWidth_eq]
+    hc0 := hcR cp (by simp [InExt])
+    hc7 := hcR (cp + 7) (by simp [InExt])
+    hq := by
+      rw [ldv_ld_imgW]; unfold imgW
+      rw [imgLE_congr (img' := img) (fun i hi => hc' (cp + i) (by omega) (by omega)), hqimg]
+    hq0 := hq0
+    hq7 := hPR (q + 15) (by have := hcov 7 (by omega); simpa using this)
+    hnm := by
+      rw [ldv_ld_imgW]; unfold imgW
+      have h8 : readLE m (q + 8) 8 = some (imgLE (imgM Dt) (q + 8) 8) :=
+        readLE_of_img (fun i hi => hn (q + 8 + i) (by omega) (by omega))
+      have : read64 m (q + 8) = readLE m (q + 8) 8 := rfl
+      rw [this, h8] at hrw
+      cases hrw; rfl
+    hcp := hcpl
+    hql := by omega }
+  have f0 : SgC0 s p r rv (upd (upd (upd (upd (upd (upd rv 1 r) 15 4#64) 2
+      (s + 18446744073709551504#64)) 14 3#64) 14 2#64) 14 4#64)
+      (writeLog (writeLog (writeLog M
+      [((s + 18446744073709551504#64 + 104#64).toNat, 8, r)])
+      [((s + 18446744073709551504#64 + 96#64).toNat, 8, rv 8)])
+      [((s + 18446744073709551504#64 + 88#64).toNat, 8, rv 9)]) Mp := by
+    refine ⟨by simp [upd, cx.h10], by simp [upd], fun y hy hc'' hy2 => ?_, ?_, ?_, ?_, fun k hk => ?_⟩
+    · have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+      have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc'' (e ▸ hz)
+      simp [upd, hy1, hy2, hcl 14 (by decide), hcl 15 (by decide)]
+    all_goals first
+      | (simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+         simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit])
+      | (simp only [InExt] at hk
+         simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+         simp (disch := omega) only [imgM_store_miss]
+         exact hslot k (by simp only [InExt]; omega))
+  rw [strRender_clos hcd] at hc ⊢
+  rcases hname with ⟨hn0, rfl⟩ | ⟨x, hnx, hnz, hcs⟩
+  · rw [hn0] at hc ⊢
+    iapply sg_cloAnon Wp A HN cx hmc hc f0 fc
+    unfold SgRest
+    iframe Hview Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
+  · rw [hnx] at hc ⊢
+    ihave #Hx := strAt_of_cstringWithin hcs hPW $$ Hon
+    have hwl := read64_lt hrw
+    iapply sg_cloNamed Wp A HN Hout cx hmc hc f0 fc (fun h => hnz (by
+      have := congrArg BitVec.toNat h; simp at this; omega))
+    rw [show (BitVec.ofNat 64 w).toNat = w by simp; omega]
+    unfold SgRest
+    iframe Hview Hx Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
+
 end Glue
 
 end VsaIris.Interp
