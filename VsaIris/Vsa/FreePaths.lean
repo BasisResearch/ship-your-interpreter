@@ -1230,4 +1230,65 @@ theorem FB2.geo {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {
     by rw [hpend]; exact HH.bnd_ne_node P.i1 hpnode bX 8 (by omega) (by omega),
     B.heap.heap.node_foot P.i0 P.i1 hpredm, B.heap.heap.node_foot P.i0 P.i1 hsuccm⟩
 
+/-- The virtual heap in which the free predecessor `p` absorbed `x`
+(`PHeapAt.coalPrev`): `p` unlinked, its header recording `psz + sz`, and
+`x`'s header as the machine leaves it. -/
+abbrev b2Mem (Mt : Mem) (p psz sz hdr0 predP succP : Nat) : Mem :=
+  writeLog (writeLog (writeLog (writeLog (writeLog Mt
+    [(predP + 16, 8, BitVec.ofNat 64 succP)]) [(succP + 24, 8, BitVec.ofNat 64 predP)])
+    [(p + psz + 8, 8, BitVec.ofNat 64 (hdr0 ||| 1))]) [(p + 8, 8, BitVec.ofNat 64 (psz + sz + 1))])
+    [(p + psz + 8, 8, BitVec.ofNat 64 hdr0)]
+
+theorem FB2.coal {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    {p psz i : Nat} {pre post : List Nat} {predP succP : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ d bins x sz hdr0 hnn w p psz i pre post predP succP) :
+    PHeapAt (b2Mem Mt p psz sz hdr0 predP succP) C.H C.top0 brkv
+      (cs₀ ++ ⟨p, psz + sz, true⟩ :: d :: cs₃) (updBins bins i (pre ++ post)) := by
+  have G := B.geo
+  have P := B.pv
+  have hpend := P.pend
+  subst hpend
+  have h := B.heap
+  simp only [List.append_assoc, List.singleton_append] at h
+  have hps := G.psz16; have hss := G.sz16
+  exact h.coalPrev B.hno P.i0 P.i1 P.bin P.hpred P.hsucc B.hdr (h' := psz + sz + 1)
+    (by unfold chunkSize; omega) (by omega)
+    (fun h0 hr => by have := P.prev h0 hr; unfold prevInuse; rw [show (psz + sz + 1) % 2 = 1 by omega, this])
+    (BitVec.ofNat 64 hdr0)
+
+/-- The machine memory after unlinking `p` agrees with the coalesced virtual
+heap off `p`'s header and the words `excl` excludes. -/
+theorem b2_agree {C : MCtx} {Mt Mt1 : Mem} {p psz sz dsz hdr0 predP succP : Nat} {w : BitVec 64}
+    (G : B2Geo C p psz sz dsz predP succP) (hM1 : Mt1 = writeLog Mt [(p + psz + sz + 8, 8, w)])
+    (hdr : read64 Mt (p + psz + 8) = some hdr0)
+    {v1 v2 : BitVec 64} (h1 : v1.toNat = predP) (h2 : v2.toNat = succP) :
+    ∀ w0, vsaFoot C.H w0 → ¬ (p + 8 ≤ w0 ∧ w0 < p + 16) → ¬ (p + psz + sz + 8 ≤ w0 ∧ w0 < p + psz + sz + 16) →
+      (writeLog (writeLog Mt1 [(succP + 24, 8, v1)]) [(predP + 16, 8, v2)])[w0]? =
+      (b2Mem Mt p psz sz hdr0 predP succP)[w0]? := by
+  obtain ⟨hp16, hplo, hps16, hps32, hs16, hs32, hd16, hd32, hdend, htop, hpp16, hsp16, hpplo, hsplo,
+    hpphi, hsphi, sP, sX, sD, pD, pP, pX, _, _⟩ := G
+  have hdlt := Vsa.Sim.read64_lt _ _ _ hdr
+  intro w0 hw0 h1' h2'
+  refine agree_of_words (P := fun x => vsaFoot C.H x ∧ ¬ (p + 8 ≤ x ∧ x < p + 16) ∧
+      ¬ (p + psz + sz + 8 ≤ x ∧ x < p + psz + sz + 16))
+    [succP + 24, predP + 16, p + psz + 8] (fun w' hw' => ?_) (fun x hx hout => ?_) w0 ⟨hw0, h1', h2'⟩
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · refine ⟨predP, ?_, ?_⟩
+      · rw [rd_miss (by omega), read64_store_hit, h1]
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit,
+          BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · refine ⟨succP, ?_, ?_⟩
+      · rw [read64_store_hit, h2]
+      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    · refine ⟨hdr0, ?_, ?_⟩
+      · rw [rd_miss (by omega), rd_miss (by omega), hM1, rd_miss (by omega)]; exact hdr
+      · rw [read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdlt]
+  · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq] at hout
+    obtain ⟨hx1, hx2, hx3⟩ := hx
+    rw [hM1, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
+      writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+
 end VsaIris.VsaHeap
