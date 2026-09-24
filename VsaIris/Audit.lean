@@ -21,6 +21,11 @@ import VsaIris.Interp.ProofNativePrintln
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Interp.ProofStringify
+import VsaIris.Vsa.AllocHoles
+import VsaIris.Interp.ProofEnvNew
+import VsaIris.Interp.ProofEnvGet
+import VsaIris.Interp.ProofEnvSet
+import VsaIris.Interp.ProofEnvDefine
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -146,3 +151,16 @@ import VsaIris.Interp.ProofStringify
 #print axioms VsaIris.Interp.ms_callNewlibAbort
 #print axioms VsaIris.LocalRun.promote
 #print axioms VsaIris.Inst.Strlen.strlen_specOwnedW
+#print axioms VsaIris.VsaHeap.mallocChgRun_proved
+#print axioms VsaIris.VsaHeap.mallocLocalRun_proved
+#print axioms VsaIris.VsaHeap.freeChgRun_proved
+#print axioms VsaIris.VsaHeap.freeLocalRun_proved
+#print axioms VsaIris.VsaHeap.reallocChgRun_proved
+#print axioms VsaIris.VsaHeap.reallocLocalRun_proved
+#print axioms VsaIris.VsaHeap.allocSpecs
+#print axioms VsaIris.Interp.envNew_spec
+#print axioms VsaIris.Interp.envGet_spec
+#print axioms VsaIris.Interp.envSet_spec
+#print axioms VsaIris.Interp.envDefine_spec
+#print axioms VsaIris.Interp.reallocRho_spec
+#print axioms Vsa.Sim.NativeNameAudit.Control.sharedGeom
