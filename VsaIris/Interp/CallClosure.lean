@@ -162,3 +162,74 @@ theorem world_depth (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Na
 end World
 
 end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+open VsaIris VsaIris.Sym VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim Vsa.While
+
+-- Run K1a: the kind tests (`4`: a closure), the callee copied to `sp+120`,
+-- the line; stop before the closure object's load.
+#ix_seg CallK_runA {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
+    {aX s w0 w1 w2 : BitVec 64}
+    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 28 ≤ 0x100000000)
+    (hx3 : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
+    (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64)
+    (hW0 : ldv .ld Mt (s + 18446744073709550528#64 + 96#64).toNat = w0)
+    (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 104#64).toNat = w1)
+    (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
+    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = 4#64) :
+    IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
+  by ix_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x80003288
+
+-- Run K1b: `fn_expr` from the closure object; `s5` spilled, `s5 = fn_expr`.
+#ix_seg CallK_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
+    {s cp q : BitVec 64}
+    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hc1 : 0x80000000 ≤ cp.toNat) (hc2 : cp.toNat + 16 ≤ 0x100000000)
+    (hc3 : cp.toNat + 16 ≤ tohostAddr ∨ tohostAddr + 16 ≤ cp.toNat)
+    (h13 : R 13 = cp) (h2 : R 2 = s + 18446744073709550528#64)
+    (hq : ldv .ld Dt cp.toNat = q) :
+    IW live Dt (accAddrs cp.toNat 16) (InExt (s.toNat - 1088, 1088)) Q 0x80003288#64 R Mt
+  by ix_run hlive using [h13, h2, hq, hsf] at 0x80003294
+
+-- Run K1c: `paramc` from the `EX_FN` node, the arity test (`bne`: the
+-- arity error at `0x80003d60`), `++in->call_depth` (the depth word owned
+-- beside the frame), `s3` spilled, the depth test (`blt`: the depth error at
+-- `0x80003ca4`).
+#ix_seg CallK_runC {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
+    {s q inp : BitVec 64} {argc paramc dep : Nat}
+    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hq1 : 0x80000000 ≤ q.toNat) (hq2 : q.toNat + 28 ≤ 0x100000000)
+    (hq3 : q.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ q.toNat)
+    (hi1 : tohostAddr + 16 ≤ inp.toNat) (hi2 : inp.toNat + 480 ≤ 0x88000000)
+    (hi3 : inp.toNat + 12 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp.toNat + 8) (hia : inp.toNat % 8 = 0)
+    (h14 : R 14 = q) (h18 : R 18 = inp) (h2 : R 2 = s + 18446744073709550528#64)
+    (hpc : ldv .lw Dt (q + 24#64).toNat = BitVec.ofNat 64 paramc)
+    (hdep : ldv .lw Mt (inp + 8#64).toNat = BitVec.ofNat 64 dep) :
+    IW live Dt (accAddrs (q.toNat + 24) 4)
+      (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q 0x80003294#64 R Mt
+  by ix_run hlive using [h14, h18, h2, hpc, hdep, hsf] at 0x80003d60 0x80003ca4 0x800032b4
+
+-- Run K1d: `cl->env` from the closure object, `argc` spilled at `sp+0`.
+#ix_seg CallK_runD {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
+    {s cp e inp : BitVec 64}
+    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hc1 : 0x80000000 ≤ cp.toNat) (hc2 : cp.toNat + 16 ≤ 0x100000000)
+    (hc3 : cp.toNat + 16 ≤ tohostAddr ∨ tohostAddr + 16 ≤ cp.toNat)
+    (h13 : R 13 = cp) (h2 : R 2 = s + 18446744073709550528#64)
+    (he : ldv .ld Dt (cp + 8#64).toNat = e) :
+    IW live Dt (accAddrs cp.toNat 16)
+      (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q 0x800032b4#64 R Mt
+  by ix_run hlive using [h13, h2, he, hsf] at 0x800032bc
+
+end VsaIris.Interp
