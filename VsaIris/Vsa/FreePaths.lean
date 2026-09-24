@@ -923,4 +923,68 @@ theorem free_b1b {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a2
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rfl
 
+/-- The free predecessor `p` of `x` (size `psz`): last of `cs₁`, on bin `i`
+between `predP` and `succP`, its header with `PREV_INUSE`, its footer read at
+`x`. -/
+structure FPv (Mt : Mem) (cs₁ : List Chunk) (bins : Nat → List Nat) (x : Nat) (cs₀ : List Chunk)
+    (p psz i : Nat) (pre post : List Nat) (predP succP : Nat) : Prop where
+  split : cs₁ = cs₀ ++ [⟨p, psz, false⟩]
+  pend : p + psz = x
+  i0 : 0 < i
+  i1 : i < numBins
+  bin : bins i = pre ++ p :: post
+  hpred : (binAt i :: pre).getLast? = some predP
+  hsucc : (post ++ [binAt i]).head? = some succP
+  foot : read64 Mt x = some psz
+  fd : read64 Mt (p + 16) = some succP
+  bk : read64 Mt (p + 24) = some predP
+  prev : ∀ h0, read64 Mt (p + 8) = some h0 → h0 % 2 = 1
+
+theorem FNt.pv {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₁ cs₃ : List Chunk}
+    {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    (N : FNt C R Mt Mt1 brkv cs₁ cs₃ d bins x sz hdr0 hnn w) (hpf : hdr0 % 2 = 0) :
+    ∃ cs₀ p psz i pre post predP succP, FPv Mt cs₁ bins x cs₀ p psz i pre post predP succP := by
+  have HH := N.heap.heap.heap
+  -- `x` is not the first chunk: its header lacks `PREV_INUSE`
+  obtain ⟨cs₀, c, hc⟩ : ∃ cs₀ c, cs₁ = cs₀ ++ [c] := by
+    rcases List.eq_nil_or_concat cs₁ with rfl | ⟨cs₀, c, rfl⟩
+    · exfalso
+      have hv : x = heapStart := by
+        have := (walkHead (by simpa using HH.walk)).addr; exact this
+      have := HH.first_prev
+      rw [← hv, N.hdr] at this
+      simp only [Option.any, beq_iff_eq] at this; omega
+    · exact ⟨cs₀, c, List.concat_eq_append ..⟩
+  subst hc
+  have hw := HH.walk
+  simp only [List.append_assoc, List.singleton_append] at hw
+  obtain ⟨⟨h, hr, hp⟩, hn⟩ := walk_next_of hw
+  have hca : c.addr + c.size = x := by
+    rcases hn with ⟨_, h1⟩ | ⟨d', cs', h1, h2⟩
+    · cases h1
+    · simp only [List.cons.injEq] at h1; rw [← h2, ← h1.1]
+  rw [hca, N.hdr] at hr
+  cases hr
+  have hcf : c.inuse = false := by
+    rw [← hp]; unfold prevInuse; simp; omega
+  obtain ⟨p, psz, ci⟩ := c
+  simp only at hca hcf
+  subst hcf
+  have hcm : (⟨p, psz, false⟩ : Chunk) ∈ (cs₀ ++ [⟨p, psz, false⟩]) ++ ⟨x, sz, true⟩ :: d :: cs₃ := by simp
+  obtain ⟨i, hi0, hi, hm, _⟩ := HH.free_binned _ hcm rfl
+  simp only at hm
+  obtain ⟨pre, post, hbin⟩ := List.append_of_mem hm
+  obtain ⟨predP, hpred⟩ : ∃ q, (binAt i :: pre).getLast? = some q := ⟨_, List.getLast?_cons⟩
+  obtain ⟨succP, hsucc⟩ : ∃ q, (post ++ [binAt i]).head? = some q := by
+    rcases post with _ | ⟨z, zs⟩ <;> simp
+  have hring := (binList_iff_ring.1 (HH.bins_list i hi0 hi)).1
+  rw [hbin] at hring
+  have hft := HH.footer _ hcm rfl
+  simp only at hft
+  rw [hca] at hft
+  have HH' : HeapAt Mt C.H (fun e => e ∈ C.H) C.top0 brkv (cs₀ ++ ⟨p, psz, false⟩ :: ⟨x, sz, true⟩ :: d :: cs₃) bins := by
+    simpa using HH
+  exact ⟨cs₀, p, psz, i, pre, post, predP, succP, rfl, hca, hi0, hi, hbin, hpred, hsucc, hft,
+    (ring_member hring hpred hsucc).1, (ring_member hring hpred hsucc).2, HH'.freeNbrs.prev⟩
+
 end VsaIris.VsaHeap
