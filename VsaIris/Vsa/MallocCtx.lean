@@ -211,12 +211,12 @@ theorem MHeap.off_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
 /-- The stack window misses the `_errno` word and the run of allocator
 globals from `__malloc_sbrk_base` to `__malloc_current_mallinfo`: every gap
 between them is narrower than the window. -/
-theorem MHeap.glob_off {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) :
-    (C.s.toNat ≤ 0x8001b538 ∨ 0x8001b53c + mHead ≤ C.s.toNat) ∧
-      (C.s.toNat ≤ 0x8001b960 ∨ 0x8001ba68 + mHead ≤ C.s.toNat) := by
-  have g : ∀ a, allocGlobal a → ¬ (C.s.toNat - mHead ≤ a ∧ a < C.s.toNat) :=
-    fun a ha hw => Hp.disj a hw.1 hw.2 (.inl ha)
+theorem glob_off_of {H : List (Nat × Nat)} {s : BitVec 64}
+    (hd : ∀ a, s.toNat - mHead ≤ a → a < s.toNat → ¬ vsaFoot H a) :
+    (s.toNat ≤ 0x8001b538 ∨ 0x8001b53c + mHead ≤ s.toNat) ∧
+      (s.toNat ≤ 0x8001b960 ∨ 0x8001ba68 + mHead ≤ s.toNat) := by
+  have g : ∀ a, allocGlobal a → ¬ (s.toNat - mHead ≤ a ∧ a < s.toNat) :=
+    fun a ha hw => hd a hw.1 hw.2 (.inl ha)
   have h1 := g 0x8001b538 (by unfold allocGlobal InRange; omega)
   have h2 := g 0x8001b53b (by unfold allocGlobal InRange; omega)
   have h3 := g 0x8001b960 (by unfold allocGlobal InRange; omega)
@@ -226,6 +226,12 @@ theorem MHeap.glob_off {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
   have h7 := g 0x8001ba67 (by unfold allocGlobal InRange; omega)
   unfold mHead at *
   omega
+
+theorem MHeap.glob_off {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) :
+    (C.s.toNat ≤ 0x8001b538 ∨ 0x8001b53c + mHead ≤ C.s.toNat) ∧
+      (C.s.toNat ≤ 0x8001b960 ∨ 0x8001ba68 + mHead ≤ C.s.toNat) :=
+  glob_off_of Hp.disj
 
 /-- A footprint range of positive width lies wholly below or above the stack window. -/
 theorem MHeap.off_stack_w {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
