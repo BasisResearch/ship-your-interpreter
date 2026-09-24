@@ -7,6 +7,10 @@ import VsaIris.Vsa.Console
 import VsaIris.LocalRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
+import VsaIris.Vsa.RuntimeError
+import VsaIris.Vsa.OomSites
+import VsaIris.Vsa.Setjmp
+import VsaIris.Vsa.TopAbrupt
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -85,3 +89,24 @@ import VsaIris.Interp.Need
 #print axioms VsaIris.Interp.execNeed_callBody
 #print axioms VsaIris.Interp.execNeed_of_stackFits
 #print axioms VsaIris.Interp.stackScratch_boundary
+#print axioms VsaIris.Newlib.NewlibHoles.at
+#print axioms VsaIris.Newlib.Exit.wp_exitCall
+#print axioms VsaIris.Newlib.MainErr.wp_mainErrTail
+#print axioms VsaIris.Newlib.Landing.wp_landing
+#print axioms VsaIris.Interp.abortRes_widen
+#print axioms VsaIris.Interp.wp_abortOom
+#print axioms VsaIris.Interp.wp_abortLanding
+#print axioms VsaIris.Interp.wp_abort
+#print axioms VsaIris.Inst.aluA0_runFact
+#print axioms VsaIris.Newlib.RtErr.rtErr_spec
+#print axioms VsaIris.Inst.seg_runFactR
+#print axioms VsaIris.Newlib.Oom.wp_oomBlock
+#print axioms VsaIris.Newlib.OomSites.oom80002a38_ok
+#print axioms VsaIris.Newlib.OomSites.oom80002bd0_ok
+#print axioms VsaIris.Newlib.OomSites.oom80003140_ok
+#print axioms VsaIris.Newlib.Setjmp.setjmp_spec
+#print axioms VsaIris.Newlib.Landing.wp_interpRet1
+#print axioms VsaIris.Newlib.TopAbrupt.wp_topAbrupt
+#print axioms VsaIris.Newlib.TopAbrupt.topRet_ok
+#print axioms VsaIris.Newlib.TopAbrupt.topBrk_ok
+#print axioms VsaIris.Newlib.OomSites.oom80003e28_ok

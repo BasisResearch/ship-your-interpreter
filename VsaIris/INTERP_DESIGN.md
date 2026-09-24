@@ -769,7 +769,75 @@ exhibits all the predicates together at the control program's real initial
 memory. `heapRes`/`world` inhabitation at that memory needs `isHeap` for the
 interpreter control's dlmalloc heap and stays with H4/A0.
 
+### STATEMENT CHANGES (H5)
+
+- **`struct Interp` layout.** `interpJmpLen = 208`, `interpErrOff = 224`
+  (were 112 and 128). newlib's riscv `jmp_buf` is 26 words (14 integer + 12
+  FP slots; `setjmp` fills the first 14), so `err_msg` starts at `in+224`:
+  `runtime_error` passes `addi a0,s0,224` to `snprintf`, and `main` passes
+  `addi a2,sp,496` with `in = sp+272`. VSA's `ObjGeom (inp, 384)` undercounts
+  the object (480 bytes) but is only a geometry bound.
+- **`err_msg` is a parameter of the context.** `interpCoreE`/`interpCtxE`/
+  `worldE` take the `err_msg` resource `E`; `interpCore`/`interpCtx`/`world`
+  are the instances at `errAny` (any bytes). The landing's `world` has
+  `errStr` (a NUL within the 256 bytes), which `runtime_error`'s second
+  `snprintf` establishes and `main`'s `fprintf("%s\n", in->err_msg)` needs.
+- **`world` owns newlib's runtime data.** `Stdio.stdioOwn`: every
+  `.data`/`.bss` byte from `__sglue` to `__bss_end` outside the allocator's
+  globals, at an image satisfying VSA's `ConsoleStream` and
+  `ExitRuntimeData` (`Stdio.StdioOK`). `value_print` (H2), the error line and
+  `exit` all need it; `InterpRunPhysicalFacts.console`/`.exit_runtime` give it
+  at the boundary. `Newlib.stdioFoot_off_alloc`: the two owners are disjoint.
+- **`IrisHoles.newlib` is exact** (`VsaIris/Vsa/Newlib.lean`):
+  `snprintf`/`fprintf` with `%s`/`%d` formats (`FmtArgsOK`), `fwrite` (gcc's
+  form of the out-of-memory `fprintf`), and `exit`'s newlib interior
+  (`__call_exitprocs`, `__stdio_exit_handler`). A write to `stderr` leaves
+  newlib's data in a state `Ierr` outside `ExitRuntimeData` (the `FILE`
+  gains `__SWR` and a buffer), so `NewlibHoles := ∃ Ierr, NewlibHolesAt Ierr`.
+- **`stderr` output is console output.** `_write` ignores its descriptor and
+  stores every byte to `tohost`, so the error line is printed. VSA's
+  `FprintfStderrNeutral` (`Vsa/Sim/ExitPath.lean`: the output is unchanged
+  across `fprintf`) is false; nothing in the Iris route uses it.
+- **Out of memory is `fwrite` + `exit(1)`**, not `fprintf`: every inlined
+  `xmalloc` NULL arm is `fwrite(msg, 1, 14, stderr); exit(1)`.
+- **`abortCore` depends on the site's region** (`VsaIris/Interp/Abort.lean`).
+  `abortRes s n = abortAt (abortCore s n) s n` with `abortCore s n :=
+  landingCore ∨ oomCore s n`. `landingCore` is the `longjmp` landing: some
+  `worldE (errStr inp)`, the `jmp_buf` read-only at `jb`, and `landingRegs jb`
+  (`ra`, `s0`–`s11`, `sp` read off `jb`, `a0 = 1`, PC at the restored `ra`).
+  `oomCore s n` is `exit`'s entry with `a0 = 1` after the out-of-memory
+  `fwrite`, and its stack pointer `s'` leaves room for `exit` inside `[s - n,
+  s)` (`OomSp`). That fact is about the site's region, so the core is not
+  site-independent as F3's `abortAt Core` assumed; it is monotone in the region
+  (`abortCore_mono`), and `abortRes_widen` turns a callee's `abortRes` into
+  `abortAt (abortCore s n) (s - f) nc`, which is what F3's `wp_callArmAbort`
+  (at `Core := abortCore s n`) consumes through `fnSpecAbort_mono`. The
+  alternative, `exit(1)` run by the site itself, needs `Φ (1, _)`, which only
+  the top's continuation can supply.
+- **The abort continuation is closed** (`wp_abort`): at `interp_run`'s `jal
+  exec_stmt` (`sp = sM - 176`), `abortRes` plus what `interp_run`'s proof keeps
+  (`TopLanding`: the `jmp_buf` it wrote, its frame, `main`'s saved pair) ends in
+  `exit(70)` (`wp_abortLanding` → `Landing.wp_landing` → `MainErr.wp_mainErrTail`
+  → `Exit.wp_exitCall`) or `exit(1)` (`wp_abortOom`), for either WP.
+
 ## 11. Open questions for the user
+
+- **Q5 (lane H4, needs the user): a page-aligned break at the boundary.** `malloc_extend_top`
+  grows the top in place only when the old heap end is page-aligned (`0x80004f70`). Otherwise it
+  returns NULL when the old top is under 32 bytes (`0x80004f94`), or it fenceposts and frees the
+  old top, which `ChunkWalk` cannot describe. `InitialAllocatorAt` does not rule this out, so its
+  `capacity` does not imply allocation success. The Iris heap shape therefore adds
+  `brkv % 4096 = 0`. Every allocator path preserves it (extension by page-rounded sizes, trim by
+  whole pages). A0 needs it at the boundary, which means a new `Loaded` field beside `capacity`,
+  or a proof from the loader. Recorded in `PROOF_CLOSURE_PLAN.md` §2.
+
+- **Q5b (lane H4, needs the user): a 32-bit `binblocks` word at the boundary.** `_malloc_r`'s
+  block search shifts a mask up to the next set bit of `binblocks` and advances the bin index by
+  four each shift (`0x80004994`-`0x800049a0`). `HeapAt.binblocks` bounds only the bits of nonempty
+  blocks, and dlmalloc clears the bitmap lazily, so a bit at 32 or above would walk the index past
+  bin 127. The Iris heap shape therefore adds `bb < 2 ^ 32` (`PHeapAt.bb_lt`); every path preserves
+  it, since the bits written are `1 << (i / 4)` for `i < 128`. Same supplier as Q5. Recorded in
+  `PROOF_CLOSURE_PLAN.md` §2.
 
 - **Q1 (hard to change later): stack admissibility at the boundary** (§10.4).
   Approve a `stack_admissible` field in `InterpRunReady`, shaped like
@@ -787,3 +855,24 @@ interpreter control's dlmalloc heap and stays with H4/A0.
 - **Q4: newlib safety holes.** `snprintf`/`fprintf` on the error paths are
   needed only so that partial mode is "never stuck". Leave them as named
   holes, or schedule proofs? (`vfprintf` is large.)
+- **Q6 (lane H5, needs the user): `_impure_data._stderr` at the boundary.**
+  `main`'s error line (`0x80004600`) loads its stream with `ld a5,0(s0);
+  ld a0,24(a5)`, i.e. from the reentrancy record's `_stderr` field
+  (`0x8001b550`). `InterpRunPhysicalFacts` pins stdout (`ConsoleStream`) and
+  the idle `stderr` `FILE` (`ExitRuntimeData.stderr`) but not this pointer, so
+  from the boundary alone `fprintf` may be handed any stream and the error
+  path's safety is unprovable. `Stdio.StdioOK` requires it
+  (`read64 m stderrPtrAddr = some exitStderr`); the supplier is one more
+  `ExitRuntimeData` field, read off the same snapshot
+  (`Vsa/Sim/OutputAliasSnapshot.lean`).
+- **Q7 (lane H5, needs the user): the error path's stack at the deepest call.**
+  `runtime_error` needs 224 bytes plus `snprintf`'s chain (272 + 592 + 64 =
+  928, `IrisHoles.newlib.snprintf` claims 1024). The budget's leaf headroom is
+  `evalFrame = 1088` (`EvalEntry.stackBudget`, `ProgramStackFits.need`), so an
+  error raised at call depth `maxCallDepth` from the deepest `eval_expr` has
+  no owned stack for `runtime_error`: 1152 > 1088 even at the measured need.
+  Either the boundary reserves an error headroom `rtErrNeed ≥ 224 + 1024`
+  below the program's need, or `perCallBudget` accounting leaves it at depth
+  `maxCallDepth`. H5 states `runtime_error`'s spec with its real need; E1–E6
+  must supply it at each error site.
+

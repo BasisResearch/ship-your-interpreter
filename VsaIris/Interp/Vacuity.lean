@@ -290,7 +290,7 @@ theorem ctl_interpCtxPre :
   iintro ⟨Hg, Hd, Hp, Hj, He, #Hf⟩
   imod wordRO_of_ownImg ctl_globals $$ Hg with Hg
   imodintro
-  unfold interpCtxPre interpCore
+  unfold interpCtxPre interpCore interpCoreE errAny
   isplitl [Hg Hd Hp He]
   · iexists 0x81000000
     iframe Hg Hf

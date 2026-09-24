@@ -32,6 +32,9 @@ unproved callee as a `Module Type`.
 | `MallocRun.lean` | none | `allocCall_of_localRun` (one allocator call from its local run); `DlMallocImpl` and the credit-indexed `DlMallocRoomImpl` from the first-order runs `MallocLocalRun`/`FreeLocalRun`/`MallocRoomRun` |
 | `Vsa/HeapShape.lean`, `Vsa/Malloc.lean` | none | `vsaLayout` (`Shape` = `DlHeap.HeapAt` with exact live blocks; `BlockHeapAt.transport`: it reads only `heapFoot`), `vsaRoom` (`AllocationReserve`), `vsaDlMallocImpl`, `vsaDlMallocRoomImpl` |
 | `Vsa/ControlWitness.lean`, `Vsa/ControlEnd.lean` | none | the eb73d8c control heap: its Iris shape, both calls' post-states inside the live-relative frame, and `MallocEnd`/`MallocRoomEnd` at the concrete `malloc(64)` return |
+| `Vsa/HeapRoom.lean`, `Vsa/HeapAlg.lean`, `Vsa/HeapTake.lean`, `Vsa/HeapSplit.lean`, `Vsa/HeapMove.lean` | none | the counted heap `PHeapAt` (page-aligned break, 32-bit `binblocks`) and its three edits: `PHeapAt.take` (unlink a chunk from a bin and hand it out), `PHeapAt.topSplit` (cut `nb` off the top chunk), `PHeapAt.moveBin` (move a chunk between bins and set its block bit); bins as rings of links (`Links`, `Ring`, `links_link`/`links_unlink`) |
+| `Vsa/SymRun.lean`, `Vsa/AllocCode.lean`, `Vsa/AllocSteps/*`, `Vsa/AllocTac.lean` | none | the `SWP` symbolic-execution layer: one `st_<pc>` per allocator instruction (generated) and `sx_run` driving them |
+| `Vsa/MallocCtx.lean`, `Vsa/MallocPaths.lean`, `Vsa/MallocPro.lean`, `Vsa/MallocLR.lean`, `Vsa/MallocTop.lean`, `Vsa/MallocChain.lean` | none | `_malloc_r` at the binary: the call context `MCtx`/`MOK`, the frame and heap invariants, `TakeRet`/`MOK.fin_take`, and the proved joins chained by `malloc_paths` |
 | `Vsa/MallocConsumer.lean` | none | `wp_call_malloc_owns`, `ownSet_agree_state`, and `mallocRoomCallerFacts_of_iris`: every `MallocReturnAt` field `prepareCopy` uses, from the Iris spec |
 
 The project is 1,599 lines. MachCSL's corresponding Rocq layers run to

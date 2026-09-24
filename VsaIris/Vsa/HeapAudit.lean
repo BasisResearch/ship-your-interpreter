@@ -1,6 +1,11 @@
+import VsaIris.Vsa.MallocPro
 import VsaIris.Vsa.MallocConsumer
 import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.MallocFastHeap
+import VsaIris.Vsa.MallocLive
+import VsaIris.Vsa.FreeChain
+import VsaIris.Vsa.AllocHoles
+import VsaIris.Vsa.AllocTac
 
 /-! Axiom audit for the iris-heap results: every headline theorem, printed. -/
 
@@ -31,3 +36,46 @@ import VsaIris.Vsa.MallocFastHeap
 #print axioms VsaIris.VsaHeap.vsa_reserve_fails_after_split
 #print axioms VsaIris.VsaHeap.FastAt.split
 #print axioms VsaIris.VsaHeap.split24_vsa_reserve_false
+#print axioms VsaIris.MallocFast.fast_run
+#print axioms VsaIris.MallocFast.mallocRoomRun_fast
+#print axioms VsaIris.MallocFast.vsaDlMallocRoomImpl_fast
+#print axioms VsaIris.MallocFast.pathLoaded_of_image
+#print axioms VsaIris.MallocFast.vsaDlMallocRoomImpl_boundary
+#print axioms VsaIris.MallocFast.vsaFoot_live
+#print axioms VsaIris.VsaHeap.FastAt.merge
+#print axioms VsaIris.freeRoomSpec_of_run
+#print axioms VsaIris.MallocFast.free_run
+#print axioms VsaIris.MallocFast.freeRoomRun_fast
+#print axioms VsaIris.MallocFast.vsaDlFreeRoomImpl_fast
+#print axioms VsaIris.MallocFast.vsaDlFreeRoomImpl_boundary
+#print axioms VsaIris.allocCallArgs_of_localRun
+#print axioms VsaIris.reallocSpec_of_localRun
+#print axioms VsaIris.dlReallocImpl_of_localRun
+#print axioms VsaIris.VsaHeap.vsaDlReallocImpl
+#print axioms VsaIris.VsaHeap.reallocBlock_of_fresh
+#print axioms VsaIris.VsaHeap.reallocCopies_of_owned
+
+/-! Lane H4: the symbolic run layer, the step table, the counted specs. -/
+
+#print axioms VsaIris.Sym.swp_seg
+#print axioms VsaIris.Sym.swp_step
+#print axioms VsaIris.Sym.swp_jal
+#print axioms VsaIris.Sym.ldv_store_hit
+#print axioms VsaIris.Sym.ldv_store_miss
+#print axioms VsaIris.Sym.st_800047a8
+#print axioms VsaIris.Sym.st_800047cc
+#print axioms VsaIris.Sym.st_800047f0
+#print axioms VsaIris.Sym.st_8000483c
+#print axioms VsaIris.mallocChgSpec_of_run
+#print axioms VsaIris.reallocChgSpec_of_run
+#print axioms VsaIris.isHeapRoom_mono
+#print axioms VsaIris.VsaHeap.roomB_of_initial
+#print axioms VsaIris.VsaHeap.physSize_le_chg
+#print axioms VsaIris.VsaHeap.allocSpecs
+#print axioms VsaIris.VsaHeap.PHeapAt.take
+#print axioms VsaIris.VsaHeap.j_small
+#print axioms VsaIris.VsaHeap.small_take
+#print axioms VsaIris.VsaHeap.mOK_chg
+#print axioms VsaIris.VsaHeap.epi_core
+#print axioms VsaIris.VsaHeap.malloc_pro
+#print axioms VsaIris.VsaHeap.malloc_errno

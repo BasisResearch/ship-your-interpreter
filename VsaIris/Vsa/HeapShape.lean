@@ -203,23 +203,35 @@ end Reads
 
 /-! ## Locality -/
 
+/-- The footprint bytes `HeapAt` reads: all of `vsaFoot` except the `_errno`
+word and `0x8001ba08`, which only `_sbrk_r` and `malloc`'s error path write. -/
+def vsaRead (H : List (Nat × Nat)) (a : Nat) : Prop :=
+  vsaFoot H a ∧ ¬ InRange 0x8001b538 0x8001b53c a ∧ ¬ InRange 0x8001ba08 0x8001ba0c a
+
+/-- A footprint doubleword away from the two unread words is read. -/
+def NotErr (a : Nat) : Prop :=
+  a + 8 ≤ 0x8001b538 ∨ (0x8001b53c ≤ a ∧ a + 8 ≤ 0x8001ba08) ∨ 0x8001ba0c ≤ a
+
 private theorem read64_of_foot {H : List (Nat × Nat)} {m m' : Mem}
-    (hag : AgreeP (vsaFoot H) m m') {a : Nat} (hf : ∀ k, k < 8 → vsaFoot H (a + k)) :
-    read64 m a = read64 m' a :=
-  read64_agreeP hag hf
+    (hag : AgreeP (vsaRead H) m m') {a : Nat} (hf : ∀ k, k < 8 → vsaFoot H (a + k))
+    (hn : NotErr a) : read64 m a = read64 m' a :=
+  read64_agreeP hag fun k hk => ⟨hf k hk, by unfold InRange NotErr at *; omega,
+    by unfold InRange NotErr at *; omega⟩
 
 private theorem global_read {H : List (Nat × Nat)} {a : Nat}
     (hg : ∀ k, k < 8 → allocGlobal (a + k)) : ∀ k, k < 8 → vsaFoot H (a + k) :=
   fun k hk => .inl (hg k hk)
 
-/-- **`HeapAt` reads only the allocator's footprint.** Two memories that agree
-on `vsaFoot H` satisfy the same block-heap shape. Every other byte, in
-particular every byte of a live extent, is unconstrained by the allocator. -/
-theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+/-- **`HeapAt` reads only `vsaRead`.** Two memories that agree on it satisfy
+the same block-heap shape. Every other byte, in particular every byte of a
+live extent and the `_errno` word, is unconstrained by the allocator. -/
+theorem BlockHeapAt.transport_read {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
-    (h : BlockHeapAt m H top brkv chunks bins) (hag : AgreeP (vsaFoot H) m m') :
+    (h : BlockHeapAt m H top brkv chunks bins) (hag : AgreeP (vsaRead H) m m') :
     BlockHeapAt m' H top brkv chunks bins := by
   have hH := h.heap
+  have hlo : heapStart ≤ top := hH.walk.le
+  have hcb := hH.walk.chunk_bounds
   have G : ∀ a lo hi, InRange lo hi a → (lo = 0x8001ad10 ∧ hi = 0x8001b520 ∨
       lo = 0x8001b960 ∧ hi = 0x8001b970 ∨ lo = 0x8001b990 ∧ hi = 0x8001b9b0 ∨
       lo = 0x8001ba18 ∧ hi = 0x8001ba68) → allocGlobal a := by
@@ -232,18 +244,18 @@ theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : N
     · exact .inr (.inr (.inr (.inr (.inr hr))))
   have gAv : ∀ a, 0x8001ad10 ≤ a → a + 8 ≤ 0x8001b520 → read64 m a = read64 m' a :=
     fun a h1 h2 => read64_of_foot hag (global_read fun k hk =>
-      G _ _ _ ⟨by omega, by omega⟩ (.inl ⟨rfl, rfl⟩))
+      G _ _ _ ⟨by omega, by omega⟩ (.inl ⟨rfl, rfl⟩)) (.inl (by omega))
   have gSbrk : read64 m sbrkBaseAddr = read64 m' sbrkBaseAddr :=
     read64_of_foot hag (global_read fun k hk =>
       G _ _ _ ⟨by unfold sbrkBaseAddr; omega, by unfold sbrkBaseAddr; omega⟩
-        (.inr (.inl ⟨rfl, rfl⟩)))
+        (.inr (.inl ⟨rfl, rfl⟩))) (.inr (.inl (by unfold sbrkBaseAddr; omega)))
   have gBrk : ∀ a, 0x8001b990 ≤ a → a + 8 ≤ 0x8001b9b0 → read64 m a = read64 m' a :=
     fun a h1 h2 => read64_of_foot hag (global_read fun k hk =>
-      G _ _ _ ⟨by omega, by omega⟩ (.inr (.inr (.inl ⟨rfl, rfl⟩))))
+      G _ _ _ ⟨by omega, by omega⟩ (.inr (.inr (.inl ⟨rfl, rfl⟩)))) (.inr (.inl (by omega)))
   have gMi : read64 m mallinfoAddr = read64 m' mallinfoAddr :=
     read64_of_foot hag (global_read fun k hk =>
       G _ _ _ ⟨by unfold mallinfoAddr; omega, by unfold mallinfoAddr; omega⟩
-        (.inr (.inr (.inr ⟨rfl, rfl⟩))))
+        (.inr (.inr (.inr ⟨rfl, rfl⟩)))) (.inr (.inr (by unfold mallinfoAddr; omega)))
   have gTop : read64 m topAddr = read64 m' topAddr :=
     gAv _ (by unfold topAddr avAddr; omega) (by unfold topAddr avAddr; omega)
   have gBb : read64 m binblocksAddr = read64 m' binblocksAddr :=
@@ -262,15 +274,22 @@ theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : N
       (by unfold binAt avAddr; unfold numBins at hi; omega)
   have hdr : ∀ q, (q = top ∨ ∃ c ∈ chunks, c.addr = q) →
       read64 m (q + 8) = read64 m' (q + 8) :=
-    fun q hq => read64_of_foot hag (foot_header h hq)
+    fun q hq => read64_of_foot hag (foot_header h hq) (.inr (.inr (by
+      unfold heapStart at hlo
+      rcases hq with rfl | ⟨c, hc, rfl⟩
+      · omega
+      · have := (hcb c hc).1; unfold heapStart at this; omega)))
   have hfreeRd : ∀ c ∈ chunks, c.inuse = false →
       read64 m (c.addr + 16) = read64 m' (c.addr + 16) ∧
       read64 m (c.addr + 24) = read64 m' (c.addr + 24) ∧
       read64 m (c.addr + c.size) = read64 m' (c.addr + c.size) := by
     intro c hc hf
     obtain ⟨hl, hft⟩ := foot_free h hc hf
-    refine ⟨read64_of_foot hag (fun k hk => hl k (by omega)),
-      read64_of_foot hag (fun k hk => ?_), read64_of_foot hag hft⟩
+    have hca := (hcb c hc).1
+    unfold heapStart at hca
+    refine ⟨read64_of_foot hag (fun k hk => hl k (by omega)) (.inr (.inr (by omega))),
+      read64_of_foot hag (fun k hk => ?_) (.inr (.inr (by omega))),
+      read64_of_foot hag hft (.inr (.inr (by omega)))⟩
     have := hl (k + 8) (by omega)
     rwa [show c.addr + 16 + (k + 8) = c.addr + 24 + k by omega] at this
   have hstart : read64 m (heapStart + 8) = read64 m' (heapStart + 8) :=
@@ -311,6 +330,14 @@ theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : N
       binblocks := fun bb hbb => hH.binblocks bb (gBb ▸ hbb)
       live := hH.live
       exact := hH.exact }
+
+/-- **`HeapAt` reads only the allocator's footprint.** Two memories that agree
+on `vsaFoot H` satisfy the same block-heap shape. -/
+theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat}
+    (h : BlockHeapAt m H top brkv chunks bins) (hag : AgreeP (vsaFoot H) m m') :
+    BlockHeapAt m' H top brkv chunks bins :=
+  h.transport_read fun a ha => hag a ha.1
 
 theorem BlockHeap.transport {m m' : Mem} {H : List (Nat × Nat)} (h : BlockHeap m H)
     (hag : AgreeP (vsaFoot H) m m') : BlockHeap m' H := by

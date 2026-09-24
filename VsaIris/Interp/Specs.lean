@@ -3,6 +3,7 @@ import VsaIris.MallocRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
 import VsaIris.Interp.Vacuity
+import VsaIris.Vsa.AllocHoles
 import VsaIris.Vsa.HeapShape
 import Vsa.RuntimeRepr
 import Vsa.While.Cost
@@ -216,21 +217,13 @@ theorem execSpecT (st : St) (d env : Nat) (sm : Stmt) (st' : St) (status : Statu
 
 /-! ### Partial, outcome-quantified, with abort (stuck_sim) -/
 
-/-- What an abort hands the top: the landing registers (H5 pins them from the
-`jmp_buf`, or the `exit(1)` entry for OOM), SOME world, and the whole owned
-stack below `s`. Callers re-base it at each call (`abort_rebase`). -/
-def abortCore : IProp GF :=
-  iprop(∃ (landing : Bool) (ρ : Regime) (st : St) (d : Nat),
-    world N L Room inp ρ st d ∗
-    (if landing then PC ↦ᵣ 0#64 -- H5: the `setjmp` return site in `interp_run`, a0 = 1
-     else PC ↦ᵣ 0x80004764#64 ∗ (10 : Nat) ↦ᵣ 1#64)) -- `exit`, a0 = 1
-
-/-- The abort resource at a site: `abortCore` and the whole owned stack below
-`s` (F3's landed `VsaIris.abortAt`). The `stackScratch` is OUTSIDE the
-existential — nothing under it mentions `s` or `need` — which is what lets
-`abort_rebase` move it. -/
-def abortRes (s : BitVec 64) (need : Nat) : IProp GF :=
-  abortAt (abortCore N L Room inp) s need
+-- H5 (landed, `VsaIris/Interp/Abort.lean`): `abortCore N L Room inp s n` is the
+-- `longjmp` landing (`landingCore`: some world with `err_msg` a C string and the
+-- registers read off the `jmp_buf`) or `exit(1)`'s entry after an out-of-memory
+-- `fwrite` (`oomCore s n`, whose stack pointer leaves room for `exit` inside the
+-- site's region — hence the dependence on `s n`). `abortRes s n = abortAt
+-- (abortCore … s n) s n`. `wp_abort` is the continuation at `interp_run`'s
+-- `jal exec_stmt`: it ends the run with a nonzero exit code.
 
 /-- **`eval_expr`, partial.** The return branch gets SOME outcome with its
 derivation; error arms take the abort branch. Proved by Löb (A). -/
@@ -257,21 +250,10 @@ theorem specsP :
     ⊢ □ ((∀ st d env e, evalSpecP_body (GF := GF) M N L Room inp st d env e) ∧
          (∀ st d env sm, execSpecP_body (GF := GF) M N L Room inp st d env sm)) := by sorry
 
-/-- F3 (landed as `VsaIris.abort_rebase`): re-basing an abort continuation
-from the caller's region to the child's, joining the caller's frame bytes
-`[s_c, s_p)` and the slack `[s_p - n_p, s_c - n_c)` back in.
-
-STATEMENT CHANGE (F3): the skeleton's two side conditions were not enough —
-the two regions must also lie below their stack pointers (`hnp`, `hnc`),
-otherwise `stackScratch` truncates at 0 and the intervals do not join. -/
-theorem abort_rebase {Wp : MachWP (GF := GF) M} {Φ : Nat × String → IProp GF}
-    (sp_ sc : BitVec 64) (np nc : Nat) (hnp : np ≤ sp_.toNat) (hnc : nc ≤ sc.toNat)
-    (hsc : sc.toNat ≤ sp_.toNat) (hle : sp_.toNat - np ≤ sc.toNat - nc) :
-    (abortRes N L Room inp sp_ np -∗ Wp.W Φ) ∗
-      blockOwn (sc.toNat) (sp_.toNat - sc.toNat) ∗
-      blockOwn (sp_.toNat - np) ((sc.toNat - nc) - (sp_.toNat - np))
-    ⊢ (abortRes N L Room inp sc nc -∗ Wp.W Φ) :=
-  VsaIris.abort_rebase _ sp_ sc np nc hnp hnc hsc hle
+-- F3 + H5: a callee's `abortRes (s - f) nc` widens to its caller's core
+-- (`abortRes_widen`), so F3's `wp_callArmAbort` at `Core := abortCore … s n` is
+-- the call step (through `fnSpecAbort_mono`); F3's `abort_rebase` applies at a
+-- fixed core.
 
 end Specs
 
@@ -311,14 +293,15 @@ field must come with a satisfiability witness (xv6iris durable-notes
 "Vacuity"): the allocator runs at the control image (`ControlEnd`), the
 newlib specs at a concrete call. -/
 structure IrisHoles : Prop where
-  /-- `MallocRoomRun`/`MallocLocalRun`/`FreeLocalRun`/`ReallocLocalRun`
-  (`VsaIris/MallocRun.lean`) at the binary. H4 may discharge them. -/
-  alloc : True
-  /-- Safety of `snprintf` (`%s`/`%d` messages in `runtime_error`) and
-  `fprintf` (error and OOM paths). Partial mode only. -/
-  newlib : True
-  -- DESIGN: replace each `True` with the exact run/spec structure once H4/H5
-  -- fix their statements.
+  /-- The allocator's first-order runs at the binary, both regimes
+  (`VsaIris/Vsa/AllocHoles.lean`); `VsaHeap.allocSpecs` turns them into the
+  Iris specs. H4 discharges them field by field. -/
+  alloc : VsaHeap.AllocHoles
+  /-- The newlib calls on the error and exit paths, exact Iris statements
+  (`VsaIris/Vsa/Newlib.lean`, H5): `snprintf` and `fprintf` with `%s`/`%d`
+  formats, `fwrite` of the out-of-memory message, and `exit`'s newlib
+  interior. Scheduled after E1-E6 (user, Q4). -/
+  newlib : Newlib.NewlibHoles
 
 /-- The boundary (A0): from `InterpRunReady` and `ProgramRepr`, allocate the
 ghost state and produce the initial world, the persistent AST and code, the

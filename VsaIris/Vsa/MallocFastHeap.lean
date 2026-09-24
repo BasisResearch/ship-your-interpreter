@@ -175,7 +175,7 @@ abbrev splitMem (m : Mem) (top nb brkv : Nat) : Mem :=
 theorem FastAt.split {m : Mem} {H : List (Nat × Nat)} {maxReq k top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (h : FastAt m H maxReq (k + 1) top brkv chunks bins) {nb n : Nat}
-    (hnb16 : nb % 16 = 0) (hnb32 : 32 ≤ nb) (hnbP : nb ≤ physSize maxReq) (hn : 0 < n)
+    (hnb16 : nb % 16 = 0) (hnb32 : 32 ≤ nb) (hnbP : nb ≤ physSize maxReq)
     (hn8 : n + 8 ≤ nb) :
     FastAt (splitMem m top nb brkv) ((top + 16, n) :: H) maxReq k
       (top + nb) brkv (chunks ++ [⟨top, nb, true⟩]) bins := by

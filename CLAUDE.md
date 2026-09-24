@@ -15,6 +15,7 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 | Task shape | Use (never hand-roll) |
 |---|---|
 | WHOLE FUNCTION (multi-block: branches, loops, calls, tail-j, tohost seams) | `scripts/gen_fn.py --fn <f> --entry <pc> [--fold]` — emits the block arms + (recognised counted-loop shape) the derived `FnSummary` fold; fold combinators `FnSummary.{seq,callSplice,tailJump}` + `segRowFramed` (`Vsa/Sim/FnSummary.lean`, `SegToTripleFramed.lean`; model fold: `rows/FnWriteFold.lean`); rule R9 catches hand-rolled multi-seg function files |
+| Allocator machine run on the Iris route (`LocalRun`: `_malloc_r`, `_free_r`, `_realloc_r` and callees) | `SWP pc R Mt` (`VsaIris/Vsa/SymRun.lean`) with the generated step table `st_<pc>` (`VsaIris/Vsa/AllocSteps/*`, `scripts/gen_alloc_steps.py`, one lemma per instruction) and the driver `sx_run` (`AllocTac.lean`); loads through stores by `ldv_store_hit`/`ldv_store_miss`. NEVER a hand stage over `seg_step` |
 | Straight-line OR branch/jump-terminated span | `#derive_case` seg + `segToTriple` (br/j/jr terminators are in-model; model: `Vsa/Sim/EnvDefSeg.lean` — 58 hand lines → 14, `EnvDefBridges4.lean` for branch-ended rows) |
 | Span ending in a CALL (`jal`) | `BridgeSeg.bridgeOfSeg` + `jalStep_of_obs` (the jal seam is deliberately outside `TKind`) |
 | Call span requiring HTIF or other non-ABI register preservation | `bridgeOfSegFull` + `jalCallFacts_of_obs` (`BridgeSegFull.lean`); retain the complete reflected register frame on the actual call endpoint |
