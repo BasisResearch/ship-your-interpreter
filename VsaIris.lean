@@ -104,3 +104,4 @@ import VsaIris.Interp.ProofValueTruthy
 import VsaIris.Interp.ProofValueEqual
 import VsaIris.Interp.NewlibCall
 import VsaIris.Interp.ProofValuePrint
+import VsaIris.Interp.ProofNativePrint
