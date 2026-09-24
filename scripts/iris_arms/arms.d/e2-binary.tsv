@@ -1,0 +1,8 @@
+# Lane E2: eval_expr's binary operators (INTERP_DESIGN.md §6, §8). Format: LANE.md "Row format" (lane G).
+# Families: scripts/iris_arms/families/e2_binary.py; templates scripts/iris_arms/templates/.
+#
+# arm	fn	tag	ctor	children	result	steps	errors	family
+BinaryLtInt	eval	6	.binary .lt l r	l:E:.int a:120; r:E:.int b:144	.bool (decide (a < b))	run 0x80003164 0x800034f8; child l 0x800034f8; run 0x800034fc 0x80003518; child r 0x80003518; run 0x8000351c 0x800036c8 @0x80003678; helper valueBool 0x800036c8; run 0x800036cc ret	kind:0x80003678:0x80003e9c; kind:0x80003694:0x80003e54	binOne op=lt
+BinaryLeInt	eval	6	.binary .le l r	l:E:.int a:120; r:E:.int b:144	.bool (decide (a ≤ b))	run 0x80003164 0x800034f8; child l 0x800034f8; run 0x800034fc 0x80003518; child r 0x80003518; run 0x8000351c 0x80003b00 @0x80003678; helper valueBool 0x80003b00; run 0x80003b04 ret	kind:0x80003678:0x80003e9c; kind:0x80003694:0x80003e54	binOne op=le
+BinaryGtInt	eval	6	.binary .gt l r	l:E:.int a:120; r:E:.int b:144	.bool (decide (a > b))	run 0x80003164 0x800034f8; child l 0x800034f8; run 0x800034fc 0x80003518; child r 0x80003518; run 0x8000351c 0x80003aec @0x80003678; helper valueBool 0x80003aec; run 0x80003af0 ret	kind:0x80003678:0x80003e9c; kind:0x80003694:0x80003e54	binOne op=gt
+BinaryGeInt	eval	6	.binary .ge l r	l:E:.int a:120; r:E:.int b:144	.bool (decide (a ≥ b))	run 0x80003164 0x800034f8; child l 0x800034f8; run 0x800034fc 0x80003518; child r 0x80003518; run 0x8000351c 0x800036c8 @0x80003678; helper valueBool 0x800036c8; run 0x800036cc ret	kind:0x80003678:0x80003e9c; kind:0x80003694:0x80003e54	binOne op=ge

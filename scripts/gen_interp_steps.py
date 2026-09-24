@@ -223,6 +223,40 @@ def gen_code():
         w = int.from_bytes(bytes(BYTE_RO[a + j] for j in range(8)), 'little')
         names.append(f'interpRO_ld_{a:08x}')
         C.append(f'theorem interpRO_ld_{a:08x} : ldvf .ld interpROImg {a} = 0x{w:x}#64 := by decide')
+    # lane E2: a table load's membership side condition, one lemma per loaded
+    # word: `decide` walks `interpRO` once here, not in every run (past ~230
+    # bytes the walk exceeds the recursion depth and the run's budget)
+    C.append('')
+    C.append('theorem mem_of_lookup {l : List (Nat × BitVec 8)} {b : Nat} {v : BitVec 8} :')
+    C.append('    l.lookup b = some v → (b, v) ∈ l := by')
+    C.append('  induction l with')
+    C.append('  | nil => intro h; cases h')
+    C.append('  | cons p l ih =>')
+    C.append('    intro h')
+    C.append('    obtain ⟨k, x⟩ := p')
+    C.append('    by_cases hk : b = k')
+    C.append('    · subst hk; simp [List.lookup] at h; subst h; exact List.mem_cons_self')
+    C.append('    · have : List.lookup b ((k, x) :: l) = l.lookup b := by')
+    C.append('        simp [List.lookup, show (b == k) = false from by simpa using hk]')
+    C.append('      rw [this] at h; exact List.mem_cons_of_mem _ (ih h)')
+    C.append('')
+    C.append('/-- A table load\'s bytes are in `interpRO` when the lookup finds them. -/')
+    C.append('theorem interpRO_mem_img {a w : Nat} (h : ∀ b ∈ accAddrs a w, (interpRO.lookup b).isSome = true) :')
+    C.append('    ∀ b ∈ accAddrs a w, (b, interpROImg b) ∈ interpRO := by')
+    C.append('  intro b hb')
+    C.append('  have := h b hb')
+    C.append('  unfold interpROImg')
+    C.append('  cases e : interpRO.lookup b with')
+    C.append('  | none => rw [e] at this; cases this')
+    C.append('  | some v => exact mem_of_lookup e')
+    acc = []
+    for base, n in TABLES:
+        for i in range(n):
+            acc.append((base + 4 * i, 4))
+    acc += [(a, 8) for a in RO_LD]
+    for a, w in acc:
+        C.append(f'theorem interpRO_acc{w}_{a:08x} : ∀ b ∈ accAddrs {a} {w}, (b, interpROImg b) ∈ interpRO :=')
+        C.append('  interpRO_mem_img (by decide)')
     C.append('')
     C.append('/-- Evaluate the jump-table words (`ix_run`\'s normalizer). -/')
     C.append('macro "ix_tab" : tactic => `(tactic| simp only [' + ', '.join(names) + '] at *)\n')

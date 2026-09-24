@@ -20453,6 +20453,181 @@ theorem interpRO_ld_80019fe0 : ldvf .ld interpROImg 2147590112 = 0x800195c8#64 :
 theorem interpRO_ld_80019fe8 : ldvf .ld interpROImg 2147590120 = 0x800195d0#64 := by decide
 theorem interpRO_ld_80019ff0 : ldvf .ld interpROImg 2147590128 = 0x800195d8#64 := by decide
 
+theorem mem_of_lookup {l : List (Nat × BitVec 8)} {b : Nat} {v : BitVec 8} :
+    l.lookup b = some v → (b, v) ∈ l := by
+  induction l with
+  | nil => intro h; cases h
+  | cons p l ih =>
+    intro h
+    obtain ⟨k, x⟩ := p
+    by_cases hk : b = k
+    · subst hk; simp [List.lookup] at h; subst h; exact List.mem_cons_self
+    · have : List.lookup b ((k, x) :: l) = l.lookup b := by
+        simp [List.lookup, show (b == k) = false from by simpa using hk]
+      rw [this] at h; exact List.mem_cons_of_mem _ (ih h)
+
+/-- A table load's bytes are in `interpRO` when the lookup finds them. -/
+theorem interpRO_mem_img {a w : Nat} (h : ∀ b ∈ accAddrs a w, (interpRO.lookup b).isSome = true) :
+    ∀ b ∈ accAddrs a w, (b, interpROImg b) ∈ interpRO := by
+  intro b hb
+  have := h b hb
+  unfold interpROImg
+  cases e : interpRO.lookup b with
+  | none => rw [e] at this; cases this
+  | some v => exact mem_of_lookup e
+theorem interpRO_acc4_80019f58 : ∀ b ∈ accAddrs 2147589976 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f5c : ∀ b ∈ accAddrs 2147589980 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f60 : ∀ b ∈ accAddrs 2147589984 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f64 : ∀ b ∈ accAddrs 2147589988 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f68 : ∀ b ∈ accAddrs 2147589992 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f6c : ∀ b ∈ accAddrs 2147589996 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f70 : ∀ b ∈ accAddrs 2147590000 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f74 : ∀ b ∈ accAddrs 2147590004 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f78 : ∀ b ∈ accAddrs 2147590008 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f7c : ∀ b ∈ accAddrs 2147590012 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f80 : ∀ b ∈ accAddrs 2147590016 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f84 : ∀ b ∈ accAddrs 2147590020 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f88 : ∀ b ∈ accAddrs 2147590024 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f8c : ∀ b ∈ accAddrs 2147590028 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f90 : ∀ b ∈ accAddrs 2147590032 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f94 : ∀ b ∈ accAddrs 2147590036 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f98 : ∀ b ∈ accAddrs 2147590040 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f9c : ∀ b ∈ accAddrs 2147590044 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fa0 : ∀ b ∈ accAddrs 2147590048 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fa4 : ∀ b ∈ accAddrs 2147590052 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fa8 : ∀ b ∈ accAddrs 2147590056 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fac : ∀ b ∈ accAddrs 2147590060 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fb0 : ∀ b ∈ accAddrs 2147590064 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fb4 : ∀ b ∈ accAddrs 2147590068 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fb8 : ∀ b ∈ accAddrs 2147590072 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fbc : ∀ b ∈ accAddrs 2147590076 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fc0 : ∀ b ∈ accAddrs 2147590080 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fc4 : ∀ b ∈ accAddrs 2147590084 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fc8 : ∀ b ∈ accAddrs 2147590088 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fcc : ∀ b ∈ accAddrs 2147590092 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fd0 : ∀ b ∈ accAddrs 2147590096 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fd4 : ∀ b ∈ accAddrs 2147590100 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fd8 : ∀ b ∈ accAddrs 2147590104 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019ef8 : ∀ b ∈ accAddrs 2147589880 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019efc : ∀ b ∈ accAddrs 2147589884 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f00 : ∀ b ∈ accAddrs 2147589888 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f04 : ∀ b ∈ accAddrs 2147589892 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f08 : ∀ b ∈ accAddrs 2147589896 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f0c : ∀ b ∈ accAddrs 2147589900 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f10 : ∀ b ∈ accAddrs 2147589904 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f14 : ∀ b ∈ accAddrs 2147589908 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f18 : ∀ b ∈ accAddrs 2147589912 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f1c : ∀ b ∈ accAddrs 2147589916 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f20 : ∀ b ∈ accAddrs 2147589920 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f24 : ∀ b ∈ accAddrs 2147589924 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019370 : ∀ b ∈ accAddrs 2147586928 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019374 : ∀ b ∈ accAddrs 2147586932 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019378 : ∀ b ∈ accAddrs 2147586936 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f28 : ∀ b ∈ accAddrs 2147589928 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f2c : ∀ b ∈ accAddrs 2147589932 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f30 : ∀ b ∈ accAddrs 2147589936 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f34 : ∀ b ∈ accAddrs 2147589940 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f38 : ∀ b ∈ accAddrs 2147589944 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f3c : ∀ b ∈ accAddrs 2147589948 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f40 : ∀ b ∈ accAddrs 2147589952 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f44 : ∀ b ∈ accAddrs 2147589956 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f48 : ∀ b ∈ accAddrs 2147589960 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f4c : ∀ b ∈ accAddrs 2147589964 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f50 : ∀ b ∈ accAddrs 2147589968 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019f54 : ∀ b ∈ accAddrs 2147589972 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fe0 : ∀ b ∈ accAddrs 2147590112 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fe4 : ∀ b ∈ accAddrs 2147590116 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fe8 : ∀ b ∈ accAddrs 2147590120 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019fec : ∀ b ∈ accAddrs 2147590124 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019ff0 : ∀ b ∈ accAddrs 2147590128 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc4_80019ff4 : ∀ b ∈ accAddrs 2147590132 4, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019370 : ∀ b ∈ accAddrs 2147586928 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019f28 : ∀ b ∈ accAddrs 2147589928 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019f30 : ∀ b ∈ accAddrs 2147589936 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019f38 : ∀ b ∈ accAddrs 2147589944 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019f40 : ∀ b ∈ accAddrs 2147589952 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019f48 : ∀ b ∈ accAddrs 2147589960 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019f50 : ∀ b ∈ accAddrs 2147589968 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019fe0 : ∀ b ∈ accAddrs 2147590112 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019fe8 : ∀ b ∈ accAddrs 2147590120 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+theorem interpRO_acc8_80019ff0 : ∀ b ∈ accAddrs 2147590128 8, (b, interpROImg b) ∈ interpRO :=
+  interpRO_mem_img (by decide)
+
 /-- Evaluate the jump-table words (`ix_run`'s normalizer). -/
 macro "ix_tab" : tactic => `(tactic| simp only [interpRO_lw_80019f58, interpRO_lw_80019f5c, interpRO_lw_80019f60, interpRO_lw_80019f64, interpRO_lw_80019f68, interpRO_lw_80019f6c, interpRO_lw_80019f70, interpRO_lw_80019f74, interpRO_lw_80019f78, interpRO_lw_80019f7c, interpRO_lw_80019f80, interpRO_lw_80019f84, interpRO_lw_80019f88, interpRO_lw_80019f8c, interpRO_lw_80019f90, interpRO_lw_80019f94, interpRO_lw_80019f98, interpRO_lw_80019f9c, interpRO_lw_80019fa0, interpRO_lw_80019fa4, interpRO_lw_80019fa8, interpRO_lw_80019fac, interpRO_lw_80019fb0, interpRO_lw_80019fb4, interpRO_lw_80019fb8, interpRO_lw_80019fbc, interpRO_lw_80019fc0, interpRO_lw_80019fc4, interpRO_lw_80019fc8, interpRO_lw_80019fcc, interpRO_lw_80019fd0, interpRO_lw_80019fd4, interpRO_lw_80019fd8, interpRO_lw_80019ef8, interpRO_lw_80019efc, interpRO_lw_80019f00, interpRO_lw_80019f04, interpRO_lw_80019f08, interpRO_lw_80019f0c, interpRO_lw_80019f10, interpRO_lw_80019f14, interpRO_lw_80019f18, interpRO_lw_80019f1c, interpRO_lw_80019f20, interpRO_lw_80019f24, interpRO_lw_80019370, interpRO_lw_80019374, interpRO_lw_80019378, interpRO_lw_80019f28, interpRO_lw_80019f2c, interpRO_lw_80019f30, interpRO_lw_80019f34, interpRO_lw_80019f38, interpRO_lw_80019f3c, interpRO_lw_80019f40, interpRO_lw_80019f44, interpRO_lw_80019f48, interpRO_lw_80019f4c, interpRO_lw_80019f50, interpRO_lw_80019f54, interpRO_lw_80019fe0, interpRO_lw_80019fe4, interpRO_lw_80019fe8, interpRO_lw_80019fec, interpRO_lw_80019ff0, interpRO_lw_80019ff4, interpRO_ld_80019370, interpRO_ld_80019f28, interpRO_ld_80019f30, interpRO_ld_80019f38, interpRO_ld_80019f40, interpRO_ld_80019f48, interpRO_ld_80019f50, interpRO_ld_80019fe0, interpRO_ld_80019fe8, interpRO_ld_80019ff0] at *)
 
