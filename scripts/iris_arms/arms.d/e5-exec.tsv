@@ -4,3 +4,5 @@
 # arm	fn	tag	ctor	children	result	steps	errors	family
 ExecBrk	exec	7	.brk		.brk	run 0x80004014 ret		execConst ctor=brk a0=1
 ExecCont	exec	8	.cont		.cont	run 0x80004014 ret		execConst ctor=cont a0=2
+ExecExpr	exec	0	.expr e	e:E:v:16	.normal	run 0x80004014 0x80004180; child e 0x80004180; run 0x80004184 ret		execEval1 node=exprNode_of need=execNeed_expr sem=expr tail=epi
+ExecRet	exec	6	.ret (some e)	e:E:v:16	.ret v	run 0x80004014 0x80004134; child e 0x80004134; run 0x80004138 ret		execEval1 node=retNode_of need=execNeed_ret sem=ret tail=ret

@@ -1,4 +1,5 @@
 import VsaIris.Interp.ExecDisp
+import VsaIris.Interp.NewlibCall
 
 /-!
 # The exec arm layer (lane E5)
@@ -130,6 +131,53 @@ theorem execDisp_finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
 
 end Finish
 
+/-- A register already holding `v`: the dispatch runs rewrite `a6` this way,
+so the jump table's bound check `bltu a6,a5` is decided by the tag. -/
+theorem upd_eq_self {R : Nat → BitVec 64} {k : Nat} {v : BitVec 64} (h : R k = v) :
+    Sym.upd R k v = R := funext fun r => by
+  unfold Sym.upd; split
+  · subst r; exact h.symm
+  · rfl
+
+/-- The facts of a node whose field `+8` points to a child expression (`expr`,
+`ret e`): the node, the field, the child's representation. -/
+structure ExprFieldNode (m : Mem) (P : Nat → Prop) (aS : BitVec 64) (tag : Nat) (e : Vsa.While.Expr)
+    (p : Nat) : Prop where
+  node : StmtNode m P aS tag 16
+  field : ldv .ld m (aS + 8#64).toNat = BitVec.ofNat 64 p
+  child : ExprReprWithin m P p e
+  toNat : (BitVec.ofNat 64 p).toNat = p
+  ne : BitVec.ofNat 64 p ≠ 0#64
+
+theorem exprFieldNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {tag p : Nat} {e : Vsa.While.Expr}
+    (hg : ∀ k, P k → Interp.ReadOK k) (ht : read32 m aS.toNat = some tag) (hc : Covers P aS.toNat 4)
+    (htag : tag < 2 ^ 31) (hr : read64 m (aS.toNat + 8) = some p) (cr : Covers P (aS.toNat + 8) 8)
+    (hne : p ≠ 0) (hx : ExprReprWithin m P p e) : ExprFieldNode m P aS tag e p := by
+  have hn := stmtNode_of (w := 16) hg ht hc htag (Or.inr (by decide))
+    (fun j h1 h2 => field_mid hr cr h1 (by omega))
+  have hl := readLE_lt hr
+  have hpt : (BitVec.ofNat 64 p).toNat = p := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hl]
+  refine ⟨hn, field64 hr (by have := hn.hi; omega), hx, hpt, fun h => hne ?_⟩
+  have := congrArg BitVec.toNat h
+  rwa [hpt] at this
+
+/-- An `expr e` statement node. -/
+theorem exprNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {e : Vsa.While.Expr}
+    (h : StmtReprWithin m P aS.toNat (.expr e)) (hg : ∀ k, P k → Interp.ReadOK k) :
+    ∃ p, ExprFieldNode m P aS 0 e p := by
+  cases h with
+  | expr h0 c0 hr cr hx =>
+    refine ⟨_, exprFieldNode_of hg h0 c0 (by decide) hr cr ?_ hx⟩
+    have := (hg _ (hx.tagCovers 0 (by decide))).lo
+    omega
+
+/-- A `ret e` statement node. -/
+theorem retNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {e : Vsa.While.Expr}
+    (h : StmtReprWithin m P aS.toNat (.ret (some e))) (hg : ∀ k, P k → Interp.ReadOK k) :
+    ∃ p, ExprFieldNode m P aS 6 e p := by
+  cases h with
+  | retSome h0 c0 hr cr hne hx => exact ⟨_, exprFieldNode_of hg h0 c0 (by decide) hr cr hne hx⟩
+
 /-! ## Child calls from a frame of any size -/
 
 /-- The geometry of a child call from a frame of `f` bytes below `s`: the
@@ -260,5 +308,285 @@ theorem ms_callEvalPF {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
     iframe HC Hst HOut
 
 end CallsF
+
+/-! ## A value slot outside the frame (the `ret` slot) -/
+
+/-- A doubleword of a tracking memory's image is its load. -/
+theorem imgW_eq_ldv (M : Mem) (a : Nat) : imgW (imgM M) a = ldv .ld M a :=
+  (ldvf_ld_imgLE rfl).symm
+
+/-- A load reads only its window. -/
+theorem ldv_congrW (k : MKind) {Mt Mt' : Mem} {a : Nat}
+    (h : ∀ j, j < widthOfM k → imgM Mt (a + j) = imgM Mt' (a + j)) : ldv k Mt a = ldv k Mt' a := by
+  unfold ldv bytesAt
+  congr 1
+  apply List.map_congr_left
+  intro j hj
+  exact h j (List.mem_range.1 hj)
+
+section Slot
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+
+/-- **A 24-byte slot into a run's owned bytes**, at a tracking memory that
+agrees with the old one on them. -/
+theorem ms_slotIn {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M : Mem} {a : Nat} :
+    ms (GF := GF) pc R S M ∗ slot24 a ⊢
+      ∃ M', ms pc R (fun x => S x ∨ InExt (a, 24) x) M' ∗
+        ⌜(∀ x, S x → imgM M' x = imgM M x) ∧ ∀ x, S x → ¬ InExt (a, 24) x⌝ := by
+  iintro ⟨Hms, Hslot⟩
+  unfold slot24 blockOwn
+  ihave ⟨%f, Hslot⟩ := ownSet_fn _ $$ Hslot
+  ihave ⟨%Mt, Hslot⟩ := ownSet_mem _ f $$ Hslot
+  ihave ⟨%M', Hms, %⟨h1, -, h3⟩⟩ := ms_join $$ [Hms Hslot]
+  · iframe Hms Hslot
+  iexists M'
+  iframe Hms
+  ipureintro; exact ⟨h1, h3⟩
+
+/-- **A represented value out of a run's owned bytes**: the slot's three
+words mean `v`. -/
+theorem ms_valOut [InterpGS GF] (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64}
+    {S : Nat → Prop} {M : Mem} {a : Nat} {v : Value} {w0 w1 w2 : BitVec 64}
+    (hd : ∀ x, S x → ¬ InExt (a, 24) x) (h0 : ldv .ld M a = w0) (h8 : ldv .ld M (a + 8) = w1)
+    (h16 : ldv .ld M (a + 16) = w2) :
+    ms (GF := GF) pc R (fun x => S x ∨ InExt (a, 24) x) M ∗ □ valOf N v w0 w1 w2 ⊢
+      ms pc R S M ∗ valAt N a v := by
+  iintro ⟨Hms, #Hv⟩
+  ihave ⟨Hms, Hslot⟩ := ms_split hd $$ Hms
+  iframe Hms
+  iapply valAt_of_img N
+  iframe Hslot
+  unfold valImg
+  rw [imgW_eq_ldv, imgW_eq_ldv, imgW_eq_ldv, h0, h8, h16]
+  iexact Hv
+
+end Slot
+
+/-- Two owned byte ranges that share no byte are apart. -/
+theorem slot_apart {a b n : Nat} (hn : 0 < n)
+    (h : ∀ x, InExt (b, n) x → ¬ InExt (a, 24) x) : a + 24 ≤ b ∨ b + n ≤ a := by
+  by_cases h1 : a + 24 ≤ b
+  · exact .inl h1
+  by_cases h2 : b + n ≤ a
+  · exact .inr h2
+  exfalso
+  have := h (max a b) (by simp only [InExt]; omega)
+  simp only [InExt] at this; omega
+
+/-! ## The two exits every arm ends in -/
+
+/-- The spills survive a store below them. -/
+theorem ExecSaved.store {Mt : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
+    (h : ExecSaved Mt s ret v8 v9 v18 v19) {a w : Nat} (v : BitVec 64) (_hs : 176 ≤ s.toNat)
+    (ha : a + w ≤ s.toNat - 176 + 136 ∨ s.toNat ≤ a) :
+    ExecSaved (writeLog Mt [(a, w, v)]) s ret v8 v9 v18 v19 :=
+  have e : widthOfM MKind.ld = 8 := rfl
+  ⟨by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.ra,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s0,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s1,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s2,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s3⟩
+
+/-- The spills read through a memory agreeing on the frame. -/
+theorem ExecSaved.congr {Mt Mt' : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
+    (h : ExecSaved Mt s ret v8 v9 v18 v19)
+    (hag : ∀ x, InExt (s.toNat - 176, 176) x → imgM Mt' x = imgM Mt x) :
+    ExecSaved Mt' s ret v8 v9 v18 v19 := by
+  have c : ∀ o, o + 8 ≤ 176 → ldv .ld Mt' (s.toNat - 176 + o) = ldv .ld Mt (s.toNat - 176 + o) :=
+    fun o ho => ldv_congrW .ld fun j hj => hag _ (by
+      simp only [InExt]; have : widthOfM MKind.ld = 8 := rfl; omega)
+  exact ⟨(c 168 (by decide)).trans h.ra, (c 160 (by decide)).trans h.s0, (c 152 (by decide)).trans h.s1,
+    (c 144 (by decide)).trans h.s2, (c 136 (by decide)).trans h.s3⟩
+
+/-- Carry `ExecSaved` back through a memory's stores and calls' slot words to
+a memory it is known for (`hoff` normalizes the frame addresses). -/
+syntax "ix_esaved " term " using " term : tactic
+macro_rules
+  | `(tactic| ix_esaved $h using $hoff) => `(tactic| (
+      (try unfold slotWrite);
+      repeat refine ExecSaved.store ?_ _ (by omega) (by first | omega | (rw [($hoff:term)] <;> first | omega | decide));
+      exact $h))
+
+#ix_seg ExecEpi_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
+    {DA : List Nat} {s ret v8 v9 v18 v19 : BitVec 64}
+    (hsf : (s + 18446744073709551440#64).toNat = s.toNat - 176)
+    (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hal : ret.toNat % 4 = 0)
+    (h2 : R 2 = s + 18446744073709551440#64)
+    (hRA : ldv .ld Mt (s + 18446744073709551440#64 + 168#64).toNat = ret)
+    (hS0 : ldv .ld Mt (s + 18446744073709551440#64 + 160#64).toNat = v8)
+    (hS1 : ldv .ld Mt (s + 18446744073709551440#64 + 152#64).toNat = v9)
+    (hS2 : ldv .ld Mt (s + 18446744073709551440#64 + 144#64).toNat = v18)
+    (hS3 : ldv .ld Mt (s + 18446744073709551440#64 + 136#64).toNat = v19) :
+    IW live m DA (InExt (s.toNat - 176, 176)) Q 0x8000409c#64 R Mt
+  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
+
+#ix_seg ExecRetCopy_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
+    {DA : List Nat} {s aRet ret v8 v9 v18 v19 : BitVec 64}
+    (hsf : (s + 18446744073709551440#64).toNat = s.toNat - 176)
+    (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hr1 : tohostAddr + 16 ≤ aRet.toNat) (hr2 : aRet.toNat + 24 ≤ 0x100000000) (hr3 : aRet.toNat % 8 = 0)
+    (hrd : aRet.toNat + 24 ≤ s.toNat - 176 ∨ s.toNat ≤ aRet.toNat)
+    (hal : ret.toNat % 4 = 0)
+    (h2 : R 2 = s + 18446744073709551440#64) (h18 : R 18 = aRet)
+    (hRA : ldv .ld Mt (s + 18446744073709551440#64 + 168#64).toNat = ret)
+    (hS0 : ldv .ld Mt (s + 18446744073709551440#64 + 160#64).toNat = v8)
+    (hS1 : ldv .ld Mt (s + 18446744073709551440#64 + 152#64).toNat = v9)
+    (hS2 : ldv .ld Mt (s + 18446744073709551440#64 + 144#64).toNat = v18)
+    (hS3 : ldv .ld Mt (s + 18446744073709551440#64 + 136#64).toNat = v19) :
+    IW live m DA (fun a => InExt (s.toNat - 176, 176) a ∨ InExt (aRet.toNat, 24) a) Q 0x80004138#64 R Mt
+  by ix_run hlive using [h2, h18, hRA, hS0, hS1, hS2, hS3, hsf, hal]
+
+section Exits
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+
+/-- A register write outside `l` keeps `l`. -/
+theorem KeepRegs.upd {l : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs l R R') {k : Nat}
+    (hk : k ∉ l) (v : BitVec 64) : KeepRegs l R (Sym.upd R' k v) := fun x hx => by
+  have hne : x ≠ k := fun e => hk (e ▸ hx)
+  rw [upd_other _ _ hne]; exact h x hx
+
+/-- `ExecRet` from its fields. -/
+theorem execRet_mk {R0 R' : Nat → BitVec 64} {s v8 v9 v18 v19 : BitVec 64} {status : Status}
+    (h2 : R' 2 = s) (h8 : R' 8 = v8) (h9 : R' 9 = v9) (h18 : R' 18 = v18) (h19 : R' 19 = v19)
+    (hi : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R0 R') (h10 : R' 10 = statusCode status) :
+    ExecRet R0 R' s v8 v9 v18 v19 status := ⟨h2, h8, h9, h18, h19, hi, h10⟩
+
+/-- The registers an arm returns with, read off the epilogue's end state
+(`hk : KeepRegs [20..27] R0 R` for the arm's registers `R` the end state
+updates; the status in `a0` by `rfl` or an assumption). -/
+syntax "ix_execRet " term : tactic
+macro_rules
+  | `(tactic| ix_execRet $hk) => `(tactic| refine execRet_mk (by ix_reg; exact execSP_restore _)
+      (by ix_reg) (by ix_reg) (by ix_reg) (by ix_reg)
+      (by repeat (first | exact $hk | refine KeepRegs.upd ?_ (by decide) _))
+      (by ix_reg; first | rfl | assumption))
+
+/-- **The shared exit `0x8000409c`**, for either WP: the status already in
+`a0`, the epilogue restores the spills and returns; the frame rejoins the stack
+and the dispatch-point continuation takes the rest. -/
+theorem wp_execEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
+    {Φ : Nat × String → IProp GF} {ρ : Regime} {st' : St} {d : Nat} {sm : Stmt} {status : Status}
+    {aRet s ret v8 v9 v18 v19 : BitVec 64} {R0 R : Nat → BitVec 64} {Mt : Mem}
+    (hsg : StackGeom s (execNeed sm d)) (hal : ret.toNat % 4 = 0)
+    (h2 : R 2 = execSP s) (h10 : R 10 = statusCode status)
+    (hsv : ExecSaved Mt s ret v8 v9 v18 v19) (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R0 R) :
+    codeRes ∗ ms 0x8000409c#64 R (InExt (s.toNat - 176, 176)) Mt ∗
+      stackScratch (execSP s) (execNeed sm d - 176) ∗
+      statusRet N aRet.toNat status ∗ world N L Room inp ρ st' d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm status aRet s R0 ret v8 v9 v18 v19
+    ⊢ Wp.W Φ := by
+  obtain ⟨hfg, _⟩ := execFrameGeom_of hsg
+  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  iintro ⟨#Hcode, Hms, Hst, Hret, Hw, HK⟩
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
+    (F := iprop(stackScratch (execSP s) (execNeed sm d - 176) ∗ statusRet N aRet.toNat status ∗
+      world N L Room inp ρ st' d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm status aRet s R0 ret v8 v9 v18 v19))
+  rotate_left
+  · iframe Hms Hst Hret Hw HK
+    iapply codeRes_text $$ Hcode
+  intro F'
+  refine ExecEpi_run (m := ∅) (DA := []) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) hlive
+    hfg.sf hfg.lo hfg.hi hfg.al hal h2 ?_ ?_ ?_ ?_ ?_ ?_
+  · rw [hoff _ (by decide)]; exact hsv.ra
+  · rw [hoff _ (by decide)]; exact hsv.s0
+  · rw [hoff _ (by decide)]; exact hsv.s1
+  · rw [hoff _ (by decide)]; exact hsv.s2
+  · rw [hoff _ (by decide)]; exact hsv.s3
+  intros
+  apply swp_closeRM
+  intro R' Mt' hR' _
+  have hfin := execDisp_finish (N := N) (L := L) (Room := Room) (inp := inp) Wp
+    (Φ := Φ) (ρ := ρ) (st' := st') (d := d) (sm := sm) (status := status) (aRet := aRet) (s := s)
+    (ret := ret) (R := R0) (R' := R') (Mt := Mt') (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19)
+    (pc := ret) hsg rfl (by subst hR'; ix_reg) (by subst hR'; ix_execRet hk)
+  unfold F'
+  iintro ⟨⟨Hst, Hret, Hw, HK⟩, Hms⟩
+  iapply hfin
+  iframe Hms Hst Hret Hw HK
+
+/-- **The `ret` exit `0x80004138`**, for either WP: the value in the frame
+slot `sp+16` (its words `w0 w1 w2`, meaning `v`) is copied into the caller's
+`ret` slot, the status `3` set and the epilogue run; the continuation gets the
+slot as `valAt aRet v`. -/
+theorem wp_execRetCopy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
+    {Φ : Nat × String → IProp GF} {ρ : Regime} {st' : St} {d : Nat} {sm : Stmt} {v : Value}
+    {aRet s ret v8 v9 v18 v19 w0 w1 w2 : BitVec 64} {R0 R : Nat → BitVec 64} {Mt : Mem}
+    (hsg : StackGeom s (execNeed sm d)) (hsl : SlotGeom aRet) (hal : ret.toNat % 4 = 0)
+    (h2 : R 2 = execSP s) (h18 : R 18 = aRet)
+    (hsv : ExecSaved Mt s ret v8 v9 v18 v19) (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R0 R)
+    (hw0 : ldv .ld Mt (s.toNat - 176 + 16) = w0) (hw1 : ldv .ld Mt (s.toNat - 176 + 24) = w1)
+    (hw2 : ldv .ld Mt (s.toNat - 176 + 32) = w2) :
+    codeRes ∗ ms 0x80004138#64 R (InExt (s.toNat - 176, 176)) Mt ∗ slot24 aRet.toNat ∗
+      □ valOf N v w0 w1 w2 ∗ stackScratch (execSP s) (execNeed sm d - 176) ∗
+      world N L Room inp ρ st' d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm (.ret v) aRet s R0 ret v8 v9 v18 v19
+    ⊢ Wp.W Φ := by
+  obtain ⟨hfg, _⟩ := execFrameGeom_of hsg
+  have hoff := execSP_off (s := s) hfg.sf (by have := hfg.hi; omega)
+  iintro ⟨#Hcode, Hms, Hslot, #Hv, Hst, Hw, HK⟩
+  ihave ⟨%M2, Hms, %⟨hag, hd⟩⟩ := ms_slotIn $$ [Hms Hslot]
+  · iframe Hms Hslot
+  have hrd := slot_apart (by decide) hd
+  have hsv2 := hsv.congr hag
+  have hag8 : ∀ o, o + 8 ≤ 176 → ∀ j, j < 8 → imgM M2 (s.toNat - 176 + o + j) =
+      imgM Mt (s.toNat - 176 + o + j) := fun o ho j hj => hag _ (by simp only [InExt]; omega)
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
+    (F := iprop(stackScratch (execSP s) (execNeed sm d - 176) ∗ world N L Room inp ρ st' d ∗
+      □ valOf N v w0 w1 w2 ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm (.ret v) aRet s R0 ret v8 v9 v18 v19))
+  rotate_left
+  · iframe Hms Hst Hw Hv HK
+    iapply codeRes_text $$ Hcode
+  intro F'
+  refine ExecRetCopy_run (m := ∅) (DA := []) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) hlive
+    hfg.sf hfg.lo hfg.hi hfg.al hsl.lo hsl.hi hsl.al
+    (by rcases hrd with h | h; exact .inl h; exact .inr (by omega)) hal h2 h18 ?_ ?_ ?_ ?_ ?_ ?_
+  · rw [hoff _ (by decide)]; exact hsv2.ra
+  · rw [hoff _ (by decide)]; exact hsv2.s0
+  · rw [hoff _ (by decide)]; exact hsv2.s1
+  · rw [hoff _ (by decide)]; exact hsv2.s2
+  · rw [hoff _ (by decide)]; exact hsv2.s3
+  intros
+  apply swp_closeRM
+  intro R' Mt' hR' hMt'
+  have hr8 : (aRet + 8#64).toNat = aRet.toNat + 8 := by
+    have := hsl.hi; simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega
+  have hr16 : (aRet + 16#64).toNat = aRet.toNat + 16 := by
+    have := hsl.hi; simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega
+  have hsrc : ∀ o, o + 8 ≤ 176 → ldv .ld M2 (s + 18446744073709551440#64 + BitVec.ofNat 64 o).toNat =
+      ldv .ld Mt (s.toNat - 176 + o) := fun o ho => by
+    rw [hoff _ (by omega), ldv_congrW .ld (hag8 o ho)]
+  have h0 : ldv .ld Mt' aRet.toNat = w0 := by
+    rw [hMt', hr8, hr16]; ix_fwd; rw [hsrc 16 (by decide), hw0]
+  have h8 : ldv .ld Mt' (aRet.toNat + 8) = w1 := by
+    rw [hMt', hr8, hr16]; ix_fwd; rw [hsrc 24 (by decide), hw1]
+  have h16 : ldv .ld Mt' (aRet.toNat + 16) = w2 := by
+    rw [hMt', hr8, hr16]; ix_fwd; rw [hsrc 32 (by decide), hw2]
+  have hfin := execDisp_finish (N := N) (L := L) (Room := Room) (inp := inp) Wp
+    (Φ := Φ) (ρ := ρ) (st' := st') (d := d) (sm := sm) (status := .ret v) (aRet := aRet) (s := s)
+    (ret := ret) (R := R0) (R' := R') (Mt := Mt') (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19)
+    (pc := ret) hsg rfl (by subst hR'; ix_reg) (by subst hR'; ix_execRet hk)
+  simp only [statusRet] at hfin
+  unfold F'
+  iintro ⟨⟨Hst, Hw, #Hv, HK⟩, Hms⟩
+  ihave ⟨Hms, Hval⟩ := ms_valOut N hd h0 h8 h16 $$ [Hms]
+  · iframe Hms Hv
+  iapply hfin
+  iframe Hms Hst Hw HK Hval
+
+end Exits
 
 end VsaIris.Interp

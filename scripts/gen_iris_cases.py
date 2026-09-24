@@ -221,7 +221,34 @@ def subst_execConst(arm: Arm, mode: str) -> dict[str, str]:
     return {"ARM": arm.name, "TAG": str(arm.tag), "CTOR": arm.params["ctor"], "A0": arm.params["a0"]}
 
 
-FAMILIES = {"binInt": subst_binInt, "execConst": subst_execConst}
+def subst_execEval1(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `execEval1` (lane E5): an `exec_stmt` arm that evaluates ONE child
+    expression (the node's field `+8`) into the frame slot `sp+16` and ends in
+    a shared exit of `ExecArm.lean`. Steps: `run <dispatch> <jal>; child e <jal>;
+    run <jal+4> ret`. Params: `node` (the node lemma), `need` (the stack
+    lemma), `sem` (the `ExecSCost`/`ExecS` constructor), `tail` (`epi`: the
+    status in `a0` then `0x8000409c`, `wp_execEpi`; `ret`: the copy into the
+    `ret` slot at `0x80004138`, `wp_execRetCopy`)."""
+    runs = run_steps(arm)
+    kids = [s for s in arm.steps if s.op == "child"]
+    if (len(runs) != 2 or len(kids) != 1 or int(runs[0].args[0], 0) != EXEC_DISP
+            or [c.slot for c in arm.children] != [16]):
+        raise SystemExit(f"{arm.name}: family execEval1 is run, child (slot 16), run")
+    j1 = int(kids[0].args[1], 0)
+    if int(runs[0].args[1], 0) != j1 or int(runs[1].args[0], 0) != j1 + 4:
+        raise SystemExit(f"{arm.name}: the runs must meet the child call at {j1:#x}")
+    p = arm.params
+    tail = p["tail"]
+    snip = (TEMPLATES / f"execEval1_tail_{tail}_{mode}.lean").read_text()
+    seg = (TEMPLATES / f"execEval1_seg_{tail}.lean").read_text() if tail == "epi" else ""
+    doc = {"epi": "the status set, then the shared epilogue `wp_execEpi`",
+           "ret": "the copy into the `ret` slot and the epilogue, `wp_execRetCopy`"}[tail]
+    return {"TAIL": snip, "TAILSEG": seg, "TAILDOC": doc, "ARM": arm.name, "TAG": str(arm.tag),
+            "SM": arm.ctor, "STATUS": arm.result, "NODE": p["node"], "NEED": p["need"],
+            "SEM": p["sem"], "J1": f"{j1:08x}", "J1N": f"{j1 + 4:08x}"}
+
+
+FAMILIES = {"binInt": subst_binInt, "execConst": subst_execConst, "execEval1": subst_execEval1}
 
 
 def emit(arm: Arm, mode: str) -> str:
