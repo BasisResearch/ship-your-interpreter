@@ -26,14 +26,17 @@ theorem StdioOK.stdout {img : Nat → BitVec 8} (h : StdioOK img) :
 `_impure_data._stdout`. -/
 abbrev ioW (k : Nat) : Prop := InExt (0x8001b970, 8) k ∨ InExt (0x8001b548, 8) k
 
-/-- The bytes a `native_print` run owns: its frame, the arguments, the two
-words of newlib's data. -/
-abbrev npS (s args : BitVec 64) (n : Nat) (k : Nat) : Prop :=
-  (InExt (s.toNat - 80, 80) k ∨ InExt (args.toNat, 24 * n) k) ∨ ioW k
+/-- The bytes `native_print` owns across its calls: its frame and the
+arguments. -/
+abbrev npF (s args : BitVec 64) (n : Nat) (k : Nat) : Prop :=
+  InExt (s.toNat - 80, 80) k ∨ InExt (args.toNat, 24 * n) k
+
+/-- A run's bytes: those and the two words of newlib's data. -/
+abbrev npS (s args : BitVec 64) (n : Nat) (k : Nat) : Prop := npF s args n k ∨ ioW k
 
 macro_rules
   | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, npS, ioW, VsaIris.InExt] at *; sx_addr))
+    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, npS, npF, ioW, VsaIris.InExt] at *; sx_addr))
 
 section Vals
 
@@ -152,31 +155,150 @@ theorem valsImg_get (N : NativeAddrs) (f : Nat → BitVec 8) :
     rw [show a + 24 * (i + 1) = a + 24 + 24 * i by omega, List.getElem_cons_succ]
     iapply this $$ H
 
+/-- `ioW` is inside newlib's data. -/
+theorem ioW_stdio {k : Nat} (h : ioW k) : stdioFoot k := by
+  simp only [ioW, InExt] at h; unfold stdioFoot InRange; omega
+
+omit I in
+/-- **Open the two words of newlib's data into a run's owned bytes.** -/
+theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M : Mem} :
+    ms (GF := GF) pc R S M ∗ stdioOwn ⊢
+      ∃ (img : Nat → BitVec 8) (M' : Mem), ⌜StdioOK img⌝ ∗
+        ms pc R (fun k => S k ∨ ioW k) M' ∗
+        ownSet (fun k => stdioFoot k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ∗
+        ⌜(∀ k, S k → imgM M' k = imgM M k) ∧ (∀ k, ioW k → imgM M' k = img k) ∧
+          ∀ k, S k → ¬ ioW k⌝ := by
+  iintro ⟨Hms, Hio⟩
+  ihave ⟨%img, %hok, H1, H2⟩ := stdioAt_open StdioOK ioW $$ Hio
+  ihave H1 := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨ioW_stdio h, h⟩⟩) $$ H1
+  ihave ⟨%Mi, H1, %hMi⟩ := ownSet_trackedAt _ img $$ H1
+  ihave ⟨%M', Hms, %⟨h1, h2, h3⟩⟩ := ms_join $$ [Hms H1]
+  · iframe Hms H1
+  iexists img, M'
+  iframe Hms H2
+  ipureintro
+  exact ⟨hok, h1, fun k hk => (h2 k hk).trans (hMi k hk), h3⟩
+
+omit I in
+/-- **Close them again**, unchanged by the run. -/
+theorem ms_ioClose {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M : Mem}
+    {img : Nat → BitVec 8} (hok : StdioOK img) (hd : ∀ k, S k → ¬ ioW k)
+    (hio : ∀ k, ioW k → imgM M k = img k) :
+    ms (GF := GF) pc R (fun k => S k ∨ ioW k) M ∗
+        ownSet (fun k => stdioFoot k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ⊢
+      ms pc R S M ∗ stdioOwn := by
+  iintro ⟨Hms, H2⟩
+  ihave ⟨Hms, H1⟩ := ms_split hd $$ Hms
+  iframe Hms
+  iapply stdioAt_close StdioOK ioW img hok
+  iframe H2
+  ihave H1 := ownSet_congr (Ψ := fun k => iprop(k ↦ₘ img k)) (fun k hk => by rw [hio k hk]) $$ H1
+  iapply ownSet_iff _ (fun k => ⟨fun h => ⟨ioW_stdio h, h⟩, fun h => h.2⟩) $$ H1
+
 end Vals
 
-section
+/-! ## The runs (`#ix_seg`: each run a lemma ending at its computed state) -/
 
-variable {live : Nat → Prop}
-
-example (hlive : ∀ p ∈ interpText, live p.1) (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop)
-    (s args sret r : BitVec 64) (n : Nat) (rv : Nat → BitVec 64) (M : Mem)
+/- The prologue, one or more arguments: to the loop head. -/
+#ix_seg np_pro {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
+    {s args sret r : BitVec 64} {n : Nat}
     (h10 : rv 10 = sret) (h12 : rv 12 = BitVec.ofNat 64 n) (h13 : rv 13 = args) (h2 : rv 2 = s)
     (hs1 : 0x87800000 + 80 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (hn : 0 < n) (hn2 : n < 2 ^ 31) :
-    IW live ∅ [] (npS s args n) Q nativePrintPC (upd rv 1 r) M := by
-  have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-    rw [BitVec.toNat_add]; simp; omega
-  have hnI : (BitVec.ofNat 64 n).toInt = (n : Int) := by
-    rw [BitVec.toInt_eq_toNat_cond]; simp; omega
-  have h0I : (0#64 : BitVec 64).toInt = 0 := by decide
-  unfold nativePrintPC
-  ix_run hlive using [h10, h12, h13, h2, hsf, hnI, h0I] at 0x80002f1c
-  · intro hc; exfalso
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12, hnI, h0I] at hc; omega
-  · intro _
-    ix_run hlive using [h10, h12, h13, h2, hsf] at 0x80002f1c
-    done
+    IW live ∅ [] (npF s args n) Q nativePrintPC (upd rv 1 r) M
+  by
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
+      rw [BitVec.toNat_add]; simp; omega
+    have hnI : (BitVec.ofNat 64 n).toInt = (n : Int) := by
+      rw [BitVec.toInt_eq_toNat_cond]; simp; omega
+    have h0I : (0#64 : BitVec 64).toInt = 0 := by decide
+    unfold nativePrintPC
+    ix_run hlive using [h10, h12, h13, h2, hsf, hnI, h0I] at 0x80002f1c
+    all_goals first
+      | (intro hc; exfalso
+         simp only [upd_apply, Nat.reduceEqDiff, ite_false, h12, hnI, h0I] at hc; omega)
+      | (intro _; ix_run hlive using [h10, h12, h13, h2, hsf] at 0x80002f1c)
 
-end
+/- The prologue, no arguments: to `jal value_null`. -/
+#ix_seg np_pro0 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
+    {s args sret r : BitVec 64} {n : Nat}
+    (h10 : rv 10 = sret) (h12 : rv 12 = BitVec.ofNat 64 n) (h13 : rv 13 = args) (h2 : rv 2 = s)
+    (hs1 : 0x87800000 + 80 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hn : n = 0) :
+    IW live ∅ [] (npF s args n) Q nativePrintPC (upd rv 1 r) M
+  by
+    subst hn
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
+      rw [BitVec.toNat_add]; simp; omega
+    unfold nativePrintPC
+    ix_run hlive using [h10, h12, h13, h2, hsf] at 0x80002f64
+
+/- The loop body: copy argument `i`, `jal value_print`. -/
+#ix_seg np_body {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
+    {s args : BitVec 64} {n i : Nat} {w0 w1 w2 : BitVec 64}
+    (h8 : R 8 = args + BitVec.ofNat 64 (24 * i)) (h9 : R 9 = BitVec.ofNat 64 i)
+    (h18 : R 18 = 0x8001b970#64) (h2 : R 2 = s + 18446744073709551536#64)
+    (hs1 : 0x87800000 + 80 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (ha1 : args.toNat % 8 = 0) (ha2 : tohostAddr + 16 ≤ args.toNat)
+    (ha3 : args.toNat + 24 * n ≤ 0x100000000) (hi : i < n)
+    (ea : (args + BitVec.ofNat 64 (24 * i)).toNat = args.toNat + 24 * i)
+    (hw0 : ldv .ld M (args.toNat + 24 * i) = w0)
+    (hw1 : ldv .ld M (args + BitVec.ofNat 64 (24 * i) + 8#64).toNat = w1)
+    (hw2 : ldv .ld M (args + BitVec.ofNat 64 (24 * i) + 16#64).toNat = w2)
+    (hio1 : ldv .ld M 0x8001b970 = 0x8001b538#64) (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
+    IW live ∅ [] (npS s args n) Q 0x80002f1c#64 R M
+  by
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
+      rw [BitVec.toNat_add]; simp; omega
+    ix_run hlive using [h8, h9, h18, h2, hsf, ea, hw0, hw1, hw2, hio1, hio2] at 0x80002f44
+
+/- After `value_print`, more arguments: `jal fputc` with `' '`. -/
+#ix_seg np_more {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
+    {s args : BitVec 64} {n i : Nat}
+    (h8 : R 8 = args + BitVec.ofNat 64 (24 * i)) (h9 : R 9 = BitVec.ofNat 64 (i + 1))
+    (h18 : R 18 = 0x8001b970#64) (h19 : R 19 = BitVec.ofNat 64 n)
+    (hne : BitVec.ofNat 64 n ≠ BitVec.ofNat 64 (i + 1))
+    (hio1 : ldv .ld M 0x8001b970 = 0x8001b538#64) (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
+    IW live ∅ [] (npS s args n) Q 0x80002f48#64 R M
+  by
+    ix_run hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18
+    all_goals first
+      | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; exact hne)
+      | (intro _; ix_run hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18)
+
+/- After the last `value_print`: restore `s0`-`s3`, `jal value_null`. -/
+#ix_seg np_last {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
+    {s args : BitVec 64} {n : Nat} {v8 v9 v18 v19 : BitVec 64}
+    (h9 : R 9 = BitVec.ofNat 64 n) (h19 : R 19 = BitVec.ofNat 64 n)
+    (h2 : R 2 = s + 18446744073709551536#64)
+    (hs1 : 0x87800000 + 80 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hl8 : ldv .ld M (s + 18446744073709551536#64 + 64#64).toNat = v8)
+    (hl9 : ldv .ld M (s + 18446744073709551536#64 + 56#64).toNat = v9)
+    (hl18 : ldv .ld M (s + 18446744073709551536#64 + 48#64).toNat = v18)
+    (hl19 : ldv .ld M (s + 18446744073709551536#64 + 40#64).toNat = v19) :
+    IW live ∅ [] (npS s args n) Q 0x80002f48#64 R M
+  by
+    ix_run hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64
+    all_goals first
+      | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; done)
+      | (intro _; ix_run hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64)
+
+/- The epilogue, after `value_null`. -/
+#ix_seg np_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
+    {s args r v20 : BitVec 64} {n : Nat}
+    (h2 : R 2 = s + 18446744073709551536#64)
+    (hs1 : 0x87800000 + 80 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hal : r.toNat % 4 = 0)
+    (hra : ldv .ld M (s + 18446744073709551536#64 + 72#64).toNat = r)
+    (hs4 : ldv .ld M (s + 18446744073709551536#64 + 32#64).toNat = v20) :
+    IW live ∅ [] (npF s args n) Q 0x80002f68#64 R M
+  by
+    ix_run hlive using [h2, hra, hs4, hal]
 
 end VsaIris.Interp
