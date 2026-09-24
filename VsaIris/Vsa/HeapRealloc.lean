@@ -552,4 +552,25 @@ theorem Starts.swap {a b : Nat × Nat} {H : List (Nat × Nat)} (h : Starts (a ::
   obtain ⟨⟨h1, h2⟩, h3, h4⟩ := h
   exact ⟨⟨Ne.symm h1, h3⟩, h2, h4⟩
 
+/-- **A chunk's payload is footprint** where no live block starts at it: every
+other live extent lies in another chunk. -/
+theorem PHeapAt.payload_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
+    {c : Chunk} (hc : c ∈ chunks) (hno : ∀ e ∈ H, e.1 ≠ c.addr + 16) :
+    ∀ a, c.addr + 16 ≤ a → a < c.addr + c.size + 8 → vsaFoot H a := by
+  have HH := h.heap.heap
+  have hb := HH.walk.chunk_bounds c hc
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := h.heap.top_room
+  unfold heapStart at hb
+  intro a h1 h2
+  refine .inr ⟨by show heapStart ≤ a; unfold heapStart; omega,
+    by show a < heapEnd; unfold heapEnd at hbrk ⊢; omega, fun e he hin => ?_⟩
+  obtain ⟨ce, hce, _, h3, h4⟩ := HH.exact e he he
+  have hbe := HH.walk.chunk_bounds ce hce
+  unfold InExt at hin
+  rcases HH.walk.chunk_sep ce hce c hc with rfl | h5 | h5
+  · exact hno e he h3.symm
+  · omega
+  · omega
+
 end VsaIris.VsaHeap

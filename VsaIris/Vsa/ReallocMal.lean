@@ -493,4 +493,133 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
     rw [hkeep _ (.inr ⟨hn, hf⟩), hM2o _ (hfoot _ hf)]
     exact hdata k hk
 
+/-- The state back from the nested `_malloc_r` with a block `p'`: the frame and
+the three spills (`nb`, `X`, `S`), the heap holding both blocks with `X`
+unchanged (`LiveKeep`), the new block fresh, and the old contents in place. -/
+structure RMal (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) (X S nb p' top brkv : Nat)
+    (chunks : List Chunk) (bins : Nat → List Nat) : Prop where
+  frame : RFrame C R Mt
+  spNb : read64 Mt (C.s.toNat - 64) = some nb
+  spX : read64 Mt (C.s.toNat - 64 + 8) = some X
+  spS : read64 Mt (C.s.toNat - 64 + 16) = some S
+  heap : PHeapAt Mt ((p', C.n.toNat) :: (B.p, B.nOld) :: C.H) top brkv chunks bins
+  top_le : top ≤ C.top0 + physSize C.n.toNat
+  fresh : FreshAt ((B.p, B.nOld) :: C.H) p' C.n.toNat
+  align : p' % 16 = 0
+  keepX : (⟨X, S, true⟩ : Chunk) ∈ chunks
+  addr : X + 16 = B.p
+  starts : Starts ((B.p, B.nOld) :: C.H)
+  pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
+  disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
+  disjD : ∀ a, C.s.toNat - allocHeadroom ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
+  data : ∀ k, k < B.nOld → Mt[B.p + k]? = some (B.old (B.p + k))
+  nbok : NbOK C.n nb
+  nb31 : nb < 2 ^ 31
+  lt : S < nb
+  grow : B.nOld < C.n.toNat
+  s0 : (R 8).toNat = X + 16
+  s1 : R 9 = reentV
+  a0 : (R 10).toNat = p'
+
+/-- Both blocks with `p'` fresh start at distinct addresses. -/
+theorem RMal.starts2 {C : MCtx} {B : RB} {R : Nat → BitVec 64} {Mt : Mem} {X S nb p' top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (M : RMal C B R Mt X S nb p' top brkv chunks bins) :
+    Starts ((p', C.n.toNat) :: (B.p, B.nOld) :: C.H) :=
+  M.starts.cons M.fresh.start
+
+/-- **The new chunk right after the old one** (`0x800055b0`): merge them and
+go to the tail. -/
+theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {X S nb p' top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
+    (M : RMal C B R Mt X S nb p' top brkv chunks bins) (hp' : p' = X + S + 16)
+    (h12 : (R 12).toNat = X) (h14 : (R 14).toNat = S) (h15 : (R 15).toNat = nb) :
+    AW C.live C.S C.Q 0x800055b0#64 R Mt := by
+  have HH := M.heap.heap.heap
+  have hXm := M.keepX
+  have hXb := HH.walk.chunk_bounds _ hXm
+  have hS16 := (walk_sizes HH.walk _ hXm).1
+  have hx16 := HH.aligned.1 _ hXm
+  simp only at hXb hS16 hx16
+  -- the new block's chunk `N` right after `X`
+  obtain ⟨cN, hcN, huN, hcNa, hcNn⟩ := HH.exact _ List.mem_cons_self List.mem_cons_self
+  simp only at hcNa hcNn
+  obtain ⟨Na, ns, Ni⟩ := cN
+  simp only at huN hcNa hcNn
+  subst huN
+  have hNa : Na = X + S := by omega
+  subst hNa
+  have hNb := HH.walk.chunk_bounds _ hcN
+  have hns16 := (walk_sizes HH.walk _ hcN).1
+  simp only at hNb hns16
+  obtain ⟨cs₁, cs₂, hsp⟩ := List.append_of_mem hXm
+  have hw := HH.walk
+  rw [hsp] at hw
+  obtain ⟨_, hnext⟩ := walk_next_of hw
+  obtain ⟨cs₃, rfl⟩ : ∃ cs₃, cs₂ = ⟨X + S, ns, true⟩ :: cs₃ := by
+    rcases hnext with ⟨he, _⟩ | ⟨d, cs₃, h1, h2⟩
+    · exfalso; simp only at he; have := HH.walk.chunk_bounds _ hcN; simp only at this; omega
+    · have hdm : d ∈ chunks := by rw [hsp, h1]; simp
+      have := HH.chunk_eq hdm hcN (by simp only at h2 ⊢; omega)
+      exact ⟨cs₃, by rw [h1, this]⟩
+  have hbrk := HH.brk_le; have htle := HH.top_le
+  unfold heapStart heapEnd at *
+  obtain ⟨hX, hXr, hXs, hXl⟩ := walk_header HH.walk _ hXm
+  obtain ⟨hN, hNr, hNs, hNl⟩ := walk_header HH.walk _ hcN
+  simp only at hXr hXs hNr hNs
+  have hNlt := Vsa.Sim.read64_lt _ _ _ hNr
+  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hNf : ∀ k, k < 8 → vsaFoot C.H (X + S + 8 + k) := fun k hk =>
+    vsaFoot_cons_sub _ (vsaFoot_cons_sub _ (foot_header M.heap.heap (.inr ⟨_, hcN, rfl⟩) k hk))
+  have eN : (R 10 + sign_extend (m := 64) (0xff8#12)).toNat = X + S + 8 := by
+    rw [show (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) from rfl,
+      addr_sub M.a0 8 (by omega) (by omega)]; omega
+  refine st_800055b0 O.live (by rw [eN]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+    (by rw [eN]; exact O.foot hNf) ?_
+  rw [eN, ldv_at hNr _ rfl]
+  refine st_800055b4 O.live ?_
+  refine st_800055b8 O.live ?_
+  refine st_800055bc O.live ?_
+  have hns : (BitVec.ofNat 64 hN &&& sign_extend (m := 64) (0xffc#12)).toNat = ns := by
+    rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
+      toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hNlt, ← hNs]; rfl
+  -- the virtual heap: the new block dropped, `X` absorbing `N`, the block grown
+  have hv : (BitVec.ofNat 64 (S + ns + hX % 2)).toNat = S + ns + hX % 2 := by
+    rw [BitVec.toNat_ofNat]; omega
+  generalize hV : writeLog Mt [(X + 8, 8, BitVec.ofNat 64 (S + ns + hX % 2))] = V
+  have hVo : ∀ w, ¬ (X + 8 ≤ w ∧ w < X + 16) → V[w]? = Mt[w]? := fun w hw => by
+    have ho : OutL [(X + 8, 8, BitVec.ofNat 64 (S + ns + hX % 2))] w := ⟨by simp only; omega, trivial⟩
+    rw [← hV, writeLog_out _ _ _ ho]
+  have H0 := M.heap
+  rw [hsp] at H0
+  have Ha := H0.drop.absorb (m' := V) (x := X) (a := S) (b := ns) (h' := S + ns + hX % 2)
+    (fun e he heq => M.fresh.start e he (by rw [heq, hp']))
+    (by rw [← hV, read64_store_hit, hv]) (by unfold chunkSize; omega) (by omega)
+    (fun h0 hr => by
+      rw [hXr] at hr; cases hr; unfold prevInuse; rw [show (S + ns + hX % 2) % 2 = hX % 2 by omega])
+    (fun w _ hw _ => hVo w hw)
+  have Hr := Ha.reblock (c := ⟨X, S + ns, true⟩) (by simp) rfl M.addr (n' := C.n.toNat)
+    (by simp only; omega)
+  rw [← M.addr] at Hr
+  -- the header after the merged chunk
+  have hw2 := HH.walk
+  rw [hsp] at hw2
+  obtain ⟨⟨hn, hnr, hnp⟩, _⟩ := walk_next_of (cs₁ := cs₁ ++ [⟨X, S, true⟩]) (by simpa using hw2)
+  simp only at hnr hnp
+  have hnodd : hn % 2 = 1 := by unfold prevInuse at hnp; simpa using hnp
+  have hnb := M.nbok.eq
+  refine realloc_tail O (V := V) (X := X) (S := S + ns) (nb := nb) (cs₁ := cs₁) (cs₂ := cs₃)
+    ⟨M.frame.of_regs ?_ ?_ ?_, Hr, by rw [M.addr]; exact M.starts, M.top_le, M.nbok,
+      by rw [hnb]; unfold physSize; omega, ⟨hX, hXr, by rw [← hV, read64_store_hit, hv]⟩,
+      ⟨hn, by rw [show X + (S + ns) + 8 = X + S + ns + 8 by omega]; exact hnr, by
+        rw [show hn / 2 * 2 + 1 = hn by omega, ← hV, rd_miss (by omega),
+          show X + (S + ns) + 8 = X + S + ns + 8 by omega]; exact hnr⟩,
+      fun w _ hw _ => (hVo w hw).symm, M.pres, M.disj, M.disjD, by rw [M.addr]; exact M.data,
+      by have := M.grow; omega, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · rw [M.s0]
+  · exact M.s1
+  · exact h12
+  · rw [BitVec.toNat_add, h14, hns, Nat.mod_eq_of_lt (by omega)]
+  · exact h15
+
 end VsaIris.VsaHeap
