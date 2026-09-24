@@ -1,101 +1,45 @@
-# Lane H2: value functions and natives
+# Lane E5: `exec_stmt`'s statement arms
 
-Branch `lane-h2` (from `hub/iris-main`), merged `hub/lane-g` (its step-table
-generator and arm layer) and `hub/lane-h1` (`mallocRho_spec`, `memcpySpec`,
-`strlenSpec`; `strAt` carries `StrWin`). Design: `VsaIris/INTERP_DESIGN.md` §9 H2; statement
-changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
+Branch `lane-e5` (from `wave4-base`). Design: `VsaIris/INTERP_DESIGN.md` §4, §6,
+§8 (row "exec"); statement change in §10 "STATEMENT CHANGES (E5)".
+Family: expr, varInit, varNull, block, if (3 outcomes), return (2), break,
+continue, and the while/for arms' non-loop parts. Rows go in
+`scripts/iris_arms/arms.d/e5-exec.tsv`.
+
+## STATEMENT CHANGE: the exec motive is stated at the dispatch point
+
+gcc compiled `if`'s `return exec_stmt(in, branch, env, ret)` as an in-frame
+tail call: `0x8000422c ld s0,16(s0); j 0x80004014` (then) and
+`0x800042cc ld s0,24(s0); bnez s0,0x80004014` (else), after reloading `a6`/`a4`.
+The branch never runs from `exec_stmt`'s entry, so the entry-shaped
+`execSpecT_body` of the branch cannot discharge it. Every exec arm is therefore
+proved at the DISPATCH point `0x80004014` (`VsaIris/Interp/SpecExecDisp.lean`):
+
+- `execDispT_body … D` (total, derivation-indexed) — the recursor motive of
+  `ExecSCost` for lane A;
+- `execDispP_body Core …` (partial) and its Löb hypothesis `execDispsP`;
+- `execSpecT_of_disp`, `execSpecP_of_disp`, `execSpecsP_of_disps`
+  (`ExecDisp.lean`) recover the entry specs (prologue run `ExecProl_run`,
+  `wp_execProl`) for every `jal exec_stmt` caller (block/while/for bodies,
+  closure bodies, `interp_run`).
+
+State at the dispatch point: `ms 0x80004014 R (InExt (s-176,176)) Mt` with
+`DispRegs` (`sp = s-176`, `s0 = stmt`, `s1 = in`, `s2 = ret`, `s3 = env`,
+`a6 = 8`, `a4 = 0x80019fb8`) and `ExecSaved Mt s ret v8 v9 v18 v19` (the
+spills); the continuation `execDispK` gets `ExecRet` (sp, s0-s3 restored,
+s4-s11 kept, status in `a0`) at the return address.
+
+**For E6 / A:** the while arm enters its loop at `0x8000403c` and the for arm at
+`0x8000426c`, both in the frame at the dispatch-point state above; E5 proves
+the dispatch → loop-head part and the exits. The loop lemmas' shape is
+coordinated below (in flight).
 
 ## Done
-- **Statements** (`VsaIris/Interp/SpecValue.lean`), in lane G's register-file
-  form (`helperSpec`): `valueNullSpec`, `valueBoolSpec`, `valueStrSpec`
-  (+ G's `valueIntSpec`), `valueTruthySpec`, `valueEqualSpec`,
-  `valuePrintSpec`, `nativePrintSpec`, `nativePrintlnSpec`; callee spec
-  `strcmpSpecV` (H3), `nativeAssertSpec` and `stringifySpec`
-  (`fnSpecAbort`, `SpecStringify.lean`).
-- **Proved, for either WP** (axioms ⊆ {propext, Classical.choice, Quot.sound},
-  `VsaIris/Audit.lean`):
-  - `valueNull_spec`, `valueBool_spec`, `valueInt_spec` (discharges G's stub),
-    `valueStr_spec` (`ProofValueCons.lean`): `helper_leaf` (`HelperRun.lean`,
-    a helper as one symbolic run) plus one `ix_run` each;
-  - `valueTruthy_spec` (`ProofValueTruthy.lean`);
-  - `valueEqual_spec` (`ProofValueEqual.lean`): every kind; strings through
-    `strcmpSpecV` (H3) at `jal 0x800028d4`, closures by the store's address
-    map (`storeRepr_clos_inj`), natives by `NativeInj`; one lemma per arm;
-  - `valuePrint_spec` (`ProofValuePrint.lean`), given `IrisHoles.out`: every
-    arm tail-calls newlib (`ms_tailNewlib`, `NewlibCall.lean`); the closure
-    arm reads the closure object and the `EX_FN` name field through a data
-    view (`roOwn_clod`);
-  - `nativePrint_spec` (`ProofNativePrint.lean`), given `IrisHoles.out`: six
-    `#ix_seg` runs; the loop is a Lean induction over the arguments left
-    (`np_loop`: `np_A` = head, copy, `value_print`; `np_B_more`/`np_B_last`);
-    newlib's two stdio words enter a run through `ms_ioOpen`/`ms_ioClose`;
-  - `nativePrintln_spec` (`ProofNativePrintln.lean`): `native_print` into its
-    own frame slot (by `nativePrint_spec`), `fputc('\n')`, `value_null`;
-  - `nativeAssert_spec` (`ProofNativeAssert.lean`), given H5's `NewlibHoles`:
-    a `fnSpecAbort`. Seven `#ix_seg` runs. `runtime_error` is called through
-    `ms_callNewlibAbort` (`NewlibCall.lean`) against `rtErr_spec`. The abort
-    rebuilds `abortRes s nativeAssertNeed` (`na_rtErr`). The messages are
-    `FmtArgsOK` over `.rodata` or the second argument's string
-    (`readable_str`). The first argument's copy uses `ms_carveVal`/
-    `ms_uncarveVal`.
-- **Generator** (`scripts/gen_interp_steps.py`, shared with G): the step table
-  covers the value helpers, the natives and `stringify` (their kind tables and
-  `stringify`'s `.rodata` constant as table words); `sltu`/`sltiu` get
-  `itO_<pc>` (`VsaIris/Vsa/SymObs.lean`: `aluStep_of_obs`, `swp_alu`), which
-  `ix_run` tries. eval_expr's `seqz` sites get them too.
-- **Statement fix in G's layer**: `helperSpec` hands the callee an aligned
-  return address (without it no helper can `ret`); `ms_callHelper` takes
-  `(by decide)` at the call site; G's template and cases regenerated.
-
-- **Shared layers**: `LocalRun.promote` and `strlen_specOwnedW`
-  (`Vsa/StrlenOwned.lean`: H3's `strlen` on an owned buffer, the bytes handed
-  back unchanged); `ms_callRegs` (`Interp/CallRegs.lean`: a call from a run by
-  the callee's register list, `regFile_cut`/`regFile_uncut`).
-
-  - `stringify_spec` (`ProofStringify.lean`): a `fnSpecAbort` in both
-    regimes. Fifteen `#ix_seg` runs and one lemma per kind arm
-    (`sg_dispatch`). The arms share the buffer tail: `strlen` (H3, owned
-    buffer), `malloc` (`ms_callMalloc`), OOM (`wp_oomBlock` at
-    `oom80003140`), `memcpy`, epilogue. Strings copy through H1's
-    `strlenSpec`/`memcpySpec` from the payload's read-only bytes. Integers
-    and named closures go through `snprintf` (`out.snprintfInt`,
-    `out.snprintfFn`). Premises: `memcpySpecOwned`, `strcpySpec` (H3) and
-    `hstk` (the stack region is live).
+- `SpecExecDisp.lean` (statement), `ExecDisp.lean` (prologue and the entry
+  specs from the dispatch-point ones). Axioms ⊆ {propext, Classical.choice, Quot.sound}.
 
 ## In flight
-- None. All H2 deliverables are proved.
+- Arm families (brk/cont first, then ret/expr/var/if/block).
 
-## Holes (`VsaIris/HOLES.md`, `IrisHoles.out`, `VsaIris/Vsa/NewlibOut.lean`)
-- `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`: newlib's stdout
-  calls, exact about what they print (VSA assumed the same:
-  `CallIOContracts`). `out.snprintfFn`: `snprintf(buf, 64, "<fn %s>", name)`;
-  `out.snprintfInt`: `snprintf(buf, 64, "%lld", i)`.
-
-## Findings
-- `closOwn`/`astE` carry no read geometry (`ReadOK`), so no run can load a
-  closure object or its `EX_FN` node from them. `dispRes` (what `value_print`
-  needs of a closure) carries it; its supplier is the `EX_FN` arm (heap block,
-  program AST) or a geometry field on `closOwn`. The `call` arm needs the same.
-- **Q8**: `stringify` cuts a named closure's rendering at 63 characters
-  (`snprintf` into `char buf[64]`); `Value.catDisplay` does not, so the
-  concat rule disagrees with the machine for names longer than 58 characters
-  (`PROOF_CLOSURE_PLAN.md`).
-- G's `helperSpec` lacked the return-address alignment (fixed, above).
-- `runtime_error` needs the `jmp_buf` at a named image with an aligned `ra`
-  word; `world` gives only `∃ jb` (INTERP_DESIGN.md §10, H2).
-- H3's `strlen` needs `live` on the bytes it reads (`Ctx.codeLive`); for a
-  stack buffer that is the stack region, a condition on the top-level `live`
-  like `CodeLive` (`stringify_spec` takes it as `hstk`).
-- Tooling: after merging G, `ix_run` explores undecided branches; H2's scripts
-  use `ix_run1` (the stopping variant). `simpa`/`omega` over `k % 2^64` with a
-  variable `k` can produce kernel deep recursion; explicit `Nat.mod_eq_of_lt`
-  rewrites avoid it.
-
-## Interface for other lanes
-- H3: `stringify_spec` takes `memcpySpecOwned` (memcpy from an owned source,
-  handed back) and `strcpySpec` (`SpecStringify.lean`) as premises.
-- E lanes call the helpers with `ms_callHelper` (G) against the specs above.
-- H3: `strcmpSpecV` is the register-file form of H1's `strcmpSpec`.
-- H1: `HelperRun.helper_leaf` is the register-file twin of H1's `wp_ew`
-  (a span as one run); `SymObs.swp_alu` gives `snez`/`seqz` steps to any
-  `SWP` table.
+## Holes
+None added.
