@@ -107,12 +107,17 @@ structure MNull (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
   starved : Starved C.top0 C.n.toNat
 
-/-- The obligations of a `_malloc_r` call context. -/
-structure MOK (C : MCtx) : Prop where
+/-- The obligations every allocator call context shares: the code is live,
+the caller's `sp` has room, the write window is owned, and the return
+address is word-aligned. -/
+structure WOK (C : MCtx) : Prop where
   live : AllocLive C.live
   sp : MSp C.s
   own : ∀ a, MWin C.H C.s a → C.S a
   ral : C.r.toNat % 4 = 0
+
+/-- The obligations of a `_malloc_r` call context. -/
+structure MOK (C : MCtx) : Prop extends WOK C where
   ok : ∀ R Mt, MRet C R Mt → AW C.live C.S C.Q C.r R Mt
   null : ∀ R Mt, MNull C R Mt → AW C.live C.S C.Q C.r R Mt
 
@@ -139,34 +144,40 @@ structure MHeap (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk)
 /-! ## Ownership -/
 
 /-- Stack bytes of the window are owned. -/
-theorem MOK.stack {C : MCtx} (O : MOK C) {a w : Nat} (h1 : C.s.toNat - mHead ≤ a)
+theorem WOK.stack {C : MCtx} (O : WOK C) {a w : Nat} (h1 : C.s.toNat - mHead ≤ a)
     (h2 : a + w ≤ C.s.toNat) : ∀ b ∈ accAddrs a w, C.S b := by
   intro b hb
   have := of_mem_accAddrs hb
   exact O.own b (.inr ⟨by omega, by omega⟩)
 
 /-- Footprint bytes are owned. -/
-theorem MOK.foot {C : MCtx} (O : MOK C) {a w : Nat} (h : ∀ k, k < w → vsaFoot C.H (a + k)) :
+theorem WOK.foot {C : MCtx} (O : WOK C) {a w : Nat} (h : ∀ k, k < w → vsaFoot C.H (a + k)) :
     ∀ b ∈ accAddrs a w, C.S b := by
   intro b hb
   obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hb
   exact O.own _ (.inl (h j (List.mem_range.mp hj)))
 
 /-- An owned footprint doubleword at an address equal to `a'`. -/
-theorem MOK.foot_at {C : MCtx} (O : MOK C) {a' : Nat} (h : ∀ k, k < 8 → vsaFoot C.H (a' + k)) :
+theorem WOK.foot_at {C : MCtx} (O : WOK C) {a' : Nat} (h : ∀ k, k < 8 → vsaFoot C.H (a' + k)) :
     ∀ a, a = a' → ∀ b ∈ accAddrs a 8, C.S b := by
   intro a he; subst he; exact O.foot h
 
 /-- An allocator-global doubleword is owned. -/
-theorem MOK.glob {C : MCtx} (O : MOK C) {a : Nat} (h1 : 0x8001ad10 ≤ a) (h2 : a + 8 ≤ 0x8001b520) :
+theorem WOK.glob {C : MCtx} (O : WOK C) {a : Nat} (h1 : 0x8001ad10 ≤ a) (h2 : a + 8 ≤ 0x8001b520) :
     ∀ b ∈ accAddrs a 8, C.S b :=
   O.foot fun k hk => .inl (.inl ⟨by omega, by omega⟩)
 
 /-- The bin headers' link words are owned. -/
-theorem MOK.bin_link {C : MCtx} (O : MOK C) {j a : Nat} (hj : j < numBins)
+theorem WOK.bin_link {C : MCtx} (O : WOK C) {j a : Nat} (hj : j < numBins)
     (ha : a = binAt j + 16 ∨ a = binAt j + 24) : ∀ b ∈ accAddrs a 8, C.S b := by
   have := binAt_geo j hj
   rcases ha with rfl | rfl <;> exact O.glob (by omega) (by omega)
+
+theorem MOK.stack {C : MCtx} (O : MOK C) {a w : Nat} (h1 : C.s.toNat - mHead ≤ a)
+    (h2 : a + w ≤ C.s.toNat) : ∀ b ∈ accAddrs a w, C.S b := O.toWOK.stack h1 h2
+
+theorem MOK.foot {C : MCtx} (O : MOK C) {a w : Nat} (h : ∀ k, k < w → vsaFoot C.H (a + k)) :
+    ∀ b ∈ accAddrs a w, C.S b := O.toWOK.foot h
 
 /-- Frame bytes are owned: the `sx_side` rule for stack accesses. -/
 macro_rules
