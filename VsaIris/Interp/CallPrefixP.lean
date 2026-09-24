@@ -39,7 +39,7 @@ def CallK254P (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : Roo
     (Kret : IProp GF) : IProp GF :=
   iprop(∀ (R : Nat → BitVec 64) (Mt : Mem) (w0 w1 w2 : BitVec 64) (st1 : St) (fv : Value)
       (st2 : St) (vs : List Value),
-    ⌜EvalE st d env f st1 fv ∧ EvalArgs st1 d env args st2 vs⌝ -∗
+    ⌜EvalE st d env f st1 fv ∧ EvalArgs st1 d env args st2 vs ∧ args.length ≤ maxArgs⌝ -∗
     ⌜CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 args.length⌝ -∗
     □ valOf N fv w0 w1 w2 -∗ argVals N (imgM Mt) (argsBase s) 0 vs -∗
     ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt -∗
@@ -162,7 +162,7 @@ end Defs
   · simp only [List.nil_append]
     iintro %R' %Mt' %st2 %vs %hEa %⟨hk', h16, hU⟩ Hms Hargs Hst Hw Hslot
     unfold CallK254P
-    iapply HK $$ %R' %Mt' %w0 %w1 %w2 %st1 %fv %st2 %vs %⟨hEf, hEa⟩
+    iapply HK $$ %R' %Mt' %w0 %w1 %w2 %st1 %fv %st2 %vs %⟨hEf, hEa, by unfold maxArgs; omega⟩
       %(CallAt.of_seg hfg hA hkeep1 hB hU hk') Hv1 Hargs Hms Hst Hw Hslot Hk
   · iintro H
     ihave Hk := and_elim_r $$ Hk
@@ -175,7 +175,7 @@ end Defs
   have hnil : args = [] := List.eq_nil_of_length_eq_zero hz
   subst hnil
   unfold CallK254P
-  iapply HK $$ %R2 %Mt2 %w0 %w1 %w2 %st1 %fv %st1 %([] : List Value) %⟨hEf, .nil _ _ _⟩
+  iapply HK $$ %R2 %Mt2 %w0 %w1 %w2 %st1 %fv %st1 %([] : List Value) %⟨hEf, .nil _ _ _, by simp [maxArgs]⟩
     %(CallAt.of_seg hfg hA hkeep1 hB (Untouched.refl _ _ _) (fun _ _ => rfl)) Hv1 [] Hms Hst Hw
     Hslot Hk
   unfold argVals; iempintro
