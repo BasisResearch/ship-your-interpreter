@@ -1,84 +1,97 @@
 # Lane E5: `exec_stmt`'s statement arms
 
-Branch `lane-e5` (from `wave4-base`, merged `hub/iris-main` at INTEGRATION.md).
-Design: `VsaIris/INTERP_DESIGN.md` §4, §6, §8 (row "exec"); statement change in
-§10 "STATEMENT CHANGES (E5)". Family: expr, varInit, varNull, block, if (3
-outcomes), return (2), break, continue, and the while/for arms' non-loop parts.
-Rows: `scripts/iris_arms/arms.d/e5-exec.tsv`.
+Branch `lane-e5` (from `wave4-base`; merged `hub/iris-main` at INTEGRATION.md,
+`hub/lane-e6` (SpecLoop), `hub/lane-e1` (`ReadOK.win`), `hub/lane-e2`
+(`CoreOK`, `errCtx`)). Design: `VsaIris/INTERP_DESIGN.md` §4, §6, §8 (row
+"exec"); statement changes in §10 "STATEMENT CHANGES (E5)". Rows:
+`scripts/iris_arms/arms.d/e5-exec.tsv`.
 
-## STATEMENT CHANGE: the exec motive is stated at the dispatch point
+## Status: done — every arm of the family in both modes
 
-gcc compiled `if`'s `return exec_stmt(in, branch, env, ret)` as an in-frame
-tail call (`0x8000422c ld s0,16(s0); j 0x80004014`, `0x800042cc ld s0,24(s0);
-bnez s0,0x80004014`, after `li a6,8; auipc a4`). The branch never runs from
-`exec_stmt`'s entry, so the entry spec `execSpecT_body` cannot discharge it.
-Every exec arm is proved at the DISPATCH point `0x80004014`
-(`VsaIris/Interp/SpecExecDisp.lean`):
+All axioms ⊆ {propext, Classical.choice, Quot.sound} (`VsaIris/Interp/E5Audit.lean`,
+40 declarations, imported by `VsaIris/Audit.lean`). No holes added
+(`check_iris_holes.py`: 12 ledgered). Drift gate clean.
 
-- `execDispT_body … D` (total) — **the recursor motive of `ExecSCost` for A**;
-- `execDispP_body Core …` (partial) and its Löb hypothesis `execDispsP`;
-- `ExecDisp.lean`: `execSpecT_of_disp`, `execSpecP_of_disp`,
-  `execSpecsP_of_disps` recover the entry specs (prologue run `ExecProl_run`,
-  `wp_execProl`) for every `jal exec_stmt` caller (block/while/for bodies, closure
-  bodies, `interp_run`). `execDispT_apply`/`execDispP_apply`/`execDispsP_at`
-  instantiate the specs.
-
-Dispatch-point state: `ms 0x80004014 R (InExt (s-176,176)) Mt`, `DispFacts`
-(`DispRegs`: `sp = s-176`, `s0` stmt, `s1` in, `s2` ret slot, `s3` env,
-`a6 = 8`, `a4 = 0x80019fb8`; `ExecSaved Mt s ret v8 v9 v18 v19`: the spills;
-`ret` aligned; `StackGeom s (execNeed sm d)`; `SlotGeom aRet`; bodies bound).
-The continuation `execDispK` gets `ExecRet` (sp, s0-s3 restored, s4-s11 kept,
-status in `a0`) at the return address, the whole stack, `statusRet`.
-
-**For E6 / A:** replace `execSpecT_body D` by `execDispT_body D` in the
-`ExecSCost` motive (E6's `execSpecT_body D ∧ …while…`). The while arm enters its
-loop at `0x8000403c`, the for arm at `0x8000423c`/`0x8000426c`, in the frame
-at the dispatch-point state; E5 proves dispatch → loop head and the exits.
-
-## Done (all axioms ⊆ {propext, Classical.choice, Quot.sound}, `E5Audit.lean`)
-
-| arm | T | P | family / file |
+| arm (`ExecSCost`/`ExecS` ctor) | total | partial | family |
 |---|---|---|---|
-| break, continue | `caseT_ExecBrk`/`Cont` | `caseP_…` | `execConst` |
-| `expr e` | `caseT_ExecExpr` | `caseP_ExecExpr` | `execEval1 tail=epi` |
-| `ret e` | `caseT_ExecRet` | `caseP_ExecRet` | `execEval1 tail=ret` |
-| `ret;` | `caseT_ExecRetNull` | `caseP_ExecRetNull` | `execNullRet` |
-| `if` true / false / none | `caseT_ExecIfTrue`/`False`/`None` | `caseP_ExecIf` (every outcome) | `execIf*` over `ExecIf.lean` |
+| `brk`, `cont` | `caseT_ExecBrk`/`Cont` | `caseP_ExecBrk`/`Cont` | `execConst` |
+| `expr` | `caseT_ExecExpr` | `caseP_ExecExpr` | `execEval1 tail=epi` |
+| `ret` (e) | `caseT_ExecRet` | `caseP_ExecRet` | `execEval1 tail=ret` |
+| `retNull` | `caseT_ExecRetNull` | `caseP_ExecRetNull` | `execNullRet` |
+| `ifTrue`/`ifFalse`/`ifNone` | `caseT_ExecIfTrue`/`False`/`None` | `caseP_ExecIf` (every outcome) | `execIfTrue/False/None`, `execIfAll` |
+| `while*` (any while derivation) | `caseT_ExecWhile` | `caseP_ExecWhile` | `execWhile` (over E6) |
+| `forStart` | `caseT_ExecFor` | `caseP_ExecFor` | `execFor` (over E6) |
+| `block` | `caseT_ExecBlock` | `caseP_ExecBlock` | `execBlock` (over G's seqLoop) |
+| `varInit` / `varNull` | `caseT_ExecVarInit`/`Null` | `caseP_ExecVarInit`/`Null` | `execVarInit`/`execVarNull` |
 
-Layers (hand): `SpecExecDisp.lean`, `ExecDisp.lean`, `ExecArm.lean` (node
-facts `StmtNode`/`ExprFieldNode`/`IfNode`; shared exits `wp_execEpi` (a0 set,
-`0x8000409c`) and `wp_execRetCopy` (`0x80004138`, copy into the `ret` slot),
-both for either WP; `ms_callEvalPF` (partial child call from a frame of any
-size); `ms_callHelperSlot`/`ms_callHelperVal` (a helper filling / reading a
-frame slot); `ms_slotIn`/`ms_valOut`; the in-frame tail call `ifRedispatch`,
-`execDispKP_redispatch`), `SymLater.lean` (`wp_swpF_later`: a symbolic run that
-pays the Löb later — the `if` re-dispatch is a jump, not a `jal`),
-`ExecIf.lean` (the `if` runs, `wp_ifTruthy`, `ifPrefixT/P`, routes).
+## Interface for A (and E6)
 
-Generator (additions only; G's rows regenerate identically):
-`gen_iris_cases.py` accepts exec rows starting at the dispatch point
-(`EXEC_DISP`); families `execConst`, `execEval1` (tail snippets
-`execEval1_tail_{epi,ret}_{T,P}`), `execNullRet`, `execIfTrue/False/None/All`.
-A family may emit only one mode (the three total `if` rows vs one partial row).
+- **STATEMENT CHANGE: the exec motive is `execDispT_body D`**, stated at the
+  dispatch point `0x80004014` (`SpecExecDisp.lean`), because gcc made the `if`
+  branch an in-frame tail call (`j 0x80004014`, `bnez s0,0x80004014`). The
+  partial Löb hypothesis is `execDispsP Core`. `ExecDisp.lean`:
+  `execSpecT_of_disp`, `execSpecP_of_disp`, `execSpecsP_of_disps` give the
+  entry specs to every `jal exec_stmt` caller (E6's loops, G's seqLoops, the
+  closure body, `interp_run`). E6's `execSpecT_body D ∧ …while…` becomes
+  `execDispT_body D ∧ …while…`.
+- Case hypotheses (all as specs/motives, no proof imports): children's
+  `evalSpecT_body`/`execDispT_body`; `whileT_body`/`whileP_body`,
+  `execInitT_body`/`forLoopT_body`, `execInitP_body`/`forLoopP_body` (E6:
+  `whileP_all`, `forLoopP_all`, `execInitP_all` supply the partial ones);
+  G's `blockSeqT_body` (total; `blockSeqP_all` is used directly in partial);
+  helper specs `valueNullSpec`, `valueTruthySpec` (H2), `envNewSpec`,
+  `envDefineSpec` (H1).
+- Partial error premises follow E2: `errCtx inp` (resource), `CoreOK N L Room
+  inp Core`, `NewlibHoles`, `CodeLive live`. Allocating arms are stated at
+  `vsaLayoutP`/`vsaRoomB`.
+- Open for A (recorded in `PROOF_CLOSURE_PLAN.md`): the top-level handler of
+  an out-of-memory abort under `Core := abortCore … 0x88000000 0x800000`.
 
-## Blocked / in flight
-- **Partial cases that can run out of memory** (`var` via `env_define`,
-  block and `for` via `env_new`): the partial specs abort with a FIXED `Core`
-  (G), H5's out-of-memory core is site-indexed (`oomCore s n`); see
-  `experiments/smt/PROOF_CLOSURE_PLAN.md` "The partial specs' abort core is
-  not site-indexed". Proposed fix: abort with `abortRes s need`, rebase with
-  `abortRes_widen`. Raised with the user (cove status). Total cases proceed.
-- In flight: `var` (init/null) total, block total (G's `blockSeqT_body`),
-  while/for total over E6's `SpecLoop`.
+## Layers (hand)
+
+- `SpecExecDisp.lean` (statement), `ExecDisp.lean` (prologue, entry specs,
+  `execDispT_apply`/`execDispP_apply`).
+- `ExecArm.lean`: node facts (`StmtNode`, `ExprFieldNode`, `IfNode`), the two
+  shared exits for either WP (`wp_execEpi` at `0x8000409c`, `wp_execRetCopy` at
+  `0x80004138`, `wp_execEpiRet` at `0x80004150`), `ms_callEvalPF` (partial child
+  call from a frame of any size), `ms_callHelperSlot`/`ms_callHelperVal`,
+  `ms_valCarve`/`ms_valUncarve`, `ms_slotIn`/`ms_valOut`, the in-frame tail call
+  (`ifRedispatch`, `execDispKP_redispatch`), `ix_esaved`, `ix_execRet`.
+- `SymLater.lean`: `wp_swpF_later` (a symbolic run that pays a Löb later).
+- `ExecIf.lean`, `ExecLoops.lean` (while/for dispatch, `wp_loopExit`),
+  `ExecBlock.lean` (`blockNode_of`), `ExecVar.lean` (`varTail`, `varTailP`),
+  `ExecEnv.lean` (`ms_callEnvNew(W)`, `ms_callEnvDefine`,
+  `storeRepr_frameAt_ne`), `ExecOom.lean` (`ms_callRegsAbort`, `oom_regs`,
+  `ms_callEnvNewP`, `ms_callEnvDefineP`).
+
+## Generator (additions only; G's, E1's and E2's rows regenerate identically)
+
+- `gen_iris_cases.py`: exec rows may start at the dispatch point (`EXEC_DISP`);
+  a family may emit one mode only (the three total `if` rows, one partial row).
+- Families `execConst`, `execEval1` (tail snippets
+  `execEval1_tail_{epi,ret}_{T,P}`, `execEval1_seg_epi`), `execNullRet`,
+  `execIfTrue/False/None/All`, `execWhile`, `execBlock`, `execFor`,
+  `execVarInit`, `execVarNull`.
 
 ## Line counts (generated vs hand)
-| arm | generated T | generated P | hand layer used |
-|---|---|---|---|
-| break / continue | 2 × 96 | 2 × 74 | ExecArm (shared) |
-| expr / ret e | 136 / 117 | 124 / 111 | ExecArm exits |
-| ret; | 131 | 106 | `ms_callHelperSlot` |
-| if (T × 3, P × 1) | 42 / 42 / 37 | 59 | `ExecIf.lean` 715 |
-| shared hand layer | | | `SpecExecDisp` 151, `ExecDisp` 278, `ExecArm` 923, `SymLater` 129 |
 
-## Holes
-None added.
+| arm | generated T | generated P |
+|---|---|---|
+| brk / cont | 96 / 96 | 74 / 74 |
+| expr / ret e | 136 / 117 | 124 / 111 |
+| ret; | 131 | 106 |
+| if (3 T, 1 P) | 42 + 42 + 37 | 59 |
+| while | 69 | 89 |
+| for | 126 | 182 |
+| block | 184 | 227 |
+| var init / null | 104 / 110 | 120 / 125 |
+
+Generated: 2,581 lines (24 files). Hand: templates 2,191 lines (most families
+are one row: their template is the proof), layers 3,725 lines, table 18 rows.
+
+## Findings
+
+- The `if` in-frame tail call (above).
+- Duplicates to fold later: E6's `LoopKit` has `execSP_off` (over
+  `ExecFrameGeom`; E5's is `execSP_offF`), `ms_callEvalPx` (≈ E5's
+  `ms_callEvalPF`), `ms_truthyCall` (≈ `ms_callHelperVal` + `valueTruthySpec`).

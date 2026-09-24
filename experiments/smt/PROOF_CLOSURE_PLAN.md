@@ -4222,20 +4222,17 @@ top-level `live` like `CodeLive`. Its supplier is the instantiation of
 
 ## The partial specs' abort core is not site-indexed (lane E5, 2026-09-24)
 
-- **Affected:** every partial case whose arm can run out of memory:
-  `exec_stmt`'s `var` (both, `env_define` `oomAt 0x80002bd0`), block and `for`
-  (`env_new`, `oomAt 0x80002a38`); `eval_expr`'s `fn` literal, concat
-  (`stringify`/`malloc`) and call (`env_new`) arms.
-- **Missing supplier:** `evalSpecP_body Core`/`execSpecP_body Core` (lane G) and
-  `execDispP_body Core` abort with `abortAt Core s need` for ONE `Core` fixed
-  by the Löb hypothesis. H5's out-of-memory core `oomCore s n` is
-  site-indexed (`OomSp`: `exit`'s stack inside `[s - n, s)`), and
-  `abortCore_mono` needs the site's region inside the region `Core` was built
-  for. No site knows that region: `StackGeom` bounds `s` only by
-  `stackSL.hi`, not by `interp_run`'s `sp`.
-- **Proposed fix:** make the core site-indexed: the partial specs abort with
-  `abortRes N L Room inp s need` (= `abortAt (abortCore … s need) s need`),
-  and each call site rebases with `abortRes_widen` (it knows the child's
-  region is inside its own). The Löb hypotheses then need no `Core`
-  parameter. Until then E5 proves the arms without an out-of-memory path
-  (brk, cont, ret, expr, if) against the generic `Core`.
+- **Status: resolved by convention (lane E2's `CoreOK`).** The partial specs
+  keep a fixed `Core`; an arm that can abort on its own (a runtime error, out
+  of memory) takes `CoreOK N L Room inp Core` (`SpecErr.lean`): every region
+  inside the stack segment's `abortCore` enters `Core`, and
+  `coreOK_top` shows the whole segment's `abortCore … 0x88000000 0x800000`
+  is such a core. E5's allocating arms (block, `for`, `var`) take it
+  (`ms_callEnvNewP`, `ms_callEnvDefineP`).
+- **Remaining obligation (lane A):** with `Core := abortCore … 0x88000000
+  0x800000`, the top-level handler at `interp_run` receives
+  `abortAt Core sI nI`; its out-of-memory case must run `exit` from an `sp`
+  that `OomSp` places anywhere in the stack segment, while `interp_run` owns
+  only `[sI - nI, sI)`. Either the top owns (or rebuilds) the frames above
+  `sI` for `exit`, or the core is narrowed to `interp_run`'s region and
+  `StackGeom` bounds every site by it.
