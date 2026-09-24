@@ -87,9 +87,15 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   `ReallocNext.lean`); `realloc_topgrow` (into the top, `ReallocTop.lean`).
 - **Strengthened contract** (`PROOF_CLOSURE_PLAN.md`): `MRet`/`MHeap`/`TakeRet` carry
   `LiveKeep` (live blocks' chunks survive `_malloc_r`), which the merge path needs.
-- Left for realloc: the three predecessor paths (`0x800055e4` prev+X, `0x8000566c`
-  prev+X+next, `0x80005510` prev+X+top: unlink, `coalPrev`, backward copy), the growth
-  dispatch at `0x800052f0`, the wrapper `realloc` (`0x8000527c`) and the top-level contexts.
+- The three predecessor paths: `realloc_pvX` (`ReallocPrev.lean`), `realloc_pvXN`
+  (`ReallocPrevN.lean`), `realloc_pvT` (`ReallocPrevT.lean`). Shared: `pvG_rt` (the tail over
+  a virtual pre-state `PvIn`), `next_absorb` (`NAbs`, factored out of `realloc_next`), the
+  copies `pv{A,N,T}_inline`/`pv*_mm`, the heap edit `PHeapAt.setTop` (`growTop` generalised to
+  shrinking).
+- The growth dispatch `realloc_grow` (`ReallocGrow.lean`: `grow_top`, `grow_free`, `grow_used`,
+  `grow_pvX`, `prev_load`); `realloc_dec` hands it `a3 = hdr0` (`RD` no longer carries `a3`).
+- Left for realloc: the wrapper `realloc` (`0x8000527c`), the top-level contexts and runs,
+  the field deletion.
 
 ## Next: `_realloc_r` (`0x80005290`, wrapper `realloc` `0x8000527c`)
 Paths (X = p-16 of size S, nb = normalized request, T = tail `0x80005414`):
