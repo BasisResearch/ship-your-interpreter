@@ -43,18 +43,22 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   `take_ret` (any bin and position). `from_lr` (`MallocChain.lean`) is the shared tree from
   the last-remainder check on.
 
-## In flight
-- The last residual malloc join (`malloc_paths`' hypothesis): the block walk (`0x80004978`).
+- **The block walk** (`0x80004978`, `Vsa/MallocBlocks.lean`, `Vsa/MallocBlocks2.lean`):
+  member walk, take, split, bin loop, block clearing (`PHeapAt.clearBlock`,
+  `Vsa/HeapClear.lean`), next-block search, and the fold `bw_walk`. `malloc_all` closes
+  `_malloc_r`.
+- **`malloc` discharged**: `mallocChgRun_proved`, `mallocLocalRun_proved`
+  (`Vsa/MallocRunAll.lean`, through `aw_run`, `malloc_ret`, `mOK_loc`); the fields
+  `alloc.mallocChgRun` and `alloc.mallocLocalRun` and their HOLES rows are deleted.
+  `AllocBase.lean` holds the calling conditions so `AllocHoles.lean` can import the proofs.
 
 ## Holes
-- Unchanged: `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`,
-  `alloc.freeLocalRun`, `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
+- Left: `alloc.freeChgRun`, `alloc.freeLocalRun`, `alloc.reallocChgRun`,
+  `alloc.reallocLocalRun`.
 
 ## Next
-1. The block walk's split (`0x80004d14`) reuses `PHeapAt.splitFree` with `i` the victim's
-   bin; its exact fit (`0x800049e8`) is `PHeapAt.take`.
-2. The re-binding and `_free_r`'s frontlink share a sorted insert into a large bin; generalize
-   `PHeapAt.moveBin` to an insertion point.
-3. The large-bin scan and the block walk are loops: inductions over the bin list with `AW` as
-   the motive.
-4. Then `_free_r`, `_malloc_trim_r` (over `sbrk_r_run`), `_realloc_r`.
+1. `_free_r`: the context `MCtx`/`MOK` analogue for `free`, then the paths (top merge,
+   backward/forward coalescing, small/large frontlink — the sorted insert is
+   `PHeapAt.moveBinAt`), and `_malloc_trim_r` over `sbrk_r_run`.
+2. `_realloc_r` (the `sltu` at `0x800052d0` needs a hand step lemma), whose nested
+   `_malloc_r` call reuses `malloc_all` with its own `MCtx`.

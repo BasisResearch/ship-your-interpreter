@@ -485,6 +485,22 @@ theorem mChg_own {H : List (Nat × Nat)} {s : BitVec 64} (hsp : SpOKA s) (a : Na
     · exact Nat.le_trans (Nat.sub_le_sub_left (by decide : 256 ≤ 512) _) h1
     · rw [Nat.sub_add_cancel hs]; exact h2
 
+/-- The callee-saved registers the caller passed are back at a return. -/
+theorem saved_of_regs {C : MCtx} {R : Nat → BitVec 64} {saved : List (Nat × BitVec 64)}
+    {r n s : BitVec 64} (hsv : saved.map Prod.fst = vsaSaved)
+    (hE : EntryRegs C.rv0 mallocEntryBV r n s saved) (h : MRegs C R) :
+    ∀ p ∈ saved, R p.1 = p.2 := by
+  intro p hp
+  have hk : p.1 ∈ vsaSaved := by rw [← hsv]; exact List.mem_map_of_mem hp
+  have hv := hE.saved p hp
+  unfold vsaSaved at hk
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
+  rcases hk with h' | h' | h' | h' <;> rw [h'] at hv ⊢ <;> rw [← hv]
+  · exact h.s0
+  · exact h.s1
+  · exact h.s2
+  · exact h.s3
+
 /-- **The counted context's obligations.** A return's top grows by at most
 the request's chunk, which the credits cover; NULL is refuted by them. -/
 theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
@@ -501,17 +517,9 @@ theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
     intro R Mt h
     have hP := physSize_le_chg hchg
     obtain ⟨top, brkv, chunks, bins, hheap, htop⟩ := h.heap
-    refine malloc_exit (brkv := brkv) (chunks := chunks) (bins := bins) hsv h.regs.ra h.regs.sp
-      (fun p hp => ?_) h.fresh h.align hheap (by simp only [mChgCtx] at htop; omega) h.pres
-    have hk : p.1 ∈ vsaSaved := by rw [← hsv]; exact List.mem_map_of_mem hp
-    have hv := hE.saved p hp
-    unfold vsaSaved at hk
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
-    rcases hk with h' | h' | h' | h' <;> rw [h'] at hv ⊢ <;> rw [← hv]
-    · exact h.regs.s0
-    · exact h.regs.s1
-    · exact h.regs.s2
-    · exact h.regs.s3
+    exact malloc_exit (brkv := brkv) (chunks := chunks) (bins := bins) hsv h.regs.ra h.regs.sp
+      (saved_of_regs hsv hE h.regs) h.fresh h.align hheap (by simp only [mChgCtx] at htop; omega)
+      h.pres
   null := by
     intro R Mt h
     have hP := physSize_le_chg16 hchg
@@ -519,5 +527,40 @@ theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
     simp only [mChgCtx] at this
     unfold Starved extendSlack at *
     omega
+
+/-! ## The uncounted top-level context -/
+
+/-- The context of an uncounted `malloc` run at the binary: the owned bytes
+and postcondition of `MallocLocalRun`. -/
+def mLocCtx (live : Nat → Prop) (H : List (Nat × Nat)) (n r s : BitVec 64)
+    (saved : List (Nat × BitVec 64)) (rv0 : Nat → BitVec 64) (Mt0 : Mem) (top0 : Nat) : MCtx :=
+  ⟨live, mS H s, MallocEnd vsaLayoutP H n r s saved, H, n, r, s, rv0, Mt0, top0⟩
+
+/-- **The uncounted context's obligations.** A return hands out the block; a
+NULL return keeps the heap. -/
+theorem mOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
+    {saved : List (Nat × BitVec 64)} {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat}
+    (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hsp : SpOKA s)
+    (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved) :
+    MOK (mLocCtx live H n r s saved rv0 Mt0 top0) where
+  live := hlive
+  sp := MSp.of_spOKA hsp
+  own := mChg_own hsp
+  ral := hral
+  ok := by
+    intro R Mt h
+    obtain ⟨top, brkv, chunks, bins, hheap, _⟩ := h.heap
+    refine malloc_ret (F := vsaFoot (((R 10).toNat, n.toNat) :: H)) hsv h.regs.ra h.regs.sp
+      (saved_of_regs hsv hE h.regs) (fun a ha => .inr (vsaFoot_cons_sub a ha)) (fun a ha => h.pres a (vsaFoot_cons_sub a ha))
+      fun rv mv hfr ha0 him => ⟨hfr, .inr ⟨?_, ?_, ?_⟩⟩ <;> rw [ha0]
+    · exact h.fresh
+    · exact h.align
+    · exact ⟨Mt, top, brkv, chunks, bins, him, hheap⟩
+  null := by
+    intro R Mt h
+    obtain ⟨top, brkv, chunks, bins, hheap⟩ := h.heap
+    exact malloc_ret hsv h.regs.ra h.regs.sp (saved_of_regs hsv hE h.regs) (fun a ha => .inr ha)
+      h.pres fun rv mv hfr ha0 him =>
+        ⟨hfr, .inl ⟨ha0.trans h.a0, ⟨Mt, top, brkv, chunks, bins, him, hheap⟩⟩⟩
 
 end VsaIris.VsaHeap

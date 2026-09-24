@@ -79,3 +79,6 @@ import VsaIris.Vsa.AllocTac
 #print axioms VsaIris.VsaHeap.epi_core
 #print axioms VsaIris.VsaHeap.malloc_pro
 #print axioms VsaIris.VsaHeap.malloc_errno
+#print axioms VsaIris.VsaHeap.malloc_all
+#print axioms VsaIris.VsaHeap.mallocChgRun_proved
+#print axioms VsaIris.VsaHeap.mallocLocalRun_proved

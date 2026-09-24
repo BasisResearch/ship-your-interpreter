@@ -2811,9 +2811,18 @@ insertion point of the target bin) continues into the block search's test
 empty-bin case, and the walk `rebinL_walk`, an induction over the bin's
 unvisited members). A large request scans its bin (`lscan`,
 `VsaIris/Vsa/MallocLarge.lean`: the cascade `lscan_idx`, the backward walk
-`lscan_walk`, the take `lscan_take` over the general `take_ret`). One join
-remains, and is exactly `malloc_paths`' hypothesis: the block walk
-(`0x80004978`).
+`lscan_walk`, the take `lscan_take` over the general `take_ret`). The block
+walk (`0x80004978`, `bw_find` in `VsaIris/Vsa/MallocBlocks2.lean`) discharges
+`malloc_paths`' last hypothesis: the initial bitmap search (`bw_find_loop`),
+each block's bin loop and member walk (`bw_block`, `bw_bins`, `bw_member`; take
+`bw_take`, split `bw_split` over `PHeapAt.splitFree`), the clearing of an
+exhausted block's bit (`bw_clear`, over `PHeapAt.clearBlock`), and the
+next-block search (`bw_next`), folded by `bw_walk` (an induction over the
+blocks left). `malloc_all` is `_malloc_r` closed on every path;
+`mallocChgRun_proved` and `mallocLocalRun_proved`
+(`VsaIris/Vsa/MallocRunAll.lean`) are the counted and uncounted runs from
+`malloc`'s entry, and the fields `alloc.mallocChgRun`/`alloc.mallocLocalRun`
+are deleted. `free` and `realloc` remain (`AllocHoles`).
 
 CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
 `heapEnd < top0 + physSize n + extendSlack`, which the code does not

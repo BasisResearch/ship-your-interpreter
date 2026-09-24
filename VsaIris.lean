@@ -44,6 +44,7 @@ import VsaIris.Vsa.AllocSteps
 import VsaIris.Vsa.AllocTac
 import VsaIris.MallocChg
 import VsaIris.Vsa.HeapRoom
+import VsaIris.Vsa.AllocBase
 import VsaIris.Vsa.AllocHoles
 import VsaIris.Vsa.HeapAlg
 import VsaIris.Vsa.HeapTake
@@ -68,6 +69,7 @@ import VsaIris.Vsa.HeapClear
 import VsaIris.Vsa.MallocBlocks
 import VsaIris.Vsa.MallocChain
 import VsaIris.Vsa.MallocBlocks2
+import VsaIris.Vsa.MallocRunAll
 import VsaIris.Vsa.CostRoom
 import VsaIris.Stack
 import VsaIris.Interp.Need

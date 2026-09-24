@@ -4,8 +4,6 @@ Every assumption left in the Iris route is a field of `structure IrisHoles` and 
 
 | field | what it assumes | owner | satisfiability evidence | discharge plan |
 |---|---|---|---|---|
-| `alloc.mallocChgRun` | counted `_malloc_r` (every path, `sbrk` growth included) meets `MallocRoomEnd` over `vsaRoomB`/`vsaChg` | H4 | top split proved on the fast heap (`mallocRoomRun_fast`); `ControlEnd` | `SWP` step table (`AllocSteps`, `sx_run`) + `HeapAt` algebra per path |
-| `alloc.mallocLocalRun` | uncounted `_malloc_r` meets `MallocEnd` (NULL or fresh block) | H4 | `ControlWitness` | same paths as `mallocChgRun`, plus the `sbrk` failure arm |
 | `alloc.freeChgRun` | counted `_free_r` (coalescing, bins, trim) keeps `vsaRoomB` | H4 | top merge proved (`freeRoomRun_fast`) | `SWP` paths: top merge, backward/forward coalescing, small/large `frontlink`, `_malloc_trim_r` |
 | `alloc.freeLocalRun` | uncounted `_free_r` meets `FreeEnd` | H4 | as `freeChgRun` | shares `freeChgRun`'s paths |
 | `alloc.reallocChgRun` | counted `_realloc_r` grow path meets `ReallocChgEnd` (never NULL) | H4 | `reallocChgSpec_of_run` consumers | `SWP` paths: in place (top, free next), malloc-copy-free; `sltu` at `0x800052d0` needs a hand step lemma |
