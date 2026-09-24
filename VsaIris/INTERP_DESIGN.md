@@ -18,6 +18,29 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q4: newlib `snprintf`/`fprintf` safety specs stay as named holes for now,** scheduled after E1–E6. They must not be forgotten: every hole lives as a field of `IrisHoles` (so it appears in the final theorem's hypothesis) AND has an entry in `VsaIris/HOLES.md` with owner package, satisfiability evidence and discharge plan. `scripts/check_iris_holes.py` fails if the two disagree.
 - **A0's `BootGap` moves into `Loaded` (2026-09-24).** The boundary heap facts become `InterpRunReadyFacts` fields, as Q1 did with `stack_admissible`; `world_of_boundary` no longer takes them as a premise. (lane BG; see the next STATEMENT CHANGE)
 
+- **Two more boundary facts in `Loaded` (2026-09-24, integration).** H1's frame invariant (`FrameLayout`/`FrameBridge`: canonical capacity, `SharedWin` for string reads) needs them at the global frame; `Loaded` did not state them. (see the next STATEMENT CHANGE)
+
+## STATEMENT CHANGE (integration): the global frame's capacity and the shared bytes' geometry
+
+`BootFrameChunks` gains `cap_canon : F.cap = 8` (the capacity `env_define`
+reaches for `interp_init`'s three natives, `capFor 3`), and `BootHeapFacts`
+gains `shared_geom : SharedGeom shared stackSL` (every shared byte is RAM with
+8 bytes of slack, off the HTIF words and the stack; VSA's own `SharedGeom`).
+
+- **Why.** H1 made the frame invariant exact: `FrameLayout.cap_canon`
+  (`cap = capFor n`, which the counted regime's growth charges follow) and
+  `frameBody_of_frameRepr`'s `SharedWin P` (the string routines' read
+  window). Neither follows from the ownership data: `FrameArraysOwned.bound`
+  only gives `3 ≤ cap`, and `Immutable.readable` only `k < 2^32`.
+- **What narrowed.** `Loaded interpRunLayout p c`, as in lane BG.
+- **Not vacuous.** The control has `cap = 8` (`rfl`) and shared bytes at
+  `0x81000200…` and in the AST page (`Control.sharedGeom`, `omega`).
+- **Consumer.** `World.lean`: `BootGap.sharedWin` (`sharedWin_of_geom`),
+  `FrameChunks.cap_canon`. The array blocks are the chunk payloads cut to
+  `8 cap`/`24 cap` bytes (`trimArrays`, H1's exact `FrameLayout.arrays`); the
+  boundary heap's live list `Boot.H` trims them the same way
+  (`BlockHeapAt.shrink`), so the store's blocks stay live-list members.
+
 ## STATEMENT CHANGE (lane BG): `Loaded interpRunLayout` now carries the boundary heap facts
 
 `Vsa/Sim/LayoutInstance.lean` `InterpRunReadyFacts` replaced the field
@@ -34,8 +57,9 @@ structure BootHeapFacts … : Prop where
   top_room  : top + 16 ≤ brkv                    -- dlmalloc's MINSIZE top
   brk_page  : brkv % 4096 = 0                    -- Q5
   binblocks : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32   -- Q5b
-  frame     : BootFrameChunks m chunks shared e F  -- global frame: 3 distinct whole unshared chunk payloads
+  frame     : BootFrameChunks m chunks shared e F  -- global frame: 3 distinct whole unshared chunk payloads, cap 8
   stderr    : read64 m impureStderrAddr = some exitStderr            -- Q6
+  shared_geom : SharedGeom shared stackSL                            -- (integration)
 ```
 
 - **What narrowed.** `interpRunLayout.atInterpRun`, hence `Loaded

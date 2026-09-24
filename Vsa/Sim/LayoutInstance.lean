@@ -15,6 +15,7 @@ import Vsa.Sim.AstMutableByte
 import Vsa.Sim.RuntimeOwnershipInitial
 import Vsa.Refinement
 import Vsa.While.StackNeed
+import Vsa.Sim.SharedGeometry
 
 /-!
 # L8/M6 — `LayoutInstance`: the concrete `Layout` + its `GeomFacts` / statics
@@ -368,6 +369,11 @@ structure BootFrameChunks (m : Vsa.MemRepr.Mem) (chunks : List DlHeap.Chunk)
   nodup : F.blocks.Nodup
   /-- No shared (immutable) byte lives in them. -/
   unshared : ∀ b ∈ F.blocks, ∀ k, b.1 ≤ k → k < b.1 + b.2 → ¬ shared k
+  /-- The capacity `env_define`'s growth policy reaches for the three natives
+  `interp_init` defines (`env.c`: `cap = cap ? 2*cap : 8`). User decision
+  (2026-09-24, integration): the Iris frame invariant keeps capacities
+  canonical (`FrameLayout.cap_canon`). -/
+  cap_canon : F.cap = 8
 
 /-- `_impure_data._stderr` (`reent + 24`), read by `main`'s error line. -/
 def impureStderrAddr : Nat := consoleReent + 24
@@ -385,6 +391,10 @@ structure BootHeapFacts (m : Vsa.MemRepr.Mem) (shared : Nat → Prop) (e top brk
   frame : BootFrameChunks m chunks shared e F
   /-- `_impure_data._stderr = &__sf[2]` (INTERP_DESIGN.md Q6). -/
   stderr : Vsa.MemRepr.read64 m impureStderrAddr = some exitStderr
+  /-- Every shared byte is RAM with the word loop's slack, off the HTIF words
+  and the stack. User decision (2026-09-24, integration): the Iris route's
+  string reads need it (`SharedWin`). -/
+  shared_geom : SharedGeom shared stackSL
 
 /-- The initial ownership, one allocator walk of it, and the facts above, about
 the same witnesses. -/

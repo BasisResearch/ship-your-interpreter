@@ -42,6 +42,7 @@ theorem bootFrameChunks : BootFrameChunks heapMem heapChunks shared 0x81000000 b
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
     unfold shared AstPage
     rcases hb with rfl | rfl | rfl <;> (dsimp only at hlo hhi; omega)
+  cap_canon := rfl
 
 /-- `_impure_data._stderr`, read off the snapshot through both logs. -/
 theorem stderr_mem : read64 heapMem impureStderrAddr = some exitStderr := by
@@ -57,6 +58,13 @@ theorem binblocks_mem : read64 heapMem binblocksAddr = some 0 := by
     decide
   · unfold binblocksAddr avAddr; omega
 
+/-- The shared bytes (three native names and the AST page) are RAM above the
+HTIF words and below the stack. -/
+theorem sharedGeom : SharedGeom shared stackSL where
+  ram := by intro k hk; unfold shared AstPage at hk; omega
+  htif := by intro k hk; unfold shared AstPage at hk; rw [tohostAddr_val]; omega
+  stack := by intro k hk; unfold shared AstPage at hk; left; show k < 0x87800000; omega
+
 theorem bootHeapFacts :
     BootHeapFacts heapMem shared 0x81000000 heapTop heapBrk heapChunks bootFrame where
   top_room := by decide
@@ -68,6 +76,8 @@ theorem bootHeapFacts :
     decide
   frame := bootFrameChunks
   stderr := stderr_mem
+  shared_geom := sharedGeom
+
 
 theorem bootHeap : BootHeap heapMem heapArena phif phic 0x82000000 2 ownershipData
     heapTop heapBrk heapChunks (fun _ => []) bootFrame where
