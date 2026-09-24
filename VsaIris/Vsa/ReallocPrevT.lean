@@ -715,4 +715,143 @@ theorem pvT_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : 
   · exact Rt.heap
   · exact Rt.data k hk
 
+/-- **Into the free predecessor and the top** (`0x80005510`): unlink `P`, copy
+the payload down to `P + 16` (inline up to 72 bytes, else `memmove`), and move
+the top to `P + nb` (`pvT_fin`). -/
+theorem realloc_pvT {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
+    (D : RD C B R Mt brkv chunks bins X S hdr0 nb)
+    {cs₀ : List Chunk} {P ps i : Nat} {pre post : List Nat} {predP succP : Nat}
+    (hsp : chunks = (cs₀ ++ [⟨P, ps, false⟩]) ++ [⟨X, S, true⟩])
+    (PV : FPv Mt (cs₀ ++ [⟨P, ps, false⟩]) bins X cs₀ P ps i pre post predP succP)
+    (hXt : X + S = C.top0) (hroom : nb + 32 ≤ ps + S + (brkv - C.top0)) (h6 : (R 6).toNat = P)
+    (h16 : (R 16).toNat = ps + S + (brkv - C.top0)) :
+    AW C.live C.S C.Q 0x80005510#64 R Mt := by
+  have Hp := D.heap
+  have H0 := Hp.heap
+  rw [hsp] at H0
+  let C' : MCtx := { C with H := (B.p, B.nOld) :: C.H }
+  have G : PvGeo C' P ps S predP succP := PvGeo.of_heap (C := C') (rest := []) H0 PV
+  have hpend : X = P + ps := PV.pend.symm
+  have hspan := pv_span D (rest := []) hsp hpend
+  subst hpend
+  have hp16 := G.p16; have hplo := G.plo; have hps16 := G.psz16; have hps32 := G.psz32
+  have hs16 := G.sz16; have hs32 := G.sz32
+  have hxend : P + ps + S ≤ C.top0 := G.xend; have htop : C.top0 + 16 ≤ 0x87800000 := G.top
+  have hpp16 := G.pp16; have hsp16 := G.sp16; have hpplo := G.pplo; have hsplo := G.splo
+  have hpphi : predP + 32 ≤ C.top0 := G.pphi; have hsphi : succP + 32 ≤ C.top0 := G.sphi
+  have hlo := O.spA.lo; have hhi := O.spA.hi
+  unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
+  have hdisj := Hp.disjD
+  unfold allocHeadroom at hdisj
+  -- the link words
+  have hPf := (foot_free H0.heap (c' := ⟨P, ps, false⟩) (by simp) rfl).1
+  simp only at hPf
+  have fB : ∀ k, k < 8 → vsaFoot C.H (P + 24 + k) := fun k hk => vsaFoot_cons_sub _ (by
+    have := hPf (8 + k) (by omega); rwa [show P + 16 + (8 + k) = P + 24 + k by omega] at this)
+  have fF : ∀ k, k < 8 → vsaFoot C.H (P + 16 + k) := fun k hk => vsaFoot_cons_sub _ (hPf k (by omega))
+  have fS : ∀ k, k < 8 → vsaFoot C.H (succP + 24 + k) := fun k hk => vsaFoot_cons_sub _ (by
+    have := G.spfoot (24 + k) (by omega) (by omega)
+    rwa [show succP + (24 + k) = succP + 24 + k by omega] at this)
+  have fP : ∀ k, k < 8 → vsaFoot C.H (predP + 16 + k) := fun k hk => vsaFoot_cons_sub _ (by
+    have := G.ppfoot (16 + k) (by omega) (by omega)
+    rwa [show predP + (16 + k) = predP + 16 + k by omega] at this)
+  have hpl := Vsa.Sim.read64_lt _ _ _ PV.bk
+  have hsl := Vsa.Sim.read64_lt _ _ _ PV.fd
+  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
+  have n24 : (sign_extend (m := 64) (0x018#12) : BitVec 64) = BitVec.ofNat 64 24 := rfl
+  have eB : (R 6 + sign_extend (m := 64) (0x018#12)).toNat = P + 24 := by rw [n24, addr_add h6 24 (by omega)]
+  have eF : (R 6 + sign_extend (m := 64) (0x010#12)).toNat = P + 16 := by rw [n16, addr_add h6 16 (by omega)]
+  refine st_80005510 O.live (by rw [eB]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+    (by rw [eB]; exact O.foot fB) ?_
+  rw [eB, ldv_at PV.bk _ rfl]
+  refine st_80005514 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; exact O.foot fF) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  rw [eF, ldv_at PV.fd _ rfl]
+  refine st_80005518 O.live (st_8000551c O.live ?_)
+  have hvP : (BitVec.ofNat 64 predP).toNat = predP := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl]
+  have hvS : (BitVec.ofNat 64 succP).toNat = succP := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl]
+  have eS : (BitVec.ofNat 64 succP + sign_extend (m := 64) (0x018#12)).toNat = succP + 24 := by
+    rw [n24, addr_add hvS 24 (by omega)]
+  have eP : (BitVec.ofNat 64 predP + sign_extend (m := 64) (0x010#12)).toNat = predP + 16 := by
+    rw [n16, addr_add hvP 16 (by omega)]
+  refine st_80005520 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]
+        unfold StOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]; exact O.foot fS) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  rw [eS]
+  refine st_80005524 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]
+        unfold StOK Vsa.Sim.tohostAddr; omega)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]; exact O.foot fP) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  rw [eP]
+  have eL : (R 14 + sign_extend (m := 64) (0xff8#12)).toNat = S - 8 := by
+    rw [show (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) from rfl,
+      addr_sub D.a4 8 (by omega) (by omega)]
+  have e72 : (0#64 + sign_extend (m := 64) (0x048#12)).toNat = 72 := rfl
+  -- the unlinked memory, the frame, the copy's arguments
+  have oS := off_stack_of Hp.disj fS
+  have oP := off_stack_of Hp.disj fP
+  have F1 : RFrame C R (writeLog (writeLog Mt [(succP + 24, 8, BitVec.ofNat 64 predP)])
+      [(predP + 16, 8, BitVec.ofNat 64 succP)]) :=
+    (D.frame.store (by omega)).store (by omega)
+  have hstk : ∀ a, vsaFoot C.H a → a < C.s.toNat - 512 ∨ C.s.toNat ≤ a := fun a ha =>
+    Classical.byContradiction fun hc => hdisj a (by omega) (by omega) ha
+  have hdst : P + 16 + (S - 8) ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ P + 16 := by
+    rcases hstk _ (hspan (P + 16) (by omega) (by omega)) with h | h
+    · rcases hstk _ (hspan (P + 16 + (S - 9)) (by omega) (by omega)) with h' | h'
+      · exact .inl (by omega)
+      · exfalso
+        have := hstk (C.s.toNat - 64) (hspan _ (by omega) (by omega)); omega
+    · exact .inr h
+  have hsrc : P + ps + 16 + (S - 8) ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ P + ps + 16 := by
+    rcases hdst with h | h
+    · rcases hstk _ (hspan (P + ps + 16 + (S - 9)) (by omega) (by omega)) with h' | h'
+      · exact .inl (by omega)
+      · exfalso
+        have := hstk (C.s.toNat - 64) (hspan _ (by omega) (by omega)); omega
+    · exact .inr (by omega)
+  have A : CPArgs C.S (P + 16) (P + ps + 16) (S - 8) :=
+    { n8 := by omega, d8 := by omega, s8 := by omega, ov := .inl (by omega),
+      dlo := by unfold Vsa.Sim.tohostAddr; omega, dhi := by omega,
+      slo := by unfold Vsa.Sim.tohostAddr; omega, shi := by omega,
+      sS := fun k hk => O.own _ (.inl (hspan _ (by omega) (by omega))),
+      dS := fun k hk => O.own _ (.inl (hspan _ (by omega) (by omega))) }
+  have z : (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 := rfl
+  have h13' : (R 6 + sign_extend (m := 64) (0x010#12)).toNat = P + 16 := eF
+  refine st_80005528 O.live (st_8000552c O.live (fun hc => ?_) (fun hc => ?_)) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, eL, e72] at hc ⊢
+  · -- over 72 bytes: `memmove`
+    refine pvT_mm O { A with n32 := by omega } (F1.of_regs ?_ ?_ ?_) hdst hsrc ?_ ?_ ?_
+      (fun R' Mc F' hMc g13 g6 g15 g16 g9 => pvT_fin O D hsp PV hXt hroom F' hMc ?_ ?_ ?_ ?_) <;>
+      (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+    · exact eF
+    · exact D.s0
+    · exact eL
+    · rw [g6]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h6
+    · rw [g15]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact D.a5
+    · rw [g16]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h16
+    · rw [g13]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact eF
+  · -- up to 72 bytes: inline
+    have hLs : S - 8 = 24 ∨ S - 8 = 40 ∨ S - 8 = 56 ∨ S - 8 = 72 := by omega
+    refine pvT_inline A O.live hLs rfl ?_ ?_ ?_ ?_ fun R' K => pvT_fin O D hsp PV hXt hroom
+      ((F1.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_) (fun a _ => rfl) ?_ ?_ ?_ ?_ <;>
+      (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+    · exact D.s0
+    · exact h6
+    · exact eF
+    · exact eL
+    · rw [K.sp]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · rw [K.s2]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · rw [K.s3]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · exact copyW_out (by omega)
+    · rw [K.t1]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h6
+    · rw [K.a5]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact D.a5
+    · rw [K.a6]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h16
+    · rw [K.a3]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact eF
+
 end VsaIris.VsaHeap
