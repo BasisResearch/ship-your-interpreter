@@ -820,6 +820,37 @@ interpreter control's dlmalloc heap and stays with H4/A0.
   `exit(70)` (`wp_abortLanding` → `Landing.wp_landing` → `MainErr.wp_mainErrTail`
   → `Exit.wp_exitCall`) or `exit(1)` (`wp_abortOom`), for either WP.
 
+### STATEMENT CHANGES (G, landed)
+
+`eval_expr`'s specs are stated in `VsaIris/Interp/SpecEval.lean` (it
+supersedes §D of `Specs.lean` for `eval_expr`). Each change is forced by the
+binary or by what the proofs consume:
+
+- **ABI: `a0 = sret`, `a1 = in`, `a2 = e`, `a3 = env`**, not `a1 = env,
+  a2 = e`. The C signature is `eval_expr(Interp *in, Expr *e, Env *env)` with
+  an `sret` result. Evidence: the prologue keeps `a1` in `s2` and passes it
+  unchanged to both children and to `runtime_error` (`0x80003184 mv s2,a1`,
+  `0x8000350c mv a1,s2`, `0x80003b2c mv a0,s2`); the binary arm spills `a3`
+  for the right child (`0x800034f4 sd a3,0(sp)`, `0x80003500 ld a3,0(sp)`);
+  the var arm passes `a3` to `env_get` (`0x80003438 mv a0,a3`).
+- **Registers are one valuation.** The skeleton quantified over arbitrary
+  `saved`/`clobE` lists; no body meets that (it spills `s0`-`s3` whatever the
+  caller passed). The pre owns every register but `PC`/`ra` (which `fnSpecW`
+  handles) and `gp`/`tp` as `regFile rv`, with named argument pins
+  `EvalRegs`; the post returns some `rv'` with `KeepRegs calleeSaved rv rv'`.
+  This is also exactly the shape a symbolic run (`SWP`) consumes.
+- **`codeRes`** (the code, the jump tables, `gp`, persistent) is in the pre:
+  every segment fetches its instructions from it.
+- **`astEG`** = `astE` plus the read set's address facts (`ReadOK`: RAM, off
+  the HTIF words), which every load side condition needs. A0 supplies them
+  from `ast_readable`; `astEG_astE` forgets them.
+- **`StackGeom`/`SlotGeom`** name the stack and result-slot geometry.
+- **The line field is not read-owned.** `0x80003524 lw s0,4(s0)` reads the
+  node's line number, outside `ExprReprWithin`'s read set; the step is a
+  havoc load (`swp_havocD`): the run continues for every loaded value.
+- Helpers are stated with `helperSpec` (registers kept but a clobber list);
+  `valueIntSpec` is the stub for `value_int` (H2).
+
 ## 11. Open questions for the user
 
 - **Q5 (lane H4, needs the user): a page-aligned break at the boundary.** `malloc_extend_top`

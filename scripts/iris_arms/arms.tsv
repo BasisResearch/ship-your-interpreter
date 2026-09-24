@@ -1,0 +1,7 @@
+# Interpreter code arms for the Iris case generator (lane G).
+# Format and step language: LANE.md "Row format". Hand edits go HERE, never in
+# the generated VsaIris/Interp/Case/*.lean files (gen_iris_cases.py --check).
+#
+# arm	fn	tag	ctor	children	result	steps	errors	family
+BinaryAddInt	eval	6	.binary .add l r	l:E:.int a:120; r:E:.int b:144	.int (wrap64 (a + b))	run 0x80003164 0x800034f8; child l 0x800034f8; run 0x800034fc 0x80003518; child r 0x80003518; run 0x8000351c 0x800038d4; helper valueInt 0x800038d4; run 0x800038d8 ret	kind:0x800038ac:0x80003df8; kind:0x800038c8:0x80003d18	binInt op=.add mop=+ wrap=toInt_add_wrap tok=11
+BinarySubInt	eval	6	.binary .sub l r	l:E:.int a:120; r:E:.int b:144	.int (wrap64 (a - b))	run 0x80003164 0x800034f8; child l 0x800034f8; run 0x800034fc 0x80003518; child r 0x80003518; run 0x8000351c 0x8000391c; helper valueInt 0x8000391c; run 0x80003920 ret	kind:0x800038f4:0x80003eec; kind:0x80003910:0x80003ec4	binInt op=.sub mop=- wrap=toInt_sub_wrap tok=12
