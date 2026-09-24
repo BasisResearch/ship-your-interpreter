@@ -734,4 +734,51 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
         have hfit : nb ≤ sz := hcmp.2.1 (by rw [show ((0#64 : BitVec 64)).toInt = 0 from rfl] at hnn ⊢; omega)
         exact bw_take O (W.keep hkp') hk1 hk hmem hcy hfit hpred hvals.1 hvals.2.1 hvals.2.2
 
+/-- **An exhausted bin is empty.** From the search's start up, a bin whose
+members are all smaller than `nb` has none (`ScanFrom`). -/
+theorem scanFrom_empty {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {nb start k : Nat}
+    (HH : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) (hsf : ScanFrom chunks bins nb start)
+    (hs1 : 1 < start) (hk : start ≤ k) (hkn : k < numBins) (hsm : AllSmall chunks (bins k) nb) :
+    bins k = [] := by
+  rcases h : bins k with _ | ⟨x, xs⟩
+  · rfl
+  · exfalso
+    have hx : x ∈ bins k := by rw [h]; exact List.mem_cons_self
+    have hstart : binIndex nb < start ∨ (binIndex nb ≤ start ∧ start < k) ∨ start = k := by
+      rcases hsf with h1 | ⟨y, sy, hy, hfy, hly⟩
+      · exact .inl h1
+      · by_cases hsk : start = k
+        · exact .inr (.inr hsk)
+        · refine .inr (.inl ⟨?_, by omega⟩)
+          obtain ⟨c, hc, hca, _, hbi⟩ := HH.bin_free start y (by omega) (by omega) hy
+          have := HH.chunk_eq hc hfy hca
+          subst this
+          rw [← hbi (by omega)]
+          exact binIndex_mono hly
+    rcases hstart with h1 | ⟨h1, h2⟩ | rfl
+    · obtain ⟨c, hc, hca, hcf, hbi⟩ := HH.bin_free k x (by omega) hkn hx
+      obtain ⟨ca, cs, ci⟩ := c
+      simp only at hca hcf hbi
+      subst hca hcf
+      have hlt := hsm ca hx cs hc
+      have := binIndex_mono (Nat.le_of_lt hlt)
+      rw [hbi (by omega)] at this; omega
+    · obtain ⟨c, hc, hca, hcf, hbi⟩ := HH.bin_free k x (by omega) hkn hx
+      obtain ⟨ca, cs, ci⟩ := c
+      simp only at hca hcf hbi
+      subst hca hcf
+      have hlt := hsm ca hx cs hc
+      have := binIndex_mono (Nat.le_of_lt hlt)
+      rw [hbi (by omega)] at this; omega
+    · rcases hsf with h1 | ⟨y, sy, hy, hfy, hly⟩
+      · obtain ⟨c, hc, hca, hcf, hbi⟩ := HH.bin_free start x (by omega) hkn hx
+        obtain ⟨ca, cs, ci⟩ := c
+        simp only at hca hcf hbi
+        subst hca hcf
+        have hlt := hsm ca hx cs hc
+        have := binIndex_mono (Nat.le_of_lt hlt)
+        rw [hbi (by omega)] at this; omega
+      · exact absurd (hsm y hy sy hfy) (by omega)
+
 end VsaIris.VsaHeap
