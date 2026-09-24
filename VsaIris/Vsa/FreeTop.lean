@@ -351,4 +351,16 @@ theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n 
   · exact hEp
   · rw [BitVec.toNat_add, hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpsl]; omega
 
+/-- **`_free_r`** (`0x80007350`, a non-NULL block): the prologue, the
+dispatch on the top (`0x80007398`), and every path to the epilogue. -/
+theorem free_body {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {q n brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat}
+    (E : FEntry C q R) (Hp : FHeap C C.Mt0 q n brkv chunks bins) :
+    AW C.live C.S C.Q 0x80007350#64 R C.Mt0 :=
+  free_pro O E Hp fun _ _ _ _ _ _ D => st_80007398 O.live
+    (fun h => free_top O D (by
+      have := congrArg BitVec.toNat h; rw [D.a6, D.a2] at this; omega))
+    (fun h => free_nt O D (fun he => h (BitVec.eq_of_toNat_eq (by rw [D.a6, D.a2]; omega)))
+      fun _ _ _ _ _ _ _ N => free_split O N)
+
 end VsaIris.VsaHeap
