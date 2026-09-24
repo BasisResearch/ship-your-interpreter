@@ -2087,6 +2087,117 @@ theorem sg_cloAnon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     simp (disch := omega) only [imgM_store_miss]
     exact f0.hslot k (by simp only [InExt]; omega)
 
+/-- **A named closure**: `snprintf(buf, 64, "<fn %s>", name)`
+(`IrisHoles.out.snprintfFn`), then the shared tail. -/
+theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) {x : String}
+    (hc : vsaChg ((fnRender x).toList.length + 1) c)
+    {Dt : Mem} {cp q nm : Nat} {R : Nat → BitVec 64} {M : Mem} (f0 : SgC0 s p r rv R M Mp)
+    (fc : SgClo M Dt p cp q nm) (hnz : BitVec.ofNat 64 nm ≠ 0#64) :
+    roOwn roR (interpText ++ dataOf Dt (clodA cp q)) ∗ strAt (BitVec.ofNat 64 nm).toNat x ∗
+      SgRest Wp Φ N inp p s r v (fnRender x) ρ H c o rv Mp ∗ ms 0x8000301c#64 R (sgF s p) M ⊢
+      Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have eB : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
+    rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+    rw [BitVec.toNat_add]; simp; omega
+  have hsl : ∀ k, sgF s p k ↔ (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) := fun k => by
+    constructor
+    · intro h; by_cases h' : InExt (s.toNat - 96, 64) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact .inl (by simp only [InExt] at h ⊢; omega)
+  have hlen : (fnRender x).toList.length ≤ 63 := by
+    unfold fnRender; simp; omega
+  iintro ⟨#Hview, #Hx, Hrest, Hms⟩
+  iapply wp_swpF Wp (text := interpText ++ dataOf Dt (clodA cp q)) (S := sgF s p) (R := R)
+    (Mt := M) (pc := 0x8000301c#64)
+    (F := iprop(strAt (BitVec.ofNat 64 nm).toNat x ∗ SgRest Wp Φ N inp p s r v (fnRender x) ρ H c o rv Mp))
+  rotate_left
+  · iframe Hview Hx Hrest Hms
+  intro F'
+  refine sg_cloN cx.hlive f0.h10 f0.h2 (by omega) hs2 hs3 cx.hg.al
+    (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi fc.hw8 fc.hc0 fc.hc7
+    fc.hq fc.hq0 fc.hq7 fc.hnm hnz fc.hcp fc.hql ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  iintro ⟨⟨#Hx, Hrest⟩, Hms⟩
+  ihave Hms := ms_iff hsl $$ Hms
+  ihave ⟨Hms, HB⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  ihave HB := ownSet_forget _ _ $$ HB
+  unfold SgRest
+  icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  ihave #Hgp := codeRes_gp $$ Hcode
+  have hsg' : SpIn (s + 18446744073709551504#64) snprintfNeed :=
+    ⟨by rw [e112]; unfold snprintfNeed Vsa.Sim.tohostAddr; omega, by rw [e112]; omega,
+      by rw [e112]; omega⟩
+  ihave #Hsp := Hout.snprintfFn live Wp (s + 18446744073709551504#64)
+    (s + 18446744073709551504#64 + 16#64) (BitVec.ofNat 64 nm) x (upd (upd (upd (upd (upd (upd (upd (upd R 15 (BitVec.ofNat 64 cp)) 15 (BitVec.ofNat 64 q)) 13
+      (BitVec.ofNat 64 nm)) 9 (s + 18446744073709551504#64 + 16#64))
+      10 (s + 18446744073709551504#64 + 16#64)) 12 2147586100#64) 12 2147586760#64) 11 64#64) cx.hcl hsg'
+  unfold snprintfFnSpec
+  rw [eB]
+  iapply (ms_callNewlib Wp (i := 0x80003040)
+    (jalx_80003040 live (fun q hq => cx.hlive _ (interp_code_80003040 q hq))) interp_code_80003040
+    (vs := [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c8#64, BitVec.ofNat 64 nm])
+    (P := fun _ => iprop(argsAt [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c8#64,
+        BitVec.ofNat 64 nm] ∗ blockOwn (s.toNat - 96) 64 ∗ strAt (BitVec.ofNat 64 nm).toNat x ∗
+      stdioOwn ∗ callFrame (s + 18446744073709551504#64) snprintfNeed Newlib.calleeSaved
+        (upd (upd (upd (upd (upd (upd (upd (upd R 15 (BitVec.ofNat 64 cp)) 15 (BitVec.ofNat 64 q)) 13
+      (BitVec.ofNat 64 nm)) 9 (s + 18446744073709551504#64 + 16#64))
+      10 (s + 18446744073709551504#64 + 16#64)) 12 2147586100#64) 12 2147586760#64) 11 64#64)))
+    (Q := fun _ => iprop(clobbered argRegs ∗
+      (∃ img, ownImg (InExt (s.toNat - 96, 64)) img ∗ ⌜CStrImg img (s.toNat - 96) (fnRender x)⌝) ∗
+      stdioOwn ∗ callFrame (s + 18446744073709551504#64) snprintfNeed Newlib.calleeSaved
+        (upd (upd (upd (upd (upd (upd (upd (upd R 15 (BitVec.ofNat 64 cp)) 15 (BitVec.ofNat 64 q)) 13
+      (BitVec.ofNat 64 nm)) 9 (s + 18446744073709551504#64 + 16#64))
+      10 (s + 18446744073709551504#64 + 16#64)) 12 2147586100#64) 12 2147586760#64) 11 64#64)))
+    (X := iprop(blockOwn (s.toNat - 96) 64 ∗ strAt (BitVec.ofNat 64 nm).toNat x ∗ stdioOwn))
+    (Y := iprop((∃ img, ownImg (InExt (s.toNat - 96, 64)) img ∗
+      ⌜CStrImg img (s.toNat - 96) (fnRender x)⌝) ∗ stdioOwn))
+    (need := snprintfNeed) (n := stringifyNeed - 112) (s := s + 18446744073709551504#64)
+    (R := upd (upd (upd (upd (upd (upd (upd (upd R 15 (BitVec.ofNat 64 cp)) 15 (BitVec.ofNat 64 q)) 13
+      (BitVec.ofNat 64 nm)) 9 (s + 18446744073709551504#64 + 16#64))
+      10 (s + 18446744073709551504#64 + 16#64)) 12 2147586100#64) 12 2147586760#64) 11 64#64) (S := sgFnb s p)
+    (by simp) (fun j hj => by
+      simp only [List.length_cons, List.length_nil] at hj
+      rcases j with _ | _ | _ | _ | j
+      · simp [upd]
+      · simp [upd]
+      · simp [upd]
+      · simp [upd]
+      · omega)
+    (by simp [upd, f0.h2]) (by rw [e112]; unfold stringifyNeed snprintfNeed; omega)
+    (by unfold stringifyNeed; omega)
+    (fun _ => by iintro ⟨Ha, ⟨Hb, Hs, Hio⟩, Hf⟩; iframe Ha Hb Hs Hio Hf)
+    (fun _ => by iintro ⟨Ha, Hd, Hs, Hf⟩; iframe Ha Hd Hs Hf))
+  unfold blockOwn snprintfEntry
+  iframe Hsp Hcode Hms HB Hx Hstd Hst Hgp Himg
+  iintro %R' %hk' ⟨Hd, Hstd⟩ Hms Hst
+  have k' : ∀ y ∈ fRegs, y ∉ callerSaved → R' y = _ := fun y hy hc' => hk' y hy hc'
+  iapply sg_filled Wp A HN cx hmc hc hlen (pc := 0x80003044#64) (.inr (.inr rfl))
+    (R := upd R' 1 (BitVec.ofNat 64 (0x80003040 + 4))) (M := M)
+    ⟨by ix_reg; rw [k' 9 (by decide) (by decide)]; simp [upd],
+      by ix_reg; rw [k' 2 (by decide) (by decide)]; simp [upd, f0.h2],
+      fun y hy hc' hy2 hy9 => by
+        have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+        have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc' (e ▸ hz)
+        simp only [upd, hy1, ite_false]
+        rw [k' y hy hc']
+        simp only [upd, hy9, hcl 10 (by decide), hcl 11 (by decide), hcl 12 (by decide),
+          hcl 13 (by decide), hcl 15 (by decide), ite_false]
+        exact f0.hk y hy hc' hy2,
+      f0.sra, f0.ss0, f0.ss1, f0.hslot⟩
+  unfold SgRest
+  iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
+
 end Glue
 
 end VsaIris.Interp
