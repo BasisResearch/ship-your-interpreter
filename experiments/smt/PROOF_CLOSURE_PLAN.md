@@ -4203,3 +4203,14 @@ every byte it reads. `stringify_spec` therefore takes
 `hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a`, a condition on the
 top-level `live` like `CodeLive`. Its supplier is the instantiation of
 `vsaModel live` at the boundary, which chooses `live`.
+
+### Iris route, E1: `ErrRoom` (Q7) is a named premise of the error arms
+
+`caseP_Var` and `caseP_Assign` (`VsaIris/Interp/Case/{Var,Assign}P.lean`)
+take `ErrRoom e d : rtErrNeed + evalFrame ≤ evalNeed e d`
+(`VsaIris/Interp/LeafErr.lean`). `runtime_error` runs at `sp = s - 1088` and
+needs `rtErrNeed = 1248` bytes; after the arm's frame the budget leaves
+`evalNeed e d - 1088 = 1088 + (maxCallDepth - d) * 6144` for a leaf, so the
+premise holds for `d < maxCallDepth` (`errRoom_of_lt`) and fails at
+`d = maxCallDepth` (INTERP_DESIGN.md Q7). Supplier: the user's Q7 decision
+(an error headroom in the boundary's budget, or depth accounting).
