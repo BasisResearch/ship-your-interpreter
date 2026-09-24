@@ -34,6 +34,36 @@ theorem read64_keep {m m' : Mem} {a : Nat} (h : ∀ k, k < 8 → m'[a + k]? = m[
     read64 m' a = read64 m a :=
   read64_agreeP (P := fun b => m'[b]? = m[b]?) (fun _ hb => hb) h
 
+/-- Two memories that read the same doubleword at `a` hold the same bytes
+there. -/
+theorem bytes_of_read64_eq {m m' : Mem} {a v : Nat} (h : read64 m a = some v)
+    (h' : read64 m' a = some v) : ∀ k, k < 8 → m'[a + k]? = m[a + k]? := by
+  obtain ⟨b0, b1, b2, b3, b4, b5, b6, b7, e0, e1, e2, e3, e4, e5, e6, e7, hv⟩ := read64_bytes m a v h
+  obtain ⟨c0, c1, c2, c3, c4, c5, c6, c7, f0, f1, f2, f3, f4, f5, f6, f7, hv'⟩ := read64_bytes m' a v h'
+  have l0 := b0.isLt; have l1 := b1.isLt; have l2 := b2.isLt; have l3 := b3.isLt
+  have l4 := b4.isLt; have l5 := b5.isLt; have l6 := b6.isLt; have l7 := b7.isLt
+  have k0 := c0.isLt; have k1 := c1.isLt; have k2 := c2.isLt; have k3 := c3.isLt
+  have k4 := c4.isLt; have k5 := c5.isLt; have k6 := c6.isLt; have k7 := c7.isLt
+  have q0 : c0 = b0 := BitVec.eq_of_toNat_eq (by omega)
+  have q1 : c1 = b1 := BitVec.eq_of_toNat_eq (by omega)
+  have q2 : c2 = b2 := BitVec.eq_of_toNat_eq (by omega)
+  have q3 : c3 = b3 := BitVec.eq_of_toNat_eq (by omega)
+  have q4 : c4 = b4 := BitVec.eq_of_toNat_eq (by omega)
+  have q5 : c5 = b5 := BitVec.eq_of_toNat_eq (by omega)
+  have q6 : c6 = b6 := BitVec.eq_of_toNat_eq (by omega)
+  have q7 : c7 = b7 := BitVec.eq_of_toNat_eq (by omega)
+  intro k hk
+  rcases k with _ | _ | _ | _ | _ | _ | _ | _ | k
+  · simpa [e0, f0] using congrArg some q0
+  · rw [e1, f1, q1]
+  · rw [e2, f2, q2]
+  · rw [e3, f3, q3]
+  · rw [e4, f4, q4]
+  · rw [e5, f5, q5]
+  · rw [e6, f6, q6]
+  · rw [e7, f7, q7]
+  · omega
+
 /-! ## Heap geometry -/
 
 section Geo
