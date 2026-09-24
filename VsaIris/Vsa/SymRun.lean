@@ -94,6 +94,14 @@ theorem upd_other (R : Nat → BitVec 64) {k r : Nat} (v : BitVec 64) (h : r ≠
     upd R k v r = R r := by
   simp [upd, h]
 
+/-- Updating a register to the value it holds changes nothing. -/
+theorem upd_self_eq {R : Nat → BitVec 64} {k : Nat} {v : BitVec 64} (h : R k = v) : upd R k v = R := by
+  funext r
+  unfold upd
+  by_cases hr : r = k
+  · subst hr; rw [if_pos rfl, h]
+  · rw [if_neg hr]
+
 /-- The pins of a register list read off a register file; `gp` reads its
 fixed value. -/
 def pinsOf (ks : List Nat) (R : Nat → BitVec 64) : GRegs :=
