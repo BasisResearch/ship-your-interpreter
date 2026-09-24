@@ -901,5 +901,397 @@ theorem forLoopT_loop (hlive : ∀ p ∈ interpText, live p.1)
 
 end Total
 
--- @@REST@@
+/-! ## Partial mode -/
+
+section Partial
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+
+/-- **The condition's evaluation, partial mode** (`forCondEvalT` through the
+Löb hypothesis). -/
+theorem forCondEvalP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
+    {Core K : IProp GF} {st : St} {d env : Nat} {init : Option Stmt} {c : Expr}
+    {step : Option Expr} {b : Stmt}
+    {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {m' : Nat}
+    (hh : StmtHead R s aS (BitVec.ofNat 64 inp) aRet aEnv) (hfg : ExecFrameGeom s)
+    (hsg : StackGeom (s + 18446744073709551440#64) m') (hfit : evalNeed c d ≤ m')
+    (hcb : c.bodiesBound perCallBudget = true) :
+    ms 0x8000426c#64 R (execS s) Mt ∗ codeRes ∗ □ astSG aS.toNat (.forStmt init (some c) step b) ∗
+      □ frameAt env aEnv.toNat ∗ stackScratch (s + 18446744073709551440#64) m' ∗
+      world N L Room inp .uncounted st d ∗ evalSpecsP (vsaModel live) N L Room inp Core ∗
+      (K ∧ (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ ownSet (execS s) byteAny) -∗
+        (wpW (vsaModel live)).W Φ)) ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St) (v : Value), ⌜EvalE st d env c st' v⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = (if v.truthy then 1#64 else 0#64) ∧
+          Untouched (execS s) (execW s) Mt Mt'⌝ -∗
+        ms 0x800042a4#64 R' (execS s) Mt' -∗ stackScratch (s + 18446744073709551440#64) m' -∗
+        world N L Room inp .uncounted st' d -∗
+        (K ∧ (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ ownSet (execS s) byteAny) -∗
+          (wpW (vsaModel live)).W Φ)) -∗ (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  iintro ⟨Hms, #Hcode, #Hast, #Hfr, Hst, Hw, #HE, HK, Hk⟩
+  iapply forCondStage (wpW _) hlive hh
+  iframe Hms Hcode Hast
+  iintro %R1 %aC %⟨hregs, hk1⟩ #Hac Hms
+  ihave Hc := evalSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env c $$ HE
+  iapply ms_callEvalPx (N := N) (L := L) (Room := Room) (inp := inp) (X := iprop(emp)) (Kret := K)
+    (i := 0x80004280) (jalx_80004280 live (fun p hp => hlive _ (interp_code_80004280 p hp)))
+    interp_code_80004280 (by decide) (hsg.narrow hfit) hfit hsg.le
+    (execSlot hfg (o := 104) (by omega) rfl).geo hcb
+  iframe Hc Hcode Hac Hfr Hms Hst Hw HK
+  isplitl []
+  · ipureintro; exact ⟨hregs, execSlot_in (execSlot hfg (o := 104) (by omega) rfl) (by omega)⟩
+  isplitl []
+  · inext; iempintro
+  iintro %R2 %w0 %w1 %w2 %st' %v %hE %hk2 #Hv Hms Hst Hw - HK
+  iapply forCopy (wpW _) (R := upd R2 1 (BitVec.ofNat 64 (0x80004280 + 4))) hlive htr hfg
+    (by ix_reg; rw [keep_reg hk2 (by decide)]; exact hregs.sp)
+  iframe Hms Hcode Hv
+  iintro %R3 %Mt3 %⟨hk3, h30, hut⟩ Hms
+  iapply Hk $$ %R3 %Mt3 %st' %v %hE
+    %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30, hut⟩
+    Hms Hst Hw HK
+
+/-- **The body, partial mode** (`forBodyT` through the Löb hypothesis); the
+body's `jal` also strips the later of `X`. -/
+theorem forBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    {Core K X : IProp GF} {st : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr}
+    {b : Stmt} {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {m' : Nat}
+    (hh : StmtHead R s aS (BitVec.ofNat 64 inp) aRet aEnv)
+    (hsg : StackGeom (s + 18446744073709551440#64) m') (hfit : execNeed b d ≤ m')
+    (hbb : b.bodiesBound perCallBudget = true) (hslg : SlotGeom aRet) :
+    ms 0x800042a8#64 R (execS s) Mt ∗ codeRes ∗ □ astSG aS.toNat (.forStmt init cnd step b) ∗
+      □ frameAt env aEnv.toNat ∗ stackScratch (s + 18446744073709551440#64) m' ∗
+      slot24 aRet.toNat ∗ world N L Room inp .uncounted st d ∗
+      execSpecsP (vsaModel live) N L Room inp Core ∗ ▷ X ∗
+      (K ∧ (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+        ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ)) ∗
+      (∀ (R' : Nat → BitVec 64) (st' : St) (status : Status), ⌜ExecS st d env b st' status⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = whileA0 status⌝ -∗
+        ms (forNext status) R' (execS s) Mt -∗ stackScratch (s + 18446744073709551440#64) m' -∗
+        statusRet N aRet.toNat status -∗ world N L Room inp .uncounted st' d -∗ X -∗
+        (K ∧ (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+          ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ)) -∗ (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  iintro ⟨Hms, #Hcode, #Hast, #Hfr, Hst, Hslot, Hw, #HS, HX, HK, Hk⟩
+  iapply forStageBody (wpW _) hlive hh
+  iframe Hms Hcode Hast
+  iintro %R1 %aB %⟨hregs, hk1⟩ #Hab Hms
+  ihave Hb := execSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env b $$ HS
+  iapply ms_callExecPx (N := N) (L := L) (Room := Room) (inp := inp) (Kret := K) (X := X)
+    (i := 0x800042b8) (jalx_800042b8 live (fun p hp => hlive _ (interp_code_800042b8 p hp)))
+    interp_code_800042b8 (by decide) (hsg.narrow hfit) hfit hsg.le hslg hbb
+  iframe Hb HX Hcode Hab Hfr Hms Hst Hslot Hw HK
+  isplitl []
+  · ipureintro; exact hregs
+  iintro %R2 %st' %status %hE %⟨hk2, h20⟩ Hms Hst Hret Hw HX HK
+  iapply forRoute (wpW _) (R := upd R2 1 (BitVec.ofNat 64 (0x800042b8 + 4))) hlive
+    (by ix_reg; exact h20)
+  iframe Hms Hcode
+  iintro %R3 %⟨hk3, h30⟩ Hms
+  iapply Hk $$ %R3 %st' %status %hE
+    %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30⟩
+    Hms Hst Hret Hw HX HK
+
+/-- **The step, partial mode**: from `0x80004264` to the loop head with the
+`ExecStep` derivation (the step's value discarded). -/
+theorem forStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    {Core K : IProp GF} {st : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr}
+    {b : Stmt} {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {m' : Nat}
+    (hh : StmtHead R s aS (BitVec.ofNat 64 inp) aRet aEnv) (hfg : ExecFrameGeom s)
+    (hsg : StackGeom (s + 18446744073709551440#64) m') (hfits : ForFits d cnd step b m') :
+    ms 0x80004264#64 R (execS s) Mt ∗ codeRes ∗ □ astSG aS.toNat (.forStmt init cnd step b) ∗
+      □ frameAt env aEnv.toNat ∗ stackScratch (s + 18446744073709551440#64) m' ∗
+      world N L Room inp .uncounted st d ∗ evalSpecsP (vsaModel live) N L Room inp Core ∗
+      (K ∧ (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ ownSet (execS s) byteAny) -∗
+        (wpW (vsaModel live)).W Φ)) ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St), ⌜ExecStep st d env step st'⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ Untouched (execS s) (execW s) Mt Mt'⌝ -∗
+        ms 0x8000426c#64 R' (execS s) Mt' -∗ stackScratch (s + 18446744073709551440#64) m' -∗
+        world N L Room inp .uncounted st' d -∗
+        (K ∧ (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ ownSet (execS s) byteAny) -∗
+          (wpW (vsaModel live)).W Φ)) -∗ (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  iintro ⟨Hms, #Hcode, #Hast, #Hfr, Hst, Hw, #HE, HK, Hk⟩
+  cases step with
+  | none =>
+    iapply forStepNone (wpW _) hlive hh
+    iframe Hms Hcode Hast
+    iintro %R' %hk Hms
+    iapply Hk $$ %R' %Mt %st %(ExecStep.none _ _ _) %⟨hk, Untouched.refl _ _ _⟩ Hms Hst Hw HK
+  | some e =>
+    obtain ⟨hfit, heb⟩ := hfits.step e rfl
+    have hs16 := execSlot hfg (o := 16) (by omega) rfl
+    iapply forStepStage (wpW _) hlive hh
+    iframe Hms Hcode Hast
+    iintro %R1 %aE %⟨hregs, hk1⟩ #Hae Hms
+    ihave He := evalSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env e $$ HE
+    iapply ms_callEvalPx (N := N) (L := L) (Room := Room) (inp := inp) (X := iprop(emp)) (Kret := K)
+      (i := 0x800042e8) (jalx_800042e8 live (fun p hp => hlive _ (interp_code_800042e8 p hp)))
+      interp_code_800042e8 (by decide) (hsg.narrow hfit) hfit hsg.le hs16.geo heb
+    iframe He Hcode Hae Hfr Hms Hst Hw HK
+    isplitl []
+    · ipureintro; exact ⟨hregs, execSlot_in hs16 (by omega)⟩
+    isplitl []
+    · inext; iempintro
+    iintro %R2 %w0 %w1 %w2 %st' %v %hE %hk2 #_ Hms Hst Hw - HK
+    iapply forJoin (wpW _) hlive (.inr rfl)
+    iframe Hms Hcode
+    iintro Hms
+    iapply Hk $$ %_ %_ %st' %(ExecStep.some _ _ _ _ _ _ hE)
+      %⟨KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _),
+        Untouched.slotWrite hs16 (Nat.le_refl _) (by omega) Mt w0 w1 w2⟩ Hms Hst Hw HK
+
+/-- `forLoopP_body` as one Iris proposition: the statement Löb is taken over. -/
+abbrev forLoopPI (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : Stmt) :
+    IProp GF :=
+  iprop(∀ (Φ : Nat × String → IProp GF) (st : St) (init : Option Stmt) (aS aEnv aRet s : BitVec 64)
+      (R : Nat → BitVec 64) (Mt : Mem) (m' : Nat),
+    ⌜StmtHead R s aS (BitVec.ofNat 64 inp) aRet aEnv ∧ ExecFrameGeom s ∧
+      StackGeom (s + 18446744073709551440#64) m' ∧ ForFits d cnd step b m' ∧ SlotGeom aRet⌝ -∗
+    (ms 0x8000426c#64 R (execS s) Mt ∗ codeRes ∗ □ astSG aS.toNat (.forStmt init cnd step b) ∗
+      □ frameAt env aEnv.toNat ∗ stackScratch (s + 18446744073709551440#64) m' ∗
+      slot24 aRet.toNat ∗ world N L Room inp .uncounted st d ∗
+      evalSpecsP (vsaModel live) N L Room inp Core ∗ execSpecsP (vsaModel live) N L Room inp Core ∗
+      ((∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St) (status : Status),
+        ⌜ForLoop st d env cnd step b st' status⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status ∧
+          Untouched (execS s) (execW s) Mt Mt'⌝ -∗
+        ms (loopExit status) R' (execS s) Mt' -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ) ∧
+       (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+          ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ))) -∗
+    (wpW (vsaModel live)).W Φ)
+
+/-- The loop's exit pair at a head state, as a proposition (what each branch
+of an iteration hands on). -/
+abbrev forExitK (Core : IProp GF) (Φ : Nat × String → IProp GF) (st : St) (d env : Nat)
+    (cnd step : Option Expr) (b : Stmt) (aRet s : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem)
+    (m' : Nat) : IProp GF :=
+  iprop((∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St) (status : Status),
+        ⌜ForLoop st d env cnd step b st' status⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status ∧
+          Untouched (execS s) (execW s) Mt Mt'⌝ -∗
+        ms (loopExit status) R' (execS s) Mt' -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ) ∧
+       (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+          ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ))
+
+theorem forExitK_ret {Core : IProp GF} {Φ : Nat × String → IProp GF} {st : St} {d env : Nat}
+    {cnd step : Option Expr} {b : Stmt} {aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
+    {m' : Nat} :
+    forExitK (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+        Core Φ st d env cnd step b aRet s R Mt m' ⊢
+      ∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St) (status : Status),
+        ⌜ForLoop st d env cnd step b st' status⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status ∧
+          Untouched (execS s) (execW s) Mt Mt'⌝ -∗
+        ms (loopExit status) R' (execS s) Mt' -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ :=
+  and_elim_l
+
+theorem forExitK_abort {Core : IProp GF} {Φ : Nat × String → IProp GF} {st : St} {d env : Nat}
+    {cnd step : Option Expr} {b : Stmt} {aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
+    {m' : Nat} :
+    forExitK (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+        Core Φ st d env cnd step b aRet s R Mt m' ⊢
+      iprop(abortAt Core (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+          ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ :=
+  and_elim_r
+
+/-- **One iteration from the body's staging** (partial mode): the body, then
+out, or the step and the next iteration through `X` (the Löb hypothesis,
+whose later the body's `jal` pays). -/
+theorem forFromBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    {Core : IProp GF} {st st1 : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr}
+    {b : Stmt} {aS aEnv aRet s : BitVec 64} {R R1 : Nat → BitVec 64} {Mt Mt1 : Mem} {m' : Nat}
+    (hfc : ForCond st d env cnd st1) (hk1 : KeepRegs calleeSaved R R1)
+    (hut1 : Untouched (execS s) (execW s) Mt Mt1)
+    (hh : StmtHead R s aS (BitVec.ofNat 64 inp) aRet aEnv) (hfg : ExecFrameGeom s)
+    (hsg : StackGeom (s + 18446744073709551440#64) m') (hfits : ForFits d cnd step b m')
+    (hslg : SlotGeom aRet) :
+    ms 0x800042a8#64 R1 (execS s) Mt1 ∗ codeRes ∗ □ astSG aS.toNat (.forStmt init cnd step b) ∗
+      □ frameAt env aEnv.toNat ∗ stackScratch (s + 18446744073709551440#64) m' ∗
+      slot24 aRet.toNat ∗ world N L Room inp .uncounted st1 d ∗
+      evalSpecsP (vsaModel live) N L Room inp Core ∗ execSpecsP (vsaModel live) N L Room inp Core ∗
+      ▷ forLoopPI (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+        Core d env cnd step b ∗
+      forExitK (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+        Core Φ st d env cnd step b aRet s R Mt m'
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  iintro ⟨Hms, #Hcode, #Hast, #Hfr, Hst, Hslot, Hw, #HE, #HS, HX, HK⟩
+  have hh1 := hh.keep hk1
+  iapply forBodyP (init := init) (cnd := cnd) (step := step)
+    (X := forLoopPI (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+      Core d env cnd step b)
+    (K := forExitK (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+      Core Φ st d env cnd step b aRet s R Mt m')
+    hlive hh1 hsg hfits.body hfits.bodyB hslg
+  iframe Hms Hcode Hast Hfr Hst Hslot Hw HS HX
+  isplitl [HK]
+  · isplit
+    · iexact HK
+    · iapply forExitK_abort $$ HK
+  iintro %R2 %st2 %status %hE2 %⟨hk2, h20⟩ Hms Hst Hret Hw HX HK
+  cases status with
+  | brk =>
+    simp only [forNext, whileA0]
+    ihave HK := and_elim_l $$ HK
+    ihave HK := forExitK_ret $$ HK
+    rw [← loopExit_normal, statusRet_brk, ← statusRet_normal (GF := GF) N]
+    iapply HK $$ %R2 %Mt1 %st2 %.normal %(ForLoop.bodyBreak _ _ _ _ _ _ _ _ hfc hE2)
+      %⟨KeepRegs.trans hk1 hk2, h20, hut1⟩ Hms Hst Hret Hw
+  | ret rv =>
+    simp only [forNext]
+    ihave HK := and_elim_l $$ HK
+    ihave HK := forExitK_ret $$ HK
+    rw [← loopExit_ret rv]
+    iapply HK $$ %R2 %Mt1 %st2 %(.ret rv) %(ForLoop.bodyRet _ _ _ _ _ _ _ _ _ hfc hE2)
+      %⟨KeepRegs.trans hk1 hk2, h20, hut1⟩ Hms Hst Hret Hw
+  | normal | cont =>
+    simp only [forNext, statusRet_normal, statusRet_cont]
+    have hh2 := hh1.keep hk2
+    ihave HK := and_elim_l $$ HK
+    iapply forStepP (K := iprop(slot24 aRet.toNat ∗
+        forLoopPI (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+          Core d env cnd step b ∗
+        forExitK (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+          Core Φ st d env cnd step b aRet s R Mt m'))
+      hlive hh2 hfg hsg hfits
+    iframe Hms Hcode Hast Hfr Hst Hw HE
+    isplitl [HK HX Hret]
+    · isplit
+      · iframe HK HX Hret
+      · iintro ⟨HA, HO⟩
+        ihave HK := forExitK_abort $$ HK
+        iapply HK $$ [HA Hret HO]
+        iframe HA Hret HO
+    iintro %R3 %Mt3 %st3 %hS3 %⟨hk3, hut3⟩ Hms Hst Hw HK
+    ihave ⟨Hslot, HX, HK⟩ := and_elim_l $$ HK
+    iapply HX $$ %Φ %st3 %init %aS %aEnv %aRet %s %R3 %Mt3 %m' %⟨hh2.keep hk3, hfg, hsg, hfits, hslg⟩
+    iframe Hms Hcode Hast Hfr Hst Hslot Hw HE HS
+    isplit
+    · iintro %R4 %Mt4 %st4 %status4 %hL4 %⟨hk4, h40, hut4⟩ Hms Hst Hret Hw
+      ihave HK := forExitK_ret $$ HK
+      iapply HK $$ %R4 %Mt4 %st4 %status4
+        %(ForLoop.loop _ _ _ _ _ _ _ _ _ _ _ _ hfc hE2 (by first | exact .inl rfl | exact .inr rfl) hS3 hL4)
+        %⟨KeepRegs.trans (KeepRegs.trans (KeepRegs.trans hk1 hk2) hk3) hk4, h40,
+          (hut1.trans hut3).trans hut4⟩ Hms Hst Hret Hw
+    · iapply forExitK_abort $$ HK
+
+/-- **The `for` loop, partial mode, by Löb**: one iteration from the head
+(the condition: out or on to the body), the rest through `forFromBodyP`. -/
+theorem forLoopPI_loeb (hlive : ∀ p ∈ interpText, live p.1)
+    (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
+    (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : Stmt) :
+    ⊢ forLoopPI (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+        Core d env cnd step b := by
+  iapply loeb_wand
+  imodintro
+  iintro Hlob
+  iintro %Φ %st %init %aS %aEnv %aRet %s %R %Mt %m' %⟨hh, hfg, hsg, hfits, hslg⟩
+    ⟨Hms, #Hcode, #Hast, #Hfr, Hst, Hslot, Hw, #HE, #HS, HK⟩
+  cases cnd with
+  | none =>
+    iapply forCondNone (wpW _) hlive hh
+    iframe Hms Hcode Hast
+    iintro %R1 %hk1 Hms
+    iapply forFromBodyP hlive (ForCond.none _ _ _) hk1 (Untouched.refl _ _ _) hh hfg hsg hfits hslg
+    iframe Hms Hcode Hast Hfr Hst Hslot Hw HE HS Hlob
+    iexact HK
+  | some c =>
+    obtain ⟨hfit, hcb⟩ := hfits.cond c rfl
+    iapply forCondEvalP (K := iprop(slot24 aRet.toNat ∗
+        forExitK (GF := GF) (live := live) (N := N) (L := L) (Room := Room) (inp := inp)
+          Core Φ st d env (some c) step b aRet s R Mt m'))
+      hlive htr hh hfg hsg hfit hcb
+    iframe Hms Hcode Hast Hfr Hst Hw HE
+    isplitl [HK Hslot]
+    · isplit
+      · iframe Hslot HK
+      · iintro ⟨HA, HO⟩
+        ihave HK := and_elim_r $$ HK
+        iapply HK $$ [HA Hslot HO]
+        iframe HA Hslot HO
+    iintro %R1 %Mt1 %st1 %v %hE1 %⟨hk1, h10, hut1⟩ Hms Hst Hw HK
+    ihave ⟨Hslot, HK⟩ := and_elim_l $$ HK
+    iapply forBranch (wpW _) hlive
+    iframe Hms Hcode
+    isplit
+    · iintro %h0 Hms
+      cases hv : v.truthy with
+      | true => exfalso; rw [hv] at h10; rw [h10] at h0; exact absurd h0 (by decide)
+      | false =>
+        ihave HK := forExitK_ret $$ HK
+        rw [← loopExit_normal, ← statusRet_normal (GF := GF) N]
+        iapply HK $$ %_ %Mt1 %st1 %.normal %(ForLoop.condFalse _ _ _ _ _ _ _ _ hE1 hv)
+          %⟨hk1.calleeSaved_upd (by decide) _, by ix_reg; rfl, hut1⟩ Hms Hst Hslot Hw
+    · iintro %h0 Hms
+      cases hv : v.truthy with
+      | false => exfalso; rw [hv] at h10; exact h0 (by simpa using h10)
+      | true =>
+        iapply forFromBodyP hlive (ForCond.some _ _ _ _ _ _ hE1 hv) hk1 hut1 hh hfg hsg hfits hslg
+        iframe Hms Hcode Hast Hfr Hst Hslot Hw HE HS Hlob
+        iexact HK
+
+/-- **The `for` loop, partial mode** (`forLoopP_body`), for every loop. -/
+theorem forLoopP_all (hlive : ∀ p ∈ interpText, live p.1)
+    (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
+    (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : Stmt) :
+    forLoopP_body (GF := GF) live N L Room inp Core d env cnd step b := by
+  intro Φ st init aS aEnv aRet s R Mt m' hh hfg hsg hfits hslg
+  have H := forLoopPI_loeb (L := L) (Room := Room) (inp := inp) hlive htr Core d env cnd step b
+  iintro Hpre
+  ihave H := H
+  iapply H $$ %Φ %st %init %aS %aEnv %aRet %s %R %Mt %m' %⟨hh, hfg, hsg, hfits, hslg⟩ Hpre
+
+/-- **The `for` init, partial mode** (`execInitP_body`), for every init. -/
+theorem execInitP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF) (d outer : Nat) :
+    ∀ init, execInitP_body (GF := GF) live N L Room inp Core d outer init := by
+  intro init Φ st cnd step b aS aOuter aRet s R Mt m' hh _ hsg hfits hslg
+  iintro ⟨Hms, #Hcode, #Hast, #Hfr, Hst, Hslot, Hw, #HS, HK⟩
+  cases init with
+  | none =>
+    iapply forInitNone (wpW _) hlive hh
+    iframe Hms Hcode Hast
+    iintro %R' %hk Hms
+    ihave HK := and_elim_l $$ HK
+    iapply HK $$ %R' %st %(ExecInit.none _ _ _) %hk Hms Hst Hslot Hw
+  | some i =>
+    obtain ⟨hfit, hib⟩ := hfits i rfl
+    iapply forInitStage (wpW _) hlive hh
+    iframe Hms Hcode Hast
+    iintro %R1 %aI %⟨hregs, hk1, h19⟩ #Hai Hms
+    ihave Hi := execSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d outer i $$ HS
+    iapply ms_callExecP (N := N) (L := L) (Room := Room) (inp := inp)
+      (Kret := iprop(∀ (R' : Nat → BitVec 64) (st' : St),
+        ⌜ExecInit st d outer (some i) st'⌝ -∗ ⌜KeepRegs initKeep R R' ∧ R' 19 = aOuter⌝ -∗
+        ms 0x8000426c#64 R' (execS s) Mt -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ slot24 aRet.toNat -∗
+        world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ))
+      (i := 0x80004254) (jalx_80004254 live (fun p hp => hlive _ (interp_code_80004254 p hp)))
+      interp_code_80004254 (by decide) (hsg.narrow hfit) hfit hsg.le hslg hib
+    iframe Hi Hcode Hai Hfr Hms Hst Hslot Hw HK
+    isplitl []
+    · ipureintro; exact hregs
+    iintro %R2 %st' %status %hE %⟨hk2, -⟩ Hms Hst Hret Hw HK
+    ihave Hslot := statusRet_slot N _ status $$ Hret
+    ihave HK := and_elim_l $$ HK
+    iapply forJoin (wpW _) hlive (.inl rfl)
+    iframe Hms Hcode
+    iintro Hms
+    have hk2c : KeepRegs calleeSaved R1 (upd R2 1 (BitVec.ofNat 64 (0x80004254 + 4))) :=
+      hk2.calleeSaved_upd (by decide) _
+    iapply HK $$ %_ %st' %(ExecInit.some _ _ _ _ _ _ hE)
+      %⟨KeepRegs.trans hk1 (KeepRegs.sub hk2c (by decide)), (hk2c 19 (by decide)).trans h19⟩
+      Hms Hst Hslot Hw
+
+end Partial
+
 end VsaIris.Interp
