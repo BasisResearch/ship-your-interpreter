@@ -19,7 +19,7 @@ page-aligned heap:
 
 namespace VsaIris.VsaHeap
 
-open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast VsaIris.Sym
 
 /-- **A live block leaves the list.** -/
 theorem PHeapAt.drop {m : Mem} {e : Nat × Nat} {H : List (Nat × Nat)} {top brkv : Nat}
@@ -1011,5 +1011,269 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact absurd h1.symm (hno e he)
     · exact ⟨c, by simp, hu, h1, h2⟩
     · exact ⟨c, by simp [h3], hu, h1, h2⟩
+
+/-- Reflagging at `q` changes only the chunk ending there. -/
+theorem map_reflag_eq {q : Nat} {b : Bool} {cs₁ cs₂ : List Chunk} {N : Chunk}
+    (hN : N.addr + N.size = q) (h1 : ∀ c ∈ cs₁, c.addr + c.size ≠ q)
+    (h2 : ∀ c ∈ cs₂, c.addr + c.size ≠ q) :
+    (cs₁ ++ N :: cs₂).map (reflag q b) = cs₁ ++ { N with inuse := b } :: cs₂ := by
+  rw [List.map_append, List.map_cons]
+  have e1 : cs₁.map (reflag q b) = cs₁ := by
+    rw [List.map_congr_left (g := id) fun c hc => by simp [reflag, h1 c hc], List.map_id]
+  have e2 : cs₂.map (reflag q b) = cs₂ := by
+    rw [List.map_congr_left (g := id) fun c hc => by simp [reflag, h2 c hc], List.map_id]
+  rw [e1, e2]
+  simp [reflag, hN]
+
+/-- The chunks of a walk end at distinct places: only `N` ends where it does. -/
+theorem walk_ends_ne {m : Mem} {p top : Nat} {cs₁ cs₂ : List Chunk} {N : Chunk}
+    (hw : ChunkWalk m p top (cs₁ ++ N :: cs₂)) :
+    (∀ c ∈ cs₁, c.addr + c.size ≠ N.addr + N.size) ∧ (∀ c ∈ cs₂, c.addr + c.size ≠ N.addr + N.size) := by
+  have hb := hw.chunk_bounds
+  have hs := hw.chunk_sep
+  have hN : N ∈ cs₁ ++ N :: cs₂ := by simp
+  obtain ⟨mid, W1, W2⟩ := hw.append_inv
+  have HN := walkHead W2
+  have hW1b := W1.chunk_bounds
+  have hW2b := HN.rest.chunk_bounds
+  refine ⟨fun c hc => ?_, fun c hc => ?_⟩
+  · have := hW1b c hc; have := HN.min; have := HN.addr; omega
+  · have := hW2b c hc; have := HN.addr; omega
+
+/-- **Coalesce with the next chunk.** The in-use chunk `Y` of size `a` absorbs
+the free chunk after it (size `b`, on bin `i`): the free chunk is unlinked
+(its `pred`'s `fd` and `succ`'s `bk`) and marked in use in a virtual header,
+and `Y`'s header records `a + b`; the absorbed header may hold any word. -/
+theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {Y a b : Nat}
+    (h : PHeapAt m H top brkv (cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs₂) bins)
+    {i : Nat} (hi0 : 0 < i) (hi : i < numBins) {pre post : List Nat} {pred succ : Nat}
+    (hbin : bins i = pre ++ (Y + a) :: post)
+    (hpred : (binAt i :: pre).getLast? = some pred) (hsucc : (post ++ [binAt i]).head? = some succ)
+    {hdn : Nat} (hdnr : read64 m (Y + a + b + 8) = some hdn)
+    {h' : Nat} (hsz' : chunkSize h' = a + b) (hlow' : h' % 4 < 2)
+    (hpi' : ∀ h0, read64 m (Y + 8) = some h0 → prevInuse h' = prevInuse h0) (vx : BitVec 64) :
+    PHeapAt (writeLog (writeLog (writeLog (writeLog (writeLog m
+      [(pred + 16, 8, BitVec.ofNat 64 succ)]) [(succ + 24, 8, BitVec.ofNat 64 pred)])
+      [(Y + a + b + 8, 8, BitVec.ofNat 64 (hdn ||| 1))]) [(Y + 8, 8, BitVec.ofNat 64 h')])
+      [(Y + a + 8, 8, vx)]) H top brkv (cs₁ ++ ⟨Y, a + b, true⟩ :: cs₂)
+      (updBins bins i (pre ++ post)) := by
+  have HH := h.heap.heap
+  obtain ⟨hal, htop16⟩ := HH.aligned
+  have hN : (⟨Y + a, b, false⟩ : Chunk) ∈ cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs₂ := by simp
+  have hX : (⟨Y, a, true⟩ : Chunk) ∈ cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs₂ := by simp
+  have hNb := HH.walk.chunk_bounds _ hN
+  have hXb := HH.walk.chunk_bounds _ hX
+  have hN16 := hal _ hN; have hX16 := hal _ hX
+  simp only at hNb hXb hN16 hX16
+  have hbrk := HH.brk_le; have htle := HH.top_le
+  have hlo := HH.walk.le
+  unfold heapStart heapEnd at *
+  -- the neighbours of the free chunk
+  have hw : ChunkWalk m heapStart top ((cs₁ ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: cs₂) := by
+    simpa using HH.walk
+  have HH' : HeapAt m H (fun e => e ∈ H) top brkv ((cs₁ ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: cs₂) bins := by
+    simpa using HH
+  have NB := HH'.freeNbrs
+  obtain ⟨d, cs₃, rfl⟩ : ∃ d cs₃, cs₂ = d :: cs₃ := by
+    rcases hc : cs₂ with _ | ⟨d, cs₃⟩
+    · exfalso
+      obtain ⟨_, hn⟩ := walk_next_of hw
+      rw [hc] at hn
+      rcases hn with ⟨h1, _⟩ | ⟨_, _, h1, _⟩
+      · exact NB.not_top h1
+      · cases h1
+    · exact ⟨d, cs₃, rfl⟩
+  have hdin : d.inuse = true := NB.next d rfl
+  obtain ⟨_, hdnext⟩ := walk_next_of hw
+  have hda : d.addr = Y + a + b := by
+    rcases hdnext with ⟨_, h1⟩ | ⟨d', cs', h1, h2⟩
+    · cases h1
+    · simp only [List.cons.injEq] at h1; rw [h1.1]; exact h2
+  have hdm : d ∈ cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d :: cs₃ := by simp
+  obtain ⟨hdh, hdhr, _, hdhl⟩ := walk_header HH.walk d hdm
+  rw [hda, hdnr] at hdhr
+  obtain rfl : hdn = hdh := Option.some.inj hdhr
+  -- the bin nodes
+  have hvmem : Y + a ∈ bins i := by rw [hbin]; exact List.mem_append_right _ List.mem_cons_self
+  have hpredm : pred = binAt i ∨ pred ∈ bins i := by
+    have := List.mem_of_getLast? hpred
+    rcases List.mem_cons.mp this with h1 | h1
+    · exact .inl h1
+    · exact .inr (by rw [hbin]; exact List.mem_append_left _ h1)
+  have hsuccm : succ = binAt i ∨ succ ∈ bins i := by
+    have := List.mem_of_head? hsucc
+    rcases List.mem_append.mp this with h1 | h1
+    · exact .inr (by rw [hbin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
+    · exact .inl (List.mem_singleton.mp h1)
+  obtain ⟨hp16, hpnode⟩ := HH.node hi0 hi hpredm
+  obtain ⟨hs16, hsnode⟩ := HH.node hi0 hi hsuccm
+  have hnnb : (Y + a + b = top ∨ ∃ c ∈ cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d :: cs₃,
+      c.addr = Y + a + b) := .inr ⟨d, hdm, hda⟩
+  have hYb : (Y = top ∨ ∃ c ∈ cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d :: cs₃, c.addr = Y) :=
+    .inr ⟨_, hX, rfl⟩
+  have hsn := HH.bnd_ne_node hi hsnode hnnb 16 (by omega) (by omega)
+  have hsY := HH.bnd_ne_node hi hsnode hYb 16 (by omega) (by omega)
+  have hpv := Vsa.Sim.read64_lt _ _ _ hdnr
+  have hpl : pred < 2 ^ 64 := by
+    rcases hpnode with rfl | ⟨cx, hcx, rfl, _, _⟩
+    · have := binAt_geo i hi; omega
+    · have := HH.walk.chunk_bounds cx hcx; omega
+  have hsl : succ < 2 ^ 64 := by
+    rcases hsnode with rfl | ⟨cx, hcx, rfl, _, _⟩
+    · have := binAt_geo i hi; omega
+    · have := HH.walk.chunk_bounds cx hcx; omega
+  -- step 1: unlink the free chunk
+  generalize hM1 : writeLog (writeLog (writeLog m [(pred + 16, 8, BitVec.ofNat 64 succ)])
+    [(succ + 24, 8, BitVec.ofNat 64 pred)]) [(Y + a + b + 8, 8, BitVec.ofNat 64 (hdn ||| 1))] = M1
+  have hor1 : (hdn ||| 1) = hdn / 2 * 2 + 1 := by
+    have h1 : (hdn ||| 1) / 2 = hdn / 2 := by
+      have := Nat.or_div_two_pow (a := hdn) (b := 1) (n := 1); simpa using this
+    have h2 : (hdn ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
+    have := Nat.div_add_mod (hdn ||| 1) 2
+    omega
+  have hor1lt : hdn ||| 1 < 2 ^ 64 := by rw [hor1]; omega
+  have hd16 := hal d hdm
+  rw [hda] at hd16
+  have H1 := h.take hi0 hi hbin hN rfl (n := 0) (by simp only; omega) hpred hsucc
+    (m' := M1) (hd' := hdn ||| 1)
+    (by show read64 _ (pred + 16) = _
+        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
+          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl])
+    (by show read64 _ (succ + 24) = _
+        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_hit, BitVec.toNat_ofNat,
+          Nat.mod_eq_of_lt hpl])
+    (by simp only; rw [← hM1, read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hor1lt])
+    (fun hd hr => by
+      simp only at hr; rw [hdnr] at hr; cases hr
+      unfold chunkSize; rw [hor1]; omega)
+    (by unfold prevInuse; rw [hor1]; simp)
+    (fun a' ha' hna => by
+      unfold TakeW at hna; simp only at hna
+      rw [← hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
+  have H1' := H1.drop
+  simp only at H1'
+  have hends := walk_ends_ne (cs₁ := cs₁ ++ [⟨Y, a, true⟩]) (N := ⟨Y + a, b, false⟩) (cs₂ := d :: cs₃) hw
+  simp only at hends
+  rw [show cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d :: cs₃ =
+    (cs₁ ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: d :: cs₃ by simp,
+    map_reflag_eq (q := Y + a + b) rfl hends.1 hends.2] at H1'
+  simp only [List.append_assoc, List.singleton_append] at H1'
+  -- step 2: absorb it
+  have hno : ∀ e ∈ H, e.1 ≠ Y + a + 16 := by
+    intro e he heq
+    obtain ⟨c, hc, hu, h1, _⟩ := HH.exact e he he
+    have := HH.chunk_eq hc hN (by simp only; omega)
+    rw [this] at hu; cases hu
+  have hY8 : read64 M1 (Y + 8) = read64 m (Y + 8) := by
+    rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
+      read64_store_miss _ _ (by omega)]
+  have hh'lt : h' < 2 ^ 64 := by unfold chunkSize at hsz'; omega
+  exact H1'.absorb hno (by rw [read64_store_miss _ _ (by omega), read64_store_hit,
+      BitVec.toNat_ofNat, Nat.mod_eq_of_lt hh'lt]) hsz' hlow'
+    (fun h0 hr => hpi' h0 (by rw [← hY8]; exact hr))
+    (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
+
+/-- **Coalesce with the previous chunk.** The free chunk `P` of size `a` (on
+bin `i`) absorbs the in-use chunk after it (size `b`, holding no block,
+`hno`): `P` is unlinked and marked in use in a virtual header, and `P`'s
+header records `a + b`; the absorbed header may hold any word. -/
+theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {P a b : Nat}
+    (h : PHeapAt m H top brkv (cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂) bins)
+    (hno : ∀ e ∈ H, e.1 ≠ P + a + 16)
+    {i : Nat} (hi0 : 0 < i) (hi : i < numBins) {pre post : List Nat} {pred succ : Nat}
+    (hbin : bins i = pre ++ P :: post)
+    (hpred : (binAt i :: pre).getLast? = some pred) (hsucc : (post ++ [binAt i]).head? = some succ)
+    {hx : Nat} (hxr : read64 m (P + a + 8) = some hx)
+    {h' : Nat} (hsz' : chunkSize h' = a + b) (hlow' : h' % 4 < 2)
+    (hpi' : ∀ h0, read64 m (P + 8) = some h0 → prevInuse h' = prevInuse h0) (vx : BitVec 64) :
+    PHeapAt (writeLog (writeLog (writeLog (writeLog (writeLog m
+      [(pred + 16, 8, BitVec.ofNat 64 succ)]) [(succ + 24, 8, BitVec.ofNat 64 pred)])
+      [(P + a + 8, 8, BitVec.ofNat 64 (hx ||| 1))]) [(P + 8, 8, BitVec.ofNat 64 h')])
+      [(P + a + 8, 8, vx)]) H top brkv (cs₁ ++ ⟨P, a + b, true⟩ :: cs₂)
+      (updBins bins i (pre ++ post)) := by
+  have HH := h.heap.heap
+  obtain ⟨hal, htop16⟩ := HH.aligned
+  have hN : (⟨P, a, false⟩ : Chunk) ∈ cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂ := by simp
+  have hX : (⟨P + a, b, true⟩ : Chunk) ∈ cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂ := by simp
+  have hNb := HH.walk.chunk_bounds _ hN
+  have hXb := HH.walk.chunk_bounds _ hX
+  have hN16 := hal _ hN; have hX16 := hal _ hX
+  simp only at hNb hXb hN16 hX16
+  have hbrk := HH.brk_le; have htle := HH.top_le
+  have hlo := HH.walk.le
+  unfold heapStart heapEnd at *
+  obtain ⟨hxh, hxhr, _, hxhl⟩ := walk_header HH.walk _ hX
+  simp only at hxhr
+  rw [hxr] at hxhr
+  obtain rfl : hx = hxh := Option.some.inj hxhr
+  -- the bin nodes
+  have hpredm : pred = binAt i ∨ pred ∈ bins i := by
+    have := List.mem_of_getLast? hpred
+    rcases List.mem_cons.mp this with h1 | h1
+    · exact .inl h1
+    · exact .inr (by rw [hbin]; exact List.mem_append_left _ h1)
+  have hsuccm : succ = binAt i ∨ succ ∈ bins i := by
+    have := List.mem_of_head? hsucc
+    rcases List.mem_append.mp this with h1 | h1
+    · exact .inr (by rw [hbin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
+    · exact .inl (List.mem_singleton.mp h1)
+  obtain ⟨hp16, hpnode⟩ := HH.node hi0 hi hpredm
+  obtain ⟨hs16, hsnode⟩ := HH.node hi0 hi hsuccm
+  have hXbd : (P + a = top ∨ ∃ c ∈ cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂, c.addr = P + a) :=
+    .inr ⟨_, hX, rfl⟩
+  have hPbd : (P = top ∨ ∃ c ∈ cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂, c.addr = P) :=
+    .inr ⟨_, hN, rfl⟩
+  have hsX := HH.bnd_ne_node hi hsnode hXbd 16 (by omega) (by omega)
+  have hsP := HH.bnd_ne_node hi hsnode hPbd 16 (by omega) (by omega)
+  have hpl : pred < 2 ^ 64 := by
+    rcases hpnode with rfl | ⟨cx, hcx, rfl, _, _⟩
+    · have := binAt_geo i hi; omega
+    · have := HH.walk.chunk_bounds cx hcx; omega
+  have hsl : succ < 2 ^ 64 := by
+    rcases hsnode with rfl | ⟨cx, hcx, rfl, _, _⟩
+    · have := binAt_geo i hi; omega
+    · have := HH.walk.chunk_bounds cx hcx; omega
+  -- step 1: unlink `P`
+  generalize hM1 : writeLog (writeLog (writeLog m [(pred + 16, 8, BitVec.ofNat 64 succ)])
+    [(succ + 24, 8, BitVec.ofNat 64 pred)]) [(P + a + 8, 8, BitVec.ofNat 64 (hx ||| 1))] = M1
+  have hor1 : (hx ||| 1) = hx / 2 * 2 + 1 := by
+    have h1 : (hx ||| 1) / 2 = hx / 2 := by
+      have := Nat.or_div_two_pow (a := hx) (b := 1) (n := 1); simpa using this
+    have h2 : (hx ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
+    have := Nat.div_add_mod (hx ||| 1) 2
+    omega
+  have hor1lt : hx ||| 1 < 2 ^ 64 := by rw [hor1]; have := Vsa.Sim.read64_lt _ _ _ hxr; omega
+  have H1 := h.take hi0 hi hbin hN rfl (n := 0) (by simp only; omega) hpred hsucc
+    (m' := M1) (hd' := hx ||| 1)
+    (by show read64 _ (pred + 16) = _
+        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
+          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl])
+    (by show read64 _ (succ + 24) = _
+        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_hit, BitVec.toNat_ofNat,
+          Nat.mod_eq_of_lt hpl])
+    (by simp only; rw [← hM1, read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hor1lt])
+    (fun hd hr => by
+      simp only at hr; rw [hxr] at hr; cases hr
+      unfold chunkSize; rw [hor1]; omega)
+    (by unfold prevInuse; rw [hor1]; simp)
+    (fun a' ha' hna => by
+      unfold TakeW at hna; simp only at hna
+      rw [← hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
+  have H1' := H1.drop
+  simp only at H1'
+  have hends := walk_ends_ne (cs₁ := cs₁) (N := ⟨P, a, false⟩) (cs₂ := ⟨P + a, b, true⟩ :: cs₂) HH.walk
+  simp only at hends
+  rw [map_reflag_eq (q := P + a) rfl hends.1 hends.2] at H1'
+  -- step 2: absorb the chunk after it
+  have hP8 : read64 M1 (P + 8) = read64 m (P + 8) := by
+    rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
+      read64_store_miss _ _ (by omega)]
+  have hh'lt : h' < 2 ^ 64 := by unfold chunkSize at hsz'; omega
+  exact H1'.absorb (x := P) (a := a) (b := b) hno (by rw [read64_store_miss _ _ (by omega), read64_store_hit,
+      BitVec.toNat_ofNat, Nat.mod_eq_of_lt hh'lt]) hsz' hlow'
+    (fun h0 hr => hpi' h0 (by rw [← hP8]; exact hr))
+    (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
 
 end VsaIris.VsaHeap
