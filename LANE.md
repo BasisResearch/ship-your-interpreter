@@ -10,7 +10,7 @@ Branch `lane-e5` (from `wave4-base`; merged `hub/iris-main` at INTEGRATION.md,
 
 All axioms ⊆ {propext, Classical.choice, Quot.sound} (`VsaIris/Interp/E5Audit.lean`,
 40 declarations, imported by `VsaIris/Audit.lean`). No holes added
-(`check_iris_holes.py`: 12 ledgered). Drift gate clean.
+(`check_iris_holes.py` passes: 10 ledgered, none from E5). Drift gate clean.
 
 | arm (`ExecSCost`/`ExecS` ctor) | total | partial | family |
 |---|---|---|---|
