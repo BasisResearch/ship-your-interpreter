@@ -589,4 +589,212 @@ theorem ssprint_loop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     intro i hk R Mt st
     exact ssprint_iterA hlive g total0 L R0 R Mt0 Mt i SG hL8 hsum st (ih (i + 1) (by omega)) hkX
 
+/-- `__ssprint_r`'s writes, its own frame included. -/
+def PrintFrame (s dst n a : Nat) : Prop := PrintW s dst n a ∨ (s - 928 ≤ a ∧ a < s - 864)
+
+/-- What `__ssprint_r` leaves: every piece printed, the `uio` emptied. -/
+structure PrintOut (s dst n : Nat) (g : Nat → BitVec 8) (total0 : List (BitVec 8))
+    (L : List (Nat × Nat)) (Mt Mt' : Mem) : Prop where
+  buf : BufAt Mt' s dst n (total0 ++ catPieces g L)
+  cnt : ldv .lw Mt' (snpU s + 8) = 0#64
+  res : ldv .ld Mt' (snpU s + 16) = 0#64
+  frame : ∀ a, ¬ PrintFrame s dst n a → imgM Mt' a = imgM Mt a
+
+/-- `__ssprint_r`'s continuation. -/
+def PrintK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
+    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (g : Nat → BitVec 8)
+    (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R : Nat → BitVec 64) (Mt : Mem) : Prop :=
+  ∀ R' Mt', R' 10 = 0#64 → R' 2 = R 2 → (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z) →
+    PrintOut s dst n g total0 L Mt Mt' → NW live Dt DA (snpS s dst n) Q (R 1) R' Mt'
+
+/-- The spill slots of `__ssprint_r`'s frame hold the caller's registers. -/
+structure PrintSlots (Mt : Mem) (s : Nat) (R : Nat → BitVec 64) : Prop where
+  ra : ldv .ld Mt (s - 928 + 56) = R 1
+  s0 : ldv .ld Mt (s - 928 + 48) = R 8
+  s1 : ldv .ld Mt (s - 928 + 40) = R 9
+  s2 : ldv .ld Mt (s - 928 + 32) = R 18
+  s3 : ldv .ld Mt (s - 928 + 24) = R 19
+  s4 : ldv .ld Mt (s - 928 + 16) = R 20
+  s5 : ldv .ld Mt (s - 928 + 8) = R 21
+
+/-- **`__ssprint_r`'s epilogue** (`0x8000e9b0`): `ra`, `s1` reloaded, the `uio`
+emptied, `a0 = 0`, `ret`. -/
+theorem print_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (Rc R : Nat → BitVec 64)
+    (Mc Mt : Mem) (SG : SnpGeom s dst n)
+    (hB : BufAt Mt s dst n (total0 ++ catPieces g L))
+    (hfr : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mc a)
+    (hsra : ldv .ld Mc (s - 928 + 56) = Rc 1) (hss1 : ldv .ld Mc (s - 928 + 40) = Rc 9)
+    (h2 : R 2 = BitVec.ofNat 64 (s - 928)) (h9 : R 9 = BitVec.ofNat 64 (snpU s))
+    (hkp : ∀ z, (z = 8 ∨ (18 ≤ z ∧ z ≤ 27)) → R z = Rc z) (hal : (Rc 1).toNat % 4 = 0)
+    (hk : ∀ R' Mt', R' 10 = 0#64 → R' 2 = BitVec.ofNat 64 (s - 864) →
+      (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = Rc z) →
+      BufAt Mt' s dst n (total0 ++ catPieces g L) → ldv .lw Mt' (snpU s + 8) = 0#64 →
+      ldv .ld Mt' (snpU s + 16) = 0#64 → (∀ a, ¬ PrintW s dst n a → imgM Mt' a = imgM Mc a) →
+      NW live Dt DA (snpS s dst n) Q (Rc 1) R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x8000e9b0#64 R Mt := by
+  have SG' := SG
+  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
+  have hag : ∀ a w, (a + w ≤ s - 928 ∨ s - 864 ≤ a ∨ (s - 928 ≤ a ∧ a + w ≤ s - 864)) →
+      (s - 928 ≤ a ∧ a + w ≤ s - 864) → ∀ i, i < w → imgM Mt (a + i) = imgM Mc (a + i) :=
+    fun a w _ h i hi => hfr _ (by unfold PrintW snpFP snpU; omega)
+  have ra' : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 56)).toNat = Rc 1 := by
+    rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ 8 (by omega) (by omega))]; exact hsra
+  have s1' : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 40)).toNat = Rc 9 := by
+    rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ 8 (by omega) (by omega))]; exact hss1
+  have n9 : (R 9).toNat = s - 640 := by rw [h9]; simp only [snpU, BitVec.toNat_ofNat]; omega
+  simp only [snpU] at h9
+  nx_run hlive using [ofNat_add_ofNat, h2, h9, ra', s1']
+  rw [toNat_ofNat_lt (x := s - 640 + 16) (by omega), toNat_ofNat_lt (x := s - 640 + 8) (by omega)]
+  have hag2 : ∀ a, (a < s - 632 ∨ s - 616 ≤ a) →
+      imgM (writeLog (writeLog Mt [(s - 640 + 16, 8, 0#64)]) [(s - 640 + 8, 4, 0#64)]) a = imgM Mt a :=
+    fun a ha => by rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega)]
+  refine hk _ _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [show s - 928 + 64 = s - 864 by omega]) ?_
+    (hB.transport (fun a ha => hag2 a (by simp only [snpFP] at ha; omega)) hn0) ?_ ?_
+    (fun a ha => (hag2 a (by unfold PrintW snpU at ha; omega)).trans (hfr a ha))
+  · intro z hz
+    rcases hz with rfl | rfl | hz
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hkp 8 (.inl rfl)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · simp only [upd_apply, show z ≠ 2 by omega, show z ≠ 9 by omega, show z ≠ 10 by omega,
+        show z ≠ 1 by omega, ite_false]
+      exact hkp z (.inr hz)
+  · simp only [snpU]; exact ldv_lw_zero_eq _ rfl
+  · simp only [snpU]
+    rw [ldv_store_miss .ld _ _ (by simp only [widthOfM]; omega)]; exact ldv_store_hit _ _ _
+
+/-- **`__ssprint_r`'s loop exit** (`0x8000e99c`): `s0`, `s2`–`s5` reloaded,
+then the epilogue. -/
+theorem print_restore {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (Rc R0 R : Nat → BitVec 64)
+    (Mc Mt : Mem) (SG : SnpGeom s dst n) (pe : PrintEnd s dst n g total0 L R0 R Mc Mt)
+    (hsl : PrintSlots Mc s Rc) (hk0 : ∀ z, 22 ≤ z → z ≤ 27 → R0 z = Rc z) (hal : (Rc 1).toNat % 4 = 0)
+    (hk : ∀ R' Mt', R' 10 = 0#64 → R' 2 = BitVec.ofNat 64 (s - 864) →
+      (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = Rc z) →
+      BufAt Mt' s dst n (total0 ++ catPieces g L) → ldv .lw Mt' (snpU s + 8) = 0#64 →
+      ldv .ld Mt' (snpU s + 16) = 0#64 → (∀ a, ¬ PrintW s dst n a → imgM Mt' a = imgM Mc a) →
+      NW live Dt DA (snpS s dst n) Q (Rc 1) R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x8000e99c#64 R Mt := by
+  have SG' := SG
+  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
+  have hag : ∀ a, s - 928 ≤ a → a + 8 ≤ s - 864 → ∀ i, i < widthOfM .ld → imgM Mt (a + i) = imgM Mc (a + i) :=
+    fun a h1 h2 i hi => pe.frame _ (by unfold PrintW snpFP snpU; simp only [widthOfM] at hi; omega)
+  have f48 : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 48)).toNat = Rc 8 := by
+    rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ (by omega) (by omega))]; exact hsl.s0
+  have f32 : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 32)).toNat = Rc 18 := by
+    rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ (by omega) (by omega))]; exact hsl.s2
+  have f24 : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 24)).toNat = Rc 19 := by
+    rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ (by omega) (by omega))]; exact hsl.s3
+  have f16 : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 16)).toNat = Rc 20 := by
+    rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ (by omega) (by omega))]; exact hsl.s4
+  have f8 : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 8)).toNat = Rc 21 := by
+    rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ (by omega) (by omega))]; exact hsl.s5
+  have h2 := pe.r2
+  nx_run hlive using [ofNat_add_ofNat, h2, f48, f32, f24, f16, f8] at 0x8000e9b0
+  refine print_epi hlive g total0 L Rc _ Mc Mt SG pe.buf pe.frame hsl.ra hsl.s1 ?_ ?_ ?_ hal hk
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · exact h2
+  · exact pe.r9
+  · intro z hz
+    rcases hz with rfl | hz
+    · simp
+    · by_cases h18 : z = 18
+      · subst h18; simp
+      by_cases h19 : z = 19
+      · subst h19; simp
+      by_cases h20 : z = 20
+      · subst h20; simp
+      by_cases h21 : z = 21
+      · subst h21; simp
+      simp only [h18, h19, h20, h21, show z ≠ 8 by omega, ite_false]
+      exact (pe.keep z (.inr (by omega))).trans (hk0 z (by omega) (by omega))
+
+/-- **`__ssprint_r(ptr, fp, uio)`** (`0x8000e908`, `sp = s - 864`, from
+`_svfprintf_r`): every piece of the `uio` appended to the output. -/
+theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R : Nat → BitVec 64)
+    (Mt : Mem) (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8) (hsum : sumLen L < 2 ^ 32)
+    (h2 : R 2 = BitVec.ofNat 64 (s - 864)) (h11 : R 11 = BitVec.ofNat 64 (snpFP s))
+    (h12 : R 12 = BitVec.ofNat 64 (snpU s)) (hal : (R 1).toNat % 4 = 0)
+    (hptr : ldv .ld Mt (snpU s) = BitVec.ofNat 64 (snpIov s))
+    (hcnt : ldv .lw Mt (snpU s + 8) = BitVec.ofNat 64 L.length)
+    (hres : ldv .ld Mt (snpU s + 16) = BitVec.ofNat 64 (sumLen L))
+    (hiov : IovAt Mt s L) (hP : PiecesOK Dt DA Mt s dst n g L) (hB : BufAt Mt s dst n total0)
+    (hk : PrintK live Dt DA Q s dst n g total0 L R Mt) :
+    NW live Dt DA (snpS s dst n) Q 0x8000e908#64 R Mt := by
+  have SG' := SG
+  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
+  simp only [snpU, snpIov, snpFP] at h11 h12 hptr hcnt hres
+  have n12 : (R 12).toNat = s - 640 := by rw [h12]; simp only [BitVec.toNat_ofNat]; omega
+  have hres' : ldv .ld Mt (BitVec.ofNat 64 (s - 640 + 16)).toNat = BitVec.ofNat 64 (sumLen L) := by
+    rw [toNat_ofNat_lt (by omega)]; exact hres
+  have hptr' : ldv .ld Mt (BitVec.ofNat 64 (s - 640)).toNat = BitVec.ofNat 64 (s - 512) := by
+    rw [toNat_ofNat_lt (by omega)]; exact hptr
+  have eS : BitVec.ofNat 64 (s - 864 + 18446744073709551552) = BitVec.ofNat 64 (s - 928) := by
+    apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
+  nx_run hlive using [ofNat_add_ofNat, h2, h11, h12, hres', hptr', eS] at 0x8000e950 0x8000e9b0
+  all_goals rename_i hb
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hb)
+  · -- nothing to print
+    have h0 : sumLen L = 0 := by
+      have := congrArg BitVec.toNat hb; simp only [BitVec.toNat_ofNat, BitVec.reduceToNat] at this; omega
+    have hcat : catPieces g L = [] := catPieces_of_sumLen_zero g L h0
+    rw [toNat_ofNat_lt (x := s - 928 + 40) (by omega), toNat_ofNat_lt (x := s - 928 + 56) (by omega)]
+    have hag : ∀ a, (a < s - 928 ∨ s - 864 ≤ a) →
+        imgM (writeLog (writeLog Mt [(s - 928 + 40, 8, R 9)]) [(s - 928 + 56, 8, R 1)]) a = imgM Mt a :=
+      fun a ha => by rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega)]
+    refine print_epi hlive g total0 L R _ _ _ SG ?_ (fun a _ => rfl) ?_ ?_ ?_ ?_ ?_ hal
+      (fun R' Mt' h10' h2' hkp' hB' hcnt' hres' hfr' => hk R' Mt' h10' (h2'.trans h2.symm) hkp'
+        ⟨hB', hcnt', hres', fun a ha => (hfr' a (fun h => ha (.inl h))).trans
+          (hag a (by unfold PrintFrame at ha; omega))⟩)
+    · rw [hcat, List.append_nil]
+      exact hB.transport (fun a ha => hag a (by simp only [snpFP] at ha; omega)) hn0
+    · exact ldv_store_hit _ _ _
+    · rw [ldv_store_miss .ld _ _ (by simp only [widthOfM]; omega)]; exact ldv_store_hit _ _ _
+    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    intro z hz
+    simp only [show z ≠ 9 by omega, show z ≠ 2 by omega, show z ≠ 14 by omega, ite_false]
+  · -- the loop
+    have hpos : 0 < sumLen L := by
+      rcases Nat.eq_zero_or_pos (sumLen L) with h0 | h0
+      · exact absurd (by rw [h0]) hb
+      · exact h0
+    simp (disch := omega) only [toNat_ofNat_lt]
+    refine nw_gen (fun M => PrintSlots M s R ∧ ∀ a, (a < s - 928 ∨ s - 864 ≤ a) → imgM M a = imgM Mt a)
+      ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, fun a ha => by simp (disch := omega) only [imgM_store_miss]⟩ ?_
+    any_goals simp (disch := first | omega | (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_ld_hit_eq]
+    rintro Mc ⟨hsl, hagr⟩
+    have hiov0 : IovAt Mc s L := hiov.transport hL8 fun a h1 h2 => hagr a (by simp only [snpIov] at h1 h2; omega)
+    have hP0 : PiecesOK Dt DA Mc s dst n g L := by
+      intro j hj
+      obtain ⟨PG, hl, hw⟩ := hP j hj
+      refine ⟨PG, hl, hw.transport fun a h1 h2 => hagr a ?_⟩
+      obtain ⟨_, _, _, _, _, hfr, _⟩ := PG; omega
+    have hB0 : BufAt Mc s dst n total0 := hB.transport (fun a ha => hagr a (by simp only [snpFP] at ha; omega)) hn0
+    have hLp : 0 < L.length := by
+      rcases L with _ | ⟨p, L⟩
+      · simp [sumLen] at hpos
+      · simp
+    refine ssprint_loop hlive g total0 L _ Mc SG hL8 hsum ?_ L.length 0 (by omega) _ Mc
+      ⟨hLp, hiov0, hP0, by simp only [List.take_zero, catPieces, List.flatMap_nil, List.append_nil]; exact hB0, ?_, ?_, by simpa using hpos, ?_, ?_, ?_, ?_, ?_, ?_,
+        fun _ _ => rfl, fun _ _ => rfl⟩
+    · intro R' Mt' pe
+      refine print_restore hlive g total0 L R _ R' Mc Mt' SG pe hsl ?_ hal
+        (fun R'' Mt'' h10' h2' hkp' hB' hcnt' hres' hfr' => hk R'' Mt'' h10' (h2'.trans h2.symm) hkp'
+          ⟨hB', hcnt', hres', fun a ha => (hfr' a (fun h => ha (.inl h))).trans
+            (hagr a (by unfold PrintFrame at ha; omega))⟩)
+      intro z h1 h2
+      simp only [upd_apply, show z ≠ 21 by omega, show z ≠ 20 by omega, show z ≠ 19 by omega,
+        show z ≠ 8 by omega, show z ≠ 9 by omega, show z ≠ 2 by omega, show z ≠ 14 by omega, ite_false]
+    · simp only [snpU]; rw [ldv_agree .lw (fun i hi => hagr _ (by simp only [widthOfM] at hi; omega))]
+      simpa using hcnt
+    · simp only [snpU]; rw [ldv_agree .ld (fun i hi => hagr _ (by simp only [widthOfM] at hi; omega))]
+      simpa using hres
+    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, snpIov, snpU, snpFP]
+    all_goals simp
+
 end VsaIris.Sym
