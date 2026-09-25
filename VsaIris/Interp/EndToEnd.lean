@@ -115,3 +115,32 @@ theorem stuck_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     (vsaOk_of_ready b.ready) hA
 
 end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+/-- **`InterpSim` at the concrete layout, from the holes.** -/
+theorem interpSim_iris (h : IrisHoles) : Vsa.Refine.InterpSim Vsa.Sim.LayoutInstance.interpRunLayout :=
+  ⟨term_sim_of (supplies_of h) h.newlib, stuck_sim_of (supplies_of h) h.newlib⟩
+
+end VsaIris.Interp
+
+namespace Vsa.Sim.EndToEnd
+
+open Vsa.While
+open Vsa.Machine (Halts Diverges)
+open Vsa.Refine (Loaded)
+open Vsa.Sim.LayoutInstance (interpRunLayout)
+
+/-- **THE END-TO-END THEOREM.** For every WHILE program loaded in the
+interpreter's memory (`Loaded interpRunLayout p c`), the machine halts with
+exit code 0 and output `out` exactly when `out` is a big-step behaviour of the
+program, and a divergent machine run means the program has no behaviour.
+The only assumptions are the newlib specifications in `IrisHoles`
+(`VsaIris/HOLES.md`). -/
+theorem endToEnd_refinement (h : VsaIris.Interp.IrisHoles) :
+    ∀ p c, Loaded interpRunLayout p c →
+      (∀ out, BigStep p out ↔ Halts c out 0) ∧
+      (Diverges c → ¬ ∃ out, BigStep p out) :=
+  Vsa.Refine.refinement (VsaIris.Interp.interpSim_iris h)
+
+end Vsa.Sim.EndToEnd

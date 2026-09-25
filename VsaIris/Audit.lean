@@ -1,3 +1,4 @@
+import VsaIris.Interp.EndToEnd
 import VsaIris.DlHeap
 import VsaIris.Adequacy
 import VsaIris.Example
@@ -328,3 +329,15 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Interp.caseT_ExecVarInit
 #print axioms VsaIris.Interp.caseT_ExecVarNull
 #print axioms VsaIris.Interp.caseT_ExecWhile
+
+-- lane A: the assembly and the end-to-end theorem
+#print axioms VsaIris.Interp.interpSeqT_all
+#print axioms VsaIris.Interp.execDispT_all
+#print axioms VsaIris.Interp.specsP_all
+#print axioms VsaIris.Interp.interpRun_total_top
+#print axioms VsaIris.Interp.interpRun_partial_top
+#print axioms VsaIris.Interp.supplies_of
+#print axioms VsaIris.Interp.term_sim_of
+#print axioms VsaIris.Interp.stuck_sim_of
+#print axioms VsaIris.Interp.interpSim_iris
+#print axioms Vsa.Sim.EndToEnd.endToEnd_refinement

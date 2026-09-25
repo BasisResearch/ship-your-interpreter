@@ -176,14 +176,9 @@ def _structure_fields(path: Path, structure: str) -> tuple[str, ...]:
 def completion_surface(repo: Path) -> CompletionSurface:
     """Census the current proof surface without claiming any theorem is proved."""
     term = _structure_fields(repo / "Vsa/Sim/TermAssembly.lean", "TermResidualsBase")
-    remaining = _structure_fields(repo / "Vsa/Sim/EndToEnd.lean", "RemainingWork")
-    if set(remaining) != {"divWork", "errWork"}:
-        raise LedgerError(f"unrecognized RemainingWork fields: {remaining}")
-    return CompletionSurface(
-        term,
-        _structure_fields(repo / "Vsa/Sim/DivFamilyAssembly.lean", "DivWork"),
-        _structure_fields(repo / "Vsa/Sim/rows/ErrFamilyAssembly.lean", "ErrWork"),
-    )
+    # `RemainingWork`/`DivWork`/`ErrWork` are deleted: the end-to-end theorem
+    # (`VsaIris/Interp/EndToEnd.lean`) assumes only `IrisHoles`.
+    return CompletionSurface(term, (), ())
 
 
 @dataclass(frozen=True)
