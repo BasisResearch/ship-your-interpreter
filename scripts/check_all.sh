@@ -59,6 +59,8 @@ python3 scripts/gen_footprint_row.py --check \
   || fail "stage a3: Vsa/Sim/rows/Eval*RowFootprint.lean is stale"
 python3 -B scripts/gen_interp_steps.py --check \
   || fail "stage a3: VsaIris/Interp/{Code,Steps}*.lean is stale (gen_interp_steps.py)"
+python3 -B scripts/gen_interp_steps.py --table stdio --check \
+  || fail "stage a3: VsaIris/Vsa/Stdout/{Code,Steps}*.lean is stale (gen_interp_steps.py --table stdio)"
 python3 -B scripts/gen_iris_cases.py --check \
   || fail "stage a3: VsaIris/Interp/Case/*.lean is stale (gen_iris_cases.py from scripts/iris_arms/arms.tsv)"
 
