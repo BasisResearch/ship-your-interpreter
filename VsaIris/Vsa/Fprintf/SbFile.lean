@@ -222,7 +222,7 @@ theorem Frame.snoc {M M0 : Mem} {Reg : Nat → Prop} {a w : Nat} {v : BitVec 64}
 /-- Peel a chain of stores inside the region (`SfvReg`), each by `omega` on
 its `Nat` address. -/
 macro "frame_chain" : tactic => `(tactic| (repeat (refine Frame.snoc ?_ ?_)) <;>
-  first | exact Frame.refl _ _ | assumption | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
+  first | exact Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
     BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod] at h1 h2; (try unfold SfvReg); (try unfold SwReg); omega))
 
 /-- **A flushed buffer**: after `_fflush_r` on the stack `FILE` (called with
