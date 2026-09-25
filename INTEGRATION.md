@@ -199,3 +199,13 @@ Hole ledger: before 10 (`newlib.{snprintf,fprintf,fwrite,exitHandlers}`, `out.{f
 after 5 (`newlib.snprintf`, `newlib.fprintf`, `out.fprintf`, `out.snprintfFn`, `out.snprintfInt`).
 Checks: `lake build Vsa VsaIris VsaIris.Audit` green (2700 jobs), `check_iris_holes.py` ok (5),
 `endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
+
+### V (2026-09-25)
+
+| lane | head | merge on `iris-main` | conflicts |
+|---|---|---|---|
+| V (REVIEW.md, P5 README, P6 dead-code removal: 88 modules) | `4b7604e` | `12e97be` | none (report archived as `LANES-v.md`) |
+
+Hole ledger: before 5, after 5 (V proves no hole; its vacuity findings C1–C3/H1 go to B1–B3).
+Checks: build green (2682 jobs), `check_iris_holes.py` ok (5), `check_final_axioms.sh` 10/10,
+`endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
