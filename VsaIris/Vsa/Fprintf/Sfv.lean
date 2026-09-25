@@ -1,4 +1,5 @@
 import VsaIris.Vsa.Fprintf.SbFile
+import VsaIris.Vsa.Fprintf.Arith
 
 /-!
 # `__sfvwrite_r` on `__sbprintf`'s stack `FILE` (lane N5)
@@ -304,6 +305,99 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
       simp only [sfvKeep, List.mem_cons, List.not_mem_nil, or_false] at hx
       rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
         (simp only [rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27]; exact hkeep _ (by decide))
+
+
+theorem ReadB.byteSrc {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {a : Nat} {b : BitVec 8}
+    (h : ReadB Dt DA S Mt a b) : ByteSrc S Mt Dt DA a b := by
+  rcases h with h | h
+  · exact .inr h
+  · exact .inl h
+
+/-- The Nat remainder of a `__moddi3` result on nonnegative operands. -/
+theorem moddi3_nat {x : Nat} {v : BitVec 64} (hx : x < 2 ^ 31)
+    (h : v.toInt = Vsa.While.wrap64 ((BitVec.ofNat 64 x).toInt.tmod (1024#64 : BitVec 64).toInt)) :
+    v = BitVec.ofNat 64 (x % 1024) := by
+  have e1 : (BitVec.ofNat 64 x).toInt = (x : Int) := toInt_ofNat_small (by omega)
+  have e2 : (1024#64 : BitVec 64).toInt = 1024 := by decide
+  rw [e1, e2] at h
+  have e3 : (x : Int).tmod 1024 = ((x % 1024 : Nat) : Int) := by
+    rw [Int.tmod_eq_emod_of_nonneg (by omega)]; omega
+  rw [e3] at h
+  unfold Vsa.While.wrap64 at h
+  rw [BitVec.ofInt_natCast] at h
+  exact BitVec.eq_of_toInt_eq h
+
+/-- **The direct write** (`0x8000e214` with nothing buffered and `L ≥ 1024`):
+`__moddi3(L, 1024)`, then `__swrite(stdout, src, n)` with `n = L - L % 1024`
+straight from the source, then the tail at `0x8000e258` with `n` bytes done. -/
+theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
+    (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem}
+    {R Rh : Nat → BitVec 64} {s f U fp : BitVec 64} {need nxt L src : Nat} {g : Nat → BitVec 8}
+    (hs1 : s.toNat - need + 256 ≤ fp.toNat) (hs2 : fp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hfpa : fp.toNat % 16 = 0)
+    (hf1 : fp.toNat ≤ f.toNat) (hf2 : f.toNat + 1208 ≤ s.toNat) (hfa : f.toNat % 8 = 0)
+    (hL1 : 1024 ≤ L) (hL2 : L < 2 ^ 31)
+    (hsr1 : 0x80000000 ≤ src) (hsr2 : src + L ≤ 0x100000000) (hsr3 : src + L ≤ tohostAddr ∨ tohostAddr + 8 ≤ src)
+    (hsrd : ∀ i, i < L → (src + i < fp.toNat - 256 ∨ fp.toNat ≤ src + i) ∧
+      (src + i < 0x8001bb30 ∨ 0x8001bb32 ≤ src + i) ∧ (src + i < 0x8001ba08 ∨ 0x8001ba0c ≤ src + i))
+    (hw : ReadWin Dt DA (outS s need) Mt src (src + L) g)
+    (hRh : SfvRef Rh f U fp) (hR : SfvRegs R Rh nxt L src (f + BitVec.ofNat 64 (184 + 0)))
+    (hF : SbFile Mt f [])
+    (hk : ∀ R' M', R' 18 = BitVec.ofNat 64 (L - L % 1024) → R' 9 = BitVec.ofNat 64 nxt →
+      R' 19 = BitVec.ofNat 64 L → R' 22 = BitVec.ofNat 64 src → (∀ x ∈ sfvKeep, R' x = Rh x) →
+      SbFile M' f [] → Frame M' Mt (SfvReg f.toNat fp.toNat) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
+        (t ++ putcs (copyBytes g src (L - L % 1024))) 0x8000e258#64 R' M') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dfc0#64 R Mt := by
+  obtain ⟨h8, h20, h21, h24, h2⟩ := hR.k2 hRh
+  have h19 := hR.len; have h22 := hR.src; have h15 := hR.p; have h13 := hR.flags; have h9 := hR.nxt
+  have hw' := hF.w; have hBl := hF.base; have hsz := hF.size; have hwr := hF.writer; have hck := hF.cookie
+  simp only [List.length_nil] at hw'
+  refine it_8000dfc0 hlive (fun hc => ?_) (fun _ => ?_)
+  · exfalso; rw [h19] at hc; have := congrArg BitVec.toNat hc; simp only [BitVec.toNat_ofNat] at this; omega
+  nx_run hlive using [h8, h19, h22, h15, h13, h24, hw', hBl, hsz, BitVec.add_assoc, ofNat_add_ofNat] at 2147501864
+  have hsx : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 L)) = BitVec.ofNat 64 L := by
+    apply BitVec.eq_of_toNat_eq
+    simp only [BitVec.toNat_signExtend]
+    have hmsb : (BitVec.extractLsb 31 0 (BitVec.ofNat 64 L)).msb = false := by
+      rw [BitVec.msb_eq_decide]
+      simp only [decide_eq_false_iff_not, Nat.not_le, BitVec.extractLsb_toNat, BitVec.toNat_ofNat,
+        Nat.shiftRight_zero]; omega
+    rw [hmsb]
+    simp only [Bool.false_eq_true, ite_false, Nat.add_zero, BitVec.toNat_setWidth, BitVec.extractLsb_toNat,
+      BitVec.toNat_ofNat, Nat.shiftRight_zero]
+    omega
+  refine moddi3_sw hlive' hsub (BitVec.ofNat 64 L) 1024#64 0x8000e238#64 _ Mt (by decide)
+    (by rsimp; exact hsx) (by rsimp) (by rsimp) (by decide) (fun R' hq hkp => ?_)
+  have e10 := moddi3_nat hL2 hq
+  have k8 : R' 8 = f := by rw [hkp 8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h8
+  have k18 : R' 18 = BitVec.ofNat 64 L := by rw [hkp 18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp
+  have k21 : R' 21 = 0x8001b538#64 := by rw [hkp 21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h21
+  have k22 : R' 22 = BitVec.ofNat 64 src := by rw [hkp 22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h22
+  have k2 : R' 2 = fp := by rw [hkp 2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h2
+  have esw := subw_ofNat (a := L) (b := L % 1024) hL2 (by omega)
+  nx_run hlive using [k8, k18, k21, k22, k2, e10, hwr, hck, esw] at 2147545044
+  have hn : (copyBytes g src (L - L % 1024)).length = L - L % 1024 := copyBytes_length _ _ _
+  refine swrite_run (sp := fp) (buf := src) (bs := copyBytes g src (L - L % 1024)) (ra := 0x8000e250#64)
+    (s0 := f) hlive (by omega) hs2 hs3 hs4 hfpa (by rsimp) (by decide) (by rsimp; exact k8) hsr1
+    (by rw [hn]; omega) (by rw [hn]; omega) (fun i hi => ?_) (fun i hi => ?_) (by rsimp) (by rsimp)
+    (by rsimp; rw [hn]) (by rsimp; exact k2) hF.sfl hF.sfd (fun R'' hR => ?_)
+  · rw [hn] at hi; have := hsrd i (by omega); omega
+  · rw [hn] at hi; rw [copyBytes_get]; exact (hw (src + i) (by omega) (by omega)).byteSrc
+  · nx_ret hR
+    nx_run hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, rk22, BitVec.add_assoc] at 2147541592
+    obtain ⟨hF', hFr'⟩ := hF.swrote (ra := 0x8000e250#64) (s0 := f) (by omega) hf1 (by omega) (by omega)
+    refine hk _ _ ?_ ?_ ?_ ?_ ?_ hF' hFr'
+    · rsimp; rw [hn]
+    · rsimp; rw [rk9, hkp 9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h9
+    · rsimp; rw [rk19, hkp 19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h19
+    · rsimp; rw [rk22]; exact k22
+    · intro x hx
+      simp only [sfvKeep, List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
+        (simp only [rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27];
+         rw [hkp _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp;
+         exact hR.keep _ (by decide))
 
 
 end VsaIris.Sym.Fp

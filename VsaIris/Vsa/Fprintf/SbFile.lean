@@ -209,6 +209,11 @@ theorem SbFile.advance {Mt0 Mt : Mem} {f fp : BitVec 64} {pend : List (BitVec 8)
   · simp only [List.length_append, copyBytes_length]
     rw [ldv_lw_store_ofNat _ _ (by omega), Nat.sub_sub]
 
+/-- The bytes `__swrite(stdout, …)` called with `sp = fp` changes: its
+frames below `fp`, `stdout`'s flags, `errno`. -/
+def SwReg (fp : Nat) (a : Nat) : Prop :=
+  (fp - 256 ≤ a ∧ a < fp) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
+
 /-- A frame grows by a store inside the region. -/
 theorem Frame.snoc {M M0 : Mem} {Reg : Nat → Prop} {a w : Nat} {v : BitVec 64} (h : Frame M M0 Reg)
     (hr : ∀ b, a ≤ b → b < a + w → Reg b) : Frame (writeLog M [(a, w, v)]) M0 Reg :=
@@ -218,7 +223,7 @@ theorem Frame.snoc {M M0 : Mem} {Reg : Nat → Prop} {a w : Nat} {v : BitVec 64}
 its `Nat` address. -/
 macro "frame_chain" : tactic => `(tactic| (repeat (refine Frame.snoc ?_ ?_)) <;>
   first | exact Frame.refl _ _ | assumption | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
-    BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod] at h1 h2; unfold SfvReg; omega))
+    BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod] at h1 h2; (try unfold SfvReg); (try unfold SwReg); omega))
 
 /-- **A flushed buffer**: after `_fflush_r` on the stack `FILE` (called with
 `sp = fp`), `_p` is back at the base, `_w` at 1024, nothing buffered, and
@@ -242,5 +247,29 @@ theorem SbFile.flushed {M2 Mt0 : Mem} {f fp ra s0 s1 s2 s3 : BitVec 64}
   · decide
   · rfl
   · decide
+
+/-- **After `__swrite(stdout, …)`** called with `sp = fp`: the stack `FILE`
+is as it was; only its frame, `stdout`'s flags and `errno` changed. -/
+theorem SbFile.swrote {Mt : Mem} {f fp ra s0 : BitVec 64} {pend : List (BitVec 8)} (hF : SbFile Mt f pend)
+    (hf1 : 0x8001c168 ≤ f.toNat) (hf2 : fp.toNat ≤ f.toNat) (hf3 : f.toNat + 1208 < 2 ^ 32)
+    (hfp : 0x80100000 ≤ fp.toNat - 256) :
+    SbFile (swriteMt Mt fp ra s0) f pend ∧ Frame (swriteMt Mt fp ra s0) Mt (SfvReg f.toNat fp.toNat) := by
+  have hA : Frame (swriteMt Mt fp ra s0) Mt (SwReg fp.toNat) := by
+    unfold swriteMt
+    frame_chain
+  have hA' : Frame (swriteMt Mt fp ra s0) Mt (SfvReg f.toNat fp.toNat) :=
+    hA.mono fun a h => by unfold SwReg at h; unfold SfvReg; omega
+  have h12 : (f + 12#64).toNat = f.toNat + 12 := by
+    rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
+  refine ⟨⟨hF.toSbFixed.transport hA' ?_ hf1 (.inr hf2) (by omega) hfp, hF.len, ?_, ?_, fun i h => ?_⟩, hA'⟩
+  · unfold swriteMt
+    simp (config := {failIfUnchanged := false}) only [BitVec.add_assoc, BitVec.reduceAdd]; nx_mem; decide
+  · rw [hA.ldv .ld (fun j hj => by simp only [widthOfM] at hj; unfold SwReg; omega)]; exact hF.p
+  · rw [hA.ldv .lw (fun j hj => by simp only [widthOfM] at hj; rw [h12]; unfold SwReg; omega)]; exact hF.w
+  · rw [hA _ (by
+      have : (f + 184#64).toNat = f.toNat + 184 := by
+        rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
+      rw [this]; unfold SwReg; have := hF.len; omega)]
+    exact hF.buf i h
 
 end VsaIris.Sym.Fp
