@@ -31,12 +31,21 @@ literal run through `mbtowc` → literal iov → `%` parse through the jump tabl
   (literal-run induction; `FmtAt`, `LocMb`, `MbReg`).
 - `Fprintf/Digits.lean`: `vfp_digits` (decimal loop `0x8000ca80` → `0x8000cab8`; `digBytes n`
   = `natDigits (n+1) n` of `SnprintfSpec.lean`, whose `intToString_of_bv` gives the sign split).
+- `Fprintf/Lld.lean`: `lld_head` (`%lld` parse, argument, sign byte, magnitude; `LldHead`),
+  `lld_mag` (one digit or the decimal loop; `LldMag`).
+- `Fprintf/Loop.lean`: the loop-head state `VfpLoop`, `VfpSpills`, `vfp_head`
+  (`0x8000a944` → `0x8000a9b0`, FILE-independent; shared with N3).
+- `Fprintf/ScanTo.lean`: `vfp_toTerm` (loop head → literal run → `%` at `0x8000a9fc` or NUL at
+  `0x8000aca8`, the run's iov appended; `VfpPend`, `ScanPost`).
+- `Fprintf/Tac.lean`: `nf_run` passes its stops; `sx_side` rules check the branch fact's shape
+  (`bv_side_contra`, `closed_decide`). Files that `open scoped VsaIris.Sym.Stdout` add
+  `local macro_rules | \`(tactic| sx_side) => \`(tactic| closed_decide)` after it: N1's scoped
+  `assumption` rule recurses on literal `Int.lt` branches.
 
 ## In flight
 
-`%lld` prefix (`0x8000a9fc` → sign / decimal loop), emit + `__sprint_r` back to the loop
-head, `%s`, loop end + epilogue, `__sbprintf`, outer `_vfprintf_r` + `fprintf`, the Iris
-wrapper to `outSpec`.
+`%lld` emit (`0x8000b444` → `__sprint_r` → loop head), `%s`, loop end + epilogue,
+`__sbprintf`, outer `_vfprintf_r` + `fprintf`, the Iris wrapper to `outSpec`.
 
 ## Statement issues
 
