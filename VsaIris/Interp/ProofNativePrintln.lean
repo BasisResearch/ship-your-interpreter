@@ -20,7 +20,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions
 saved words and a pad word). -/
 abbrev nplF (s : BitVec 64) (k : Nat) : Prop := InExt (s.toNat - 24, 24) k
 
-/-- And newlib's two words. -/
+/-- And `_impure_data._stdout`. -/
 abbrev nplS (s : BitVec 64) (k : Nat) : Prop := nplF s k ∨ ioW k
 
 macro_rules
@@ -45,8 +45,9 @@ macro_rules
 #ix_seg npl_mid {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64}
-    (hio1 : ldv .ld M 0x8001b970 = 0x8001b538#64) (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
-    IW live ∅ [] (nplS s) Q 0x80002f94#64 R M
+    (hio1 : ldv .ld impMem 0x8001b970 = 0x8001b538#64)
+    (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
+    IW live impMem (accAddrs 0x8001b970 8) (nplS s) Q 0x80002f94#64 R M
   by
     ix_run1 hlive using [hio1, hio2] at 0x80002fa0
 
@@ -174,19 +175,21 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   -- `stdout`, to `jal fputc`
   ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
   · iframe Hms Hstd
-  have hio1 : ldv .ld M1 0x8001b970 = 0x8001b538#64 := by
-    rw [ldv_ld_imgW]; unfold imgW
-    rw [imgLE_congr (img' := img) (fun j hj => hio _ (by simp [ioW, InExt]; omega))]
-    exact hok.impure
+  have hio1 := ldv_impMem
   have hio2 : ldv .ld M1 0x8001b548 = 0x8001bb20#64 := by
     rw [ldv_ld_imgW]; unfold imgW
     rw [imgLE_congr (img' := img) (fun j hj => hio _ (by simp [ioW, InExt]; omega))]
     exact StdioOK.stdout hok
   iapply wp_swpF Wp (S := nplS s) (R := R) (Mt := M1) (pc := 0x80002f94#64)
-    (F := iprop(ownSet (fun k => stdioFoot k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ∗ codeRes ∗ binImg ∗
+    (text := interpText ++ dataOf impMem (accAddrs 0x8001b970 8))
+    (F := iprop(ioRest img ∗ codeRes ∗ binImg ∗
       consoleOwn (o ++ printArgs st vs) ∗ FnplR Wp Φ N sret args s r vs st o rv))
   rotate_left
-  · rw [hro]; unfold FnplR; iframe Hcode Himg Hio Hcon Hsl Hnull Hvs Hst Hk Hms
+  · unfold ioRest
+    icases Hio with ⟨Hio, #Hr⟩
+    isplitl []
+    · iapply codeRes_imp; iframe Hcode Hr
+    unfold FnplR; iframe Hcode Himg Hio Hr Hcon Hsl Hnull Hvs Hst Hk Hms
   intro F'
   refine npl_mid c.hlive hio1 hio2 ?_
   intros; apply swp_closeF

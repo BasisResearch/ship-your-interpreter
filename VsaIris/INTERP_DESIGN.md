@@ -23,6 +23,26 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
 
+## STATEMENT CHANGE (lane A): `_impure_ptr` is read-only
+
+`Stdio.stdioAt P` owns the 8 bytes of `_impure_ptr` (`0x8001b970`, never
+written; it holds `&_impure_data`) as the persistent `Stdio.impureRO`
+(`roImg impureW impureByte`, `VsaIris/Vsa/ImpureRO.lean`) and every other
+byte of `stdioFoot` (`stdioExcl`) exclusively; its image agrees with
+`_impure_ptr` (`ImpureImg`). `StdioOK` is unchanged.
+
+- **Why.** `envText` and `allocText` list `_impure_ptr` as `↦ₘ□`, and full
+  and discarded ownership of one byte cannot coexist, so `textOwn allocText`
+  could not be produced next to `world`'s `stdioOwn`.
+- **Consequence.** `textOwn_envText`/`textOwn_allocText` (`binImg ∗
+  impureRO ⊢ textOwn …`, `VsaIris/Vsa/ImpureText.lean`); `stdioAt_impure`
+  projects `impureRO`. The boundary discards the 8 bytes with a ghost update.
+  Readers of `_impure_ptr` (`main`'s error line, the out-of-memory block,
+  `native_print`/`native_println`) read it with a discarded fraction
+  (`imgFootD`, the data view `impMem`).
+- **Holes.** The `IrisHoles` newlib statements keep their text; newlib never
+  writes `_impure_ptr`, so they remain satisfiable.
+
 ## STATEMENT CHANGE (lane A, Q7 decided 2026-09-25): the helpers' stack headroom
 
 `Vsa.Sim.LayoutInstance.helperHeadroom = 2048` is added to

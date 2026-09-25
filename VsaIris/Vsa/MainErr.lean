@@ -57,9 +57,10 @@ abbrev aL (v a5v a2v a1v s0v sM : BitVec 64) : GRegs :=
 abbrev aLds (simg : Nat → BitVec 8) : List (List (BitVec 8)) :=
   [imgWord simg consoleImpurePtrAddr, imgWord simg stderrPtrAddr]
 
-/-- The read footprint of the two stdio words. -/
+/-- The read footprint of the two stdio words: `_impure_ptr` read-only
+(`Stdio.impureRO`), `_impure_data._stderr` owned. -/
 abbrev stdFoot (simg : Nat → BitVec 8) : List (Nat × DFrac × BitVec 8) :=
-  imgFoot consoleImpurePtrAddr 8 simg ++ imgFoot stderrPtrAddr 8 simg
+  imgFootD consoleImpurePtrAddr 8 simg ++ imgFoot stderrPtrAddr 8 simg
 
 theorem a_facts {m : Std.ExtHashMap Nat (BitVec 8)} {v a5v a2v a1v sM : BitVec 64}
     {simg : Nat → BitVec 8} (hcode : mainErrCodeLoaded m) (hv : v ≠ 0#64)
@@ -209,38 +210,50 @@ section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The two stdio windows `main` reads. -/
-def StdWin (k : Nat) : Prop :=
-  InExt (consoleImpurePtrAddr, 8) k ∨ InExt (stderrPtrAddr, 8) k
+/-- The stdio window `main` owns: `_impure_data._stderr` (`_impure_ptr` is
+read-only, `Stdio.impureRO`). -/
+def StdWin (k : Nat) : Prop := InExt (stderrPtrAddr, 8) k
 
-def stdWinList : List Nat := List.range' consoleImpurePtrAddr 8 ++ List.range' stderrPtrAddr 8
+def stdWinList : List Nat := List.range' stderrPtrAddr 8
 
 theorem stdWinList_nodup : stdWinList.Nodup := by decide
 
-theorem stdWin_mem (k : Nat) : (stdioFoot k ∧ StdWin k) ↔ k ∈ stdWinList := by
-  unfold stdWinList StdWin InExt stdioFoot InRange consoleImpurePtrAddr stderrPtrAddr consoleReent
-  simp only [List.mem_append, List.mem_range']
+theorem stdWin_mem (k : Nat) : (stdioExcl k ∧ StdWin k) ↔ k ∈ stdWinList := by
+  unfold stdWinList StdWin InExt stdioExcl stdioFoot impureW InRange stderrPtrAddr consoleReent
+  simp only [List.mem_range']
   constructor
-  · rintro ⟨_, h | h⟩
-    · exact .inl ⟨k - 0x8001b970, by simp at h; omega, by simp at h; omega⟩
-    · exact .inr ⟨k - (0x8001b538 + 24), by simp at h; omega, by simp at h; omega⟩
-  · rintro (⟨i, hi, rfl⟩ | ⟨i, hi, rfl⟩)
-    · exact ⟨by omega, .inl ⟨by simp, by simp; omega⟩⟩
-    · exact ⟨by omega, .inr ⟨by simp, by simp; omega⟩⟩
+  · rintro ⟨_, h⟩
+    exact ⟨k - (0x8001b538 + 24), by simp at h; omega, by simp at h; omega⟩
+  · rintro ⟨i, hi, rfl⟩
+    exact ⟨⟨by omega, by omega⟩, ⟨by simp, by simp; omega⟩⟩
 
-theorem stdWin_iff (simg : Nat → BitVec 8) :
-    ownSet (GF := GF) (fun k => stdioFoot k ∧ StdWin k) (fun k => k ↦ₘ simg k) ⊣⊢
+/-- **The stdio footprint** from the owned window and `_impure_ptr`. -/
+theorem stdWin_foot (simg : Nat → BitVec 8) (hi : ImpureImg simg) :
+    ownSet (GF := GF) (fun k => stdioExcl k ∧ StdWin k) (fun k => k ↦ₘ simg k) ∗ impureRO ⊢
       sepL (stdFoot simg) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) := by
-  have e : stdFoot simg = stdWinList.map (fun k => (k, DFrac.own 1, simg k)) := by
-    unfold stdFoot imgFoot stdWinList; rw [List.map_append]
-  rw [e, VsaIris.sepL_map]
-  constructor
-  · iintro H
+  iintro ⟨H, #Hr⟩
+  iapply (sepL_append _ _ _).2
+  isplitr [H]
+  · unfold impureRO
+    ihave #Hr := roImg_congr (g := simg) (fun a ha => (hi a ha).symm) $$ Hr
+    unfold imgFootD
+    iapply roImg_foot impureW simg _ (fun a ha => by
+      rw [List.mem_range'] at ha; unfold impureW consoleImpurePtrAddr at *; omega) $$ Hr
+  · rw [show imgFoot stderrPtrAddr 8 simg = stdWinList.map (fun k => (k, DFrac.own 1, simg k)) from rfl,
+      VsaIris.sepL_map]
     ihave H := ownSet_iff _ stdWin_mem $$ H
     iapply ownSet_to_sepL _ stdWinList_nodup $$ H
-  · iintro H
-    ihave H := sepL_to_ownSet _ stdWinList_nodup $$ H
-    iapply ownSet_iff _ (fun k => (stdWin_mem k).symm) $$ H
+
+/-- **And back**: the owned window out of the stdio footprint. -/
+theorem stdWin_back (simg : Nat → BitVec 8) :
+    sepL (GF := GF) (stdFoot simg) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ⊢
+      ownSet (fun k => stdioExcl k ∧ StdWin k) (fun k => k ↦ₘ simg k) := by
+  iintro H
+  ihave ⟨-, H⟩ := (sepL_append _ _ _).1 $$ H
+  rw [show imgFoot stderrPtrAddr 8 simg = stdWinList.map (fun k => (k, DFrac.own 1, simg k)) from rfl,
+    VsaIris.sepL_map]
+  ihave H := sepL_to_ownSet _ stdWinList_nodup $$ H
+  iapply ownSet_iff _ (fun k => (stdWin_mem k).symm) $$ H
 
 theorem sepL_calleeSaved (f : Nat → BitVec 64) :
     sepL (GF := GF) calleeSaved (fun r => r ↦ᵣ f r) ⊣⊢
@@ -273,8 +286,9 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg mainErrCode_text $$ Himg
   -- `_impure_ptr` and `_impure_data._stderr`
-  ihave ⟨%simg, %hok, Hw, Hrest⟩ := stdioAt_open StdioOK StdWin $$ Hstd
-  ihave Hw := (stdWin_iff simg).1 $$ Hw
+  ihave ⟨%simg, %⟨hok, himp⟩, Hw, Hrest, #Himp⟩ := stdioAt_open StdioOK StdWin $$ Hstd
+  ihave Hw := stdWin_foot simg himp $$ [Hw]
+  · iframe Hw Himp
   ihave ⟨⟨%a5v, Ha5⟩, Hargs⟩ := clobbered_take (r := 15) (by decide) $$ Hargs
   ihave ⟨⟨%a2v, Ha2⟩, Hargs⟩ := clobbered_take (r := 12) (by decide) $$ Hargs
   ihave ⟨⟨%a1v, Ha1⟩, Hargs⟩ := clobbered_take (r := 11) (by decide) $$ Hargs
@@ -289,7 +303,7 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
         hcodeL)) hv hok
       (fun k hk => by
         rcases hk with hk | hk
-        · exact imgFoot_pin (a := consoleImpurePtrAddr) (n := 8) hMR
+        · exact imgFootD_pin (a := consoleImpurePtrAddr) (n := 8) hMR
             (fun q hq => List.mem_append_right _ (List.mem_append_left _ hq)) k hk.1 hk.2
         · exact imgFoot_pin (a := stderrPtrAddr) (n := 8) hMR
             (fun q hq => List.mem_append_right _ (List.mem_append_right _ hq)) k hk.1 hk.2))
@@ -307,9 +321,9 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     iexact Hw
   iintro Hpc ⟨Ha0, Ha5, Ha2, Ha1, Hs0, Hsp, -⟩ - HMR
   ihave ⟨-, Hw⟩ := (sepL_append _ _ _).1 $$ HMR
-  ihave Hw := (stdWin_iff simg).2 $$ Hw
-  ihave Hstd := stdioAt_close StdioOK StdWin simg hok $$ [Hw Hrest]
-  · iframe Hw Hrest
+  ihave Hw := stdWin_back simg $$ Hw
+  ihave Hstd := stdioAt_close StdioOK StdWin simg hok himp $$ [Hw Hrest]
+  · iframe Hw Hrest Himp
   -- `fprintf(stderr, "%s\n", in->err_msg)`
   let errp : BitVec 64 := sM + sign_extend (m := 64) (0x1f0#12)
   have herrp : errp.toNat = sM.toNat + 496 := addr_off sM _ 496 (by decide) (by omega)
