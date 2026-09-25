@@ -1,10 +1,11 @@
 # Interpreter-level design: `eval_expr`, `exec_stmt`, `interp_run` in the Iris logic
 
-Status: DESIGN, not built. The statement skeleton is `VsaIris/Interp/Specs.lean`
-(not imported from `VsaIris.lean`; its lemma bodies are `sorry` and it has never
-been elaborated). This page fixes the representation predicates, the function
-specs, the assembly of `InterpSim`, and the fan-out. The proofs are left to the
-work packages in §9. MachCSL's own rule applies here (paper §9.1, xv6iris
+Status: built. The statements live in `Interp/SpecEval.lean`,
+`Interp/SpecExecDisp.lean`, `Interp/SpecLoop.lean` and the helper `Spec*.lean`
+files; the assumptions in `Interp/Holes.lean`; the assembly in
+`Interp/TermSim.lean`, `Interp/StuckSim.lean`, `Interp/TopRun*.lean` and
+`Interp/EndToEnd.lean`. This page fixes the representation predicates, the
+function specs, the assembly of `InterpSim`, and the fan-out. MachCSL's own rule applies here (paper §9.1, xv6iris
 `claude-notes/durable-notes.md` "Orchestration"): the top level owns the specs,
 and a proof that fights its interface is evidence the interface is wrong.
 
