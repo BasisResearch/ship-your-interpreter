@@ -171,12 +171,7 @@ theorem closAt_agree (ca p p' : Nat) : closAt (GF := GF) ca p ∗ closAt ca p' �
 
 /-! ## Read-only images, strings, the AST -/
 
-/-- `S` owned read-only at the image `img`. -/
-def roImg (S : Nat → Prop) (img : Nat → BitVec 8) : IProp GF :=
-  iprop(□ ∀ k, ⌜S k⌝ → k ↦ₘ□ img k)
-
-instance (S : Nat → Prop) (img : Nat → BitVec 8) : Persistent (roImg (GF := GF) S img) := by
-  unfold roImg; infer_instance
+/- `roImg` (`S` owned read-only at an image) is in `VsaIris/Vsa/ImpureRO.lean`. -/
 
 /-- The binary's `.text` and `.rodata`, persistent (newlib's code and every
 constant a helper reads; `world` owns it). -/

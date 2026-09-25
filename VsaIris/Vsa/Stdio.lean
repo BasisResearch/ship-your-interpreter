@@ -1,4 +1,5 @@
 import VsaIris.MallocRun
+import VsaIris.Vsa.ImpureRO
 import Vsa.Sim.ExitRuntimeData
 
 /-!
@@ -55,9 +56,13 @@ section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- newlib's runtime data, exclusively owned at some image satisfying `P`. -/
+/-- The bytes of newlib's data `stdioAt` owns exclusively: all but `_impure_ptr`. -/
+def stdioExcl (a : Nat) : Prop := stdioFoot a ∧ ¬ impureW a
+
+/-- newlib's runtime data at some image satisfying `P`: `_impure_ptr`
+read-only, every other byte exclusively owned. -/
 def stdioAt (P : (Nat → BitVec 8) → Prop) : IProp GF :=
-  iprop(∃ img, ⌜P img⌝ ∗ ownSet stdioFoot (fun a => a ↦ₘ img a))
+  iprop(∃ img, ⌜P img ∧ ImpureImg img⌝ ∗ ownSet stdioExcl (fun a => a ↦ₘ img a) ∗ impureRO)
 
 /-- newlib's runtime data in its boundary state. -/
 abbrev stdioOwn : IProp GF := stdioAt StdioOK
@@ -65,11 +70,23 @@ abbrev stdioOwn : IProp GF := stdioAt StdioOK
 theorem stdioAt_mono {P Q : (Nat → BitVec 8) → Prop} (h : ∀ img, P img → Q img) :
     stdioAt (GF := GF) P ⊢ stdioAt Q := by
   unfold stdioAt
-  iintro ⟨%img, %hp, H⟩
+  iintro ⟨%img, %⟨hp, hi⟩, H, #Hr⟩
   iexists img
-  iframe H
+  iframe H Hr
   ipureintro
-  exact h img hp
+  exact ⟨h img hp, hi⟩
+
+/-- `_impure_ptr` out of newlib's data, persistently. -/
+theorem stdioAt_impure (P : (Nat → BitVec 8) → Prop) :
+    stdioAt (GF := GF) P ⊢ stdioAt P ∗ impureRO := by
+  unfold stdioAt
+  iintro ⟨%img, %hp, H, #Hr⟩
+  isplitl [H]
+  · iexists img
+    iframe H Hr
+    ipureintro
+    exact hp
+  · iexact Hr
 
 end Own
 
