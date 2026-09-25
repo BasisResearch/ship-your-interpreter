@@ -295,6 +295,18 @@ theorem callRet_of {R Rf : Nat → BitVec 64} {a0 : BitVec 64} (h10 : Rf 10 = a0
     · rw [if_pos hc]
     · rw [if_neg hc, hkeep r hr hne e hc]
 
+/-- A callee summary's side condition at a call site: a register value, a
+load through the run's stores, an address bound, a literal fact. -/
+syntax "nx_disch" : tactic
+macro_rules
+  | `(tactic| nx_disch) => `(tactic| first
+      | rfl | assumption | decide
+      | (nx_norm; first | done | rfl | assumption)
+      | (nx_mem; first | done | rfl | assumption | (nx_console; done))
+      | (nx_norm; nx_mem; first | done | rfl | assumption | (nx_console; done))
+      | nx_addr
+      | (intro i hi; nx_addr))
+
 /-! ## `#nx_chain`: a chain whose last piece stops at a return
 
 `#ix_chain` (`ITac.lean`) with the last piece's leftover goals exported as

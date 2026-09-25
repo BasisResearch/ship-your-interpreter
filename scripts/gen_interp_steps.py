@@ -600,6 +600,13 @@ theorem jalx_{pc:08x} (live : Nat → Prop)
   rwa [show BitVec.addInt (0x{pc:x}#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x{pc:x} + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 """)
+        if TABLE == 'stdio':
+            # lane N1: a stdio run follows calls (`swp_jal`)
+            thm.append(hdr('it', pc) + f"""
+    (hk : {iw(f'0x{tgt:x}#64', f'(upd R 1 (BitVec.ofNat 64 (0x{pc:x} + 4)))')}) :
+    {iw(f'0x{pc:x}#64')} :=
+  swp_jal 0x{pc:x} [{code_s}] 0x{tgt:x}#64 (jalx_{pc:08x} live (fun p hp => hlive _ (interp_code_{pc:08x} p hp)))
+    (fun p hp => List.mem_append_left _ (interp_code_{pc:08x} p hp)) (by decide) (by decide) rfl hk""")
     return segs, thm
 
 
