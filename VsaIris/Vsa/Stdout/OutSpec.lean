@@ -329,12 +329,6 @@ def OutEnd (o frag : String) (r s : BitVec 64) (cs : Nat → BitVec 64) :
     (∀ x ∈ Newlib.calleeSaved, rv x = cs x) ∧
     StdioOK (fun a => if impureW a then impureByte a else mv a)
 
-theorem sext32_eq_zero {v : BitVec 32}
-    (h : LeanRV64DExecutable.Functions.sign_extend (m := 64) v = 0#64) : v = 0#32 := by
-  have := congrArg (BitVec.setWidth 32) h
-  simp [LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend] at this
-  rw [← this]; ext i hi; simp [BitVec.getElem_setWidth, hi, BitVec.getLsbD_signExtend]; omega
-
 /-- **The end of a stdout run from its summary.** A callee returning with
 `RetOK`, a memory keeping everything but its stack window, `errno` and
 stdout's pointer/count/flags/buffer byte (`outKeep`), and stdout idle again
