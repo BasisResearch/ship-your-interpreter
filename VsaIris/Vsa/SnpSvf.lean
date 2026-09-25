@@ -1047,4 +1047,113 @@ theorem svf_printSign {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   · exact svf_printSign0 hlive R Mt SG St hL h132 h28 size (by simpa using h16) h22 (by omega) h20 h167 hk
   · exact svf_printSign45 hlive R Mt SG St hL h132 h28 size (by simpa using h16) h22 hsize hsum h20 h167 hk
 
+/-- `PRINT`'s continuation after the body (`0x80007914`, the flush test). -/
+def PrintEndK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
+    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
+    (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) : Prop :=
+  ∀ R' Mt', SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L R' Mt' →
+    R' 12 = BitVec.ofNat 64 (sumLen L) → NW live Dt DA (snpS s dst n) Q 0x80007914#64 R' Mt'
+
+/-- The return count stored anew (`sd a5,16(sp)`). -/
+theorem SvfSt.setRet {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
+    {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
+    {R R' : Nat → BitVec 64} {Mt : Mem} (rt' : BitVec 64)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (SG : SnpGeom s dst n)
+    (hR : SvfRegs R' R) (h23 : R' 23 = R 23) :
+    SvfSt DA s dst n R0 Mt0 p ap rt' total L R'
+      (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 16)).toNat, 8, rt')]) := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hM : ∀ a, (a < s - 864 + 16 ∨ s - 864 + 24 ≤ a) →
+      imgM (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 16)).toNat, 8, rt')]) a = imgM Mt a :=
+    fun a ha => by svf_mem
+  refine ⟨St.core.update SG hR (fun a ha => hM a (by unfold SvfKeep at ha; omega)) ?_ ?_ ?_,
+    h23.trans St.r23, ?_, ?_, St.iov.transport (by have := St.len; omega) (fun a h1 h2 => ?_), St.src,
+    St.len, St.sum⟩
+  · svf_mem; exact St.core.fmt
+  · svf_mem
+  · svf_mem; exact St.core.ap
+  · svf_mem; exact St.cnt
+  · svf_mem; exact St.res
+  · exact hM a (by simp only [snpIov] at h1 h2; omega)
+
+/-- `PRINT`'s return count (`0x800078ec`): `ret += max(width, realsz)` with
+width `0`. -/
+theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L R Mt)
+    (h12 : R 12 = BitVec.ofNat 64 (sumLen L)) (h4 : R 6 &&& 4#64 = 0#64) (h28 : R 28 = 0#64)
+    (rs : Nat) (h16 : R 16 = BitVec.ofNat 64 rs) (hrs : c + rs < 2 ^ 31)
+    (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total L) :
+    NW live Dt DA (snpS s dst n) Q 0x800078ec#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := St.core.r2
+  have hr := St.core.ret
+  have haw := addw_ofNat (a := rs) (b := c) (by omega)
+  have haw0 := addw_ofNat (a := 0) (b := c) (by omega)
+  nx_runF hlive using [ofNat_add_ofNat, h2, h4, h28, h16, hr, haw, haw0] at 0x80007914
+  all_goals rename_i hc
+  · have e : rs = 0 := by
+      rw [h16, h28] at hc
+      simp (disch := omega) only [toInt_ofNat_small, BitVec.reduceToInt] at hc; omega
+    subst e
+    refine hk _ _ ?_ ?_
+    · rw [show c + 0 = 0 + c by omega]
+      refine St.setRet (BitVec.ofNat 64 (0 + c)) SG ?_ ?_
+      · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+          simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h12
+  · refine hk _ _ ?_ ?_
+    · rw [Nat.add_comm]
+      refine St.setRet (BitVec.ofNat 64 (rs + c)) SG ?_ ?_
+      · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+          simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h12
+
+#ix_piece svfBody_p1 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L R Mt) (hL : L.length ≤ 2)
+    (h12 : R 12 = BitVec.ofNat 64 (sumLen L)) (h256 : R 6 &&& 256#64 = 0#64)
+    (h4 : R 6 &&& 4#64 = 0#64) (h28 : R 28 = 0#64) (cp size rs : Nat)
+    (h22 : R 22 = BitVec.ofNat 64 size) (h26 : R 26 = BitVec.ofNat 64 cp)
+    (h16 : R 16 = BitVec.ofNat 64 rs) (hsrc : PieceSrc DA s dst n cp size)
+    (hsum : sumLen L + size < 2 ^ 31) (hrs : c + rs < 2 ^ 31)
+    (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total (L ++ [(cp, size)])) :
+    NW live Dt DA (snpS s dst n) Q 0x800078bc#64 R Mt by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := St.core.r2
+  have h23 := St.r23
+  have hcn := St.cnt
+  have hsx := VsaIris.Interp.sext32_ofNat_eq (a := L.length + 1) (by omega)
+  nx_runF hlive using [ofNat_add_ofNat, h2, h23, hcn, h12, h256, h4, h28, h22, h26, h16, hsx] at 0x800078e8
+
+#ix_piece svfBody_p2 from svfBody_p1 by
+  nx_runF hlive using [ofNat_add_ofNat, h2, h23] at 0x800078ec
+  refine svf_body_tail hlive _ _ SG (St.push SG hsrc (by omega) hsum ?_ ?_ ?_ ?_ ?_ ?_ ?_) ?_ ?_ ?_ rs ?_
+    hrs hk
+  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    rw [show s - 864 + 352 + 16 * L.length + 16 = s - 864 + 352 + 16 * (L.length + 1) by omega]
+  · intro a ha; unfold PushW at ha; svf_mem
+  · svf_mem
+  · svf_mem
+  · svf_mem
+  · svf_mem
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  all_goals first | exact h4 | exact h28 | exact h16 | (rw [sumLen_append_one])
+
+-- `PRINT`'s body piece and return count (`0x800078bc` → `0x80007914`).
+#ix_chain svf_printBody := [svfBody_p1, svfBody_p2]
+
 end VsaIris.Sym
