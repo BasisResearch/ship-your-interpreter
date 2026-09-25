@@ -1723,4 +1723,109 @@ theorem svf_end {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
 
+/-! ## `%d` and `%lld` -/
+
+/-- **`ll`** (`0x80008534`, the first `l` at `x - 1`): the second `l` at `x`,
+the `d` at `x + 1`, the quad flag, back to the table. -/
+theorem svf_convLL {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat} (x : Nat)
+    (R : Nat → BitVec 64) (Mt : Mem)
+    (hx : InDA DA x (x + 2)) (hx1 : 0x80000000 ≤ x) (hx2 : x + 2 ≤ 0x100000000)
+    (hx3 : x + 2 ≤ 0x8001ad00 ∨ 0x8001ad08 ≤ x)
+    (hl : imgM Dt x = 0x6c#8) (h25 : R 25 = BitVec.ofNat 64 x) (h6 : R 6 = 0#64)
+    (hk : ∀ R', R' 25 = BitVec.ofNat 64 (x + 1) → R' 24 = BitVec.ofNat 64 (imgM Dt (x + 1)).toNat →
+      R' 6 = 32#64 → (∀ z, z ≠ 6 → z ≠ 15 → z ≠ 24 → z ≠ 25 → R' z = R z) →
+      NW live Dt DA (snpS s dst n) Q 0x80007798#64 R' Mt) :
+    NW live Dt DA (snpS s dst n) Q 0x80008534#64 R Mt := by
+  have hb0 := lbu_img_ofNat Dt x (by omega)
+  have hb1 := lbu_img_ofNat Dt (x + 1) (by omega)
+  rw [hl] at hb0
+  nx_runF hlive using [ofNat_add_ofNat, h25, h6, hb0, hb1] at 0x80007798
+  refine hk _ ?_ ?_ ?_ fun z h6' h15 h24 h25' => ?_
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · decide
+  · simp only [h6', h15, h24, h25', ite_false]
+
+/-- The sign byte and magnitude `_svfprintf_r` prints a signed value with. -/
+def vSg (v : BitVec 64) : Nat := if v.toInt < 0 then 45 else 0
+
+def vMag (v : BitVec 64) : Nat := if v.toInt < 0 then (-v).toNat else v.toNat
+
+/-- The integer conversion after its argument (`0x80008100`): the sign byte
+at `sp + 167`, the magnitude `m` in `a4`, precision `-1`, width `0`. -/
+structure IntAt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
+    (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat)) (m sg : Nat)
+    (R : Nat → BitVec 64) (Mt : Mem) : Prop where
+  st : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt
+  sign : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 sg
+  sg01 : sg = 0 ∨ sg = 45
+  r14 : R 14 = BitVec.ofNat 64 m
+  mlt : m < 2 ^ 64
+  r6 : R 6 = 0#64 ∨ R 6 = 32#64
+  r20 : R 20 = 18446744073709551615#64
+  r28 : R 28 = 0#64
+
+theorem ldv_lbu_sb45 (Mt : Mem) (a : Nat) : ldv .lbu (writeLog Mt [(a, 1, 45#64)]) a = 45#64 := by
+  have := ldv_lbu_sb Mt a 45#8
+  rwa [show BitVec.zeroExtend 64 (45#8) = 45#64 by decide] at this
+
+theorem vSg_pos {v : BitVec 64} (h : (0#64).toInt ≤ v.toInt) : vSg v = 0 := by
+  unfold vSg; rw [if_neg (by simp at h; omega)]
+
+theorem vMag_pos {v : BitVec 64} (h : (0#64).toInt ≤ v.toInt) : vMag v = v.toNat := by
+  unfold vMag; rw [if_neg (by simp at h; omega)]
+
+theorem vSg_neg {v : BitVec 64} (h : ¬ (0#64).toInt ≤ v.toInt) : vSg v = 45 := by
+  unfold vSg; rw [if_pos (by simp at h; omega)]
+
+theorem vMag_neg {v : BitVec 64} (h : ¬ (0#64).toInt ≤ v.toInt) : vMag v = (-v).toNat := by
+  unfold vMag; rw [if_pos (by simp at h; omega)]
+
+theorem vSg01 (v : BitVec 64) : vSg v = 0 ∨ vSg v = 45 := by unfold vSg; split <;> simp
+
+theorem vMag_lt (v : BitVec 64) : vMag v < 2 ^ 64 := by unfold vMag; split <;> exact BitVec.isLt _
+
+/-- **`%lld`'s argument** (`0x80008008` with the quad flag): the 64-bit value
+`v` loaded from the `va_list`, the cursors stored, the sign byte and
+magnitude. -/
+theorem svf_intQ {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (x : Nat) (v : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt)
+    (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = 0#64)
+    (h25 : R 25 = BitVec.ofNat 64 x) (h6 : R 6 = 32#64) (h20 : R 20 = 18446744073709551615#64)
+    (h27 : R 27 = 0#64)
+    (hv : ldv .ld Mt (BitVec.ofNat 64 ap).toNat = v) (hap1 : s - 40 ≤ ap) (hap2 : ap + 8 ≤ s)
+    (hk : ∀ R' Mt', IntAt DA s dst n R0 Mt0 x (ap + 8) rt total L (vMag v) (vSg v) R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80008100#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80008008#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := St.core.r2
+  have hapf := St.core.ap
+  nx_runF hlive using [ofNat_add_ofNat, h2, h6, h20, h25, h27, hapf, hv] at 0x80008100
+  all_goals rename_i hc _
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc)
+  all_goals refine hk _ _ ⟨St.update SG ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]))
+  all_goals (try (intro a ha; unfold StKeep SvfKeep at ha; svf_mem))
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+  all_goals (try (svf_mem; done))
+  all_goals (try (svf_mem; exact St.core.ret))
+  · svf_mem; rw [vSg_pos hc]; exact h167
+  · exact vSg01 v
+  · rw [vMag_pos hc]; simp
+  · exact vMag_lt v
+  · exact .inr h6
+  · exact h20
+  · rw [ldv_lbu_sb45, vSg_neg hc]
+  · exact vSg01 v
+  · rw [vMag_neg hc]; apply BitVec.eq_of_toNat_eq; simp
+  · exact vMag_lt v
+  · exact .inr h6
+  · exact h20
+
 end VsaIris.Sym
