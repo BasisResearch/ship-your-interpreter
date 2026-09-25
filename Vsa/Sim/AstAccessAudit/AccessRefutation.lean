@@ -1,6 +1,6 @@
 import Vsa.Sim.AstAccessAudit.AccessPrefix
 import Vsa.Sim.AstAccessAudit.StuckLoad
-import Vsa.Sim.EndToEnd
+import Vsa.Refinement
 
 /-! A complete finite execution obstruction under the historical ownership-only boundary.
 The program evaluates two integer literals and produces no output. The admitted
@@ -29,9 +29,6 @@ theorem access_not_interpSim : ¬ InterpSim BeforeAstReadability.interpRunLayout
   exact access_not_halts "" 0
     (H.term_sim accessProgram accessConfig "" access_loaded access_bigStep)
 
-theorem access_not_remainingWork : EndToEnd.RemainingWork BeforeAstReadability.interpRunLayout → False :=
-  fun W => access_not_interpSim (EndToEnd.interpSim_ofWork W)
-
 theorem access_not_behavioralCorrespondence :
     ¬ (∀ p c, Loaded BeforeAstReadability.interpRunLayout p c →
       (∀ out, BigStep p out ↔ Halts c out 0) ∧
@@ -43,7 +40,6 @@ theorem access_not_behavioralCorrespondence :
 #print axioms access_final_stuck
 #print axioms access_not_halts
 #print axioms access_not_interpSim
-#print axioms access_not_remainingWork
 #print axioms access_not_behavioralCorrespondence
 
 end Vsa.Sim.AstAccessAudit

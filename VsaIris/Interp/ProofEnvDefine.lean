@@ -54,7 +54,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
   iintro %ρ %st %fa %x %v %e %pn %pv %s %saved %hsv
   unfold fnSpecAbort
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp, hslot⟩, Ha0, Ha1, Ha2, Hsp, -, Hcl, Hsv, Hstk, #Hfa, #Hx, Hval,
+  iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp, hslot⟩, Ha0, Ha1, Ha2, Hsp, -, -, Hcl, Hsv, Hstk, #Hfa, #Hx, Hval,
     Hhs⟩ HK
   -- the heap and the store; the frame opened
   ihave ⟨%H, %B, Hh, Hst, %hBH⟩ := heapStore_parts N _ st $$ Hhs

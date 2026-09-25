@@ -93,9 +93,8 @@ def valsAt (N : NativeAddrs) (a : Nat) (vs : List Value) : IProp GF :=
 the closure object's first word (its `EX_FN` node) and the node's name field,
 read-only, with the read geometry the loads need (`ReadOK`, as in lane G's
 `astEG`) and the view's string window (`SharedWin`, H1: the name is a
-`strAt`). This is `closOwn` (without the environment link) plus geometry:
-`closOwn`/`astE` carry no geometry, so the supplier is the one that built the
-closure (`EX_FN`: a heap block and the program's AST, both readable).
+`strAt`). This is `closOwn` without the environment link (`dispSupply`
+projects it from the store).
 Every other value is displayed from its own words. -/
 def dispRes (st : Store) : Value → IProp GF
   | .closure ca => iprop(∃ (cd : ClosureData) (p q : Nat) (img : Nat → BitVec 8) (P : Nat → Prop)
@@ -134,7 +133,7 @@ covers. -/
 def strcmpSpecV (Wp : MachWP (GF := GF) M) : IProp GF :=
   iprop(□ ∀ (p q : BitVec 64) (x y : String),
     helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
-      iprop(strAt p.toNat x ∗ strAt q.toNat y)
+      iprop(binImg ∗ strAt p.toNat x ∗ strAt q.toNat y)
       (fun rv' => iprop(⌜rv' 10 = 0#64 ↔ x = y⌝)))
 
 instance (Wp : MachWP (GF := GF) M) : Persistent (strcmpSpecV M Wp) := by
@@ -169,7 +168,7 @@ def valueEqualSpec (Wp : MachWP (GF := GF) M) (pa pb s : BitVec 64) (a b : Value
     (B : List (Nat × Nat)) : IProp GF :=
   helperSpec M Wp valueEqualPC callerSaved (fun rv => rv 10 = pa ∧ rv 11 = pb ∧ rv 2 = s)
     iprop(valAt N pa.toNat a ∗ valAt N pb.toNat b ∗ ⌜SlotGeom pa ∧ SlotGeom pb ∧ NativeInj N⌝ ∗
-      storeRepr N st B ∗ stackAt s 16 ∗ strcmpSpecV M Wp)
+      storeRepr N st B ∗ stackAt s 16 ∗ strcmpSpecV M Wp ∗ binImg)
     (fun rv' => iprop(valAt N pa.toNat a ∗ valAt N pb.toNat b ∗ storeRepr N st B ∗ stackAt s 16 ∗
       ⌜rv' 10 = if Value.equal a b then 1#64 else 0#64⌝))
 
@@ -210,13 +209,17 @@ def nativePrintlnSpec (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs :
     (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
       consoleOwn (o ++ printArgs st vs ++ "\n") ∗ stackAt s nativePrintlnNeed))
 
+/-- `Call.assertOk`'s premise: one or two arguments, the first truthy. -/
+def AssertOk (vs : List Value) : Prop := ∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true
+
 /-- `native_assert(sret, in, argc, args, line)`, a function that returns OR
 aborts (`fnSpecAbort`). With one or two arguments, the first truthy, it
 returns `null`: the premise of `Call.assertOk`. Otherwise it calls
 `runtime_error(in, line, …)` (H5's `rtErr_spec`: the arity message, or `"%s"`
 with `"assertion failed"` or the second argument's string), which never
 returns: the abort branch receives H5's `abortRes` over the whole stack below
-`s`, and the result slot and the arguments back. The world and the `jmp_buf`
+`s`, and the result slot and the arguments back, with the reason: `AssertOk`
+fails (lane E4: total mode refutes the abort branch with it). The world and the `jmp_buf`
 (read-only at `jb`, its `ra` word aligned) are `runtime_error`'s. -/
 def nativeAssertSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred)
     (sret inp args s line : BitVec 64) (vs : List Value) (ρ : Regime) (st : St) (d : Nat)
@@ -232,7 +235,7 @@ def nativeAssertSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred)
     (fun _ => iprop(∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
       ⌜∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true⌝ ∗ valAt N sret.toNat .null ∗
       valsAt N args.toNat vs ∗ world N L Room inp.toNat ρ st d ∗ stackAt s nativeAssertNeed))
-    iprop(abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
+    iprop(⌜¬ AssertOk vs⌝ ∗ abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
       valsAt N args.toNat vs))
 
 end Specs

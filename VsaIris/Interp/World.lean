@@ -974,6 +974,8 @@ theorem interpCtxPre_of_bytes {inp g : Nat} {img : Nat → BitVec 8}
     iframe Hg Hf
     isplitl [Hd]
     · iapply wordAt_of_ownImg hd $$ Hd
+    isplitl []
+    · ipureintro; decide
     isplitl [Hp]
     · iapply blockOwn_of_ownImg _ _ _ $$ Hp
     · iapply blockOwn_of_ownImg _ _ _ $$ He
@@ -1067,6 +1069,9 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
   ihave ⟨Hstk, Hsta⟩ := ownSet_unglue _ _ _ stack_disj $$ Hall
   ihave Hsta := ownSet_iff _ static_parts $$ Hsta
   ihave ⟨Hstd, Hsta⟩ := ownSet_unglue _ _ _ stdio_disj $$ Hsta
+  -- `_impure_ptr` is never written: discard it (`Stdio.impureRO`)
+  ihave ⟨Himp, Hstd⟩ := ownSet_split _ Stdio.impureW _ $$ Hstd
+  imod ownImg_persist _ (memImg c.σ.mem) $$ Himp with #Himp
   ihave Hstk := ownSet_iff _ (fun k => stack_parts b.inp.toNat k b.inp_toNat) $$ Hstk
   ihave ⟨Hfree, Hstk⟩ := ownSet_unglue _ _ _ (freeStack_disj _ b.inp_toNat) $$ Hstk
   ihave ⟨Hint, Hcal⟩ := ownSet_unglue _ _ _ (interp_disj _) $$ Hstk
@@ -1098,10 +1103,17 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
     · iapply heapRes_of_bytes (b.blockHeapAt hroom) gap.brk_page gap.binblocks hH hρ $$ Hh
     isplitl [Hstd]
     · unfold Stdio.stdioOwn Stdio.stdioAt
+      have hok := stdioOK_of_mem b.ready.console b.ready.exit_runtime gap.stderr gap.locale
       iexists memImg c.σ.mem
-      iframe Hstd
-      ipureintro
-      exact stdioOK_of_mem b.ready.console b.ready.exit_runtime gap.stderr gap.locale
+      isplitr [Hstd]
+      · ipureintro; exact ⟨hok, Stdio.StdioOK.impureImg hok⟩
+      isplitl [Hstd]
+      · unfold Stdio.stdioExcl
+        iexact Hstd
+      unfold Stdio.impureRO
+      have hin : ∀ k, Stdio.impureW k → Stdio.stdioFoot k ∧ Stdio.impureW k := fun k hk =>
+        ⟨by unfold Stdio.impureW at hk; unfold Stdio.stdioFoot Stdio.InRange; omega, hk⟩
+      iapply roImg_restrict hin (fun k hk => Stdio.StdioOK.impureImg hok k hk) $$ Himp
     · ipureintro
       intro blk hblk
       exact hG.live blk (by simpa using hblk)

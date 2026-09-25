@@ -233,8 +233,9 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   rw [hS.spillsSaved]
   ihave Hsp1 := (sepL_spills S.spills cs).1 $$ Hsp1
   -- `_impure_ptr` and `_impure_data._stderr`
-  ihave ⟨%simg, %hok, Hw, Hrest⟩ := stdioAt_open StdioOK StdWin $$ Hstd
-  ihave Hw := (stdWin_iff simg).1 $$ Hw
+  ihave ⟨%simg, %⟨hok, himp⟩, Hw, Hrest, #Himp⟩ := stdioAt_open StdioOK StdWin $$ Hstd
+  ihave Hw := stdWin_foot simg himp $$ [Hw]
+  · iframe Hw Himp
   ihave ⟨⟨%a5v, Ha5⟩, Hargs⟩ := clobbered_take (r := 15) (by decide) $$ Hargs
   ihave ⟨⟨%a2v, Ha2⟩, Hargs⟩ := clobbered_take (r := 12) (by decide) $$ Hargs
   ihave ⟨⟨%a1v, Ha1⟩, Hargs⟩ := clobbered_take (r := 11) (by decide) $$ Hargs
@@ -262,7 +263,7 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
       (code_present hok' _ (fun q hq => hMR q (List.mem_append_left _ hq)) hcodeL) hok hsp'
       (fun k hk => by
         rcases hk with hk | hk
-        · exact imgFoot_pin (a := consoleImpurePtrAddr) (n := 8) hMR
+        · exact imgFootD_pin (a := consoleImpurePtrAddr) (n := 8) hMR
             (fun q hq => List.mem_append_right _ (List.mem_append_left _ hq)) k hk.1 hk.2
         · exact imgFoot_pin (a := stderrPtrAddr) (n := 8) hMR
             (fun q hq => List.mem_append_right _ (List.mem_append_right _ hq)) k hk.1 hk.2))
@@ -281,9 +282,9 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     iexact Hw
   iintro Hpc ⟨Ha5, Ha2, Ha1, Ha3, Ha0, Hsp, Hsp1⟩ - Hwin HMR
   ihave ⟨-, Hw⟩ := (sepL_append _ _ _).1 $$ HMR
-  ihave Hw := (stdWin_iff simg).2 $$ Hw
-  ihave Hstd := stdioAt_close StdioOK StdWin simg hok $$ [Hw Hrest]
-  · iframe Hw Hrest
+  ihave Hw := stdWin_back simg $$ Hw
+  ihave Hstd := stdioAt_close StdioOK StdWin simg hok himp $$ [Hw Hrest]
+  · iframe Hw Hrest Himp
   ihave Hsp1 := sepL_spills_keep S.spills _ cs hkeep $$ Hsp1
   ihave Hwin := blockOwn_of_W Wf s'.toNat S.frameTop _ hWf $$ Hwin
   -- the callee-saved registers back together

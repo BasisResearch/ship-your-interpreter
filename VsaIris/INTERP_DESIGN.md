@@ -1,10 +1,11 @@
 # Interpreter-level design: `eval_expr`, `exec_stmt`, `interp_run` in the Iris logic
 
-Status: DESIGN, not built. The statement skeleton is `VsaIris/Interp/Specs.lean`
-(not imported from `VsaIris.lean`; its lemma bodies are `sorry` and it has never
-been elaborated). This page fixes the representation predicates, the function
-specs, the assembly of `InterpSim`, and the fan-out. The proofs are left to the
-work packages in §9. MachCSL's own rule applies here (paper §9.1, xv6iris
+Status: built. The statements live in `Interp/SpecEval.lean`,
+`Interp/SpecExecDisp.lean`, `Interp/SpecLoop.lean` and the helper `Spec*.lean`
+files; the assumptions in `Interp/Holes.lean`; the assembly in
+`Interp/TermSim.lean`, `Interp/StuckSim.lean`, `Interp/TopRun*.lean` and
+`Interp/EndToEnd.lean`. This page fixes the representation predicates, the
+function specs, the assembly of `InterpSim`, and the fan-out. MachCSL's own rule applies here (paper §9.1, xv6iris
 `claude-notes/durable-notes.md` "Orchestration"): the top level owns the specs,
 and a proof that fights its interface is evidence the interface is wrong.
 
@@ -22,6 +23,186 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 
 - **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
+
+## STATEMENT CHANGE (lane A): the general registers and `main`'s `s0` in `Loaded`
+
+`InterpRunReadyFacts` (`Vsa/Sim/LayoutInstance.lean`) gains two fields, as
+the standing decision on boundary facts (2026-09-24) prescribes:
+
+```lean
+gprs      : ∀ n, 1 ≤ n → n ≤ 31 → (gprGet c.σ n).isSome
+s0_impure : c.σ.regs.get? Register.x8 = some 0x8001b970#64
+```
+
+- **Why.** Adequacy needs the global invariant at the loaded configuration,
+  and `VsaOk.gpr` states every general register present; `Loaded` named only
+  the argument and callee-saved ones. `interp_run` spills `s0`, and its error
+  line and the `longjmp` landing reload it as `&_impure_ptr`
+  (`interpRun_partial_boot`'s `R0 8 = 0x8001b970`); `main` sets it at
+  `0x80004590` (`addi s0,gp,1120`) before `jal interp_run`.
+- **What narrowed.** `interpRunLayout.atInterpRun`, hence `Loaded
+  interpRunLayout p c` and the hypothesis of `endToEnd_refinement`.
+  `Refinement.lean` is unchanged. `InterpRunPhysicalFacts` and the historical
+  boundaries (`BeforeRuntimeOwnership` etc.) are unchanged.
+- **Not vacuous.** The control's snapshot now has `s0 = 0x8001b970`
+  (`OutputAliasPhysical.physicalConfigS0`: `physicalRegs` with `x8`
+  replaced; `Control.heapConfig` uses it). `physicalS0_gprs` and
+  `physicalRegsS0_x8` supply the fields in `Control.readyFacts`; the other
+  physical facts transport through `PhysicalCarrier.of_regs_s0`. The
+  output-alias witness keeps `physicalConfig` (`s0 = 0`); its trace is
+  unchanged.
+- **Consumer.** `TopBoundary.vsaOk_of_ready` (no `hgpr` premise);
+  `TopEntryBoot.topRegs_ready`/`topRegs_carve` (the entry registers from
+  adequacy's register points-to), `codeRes_of_boundary` (`gp ↦ᵣ gpV ∗ binImg
+  ⊢ |==> codeRes`), `interpRun_total_top`/`interpRun_partial_top`.
+
+## STATEMENT CHANGE (lane A): the landing core stops at `interp_run`'s frame
+
+`StackGeom s n` (`SpecEval.lean`) gains `top : s.toNat ≤ spEntry - interpRunFrame`:
+every `eval_expr`/`exec_stmt` site (and every helper whose `stackAt` carries
+`StackGeom`) runs at or below `interp_run`'s lowered `sp`. `CoreOK`
+(`SpecErr.lean`) widens only regions with `sc.toNat ≤ spEntry - interpRunFrame`,
+and `evalCore := abortCore N L Room inp runSp (runSp.toNat - 0x87800000)`
+(`LeafErr.lean`; `runSp = BitVec.ofNat 64 (spEntry - interpRunFrame)`), no longer
+the whole segment.
+
+- **Why.** H5's `wp_abort` accepts `abortRes … (sM - 176) n` only: an
+  out-of-memory `exit` over the whole segment could run on bytes the top owns
+  (`struct Interp`, `main`'s frame).
+- **Producers.** The top's `topStackGeom`; children derive `top` from the
+  parent (`narrow`, `lower`, `lowerE`, `evalCallGeom`, `callGeomF`,
+  `stackGeom_evalSP`); the helper contexts (`SgCtx`, `NpCtx`, `NplCtx`,
+  `NaCtx`) carry it from their entry `StackGeom`.
+- **Consequence.** `TopRunP.evalCore_top`: the partial specs' core is the top's
+  abort core; `interpRun_partial` has no `hcore` premise.
+
+## STATEMENT CHANGE (lane A): the `interp_run` loop keeps the node and the frame image
+
+`interpSeqP_body` (`SeqLoopInterp.lean`) now returns, at a `ret`/`brk`/`cont`
+exit, `ReadOK (R' 9).toNat` (`s1` is still the statement node, `ReadOK` from
+`InterpData.geo` at the node's tag), and its abort branch hands the frame back
+as `ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)` instead of `byteAny` (the
+`longjmp` landing reloads `in`, the link and `main`'s `s0` from it). The abort
+image comes from `Arm.ms_callExecPM` (the exec call threading one continuation
+`K` whose abort branch takes the frame at `Mt`); `ms_callExecP` is its
+instance. `interpRun_partial` uses `interpSeqP_all` directly (the former
+premise `interpSeqPX_body` is gone).
+
+## STATEMENT CHANGE (lane A): one rule for the top-level abrupt statuses
+
+H5's `TopAbrupt.wp_topAbrupt` (the `line` word as `roImg`, which no AST
+representation supplies: the statement's `+4` word is not in its read set) and
+lane A's `wp_topAbrH` are folded into `Interp.wp_topAbrupt` (`TopRunP.lean`),
+over H5's descriptor `TopSite` (now `head`, `fmt`, `fmtBytes`, `jal`) and
+certificates `topRet_ok`/`topBrk_ok` (`jal` and format facts), with the
+staging and tail as `interp_run`'s symbolic runs (`TopRuns`, `line` read by
+havoc from a `ReadOK` node).
+
+## STATEMENT CHANGE (lane A): closure geometry in `closOwn`
+
+`closOwn ca cd` (`Repr.lean`) carries `ClosObj img p q e` (nonnull, the
+`fn_expr`/`env` words, and `ReadOK` on the object's 16 bytes) and the `EX_FN`
+node as `astEG` (view with `ReadOK` geometry) instead of `astE`. `ReadOK` and
+`astEG` moved from `SpecEval.lean` to `Repr.lean` (names kept).
+
+- **Why.** The closure call and `value_print` load the object and the node;
+  `CloSupply`/`DispSupply` were named premises because `closOwn` lacked the
+  geometry.
+- **Producer.** The `fn` arm (`fnLit_{T,P}` templates) passes the fresh heap
+  block's placement and the node's `astEG` to `storeRepr_allocClosure`.
+  The boundary store has no closures (`storeRepr_empty`).
+- **Consequence.** `cloSupply : CloSupply N` and `dispSupply : DispSupply N`
+  (`CallClosure.lean`) hold for every `N`; `SharedWin` follows from `ReadOK`.
+## STATEMENT CHANGE (lane A): `_impure_ptr` is read-only
+
+`Stdio.stdioAt P` owns the 8 bytes of `_impure_ptr` (`0x8001b970`, never
+written; it holds `&_impure_data`) as the persistent `Stdio.impureRO`
+(`roImg impureW impureByte`, `VsaIris/Vsa/ImpureRO.lean`) and every other
+byte of `stdioFoot` (`stdioExcl`) exclusively; its image agrees with
+`_impure_ptr` (`ImpureImg`). `StdioOK` is unchanged.
+
+- **Why.** `envText` and `allocText` list `_impure_ptr` as `↦ₘ□`, and full
+  and discarded ownership of one byte cannot coexist, so `textOwn allocText`
+  could not be produced next to `world`'s `stdioOwn`.
+- **Consequence.** `textOwn_envText`/`textOwn_allocText` (`binImg ∗
+  impureRO ⊢ textOwn …`, `VsaIris/Vsa/ImpureText.lean`); `stdioAt_impure`
+  projects `impureRO`. The boundary discards the 8 bytes with a ghost update.
+  Readers of `_impure_ptr` (`main`'s error line, the out-of-memory block,
+  `native_print`/`native_println`) read it with a discarded fraction
+  (`imgFootD`, the data view `impMem`).
+- **Holes.** The `IrisHoles` newlib statements keep their text; newlib never
+  writes `_impure_ptr`, so they remain satisfiable.
+
+## STATEMENT CHANGE (lane A): helper specs carry their code context; memcpy/strcpy destinations above HTIF
+
+Every helper spec a case lemma takes as a closed hypothesis carries, in its
+precondition, the persistent code context its proof runs from:
+
+| spec | added to the precondition |
+|---|---|
+| `envNewSpec`, `envDefineSpec` | `codeX` (beside `gp ↦ᵣ□ gpV`) |
+| `envGetSpec`, `envSetSpec` | `gp ↦ᵣ□ gpV ∗ codeX` |
+| `strcmpSpecV`, `strcmpOrdSpec`, `strlenHeapSpec`, `strcpyHeapSpec` | `binImg` |
+| `memcpySpecOwned` | `binImg` |
+| `valueEqualSpec` | `binImg` (its `strcmp` call's) |
+
+`codeX := binImg ∗ impureRO` (`VsaIris/Vsa/ImpureText.lean`) gives
+`textOwn envText`/`textOwn allocText`; `world_codeX`/`world_allocText`/
+`world_binImg` frame it out of `world`, `codeRes_gpM` gives `gp`.
+
+- **Destinations above HTIF.** `memcpySpec`, `memcpySpecOwned`, `strcpySpec`
+  and `strcpyHeapSpec` require `htifLo + 16 ≤ dst.toNat` (VSA's store facts
+  hold only above the HTIF words). The `…H` copies and the `gapRO` premise are
+  deleted; `memcpy_spec_env`/`memcpy_spec_owned`/`StrLeaf.strcpy_spec`/
+  `StrLeaf.strcpy_heap_spec` prove the real specs. Every caller's destination
+  is a heap block or a stack buffer (env_define's name copy, `stringify`'s
+  buffers, the concatenation block).
+- **`stringifySpec`'s abort** is `⌜ρ = .uncounted⌝ ∗ abortRes … ∗ slot24 p`:
+  only an uncounted `malloc` fails, and the out-of-memory path hands back the
+  value's slot, so `stringifySpecT` (counted) and `stringifySpecP` are both
+  consequences (`stringifyT_closed`, `stringifyP_closed`).
+- **Leaf specs inside helper proofs** (`strcmpSpec`, `strlenSpec`,
+  `memcpySpec`, `strcpySpec`) stay code-free resources; the proofs that use
+  them own `binImg` and take them as `binImg ⊢ …` (`stringify_spec`) or
+  receive them from it (`envDefine_closed`).
+- **The cases.** `caseT_FnLit`/`caseP_FnLit`/`caseT_BinaryConcat`/
+  `caseP_BinaryAdd` are closed statements: they take `binImg` and
+  `textOwn allocText` from `world` in their precondition. `TermSupply`/
+  `StuckSupply` lose `fnLit`/`concat`/`add` and gain `alloc`,
+  `stringifyT`/`stringifyP`, `strlenHeap`, `memcpyOwned`, `strcpyHeap`.
+- **`topLive`** adds `_impure_ptr`'s 8 bytes (in `envText`/`allocText`) and the
+  stack segment (`stringify`'s `strlen` of its stack buffer), present in a
+  loaded configuration by `InterpRunPhysicalFacts.statics`/`.stack_bytes`.
+- **Suppliers.** `VsaIris/Interp/Supply.lean`: the generic
+  `fnSpecW_close`/`fnSpecAbort_close`/`helperSpec_close` (a spec proved under
+  a persistent context its precondition carries is closed), one `*_closed`
+  theorem per spec, and `supplies_of : IrisHoles → Supplies`.
+
+## STATEMENT CHANGE (lane A, Q7 decided 2026-09-25): the helpers' stack headroom
+
+`Vsa.Sim.LayoutInstance.helperHeadroom = 2048` is added to
+`ProgramStackFits.need` (a narrowing of `Loaded`, as Q1) and to the Iris
+budget `stackBudget need d = need + (maxCallDepth - d) * perCallBudget +
+evalFrame + helperHeadroom`.
+
+- **Why.** At call depth `maxCallDepth` the budget left `evalFrame = 1088`
+  bytes below a leaf arm's frame, but `runtime_error` needs `rtErrNeed = 1248`
+  (so `ErrRoom (.var x) maxCallDepth` was false), and a native call's
+  `fprintf` chain needs `nativePrintlnNeed = 4224` below a call node that
+  left 2176 (E4's `hroom`). The constant is the larger shortfall.
+- **Consequence.** `ErrRoom e d` holds at every depth (`errRoom`); E4's
+  `hroom` holds at every depth.
+- **Not vacuous.** The control program and every `c/tests/*.wl` witness
+  (`StackAdmissibleWitness.lean`) still decide `programStackFits` (about
+  2.24 MB of slack).
+
+## STATEMENT CHANGE (lane A): `newlib.exitHandlers` is exact from `StdioOK`
+
+`exitHandlersSpec` takes `quiet : Bool`: with `quiet = true` it starts from
+`StdioOK` only and the continuation's output extension is empty. `term_sim`
+needs `Halts c st'.out 0` exactly; the old field allowed `exit(0)` to print.
+It holds of the binary: `main` makes `stdout` unbuffered, so the close path
+flushes nothing. `wp_exitCall` takes `quiet`; H5's error exits pass `false`.
 
 ## STATEMENT CHANGE (integration): the global frame's capacity and the shared bytes' geometry
 
@@ -1014,6 +1195,50 @@ binary or by what the proofs consume:
   decide, leaving `cond → …` for each side. Lane G's `ix_run` explores both
   sides. H2's scripts resolve each side themselves. The two share
   `ixRunCore`.
+
+### STATEMENT CHANGES (E4)
+
+- **`world` owns the binary's image `Newlib.binImg`** (persistent: `.text`
+  and `.rodata` of the fixed ELF, `worldE`'s last conjunct; projection
+  `worldE_binImg`). Every native (`nativePrintSpec`, `nativePrintlnSpec`,
+  `nativeAssertSpec`), `stringifySpec`, `runtime_error` (`rtErr_spec`) and the
+  abort landing take `binImg` (newlib's code), but no recursive spec carried
+  it: `evalPre`/`execPre` have only `codeRes` (the interpreter's own code), so
+  no call arm could call a native and no error arm could call `runtime_error`.
+  Precedent: H5 put `Stdio.stdioOwn` into `world` for the same callees. The
+  definitions of its domain moved below `Repr` (`Vsa/BinDom.lean`) so `worldE`
+  can name it; `binImg` itself is defined in `Repr.lean` (namespace
+  `VsaIris.Newlib`, name unchanged). Consumers adjusted: `world_heapStore`
+  (the image on the right), `world_blocks_off_heap`, `rtErr_spec` (rebuilds
+  the landing's world with its own `binImg`), `wp_abortLanding`, E1's
+  `var`/`assign`/`fnLit` templates and E2's `catRest` (it keeps the image for
+  `world_of_catRest`). A supplies it
+  at `setjmp` from the boundary's `roOn CodeByte` (`bootRes`).
+- **`interpCtxE` carries the `jmp_buf`'s aligned `ra` word**
+  (`∃ jb, jmpRO inp jb ∗ ⌜(imgW jb (inp + interpJmpOff)).toNat % 4 = 0⌝`).
+  `runtime_error` (`rtErr_spec`'s `hjb`) and `nativeAssertSpec` need it; E2's
+  `errCtx` supplied it as a partial-mode premise, which a total-mode `assert`
+  call cannot have. With it in the world, `world_errCtx` derives `errCtx` in
+  either mode. Supplier: A, after `setjmp` (the saved `ra` is `0x80004428`).
+- **`interpCoreE` carries `d ≤ maxCallDepth`.** The closure call's depth
+  test is a signed 32-bit compare (`addiw`, `blt 1000`); for a counter of
+  `2^31` or more it passes, while `Call.closure` needs `d < maxCallDepth`, so
+  the partial spec (quantified over every `d`) was unprovable at such worlds.
+  The machine keeps the bound (the check before every body, the reset on the
+  error, the decrement after); A0 establishes it at `d = 0`. Consumers adjusted:
+  `rtErr_spec` (rebuilds the landing's context with the same `d`),
+  `wp_abortLanding`, `world_of_boundary` (`World.lean`), `ctl_interpCtxPre`.
+- **`nativeAssertSpec`'s abort carries its reason**, `⌜¬ AssertOk vs⌝`
+  (`AssertOk vs := ∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy`): total mode
+  must prove the abort continuation of the `∧`, and refutes it with
+  `Call.assertOk`'s premise. H2's abort paths (`na_badPath`, `na_falsy*`)
+  supply it (`not_assertOk_len`, `not_assertOk_falsy`).
+- **The call arm's partial case takes `execDispsP`.** A closure call runs
+  its body with `exec_stmt` inside `eval_expr`'s arm, so `caseP_CallArm`'s
+  Löb hypotheses are `evalSpecsP ∗ errCtx ∗ execDispsP` (E5's statement form
+  of the exec Löb hypothesis). `execSpecsP_of_disps` gives `CallCloP` the
+  entry specs G's closure loop takes. The recursor's partial case supplies both
+  hypotheses; the other eval arms keep `evalSpecsP ∗ errCtx`.
 
 ### STATEMENT CHANGES (E2)
 

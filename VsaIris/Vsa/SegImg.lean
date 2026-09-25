@@ -18,8 +18,7 @@ takes its read footprint as a list and each `ld` as a byte list with a
 * `imgWord img a`: the loaded bytes of an `ld` at `a`, with
   `bytesVal_imgWord` (the loaded value is `imgW img a`) and `ldFact`
   (the `MemFacts` of the load from the footprint's agreement);
-* `stdioAt_open`/`stdioAt_close`: a window of newlib's data out of `stdioAt`
-  and back, keeping the image.
+* `imgFootD`: a read-only extent (discarded fractions) as a footprint list.
 -/
 
 namespace VsaIris.Inst
@@ -125,6 +124,11 @@ theorem addr_off (base : BitVec 64) (imm : BitVec 12) (off : Nat)
 def imgFoot (a n : Nat) (img : Nat → BitVec 8) : List (Nat × DFrac × BitVec 8) :=
   (List.range' a n).map (fun k => (k, DFrac.own 1, img k))
 
+/-- The read footprint of a read-only `n`-byte extent at the image `img`
+(discarded fractions: `_impure_ptr`). -/
+def imgFootD (a n : Nat) (img : Nat → BitVec 8) : List (Nat × DFrac × BitVec 8) :=
+  (List.range' a n).map (fun k => (k, DFrac.discard, img k))
+
 /-- The written-byte list of an owned `n`-byte extent at `img`. -/
 def imgW8 (a n : Nat) (img : Nat → BitVec 8) : List (Nat × BitVec 8) :=
   (List.range' a n).map (fun k => (k, img k))
@@ -183,6 +187,15 @@ theorem imgFoot_pin {live : Nat → Prop} {c : Vsa.Machine.Config} {MR : List (N
   have := hMR (k, DFrac.own 1, img k) (hsub _ (List.mem_map.mpr ⟨k, by
     rw [List.mem_range']; exact ⟨k - a, by omega, by omega⟩, rfl⟩))
   exact this
+
+/-- A footprint agreement on a read-only extent reads every byte of it. -/
+theorem imgFootD_pin {live : Nat → Prop} {c : Vsa.Machine.Config}
+    {MR : List (Nat × DFrac × BitVec 8)} {a n : Nat} {img : Nat → BitVec 8}
+    (hMR : ∀ p ∈ MR, (vsaModel live).mem c p.1 = p.2.2) (hsub : ∀ p ∈ imgFootD a n img, p ∈ MR) :
+    ∀ k, a ≤ k → k < a + n → (c.σ.mem[k]?).getD 0 = img k := by
+  intro k h1 h2
+  exact hMR (k, DFrac.discard, img k) (hsub _ (List.mem_map.mpr ⟨k, by
+    rw [List.mem_range']; exact ⟨k - a, by omega, by omega⟩, rfl⟩))
 
 end Own
 

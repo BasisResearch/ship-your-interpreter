@@ -7,7 +7,8 @@ import VsaIris.Vsa.Stdio
 `StdioOK img` quantifies over memories agreeing with `img` on `stdioFoot`.
 `fillMem` builds one, so each memory fact of `ConsoleStream`/`ExitRuntimeData`
 becomes a word of the image (`StdioOK.word`). H5 reads `_impure_ptr` and
-`_impure_data._stderr` this way at `main`'s error line.
+`_impure_data._stderr` this way at `main`'s error line. `StdioOK.impureImg`
+gives `_impure_ptr` byte by byte.
 -/
 
 namespace VsaIris.Stdio
@@ -77,35 +78,69 @@ theorem StdioOK.stderr {img : Nat → BitVec 8} (h : StdioOK img) :
     imgW img stderrPtrAddr = BitVec.ofNat 64 exitStderr :=
   StdioOK.word h.facts.2.2.1 (dataList_range (by decide) (by decide))
 
+/-- The bytes of a little-endian number, one by one. -/
+theorem imgLE_byte (img : Nat → BitVec 8) : ∀ {n a i : Nat}, i < n →
+    img (a + i) = BitVec.ofNat 8 (imgLE img a n / 256 ^ i)
+  | n + 1, a, 0, _ => by
+    apply BitVec.eq_of_toNat_eq
+    simp only [imgLE, Nat.pow_zero, Nat.div_one, Nat.add_zero, BitVec.toNat_ofNat]
+    have := (img a).isLt
+    omega
+  | n + 1, a, i + 1, h => by
+    rw [show a + (i + 1) = (a + 1) + i by omega, imgLE_byte img (n := n) (a := a + 1) (by omega)]
+    congr 1
+    simp only [imgLE]
+    rw [Nat.pow_succ, Nat.mul_comm (256 ^ i) 256, ← Nat.div_div_eq_div_mul]
+    congr 1
+    have := (img a).isLt
+    omega
+
+/-- A `StdioOK` image holds `&_impure_data` in `_impure_ptr`, byte by byte. -/
+theorem StdioOK.impureImg {img : Nat → BitVec 8} (h : StdioOK img) : ImpureImg img := by
+  intro a ha
+  have hw := congrArg BitVec.toNat h.impure
+  rw [imgW_toNat, BitVec.toNat_ofNat] at hw
+  unfold consoleImpurePtrAddr at hw
+  rw [Nat.mod_eq_of_lt (by unfold consoleReent; omega)] at hw
+  unfold impureW at ha
+  obtain ⟨i, rfl⟩ : ∃ i, a = 0x8001b970 + i := ⟨a - 0x8001b970, by omega⟩
+  rw [imgLE_byte img (n := 8) (a := 0x8001b970) (i := i) (by omega), hw]
+  unfold impureByte
+  rw [Nat.add_sub_cancel_left]
+
 section Own
 
 open Iris Iris.BI Iris.Std Iris.ProofMode
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **Open** the bytes `R` of newlib's data, keeping the image. -/
+/-- **Open** the bytes `R` of newlib's exclusive data, keeping the image and
+`_impure_ptr`. -/
 theorem stdioAt_open (P : (Nat → BitVec 8) → Prop) (R : Nat → Prop) :
-    stdioAt (GF := GF) P ⊢ ∃ img, ⌜P img⌝ ∗
-      ownSet (fun k => stdioFoot k ∧ R k) (fun k => k ↦ₘ img k) ∗
-      ownSet (fun k => stdioFoot k ∧ ¬ R k) (fun k => k ↦ₘ img k) := by
+    stdioAt (GF := GF) P ⊢ ∃ img, ⌜P img ∧ ImpureImg img⌝ ∗
+      ownSet (fun k => stdioExcl k ∧ R k) (fun k => k ↦ₘ img k) ∗
+      ownSet (fun k => stdioExcl k ∧ ¬ R k) (fun k => k ↦ₘ img k) ∗ impureRO := by
   unfold stdioAt
-  iintro ⟨%img, %hp, H⟩
+  iintro ⟨%img, %hp, H, #Hr⟩
   iexists img
-  ihave ⟨H1, H2⟩ := ownSet_split stdioFoot R _ $$ H
-  iframe H1 H2
+  ihave ⟨H1, H2⟩ := ownSet_split stdioExcl R _ $$ H
+  iframe H1 H2 Hr
   ipureintro; exact hp
 
 /-- **Close** them again, at the same image. -/
 theorem stdioAt_close (P : (Nat → BitVec 8) → Prop) (R : Nat → Prop) (img : Nat → BitVec 8)
-    (hp : P img) :
-    ownSet (GF := GF) (fun k => stdioFoot k ∧ R k) (fun k => k ↦ₘ img k) ∗
-      ownSet (fun k => stdioFoot k ∧ ¬ R k) (fun k => k ↦ₘ img k) ⊢ stdioAt P := by
+    (hp : P img) (hi : ImpureImg img) :
+    ownSet (GF := GF) (fun k => stdioExcl k ∧ R k) (fun k => k ↦ₘ img k) ∗
+      ownSet (fun k => stdioExcl k ∧ ¬ R k) (fun k => k ↦ₘ img k) ∗ impureRO ⊢ stdioAt P := by
   unfold stdioAt
-  iintro H
+  iintro ⟨H1, H2, #Hr⟩
   iexists img
+  iframe Hr
   isplitr
-  · ipureintro; exact hp
-  ihave H := ownSet_join _ _ _ (fun k h1 h2 => h2.2 h1.2) $$ H
+  · ipureintro; exact ⟨hp, hi⟩
+  ihave H := ownSet_join _ _ _
+    (fun k (h1 : stdioExcl k ∧ R k) (h2 : stdioExcl k ∧ ¬ R k) => h2.2 h1.2) $$ [H1 H2]
+  · iframe H1 H2
   iapply ownSet_iff _ _ $$ H
   intro k; constructor
   · rintro (⟨h, _⟩ | ⟨h, _⟩) <;> exact h

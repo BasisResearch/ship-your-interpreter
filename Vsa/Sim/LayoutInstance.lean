@@ -17,6 +17,7 @@ import Vsa.Sim.RuntimeOwnershipInitial
 import Vsa.Refinement
 import Vsa.While.StackNeed
 import Vsa.Sim.SharedGeometry
+import Vsa.Sim.BlockPilot
 
 /-!
 # L8/M6 — `LayoutInstance`: the concrete `Layout` + its `GeomFacts` / statics
@@ -281,6 +282,13 @@ level consumes a real machine frame, and the heap ends where the stack begins
 /-- `interp_run`'s machine frame, bytes (`800043ec: addi sp,sp,-176`). -/
 def interpRunFrame : Nat := 176
 
+/-- Stack headroom below every `eval_expr` frame beyond ItemZero's
+`evalFrame` (user decision Q7, 2026-09-25). A leaf arm at the deepest call
+level owns `evalFrame` bytes below its frame, but `runtime_error` needs 1248
+(its 224-byte frame plus `snprintf`'s 1024) and a native call's `fprintf`
+chain 4224 below a call node's 2176: the larger shortfall, `4224 - 2176`. -/
+def helperHeadroom : Nat := 2048
+
 /-- A program fits the stack: every top-level statement's ItemZero need at
 depth 0 (`ExecEntry.stackBudget`: `s.stackNeed + maxCallDepth * perCallBudget +
 evalFrame`) lies between `stackSL.lo` and `interp_run`'s post-spill `sp`, and
@@ -288,14 +296,14 @@ every `.fn` body fits one call level. Decidable over the concrete AST
 (`programStackFits`). -/
 structure ProgramStackFits (p : Vsa.While.Program) : Prop where
   need : stackSL.lo + Vsa.While.Stmt.stackNeedList p +
-    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame +
+    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame + helperHeadroom +
     interpRunFrame ≤ spEntry
   bodies : Vsa.While.Stmt.bodiesBoundList Vsa.While.perCallBudget p = true
 
 /-- The kernel-computable checker for `ProgramStackFits`. -/
 def programStackFits (p : Vsa.While.Program) : Bool :=
   decide (stackSL.lo + Vsa.While.Stmt.stackNeedList p +
-    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame +
+    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame + helperHeadroom +
     interpRunFrame ≤ spEntry) &&
   Vsa.While.Stmt.bodiesBoundList Vsa.While.perCallBudget p
 
@@ -427,6 +435,14 @@ structure InterpRunReadyFacts
   below `interp_run`'s frame. Without it an AST deeper than the 8 MiB stack
   overflows into the heap (INTERP_DESIGN.md §10.4). -/
   stack_admissible : StackAdmissible c.σ.mem stmts count
+  /-- Every general register is present in Sail's register map (the loader
+  initialises all of them). User decision (2026-09-24, boundary facts): the
+  Iris route's global invariant `VsaOk.gpr` needs it at adequacy. -/
+  gprs : ∀ n, 1 ≤ n → n ≤ 31 → (gprGet c.σ n).isSome
+  /-- `main`'s `s0` is `&_impure_ptr` (`0x80004590: addi s0,gp,1120` before
+  `jal interp_run`). `interp_run` spills it and its error line and landing
+  reload it. User decision (2026-09-24, boundary facts). -/
+  s0_impure : c.σ.regs.get? Register.x8 = some (0x8001b970#64 : BitVec 64)
 
 /-- The initial ownership, projected from `boot`. -/
 theorem InterpRunReadyFacts.ownership

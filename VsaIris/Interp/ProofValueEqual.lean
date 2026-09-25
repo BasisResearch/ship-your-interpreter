@@ -39,7 +39,7 @@ theorem storeRepr_clos_inj (N : NativeAddrs) {st : Store} {B : List (Nat × Nat)
 /-- One instance of `strcmp`'s spec. -/
 theorem strcmpSpecV_at {M : MachineModel} {Wp : MachWP (GF := GF) M} (p q : BitVec 64) (x y : String) :
     strcmpSpecV M Wp ⊢ helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
-      iprop(strAt p.toNat x ∗ strAt q.toNat y) (fun rv' => iprop(⌜rv' 10 = 0#64 ↔ x = y⌝)) := by
+      iprop(Newlib.binImg ∗ strAt p.toNat x ∗ strAt q.toNat y) (fun rv' => iprop(⌜rv' 10 = 0#64 ↔ x = y⌝)) := by
   unfold strcmpSpecV
   iintro #H
   iapply H
@@ -154,7 +154,7 @@ def Fveq (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp 
     (pa pb s r : BitVec 64) (a b : Value) (st : Store) (B : List (Nat × Nat)) (rv : Nat → BitVec 64)
     (Ma Mb : Mem) : IProp GF :=
   iprop(valImg N (imgM Ma) pa.toNat a ∗ valImg N (imgM Mb) pb.toNat b ∗
-    storeRepr N st B ∗ strcmpSpecV (vsaModel live) Wp ∗ codeRes ∗
+    storeRepr N st B ∗ strcmpSpecV (vsaModel live) Wp ∗ Newlib.binImg ∗ codeRes ∗
     (PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
       (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
         (valAt N pa.toNat a ∗ valAt N pb.toNat b ∗ storeRepr N st B ∗ stackAt s 16 ∗
@@ -176,7 +176,7 @@ theorem veq_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   apply swp_closeF
   refine .trans ?_ (veq_close Wp (N := N) (st := st) (B := B) h1 h10 hkeep hA hB hdab hdk hsg)
   unfold Fveq
-  iintro ⟨⟨#Hwa, #Hwb, Hst, #Hcmp, #Hcode, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hwa, #Hwb, Hst, #Hcmp, #Hbi, #Hcode, Hk⟩, Hms⟩
   iframe Hms Hwa Hwb Hst Hk
 
 /-- The pure context of a `value_equal` run (named, CLAUDE.md law 6). -/
@@ -409,7 +409,7 @@ theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1
       ms 0x800028d4#64 R1 (veqS pa pb s)
         (writeLog M [((s + 18446744073709551600#64 + 8#64).toNat, 8, r)]) ⊢ Wp.W Φ := by
   unfold Fveq
-  iintro ⟨⟨#Hwa, #Hwb, Hst, #Hcmp, #Hcode, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hwa, #Hwb, Hst, #Hcmp, #Hbi, #Hcode, Hk⟩, Hms⟩
   ihave #Hxa := valImg_str $$ Hwa
   ihave #Hxb := valImg_str $$ Hwb
   ihave #Hsc := strcmpSpecV_at (imgW (imgM Ma) (pa.toNat + 8)) (imgW (imgM Mb) (pb.toNat + 8)) x1 x2
@@ -418,7 +418,7 @@ theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1
     (jalx_800028d4 live (fun p hp => c.hlive _ (interp_code_800028d4 p hp))) interp_code_800028d4
     (by decide) (clob := callerSaved)
     (pins := fun rv => rv 10 = imgW (imgM Ma) (pa.toNat + 8) ∧ rv 11 = imgW (imgM Mb) (pb.toNat + 8))
-    (Pre := iprop(strAt (imgW (imgM Ma) (pa.toNat + 8)).toNat x1 ∗
+    (Pre := iprop(Newlib.binImg ∗ strAt (imgW (imgM Ma) (pa.toNat + 8)).toNat x1 ∗
       strAt (imgW (imgM Mb) (pb.toNat + 8)).toNat x2))
     (Post := fun rv' => iprop(⌜rv' 10 = 0#64 ↔ x1 = x2⌝))
   isplitl []
@@ -427,7 +427,7 @@ theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1
   · iexact Hsc
   iframe Hcode Hms
   isplitl []
-  · iframe Hxa Hxb
+  · iframe Hbi Hxa Hxb
   iintro %R' %hk' %hres Hms
   iapply wp_swpF Wp (S := veqS pa pb s)
     (F := Fveq Wp Φ N pa pb s r (.str x1) (.str x2) st B rv Ma Mb)
@@ -436,7 +436,7 @@ theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1
       unfold codeRes; simp [dataOf]
     rw [hro]
     unfold Fveq
-    iframe Hcode Hwa Hwb Hst Hcmp Hk Hms
+    iframe Hcode Hwa Hwb Hst Hcmp Hbi Hk Hms
   intro F'
   have hk2 : R' 2 = R1 2 := hk' 2 (by decide) (by decide)
   exact veq_str_run2 Wp c (hk2.trans h2) hres
@@ -513,7 +513,7 @@ theorem valueEqual_spec (hlive : ∀ p ∈ interpText, live p.1)
     ⊢ valueEqualSpec (vsaModel live) N Wp pa pb s a b st B := by
   unfold valueEqualSpec helperSpec fnSpecW
   iintro %rv !> %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨h10, h11, h2⟩, #Hcode, Hva, Hvb, %⟨hga, hgb, hinj⟩,
-    Hst, ⟨Hsk, %hsg⟩, #Hcmp⟩ Hk
+    Hst, ⟨Hsk, %hsg⟩, #Hcmp, #Hbi⟩ Hk
   ihave ⟨%Ma, HA, #Hwa⟩ := valAt_tracked N _ a $$ Hva
   ihave ⟨%Mb, HB, #Hwb⟩ := valAt_tracked N _ b $$ Hvb
   ihave %hpa := valOf_pure N a _ _ _ $$ Hwa
@@ -539,7 +539,7 @@ theorem valueEqual_spec (hlive : ∀ p ∈ interpText, live p.1)
     rw [hro]
     unfold ms Fveq
     rw [regFile_upd_ra]; simp only [upd_same]
-    iframe Hcode Hwa Hwb Hst Hcmp Hk Hpc Hra Hregs HS
+    iframe Hcode Hwa Hwb Hst Hcmp Hbi Hk Hpc Hra Hregs HS
   intro F'
   exact veq_run Wp ⟨hlive, hal, h10, h11, h2, hga, hgb, hsg, hMa, hMb, hdab, hdk⟩ hpa hpb hclo hinj
 

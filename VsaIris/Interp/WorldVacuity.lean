@@ -38,25 +38,25 @@ def ctlBoot : Boot heapConfig nativeNameProgram where
   chunks := heapChunks
   bins := fun _ => []
   repr := by
-    show ProgramRepr (physicalConfig heapMem).σ.mem 0x82000000 2 nativeNameProgram
-    rw [physicalConfig_mem]
+    show ProgramRepr (physicalConfigS0 heapMem).σ.mem 0x82000000 2 nativeNameProgram
+    rw [physicalConfigS0_mem]
     exact heapAstReads.programWithin.erase
   ready := readyFacts
   owned := by
-    show RuntimeOwnership.InitialOwned (physicalConfig heapMem).σ.mem heapArena stackSL phif phic
+    show RuntimeOwnership.InitialOwned (physicalConfigS0 heapMem).σ.mem heapArena stackSL phif phic
       0x82000000 2 ownershipData
-    rw [physicalConfig_mem]
+    rw [physicalConfigS0_mem]
     exact initialOwned
   alloc := by
-    show InitialAllocatorAt (physicalConfig heapMem).σ.mem exts (RuntimeOwnership.ReallocExtent alloc) 0x82000000 2
+    show InitialAllocatorAt (physicalConfigS0 heapMem).σ.mem exts (RuntimeOwnership.ReallocExtent alloc) 0x82000000 2
       heapTop heapBrk heapChunks fun _ => []
-    rw [physicalConfig_mem]
+    rw [physicalConfigS0_mem]
     exact ⟨heapAt, heapCapacity⟩
   frame := bootFrame
   heapFacts := by
-    show BootHeapFacts (physicalConfig heapMem).σ.mem Control.shared (phif 0) heapTop heapBrk
+    show BootHeapFacts (physicalConfigS0 heapMem).σ.mem Control.shared (phif 0) heapTop heapBrk
       heapChunks bootFrame
-    rw [physicalConfig_mem]
+    rw [physicalConfigS0_mem]
     exact bootHeapFacts
 
 /-- **The boundary gap holds at the control**, derived from its `Loaded`

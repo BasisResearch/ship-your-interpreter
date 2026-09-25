@@ -48,15 +48,16 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
     {N : NativeAddrs} {inp : Nat}
     (HN : NewlibHoles) (hcl : CodeLive live)
     {st : St} {d env : Nat} {nm : Option String} {ps : List String} {body : List Stmt} :
-    textOwn allocText ∗ leafErrCtx inp ∗
+    leafErrCtx inp ∗
       evalSpecsP (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp (evalCore N vsaLayoutP vsaRoomB inp) ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp
         (evalCore N vsaLayoutP vsaRoomB inp) st d env (.fn nm ps body) by
-  iintro ⟨#Ht, #HE, #-⟩
+  iintro ⟨#HE, #-⟩
   unfold evalSpecP_body fnSpecAbort
   iintro %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
   icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
+  ihave ⟨Hw, -, #Ht⟩ := world_allocText N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   unfold astEG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := leafNode_fn hrepr hgeo
@@ -120,7 +121,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   iintro ⟨⟨#Ht, #HE, #Hcode, #Hro, #Hfb, Hst, Hw, Hk⟩, Hms⟩
   -- `malloc(16)`, charged `closureBytes`
   unfold world worldE
-  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
+  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hbw⟩
   ihave ⟨Hs, %⟨heNZ, -, -⟩⟩ := storeRepr_frameInfo N $$ [Hs Hfb]
   · iframe Hs Hfb
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.fn nm ps body) d - 1088)
@@ -211,13 +212,14 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
       stackScratch (s + 18446744073709550528#64) (evalNeed (.fn nm ps body) d - 1088) ∗
       heapRes vsaLayoutP vsaRoomB .uncounted (((R2 10).toNat, 16) :: H) ∗
       storeRepr N st.store B ∗ consoleOwn st.out ∗ Stdio.stdioOwn ∗ interpCtxE inp d (errAny inp) ∗
+      Newlib.binImg ∗
       ((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.fn nm ps body) st' v⌝ ∗
           evalPost N vsaLayoutP vsaRoomB inp .uncounted st' d (.fn nm ps body) v sret s rv) -∗
           (wpW (vsaModel live)).W Φ) ∧
         (abortAt (evalCore N vsaLayoutP vsaRoomB inp) s (evalNeed (.fn nm ps body) d) ∗
           slot24 sret.toNat -∗ (wpW (vsaModel live)).W Φ))))
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hh Hs Hc Hio Hi Hk
+  · iframe Hdv Hms Hcode Hro Hfb Hst Hh Hs Hc Hio Hi Hbw Hk
   intro F'
   refine FnLitT_run2 (aX := aX) (s := s) (sret := sret) (pv := R2 10) (aE := aE) hlive hsf hs'
     hs2 hs3 (by ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2) hA2 ?_
@@ -241,7 +243,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   apply swp_closeM
   intro Mt3 hMt3
   unfold F'
-  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hh, Hs, Hc, Hio, Hi, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hh, Hs, Hc, Hio, Hi, #Hbw, Hk⟩, Hms⟩
 
 #ix_piece FnLitP_p3 from FnLitP_p2 by
   -- the closure object and the result
@@ -266,12 +268,16 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   ihave ⟨Hms, Hblk⟩ := ms_split (S := frS (s.toNat - 1088) sret.toNat)
     (T := InExt ((R2 10).toNat, 16)) (fun b h1 h2 => hdb b h1 h2) $$ Hms
   ihave #HaE := astEG_of_view hrepr hgeo $$ Hro
-  ihave #HaX := astEG_astE _ _ $$ HaE
+  have hobj : ClosObj (imgM Mt3) (R2 10).toNat aX.toNat aE.toNat :=
+    ⟨hpne, heNZ, eB0, eB8, fun k hk => by
+      simp only [VsaIris.InExt] at hk
+      exact ⟨by omega, by omega, Or.inr (by unfold Vsa.Sim.tohostAddr; omega),
+        by omega, Or.inr (by unfold Vsa.Sim.tohostAddr; omega)⟩⟩
   iapply (wpW (vsaModel live)).fupd
   imod storeRepr_allocClosure (N := N) (s := st.store) (s' := store') (B := B)
     (cd := ⟨env, nm, ps, body⟩) (p := (R2 10).toNat) (q := aX.toNat) (e := aE.toNat)
-    (img := imgM Mt3) hcl hfr hpne heNZ eB0 eB8 hbody $$ [Hs Hblk] with ⟨Hs, #Hca⟩
-  · iframe Hs Hblk HaX Hfb
+    (img := imgM Mt3) hcl hfr hobj hbody $$ [Hs Hblk] with ⟨Hs, #Hca⟩
+  · iframe Hs Hblk HaE Hfb
   imodintro
   ihave ⟨Hpc, Hra, Hregs, HS, Hval⟩ := ms_exit_sret N (v := .closure a) hdj $$ [Hms]
   · iframe Hms
@@ -301,7 +307,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   unfold world worldE
   iexists ((R2 10).toNat, 16) :: H, B
   iframe Hh Hs Hc Hio Hi
-  ipureintro; exact fun b hb => List.mem_cons_of_mem _ (hB b hb)
+  isplitr
+  · ipureintro; exact fun b hb => List.mem_cons_of_mem _ (hB b hb)
+  · iexact Hbw
 
 #ix_chain caseP_FnLit := [FnLitP_p1, FnLitP_pOom, FnLitP_p2, FnLitP_p3]
 

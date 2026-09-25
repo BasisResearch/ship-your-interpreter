@@ -4186,6 +4186,10 @@ evidence is below.
 
 ## Closure objects carry no read geometry on the Iris side (lane H2, 2026-09-24)
 
+DISCHARGED (lane A, 2026-09-25): `closOwn` carries `ClosObj` (the object's
+`ReadOK` on `InExt (p, 16)`) and the node's `astEG`; see the two E4 entries
+below.
+
 `value_print`'s closure arm loads the closure object (`ca`'s 16 bytes) and
 its `EX_FN` node's name field. `closOwn`/`astE` (`VsaIris/Interp/Repr.lean`)
 give the bytes' values but no `ReadOK` geometry (RAM, off the HTIF window),
@@ -4204,7 +4208,58 @@ every byte it reads. `stringify_spec` therefore takes
 top-level `live` like `CodeLive`. Its supplier is the instantiation of
 `vsaModel live` at the boundary, which chooses `live`.
 
-### Iris route, E1: `ErrRoom` (Q7) is a named premise of the error arms
+## The call arm's natives need stack room at the deepest call level (lane E4, 2026-09-24)
+
+- Declarations: `caseT_CallPrint`/`caseT_CallPrintln` and their partial twins
+  (premise `hroom : nativePrint(ln)Need + 1088 ≤ evalNeed (.call f args) d`).
+- `native_print` needs `nativePrintNeed = 80 + fprintfNeed = 4176` bytes below
+  the call arm's frame (`nativePrintlnNeed = 4224`). A call node at depth `d`
+  owns `evalNeed (.call f args) d - 1088 = stackNeed (.call f args) +
+  (maxCallDepth - d) * perCallBudget ≥ 2176 + (1000 - d) * 6144` bytes below
+  its frame: enough for `d < maxCallDepth`, not at `d = maxCallDepth` (a
+  1000-deep recursion that prints at the bottom). Supplier: the budget
+  (`StackNeed`'s leaf headroom, Q7's decision); A discharges `hroom` from
+  `d < maxCallDepth` (`stackBudget` arithmetic) otherwise.
+- `assert` (`nativeAssertNeed = 1328`) and `runtime_error` (`1088 + rtErrNeed
+  = 2336`) fit at every depth (`evalNeed_call_rtErr`).
+
+## Closure display geometry for `print` (lane E4, 2026-09-24)
+
+- Declaration: `DispSupply N` (`VsaIris/Interp/CallNative.lean`), a premise
+  of the printing native cases: `storeRepr N s B ∗ closAt ca p ⊢ storeRepr N s
+  B ∗ dispRes s (.closure ca)`.
+- DISCHARGED (lane A, 2026-09-25): `dispSupply : DispSupply N`
+  (`CallClosure.lean`, `dispSupply_of_cloSupply cloSupply`), for every `N`.
+  `CatDispSupply N` is the same statement.
+## Closure call resources (lane E4, 2026-09-24)
+
+- Declaration: `CloSupply N` (`VsaIris/Interp/CallClosure.lean`), a premise
+  of `caseT_CallClosure` and the partial closure path: every closure the
+  store owns has its object's bytes, the `EX_FN` node's view (`ReadOK`,
+  `SharedWin`) and its environment's binding (`CloRes`). It subsumes
+  `DispSupply`. DISCHARGED (lane A, 2026-09-25): `cloSupply : CloSupply N`
+  (`CallClosure.lean`), for every `N`, from `storeRepr`: `closOwn` now carries
+  `ClosObj` (object `ReadOK`) and the node's `astEG`, established by the
+  `EX_FN` arm through `storeRepr_allocClosure`; `SharedWin` follows from
+  `ReadOK` (`sharedWin_of_readOK`). The case lemmas keep the premise.
+- Declarations: `caseT_CallClosure`, `callClosureT`, `cloExitN`, `cloExitR`
+  (premises `hinpG : RtErr.InpGeom (ofNat inp)`, `hinpL : inp < 2 ^ 64`,
+  `hinpA : inp % 8 = 0`). The closure path reads and writes
+  `in->call_depth` through the machine and needs the interpreter struct's
+  placement. `world` owns its bytes but carries no address facts. Supplier: the
+  boundary (`interp_run`'s `inp` is `&interp` in `.bss`; Q-family with the
+  jmp_buf alignment already added to `interpCtxE`).
+
+## The closure call's arity error (lane E4, resolved 2026-09-25)
+
+- **Resolved.** `rtErr_spec` (`VsaIris/Vsa/RuntimeError.lean`) now returns
+  the readable bytes on abort (`abortRes ∗ readable Sro Sown rd`; its
+  `snprintf` only reads them). E2's `ms_rtErrEvalOwn` (`ErrArm.lean`) lends
+  owned frame bytes to it and rejoins them; `ms_rtErrEval` is its `Sown = ∅`
+  instance, statement unchanged. `cloErrArity` (`CallCloP.lean`) proves the
+  arity error, and `callCloP_of` no longer takes `CloArityP`.
+
+## Iris route, E1: `ErrRoom` (Q7) is a named premise of the error arms
 
 `caseP_Var` and `caseP_Assign` (`VsaIris/Interp/Case/{Var,Assign}P.lean`)
 take `ErrRoom e d : rtErrNeed + evalFrame ≤ evalNeed e d`

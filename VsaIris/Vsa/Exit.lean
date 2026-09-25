@@ -194,15 +194,16 @@ theorem clobbered_put {r : Nat} {rs : List Nat} (h : r ∈ rs) :
 /-- **`exit(e)`**, for either WP. Entered at `0x80004764` with `a0 = e`
 (`e < 2^31`), the callee-saved `s0` and the rest of the ABI frame, newlib's
 data at its boundary state or after a `stderr` write, and the console at
-`o`, the run halts with code `e` and the console at some extension of `o`. -/
+`o`, the run halts with code `e` and the console at some extension of `o`,
+exactly `o` when newlib's data is at its boundary state (`quiet`). -/
 theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr)
     (live : Nat → Prop) (hlive : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (s r e s0v : BitVec 64) (cs : Nat → BitVec 64) (o : String)
-    (he : e.toNat < 2 ^ 31) (hs : SpIn s exitNeed) :
+    (quiet : Bool) (he : e.toNat < 2 ^ 31) (hs : SpIn s exitNeed) :
     PC ↦ᵣ exitEntry ∗ ra ↦ᵣ r ∗ (8 : Nat) ↦ᵣ s0v ∗ argsAt [e] ∗
       callFrame s exitNeed (calleeSaved.drop 1) cs ∗
-      stdioAt (fun img => StdioOK img ∨ Ierr img) ∗ consoleOwn o ∗
-      (∀ o', Φ (e.toNat, o ++ o'))
+      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ consoleOwn o ∗
+      (∀ o', ⌜quiet = true → o' = ""⌝ -∗ Φ (e.toNat, o ++ o'))
     ⊢ Wp.W Φ := by
   have hlo := hs.lo
   have hhi := hs.hi
@@ -257,7 +258,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   iframe Hpc Hsp Ha1 Hs0 Hra Ha0 Hfr Hcode
   iintro Hpc ⟨Hsp, Ha1, Hs0, Hra, Ha0, -⟩ Hfr -
   -- `exit`'s newlib interior
-  have hh := H.exitHandlers live Wp (s - 16#64) e r cs o Φ hlive hsp'
+  have hh := H.exitHandlers live Wp (s - 16#64) e r cs o Φ quiet hlive hsp'
   unfold exitHandlersSpec exitHandlersPC exitHandlersEnd callFrame argsAt at hh
   simp only [List.zipIdx_cons, List.zipIdx_nil, sepL_cons, sepL_nil, Nat.add_zero,
     List.length_cons, List.length_nil] at hh
@@ -270,7 +271,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   isplitl [Hscr]
   · rw [show exitHandlersNeed = exitNeed - (16#64 : BitVec 64).toNat from rfl]
     iexact Hscr
-  iintro Hpc ⟨%rv, Hra⟩ Hs0 Hargs Hstdio ⟨%o', Hcon⟩ ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩
+  iintro Hpc ⟨%rv, Hra⟩ Hs0 Hargs Hstdio ⟨%o', %hq, Hcon⟩ ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩
   -- `mv a0,s0`
   ihave ⟨⟨%a0v, Ha0⟩, Hargs⟩ := clobbered_take (r := 10) (by decide) $$ Hargs
   iapply wp_segW live Wp exitMvSeg (mvL a0v e) [] 0x80004788#64
@@ -322,7 +323,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   rw [show exitSite.rs1 = 14 from rfl, show exitSite.rs2 = 15 from rfl,
     show BitVec.ofNat 64 exitSite.pc = 0x80000190#64 from rfl]
   iframe Hx Ha4 Ha5 Hcon Hpc
-  iapply HΦ
+  iapply HΦ $$ %o' %hq
 
 end Wp
 

@@ -1,3 +1,4 @@
+import VsaIris.Interp.EndToEnd
 import VsaIris.DlHeap
 import VsaIris.Adequacy
 import VsaIris.Example
@@ -22,6 +23,7 @@ import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Interp.ProofStringify
 import VsaIris.Interp.E5Audit
+import VsaIris.Interp.E4Audit
 import VsaIris.Vsa.AllocHoles
 import VsaIris.Interp.ProofEnvNew
 import VsaIris.Interp.ProofEnvGet
@@ -173,7 +175,6 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Newlib.OomSites.oom80003140_ok
 #print axioms VsaIris.Newlib.Setjmp.setjmp_spec
 #print axioms VsaIris.Newlib.Landing.wp_interpRet1
-#print axioms VsaIris.Newlib.TopAbrupt.wp_topAbrupt
 #print axioms VsaIris.Newlib.TopAbrupt.topRet_ok
 #print axioms VsaIris.Newlib.TopAbrupt.topBrk_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003e28_ok
@@ -328,3 +329,15 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Interp.caseT_ExecVarInit
 #print axioms VsaIris.Interp.caseT_ExecVarNull
 #print axioms VsaIris.Interp.caseT_ExecWhile
+
+-- lane A: the assembly and the end-to-end theorem
+#print axioms VsaIris.Interp.interpSeqT_all
+#print axioms VsaIris.Interp.execDispT_all
+#print axioms VsaIris.Interp.specsP_all
+#print axioms VsaIris.Interp.interpRun_total_top
+#print axioms VsaIris.Interp.interpRun_partial_top
+#print axioms VsaIris.Interp.supplies_of
+#print axioms VsaIris.Interp.term_sim_of
+#print axioms VsaIris.Interp.stuck_sim_of
+#print axioms VsaIris.Interp.interpSim_iris
+#print axioms Vsa.Sim.EndToEnd.endToEnd_refinement

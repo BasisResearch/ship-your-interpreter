@@ -409,7 +409,8 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       callFrame (s + 18446744073709551536#64) RtErr.rtErrNeed Newlib.calleeSaved R ∗
       readable Sro (fun _ => False) rd ∗ jmpRO inp.toNat jb ∗ world N L Room inp.toNat ρ st d))
     (Q := fun _ => iprop(False))
-    (A := abortRes N L Room inp.toNat (s + 18446744073709551536#64) RtErr.rtErrNeed)
+    (A := iprop(abortRes N L Room inp.toNat (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
+      readable Sro (fun _ => False) rd))
     (X := iprop(readable Sro (fun _ => False) rd ∗ jmpRO inp.toNat jb ∗
       world N L Room inp.toNat ρ st d)) (Y := iprop(False))
     (need := RtErr.rtErrNeed) (n := RtErr.rtErrNeed) (by simp)
@@ -429,7 +430,7 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   isplit
   · iintro %R' %_ Hf
     iexfalso; iexact Hf
-  · iintro HA - HS
+  · iintro ⟨HA, -⟩ - HS
     unfold abortRes abortAt
     icases HA with ⟨Hcore, Hst⟩
     ihave Hcore := abortCore_mono N L Room inp.toNat (sc := s + 18446744073709551536#64)
@@ -458,8 +459,22 @@ abbrev NaK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
         ⌜∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true⌝ ∗ valAt N sret.toNat .null ∗
         valsAt N args.toNat vs ∗ world N L Room inp.toNat ρ st d ∗
         stackAt s nativeAssertNeed) -∗ Wp.W Φ) ∧
-    (abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
+    (⌜¬ AssertOk vs⌝ ∗ abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
       valsAt N args.toNat vs -∗ Wp.W Φ))
+
+/-- An abort continuation that wants the abort's reason, given it. -/
+theorem wand_pure_apply {φ : Prop} {P Q : IProp GF} (h : φ) : iprop(⌜φ⌝ ∗ P -∗ Q) ⊢ iprop(P -∗ Q) := by
+  iintro H HP
+  iapply H
+  iframe HP
+  ipureintro; exact h
+
+theorem not_assertOk_len {vs : List Value} (h : ¬ (vs.length = 1 ∨ vs.length = 2)) : ¬ AssertOk vs := by
+  rintro ⟨v, m, (rfl | rfl), -⟩ <;> simp at h
+
+theorem not_assertOk_falsy {vs : List Value} (h0 : 0 < vs.length) (ht : (vs[0]'h0).truthy = false) :
+    ¬ AssertOk vs := by
+  rintro ⟨v, m, (rfl | rfl), hv⟩ <;> simp_all
 
 /-- What a `native_assert` run carries. -/
 def NaRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
@@ -485,6 +500,7 @@ structure NaCtx (live : Nat → Prop) (sret inp args s line r : BitVec 64) (n : 
   hs1 : 0x87800000 + nativeAssertNeed ≤ s.toNat
   hs2 : s.toNat ≤ 0x88000000
   hs3 : s.toNat % 16 = 0
+  hs4 : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame
   hg : SlotGeom sret
   ha : ArgsGeom args n
   hn : n < 2 ^ 31
@@ -525,6 +541,7 @@ theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_len (by rw [hlen]; exact hbad)) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002e90 live (fun p hp => c.hlive _ (interp_code_80002e90 p hp)))
     interp_code_80002e90 (naArity_fmt (fun a ha => ⟨.inl ha, rfl⟩) 0#64 0#64) c.hinp c.hjb c.hs1 hs2 hs3
     hlen c.hdfa)
@@ -842,7 +859,7 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     ipureintro
     exact ⟨by unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega,
-      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, c.hs4⟩
 
 /-- **Falsy, one argument**: `runtime_error(in, line, "%s", "assertion failed", 0)`. -/
 theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -876,6 +893,7 @@ theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
     interp_code_80002ebc (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
       0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
@@ -941,6 +959,7 @@ theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
     interp_code_80002ebc (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
       0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
@@ -1011,6 +1030,7 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     naS_fmt (fun a ha => ⟨Or.inl (Or.inl ha), hrd.1 a ha⟩)
       ⟨_, cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2⟩ 0#64
   ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
     interp_code_80002ebc hfmt c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
   iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
@@ -1045,7 +1065,8 @@ theorem nativeAssert_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
   ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [HF HA]
   · iframe HF HA
   have c : NaCtx live sret inp args s line r vs.length rv jb :=
-    ⟨hlive, hal, h10, h11, h12, h13, h14, h2, hs0, hs3, hs4, hg, ha, hn, hinp, hjb, hdfa⟩
+    ⟨hlive, hal, h10, h11, h12, h13, h14, h2, hs0, hs3, hs4, hsg.top, hg, ha, hn, hinp, hjb,
+      hdfa⟩
   have hms : ms (GF := GF) nativeAssertPC (upd rv 1 r) (npF s args vs.length) M =
       iprop(PC ↦ᵣ nativeAssertPC ∗ ra ↦ᵣ r ∗ regFile rv ∗
         ownSet (fun a => InExt (s.toNat - 80, 80) a ∨ InExt (args.toNat, 24 * vs.length) a)

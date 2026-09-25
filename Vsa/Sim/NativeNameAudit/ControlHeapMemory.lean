@@ -58,7 +58,7 @@ def heapLog : List WEntry := avLog ++ smallLog
 def fullLog : List WEntry := log ++ heapLog
 def avMem : Mem := writeLog mem avLog
 def heapMem : Mem := writeLog snapshotMem fullLog
-def heapConfig : Config := physicalConfig heapMem
+def heapConfig : Config := physicalConfigS0 heapMem
 
 theorem heapMem_eq : heapMem = writeLog avMem smallLog := by
   show writeLog snapshotMem (log ++ (avLog ++ smallLog)) =
@@ -428,7 +428,7 @@ theorem heapMemoryFacts : SnapshotMemoryFacts heapMem where
     exact (heapStoreFacts.transport (fun k hk => hag k (storePage_outside_prefix hk))).store
 
 theorem heapPhysicalFacts : InterpRunPhysicalFacts heapConfig 0x82000000 2 fixedInp
-    Nfixed arena phif phic 0 := heapMemoryFacts.physicalFacts
+    Nfixed arena phif phic 0 := heapMemoryFacts.physicalFactsS0
 
 theorem astAgree : AgreeP AstPage mem heapMem := by
   intro k hk
@@ -547,14 +547,14 @@ theorem heapPhysicalFactsAt : InterpRunPhysicalFacts heapConfig 0x82000000 2 fix
   { heapPhysicalFacts with
     arena_protected := heapArena_protected
     store := by
-      show StoreRepr (physicalConfig heapMem).σ.mem Nfixed heapArena phif phic initSt.store
-      rw [physicalConfig_mem]
+      show StoreRepr (physicalConfigS0 heapMem).σ.mem Nfixed heapArena phif phic initSt.store
+      rw [physicalConfigS0_mem]
       exact heapStoreFacts.storeAt (by decide)
     store_survives := by
       show ∀ m' : Mem, (∀ k, ¬ interpRunWriteFootprint fixedInp k →
-        (physicalConfig heapMem).σ.mem[k]? = m'[k]?) →
+        (physicalConfigS0 heapMem).σ.mem[k]? = m'[k]?) →
         StoreRepr m' Nfixed heapArena phif phic initSt.store
-      rw [physicalConfig_mem]
+      rw [physicalConfigS0_mem]
       exact heapStoreSurvivesAt
     arena_budget := by decide }
 
