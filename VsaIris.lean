@@ -139,6 +139,7 @@ import VsaIris.Vsa.ObsStep
 import VsaIris.Vsa.SnpArith
 import VsaIris.Vsa.SnpCtx
 import VsaIris.Vsa.SnpMove
+import VsaIris.Vsa.SnpPuts
 import VsaIris.Interp.IRun
 import VsaIris.Interp.Steps
 import VsaIris.Interp.ITac

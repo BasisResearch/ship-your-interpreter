@@ -17,9 +17,19 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   (`SymHavoc.lean`: `swp_havocP`, `ntP_<pc>`) for `strlen`'s word loads past a
   `strAt` string's NUL. `decode_index.tsv` now also indexes `RetSupp.lean`.
 
+- **Leaf runs over `NW`** (`VsaIris/Vsa/SnpMove.lean`, `SnpPuts.lean`):
+  `memmove_nw` (all paths: byte loop, 32/8-byte word loops, tail; any length,
+  disjoint ranges; bytes read through data or ownership, `ReadWin`),
+  `ssputs_nw` (`__ssputs_r` on the string `FILE`: copies `min len _w`,
+  advances `_p`, lowers `_w`; postcondition `PutsOut`). Tools: `nw_gen`
+  (rebase the tracking memory), `snp_ld`/`snp_sd`, `bv_nat`, `Copied`.
+- Lessons: a declaration holds ~20 driver steps before the 200k budget; split
+  long runs into lemmas at call/branch boundaries and rebase memory with
+  `nw_gen`; state memory facts at `BitVec.ofNat` addresses (`ofNat_add_ofNat`
+  in `nx_run using`).
+
 ## In flight
-- Building the step table; then the `nx_run` driver (ITac's `ixRunCore` with
-  the `nt*` prefixes).
+- `__ssprint_r` (the iov loop over `ssputs_nw`), then `_svfprintf_r`.
 
 ## Plan
 1. Leaf runs over `NW`: `__ascii_mbtowc` (one char), `strlen` of a data string
