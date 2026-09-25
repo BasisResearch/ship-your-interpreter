@@ -117,7 +117,7 @@ theorem abortAt_of_evalCallee {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
     (hsg : StackGeom s n) (hn : 1088 + need ≤ n) :
     abortRes N L Room inp (evalSP s) need ∗ blockOwn (s.toNat - n) (n - 1088 - need) ∗
       ownSet (InExt (s.toNat - 1088, 1088)) byteAny ⊢ abortAt Core s n := by
-  have hs1 := hsg.lo; have hs2 := hsg.hi; have hs4 := hsg.le
+  have hs1 := hsg.lo; have hs2 := hsg.hi; have hs4 := hsg.le; have hs5 := hsg.top
   unfold Vsa.Sim.LayoutInstance.stackSL at hs1 hs2
   simp only at hs1 hs2
   have hsf : (evalSP s).toNat = s.toNat - 1088 := by

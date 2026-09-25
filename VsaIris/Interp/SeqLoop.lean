@@ -144,7 +144,7 @@ theorem arr_elem_addr {arr : BitVec 64} {idx count : Nat} (h : arr.toNat + 8 * c
 /-- A child's stack geometry inside the region below the lowered `sp`. -/
 theorem StackGeom.narrow {s : BitVec 64} {m n : Nat} (h : StackGeom s m) (hn : n ≤ m) :
     StackGeom s n :=
-  ⟨by have := h.le; omega, by have := h.lo; omega, h.hi, h.al⟩
+  ⟨by have := h.le; omega, by have := h.lo; omega, h.hi, h.al, h.top⟩
 
 section Motive
 

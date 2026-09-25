@@ -485,6 +485,7 @@ structure SgCtx (live : Nat → Prop) (p s r : BitVec 64) (rv : Nat → BitVec 6
   hs1 : 0x87800000 + stringifyNeed ≤ s.toNat
   hs2 : s.toNat ≤ 0x88000000
   hs3 : s.toNat % 16 = 0
+  hs4 : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame
   hg : SlotGeom p
   hdsp : ∀ k, InExt (s.toNat - 112, 112) k → ¬ InExt (p.toNat, 24) k
 
@@ -1048,7 +1049,7 @@ theorem sg_ret {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → 
   ipureintro
   exact ⟨by unfold stringifyNeed snprintfNeed; omega,
     by unfold Vsa.Sim.LayoutInstance.stackSL stringifyNeed snprintfNeed; simp; omega,
-    by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+    by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, cx.hs4⟩
 
 /-- **The epilogue and the return** after `memcpy`: the block holds the
 rendering, the value's slot and the stack come back. -/
@@ -2431,7 +2432,7 @@ theorem stringify_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive 
   ihave ⟨%Mf, HF⟩ := ownSet_mem _ f $$ HF
   ihave ⟨%M, HM, %⟨-, hMa, hdsp⟩⟩ := ownSet_join_tracked _ _ Mf Ma $$ [HF HA]
   · iframe HF HA
-  have cx : SgCtx live p s r rv := ⟨hlive, hcl, hstk, hal, h10, h2, hs0, hs3, hs4, hg, hdsp⟩
+  have cx : SgCtx live p s r rv := ⟨hlive, hcl, hstk, hal, h10, h2, hs0, hs3, hs4, hsg.top, hg, hdsp⟩
   have hms : ms (GF := GF) stringifyPC (upd rv 1 r) (sgF s p) M =
       iprop(PC ↦ᵣ stringifyPC ∗ ra ↦ᵣ r ∗ regFile rv ∗
         ownSet (fun a => InExt (s.toNat - 112, 112) a ∨ InExt (p.toNat, 24) a)

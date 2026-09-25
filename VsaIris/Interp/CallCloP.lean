@@ -58,7 +58,7 @@ theorem cloAbort {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
   iintro ⟨HA, HS⟩
   ihave ⟨HC, Hst⟩ := abortAt_elim _ _ _ $$ HA
   ihave HC := hcore (s + 18446744073709550528#64) (n - 1088) (by rw [hsf]; omega)
-    (by rw [hsf]; omega) (by rw [hsf]; have := hfg.hi; omega) $$ HC
+    (by rw [hsf]; omega) (by rw [hsf]; have := hsg.top; omega) $$ HC
   iapply abortAt_intro
   iframe HC
   iapply evalFrame_join hsg.le hn $$ [Hst HS]

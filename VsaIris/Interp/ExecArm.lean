@@ -264,14 +264,15 @@ structure CallGeomF (s sF : BitVec 64) (f np nc o : Nat) : Prop where
 theorem callGeomF {s sF : BitVec 64} {f np nc : Nat} (hsg : StackGeom s np)
     (hsF : sF.toNat = s.toNat - f) (hle : nc + f ≤ np)
     {o : Nat} (ho : o + 24 ≤ f) (ho8 : o % 8 = 0) (hf8 : f % 16 = 0) : CallGeomF s sF f np nc o := by
-  have h1 := hsg.le; have h2 := hsg.lo; have h3 := hsg.hi; have h4 := hsg.al
+  have h1 := hsg.le; have h2 := hsg.lo; have h3 := hsg.hi; have h4 := hsg.al; have h5 := hsg.top
   simp only [Vsa.Sim.LayoutInstance.stackSL] at h2 h3
   have hsl : (sF + BitVec.ofNat 64 o).toNat = s.toNat - f + o := by
     rw [BitVec.toNat_add, hsF, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := o) (by omega)]
     exact Nat.mod_eq_of_lt (by omega)
-  refine ⟨hsF, hsl, ⟨by omega, ?_, ?_, ?_⟩, by omega, by omega, ⟨?_, ?_, ?_⟩⟩
+  refine ⟨hsF, hsl, ⟨by omega, ?_, ?_, ?_, ?_⟩, by omega, by omega, ⟨?_, ?_, ?_⟩⟩
   · simp only [Vsa.Sim.LayoutInstance.stackSL]; omega
   · simp only [Vsa.Sim.LayoutInstance.stackSL]; omega
+  · omega
   · omega
   · rw [hsl]; omega
   · rw [hsl]; unfold Vsa.Sim.tohostAddr; omega

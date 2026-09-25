@@ -404,6 +404,7 @@ structure NpCtx (live : Nat → Prop) (sret args s r : BitVec 64) (n : Nat) (rv 
   hs1 : 0x87800000 + nativePrintNeed ≤ s.toNat
   hs2 : s.toNat ≤ 0x88000000
   hs3 : s.toNat % 16 = 0
+  hs4 : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame
   hg : SlotGeom sret
   ha : ArgsGeom args n
   hn : n < 2 ^ 31
@@ -583,7 +584,7 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     ipureintro
     exact ⟨by unfold nativePrintNeed printNeed fprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativePrintNeed printNeed fprintfNeed; omega,
-      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, c.hs4⟩
 
 /-- The frame of the loop-body run. -/
 def FnpA (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
@@ -717,7 +718,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   have hsg80 : StackGeom (s - 80#64) printNeed := ⟨by rw [hst80]; unfold printNeed fprintfNeed; omega,
     by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL printNeed fprintfNeed; simp; omega,
     by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega,
-    by rw [hst80]; omega⟩
+    by rw [hst80]; omega, by rw [hst80]; have := c.hs4; omega⟩
   have hslg : SlotGeom (s - 80#64) := ⟨by rw [hst80]; omega,
     by rw [hst80]; unfold Vsa.Sim.tohostAddr; omega, by rw [hst80]; omega⟩
   iapply ms_callHelper Wp (i := 0x80002f44)
@@ -826,7 +827,8 @@ theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     rw [hsm, BitVec.toNat_add]; simp; omega
   have hsg : StackGeom (s - 80#64) printNeed := ⟨by rw [hst80]; unfold printNeed fprintfNeed; omega,
     by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL printNeed fprintfNeed; simp; omega,
-    by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, by rw [hst80]; omega⟩
+    by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, by rw [hst80]; omega,
+    by rw [hst80]; have := c.hs4; omega⟩
   unfold NpRest
   icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
   iapply ms_callOut Wp (i := 0x80002f18)
@@ -1051,7 +1053,7 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
   · iframe HF HA
   have c : NpCtx live sret args s r vs.length rv :=
     ⟨hlive, hal, h10, h12, h13, h2, by unfold nativePrintNeed printNeed fprintfNeed; omega, by omega,
-      hs4, hg, ha, hn, hdfa⟩
+      hs4, hsg.top, hg, ha, hn, hdfa⟩
   have hms : ms (GF := GF) nativePrintPC (upd rv 1 r) (npF s args vs.length) M =
       iprop(PC ↦ᵣ nativePrintPC ∗ ra ↦ᵣ r ∗ regFile rv ∗
         ownSet (fun a => InExt (s.toNat - 80, 80) a ∨ InExt (args.toNat, 24 * vs.length) a)

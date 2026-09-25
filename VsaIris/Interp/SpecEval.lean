@@ -67,12 +67,15 @@ end Regs
 -- `ReadOK` and `astEG` live in `Repr.lean` (`closOwn` carries them).
 
 /-- A stack pointer `s` with `n` owned bytes below it, inside the stack
-segment (`stackSL`), 16-aligned. -/
+segment (`stackSL`), 16-aligned, and at or below `interp_run`'s frame (`top`:
+every `eval_expr`/`exec_stmt` site runs inside the program's loop, so an abort's
+out-of-memory region never reaches the bytes `interp_run`'s caller owns). -/
 structure StackGeom (s : BitVec 64) (n : Nat) : Prop where
   le : n ≤ s.toNat
   lo : Vsa.Sim.LayoutInstance.stackSL.lo ≤ s.toNat - n
   hi : s.toNat ≤ Vsa.Sim.LayoutInstance.stackSL.hi
   al : s.toNat % 16 = 0
+  top : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame
 
 /-- A 24-byte value slot the callee may store to: 8-aligned, RAM, off HTIF. -/
 structure SlotGeom (a : BitVec 64) : Prop where

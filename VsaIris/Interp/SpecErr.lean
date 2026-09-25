@@ -101,13 +101,27 @@ instance (inp : Nat) : Persistent (errCtx (GF := GF) inp) := by
 theorem errCtx_img (inp : Nat) : errCtx (GF := GF) inp ⊢ binImg := by
   unfold errCtx; iintro ⟨#H, -⟩; iexact H
 
+/-- `interp_run`'s lowered `sp` (`spEntry - interpRunFrame`): every
+`eval_expr`/`exec_stmt` site runs at or below it (`StackGeom.top`). -/
+abbrev runSp : BitVec 64 :=
+  BitVec.ofNat 64 (Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame)
+
+theorem runSp_toNat :
+    runSp.toNat = Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame := by
+  decide
+
+theorem runTop_eq : Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame =
+    0x87fffc50 := by decide
+
 variable (L : DlLayout) (Room : RoomPred) (inp : Nat)
 
 /-- The landing core `Core` absorbs `runtime_error`'s (and the out-of-memory
-exit's) abort core at any region `[sc - nc, sc)` of the stack segment. -/
+exit's) abort core at any region `[sc - nc, sc)` of the stack segment at or
+below `interp_run`'s frame (`StackGeom.top`). -/
 def CoreOK (Core : IProp GF) : Prop :=
   ∀ (sc : BitVec 64) (nc : Nat), nc ≤ sc.toNat → 0x87800000 ≤ sc.toNat - nc →
-    sc.toNat ≤ 0x88000000 → abortCore N L Room inp sc nc ⊢ Core
+    sc.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame →
+    abortCore N L Room inp sc nc ⊢ Core
 
 /-- The pure premises of an error arm. -/
 structure ErrEnv (live : Nat → Prop) (Core : IProp GF) : Prop where
@@ -117,11 +131,12 @@ structure ErrEnv (live : Nat → Prop) (Core : IProp GF) : Prop where
   inpLt : inp < 2 ^ 64
   core : CoreOK N L Room inp Core
 
-/-- The whole stack segment's core absorbs every region inside it. -/
+/-- The core over the stack below `interp_run`'s frame absorbs every region
+inside it. -/
 theorem coreOK_top : CoreOK (GF := GF) N L Room inp
-    (abortCore N L Room inp 0x88000000#64 0x800000) := fun sc nc h1 h2 h3 =>
-  abortCore_mono N L Room inp (by decide) (by decide) (by simp only [BitVec.toNat_ofNat]; omega)
-    (by simp only [BitVec.toNat_ofNat]; omega) (by decide)
+    (abortCore N L Room inp runSp (runSp.toNat - 0x87800000)) := fun sc nc _ h2 h3 =>
+  abortCore_mono N L Room inp (by decide) (by decide) (by rw [runSp_toNat, runTop_eq]; omega)
+    (by rw [runSp_toNat]; exact h3) (by decide)
 
 end Specs
 

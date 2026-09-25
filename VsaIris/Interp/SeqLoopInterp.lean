@@ -201,12 +201,13 @@ def interpSeqP_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room
       slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ world N L Room inp .uncounted st d ∗
       execSpecsP (vsaModel live) N L Room inp Core ∗
       ((∀ (R' : Nat → BitVec 64) (st' : St) (status : Status),
-        ⌜ExecSeq st d genv ss st' status⌝ -∗ ⌜KeepRegs interpKeep R R'⌝ -∗ F -∗
+        ⌜ExecSeq st d genv ss st' status⌝ -∗
+        ⌜KeepRegs interpKeep R R' ∧ (status ≠ .normal → ReadOK (R' 9).toNat)⌝ -∗ F -∗
         ms (interpExit status) R' (interpS s) Mt -∗ stackScratch (s + 18446744073709551440#64) m' -∗
         statusRet N (s + 18446744073709551440#64 + 88#64).toNat status -∗
         world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ) ∧
        (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗
-          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) byteAny) -∗
+          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)) -∗
           (wpW (vsaModel live)).W Φ))
       ⊢ (wpW (vsaModel live)).W Φ)
 
@@ -591,12 +592,13 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ world N L Room inp .uncounted st d ∗
       execSpecsP (vsaModel live) N L Room inp Core ∗
       ((∀ (R' : Nat → BitVec 64) (st' : St) (status : Status),
-        ⌜ExecSeq st d genv (sm :: ss) st' status⌝ -∗ ⌜KeepRegs interpKeep R R'⌝ -∗ F -∗
+        ⌜ExecSeq st d genv (sm :: ss) st' status⌝ -∗
+        ⌜KeepRegs interpKeep R R' ∧ (status ≠ .normal → ReadOK (R' 9).toNat)⌝ -∗ F -∗
         ms (interpExit status) R' (interpS s) Mt -∗ stackScratch (s + 18446744073709551440#64) m' -∗
         statusRet N (s + 18446744073709551440#64 + 88#64).toNat status -∗
         world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ) ∧
        (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗
-          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) byteAny) -∗
+          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)) -∗
           (wpW (vsaModel live)).W Φ))))
   rotate_left
   · iframe Hdv Hms HF Hcode Hro Hfr Hst Hslot Hw IH; iexact HK
@@ -625,12 +627,13 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ world N L Room inp .uncounted st d ∗
       execSpecsP (vsaModel live) N L Room inp Core ∗
       ((∀ (R' : Nat → BitVec 64) (st' : St) (status : Status),
-        ⌜ExecSeq st d genv (sm :: ss) st' status⌝ -∗ ⌜KeepRegs interpKeep R R'⌝ -∗ F -∗
+        ⌜ExecSeq st d genv (sm :: ss) st' status⌝ -∗
+        ⌜KeepRegs interpKeep R R' ∧ (status ≠ .normal → ReadOK (R' 9).toNat)⌝ -∗ F -∗
         ms (interpExit status) R' (interpS s) Mt -∗ stackScratch (s + 18446744073709551440#64) m' -∗
         statusRet N (s + 18446744073709551440#64 + 88#64).toNat status -∗
         world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ) ∧
        (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗
-          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) byteAny) -∗
+          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)) -∗
           (wpW (vsaModel live)).W Φ))))
   rotate_left
   · iframe Hdv Hms HF Hcode Hro Hfr Hst Hslot Hw IH; iexact HK
@@ -644,17 +647,22 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, #IH, HK⟩, Hms⟩
   ihave H1 := execSpecsP_at Core st d genv sm $$ IH
-  iapply ms_callExecP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004474)
+  iapply ms_callExecPM (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004474)
     (jalx_80004474 live (fun p hp => hlive _ (interp_code_80004474 p hp)))
     interp_code_80004474 (by decide) (Core := Core) (st := st) (d := d) (env := genv) (sm := sm)
     (aS := BitVec.ofNat 64 p) (aE := g)
     (aRet := s + 18446744073709551440#64 + 88#64) (s := s + 18446744073709551440#64) (m := m')
-    (Kret := iprop(∀ (R' : Nat → BitVec 64) (st' : St) (status : Status),
-        ⌜ExecSeq st d genv (sm :: ss) st' status⌝ -∗ ⌜KeepRegs interpKeep R R'⌝ -∗ F -∗
+    (K := iprop((∀ (R' : Nat → BitVec 64) (st' : St) (status : Status),
+        ⌜ExecSeq st d genv (sm :: ss) st' status⌝ -∗
+        ⌜KeepRegs interpKeep R R' ∧ (status ≠ .normal → ReadOK (R' 9).toNat)⌝ -∗ F -∗
         ms (interpExit status) R' (interpS s) Mt -∗ stackScratch (s + 18446744073709551440#64) m' -∗
         statusRet N (s + 18446744073709551440#64 + 88#64).toNat status -∗
-        world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ))
-    (hsg'.narrow hneed) hneed hsg'.le hslg hbb
+        world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ) ∧
+       (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗
+          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗
+          ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)) -∗
+          (wpW (vsaModel live)).W Φ)))
+    (hsg'.narrow hneed) hneed hsg'.le hslg hbb and_elim_r
   iframe H1 Hcode Hfr Hms Hst Hslot Hw HK
   isplitl []
   · ipureintro
@@ -672,12 +680,13 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       statusRet N (s + 18446744073709551440#64 + 88#64).toNat status ∗
       world N L Room inp .uncounted st' d ∗ execSpecsP (vsaModel live) N L Room inp Core ∗
       ((∀ (R' : Nat → BitVec 64) (st'' : St) (status' : Status),
-        ⌜ExecSeq st d genv (sm :: ss) st'' status'⌝ -∗ ⌜KeepRegs interpKeep R R'⌝ -∗ F -∗
+        ⌜ExecSeq st d genv (sm :: ss) st'' status'⌝ -∗
+        ⌜KeepRegs interpKeep R R' ∧ (status' ≠ .normal → ReadOK (R' 9).toNat)⌝ -∗ F -∗
         ms (interpExit status') R' (interpS s) Mt -∗ stackScratch (s + 18446744073709551440#64) m' -∗
         statusRet N (s + 18446744073709551440#64 + 88#64).toNat status' -∗
         world N L Room inp .uncounted st'' d -∗ (wpW (vsaModel live)).W Φ) ∧
        (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗
-          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) byteAny) -∗
+          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)) -∗
           (wpW (vsaModel live)).W Φ))))
   rotate_left
   · iframe Hdv Hms HF Hcode Hro Hfr Hst Hret Hw IH; iexact HK
@@ -696,6 +705,11 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     (hR1 2 (by decide)).trans hh.sp
   have e18r : R' 18 = arr + BitVec.ofNat 64 (8 * count) := by simpa [upd_apply] using e18
   have e20r : R' 20 = 1#64 := by simpa [upd_apply] using e20
+  -- `s1` still holds the statement node (the top reads its `line` at an abrupt exit)
+  have e9 : upd R' 1 (BitVec.ofNat 64 (2147501172 + 4)) 9 = BitVec.ofNat 64 p := by
+    ix_keep [hkeep, hkeep1]
+  have hread9 : ReadOK (upd R' 1 (BitVec.ofNat 64 (2147501172 + 4)) 9).toNat := by
+    rw [e9, hpt]; exact hdat.geo _ (by simpa using hsp.tagCovers 0 (by decide))
   obtain ⟨hstep, hnext⟩ := cursor_step (arr := arr) hdat.ahi hidx
   refine InterpLoop_runB (sc := statusCode status) (idx := idx) hlive e10 e19 e20 e8 e18 ?_ ?_ ?_ ?_
   · -- `ret`: the loop leaves with it
@@ -710,7 +724,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     cases status with
     | ret v =>
       rw [← interpExit_ret v] at *
-      iapply HK $$ %_ %st' %(Status.ret v) %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne) %hR1 HF Hms Hst Hret Hw
+      iapply HK $$ %_ %st' %(Status.ret v) %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne)
+        %⟨hR1, fun _ => hread9⟩ HF Hms Hst Hret Hw
     | _ => exfalso; exact absurd hc (by decide)
   · -- `brk`/`cont`: the loop leaves with it
     intro hc0 hc
@@ -730,10 +745,12 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     cases status with
     | brk =>
       rw [← interpExit_brk] at *
-      iapply HK $$ %_ %st' %Status.brk %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne) %hR1' HF Hms Hst Hret Hw
+      iapply HK $$ %_ %st' %Status.brk %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne)
+        %⟨hR1', fun _ => by rw [upd_other _ _ (by decide)]; exact hread9⟩ HF Hms Hst Hret Hw
     | cont =>
       rw [← interpExit_cont] at *
-      iapply HK $$ %_ %st' %Status.cont %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne) %hR1' HF Hms Hst Hret Hw
+      iapply HK $$ %_ %st' %Status.cont %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne)
+        %⟨hR1', fun _ => by rw [upd_other _ _ (by decide)]; exact hread9⟩ HF Hms Hst Hret Hw
     | ret v => exact absurd rfl hc0
     | normal => exact absurd rfl hne
   · -- the program's end
@@ -757,7 +774,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       ihave HK := and_elim_l $$ HK
       rw [← interpExit_normal] at *
       iapply HK $$ %_ %st' %Status.normal
-        %(ExecSeq.consNormal _ _ _ _ _ _ _ _ hE (ExecSeq.nil _ _ _)) %?_ HF Hms Hst Hret Hw
+        %(ExecSeq.consNormal _ _ _ _ _ _ _ _ hE (ExecSeq.nil _ _ _)) %⟨?_, fun h => absurd rfl h⟩
+        HF Hms Hst Hret Hw
       refine KeepRegs.trans hR1 ?_
       keep_split
       all_goals ix_reg
@@ -787,10 +805,10 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
           keep_split
           all_goals (rw [hR2]; ix_reg)
         isplit
-        · iintro %R'' %st'' %status'' %hE2 %hk'' HF Hms Hst Hret Hw
+        · iintro %R'' %st'' %status'' %hE2 %⟨hk'', hr''⟩ HF Hms Hst Hret Hw
           ihave HK := and_elim_l $$ HK
           iapply HK $$ %R'' %st'' %status'' %(ExecSeq.consNormal _ _ _ _ _ _ _ _ hE hE2)
-            %(KeepRegs.trans hR2' hk'') HF Hms Hst Hret Hw
+            %⟨KeepRegs.trans hR2' hk'', hr''⟩ HF Hms Hst Hret Hw
         · ihave HK := and_elim_r $$ HK
           iexact HK
       · rw [hR2]

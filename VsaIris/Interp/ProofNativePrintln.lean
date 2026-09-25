@@ -148,6 +148,7 @@ structure NplCtx (live : Nat → Prop) (sret s r : BitVec 64) (rv : Nat → BitV
   hs1 : 0x87800000 + nativePrintlnNeed ≤ s.toNat
   hs2 : s.toNat ≤ 0x88000000
   hs3 : s.toNat % 16 = 0
+  hs4 : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame
   hg : SlotGeom sret
 
 /-- **After `native_print`**: `fputc('\n')`, `value_null`, the epilogue, the
@@ -199,7 +200,8 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hsg : StackGeom (s + 18446744073709551568#64) nativePrintNeed :=
     ⟨by rw [e48]; unfold nativePrintNeed printNeed fprintfNeed; omega,
       by rw [e48]; unfold Vsa.Sim.LayoutInstance.stackSL nativePrintNeed printNeed fprintfNeed; simp; omega,
-      by rw [e48]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, by rw [e48]; omega⟩
+      by rw [e48]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, by rw [e48]; omega,
+      by rw [e48]; have := c.hs4; omega⟩
   iapply ms_callOut Wp (i := 0x80002fa0)
     (jalx_80002fa0 live (fun p hp => c.hlive _ (interp_code_80002fa0 p hp))) interp_code_80002fa0
     (R := upd (upd (upd R 15 2147595576#64) 10 10#64) 11 2147597088#64)
@@ -310,7 +312,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     exact ⟨by unfold nativePrintlnNeed nativePrintNeed printNeed fprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp
          unfold nativePrintlnNeed nativePrintNeed printNeed fprintfNeed; omega,
-      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, c.hs4⟩
 
 /-- `native_print`'s stack and result slot, from `native_println`'s stack. -/
 theorem npl_geom {s : BitVec 64} (h : StackGeom s nativePrintlnNeed) :
@@ -328,8 +330,10 @@ theorem npl_geom {s : BitVec 64} (h : StackGeom s nativePrintlnNeed) :
   have a5 : (s.toNat - 48) % 8 = 0 := by omega
   have a6 : 0x8001ad00 + 16 ≤ s.toNat - 48 := by omega
   have a7 : s.toNat - 48 + 24 ≤ 0x100000000 := by omega
-  rw [← e48] at a1 a2 a3 a4 a5 a6 a7
-  exact ⟨⟨a1, a2, a3, a4⟩, ⟨a5, a6, a7⟩⟩
+  have a8 : s.toNat - 48 ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame := by
+    have := h.top; omega
+  rw [← e48] at a1 a2 a3 a4 a5 a6 a7 a8
+  exact ⟨⟨a1, a2, a3, a4, a8⟩, ⟨a5, a6, a7⟩⟩
 
 /-- **`native_println`**, given `IrisHoles.out`, for either WP. -/
 theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
@@ -344,7 +348,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
   unfold nativePrintlnNeed nativePrintNeed printNeed fprintfNeed at hs1 hs2
   have c : NplCtx live sret s r rv :=
     ⟨hlive, hal, h10, h2, by unfold nativePrintlnNeed nativePrintNeed printNeed fprintfNeed; omega,
-      by omega, hs4, hg⟩
+      by omega, hs4, hsg.top, hg⟩
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
   have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
