@@ -53,7 +53,27 @@ Branch `lane-a`, from `hub/iris-main` (`05874b5`), fast-forwarded to `hub/lane-e
 
 ## Done
 
-(nothing yet)
+- F1 (Q7 headroom, `helperHeadroom = 2048`, `errRoom` at every depth) and F2 (`exitHandlers` quiet from `StdioOK`), `327fe89`.
+- `TermSim.lean`: the total recursion (nine motives, fifty cases; `binaryT` dispatches `binOpSem`), `interpSeqT_all`, `execDispT_all`, over `TermSupply`.
+- `StuckSim.lean`: the Löb (`specsP_all : errCtx inp ⊢ □ (eval ∧ exec partial specs)`), over `StuckSupply`.
+- `TopBoundary.lean`: `topLive`, `vsaOk_of_ready` (given present GPRs), the register map.
+
+## In flight (sub-agents)
+
+| item | where | status |
+|---|---|---|
+| strcmp (`strcmpSpec`, `strcmpSpecV`, `strcmpOrdSpec`) | main tree, new files | running |
+| memcpy (`memcpySpec`, `memcpySpecOwned`) | main tree | obstruction found: the specs allow a destination below the HTIF words; fix = add `htifLo + 16 ≤ dst` (F4); proving the fixed form |
+| strcpy, strlen (`strlenSpec`), heap forms | main tree | running |
+| `interp_run` whole run, both modes | main tree | running |
+| F3 `_impure_ptr` read-only in `stdioAt` | worktree wt1 | running |
+| F5 closure geometry in `closOwn` (`CloSupply`) | worktree wt2 | running |
+| F6 `runtime_error` returns its readable bytes (`CloArityP`) | worktree wt3 | running |
+
+## Foundations still to do (me, after F3)
+
+- F4: helper specs valid (code context in their precondition; memcpy's destination above HTIF).
+- `Loaded` boundary field: every general register present (`VsaOk.gpr`; standing decision "boundary facts become `Loaded` fields with a control witness").
 
 ## Holes
 
