@@ -27,6 +27,10 @@ syntax "nx_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)?
 /-- `nx_run1`: `nx_run` that stops at a branch it cannot decide. -/
 syntax "nx_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
+/-- `nx_runF`: `nx_run` whose facts also rewrite each branch condition before
+`sx_side` tries to refute it (a condition on a register the facts pin). -/
+syntax "nx_runF " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
+
 /-- The table normalizer, with store forwarding and the caller's facts
 applied again after it (a load forwarded through a store then meets its
 fact in the same step). -/
@@ -43,5 +47,7 @@ elab_rules : tactic
     ixRunCore true n h fs stops nxPrefixes (some (← nxTab fs))
   | `(tactic| nx_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => do
     ixRunCore false n h fs stops nxPrefixes (some (← nxTab fs))
+  | `(tactic| nx_runF $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => do
+    ixRunCore true n h fs stops nxPrefixes (some (← nxTab fs)) true
 
 end VsaIris.Sym

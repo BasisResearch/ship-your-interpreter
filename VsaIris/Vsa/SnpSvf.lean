@@ -284,4 +284,228 @@ theorem svf_entry {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     svfPro2 hlive R Mt R' Mt' SG SP hB hK
   apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
 
+/-! ## The format scan -/
+
+/-- The loop's fixed registers. -/
+def SvfRegs (R' R : Nat → BitVec 64) : Prop :=
+  ∀ z, z = 2 ∨ z = 8 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 ∨ z = 23 → R' z = R z
+
+/-- `SvfAt` survives a scratch write inside `[s - 864 + 168, s - 864 + 224)`
+(`mbtowc`'s character, the sign and digit buffers) and new values in the
+registers the loop does not fix. -/
+theorem SvfAt.scratch {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat}
+    {rt : BitVec 64} {total : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
+    (A : SvfAt s dst n R0 Mt0 p ap rt total R Mt) (SG : SnpGeom s dst n) (hR : SvfRegs R' R)
+    (hM : ∀ a, (a < s - 864 + 168 ∨ s - 864 + 224 ≤ a) → imgM Mt' a = imgM Mt a) :
+    SvfAt s dst n R0 Mt0 p ap rt total R' Mt' := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hdsep := SG.d_sep
+  have ag : ∀ (k : MKind) (off : Nat), (off + widthOfM k ≤ 168 ∨ 224 ≤ off) → off + widthOfM k ≤ 592 →
+      ldv k Mt' (BitVec.ofNat 64 (s - 864 + off)).toNat = ldv k Mt (BitVec.ofNat 64 (s - 864 + off)).toNat :=
+    fun k off h1 h2 => by
+      rw [toNat_ofNat_lt (by omega)]
+      exact ldv_agree k fun i hi => hM _ (by omega)
+  have ag0 : ldv .ld Mt' (BitVec.ofNat 64 (s - 864)).toNat = ldv .ld Mt (BitVec.ofNat 64 (s - 864)).toNat := by
+    have := ag .ld 0 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)
+    simpa using this
+  have sv := A.saved
+  refine ⟨(hR 2 (by omega)).trans A.r2, (hR 8 (by omega)).trans A.r8, (hR 9 (by omega)).trans A.r9,
+    (hR 18 (by omega)).trans A.r18, (hR 19 (by omega)).trans A.r19, (hR 21 (by omega)).trans A.r21,
+    (hR 23 (by omega)).trans A.r23, ag0.trans A.fmt,
+    (ag .ld 8 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans A.fp,
+    (ag .ld 16 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans A.ret,
+    (ag .ld 24 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans A.ap,
+    (ag .ld 224 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans A.uio,
+    (ag .lw 232 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans A.cnt,
+    (ag .ld 240 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans A.res,
+    ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
+    A.buf.transport (fun a ha => hM a (by simp only [snpFP] at ha; omega)) SG.n_pos,
+    fun a ha => (hM a (by simp only [SvfW, snpFP] at ha; omega)).trans (A.frame a ha)⟩
+  · exact (ag .ld 584 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.ra
+  · exact (ag .ld 576 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s0
+  · exact (ag .ld 568 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s1
+  · exact (ag .ld 560 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s2
+  · exact (ag .ld 552 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s3
+  · exact (ag .ld 544 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s4
+  · exact (ag .ld 536 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s5
+  · exact (ag .ld 528 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s6
+  · exact (ag .ld 520 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s7
+  · exact (ag .ld 512 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s8
+  · exact (ag .ld 504 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s9
+  · exact (ag .ld 496 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s10
+  · exact (ag .ld 488 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s11
+
+theorem SvfAt.ld0 {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat}
+    {rt : BitVec 64} {total : List (BitVec 8)} {R : Nat → BitVec 64} {Mt : Mem}
+    (A : SvfAt s dst n R0 Mt0 p ap rt total R Mt) (k : MKind) {a : Nat}
+    (h : ∀ i, i < widthOfM k → ¬ SvfW s dst n (a + i)) : ldv k Mt a = ldv k Mt0 a :=
+  ldv_agree k fun i hi => A.frame _ (h i hi)
+
+theorem lbu_img_ofNat (Dt : Mem) (q : Nat) (hq : q < 2 ^ 64) :
+    ldv .lbu Dt (BitVec.ofNat 64 q).toNat = BitVec.ofNat 64 (imgM Dt q).toNat := by
+  rw [toNat_ofNat_lt hq]
+  simp only [ldv, bytesVal, bytesAt, widthOfM, List.range_one, List.map_cons, List.map_nil,
+    List.getD_cons_zero, Nat.add_zero]
+  apply BitVec.eq_of_toNat_eq
+  simp only [LeanRV64DExecutable.zero_extend, Sail.BitVec.zeroExtend, BitVec.toNat_setWidth,
+    BitVec.toNat_ofNat]
+
+theorem snez_ofNat (b : BitVec 8) :
+    LeanRV64DExecutable.zero_extend (m := 64) (LeanRV64DExecutable.Functions.bool_to_bit
+      (LeanRV64DExecutable.Functions.zopz0zI_u (0#64) (BitVec.ofNat 64 b.toNat))) =
+      if b = 0#8 then 0#64 else 1#64 := by
+  have e : BitVec.ofNat 64 b.toNat = BitVec.zeroExtend 64 b := by
+    apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat, BitVec.toNat_setWidth]
+  rw [e]
+  split
+  · rename_i h; exact snez_zero h
+  · rename_i h; exact snez_one h
+
+/-- The scan after `mbtowc` returned on the byte at `q` (`0x80007744`). -/
+structure ScanAt (Dt : Mem) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
+    (rt : BitVec 64) (total : List (BitVec 8)) (q : Nat) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
+  svf : SvfAt s dst n R0 Mt0 p ap rt total R Mt
+  r22 : R 22 = BitVec.ofNat 64 q
+  r10 : R 10 = if imgM Dt q = 0#8 then 0#64 else 1#64
+  wc : ldv .lw Mt (BitVec.ofNat 64 (s - 864 + 180)).toNat = BitVec.ofNat 64 (imgM Dt q).toNat
+
+/-- **One `mbtowc` call of the scan** (`0x80007724` → `0x80007744`): the
+locale's `__ascii_mbtowc` on the format byte at `q`. -/
+theorem svf_mbtowc {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    (q : Nat) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (A : SvfAt s dst n R0 Mt0 p ap rt total R Mt) (h22 : R 22 = BitVec.ofNat 64 q)
+    (hq : InDA DA q (q + 1)) (hq1 : 0x80000000 ≤ q) (hq2 : q + 1 ≤ 0x100000000)
+    (hq3 : q + 1 ≤ 0x8001ad00 ∨ 0x8001ad08 ≤ q)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
+    (hk : ∀ R' Mt', ScanAt Dt s dst n R0 Mt0 p ap rt total q R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80007744#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80007724#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have hd1 := SG.d_lo
+  have h2 := A.r2
+  have h8 := A.r8
+  have h9 := A.r9
+  have hmb' : ldv .ld Mt 0x8001b880 = 0x80012268#64 :=
+    (A.ld0 .ld fun i hi => by simp only [SvfW, snpFP, widthOfM] at hi ⊢; omega).trans hmb
+  have hmx' : ldv .lbu Mt 0x8001b8f8 = 1#64 :=
+    (A.ld0 .lbu fun i hi => by simp only [SvfW, snpFP, widthOfM] at hi ⊢; omega).trans hmx
+  have hbq := lbu_img_ofNat Dt q (by omega)
+  nx_run hlive using [ofNat_add_ofNat, h2, h8, h9, h22, hmb', hmx', hbq] at 0x80007744
+  refine hk _ _ ⟨A.scratch SG ?_ ?_, ?_, ?_, ?_⟩
+  · intro z hz
+    rcases hz with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · intro a ha
+    svf_mem
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h22
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact snez_ofNat _
+  · exact ldv_lw_store4 Mt _ _ (by have := (imgM Dt q).isLt; omega)
+
+/-- The scan's branch on `mbtowc`'s result (`0x80007744`): the end of the
+format (`hZ`), a conversion (`hP`), or the next byte (`hN`). -/
+theorem svf_scan_br {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    (q : Nat) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (hq : q + 1 < 2 ^ 64)
+    (S : ScanAt Dt s dst n R0 Mt0 p ap rt total q R Mt)
+    (hZ : imgM Dt q = 0#8 → ∀ R', SvfRegs R' R → R' 22 = BitVec.ofNat 64 q → R' 10 = 0#64 →
+      NW live Dt DA (snpS s dst n) Q 0x80007960#64 R' Mt)
+    (hP : imgM Dt q = 37#8 → ∀ R', SvfRegs R' R → R' 22 = BitVec.ofNat 64 q → R' 10 = 1#64 →
+      NW live Dt DA (snpS s dst n) Q 0x8000775c#64 R' Mt)
+    (hN : imgM Dt q ≠ 0#8 → imgM Dt q ≠ 37#8 → ∀ R', SvfRegs R' R →
+      R' 22 = BitVec.ofNat 64 (q + 1) → NW live Dt DA (snpS s dst n) Q 0x80007724#64 R' Mt) :
+    NW live Dt DA (snpS s dst n) Q 0x80007744#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have h2 := S.svf.r2
+  have h19 := S.svf.r19
+  have h22 := S.r22
+  have h10 := S.r10
+  have hwc := S.wc
+  by_cases hz : imgM Dt q = 0#8
+  · rw [if_pos hz] at h10
+    nx_runF hlive using [ofNat_add_ofNat, h2, h10, h19, h22, hwc] at 0x80007960
+    exact hZ hz _ (fun _ _ => rfl) h22 h10
+  rw [if_neg hz] at h10
+  by_cases hp : imgM Dt q = 37#8
+  · have hp' : BitVec.ofNat 64 (imgM Dt q).toNat = 37#64 := by rw [hp]; rfl
+    nx_runF hlive using [ofNat_add_ofNat, h2, h10, h19, h22, hwc, hp'] at 0x8000775c
+    refine hP hp _ ?_ ?_ ?_
+    · intro z hz
+      rcases hz with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · exact h22
+    · exact h10
+  · have hp' : BitVec.ofNat 64 (imgM Dt q).toNat ≠ 37#64 := fun h => hp (by
+      apply BitVec.eq_of_toNat_eq; have := congrArg BitVec.toNat h
+      simp only [BitVec.toNat_ofNat] at this; have := (imgM Dt q).isLt; simp; omega)
+    nx_runF hlive using [ofNat_add_ofNat, h2, h10, h19, h22, hwc, hp'] at 0x80007724
+    refine hN hz hp _ ?_ ?_
+    · intro z hz
+      rcases hz with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+
+/-- A format read by the scan: bytes `[q, q + k]` in the data view, in RAM off
+the HTIF words. -/
+structure FmtGeom (DA : List Nat) (q k : Nat) : Prop where
+  dom : InDA DA q (q + k + 1)
+  lo : 0x80000000 ≤ q
+  hi : q + k + 1 ≤ 0x100000000
+  htif : q + k + 1 ≤ 0x8001ad00 ∨ 0x8001ad08 ≤ q
+
+/-- **The literal scan** (`0x80007724`): `k` ordinary bytes from `q`, then the
+NUL (`hZ`, at `0x80007960`) or a `'%'` (`hP`, at `0x8000775c`). -/
+theorem svf_scan {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    (SG : SnpGeom s dst n)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64) :
+    ∀ k q (R : Nat → BitVec 64) (Mt : Mem), SvfAt s dst n R0 Mt0 p ap rt total R Mt →
+      R 22 = BitVec.ofNat 64 q → FmtGeom DA q k →
+      (∀ i, i < k → imgM Dt (q + i) ≠ 0#8 ∧ imgM Dt (q + i) ≠ 37#8) →
+      (imgM Dt (q + k) = 0#8 → ∀ R' Mt', SvfAt s dst n R0 Mt0 p ap rt total R' Mt' →
+        R' 22 = BitVec.ofNat 64 (q + k) → R' 10 = 0#64 →
+        NW live Dt DA (snpS s dst n) Q 0x80007960#64 R' Mt') →
+      (imgM Dt (q + k) = 37#8 → ∀ R' Mt', SvfAt s dst n R0 Mt0 p ap rt total R' Mt' →
+        R' 22 = BitVec.ofNat 64 (q + k) → R' 10 = 1#64 →
+        NW live Dt DA (snpS s dst n) Q 0x8000775c#64 R' Mt') →
+      (imgM Dt (q + k) = 0#8 ∨ imgM Dt (q + k) = 37#8) →
+      NW live Dt DA (snpS s dst n) Q 0x80007724#64 R Mt := by
+  intro k
+  induction k with
+  | zero =>
+    intro q R Mt A h22 G _ hZ hP hend
+    refine svf_mbtowc hlive q R Mt SG A h22 (fun b h1 h2 => G.dom b h1 (by omega)) G.lo
+      (by have := G.hi; omega) (by have := G.htif; omega) hmb hmx fun R' Mt' S => ?_
+    refine svf_scan_br hlive q R' Mt' SG (by have := G.hi; omega) S
+      (fun hz R'' hR h22' h10 => hZ hz R'' Mt' (S.svf.scratch SG hR fun _ _ => rfl) h22' h10)
+      (fun hp R'' hR h22' h10 => hP hp R'' Mt' (S.svf.scratch SG hR fun _ _ => rfl) h22' h10)
+      (fun hz hp => ?_)
+    rcases hend with h | h
+    · exact absurd h hz
+    · exact absurd h hp
+  | succ k ih =>
+    intro q R Mt A h22 G hb hZ hP hend
+    have hb0 := hb 0 (by omega)
+    simp only [Nat.add_zero] at hb0
+    refine svf_mbtowc hlive q R Mt SG A h22 (fun b h1 h2 => G.dom b h1 (by omega)) G.lo
+      (by have := G.hi; omega) (by have := G.htif; omega) hmb hmx fun R' Mt' S => ?_
+    refine svf_scan_br hlive q R' Mt' SG (by have := G.hi; omega) S
+      (fun hz => absurd hz hb0.1) (fun hp => absurd hp hb0.2)
+      (fun _ _ R'' hR h22' => ?_)
+    have e : q + (k + 1) = q + 1 + k := by omega
+    rw [e] at hZ hP hend
+    refine ih (q + 1) R'' Mt' (S.svf.scratch SG hR fun _ _ => rfl) h22'
+      ⟨fun b h1 h2 => G.dom b (by omega) (by omega), by have := G.lo; omega,
+        by have := G.hi; omega, by have := G.htif; omega⟩
+      (fun i hi => by rw [show q + 1 + i = q + (i + 1) by omega]; exact hb (i + 1) (by omega))
+      hZ hP hend
+
 end VsaIris.Sym

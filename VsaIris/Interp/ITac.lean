@@ -78,11 +78,14 @@ def ixTrySide (norm : Syntax) (g : MVarId) : TacticM Bool := do
     saved.restore; return false
 
 /-- Close a branch goal `C → IW …` when `sx_side` refutes `C`. -/
-def ixTryPrune (norm : Syntax) (g : MVarId) : TacticM Bool := do
+def ixTryPrune (norm : Syntax) (g : MVarId) (condFacts : Bool := false) : TacticM Bool := do
   let saved ← saveState
   try
-    let gs ← evalTacticAt
-      (← `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; sx_side))))) g
+    -- `condFacts`: the caller's facts also rewrite the branch condition itself
+    let tac ← if condFacts then
+        `(tactic| (intro hc; exfalso; revert hc; ($(⟨norm⟩) <;> sx_side)))
+      else `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; sx_side))))
+    let gs ← evalTacticAt tac g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
@@ -143,7 +146,8 @@ syntax "ix_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)
 /-- The driver behind `ix_run` (`explore`) and `ix_run1`. -/
 def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
-    (pfxs : List String := ixPrefixes) (tab : Option (TSyntax `tactic) := none) :
+    (pfxs : List String := ixPrefixes) (tab : Option (TSyntax `tactic) := none)
+    (condFacts : Bool := false) :
     TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
     let stopPCs : List Nat := match stops with
@@ -196,10 +200,10 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
         else
           stuck := stuck ++ [c]
       | [t, f] =>
-        if ← ixTryPrune norm t then
+        if ← ixTryPrune norm t condFacts then
           let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := stuck ++ [f]; continue
           work := (f', fuel - 1) :: work
-        else if ← ixTryPrune norm f then
+        else if ← ixTryPrune norm f condFacts then
           let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := stuck ++ [t]; continue
           work := (t', fuel - 1) :: work
         else if !explore then
