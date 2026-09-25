@@ -8,7 +8,7 @@ the reflected state (no `native_decide`), generated per program. The
 witnesses can close only after P1 (console flags) and P2 (script bytes, lane
 B1) and P3 (stack presence, lane B2).
 
-## Status: witnesses built modulo P3 (lane B2, not yet pushed); C4 resolved by P7
+## Status: done (witnesses close with no open premises; merged B1 and B2; P7 landed)
 
 ## P7 (C4), approved by the user 2026-09-25 and landed
 
@@ -27,13 +27,13 @@ removed with the fix (commit `2b62ce16` has it).
   every `c/tests/*.wl` build reaching `interp_run` except `recursion`
   (arithmetic, for, functions1/2, scope, strings, while, err_divzero,
   err_undefined), `loaded : Loaded interpRunLayout prog (bootConfig (bootMem
-  script log) regs entrySteps)` with one premise: every stack byte present
-  (C3). `loadedAt` holds over any memory the entry view is a partial view of,
-  so B2's `fillZero` discharges the premise when it lands.
+  script log) regs entrySteps)` at its zero fill (`fillZero`, B2's P3), with
+  no premises: `loadedAt` holds over any memory the entry view is a partial
+  view of, and the fill has every stack byte (`Fill.lean`).
   `prog_eq` identifies `prog` with the `Programs.lean` source for while,
   arithmetic, for, scope, strings, recursion.
 - **Capstone** `Vsa/Sim/Boot/EndToEnd.lean`: `proofElf_halts` (and five more):
-  `IrisHoles` + stack presence ⊢ the real proof-ELF entry state
+  `IrisHoles` ⊢ the real proof-ELF entry state
   `Halts … "55\n2500\n36\n" 0`. Axioms `[propext, Classical.choice, Quot.sound]`.
 - Loader: `initializeMemory_eq : ElfLoads elf script → initializeMemory .B64
   elf = loadedMem script` (`Elf.lean`); `check-elf` evaluates `ElfLoads`
@@ -45,11 +45,10 @@ removed with the fix (commit `2b62ce16` has it).
   (`Ast.lean`), capacity from the cost evaluator (`Capacity.lean`,
   `Vsa/While/CostEval.lean`: completeness + fuel monotonicity).
 - Corpus: 35 ELFs traced; all agree with the proof ELF outside the script blob.
-- Merged B1 (P1, P2). `lake build Vsa VsaIris VsaBoot` green.
+- Merged B1 (P1, P2) and B2 (P3). `lake build Vsa VsaIris VsaIris.Audit VsaBoot` green (2626 jobs); `check_final_axioms.sh` 24/24 (adds `Gen.Proof.loaded`, `proofElf_halts`, `initializeMemory_eq`); `check_iris_holes.py` 10 holes, unchanged.
 
 ## Open
 
-- P3 (lane B2): then `hstack` goes via densification.
 - `recursion.wl`: `capOk` out of kernel reach (`fib(20)` allocates ~22k
   frames in the list-backed store); its trace has every other fact.
 - `err_parse` never reaches `interp_run` (outside the theorem).

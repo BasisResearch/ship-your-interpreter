@@ -1,4 +1,5 @@
 import Vsa.Sim.Boot.Physical
+import Vsa.Sim.Boot.Fill
 import Vsa.While.Programs
 
 /-!
@@ -1080,13 +1081,11 @@ theorem loadedAt {m : Vsa.MemRepr.Mem} (hv : PartialView m (bootView script runs
   loaded_of hv (memFacts hv hstack) bootRegs ownOk frameOk storeOk heapOk heapFactsOk progOk
     capacityOk fitsOk
 
-/-- The real entry state is `Loaded` for `prog`, given every stack byte present
-(REVIEW.md C3; lane B2's P3 discharges it through the zero fill). -/
-theorem loaded
-    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →
-      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b) :
-    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog
-      (bootConfig (bootMem script log) regs entrySteps) :=
-  loadedAt view.partial hstack
+/-- **The witness**: the real entry state's zero fill (REVIEW.md P3; the
+form `endToEnd_refinement` takes) is `Loaded` for `prog`. -/
+theorem loaded : Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog
+    (Vsa.Densify.fillZero (bootConfig (bootMem script log) regs entrySteps)) := by
+  rw [fillZero_bootConfig]
+  exact loadedAt view.partial.fill (fillZeroMem_stack _)
 
 end Vsa.Sim.Boot.Gen.Arithmetic

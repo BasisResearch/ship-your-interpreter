@@ -88,6 +88,8 @@ every boundary structure are unchanged.
 
 - **P7 approved (user, 2026-09-25; `REVIEW.md` C4/§4 P7).** Shared bytes may lie in `.rodata`: the boundary's shared-byte geometry is the read window the Iris consumers need (`ReadOK`, `SharedWin`), not "above the static image". (lane B3; see the next STATEMENT CHANGE)
 
+- **P4 landed (lane B3, 2026-09-25).** `Loaded` is witnessed at the binary's real `interp_run` entry state (loader memory + traced stores, zero-filled per P3) for the proof ELF and every `c/tests/*.wl` build but `recursion` (`capacity` out of kernel reach): `Vsa/Sim/Boot/Gen/<Prog>.loaded`, generated; `Vsa/Sim/Boot/EndToEnd.lean` applies `endToEnd_refinement` there. No statement change besides P7.
+
 ## STATEMENT CHANGE (lane B3, P7): the boundary's shared bytes may lie in `.rodata`
 
 `interp_init` defines the natives with `value_native("print", …)`, so each

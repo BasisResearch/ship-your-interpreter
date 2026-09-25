@@ -22,6 +22,9 @@ THEOREMS=(
   Vsa.Refine.refinement                           # the generic composition (Vsa/Refinement.lean)
   Vsa.Sim.NativeNameAudit.Control.loaded          # the control witness of `Loaded interpRunLayout`
   Vsa.Sim.NativeNameAudit.Control.loaded_fill     # the same at `fillZero heapConfig` (THE theorem's hypothesis)
+  Vsa.Sim.Boot.Gen.Proof.loaded                   # loader-derived witness at the proof ELF's real entry (lane B3)
+  Vsa.Sim.Boot.proofElf_halts                     # the final theorem at that state: prints 55 2500 36, exits 0
+  Vsa.Sim.Boot.initializeMemory_eq                # the loader's memory is the generated image
   Vsa.Sim.LayoutInstance.all_stackFits            # ProgramStackFits at every c/tests/*.wl embedding
   VsaIris.Interp.ctl_world_counted                # world_of_boundary at the control, counted regime
   VsaIris.Interp.ctl_world_uncounted              # world_of_boundary at the control, uncounted regime
@@ -40,6 +43,7 @@ mv "${AXFILE%.lean}" "$AXFILE"
   echo "import Vsa.Sim.NativeNameAudit.ControlLoaded"
   echo "import Vsa.Sim.StackAdmissibleWitness"
   echo "import VsaIris.Vsa.StdioOrient"
+  echo "import VsaBoot"
   for t in "${THEOREMS[@]}"; do echo "#print axioms $t"; done
 } > "$AXFILE"
 OUT="$(lake env lean "$AXFILE" 2>&1)"; STATUS=$?

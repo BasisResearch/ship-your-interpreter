@@ -4387,8 +4387,9 @@ log, and `LogOk` (kernel-checked per program) gives every byte.
   change). REVIEW.md P7. **Resolved** (user decision 2026-09-25): the field is
   `SharedReadWin` (`Vsa/Sim/SharedGeometry.lean`), witnessed by
   `OwnOk.readWin` at every trace; the obstruction was removed with the fix.
-- Witnesses: `Gen/<Prog>.loaded` for 10 traces; the one remaining premise is
-  C3's stack presence (lane B2, P3); `EndToEnd.lean` `*_halts`.
+- Witnesses: `Gen/<Prog>.loaded : Loaded interpRunLayout prog (fillZero c)` at
+  the real entry state of 10 traces, no premises (P3 merged: stack presence
+  from the zero fill); `EndToEnd.lean` `*_halts` from `IrisHoles` alone.
 - `recursion.wl`'s `capacity`: `capOk` does not finish in the kernel
   (`fib(20)`, ~22k frames, list-backed store). Missing supplier: a cost
   bound not by evaluation (e.g. a symbolic cost lemma for the program).

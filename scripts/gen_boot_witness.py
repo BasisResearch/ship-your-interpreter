@@ -568,6 +568,7 @@ def cmd_program(args):
         nchunks = (len(log) + CHUNK - 1) // CHUNK
         out = [
             "import Vsa.Sim.Boot.Physical",
+            "import Vsa.Sim.Boot.Fill",
             "import Vsa.While.Programs",
             "",
             "/-!",
@@ -726,14 +727,12 @@ def cmd_program(args):
             "  loaded_of hv (memFacts hv hstack) bootRegs ownOk frameOk storeOk heapOk heapFactsOk progOk",
             "    capacityOk fitsOk",
             "",
-            "/-- The real entry state is `Loaded` for `prog`, given every stack byte present",
-            "(REVIEW.md C3; lane B2's P3 discharges it through the zero fill). -/",
-            "theorem loaded",
-            "    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →",
-            "      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b) :",
-            "    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog",
-            "      (bootConfig (bootMem script log) regs entrySteps) :=",
-            "  loadedAt view.partial hstack",
+            "/-- **The witness**: the real entry state's zero fill (REVIEW.md P3; the",
+            "form `endToEnd_refinement` takes) is `Loaded` for `prog`. -/",
+            "theorem loaded : Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog",
+            "    (Vsa.Densify.fillZero (bootConfig (bootMem script log) regs entrySteps)) := by",
+            "  rw [fillZero_bootConfig]",
+            "  exact loadedAt view.partial.fill (fillZeroMem_stack _)",
             "",
         ]) + [
             f"end Vsa.Sim.Boot.Gen.{ln}",
@@ -748,7 +747,7 @@ def cmd_program(args):
 def write_index():
     """`VsaBoot.lean`: the boot infrastructure and every generated trace."""
     mods = ["Vsa.While.CostEval", "Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Ast", "Vsa.Sim.Boot.Capacity", "Vsa.Sim.Boot.Heap",
-            "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Elf", "Vsa.Sim.Boot.EndToEnd"]
+            "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Fill", "Vsa.Sim.Boot.Elf", "Vsa.Sim.Boot.EndToEnd"]
     mods += [f"Vsa.Sim.Boot.Gen.{f.stem}" for f in sorted((BOOT_DIR / "Gen").glob("*.lean"))]
     (ROOT / "VsaBoot.lean").write_text("".join(f"import {m}\n" for m in mods))
 
