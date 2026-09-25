@@ -196,7 +196,7 @@ theorem catPieces_take_drop (g : Nat → BitVec 8) (L : List (Nat × Nat)) (i : 
 the `uio`'s count and `resid`, the frames below `_svfprintf_r`'s. -/
 def PrintW (s dst n a : Nat) : Prop :=
   (dst ≤ a ∧ a < dst + n) ∨ (snpFP s ≤ a ∧ a < snpFP s + 16) ∨
-    (snpU s + 8 ≤ a ∧ a < snpU s + 24) ∨ (s - 992 ≤ a ∧ a < s - 864)
+    (snpU s + 8 ≤ a ∧ a < snpU s + 24) ∨ (s - 992 ≤ a ∧ a < s - 928)
 
 /-- **`__ssprint_r`'s loop invariant** at the loop head (`0x8000e950`), piece
 `i` next: the buffer holds what the pieces before `i` printed, the count and
@@ -217,7 +217,7 @@ structure PrintSt (Dt : Mem) (DA : List Nat) (s dst n : Nat) (g : Nat → BitVec
   r14 : R 14 = BitVec.ofNat 64 (sumLen (L.drop i))
   r20 : R 20 = BitVec.ofNat 64 (snpFP s)
   r21 : R 21 = 18446744073709551615#64
-  keep : ∀ z, (z = 1 ∨ z = 3 ∨ z = 4 ∨ z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z
+  keep : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z
   frame : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a
 
 /-- `__ssprint_r`'s loop exit (`0x8000e99c`): every piece printed. -/
@@ -226,7 +226,7 @@ structure PrintEnd (s dst n : Nat) (g : Nat → BitVec 8) (total0 : List (BitVec
   buf : BufAt Mt s dst n (total0 ++ catPieces g L)
   r2 : R 2 = BitVec.ofNat 64 (s - 928)
   r9 : R 9 = BitVec.ofNat 64 (snpU s)
-  keep : ∀ z, (z = 1 ∨ z = 3 ∨ z = 4 ∨ z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z
+  keep : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z
   frame : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a
 
 theorem BufAt.transport {Mt Mt' : Mem} {s dst n : Nat} {total : List (BitVec 8)}
@@ -267,7 +267,25 @@ def PrintKX (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
   ∀ R' Mt', PrintEnd s dst n g total0 L R0 R' Mt0 Mt' →
     NW live Dt DA (snpS s dst n) Q 0x8000e99c#64 R' Mt'
 
-/-- The memory after `__ssprint_r` stores the new `resid`. -/
+/-- The memory after `__ssprint_r` stores to the `uio`'s count or `resid`. -/
+theorem print_uio_mem {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVec 8}
+    {total : List (BitVec 8)} {L : List (Nat × Nat)} {Mt Mt0 : Mem} (a0 w : Nat) (v : BitVec 64)
+    (ha : s - 632 ≤ a0) (hw : a0 + w ≤ s - 616)
+    (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8)
+    (hiov : IovAt Mt s L) (hP : PiecesOK Dt DA Mt s dst n g L) (hB : BufAt Mt s dst n total)
+    (hfr : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a) :
+    IovAt (writeLog Mt [(a0, w, v)]) s L ∧
+      PiecesOK Dt DA (writeLog Mt [(a0, w, v)]) s dst n g L ∧
+      BufAt (writeLog Mt [(a0, w, v)]) s dst n total ∧
+      (∀ a, ¬ PrintW s dst n a → imgM (writeLog Mt [(a0, w, v)]) a = imgM Mt0 a) := by
+  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG
+  have hag : ∀ a, (a < s - 632 ∨ s - 616 ≤ a) → imgM (writeLog Mt [(a0, w, v)]) a = imgM Mt a :=
+    fun a ha => imgM_store_miss _ _ (by omega)
+  exact ⟨hiov.transport hL8 (fun a h1 h2 => hag a (by simp only [snpIov] at h1 h2; omega)),
+    hP.transport fun a ha => hag a (by unfold PrintW snpU at ha; omega),
+    hB.transport (fun a ha => hag a (by simp only [snpFP] at ha; omega)) hn0,
+    fun a ha => (hag a (by unfold PrintW snpU at ha; omega)).trans (hfr a ha)⟩
+
 theorem print_resid_mem {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVec 8}
     {total : List (BitVec 8)} {L : List (Nat × Nat)} {Mt Mt0 : Mem} (v : BitVec 64)
     (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8)
@@ -276,14 +294,9 @@ theorem print_resid_mem {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → 
     IovAt (writeLog Mt [(s - 624, 8, v)]) s L ∧
       PiecesOK Dt DA (writeLog Mt [(s - 624, 8, v)]) s dst n g L ∧
       BufAt (writeLog Mt [(s - 624, 8, v)]) s dst n total ∧
-      (∀ a, ¬ PrintW s dst n a → imgM (writeLog Mt [(s - 624, 8, v)]) a = imgM Mt0 a) := by
-  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG
-  have hag : ∀ a, (a < s - 624 ∨ s - 616 ≤ a) → imgM (writeLog Mt [(s - 624, 8, v)]) a = imgM Mt a :=
-    fun a ha => imgM_store_miss _ _ (by omega)
-  exact ⟨hiov.transport hL8 (fun a h1 h2 => hag a (by simp only [snpIov] at h1 h2; omega)),
-    hP.transport fun a ha => hag a (by unfold PrintW snpU at ha; omega),
-    hB.transport (fun a ha => hag a (by simp only [snpFP] at ha; omega)) hn0,
-    fun a ha => (hag a (by unfold PrintW snpU at ha; omega)).trans (hfr a ha)⟩
+      (∀ a, ¬ PrintW s dst n a → imgM (writeLog Mt [(s - 624, 8, v)]) a = imgM Mt0 a) :=
+  have h := SG.s_lo
+  print_uio_mem (s - 624) 8 v (by omega) (by omega) SG hL8 hiov hP hB hfr
 
 /-- The next piece: the loop invariant at `i + 1`. -/
 theorem print_next {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVec 8}
@@ -297,7 +310,7 @@ theorem print_next {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVe
     (h2 : R' 2 = BitVec.ofNat 64 (s - 928)) (h8 : R' 8 = BitVec.ofNat 64 (snpIov s + 16 * (i + 1)))
     (h9 : R' 9 = BitVec.ofNat 64 (snpU s)) (h14 : R' 14 = BitVec.ofNat 64 (sumLen (L.drop (i + 1))))
     (h20 : R' 20 = BitVec.ofNat 64 (snpFP s)) (h21 : R' 21 = 18446744073709551615#64)
-    (hkp : ∀ z, (z = 1 ∨ z = 3 ∨ z = 4 ∨ z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R' z = R0 z) :
+    (hkp : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R' z = R0 z) :
     PrintSt Dt DA s dst n g total0 L R0 R' Mt0
       (writeLog Mt [(s - 624, 8, BitVec.ofNat 64 (sumLen (L.drop (i + 1))))]) (i + 1) := by
   have SG' := SG
@@ -326,7 +339,7 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (h2 : R 2 = BitVec.ofNat 64 (s - 928)) (h8 : R 8 = BitVec.ofNat 64 (snpIov s + 16 * i))
     (h9 : R 9 = BitVec.ofNat 64 (snpU s)) (h10 : R 10 = 0#64) (h18 : R 18 = BitVec.ofNat 64 L[i].2)
     (h20 : R 20 = BitVec.ofNat 64 (snpFP s)) (h21 : R 21 = 18446744073709551615#64)
-    (hkp : ∀ z, (z = 1 ∨ z = 3 ∨ z = 4 ∨ z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z)
+    (hkp : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z)
     (hfr : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a)
     (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
     (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
@@ -379,5 +392,201 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     · intro z hz
       simp only [show z ≠ 14 by omega, show z ≠ 8 by omega, show z ≠ 13 by omega, ite_false]
       exact hkp z hz
+
+/-- **A nonempty piece's call** (at `__ssputs_r`'s entry, from `0x8000e97c`):
+`ssputs_buf`, then `ssprint_iterB`. -/
+theorem print_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R : Nat → BitVec 64)
+    (Mt0 Mt : Mem) (i : Nat) (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8) (hi : i < L.length)
+    (hiov : IovAt Mt s L) (hP : PiecesOK Dt DA Mt s dst n g L)
+    (hB : BufAt Mt s dst n (total0 ++ catPieces g (L.take i)))
+    (hcnt : ldv .lw Mt (snpU s + 8) = BitVec.ofNat 64 (L.length - (i + 1)))
+    (hres : ldv .ld Mt (snpU s + 16) = BitVec.ofNat 64 (sumLen (L.drop i)))
+    (hsum : sumLen (L.drop i) < 2 ^ 32)
+    (h1 : R 1 = 0x8000e980#64) (h2 : R 2 = BitVec.ofNat 64 (s - 928))
+    (h8 : R 8 = BitVec.ofNat 64 (snpIov s + 16 * i)) (h9 : R 9 = BitVec.ofNat 64 (snpU s))
+    (h11 : R 11 = BitVec.ofNat 64 (snpFP s)) (h12 : R 12 = BitVec.ofNat 64 L[i].1)
+    (h13 : R 13 = BitVec.ofNat 64 L[i].2) (h18 : R 18 = BitVec.ofNat 64 L[i].2)
+    (h20 : R 20 = BitVec.ofNat 64 (snpFP s)) (h21 : R 21 = 18446744073709551615#64)
+    (hkp : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z)
+    (hfr : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a)
+    (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
+    (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
+    NW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
+  obtain ⟨PG, hl, hw⟩ := hP i hi
+  refine ssputs_buf hlive L[i].1 L[i].2 g _ R Mt SG PG hl hB h2 h11 h12 h13 (by rw [h1]; decide) hw
+    (fun R' Mt' h10' h2' h8' h9' hkp' hB' hfr' => ?_)
+  have hag : ∀ a, ¬ PrintW s dst n a ∨ (snpU s + 8 ≤ a ∧ a < snpU s + 24) ∨
+      (snpIov s ≤ a ∧ a < snpIov s + 128) → imgM Mt' a = imgM Mt a := by
+    intro a ha
+    obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG
+    exact hfr' a (by unfold PrintW snpU snpIov snpFP at *; omega) (by unfold PrintW snpU snpIov snpFP at *; omega)
+      (by unfold PrintW snpU snpIov snpFP at *; omega)
+  rw [h1]
+  refine ssprint_iterB hlive g total0 L R0 R' Mt0 Mt' i SG hL8 hi
+    (hiov.transport hL8 fun a h1 h2 => hag a (.inr (.inr ⟨h1, h2⟩)))
+    (hP.transport fun a ha => hag a (.inl ha)) (by rw [catPieces_take_succ g L hi, ← List.append_assoc]; exact hB')
+    ((ldv_agree .lw fun j hj => hag _ (.inr (.inl (by simp only [widthOfM] at hj; omega)))).trans hcnt)
+    ((ldv_agree .ld fun j hj => hag _ (.inr (.inl (by simp only [widthOfM] at hj; omega)))).trans hres)
+    hsum (h2'.trans h2) (h8'.trans h8) (h9'.trans h9) h10' ((hkp' 18 (by omega) (by omega)).trans h18)
+    ((hkp' 20 (by omega) (by omega)).trans h20) ((hkp' 21 (by omega) (by omega)).trans h21)
+    (fun z hz => (hkp' z (by omega) (by omega)).trans (hkp z hz))
+    (fun a ha => (hag a (.inl ha)).trans (hfr a ha)) hkL hkX
+
+/-- `print_call` from the loop invariant, after the count store. -/
+theorem print_call0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R R' : Nat → BitVec 64)
+    (Mt0 Mt : Mem) (i : Nat) (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8) (hsum : sumLen L < 2 ^ 32)
+    (st : PrintSt Dt DA s dst n g total0 L R0 R Mt0 Mt i)
+    (h1 : R' 1 = 0x8000e980#64) (h2 : R' 2 = BitVec.ofNat 64 (s - 928))
+    (h8 : R' 8 = BitVec.ofNat 64 (snpIov s + 16 * i)) (h9 : R' 9 = BitVec.ofNat 64 (snpU s))
+    (h11 : R' 11 = BitVec.ofNat 64 (snpFP s)) (h12 : R' 12 = BitVec.ofNat 64 (L[i]'st.lt).1)
+    (h13 : R' 13 = BitVec.ofNat 64 (L[i]'st.lt).2) (h18 : R' 18 = BitVec.ofNat 64 (L[i]'st.lt).2)
+    (h20 : R' 20 = BitVec.ofNat 64 (snpFP s)) (h21 : R' 21 = 18446744073709551615#64)
+    (hkp : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R' z = R z)
+    (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
+    (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
+    NW live Dt DA (snpS s dst n) Q 0x8001438c#64 R'
+      (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) := by
+  have hi := st.lt
+  have SG' := SG
+  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
+  have hsumi : sumLen (L.drop i) ≤ sumLen L := by
+    have := congrArg sumLen (List.take_append_drop i L)
+    simp only [sumLen, List.map_append, List.sum_append] at this ⊢; omega
+  obtain ⟨hiov1, hP1, hB1, hfr1⟩ := print_uio_mem (s - 632) 4 (BitVec.ofNat 64 (L.length - (i + 1)))
+    (by omega) (by omega) SG hL8 st.iov st.pieces st.buf st.frame
+  have hcnt1 : ldv .lw (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) (snpU s + 8) =
+      BitVec.ofNat 64 (L.length - (i + 1)) := by
+    simp only [snpU]; rw [show s - 640 + 8 = s - 632 by omega]; exact ldv_lw_store4 _ _ _ (by omega)
+  have hres1 : ldv .ld (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) (snpU s + 16) =
+      BitVec.ofNat 64 (sumLen (L.drop i)) := by
+    rw [ldv_store_miss .ld _ _ (by simp only [widthOfM, snpU]; omega)]; exact st.res
+  exact print_call hlive g total0 L R0 R' Mt0 _ i SG hL8 hi hiov1 hP1 hB1 hcnt1 hres1 (by omega)
+    h1 h2 h8 h9 h11 h12 h13 h18 h20 h21 (fun z hz => (hkp z hz).trans (st.keep z hz)) hfr1 hkL hkX
+
+/-- An empty piece (`0x8000e948`): skipped, the next piece. -/
+theorem print_skip0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R R' : Nat → BitVec 64)
+    (Mt0 Mt : Mem) (i : Nat) (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8) (hsum : sumLen L < 2 ^ 32)
+    (st : PrintSt Dt DA s dst n g total0 L R0 R Mt0 Mt i) (hl0 : (L[i]'st.lt).2 = 0)
+    (h2 : R' 2 = R 2) (h8 : R' 8 = R 8) (h9 : R' 9 = R 9) (h13 : R' 13 = BitVec.ofNat 64 (sumLen (L.drop i)))
+    (h14 : R' 14 = R 14) (h20 : R' 20 = R 20) (h21 : R' 21 = R 21)
+    (hkp : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R' z = R z)
+    (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1)) :
+    NW live Dt DA (snpS s dst n) Q 0x8000e948#64 R'
+      (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) := by
+  have hi := st.lt
+  have hpos := st.pos
+  have SG' := SG
+  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
+  have hsd := sumLen_drop L hi
+  have hsumi : sumLen (L.drop i) ≤ sumLen L := by
+    have := congrArg sumLen (List.take_append_drop i L)
+    simp only [sumLen, List.map_append, List.sum_append] at this ⊢; omega
+  have n13 : (R' 13).toNat = sumLen (L.drop i) := by rw [h13]; simp only [BitVec.toNat_ofNat]; omega
+  have h8' : R' 8 = BitVec.ofNat 64 (snpIov s + 16 * i) := h8.trans st.r8
+  nx_run hlive using [ofNat_add_ofNat, h8', h13] at 0x8000e950
+  obtain ⟨hiov1, hP1, hB1, hfr1⟩ := print_uio_mem (s - 632) 4 (BitVec.ofNat 64 (L.length - (i + 1)))
+    (by omega) (by omega) SG hL8 st.iov st.pieces st.buf st.frame
+  have hi1 : i + 1 < L.length := by
+    apply Classical.byContradiction; intro hge
+    have : sumLen (L.drop (i + 1)) = 0 := by rw [List.drop_of_length_le (by omega)]; rfl
+    omega
+  refine hkL _ _ ⟨hi1, hiov1, hP1, ?_, ?_, ?_, by omega, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hfr1⟩
+  · rw [catPieces_take_succ g L hi, hl0]; simpa [pieceBytes] using hB1
+  · simp only [snpU]; rw [show s - 640 + 8 = s - 632 by omega]; exact ldv_lw_store4 _ _ _ (by omega)
+  · rw [ldv_store_miss .ld _ _ (by simp only [widthOfM, snpU]; omega), st.res]; congr 1; omega
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · exact h2.trans st.r2
+  · simp only [snpIov]; rw [show s - 512 + 16 * i + 16 = s - 512 + 16 * (i + 1) by omega]
+  · exact h9.trans st.r9
+  · rw [h14, st.r14]; congr 1; omega
+  · exact h20.trans st.r20
+  · exact h21.trans st.r21
+  · intro z hz; rw [if_neg (by omega)]; exact (hkp z hz).trans (st.keep z hz)
+
+/-- **One iteration of `__ssprint_r`'s loop** (`0x8000e950`): the count, the
+piece's length; an empty piece is skipped, a nonempty one copied
+(`print_call`). -/
+theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R : Nat → BitVec 64)
+    (Mt0 Mt : Mem) (i : Nat) (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8)
+    (hsum : sumLen L < 2 ^ 32)
+    (st : PrintSt Dt DA s dst n g total0 L R0 R Mt0 Mt i)
+    (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
+    (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
+    NW live Dt DA (snpS s dst n) Q 0x8000e950#64 R Mt := by
+  have hi := st.lt
+  have hpos := st.pos
+  have h2 := st.r2
+  have h8 := st.r8
+  have h9 := st.r9
+  have h14 := st.r14
+  have h20 := st.r20
+  have h21 := st.r21
+  have hcnt := st.cnt
+  have SG' := SG
+  obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
+  have hsd := sumLen_drop L hi
+  have hsumi : sumLen (L.drop i) ≤ sumLen L := by
+    have := congrArg sumLen (List.take_append_drop i L)
+    simp only [sumLen, List.map_append, List.sum_append] at this ⊢; omega
+  obtain ⟨b0, l0⟩ := st.iov i hi
+  simp only [snpU, snpIov] at h8 h9 hcnt b0 l0
+  have hcnt' : ldv .lw Mt (BitVec.ofNat 64 (s - 640 + 8)).toNat = BitVec.ofNat 64 (L.length - i) := by
+    rw [toNat_ofNat_lt (by omega)]; exact hcnt
+  have hb' : ldv .ld Mt (BitVec.ofNat 64 (s - 512 + 16 * i)).toNat = BitVec.ofNat 64 L[i].1 := by
+    rw [toNat_ofNat_lt (by omega)]; exact b0
+  have hl' : ldv .ld Mt (BitVec.ofNat 64 (s - 512 + 16 * i + 8)).toNat = BitVec.ofNat 64 L[i].2 := by
+    rw [toNat_ofNat_lt (by omega)]; exact l0
+  have eC : (BitVec.ofNat 64 (s - 640 + 8)).toNat = s - 632 := by rw [toNat_ofNat_lt (by omega)]; omega
+  have hcnt2 : ldv .lw Mt (s - 632) = BitVec.ofNat 64 (L.length - i) := by
+    rw [show s - 632 = s - 640 + 8 by omega]; exact hcnt
+  have hcw : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 (L.length - i + 18446744073709551615)))
+      = BitVec.ofNat 64 (L.length - (i + 1)) := by
+    rw [show BitVec.ofNat 64 (L.length - i + 18446744073709551615) = BitVec.ofNat 64 (L.length - (i + 1)) by
+      apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega]
+    exact VsaIris.Interp.sext32_ofNat_eq (by omega)
+  nx_run hlive using [ofNat_add_ofNat, h2, h8, h9, h14, h20, h21, hcnt', hcnt2, hb', hl', eC, hcw] at 0x8001438c 0x8000e948
+  all_goals rename_i hb
+  · -- an empty piece: skipped
+    have hl0 : (L[i]'hi).2 = 0 := by
+      have := congrArg BitVec.toNat hb; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
+        BitVec.toNat_ofNat, BitVec.reduceToNat] at this; omega
+    refine print_skip0 hlive g total0 L R0 R _ Mt0 Mt i SG hL8 hsum st hl0 ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hkL
+    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    all_goals first
+      | rfl | exact st.r14
+      | (intro z hz
+         simp only [show z ≠ 13 by omega, show z ≠ 12 by omega, show z ≠ 15 by omega,
+           show z ≠ 18 by omega, ite_false])
+  · -- a nonempty piece: `__ssputs_r`
+    refine print_call0 hlive g total0 L R0 R _ Mt0 Mt i SG hL8 hsum st ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hkL hkX
+    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    all_goals first
+      | exact st.r2 | exact st.r8 | exact st.r9 | exact st.r20 | exact st.r21
+      | (intro z hz
+         simp only [show z ≠ 1 by omega, show z ≠ 10 by omega, show z ≠ 11 by omega,
+           show z ≠ 12 by omega, show z ≠ 13 by omega, show z ≠ 15 by omega, show z ≠ 18 by omega,
+           ite_false])
+
+/-- **`__ssprint_r`'s loop** from any piece to its exit. -/
+theorem ssprint_loop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 : Nat → BitVec 64)
+    (Mt0 : Mem) (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8) (hsum : sumLen L < 2 ^ 32)
+    (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
+    ∀ k i, L.length - i = k → PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 i := by
+  intro k
+  induction k with
+  | zero => intro i hk R Mt st; have := st.lt; omega
+  | succ k ih =>
+    intro i hk R Mt st
+    exact ssprint_iterA hlive g total0 L R0 R Mt0 Mt i SG hL8 hsum st (ih (i + 1) (by omega)) hkX
 
 end VsaIris.Sym
