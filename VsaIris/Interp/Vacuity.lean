@@ -293,13 +293,13 @@ def ctlInterpExts : List (Nat × Nat) :=
 theorem ctl_globals : imgLE (memImg heapMem) ctlInp 8 = 0x81000000 := by
   have h := heapPhysicalFacts.globals
   unfold heapConfig at h
-  rw [physicalConfig_mem] at h
+  rw [physicalConfigS0_mem] at h
   exact readLE_memImg (n := 8) (a := ctlInp) h
 
 theorem ctl_depth : imgLE (memImg heapMem) (ctlInp + interpDepthOff) 4 = 0 := by
   have h := heapPhysicalFacts.call_depth
   unfold heapConfig at h
-  rw [physicalConfig_mem] at h
+  rw [physicalConfigS0_mem] at h
   exact readLE_memImg (n := 4) (a := ctlInp + interpDepthOff) h
 
 /-- **The interpreter context at `interp_run`'s entry**, before `setjmp`. -/

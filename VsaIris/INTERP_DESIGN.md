@@ -23,6 +23,38 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
 
+## STATEMENT CHANGE (lane A): the general registers and `main`'s `s0` in `Loaded`
+
+`InterpRunReadyFacts` (`Vsa/Sim/LayoutInstance.lean`) gains two fields, as
+the standing decision on boundary facts (2026-09-24) prescribes:
+
+```lean
+gprs      : ∀ n, 1 ≤ n → n ≤ 31 → (gprGet c.σ n).isSome
+s0_impure : c.σ.regs.get? Register.x8 = some 0x8001b970#64
+```
+
+- **Why.** Adequacy needs the global invariant at the loaded configuration,
+  and `VsaOk.gpr` states every general register present; `Loaded` named only
+  the argument and callee-saved ones. `interp_run` spills `s0`, and its error
+  line and the `longjmp` landing reload it as `&_impure_ptr`
+  (`interpRun_partial_boot`'s `R0 8 = 0x8001b970`); `main` sets it at
+  `0x80004590` (`addi s0,gp,1120`) before `jal interp_run`.
+- **What narrowed.** `interpRunLayout.atInterpRun`, hence `Loaded
+  interpRunLayout p c` and the hypothesis of `endToEnd_refinement`.
+  `Refinement.lean` is unchanged. `InterpRunPhysicalFacts` and the historical
+  boundaries (`BeforeRuntimeOwnership` etc.) are unchanged.
+- **Not vacuous.** The control's snapshot now has `s0 = 0x8001b970`
+  (`OutputAliasPhysical.physicalConfigS0`: `physicalRegs` with `x8`
+  replaced; `Control.heapConfig` uses it). `physicalS0_gprs` and
+  `physicalRegsS0_x8` supply the fields in `Control.readyFacts`; the other
+  physical facts transport through `PhysicalCarrier.of_regs_s0`. The
+  output-alias witness keeps `physicalConfig` (`s0 = 0`); its trace is
+  unchanged.
+- **Consumer.** `TopBoundary.vsaOk_of_ready` (no `hgpr` premise);
+  `TopEntryBoot.topRegs_ready`/`topRegs_carve` (the entry registers from
+  adequacy's register points-to), `codeRes_of_boundary` (`gp ↦ᵣ gpV ∗ binImg
+  ⊢ |==> codeRes`), `interpRun_total_top`/`interpRun_partial_top`.
+
 ## STATEMENT CHANGE (lane A): closure geometry in `closOwn`
 
 `closOwn ca cd` (`Repr.lean`) carries `ClosObj img p q e` (nonnull, the

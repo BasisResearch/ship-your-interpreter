@@ -55,15 +55,15 @@ theorem topLive_present {m : Vsa.MemRepr.Mem} (ht : Code.FixedTextLoaded m)
 
 /-! ## The global invariant at the boundary -/
 
-/-- **`VsaOk` at a loaded configuration.** `gprs`: every general register is
-present in Sail's register map (a boundary fact). -/
+/-- **`VsaOk` at a loaded configuration.** Every general register is present
+by the boundary field `InterpRunReadyFacts.gprs`. -/
 theorem vsaOk_of_ready {c : Vsa.Machine.Config} {stmts count : Nat} {inp : BitVec 64}
     {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {φf φc : Vsa.While.Addr → Nat}
-    {aLeft : Nat} (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft)
-    (hgpr : ∀ n, 1 ≤ n → n ≤ 31 → (gprGet c.σ n).isSome) : VsaOk topLive c where
+    {aLeft : Nat} (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
+    VsaOk topLive c where
   good := F.good
   tick := F.tick
-  gpr := hgpr
+  gpr := F.gprs
   live := topLive_present F.text_image F.rodata_image
   htifIdle := F.htif_payload
 

@@ -56,7 +56,8 @@ Branch `lane-a`, from `hub/iris-main` (`05874b5`), fast-forwarded to `hub/lane-e
 - F1 (Q7 headroom, `helperHeadroom = 2048`, `errRoom` at every depth) and F2 (`exitHandlers` quiet from `StdioOK`), `327fe89`.
 - `TermSim.lean`: the total recursion (nine motives, fifty cases; `binaryT` dispatches `binOpSem`), `interpSeqT_all`, `execDispT_all`, over `TermSupply`.
 - `StuckSim.lean`: the Löb (`specsP_all : errCtx inp ⊢ □ (eval ∧ exec partial specs)`), over `StuckSupply`.
-- `TopBoundary.lean`: `topLive`, `vsaOk_of_ready` (given present GPRs), the register map.
+- `TopBoundary.lean`: `topLive`, `vsaOk_of_ready`, the register map.
+- `Loaded` fields `gprs` and `s0_impure` (control: `physicalConfigS0`); `TopEntryBoot.lean`: `codeRes_of_boundary`, `topRegs_carve`, `interpRun_total_top`/`interpRun_partial_top` from `bootRes` and adequacy's registers.
 
 ## In flight (sub-agents)
 
@@ -73,7 +74,6 @@ Branch `lane-a`, from `hub/iris-main` (`05874b5`), fast-forwarded to `hub/lane-e
 ## Foundations still to do (me, after F3)
 
 - F4: helper specs valid (code context in their precondition; memcpy's destination above HTIF).
-- `Loaded` boundary field: every general register present (`VsaOk.gpr`; standing decision "boundary facts become `Loaded` fields with a control witness").
 
 ## Holes
 
