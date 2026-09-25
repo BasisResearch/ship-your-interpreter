@@ -272,7 +272,6 @@ import VsaIris.Interp.SupplyBoot
 import VsaIris.Interp.TopRun
 import VsaIris.Interp.TopRunP
 import VsaIris.Interp.TopEntryBoot
-import VsaIris.Interp.Holes
 import VsaIris.Interp.Supply
 import VsaIris.Interp.EndToEnd
 import VsaIris.Interp.ProofStrcmp

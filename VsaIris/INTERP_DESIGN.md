@@ -25,6 +25,22 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
 - **P1–P4 accepted (user, 2026-09-25; `REVIEW.md` §4).** The review found `Loaded interpRunLayout p c` false at every configuration the binary reaches (C1 console flags, C2 script bytes in the rodata pin, C3 stack presence). P1 (console flags at the boundary), P2 (the script blob out of the rodata pin) and P4 (loader-derived witnesses) are separate lanes. P3 (lane B2, this branch): the final theorem is stated at the fill-with-zero `fillZero c` of the configuration, whose presence fields hold by construction, and the machine is proved insensitive to absent bytes. (see the next STATEMENT CHANGE)
 
+## STATEMENT CHANGE (lane V2, 2026-09-25): `IrisHoles` removed; the theorem has no hypotheses
+
+Lanes N1–N5 discharged every field of `IrisHoles`; the empty record is gone
+(`VsaIris/Interp/Holes.lean`, `VsaIris/HOLES.md`, `scripts/check_iris_holes.py`
+deleted). `supplies_of : Supplies`, `interpSim_iris : InterpSim interpRunLayout`,
+`endToEnd_refinement_loaded`, `endToEnd_refinement`, the six `Vsa.Sim.Boot.*_halts`
+capstones and the `ReviewV2.*` corollaries take no hypothesis:
+
+```lean
+theorem endToEnd_refinement :
+    ∀ p c, Loaded interpRunLayout p (fillZero c) →
+      (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+`Q2`/`Q4` below and the lane sections mentioning `IrisHoles` are history.
+
 ## STATEMENT CHANGE (lane B2, P3): `endToEnd_refinement` at `fillZero c`
 
 `Vsa.Sim.EndToEnd.endToEnd_refinement` (`VsaIris/Interp/EndToEnd.lean`) now reads

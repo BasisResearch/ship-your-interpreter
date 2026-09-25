@@ -15,16 +15,45 @@ THEOREMS=(
   Vsa.Densify.halts_fillZero                      # P3: Halts invariant under the fill-with-zero (Vsa/Densify.lean)
   Vsa.Densify.diverges_fillZero                   # P3: Diverges invariant under the fill-with-zero
   Vsa.Densify.stepOnce_resp                       # P3: stepOnce never inspects byte presence
-  VsaIris.Interp.interpSim_iris                   # InterpSim at the concrete layout from IrisHoles
+  VsaIris.Interp.interpSim_iris                   # InterpSim at the concrete layout (no hypotheses)
   VsaIris.Interp.term_sim_of                      # term_sim from Supplies + NewlibHoles
   VsaIris.Interp.stuck_sim_of                     # stuck_sim from Supplies + NewlibHoles
-  VsaIris.Interp.supplies_of                      # every callee spec closed from IrisHoles
+  VsaIris.Interp.supplies_of                      # every callee spec closed (no hypotheses)
   Vsa.Refine.refinement                           # the generic composition (Vsa/Refinement.lean)
   Vsa.Sim.NativeNameAudit.Control.loaded          # the control witness of `Loaded interpRunLayout`
   Vsa.Sim.NativeNameAudit.Control.loaded_fill     # the same at `fillZero heapConfig` (THE theorem's hypothesis)
   Vsa.Sim.Boot.Gen.Proof.loaded                   # loader-derived witness at the proof ELF's real entry (lane B3)
+  Vsa.Sim.Boot.Gen.While.loaded                   # … and every c/tests build reaching interp_run (REVIEW2.md F4)
+  Vsa.Sim.Boot.Gen.Arithmetic.loaded
+  Vsa.Sim.Boot.Gen.For.loaded
+  Vsa.Sim.Boot.Gen.Scope.loaded
+  Vsa.Sim.Boot.Gen.Strings.loaded
+  Vsa.Sim.Boot.Gen.Functions1.loaded
+  Vsa.Sim.Boot.Gen.Functions2.loaded
+  Vsa.Sim.Boot.Gen.ErrDivzero.loaded
+  Vsa.Sim.Boot.Gen.ErrUndefined.loaded
+  Vsa.Sim.Boot.Gen.Proof.loadedEntry_fill         # P8: the witness at ANY entry configuration (EntryRegs, empty console, entry view)
   Vsa.Sim.Boot.proofElf_halts                     # the final theorem at that state: prints 55 2500 36, exits 0
+  Vsa.Sim.Boot.while_halts                        # … and the five other capstones
+  Vsa.Sim.Boot.arithmetic_halts
+  Vsa.Sim.Boot.for_halts
+  Vsa.Sim.Boot.scope_halts
+  Vsa.Sim.Boot.strings_halts
   Vsa.Sim.Boot.initializeMemory_eq                # the loader's memory is the generated image
+  ReviewV2.endToEnd_unconditional                 # Vsa/Sim/Boot/Audit.lean (lane V2): the theorem with no hypotheses
+  ReviewV2.proofElf_halts_unconditional           # the proof ELF's real entry state halts with 55 2500 36, from nothing
+  ReviewV2.proofElf_halts_entry                   # P8: the same at any entry configuration (the reached state, natively checked)
+  ReviewV2.arithmetic_halts_entry
+  ReviewV2.proofElf_not_halts_empty               # Halts is not trivial there
+  ReviewV2.proofElf_not_diverges
+  ReviewV2.proofElf_clean_halt_unique
+  ReviewV2.errDivzero_noBigStep                   # err_divzero.wl has no BigStep (evaluator stuck, kernel decide)
+  ReviewV2.errDivzero_never_clean                 # … so its real entry state never halts cleanly
+  ReviewV2.errDivzero_never_clean_entry
+  ReviewV2.errDivzero_stuck                       # … and diverges or exits nonzero
+  ReviewV2.errUndefined_noBigStep
+  ReviewV2.errUndefined_never_clean
+  ReviewV2.errUndefined_stuck
   Vsa.Sim.LayoutInstance.all_stackFits            # ProgramStackFits at every c/tests/*.wl embedding
   VsaIris.Interp.ctl_world_counted                # world_of_boundary at the control, counted regime
   VsaIris.Interp.ctl_world_uncounted              # world_of_boundary at the control, uncounted regime

@@ -5,10 +5,12 @@ import Vsa.Sim.Boot.Ast
 import Vsa.Sim.Boot.Capacity
 import Vsa.Sim.Boot.Heap
 import Vsa.Sim.Boot.Owned
+import Vsa.Sim.Boot.Entry
 import Vsa.Sim.Boot.Physical
 import Vsa.Sim.Boot.Fill
 import Vsa.Sim.Boot.Elf
 import Vsa.Sim.Boot.EndToEnd
+import Vsa.Sim.Boot.Audit
 import Vsa.Sim.Boot.Gen.Arithmetic
 import Vsa.Sim.Boot.Gen.ErrDivzero
 import Vsa.Sim.Boot.Gen.ErrUndefined

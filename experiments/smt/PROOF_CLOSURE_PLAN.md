@@ -4428,3 +4428,36 @@ is `endToEnd_refinement_loaded`; `Control.loaded_fill` witnesses the new
 hypothesis at the control. No hole was added. Open: C1/C2 (P1/P2, other lanes),
 and P4's loader-derived witnesses; see `INTERP_DESIGN.md` "STATEMENT CHANGE
 (lane B2, P3)".
+
+## Lane V2 audit: `endToEnd_refinement` at `905e3735` is NOT VACUOUS (2026-09-25)
+
+`REVIEW2.md`. `IrisHoles` has no fields; `ReviewV2.endToEnd_unconditional`
+(`experiments/review-v2/Audit.lean`) states the theorem with no hypotheses,
+axioms `[propext, Classical.choice, Quot.sound]`. Native replay of the
+theorem's own `Vsa.setupElf`/`Vsa.stepOnce` on the embedded ELF for
+`entrySteps` steps reproduces `bootMem script log` byte for byte, the traced
+GPRs and PC, and halts identically from the witness and the reached state
+(10 witnesses; `experiments/review-v2/Replay.lean`). Kernel-checked at the
+real entry states: `Halts cProof "55\n2500\n36\n" 0`, `¬ Halts cProof "" 0`,
+`¬ Diverges cProof`; for `err_divzero`/`err_undefined`: no `BigStep`
+(evaluator `stuck`, `decide +kernel`), no clean halt, diverges-or-nonzero.
+
+Obstructions recorded (not fixed):
+- **F1** `Gen.<Prog>.loaded` is stated at `bootConfig`, whose CSR file is
+  `physicalAssignments.take 32` (setup values), not the reached one
+  (`mtime/mcycle/minstret/mip/htif_tohost/cycleCount` differ). Affected
+  declarations: `Vsa.Sim.Boot.Gen.<Prog>.loadedAt/loaded`,
+  `Vsa.Sim.Boot.readyFacts_of`. Missing supplier: `loadedAt` generalised over
+  any `σ` with `GoodState σ`, the traced GPRs/PC/`htif_payload_writes` and a
+  memory extending the entry view (REVIEW2.md P8); `GoodState` of the reached
+  state then stays a native check like `ElfLoads`.
+- **F2** The ELF ↔ image link (`ElfLoads`, native `check-elf`) and the store
+  log ↔ machine link (emulator `--trace-all`, syntactic store capture) never
+  enter the kernel. Evidence that both hold: `elf_xcheck.py`, `Replay.lean`.
+  Missing supplier: a per-build re-check in `check_all.sh` (P9).
+- `recursion.wl`: still no `loaded` (`capOk` out of kernel reach); `err_parse`
+  outside the theorem; `adv_oom_*` not `Loaded` (`capacity`, M1).
+
+- **`IrisHoles` removed (lane V2, user request, 2026-09-25).** The record was
+  empty; `endToEnd_refinement` and every capstone now take no hypothesis
+  (INTERP_DESIGN.md "STATEMENT CHANGE (lane V2)").
