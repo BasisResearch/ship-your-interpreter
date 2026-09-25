@@ -242,3 +242,43 @@ proved N1/N3/N4/N5 runs assumed `stdout` oriented. Being rebased on branch `int2
 Hole ledger: before 3, after 3 (B2 adds and removes none).
 Checks: build green (2723 jobs), `check_iris_holes.py` ok (3), `endToEnd_refinement` axioms
 `[propext, Classical.choice, Quot.sound]`.
+
+### B1 + B3 (2026-09-25), with the newlib runs rebased (branch `int2-b1`)
+
+| lane | head | conflicts |
+|---|---|---|
+| B1 (P1: `stdout` unoriented at the boundary, `StdioOK := ∃ o, StdioOKAt o`; P2: the script bytes unpinned) | `8c9b09c` | `Stdio.lean`, `StdioRead.lean`, `WorldStdio.lean`, `NewlibOut.lean` (B1's orientation index kept with N2/N3's `LocaleData`/`StderrStream` conjuncts), `Vsa.lean`, `REVIEW.md` (both sides) |
+| B3 (P4 loader-derived `Loaded` witnesses, P7 `SharedReadWin`; contains B1, B2) | `12591e3` | `BootHeapFacts` (N2/N3's `locale`/`stderrStream` kept, B3's `SharedReadWin`), `ControlBootHeap.lean`, `README.md`/`REVIEW.md`/`PROOF_CLOSURE_PLAN.md` (both sides) |
+
+B1 made every proved stdio run's precondition admit `stdout->_flags = 0x000a`; the N1/N3/N4/N5
+proofs assumed `0x200a`. Rebased:
+- interface: `ConsoleMt fl`, `consoleFlagsV o`, `consoleMt_of`/`consoleMt_ex` (`Stdout/Console.lean`);
+  `CloseCommon o`, `StdioErrOKAt`/`StdioErrOK := ∃ o`, `CloseReadyAt`/`CloseReady` (`StdioErr.lean`);
+  `stdioErrOK_of_writeAt` (`Stderr/ErrOK.lean`); `StdioOKAt.written` (`Stdout/StdioAfter.lean`).
+- `exit`'s interior: `gen_exit_handlers.py` emits the idle/written chains for both orientations
+  (`ExitH/Run{Idle,Written}{,U}.lean`); `exit_run` splits on `o`.
+- `stderr` runs (`FwriteRun`, `FprintfHead`, `FprintfBody`): `stdout`'s flags are never read, so
+  they take `ConsoleMt fl` for any `fl`.
+- stdout runs (N1): `swbuf_run'`, `fwrite_run`, `fputs_run` run the ORIENT block from `0x000a`
+  (one chain per orientation, shared segment/tactic macros), `fputc_run` needs no split; the
+  `_flags2` store is shown to restore its bytes (`imgM_flags2_keep`). `fprintf` (N5): `StdoutSbAt fl`,
+  `vfp_outer` as three pieces over `orientMem`; `_vfprintf_r`'s ORIENT test on this route is at
+  `0x8000af54` (`StdioOrient.lean` doc corrected).
+- B3's `HeapFactsOk` decides the new `locale`/`stderrStream` boundary facts at every trace.
+All Iris-level hole theorems (`fputc_out`, `fputs_out`, `fwrite_out`, `Fp.fprintf_out`,
+`fwrite_proved`, `fprintf_proved`, `exitHandlers_spec`) keep their statements.
+
+**Loader-derived `Loaded` witnesses (B3).** `Vsa/Sim/Boot/Gen/<Prog>.lean` (from
+`scripts/gen_boot_witness.py`, library `VsaBoot`): `loaded : Loaded interpRunLayout prog (fillZero c)`
+at the real entry configuration `c` (ELF loader memory via `initializeMemory_eq`, the traced store
+log, the entry registers), with no premises, for the proof ELF and `arithmetic`, `for`,
+`functions1`, `functions2`, `scope`, `strings`, `while`, `err_divzero`, `err_undefined`.
+Not covered: `recursion` (its `capacity`, the cost of `fib(20)`, is out of kernel reach) and
+`err_parse` (never reaches `interp_run`). Capstone `Vsa/Sim/Boot/EndToEnd.lean`:
+`proofElf_halts : IrisHoles → Halts c "55\n2500\n36\n" 0` at the proof ELF's real entry state, and
+`while_halts`, `arithmetic_halts`, `for_halts`, `scope_halts`, `strings_halts`.
+
+Hole ledger: before 3, after 3 (`newlib.snprintf`, `out.snprintfFn`, `out.snprintfInt`).
+Checks: `lake build Vsa VsaIris VsaIris.Audit VsaBoot` green (2755 jobs), `check_iris_holes.py` ok (3),
+`check_final_axioms.sh` 24/24, discipline OK, `gen_exit_handlers.py --check` ok,
+`endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
