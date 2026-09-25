@@ -42,10 +42,20 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
 - `SnpGeom` now puts the stack scratch and destination above newlib's static
   data (`0x8001c168`).
 
+- **`_svfprintf_r` format loop, so far** (`SnpSvf.lean`): loop head
+  `SvfAt`/`SvfCore`; the scan (`svf_scan`, one `__ascii_mbtowc` per byte);
+  the literal run's piece (`svf_lit`); pending pieces `SvfSt` with
+  memory-independent provenance `PieceSrc` (rebuilt into `PiecesOK` at the
+  flush); the conversion start and jump-table dispatch (`svf_convStart`,
+  `svf_disp`); `%s` (`svf_convS`, `strlen_nw`); PRINT with sign/body pieces,
+  return count, flush through `ssprint_nw` and the back edge, composed as
+  `svf_print` from `PrintIn`. `__umoddi3` (`umod_nw`).
+- `nx_runF`: the driver variant whose facts also rewrite branch conditions.
+
 ## In flight
-- `_svfprintf_r` format loop: literal scan (`__ascii_mbtowc` per byte),
-  literal piece, `%s` (strlen path), `%d`/`%lld` (sign, digits), PRINT and
-  flush via `ssprint_nw`, final flush, epilogue.
+- `%d`/`%lld` (value load, sign, single-digit and `udiv`/`umod` digit loop),
+  the end of the format (final flush, epilogue), the loop over a format
+  (model `fmtRender`), then `snprintf`'s wrapper and the Iris layer.
 
 ## Plan
 1. Leaf runs over `NW`: `__ascii_mbtowc` (one char), `strlen` of a data string

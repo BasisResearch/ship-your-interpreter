@@ -1493,4 +1493,125 @@ theorem svf_print {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   · rw [hL1] at A
     simpa [sgL, List.append_assoc] using A
 
+/-! ## `%s` -/
+
+/-- **`%s` after `strlen`** (`0x80009e88`): the spilled flags and argument
+cursor reloaded, `size = len`, no sign, precision `0`, `PRINT`. -/
+theorem svf_convS_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (q a len : Nat) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 (q + 2) 0 (BitVec.ofNat 64 c) total L R Mt) (hL : L.length ≤ 1)
+    (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = 0#64)
+    (h56 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 56)).toNat = 0#64)
+    (h48 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 48)).toNat = 0#64)
+    (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = BitVec.ofNat 64 (ap + 8))
+    (h10 : R 10 = BitVec.ofNat 64 len) (h26 : R 26 = BitVec.ofNat 64 a)
+    (hsrc : PieceSrc DA s dst n a len) (hc : c + len + 1 < 2 ^ 31) (hsum : sumLen L + len + 1 < 2 ^ 31)
+    (hk : ∀ R' Mt', PrintIn DA s dst n R0 Mt0 (q + 2) (ap + 8) c total L a len 0 R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80009e88#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := St.core.r2
+  have h24 := St.core.ap
+  have hlen : len < 2 ^ 31 := by omega
+  have hsx := VsaIris.Interp.sext32_ofNat_eq hlen
+  have hng : ¬ (BitVec.ofNat 64 len).toInt < (0#64).toInt := by
+    rw [toInt_ofNat_small (by omega)]; simp
+  nx_runF hlive using [ofNat_add_ofNat, h2, h10, h167, h56, h48, h32, h24, hsx, hng] at 0x8000782c
+  refine hk _ _ ⟨St.update SG ?_ ?_ ?_ ?_ ?_ ?_, hL, ?_, ?_, ?_, ?_, .inl rfl, ?_, ?_, ?_, .inl ?_, ?_,
+    ?_, hsrc, hc, hsum⟩
+  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · intro a ha; unfold StKeep SvfKeep at ha; svf_mem
+  · svf_mem; exact St.core.fmt
+  · svf_mem; exact St.core.ret
+  · svf_mem
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, sgN, ite_true, Nat.add_zero])
+  · decide
+  · decide
+  · decide
+  · exact h26
+  · svf_mem; exact h167
+  · svf_mem
+
+/-- A `%s` argument: a NUL-terminated string in the data view, in RAM off the
+HTIF words with the word loop's eight bytes of slack. -/
+structure DStr (Dt : Mem) (DA : List Nat) (a len : Nat) : Prop where
+  dom : InDA DA a (a + len + 1)
+  nz : ∀ i, i < len → imgM Dt (a + i) ≠ 0
+  nul : imgM Dt (a + len) = 0
+  lo : 0x80000000 ≤ a
+  hi : a + len + 8 ≤ 0x100000000
+  htif : a + len + 8 ≤ 0x8001ad00 ∨ 0x8001ad08 ≤ a
+
+theorem DStr.read {Dt : Mem} {DA : List Nat} {a len : Nat} (h : DStr Dt DA a len) (S : Nat → Prop)
+    (Mt : Mem) : StrRead Dt DA S Mt a len (imgM Dt) where
+  win b h1 h2 := .inl ⟨h.dom b h1 h2, rfl⟩
+  nz := h.nz
+  nul := h.nul
+  lo := h.lo
+  hi := h.hi
+  htif := h.htif
+
+/-- **`%s`** (from the table, `0x80007798`): the argument pointer loaded
+from the `va_list`, `strlen` of the string, `PRINT` with the string as the
+body. -/
+theorem svf_convS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (q a len : Nat) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (CA : ConvAt DA s dst n R0 Mt0 (q + 1) ap (BitVec.ofNat 64 c) total L (q + 1) 0x73 R Mt)
+    (hL : L.length ≤ 1)
+    (hap : ldv .ld Mt (BitVec.ofNat 64 ap).toNat = BitVec.ofNat 64 a) (hap1 : s - 40 ≤ ap)
+    (hap2 : ap + 8 ≤ s) (hq : q + 3 < 2 ^ 64) (hstr : DStr Dt DA a len) (ha0 : a ≠ 0)
+    (hsrc : PieceSrc DA s dst n a len) (hc : c + len + 1 < 2 ^ 31) (hsum : sumLen L + len + 1 < 2 ^ 31)
+    (hk : ∀ R' Mt', PrintIn DA s dst n R0 Mt0 (q + 2) (ap + 8) c total L a len 0 R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80007798#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  refine svf_disp hlive (q + 1) 0x73 _ (.inl ⟨rfl, rfl⟩) R Mt (by omega) CA.r25 CA.r24 CA.r26 CA.r22
+    fun R1 h25 h24 hkp => ?_
+  have hsa := SG.s_al
+  have St := CA.st
+  have hk1 : ∀ z, z = 2 ∨ z = 6 ∨ z = 8 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 20 ∨ z = 21 ∨ z = 23 ∨ z = 27 →
+      R1 z = R z := fun z hz => hkp z (by omega) (by omega) (by omega) (by omega)
+  have h2 : R1 2 = BitVec.ofNat 64 (s - 864) := (hk1 2 (by omega)).trans St.core.r2
+  have h6 : R1 6 = 0#64 := (hk1 6 (by omega)).trans CA.r6
+  have h20 : R1 20 = 18446744073709551615#64 := (hk1 20 (by omega)).trans CA.r20
+  have h27 : R1 27 = 0#64 := (hk1 27 (by omega)).trans CA.r27
+  have hapf := St.core.ap
+  have hahi := hstr.hi
+  have ha0' : BitVec.ofNat 64 a ≠ 0#64 := fun h => ha0 (by
+    have := congrArg BitVec.toNat h; simp only [BitVec.toNat_ofNat] at this; omega)
+  have hz16 : (0#64 &&& 16#64 : BitVec 64) = 0#64 := by decide
+  nx_runF hlive using [ofNat_add_ofNat, h2, h6, h20, h24, h25, h27, hapf, hap, ha0', hz16] at 0x80006cf0
+  refine strlen_nw hlive (hstr.read _ _) _ ?_ ?_ fun R2 h10 hkp2 => ?_
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  have hR : SvfRegs R2 R := by
+    intro z hz
+    rw [hkp2 z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
+    rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> exact hk1 _ (by omega)
+  refine svf_convS_ret hlive q a len R2 _ SG (St.update SG hR ?_ ?_ ?_ ?_ ?_) hL ?_ ?_ ?_ ?_ h10 ?_ hsrc
+    hc hsum hk
+  · rw [hkp2 23 (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hk1 23 (by omega)
+  · intro a ha; unfold StKeep SvfKeep at ha; svf_mem
+  · svf_mem
+  · svf_mem; exact St.core.ret
+  · svf_mem
+  · svf_mem
+  · svf_mem
+  · svf_mem
+  · svf_mem
+  · rw [hkp2 26 (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+
 end VsaIris.Sym
