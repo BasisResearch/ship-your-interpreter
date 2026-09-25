@@ -4,6 +4,7 @@ import Vsa.Sim.Boot.Heap
 import Vsa.Sim.Boot.Obstruction
 import Vsa.Sim.Boot.Owned
 import Vsa.Sim.Boot.Physical
+import Vsa.Sim.Boot.Elf
 import Vsa.Sim.Boot.Gen.Arithmetic
 import Vsa.Sim.Boot.Gen.ErrDivzero
 import Vsa.Sim.Boot.Gen.ErrUndefined

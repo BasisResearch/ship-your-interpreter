@@ -18,6 +18,7 @@ extents) or `FrameOk` (reads through a byte view); the generated witnesses
 discharge each with one `decide +kernel`.
 -/
 
+-- discipline: allow(R7-conj-tower-def) the existentials restate landed shapes (`FrameArraysOwned.keys`, `ValueOwned`, `BootFrameChunks.live`) at `show`/field sites; every new record here is a named-field structure
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc Vsa.Sim.RuntimeOwnership
@@ -393,7 +394,7 @@ structure HeapFactsOk (v : Nat → Option (BitVec 8)) (B : BootOwn) (top brkv : 
     (chunks : List DlHeap.Chunk) (sblk nblk vblk : Nat × Nat) : Prop where
   top_room : top + 16 ≤ brkv
   brk_page : brkv % 4096 = 0
-  binblocks : ∃ bb, readLEv v DlHeap.binblocksAddr 8 = some bb ∧ bb < 2 ^ 32
+  binblocks : (readLEv v DlHeap.binblocksAddr 8).any (fun bb => decide (bb < 2 ^ 32)) = true
   stderr : readLEv v impureStderrAddr 8 = some exitStderr
   record : sblk.1 ≤ B.env ∧ B.env + 32 ≤ sblk.1 + sblk.2
   arrays : nblk.1 = B.pn ∧ 8 * B.cap ≤ nblk.2 ∧ vblk.1 = B.pv ∧ 24 * B.cap ≤ vblk.2
@@ -411,9 +412,13 @@ theorem bootHeapFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} {B : BootOwn}
   brk_page := h.brk_page
   binblocks := by
     intro bb hbb
-    obtain ⟨bb', hr, hlt⟩ := h.binblocks
-    rw [Option.some.inj (hbb.symm.trans (hv.readLE hr))]
-    exact hlt
+    have hb := h.binblocks
+    cases hr : readLEv v DlHeap.binblocksAddr 8 with
+    | none => rw [hr] at hb; cases hb
+    | some bb' =>
+      rw [hr] at hb
+      rw [Option.some.inj (hbb.symm.trans (hv.readLE hr))]
+      simpa using hb
   frame := {
     cap := hv.readLE hf.cap
     names := hv.readLE hf.names
