@@ -69,7 +69,12 @@ RO_LD = [0x80019370] + [0x80019f28 + 8 * i for i in range(6)] + [0x80019fe0 + 8 
 # lane N1: newlib's stdout path (`fputc`, `fputs`, `fwrite`, `fprintf` on an
 # unbuffered `stdout`, down to `_write`'s `tohost` stores)
 STDIO_FUNCS = ['_write', '_write_r', '__swrite', '__sflush_r', '_fflush_r', '__swbuf_r', '_putc_r',
-               'fputc', '__retarget_lock_acquire_recursive', '__retarget_lock_release_recursive']
+               'fputc', '__retarget_lock_acquire_recursive', '__retarget_lock_release_recursive',
+               # lane N4: `exit`'s newlib interior (`__call_exitprocs`, the stdio exit
+               # handler, `_fwalk_sglue` closing the three `FILE`s)
+               'exit', '__call_exitprocs', 'stdio_exit_handler', '_fwalk_sglue', '_fclose_r',
+               '__sclose', '_close_r', '_close', '__sfp_lock_acquire', '__sfp_lock_release',
+               '__retarget_lock_close_recursive']
 # PCs with no step lemma (their code bytes and `stdio_code_<pc>` stay): `_write`'s
 # putchar store (printed by `swp_putc`)
 STDIO_SKIP = {0x8000005c}
