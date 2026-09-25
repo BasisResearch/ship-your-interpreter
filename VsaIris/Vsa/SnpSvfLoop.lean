@@ -1,4 +1,5 @@
 import VsaIris.Vsa.SnpSvfConv
+import Vsa.Sim.SnprintfSpec39
 
 /-!
 # `_svfprintf_r`'s format loop
@@ -164,5 +165,60 @@ theorem svf_iterS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     · exact pieceBytes_congr fun i hi => hg2 _ (DO.stack _ (hstr.dom _ (by omega) (by omega)))
   rw [e1, e2, ← List.append_assoc] at A6
   exact A6
+
+/-! ## Renderings -/
+
+/-- A string's bytes (ASCII). -/
+def strBytes (x : String) : List (BitVec 8) := x.toList.map fun c => BitVec.ofNat 8 c.toNat
+
+theorem vSg_eq (v : BitVec 64) : vSg v = if 2 ^ 63 ≤ v.toNat then 45 else 0 := by
+  unfold vSg
+  have := BitVec.toInt_eq_toNat_cond v
+  by_cases h : 2 ^ 63 ≤ v.toNat
+  · rw [if_pos h, if_pos (by rw [this]; split <;> omega)]
+  · rw [if_neg h, if_neg (by rw [this]; split <;> omega)]
+
+theorem vMag_eq (v : BitVec 64) : vMag v = if 2 ^ 63 ≤ v.toNat then (-v).toNat else v.toNat := by
+  unfold vMag
+  have := BitVec.toInt_eq_toNat_cond v
+  by_cases h : 2 ^ 63 ≤ v.toNat
+  · rw [if_pos h, if_pos (by rw [this]; split <;> omega)]
+  · rw [if_neg h, if_neg (by rw [this]; split <;> omega)]
+
+/-- **An integer's pieces are its decimal rendering**: the sign piece (`'-'`
+at `sp + 167` when set) and the `K` digits at `sp + 348 - K`, read through a
+`g` that agrees with the memory `Mt` holding them. -/
+theorem intPieces {s K : Nat} {v : BitVec 64} {g : Nat → BitVec 8} {Mt : Mem} (hs : 1024 ≤ s)
+    (DG : DigitsAt Mt s (vMag v) K) (hg : ∀ a, PZone s a → g a = imgM Mt a)
+    (hsg : imgM Mt (s - 864 + 167) = BitVec.ofNat 8 (vSg v)) :
+    catPieces g (sgL s (vSg v) ++ [(s - 864 + 348 - K, K)]) = strBytes (Vsa.While.intToString v.toInt) := by
+  have hK := DG.le
+  have hK1 := DG.pos
+  have hdig : pieceBytes g (s - 864 + 348 - K) K = (Vsa.While.natToString (vMag v)).toList.map
+      (fun c => BitVec.ofNat 8 c.toNat) := by
+    rw [← Vsa.Sim.digits_eq_natToString (vMag v) K (fun k => digB (vMag v) (K - 1 - k)) hK1
+      (fun k _ => rfl) DG.hub DG.hlb]
+    unfold pieceBytes
+    refine List.map_congr_left fun i hi => ?_
+    have hi' := List.mem_range.mp hi
+    rw [hg _ (by unfold PZone; omega), show s - 864 + 348 - K + i = s - 864 + 348 - 1 - (K - 1 - i) by omega]
+    exact DG.bytes _ (by omega)
+  rw [Vsa.Sim.intToString_of_bv v]
+  unfold strBytes
+  by_cases h : 2 ^ 63 ≤ v.toNat
+  · have e : vSg v = 45 := by rw [vSg_eq, if_pos h]
+    rw [if_pos h, e]
+    simp only [sgL, show (45 : Nat) ≠ 0 by decide, ite_false, List.singleton_append, catPieces_cons,
+      catPieces, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    rw [String.toList_append, List.map_append]
+    congr 1
+    · simp only [pieceBytes, List.range_one, List.map_cons, List.map_nil, Nat.add_zero]
+      rw [hg _ (by unfold PZone; omega), hsg, e]; rfl
+    · rw [hdig, vMag_eq, if_pos h]
+  · have e : vSg v = 0 := by rw [vSg_eq, if_neg h]
+    rw [if_neg h, e]
+    simp only [sgL, ite_true, List.nil_append, catPieces, List.flatMap_cons, List.flatMap_nil,
+      List.append_nil]
+    rw [hdig, vMag_eq, if_neg h]
 
 end VsaIris.Sym
