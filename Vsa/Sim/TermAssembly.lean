@@ -36,7 +36,8 @@ loop-head assembly, and the entry premise is `hEntryHalts_closed'` modulo
 
 * `TermResiduals` — every row's residual premise (`∀…, <Resid>`), the
   `hCallClosure` crux, the `eval_binary_row` cells, and the two aggregate family
-  fields. `EndToEnd` replaces those family fields by `DivWork` and `ErrWork`.
+  fields. The end-to-end theorem no longer uses this record: it is proved on
+  the Iris route from `IrisHoles` (`VsaIris/Interp/EndToEnd.lean`).
 * `termCases_of_residuals (R) : TermCaseBundle.TermCases` — applies every row.
 * `hterm_of_residuals (R) : <hterm shape>` — `termSimClosed_of_bundle` + `hEntryHalts_closed'`.
 * `hdivFam_of_residuals (R) : DivFamily L` — the `DivCorrFamily` reduction.

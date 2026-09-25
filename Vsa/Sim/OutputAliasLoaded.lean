@@ -39,7 +39,7 @@ theorem snapshot_readyFacts :
   gp := (physical_carrier snapshotMem).gp
   main_ra := snapshot_mainRa
   htif_payload := (physical_carrier snapshotMem).htif_payload
-  s0 := ⟨0, (physical_carrier snapshotMem).s0⟩
+  s0 := (physical_carrier snapshotMem).s0
   s1 := ⟨0, (physical_carrier snapshotMem).s1⟩
   s2 := ⟨0, (physical_carrier snapshotMem).s2⟩
   s3 := ⟨0, (physical_carrier snapshotMem).s3⟩

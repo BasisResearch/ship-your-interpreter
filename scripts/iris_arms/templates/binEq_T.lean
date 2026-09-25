@@ -56,6 +56,7 @@
   unfold Newlib.RtErr.rtErrNeed Newlib.snprintfNeed at hne
   have g16 := evalCallGeom (nc := 16) (o := 0) hsg (by omega) (by decide) (by decide)
   ihave #Hcmp := hsc
+  ihave ⟨Hw, #Hbi⟩ := world_binImg N L Room inp _ st2 d $$ Hw
   ihave ⟨%B, Hsto, Hwk⟩ := world_store N L Room inp _ st2 d $$ Hw
   ihave ⟨Hslack, Hs16⟩ := stackScratch_narrow (s := s + 18446744073709550528#64)
     (n := evalNeed (.binary {OP} l r) d - 1088) (m := 16) (by rw [hsf]; omega) (by omega) $$ Hst
@@ -65,7 +66,7 @@
     hSa hSb hab
     (evalSlotGeom hsg hneed (o := 64) (by decide) (by decide))
     (evalSlotGeom hsg hneed (o := 32) (by decide) (by decide)) hni ha0 ha8 ha16 hb0 hb8 hb16
-  iframe Hcode Hv1 Hv2 Hms Hsto Hcmp
+  iframe Hcode Hv1 Hv2 Hms Hsto Hcmp Hbi
   isplitl []
   · ipureintro; exact ⟨by ix_reg, by ix_reg, by ix_keep [hkeep2, hkeep1]⟩
   isplitl [Hs16]

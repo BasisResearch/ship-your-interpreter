@@ -939,15 +939,10 @@ THEOREMS=(
   Vsa.Sim.epilogue_notail_framed                    # MemcpySpecFramedWord
   Vsa.Sim.epilogue_tail_framed                      # MemcpySpecFramedWord
   # Wave 39: the error close + the grounded layout + THE END-TO-END THEOREM
-  Vsa.Sim.ErrSharedInputs.toShared                  # rows/ErrFamilyAssembly (ErrShared instantiated ONCE over the landed exit-tail segments)
-  Vsa.Sim.errFamily_ofWork                          # rows/ErrFamilyAssembly (ErrFamily Ly from the ErrWork bundle — stragglers hBadClosure/hTopAbrupt named)
   Vsa.Sim.LayoutGround.ground_atInterpRun           # rows/LayoutGround (GENERATED: the concrete Layout pinned to the ELF's interp_run symbol)
   Vsa.Sim.LayoutGround.ground_interpRunCode         # rows/LayoutGround
   Vsa.Sim.LayoutGround.ground_stackSL               # rows/LayoutGround
   Vsa.Sim.LayoutGround.ground_tohostAddr            # rows/LayoutGround
-  Vsa.Sim.EndToEnd.interpSim_ofWork                 # EndToEnd (InterpSim L from ONE RemainingWork record at any layout)
-  Vsa.Sim.EndToEnd.endToEnd                         # EndToEnd (THE THEOREM: InterpSim interpRunLayout from RemainingWork — the hypothesis list IS the remaining project)
-  Vsa.Sim.EndToEnd.endToEnd_refinement              # EndToEnd (the full BigStep↔Halts behavioral correspondence)
   # Wave 41: exec mail-merge (5 arms) + argsHead + the native splice stack
   Vsa.Sim.blockB_stmtRet_stagePre                   # rows/StmtRetArmStagePre (exec-eval cut, _es sites reused)
   Vsa.Sim.stmtRet_field_of_dispatch                 # rows/StmtRetArmStagePre
@@ -971,9 +966,6 @@ THEOREMS=(
   Vsa.Sim.nativeAssertOkSpec_of_splice              # rows/NativeArmSplice
   Vsa.Sim.nativePrintSpec_of_splice                 # rows/NativeArmSplice
   Vsa.Sim.nativePrintlnSpec_of_splice               # rows/NativeArmSplice
-  Vsa.Sim.nativeDispatchStageSeg_seg                # rows/NativeArmDispatch (beq-taken dispatch seg)
-  Vsa.Sim.nativeDispatchStageBridge                 # rows/NativeArmDispatch (bridgeOfSegFramed at AbiExceptS7)
-  Vsa.Sim.nativeDispatchJalSeam_of                  # rows/NativeArmDispatch
   Vsa.Sim.nativeBodyAssert                          # rows/NativeBodyAssert (assertOk body: value_truthy ≫ value_null)
   Vsa.Sim.nativeAssertOkSpec_of_dispatch            # rows/NativeBodyAssert (hCallAssertOk ← geometry + hDispatch + NativeAssertInternalAbi)
   # Wave 42: divergence board 14/14 eval-child + naExit ABI amendment + print contract layer + crux marshal bricks

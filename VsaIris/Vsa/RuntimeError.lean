@@ -485,7 +485,8 @@ the arguments with a `%s`/`%d` format whose `%s` arguments are readable, its
 stack (`rtErrNeed` bytes), every callee-saved register, the `jmp_buf`
 read-only at `jb` (whose `ra` slot is 4-aligned) and the world, the call never
 returns, and its abort branch receives the `longjmp` landing with its whole
-stack region: `abortRes s rtErrNeed`. -/
+stack region, `abortRes s rtErrNeed`, and the format's readable bytes, which
+`snprintf` only reads (a caller's owned message buffer rejoins its frame). -/
 theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : Vsa.RuntimeRepr.NativeAddrs) (L : DlLayout)
     (Room : RoomPred) (inp s line fmt x1 x2 : BitVec 64) (cs : Nat → BitVec 64)
@@ -497,7 +498,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
       (fun _ => iprop(argsAt [inp, line, fmt, x1, x2] ∗ callFrame s rtErrNeed calleeSaved cs ∗
         readable Sro Sown rd ∗ jmpRO inp.toNat jb ∗ world N L Room inp.toNat ρ st d))
       (fun _ => iprop(False))
-      (abortRes N L Room inp.toNat s rtErrNeed) := by
+      (iprop(abortRes N L Room inp.toNat s rtErrNeed ∗ readable Sro Sown rd)) := by
   have hHA := H.at
   have h1 := hs.lo; have h2 := hs.hi; have h3 := hs.align
   unfold rtErrNeed snprintfNeed tohostAddr at h1
@@ -557,7 +558,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   iintro Hpc ⟨Hsp, Hs0, Hs1, Ha0, Ha1, Hra, -⟩ Hfr -
   -- open the world: newlib's data and `err_msg`
   unfold world worldE interpCtxE interpCoreE errAny
-  icases Hw with ⟨%Hh, %B, Hheap, Hstore, Hcon, Hstd, ⟨⟨%g, Hg, Hfa, Hd, Hpad, Herr⟩, Hjb'⟩, %hBH⟩
+  icases Hw with ⟨%Hh, %B, Hheap, Hstore, Hcon, Hstd, ⟨⟨%g, Hg, Hfa, Hd, %hdle, Hpad, Herr⟩, Hjb'⟩, %hBH, -⟩
   -- `snprintf(body, 192, fmt, a1, a2)`
   let cs1 : Nat → BitVec 64 := fun q => if q = 8 then inp else if q = 9 then line else cs q
   have hsp1 : SpIn (s - 224#64) snprintfNeed :=
@@ -799,6 +800,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   -- the abort: the landing, with `runtime_error`'s whole stack region
   ihave Hk := and_elim_r $$ Hk
   iapply Hk
+  iframe Hrdb
   unfold abortRes
   iapply abortAt_intro
   isplitr [Hscr Hbody Hgap Hfr]
@@ -813,6 +815,8 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
       isplitl
       · iexists g
         iframe Hg Hfa Hd Hpad
+        isplitl []
+        · ipureintro; exact hdle
         unfold cstrBuf
         icases Herr with ⟨%eimg, Herr, %hnul⟩
         iexists eimg
@@ -823,7 +827,9 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
         ipureintro
         obtain ⟨k, hk, h0⟩ := hnul
         exact ⟨k, hk, by rw [← h0, herrp]; rfl⟩
-      ipureintro; exact hBH
+      isplitr
+      · ipureintro; exact hBH
+      · iexact Himg
     · unfold landingRegs VsaIris.sp VsaIris.ra jbSaved
       simp only [sepL_cons, sepL_nil, jbWord, interpJmpOff, Nat.reduceMul]
       iframe Hpc Hra Hsp Ha0 Htmp Hs0 H9 H18 H19 H20 H21 H22 H23 H24 H25 H26 H27

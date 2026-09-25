@@ -220,7 +220,8 @@ def gen_code():
                                            for i in range(4)) + ' :=')
         C.append('  ⟨' + ',\n   '.join(f'h _ ({mem_proof(pc + i)})' for i in range(4)) + '⟩\n')
     for pc in PCS:
-        if classify(pc)[0] not in ('jal', 'obs', 'jalr') and pc not in SKIP:
+        # lane E4: the indirect call sites (`jalr`) too (`CallJalr.ms_callHelperR`)
+        if classify(pc)[0] not in ('jal', 'obs', 'jalr') and MN[pc] != 'jalr' and pc not in SKIP:
             continue
         bs = [BYTE[pc + i] for i in range(4)]
         cs = ', '.join(f'0x{b:02x}#8' for b in bs)

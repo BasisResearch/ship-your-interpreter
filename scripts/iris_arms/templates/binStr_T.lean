@@ -33,6 +33,7 @@
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #Hv1, #Hv2⟩, Hms⟩
   -- `strcmp(l, r)`: the sign class of the result
   ihave #Hsc0 := hsc
+  ihave ⟨Hw, #Hbi⟩ := world_binImg N L Room inp _ _ d $$ Hw
   ihave #Hsc := strcmpOrdSpec_at (p := w1) (q := u1) (x := x) (y := y) $$ Hsc0
   unfold valOf
   icases Hv1 with ⟨%hx, #Hx⟩
@@ -41,13 +42,13 @@
     (jalx_{JSC} live (fun p hp => hlive _ (interp_code_{JSC} p hp)))
     interp_code_{JSC} (by decide) (clob := callerSaved)
     (pins := fun rv => rv 10 = w1 ∧ rv 11 = u1)
-    (Pre := iprop(strAt w1.toNat x ∗ strAt u1.toNat y))
+    (Pre := iprop(Newlib.binImg ∗ strAt w1.toNat x ∗ strAt u1.toNat y))
     (Post := fun rv' => iprop(⌜StrcmpSign (rv' 10) x y⌝))
   iframe Hsc Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep2], by ix_reg; ix_fwd⟩
   isplitl []
-  · iframe Hx; iexact Hy
+  · iframe Hbi Hx; iexact Hy
   iintro %R3 %hkeep3 %hsign Hms
 
 #ix_piece {ARM}T_p4 from {ARM}T_p3 by

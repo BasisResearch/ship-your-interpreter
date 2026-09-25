@@ -119,7 +119,7 @@ def e2_chain(name, stmt_hdr, facts, stops):
 
 def e2_fill(name, subst):
     # the prefixes' context placeholders are empty unless a family sets them
-    subst = {"LHS": "", "INTRO0": "", "LHSX": "", "INTROX": "", "CTXO": "", "CTXC": "", "CTXI": "",
+    subst = {"LHS": "", "INTRO0": "", "LHSX": "", "INTROX": "", "WCTX": "", "CTXO": "", "CTXC": "", "CTXI": "",
              "CTXP": "", "CTXQ": "", "CTXF": "", "CTXD": "", **subst}
     return fill((E2_TEMPLATES / name).read_text(), subst)  # noqa: F821
 
@@ -705,7 +705,8 @@ E2_CAT_PHYPS = ("    (hL : L = vsaLayoutP) (hRoom : Room = vsaRoomB) (A : AllocS
                 "    (hsc : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (vsaModel live) (wpW (vsaModel live)) d q y ρ H)\n"
                 "    (hvs : ⊢ ∀ p q x, valueStrSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p q x)\n"
                 "    (hd : CatDispSupply (GF := GF) N)\n")
-E2_CAT_PCTX = {"LHSX": " ∗ textOwn (GF := GF) allocText", "INTROX": ", #Hat", "CTXF": " ∗ textOwn allocText",
+E2_CAT_PCTX = {"WCTX": "  ihave ⟨Hw, -, #Hat⟩ := world_allocText N L Room inp _ st d $$ Hw\n",
+               "CTXF": " ∗ textOwn allocText",
                "CTXI": "iframe Hat; ", "CTXD": ", #Hat"}
 E2_CAT_RWREAD = ("rw [ldv_agree (fun j hj => hM4 _ (by simp only [VsaIris.InExt]; omega)\n"
                  "      (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega))]\n"
@@ -732,7 +733,7 @@ def subst_binConcat(arm, mode):
         "VARS": "{lv rv' : Value}", "LV": "lv", "RV": "rv'", "RES": E2_CAT_SUB["RES"],
         "COST": "nl + nr + binOpCost st2.store .add lv rv'", "KTAIL": "k + binOpCost st2.store .add lv rv'",
         "PREP": "  subst hL hRoom\n  rw [binOpCost_concat hcat]", "HYPS": hyps,
-        "LHS": "binImg (GF := GF) ∗ textOwn (GF := GF) allocText ", "INTRO0": "⟨#Hbin, #Hat⟩ ",
+        "WCTX": "  ihave ⟨Hw, #Hbin, #Hat⟩ := world_allocText N L Room inp _ st d $$ Hw\n",
         **E2_CAT_CTX})
     sub = dict(E2_CAT_SUB, ARM=arm.name)
     sub["RWREAD"] = E2_CAT_RWREAD

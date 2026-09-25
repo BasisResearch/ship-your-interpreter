@@ -197,8 +197,10 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     rw [hV0, hV1, hV2]; iexact Hv
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.assign x e) d - 1088)
     (m := envGetNeed) (by rw [hsf]; omega) (by omega) $$ Hst
+  ihave ⟨Hw, #Hcx⟩ := world_codeX N L Room inp _ _ d $$ Hw
+  ihave #Hgpv := codeRes_gpM $$ Hcode
   unfold world worldE
-  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
+  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hbw⟩
   ihave #Hset := hsetS
   unfold envSetSpec
   ihave #Hg := Hset $$ %st'.store %B %env %x %v %(R2 10) %(R2 11) %(R2 12) %(R2 2)
@@ -213,10 +215,10 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
      ⟨(by rw [ho]; omega), (by rw [ho]; omega),
        (by rw [ho]; unfold htifLo; unfold Vsa.Sim.tohostAddr at *; omega), (by rw [ho]; omega)⟩⟩
     (X := iprop(stackScratch (R2 2) envGetNeed ∗ frameAt env (R2 10).toNat ∗
-      strAt (R2 11).toNat x ∗ valAt N (R2 12).toNat v ∗ storeRepr N st'.store B))
+      strAt (R2 11).toNat x ∗ valAt N (R2 12).toNat v ∗ storeRepr N st'.store B ∗ gp ↦ᵣ□ MallocFast.gpV ∗ codeX))
     (Y := fun res => iprop(stackScratch (R2 2) envGetNeed ∗ valAt N (R2 12).toNat v ∗
       setOut N st'.store B env x v res))
-  iframe Hg Hcode Hms Hs
+  iframe Hg Hcode Hms Hs Hgpv Hcx
   isplitl [Hst Hval]
   · rw [e2, e10, e11, hqt, ho]; iframe Hst Hfb Hx Hval
   iintro %R3 %hkeep3 ⟨Hst, Hval, Hso⟩ Hms
@@ -261,7 +263,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
       unfold world worldE
       iexists H, B
       iframe Hh Hs Hc Hio Hi
-      ipureintro; exact hB
+      isplitr
+      · ipureintro; exact hB
+      · iexact Hbw
     intro F'
     refine it_800034b4 hlive (fun hc => absurd (by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hres) hc) (fun hz => ?_)
@@ -309,7 +313,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     unfold world worldE
     iexists H, B
     iframe Hh Hs Hc Hio Hi
-    ipureintro; exact hB
+    isplitr
+    · ipureintro; exact hB
+    · iexact Hbw
   intro F'
   -- `bnez a0`: bound
   refine it_800034b4 hlive (fun hnz => ?_) (fun hc => absurd (by

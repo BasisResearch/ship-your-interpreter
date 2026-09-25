@@ -1,4 +1,4 @@
-import Vsa.Sim.EndToEnd
+import Vsa.Refinement
 import Vsa.Sim.OutputAliasRun
 
 /-! The historical physical boundary admits an incompatible execution. The admitted source
@@ -26,13 +26,6 @@ theorem not_interpSim_of_alias_halt
   exact snapshot_not_source_halt_of_alias_halt hm
     (H.term_sim program snapshotConfig "\n" snapshot_loaded program_bigStep)
 
-/-- Conditional impossibility of supplying the exact end-to-end work record. -/
-theorem not_remainingWork_of_alias_halt
-    (hm : Halts snapshotConfig "\n\n" 0) :
-    (EndToEnd.RemainingWork BeforeAstOwnership.interpRunLayout → False) := by
-  intro W
-  exact not_interpSim_of_alias_halt hm (EndToEnd.interpSim_ofWork W)
-
 /-- Negates the behavioral correspondence under the historical boundary. -/
 theorem not_behavioralCorrespondence_of_alias_halt
     (hm : Halts snapshotConfig "\n\n" 0) :
@@ -45,17 +38,12 @@ theorem not_behavioralCorrespondence_of_alias_halt
 
 #print axioms snapshot_not_source_halt_of_alias_halt
 #print axioms not_interpSim_of_alias_halt
-#print axioms not_remainingWork_of_alias_halt
 #print axioms not_behavioralCorrespondence_of_alias_halt
 
 open Vsa.Sim.LayoutInstance
 
 theorem snapshot_not_interpSim : ¬ InterpSim BeforeAstOwnership.interpRunLayout :=
   not_interpSim_of_alias_halt snapshot_halts_twoLF
-
-theorem snapshot_not_remainingWork :
-    (EndToEnd.RemainingWork BeforeAstOwnership.interpRunLayout → False) :=
-  not_remainingWork_of_alias_halt snapshot_halts_twoLF
 
 theorem snapshot_not_behavioralCorrespondence :
     ¬ (∀ p c, Loaded BeforeAstOwnership.interpRunLayout p c →
@@ -64,7 +52,6 @@ theorem snapshot_not_behavioralCorrespondence :
   not_behavioralCorrespondence_of_alias_halt snapshot_halts_twoLF
 
 #print axioms snapshot_not_interpSim
-#print axioms snapshot_not_remainingWork
 #print axioms snapshot_not_behavioralCorrespondence
 
 end Vsa.Sim.OutputAliasLoaded
