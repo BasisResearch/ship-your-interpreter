@@ -5,14 +5,28 @@ interpreter compiled to bare-metal RV64 with HTIF I/O. The proof relates an
 inductive big-step semantics of WHILE to the binary's execution in the
 Sail-generated RISC-V model.
 
-The full Lean source build passes. The end-to-end theorem
-`Vsa.Sim.EndToEnd.endToEnd_refinement` (`VsaIris/Interp/EndToEnd.lean`) is
-proved from the named newlib holes `VsaIris.Interp.IrisHoles`
-(`VsaIris/HOLES.md`). The
-[proof closure plan](experiments/smt/PROOF_CLOSURE_PLAN.md) records completed
-proofs, remaining obligations, and validation results. Permitted axioms are
-`propext`, `Classical.choice`, and `Quot.sound`. `REVIEW.md` is the
-adversarial soundness review of the final theorem's hypotheses.
+**The result.** `Vsa.Sim.EndToEnd.endToEnd_refinement`
+([`VsaIris/Interp/EndToEnd.lean`](VsaIris/Interp/EndToEnd.lean)) is proved
+unconditionally: its only hypothesis, `VsaIris.Interp.IrisHoles`
+([`VsaIris/Interp/Holes.lean`](VsaIris/Interp/Holes.lean)), is a structure with
+no fields, and every newlib and allocator routine the binary calls is proved
+against the real machine code. The only axioms are `propext`,
+`Classical.choice` and `Quot.sound`. [`docs/RESULT.md`](docs/RESULT.md) tells the
+story in prose.
+
+![The end-to-end theorem](docs/theorem.png)
+
+The hypothesis `Loaded` is built from real boot traces of the binary for ten
+programs (`Vsa/Sim/Boot/`, library `VsaBoot`), and
+[`Vsa/Sim/Boot/EndToEnd.lean`](Vsa/Sim/Boot/EndToEnd.lean) applies the theorem at
+those real entry states, for example `proofElf_halts`: the proof ELF halts
+printing `55 2500 36` with exit code 0. `Loaded` asks two things of a
+program: its modelled heap use fits the arena (`capacity`) and its recursion
+fits the stack (`stack_admissible`). [`REVIEW.md`](REVIEW.md) is the adversarial
+soundness review of the final theorem's hypotheses. The proof uses Iris
+(iris-lean) with a port of MachCSL's machine-code separation logic
+([`VsaIris/`](VsaIris), design in
+[`VsaIris/INTERP_DESIGN.md`](VsaIris/INTERP_DESIGN.md)).
 
 The tooling that makes this tractable is documented separately in
 [`TOOLING.md`](TOOLING.md): proof generators, validation commands, and

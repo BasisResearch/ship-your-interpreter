@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="840" viewBox="0 0 1600 840">
+  <rect width="1600" height="840" fill="#fbfaf7"/>
+  <rect x="60" y="60" width="1480" height="720" rx="18" fill="#ffffff" stroke="#e4e0d8" stroke-width="2"/>
+  <text x="110" y="140" font-family="Helvetica Neue, Helvetica, Arial" font-size="44" font-weight="700" fill="#1f2328">Ship your interpreter</text>
+  <text x="110" y="188" font-family="Helvetica Neue, Helvetica, Arial" font-size="24" fill="#6b6f76">A C interpreter for WHILE, compiled to a bare-metal RV64 binary, refines its big-step semantics.</text>
+  <rect x="110" y="230" width="1380" height="270" rx="12" fill="#f6f8fa" stroke="#e4e0d8"/>
+  <g font-family="Fira Code" font-size="30" fill="#1f2328">
+    <text x="150" y="300"><tspan fill="#8250df">theorem</tspan> <tspan fill="#0550ae">endToEnd_refinement</tspan> (h : <tspan fill="#953800">IrisHoles</tspan>) :</text>
+    <text x="210" y="352"><tspan fill="#8250df">∀</tspan> p c, <tspan fill="#953800">Loaded</tspan> interpRunLayout p (fillZero c) →</text>
+    <text x="270" y="404">(<tspan fill="#8250df">∀</tspan> out, <tspan fill="#953800">BigStep</tspan> p out ↔ <tspan fill="#953800">Halts</tspan> c out <tspan fill="#0a3069">0</tspan>) ∧</text>
+    <text x="270" y="456">(<tspan fill="#953800">Diverges</tspan> c → ¬ <tspan fill="#8250df">∃</tspan> out, <tspan fill="#953800">BigStep</tspan> p out)</text>
+  </g>
+  <g font-family="Helvetica Neue, Helvetica, Arial" font-size="24" fill="#3d4148">
+    <text x="110" y="575"><tspan font-weight="700">Unconditional.</tspan> <tspan font-family="Fira Code" font-size="22">structure IrisHoles : Prop where</tspan> has no fields.</text>
+    <text x="110" y="617"><tspan font-weight="700">Axioms.</tspan> propext, Classical.choice, Quot.sound. No sorry, native_decide or raised limits in the Iris layer.</text>
+    <text x="110" y="659"><tspan font-weight="700">Machine.</tspan> The Sail RISC-V model, covering the binary's own dlmalloc and newlib code.</text>
+    <text x="110" y="701"><tspan font-weight="700">Not vacuous.</tspan> Loaded is built from real boot traces for ten programs; the proof ELF halts printing 55 2500 36.</text>
+  </g>
+  <text x="110" y="760" font-family="Helvetica Neue, Helvetica, Arial" font-size="20" fill="#8a8f98">Lean 4 · iris-lean (a port of MachCSL) · github.com/BasisResearch/ship-your-interpreter</text>
+</svg>
