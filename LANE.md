@@ -1,25 +1,46 @@
-# Lane N1: newlib stdout holes (`out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`)
+# Lane N5: `out.fprintf` (`fprintf(stdout, fmt, arg)`)
 
-Branch `lane-n1` (from `hub/iris-main`). Brief: `~/lane-n1-aws.md`.
+Branch `lane-n5` (from `hub/iris-main` `286c2ad`; merged N1's `lane-n1` at `44f04ed`).
+Brief: `~/lane-n5-aws.md`. Hole: `out.fprintf` (`VsaIris/HOLES.md`, `NewlibOut.OutHoles.fprintf`).
+
+## The path (checked against `experiments/disasm.txt`)
+
+`fprintf` → `_vfprintf_r(reent, stdout)`: `stdout`'s flags are `0x200a`
+(`__SORD|__SWR|__SNBF`), so `(flags & 0x1a) == 0x0a` holds and it hands the format to
+`__sbprintf` (`0x8000ac20`). `__sbprintf` builds a stack `FILE` at `sp+24` (flags
+`0x2008`, fully buffered, 1024-byte buffer at `sp+208`, `_cookie`/`_write` copied from
+`stdout`: `__swrite` on `stdout`), runs `_vfprintf_r` on it, then `_fflush_r` on it.
+The inner `_vfprintf_r` prints through `__sprint_r` → `__sfvwrite_r` (fully buffered
+branch: `memmove` into the buffer, `_fflush_r` when it fills, a direct `__swrite` of
+`len - len % 1024` bytes when the buffer is empty and `len ≥ 1024`, via `__moddi3`).
+`%lld` digits: `__hidden___udivdi3`/`__umoddi3`. `%s`: `strlen`.
 
 ## Done
-- `VsaIris/LocalRunO.lean`: printing local runs. `SegFromO` (a segment that may print), `LRO`
-  (least fixed point, impredicative: no uniform fuel), `wp_lroW` (either WP, console cell in the
-  footprint), `lro_of_localRun` (silent `LocalRun`s embed), `segFromO_of_runFactO`.
-- `VsaIris/Vsa/SymRunO.lean`: `SWPO` = `SWP` ending in `LRO`; `swp_putc` (one `tohost` putchar
-  store inside a symbolic run), `swpo_run`, `swpo_done`.
 
-## In flight
-- Step table for newlib's stdio code (generator shared with `gen_interp_steps.py`).
+- Step table: N1's `--table stdio` extended with `fprintf`, `_vfprintf_r`, `__sbprintf`,
+  `__sprint_r`, `__sfvwrite_r`, `memmove`, the locale leaves, `strlen`, `memset`, the
+  lock init/close stubs; `jr` with an offset (`memset`'s computed jump, N2's `jri`).
+  Decode: N3's `Batch18` (unchanged copy) + `Batch19` (`__sbprintf`'s four `jal` words).
+- `VsaIris/Vsa/SymBridge.lean`: `swpo_bridge`, a continuation-form run proved over
+  another step table (E2's `udiv_iw`/`moddi3_iw` over the interpreter's) used inside a
+  run over `stdioText` (`swp_text_mono`, `mem_dataOf`: the other table's code in the
+  data view).
 
-## Findings
-- `_write_r` stores `errno = 0` (`0x8001ba08`), an allocator global (`VsaHeap.allocGlobal`),
-  not in `stdioFoot`. Every stdout/stderr write path needs it owned; the hole statements
-  (`outSpec`, H5's `fprintfSpec`/`fwriteSpec`/`exitHandlersSpec`) own only `stdioOwn`.
+## For N1 / N3 (shared layer)
+
+- I add functions to `STDIO_FUNCS` (list above) and nothing else in N1's files so far.
+  N3 needs `_vfprintf_r`/`__sprint_r`/`__sfvwrite_r` too: they are in the table now.
+- `sflush_run` pins `f = stdout` (`hfS`); `__sbprintf`'s stack `FILE` needs it for any
+  `f` whose cookie is `stdout`. I will generalize it (N1: shout if you are on it).
+- errno: I rely on `outS` (which owns `errno`) like N1; the `outSpec` statement change
+  (add `errnoOwn`) is N1's to make for all four `out.*` holes.
 
 ## Holes
-- Unchanged so far: `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf` (mine).
+
+- `out.fprintf`: still ledgered.
 
 ## Next
-- The shared chain `__swrite → _write_r → _write` (n bytes), then `_fflush_r`/`__sflush_r`,
-  `__swbuf_r`, `_putc_r`, `fputc`.
+
+- Inner `_vfprintf_r` runs for `"%lld"`, `"<fn %s>"`, `"<native fn %s>"`; `__sfvwrite_r`
+  on the stack `FILE` (buffer invariant: printed ++ pending = consumed); `__sbprintf`;
+  the outer call; the Iris wrapper.
