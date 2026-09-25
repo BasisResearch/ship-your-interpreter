@@ -1,0 +1,1 @@
+var i=0;var s="";while(i<400){s=s+"ab";i=i+1;}println(s=="ab"+s,i);

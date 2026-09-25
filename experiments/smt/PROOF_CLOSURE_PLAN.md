@@ -1,7 +1,11 @@
 # Proof closure plan
 
-Prove `remainingWork_closed : RemainingWork interpRunLayout`, then discharge
-the `RemainingWork` hypothesis of `endToEnd_refinement`.
+`Vsa.Sim.EndToEnd.endToEnd_refinement` (`VsaIris/Interp/EndToEnd.lean`) is
+proved from `VsaIris.Interp.IrisHoles` (the ten newlib holes, `VsaIris/HOLES.md`);
+the `RemainingWork` tower it replaced was removed at `286c2ad`, and the
+sections below that still frame `RemainingWork`/`DivWork`/`ErrWork` as open
+obligations are historical. The open items are the holes and the boundary
+obstructions recorded under "Lane V review" at the end of this file.
 
 ## Status
 
@@ -4325,3 +4329,36 @@ callee specs from `VsaIris/Interp/SpecConcat.lean`:
   only `[sI - nI, sI)`. Either the top owns (or rebuilds) the frames above
   `sI` for `exit`, or the core is narrowed to `interp_run`'s region and
   `StackGeom` bounds every site by it.
+
+## Lane V review: `Loaded interpRunLayout` is not reached by the binary (2026-09-25)
+
+Full report: `REVIEW.md` (repo root); tooling and results in `experiments/review-v/`.
+Machine-checked obstructions (Lean emulator traces of the proof ELF and of
+every `c/tests/*.wl` build, reconstructed at `interp_run`'s entry):
+
+- **`InterpRunPhysicalFacts.console` (`ConsoleStream.flags = 0x200a`) is false at
+  entry.** `setvbuf` writes `stdout->_flags := 0x000a` (proof ELF, step 1302);
+  `__SORD = 0x2000` is set by the first console write after entry (step 104764,
+  `0x8000a914`). Affected declaration: `Vsa.Sim.ConsoleStream` (and the holes'
+  `StdioOK` preconditions). Missing supplier: a boundary statement with
+  `0x000a` plus a once-proved first-write transition (REVIEW.md P1).
+- **`InterpRunPhysicalFacts.rodata_image` pins the embedded script.**
+  `FixedRodataLoaded` covers `[0x80018be0, 0x8001acf0)`; the first 454 bytes are
+  `_script_start` (`while.wl` + NUL), so every other program's build fails the
+  pin. No proof reads a byte in that range. Missing supplier: a rodata pin that
+  excludes `[_script_start, _script_start + 454)` (REVIEW.md P2).
+- **`stack_bytes` / `VsaOk.live topLive` need a dense memory.** The loader
+  inserts only `p_filesz` bytes; at entry 1.8–4.6 KB of the 8 MiB stack are
+  present. Missing supplier: a densification lemma for `Halts`/`Diverges`
+  (`readByte = getD 0`) or a presence-free `live` (REVIEW.md P3).
+- **No `Loaded` witness from the loader.** `Control.loaded` is a hand-built
+  dense snapshot; the real parser places the AST in the dlmalloc heap after
+  `_end`. Every other first-order field of `Loaded` (registers, images,
+  statics, `ExitRuntimeData`, the initial store, `cap_canon`, the full
+  `DlHeap.HeapAt` shape, `BootFrameChunks`, `ProgramRepr`, `SharedGeom`)
+  holds at the real entry state of every traced program. Missing supplier: a
+  generator from the emulator's entry write log to a reflected memory term
+  plus the control's field proofs made generic (REVIEW.md P4).
+- `capacity` and `stack_admissible` make `Loaded` program-execution
+  dependent (REVIEW.md M1); `CStr` restricts programs to ASCII (L1).
+

@@ -5,11 +5,14 @@ interpreter compiled to bare-metal RV64 with HTIF I/O. The proof relates an
 inductive big-step semantics of WHILE to the binary's execution in the
 Sail-generated RISC-V model.
 
-The full Lean source build passes. The end-to-end theorem remains conditional
-on the `RemainingWork` record. The
+The full Lean source build passes. The end-to-end theorem
+`Vsa.Sim.EndToEnd.endToEnd_refinement` (`VsaIris/Interp/EndToEnd.lean`) is
+proved from the named newlib holes `VsaIris.Interp.IrisHoles`
+(`VsaIris/HOLES.md`). The
 [proof closure plan](experiments/smt/PROOF_CLOSURE_PLAN.md) records completed
 proofs, remaining obligations, and validation results. Permitted axioms are
-`propext`, `Classical.choice`, and `Quot.sound`.
+`propext`, `Classical.choice`, and `Quot.sound`. `REVIEW.md` is the
+adversarial soundness review of the final theorem's hypotheses.
 
 The tooling that makes this tractable is documented separately in
 [`TOOLING.md`](TOOLING.md): proof generators, validation commands, and

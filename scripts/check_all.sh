@@ -9,7 +9,8 @@
 #   (a5) IH clause status          — informational source summary;
 #   (b) grep gate                   — no `sorry`, `native_decide`, `bv_decide`,
 #                                     or `axiom` declarations
-#                                     anywhere under Vsa/ or in Vsa.lean.
+#                                     anywhere under Vsa/ or VsaIris/ or in
+#                                     Vsa.lean, VsaIris.lean, VsaRun.lean.
 #                                     Comments/docstrings and string literals
 #                                     are stripped first;
 #   (a) private serial build        — all source modules compile;
@@ -78,9 +79,10 @@ echo "== stage b: sorry / native_decide / bv_decide / axiom gate"
 python3 - <<'PYEOF' || fail "stage b: forbidden token(s) found (see above)"
 import pathlib, re, sys
 
-files = sorted(pathlib.Path("Vsa").rglob("*.lean"))
-if pathlib.Path("Vsa.lean").exists():
-    files.append(pathlib.Path("Vsa.lean"))
+files = sorted(pathlib.Path("Vsa").rglob("*.lean")) + sorted(pathlib.Path("VsaIris").rglob("*.lean"))
+for root in ("Vsa.lean", "VsaIris.lean", "VsaRun.lean"):
+    if pathlib.Path(root).exists():
+        files.append(pathlib.Path(root))
 
 def strip_comments_and_strings(src: str) -> str:
     """Blank out line comments (`--`), (nested) block comments (`/- -/`,
@@ -393,8 +395,6 @@ THEOREMS=(
   Vsa.Sim.errorTailHalts_exit                     # ErrorTail (M5: errorTailHalts with ExitStoreHalts DISCHARGED — supplies exitStoreHalts concretely at ExitStorePre:=ExitStorePreExit, leaving only the ErrorTailChain decode span (0x80004428→_exit) as the single residual. CONDITIONAL on SnprintfContract SC + ErrorTailChain HT + hre frame geometry)
   Vsa.Sim.errorTailChain_of_segments              # ExitPath (M5: ErrorTailChain DECOMPOSED into a Triple.seq of the span's four decoded straight-line segments — InterpContSeg (0x80004428→0x800045ec: taken bnez a0=1, interp_run epilogue ret a0=1), MainErrorSeg (0x800045ec→0x80000038: taken bnez, fprintf(stderr NOT tohost so output unchanged)+li a0,70+main epilogue ret), Crt0ExitSeg (0x80000038→0x80000180: j exit; __call_exitprocs+stdio handler no tohost; mv a0,s0=70; jal _exit), ExitPrologSeg (0x80000180→sd a5,tohost: slli/srli/ori form (70<<<1)|1) — plus the entry-output pinning hEntryOut (output at the setjmp-cont = out, NOT named by ErrorTailChain's pre). Composed via Triple.seq/conseq; ra0=0x80004428. Converts the one opaque ErrorTailChain residual into four minimal per-segment residuals + the fprintf output-neutrality handling)
   Vsa.Sim.errorTailHalts_segments                 # ExitPath (M5: errorTailHalts with ErrorTailChain supplied from the four segment Triples via errorTailChain_of_segments — the runtime_error→exit(70) chain conditional only on SnprintfContract SC, the four decoded segment residuals h1..h4, the entry-output pinning hEntryOut, and the runtime_error_spec frame geometry hre at the concrete continuation ra0=0x80004428)
-  Vsa.Sim.exitPrologSeg_of                         # ExitPathSeg (M5 DISCHARGED: ExitPrologSeg segment — Triple (AtExitProlog out) (ExitStorePreExit out). The _exit prologue 0x80000180→0x80000190: slli a4,a0,0x20 / srli a5,a4,0x1f / ori a5,a5,1 (form (70<<<1)|1 in a5 from a0=70, by decide) / auipc a4,0x1b (tohost base 0x8001b18c) → park at sd a5,tohost @0x80000190 with EA=tohostAddr, a5=(70<<<1)|1. Four stepObs_alu sites (esite_80000180..8000018c) threaded via Muldi3Spec obs_alu_* consumers; landing config satisfies ExitStorePreExit. CONDITIONAL on ExitPrologGeom out — the two facts AtExitProlog omits: _exitLoaded + htif_payload_writes=0)
-  Vsa.Sim.exitPrologSeg                             # ExitPathSeg (M5: exitPrologSeg_of packaged as the ExitPrologSeg out segment residual of errorTailChain_of_segments, conditional on ExitPrologGeom)
   Vsa.Sim.errorSim_of_sites                         # ErrorSimFull (M5 FULL error-sim assembly — the six-relation widening of errorSim_execSeq. Applies @ExecSeqErr.rec with all six error motives = constant ErrHalts c := ∃out, Halts c out 70 (the recursor node + every sub-IH ignored, error-side analog of the term_sim_of_cases motives), taking all 42 error-constructor minor premises as explicit per-error-site residuals (EvalErr 15 + EvalArgsErr 2 + CallErr 7 + ExecErr 12 + ForLoopErr 4 + ExecSeqErr 2). Recursive error nodes (ExecSeqErr.tail/CallErr.body/EvalErr-ExecErr-ForLoopErr propagation) additionally receive the sub-node ErrHalts c as a recursor-supplied IH. Type-checks iff the six constant motives compose through every constructor of the mutual family. Concludes: an arbitrary ExecSeqErr node → ErrHalts c)
   Vsa.Sim.errorSimFull                              # ErrorSimFull (M5: full error simulation, program level — errorSim_of_sites specialized to BigStepErr p = ExecSeqErr initSt 0 0 p, yielding exists out, Halts c out 70. CONDITIONAL only on the 42 per-error-site residuals)
   Vsa.Sim.stuck_of_bigStepErrFull                  # ErrorSimFull (M5 to stuck_sim: composes errorSimFull with stuck_of_halts_70 to discharge stuck_sim Diverges-or-nonzero-halt error disjunct, for the FULL six-relation error judgment. CONDITIONAL on the 42 per-error-site residuals)
@@ -738,8 +738,6 @@ THEOREMS=(
   Vsa.Sim.stmtBlock_split                           # ArmSegSplitSqEntry (SEntryC .block → SqEntryC of the inner list)
   Vsa.Sim.seqHead_split                             # ArmSegSplitSqEntry (the REVERSE boundary: SqEntryC (s::ss) → SEntryC s, consuming loopHeadDispatch_span's ExecEntry)
   Vsa.Sim.armResidGap_sqEntryFields                 # ArmSegSplitSqEntry (the 3 boundary fields ← SqEntryStages — 29/29 COVERED)
-  Vsa.Sim.armResidGap_of_stages                     # ApproxArmResidGapAssembly (THE FULL 29-field ApproxArmResidGap ← ONE ArmStages bundle, every field mapped BY NAME)
-  Vsa.Sim.divFamily_of_armStages                    # ApproxArmResidGapAssembly (DivFamily L ← hEntry + hIter + ArmStages — the ENTIRE divergence family on ONE supplier interface)
   Vsa.Sim.binaryR_midStagePre                       # MidArmCombinator (the FEARED ~250-line mid-arm threading FACTORED: the left-span entanglement = honest carried premises SubEvalReturn already establishes; 7 op-independent sites — ONE combinator serves every binary/logical op)
   Vsa.Sim.binaryR_midStage1                         # MidArmCombinator (the LandedN 1 divergence-fold form)
   Vsa.Sim.blockB_logical_stagePre                   # StagePreSuppliers2 (logicalL head cut; logicalR needs a value_truthy-seam variant — recorded)
@@ -773,7 +771,6 @@ THEOREMS=(
   Vsa.Sim.TermAssembly.refinement_of_residuals      # TermAssembly (conditional refinement from TermResiduals)
   Vsa.Sim.ArmEntryK.destruct                        # DeriveMetaTowers (#derive_destructurer on the ~48-conjunct tower — R6 mechanized; async-snapshot gotcha solved via direct addDecl)
   Vsa.Sim.TwoSubReturn.destruct                     # DeriveMetaTowers (the 16-field tower with nested ∃; named-field consumers demoed)
-  Vsa.Sim.demoRowGen                                # DeriveRow (#derive_row: in-language row emission, hwf by one decide, hpost the named variation point)
   Vsa.Sim.Trichotomy.nodeDispatch_of_stmtDispatch   # Trichotomy (NodeDispatch from the sharper single-statement StmtDispatch atom; all seq plumbing discharged)
   Vsa.Sim.Trichotomy.bigStep_of_execSeq_normal      # Trichotomy (hroot normal-completion case fully discharged)
   Vsa.Sim.Trichotomy.trichotomy_of_stmtDispatch     # Trichotomy (htri REDUCED to StmtDispatch + hExclude — both pure While-layer, no Sail state)
@@ -809,13 +806,6 @@ THEOREMS=(
   Vsa.Sim.binIntCellResid_add_ofStaged              # rows/BinIntReadback (consumer demo: the .add cell = ArmPostGeomV + storeSize + BinArmExtras)
   Vsa.Sim.binIntCellResid_mod_ofStaged              # rows/BinIntReadback (fan-out complete: ALL 9 int cells at the target shape; libgcc extras threaded per-op)
   Vsa.Sim.stringifyDisplay_str                      # rows/StringifySpec (stringify IS Value.catDisplay — nameless native arm, falsity #13: str case = strdup — proved; full per-kind decode landed)
-  Vsa.Sim.cstring_of_asciiZAt                        # rows/StringifyBridge (AsciiZAt fold: pinned NUL-terminated ASCII run → CString, ONE reader for all literal branches)
-  Vsa.Sim.cstring_boolLit_of                         # rows/StringifyBridge (rodata pins ELF-verified: 19008="true" 19010="false" 19018="null"; b-selected literal CString)
-  Vsa.Sim.cstring_null_of_wordBytes                  # rows/StringifyBridge (null arm in-place literal: sw 0x6c6c756e + sb zero → CString buf "null")
-  Vsa.Sim.stringifyContract_bool_of_call             # rows/StringifyBridge (.bool b through the shared strdup tail via stringifyDisplay_bool)
-  Vsa.Sim.stringifyContract_null_of_call             # rows/StringifyBridge (.null through the shared strdup tail)
-  Vsa.Sim.stringifyContract_native_of_call           # rows/StringifyBridge (.native w — the NAMELESS "<native fn>" catDisplay form, falsity #13 amendment)
-  Vsa.Sim.stringifyContract_of_kinds                 # rows/StringifyBridge (the ∀v supplier assembler = strConcatHeapResid_of_cblock's hStringify premise)
   Vsa.Sim.strConcatCellResid_of_heapResid           # rows/StringifySpec (the stringify GATE CLOSED at display level: concat cell ← stringify-free StrConcatHeapResid)
   Vsa.Sim.stringifyStrdupTailContract               # rows/StringifyStrdupTail (the shared strdup tail 0x80003044 = env_define's append splice: strlen ≫ malloc ≫ memcpy over the SAME framed contracts)
   Vsa.Sim.stringifyStrdupTailResid_of_contract      # rows/StringifyStrdupTail (StringifySpec gap 2 ← the tail contract; CString copied byte-for-byte incl NUL)
@@ -827,7 +817,6 @@ THEOREMS=(
   # Wave 34
   Vsa.Sim.execEntry_recast_depth                    # SeqHeadStages (ExecEntry's depth is a machine-side PHANTOM — depth-0 spans re-type at any d for free)
   Vsa.Sim.seqHeadStagePre_of_span                   # SeqHeadStages (SqEntry seqHead field ← loopHeadDispatch_span's already-built inputs; span premise families = the standing DriveToLoopHead residual)
-  Vsa.Sim.divFamily_of_armStageComponents           # ArmStagesPartial (the 29-premise flattened form: divergence closes on independently-suppliable fields, partial delivery threads through)
   Vsa.Sim.concatHeapCore                            # rows/ConcatHeapCore (the concat C-block splice: 8 callees over 7 seams as pure callSeg algebra, front/middle/tail)
   Vsa.Sim.concatMallocSlot                          # rows/ConcatSeams (malloc callee slot ← MallocContract.spec)
   Vsa.Sim.concatFreeSlot                            # rows/ConcatSeams (both free slots ← MallocContract.freeSpec)
@@ -836,7 +825,6 @@ THEOREMS=(
   Vsa.Sim.concatCBlockTriple_of                     # rows/ConcatSeams (concatHeapCore with the contract-layer slots pre-plugged; strlen/memcpy/strcpy/value_str per-call threaded)
   Vsa.Sim.evalChildField_of_blockA_stage            # EvalChildFieldCombinator (THE per-field closer: dispatch bridge + counted arm-head cut ⇒ LandedN 1 JalPreBundle — kills the hand-composition across all eval-child fields)
   Vsa.Sim.binaryL_field_of_extras                   # ArmStagesWave34 (FIRST fully machine-composed field: blockA_binaryArm ≫ blockB_binary_leftStagePre via the combinator, mod BinArmGeomProvider)
-  Vsa.Sim.divFamily_wave34                          # ArmStagesWave34 (capstone: binaryL + seqHead wired, premise list visibly shrinking)
   Vsa.Sim.strdupMemcpy_prune_null                   # rows/StrdupTailContractClose (selected successful malloc return for memcpy staging)
   Vsa.Sim.strdupMemcpyArg_a2_reload                 # rows/StrdupTailContractClose (gap-1 witness: lds-generic reload readback at singleton [sizeBytes])
   Vsa.Sim.strdupMemcpy_frame_obstruction            # rows/StrdupTailContractClose (Law-4 REGRESSION GUARD: the pre-amendment single-gm bridge forced sOld = dst)
@@ -851,7 +839,6 @@ THEOREMS=(
   Vsa.Sim.blockA_logicalArm                         # rows/UnaryLogicalArmBridge (tag-7 arm bridge @0x8000355c → blockB_logical_stagePre's hpre; x13-reach threaded via the Triple pre)
   Vsa.Sim.unaryE_field_of_extras                    # EvalChildFieldCombinator (unary field FIELD-COMPOSED via the one-point seam, k=2)
   Vsa.Sim.logicalL_field_of_extras                  # EvalChildFieldCombinator (logicalL field FIELD-COMPOSED, k=3)
-  Vsa.Sim.evalChildStages_ublr_wired                # ArmStagesWave34 (unary+binaryL+logicalL wired into the capstone — 3/14 eval-child fields machine-composed)
   Vsa.Sim.fnArmClosureBuild_log_eq                  # rows/FnArmClosureBuild (the concrete 4-entry closure-build log — the FAST reflection layer, 0.4s rfl)
   Vsa.Sim.fnArmClosureBuild_reads                   # rows/FnArmClosureBuild (all four closure-record reads off the write-log; was an 800k-heartbeat whnf timeout, fixed by the two-layer log-list idiom)
   Vsa.Sim.midStage1_of_marshal                      # MidArmFieldIH (binaryR_midStage1 from the named MidArmRightMarshal residual)
@@ -888,7 +875,6 @@ THEOREMS=(
   Vsa.Sim.assignE_field_of_dispatch                 # rows/AssignArmStagePre (assignE FIELD-COMPOSED)
   Vsa.Sim.blockB_call_stagePre                      # rows/CallArmStagePre (the callF arm-head cut)
   Vsa.Sim.callF_field_of_dispatch                   # rows/CallArmStagePre (callF FIELD-COMPOSED — 7/14 eval-child)
-  Vsa.Sim.evalChildStages_ublrac_wired              # ArmStagesWave34 (unary+binaryL+binaryR+logicalL+logicalR+assignE+callF wired into the capstone)
   Vsa.Sim.callClosureSim                            # rows/CallClosureRow (falsities #5/#6 AMENDED: BodyHandoff ∃-mid + emptyBypass, entryFold deleted; depth step composed — the motive was already depth-indexed)
   Vsa.Sim.callClosureEntrySplice                    # rows/CallClosureSplice (ONE spliceFold: dispatch ≫ real env_new_spec ≫ zero-param split ≫ storeChainList params-fold ≫ handoff)
   Vsa.Sim.callClosureRet_of_status                  # rows/CallClosureSplice (the a_6 status classification split)
@@ -930,7 +916,6 @@ THEOREMS=(
   Vsa.Sim.landedN_eentryC_of_execPreBundle          # ArmSegSplitExecEval (ExecJalPreBundle → LandedN 1 EEntryC)
   Vsa.Sim.blockB_stmtExpr_stagePre                  # rows/StmtExprArmStagePre (the first exec-eval cut — landed _es sites reused, no new battery)
   Vsa.Sim.stmtExpr_field_of_dispatch                # rows/StmtExprArmStagePre (stmtExpr FIELD-COMPOSED — 8/14)
-  Vsa.Sim.divFamily_wave40                          # ArmStagesWave34 (capstone: 8 eval-child fields wired)
   Vsa.Sim.memcpy_spec_framed_word                   # MemcpySpecFramedWord (the aligned WORD route with the ABI frame end-to-end; post = the byte variant's, consumers route on hroute)
   Vsa.Sim.dispatch_to_word_framed                   # MemcpySpecFramedWord
   Vsa.Sim.wordloop_abi                              # MemcpySpecFramedWord (ABI transport free through word_loop_spec)
@@ -967,18 +952,9 @@ THEOREMS=(
   Vsa.Sim.nativeBodyAssert                          # rows/NativeBodyAssert (assertOk body: value_truthy ≫ value_null)
   Vsa.Sim.nativeAssertOkSpec_of_dispatch            # rows/NativeBodyAssert (hCallAssertOk ← geometry + hDispatch + NativeAssertInternalAbi)
   # Wave 42: divergence board 14/14 eval-child + naExit ABI amendment + print contract layer + crux marshal bricks
-  Vsa.Sim.evalChildStages_ublracSEA_wired           # ArmStagesWave34 (all 14 eval-child fields machine-composed; residuals = the 9 named *Dispatch)
-  Vsa.Sim.divFamily_wave42                          # ArmStagesWave34 (capstone)
   Vsa.Sim.naExit_abiFrame                           # EvalCallNative2 (naExit ABI clause destructurer)
   Vsa.Sim.abiPreserved_enum                         # EvalCallNative2 (reusable 15-way AbiPreserved enumeration)
   Vsa.Sim.nativeAssertInternalAbi_closed            # rows/NativeBodyAssert (NativeAssertInternalAbi DISCHARGED — hCallAssertOk ← hDispatch + geometry only)
-  Vsa.Sim.nativeBodyOut                             # rows/NativeBodyPrint (ONE parametric fn-body out-marshal; print/println instances)
-  Vsa.Sim.nativeBodyPrint                           # rows/NativeBodyPrint
-  Vsa.Sim.nativeBodyPrintln                         # rows/NativeBodyPrint
-  Vsa.Sim.nativePrintSpec_of_internal               # rows/NativeBodyPrint (hCallPrint ← hDispatch + NativePrintInternal + geometry)
-  Vsa.Sim.nativePrintlnSpec_of_internal             # rows/NativeBodyPrint
-  Vsa.Sim.printedPrefix_full                        # rows/NativeBodyPrint (loop-invariant output algebra)
-  Vsa.Sim.printedPrefix_step                        # rows/NativeBodyPrint
   Vsa.Sim.segToTripleOut                            # rows/CallCruxMarshal (segToTriple + sailOutput carry — unblocks OutRepr in carrier marshals)
   Vsa.Sim.outRepr_transport                         # rows/CallCruxMarshal
   Vsa.Sim.gholds_reg                                # rows/CallCruxMarshal (GHolds → regs.get? pin reader)
@@ -992,8 +968,6 @@ THEOREMS=(
   Vsa.Sim.stmtForInit_field_of_dispatch             # rows/StmtForInitArmStagePre
   Vsa.Sim.flBodyBodyBridge                          # rows/FlBodyArmStagePre
   Vsa.Sim.flBody_field_of_dispatch                  # rows/FlBodyArmStagePre
-  Vsa.Sim.nonEvalChildStages_mk                     # ArmStagesWave34
-  Vsa.Sim.nonEvalChildStages_wave43_wired           # ArmStagesWave34 (3 jal-exec_stmt fields swapped for *ArmDispatch residuals)
   Vsa.Sim.LayoutJumpTableGen.groundSlot_0           # rows/LayoutJumpTableGen (GENERATED: .rodata dispatch slot pins, all 11 tags)
   Vsa.Sim.LayoutJumpTableGen.groundSlot_1           # rows/LayoutJumpTableGen
   Vsa.Sim.LayoutJumpTableGen.groundSlot_2           # rows/LayoutJumpTableGen
@@ -1081,14 +1055,7 @@ THEOREMS=(
   Vsa.Sim.ExecGround.survive_stack                  # EntryGround (exec twin)
   Vsa.Sim.LayoutStmtTableGen.groundStmtSlot_0       # rows/LayoutStmtTableGen (exec_stmt jump-table pins, GENERATED)
   Vsa.Sim.LayoutStmtTableGen.groundStmtSlot_8       # rows/LayoutStmtTableGen
-  Vsa.Sim.Rows.strAstRegionBody_of_ground           # rows/EntryGroundRows (hStr = record fill at ground insertion)
-  Vsa.Sim.Rows.execGround_caseGeom_brk              # rows/EntryGroundRows (ExecCaseGeom entry-suppliable half)
-  Vsa.Sim.Rows.execGround_caseGeom_cont             # rows/EntryGroundRows
-  Vsa.Sim.Rows.stmtTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier off generated pins)
-  Vsa.Sim.Rows.kindTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier, eval table)
   Vsa.Sim.execLeafWidenP_of_entry                   # rows/ExecCaseGeom (X3-c pinned exec-leaf widener from entry alone, wave 48d)
-  Vsa.Sim.Rows.field_hSBrk                          # rows/ExecLeafPin (hSBrk discharged OUTRIGHT, premise-free, wave 48d X3-c)
-  Vsa.Sim.Rows.field_hSCont                         # rows/ExecLeafPin (hSCont discharged OUTRIGHT, premise-free, wave 48d X3-c)
   # EvalChildArm: the parametric exec-arm → eval_expr child dispatch (one layer, five instances)
   Vsa.Sim.EvalChildArm.dispatch                     # EvalChildArm (generic: ExecEntry → child EvalEntry + parent Carrier)
   Vsa.Sim.EvalChildArm.exitKit_at_exit              # EvalChildArm (generic: parent facts at the child's widened exit)
@@ -1315,6 +1282,18 @@ PYEOF
 
 rm -f "$AXFILE"
 echo "stage c: OK"
+
+# ---------------------------------------- (c2) the final theorem's axioms
+# THE end-to-end theorem lives in VsaIris (Iris route); stage c imports only
+# Vsa. Audit it (and the concrete-boundary witnesses) against the VsaIris
+# build when one is present.
+if [ -f .lake/build/lib/lean/VsaIris/Interp/EndToEnd.olean ]; then
+  echo "== stage c2: #print axioms on the final theorem (VsaIris)"
+  scripts/check_final_axioms.sh || fail "stage c2: final-theorem axiom audit failed (see above)"
+  echo "stage c2: OK"
+else
+  echo "stage c2: SKIPPED (no VsaIris build; run \`lake build VsaIris\` then scripts/check_final_axioms.sh)"
+fi
 
 # ------------------------------------------------- (d) encoder differential
 # Compare encoder step semantics, span declarations and summary clauses

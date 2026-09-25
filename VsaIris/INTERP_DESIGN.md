@@ -1006,6 +1006,19 @@ lanes); then E1–E6 (six lanes).
    does not own `tohost` provably cannot print (F2), so a missing putchar in a
    print path shows up as an unprovable goal, not as a silent output mismatch.
 
+10. **The boundary is not reached by the binary (lane V, 2026-09-25;
+   `REVIEW.md`).** Traced at `interp_run`'s entry for the proof ELF and every
+   `c/tests/*.wl` build: `ConsoleStream.flags = 0x200a` is false there
+   (`setvbuf` leaves `0x000a`; `__SORD` is set by the first write after
+   entry); `FixedRodataLoaded` pins the embedded script, so only the
+   `while.wl` build can be `Loaded`; `stack_bytes`/`topLive` need a dense
+   memory the loader never produces. Every other first-order field of
+   `Loaded` holds at the real entry state. Proposed fixes P1–P4 in
+   `REVIEW.md`; not landed (statement changes are the user's call).
+11. **`Loaded` depends on the program's execution** (`capacity`,
+   `stack_admissible`), and `CStr` is ASCII-only; README should say so
+   (`REVIEW.md` M1, L1, P5).
+
 ### STATEMENT CHANGES (R, landed)
 
 The §3 predicates are built in

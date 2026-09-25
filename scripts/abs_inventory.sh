@@ -18,9 +18,6 @@ FILES=$(ls Vsa/Sim/GeomFacts.lean Vsa/Sim/SegEval*.lean Vsa/Sim/FrameCalc.lean V
            Vsa/Sim/EnvDefSeg.lean Vsa/Sim/EnvGetMarshal.lean Vsa/Sim/WriteLogNF.lean \
            Vsa/Sim/StepCount.lean Vsa/Sim/MidArmCombinator.lean Vsa/Sim/EvalChildFieldCombinator.lean \
            Vsa/Sim/ArmSegSplit*.lean Vsa/Sim/StagePreSuppliers*.lean \
-           Vsa/Sim/ArmStagesPartial.lean Vsa/Sim/ArmStagesWave34.lean Vsa/Sim/SeqHeadStages.lean \
-           Vsa/Sim/ApproxArmResidGapAssembly.lean Vsa/Sim/StoreSeg.lean \
-           Vsa/Sim/DeriveMetaTowers.lean Vsa/Sim/DeriveRow.lean \
            Vsa/Sim/rows/ArmPostGeom.lean Vsa/Sim/rows/LoopSteps.lean \
            Vsa/Sim/rows/BinArmBridge.lean Vsa/Sim/rows/UnaryLogicalArmBridge.lean \
            Vsa/Sim/rows/ConcatSeams.lean Vsa/Sim/rows/BlockCConcat.lean \

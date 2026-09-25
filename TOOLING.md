@@ -227,9 +227,9 @@ description names the requested obligation and its exact acceptance type:
 
 ```json
 {
-  "target_obligation": "remainingWork_closed",
-  "target_type": "Vsa.Sim.RemainingWork Vsa.Sim.interpRunLayout",
-  "consumer": "Vsa.Sim.remainingWork_closed",
+  "target_obligation": "supplies_of",
+  "target_type": "VsaIris.Interp.IrisHoles → VsaIris.Interp.Supplies",
+  "consumer": "VsaIris.Interp.interpSim_iris",
   "role": "target",
   "remaining_premises": []
 }
