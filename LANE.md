@@ -80,11 +80,15 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   `ProofStringify` use `ms_callNewlibA` (verbatim from lane N1).
 
 ## In flight
-- `newlib.snprintf`: `%d` iteration (`svf_iterD`), the `parseFmt` induction,
-  owned readable bytes (`readable Sro Sown`: prove the run with them in the
-  view, then `LocalRun.promote`). Expected statement change: readable bytes in
-  RAM off the HTIF words (bounds the rendering below `2^31` too), stack and
-  destination above newlib's data.
+- `newlib.snprintf`: proved as `Sym.snprintf_gen` (`Vsa/SnpGen.lean`) for an
+  aligned return address, stack/destination above newlib's data and readable
+  bytes in RAM (`ReadGeom`); pieces: `svf_iterD`, `svf_fmt`/`loop_fmt`
+  (`Vsa/SnpFmt.lean`, induction over `parseFmt`), `fmtRen_length_le`,
+  `snpSpec_of_runO` (owned readable bytes promoted). **Blocked** on the
+  consumers: `rtErr_spec` has no stack/`Sro` bounds and the shared view is
+  bounded only below `2^32` (needed: `k + 8 ≤ 0x88000000` so a `%s` string
+  stays below `2^27` bytes; the 32-bit count overflows otherwise). Recorded in
+  `experiments/smt/PROOF_CLOSURE_PLAN.md` (lane N2 section) and HOLES.md.
 - Integration note: lane N1 also defines `VsaIris.Sym.NW` (its stdout table);
   this lane's `NW` (`SnpRunDef.lean`) must be renamed when the two merge.
   `snpCall_regs`/`snpOwnSet_ro_off` duplicate N1's `call_regs`/`ownSet_ro_off`.
@@ -105,5 +109,5 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
 - Closed: `out.snprintfInt`, `out.snprintfFn` (`Sym.snprintfFn_out`: the
   name's `strAt` bytes in the view, agreeing with `.rodata` where they overlap
   (`fnName_agree`); `fnRender` by `cstrImg_cut`).
-- Ledgered: `newlib.snprintf`
+- Ledgered (blocked, see above): `newlib.snprintf`
   (expected change: the readable bytes and destination need RAM geometry).
