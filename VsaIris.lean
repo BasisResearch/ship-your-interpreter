@@ -276,9 +276,15 @@ import VsaIris.Vsa.Stderr.VfpErr
 import VsaIris.Vsa.Stderr.SprintErr
 import VsaIris.Vsa.Stderr.Promote
 import VsaIris.Vsa.Stderr.FprintfHead
+import VsaIris.Vsa.Stderr.FprintfBody
+import VsaIris.Vsa.Stderr.FprintfSpec
 import VsaIris.Vsa.Fprintf.Sprint
 import VsaIris.Vsa.Fprintf.Strlen
 import VsaIris.Vsa.Fprintf.Fmts
+import VsaIris.Vsa.Fprintf.ScanTo
+import VsaIris.Vsa.Fprintf.InnerS
 import VsaIris.Vsa.ExitH.Iris
 import VsaIris.Vsa.Stderr.SprintHook
 import VsaIris.Vsa.Stderr.SEmpty
+import VsaIris.Vsa.Fprintf.End
+import VsaIris.Vsa.Fprintf.Inner
