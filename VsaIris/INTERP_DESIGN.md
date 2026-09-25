@@ -1495,3 +1495,37 @@ without the fact and no other resource carries it:
   take `hEL : ErrnoLend L Room`. The same applies to H5's stderr/exit holes
   (`newlib.fprintf`, `newlib.fwrite`, `newlib.exitHandlers`, N3) and to
   `out.fprintf` (N5): their write paths reach `_write_r`.
+
+### STATEMENT CHANGES (N3)
+
+`newlib.fwrite` is proved (`Newlib.fwrite_proved`, `Vsa/Stderr/FwriteSpec.lean`:
+`fwriteErr_run`, the whole first `fwrite(ptr, 1, n, stderr)` as one printing
+symbolic run, under `wp_lroW`). The hole as written was unprovable; the
+corrected statement and why:
+
+- **`errno`.** `_write_r` clears the global `errno` (N1 above), so
+  `fwriteSpec` takes and returns `errnoOwn`. Out of memory the block borrows
+  it from the heap resource the arm drops (`ErrnoOwn.heapRes_errno` at
+  `ExecOom`'s `oomAt`, `sg_oomEnd`'s `SgRest`, and the NULL branches of the
+  `fn`-literal and concatenation templates); `ev_oom`/`ms_evalOom`/
+  `wp_oomBlock` take it, and `Abort.oomCore` carries it to `exit(1)`'s entry,
+  whose close path (`_close_r`, `_fstat_r`) writes it too (N4).
+- **`Ierr` is fixed to `StdioErrOK`** (`StdioErr.lean`): the state the first
+  write leaves (`__SORD | __SRW | __SWR | __SNBF`, `_bf._base = _p = _nbuf`,
+  `_flags2 = 0`; every other field `exit` reads as in `StdioOK`,
+  `stdioErrOK_of_write`). `NewlibHoles := NewlibHolesAt StdioErrOK`.
+- **`StdioOK` pins `stderr`'s buffer and writer** (`Vsa/Sim/StderrStream.lean`,
+  the fifth conjunct; `BootHeapFacts.stderrStream`, control witness in the
+  snapshot). Without `_bf._base = NULL` and `_write = __swrite`, `fwrite`
+  jumps through an unconstrained function pointer.
+- **Premises.** `0 < n < 2^30` (`n = 0` returns before orienting the stream;
+  one `__sfvwrite_r` chunk is `< 0x7ffffc00`); the bytes read-only (`Sro`) in
+  RAM off the tohost cells and off the stack, newlib's data and `errno`; the
+  frame above newlib's data (`0x80100000 ≤ s - 768`); an aligned return
+  address (as N1's `outSpec`). The out-of-memory message is in `.rodata`
+  (`oomMsg_text`); `OomBlockSp` gains `data`, and `ms_callEnvNewP`/
+  `ms_callEnvDefineP` take the region above newlib's data (`0x80100000 ≤
+  R2 - n`, from the stack segment); `OomSite.OK` gains `fwAlign`.
+- **Tactics.** N1's stdout side-condition rules extend `nx_side`, not the
+  shared `sx_side` (`ix_run` takes the side tactic): imported into the
+  interpreter's run files, they exhausted `ix_run1`'s recursion depth.

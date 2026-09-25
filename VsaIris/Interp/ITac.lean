@@ -63,22 +63,30 @@ def ixNorm (facts : Array Term) : TacticM Syntax := do
       facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
     `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem)))
 
+/-- The side-condition tactic of a run: `sx_side`, or the caller's (`side`). -/
+def ixSide (side : Option Syntax) : TacticM Syntax := do
+  match side with
+  | some t => pure t
+  | none => `(tactic| sx_side)
+
 /-- Try `sx_side` (after the normalizers) on a goal; `true` when it closes. -/
-def ixTrySide (norm : Syntax) (g : MVarId) : TacticM Bool := do
+def ixTrySide (norm : Syntax) (g : MVarId) (side : Option Syntax := none) : TacticM Bool := do
   let saved ← saveState
+  let sd ← ixSide side
   try
-    let gs ← evalTacticAt (← `(tactic| ($(⟨norm⟩) <;> sx_side))) g
+    let gs ← evalTacticAt (← `(tactic| ($(⟨norm⟩) <;> $(⟨sd⟩)))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
     saved.restore; return false
 
 /-- Close a branch goal `C → IW …` when `sx_side` refutes `C`. -/
-def ixTryPrune (norm : Syntax) (g : MVarId) : TacticM Bool := do
+def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none) : TacticM Bool := do
   let saved ← saveState
+  let sd ← ixSide side
   try
     let gs ← evalTacticAt
-      (← `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; sx_side))))) g
+      (← `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; $(⟨sd⟩)))))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
@@ -93,8 +101,8 @@ def ixCandidates (pc : Nat) (pre : List String := ["it", "itD", "itT", "itH", "i
 
 /-- Apply one candidate: the continuation goals (an `SWP` conclusion) and the
 side conditions `sx_side` could not close; `none` when it does not apply. -/
-def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool) :
-    TacticM (Option (List MVarId × List MVarId)) := do
+def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool)
+    (side : Option Syntax := none) : TacticM (Option (List MVarId × List MVarId)) := do
   let saved ← saveState
   try
     let gs ← evalTacticAt (← `(tactic| apply $(mkIdent nm) $(⟨h⟩))) g
@@ -104,7 +112,7 @@ def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool
       let ty ← g.withContext (do instantiateMVars (← g.getType))
       if ← g.withContext (forallTelescopeReducing ty fun _ b => isSWP b) then
         conts := conts ++ [g]
-      else if !(← ixTrySide norm g) then
+      else if !(← ixTrySide norm g side) then
         pending := pending ++ [g]
     if strict && !pending.isEmpty then
       saved.restore; return none
@@ -116,14 +124,14 @@ def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool
 close; failing that, the first candidate that applies, with its side
 conditions left pending. -/
 def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
-    (pre : List String := ["it", "itD", "itT", "itH", "itO"]) :
+    (pre : List String := ["it", "itD", "itT", "itH", "itO"]) (side : Option Syntax := none) :
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
   let cands ← ixCandidates pc pre
   for nm in cands do
-    if let some r ← ixApply norm h g nm true then return some r
+    if let some r ← ixApply norm h g nm true side then return some r
   for nm in cands do
-    if let some r ← ixApply norm h g nm false then return some r
+    if let some r ← ixApply norm h g nm false side then return some r
   return none
 
 /-- `ix_run h`, `ix_run [n] h`, `ix_run h using [e,…]`, `ix_run h at pc…`.

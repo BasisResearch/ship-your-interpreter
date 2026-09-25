@@ -14,9 +14,9 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-/-- `sx_side` for `outS` with the byte hypothesis normalized first (`nx_hb`). -/
+/-- `nx_side` for `outS` with the byte hypothesis normalized first (`nx_hb`). -/
 macro_rules
-  | `(tactic| sx_side) => `(tactic| (
+  | `(tactic| nx_side) => `(tactic| (
       intro b hb
       (try nx_hb hb)
       simp only [outS, impureW, stdioFoot, InRange] at ⊢

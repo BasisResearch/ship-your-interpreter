@@ -1,3 +1,4 @@
+import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Interp.SpecConcat
 import VsaIris.Interp.CallFree
 import VsaIris.Interp.BinEq
@@ -93,7 +94,7 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     (hE : ErrEnv N L Room inp live Core) {s : BitVec 64} {n : Nat} (hsg : StackGeom s n)
     (hn : 1088 + fwriteNeed ≤ n) {R : Nat → BitVec 64} {M : Mem} {o : String} :
     ⌜R 2 = evalSP s⌝ ∗ codeRes ∗ binImg ∗ ms 0x80003e28#64 R (InExt (s.toNat - 1088, 1088)) M ∗
-      stackScratch (evalSP s) (n - 1088) ∗ Stdio.stdioOwn ∗ consoleOwn o ∗
+      stackScratch (evalSP s) (n - 1088) ∗ Stdio.stdioOwn ∗ Stdio.errnoOwn ∗ consoleOwn o ∗
       (abortAt Core s n -∗ Wp.W Φ) ⊢ Wp.W Φ := by
   have hs1 := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
   unfold Vsa.Sim.LayoutInstance.stackSL at hs1 hs2
@@ -101,7 +102,7 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   unfold fwriteNeed at hn
   have hsf : (evalSP s).toNat = s.toNat - 1088 := by
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  iintro ⟨%h2, #Hcode, #Himg, Hms, Hst, Hstd, Hcon, Hk⟩
+  iintro ⟨%h2, #Hcode, #Himg, Hms, Hst, Hstd, Herr, Hcon, Hk⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave Hst := evalFrame_join hs4 (by omega) $$ [Hst HS]
   · iframe Hst HS
@@ -113,9 +114,10 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iapply Oom.wp_oomBlock hE.newlib live hE.code Wp N L Room inp OomSites.oom80003e28
     OomSites.oom80003e28_ok s (evalSP s) _ n
     ⟨by omega, by unfold Vsa.Sim.tohostAddr; omega, by rw [hsf]; unfold fwriteNeed; omega,
-      by rw [hsf]; show s.toNat - 1088 + 1032 ≤ s.toNat; omega, hs2, by rw [hsf]; omega⟩ _ o
+      by rw [hsf]; show s.toNat - 1088 + 1032 ≤ s.toNat; omega, hs2, by rw [hsf]; omega,
+      by rw [hsf]; unfold fwriteNeed; omega⟩ _ o
   rw [show BitVec.ofNat 64 OomSites.oom80003e28.head = 0x80003e28#64 from rfl]
-  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hcon
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Herr Hcon
   iintro HA
   iapply Hk
   unfold abortRes abortAt

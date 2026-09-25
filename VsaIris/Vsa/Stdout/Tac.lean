@@ -26,8 +26,14 @@ of stack below `s`. -/
 def outS (s : BitVec 64) (need : Nat) (a : Nat) : Prop :=
   (stdioFoot a ∧ ¬ impureW a) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨ (s.toNat - need ≤ a ∧ a < s.toNat)
 
+/-- A stdout run's side conditions (`nx_run`): `sx_side`, then the rules
+below for `outS`. Kept apart from `sx_side` so that importing this file does
+not change the interpreter's `ix_run`. -/
+syntax "nx_side" : tactic
+macro_rules | `(tactic| nx_side) => `(tactic| sx_side)
+
 macro_rules
-  | `(tactic| sx_side) => `(tactic| (intro b hb; simp only [mem_accAddrs_iff, outS, stdioFoot, InRange, impureW] at *; sx_addr))
+  | `(tactic| nx_side) => `(tactic| (intro b hb; simp only [mem_accAddrs_iff, outS, stdioFoot, InRange, impureW] at *; sx_addr))
 
 /-- Updating the registers `xs` to the values `v`. -/
 def updAll (R : Nat → BitVec 64) (v : Nat → BitVec 64) : List Nat → Nat → BitVec 64
@@ -120,7 +126,7 @@ def nxTryPrune (facts : Array Term) (norm : Syntax) (g : MVarId) : TacticM Bool 
   let saved ← saveState
   try
     let gs ← evalTacticAt
-      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero, BitVec.sub_self, sext_zero32] at hc); (try (exfalso; revert hc; sx_side))))) g
+      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero, BitVec.sub_self, sext_zero32] at hc); (try (exfalso; revert hc; nx_side))))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
@@ -165,7 +171,7 @@ def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
       let some (conts, pend) ← ixStep norm h cur
-          ["it", "itD", "itT", "itH", "itO", "iu", "iuD", "iuT", "iuH", "iuO"]
+          ["it", "itD", "itT", "itH", "itO", "iu", "iuD", "iuT", "iuH", "iuO"] (some (← `(tactic| nx_side)))
         | stuck := stuck ++ [cur]; continue
       pending := pending ++ pend
       match conts with
@@ -224,7 +230,7 @@ elab_rules : tactic
 /-- `nx_addr` for byte-ownership goals: unfold `outS` first. -/
 macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
 
-macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
+macro_rules | `(tactic| nx_side) => `(tactic| nx_addr)
 /-- The address-range hypothesis of a byte-set side condition, as arithmetic. -/
 syntax "nx_hb " ident : tactic
 macro_rules
@@ -232,11 +238,11 @@ macro_rules
       toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod,
       Nat.reduceAdd] at $h:ident)
 
-macro_rules | `(tactic| sx_side) => `(tactic| (intro b hb; (try nx_hb hb); nx_addr))
+macro_rules | `(tactic| nx_side) => `(tactic| (intro b hb; (try nx_hb hb); nx_addr))
 
 /-- A branch refuted by a hypothesis of the run (a flag bit a summary assumes). -/
 macro_rules
-  | `(tactic| sx_side) => `(tactic| (intro hc; first | (apply hc; assumption) | (apply absurd hc; assumption)))
+  | `(tactic| nx_side) => `(tactic| (intro hc; first | (apply hc; assumption) | (apply absurd hc; assumption)))
 
 /-- The caller-saved registers other than `a0` and `ra`. -/
 abbrev callClob : List Nat := [5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
