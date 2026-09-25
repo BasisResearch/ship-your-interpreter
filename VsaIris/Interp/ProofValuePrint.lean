@@ -44,9 +44,9 @@ theorem vp_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     {need : Nat}
     (hspec : ⊢ fnSpecW Wp entry P Q)
     (hlen : vs.length ≤ 8) (hvs : ∀ i (h : i < vs.length), R (10 + i) = vs[i]) (hs : R 2 = s)
-    (h1 : R 1 = r) (hkeep : ∀ x ∈ fRegs, x ∉ callerSaved → R x = rv x)
+    (h1 : R 1 = r) (hal : r.toNat % 4 = 0) (hkeep : ∀ x ∈ fRegs, x ∉ callerSaved → R x = rv x)
     (hsg : StackGeom s printNeed) (hneed : need ≤ printNeed)
-    (hP : ∀ r, iprop(argsAt vs ∗ (Xr ∗ stdioW ∗ consoleOwn o) ∗
+    (hP : ∀ r, r.toNat % 4 = 0 → iprop(argsAt vs ∗ (Xr ∗ stdioW ∗ consoleOwn o) ∗
       callFrame s need Newlib.calleeSaved R) ⊢ P r)
     (hQ : ∀ r, Q r ⊢ iprop(clobbered argRegs ∗ (stdioW ∗ consoleOwn (o ++ frag)) ∗
       callFrame s need Newlib.calleeSaved R))
@@ -62,7 +62,7 @@ theorem vp_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   ihave #Hsp := hspec
   ihave #HX := hX $$ [Hv Hd HE Himg]
   · iframe Hv Hd HE Himg
-  iapply ms_tailNewlib Wp hlen hvs hs hsg.le hneed hP hQ
+  iapply ms_tailNewlibA Wp hlen hvs hs hsg.le hneed (by rw [h1]; exact hal) hP hQ
   iframe Hsp Hms Hst Himg
   isplitl [Hstd Hcon]
   · iframe HX Hstd Hcon
@@ -108,13 +108,14 @@ abbrev VpGoal (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → I
 omit I in
 /-- An `outSpec` precondition from H5's calling convention. -/
 theorem outSpec_P {vs : List (BitVec 64)} {Xr : IProp GF} {o : String} {s : BitVec 64} {need : Nat}
-    {cs : Nat → BitVec 64} (r : BitVec 64) :
+    {cs : Nat → BitVec 64} (r : BitVec 64) (hr : r.toNat % 4 = 0) :
     iprop(argsAt vs ∗ (Xr ∗ stdioW ∗ consoleOwn o) ∗ callFrame s need Newlib.calleeSaved cs) ⊢
-      (fun (_ : BitVec 64) => iprop(argsAt vs ∗ Xr ∗ stdioW ∗ consoleOwn o ∗
+      (fun (r : BitVec 64) => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt vs ∗ Xr ∗ stdioW ∗ consoleOwn o ∗
         callFrame s need Newlib.calleeSaved cs)) r := by
   dsimp only
   iintro ⟨Ha, ⟨Hx, Hs, Hc⟩, Hf⟩
   iframe Ha Hx Hs Hc Hf
+  ipureintro; exact hr
 
 omit I in
 theorem outSpec_Q {o frag : String} {s : BitVec 64} {need : Nat} {cs : Nat → BitVec 64} (r : BitVec 64) :
@@ -140,7 +141,7 @@ theorem vp_null (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   ix_run1 c.hlive using [h10, h11, h2, hk, hku]
   refine vp_swp_close Wp (Xr := strAt 0x80019018 "null") (frag := "null")
     (H.fwrite live Wp 0x80019018#64 s _ "null" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
-    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX rfl c.hMa
   case hvs =>
     intro i h
@@ -182,7 +183,7 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     ix_run1 c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019010 "false") (frag := "false")
       (H.fputs live Wp 0x80019010#64 s _ "false" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
-      (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+      (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
       outSpec_Q ?hX rfl c.hMa
     case hvs =>
       intro i h
@@ -199,7 +200,7 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     ix_run1 c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019008 "true") (frag := "true")
       (H.fputs live Wp 0x80019008#64 s _ "true" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
-      (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+      (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
       outSpec_Q ?hX rfl c.hMa
     case hvs =>
       intro i h
@@ -230,7 +231,7 @@ theorem vp_int (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
     (frag := intToString w.toInt)
     (H.fprintf live Wp 0x800192c0#64 w s _ (intToString w.toInt) o c.hcl
       (spIn_of_stackGeom c.hsg (by decide)))
-    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX (by rw [← hn]; rfl) c.hMa
   case hvs =>
     intro i h
@@ -259,7 +260,7 @@ theorem vp_str (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   refine vp_swp_close Wp (Xr := strAt (imgW (imgM Ma) (p.toNat + 8)).toNat x) (frag := x)
     (H.fputs live Wp (imgW (imgM Ma) (p.toNat + 8)) s _ x o c.hcl
       (spIn_of_stackGeom c.hsg (by decide)))
-    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX rfl c.hMa
   case hvs =>
     intro i h
@@ -288,7 +289,7 @@ theorem vp_native (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (frag := "<native fn " ++ nativeName f ++ ">")
     (H.fprintf live Wp 0x800192d8#64 (imgW (imgM Ma) (p.toNat + 8)) s _
       ("<native fn " ++ nativeName f ++ ">") o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
-    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX (by cases f <;> rfl) c.hMa
   case hvs =>
     intro i h
@@ -350,7 +351,7 @@ theorem vp_clo_anon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw8, ecp, hq, eq8, hnm]
   refine vp_swp_close Wp (Xr := strAt 0x800192d0 "<fn>") (frag := "<fn>")
     (H.fwrite live Wp 0x800192d0#64 s _ "<fn>" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
-    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX hdisp.symm c.hMa
   case hvs =>
     intro i h
@@ -394,7 +395,7 @@ theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     (frag := "<fn " ++ x ++ ">")
     (H.fprintf live Wp 0x800192c8#64 (BitVec.ofNat 64 nm) s _ ("<fn " ++ x ++ ">") o c.hcl
       (spIn_of_stackGeom c.hsg (by decide)))
-    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
+    (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX hdisp.symm c.hMa
   case hvs =>
     intro i h

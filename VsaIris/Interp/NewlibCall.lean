@@ -180,6 +180,42 @@ theorem ms_tailNewlib (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   · iframe Hargs Htmp Hsp Hcs
   iapply Hk $$ Hpc Hra Hregs HY HS Hst
 
+/-- `ms_tailNewlib` whose callee precondition may use the return address's
+alignment (`NewlibOut.outSpec`: the callee's `ret`). -/
+theorem ms_tailNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {entry : BitVec 64} {P Q : BitVec 64 → IProp GF} {vs : List (BitVec 64)} {X Y : IProp GF}
+    {s : BitVec 64} {need n : Nat} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem}
+    (hlen : vs.length ≤ 8) (hvs : ∀ i (h : i < vs.length), R (10 + i) = vs[i]) (hs : R 2 = s)
+    (hn : n ≤ s.toNat) (hneed : need ≤ n)
+    (hra : (R 1).toNat % 4 = 0)
+    (hP : ∀ r, r.toNat % 4 = 0 → iprop(argsAt vs ∗ X ∗ callFrame s need Newlib.calleeSaved R) ⊢ P r)
+    (hQ : ∀ r, Q r ⊢ iprop(clobbered argRegs ∗ Y ∗ callFrame s need Newlib.calleeSaved R)) :
+    fnSpecW Wp entry P Q ∗ ms entry R S Mt ∗ X ∗ stackScratch s n ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗
+      (PC ↦ᵣ R 1 -∗ ra ↦ᵣ R 1 -∗
+        (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = R x⌝) -∗ Y -∗
+        ownSet S (fun a => a ↦ₘ imgM Mt a) -∗ stackScratch s n -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  unfold ms fnSpecW
+  iintro ⟨#Hspec, ⟨Hpc, Hra, Hregs, HS⟩, HX, Hst, #Hgp, #Himg, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hneed $$ Hst
+  ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib R).1 $$ Hregs
+  ihave Hargs := argsAt_of_regs R vs hlen hvs $$ Hargs
+  ihave Htmp := clobbered_of_fn _ R $$ Htmp
+  rw [hs]
+  iapply Hspec $$ %(R 1) %Φ Hpc Hra [Hargs HX Hsp Hcs Htmp Hst]
+  · iapply (hP (R 1) hra)
+    unfold callFrame
+    iframe Hargs HX Hsp Hcs Hst Hgp Himg Htmp
+  iintro Hpc Hra HQ
+  ihave ⟨Hargs, HY, Hcf⟩ := hQ (R 1) $$ HQ
+  unfold callFrame
+  icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
+  ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
+  · iframe Hslack Hst
+  ihave Hregs := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
+  · iframe Hargs Htmp Hsp Hcs
+  iapply Hk $$ Hpc Hra Hregs HY HS Hst
+
 /-- **A newlib call from a run** (`jal entry` at `i`): the run continues at
 `i + 4` with the callee-saved registers and `sp` kept. -/
 theorem ms_callNewlib (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -210,6 +246,52 @@ theorem ms_callNewlib (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   iframe Hi Hspec Hpc Hra
   isplitl [Hargs HX Hsp Hcs Htmp Hst]
   · iapply hP
+    unfold callFrame
+    iframe Hargs HX Hsp Hcs Hst Hgp Himg Htmp
+  iintro Hpc Hra HQ
+  ihave ⟨Hargs, HY, Hcf⟩ := hQ _ $$ HQ
+  unfold callFrame
+  icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
+  ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
+  · iframe Hslack Hst
+  ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
+  · iframe Hargs Htmp Hsp Hcs
+  iapply Hk $$ %R' %hk HY [Hpc Hra Hregs HS] Hst
+  rw [regFile_upd_ra]
+  simp only [upd_same]
+  iframe Hpc Hra Hregs HS
+
+/-- `ms_callNewlib` whose callee precondition may use the return address's
+alignment. -/
+theorem ms_callNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
+    (hexec : JalExec (vsaModel live) i code entry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    {P Q : BitVec 64 → IProp GF} {vs : List (BitVec 64)} {X Y : IProp GF}
+    {s : BitVec 64} {need n : Nat} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem}
+    (hlen : vs.length ≤ 8) (hvs : ∀ i (h : i < vs.length), R (10 + i) = vs[i]) (hs : R 2 = s)
+    (hn : n ≤ s.toNat) (hneed : need ≤ n)
+    (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    (hP : ∀ r, r.toNat % 4 = 0 → iprop(argsAt vs ∗ X ∗ callFrame s need Newlib.calleeSaved R) ⊢ P r)
+    (hQ : ∀ r, Q r ⊢ iprop(clobbered argRegs ∗ Y ∗ callFrame s need Newlib.calleeSaved R)) :
+    fnSpecW Wp entry P Q ∗ codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ X ∗ stackScratch s n ∗
+      gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗
+      (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ Y -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s n -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  unfold ms
+  iintro ⟨#Hspec, #Hcode, ⟨Hpc, Hra, Hregs, HS⟩, HX, Hst, #Hgp, #Himg, Hk⟩
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hneed $$ Hst
+  ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib R).1 $$ Hregs
+  ihave Hargs := argsAt_of_regs R vs hlen hvs $$ Hargs
+  ihave Htmp := clobbered_of_fn _ R $$ Htmp
+  rw [hs]
+  iapply wp_callW Wp hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hargs HX Hsp Hcs Htmp Hst]
+  · iapply (hP _ hi4)
     unfold callFrame
     iframe Hargs HX Hsp Hcs Hst Hgp Himg Htmp
   iintro Hpc Hra HQ

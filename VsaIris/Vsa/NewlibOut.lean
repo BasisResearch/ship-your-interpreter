@@ -67,7 +67,7 @@ def outSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (entr
     (args : List (BitVec 64)) (R : IProp GF) (s : BitVec 64) (need : Nat) (cs : Nat → BitVec 64)
     (o frag : String) : IProp GF :=
   fnSpecW Wp entry
-    (fun _ => iprop(argsAt args ∗ R ∗ stdioW ∗ consoleOwn o ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt args ∗ R ∗ stdioW ∗ consoleOwn o ∗
       callFrame s need calleeSaved cs))
     (fun _ => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
       callFrame s need calleeSaved cs))

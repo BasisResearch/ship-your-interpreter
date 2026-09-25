@@ -58,7 +58,7 @@ theorem ofNat_zeroExtend8 (c : BitVec 8) :
     nx_addr
   · intro i hi; simp only [List.length_cons, List.length_nil] at hi
     obtain rfl : i = 0 := by omega
-    refine .inl ⟨by simp [outS, stdioFoot, InRange], ?_⟩
+    refine .inl ⟨by simp [outS, stdioFoot, InRange, impureW], ?_⟩
     simp only [List.getElem_cons_zero, Nat.add_zero, BitVec.reduceToNat]
     rw [imgM_sb_hit, ofNat_zeroExtend8]
 

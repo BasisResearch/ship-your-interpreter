@@ -24,10 +24,10 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 /-- The bytes a stdout call owns: newlib's data, `errno`, and `need` bytes
 of stack below `s`. -/
 def outS (s : BitVec 64) (need : Nat) (a : Nat) : Prop :=
-  stdioFoot a ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨ (s.toNat - need ≤ a ∧ a < s.toNat)
+  (stdioFoot a ∧ ¬ impureW a) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨ (s.toNat - need ≤ a ∧ a < s.toNat)
 
 macro_rules
-  | `(tactic| sx_side) => `(tactic| (intro b hb; simp only [mem_accAddrs_iff, outS, stdioFoot, InRange] at *; sx_addr))
+  | `(tactic| sx_side) => `(tactic| (intro b hb; simp only [mem_accAddrs_iff, outS, stdioFoot, InRange, impureW] at *; sx_addr))
 
 /-- Updating the registers `xs` to the values `v`. -/
 def updAll (R : Nat → BitVec 64) (v : Nat → BitVec 64) : List Nat → Nat → BitVec 64
@@ -69,7 +69,7 @@ theorem sext_zero32 : BitVec.signExtend 64 (0#32) = 0#64 := by decide
 syntax "nx_console" : tactic
 macro_rules
   | `(tactic| nx_console) => `(tactic| simp (disch := assumption) only
-      [ConsoleMt.impure, ConsoleMt.sinit, ConsoleMt.stdout, ConsoleMt.p, ConsoleMt.w,
+      [ldv_impDt, ConsoleMt.sinit, ConsoleMt.stdout, ConsoleMt.p, ConsoleMt.w,
        ConsoleMt.flagsU, ConsoleMt.flagsS, ConsoleMt.fd, ConsoleMt.base, ConsoleMt.bsize,
        ConsoleMt.lbf, ConsoleMt.cookie, ConsoleMt.writer, ConsoleMt.lock, ConsoleMt.lockMode])
 
@@ -208,7 +208,7 @@ elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
 
 /-- `nx_addr` for byte-ownership goals: unfold `outS` first. -/
-macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
+macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
 
 macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
 /-- The address-range hypothesis of a byte-set side condition, as arithmetic. -/

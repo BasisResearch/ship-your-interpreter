@@ -485,7 +485,7 @@ theorem outSpec_fn {live : Nat → Prop} {Wp : MachWP (GF := GF) (vsaModel live)
     {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need : Nat} {cs : Nat → BitVec 64}
     {o frag : String} :
     outSpec live Wp entry args Rr s need cs o frag ⊢
-      fnSpecW Wp entry (fun _ => iprop(argsAt args ∗ Rr ∗ stdioW ∗ consoleOwn o ∗
+      fnSpecW Wp entry (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt args ∗ Rr ∗ stdioW ∗ consoleOwn o ∗
           callFrame s need Newlib.calleeSaved cs))
         (fun _ => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
           callFrame s need Newlib.calleeSaved cs)) := .rfl
@@ -501,7 +501,8 @@ theorem ms_callOut (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     {S : Nat → Prop} {Mt : Mem} {o frag : String}
     (hspec : ∀ cs, ⊢ outSpec live Wp entry args Rr s need cs o frag)
     (hlen : args.length ≤ 8) (hvs : ∀ i (h : i < args.length), R (10 + i) = args[i])
-    (hs : R 2 = s) (hn : n ≤ s.toNat) (hneed : need ≤ n) :
+    (hs : R 2 = s) (hn : n ≤ s.toNat) (hneed : need ≤ n)
+    (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0 := by decide) :
     codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ Rr ∗ stdioW ∗ consoleOwn o ∗ stackScratch s n ∗ binImg ∗
       (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ stdioW -∗
         consoleOwn (o ++ frag) -∗ ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
@@ -511,14 +512,14 @@ theorem ms_callOut (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hsp0 := hspec R
   ihave #Hsp := outSpec_fn $$ Hsp0
   ihave #Hgp := codeRes_gp $$ Hcode
-  iapply ms_callNewlib Wp hexec hcode
-    (P := fun _ => iprop(argsAt args ∗ Rr ∗ stdioW ∗ consoleOwn o ∗
+  iapply ms_callNewlibA Wp hexec hcode
+    (P := fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt args ∗ Rr ∗ stdioW ∗ consoleOwn o ∗
       callFrame s need Newlib.calleeSaved R))
     (Q := fun _ => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
       callFrame s need Newlib.calleeSaved R))
     (X := iprop(Rr ∗ stdioW ∗ consoleOwn o))
-    (Y := iprop(stdioW ∗ consoleOwn (o ++ frag))) hlen hvs hs hn hneed
-    (fun r => by iintro ⟨Ha, ⟨Hx, Hs, Hc⟩, Hf⟩; iframe Ha Hx Hs Hc Hf)
+    (Y := iprop(stdioW ∗ consoleOwn (o ++ frag))) hlen hvs hs hn hneed hi4
+    (fun r hr => by iintro ⟨Ha, ⟨Hx, Hs, Hc⟩, Hf⟩; iframe Ha Hx Hs Hc Hf; ipureintro; exact hr)
     (fun r => by iintro ⟨Ha, Hs, Hc, Hf⟩; iframe Ha Hs Hc Hf)
   iframe Hsp Hcode Hms Hst Hgp Himg HR Hstd Hcon
   iintro %R' %hk ⟨Hstd, Hcon⟩ Hms Hst

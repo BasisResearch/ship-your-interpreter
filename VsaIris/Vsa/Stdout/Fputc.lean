@@ -12,17 +12,20 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-#ix_seg fputc_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
+#ix_seg fputc_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s ra : BitVec 64} {need : Nat} {c : BitVec 8}
     (hs1 : s.toNat - need + 512 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
     (hs4 : 0x80100000 ≤ s.toNat - need) (hal : s.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = BitVec.zeroExtend 64 c) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = s)
     (hc : ConsoleMt Mt) :
-    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800062e0#64 R Mt
-  by nx_run hlive using [h1, h10, h11, h2, BitVec.add_assoc] at 2147545288
+    SWPO live (stdioText ++ dataOf impDt (accAddrs 0x8001b970 8)) iRegs (outS s need) Q t 0x800062e0#64 R Mt
+  by nx_run hlive using [h1, h10, h11, h2, BitVec.add_assoc] at 2147542692
 
-#ix_piece fputc_B from fputc_A by
+#ix_piece fputc_A2 from fputc_A by
+  nx_run hlive using [h1, h10, h11, h2, BitVec.add_assoc] at 2147545288
+
+#ix_piece fputc_B from fputc_A2 by
   refine swbuf_run' (sp := s + 18446744073709551536#64) (ra := 0x8000e740#64) (c := c) hlive
     ?_ ?_ hs3 hs4 ?_ (by decide) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ (fun R' M' hR hK hD => ?_)
   all_goals try (nx_norm; done)
@@ -34,11 +37,11 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
   nx_run hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, h1, hD.p, hD.w, hD.flagsU, hD.flagsS,
     BitVec.add_assoc]
 
-#nx_chain fputc_chain := [fputc_A, fputc_B, fputc_C]
+#nx_chain fputc_chain := [fputc_A, fputc_A2, fputc_B, fputc_C]
 
 /-- **`fputc(c, stdout)`** from the boundary state: prints `c`, returns it;
 the memory keeps `outKeep s 512` and ends with `stdout` idle (`OutDone`). -/
-theorem fputc_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
+theorem fputc_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s ra : BitVec 64} {need : Nat} {c : BitVec 8}
     (hs1 : s.toNat - need + 512 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
@@ -46,8 +49,8 @@ theorem fputc_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) 
     (h1 : R 1 = ra) (h10 : R 10 = BitVec.zeroExtend 64 c) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = s)
     (hc : ConsoleMt Mt)
     (hk : ∀ R' M', RetOK R R' (BitVec.zeroExtend 64 c &&& 255#64) → MemKeep Mt M' (outKeep s 512) →
-      OutDone M' c → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs [c]) ra R' M') :
-    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800062e0#64 R Mt := by
+      OutDone M' c → SWPO live (stdioText ++ dataOf impDt (accAddrs 0x8001b970 8)) iRegs (outS s need) Q (t ++ putcs [c]) ra R' M') :
+    SWPO live (stdioText ++ dataOf impDt (accAddrs 0x8001b970 8)) iRegs (outS s need) Q t 0x800062e0#64 R Mt := by
   refine fputc_chain hlive hs1 hs3 hs4 hal hra h1 h10 h11 h2 hc ?_
   intros
   have hK : MemKeep _ _ _ := ‹MemKeep _ _ _›
