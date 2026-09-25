@@ -2,6 +2,8 @@ import VsaIris.Interp.TopRun
 import VsaIris.Interp.ExecArm
 import VsaIris.Interp.SpecErr
 import VsaIris.Vsa.TopAbrupt
+import VsaIris.Interp.ProofValueCons
+import VsaIris.Interp.LeafErr
 
 /-!
 # `interp_run`'s whole run, partial mode (lane A, INTERP_DESIGN.md §4.4, §5.3)
@@ -61,54 +63,47 @@ structure TopFrameP (Mt : Mem) : Prop where
   ra : ldv .ld Mt (sFr + 168#64).toNat = 0x800045ec#64
   s0 : ldv .ld Mt (sFr + 160#64).toNat = 0x8001b970#64
 
-/-- A top-level status block's two runs (`0x80004540`/`0x80004564`): the
-staging of `snprintf(in->err_msg, 256, fmt, s->line)` up to its `jal`
-(`line` read by havoc), and `li s5,1; j` into the epilogue, up to `ret`. -/
-structure TopAbrSite (live : Nat → Prop) (head jal : Nat) (jcode : List (BitVec 8))
-    (fmt : BitVec 64) : Prop where
+/-- A top-level status block's two runs (`TopSite`'s `head`, its `jal`):
+the staging of `snprintf(in->err_msg, 256, fmt, s->line)` up to the `jal`
+(`line` read by havoc: the statement node's representation does not cover
+the word, `s1` is only known to be a node, `ReadOK`), and `li s5,1; j` into
+the epilogue, up to `ret`. -/
+structure TopRuns (live : Nat → Prop) (T : TopSite) : Prop where
   stage : ∀ {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {R : Nat → BitVec 64},
     R 2 = sFr → ldv .ld Mt (sTop.toNat - 176) = BitVec.ofNat 64 inpTop → LdOK (R 9 + 4#64).toNat 4 →
     (∀ R' : Nat → BitVec 64, R' 2 = sFr → R' 10 = BitVec.ofNat 64 inpTop + 224#64 →
-      R' 11 = 256#64 → R' 12 = fmt → (∀ x ∈ Newlib.calleeSaved, R' x = R x) →
-      IW live ∅ [] (interpS sTop) Q (BitVec.ofNat 64 jal) R' Mt) →
-    IW live ∅ [] (interpS sTop) Q (BitVec.ofNat 64 head) R Mt
+      R' 11 = 256#64 → R' 12 = T.fmt → (∀ x ∈ Newlib.calleeSaved, R' x = R x) →
+      IW live ∅ [] (interpS sTop) Q (BitVec.ofNat 64 T.jal.pc) R' Mt) →
+    IW live ∅ [] (interpS sTop) Q (BitVec.ofNat 64 T.head) R Mt
   tail : ∀ {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {R : Nat → BitVec 64},
     R 2 = sFr → ldv .ld Mt (sFr + 168#64).toNat = 0x800045ec#64 →
     (∀ R' : Nat → BitVec 64, R' 10 = 1#64 → R' 1 = 0x800045ec#64 → R' 2 = sTop →
       R' 8 = ldv .ld Mt (sFr + 160#64).toNat →
       IW live ∅ [] (interpS sTop) Q 0x800045ec#64 R' Mt) →
-    IW live ∅ [] (interpS sTop) Q (BitVec.ofNat 64 (jal + 4)) R Mt
-  exec : JalExec (vsaModel live) jal jcode snprintfEntry
-  code : ∀ p ∈ codeFoot jal jcode, (p.1, p.2.2) ∈ interpText
-  fmtOK : ∀ lv, FmtArgsOK (fun a => rodataDom a ∨ False) rodataByte fmt [lv]
+    IW live ∅ [] (interpS sTop) Q (BitVec.ofNat 64 (T.jal.pc + 4)) R Mt
+  code : ∀ p ∈ codeFoot T.jal.pc T.jal.code, (p.1, p.2.2) ∈ interpText
 
 theorem calleeSaved_ne {x : Nat} (hx : x ∈ Newlib.calleeSaved) :
     x ≠ 10 ∧ x ≠ 11 ∧ x ≠ 12 ∧ x ≠ 13 ∧ x ≠ 15 := by
   revert x; decide
 
-theorem topAbrRet_site (hlive : ∀ p ∈ interpText, live p.1) :
-    TopAbrSite live 0x80004540 0x80004558 [0xef#8, 0x10#8, 0xc0#8, 0x6e#8] 0x80019550#64 where
+theorem topRet_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topRet where
   stage h2 hin hl k := TopAbrRet_run hlive h2 hin hl (fun v => k _ (by ix_reg; exact h2) (by ix_reg)
     (by ix_reg) (by ix_reg) (fun x hx => by
       obtain ⟨h1, h2, h3, h4, h5⟩ := calleeSaved_ne hx
       simp only [upd_apply, h1, h2, h3, h4, h5, ite_false]))
   tail h2 hra k := TopTlRet_run hlive h2 hra (k _ (by ix_reg) (by ix_reg) (by ix_reg; decide)
     (by ix_reg))
-  exec := jalx_80004558 live (fun p hp => hlive _ (interp_code_80004558 p hp))
   code := interp_code_80004558
-  fmtOK lv := fmt_ok topRet_ok lv
 
-theorem topAbrBrk_site (hlive : ∀ p ∈ interpText, live p.1) :
-    TopAbrSite live 0x80004564 0x8000457c [0xef#8, 0x10#8, 0x80#8, 0x6c#8] 0x80019588#64 where
+theorem topBrk_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topBrk where
   stage h2 hin hl k := TopAbrBrk_run hlive h2 hin hl (fun v => k _ (by ix_reg; exact h2) (by ix_reg)
     (by ix_reg) (by ix_reg) (fun x hx => by
       obtain ⟨h1, h2, h3, h4, h5⟩ := calleeSaved_ne hx
       simp only [upd_apply, h1, h2, h3, h4, h5, ite_false]))
   tail h2 hra k := TopTlBrk_run hlive h2 hra (k _ (by ix_reg) (by ix_reg) (by ix_reg; decide)
     (by ix_reg))
-  exec := jalx_8000457c live (fun p hp => hlive _ (interp_code_8000457c p hp))
   code := interp_code_8000457c
-  fmtOK lv := fmt_ok topBrk_ok lv
 
 theorem ldOK_of_readOK {q : BitVec 64} (h : ReadOK q.toNat) : LdOK (q + 4#64).toNat 4 := by
   have h1 := h.lo; have h2 := h.win.1; have h3 := h.win.2
@@ -121,19 +116,19 @@ theorem sFr_eq : sFr = sTop - 176#64 := by decide
 theorem topErr_toNat : (BitVec.ofNat 64 inpTop + 224#64).toNat = sTop.toNat + 496 := by decide
 
 /-- **A top-level `return`/`break`/`continue`, then `exit(70)`**, for either
-WP, from `interp_run`'s loop exit `head` (`0x80004540`/`0x80004564`): the run
-stages `snprintf(in->err_msg, 256, fmt, s->line)` (the `line` word read by
-havoc: `s1 = R 9` is a statement node, `ReadOK`), formats, returns 1, and
+WP, from `interp_run`'s loop exit `T.head` (`topRet`: `0x80004540`,
+`topBrk`: `0x80004564`): the run stages `snprintf(in->err_msg, 256, fmt,
+s->line)` (the `line` word read by havoc: `s1 = R 9` is a statement node,
+`ReadOK`), formats (`T.OK`: the `jal` and the format), returns 1, and
 `main`'s error line exits 70. -/
-theorem wp_topAbrH (H : NewlibHoles) (hcl : CodeLive live)
+theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    {head jal : Nat} {jcode : List (BitVec 8)} {fmt : BitVec 64}
-    (hS : TopAbrSite live head jal jcode fmt) (hΦ : ∀ o, ⊢ Φ (70, o))
+    {T : TopSite} (hok : T.OK) (hS : TopRuns live T) (hΦ : ∀ o, ⊢ Φ (70, o))
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {ρ : Regime} {st : St} {d : Nat}
     {R : Nat → BitVec 64} {Mt : Mem} {imgT : Nat → BitVec 8}
     (h2 : R 2 = sFr) (hs1 : ReadOK (R 9).toNat) (hf : TopFrameP Mt)
     (hT : imgW imgT (sTop.toNat + 760) = 0x80000038#64) :
-    codeRes ∗ ms (BitVec.ofNat 64 head) R (interpS sTop) Mt ∗ slot24 (sFr + 88#64).toNat ∗
+    codeRes ∗ ms (BitVec.ofNat 64 T.head) R (interpS sTop) Mt ∗ slot24 (sFr + 88#64).toNat ∗
       stackScratch sFr (sFr.toNat - stackSL.lo) ∗ world N L Room inpTop ρ st d ∗
       ownImg (InExt (sTop.toNat + 752, 16)) imgT
     ⊢ Wp.W Φ := by
@@ -155,17 +150,20 @@ theorem wp_topAbrH (H : NewlibHoles) (hcl : CodeLive live)
   iintro ⟨⟨Hslot, Hst, Herr, Hstd, Hcon, HT, #Hcode, #Hgp, #Himg⟩, Hms⟩
   -- `snprintf(in->err_msg, 256, fmt, line)`
   have hsp1 : SpIn sFr snprintfNeed := ⟨by decide, by decide, by decide⟩
-  have hsn := H.at.snprintf live Wp sFr (BitVec.ofNat 64 inpTop + 224#64) 256#64 fmt [R1 13] R1
+  have hsn := H.at.snprintf live Wp sFr (BitVec.ofNat 64 inpTop + 224#64) 256#64 T.fmt [R1 13] R1
     rodataDom (fun _ => False)
-    rodataByte hcl (by simp) (by decide) (by decide) (hS.fmtOK _) hsp1
+    rodataByte hcl (by simp) (by decide) (by decide) (fmt_ok hok _) hsp1
   unfold snprintfSpec at hsn
   ihave #Hsn := hsn
-  iapply ms_callNewlib Wp hS.exec hS.code (vs := [BitVec.ofNat 64 inpTop + 224#64, 256#64, fmt, R1 13])
+  have hj : JalExec (vsaModel live) T.jal.pc T.jal.code snprintfEntry := by
+    have := JalSite.exec hok.jalCert live (hok.jalText.live hcl)
+    rwa [hok.jalTgt] at this
+  iapply ms_callNewlib Wp hj hS.code (vs := [BitVec.ofNat 64 inpTop + 224#64, 256#64, T.fmt, R1 13])
     (X := iprop(blockOwn (sTop.toNat + 496) 256 ∗ readable rodataDom (fun _ => False) rodataByte ∗
       Stdio.stdioOwn))
     (Y := iprop(cstrBuf (sTop.toNat + 496) 256 ∗ readable rodataDom (fun _ => False) rodataByte ∗
       Stdio.stdioOwn))
-    (P := fun _ => iprop(argsAt ([BitVec.ofNat 64 inpTop + 224#64, 256#64, fmt] ++ [R1 13]) ∗
+    (P := fun _ => iprop(argsAt ([BitVec.ofNat 64 inpTop + 224#64, 256#64, T.fmt] ++ [R1 13]) ∗
       blockOwn (BitVec.ofNat 64 inpTop + 224#64).toNat (256#64 : BitVec 64).toNat ∗
       readable rodataDom (fun _ => False) rodataByte ∗ Stdio.stdioOwn ∗
       callFrame sFr snprintfNeed Newlib.calleeSaved R1))
@@ -198,7 +196,7 @@ theorem wp_topAbrH (H : NewlibHoles) (hcl : CodeLive live)
     · iapply Oom.ownSet_none
   iintro %R2 %hk2 ⟨Herr, -, Hstd⟩ Hms Hst
   -- `li s5,1; j`, the epilogue, `ret` to `main`
-  have e2' : upd R2 1 (BitVec.ofNat 64 (jal + 4)) 2 = sFr := by
+  have e2' : upd R2 1 (BitVec.ofNat 64 (T.jal.pc + 4)) 2 = sFr := by
     rw [upd_other _ _ (by decide), hk2 2 (by decide) (by decide), e2]
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
     (F := iprop(slot24 (sFr + 88#64).toNat ∗ stackScratch sFr (sFr.toNat - stackSL.lo) ∗
@@ -341,61 +339,12 @@ theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := 
 
 end Abort
 
-/-! ## The loop motive the partial run needs -/
-
-section Motive
-
-open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-
-/-- **The `interp_run` loop, partial mode, as `interp_run`'s ends need it.**
-`SeqLoopInterp.interpSeqP_body` with two more facts about the same run:
-
-* at a non-normal exit (`ret`/`brk`/`cont`, the error blocks at
-  `0x80004540`/`0x80004564`, which load `s1->line`), `s1 = R' 9` is still the
-  statement node `exec_stmt` ran (`s1` is callee-saved; the node satisfies
-  `ReadOK` through `InterpData.geo`), so the `line` word is a load inside RAM;
-* the abort branch hands the frame back at the loop's tracking memory `Mt`
-  (the loop never writes it) instead of at any bytes: the `longjmp` landing
-  reloads `in`, the link and `main`'s `s0` from it.
-
-Supplier: the loop's cases (`SeqLoopInterp.interpSeqP_cons`), where both facts
-are at hand (`hsp` gives the node, `F'` keeps `ms … Mt`). -/
-def interpSeqPX_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
-    (inp : Nat) (Core : IProp GF) (d genv : Nat) (ss : List Vsa.While.Stmt) : Prop :=
-  ∀ (Φ : Nat × String → IProp GF) (st : St) (idx count : Nat) (s arr g : BitVec 64)
-    (R : Nat → BitVec 64) (Mt Dt m : Mem) (P : Nat → Prop) (all : List Vsa.While.Stmt) (m' : Nat)
-    (F : IProp GF),
-    ss ≠ [] → ss = all.drop idx → InterpData Dt m P arr count inp g all →
-    InterpHead R s arr idx count → ExecFrameGeom s → InterpFrame Mt s inp →
-    StackGeom (s + 18446744073709551440#64) m' →
-    (∀ x ∈ all, execNeed x d ≤ m' ∧ x.bodiesBound perCallBudget = true) →
-    SlotGeom (s + 18446744073709551440#64 + 88#64) →
-    (F ∗ ms 0x8000448c#64 R (interpS s) Mt ∗ codeRes ∗ roOn P m ∗
-      roOwn roR (interpText ++ dataOf Dt (interpView arr.toNat count inp)) ∗ □ frameAt genv g.toNat ∗
-      stackScratch (s + 18446744073709551440#64) m' ∗
-      slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗ world N L Room inp .uncounted st d ∗
-      execSpecsP (vsaModel live) N L Room inp Core ∗
-      ((∀ (R' : Nat → BitVec 64) (st' : St) (status : Status),
-        ⌜ExecSeq st d genv ss st' status⌝ -∗
-        ⌜KeepRegs interpKeep R R' ∧ (status ≠ .normal → ReadOK (R' 9).toNat)⌝ -∗ F -∗
-        ms (interpExit status) R' (interpS s) Mt -∗ stackScratch (s + 18446744073709551440#64) m' -∗
-        statusRet N (s + 18446744073709551440#64 + 88#64).toNat status -∗
-        world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ) ∧
-       (iprop(abortAt Core (s + 18446744073709551440#64) m' ∗
-          slot24 (s + 18446744073709551440#64 + 88#64).toNat ∗
-          ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)) -∗
-          (wpW (vsaModel live)).W Φ))
-      ⊢ (wpW (vsaModel live)).W Φ)
-
-end Motive
-
 /-! ## `interp_run`'s whole run, partial mode -/
 
 section Run
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris.Newlib
-  Vsa.RuntimeRepr Vsa.Sim.LayoutInstance VsaIris.VsaHeap
+  Vsa.RuntimeRepr Vsa.Sim.LayoutInstance VsaIris.VsaHeap VsaIris.Newlib.TopAbrupt
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
@@ -411,25 +360,35 @@ theorem errCtx_of_jb {jb : Nat → BitVec 8} (hjb : JbTop jb sFr) :
   iframe Hj
   ipureintro; rw [hjb.ra]; decide
 
+/-- The landing core of the partial specs is the top's abort core: the stack
+segment below `interp_run`'s frame. -/
+theorem evalCore_top (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) :
+    evalCore (GF := GF) N L Room inpTop ⊢ abortCore N L Room inpTop sFr (sFr.toNat - stackSL.lo) := by
+  unfold evalCore
+  rw [show runSp = sFr from by decide]
+  exact .rfl
+
 /-- **`interp_run`'s whole run, partial mode** (INTERP_DESIGN.md §4.4, §5.3):
 from `interp_run`'s entry (`topPre` uncounted, `main`'s `s0` at
-`&_impure_ptr`), the loop motive (`interpSeqPX_body`), the partial statement
-specs under the error context `setjmp` establishes, and an abort core over
-the stack below `interp_run`'s frame (`hcore`): every halt is either code 0
-after a normal completion of the program (`hΦ0`, with its `ExecSeq`) or a
-nonzero code (`hΦe`: `exit(70)` after a top-level `return`/`break`/
-`continue` or a runtime error, `exit(1)` out of memory). -/
+`&_impure_ptr`) and the partial statement specs under the error context
+`setjmp` establishes, at the landing core `evalCore` (the stack below
+`interp_run`'s frame): every halt is either code 0 after a normal completion
+of the program (`hΦ0`, with its `ExecSeq`) or a nonzero code (`hΦe`:
+`exit(70)` after a top-level `return`/`break`/`continue` or a runtime error,
+`exit(1)` out of memory). The loop is `SeqLoopInterp.interpSeqP_all`. -/
 theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1)
-    (hcl : CodeLive live) {Core : IProp GF} {N : NativeAddrs} {m : Mem} {P : Nat → Prop}
+    (hcl : CodeLive live) {N : NativeAddrs} {m : Mem} {P : Nat → Prop}
     {stmts count : Nat} {p : Program} {g : Nat} {R0 : Nat → BitVec 64}
     {Φ : Nat × String → IProp GF} (hE : TopEntry m P stmts count p g R0)
     (hs0 : R0 8 = 0x8001b970#64)
-    (hloop : interpSeqPX_body (GF := GF) live N vsaLayoutP vsaRoomB inpTop Core 0 0 p)
-    (hspecs : errCtx (GF := GF) inpTop ⊢ execSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inpTop Core)
-    (hcore : Core ⊢ abortCore N vsaLayoutP vsaRoomB inpTop sFr (sFr.toNat - stackSL.lo))
+    (hspecs : errCtx (GF := GF) inpTop ⊢
+      execSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inpTop (evalCore N vsaLayoutP vsaRoomB inpTop))
     (hΦ0 : ∀ st', ExecSeq initSt 0 0 p st' .normal → ⊢ Φ (0, st'.out))
     (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) :
     topPre (GF := GF) N .uncounted m P g R0 ⊢ (wpW (GF := GF) (vsaModel live)).W Φ := by
+  have hloop := interpSeqP_all (GF := GF) hlive (N := N)
+    (by iintro %q; iapply valueNull_spec hlive (wpW (GF := GF) (vsaModel live)) N q)
+    vsaLayoutP vsaRoomB inpTop (evalCore N vsaLayoutP vsaRoomB inpTop) 0 0 p
   iapply wp_topPrologue H hlive hcl (wpW (GF := GF) (vsaModel live)) hE ?_ ?_
   · intro h0
     have hp : p = [] := List.eq_nil_of_length_eq_zero ((topCount hE).trans h0)
@@ -469,43 +428,50 @@ theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live 
         rw [interpExit_ret]
         simp only [statusRet]
         ihave Hret := valAt_slot $$ Hret
-        iapply wp_topAbrH H hcl (wpW (GF := GF) (vsaModel live)) (topAbrRet_site hlive)
+        iapply wp_topAbrupt H hcl (wpW (GF := GF) (vsaModel live)) topRet_ok (topRet_runs hlive)
           (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
       | brk =>
         rw [interpExit_brk]
         simp only [statusRet]
-        iapply wp_topAbrH H hcl (wpW (GF := GF) (vsaModel live)) (topAbrBrk_site hlive)
+        iapply wp_topAbrupt H hcl (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
           (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
       | cont =>
         rw [interpExit_cont]
         simp only [statusRet]
-        iapply wp_topAbrH H hcl (wpW (GF := GF) (vsaModel live)) (topAbrBrk_site hlive)
+        iapply wp_topAbrupt H hcl (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
           (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
     · -- an abort
       iintro ⟨HA, Hslot, HS⟩
-      iapply wp_topAbort H hcl (wpW (GF := GF) (vsaModel live)) hΦe hcore hfp hjb hT
+      iapply wp_topAbort H hcl (wpW (GF := GF) (vsaModel live)) hΦe (evalCore_top N vsaLayoutP vsaRoomB)
+        hfp hjb hT
       iframe HA Hslot HS Hjb HT Hgp Himg
 
 /-- **`interp_run`'s whole run from the boundary, partial mode**: `bootRes`
 uncounted, the entry registers (`main`'s `s0` at `&_impure_ptr`) and the
 code. -/
 theorem interpRun_partial_boot (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1)
-    (hcl : CodeLive live) {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) {Core : IProp GF}
+    (hcl : CodeLive live) {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
     {R0 : Nat → BitVec 64} (hR : TopRegs R0 b.stmts b.count) (hs0 : R0 8 = 0x8001b970#64)
     {Φ : Nat × String → IProp GF}
-    (hloop : interpSeqPX_body (GF := GF) live b.N vsaLayoutP vsaRoomB inpTop Core 0 0 p)
-    (hspecs : errCtx (GF := GF) inpTop ⊢ execSpecsP (vsaModel live) b.N vsaLayoutP vsaRoomB inpTop Core)
-    (hcore : Core ⊢ abortCore b.N vsaLayoutP vsaRoomB inpTop sFr (sFr.toNat - stackSL.lo))
+    (hspecs : errCtx (GF := GF) inpTop ⊢
+      execSpecsP (vsaModel live) b.N vsaLayoutP vsaRoomB inpTop (evalCore b.N vsaLayoutP vsaRoomB inpTop))
     (hΦ0 : ∀ st', ExecSeq initSt 0 0 p st' .normal → ⊢ Φ (0, st'.out))
     (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) :
     bootRes b .uncounted ∗ PC ↦ᵣ 0x800043ec#64 ∗ ra ↦ᵣ 0x800045ec#64 ∗ regFile R0 ∗ codeRes ⊢
       (wpW (GF := GF) (vsaModel live)).W Φ :=
   (topPre_of_bootRes b _ R0).trans
-    (interpRun_partial H hlive hcl (topEntry_of_boot b hR) hs0 hloop hspecs hcore hΦ0 hΦe)
+    (interpRun_partial H hlive hcl (topEntry_of_boot b hR) hs0 hspecs hΦ0 hΦe)
 
 end Run
 
 end VsaIris.Interp
+
+#print axioms VsaIris.Interp.wp_topAbrupt
+#print axioms VsaIris.Interp.topRet_runs
+#print axioms VsaIris.Interp.topBrk_runs
+#print axioms VsaIris.Interp.evalCore_top
+#print axioms VsaIris.Interp.interpRun_partial
+#print axioms VsaIris.Interp.interpRun_partial_boot

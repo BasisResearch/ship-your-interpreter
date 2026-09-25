@@ -24,8 +24,9 @@ What the call needs beyond `evalPre`, named:
   the Löb hypothesis.
 * `ErrRoom e d`: `runtime_error`'s stack below the arm's frame. It holds at
   every depth (`errRoom`): the budget's `helperHeadroom` (Q7) pays for it.
-* `evalCore`: the landing core over the whole stack segment, the one `Core`
-  every nested abort widens to (`abortCore_mono`), so the partial cases with
+* `evalCore`: the landing core over the stack segment below `interp_run`'s
+  frame (`runSp`), the one `Core` every nested abort widens to
+  (`abortCore_mono`, every site's `StackGeom.top`), so the partial cases with
   error arms are stated at `Core := evalCore`.
 -/
 
@@ -79,17 +80,16 @@ theorem leafErrCtx_of_errCtx {inp : Nat} (hg : RtErr.InpGeom (BitVec.ofNat 64 in
 
 variable (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
 
-/-- The landing core over the whole stack segment `[0x87800000, 0x88000000)`. -/
-def evalCore : IProp GF := abortCore N L Room inp 0x88000000#64 0x800000
+/-- The landing core over the stack segment below `interp_run`'s frame,
+`[0x87800000, runSp)` (the bytes above belong to `interp_run` and `main`). -/
+def evalCore : IProp GF := abortCore N L Room inp runSp (runSp.toNat - 0x87800000)
 
-/-- Every site inside the stack segment widens its core to `evalCore`. -/
+/-- Every site inside the stack segment at or below `interp_run`'s frame
+widens its core to `evalCore`. -/
 theorem evalCore_of {s : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hlo : 0x87800000 ≤ s.toNat - n)
-    (hhi : s.toNat ≤ 0x88000000) :
-    abortCore N L Room inp s n ⊢ evalCore (GF := GF) N L Room inp := by
-  unfold evalCore
-  exact abortCore_mono N L Room inp (by decide) (by unfold Vsa.Sim.tohostAddr; decide)
-    (by simp only [BitVec.toNat_ofNat]; omega) (by simp only [BitVec.toNat_ofNat]; omega)
-    (by decide)
+    (hhi : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame) :
+    abortCore N L Room inp s n ⊢ evalCore (GF := GF) N L Room inp :=
+  coreOK_top N L Room inp s n hn hlo hhi
 
 end Res
 
@@ -231,7 +231,8 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     icases HA with ⟨Hcore, Hst⟩
     ihave Hcore := evalCore_of N L Room inp (s := evalSP s) (n := RtErr.rtErrNeed)
       (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega)
-      (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega) (by have := hsf; omega) $$ Hcore
+      (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega) (by have := hsf; have := hsg.top; omega)
+      $$ Hcore
     ihave Hst := stackScratch_widen (m := RtErr.rtErrNeed) hn1088
       (by unfold RtErr.rtErrNeed snprintfNeed; omega) $$ [Hslack Hst]
     · iframe Hslack Hst
@@ -290,7 +291,7 @@ theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   iintro HA
   unfold abortRes abortAt
   icases HA with ⟨Hcore, Hst⟩
-  ihave Hcore := evalCore_of N L Room inp (s := s) (n := n) hs1 (by omega) hs3 $$ Hcore
+  ihave Hcore := evalCore_of N L Room inp (s := s) (n := n) hs1 (by omega) hsg.top $$ Hcore
   iapply Hk
   iframe Hcore Hst Hsl
 

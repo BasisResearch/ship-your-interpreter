@@ -88,8 +88,9 @@ theorem CallSaved.slotWrite {Mt : Mem} {s ret v8 v9 v18 : BitVec 64}
 theorem stackGeom_evalSP {s : BitVec 64} {n : Nat} (hsg : StackGeom s n) (h : 1088 ≤ n)
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088) :
     StackGeom (s + 18446744073709550528#64) (n - 1088) := by
-  have h1 := hsg.le; have h2 := hsg.lo; have h3 := hsg.hi; have h4 := hsg.al
-  refine ⟨by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega⟩
+  have h1 := hsg.le; have h2 := hsg.lo; have h3 := hsg.hi; have h4 := hsg.al; have h5 := hsg.top
+  refine ⟨by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega,
+    by rw [hsf]; omega⟩
 
 /-- `CallAt` from the state before the argument loop (`Mt2`, the loop's
 entry memory) and the loop's frame fact. -/

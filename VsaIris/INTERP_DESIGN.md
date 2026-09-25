@@ -23,6 +23,48 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
 
+## STATEMENT CHANGE (lane A): the landing core stops at `interp_run`'s frame
+
+`StackGeom s n` (`SpecEval.lean`) gains `top : s.toNat ≤ spEntry - interpRunFrame`:
+every `eval_expr`/`exec_stmt` site (and every helper whose `stackAt` carries
+`StackGeom`) runs at or below `interp_run`'s lowered `sp`. `CoreOK`
+(`SpecErr.lean`) widens only regions with `sc.toNat ≤ spEntry - interpRunFrame`,
+and `evalCore := abortCore N L Room inp runSp (runSp.toNat - 0x87800000)`
+(`LeafErr.lean`; `runSp = BitVec.ofNat 64 (spEntry - interpRunFrame)`), no longer
+the whole segment.
+
+- **Why.** H5's `wp_abort` accepts `abortRes … (sM - 176) n` only: an
+  out-of-memory `exit` over the whole segment could run on bytes the top owns
+  (`struct Interp`, `main`'s frame).
+- **Producers.** The top's `topStackGeom`; children derive `top` from the
+  parent (`narrow`, `lower`, `lowerE`, `evalCallGeom`, `callGeomF`,
+  `stackGeom_evalSP`); the helper contexts (`SgCtx`, `NpCtx`, `NplCtx`,
+  `NaCtx`) carry it from their entry `StackGeom`.
+- **Consequence.** `TopRunP.evalCore_top`: the partial specs' core is the top's
+  abort core; `interpRun_partial` has no `hcore` premise.
+
+## STATEMENT CHANGE (lane A): the `interp_run` loop keeps the node and the frame image
+
+`interpSeqP_body` (`SeqLoopInterp.lean`) now returns, at a `ret`/`brk`/`cont`
+exit, `ReadOK (R' 9).toNat` (`s1` is still the statement node, `ReadOK` from
+`InterpData.geo` at the node's tag), and its abort branch hands the frame back
+as `ownSet (interpS s) (fun a => a ↦ₘ imgM Mt a)` instead of `byteAny` (the
+`longjmp` landing reloads `in`, the link and `main`'s `s0` from it). The abort
+image comes from `Arm.ms_callExecPM` (the exec call threading one continuation
+`K` whose abort branch takes the frame at `Mt`); `ms_callExecP` is its
+instance. `interpRun_partial` uses `interpSeqP_all` directly (the former
+premise `interpSeqPX_body` is gone).
+
+## STATEMENT CHANGE (lane A): one rule for the top-level abrupt statuses
+
+H5's `TopAbrupt.wp_topAbrupt` (the `line` word as `roImg`, which no AST
+representation supplies: the statement's `+4` word is not in its read set) and
+lane A's `wp_topAbrH` are folded into `Interp.wp_topAbrupt` (`TopRunP.lean`),
+over H5's descriptor `TopSite` (now `head`, `fmt`, `fmtBytes`, `jal`) and
+certificates `topRet_ok`/`topBrk_ok` (`jal` and format facts), with the
+staging and tail as `interp_run`'s symbolic runs (`TopRuns`, `line` read by
+havoc from a `ReadOK` node).
+
 ## STATEMENT CHANGE (lane A): closure geometry in `closOwn`
 
 `closOwn ca cd` (`Repr.lean`) carries `ClosObj img p q e` (nonnull, the

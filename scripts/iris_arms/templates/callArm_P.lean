@@ -151,7 +151,7 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
           (by rw [hsf]; have := hsg.le; unfold nativeAssertNeed Newlib.RtErr.rtErrNeed Newlib.snprintfNeed; omega)
           (by rw [hsf]; have := hsg.lo; have := hsg.le; unfold Vsa.Sim.LayoutInstance.stackSL at *
               simp only at *; unfold nativeAssertNeed Newlib.RtErr.rtErrNeed Newlib.snprintfNeed; omega)
-          (by rw [hsf]; have := hsg.hi; unfold Vsa.Sim.LayoutInstance.stackSL at *; simp only at *; omega)
+          (by rw [hsf]; have := hsg.top; omega)
           $$ Hcore
         ihave Hk := and_elim_r $$ Hk
         iapply Hk

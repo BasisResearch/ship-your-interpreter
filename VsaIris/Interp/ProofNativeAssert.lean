@@ -500,6 +500,7 @@ structure NaCtx (live : Nat → Prop) (sret inp args s line r : BitVec 64) (n : 
   hs1 : 0x87800000 + nativeAssertNeed ≤ s.toNat
   hs2 : s.toNat ≤ 0x88000000
   hs3 : s.toNat % 16 = 0
+  hs4 : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame
   hg : SlotGeom sret
   ha : ArgsGeom args n
   hn : n < 2 ^ 31
@@ -858,7 +859,7 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     ipureintro
     exact ⟨by unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega,
-      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+      by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, c.hs4⟩
 
 /-- **Falsy, one argument**: `runtime_error(in, line, "%s", "assertion failed", 0)`. -/
 theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -1064,7 +1065,8 @@ theorem nativeAssert_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
   ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [HF HA]
   · iframe HF HA
   have c : NaCtx live sret inp args s line r vs.length rv jb :=
-    ⟨hlive, hal, h10, h11, h12, h13, h14, h2, hs0, hs3, hs4, hg, ha, hn, hinp, hjb, hdfa⟩
+    ⟨hlive, hal, h10, h11, h12, h13, h14, h2, hs0, hs3, hs4, hsg.top, hg, ha, hn, hinp, hjb,
+      hdfa⟩
   have hms : ms (GF := GF) nativeAssertPC (upd rv 1 r) (npF s args vs.length) M =
       iprop(PC ↦ᵣ nativeAssertPC ∗ ra ↦ᵣ r ∗ regFile rv ∗
         ownSet (fun a => InExt (s.toNat - 80, 80) a ∨ InExt (args.toNat, 24 * vs.length) a)

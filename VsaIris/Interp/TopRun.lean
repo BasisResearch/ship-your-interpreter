@@ -677,7 +677,7 @@ theorem topData {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} {
 theorem topFrameGeom : ExecFrameGeom sTop := ⟨by decide, by decide, by decide, by decide⟩
 
 theorem topStackGeom : StackGeom sFr (sFr.toNat - stackSL.lo) :=
-  ⟨by decide, by decide, by decide, by decide⟩
+  ⟨by decide, by decide, by decide, by decide, by decide⟩
 
 theorem topSlotGeom : SlotGeom (sFr + 88#64) := ⟨by decide, by decide, by decide⟩
 

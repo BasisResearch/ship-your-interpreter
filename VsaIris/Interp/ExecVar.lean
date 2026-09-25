@@ -393,7 +393,7 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     ihave ⟨HC, Hst⟩ := abortAt_elim _ _ _ $$ HA
     ihave HC := hcore (R2 2) (execNeed (.varDecl x eo) d - 176) (by rw [h22]; exact hle')
       (by rw [h22, hfg.sf]; have := hsg.lo; simp only [Vsa.Sim.LayoutInstance.stackSL] at this; omega)
-      (by rw [h22, hfg.sf]; have := hfg.hi; omega) $$ HC
+      (by rw [h22, hfg.sf]; have := hsg.top; omega) $$ HC
     iapply abortAt_intro
     iframe HC
     ihave Hval := valAt_slot $$ Hval
