@@ -13,7 +13,8 @@ Merged
 - **`newlib.fprintf`**: statement narrowed to `main`'s only call (INTERP_DESIGN N3), consumers
   rewired (errno lent from the dropped world). Run pieces proved: `vfpEntry_run` (shared with N5),
   `vfpErr_run` (stderr setup via `swsetupErr_run`), `sprintErr_run` (the unbuffered
-  one-piece flush; `_vfprintf_r` flushes after each conversion and at the end), `LRO.promote` (owned string through the data view). Waiting on N5's
+  one-piece flush; `_vfprintf_r` flushes after each conversion and at the end), `sprintErr_hook` +
+  `SprintPost.printRet` (N5's `vfp_printH` hook for stderr, empty piece included), `LRO.promote` (owned string through the data view). Waiting on N5's
   format-loop pieces (`vfp_head` landed; `%s` with a strlen hook and the end next), then the
   fprintf prologue/epilogue glue and the Iris wrapper.
 
