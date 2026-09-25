@@ -3,6 +3,7 @@ import VsaIris.Interp.CallMalloc
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Vsa.OomSites
+import VsaIris.Vsa.SnpHoles
 import VsaIris.Vsa.ErrnoOwn
 
 /-!
@@ -1534,7 +1535,7 @@ theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
         (by ix_reg) (by ix_reg) (fB _ (by ix_reg) (by ix_reg) (fun y h1 h2 h9 h10 h11 h14 h15 => by
           simp [upd, h1, h2, h9, h10, h11, h14, h15]))
 
-/-- **An integer**: `snprintf(buf, 64, "%lld", i)` (`IrisHoles.out.snprintfInt`),
+/-- **An integer**: `snprintf(buf, 64, "%lld", i)` (`Sym.snprintfInt_out`),
 then the shared tail. -/
 theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
@@ -1601,18 +1602,18 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hsg' : SpIn (s + 18446744073709551504#64) snprintfNeed :=
     ⟨by rw [e112]; unfold snprintfNeed Vsa.Sim.tohostAddr; omega, by rw [e112]; omega,
       by rw [e112]; omega⟩
-  ihave #Hsp := Hout.snprintfInt live Wp (s + 18446744073709551504#64)
+  ihave #Hsp := snprintfInt_out live Wp (s + 18446744073709551504#64)
     (s + 18446744073709551504#64 + 16#64) iw
     (upd (upd (upd (upd (upd (upd (upd (upd (upd (upd (upd rv 1 r) 15 2#64) 2
       (s + 18446744073709551504#64)) 14 3#64) 14 2#64) 13 iw) 9 (s + 18446744073709551504#64 + 16#64))
       10 (s + 18446744073709551504#64 + 16#64)) 12 2147586252#64) 12 2147586752#64) 11 64#64)
-    cx.hcl hsg'
+    cx.hcl hsg' (by rw [e112]; unfold snprintfNeed; omega) (by rw [eB]; omega) (by rw [eB]; omega)
   unfold snprintfIntSpec
   rw [eB]
-  iapply (ms_callNewlib Wp (i := 0x800030d8)
+  iapply (ms_callNewlibA Wp (i := 0x800030d8)
     (jalx_800030d8 live (fun q hq => cx.hlive _ (interp_code_800030d8 q hq))) interp_code_800030d8
     (vs := [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c0#64, iw])
-    (P := fun _ => iprop(argsAt [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c0#64, iw] ∗
+    (P := fun ra0 => iprop(⌜ra0.toNat % 4 = 0⌝ ∗ argsAt [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c0#64, iw] ∗
       blockOwn (s.toNat - 96) 64 ∗ stdioOwn ∗
       callFrame (s + 18446744073709551504#64) snprintfNeed Newlib.calleeSaved
         (upd (upd (upd (upd (upd (upd (upd (upd (upd (upd (upd rv 1 r) 15 2#64) 2
@@ -1642,8 +1643,12 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       · simp [upd]
       · omega)
     (by simp [upd]) (by rw [e112]; unfold stringifyNeed snprintfNeed; omega)
-    (by unfold stringifyNeed; omega)
-    (fun _ => by iintro ⟨Ha, ⟨Hb, Hs⟩, Hf⟩; iframe Ha Hb Hs Hf)
+    (by unfold stringifyNeed; omega) (by decide)
+    (fun _ hr => by
+      iintro ⟨Ha, ⟨Hb, Hs⟩, Hf⟩
+      isplitr
+      · ipureintro; exact hr
+      iframe Ha Hb Hs Hf)
     (fun _ => by iintro ⟨Ha, Hd, Hs, Hf⟩; iframe Ha Hd Hs Hf))
   unfold blockOwn snprintfEntry
   iframe Hsp Hcode Hms HB Hstd Hst Hgp Himg
@@ -2103,7 +2108,7 @@ theorem sg_cloAnon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     exact f0.hslot k (by simp only [InExt]; omega)
 
 /-- **A named closure**: `snprintf(buf, 64, "<fn %s>", name)`
-(`IrisHoles.out.snprintfFn`), then the shared tail. -/
+(`Sym.snprintfFn_out`), then the shared tail. -/
 theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2153,16 +2158,17 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   have hsg' : SpIn (s + 18446744073709551504#64) snprintfNeed :=
     ⟨by rw [e112]; unfold snprintfNeed Vsa.Sim.tohostAddr; omega, by rw [e112]; omega,
       by rw [e112]; omega⟩
-  ihave #Hsp := Hout.snprintfFn live Wp (s + 18446744073709551504#64)
+  ihave #Hsp := snprintfFn_out live Wp (s + 18446744073709551504#64)
     (s + 18446744073709551504#64 + 16#64) (BitVec.ofNat 64 nm) x (upd (upd (upd (upd (upd (upd (upd (upd R 15 (BitVec.ofNat 64 cp)) 15 (BitVec.ofNat 64 q)) 13
       (BitVec.ofNat 64 nm)) 9 (s + 18446744073709551504#64 + 16#64))
       10 (s + 18446744073709551504#64 + 16#64)) 12 2147586100#64) 12 2147586760#64) 11 64#64) cx.hcl hsg'
+    (by rw [e112]; unfold snprintfNeed; omega) (by rw [eB]; omega) (by rw [eB]; omega)
   unfold snprintfFnSpec
   rw [eB]
-  iapply (ms_callNewlib Wp (i := 0x80003040)
+  iapply (ms_callNewlibA Wp (i := 0x80003040)
     (jalx_80003040 live (fun q hq => cx.hlive _ (interp_code_80003040 q hq))) interp_code_80003040
     (vs := [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c8#64, BitVec.ofNat 64 nm])
-    (P := fun _ => iprop(argsAt [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c8#64,
+    (P := fun ra0 => iprop(⌜ra0.toNat % 4 = 0⌝ ∗ argsAt [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c8#64,
         BitVec.ofNat 64 nm] ∗ blockOwn (s.toNat - 96) 64 ∗ strAt (BitVec.ofNat 64 nm).toNat x ∗
       stdioOwn ∗ callFrame (s + 18446744073709551504#64) snprintfNeed Newlib.calleeSaved
         (upd (upd (upd (upd (upd (upd (upd (upd R 15 (BitVec.ofNat 64 cp)) 15 (BitVec.ofNat 64 q)) 13
@@ -2190,8 +2196,12 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
       · simp [upd]
       · omega)
     (by simp [upd, f0.h2]) (by rw [e112]; unfold stringifyNeed snprintfNeed; omega)
-    (by unfold stringifyNeed; omega)
-    (fun _ => by iintro ⟨Ha, ⟨Hb, Hs, Hio⟩, Hf⟩; iframe Ha Hb Hs Hio Hf)
+    (by unfold stringifyNeed; omega) (by decide)
+    (fun _ hr => by
+      iintro ⟨Ha, ⟨Hb, Hs, Hio⟩, Hf⟩
+      isplitr
+      · ipureintro; exact hr
+      iframe Ha Hb Hs Hio Hf)
     (fun _ => by iintro ⟨Ha, Hd, Hs, Hf⟩; iframe Ha Hd Hs Hf))
   unfold blockOwn snprintfEntry
   iframe Hsp Hcode Hms HB Hx Hstd Hst Hgp Himg

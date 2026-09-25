@@ -22,6 +22,9 @@ Each is an exact Iris statement about the fixed binary, in H5's calling
 convention (`argsAt`, `callFrame`), a field of `OutHoles` (hence of
 `IrisHoles`) with a row in `VsaIris/HOLES.md`. Unlike H5's `stderr` calls,
 these are exact about what they print: the console grows by the fragment.
+The `snprintf` statements are proved (`VsaIris.Sym.snprintfInt_out`,
+`VsaIris.Sym.snprintfFn_out`, `Vsa/SnpHoles.lean`) for a stack and buffer
+above newlib's data.
 `fputs`, `fputc` and `fwrite` are proved (`VsaIris.Sym.fputc_out`,
 `Vsa/Stdout/OutSpec.lean`; `VsaIris.Sym.fputs_out`, `VsaIris.Sym.fwrite_out`,
 `Vsa/Stdout/StrOut.lean`) for a stack above `.bss`; `fprintf` with `fprintfOut`'s formats is proved
@@ -88,7 +91,7 @@ and a NUL, in `buf[0, 64)`. -/
 def snprintfFnSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s buf name : BitVec 64) (x : String) (cs : Nat → BitVec 64) : IProp GF :=
   fnSpecW Wp snprintfEntry
-    (fun _ => iprop(argsAt [buf, 64#64, 0x800192c8#64, name] ∗ blockOwn buf.toNat 64 ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt [buf, 64#64, 0x800192c8#64, name] ∗ blockOwn buf.toNat 64 ∗
       strAt name.toNat x ∗ stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
     (fun _ => iprop(clobbered argRegs ∗
       (∃ img, ownImg (InExt (buf.toNat, 64)) img ∗ ⌜CStrImg img buf.toNat (fnRender x)⌝) ∗
@@ -99,7 +102,7 @@ def snprintfFnSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)
 def snprintfIntSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s buf i : BitVec 64) (cs : Nat → BitVec 64) : IProp GF :=
   fnSpecW Wp snprintfEntry
-    (fun _ => iprop(argsAt [buf, 64#64, 0x800192c0#64, i] ∗ blockOwn buf.toNat 64 ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt [buf, 64#64, 0x800192c0#64, i] ∗ blockOwn buf.toNat 64 ∗
       stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
     (fun _ => iprop(clobbered argRegs ∗
       (∃ img, ownImg (InExt (buf.toNat, 64)) img ∗ ⌜CStrImg img buf.toNat (intToString i.toInt)⌝) ∗
@@ -110,14 +113,9 @@ end Specs
 /-- **newlib's stdout calls at the binary** (`IrisHoles.out`), for every Iris
 instance, every `live` set holding the code, and both WPs. -/
 structure OutHoles : Prop where
-  /-- `snprintf(buf, 64, "<fn %s>", name)` renders into the buffer. -/
-  snprintfFn : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (s buf name : BitVec 64) (x : String)
-    (cs : Nat → BitVec 64), CodeLive live → SpIn s snprintfNeed →
-    ⊢ snprintfFnSpec live Wp s buf name x cs
-  /-- `snprintf(buf, 64, "%lld", i)` renders the integer into the buffer. -/
-  snprintfInt : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (s buf i : BitVec 64) (cs : Nat → BitVec 64),
-    CodeLive live → SpIn s snprintfNeed → ⊢ snprintfIntSpec live Wp s buf i cs
+
+/-- Every stdout call and `snprintf` rendering is proved (`Vsa/Stdout/`,
+`Vsa/Fprintf/Out.lean`, `Vsa/SnpHoles.lean`); nothing is left assumed. -/
+theorem OutHoles.proved : OutHoles := ⟨⟩
 
 end VsaIris.Newlib

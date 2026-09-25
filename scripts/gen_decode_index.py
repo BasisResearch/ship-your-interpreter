@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerate scripts/decode_index.tsv: instruction word -> DecodeTable module.
 
-Scans Vsa/Sim/DecodeTable/Batch*.lean for `theorem decode_<8 hex digits>` and
+Scans Vsa/Sim/DecodeTable/Batch*.lean and RetSupp.lean for `theorem decode_<8 hex digits>` and
 emits one line per decode lemma:
 
     <word-hex8>\t<module>
@@ -34,6 +34,7 @@ def main() -> int:
     index: dict[str, str] = {}
     dupes: list[tuple[str, str, str]] = []
 
+    # `RetSupp.lean`: M3's words outside the census batches (`__ascii_mbtowc`).
     for path in sorted(DECODE_DIR.glob("Batch*.lean")) + [DECODE_DIR / "RetSupp.lean"]:
         module = f"Vsa.Sim.DecodeTable.{path.stem}"
         for line in path.read_text().splitlines():

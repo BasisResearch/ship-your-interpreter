@@ -2,6 +2,7 @@ import VsaIris.Vsa.Stdout.Steps
 import VsaIris.Vsa.SymRunO
 import VsaIris.Vsa.SymJalr
 import VsaIris.Interp.ITac
+import VsaIris.Vsa.BvLits
 
 /-!
 # `_write`: the console loop (lane N1)
@@ -93,9 +94,6 @@ theorem write_putc (hl : ∀ p ∈ stdioText, live p.1) (b : BitVec 8) {t : Stri
 /-- The shifted putchar command `a4` holds in the loop. -/
 abbrev writeCmd : BitVec 64 :=
   shift_bits_left ((0#64) + sign_extend (m := 64) (0x101#12)) (Sail.BitVec.extractLsb (0x30#6) 5 0)
-
-theorem toNat_ofNat_lt {a : Nat} (h : a < 2 ^ 64) : (BitVec.ofNat 64 a).toNat = a := by
-  simp [BitVec.toNat_ofNat, Nat.mod_eq_of_lt h]
 
 theorem sx0 : sign_extend (m := 64) (0x000#12) = 0#64 := by decide
 

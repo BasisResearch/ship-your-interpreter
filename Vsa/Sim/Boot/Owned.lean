@@ -107,9 +107,10 @@ structure OwnOk (B : BootOwn) : Prop where
     0x80000000 ≤ r.1 ∧ r.1 + r.2 ≤ 0x100000000 ∧
       (r.1 + r.2 ≤ 0x8001ad00 ∨ 0x8001c168 ≤ r.1) ∧
       (r.1 + r.2 ≤ 0x87800000 ∨ 0x88000000 ≤ r.1)
-  /-- Shared ranges leave the word loop's 8-byte slack below `2^32` and keep
-  every byte's 8-byte read window off the 16 HTIF bytes (`SharedReadWin`). -/
-  sharedWin : ∀ r ∈ B.sharedRanges, r.1 + r.2 + 7 ≤ 0x100000000 ∧
+  /-- Shared ranges leave the word loop's 8-byte slack below the RAM top
+  (`0x88000000`, lane N2) and keep every byte's 8-byte read window off the 16
+  HTIF bytes (`SharedReadWin`). -/
+  sharedWin : ∀ r ∈ B.sharedRanges, r.1 + r.2 + 7 ≤ 0x88000000 ∧
     (r.1 + r.2 + 7 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ r.1)
   /-- Shared ranges avoid the mutable extents. -/
   sharedImmutable : ∀ r ∈ B.sharedRanges, ∀ e ∈ B.mutableExts, ExtDisjoint r e

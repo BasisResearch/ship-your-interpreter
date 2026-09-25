@@ -211,6 +211,8 @@ byte to be present, and only the pin supplied the script's presence).
   and is outside the theorem.
 - **Not vacuous.** The control keeps `while.wl`'s bytes (`snapshot_rodata`).
   `check_loaded.py`: `rodata_image` passes for every build of the corpus.
+- **Shared bytes lie in RAM (2026-09-25, lane N2; user decision covering boundary facts).** `BootHeapFacts.shared_geom : SharedReadWin shared stackSL` (lane B3's P7: shared bytes may lie in `.rodata`) now bounds every shared byte by the RAM top, `k + 8 ≤ 0x88000000` (was `2^32`); so do `SharedWin` and `ReadOK.win`, and `StrWin.hi` (`p + len + 8 ≤ 0x88000000`). Everything the loader and boot write lies in RAM (lane B2 checked all 35 traced boots); the control witness satisfies it (`SharedGeom.toReadWin` takes the bound). Why: `_svfprintf_r` counts in a 32-bit `int`, so `newlib.snprintf` needs every `%s` string below `2^27` bytes, which RAM gives (`Sym.fmtRen_length_le`); a `2^32` window admits strings near `2^31` bytes, whose count overflows onto the `EOF` path. Consumers: `CStrCov` gains `win : ∀ i ≤ len, ReadAddr (p + i)` (`Newlib.ReadAddr`: RAM below `0x88000000`, off the HTIF words); `cstrCov_rodata` proves it, `cstrCov_of_nul` and `cstrCov_of_img` take it (from the stack geometry or the string's `StrWin`). B3's boot witnesses (`OwnOk.sharedWin`, `gen_boot_witness.py`) must check `r.1 + r.2 + 7 ≤ 0x88000000` when lane B3 merges; lane B3 is not merged here (its B1 orientation change needs the stdout proofs ported; user, 2026-09-25). Integration (INT2): done, `OwnOk.sharedWin` decides `r.1 + r.2 + 7 ≤ 0x88000000` at every trace.
+- **`newlib.snprintf` discharged (2026-09-25, lane N2).** `NewlibHolesAt.snprintf : SnprintfProved`, proved by `Sym.snprintf_ok` (`Vsa/SnpGen.lean`) and passed in by `NewlibCore.full`, like `fprintf`. The statement gains: the return address 4-aligned (`snprintfSpec`'s precondition, `ret`'s `jalr`), `0x8001c168 ≤ s - 1024` and `0x8001c168 ≤ dst ∧ dst + n ≤ 2^32` (the frame and the destination off newlib's data, which the run reads, and off the HTIF words), and the strings' `CStrCov.win`. Suppliers: `rtErr_spec` takes `0x8001c168 ≤ s - rtErrNeed` (its three callers derive it from `StackGeom`/their stack bounds) and `InpGeom.above : 0x8001c168 ≤ inp` (built only at `inpGeom_top`); `wp_topAbrupt` and `cloArityTail` prove theirs from concrete addresses and `hfg`, and call through `ms_callNewlibA`. `IrisHoles` has no fields left (`IrisHoles.proved`); `NewlibCoreAt` and `OutHoles` are empty (`NewlibCoreAt.proved`, `OutHoles.proved`).
 
 ## STATEMENT CHANGE (lane A): the general registers and `main`'s `s0` in `Loaded`
 
@@ -1708,6 +1710,24 @@ without the fact and no other resource carries it:
     each one `decide`): `__ascii_mbtowc`, `1`, `"."` at `0x80019770`.
   - **Every hole that returns `stdioOwn` must now also restore the locale**;
     nothing writes it (`setlocale` is not linked into any path).
+- **The `out.snprintf*` holes take an aligned return address and a stack and
+  buffer above newlib's data.** `snprintfIntSpec`/`snprintfFnSpec` carry
+  `⌜r.toNat % 4 = 0⌝` in their precondition: `snprintf` returns through
+  `jalr zero, 0(ra)`, a successful step only to a 4-aligned target (lane N1's
+  change to `outSpec`, same reason). `OutHoles.snprintfFn` (and the proved
+  `Sym.snprintfInt_out`, `Vsa/SnpHoles.lean`) take `0x8001c168 ≤ s - 1024`,
+  `0x8001c168 ≤ buf` and `buf + 64 ≤ 2^32` besides `SpIn`: `SpIn` bounds the
+  stack only below by the HTIF words, so the 1024-byte frame may lie over
+  `.data`/`.bss` (whose bytes the run reads: the locale words, `_impure_ptr`),
+  and nothing places `buf` off the HTIF words or in 32-bit RAM. `stringify`'s
+  callers (`sg_intArm`, `sg_fnArm`) derive all three from `SgCtx.hs1` (the
+  stack region starts at `0x87800000`) and pass the alignment through
+  `ms_callNewlibA`.
+- **Not a statement change: the conversion table is data.** `_svfprintf_r`
+  dispatches through a jump table in `.rodata` (`0x8001a0fc`). The holes'
+  `CodeLive` makes only `.text` live, so `snpText` holds the code alone and the
+  table is read through the run's data view (`SnpSvfConv.TabAt`, from
+  `binImg`), like the format string.
 
 ### STATEMENT CHANGES (N1)
 

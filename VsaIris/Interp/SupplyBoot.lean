@@ -27,7 +27,8 @@ theorem nativeInj_of {N : NativeAddrs} (h : NativeEntries N) : NativeInj N := by
 theorem interpObject_toNat : (BitVec.ofNat 64 interpObject).toNat = interpObject := by decide
 
 theorem inpGeom_top : Newlib.RtErr.InpGeom (BitVec.ofNat 64 interpObject) :=
-  ⟨by rw [interpObject_toNat]; decide, by rw [interpObject_toNat]; decide⟩
+  ⟨by rw [interpObject_toNat]; decide, by rw [interpObject_toNat]; decide,
+    by rw [interpObject_toNat]; decide⟩
 
 theorem inpLt_top : interpObject < 2 ^ 64 := by decide
 

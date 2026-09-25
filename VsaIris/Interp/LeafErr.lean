@@ -191,10 +191,11 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     hfmt (fun a ha => ⟨Or.inl (Or.inl ha), hrd.1 a ha⟩)
       ⟨_, by
         rw [hpt']
-        exact cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2⟩
+        exact cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2.1 hrd.2.2⟩
   rw [← hinpt]
   ihave #Hspec := RtErr.rtErr_spec HN live hcl Wp N L Room (BitVec.ofNat 64 inp) (evalSP s) line
-    fmt (BitVec.ofNat 64 p) 0#64 R _ (fun _ => False) rd jb ρ st d hsp hok.geom hf
+    fmt (BitVec.ofNat 64 p) 0#64 R _ (fun _ => False) rd jb ρ st d hsp
+    (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega) hok.geom hf
     (by rw [hinpt]; exact hok.ra)
   ihave #Hgp := codeRes_gp $$ Hcode
   have hn1088 : n - 1088 ≤ (evalSP s).toNat := by rw [hsf]; omega

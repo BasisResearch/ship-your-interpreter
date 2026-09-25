@@ -14,18 +14,11 @@ interpreter's code are proved.
 
 namespace VsaIris.Interp
 
-/-- **The named holes of the final theorem.** -/
+/-- **The named holes of the final theorem**: none left. Every newlib call is
+proved (`Vsa/Stdout/`, `Vsa/Stderr/`, `Vsa/Fprintf/`, `Vsa/ExitH/`, and lane
+N2's `snprintf`, `Vsa/SnpHoles.lean`, `Vsa/SnpGen.lean`). -/
 structure IrisHoles : Prop where
-  /-- The newlib call on the error paths (`VsaIris/Vsa/Newlib.lean`, H5):
-  `snprintf` with `%s`/`%d` formats, at a post-write state `exit`'s close
-  path runs from. `fwrite`, `fprintf` (`VsaIris/Vsa/Stderr/`) and `exit`'s
-  newlib interior are proved (`Newlib.NewlibCore.full`,
-  `VsaIris/Vsa/ExitH/Iris.lean`). -/
-  newlib : Newlib.NewlibCore
-  /-- newlib's stdout calls (`fputs` on `stdout`) and `stringify`'s
-  `snprintf` renderings, exact about what they print or render
-  (`VsaIris/Vsa/NewlibOut.lean`, H2). `fputc`, `fwrite` and `fprintf` on
-  `stdout` are proved (`Vsa/Stdout/`, `Vsa/Fprintf/Out.lean`). -/
-  out : Newlib.OutHoles
+
+theorem IrisHoles.proved : IrisHoles := ⟨⟩
 
 end VsaIris.Interp

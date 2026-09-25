@@ -14,20 +14,22 @@ structure SharedGeom (shared : Nat → Prop) (SL : StackLayout) : Prop where
   stack : ∀ k, shared k → k < SL.lo ∨ SL.hi ≤ k
 
 /-- The read window of the shared byte set at the boundary (REVIEW.md P7, user
-decision 2026-09-25): every shared byte is RAM with the word loop's 8-byte
-slack below the RAM top, its window avoids the 16 HTIF bytes at `tohostAddr`,
-and it is outside the stack. Unlike `SharedGeom` it admits the fixed image
+decision 2026-09-25): every shared byte is RAM (below `0x88000000`, with the
+word loop's 8-byte slack: everything the loader and boot write lies in RAM,
+lane N2), its window avoids the 16 HTIF bytes at `tohostAddr`, and it is
+outside the stack. Unlike `SharedGeom` it admits the fixed image
 below `tohostAddr`: the natives' value names are `.rodata` literals. This is
 exactly what the Iris route's string reads consume (`ReadOK`, `SharedWin`). -/
 structure SharedReadWin (shared : Nat → Prop) (SL : StackLayout) : Prop where
-  ram : ∀ k, shared k → 0x80000000 ≤ k ∧ k + 8 ≤ 0x100000000
+  ram : ∀ k, shared k → 0x80000000 ≤ k ∧ k + 8 ≤ 0x88000000
   htif : ∀ k, shared k → k + 8 ≤ tohostAddr ∨ tohostAddr + 16 ≤ k
   stack : ∀ k, shared k → k < SL.lo ∨ SL.hi ≤ k
 
-/-- The above-image geometry is a special case. -/
+/-- The above-image geometry is a special case, for shared bytes in RAM. -/
 theorem SharedGeom.toReadWin {shared : Nat → Prop} {SL : StackLayout}
-    (h : SharedGeom shared SL) : SharedReadWin shared SL where
-  ram := fun k hk => by have := h.ram k hk; omega
+    (h : SharedGeom shared SL) (hram : ∀ k, shared k → k + 8 ≤ 0x88000000) :
+    SharedReadWin shared SL where
+  ram := fun k hk => by have := h.ram k hk; have := hram k hk; omega
   htif := fun k hk => Or.inr (h.htif k hk)
   stack := h.stack
 

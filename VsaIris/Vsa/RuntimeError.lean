@@ -471,14 +471,28 @@ theorem sp224 (s : BitVec 64) : s + sign_extend (m := 64) (0xf20#12) = s - 224#6
 /-- `runtime_error`'s entry. -/
 abbrev rtErrEntry : BitVec 64 := 0x80002da8#64
 
-/-- `struct Interp` in RAM above the HTIF words. -/
+/-- `struct Interp` in RAM above the HTIF words and newlib's data (its
+`err_msg` is `snprintf`'s destination, lane N2). -/
 structure InpGeom (inp : BitVec 64) : Prop where
   lo : Vsa.Sim.tohostAddr + 16 ≤ inp.toNat
   hi : inp.toNat + 480 ≤ 0x88000000
+  above : 0x8001c168 ≤ inp.toNat
 
 section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+
+/-! The arithmetic of `rtErr_spec`'s `snprintf` frames, apart from the
+proof's large context. -/
+
+theorem rt_sa {x : Nat} (a : 0x8001c168 ≤ x - rtErrNeed) : 0x8001c168 + 1248 ≤ x := by
+  unfold rtErrNeed snprintfNeed at a; omega
+theorem rt_k1 {x : Nat} (a : 0x8001c168 + 1248 ≤ x) : 0x8001c168 ≤ x - 224 - snprintfNeed := by
+  unfold snprintfNeed; omega
+theorem rt_k2 {x : Nat} (a : 0x8001c168 + 1248 ≤ x) : 0x8001c168 ≤ x - 224 := by omega
+theorem rt_k3 {x : Nat} (a : x ≤ 0x88000000) : x - 224 + 192 ≤ 0x100000000 := by omega
+theorem rt_k4 {x : Nat} (a : 0x8001c168 ≤ x) : 0x8001c168 ≤ x + 224 := by omega
+theorem rt_k5 {x : Nat} (a : x + 480 ≤ 0x88000000) : x + 224 + 256 ≤ 0x100000000 := by omega
 
 /-- **`runtime_error(in, line, fmt, a1, a2)` aborts**, for either WP. Given
 the arguments with a `%s`/`%d` format whose `%s` arguments are readable, its
@@ -491,7 +505,8 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : Vsa.RuntimeRepr.NativeAddrs) (L : DlLayout)
     (Room : RoomPred) (inp s line fmt x1 x2 : BitVec 64) (cs : Nat → BitVec 64)
     (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) (jb : Nat → BitVec 8) (ρ : Regime)
-    (st : Vsa.While.St) (d : Nat) (hs : SpIn s rtErrNeed) (hinp : InpGeom inp)
+    (st : Vsa.While.St) (d : Nat) (hs : SpIn s rtErrNeed) (hbss : 0x8001c168 ≤ s.toNat - rtErrNeed)
+    (hinp : InpGeom inp)
     (hfmt : FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt [x1, x2])
     (hjb : (jbWord inp.toNat jb 0).toNat % 4 = 0) :
     ⊢ fnSpecAbort Wp rtErrEntry
@@ -564,8 +579,13 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   have hsp1 : SpIn (s - 224#64) snprintfNeed :=
     ⟨by rw [hs224]; unfold snprintfNeed tohostAddr; omega, by rw [hs224]; omega,
       by rw [hs224]; omega⟩
+  have hsA := rt_sa hbss
+  have k1 : 0x8001c168 ≤ (s - 224#64).toNat - snprintfNeed := by rw [hs224]; exact rt_k1 hsA
+  have k2 : 0x8001c168 ≤ (s - 224#64).toNat := by rw [hs224]; exact rt_k2 hsA
+  have k3 : (s - 224#64).toNat + (192#64 : BitVec 64).toNat ≤ 0x100000000 := by
+    rw [hs224, show (192#64 : BitVec 64).toNat = 192 from rfl]; exact rt_k3 h2
   have hf1 := hHA.snprintf live Wp (s - 224#64) (s - 224#64) 192#64 fmt [x1, x2] cs1 Sro Sown rd
-    hlive (by simp) (by decide) (by decide) hfmt hsp1
+    hlive (by simp) (by decide) (by decide) hfmt hsp1 k1 k2 k3
   unfold snprintfSpec at hf1
   have hjt1 : TextAt rtJalSnprintf1.pc rtJalSnprintf1.code := by decide
   have hj1 : JalExec (vsaModel live) rtJalSnprintf1.pc rtJalSnprintf1.code snprintfEntry :=
@@ -579,7 +599,9 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   unfold VsaIris.ra
   iframe Hpc Hra
   isplitl [Ha0 Ha1 Ha2 Ha3 Ha4 Hargs Hbody Hrdb Hstd Hsp Hscr Hs0 Hs1 Hsaved Htmp]
-  · unfold argsAt callFrame VsaIris.sp
+  · isplitr
+    · ipureintro; decide
+    unfold argsAt callFrame VsaIris.sp
     simp only [List.cons_append, List.nil_append, List.zipIdx_cons, List.zipIdx_nil, sepL_cons,
       sepL_nil, List.length_cons, List.length_nil, Nat.add_zero, Nat.reduceAdd]
     rw [hs224, show rtErrNeed - (224#64 : BitVec 64).toNat = snprintfNeed from rfl,
@@ -632,6 +654,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   have hfmt2 : FmtArgsOK (fun a => rodataDom a ∨ Sown2 a) rd2 fmt2 [line, s - 224#64] :=
     fmt2_ok (fun a ha => ⟨.inl ha, by simp [rd2, ha]⟩)
       (cstrCov_of_nul (n := 192) (fun i hi => .inr ⟨Nat.le_add_right _ _, Nat.add_lt_add_left hi _⟩)
+        (fun i hi => by rw [hs224]; unfold ReadAddr; omega)
         (by
           obtain ⟨k, hk, h0⟩ := hbnul
           refine ⟨k, hk, ?_⟩
@@ -641,7 +664,8 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
           rw [ite_cond_eq_false _ _ (eq_false this)]; exact h0))
   have hf2 := hHA.snprintf live Wp (s - 224#64) (inp + sign_extend (m := 64) (0x0e0#12)) 256#64
     fmt2 [line, s - 224#64] cs1 rodataDom Sown2 rd2 hlive (by simp) (by decide) (by decide)
-    hfmt2 hsp1
+    hfmt2 hsp1 k1 (by rw [herrp]; exact rt_k4 hinp.above)
+    (by rw [herrp, show (256#64 : BitVec 64).toNat = 256 from rfl]; exact rt_k5 hi2)
   unfold snprintfSpec at hf2
   have hjt2 : TextAt rtJalSnprintf2.pc rtJalSnprintf2.code := by decide
   have hj2 : JalExec (vsaModel live) rtJalSnprintf2.pc rtJalSnprintf2.code snprintfEntry :=
@@ -655,7 +679,9 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   unfold VsaIris.ra
   iframe Hpc Hra
   isplitl [Ha0 Ha1 Ha2 Ha3 Ha4 Hargs Herr Hbody Hstd Hsp Hscr Hs0 Hs1 Hsaved Htmp]
-  · unfold argsAt callFrame VsaIris.sp readable
+  · isplitr
+    · ipureintro; decide
+    unfold argsAt callFrame VsaIris.sp readable
     simp only [List.cons_append, List.nil_append, List.zipIdx_cons, List.zipIdx_nil, sepL_cons,
       sepL_nil, List.length_cons, List.length_nil, Nat.add_zero, Nat.reduceAdd]
     rw [herrp, show (256#64 : BitVec 64).toNat = 256 from rfl]

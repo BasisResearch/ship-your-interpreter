@@ -4330,6 +4330,22 @@ callee specs from `VsaIris/Interp/SpecConcat.lean`:
   `sI` for `exit`, or the core is narrowed to `interp_run`'s region and
   `StackGeom` bounds every site by it.
 
+## `newlib.snprintf`: discharged (lane N2, 2026-09-25)
+
+- **Status: closed.** `Sym.snprintf_ok : Newlib.SnprintfProved`
+  (`VsaIris/Vsa/SnpGen.lean`, over `snprintf_gen`) is passed to
+  `NewlibCore.full`; `IrisHoles` has no fields (`IrisHoles.proved`).
+- **Statement (INTERP_DESIGN.md Decisions, 2026-09-25):** aligned return
+  address, stack and destination above newlib's data, and every format/`%s`
+  byte in RAM below `0x88000000` off the HTIF words (`CStrCov.win`), which
+  bounds the rendering below `2^31` for `_svfprintf_r`'s 32-bit count.
+- **Boundary:** `BootHeapFacts.shared_geom : SharedReadWin` with the RAM
+  bound (lane B3's P7 applied here); `SharedWin`, `ReadOK.win`, `StrWin.hi`
+  carry it. **Remaining for lane B3's merge:** its boot witnesses
+  (`Vsa/Sim/Boot/Owned.lean` `OwnOk.sharedWin`, `scripts/gen_boot_witness.py`)
+  must check `r.1 + r.2 + 7 ≤ 0x88000000`, and B1's stdout orientation needs
+  the stdout proofs (N1/N5) to run the `ORIENT` block.
+
 ## Lane V review: `Loaded interpRunLayout` is not reached by the binary (2026-09-25)
 
 Full report: `REVIEW.md` (repo root); tooling and results in `experiments/review-v/`.

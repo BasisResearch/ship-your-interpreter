@@ -126,8 +126,8 @@ namespace VsaIris.Interp
 
 /-- **`InterpSim` at the concrete layout, from the holes.** -/
 theorem interpSim_iris (h : IrisHoles) : Vsa.Refine.InterpSim Vsa.Sim.LayoutInstance.interpRunLayout :=
-  ⟨term_sim_of (supplies_of h) (h.newlib.full VsaIris.Newlib.fprintf_ok),
-    stuck_sim_of (supplies_of h) (h.newlib.full VsaIris.Newlib.fprintf_ok)⟩
+  ⟨term_sim_of (supplies_of h) (VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok VsaIris.Sym.snprintf_ok),
+    stuck_sim_of (supplies_of h) (VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok VsaIris.Sym.snprintf_ok)⟩
 
 end VsaIris.Interp
 

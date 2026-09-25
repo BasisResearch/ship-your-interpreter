@@ -53,15 +53,22 @@ private def hex8 (n : Nat) : String :=
   let s := String.ofList (Nat.toDigits 16 n)
   String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s
 
-/-- The normalizer run after every step and before every side condition:
-register lookups, the caller's facts (`using`), store forwarding. -/
-def ixNorm (facts : Array Term) : TacticM Syntax := do
+/-- `ixNorm` with a table normalizer other than `ix_tab` (lane N2's `nx_tab`). -/
+def ixNormTab (facts : Array Term) (tab : Option (TSyntax `tactic)) : TacticM Syntax := do
+  let tab ← match tab with
+    | some t => pure t
+    | none => `(tactic| ix_tab)
+  let tab : TSyntax ``Lean.Parser.Tactic.tacticSeq ← `(Lean.Parser.Tactic.tacticSeq| $tab:tactic)
   if facts.isEmpty then
-    `(tactic| ((try sx_norm) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem)))
+    `(tactic| ((try sx_norm) <;> (try $tab) <;> (try sx_norm) <;> (try ix_mem)))
   else
     let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
       facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-    `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem)))
+    `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try $tab) <;> (try sx_norm) <;> (try ix_mem)))
+
+/-- The normalizer run after every step and before every side condition:
+register lookups, the caller's facts (`using`), store forwarding. -/
+def ixNorm (facts : Array Term) : TacticM Syntax := ixNormTab facts none
 
 /-- The side-condition tactic of a run: `sx_side`, or the caller's (`side`). -/
 def ixSide (side : Option Syntax) : TacticM Syntax := do
@@ -81,12 +88,16 @@ def ixTrySide (norm : Syntax) (g : MVarId) (side : Option Syntax := none) : Tact
     saved.restore; return false
 
 /-- Close a branch goal `C → IW …` when `sx_side` refutes `C`. -/
-def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none) : TacticM Bool := do
+def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none)
+    (condFacts : Bool := false) : TacticM Bool := do
   let saved ← saveState
   let sd ← ixSide side
   try
-    let gs ← evalTacticAt
-      (← `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; $(⟨sd⟩)))))) g
+    -- `condFacts`: the caller's facts also rewrite the branch condition itself
+    let tac ← if condFacts then
+        `(tactic| (intro hc; exfalso; revert hc; (try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq, Decidable.not_not]); ($(⟨norm⟩) <;> $(⟨sd⟩))))
+      else `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; $(⟨sd⟩)))))
+    let gs ← evalTacticAt tac g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
@@ -152,7 +163,7 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
     (pre : List String := ixPre)
     (mkNorm : Array Term → TacticM Syntax := ixNorm) (clearPruned : Bool := false)
-    (budgetPct : Nat := 0) :
+    (budgetPct : Nat := 0) (condFacts : Bool := false) :
     TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
     let stopPCs : List Nat := match stops with
@@ -212,10 +223,10 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
           stuck := stuck ++ [c]
       | [t, f] =>
         let introTac ← if clearPruned then `(tactic| intro _) else `(tactic| intro hc)
-        if ← ixTryPrune norm t then
+        if ← ixTryPrune norm t none condFacts then
           let [f'] ← evalTacticAt introTac f | stuck := stuck ++ [f]; continue
           work := (f', fuel - 1) :: work
-        else if ← ixTryPrune norm f then
+        else if ← ixTryPrune norm f none condFacts then
           let [t'] ← evalTacticAt introTac t | stuck := stuck ++ [t]; continue
           work := (t', fuel - 1) :: work
         else if !explore then

@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.Console
 import VsaIris.Vsa.Stdout.Write
 import VsaIris.Vsa.Stdout.Attr
+import VsaIris.Vsa.BvLits
 
 /-!
 # Driving stdout runs (lane N1)
@@ -58,9 +59,6 @@ theorem subw_add_ofNat {n : Nat} (hn : n < 2 ^ 31) (B : BitVec 64) :
   rw [hmsb]
   simp only [Bool.false_eq_true, ite_false, Nat.add_zero, BitVec.toNat_setWidth, BitVec.toNat_ofNat]
   omega
-
-theorem toInt_ofNat_small {n : Nat} (h : n < 2 ^ 63) : (BitVec.ofNat 64 n).toInt = n := by
-  rw [BitVec.toInt_eq_toNat_cond]; simp; omega
 
 /-- An aligned jump target is its own `(_ & ~1)`. -/
 theorem update_aligned (r : BitVec 64) (h : r.toNat % 4 = 0) : Sail.BitVec.update r 0 0#1 = r := by

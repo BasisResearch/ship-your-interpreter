@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.OutSpec
 import VsaIris.Vsa.Stdout.Fwrite
 import VsaIris.Vsa.Stdout.Fputs
+import VsaIris.Vsa.BvLits
 
 /-!
 # `out.fwrite` and `out.fputs` (lane N1)
@@ -30,9 +31,6 @@ theorem putcs_chars : ∀ (l : List Char), (∀ c ∈ l, c.toNat < 256) →
     apply String.toList_injective
     simp [String.toList_append]
     rw [show toString c = String.singleton c from rfl, String.toList_singleton]; rfl
-
-/-- A string's characters as bytes. -/
-def strBytes (s : String) : List (BitVec 8) := s.toList.map fun c => BitVec.ofNat 8 c.toNat
 
 theorem strBytes_length (s : String) : (strBytes s).length = s.toList.length := by
   simp [strBytes]

@@ -141,7 +141,7 @@ theorem strcmpCtx {live : Nat → Prop} (hcl : CodeLive live) {p q r : BitVec 64
       rw [List.getElem?_eq_getElem hk]
       exact ⟨h0, hlt⟩
   have sw : ∀ {a len : Nat}, StrWin a len → SWin a len := fun {a len} h =>
-    ⟨h.lo, h.hi, by
+    ⟨h.lo, by have := h.hi; omega, by
       rcases h.htif with h1 | h1
       · exact .inl h1
       · exact .inr (by unfold htifLo at h1; rw [show tohostAddr = 0x8001ad00 from rfl]; omega)⟩

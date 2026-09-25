@@ -172,7 +172,8 @@ theorem ms_rtErrEvalOwn (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
   have hjb' : (jbWord (BitVec.ofNat 64 inp).toNat jb 0).toNat % 4 = 0 := by rw [hinpN]; exact hjb
   have hspec := RtErr.rtErr_spec hE.newlib live hE.code Wp N L Room (BitVec.ofNat 64 inp)
-    (evalSP s) line fmt x1 x2 R Sro Sown rd jb ρ st d hsp hinp hfmt hjb'
+    (evalSP s) line fmt x1 x2 R Sro Sown rd jb ρ st d hsp
+    (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega) hinp hfmt hjb'
   rw [hinpN] at hspec
   ihave #Hspec := hspec
   ihave #Hgp := codeRes_gp $$ Hcode
