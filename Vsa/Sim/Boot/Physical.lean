@@ -1,4 +1,6 @@
 import Vsa.Sim.Boot.Owned
+import Vsa.Sim.Boot.Ast
+import Vsa.Sim.Boot.Capacity
 
 /-!
 # The physical boundary facts from a boot trace
@@ -171,5 +173,32 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v
       stack_admissible := hfit
       gprs := bootState_gprs m g
       s0_impure := by rw [← R.s0]; exact hgpr 7 (by decide) }
+
+/-- **`Loaded` at a boot trace's entry.** The represented program is the one
+the decoder finds within the shared bytes (`hdec`); its cost and stack need
+are decided (`hcap`, `hfit`). -/
+theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v)
+    {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
+    (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
+    (ho : OwnOk B) (hf : FrameOk v B)
+    (hstore : frameCheck (maskView prologueMask v) bootNatives B.env initFrame = true)
+    {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
+    (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
+    {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
+    (hgeom : SharedGeom B.shared stackSL)
+    {p0 : Program} {fuel cfuel : Nat}
+    (hdec : decodesTo v B.sharedB fuel stmts count p0 = true)
+    (hcap : capOk cfuel p0 top = true) (hfit : programStackFits p0 = true) :
+    Vsa.Refine.Loaded interpRunLayout p0 (bootConfig m g steps) := by
+  have hwithin : ProgramReprWithin m B.shared stmts count p0 :=
+    (decodesTo_sound hv.partial hdec).mono (fun _ hk => B.shared_of_sharedB hk)
+  have huniq : ∀ p, ProgramRepr m stmts count p → p = p0 :=
+    fun p hp => hp.unique hwithin.erase
+  refine ⟨stmts, count, hwithin.erase, BitVec.ofNat 64 interpObject, bootNatives, bootArena,
+    fun _ => B.env, fun _ => 0, 0, ?_⟩
+  exact readyFacts_of hv M R ho hf hstore hh hH hgeom
+    (fun p hp => huniq p hp ▸ hwithin)
+    (fun p hp => huniq p hp ▸ capacity_of_capOk hcap)
+    (fun p hp => huniq p hp ▸ ProgramStackFits.of_check hfit)
 
 end Vsa.Sim.Boot

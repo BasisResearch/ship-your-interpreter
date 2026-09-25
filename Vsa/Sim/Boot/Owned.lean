@@ -68,6 +68,13 @@ def sharedRanges : List Extent :=
 
 def shared (k : Nat) : Prop := ∃ r ∈ B.sharedRanges, ExtentByte r k
 
+/-- `shared`, as a `Bool`. -/
+def sharedB (k : Nat) : Bool := B.sharedRanges.any fun r => decide (r.1 ≤ k ∧ k < r.1 + r.2)
+
+theorem shared_of_sharedB {k : Nat} (h : B.sharedB k = true) : B.shared k := by
+  obtain ⟨r, hr, hk⟩ := List.any_eq_true.mp h
+  exact ⟨r, hr, (of_decide_eq_true hk : r.1 ≤ k ∧ k < r.1 + r.2)⟩
+
 /-- The three mutable extents. -/
 def mutableExts : List Extent := [(B.env, 32), (B.pn, 8 * B.cap), (B.pv, 24 * B.cap)]
 

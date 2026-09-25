@@ -1111,8 +1111,34 @@ theorem globals : Vsa.MemRepr.read64 (bootMem script log) Vsa.Sim.LayoutInstance
 theorem depth : Vsa.MemRepr.read32 (bootMem script log)
     (Vsa.Sim.LayoutInstance.interpObject + 8) = some 0 := by boot_read view
 
+/-- The represented program, decoded from the entry memory. -/
+def prog : Vsa.While.Program :=
+  [(.varDecl "make_adder" (some (.fn (some "make_adder") ["n"] [(.ret (some (.fn none ["x"] [(.ret (some (.binary .add (.var "x") (.var "n"))))])))]))), (.varDecl "add5" (some (.call (.var "make_adder") [(.int (5))]))), (.expr (.call (.var "println") [(.call (.var "add5") [(.int (10))])])), (.varDecl "apply_twice" (some (.fn (some "apply_twice") ["f", "x"] [(.ret (some (.call (.var "f") [(.call (.var "f") [(.var "x")])])))]))), (.expr (.call (.var "println") [(.call (.var "apply_twice") [(.var "add5"), (.int (1))])])), (.expr (.call (.var "println") [(.call (.var "apply_twice") [(.fn none ["x"] [(.ret (some (.binary .mul (.var "x") (.var "x"))))]), (.int (3))])])), (.varDecl "make_counter" (some (.fn (some "make_counter") [] [(.varDecl "count" (some (.int (0)))), (.ret (some (.fn none [] [(.expr (.assign "count" (.binary .add (.var "count") (.int (1))))), (.ret (some (.var "count")))])))]))), (.varDecl "c" (some (.call (.var "make_counter") []))), (.expr (.call (.var "c") [])), (.expr (.call (.var "c") [])), (.expr (.call (.var "println") [(.call (.var "c") [])])), (.varDecl "c2" (some (.call (.var "make_counter") []))), (.expr (.call (.var "println") [(.call (.var "c2") [])]))]
+
+/-- The decoder finds `prog` at `stmts`, reading only shared bytes. -/
+theorem progOk : decodesTo (bootView script runs) own.sharedB 100000 stmts count prog = true := by
+  decide +kernel
+
+theorem fitsOk : Vsa.Sim.LayoutInstance.programStackFits prog = true := by decide +kernel
+
+/-- Every terminating derivation of `prog` fits the heap above `top`. -/
+theorem capacityOk : capOk 1000 prog top = true := by decide +kernel
+
 theorem heapOk : heapCheck (bootView script runs) own.exts
     [(own.pn, 8 * own.cap), (own.pv, 24 * own.cap)] top brkv chunks bins = true := by
   decide +kernel
+
+/-- **The witness.** The real entry state is `Loaded` for `prog`, given the
+two boundary facts it does not meet: every stack byte present (REVIEW.md C3,
+lane B2's P3) and the shared bytes above `.rodata` (C4, refuted by
+`c4_obstruction`; P7). -/
+theorem loaded
+    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →
+      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b)
+    (hgeom : Vsa.Sim.SharedGeom own.shared Vsa.Sim.LayoutInstance.stackSL) :
+    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog
+      (bootConfig (bootMem script log) regs entrySteps) :=
+  loaded_of view ⟨mainRa, text, rodata, statics, console, exitRuntime, globals, depth, hstack⟩
+    bootRegs ownOk frameOk storeOk heapOk heapFactsOk hgeom progOk capacityOk fitsOk
 
 end Vsa.Sim.Boot.Gen.Functions1

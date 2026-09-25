@@ -1,6 +1,8 @@
 import Vsa.While.CostEval
 import Vsa.Sim.Boot.Image
 import Vsa.Sim.Boot.Store
+import Vsa.Sim.Boot.Ast
+import Vsa.Sim.Boot.Capacity
 import Vsa.Sim.Boot.Heap
 import Vsa.Sim.Boot.Obstruction
 import Vsa.Sim.Boot.Owned

@@ -1374,6 +1374,16 @@ theorem globals : Vsa.MemRepr.read64 (bootMem script log) Vsa.Sim.LayoutInstance
 theorem depth : Vsa.MemRepr.read32 (bootMem script log)
     (Vsa.Sim.LayoutInstance.interpObject + 8) = some 0 := by boot_read view
 
+/-- The represented program, decoded from the entry memory. -/
+def prog : Vsa.While.Program :=
+  [(.varDecl "fact" (some (.fn (some "fact") ["n"] [(.ifStmt (.binary .le (.var "n") (.int (1))) (.block [(.ret (some (.int (1))))]) none), (.ret (some (.binary .mul (.var "n") (.call (.var "fact") [(.binary .sub (.var "n") (.int (1)))]))))]))), (.expr (.call (.var "println") [(.call (.var "fact") [(.int (10))])])), (.varDecl "fib" (some (.fn (some "fib") ["n"] [(.ifStmt (.binary .lt (.var "n") (.int (2))) (.block [(.ret (some (.var "n")))]) none), (.ret (some (.binary .add (.call (.var "fib") [(.binary .sub (.var "n") (.int (1)))]) (.call (.var "fib") [(.binary .sub (.var "n") (.int (2)))]))))]))), (.expr (.call (.var "println") [(.call (.var "fib") [(.int (20))])])), (.varDecl "is_even" (some (.fn (some "is_even") ["n"] [(.ifStmt (.binary .eq (.var "n") (.int (0))) (.block [(.ret (some (.bool true)))]) none), (.ret (some (.call (.var "is_odd") [(.binary .sub (.var "n") (.int (1)))])))]))), (.varDecl "is_odd" (some (.fn (some "is_odd") ["n"] [(.ifStmt (.binary .eq (.var "n") (.int (0))) (.block [(.ret (some (.bool false)))]) none), (.ret (some (.call (.var "is_even") [(.binary .sub (.var "n") (.int (1)))])))]))), (.expr (.call (.var "println") [(.call (.var "is_even") [(.int (10))]), (.call (.var "is_odd") [(.int (10))])])), (.varDecl "ack" (some (.fn (some "ack") ["m", "n"] [(.ifStmt (.binary .eq (.var "m") (.int (0))) (.block [(.ret (some (.binary .add (.var "n") (.int (1)))))]) none), (.ifStmt (.binary .eq (.var "n") (.int (0))) (.block [(.ret (some (.call (.var "ack") [(.binary .sub (.var "m") (.int (1))), (.int (1))])))]) none), (.ret (some (.call (.var "ack") [(.binary .sub (.var "m") (.int (1))), (.call (.var "ack") [(.var "m"), (.binary .sub (.var "n") (.int (1)))])])))]))), (.expr (.call (.var "println") [(.call (.var "ack") [(.int (2)), (.int (3))])]))]
+
+/-- The decoder finds `prog` at `stmts`, reading only shared bytes. -/
+theorem progOk : decodesTo (bootView script runs) own.sharedB 100000 stmts count prog = true := by
+  decide +kernel
+
+theorem fitsOk : Vsa.Sim.LayoutInstance.programStackFits prog = true := by decide +kernel
+
 theorem heapOk : heapCheck (bootView script runs) own.exts
     [(own.pn, 8 * own.cap), (own.pv, 24 * own.cap)] top brkv chunks bins = true := by
   decide +kernel

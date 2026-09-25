@@ -262,6 +262,9 @@ def main():
 
 
 RUN_MAX = 64
+# Programs whose cost evaluation is out of the kernel's reach (recursion.wl:
+# fib(20) allocates ~22k frames in a list-backed store).
+SLOW_COST = {"recursion"}
 CHUNK = 1024
 
 
@@ -415,6 +418,90 @@ def ast_bytes(mem, stmts, count):
     for i in range(count):
         touch(stmts + 8 * i, 8); stmt(rd(mem, stmts + 8 * i, 8))
     return seen
+
+
+def lean_str(mem, a):
+    out, k = [], a
+    while mem[k] != 0:
+        c = mem[k]
+        out.append({0x5C: "\\\\", 0x22: '\\"', 0x0A: "\\n", 0x09: "\\t"}.get(
+            c, chr(c) if 32 <= c < 127 else f"\\x{c:02x}"))
+        k += 1
+    return '"' + "".join(out) + '"'
+
+
+BINOPS = {11: "add", 12: "sub", 13: "mul", 14: "div", 15: "mod", 17: "ne", 19: "eq",
+          20: "lt", 21: "le", 22: "gt", 23: "ge"}
+
+
+def ast_term(mem, stmts, count):
+    """The represented program as a Lean `Program` term."""
+    def lst(xs):
+        return "[" + ", ".join(xs) + "]"
+
+    def expr(a):
+        k = rd(mem, a, 4)
+        if k == 0:
+            v = rd(mem, a + 8, 8)
+            v = v - (1 << 64) if v >= 1 << 63 else v
+            return f"(.int ({v}))"
+        if k == 1:
+            return f"(.str {lean_str(mem, rd(mem, a + 8, 8))})"
+        if k == 2:
+            return "(.bool true)" if rd(mem, a + 8, 4) else "(.bool false)"
+        if k == 3:
+            return ".null"
+        if k == 4:
+            return f"(.var {lean_str(mem, rd(mem, a + 8, 8))})"
+        if k == 5:
+            return f"(.assign {lean_str(mem, rd(mem, a + 8, 8))} {expr(rd(mem, a + 16, 8))})"
+        if k == 6:
+            return f"(.binary .{BINOPS[rd(mem, a + 8, 4)]} {expr(rd(mem, a + 16, 8))} {expr(rd(mem, a + 24, 8))})"
+        if k == 7:
+            op = {24: "and", 25: "or"}[rd(mem, a + 8, 4)]
+            return f"(.logical .{op} {expr(rd(mem, a + 16, 8))} {expr(rd(mem, a + 24, 8))})"
+        if k == 8:
+            op = {12: "neg", 16: "not"}[rd(mem, a + 8, 4)]
+            return f"(.unary .{op} {expr(rd(mem, a + 16, 8))})"
+        if k == 9:
+            args, argc = rd(mem, a + 16, 8), rd(mem, a + 24, 4)
+            return f"(.call {expr(rd(mem, a + 8, 8))} {lst([expr(rd(mem, args + 8 * i, 8)) for i in range(argc)])})"
+        if k == 10:
+            nm = rd(mem, a + 8, 8)
+            name = f"(some {lean_str(mem, nm)})" if nm else "none"
+            params, pc = rd(mem, a + 16, 8), rd(mem, a + 24, 4)
+            ps = lst([lean_str(mem, rd(mem, params + 8 * i, 8)) for i in range(pc)])
+            body = rd(mem, a + 32, 8)
+            assert rd(mem, body, 4) == 2
+            st, n = rd(mem, body + 8, 8), rd(mem, body + 16, 4)
+            return f"(.fn {name} {ps} {lst([stmt(rd(mem, st + 8 * i, 8)) for i in range(n)])})"
+        raise SystemExit(f"bad expr kind {k}")
+
+    def opt(f, g):
+        q = rd(mem, f, 8)
+        return f"(some {g(q)})" if q else "none"
+
+    def stmt(a):
+        k = rd(mem, a, 4)
+        if k == 0:
+            return f"(.expr {expr(rd(mem, a + 8, 8))})"
+        if k == 1:
+            return f"(.varDecl {lean_str(mem, rd(mem, a + 8, 8))} {opt(a + 16, expr)})"
+        if k == 2:
+            st, n = rd(mem, a + 8, 8), rd(mem, a + 16, 4)
+            return f"(.block {lst([stmt(rd(mem, st + 8 * i, 8)) for i in range(n)])})"
+        if k == 3:
+            return f"(.ifStmt {expr(rd(mem, a + 8, 8))} {stmt(rd(mem, a + 16, 8))} {opt(a + 24, stmt)})"
+        if k == 4:
+            return f"(.whileStmt {expr(rd(mem, a + 8, 8))} {stmt(rd(mem, a + 16, 8))})"
+        if k == 5:
+            return (f"(.forStmt {opt(a + 8, stmt)} {opt(a + 16, expr)} {opt(a + 24, expr)} "
+                    f"{stmt(rd(mem, a + 32, 8))})")
+        if k == 6:
+            return f"(.ret {opt(a + 8, expr)})"
+        return {7: ".brk", 8: ".cont"}[k]
+
+    return lst([stmt(rd(mem, stmts + 8 * i, 8)) for i in range(count)])
 
 
 def heap_walk(mem):
@@ -620,10 +707,39 @@ def cmd_program(args):
             "theorem depth : Vsa.MemRepr.read32 (bootMem script log)",
             "    (Vsa.Sim.LayoutInstance.interpObject + 8) = some 0 := by boot_read view",
             "",
+            "/-- The represented program, decoded from the entry memory. -/",
+            f"def prog : Vsa.While.Program :=\n  {ast_term(mem, stmts, count)}",
+            "",
+            "/-- The decoder finds `prog` at `stmts`, reading only shared bytes. -/",
+            "theorem progOk : decodesTo (bootView script runs) own.sharedB 100000 stmts count prog = true := by",
+            "  decide +kernel",
+            "",
+            "theorem fitsOk : Vsa.Sim.LayoutInstance.programStackFits prog = true := by decide +kernel",
+            "",
+        ] + ([] if name in SLOW_COST else [
+            "/-- Every terminating derivation of `prog` fits the heap above `top`. -/",
+            "theorem capacityOk : capOk 1000 prog top = true := by decide +kernel",
+            "",
+        ]) + [
             "theorem heapOk : heapCheck (bootView script runs) own.exts",
             "    [(own.pn, 8 * own.cap), (own.pv, 24 * own.cap)] top brkv chunks bins = true := by",
             "  decide +kernel",
             "",
+        ] + ([] if name in SLOW_COST else [
+            "/-- **The witness.** The real entry state is `Loaded` for `prog`, given the",
+            "two boundary facts it does not meet: every stack byte present (REVIEW.md C3,",
+            "lane B2's P3) and the shared bytes above `.rodata` (C4, refuted by",
+            "`c4_obstruction`; P7). -/",
+            "theorem loaded",
+            "    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →",
+            "      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b)",
+            "    (hgeom : Vsa.Sim.SharedGeom own.shared Vsa.Sim.LayoutInstance.stackSL) :",
+            "    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog",
+            "      (bootConfig (bootMem script log) regs entrySteps) :=",
+            "  loaded_of view ⟨mainRa, text, rodata, statics, console, exitRuntime, globals, depth, hstack⟩",
+            "    bootRegs ownOk frameOk storeOk heapOk heapFactsOk hgeom progOk capacityOk fitsOk",
+            "",
+        ]) + [
             f"end Vsa.Sim.Boot.Gen.{ln}",
         ]
         dst = BOOT_DIR / "Gen" / f"{ln}.lean"
@@ -635,7 +751,7 @@ def cmd_program(args):
 
 def write_index():
     """`VsaBoot.lean`: the boot infrastructure and every generated trace."""
-    mods = ["Vsa.While.CostEval", "Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Heap",
+    mods = ["Vsa.While.CostEval", "Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Ast", "Vsa.Sim.Boot.Capacity", "Vsa.Sim.Boot.Heap",
             "Vsa.Sim.Boot.Obstruction", "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Elf"]
     mods += [f"Vsa.Sim.Boot.Gen.{f.stem}" for f in sorted((BOOT_DIR / "Gen").glob("*.lean"))]
     (ROOT / "VsaBoot.lean").write_text("".join(f"import {m}\n" for m in mods))
