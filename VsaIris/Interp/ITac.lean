@@ -83,7 +83,7 @@ def ixTryPrune (norm : Syntax) (g : MVarId) (condFacts : Bool := false) : Tactic
   try
     -- `condFacts`: the caller's facts also rewrite the branch condition itself
     let tac ← if condFacts then
-        `(tactic| (intro hc; exfalso; revert hc; ($(⟨norm⟩) <;> sx_side)))
+        `(tactic| (intro hc; exfalso; revert hc; (try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq, Decidable.not_not]); ($(⟨norm⟩) <;> sx_side)))
       else `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; sx_side))))
     let gs ← evalTacticAt tac g
     if gs.isEmpty then return true
