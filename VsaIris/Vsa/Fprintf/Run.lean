@@ -42,7 +42,7 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000de30#64 R' M') →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R0 Mt0)
     (hk : ∀ R' M', RetOK R R' (BitVec.ofNat 64 N) → Frame M' Mt (FpReg (s.toNat - 80)) →
-      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
+      ldv .lh M' 0x8001bb30 = 0x200a#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800061c0#64 R Mt := by
   have e80 : (s - 80#64).toNat = s.toNat - 80 := toNat_sub_lit (by decide) (by omega)
   have e672 : (s - 80#64 - 592#64).toNat = s.toNat - 672 := by
@@ -57,7 +57,7 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   have hsoC : 0x8001ad10 ≤ (s - 80#64).toNat := by rw [e80]; omega
   refine fprintf_wrap (sf := s - 80#64) hlive (by rw [e80]; omega) (by rw [e80]; omega) hs3 hs4
     (by rw [e80]; omega) hra (by rw [hsf]; exact h2) himp hDA
-    (fun R0 Mt0 h2' h10' h11' h12' h13' h1' hfr0 harg hk0 => ?_) (fun R' M' hr hf => hk R' M' hr (by rw [e80] at hf; exact hf))
+    (fun R0 Mt0 h2' h10' h11' h12' h13' h1' hfr0 harg hk0 => ?_) (fun R' M' hr hf hl => hk R' M' hr (by rw [e80] at hf; exact hf) hl)
   have hl0 : ∀ (kd : MKind) (a : Nat), a + 8 ≤ s.toNat - 80 → widthOfM kd ≤ 8 → ldv kd Mt0 a = ldv kd Mt a :=
     fun kd a ha hw => hfr0.ldv kd fun j hj h => by rw [e80] at h; omega
   have hSo0 : StdoutSb Mt0 := ⟨(hl0 _ _ (by omega) (by decide)).trans hSo.flagsU,
@@ -69,10 +69,10 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     (by rw [e672]; omega) hs3 hs4 (by rw [e672]; omega) (by rw [h1']; decide) (by rw [h2', hso])
     h10' (h11'.trans hstd) h12' h13' ((hl0 _ _ (by omega) (by decide)).trans hdec) hdA hdv hSo0
     (by rw [hl0 _ _ (by omega) (by decide)]; exact hbase)
-    (fun R1 Mt1 h2'' h10'' h11'' h12'' h13'' h1'' hfr1 hk1 => ?_) fun R' M' e10 e2 e1 ek hfr => ?_
+    (fun R1 Mt1 h2'' h10'' h11'' h12'' h13'' h1'' hfr1 hk1 => ?_) fun R' M' e10 e2 e1 ek hfr hl => ?_
   rotate_left
   · rw [h1']; exact hk0 R' M' e10 (e2.trans h2') (e1.trans h1') (fun x hx => (ek x hx))
-      (by rw [e672] at hfr; rw [e80, Nat.sub_sub]; exact hfr)
+      (by rw [e672] at hfr; rw [e80, Nat.sub_sub]; exact hfr) hl
   have e48 : (s - 80#64 + 32#64).toNat = s.toNat - 48 := by rw [toNat_add_lit (by rw [e80]; omega), e80]; omega
   have hl1 : ∀ (kd : MKind) (a : Nat), a + 8 ≤ s.toNat - 672 ∨ s.toNat - 80 ≤ a → widthOfM kd ≤ 8 →
       ldv kd Mt1 a = ldv kd Mt0 a :=
@@ -85,7 +85,7 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   refine sbprintf_run (sp := s - 1936#64) (N := N) (bytes := bytes) hlive hlive' hsub (by rw [e1936]; omega)
     (by rw [e1936]; omega) hs3 hs4 (by rw [e1936]; omega) (by rw [h1'']; decide) hN hbl (h2''.trans hsb'.symm)
     h10'' h11'' rfl rfl hSo1 (fun R2 Mt2 a2 a10 a11 a12 a13 a1 hsbf hfr2 hk2 => ?_)
-    fun R' M' e10 e2 e1 ek hfr => ?_
+    fun R' M' e10 e2 e1 ek hfr hl => ?_
   · have hfrA : Frame Mt2 Mt (fun a => s.toNat - 1936 ≤ a ∧ a < s.toNat) := by
       refine ((hfr0.mono fun a h => ?_).trans (hfr1.mono fun a h => ?_)).trans (hfr2.mono fun a h => ?_)
       · rw [e80] at h
@@ -100,7 +100,7 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
       exact harg
     exact hV R2 Mt2 a2 a10 a11 (by rw [a12, h12'']; try rw [h12']) (by rw [a13, h13'']; try rw [h13'])
       a1 hsbf hfrA hA hk2
-  · rw [h1'']; refine hk1 R' M' e10 (e2.trans h2'') (e1.trans h1'') (fun x hx => ek x hx) ?_
+  · rw [h1'']; refine hk1 R' M' e10 (e2.trans h2'') (e1.trans h1'') (fun x hx => ek x hx) ?_ hl
     rw [e1936] at hfr; rw [e672, Nat.sub_sub]; exact hfr
 
 end VsaIris.Sym.Fp

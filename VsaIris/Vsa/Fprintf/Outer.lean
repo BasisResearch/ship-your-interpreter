@@ -37,11 +37,11 @@ theorem vfp_outer (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
     (hS : ∀ (R0 : Nat → BitVec 64) (Mt0 : Mem), R0 2 = sp → R0 10 = 0x8001b538#64 → R0 11 = 0x8001bb20#64 →
       R0 12 = fmt → R0 13 = ap → R0 1 = 0x8000ac24#64 → Frame Mt0 Mt (fun a => sp.toNat ≤ a ∧ a < sp.toNat + 592) →
       (∀ R' M', R' 10 = BitVec.ofNat 64 N → R' 2 = sp → R' 1 = 0x8000ac24#64 → (∀ x ∈ vfpSaved, R' x = R0 x) →
-        Frame M' Mt0 (SbpReg (sp.toNat - 1264)) →
+        Frame M' Mt0 (SbpReg (sp.toNat - 1264)) → ldv .lh M' 0x8001bb30 = 0x200a#64 →
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) 0x8000ac24#64 R' M') →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dda8#64 R0 Mt0)
     (hk : ∀ R' M', R' 10 = BitVec.ofNat 64 N → R' 2 = R 2 → R' 1 = R 1 → (∀ x ∈ vfpSaved, R' x = R x) →
-      Frame M' Mt (OuterReg sp.toNat) →
+      Frame M' Mt (OuterReg sp.toNat) → ldv .lh M' 0x8001bb30 = 0x200a#64 →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
   have hsp : (sp + 592#64).toNat = sp.toNat + 592 := sp_lit (by omega)
@@ -68,7 +68,7 @@ theorem vfp_outer (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
   have hap' : ldv .ld Mt1 (sp + 24#64).toNat = ap := by rw [eo 24 (by omega)]; exact hap.trans h13
   nx_run [1] hlive using [hap']
   refine hS _ _ (by rsimp; exact f2.trans h2') (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) hFrE
-    fun R2 M2 e10 e2 e1 ek hfr2 => ?_
+    fun R2 M2 e10 e2 e1 ek hfr2 hfl2 => ?_
   have hlo : ∀ k, 8 ≤ k → k + 8 ≤ 592 → ldv .ld M2 (sp + BitVec.ofNat 64 k).toNat = ldv .ld Mt1 (sp.toNat + k) :=
     fun k h1 h2 => by
       rw [eo k (by omega)]
@@ -81,7 +81,7 @@ theorem vfp_outer (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
   have hst : Frame (writeLog M2 [((sp + 16#64).toNat, 8, BitVec.ofNat 64 N)]) M2
       (fun a => sp.toNat + 16 ≤ a ∧ a < sp.toNat + 24) :=
     Frame.store M2 _ fun b h1 h2 => by rw [eo 16 (by omega)] at h1 h2; exact ⟨h1, h2⟩
-  refine hk _ _ (by rsimp) (by rsimp; exact h2w.down.symm) (by rsimp) (fun x hx => ?_) ?_
+  refine hk _ _ (by rsimp) (by rsimp; exact h2w.down.symm) (by rsimp) (fun x hx => ?_) ?_ ?_
   · simp only [vfpSaved, List.mem_cons, List.not_mem_nil, or_false] at hx
     rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
       (rw [ek _ (by decide)]; rsimp; first | rfl | (simp only [f9, f18, f19, f21, f23, f24, f25, f26, f27]; exact E.keep _ (by decide)))
@@ -94,5 +94,6 @@ theorem vfp_outer (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
       · exact .inr (.inl h)
       · exact .inr (.inr h)
     · unfold OuterReg; omega
+  · rw [ldv_lh_miss _ _ (.inl (by rw [eo 16 (by omega)]; omega))]; exact hfl2
 
 end VsaIris.Sym.Fp

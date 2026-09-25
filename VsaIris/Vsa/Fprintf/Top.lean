@@ -34,17 +34,17 @@ theorem fprintf_wrap (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
       R0 12 = R 11 → R0 13 = sf + 32#64 → R0 1 = 0x80006204#64 →
       Frame Mt0 Mt (fun a => sf.toNat ≤ a ∧ a < sf.toNat + 80) → ldv .ld Mt0 (sf + 32#64).toNat = R 12 →
       (∀ R' M', R' 10 = BitVec.ofNat 64 N → R' 2 = sf → R' 1 = 0x80006204#64 → (∀ x ∈ vfpSaved, R' x = R0 x) →
-        Frame M' Mt0 (OuterReg (sf.toNat - 592)) →
+        Frame M' Mt0 (OuterReg (sf.toNat - 592)) → ldv .lh M' 0x8001bb30 = 0x200a#64 →
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) 0x80006204#64 R' M') →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R0 Mt0)
     (hk : ∀ R' M', RetOK R R' (BitVec.ofNat 64 N) → Frame M' Mt (FpReg sf.toNat) →
-      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
+      ldv .lh M' 0x8001bb30 = 0x200a#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800061c0#64 R Mt := by
   have e : sf + 80#64 + 18446744073709551536#64 = sf := by rw [BitVec.add_assoc]; simp
   have eo : ∀ k : Nat, k ≤ 100 → (sf + BitVec.ofNat 64 k).toNat = sf.toNat + k := fun k hk => sp_lit (by omega)
   nx_run hlive using [h2, e, himp, BitVec.add_assoc] at 2147526788
   refine hO _ _ (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) ?_ (by nx_mem)
-    fun R1 M1 e10 e2 e1 ek hfr1 => ?_
+    fun R1 M1 e10 e2 e1 ek hfr1 hfl1 => ?_
   · repeat (refine Frame.snoc ?_ ?_)
     all_goals first | exact Frame.refl _ _ |
       (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
@@ -59,7 +59,7 @@ theorem fprintf_wrap (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
     rw [hfr1.ldv .ld hn]
     nx_mem
   nx_run hlive using [e2, e10, l24, BitVec.add_assoc]
-  refine hk _ _ (retOK_of (by rsimp; exact e10) fun x hx h32 h10 hc => ?_) ?_
+  refine hk _ _ (retOK_of (by rsimp; exact e10) fun x hx h32 h10 hc => ?_) ?_ ?hfl
   · simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
     rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
       rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
@@ -80,5 +80,6 @@ theorem fprintf_wrap (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
       · exact .inl ⟨by rw [Nat.sub_sub] at h1; exact h1, by omega⟩
       · exact .inr (.inl h)
       · exact .inr (.inr h)
+  case hfl => exact hfl1
 
 end VsaIris.Sym.Fp

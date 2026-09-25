@@ -103,7 +103,7 @@ local macro "sb_finish" : tactic => `(tactic| (
         rw [hFr.ldv .lhu hnr]
         have := hSb1.flagsU; simp only [BitVec.add_assoc, BitVec.reduceAdd] at this; exact this
       all_goals try (rw [hsp _ (by omega) (by omega) _ hFr, hsp1 _ (by omega) (by omega)]; nx_mem)
-      refine hk R3 _ e10' (e2'.trans h2.symm) e1' (fun x hx => ?_) ?_
+      refine hk R3 _ e10' (e2'.trans h2.symm) e1' (fun x hx => ?_) ?_ ?hsfl
       · simp only [vfpSaved, List.mem_cons, List.not_mem_nil, or_false] at hx
         rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
         · exact e8
@@ -146,7 +146,7 @@ local macro "sb_finish" : tactic => `(tactic| (
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000de30#64 R' M') →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R0 Mt0)
     (hk : ∀ R' M', R' 10 = BitVec.ofNat 64 N → R' 2 = R 2 → R' 1 = R 1 → (∀ x ∈ vfpSaved, R' x = R x) →
-      Frame M' Mt (SbpReg sp.toNat) →
+      Frame M' Mt (SbpReg sp.toNat) → ldv .lh M' 0x8001bb30 = 0x200a#64 →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dda8#64 R Mt by
   have e : sp + 1264#64 + 18446744073709550352#64 = sp := by rw [BitVec.add_assoc]; simp
@@ -204,6 +204,7 @@ local macro "sb_finish" : tactic => `(tactic| (
   rw [List.append_nil] at hb
   subst hb
   sb_finish
+  case hsfl => nx_mem; exact hSb1.sfl
 
 #ix_piece sbprintf_4b from sbprintf_3 at 2 by
   have hlen := hSb1.len
@@ -223,6 +224,7 @@ local macro "sb_finish" : tactic => `(tactic| (
   have hFr := hFl.2
   rw [String.append_assoc, ← putcs_append, ← hb]
   sb_finish
+  case hsfl => exact hFl.1.sfl
 
 /-! **`sbprintf_run`**: `__sbprintf(reent, stdout, fmt, ap)` with the inner run a hook. -/
 #ix_tree sbprintf_run := sbprintf_1 [sbprintf_2 [sbprintf_3 [sbprintf_4a, sbprintf_4b]]]
