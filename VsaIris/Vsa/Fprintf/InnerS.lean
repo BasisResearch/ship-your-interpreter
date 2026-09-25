@@ -66,7 +66,7 @@ theorem vfpInnerS (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
         (upd (updAll R0 v [11, 12, 13, 14, 15, 16]) 10 (BitVec.ofNat 64 bs.length)) Mt0) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x80006cf0#64 R0 Mt0)
     (hk : ∀ R' M' out pend', pend0 ++ (lit ++ bs ++ [0x3e#8]) = out ++ pend' → R' 2 = R 2 → R' 1 = R 1 →
-      (∀ x ∈ vfpSaved, R' x = R x) → SbFile M' f pend' → LocMb M' → Frame M' Mt (InnerReg f.toNat sp.toNat) →
+      R' 10 = BitVec.ofNat 64 (lit.length + bs.length + 1) → (∀ x ∈ vfpSaved, R' x = R x) → SbFile M' f pend' → LocMb M' → Frame M' Mt (InnerReg f.toNat sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
   refine vfp_begin hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa h2 h10 h11 h12 hdec hdA hdv hF fun R3 Mt3 B => ?_
@@ -173,7 +173,7 @@ theorem vfpInnerS (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
       _ = out1 ++ (pend1 ++ [0x3e#8]) := by rw [hrel1]; simp
       _ = (out1 ++ out2) ++ pend2 := by rw [r2]; simp
   rw [String.append_assoc, ← putcs_append]
-  refine hk R8 _ (out1 ++ out2) pend2 hrel (e2.trans h2.symm) e1 ekeep
+  refine hk R8 _ (out1 ++ out2) pend2 hrel (e2.trans h2.symm) e1 (by rw [e10]; simp) ekeep
     (H.file.frame_out hst (by omega) fun b hb => by omega)
     (((hloc6.frame S7.frame (fun a h1 h2 h => by have := hSc _ h; omega) (fun h => by have := hSc _ h; omega)).frame
       H.frame (fun a h1 h2 h => by have := hSR' _ h; omega) (fun h => by have := hSR' _ h; omega)).frame

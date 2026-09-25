@@ -100,6 +100,15 @@ theorem vfp_begin (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
     hFrE.trans (H.frame.mono fun a h => by unfold HeadReg at h; omega),
     (H.frame.ldv .ld fun j hj h => by simp only [widthOfM] at hj; unfold HeadReg at h; omega).trans E.ap⟩
 
+theorem lldCnt_eq (v : BitVec 64) :
+    lldCnt (lldSign v) (digBytes (lldMag v).toNat) = (lldBytes v).length := by
+  unfold lldCnt lldBytes
+  by_cases h : isNeg v
+  · have : lldSign v ≠ 0#8 := fun e => (lldSign_eq_zero.1 e) h
+    simp [this, h]; omega
+  · have : lldSign v = 0#8 := lldSign_eq_zero.2 h
+    simp [this, h]
+
 theorem vfpInnerLld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp f ap v : BitVec 64} {need : Nat} {pend0 : List (BitVec 8)}
@@ -115,7 +124,7 @@ theorem vfpInnerLld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
     (hF : SbFile Mt f pend0) (hL : LocMb Mt) (hv : ldv .ld Mt ap.toNat = v)
     (hFm : LldFmt Dt DA) (hP0 : FmtAt Dt DA 0x800192c0 [37#8]) (hP4 : FmtAt Dt DA 0x800192c4 [0#8])
     (hk : ∀ R' M' out pend', pend0 ++ lldBytes v = out ++ pend' → R' 2 = R 2 → R' 1 = R 1 →
-      (∀ x ∈ vfpSaved, R' x = R x) → SbFile M' f pend' → LocMb M' → Frame M' Mt (InnerReg f.toNat sp.toNat) →
+      R' 10 = BitVec.ofNat 64 (lldBytes v).length → (∀ x ∈ vfpSaved, R' x = R x) → SbFile M' f pend' → LocMb M' → Frame M' Mt (InnerReg f.toNat sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
   refine vfp_begin hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa h2 h10 h11 h12 hdec hdA hdv hF fun R3 Mt3 B => ?_
@@ -169,7 +178,7 @@ theorem vfpInnerLld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
     Frame.store M6 _ fun b h1 h2 => by rw [eo 232 (by omega)] at h1 h2; exact ⟨h1, h2⟩
   refine vfp_end0 hlive hs1 hs2 hs3 hs4 hal (by omega) (by omega) hfa (fun b h1 h2 => by unfold outS; omega)
     (.inr hf1) hP6 ⟨hSb6.flags, hSb6.flags2, by decide, by decide⟩ hS6 hra rfl fun R7 e10 e2 e1 ekeep => ?_
-  refine hk R7 _ out pend' hrel (e2.trans h2.symm) e1 ekeep (hSb6.frame_out hst (by omega) fun b hb => by omega)
+  refine hk R7 _ out pend' hrel (e2.trans h2.symm) e1 (by rw [e10, Nat.zero_add, lldCnt_eq]) ekeep (hSb6.frame_out hst (by omega) fun b hb => by omega)
     ((hloc5.frame S6.frame (fun a h1 h2 h => by have := hSc _ h; omega) (fun h => by have := hSc _ h; omega)).frame
       hst (fun a h1 h2 h => by omega) (fun h => by omega)) ?_
   refine ((((hFr3.mono fun a h => ?_).trans (S4.frame.mono fun a h => ?_)).trans (hfr5.mono fun a h => ?_)).trans
