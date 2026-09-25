@@ -21,3 +21,6 @@ name = "iris"
 git = "https://github.com/leanprover-community/iris-lean"
 rev = "740e2c4a9c672c61d76ad2f9c478c922f7461cf6"
 subDir = "Iris"
+
+[[lean_lib]]
+name = "VsaBoot"

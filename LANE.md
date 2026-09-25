@@ -1,69 +1,44 @@
-# Lane V: adversarial soundness review of `endToEnd_refinement` (paper §9.3)
+# Lane B3: loader-derived `Loaded` witnesses (REVIEW.md P4)
 
-Branch `lane-v` (from `hub/iris-main` `286c2ad`). Report: `REVIEW.md`.
-Tooling and evidence: `experiments/review-v/`.
+Branch `lane-b3` (from `hub/iris-main` `286c2ad`, merged `hub/lane-v`).
+Brief: build kernel-checked `Loaded interpRunLayout p c` witnesses for the
+`c/tests/*.wl` programs from their real boot: the ELF loader's memory plus the
+emulator's store log up to `interp_run`'s entry, checked by `decide`s over
+the reflected state (no `native_decide`), generated per program. The
+witnesses can close only after P1 (console flags) and P2 (script bytes, lane
+B1) and P3 (stack presence, lane B2).
 
-## Status: done (review written; statement changes left as proposals)
+## Status: in flight (infrastructure)
 
-`lake build Vsa VsaIris` green (2587 jobs after the dead-code deletion).
-`scripts/check_final_axioms.sh` (new): the final theorem and its boundary
-witnesses depend on `[propext, Classical.choice, Quot.sound]` only.
-`scripts/check_all.sh --static-only` green (stage a4 was failing at
-`hub/iris-main`). `check_iris_holes.py`: 10 ledgered holes, unchanged. The
-stage-c sweep over the trimmed `THEOREMS` list: 1037/1037 audited, allowed
-axioms only.
+## Done
 
-## Findings (ranked; details and evidence in `REVIEW.md`)
+- Corpus: `scripts/gen_boot_witness.py corpus` patches the proof ELF's script
+  blob per script, traces each build to `interp_run` with the Lean emulator,
+  and dumps `initializeMemory`'s pieces natively
+  (`scripts/boot_elf_pieces.lean`). All 35 ELFs (review corpus + proof ELF)
+  agree with the proof ELF outside the script blob.
+- `Vsa/Sim/Boot/Log.lean`: packed store log (`PackedLog`), final byte map
+  (`RunTree`), the check `LogOk` (each store against its cells, each cell
+  against its last writer, with the model's own `writeEntryByte`), and
+  `writeLog_view`: `(writeLog m L.log)[x]? = logView t (m[·]?) x`. No
+  sequential fold in the kernel (a naive fold hits the kernel's recursion
+  depth); the check splits into independent 1024-store chunks.
+- `Vsa/Sim/Boot/Image.lean` + generated `ImageData.lean`: the loader's memory
+  (`loadedMem script`, `initializeMemory`'s insertions over `bootPieces`),
+  `bootMem script L = writeLog (loadedMem script) L.log`, `bootMem_get`.
+- `Vsa/Sim/Boot/Gen/<Prog>.lean` (generated): script, log, runs, entry
+  registers, `logOk`, `mem_get`. Built: `while` (9,005 stores, 66 s),
+  `adv_empty` (1,455 stores, 10 s). Library `VsaBoot` (`lake build VsaBoot`).
 
-- **C1 (critical, vacuity).** `ConsoleStream.flags = 0x200a` is false at
-  `interp_run`'s entry (real: `0x000a`; `__SORD` is set by the first console
-  write after entry). `Loaded interpRunLayout p c` holds for no configuration
-  the binary reaches, for any program.
-- **C2 (critical, ∀ p).** `FixedRodataLoaded` pins the embedded script
-  (`_script_start = 0x80018be0`), so only the `while.wl` build can be
-  `Loaded`; no proof reads a script byte.
-- **C3 (high).** `stack_bytes`/`topLive` need every stack byte present;
-  the loader inserts only `p_filesz` bytes (sparse Sail memory).
-- **H1.** No loader-derived `Loaded` witness exists (the control is a
-  hand-built dense snapshot); reaching entry takes 85k steps.
-- **M1–M3, L1–L4.** `capacity`/`stack_admissible` make `Loaded`
-  execution-dependent; Q8/`stringify` quirks are in the spec; ASCII-only
-  strings; hygiene gaps (fixed).
-- Everything else in `Loaded` holds at the real entry state of every traced
-  program (registers, images, statics, `ExitRuntimeData`, initial store,
-  `cap = 8`, the full `DlHeap.HeapAt` shape, frame chunks, `ProgramRepr`).
+## Next
 
-## Empirical cross-check
-
-Lean emulator on the proof ELF, all `c/tests/*.wl` (script blob patched in
-place; three minified, `functions.wl` split) and 23 adversarial programs
-(depth 999/1000, 58/59/70-character closure names, INT64_MIN division,
-33 arguments, 440-deep nesting, non-ASCII, every runtime error, OOM). All
-match the semantics' prediction, including both out-of-memory programs
-(`out of memory`, exit 1); see `REVIEW.md` §2.
-
-## Hygiene committed
-
-- README no longer says the theorem is conditional on `RemainingWork`.
-- `check_all.sh`: stage b scans `VsaIris/`; new stage c2 runs
-  `scripts/check_final_axioms.sh`; 35 stale `THEOREMS` entries removed.
-- 20 legacy files grandfathered in `discipline_grandfather.txt` (dated
-  comment).
-- Dead code: 88 modules deleted (unreachable from every root, or
-  `RemainingWork`-tower leftovers wired only through `Vsa.lean`), with their
-  `Vsa.lean` imports and `abs_inventory.sh`/grandfather lines.
-- `PROOF_CLOSURE_PLAN.md`, `INTERP_DESIGN.md` §10, `TOOLING.md` record the
-  review.
-
-## Proposals for the user (statement changes, not landed)
-
-P1 boundary flags `0x000a` + first-write lemma; P2 rodata pin excluding the
-script; P3 densification lemma for `Halts`/`Diverges`; P4 loader-derived
-`Loaded` witnesses from the entry write log; P5 README states `Loaded`'s
-program-dependent hypotheses; P6 delete the tower core (`TermAssembly`,
-`InterpSimFinal`, `rows/AssemblySkeleton`, `While/StmtDispatchClose`,
-`rows/Field_hStr`) with its ledger tooling.
+- Boot config (entry registers into the Sail register map), per-field
+  checkers of `InterpRunPhysicalFacts`/`InterpRunReadyFacts` over `bootView`.
+- `initializeMemory .B64 elf = loadedMem script` from the native piece dump.
+- `capacity` (`InitialAllocatorAt`): needs the cost of every terminating
+  derivation, i.e. determinism of the cost relations or a cost evaluator.
+- Merge B1/B2 when they land.
 
 ## Holes
 
-None added; 10 ledgered, unchanged.
+None added.
