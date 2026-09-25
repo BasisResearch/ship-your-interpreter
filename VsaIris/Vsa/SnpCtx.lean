@@ -56,6 +56,16 @@ macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro b hb; rw [mem_accAddrs_iff] at hb; sx_pre; sx_lits; sx_bv; sx_lits; snp_inda))
 
+theorem toInt_ofNat_small {x : Nat} (h : x < 2 ^ 63) : (BitVec.ofNat 64 x).toInt = x := by
+  rw [BitVec.toInt_eq_toNat_cond]
+  simp only [BitVec.toNat_ofNat]
+  split <;> omega
+
+/-- Signed comparisons of small values (`blez`, `blt` on counts). -/
+macro_rules
+  | `(tactic| sx_side) =>
+    `(tactic| (intro hc; simp (disch := omega) only [toInt_ofNat_small, BitVec.reduceToInt] at hc; omega))
+
 /-- Owned-byte side conditions of a `snprintf` run. -/
 macro_rules
   | `(tactic| sx_side) =>

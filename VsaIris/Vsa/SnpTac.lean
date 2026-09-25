@@ -27,10 +27,21 @@ syntax "nx_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)?
 /-- `nx_run1`: `nx_run` that stops at a branch it cannot decide. -/
 syntax "nx_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
+/-- The table normalizer, with store forwarding and the caller's facts
+applied again after it (a load forwarded through a store then meets its
+fact in the same step). -/
+def nxTab (fs : Option (Syntax.TSepArray `term ",")) : TacticM (TSyntax `tactic) := do
+  match fs with
+  | none => `(tactic| ((try nx_tab) <;> (try ix_mem)))
+  | some fs =>
+    let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
+      fs.getElems.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
+    `(tactic| ((try nx_tab) <;> (try ix_mem) <;> (try simp only [$lems,*])))
+
 elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => do
-    ixRunCore true n h fs stops nxPrefixes (some (← `(tactic| nx_tab)))
+    ixRunCore true n h fs stops nxPrefixes (some (← nxTab fs))
   | `(tactic| nx_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => do
-    ixRunCore false n h fs stops nxPrefixes (some (← `(tactic| nx_tab)))
+    ixRunCore false n h fs stops nxPrefixes (some (← nxTab fs))
 
 end VsaIris.Sym
