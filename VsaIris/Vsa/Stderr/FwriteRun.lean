@@ -1,7 +1,7 @@
 import VsaIris.Vsa.Stderr.Swrite
 import VsaIris.Vsa.Stderr.Mem
 import VsaIris.Vsa.SymCompactTac
-import VsaIris.Vsa.StdioErr
+import VsaIris.Vsa.Stderr.ErrOK
 
 /-!
 # `fwrite(ptr, 1, n, stderr)`, the first write, as a printing run (lane N3)
@@ -17,17 +17,11 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-/-- The bytes of `stderr`'s `FILE` a first write changes: `_p`, `_r`, `_w`,
-the flags (`[0, 18)`), `_bf` (`[24, 36)`), `_flags2` (`[176, 180)`). -/
-def errWritten (a : Nat) : Prop :=
-  (0x8001bbd8 ≤ a ∧ a < 0x8001bbd8 + 18) ∨ (0x8001bbd8 + 24 ≤ a ∧ a < 0x8001bbd8 + 36) ∨
-    (0x8001bbd8 + 176 ≤ a ∧ a < 0x8001bbd8 + 180)
-
 /-- The memory after `fwrite(ptr, 1, n, stderr)`: the stack below `s`,
 `errno` and `stderr`'s written fields changed; those fields as a written
 unbuffered stream (`ErrWrittenFile`). -/
 structure FwritePost (Mt Mt' : Mem) (s : BitVec 64) : Prop where
-  frame : ∀ a, ¬ (s.toNat - 768 ≤ a ∧ a < s.toNat) → ¬ errWritten a → ¬ Stdio.errnoFoot a →
+  frame : ∀ a, ¬ (s.toNat - 768 ≤ a ∧ a < s.toNat) → ¬ Stdio.errWritten a → ¬ Stdio.errnoFoot a →
     imgM Mt' a = imgM Mt a
   cursor : imgLE (imgM Mt') 0x8001bbd8 8 = 0x8001bc4f
   flags : imgLE (imgM Mt') 0x8001bbe8 2 = 0x201a
@@ -195,7 +189,7 @@ macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk
   refine hk _ _ (retOK_of ?_ ?_) ⟨fun a ha1 ha2 ha3 => ?_, ?_, ?_, ?_, ?_⟩
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hbn]
   · ret_keep
-  · simp only [errWritten, Stdio.errnoFoot, Stdio.errnoAddr] at ha2 ha3
+  · simp only [Stdio.errWritten, Stdio.errnoFoot, Stdio.errnoAddr] at ha2 ha3
     simp (disch := nx_fdisch) only [imgM_store_miss, imgM_fillR_out]
   all_goals (simp (disch := nx_fdisch) only [imgLE_store_miss, imgLE_fillR_out, imgLE_imgM_store,
     imgLE_store2_hit, imgLE_store4_hit]; try decide)
