@@ -156,5 +156,7 @@ Adversarial programs (`experiments/review-v/wl/adv_*.wl`):
   the emulator's trace, not by Lean.
 - The Lean build under the shared lock was used only for the axiom audit
   and to confirm the deletions compile; no proof was re-elaborated by hand.
-- `scripts/tests` (pytest) was not run; LANE.md (lane A) reports
-  environment-path failures there predating this lane.
+- `scripts/tests` (`python3 -B -m unittest discover -s scripts/tests`) was run
+  before and after P6: the same eight failures on both trees (fixture
+  environment paths in `test_check_all`, `test_proof_slice`, predating this
+  lane); no new failure. 267 tests after P6.
