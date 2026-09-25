@@ -17,6 +17,7 @@ stdout run whose data view contains the interpreter's code runs them through
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast
+open scoped VsaIris.Sym.Stdout
 
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String}

@@ -19,6 +19,7 @@ peels each region with `ldv_*_fillR_miss`), loads inside meet the facts.
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 /-- Store forwarding through `fillR` regions too (a load off a region reads
 the memory below it). -/

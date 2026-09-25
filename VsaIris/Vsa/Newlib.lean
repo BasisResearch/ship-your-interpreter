@@ -223,7 +223,8 @@ def errLineFmt : BitVec 64 := 0x800195e0#64
 /-- `fprintf(stderr, "%s\n", p)` (`main`'s error line): prints some string,
 reads the NUL-terminated string at `p` inside the owned `n`-byte buffer
 (handed back unchanged), clears `errno`, leaves newlib's data in the
-post-`stderr`-write state `StdioErrOK`, returns (to an aligned address). -/
+post-`stderr`-write state `StdioErrOK`, returns (to an aligned address; lane N3: proved,
+`Stderr/FprintfSpec.lean`). -/
 def fprintfSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (s p : BitVec 64)
     (n : Nat) (bv : Nat → BitVec 8) (cs : Nat → BitVec 64) (o : String) : IProp GF :=
   fnSpecW Wp fprintfEntry
@@ -279,10 +280,14 @@ structure NewlibCoreAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
     CodeLive live → args.length ≤ 5 → 0 < n.toNat → n.toNat < 2 ^ 31 →
     FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt args → SpIn s snprintfNeed →
     ⊢ snprintfSpec live Wp s dst n fmt args cs Sro Sown rd
-  /-- `fprintf(stderr, "%s\n", p)` (`main`'s error line): a NUL within the
-  `n < 2^30` owned bytes at `p`, in RAM, whose word-at-a-time `strlen` stays off
-  the `tohost` cells; the frame above newlib's data. -/
-  fprintf : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
+
+/-- `fprintf(stderr, "%s\n", p)` (`main`'s error line): a NUL within the
+`n < 2^30` owned bytes at `p`, in RAM, whose word-at-a-time `strlen` stays off
+the `tohost` cells; the frame above newlib's data. Proved:
+`Stderr/FprintfSpec.lean` (`fprintf_ok`), above the interpreter proofs that use
+it; `NewlibCore.full` takes it. -/
+def FprintfProved : Prop :=
+  ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s p : BitVec 64) (n : Nat) (bv : Nat → BitVec 8)
     (cs : Nat → BitVec 64) (o : String),
     CodeLive live → (∃ k, k < n ∧ bv (p.toNat + k) = 0) → n < 2 ^ 30 →
@@ -291,9 +296,12 @@ structure NewlibCoreAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
     SpIn s fprintfNeed → 0x80100000 ≤ s.toNat - fprintfNeed →
     ⊢ fprintfSpec live Wp s p n bv cs o
 
-/-- The newlib statements the proofs use: the assumed ones and `exit`'s
-interior, which `ExitH/Iris.lean` proves from `CloseReady` (`NewlibCore.full`). -/
+/-- The newlib statements the proofs use: the assumed ones, `fprintf` (proved,
+`FprintfProved`) and `exit`'s interior, which `ExitH/Iris.lean` proves from
+`CloseReady` (`NewlibCore.full`). -/
 structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop extends NewlibCoreAt Ierr where
+  /-- `fprintf(stderr, "%s\n", p)` (proved: `Newlib.fprintf_ok`). -/
+  fprintf : FprintfProved
   /-- The newlib interior of `exit` (proved: `ExitH.exitHandlers_spec`). -/
   exitHandlers : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
@@ -302,8 +310,8 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop extends Newl
     ⊢ exitHandlersSpec Ierr live Wp s e r cs o Φ quiet
 
 /-- **`IrisHoles.newlib`**: the assumed newlib statements at the post-`stderr`-write
-state `StdioErrOK` (lane N3: the state `fwrite` provably leaves,
-`Stderr/FwriteSpec.lean`). `exit`'s interior is proved from it (`NewlibCore.full`). -/
+state `StdioErrOK` (lane N3: the state `fwrite` and `fprintf` provably leave,
+`Stderr/FwriteSpec.lean`, `Stderr/FprintfSpec.lean`). `exit`'s interior is proved from it (`NewlibCore.full`). -/
 def NewlibCore : Prop := NewlibCoreAt StdioErrOK
 
 /-- The newlib statements the proofs use, at `StdioErrOK`. -/

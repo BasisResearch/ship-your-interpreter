@@ -27,7 +27,7 @@ offsets from a base as `Nat` arithmetic. -/
 syntax "nx_fdisch" : tactic
 macro_rules
   | `(tactic| nx_fdisch) => `(tactic| (
-      (try simp only [BitVec.add_assoc, BitVec.reduceAdd])
+      (try simp only [BitVec.sub_eq_add_neg, BitVec.reduceNeg, BitVec.add_assoc, BitVec.reduceAdd])
       (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, toNat_sub_lit,
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
       omega))

@@ -18,6 +18,7 @@ residual and returns to the head, or leaves when it reaches zero.
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 /-- Registers the loop never writes (`sp`, `s0`, `s4`, `s5`, `s7`–`s11`). -/
 abbrev sfvKeep : List Nat := [2, 8, 20, 21, 23, 24, 25, 26, 27]
@@ -380,7 +381,7 @@ theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   nx_run hlive using [k8, k18, k21, k22, k2, e10, hwr, hck, esw] at 2147545044
   have hn : (copyBytes g src (L - L % 1024)).length = L - L % 1024 := copyBytes_length _ _ _
   refine swrite_run (sp := fp) (buf := src) (bs := copyBytes g src (L - L % 1024)) (ra := 0x8000e250#64)
-    (s0 := f) hlive (by omega) hs2 hs3 hs4 hfpa (by rsimp) (by decide) (by rsimp; exact k8) hsr1
+    (s0 := f) hlive (by omega) hs2 hs3 (by omega) hfpa (by rsimp) (by decide) (by rsimp; exact k8) hsr1
     (by rw [hn]; omega) (by rw [hn]; omega) (fun i hi => ?_) (fun i hi => ?_) (by rsimp) (by rsimp)
     (by rsimp; rw [hn]) (by rsimp; exact k2) hF.sfl hF.sfd (fun R'' hR => ?_)
   · rw [hn] at hi; have := hsrd i (by omega); omega

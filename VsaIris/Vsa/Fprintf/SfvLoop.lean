@@ -20,6 +20,7 @@ out (`sfv_exit`).
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 /-- The bytes the loop changes: a pass's (`SfvReg`) and the residual. -/
 def LoopReg (f fp U : Nat) (a : Nat) : Prop := SfvReg f fp a ∨ (U + 16 ≤ a ∧ a < U + 24)

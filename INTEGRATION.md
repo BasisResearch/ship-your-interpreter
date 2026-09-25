@@ -209,3 +209,13 @@ Checks: `lake build Vsa VsaIris VsaIris.Audit` green (2700 jobs), `check_iris_ho
 Hole ledger: before 5, after 5 (V proves no hole; its vacuity findings C1–C3/H1 go to B1–B3).
 Checks: build green (2682 jobs), `check_iris_holes.py` ok (5), `check_final_axioms.sh` 10/10,
 `endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
+
+### N3 (2026-09-25)
+
+| lane | head | merge on `iris-main` | conflicts |
+|---|---|---|---|
+| N3 (`newlib.fprintf` proved; contains N5 at `4423d4b`) | `ecc8d0a` | `761d764` | `HOLES.md` (both conflicting rows, `newlib.fprintf` and `out.fputs`, proved; dropped); report archived as `LANES-n3.md` |
+
+Hole ledger: before 5, after 4 (`newlib.snprintf`, `out.fprintf`, `out.snprintfFn`, `out.snprintfInt`).
+Phase 1 done: 6 of 10 holes proved. Checks: build green (2707 jobs), `check_iris_holes.py` ok (4),
+`endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
