@@ -9,7 +9,12 @@ Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). M
   axioms `propext, Classical.choice, Quot.sound`). HOLES row and `NewlibHolesAt.fwrite`
   removed; `Oom.wp_oomBlock` consumes the theorem. Statement changes: INTERP_DESIGN.md §10
   "STATEMENT CHANGES (N3)".
-- **`newlib.fprintf`**: open (next).
+- **`newlib.fprintf`**: statement narrowed to `main`'s only call (INTERP_DESIGN N3), consumers
+  rewired (errno lent from the dropped world). Run pieces proved: `vfpEntry_run` (shared with N5),
+  `vfpErr_run` (stderr setup via `swsetupErr_run`), `sprintErr_run`/`sprintErr0_run` (the
+  unbuffered two-piece flush), `LRO.promote` (owned string through the data view). Waiting on N5's
+  format-loop pieces (`vfp_head` landed; `%s` with a strlen hook and the end next), then the
+  fprintf prologue/epilogue glue and the Iris wrapper.
 
 ## Findings (checked against `experiments/disasm.txt`)
 
