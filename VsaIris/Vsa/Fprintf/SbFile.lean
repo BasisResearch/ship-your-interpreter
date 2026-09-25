@@ -272,4 +272,47 @@ theorem SbFile.swrote {Mt : Mem} {f fp ra s0 : BitVec 64} {pend : List (BitVec 8
       rw [this]; unfold SwReg; have := hF.len; omega)]
     exact hF.buf i h
 
+/-! ## Pieces as windows -/
+
+/-- A piece's bytes as a byte function from its source address. -/
+def win (bs : List (BitVec 8)) (src : Nat) (a : Nat) : BitVec 8 := bs.getD (a - src) 0
+
+theorem copyBytes_win (bs : List (BitVec 8)) (src c : Nat) (hc : c ≤ bs.length) :
+    copyBytes (win bs src) src c = bs.take c := by
+  apply List.ext_getElem (by simp; omega)
+  intro i h1 h2
+  simp only [copyBytes_length] at h1
+  rw [copyBytes_get, List.getElem_take]
+  simp [win, List.getD_eq_getElem?_getD, show i < bs.length by omega]
+
+theorem win_drop (bs : List (BitVec 8)) (src c : Nat) (a : Nat) (h : src + c ≤ a) :
+    win (bs.drop c) (src + c) a = win bs src a := by
+  simp only [win, List.getD_eq_getElem?_getD, List.getElem?_drop]
+  congr 2; omega
+
+/-- A piece's bytes readable at `M`. -/
+def PieceReads (Dt : Mem) (DA : List Nat) (S : Nat → Prop) (M : Mem) (src : Nat) (bs : List (BitVec 8)) :
+    Prop := ∀ i (h : i < bs.length), ReadB Dt DA S M (src + i) bs[i]
+
+theorem PieceReads.readWin {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {M : Mem} {src : Nat}
+    {bs : List (BitVec 8)} (h : PieceReads Dt DA S M src bs) :
+    ReadWin Dt DA S M src (src + bs.length) (win bs src) := by
+  intro a h1 h2
+  have := h (a - src) (by omega)
+  rw [show src + (a - src) = a by omega] at this
+  simpa [win, List.getD_eq_getElem?_getD, show a - src < bs.length by omega] using this
+
+theorem PieceReads.drop {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {M : Mem} {src : Nat}
+    {bs : List (BitVec 8)} (h : PieceReads Dt DA S M src bs) (c : Nat) :
+    PieceReads Dt DA S M (src + c) (bs.drop c) := by
+  intro i hi
+  simp only [List.length_drop] at hi
+  rw [List.getElem_drop, show src + c + i = src + (c + i) by omega]
+  exact h (c + i) (by omega)
+
+theorem PieceReads.transport {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {M M' : Mem} {src : Nat}
+    {bs : List (BitVec 8)} (h : PieceReads Dt DA S M src bs)
+    (hM : ∀ i, i < bs.length → imgM M' (src + i) = imgM M (src + i)) : PieceReads Dt DA S M' src bs :=
+  fun i hi => (h i hi).transport (hM i hi)
+
 end VsaIris.Sym.Fp

@@ -26,6 +26,16 @@ branch: `memmove` into the buffer, `_fflush_r` when it fills, a direct `__swrite
   run over `stdioText` (`swp_text_mono`, `mem_dataOf`: the other table's code in the
   data view).
 
+- `VsaIris/Vsa/Fprintf/`: `Move.lean` (`memmove_run`: every forward path), `Flush.lean`
+  (`fflushF_run`/`fflushF_run0`: `_fflush_r` on `__sbprintf`'s stack FILE, fully buffered),
+  `Arith.lean` (`moddi3_sw`, `udiv_sw`: E2's `ProofArith` runs bridged into stdio runs),
+  `SbFile.lean` (`SbFile`, `Frame`, `nx_mem` through `fillR`), `Sfv.lean` (the passes),
+  `SfvLoop.lean` (`sfv_loop`: `__sfvwrite_r`'s loop on the stack FILE, any iovs, any lengths;
+  `pend0 ++ ALL = printed ++ pend'`).
+- Tactics (`Fprintf/Tac.lean`): `nx_flat` (fresh register file + facts), `nf_run`, `nf_go`.
+  Lesson: `try`/`first` do NOT catch heartbeat/recursion exceptions; a side goal that falls
+  through to `sx_side`'s `decide` on a symbolic BitVec kills the run. Give every pointer bounds.
+
 ## For N1 / N3 (shared layer)
 
 - I add functions to `STDIO_FUNCS` (list above) and nothing else in N1's files so far.

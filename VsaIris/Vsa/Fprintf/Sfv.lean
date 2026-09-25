@@ -74,7 +74,8 @@ theorem sfv_tail (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     (hf1 : s.toNat - need ≤ f.toNat) (hf2 : f.toNat + 1208 ≤ s.toNat)
     (hfU : U.toNat + 24 ≤ f.toNat ∨ f.toNat + 1208 ≤ U.toNat)
     (hc : c ≤ resid) (hr : resid < 2 ^ 63) (hcL : c ≤ L) (hL : L < 2 ^ 63) (hsrc : src + L < 2 ^ 64)
-    (hRh : SfvRef Rh f U sp) (hR : SfvRegs R Rh nxt L src P) (h18 : R 18 = BitVec.ofNat 64 c)
+    (hRh : SfvRef Rh f U sp) (h9 : R 9 = BitVec.ofNat 64 nxt) (h19 : R 19 = BitVec.ofNat 64 L)
+    (h22 : R 22 = BitVec.ofNat 64 src) (hkeep : ∀ x ∈ sfvKeep, R x = Rh x) (h18 : R 18 = BitVec.ofNat 64 c)
     (hres : ldv .ld Mt (U + 16#64).toNat = BitVec.ofNat 64 resid)
     (hfl : ldv .lh Mt (f + 16#64).toNat = 0x2008#64) (hp : ldv .ld Mt f.toNat = P)
     (hkH : resid ≠ c → ∀ R', SfvRegs R' Rh nxt (L - c) (src + c) P →
@@ -84,8 +85,8 @@ theorem sfv_tail (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e334#64 R'
         (writeLog Mt [((U + 16#64).toNat, 8, BitVec.ofNat 64 (resid - c))])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e258#64 R Mt := by
-  obtain ⟨h8, h20, _, _, _⟩ := hR.k2 hRh
-  have h19 := hR.len; have h22 := hR.src
+  have h8 : R 8 = f := (hkeep 8 (by decide)).trans hRh.file
+  have h20 : R 20 = U := (hkeep 20 (by decide)).trans hRh.uio
   have e1 : BitVec.ofNat 64 resid - BitVec.ofNat 64 c = BitVec.ofNat 64 (resid - c) := by
     apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_sub, BitVec.toNat_ofNat]; omega
   have e2 : BitVec.ofNat 64 L - BitVec.ofNat 64 c = BitVec.ofNat 64 (L - c) := by
@@ -93,12 +94,12 @@ theorem sfv_tail (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
   nx_run hlive using [h8, h18, h19, h20, h22, hres, hfl, hp, e1, e2, ofNat_add_ofNat,
     BitVec.add_assoc] at 2147540928 2147541812
   · rename_i hb; rsimp at hb
-    refine hkX ?_ _ (by keep_chain hR.keep)
+    refine hkX ?_ _ (by keep_chain hkeep)
     have := congrArg BitVec.toNat hb; simp only [BitVec.toNat_ofNat] at this; omega
   · rename_i hb; rsimp at hb
-    refine hkH (fun e => hb (by rw [e, Nat.sub_self])) _ ⟨?_, ?_, ?_, ?_, ?_, by keep_chain hR.keep⟩
+    refine hkH (fun e => hb (by rw [e, Nat.sub_self])) _ ⟨?_, ?_, ?_, ?_, ?_, by keep_chain hkeep⟩
     all_goals rsimp
-    all_goals first | exact hR.nxt | (rw [ldv_ld_miss _ _ (by nx_addr)]; exact hp)
+    all_goals first | exact h9 | (rw [ldv_ld_miss _ _ (by nx_addr)]; exact hp)
 
 /-- **The next `iov`** (`s3 = 0` at the head, `0x8000e0ac`): the piece at
 `nxt` becomes current, `nxt` moves on by 16. -/
