@@ -96,7 +96,7 @@ theorem cloDefineStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
   iapply ms_callEnvDefineP HN hcl (i := 0x80003310)
     (jalx_80003310 live (fun p hp => hlive _ (interp_code_80003310 p hp))) interp_code_80003310
     (by decide) (st := ⟨st, out⟩) (d := d + 1) (fa := fa) (x := x) (v := v) (R := R) (n := n) hsp hpv
-    hn1 (by rw [h2, hsf]; omega) (by rw [h2, hsf]; unfold Vsa.Sim.tohostAddr; omega)
+    hn1 (by rw [h2, hsf]; omega) (by rw [h2, hsf]; omega)
     (by rw [h2, hsf]; omega) (by rw [h2, hsf]; omega)
   iframe Hed Hcode Himg Hms Hst Hstr Hval Hw
   isplitl []
@@ -329,8 +329,8 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   have hspN : EnvSp (R1 2) envNewNeed := by rw [h2]; exact envSp_eval hfg (by decide)
   rw [← h2]
   ihave #Hen := hen
-  have hlo' : Vsa.Sim.tohostAddr + 16 ≤ (R1 2).toNat - (n - 1088) := by
-    rw [h2, hsf]; unfold Vsa.Sim.tohostAddr; omega
+  have hlo' : 0x80100000 ≤ (R1 2).toNat - (n - 1088) := by
+    rw [h2, hsf]; omega
   have hfit : (R1 2).toNat - (n - 1088) + Newlib.fwriteNeed + 16 ≤ (R1 2).toNat := by
     rw [h2, hsf]; unfold Newlib.fwriteNeed; omega
   have hhi' : (R1 2).toNat ≤ 0x88000000 := by

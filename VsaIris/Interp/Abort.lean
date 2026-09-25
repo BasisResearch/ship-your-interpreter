@@ -12,7 +12,8 @@ abort is one of two machine states:
   and `sp` from the `jmp_buf` (`landingRegs`), with `a0 = 1` and the PC at the
   restored `ra`; the world is intact with `err_msg` a C string (`errStr`);
 * **`exit(1)`'s entry after an out-of-memory `fwrite`** (`oomCore s n`): `a0 = 1`,
-  newlib's data after a `stderr` write, and a stack pointer `s'` with room for
+  newlib's data after a `stderr` write, the `errno` word `fwrite` borrowed
+  (which `exit`'s close path writes too), and a stack pointer `s'` with room for
   `exit` inside the site's region `[s - n, s)` (`OomSp`).
 
 The second depends on the site's region, and is monotone in it
@@ -127,7 +128,7 @@ def oomCore (s : BitVec 64) (n : Nat) : IProp GF :=
   iprop(∃ (s' r v0 : BitVec 64) (o : String), ⌜OomSp s n s'⌝ ∗ PC ↦ᵣ exitEntry ∗
     (10 : Nat) ↦ᵣ 1#64 ∗ ra ↦ᵣ r ∗ (8 : Nat) ↦ᵣ v0 ∗ sp ↦ᵣ s' ∗ clobbered (argRegs.drop 1) ∗
     clobbered tmpRegs ∗ sepL (calleeSaved.drop 1) (fun r => iprop(∃ w, r ↦ᵣ w)) ∗
-    stdioAt (fun img => StdioOK img ∨ stdioErr img) ∗ consoleOwn o)
+    stdioAt (fun img => StdioOK img ∨ stdioErr img) ∗ errnoOwn ∗ consoleOwn o)
 
 /-- What an abort hands the continuation, besides the stack. -/
 def abortCore (s : BitVec 64) (n : Nat) : IProp GF :=
@@ -174,7 +175,7 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     (hΦ : ∀ o, ⊢ Φ (1, o)) (s : BitVec 64) (n : Nat) :
     oomCore s n ∗ stackScratch s n ∗ gp ↦ᵣ□ gpV ∗ binImg ⊢ Wp.W Φ := by
   unfold oomCore
-  iintro ⟨⟨%s', %r, %v0, %o, %hs, Hpc, Ha0, Hra, Hs0, Hsp, Hargs, Htmp, Hsaved, Hstd, Hcon⟩,
+  iintro ⟨⟨%s', %r, %v0, %o, %hs, Hpc, Ha0, Hra, Hs0, Hsp, Hargs, Htmp, Hsaved, Hstd, -, Hcon⟩,
     Hscr, #Hgp, #Himg⟩
   have h1 := hs.need; have h2 := hs.lo; have h3 := hs.fits; have h4 := hs.below
   have h5 := hs.hi; have h6 := hs.align

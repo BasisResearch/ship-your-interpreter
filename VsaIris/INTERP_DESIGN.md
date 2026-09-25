@@ -1451,3 +1451,94 @@ without the fact and no other resource carries it:
   stack and the resulting `abortRes` enters `Core` (`ms_callEnvNewP`,
   `ms_callEnvDefineP`, `ExecOom.lean`). The arms fix `L`/`Room` to
   `vsaLayoutP`/`vsaRoomB` (the `env_*` specs' heap).
+
+### STATEMENT CHANGES (N2)
+
+- **`StdioOK` pins the C locale** (`Vsa/Sim/LocaleData.lean`: `LocaleData`,
+  the fourth conjunct of `Stdio.StdioOK`). `_svfprintf_r`, behind every
+  `snprintf`/`fprintf` hole, reads three words of `__global_locale` (`.data`,
+  inside `stdioFoot`): the `mbtowc` hook it calls through `jalr s4`
+  (`0x80007740`, `__global_locale + 232 = 0x8001b880`), `__mb_cur_max`
+  (`0x8001b8f8`, via `__locale_mb_cur_max`), and the lconv `decimal_point`
+  (`0x8001b898`, via `_localeconv_r`, then `strlen`). `StdioOK` pinned none of
+  them, so the `snprintf` holes quantified over locale data that sends the
+  indirect call anywhere: unprovable as written.
+  - **What narrowed.** `LayoutInstance.BootHeapFacts` gains `locale :
+    LocaleData m` (so `Loaded interpRunLayout`, the hypothesis of
+    `endToEnd_refinement`, narrows); `World.BootGap` gains `locale`, and
+    `stdioOK_of_mem` takes it. `StdioOK`'s consumers are unchanged except
+    `StdioOK.stderr` (the tower's third conjunct is now a pair).
+  - **Not vacuous.** The control's snapshot carries the ELF values
+    (`NativeNameAudit.Control.locale_mem`, three reads through the heap log,
+    each one `decide`): `__ascii_mbtowc`, `1`, `"."` at `0x80019770`.
+  - **Every hole that returns `stdioOwn` must now also restore the locale**;
+    nothing writes it (`setlocale` is not linked into any path).
+
+### STATEMENT CHANGES (N1)
+
+- **The stdout calls borrow `errno`.** `_write_r` runs `sw zero,1272(gp)`
+  (`errno = 0`, `0x8001ba08`) on every console write, so every stdout/stderr
+  write path stores to that word. It is an allocator global
+  (`VsaHeap.allocGlobal`: `_sbrk_r` clears it too), owned by the heap
+  resource, not by `stdioOwn`; a spec that owns only `stdioOwn` cannot run
+  the store (the ghost map must change with the machine). `NewlibOut.outSpec`
+  now takes and returns `Stdio.stdioW := stdioOwn ∗ errnoOwn` (`errnoOwn`:
+  the word at any value). The global `errno` is only ever written with 0 and
+  never read on these paths; `_sbrk`'s ENOMEM goes to `_impure_data._errno`.
+- **The heap lends it.** `ErrnoOwn.heapRes_errno`: `heapRes vsaLayoutP
+  vsaRoomB ρ H ⊢ errnoOwn ∗ (errnoOwn -∗ heapRes …)`; the shape never reads the
+  word (`BlockHeapAt.transport_read`, `vsaRead`). Generic-layout arms take
+  `ErrnoOwn.ErrnoLend L Room`; `TermSim`/`StuckSim` supply `errnoLend_vsa`.
+- **Consumers.** `valuePrintSpec`, `nativePrintSpec`, `nativePrintlnSpec`,
+  `natOutSpec` and `world_out` carry `stdioW` where they carried `stdioOwn`;
+  `callNativeOut`, `caseT_CallPrint`, `caseT_CallPrintln`, `caseP_CallArm`
+  take `hEL : ErrnoLend L Room`. The same applies to H5's stderr/exit holes
+  (`newlib.fprintf`, `newlib.fwrite`, `newlib.exitHandlers`, N3) and to
+  `out.fprintf` (N5): their write paths reach `_write_r`.
+- **The return address is aligned.** `outSpec`'s precondition carries
+  `⌜r.toNat % 4 = 0⌝`: the callee's `ret` is a `jalr` whose target must be
+  4-aligned to be a successful step. Callers supply it from their `jal` site
+  (`ms_callNewlibA`, `ms_tailNewlibA`).
+- **`out.fputc` and `out.fwrite` need the stack above `.bss`.** `SpIn s need` admits a stack
+  window inside newlib's data (it bounds `s` only below by the HTIF words),
+  where the callee's spills would overwrite `stdioOwn`'s bytes. The proved
+  `Sym.fputc_out` (`Vsa/Stdout/OutSpec.lean`) and `Sym.fwrite_out`
+  (`Vsa/Stdout/FwriteOut.lean`) take `0x8001c168 ≤ s - need`
+  besides `SpIn`; the interpreter's callers derive it from `StackGeom`
+  (`Sym.bss_of_stackGeom`; the stack region starts at `0x87800000`). The
+  remaining stdout holes take the same premise when proved.
+
+### STATEMENT CHANGES (N3)
+
+`newlib.fwrite` is proved (`Newlib.fwrite_proved`, `Vsa/Stderr/FwriteSpec.lean`:
+`fwriteErr_run`, the whole first `fwrite(ptr, 1, n, stderr)` as one printing
+symbolic run, under `wp_lroW`). The hole as written was unprovable; the
+corrected statement and why:
+
+- **`errno`.** `_write_r` clears the global `errno` (N1 above), so
+  `fwriteSpec` takes and returns `errnoOwn`. Out of memory the block borrows
+  it from the heap resource the arm drops (`ErrnoOwn.heapRes_errno` at
+  `ExecOom`'s `oomAt`, `sg_oomEnd`'s `SgRest`, and the NULL branches of the
+  `fn`-literal and concatenation templates); `ev_oom`/`ms_evalOom`/
+  `wp_oomBlock` take it, and `Abort.oomCore` carries it to `exit(1)`'s entry,
+  whose close path (`_close_r`, `_fstat_r`) writes it too (N4).
+- **`Ierr` is fixed to `StdioErrOK`** (`StdioErr.lean`): the state the first
+  write leaves (`__SORD | __SRW | __SWR | __SNBF`, `_bf._base = _p = _nbuf`,
+  `_flags2 = 0`; every other field `exit` reads as in `StdioOK`,
+  `stdioErrOK_of_write`). `NewlibHoles := NewlibHolesAt StdioErrOK`.
+- **`StdioOK` pins `stderr`'s buffer and writer** (`Vsa/Sim/StderrStream.lean`,
+  the fifth conjunct; `BootHeapFacts.stderrStream`, control witness in the
+  snapshot). Without `_bf._base = NULL` and `_write = __swrite`, `fwrite`
+  jumps through an unconstrained function pointer.
+- **Premises.** `0 < n < 2^30` (`n = 0` returns before orienting the stream;
+  one `__sfvwrite_r` chunk is `< 0x7ffffc00`); the bytes read-only (`Sro`) in
+  RAM off the tohost cells and off the stack, newlib's data and `errno`; the
+  frame above newlib's data (`0x80100000 ≤ s - 768`); an aligned return
+  address (as N1's `outSpec`). The out-of-memory message is in `.rodata`
+  (`oomMsg_text`); `OomBlockSp` gains `data`, and `ms_callEnvNewP`/
+  `ms_callEnvDefineP` take the region above newlib's data (`0x80100000 ≤
+  R2 - n`, from the stack segment); `OomSite.OK` gains `fwAlign`.
+- **Tactics.** Stdio run files' `sx_side` rules are scoped
+  (`open scoped VsaIris.Sym.Stdout`, N1): unscoped, imported into the
+  interpreter's run files through `Oom`, they exhausted `ix_run1`'s recursion
+  depth.

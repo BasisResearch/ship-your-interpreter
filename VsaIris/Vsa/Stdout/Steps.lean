@@ -38,3 +38,8 @@ import VsaIris.Vsa.Stdout.Steps.Part34
 import VsaIris.Vsa.Stdout.Steps.Part35
 import VsaIris.Vsa.Stdout.Steps.Part36
 import VsaIris.Vsa.Stdout.Steps.Part37
+import VsaIris.Vsa.Stdout.Steps.Part38
+import VsaIris.Vsa.Stdout.Steps.Part39
+import VsaIris.Vsa.Stdout.Steps.Part40
+import VsaIris.Vsa.Stdout.Steps.Part41
+import VsaIris.Vsa.Stdout.Steps.Part42

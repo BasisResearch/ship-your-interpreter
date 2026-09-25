@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Console
 import VsaIris.Vsa.Stdout.Write
+import VsaIris.Vsa.Stdout.Attr
 
 /-!
 # Driving stdout runs (lane N1)
@@ -23,10 +24,15 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 /-- The bytes a stdout call owns: newlib's data, `errno`, and `need` bytes
 of stack below `s`. -/
 def outS (s : BitVec 64) (need : Nat) (a : Nat) : Prop :=
-  stdioFoot a ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨ (s.toNat - need ≤ a ∧ a < s.toNat)
+  (stdioFoot a ∧ ¬ impureW a) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨ (s.toNat - need ≤ a ∧ a < s.toNat)
 
-macro_rules
-  | `(tactic| sx_side) => `(tactic| (intro b hb; simp only [mem_accAddrs_iff, outS, stdioFoot, InRange] at *; sx_addr))
+namespace Stdout
+/-- Footprint side goals over `outS`. The `sx_side` rules of this file are
+scoped to `VsaIris.Sym.Stdout` (`open scoped VsaIris.Sym.Stdout` in each run
+file): importers' `sx_side` goals never reach them. -/
+scoped macro_rules
+  | `(tactic| sx_side) => `(tactic| (intro b hb; simp only [mem_accAddrs_iff, outS, stdioFoot, InRange, impureW] at *; sx_addr))
+end Stdout
 
 /-- Updating the registers `xs` to the values `v`. -/
 def updAll (R : Nat → BitVec 64) (v : Nat → BitVec 64) : List Nat → Nat → BitVec 64
@@ -68,7 +74,7 @@ theorem sext_zero32 : BitVec.signExtend 64 (0#32) = 0#64 := by decide
 syntax "nx_console" : tactic
 macro_rules
   | `(tactic| nx_console) => `(tactic| simp (disch := assumption) only
-      [ConsoleMt.impure, ConsoleMt.sinit, ConsoleMt.stdout, ConsoleMt.p, ConsoleMt.w,
+      [ldv_impDt, ConsoleMt.sinit, ConsoleMt.stdout, ConsoleMt.p, ConsoleMt.w,
        ConsoleMt.flagsU, ConsoleMt.flagsS, ConsoleMt.fd, ConsoleMt.base, ConsoleMt.bsize,
        ConsoleMt.lbf, ConsoleMt.cookie, ConsoleMt.writer, ConsoleMt.lock, ConsoleMt.lockMode])
 
@@ -93,7 +99,8 @@ macro_rules
         BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
         BitVec.ushiftRight_eq', BitVec.reduceToNat,
         BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend, not_true_eq_false])
+        BitVec.reduceAppend, not_true_eq_false, Nat.reducePow, Nat.reduceMod, BitVec.reduceAnd,
+        BitVec.reduceOr])
 
 open Lean Elab Tactic Meta in
 /-- `nx_run`'s normalizer: `ix_run`'s (register lookups, the caller's facts),
@@ -103,7 +110,7 @@ reaches the entry memory, which the facts describe. -/
 def nxNorm (facts : Array Term) : TacticM Syntax := do
   let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
     facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-  `(tactic| ((try simp only [updAll] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
+  `(tactic| ((try simp only [updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero]) <;>
       (try simp (disch := decide) only [update_aligned]) <;>
@@ -126,9 +133,11 @@ def nxTryPrune (facts : Array Term) (norm : Syntax) (g : MVarId) : TacticM Bool 
 
 open Lean Elab Tactic Meta in
 def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
-    (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num))) :
+    (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
+    (budgetPct : Nat := 0) :
     TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
+    let ctx ← readThe Core.Context
     let stopPCs : List Nat := match stops with
       | some ss => ss.toList.map (·.getNat)
       | none => []
@@ -153,6 +162,11 @@ def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       let (cur, fuel) := work.head!
       work := work.tail!
       if fuel == 0 then stuck := stuck ++ [cur]; continue
+      -- lane N3: a budgeted run (a proof piece) stops once it used `budgetPct`% of
+      -- the declaration's heartbeats
+      if budgetPct != 0 && ctx.maxHeartbeats != 0 then
+        let used := (← IO.getNumHeartbeats) - ctx.initHeartbeats
+        if used * 100 > ctx.maxHeartbeats * budgetPct then stuck := stuck ++ [cur]; continue
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
       let some (conts, pend) ← ixStep norm h cur | stuck := stuck ++ [cur]; continue
@@ -201,14 +215,21 @@ with `nxNorm`; a continuation's binders (a callee's havoc values) are all
 introduced. -/
 syntax "nx_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
+/-- `nx_runB …`: `nx_run` that stops at 55% of the declaration's heartbeat
+budget (lane N3: one `#ix_piece` of a long run). -/
+syntax "nx_runB " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
+
 open Lean Elab Tactic Meta in
 elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
+  | `(tactic| nx_runB $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops 55
 
 /-- `nx_addr` for byte-ownership goals: unfold `outS` first. -/
-macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
+macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
 
-macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
+namespace Stdout
+scoped macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
+end Stdout
 /-- The address-range hypothesis of a byte-set side condition, as arithmetic. -/
 syntax "nx_hb " ident : tactic
 macro_rules
@@ -216,11 +237,22 @@ macro_rules
       toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod,
       Nat.reduceAdd] at $h:ident)
 
-macro_rules | `(tactic| sx_side) => `(tactic| (intro b hb; (try nx_hb hb); nx_addr))
+namespace Stdout
+scoped macro_rules | `(tactic| sx_side) => `(tactic| (intro b hb; (try nx_hb hb); nx_addr))
+end Stdout
 
+namespace Stdout
+/-- A load from the data view's first block (`_impure_ptr`, in a view
+`accAddrs 0x8001b970 8 ++ DAs` that also holds a string). -/
+scoped macro_rules
+  | `(tactic| sx_side) => `(tactic| (intro b hb; apply List.mem_append_left; exact hb))
+end Stdout
+
+namespace Stdout
 /-- A branch refuted by a hypothesis of the run (a flag bit a summary assumes). -/
-macro_rules
+scoped macro_rules
   | `(tactic| sx_side) => `(tactic| (intro hc; first | (apply hc; assumption) | (apply absurd hc; assumption)))
+end Stdout
 
 /-- The caller-saved registers other than `a0` and `ra`. -/
 abbrev callClob : List Nat := [5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]

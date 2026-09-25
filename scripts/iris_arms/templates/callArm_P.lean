@@ -31,6 +31,7 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
     {st : St} {d env : Nat} {f : Expr} {args : List Expr}
     (hE : ErrEnv (GF := GF) N L Room inp live Core) (hN : NativeEntries N) (hd : DispSupply (GF := GF) N)
+    (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
     (ha : evalArgsP_body (GF := GF) live N L Room inp Core d env args)
     (hvk : ⊢ ∀ p Mt v, valueKindNameSpec (GF := GF) (vsaModel live) (wpW (vsaModel live)) p Mt v)
     (hnp : ∀ sret args s vs st o,
@@ -87,7 +88,7 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
       iapply callNativeOut hlive (wpW (vsaModel live)) (nf := .print) (entry := nativePrintPC)
         (out := fun st vs o => o ++ printArgs st vs) (need := nativePrintNeed)
         (by show N.print = _; rw [hN.print]; rfl) (by decide) (by unfold maxArgs at hlen; omega)
-        hsg (by omega) (by unfold nativePrintlnNeed at hroom; omega) hslg hal hd hregs.sp hcall
+        hsg (by omega) (by unfold nativePrintlnNeed at hroom; omega) hslg hal hd hregs.sp hcall hEL
       ihave #Hsp := hsp1
       isplitl []
       · iexact Hsp
@@ -107,7 +108,7 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
       iapply callNativeOut hlive (wpW (vsaModel live)) (nf := .println) (entry := nativePrintlnPC)
         (out := fun st vs o => o ++ printArgs st vs ++ "\n") (need := nativePrintlnNeed)
         (by show N.println = _; rw [hN.println]; rfl) (by decide) (by unfold maxArgs at hlen; omega)
-        hsg (by omega) hroom hslg hal hd hregs.sp hcall
+        hsg (by omega) hroom hslg hal hd hregs.sp hcall hEL
       ihave #Hsp := hsp2
       isplitl []
       · iexact Hsp

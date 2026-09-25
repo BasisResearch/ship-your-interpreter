@@ -1,6 +1,7 @@
 import VsaIris.Interp.ProofValuePrint
 import VsaIris.Interp.ProofValueCons
 import VsaIris.Vsa.StdioRead
+import VsaIris.Vsa.Stdout.OutSpec
 
 /-!
 # `native_print` and `native_println` (lane H2)
@@ -195,19 +196,20 @@ theorem codeRes_imp :
     rw [mem_accAddrs_iff] at ha; unfold impureW; omega) $$ Hr
 
 omit I in
-/-- newlib's data outside `ioW`, with `_impure_ptr`. -/
+/-- newlib's data outside `ioW`, with `_impure_ptr`, and `errno`. -/
 def ioRest (img : Nat → BitVec 8) : IProp GF :=
-  iprop(ownSet (fun k => stdioExcl k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ∗ impureRO)
+  iprop(ownSet (fun k => stdioExcl k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ∗ impureRO ∗ errnoOwn)
 
 omit I in
 /-- **Open the two words of newlib's data into a run's owned bytes.** -/
 theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M : Mem} :
-    ms (GF := GF) pc R S M ∗ stdioOwn ⊢
+    ms (GF := GF) pc R S M ∗ stdioW ⊢
       ∃ (img : Nat → BitVec 8) (M' : Mem), ⌜StdioOK img⌝ ∗
         ms pc R (fun k => S k ∨ ioW k) M' ∗ ioRest img ∗
         ⌜(∀ k, S k → imgM M' k = imgM M k) ∧ (∀ k, ioW k → imgM M' k = img k) ∧
           ∀ k, S k → ¬ ioW k⌝ := by
-  iintro ⟨Hms, Hio⟩
+  unfold stdioW
+  iintro ⟨Hms, Hio, Herr⟩
   ihave ⟨%img, %⟨hok, -⟩, H1, H2, #Hr⟩ := stdioAt_open StdioOK ioW $$ Hio
   ihave H1 := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨ioW_stdio h, h⟩⟩) $$ H1
   ihave ⟨%Mi, H1, %hMi⟩ := ownSet_trackedAt _ img $$ H1
@@ -215,7 +217,7 @@ theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
   · iframe Hms H1
   iexists img, M'
   unfold ioRest
-  iframe Hms H2 Hr
+  iframe Hms H2 Hr Herr
   ipureintro
   exact ⟨hok, h1, fun k hk => (h2 k hk).trans (hMi k hk), h3⟩
 
@@ -225,11 +227,11 @@ theorem ms_ioClose {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {
     {img : Nat → BitVec 8} (hok : StdioOK img) (hd : ∀ k, S k → ¬ ioW k) :
     ms (GF := GF) pc R (fun k => S k ∨ ioW k) M ∗ ioRest img ∗
         ⌜∀ k, ioW k → imgM M k = img k⌝ ⊢
-      ms pc R S M ∗ stdioOwn := by
-  unfold ioRest
-  iintro ⟨Hms, ⟨H2, #Hr⟩, %hio⟩
+      ms pc R S M ∗ stdioW := by
+  unfold ioRest stdioW
+  iintro ⟨Hms, ⟨H2, #Hr, Herr⟩, %hio⟩
   ihave ⟨Hms, H1⟩ := ms_split hd $$ Hms
-  iframe Hms
+  iframe Hms Herr
   iapply stdioAt_close StdioOK ioW img hok hok.impureImg
   iframe H2 Hr
   ihave H1 := ownSet_congr (Ψ := fun k => iprop(k ↦ₘ img k)) (fun k hk => by rw [hio k hk]) $$ H1
@@ -422,14 +424,14 @@ abbrev NpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
     IProp GF :=
   iprop(PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
     (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
-      (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
+      (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
         consoleOwn (o ++ printArgs st vs) ∗ stackAt s nativePrintNeed)) -∗ Wp.W Φ)
 
 /-- The frame of the epilogue run. -/
 def FnpE (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64)
     (Margs : Mem) : IProp GF :=
-  iprop(valsImg N (imgM Margs) args.toNat vs ∗ valAt N sret.toNat .null ∗ stdioOwn ∗
+  iprop(valsImg N (imgM Margs) args.toNat vs ∗ valAt N sret.toNat .null ∗ stdioW ∗
     consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
     NpK Wp Φ N sret args s r vs st o rv)
 
@@ -484,9 +486,9 @@ theorem outSpec_fn {live : Nat → Prop} {Wp : MachWP (GF := GF) (vsaModel live)
     {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need : Nat} {cs : Nat → BitVec 64}
     {o frag : String} :
     outSpec live Wp entry args Rr s need cs o frag ⊢
-      fnSpecW Wp entry (fun _ => iprop(argsAt args ∗ Rr ∗ stdioOwn ∗ consoleOwn o ∗
+      fnSpecW Wp entry (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt args ∗ Rr ∗ stdioW ∗ consoleOwn o ∗
           callFrame s need Newlib.calleeSaved cs))
-        (fun _ => iprop(clobbered argRegs ∗ stdioOwn ∗ consoleOwn (o ++ frag) ∗
+        (fun _ => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
           callFrame s need Newlib.calleeSaved cs)) := .rfl
 
 omit I in
@@ -500,9 +502,10 @@ theorem ms_callOut (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     {S : Nat → Prop} {Mt : Mem} {o frag : String}
     (hspec : ∀ cs, ⊢ outSpec live Wp entry args Rr s need cs o frag)
     (hlen : args.length ≤ 8) (hvs : ∀ i (h : i < args.length), R (10 + i) = args[i])
-    (hs : R 2 = s) (hn : n ≤ s.toNat) (hneed : need ≤ n) :
-    codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ Rr ∗ stdioOwn ∗ consoleOwn o ∗ stackScratch s n ∗ binImg ∗
-      (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ stdioOwn -∗
+    (hs : R 2 = s) (hn : n ≤ s.toNat) (hneed : need ≤ n)
+    (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0 := by decide) :
+    codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ Rr ∗ stdioW ∗ consoleOwn o ∗ stackScratch s n ∗ binImg ∗
+      (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ stdioW -∗
         consoleOwn (o ++ frag) -∗ ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
         stackScratch s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
@@ -510,14 +513,14 @@ theorem ms_callOut (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hsp0 := hspec R
   ihave #Hsp := outSpec_fn $$ Hsp0
   ihave #Hgp := codeRes_gp $$ Hcode
-  iapply ms_callNewlib Wp hexec hcode
-    (P := fun _ => iprop(argsAt args ∗ Rr ∗ stdioOwn ∗ consoleOwn o ∗
+  iapply ms_callNewlibA Wp hexec hcode
+    (P := fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt args ∗ Rr ∗ stdioW ∗ consoleOwn o ∗
       callFrame s need Newlib.calleeSaved R))
-    (Q := fun _ => iprop(clobbered argRegs ∗ stdioOwn ∗ consoleOwn (o ++ frag) ∗
+    (Q := fun _ => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
       callFrame s need Newlib.calleeSaved R))
-    (X := iprop(Rr ∗ stdioOwn ∗ consoleOwn o))
-    (Y := iprop(stdioOwn ∗ consoleOwn (o ++ frag))) hlen hvs hs hn hneed
-    (fun r => by iintro ⟨Ha, ⟨Hx, Hs, Hc⟩, Hf⟩; iframe Ha Hx Hs Hc Hf)
+    (X := iprop(Rr ∗ stdioW ∗ consoleOwn o))
+    (Y := iprop(stdioW ∗ consoleOwn (o ++ frag))) hlen hvs hs hn hneed hi4
+    (fun r hr => by iintro ⟨Ha, ⟨Hx, Hs, Hc⟩, Hf⟩; iframe Ha Hx Hs Hc Hf; ipureintro; exact hr)
     (fun r => by iintro ⟨Ha, Hs, Hc, Hf⟩; iframe Ha Hs Hc Hf)
   iframe Hsp Hcode Hms Hst Hgp Himg HR Hstd Hcon
   iintro %R' %hk ⟨Hstd, Hcon⟩ Hms Hst
@@ -560,7 +563,7 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     (hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k)
     (hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k) :
     codeRes ∗ ms 0x80002f64#64 R (npF s args n) M ∗ slot24 sret.toNat ∗
-      valsImg N (imgM Margs) args.toNat vs ∗ stdioOwn ∗ consoleOwn (o ++ printArgs st vs) ∗
+      valsImg N (imgM Margs) args.toNat vs ∗ stdioW ∗ consoleOwn (o ++ printArgs st vs) ∗
       stackScratch (s - 80#64) printNeed ∗ NpK Wp Φ N sret args s r vs st o rv ⊢ Wp.W Φ := by
   iintro ⟨#Hcode, Hms, Hsl, #Hv, Hstd, Hcon, Hst, Hk⟩
   ihave #Hvn := hvn
@@ -643,9 +646,9 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
     (hlen : vs.length = n) {i : Nat} (hi : i < n) {R : Nat → BitVec 64} {M : Mem}
     (f : NpFacts sret args s r n i i rv R M Margs)
     (hB : ∀ R' M', NpFacts sret args s r n i (i + 1) rv R' M' Margs →
-      NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R' (npF s args n) M' ∗ stdioOwn ∗
+      NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R' (npF s args n) M' ∗ stdioW ∗
         consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ) :
-    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R (npF s args n) M ∗ stdioOwn ∗
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i) ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
   ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
@@ -683,11 +686,11 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   rotate_left
   · unfold NpRest ioRest
     icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
-    icases Hio with ⟨Hio, #Hr⟩
+    icases Hio with ⟨Hio, #Hr, Herr⟩
     isplitl []
     · iapply codeRes_imp; iframe Hcode Hr
     unfold FnpA NpRest ioRest
-    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hr Hms
+    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hr Herr Hms
   intro F'
   refine np_body c.hlive f.h8 f.h9 f.h18 f.h2 (by omega) hs2 hs3 ha1 ha2 ha3 hi ea hw0 hw1 hw2 hio1
     hio2 ?_
@@ -765,9 +768,9 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
     (by decide) (clob := callerSaved)
     (pins := fun rv => rv 10 = s - 80#64 ∧ rv 11 = stdoutFile ∧ rv 2 = s - 80#64)
     (Pre := iprop(valAt N (s - 80#64).toNat (vs[i]'(by omega)) ∗ ⌜SlotGeom (s - 80#64)⌝ ∗
-      dispRes st (vs[i]'(by omega)) ∗ binImg ∗ stdioOwn ∗ consoleOwn (o ++ npOut st vs i) ∗
+      dispRes st (vs[i]'(by omega)) ∗ binImg ∗ stdioW ∗ consoleOwn (o ++ npOut st vs i) ∗
       stackAt (s - 80#64) printNeed))
-    (Post := fun _ => iprop(valAt N (s - 80#64).toNat (vs[i]'(by omega)) ∗ stdioOwn ∗
+    (Post := fun _ => iprop(valAt N (s - 80#64).toNat (vs[i]'(by omega)) ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ∗
       stackAt (s - 80#64) printNeed))
   iframe Hvp Hcode Hms
@@ -854,8 +857,8 @@ theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (ha0 : R 10 = 32#64) (ha1 : R 11 = stdoutFile)
     (hA : ∀ R' M', NpFacts sret args s r n (i + 1) (i + 1) rv R' M' Margs →
       NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R' (npF s args n) M' ∗
-        stdioOwn ∗ consoleOwn (o' ++ " ") ⊢ Wp.W Φ) :
-    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f18#64 R (npF s args n) M ∗ stdioOwn ∗
+        stdioW ∗ consoleOwn (o' ++ " ") ⊢ Wp.W Φ) :
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f18#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn o' ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
@@ -873,7 +876,8 @@ theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iapply ms_callOut Wp (i := 0x80002f18)
     (jalx_80002f18 live (fun p hp => c.hlive _ (interp_code_80002f18 p hp))) interp_code_80002f18
     (R := R) (S := npF s args n) (Mt := M) (n := printNeed)
-    (fun cs => H.fputc live Wp (32#8) (s - 80#64) cs o' hcl (spIn_of_stackGeom hsg (by decide)))
+    (fun cs => VsaIris.Sym.fputc_out live Wp (32#8) (s - 80#64) cs o' hcl (spIn_of_stackGeom hsg (by decide))
+      (VsaIris.Sym.bss_of_stackGeom hsg (by decide)))
     (by simp) (fun j hj => by
       simp only [List.length_cons, List.length_nil] at hj
       rcases j with _ | _ | j
@@ -910,8 +914,8 @@ theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     {R : Nat → BitVec 64} {M : Mem} (f : NpFacts sret args s r n i (i + 1) rv R M Margs)
     (hA : ∀ R' M', NpFacts sret args s r n (i + 1) (i + 1) rv R' M' Margs →
       NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R' (npF s args n) M' ∗
-        stdioOwn ∗ consoleOwn (o ++ npOut st vs (i + 1)) ⊢ Wp.W Φ) :
-    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioOwn ∗
+        stdioW ∗ consoleOwn (o ++ npOut st vs (i + 1)) ⊢ Wp.W Φ) :
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
   ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
@@ -933,11 +937,11 @@ theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   rotate_left
   · unfold NpRest ioRest
     icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
-    icases Hio with ⟨Hio, #Hr⟩
+    icases Hio with ⟨Hio, #Hr, Herr⟩
     isplitl []
     · iapply codeRes_imp; iframe Hcode Hr
     unfold FnpB FnpA NpRest ioRest
-    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hr Hms
+    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hr Herr Hms
   intro F'
   refine np_more c.hlive f.h8 f.h9 f.h18 f.h19 hne hio1 hio2 ?_
   intros; apply swp_closeF
@@ -1004,7 +1008,7 @@ theorem np_B_last (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (hvn : ⊢ valueNullSpec (vsaModel live) N Wp sret) (hlen : vs.length = n) {i : Nat}
     (hi : i + 1 = n) {R : Nat → BitVec 64} {M : Mem}
     (f : NpFacts sret args s r n i (i + 1) rv R M Margs) :
-    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioOwn ∗
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
@@ -1013,7 +1017,7 @@ theorem np_B_last (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
   rw [String.append_assoc, npOut_last st vs i (by omega)]
   iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002f48#64)
-    (F := iprop(slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ stdioOwn ∗
+    (F := iprop(slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ stdioW ∗
       consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
       NpK Wp Φ N sret args s r vs st o rv ∗ codeRes))
   rotate_left
@@ -1059,7 +1063,7 @@ theorem np_loop (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     (hvn : ⊢ valueNullSpec (vsaModel live) N Wp sret) (hlen : vs.length = n) :
     ∀ k i, i + k + 1 = n → ∀ R M, NpFacts sret args s r n i i rv R M Margs →
       NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R (npF s args n) M ∗
-        stdioOwn ∗ consoleOwn (o ++ npOut st vs i) ⊢ Wp.W Φ := by
+        stdioW ∗ consoleOwn (o ++ npOut st vs i) ⊢ Wp.W Φ := by
   intro k
   induction k with
   | zero =>
@@ -1105,7 +1109,7 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
       rw [List.length_eq_zero_iff.1 h0]; simp [printArgs]
     ihave Hcon := (show consoleOwn (GF := GF) o ⊢ consoleOwn (o ++ printArgs st vs) by rw [e]) $$ Hcon
     iapply wp_swpF Wp (S := npF s args vs.length) (R := upd rv 1 r) (Mt := M) (pc := nativePrintPC)
-      (F := iprop(slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ stdioOwn ∗
+      (F := iprop(slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ stdioW ∗
         consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
         NpK Wp Φ N sret args s r vs st o rv ∗ codeRes))
     rotate_left
@@ -1147,7 +1151,7 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
       exact hMa k hk
     iframe Hcode Hms Hsl Hv Hstd Hcon Hst Hk
   · iapply wp_swpF Wp (S := npF s args vs.length) (R := upd rv 1 r) (Mt := M) (pc := nativePrintPC)
-      (F := iprop(NpRest Wp Φ N sret args s r vs st o rv Margs ∗ stdioOwn ∗ consoleOwn o))
+      (F := iprop(NpRest Wp Φ N sret args s r vs st o rv Margs ∗ stdioW ∗ consoleOwn o))
     rotate_left
     · rw [hro, hms]
       unfold NpRest
