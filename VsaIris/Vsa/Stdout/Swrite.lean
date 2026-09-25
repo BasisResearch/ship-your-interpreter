@@ -31,10 +31,10 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
 `buf`) and returns `n`. The buffer is off the call's frame, the flags and
 `errno`. -/
 theorem swrite_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
-    {R : Nat → BitVec 64} {s sp : BitVec 64} {need : Nat} {buf : Nat} {bs : List (BitVec 8)}
+    {R : Nat → BitVec 64} {s sp ra s0 : BitVec 64} {need : Nat} {buf : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 64 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : (R 1).toNat % 4 = 0)
-    (hb1 : 0x80000000 ≤ buf) (hb2 : buf + bs.length ≤ 0x100000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (h1 : R 1 = ra)
+    (hra : ra.toNat % 4 = 0) (h8 : R 8 = s0) (hb1 : 0x80000000 ≤ buf) (hb2 : buf + bs.length ≤ 0x100000000)
     (hb3 : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)
     (hbd : ∀ i, i < bs.length → (buf + i < sp.toNat - 64 ∨ sp.toNat ≤ buf + i) ∧
       (buf + i < 0x8001bb30 ∨ 0x8001bb32 ≤ buf + i) ∧ (buf + i < 0x8001ba08 ∨ 0x8001ba0c ≤ buf + i))
@@ -42,22 +42,16 @@ theorem swrite_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Me
     (h11 : R 11 = 0x8001bb20#64) (h12 : R 12 = BitVec.ofNat 64 buf)
     (h13 : R 13 = BitVec.ofNat 64 bs.length) (h2 : R 2 = sp)
     (hfl : ldv .lh Mt 0x8001bb30 = 0x200a#64) (hfd : ldv .lh Mt 0x8001bb32 = 1#64)
-    (hk : ∀ v : Nat → BitVec 64, SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
-      (t ++ putcs bs) (R 1) (callRet R v (BitVec.ofNat 64 bs.length)) (swriteMt Mt sp (R 1) (R 8))) :
+    (hk : ∀ R', RetOK R R' (BitVec.ofNat 64 bs.length) → SWPO live (stdioText ++ dataOf Dt DA) iRegs
+      (outS s need) Q (t ++ putcs bs) ra R' (swriteMt Mt sp ra s0)) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000efd4#64 R Mt := by
-  ix_run hlive using [h11, h2, hfl, hfd, BitVec.reduceAnd, BitVec.reduceOr, BitVec.add_assoc] at 2147483708
+  nx_run hlive using [h11, h2, h1, h8, hfl, hfd, BitVec.reduceAnd, BitVec.reduceOr, BitVec.add_assoc] at 2147483708
   refine write_run' hlive buf bs hb1 hb2 hb3 (fun i hi => ?_) _ t (by simp [upd_apply, h12])
-    (by simp [upd_apply, h13]) (by simp [upd_apply] <;> decide) (fun v11 v13 v14 v15 v16 => ?_)
+    (by simp [upd_apply, h13]) (by simp [upd_apply, hra] <;> decide) (fun v11 v13 v14 v15 v16 => ?_)
   · refine ((((hsrc i hi).store _ ?_).store _ ?_).store _ ?_).store _ ?_ |>.store _ ?_
-    all_goals (have := hbd i hi; sx_addr)
+    all_goals (have := hbd i hi; nx_addr)
   sx_norm
-  ix_run hlive using [h13, h12, h2, BitVec.add_assoc]
-  refine swp_congr (callRet_of ?_ ?_) (hk _)
-  · simp [upd_apply]
-  · intro x hx h32 h10 hc
-    simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-      rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp_all [upd_apply]
+  nx_run hlive using [h13, h12, h2, h1, h8, BitVec.add_assoc]
+  exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 end VsaIris.Sym

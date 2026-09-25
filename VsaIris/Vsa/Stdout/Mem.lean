@@ -115,11 +115,36 @@ theorem ldv_lbu_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 1 ≤ b �
 theorem ldv_lwu_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 4 ≤ b ∨ b + w ≤ a) :
     ldv .lwu (writeLog Mt [(b, w, v)]) a = ldv .lwu Mt a := ldv_store_miss .lwu Mt v h
 
+/-! ### Goal-only address arithmetic
+
+`sx_addr` normalizes every hypothesis (`simp … at *`), which dominates a
+long run's cost: the context holds the run's facts and summaries. `nx_addr`
+rewrites only the goal: `(x + k#64).toNat` becomes `x.toNat + k` or
+`x.toNat - (2^64 - k)` (a negative offset), side conditions by `omega` from
+the context's bounds; then `omega`. -/
+
+theorem toNat_add_lit {x : BitVec 64} {k : Nat} (h : x.toNat + k < 2 ^ 64) :
+    (x + BitVec.ofNat 64 k).toNat = x.toNat + k := by
+  rw [BitVec.toNat_add, BitVec.toNat_ofNat]
+  have : k < 2 ^ 64 := by omega
+  rw [Nat.mod_eq_of_lt this, Nat.mod_eq_of_lt h]
+
+theorem toNat_add_neg {x : BitVec 64} {k : Nat} (hk : k < 2 ^ 64) (h : 2 ^ 64 ≤ x.toNat + k) :
+    (x + BitVec.ofNat 64 k).toNat = x.toNat - (2 ^ 64 - k) := by
+  rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hk]
+  have := x.isLt
+  omega
+
+syntax "nx_addr" : tactic
+macro_rules
+  | `(tactic| nx_addr) => `(tactic| ((try simp (disch := omega) only [mem_accAddrs_iff, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat,
+      Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd, and_true, true_and]); omega))
+
 /-- Store forwarding at every width, for stdio runs. -/
 syntax "nx_mem" : tactic
 macro_rules
-  | `(tactic| nx_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
+  | `(tactic| nx_mem) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
       ldv_ld_miss, ldv_lw_miss, ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
-      ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss] at *)
+      ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss])
 
 end VsaIris.Sym
