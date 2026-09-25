@@ -361,10 +361,12 @@ stack pointer: its frame and its callees' (`[sp - 352, sp)`), the `FILE`'s
 `_p`/`_w`/buffer, the residual, `stdout`'s flags, `errno`. -/
 def SfvCallReg (f sp U : Nat) (a : Nat) : Prop := LoopReg f (sp - 96) U a ∨ (sp - 96 ≤ a ∧ a < sp)
 
-/-- **`__sfvwrite_r(reent, f, uio)`** on `__sbprintf`'s stack `FILE` holding
+/-! **`__sfvwrite_r(reent, f, uio)`** on `__sbprintf`'s stack `FILE` holding
 `pend0`, with the pieces `iovs` (the `uio`'s `iov` array at `A`, residual
 their total): back at `ra` with 0, having printed `out` and buffered `pend'`,
-`pend0 ++ bytes = out ++ pend'`, and changed only `SfvCallReg`. -/
+`pend0 ++ bytes = out ++ pend'`, and changed only `SfvCallReg`
+(`sfvwrite_chain`: the prologue `sfvwrite_A`, then `sfv_start`). -/
+
 #ix_seg sfvwrite_A {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
