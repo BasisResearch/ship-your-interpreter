@@ -18,6 +18,11 @@ block at four sites (`experiments/disasm.txt`):
 | `_vfprintf_r` | `0x8000a8f0` (`bgez` → `0x8000a8fc`) | `0x8000a8fc`–`0x8000a914` | `0x8000a924` (via `bgez`) |
 | `__swbuf_r` | `0x8000f108` (`bgez` → `0x8000f1b4`) | `0x8000f1b4`–`0x8000f1c8` | `0x8000f118` (`j`) |
 
+`_vfprintf_r`'s test at `0x8000a8f0` is taken only when `_flags2 & 1` is set; with
+`_flags2 = 0` (every boundary state) the route runs the stub lock (`0x8000ace8` →
+`0x8000af44`) and tests at `0x8000af54` (`bltz` → `0x8000a918` oriented, else
+`j 0x8000a8fc`, the block above; `Fprintf/Outer.lean`).
+
 Each block computes `_flags | 0x2000` (`lui …,0x2; or`) and
 `_flags2 & 0xffffffffffffdfff` (`lui …,0xffffe; addi …,-1; and`) and stores
 them with `sh …,16(fp)` and `sw …,176(fp)`. At a `ConsoleStreamAt o` state
