@@ -232,3 +232,13 @@ Checks: build green (2714 jobs), `check_iris_holes.py` ok (3), `endToEnd_refinem
 
 B1 (next): its `StdioOK := ∃ o, StdioOKAt o` changes the precondition of every newlib run; the
 proved N1/N3/N4/N5 runs assumed `stdout` oriented. Being rebased on branch `int2-b1`.
+
+### B2 (2026-09-25)
+
+| lane | head | merge on `iris-main` | conflicts |
+|---|---|---|---|
+| B2 (P3: `halts_fillZero`/`diverges_fillZero`; `endToEnd_refinement` stated at `fillZero c`, the old statement is `endToEnd_refinement_loaded`) | `56d51b1` | `b642d95` | `README.md` and `PROOF_CLOSURE_PLAN.md` (both sides kept), `LANES-a.md` (lane A's report restored; B2's report archived as `LANES-b2.md`) |
+
+Hole ledger: before 3, after 3 (B2 adds and removes none).
+Checks: build green (2723 jobs), `check_iris_holes.py` ok (3), `endToEnd_refinement` axioms
+`[propext, Classical.choice, Quot.sound]`.
