@@ -91,7 +91,33 @@ theorem VfpSpills.ofEnd {Mt M' : Mem} {sp f : BitVec 64} {C : Nat → BitVec 64}
     (sp' 504 (by omega) (by omega)).trans h.s9, (sp' 496 (by omega) (by omega)).trans h.s10,
     (sp' 488 (by omega) (by omega)).trans h.s11⟩
 
-#ix_piece vfpEnd_1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
+/-- **`_vfprintf_r`'s end with nothing pending**: no flush. -/
+theorem vfp_end0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
+    {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
+    {R C : Nat → BitVec 64} {s sp reent f fl : BitVec 64} {need cnt : Nat} {iovs : List (Nat × List (BitVec 8))}
+    (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
+    (hf1 : 0x8001ad10 ≤ f.toNat) (hf2 : f.toNat + 184 ≤ 0x88000000) (hfa : f.toNat % 8 = 0)
+    (hfC : Cover (outS s need) f.toNat (f.toNat + 184)) (hfsp : f.toNat + 184 ≤ sp.toNat ∨ sp.toNat + 592 ≤ f.toNat)
+    (hP : VfpPend R Mt sp reent f cnt iovs) (hE : EndFile Mt f fl) (hS : VfpSpills Mt sp C)
+    (hra : (C 1).toNat % 4 = 0)
+    (h0 : piecesLen iovs = 0)
+    (hk0 : ∀ R' : Nat → BitVec 64, R' 10 = BitVec.ofNat 64 cnt → R' 2 = sp + 592#64 →
+      R' 1 = C 1 → (∀ x ∈ vfpSaved, R' x = C x) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R'
+        (writeLog Mt [((sp + 232#64).toNat, 4, 0#64)])) :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000aca8#64 R Mt := by
+  have h2 := hP.spR; have hre := hP.reent; have hfi := hP.file; have hres := hP.resid
+  rw [h0] at hres
+  nx_run hlive using [h2, hre, hfi, hres] at 2147527868
+  refine vfp_tail hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp ?_ ?_ hE hP.count hS hra hk0
+  · rsimp; exact h2
+  · rsimp
+
+/-! **`vfp_end1`**: `_vfprintf_r`'s end with pieces pending: the final flush (the hook `hSh`,
+returning to `0x8000cfac`), then `vfp_tail`. -/
+#ix_piece vfp_end1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 8) → Mem → Prop} {t : String} {Mt : Mem}
     {R C : Nat → BitVec 64} {s sp reent f fl : BitVec 64} {need cnt : Nat} {iovs : List (Nat × List (BitVec 8))}
@@ -100,32 +126,19 @@ theorem VfpSpills.ofEnd {Mt M' : Mem} {sp f : BitVec 64} {C : Nat → BitVec 64}
     (hf1 : 0x8001ad10 ≤ f.toNat) (hf2 : f.toNat + 184 ≤ 0x88000000) (hfa : f.toNat % 8 = 0)
     (hfC : Cover (outS s need) f.toNat (f.toNat + 184)) (hfsp : f.toNat + 184 ≤ sp.toNat ∨ sp.toNat + 592 ≤ f.toNat)
     (hP : VfpPend R Mt sp reent f cnt iovs) (hE : EndFile Mt f fl) (hS : VfpSpills Mt sp C)
-    (hra : (C 1).toNat % 4 = 0) (hpl : piecesLen iovs < 2 ^ 31)
+    (hra : (C 1).toNat % 4 = 0)
+    (hpl : piecesLen iovs < 2 ^ 31) (h0 : piecesLen iovs ≠ 0)
     (hSh : ∀ R0 : Nat → BitVec 64, R0 2 = sp → R0 10 = reent → R0 11 = f → R0 12 = sp + 224#64 →
       R0 1 = 0x8000cfac#64 → (∀ R' M' out, RetOK R0 R' 0#64 → Post out M' →
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000cfac#64 R' M') →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e8cc#64 R0 Mt)
     (hPR : ∀ out M', Post out M' → EndRet Mt M' sp f)
-    (hk0 : piecesLen iovs = 0 → ∀ R' : Nat → BitVec 64, R' 10 = BitVec.ofNat 64 cnt → R' 2 = sp + 592#64 →
-      R' 1 = C 1 → (∀ x ∈ vfpSaved, R' x = C x) →
-      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R'
-        (writeLog Mt [((sp + 232#64).toNat, 4, 0#64)]))
     (hk1 : ∀ out M', Post out M' → ∀ R' : Nat → BitVec 64, R' 10 = BitVec.ofNat 64 cnt → R' 2 = sp + 592#64 →
       R' 1 = C 1 → (∀ x ∈ vfpSaved, R' x = C x) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (C 1) R'
         (writeLog M' [((sp + 232#64).toNat, 4, 0#64)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000aca8#64 R Mt by
   have h2 := hP.spR; have hre := hP.reent; have hfi := hP.file; have hres := hP.resid
-  by_cases h0 : piecesLen iovs = 0
-
-#ix_piece vfpEnd_2 from vfpEnd_1 at 1 by
-  rw [h0] at hres
-  nx_run hlive using [h2, hre, hfi, hres] at 2147527868
-  refine vfp_tail hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp ?_ ?_ hE hP.count hS hra (hk0 h0)
-  · rsimp; exact h2
-  · rsimp
-
-#ix_piece vfpEnd_3 from vfpEnd_1 at 2 by
   have hz1 : (BitVec.ofNat 64 (piecesLen iovs) = 0#64) = False := eq_false fun h => by
     have := congrArg BitVec.toNat h; simp at this; omega
   have hz2 : (BitVec.ofNat 64 (piecesLen iovs) ≠ 0#64) = True := eq_true fun h => by
@@ -144,8 +157,34 @@ theorem VfpSpills.ofEnd {Mt M' : Mem} {sp f : BitVec 64} {C : Nat → BitVec 64}
   · rsimp; exact k2
   · rsimp; exact k20
 
-/-! **`vfp_end`**: `_vfprintf_r` from the format's NUL (`0x8000aca8`) to the caller: the
-final flush (the hook `hSh`) when iovs are pending, then `vfp_tail`. -/
-#ix_tree vfp_end := vfpEnd_1 [vfpEnd_2, vfpEnd_3]
+/-- **`_vfprintf_r`'s end** from the format's NUL (`0x8000aca8`) to the caller. -/
+theorem vfp_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
+    {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 8) → Mem → Prop} {t : String} {Mt : Mem}
+    {R C : Nat → BitVec 64} {s sp reent f fl : BitVec 64} {need cnt : Nat} {iovs : List (Nat × List (BitVec 8))}
+    (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
+    (hf1 : 0x8001ad10 ≤ f.toNat) (hf2 : f.toNat + 184 ≤ 0x88000000) (hfa : f.toNat % 8 = 0)
+    (hfC : Cover (outS s need) f.toNat (f.toNat + 184)) (hfsp : f.toNat + 184 ≤ sp.toNat ∨ sp.toNat + 592 ≤ f.toNat)
+    (hP : VfpPend R Mt sp reent f cnt iovs) (hE : EndFile Mt f fl) (hS : VfpSpills Mt sp C)
+    (hra : (C 1).toNat % 4 = 0)
+    (hpl : piecesLen iovs < 2 ^ 31)
+    (hSh : ∀ R0 : Nat → BitVec 64, R0 2 = sp → R0 10 = reent → R0 11 = f → R0 12 = sp + 224#64 →
+      R0 1 = 0x8000cfac#64 → (∀ R' M' out, RetOK R0 R' 0#64 → Post out M' →
+        SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000cfac#64 R' M') →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e8cc#64 R0 Mt)
+    (hPR : ∀ out M', Post out M' → EndRet Mt M' sp f)
+    (hk0 : piecesLen iovs = 0 → ∀ R' : Nat → BitVec 64, R' 10 = BitVec.ofNat 64 cnt → R' 2 = sp + 592#64 →
+      R' 1 = C 1 → (∀ x ∈ vfpSaved, R' x = C x) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R'
+        (writeLog Mt [((sp + 232#64).toNat, 4, 0#64)]))
+    (hk1 : ∀ out M', Post out M' → ∀ R' : Nat → BitVec 64, R' 10 = BitVec.ofNat 64 cnt → R' 2 = sp + 592#64 →
+      R' 1 = C 1 → (∀ x ∈ vfpSaved, R' x = C x) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (C 1) R'
+        (writeLog M' [((sp + 232#64).toNat, 4, 0#64)])) :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000aca8#64 R Mt := by
+  by_cases h0 : piecesLen iovs = 0
+  · exact vfp_end0 hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp hP hE hS hra h0 (hk0 h0)
+  · exact vfp_end1 hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp hP hE hS hra hpl h0 hSh hPR hk1
 
 end VsaIris.Sym.Fp
