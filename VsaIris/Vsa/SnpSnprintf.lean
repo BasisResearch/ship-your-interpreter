@@ -273,4 +273,34 @@ theorem loop_lld {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (fun i hi => absurd hi (by omega)) (by simpa using h4) (by omega) hal ?_
   simpa [pieceBytes_zero] using hret
 
+/-- **`"<fn %s>"`'s loop**: the `%s` iteration after `"<fn "`, then `">"` and
+the NUL. -/
+theorem loop_fn {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
+    (hal : (R0 1).toNat % 4 = 0) (p ap : Nat) (FG : FmtGeom DA p 7)
+    (hb : ∀ i, i < 4 → imgM Dt (p + i) ≠ 0#8 ∧ imgM Dt (p + i) ≠ 37#8)
+    (h4 : imgM Dt (p + 4) = 37#8) (h5 : imgM Dt (p + 5) = 0x73#8)
+    (h6 : imgM Dt (p + 6) ≠ 0#8 ∧ imgM Dt (p + 6) ≠ 37#8) (h7 : imgM Dt (p + 7) = 0#8)
+    (a len : Nat) (hap : ldv .ld Mt0 (BitVec.ofNat 64 ap).toNat = BitVec.ofNat 64 a) (hap1 : s - 40 ≤ ap)
+    (hap2 : ap + 8 ≤ s) (hstr : DStr Dt DA a len) (hlen : len + 7 < 2 ^ 31) :
+    SvfLoopRun live Dt DA Q s dst n R0 Mt0 p ap
+      (pieceBytes (imgM Dt) p 4 ++ pieceBytes (imgM Dt) a len ++ pieceBytes (imgM Dt) (p + 6) 1) := by
+  intro R Mt A hret
+  have A' : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 ([] : List (BitVec 8)).length) [] R Mt := by simpa using A
+  refine svf_iterS hlive R Mt SG DO hmb hmx A' 4 ⟨fun b h1 h2 => FG.dom b h1 (by omega), FG.lo,
+    by have := FG.hi; omega, by have := FG.htif; omega⟩ hb h4 h5 a len hap hap1 hap2 hstr
+    (by simp; omega) fun R' Mt' A2 => ?_
+  simp only [List.length_nil, Nat.zero_add, List.nil_append] at A2
+  refine svf_iterEnd hlive R' Mt' SG DO hmb hmx (total := pieceBytes (imgM Dt) p 4 ++ pieceBytes (imgM Dt) a len)
+    (by simpa using A2) 1 ⟨fun b h1 h2 => FG.dom b (by omega) (by omega), by have := FG.lo; omega,
+      by have := FG.hi; omega, by have := FG.htif; omega⟩
+    (fun i hi => by rw [show i = 0 by omega]; simpa using h6) (by simpa using h7) (by simp; omega) hal ?_
+  rw [show p + 4 + 2 = p + 6 by omega]
+  have e : (pieceBytes (imgM Dt) p 4 ++ pieceBytes (imgM Dt) a len).length + 1 =
+      (pieceBytes (imgM Dt) p 4 ++ pieceBytes (imgM Dt) a len ++ pieceBytes (imgM Dt) (p + 6) 1).length := by
+    simp; omega
+  rw [e]; exact hret
+
 end VsaIris.Sym
