@@ -418,6 +418,13 @@ structure HeapFactsOk (v : Nat → Option (BitVec 8)) (B : BootOwn) (top brkv : 
   brk_page : brkv % 4096 = 0
   binblocks : (readLEv v DlHeap.binblocksAddr 8).any (fun bb => decide (bb < 2 ^ 32)) = true
   stderr : readLEv v impureStderrAddr 8 = some exitStderr
+  /-- The C locale's data (`LocaleData`, lane N2). -/
+  locMbtowc : readLEv v localeMbtowcAddr 8 = some asciiMbtowc
+  locMbMax : readLEv v localeMbMaxAddr 1 = some 1
+  locDecPoint : readLEv v localeDecPointAddr 8 = some decPointStr
+  /-- `stderr`'s `_bf._base` and `_write` (`StderrStream`, lane N3). -/
+  errBase : readLEv v (exitStderr + 24) 8 = some 0
+  errWriter : readLEv v (exitStderr + 64) 8 = some consoleSwrite
   record : sblk.1 ≤ B.env ∧ B.env + 32 ≤ sblk.1 + sblk.2
   arrays : nblk.1 = B.pn ∧ 8 * B.cap ≤ nblk.2 ∧ vblk.1 = B.pv ∧ 24 * B.cap ≤ vblk.2
   live : ∀ b ∈ [sblk, nblk, vblk], ∃ c ∈ chunks, c.inuse = true ∧ b = (c.addr + 16, c.size - 8)
@@ -467,6 +474,8 @@ theorem bootHeapFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} {B : BootOwn}
       omega
     cap_canon := h.cap_canon }
   stderr := hv.readLE h.stderr
+  locale := ⟨hv.readLE h.locMbtowc, hv.readLE h.locMbMax, hv.readLE h.locDecPoint⟩
+  stderrStream := ⟨hv.readLE h.errBase, hv.readLE h.errWriter⟩
   shared_geom := hgeom
 
 end Vsa.Sim.Boot
