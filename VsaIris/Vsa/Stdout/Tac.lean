@@ -26,8 +26,13 @@ of stack below `s`. -/
 def outS (s : BitVec 64) (need : Nat) (a : Nat) : Prop :=
   (stdioFoot a ∧ ¬ impureW a) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨ (s.toNat - need ≤ a ∧ a < s.toNat)
 
-macro_rules
+namespace Stdout
+/-- Footprint side goals over `outS`. The `sx_side` rules of this file are
+scoped to `VsaIris.Sym.Stdout` (`open scoped VsaIris.Sym.Stdout` in each run
+file): importers' `sx_side` goals never reach them. -/
+scoped macro_rules
   | `(tactic| sx_side) => `(tactic| (intro b hb; simp only [mem_accAddrs_iff, outS, stdioFoot, InRange, impureW] at *; sx_addr))
+end Stdout
 
 /-- Updating the registers `xs` to the values `v`. -/
 def updAll (R : Nat → BitVec 64) (v : Nat → BitVec 64) : List Nat → Nat → BitVec 64
@@ -210,7 +215,9 @@ elab_rules : tactic
 /-- `nx_addr` for byte-ownership goals: unfold `outS` first. -/
 macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
 
-macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
+namespace Stdout
+scoped macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
+end Stdout
 /-- The address-range hypothesis of a byte-set side condition, as arithmetic. -/
 syntax "nx_hb " ident : tactic
 macro_rules
@@ -218,11 +225,15 @@ macro_rules
       toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod,
       Nat.reduceAdd] at $h:ident)
 
-macro_rules | `(tactic| sx_side) => `(tactic| (intro b hb; (try nx_hb hb); nx_addr))
+namespace Stdout
+scoped macro_rules | `(tactic| sx_side) => `(tactic| (intro b hb; (try nx_hb hb); nx_addr))
+end Stdout
 
+namespace Stdout
 /-- A branch refuted by a hypothesis of the run (a flag bit a summary assumes). -/
-macro_rules
+scoped macro_rules
   | `(tactic| sx_side) => `(tactic| (intro hc; first | (apply hc; assumption) | (apply absurd hc; assumption)))
+end Stdout
 
 /-- The caller-saved registers other than `a0` and `ra`. -/
 abbrev callClob : List Nat := [5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]

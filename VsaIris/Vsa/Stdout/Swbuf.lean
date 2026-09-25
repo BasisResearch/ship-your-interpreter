@@ -11,6 +11,8 @@ with its one-byte buffer, so it resets `_w` to `_lbfsize = 0`, stores `c` at
 
 namespace VsaIris.Sym
 
+open scoped VsaIris.Sym.Stdout
+
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 /-- A byte just stored with `sb`. -/

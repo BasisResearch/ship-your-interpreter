@@ -17,6 +17,8 @@ Each is an exact Iris statement about the fixed binary, in H5's calling
 convention (`argsAt`, `callFrame`), a field of `OutHoles` (hence of
 `IrisHoles`) with a row in `VsaIris/HOLES.md`. Unlike H5's `stderr` calls,
 these are exact about what they print: the console grows by the fragment.
+`fputc` is proved (`VsaIris.Sym.fputc_out`, `Vsa/Stdout/OutSpec.lean`) for a
+stack above `.bss`.
 
 Stack needs are measured frame chains of the binary (`fputs` 576, `fputc`
 528, `fwrite` 608, `fprintf` 3200), rounded up; `snprintf`'s is H5's.
@@ -104,12 +106,6 @@ structure OutHoles : Prop where
     (Wp : MachWP (GF := GF) (vsaModel live)) (str s : BitVec 64) (cs : Nat → BitVec 64)
     (frag o : String), CodeLive live → SpIn s outNeed →
     ⊢ outSpec live Wp fputsEntry [str, stdoutFile] (strAt str.toNat frag) s outNeed cs o frag
-  /-- `fputc(c, stdout)` prints the character. -/
-  fputc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (c : BitVec 8) (s : BitVec 64)
-    (cs : Nat → BitVec 64) (o : String), CodeLive live → SpIn s outNeed →
-    ⊢ outSpec live Wp fputcEntry [BitVec.zeroExtend 64 c, stdoutFile] iprop(emp) s outNeed cs o
-        (toString (Char.ofNat c.toNat))
   /-- `fwrite(buf, 1, n, stdout)` of a C string's `n` bytes prints them. -/
   fwrite : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (buf s : BitVec 64) (cs : Nat → BitVec 64)

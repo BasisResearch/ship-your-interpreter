@@ -1,25 +1,23 @@
-# Lane N1: newlib stdout holes (`out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`)
+# Lane N1: newlib stdout holes (`out.fputs`, `out.fputc`, `out.fwrite`)
 
-Branch `lane-n1` (from `hub/iris-main`). Brief: `~/lane-n1-aws.md`.
+Branch `lane-n1` (from `hub/iris-main`). Brief: `~/lane-n1-aws.md`. `out.fprintf` moved to N5.
 
 ## Done
-- `VsaIris/LocalRunO.lean`: printing local runs. `SegFromO` (a segment that may print), `LRO`
-  (least fixed point, impredicative: no uniform fuel), `wp_lroW` (either WP, console cell in the
-  footprint), `lro_of_localRun` (silent `LocalRun`s embed), `segFromO_of_runFactO`.
-- `VsaIris/Vsa/SymRunO.lean`: `SWPO` = `SWP` ending in `LRO`; `swp_putc` (one `tohost` putchar
-  store inside a symbolic run), `swpo_run`, `swpo_done`.
-
-## In flight
-- Step table for newlib's stdio code (generator shared with `gen_interp_steps.py`).
-
-## Findings
-- `_write_r` stores `errno = 0` (`0x8001ba08`), an allocator global (`VsaHeap.allocGlobal`),
-  not in `stdioFoot`. Every stdout/stderr write path needs it owned; the hole statements
-  (`outSpec`, H5's `fprintfSpec`/`fwriteSpec`/`exitHandlersSpec`) own only `stdioOwn`.
+- Printing local runs: `LocalRunO.lean` (`SegFromO`, `LRO`, `wp_lroW`), `Vsa/SymRunO.lean`
+  (`SWPO`, `swp_putc`), `Vsa/SymJalr.lean` (`swp_jalr`).
+- Stdio step table (`scripts/gen_interp_steps.py --table stdio` → `Vsa/Stdout/Steps`), driver
+  `nx_run`/`#nx_chain` (`Vsa/Stdout/Tac.lean`; its `sx_side` rules are scoped:
+  `open scoped VsaIris.Sym.Stdout`), abstract memory posts (`MemKeep`, `nx_mem_keep`).
+- Shared chain summaries: `write_run'` (`_write`), `swrite_run` (`__swrite`/`_write_r`),
+  `sflush_run`, `fflush_run`, `swbuf_run'`, `fputc_run`.
+- Statement changes (INTERP_DESIGN N1): stdout calls borrow `errno` (`stdioW`), aligned
+  return address, stack above `.bss` for proved out-holes.
+- **`out.fputc` proved**: `Sym.fputc_out` (`Vsa/Stdout/OutSpec.lean`); generic Iris wrapper
+  `outSpec_of_run` + end-state lemma `outEnd_of` for the remaining stdout calls.
 
 ## Holes
-- Unchanged so far: `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf` (mine).
+- Remaining (mine): `out.fputs`, `out.fwrite`.
 
 ## Next
-- The shared chain `__swrite → _write_r → _write` (n bytes), then `_fflush_r`/`__sflush_r`,
-  `__swbuf_r`, `_putc_r`, `fputc`.
+- Extend the stdio table with `fputs`/`_fputs_r`/`__sfvwrite_r`/`fwrite`/`_fwrite_r`; prove
+  `__sfvwrite_r`'s unbuffered path (loop of `__swrite` chunks); wrappers via `outSpec_of_run`.

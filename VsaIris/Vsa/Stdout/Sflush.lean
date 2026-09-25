@@ -12,6 +12,8 @@ Two `FILE`s reach it: `stdout` (one byte, from `__swbuf_r`) and
 
 namespace VsaIris.Sym
 
+open scoped VsaIris.Sym.Stdout
+
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 /-- The memory after `__sflush_r(reent, f)` returns: its five spills, `_p`

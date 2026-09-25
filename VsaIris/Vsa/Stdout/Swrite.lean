@@ -14,6 +14,8 @@ bytes, `a0 = n`, the memory is `swriteMt` (two stack slots, the flags,
 
 namespace VsaIris.Sym
 
+open scoped VsaIris.Sym.Stdout
+
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 /-- The memory after `__swrite(stdout, buf, n)` returns: `__swrite`'s `ra`
