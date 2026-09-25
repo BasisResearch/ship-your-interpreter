@@ -56,7 +56,7 @@ theorem vfpInnerS (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
     (hlit : lit ≠ []) (hlits : ∀ b ∈ lit, b ≠ 0#8 ∧ b ≠ 37#8) (hlitL : lit.length ≤ 16)
     (hP1 : FmtAt Dt DA P.toNat (lit ++ [37#8])) (hPs : SFmt Dt DA (P.toNat + lit.length))
     (hP2 : FmtAt Dt DA (P.toNat + lit.length + 2) ([0x3e#8] ++ [0#8]))
-    (hbsL : bs.length < 2 ^ 20)
+    (hbsL : bs.length + 32 < 2 ^ 31)
     (hstrD : ∀ i (h : i < bs.length), str.toNat + i ∈ DA ∧ imgM Dt (str.toNat + i) = bs[i])
     (hstrR : 0x80000000 ≤ str.toNat ∧ str.toNat + bs.length ≤ 0x100000000 ∧
       (str.toNat + bs.length ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ str.toNat) ∧

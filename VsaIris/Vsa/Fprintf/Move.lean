@@ -63,7 +63,7 @@ macro "fp_hb " h:ident : tactic => `(tactic| simp only [mem_accAddrs_iff,
   BitVec.add_zero, BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.reduceToNat, Nat.reducePow] at $h:ident)
 
 /-- Byte-set side conditions (`∀ b ∈ accAddrs a w, P b`) from a `Cover` fact. -/
-macro_rules
+scoped macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro b hb; fp_hb hb; nf_cover))
 
@@ -645,7 +645,7 @@ open Sail LeanRV64DExecutable.Functions
 
 /-- Register lookups through an `upd` chain. -/
 syntax "rsimp" (Lean.Parser.Tactic.location)? : tactic
-macro_rules
+scoped macro_rules
   | `(tactic| rsimp $[$loc]?) =>
     `(tactic| simp (config := {failIfUnchanged := false}) only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] $[$loc]?)
 

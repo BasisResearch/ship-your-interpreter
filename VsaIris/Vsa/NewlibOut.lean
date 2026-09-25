@@ -19,7 +19,9 @@ convention (`argsAt`, `callFrame`), a field of `OutHoles` (hence of
 these are exact about what they print: the console grows by the fragment.
 `fputs`, `fputc` and `fwrite` are proved (`VsaIris.Sym.fputc_out`,
 `Vsa/Stdout/OutSpec.lean`; `VsaIris.Sym.fputs_out`, `VsaIris.Sym.fwrite_out`,
-`Vsa/Stdout/StrOut.lean`) for a stack above `.bss`.
+`Vsa/Stdout/StrOut.lean`) for a stack above `.bss`; `fprintf` with `fprintfOut`'s formats is proved
+(`VsaIris.Sym.Fp.fprintf_out`, `Vsa/Fprintf/Out.lean`) for a stack above
+`0x80100000` with `interpText` live.
 
 Stack needs are measured frame chains of the binary (`fputs` 576, `fputc`
 528, `fwrite` 608, `fprintf` 3200), rounded up; `snprintf`'s is H5's.
@@ -102,12 +104,6 @@ end Specs
 /-- **newlib's stdout calls at the binary** (`IrisHoles.out`), for every Iris
 instance, every `live` set holding the code, and both WPs. -/
 structure OutHoles : Prop where
-  /-- `fprintf(stdout, fmt, arg)` with `value_print`'s formats. -/
-  fprintf : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (fmt arg s : BitVec 64) (cs : Nat → BitVec 64)
-    (frag o : String), CodeLive live → SpIn s fprintfNeed →
-    ⊢ outSpec live Wp fprintfEntry [stdoutFile, fmt, arg] (fprintfOut fmt arg frag) s fprintfNeed
-        cs o frag
   /-- `snprintf(buf, 64, "<fn %s>", name)` renders into the buffer. -/
   snprintfFn : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s buf name : BitVec 64) (x : String)

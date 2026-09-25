@@ -22,9 +22,10 @@ structure IrisHoles : Prop where
   newlib interior are proved (`Newlib.NewlibCore.full`,
   `VsaIris/Vsa/ExitH/Iris.lean`). -/
   newlib : Newlib.NewlibCore
-  /-- newlib's stdout calls (`fputs`, `fputc`, `fwrite`, `fprintf` on
-  `stdout`) and `stringify`'s `snprintf` renderings, exact about what they
-  print or render (`VsaIris/Vsa/NewlibOut.lean`, H2). -/
+  /-- newlib's stdout calls (`fputs` on `stdout`) and `stringify`'s
+  `snprintf` renderings, exact about what they print or render
+  (`VsaIris/Vsa/NewlibOut.lean`, H2). `fputc`, `fwrite` and `fprintf` on
+  `stdout` are proved (`Vsa/Stdout/`, `Vsa/Fprintf/Out.lean`). -/
   out : Newlib.OutHoles
 
 end VsaIris.Interp

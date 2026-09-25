@@ -1614,3 +1614,29 @@ corrected statement and why:
   longer a field of the assumed `NewlibCoreAt`: it is `NewlibHolesAt.fprintf :
   FprintfProved`, and `NewlibCore.full` takes the proof (`fprintf_ok`) from its
   callers (`Supply`, `EndToEnd`).
+
+### STATEMENT CHANGES (N5)
+
+`out.fprintf` is proved (`Sym.Fp.fprintf_out`, `Vsa/Fprintf/Out.lean`): the
+whole `fprintf(stdout, fmt, arg)` as one printing symbolic run (`fprintf_wrap`
+→ the outer `_vfprintf_r` → `__sbprintf` on a stack `FILE` → the inner
+`_vfprintf_r`, `vfpInnerLld`/`vfpInnerS` → `_fflush_r`), under
+`outSpec_of_run`. The field and its row are gone; `vp_int`, `vp_native` and
+`vp_fnNamed` call the theorem. It takes two premises the field lacked:
+
+- **All of `interpText` live** (`∀ p ∈ interpText, live p.1`). The digit
+  loop runs the interpreter's `__umoddi3`/`__udivdi3` proofs
+  (`Interp.ProofArith`), stated over the whole `interpText`, whose jump
+  tables lie in `.rodata`, outside `CodeLive`. The callers hold it
+  (`VpCtx.hlive`).
+- **The stack above the first megabyte of RAM** (`0x80100000 ≤ s -
+  fprintfNeed`, as N3's `fprintf`/`fwrite`): `__sbprintf`'s stack `FILE`
+  and the callee frames lie below `s - 1936`. Callers derive it from
+  `StackGeom` (`Sym.Fp.stackMb_of_stackGeom`).
+
+A name is bounded by the run itself: its bytes are in the data view, so off
+`outS` (`outSpec_of_run`'s `hoff`); a contiguous string off the stack window
+lies wholly below it (`len < 2^27`) or above it (`len < 2^31 - 2^20`), so
+`fprintf`'s 32-bit count never overflows (`s_stage`'s bound is `2^31`).
+`interpText_img` (one kernel `decide`) moved from `TopEntryBoot` to
+`Vsa/InterpImg.lean`, below both consumers.
