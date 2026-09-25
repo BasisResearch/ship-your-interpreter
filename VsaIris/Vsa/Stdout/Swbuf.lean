@@ -101,4 +101,60 @@ theorem swbuf_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) 
   simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
+/-- The bytes a stdout write leaves alone: all but its frames (the `n` bytes
+below `sp`), `errno`, `stdout`'s `_p`, `_w` and flags, and its buffer byte. -/
+@[nx_mt] def outKeep (sp : BitVec 64) (n : Nat) (a : Nat) : Prop :=
+  ¬ (sp.toNat - n ≤ a ∧ a < sp.toNat) ∧ ¬ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∧ ¬ (0x8001bb20 ≤ a ∧ a < 0x8001bb28) ∧
+    ¬ (0x8001bb2c ≤ a ∧ a < 0x8001bb32) ∧ a ≠ 0x8001bb97
+
+/-- A callee's frame window inside its caller's: the callee's `sp` is `k`
+bytes below. -/
+theorem outKeep_sub {s : BitVec 64} {k n m a : Nat} (hk : k + n ≤ m) (hs : k ≤ s.toNat)
+    (hk64 : k < 2 ^ 64) (h : outKeep s m a) :
+    outKeep (s + BitVec.ofNat 64 (2 ^ 64 - k)) n a := by
+  have e : (s + BitVec.ofNat 64 (2 ^ 64 - k)).toNat = s.toNat - k := by
+    rw [BitVec.toNat_add]; have := s.isLt; simp only [BitVec.toNat_ofNat]
+    rcases Nat.eq_zero_or_pos k with rfl | hk0
+    · simp; omega
+    · rw [Nat.mod_eq_of_lt (by omega : 2 ^ 64 - k < 2 ^ 64)]; omega
+  simp only [outKeep, e] at h ⊢
+  omega
+
+/-- `stdout`'s written fields after a flushed write of `c`. -/
+structure OutDone (M : Mem) (c : BitVec 8) : Prop where
+  p : ldv .ld M 0x8001bb20 = 0x8001bb97#64
+  w : ldv .lw M 0x8001bb2c = 0#64
+  flagsU : ldv .lhu M 0x8001bb30 = 0x200a#64
+  flagsS : ldv .lh M 0x8001bb30 = 0x200a#64
+  buf : imgM M 0x8001bb97 = c
+
+/-- **`__swbuf_r(reent, c, stdout)`**, abstract post: prints `c`, returns it;
+the memory keeps `outKeep` and ends with `stdout` idle (`OutDone`). -/
+theorem swbuf_run' {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
+    {R : Nat → BitVec 64} {s sp ra : BitVec 64} {need : Nat} {c : BitVec 8}
+    (hs1 : s.toNat - need + 320 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = BitVec.zeroExtend 64 c)
+    (h12 : R 12 = 0x8001bb20#64) (h2 : R 2 = sp)
+    (hsinit : ldv .ld Mt 0x8001b580 = 0x80005d2c#64) (hlbf : ldv .lw Mt 0x8001bb48 = 0#64)
+    (hF : ldv .lh Mt 0x8001bb30 = 0x200a#64) (hB : ldv .ld Mt 0x8001bb38 = 0x8001bb97#64)
+    (hlm : ldv .lw Mt 0x8001bbd0 = 0#64) (hP : ldv .ld Mt 0x8001bb20 = 0x8001bb97#64)
+    (hbs : ldv .lw Mt 0x8001bb40 = 1#64) (hlock : ldv .ld Mt 0x8001bbc0 = 0#64)
+    (hwr : ldv .ld Mt 0x8001bb60 = 0x8000efd4#64) (hck : ldv .ld Mt 0x8001bb50 = 0x8001bb20#64)
+    (hsfd : ldv .lh Mt 0x8001bb32 = 1#64)
+    (hk : ∀ R' M', RetOK R R' (BitVec.zeroExtend 64 c &&& 255#64) → MemKeep Mt M' (outKeep sp 256) →
+      OutDone M' c → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs [c]) ra R' M') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000f0c8#64 R Mt := by
+  refine swbuf_run hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h12 h2 hsinit hlbf hF hB hlm hP hbs hlock
+    hwr hck hsfd fun R' hR => hk R' _ hR ⟨fun a ha => ?_⟩ ⟨?_, ?_, ?_, ?_, ?_⟩
+  · simp only [outKeep] at ha
+    simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd]
+    simp (disch := nx_addr) only [imgM_store_miss]
+  all_goals simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd]
+  all_goals try (nx_mem; done)
+  all_goals try (nx_mem; nx_norm; done)
+  simp (disch := nx_addr) only [imgM_store_miss]
+  rw [imgM_sb_hit, ofNat_zeroExtend8]
+
 end VsaIris.Sym
