@@ -1338,10 +1338,11 @@ theorem text : Vsa.Sim.Code.FixedTextLoaded (bootMem script log) :=
   bootMem_text logOk (by decide +kernel)
 
 /-- `.rodata` after the script blob (REVIEW.md P2's pin). -/
-theorem rodata : ∀ off, 454 ≤ off → off < Vsa.Sim.Code.fixedRodataSize →
-    (bootMem script log)[Vsa.Sim.Code.fixedRodataBase + off]? =
-      some (Vsa.Sim.Code.fixedRodataByte off) :=
+theorem rodata : Vsa.Sim.Code.FixedRodataLoaded (bootMem script log) :=
   bootMem_rodata logOk (by decide +kernel)
+
+/-- `stdout` unoriented at the entry (REVIEW.md P1). -/
+theorem console : Vsa.Sim.ConsoleBoot (bootMem script log) := by boot_facts view
 
 theorem statics : Vsa.Sim.Code.ImageStaticsLoaded (bootMem script log) := by
   unfold Vsa.Sim.Code.ImageStaticsLoaded Vsa.Sim.Code.imgLldFmt Vsa.Sim.Code.imgDecPointStr

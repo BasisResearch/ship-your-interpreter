@@ -1,3 +1,4 @@
+import Vsa.While.CostEval
 import Vsa.Sim.Boot.Image
 import Vsa.Sim.Boot.Store
 import Vsa.Sim.Boot.Heap

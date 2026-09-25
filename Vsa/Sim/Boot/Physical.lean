@@ -46,15 +46,14 @@ theorem store_of_check {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m 
     exact storeRepr_initSt (frameCheck_sound hpv φf φc hf) ha
   exact ⟨hsurv m (fun _ _ => rfl), hsurv⟩
 
-/-- The entry's memory read facts. `rodata`, `console` and `stackBytes` are
-the fields REVIEW.md P2, P1 and P3 restate; the boot traces discharge the
-restated forms (`bootMem_rodata`, `ConsoleBoot`, densification). -/
+/-- The entry's memory read facts. `stackBytes` is the field REVIEW.md P3
+restates (lane B2). -/
 structure BootMemFacts (m : Mem) (e : Nat) : Prop where
   mainRa : read64 m 0x87fffff8 = some 0x80000038
   text : Code.FixedTextLoaded m
   rodata : Code.FixedRodataLoaded m
   statics : Code.ImageStaticsLoaded m
-  console : ConsoleStream m
+  console : ConsoleBoot m
   exitRuntime : ExitRuntimeData m
   globals : read64 m interpObject = some e
   depth : read32 m (interpObject + 8) = some 0

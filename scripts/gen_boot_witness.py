@@ -600,10 +600,11 @@ def cmd_program(args):
             "  bootMem_text logOk (by decide +kernel)",
             "",
             "/-- `.rodata` after the script blob (REVIEW.md P2's pin). -/",
-            "theorem rodata : ∀ off, 454 ≤ off → off < Vsa.Sim.Code.fixedRodataSize →",
-            "    (bootMem script log)[Vsa.Sim.Code.fixedRodataBase + off]? =",
-            "      some (Vsa.Sim.Code.fixedRodataByte off) :=",
+            "theorem rodata : Vsa.Sim.Code.FixedRodataLoaded (bootMem script log) :=",
             "  bootMem_rodata logOk (by decide +kernel)",
+            "",
+            "/-- `stdout` unoriented at the entry (REVIEW.md P1). -/",
+            "theorem console : Vsa.Sim.ConsoleBoot (bootMem script log) := by boot_facts view",
             "",
             "theorem statics : Vsa.Sim.Code.ImageStaticsLoaded (bootMem script log) := by",
             "  unfold Vsa.Sim.Code.ImageStaticsLoaded Vsa.Sim.Code.imgLldFmt Vsa.Sim.Code.imgDecPointStr",
@@ -634,7 +635,7 @@ def cmd_program(args):
 
 def write_index():
     """`VsaBoot.lean`: the boot infrastructure and every generated trace."""
-    mods = ["Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Heap",
+    mods = ["Vsa.While.CostEval", "Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Heap",
             "Vsa.Sim.Boot.Obstruction", "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Elf"]
     mods += [f"Vsa.Sim.Boot.Gen.{f.stem}" for f in sorted((BOOT_DIR / "Gen").glob("*.lean"))]
     (ROOT / "VsaBoot.lean").write_text("".join(f"import {m}\n" for m in mods))

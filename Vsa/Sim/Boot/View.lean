@@ -110,11 +110,10 @@ theorem bootMem_text {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t
 /-- `.rodata` after the script blob and its NUL is the loader's when every
 store lies above it (REVIEW.md P2's pin). -/
 theorem bootMem_rodata {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t)
-    (ha : t.above 0x8001acf0 = true) :
-    ∀ off, 454 ≤ off → off < Code.fixedRodataSize →
-      (bootMem script L)[Code.fixedRodataBase + off]? = some (Code.fixedRodataByte off) := by
+    (ha : t.above 0x8001acf0 = true) : Code.FixedRodataLoaded (bootMem script L) := by
   intro off hlo hoff
   unfold Code.fixedRodataSize at hoff
+  unfold Code.fixedScriptSize at hlo
   show (bootMem script L)[0x80018be0 + off]? = _
   have hp := inPieces_seg (x := 0x80018be0 + off) (by omega) (by omega)
   have h1 : ¬ 0x80018be0 + off < 0x80000000 := by omega
