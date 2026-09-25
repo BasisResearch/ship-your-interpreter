@@ -274,6 +274,50 @@ theorem outBytes_back (mv : Nat → BitVec 8) (s : BitVec 64) (need : Nat) (hs :
         unfold stdioExcl stdioFoot InExt Stdio.InRange at *; simp at h; omega⟩, by
         unfold errnoFoot InExt Stdio.InRange at *; simp at h; omega⟩⟩) $$ Hs
 
+/-- A persistent byte is not in an owned list. -/
+theorem sepL_ro_ne (y : Nat) (b : BitVec 8) (f : Nat → BitVec 8) :
+    ∀ l : List Nat, sepL (GF := GF) l (fun a => a ↦ₘ f a) ∗ (y ↦ₘ□ b) ⊢ ⌜y ∉ l⌝
+  | [] => by iintro _; ipureintro; simp
+  | x :: xs => by
+    rw [sepL_cons]
+    iintro ⟨⟨Hx, Hxs⟩, #Hy⟩
+    ihave %h1 := memRO_excl_ne y x b (f x) $$ [Hx]
+    · iframe Hy Hx
+    ihave %h2 := sepL_ro_ne y b f xs $$ [Hxs]
+    · iframe Hxs Hy
+    ipureintro
+    simp only [List.mem_cons, not_or]
+    exact ⟨h1, h2⟩
+
+/-- Persistent bytes are off an owned byte set. -/
+theorem ownSet_ro_off (S : Nat → Prop) (f : Nat → BitVec 8) :
+    ∀ text : List (Nat × BitVec 8), ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗
+      sepL text (fun p => p.1 ↦ₘ□ p.2) ⊢ ⌜∀ p ∈ text, ¬ S p.1⌝
+  | [] => by iintro _; ipureintro; simp
+  | q :: qs => by
+    rw [sepL_cons]
+    iintro ⟨HS, #Hq, #Hqs⟩
+    ihave %h2 := ownSet_ro_off S f qs $$ [HS]
+    · iframe HS Hqs
+    rw [show ownSet S (fun a => a ↦ₘ f a) = iprop(∃ l : List Nat,
+        ⌜l.Nodup ∧ ∀ a, a ∈ l ↔ S a⌝ ∗ sepL l (fun a => a ↦ₘ f a)) from rfl]
+    icases HS with ⟨%l, %⟨_, hmem⟩, Hl⟩
+    ihave %h1 := sepL_ro_ne q.1 q.2 f l $$ [Hl]
+    · iframe Hl Hq
+    ipureintro
+    intro p hp
+    rcases List.mem_cons.mp hp with rfl | hp
+    · exact fun h => h1 ((hmem _).2 h)
+    · exact h2 p hp
+
+/-- The data part of a run's read-only resources. -/
+theorem roOwn_data {ro : List (Nat × BitVec 64)} {T D : List (Nat × BitVec 8)} :
+    roOwn (GF := GF) ro (T ++ D) ⊢ sepL D (fun p => p.1 ↦ₘ□ p.2) := by
+  unfold roOwn
+  iintro ⟨-, #H⟩
+  ihave ⟨-, #H⟩ := (sepL_append _ _ _).1 $$ H
+  iexact H
+
 end Own
 
 /-- The end of a stdout call's run: the console grew by `frag`, the PC and
@@ -323,20 +367,20 @@ theorem outEnd_of {o frag t : String} {r s a0 : BitVec 64} {cs R R' rv : Nat →
       rw [hmv a (.inl ⟨ha, hi⟩), hK.keep a ?_, hMt a ⟨ha, hi⟩]
       unfold outKeep; unfold stdioFoot Stdio.InRange at ha; unfold outW at hn; omega
   · rw [imgLE_congr (img' := imgM M') (fun i hi => by
-      rw [if_neg (by unfold impureW; omega), hW _ (by unfold outW; omega)])]
+      rw [if_neg (show ¬ impureW _ by unfold impureW; omega), hW _ (by unfold outW; omega)])]
     rw [ldv_ld_imgW] at hp
     have := congrArg BitVec.toNat hp
     rw [imgW_toNat] at this
     exact this
   · rw [imgLE_congr (img' := imgM M') (fun i hi => by
-      rw [if_neg (by unfold impureW; omega), hW _ (by unfold outW; omega)])]
+      rw [if_neg (show ¬ impureW _ by unfold impureW; omega), hW _ (by unfold outW; omega)])]
     rw [ldv_lw_img] at hw
     have hl := imgLE_lt (imgM M') 0x8001bb2c 4
     have := congrArg BitVec.toNat (sext32_eq_zero hw)
     simp at this
     omega
   · rw [imgLE_congr (img' := imgM M') (fun i hi => by
-      rw [if_neg (by unfold impureW; omega), hW _ (by unfold outW; omega)])]
+      rw [if_neg (show ¬ impureW _ by unfold impureW; omega), hW _ (by unfold outW; omega)])]
     rw [ldv_lhu_img] at hf
     have hl := imgLE_lt (imgM M') 0x8001bb30 2
     have := congrArg BitVec.toNat hf
@@ -352,15 +396,18 @@ owned bytes (newlib's data at a `StdioOK` image), ends in `OutEnd`; the
 persistent input `Rr` supplies the run's data view and its pure facts. -/
 theorem outSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live))
     {entry : BitVec 64} {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need : Nat}
-    {cs : Nat → BitVec 64} {o frag : String} {Dt : Mem} {DA : List Nat} {Pf : Prop}
+    {cs : Nat → BitVec 64} {o frag : String} {X : Type} {Dt : X → Mem} {DA : X → List Nat}
+    {Pf : X → Prop}
     (hlen : args.length ≤ 8) (hneed : need ≤ s.toNat) (hs4 : 0x8001c168 ≤ s.toNat - need)
     (hdata : iprop(Rr ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗ impureRO) ⊢
-      roOwn roR (stdioText ++ dataOf Dt DA) ∗ ⌜Pf⌝)
-    (hrun : ∀ (R : Nat → BitVec 64) (Mt : Mem) (r : BitVec 64) (img : Nat → BitVec 8),
+      ∃ x, roOwn roR (stdioText ++ dataOf (Dt x) (DA x)) ∗ ⌜Pf x⌝)
+    (hrun : ∀ (x : X) (R : Nat → BitVec 64) (Mt : Mem) (r : BitVec 64) (img : Nat → BitVec 8),
       r.toNat % 4 = 0 → R 1 = r → R 2 = s → (∀ i (h : i < args.length), R (10 + i) = args[i]) →
       (∀ x ∈ Newlib.calleeSaved, R x = cs x) → StdioOK img → ImpureImg img →
-      (∀ a, stdioExcl a → imgM Mt a = img a) → Pf →
-      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) (OutEnd o frag r s cs) o entry R Mt) :
+      (∀ a, stdioExcl a → imgM Mt a = img a) → Pf x →
+      (∀ q ∈ dataOf (Dt x) (DA x), ¬ outS s need q.1) →
+      SWPO live (stdioText ++ dataOf (Dt x) (DA x)) iRegs (outS s need) (OutEnd o frag r s cs) o
+        entry R Mt) :
     ⊢ outSpec live Wp entry args Rr s need cs o frag := by
   classical
   unfold outSpec fnSpecW
@@ -372,11 +419,14 @@ theorem outSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
   · iframe Hpc Hra Hargs Hsp Hcs Ht
   unfold stdioW stdioOwn stdioAt
   icases Hw with ⟨⟨%img, %⟨hok, himp⟩, Hx, #Himp⟩, He⟩
-  ihave ⟨#Hro, %hPf⟩ := hdata $$ [HR Himp]
+  ihave ⟨%x, #Hro, %hPf⟩ := hdata $$ [HR Himp]
   · iframe HR Hgp Himg Himp
   ihave ⟨%Mt, HS, %hMt⟩ := outBytes img s need hneed $$ [Hx He Hst]
   · iframe Hx He Hst
-  have hl := hrun R Mt r img hal h1 h2 hargs hcs hok himp hMt hPf
+  ihave ⟨⟨HS, -⟩, %hoff⟩ := keep_pure (ownSet_ro_off (outS s need) (imgM Mt) (dataOf (Dt x) (DA x))) $$ [HS]
+  · ihave #Hd := roOwn_data $$ Hro
+    iframe HS Hd
+  have hl := hrun x R Mt r img hal h1 h2 hargs hcs hok himp hMt hPf hoff
   have hlro := swpo_run hl (rv := R) (mv := imgM Mt) ⟨h32, fun _ _ _ => rfl, fun _ _ => rfl⟩
   iapply wp_lroW Wp hlro
   iframe Hro Hregs HS Hcon
@@ -415,9 +465,11 @@ theorem fputc_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
   have hlo := hsp.lo
   have hhi := hsp.hi
   unfold tohostAddr outNeed at hlo; unfold outNeed at hbss
-  refine outSpec_of_run (Pf := True) (Dt := impDt) (DA := accAddrs 0x8001b970 8) Wp (by simp) (by unfold outNeed; omega) hbss ?_
-    (fun R Mt r img hal h1 h2 hargs hcs hok himp hMt _ => ?_)
+  refine outSpec_of_run (X := Unit) (Pf := fun _ => True) (Dt := fun _ => impDt)
+    (DA := fun _ => accAddrs 0x8001b970 8) Wp (by simp) (by unfold outNeed; omega) hbss ?_
+    (fun _ R Mt r img hal h1 h2 hargs hcs hok himp hMt _ _ => ?_)
   · iintro ⟨-, H⟩
+    iexists ()
     isplitl
     · iapply roOwn_stdio $$ H
     · ipureintro; trivial

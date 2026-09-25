@@ -230,6 +230,13 @@ scoped macro_rules | `(tactic| sx_side) => `(tactic| (intro b hb; (try nx_hb hb)
 end Stdout
 
 namespace Stdout
+/-- A load from the data view's first block (`_impure_ptr`, in a view
+`accAddrs 0x8001b970 8 ++ DAs` that also holds a string). -/
+scoped macro_rules
+  | `(tactic| sx_side) => `(tactic| (intro b hb; exact List.mem_append_left _ hb))
+end Stdout
+
+namespace Stdout
 /-- A branch refuted by a hypothesis of the run (a flag bit a summary assumes). -/
 scoped macro_rules
   | `(tactic| sx_side) => `(tactic| (intro hc; first | (apply hc; assumption) | (apply absurd hc; assumption)))

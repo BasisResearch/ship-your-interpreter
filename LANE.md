@@ -13,11 +13,14 @@ Branch `lane-n1` (from `hub/iris-main`). Brief: `~/lane-n1-aws.md`. `out.fprintf
 - Statement changes (INTERP_DESIGN N1): stdout calls borrow `errno` (`stdioW`), aligned
   return address, stack above `.bss` for proved out-holes.
 - **`out.fputc` proved**: `Sym.fputc_out` (`Vsa/Stdout/OutSpec.lean`); generic Iris wrapper
-  `outSpec_of_run` + end-state lemma `outEnd_of` for the remaining stdout calls.
+  `outSpec_of_run` (data view indexed by an opened image) + `outEnd_of`.
+- `__sfvwrite_r` unbuffered path: `sfvwrite_run` (`Vsa/Stdout/Sfvwrite.lean`), shared with N3/N5.
+- **`out.fwrite` proved**: `Sym.fwrite_out` (`Vsa/Stdout/FwriteOut.lean`, over `fwrite_run`).
 
 ## Holes
-- Remaining (mine): `out.fputs`, `out.fwrite`.
+- Remaining (mine): `out.fputs`.
 
 ## Next
-- Extend the stdio table with `fputs`/`_fputs_r`/`__sfvwrite_r`/`fwrite`/`_fwrite_r`; prove
-  `__sfvwrite_r`'s unbuffered path (loop of `__swrite` chunks); wrappers via `outSpec_of_run`.
+- `fputs`: its `strlen` call via a framing lemma `swpo_leaf` (a silent leaf `LocalRun` on a
+  smaller footprint, `StrLeaf.strlenRunL`, spliced into an `SWPO` run; its code bytes are in
+  `stdioText`), then `sfvwrite_run`; wrapper as `fwrite_out` (NUL byte in the view).

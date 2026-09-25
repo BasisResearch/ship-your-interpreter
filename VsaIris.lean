@@ -270,3 +270,4 @@ import VsaIris.Vsa.SymJalr
 import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Vsa.Stdout.Fputc
 import VsaIris.Vsa.Stdout.Sfvwrite
+import VsaIris.Vsa.Stdout.FwriteOut
