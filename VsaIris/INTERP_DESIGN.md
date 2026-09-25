@@ -23,6 +23,22 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
 
+## STATEMENT CHANGE (lane A): closure geometry in `closOwn`
+
+`closOwn ca cd` (`Repr.lean`) carries `ClosObj img p q e` (nonnull, the
+`fn_expr`/`env` words, and `ReadOK` on the object's 16 bytes) and the `EX_FN`
+node as `astEG` (view with `ReadOK` geometry) instead of `astE`. `ReadOK` and
+`astEG` moved from `SpecEval.lean` to `Repr.lean` (names kept).
+
+- **Why.** The closure call and `value_print` load the object and the node;
+  `CloSupply`/`DispSupply` were named premises because `closOwn` lacked the
+  geometry.
+- **Producer.** The `fn` arm (`fnLit_{T,P}` templates) passes the fresh heap
+  block's placement and the node's `astEG` to `storeRepr_allocClosure`.
+  The boundary store has no closures (`storeRepr_empty`).
+- **Consequence.** `cloSupply : CloSupply N` and `dispSupply : DispSupply N`
+  (`CallClosure.lean`) hold for every `N`; `SharedWin` follows from `ReadOK`.
+
 ## STATEMENT CHANGE (lane A, Q7 decided 2026-09-25): the helpers' stack headroom
 
 `Vsa.Sim.LayoutInstance.helperHeadroom = 2048` is added to

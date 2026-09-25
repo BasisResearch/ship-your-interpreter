@@ -15,9 +15,9 @@ This file: what the path reads besides the frame.
 * `CloRes s ca p` (persistent): the closure `ca` at `p`: its store entry
   `cd`, its 16 bytes read-only with their read geometry, the `EX_FN` node's
   view (`ExprReprWithin`, `ReadOK`, `SharedWin`), and its environment's
-  binding. `CloSupply N` (a NAMED premise, `PROOF_CLOSURE_PLAN.md` lane E4):
-  every closure the store owns has it. It subsumes `DispSupply`
-  (`dispSupply_of_cloSupply`).
+  binding. `CloSupply N`: every closure the store owns has it; proved for
+  every `N` from `storeRepr` (`cloSupply`, since `closOwn` carries the
+  geometry). It subsumes `DispSupply` (`dispSupply_of_cloSupply`, `dispSupply`).
 * `roOwn_roImg`: a data view of a read-only image (the closure object).
 * `world_depth`: the depth word out of the world, and back.
 -/
@@ -53,9 +53,11 @@ def CloRes (s : Store) (ca p : Nat) : IProp GF :=
 instance (s : Store) (ca p : Nat) : Persistent (CloRes (GF := GF) s ca p) := by
   unfold CloRes; infer_instance
 
-/-- **The closures' read geometry, from the store** (a NAMED premise;
-`closOwn` carries the bytes but not their `ReadOK`/`SharedWin` geometry, H2's
-finding; supplier: a geometry field on `closOwn`, from the `EX_FN` arm). -/
+/-- **The closures' read geometry, from the store**: every closure the store
+owns has its resources. Proved for every `N` (`cloSupply`): `closOwn` carries
+the object's `ReadOK` geometry (`ClosObj`) and the node's `astEG`, established
+by the `EX_FN` arm (`storeRepr_allocClosure`). Kept as a named statement so the
+case lemmas' signatures are unchanged. -/
 def CloSupply (N : NativeAddrs) : Prop :=
   ∀ (s : Store) (B : List (Nat × Nat)) (ca p : Nat),
     storeRepr (GF := GF) N s B ∗ closAt ca p ⊢ storeRepr N s B ∗ CloRes s ca p
@@ -74,6 +76,42 @@ theorem dispSupply_of_cloSupply {N : NativeAddrs} (h : CloSupply (GF := GF) N) :
   iframe Hc Himg Hro
   ipureintro
   exact ⟨hf.lookup, hf.fn, hf.objOK, hf.repr, hf.geo, hf.win⟩
+
+/-- **`CloSupply`, from the store**: the closure's entry by the address map,
+its `closOwn` out of `closuresOwn` (persistent), the address by agreement of
+the two fragments, and `SharedWin` from the node's `ReadOK` geometry (`ReadOK.win`). -/
+theorem cloSupply {N : NativeAddrs} : CloSupply (GF := GF) N := by
+  intro s B ca p
+  iintro ⟨Hs, #Hat⟩
+  ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_closAt (GF := GF) N (s := s) (B := B)
+    (ca := ca) (p := p)) $$ [Hs Hat]
+  · iframe Hs Hat
+  obtain ⟨cd, hcd⟩ : ∃ cd, s.closures[ca]? = some cd :=
+    ⟨s.closures[ca], Array.getElem?_eq_getElem hlt⟩
+  have h' : s.closures.toList[ca]? = some cd := by rw [Array.getElem?_toList]; exact hcd
+  have hg := closuresOwn_get (GF := GF) 0 s.closures.toList ca cd h'
+  rw [Nat.zero_add] at hg
+  unfold storeRepr
+  icases Hs with ⟨%mf, %mc, %Bs, Hf, Hc, %hpure, Hfr, #Hcl⟩
+  ihave #Ho := hg $$ Hcl
+  isplitl [Hf Hc Hfr]
+  · iexists mf, mc, Bs
+    iframe Hf Hc Hfr Hcl
+    ipureintro; exact hpure
+  unfold closOwn CloRes astEG
+  icases Ho with ⟨%p', %q, %e, %img, #Hat', %hobj, #Hro, ⟨%P, %m, %⟨hrepr, hgeo⟩, #HroP⟩, #Henv⟩
+  ihave %hpp := closAt_agree ca p p' $$ [Hat Hat']
+  · iframe Hat Hat'
+  subst hpp
+  iexists cd, q, e, img, P, m
+  iframe Hro HroP Henv
+  ipureintro
+  exact ⟨hcd, hobj.fn, hobj.env, hobj.objOK, hrepr, hgeo,
+    fun k hk => ⟨(hgeo k hk).lo, (hgeo k hk).win.1, (hgeo k hk).win.2⟩⟩
+
+/-- `DispSupply`, from the store (`cloSupply`). -/
+theorem dispSupply {N : NativeAddrs} : DispSupply (GF := GF) N :=
+  dispSupply_of_cloSupply cloSupply
 
 end Defs
 

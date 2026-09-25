@@ -229,6 +229,31 @@ instance (a : Nat) (s : Stmt) : Persistent (astS (GF := GF) a s) := by unfold as
 instance (a n : Nat) (ss : List Stmt) : Persistent (astSs (GF := GF) a n ss) := by
   unfold astSs; infer_instance
 
+/-- A byte a load may read: RAM, off the HTIF words. `win` is the string
+routines' over-read window from the byte (H1's `SharedWin`): `strlen` and
+`strcmp` load whole aligned words, so every string of an AST view needs its
+8-byte window (E1, INTERP_DESIGN.md §10 "STATEMENT CHANGES (E1)"). -/
+structure ReadOK (k : Nat) : Prop where
+  lo : 0x80000000 ≤ k
+  hi : k < 0x100000000
+  off : k < Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k
+  win : k + 8 ≤ 0x100000000 ∧ (k + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k)
+
+/-- Persistent AST ownership with its read set's address facts. -/
+def astEG (a : Nat) (e : Expr) : IProp GF :=
+  iprop(∃ (P : Nat → Prop) (m : Mem), ⌜ExprReprWithin m P a e ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m)
+
+instance (a : Nat) (e : Expr) : Persistent (astEG (GF := GF) a e) := by
+  unfold astEG; infer_instance
+
+omit I in
+theorem astEG_astE (a : Nat) (e : Expr) : astEG (GF := GF) a e ⊢ astE a e := by
+  unfold astEG astE
+  iintro ⟨%P, %m, %⟨h, _⟩, H⟩
+  iexists P, m
+  iframe H
+  ipureintro; exact h
+
 /-! ## Values -/
 
 /-- The meaning of a 24-byte `Value`'s three words (`ValueRepr`), persistent. -/
@@ -264,12 +289,22 @@ theorem valAt_slot (N : NativeAddrs) (a : Nat) (v : Value) :
 
 /-! ## Closures -/
 
+/-- The pure layout of a closure object at `p` in its image: nonnull, its
+`fn_expr` word `q` and `env` word `e`, and the 16 bytes' read geometry (the
+closure call and `value_print` load both words). -/
+structure ClosObj (img : Nat → BitVec 8) (p q e : Nat) : Prop where
+  p_ne : p ≠ 0
+  e_ne : e ≠ 0
+  fn : imgLE img p 8 = q
+  env : imgLE img (p + 8) 8 = e
+  objOK : ∀ k, InExt (p, 16) k → ReadOK k
+
 /-- A closure object (`ClosureRepr`), persistent: its 16 bytes (`fn_expr`,
-`env`), the `EX_FN` node, and the captured frame's address. -/
+`env`) with their read geometry, the `EX_FN` node's view with its read
+geometry (`astEG`), and the captured frame's address. -/
 def closOwn (ca : Nat) (cd : ClosureData) : IProp GF :=
-  iprop(∃ (p q e : Nat) (img : Nat → BitVec 8), closAt ca p ∗
-    ⌜p ≠ 0 ∧ e ≠ 0 ∧ imgLE img p 8 = q ∧ imgLE img (p + 8) 8 = e⌝ ∗
-    roImg (InExt (p, 16)) img ∗ astE q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e)
+  iprop(∃ (p q e : Nat) (img : Nat → BitVec 8), closAt ca p ∗ ⌜ClosObj img p q e⌝ ∗
+    roImg (InExt (p, 16)) img ∗ astEG q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e)
 
 instance (ca : Nat) (cd : ClosureData) : Persistent (closOwn (GF := GF) ca cd) := by
   unfold closOwn; infer_instance

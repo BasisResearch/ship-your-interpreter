@@ -403,7 +403,7 @@ theorem closuresOwn_fresh {p : Nat} {img : Nat → BitVec 8} {mc : NatMap Nat} :
     ihave %hcs := closuresOwn_fresh (i + 1) cs $$ [Hcs Hmc Hown]
     · iframe Hcs Hmc Hown
     unfold closOwn
-    icases Hcd with ⟨%p', %q', %e', %img', #Hat, %⟨hp', -⟩, #Hro, -⟩
+    icases Hcd with ⟨%p', %q', %e', %img', #Hat, %-, #Hro, -⟩
     ihave %hoff := roImg_ownImg_off (S := InExt (p', 16)) (a := p') (by unfold InExt; simp) $$ [Hro Hown]
     · iframe Hro Hown
     unfold closAt
@@ -442,11 +442,11 @@ Its pointer is fresh against every existing closure by ownership
 theorem storeRepr_allocClosure {s s' : Store} {B : List (Nat × Nat)} {cd : ClosureData}
     {p q e : Nat} {img : Nat → BitVec 8}
     (hcl : s'.closures.toList = s.closures.toList ++ [cd]) (hfr : s'.frames = s.frames)
-    (hp : p ≠ 0) (he : e ≠ 0) (hq : imgLE img p 8 = q) (he' : imgLE img (p + 8) 8 = e)
+    (hobj : ClosObj img p q e)
     (hbody : Stmt.stackNeedList cd.body ≤ perCallBudget ∧
       Stmt.bodiesBoundList perCallBudget cd.body = true) :
     storeRepr (GF := GF) N s B ∗ ownImg (InExt (p, 16)) img ∗
-        astE q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e ⊢
+        astEG q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e ⊢
       |==> (storeRepr N s' B ∗ closAt s.closures.size p) := by
   unfold storeRepr
   iintro ⟨⟨%mf, %mc, %Bs, Hf, Hc, %⟨hmaps, hB, hbb, hinv⟩, Hfr, #Hcl⟩, Hown, #Hast, #Henv⟩
@@ -515,7 +515,7 @@ theorem storeRepr_allocClosure {s s' : Store} {B : List (Nat × Nat)} {cd : Clos
   iexists p, q, e, img
   iframe Hat Hro Hast Henv
   ipureintro
-  exact ⟨hp, he, hq, he'⟩
+  exact hobj
 
 /-! ## Two owners (INTERP_DESIGN.md §10.7) -/
 
