@@ -4,11 +4,8 @@ import VsaIris.DlHeap
 /-!
 # newlib's data after a `stderr` write, and `errno` (lane N3)
 
-* **`errno`** (`0x8001ba08`, 4 bytes) is written by every syscall wrapper on
-  the write and close paths (`_write_r`, `_fstat_r`, `_close_r`:
-  `sw zero,1272(gp)`). It is an allocator global (`VsaHeap.allocGlobal`;
-  `_sbrk_r` writes it too), outside `stdioFoot`, so the newlib specs own it
-  separately: `errnoOwn`.
+* **`errno`** (`Stdio.errnoFoot`, N1) is also written on the close path
+  (`_fstat_r`, `_close_r`), so the stderr specs borrow `errnoOwn` too.
 * **`StdioErrOK`**: the state a single `fwrite`/`fprintf` to `stderr` leaves.
   `stderr`'s `FILE` has been oriented (`__SORD`), set up for writing (`__SWR`)
   and given its one-byte unbuffered buffer `_nbuf` (`__smakebuf_r`), with no
@@ -19,12 +16,6 @@ import VsaIris.DlHeap
 namespace VsaIris.Stdio
 
 open Vsa.MemRepr Vsa.Sim
-
-/-- The global `errno` word. -/
-def errnoAddr : Nat := 0x8001ba08
-
-/-- Its four bytes. -/
-def errnoFoot (a : Nat) : Prop := errnoAddr ≤ a ∧ a < errnoAddr + 4
 
 /-- `stderr`'s `FILE` after one unbuffered write: flags
 `__SORD | __SRW | __SWR | __SNBF` (`0x201a`), the one-byte buffer `_nbuf`
@@ -82,16 +73,5 @@ theorem StdioErrOK.closeReady {img : Nat → BitVec 8} (h : StdioErrOK img) : Cl
   fun m hm => by
     obtain ⟨hc, hx, _⟩ := h m hm
     exact ⟨hc, .inr hx⟩
-
-section Own
-
-open Iris Iris.BI Iris.Std Iris.ProofMode
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-/-- The `errno` word, at any value. -/
-def errnoOwn : IProp GF := ownSet errnoFoot VsaIris.byteAny
-
-end Own
 
 end VsaIris.Stdio

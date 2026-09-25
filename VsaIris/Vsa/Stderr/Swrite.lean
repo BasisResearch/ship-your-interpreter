@@ -14,17 +14,12 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-/-- The bytes a `stderr` write owns: newlib's data but `_impure_ptr` (which
-the Iris route keeps read-only, `impureRO`, and the stdio table serves),
-`errno`, and `need` bytes of stack below `s`. -/
-def errS (s : BitVec 64) (need : Nat) (a : Nat) : Prop :=
-  stdioExcl a ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨ (s.toNat - need ≤ a ∧ a < s.toNat)
-
+/-- `sx_side` for `outS` with the byte hypothesis normalized first (`nx_hb`). -/
 macro_rules
   | `(tactic| sx_side) => `(tactic| (
       intro b hb
       (try nx_hb hb)
-      simp only [errS, stdioExcl, impureW, stdioFoot, InRange] at ⊢
+      simp only [outS, impureW, stdioFoot, InRange] at ⊢
       (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow,
         Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
       omega))
@@ -50,13 +45,13 @@ theorem swriteErr_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt :
     (hb3 : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)
     (hbd : ∀ i, i < bs.length → (buf + i < sp.toNat - 64 ∨ sp.toNat ≤ buf + i) ∧
       (buf + i < 0x8001bbe8 ∨ 0x8001bbea ≤ buf + i) ∧ (buf + i < 0x8001ba08 ∨ 0x8001ba0c ≤ buf + i))
-    (hsrc : ∀ i (h : i < bs.length), ByteSrc (errS s need) Mt Dt DA (buf + i) bs[i])
+    (hsrc : ∀ i (h : i < bs.length), ByteSrc (outS s need) Mt Dt DA (buf + i) bs[i])
     (h11 : R 11 = 0x8001bbd8#64) (h12 : R 12 = BitVec.ofNat 64 buf)
     (h13 : R 13 = BitVec.ofNat 64 bs.length) (h2 : R 2 = sp)
     (hfl : ldv .lh Mt 0x8001bbe8 = 0x201a#64) (hfd : ldv .lh Mt 0x8001bbea = 2#64)
     (hk : ∀ R', RetOK R R' (BitVec.ofNat 64 bs.length) → SWPO live (stdioText ++ dataOf Dt DA) iRegs
-      (errS s need) Q (t ++ putcs bs) ra R' (swriteErrMt Mt sp ra s0)) :
-    SWPO live (stdioText ++ dataOf Dt DA) iRegs (errS s need) Q t 0x8000efd4#64 R Mt := by
+      (outS s need) Q (t ++ putcs bs) ra R' (swriteErrMt Mt sp ra s0)) :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000efd4#64 R Mt := by
   nx_run hlive using [h11, h2, h1, h8, hfl, hfd, BitVec.reduceAnd, BitVec.reduceOr, BitVec.add_assoc] at 2147483708
   refine write_run' hlive buf bs hb1 hb2 hb3 (fun i hi => ?_) _ t (by simp [upd_apply, h12])
     (by simp [upd_apply, h13]) (by simp [upd_apply, hra] <;> decide) (fun v11 v13 v14 v15 v16 => ?_)

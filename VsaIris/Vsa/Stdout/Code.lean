@@ -1941,7 +1941,7 @@ def stdioCode : List (Nat × BitVec 8) := stdioNode0_322
 
 /-- The jump tables `eval_expr` and `exec_stmt` dispatch through (`.rodata`). -/
 def stdioRO : List (Nat × BitVec 8) :=
-  [(0x8001b970, 0x38#8), (0x8001b971, 0xb5#8), (0x8001b972, 0x01#8), (0x8001b973, 0x80#8), (0x8001b974, 0x00#8), (0x8001b975, 0x00#8), (0x8001b976, 0x00#8), (0x8001b977, 0x00#8)]
+  []
 
 /-- The read-only bytes a stdout run fetches. -/
 def stdioText : List (Nat × BitVec 8) := stdioCode ++ stdioRO
@@ -15398,41 +15398,5 @@ theorem stdio_code_80010520 : ∀ p ∈ codeFoot 0x80010520 [0xef#8, 0xf0#8, 0xd
   · exact List.mem_append_left stdioRO (List.mem_append_right stdioNode0_161 (List.mem_append_right stdioNode161_241 (List.mem_append_right stdioNode241_281 (List.mem_append_right stdioNode281_301 (List.mem_append_right stdioNode301_311 (List.mem_append_right stdioNode311_316 (List.mem_append_left stdioNode319_322 (List.mem_append_right stdioChunk316 (List.mem_append_left stdioChunk318 ((by decide : ((0x80010521 : Nat), (0xf0#8 : BitVec 8)) ∈ stdioChunk317)))))))))))
   · exact List.mem_append_left stdioRO (List.mem_append_right stdioNode0_161 (List.mem_append_right stdioNode161_241 (List.mem_append_right stdioNode241_281 (List.mem_append_right stdioNode281_301 (List.mem_append_right stdioNode301_311 (List.mem_append_right stdioNode311_316 (List.mem_append_left stdioNode319_322 (List.mem_append_right stdioChunk316 (List.mem_append_left stdioChunk318 ((by decide : ((0x80010522 : Nat), (0xde#8 : BitVec 8)) ∈ stdioChunk317)))))))))))
   · exact List.mem_append_left stdioRO (List.mem_append_right stdioNode0_161 (List.mem_append_right stdioNode161_241 (List.mem_append_right stdioNode241_281 (List.mem_append_right stdioNode281_301 (List.mem_append_right stdioNode301_311 (List.mem_append_right stdioNode311_316 (List.mem_append_left stdioNode319_322 (List.mem_append_right stdioChunk316 (List.mem_append_left stdioChunk318 ((by decide : ((0x80010523 : Nat), (0xb1#8 : BitVec 8)) ∈ stdioChunk317)))))))))))
-
-theorem stdioRO_lw_8001b970 : ldvf .lw stdioROImg 2147596656 = 0xffffffff8001b538#64 := by decide
-theorem stdioRO_lw_8001b974 : ldvf .lw stdioROImg 2147596660 = 0x0#64 := by decide
-theorem stdioRO_ld_8001b970 : ldvf .ld stdioROImg 2147596656 = 0x8001b538#64 := by decide
-
-theorem stdio_mem_of_lookup {l : List (Nat × BitVec 8)} {b : Nat} {v : BitVec 8} :
-    l.lookup b = some v → (b, v) ∈ l := by
-  induction l with
-  | nil => intro h; cases h
-  | cons p l ih =>
-    intro h
-    obtain ⟨k, x⟩ := p
-    by_cases hk : b = k
-    · subst hk; simp [List.lookup] at h; subst h; exact List.mem_cons_self
-    · have : List.lookup b ((k, x) :: l) = l.lookup b := by
-        simp [List.lookup, show (b == k) = false from by simpa using hk]
-      rw [this] at h; exact List.mem_cons_of_mem _ (ih h)
-
-/-- A table load's bytes are in `stdioRO` when the lookup finds them. -/
-theorem stdioRO_mem_img {a w : Nat} (h : ∀ b ∈ accAddrs a w, (stdioRO.lookup b).isSome = true) :
-    ∀ b ∈ accAddrs a w, (b, stdioROImg b) ∈ stdioRO := by
-  intro b hb
-  have := h b hb
-  unfold stdioROImg
-  cases e : stdioRO.lookup b with
-  | none => rw [e] at this; cases this
-  | some v => exact stdio_mem_of_lookup e
-theorem stdioRO_acc4_8001b970 : ∀ b ∈ accAddrs 2147596656 4, (b, stdioROImg b) ∈ stdioRO :=
-  stdioRO_mem_img (by decide)
-theorem stdioRO_acc4_8001b974 : ∀ b ∈ accAddrs 2147596660 4, (b, stdioROImg b) ∈ stdioRO :=
-  stdioRO_mem_img (by decide)
-theorem stdioRO_acc8_8001b970 : ∀ b ∈ accAddrs 2147596656 8, (b, stdioROImg b) ∈ stdioRO :=
-  stdioRO_mem_img (by decide)
-
-/-- Evaluate the jump-table words (`ix_run`'s normalizer). -/
-macro "stdio_tab" : tactic => `(tactic| simp only [stdioRO_lw_8001b970, stdioRO_lw_8001b974, stdioRO_ld_8001b970] at *)
 
 end VsaIris.Sym

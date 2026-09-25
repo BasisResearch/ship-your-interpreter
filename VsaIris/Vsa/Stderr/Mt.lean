@@ -34,10 +34,11 @@ structure ErrMt (Mt : Mem) : Prop where
 
 /-- **`stderr` at the boundary, as loads.** -/
 theorem errMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
-    (hM : ∀ a, stdioFoot a → imgM Mt a = img a) : ErrMt Mt := by
+    (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) : ErrMt Mt := by
   obtain ⟨_, he, _, _, hs⟩ := h.facts
-  have F : ∀ a n, 0x8001ba68 ≤ a → a + n ≤ 0x8001c168 → ∀ i, i < n → stdioFoot (a + i) := by
-    intro a n h1 h2 i hi; unfold stdioFoot InRange; omega
+  have F : ∀ a n, 0x8001ba68 ≤ a → a + n ≤ 0x8001c168 → ∀ i, i < n →
+      stdioFoot (a + i) ∧ ¬ impureW (a + i) := by
+    intro a n h1 h2 i hi; unfold stdioFoot InRange impureW; omega
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · exact ldv_lhu_of_imgLE (stdio_imgLE hM he.stderr.flags_read (F _ _ (by decide) (by decide)))
   · exact (ldv_lh_of_imgLE (stdio_imgLE hM he.stderr.flags_read (F _ _ (by decide) (by decide)))).trans

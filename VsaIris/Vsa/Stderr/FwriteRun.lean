@@ -34,7 +34,7 @@ theorem imgLE_fillR_out (M : Mem) {lo n a k : Nat} (g : Nat → BitVec 8)
 
 set_option hygiene false in
 /-- One piece of the run up to `__swrite`. -/
-macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, h13, stdioRO_ld_8001b970,
+macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000efd4))
 
@@ -46,17 +46,18 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
     (hra : ra.toNat % 4 = 0) (hn : n.toNat < 2 ^ 30) (hn0 : (n = 0#64) = False)
     (h1 : R 1 = ra) (h2 : R 2 = s) (h10 : R 10 = ptr) (h11 : R 11 = 1#64) (h12 : R 12 = n)
     (h13 : R 13 = 0x8001bbd8#64) (hC : ConsoleMt Mt) (hE : ErrMt Mt)
+    (hDt : ldv .ld Dt 0x8001b970 = 0x8001b538#64)
     (bs : List (BitVec 8)) (hbn : n = BitVec.ofNat 64 bs.length) (hbl0 : 0 < bs.length)
     (hbl : bs.length < 2 ^ 30)
     (hb1 : 0x80000000 ≤ ptr.toNat) (hb2 : ptr.toNat + bs.length ≤ 0x100000000)
     (hb3 : ptr.toNat + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ ptr.toNat)
     (hbd : ∀ i, i < bs.length → (ptr.toNat + i < s.toNat - 768 ∨ s.toNat ≤ ptr.toNat + i) ∧
       ¬ stdioFoot (ptr.toNat + i) ∧ (ptr.toNat + i < 0x8001ba08 ∨ 0x8001ba0c ≤ ptr.toNat + i))
-    (hsrc : ∀ i (h : i < bs.length), ByteSrc (errS s 768) Mt Dt DA (ptr.toNat + i) bs[i])
+    (hsrc : ∀ i (h : i < bs.length), ByteSrc (outS s 768) Mt Dt (accAddrs 0x8001b970 8 ++ DA) (ptr.toNat + i) bs[i])
     (hk : ∀ R' Mt', RetOK R R' n → FwritePost Mt Mt' s →
-      SWPO live (stdioText ++ dataOf Dt DA) iRegs (errS s 768) Q (t ++ putcs bs) ra R' Mt') :
-    SWPO live (stdioText ++ dataOf Dt DA) iRegs (errS s 768) Q t 0x80005260#64 R Mt by
-  nx_runB hlive using [h1, h2, h10, h11, h12, h13, stdioRO_ld_8001b970,
+      SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s 768) Q (t ++ putcs bs) ra R' Mt') :
+    SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s 768) Q t 0x80005260#64 R Mt by
+  nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000efd4
 
@@ -127,7 +128,7 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
 set_option hygiene false in
 /-- One piece of the run after `__swrite` returns. -/
 macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
-  rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, hbn, stdioRO_ld_8001b970, hC.sinit, hE.lockMode,
+  rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, hbn, hDt, hC.sinit, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, BitVec.reduceXOr, BitVec.reduceAnd, BitVec.reduceOr])
 
 #ix_piece fwriteErr_16 from fwriteErr_15 by
@@ -189,7 +190,7 @@ macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk
   refine hk _ _ (retOK_of ?_ ?_) ⟨fun a ha1 ha2 ha3 => ?_, ?_, ?_, ?_, ?_⟩
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hbn]
   · ret_keep
-  · simp only [Stdio.errWritten, Stdio.errnoFoot, Stdio.errnoAddr] at ha2 ha3
+  · simp only [Stdio.errWritten, Stdio.errnoFoot, Stdio.InRange] at ha2 ha3
     simp (disch := nx_fdisch) only [imgM_store_miss, imgM_fillR_out]
   all_goals (simp (disch := nx_fdisch) only [imgLE_store_miss, imgLE_fillR_out, imgLE_imgM_store,
     imgLE_store2_hit, imgLE_store4_hit]; try decide)

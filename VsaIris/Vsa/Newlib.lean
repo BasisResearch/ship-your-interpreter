@@ -4,6 +4,7 @@ import VsaIris.Vsa.Console
 import Vsa.Sim.Code.FixedImage
 import Vsa.Sim.LayoutInstance
 import VsaIris.Vsa.HeapShape
+import VsaIris.Vsa.StdioErr
 
 /-!
 # `IrisHoles.newlib`: the newlib calls on the error and exit paths (H5)
@@ -16,8 +17,8 @@ now. Each is an exact Iris statement about the fixed binary, a field of
   `runtime_error`'s two calls, and `interp_run`'s top-level status messages;
 * `fprintf` (`0x800061c0`) to `stderr` with such a format: `main`'s
   `fprintf(stderr, "%s\n", in->err_msg)`;
-* `fwrite` (`0x80005260`) to `stderr`: the out-of-memory message (gcc turned
-  `fprintf(stderr, "out of memory\n")` into `fwrite(msg, 1, 14, stderr)`);
+* (`fwrite` (`0x80005260`) to `stderr`, the out-of-memory message, is proved:
+  `Stderr/FwriteSpec.lean`, lane N3);
 * `exitHandlers`: the newlib interior of `exit` (`0x80004778`–`0x80004788`:
   `__call_exitprocs(e, 0)`, then the installed `__stdio_exit_handler`).
 
@@ -28,9 +29,9 @@ its descriptor and stores to `tohost`, so `fprintf`/`fwrite` hand back
 
 After a write to `stderr` its `FILE` object has left VSA's `ExitRuntimeData`
 state (`__swsetup_r` sets `__SWR`, `__smakebuf_r` installs the one-byte
-buffer). That state is `Ierr`, a parameter of `NewlibHolesAt` that the
-discharge fixes: `NewlibHoles := ∃ Ierr, NewlibHolesAt Ierr`, and
-`NewlibHoles.at` instantiates it at `stdioErr`, a choice of such an `Ierr`.
+buffer). That state is `Ierr`, a parameter of `NewlibHolesAt`; lane N3 fixed
+it to `StdioErrOK` (`StdioErr.lean`), the state `fwrite` provably leaves:
+`NewlibHoles := NewlibHolesAt StdioErrOK`.
 
 The stack needs are measured frame chains of the binary, rounded up:
 `snprintf` 272 + `_svfprintf_r` 592 + `__ssprint_r` 64 = 928;
@@ -228,14 +229,15 @@ def fprintfSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
       (∃ o', consoleOwn (o ++ o')) ∗ callFrame s fprintfNeed calleeSaved cs))
 
 /-- `fwrite(ptr, 1, n, stderr)`: prints some string, reads `ptr[0, n)`,
-leaves newlib's data in `Ierr`, returns. -/
-def fwriteSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
+clears `errno`, leaves newlib's data in the post-write state `StdioErrOK`,
+returns (to an aligned return address; lane N3: proved, `Stderr/FwriteSpec.lean`). -/
+def fwriteSpec (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s ptr n : BitVec 64) (cs : Nat → BitVec 64)
     (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) (o : String) : IProp GF :=
   fnSpecW Wp fwriteEntry
-    (fun _ => iprop(argsAt [ptr, 1#64, n, stderrFile] ∗ readable Sro Sown rd ∗ stdioOwn ∗
-      consoleOwn o ∗ callFrame s fwriteNeed calleeSaved cs))
-    (fun _ => iprop(clobbered argRegs ∗ readable Sro Sown rd ∗ stdioAt Ierr ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt [ptr, 1#64, n, stderrFile] ∗ readable Sro Sown rd ∗
+      stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ callFrame s fwriteNeed calleeSaved cs))
+    (fun _ => iprop(clobbered argRegs ∗ readable Sro Sown rd ∗ stdioAt StdioErrOK ∗ errnoOwn ∗
       (∃ o', consoleOwn (o ++ o')) ∗ callFrame s fwriteNeed calleeSaved cs))
 
 /-- The newlib interior of `exit(e)`: from `jal __call_exitprocs` at
@@ -277,13 +279,6 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
     CodeLive live → args.length ≤ 6 → FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt args →
     SpIn s fprintfNeed →
     ⊢ fprintfSpec Ierr live Wp s fmt args cs Sro Sown rd o
-  /-- `fwrite(ptr, 1, n, stderr)` (the out-of-memory message). -/
-  fwrite : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (s ptr n : BitVec 64) (cs : Nat → BitVec 64)
-    (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) (o : String),
-    CodeLive live → (∀ i, i < n.toNat → Sro (ptr.toNat + i) ∨ Sown (ptr.toNat + i)) →
-    SpIn s fwriteNeed →
-    ⊢ fwriteSpec Ierr live Wp s ptr n cs Sro Sown rd o
   /-- The newlib interior of `exit`. -/
   exitHandlers : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
@@ -291,17 +286,14 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
     CodeLive live → SpIn s exitHandlersNeed →
     ⊢ exitHandlersSpec Ierr live Wp s e r cs o Φ quiet
 
-/-- **`IrisHoles.newlib`**: the newlib statements hold at some post-write
-state. -/
-def NewlibHoles : Prop := ∃ Ierr, NewlibHolesAt Ierr
+/-- **`IrisHoles.newlib`**: the newlib statements at the post-`stderr`-write
+state `StdioErrOK` (lane N3: the state `fwrite` provably leaves,
+`Stderr/FwriteSpec.lean`). -/
+def NewlibHoles : Prop := NewlibHolesAt StdioErrOK
 
-/-- The post-`stderr`-write state the holes are instantiated at. -/
-def stdioErr (img : Nat → BitVec 8) : Prop := ∃ h : NewlibHoles, Classical.choose h img
+/-- The post-`stderr`-write state. -/
+abbrev stdioErr (img : Nat → BitVec 8) : Prop := StdioErrOK img
 
-theorem NewlibHoles.at (h : NewlibHoles) : NewlibHolesAt stdioErr := by
-  have e : stdioErr = Classical.choose h :=
-    funext fun img => propext ⟨fun ⟨_, hi⟩ => hi, fun hi => ⟨h, hi⟩⟩
-  rw [e]
-  exact Classical.choose_spec h
+theorem NewlibHoles.at (h : NewlibHoles) : NewlibHolesAt stdioErr := h
 
 end VsaIris.Newlib

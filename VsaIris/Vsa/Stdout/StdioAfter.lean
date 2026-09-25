@@ -53,7 +53,7 @@ theorem StdioOK.written {img img' : Nat → BitVec 8} (h : StdioOK img)
     (hp : imgLE img' 0x8001bb20 8 = 0x8001bb97) (hw : imgLE img' 0x8001bb2c 4 = 0)
     (hf : imgLE img' 0x8001bb30 2 = 0x200a) : StdioOK img' := by
   intro m hm
-  obtain ⟨hc, he, hs⟩ := h.facts
+  obtain ⟨hc, he, hs, hl, hst⟩ := h.facts
   have hag : AgreeP (fun a => stdioFoot a ∧ ¬ outW a) (fillMem img dataList) m := fun a ha => by
     rw [fillMem_get img (mem_dataList ha.1), hm a ha.1, hkeep a ha.1 ha.2]
   have ag : ∀ (n a : Nat), (∀ k, k < n → stdioFoot (a + k) ∧ ¬ outW (a + k)) →
@@ -74,7 +74,7 @@ theorem StdioOK.written {img img' : Nat → BitVec 8} (h : StdioOK img)
     · show (img' 0x8001bb30).toNat = 10; omega
     · show (img' 2147597105).toNat = 32; omega
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
-    he.transport fun a ha => hag a (exitExtra_off ha), ?_⟩
+    he.transport fun a ha => hag a (exitExtra_off ha), ?_, ⟨?_, ?_, ?_⟩, ⟨?_, ?_⟩⟩
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hc.impure
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hc.stdout
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hc.sinit
@@ -97,5 +97,10 @@ theorem StdioOK.written {img img' : Nat → BitVec 8} (h : StdioOK img)
   · exact (ag 4 _ (F _ _ (by decide))).symm.trans hc.lockMode
   · exact ⟨_, hmS _ (by unfold stdioFoot InRange consoleBuf; omega)⟩
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hs
+  · exact (ag 8 _ (F _ _ (by decide))).symm.trans hl.mbtowc
+  · exact (ag 1 _ (F _ _ (by decide))).symm.trans hl.mbMax
+  · exact (ag 8 _ (F _ _ (by decide))).symm.trans hl.decPoint
+  · exact (ag 8 _ (F _ _ (by decide))).symm.trans hst.base
+  · exact (ag 8 _ (F _ _ (by decide))).symm.trans hst.writer
 
 end VsaIris.Stdio
