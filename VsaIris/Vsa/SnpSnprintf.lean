@@ -212,4 +212,65 @@ theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     · exact (hk4 z h1 h2).trans ((hkeep z (.inr (.inr ⟨h1, h2⟩))).trans (SA.keep z h1 h2))
   · rw [hfr4 a ha2, hfr a (by have := SG.d_sep; simp only [SvfW, snpFP]; omega), SA.frame a (by omega)]
 
+/-! ## The formats of the two exact holes -/
+
+theorem pieceBytes_zero (g : Nat → BitVec 8) (b : Nat) : pieceBytes g b 0 = [] := by simp [pieceBytes]
+
+theorem natDigits_length_le : ∀ (fuel n k : Nat), 1 ≤ k → n < 10 ^ k →
+    (Vsa.While.natDigits fuel n).length ≤ k
+  | 0, _, _, _, _ => by simp [Vsa.While.natDigits]
+  | fuel + 1, n, k, hk, hn => by
+    unfold Vsa.While.natDigits
+    split
+    · simp; omega
+    · have hk2 : 2 ≤ k := by
+        rcases Nat.lt_or_ge k 2 with h | h
+        · have : k = 1 := by omega
+          subst this; omega
+        · exact h
+      have := natDigits_length_le fuel (n / 10) (k - 1) (by omega) (by
+        rw [Nat.div_lt_iff_lt_mul (by decide),
+          show 10 ^ (k - 1) * 10 = 10 ^ k by rw [← Nat.pow_succ]; congr 1; omega]; exact hn)
+      simp; omega
+
+/-- A 64-bit value renders in at most 20 characters. -/
+theorem intToString_length_le (v : BitVec 64) : (strBytes (Vsa.While.intToString v.toInt)).length ≤ 20 := by
+  unfold strBytes
+  rw [List.length_map, Vsa.Sim.intToString_of_bv v]
+  have hn : ∀ m, m < 2 ^ 64 → (Vsa.While.natToString m).toList.length ≤ 20 := fun m hm => by
+    rw [Vsa.Sim.natToString_toList_39]
+    exact natDigits_length_le _ _ 20 (by decide) (by have h := (show 2 ^ 64 < 10 ^ 20 by decide); omega)
+  split
+  · rw [String.toList_append, List.length_append]
+    have h1 : (-v).toNat < 2 ^ 63 + 1 := by
+      have := BitVec.toNat_neg v
+      rw [this]; rename_i h; have := v.isLt; omega
+    have h2 : (Vsa.While.natToString (-v).toNat).toList.length ≤ 19 := by
+      rw [Vsa.Sim.natToString_toList_39]
+      exact natDigits_length_le _ _ 19 (by decide) (by have h := (show 2 ^ 63 + 1 ≤ 10 ^ 19 by decide); omega)
+    simp only [show ("-" : String).toList.length = 1 from rfl]; omega
+  · exact hn _ v.isLt
+
+/-- **`"%lld"`'s loop**: one `%lld` iteration, then the NUL. -/
+theorem loop_lld {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
+    (hal : (R0 1).toNat % 4 = 0) (p ap : Nat) (FG : FmtGeom DA p 4)
+    (h0 : imgM Dt p = 37#8) (h1 : imgM Dt (p + 1) = 0x6c#8) (h2 : imgM Dt (p + 2) = 0x6c#8)
+    (h3 : imgM Dt (p + 3) = 0x64#8) (h4 : imgM Dt (p + 4) = 0#8)
+    (v : BitVec 64) (hv : ldv .ld Mt0 (BitVec.ofNat 64 ap).toNat = v) (hap1 : s - 40 ≤ ap) (hap2 : ap + 8 ≤ s) :
+    SvfLoopRun live Dt DA Q s dst n R0 Mt0 p ap (strBytes (Vsa.While.intToString v.toInt)) := by
+  intro R Mt A hret
+  have A' : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 ([] : List (BitVec 8)).length) [] R Mt := by simpa using A
+  have hlen := intToString_length_le v
+  refine svf_iterLLD hlive R Mt SG DO hmb hmx A' 0 ⟨fun b h1 h2 => FG.dom b h1 (by omega), FG.lo,
+    by have := FG.hi; omega, by have := FG.htif; omega⟩ (fun i hi => absurd hi (by omega)) h0 h1 h2 h3 v hv hap1 hap2
+    (by simp) fun R' Mt' A2 => ?_
+  simp only [List.length_nil, Nat.zero_add, Nat.add_zero, List.nil_append, pieceBytes_zero] at A2
+  refine svf_iterEnd hlive R' Mt' SG DO hmb hmx A2 0 ⟨fun b h1 h2 => FG.dom b (by omega) (by omega),
+    by have := FG.lo; omega, by have := FG.hi; omega, by have := FG.htif; omega⟩
+    (fun i hi => absurd hi (by omega)) (by simpa using h4) (by omega) hal ?_
+  simpa [pieceBytes_zero] using hret
+
 end VsaIris.Sym
