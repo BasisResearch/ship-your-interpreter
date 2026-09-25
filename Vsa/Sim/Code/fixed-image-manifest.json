@@ -1,7 +1,7 @@
 {
   "schema": "vsa.fixed-image-manifest.v1",
   "elf_sha256": "b146c6edb76ea9a0f0f30be381f8176ed2de9717e1ae9b37feff4b2b9ca1d0f0",
-  "generator_sha256": "1bf473e42e2e560b1ad436848cde59fa1dd3ea212adbf759ddadc0aff0247fc5",
+  "generator_sha256": "3f7fe7e358709a1cf11ef018649a4ab1104dc5619de16e64361e06e0d7950d16",
   "embedded_elf_identical": true,
   "sections": {
     ".text": {
@@ -24,7 +24,7 @@
   },
   "generated_sha256": {
     "FixedImageData.lean": "f3dd57214492f362e7c48bca6a0650204ef971ba37b66f0f79a8a5d6d7bd1227",
-    "FixedImage.lean": "d4bf290d5b66c5536b95c170d09ea082c3dca3336bb7a8d4240f809673affeec",
+    "FixedImage.lean": "3228ff19ed894124038cc7cf15265cb94ddd7f09669ed144232d972003f328a7",
     "FixedImage_Interp_run.lean": "eaae42e38388dce01e1179a9553b7d5c09339b71c0ed7364391fce7277c7eb33",
     "FixedImage_Setjmp.lean": "81234fed42720b02f512c0306ca423e95705e28c40a34d69985b52aaeb85a37a",
     "FixedImage_Strlen.lean": "17e0bea88acc36059bd570cae26619cfb556d653960292224c13de98f6cec42b",

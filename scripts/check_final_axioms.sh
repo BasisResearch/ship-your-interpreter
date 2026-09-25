@@ -20,6 +20,12 @@ THEOREMS=(
   Vsa.Sim.LayoutInstance.all_stackFits            # ProgramStackFits at every c/tests/*.wl embedding
   VsaIris.Interp.ctl_world_counted                # world_of_boundary at the control, counted regime
   VsaIris.Interp.ctl_world_uncounted              # world_of_boundary at the control, uncounted regime
+  Vsa.Sim.ConsoleStreamAt.orient                  # P1: the first write orients stdout (agreement form)
+  Vsa.Sim.ConsoleStreamAt.orient_logWH            # P1: ORIENT's reflected log (sw; sh) orients stdout
+  Vsa.Sim.ConsoleStreamAt.orient_logHW            # P1: ORIENT's reflected log (sh; sw, __swbuf_r)
+  Vsa.Sim.orientVfprintf_log                      # P1: _vfprintf_r's ORIENT block, decided
+  VsaIris.Stdio.StdioOKAt.orient                  # P1: the image form
+  Vsa.Sim.Code.FixedRodataLoaded.byteAt           # P2: the rodata pin after the script
 )
 AXFILE="$(mktemp /tmp/vsa_final_axioms.XXXXXX)".lean
 mv "${AXFILE%.lean}" "$AXFILE"
@@ -28,6 +34,7 @@ mv "${AXFILE%.lean}" "$AXFILE"
   echo "import VsaIris.Interp.WorldVacuity"
   echo "import Vsa.Sim.NativeNameAudit.ControlLoaded"
   echo "import Vsa.Sim.StackAdmissibleWitness"
+  echo "import VsaIris.Vsa.StdioOrient"
   for t in "${THEOREMS[@]}"; do echo "#print axioms $t"; done
 } > "$AXFILE"
 OUT="$(lake env lean "$AXFILE" 2>&1)"; STATUS=$?

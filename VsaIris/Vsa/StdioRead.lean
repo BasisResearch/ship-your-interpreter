@@ -47,11 +47,17 @@ theorem mem_dataList {a : Nat} (h : stdioFoot a) : a ∈ dataList := by
   unfold stdioFoot InRange at h
   omega
 
-/-- The canonical memory of a `StdioOK` image. -/
-theorem StdioOK.facts {img : Nat → BitVec 8} (h : StdioOK img) :
-    ConsoleStream (fillMem img dataList) ∧ ExitRuntimeData (fillMem img dataList) ∧
+/-- The canonical memory of a `StdioOKAt` image. -/
+theorem StdioOKAt.facts {o : Bool} {img : Nat → BitVec 8} (h : StdioOKAt o img) :
+    ConsoleStreamAt o (fillMem img dataList) ∧ ExitRuntimeData (fillMem img dataList) ∧
       read64 (fillMem img dataList) stderrPtrAddr = some exitStderr :=
   h (fillMem img dataList) (fun _ ha => fillMem_get (l := dataList) img (mem_dataList ha))
+
+/-- The canonical memory of a `StdioOK` image, at the image's orientation. -/
+theorem StdioOK.facts {img : Nat → BitVec 8} (h : StdioOK img) :
+    ∃ o, ConsoleStreamAt o (fillMem img dataList) ∧ ExitRuntimeData (fillMem img dataList) ∧
+      read64 (fillMem img dataList) stderrPtrAddr = some exitStderr :=
+  let ⟨o, h⟩ := h; ⟨o, h.facts⟩
 
 /-- A word of the image, from a `read64` fact about its canonical memory. -/
 theorem StdioOK.word {img : Nat → BitVec 8} {a v : Nat}
@@ -70,12 +76,12 @@ theorem dataList_range {a : Nat} (h1 : 0x8001b520 ≤ a) (h2 : a + 8 ≤ 0x8001c
 /-- `_impure_ptr` holds `&_impure_data`. -/
 theorem StdioOK.impure {img : Nat → BitVec 8} (h : StdioOK img) :
     imgW img consoleImpurePtrAddr = BitVec.ofNat 64 consoleReent :=
-  StdioOK.word h.facts.1.impure (dataList_range (by decide) (by decide))
+  let ⟨_, h⟩ := h; StdioOK.word h.facts.1.impure (dataList_range (by decide) (by decide))
 
 /-- `_impure_data._stderr` holds `&__sf[2]`. -/
 theorem StdioOK.stderr {img : Nat → BitVec 8} (h : StdioOK img) :
     imgW img stderrPtrAddr = BitVec.ofNat 64 exitStderr :=
-  StdioOK.word h.facts.2.2 (dataList_range (by decide) (by decide))
+  let ⟨_, h⟩ := h; StdioOK.word h.facts.2.2 (dataList_range (by decide) (by decide))
 
 /-- The bytes of a little-endian number, one by one. -/
 theorem imgLE_byte (img : Nat → BitVec 8) : ∀ {n a i : Nat}, i < n →

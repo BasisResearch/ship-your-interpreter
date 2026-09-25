@@ -70,8 +70,8 @@ theorem access_statics : Code.ImageStaticsLoaded accessMem := by
     Code.imgDecPointPtr, Code.imgMbCurMax, Code.imgImpurePtr, access_image_byte]
     using snapshot_statics
 
-theorem access_console : ConsoleStream accessMem := by
-  apply ConsoleStream.of_agree _ snapshot_console
+theorem access_console : ConsoleBoot accessMem := by
+  apply ConsoleStreamAt.of_agree _ snapshot_console
   intro a ha
   apply access_image_byte
   all_goals

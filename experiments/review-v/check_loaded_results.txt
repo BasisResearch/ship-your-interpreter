@@ -16,9 +16,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 422 mismatching bytes, 422 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 422 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -41,9 +41,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 422 mismatching bytes, 422 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 422 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -63,6 +63,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x000ax1, fprintf@0x000ax1, snprintf@0x000ax3
   AST: var f = fn f(a) {return a;}; println(f(1, 2));
 == adv_assert2
   PASS pc: entry step 16808, 2448 stores replayed
@@ -82,9 +84,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -107,9 +109,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -129,7 +131,77 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('17263', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x200ax1, fputc@0x200ax1, fputs@0x000ax1, snprintf@0x200ax2
   AST: println('a'); assert(false, 'boom'); println('b');
+== adv_big_ok
+  PASS pc: entry step 28261, 3327 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 4
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 424 unpinned script bytes differ from the proof ELF
+  PASS statics[sparse]: []
+  PASS console (ConsoleBoot)[sparse]: failed: 
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2221 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 554 in [0x8001c330, 0x8001ca1b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ca20 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 424 unpinned script bytes differ from the proof ELF
+  PASS statics[dense]: []
+  PASS console (ConsoleBoot)[dense]: failed: 
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 554 in [0x8001c330, 0x8001ca1b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ca20 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): 
+  AST: var s = 'x'; var i = 0; while ((i < 23)) {(s = (s + s)); (i = (i + 1));} println(2);
 == adv_break
   PASS pc: entry step 13735, 1828 stores replayed
   PASS interp_arg a0=inp: 0x87fffe10
@@ -148,9 +220,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -173,9 +245,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -195,6 +267,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('14228', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax1, fputc@0x200ax1, snprintf@0x200ax1
   AST: println(1); break;
 == adv_depth1000
   PASS pc: entry step 29464, 3295 stores replayed
@@ -214,9 +288,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 421 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -239,9 +313,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 421 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -261,6 +335,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x000ax1, fprintf@0x000ax1, snprintf@0x000ax2
   AST: var f = fn f(n) {if ((n == 0)) {return 0;} return (1 + f((n - 1)));}; println(f(1000));
 == adv_depth999
   PASS pc: entry step 29427, 3295 stores replayed
@@ -280,9 +356,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 421 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -305,9 +381,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 421 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -327,6 +403,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('1483741', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fputc@0x200ax1
   AST: var f = fn f(n) {if ((n == 0)) {return 0;} return (1 + f((n - 1)));}; println(f(999));
 == adv_empty
   PASS pc: entry step 9901, 1455 stores replayed
@@ -346,9 +424,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -371,9 +449,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -393,6 +471,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x000ax1
   AST: 
 == adv_intmin
   PASS pc: entry step 55189, 5096 stores replayed
@@ -412,9 +492,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 432 mismatching bytes, 432 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 432 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -437,9 +517,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 432 mismatching bytes, 432 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 432 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -459,6 +539,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 15 stores (14 rewrite the same value); changes: [('55842', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax6, fputc@0x200ax7
   AST: println(((-9223372036854775807) - 1)); println((((-9223372036854775807) - 1) / (-1))); println((((-9223372036854775807) - 1) % (-1))); println((((1000000 * 1000000) * 1000000) * 1000000)); println(((-
 == adv_longname
   PASS pc: entry step 23573, 3207 stores replayed
@@ -478,9 +560,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 428 mismatching bytes, 428 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 428 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -503,9 +585,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 428 mismatching bytes, 428 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 428 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -525,6 +607,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 7 stores (6 rewrite the same value); changes: [('26923', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x200ax1, fputc@0x200ax3, fputs@0x000ax1, fputs@0x200ax1, snprintf@0x000ax1, snprintf@0x200ax1
   AST: var aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = fn aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa() {return 0;}; println(('' + aaaaaaaaaaaaaaaaaaaa
 == adv_loopvar
   PASS pc: entry step 29484, 3611 stores replayed
@@ -544,9 +628,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 426 mismatching bytes, 426 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 426 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -569,9 +653,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 426 mismatching bytes, 426 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 426 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -591,6 +675,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 5 stores (4 rewrite the same value); changes: [('1362387', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x200ax1, fputc@0x200ax2, fputs@0x000ax1
   AST: var i = 0; var s = ''; while ((i < 400)) {(s = (s + 'ab')); (i = (i + 1));} println((s == ('ab' + s)), i);
 == adv_modzero
   PASS pc: entry step 16768, 2078 stores replayed
@@ -610,9 +696,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -635,9 +721,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -657,6 +743,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x000ax1, fprintf@0x000ax1, snprintf@0x000ax2
   AST: var a = 0; println((5 % a));
 == adv_name58
   PASS pc: entry step 17276, 2303 stores replayed
@@ -676,9 +764,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 430 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -701,9 +789,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 430 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -723,6 +811,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('20549', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fputc@0x200ax1, fputs@0x000ax1, snprintf@0x000ax1
   AST: var bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb = fn bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb() {return 0;}; println(('' + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 == adv_name59
   PASS pc: entry step 17280, 2304 stores replayed
@@ -742,9 +832,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -767,9 +857,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -789,6 +879,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('20562', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fputc@0x200ax1, fputs@0x000ax1, snprintf@0x000ax1
   AST: var ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc = fn ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc() {return 0;}; println(('' + cccccccccccccccccccccccccccccccccccccccccc
 == adv_native
   PASS pc: entry step 28316, 3681 stores replayed
@@ -808,9 +900,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 425 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -833,9 +925,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 425 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -855,6 +947,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 11 stores (10 rewrite the same value); changes: [('30781', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x200ax1, fputc@0x200ax5, fputs@0x000ax1, fputs@0x200ax3
   AST: println(('' + println), println, ('' + fn () {return 1;})); println((print == print), (fn () {return 1;} == fn () {return 1;}));
 == adv_nest
   PASS pc: entry step 91424, 16363 stores replayed
@@ -874,9 +968,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 452 mismatching bytes, 452 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 452 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -899,9 +993,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 452 mismatching bytes, 452 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 452 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -921,6 +1015,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('113917', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fputc@0x200ax1
   AST: println((-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-
 == adv_nest_odd
   PASS pc: entry step 84519, 15076 stores replayed
@@ -940,9 +1036,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 448 mismatching bytes, 448 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 448 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -965,9 +1061,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 448 mismatching bytes, 448 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 448 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -987,6 +1083,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('105062', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fputc@0x200ax1
   AST: println((-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-
 == adv_nonascii
   PASS pc: entry step 11909, 1752 stores replayed
@@ -1006,9 +1104,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1031,9 +1129,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1053,6 +1151,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('12375', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fputc@0x200ax1, fputs@0x000ax1
   AST: println('h');
 == adv_notcallable
   PASS pc: entry step 16080, 2169 stores replayed
@@ -1072,9 +1172,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1097,9 +1197,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1119,7 +1219,145 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('16881', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x200ax1, fputc@0x200ax1, fputs@0x000ax1, snprintf@0x200ax2
   AST: var x = 1; println('a'); x();
+== adv_oom_div
+  PASS pc: entry step 16246, 2262 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 422 unpinned script bytes differ from the proof ELF
+  PASS statics[sparse]: []
+  PASS console (ConsoleBoot)[sparse]: failed: 
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 1765 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 234 in [0x8001c330, 0x8001c6a3]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c6b0 brk=0x8001d000 chunks=24 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 422 unpinned script bytes differ from the proof ELF
+  PASS statics[dense]: []
+  PASS console (ConsoleBoot)[dense]: failed: 
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 234 in [0x8001c330, 0x8001c6a3]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c6b0 brk=0x8001d000 chunks=24 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): 
+  AST: var s = 'x'; while (true) {(s = (s + s));}
+== adv_oom_term
+  PASS pc: entry step 28261, 3327 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 4
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 424 unpinned script bytes differ from the proof ELF
+  PASS statics[sparse]: []
+  PASS console (ConsoleBoot)[sparse]: failed: 
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2221 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 554 in [0x8001c330, 0x8001ca1b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ca20 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 424 unpinned script bytes differ from the proof ELF
+  PASS statics[dense]: []
+  PASS console (ConsoleBoot)[dense]: failed: 
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 554 in [0x8001c330, 0x8001ca1b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ca20 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): 
+  AST: var s = 'x'; var i = 0; while ((i < 26)) {(s = (s + s)); (i = (i + 1));} println(1);
 == adv_strcmp
   PASS pc: entry step 19462, 3103 stores replayed
   PASS interp_arg a0=inp: 0x87fffe10
@@ -1138,9 +1376,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 425 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1163,9 +1401,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 425 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1185,6 +1423,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 15 stores (14 rewrite the same value); changes: [('21288', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fputc@0x200ax7, fputs@0x000ax1, fputs@0x200ax6
   AST: println(('abc' < 'abd'), ('b' > 'abc'), ('a' <= 'a'), ('a' >= 'b'), ('a' == 'a'), ('a' != 'a'), ('' < 'a'));
 == adv_toomany
   PASS pc: entry step 81145, 7011 stores replayed
@@ -1204,9 +1444,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 429 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1229,9 +1469,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 429 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1251,6 +1491,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x000ax1, fprintf@0x000ax1, snprintf@0x000ax2
   AST: var f = fn f() {return 0;}; println(f(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33));
 == adv_truthy
   PASS pc: entry step 29060, 4007 stores replayed
@@ -1270,9 +1512,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 427 mismatching bytes, 427 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 427 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1295,9 +1537,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 427 mismatching bytes, 427 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 427 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1317,6 +1559,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 15 stores (14 rewrite the same value); changes: [('30568', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fputc@0x200ax7, fputs@0x000ax1, fputs@0x200ax6
   AST: println((!(!'')), (!(!'a')), (!(!0)), (!(!1)), (!(!null)), (!(!fn () {return 0;}))); if ('') {println('t');} else {println('f');}
 == arithmetic
   PASS pc: entry step 106390, 9680 stores replayed
@@ -1336,9 +1580,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1361,9 +1605,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1383,6 +1627,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 47 stores (46 rewrite the same value); changes: [('107124', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax7, fputc@0x200ax23, fputs@0x200ax15
   AST: println((1 + (2 * 3))); println(((1 + 2) * 3)); println((10 / 3)); println((10 % 3)); println(((-5) + 3)); println(((2 * 3) + (4 * 5))); println((1000000 * 1000000)); println(((7 - 2) - 1)); println((
 == err_divzero
   PASS pc: entry step 18184, 2263 stores replayed
@@ -1402,9 +1648,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1427,9 +1673,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1449,7 +1695,10 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x000ax1, fprintf@0x000ax1, snprintf@0x000ax2
   AST: var a = 10; println((a / (a - 10)));
+== err_parse: EXCEPTION AssertionError('no entry row')
 == err_undefined
   PASS pc: entry step 12365, 1761 stores replayed
   PASS interp_arg a0=inp: 0x87fffe10
@@ -1468,9 +1717,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1493,9 +1742,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1515,6 +1764,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 0 stores (0 rewrite the same value); changes: []; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x000ax1, fprintf@0x000ax1, snprintf@0x000ax2
   AST: println(nope);
 == for
   PASS pc: entry step 120300, 12637 stores replayed
@@ -1534,9 +1785,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 441 mismatching bytes, 441 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 441 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1559,9 +1810,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 441 mismatching bytes, 441 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 441 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1581,6 +1832,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 39 stores (38 rewrite the same value); changes: [('123115', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax10, fputc@0x200ax19, fputs@0x200ax8, snprintf@0x200ax5
   AST: for (var i = 1; (i <= 15); (i = (i + 1))) {if (((i % 15) == 0)) {println('FizzBuzz');} else if (((i % 3) == 0)) {println('Fizz');} else if (((i % 5) == 0)) {println('Buzz');} else {println(i);}} var s
 == functions1
   PASS pc: entry step 72465, 8441 stores replayed
@@ -1600,9 +1853,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 429 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1625,9 +1878,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 429 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1647,6 +1900,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 11 stores (10 rewrite the same value); changes: [('75938', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax4, fputc@0x200ax5
   AST: var make_adder = fn make_adder(n) {return fn (x) {return (x + n);};}; var add5 = make_adder(5); println(add5(10)); var apply_twice = fn apply_twice(f, x) {return f(f(x));}; println(apply_twice(add5, 1
 == functions2
   PASS pc: entry step 62110, 7318 stores replayed
@@ -1666,9 +1921,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1691,9 +1946,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 423 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1713,6 +1968,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 9 stores (8 rewrite the same value); changes: [('65453', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x200ax2, fputc@0x200ax4, fputs@0x000ax1, fwrite@0x200ax1
   AST: var make_adder = fn make_adder(n) {return fn (x) {return (x + n);};}; var add5 = make_adder(5); var f = add5; println((f == add5)); println(make_adder); println(fn (x) {return x;}); var compose = fn c
 == proof
   PASS pc: entry step 85483, 8837 stores replayed
@@ -1732,9 +1989,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  PASS rodata_image[sparse]: 0 mismatching bytes, 0 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 0 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1757,9 +2014,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  PASS rodata_image[dense]: 0 mismatching bytes, 0 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 0 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1779,7 +2036,77 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 7 stores (6 rewrite the same value); changes: [('104764', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax2, fputc@0x200ax3
   AST: var i = 0; var sum = 0; while ((i < 10)) {(i = (i + 1)); (sum = (sum + i));} println(sum); var n = 0; var total = 0; while (true) {(n = (n + 1)); if ((n > 100)) {break;} if (((n % 2) == 0)) {continue;
+== recursion
+  PASS pc: entry step 118435, 12030 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 9
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
+  PASS statics[sparse]: []
+  PASS console (ConsoleBoot)[sparse]: failed: 
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 3613 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 3552 in [0x8001c330, 0x8001ea7b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ea80 brk=0x8001f000 chunks=222 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
+  PASS statics[dense]: []
+  PASS console (ConsoleBoot)[dense]: failed: 
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 3552 in [0x8001c330, 0x8001ea7b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ea80 brk=0x8001f000 chunks=222 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 3 stores (2 rewrite the same value); changes: [('134401', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): fprintf@0x000ax1, fputc@0x200ax1
+  AST: var fact = fn fact(n) {if ((n <= 1)) {return 1;} return (n * fact((n - 1)));}; println(fact(10)); var fib = fn fib(n) {if ((n < 2)) {return n;} return (fib((n - 1)) + fib((n - 2)));}; println(fib(20))
 == scope
   PASS pc: entry step 75486, 8002 stores replayed
   PASS interp_arg a0=inp: 0x87fffe10
@@ -1798,9 +2125,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 430 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1823,9 +2150,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 430 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1845,6 +2172,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 17 stores (16 rewrite the same value); changes: [('76975', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax6, fputc@0x200ax8, fputs@0x200ax1
   AST: var x = 1; {var x = 2; println(x); (x = 3); println(x);} println(x); var y = 10; {(y = 20);} println(y); var g = 5; var shadow = fn shadow(g) {return (g * 2);}; println(shadow(7), g); var count = 0; w
 == strings
   PASS pc: entry step 36228, 5031 stores replayed
@@ -1864,9 +2193,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1889,9 +2218,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 431 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1911,6 +2240,8 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 21 stores (20 rewrite the same value); changes: [('38332', '_fputs_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fputc@0x200ax10, fputs@0x000ax1, fputs@0x200ax9, snprintf@0x200ax2
   AST: println((('hello' + ' ') + 'world')); println(('value: ' + 42)); println((1 + '2')); var s = 'abc'; println((s == 'abc'), (s != 'def')); println(('a' < 'b'), ('abc' <= 'abc')); println('line1\nline2')
 == while
   PASS pc: entry step 86320, 9005 stores replayed
@@ -1930,9 +2261,9 @@
   PASS stack_ok: 
   PASS main_ra[sparse]: 0x80000038
   PASS text_image[sparse]: 0 mismatching bytes
-  FAIL rodata_image[sparse]: 436 mismatching bytes, 436 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[sparse]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 436 unpinned script bytes differ from the proof ELF
   PASS statics[sparse]: []
-  FAIL console[sparse]: failed: flags
+  PASS console (ConsoleBoot)[sparse]: failed: 
   PASS exit_runtime[sparse]: failed: 
   PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
   PASS globals present[sparse]: 0x8001c180
@@ -1955,9 +2286,9 @@
   PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
   PASS main_ra[dense]: 0x80000038
   PASS text_image[dense]: 0 mismatching bytes
-  FAIL rodata_image[dense]: 436 mismatching bytes, 436 inside the script blob [0x80018be0,0x80018da5)
+  PASS rodata_image[dense]: 0 mismatching pinned bytes [0x80018da6,0x8001acf0); 436 unpinned script bytes differ from the proof ELF
   PASS statics[dense]: []
-  FAIL console[dense]: failed: flags
+  PASS console (ConsoleBoot)[dense]: failed: 
   PASS exit_runtime[dense]: failed: 
   PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
   PASS globals present[dense]: 0x8001c180
@@ -1977,4 +2308,6 @@
   PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
   PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
   PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS P1 flag stores are ORIENT (0x000a -> 0x200a), before exit: 7 stores (6 rewrite the same value); changes: [('105601', '_vfprintf_r', '0xa', '0x200a')]; bad: []
+  PASS P1 StdioOK console at every newlib call (flags 0x000a or 0x200a): calls (name, flags): exitHandlers@0x200ax1, fprintf@0x000ax1, fprintf@0x200ax2, fputc@0x200ax3
   AST: var i = 0; var sum = 0; while ((i < 10)) {(i = (i + 1)); (sum = (sum + i));} println(sum); var n = 0; var total = 0; while (true) {(n = (n + 1)); if ((n > 100)) {break;} if (((n % 2) == 0)) {continue;

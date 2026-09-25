@@ -18,7 +18,7 @@ theorem memoryFacts : SnapshotMemoryFacts mem where
       Code.imgDecPointStr, Code.imgParseSlotD, Code.imgParseSlotL, Code.imgFnSlot,
       Code.imgDecPointPtr, Code.imgMbCurMax, Code.imgImpurePtr, unchanged]
       using nativeName_statics
-  console := ConsoleStream.of_agree (by
+  console := ConsoleStreamAt.of_agree (by
     intro k hk
     apply unchanged
     left

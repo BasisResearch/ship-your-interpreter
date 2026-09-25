@@ -114,6 +114,7 @@ import VsaIris.Vsa.H5Sites
 import VsaIris.Vsa.Exit
 import VsaIris.Vsa.SegImg
 import VsaIris.Vsa.StdioRead
+import VsaIris.Vsa.StdioOrient
 import VsaIris.Vsa.MainErr
 import VsaIris.Vsa.Landing
 import VsaIris.Interp.Abort

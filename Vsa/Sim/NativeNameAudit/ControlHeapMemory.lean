@@ -400,7 +400,7 @@ theorem heapMemoryFacts : SnapshotMemoryFacts heapMem where
       Code.imgDecPointStr, Code.imgParseSlotD, Code.imgParseSlotL, Code.imgFnSlot,
       Code.imgDecPointPtr, Code.imgMbCurMax, Code.imgImpurePtr, unchanged_low]
       using memoryFacts.statics
-  console := ConsoleStream.of_agree (by
+  console := ConsoleStreamAt.of_agree (by
     intro k hk
     apply unchanged_low
     unfold ConsoleFoot consoleImpurePtrAddr consoleReent consoleStdout consoleBuf at hk

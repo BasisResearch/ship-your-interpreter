@@ -25,16 +25,31 @@ theorem FixedBytesLoaded.slotPinned {m : Mem} {base size : Nat}
   simp only [Nat.add_zero] at hzero
   exact ⟨hzero, pin 1 (by decide), pin 2 (by decide), pin 3 (by decide)⟩
 
-/-- Project a complete slot contained in the fixed read-only image. -/
+/-- A slot inside a window of pinned bytes. -/
+theorem slotPinned_of_window {m : Mem} {lo hi base : Nat} {byte : Nat → BitVec 8}
+    (hb : ∀ x, lo ≤ x → x < hi → m[x]? = some (byte (x - base)))
+    (a : BitVec 64) (hbase : base ≤ lo) (hlo : lo ≤ a.toNat) (hhi : a.toNat + 4 ≤ hi) :
+    SlotPinned a (byte (a.toNat - base)) (byte (a.toNat - base + 1))
+      (byte (a.toNat - base + 2)) (byte (a.toNat - base + 3)) m := by
+  have pin (i : Nat) (hi : i < 4) : m[a.toNat + i]? = some (byte (a.toNat - base + i)) := by
+    have e : a.toNat - base + i = a.toNat + i - base := by omega
+    rw [e]
+    exact hb _ (by omega) (by omega)
+  have hzero := pin 0 (by decide)
+  simp only [Nat.add_zero] at hzero
+  exact ⟨hzero, pin 1 (by decide), pin 2 (by decide), pin 3 (by decide)⟩
+
+/-- Project a complete slot contained in the fixed read-only image (after
+the embedded script, `FixedRodataLoaded`). -/
 theorem FixedRodataLoaded.slotPinned {m : Mem} (h : FixedRodataLoaded m)
-    (a : BitVec 64) (hlo : 0x80018be0 ≤ a.toNat)
+    (a : BitVec 64) (hlo : 0x80018da6 ≤ a.toNat)
     (hhi : a.toNat + 4 ≤ 0x8001acf0) :
     SlotPinned a
       (fixedRodataByte (a.toNat - 0x80018be0))
       (fixedRodataByte (a.toNat - 0x80018be0 + 1))
       (fixedRodataByte (a.toNat - 0x80018be0 + 2))
       (fixedRodataByte (a.toNat - 0x80018be0 + 3)) m :=
-  FixedBytesLoaded.slotPinned h a hlo hhi
+  slotPinned_of_window (fun _ h1 h2 => h.byteAt h1 h2) a (by decide) hlo hhi
 
 theorem FixedRodataLoaded.addSlot {m : Mem} (h : FixedRodataLoaded m) :
     AddSlotPinned m := h.slotPinned 0x80019f84#64 (by decide) (by decide)
