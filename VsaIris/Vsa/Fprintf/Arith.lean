@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Interp.ProofArith
+import VsaIris.Vsa.Fprintf.Move
 
 /-!
 # libgcc's divide inside a stdout run (lane N5)
@@ -55,5 +56,39 @@ theorem udiv_sw (hlive : ∀ p ∈ interpText, live p.1) (hsub : ∀ p ∈ inter
     (interpText_sub hsub)
     (fun _ hk' => udiv_iw hlive n d r R Mt hd h10 h11 hr hal fun R' h1 h2 h3 => hk' r R' Mt ⟨rfl, rfl, h1, h2, h3⟩)
     (fun pc' R' Mt' ⟨e1, e2, h1, h2, h3⟩ => by subst e1 e2; exact hk R' h1 h2 h3)
+
+/-- **`__umoddi3`** (`0x800046f4`) over the interpreter's table: the unsigned
+remainder in `a0`, returned through `t0` to `r`. -/
+theorem umoddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R : Nat → BitVec 64)
+    (Mt : Mem) (hd : d ≠ 0#64) (h10 : R 10 = n) (h11 : R 11 = d) (hr : R 1 = r)
+    (hal : r.toNat % 4 = 0)
+    (hk : ∀ R', (R' 10).toNat = n.toNat % d.toNat → SDivKeep R' R → IW live Dt DA S Q r R' Mt) :
+    IW live Dt DA S Q 0x800046f4#64 R Mt := by
+  refine it_800046f4 hlive ?_
+  refine iw_jal 0x800046f8 _ _ (jalx_800046f8 live (fun p hp => hlive _ (interp_code_800046f8 p hp)))
+    interp_code_800046f8 rfl ?_
+  refine udiv_iw hlive n d 0x800046fc#64 _ Mt hd (by rsimp; exact h10) (by rsimp; exact h11) (by rsimp)
+    (by decide) (fun R' _ hm hkp => ?_)
+  have h5 : R' 5 = r := by
+    rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]; rsimp; rw [sx0, BitVec.add_zero]; exact hr
+  refine it_800046fc hlive (it_80004700 hlive (by rsimp; rw [h5]; exact hal) ?_)
+  rsimp; rw [h5]
+  refine hk _ (by rsimp; rw [sx0, BitVec.add_zero]; exact hm) (fun z h1 h5' h10' h11' h12 h13 => ?_)
+  rsimp; simp only [h10', ite_false]
+  rw [hkp z h10' h11' h12 h13]; rsimp; simp only [h1, h5', ite_false]
+
+/-- **`__umoddi3`** inside a stdout run. -/
+theorem umoddi3_sw (hlive : ∀ p ∈ interpText, live p.1) (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA)
+    (n d r : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) (hd : d ≠ 0#64) (h10 : R 10 = n)
+    (h11 : R 11 = d) (hr : R 1 = r) (hal : r.toNat % 4 = 0)
+    (hk : ∀ R', (R' 10).toNat = n.toNat % d.toNat → SDivKeep R' R →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t r R' Mt) :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x800046f4#64 R Mt :=
+  swpo_bridge (C := fun pc' R' Mt' => pc' = r ∧ Mt' = Mt ∧ (R' 10).toNat = n.toNat % d.toNat ∧ SDivKeep R' R)
+    (interpText_sub hsub)
+    (fun _ hk' => umoddi3_iw hlive n d r R Mt hd h10 h11 hr hal fun R' h1 h2 => hk' r R' Mt ⟨rfl, rfl, h1, h2⟩)
+    (fun pc' R' Mt' ⟨e1, e2, h1, h2⟩ => by subst e1 e2; exact hk R' h1 h2)
 
 end VsaIris.Sym.Fp
