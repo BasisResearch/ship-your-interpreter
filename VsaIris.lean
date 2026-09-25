@@ -143,6 +143,7 @@ import VsaIris.Vsa.SnpPuts
 import VsaIris.Vsa.SnpPrint
 import VsaIris.Vsa.SnpStrlen
 import VsaIris.Vsa.SnpSvf
+import VsaIris.Vsa.SnpSvfConv
 import VsaIris.Interp.IRun
 import VsaIris.Interp.Steps
 import VsaIris.Interp.ITac
