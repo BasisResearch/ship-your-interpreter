@@ -1451,3 +1451,25 @@ without the fact and no other resource carries it:
   stack and the resulting `abortRes` enters `Core` (`ms_callEnvNewP`,
   `ms_callEnvDefineP`, `ExecOom.lean`). The arms fix `L`/`Room` to
   `vsaLayoutP`/`vsaRoomB` (the `env_*` specs' heap).
+
+### STATEMENT CHANGES (N2)
+
+- **`StdioOK` pins the C locale** (`Vsa/Sim/LocaleData.lean`: `LocaleData`,
+  the fourth conjunct of `Stdio.StdioOK`). `_svfprintf_r`, behind every
+  `snprintf`/`fprintf` hole, reads three words of `__global_locale` (`.data`,
+  inside `stdioFoot`): the `mbtowc` hook it calls through `jalr s4`
+  (`0x80007740`, `__global_locale + 232 = 0x8001b880`), `__mb_cur_max`
+  (`0x8001b8f8`, via `__locale_mb_cur_max`), and the lconv `decimal_point`
+  (`0x8001b898`, via `_localeconv_r`, then `strlen`). `StdioOK` pinned none of
+  them, so the `snprintf` holes quantified over locale data that sends the
+  indirect call anywhere: unprovable as written.
+  - **What narrowed.** `LayoutInstance.BootHeapFacts` gains `locale :
+    LocaleData m` (so `Loaded interpRunLayout`, the hypothesis of
+    `endToEnd_refinement`, narrows); `World.BootGap` gains `locale`, and
+    `stdioOK_of_mem` takes it. `StdioOK`'s consumers are unchanged except
+    `StdioOK.stderr` (the tower's third conjunct is now a pair).
+  - **Not vacuous.** The control's snapshot carries the ELF values
+    (`NativeNameAudit.Control.locale_mem`, three reads through the heap log,
+    each one `decide`): `__ascii_mbtowc`, `1`, `"."` at `0x80019770`.
+  - **Every hole that returns `stdioOwn` must now also restore the locale**;
+    nothing writes it (`setlocale` is not linked into any path).

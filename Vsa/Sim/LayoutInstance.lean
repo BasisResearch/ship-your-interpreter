@@ -2,6 +2,7 @@ import Vsa.Sim.GeomFacts
 import Vsa.Sim.ImageDischarge
 import Vsa.Sim.ConsoleStream
 import Vsa.Sim.ExitRuntimeData
+import Vsa.Sim.LocaleData
 import Vsa.Sim.GoodState
 import Vsa.Sim.JmpSpec
 import Vsa.Sim.Code.Interp_run
@@ -399,6 +400,10 @@ structure BootHeapFacts (m : Vsa.MemRepr.Mem) (shared : Nat → Prop) (e top brk
   frame : BootFrameChunks m chunks shared e F
   /-- `_impure_data._stderr = &__sf[2]` (INTERP_DESIGN.md Q6). -/
   stderr : Vsa.MemRepr.read64 m impureStderrAddr = some exitStderr
+  /-- The C locale's data (`LocaleData`): `_svfprintf_r`'s `mbtowc` hook,
+  `__mb_cur_max`, the decimal point. Lane N2: the `snprintf`/`fprintf`
+  proofs jump through the hook, so `StdioOK` carries it. -/
+  locale : LocaleData m
   /-- Every shared byte is RAM with the word loop's slack, off the HTIF words
   and the stack. User decision (2026-09-24, integration): the Iris route's
   string reads need it (`SharedWin`). -/
