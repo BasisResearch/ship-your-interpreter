@@ -15,12 +15,11 @@ Branch `lane-n1` (from `hub/iris-main`). Brief: `~/lane-n1-aws.md`. `out.fprintf
 - **`out.fputc` proved**: `Sym.fputc_out` (`Vsa/Stdout/OutSpec.lean`); generic Iris wrapper
   `outSpec_of_run` (data view indexed by an opened image) + `outEnd_of`.
 - `__sfvwrite_r` unbuffered path: `sfvwrite_run` (`Vsa/Stdout/Sfvwrite.lean`), shared with N3/N5.
-- **`out.fwrite` proved**: `Sym.fwrite_out` (`Vsa/Stdout/FwriteOut.lean`, over `fwrite_run`).
+- **`out.fwrite` proved**: `Sym.fwrite_out` (`Vsa/Stdout/StrOut.lean`, over `fwrite_run`).
+- Leaf calls inside symbolic runs: `LocalRun.frame`/`swpo_leaf` (`Vsa/SymLeaf.lean`);
+  `swpo_strlen` (`Vsa/Stdout/Strlen.lean`) splices `StrLeaf.strlenRunL`.
+- **`out.fputs` proved**: `Sym.fputs_out` (`Vsa/Stdout/StrOut.lean`, over `fputs_run`); string
+  arguments opened once by `strView_open` (`StrView`).
 
 ## Holes
-- Remaining (mine): `out.fputs`.
-
-## Next
-- `fputs`: its `strlen` call via a framing lemma `swpo_leaf` (a silent leaf `LocalRun` on a
-  smaller footprint, `StrLeaf.strlenRunL`, spliced into an `SWPO` run; its code bytes are in
-  `stdioText`), then `sfvwrite_run`; wrapper as `fwrite_out` (NUL byte in the view).
+- All of lane N1's holes are proved (`out.fputs`, `out.fputc`, `out.fwrite`); `out.fprintf` is N5's.

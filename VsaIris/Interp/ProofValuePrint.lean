@@ -1,6 +1,6 @@
 import VsaIris.Interp.NewlibCall
 import VsaIris.Vsa.NewlibOut
-import VsaIris.Vsa.Stdout.FwriteOut
+import VsaIris.Vsa.Stdout.StrOut
 
 /-!
 # `value_print` (lane H2)
@@ -184,7 +184,8 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   · simp only [Bool.cond_false] at hb
     ix_run1 c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019010 "false") (frag := "false")
-      (H.fputs live Wp 0x80019010#64 s _ "false" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
+      (VsaIris.Sym.fputs_out live Wp 0x80019010#64 s _ "false" o c.hcl (spIn_of_stackGeom c.hsg (by decide))
+        (VsaIris.Sym.bss_of_stackGeom c.hsg (by decide)))
       (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
       outSpec_Q ?hX rfl c.hMa
     case hvs =>
@@ -201,7 +202,8 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   · simp only [Bool.cond_true] at hb
     ix_run1 c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019008 "true") (frag := "true")
-      (H.fputs live Wp 0x80019008#64 s _ "true" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
+      (VsaIris.Sym.fputs_out live Wp 0x80019008#64 s _ "true" o c.hcl (spIn_of_stackGeom c.hsg (by decide))
+        (VsaIris.Sym.bss_of_stackGeom c.hsg (by decide)))
       (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
       outSpec_Q ?hX rfl c.hMa
     case hvs =>
@@ -260,8 +262,8 @@ theorem vp_str (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   unfold VpGoal valuePrintPC
   ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw]
   refine vp_swp_close Wp (Xr := strAt (imgW (imgM Ma) (p.toNat + 8)).toNat x) (frag := x)
-    (H.fputs live Wp (imgW (imgM Ma) (p.toNat + 8)) s _ x o c.hcl
-      (spIn_of_stackGeom c.hsg (by decide)))
+    (VsaIris.Sym.fputs_out live Wp (imgW (imgM Ma) (p.toNat + 8)) s _ x o c.hcl
+      (spIn_of_stackGeom c.hsg (by decide)) (VsaIris.Sym.bss_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX rfl c.hMa
   case hvs =>

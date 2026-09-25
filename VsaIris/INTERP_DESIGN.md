@@ -1477,11 +1477,11 @@ without the fact and no other resource carries it:
   `⌜r.toNat % 4 = 0⌝`: the callee's `ret` is a `jalr` whose target must be
   4-aligned to be a successful step. Callers supply it from their `jal` site
   (`ms_callNewlibA`, `ms_tailNewlibA`).
-- **`out.fputc` and `out.fwrite` need the stack above `.bss`.** `SpIn s need` admits a stack
+- **`out.fputs`, `out.fputc` and `out.fwrite` need the stack above `.bss`.** `SpIn s need` admits a stack
   window inside newlib's data (it bounds `s` only below by the HTIF words),
   where the callee's spills would overwrite `stdioOwn`'s bytes. The proved
-  `Sym.fputc_out` (`Vsa/Stdout/OutSpec.lean`) and `Sym.fwrite_out`
-  (`Vsa/Stdout/FwriteOut.lean`) take `0x8001c168 ≤ s - need`
+  `Sym.fputc_out` (`Vsa/Stdout/OutSpec.lean`), `Sym.fputs_out` and
+  `Sym.fwrite_out` (`Vsa/Stdout/StrOut.lean`) take `0x8001c168 ≤ s - need`
   besides `SpIn`; the interpreter's callers derive it from `StackGeom`
   (`Sym.bss_of_stackGeom`; the stack region starts at `0x87800000`). The
   remaining stdout holes take the same premise when proved.
