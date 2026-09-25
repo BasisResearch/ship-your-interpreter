@@ -34,7 +34,7 @@ theorem fprintf_lld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
     (himp : ldv .ld Dt 0x8001b970 = 0x8001b538#64) (hDA : Cover (· ∈ DA) 0x8001b970 0x8001b978)
     (hdec : ldv .ld Mt 0x8001b898 = 0x80019770#64) (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
     (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8)
-    (hSo : StdoutSb Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64) (hloc : LocMb Mt)
+    {o : Bool} (hSo : StdoutSbAt (consoleFlagsV o) Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64) (hloc : LocMb Mt)
     (hL : LldFmt Dt DA) (hP1 : FmtAt Dt DA 0x800192c0 [37#8]) (hP2 : FmtAt Dt DA 0x800192c4 [0#8])
     (hk : ∀ R' M', RetOK R R' (BitVec.ofNat 64 (lldBytes (R 12)).length) → Frame M' Mt (FpReg (s.toNat - 80)) →
       ldv .lh M' 0x8001bb30 = 0x200a#64 →
@@ -65,7 +65,7 @@ theorem fprintf_s (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
     (himp : ldv .ld Dt 0x8001b970 = 0x8001b538#64) (hDA : Cover (· ∈ DA) 0x8001b970 0x8001b978)
     (hdec : ldv .ld Mt 0x8001b898 = 0x80019770#64) (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
     (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8)
-    (hSo : StdoutSb Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64) (hloc : LocMb Mt)
+    {o : Bool} (hSo : StdoutSbAt (consoleFlagsV o) Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64) (hloc : LocMb Mt)
     (hlit : lit ≠ []) (hlits : ∀ b ∈ lit, b ≠ 0#8 ∧ b ≠ 37#8) (hlitL : lit.length ≤ 16)
     (hP1 : FmtAt Dt DA P.toNat (lit ++ [37#8])) (hPs : SFmt Dt DA (P.toNat + lit.length))
     (hP2 : FmtAt Dt DA (P.toNat + lit.length + 2) ([0x3e#8] ++ [0#8]))
