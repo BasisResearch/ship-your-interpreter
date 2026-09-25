@@ -1495,6 +1495,18 @@ without the fact and no other resource carries it:
   take `hEL : ErrnoLend L Room`. The same applies to H5's stderr/exit holes
   (`newlib.fprintf`, `newlib.fwrite`, `newlib.exitHandlers`, N3) and to
   `out.fprintf` (N5): their write paths reach `_write_r`.
+- **The return address is aligned.** `outSpec`'s precondition carries
+  `⌜r.toNat % 4 = 0⌝`: the callee's `ret` is a `jalr` whose target must be
+  4-aligned to be a successful step. Callers supply it from their `jal` site
+  (`ms_callNewlibA`, `ms_tailNewlibA`).
+- **`out.fputc` and `out.fwrite` need the stack above `.bss`.** `SpIn s need` admits a stack
+  window inside newlib's data (it bounds `s` only below by the HTIF words),
+  where the callee's spills would overwrite `stdioOwn`'s bytes. The proved
+  `Sym.fputc_out` (`Vsa/Stdout/OutSpec.lean`) and `Sym.fwrite_out`
+  (`Vsa/Stdout/FwriteOut.lean`) take `0x8001c168 ≤ s - need`
+  besides `SpIn`; the interpreter's callers derive it from `StackGeom`
+  (`Sym.bss_of_stackGeom`; the stack region starts at `0x87800000`). The
+  remaining stdout holes take the same premise when proved.
 
 ### STATEMENT CHANGES (N3)
 
@@ -1526,6 +1538,7 @@ corrected statement and why:
   (`oomMsg_text`); `OomBlockSp` gains `data`, and `ms_callEnvNewP`/
   `ms_callEnvDefineP` take the region above newlib's data (`0x80100000 ≤
   R2 - n`, from the stack segment); `OomSite.OK` gains `fwAlign`.
-- **Tactics.** N1's stdout side-condition rules extend `nx_side`, not the
-  shared `sx_side` (`ix_run` takes the side tactic): imported into the
-  interpreter's run files, they exhausted `ix_run1`'s recursion depth.
+- **Tactics.** Stdio run files' `sx_side` rules are scoped
+  (`open scoped VsaIris.Sym.Stdout`, N1): unscoped, imported into the
+  interpreter's run files through `Oom`, they exhausted `ix_run1`'s recursion
+  depth.

@@ -13,16 +13,20 @@ rewrites them without `__SOFF` (unchanged) and passes descriptor 2, which
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
-/-- `nx_side` for `outS` with the byte hypothesis normalized first (`nx_hb`). -/
-macro_rules
-  | `(tactic| nx_side) => `(tactic| (
+namespace Stdout
+/-- `sx_side` for `outS` with the byte hypothesis normalized first (`nx_hb`),
+scoped like N1's stdout rules. -/
+scoped macro_rules
+  | `(tactic| sx_side) => `(tactic| (
       intro b hb
       (try nx_hb hb)
       simp only [outS, impureW, stdioFoot, InRange] at ⊢
       (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow,
         Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
       omega))
+end Stdout
 
 /-- The memory after `__swrite(stderr, buf, n)` returns: `__swrite`'s `ra`
 slot, the flags, `_write_r`'s `s0`/`ra` slots, `errno`. -/

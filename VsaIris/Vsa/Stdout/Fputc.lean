@@ -10,6 +10,8 @@ calls `_putc_r`, which takes it again, finds `_w` exhausted and calls
 
 namespace VsaIris.Sym
 
+open scoped VsaIris.Sym.Stdout
+
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 #ix_seg fputc_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)

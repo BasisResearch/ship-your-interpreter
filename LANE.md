@@ -1,7 +1,7 @@
 # Lane N3: newlib stderr holes (`newlib.fprintf`, `newlib.fwrite`)
 
 Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). Merged
-`hub/iris-main` at `286c2ad` and `hub/lane-n1` at `83aae2a` (errno lending, `outSpec`).
+`hub/iris-main` at `286c2ad` and `hub/lane-n1` at `34fe574` (errno lending, `outSpec`, `sfvwrite_run`).
 
 ## Status
 
@@ -31,11 +31,11 @@ Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). M
   (five conjuncts). Your hand-edited `Case/CallArmP`, `CallPrintT`, `CallPrintlnT` (`hEL`)
   were not in the templates; I added `hEL` to `callArm_P.lean`/`callOut_T.lean` so
   `gen_iris_cases.py` reproduces them (stage a3 was stale).
-- Your stdout `sx_side` rules (`intro hc; apply hc; assumption`, …) broke the interpreter's
-  `ix_run1` (max recursion in `ProofStringify`) once `Oom` imported the stdio layer. They now
-  extend `nx_side` (`syntax` in `Stdout/Tac.lean`, falling back to `sx_side`); `ixStep`/
-  `ixApply`/`ixTrySide`/`ixTryPrune` take an optional `side` tactic and `nxRunCore` passes
-  `nx_side`. New stdio rules should extend `nx_side`.
+- Merged your `34fe574` (scoped stdout `sx_side` rules): my stderr rule is scoped the same way
+  (`Stderr/Swrite.lean`). `Tac.lean` keeps your version plus `nx_runB` (`nxRunCore … budgetPct`,
+  budgeted `#ix_piece` runs); `ITac.ixPre` holds the candidate prefixes (with your `itS…`).
+  The stdio table adds `__swsetup_r`, `__smakebuf_r`, `__swhatbuf_r`, `_fstat_r`, `_fstat`,
+  `memset`, `__hidden___udivdi3` (stderr's first write).
 - `errS` is gone: stderr runs use your `outS` and the `impDt`-style data view
   (`_impure_ptr` from `Dt`).
 

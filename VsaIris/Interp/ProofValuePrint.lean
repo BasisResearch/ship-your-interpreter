@@ -1,5 +1,6 @@
 import VsaIris.Interp.NewlibCall
 import VsaIris.Vsa.NewlibOut
+import VsaIris.Vsa.Stdout.FwriteOut
 
 /-!
 # `value_print` (lane H2)
@@ -140,7 +141,8 @@ theorem vp_null (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   unfold VpGoal valuePrintPC
   ix_run1 c.hlive using [h10, h11, h2, hk, hku]
   refine vp_swp_close Wp (Xr := strAt 0x80019018 "null") (frag := "null")
-    (H.fwrite live Wp 0x80019018#64 s _ "null" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
+    (VsaIris.Sym.fwrite_out live Wp 0x80019018#64 s _ "null" o c.hcl (spIn_of_stackGeom c.hsg (by decide))
+      (VsaIris.Sym.bss_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX rfl c.hMa
   case hvs =>
@@ -350,7 +352,8 @@ theorem vp_clo_anon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   unfold valuePrintPC
   ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw8, ecp, hq, eq8, hnm]
   refine vp_swp_close Wp (Xr := strAt 0x800192d0 "<fn>") (frag := "<fn>")
-    (H.fwrite live Wp 0x800192d0#64 s _ "<fn>" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
+    (VsaIris.Sym.fwrite_out live Wp 0x800192d0#64 s _ "<fn>" o c.hcl (spIn_of_stackGeom c.hsg (by decide))
+      (VsaIris.Sym.bss_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX hdisp.symm c.hMa
   case hvs =>

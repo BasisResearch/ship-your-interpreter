@@ -16,6 +16,7 @@ single `iov` in one chunk (`n < 2^30`) through `fp->_write = __swrite`
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 /-- The memory after `fwrite(ptr, 1, n, stderr)`: the stack below `s`,
 `errno` and `stderr`'s written fields changed; those fields as a written

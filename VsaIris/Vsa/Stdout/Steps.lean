@@ -11,3 +11,4 @@ import VsaIris.Vsa.Stdout.Steps.Part07
 import VsaIris.Vsa.Stdout.Steps.Part08
 import VsaIris.Vsa.Stdout.Steps.Part09
 import VsaIris.Vsa.Stdout.Steps.Part10
+import VsaIris.Vsa.Stdout.Steps.Part11

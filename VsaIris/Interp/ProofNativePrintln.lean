@@ -209,8 +209,8 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (jalx_80002fa0 live (fun p hp => c.hlive _ (interp_code_80002fa0 p hp))) interp_code_80002fa0
     (R := upd (upd (upd R 15 2147595576#64) 10 10#64) 11 2147597088#64)
     (S := nplF s) (Mt := M1) (n := nativePrintNeed)
-    (fun cs => H.fputc live Wp (10#8) (s + 18446744073709551568#64) cs (o ++ printArgs st vs) hcl
-      (spIn_of_stackGeom hsg (by decide)))
+    (fun cs => VsaIris.Sym.fputc_out live Wp (10#8) (s + 18446744073709551568#64) cs (o ++ printArgs st vs) hcl
+      (spIn_of_stackGeom hsg (by decide)) (VsaIris.Sym.bss_of_stackGeom hsg (by decide)))
     (by simp) (fun j hj => by
       simp only [List.length_cons, List.length_nil] at hj
       rcases j with _ | _ | j

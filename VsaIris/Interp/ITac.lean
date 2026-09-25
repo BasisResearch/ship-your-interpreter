@@ -92,8 +92,12 @@ def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none) : Tac
   catch _ =>
     saved.restore; return false
 
+/-- The step-lemma prefixes tried, in order: the interpreter's, then `itS…`
+(newlib's stdio table at a function the interpreter's table also has). -/
+def ixPre : List String := ["it", "itD", "itT", "itH", "itO", "itS", "itDS", "itTS", "itHS", "itOS"]
+
 /-- The step lemmas of the instruction at `pc`, in the order tried. -/
-def ixCandidates (pc : Nat) (pre : List String := ["it", "itD", "itT", "itH", "itO"]) :
+def ixCandidates (pc : Nat) (pre : List String := ixPre) :
     TacticM (List Name) := do
   let env ← getEnv
   let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
@@ -124,7 +128,7 @@ def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool
 close; failing that, the first candidate that applies, with its side
 conditions left pending. -/
 def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
-    (pre : List String := ["it", "itD", "itT", "itH", "itO"]) (side : Option Syntax := none) :
+    (pre : List String := ixPre) (side : Option Syntax := none) :
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
   let cands ← ixCandidates pc pre
@@ -146,7 +150,7 @@ syntax "ix_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)
 /-- The driver behind `ix_run` (`explore`) and `ix_run1`. -/
 def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
-    (pre : List String := ["it", "itD", "itT", "itH", "itO"])
+    (pre : List String := ixPre)
     (mkNorm : Array Term → TacticM Syntax := ixNorm) (clearPruned : Bool := false)
     (budgetPct : Nat := 0) :
     TacticM Unit := do
