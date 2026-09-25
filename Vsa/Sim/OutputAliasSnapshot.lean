@@ -65,7 +65,7 @@ def snapshotWords : List (Nat × Nat × Nat) :=
    (0x8001bb20, 8, 0x8001bb97),
    (0x8001bb28, 4, 0x0),
    (0x8001bb2c, 4, 0x0),
-   (0x8001bb30, 2, 0x200a),
+   (0x8001bb30, 2, 0x000a),
    (0x8001bb32, 2, 0x1),
    (0x8001bb38, 8, 0x8001bb97),
    (0x8001bb40, 4, 0x1),
@@ -228,7 +228,7 @@ theorem snapshot_text : Code.FixedTextLoaded snapshotMem := by
   exact congrArg Code.fixedTextByte (by omega)
 
 theorem snapshot_rodata : Code.FixedRodataLoaded snapshotMem := by
-  intro k hk
+  intro k _ hk
   change k < 0x2110 at hk
   change snapshotMem[0x80018be0 + k]? = some (Code.fixedRodataByte k)
   apply snapshot_get _ _ (by omega) (by omega)
@@ -246,7 +246,7 @@ theorem snapshot_statics : Code.ImageStaticsLoaded snapshotMem := by
   repeat' apply And.intro
   all_goals pin_byte
 
-theorem snapshot_console : ConsoleStream snapshotMem where
+theorem snapshot_console : ConsoleBoot snapshotMem where
   impure := by pin_read
   stdout := by pin_read
   sinit := by pin_read

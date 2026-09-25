@@ -9,10 +9,12 @@ Two memory views: `sparse` (the actual Sail map: absent bytes are `none`) and
 `dense` (absent RAM bytes read as `some 0`, the shape of the control snapshot).
 """
 import sys, os, re, json
-ROOT = "/data/home/kirancodes/Documents/code/vsa-iris-v"
+S = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(S, "..", ".."))
 sys.path.insert(0, ROOT + "/scripts")
 from difftest_lib import Image
-S = os.path.dirname(os.path.abspath(__file__))
+# ELFs (`patch_elf.py`) and traces (`trace_corpus.py`) live outside the repository.
+WORK = os.environ.get("REVIEW_V_WORK", "/tmp/review-v-work")
 PROOF = ROOT + "/c/while-riscv-htif.elf"
 
 # ---- constants from the Lean sources -------------------------------------
@@ -78,12 +80,12 @@ class Mem:
             out.append(b); k += 1
 
 def load(name):
-    img = Image(S + f"/elfs/{name}.elf")
+    img = Image(WORK + f"/elfs/{name}.elf")
     d = {}
     for v, off, sz in img.segs:
         for i in range(sz): d[v + i] = img.raw[off + i]
     entry = None; nstores = 0
-    with open(S + f"/traces/{name}.entry-trace.tsv") as f:
+    with open(WORK + f"/traces/{name}.trace.tsv") as f:
         for line in f:
             if not line.startswith("T\t"): continue
             p = line.rstrip("\n").split("\t")
@@ -126,21 +128,24 @@ def run(name, results):
         img = Image(PROOF)
         bad = [a for a in range(TEXT_BASE, TEXT_BASE + TEXT_SIZE) if m.get(a) != img.byte(a)]
         c("text_image", not bad, f"{len(bad)} mismatching bytes")
-        bad = [a for a in range(RODATA_BASE, RODATA_BASE + RODATA_SIZE) if m.get(a) != img.byte(a)]
-        inscript = [a for a in bad if RODATA_BASE <= a < RODATA_BASE + SCRIPT_LEN]
-        c("rodata_image", not bad, f"{len(bad)} mismatching bytes, {len(inscript)} inside the script blob [{RODATA_BASE:#x},{RODATA_BASE+SCRIPT_LEN:#x})")
+        # P2: `FixedRodataLoaded` pins `.rodata` after the script and its NUL.
+        bad = [a for a in range(RODATA_BASE + SCRIPT_LEN + 1, RODATA_BASE + RODATA_SIZE) if m.get(a) != img.byte(a)]
+        inscript = [a for a in range(RODATA_BASE, RODATA_BASE + SCRIPT_LEN + 1) if m.get(a) != img.byte(a)]
+        c("rodata_image", not bad, f"{len(bad)} mismatching pinned bytes [{RODATA_BASE+SCRIPT_LEN+1:#x},{RODATA_BASE+RODATA_SIZE:#x}); {len(inscript)} unpinned script bytes differ from the proof ELF")
         bad = [(a, i) for a, bs in STATICS for i in range(len(bs)) if m.get(a + i) != bs[i]]
         c("statics", not bad, f"{bad[:3]}")
         # --- console / exit runtime ---
         cs = {"impure": m.r64(C_IMPURE) == C_REENT, "stdout": m.r64(C_REENT + 16) == C_STDOUT,
               "sinit": m.r64(C_REENT + 72) == C_SINIT, "cursor": m.r64(C_STDOUT) == C_BUF,
               "readCount": m.r32(C_STDOUT + 8) == 0, "writeCount": m.r32(C_STDOUT + 12) == 0,
-              "flags": m.readLE(C_STDOUT + 16, 2) == 0x200a, "fd": m.readLE(C_STDOUT + 18, 2) == 1,
+              # P1: `ConsoleBoot` (`ConsoleStreamAt false`): `_flags = 0x000a`, not yet oriented
+              "flags": m.readLE(C_STDOUT + 16, 2) == 0x000a, "flag0": m.get(C_STDOUT + 16) == 0x0a,
+              "flag1": m.get(C_STDOUT + 17) == 0x00, "fd": m.readLE(C_STDOUT + 18, 2) == 1,
               "base": m.r64(C_STDOUT + 24) == C_BUF, "bufSize": m.r32(C_STDOUT + 32) == 1,
               "lineBufSize": m.r32(C_STDOUT + 40) == 0, "cookie": m.r64(C_STDOUT + 48) == C_STDOUT,
               "writer": m.r64(C_STDOUT + 64) == C_SWRITE, "lock": m.r64(C_STDOUT + 160) == 0,
               "lockMode": m.r32(C_STDOUT + 176) == 0, "bufferByte": m.get(C_BUF) is not None}
-        c("console", all(cs.values()), "failed: " + ",".join(k for k, v in cs.items() if not v))
+        c("console (ConsoleBoot)", all(cs.values()), "failed: " + ",".join(k for k, v in cs.items() if not v))
         def idle(file, flags, fd):
             return {"flags": m.readLE(file + 16, 2) == flags, "fd": m.readLE(file + 18, 2) == fd,
                     "readCount": m.r32(file + 8) == 0, "savedReadCount": m.r32(file + 112) == 0,
@@ -332,11 +337,62 @@ def run(name, results):
             # binding keys: allocations of exactly len+1 inside in-use chunks
             okk = all(chunk_of(q) and chunk_of(q)[2] and chunk_of(q)[0] + 16 == q for q, n in key_exts)
             c("binding keys are whole payloads", okk, f"{[(hex(q), n) for q, n in key_exts]}")
+    orient_check(name, d, chk)
     results[name] = R
     return R
 
+
+# P1: `ORIENT`'s `sh _flags` sites (`VsaIris/Vsa/StdioOrient.lean`).
+ORIENT_SH = {0x80005108: "_fwrite_r", 0x80006430: "_fputs_r", 0x8000a914: "_vfprintf_r", 0x8000f1c4: "__swbuf_r"}
+CALLS = {0x80006500: "fputs", 0x800062e0: "fputc", 0x80005260: "fwrite", 0x800061c0: "fprintf",
+         0x80005c44: "snprintf", 0x80004778: "exitHandlers"}
+EXIT_HANDLERS = 0x80004778
+
+
+def orient_check(name, d, chk):
+    """After entry: every store to `stdout->_flags` before `exit`'s newlib
+    interior is an `ORIENT` `sh` of `0x200a`, the first one from `0x000a`;
+    at every newlib call the interpreter's `StdioOK` console fields hold at
+    orientation `0x000a` or `0x200a` (`ConsoleStreamAt o`)."""
+    m = Mem(dict(d), False)
+    entered = False; calls = {}; bad_calls = []; stores = []; bad_stores = []; exited = False
+    with open(WORK + f"/traces/{name}.trace.tsv") as f:
+        for line in f:
+            if not line.startswith("T\t"): continue
+            p = line.rstrip("\n").split("\t")
+            pc = int(p[2], 16)
+            if not entered:
+                entered = pc == INTERP_RUN
+                continue
+            if pc in CALLS and not exited:
+                fl = m.readLE(C_STDOUT + 16, 2)
+                ok = (fl in (0x000a, 0x200a) and m.r64(C_STDOUT) == C_BUF and m.r32(C_STDOUT + 12) == 0
+                      and m.r64(C_STDOUT + 24) == C_BUF and m.r32(C_STDOUT + 176) == 0)
+                key = (CALLS[pc], fl)
+                calls[key] = calls.get(key, 0) + 1
+                if not ok: bad_calls.append((CALLS[pc], p[1], hex(fl or 0)))
+                if pc == EXIT_HANDLERS: exited = True
+            if len(p) > 35 and p[35].startswith("S"):
+                wd = int(p[35][1:]); a = int(p[36], 16); post = int(p[38], 16)
+                before = m.readLE(C_STDOUT + 16, 2)
+                for i in range(wd): m.d[a + i] = (post >> (8 * i)) & 0xff
+                if a < C_STDOUT + 18 and C_STDOUT + 16 < a + wd and not exited:
+                    after = m.readLE(C_STDOUT + 16, 2)
+                    stores.append((p[1], ORIENT_SH.get(pc, hex(pc)), hex(before), hex(after)))
+                    # A store that rewrites the same value (`__swrite`'s `_flags &= ~__SOFF`,
+                    # `0x8000f00c`) is harmless; one that changes it must be `ORIENT`'s.
+                    if before != after and (pc not in ORIENT_SH or after != 0x200a):
+                        bad_stores.append(stores[-1])
+    orients = [s for s in stores if s[2] != s[3]]
+    chk("P1 flag stores are ORIENT (0x000a -> 0x200a), before exit", entered and not bad_stores and len(orients) <= 1
+        and all(s[2] == "0xa" for s in orients),
+        f"{len(stores)} stores ({len(stores) - len(orients)} rewrite the same value); changes: {orients}; bad: {bad_stores[:3]}")
+    chk("P1 StdioOK console at every newlib call (flags 0x000a or 0x200a)", not bad_calls,
+        "calls (name, flags): " + ", ".join(f"{k[0]}@{k[1]:#06x}x{v}" for k, v in sorted(calls.items(), key=str))
+        + (f"; bad: {bad_calls[:3]}" if bad_calls else ""))
+
 if __name__ == "__main__":
-    names = sys.argv[1:] or sorted(f[:-len(".entry-trace.tsv")] for f in os.listdir(S + "/traces") if f.endswith(".entry-trace.tsv"))
+    names = sys.argv[1:] or sorted(f[:-len(".trace.tsv")] for f in os.listdir(WORK + "/traces") if f.endswith(".trace.tsv"))
     results = {}
     for n in names:
         try:
@@ -349,4 +405,4 @@ if __name__ == "__main__":
             for ok, note in v:
                 print(f"  {'PASS' if ok else 'FAIL'} {k}: {note}")
         print(f"  AST: {R['_ast'][:200]}")
-    json.dump(results, open(S + "/check_loaded.json", "w"), indent=1, default=str)
+    json.dump(results, open(WORK + "/check_loaded.json", "w"), indent=1, default=str)

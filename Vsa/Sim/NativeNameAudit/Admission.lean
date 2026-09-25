@@ -210,7 +210,7 @@ theorem nativeName_statics : Code.ImageStaticsLoaded nativeNameMem := by
 
 /-- The broad ConsoleFoot is not assumed unchanged. Every actual field is
 read from the finite snapshot; only the existential buffer byte changes. -/
-theorem nativeName_console : ConsoleStream nativeNameMem where
+theorem nativeName_console : ConsoleBoot nativeNameMem where
   impure := by native_read
   stdout := by native_read
   sinit := by native_read

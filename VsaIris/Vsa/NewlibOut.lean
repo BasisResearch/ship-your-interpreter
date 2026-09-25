@@ -6,10 +6,15 @@ import VsaIris.Interp.Repr
 
 `value_print` and the natives print through newlib's stdio: `fputs`,
 `fputc`, `fwrite` and `fprintf` on `stdout`. `stdout` is unbuffered at every
-boundary (`ConsoleStream`, part of `StdioOK`: `_w = 0`, a one-byte buffer,
+boundary (`ConsoleStreamAt o`, part of `StdioOK`: `_w = 0`, a one-byte buffer,
 the `__swrite` callback), so each call reaches `_write`'s `tohost` store
 (`putcSite`) before it returns, and newlib's data is back in its boundary
-state. `stringify`'s named-closure arm renders through
+state. The precondition `stdioOwn` admits both orientations: the first
+console write of a run starts from `_flags = 0x000a` (`interp_run`'s entry,
+`ConsoleBoot`) and its `ORIENT` block sets `__SORD`
+(`Stdio.StdioOKAt.orient`, `VsaIris/Vsa/StdioOrient.lean`); every later one
+starts from `0x200a`. The postcondition is the oriented state, weakened to
+`stdioOwn`. `stringify`'s named-closure arm renders through
 `snprintf(buf, 64, "<fn %s>", name)`.
 
 INTERP_DESIGN.md Q4: like H5's `NewlibHoles`, these stay unproved for now.
@@ -63,9 +68,10 @@ instance (fmt arg : BitVec 64) (frag : String) : Persistent (fprintfOut (GF := G
   unfold fprintfOut; infer_instance
 
 /-- A stdout call: arguments `args`, the read-only input `R`; the console grows
-by `frag` and newlib's data stays in its boundary state. The call borrows
-libgloss's `errno` (`_write_r` clears it on every write; an allocator global,
-lent by `ErrnoOwn.heapRes_errno`). -/
+by `frag` and newlib's data stays in its boundary state. `stdioOwn` holds
+`StdioOK`, either `stdout` orientation: a first call from `0x000a` is
+covered. The call borrows libgloss's `errno` (`_write_r` clears it on every
+write; an allocator global, lent by `ErrnoOwn.heapRes_errno`). -/
 def outSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (entry : BitVec 64)
     (args : List (BitVec 64)) (R : IProp GF) (s : BitVec 64) (need : Nat) (cs : Nat → BitVec 64)
     (o frag : String) : IProp GF :=

@@ -3,7 +3,9 @@ _script_start with the given script padded with newlines to the proof
 script's length (453) plus its NUL. Every other byte is unchanged."""
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-ROOT = "/data/home/kirancodes/Documents/code/vsa-iris-v"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+# Built ELFs and traces live outside the repository (CLAUDE.md, Documentation).
+WORK = os.environ.get("REVIEW_V_WORK", "/tmp/review-v-work")
 sys.path.insert(0, ROOT + "/scripts")
 from difftest import elf_symbols
 from difftest_lib import Image
@@ -31,6 +33,6 @@ def build(script_path, out_path):
 if __name__ == "__main__":
     for p in sys.argv[1:]:
         n = os.path.splitext(os.path.basename(p))[0]
-        out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "elfs", n + ".elf")
+        out = os.path.join(WORK, "elfs", n + ".elf")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         print(n, build(p, out))

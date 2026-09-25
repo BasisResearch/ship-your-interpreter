@@ -24,27 +24,28 @@ open Vsa.Sim Vsa.Sim.LayoutInstance
 /-! ## The live set -/
 
 /-- The bytes every run fetches or loads without owning them: the binary's
-`.text` and `.rodata`, `_impure_ptr` (the helpers' code lists `envText` and
-`allocText` load it) and the stack segment (`stringify`'s `strlen` reads its
-stack buffer through the run's read-only text). All are present in the loaded
-configuration (`topLive_present`). -/
+`.text` and `.rodata` except the embedded script `[0x80018be0, 0x80018da6)`
+(never read; not pinned by `FixedRodataLoaded`), `_impure_ptr` (the helpers'
+code lists `envText` and `allocText` load it) and the stack segment
+(`stringify`'s `strlen` reads its stack buffer through the run's read-only
+text). All are present in the loaded configuration (`topLive_present`). -/
 def topLive (a : Nat) : Prop :=
-  (0x80000000 ≤ a ∧ a < 0x8001acf0) ∨ (0x8001b970 ≤ a ∧ a < 0x8001b978) ∨
-    (0x87800000 ≤ a ∧ a < 0x88000000)
+  (0x80000000 ≤ a ∧ a < 0x8001acf0 ∧ ¬ (0x80018be0 ≤ a ∧ a < 0x80018da6)) ∨
+    (0x8001b970 ≤ a ∧ a < 0x8001b978) ∨ (0x87800000 ≤ a ∧ a < 0x88000000)
 
 theorem interpText_all :
-    VsaIris.Sym.interpText.all (fun p => (0x80000000 ≤ p.1 && p.1 < 0x8001acf0)) = true := by decide +kernel
+    VsaIris.Sym.interpText.all (fun p => (0x80000000 ≤ p.1 && p.1 < 0x8001acf0 &&
+      !(0x80018be0 ≤ p.1 && p.1 < 0x80018da6))) = true := by decide +kernel
 
 theorem topLive_interp : ∀ p ∈ VsaIris.Sym.interpText, topLive p.1 := by
   intro p hp
   have h := List.all_eq_true.1 interpText_all p hp
-  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-  exact .inl h
+  refine .inl ⟨?_, ?_, ?_⟩ <;> revert h <;> simp <;> omega
 
 theorem topLive_code : Newlib.CodeLive topLive := by
   intro a ha
   unfold Newlib.textDom at ha
-  exact .inl ⟨ha.1, by omega⟩
+  exact .inl ⟨ha.1, by omega, by omega⟩
 
 /-- The live bytes are present in a loaded configuration. -/
 theorem topLive_present {m : Vsa.MemRepr.Mem} (ht : Code.FixedTextLoaded m)
@@ -52,7 +53,7 @@ theorem topLive_present {m : Vsa.MemRepr.Mem} (ht : Code.FixedTextLoaded m)
     (hs : ∀ k, stackSL.lo ≤ k → k < stackSL.hi → ∃ b : BitVec 8, m[k]? = some b) :
     ∀ a, topLive a → (m[a]?).isSome := by
   intro a ha
-  rcases ha with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩
+  rcases ha with ⟨h1, h2, h3⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩
   rotate_left
   · have hp := Code.imageStatics_impurePtr_range hi
     unfold Code.imgImpurePtr at hp
@@ -74,9 +75,7 @@ theorem topLive_present {m : Vsa.MemRepr.Mem} (ht : Code.FixedTextLoaded m)
   · have := ht (a - 0x80000000) (by unfold Code.fixedTextSize; omega)
     rw [show Code.fixedTextBase + (a - 0x80000000) = a by unfold Code.fixedTextBase; omega] at this
     rw [this]; rfl
-  · have := hr (a - 0x80018be0) (by unfold Code.fixedRodataSize; omega)
-    rw [show Code.fixedRodataBase + (a - 0x80018be0) = a by unfold Code.fixedRodataBase; omega] at this
-    rw [this]; rfl
+  · rw [hr.byteAt (by omega) h2]; rfl
 
 /-! ## The global invariant at the boundary -/
 

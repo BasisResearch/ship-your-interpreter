@@ -75,9 +75,9 @@ theorem ExitIdleFile.of_img {m m' : Mem} {file flags descriptor : Nat}
   lockMode := readLE_img h 4 _ hf.lockMode fun k hk => by
     have := hin (176 + k) (by omega); rwa [← Nat.add_assoc] at this
 
-theorem ConsoleStream.of_img {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
-    (hc : ConsoleStream m) :
-    ConsoleStream m' where
+theorem ConsoleStreamAt.of_img {o : Bool} {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
+    (hc : ConsoleStreamAt o m) :
+    ConsoleStreamAt o m' where
   impure := readLE_img h 8 _ hc.impure (by stdio_in)
   stdout := readLE_img h 8 _ hc.stdout (by stdio_in)
   sinit := readLE_img h 8 _ hc.sinit (by stdio_in)
@@ -129,11 +129,12 @@ theorem StderrStream.of_img {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
 /-- **newlib's data at the boundary**: the memory's own image satisfies
 `StdioOK`. The `stderr` pointer is the one fact the boundary does not state
 (INTERP_DESIGN.md Q6); `BootGap.stderr` carries it. -/
-theorem stdioOK_of_mem {m : Mem} (hc : ConsoleStream m) (he : ExitRuntimeData m)
-    (hs : read64 m stderrPtrAddr = some exitStderr) (hl : LocaleData m) (hw : StderrStream m) :
+theorem stdioOK_of_mem {o : Bool} {m : Mem} (hc : ConsoleStreamAt o m)
+    (he : ExitRuntimeData m) (hs : read64 m stderrPtrAddr = some exitStderr)
+    (hl : LocaleData m) (hw : StderrStream m) :
     StdioOK (memImg m) := by
-  intro m' h
-  exact ⟨ConsoleStream.of_img h hc, ExitRuntimeData.of_img h he,
+  refine ⟨o, fun m' h => ?_⟩
+  exact ⟨ConsoleStreamAt.of_img h hc, ExitRuntimeData.of_img h he,
     readLE_img h 8 _ hs (by stdio_in), LocaleData.of_img h hl, StderrStream.of_img h hw⟩
 
 end VsaIris.Interp

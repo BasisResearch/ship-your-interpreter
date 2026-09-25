@@ -22,7 +22,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions
 /-- `_impure_data._stdout` holds `&__sf[1]`. -/
 theorem StdioOK.stdout {img : Nat → BitVec 8} (h : StdioOK img) :
     imgW img (consoleReent + 16) = BitVec.ofNat 64 consoleStdout :=
-  StdioOK.word h.facts.1.stdout (dataList_range (by decide) (by decide))
+  let ⟨_, h⟩ := h; StdioOK.word h.facts.1.stdout (dataList_range (by decide) (by decide))
 
 /-- The word of newlib's data `native_print` owns while it reads it:
 `_impure_data._stdout`. It reads `_impure_ptr` through the read-only data

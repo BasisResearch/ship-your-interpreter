@@ -207,7 +207,9 @@ structure InterpRunPhysicalFacts
   text_image : Code.FixedTextLoaded c.σ.mem
   rodata_image : Code.FixedRodataLoaded c.σ.mem
   statics : Code.ImageStaticsLoaded c.σ.mem
-  console : ConsoleStream c.σ.mem
+  /-- `stdout` as `main`'s `setvbuf` leaves it: `_flags = 0x000a`, not yet
+  oriented (the first console write sets `__SORD`: `ConsoleStreamAt.orient`). -/
+  console : ConsoleBoot c.σ.mem
   exit_runtime : ExitRuntimeData c.σ.mem
   arena_protected : ∀ a, ProtectedInitialByte a → ¬ (A.lo ≤ a ∧ a < A.hi)
   out : OutRepr c.σ Vsa.While.initSt
@@ -627,8 +629,8 @@ theorem loaded_tick {p : Vsa.While.Program} {c : Vsa.Machine.Config}
 /-- The concrete refinement boundary is explicitly post-CRT. This projection
 does not pretend that the zero-initialized ELF data already satisfies newlib's
 runtime `FILE` state. -/
-theorem loaded_consoleStream {p : Vsa.While.Program} {c : Vsa.Machine.Config}
-    (h : Vsa.Refine.Loaded interpRunLayout p c) : ConsoleStream c.σ.mem := by
+theorem loaded_consoleBoot {p : Vsa.While.Program} {c : Vsa.Machine.Config}
+    (h : Vsa.Refine.Loaded interpRunLayout p c) : ConsoleBoot c.σ.mem := by
   obtain ⟨_a, _n, _hp, _inp, _N, _A, _φf, _φc, _aLeft, F⟩ := h
   exact F.console
 

@@ -416,7 +416,7 @@ theorem stuckSupply {live : Nat → Prop} (L : SupplyLive live) (HN : NewlibHole
 
 theorem textOrImpure_topLive {p : Nat × BitVec 8} (h : TextOrImpure p) : topLive p.1 := by
   rcases h with ⟨hd, -⟩ | ⟨hd, -⟩
-  · unfold textDom at hd; exact .inl ⟨hd.1, by omega⟩
+  · unfold textDom at hd; exact .inl ⟨hd.1, by omega, by omega⟩
   · unfold impureW at hd; exact .inr (.inl hd)
 
 /-- `topLive` holds every code list the helpers run from. -/

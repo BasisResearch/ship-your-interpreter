@@ -16,12 +16,13 @@ byte of `.data`/`.bss` from `__sglue` to `__bss_end`, so the two footprints
 partition that range (`nm c/while-riscv-htif.elf`).
 
 `StdioOK` is the state the interpreter keeps at every boundary: VSA's
-`ConsoleStream` (stdout's `FILE`, unbuffered, `_w = 0`, the `__swrite`
-callback) and `ExitRuntimeData` (empty `atexit` list, the installed
-`stdio_exit_handler`, idle stdin/stderr) and `_impure_data._stderr`.
-`InterpRunPhysicalFacts.console` and `.exit_runtime` supply the first two at
-the boundary; the `stderr` pointer is not yet a boundary field
-(INTERP_DESIGN.md Q6).
+`ConsoleStreamAt o` (stdout's `FILE`, unbuffered, `_w = 0`, the `__swrite`
+callback; `o` its orientation: `_flags = 0x000a` until the first console
+write sets `__SORD`, `0x200a` after) and `ExitRuntimeData` (empty `atexit`
+list, the installed `stdio_exit_handler`, idle stdin/stderr) and
+`_impure_data._stderr`. `InterpRunPhysicalFacts.console` (unoriented) and
+`.exit_runtime` supply the first two at the boundary; the `stderr` pointer is
+`BootHeapFacts.stderr` (INTERP_DESIGN.md Q6).
 -/
 
 namespace VsaIris.Stdio
@@ -46,14 +47,23 @@ line loads its stream from there (`ld a0,24(a5)`); neither `ConsoleStream`
 nor `ExitRuntimeData` pins it. -/
 def stderrPtrAddr : Nat := consoleReent + 24
 
-/-- The runtime data the interpreter keeps at every boundary, read off an
-image of `stdioFoot`: any memory agreeing with the image there satisfies
-`ConsoleStream`, `ExitRuntimeData` and the `stderr` pointer (all read only
+/-- The runtime data at `stdout` orientation `o`, read off an image of
+`stdioFoot`: any memory agreeing with the image there satisfies
+`ConsoleStreamAt o`, `ExitRuntimeData` and the `stderr` pointer (all read only
 inside `stdioFoot`). -/
-def StdioOK (img : Nat → BitVec 8) : Prop :=
+def StdioOKAt (o : Bool) (img : Nat → BitVec 8) : Prop :=
   ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) →
-    ConsoleStream m ∧ ExitRuntimeData m ∧ read64 m stderrPtrAddr = some exitStderr ∧
+    ConsoleStreamAt o m ∧ ExitRuntimeData m ∧ read64 m stderrPtrAddr = some exitStderr ∧
       LocaleData m ∧ StderrStream m
+
+/-- The runtime data the interpreter keeps at every boundary: `stdout`
+unoriented (`interp_run`'s entry, until the first console write) or oriented
+(after it). Every newlib call's precondition takes either; a console write
+leaves it oriented (`StdioOKAt.orient`). -/
+def StdioOK (img : Nat → BitVec 8) : Prop := ∃ o, StdioOKAt o img
+
+theorem StdioOKAt.ok {o : Bool} {img : Nat → BitVec 8} (h : StdioOKAt o img) : StdioOK img :=
+  ⟨o, h⟩
 
 /-- libgloss's `errno` word (`0x8001ba08`). `_write_r` (every console
 write) and `_sbrk_r` clear it; its value is never read on either path. It is
