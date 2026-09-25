@@ -348,7 +348,7 @@ theorem wp_mainErrTail (H : NewlibHoles)
     iexact Himg
   -- `li a0,70; j; ld ra,760(sp); ld s0,752(sp); addi sp,sp,768; ret`
   unfold callFrame VsaIris.sp
-  iintro Hpc Hra ⟨Hargs, Herr, Hstd, -, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
+  iintro Hpc Hra ⟨Hargs, Herr, Hstd, Herrno, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
   rw [herrp]
   ihave ⟨Hs0, Hsaved⟩ := (sepL_calleeSaved cs').1 $$ Hsaved
   ihave ⟨⟨%a0v, Ha0⟩, Hargs⟩ := clobbered_take (r := 10) (by decide) $$ Hargs
@@ -423,6 +423,8 @@ theorem wp_mainErrTail (H : NewlibHoles)
       iexact Hsaved
   isplitl [Hstd]
   · iapply stdioAt_mono (fun img h => .inr ⟨by simp, h⟩) $$ Hstd
+  isplitl [Herrno]
+  · iexact Herrno
   iintro %o'' -
   rw [show (70#64 : BitVec 64).toNat = 70 from rfl, String.append_assoc]
   iapply HΦ

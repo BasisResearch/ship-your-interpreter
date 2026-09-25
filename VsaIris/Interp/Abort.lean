@@ -176,7 +176,7 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     (hΦ : ∀ o, ⊢ Φ (1, o)) (s : BitVec 64) (n : Nat) :
     oomCore s n ∗ stackScratch s n ∗ gp ↦ᵣ□ gpV ∗ binImg ⊢ Wp.W Φ := by
   unfold oomCore
-  iintro ⟨⟨%s', %r, %v0, %o, %hs, Hpc, Ha0, Hra, Hs0, Hsp, Hargs, Htmp, Hsaved, Hstd, -, Hcon⟩,
+  iintro ⟨⟨%s', %r, %v0, %o, %hs, Hpc, Ha0, Hra, Hs0, Hsp, Hargs, Htmp, Hsaved, Hstd, Hno, Hcon⟩,
     Hscr, #Hgp, #Himg⟩
   have h1 := hs.need; have h2 := hs.lo; have h3 := hs.fits; have h4 := hs.below
   have h5 := hs.hi; have h6 := hs.align
@@ -204,6 +204,8 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
       rcases h with h | h
       · exact .inl h
       · exact .inr ⟨by simp, h⟩) $$ Hstd
+  isplitl [Hno]
+  · iexact Hno
   iintro %o' -
   rw [show (1#64 : BitVec 64).toNat = 1 from rfl]
   iapply hΦ

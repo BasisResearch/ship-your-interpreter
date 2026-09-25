@@ -423,7 +423,7 @@ theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live 
         have h21 : R' 21 = 0#64 := (hkeep 21 (by decide)).trans hf.s5
         rw [interpExit_normal]
         ihave HΦ := hΦ0 st' hE'
-        iapply wp_topNormal H hlive hcl (wpW (GF := GF) (vsaModel live)) h2 h21 hf.ra hT
+        iapply wp_topNormal H hlive hcl (wpW (GF := GF) (vsaModel live)) ErrnoOwn.errnoLend_vsa h2 h21 hf.ra hT
         iframe Hcode Hms Hw HT HΦ
       | ret v =>
         rw [interpExit_ret]

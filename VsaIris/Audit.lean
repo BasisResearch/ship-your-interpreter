@@ -160,6 +160,8 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Interp.stackScratch_boundary
 #print axioms VsaIris.Newlib.NewlibHoles.at
 #print axioms VsaIris.Newlib.Exit.wp_exitCall
+#print axioms VsaIris.Newlib.ExitH.exitHandlers_spec
+#print axioms VsaIris.Newlib.NewlibCore.full
 #print axioms VsaIris.Newlib.MainErr.wp_mainErrTail
 #print axioms VsaIris.Newlib.Landing.wp_landing
 #print axioms VsaIris.Interp.abortRes_widen

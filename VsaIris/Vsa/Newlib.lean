@@ -249,15 +249,17 @@ def fwriteSpec (live : Nat → Prop)
 state or from `Ierr`. From `Ierr` it may print (the `stderr` close path). From
 the boundary state (`quiet`: no `stderr` write happened) it prints nothing:
 `stdout` is unbuffered (`main`'s `setvbuf(stdout, 0, _IONBF, 0)`), so no
-stream has pending bytes to flush. `term_sim`'s `exit(0)` needs this. -/
+stream has pending bytes to flush. `term_sim`'s `exit(0)` needs this. It owns
+`errno` (`errnoOwn`): `_close_r` clears it on each of the three closes. -/
 def exitHandlersSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
     (o : String) (Φ : Nat × String → IProp GF) (quiet : Bool) : IProp GF :=
   iprop(PC ↦ᵣ exitHandlersPC ∗ ra ↦ᵣ r ∗ (8 : Nat) ↦ᵣ e ∗ argsAt [e, 0#64] ∗
-      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ consoleOwn o ∗
+      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ errnoOwn ∗ consoleOwn o ∗
       callFrame s exitHandlersNeed (calleeSaved.drop 1) cs ∗
       (PC ↦ᵣ exitHandlersEnd -∗ (∃ w, ra ↦ᵣ w) -∗ (8 : Nat) ↦ᵣ e -∗ clobbered argRegs -∗
-        stdioAt (fun _ => True) -∗ (∃ o', ⌜quiet = true → o' = ""⌝ ∗ consoleOwn (o ++ o')) -∗
+        stdioAt (fun _ => True) -∗ errnoOwn -∗
+        (∃ o', ⌜quiet = true → o' = ""⌝ ∗ consoleOwn (o ++ o')) -∗
         callFrame s exitHandlersNeed (calleeSaved.drop 1) cs -∗ Wp.W Φ)
     -∗ Wp.W Φ)
 
@@ -265,9 +267,9 @@ end Specs
 
 /-! ## The holes -/
 
-/-- The newlib statements at the post-`stderr`-write state `Ierr`, for every
-Iris instance, every `live` set holding the code, and both WPs. -/
-structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
+/-- The assumed newlib statements at the post-`stderr`-write state `Ierr`,
+for every Iris instance, every `live` set holding the code, and both WPs. -/
+structure NewlibCoreAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
   /-- `snprintf` with a `%s`/`%d` format (`runtime_error`, `interp_run`). -/
   snprintf : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s dst n fmt : BitVec 64) (args : List (BitVec 64))
@@ -286,16 +288,23 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
     (p.toNat + n + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 8 ≤ p.toNat) →
     SpIn s fprintfNeed → 0x80100000 ≤ s.toNat - fprintfNeed →
     ⊢ fprintfSpec live Wp s p n bv cs o
-  /-- The newlib interior of `exit`. -/
+
+/-- The newlib statements the proofs use: the assumed ones and `exit`'s
+interior, which `ExitH/Iris.lean` proves from `CloseReady` (`NewlibCore.full`). -/
+structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop extends NewlibCoreAt Ierr where
+  /-- The newlib interior of `exit` (proved: `ExitH.exitHandlers_spec`). -/
   exitHandlers : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
     (o : String) (Φ : Nat × String → IProp GF) (quiet : Bool),
     CodeLive live → SpIn s exitHandlersNeed →
     ⊢ exitHandlersSpec Ierr live Wp s e r cs o Φ quiet
 
-/-- **`IrisHoles.newlib`**: the newlib statements at the post-`stderr`-write
+/-- **`IrisHoles.newlib`**: the assumed newlib statements at the post-`stderr`-write
 state `StdioErrOK` (lane N3: the state `fwrite` provably leaves,
-`Stderr/FwriteSpec.lean`). -/
+`Stderr/FwriteSpec.lean`). `exit`'s interior is proved from it (`NewlibCore.full`). -/
+def NewlibCore : Prop := NewlibCoreAt StdioErrOK
+
+/-- The newlib statements the proofs use, at `StdioErrOK`. -/
 def NewlibHoles : Prop := NewlibHolesAt StdioErrOK
 
 /-- The post-`stderr`-write state. -/
