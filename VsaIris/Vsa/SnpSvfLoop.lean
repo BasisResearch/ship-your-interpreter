@@ -221,4 +221,112 @@ theorem intPieces {s K : Nat} {v : BitVec 64} {g : Nat → BitVec 8} {Mt : Mem} 
       List.append_nil]
     rw [hdig, vMag_eq, if_neg h]
 
+theorem lbu_imgM {Mt : Mem} {a b : Nat} (hb : b < 256) (h : ldv .lbu Mt a = BitVec.ofNat 64 b) :
+    imgM Mt a = BitVec.ofNat 8 b := by
+  simp only [ldv, bytesVal, bytesAt, widthOfM, List.range_one, List.map_cons, List.map_nil,
+    List.getD_cons_zero, Nat.add_zero] at h
+  apply BitVec.eq_of_toNat_eq
+  have := congrArg BitVec.toNat h
+  simp only [LeanRV64DExecutable.zero_extend, Sail.BitVec.zeroExtend, BitVec.toNat_setWidth,
+    BitVec.toNat_ofNat] at this ⊢
+  have := (imgM Mt a).isLt
+  omega
+
+/-- The integer conversion from the table through `PRINT` and the flush: the
+value `v` rendered after the pending literal pieces. -/
+def IntK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
+    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
+    (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) (v : BitVec 64) : Prop :=
+  ∀ R' Mt' (g : Nat → BitVec 8), (∀ a, (a < s - 1024 ∨ s ≤ a) → g a = imgM Dt a) →
+    SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 (c + (strBytes (Vsa.While.intToString v.toInt)).length))
+      (total ++ catPieces g L ++ strBytes (Vsa.While.intToString v.toInt)) R' Mt' →
+    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt'
+
+/-- From the integer's `IntAt` (`0x80008100`) to the loop head. -/
+theorem svf_intTail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (v : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (IA : IntAt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L (vMag v) (vSg v) R Mt)
+    (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
+    (hk : IntK live Dt DA Q s dst n R0 Mt0 p ap c total L v) :
+    NW live Dt DA (snpS s dst n) Q 0x80008100#64 R Mt := by
+  have hs1 := SG.s_lo
+  refine svf_digits hlive R Mt SG IA hL hc hsum fun R1 Mt1 K PI DG => ?_
+  refine svf_print hlive R1 Mt1 SG PI fun R2 Mt2 g hg1 hg2 A2 => ?_
+  have hsg := lbu_imgM (by rcases vSg01 v with h | h <;> rw [h] <;> decide) PI.sign
+  rw [toNat_ofNat_lt (by have := SG.s_hi; omega)] at hsg
+  have hip := intPieces (by omega) DG hg1 hsg
+  rw [List.append_assoc L, catPieces_append, hip] at A2
+  have hlen : (strBytes (Vsa.While.intToString v.toInt)).length = K + sgN (vSg v) := by
+    rw [← hip, catPieces_append]; simp [sgL, sgN, catPieces]; split <;> simp <;> omega
+  rw [← List.append_assoc] at A2
+  refine hk R2 Mt2 g hg2 ?_
+  rw [hlen]; exact A2
+
+/-- **A `%lld` iteration** (`0x80007720` → `0x80007720`): the literal run
+`[p, p + k)`, `"%lld"` at `p + k`, the 64-bit value at `ap`. -/
+theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
+    (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 total.length) total R Mt)
+    (k : Nat) (FG : FmtGeom DA p (k + 3))
+    (hb : ∀ i, i < k → imgM Dt (p + i) ≠ 0#8 ∧ imgM Dt (p + i) ≠ 37#8)
+    (hpc : imgM Dt (p + k) = 37#8) (hl1 : imgM Dt (p + k + 1) = 0x6c#8)
+    (hl2 : imgM Dt (p + k + 2) = 0x6c#8) (hd : imgM Dt (p + k + 3) = 0x64#8)
+    (v : BitVec 64) (hv : ldv .ld Mt0 (BitVec.ofNat 64 ap).toNat = v)
+    (hap1 : s - 40 ≤ ap) (hap2 : ap + 8 ≤ s) (hc : total.length + k + 21 < 2 ^ 31)
+    (hk : ∀ R' Mt', SvfAt s dst n R0 Mt0 (p + k + 4) (ap + 8)
+      (BitVec.ofNat 64 (total.length + k + (strBytes (Vsa.While.intToString v.toInt)).length))
+      (total ++ pieceBytes (imgM Dt) p k ++ strBytes (Vsa.While.intToString v.toInt)) R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hFlo := FG.lo
+  have hFhi := FG.hi
+  have hFht := FG.htif
+  refine svf_head hlive R Mt SG A fun R1 A1 h22 => ?_
+  refine svf_scan hlive SG hmb hmx k p R1 Mt A1 h22 ⟨fun b h1 h2 => FG.dom b h1 (by omega), hFlo,
+    by omega, by omega⟩ hb (fun h => absurd (h.symm.trans hpc) (by decide)) (fun _ R2 Mt2 A2 h22' h10 => ?_) (.inr hpc)
+  refine svf_lit hlive 0x8000775c#64 0x8000776c#64 (.inl ⟨rfl, rfl⟩) R2 Mt2 SG A2 h22'
+    (by simpa using h10) (by omega) (by omega) (by omega) (fun _ => pieceSrc_of_data DO SG (by omega)
+      (fun b h1 h2 => FG.dom b h1 (by omega))) ?_
+  intro R3 Mt3 L hL St3 h22''
+  have hLl : L.length ≤ 1 := by rcases hL with ⟨rfl, _⟩ | ⟨rfl, _⟩ <;> simp
+  have hLs : sumLen L = k := by rcases hL with ⟨rfl, _⟩ | ⟨rfl, _⟩ <;> simp [sumLen] <;> omega
+  refine svf_convStart hlive (p + k) R3 Mt3 SG St3 h22'' (fun b h1 h2 => FG.dom b (by omega) (by omega))
+    (by omega) (by omega) (by omega) fun R4 Mt4 CA => ?_
+  rw [hl1] at CA
+  refine svf_disp hlive (p + k + 1) 0x6c _ (.inr (.inr ⟨rfl, rfl⟩)) R4 Mt4 (by omega) CA.r25 CA.r24
+    CA.r26 CA.r22 fun R5 h25 h24 hkp5 => ?_
+  have h6 : R5 6 = 0#64 := (hkp5 6 (by decide) (by decide) (by decide) (by decide)).trans CA.r6
+  refine svf_convLL hlive (p + k + 2) R5 Mt4 (fun b h1 h2 => FG.dom b (by omega) (by omega))
+    (by omega) (by omega) (by omega) hl2 h25 h6 fun R6 h25' h24' h6' hkp6 => ?_
+  rw [hd] at h24'
+  have k26 : R6 26 = 90#64 := (hkp6 26 (by decide) (by decide) (by decide) (by decide)).trans
+    ((hkp5 26 (by decide) (by decide) (by decide) (by decide)).trans CA.r26)
+  have k22 : R6 22 = 0x8001a0fc#64 := (hkp6 22 (by decide) (by decide) (by decide) (by decide)).trans
+    ((hkp5 22 (by decide) (by decide) (by decide) (by decide)).trans CA.r22)
+  refine svf_disp hlive (p + k + 2 + 1) 0x64 _ (.inr (.inl ⟨rfl, rfl⟩)) R6 Mt4 (by omega) h25' h24'
+    k26 k22 fun R7 h25'' _ hkp7 => ?_
+  have kk : ∀ z, z ≠ 6 → z ≠ 14 → z ≠ 15 → z ≠ 24 → z ≠ 25 → R7 z = R4 z := fun z a b c d e =>
+    (hkp7 z b c d e).trans ((hkp6 z a c d e).trans (hkp5 z b c d e))
+  have St7 := CA.st.update SG (R' := R7) (fun z hz => kk z (by omega) (by omega) (by omega) (by omega) (by omega))
+    (kk 23 (by decide) (by decide) (by decide) (by decide) (by decide)) (fun _ _ => rfl) CA.st.core.fmt
+    CA.st.core.ret CA.st.core.ap
+  have hv' := (ld_ap SG CA.st.core.frame hap1 hap2).trans hv
+  refine svf_intQ hlive (p + k + 2 + 1 + 1) v R7 Mt4 SG St7 CA.sign h25''
+    ((hkp7 6 (by decide) (by decide) (by decide) (by decide)).trans h6')
+    ((kk 20 (by decide) (by decide) (by decide) (by decide) (by decide)).trans CA.r20)
+    ((kk 27 (by decide) (by decide) (by decide) (by decide) (by decide)).trans CA.r27) hv' hap1 hap2
+    fun R8 Mt8 IA => ?_
+  refine svf_intTail hlive v R8 Mt8 SG IA hLl (by omega) (by omega) fun R9 Mt9 g hg A9 => hk R9 Mt9 ?_
+  rw [catPieces_lit g hL, show p + k - p = k by omega,
+    pieceBytes_congr (g' := imgM Dt) fun i hi => hg _ (DO.stack _ (FG.dom _ (by omega) (by omega)))] at A9
+  rw [show p + k + 2 + 1 + 1 = p + k + 4 by omega] at A9
+  exact A9
+
 end VsaIris.Sym
