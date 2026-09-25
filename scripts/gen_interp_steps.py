@@ -75,11 +75,18 @@ STDIO_FUNCS = ['_write', '_write_r', '__swrite', '__sflush_r', '_fflush_r', '__s
                # (`__swsetup_r` → `__smakebuf_r` → `__swhatbuf_r` → `_fstat_r` → `_fstat` → `memset`)
                # and divides by the item size (`__udivdi3`)
                '__hidden___udivdi3', '__swsetup_r', '__smakebuf_r', '__swhatbuf_r', '_fstat_r',
-               '_fstat', 'memset']
+               '_fstat', 'memset',
+               # lane N5: `fprintf(stdout, …)`: `_vfprintf_r` on the unbuffered `stdout` hands
+               # the format to `__sbprintf`, whose stack `FILE` is fully buffered
+               # (`__sprint_r` → `__sfvwrite_r` → `memmove`, `_fflush_r`); the locale leaves
+               'fprintf', '_vfprintf_r', '__sbprintf', '__sprint_r', 'memmove',
+               '_localeconv_r', '__locale_mb_cur_max', '__ascii_mbtowc', 'strlen',
+               '__retarget_lock_init_recursive', '__retarget_lock_close_recursive']
 # Functions whose code bytes are in `stdioText` without step lemmas: the string
 # leaves (`strCode`), run by their own symbolic run (`StrLeaf.strlenRunL`)
-# framed into a stdout run (`swpo_leaf`).
-STDIO_CODE_ONLY = ['strlen', 'strcpy']
+# framed into a stdout run (`swpo_leaf`). `strlen` also has step lemmas (N5 steps
+# it inside `_vfprintf_r`).
+STDIO_CODE_ONLY = ['strcpy']
 # PCs with no step lemma (their code bytes and `stdio_code_<pc>` stay): `_write`'s
 # putchar store (printed by `swp_putc`)
 STDIO_SKIP = {0x8000005c}
@@ -150,6 +157,10 @@ def classify(pc):
     if TABLE == 'stdio' and w & 0x7f == 0x67 and (w >> 7) & 31 == 1 and (w >> 12) & 7 == 0 \
             and (w >> 15) & 31 not in (0, 1):
         return ('jalr', dict(rs1=(w >> 15) & 31, imm=(w >> 20) & 0xfff))
+    # lane N5 (N2's `jri`): `jr` with an offset (`memset`'s computed jump)
+    if TABLE == 'stdio' and w & 0x7f == 0x67 and (w >> 7) & 31 == 0 and (w >> 12) & 7 == 0 \
+            and (w >> 20) != 0 and (w >> 15) & 31 not in (0, 1):
+        return ('jri', dict(rs1=(w >> 15) & 31, imm=(w >> 20) & 0xfff))
     return classify_word(pc, w, GPV)
 
 
@@ -366,11 +377,12 @@ def emit(pc):
     if cls == 'unsupported':
         return None, None
     single = f'def ix_{pc:08x} : List BBlock := [{{ body := [mkLine 0x{pc:x}#64 0x{w:08x}#32], term := none }}]'
-    tinstr = lambda kind, rs1, rs2, i13, i21: (
+    tinstr = lambda kind, rs1, rs2, i13, i21, i12=None: (
         f'⟨0x{pc:x}#64, 0x{w:08x}#32, 0x{bs[0]:02x}#8, 0x{bs[1]:02x}#8, 0x{bs[2]:02x}#8, '
-        f'0x{bs[3]:02x}#8, {kind}, {rs1}, {rs2}, 0x{i13 & 0x1fff:x}#13, 0x{i21 & 0x1fffff:x}#21, 0#12⟩')
-    tdef = lambda name, kind, rs1, rs2, i13, i21: (
-        f'def {name} : List BBlock := [⟨[], some ({tinstr(kind, rs1, rs2, i13, i21)} : TInstr)⟩]')
+        f'0x{bs[3]:02x}#8, {kind}, {rs1}, {rs2}, 0x{i13 & 0x1fff:x}#13, 0x{i21 & 0x1fffff:x}#21, '
+        + ('0#12⟩' if i12 is None else f'0x{i12:03x}#12⟩'))
+    tdef = lambda name, kind, rs1, rs2, i13, i21, i12=None: (
+        f'def {name} : List BBlock := [⟨[], some ({tinstr(kind, rs1, rs2, i13, i21, i12)} : TInstr)⟩]')
     NIL = '(fun a _ => trivial)'
     if cls == 'alu':
         segs.append(single)
@@ -410,6 +422,22 @@ def emit(pc):
     (hk : ∀ v, {iw(nxt, f"(upd R {rd} v)")}) :
     {iw(f'0x{pc:x}#64')} :=
   swp_havocD (T := interpText) (D := dataOf Dt DA) (rs := iRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
+    ix_{pc:08x} {lst(ks)} {rd} (accAddrs {ea} {wd}) (fun f => [bytesAt f {ea} {wd}]) 0
+    (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
+    rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
+    (fun m hm hD => by unfold ix_{pc:08x} ChainFacts; {CF}; exact ⟨hea, lpins{suf}_img (fun b _ => rfl)⟩)
+    (by decide) (by decide) (by decide) (fun _ => {hgp(ks)}) (by decide) (fun _ => rfl)
+    (fun _ x hx hg hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with {alts} <;> first | rfl | exact absurd rfl hg | exact absurd rfl hr)
+    hk""")
+        if TABLE == 'stdio':
+            # lane N5 (N2's `itP`): bytes partly data, partly owned, partly neither
+            # (`SymHavoc.swp_havocP`)
+            thm.append(hdr('itP', pc) + f"""
+    (hea : LdOK {ea} {wd})
+    (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
+      v = ldvf .{d['kind']} f {ea}) → {iw(nxt, f"(upd R {rd} v)")}) :
+    {iw(f'0x{pc:x}#64')} :=
+  swp_havocP (T := interpText) (D := dataOf Dt DA) (rs := iRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     ix_{pc:08x} {lst(ks)} {rd} (accAddrs {ea} {wd}) (fun f => [bytesAt f {ea} {wd}]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
@@ -476,6 +504,14 @@ def emit(pc):
 """ + step(f'ix_{pc:08x}', [r], '[]', '[]', '[]', NIL,
            f'show (Sail.BitVec.update (R {r} + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; '
            'rw [ret_tgt _ hal]; exact hal', '(ret_tgt _ hal)', hR([r]), hRo([r]), 'hk'))
+    elif cls == 'jri':
+        r, imm = d['rs1'], d['imm']
+        tgt = f'(Sail.BitVec.update (R {r} + sign_extend (m := 64) (0x{imm:03x}#12)) 0 0#1)'
+        segs.append(tdef(f'ix_{pc:08x}', '.jr', r, 0, 0, 0, imm))
+        thm.append(hdr('it', pc) + f"""
+    (hal : {tgt}.toNat % 4 = 0) (hk : {iw(tgt)}) :
+    {iw(f'0x{pc:x}#64')} :=
+""" + step(f'ix_{pc:08x}', [r], '[]', '[]', '[]', NIL, 'exact hal', 'rfl', hR([r]), hRo([r]), 'hk'))
     elif cls == 'obs':
         rd, rs1 = d['rd'], d['rs1']
         A = src(rs1)
@@ -654,7 +690,7 @@ def gen_steps():
     uns = ', '.join(f'`0x{pc:x}` {MN[pc]}' for pc in unsupported)
     for k, (segs, thms, mods, pcs) in enumerate(parts):
         L = [HEADER, 'import VsaIris.Interp.IRun', 'import VsaIris.Vsa.SymObs'] + \
-            (['import VsaIris.Vsa.SymJalr'] if TABLE == 'stdio' else []) + ['import Vsa.Sim.EnvNewSites', 'import Vsa.Sim.ExecuteAlu'] + \
+            (['import VsaIris.Vsa.SymJalr', 'import VsaIris.Vsa.SymHavoc'] if TABLE == 'stdio' else []) + ['import Vsa.Sim.EnvNewSites', 'import Vsa.Sim.ExecuteAlu'] + \
             [f'import {m}' for m in sorted(mods)] + ['',
              f'/-! The interpreter\'s step table, `0x{pcs[0]:x}` to `0x{pcs[-1]:x}` (see',
              '`scripts/gen_interp_steps.py`). -/', '',
