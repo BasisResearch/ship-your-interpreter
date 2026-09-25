@@ -122,9 +122,10 @@ s->line)` (the `line` word read by havoc: `s1 = R 9` is a statement node,
 `ReadOK`), formats (`T.OK`: the `jal` and the format), returns 1, and
 `main`'s error line exits 70. -/
 theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
+    {L : DlLayout} {Room : RoomPred} (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {T : TopSite} (hok : T.OK) (hS : TopRuns live T) (hΦ : ∀ o, ⊢ Φ (70, o))
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {ρ : Regime} {st : St} {d : Nat}
+    {N : NativeAddrs} {ρ : Regime} {st : St} {d : Nat}
     {R : Nat → BitVec 64} {Mt : Mem} {imgT : Nat → BitVec 8}
     (h2 : R 2 = sFr) (hs1 : ReadOK (R 9).toNat) (hf : TopFrameP Mt)
     (hT : imgW imgT (sTop.toNat + 760) = 0x80000038#64) :
@@ -133,21 +134,21 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
       ownImg (InExt (sTop.toNat + 752, 16)) imgT
     ⊢ Wp.W Φ := by
   iintro ⟨#Hcode, Hms, Hslot, Hst, Hw, HT⟩
-  ihave ⟨Herr, Hstd, Hcon, #Himg⟩ := world_exitParts N L Room ρ st d $$ Hw
+  ihave ⟨Herr, Hstd, Herrno, Hcon, #Himg⟩ := world_exitPartsE N L Room hEL ρ st d $$ Hw
   ihave #Hgp := codeRes_gp $$ Hcode
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
     (F := iprop(slot24 (sFr + 88#64).toNat ∗ stackScratch sFr (sFr.toNat - stackSL.lo) ∗
-      blockOwn (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ consoleOwn st.out ∗
+      blockOwn (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ Stdio.errnoOwn ∗ consoleOwn st.out ∗
       ownImg (InExt (sTop.toNat + 752, 16)) imgT ∗ codeRes ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg))
   rotate_left
-  · iframe Hslot Hst Herr Hstd Hcon HT Hms Hcode Hgp Himg
+  · iframe Hslot Hst Herr Hstd Herrno Hcon HT Hms Hcode Hgp Himg
     iapply codeRes_text $$ Hcode
   intro F'
   refine hS.stage h2 hf.inp (ldOK_of_readOK hs1) ?_
   intro R1 e2 e10 e11 e12 _
   apply swp_closeF
   unfold F'
-  iintro ⟨⟨Hslot, Hst, Herr, Hstd, Hcon, HT, #Hcode, #Hgp, #Himg⟩, Hms⟩
+  iintro ⟨⟨Hslot, Hst, Herr, Hstd, Herrno, Hcon, HT, #Hcode, #Hgp, #Himg⟩, Hms⟩
   -- `snprintf(in->err_msg, 256, fmt, line)`
   have hsp1 : SpIn sFr snprintfNeed := ⟨by decide, by decide, by decide⟩
   have hsn := H.at.snprintf live Wp sFr (BitVec.ofNat 64 inpTop + 224#64) 256#64 T.fmt [R1 13] R1
@@ -200,17 +201,17 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
     rw [upd_other _ _ (by decide), hk2 2 (by decide) (by decide), e2]
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
     (F := iprop(slot24 (sFr + 88#64).toNat ∗ stackScratch sFr (sFr.toNat - stackSL.lo) ∗
-      cstrBuf (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ consoleOwn st.out ∗
+      cstrBuf (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ Stdio.errnoOwn ∗ consoleOwn st.out ∗
       ownImg (InExt (sTop.toNat + 752, 16)) imgT ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg))
   rotate_left
-  · iframe Hslot Hst Herr Hstd Hcon HT Hms Hgp Himg
+  · iframe Hslot Hst Herr Hstd Herrno Hcon HT Hms Hgp Himg
     iapply codeRes_text $$ Hcode
   intro F'
   refine hS.tail e2' hf.ra ?_
   intro R3 f10 f1 f2 f8
   apply swp_closeF
   unfold F'
-  iintro ⟨⟨Hslot, Hst, Herr, Hstd, Hcon, HT, #Hgp, #Himg⟩, Hms⟩
+  iintro ⟨⟨Hslot, Hst, Herr, Hstd, Herrno, Hcon, HT, #Hgp, #Himg⟩, Hms⟩
   ihave ⟨%Mt', Hms⟩ := ms_unslot (S := InExt (sTop.toNat - 176, 176)) (a := sTop.toNat - 176 + 88)
     (fun b hb => by simp only [InExt] at hb ⊢; omega) $$ [Hms Hslot]
   · iframe Hms
@@ -238,11 +239,11 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
   unfold cstrBuf
   icases Herr with ⟨%eimg, Herr, %henul⟩
   rw [f10, f2, f8, hf.s0]
-  iapply wp_mainErrTail H.at live hcl Wp sTop 1#64 (R3 1) R3 st.out imgT eimg mainSp_top (by decide)
+  iapply wp_mainErrTail H live hcl Wp sTop 1#64 (R3 1) R3 st.out imgT eimg mainSp_top (by decide)
     hT henul
   unfold callFrame
   rw [show List.drop 1 argRegs = [11, 12, 13, 14, 15, 16, 17] from rfl]
-  iframe Hpc Ha0 Hra Hs0 Hargs Hsp Hst Hcs Htmp Hgp Himg HT Herr Hstd Hcon
+  iframe Hpc Ha0 Hra Hs0 Hargs Hsp Hst Hcs Htmp Hgp Himg HT Herr Hstd Herrno Hcon
   iintro %o'
   iapply hΦ
 
@@ -295,7 +296,7 @@ the `jmp_buf` `setjmp` wrote and `main`'s saved pair end the run with a
 nonzero exit code (`Abort.wp_abort`). -/
 theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) {Core : IProp GF}
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
     (hcore : Core ⊢ abortCore N L Room inpTop sFr (sFr.toNat - stackSL.lo))
     {Mt : Mem} {jb imgT : Nat → BitVec 8} (hf : TopFrameP Mt) (hjb : JbTop jb sFr)
     (hT : imgW imgT (sTop.toNat + 760) = 0x80000038#64) :
@@ -321,7 +322,7 @@ theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := 
       show (sTop - 176#64).toNat = sTop.toNat - 176 from by decide]
     omega) $$ HI
   rw [sFr_eq] at *
-  iapply wp_abort N L Room inpTop H live hcl Wp hΦe sTop (sTop.toNat - 176 - stackSL.lo) (by decide)
+  iapply wp_abort N L Room inpTop H hEL live hcl Wp hΦe sTop (sTop.toNat - 176 - stackSL.lo) (by decide)
     (by decide) jb (glue (interpS sTop) (imgM Mt) f) imgT (topLanding_of hf hjb hT)
   unfold abortRes
   rw [show (sTop - 176#64).toNat - stackSL.lo = sTop.toNat - 176 - stackSL.lo from by decide] at *
@@ -428,24 +429,24 @@ theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live 
         rw [interpExit_ret]
         simp only [statusRet]
         ihave Hret := valAt_slot $$ Hret
-        iapply wp_topAbrupt H hcl (wpW (GF := GF) (vsaModel live)) topRet_ok (topRet_runs hlive)
+        iapply wp_topAbrupt H hcl ErrnoOwn.errnoLend_vsa (wpW (GF := GF) (vsaModel live)) topRet_ok (topRet_runs hlive)
           (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
       | brk =>
         rw [interpExit_brk]
         simp only [statusRet]
-        iapply wp_topAbrupt H hcl (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
+        iapply wp_topAbrupt H hcl ErrnoOwn.errnoLend_vsa (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
           (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
       | cont =>
         rw [interpExit_cont]
         simp only [statusRet]
-        iapply wp_topAbrupt H hcl (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
+        iapply wp_topAbrupt H hcl ErrnoOwn.errnoLend_vsa (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
           (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
     · -- an abort
       iintro ⟨HA, Hslot, HS⟩
-      iapply wp_topAbort H hcl (wpW (GF := GF) (vsaModel live)) hΦe (evalCore_top N vsaLayoutP vsaRoomB)
+      iapply wp_topAbort H hcl (wpW (GF := GF) (vsaModel live)) hΦe ErrnoOwn.errnoLend_vsa (evalCore_top N vsaLayoutP vsaRoomB)
         hfp hjb hT
       iframe HA Hslot HS Hjb HT Hgp Himg
 

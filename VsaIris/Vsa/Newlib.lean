@@ -15,8 +15,8 @@ now. Each is an exact Iris statement about the fixed binary, a field of
 
 * `snprintf` (`0x80005c44`) with a format whose conversions are `%s`/`%d`:
   `runtime_error`'s two calls, and `interp_run`'s top-level status messages;
-* `fprintf` (`0x800061c0`) to `stderr` with such a format: `main`'s
-  `fprintf(stderr, "%s\n", in->err_msg)`;
+* `fprintf` (`0x800061c0`) to `stderr` with `main`'s format: `main`'s
+  `fprintf(stderr, "%s\n", in->err_msg)` (its only call);
 * (`fwrite` (`0x80005260`) to `stderr`, the out-of-memory message, is proved:
   `Stderr/FwriteSpec.lean`, lane N3);
 * `exitHandlers`: the newlib interior of `exit` (`0x80004778`–`0x80004788`:
@@ -215,18 +215,21 @@ def snprintfSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (fun _ => iprop(clobbered argRegs ∗ cstrBuf dst.toNat n.toNat ∗ readable Sro Sown rd ∗
       stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
 
-/-- `fprintf(stderr, fmt, args…)`: prints some string, reads the format and
-its `%s` arguments, leaves newlib's data in the post-`stderr`-write state
-`Ierr`, returns. -/
-def fprintfSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (s fmt : BitVec 64) (args : List (BitVec 64))
-    (cs : Nat → BitVec 64) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) (o : String) :
-    IProp GF :=
+/-- `main`'s error-line format `"%s\n"` (`0x800195e0`, `.rodata`). -/
+def errLineFmt : BitVec 64 := 0x800195e0#64
+
+/-- `fprintf(stderr, "%s\n", p)` (`main`'s error line): prints some string,
+reads the NUL-terminated string at `p` inside the owned `n`-byte buffer
+(handed back unchanged), clears `errno`, leaves newlib's data in the
+post-`stderr`-write state `StdioErrOK`, returns (to an aligned address). -/
+def fprintfSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (s p : BitVec 64)
+    (n : Nat) (bv : Nat → BitVec 8) (cs : Nat → BitVec 64) (o : String) : IProp GF :=
   fnSpecW Wp fprintfEntry
-    (fun _ => iprop(argsAt ([stderrFile, fmt] ++ args) ∗ readable Sro Sown rd ∗ stdioOwn ∗
-      consoleOwn o ∗ callFrame s fprintfNeed calleeSaved cs))
-    (fun _ => iprop(clobbered argRegs ∗ readable Sro Sown rd ∗ stdioAt Ierr ∗
-      (∃ o', consoleOwn (o ++ o')) ∗ callFrame s fprintfNeed calleeSaved cs))
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt [stderrFile, errLineFmt, p] ∗
+      ownImg (InExt (p.toNat, n)) bv ∗ stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗
+      callFrame s fprintfNeed calleeSaved cs))
+    (fun _ => iprop(clobbered argRegs ∗ ownImg (InExt (p.toNat, n)) bv ∗ stdioAt StdioErrOK ∗
+      errnoOwn ∗ (∃ o', consoleOwn (o ++ o')) ∗ callFrame s fprintfNeed calleeSaved cs))
 
 /-- `fwrite(ptr, 1, n, stderr)`: prints some string, reads `ptr[0, n)`,
 clears `errno`, leaves newlib's data in the post-write state `StdioErrOK`,
@@ -272,13 +275,17 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
     CodeLive live → args.length ≤ 5 → 0 < n.toNat → n.toNat < 2 ^ 31 →
     FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt args → SpIn s snprintfNeed →
     ⊢ snprintfSpec live Wp s dst n fmt args cs Sro Sown rd
-  /-- `fprintf(stderr, …)` with a `%s`/`%d` format (`main`'s error line). -/
+  /-- `fprintf(stderr, "%s\n", p)` (`main`'s error line): a NUL within the
+  `n < 2^30` owned bytes at `p`, in RAM, whose word-at-a-time `strlen` stays off
+  the `tohost` cells; the frame above newlib's data. -/
   fprintf : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (s fmt : BitVec 64) (args : List (BitVec 64))
-    (cs : Nat → BitVec 64) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) (o : String),
-    CodeLive live → args.length ≤ 6 → FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt args →
-    SpIn s fprintfNeed →
-    ⊢ fprintfSpec Ierr live Wp s fmt args cs Sro Sown rd o
+    (Wp : MachWP (GF := GF) (vsaModel live)) (s p : BitVec 64) (n : Nat) (bv : Nat → BitVec 8)
+    (cs : Nat → BitVec 64) (o : String),
+    CodeLive live → (∃ k, k < n ∧ bv (p.toNat + k) = 0) → n < 2 ^ 30 →
+    0x80000000 ≤ p.toNat → p.toNat + n + 8 ≤ 0x100000000 →
+    (p.toNat + n + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 8 ≤ p.toNat) →
+    SpIn s fprintfNeed → 0x80100000 ≤ s.toNat - fprintfNeed →
+    ⊢ fprintfSpec live Wp s p n bv cs o
   /-- The newlib interior of `exit`. -/
   exitHandlers : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)

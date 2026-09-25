@@ -167,6 +167,18 @@ theorem world_exitParts (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (ρ :
   iframe Hcon Hstd Himg
   iapply blockOwn_cast (by unfold interpErrOff; decide) (by unfold interpErrLen; rfl) $$ Herr
 
+/-- `world_exitParts` with `errno` lent by the dropped heap. -/
+theorem world_exitPartsE (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
+    (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room) (ρ : Regime) (st : St) (d : Nat) :
+    world (GF := GF) N L Room inpTop ρ st d ⊢
+      blockOwn (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ Stdio.errnoOwn ∗ consoleOwn st.out ∗
+        binImg := by
+  unfold world worldE interpCtxE interpCoreE errAny
+  iintro ⟨%H, %B, Hh, -, Hcon, Hstd, ⟨⟨%g, -, -, -, -, -, Herr⟩, -⟩, -, #Himg⟩
+  ihave ⟨Herrno, -⟩ := hEL _ _ $$ Hh
+  iframe Hcon Hstd Herrno Himg
+  iapply blockOwn_cast (by unfold interpErrOff; decide) (by unfold interpErrLen; rfl) $$ Herr
+
 /-- **`interp_run` returns `0`, `main` returns `0`, `exit(0)`**, for either
 WP: at `interp_run`'s epilogue (`0x80004514`) with `s5 = 0`, its frame's
 spilled link `0x800045ec`, the world at `st`, and `main`'s saved pair: the run

@@ -1542,3 +1542,18 @@ corrected statement and why:
   (`open scoped VsaIris.Sym.Stdout`, N1): unscoped, imported into the
   interpreter's run files through `Oom`, they exhausted `ix_run1`'s recursion
   depth.
+- **`newlib.fprintf` narrowed to its one call** (`main`'s
+  `fprintf(stderr, "%s\n", in->err_msg)`). The general statement (any
+  `%s`/`%d` format, `readable` arguments, `Ierr`) was unprovable as written:
+  `_write_r` writes `errno`, and `%s`'s word-at-a-time `strlen` reads up to 7
+  bytes past the NUL, outside `FmtArgsOK`'s coverage. `fprintfSpec` now takes
+  the owned `n`-byte buffer holding a NUL (`n < 2^30`, in RAM, its
+  over-read off the tohost cells), `errnoOwn`, an aligned return and a frame
+  above newlib's data, and hands back the buffer, `errnoOwn` and
+  `stdioAt StdioErrOK`. `strlen` needs no ASCII (`StrBytes` lost its `ascii`
+  field; `wordGuard` reads the bytes directly through `detect_all_ones`).
+  `MainSp.lo` is `0x80100000 + fprintfNeed ≤ sM`; `wp_mainErrTail`,
+  `wp_landing`, `wp_interpRet1` take `errnoOwn` (`H : NewlibHoles`);
+  `wp_abortLanding`, `wp_abort`, `wp_topAbort`, `wp_topAbrupt` take
+  `ErrnoOwn.ErrnoLend L Room` and lend it from the world they drop
+  (`world_exitPartsE`); `interpRun_partial` supplies `errnoLend_vsa`.
