@@ -23,7 +23,9 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   `ssputs_nw` (`__ssputs_r` on the string `FILE`: copies `min len _w`,
   advances `_p`, lowers `_w`; postcondition `PutsOut`). Tools: `nw_gen`
   (rebase the tracking memory), `snp_ld`/`snp_sd`, `bv_nat`, `Copied`.
-- Lessons: grep filters on `linter` hide parse errors (the token list names
+- Lessons: `omega` recurses too deeply with two truncated subtractions of one
+  variable (`x ≤ s - 1024 ⊢ x ≤ s - 264`): convert to additive form first.
+  Grep filters on `linter` hide parse errors (the token list names
   `register_linter_set`); check with `grep error`. A doc comment cannot precede
   `#ix_chain`. A declaration holds ~20 driver steps before the 200k budget; split
   long runs into lemmas at call/branch boundaries and rebase memory with
@@ -52,10 +54,22 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   `svf_print` from `PrintIn`. `__umoddi3` (`umod_nw`).
 - `nx_runF`: the driver variant whose facts also rewrite branch conditions.
 
+- **Conversions and iterations** (`SnpSvfConv.lean`, `SnpSvfLoop.lean`): `%s`
+  (`svf_convS`), `%d`/`%lld` (`svf_intD`/`svf_intQ`, `ll` via `svf_convLL`),
+  digits (`svf_dig1`, `svf_digLoop` over `umod_nw`/`udiv_nw`, `svf_digExit`),
+  rendered as `intToString` bytes (`intPieces`, over M3's
+  `digits_eq_natToString`); whole iterations `svf_iterS`, `svf_iterLLD`,
+  `svf_iterEnd` (loop head to loop head / to the return).
+- **`snprintf_nw`** (`SnpSnprintf.lean`): `snprintf` end to end over `NW`
+  (prologue `snp_pro`, `_svfprintf_r`, NUL, epilogue `snp_epi`), parametric in
+  the format's loop `SvfLoopRun`; post `SnpOut` (stream cut at `n - 1`, NUL,
+  frame).
+
 ## In flight
-- `%d`/`%lld` (value load, sign, single-digit and `udiv`/`umod` digit loop),
-  the end of the format (final flush, epilogue), the loop over a format
-  (model `fmtRender`), then `snprintf`'s wrapper and the Iris layer.
+- `SvfLoopRun` for `"%lld"` and `"<fn %s>"`; `%d` iteration; the general
+  `parseFmt` induction for `newlib.snprintf`.
+- The Iris layer: `wp_localRunW`, readable bytes as the data view
+  (`LocalRun.promote`), `binImg` → text and rodata, then the three holes.
 
 ## Plan
 1. Leaf runs over `NW`: `__ascii_mbtowc` (one char), `strlen` of a data string

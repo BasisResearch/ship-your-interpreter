@@ -166,4 +166,48 @@ theorem snp_pro {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   · svf_mem
   · intro a ha; svf_mem
 
+/-- **`snprintf(dst, n, fmt, …)`** (`0x80005c44`) in its run, for a format
+whose loop renders `total` (`SvfLoopRun`, discharged per format): the
+caller's registers kept, `total` cut at `n - 1` and a NUL in `dst[0, n)`,
+nothing else outside the stack scratch changed. -/
+theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (h2 : R 2 = BitVec.ofNat 64 s) (h10 : R 10 = BitVec.ofNat 64 dst) (h11 : R 11 = BitVec.ofNat 64 n)
+    (hal : (R 1).toNat % 4 = 0) (hdp : ldv .ld Mt 0x8001b898 = 0x80019770#64) (hdot : DotAt Dt DA)
+    (total : List (BitVec 8)) (hlen : total.length < 2 ^ 31)
+    (hloop : ∀ R0' Mt0', SnpAtSvf s dst n R Mt R0' Mt0' →
+      SvfLoopRun live Dt DA Q s dst n R0' Mt0' (R0' 12).toNat (R0' 13).toNat total)
+    (hk : ∀ R' Mt', R' 2 = R 2 → (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z) →
+      SnpOut Mt Mt' s dst n total → NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  refine snp_pro hlive R Mt SG h2 h10 h11 fun R1 Mt1 SA => ?_
+  have hdp1 : ldv .ld Mt1 0x8001b898 = 0x80019770#64 :=
+    (ldv_agree .ld fun i hi => SA.frame _ (by simp only [widthOfM] at hi; omega)).trans hdp
+  refine svf_entry hlive R1 Mt1 SG SA.r2 SA.r11 hdp1 hdot SA.buf fun R2 Mt2 A => ?_
+  refine hloop R1 Mt1 SA R2 Mt2 A ?_
+  intro R3 Mt3 h2' hkeep h10' hB hfr
+  have hag : ∀ a, (s - 272 ≤ a ∧ a < s) → ¬ (snpFP s ≤ a ∧ a < snpFP s + 16) →
+      imgM Mt3 a = imgM Mt1 a := fun a h1 h2 => hfr a (by
+    have := SG.d_sep; simp only [SvfW, snpFP] at h2 ⊢; omega)
+  have ld3 : ∀ off, 200 ≤ off → off + 8 ≤ 272 →
+      ldv .ld Mt3 (BitVec.ofNat 64 (s - 272 + off)).toNat = ldv .ld Mt1 (BitVec.ofNat 64 (s - 272 + off)).toNat :=
+    fun off h1 h2 => by
+      rw [toNat_ofNat_lt (by omega)]
+      exact ldv_agree .ld fun i hi => hag _ (by simp only [widthOfM] at hi; omega)
+        (by simp only [snpFP, widthOfM] at hi ⊢; omega)
+  rw [SA.r1]
+  refine snp_epi hlive total R3 Mt3 Mt SG h2' ((hkeep 8 (.inl rfl)).trans SA.r8) h10' hlen hB (R 1) (R 8) (R 9)
+    ((ld3 216 (by omega) (by omega)).trans SA.ra) ((ld3 208 (by omega) (by omega)).trans SA.s0)
+    ((ld3 200 (by omega) (by omega)).trans SA.s1) hal fun R4 Mt4 h24 h84 h94 hk4 hb hnul hfr4 => ?_
+  refine hk R4 Mt4 (h24.trans h2.symm) ?_ ⟨hb, hnul, fun a ha1 ha2 => ?_⟩
+  · intro z hz
+    rcases hz with rfl | rfl | ⟨h1, h2⟩
+    · exact h84
+    · exact h94
+    · exact (hk4 z h1 h2).trans ((hkeep z (.inr (.inr ⟨h1, h2⟩))).trans (SA.keep z h1 h2))
+  · rw [hfr4 a ha2, hfr a (by have := SG.d_sep; simp only [SvfW, snpFP]; omega), SA.frame a (by omega)]
+
 end VsaIris.Sym
