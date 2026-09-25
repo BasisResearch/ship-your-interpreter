@@ -276,3 +276,4 @@ import VsaIris.Vsa.Stderr.VfpErr
 import VsaIris.Vsa.Stderr.SprintErr
 import VsaIris.Vsa.Stderr.SprintErr0
 import VsaIris.Vsa.Stderr.Promote
+import VsaIris.Vsa.Stderr.FprintfHead
