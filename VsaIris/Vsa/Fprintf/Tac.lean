@@ -50,18 +50,17 @@ macro "nx_flat" : tactic => `(tactic| (
   have f27 := g27; have f28 := g28; have f29 := g29; have f30 := g30; have f31 := g31
   clear g1 g2 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31))
 
-set_option hygiene false in
 /-- `nf_run [n] h using [facts] at pc…`: `nx_run` with the flat register facts
 `f<r>` (`nx_flat`) and the literal-arithmetic simprocs in the normalizer's list
 (`nx_run`'s normalizer rewrites with its `using` list only). -/
-macro "nf_run " "[" n:num "] " h:term " using " "[" fs:term,* "]" stops:(" at " num+)? : tactic =>
-  match stops with
-  | some stx =>
-    let ss : Array (Lean.TSyntax `num) := stx.raw[1].getArgs.map (⟨·⟩)
+syntax "nf_run " "[" num "] " term " using " "[" term,* "]" (" at " num+)? : tactic
+set_option hygiene false in
+macro_rules
+  | `(tactic| nf_run [$n] $h using [$fs,*] at $ss*) =>
     `(tactic| nx_run [$n] $h using [$fs,*, BitVec.reduceSub, BitVec.reduceOr,
       BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
       f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31] at $ss*)
-  | none =>
+  | `(tactic| nf_run [$n] $h using [$fs,*]) =>
     `(tactic| nx_run [$n] $h using [$fs,*, BitVec.reduceSub, BitVec.reduceOr,
       BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
       f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31])
