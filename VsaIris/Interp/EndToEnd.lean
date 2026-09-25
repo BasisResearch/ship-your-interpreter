@@ -6,6 +6,7 @@ import VsaIris.Interp.SupplyBoot
 import VsaIris.Interp.Supply
 import VsaIris.Adequacy
 import Vsa.Refinement
+import Vsa.Densify
 
 /-!
 # The end-to-end theorem on the Iris route (package A)
@@ -21,7 +22,12 @@ INTERP_DESIGN.md §5.2-§5.4. From `Loaded interpRunLayout p c`:
   run (`interpRun_partial_top`: a normal end hands a derivation, which the
   hypothesis refutes; every other end exits nonzero), and partial adequacy
   (`vsa_adequacyP_nonzero`).
-* `endToEnd_refinement`: `Vsa.Refine.refinement` (unchanged) of the two.
+* `endToEnd_refinement_loaded`: `Vsa.Refine.refinement` (unchanged) of the two.
+* `endToEnd_refinement`: the same at the fill-with-zero `fillZero c` of the
+  configuration (P3, `Vsa/Densify.lean`): `Loaded` demands the stack present,
+  which the loader's sparse memory never is; the machine cannot tell an
+  absent byte from a present zero, so the hypothesis is checked on the dense
+  view and the conclusion holds of the real configuration.
 -/
 
 namespace VsaIris.Interp
@@ -131,16 +137,35 @@ open Vsa.Machine (Halts Diverges)
 open Vsa.Refine (Loaded)
 open Vsa.Sim.LayoutInstance (interpRunLayout)
 
-/-- **THE END-TO-END THEOREM.** For every WHILE program loaded in the
-interpreter's memory (`Loaded interpRunLayout p c`), the machine halts with
-exit code 0 and output `out` exactly when `out` is a big-step behaviour of the
-program, and a divergent machine run means the program has no behaviour.
-The only assumptions are the newlib specifications in `IrisHoles`
-(`VsaIris/HOLES.md`). -/
-theorem endToEnd_refinement (h : VsaIris.Interp.IrisHoles) :
+open Vsa.Densify (fillZero halts_fillZero diverges_fillZero)
+
+/-- The end-to-end theorem at a configuration that is literally `Loaded`
+(every field taken at `c` itself, including the present stack). -/
+theorem endToEnd_refinement_loaded (h : VsaIris.Interp.IrisHoles) :
     ∀ p c, Loaded interpRunLayout p c →
       (∀ out, BigStep p out ↔ Halts c out 0) ∧
       (Diverges c → ¬ ∃ out, BigStep p out) :=
   Vsa.Refine.refinement (VsaIris.Interp.interpSim_iris h)
+
+/-- **THE END-TO-END THEOREM.** For every WHILE program loaded in the
+interpreter's memory — `Loaded interpRunLayout p (fillZero c)`, the loaded
+configuration with every absent RAM byte read as the zero it already is —
+the machine halts with exit code 0 and output `out` exactly when `out` is a
+big-step behaviour of the program, and a divergent machine run means the
+program has no behaviour. The only assumptions are the newlib specifications
+in `IrisHoles` (`VsaIris/HOLES.md`). `fillZero` is the review's P3
+(`REVIEW.md` C3): the Sail model reads absent bytes as `0` and never inspects
+presence (`Vsa.Densify.stepOnce_resp`), so `Halts`/`Diverges` of `c` and of
+`fillZero c` coincide (`halts_fillZero`, `diverges_fillZero`), while `Loaded`'s
+presence fields (`stack_bytes`, `VsaOk.live`) hold of the dense view by
+construction. -/
+theorem endToEnd_refinement (h : VsaIris.Interp.IrisHoles) :
+    ∀ p c, Loaded interpRunLayout p (fillZero c) →
+      (∀ out, BigStep p out ↔ Halts c out 0) ∧
+      (Diverges c → ¬ ∃ out, BigStep p out) := by
+  intro p c hL
+  obtain ⟨h1, h2⟩ := endToEnd_refinement_loaded h p (fillZero c) hL
+  exact ⟨fun out => (h1 out).trans (halts_fillZero c out 0).symm,
+    fun hd => h2 ((diverges_fillZero c).1 hd)⟩
 
 end Vsa.Sim.EndToEnd

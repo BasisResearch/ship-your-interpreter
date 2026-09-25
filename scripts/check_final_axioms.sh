@@ -10,13 +10,18 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 THEOREMS=(
-  Vsa.Sim.EndToEnd.endToEnd_refinement            # VsaIris/Interp/EndToEnd.lean: THE theorem
+  Vsa.Sim.EndToEnd.endToEnd_refinement            # VsaIris/Interp/EndToEnd.lean: THE theorem (at `fillZero c`)
+  Vsa.Sim.EndToEnd.endToEnd_refinement_loaded     # the same at a literally `Loaded` configuration
+  Vsa.Densify.halts_fillZero                      # P3: Halts invariant under the fill-with-zero (Vsa/Densify.lean)
+  Vsa.Densify.diverges_fillZero                   # P3: Diverges invariant under the fill-with-zero
+  Vsa.Densify.stepOnce_resp                       # P3: stepOnce never inspects byte presence
   VsaIris.Interp.interpSim_iris                   # InterpSim at the concrete layout from IrisHoles
   VsaIris.Interp.term_sim_of                      # term_sim from Supplies + NewlibHoles
   VsaIris.Interp.stuck_sim_of                     # stuck_sim from Supplies + NewlibHoles
   VsaIris.Interp.supplies_of                      # every callee spec closed from IrisHoles
   Vsa.Refine.refinement                           # the generic composition (Vsa/Refinement.lean)
   Vsa.Sim.NativeNameAudit.Control.loaded          # the control witness of `Loaded interpRunLayout`
+  Vsa.Sim.NativeNameAudit.Control.loaded_fill     # the same at `fillZero heapConfig` (THE theorem's hypothesis)
   Vsa.Sim.LayoutInstance.all_stackFits            # ProgramStackFits at every c/tests/*.wl embedding
   VsaIris.Interp.ctl_world_counted                # world_of_boundary at the control, counted regime
   VsaIris.Interp.ctl_world_uncounted              # world_of_boundary at the control, uncounted regime

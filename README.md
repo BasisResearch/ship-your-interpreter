@@ -51,6 +51,18 @@ memory representation, via the inductive `ProgramRepr`. `InterpSim` is the
 forward-simulation obligation. Every derivable behaviour is realised by the
 machine, and underivable programs never halt cleanly.
 
+The final theorem `Vsa.Sim.EndToEnd.endToEnd_refinement`
+(`VsaIris/Interp/EndToEnd.lean`) is `refinement` at the concrete layout, stated
+at the fill-with-zero of the configuration: `Loaded interpRunLayout p
+(Vsa.Densify.fillZero c)`, where `fillZero c` inserts every absent RAM byte as
+`some 0`. The Sail model reads an absent byte as `0` and never inspects
+presence (`Vsa/Densify/`: `stepOnce_resp`, hence `halts_fillZero`,
+`diverges_fillZero`), so the conclusion is about the real configuration `c`
+while `Loaded`'s presence fields (the 8 MiB stack, adequacy's live set) are
+checked on the dense view, which is what the loader's sparse memory never
+satisfies literally (`REVIEW.md` C3). `endToEnd_refinement_loaded` is the same
+theorem at a literally `Loaded` configuration.
+
 ```lean
 structure InterpSim (L : Layout) : Prop where
   term_sim  : ∀ p c out, Loaded L p c → BigStep p out → Halts c out 0

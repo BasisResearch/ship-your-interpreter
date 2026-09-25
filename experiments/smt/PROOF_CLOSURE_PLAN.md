@@ -4362,3 +4362,20 @@ every `c/tests/*.wl` build, reconstructed at `interp_run`'s entry):
 - `capacity` and `stack_admissible` make `Loaded` program-execution
   dependent (REVIEW.md M1); `CStr` restricts programs to ASCII (L1).
 
+
+### P3 landed (lane B2, 2026-09-25): the machine is insensitive to absent bytes
+
+`REVIEW.md` C3 is resolved by statement: `endToEnd_refinement` is now stated at
+`Vsa.Densify.fillZero c` (every absent RAM byte inserted as `some 0`), and
+`Vsa/Densify.lean` proves `Halts c out e ↔ Halts (fillZero c) out e` and
+`Diverges c ↔ Diverges (fillZero c)` from `Vsa.Densify.Gen.stepOnce_resp`: a
+logical-relations proof (`Resp`, `Vsa/Densify/Resp.lean`) over the 307 monadic
+functions of the executable Sail model in `stepOnce`'s call graph
+(`experiments/densify/closure.tsv`, generated theorems `Vsa/Densify/Gen*.lean`
+from `scripts/gen_resp.py`, the two recursive groups by hand). Every memory
+access of the model goes through lean-sail's `readByte` (`getD 0`) and
+`writeByte` (`insert`); no Sail path inspects presence. The previous statement
+is `endToEnd_refinement_loaded`; `Control.loaded_fill` witnesses the new
+hypothesis at the control. No hole was added. Open: C1/C2 (P1/P2, other lanes),
+and P4's loader-derived witnesses; see `INTERP_DESIGN.md` "STATEMENT CHANGE
+(lane B2, P3)".

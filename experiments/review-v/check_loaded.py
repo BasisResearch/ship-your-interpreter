@@ -6,14 +6,25 @@ ELF PT_LOAD bytes (exactly `initializeMemory`) + every store of the traced run
 up to the entry step; registers = the entry row of the trace.
 
 Two memory views: `sparse` (the actual Sail map: absent bytes are `none`) and
-`dense` (absent RAM bytes read as `some 0`, the shape of the control snapshot).
+`fillZero` (absent RAM bytes `[0x80000000, 0x88000000)` read as `some 0`, every
+other byte unchanged). `fillZero` is exactly `Vsa.Densify.fillZero`
+(`Vsa/Densify/Transport.lean`, `fillZeroMem_get`), the configuration the final
+theorem's hypothesis `Loaded interpRunLayout p (fillZero c)` is stated at (P3,
+`VsaIris/Interp/EndToEnd.lean`); the machine cannot distinguish the two views
+(`Vsa.Densify.halts_fillZero`/`diverges_fillZero`). The checker also verifies
+that every byte the loader or the traced run touched lies inside RAM, so the
+fill covers everything the sparse view holds.
+
+Data: `elfs/<name>.elf` and `traces/<name>.entry-trace.tsv` under `$VSA_REVIEW_DATA`
+(default: this directory); `$VSA_ROOT` is the repository (default: this checkout).
 """
 import sys, os, re, json
-ROOT = "/data/home/kirancodes/Documents/code/vsa-iris-v"
+ROOT = os.environ.get("VSA_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT + "/scripts")
 from difftest_lib import Image
-S = os.path.dirname(os.path.abspath(__file__))
+S = os.environ.get("VSA_REVIEW_DATA", os.path.dirname(os.path.abspath(__file__)))
 PROOF = ROOT + "/c/while-riscv-htif.elf"
+RAM_LO, RAM_HI = 0x80000000, 0x88000000   # Vsa.Densify.ramBase, ramBase + ramSize
 
 # ---- constants from the Lean sources -------------------------------------
 INTERP_RUN = 0x800043ec; SP_ENTRY = 0x87fffd00; GP_ENTRY = 0x8001b510
@@ -55,7 +66,7 @@ class Mem:
         self.d = d; self.dense = dense
     def get(self, a):
         b = self.d.get(a)
-        if b is None and self.dense and 0x80000000 <= a < 0x88000000: return 0
+        if b is None and self.dense and RAM_LO <= a < RAM_HI: return 0   # fillZeroMem_get
         return b
     def present(self, a): return a in self.d
     def readLE(self, a, n):
@@ -106,7 +117,7 @@ def run(name, results):
     def chk(field, ok, note=""):
         R.setdefault(field, []).append((bool(ok), note))
     for dense in (False, True):
-        m = Mem(d, dense); tag = "dense" if dense else "sparse"
+        m = Mem(d, dense); tag = "fillZero" if dense else "sparse"
         def c(field, ok, note=""): chk(f"{field}[{tag}]", ok, note)
         # --- registers (view-independent, record once) ---
         if not dense:
@@ -168,8 +179,10 @@ def run(name, results):
             c("stack_bytes", present == STACK_HI - STACK_LO, f"{present} of {STACK_HI-STACK_LO} stack bytes present in the map")
             bss = sum(1 for a in range(0x8001b990, 0x8001c168) if m.present(a))
             c("bss present", bss == 0x8001c168 - 0x8001b990, f"{bss} of {0x8001c168-0x8001b990} .bss bytes present")
+            outside = sum(1 for a in d if not (RAM_LO <= a < RAM_HI))
+            chk("fillZero covers the map (no byte outside RAM)", outside == 0, f"{outside} present bytes outside [{RAM_LO:#x},{RAM_HI:#x}); {len(d)} present bytes")
         else:
-            c("stack_bytes", True, "dense view: all present by construction")
+            c("stack_bytes", True, "fillZero view: every RAM byte present by construction (Vsa.Densify.fillZeroMem_ram)")
         # --- the store: global frame ---
         if genv:
             cnt, cap, pn, pv, par = m.r32(genv), m.r32(genv + 4), m.r64(genv + 8), m.r64(genv + 16), m.r64(genv + 24)
