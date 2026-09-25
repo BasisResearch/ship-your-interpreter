@@ -33,22 +33,22 @@ set_option hygiene false in
 `f<r> : R' r = v` for `ra`, `sp`, `t0`–`t6`, `s0`–`s11`, `a0`–`a7`. -/
 macro "nx_flat" : tactic => `(tactic| (
   refine swp_fresh fun R' hR' => ?_
-  have g1 := hR' 1; have g2 := hR' 2; have g5 := hR' 5; have g6 := hR' 6; have g7 := hR' 7; have g8 := hR' 8
+  have g1 := hR' 1; have g2 := hR' 2; have g3 := hR' 3; have g4 := hR' 4; have g5 := hR' 5; have g6 := hR' 6; have g7 := hR' 7; have g8 := hR' 8
   have g9 := hR' 9; have g10 := hR' 10; have g11 := hR' 11; have g12 := hR' 12; have g13 := hR' 13; have g14 := hR' 14
   have g15 := hR' 15; have g16 := hR' 16; have g17 := hR' 17; have g18 := hR' 18; have g19 := hR' 19; have g20 := hR' 20
   have g21 := hR' 21; have g22 := hR' 22; have g23 := hR' 23; have g24 := hR' 24; have g25 := hR' 25; have g26 := hR' 26
   have g27 := hR' 27; have g28 := hR' 28; have g29 := hR' 29; have g30 := hR' 30; have g31 := hR' 31
   clear hR'
   first
-    | simp (config := {failIfUnchanged := false}) only [upd_apply, updAll, Nat.reduceEqDiff, ite_true, ite_false, BitVec.add_assoc, BitVec.reduceAdd, f1, f2, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31] at g1 g2 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31
-    | simp (config := {failIfUnchanged := false}) only [upd_apply, updAll, Nat.reduceEqDiff, ite_true, ite_false] at g1 g2 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31
-  (try clear f1 f2 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
-  have f1 := g1; have f2 := g2; have f5 := g5; have f6 := g6; have f7 := g7; have f8 := g8
+    | simp (config := {failIfUnchanged := false}) only [upd_apply, updAll, Nat.reduceEqDiff, ite_true, ite_false, BitVec.add_assoc, BitVec.reduceAdd, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31] at g1 g2 g3 g4 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31
+    | simp (config := {failIfUnchanged := false}) only [upd_apply, updAll, Nat.reduceEqDiff, ite_true, ite_false] at g1 g2 g3 g4 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31
+  (try clear f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+  have f1 := g1; have f2 := g2; have f3 := g3; have f4 := g4; have f5 := g5; have f6 := g6; have f7 := g7; have f8 := g8
   have f9 := g9; have f10 := g10; have f11 := g11; have f12 := g12; have f13 := g13; have f14 := g14
   have f15 := g15; have f16 := g16; have f17 := g17; have f18 := g18; have f19 := g19; have f20 := g20
   have f21 := g21; have f22 := g22; have f23 := g23; have f24 := g24; have f25 := g25; have f26 := g26
   have f27 := g27; have f28 := g28; have f29 := g29; have f30 := g30; have f31 := g31
-  clear g1 g2 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31))
+  clear g1 g2 g3 g4 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31))
 
 /-- `nf_run [n] h using [facts] at pc…`: `nx_run` with the flat register facts
 `f<r>` (`nx_flat`) and the literal-arithmetic simprocs in the normalizer's list
@@ -58,11 +58,11 @@ set_option hygiene false in
 macro_rules
   | `(tactic| nf_run [$n] $h using [$fs,*] at $ss*) =>
     `(tactic| nx_run [$n] $h using [$fs,*, BitVec.reduceSub, BitVec.reduceOr,
-      BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
+      BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
       f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31] at $ss*)
   | `(tactic| nf_run [$n] $h using [$fs,*]) =>
     `(tactic| nx_run [$n] $h using [$fs,*, BitVec.reduceSub, BitVec.reduceOr,
-      BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
+      BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
       f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31])
 
 end VsaIris.Sym
