@@ -329,4 +329,35 @@ theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   rw [show p + k + 2 + 1 + 1 = p + k + 4 by omega] at A9
   exact A9
 
+/-- **The last iteration** (`0x80007720` → `_svfprintf_r`'s return): the literal
+run `[p, p + k)`, then the NUL. -/
+theorem svf_iterEnd {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
+    (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 total.length) total R Mt)
+    (k : Nat) (FG : FmtGeom DA p k)
+    (hb : ∀ i, i < k → imgM Dt (p + i) ≠ 0#8 ∧ imgM Dt (p + i) ≠ 37#8)
+    (hz : imgM Dt (p + k) = 0#8) (hc : total.length + k + 1 < 2 ^ 31) (hal : (R0 1).toNat % 4 = 0)
+    (hk : SvfRetK live Dt DA Q s dst n R0 Mt0 (BitVec.ofNat 64 (total.length + k))
+      (total ++ pieceBytes (imgM Dt) p k)) :
+    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hFlo := FG.lo
+  have hFhi := FG.hi
+  refine svf_head hlive R Mt SG A fun R1 A1 h22 => ?_
+  refine svf_scan hlive SG hmb hmx k p R1 Mt A1 h22 FG hb (fun _ R2 Mt2 A2 h22' h10 => ?_)
+    (fun h => absurd (h.symm.trans hz) (by decide)) (.inl hz)
+  refine svf_lit hlive 0x80007960#64 0x800079b0#64 (.inr ⟨rfl, rfl⟩) R2 Mt2 SG A2 h22'
+    (by simpa using h10) (by omega) (by omega) (by omega) (fun _ => pieceSrc_of_data DO SG (by omega)
+      (fun b h1 h2 => FG.dom b h1 (by omega))) ?_
+  intro R3 Mt3 L hL St3 _
+  refine svf_end hlive R3 Mt3 SG St3 hal ?_
+  rw [catPieces_lit _ hL, show p + k - p = k by omega]
+  rw [pieceBytes_congr (g' := imgM Dt) fun i hi => by
+      unfold gOf; rw [if_neg (by have := DO.stack _ (FG.dom (p + i) (by omega) (by omega)); omega)]]
+  exact hk
+
 end VsaIris.Sym
