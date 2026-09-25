@@ -51,7 +51,7 @@ the allocator's footprint unchanged. -/
 def strlenHeapSpec (Wp : MachWP (GF := GF) M) (q : BitVec 64) (x : String) (ρ : Regime)
     (H : List (Nat × Nat)) : IProp GF :=
   helperSpec M Wp strlenPC callerSaved (fun rv => rv 10 = q)
-    iprop(⌜HeapStr H q x⌝ ∗ strOwn q.toNat x ∗ heapRes vsaLayoutP vsaRoomB ρ H)
+    iprop(binImg ∗ ⌜HeapStr H q x⌝ ∗ strOwn q.toNat x ∗ heapRes vsaLayoutP vsaRoomB ρ H)
     (fun rv' => iprop(⌜rv' 10 = BitVec.ofNat 64 x.length⌝ ∗ strOwn q.toNat x ∗
       heapRes vsaLayoutP vsaRoomB ρ H))
 
@@ -60,7 +60,7 @@ def strlenHeapSpec (Wp : MachWP (GF := GF) M) (q : BitVec 64) (x : String) (ρ :
 def strcpyHeapSpec (Wp : MachWP (GF := GF) M) (d q : BitVec 64) (y : String) (ρ : Regime)
     (H : List (Nat × Nat)) : IProp GF :=
   helperSpec M Wp strcpyPC callerSaved (fun rv => rv 10 = d ∧ rv 11 = q)
-    iprop(⌜HeapStr H q y ∧ RamWin d.toNat (y.toList.length + 1)⌝ ∗
+    iprop(binImg ∗ ⌜HeapStr H q y ∧ RamWin d.toNat (y.toList.length + 1) ∧ htifLo + 16 ≤ d.toNat⌝ ∗
       blockOwn d.toNat (y.toList.length + 1) ∗ strOwn q.toNat y ∗
       heapRes vsaLayoutP vsaRoomB ρ H)
     (fun _ => iprop((∃ img, ownImg (InExt (d.toNat, y.toList.length + 1)) img ∗

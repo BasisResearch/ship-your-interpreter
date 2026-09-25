@@ -162,12 +162,13 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     (hsc : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (vsaModel live) (twpW (vsaModel live)) d q y ρ H)
     (hvs : ⊢ ∀ p q x, valueStrSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) p q x)
     (hd : CatDispSupply (GF := GF) N) :
-    binImg (GF := GF) ∗ textOwn (GF := GF) allocText ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary .add l r) st2
+    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary .add l r) st2
         (.str (lv.catDisplay st2.store ++ rv'.catDisplay st2.store)) (nl + nr + binOpCost st2.store .add lv rv') D by
   unfold evalSpecT_body fnSpecW
-  iintro ⟨#Hbin, #Hat⟩ %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
+  iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
   icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
+  ihave ⟨Hw, #Hbin, #Hat⟩ := world_allocText N L Room inp _ st d $$ Hw
   unfold astEG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨aL, aR, hn, hrl, hrr, haL, haR⟩ := binNode_of_repr hrepr hgeo
@@ -492,7 +493,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   isplitl []
   · ipureintro; ix_reg; ix_keep [hkeep6]
   isplitl [Hx Hh]
-  · iframe Hx Hh; ipureintro; exact ⟨List.mem_cons_of_mem _ List.mem_cons_self, hf1.2⟩
+  · iframe Hbin Hx Hh; ipureintro; exact ⟨List.mem_cons_of_mem _ List.mem_cons_self, hf1.2⟩
   iintro %R8 %hkeep8 ⟨%hla, Hx, Hh⟩ Hms
 
 #ix_piece BinaryConcatT_p6 from BinaryConcatT_p5 by
@@ -527,7 +528,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   isplitl []
   · ipureintro; ix_reg; ix_keep [hkeep8]
   isplitl [Hy Hh]
-  · iframe Hy Hh; ipureintro; exact ⟨List.mem_cons_self, hf2.2⟩
+  · iframe Hbin Hy Hh; ipureintro; exact ⟨List.mem_cons_self, hf2.2⟩
   iintro %R10 %hkeep10 ⟨%hlb, Hy, Hh⟩ Hms
 
 #ix_piece BinaryConcatT_p7 from BinaryConcatT_p6 by
@@ -620,8 +621,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   iapply ms_callMemcpyOwned (twpW _) hmc (i := 0x80003aa8)
     (jalx_80003aa8 live (fun p hp => hlive _ (interp_code_80003aa8 p hp))) interp_code_80003aa8
     (by decide) (dst := (R12 10)) (src := (R4 10)) (n := (strRender st2.store lv).toList.length) (img := img1)
-    ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩ ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩
-  iframe Hcode Hms Hb1 Hx1
+    ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩ (by unfold htifLo; omega)
+    ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩
+  iframe Hcode Hbin Hms Hb1 Hx1
   isplitl []
   · ipureintro
     refine ⟨by ix_reg, by ix_reg; ix_keep [hkeep12, hkeep10, hkeep8, hkeep6], ?_⟩
@@ -675,10 +677,10 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     ix_reg; rw [hkeep14 8 (by decide) (by decide), hkeep14 18 (by decide) (by decide)]; ix_reg
     rw [hkeep12 18 (by decide) (by decide)]; ix_reg; rw [h18, String.length_toList]
   isplitl [Hb2 Hy Hh]
-  · rw [hd]; iframe Hb2 Hy Hh
+  · rw [hd]; iframe Hbin Hb2 Hy Hh
     ipureintro
     exact ⟨⟨List.mem_cons_of_mem _ List.mem_cons_self, hf2.2⟩,
-      ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩⟩
+      ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩, by unfold htifLo; omega⟩
   iintro %R16 %hkeep16 ⟨⟨%img2, Hz, %hc2⟩, Hy, Hh⟩ Hms
   rw [hd] at hc2
   ihave Hs := ownImg_cat (q := (R12 10).toNat) (q1 := (R4 10).toNat) img1 img2 hc1 hc2 $$ [Hd Hz]

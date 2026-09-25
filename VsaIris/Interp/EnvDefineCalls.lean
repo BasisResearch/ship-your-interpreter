@@ -93,7 +93,7 @@ theorem wp_call_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code memcpyPC)
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {R : Nat → BitVec 64} {n : Nat}
     {img : Nat → BitVec 8} (h12 : R 12 = BitVec.ofNat 64 n) (hd : RamWin (R 10).toNat n)
-    (hs : RamWin (R 11).toNat n) :
+    (hh : htifLo + 16 ≤ (R 10).toNat) (hs : RamWin (R 11).toNat n) :
     instrAt i code ∗ memcpySpec Wp ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 i ∗ regsOf gprs R ∗
       blockOwn (R 10).toNat n ∗ roImg (InExt ((R 11).toNat, n)) img ∗
       (∀ R' : Nat → BitVec 64, ⌜R' 10 = R 10 ∧ R' 1 = BitVec.ofNat 64 (i + 4) ∧
@@ -109,7 +109,8 @@ theorem wp_call_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     (A := iprop(blockOwn (R 10).toNat n ∗ roImg (InExt ((R 11).toNat, n)) img))
     (B := fun Rc => iprop(⌜Rc 10 = R 10⌝ ∗
       ownImg (InExt ((R 10).toNat, n)) (fun a => img (a - (R 10).toNat + (R 11).toNat))))
-    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin (R 10).toNat n ∧ RamWin (R 11).toNat n⌝ ∗
+    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin (R 10).toNat n ∧ htifLo + 16 ≤ (R 10).toNat ∧
+        RamWin (R 11).toNat n⌝ ∗
       (10 : Nat) ↦ᵣ R 10 ∗ (11 : Nat) ↦ᵣ R 11 ∗ (12 : Nat) ↦ᵣ BitVec.ofNat 64 n ∗
       clobbered argClob ∗ blockOwn (R 10).toNat n ∗ roImg (InExt ((R 11).toNat, n)) img))
     (Q := fun _ => iprop((10 : Nat) ↦ᵣ R 10 ∗ clobbered retClob ∗
@@ -119,7 +120,7 @@ theorem wp_call_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     icases HR with ⟨Ha0, Ha1, Ha2, Hcl⟩
     ihave Hcl := clobbered_of_regsOf _ R $$ Hcl
     iframe Ha0 Ha1 Ha2 Hcl Hb Hsrc
-    ipureintro; exact ⟨hi4, hd, hs⟩
+    ipureintro; exact ⟨hi4, hd, hh, hs⟩
   · iintro ⟨Ha0, Hcl, Hout⟩
     ihave ⟨%f, Hcl⟩ := regsOf_of_clobbered retClob (by decide) $$ Hcl
     ihave HR := regsOf_cons_fun 10 _ retClob (by decide) f $$ [Ha0 Hcl]

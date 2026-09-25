@@ -24,8 +24,13 @@ open Vsa.Sim Vsa.Sim.LayoutInstance
 /-! ## The live set -/
 
 /-- The bytes every run fetches or loads without owning them: the binary's
-`.text` and `.rodata`. -/
-def topLive (a : Nat) : Prop := 0x80000000 ≤ a ∧ a < 0x8001acf0
+`.text` and `.rodata`, `_impure_ptr` (the helpers' code lists `envText` and
+`allocText` load it) and the stack segment (`stringify`'s `strlen` reads its
+stack buffer through the run's read-only text). All are present in the loaded
+configuration (`topLive_present`). -/
+def topLive (a : Nat) : Prop :=
+  (0x80000000 ≤ a ∧ a < 0x8001acf0) ∨ (0x8001b970 ≤ a ∧ a < 0x8001b978) ∨
+    (0x87800000 ≤ a ∧ a < 0x88000000)
 
 theorem interpText_all :
     VsaIris.Sym.interpText.all (fun p => (0x80000000 ≤ p.1 && p.1 < 0x8001acf0)) = true := by decide +kernel
@@ -34,17 +39,37 @@ theorem topLive_interp : ∀ p ∈ VsaIris.Sym.interpText, topLive p.1 := by
   intro p hp
   have h := List.all_eq_true.1 interpText_all p hp
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-  exact h
+  exact .inl h
 
 theorem topLive_code : Newlib.CodeLive topLive := by
   intro a ha
   unfold Newlib.textDom at ha
-  exact ⟨ha.1, by omega⟩
+  exact .inl ⟨ha.1, by omega⟩
 
 /-- The live bytes are present in a loaded configuration. -/
 theorem topLive_present {m : Vsa.MemRepr.Mem} (ht : Code.FixedTextLoaded m)
-    (hr : Code.FixedRodataLoaded m) : ∀ a, topLive a → (m[a]?).isSome := by
-  intro a ⟨h1, h2⟩
+    (hr : Code.FixedRodataLoaded m) (hi : Code.ImageStaticsLoaded m)
+    (hs : ∀ k, stackSL.lo ≤ k → k < stackSL.hi → ∃ b : BitVec 8, m[k]? = some b) :
+    ∀ a, topLive a → (m[a]?).isSome := by
+  intro a ha
+  rcases ha with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩
+  rotate_left
+  · have hp := Code.imageStatics_impurePtr_range hi
+    unfold Code.imgImpurePtr at hp
+    obtain ⟨e0, e1, e2, e3, e4, e5, e6, e7⟩ := hp
+    obtain ⟨k, hk, rfl⟩ : ∃ k, k < 8 ∧ a = 0x8001b970 + k := ⟨a - 0x8001b970, by omega, by omega⟩
+    have hk' : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4 ∨ k = 5 ∨ k = 6 ∨ k = 7 := by omega
+    rcases hk' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · rw [show (0x8001b970 : Nat) + 0 = 0x8001b970 from rfl, e0]; rfl
+    · rw [e1]; rfl
+    · rw [e2]; rfl
+    · rw [e3]; rfl
+    · rw [e4]; rfl
+    · rw [e5]; rfl
+    · rw [e6]; rfl
+    · rw [e7]; rfl
+  · obtain ⟨b, hb⟩ := hs a h1 h2
+    rw [hb]; rfl
   by_cases h : a < 0x80018be0
   · have := ht (a - 0x80000000) (by unfold Code.fixedTextSize; omega)
     rw [show Code.fixedTextBase + (a - 0x80000000) = a by unfold Code.fixedTextBase; omega] at this
@@ -64,7 +89,7 @@ theorem vsaOk_of_ready {c : Vsa.Machine.Config} {stmts count : Nat} {inp : BitVe
   good := F.good
   tick := F.tick
   gpr := F.gprs
-  live := topLive_present F.text_image F.rodata_image
+  live := topLive_present F.text_image F.rodata_image F.statics F.stack_bytes
   htifIdle := F.htif_payload
 
 /-! ## The register map -/

@@ -10,16 +10,14 @@ newlib's `memcpy` (`0x80006bc8`, `memcpyPC`) is ONE bounded local run
 (`Memcpy.memcpyLocalRun`, over the step table `MemcpySteps.lean`), so each
 spec is one `wp_localRunW` application (`memcpy_wp`), for either WP.
 
-* `memcpy_spec_env`: the read-only source of `memcpySpecH` sits in the run's
+* `memcpy_spec_env`: the read-only source of `memcpySpec` sits in the run's
   read-only text (`srcText`).
-* `memcpy_spec_owned`: the owned source of `memcpySpecOwnedH` is promoted
+* `memcpy_spec_owned`: the owned source of `memcpySpecOwned` is promoted
   from the read-only text to the owned set (`LocalRun.promote`) and handed
   back unchanged.
 
-`memcpySpecH`/`memcpySpecOwnedH` are `memcpySpec`/`memcpySpecOwned` with
-`htifLo + 16 ≤ dst.toNat`: VSA's store facts (`MemFacts` `.sd`/`.sb`) hold
-only above the HTIF words, and `RamWin` admits a destination in
-`[0x8001acf0, 0x8001ad00)` that `binImg` does not exclude.
+Both specs require `htifLo + 16 ≤ dst.toNat`: VSA's store facts (`MemFacts`
+`.sd`/`.sb`) hold only above the HTIF words.
 -/
 
 namespace VsaIris.Interp
@@ -27,46 +25,6 @@ namespace VsaIris.Interp
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.Newlib VsaIris.MallocFast VsaIris.Sym VsaIris.Memcpy
 
-section Defs
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-variable {M : MachineModel}
-
-/-- `memcpy(dst, src, n)` from read-only bytes into an owned block. -/
-def memcpySpecH (Wp : MachWP (GF := GF) M) : IProp GF :=
-  iprop(□ ∀ (dst src : BitVec 64) (n : Nat) (img : Nat → BitVec 8), fnSpecW Wp memcpyPC
-    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ htifLo + 16 ≤ dst.toNat ∧
-        RamWin src.toNat n⌝ ∗
-      (10 : Nat) ↦ᵣ dst ∗ (11 : Nat) ↦ᵣ src ∗ (12 : Nat) ↦ᵣ BitVec.ofNat 64 n ∗
-      clobbered argClob ∗ blockOwn dst.toNat n ∗ roImg (InExt (src.toNat, n)) img))
-    (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
-      ownImg (InExt (dst.toNat, n)) (fun a => img (a - dst.toNat + src.toNat)))))
-
-instance (Wp : MachWP (GF := GF) M) : Persistent (memcpySpecH Wp) := by
-  unfold memcpySpecH; infer_instance
-
-end Defs
-
-section DefsOwned
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-variable (M : MachineModel)
-
-/-- `memcpy(dst, src, n)` from an OWNED source, handed back unchanged. -/
-def memcpySpecOwnedH (Wp : MachWP (GF := GF) M) : IProp GF :=
-  iprop(□ ∀ (dst src : BitVec 64) (n : Nat) (img : Nat → BitVec 8), fnSpecW Wp memcpyPC
-    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ htifLo + 16 ≤ dst.toNat ∧
-        RamWin src.toNat n⌝ ∗
-      (10 : Nat) ↦ᵣ dst ∗ (11 : Nat) ↦ᵣ src ∗ (12 : Nat) ↦ᵣ BitVec.ofNat 64 n ∗
-      clobbered argClob ∗ blockOwn dst.toNat n ∗ ownImg (InExt (src.toNat, n)) img))
-    (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
-      ownImg (InExt (dst.toNat, n)) (fun a => img (a - dst.toNat + src.toNat)) ∗
-      ownImg (InExt (src.toNat, n)) img)))
-
-instance (Wp : MachWP (GF := GF) M) : Persistent (memcpySpecOwnedH M Wp) := by
-  unfold memcpySpecOwnedH; infer_instance
-
-end DefsOwned
 
 /-! ## Code and registers -/
 
@@ -222,11 +180,11 @@ theorem blockOwn_fn (p n : Nat) :
 /-- **`memcpy` from read-only bytes**, for every code-live `live` and every
 `MachWP`. -/
 theorem memcpy_spec_env (live : Nat → Prop) (hcl : CodeLive live)
-    (Wp : MachWP (GF := GF) (vsaModel live)) : binImg (GF := GF) ⊢ memcpySpecH Wp := by
+    (Wp : MachWP (GF := GF) (vsaModel live)) : binImg (GF := GF) ⊢ memcpySpec Wp := by
   have hlive := memcpy_live hcl
   iintro #Himg
   ihave #Hcode := instrAt_of_binImg memcpyCode_text $$ Himg
-  unfold memcpySpecH
+  unfold memcpySpec
   imodintro
   iintro %dst %src %n %img
   unfold fnSpecW
@@ -265,16 +223,16 @@ theorem memcpy_spec_env (live : Nat → Prop) (hcl : CodeLive live)
 code-live `live` and every `MachWP`. -/
 theorem memcpy_spec_owned (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
-    binImg (GF := GF) ⊢ memcpySpecOwnedH (vsaModel live) Wp := by
+    binImg (GF := GF) ⊢ memcpySpecOwned (vsaModel live) Wp := by
   have hlive := memcpy_live hcl
   iintro #Himg
   ihave #Hcode := instrAt_of_binImg memcpyCode_text $$ Himg
-  unfold memcpySpecOwnedH
+  unfold memcpySpecOwned
   imodintro
   iintro %dst %src %n %img
   unfold fnSpecW
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%hpre, H10, H11, H12, Hcl, Hdst, Hsrc⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%hpre, H10, H11, H12, Hcl, Hdst, Hsrc, -⟩ Hk
   obtain ⟨hal, hwd, hhd, hws⟩ := hpre
   have Gm := geo_of_pre hal hwd hhd hws
   ihave ⟨%f, Hcl⟩ := clobbered_fn argClob (by decide) $$ Hcl

@@ -116,21 +116,11 @@ structure TermSupply (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : Prop 
   nAssert : ∀ (sret inp args s line : BitVec 64) (vs : List Value) (ρ : Regime) (st : St) (d : Nat)
     (jb : Nat → BitVec 8),
     ⊢ nativeAssertSpec (GF := GF) (Mv live) N (twpW (Mv live)) Lp Rp sret inp args s line vs ρ st d jb
-  /-- The `fn` literal's case, closed (its case lemma takes `textOwn allocText`). -/
-  fnLit : ∀ {st : St} {d env : Nat} {nm : Option String} {ps : List String} {body : List Stmt}
-    {store' : Store} {a : Addr} (h : st.store.allocClosure ⟨env, nm, ps, body⟩ = (store', a)),
-    ⊢ evalSpecT_body (GF := GF) (Mv live) N Lp Rp inp st d env (.fn nm ps body) ⟨store', st.out⟩
-      (.closure a) closureBytes (.fn st d env nm ps body store' a h)
-  /-- String `+`'s case, closed (its case lemma takes `binImg ∗ textOwn allocText`). -/
-  concat : ∀ {st st1 st2 : St} {d env : Nat} {l r : Expr} {lv rv' : Value} {nl nr : Nat}
-    (Dl : EvalECost st d env l st1 lv nl) (Dr : EvalECost st1 d env r st2 rv' nr)
-    (D : EvalECost st d env (.binary .add l r) st2 (.str (lv.catDisplay st2.store ++ rv'.catDisplay st2.store))
-      (nl + nr + binOpCost st2.store .add lv rv')),
-    (⊢ evalSpecT_body (GF := GF) (Mv live) N Lp Rp inp st d env l st1 lv nl Dl) →
-    (⊢ evalSpecT_body (GF := GF) (Mv live) N Lp Rp inp st1 d env r st2 rv' nr Dr) →
-    valTag lv = 3 ∨ valTag rv' = 3 →
-    ⊢ evalSpecT_body (GF := GF) (Mv live) N Lp Rp inp st d env (.binary .add l r) st2
-      (.str (lv.catDisplay st2.store ++ rv'.catDisplay st2.store)) (nl + nr + binOpCost st2.store .add lv rv') D
+  alloc : AllocSpecs live
+  stringifyT : ⊢ ∀ p s v st k H c o, stringifySpecT (GF := GF) (Mv live) N (twpW (Mv live)) p s v st k H c o
+  strlenHeap : ⊢ ∀ q x ρ H, strlenHeapSpec (GF := GF) (Mv live) (twpW (Mv live)) q x ρ H
+  memcpyOwned : ⊢ memcpySpecOwned (GF := GF) (Mv live) (twpW (Mv live))
+  strcpyHeap : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (Mv live) (twpW (Mv live)) d q y ρ H
 
 /-! ## The binary arm: one `binOpSem` outcome, one case lemma -/
 
@@ -158,7 +148,8 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     by_cases hs : valTag lv = 3 ∨ valTag rv = 3
     · have e := (binOpSem_add_str st2.store hs).symm.trans hsem
       obtain rfl := Option.some.inj e
-      exact S.concat Dl Dr _ hl hr hs
+      exact caseT_BinaryConcat S.hlive Dl Dr _ hl hr rfl rfl hs S.alloc S.stringifyT S.strlenHeap
+        S.memcpyOwned S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply)
     · cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem <;>
         simp [valTag] at hs
       obtain rfl := Option.some.inj hsem
@@ -328,7 +319,7 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
   case call =>
     intro st d env f args st1 st2 st3 fv vs v nf na nc Df hlen Da Dc ihf iha ihc
     exact ihc Df hlen Da ihf iha
-  case fn => intro st d env nm ps body store' a h; exact ($S).fnLit h
+  case fn => intro st d env nm ps body store' a h; exact caseT_FnLit ($S).hlive ($S).alloc h _
   case argsNil => intro st d env; exact evalArgsT_nil live N Lp Rp inp st d env
   case argsCons =>
     intro st d env e es st1 st2 v vs ne nes De Des ihe ihes; exact evalArgsT_cons ($S).hlive De Des ihe ihes

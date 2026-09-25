@@ -166,7 +166,7 @@ theorem strlen_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   iintro %rv
   unfold fnSpecW
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %h10, -, %hhs, Hs, Hh⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %h10, -, -, %hhs, Hs, Hh⟩ Hk
   ihave ⟨Hh, %⟨img0, hshape⟩⟩ := heapRes_shape ρ H $$ Hh
   unfold strOwn
   icases Hs with ⟨%img, Hb, %hstr⟩
@@ -217,124 +217,7 @@ theorem strlen_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   iframe HS
   ipureintro; exact hstr
 
-/-! ## `strcpy` of an owned heap string -/
-
-/-- **`strcpy` of a string the caller owns in a live heap block** into an
-owned buffer, for either WP (`hgap`: `ProofStrcpy.lean`). -/
-theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (hgap : binImg (GF := GF) ⊢ gapRO)
-    (d q : BitVec 64) (y : String) (ρ : Regime) (H : List (Nat × Nat)) :
-    binImg (GF := GF) ⊢ strcpyHeapSpec (vsaModel live) Wp d q y ρ H := by
-  iintro #Himg
-  ihave #Hcode := strCode_of_binImg $$ Himg
-  ihave #Hlow := low_ro hgap $$ Himg
-  unfold strcpyHeapSpec helperSpec
-  iintro %rv
-  unfold fnSpecW
-  imodintro
-  iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨h10, h11⟩, -, %⟨hhs, hram⟩, Hb, Hs, Hh⟩ Hk
-  unfold blockOwn
-  by_cases hd : tohostAddr + 16 ≤ d.toNat
-  rotate_left
-  · have hlo := hram.lo; have hh := hram.htif
-    have e3 : tohostAddr = VsaIris.Interp.htifLo := rfl
-    have hlt : d.toNat < 0x8001ad00 := by
-      unfold VsaIris.Interp.htifLo at *; rcases hh with hh | hh <;> omega
-    ihave ⟨%w, #Hw⟩ := Hlow $$ %d.toNat %⟨hlo, hlt⟩
-    ihave %hno := ro_off d.toNat w (InExt (d.toNat, y.toList.length + 1)) $$ Hw Hb
-    exact absurd ⟨Nat.le_refl _, by simp⟩ hno
-  ihave ⟨Hh, %⟨img0, hshape⟩⟩ := heapRes_shape ρ H $$ Hh
-  unfold strOwn
-  icases Hs with ⟨%img, Hs, %hstr⟩
-  ihave ⟨%g, Hb⟩ := ownSet_fn (InExt (d.toNat, y.toList.length + 1)) $$ Hb
-  ihave ⟨%Mt, Hb, %_⟩ := VsaIris.Interp.ownSet_trackedAt _ g $$ Hb
-  ihave %hdisj := ownSet_disj (InExt (q.toNat, y.toList.length + 1))
-    (InExt (d.toNat, y.toList.length + 1)) img (imgM Mt) $$ [Hs Hb]
-  · iframe Hs Hb
-  have c : CCtx live d q r y.toList.length img (y.toList.length + 1) :=
-    ⟨⟨regions_of_heap hshape hhs, strBytes_of_img hstr, hal, strCode_live hcl⟩, hd, hram.hi,
-      Nat.le_refl _⟩
-  let mv : Nat → BitVec 8 := fun a =>
-    if q.toNat ≤ a ∧ a < q.toNat + (y.toList.length + 1) then img a else imgM Mt a
-  have hmvS : ∀ a, InExt (d.toNat, y.toList.length + 1) a → mv a = imgM Mt a := fun a ha => by
-    simp only [mv]; rw [if_neg (show ¬ (q.toNat ≤ a ∧ a < q.toNat + (y.toList.length + 1)) from fun h => hdisj a h ha)]
-  have hmvT : ∀ a, InExt (q.toNat, y.toList.length + 1) a → mv a = img a := fun a ha => by
-    simp only [mv]; rw [if_pos (show q.toNat ≤ a ∧ a < q.toNat + (y.toList.length + 1) from ha)]
-  obtain ⟨n, hn⟩ := strcpyRun (Mt := Mt) c (R := entryRv VsaIris.Interp.strcpyPC r (rv 10) (rv 11) rv)
-    rfl h10 h11
-  have hrun := LocalRun.promote (fun p hp hS => hdisj p.1 (by
-      obtain ⟨k, hk, rfl⟩ := List.mem_map.mp (show p ∈ strText q.toNat y.toList.length img from hp)
-      have := List.mem_range.mp hk
-      exact ⟨by simp, by simp; omega⟩) hS) n _ mv
-    (hn _ mv ⟨rfl, fun _ _ _ => rfl, hmvS⟩) (fun p hp => by
-      rw [hmvT _ ((strText_iff _ _ img _).1 (.inr ⟨p, hp, rfl⟩)), strText_mem_img p hp])
-  ihave ⟨Hl, Ho⟩ := (regFile_split rv).1 $$ Hregs
-  ihave ⟨H10, H11, H1216⟩ := fLeaf_split rv $$ Hl
-  ihave Hpc := (pc_reg _).1 $$ Hpc
-  ihave Hra := (ra_reg _).1 $$ Hra
-  ihave Hsr := sRegs_in VsaIris.Interp.strcpyPC r (rv 10) (rv 11) rv $$ [Hpc Hra H10 H11 H1216]
-  · iframe Hpc Hra H10 H11 H1216
-  ihave Hb := Strlen.ownSet_congr (g := fun a => iprop(a ↦ₘ mv a)) (fun a ha => by
-    rw [hmvS a ha]) $$ Hb
-  ihave Hs := Strlen.ownSet_congr (g := fun a => iprop(a ↦ₘ mv a)) (fun a ha => by
-    rw [hmvT a ha]) $$ Hs
-  ihave Hall := ownSet_join _ _ _ (fun a h1 h2 => hdisj a h2 h1) $$ [Hb Hs]
-  · iframe Hb Hs
-  ihave Hall := ownSet_iff _ (S := fun a => InExt (d.toNat, y.toList.length + 1) a ∨
-      InExt (q.toNat, y.toList.length + 1) a)
-    (T := fun a => InExt (d.toNat, y.toList.length + 1) a ∨
-      ∃ p ∈ strText q.toNat y.toList.length img, p.1 = a)
-    (fun a => or_congr_right (Iff.trans (strText_iff q.toNat y.toList.length img a).symm
-      ⟨fun h => h.resolve_left id, Or.inr⟩)) $$ Hall
-  iapply wp_localRunW Wp n _ mv hrun
-  isplitr [Hsr Hall Hk Ho Hh]
-  · unfold roOwn
-    simp only [sepL_nil]
-    isplitr
-    · iempintro
-    iexact Hcode
-  iframe Hsr Hall
-  unfold runKontW
-  iintro %rv' %mv' %⟨⟨h32, h1, h10', hcp⟩, hT⟩ Hsr HS
-  ihave ⟨Hpc, Hra, Ha0, Ht⟩ := sRegs_out rv' $$ Hsr
-  ihave Hf := regFile_after rv rv' $$ [Ha0 Ht Ho]
-  · iframe Ha0 Ht Ho
-  ihave Hpc := reg_eq h32 $$ Hpc
-  ihave Hra := reg_eq h1 $$ Hra
-  ihave Hpc := (pc_reg _).2 $$ Hpc
-  ihave Hra := (ra_reg _).2 $$ Hra
-  ihave ⟨HD, HQ⟩ := ownSet_split _ (InExt (d.toNat, y.toList.length + 1)) _ $$ HS
-  ihave HD := ownSet_iff _ (T := InExt (d.toNat, y.toList.length + 1))
-    (fun a => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ HD
-  ihave HQ := ownSet_iff _ (T := InExt (q.toNat, y.toList.length + 1))
-    (fun a => ⟨fun h => by
-      rcases h.1 with h1 | h1
-      · exact absurd h1 h.2
-      · exact (strText_iff _ _ img a).1 (.inr h1),
-      fun h => ⟨.inr (((strText_iff _ _ img a).2 h).resolve_left id), fun h' => hdisj a h h'⟩⟩) $$ HQ
-  ihave HQ := Strlen.ownSet_congr (g := fun a => iprop(a ↦ₘ img a)) (fun a ha => by
-    rw [hT _ (strText_of_ext ha)]) $$ HQ
-  iapply Hk $$ Hpc Hra
-  iexists leafRv rv rv'
-  iframe Hf
-  isplitr
-  · ipureintro; exact leafRv_keep rv rv'
-  simp only []
-  iframe Hh
-  isplitl [HD]
-  · iexists mv'
-    iframe HD
-    ipureintro
-    refine ⟨fun i hi => ?_, ?_⟩
-    · rw [hcp i (by omega)]; exact hstr.1 i hi
-    · rw [hcp _ (Nat.le_refl _)]; exact hstr.2
-  iexists img
-  iframe HQ
-  ipureintro; exact hstr
-
 end VsaIris.Interp.StrLeaf
 
 #print axioms VsaIris.Interp.StrLeaf.strlen_spec_env
-#print axioms VsaIris.Interp.StrLeaf.strcpy_spec
 #print axioms VsaIris.Interp.StrLeaf.strlen_heap_spec
-#print axioms VsaIris.Interp.StrLeaf.strcpy_heap_spec

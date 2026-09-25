@@ -47,15 +47,16 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
     {N : NativeAddrs} {inp : Nat}
     (HN : NewlibHoles) (hcl : CodeLive live)
     {st : St} {d env : Nat} {nm : Option String} {ps : List String} {body : List Stmt} :
-    textOwn allocText ∗ leafErrCtx inp ∗
+    leafErrCtx inp ∗
       evalSpecsP (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp (evalCore N vsaLayoutP vsaRoomB inp) ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp
         (evalCore N vsaLayoutP vsaRoomB inp) st d env (.fn nm ps body) by
-  iintro ⟨#Ht, #HE, #-⟩
+  iintro ⟨#HE, #-⟩
   unfold evalSpecP_body fnSpecAbort
   iintro %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
   icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
+  ihave ⟨Hw, -, #Ht⟩ := world_allocText N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   unfold astEG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := leafNode_fn hrepr hgeo

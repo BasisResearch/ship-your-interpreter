@@ -65,12 +65,14 @@ variable (M : MachineModel) (N : NativeAddrs)
 def strOwn (q : Nat) (x : String) : IProp GF :=
   iprop(∃ img, ownImg (InExt (q, x.toList.length + 1)) img ∗ ⌜CStrImg img q x⌝)
 
-/-- `memcpy(dst, src, n)` from an OWNED source, handed back unchanged. -/
+/-- `memcpy(dst, src, n)` from an OWNED source, handed back unchanged, into a
+destination above the HTIF words; the code context `binImg` in the precondition. -/
 def memcpySpecOwned (Wp : MachWP (GF := GF) M) : IProp GF :=
   iprop(□ ∀ (dst src : BitVec 64) (n : Nat) (img : Nat → BitVec 8), fnSpecW Wp memcpyPC
-    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ RamWin src.toNat n⌝ ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ htifLo + 16 ≤ dst.toNat ∧
+        RamWin src.toNat n⌝ ∗
       (10 : Nat) ↦ᵣ dst ∗ (11 : Nat) ↦ᵣ src ∗ (12 : Nat) ↦ᵣ BitVec.ofNat 64 n ∗
-      clobbered argClob ∗ blockOwn dst.toNat n ∗ ownImg (InExt (src.toNat, n)) img))
+      clobbered argClob ∗ blockOwn dst.toNat n ∗ ownImg (InExt (src.toNat, n)) img ∗ binImg))
     (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
       ownImg (InExt (dst.toNat, n)) (fun a => img (a - dst.toNat + src.toNat)) ∗
       ownImg (InExt (src.toNat, n)) img)))
@@ -78,10 +80,12 @@ def memcpySpecOwned (Wp : MachWP (GF := GF) M) : IProp GF :=
 instance (Wp : MachWP (GF := GF) M) : Persistent (memcpySpecOwned M Wp) := by
   unfold memcpySpecOwned; infer_instance
 
-/-- `strcpy(dst, src)` of a read-only C string into an owned buffer. -/
+/-- `strcpy(dst, src)` of a read-only C string into an owned buffer above the
+HTIF words. -/
 def strcpySpec (Wp : MachWP (GF := GF) M) : IProp GF :=
   iprop(□ ∀ (dst src : BitVec 64) (x : String) (n : Nat), fnSpecW Wp strcpyPC
-    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ x.toList.length + 1 ≤ n⌝ ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ x.toList.length + 1 ≤ n ∧
+        htifLo + 16 ≤ dst.toNat⌝ ∗
       (10 : Nat) ↦ᵣ dst ∗ (11 : Nat) ↦ᵣ src ∗ clobbered (12 :: argClob) ∗ blockOwn dst.toNat n ∗
       strAt src.toNat x))
     (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
@@ -93,7 +97,8 @@ instance (Wp : MachWP (GF := GF) M) : Persistent (strcpySpec M Wp) := by
 /-- **`stringify(&v)`**, a function that returns OR aborts, in regime `ρ`
 (`malloc`'s `c` credits when counted). It returns a fresh heap block holding
 `strRender st v` and a NUL, the value and the rest untouched; in partial mode
-an out-of-memory `malloc` aborts with H5's `abortRes` over its stack. -/
+an out-of-memory `malloc` aborts with H5's `abortRes` over its stack and the
+value's slot, only in the uncounted regime (`⌜ρ = .uncounted⌝`). -/
 def stringifySpec (Wp : MachWP (GF := GF) M) (inp : Nat) (p s : BitVec 64) (v : Value)
     (st : Store) (ρ : Regime) (H : List (Nat × Nat)) (c : Nat) (o : String) : IProp GF :=
   iprop(∀ rv : Nat → BitVec 64, fnSpecAbort Wp stringifyPC
@@ -108,7 +113,8 @@ def stringifySpec (Wp : MachWP (GF := GF) M) (inp : Nat) (p s : BitVec 64) (v : 
       ⌜FreshBlock vsaLayoutP H q.toNat ((strRender st v).toList.length + 1) ∧ q.toNat % 16 = 0⌝ ∗
       heapRes vsaLayoutP vsaRoomB ρ ((q.toNat, (strRender st v).toList.length + 1) :: H) ∗
       stdioOwn ∗ consoleOwn o ∗ stackAt s stringifyNeed))
-    (abortRes N vsaLayoutP vsaRoomB inp s stringifyNeed))
+    (iprop(⌜ρ = .uncounted⌝ ∗ abortRes N vsaLayoutP vsaRoomB inp s stringifyNeed ∗
+      slot24 p.toNat)))
 
 end Specs
 

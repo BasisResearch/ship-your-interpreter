@@ -3,10 +3,8 @@ import VsaIris.Interp.ProofStrHeap
 /-!
 # `strcpy` with the destination above the HTIF words (lane A)
 
-`strcpySpecH`/`strcpyHeapSpecH` are `strcpySpec`/`strcpyHeapSpec` with one
-added conjunct in the pure precondition: the destination starts at or above
-`htifLo + 16` (VSA's store facts need it, as for `memcpy`). With it the
-proofs need no `gapRO` premise.
+`strcpySpec`/`strcpyHeapSpec` require the destination at or above
+`htifLo + 16` (VSA's store facts need it, as for `memcpy`).
 -/
 
 namespace VsaIris.Interp.StrLeaf
@@ -16,45 +14,18 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Inst.Strlen Vsa
 open VsaIris.VsaHeap VsaIris.Interp
 open Vsa.Sim Vsa.Sim.DlHeap Vsa.MemRepr
 
-section Specs
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-variable (M : MachineModel)
-
-omit I in
-/-- `strcpySpec` with `htifLo + 16 ≤ dst`. -/
-def strcpySpecH (Wp : MachWP (GF := GF) M) : IProp GF :=
-  iprop(□ ∀ (dst src : BitVec 64) (x : String) (n : Nat), fnSpecW Wp strcpyPC
-    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ x.toList.length + 1 ≤ n ∧
-        htifLo + 16 ≤ dst.toNat⌝ ∗
-      (10 : Nat) ↦ᵣ dst ∗ (11 : Nat) ↦ᵣ src ∗ clobbered (12 :: argClob) ∗ blockOwn dst.toNat n ∗
-      strAt src.toNat x))
-    (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
-      (∃ img, ownImg (InExt (dst.toNat, n)) img ∗ ⌜CStrImg img dst.toNat x⌝))))
-
-/-- `strcpyHeapSpec` with `htifLo + 16 ≤ d`. -/
-def strcpyHeapSpecH (Wp : MachWP (GF := GF) M) (d q : BitVec 64) (y : String) (ρ : Regime)
-    (H : List (Nat × Nat)) : IProp GF :=
-  helperSpec M Wp strcpyPC callerSaved (fun rv => rv 10 = d ∧ rv 11 = q)
-    iprop(⌜HeapStr H q y ∧ RamWin d.toNat (y.toList.length + 1) ∧ htifLo + 16 ≤ d.toNat⌝ ∗
-      blockOwn d.toNat (y.toList.length + 1) ∗ strOwn q.toNat y ∗
-      heapRes vsaLayoutP vsaRoomB ρ H)
-    (fun _ => iprop((∃ img, ownImg (InExt (d.toNat, y.toList.length + 1)) img ∗
-        ⌜CStrImg img d.toNat y⌝) ∗ strOwn q.toNat y ∗ heapRes vsaLayoutP vsaRoomB ρ H))
-
-end Specs
 
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`strcpy` meets `strcpySpecH`**, for either WP. -/
-theorem strcpy_specH (live : Nat → Prop) (hcl : CodeLive live)
+/-- **`strcpy` meets `strcpySpec`**, for either WP. -/
+theorem strcpy_spec (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
-    binImg (GF := GF) ⊢ strcpySpecH (vsaModel live) Wp := by
+    binImg (GF := GF) ⊢ VsaIris.Interp.strcpySpec (vsaModel live) Wp := by
   iintro #Himg
   ihave #Hcode := strCode_of_binImg $$ Himg
-  unfold strcpySpecH
+  unfold VsaIris.Interp.strcpySpec
   imodintro
   iintro %dst %src %x %n
   unfold fnSpecW
@@ -111,18 +82,18 @@ theorem strcpy_specH (live : Nat → Prop) (hcl : CodeLive live)
 
 variable [I : InterpGS GF]
 
-/-- **`strcpy` of an owned heap string meets `strcpyHeapSpecH`**, for either WP. -/
-theorem strcpy_heap_specH (live : Nat → Prop) (hcl : CodeLive live)
+/-- **`strcpy` of an owned heap string meets `strcpyHeapSpec`**, for either WP. -/
+theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live))
     (d q : BitVec 64) (y : String) (ρ : Regime) (H : List (Nat × Nat)) :
-    binImg (GF := GF) ⊢ strcpyHeapSpecH (vsaModel live) Wp d q y ρ H := by
+    binImg (GF := GF) ⊢ strcpyHeapSpec (vsaModel live) Wp d q y ρ H := by
   iintro #Himg
   ihave #Hcode := strCode_of_binImg $$ Himg
-  unfold strcpyHeapSpecH helperSpec
+  unfold strcpyHeapSpec helperSpec
   iintro %rv
   unfold fnSpecW
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨h10, h11⟩, -, %⟨hhs, hram, hdh⟩, Hb, Hs, Hh⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨h10, h11⟩, -, -, %⟨hhs, hram, hdh⟩, Hb, Hs, Hh⟩ Hk
   unfold blockOwn
   have hd : tohostAddr + 16 ≤ d.toNat := by
     have : tohostAddr = htifLo := rfl
@@ -221,5 +192,5 @@ end
 
 end VsaIris.Interp.StrLeaf
 
-#print axioms VsaIris.Interp.StrLeaf.strcpy_specH
-#print axioms VsaIris.Interp.StrLeaf.strcpy_heap_specH
+#print axioms VsaIris.Interp.StrLeaf.strcpy_spec
+#print axioms VsaIris.Interp.StrLeaf.strcpy_heap_spec

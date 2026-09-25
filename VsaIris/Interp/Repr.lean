@@ -581,6 +581,12 @@ theorem worldE_binImg (E : IProp GF) (N : NativeAddrs) (L : DlLayout) (Room : Ro
     · iexact Hb
   · iexact Hb
 
+/-- The binary's image out of the world. -/
+theorem world_binImg (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
+    (ρ : Regime) (st : St) (d : Nat) :
+    world (GF := GF) N L Room inp ρ st d ⊢ world N L Room inp ρ st d ∗ Newlib.binImg :=
+  worldE_binImg _ N L Room inp ρ st d
+
 end Repr
 
 end VsaIris.Interp

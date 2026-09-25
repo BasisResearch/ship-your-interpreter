@@ -77,7 +77,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   iintro %ρ %st %po %par %s %saved %hsv
   unfold fnSpecAbort
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp⟩, Ha0, Hsp, -, Hcl, Hsv, Hstk, #Hpar, Hhs⟩ HK
+  iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp⟩, Ha0, Hsp, -, -, Hcl, Hsv, Hstk, #Hpar, Hhs⟩ HK
   unfold heapStore
   icases Hhs with ⟨%H, %B, Hh, Hst, %hBH⟩
   ihave ⟨Hst, %hinv⟩ := keep_pure (storeRepr_pure N st B) $$ Hst

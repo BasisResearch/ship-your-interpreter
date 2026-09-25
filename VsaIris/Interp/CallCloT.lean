@@ -81,6 +81,7 @@ theorem cloDefineStepT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
     ⟨by rw [h12]; omega, by rw [h12]; omega, by rw [h12]; unfold htifLo; omega, by rw [h12]; omega⟩
   rw [← h2]
   iintro ⟨#Hcode, Hms, ⟨#Hfr, Hw⟩, Hval, #Hstr, Hst, Hk⟩
+  ihave ⟨Hw, #Hcx⟩ := world_codeX N vsaLayoutP vsaRoomB inp _ ⟨st, out⟩ (d + 1) $$ Hw
   ihave ⟨Hh, Hc, Hio, Hi, #Hb⟩ := (world_heapStore N inp _ ⟨st, out⟩ (d + 1)).1 $$ Hw
   ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := R 2) hle hn1 $$ Hst
   ihave #Hed := hed
@@ -88,7 +89,7 @@ theorem cloDefineStepT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
     (jalx_80003310 live (fun p hp => hlive _ (interp_code_80003310 p hp))) interp_code_80003310
     (by decide) (k := k + bindParamsCost (st.define fa x v) fa rest + nb) (st := st) (fa := fa)
     (x := x) (v := v) (R := R) hsp hpv
-  iframe Hed Hcode Hms Hst Hstr Hval Hh
+  iframe Hed Hcode Hcx Hms Hst Hstr Hval Hh
   isplitl []
   · rw [h10]; iexact Hfr
   iintro %R' %hk Hst Hval Hh Hms

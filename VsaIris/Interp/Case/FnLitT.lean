@@ -80,13 +80,13 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
     {store' : Store} {a : Addr}
     (halloc : st.store.allocClosure ⟨env, nm, ps, body⟩ = (store', a))
     (D : EvalECost st d env (.fn nm ps body) ⟨store', st.out⟩ (.closure a) closureBytes) :
-    textOwn allocText ⊢ evalSpecT_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp st d env
+    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp st d env
       (.fn nm ps body) ⟨store', st.out⟩ (.closure a) closureBytes D by
-  iintro #Ht
   unfold evalSpecT_body fnSpecW
   iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
   icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
+  ihave ⟨Hw, -, #Ht⟩ := world_allocText N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   unfold astEG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := leafNode_fn hrepr hgeo

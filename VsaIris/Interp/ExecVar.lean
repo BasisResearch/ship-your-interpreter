@@ -180,6 +180,7 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   -- the value slot lent to env_define
   ihave ⟨Hms, Hval⟩ := ms_valCarve N hslotS hs0 hs8 hs16 $$ [Hms]
   · iframe Hms Hv
+  ihave ⟨Hw, #Hcx⟩ := world_codeX N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   ihave ⟨Hh, Hc, Hio, Hi⟩ := (world_heapStore N inp (.counted (k + defineCost st.store env x)) st d).1 $$ Hw
   have h22 : R2 2 = execSP s := by subst hR2; ix_reg; exact h2
   have h210 : R2 10 = aE := by subst hR2; ix_reg; exact h19
@@ -202,7 +203,7 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
       by rw [hr12, g16]; have := hfg.hi; omega,
       by rw [hr12, g16]; have := hfg.lo; unfold htifLo; omega,
       by rw [hr12, g16]; have := hfg.al; omega⟩
-  iframe Hed Hcode Hms Hst Hh Hval
+  iframe Hed Hcode Hcx Hms Hst Hh Hval
   isplitl []
   · imodintro; rw [h210]; iexact Hfb
   isplitl []

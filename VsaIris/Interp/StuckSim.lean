@@ -95,14 +95,11 @@ structure StuckSupply (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : Prop
   nAssert : ∀ (sret inp args s line : BitVec 64) (vs : List Value) (ρ : Regime) (st : St) (d : Nat)
     (jb : Nat → BitVec 8),
     ⊢ nativeAssertSpec (GF := GF) (Mv live) N (wpW (Mv live)) Lp Rp sret inp args s line vs ρ st d jb
-  /-- The `fn` literal's partial case, closed (its lemma takes `textOwn allocText`). -/
-  fnLit : ∀ {st : St} {d env : Nat} {nm : Option String} {ps : List String} {body : List Stmt},
-    leafErrCtx inp ∗ evalSpecsP (GF := GF) (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) ⊢
-      evalSpecP_body (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) st d env (.fn nm ps body)
-  /-- `+`'s partial case, closed (its lemma takes `textOwn allocText`). -/
-  add : ∀ {st : St} {d env : Nat} {l r : Expr},
-    evalSpecsP (GF := GF) (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) ∗ errCtx inp ⊢
-      evalSpecP_body (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) st d env (.binary .add l r)
+  alloc : AllocSpecs live
+  stringifyP : ⊢ ∀ p s v st ρ H c o, stringifySpecP (GF := GF) (Mv live) N (wpW (Mv live)) inp p s v st ρ H c o
+  strlenHeap : ⊢ ∀ q x ρ H, strlenHeapSpec (GF := GF) (Mv live) (wpW (Mv live)) q x ρ H
+  memcpyOwned : ⊢ memcpySpecOwned (GF := GF) (Mv live) (wpW (Mv live))
+  strcpyHeap : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (Mv live) (wpW (Mv live)) d q y ρ H
 
 /-- The Löb conclusion, as one proposition. -/
 abbrev specsPI (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : IProp GF :=
@@ -148,7 +145,7 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     iapply caseP_Assign S.hlive hE.newlib hE.code (errRoom _ _) S.envSet
     iframe HL HE
   | fn nm ps body =>
-    iapply S.fnLit
+    iapply caseP_FnLit S.hlive S.alloc hE.newlib hE.code
     iframe HL HE
   | unary op e =>
     cases op with
@@ -162,7 +159,10 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     | or => iapply caseP_LogicalOr S.hlive S.vtruthy S.vbool $$ HE
   | binary op l r =>
     cases op with
-    | add => iapply S.add; iframe HE Hctx
+    | add =>
+      iapply caseP_BinaryAdd S.hlive hE S.vint rfl rfl S.alloc S.stringifyP S.strlenHeap S.memcpyOwned
+        S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply) S.vkind
+      iframe HE Hctx
     | sub => iapply caseP_BinarySub S.hlive hE S.vint S.vkind; iframe HE Hctx
     | mul => iapply caseP_BinaryMul S.hlive hE S.vint S.vkind; iframe HE Hctx
     | div => iapply caseP_BinaryDiv S.hlive hE S.vint S.vkind; iframe HE Hctx

@@ -27,12 +27,12 @@ Branch `lane-a`, from `hub/iris-main` (`05874b5`), fast-forwarded to `hub/lane-e
 | premise | supplier | status |
 |---|---|---|
 | `valueInt/Bool/Null/StrSpec`, `valueKindNameSpec`, `valueTruthySpec`, `valueEqualSpec` | H2 (`⊢`) | proved |
-| `envNew/Define/Get/SetSpec` | H1 + F4 wrapper | open (F4) |
-| `strcmpSpec`, `strcmpSpecV`, `strcmpOrdSpec` | strcmp run | open (no proof) |
-| `memcpySpec`, `memcpySpecOwned` | memcpy run | open (no proof) |
-| `strcpySpec`, `strcpyHeapSpec` | strcpy run | open (no proof) |
-| `strlenSpec`, `strlenHeapSpec` | H3 `strlen_specW` adapters | open |
-| `stringifySpecT/P` | H2 `stringify_spec` adapters | open |
+| `envNew/Define/Get/SetSpec` | H1 + F4 (`env*_closed`, `Supply.lean`) | proved |
+| `strcmpSpec`, `strcmpSpecV`, `strcmpOrdSpec` | strcmp run (`ProofStrcmp.lean`) | proved |
+| `memcpySpec`, `memcpySpecOwned` | memcpy run (`ProofMemcpy.lean`), destination above HTIF | proved |
+| `strcpySpec`, `strcpyHeapSpec` | strcpy run (`ProofStrcpyH.lean`), destination above HTIF | proved |
+| `strlenSpec`, `strlenHeapSpec` | `ProofStrlen.lean`, `ProofStrHeap.lean` | proved |
+| `stringifySpecT/P` | `stringifyT_closed`/`stringifyP_closed` (`Supply.lean`) | proved |
 | `AllocSpecs` | H4 `allocSpecs` | proved |
 | `CatDispSupply`, `CloSupply`, `NativeInj` | boundary/store facts | open |
 | `ErrRoom`, native `hroom` | F1 | open (F1) |
@@ -52,6 +52,8 @@ Branch `lane-a`, from `hub/iris-main` (`05874b5`), fast-forwarded to `hub/lane-e
 5. Audit.
 
 ## Done
+
+- F4 (helper specs carry their code context; memcpy/strcpy destinations above HTIF; `topLive` adds `_impure_ptr` and the stack): `Supply.lean`, `supplies_of : IrisHoles → Supplies`.
 
 - F1 (Q7 headroom, `helperHeadroom = 2048`, `errRoom` at every depth) and F2 (`exitHandlers` quiet from `StdioOK`), `327fe89`.
 - `TermSim.lean`: the total recursion (nine motives, fifty cases; `binaryT` dispatches `binOpSem`), `interpSeqT_all`, `execDispT_all`, over `TermSupply`.
@@ -73,7 +75,6 @@ Branch `lane-a`, from `hub/iris-main` (`05874b5`), fast-forwarded to `hub/lane-e
 
 ## Foundations still to do (me, after F3)
 
-- F4: helper specs valid (code context in their precondition; memcpy's destination above HTIF).
 
 ## Holes
 

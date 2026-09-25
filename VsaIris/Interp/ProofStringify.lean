@@ -462,7 +462,8 @@ abbrev SgK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
         ⌜FreshBlock vsaLayoutP H q.toNat (x.toList.length + 1) ∧ q.toNat % 16 = 0⌝ ∗
         heapRes vsaLayoutP vsaRoomB ρ ((q.toNat, x.toList.length + 1) :: H) ∗
         stdioOwn ∗ consoleOwn o ∗ stackAt s stringifyNeed) -∗ Wp.W Φ) ∧
-    (abortRes N vsaLayoutP vsaRoomB inp s stringifyNeed -∗ Wp.W Φ))
+    (iprop(⌜ρ = .uncounted⌝ ∗ abortRes N vsaLayoutP vsaRoomB inp s stringifyNeed ∗
+      slot24 p.toNat) -∗ Wp.W Φ))
 
 /-- What a `stringify` run carries: the value's meaning at its image, the heap,
 newlib's data and the console, the stack below the frame, the continuation. -/
@@ -729,8 +730,8 @@ theorem sgFrame_split {s : BitVec 64} (hs : stringifyNeed ≤ s.toNat) :
 theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
-    (HN : NewlibHoles) (cx : SgCtx live p s r rv) {R : Nat → BitVec 64} {M : Mem}
-    (h2 : R 2 = s + 18446744073709551504#64) :
+    (HN : NewlibHoles) (cx : SgCtx live p s r rv) (hρ : ρ = .uncounted) {R : Nat → BitVec 64}
+    {M : Mem} (h2 : R 2 = s + 18446744073709551504#64) :
     SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms 0x80003140#64 R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
@@ -739,8 +740,10 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold SgRest
   iintro ⟨⟨#Hcode, #Himg, -, -, -, Hstd, Hcon, Hst, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave ⟨HF, -⟩ := ownSet_split _ (InExt (s.toNat - 112, 112)) _ $$ HS
+  ihave ⟨HF, HP⟩ := ownSet_split _ (InExt (s.toNat - 112, 112)) _ $$ HS
   ihave HF := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ HF
+  ihave HP := ownSet_iff _ (T := InExt (p.toNat, 24)) (fun k =>
+    ⟨fun h => h.1.resolve_left h.2, fun h => ⟨.inr h, fun h' => cx.hdsp k h' h⟩⟩) $$ HP
   ihave Hst := sgFrame_join (s := s) (by unfold stringifyNeed snprintfNeed; omega) $$ [Hst HF]
   · iframe Hst HF
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
@@ -756,14 +759,22 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       by rw [e112]; unfold stringifyNeed snprintfNeed fwriteNeed; omega,
       by rw [e112]; show s.toNat - 112 + 0 ≤ s.toNat; omega, hs2, by rw [e112]; omega⟩ _ o
   rw [show BitVec.ofNat 64 OomSites.oom80003140.head = 2147496256#64 from rfl]
-  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hcon Hk
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hcon
+  iintro HA
+  iapply Hk
+  isplitl []
+  · ipureintro; exact hρ
+  iframe HA
+  unfold slot24 blockOwn
+  iexact HP
 
 /-- **Out of memory**: from `malloc`'s NULL (either copy tail), the run to
 the out-of-memory block. -/
 theorem sg_oomPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
-    (HN : NewlibHoles) (cx : SgCtx live p s r rv) {pc : Nat} (hpc : pc = 0x8000305c ∨ pc = 0x800030fc)
+    (HN : NewlibHoles) (cx : SgCtx live p s r rv) (hρ : ρ = .uncounted) {pc : Nat}
+    (hpc : pc = 0x8000305c ∨ pc = 0x800030fc)
     {R : Nat → BitVec 64} {M : Mem}
     (h2 : R 2 = s + 18446744073709551504#64) (h10 : R 10 = 0#64) :
     SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms (BitVec.ofNat 64 pc) R (sgF s p) M ⊢ Wp.W Φ := by
@@ -785,12 +796,12 @@ theorem sg_oomPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi h10 ?_
     intros; apply swp_closeF
     dsimp only [F']
-    exact sg_oomEnd Wp HN cx (by ix_reg; exact h2)
+    exact sg_oomEnd Wp HN cx hρ (by ix_reg; exact h2)
   · refine sg_soom cx.hlive h2 (by omega) hs2 hs3 cx.hg.al
       (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi h10 ?_
     intros; apply swp_closeF
     dsimp only [F']
-    exact sg_oomEnd Wp HN cx (by ix_reg; exact h2)
+    exact sg_oomEnd Wp HN cx hρ (by ix_reg; exact h2)
 
 /-- After `malloc` returned the block `q`: the heap extended, the block owned. -/
 def SgRestB (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
@@ -910,16 +921,16 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
     (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin q.toNat (x.toList.length + 1) ∧
-        RamWin (s.toNat - 96) (x.toList.length + 1)⌝ ∗
+        htifLo + 16 ≤ q.toNat ∧ RamWin (s.toNat - 96) (x.toList.length + 1)⌝ ∗
       (10 : Nat) ↦ᵣ q ∗ (11 : Nat) ↦ᵣ (s + 18446744073709551504#64 + 16#64) ∗
       (12 : Nat) ↦ᵣ BitVec.ofNat 64 (x.toList.length + 1) ∗ clobbered argClob ∗
       blockOwn q.toNat (x.toList.length + 1) ∗
-      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
+      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M) ∗ binImg))
     (Q := fun _ => iprop((10 : Nat) ↦ᵣ q ∗ clobbered retClob ∗
       ownImg (InExt (q.toNat, x.toList.length + 1)) (fun a => imgM M (a - q.toNat + (s.toNat - 96))) ∗
       ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
     (X := iprop(blockOwn q.toNat (x.toList.length + 1) ∗
-      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
+      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M) ∗ binImg))
     (Y := fun g => iprop(⌜g 10 = q⌝ ∗
       ownImg (InExt (q.toNat, x.toList.length + 1)) (fun a => imgM M (a - q.toNat + (s.toNat - 96))) ∗
       ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
@@ -928,12 +939,12 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     ?hP ?hQ)
   case hP =>
     simp only [sepL_cons, sepL_nil]
-    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB⟩
-    iframe Hbk HB
+    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB, #Hbi⟩
+    iframe Hbk HB Hbi
     isplitl []
     · ipureintro
       refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩,
-        ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩⟩
+        by unfold htifLo; omega, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩⟩
     isplitl [H10]
     · ix_reg; rw [f.h10]; iexact H10
     isplitl [H11]
@@ -954,7 +965,7 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     simp only [ite_true]
     simp (config := { decide := true }) only [ite_false]
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd HB
-  iframe Hmcs Hcode Hms Hblk HB
+  iframe Hmcs Hcode Hms Hblk HB Himg
   iintro %g ⟨%hg10, Hd, HB⟩ Hms
   ihave ⟨%M2, Hms, %⟨hM2a, hM2b, -⟩⟩ := ms_join $$ [Hms HB]
   · iframe Hms HB
@@ -1125,7 +1136,7 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold mallocRes
   icases Hres with (⟨%⟨h0, hρ⟩, Hh⟩ | ⟨%hf, Hh, Hb⟩)
   · subst hρ
-    iapply sg_oomPath Wp HN cx (c := c) (pc := 0x8000305c) (.inl rfl)
+    iapply sg_oomPath Wp HN cx rfl (c := c) (pc := 0x8000305c) (.inl rfl)
       (R := upd R' 1 (BitVec.ofNat 64 (0x80003058 + 4))) (M := M)
       (by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2) (by ix_reg; exact h0)
     unfold SgRest
@@ -1358,7 +1369,7 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
     (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
-    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hsc : binImg (GF := GF) ⊢ strcpySpec (vsaModel live) Wp)
     (hc : vsaChg (x.toList.length + 1) c) (hlen : x.toList.length ≤ 63) {src : BitVec 64}
     (hsrc : binImg (GF := GF) ⊢ strAt src.toNat x)
     {R : Nat → BitVec 64} {M : Mem} (h10 : R 10 = s + 18446744073709551504#64 + 16#64)
@@ -1383,7 +1394,7 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold SgRest
   icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
   ihave #Hs := hsrc $$ Himg
-  ihave #Hsc0 := hsc
+  ihave #Hsc0 := hsc $$ Himg
   unfold strcpySpec
   ihave #Hscs := Hsc0 $$ %(s + 18446744073709551504#64 + 16#64) %src %x %64
   rw [eB]
@@ -1392,7 +1403,8 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
-    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin (s.toNat - 96) 64 ∧ x.toList.length + 1 ≤ 64⌝ ∗
+    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin (s.toNat - 96) 64 ∧ x.toList.length + 1 ≤ 64 ∧
+        htifLo + 16 ≤ s.toNat - 96⌝ ∗
       (10 : Nat) ↦ᵣ (s + 18446744073709551504#64 + 16#64) ∗ (11 : Nat) ↦ᵣ src ∗
       clobbered (12 :: argClob) ∗ blockOwn (s.toNat - 96) 64 ∗ strAt src.toNat x))
     (Q := fun _ => iprop((10 : Nat) ↦ᵣ (s + 18446744073709551504#64 + 16#64) ∗ clobbered retClob ∗
@@ -1407,7 +1419,8 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iframe Hbk Hs'
     isplitl []
     · ipureintro
-      refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩, by omega⟩
+      refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩, by omega,
+        by unfold htifLo; omega⟩
     isplitl [H10]
     · rw [h10]; iexact H10
     isplitl [H11]
@@ -1449,7 +1462,7 @@ theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
     (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
-    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hsc : binImg (GF := GF) ⊢ strcpySpec (vsaModel live) Wp)
     {b : Bool} (hc : vsaChg ((if b then "true" else "false").toList.length + 1) c) {M : Mem}
     (hk : ldv .lw M p.toNat = 1#64) (hb : ldv .lw M (p + 8#64).toNat = if b then 1#64 else 0#64)
     (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k) :
@@ -1699,7 +1712,7 @@ structure SgS2 (s p r sw : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M
 theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
-    (cx : SgCtx live p s r rv) (hsl : ⊢ strlenSpec (GF := GF) Wp) {t : String} {M : Mem}
+    (cx : SgCtx live p s r rv) (hsl : binImg (GF := GF) ⊢ strlenSpec Wp) {t : String} {M : Mem}
     (hk : ldv .lw M p.toNat = 3#64) (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k)
     (hB : ∀ R' M', SgS2 s p r (imgW (imgM Mp) (p.toNat + 8)) t rv R' M' Mp →
       SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp ∗ ms 0x800030f8#64 R' (sgF s p) M' ⊢ Wp.W Φ) :
@@ -1745,7 +1758,7 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
   ihave #Hs := valImg_str_strAt $$ Hv
   ihave %hwin := strAt_win $$ Hs
-  ihave #Hsl0 := hsl
+  ihave #Hsl0 := hsl $$ Himg
   unfold strlenSpec
   ihave #Hsls := Hsl0 $$ %(imgW (imgM Mp) (p.toNat + 8)) %t
   unfold strlenPC
@@ -1846,7 +1859,7 @@ structure SgS3 (s p r sw : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : 
 theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
-    (cx : SgCtx live p s r rv) (hmcr : ⊢ memcpySpec (GF := GF) Wp) {t : String} {q : BitVec 64}
+    (cx : SgCtx live p s r rv) (hmcr : binImg (GF := GF) ⊢ memcpySpec Wp) {t : String} {q : BitVec 64}
     {R : Nat → BitVec 64} {M : Mem} (f : SgS3 s p r (imgW (imgM Mp) (p.toNat + 8)) t H q rv R M Mp) :
     SgRestB Wp Φ N inp p s r (.str t) t ρ H o rv Mp q ∗ ms 0x800030fc#64 R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
@@ -1877,7 +1890,7 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hs := valImg_str_strAt $$ Hv
   unfold strAt
   icases Hs with ⟨%img, %⟨hci, hw⟩, #Hro⟩
-  ihave #Hmc0 := hmcr
+  ihave #Hmc0 := hmcr $$ Himg
   unfold memcpySpec
   ihave #Hmcs := Hmc0 $$ %q %(imgW (imgM Mp) (p.toNat + 8)) %(t.toList.length + 1) %img
   unfold memcpyPC
@@ -1887,6 +1900,7 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
     (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin q.toNat (t.toList.length + 1) ∧
+        htifLo + 16 ≤ q.toNat ∧
         RamWin (imgW (imgM Mp) (p.toNat + 8)).toNat (t.toList.length + 1)⌝ ∗
       (10 : Nat) ↦ᵣ q ∗ (11 : Nat) ↦ᵣ imgW (imgM Mp) (p.toNat + 8) ∗
       (12 : Nat) ↦ᵣ BitVec.ofNat 64 (t.toList.length + 1) ∗ clobbered argClob ∗
@@ -1909,7 +1923,7 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     · ipureintro
       have w1 := hw.lo; have w2 := hw.hi; have w3 := hw.htif
       refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩,
-        ⟨by omega, by omega, by omega⟩⟩
+        by unfold htifLo; omega, ⟨by omega, by omega, by omega⟩⟩
     isplitl [H10]
     · ix_reg; rw [f.h10]; iexact H10
     isplitl [H11]
@@ -1953,7 +1967,7 @@ theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
     (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
-    (hmcr : ⊢ memcpySpec (GF := GF) Wp) (hc : vsaChg (x.toList.length + 1) c)
+    (hmcr : binImg (GF := GF) ⊢ memcpySpec Wp) (hc : vsaChg (x.toList.length + 1) c)
     (hlt : x.toList.length + 1 < 2 ^ 64)
     {R : Nat → BitVec 64} {M : Mem} (f : SgS2 s p r (imgW (imgM Mp) (p.toNat + 8)) x rv R M Mp) :
     SgRest Wp Φ N inp p s r (.str x) x ρ H c o rv Mp ∗
@@ -1985,7 +1999,7 @@ theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   unfold mallocRes
   icases Hres with (⟨%⟨h0, hρ⟩, Hh⟩ | ⟨%hf, Hh, Hb⟩)
   · subst hρ
-    iapply sg_oomPath Wp HN cx (c := c) (pc := 0x800030fc) (.inr rfl)
+    iapply sg_oomPath Wp HN cx rfl (c := c) (pc := 0x800030fc) (.inr rfl)
       (R := upd R' 1 (BitVec.ofNat 64 (0x800030f8 + 4))) (M := M)
       (by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2) (by ix_reg; exact h0)
     unfold SgRest
@@ -2007,7 +2021,7 @@ theorem sg_strArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
     (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
-    (hsl : ⊢ strlenSpec (GF := GF) Wp) (hmcr : ⊢ memcpySpec (GF := GF) Wp) {t : String}
+    (hsl : binImg (GF := GF) ⊢ strlenSpec Wp) (hmcr : binImg (GF := GF) ⊢ memcpySpec Wp) {t : String}
     (hc : vsaChg (t.toList.length + 1) c) (hlt : t.toList.length + 1 < 2 ^ 64) {M : Mem}
     (hk : ldv .lw M p.toNat = 3#64) (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k) :
     SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp ∗
@@ -2342,8 +2356,8 @@ theorem sg_dispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {st : Store} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
     (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles) (cx : SgCtx live p s r rv)
-    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hmcr : ⊢ memcpySpec (GF := GF) Wp)
-    (hsl : ⊢ strlenSpec (GF := GF) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp) {v : Value}
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hmcr : binImg (GF := GF) ⊢ memcpySpec Wp)
+    (hsl : binImg (GF := GF) ⊢ strlenSpec Wp) (hsc : binImg (GF := GF) ⊢ strcpySpec (vsaModel live) Wp) {v : Value}
     (hc : vsaChg ((strRender st v).toList.length + 1) c)
     (hpv : ValPure N v (imgW (imgM Mp) p.toNat) (imgW (imgM Mp) (p.toNat + 8))
       (imgW (imgM Mp) (p.toNat + 16)))
@@ -2410,8 +2424,8 @@ theorem stringify_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive 
     (hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a)
     (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles)
     (Wp : MachWP (GF := GF) (vsaModel live))
-    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hmcr : ⊢ memcpySpec (GF := GF) Wp)
-    (hsl : ⊢ strlenSpec (GF := GF) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hmcr : binImg (GF := GF) ⊢ memcpySpec Wp)
+    (hsl : binImg (GF := GF) ⊢ strlenSpec Wp) (hsc : binImg (GF := GF) ⊢ strcpySpec (vsaModel live) Wp)
     (N : NativeAddrs) (inp : Nat) (p s : BitVec 64) (v : Value) (st : Store) (ρ : Regime)
     (H : List (Nat × Nat)) (c : Nat) (o : String) :
     textOwn allocText ⊢ stringifySpec (vsaModel live) N Wp inp p s v st ρ H c o := by

@@ -75,7 +75,7 @@ it. -/
 def strcmpOrdSpec (Wp : MachWP (GF := GF) M) : IProp GF :=
   iprop(□ ∀ (p q : BitVec 64) (x y : String),
     helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
-      iprop(strAt p.toNat x ∗ strAt q.toNat y)
+      iprop(binImg ∗ strAt p.toNat x ∗ strAt q.toNat y)
       (fun rv' => iprop(⌜StrcmpSign (rv' 10) x y⌝)))
 
 instance (Wp : MachWP (GF := GF) M) : Persistent (strcmpOrdSpec M Wp) := by
@@ -84,7 +84,7 @@ instance (Wp : MachWP (GF := GF) M) : Persistent (strcmpOrdSpec M Wp) := by
 /-- One instance of `strcmpOrdSpec`. -/
 theorem strcmpOrdSpec_at {Wp : MachWP (GF := GF) M} (p q : BitVec 64) (x y : String) :
     strcmpOrdSpec M Wp ⊢ helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
-      iprop(strAt p.toNat x ∗ strAt q.toNat y) (fun rv' => iprop(⌜StrcmpSign (rv' 10) x y⌝)) := by
+      iprop(binImg ∗ strAt p.toNat x ∗ strAt q.toNat y) (fun rv' => iprop(⌜StrcmpSign (rv' 10) x y⌝)) := by
   unfold strcmpOrdSpec
   iintro #H
   iapply H

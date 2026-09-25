@@ -189,6 +189,7 @@
   have hcs7 : CatSaved Mt7 s ret rv := hcs6.eq hMt7
   unfold F' evalArmF
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hrest, Hx, Hy, Hslack⟩, Hk⟩, #HE, #Hat⟩, Hms⟩
+  ihave #Hbin := errCtx_img inp $$ HE
   ihave Hsl1 := hsl $$ %{Q1} %{XR} %Regime.uncounted %{H2}
   iapply ms_callHelper (wpW _) (i := 0x80003a78) (entry := strlenPC)
     (jalx_80003a78 live (fun p hp => hlive _ (interp_code_80003a78 p hp)))
@@ -198,7 +199,7 @@
   isplitl []
   · ipureintro; ix_reg; ix_keep [hkeep6]
   isplitl [Hx Hh]
-  · iframe Hx Hh; ipureintro; exact ⟨List.mem_cons_of_mem _ List.mem_cons_self, hf1.2⟩
+  · iframe Hbin Hx Hh; ipureintro; exact ⟨List.mem_cons_of_mem _ List.mem_cons_self, hf1.2⟩
   iintro %R8 %hkeep8 ⟨%hla, Hx, Hh⟩ Hms
 
 #ix_piece {ARM}P_{ROW}4 from {ARM}P_{ROW}3 by
@@ -220,6 +221,7 @@
   have hcs9 : CatSaved Mt9 s ret rv := hcs7.eq hMt9
   unfold F' evalArmF
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hrest, Hx, Hy, Hslack⟩, Hk⟩, #HE, #Hat⟩, Hms⟩
+  ihave #Hbin := errCtx_img inp $$ HE
   ihave Hsl2 := hsl $$ %{Q2} %{YR} %Regime.uncounted %{H2}
   iapply ms_callHelper (wpW _) (i := 0x80003a84) (entry := strlenPC)
     (jalx_80003a84 live (fun p hp => hlive _ (interp_code_80003a84 p hp)))
@@ -229,7 +231,7 @@
   isplitl []
   · ipureintro; ix_reg; ix_keep [hkeep8]
   isplitl [Hy Hh]
-  · iframe Hy Hh; ipureintro; exact ⟨List.mem_cons_self, hf2.2⟩
+  · iframe Hbin Hy Hh; ipureintro; exact ⟨List.mem_cons_self, hf2.2⟩
   iintro %R10 %hkeep10 ⟨%hlb, Hy, Hh⟩ Hms
 
 #ix_piece {ARM}P_{ROW}5 from {ARM}P_{ROW}4 by
@@ -342,11 +344,13 @@
   ihave ⟨Hb1, Hb2⟩ := blockOwn_split {Q}.toNat ({XL} + {YL} + 1) {XL} ({Q}.toNat + {XL}) ({YL} + 1)
     (by omega) rfl (by omega) $$ Hblk
   ihave ⟨%img1, %hc1, Hx1, Hx0⟩ := strOwn_cut {Q1}.toNat {XR} $$ Hx
+  ihave #Hbin := errCtx_img inp $$ HE
   iapply ms_callMemcpyOwned (wpW _) hmc (i := 0x80003aa8)
     (jalx_80003aa8 live (fun p hp => hlive _ (interp_code_80003aa8 p hp))) interp_code_80003aa8
     (by decide) (dst := {Q}) (src := {Q1}) (n := {XL}) (img := img1)
-    ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩ ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩
-  iframe Hcode Hms Hb1 Hx1
+    ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩ (by unfold htifLo; omega)
+    ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩
+  iframe Hcode Hbin Hms Hb1 Hx1
   isplitl []
   · ipureintro
     refine ⟨by ix_reg, by ix_reg; ix_keep [hkeep12, hkeep10, hkeep8, hkeep6], ?_⟩
@@ -382,6 +386,7 @@
   have ha3 := fresh_arena hf3.1
   have hd : ({Q} + BitVec.ofNat 64 {XL}).toNat = {Q}.toNat + {XL} := by
     simp only [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.reducePow]; omega
+  ihave #Hbin := errCtx_img inp $$ HE
   ihave Hsc1 := hsc $$ %({Q} + BitVec.ofNat 64 {XL}) %{Q2} %{YR} %Regime.uncounted %{H3}
   unfold strcpyHeapSpec
   iapply ms_callHelper (wpW _) (i := 0x80003ab4) (entry := strcpyPC)
@@ -394,10 +399,10 @@
     ix_reg; rw [hkeep14 8 (by decide) (by decide), hkeep14 18 (by decide) (by decide)]; ix_reg
     rw [hkeep12 18 (by decide) (by decide)]; ix_reg; rw [h18, String.length_toList]
   isplitl [Hb2 Hy Hh]
-  · rw [hd]; iframe Hb2 Hy Hh
+  · rw [hd]; iframe Hbin Hb2 Hy Hh
     ipureintro
     exact ⟨⟨List.mem_cons_of_mem _ List.mem_cons_self, hf2.2⟩,
-      ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩⟩
+      ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩, by unfold htifLo; omega⟩
   iintro %R16 %hkeep16 ⟨⟨%img2, Hz, %hc2⟩, Hy, Hh⟩ Hms
   rw [hd] at hc2
   ihave Hs := ownImg_cat (q := {Q}.toNat) (q1 := {Q1}.toNat) img1 img2 hc1 hc2 $$ [Hd Hz]

@@ -71,14 +71,14 @@ theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
     (hb16 : ldv .ld Mt (pb.toNat + 16) = wb2) :
     ⌜R 10 = pa ∧ R 11 = pb ∧ R 2 = sp⌝ ∗ codeRes ∗ □ valOf N a wa0 wa1 wa2 ∗
       □ valOf N b wb0 wb1 wb2 ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ storeRepr N st B ∗
-      stackAt sp 16 ∗ strcmpSpecV (vsaModel live) Wp ∗
+      stackAt sp 16 ∗ strcmpSpecV (vsaModel live) Wp ∗ Newlib.binImg ∗
       (∀ (R' : Nat → BitVec 64) (M' : Mem), ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗
         ⌜R' 10 = if Value.equal a b then 1#64 else 0#64⌝ -∗
         ⌜∀ k, S k → ¬ InExt (pa.toNat, 24) k → ¬ InExt (pb.toNat, 24) k → imgM M' k = imgM Mt k⌝ -∗
         ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S M' -∗
         storeRepr N st B -∗ stackAt sp 16 -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  iintro ⟨%⟨h10, h11, h2⟩, #Hcode, #Hva, #Hvb, Hms, Hst, Hsk, #Hcmp, Hk⟩
+  iintro ⟨%⟨h10, h11, h2⟩, #Hcode, #Hva, #Hvb, Hms, Hst, Hsk, #Hcmp, #Hbi, Hk⟩
   ihave ⟨Hms, HA⟩ := ms_carveWords N hSa ha0 ha8 ha16 $$ [Hms Hva]
   · iframe Hms Hva
   ihave ⟨Hms, HB⟩ := ms_carveWords N (S := fun k => S k ∧ ¬ InExt (pa.toNat, 24) k)
@@ -91,7 +91,7 @@ theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
   isplitl []
   · ipureintro; exact ⟨h10, h11, h2⟩
   isplitl [HA HB Hst Hsk]
-  · iframe HA HB Hst Hsk Hcmp; ipureintro; exact ⟨hga, hgb, hni⟩
+  · iframe HA HB Hst Hsk Hcmp Hbi; ipureintro; exact ⟨hga, hgb, hni⟩
   iintro %R' %hkeep ⟨HA, HB, Hst, Hsk, %hr⟩ Hms
   ihave ⟨%M1, Hms, %hM1⟩ := ms_uncarveVal N (S := fun k => S k ∧ ¬ InExt (pa.toNat, 24) k)
     (fun k hk => ⟨hSb k hk, fun h => hab k h hk⟩) $$ [Hms HB]

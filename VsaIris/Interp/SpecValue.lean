@@ -133,7 +133,7 @@ covers. -/
 def strcmpSpecV (Wp : MachWP (GF := GF) M) : IProp GF :=
   iprop(□ ∀ (p q : BitVec 64) (x y : String),
     helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
-      iprop(strAt p.toNat x ∗ strAt q.toNat y)
+      iprop(binImg ∗ strAt p.toNat x ∗ strAt q.toNat y)
       (fun rv' => iprop(⌜rv' 10 = 0#64 ↔ x = y⌝)))
 
 instance (Wp : MachWP (GF := GF) M) : Persistent (strcmpSpecV M Wp) := by
@@ -168,7 +168,7 @@ def valueEqualSpec (Wp : MachWP (GF := GF) M) (pa pb s : BitVec 64) (a b : Value
     (B : List (Nat × Nat)) : IProp GF :=
   helperSpec M Wp valueEqualPC callerSaved (fun rv => rv 10 = pa ∧ rv 11 = pb ∧ rv 2 = s)
     iprop(valAt N pa.toNat a ∗ valAt N pb.toNat b ∗ ⌜SlotGeom pa ∧ SlotGeom pb ∧ NativeInj N⌝ ∗
-      storeRepr N st B ∗ stackAt s 16 ∗ strcmpSpecV M Wp)
+      storeRepr N st B ∗ stackAt s 16 ∗ strcmpSpecV M Wp ∗ binImg)
     (fun rv' => iprop(valAt N pa.toNat a ∗ valAt N pb.toNat b ∗ storeRepr N st B ∗ stackAt s 16 ∗
       ⌜rv' 10 = if Value.equal a b then 1#64 else 0#64⌝))
 

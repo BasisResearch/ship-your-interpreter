@@ -131,15 +131,16 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
     (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
     {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {n : Nat} {img : Nat → BitVec 8}
-    (h12 : R 12 = BitVec.ofNat 64 n) (hd : RamWin (R 10).toNat n) (hs : RamWin (R 11).toNat n) :
-    codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ blockOwn (R 10).toNat n ∗
+    (h12 : R 12 = BitVec.ofNat 64 n) (hd : RamWin (R 10).toNat n) (hh : htifLo + 16 ≤ (R 10).toNat)
+    (hs : RamWin (R 11).toNat n) :
+    codeRes ∗ binImg ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ blockOwn (R 10).toNat n ∗
       ownImg (InExt ((R 11).toNat, n)) img ∗
       (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ ⌜R' 10 = R 10⌝ -∗
         ownImg (InExt ((R 10).toNat, n)) (fun a => img (a - (R 10).toNat + (R 11).toNat)) -∗
         ownImg (InExt ((R 11).toNat, n)) img -∗
         ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  iintro ⟨#Hcode, Hms, Hblk, Hsrc, Hk⟩
+  iintro ⟨#Hcode, #Hbi, Hms, Hblk, Hsrc, Hk⟩
   ihave #Hmc0 := hmc
   unfold memcpySpecOwned
   ihave #Hmcs := Hmc0 $$ %(R 10) %(R 11) %n %img
@@ -147,23 +148,24 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
-    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin (R 10).toNat n ∧ RamWin (R 11).toNat n⌝ ∗
+    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin (R 10).toNat n ∧ htifLo + 16 ≤ (R 10).toNat ∧
+        RamWin (R 11).toNat n⌝ ∗
       (10 : Nat) ↦ᵣ R 10 ∗ (11 : Nat) ↦ᵣ R 11 ∗ (12 : Nat) ↦ᵣ BitVec.ofNat 64 n ∗
-      clobbered argClob ∗ blockOwn (R 10).toNat n ∗ ownImg (InExt ((R 11).toNat, n)) img))
+      clobbered argClob ∗ blockOwn (R 10).toNat n ∗ ownImg (InExt ((R 11).toNat, n)) img ∗ binImg))
     (Q := fun _ => iprop((10 : Nat) ↦ᵣ R 10 ∗ clobbered retClob ∗
       ownImg (InExt ((R 10).toNat, n)) (fun a => img (a - (R 10).toNat + (R 11).toNat)) ∗
       ownImg (InExt ((R 11).toNat, n)) img))
-    (X := iprop(blockOwn (R 10).toNat n ∗ ownImg (InExt ((R 11).toNat, n)) img))
+    (X := iprop(blockOwn (R 10).toNat n ∗ ownImg (InExt ((R 11).toNat, n)) img ∗ binImg))
     (Y := fun g => iprop(⌜g 10 = R 10⌝ ∗
       ownImg (InExt ((R 10).toNat, n)) (fun a => img (a - (R 10).toNat + (R 11).toNat)) ∗
       ownImg (InExt ((R 11).toNat, n)) img))
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
   case hP =>
     simp only [sepL_cons, sepL_nil]
-    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB⟩
-    iframe H10 H11 Hbk HB
+    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB, #Hbi'⟩
+    iframe H10 H11 Hbk HB Hbi'
     isplitl []
-    · ipureintro; exact ⟨hal, hd, hs⟩
+    · ipureintro; exact ⟨hal, hd, hh, hs⟩
     isplitl [H12]
     · rw [h12]; iexact H12
     iapply clobbered_of_fn argClob _
@@ -180,7 +182,7 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
     simp only [ite_true]
     simp (config := { decide := true }) only [ite_false]
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd HB
-  iframe Hmcs Hcode Hms Hblk Hsrc
+  iframe Hmcs Hcode Hbi Hms Hblk Hsrc
   iintro %g ⟨%hg10, Hd, HB⟩ Hms
   have hkeep : ∀ x ∈ fRegs, x ∉ callerSaved →
       (fun x => if x ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] then g x
@@ -204,9 +206,10 @@ theorem ms_callMemcpyOwned (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat ×
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
     (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
     {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {dst src : BitVec 64} {n : Nat}
-    {img : Nat → BitVec 8} (hd : RamWin dst.toNat n) (hs : RamWin src.toNat n) :
+    {img : Nat → BitVec 8} (hd : RamWin dst.toNat n) (hh : htifLo + 16 ≤ dst.toNat)
+    (hs : RamWin src.toNat n) :
     ⌜R 10 = dst ∧ R 11 = src ∧ R 12 = BitVec.ofNat 64 n⌝ ∗
-      codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ blockOwn dst.toNat n ∗
+      codeRes ∗ binImg ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ blockOwn dst.toNat n ∗
       ownImg (InExt (src.toNat, n)) img ∗
       (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ ⌜R' 10 = dst⌝ -∗
         ownImg (InExt (dst.toNat, n)) (fun a => img (a - dst.toNat + src.toNat)) -∗
@@ -215,7 +218,7 @@ theorem ms_callMemcpyOwned (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat ×
     ⊢ Wp.W Φ := by
   iintro ⟨%⟨h10, h11, h12⟩, H⟩
   subst h10 h11
-  iapply ms_callMemcpyOwnedR Wp hmc hexec hcode hal h12 hd hs $$ H
+  iapply ms_callMemcpyOwnedR Wp hmc hexec hcode hal h12 hd hh hs $$ H
 
 /-- `ms_callMalloc` at a named request, the register facts a pure premise. -/
 theorem ms_callMallocN (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))

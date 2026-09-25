@@ -3,6 +3,7 @@ import VsaIris.Interp.TermSim
 import VsaIris.Interp.StuckSim
 import VsaIris.Interp.Holes
 import VsaIris.Interp.SupplyBoot
+import VsaIris.Interp.Supply
 import VsaIris.Adequacy
 import Vsa.Refinement
 
@@ -28,14 +29,6 @@ namespace VsaIris.Interp
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.VsaHeap VsaIris.Sym
 open Vsa.While Vsa.RuntimeRepr Vsa.Sim.LayoutInstance
-
-/-- The helper specs of the total and partial cases, for every Iris
-instance, from the holes. -/
-structure Supplies : Prop where
-  term : ∀ {GF : BundledGFunctors} [G : MachGS .hasLC GF] [I : InterpGS GF] (N : NativeAddrs),
-    NativeEntries N → TermSupply (GF := GF) topLive N inpTop
-  stuck : ∀ {GF : BundledGFunctors} [G : MachGS .hasLC GF] [I : InterpGS GF] (N : NativeAddrs),
-    NativeEntries N → StuckSupply (GF := GF) topLive N inpTop
 
 section
 

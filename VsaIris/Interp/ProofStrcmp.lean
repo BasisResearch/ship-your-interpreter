@@ -237,13 +237,12 @@ omit I in
 either WP. -/
 theorem strcmp_spec_ord (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
-    binImg (GF := GF) ⊢ strcmpOrdSpec (vsaModel live) Wp := by
-  iintro #Himg
+    ⊢ strcmpOrdSpec (GF := GF) (vsaModel live) Wp := by
   unfold strcmpOrdSpec helperSpec fnSpecW
   imodintro
   iintro %p %q %x %y %rv
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨hp, hq⟩, -, #Hx, #Hy⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨hp, hq⟩, -, #Himg, #Hx, #Hy⟩ Hk
   ihave ⟨Hc, Ho⟩ := (regFile_cut fRegs_perm_c rv).1 $$ Hregs
   iapply strcmp_core live hcl Wp hal rv hp hq
   iframe Himg Hx Hy Hpc Hra Hc
@@ -266,9 +265,8 @@ theorem strcmp_spec_ord (live : Nat → Prop) (hcl : CodeLive live)
 the sign class's first field. -/
 theorem strcmp_spec_v (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
-    binImg (GF := GF) ⊢ strcmpSpecV (vsaModel live) Wp := by
-  iintro #Himg
-  ihave #H := strcmp_spec_ord live hcl Wp $$ Himg
+    ⊢ strcmpSpecV (GF := GF) (vsaModel live) Wp := by
+  ihave #H := strcmp_spec_ord live hcl Wp
   unfold strcmpSpecV
   imodintro
   iintro %p %q %x %y

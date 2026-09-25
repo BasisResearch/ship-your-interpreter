@@ -196,6 +196,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     rw [hV0, hV1, hV2]; iexact Hv
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.assign x e) d - 1088)
     (m := envGetNeed) (by rw [hsf]; omega) (by omega) $$ Hst
+  ihave ⟨Hw, #Hcx⟩ := world_codeX N L Room inp _ _ d $$ Hw
+  ihave #Hgpv := codeRes_gpM $$ Hcode
   unfold world worldE
   icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hbw⟩
   ihave #Hset := hsetS
@@ -212,10 +214,10 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
      ⟨(by rw [ho]; omega), (by rw [ho]; omega),
        (by rw [ho]; unfold htifLo; unfold Vsa.Sim.tohostAddr at *; omega), (by rw [ho]; omega)⟩⟩
     (X := iprop(stackScratch (R2 2) envGetNeed ∗ frameAt env (R2 10).toNat ∗
-      strAt (R2 11).toNat x ∗ valAt N (R2 12).toNat v ∗ storeRepr N st'.store B))
+      strAt (R2 11).toNat x ∗ valAt N (R2 12).toNat v ∗ storeRepr N st'.store B ∗ gp ↦ᵣ□ MallocFast.gpV ∗ codeX))
     (Y := fun res => iprop(stackScratch (R2 2) envGetNeed ∗ valAt N (R2 12).toNat v ∗
       setOut N st'.store B env x v res))
-  iframe Hg Hcode Hms Hs
+  iframe Hg Hcode Hms Hs Hgpv Hcx
   isplitl [Hst Hval]
   · rw [e2, e10, e11, hqt, ho]; iframe Hst Hfb Hx Hval
   iintro %R3 %hkeep3 ⟨Hst, Hval, Hso⟩ Hms

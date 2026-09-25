@@ -133,6 +133,51 @@ byte of `stdioFoot` (`stdioExcl`) exclusively; its image agrees with
 - **Holes.** The `IrisHoles` newlib statements keep their text; newlib never
   writes `_impure_ptr`, so they remain satisfiable.
 
+## STATEMENT CHANGE (lane A): helper specs carry their code context; memcpy/strcpy destinations above HTIF
+
+Every helper spec a case lemma takes as a closed hypothesis carries, in its
+precondition, the persistent code context its proof runs from:
+
+| spec | added to the precondition |
+|---|---|
+| `envNewSpec`, `envDefineSpec` | `codeX` (beside `gp ↦ᵣ□ gpV`) |
+| `envGetSpec`, `envSetSpec` | `gp ↦ᵣ□ gpV ∗ codeX` |
+| `strcmpSpecV`, `strcmpOrdSpec`, `strlenHeapSpec`, `strcpyHeapSpec` | `binImg` |
+| `memcpySpecOwned` | `binImg` |
+| `valueEqualSpec` | `binImg` (its `strcmp` call's) |
+
+`codeX := binImg ∗ impureRO` (`VsaIris/Vsa/ImpureText.lean`) gives
+`textOwn envText`/`textOwn allocText`; `world_codeX`/`world_allocText`/
+`world_binImg` frame it out of `world`, `codeRes_gpM` gives `gp`.
+
+- **Destinations above HTIF.** `memcpySpec`, `memcpySpecOwned`, `strcpySpec`
+  and `strcpyHeapSpec` require `htifLo + 16 ≤ dst.toNat` (VSA's store facts
+  hold only above the HTIF words). The `…H` copies and the `gapRO` premise are
+  deleted; `memcpy_spec_env`/`memcpy_spec_owned`/`StrLeaf.strcpy_spec`/
+  `StrLeaf.strcpy_heap_spec` prove the real specs. Every caller's destination
+  is a heap block or a stack buffer (env_define's name copy, `stringify`'s
+  buffers, the concatenation block).
+- **`stringifySpec`'s abort** is `⌜ρ = .uncounted⌝ ∗ abortRes … ∗ slot24 p`:
+  only an uncounted `malloc` fails, and the out-of-memory path hands back the
+  value's slot, so `stringifySpecT` (counted) and `stringifySpecP` are both
+  consequences (`stringifyT_closed`, `stringifyP_closed`).
+- **Leaf specs inside helper proofs** (`strcmpSpec`, `strlenSpec`,
+  `memcpySpec`, `strcpySpec`) stay code-free resources; the proofs that use
+  them own `binImg` and take them as `binImg ⊢ …` (`stringify_spec`) or
+  receive them from it (`envDefine_closed`).
+- **The cases.** `caseT_FnLit`/`caseP_FnLit`/`caseT_BinaryConcat`/
+  `caseP_BinaryAdd` are closed statements: they take `binImg` and
+  `textOwn allocText` from `world` in their precondition. `TermSupply`/
+  `StuckSupply` lose `fnLit`/`concat`/`add` and gain `alloc`,
+  `stringifyT`/`stringifyP`, `strlenHeap`, `memcpyOwned`, `strcpyHeap`.
+- **`topLive`** adds `_impure_ptr`'s 8 bytes (in `envText`/`allocText`) and the
+  stack segment (`stringify`'s `strlen` of its stack buffer), present in a
+  loaded configuration by `InterpRunPhysicalFacts.statics`/`.stack_bytes`.
+- **Suppliers.** `VsaIris/Interp/Supply.lean`: the generic
+  `fnSpecW_close`/`fnSpecAbort_close`/`helperSpec_close` (a spec proved under
+  a persistent context its precondition carries is closed), one `*_closed`
+  theorem per spec, and `supplies_of : IrisHoles → Supplies`.
+
 ## STATEMENT CHANGE (lane A, Q7 decided 2026-09-25): the helpers' stack headroom
 
 `Vsa.Sim.LayoutInstance.helperHeadroom = 2048` is added to
