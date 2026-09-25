@@ -16,15 +16,25 @@ Over `SymCompact.lean`'s lemmas, for `SWP`/`SWPO` goals of any run:
 
 namespace VsaIris.Sym
 
+theorem toNat_sub_lit {x : BitVec 64} {k : Nat} (hk : k < 2 ^ 64) (h : k ≤ x.toNat) :
+    (x - BitVec.ofNat 64 k).toNat = x.toNat - k := by
+  rw [BitVec.toNat_sub, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hk]
+  have := x.isLt
+  omega
+
 /-- The address side conditions of `fillR_writeLog_in`/`_out`: `BitVec`
 offsets from a base as `Nat` arithmetic. -/
 syntax "nx_fdisch" : tactic
 macro_rules
   | `(tactic| nx_fdisch) => `(tactic| (
       (try simp only [BitVec.add_assoc, BitVec.reduceAdd])
-      (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg,
+      (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, toNat_sub_lit,
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
       omega))
+
+/-- Address side conditions with nested literal offsets (`sp + c₁ + c₂`),
+as `nx_fdisch` normalizes them. -/
+macro_rules | `(tactic| nx_addr) => `(tactic| nx_fdisch)
 
 /-- `nx_forget lo n`: forget the bytes `[lo, lo + n)` (a dead stack region)
 and erase the stores inside it (`swp_forget_region`). -/
