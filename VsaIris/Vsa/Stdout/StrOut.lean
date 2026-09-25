@@ -201,7 +201,8 @@ theorem fwrite_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)
   have hoffA : ∀ i, i < frag.toList.length → ¬ outS s fwriteNeed (buf.toNat + i) := fun i hi =>
     hoff (buf.toNat + i, _) (List.mem_map.mpr ⟨_, mem_strDA_str hi, rfl⟩)
   have hs5 : 0x8001c168 ≤ s.toNat - 512 := Nat.le_trans hbss (Nat.sub_le_sub_left (by decide) _)
-  have hcm := consoleMt_of hok fun a ha hi => hMt a ⟨ha, hi⟩
+  obtain ⟨_, hokA⟩ := id hok
+  have hcm := consoleMt_of hokA fun a ha hi => hMt a ⟨ha, hi⟩
   refine fwrite_run (stdioText_live hcl) (bs := strBytes frag) (buf := buf.toNat)
     (by unfold fwriteNeed; omega) hhi hbss hsp.align hal (by rw [hn]; exact hv.short (Nat.le_refl _) hoff) h1
     (by rw [hargs 0 (by simp)]; simp) (hargs 1 (by simp))
@@ -239,7 +240,8 @@ theorem fputs_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
   have hoffA : ∀ i, i < frag.toList.length → ¬ outS s outNeed (str.toNat + i) := fun i hi =>
     hoff (str.toNat + i, _) (List.mem_map.mpr ⟨_, mem_strDA_str (by omega), rfl⟩)
   have hs5 : 0x8001c168 ≤ s.toNat - 512 := Nat.le_trans hbss (Nat.sub_le_sub_left (by decide) _)
-  have hcm := consoleMt_of hok fun a ha hi => hMt a ⟨ha, hi⟩
+  obtain ⟨_, hokA⟩ := id hok
+  have hcm := consoleMt_of hokA fun a ha hi => hMt a ⟨ha, hi⟩
   have c : StrLeaf.LCtx live str 0x800063dc#64 (strBytes frag).length img := by
     rw [hn]; exact ⟨StrLeaf.regions_of_win hv.win, StrLeaf.strBytes_of_img hv.cstr, by decide, StrLeaf.strCode_live hcl⟩
   refine fputs_run (stdioText_live hcl) (bs := strBytes frag) (bv := img) (P := str)
