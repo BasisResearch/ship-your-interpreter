@@ -1165,4 +1165,140 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
 -- `PRINT`'s body piece and return count (`0x800078bc` → `0x80007914`).
 #ix_chain svf_printBody := [svfBody_p1, svfBody_p2]
 
+/-! ## The flush and the back edge -/
+
+/-- **The back edge** (`0x80007918`): the count cleared, no buffer to free,
+`s7` back at the iovec array, the loop head. -/
+theorem svf_back {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (C : SvfCore s dst n R0 Mt0 p ap rt total R Mt)
+    (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
+    (hres : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 240)).toNat = 0#64)
+    (hk : ∀ R' Mt', SvfAt s dst n R0 Mt0 p ap rt total R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80007918#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := C.r2
+  have h21 := C.r21
+  nx_runF hlive using [ofNat_add_ofNat, h2, h21, h32] at 0x80007720
+  refine hk _ _ ⟨C.update SG ?_ (fun a ha => ?_) ?_ ?_ ?_, ?_, ?_, ?_⟩
+  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · unfold SvfKeep at ha; svf_mem
+  · svf_mem; exact C.fmt
+  · svf_mem; exact C.ret
+  · svf_mem; exact C.ap
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · svf_mem
+  · svf_mem; exact hres
+
+/-- `SvfCore` after `__ssprint_r`: the stream grown, everything outside
+`PrintFrame` unchanged. -/
+theorem SvfCore.flushed {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat}
+    {rt : BitVec 64} {total total' : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
+    (C : SvfCore s dst n R0 Mt0 p ap rt total R Mt) (SG : SnpGeom s dst n) (hR : SvfRegs R' R)
+    (hM : ∀ a, ¬ PrintFrame s dst n a → imgM Mt' a = imgM Mt a) (hB : BufAt Mt' s dst n total') :
+    SvfCore s dst n R0 Mt0 p ap rt total' R' Mt' := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hdsep := SG.d_sep
+  have ag : ∀ (off : Nat), (off + 8 ≤ 224 ∨ 248 ≤ off) → off + 8 ≤ 592 →
+      ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + off)).toNat = ldv .ld Mt (BitVec.ofNat 64 (s - 864 + off)).toNat :=
+    fun off h1 h2 => by
+      rw [toNat_ofNat_lt (by omega)]
+      exact ldv_agree .ld fun i hi => hM _ (by unfold PrintFrame PrintW snpFP snpU; simp only [widthOfM] at hi; omega)
+  have ag224 : ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 224)).toNat =
+      ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 224)).toNat := by
+    rw [toNat_ofNat_lt (by omega)]
+    exact ldv_agree .ld fun i hi => hM _ (by unfold PrintFrame PrintW snpFP snpU; simp only [widthOfM] at hi; omega)
+  have sv := C.saved
+  refine ⟨(hR 2 (by omega)).trans C.r2, (hR 8 (by omega)).trans C.r8, (hR 9 (by omega)).trans C.r9,
+    (hR 18 (by omega)).trans C.r18, (hR 19 (by omega)).trans C.r19, (hR 21 (by omega)).trans C.r21,
+    ?_, (ag 8 (by omega) (by omega)).trans C.fp, (ag 16 (by omega) (by omega)).trans C.ret,
+    (ag 24 (by omega) (by omega)).trans C.ap, ag224.trans C.uio,
+    ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, hB,
+    fun a ha => (hM a (by simp only [SvfW, snpFP] at ha; unfold PrintFrame PrintW snpFP snpU; omega)).trans
+      (C.frame a ha)⟩
+  · have := ag 0 (by omega) (by omega)
+    simp only [Nat.add_zero] at this
+    exact this.trans C.fmt
+  · exact (ag 584 (by omega) (by omega)).trans sv.ra
+  · exact (ag 576 (by omega) (by omega)).trans sv.s0
+  · exact (ag 568 (by omega) (by omega)).trans sv.s1
+  · exact (ag 560 (by omega) (by omega)).trans sv.s2
+  · exact (ag 552 (by omega) (by omega)).trans sv.s3
+  · exact (ag 544 (by omega) (by omega)).trans sv.s4
+  · exact (ag 536 (by omega) (by omega)).trans sv.s5
+  · exact (ag 528 (by omega) (by omega)).trans sv.s6
+  · exact (ag 520 (by omega) (by omega)).trans sv.s7
+  · exact (ag 512 (by omega) (by omega)).trans sv.s8
+  · exact (ag 504 (by omega) (by omega)).trans sv.s9
+  · exact (ag 496 (by omega) (by omega)).trans sv.s10
+  · exact (ag 488 (by omega) (by omega)).trans sv.s11
+
+/-- **The flush** (`0x80007914`): the pending pieces through `__ssprint_r`
+(`ssprint_nw`) when `resid ≠ 0`, then the back edge. -/
+theorem svf_flush {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt)
+    (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
+    (h12 : R 12 = BitVec.ofNat 64 (sumLen L))
+    (hk : ∀ R' Mt', SvfAt s dst n R0 Mt0 p ap rt (total ++ catPieces (gOf s Dt Mt) L) R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80007914#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := St.core.r2
+  have h8 := St.core.r8
+  have hfp := St.core.fp
+  have hsum := St.sum
+  rcases Nat.eq_zero_or_pos (sumLen L) with h0 | hpos
+  · have hcat := catPieces_of_sumLen_zero (gOf s Dt Mt) L h0
+    rw [h0] at h12
+    nx_runF hlive using [h12] at 0x80007918
+    refine svf_back hlive R Mt SG (by rw [hcat, List.append_nil]; exact St.core) h32
+      (by have := St.res; rwa [h0] at this) hk
+  · have hne : BitVec.ofNat 64 (sumLen L) ≠ 0#64 := fun h => by
+      have := congrArg BitVec.toNat h; simp only [BitVec.toNat_ofNat] at this; omega
+    nx_runF hlive using [ofNat_add_ofNat, h2, h8, hfp, h12, hne] at 0x8000e908
+    have hL3 := St.len
+    have hdsep := SG.d_sep
+    have hu := St.core.uio
+    have hcn := St.cnt
+    have hrs := St.res
+    rw [toNat_ofNat_lt (by omega)] at hu hcn hrs
+    refine ssprint_nw hlive (gOf s Dt Mt) total L _ Mt SG (by omega) (by omega) ?_ ?_ ?_ ?_ ?_ ?_ ?_
+      St.iov (piecesOK_of_src St.src) St.core.buf ?_
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h2
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, snpU]
+      rw [show s - 864 + 224 = s - 640 by omega]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
+    · simp only [snpU, snpIov]
+      rw [show s - 640 = s - 864 + 224 by omega, show s - 512 = s - 864 + 352 by omega]; exact hu
+    · simp only [snpU]; rw [show s - 640 + 8 = s - 864 + 232 by omega]; exact hcn
+    · simp only [snpU]; rw [show s - 640 + 16 = s - 864 + 240 by omega]; exact hrs
+    · intro R' Mt' h10 h2' hkp PO
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      nx_runF hlive using [h10] at 0x80007918
+      refine svf_back hlive R' Mt' SG (St.core.flushed SG ?_ PO.frame PO.buf) ?_ ?_ hk
+      · intro z hz
+        rcases hz with rfl | rfl | rfl | rfl | rfl | rfl
+        · rw [h2']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+        all_goals (rw [hkp _ (by omega)]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+      · rw [toNat_ofNat_lt (by omega)]
+        refine (ldv_agree .ld fun i hi => PO.frame _ ?_).trans ?_
+        · unfold PrintFrame PrintW snpFP snpU; simp only [widthOfM] at hi; omega
+        · rw [← toNat_ofNat_lt (x := s - 864 + 32) (by omega)]; exact h32
+      · have := PO.res
+        simp only [snpU] at this
+        rw [toNat_ofNat_lt (by omega), show s - 864 + 240 = s - 640 + 16 by omega]; exact this
+
 end VsaIris.Sym
