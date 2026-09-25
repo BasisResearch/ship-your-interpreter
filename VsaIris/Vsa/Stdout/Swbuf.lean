@@ -6,7 +6,9 @@ import VsaIris.Vsa.Stdout.Fflush
 `__swbuf_r(reent, c, stdout)` with `_w` exhausted: `stdout` is in write mode
 with its one-byte buffer, so it resets `_w` to `_lbfsize = 0`, stores `c` at
 `_p = _bf._base`, advances `_p`, and, the buffer now full, flushes it
-(`fflush_run`), which prints `c`. It returns `c`.
+(`fflush_run`), which prints `c`. It returns `c`. At `_flags = 0x000a` it
+first orients `stdout` (`swbufU_chain`); `swbuf_run'` takes either
+orientation.
 -/
 
 namespace VsaIris.Sym
@@ -50,6 +52,18 @@ theorem imgM_flags2_keep {M M0 : Mem} (h0 : ldv .lw M0 0x8001bbd0 = 0#64)
     (ha : 0x8001bbd0 ≤ a ∧ a < 0x8001bbd0 + 4) :
     imgM (writeLog M [(0x8001bbd0, 4, 0#64)]) a = imgM M a :=
   imgM_store_restore M 0#64 (by decide) (by rw [imgLE_congr hag, imgLE_zero_of_lw h0]; rfl) ha
+
+/-- A kept byte `a` through a run's write log, with the `ORIENT` block's
+`_flags2` store (if any) restored from `h0 : ldv .lw Mt 0x8001bbd0 = 0`. -/
+syntax "nx_keep_orient " term : tactic
+set_option hygiene false in
+macro_rules
+  | `(tactic| nx_keep_orient $h0) => `(tactic| (
+      simp (disch := nx_addr) only [imgM_store_miss]
+      try (by_cases hf2 : 0x8001bbd0 ≤ a ∧ a < 0x8001bbd0 + 4
+           · rw [imgM_flags2_keep $h0 (fun i hi => by simp (disch := nx_addr) only [imgM_store_miss]) hf2]
+             simp (disch := nx_addr) only [imgM_store_miss]
+           · simp (disch := nx_addr) only [imgM_store_miss])))
 
 set_option hygiene false in
 /-- `__swbuf_r` from its entry to `jal _fflush_r`, with `_flags = fl`: from
@@ -204,11 +218,7 @@ theorem swbuf_run' {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     intros
     refine hk _ _ (retOK_of (by simp [upd_apply]) (by ret_keep)) ⟨fun a ha => ?_⟩ ⟨?_, ?_, ?_, ?_, ?_⟩
     · simp only [outKeep] at ha
-      by_cases hf2 : 0x8001bbd0 ≤ a ∧ a < 0x8001bbd0 + 4
-      · simp (disch := nx_addr) only [imgM_store_miss]
-        rw [imgM_flags2_keep hlm (fun i hi => by simp (disch := nx_addr) only [imgM_store_miss]) hf2]
-        simp (disch := nx_addr) only [imgM_store_miss]
-      · simp (disch := nx_addr) only [imgM_store_miss]
+      nx_keep_orient hlm
     all_goals try (nx_mem; done)
     all_goals try (nx_mem; nx_norm; done)
     simp (disch := nx_addr) only [imgM_store_miss]

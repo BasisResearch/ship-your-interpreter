@@ -469,9 +469,10 @@ theorem fputc_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     · ipureintro; trivial
   · have hs1 : s.toNat - outNeed + 512 ≤ s.toNat := by unfold outNeed; omega
     have hs5 : 0x8001c168 ≤ s.toNat - 512 := Nat.le_trans hbss (Nat.sub_le_sub_left (by decide) _)
+    obtain ⟨_, hokA⟩ := id hok
     refine fputc_run (stdioText_live hcl) hs1 hhi hbss hsp.align hal h1
       (hargs 0 (by simp)) (hargs 1 (by simp)) h2
-      (consoleMt_of hok fun a ha hi => hMt a ⟨ha, hi⟩)
+      (consoleMt_of hokA fun a ha hi => hMt a ⟨ha, hi⟩)
       (fun R' M' hR hK hD => swpo_done fun rv mv hm => ?_)
     refine outEnd_of (k := 512) hok himp hMt hR h1 h2 hcs hs5 hK hD.p hD.w hD.flagsU hm ?_
     simp [putcs, putcStr]

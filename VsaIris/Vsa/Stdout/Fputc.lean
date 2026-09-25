@@ -5,7 +5,9 @@ import VsaIris.Vsa.Stdout.Swbuf
 
 From the boundary state (`ConsoleMt`): `fputc` takes the (no-op) lock,
 calls `_putc_r`, which takes it again, finds `_w` exhausted and calls
-`__swbuf_r` (`swbuf_run`), which prints `c`; both release and return `c`.
+`__swbuf_r` (`swbuf_run'`), which prints `c`; both release and return `c`.
+The run is the same at either orientation (`ConsoleMt (consoleFlagsV o)`):
+`__swbuf_r` orients an unoriented `stdout`.
 -/
 
 namespace VsaIris.Sym
