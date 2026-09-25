@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from scripts import difftest, houdini_summary, residual_coverage_ledger
+from scripts import difftest, houdini_summary
 from scripts import segment_certificates as certs
 
 
@@ -347,88 +347,6 @@ class SegmentCertificateTests(unittest.TestCase):
                 self.effect["provenance"] = "Lean:" + original["theorem"]
                 self.write_table(
                     "query-effects.tsv", certs.EFFECT_COLUMNS, [self.effect]
-                )
-
-    def test_ledger_validates_authority_without_promoting_full_residual_coverage(
-        self,
-    ) -> None:
-        surface = residual_coverage_ledger.CompletionSurface((self.field,), (), ())
-        self.capability["capability"] = "machine-only"
-        self.write_table(
-            "query-capabilities.tsv", tuple(self.capability), [self.capability]
-        )
-        self.write_table(
-            "residual-capabilities.tsv",
-            (
-                "field",
-                "machine_instances",
-                "semantic_projection",
-                "full_residual",
-                "capability_class",
-            ),
-            [
-                {
-                    "field": field,
-                    "machine_instances": "1" if field == self.field else "0",
-                    "semantic_projection": "no",
-                    "full_residual": "no",
-                    "capability_class": "finite-projection"
-                    if field == self.field
-                    else "non-finite"
-                    if field == "hDivCorr"
-                    else "composite-family"
-                    if field == "hErrFam"
-                    else "lean-only",
-                }
-                for field in surface.targets
-            ],
-        )
-        self.write_table(
-            "residual-holes.tsv",
-            ("field", "dimension", "reason"),
-            [
-                {
-                    "field": field,
-                    "dimension": "full-lean-proposition",
-                    "reason": "no full witness",
-                }
-                for field in surface.targets
-            ],
-        )
-        self.write_table(
-            "residual-extensions.tsv", ("query", "field", "name", "predicate"), []
-        )
-        self.write_table("lean-certificates.tsv", ("residual", "post", "theorem"), [])
-
-        def load(directory, *, authority_dir=None):
-            return certs.load_segment_certificates(
-                directory, repo_root=self.repo, authority_dir=authority_dir
-            )
-
-        with patch.object(residual_coverage_ledger, "load_segment_certificates", load):
-            with self.assertRaises(residual_coverage_ledger.LedgerError):
-                residual_coverage_ledger.build_ledger(
-                    self.campaign, [], [], surface=surface
-                )
-            result = residual_coverage_ledger.build_ledger(
-                self.campaign, [], [], surface=surface, segment_authority=self.authority
-            )
-            self.assertEqual(result["summary"]["segment_certificate_count"], 1)
-            contract = result["segment_certificates"][0]
-            self.assertTrue(contract["segment_authority_validated"])
-            self.assertEqual(contract["theorem"], self.descriptor["theorem"])
-            for row in [contract, *result["cells"], *result["leaves"]]:
-                self.assertFalse(row["lean_bridge_compiled"])
-                self.assertFalse(row["full_residual_compiled"])
-            self.descriptor["precondition"] = "Example.changedPre"
-            self.save_descriptor()
-            with self.assertRaises(residual_coverage_ledger.LedgerError):
-                residual_coverage_ledger.build_ledger(
-                    self.campaign,
-                    [],
-                    [],
-                    surface=surface,
-                    segment_authority=self.authority,
                 )
 
     def test_missing_or_campaign_owned_authority_is_rejected(self) -> None:

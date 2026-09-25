@@ -3,7 +3,7 @@
 Branch `lane-v` (from `hub/iris-main` `286c2ad`). Report: `REVIEW.md`.
 Tooling and evidence: `experiments/review-v/`.
 
-## Status: done (review written; statement changes left as proposals)
+## Status: done (review written; P5 and P6 landed; P1–P4 handed to lanes B1–B3)
 
 `lake build Vsa VsaIris` green (2587 jobs after the dead-code deletion).
 `scripts/check_final_axioms.sh` (new): the final theorem and its boundary
@@ -49,20 +49,22 @@ match the semantics' prediction, including both out-of-memory programs
   `scripts/check_final_axioms.sh`; 35 stale `THEOREMS` entries removed.
 - 20 legacy files grandfathered in `discipline_grandfather.txt` (dated
   comment).
+- P6: the tower core (`TermAssembly`, `InterpSimFinal`, `rows/AssemblySkeleton`,
+  `rows/Field_hStr`) and the residual-ledger tooling removed; `StmtDispatchClose`
+  kept (semantics trichotomy). Build green (2583 jobs).
+- P5: README states every `InterpRunReadyFacts` requirement, naming
+  `capacity` and `stack_admissible`.
 - Dead code: 88 modules deleted (unreachable from every root, or
   `RemainingWork`-tower leftovers wired only through `Vsa.lean`), with their
   `Vsa.lean` imports and `abs_inventory.sh`/grandfather lines.
 - `PROOF_CLOSURE_PLAN.md`, `INTERP_DESIGN.md` §10, `TOOLING.md` record the
   review.
 
-## Proposals for the user (statement changes, not landed)
+## Proposals (P1–P4 assigned to lanes B1–B3)
 
 P1 boundary flags `0x000a` + first-write lemma; P2 rodata pin excluding the
 script; P3 densification lemma for `Halts`/`Diverges`; P4 loader-derived
-`Loaded` witnesses from the entry write log; P5 README states `Loaded`'s
-program-dependent hypotheses; P6 delete the tower core (`TermAssembly`,
-`InterpSimFinal`, `rows/AssemblySkeleton`, `While/StmtDispatchClose`,
-`rows/Field_hStr`) with its ledger tooling.
+`Loaded` witnesses from the entry write log; (P5 and P6 are landed on this branch.)
 
 ## Holes
 

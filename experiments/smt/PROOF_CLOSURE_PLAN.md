@@ -4362,3 +4362,4 @@ every `c/tests/*.wl` build, reconstructed at `interp_run`'s entry):
 - `capacity` and `stack_admissible` make `Loaded` program-execution
   dependent (REVIEW.md M1); `CStr` restricts programs to ASCII (L1).
 
+Decisions (2026-09-25): P1–P6 approved. P1+P2 → lane B1, P3 → lane B2, P4 → lane B3. P5 (README names `capacity`/`stack_admissible` and every `Loaded` requirement) and P6 (tower core and residual-ledger tooling removed; `StmtDispatchClose` kept) landed on `lane-v`.

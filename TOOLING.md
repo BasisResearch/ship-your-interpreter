@@ -56,7 +56,6 @@ existing theorem or generated segment with the required shape.
 | Error routing and spill rows | `gen_m5_error_routing.py`, `gen_err_spill_rows.py` |
 | Layout, image and transport facts | `gen_layout.py`, `gen_image_pins.py`, `gen_transport.py` |
 | Decode imports | `gen_decode_index.py` |
-| Assembly record | `experiments/gen_assembly_skeleton.py` |
 | Owned source recursion | `python3 -B -m scripts.gen_allocator_cases` |
 | Code pins and environment sites | `experiments/gen_code_lemmas.py`, `experiments/gen_envget_sites.py` |
 
@@ -179,10 +178,8 @@ private backend, not the generator's direct `--check` mode.
 | Bounded proof-construction experiments | `autoprove.py` |
 | Summary mining and residual queries | `houdini_summary.py` |
 | Trace, semantic and effect checks | `difftest.py`, `difftest.sh` |
-| Typed evidence accounting | `residual_coverage_ledger.py` |
 | Clause residual status, hook probes, candidate drafts | `ih_clause_status.py` |
 | Clause step refutation | `ih_clause_fuzz.py` |
-| Clause field evidence ledger | `ih_clause_ledger.py` |
 
 The default `check_validation.py` gate imports every compiled module and
 inventories inherited residual fields before running boundary regressions.
@@ -196,7 +193,10 @@ python3 -B scripts/field_census.py \
 Use `--inventory-only` for field enumeration or repeat `--field NAME` for a
 subset. Probes run serially. `FOUND` requires a checked proof and standard
 axioms. `NO_MATCH` is inconclusive. Reports retain source and backend hashes;
-supplier search does not construct the final residual record.
+supplier search does not construct the final residual record. The default
+`--structure` is the generated `Vsa.Sim.IHClause.Trivial.Residuals`; the
+former term-residual record (`TermAssembly`) was removed with the
+`RemainingWork` tower (`REVIEW.md` P6).
 
 For a development check of a known supplier, use a persistent private overlay:
 
@@ -286,7 +286,6 @@ python3 -B scripts/ih_clause_status.py --summary               # WIRED / HOOK / 
 python3 -B scripts/ih_clause_status.py --backend <B> --output <D> \
   --verify-census --suggest                                      # hook lemmas, census re-check, drafts
 python3 -B scripts/ih_clause_fuzz.py --output <D> [--lean --backend <B>]
-python3 -B scripts/ih_clause_ledger.py build --dir <D>
 python3 -B scripts/field_census.py --backend <B> --output <C> \
   --structure Vsa.Sim.IHClause.Trivial.Residuals                 # supplier search (full backend only)
 python3 -B -m scripts.proof_slice --backend <B> --output <O> \
@@ -332,9 +331,6 @@ outside the address-map fragment, so it is UNSUPPORTED unless `--lean` runs
 the fuzzer's witness probe against a fingerprint-current backend.
 `smt_check.py` is not applied (a motive conclusion is an opaque atom to it).
 
-`ih_clause_ledger.py` emits one row per field and evidence kind (execution,
-smt, oracle, lean-bridge) from those artifacts and an optional `--execution`
-TSV; a missing artifact is an explicit hole.
 
 ## Differential tests
 
