@@ -1989,6 +1989,11 @@ theorem imgM_sb_ofNat (Mt : Mem) (a k : Nat) (hk : k < 256) :
     apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat, BitVec.toNat_setWidth]; omega
   rw [e, imgM_sb_zext]
 
+theorem imgM_sb_ofNat' (Mt : Mem) (a k : Nat) (ha : a < 2 ^ 64) (hk : k < 256) :
+    imgM (writeLog Mt [((BitVec.ofNat 64 a).toNat, 1, BitVec.ofNat 64 k)]) a = BitVec.ofNat 8 k := by
+  have := imgM_sb_ofNat Mt a k hk
+  rwa [toNat_ofNat_lt ha]
+
 theorem DigKeep.trans {R R' R'' : Nat → BitVec 64} (h1 : DigKeep R' R) (h2 : DigKeep R'' R') :
     DigKeep R'' R := fun z a b c d e f g h i j k l => (h2 z a b c d e f g h i j k l).trans (h1 z a b c d e f g h i j k l)
 
@@ -2057,4 +2062,98 @@ theorem svf_digLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
           unfold digB; congr 1; omega
       · rw [imgM_miss_nat _ _ (by omega) (by omega)]; exact hM a (by omega)
 
+/-- What an integer conversion's digits are: `K` bytes at `sp + 348 - K`, the
+decimal digits of `mag` most significant first, with the bounds that make
+`K` the digit count. -/
+structure DigitsAt (Mt : Mem) (s mag K : Nat) : Prop where
+  pos : 1 ≤ K
+  le : K ≤ 20
+  hub : mag / 10 ^ (K - 1) ≤ 9
+  hlb : K = 1 ∨ 9 < mag / 10 ^ (K - 2)
+  bytes : ∀ i, i < K → imgM Mt (s - 864 + 348 - 1 - i) = digB mag i
+
+/-- The digits' piece. -/
+theorem digSrc {DA : List Nat} {s dst n K : Nat} (SG : SnpGeom s dst n) (hK : K ≤ 20) :
+    PieceSrc DA s dst n (s - 864 + 348 - K) K := by
+  have := SG.s_lo; have := SG.s_hi; have := SG.d_sep; have := SG.d_lo
+  exact ⟨⟨by omega, by omega, by omega, by omega, by simp only [snpFP]; omega, by omega, by omega⟩,
+    by omega, .inr ⟨by omega, by omega⟩⟩
+
+/-- The integer conversion's continuation into `PRINT`. -/
+def IntPrintK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
+    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
+    (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) (m sg : Nat) : Prop :=
+  ∀ R' Mt' K, PrintIn DA s dst n R0 Mt0 p ap c total L (s - 864 + 348 - K) K sg R' Mt' →
+    DigitsAt Mt' s m K → NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R' Mt'
+
+/-- **One digit** (`0x80008100`, `m ≤ 9`): `'0' + m` at `sp + 347`, `PRINT`. -/
+theorem svf_dig1 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} {m sg : Nat} (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (IA : IntAt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L m sg R Mt) (hm9 : m ≤ 9)
+    (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
+    (hk : IntPrintK live Dt DA Q s dst n R0 Mt0 p ap c total L m sg) :
+    NW live Dt DA (snpS s dst n) Q 0x80008100#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have h2 := IA.st.core.r2
+  have h14 := IA.r14
+  have h20 := IA.r20
+  have h167 := IA.sign
+  have hsa := SG.s_al
+  have hn9 : ¬ (9#64).toNat < (BitVec.ofNat 64 m).toNat := by rw [toNat_ofNat_lt (by omega)]; simp; omega
+  have hsx : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 (m + 48))) = BitVec.ofNat 64 (m + 48) :=
+    VsaIris.Interp.sext32_ofNat_eq (by omega)
+  have h167' : ldv .lbu (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 347)).toNat, 1, BitVec.ofNat 64 (m + 48))])
+      (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 sg := by
+    rw [ldv_miss_nat _ _ _ (by omega) (by omega) (by simp only [widthOfM]; omega)]; exact h167
+  nx_runF hlive using [ofNat_add_ofNat, h2, h14, h20, h167, hn9, hsx, h167'] at 0x8000782c
+  all_goals rename_i hsg _
+  all_goals refine hk _ _ 1 ⟨IA.st.update SG ?_ ?_ ?_ ?_ ?_ ?_, hL, ?_, ?_, ?_, ?_, IA.sg01, ?_, ?_, ?_,
+    .inr ?_, ?_, ?_, ?_, by omega, by omega⟩ ⟨Nat.le_refl _, by omega, by simpa using hm9, .inl rfl, ?_⟩
+  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]))
+  all_goals (try (intro a ha; unfold StKeep SvfKeep at ha; svf_mem))
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+  · svf_mem; exact IA.st.core.fmt
+  · svf_mem; exact IA.st.core.ret
+  · svf_mem; exact IA.st.core.ap
+  · rcases IA.r6 with h | h <;> rw [h] <;> decide
+  · rcases IA.r6 with h | h <;> rw [h] <;> decide
+  · rcases IA.r6 with h | h <;> rw [h] <;> decide
+  · exact IA.r28
+  · rcases IA.sg01 with h | h <;> subst h <;> first | rfl | (simp at hsg) | decide
+  · rw [show s - 864 + 348 - 1 = s - 864 + 347 by omega]
+  · exact IA.r20
+  · svf_mem; exact h167
+  · svf_mem
+  · exact digSrc SG (by omega)
+  · intro i hi
+    have hi0 : i = 0 := by omega
+    subst hi0
+    rw [show s - 864 + 348 - 1 - 0 = s - 864 + 347 by omega]
+    svf_mem
+    rw [imgM_sb_ofNat' _ _ _ (by omega) (by omega)]
+    unfold digB; congr 1; simp; omega
+  · svf_mem; exact IA.st.core.fmt
+  · svf_mem; exact IA.st.core.ret
+  · svf_mem; exact IA.st.core.ap
+  · rcases IA.r6 with h | h <;> rw [h] <;> decide
+  · rcases IA.r6 with h | h <;> rw [h] <;> decide
+  · rcases IA.r6 with h | h <;> rw [h] <;> decide
+  · exact IA.r28
+  · rcases IA.sg01 with h | h <;> subst h <;> first | rfl | (simp at hsg) | decide
+  · rw [show s - 864 + 348 - 1 = s - 864 + 347 by omega]
+  · exact IA.r20
+  · svf_mem; exact h167
+  · svf_mem
+  · exact digSrc SG (by omega)
+  · intro i hi
+    have hi0 : i = 0 := by omega
+    subst hi0
+    rw [show s - 864 + 348 - 1 - 0 = s - 864 + 347 by omega]
+    svf_mem
+    rw [imgM_sb_ofNat' _ _ _ (by omega) (by omega)]
+    unfold digB; congr 1; simp; omega
 end VsaIris.Sym
