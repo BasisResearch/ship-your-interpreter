@@ -4,3 +4,8 @@ import VsaIris.Vsa.Stdout.Steps.Part00
 import VsaIris.Vsa.Stdout.Steps.Part01
 import VsaIris.Vsa.Stdout.Steps.Part02
 import VsaIris.Vsa.Stdout.Steps.Part03
+import VsaIris.Vsa.Stdout.Steps.Part04
+import VsaIris.Vsa.Stdout.Steps.Part05
+import VsaIris.Vsa.Stdout.Steps.Part06
+import VsaIris.Vsa.Stdout.Steps.Part07
+import VsaIris.Vsa.Stdout.Steps.Part08

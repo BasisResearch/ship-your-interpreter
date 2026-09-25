@@ -88,7 +88,9 @@ def ixTryPrune (norm : Syntax) (g : MVarId) : TacticM Bool := do
 def ixCandidates (pc : Nat) : TacticM (List Name) := do
   let env ← getEnv
   let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
-  return [mk "it", mk "itD", mk "itT", mk "itH", mk "itO"].filter env.contains
+  -- `itS…`: newlib's stdio table at a function the interpreter's table also has
+  return [mk "it", mk "itD", mk "itT", mk "itH", mk "itO",
+    mk "itS", mk "itDS", mk "itTS", mk "itHS", mk "itOS"].filter env.contains
 
 /-- Apply one candidate: the continuation goals (an `SWP` conclusion) and the
 side conditions `sx_side` could not close; `none` when it does not apply. -/
