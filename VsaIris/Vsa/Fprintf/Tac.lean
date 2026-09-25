@@ -70,14 +70,32 @@ end VsaIris.Sym
 namespace VsaIris.Sym
 
 /-- `nf_go k [n] h using [facts] at pc…`: `k` rounds of `nx_flat; nf_run [n]` on every
-open run goal: the register file never grows past `n` updates (the normalizer's
-recursion depth bounds the chain it can reduce). -/
-syntax "nf_go " num " [" num "] " term " using " "[" term,* "]" (" at " num+)? : tactic
+open run goal at a literal PC that is not a stop: the register file never grows
+past `n` updates (the normalizer's recursion depth bounds the chain it can
+reduce). Side goals and stopped runs are left as they are. -/
+syntax (name := nfGo) "nf_go " num " [" num "] " term " using " "[" term,* "]" (" at " num+)? : tactic
 
-macro_rules
-  | `(tactic| nf_go $k [$n] $h using [$fs,*] at $ss*) =>
-    `(tactic| iterate $k (all_goals try (nx_flat; nf_run [$n] $h using [$fs,*] at $ss*)))
-  | `(tactic| nf_go $k [$n] $h using [$fs,*]) =>
-    `(tactic| iterate $k (all_goals try (nx_flat; nf_run [$n] $h using [$fs,*])))
+open Lean Elab Tactic Meta in
+@[tactic nfGo] def evalNfGo : Tactic := fun stx => do
+  let k := stx[1].isNatLit?.getD 1
+  let n : TSyntax `num := ⟨stx[3]⟩
+  let h : Term := ⟨stx[5]⟩
+  let fs : Syntax.TSepArray `term "," := ⟨stx[8].getArgs⟩
+  let stops : Array (TSyntax `num) := if stx[10].isNone then #[] else stx[10][1].getArgs.map (⟨·⟩)
+  let stopPCs := stops.toList.map (·.getNat)
+  for _ in [0:k] do
+    let gs ← getGoals
+    let mut out : List MVarId := []
+    for g in gs do
+      if ← g.isAssigned then continue
+      match ← g.withContext (do swpPC? (← instantiateMVars (← g.getType))) with
+      | some pc =>
+        if stopPCs.contains pc then out := out ++ [g]; continue
+        let tac ← if stops.isEmpty then `(tactic| (nx_flat; nf_run [$n] $h using [$fs,*]))
+          else `(tactic| (nx_flat; nf_run [$n] $h using [$fs,*] at $stops*))
+        let r ← evalTacticAt tac g
+        out := out ++ r
+      | none => out := out ++ [g]
+    setGoals out
 
 end VsaIris.Sym
