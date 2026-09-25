@@ -413,6 +413,22 @@ def emit(pc):
     (by decide) (by decide) (by decide) (fun _ => {hgp(ks)}) (by decide) (fun _ => rfl)
     (fun _ x hx hg hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with {alts} <;> first | rfl | exact absurd rfl hg | exact absurd rfl hr)
     hk""")
+        if TABLE == 'stdio':
+            # lane N5 (N2's `itP`): bytes partly data, partly owned, partly neither
+            # (`SymHavoc.swp_havocP`)
+            thm.append(hdr('itP', pc) + f"""
+    (hea : LdOK {ea} {wd})
+    (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
+      v = ldvf .{d['kind']} f {ea}) → {iw(nxt, f"(upd R {rd} v)")}) :
+    {iw(f'0x{pc:x}#64')} :=
+  swp_havocP (T := interpText) (D := dataOf Dt DA) (rs := iRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
+    ix_{pc:08x} {lst(ks)} {rd} (accAddrs {ea} {wd}) (fun f => [bytesAt f {ea} {wd}]) 0
+    (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
+    rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
+    (fun m hm hD => by unfold ix_{pc:08x} ChainFacts; {CF}; exact ⟨hea, lpins{suf}_img (fun b _ => rfl)⟩)
+    (by decide) (by decide) (by decide) (fun _ => {hgp(ks)}) (by decide) (fun _ => rfl)
+    (fun _ x hx hg hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with {alts} <;> first | rfl | exact absurd rfl hg | exact absurd rfl hr)
+    hk""")
         if pc in TABLE_LOADS:
             thm.append(hdr('itT', pc) + f"""
     (hea : LdOK {ea} {wd})
@@ -653,7 +669,7 @@ def gen_steps():
     uns = ', '.join(f'`0x{pc:x}` {MN[pc]}' for pc in unsupported)
     for k, (segs, thms, mods, pcs) in enumerate(parts):
         L = [HEADER, 'import VsaIris.Interp.IRun', 'import VsaIris.Vsa.SymObs'] + \
-            (['import VsaIris.Vsa.SymJalr'] if TABLE == 'stdio' else []) + ['import Vsa.Sim.EnvNewSites', 'import Vsa.Sim.ExecuteAlu'] + \
+            (['import VsaIris.Vsa.SymJalr', 'import VsaIris.Vsa.SymHavoc'] if TABLE == 'stdio' else []) + ['import Vsa.Sim.EnvNewSites', 'import Vsa.Sim.ExecuteAlu'] + \
             [f'import {m}' for m in sorted(mods)] + ['',
              f'/-! The interpreter\'s step table, `0x{pcs[0]:x}` to `0x{pcs[-1]:x}` (see',
              '`scripts/gen_interp_steps.py`). -/', '',
