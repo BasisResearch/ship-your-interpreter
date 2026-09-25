@@ -50,10 +50,18 @@ literal run through `mbtowc` → literal iov → `%` parse through the jump tabl
   `local macro_rules | \`(tactic| sx_side) => \`(tactic| closed_decide)` after it: N1's scoped
   `assumption` rule recurses on literal `Int.lt` branches.
 
-## In flight
+- `Fprintf/Sbprintf.lean`, `Outer.lean`, `Top.lean`, `Run.lean`: `sbprintf_run` (`__sbprintf`),
+  `vfp_outer` (outer `_vfprintf_r(stdout)`), `fprintf_wrap`, `fprintf_sb`, `fprintf_via`; stdout's
+  flags (`lh 0x200a`) are a post through all four.
+- `Fprintf/Fmts.lean`: `fprintf_lld`, `fprintf_s` (`strlen` through `strlen_sw`).
+- `Fprintf/Out.lean`: **`out.fprintf` proved** (`fprintf_out`): data view `soDt` (impure,
+  formats, `"."`, jump table, `interpText`, the name), `putcs (lldBytes v) = intToString v.toInt`,
+  `OutEnd` through `outEnd_of`. Field and HOLES row removed; `ProofValuePrint` calls the theorem.
+  Statement change (INTERP_DESIGN §10 N5): `interpText` live and `0x80100000 ≤ s - fprintfNeed`.
 
-`__sbprintf` (stack `FILE` set-up, inner run, `_fflush_r`), the outer `_vfprintf_r(stdout)` +
-`fprintf`, the Iris wrapper to `outSpec`, the `out.fprintf` field + HOLES row.
+## Status
+
+Done. `out.fprintf` is discharged; merged `hub/lane-n3` at `ecc8d0a`.
 
 ## Statement issues
 
