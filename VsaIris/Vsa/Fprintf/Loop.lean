@@ -56,11 +56,14 @@ structure VfpSpills (Mt : Mem) (sp : BitVec 64) (C : Nat → BitVec 64) : Prop w
   s10 : ldv .ld Mt (sp + 496#64).toNat = C 26
   s11 : ldv .ld Mt (sp + 488#64).toNat = C 27
 
-/-- The bytes `vfp_head` writes: the frame's low `256` bytes and the nine
-spill slots (not `ra`, `s0`, `s4`, `s6`, spilled at the entry). -/
+/-- The bytes `vfp_head` writes: reent/`FILE`/count at `sp`, the zeroed slots
+`40`, `72`–`96`, `144`, the `uio` at `224`, and the nine spill slots. The
+entry's slots (`ap` at `24`, the decimal point at `56`/`64`, the `mbstate` at
+`200`, `ra`/`s0`/`s4`/`s6`) are outside. -/
 def HeadReg (sp : Nat) (a : Nat) : Prop :=
-  (sp ≤ a ∧ a < sp + 256) ∨ (sp + 488 ≤ a ∧ a < sp + 528) ∨ (sp + 536 ≤ a ∧ a < sp + 544) ∨
-    (sp + 552 ≤ a ∧ a < sp + 576)
+  (sp ≤ a ∧ a < sp + 24) ∨ (sp + 40 ≤ a ∧ a < sp + 48) ∨ (sp + 72 ≤ a ∧ a < sp + 104) ∨
+    (sp + 144 ≤ a ∧ a < sp + 152) ∨ (sp + 224 ≤ a ∧ a < sp + 248) ∨ (sp + 488 ≤ a ∧ a < sp + 528) ∨
+    (sp + 536 ≤ a ∧ a < sp + 544) ∨ (sp + 552 ≤ a ∧ a < sp + 576)
 
 /-- The state `vfp_head` hands the loop: `VfpLoop` (reent `s0`, `FILE` `s4`,
 format `s6`), the nine spills, the kept registers, the frame. -/
