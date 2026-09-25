@@ -386,7 +386,7 @@ theorem fprintfErr_run {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     (h12 : R 12 = p) (hDt : ldv .ld Dt 0x8001b970 = 0x8001b538#64)
     (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
     (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8)
-    (hC : ConsoleMt Mt) (hE : ErrMt Mt) (hL : LocaleMt Mt)
+    {fl : BitVec 64} (hC : ConsoleMt fl Mt) (hE : ErrMt Mt) (hL : LocaleMt Mt)
     (hstr : FprStr live Dt DA s p n)
     (hF0 : Fp.FmtAt Dt (fprDA DA) 0x800195e0 [37#8]) (hSF : Fp.SFmt Dt (fprDA DA) 0x800195e0)
     (hF : Fp.FmtAt Dt (fprDA DA) 0x800195e2 [10#8, 0#8])

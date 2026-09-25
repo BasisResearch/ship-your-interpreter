@@ -261,7 +261,7 @@ theorem fwrite_proved (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel li
     (hs3 := hs3) (hs4 := hs4) (hal := hal) (hra := hra) (hn := hn)
     (hn0 := eq_false fun h => by subst h; simp at hn0)
     (h1 := h1) (h2 := h2) (h10 := h10) (h11 := h11) (h12 := h12) (h13 := h13)
-    (hC := consoleMt_of hok hMx) (hE := errMt_of hok hMx) (hDt := ldv_fwDt rd _ _) (bs := bs)
+    (hC := (consoleMt_ex hok hMx).choose_spec) (hE := errMt_of hok hMx) (hDt := ldv_fwDt rd _ _) (bs := bs)
     (hbn := by rw [hbl]; exact ((BitVec.ofNat_toNat _ _).trans (BitVec.setWidth_eq _)).symm)
     (hbl0 := by omega) (hbl := by omega) (hb1 := hb1) (hb2 := by omega) (hb3 := by omega)
     (hbd := fun i hi => by

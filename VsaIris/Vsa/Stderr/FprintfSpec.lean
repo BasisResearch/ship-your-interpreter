@@ -348,7 +348,7 @@ theorem fprintf_proved (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel l
       hroA _ (by simp only [fpRo, List.mem_append, mem_accAddrs_iff]; omega)⟩
     ⟨by rw [fpDt_ro (by simp only [fpRo, List.mem_append, mem_accAddrs_iff]; omega)]; decide,
       by rw [fpDt_ro (by simp only [fpRo, List.mem_append, mem_accAddrs_iff]; omega)]; decide⟩
-    (consoleMt_of hok hMx) (errMt_of hok hMx) (localeMt_of hok hMx) hstr
+    (consoleMt_ex hok hMx).choose_spec (errMt_of hok hMx) (localeMt_of hok hMx) hstr
     (fp_fmt0 _ _ _) (fp_sfmt _ _ _) (fp_fmt2 _ _ _)
     (hroA _ (by simp only [fpRo, List.mem_append, mem_accAddrs_iff]; omega))
     (by rw [fpDt_ro (by simp only [fpRo, List.mem_append, mem_accAddrs_iff]; omega)]; decide)

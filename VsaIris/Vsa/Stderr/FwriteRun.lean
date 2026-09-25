@@ -53,7 +53,7 @@ macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
     (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - 768) (hal : s.toNat % 16 = 0)
     (hra : ra.toNat % 4 = 0) (hn : n.toNat < 2 ^ 30) (hn0 : (n = 0#64) = False)
     (h1 : R 1 = ra) (h2 : R 2 = s) (h10 : R 10 = ptr) (h11 : R 11 = 1#64) (h12 : R 12 = n)
-    (h13 : R 13 = 0x8001bbd8#64) (hC : ConsoleMt Mt) (hE : ErrMt Mt)
+    (h13 : R 13 = 0x8001bbd8#64) {fl : BitVec 64} (hC : ConsoleMt fl Mt) (hE : ErrMt Mt)
     (hDt : ldv .ld Dt 0x8001b970 = 0x8001b538#64)
     (bs : List (BitVec 8)) (hbn : n = BitVec.ofNat 64 bs.length) (hbl0 : 0 < bs.length)
     (hbl : bs.length < 2 ^ 30)

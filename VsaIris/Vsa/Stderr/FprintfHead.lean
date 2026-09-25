@@ -74,7 +74,7 @@ macro "fh_tr" : tactic => `(tactic| (
     (h12 : R 12 = p) (hDt : ldv .ld Dt 0x8001b970 = 0x8001b538#64)
     (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
     (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8)
-    (hC : ConsoleMt Mt) (hE : ErrMt Mt) (hL : LocaleMt Mt)
+    {fl : BitVec 64} (hC : ConsoleMt fl Mt) (hE : ErrMt Mt) (hL : LocaleMt Mt)
     (hk : ∀ R' Mt', FprLoop R' Mt' Mt s p ra (fprC R) →
       SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs
       (outS s 4096) Q t 0x8000a9b0#64 R' Mt') :

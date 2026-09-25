@@ -103,6 +103,12 @@ theorem consoleMt_of {o : Bool} {img : Nat → BitVec 8} (h : StdioOKAt o img) {
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.lock (F _ _ (by decide) (by decide)))
   · exact (ldv_lw_of_imgLE (stdio_imgLE hM hc.lockMode (F _ _ (by decide) (by decide)))).trans (by decide)
 
+/-- `stdout` at a boundary image of either orientation, as loads: a run
+that never reads `_flags` (the `stderr` paths) takes this. -/
+theorem consoleMt_ex {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
+    (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) : ∃ fl, ConsoleMt fl Mt :=
+  let ⟨_, h⟩ := h; ⟨_, consoleMt_of h hM⟩
+
 /-- `_impure_ptr` as a persistent data view (`impureRO`). -/
 def impDt : Mem := fillMem impureByte (List.range' 0x8001b970 8)
 
