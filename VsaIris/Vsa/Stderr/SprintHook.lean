@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stderr.SprintErr
 import VsaIris.Vsa.Fprintf.Print
+import VsaIris.Vsa.Fprintf.End
 
 /-!
 # `stderr`'s flush as `vfp_printH`'s hook (lane N3)
@@ -96,5 +97,26 @@ theorem SprintPost.printRet {Mt M' : Mem} {sp : BitVec 64} (h : SprintPost Mt M'
     rw [toNat_add_lit (by omega)]; omega
   exact ⟨by simpa using T 0 (by omega), T 8 (by omega), T 16 (by omega), T 32 (by omega),
     T 224 (by omega), h.res⟩
+
+/-- **The end's slots survive the last flush** (`vfp_end`'s hook post): the
+count, `stderr`'s flags (rewritten with the same `0x201a`) and `_flags2`, the
+spills. -/
+theorem SprintPost.endRet {Mt M' : Mem} {sp : BitVec 64} (h : SprintPost Mt M' sp)
+    (hfl : ldv .lh Mt 0x8001bbe8 = 0x201a#64)
+    (hsp1 : 0x80100000 ≤ sp.toNat) (hsp2 : sp.toNat + 592 ≤ 0x88000000) :
+    Fp.EndRet Mt M' sp 0x8001bbd8#64 := by
+  have F : Fp.Frame M' Mt (fun a => (sp.toNat - 256 ≤ a ∧ a < sp.toNat) ∨
+      (sp.toNat + 232 ≤ a ∧ a < sp.toNat + 248) ∨ (0x8001bbe8 ≤ a ∧ a < 0x8001bbea) ∨
+      Stdio.errnoFoot a) := fun a ha => by
+    simp only [not_or] at ha
+    exact h.frame a ha.1 ha.2.1 ha.2.2.1 ha.2.2.2
+  refine ⟨F.ldv _ fun j hj => ?_, ?_, F.ldv _ fun j hj => ?_, fun k h1 h2 => F.ldv _ fun j hj => ?_⟩
+  · simp only [widthOfM, Stdio.errnoFoot, Stdio.InRange] at hj ⊢
+    rw [toNat_add_lit (by omega)]; omega
+  · show ldv .lh M' 0x8001bbe8 = ldv .lh Mt 0x8001bbe8
+    rw [h.flagsS, hfl]
+  · simp only [widthOfM, Stdio.errnoFoot, Stdio.InRange] at hj ⊢
+    rw [show (2147597272#64 + 176#64).toNat = 2147597448 from rfl]; omega
+  · simp only [widthOfM, Stdio.errnoFoot, Stdio.InRange] at hj ⊢; omega
 
 end VsaIris.Sym
