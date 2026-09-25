@@ -218,7 +218,8 @@ theorem naArity_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
 
 /-- A C string's bytes, read through any `rd` that agrees with its image. -/
 theorem cstrCov_of_img {R : Nat → Prop} {rd : Nat → BitVec 8} {p : Nat} {x : String}
-    (hR : ∀ i, i ≤ x.toList.length → R (p + i)) (hc : CStrImg rd p x) :
+    (hR : ∀ i, i ≤ x.toList.length → R (p + i)) (hc : CStrImg rd p x)
+    (hW : StrWin p x.toList.length) :
     CStrCov R rd p (x.toList.map fun c => BitVec.ofNat 8 c.toNat) where
   bytes i h := by
     simp only [List.length_map] at h
@@ -232,6 +233,10 @@ theorem cstrCov_of_img {R : Nat → Prop} {rd : Nat → BitVec 8} {p : Nat} {x :
   nul := by
     simp only [List.length_map]
     exact ⟨hR _ (Nat.le_refl _), hc.2⟩
+  win i hi := by
+    simp only [List.length_map] at hi
+    have := hW.lo; have := hW.hi; have := hW.htif
+    unfold htifLo at *; unfold ReadAddr; omega
 
 /-- `"%s"` with a C string argument. -/
 theorem naS_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
@@ -321,10 +326,10 @@ omit I in
 theorem readable_str {p : Nat} {x : String} :
     binImg (GF := GF) ∗ strAt p x ⊢ ∃ rd : Nat → BitVec 8,
       readable (fun a => rodataDom a ∨ InExt (p, x.toList.length + 1) a) (fun _ => False) rd ∗
-      ⌜(∀ a, rodataDom a → rd a = rodataByte a) ∧ CStrImg rd p x⌝ := by
+      ⌜(∀ a, rodataDom a → rd a = rodataByte a) ∧ CStrImg rd p x ∧ StrWin p x.toList.length⌝ := by
   classical
   unfold binImg strAt
-  iintro ⟨⟨-, #Hr⟩, ⟨%img, %⟨hc, -⟩, #Hs⟩⟩
+  iintro ⟨⟨-, #Hr⟩, ⟨%img, %⟨hc, hw⟩, #Hs⟩⟩
   ihave #Hr' := roImg_sub (T := fun a => rodataDom a ∧ InExt (p, x.toList.length + 1) a)
     (fun k h => h.1) $$ Hr
   ihave #Hs' := roImg_sub (T := fun a => rodataDom a ∧ InExt (p, x.toList.length + 1) a)
@@ -347,7 +352,7 @@ theorem readable_str {p : Nat} {x : String} :
         iapply Hr $$ %k %(hk.resolve_right hin)
     · iapply ownImg_none
   · ipureintro
-    refine ⟨fun a ha => ?_, ⟨fun i hi => ?_, ?_⟩⟩
+    refine ⟨fun a ha => ?_, ⟨fun i hi => ?_, ?_⟩, hw⟩
     · by_cases hin : InExt (p, x.toList.length + 1) a
       · simp only [hin, ite_true]; exact (hag a ⟨ha, hin⟩).symm
       · simp only [hin, ite_false]
@@ -403,7 +408,8 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     ⟨by rw [e80]; unfold RtErr.rtErrNeed snprintfNeed Vsa.Sim.tohostAddr; omega,
       by rw [e80]; omega, by rw [e80]; omega⟩
   ihave #Hspec := RtErr.rtErr_spec HN live hcl Wp N L Room inp (s + 18446744073709551536#64) line
-    fmt x1 0#64 R Sro (fun _ => False) rd jb ρ st d hsp hinp hfmt hjb
+    fmt x1 0#64 R Sro (fun _ => False) rd jb ρ st d hsp
+    (by rw [e80]; unfold RtErr.rtErrNeed snprintfNeed; omega) hinp hfmt hjb
   ihave #Hgp := codeRes_gp $$ Hcode
   iapply ms_callNewlibAbort Wp hexec hcode (vs := [inp, line, fmt, x1, 0#64])
     (P := fun _ => iprop(argsAt [inp, line, fmt, x1, 0#64] ∗
@@ -1027,7 +1033,7 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       InExt ((imgW (imgM Margs) (args.toNat + 24 + 8)).toNat, t.toList.length + 1) a) ∨ False)
       rd 0x80019038#64 [imgW (imgM Margs) (args.toNat + 24 + 8), 0#64] :=
     naS_fmt (fun a ha => ⟨Or.inl (Or.inl ha), hrd.1 a ha⟩)
-      ⟨_, cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2⟩ 0#64
+      ⟨_, cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2.1 hrd.2.2⟩ 0#64
   ihave Hk := and_elim_r $$ Hk
   ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
   iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))

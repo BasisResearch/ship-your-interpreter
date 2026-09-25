@@ -193,10 +193,10 @@ def htifLo : Nat := 0x8001ad00
 /-- **The window a word-at-a-time string routine reads.** `strlen` and
 `strcmp` load whole aligned 8-byte words, so they read up to 7 bytes past
 the NUL of a `len`-character string at `p`: the window `[p, p + len + 8)`
-must be RAM and off the HTIF words. -/
+must be RAM (below `0x88000000`) and off the HTIF words. -/
 structure StrWin (p len : Nat) : Prop where
   lo : 0x80000000 ≤ p
-  hi : p + len + 8 ≤ 0x100000000
+  hi : p + len + 8 ≤ 0x88000000
   htif : p + len + 8 ≤ htifLo ∨ htifLo + 16 ≤ p
 
 /-- A C string at `p`, NUL included, read-only forever (`CString`), with the

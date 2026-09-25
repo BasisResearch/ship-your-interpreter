@@ -123,11 +123,22 @@ def parseFmt : List (BitVec 8) → Option (List Conv)
       | [] => none
     else parseFmt rest
 
-/-- The bytes at `p` in `rd` are `bs` followed by a NUL, all inside `R`. -/
+/-- A byte a string routine may read, with the 8 bytes its word loop reads
+from it: RAM below `0x88000000`, off the HTIF words. -/
+def ReadAddr (a : Nat) : Prop :=
+  0x80000000 ≤ a ∧ a + 8 ≤ 0x88000000 ∧ (a + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ a)
+
+theorem readAddr_rodata {a : Nat} (h : rodataDom a) : ReadAddr a := by
+  unfold rodataDom at h; unfold ReadAddr; omega
+
+/-- The bytes at `p` in `rd` are `bs` followed by a NUL, all inside `R`, each
+readable by a string routine (`ReadAddr`: `snprintf` bounds its 32-bit count
+by RAM). -/
 structure CStrCov (R : Nat → Prop) (rd : Nat → BitVec 8) (p : Nat) (bs : List (BitVec 8)) :
     Prop where
   bytes : ∀ i (h : i < bs.length), R (p + i) ∧ rd (p + i) = bs[i] ∧ bs[i] ≠ 0
   nul : R (p + bs.length) ∧ rd (p + bs.length) = 0
+  win : ∀ i, i ≤ bs.length → ReadAddr (p + i)
 
 /-- A format with bytes `bytes` and conversions `convs`, and its arguments,
 are safe to print: the format is a C string in `R` with only `%s`/`%d`
@@ -144,22 +155,24 @@ structure FmtArgsAt (R : Nat → Prop) (rd : Nat → BitVec 8) (fmt : BitVec 64)
 /-- A NUL within `n` bytes of `p`, all inside `R`, makes a C string there: the
 bytes before the first NUL. -/
 theorem cstrCov_of_nul {R : Nat → Prop} {rd : Nat → BitVec 8} {p : Nat} :
-    ∀ {n : Nat}, (∀ i, i < n → R (p + i)) → (∃ k, k < n ∧ rd (p + k) = 0) →
-      ∃ t, CStrCov R rd p t
-  | 0, _, ⟨_, hk, _⟩ => absurd hk (Nat.not_lt_zero _)
-  | n + 1, hR, h => by
+    ∀ {n : Nat}, (∀ i, i < n → R (p + i)) → (∀ i, i < n → ReadAddr (p + i)) →
+      (∃ k, k < n ∧ rd (p + k) = 0) → ∃ t, CStrCov R rd p t
+  | 0, _, _, ⟨_, hk, _⟩ => absurd hk (Nat.not_lt_zero _)
+  | n + 1, hR, hW, h => by
     by_cases h' : ∃ k, k < n ∧ rd (p + k) = 0
-    · exact cstrCov_of_nul (fun i hi => hR i (by omega)) h'
+    · exact cstrCov_of_nul (fun i hi => hR i (by omega)) (fun i hi => hW i (by omega)) h'
     · obtain ⟨k, hk, h0⟩ := h
       have hkn : k = n := by
         apply Classical.byContradiction; intro hne; exact h' ⟨k, by omega, h0⟩
       subst hkn
-      refine ⟨(List.range k).map (fun i => rd (p + i)), ⟨fun i hi => ?_, ?_⟩⟩
+      refine ⟨(List.range k).map (fun i => rd (p + i)), ⟨fun i hi => ?_, ?_, fun i hi => ?_⟩⟩
       · have hi' : i < k := by simpa using hi
         refine ⟨hR i (by omega), by simp, ?_⟩
         simpa using fun hz => h' ⟨i, hi', hz⟩
       · simp only [List.length_map, List.length_range]
         exact ⟨hR k (by omega), h0⟩
+      · simp only [List.length_map, List.length_range] at hi
+        exact hW i (by omega)
 
 /-- A C string of the fixed `.rodata`, read through any `rd` that agrees with
 the image there. The byte facts are one `decide` over the image. -/
@@ -174,6 +187,10 @@ theorem cstrCov_rodata {R : Nat → Prop} {rd : Nat → BitVec 8}
   nul := by
     obtain ⟨hR, hrd⟩ := hro _ hn.1
     exact ⟨hR, hrd.trans hn.2⟩
+  win i hi := by
+    rcases Nat.lt_or_ge i bs.length with h | h
+    · exact readAddr_rodata (hb i h).1
+    · rw [show i = bs.length by omega]; exact readAddr_rodata hn.1
 
 /-- Some format bytes and conversions make `fmt` and `args` safe to print. -/
 def FmtArgsOK (R : Nat → Prop) (rd : Nat → BitVec 8) (fmt : BitVec 64)
@@ -205,12 +222,13 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
 /-- `snprintf(dst, n, fmt, args…)`, `0 < n < 2^31`: writes a C string into
 `dst[0, n)`, reads the format and its `%s` arguments, keeps newlib's runtime
-data in its boundary state, prints nothing, returns. -/
+data in its boundary state, prints nothing, returns (to an aligned address;
+lane N2: proved, `Vsa/SnpGen.lean`). -/
 def snprintfSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s dst n fmt : BitVec 64) (args : List (BitVec 64)) (cs : Nat → BitVec 64)
     (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) : IProp GF :=
   fnSpecW Wp snprintfEntry
-    (fun _ => iprop(argsAt ([dst, n, fmt] ++ args) ∗ blockOwn dst.toNat n.toNat ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt ([dst, n, fmt] ++ args) ∗ blockOwn dst.toNat n.toNat ∗
       readable Sro Sown rd ∗ stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
     (fun _ => iprop(clobbered argRegs ∗ cstrBuf dst.toNat n.toNat ∗ readable Sro Sown rd ∗
       stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
@@ -269,14 +287,25 @@ end Specs
 /-! ## The holes -/
 
 /-- The assumed newlib statements at the post-`stderr`-write state `Ierr`,
-for every Iris instance, every `live` set holding the code, and both WPs. -/
+for every Iris instance, every `live` set holding the code, and both WPs:
+none left (lane N2 proved `snprintf`, `SnprintfProved`). -/
 structure NewlibCoreAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
-  /-- `snprintf` with a `%s`/`%d` format (`runtime_error`, `interp_run`). -/
-  snprintf : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
+
+theorem NewlibCoreAt.proved (Ierr : (Nat → BitVec 8) → Prop) : NewlibCoreAt Ierr := ⟨⟩
+
+/-- `snprintf(dst, n, fmt, args…)` with a `%s`/`%d` format (`runtime_error`,
+`interp_run`): the stack and the destination above newlib's data (the format's
+and `%s` strings' bytes are RAM off the HTIF words, `CStrCov.win`). Proved:
+`Vsa/SnpGen.lean` (`Sym.snprintf_ok`), above the interpreter proofs that use
+it; `NewlibCore.full` takes it. -/
+def SnprintfProved : Prop :=
+  ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s dst n fmt : BitVec 64) (args : List (BitVec 64))
     (cs : Nat → BitVec 64) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8),
     CodeLive live → args.length ≤ 5 → 0 < n.toNat → n.toNat < 2 ^ 31 →
     FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt args → SpIn s snprintfNeed →
+    0x8001c168 ≤ s.toNat - snprintfNeed → 0x8001c168 ≤ dst.toNat →
+    dst.toNat + n.toNat ≤ 0x100000000 →
     ⊢ snprintfSpec live Wp s dst n fmt args cs Sro Sown rd
 
 /-- `fprintf(stderr, "%s\n", p)` (`main`'s error line): a NUL within the
@@ -294,10 +323,12 @@ def FprintfProved : Prop :=
     SpIn s fprintfNeed → 0x80100000 ≤ s.toNat - fprintfNeed →
     ⊢ fprintfSpec live Wp s p n bv cs o
 
-/-- The newlib statements the proofs use: the assumed ones, `fprintf` (proved,
-`FprintfProved`) and `exit`'s interior, which `ExitH/Iris.lean` proves from
+/-- The newlib statements the proofs use: the assumed ones (none), `snprintf`
+(proved, `SnprintfProved`), `fprintf` (proved, `FprintfProved`) and `exit`'s interior, which `ExitH/Iris.lean` proves from
 `CloseReady` (`NewlibCore.full`). -/
 structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop extends NewlibCoreAt Ierr where
+  /-- `snprintf` with a `%s`/`%d` format (proved: `Sym.snprintf_ok`). -/
+  snprintf : SnprintfProved
   /-- `fprintf(stderr, "%s\n", p)` (proved: `Newlib.fprintf_ok`). -/
   fprintf : FprintfProved
   /-- The newlib interior of `exit` (proved: `ExitH.exitHandlers_spec`). -/

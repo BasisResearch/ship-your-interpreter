@@ -4,9 +4,10 @@ import VsaIris.Vsa.SnpFmt
 /-!
 # `snprintf` on any `%s`/`%d` format (lane N2)
 
-`snprintf_gen` is H5's `newlib.snprintf` statement proved for a stack and a
-destination above newlib's data and readable bytes in RAM off the HTIF words
-(`ReadGeom`), with a 4-aligned return address. The run reads the format and
+`snprintf_gen` is H5's `newlib.snprintf` statement, for a stack and a
+destination above newlib's data and a 4-aligned return address; the format's
+and every `%s` argument's bytes are RAM off the HTIF words (`CStrCov.win`,
+`ReadAddr`). The run reads the format and
 every `%s` argument (`readL`) through its data view: the read-only ones from
 `roImg Sro rd`, the owned ones promoted (`snpSpec_of_runO`). RAM bounds each
 string below `2^27` bytes, so the rendering stays below `2^31`
@@ -21,22 +22,17 @@ open VsaIris.Inst
 
 /-! ## Readable bytes -/
 
-/-- Readable bytes lie in RAM with a string routine's 8-byte read window off
-the HTIF words. -/
-def ReadGeom (R : Nat → Prop) : Prop :=
-  ∀ a, R a → 0x80000000 ≤ a ∧ a + 8 ≤ 0x88000000 ∧ (a + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ a)
-
 /-- A run of readable bytes has a string routine's window. -/
-theorem readGeom_win {R : Nat → Prop} (hg : ReadGeom R) {p len : Nat}
-    (h : ∀ i, i ≤ len → R (p + i)) :
+theorem readAddr_win {p len : Nat} (h : ∀ i, i ≤ len → ReadAddr (p + i)) :
     0x80000000 ≤ p ∧ p + len + 8 ≤ 0x88000000 ∧ (p + len + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ p) := by
-  obtain ⟨h0, -, h0h⟩ := hg p (by simpa using h 0 (Nat.zero_le _))
-  obtain ⟨-, hl, -⟩ := hg (p + len) (h len (Nat.le_refl _))
+  obtain ⟨h0, -, h0h⟩ := h 0 (Nat.zero_le _)
+  obtain ⟨-, hl, -⟩ := h len (Nat.le_refl _)
+  simp only [Nat.add_zero] at h0 h0h
   refine ⟨h0, hl, ?_⟩
   rcases h0h with h0h | h0h
   · if hc : p + len + 8 ≤ 0x8001ad00 then exact .inl hc
     else
-      obtain ⟨-, -, hb⟩ := hg (p + (0x8001acf9 - p)) (h _ (by omega))
+      obtain ⟨-, -, hb⟩ := h (0x8001acf9 - p) (by omega)
       omega
   · exact .inr h0h
 
@@ -94,6 +90,21 @@ theorem readL_R {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {ar
     rcases Nat.lt_or_ge j (strT R rd args i).length with hj | hj
     · exact (hs.bytes j hj).1
     · rw [show j = (strT R rd args i).length by omega]; exact hs.nul.1
+
+/-- Every byte the run reads has a string routine's window. -/
+theorem readL_addr {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {args : List (BitVec 64)}
+    {bytes : List (BitVec 8)} {convs : List Conv} (FA : FmtArgsAt R rd fmt args bytes convs) {a : Nat}
+    (ha : a ∈ readL R rd fmt.toNat bytes convs args) : ReadAddr a := by
+  rcases mem_readL.1 ha with ⟨h1, h2⟩ | ⟨i, hi, hc, h1, h2⟩
+  · obtain ⟨j, rfl⟩ : ∃ j, a = fmt.toNat + j := ⟨a - fmt.toNat, by omega⟩
+    exact FA.fmt_str.win j (by omega)
+  · have hs := strT_spec (R := R) (rd := rd) (i := i) (by
+      have hc' : convs[i] = .str := by simpa [List.getElem?_eq_getElem hi] using hc
+      obtain ⟨t, ht⟩ := FA.strs i hi hc'
+      exact ⟨t, by rwa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem
+        (Nat.lt_of_lt_of_le hi FA.arity)]⟩)
+    obtain ⟨j, rfl⟩ : ∃ j, a = (args.getD i 0).toNat + j := ⟨a - (args.getD i 0).toNat, by omega⟩
+    exact hs.win j (by omega)
 
 /-! ## The view -/
 
@@ -254,7 +265,7 @@ end Own
 /-- A `%s` argument's string, as the run's view reads it. -/
 theorem genDStr {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {args : List (BitVec 64)}
     {bytes : List (BitVec 8)} {convs : List Conv} {Sown : Nat → Prop} (FA : FmtArgsAt R rd fmt args bytes convs)
-    (hg : ReadGeom R) {i : Nat} (hi : i < convs.length) (hia : i < args.length) (hc : convs[i] = .str) :
+    {i : Nat} (hi : i < convs.length) (hia : i < args.length) (hc : convs[i] = .str) :
     DStr (viewMem (genImg (readL R rd fmt.toNat bytes convs args) rd)
         (genRO (readL R rd fmt.toNat bytes convs args) Sown ++ genOwn (readL R rd fmt.toNat bytes convs args) Sown))
       (genRO (readL R rd fmt.toNat bytes convs args) Sown ++ genOwn (readL R rd fmt.toNat bytes convs args) Sown)
@@ -268,11 +279,7 @@ theorem genDStr {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {ar
       (args[i]).toNat + j ∈ readL R rd fmt.toNat bytes convs args := fun j hj =>
     mem_readL.2 (.inr ⟨i, hi, by simp [List.getElem?_eq_getElem hi, hc], by rw [hgd]; omega,
       by rw [hgd]; omega⟩)
-  have hR : ∀ j, j ≤ (strT R rd args i).length → R ((args[i]).toNat + j) := fun j hj => by
-    rcases Nat.lt_or_ge j (strT R rd args i).length with h | h
-    · exact (hs.bytes j h).1
-    · rw [show j = (strT R rd args i).length by omega]; exact hs.nul.1
-  obtain ⟨hlo, hhi, hht⟩ := readGeom_win hg hR
+  obtain ⟨hlo, hhi, hht⟩ := readAddr_win hs.win
   refine ⟨⟨fun b h1 h2 => mem_genDA.2 (.inr (by
       have := hin (b - (args[i]).toNat) (by omega); rwa [Nat.add_sub_cancel' h1] at this)),
     fun j hj => by rw [genView_read (hin j (by omega)), (hs.bytes j hj).2.1]; exact (hs.bytes j hj).2.2,
@@ -285,14 +292,14 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 /-- **`newlib.snprintf`**: `snprintf(dst, n, fmt, args…)` with a `%s`/`%d`
 format writes a NUL-terminated string into `dst[0, n)`, keeps the readable
 bytes and newlib's data, for a 4-aligned return address, a stack and a
-destination above newlib's data, and readable bytes in RAM off the HTIF words. -/
+destination above newlib's data (the format's and `%s` strings' bytes are RAM
+off the HTIF words: `CStrCov.win`). -/
 theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s dst n fmt : BitVec 64) (args : List (BitVec 64)) (cs : Nat → BitVec 64)
     (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) (hcl : CodeLive live) (hargs5 : args.length ≤ 5)
     (hn0 : 0 < n.toNat) (hn : n.toNat < 2 ^ 31) (hfa : FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt args)
     (hsp : SpIn s snprintfNeed) (hbss : 0x8001c168 ≤ s.toNat - snprintfNeed)
-    (hd1 : 0x8001c168 ≤ dst.toNat) (hd2 : dst.toNat + n.toNat ≤ 0x100000000)
-    (hrg : ReadGeom (fun a => Sro a ∨ Sown a)) :
+    (hd1 : 0x8001c168 ≤ dst.toNat) (hd2 : dst.toNat + n.toNat ≤ 0x100000000) :
     ⊢ fnSpecW Wp snprintfEntry
       (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt ([dst, n, fmt] ++ args) ∗ blockOwn dst.toNat n.toNat ∗
         readable Sro Sown rd ∗ stdioOwn ∗ callFrame s snprintfNeed Newlib.calleeSaved cs))
@@ -329,7 +336,7 @@ theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel liv
       (a + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ a) := fun a ha => by
     rcases mem_genDA.1 ha with h | h
     · simp only [baseDA, List.mem_append, mem_accAddrs_iff] at h; omega
-    · obtain ⟨h1, h2, h3⟩ := hrg a (hLR a h); omega
+    · obtain ⟨h1, h2, h3⟩ := readL_addr FA h; omega
   have DO := dataOff_of (s := s.toNat) (dst := dst.toNat) (n := n.toNat)
     (fun a ha => (hDA a ha).1) (fun a ha => (hDA a ha).2) hoff BV.tab
   have e2 : R 2 = BitVec.ofNat 64 s.toNat := by rw [h2]; simp
@@ -349,9 +356,7 @@ theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel liv
   -- the format in the view
   have hfin : ∀ j, j ≤ bytes.length → fmt.toNat + j ∈ L := fun j hj =>
     mem_readL.2 (.inl ⟨by omega, by omega⟩)
-  have hfR : ∀ j, j ≤ bytes.length → (Sro (fmt.toNat + j) ∨ Sown (fmt.toNat + j)) := fun j hj =>
-    hLR _ (hfin j hj)
-  obtain ⟨hflo, hfhi, hfht⟩ := readGeom_win hrg hfR
+  obtain ⟨hflo, hfhi, hfht⟩ := readAddr_win FA.fmt_str.win
   have F : FmtAt Dt DA fmt.toNat bytes :=
     ⟨fun i h => by
       rw [genView_read (hfin i (by omega))]
@@ -361,10 +366,10 @@ theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel liv
         have := hfin (b - fmt.toNat) (by omega); rwa [Nat.add_sub_cancel' h1] at this)),
       hflo, by omega, by omega⟩⟩
   have HS : StrArgs Dt DA convs args := fun i h h' hc =>
-    ⟨_, (genDStr (Sown := Sown) FA hrg h h' hc).1⟩
+    ⟨_, (genDStr (Sown := Sown) FA h h' hc).1⟩
   have hB : ∀ i (h : i < convs.length) (h' : i < args.length), convs[i] = .str →
       (cstrOf (imgM Dt) (args[i]).toNat (2 ^ 32)).length ≤ 2 ^ 27 := fun i h h' hc => by
-    obtain ⟨hd, hl⟩ := genDStr (Sown := Sown) FA hrg h h' hc
+    obtain ⟨hd, hl⟩ := genDStr (Sown := Sown) FA h h' hc
     rw [cstrOf_eq _ _ _ _ hd.nz hd.nul (by have := hd.hi; omega)]
     simp; omega
   have hlenT := fmtRen_length_le (imgM Dt) (2 ^ 27) (by decide) bytes.length bytes convs args
@@ -383,6 +388,11 @@ theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel liv
       ⟨min (fmtRen (imgM Dt) bytes args).length (n.toNat - 1), by omega, O.nul⟩
     simp only [Newlib.calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hz
     omega
+
+/-- **`newlib.snprintf`, discharged** (`Newlib.SnprintfProved`). -/
+theorem snprintf_ok : SnprintfProved := by
+  intro hlc GF _ live Wp s dst n fmt args cs Sro Sown rd hcl ha hn0 hn hfa hsp hbss hd1 hd2
+  exact snprintf_gen live Wp s dst n fmt args cs Sro Sown rd hcl ha hn0 hn hfa hsp hbss hd1 hd2
 
 end Spec
 

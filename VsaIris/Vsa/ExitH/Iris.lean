@@ -327,9 +327,10 @@ namespace VsaIris.Newlib
 /-- **The newlib statements from the assumed ones**: `exit`'s interior is
 proved (`ExitH.exitHandlers_spec`) at `StdioErrOK`, a state the close path
 runs from (`StdioErrOK.closeReady`); `fprintf`'s proof (`fprintf_ok`, above
-this file) is passed in. -/
-theorem NewlibCore.full (h : NewlibCore) (hf : FprintfProved) : NewlibHoles :=
+this file) and `snprintf`'s (`Sym.snprintf_ok`) are passed in. -/
+theorem NewlibCore.full (h : NewlibCore) (hf : FprintfProved) (hs : SnprintfProved) : NewlibHoles :=
   { toNewlibCoreAt := h
+    snprintf := hs
     fprintf := hf
     exitHandlers := fun live Wp s e r cs o Φ quiet hcl hs =>
       ExitH.exitHandlers_spec (fun _ h => Stdio.StdioErrOK.closeReady h) live Wp s e r cs o Φ quiet hcl hs }

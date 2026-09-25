@@ -37,7 +37,7 @@ theorem strBytes_of_img {img : Nat → BitVec 8} {q : Nat} {x : String}
 theorem regions_of_win {P : BitVec 64} {len : Nat} (h : VsaIris.Interp.StrWin P.toNat len) :
     ReadRegions P len := by
   have hlo := h.lo; have hhi := h.hi; have ht := h.htif
-  refine ⟨hlo, hhi, by omega, ?_⟩
+  refine ⟨hlo, by omega, by omega, ?_⟩
   have : tohostAddr = VsaIris.Interp.htifLo := rfl
   rcases ht with ht | ht
   · left; omega

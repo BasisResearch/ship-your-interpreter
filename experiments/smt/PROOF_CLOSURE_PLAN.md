@@ -4330,46 +4330,22 @@ callee specs from `VsaIris/Interp/SpecConcat.lean`:
   `sI` for `exit`, or the core is narrowed to `interp_run`'s region and
   `StackGeom` bounds every site by it.
 
-## `newlib.snprintf`: proved under premises its consumers cannot yet supply (lane N2, 2026-09-25)
+## `newlib.snprintf`: discharged (lane N2, 2026-09-25)
 
-- **Status:** `Sym.snprintf_gen` (`VsaIris/Vsa/SnpGen.lean`, axioms ⊆
-  {propext, Classical.choice, Quot.sound}) proves `Newlib.snprintfSpec`'s
-  content for every `%s`/`%d` format (`FmtArgsOK`) with four added premises:
-  a 4-aligned return address (in the precondition), `0x8001c168 ≤ s - 1024`,
-  `0x8001c168 ≤ dst ∧ dst + n ≤ 2^32`, and `ReadGeom (Sro ∨ Sown)`: every
-  readable byte in `[0x80000000, 0x88000000 - 8]` with its 8-byte window off
-  the HTIF words. The hole `NewlibHolesAt.snprintf` stays ledgered.
-- **Why each premise is needed.** `_svfprintf_r` counts in a 32-bit `int`
-  (`addw`), and so do `__ssprint_r`'s `uio_resid` and `__ssputs_r`'s `_w`.
-  The proved path needs the rendering below `2^31` (`svf_iterS`'s
-  `total.length + k + len + 1 < 2^31`). Strings below `0x88000000` are shorter
-  than `2^27` (`readGeom_win`), which bounds the rendering by
-  `fmtRen_length_le`. With only a `2^32` window, one `%s` string may approach
-  `2^31` bytes and the count overflows onto the `EOF` path, which the proof
-  does not cover. The stack and destination bounds keep the frame and the
-  destination off newlib's data that the run reads (the locale words,
-  `_impure_ptr`) and off the HTIF words. The alignment is `ret`'s `jalr`.
-- **Missing suppliers (the obstruction):**
-  - `RuntimeError.rtErr_spec` (both calls). `Sro`/`Sown` are unconstrained
-    parameters. `SpIn s rtErrNeed` and `InpGeom inp` give only
-    `≥ tohostAddr + 16`, not `≥ 0x8001c168`. `InpGeom` is built only at
-    `SupplyBoot.inpGeom_top` (concrete), so a field `0x8001c168 ≤ inp` is
-    cheap. The stack bound and `ReadGeom` must come from `rtErr_spec`'s
-    callers (`ErrArm`, `LeafErr`, `ProofNativeAssert`).
-  - `CallCloP.cloArityTail`: the named-closure caller's `Sro` includes the
-    closure name's bytes, bounded only by `SharedWin` (`k + 8 ≤ 2^32`).
-  - The shared-view invariants (`Vsa.Sim.SharedGeom.ram`,
-    `LayoutInstance.BootHeapFacts.shared_geom`, `SharedWin`, `ReadOK`) bound
-    shared bytes only below `2^32`. A supplier needs a RAM bound
-    (`k + 8 ≤ 0x88000000`) on the shared view at the boundary, threaded to the
-    AST name strings.
-  - `TopRunP.wp_topAbrupt` can supply everything (concrete addresses,
-    `hok.jalCert` for the alignment).
-- **Closing it:** narrow `NewlibHolesAt.snprintf` to `snprintf_gen`'s
-  premises (and `snprintfSpec`'s precondition to the aligned return address),
-  then supply them at the four call sites. Call sites use `ms_callNewlibA` or
-  prove `(jal pc + 4) % 4 = 0`. RuntimeError also needs the `rtErr_spec`
-  premises and the shared-view RAM bound above.
+- **Status: closed.** `Sym.snprintf_ok : Newlib.SnprintfProved`
+  (`VsaIris/Vsa/SnpGen.lean`, over `snprintf_gen`) is passed to
+  `NewlibCore.full`; `IrisHoles` has no fields (`IrisHoles.proved`).
+- **Statement (INTERP_DESIGN.md Decisions, 2026-09-25):** aligned return
+  address, stack and destination above newlib's data, and every format/`%s`
+  byte in RAM below `0x88000000` off the HTIF words (`CStrCov.win`), which
+  bounds the rendering below `2^31` for `_svfprintf_r`'s 32-bit count.
+- **Boundary:** `BootHeapFacts.shared_geom : SharedReadWin` with the RAM
+  bound (lane B3's P7 applied here); `SharedWin`, `ReadOK.win`, `StrWin.hi`
+  carry it. **Remaining for lane B3's merge:** its boot witnesses
+  (`Vsa/Sim/Boot/Owned.lean` `OwnOk.sharedWin`, `scripts/gen_boot_witness.py`)
+  must check `r.1 + r.2 + 7 ≤ 0x88000000`, and B1's stdout orientation needs
+  the stdout proofs (N1/N5) to run the `ORIENT` block.
+
 ## Lane V review: `Loaded interpRunLayout` is not reached by the binary (2026-09-25)
 
 Full report: `REVIEW.md` (repo root); tooling and results in `experiments/review-v/`.

@@ -153,18 +153,19 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
   have hsp1 : SpIn sFr snprintfNeed := ⟨by decide, by decide, by decide⟩
   have hsn := H.at.snprintf live Wp sFr (BitVec.ofNat 64 inpTop + 224#64) 256#64 T.fmt [R1 13] R1
     rodataDom (fun _ => False)
-    rodataByte hcl (by simp) (by decide) (by decide) (fmt_ok hok _) hsp1
+    rodataByte hcl (by simp) (by decide) (by decide) (fmt_ok hok _) hsp1 (by decide)
+    (by rw [topErr_toNat]; decide) (by rw [topErr_toNat]; decide)
   unfold snprintfSpec at hsn
   ihave #Hsn := hsn
   have hj : JalExec (vsaModel live) T.jal.pc T.jal.code snprintfEntry := by
     have := JalSite.exec hok.jalCert live (hok.jalText.live hcl)
     rwa [hok.jalTgt] at this
-  iapply ms_callNewlib Wp hj hS.code (vs := [BitVec.ofNat 64 inpTop + 224#64, 256#64, T.fmt, R1 13])
+  iapply ms_callNewlibA Wp hj hS.code (vs := [BitVec.ofNat 64 inpTop + 224#64, 256#64, T.fmt, R1 13])
     (X := iprop(blockOwn (sTop.toNat + 496) 256 ∗ readable rodataDom (fun _ => False) rodataByte ∗
       Stdio.stdioOwn))
     (Y := iprop(cstrBuf (sTop.toNat + 496) 256 ∗ readable rodataDom (fun _ => False) rodataByte ∗
       Stdio.stdioOwn))
-    (P := fun _ => iprop(argsAt ([BitVec.ofNat 64 inpTop + 224#64, 256#64, T.fmt] ++ [R1 13]) ∗
+    (P := fun ra0 => iprop(⌜ra0.toNat % 4 = 0⌝ ∗ argsAt ([BitVec.ofNat 64 inpTop + 224#64, 256#64, T.fmt] ++ [R1 13]) ∗
       blockOwn (BitVec.ofNat 64 inpTop + 224#64).toNat (256#64 : BitVec 64).toNat ∗
       readable rodataDom (fun _ => False) rodataByte ∗ Stdio.stdioOwn ∗
       callFrame sFr snprintfNeed Newlib.calleeSaved R1))
@@ -180,8 +181,15 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
       | 1, _ => exact e11
       | 2, _ => exact e12
       | 3, _ => rfl) e2 (by decide) (by decide)
-    (fun _ => by
+    (by
+      have h1 := hok.jalCert.align; have h2 := hok.jalCert.hi
+      unfold Vsa.Sim.tohostAddr at h2
+      have h3 : T.jal.pc + 4 < 2 ^ 64 := by omega
+      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt h3]; omega)
+    (fun _ hr => by
       iintro ⟨Ha, ⟨Hb, Hr, Hs⟩, Hc⟩
+      isplitr
+      · ipureintro; exact hr
       simp only [List.cons_append, List.nil_append]
       rw [topErr_toNat, show (256#64 : BitVec 64).toNat = 256 from rfl]
       iframe Ha Hb Hr Hs Hc)

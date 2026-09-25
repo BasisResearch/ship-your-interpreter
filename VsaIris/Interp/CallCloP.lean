@@ -548,15 +548,17 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     96#64 0x800194a8#64 [a3, R 14, R 15] R Sro (fun _ => False) rd hE.code (by simp) (by decide) (by decide)
     (arity_fmt (fun a ha => ⟨.inl (hro a ha).1, (hro a ha).2⟩)
       (by obtain ⟨t, ht⟩ := hs; exact ⟨t, ⟨fun i hi => ⟨.inl (ht.bytes i hi).1, (ht.bytes i hi).2⟩,
-        ⟨.inl ht.nul.1, ht.nul.2⟩⟩⟩) _ _) hsp
+        ⟨.inl ht.nul.1, ht.nul.2⟩, ht.win⟩⟩) _ _) hsp
+    (by rw [hsf]; unfold snprintfNeed; omega) (by rw [h144]; omega)
+    (by rw [h144, show (96#64 : BitVec 64).toNat = 96 from rfl]; omega)
   unfold snprintfSpec at hf
   ihave #Hf := hf
   ihave #Hgp := codeRes_gp $$ Hcode
   have hbuft : (s + 18446744073709550528#64 + 144#64).toNat = s.toNat - 1088 + 144 := h144
-  iapply ms_callNewlib (wpW _) (i := 0x80003d84) (entry := snprintfEntry)
+  iapply ms_callNewlibA (wpW _) (i := 0x80003d84) (entry := snprintfEntry)
     (jalx_80003d84 live (fun p hp => hlive _ (interp_code_80003d84 p hp))) interp_code_80003d84
     (vs := [s + 18446744073709550528#64 + 144#64, 96#64, 0x800194a8#64, a3, R 14, R 15])
-    (P := fun _ => iprop(argsAt ([s + 18446744073709550528#64 + 144#64, 96#64, 0x800194a8#64] ++
+    (P := fun ra0 => iprop(⌜ra0.toNat % 4 = 0⌝ ∗ argsAt ([s + 18446744073709550528#64 + 144#64, 96#64, 0x800194a8#64] ++
         [a3, R 14, R 15]) ∗
       blockOwn (s + 18446744073709550528#64 + 144#64).toNat (96#64 : BitVec 64).toNat ∗
       readable Sro (fun _ => False) rd ∗ Stdio.stdioOwn ∗
@@ -580,10 +582,13 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
       · rfl
       · rfl
       · omega)
-    h2 (by rw [hsf]; omega) (by unfold snprintfNeed; omega)
-    (fun r => by
+    h2 (by rw [hsf]; omega) (by unfold snprintfNeed; omega) (by decide)
+    (fun r hr => by
       simp only [List.cons_append, List.nil_append, show (96#64 : BitVec 64).toNat = 96 from rfl]
-      iintro ⟨Ha, ⟨Hbo, Hr, Hio⟩, Hf⟩; iframe Ha Hbo Hr Hio Hf)
+      iintro ⟨Ha, ⟨Hbo, Hr, Hio⟩, Hf⟩
+      isplitr
+      · ipureintro; exact hr
+      iframe Ha Hbo Hr Hio Hf)
     (fun r => by
       simp only [show (96#64 : BitVec 64).toNat = 96 from rfl]
       iintro ⟨Ha, Hcb, Hr, Hio, Hf⟩; iframe Ha Hcb Hr Hio Hf)
@@ -617,7 +622,8 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     pctS_fmt (fun a ha => ⟨.inl ha, by simp [rd2, ha]⟩)
       (by
         rw [hbuft]
-        refine cstrCov_of_nul (n := 96) (fun i hi => .inr ⟨Nat.le_add_right _ _, by omega⟩) ?_
+        refine cstrCov_of_nul (n := 96) (fun i hi => .inr ⟨Nat.le_add_right _ _, by omega⟩)
+          (fun i hi => by unfold ReadAddr; omega) ?_
         obtain ⟨k, hk, h0⟩ := hnul
         refine ⟨k, hk, ?_⟩
         have : ¬ rodataDom (s.toNat - 1088 + 144 + k) := hoff2 _ ⟨Nat.le_add_right _ _, by omega⟩
@@ -717,7 +723,7 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
     ihave #Himg := errCtx_img inp $$ HE
     obtain ⟨x, -, hcs⟩ := hname.resolve_left hnz
     ihave #Hstr := strAt_of_cstringWithin hcs hwin $$ Hro
-    ihave ⟨%rd, Hrd, %⟨hrdro, hcimg⟩⟩ := readable_str $$ [Himg Hstr]
+    ihave ⟨%rd, Hrd, %⟨hrdro, hcimg, hswin⟩⟩ := readable_str $$ [Himg Hstr]
     · isplitl
       · iexact Himg
       · iexact Hstr
@@ -727,7 +733,7 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
       (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg; exact har.s2)
       (by rw [hR2]; ix_reg; exact har.s7)
       (fun a ha => ⟨Or.inl ha, hrdro a ha⟩)
-      ⟨_, cstrCov_of_img (fun i hi => .inr (by simp only [InExt]; omega)) hcimg⟩
+      ⟨_, cstrCov_of_img (fun i hi => .inr (by simp only [InExt]; omega)) hcimg hswin⟩
     iframe Hcode HE Hrd Hms Hst Hw Hab
 
 /-- **The closure call from the kind dispatch, partial mode**: the closure's
