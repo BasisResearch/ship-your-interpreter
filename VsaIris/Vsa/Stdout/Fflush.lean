@@ -57,7 +57,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 #nx_chain fflush_chain := [fflush_A, fflush_B, fflush_C]
 
 /-- The memory after `_fflush_r(reent, stdout)` returns. -/
-abbrev fflushMt (Mt : Mem) (sp B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
+@[nx_mt] abbrev fflushMt (Mt : Mem) (sp B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   writeLog (sflushMt
     (writeLog (writeLog (writeLog (writeLog Mt [((sp + 18446744073709551608#64).toNat, 8, ra)])
       [((sp + 18446744073709551592#64).toNat, 8, 2147595576#64)])
@@ -94,6 +94,7 @@ theorem fflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
   refine fflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h2 hn hn2 hB1 hb2 hsinit hF hlm hlock
     hBl hB0 hP hwr hck hsfd hb3 hbd hsrc ?_
   intros
+  simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 end VsaIris.Sym

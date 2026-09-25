@@ -18,7 +18,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 /-- The memory after `__swrite(stdout, buf, n)` returns: `__swrite`'s `ra`
 slot, the flags, `_write_r`'s `s0`/`ra` slots, `errno`. -/
-abbrev swriteMt (Mt : Mem) (sp ra s0 : BitVec 64) : Mem :=
+@[nx_mt] abbrev swriteMt (Mt : Mem) (sp ra s0 : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551608#64).toNat, 8, ra)]) [(2147597104, 2, 8202#64)])
     [((sp + 18446744073709551600#64).toNat, 8, s0)]) [((sp + 18446744073709551608#64).toNat, 8, ra)])
@@ -52,6 +52,7 @@ theorem swrite_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Me
     all_goals (have := hbd i hi; nx_addr)
   sx_norm
   nx_run hlive using [h13, h12, h2, h1, h8, BitVec.add_assoc]
+  simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 end VsaIris.Sym

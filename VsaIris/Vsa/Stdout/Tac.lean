@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Console
 import VsaIris.Vsa.Stdout.Write
+import VsaIris.Vsa.Stdout.Attr
 
 /-!
 # Driving stdout runs (lane N1)
@@ -93,7 +94,8 @@ macro_rules
         BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
         BitVec.ushiftRight_eq', BitVec.reduceToNat,
         BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend, not_true_eq_false])
+        BitVec.reduceAppend, not_true_eq_false, Nat.reducePow, Nat.reduceMod, BitVec.reduceAnd,
+        BitVec.reduceOr])
 
 open Lean Elab Tactic Meta in
 /-- `nx_run`'s normalizer: `ix_run`'s (register lookups, the caller's facts),
@@ -103,7 +105,7 @@ reaches the entry memory, which the facts describe. -/
 def nxNorm (facts : Array Term) : TacticM Syntax := do
   let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
     facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-  `(tactic| ((try simp only [updAll] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
+  `(tactic| ((try simp only [updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero]) <;>
       (try simp (disch := decide) only [update_aligned]) <;>

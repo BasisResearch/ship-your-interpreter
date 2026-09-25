@@ -16,7 +16,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 /-- The memory after `__sflush_r(reent, f)` returns: its five spills, `_p`
 reset to the base, `_w` to `0`, and `__swrite`'s effect (`swriteMt`). -/
-abbrev sflushMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
+@[nx_mt] abbrev sflushMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   swriteMt (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551600#64).toNat, 8, s0)]) [((sp + 18446744073709551576#64).toNat, 8, s3)])
     [((sp + 18446744073709551608#64).toNat, 8, ra)]) [((sp + 18446744073709551584#64).toNat, 8, s2)])
@@ -112,6 +112,7 @@ theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     hF hF8 hF3 hBl hB0 hP hwr hck hsfl hsfd hb3 hbd hsrc (toInt_ofNat_small (by omega))
     (subw_add_ofNat hn2) ?_
   intros
+  simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 
