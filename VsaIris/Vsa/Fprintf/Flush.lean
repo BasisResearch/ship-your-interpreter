@@ -16,6 +16,7 @@ to `_bf._size` (the fully-buffered branch, `flags & 3 = 0`). N1's
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 #ix_seg sflushF_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
@@ -53,7 +54,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.S
 
 #ix_piece sflushF_C from sflushF_B by
   refine swrite_run (sp := sp + 18446744073709551568#64) (buf := B.toNat) (bs := bs)
-    (ra := 0x8000ed0c#64) (s0 := f) hlive ?_ ?_ hs3 hs4 ?_ ?_ (by decide) ?_
+    (ra := 0x8000ed0c#64) (s0 := f) hlive ?_ ?_ hs3 (by omega) ?_ ?_ (by decide) ?_
     (by omega) (by omega) hb3 ?_ (fun i hi => ?_) ?_ ?_ ?_ ?_ ?_ ?_ (fun R' hR => ?_)
   all_goals try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.ofNat_toNat,
     BitVec.setWidth_eq]; done)
@@ -112,6 +113,7 @@ theorem sflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1
     hF hBl hB0 hP hsz hwr hck hsfl hsfd hb3 hbd hsrc (toInt_ofNat_small (by omega))
     (subw_add_ofNat hn2) ?_
   intros
+  simp only [sflushFMt, nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 /-- The memory after `__sflush_r(reent, f)` with nothing pending: the spills

@@ -18,6 +18,7 @@ locals, which `nx_run`'s normalizer uses (`simp only [*]`).
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 /-- **A fresh register file** equal to the current one. -/
 theorem swp_fresh {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat}
@@ -49,18 +50,17 @@ macro "nx_flat" : tactic => `(tactic| (
   have f27 := g27; have f28 := g28; have f29 := g29; have f30 := g30; have f31 := g31
   clear g1 g2 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31))
 
-set_option hygiene false in
 /-- `nf_run [n] h using [facts] at pc…`: `nx_run` with the flat register facts
 `f<r>` (`nx_flat`) and the literal-arithmetic simprocs in the normalizer's list
 (`nx_run`'s normalizer rewrites with its `using` list only). -/
-macro "nf_run " "[" n:num "] " h:term " using " "[" fs:term,* "]" stops:(" at " num+)? : tactic =>
-  match stops with
-  | some stx =>
-    let ss : Array (Lean.TSyntax `num) := stx.raw[1].getArgs.map (⟨·⟩)
+syntax "nf_run " "[" num "] " term " using " "[" term,* "]" (" at " num+)? : tactic
+set_option hygiene false in
+macro_rules
+  | `(tactic| nf_run [$n] $h using [$fs,*] at $ss*) =>
     `(tactic| nx_run [$n] $h using [$fs,*, BitVec.reduceSub, BitVec.reduceOr,
       BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
       f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31] at $ss*)
-  | none =>
+  | `(tactic| nf_run [$n] $h using [$fs,*]) =>
     `(tactic| nx_run [$n] $h using [$fs,*, BitVec.reduceSub, BitVec.reduceOr,
       BitVec.reduceAnd, BitVec.reduceHShiftLeft, f1, f2, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
       f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31])
@@ -97,5 +97,55 @@ open Lean Elab Tactic Meta in
         out := out ++ r
       | none => out := out ++ [g]
     setGoals out
+
+end VsaIris.Sym
+
+namespace VsaIris.Sym
+
+/-- Branch conditions over offset addresses (`x + k = y`, `x + k ≠ y`), refuted
+through `toNat` arithmetic before `sx_side`'s last resort `decide` (which
+diverges on a symbolic `BitVec`, and `first`/`try` do not catch its
+recursion-depth exception). -/
+syntax "bv_toNat_contra " ident : tactic
+macro_rules
+  | `(tactic| bv_toNat_contra $h) => `(tactic| (
+      have hc' := congrArg BitVec.toNat $h
+      simp (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
+        BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod] at hc'
+      omega))
+open Lean Elab Tactic Meta in
+/-- `sx_side` on a refuted branch `¬ (x = y)` or `¬ (x ≠ y)`: the `toNat`
+contradiction. The shape is checked syntactically first: unifying the branch
+fact with `_ = _` would unfold an arbitrary condition (`Int.lt` of literal
+words recurses past the depth limit, which `first` does not catch). -/
+elab "bv_side_contra" : tactic => do
+  let g ← getMainGoal
+  let ty ← instantiateMVars (← g.getType)
+  let p? : Option Expr :=
+    if ty.isAppOfArity ``Not 1 then some ty.appArg!
+    else if ty.isArrow && ty.bindingBody!.isConstOf ``False then some ty.bindingDomain!
+    else none
+  let some p := p? | throwError "bv_side_contra: not a refuted branch"
+  if p.isAppOfArity ``Eq 3 then
+    evalTactic (← `(tactic| (intro hc; bv_toNat_contra hc)))
+  else if (p.isAppOfArity ``Not 1 && p.appArg!.isAppOfArity ``Eq 3) || p.isAppOfArity ``Ne 3 then
+    evalTactic (← `(tactic| (intro hc; apply hc; intro hc2; bv_toNat_contra hc2)))
+  else throwError "bv_side_contra: not an address (in)equality"
+
+macro_rules
+  | `(tactic| sx_side) => `(tactic| bv_side_contra)
+
+open Lean Elab Tactic Meta in
+/-- `sx_side` on a closed goal (a branch on literal words): `decide`, before
+any rule that searches the context (`assumption` against a literal `Int.lt`
+unfolds past the recursion limit). -/
+elab "closed_decide" : tactic => do
+  let g ← getMainGoal
+  let ty ← instantiateMVars (← g.getType)
+  if ty.hasFVar || ty.hasMVar then throwError "closed_decide: not closed"
+  evalTactic (← `(tactic| decide))
+
+macro_rules
+  | `(tactic| sx_side) => `(tactic| closed_decide)
 
 end VsaIris.Sym
