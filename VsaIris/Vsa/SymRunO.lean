@@ -47,7 +47,8 @@ word for `c` in its registers, the store prints `c`; the run continues after
 it with the console at `t ++ c`. -/
 theorem swp_putc (T : TohostSite) (hT : T.Cert) (c : BitVec 8) {t : String}
     {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ text, live p.1) (hcode : ∀ p ∈ codeFoot T.pc T.code, (p.1, p.2.2) ∈ text)
+    (hlive : ∀ p ∈ codeFoot T.pc T.code, live p.1)
+    (hcode : ∀ p ∈ codeFoot T.pc T.code, (p.1, p.2.2) ∈ text)
     (hPC : VsaIris.PC ∈ rs) (h1 : T.rs1 ∈ rs) (h2 : T.rs2 ∈ rs)
     (hne1 : T.rs1 ≠ VsaIris.PC) (hne2 : T.rs2 ≠ VsaIris.PC)
     (hpc : pc = BitVec.ofNat 64 T.pc) (hr1 : R T.rs1 = T.base) (hr2 : R T.rs2 = putcWord c)
@@ -56,7 +57,7 @@ theorem swp_putc (T : TohostSite) (hT : T.Cert) (c : BitVec 8) {t : String}
   subst hpc
   refine swp_done fun rv mv hm => LRO.seg 0 (segFromO_of_runFactO
     (putc_runFact live T hT c (DFrac.own 1) (DFrac.own 1)
-      (fun p hp => hlive _ (hcode p hp))) ?_ ?_ ?_ (fun p hp => by cases hp) ?_)
+      hlive) ?_ ?_ ?_ (fun p hp => by cases hp) ?_)
   · intro p hp
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl

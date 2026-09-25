@@ -70,7 +70,8 @@ RO_LD = [0x80019370] + [0x80019f28 + 8 * i for i in range(6)] + [0x80019fe0 + 8 
 # unbuffered `stdout`, down to `_write`'s `tohost` stores)
 STDIO_FUNCS = ['_write', '_write_r', '__swrite', '__sflush_r', '_fflush_r', '__swbuf_r', '_putc_r',
                'fputc', '__retarget_lock_acquire_recursive', '__retarget_lock_release_recursive']
-# PCs with no step lemma: `_write`'s putchar store (printed by `swp_putc`)
+# PCs with no step lemma (their code bytes and `stdio_code_<pc>` stay): `_write`'s
+# putchar store (printed by `swp_putc`)
 STDIO_SKIP = {0x8000005c}
 TABLE = 'stdio' if '--table' in sys.argv and sys.argv[sys.argv.index('--table') + 1] == 'stdio' \
     else 'interp'
@@ -97,7 +98,7 @@ for l in open(ROOT / 'experiments/disasm.txt'):
         fn = m.group(2)
         continue
     m = re.match(r'^\s+([0-9a-f]+):\t([0-9a-f]{8})\s+\t(\S+)', l)
-    if m and fn in FUNCS and int(m.group(1), 16) not in SKIP:
+    if m and fn in FUNCS:
         pc = int(m.group(1), 16)
         W[pc] = int(m.group(2), 16)
         MN[pc] = m.group(3)
@@ -219,7 +220,7 @@ def gen_code():
                                            for i in range(4)) + ' :=')
         C.append('  ⟨' + ',\n   '.join(f'h _ ({mem_proof(pc + i)})' for i in range(4)) + '⟩\n')
     for pc in PCS:
-        if classify(pc)[0] not in ('jal', 'obs', 'jalr'):
+        if classify(pc)[0] not in ('jal', 'obs', 'jalr') and pc not in SKIP:
             continue
         bs = [BYTE[pc + i] for i in range(4)]
         cs = ', '.join(f'0x{b:02x}#8' for b in bs)
@@ -606,6 +607,8 @@ def gen_steps():
     unsupported, parts = [], []
     cur = ([], [], set(), [])
     for pc in PCS:
+        if pc in SKIP:
+            continue
         segs, thms = emit(pc)
         if segs is None:
             unsupported.append(pc)
