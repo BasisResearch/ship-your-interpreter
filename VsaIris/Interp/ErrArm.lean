@@ -179,7 +179,7 @@ theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
       readable Sro (fun _ => False) rd ∗ jmpRO inp jb ∗
       world N L Room inp ρ st d))
     (Q := fun _ => iprop(False))
-    (A := abortRes N L Room inp (evalSP s) RtErr.rtErrNeed)
+    (A := iprop(abortRes N L Room inp (evalSP s) RtErr.rtErrNeed ∗ readable Sro (fun _ => False) rd))
     (X := iprop(readable Sro (fun _ => False) rd ∗ jmpRO inp jb ∗
       world N L Room inp ρ st d)) (Y := iprop(False))
     (need := RtErr.rtErrNeed) (n := n - 1088) (by simp)
@@ -199,7 +199,7 @@ theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   isplit
   · iintro %R' %_ Hf
     iexfalso; iexact Hf
-  · iintro HA Hslack HS
+  · iintro ⟨HA, -⟩ Hslack HS
     ihave HS := ownSet_forget _ _ $$ HS
     iapply Hab
     iapply abortAt_of_evalCallee hE.core hsg (need := RtErr.rtErrNeed) (by unfold RtErr.rtErrNeed snprintfNeed; omega)

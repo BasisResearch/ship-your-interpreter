@@ -206,7 +206,8 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       readable (fun a => rodataDom a ∨ InExt (p, x.toList.length + 1) a) (fun _ => False) rd ∗
       jmpRO (BitVec.ofNat 64 inp).toNat jb ∗ world N L Room (BitVec.ofNat 64 inp).toNat ρ st d))
     (Q := fun _ => iprop(False))
-    (A := abortRes N L Room (BitVec.ofNat 64 inp).toNat (evalSP s) RtErr.rtErrNeed)
+    (A := iprop(abortRes N L Room (BitVec.ofNat 64 inp).toNat (evalSP s) RtErr.rtErrNeed ∗
+      readable (fun a => rodataDom a ∨ InExt (p, x.toList.length + 1) a) (fun _ => False) rd))
     (X := iprop(readable (fun a => rodataDom a ∨ InExt (p, x.toList.length + 1) a) (fun _ => False) rd ∗
       jmpRO (BitVec.ofNat 64 inp).toNat jb ∗ world N L Room (BitVec.ofNat 64 inp).toNat ρ st d))
     (Y := iprop(False))
@@ -228,7 +229,7 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   isplit
   · iintro %R' %_ Hf
     iexfalso; iexact Hf
-  · iintro HA Hslack HS
+  · iintro ⟨HA, -⟩ Hslack HS
     unfold abortRes abortAt
     icases HA with ⟨Hcore, Hst⟩
     ihave Hcore := evalCore_of N L Room inp (s := evalSP s) (n := RtErr.rtErrNeed)
