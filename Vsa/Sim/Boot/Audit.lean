@@ -1,11 +1,26 @@
-import VsaBoot
-import VsaIris.Interp.EndToEnd
+import Vsa.Sim.Boot.EndToEnd
+import Vsa.Sim.Boot.Elf
+import Vsa.Sim.Boot.Gen.Functions1
+import Vsa.Sim.Boot.Gen.Functions2
+import Vsa.Sim.Boot.Gen.ErrDivzero
+import Vsa.Sim.Boot.Gen.ErrUndefined
 
 /-!
 # REVIEW2 audit (lane V2): kernel-checked corollaries of `endToEnd_refinement`
 
-Compile with `lake env lean experiments/review-v2/Audit.lean` after
-`lake build VsaBoot`. Everything here is a *corollary*; nothing is assumed.
+Everything here is a *corollary*; nothing is assumed. `scripts/check_final_axioms.sh`
+audits the axioms of every theorem below.
+
+* §1: `IrisHoles` is trivially inhabited; the theorem with no hypotheses.
+* §2: non-trivial conclusions at the real entry states, and the capstones at
+  ANY entry configuration (`*_halts_entry`, REVIEW2.md P8): the state the
+  binary reaches satisfies their three hypotheses — `EntryRegs`, an empty
+  console, the entry view as a partial view of its memory — which
+  `experiments/review-v2/Replay.lean` checks natively.
+* §3: the runtime-error programs have no `BigStep` (the cost evaluator is
+  `stuck`, one kernel `decide`), never halt cleanly, and diverge or exit
+  nonzero.
+* §4: the machine and source notions are the real ones (`rfl` unfoldings).
 -/
 
 open Vsa.While Vsa.Machine Vsa.Refine Vsa.Sim.LayoutInstance Vsa.Densify Vsa.Sim.Boot
@@ -28,6 +43,27 @@ abbrev cProof : Config :=
 /-! ## 2. Non-trivial conclusions at the real entry states -/
 
 theorem proofElf_halts_unconditional : Halts cProof "55\n2500\n36\n" 0 := proofElf_halts ⟨⟩
+
+/-- **The capstone at any entry configuration** (P8): registers satisfying
+`EntryRegs` (`GoodState`, `PC`, `htif_payload_writes`, the traced `x1 … x31`), an
+empty console, and a memory the entry view is a partial view of — the state
+the binary reaches after `Gen.Proof.entrySteps` steps satisfies all three
+(`Replay.lean`). -/
+theorem proofElf_halts_entry {σ : MState} (E : EntryRegs σ Gen.Proof.regs)
+    (hout : output σ = "") (hv : PartialView σ.mem (bootView Gen.Proof.script Gen.Proof.runs))
+    {tick : Nat} (htick : tick < 2) (steps : Nat) :
+    Halts ⟨σ, tick, steps⟩ "55\n2500\n36\n" 0 :=
+  ((endToEnd_unconditional _ _ (Gen.Proof.prog_eq ▸ Gen.Proof.loadedEntry_fill E hout hv htick steps)).1 _).mp
+    Vsa.While.Validation.whileWl_valid
+
+theorem arithmetic_halts_entry {σ : MState} (E : EntryRegs σ Gen.Arithmetic.regs)
+    (hout : output σ = "") (hv : PartialView σ.mem (bootView Gen.Arithmetic.script Gen.Arithmetic.runs))
+    {tick : Nat} (htick : tick < 2) (steps : Nat) :
+    Halts ⟨σ, tick, steps⟩
+      "7\n9\n3\n1\n-2\n26\n1000000000000\n4\nfalse true false\ntrue true false true\ntrue true true false\nfalse true true false\n"
+      0 :=
+  ((endToEnd_unconditional _ _ (Gen.Arithmetic.prog_eq ▸ Gen.Arithmetic.loadedEntry_fill E hout hv htick steps)).1 _).mp
+    Vsa.While.Validation.arithmetic_valid
 
 /-- `Halts` is not trivially true: the same state does not halt with output `""`,
 nor with exit code 1. -/
@@ -123,6 +159,13 @@ theorem errUndefined_stuck : Diverges cUndef ∨ ∃ out e, Halts cUndef out e �
   · exact Or.inl ((diverges_fillZero _).2 h)
   · exact Or.inr ⟨out, e, (halts_fillZero _ _ _).2 h, he⟩
 
+theorem errDivzero_never_clean_entry {σ : MState} (E : EntryRegs σ Gen.ErrDivzero.regs)
+    (hout : output σ = "") (hv : PartialView σ.mem (bootView Gen.ErrDivzero.script Gen.ErrDivzero.runs))
+    {tick : Nat} (htick : tick < 2) (steps : Nat) :
+    ∀ out, ¬ Halts ⟨σ, tick, steps⟩ out 0 := fun out h =>
+  errDivzero_noBigStep ⟨out,
+    ((endToEnd_unconditional _ _ (Gen.ErrDivzero.loadedEntry_fill E hout hv htick steps)).1 out).mpr h⟩
+
 /-! ## 4. The machine notions are the real ones (definitional unfoldings, checked by `rfl`) -/
 
 example : Halts = fun (c : Config) (out : String) (e : Nat) =>
@@ -150,6 +193,9 @@ end ReviewV2
 #print axioms ReviewV2.errDivzero_never_clean
 #print axioms ReviewV2.errDivzero_stuck
 #print axioms ReviewV2.errUndefined_stuck
+#print axioms ReviewV2.proofElf_halts_entry
+#print axioms ReviewV2.arithmetic_halts_entry
+#print axioms ReviewV2.errDivzero_never_clean_entry
 #print axioms Vsa.Sim.Boot.Gen.Proof.loaded
 #print axioms Vsa.Sim.Boot.Gen.While.loaded
 #print axioms Vsa.Sim.Boot.Gen.Arithmetic.loaded

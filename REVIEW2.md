@@ -12,7 +12,7 @@ with `structure IrisHoles : Prop where` (no fields) and the ten loader-derived w
 
 ## Verdict: NOT VACUOUS
 
-**Strongest single piece of evidence.** Running the theorem's own step function (`Vsa.setupElf` then `Vsa.stepOnce`, the functions `Halts` is defined over) on the ELF parsed from the embedded `Vsa.elfHex` for exactly `Gen.Proof.entrySteps = 85,483` steps yields a Sail state whose memory is *equal* to the witness memory `bootMem Gen.Proof.script Gen.Proof.log` (same size, 127,071 present bytes, pointwise equal), whose `x1…x31` and `PC` equal the witness registers, whose console is empty, and which halts after 382,730 steps with exit 0 and output `"55\n2500\n36\n"`; the witness configuration halts identically. The kernel-checked, hypothesis-free theorem `ReviewV2.proofElf_halts_unconditional : Halts cProof "55\n2500\n36\n" 0` (`experiments/review-v2/Audit.lean`, axioms `[propext, Classical.choice, Quot.sound]`) is therefore a statement about the state the binary reaches, and `Halts` is not trivially true there (`¬ Halts cProof "" 0`, `¬ Diverges cProof`, both kernel-checked). The same replay agrees for all ten witnesses, including the two runtime-error programs (exit 70, kernel-proved to have no `BigStep` and no clean halt).
+**Strongest single piece of evidence.** Running the theorem's own step function (`Vsa.setupElf` then `Vsa.stepOnce`, the functions `Halts` is defined over) on the ELF parsed from the embedded `Vsa.elfHex` for exactly `Gen.Proof.entrySteps = 85,483` steps yields a Sail state whose memory is *equal* to the witness memory `bootMem Gen.Proof.script Gen.Proof.log` (same size, 127,071 present bytes, pointwise equal), whose `x1…x31` and `PC` equal the witness registers, whose console is empty, and which halts after 382,730 steps with exit 0 and output `"55\n2500\n36\n"`; the witness configuration halts identically. The kernel-checked, hypothesis-free theorem `ReviewV2.proofElf_halts_unconditional : Halts cProof "55\n2500\n36\n" 0` (`Vsa/Sim/Boot/Audit.lean`, axioms `[propext, Classical.choice, Quot.sound]`) is therefore a statement about the state the binary reaches, and `Halts` is not trivially true there (`¬ Halts cProof "" 0`, `¬ Diverges cProof`, both kernel-checked). The same replay agrees for all ten witnesses, including the two runtime-error programs (exit 70, kernel-proved to have no `BigStep` and no clean halt).
 
 The audit found no vacuity. It found one gap between "the witness state" and "the reached state" (F1: the witness's control-register file is synthetic; `Loaded` pins only the registers that agree) and one trust boundary that is native, not kernel (F2: the ELF bytes and the store log enter the kernel as generated data; the ELF parse and the emulator's trace are checked natively). Both are proposals for statement/tooling changes, not soundness problems.
 
@@ -20,10 +20,10 @@ The audit found no vacuity. It found one gap between "the witness state" and "th
 
 | # | severity | finding | evidence | proposal |
 |---|---|---|---|---|
-| F1 | **medium (witness is a model of the reached state, not the reached state)** | `Gen.<Prog>.loaded` is stated at `bootConfig (bootMem script log) regs entrySteps`, whose register file `bootRegs` (`Vsa/Sim/Boot/Config.lean`) is `physicalAssignments.take 32` (32 control registers at the model's *setup* values: `mtime = mcycle = minstret = mip = htif_tohost = 0`) plus `x1…x31` from the trace, with `cycleCount = 0`. The state the binary reaches has `mtime = mcycle = 0xa6f5`, `minstret = 0x14deb`, `mip = 0x80` (MTIP pending, masked by `mie = 0`), `htif_tohost = 0x8001ad00`, `cycleCount = 1`, and every CSR of `init_model` present. `Loaded` inspects only `GoodState`'s 21 pinned CSRs (`Vsa/Sim/GoodState.lean`), and every one of them was checked equal in the reached state (§2.1), so the reached state is `Loaded` too and `endToEnd_refinement` applies to it by `∀ c` — but that last step is checked natively, not by the kernel: no theorem states `Loaded` for the reached register file, and none can without reducing `init_model`. Behaviourally the two states are indistinguishable (identical `Halts` results for all ten witnesses, §2.1). | `experiments/review-v2/Replay.lean` (10 runs, §2.1); `bootRegs`/`csrAssignments` (`Config.lean:31–49`); `physicalAssignments` (`OutputAliasPhysical.lean:14`) | **P8** (§6): state `Gen.<Prog>.loadedAt` over any configuration `⟨σ, entrySteps % 2, entrySteps⟩` with `GoodState σ`, the traced `x1…x31`/`PC`/`htif_payload_writes`, and a memory extending the entry view; the current `bootConfig` instance becomes a corollary. Then only `GoodState` of the reached state is a native check, like `ElfLoads`. |
-| F2 | **low (native trust boundary, documented)** | The kernel never connects `Vsa.elfHex` (the 138,880-byte ELF) to `bootMem`: `initializeMemory_eq` takes `ElfLoads elf script` as a premise (the ELFSage parse of a concrete file, evaluated natively by `gen_boot_witness.py check-elf`), and the store log `Gen.<Prog>.log` is the emulator's `--trace-all` store operands, decoded *syntactically* (`memOpOf` in `riscv-lean/lean_emulator/LeanRiscv.lean`: opcodes `0x03`/`0x23` only). `LogOk` is the kernel's check that `runs` is the log's effect, not that the log is the machine's. Both links hold: (i) this lane's Python cross-check — `elfHex` = `c/while-riscv-htif.elf` (sha256 `b146c6ed…`), `fixedText`/`fixedRodata`/`bootData`/`bootLow` pages = the file's `.text`/`.rodata`/`.data`+`.tohost`+`.init_array`/attributes bytes, `bootPieces` = the PT_LOAD segment (113,040 `p_filesz` bytes) plus ELFSage's three unattributed regions; (ii) the replay (§2.1): `initializeMemory` + 85,483 `stepOnce`s = `bootMem` exactly, for all ten programs. The syntactic capture is complete for this binary: it is `-march=rv64i` (`c/Makefile`), `e_flags = 0` (no RVC), no A/F/D, `satp = 0` (no page walks), and lean-sail's only memory write is `writeByte` (`riscv-lean/lean-sail/Sail/ConcurrencyInterfaceV1.lean:196`). | `experiments/review-v2/elf_xcheck.py`, `Replay.lean` | add the replay (or the `ElfLoads` check) to `check_all.sh`'s compiled stage so the native links are re-checked per build; document the two native links beside `IrisHoles` in README |
+| F1 | **medium (witness is a model of the reached state, not the reached state) — landed as P8 (§8)** | `Gen.<Prog>.loaded` is stated at `bootConfig (bootMem script log) regs entrySteps`, whose register file `bootRegs` (`Vsa/Sim/Boot/Config.lean`) is `physicalAssignments.take 32` (32 control registers at the model's *setup* values: `mtime = mcycle = minstret = mip = htif_tohost = 0`) plus `x1…x31` from the trace, with `cycleCount = 0`. The state the binary reaches has `mtime = mcycle = 0xa6f5`, `minstret = 0x14deb`, `mip = 0x80` (MTIP pending, masked by `mie = 0`), `htif_tohost = 0x8001ad00`, `cycleCount = 1`, and every CSR of `init_model` present. `Loaded` inspects only `GoodState`'s 20 pinned CSRs (`Vsa/Sim/GoodState.lean`), and every one of them was checked equal in the reached state (§2.1), so the reached state is `Loaded` too and `endToEnd_refinement` applies to it by `∀ c` — but that last step is checked natively, not by the kernel: no theorem states `Loaded` for the reached register file, and none can without reducing `init_model`. Behaviourally the two states are indistinguishable (identical `Halts` results for all ten witnesses, §2.1). | `experiments/review-v2/Replay.lean` (10 runs, §2.1); `bootRegs`/`csrAssignments` (`Config.lean:31–49`); `physicalAssignments` (`OutputAliasPhysical.lean:14`) | **P8** (§6): state `Gen.<Prog>.loadedAt` over any configuration `⟨σ, entrySteps % 2, entrySteps⟩` with `GoodState σ`, the traced `x1…x31`/`PC`/`htif_payload_writes`, and a memory extending the entry view; the current `bootConfig` instance becomes a corollary. Then only `GoodState` of the reached state is a native check, like `ElfLoads`. |
+| F2 | **low (native trust boundary, documented) — landed as P9 (§8)** | The kernel never connects `Vsa.elfHex` (the 138,880-byte ELF) to `bootMem`: `initializeMemory_eq` takes `ElfLoads elf script` as a premise (the ELFSage parse of a concrete file, evaluated natively by `gen_boot_witness.py check-elf`), and the store log `Gen.<Prog>.log` is the emulator's `--trace-all` store operands, decoded *syntactically* (`memOpOf` in `riscv-lean/lean_emulator/LeanRiscv.lean`: opcodes `0x03`/`0x23` only). `LogOk` is the kernel's check that `runs` is the log's effect, not that the log is the machine's. Both links hold: (i) this lane's Python cross-check — `elfHex` = `c/while-riscv-htif.elf` (sha256 `b146c6ed…`), `fixedText`/`fixedRodata`/`bootData`/`bootLow` pages = the file's `.text`/`.rodata`/`.data`+`.tohost`+`.init_array`/attributes bytes, `bootPieces` = the PT_LOAD segment (113,040 `p_filesz` bytes) plus ELFSage's three unattributed regions; (ii) the replay (§2.1): `initializeMemory` + 85,483 `stepOnce`s = `bootMem` exactly, for all ten programs. The syntactic capture is complete for this binary: it is `-march=rv64i` (`c/Makefile`), `e_flags = 0` (no RVC), no A/F/D, `satp = 0` (no page walks), and lean-sail's only memory write is `writeByte` (`riscv-lean/lean-sail/Sail/ConcurrencyInterfaceV1.lean:196`). | `experiments/review-v2/elf_xcheck.py`, `Replay.lean` | add the replay (or the `ElfLoads` check) to `check_all.sh`'s compiled stage so the native links are re-checked per build; document the two native links beside `IrisHoles` in README |
 | F3 | low (coverage) | The ∀-program theorem is witnessed at 10 real entry states (`proof`, `while`, `arithmetic`, `for`, `scope`, `strings`, `functions1/2`, `err_divzero`, `err_undefined`). `recursion.wl` has every trace fact but no `loaded` (`capOk` for `fib(20)` is out of kernel reach); `err_parse.wl` never reaches `interp_run`. M1 stands: `capacity` and `stack_admissible` make `Loaded` execution-dependent (`adv_oom_term` has a `BigStep` but is not `Loaded`). | `Gen/Recursion.lean` (no `loadedAt`); `LANES-b3.md` | none (documented) |
-| F4 | low (hygiene) | (a) `LANES-b1.md` is byte-identical to `LANES-b3.md`: lane B1's report (`hub/lane-b1:LANE.md`, P1/P2) was overwritten in the INT2 merge `79ea46fb`. (b) `scripts/check_final_axioms.sh` audits only `Gen.Proof.loaded` and `proofElf_halts` of the boot library; the other nine witnesses and five `*_halts` are audited by `Vsa/Sim/Boot/EndToEnd.lean`'s two `#print axioms` and this lane's `Audit.lean` only. (c) `Vsa/While/Validation.lean:25` sets `maxRecDepth 4000000` and is in the capstone's import cone (`whileWl_valid`); no limit is raised in `VsaIris/` or `Vsa/Sim/Boot/` (REVIEW.md L3: 1,011 files under `Vsa/` raise limits). (d) The design doc's `LANES-b1.md`/README are otherwise current. | `diff LANES-b1.md LANES-b3.md`; `git show hub/lane-b1:LANE.md` | restore `LANES-b1.md` from `hub/lane-b1:LANE.md`; extend `check_final_axioms.sh` |
+| F4 | low (hygiene) — landed as P10 (§8) | (a) `LANES-b1.md` is byte-identical to `LANES-b3.md`: lane B1's report (`hub/lane-b1:LANE.md`, P1/P2) was overwritten in the INT2 merge `79ea46fb`. (b) `scripts/check_final_axioms.sh` audits only `Gen.Proof.loaded` and `proofElf_halts` of the boot library; the other nine witnesses and five `*_halts` are audited by `Vsa/Sim/Boot/EndToEnd.lean`'s two `#print axioms` and this lane's `Audit.lean` only. (c) `Vsa/While/Validation.lean:25` sets `maxRecDepth 4000000` and is in the capstone's import cone (`whileWl_valid`); no limit is raised in `VsaIris/` or `Vsa/Sim/Boot/` (REVIEW.md L3: 1,011 files under `Vsa/` raise limits). (d) The design doc's `LANES-b1.md`/README are otherwise current. | `diff LANES-b1.md LANES-b3.md`; `git show hub/lane-b1:LANE.md` | restore `LANES-b1.md` from `hub/lane-b1:LANE.md`; extend `check_final_axioms.sh` |
 | F5 | info (semantics corpus) | 30/35 corpus programs: the Lean semantics (cost evaluator on the AST decoded from the binary's *own* parser output at the traced entry) agrees with the emulator's output and exit code, including Q8's `catDisplay` cut (`adv_longname`, `adv_name58/59`, `adv_native`) and the abrupt-status programs (`adv_break`: `TopAbrupt`, exit 70). `err_parse` is outside the theorem; `recursion` (`fib(20)`) did not finish in the interpreter within the session; `adv_big_ok`/`adv_oom_*` were skipped in Lean (megabyte strings as `List Char`). `adv_oom_term`/`adv_oom_div` did not finish under the emulator within 60 M steps either (lane V reported `out of memory`, exit 1 at a higher cap); uncapped runs are in §4. | §4 | none |
 
 Nothing in `Halts`, `Diverges`, `output`, `BigStep`, `bootMem`, `loadedMem` is redefined: their definitions are re-stated as `rfl` examples in `Audit.lean` (§2.3).
@@ -37,7 +37,7 @@ structure IrisHoles : Prop where          -- no fields
 theorem IrisHoles.proved : IrisHoles := ⟨⟩
 ```
 
-`VsaIris/HOLES.md` has 0 rows and `python3 scripts/check_iris_holes.py` prints `ok: 0 ledgered holes`. `experiments/review-v2/Audit.lean` (kernel-checked, `lake env lean` in 37 s) contains
+`VsaIris/HOLES.md` has 0 rows and `python3 scripts/check_iris_holes.py` prints `ok: 0 ledgered holes`. `Vsa/Sim/Boot/Audit.lean` (kernel-checked, `lake env lean` in 37 s) contains
 
 ```lean
 example : VsaIris.Interp.IrisHoles := ⟨⟩
@@ -80,7 +80,7 @@ So `bootMem script log` is `initializeMemory .B64 elf` plus the traced stores, b
 
 ### 2.2 The instantiated theorem is non-trivial (task 2b)
 
-Kernel-checked in `Audit.lean` (all axioms ⊆ {propext, Classical.choice, Quot.sound}):
+Kernel-checked in `Vsa/Sim/Boot/Audit.lean` (all axioms ⊆ {propext, Classical.choice, Quot.sound}):
 
 ```lean
 theorem proofElf_halts_unconditional : Halts cProof "55\n2500\n36\n" 0        -- cProof := bootConfig (bootMem Gen.Proof.script Gen.Proof.log) Gen.Proof.regs 85483
@@ -112,8 +112,8 @@ theorem errDivzero_stuck       : Diverges cDiv ∨ ∃ out e, Halts cDiv out e �
 
 | structure / field | statement | witnessed by (generated proof) | verdict |
 |---|---|---|---|
-| **InterpRunPhysicalFacts** (47 fields, `LayoutInstance.lean:176`) | | | |
-| `good : GoodState c.σ` (21 pinned CSRs, 10 present-only) | machine mode, `misa/mstatus` init values, `mie = mtvec = satp = … = 0`, `htif_done = false`, `htif_tohost_base = tohost`, PMP/PMA init, counters present | `bootState_good`: the witness's CSR file *is* `physicalAssignments.take 32` | **synthetic** (F1); every pinned value verified equal in the reached state natively (§2.1) |
+| **InterpRunPhysicalFacts** (46 fields, `LayoutInstance.lean:176`) | | | |
+| `good : GoodState c.σ` (20 pinned CSRs, 11 present-only: `htif_tohost`, `mip`, `sig_meip/seip`, `mtime`, `mtimecmp`, `minstret`, `minstret_increment`, `mcycle`, `nextPC`, `PC`) | machine mode, `misa/mstatus` init values, `mie = mtvec = satp = … = 0`, `htif_done = false`, `htif_tohost_base = tohost`, PMP/PMA init, counters present | `bootState_good`: the witness's CSR file *is* `physicalAssignments.take 32` | **synthetic** (F1); every pinned value verified equal in the reached state natively (§2.1) |
 | `tick : c.tick < 2` | | `entrySteps % 2` | true of real boots (`plat_insns_per_tick = 2`; replay: `i = 1` at step 85,483) |
 | `pc`, `htif_payload` | `PC = 0x800043ec`, `htif_payload_writes = 0` | CSR list | replay: equal |
 | `interp_arg`, `interp_local`, `stmts_arg`, `count_arg`, `repl_arg`, `ra`, `sp`, `gp`, `s0 … s11` | `a0 = &Interp = 0x87fffe10`, `a1 = stmts`, `a2 = count`, `a3 = 0`, `ra = 0x800045ec`, `sp = 0x87fffd00`, `gp = 0x8001b510`, `s*` present | `BootRegs` (decided on the trace's entry GPR row), `bootRegs_gpr` | replay: `x1…x31` equal |
@@ -142,7 +142,7 @@ theorem errDivzero_stuck       : Diverges cDiv ∨ ∃ out e, Halts cDiv out e �
 | `program` | every represented program reads only shared bytes | decoder coverage `own.sharedB` + uniqueness | real |
 | `allocator : InitialAllocator` | `∃ top brkv chunks bins, InitialAllocatorAt …` | below | |
 | **InitialAllocatorAt** | | | |
-| `heap : HeapAt` (24: `sbrk_base`, `brk` page bounds, `top_ptr/top_size/top_header/top_pad = 0`, `max_sbrked`, `mallinfo` present, first-chunk `prev_inuse`, chunk walk `_end → top`, coalescing, free footers, bin rings, `bin_free`/`free_binned`, `remainder ≤ 1`, `binblocks` bits, `live`, `exact`) | dlmalloc's state at entry | `heapCheck` decided (proof ELF: 154 chunks, 0 free, no bins) | real |
+| `heap : HeapAt` (23: `sbrk_base`, `brk` page bounds, `top_ptr/top_size/top_header/top_pad = 0`, `max_sbrked`, `mallinfo` present, first-chunk `prev_inuse`, chunk walk `_end → top`, coalescing, free footers, bin rings, `bin_free`/`free_binned`, `remainder ≤ 1`, `binblocks` bits, `live`, `exact`) | dlmalloc's state at entry | `heapCheck` decided (proof ELF: 154 chunks, 0 free, no bins) | real |
 | `capacity` | `∀ p, ProgramRepr → ∀ st' n, ExecSeqCost initSt 0 0 p st' .normal n → 2n + 8256 ≤ heapEnd − top` | `capOk 1000 prog top` (cost evaluator; complete for the relations) | real for the 10 programs; **program-dependent** (M1); vacuous for the `err_*` programs (evaluator `stuck`); **`recursion.wl` not witnessed** |
 | **BootHeapFacts** (8) | | | |
 | `top_room`, `brk_page`, `binblocks < 2^32` | | decided | real |
@@ -188,7 +188,7 @@ The cost evaluator is exponential in the fuel argument for loops (`oracle f` nes
 
 ```
 lake build Vsa VsaIris VsaIris.Audit VsaBoot lean_riscv_emulator
-lake env lean experiments/review-v2/Audit.lean                       # §1, §2.2, §2.3 (kernel)
+lake env lean Vsa/Sim/Boot/Audit.lean                                # §1, §2.2, §2.3 (kernel; built by `lake build VsaBoot`)
 lake env lean --run experiments/review-v2/Replay.lean all             # §2.1 (native; needs B3's corpus ELFs, VSA_BOOT_WORK)
 python3 experiments/review-v2/elf_xcheck.py                           # §2.1 image provenance (pure Python)
 python3 experiments/review-v2/gen_corpus.py /tmp/Corpus.lean && lake env lean --run /tmp/Corpus.lean [name] [fuel=N]   # §4
@@ -197,3 +197,41 @@ scripts/check_all.sh --static-only; scripts/check_final_axioms.sh; python3 scrip
 ```
 
 Outputs of this lane's runs are outside the repository (scratch), summarised above.
+
+## 8. Follow-ups landed (approved by the user, 2026-09-25)
+
+- **P8 (F1).** `Vsa/Sim/Boot/Entry.lean`: `EntryRegs σ g` names the four
+  register facts `Loaded` reads (`GoodState`, `PC = interp_run`,
+  `htif_payload_writes = 0`, the traced `x1 … x31`), with `EntryRegs.gprs`
+  (presence), `EntryRegs.setMem`/`GoodState.setMem` (transport across the zero
+  fill) and `bootState_entryRegs` (the witness register file is an instance).
+  `Physical.lean`: `readyFacts_at`/`loaded_at` assemble the boundary at ANY
+  configuration `⟨σ, tick, steps⟩` with `EntryRegs σ g`, an empty console and a
+  memory the entry view is a partial view of; `readyFacts_of`/`loaded_of` are
+  their instances at `bootState`. The generator emits, per program,
+  `loadedEntry` and `loadedEntry_fill` (the form `endToEnd_refinement` takes;
+  the fill supplies the stack bytes), with `loadedAt`/`loaded` as corollaries;
+  the ten `Gen/*.lean` were regenerated from B3's traces (the diff is exactly
+  that block). `Vsa/Sim/Boot/Audit.lean` (the lane's audit, moved into the
+  library) adds `proofElf_halts_entry`, `arithmetic_halts_entry`,
+  `errDivzero_never_clean_entry`: the capstones at any entry configuration.
+  What remains native is exactly the three hypotheses at the reached state,
+  which `Replay.lean` checks field by field (`EntryRegs` = the 20 pinned
+  `GoodState` CSRs + PC + payload + GPRs; empty console; memory equality ⇒
+  partial view). The full reached register file (every CSR `init_model`
+  defines) cannot be kernel-covered without reducing `init_model`; the
+  witness now ranges over all of them.
+- **P9 (F2).** `scripts/check_all.sh` stage c3 runs `Replay.lean proof`
+  (embedded ELF: `ElfLoads` + replay + halt) whenever the VsaBoot build is
+  present, and `all` when `VSA_BOOT_WORK` points at the corpus;
+  `scripts/check_final_axioms.sh` audits every `Gen.*.loaded`,
+  `Gen.Proof.loadedEntry_fill`, the six `*_halts` and the `ReviewV2.*`
+  theorems (24 → 53). README: the witnesses and the two native links beside
+  `IrisHoles`.
+- **P10 (F4).** `LANES-b1.md` restored from `hub/lane-b1:LANE.md`.
+- Build: `lake build Vsa VsaIris VsaIris.Audit VsaBoot` green (2,809 jobs);
+  `check_final_axioms.sh` 53/53 standard; `IrisHoles` unchanged (empty);
+  `check_all.sh --static-only` (a3, a4, a5, b), `check_discipline.py`,
+  `check_iris_holes.py` (0 holes) pass; stage c3's command
+  (`Replay.lean proof`: `ElfLoads`, 85,483-step replay, memory/`EntryRegs`/
+  console equality, both halts) exits 0 in 4 m 27 s interpreted.

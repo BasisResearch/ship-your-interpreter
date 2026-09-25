@@ -1,4 +1,5 @@
 import Vsa.Sim.Boot.Owned
+import Vsa.Sim.Boot.Entry
 import Vsa.Sim.Boot.Ast
 import Vsa.Sim.Boot.Capacity
 
@@ -9,6 +10,13 @@ The fields of `InterpRunPhysicalFacts` that are read facts or arithmetic,
 over a byte view of the entry memory. The initial store is checked once over
 the view with `interp_run`'s prologue footprint masked out
 (`prologueMask`), which gives both `store` and `store_survives`.
+
+The boundary is assembled at ANY configuration `⟨σ, tick, steps⟩` whose
+registers satisfy `EntryRegs σ g` (REVIEW2.md P8: `GoodState`, `PC`,
+`htif_payload_writes`, the traced `x1 … x31`), whose console is empty, and
+whose memory the entry view is a partial view of (`readyFacts_at`,
+`loaded_at`); `readyFacts_of`/`loaded_of` are the instances at the witness
+register file `bootState`.
 -/
 
 namespace Vsa.Sim.Boot
@@ -89,35 +97,38 @@ theorem bootArena_protected :
   simp only [bootArena, DlHeap.heapStart, DlHeap.heapEnd] at hin
   omega
 
-/-- **The boundary at a boot trace's entry**, from the per-trace facts. -/
-theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
-    {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
-    (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
+/-- **The boundary at any entry configuration**, from the per-trace facts:
+registers `EntryRegs σ g`, no console output, a memory the entry view is a
+partial view of. -/
+theorem readyFacts_at {σ : Vsa.Machine.MState} {v : Nat → Option (BitVec 8)}
+    (hv : PartialView σ.mem v) {g : Nat → BitVec 64} (E : EntryRegs σ g)
+    (hout : Vsa.Machine.output σ = "") {tick : Nat} (htick : tick < 2) {steps stmts count : Nat}
+    {B : BootOwn} (M : BootMemFacts σ.mem B.env) (R : BootRegs g stmts count)
     (ho : OwnOk B) (hf : FrameOk v B)
     (hstore : frameCheck (maskView prologueMask v) bootNatives B.env initFrame = true)
     {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
     (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
     {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
-    (hprog : ∀ p : Program, ProgramRepr m stmts count p →
-      ProgramReprWithin m B.shared stmts count p)
-    (hcap : ∀ p : Program, ProgramRepr m stmts count p →
+    (hprog : ∀ p : Program, ProgramRepr σ.mem stmts count p →
+      ProgramReprWithin σ.mem B.shared stmts count p)
+    (hcap : ∀ p : Program, ProgramRepr σ.mem stmts count p →
       ∀ st' n, ExecSeqCost initSt 0 0 p st' .normal n →
         2 * n + DlHeap.extendSlack ≤ DlHeap.heapEnd - top)
-    (hfit : StackAdmissible m stmts count) :
-    InterpRunReadyFacts (bootConfig m g steps) stmts count (BitVec.ofNat 64 interpObject)
+    (hfit : StackAdmissible σ.mem stmts count) :
+    InterpRunReadyFacts ⟨σ, tick, steps⟩ stmts count (BitVec.ofNat 64 interpObject)
       bootNatives bootArena (fun _ => B.env) (fun _ => 0) 0 := by
-  have hgpr : ∀ i, i < 31 → (bootConfig m g steps).σ.regs.get? (gprReg (i + 1)) =
-      some (gprRT (i + 1) (g (i + 1))) := fun i hi => bootRegs_gpr g i hi
+  have hgpr : ∀ i, i < 31 → (⟨σ, tick, steps⟩ : Vsa.Machine.Config).σ.regs.get? (gprReg (i + 1)) =
+      some (gprRT (i + 1) (g (i + 1))) := E.gpr
+  have hpv : PartialView σ.mem v := hv
   have harena : bootArena.contains B.env 32 ∧ B.env % 8 = 0 := by
     have := ho.rolesArena (B.env, 32) (by simp [BootOwn.roleExts])
     exact ⟨⟨this.2.1, this.2.2⟩, ho.envAligned⟩
   obtain ⟨hst, hsurv⟩ := store_of_check hv (φf := fun _ => B.env) (φc := fun _ => (0 : Nat))
     (A := bootArena) rfl harena hstore
-  have hpv : PartialView m v := hv
   refine
-    { good := bootState_good m g
-      tick := Nat.mod_lt _ (by decide)
-      pc := bootState_pc m g
+    { good := E.good
+      tick := htick
+      pc := E.pc
       interp_arg := by rw [← R.a0]; exact hgpr 9 (by decide)
       interp_local := rfl
       stmts_arg := by rw [← R.a1]; exact hgpr 10 (by decide)
@@ -127,7 +138,7 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialVie
       sp := by rw [← R.sp]; exact hgpr 1 (by decide)
       gp := by rw [← R.gp]; exact hgpr 2 (by decide)
       main_ra := M.mainRa
-      htif_payload := bootState_htif_payload m g
+      htif_payload := E.payload
       s0 := ⟨_, hgpr 7 (by decide)⟩
       s1 := ⟨_, hgpr 8 (by decide)⟩
       s2 := ⟨_, hgpr 17 (by decide)⟩
@@ -146,12 +157,12 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialVie
       console := M.console
       exit_runtime := M.exitRuntime
       arena_protected := bootArena_protected
-      out := rfl
+      out := hout
       globals := by
-        show read64 m (BitVec.ofNat 64 interpObject).toNat = some B.env
+        show read64 σ.mem (BitVec.ofNat 64 interpObject).toNat = some B.env
         exact M.globals
       call_depth := by
-        show read32 m ((BitVec.ofNat 64 interpObject).toNat + 8) = some 0
+        show read32 σ.mem ((BitVec.ofNat 64 interpObject).toNat + 8) = some 0
         exact M.depth
       interp_geom := ⟨by decide, by unfold RSub; decide, by decide, by decide⟩
       setjmp_geom := ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
@@ -170,12 +181,58 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialVie
         ⟨heapAt_of_check hpv hh (fun e _ hr => B.realloc_mem hr), hcap⟩,
         bootHeapFacts_of hpv hf hH ho.readWin⟩
       stack_admissible := hfit
-      gprs := bootState_gprs m g
+      gprs := E.gprs
       s0_impure := by rw [← R.s0]; exact hgpr 7 (by decide) }
 
-/-- **`Loaded` at a boot trace's entry.** The represented program is the one
+/-- **`Loaded` at any entry configuration.** The represented program is the one
 the decoder finds within the shared bytes (`hdec`); its cost and stack need
 are decided (`hcap`, `hfit`). -/
+theorem loaded_at {σ : Vsa.Machine.MState} {v : Nat → Option (BitVec 8)}
+    (hv : PartialView σ.mem v) {g : Nat → BitVec 64} (E : EntryRegs σ g)
+    (hout : Vsa.Machine.output σ = "") {tick : Nat} (htick : tick < 2) {steps stmts count : Nat}
+    {B : BootOwn} (M : BootMemFacts σ.mem B.env) (R : BootRegs g stmts count)
+    (ho : OwnOk B) (hf : FrameOk v B)
+    (hstore : frameCheck (maskView prologueMask v) bootNatives B.env initFrame = true)
+    {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
+    (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
+    {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
+    {p0 : Program} {fuel cfuel : Nat}
+    (hdec : decodesTo v B.sharedB fuel stmts count p0 = true)
+    (hcap : capOk cfuel p0 top = true) (hfit : programStackFits p0 = true) :
+    Vsa.Refine.Loaded interpRunLayout p0 ⟨σ, tick, steps⟩ := by
+  have hwithin : ProgramReprWithin σ.mem B.shared stmts count p0 :=
+    (decodesTo_sound hv hdec).mono (fun _ hk => B.shared_of_sharedB hk)
+  have huniq : ∀ p, ProgramRepr σ.mem stmts count p → p = p0 :=
+    fun p hp => hp.unique hwithin.erase
+  refine ⟨stmts, count, hwithin.erase, BitVec.ofNat 64 interpObject, bootNatives, bootArena,
+    fun _ => B.env, fun _ => 0, 0, ?_⟩
+  exact readyFacts_at hv E hout htick M R ho hf hstore hh hH
+    (fun p hp => huniq p hp ▸ hwithin)
+    (fun p hp => huniq p hp ▸ capacity_of_capOk hcap)
+    (fun p hp => huniq p hp ▸ ProgramStackFits.of_check hfit)
+
+/-- The boundary at the witness register file `bootState` (the instance of
+`readyFacts_at` at `bootConfig`). -/
+theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
+    {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
+    (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
+    (ho : OwnOk B) (hf : FrameOk v B)
+    (hstore : frameCheck (maskView prologueMask v) bootNatives B.env initFrame = true)
+    {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
+    (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
+    {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
+    (hprog : ∀ p : Program, ProgramRepr m stmts count p →
+      ProgramReprWithin m B.shared stmts count p)
+    (hcap : ∀ p : Program, ProgramRepr m stmts count p →
+      ∀ st' n, ExecSeqCost initSt 0 0 p st' .normal n →
+        2 * n + DlHeap.extendSlack ≤ DlHeap.heapEnd - top)
+    (hfit : StackAdmissible m stmts count) :
+    InterpRunReadyFacts (bootConfig m g steps) stmts count (BitVec.ofNat 64 interpObject)
+      bootNatives bootArena (fun _ => B.env) (fun _ => 0) 0 :=
+  readyFacts_at (σ := bootState m g) hv (bootState_entryRegs m g) rfl
+    (Nat.mod_lt _ (by decide)) M R ho hf hstore hh hH hprog hcap hfit
+
+/-- `Loaded` at the witness register file (the instance of `loaded_at` at `bootConfig`). -/
 theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
     {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
     (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
@@ -187,16 +244,8 @@ theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m 
     {p0 : Program} {fuel cfuel : Nat}
     (hdec : decodesTo v B.sharedB fuel stmts count p0 = true)
     (hcap : capOk cfuel p0 top = true) (hfit : programStackFits p0 = true) :
-    Vsa.Refine.Loaded interpRunLayout p0 (bootConfig m g steps) := by
-  have hwithin : ProgramReprWithin m B.shared stmts count p0 :=
-    (decodesTo_sound hv hdec).mono (fun _ hk => B.shared_of_sharedB hk)
-  have huniq : ∀ p, ProgramRepr m stmts count p → p = p0 :=
-    fun p hp => hp.unique hwithin.erase
-  refine ⟨stmts, count, hwithin.erase, BitVec.ofNat 64 interpObject, bootNatives, bootArena,
-    fun _ => B.env, fun _ => 0, 0, ?_⟩
-  exact readyFacts_of hv M R ho hf hstore hh hH
-    (fun p hp => huniq p hp ▸ hwithin)
-    (fun p hp => huniq p hp ▸ capacity_of_capOk hcap)
-    (fun p hp => huniq p hp ▸ ProgramStackFits.of_check hfit)
+    Vsa.Refine.Loaded interpRunLayout p0 (bootConfig m g steps) :=
+  loaded_at (σ := bootState m g) hv (bootState_entryRegs m g) rfl (Nat.mod_lt _ (by decide))
+    M R ho hf hstore hh hH hdec hcap hfit
 
 end Vsa.Sim.Boot

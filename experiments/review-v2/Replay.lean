@@ -4,16 +4,22 @@ import Vsa.ElfRun
 /-!
 # REVIEW2 native replay (lane V2): is the witness configuration the machine's?
 
-Run: `lake env lean --run experiments/review-v2/Replay.lean <name> [fuel]`.
+Run: `lake env lean --run experiments/review-v2/Replay.lean <name>|all [fuel]`
+(`VSA_BOOT_WORK`: the `gen_boot_witness.py` work directory holding the corpus ELFs).
 For each generated witness `Gen.<Name>`, this parses the ELF (the embedded
 `Vsa.elfHex` for `proof`, B3's corpus ELF otherwise), checks `ElfLoads`
 natively, runs `Vsa.setupElf` + `Vsa.stepOnce` (the theorem's own step
 function) for `entrySteps` steps, and compares the reached Sail state with the
 witness `bootConfig (bootMem script log) regs entrySteps`: every byte of both
-memories, the 31 GPRs, PC, HTIF registers, the console, and the pinned
-`GoodState` CSRs. Then it runs BOTH states to halt and prints their output and
-exit code. This is native evaluation (not kernel-checked); it is the evidence
-that the kernel-checked witness state is the state the binary reaches.
+memories (so the entry view is a partial view of the reached memory), and
+exactly the register facts `EntryRegs` names (`Vsa/Sim/Boot/Entry.lean`: the
+pinned `GoodState` CSRs, PC, `htif_payload_writes`, `x1 … x31`) plus the empty
+console. These are the hypotheses of `Gen.<Prog>.loadedEntry_fill`, so a
+passing run means the kernel-checked witness covers the reached state. Then it
+runs BOTH states to halt and prints their output and exit code. This is
+native evaluation (not kernel-checked); it is the evidence that the
+kernel-checked witness state is the state the binary reaches. Exit status 0
+iff every check passes for every requested witness.
 -/
 
 open Vsa Vsa.Sim Vsa.Sim.Boot LeanRV64DExecutable Sail ConcurrencyInterfaceV1 Vsa.Machine
@@ -50,15 +56,14 @@ def witnesses : List Witness := [
   ⟨"err_divzero", Gen.ErrDivzero.script, Gen.ErrDivzero.log, Gen.ErrDivzero.runs, Gen.ErrDivzero.regs, Gen.ErrDivzero.entrySteps, "runtime error [line 1]: division by zero\n"⟩,
   ⟨"err_undefined", Gen.ErrUndefined.script, Gen.ErrUndefined.log, Gen.ErrUndefined.runs, Gen.ErrUndefined.regs, Gen.ErrUndefined.entrySteps, "runtime error [line 1]: undefined variable 'nope'\n"⟩]
 
-def elfDir : String := "/data/home/kirancodes/vsa-b3-work/elfs/"
-
 def loadElf (name : String) : IO ELF64File := do
   if name == "proof" then
     match Vsa.whileElf? with
     | .ok elf => pure elf
     | .error e => throw (IO.userError e)
   else
-    let bytes ← IO.FS.readBinFile (elfDir ++ name ++ ".elf")
+    let work := (← IO.getEnv "VSA_BOOT_WORK").getD "/Users/kirancodes/vsa-b3-work"
+    let bytes ← IO.FS.readBinFile (work ++ "/elfs/" ++ name ++ ".elf")
     match mkRawELFFile? bytes with
     | .ok (.elf64 elf) => pure elf
     | _ => throw (IO.userError "not a 64-bit ELF")
@@ -119,7 +124,6 @@ def checkOne (w : Witness) (fuel : Nat) : IO Bool := do
     ok := (← check "menvcfg" (eq64 Register.menvcfg rfl)) && ok
     ok := (← check "mcyclecfg" (eq64 Register.mcyclecfg rfl)) && ok
     ok := (← check "minstretcfg" (eq64 Register.minstretcfg rfl)) && ok
-    ok := (← check "htif_tohost" (eq64 Register.htif_tohost rfl)) && ok
     ok := (← check "mcountinhibit" ((σ.regs.get? Register.mcountinhibit : Option (BitVec 32)) == (bs.regs.get? Register.mcountinhibit : Option (BitVec 32)))) && ok
     ok := (← check "elp" ((σ.regs.get? Register.elp : Option (BitVec 1)) == (bs.regs.get? Register.elp : Option (BitVec 1)))) && ok
     ok := (← check "hart_state" ((σ.regs.get? Register.hart_state : Option HartState) == (bs.regs.get? Register.hart_state : Option HartState))) && ok
@@ -132,6 +136,7 @@ def checkOne (w : Witness) (fuel : Nat) : IO Bool := do
     -- the counters the witness resets (informational)
     let show64 (r : Register) (h : RegisterType r = BitVec 64) : String :=
       s!"{(h ▸ σ.regs.get? r : Option (BitVec 64))}"
+    IO.println s!"  [info] htif_tohost (not pinned by GoodState): reached {show64 Register.htif_tohost rfl}, witness `bootState` 0"
     IO.println s!"  reached counters (witness has setup values 0): mtime={show64 Register.mtime rfl} mcycle={show64 Register.mcycle rfl} minstret={show64 Register.minstret rfl} mip={show64 Register.mip rfl} mtimecmp={show64 Register.mtimecmp rfl} cycleCount={σ.cycleCount} (witness 0)"
     -- run both to halt
     let (r1, out1, ok1) ← runToHalt σ i u fuel

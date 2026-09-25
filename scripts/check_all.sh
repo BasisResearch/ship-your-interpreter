@@ -1289,6 +1289,30 @@ else
   echo "stage c2: SKIPPED (no VsaIris build; run \`lake build VsaIris\` then scripts/check_final_axioms.sh)"
 fi
 
+# ---------------------------------------- (c3) the boot witnesses are the machine's
+# The kernel checks `Loaded` at generated data (the loader image + the traced
+# store log); that the data IS the binary's entry state is a native fact
+# (REVIEW2.md F2). Re-check it against the VsaBoot build when one is present:
+# `experiments/review-v2/Replay.lean` parses the embedded ELF, evaluates
+# `ElfLoads`, runs the theorem's own `stepOnce` to the entry and compares the
+# reached state with the witness (memory byte for byte, `EntryRegs`, console),
+# then runs both to halt. `proof` needs no external data; the other nine
+# witnesses need the corpus ELFs (`VSA_BOOT_WORK`, from gen_boot_witness.py corpus).
+if [ -f .lake/build/lib/lean/Vsa/Sim/Boot/Audit.olean ]; then
+  echo "== stage c3: native replay of the boot witnesses (embedded ELF, then the corpus if VSA_BOOT_WORK is set)"
+  lake env lean --run experiments/review-v2/Replay.lean proof \
+    || fail "stage c3: the proof ELF's witness is not the machine's entry state (see above)"
+  if [ -n "${VSA_BOOT_WORK:-}" ] && [ -d "$VSA_BOOT_WORK/elfs" ]; then
+    VSA_BOOT_WORK="$VSA_BOOT_WORK" lake env lean --run experiments/review-v2/Replay.lean all \
+      || fail "stage c3: a corpus witness is not the machine's entry state (see above)"
+  else
+    echo "stage c3: corpus witnesses SKIPPED (set VSA_BOOT_WORK to the gen_boot_witness.py work directory)"
+  fi
+  echo "stage c3: OK"
+else
+  echo "stage c3: SKIPPED (no VsaBoot build; run \`lake build VsaBoot\` then \`lake env lean --run experiments/review-v2/Replay.lean proof\`)"
+fi
+
 # ------------------------------------------------- (d) encoder differential
 # Compare encoder step semantics, span declarations and summary clauses
 # against traces from the proof model.

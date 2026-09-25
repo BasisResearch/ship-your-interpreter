@@ -718,14 +718,39 @@ def cmd_program(args):
             "  decide +kernel",
             "",
         ] + ([] if name in SLOW_COST else [
-            "/-- **The witness**, at the entry registers over any memory extending the",
-            "entry memory in which every stack byte is present. -/",
+            "/-- **The witness at any entry configuration** (REVIEW2.md P8): registers",
+            "satisfying `EntryRegs` (`GoodState`, `PC`, `htif_payload_writes`, the traced",
+            "`x1 … x31`), no console output, and a memory the entry view is a partial view",
+            "of in which every stack byte is present. -/",
+            "theorem loadedEntry {σ : Vsa.Machine.MState} (E : EntryRegs σ regs)",
+            "    (hout : Vsa.Machine.output σ = \"\") (hv : PartialView σ.mem (bootView script runs))",
+            "    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →",
+            "      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, σ.mem[k]? = some b)",
+            "    {tick : Nat} (htick : tick < 2) (steps : Nat) :",
+            "    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog ⟨σ, tick, steps⟩ :=",
+            "  loaded_at hv E hout htick (memFacts hv hstack) bootRegs ownOk frameOk storeOk heapOk",
+            "    heapFactsOk progOk capacityOk fitsOk",
+            "",
+            "/-- The same at the configuration's zero fill (the form `endToEnd_refinement`",
+            "takes): the fill supplies the stack bytes, so only the registers, the empty",
+            "console and the entry view remain. The state the binary reaches satisfies the",
+            "three (checked natively by `experiments/review-v2/Replay.lean`). -/",
+            "theorem loadedEntry_fill {σ : Vsa.Machine.MState} (E : EntryRegs σ regs)",
+            "    (hout : Vsa.Machine.output σ = \"\") (hv : PartialView σ.mem (bootView script runs))",
+            "    {tick : Nat} (htick : tick < 2) (steps : Nat) :",
+            "    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog",
+            "      (Vsa.Densify.fillZero ⟨σ, tick, steps⟩) := by",
+            "  rw [fillZero_mk]",
+            "  exact loadedEntry (E.setMem (Vsa.Densify.fillZeroMem σ.mem)) hout hv.fill",
+            "    (fillZeroMem_stack _) htick steps",
+            "",
+            "/-- **The witness**, at the witness register file `bootState` over any memory",
+            "extending the entry memory in which every stack byte is present. -/",
             "theorem loadedAt {m : Vsa.MemRepr.Mem} (hv : PartialView m (bootView script runs))",
             "    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →",
             "      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, m[k]? = some b) :",
             "    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog (bootConfig m regs entrySteps) :=",
-            "  loaded_of hv (memFacts hv hstack) bootRegs ownOk frameOk storeOk heapOk heapFactsOk progOk",
-            "    capacityOk fitsOk",
+            "  loadedEntry (bootState_entryRegs m regs) rfl hv hstack (Nat.mod_lt _ (by decide)) entrySteps",
             "",
             "/-- **The witness**: the real entry state's zero fill (REVIEW.md P3; the",
             "form `endToEnd_refinement` takes) is `Loaded` for `prog`. -/",
@@ -747,7 +772,8 @@ def cmd_program(args):
 def write_index():
     """`VsaBoot.lean`: the boot infrastructure and every generated trace."""
     mods = ["Vsa.While.CostEval", "Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Ast", "Vsa.Sim.Boot.Capacity", "Vsa.Sim.Boot.Heap",
-            "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Fill", "Vsa.Sim.Boot.Elf", "Vsa.Sim.Boot.EndToEnd"]
+            "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Entry", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Fill",
+            "Vsa.Sim.Boot.Elf", "Vsa.Sim.Boot.EndToEnd", "Vsa.Sim.Boot.Audit"]
     mods += [f"Vsa.Sim.Boot.Gen.{f.stem}" for f in sorted((BOOT_DIR / "Gen").glob("*.lean"))]
     (ROOT / "VsaBoot.lean").write_text("".join(f"import {m}\n" for m in mods))
 
