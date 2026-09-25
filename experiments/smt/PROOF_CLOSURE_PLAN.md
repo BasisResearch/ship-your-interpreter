@@ -4186,6 +4186,10 @@ evidence is below.
 
 ## Closure objects carry no read geometry on the Iris side (lane H2, 2026-09-24)
 
+DISCHARGED (lane A, 2026-09-25): `closOwn` carries `ClosObj` (the object's
+`ReadOK` on `InExt (p, 16)`) and the node's `astEG`; see the two E4 entries
+below.
+
 `value_print`'s closure arm loads the closure object (`ca`'s 16 bytes) and
 its `EX_FN` node's name field. `closOwn`/`astE` (`VsaIris/Interp/Repr.lean`)
 give the bytes' values but no `ReadOK` geometry (RAM, off the HTIF window),
@@ -4224,17 +4228,20 @@ top-level `live` like `CodeLive`. Its supplier is the instantiation of
 - Declaration: `DispSupply N` (`VsaIris/Interp/CallNative.lean`), a premise
   of the printing native cases: `storeRepr N s B ∗ closAt ca p ⊢ storeRepr N s
   B ∗ dispRes s (.closure ca)`.
-- Missing supplier: `closOwn` carries no `ReadOK`/`SharedWin` geometry (the
-  H2 entry above). Once `closOwn` carries it (from the `EX_FN` arm), the lemma
-  is a projection of `storeRepr`'s closure list.
+- DISCHARGED (lane A, 2026-09-25): `dispSupply : DispSupply N`
+  (`CallClosure.lean`, `dispSupply_of_cloSupply cloSupply`), for every `N`.
+  `CatDispSupply N` is the same statement.
 ## Closure call resources (lane E4, 2026-09-24)
 
 - Declaration: `CloSupply N` (`VsaIris/Interp/CallClosure.lean`), a premise
   of `caseT_CallClosure` and the partial closure path: every closure the
   store owns has its object's bytes, the `EX_FN` node's view (`ReadOK`,
   `SharedWin`) and its environment's binding (`CloRes`). It subsumes
-  `DispSupply`. Supplier: the same geometry field on `closOwn` (the `EX_FN`
-  arm, H2's entry).
+  `DispSupply`. DISCHARGED (lane A, 2026-09-25): `cloSupply : CloSupply N`
+  (`CallClosure.lean`), for every `N`, from `storeRepr`: `closOwn` now carries
+  `ClosObj` (object `ReadOK`) and the node's `astEG`, established by the
+  `EX_FN` arm through `storeRepr_allocClosure`; `SharedWin` follows from
+  `ReadOK` (`sharedWin_of_readOK`). The case lemmas keep the premise.
 - Declarations: `caseT_CallClosure`, `callClosureT`, `cloExitN`, `cloExitR`
   (premises `hinpG : RtErr.InpGeom (ofNat inp)`, `hinpL : inp < 2 ^ 64`,
   `hinpA : inp % 8 = 0`). The closure path reads and writes

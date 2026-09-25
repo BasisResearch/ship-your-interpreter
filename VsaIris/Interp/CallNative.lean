@@ -144,14 +144,10 @@ theorem ms_uncarveVals (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64
   · iapply ms_iff' hsl $$ Hms
   · ipureintro; exact fun k hk hn => h1 k ⟨hk, hn⟩
 
-/-- **What `value_print` needs of a closure argument, from the store** (a
-NAMED premise, INTERP_DESIGN.md §10 "STATEMENT CHANGES (H2)", finding
-"`closOwn` carries no read geometry"): a closure the store owns is displayable
-(`dispRes`: its object's and its `EX_FN` node's read geometry and the name's
-window). `closOwn`/`astE` carry no geometry (`ReadOK`, `SharedWin`), so this
-does not follow from `storeRepr` as stated; its supplier is a geometry field
-on `closOwn`, established where closures are built (the `EX_FN` arm: a heap
-block and the program's AST). Recorded in `PROOF_CLOSURE_PLAN.md`. -/
+/-- **What `value_print` needs of a closure argument, from the store**: a
+closure the store owns is displayable (`dispRes`: its object's and its
+`EX_FN` node's read geometry and the name's window). Proved for every `N` as
+`dispSupply` (`CallClosure.lean`) from the geometry `closOwn` carries. -/
 def DispSupply (N : NativeAddrs) : Prop :=
   ∀ (s : Store) (B : List (Nat × Nat)) (ca p : Nat),
     storeRepr (GF := GF) N s B ∗ closAt ca p ⊢ storeRepr N s B ∗ dispRes s (.closure ca)

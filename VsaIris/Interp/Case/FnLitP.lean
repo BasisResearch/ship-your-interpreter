@@ -267,12 +267,16 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   ihave ⟨Hms, Hblk⟩ := ms_split (S := frS (s.toNat - 1088) sret.toNat)
     (T := InExt ((R2 10).toNat, 16)) (fun b h1 h2 => hdb b h1 h2) $$ Hms
   ihave #HaE := astEG_of_view hrepr hgeo $$ Hro
-  ihave #HaX := astEG_astE _ _ $$ HaE
+  have hobj : ClosObj (imgM Mt3) (R2 10).toNat aX.toNat aE.toNat :=
+    ⟨hpne, heNZ, eB0, eB8, fun k hk => by
+      simp only [VsaIris.InExt] at hk
+      exact ⟨by omega, by omega, Or.inr (by unfold Vsa.Sim.tohostAddr; omega),
+        by omega, Or.inr (by unfold Vsa.Sim.tohostAddr; omega)⟩⟩
   iapply (wpW (vsaModel live)).fupd
   imod storeRepr_allocClosure (N := N) (s := st.store) (s' := store') (B := B)
     (cd := ⟨env, nm, ps, body⟩) (p := (R2 10).toNat) (q := aX.toNat) (e := aE.toNat)
-    (img := imgM Mt3) hcl hfr hpne heNZ eB0 eB8 hbody $$ [Hs Hblk] with ⟨Hs, #Hca⟩
-  · iframe Hs Hblk HaX Hfb
+    (img := imgM Mt3) hcl hfr hobj hbody $$ [Hs Hblk] with ⟨Hs, #Hca⟩
+  · iframe Hs Hblk HaE Hfb
   imodintro
   ihave ⟨Hpc, Hra, Hregs, HS, Hval⟩ := ms_exit_sret N (v := .closure a) hdj $$ [Hms]
   · iframe Hms

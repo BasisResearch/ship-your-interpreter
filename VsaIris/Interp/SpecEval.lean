@@ -64,15 +64,7 @@ end Regs
 
 /-! ## Pure geometry -/
 
-/-- A byte a load may read: RAM, off the HTIF words. `win` is the string
-routines' over-read window from the byte (H1's `SharedWin`): `strlen` and
-`strcmp` load whole aligned words, so every string of an AST view needs its
-8-byte window (E1, INTERP_DESIGN.md §10 "STATEMENT CHANGES (E1)"). -/
-structure ReadOK (k : Nat) : Prop where
-  lo : 0x80000000 ≤ k
-  hi : k < 0x100000000
-  off : k < Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k
-  win : k + 8 ≤ 0x100000000 ∧ (k + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k)
+-- `ReadOK` and `astEG` live in `Repr.lean` (`closOwn` carries them).
 
 /-- A stack pointer `s` with `n` owned bytes below it, inside the stack
 segment (`stackSL`), 16-aligned. -/
@@ -115,20 +107,6 @@ def statusCode : Status → BitVec 64
 section Specs
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-
-/-- Persistent AST ownership with its read set's address facts. -/
-def astEG (a : Nat) (e : Expr) : IProp GF :=
-  iprop(∃ (P : Nat → Prop) (m : Mem), ⌜ExprReprWithin m P a e ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m)
-
-instance (a : Nat) (e : Expr) : Persistent (astEG (GF := GF) a e) := by
-  unfold astEG; infer_instance
-
-theorem astEG_astE (a : Nat) (e : Expr) : astEG (GF := GF) a e ⊢ astE a e := by
-  unfold astEG astE
-  iintro ⟨%P, %m, %⟨h, _⟩, H⟩
-  iexists P, m
-  iframe H
-  ipureintro; exact h
 
 /-- Persistent statement ownership with its read set's address facts. -/
 def astSG (a : Nat) (s : Stmt) : IProp GF :=
