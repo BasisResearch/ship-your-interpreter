@@ -95,7 +95,6 @@ structure StuckSupply (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : Prop
   nAssert : ∀ (sret inp args s line : BitVec 64) (vs : List Value) (ρ : Regime) (st : St) (d : Nat)
     (jb : Nat → BitVec 8),
     ⊢ nativeAssertSpec (GF := GF) (Mv live) N (wpW (Mv live)) Lp Rp sret inp args s line vs ρ st d jb
-  cloArity : CloArityP (GF := GF) live N Lp Rp inp (evalCore N Lp Rp inp)
   /-- The `fn` literal's partial case, closed (its lemma takes `textOwn allocText`). -/
   fnLit : ∀ {st : St} {d env : Nat} {nm : Option String} {ps : List String} {body : List Stmt},
     leafErrCtx inp ∗ evalSpecsP (GF := GF) (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) ⊢
@@ -178,7 +177,7 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     iapply caseP_CallArm S.hlive hE S.nativeEntries (dispSupply_of_cloSupply S.cloSupply)
       (evalArgsP_all S.hlive _ d env args) S.vkind S.nPrint S.nPrintln S.nAssert
       (hroomPrintln f args d)
-      (callCloP_of S.hlive hE S.vnull S.envNew S.envDefine S.cloSupply S.cloArity S.inpAl)
+      (callCloP_of S.hlive hE S.vnull S.envNew S.envDefine S.cloSupply S.inpAl)
     iframe HE Hctx HX
 
 /-- The statement cases. -/
