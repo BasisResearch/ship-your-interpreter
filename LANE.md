@@ -37,6 +37,14 @@ literal run through `mbtowc` → literal iov → `%` parse through the jump tabl
   (`0x8000a944` → `0x8000a9b0`, FILE-independent; shared with N3).
 - `Fprintf/ScanTo.lean`: `vfp_toTerm` (loop head → literal run → `%` at `0x8000a9fc` or NUL at
   `0x8000aca8`, the run's iov appended; `VfpPend`, `ScanPost`).
+- `Fprintf/LldEmit.lean`, `LldConv.lean`: `lld_stage`, `vfp_lld` (`%lld` from `%` to the loop head).
+- `Fprintf/Print.lean`: `vfp_printH` (print through a `__sprint_r` hook, any `FILE`), `sbSprint_hook`
+  (the stack `FILE`'s hook, post `SbOut`), `vfp_print`.
+- `Fprintf/SConv.lean`: `s_stage` (`%s`, `strlen` a hook).
+- `Fprintf/End.lean`: `vfp_tail`, `vfp_end0`, `vfp_end1`, `vfp_end` (NUL → caller, final flush a hook).
+- `Fprintf/Inner.lean`, `InnerLld.lean`, `InnerS.lean`: `vfp_fileSb`, `vfp_begin`, and the whole
+  inner `_vfprintf_r` on the stack `FILE`: `vfpInnerLld` (`"%lld"`, prints `lldBytes v`),
+  `vfpInnerS` (`"<lit>%s>"`, prints `lit ++ bs ++ ">"`).
 - `Fprintf/Tac.lean`: `nf_run` passes its stops; `sx_side` rules check the branch fact's shape
   (`bv_side_contra`, `closed_decide`). Files that `open scoped VsaIris.Sym.Stdout` add
   `local macro_rules | \`(tactic| sx_side) => \`(tactic| closed_decide)` after it: N1's scoped
@@ -44,8 +52,8 @@ literal run through `mbtowc` → literal iov → `%` parse through the jump tabl
 
 ## In flight
 
-`%lld` emit (`0x8000b444` → `__sprint_r` → loop head), `%s`, loop end + epilogue,
-`__sbprintf`, outer `_vfprintf_r` + `fprintf`, the Iris wrapper to `outSpec`.
+`__sbprintf` (stack `FILE` set-up, inner run, `_fflush_r`), the outer `_vfprintf_r(stdout)` +
+`fprintf`, the Iris wrapper to `outSpec`, the `out.fprintf` field + HOLES row.
 
 ## Statement issues
 
