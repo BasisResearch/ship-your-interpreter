@@ -2,7 +2,7 @@ import VsaIris.Vsa.Newlib
 import VsaIris.Interp.Repr
 
 /-!
-# `IrisHoles.out`: newlib's stdout calls (H2)
+# `OutHoles`: newlib's stdout calls (H2), all proved
 
 `value_print` and the natives print through newlib's stdio: `fputs`,
 `fputc`, `fwrite` and `fprintf` on `stdout`. `stdout` is unbuffered at every
@@ -19,8 +19,8 @@ starts from `0x200a`. The postcondition is the oriented state, weakened to
 
 INTERP_DESIGN.md Q4: like H5's `NewlibHoles`, these stay unproved for now.
 Each is an exact Iris statement about the fixed binary, in H5's calling
-convention (`argsAt`, `callFrame`), a field of `OutHoles` (hence of
-`IrisHoles`) with a row in `VsaIris/HOLES.md`. Unlike H5's `stderr` calls,
+convention (`argsAt`, `callFrame`), a field of `OutHoles`, since discharged
+(`OutHoles.proved`; `IrisHoles` was then removed). Unlike H5's `stderr` calls,
 these are exact about what they print: the console grows by the fragment.
 The `snprintf` statements are proved (`VsaIris.Sym.snprintfInt_out`,
 `VsaIris.Sym.snprintfFn_out`, `Vsa/SnpHoles.lean`) for a stack and buffer
@@ -110,7 +110,7 @@ def snprintfIntSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live
 
 end Specs
 
-/-- **newlib's stdout calls at the binary** (`IrisHoles.out`), for every Iris
+/-- **newlib's stdout calls at the binary** (`OutHoles`), for every Iris
 instance, every `live` set holding the code, and both WPs. -/
 structure OutHoles : Prop where
 

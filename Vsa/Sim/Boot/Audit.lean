@@ -11,7 +11,7 @@ import Vsa.Sim.Boot.Gen.ErrUndefined
 Everything here is a *corollary*; nothing is assumed. `scripts/check_final_axioms.sh`
 audits the axioms of every theorem below.
 
-* §1: `IrisHoles` is trivially inhabited; the theorem with no hypotheses.
+* §1: the theorem with no hypotheses (the former `IrisHoles` was removed once empty).
 * §2: non-trivial conclusions at the real entry states, and the capstones at
   ANY entry configuration (`*_halts_entry`, REVIEW2.md P8): the state the
   binary reaches satisfies their three hypotheses — `EntryRegs`, an empty
@@ -27,14 +27,12 @@ open Vsa.While Vsa.Machine Vsa.Refine Vsa.Sim.LayoutInstance Vsa.Densify Vsa.Sim
 
 namespace ReviewV2
 
-/-! ## 1. `IrisHoles` is trivially inhabited; the theorem is unconditional -/
-
-example : VsaIris.Interp.IrisHoles := ⟨⟩
+/-! ## 1. The theorem is unconditional -/
 
 theorem endToEnd_unconditional :
     ∀ p c, Loaded interpRunLayout p (fillZero c) →
       (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out) :=
-  Vsa.Sim.EndToEnd.endToEnd_refinement ⟨⟩
+  Vsa.Sim.EndToEnd.endToEnd_refinement
 
 /-- The concrete entry configuration of the proof ELF (loader memory + traced stores). -/
 abbrev cProof : Config :=
@@ -42,7 +40,7 @@ abbrev cProof : Config :=
 
 /-! ## 2. Non-trivial conclusions at the real entry states -/
 
-theorem proofElf_halts_unconditional : Halts cProof "55\n2500\n36\n" 0 := proofElf_halts ⟨⟩
+theorem proofElf_halts_unconditional : Halts cProof "55\n2500\n36\n" 0 := proofElf_halts
 
 /-- **The capstone at any entry configuration** (P8): registers satisfying
 `EntryRegs` (`GoodState`, `PC`, `htif_payload_writes`, the traced `x1 … x31`), an
@@ -88,22 +86,22 @@ theorem arithmetic_halts_unconditional :
     Halts (bootConfig (bootMem Gen.Arithmetic.script Gen.Arithmetic.log) Gen.Arithmetic.regs
       Gen.Arithmetic.entrySteps)
       "7\n9\n3\n1\n-2\n26\n1000000000000\n4\nfalse true false\ntrue true false true\ntrue true true false\nfalse true true false\n"
-      0 := arithmetic_halts ⟨⟩
+      0 := arithmetic_halts
 
 theorem for_halts_unconditional :
     Halts (bootConfig (bootMem Gen.For.script Gen.For.log) Gen.For.regs Gen.For.entrySteps)
       "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n5050\n37\n3\n01234\n"
-      0 := for_halts ⟨⟩
+      0 := for_halts
 
 theorem strings_halts_unconditional :
     Halts (bootConfig (bootMem Gen.Strings.script Gen.Strings.log) Gen.Strings.regs
       Gen.Strings.entrySteps)
       "hello world\nvalue: 42\n12\ntrue true\ntrue true\nline1\nline2\ntab\there\nquote: \"hi\"\n"
-      0 := strings_halts ⟨⟩
+      0 := strings_halts
 
 theorem scope_halts_unconditional :
     Halts (bootConfig (bootMem Gen.Scope.script Gen.Scope.log) Gen.Scope.regs
-      Gen.Scope.entrySteps) "2\n3\n1\n20\n14 5\n3\nasserts ok\n" 0 := scope_halts ⟨⟩
+      Gen.Scope.entrySteps) "2\n3\n1\n20\n14 5\n3\nasserts ok\n" 0 := scope_halts
 
 /-! ## 3. Runtime-error programs: no `BigStep`, no clean halt, not silent -/
 
@@ -148,13 +146,13 @@ theorem errUndefined_never_clean : ∀ out, ¬ Halts cUndef out 0 := fun out h =
 /-- … and, by the stuck simulation, it diverges or halts with a nonzero exit code
 (the emulator: `runtime error [line 1]: division by zero`, exit 70). -/
 theorem errDivzero_stuck : Diverges cDiv ∨ ∃ out e, Halts cDiv out e ∧ e ≠ 0 := by
-  rcases (VsaIris.Interp.interpSim_iris ⟨⟩).stuck_sim _ _ Gen.ErrDivzero.loaded errDivzero_noBigStep
+  rcases VsaIris.Interp.interpSim_iris.stuck_sim _ _ Gen.ErrDivzero.loaded errDivzero_noBigStep
     with h | ⟨out, e, h, he⟩
   · exact Or.inl ((diverges_fillZero _).2 h)
   · exact Or.inr ⟨out, e, (halts_fillZero _ _ _).2 h, he⟩
 
 theorem errUndefined_stuck : Diverges cUndef ∨ ∃ out e, Halts cUndef out e ∧ e ≠ 0 := by
-  rcases (VsaIris.Interp.interpSim_iris ⟨⟩).stuck_sim _ _ Gen.ErrUndefined.loaded errUndefined_noBigStep
+  rcases VsaIris.Interp.interpSim_iris.stuck_sim _ _ Gen.ErrUndefined.loaded errUndefined_noBigStep
     with h | ⟨out, e, h, he⟩
   · exact Or.inl ((diverges_fillZero _).2 h)
   · exact Or.inr ⟨out, e, (halts_fillZero _ _ _).2 h, he⟩
@@ -215,4 +213,3 @@ end ReviewV2
 #print axioms Vsa.Sim.Boot.initializeMemory_eq
 #print axioms Vsa.Sim.EndToEnd.endToEnd_refinement
 #print axioms VsaIris.Interp.interpSim_iris
-#print axioms VsaIris.Interp.IrisHoles.proved

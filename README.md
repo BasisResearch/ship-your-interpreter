@@ -7,8 +7,8 @@ Sail-generated RISC-V model.
 
 The full Lean source build passes. The end-to-end theorem
 `Vsa.Sim.EndToEnd.endToEnd_refinement` (`VsaIris/Interp/EndToEnd.lean`) is
-proved from the named newlib holes `VsaIris.Interp.IrisHoles`
-(`VsaIris/HOLES.md`). The
+proved with no hypotheses: every newlib call the interpreter makes is proved,
+and the former hole record `IrisHoles`, once empty, was removed. The
 [proof closure plan](experiments/smt/PROOF_CLOSURE_PLAN.md) records completed
 proofs, remaining obligations, and validation results. Permitted axioms are
 `propext`, `Classical.choice`, and `Quot.sound`. `REVIEW.md` is the
@@ -100,7 +100,7 @@ binary. `InterpRunReadyFacts` requires, at `interp_run`'s entry:
 `REVIEW.md` audits this hypothesis against the binary's real entry state;
 the fields that no real run satisfies are listed there with proposals, all
 landed (P1–P4, P7). `REVIEW2.md` is the final audit: the theorem is
-unconditional (`IrisHoles` has no fields), and it is instantiated at the
+unconditional (the former `IrisHoles` was emptied and removed), and it is instantiated at the
 binary's real `interp_run` entry states.
 
 **The witnesses and the two native links.** `Loaded` is proved by the kernel
@@ -125,6 +125,12 @@ own `Vsa.stepOnce` from `initializeMemory` to the entry, and compares the
 reached state with the witness (every byte, `EntryRegs`, the console), then
 runs both to halt. These two links, and the emulator itself, are the trust
 base beside the Lean kernel and the Sail model.
+
+```lean
+theorem Vsa.Sim.EndToEnd.endToEnd_refinement :
+    ∀ p c, Loaded interpRunLayout p (fillZero c) →
+      (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
 
 The final theorem `Vsa.Sim.EndToEnd.endToEnd_refinement`
 (`VsaIris/Interp/EndToEnd.lean`) is `refinement` at the concrete layout, stated

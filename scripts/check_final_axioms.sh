@@ -15,10 +15,10 @@ THEOREMS=(
   Vsa.Densify.halts_fillZero                      # P3: Halts invariant under the fill-with-zero (Vsa/Densify.lean)
   Vsa.Densify.diverges_fillZero                   # P3: Diverges invariant under the fill-with-zero
   Vsa.Densify.stepOnce_resp                       # P3: stepOnce never inspects byte presence
-  VsaIris.Interp.interpSim_iris                   # InterpSim at the concrete layout from IrisHoles
+  VsaIris.Interp.interpSim_iris                   # InterpSim at the concrete layout (no hypotheses)
   VsaIris.Interp.term_sim_of                      # term_sim from Supplies + NewlibHoles
   VsaIris.Interp.stuck_sim_of                     # stuck_sim from Supplies + NewlibHoles
-  VsaIris.Interp.supplies_of                      # every callee spec closed from IrisHoles
+  VsaIris.Interp.supplies_of                      # every callee spec closed (no hypotheses)
   Vsa.Refine.refinement                           # the generic composition (Vsa/Refinement.lean)
   Vsa.Sim.NativeNameAudit.Control.loaded          # the control witness of `Loaded interpRunLayout`
   Vsa.Sim.NativeNameAudit.Control.loaded_fill     # the same at `fillZero heapConfig` (THE theorem's hypothesis)

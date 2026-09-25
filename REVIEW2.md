@@ -229,6 +229,12 @@ Outputs of this lane's runs are outside the repository (scratch), summarised abo
   theorems (24 → 53). README: the witnesses and the two native links beside
   `IrisHoles`.
 - **P10 (F4).** `LANES-b1.md` restored from `hub/lane-b1:LANE.md`.
+- **`IrisHoles` removed (user request, 2026-09-25).** The empty record, its
+  ledger and checker are deleted; `interpSim_iris`, `supplies_of`,
+  `endToEnd_refinement(_loaded)`, the six capstones and the `ReviewV2.*`
+  theorems take no hypothesis. `endToEnd_refinement : ∀ p c, Loaded
+  interpRunLayout p (fillZero c) → …`. §1 above describes the state before
+  the removal (`example : IrisHoles := ⟨⟩` is gone with the structure).
 - Build: `lake build Vsa VsaIris VsaIris.Audit VsaBoot` green (2,809 jobs);
   `check_final_axioms.sh` 53/53 standard; `IrisHoles` unchanged (empty);
   `check_all.sh --static-only` (a3, a4, a5, b), `check_discipline.py`,

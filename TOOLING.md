@@ -228,7 +228,7 @@ description names the requested obligation and its exact acceptance type:
 ```json
 {
   "target_obligation": "supplies_of",
-  "target_type": "VsaIris.Interp.IrisHoles → VsaIris.Interp.Supplies",
+  "target_type": "VsaIris.Interp.Supplies",
   "consumer": "VsaIris.Interp.interpSim_iris",
   "role": "target",
   "remaining_premises": []

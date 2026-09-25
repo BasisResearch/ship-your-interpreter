@@ -16,7 +16,8 @@ import VsaIris.Interp.SupplyBoot
 import VsaIris.Interp.StuckSim
 import VsaIris.Interp.TopRun
 import VsaIris.Interp.TopBoundary
-import VsaIris.Interp.Holes
+import VsaIris.Vsa.Newlib
+import VsaIris.Vsa.NewlibOut
 import VsaIris.Vsa.ExitH.Iris
 import VsaIris.Vsa.Stderr.FprintfSpec
 import VsaIris.Vsa.SnpGen
@@ -441,7 +442,7 @@ structure Supplies : Prop where
     NativeEntries N → StuckSupply (GF := GF) topLive N inpTop
 
 /-- **Every helper spec the recursions take, from the holes.** -/
-theorem supplies_of (h : IrisHoles) : Supplies where
+theorem supplies_of : Supplies where
   term N hent := termSupply supplyLive_top (VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok VsaIris.Sym.snprintf_ok) Newlib.OutHoles.proved hent cloSupply inpGeom_top inpLt_top
     inpAl_top
   stuck N hent := stuckSupply supplyLive_top (VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok VsaIris.Sym.snprintf_ok) Newlib.OutHoles.proved

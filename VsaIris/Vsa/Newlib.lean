@@ -7,11 +7,11 @@ import VsaIris.Vsa.HeapShape
 import VsaIris.Vsa.StdioErr
 
 /-!
-# `IrisHoles.newlib`: the newlib calls on the error and exit paths (H5)
+# `NewlibHoles`: the newlib calls on the error and exit paths (H5), all proved
 
 INTERP_DESIGN.md Q4: the newlib formatter and stdio writer stay unproved for
 now. Each is an exact Iris statement about the fixed binary, a field of
-`NewlibHolesAt` (hence of `IrisHoles`) with a row in `VsaIris/HOLES.md`:
+`NewlibHolesAt`, since discharged (lanes N1–N5; `IrisHoles` was then removed):
 
 * `snprintf` (`0x80005c44`) with a format whose conversions are `%s`/`%d`:
   `runtime_error`'s two calls, and `interp_run`'s top-level status messages;
@@ -340,7 +340,7 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop extends Newl
     CodeLive live → SpIn s exitHandlersNeed →
     ⊢ exitHandlersSpec Ierr live Wp s e r cs o Φ quiet
 
-/-- **`IrisHoles.newlib`**: the assumed newlib statements at the post-`stderr`-write
+/-- **`NewlibCore`**: the newlib statements at the post-`stderr`-write
 state `StdioErrOK` (lane N3: the state `fwrite` and `fprintf` provably leave,
 `Stderr/FwriteSpec.lean`, `Stderr/FprintfSpec.lean`). `exit`'s interior is proved from it (`NewlibCore.full`). -/
 def NewlibCore : Prop := NewlibCoreAt StdioErrOK

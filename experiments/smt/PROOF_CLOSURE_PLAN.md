@@ -4457,3 +4457,7 @@ Obstructions recorded (not fixed):
   Missing supplier: a per-build re-check in `check_all.sh` (P9).
 - `recursion.wl`: still no `loaded` (`capOk` out of kernel reach); `err_parse`
   outside the theorem; `adv_oom_*` not `Loaded` (`capacity`, M1).
+
+- **`IrisHoles` removed (lane V2, user request, 2026-09-25).** The record was
+  empty; `endToEnd_refinement` and every capstone now take no hypothesis
+  (INTERP_DESIGN.md "STATEMENT CHANGE (lane V2)").

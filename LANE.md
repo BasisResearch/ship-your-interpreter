@@ -25,6 +25,10 @@ Report: `REVIEW2.md` (verdict at the top). Tooling: `experiments/review-v2/`.
 
 None added; `IrisHoles` is empty.
 
+## Also landed
+
+- `IrisHoles` removed (user request): `Holes.lean`, `HOLES.md`, `check_iris_holes.py` deleted; `supplies_of`, `interpSim_iris`, `endToEnd_refinement(_loaded)`, the capstones and the audit take no hypothesis. `origin/main` (`0fdaf01`) is not reachable from this machine (the hub has no `main`), so it was not merged here.
+
 ## Next
 
 Nothing open on this lane. P11 (docs) is folded into P9's README paragraph.
