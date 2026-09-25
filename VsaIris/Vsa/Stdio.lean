@@ -1,5 +1,6 @@
 import VsaIris.MallocRun
 import Vsa.Sim.ExitRuntimeData
+import Vsa.Sim.LocaleData
 
 /-!
 # newlib's runtime data (INTERP_DESIGN.md §4.2, package H5)
@@ -49,7 +50,8 @@ image of `stdioFoot`: any memory agreeing with the image there satisfies
 inside `stdioFoot`). -/
 def StdioOK (img : Nat → BitVec 8) : Prop :=
   ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) →
-    ConsoleStream m ∧ ExitRuntimeData m ∧ read64 m stderrPtrAddr = some exitStderr
+    ConsoleStream m ∧ ExitRuntimeData m ∧ read64 m stderrPtrAddr = some exitStderr ∧
+      LocaleData m
 
 section Own
 

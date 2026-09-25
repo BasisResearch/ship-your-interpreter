@@ -41,6 +41,11 @@ macro "stdio_in" : tactic =>
       consoleStdout, consoleBuf, exitAtexitAddr, exitAtexitLockAddr, exitStdioHandlerAddr,
       exitGlueAddr, exitStdin, exitStderr, stderrPtrAddr] at *; omega))
 
+/-- A locale read's bytes lie in `stdioFoot`. -/
+macro "stdio_in_locale" : tactic =>
+  `(tactic| (intro k hk; simp only [stdioFoot, Stdio.InRange, localeMbtowcAddr, localeMbMaxAddr,
+      localeDecPointAddr] at *; omega))
+
 /-- One byte in `stdioFoot`. -/
 macro "stdio_in_one" : tactic =>
   `(tactic| (simp only [stdioFoot, Stdio.InRange, consoleStdout, consoleBuf]; omega))
@@ -109,13 +114,20 @@ theorem ExitRuntimeData.of_img {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
   stdoutUngetc := readLE_img h 8 _ he.stdoutUngetc (by stdio_in)
   stdoutLine := readLE_img h 8 _ he.stdoutLine (by stdio_in)
 
+theorem LocaleData.of_img {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
+    (hl : LocaleData m) : LocaleData m' where
+  mbtowc := readLE_img h 8 _ hl.mbtowc (by stdio_in_locale)
+  mbMax := readLE_img h 1 _ hl.mbMax (by stdio_in_locale)
+  decPoint := readLE_img h 8 _ hl.decPoint (by stdio_in_locale)
+
 /-- **newlib's data at the boundary**: the memory's own image satisfies
 `StdioOK`. The `stderr` pointer is the one fact the boundary does not state
 (INTERP_DESIGN.md Q6); `BootGap.stderr` carries it. -/
 theorem stdioOK_of_mem {m : Mem} (hc : ConsoleStream m) (he : ExitRuntimeData m)
-    (hs : read64 m stderrPtrAddr = some exitStderr) : StdioOK (memImg m) := by
+    (hs : read64 m stderrPtrAddr = some exitStderr) (hl : LocaleData m) :
+    StdioOK (memImg m) := by
   intro m' h
   exact ⟨ConsoleStream.of_img h hc, ExitRuntimeData.of_img h he,
-    readLE_img h 8 _ hs (by stdio_in)⟩
+    readLE_img h 8 _ hs (by stdio_in), LocaleData.of_img h hl⟩
 
 end VsaIris.Interp

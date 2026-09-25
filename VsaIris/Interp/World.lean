@@ -433,6 +433,8 @@ structure BootGap {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) (G : Fra
   /-- `_impure_data._stderr` points at `__sf[2]` (INTERP_DESIGN.md Q6):
   `Stdio.StdioOK` needs it and `ExitRuntimeData` does not state it. -/
   stderr : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr
+  /-- The C locale's data (`Stdio.StdioOK`; lane N2). -/
+  locale : LocaleData c.σ.mem
   /-- The shared bytes' string read windows (H1's `SharedWin`). -/
   sharedWin : SharedWin b.D.shared
 
@@ -503,6 +505,7 @@ theorem gap (b : Boot c p) : BootGap b b.G where
   binblocks := b.heapFacts.binblocks
   frame := b.frameChunks
   stderr := b.heapFacts.stderr
+  locale := b.heapFacts.locale
   sharedWin := b.sharedWin
 
 end Boot
@@ -1098,7 +1101,7 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
       iexists memImg c.σ.mem
       iframe Hstd
       ipureintro
-      exact stdioOK_of_mem b.ready.console b.ready.exit_runtime gap.stderr
+      exact stdioOK_of_mem b.ready.console b.ready.exit_runtime gap.stderr gap.locale
     · ipureintro
       intro blk hblk
       exact hG.live blk (by simpa using hblk)
