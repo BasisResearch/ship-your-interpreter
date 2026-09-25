@@ -92,8 +92,8 @@ theorem ssputs_buf {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
       (∀ z, 18 ≤ z → z ≤ 27 → R' z = R z) → BufAt Mt' s dst n (total ++ pieceBytes g b l) →
       (∀ a, (a < dst ∨ dst + n ≤ a) → (a < snpFP s ∨ snpFP s + 16 ≤ a) →
         (a < s - 992 ∨ s - 928 ≤ a) → imgM Mt' a = imgM Mt a) →
-      NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
   obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG
   obtain ⟨hb1, hb2, hb3, hbd, hbf, hbfr, -⟩ := PG
   obtain ⟨hpw, hww, hfl, hbytes⟩ := hB
@@ -260,13 +260,13 @@ def PrintKL (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (g : Nat → BitVec 8)
     (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 : Nat → BitVec 64) (Mt0 : Mem) (i : Nat) : Prop :=
   ∀ R' Mt', PrintSt Dt DA s dst n g total0 L R0 R' Mt0 Mt' i →
-    NW live Dt DA (snpS s dst n) Q 0x8000e950#64 R' Mt'
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e950#64 R' Mt'
 
 def PrintKX (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (g : Nat → BitVec 8)
     (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 : Nat → BitVec 64) (Mt0 : Mem) : Prop :=
   ∀ R' Mt', PrintEnd s dst n g total0 L R0 R' Mt0 Mt' →
-    NW live Dt DA (snpS s dst n) Q 0x8000e99c#64 R' Mt'
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e99c#64 R' Mt'
 
 /-- The memory after `__ssprint_r` stores to the `uio`'s count or `resid`. -/
 theorem print_uio_mem {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVec 8}
@@ -344,7 +344,7 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (hfr : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a)
     (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
     (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
-    NW live Dt DA (snpS s dst n) Q 0x8000e980#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e980#64 R Mt := by
   have SG' := SG
   obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
   simp only [snpU, snpIov] at h8 h9 hres ⊢
@@ -357,7 +357,7 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   have eU : (BitVec.ofNat 64 (s - 640 + 16)).toNat = s - 624 := by rw [toNat_ofNat_lt (by omega)]; omega
   have hres2 : ldv .ld Mt (s - 624) = BitVec.ofNat 64 (sumLen (L.drop i)) := by
     rw [show s - 624 = s - 640 + 16 by omega]; exact hres
-  nx_run hlive using [ofNat_add_ofNat, h2, h8, h9, h10, h18, h21, hres', hres2, hrem, eU] at 0x8000e950 0x8000e99c
+  snp_run hlive using [ofNat_add_ofNat, h2, h8, h9, h10, h18, h21, hres', hres2, hrem, eU] at 0x8000e950 0x8000e99c
   all_goals rename_i hb
   -- `__ssputs_r` never fails on a string `FILE`
   case hT.hk.hk.hk.hk.hk.hk.hk.hk.hk.hal | hT.hk.hk.hk.hk.hk.hk.hk.hk.hk.hk =>
@@ -414,7 +414,7 @@ theorem print_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
     (hfr : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a)
     (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
     (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
-    NW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
   obtain ⟨PG, hl, hw⟩ := hP i hi
   refine ssputs_buf hlive L[i].1 L[i].2 g _ R Mt SG PG hl hB h2 h11 h12 h13 (by rw [h1]; decide) hw
     (fun R' Mt' h10' h2' h8' h9' hkp' hB' hfr' => ?_)
@@ -449,7 +449,7 @@ theorem print_call0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (hkp : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R' z = R z)
     (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
     (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
-    NW live Dt DA (snpS s dst n) Q 0x8001438c#64 R'
+    SnpW live Dt DA (snpS s dst n) Q 0x8001438c#64 R'
       (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) := by
   have hi := st.lt
   have SG' := SG
@@ -478,7 +478,7 @@ theorem print_skip0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (h14 : R' 14 = R 14) (h20 : R' 20 = R 20) (h21 : R' 21 = R 21)
     (hkp : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R' z = R z)
     (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1)) :
-    NW live Dt DA (snpS s dst n) Q 0x8000e948#64 R'
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e948#64 R'
       (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) := by
   have hi := st.lt
   have hpos := st.pos
@@ -490,7 +490,7 @@ theorem print_skip0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     simp only [sumLen, List.map_append, List.sum_append] at this ⊢; omega
   have n13 : (R' 13).toNat = sumLen (L.drop i) := by rw [h13]; simp only [BitVec.toNat_ofNat]; omega
   have h8' : R' 8 = BitVec.ofNat 64 (snpIov s + 16 * i) := h8.trans st.r8
-  nx_run hlive using [ofNat_add_ofNat, h8', h13] at 0x8000e950
+  snp_run hlive using [ofNat_add_ofNat, h8', h13] at 0x8000e950
   obtain ⟨hiov1, hP1, hB1, hfr1⟩ := print_uio_mem (s - 632) 4 (BitVec.ofNat 64 (L.length - (i + 1)))
     (by omega) (by omega) SG hL8 st.iov st.pieces st.buf st.frame
   have hi1 : i + 1 < L.length := by
@@ -521,7 +521,7 @@ theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (st : PrintSt Dt DA s dst n g total0 L R0 R Mt0 Mt i)
     (hkL : PrintKL live Dt DA Q s dst n g total0 L R0 Mt0 (i + 1))
     (hkX : PrintKX live Dt DA Q s dst n g total0 L R0 Mt0) :
-    NW live Dt DA (snpS s dst n) Q 0x8000e950#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e950#64 R Mt := by
   have hi := st.lt
   have hpos := st.pos
   have h2 := st.r2
@@ -553,7 +553,7 @@ theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     rw [show BitVec.ofNat 64 (L.length - i + 18446744073709551615) = BitVec.ofNat 64 (L.length - (i + 1)) by
       apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega]
     exact VsaIris.Interp.sext32_ofNat_eq (by omega)
-  nx_run hlive using [ofNat_add_ofNat, h2, h8, h9, h14, h20, h21, hcnt', hcnt2, hb', hl', eC, hcw] at 0x8001438c 0x8000e948
+  snp_run hlive using [ofNat_add_ofNat, h2, h8, h9, h14, h20, h21, hcnt', hcnt2, hb', hl', eC, hcw] at 0x8001438c 0x8000e948
   all_goals rename_i hb
   · -- an empty piece: skipped
     have hl0 : (L[i]'hi).2 = 0 := by
@@ -606,7 +606,7 @@ def PrintK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (g : Nat → BitVec 8)
     (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R : Nat → BitVec 64) (Mt : Mem) : Prop :=
   ∀ R' Mt', R' 10 = 0#64 → R' 2 = R 2 → (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z) →
-    PrintOut s dst n g total0 L Mt Mt' → NW live Dt DA (snpS s dst n) Q (R 1) R' Mt'
+    PrintOut s dst n g total0 L Mt Mt' → SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt'
 
 /-- The spill slots of `__ssprint_r`'s frame hold the caller's registers. -/
 structure PrintSlots (Mt : Mem) (s : Nat) (R : Nat → BitVec 64) : Prop where
@@ -633,8 +633,8 @@ theorem print_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
       (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = Rc z) →
       BufAt Mt' s dst n (total0 ++ catPieces g L) → ldv .lw Mt' (snpU s + 8) = 0#64 →
       ldv .ld Mt' (snpU s + 16) = 0#64 → (∀ a, ¬ PrintW s dst n a → imgM Mt' a = imgM Mc a) →
-      NW live Dt DA (snpS s dst n) Q (Rc 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x8000e9b0#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (Rc 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e9b0#64 R Mt := by
   have SG' := SG
   obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
   have hag : ∀ a w, (a + w ≤ s - 928 ∨ s - 864 ≤ a ∨ (s - 928 ≤ a ∧ a + w ≤ s - 864)) →
@@ -646,7 +646,7 @@ theorem print_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ 8 (by omega) (by omega))]; exact hss1
   have n9 : (R 9).toNat = s - 640 := by rw [h9]; simp only [snpU, BitVec.toNat_ofNat]; omega
   simp only [snpU] at h9
-  nx_run hlive using [ofNat_add_ofNat, h2, h9, ra', s1']
+  snp_run hlive using [ofNat_add_ofNat, h2, h9, ra', s1']
   rw [toNat_ofNat_lt (x := s - 640 + 16) (by omega), toNat_ofNat_lt (x := s - 640 + 8) (by omega)]
   have hag2 : ∀ a, (a < s - 632 ∨ s - 616 ≤ a) →
       imgM (writeLog (writeLog Mt [(s - 640 + 16, 8, 0#64)]) [(s - 640 + 8, 4, 0#64)]) a = imgM Mt a :=
@@ -677,8 +677,8 @@ theorem print_restore {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = Rc z) →
       BufAt Mt' s dst n (total0 ++ catPieces g L) → ldv .lw Mt' (snpU s + 8) = 0#64 →
       ldv .ld Mt' (snpU s + 16) = 0#64 → (∀ a, ¬ PrintW s dst n a → imgM Mt' a = imgM Mc a) →
-      NW live Dt DA (snpS s dst n) Q (Rc 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x8000e99c#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (Rc 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e99c#64 R Mt := by
   have SG' := SG
   obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
   have hag : ∀ a, s - 928 ≤ a → a + 8 ≤ s - 864 → ∀ i, i < widthOfM .ld → imgM Mt (a + i) = imgM Mc (a + i) :=
@@ -694,7 +694,7 @@ theorem print_restore {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   have f8 : ldv .ld Mt (BitVec.ofNat 64 (s - 928 + 8)).toNat = Rc 21 := by
     rw [toNat_ofNat_lt (by omega), ldv_agree .ld (hag _ (by omega) (by omega))]; exact hsl.s5
   have h2 := pe.r2
-  nx_run hlive using [ofNat_add_ofNat, h2, f48, f32, f24, f16, f8] at 0x8000e9b0
+  snp_run hlive using [ofNat_add_ofNat, h2, f48, f32, f24, f16, f8] at 0x8000e9b0
   refine print_epi hlive g total0 L Rc _ Mc Mt SG pe.buf pe.frame hsl.ra hsl.s1 ?_ ?_ ?_ hal hk
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · exact h2
@@ -726,7 +726,7 @@ theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
     (hres : ldv .ld Mt (snpU s + 16) = BitVec.ofNat 64 (sumLen L))
     (hiov : IovAt Mt s L) (hP : PiecesOK Dt DA Mt s dst n g L) (hB : BufAt Mt s dst n total0)
     (hk : PrintK live Dt DA Q s dst n g total0 L R Mt) :
-    NW live Dt DA (snpS s dst n) Q 0x8000e908#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x8000e908#64 R Mt := by
   have SG' := SG
   obtain ⟨hs1, hs2, hsa, hn0, hn31, hd1, hd2, hdsep⟩ := SG'
   simp only [snpU, snpIov, snpFP] at h11 h12 hptr hcnt hres
@@ -737,7 +737,7 @@ theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
     rw [toNat_ofNat_lt (by omega)]; exact hptr
   have eS : BitVec.ofNat 64 (s - 864 + 18446744073709551552) = BitVec.ofNat 64 (s - 928) := by
     apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
-  nx_run hlive using [ofNat_add_ofNat, h2, h11, h12, hres', hptr', eS] at 0x8000e950 0x8000e9b0
+  snp_run hlive using [ofNat_add_ofNat, h2, h11, h12, hres', hptr', eS] at 0x8000e950 0x8000e9b0
   all_goals rename_i hb
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hb)
   · -- nothing to print

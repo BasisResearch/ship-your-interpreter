@@ -374,7 +374,7 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
       by rw [hr12, g16]; have := hfg.al; omega⟩
     hbig (by rw [h22]; exact hle')
     (by rw [h22, hfg.sf]; have := hsg.lo; simp only [Vsa.Sim.LayoutInstance.stackSL] at this;
-        unfold Vsa.Sim.tohostAddr; omega)
+        omega)
     (by rw [h22, hfg.sf]; have := Stmt.stackNeed_ge (.varDecl x eo); have := hsg.le
         unfold execNeed stackBudget evalFrame Newlib.fwriteNeed at *; unfold execFrame at *; omega)
     (by rw [h22, hfg.sf]; have := hfg.hi; omega)

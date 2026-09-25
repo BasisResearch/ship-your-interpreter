@@ -228,8 +228,8 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
 theorem nt_80007d70 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d74#64 (upd R 29 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
-    NW live Dt DA S Q 0x80007d70#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d74#64 (upd R 29 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007d70#64 R Mt :=
   swp_stepD nx_80007d70 [29] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d70 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -241,8 +241,8 @@ theorem nt_80007d70 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d74 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 18).toInt < (R 20).toInt → NW live Dt DA S Q 0x80007d2c#64 R Mt) (hF : ¬ ((R 18).toInt < (R 20).toInt) → NW live Dt DA S Q 0x80007d78#64 R Mt) :
-    NW live Dt DA S Q 0x80007d74#64 R Mt := by
+    (hT : (R 18).toInt < (R 20).toInt → SnpW live Dt DA S Q 0x80007d2c#64 R Mt) (hF : ¬ ((R 18).toInt < (R 20).toInt) → SnpW live Dt DA S Q 0x80007d78#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007d74#64 R Mt := by
   by_cases hc : (R 18).toInt < (R 20).toInt
   · exact
     swp_stepD nxT_80007d74 [18, 20] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -266,8 +266,8 @@ theorem nt_80007d78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007d7c#64 (upd R 31 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007d78#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d7c#64 (upd R 31 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007d78#64 R Mt :=
   swp_stepD nx_80007d78 [2, 31] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d78 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -281,8 +281,8 @@ theorem ntD_80007d78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007d7c#64 (upd R 31 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007d78#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d7c#64 (upd R 31 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007d78#64 R Mt :=
   swp_stepD nx_80007d78 [2, 31] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d78 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -295,8 +295,8 @@ theorem ntH_80007d78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007d7c#64 (upd R 31 v) Mt) :
-    NW live Dt DA S Q 0x80007d78#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007d7c#64 (upd R 31 v) Mt) :
+    SnpW live Dt DA S Q 0x80007d78#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007d78 [2, 31] 31 (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -311,8 +311,8 @@ theorem ntP_80007d78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat) → NW live Dt DA S Q 0x80007d7c#64 (upd R 31 v) Mt) :
-    NW live Dt DA S Q 0x80007d78#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat) → SnpW live Dt DA S Q 0x80007d7c#64 (upd R 31 v) Mt) :
+    SnpW live Dt DA S Q 0x80007d78#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007d78 [2, 31] 31 (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -327,8 +327,8 @@ theorem nt_80007d7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007d80#64 (upd R 6 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007d7c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d80#64 (upd R 6 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007d7c#64 R Mt :=
   swp_stepD nx_80007d7c [2, 6] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d7c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -342,8 +342,8 @@ theorem ntD_80007d7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007d80#64 (upd R 6 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007d7c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d80#64 (upd R 6 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007d7c#64 R Mt :=
   swp_stepD nx_80007d7c [2, 6] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d7c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -356,8 +356,8 @@ theorem ntH_80007d7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007d80#64 (upd R 6 v) Mt) :
-    NW live Dt DA S Q 0x80007d7c#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007d80#64 (upd R 6 v) Mt) :
+    SnpW live Dt DA S Q 0x80007d7c#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007d7c [2, 6] 6 (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -372,8 +372,8 @@ theorem ntP_80007d7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat) → NW live Dt DA S Q 0x80007d80#64 (upd R 6 v) Mt) :
-    NW live Dt DA S Q 0x80007d7c#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat) → SnpW live Dt DA S Q 0x80007d80#64 (upd R 6 v) Mt) :
+    SnpW live Dt DA S Q 0x80007d7c#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007d7c [2, 6] 6 (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -386,8 +386,8 @@ theorem ntP_80007d7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d80 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d84#64 (upd R 16 ((R 23) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007d80#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d84#64 (upd R 16 ((R 23) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007d80#64 R Mt :=
   swp_stepD nx_80007d80 [16, 23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d80 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -399,8 +399,8 @@ theorem nt_80007d80 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d84 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d88#64 (upd R 23 ((R 15) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007d84#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d88#64 (upd R 23 ((R 15) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007d84#64 R Mt :=
   swp_stepD nx_80007d84 [15, 23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d84 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -412,8 +412,8 @@ theorem nt_80007d84 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d88 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d8c#64 (upd R 15 ((R 22) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007d88#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d8c#64 (upd R 15 ((R 22) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007d88#64 R Mt :=
   swp_stepD nx_80007d88 [15, 22] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d88 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -425,8 +425,8 @@ theorem nt_80007d88 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d8c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d90#64 (upd R 28 ((R 25) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007d8c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d90#64 (upd R 28 ((R 25) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007d8c#64 R Mt :=
   swp_stepD nx_80007d8c [25, 28] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d8c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -438,8 +438,8 @@ theorem nt_80007d8c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d90 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d94#64 (upd R 22 ((R 27) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007d90#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d94#64 (upd R 22 ((R 27) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007d90#64 R Mt :=
   swp_stepD nx_80007d90 [22, 27] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d90 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -451,8 +451,8 @@ theorem nt_80007d90 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d94 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d98#64 (upd R 27 ((R 15) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007d94#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d98#64 (upd R 27 ((R 15) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007d94#64 R Mt :=
   swp_stepD nx_80007d94 [15, 27] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d94 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -464,8 +464,8 @@ theorem nt_80007d94 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d98 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007d9c#64 (upd R 12 ((R 12) + (R 20))) Mt) :
-    NW live Dt DA S Q 0x80007d98#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007d9c#64 (upd R 12 ((R 12) + (R 20))) Mt) :
+    SnpW live Dt DA S Q 0x80007d98#64 R Mt :=
   swp_stepD nx_80007d98 [12, 20] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d98 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -477,8 +477,8 @@ theorem nt_80007d98 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007d9c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007da0#64 (upd R 11 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 11) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
-    NW live Dt DA S Q 0x80007d9c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007da0#64 (upd R 11 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 11) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
+    SnpW live Dt DA S Q 0x80007d9c#64 R Mt :=
   swp_stepD nx_80007d9c [11] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007d9c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -492,8 +492,8 @@ theorem nt_80007da0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007da4#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x000#12)).toNat, 8, (R 27))])) :
-    NW live Dt DA S Q 0x80007da0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007da4#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x000#12)).toNat, 8, (R 27))])) :
+    SnpW live Dt DA S Q 0x80007da0#64 R Mt :=
   swp_stepD nx_80007da0 [23, 27] [] [] (accAddrs ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007da0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -507,8 +507,8 @@ theorem nt_80007da4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 23) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 23) + sign_extend (m := 64) (0x008#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007da8#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x008#12)).toNat, 8, (R 20))])) :
-    NW live Dt DA S Q 0x80007da4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007da8#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x008#12)).toNat, 8, (R 20))])) :
+    SnpW live Dt DA S Q 0x80007da4#64 R Mt :=
   swp_stepD nx_80007da4 [20, 23] [] [] (accAddrs ((R 23) + sign_extend (m := 64) (0x008#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007da4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -522,8 +522,8 @@ theorem nt_80007da8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007dac#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
-    NW live Dt DA S Q 0x80007da8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dac#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
+    SnpW live Dt DA S Q 0x80007da8#64 R Mt :=
   swp_stepD nx_80007da8 [2, 12] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007da8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -537,8 +537,8 @@ theorem nt_80007dac {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007db0#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 11))])) :
-    NW live Dt DA S Q 0x80007dac#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007db0#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 11))])) :
+    SnpW live Dt DA S Q 0x80007dac#64 R Mt :=
   swp_stepD nx_80007dac [2, 11] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007dac ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -550,8 +550,8 @@ theorem nt_80007dac {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007db0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007db4#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
-    NW live Dt DA S Q 0x80007db0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007db4#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007db0#64 R Mt :=
   swp_stepD nx_80007db0 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007db0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -563,8 +563,8 @@ theorem nt_80007db0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007db4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007db8#64 (upd R 23 ((R 23) + sign_extend (m := 64) (0x010#12))) Mt) :
-    NW live Dt DA S Q 0x80007db4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007db8#64 (upd R 23 ((R 23) + sign_extend (m := 64) (0x010#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007db4#64 R Mt :=
   swp_stepD nx_80007db4 [23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007db4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -576,8 +576,8 @@ theorem nt_80007db4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007db8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 11).toInt ≤ (R 14).toInt → NW live Dt DA S Q 0x800078bc#64 R Mt) (hF : ¬ ((R 11).toInt ≤ (R 14).toInt) → NW live Dt DA S Q 0x80007dbc#64 R Mt) :
-    NW live Dt DA S Q 0x80007db8#64 R Mt := by
+    (hT : (R 11).toInt ≤ (R 14).toInt → SnpW live Dt DA S Q 0x800078bc#64 R Mt) (hF : ¬ ((R 11).toInt ≤ (R 14).toInt) → SnpW live Dt DA S Q 0x80007dbc#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007db8#64 R Mt := by
   by_cases hc : (R 11).toInt ≤ (R 14).toInt
   · exact
     swp_stepD nxT_80007db8 [11, 14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -601,8 +601,8 @@ theorem nt_80007dbc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007dc0#64 (upd R 11 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007dbc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dc0#64 (upd R 11 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007dbc#64 R Mt :=
   swp_stepD nx_80007dbc [2, 11] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007dbc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -616,8 +616,8 @@ theorem ntD_80007dbc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007dc0#64 (upd R 11 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007dbc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dc0#64 (upd R 11 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007dbc#64 R Mt :=
   swp_stepD nx_80007dbc [2, 11] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007dbc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -630,8 +630,8 @@ theorem ntH_80007dbc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007dc0#64 (upd R 11 v) Mt) :
-    NW live Dt DA S Q 0x80007dbc#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007dc0#64 (upd R 11 v) Mt) :
+    SnpW live Dt DA S Q 0x80007dbc#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007dbc [2, 11] 11 (accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -646,8 +646,8 @@ theorem ntP_80007dbc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat) → NW live Dt DA S Q 0x80007dc0#64 (upd R 11 v) Mt) :
-    NW live Dt DA S Q 0x80007dbc#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat) → SnpW live Dt DA S Q 0x80007dc0#64 (upd R 11 v) Mt) :
+    SnpW live Dt DA S Q 0x80007dbc#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007dbc [2, 11] 11 (accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -660,8 +660,8 @@ theorem ntP_80007dbc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007dc0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007dc4#64 (upd R 12 ((R 2) + sign_extend (m := 64) (0x0e0#12))) Mt) :
-    NW live Dt DA S Q 0x80007dc0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dc4#64 (upd R 12 ((R 2) + sign_extend (m := 64) (0x0e0#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007dc0#64 R Mt :=
   swp_stepD nx_80007dc0 [2, 12] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007dc0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -673,8 +673,8 @@ theorem nt_80007dc0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007dc4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007dc8#64 (upd R 10 ((R 8) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007dc4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dc8#64 (upd R 10 ((R 8) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007dc4#64 R Mt :=
   swp_stepD nx_80007dc4 [8, 10] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007dc4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -688,8 +688,8 @@ theorem nt_80007dc8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007dcc#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x090#12)).toNat, 8, (R 16))])) :
-    NW live Dt DA S Q 0x80007dc8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dcc#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x090#12)).toNat, 8, (R 16))])) :
+    SnpW live Dt DA S Q 0x80007dc8#64 R Mt :=
   swp_stepD nx_80007dc8 [2, 16] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007dc8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -703,8 +703,8 @@ theorem nt_80007dcc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007dd0#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x088#12)).toNat, 8, (R 6))])) :
-    NW live Dt DA S Q 0x80007dcc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dd0#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x088#12)).toNat, 8, (R 6))])) :
+    SnpW live Dt DA S Q 0x80007dcc#64 R Mt :=
   swp_stepD nx_80007dcc [2, 6] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007dcc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -718,8 +718,8 @@ theorem nt_80007dd0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007dd4#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x078#12)).toNat, 8, (R 31))])) :
-    NW live Dt DA S Q 0x80007dd0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dd4#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x078#12)).toNat, 8, (R 31))])) :
+    SnpW live Dt DA S Q 0x80007dd0#64 R Mt :=
   swp_stepD nx_80007dd0 [2, 31] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007dd0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -733,8 +733,8 @@ theorem nt_80007dd4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007dd8#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x070#12)).toNat, 8, (R 28))])) :
-    NW live Dt DA S Q 0x80007dd4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dd8#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x070#12)).toNat, 8, (R 28))])) :
+    SnpW live Dt DA S Q 0x80007dd4#64 R Mt :=
   swp_stepD nx_80007dd4 [2, 28] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007dd4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -777,8 +777,8 @@ theorem jalxn_80007dd8 (live : Nat → Prop)
 theorem ntC_80007dd8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x8000e908#64 (upd R 1 (BitVec.ofNat 64 (0x80007dd8 + 4))) Mt) :
-    NW live Dt DA S Q 0x80007dd8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x8000e908#64 (upd R 1 (BitVec.ofNat 64 (0x80007dd8 + 4))) Mt) :
+    SnpW live Dt DA S Q 0x80007dd8#64 R Mt :=
   swp_jal 0x80007dd8 [0xef#8, 0x60#8, 0x10#8, 0x33#8] 0x8000e908#64
     (jalxn_80007dd8 live fun p hp => hlive _ (snp_code_80007dd8 p hp))
     (fun p hp => List.mem_append_left _ (snp_code_80007dd8 p hp)) (by decide) (by decide) rfl hk
@@ -786,8 +786,8 @@ theorem ntC_80007dd8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ddc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 10) ≠ (0#64) → NW live Dt DA S Q 0x8000868c#64 R Mt) (hF : ¬ ((R 10) ≠ (0#64)) → NW live Dt DA S Q 0x80007de0#64 R Mt) :
-    NW live Dt DA S Q 0x80007ddc#64 R Mt := by
+    (hT : (R 10) ≠ (0#64) → SnpW live Dt DA S Q 0x8000868c#64 R Mt) (hF : ¬ ((R 10) ≠ (0#64)) → SnpW live Dt DA S Q 0x80007de0#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007ddc#64 R Mt := by
   by_cases hc : (R 10) ≠ (0#64)
   · exact
     swp_stepD nxT_80007ddc [10] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -811,8 +811,8 @@ theorem nt_80007de0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007de4#64 (upd R 6 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007de0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007de4#64 (upd R 6 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007de0#64 R Mt :=
   swp_stepD nx_80007de0 [2, 6] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007de0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -826,8 +826,8 @@ theorem ntD_80007de0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007de4#64 (upd R 6 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007de0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007de4#64 (upd R 6 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007de0#64 R Mt :=
   swp_stepD nx_80007de0 [2, 6] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007de0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -840,8 +840,8 @@ theorem ntH_80007de0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007de4#64 (upd R 6 v) Mt) :
-    NW live Dt DA S Q 0x80007de0#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007de4#64 (upd R 6 v) Mt) :
+    SnpW live Dt DA S Q 0x80007de0#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007de0 [2, 6] 6 (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -856,8 +856,8 @@ theorem ntP_80007de0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat) → NW live Dt DA S Q 0x80007de4#64 (upd R 6 v) Mt) :
-    NW live Dt DA S Q 0x80007de0#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat) → SnpW live Dt DA S Q 0x80007de4#64 (upd R 6 v) Mt) :
+    SnpW live Dt DA S Q 0x80007de0#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007de0 [2, 6] 6 (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -872,8 +872,8 @@ theorem nt_80007de4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007de8#64 (upd R 12 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007de4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007de8#64 (upd R 12 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007de4#64 R Mt :=
   swp_stepD nx_80007de4 [2, 12] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007de4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -887,8 +887,8 @@ theorem ntD_80007de4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007de8#64 (upd R 12 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007de4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007de8#64 (upd R 12 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007de4#64 R Mt :=
   swp_stepD nx_80007de4 [2, 12] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007de4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -901,8 +901,8 @@ theorem ntH_80007de4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007de8#64 (upd R 12 v) Mt) :
-    NW live Dt DA S Q 0x80007de4#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007de8#64 (upd R 12 v) Mt) :
+    SnpW live Dt DA S Q 0x80007de4#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007de4 [2, 12] 12 (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -917,8 +917,8 @@ theorem ntP_80007de4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat) → NW live Dt DA S Q 0x80007de8#64 (upd R 12 v) Mt) :
-    NW live Dt DA S Q 0x80007de4#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat) → SnpW live Dt DA S Q 0x80007de8#64 (upd R 12 v) Mt) :
+    SnpW live Dt DA S Q 0x80007de4#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007de4 [2, 12] 12 (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -933,8 +933,8 @@ theorem nt_80007de8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007dec#64 (upd R 16 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007de8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dec#64 (upd R 16 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007de8#64 R Mt :=
   swp_stepD nx_80007de8 [2, 16] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007de8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -948,8 +948,8 @@ theorem ntD_80007de8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007dec#64 (upd R 16 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007de8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dec#64 (upd R 16 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007de8#64 R Mt :=
   swp_stepD nx_80007de8 [2, 16] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007de8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -962,8 +962,8 @@ theorem ntH_80007de8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007dec#64 (upd R 16 v) Mt) :
-    NW live Dt DA S Q 0x80007de8#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007dec#64 (upd R 16 v) Mt) :
+    SnpW live Dt DA S Q 0x80007de8#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007de8 [2, 16] 16 (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -978,8 +978,8 @@ theorem ntP_80007de8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat) → NW live Dt DA S Q 0x80007dec#64 (upd R 16 v) Mt) :
-    NW live Dt DA S Q 0x80007de8#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat) → SnpW live Dt DA S Q 0x80007dec#64 (upd R 16 v) Mt) :
+    SnpW live Dt DA S Q 0x80007de8#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007de8 [2, 16] 16 (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -992,8 +992,8 @@ theorem ntP_80007de8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007dec {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007df0#64 (upd R 14 ((R 6) &&& sign_extend (m := 64) (0x100#12))) Mt) :
-    NW live Dt DA S Q 0x80007dec#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007df0#64 (upd R 14 ((R 6) &&& sign_extend (m := 64) (0x100#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007dec#64 R Mt :=
   swp_stepD nx_80007dec [6, 14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007dec ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1007,8 +1007,8 @@ theorem nt_80007df0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007df4#64 (upd R 31 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007df0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007df4#64 (upd R 31 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007df0#64 R Mt :=
   swp_stepD nx_80007df0 [2, 31] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007df0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1022,8 +1022,8 @@ theorem ntD_80007df0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007df4#64 (upd R 31 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007df0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007df4#64 (upd R 31 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007df0#64 R Mt :=
   swp_stepD nx_80007df0 [2, 31] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007df0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1036,8 +1036,8 @@ theorem ntH_80007df0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007df4#64 (upd R 31 v) Mt) :
-    NW live Dt DA S Q 0x80007df0#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007df4#64 (upd R 31 v) Mt) :
+    SnpW live Dt DA S Q 0x80007df0#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007df0 [2, 31] 31 (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1052,8 +1052,8 @@ theorem ntP_80007df0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat) → NW live Dt DA S Q 0x80007df4#64 (upd R 31 v) Mt) :
-    NW live Dt DA S Q 0x80007df0#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat) → SnpW live Dt DA S Q 0x80007df4#64 (upd R 31 v) Mt) :
+    SnpW live Dt DA S Q 0x80007df0#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007df0 [2, 31] 31 (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1068,8 +1068,8 @@ theorem nt_80007df4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007df8#64 (upd R 28 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007df4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007df8#64 (upd R 28 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007df4#64 R Mt :=
   swp_stepD nx_80007df4 [2, 28] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007df4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1083,8 +1083,8 @@ theorem ntD_80007df4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007df8#64 (upd R 28 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007df4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007df8#64 (upd R 28 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007df4#64 R Mt :=
   swp_stepD nx_80007df4 [2, 28] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007df4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1097,8 +1097,8 @@ theorem ntH_80007df4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007df8#64 (upd R 28 v) Mt) :
-    NW live Dt DA S Q 0x80007df4#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007df8#64 (upd R 28 v) Mt) :
+    SnpW live Dt DA S Q 0x80007df4#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007df4 [2, 28] 28 (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1113,8 +1113,8 @@ theorem ntP_80007df4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat) → NW live Dt DA S Q 0x80007df8#64 (upd R 28 v) Mt) :
-    NW live Dt DA S Q 0x80007df4#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat) → SnpW live Dt DA S Q 0x80007df8#64 (upd R 28 v) Mt) :
+    SnpW live Dt DA S Q 0x80007df4#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007df4 [2, 28] 28 (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1127,8 +1127,8 @@ theorem ntP_80007df4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007df8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007dfc#64 (upd R 23 ((R 21) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007df8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007dfc#64 (upd R 23 ((R 21) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007df8#64 R Mt :=
   swp_stepD nx_80007df8 [21, 23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007df8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1140,8 +1140,8 @@ theorem nt_80007df8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007dfc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 14) = (0#64) → NW live Dt DA S Q 0x800078c4#64 R Mt) (hF : ¬ ((R 14) = (0#64)) → NW live Dt DA S Q 0x80007e00#64 R Mt) :
-    NW live Dt DA S Q 0x80007dfc#64 R Mt := by
+    (hT : (R 14) = (0#64) → SnpW live Dt DA S Q 0x800078c4#64 R Mt) (hF : ¬ ((R 14) = (0#64)) → SnpW live Dt DA S Q 0x80007e00#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007dfc#64 R Mt := by
   by_cases hc : (R 14) = (0#64)
   · exact
     swp_stepD nxT_80007dfc [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -1163,8 +1163,8 @@ theorem nt_80007dfc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e00 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e04#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x065#12))) Mt) :
-    NW live Dt DA S Q 0x80007e00#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e04#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x065#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e00#64 R Mt :=
   swp_stepD nx_80007e00 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e00 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1176,8 +1176,8 @@ theorem nt_80007e00 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e04 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 24).toInt ≤ (R 14).toInt → NW live Dt DA S Q 0x800086c4#64 R Mt) (hF : ¬ ((R 24).toInt ≤ (R 14).toInt) → NW live Dt DA S Q 0x80007e08#64 R Mt) :
-    NW live Dt DA S Q 0x80007e04#64 R Mt := by
+    (hT : (R 24).toInt ≤ (R 14).toInt → SnpW live Dt DA S Q 0x800086c4#64 R Mt) (hF : ¬ ((R 24).toInt ≤ (R 14).toInt) → SnpW live Dt DA S Q 0x80007e08#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007e04#64 R Mt := by
   by_cases hc : (R 24).toInt ≤ (R 14).toInt
   · exact
     swp_stepD nxT_80007e04 [14, 24] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -1199,8 +1199,8 @@ theorem nt_80007e04 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e08 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e0c#64 (upd R 11 ((0#64) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007e08#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e0c#64 (upd R 11 ((0#64) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e08#64 R Mt :=
   swp_stepD nx_80007e08 [11] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e08 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1214,8 +1214,8 @@ theorem nt_80007e0c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e10#64 (upd R 10 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x040#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e0c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e10#64 (upd R 10 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x040#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e0c#64 R Mt :=
   swp_stepD nx_80007e0c [2, 10] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e0c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1229,8 +1229,8 @@ theorem ntD_80007e0c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e10#64 (upd R 10 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x040#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e0c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e10#64 (upd R 10 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x040#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e0c#64 R Mt :=
   swp_stepD nx_80007e0c [2, 10] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e0c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1243,8 +1243,8 @@ theorem ntH_80007e0c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e10#64 (upd R 10 v) Mt) :
-    NW live Dt DA S Q 0x80007e0c#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e10#64 (upd R 10 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e0c#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e0c [2, 10] 10 (accAddrs ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1259,8 +1259,8 @@ theorem ntP_80007e0c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x040#12)).toNat) → NW live Dt DA S Q 0x80007e10#64 (upd R 10 v) Mt) :
-    NW live Dt DA S Q 0x80007e0c#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x040#12)).toNat) → SnpW live Dt DA S Q 0x80007e10#64 (upd R 10 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e0c#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e0c [2, 10] 10 (accAddrs ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1275,8 +1275,8 @@ theorem nt_80007e10 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e14#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x090#12)).toNat, 8, (R 12))])) :
-    NW live Dt DA S Q 0x80007e10#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e14#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x090#12)).toNat, 8, (R 12))])) :
+    SnpW live Dt DA S Q 0x80007e10#64 R Mt :=
   swp_stepD nx_80007e10 [2, 12] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e10 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1290,8 +1290,8 @@ theorem nt_80007e14 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e18#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x088#12)).toNat, 8, (R 16))])) :
-    NW live Dt DA S Q 0x80007e14#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e18#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x088#12)).toNat, 8, (R 16))])) :
+    SnpW live Dt DA S Q 0x80007e14#64 R Mt :=
   swp_stepD nx_80007e14 [2, 16] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e14 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1305,8 +1305,8 @@ theorem nt_80007e18 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e1c#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x078#12)).toNat, 8, (R 6))])) :
-    NW live Dt DA S Q 0x80007e18#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e1c#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x078#12)).toNat, 8, (R 6))])) :
+    SnpW live Dt DA S Q 0x80007e18#64 R Mt :=
   swp_stepD nx_80007e18 [2, 6] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e18 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1320,8 +1320,8 @@ theorem nt_80007e1c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e20#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x070#12)).toNat, 8, (R 28))])) :
-    NW live Dt DA S Q 0x80007e1c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e20#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x070#12)).toNat, 8, (R 28))])) :
+    SnpW live Dt DA S Q 0x80007e1c#64 R Mt :=
   swp_stepD nx_80007e1c [2, 28] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e1c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1335,8 +1335,8 @@ theorem nt_80007e20 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e24#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x098#12)).toNat, 8, (R 31))])) :
-    NW live Dt DA S Q 0x80007e20#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e24#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x098#12)).toNat, 8, (R 31))])) :
+    SnpW live Dt DA S Q 0x80007e20#64 R Mt :=
   swp_stepD nx_80007e20 [2, 31] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e20 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1379,8 +1379,8 @@ theorem jalxn_80007e24 (live : Nat → Prop)
 theorem ntC_80007e24 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80017a74#64 (upd R 1 (BitVec.ofNat 64 (0x80007e24 + 4))) Mt) :
-    NW live Dt DA S Q 0x80007e24#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80017a74#64 (upd R 1 (BitVec.ofNat 64 (0x80007e24 + 4))) Mt) :
+    SnpW live Dt DA S Q 0x80007e24#64 R Mt :=
   swp_jal 0x80007e24 [0xef#8, 0xf0#8, 0x10#8, 0x45#8] 0x80017a74#64
     (jalxn_80007e24 live fun p hp => hlive _ (snp_code_80007e24 p hp))
     (fun p hp => List.mem_append_left _ (snp_code_80007e24 p hp)) (by decide) (by decide) rfl hk
@@ -1390,8 +1390,8 @@ theorem nt_80007e28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e2c#64 (upd R 28 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e28#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e2c#64 (upd R 28 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e28#64 R Mt :=
   swp_stepD nx_80007e28 [2, 28] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e28 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1405,8 +1405,8 @@ theorem ntD_80007e28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e2c#64 (upd R 28 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e28#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e2c#64 (upd R 28 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x070#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e28#64 R Mt :=
   swp_stepD nx_80007e28 [2, 28] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e28 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1419,8 +1419,8 @@ theorem ntH_80007e28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e2c#64 (upd R 28 v) Mt) :
-    NW live Dt DA S Q 0x80007e28#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e2c#64 (upd R 28 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e28#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e28 [2, 28] 28 (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1435,8 +1435,8 @@ theorem ntP_80007e28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat) → NW live Dt DA S Q 0x80007e2c#64 (upd R 28 v) Mt) :
-    NW live Dt DA S Q 0x80007e28#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat) → SnpW live Dt DA S Q 0x80007e2c#64 (upd R 28 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e28#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e28 [2, 28] 28 (accAddrs ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x070#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1451,8 +1451,8 @@ theorem nt_80007e2c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e30#64 (upd R 6 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e2c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e30#64 (upd R 6 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e2c#64 R Mt :=
   swp_stepD nx_80007e2c [2, 6] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e2c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1466,8 +1466,8 @@ theorem ntD_80007e2c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e30#64 (upd R 6 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e2c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e30#64 (upd R 6 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x078#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e2c#64 R Mt :=
   swp_stepD nx_80007e2c [2, 6] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e2c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1480,8 +1480,8 @@ theorem ntH_80007e2c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e30#64 (upd R 6 v) Mt) :
-    NW live Dt DA S Q 0x80007e2c#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e30#64 (upd R 6 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e2c#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e2c [2, 6] 6 (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1496,8 +1496,8 @@ theorem ntP_80007e2c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat) → NW live Dt DA S Q 0x80007e30#64 (upd R 6 v) Mt) :
-    NW live Dt DA S Q 0x80007e2c#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat) → SnpW live Dt DA S Q 0x80007e30#64 (upd R 6 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e2c#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e2c [2, 6] 6 (accAddrs ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x078#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1512,8 +1512,8 @@ theorem nt_80007e30 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e34#64 (upd R 16 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e30#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e34#64 (upd R 16 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e30#64 R Mt :=
   swp_stepD nx_80007e30 [2, 16] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e30 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1527,8 +1527,8 @@ theorem ntD_80007e30 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e34#64 (upd R 16 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e30#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e34#64 (upd R 16 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x088#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e30#64 R Mt :=
   swp_stepD nx_80007e30 [2, 16] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e30 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1541,8 +1541,8 @@ theorem ntH_80007e30 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e34#64 (upd R 16 v) Mt) :
-    NW live Dt DA S Q 0x80007e30#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e34#64 (upd R 16 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e30#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e30 [2, 16] 16 (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1557,8 +1557,8 @@ theorem ntP_80007e30 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat) → NW live Dt DA S Q 0x80007e34#64 (upd R 16 v) Mt) :
-    NW live Dt DA S Q 0x80007e30#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat) → SnpW live Dt DA S Q 0x80007e34#64 (upd R 16 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e30#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e30 [2, 16] 16 (accAddrs ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x088#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1573,8 +1573,8 @@ theorem nt_80007e34 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e38#64 (upd R 12 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e34#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e38#64 (upd R 12 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e34#64 R Mt :=
   swp_stepD nx_80007e34 [2, 12] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e34 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1588,8 +1588,8 @@ theorem ntD_80007e34 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e38#64 (upd R 12 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e34#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e38#64 (upd R 12 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x090#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e34#64 R Mt :=
   swp_stepD nx_80007e34 [2, 12] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e34 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1602,8 +1602,8 @@ theorem ntH_80007e34 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e38#64 (upd R 12 v) Mt) :
-    NW live Dt DA S Q 0x80007e34#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e38#64 (upd R 12 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e34#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e34 [2, 12] 12 (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1618,8 +1618,8 @@ theorem ntP_80007e34 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat) → NW live Dt DA S Q 0x80007e38#64 (upd R 12 v) Mt) :
-    NW live Dt DA S Q 0x80007e34#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat) → SnpW live Dt DA S Q 0x80007e38#64 (upd R 12 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e34#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e34 [2, 12] 12 (accAddrs ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x090#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1634,8 +1634,8 @@ theorem nt_80007e38 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e3c#64 (upd R 31 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x098#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e38#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e3c#64 (upd R 31 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x098#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e38#64 R Mt :=
   swp_stepD nx_80007e38 [2, 31] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e38 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -1649,8 +1649,8 @@ theorem ntD_80007e38 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e3c#64 (upd R 31 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x098#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e38#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e3c#64 (upd R 31 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x098#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e38#64 R Mt :=
   swp_stepD nx_80007e38 [2, 31] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e38 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1663,8 +1663,8 @@ theorem ntH_80007e38 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e3c#64 (upd R 31 v) Mt) :
-    NW live Dt DA S Q 0x80007e38#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e3c#64 (upd R 31 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e38#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e38 [2, 31] 31 (accAddrs ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1679,8 +1679,8 @@ theorem ntP_80007e38 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x098#12)).toNat) → NW live Dt DA S Q 0x80007e3c#64 (upd R 31 v) Mt) :
-    NW live Dt DA S Q 0x80007e38#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x098#12)).toNat) → SnpW live Dt DA S Q 0x80007e3c#64 (upd R 31 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e38#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e38 [2, 31] 31 (accAddrs ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x098#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1693,8 +1693,8 @@ theorem ntP_80007e38 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e3c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 10) ≠ (0#64) → NW live Dt DA S Q 0x80008970#64 R Mt) (hF : ¬ ((R 10) ≠ (0#64)) → NW live Dt DA S Q 0x80007e40#64 R Mt) :
-    NW live Dt DA S Q 0x80007e3c#64 R Mt := by
+    (hT : (R 10) ≠ (0#64) → SnpW live Dt DA S Q 0x80008970#64 R Mt) (hF : ¬ ((R 10) ≠ (0#64)) → SnpW live Dt DA S Q 0x80007e40#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007e3c#64 R Mt := by
   by_cases hc : (R 10) ≠ (0#64)
   · exact
     swp_stepD nxT_80007e3c [10] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -1718,8 +1718,8 @@ theorem nt_80007e40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007e44#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e40#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e44#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e40#64 R Mt :=
   swp_stepD nx_80007e40 [2, 15] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e40 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img hLD⟩)
@@ -1733,8 +1733,8 @@ theorem ntD_80007e40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e44#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e40#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e44#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e40#64 R Mt :=
   swp_stepD nx_80007e40 [2, 15] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e40 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1747,8 +1747,8 @@ theorem ntH_80007e40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e44#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007e40#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e44#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e40#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e40 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1763,8 +1763,8 @@ theorem ntP_80007e40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → NW live Dt DA S Q 0x80007e44#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007e40#64 R Mt :=
+      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → SnpW live Dt DA S Q 0x80007e44#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e40#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e40 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -1777,8 +1777,8 @@ theorem ntP_80007e40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e44 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e48#64 (upd R 14 ((0x80007e44#64) + (sign_extend (m := 64) ((0x00011#20) +++ (0x000#12))))) Mt) :
-    NW live Dt DA S Q 0x80007e44#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e48#64 (upd R 14 ((0x80007e44#64) + (sign_extend (m := 64) ((0x00011#20) +++ (0x000#12))))) Mt) :
+    SnpW live Dt DA S Q 0x80007e44#64 R Mt :=
   swp_stepD nx_80007e44 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e44 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1790,8 +1790,8 @@ theorem nt_80007e44 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e48 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e4c#64 (upd R 14 ((R 14) + sign_extend (m := 64) (0x7fc#12))) Mt) :
-    NW live Dt DA S Q 0x80007e48#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e4c#64 (upd R 14 ((R 14) + sign_extend (m := 64) (0x7fc#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e48#64 R Mt :=
   swp_stepD nx_80007e48 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e48 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1805,8 +1805,8 @@ theorem nt_80007e4c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e50#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x000#12)).toNat, 8, (R 14))])) :
-    NW live Dt DA S Q 0x80007e4c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e50#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x000#12)).toNat, 8, (R 14))])) :
+    SnpW live Dt DA S Q 0x80007e4c#64 R Mt :=
   swp_stepD nx_80007e4c [14, 23] [] [] (accAddrs ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e4c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1818,8 +1818,8 @@ theorem nt_80007e4c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e50 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e54#64 (upd R 12 ((R 12) + sign_extend (m := 64) (0x001#12))) Mt) :
-    NW live Dt DA S Q 0x80007e50#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e54#64 (upd R 12 ((R 12) + sign_extend (m := 64) (0x001#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e50#64 R Mt :=
   swp_stepD nx_80007e50 [12] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e50 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1831,8 +1831,8 @@ theorem nt_80007e50 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e54 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e58#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x001#12))) Mt) :
-    NW live Dt DA S Q 0x80007e54#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e58#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x001#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e54#64 R Mt :=
   swp_stepD nx_80007e54 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e54 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1844,8 +1844,8 @@ theorem nt_80007e54 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e58 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e5c#64 (upd R 15 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
-    NW live Dt DA S Q 0x80007e58#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e5c#64 (upd R 15 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
+    SnpW live Dt DA S Q 0x80007e58#64 R Mt :=
   swp_stepD nx_80007e58 [15] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e58 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1859,8 +1859,8 @@ theorem nt_80007e5c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 23) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 23) + sign_extend (m := 64) (0x008#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e60#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x008#12)).toNat, 8, (R 14))])) :
-    NW live Dt DA S Q 0x80007e5c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e60#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0x008#12)).toNat, 8, (R 14))])) :
+    SnpW live Dt DA S Q 0x80007e5c#64 R Mt :=
   swp_stepD nx_80007e5c [14, 23] [] [] (accAddrs ((R 23) + sign_extend (m := 64) (0x008#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e5c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1874,8 +1874,8 @@ theorem nt_80007e60 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e64#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
-    NW live Dt DA S Q 0x80007e60#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e64#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
+    SnpW live Dt DA S Q 0x80007e60#64 R Mt :=
   swp_stepD nx_80007e60 [2, 12] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e60 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1889,8 +1889,8 @@ theorem nt_80007e64 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007e68#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 15))])) :
-    NW live Dt DA S Q 0x80007e64#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e68#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 15))])) :
+    SnpW live Dt DA S Q 0x80007e64#64 R Mt :=
   swp_stepD nx_80007e64 [2, 15] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e64 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -1902,8 +1902,8 @@ theorem nt_80007e64 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e68 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e6c#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
-    NW live Dt DA S Q 0x80007e68#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e6c#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e68#64 R Mt :=
   swp_stepD nx_80007e68 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e68 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1915,8 +1915,8 @@ theorem nt_80007e68 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e6c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e70#64 (upd R 23 ((R 23) + sign_extend (m := 64) (0x010#12))) Mt) :
-    NW live Dt DA S Q 0x80007e6c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e70#64 (upd R 23 ((R 23) + sign_extend (m := 64) (0x010#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e6c#64 R Mt :=
   swp_stepD nx_80007e6c [23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e6c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1928,8 +1928,8 @@ theorem nt_80007e6c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e70 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 15).toInt ≤ (R 14).toInt → NW live Dt DA S Q 0x80007e78#64 R Mt) (hF : ¬ ((R 15).toInt ≤ (R 14).toInt) → NW live Dt DA S Q 0x80007e74#64 R Mt) :
-    NW live Dt DA S Q 0x80007e70#64 R Mt := by
+    (hT : (R 15).toInt ≤ (R 14).toInt → SnpW live Dt DA S Q 0x80007e78#64 R Mt) (hF : ¬ ((R 15).toInt ≤ (R 14).toInt) → SnpW live Dt DA S Q 0x80007e74#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007e70#64 R Mt := by
   by_cases hc : (R 15).toInt ≤ (R 14).toInt
   · exact
     swp_stepD nxT_80007e70 [14, 15] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -1951,8 +1951,8 @@ theorem nt_80007e70 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e74 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x8000977c#64 R Mt) :
-    NW live Dt DA S Q 0x80007e74#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x8000977c#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007e74#64 R Mt :=
   swp_stepD nx_80007e74 [] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e74 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -1966,8 +1966,8 @@ theorem nt_80007e78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007e7c#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e78#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e7c#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e78#64 R Mt :=
   swp_stepD nx_80007e78 [2, 15] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4] (accAddrs ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e78 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img hLD⟩)
@@ -1981,8 +1981,8 @@ theorem ntD_80007e78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e7c#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e78#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e7c#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e78#64 R Mt :=
   swp_stepD nx_80007e78 [2, 15] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e78 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -1995,8 +1995,8 @@ theorem ntH_80007e78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e7c#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007e78#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e7c#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e78#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e78 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2011,8 +2011,8 @@ theorem ntP_80007e78 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat) → NW live Dt DA S Q 0x80007e7c#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007e78#64 R Mt :=
+      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat) → SnpW live Dt DA S Q 0x80007e7c#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e78#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e78 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0b0#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2027,8 +2027,8 @@ theorem nt_80007e7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e80#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e7c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e80#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e7c#64 R Mt :=
   swp_stepD nx_80007e7c [2, 14] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e7c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -2042,8 +2042,8 @@ theorem ntD_80007e7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e80#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e7c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e80#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e7c#64 R Mt :=
   swp_stepD nx_80007e7c [2, 14] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e7c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -2056,8 +2056,8 @@ theorem ntH_80007e7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e80#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007e7c#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e80#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e7c#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e7c [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2072,8 +2072,8 @@ theorem ntP_80007e7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat) → NW live Dt DA S Q 0x80007e80#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007e7c#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat) → SnpW live Dt DA S Q 0x80007e80#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e7c#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e7c [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2086,8 +2086,8 @@ theorem ntP_80007e7c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e80 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 14).toInt ≤ (R 15).toInt → NW live Dt DA S Q 0x80008da8#64 R Mt) (hF : ¬ ((R 14).toInt ≤ (R 15).toInt) → NW live Dt DA S Q 0x80007e84#64 R Mt) :
-    NW live Dt DA S Q 0x80007e80#64 R Mt := by
+    (hT : (R 14).toInt ≤ (R 15).toInt → SnpW live Dt DA S Q 0x80008da8#64 R Mt) (hF : ¬ ((R 14).toInt ≤ (R 15).toInt) → SnpW live Dt DA S Q 0x80007e84#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007e80#64 R Mt := by
   by_cases hc : (R 14).toInt ≤ (R 15).toInt
   · exact
     swp_stepD nxT_80007e80 [14, 15] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -2111,8 +2111,8 @@ theorem nt_80007e84 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e88#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e84#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e88#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e84#64 R Mt :=
   swp_stepD nx_80007e84 [2, 14] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e84 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -2126,8 +2126,8 @@ theorem ntD_80007e84 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e88#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e84#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e88#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e84#64 R Mt :=
   swp_stepD nx_80007e84 [2, 14] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e84 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -2140,8 +2140,8 @@ theorem ntH_80007e84 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e88#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007e84#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e88#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e84#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e84 [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2156,8 +2156,8 @@ theorem ntP_80007e84 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat) → NW live Dt DA S Q 0x80007e88#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007e84#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat) → SnpW live Dt DA S Q 0x80007e88#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e84#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e84 [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2172,8 +2172,8 @@ theorem nt_80007e88 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007e8c#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e88#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e8c#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e88#64 R Mt :=
   swp_stepD nx_80007e88 [2, 15] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e88 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img hLD⟩)
@@ -2187,8 +2187,8 @@ theorem ntD_80007e88 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e8c#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e88#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e8c#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e88#64 R Mt :=
   swp_stepD nx_80007e88 [2, 15] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e88 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -2201,8 +2201,8 @@ theorem ntH_80007e88 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e8c#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007e88#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e8c#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e88#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e88 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2217,8 +2217,8 @@ theorem ntP_80007e88 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → NW live Dt DA S Q 0x80007e8c#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007e88#64 R Mt :=
+      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → SnpW live Dt DA S Q 0x80007e8c#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e88#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e88 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2231,8 +2231,8 @@ theorem ntP_80007e88 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e8c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e90#64 (upd R 23 ((R 23) + sign_extend (m := 64) (0x010#12))) Mt) :
-    NW live Dt DA S Q 0x80007e8c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e90#64 (upd R 23 ((R 23) + sign_extend (m := 64) (0x010#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007e8c#64 R Mt :=
   swp_stepD nx_80007e8c [23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e8c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2244,8 +2244,8 @@ theorem nt_80007e8c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e90 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e94#64 (upd R 12 ((R 12) + (R 14))) Mt) :
-    NW live Dt DA S Q 0x80007e90#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e94#64 (upd R 12 ((R 12) + (R 14))) Mt) :
+    SnpW live Dt DA S Q 0x80007e90#64 R Mt :=
   swp_stepD nx_80007e90 [12, 14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e90 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2259,8 +2259,8 @@ theorem nt_80007e94 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007e98#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x050#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e94#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e98#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x050#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e94#64 R Mt :=
   swp_stepD nx_80007e94 [2, 14] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e94 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -2274,8 +2274,8 @@ theorem ntD_80007e94 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007e98#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x050#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007e94#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e98#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x050#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007e94#64 R Mt :=
   swp_stepD nx_80007e94 [2, 14] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e94 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -2288,8 +2288,8 @@ theorem ntH_80007e94 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007e98#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007e94#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007e98#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e94#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e94 [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2304,8 +2304,8 @@ theorem ntP_80007e94 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x050#12)).toNat) → NW live Dt DA S Q 0x80007e98#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007e94#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x050#12)).toNat) → SnpW live Dt DA S Q 0x80007e98#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007e94#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007e94 [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x050#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2318,8 +2318,8 @@ theorem ntP_80007e94 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007e98 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007e9c#64 (upd R 15 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
-    NW live Dt DA S Q 0x80007e98#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007e9c#64 (upd R 15 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
+    SnpW live Dt DA S Q 0x80007e98#64 R Mt :=
   swp_stepD nx_80007e98 [15] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007e98 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2333,8 +2333,8 @@ theorem nt_80007e9c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007ea0#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
-    NW live Dt DA S Q 0x80007e9c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ea0#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
+    SnpW live Dt DA S Q 0x80007e9c#64 R Mt :=
   swp_stepD nx_80007e9c [2, 12] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007e9c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2348,8 +2348,8 @@ theorem nt_80007ea0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 23) + sign_extend (m := 64) (0xff0#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 23) + sign_extend (m := 64) (0xff0#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007ea4#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0xff0#12)).toNat, 8, (R 14))])) :
-    NW live Dt DA S Q 0x80007ea0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ea4#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0xff0#12)).toNat, 8, (R 14))])) :
+    SnpW live Dt DA S Q 0x80007ea0#64 R Mt :=
   swp_stepD nx_80007ea0 [14, 23] [] [] (accAddrs ((R 23) + sign_extend (m := 64) (0xff0#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007ea0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2363,8 +2363,8 @@ theorem nt_80007ea4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007ea8#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007ea4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ea8#64 (upd R 14 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007ea4#64 R Mt :=
   swp_stepD nx_80007ea4 [2, 14] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ea4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -2378,8 +2378,8 @@ theorem ntD_80007ea4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007ea8#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007ea4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ea8#64 (upd R 14 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x048#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007ea4#64 R Mt :=
   swp_stepD nx_80007ea4 [2, 14] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ea4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -2392,8 +2392,8 @@ theorem ntH_80007ea4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007ea8#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007ea4#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007ea8#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007ea4#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007ea4 [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2408,8 +2408,8 @@ theorem ntP_80007ea4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat) → NW live Dt DA S Q 0x80007ea8#64 (upd R 14 v) Mt) :
-    NW live Dt DA S Q 0x80007ea4#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat) → SnpW live Dt DA S Q 0x80007ea8#64 (upd R 14 v) Mt) :
+    SnpW live Dt DA S Q 0x80007ea4#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007ea4 [2, 14] 14 (accAddrs ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x048#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2424,8 +2424,8 @@ theorem nt_80007ea8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007eac#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 15))])) :
-    NW live Dt DA S Q 0x80007ea8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007eac#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 15))])) :
+    SnpW live Dt DA S Q 0x80007ea8#64 R Mt :=
   swp_stepD nx_80007ea8 [2, 15] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007ea8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2439,8 +2439,8 @@ theorem nt_80007eac {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 23) + sign_extend (m := 64) (0xff8#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 23) + sign_extend (m := 64) (0xff8#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007eb0#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0xff8#12)).toNat, 8, (R 14))])) :
-    NW live Dt DA S Q 0x80007eac#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007eb0#64 R (writeLog Mt [(((R 23) + sign_extend (m := 64) (0xff8#12)).toNat, 8, (R 14))])) :
+    SnpW live Dt DA S Q 0x80007eac#64 R Mt :=
   swp_stepD nx_80007eac [14, 23] [] [] (accAddrs ((R 23) + sign_extend (m := 64) (0xff8#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007eac ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2452,8 +2452,8 @@ theorem nt_80007eac {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007eb0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007eb4#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
-    NW live Dt DA S Q 0x80007eb0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007eb4#64 (upd R 14 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007eb0#64 R Mt :=
   swp_stepD nx_80007eb0 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007eb0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2465,8 +2465,8 @@ theorem nt_80007eb0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007eb4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 15).toInt ≤ (R 14).toInt → NW live Dt DA S Q 0x80007ebc#64 R Mt) (hF : ¬ ((R 15).toInt ≤ (R 14).toInt) → NW live Dt DA S Q 0x80007eb8#64 R Mt) :
-    NW live Dt DA S Q 0x80007eb4#64 R Mt := by
+    (hT : (R 15).toInt ≤ (R 14).toInt → SnpW live Dt DA S Q 0x80007ebc#64 R Mt) (hF : ¬ ((R 15).toInt ≤ (R 14).toInt) → SnpW live Dt DA S Q 0x80007eb8#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007eb4#64 R Mt := by
   by_cases hc : (R 15).toInt ≤ (R 14).toInt
   · exact
     swp_stepD nxT_80007eb4 [14, 15] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -2488,8 +2488,8 @@ theorem nt_80007eb4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007eb8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80009028#64 R Mt) :
-    NW live Dt DA S Q 0x80007eb8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80009028#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007eb8#64 R Mt :=
   swp_stepD nx_80007eb8 [] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007eb8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2503,8 +2503,8 @@ theorem nt_80007ebc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007ec0#64 (upd R 15 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007ebc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ec0#64 (upd R 15 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007ebc#64 R Mt :=
   swp_stepD nx_80007ebc [2, 15] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ebc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -2518,8 +2518,8 @@ theorem ntD_80007ebc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007ec0#64 (upd R 15 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007ebc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ec0#64 (upd R 15 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x028#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007ebc#64 R Mt :=
   swp_stepD nx_80007ebc [2, 15] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ebc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -2532,8 +2532,8 @@ theorem ntH_80007ebc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007ec0#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007ebc#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007ec0#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007ebc#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007ebc [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2548,8 +2548,8 @@ theorem ntP_80007ebc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat) → NW live Dt DA S Q 0x80007ec0#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007ebc#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat) → SnpW live Dt DA S Q 0x80007ec0#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007ebc#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007ebc [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x028#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2562,8 +2562,8 @@ theorem ntP_80007ebc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ec0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ec4#64 (upd R 20 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0xfff#12)) 31 0))) Mt) :
-    NW live Dt DA S Q 0x80007ec0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ec4#64 (upd R 20 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0xfff#12)) 31 0))) Mt) :
+    SnpW live Dt DA S Q 0x80007ec0#64 R Mt :=
   swp_stepD nx_80007ec0 [15, 20] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ec0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2575,8 +2575,8 @@ theorem nt_80007ec0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ec4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 20).toInt ≤ (0#64).toInt → NW live Dt DA S Q 0x800078ec#64 R Mt) (hF : ¬ ((R 20).toInt ≤ (0#64).toInt) → NW live Dt DA S Q 0x80007ec8#64 R Mt) :
-    NW live Dt DA S Q 0x80007ec4#64 R Mt := by
+    (hT : (R 20).toInt ≤ (0#64).toInt → SnpW live Dt DA S Q 0x800078ec#64 R Mt) (hF : ¬ ((R 20).toInt ≤ (0#64).toInt) → SnpW live Dt DA S Q 0x80007ec8#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007ec4#64 R Mt := by
   by_cases hc : (R 20).toInt ≤ (0#64).toInt
   · exact
     swp_stepD nxT_80007ec4 [20] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -2598,8 +2598,8 @@ theorem nt_80007ec4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ec8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ecc#64 (upd R 22 ((0#64) + sign_extend (m := 64) (0x010#12))) Mt) :
-    NW live Dt DA S Q 0x80007ec8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ecc#64 (upd R 22 ((0#64) + sign_extend (m := 64) (0x010#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007ec8#64 R Mt :=
   swp_stepD nx_80007ec8 [22] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ec8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2613,8 +2613,8 @@ theorem nt_80007ecc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007ed0#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007ecc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ed0#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007ecc#64 R Mt :=
   swp_stepD nx_80007ecc [2, 15] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ecc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img hLD⟩)
@@ -2628,8 +2628,8 @@ theorem ntD_80007ecc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007ed0#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007ecc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ed0#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007ecc#64 R Mt :=
   swp_stepD nx_80007ecc [2, 15] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ecc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -2642,8 +2642,8 @@ theorem ntH_80007ecc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007ed0#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007ecc#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007ed0#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007ecc#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007ecc [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2658,8 +2658,8 @@ theorem ntP_80007ecc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → NW live Dt DA S Q 0x80007ed0#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007ecc#64 R Mt :=
+      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → SnpW live Dt DA S Q 0x80007ed0#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007ecc#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007ecc [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -2672,8 +2672,8 @@ theorem ntP_80007ecc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ed0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 22).toInt < (R 20).toInt → NW live Dt DA S Q 0x80007ed8#64 R Mt) (hF : ¬ ((R 22).toInt < (R 20).toInt) → NW live Dt DA S Q 0x80007ed4#64 R Mt) :
-    NW live Dt DA S Q 0x80007ed0#64 R Mt := by
+    (hT : (R 22).toInt < (R 20).toInt → SnpW live Dt DA S Q 0x80007ed8#64 R Mt) (hF : ¬ ((R 22).toInt < (R 20).toInt) → SnpW live Dt DA S Q 0x80007ed4#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007ed0#64 R Mt := by
   by_cases hc : (R 22).toInt < (R 20).toInt
   · exact
     swp_stepD nxT_80007ed0 [20, 22] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -2695,8 +2695,8 @@ theorem nt_80007ed0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ed4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x8000a67c#64 R Mt) :
-    NW live Dt DA S Q 0x80007ed4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x8000a67c#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007ed4#64 R Mt :=
   swp_stepD nx_80007ed4 [] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ed4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2708,8 +2708,8 @@ theorem nt_80007ed4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ed8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007edc#64 (upd R 14 ((R 23) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007ed8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007edc#64 (upd R 14 ((R 23) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007ed8#64 R Mt :=
   swp_stepD nx_80007ed8 [14, 23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ed8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2721,8 +2721,8 @@ theorem nt_80007ed8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007edc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ee0#64 (upd R 27 ((R 20) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007edc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ee0#64 (upd R 27 ((R 20) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007edc#64 R Mt :=
   swp_stepD nx_80007edc [20, 27] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007edc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2734,8 +2734,8 @@ theorem nt_80007edc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ee0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ee4#64 (upd R 24 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
-    NW live Dt DA S Q 0x80007ee0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ee4#64 (upd R 24 ((0#64) + sign_extend (m := 64) (0x007#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007ee0#64 R Mt :=
   swp_stepD nx_80007ee0 [24] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ee0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2747,8 +2747,8 @@ theorem nt_80007ee0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ee4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ee8#64 (upd R 26 ((R 28) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007ee4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ee8#64 (upd R 26 ((R 28) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007ee4#64 R Mt :=
   swp_stepD nx_80007ee4 [26, 28] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ee4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2760,8 +2760,8 @@ theorem nt_80007ee4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ee8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007eec#64 (upd R 23 ((R 16) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007ee8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007eec#64 (upd R 23 ((R 16) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007ee8#64 R Mt :=
   swp_stepD nx_80007ee8 [16, 23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ee8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2773,8 +2773,8 @@ theorem nt_80007ee8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007eec {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ef0#64 (upd R 25 ((0x80007eec#64) + (sign_extend (m := 64) ((0x00012#20) +++ (0x000#12))))) Mt) :
-    NW live Dt DA S Q 0x80007eec#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ef0#64 (upd R 25 ((0x80007eec#64) + (sign_extend (m := 64) ((0x00012#20) +++ (0x000#12))))) Mt) :
+    SnpW live Dt DA S Q 0x80007eec#64 R Mt :=
   swp_stepD nx_80007eec [25] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007eec ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2786,8 +2786,8 @@ theorem nt_80007eec {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ef0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ef4#64 (upd R 25 ((R 25) + sign_extend (m := 64) (0x37c#12))) Mt) :
-    NW live Dt DA S Q 0x80007ef0#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ef4#64 (upd R 25 ((R 25) + sign_extend (m := 64) (0x37c#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007ef0#64 R Mt :=
   swp_stepD nx_80007ef0 [25] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ef0 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2799,8 +2799,8 @@ theorem nt_80007ef0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ef4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007ef8#64 (upd R 20 ((R 6) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007ef4#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007ef8#64 (upd R 20 ((R 6) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007ef4#64 R Mt :=
   swp_stepD nx_80007ef4 [6, 20] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ef4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2812,8 +2812,8 @@ theorem nt_80007ef4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007ef8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f08#64 R Mt) :
-    NW live Dt DA S Q 0x80007ef8#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f08#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007ef8#64 R Mt :=
   swp_stepD nx_80007ef8 [] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007ef8 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2825,8 +2825,8 @@ theorem nt_80007ef8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007efc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f00#64 (upd R 27 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 27) + sign_extend (m := 64) (0xff0#12)) 31 0))) Mt) :
-    NW live Dt DA S Q 0x80007efc#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f00#64 (upd R 27 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 27) + sign_extend (m := 64) (0xff0#12)) 31 0))) Mt) :
+    SnpW live Dt DA S Q 0x80007efc#64 R Mt :=
   swp_stepD nx_80007efc [27] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007efc ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2838,8 +2838,8 @@ theorem nt_80007efc {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f00 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 22).toInt < (R 27).toInt → NW live Dt DA S Q 0x80007f08#64 R Mt) (hF : ¬ ((R 22).toInt < (R 27).toInt) → NW live Dt DA S Q 0x80007f04#64 R Mt) :
-    NW live Dt DA S Q 0x80007f00#64 R Mt := by
+    (hT : (R 22).toInt < (R 27).toInt → SnpW live Dt DA S Q 0x80007f08#64 R Mt) (hF : ¬ ((R 22).toInt < (R 27).toInt) → SnpW live Dt DA S Q 0x80007f04#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007f00#64 R Mt := by
   by_cases hc : (R 22).toInt < (R 27).toInt
   · exact
     swp_stepD nxT_80007f00 [22, 27] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -2861,8 +2861,8 @@ theorem nt_80007f00 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f04 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x800098ec#64 R Mt) :
-    NW live Dt DA S Q 0x80007f04#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x800098ec#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007f04#64 R Mt :=
   swp_stepD nx_80007f04 [] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f04 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2874,8 +2874,8 @@ theorem nt_80007f04 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f08 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f0c#64 (upd R 12 ((R 12) + sign_extend (m := 64) (0x010#12))) Mt) :
-    NW live Dt DA S Q 0x80007f08#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f0c#64 (upd R 12 ((R 12) + sign_extend (m := 64) (0x010#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007f08#64 R Mt :=
   swp_stepD nx_80007f08 [12] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f08 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2887,8 +2887,8 @@ theorem nt_80007f08 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f0c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f10#64 (upd R 15 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
-    NW live Dt DA S Q 0x80007f0c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f10#64 (upd R 15 (sign_extend (m := 64) (Sail.BitVec.extractLsb ((R 15) + sign_extend (m := 64) (0x001#12)) 31 0))) Mt) :
+    SnpW live Dt DA S Q 0x80007f0c#64 R Mt :=
   swp_stepD nx_80007f0c [15] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f0c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2902,8 +2902,8 @@ theorem nt_80007f10 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 14) + sign_extend (m := 64) (0x000#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 14) + sign_extend (m := 64) (0x000#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007f14#64 R (writeLog Mt [(((R 14) + sign_extend (m := 64) (0x000#12)).toNat, 8, (R 25))])) :
-    NW live Dt DA S Q 0x80007f10#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f14#64 R (writeLog Mt [(((R 14) + sign_extend (m := 64) (0x000#12)).toNat, 8, (R 25))])) :
+    SnpW live Dt DA S Q 0x80007f10#64 R Mt :=
   swp_stepD nx_80007f10 [14, 25] [] [] (accAddrs ((R 14) + sign_extend (m := 64) (0x000#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007f10 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2917,8 +2917,8 @@ theorem nt_80007f14 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 14) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 14) + sign_extend (m := 64) (0x008#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007f18#64 R (writeLog Mt [(((R 14) + sign_extend (m := 64) (0x008#12)).toNat, 8, (R 22))])) :
-    NW live Dt DA S Q 0x80007f14#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f18#64 R (writeLog Mt [(((R 14) + sign_extend (m := 64) (0x008#12)).toNat, 8, (R 22))])) :
+    SnpW live Dt DA S Q 0x80007f14#64 R Mt :=
   swp_stepD nx_80007f14 [14, 22] [] [] (accAddrs ((R 14) + sign_extend (m := 64) (0x008#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007f14 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2932,8 +2932,8 @@ theorem nt_80007f18 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007f1c#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
-    NW live Dt DA S Q 0x80007f18#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f1c#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, (R 12))])) :
+    SnpW live Dt DA S Q 0x80007f18#64 R Mt :=
   swp_stepD nx_80007f18 [2, 12] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007f18 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2947,8 +2947,8 @@ theorem nt_80007f1c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : StOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007f20#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 15))])) :
-    NW live Dt DA S Q 0x80007f1c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f20#64 R (writeLog Mt [(((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat, 4, (R 15))])) :
+    SnpW live Dt DA S Q 0x80007f1c#64 R Mt :=
   swp_stepD nx_80007f1c [2, 15] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
     (fun m hm hD hLD => by unfold nx_80007f1c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact hea)
@@ -2960,8 +2960,8 @@ theorem nt_80007f1c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f20 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f24#64 (upd R 14 ((R 14) + sign_extend (m := 64) (0x010#12))) Mt) :
-    NW live Dt DA S Q 0x80007f20#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f24#64 (upd R 14 ((R 14) + sign_extend (m := 64) (0x010#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007f20#64 R Mt :=
   swp_stepD nx_80007f20 [14] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f20 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -2973,8 +2973,8 @@ theorem nt_80007f20 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f24 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 15).toInt ≤ (R 24).toInt → NW live Dt DA S Q 0x80007efc#64 R Mt) (hF : ¬ ((R 15).toInt ≤ (R 24).toInt) → NW live Dt DA S Q 0x80007f28#64 R Mt) :
-    NW live Dt DA S Q 0x80007f24#64 R Mt := by
+    (hT : (R 15).toInt ≤ (R 24).toInt → SnpW live Dt DA S Q 0x80007efc#64 R Mt) (hF : ¬ ((R 15).toInt ≤ (R 24).toInt) → SnpW live Dt DA S Q 0x80007f28#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007f24#64 R Mt := by
   by_cases hc : (R 15).toInt ≤ (R 24).toInt
   · exact
     swp_stepD nxT_80007f24 [15, 24] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -2998,8 +2998,8 @@ theorem nt_80007f28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007f2c#64 (upd R 11 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f28#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f2c#64 (upd R 11 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f28#64 R Mt :=
   swp_stepD nx_80007f28 [2, 11] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f28 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -3013,8 +3013,8 @@ theorem ntD_80007f28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007f2c#64 (upd R 11 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f28#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f2c#64 (upd R 11 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x008#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f28#64 R Mt :=
   swp_stepD nx_80007f28 [2, 11] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f28 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -3027,8 +3027,8 @@ theorem ntH_80007f28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007f2c#64 (upd R 11 v) Mt) :
-    NW live Dt DA S Q 0x80007f28#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007f2c#64 (upd R 11 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f28#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f28 [2, 11] 11 (accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -3043,8 +3043,8 @@ theorem ntP_80007f28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat) → NW live Dt DA S Q 0x80007f2c#64 (upd R 11 v) Mt) :
-    NW live Dt DA S Q 0x80007f28#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat) → SnpW live Dt DA S Q 0x80007f2c#64 (upd R 11 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f28#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f28 [2, 11] 11 (accAddrs ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x008#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -3057,8 +3057,8 @@ theorem ntP_80007f28 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f2c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f30#64 (upd R 12 ((R 2) + sign_extend (m := 64) (0x0e0#12))) Mt) :
-    NW live Dt DA S Q 0x80007f2c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f30#64 (upd R 12 ((R 2) + sign_extend (m := 64) (0x0e0#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007f2c#64 R Mt :=
   swp_stepD nx_80007f2c [2, 12] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f2c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -3070,8 +3070,8 @@ theorem nt_80007f2c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f30 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f34#64 (upd R 10 ((R 8) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007f30#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f34#64 (upd R 10 ((R 8) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007f30#64 R Mt :=
   swp_stepD nx_80007f30 [8, 10] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f30 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -3114,8 +3114,8 @@ theorem jalxn_80007f34 (live : Nat → Prop)
 theorem ntC_80007f34 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x8000e908#64 (upd R 1 (BitVec.ofNat 64 (0x80007f34 + 4))) Mt) :
-    NW live Dt DA S Q 0x80007f34#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x8000e908#64 (upd R 1 (BitVec.ofNat 64 (0x80007f34 + 4))) Mt) :
+    SnpW live Dt DA S Q 0x80007f34#64 R Mt :=
   swp_jal 0x80007f34 [0xef#8, 0x60#8, 0x50#8, 0x1d#8] 0x8000e908#64
     (jalxn_80007f34 live fun p hp => hlive _ (snp_code_80007f34 p hp))
     (fun p hp => List.mem_append_left _ (snp_code_80007f34 p hp)) (by decide) (by decide) rfl hk
@@ -3123,8 +3123,8 @@ theorem ntC_80007f34 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f38 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hT : (R 10) ≠ (0#64) → NW live Dt DA S Q 0x8000868c#64 R Mt) (hF : ¬ ((R 10) ≠ (0#64)) → NW live Dt DA S Q 0x80007f3c#64 R Mt) :
-    NW live Dt DA S Q 0x80007f38#64 R Mt := by
+    (hT : (R 10) ≠ (0#64) → SnpW live Dt DA S Q 0x8000868c#64 R Mt) (hF : ¬ ((R 10) ≠ (0#64)) → SnpW live Dt DA S Q 0x80007f3c#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007f38#64 R Mt := by
   by_cases hc : (R 10) ≠ (0#64)
   · exact
     swp_stepD nxT_80007f38 [10] [] [] [] 0 rfl (by decide) (by decide) (by decide)
@@ -3148,8 +3148,8 @@ theorem nt_80007f3c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007f40#64 (upd R 12 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f3c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f40#64 (upd R 12 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f3c#64 R Mt :=
   swp_stepD nx_80007f3c [2, 12] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f3c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -3163,8 +3163,8 @@ theorem ntD_80007f3c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007f40#64 (upd R 12 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f3c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f40#64 (upd R 12 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f3c#64 R Mt :=
   swp_stepD nx_80007f3c [2, 12] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f3c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -3177,8 +3177,8 @@ theorem ntH_80007f3c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007f40#64 (upd R 12 v) Mt) :
-    NW live Dt DA S Q 0x80007f3c#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007f40#64 (upd R 12 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f3c#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f3c [2, 12] 12 (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -3193,8 +3193,8 @@ theorem ntP_80007f3c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat) → NW live Dt DA S Q 0x80007f40#64 (upd R 12 v) Mt) :
-    NW live Dt DA S Q 0x80007f3c#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat) → SnpW live Dt DA S Q 0x80007f40#64 (upd R 12 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f3c#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f3c [2, 12] 12 (accAddrs ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0f0#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -3209,8 +3209,8 @@ theorem nt_80007f40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, S b)
-    (hk : NW live Dt DA S Q 0x80007f44#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f40#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f44#64 (upd R 15 (ldv .lw Mt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f40#64 R Mt :=
   swp_stepD nx_80007f40 [2, 15] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f40 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img hLD⟩)
@@ -3224,8 +3224,8 @@ theorem ntD_80007f40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007f44#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f40#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f44#64 (upd R 15 (ldv .lw Dt ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f40#64 R Mt :=
   swp_stepD nx_80007f40 [2, 15] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f40 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -3238,8 +3238,8 @@ theorem ntH_80007f40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007f44#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007f40#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007f44#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f40#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f40 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -3254,8 +3254,8 @@ theorem ntP_80007f40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → NW live Dt DA S Q 0x80007f44#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007f40#64 R Mt :=
+      v = ldvf .lw f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat) → SnpW live Dt DA S Q 0x80007f44#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f40#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f40 [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x0e8#12)).toNat 4]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -3268,8 +3268,8 @@ theorem ntP_80007f40 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f44 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007f48#64 (upd R 14 ((R 21) + sign_extend (m := 64) (0x000#12))) Mt) :
-    NW live Dt DA S Q 0x80007f44#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f48#64 (upd R 14 ((R 21) + sign_extend (m := 64) (0x000#12))) Mt) :
+    SnpW live Dt DA S Q 0x80007f44#64 R Mt :=
   swp_stepD nx_80007f44 [14, 21] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f44 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -3281,8 +3281,8 @@ theorem nt_80007f44 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
 theorem nt_80007f48 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
-    (hk : NW live Dt DA S Q 0x80007efc#64 R Mt) :
-    NW live Dt DA S Q 0x80007f48#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007efc#64 R Mt) :
+    SnpW live Dt DA S Q 0x80007f48#64 R Mt :=
   swp_stepD nx_80007f48 [] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f48 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_")
@@ -3296,8 +3296,8 @@ theorem nt_80007f4c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8)
     (hLDS : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8, S b)
-    (hk : NW live Dt DA S Q 0x80007f50#64 (upd R 15 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x018#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f4c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f50#64 (upd R 15 (ldv .ld Mt ((R 2) + sign_extend (m := 64) (0x018#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f4c#64 R Mt :=
   swp_stepD nx_80007f4c [2, 15] [bytesAt (imgM Mt) ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8] (accAddrs ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f4c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img hLD⟩)
@@ -3311,8 +3311,8 @@ theorem ntD_80007f4c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8)
     (hLDD : ∀ b ∈ accAddrs ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8, b ∈ DA)
-    (hk : NW live Dt DA S Q 0x80007f50#64 (upd R 15 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x018#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x80007f4c#64 R Mt :=
+    (hk : SnpW live Dt DA S Q 0x80007f50#64 (upd R 15 (ldv .ld Dt ((R 2) + sign_extend (m := 64) (0x018#12)).toNat)) Mt) :
+    SnpW live Dt DA S Q 0x80007f4c#64 R Mt :=
   swp_stepD nx_80007f4c [2, 15] [bytesAt (imgM Dt) ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
     (fun m hm hD hLD => by unfold nx_80007f4c ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins8_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩)
@@ -3325,8 +3325,8 @@ theorem ntH_80007f4c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8)
-    (hk : ∀ v, NW live Dt DA S Q 0x80007f50#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007f4c#64 R Mt :=
+    (hk : ∀ v, SnpW live Dt DA S Q 0x80007f50#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f4c#64 R Mt :=
   swp_havocD (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f4c [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
@@ -3341,8 +3341,8 @@ theorem ntP_80007f4c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (hlive : ∀ p ∈ snpText, live p.1)
     (hea : LdOK ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8)
     (hk : ∀ v, (∃ f : Nat → BitVec 8, (∀ p ∈ dataOf Dt DA, f p.1 = p.2) ∧ (∀ a, S a → f a = imgM Mt a) ∧
-      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x018#12)).toNat) → NW live Dt DA S Q 0x80007f50#64 (upd R 15 v) Mt) :
-    NW live Dt DA S Q 0x80007f4c#64 R Mt :=
+      v = ldvf .ld f ((R 2) + sign_extend (m := 64) (0x018#12)).toNat) → SnpW live Dt DA S Q 0x80007f50#64 (upd R 15 v) Mt) :
+    SnpW live Dt DA S Q 0x80007f4c#64 R Mt :=
   swp_havocP (T := snpText) (D := dataOf Dt DA) (rs := nRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
     nx_80007f4c [2, 15] 15 (accAddrs ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8) (fun f => [bytesAt f ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8]) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))

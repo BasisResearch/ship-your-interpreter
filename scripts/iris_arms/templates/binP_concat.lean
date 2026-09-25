@@ -281,14 +281,15 @@
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ [Hslack2 Hst]
   · iframe Hslack2 Hst
   unfold mallocRes
-  icases Hres with (⟨%⟨hq0, -⟩, -⟩ | ⟨%hf3, Hh, Hblk⟩)
-  · -- NULL: the out-of-memory block
+  icases Hres with (⟨%⟨hq0, -⟩, Hh0⟩ | ⟨%hf3, Hh, Hblk⟩)
+  · -- NULL: the out-of-memory block (it borrows `errno` from the dropped heap)
+    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hh0
     ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
     · iframe Hcode Hro
     iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE {SP} stringifyNeed (slot24 sret.toNat)
-        iprop(catRest N inp d st2 H B ∗ {SLACK}) {KP} ∗ errCtx inp))
+        iprop(Stdio.errnoOwn ∗ catRest N inp d st2 H B ∗ {SLACK}) {KP} ∗ errCtx inp))
     rotate_left
-    · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hrest Hslack Hk HE
+    · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Herr Hrest Hslack Hk HE
     intro F'
     refine {ARM}P_run8z (s := s) hlive hsf hs' hs2 hs3 ?_ ?_ ?_
     · ix_reg; ix_keep [hkeep12, hkeep10, hkeep8, hkeep6, hkeep4, hkeep2, hkeep1]
@@ -296,7 +297,7 @@
     intros
     apply swp_closeF
     unfold F' evalArmF
-    iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hrest, Hslack⟩, Hk⟩, #HE⟩, Hms⟩
+    iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Herr, Hrest, Hslack⟩, Hk⟩, #HE⟩, Hms⟩
     ihave #Hbin := errCtx_img inp $$ HE
     unfold catRest
     icases Hrest with ⟨-, Hcon, Hio, -, -⟩
@@ -308,7 +309,7 @@
     · iframe Hslack Hst
     ihave Hk := and_elim_r $$ Hk
     iapply ms_evalOom (wpW _) hE hsg (by unfold fwriteNeed; omega)
-    iframe Hcode Hbin Hms Hst Hio Hcon
+    iframe Hcode Hbin Hms Hst Hio Herr Hcon
     isplitl []
     · ipureintro; ix_reg; ix_keep [hkeep12, hkeep10, hkeep8, hkeep6, hkeep4, hkeep2, hkeep1]
     iintro HA

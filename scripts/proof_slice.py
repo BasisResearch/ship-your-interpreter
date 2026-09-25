@@ -124,8 +124,8 @@ def audit_source(
 ) -> str:
     """Use the existing census elaborator for explicit residual type checks.
 
-    `structure` selects the residual record; the default is the inherited
-    term record, a generated clause record is
+    `structure` selects the residual record; the default is the generated
+    `Trivial` clause record, another generated clause record is
     `Vsa.Sim.IHClause.<Name>.Residuals`.
     """
     source = "".join(f"import {name}\n" for name in sorted(set(imports)))
@@ -354,8 +354,6 @@ def main(argv: list[str] | None = None) -> int:
     imports = list(args.module)
     if args.field is not None:
         imports.append("Vsa.Sim.LayoutInstance")
-        if args.structure == census.STRUCTURE:
-            imports.append("Vsa.Sim.TermAssembly")
     try:
         progress = (
             checkpoint.read_checkpoint(args.checkpoint)

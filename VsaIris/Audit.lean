@@ -160,6 +160,8 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Interp.stackScratch_boundary
 #print axioms VsaIris.Newlib.NewlibHoles.at
 #print axioms VsaIris.Newlib.Exit.wp_exitCall
+#print axioms VsaIris.Newlib.ExitH.exitHandlers_spec
+#print axioms VsaIris.Newlib.NewlibCore.full
 #print axioms VsaIris.Newlib.MainErr.wp_mainErrTail
 #print axioms VsaIris.Newlib.Landing.wp_landing
 #print axioms VsaIris.Interp.abortRes_widen
@@ -170,6 +172,10 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Newlib.RtErr.rtErr_spec
 #print axioms VsaIris.Inst.seg_runFactR
 #print axioms VsaIris.Newlib.Oom.wp_oomBlock
+#print axioms VsaIris.Newlib.fwrite_proved
+#print axioms VsaIris.Newlib.fprintf_proved
+#print axioms VsaIris.Newlib.fprintf_ok
+#print axioms VsaIris.Sym.Fp.fprintf_out
 #print axioms VsaIris.Newlib.OomSites.oom80002a38_ok
 #print axioms VsaIris.Newlib.OomSites.oom80002bd0_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003140_ok

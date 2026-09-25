@@ -254,10 +254,10 @@ def charsOf (p len : Nat) (bv : Nat → BitVec 8) : List Char :=
 theorem charsOf_length (p len : Nat) (bv : Nat → BitVec 8) :
     (charsOf p len bv).length = len := by simp [charsOf]
 
-/-- A NUL-terminated ASCII string in the region. -/
+/-- A NUL-terminated string in the region (`strlen` reads any nonzero bytes;
+`cstr_of_bytes` also takes them ASCII). -/
 structure StrBytes (p len : Nat) (bv : Nat → BitVec 8) : Prop where
   nonzero : ∀ k, k < len → bv (p + k) ≠ 0
-  ascii : ∀ k, k < len → (bv (p + k)).toNat < 128
   nul : bv (p + len) = 0
 
 theorem charsOf_succ (p len : Nat) (bv : Nat → BitVec 8) :
@@ -271,30 +271,31 @@ theorem charsOf_succ (p len : Nat) (bv : Nat → BitVec 8) :
   rw [show p + (k + 1) = p + 1 + k from by omega]
 
 theorem cstr_of_bytes {m : Std.ExtHashMap Nat (BitVec 8)} : ∀ (len p : Nat) (bv : Nat → BitVec 8),
-    StrBytes p len bv → (∀ k, k ≤ len → m[p + k]? = some (bv (p + k))) →
-    CStr m p (charsOf p len bv)
-  | 0, p, bv, hb, hm => by
+    StrBytes p len bv → (∀ k, k < len → (bv (p + k)).toNat < 128) →
+    (∀ k, k ≤ len → m[p + k]? = some (bv (p + k))) → CStr m p (charsOf p len bv)
+  | 0, p, bv, hb, _, hm => by
     refine .nil ?_
     have h0 := hm 0 (by omega)
     have hn := hb.nul
     rw [Nat.add_zero] at h0 hn
     rw [h0, hn]
-  | len + 1, p, bv, hb, hm => by
+  | len + 1, p, bv, hb, hasc, hm => by
     rw [charsOf_succ]
     refine .cons (b := bv p) ?_ ?_ ?_ ?_
     · have := hm 0 (by omega); rwa [Nat.add_zero] at this
     · have := hb.nonzero 0 (by omega); rwa [Nat.add_zero] at this
-    · have := hb.ascii 0 (by omega); rwa [Nat.add_zero] at this
+    · have := hasc 0 (by omega); rwa [Nat.add_zero] at this
     · refine cstr_of_bytes len (p + 1) bv
         ⟨fun k hk => by rw [show p + 1 + k = p + (k + 1) from by omega]; exact hb.nonzero _ (by omega),
-         fun k hk => by rw [show p + 1 + k = p + (k + 1) from by omega]; exact hb.ascii _ (by omega),
          by rw [show p + 1 + len = p + (len + 1) from by omega]; exact hb.nul⟩
+        (fun k hk => by rw [show p + 1 + k = p + (k + 1) from by omega]; exact hasc _ (by omega))
         fun k hk => by
           rw [show p + 1 + k = p + (k + 1) from by omega]; exact hm _ (by omega)
 
 theorem cstr_of_reads {m : Std.ExtHashMap Nat (BitVec 8)} {p len : Nat} {bv : Nat → BitVec 8}
-    (hb : StrBytes p len bv) (hr : Reads p len bv m) : CStr m p (charsOf p len bv) :=
-  cstr_of_bytes len p bv hb fun k hk => hr.bytes k (by omega)
+    (hb : StrBytes p len bv) (hasc : ∀ k, k < len → (bv (p + k)).toNat < 128)
+    (hr : Reads p len bv m) : CStr m p (charsOf p len bv) :=
+  cstr_of_bytes len p bv hb hasc fun k hk => hr.bytes k (by omega)
 
 
 /-! ## One pin list, one step

@@ -20,6 +20,11 @@ these are exact about what they print: the console grows by the fragment.
 The `snprintf` statements are proved (`VsaIris.Sym.snprintfInt_out`,
 `VsaIris.Sym.snprintfFn_out`, `Vsa/SnpHoles.lean`) for a stack and buffer
 above newlib's data.
+`fputs`, `fputc` and `fwrite` are proved (`VsaIris.Sym.fputc_out`,
+`Vsa/Stdout/OutSpec.lean`; `VsaIris.Sym.fputs_out`, `VsaIris.Sym.fwrite_out`,
+`Vsa/Stdout/StrOut.lean`) for a stack above `.bss`; `fprintf` with `fprintfOut`'s formats is proved
+(`VsaIris.Sym.Fp.fprintf_out`, `Vsa/Fprintf/Out.lean`) for a stack above
+`0x80100000` with `interpText` live.
 
 Stack needs are measured frame chains of the binary (`fputs` 576, `fputc`
 528, `fwrite` 608, `fprintf` 3200), rounded up; `snprintf`'s is H5's.
@@ -63,13 +68,16 @@ instance (fmt arg : BitVec 64) (frag : String) : Persistent (fprintfOut (GF := G
   unfold fprintfOut; infer_instance
 
 /-- A stdout call: arguments `args`, the read-only input `R`; the console grows
-by `frag` and newlib's data stays in its boundary state. -/
+by `frag` and newlib's data stays in its boundary state. The call borrows
+libgloss's `errno` (`_write_r` clears it on every write; an allocator global,
+lent by `ErrnoOwn.heapRes_errno`). -/
 def outSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (entry : BitVec 64)
     (args : List (BitVec 64)) (R : IProp GF) (s : BitVec 64) (need : Nat) (cs : Nat → BitVec 64)
     (o frag : String) : IProp GF :=
   fnSpecW Wp entry
-    (fun _ => iprop(argsAt args ∗ R ∗ stdioOwn ∗ consoleOwn o ∗ callFrame s need calleeSaved cs))
-    (fun _ => iprop(clobbered argRegs ∗ stdioOwn ∗ consoleOwn (o ++ frag) ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt args ∗ R ∗ stdioW ∗ consoleOwn o ∗
+      callFrame s need calleeSaved cs))
+    (fun _ => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
       callFrame s need calleeSaved cs))
 
 /-- `snprintf(buf, 64, "<fn %s>", name)`: the rendering, cut to 63 characters,
@@ -99,28 +107,9 @@ end Specs
 /-- **newlib's stdout calls at the binary** (`IrisHoles.out`), for every Iris
 instance, every `live` set holding the code, and both WPs. -/
 structure OutHoles : Prop where
-  /-- `fputs(str, stdout)` prints the string. -/
-  fputs : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (str s : BitVec 64) (cs : Nat → BitVec 64)
-    (frag o : String), CodeLive live → SpIn s outNeed →
-    ⊢ outSpec live Wp fputsEntry [str, stdoutFile] (strAt str.toNat frag) s outNeed cs o frag
-  /-- `fputc(c, stdout)` prints the character. -/
-  fputc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (c : BitVec 8) (s : BitVec 64)
-    (cs : Nat → BitVec 64) (o : String), CodeLive live → SpIn s outNeed →
-    ⊢ outSpec live Wp fputcEntry [BitVec.zeroExtend 64 c, stdoutFile] iprop(emp) s outNeed cs o
-        (toString (Char.ofNat c.toNat))
-  /-- `fwrite(buf, 1, n, stdout)` of a C string's `n` bytes prints them. -/
-  fwrite : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (buf s : BitVec 64) (cs : Nat → BitVec 64)
-    (frag o : String), CodeLive live → SpIn s fwriteNeed →
-    ⊢ outSpec live Wp fwriteEntry [buf, 1#64, BitVec.ofNat 64 frag.toList.length, stdoutFile]
-        (strAt buf.toNat frag) s fwriteNeed cs o frag
-  /-- `fprintf(stdout, fmt, arg)` with `value_print`'s formats. -/
-  fprintf : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (fmt arg s : BitVec 64) (cs : Nat → BitVec 64)
-    (frag o : String), CodeLive live → SpIn s fprintfNeed →
-    ⊢ outSpec live Wp fprintfEntry [stdoutFile, fmt, arg] (fprintfOut fmt arg frag) s fprintfNeed
-        cs o frag
+
+/-- Every stdout call and `snprintf` rendering is proved (`Vsa/Stdout/`,
+`Vsa/Fprintf/Out.lean`, `Vsa/SnpHoles.lean`); nothing is left assumed. -/
+theorem OutHoles.proved : OutHoles := ⟨⟩
 
 end VsaIris.Newlib

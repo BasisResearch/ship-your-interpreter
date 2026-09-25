@@ -16,14 +16,11 @@ namespace VsaIris.Interp
 
 /-- **The named holes of the final theorem.** -/
 structure IrisHoles : Prop where
-  /-- The newlib calls on the error and exit paths (`VsaIris/Vsa/Newlib.lean`,
-  H5): `snprintf` and `fprintf` with `%s`/`%d` formats, `fwrite` of the
-  out-of-memory message, and `exit`'s newlib interior (quiet from the boundary
-  state). -/
-  newlib : Newlib.NewlibHoles
-  /-- newlib's stdout calls (`fputs`, `fputc`, `fwrite`, `fprintf` on
-  `stdout`) and `stringify`'s `snprintf` renderings, exact about what they
-  print or render (`VsaIris/Vsa/NewlibOut.lean`, H2). -/
-  out : Newlib.OutHoles
+  /-- The newlib call on the error paths (`VsaIris/Vsa/Newlib.lean`, H5):
+  `snprintf` with `%s`/`%d` formats, at a post-write state `exit`'s close
+  path runs from. `fwrite`, `fprintf` (`VsaIris/Vsa/Stderr/`) and `exit`'s
+  newlib interior are proved (`Newlib.NewlibCore.full`,
+  `VsaIris/Vsa/ExitH/Iris.lean`). -/
+  newlib : Newlib.NewlibCore
 
 end VsaIris.Interp

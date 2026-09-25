@@ -191,7 +191,7 @@ theorem svf_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
       SvfAt s dst n R0 Mt0 q ap (BitVec.ofNat 64 tot.length) tot R Mt →
       SvfRetK live Dt DA Q s dst n R0 Mt0 (BitVec.ofNat 64 (tot ++ fmtRen (imgM Dt) bs args).length)
         (tot ++ fmtRen (imgM Dt) bs args) →
-      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
   intro m
   induction m with
   | zero =>

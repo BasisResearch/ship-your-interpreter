@@ -7,7 +7,7 @@ import VsaIris.Interp.ProofArith
 `_svfprintf_r`'s decimal loop calls `__umoddi3`/`__hidden___udivdi3` by ten.
 Lane E2 proved the division in the interpreter's run (`ProofArith.udiv_iw`);
 a symbolic run is one table's instance of `SWP`, so the proof is replayed
-here over `NW` with the `snprintf` table's step lemmas (`nt_<pc>`, `nx_run`).
+here over `SnpW` with the `snprintf` table's step lemmas (`nt_<pc>`, `snp_run`).
 The arithmetic lemmas are E2's (`div_of_inv`, `DivKeep`, VSA's `DivK`).
 -/
 
@@ -24,10 +24,10 @@ theorem udiv_loop2N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R0 : Nat → BitVec 64)
     (Mt : Mem) (hal : r.toNat % 4 = 0) (hr : R0 1 = r)
     (hk : ∀ R', (R' 10).toNat = n.toNat / d.toNat → (R' 11).toNat = n.toNat % d.toNat →
-      DivKeep R' R0 → NW live Dt DA S Q r R' Mt) :
+      DivKeep R' R0 → SnpW live Dt DA S Q r R' Mt) :
     ∀ j (R : Nat → BitVec 64), Vsa.Sim.DivK d (R 12) (R 13) j → (R 10).toNat % 2 ^ (j + 1) = 0 →
       n.toNat = d.toNat * (R 10).toNat + (R 11).toNat → (R 11).toNat < 2 * (R 12).toNat →
-      DivKeep R R0 → NW live Dt DA S Q 0x800046d8#64 R Mt := by
+      DivKeep R R0 → SnpW live Dt DA S Q 0x800046d8#64 R Mt := by
   intro j
   induction j with
   | zero =>
@@ -42,7 +42,7 @@ theorem udiv_loop2N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     have h3z : R 13 >>> 1 = 0#64 := by
       apply BitVec.eq_of_toNat_eq; rw [shr1_toNat', hk3]; rfl
     refine nt_800046d8 hlive ?_ ?_
-    all_goals (intro hc; nx_run hlive at 0x800046d8)
+    all_goals (intro hc; snp_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hF.hal => rw [hR1]; exact hal
     case refine_2.hF.hal => rw [hR1]; exact hal
@@ -81,7 +81,7 @@ theorem udiv_loop2N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     have hK' : Vsa.Sim.DivK d (R 12 >>> 1) (R 13 >>> 1) j :=
       ⟨h2, h3, by rw [hpow] at hov; omega⟩
     refine nt_800046d8 hlive ?_ ?_
-    all_goals (intro hc; nx_run hlive at 0x800046d8)
+    all_goals (intro hc; snp_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hT hz =>
       refine ih _ ?_ ?_ ?_ ?_ ?_
@@ -118,17 +118,17 @@ theorem udiv_loop1N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R0 : Nat → BitVec 64)
     (Mt : Mem) (hal : r.toNat % 4 = 0) (hr : R0 1 = r)
     (hk : ∀ R', (R' 10).toNat = n.toNat / d.toNat → (R' 11).toNat = n.toNat % d.toNat →
-      DivKeep R' R0 → NW live Dt DA S Q r R' Mt) (hd0 : 0 < d.toNat) :
+      DivKeep R' R0 → SnpW live Dt DA S Q r R' Mt) (hd0 : 0 < d.toNat) :
     ∀ m (R : Nat → BitVec 64), n.toNat - (R 12).toNat = m → R 11 = n →
       (∃ k, Vsa.Sim.DivK d (R 12) (R 13) k) → (R 12).toNat < n.toNat → DivKeep R R0 →
-      NW live Dt DA S Q 0x800046c4#64 R Mt := by
+      SnpW live Dt DA S Q 0x800046c4#64 R Mt := by
   intro m
   refine Nat.strongRecOn m ?_
   intro m ih R hm h11 ⟨k, hk2, hk3, hov⟩ hlt hkp
   have hpk : 1 ≤ 2 ^ k := Nat.one_le_two_pow
   have ha2 : d.toNat ≤ (R 12).toNat := by rw [hk2]; exact Nat.le_mul_of_pos_right _ (by omega)
   refine nt_800046c4 hlive ?_ ?_
-  all_goals (intro hc; nx_run hlive at 0x800046c4 0x800046d8)
+  all_goals (intro hc; snp_run hlive at 0x800046c4 0x800046d8)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case refine_1 =>
     have htop := toNat_of_toInt_nonpos (by simpa using hc) (by omega)
@@ -187,13 +187,13 @@ theorem udiv_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     (Mt : Mem) (hd : d ≠ 0#64) (h10 : R 10 = n) (h11 : R 11 = d) (hr : R 1 = r)
     (hal : r.toNat % 4 = 0)
     (hk : ∀ R', (R' 10).toNat = n.toNat / d.toNat → (R' 11).toNat = n.toNat % d.toNat →
-      DivKeep R' R → NW live Dt DA S Q r R' Mt) :
-    NW live Dt DA S Q 0x800046ac#64 R Mt := by
+      DivKeep R' R → SnpW live Dt DA S Q r R' Mt) :
+    SnpW live Dt DA S Q 0x800046ac#64 R Mt := by
   have hd0 : 0 < d.toNat := by
     rcases Nat.eq_zero_or_pos d.toNat with h | h
     · exact absurd (BitVec.eq_of_toNat_eq (by simpa using h)) hd
     · exact h
-  nx_run hlive using [h11] at 0x800046c4 0x800046d8
+  snp_run hlive using [h11] at 0x800046c4 0x800046d8
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hF.hT hb =>
     refine udiv_loop2N hlive n d r R Mt hal hr hk 0 _ ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_
@@ -225,9 +225,9 @@ theorem umod_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     (hal : r.toNat % 4 = 0)
     (hk : ∀ R', (R' 10).toNat = n.toNat % d.toNat →
       (∀ z, z ≠ 1 → z ≠ 5 → z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → R' z = R z) →
-      NW live Dt DA S Q r R' Mt) :
-    NW live Dt DA S Q 0x800046f4#64 R Mt := by
-  nx_run hlive using [h10, h11] at 0x800046ac
+      SnpW live Dt DA S Q r R' Mt) :
+    SnpW live Dt DA S Q 0x800046f4#64 R Mt := by
+  snp_run hlive using [h10, h11] at 0x800046ac
   refine udiv_nw hlive n d 0x800046fc#64 _ Mt hd ?_ ?_ ?_ (by decide) fun R' hq hm hkp => ?_
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h11
@@ -235,7 +235,7 @@ theorem umod_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
   have h5 : R' 5 = r := by
     rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-  nx_run hlive using [h5]
+  snp_run hlive using [h5]
   refine hk _ ?_ fun z h1 h5' h10' h11' h12 h13 => ?_
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hm
   · simp only [upd_apply, h10', ite_false]

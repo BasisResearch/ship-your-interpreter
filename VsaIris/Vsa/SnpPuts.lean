@@ -45,9 +45,9 @@ theorem ssp_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     (hs1' : ldv .ld Mt (sp + 40) = s1) (hal : ra.toNat % 4 = 0)
     (hk : ∀ R', R' 10 = 0#64 → R' 2 = BitVec.ofNat 64 (sp + 64) → R' 8 = s0 → R' 9 = s1 →
       (∀ z, z ≠ 1 → z ≠ 2 → z ≠ 8 → z ≠ 9 → z ≠ 10 → z ≠ 14 → z ≠ 15 → z ≠ 32 → R' z = R z) →
-      NW live Dt DA (snpS s dst n) Q ra R'
+      SnpW live Dt DA (snpS s dst n) Q ra R'
         (writeLog (writeLog Mt [(fp + 12, 4, BitVec.ofNat 64 (w - c))]) [(fp, 8, BitVec.ofNat 64 (p + c))])) :
-    NW live Dt DA (snpS s dst n) Q 0x800143c4#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x800143c4#64 R Mt := by
   have n2 : (R 2).toNat = sp := by rw [h2]; simp only [BitVec.toNat_ofNat]; omega
   have n8 : (R 8).toNat = fp := by rw [h8]; simp only [BitVec.toNat_ofNat]; omega
   have hw' : ldv .lw Mt (BitVec.ofNat 64 (fp + 12)).toNat = BitVec.ofNat 64 w := by
@@ -60,7 +60,7 @@ theorem ssp_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     rw [toNat_ofNat_lt (by omega)]; exact hs0
   have hs1'' : ldv .ld Mt (BitVec.ofNat 64 (sp + 40)).toNat = s1 := by
     rw [toNat_ofNat_lt (by omega)]; exact hs1'
-  nx_run hlive using [ofNat_add_ofNat, h2, h8, h9, hw', hpp', subw_ofNat hcw hw31, hra', hs0', hs1'']
+  snp_run hlive using [ofNat_add_ofNat, h2, h8, h9, hw', hpp', subw_ofNat hcw hw31, hra', hs0', hs1'']
   rw [toNat_ofNat_lt (x := fp + 12) (by omega), toNat_ofNat_lt (x := fp) (by omega)]
   refine hk _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
@@ -95,12 +95,12 @@ theorem ssp_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (hwin : ReadWin Dt DA (snpS s dst n) Mt src (src + c) g)
     (hk : ∀ R' Mt', R' 10 = 0#64 → R' 2 = BitVec.ofNat 64 (sp + 64) → R' 8 = s0 → R' 9 = s1 →
       (∀ z, 18 ≤ z → z ≤ 27 → R' z = R z) → Copied Mt' Mt p src c g →
-      NW live Dt DA (snpS s dst n) Q ra R'
+      SnpW live Dt DA (snpS s dst n) Q ra R'
         (writeLog (writeLog Mt' [(fp + 12, 4, BitVec.ofNat 64 (w - c))]) [(fp, 8, BitVec.ofNat 64 (p + c))])) :
-    NW live Dt DA (snpS s dst n) Q 0x800143b8#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x800143b8#64 R Mt := by
   have G' := G
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hsl, hsh, hsh', hdisj⟩ := G'
-  nx_run hlive using [h15, h9] at 0x800069c4
+  snp_run hlive using [h15, h9] at 0x800069c4
   refine memmove_nw hlive p src c g _ Mt G ?_ ?_ ?_ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide) hwin
     (fun R' Mt' hF hcp => ?_)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10
@@ -161,10 +161,10 @@ theorem ssp_B {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : 
     (hwin : ReadWin Dt DA (snpS s dst n) Mt src (src + min len w) g)
     (hk : ∀ R' Mt', R' 10 = 0#64 → R' 2 = BitVec.ofNat 64 (sp + 64) → R' 8 = s0 → R' 9 = s1 →
       (∀ z, 18 ≤ z → z ≤ 27 → R' z = R z) → Copied Mt' Mt p src (min len w) g →
-      NW live Dt DA (snpS s dst n) Q ra R'
+      SnpW live Dt DA (snpS s dst n) Q ra R'
         (writeLog (writeLog Mt' [(fp + 12, 4, BitVec.ofNat 64 (w - min len w))])
           [(fp, 8, BitVec.ofNat 64 (p + min len w))])) :
-    NW live Dt DA (snpS s dst n) Q 0x800143a0#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x800143a0#64 R Mt := by
   have n11 : (R 11).toNat = fp := by rw [h11]; simp only [BitVec.toNat_ofNat]; omega
   have n13 : (R 13).toNat = len := by rw [h13]; simp only [BitVec.toNat_ofNat]; omega
   have n9 : (R 9).toNat = w := by rw [h9]; simp only [BitVec.toNat_ofNat]; omega
@@ -172,7 +172,7 @@ theorem ssp_B {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : 
     rw [toNat_ofNat_lt (by omega)]; exact hpp
   have hfl' : ldv .lh Mt (BitVec.ofNat 64 (fp + 16)).toNat = 0x208#64 := by
     rw [toNat_ofNat_lt (by omega)]; exact hfl
-  nx_run hlive using [ofNat_add_ofNat, h2, h9, h11, h12, h13, hpp', hfl'] at 0x800143b8
+  snp_run hlive using [ofNat_add_ofNat, h2, h9, h11, h12, h13, hpp', hfl'] at 0x800143b8
   all_goals rename_i hb
   all_goals (
     refine ssp_call hlive sp fp p src (min len w) w g ra s0 s1 _ Mt hsp1 hsp2 hsp8 hs hs1 hfp1 hfp2
@@ -217,13 +217,13 @@ theorem ssputs_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (hwin : ReadWin Dt DA (snpS s dst n) Mt src (src + min len w) g)
     (hk : ∀ R' Mt', R' 10 = 0#64 → R' 2 = R 2 → R' 8 = R 8 → R' 9 = R 9 →
       (∀ z, 18 ≤ z → z ≤ 27 → R' z = R z) → PutsOut Mt Mt' sp fp p src (min len w) w g →
-      NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
   have n2 : (R 2).toNat = sp := by rw [h2]; simp only [BitVec.toNat_ofNat]; omega
   have n11 : (R 11).toNat = fp := by rw [h11]; simp only [BitVec.toNat_ofNat]; omega
   have hw' : ldv .lw Mt (BitVec.ofNat 64 (fp + 12)).toNat = BitVec.ofNat 64 w := by
     rw [toNat_ofNat_lt (by omega)]; exact hw
-  nx_run hlive using [ofNat_add_ofNat, h2, h11, hw'] at 0x800143a0
+  snp_run hlive using [ofNat_add_ofNat, h2, h11, hw'] at 0x800143a0
   -- the spills: `s1`, `s0`, `ra` at `sp - 24`, `sp - 16`, `sp - 8`
   have e40 : (BitVec.ofNat 64 (sp + 18446744073709551552 + 40)).toNat = sp - 64 + 40 := by
     simp only [BitVec.toNat_ofNat]; omega

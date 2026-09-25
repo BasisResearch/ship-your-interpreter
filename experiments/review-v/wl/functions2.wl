@@ -1,0 +1,1 @@
+fn make_adder(n){return fn(x){return x+n;};}var add5=make_adder(5);var f=add5;println(f==add5);println(make_adder);println(fn(x){return x;});fn compose(f,g){return fn(x){return f(g(x));};}var inc=fn(x){return x+1;};var dbl=fn(x){return x*2;};println(compose(inc,dbl)(10));

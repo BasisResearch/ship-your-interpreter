@@ -1,5 +1,6 @@
 import VsaIris.Interp.TopRunP
 import VsaIris.Interp.TopBoundary
+import VsaIris.Vsa.InterpImg
 
 /-!
 # `interp_run`'s entry resources from adequacy's (lane A, INTERP_DESIGN.md §5.2)
@@ -10,7 +11,7 @@ Adequacy hands the client one register points-to per entry of `topRegs`
 register file and `codeRes`. This file supplies them:
 
 * **the code** (`codeRes_of_boundary`): `interpText` is a slice of the fixed
-  image (`interpText_img`, one kernel `decide`), so `binImg` holds it
+  image (`interpText_img`, `Vsa/InterpImg.lean`), so `binImg` holds it
   persistently (`binImg_textOwn`); `gp`'s exclusive points-to becomes
   persistent by a ghost update (`reg_persist`);
 * **the registers** (`topRegs_carve`): `topRegs` is `PC`, `ra`, `gp`, `tp` and
@@ -28,48 +29,9 @@ open Vsa.MemRepr Vsa.Sim Vsa.Sim.LayoutInstance Vsa.While Vsa.RuntimeRepr
 
 /-! ## The interpreter's code is a slice of the fixed image -/
 
-/-- Every byte of `interpText` is the fixed binary's `.text` or `.rodata`
-byte at its address. -/
-theorem interpText_img :
-    interpText.all (fun p =>
-      (decide (textDom p.1) && textByte p.1 == p.2) ||
-        (decide (rodataDom p.1) && rodataByte p.1 == p.2)) = true := by
-  decide +kernel
-
-theorem interpText_img_mem :
-    ∀ p ∈ interpText, (textDom p.1 ∧ textByte p.1 = p.2) ∨
-      (rodataDom p.1 ∧ rodataByte p.1 = p.2) := by
-  intro p hp
-  have h := List.all_eq_true.1 interpText_img p hp
-  simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-  exact h
-
 section Code
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-/-- One image byte, read-only. -/
-theorem binImg_byte {a : Nat} {b : BitVec 8}
-    (h : (textDom a ∧ textByte a = b) ∨ (rodataDom a ∧ rodataByte a = b)) :
-    binImg (GF := GF) ⊢ a ↦ₘ□ b := by
-  unfold binImg roImg
-  iintro ⟨#Ht, #Hr⟩
-  rcases h with ⟨hd, rfl⟩ | ⟨hd, rfl⟩
-  · iapply Ht $$ %a %hd
-  · iapply Hr $$ %a %hd
-
-/-- A list of image bytes, read-only. -/
-theorem binImg_sepL :
-    ∀ l : List (Nat × BitVec 8),
-      (∀ p ∈ l, (textDom p.1 ∧ textByte p.1 = p.2) ∨ (rodataDom p.1 ∧ rodataByte p.1 = p.2)) →
-      binImg (GF := GF) ⊢ sepL l (fun p => p.1 ↦ₘ□ p.2)
-  | [], _ => by iintro _; simp only [sepL_nil]; iempintro
-  | q :: l, h => by
-    simp only [sepL_cons]
-    iintro #H
-    isplitl
-    · iapply binImg_byte (h q List.mem_cons_self) $$ H
-    · iapply binImg_sepL l (fun p hp => h p (List.mem_cons_of_mem _ hp)) $$ H
 
 /-- **The interpreter's text from the image.** -/
 theorem binImg_textOwn : binImg (GF := GF) ⊢ textOwn interpText :=

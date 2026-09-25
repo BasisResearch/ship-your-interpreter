@@ -26,7 +26,7 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[1]
 SUPPORT = ROOT / "scripts/templates/FieldCensus.lean"
-STRUCTURE = "Vsa.Sim.TermAssembly.TermResiduals"
+STRUCTURE = "Vsa.Sim.IHClause.Trivial.Residuals"
 LAYOUT = "Vsa.Sim.LayoutInstance.interpRunLayout"
 TIMEOUT_SECONDS = 240
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}

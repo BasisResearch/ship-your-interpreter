@@ -435,6 +435,8 @@ structure BootGap {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) (G : Fra
   stderr : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr
   /-- The C locale's data (`Stdio.StdioOK`; lane N2). -/
   locale : LocaleData c.σ.mem
+  /-- `stderr`'s write fields (`Stdio.StdioOK`; lane N3). -/
+  stderrStream : StderrStream c.σ.mem
   /-- The shared bytes' string read windows (H1's `SharedWin`). -/
   sharedWin : SharedWin b.D.shared
 
@@ -506,6 +508,7 @@ theorem gap (b : Boot c p) : BootGap b b.G where
   frame := b.frameChunks
   stderr := b.heapFacts.stderr
   locale := b.heapFacts.locale
+  stderrStream := b.heapFacts.stderrStream
   sharedWin := b.sharedWin
 
 end Boot
@@ -1103,7 +1106,7 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
     · iapply heapRes_of_bytes (b.blockHeapAt hroom) gap.brk_page gap.binblocks hH hρ $$ Hh
     isplitl [Hstd]
     · unfold Stdio.stdioOwn Stdio.stdioAt
-      have hok := stdioOK_of_mem b.ready.console b.ready.exit_runtime gap.stderr gap.locale
+      have hok := stdioOK_of_mem b.ready.console b.ready.exit_runtime gap.stderr gap.locale gap.stderrStream
       iexists memImg c.σ.mem
       isplitr [Hstd]
       · ipureintro; exact ⟨hok, Stdio.StdioOK.impureImg hok⟩

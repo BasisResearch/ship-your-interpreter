@@ -1,5 +1,6 @@
 import VsaIris.Vsa.SnpSvfConv
 import Vsa.Sim.SnprintfSpec39
+import VsaIris.Vsa.BvLits
 
 /-!
 # `_svfprintf_r`'s format loop
@@ -22,13 +23,13 @@ theorem svf_head {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
     (A : SvfAt s dst n R0 Mt0 p ap rt total R Mt)
     (hk : ∀ R', SvfAt s dst n R0 Mt0 p ap rt total R' Mt → R' 22 = BitVec.ofNat 64 p →
-      NW live Dt DA (snpS s dst n) Q 0x80007724#64 R' Mt) :
-    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80007724#64 R' Mt) :
+    SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   have h2 := A.core.r2
   have hf := A.core.fmt
-  nx_runF hlive using [h2, hf, sext_zero, BitVec.add_zero] at 0x80007724
+  snp_runF hlive using [h2, hf, sext_zero, BitVec.add_zero] at 0x80007724
   refine hk _ (A.scratch SG ?_ ?_ fun _ _ => rfl) ?_
   · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -132,8 +133,8 @@ theorem svf_iterS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (hk : ∀ R' Mt', SvfAt s dst n R0 Mt0 (p + k + 2) (ap + 8)
       (BitVec.ofNat 64 (total.length + k + len))
       (total ++ pieceBytes (imgM Dt) p k ++ pieceBytes (imgM Dt) a len) R' Mt' →
-      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   have hFlo := FG.lo
@@ -168,9 +169,6 @@ theorem svf_iterS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   exact A6
 
 /-! ## Renderings -/
-
-/-- A string's bytes (ASCII). -/
-def strBytes (x : String) : List (BitVec 8) := x.toList.map fun c => BitVec.ofNat 8 c.toNat
 
 theorem vSg_eq (v : BitVec 64) : vSg v = if 2 ^ 63 ≤ v.toNat then 45 else 0 := by
   unfold vSg
@@ -241,7 +239,7 @@ def IntK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
   ∀ R' Mt' (g : Nat → BitVec 8), (∀ a, (a < s - 1024 ∨ s ≤ a) → g a = imgM Dt a) →
     SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 (c + (strBytes (Vsa.While.intToString v.toInt)).length))
       (total ++ catPieces g L ++ strBytes (Vsa.While.intToString v.toInt)) R' Mt' →
-    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt'
+    SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt'
 
 /-- From the integer's `IntAt` (`0x80008100`) to the loop head. -/
 theorem svf_intTail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
@@ -251,7 +249,7 @@ theorem svf_intTail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (IA : IntAt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L (vMag v) (vSg v) R Mt)
     (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
     (hk : IntK live Dt DA Q s dst n R0 Mt0 p ap c total L v) :
-    NW live Dt DA (snpS s dst n) Q 0x80008100#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x80008100#64 R Mt := by
   have hs1 := SG.s_lo
   refine svf_digits hlive R Mt SG IA hL hc hsum fun R1 Mt1 K PI DG => ?_
   refine svf_print hlive R1 Mt1 SG PI fun R2 Mt2 g hg1 hg2 A2 => ?_
@@ -282,8 +280,8 @@ theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (hk : ∀ R' Mt', SvfAt s dst n R0 Mt0 (p + k + 4) (ap + 8)
       (BitVec.ofNat 64 (total.length + k + (strBytes (Vsa.While.intToString v.toInt)).length))
       (total ++ pieceBytes (imgM Dt) p k ++ strBytes (Vsa.While.intToString v.toInt)) R' Mt' →
-      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   have hFlo := FG.lo
@@ -355,8 +353,8 @@ theorem svf_iterD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (hk : ∀ R' Mt', SvfAt s dst n R0 Mt0 (p + k + 2) (ap + 8)
       (BitVec.ofNat 64 (total.length + k + (strBytes (Vsa.While.intToString v.toInt)).length))
       (total ++ pieceBytes (imgM Dt) p k ++ strBytes (Vsa.While.intToString v.toInt)) R' Mt' →
-      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   have hFlo := FG.lo
@@ -404,7 +402,7 @@ theorem svf_iterEnd {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (hz : imgM Dt (p + k) = 0#8) (hc : total.length + k + 1 < 2 ^ 31) (hal : (R0 1).toNat % 4 = 0)
     (hk : SvfRetK live Dt DA Q s dst n R0 Mt0 (BitVec.ofNat 64 (total.length + k))
       (total ++ pieceBytes (imgM Dt) p k)) :
-    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+    SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   have hFlo := FG.lo

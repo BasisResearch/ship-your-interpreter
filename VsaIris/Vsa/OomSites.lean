@@ -195,6 +195,7 @@ theorem oom80002a38_ok : oom80002a38.OK where
   fwPc := rfl
   fwTgt := rfl
   fwText := by decide +kernel
+  fwAlign := by decide
   exCert := oom80002a38Ex_cert
   exPc := rfl
   exTgt := rfl
@@ -389,6 +390,7 @@ theorem oom80002bd0_ok : oom80002bd0.OK where
   fwPc := rfl
   fwTgt := rfl
   fwText := by decide +kernel
+  fwAlign := by decide
   exCert := oom80002bd0Ex_cert
   exPc := rfl
   exTgt := rfl
@@ -583,6 +585,7 @@ theorem oom80003140_ok : oom80003140.OK where
   fwPc := rfl
   fwTgt := rfl
   fwText := by decide +kernel
+  fwAlign := by decide
   exCert := oom80003140Ex_cert
   exPc := rfl
   exTgt := rfl
@@ -808,6 +811,7 @@ theorem oom80003e28_ok : oom80003e28.OK where
   fwPc := rfl
   fwTgt := rfl
   fwText := by decide +kernel
+  fwAlign := by decide
   exCert := oom80003e28Ex_cert
   exPc := rfl
   exTgt := rfl

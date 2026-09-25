@@ -148,6 +148,7 @@ message. -/
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
       | (intro _; ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8] at 0x80002ebc)
+      | skip
 
 /- Falsy, two arguments, the second a string: its payload is the message. -/
 #ix_seg na_fail2s {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -950,9 +951,7 @@ theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     iframe Hcode Himg Hsl Hv Hjb Hw Hst Hk Hms
   intro F'
   refine na_fail2o (n := n) c.hlive f.h2 h10 (by omega) hs2 hs3 (by omega) (by omega) ha1 (by omega) f.sa
-    (f.sc.trans (by rw [hn2])) hkw (kind_ne3 hk3) ?_ ?_
-  rotate_left
-  · intros; rename_i hc; exact absurd (kind_ne3 hk3) hc
+    (f.sc.trans (by rw [hn2])) hkw (kind_ne3 hk3) ?_
   intros; apply swp_closeF
   dsimp only [F']
   unfold NaRest

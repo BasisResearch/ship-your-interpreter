@@ -21,7 +21,7 @@ def SvfLoopRun (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Mt0 : Mem) (p ap : Nat) (total : List (BitVec 8)) : Prop :=
   ∀ R Mt, SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 0) [] R Mt →
     SvfRetK live Dt DA Q s dst n R0 Mt0 (BitVec.ofNat 64 total.length) total →
-    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt
+    SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt
 
 /-- What `snprintf` leaves: the stream cut at `n - 1` and a NUL in
 `dst[0, n)`, everything outside its scratch and `dst` unchanged. -/
@@ -46,8 +46,8 @@ theorem snp_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
       (∀ i, i < min total.length (n - 1) → imgM Mt' (dst + i) = total.getD i 0) →
       imgM Mt' (dst + min total.length (n - 1)) = 0#8 →
       (∀ a, ¬ (dst ≤ a ∧ a < dst + n) → imgM Mt' a = imgM Mt a) →
-      NW live Dt DA (snpS s dst n) Q ra R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80005cbc#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q ra R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80005cbc#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   have hsa := SG.s_al
@@ -64,7 +64,7 @@ theorem snp_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   have hpw' : ldv .ld Mt (BitVec.ofNat 64 (s - 272 + 8)).toNat =
       BitVec.ofNat 64 (dst + min total.length (n - 1)) := by
     rw [toNat_ofNat_lt (by omega), show s - 272 + 8 = snpFP s by simp only [snpFP]; omega]; exact hpw
-  nx_runF [20] hlive using [ofNat_add_ofNat, h2, h8, h10, hng, hn0', hpw', hra, hS0, hS1]
+  snp_runF [20] hlive using [ofNat_add_ofNat, h2, h8, h10, hng, hn0', hpw', hra, hS0, hS1]
   have hmin : min total.length (n - 1) < n := by omega
   refine hk _ _ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -122,8 +122,8 @@ theorem snp_pro {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
     (h2 : R 2 = BitVec.ofNat 64 s) (h10 : R 10 = BitVec.ofNat 64 dst) (h11 : R 11 = BitVec.ofNat 64 n)
     (hIm : InDA DA 0x8001b970 0x8001b978)
-    (hk : ∀ R' Mt', SnpAtSvf s dst n R Mt R' Mt' → NW live Dt DA (snpS s dst n) Q 0x80007654#64 R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
+    (hk : ∀ R' Mt', SnpAtSvf s dst n R Mt R' Mt' → SnpW live Dt DA (snpS s dst n) Q 0x80007654#64 R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   have hsa := SG.s_al
@@ -136,7 +136,7 @@ theorem snp_pro {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
   have hsz := snez_pos hn0 (by omega)
   have hsw := subw_ofNat' (w := n) (c := 1) (by omega) (by omega) (by omega)
-  nx_runF hlive using [ofNat_add_ofNat, h2, h10, h11, hx, hbl, eS, hsz, hsw] at 0x80007654
+  snp_runF hlive using [ofNat_add_ofNat, h2, h10, h11, hx, hbl, eS, hsz, hsw] at 0x80007654
   refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -182,8 +182,8 @@ theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (hloop : ∀ R0' Mt0', SnpAtSvf s dst n R Mt R0' Mt0' →
       SvfLoopRun live Dt DA Q s dst n R0' Mt0' (R0' 12).toNat (R0' 13).toNat total)
     (hk : ∀ R' Mt', R' 1 = R 1 → R' 2 = R 2 → (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z) →
-      SnpOut Mt Mt' s dst n total → NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
+      SnpOut Mt Mt' s dst n total → SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
   refine snp_pro hlive R Mt SG h2 h10 h11 hIm fun R1 Mt1 SA => ?_

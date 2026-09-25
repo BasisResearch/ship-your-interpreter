@@ -1,4 +1,5 @@
 import VsaIris.Vsa.SnpView
+import VsaIris.Vsa.Stdout.OutSpec
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Interp.NewlibCall
 import VsaIris.Interp.HelperRun
@@ -11,14 +12,14 @@ A `snprintf` hole is a `fnSpecW` in H5's calling convention: argument
 registers (`argsAt`), the destination block (`blockOwn`), newlib's data
 (`stdioOwn`), the call frame (`callFrame`: `sp`, 1024 bytes of stack, the
 callee-saved registers, the temporaries, `gp`, the image), and read-only
-inputs. `snpSpec_of_run` turns a run over `NW` from the entry into that
-specification: the registers become one register file (`snpCall_regs`), the
+inputs. `snpSpec_of_run` turns a run over `SnpW` from the entry into that
+specification: the registers become one register file (`call_regs`), the
 owned bytes one set `snpS` (`snpBytes`, every disjointness from ownership),
 the read-only cells the run's code and data view (`roOwn_snp`), and the end
 state gives the bytes back (`snpBytes_back`) with the destination's image.
 
-The register and read-only-disjointness lemmas follow lane N1's
-`Vsa/Stdout/OutSpec.lean` (`argsAt_fn`, `call_regs`, `ownSet_ro_off`).
+The register and read-only-disjointness lemmas are lane N1's
+(`Vsa/Stdout/OutSpec.lean`: `call_regs`, `ownSet_ro_off`).
 -/
 
 namespace VsaIris.Sym
@@ -27,109 +28,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib
 open VsaIris.Inst
 
-section Regs
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-theorem snpArgRegs_nodup (k : Nat) : (argRegs.drop k).Nodup :=
-  List.Nodup.sublist (List.drop_sublist _ _) (by decide)
-
-/-- `argsAt` as one register function. -/
-theorem snpArgsAt_fn : ∀ (k : Nat) (ws : List (BitVec 64)), k + ws.length ≤ 8 →
-    iprop(sepL (GF := GF) (ws.zipIdx k) (fun p => (10 + p.2) ↦ᵣ p.1) ∗
-      clobbered (argRegs.drop (k + ws.length))) ⊢
-      ∃ fa : Nat → BitVec 64, sepL (argRegs.drop k) (fun r => r ↦ᵣ fa r) ∗
-        ⌜∀ i (h : i < ws.length), fa (10 + k + i) = ws[i]⌝
-  | k, [], _ => by
-    simp only [List.zipIdx_nil, sepL_nil, List.length_nil, Nat.add_zero]
-    iintro ⟨-, H⟩
-    ihave ⟨%f, H⟩ := clobbered_fn _ (snpArgRegs_nodup k) $$ H
-    iexists f
-    iframe H
-    ipureintro; intro i h; simp at h
-  | k, w :: ws, hk => by
-    have hk8 : k < 8 := by simp at hk; omega
-    have hdrop : argRegs.drop k = (10 + k) :: argRegs.drop (k + 1) := by
-      revert hk8; generalize k = j; intro hj
-      rcases j with _ | _ | _ | _ | _ | _ | _ | _ | j <;> first | rfl | omega
-    have hnot : 10 + k ∉ argRegs.drop (k + 1) := by
-      have := snpArgRegs_nodup k; rw [hdrop] at this; exact (List.nodup_cons.mp this).1
-    rw [List.zipIdx_cons, sepL_cons]
-    iintro ⟨⟨H0, H⟩, Hc⟩
-    ihave ⟨%fa, Hs, %hfa⟩ := snpArgsAt_fn (k + 1) ws (by simp at hk; omega) $$ [H Hc]
-    · simp only [List.length_cons, show k + (ws.length + 1) = k + 1 + ws.length by omega]
-      iframe H Hc
-    iexists fun r => if r = 10 + k then w else fa r
-    rw [hdrop, sepL_cons]
-    isplitl
-    · isplitl [H0]
-      · simp only [ite_true]; iexact H0
-      rw [sepL_congr (Φ := fun r => iprop(r ↦ᵣ (if r = 10 + k then w else fa r)))
-        (Ψ := fun r => iprop(r ↦ᵣ fa r)) (fun r hr => by
-        simp [show r ≠ 10 + k from fun e => hnot (e ▸ hr)])]
-      iexact Hs
-    · ipureintro
-      intro i h
-      rcases i with _ | i
-      · simp
-      · have := hfa i (by simp at h; omega)
-        simp only [List.getElem_cons_succ]
-        rw [if_neg (by omega), ← this]; congr 1; omega
-
-/-- **A call's registers as one register file.** -/
-theorem snpCall_regs (entry r s : BitVec 64) (vs : List (BitVec 64)) (cs : Nat → BitVec 64)
-    (hlen : vs.length ≤ 8) :
-    iprop(VsaIris.PC ↦ᵣ entry ∗ VsaIris.ra ↦ᵣ r ∗ argsAt (GF := GF) vs ∗ sp ↦ᵣ s ∗
-      sepL Newlib.calleeSaved (fun x => x ↦ᵣ cs x) ∗ clobbered tmpRegs) ⊢
-      ∃ rv : Nat → BitVec 64, iprop(VsaIris.PC ↦ᵣ entry ∗ VsaIris.ra ↦ᵣ rv 1 ∗ regFile rv) ∗
-        ⌜rv 1 = r ∧ rv 2 = s ∧ (∀ i (h : i < vs.length), rv (10 + i) = vs[i]) ∧
-          ∀ x ∈ Newlib.calleeSaved, rv x = cs x⌝ := by
-  classical
-  iintro ⟨Hpc, Hra, Ha, Hsp, Hcs, Ht⟩
-  have h0 := snpArgsAt_fn (GF := GF) 0 vs (by omega)
-  simp only [Nat.zero_add, List.drop_zero] at h0
-  unfold argsAt
-  ihave ⟨%fa, Ha, %hfa⟩ := h0 $$ Ha
-  ihave ⟨%ft, Ht⟩ := clobbered_fn tmpRegs (by decide) $$ Ht
-  let rv : Nat → BitVec 64 := fun x =>
-    if x = 1 then r else if x = 2 then s else
-      if x ∈ argRegs then fa x else if x ∈ tmpRegs then ft x else cs x
-  iexists rv
-  isplitl
-  · have e1 : rv 1 = r := by simp [rv]
-    rw [e1]
-    iframe Hpc Hra
-    · iapply (regFile_newlib rv).2
-      have e2 : rv 2 = s := by simp [rv]
-      rw [e2]
-      iframe Hsp
-      rw [sepL_congr (Φ := fun x => iprop(x ↦ᵣ rv x)) (Ψ := fun x => iprop(x ↦ᵣ cs x))
-        (l := Newlib.calleeSaved) (fun x hx => by
-          simp only [Newlib.calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
-          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-            simp [rv, argRegs, tmpRegs])]
-      rw [sepL_congr (Φ := fun x => iprop(x ↦ᵣ rv x)) (Ψ := fun x => iprop(x ↦ᵣ ft x))
-        (l := tmpRegs) (fun x hx => by
-          simp only [tmpRegs, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
-          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [rv, argRegs, tmpRegs])]
-      rw [sepL_congr (Φ := fun x => iprop(x ↦ᵣ rv x)) (Ψ := fun x => iprop(x ↦ᵣ fa x))
-        (l := argRegs) (fun x hx => by
-          simp only [argRegs, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
-          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [rv, argRegs])]
-      iframe Hcs Ht Ha
-  · ipureintro
-    refine ⟨by simp [rv], by simp [rv], fun i h => ?_, fun x hx => ?_⟩
-    · have := hfa i h
-      have hi : 10 + i ∈ argRegs := by
-        simp only [argRegs, List.mem_cons, List.not_mem_nil, _root_.or_false]; omega
-      simp only [rv, hi, ite_true]
-      rw [if_neg (by omega), if_neg (by omega)]
-      simpa using this
-    · simp only [Newlib.calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
-      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-        simp [rv, argRegs, tmpRegs]
-
-end Regs
 
 /-! ## The owned bytes -/
 
@@ -225,42 +123,6 @@ theorem snpBytes_back (mv : Nat → BitVec 8) (s dst n : Nat) (hs : 1024 ≤ s)
   · iapply ownSet_iff _ (fun a => ⟨fun h => h.2, fun h => ⟨⟨(snpS_iff hs a).2 (.inr (.inr h)),
       fun h' => D.stdio_dst a h' h⟩, h⟩⟩) $$ Hd
 
-/-- A persistent byte is not in an owned list. -/
-theorem snpSepL_ro_ne (y : Nat) (b : BitVec 8) (f : Nat → BitVec 8) :
-    ∀ l : List Nat, sepL (GF := GF) l (fun a => a ↦ₘ f a) ∗ (y ↦ₘ□ b) ⊢ ⌜y ∉ l⌝
-  | [] => by iintro _; ipureintro; simp
-  | x :: xs => by
-    rw [sepL_cons]
-    iintro ⟨⟨Hx, Hxs⟩, #Hy⟩
-    ihave %h1 := memRO_excl_ne y x b (f x) $$ [Hx]
-    · iframe Hy Hx
-    ihave %h2 := snpSepL_ro_ne y b f xs $$ [Hxs]
-    · iframe Hxs Hy
-    ipureintro
-    simp only [List.mem_cons, not_or]
-    exact ⟨h1, h2⟩
-
-/-- Persistent bytes are off an owned byte set. -/
-theorem snpOwnSet_ro_off (S : Nat → Prop) (f : Nat → BitVec 8) :
-    ∀ text : List (Nat × BitVec 8), ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗
-      sepL text (fun p => p.1 ↦ₘ□ p.2) ⊢ ⌜∀ p ∈ text, ¬ S p.1⌝
-  | [] => by iintro _; ipureintro; simp
-  | q :: qs => by
-    rw [sepL_cons]
-    iintro ⟨HS, #Hq, #Hqs⟩
-    ihave %h2 := snpOwnSet_ro_off S f qs $$ [HS]
-    · iframe HS Hqs
-    rw [show ownSet S (fun a => a ↦ₘ f a) = iprop(∃ l : List Nat,
-        ⌜l.Nodup ∧ ∀ a, a ∈ l ↔ S a⌝ ∗ sepL l (fun a => a ↦ₘ f a)) from rfl]
-    icases HS with ⟨%l, %⟨_, hmem⟩, Hl⟩
-    ihave %h1 := snpSepL_ro_ne q.1 q.2 f l $$ [Hl]
-    · iframe Hl Hq
-    ipureintro
-    intro p hp
-    rcases List.mem_cons.mp hp with rfl | hp
-    · exact fun h => h1 ((hmem _).2 h)
-    · exact h2 p hp
-
 end Own
 
 /-! ## The specification from a run -/
@@ -299,8 +161,8 @@ theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
       (∀ i (h : i < args.length), R (10 + i) = args[i]) → LocaleMt Mt →
       (∀ a ∈ DA x, ¬ snpS s.toNat dst n a) → SnpDisj s.toNat dst n →
       (∀ R' Mt', SnpRet R Mt s.toNat dst n R' Mt' → Post (imgM Mt') →
-        NW live (viewMem (f x) (DA x)) (DA x) (snpS s.toNat dst n) Q (R 1) R' Mt') →
-      NW live (viewMem (f x) (DA x)) (DA x) (snpS s.toNat dst n) Q 0x80005c44#64 R Mt) :
+        SnpW live (viewMem (f x) (DA x)) (DA x) (snpS s.toNat dst n) Q (R 1) R' Mt') →
+      SnpW live (viewMem (f x) (DA x)) (DA x) (snpS s.toNat dst n) Q 0x80005c44#64 R Mt) :
     ⊢ fnSpecW Wp snprintfEntry Pre Post' := by
   classical
   unfold fnSpecW
@@ -309,9 +171,11 @@ theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
   ihave ⟨%hal, Hargs, Hbuf, HR, Hstd, Hcf⟩ := hP r $$ HP
   unfold callFrame
   icases Hcf with ⟨Hsp, Hst, Hcs, Ht, #Hgp, #Himg⟩
-  ihave ⟨%R, ⟨Hpc, Hra, Hregs⟩, %⟨h1, h2, hargs, hcs⟩⟩ := snpCall_regs 0x80005c44#64 r s args cs hlen $$
+  ihave ⟨%R, Hregs, %⟨h32, h1, h2, hargs, hcs⟩⟩ := call_regs 0x80005c44#64 r s args cs hlen $$
     [Hpc Hra Hargs Hsp Hcs Ht]
   · iframe Hpc Hra Hargs Hsp Hcs Ht
+  ihave ⟨Hpc, Hra, Hregs⟩ := (sepL_iRegs R).1 $$ Hregs
+  rw [h32]
   unfold stdioOwn stdioAt
   icases Hstd with ⟨%img, %⟨hok, himp⟩, Hx, #Himp⟩
   ihave ⟨%x, #Hd, %hPf⟩ := hdata $$ [HR]
@@ -319,7 +183,7 @@ theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
   unfold stackScratch snprintfNeed
   ihave ⟨%Mt, HS, %⟨hMt, D⟩⟩ := snpBytes img s.toNat dst n hs $$ [Hx Hst Hbuf]
   · iframe Hx Hst Hbuf
-  ihave ⟨⟨HS, -⟩, %hoff⟩ := keep_pure (snpOwnSet_ro_off (snpS s.toNat dst n) (imgM Mt)
+  ihave ⟨⟨HS, -⟩, %hoff⟩ := keep_pure (ownSet_ro_off (snpS s.toNat dst n) (imgM Mt)
     (dataOf (viewMem (f x) (DA x)) (DA x))) $$ [HS]
   · iframe HS Hd
   have hoff' : ∀ a ∈ DA x, ¬ snpS s.toNat dst n a := fun a ha =>
@@ -327,7 +191,7 @@ theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
   let F : IProp GF := iprop((PC ↦ᵣ r -∗ ra ↦ᵣ r -∗ Post' r -∗ Wp.W Φ) ∗ gp ↦ᵣ□ Newlib.gpV ∗
     binImg ∗ impureRO)
   have hrun' := hrun x (RunK Wp Φ F (snpS s.toNat dst n)) R Mt hPf (by rw [h1]; exact hal) h2 hargs
-    (localeMt_of hok hMt) hoff' D fun R' Mt' K hpost => ?_
+    (localeMt_of hok fun a h1 h2 => hMt a ⟨h1, h2⟩) hoff' D fun R' Mt' K hpost => ?_
   · iapply wp_swpF Wp (F := F) hrun'
     isplitl []
     · iapply roOwn_snp _ (viewMem (f x) (DA x)) (DA x) .rfl $$ [Hd]
@@ -395,9 +259,9 @@ theorem snpSpec_of_runO {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel 
       (∀ i (h : i < args.length), R (10 + i) = args[i]) → LocaleMt Mt →
       (∀ a ∈ DAro x ++ DAown x, ¬ snpS s.toNat dst n a) → SnpDisj s.toNat dst n →
       (∀ R' Mt', SnpRet R Mt s.toNat dst n R' Mt' → Post (imgM Mt') →
-        NW live (viewMem (f x) (DAro x ++ DAown x)) (DAro x ++ DAown x) (snpS s.toNat dst n) Q
+        SnpW live (viewMem (f x) (DAro x ++ DAown x)) (DAro x ++ DAown x) (snpS s.toNat dst n) Q
           (R 1) R' Mt') →
-      NW live (viewMem (f x) (DAro x ++ DAown x)) (DAro x ++ DAown x) (snpS s.toNat dst n) Q
+      SnpW live (viewMem (f x) (DAro x ++ DAown x)) (DAro x ++ DAown x) (snpS s.toNat dst n) Q
         0x80005c44#64 R Mt) :
     ⊢ fnSpecW Wp snprintfEntry Pre Post' := by
   classical
@@ -406,9 +270,11 @@ theorem snpSpec_of_runO {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel 
   ihave ⟨%hal, Hargs, Hbuf, HR, Hstd, Hcf⟩ := hP r $$ HP
   unfold callFrame
   icases Hcf with ⟨Hsp, Hst, Hcs, Ht, #Hgp, #Himg⟩
-  ihave ⟨%R, ⟨Hpc, Hra, Hregs⟩, %⟨h1, h2, hargs, hcs⟩⟩ := snpCall_regs 0x80005c44#64 r s args cs hlen $$
+  ihave ⟨%R, Hregs, %⟨h32, h1, h2, hargs, hcs⟩⟩ := call_regs 0x80005c44#64 r s args cs hlen $$
     [Hpc Hra Hargs Hsp Hcs Ht]
   · iframe Hpc Hra Hargs Hsp Hcs Ht
+  ihave ⟨Hpc, Hra, Hregs⟩ := (sepL_iRegs R).1 $$ Hregs
+  rw [h32]
   unfold stdioOwn stdioAt
   icases Hstd with ⟨%img, %⟨hok, himp⟩, Hx, #Himp⟩
   ihave ⟨%x, #Hd, HO, %⟨hPf, hO⟩, Hback⟩ := hdata $$ [HR]
@@ -416,7 +282,7 @@ theorem snpSpec_of_runO {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel 
   unfold stackScratch snprintfNeed
   ihave ⟨%Mt, HS, %⟨hMt, D⟩⟩ := snpBytes img s.toNat dst n hs $$ [Hx Hst Hbuf]
   · iframe Hx Hst Hbuf
-  ihave ⟨⟨HS, -⟩, %hoff1⟩ := keep_pure (snpOwnSet_ro_off (snpS s.toNat dst n) (imgM Mt)
+  ihave ⟨⟨HS, -⟩, %hoff1⟩ := keep_pure (ownSet_ro_off (snpS s.toNat dst n) (imgM Mt)
     (dataOf (viewMem (f x) (DAro x ++ DAown x)) (DAro x))) $$ [HS]
   · iframe HS Hd
   ihave %hoff2 := ownSet_disj _ _ _ _ $$ [HO HS]
@@ -431,8 +297,8 @@ theorem snpSpec_of_runO {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel 
   let Qe : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop := fun rv mv =>
     rv 32 = r ∧ rv 1 = r ∧ rv 2 = s ∧ (∀ z ∈ Newlib.calleeSaved, rv z = cs z) ∧
       (∀ a, stdioExcl a → mv a = img a) ∧ Post mv
-  have hsw : NW live Dt (DAro x ++ DAown x) (snpS s.toNat dst n) Qe 0x80005c44#64 R Mt :=
-    hrun x Qe R Mt hPf (by rw [h1]; exact hal) h2 hargs (localeMt_of hok hMt) hoff D
+  have hsw : SnpW live Dt (DAro x ++ DAown x) (snpS s.toNat dst n) Qe 0x80005c44#64 R Mt :=
+    hrun x Qe R Mt hPf (by rw [h1]; exact hal) h2 hargs (localeMt_of hok fun a h1 h2 => hMt a ⟨h1, h2⟩) hoff D
       fun R' Mt' K hpost => swp_done fun rv mv hm => by
         have hk : ∀ z, z ∈ nRegs → z ≠ 32 → rv z = R' z := fun z hz hne => hm.regs z hz hne
         refine ⟨hm.pc.trans h1, ?_, ?_, fun z hz => ?_, fun a ha => ?_, ?_⟩

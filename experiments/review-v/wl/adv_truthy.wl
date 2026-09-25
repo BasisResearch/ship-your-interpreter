@@ -1,0 +1,1 @@
+println(!!"",!!"a",!!0,!!1,!!null,!!fn(){return 0;});if(""){println("t");}else{println("f");}

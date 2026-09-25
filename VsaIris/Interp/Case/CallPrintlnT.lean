@@ -25,7 +25,7 @@ theorem caseT_CallPrintln {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {st st1 st2 : St} {d env : Nat} {f : Expr} {args : List Expr} {vs : List Value} {nf na : Nat}
-    (hN : NativeEntries N) (hd : DispSupply (GF := GF) N)
+    (hN : NativeEntries N) (hd : DispSupply (GF := GF) N) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
     (Df : EvalECost st d env f st1 (.native .println) nf) (hlen : args.length ≤ maxArgs)
     (Da : EvalArgsCost st1 d env args st2 vs na)
     (hf : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env f st1 (.native .println) nf Df)
@@ -57,7 +57,7 @@ theorem caseT_CallPrintln {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   iapply callNativeOut hlive (twpW (vsaModel live)) (nf := .println) (entry := nativePrintlnPC)
     (out := fun st vs o => o ++ printArgs st vs ++ "\n") (need := nativePrintlnNeed)
     (by show N.println = _; rw [hN.println]; rfl) (by decide) (by unfold maxArgs at hlen; omega) hsg hneed
-    hroom hslg hal hd hregs.sp hcall
+    hroom hslg hal hd hregs.sp hcall hEL
   isplitl []
   · iexact Hsp
   iframe Hcode Hast Hv Hav Hms Hst Hw Hslot

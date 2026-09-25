@@ -1,19 +1,22 @@
 import VsaIris.Vsa.SnpSnprintf
 import VsaIris.Vsa.StdioRead
+import VsaIris.Vsa.Stderr.Mt
 import VsaIris.Vsa.BinImg
 import VsaIris.Interp.Arm
 
 /-!
 # A `snprintf` run's read-only cells and boundary facts (lane N2)
 
-`NW live Dt DA` reads the family's code (`snpText`, live) and a persistent
+`SnpW live Dt DA` reads the family's code (`snpText`, live) and a persistent
 data view: `Dt` on the addresses `DA`. A hole's data view is a byte function
 `f` on `DA` (`viewMem f DA`) whose bytes the caller holds read-only
 (`sepL_view`): `.rodata` and `_impure_ptr` (`snpImg`: the format, `"."`,
 the conversion table `TabAt`), and the `%s` argument's string.
 
 newlib's data enters the run at a `StdioOK` image; the locale words
-`_svfprintf_r` reads come from it as load values (`LocaleMt`, `localeMt_of`).
+`_svfprintf_r` reads come from it as load values (lane N3's `LocaleMt`,
+`localeMt_of`, `Vsa/Stderr/Mt.lean`), and survive the run's writes
+(`LocaleMt.transport`).
 -/
 
 namespace VsaIris.Sym
@@ -159,38 +162,6 @@ theorem roOwn_snp (P : IProp GF) [Persistent P] (Dt : Mem) (DA : List Nat)
 end Own
 
 /-! ## The locale at the boundary -/
-
-/-- The locale words `_svfprintf_r` reads, as load values. -/
-structure LocaleMt (Mt : Mem) : Prop where
-  mbtowc : ldv .ld Mt 0x8001b880 = 0x80012268#64
-  mbMax : ldv .lbu Mt 0x8001b8f8 = 1#64
-  decPoint : ldv .ld Mt 0x8001b898 = 0x80019770#64
-
-theorem locale_imgLE {img : Nat → BitVec 8} {Mt : Mem}
-    (hM : ∀ a, stdioExcl a → imgM Mt a = img a) {a n v : Nat}
-    (hr : readLE (fillMem img dataList) a n = some v)
-    (hin : ∀ i, i < n → stdioExcl (a + i)) : imgLE (imgM Mt) a n = v := by
-  have h := readLE_memImg hr
-  rw [← h]
-  refine imgLE_congr fun i hi => ?_
-  rw [hM _ (hin i hi)]
-  unfold memImg
-  rw [fillMem_get img (mem_dataList (hin i hi).1)]
-  rfl
-
-/-- **The C locale at the boundary, as loads.** -/
-theorem localeMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
-    (hM : ∀ a, stdioExcl a → imgM Mt a = img a) : LocaleMt Mt := by
-  obtain ⟨_, _, _, hL⟩ := h.facts
-  have F : ∀ a n, 0x8001b53c ≤ a → a + n ≤ 0x8001b960 → ∀ i, i < n → stdioExcl (a + i) := by
-    intro a n h1 h2 i hi; unfold stdioExcl stdioFoot InRange impureW; omega
-  refine ⟨ldvf_ld_imgLE (locale_imgLE hM hL.mbtowc (F _ _ (by decide) (by decide))), ?_,
-    ldvf_ld_imgLE (locale_imgLE hM hL.decPoint (F _ _ (by decide) (by decide)))⟩
-  have h1 := locale_imgLE hM hL.mbMax (F _ _ (by decide) (by decide))
-  simp only [imgLE, Nat.mul_zero, Nat.add_zero, localeMbMaxAddr] at h1
-  show BitVec.zeroExtend 64 (imgM Mt 0x8001b8f8) = 1#64
-  rw [show imgM Mt 0x8001b8f8 = 1#8 from BitVec.eq_of_toNat_eq (by simpa using h1)]
-  rfl
 
 /-- The locale words survive a run that keeps newlib's data. -/
 theorem LocaleMt.transport {Mt Mt' : Mem} (h : LocaleMt Mt)

@@ -1,6 +1,7 @@
 import VsaIris.Vsa.SnpCtx
 import VsaIris.Interp.Arm
 import VsaIris.Vsa.ReallocMove
+import VsaIris.Vsa.BvLits
 
 /-!
 # `memmove` in a `snprintf` run
@@ -143,9 +144,6 @@ theorem Copied.sb {Mt Mt0 : Mem} {d src c : Nat} {g : Nat → BitVec 8} (h : Cop
 abbrev MMKeep (R R0 : Nat → BitVec 64) : Prop :=
   ∀ z, z ≠ 11 → z ≠ 13 → z ≠ 14 → z ≠ 15 → R z = R0 z
 
-theorem toNat_ofNat_lt {x : Nat} (h : x < 2 ^ 64) : (BitVec.ofNat 64 x).toNat = x := by
-  simp only [BitVec.toNat_ofNat]; omega
-
 theorem ofNat_add_one {x : Nat} (h : x + 1 < 2 ^ 64) :
     BitVec.ofNat 64 x + 1#64 = BitVec.ofNat 64 (x + 1) := by
   apply BitVec.eq_of_toNat_eq
@@ -176,12 +174,12 @@ theorem mm_byteLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (hal : (R0 1).toNat % 4 = 0)
     (hk : ∀ R' Mt', MMKeep R' R0 → (∀ i, i < len → imgM Mt' (d + i) = sb i) →
       (∀ a, a < d ∨ d + len ≤ a → imgM Mt' a = imgM Mt0 a) →
-      NW live Dt DA (snpS s dst n) Q (R0 1) R' Mt') :
+      SnpW live Dt DA (snpS s dst n) Q (R0 1) R' Mt') :
     ∀ k j (R : Nat → BitVec 64) (Mt : Mem), j + k = len → 0 < k →
       R 15 = BitVec.ofNat 64 (d + j) → R 11 = BitVec.ofNat 64 (src + j) →
       R 13 = BitVec.ofNat 64 (d + len) → MMKeep R R0 →
       (∀ i, i < j → imgM Mt (d + i) = sb i) → (∀ a, a < d ∨ d + j ≤ a → imgM Mt a = imgM Mt0 a) →
-      NW live Dt DA (snpS s dst n) Q 0x80006a0c#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80006a0c#64 R Mt := by
   intro k
   induction k with
   | zero => intro _ _ _ _ h; omega
@@ -198,7 +196,7 @@ theorem mm_byteLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
       simp only [LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend,
         BitVec.reduceSignExtend, BitVec.add_zero, BitVec.toNat_ofNat]; omega
     rw [e11, ldvf_lbu_readB hb hfD hfS]
-    nx_run hlive using [h15, h11, h13] at 0x80006a0c 0x80006a20
+    snp_run hlive using [h15, h11, h13] at 0x80006a0c 0x80006a20
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     all_goals rename_i hc
     all_goals rw [ofNat_add_one (by omega), ofNat_add_one (by omega),
@@ -260,8 +258,8 @@ structure MoveGeom (s dst n d src len : Nat) : Prop where
 (keeps the terms of a long run small). -/
 theorem nw_gen {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
-    {M : Mem} (P : Mem → Prop) (hP : P M) (h : ∀ M', P M' → NW live Dt DA S Q pc R M') :
-    NW live Dt DA S Q pc R M := h M hP
+    {M : Mem} (P : Mem → Prop) (hP : P M) (h : ∀ M', P M' → SnpW live Dt DA S Q pc R M') :
+    SnpW live Dt DA S Q pc R M := h M hP
 
 /-- A word copy's store: rebase the memory onto `Copied` one word longer, with
 the source window moved along. -/
@@ -290,29 +288,29 @@ theorem mm32_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (hkL : c + 32 < L → ∀ R' Mt', R' 11 = BitVec.ofNat 64 (src + (c + 32)) →
       R' 14 = BitVec.ofNat 64 (d + (c + 32)) → R' 16 = R 16 → R' 17 = R 17 → MWKeep R' R →
       Copied Mt' Mt0 d src (c + 32) g → ReadWin Dt DA (snpS s dst n) Mt' src (src + len) g →
-      NW live Dt DA (snpS s dst n) Q 0x80006a48#64 R' Mt')
+      SnpW live Dt DA (snpS s dst n) Q 0x80006a48#64 R' Mt')
     (hkX : c + 32 = L → ∀ R' Mt', R' 11 = BitVec.ofNat 64 (src + (c + 32)) →
       R' 14 = BitVec.ofNat 64 (d + (c + 32)) → R' 16 = R 16 → R' 17 = R 17 → MWKeep R' R →
-      Copied Mt' Mt0 d src (c + 32) g → NW live Dt DA (snpS s dst n) Q 0x80006a74#64 R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80006a48#64 R Mt := by
+      Copied Mt' Mt0 d src (c + 32) g → SnpW live Dt DA (snpS s dst n) Q 0x80006a74#64 R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80006a48#64 R Mt := by
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G
-  nx_run hlive using [h11, h14, h16]
+  snp_run hlive using [h11, h14, h16]
   snp_ld hw
-  nx_run hlive using [h11, h14, h16] at 0x80006a58
+  snp_run hlive using [h11, h14, h16] at 0x80006a58
   snp_sd hcp, hw => hcp1, hw1
-  nx_run hlive using [h11, h14, h16]
+  snp_run hlive using [h11, h14, h16]
   snp_ld hw1
-  nx_run hlive using [h11, h14, h16] at 0x80006a60
+  snp_run hlive using [h11, h14, h16] at 0x80006a60
   snp_sd hcp1, hw1 => hcp2, hw2
-  nx_run hlive using [h11, h14, h16]
+  snp_run hlive using [h11, h14, h16]
   snp_ld hw2
-  nx_run hlive using [h11, h14, h16] at 0x80006a68
+  snp_run hlive using [h11, h14, h16] at 0x80006a68
   snp_sd hcp2, hw2 => hcp3, hw3
-  nx_run hlive using [h11, h14, h16]
+  snp_run hlive using [h11, h14, h16]
   snp_ld hw3
-  nx_run hlive using [h11, h14, h16] at 0x80006a70
+  snp_run hlive using [h11, h14, h16] at 0x80006a70
   snp_sd hcp3, hw3 => hcp4, hw4
-  nx_run hlive using [h11, h14, h16] at 0x80006a48 0x80006a74
+  snp_run hlive using [h11, h14, h16] at 0x80006a48 0x80006a74
   all_goals rename_i hb
   all_goals (rw [show c + 8 + 8 + 8 + 8 = c + 32 by omega] at hcp4)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hb ⊢)
@@ -336,12 +334,12 @@ theorem mm_loop32 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (G : MoveGeom s dst n d src len) (hd8 : d % 8 = 0) (hL : L ≤ len) (hL32 : L % 32 = 0)
     (hk : ∀ R' Mt', MWKeep R' R0 → R' 11 = BitVec.ofNat 64 (src + L) →
       R' 14 = BitVec.ofNat 64 (d + L) → R' 17 = R0 17 → Copied Mt' Mt0 d src L g →
-      NW live Dt DA (snpS s dst n) Q 0x80006a74#64 R' Mt') :
+      SnpW live Dt DA (snpS s dst n) Q 0x80006a74#64 R' Mt') :
     ∀ m c (R : Nat → BitVec 64) (Mt : Mem), c + 32 * m = L → 0 < m →
       R 11 = BitVec.ofNat 64 (src + c) → R 14 = BitVec.ofNat 64 (d + c) →
       R 16 = BitVec.ofNat 64 (d + L) → R 17 = R0 17 → MWKeep R R0 → Copied Mt Mt0 d src c g →
       ReadWin Dt DA (snpS s dst n) Mt src (src + len) g →
-      NW live Dt DA (snpS s dst n) Q 0x80006a48#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80006a48#64 R Mt := by
   intro m
   induction m with
   | zero => intro _ _ _ _ h; omega
@@ -374,17 +372,17 @@ theorem mm8_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (hkL : c + 8 < E → ∀ R' Mt', R' 11 = BitVec.ofNat 64 (src + (c + 8)) →
       R' 14 = R 14 → R' 16 = R 16 → R' 13 = R 13 → MWKeep R' R →
       Copied Mt' Mt0 d src (c + 8) g → ReadWin Dt DA (snpS s dst n) Mt' src (src + len) g →
-      NW live Dt DA (snpS s dst n) Q 0x80006aac#64 R' Mt')
+      SnpW live Dt DA (snpS s dst n) Q 0x80006aac#64 R' Mt')
     (hkX : c + 8 = E → ∀ R' Mt', R' 11 = BitVec.ofNat 64 (src + (c + 8)) →
       R' 14 = R 14 → R' 16 = R 16 → R' 13 = R 13 → MWKeep R' R →
-      Copied Mt' Mt0 d src (c + 8) g → NW live Dt DA (snpS s dst n) Q 0x80006ac0#64 R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80006aac#64 R Mt := by
+      Copied Mt' Mt0 d src (c + 8) g → SnpW live Dt DA (snpS s dst n) Q 0x80006ac0#64 R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80006aac#64 R Mt := by
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G
-  nx_run hlive using [h11, h14, h16]
+  snp_run hlive using [h11, h14, h16]
   snp_ld hw
-  nx_run hlive using [h11, h14, h16] at 0x80006abc
+  snp_run hlive using [h11, h14, h16] at 0x80006abc
   snp_sd hcp, hw => hcp1, hw1
-  nx_run hlive using [h11, h14, h16] at 0x80006aac 0x80006ac0
+  snp_run hlive using [h11, h14, h16] at 0x80006aac 0x80006ac0
   all_goals rename_i hb
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hb ⊢)
   all_goals (rw [ofNat_add_ofNat] at hb; try rw [h14] at hb)
@@ -421,12 +419,12 @@ theorem mm_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     (h11 : R 11 = BitVec.ofNat 64 (src + c)) (hkp : MMFrame R R0)
     (hal : (R0 1).toNat % 4 = 0)
     (hk : ∀ R' Mt', MMFrame R' R0 → Copied Mt' Mt0 d src len g →
-      NW live Dt DA (snpS s dst n) Q (R0 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x800069fc#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (R0 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x800069fc#64 R Mt := by
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G
   have hR1 : R 1 = R0 1 := hkp 1 (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide)
-  nx_run hlive using [h12, h15, h11] at 0x80006a0c 0x80006ae0
+  snp_run hlive using [h12, h15, h11] at 0x80006a0c 0x80006ae0
   all_goals (rename_i hb; try simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hb; try rw [h12] at hb)
   · -- k = 0: `ret`
     have hk64 : k < 2 ^ 64 := by omega
@@ -466,12 +464,12 @@ theorem mm_loop8 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (G : MoveGeom s dst n d src len) (hd8 : d % 8 = 0) (hE : E ≤ len) (hE8 : E % 8 = 0)
     (hk : ∀ R' Mt', MWKeep R' R0 → R' 11 = BitVec.ofNat 64 (src + E) → R' 14 = R0 14 →
       R' 13 = R0 13 →
-      Copied Mt' Mt0 d src E g → NW live Dt DA (snpS s dst n) Q 0x80006ac0#64 R' Mt') :
+      Copied Mt' Mt0 d src E g → SnpW live Dt DA (snpS s dst n) Q 0x80006ac0#64 R' Mt') :
     ∀ m c (R : Nat → BitVec 64) (Mt : Mem), c + 8 * m = E → 0 < m →
       R 11 = BitVec.ofNat 64 (src + c) → R 14 = BitVec.ofNat 64 (src + E) →
       R 16 = BitVec.ofNat 64 (d + (2 ^ 64 - src)) → R 14 = R0 14 → R 13 = R0 13 → MWKeep R R0 →
       Copied Mt Mt0 d src c g → ReadWin Dt DA (snpS s dst n) Mt src (src + len) g →
-      NW live Dt DA (snpS s dst n) Q 0x80006aac#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q 0x80006aac#64 R Mt := by
   intro m
   induction m with
   | zero => intro _ _ _ _ h; omega
@@ -544,8 +542,8 @@ theorem mm_byteLoop0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     (h15 : R 15 = BitVec.ofNat 64 d) (h11 : R 11 = BitVec.ofNat 64 src)
     (h13 : R 13 = BitVec.ofNat 64 (d + len)) (hal : (R 1).toNat % 4 = 0)
     (hk : ∀ R' Mt', MMKeep R' R → Copied Mt' Mt d src len g →
-      NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80006a0c#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80006a0c#64 R Mt := by
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G
   exact mm_byteLoop hlive d src len (fun i => g (src + i)) R Mt hd1 hdd1 hdd2 hdn hs1 hs2 hs3 hdisj
     (fun i hi => hw (src + i) (by omega) (by omega)) hal
@@ -563,8 +561,8 @@ theorem mm_loop32_0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (h16 : R 16 = BitVec.ofNat 64 (d + L))
     (hk : ∀ R' Mt', MWKeep R' R → R' 11 = BitVec.ofNat 64 (src + L) →
       R' 14 = BitVec.ofNat 64 (d + L) → R' 17 = R 17 → Copied Mt' Mt d src L g →
-      NW live Dt DA (snpS s dst n) Q 0x80006a74#64 R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80006a48#64 R Mt :=
+      SnpW live Dt DA (snpS s dst n) Q 0x80006a74#64 R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80006a48#64 R Mt :=
   mm_loop32 hlive d src len L g R Mt G hd8 hL hL32 hk (L / 32) 0 R Mt (by omega) (by omega)
     (by simpa using h11) (by simpa using h14) h16 rfl (fun _ _ _ _ _ _ => rfl) (Copied.zero Mt d src g) hw
 
@@ -578,11 +576,11 @@ theorem mm_large {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (h12 : R 12 = BitVec.ofNat 64 len) (hal : (R 1).toNat % 4 = 0)
     (hw : ReadWin Dt DA (snpS s dst n) Mt src (src + len) g)
     (hk : ∀ R' Mt', MMFrame R' R → Copied Mt' Mt d src len g →
-      NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x80006a24#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x80006a24#64 R Mt := by
   have G' := G
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G'
-  nx_run hlive using [h10, h11, h12] at 0x80006a0c 0x80006a48
+  snp_run hlive using [h10, h11, h12] at 0x80006a0c 0x80006a48
   all_goals rename_i hb
   · -- unaligned: the byte loop
     refine mm_byteLoop0 hlive d src len g _ Mt G (by omega) hw ?_ ?_ ?_ ?_ (fun R' Mt' hk' hcp => ?_)
@@ -607,7 +605,7 @@ theorem mm_large {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
       have hw' : ReadWin Dt DA (snpS s dst n) Mt' src (src + len) g :=
         hw.transport fun a h1 h2 => hcp.rest a (by omega)
       have hRc : MMFrame R' R := MMFrame.trans (by mm_frame) (MMFrame.of_mw hkp)
-      nx_run hlive using [h11', h14', h17', k10, k12, k15] at 0x80006aac 0x800069fc
+      snp_run hlive using [h11', h14', h17', k10, k12, k15] at 0x80006aac 0x800069fc
       all_goals rename_i hb24
       all_goals (simp only [h10, h12] at *)
       · -- `len & 24 = 0`: the byte tail
@@ -631,7 +629,7 @@ theorem mm_large {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
             hw.transport fun a h1 h2 => hcp''.rest a (by omega)
           have hF'' := MMFrame.trans (MMFrame.trans hRc (by mm_frame)) (MMFrame.of_mw hkp'')
           simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at h13'' e28 e15 e12
-          nx_run hlive using [h13'', e28, e15, e12] at 0x800069fc
+          snp_run hlive using [h13'', e28, e15, e12] at 0x800069fc
           refine mm_tail hlive d src len (len / 32 * 32 + (len % 32 - len % 8)) (len % 8) g _ R Mt'' Mt
             G (by omega) hw'' hcp'' ?_ ?_ ?_ (MMFrame.trans hF'' (by mm_frame)) hal hk
           all_goals ((try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, k12, k10]); bv_nat)
@@ -650,14 +648,14 @@ theorem memmove_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
     (h12 : R 12 = BitVec.ofNat 64 len) (hal : (R 1).toNat % 4 = 0)
     (hw : ReadWin Dt DA (snpS s dst n) Mt src (src + len) g)
     (hk : ∀ R' Mt', MMFrame R' R → Copied Mt' Mt d src len g →
-      NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
-    NW live Dt DA (snpS s dst n) Q 0x800069c4#64 R Mt := by
+      SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
+    SnpW live Dt DA (snpS s dst n) Q 0x800069c4#64 R Mt := by
   have G' := G
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G'
   have n10 : (R 10).toNat = d := by rw [h10]; simp only [BitVec.toNat_ofNat]; omega
   have n11 : (R 11).toNat = src := by rw [h11]; simp only [BitVec.toNat_ofNat]; omega
   have n12 : (R 12).toNat = len := by rw [h12]; simp only [BitVec.toNat_ofNat]; omega
-  nx_run hlive using [h10, h11, h12] at 0x800069fc 0x80006a24
+  snp_run hlive using [h10, h11, h12] at 0x800069fc 0x80006a24
   all_goals rename_i hb
   all_goals (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, n12, BitVec.reduceToNat] at hb)
   case hT.hT | hF.hT.hT =>

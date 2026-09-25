@@ -4,7 +4,7 @@ file outside the design skeleton contains sorry/admit/axiom.
 
 `structure IrisHoles` lives in `Interp/Holes.lean`. A field
 `f : T` contributes `f.g` for each field `g` of `structure T`, following
-`def T … : Prop := ∃ …, U …` to `structure U`; a field of type `True` is a
+`def T … : Prop := ∃ …, U …` (or `def T … := U …`) to `structure U`; a field of type `True` is a
 placeholder whose `f.*` rows are reported but not checked."""
 import re, sys, pathlib
 root = pathlib.Path(__file__).resolve().parent.parent
@@ -18,7 +18,7 @@ def fields_of(ty, depth=0):
     sub = re.search(rf'structure {re.escape(ty)}\b' + BODY, src)
     if sub:
         return re.findall(r'^  (\w+)\s*:', sub.group(1), re.M)
-    d = re.search(rf'def {re.escape(ty)}\b[^\n]*:=\s*∃[^,]*,\s*([\w.]+)', src)
+    d = re.search(rf'(?:def|abbrev) {re.escape(ty)}\b[^\n]*:=\s*(?:∃[^,]*,\s*)?([\w.]+)', src)
     if d and depth < 4:
         return fields_of(d.group(1).split('.')[-1], depth + 1)
     return []

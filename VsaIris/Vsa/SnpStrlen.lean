@@ -127,10 +127,10 @@ theorem $nm {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Me
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
     (hal : (R0 1).toNat % 4 = 0)
-    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → NW live Dt DA S Q (R0 1) R' Mt)
+    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → SnpW live Dt DA S Q (R0 1) R' Mt)
     (t : Nat) (R : Nat → BitVec 64) (htk : t + $K = a + len) (hta : a ≤ t)
     (h14 : R 14 = BitVec.ofNat 64 (t + 8)) (h10 : R 10 = BitVec.ofNat 64 a) (hkp : SLKeep R R0) :
-    NW live Dt DA S Q 0x80006d2c#64 R Mt := by
+    SnpW live Dt DA S Q 0x80006d2c#64 R Mt := by
   have hw := SR.win
   have hlo := SR.lo
   have hhi := SR.hi
@@ -145,7 +145,7 @@ theorem $nm {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Me
   (try have f4 : g (BitVec.ofNat 64 (t + 4)).toNat ≠ 0#8 := SR.byteNz (by omega) (by omega))
   (try have f5 : g (BitVec.ofNat 64 (t + 5)).toNat ≠ 0#8 := SR.byteNz (by omega) (by omega))
   (try have f6 : g (BitVec.ofNat 64 (t + 6)).toNat ≠ 0#8 := SR.byteNz (by omega) (by omega))
-  iterate 9 (all_goals (try (snp_ld hw; simp only [lbu_g])); all_goals (try nx_run hlive using [h14, ofNat_add_ofNat, ofNat_wrap, Nat.reduceAdd, Nat.reduceMod, Nat.add_zero, zext_eq_zero]))
+  iterate 9 (all_goals (try (snp_ld hw; simp only [lbu_g])); all_goals (try snp_run hlive using [h14, ofNat_add_ofNat, ofNat_wrap, Nat.reduceAdd, Nat.reduceMod, Nat.add_zero, zext_eq_zero]))
   case hal => simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hR1]; exact hal
   rw [hR1]
   refine hk _ ?_ (SLKeep.trans hkp (by sl_keep))
@@ -167,10 +167,10 @@ theorem sl_tailK {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
     (hal : (R0 1).toNat % 4 = 0)
-    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → NW live Dt DA S Q (R0 1) R' Mt)
+    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → SnpW live Dt DA S Q (R0 1) R' Mt)
     (t k : Nat) (R : Nat → BitVec 64) (hk8 : k < 8) (htk : t + k = a + len) (hta : a ≤ t)
     (h14 : R 14 = BitVec.ofNat 64 (t + 8)) (h10 : R 10 = BitVec.ofNat 64 a) (hkp : SLKeep R R0) :
-    NW live Dt DA S Q 0x80006d2c#64 R Mt := by
+    SnpW live Dt DA S Q 0x80006d2c#64 R Mt := by
   obtain rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl :
     k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4 ∨ k = 5 ∨ k = 6 ∨ k = 7 := by omega
   · exact sl_tail0 hlive SR R0 hal hk t R htk hta h14 h10 hkp
@@ -188,10 +188,10 @@ theorem sl_words {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
     (hal : (R0 1).toNat % 4 = 0)
-    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → NW live Dt DA S Q (R0 1) R' Mt) :
+    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → SnpW live Dt DA S Q (R0 1) R' Mt) :
     ∀ m t (R : Nat → BitVec 64), a + len < t + 8 * m → a ≤ t → t ≤ a + len →
       R 14 = BitVec.ofNat 64 t → R 13 = 9187201950435737471#64 → R 11 = 18446744073709551615#64 →
-      R 10 = BitVec.ofNat 64 a → SLKeep R R0 → NW live Dt DA S Q 0x80006d10#64 R Mt := by
+      R 10 = BitVec.ofNat 64 a → SLKeep R R0 → SnpW live Dt DA S Q 0x80006d10#64 R Mt := by
   have hlo := SR.lo
   have hhi := SR.hi
   have hh := SR.htif
@@ -200,7 +200,7 @@ theorem sl_words {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   | zero => intro t _ h; omega
   | succ m ih =>
     intro t R hm hta ht h14 h13 h11 h10 hkp
-    nx_run hlive using [h14] at 0x80006d14
+    snp_run hlive using [h14] at 0x80006d14
     rintro ⟨f, hfD, hfS, hv⟩
     have et : (BitVec.ofNat 64 t).toNat = t := by simp only [BitVec.toNat_ofNat]; omega
     rw [et] at hv
@@ -212,7 +212,7 @@ theorem sl_words {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
         exact (word_all_ones g t fun k hk => by
           have := SR.nz (t + k - a) (by omega); rwa [show a + (t + k - a) = t + k by omega] at this).trans
           (by decide)
-      nx_run hlive using [h14, h13, h11, h10, ofNat_add_ofNat] at 0x80006d10 0x80006d2c
+      snp_run hlive using [h14, h13, h11, h10, ofNat_add_ofNat] at 0x80006d10 0x80006d2c
       all_goals rename_i hc
       all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h11] at hc
       case hT =>
@@ -226,7 +226,7 @@ theorem sl_words {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
       have hg : ¬ (((ldvf .ld f t &&& 9187201950435737471#64) + 9187201950435737471#64 |||
           ldvf .ld f t) ||| 9187201950435737471#64) = 18446744073709551615#64 := fun he =>
         word_not_all_ones f t (a + len - t) (by omega) hz (he.trans (by decide))
-      nx_run hlive using [h14, h13, h11, h10, ofNat_add_ofNat] at 0x80006d10 0x80006d2c
+      snp_run hlive using [h14, h13, h11, h10, ofNat_add_ofNat] at 0x80006d10 0x80006d2c
       all_goals rename_i hc
       all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h11] at hc
       case hT => exact absurd hc hg
@@ -241,11 +241,11 @@ theorem sl_align {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
     (hal : (R0 1).toNat % 4 = 0)
-    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → NW live Dt DA S Q (R0 1) R' Mt)
+    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → SnpW live Dt DA S Q (R0 1) R' Mt)
     (t : Nat) (R : Nat → BitVec 64) (hta : a ≤ t) (ht : t ≤ a + len)
     (h14 : R 14 = BitVec.ofNat 64 t) (h10 : R 10 = BitVec.ofNat 64 a) (hkp : SLKeep R R0) :
-    NW live Dt DA S Q 0x80006cfc#64 R Mt := by
-  nx_run hlive using [h14] at 0x80006d10
+    SnpW live Dt DA S Q 0x80006cfc#64 R Mt := by
+  snp_run hlive using [h14] at 0x80006d10
   refine sl_words hlive SR R0 hal hk ((a + len - t) / 8 + 1) t _ (by omega) hta ht ?_ ?_ ?_ ?_
     (SLKeep.trans hkp (by sl_keep))
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -256,12 +256,12 @@ theorem sl_peel_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
     (hal : (R0 1).toNat % 4 = 0)
-    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → NW live Dt DA S Q (R0 1) R' Mt)
+    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R0 → SnpW live Dt DA S Q (R0 1) R' Mt)
     (j : Nat) (R : Nat → BitVec 64) (hj : j ≤ len)
     (h14 : R 14 = BitVec.ofNat 64 (a + j)) (h10 : R 10 = BitVec.ofNat 64 a) (hkp : SLKeep R R0)
     (hnext : j < len → ∀ R' : Nat → BitVec 64, R' 14 = BitVec.ofNat 64 (a + (j + 1)) →
-      R' 10 = BitVec.ofNat 64 a → SLKeep R' R0 → NW live Dt DA S Q 0x80006d78#64 R' Mt) :
-    NW live Dt DA S Q 0x80006d78#64 R Mt := by
+      R' 10 = BitVec.ofNat 64 a → SLKeep R' R0 → SnpW live Dt DA S Q 0x80006d78#64 R' Mt) :
+    SnpW live Dt DA S Q 0x80006d78#64 R Mt := by
   have hlo := SR.lo
   have hhi := SR.hi
   have hh := SR.htif
@@ -279,7 +279,7 @@ theorem sl_peel_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     rcases Nat.lt_or_ge j len with hlt | hge
     · exact hlt
     · exact absurd (by rw [show j = len by omega, SR.nul]; rfl) hc0
-  nx_run hlive using [h14, ofNat_add_ofNat] at 0x80006d78 0x80006cfc
+  snp_run hlive using [h14, ofNat_add_ofNat] at 0x80006d78 0x80006cfc
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hF.hal => rw [hR1]; exact hal
   case hF.hk =>
@@ -312,10 +312,10 @@ theorem strlen_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R : Nat → BitVec 64)
     (h10 : R 10 = BitVec.ofNat 64 a) (hal : (R 1).toNat % 4 = 0)
-    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R → NW live Dt DA S Q (R 1) R' Mt) :
-    NW live Dt DA S Q 0x80006cf0#64 R Mt := by
+    (hk : ∀ R', R' 10 = BitVec.ofNat 64 len → SLKeep R' R → SnpW live Dt DA S Q (R 1) R' Mt) :
+    SnpW live Dt DA S Q 0x80006cf0#64 R Mt := by
   have hpeel : ∀ k j (R' : Nat → BitVec 64), j + k = len → R' 14 = BitVec.ofNat 64 (a + j) →
-      R' 10 = BitVec.ofNat 64 a → SLKeep R' R → NW live Dt DA S Q 0x80006d78#64 R' Mt := by
+      R' 10 = BitVec.ofNat 64 a → SLKeep R' R → SnpW live Dt DA S Q 0x80006d78#64 R' Mt := by
     intro k
     induction k with
     | zero =>
@@ -325,7 +325,7 @@ theorem strlen_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
       intro j R' hj h14 h10' hkp
       exact sl_peel_step hlive SR R hal hk j R' (by omega) h14 h10' hkp
         (fun _ R'' h14' h10'' hkp' => ih (j + 1) R'' (by omega) h14' h10'' hkp')
-  nx_run hlive using [h10] at 0x80006d78 0x80006cfc
+  snp_run hlive using [h10] at 0x80006d78 0x80006cfc
   case hT =>
     refine hpeel len 0 _ (by omega) ?_ ?_ (by sl_keep)
     all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Nat.add_zero]

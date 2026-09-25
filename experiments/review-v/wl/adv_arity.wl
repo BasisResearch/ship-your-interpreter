@@ -1,0 +1,1 @@
+fn f(a){return a;}println(f(1,2));

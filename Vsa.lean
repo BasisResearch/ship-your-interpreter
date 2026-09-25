@@ -514,7 +514,6 @@ import Vsa.Sim.SnprintfPost
 import Vsa.Sim.ErrorSim
 import Vsa.Sim.ErrorTail
 import Vsa.Sim.ExitPath
-import Vsa.Sim.ExitPathSeg
 import Vsa.Sim.ExitPathSpans
 import Vsa.Sim.ErrorSimFull
 import Vsa.Sim.TermSimClose
@@ -583,7 +582,6 @@ import Vsa.Sim.rows.EvalEqNeRowFootprint
 import Vsa.Sim.rows.BinIntReadback
 import Vsa.Sim.rows.StringifySpec
 import Vsa.Sim.rows.StringifyStrdupTail
-import Vsa.Sim.rows.StringifyBridge
 import Vsa.Sim.rows.StrConcatHeap
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.rows.ExecLeafD
@@ -661,7 +659,6 @@ import Vsa.Sim.StagePreSuppliers
 import Vsa.Sim.ArmSegSplitSqEntry
 import Vsa.Sim.MidArmCombinator
 import Vsa.Sim.StagePreSuppliers2
-import Vsa.Sim.ApproxArmResidGapAssembly
 import Vsa.Sim.rows.StrdupTailBridges
 import Vsa.Sim.rows.StrcpyContract
 import Vsa.Sim.rows.StrdupEpilogueSeg
@@ -671,7 +668,6 @@ import Vsa.Sim.rows.StrdupTailJalSeams
 import Vsa.Sim.rows.StrdupTailContractClose
 import Vsa.Sim.rows.CStringAppend
 import Vsa.Sim.SeqHeadStages
-import Vsa.Sim.ArmStagesPartial
 import Vsa.Sim.rows.ConcatHeapCore
 import Vsa.Sim.rows.ConcatSeams
 import Vsa.Sim.rows.ConcatStringifyLArg
@@ -680,7 +676,6 @@ import Vsa.Sim.rows.ConcatStringifyRArg
 import Vsa.Sim.rows.StringifyIntTail
 import Vsa.Sim.rows.BlockCConcat
 import Vsa.Sim.EvalChildFieldCombinator
-import Vsa.Sim.ArmStagesWave34
 import Vsa.Sim.MidArmFieldIH
 import Vsa.Sim.MidArmFieldWire
 import Vsa.Sim.ArmSegSplitExecEval
@@ -712,12 +707,8 @@ import Vsa.Sim.rows.StrdupTailSpliceFold
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle
-import Vsa.Sim.InterpSimFinal
-import Vsa.Sim.TermAssembly
 import Vsa.Sim.DeriveMeta
-import Vsa.Sim.DeriveMetaDemo
 import Vsa.Sim.DeriveMetaTowers
-import Vsa.Sim.DeriveRow
 import Vsa.Sim.LayoutInstance
 import Vsa.Sim.StackAdmissibleWitness
 -- wave 41
@@ -732,7 +723,6 @@ import Vsa.Sim.rows.NativeAddrResolve
 import Vsa.Sim.rows.NativeArmSplice
 import Vsa.Sim.rows.NativeBodyAssert
 -- wave 42
-import Vsa.Sim.rows.NativeBodyPrint
 import Vsa.Sim.rows.CallCruxMarshal
 -- wave 43
 import Vsa.Sim.rows.StmtWhileBodyArmStagePre
@@ -754,9 +744,9 @@ import Vsa.Sim.rows.FlStepArmStagePre
 import Vsa.Sim.rows.StmtForLoopSegPreB
 import Vsa.Sim.rows.ValuePrintArms
 import Vsa.Sim.rows.ValuePrintContract
-import Vsa.Sim.rows.NativePrintFinite
 import Vsa.Sim.ConsoleStream
 import Vsa.Sim.LocaleData
+import Vsa.Sim.StderrStream
 -- gen_fn whole-function summary layer (plan a, 2026-09-01)
 import Vsa.Sim.FnSummary
 import Vsa.Sim.SegToTripleFramed
@@ -771,11 +761,6 @@ import Vsa.Sim.rows.FnLockStubsFold
 import Vsa.Sim.rows.FnSfvwrite_r
 import Vsa.Sim.rows.TransportSfvwrite_r
 import Vsa.Sim.rows.FnSfvwriteFold
-import Vsa.Sim.rows.AssemblySkeleton
-import Vsa.Sim.rows.Field_hInt
-import Vsa.Sim.rows.Field_hNull
-import Vsa.Sim.rows.Field_hBool
-import Vsa.Sim.rows.Field_hStr
 import Vsa.Sim.RepackTac
 import Vsa.Sim.rows.ErrSegCrt0
 import Vsa.Sim.rows.ErrSegMain
@@ -790,8 +775,6 @@ import Vsa.Sim.MemRegion
 import Vsa.Sim.EntryGround
 import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.rows.LayoutStmtTableGen
-import Vsa.Sim.rows.EntryGroundRows
-import Vsa.Sim.rows.ExecLeafPin
 import Vsa.Sim.ReprDelta
 
 import Vsa.Sim.SeparationLogicLaws

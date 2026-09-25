@@ -215,7 +215,7 @@ theorem genData (L : List Nat) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8)
   classical
   unfold readable
   iintro ⟨⟨#Hro, Hown⟩, #Hb, #Hi⟩
-  ihave ⟨⟨Hown, -⟩, %hbo⟩ := keep_pure (snpOwnSet_ro_off Sown rd (baseDA.map fun a => (a, snpImg a)))
+  ihave ⟨⟨Hown, -⟩, %hbo⟩ := keep_pure (ownSet_ro_off Sown rd (baseDA.map fun a => (a, snpImg a)))
     $$ [Hown]
   · iframe Hown
     iapply sepL_map_ro (iprop(binImg ∗ impureRO)) snpImg baseDA

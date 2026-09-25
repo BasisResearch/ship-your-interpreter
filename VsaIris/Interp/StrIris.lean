@@ -31,9 +31,6 @@ theorem strBytes_of_img {img : Nat → BitVec 8} {q : Nat} {x : String}
     have := congrArg BitVec.toNat h0
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)] at this
     simp at this; omega
-  ascii k hk := by
-    obtain ⟨e, h1, h2⟩ := h.1 k hk
-    rw [e, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; exact h2
   nul := h.2
 
 /-- A string's window as `strlen`'s read geometry. -/

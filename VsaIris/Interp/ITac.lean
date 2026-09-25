@@ -53,9 +53,8 @@ private def hex8 (n : Nat) : String :=
   let s := String.ofList (Nat.toDigits 16 n)
   String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s
 
-/-- The normalizer run after every step and before every side condition:
-register lookups, the caller's facts (`using`), store forwarding. -/
-def ixNorm (facts : Array Term) (tab : Option (TSyntax `tactic) := none) : TacticM Syntax := do
+/-- `ixNorm` with a table normalizer other than `ix_tab` (lane N2's `nx_tab`). -/
+def ixNormTab (facts : Array Term) (tab : Option (TSyntax `tactic)) : TacticM Syntax := do
   let tab ← match tab with
     | some t => pure t
     | none => `(tactic| ix_tab)
@@ -67,43 +66,58 @@ def ixNorm (facts : Array Term) (tab : Option (TSyntax `tactic) := none) : Tacti
       facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
     `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try $tab) <;> (try sx_norm) <;> (try ix_mem)))
 
+/-- The normalizer run after every step and before every side condition:
+register lookups, the caller's facts (`using`), store forwarding. -/
+def ixNorm (facts : Array Term) : TacticM Syntax := ixNormTab facts none
+
+/-- The side-condition tactic of a run: `sx_side`, or the caller's (`side`). -/
+def ixSide (side : Option Syntax) : TacticM Syntax := do
+  match side with
+  | some t => pure t
+  | none => `(tactic| sx_side)
+
 /-- Try `sx_side` (after the normalizers) on a goal; `true` when it closes. -/
-def ixTrySide (norm : Syntax) (g : MVarId) : TacticM Bool := do
+def ixTrySide (norm : Syntax) (g : MVarId) (side : Option Syntax := none) : TacticM Bool := do
   let saved ← saveState
+  let sd ← ixSide side
   try
-    let gs ← evalTacticAt (← `(tactic| ($(⟨norm⟩) <;> sx_side))) g
+    let gs ← evalTacticAt (← `(tactic| ($(⟨norm⟩) <;> $(⟨sd⟩)))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
     saved.restore; return false
 
 /-- Close a branch goal `C → IW …` when `sx_side` refutes `C`. -/
-def ixTryPrune (norm : Syntax) (g : MVarId) (condFacts : Bool := false) : TacticM Bool := do
+def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none)
+    (condFacts : Bool := false) : TacticM Bool := do
   let saved ← saveState
+  let sd ← ixSide side
   try
     -- `condFacts`: the caller's facts also rewrite the branch condition itself
     let tac ← if condFacts then
-        `(tactic| (intro hc; exfalso; revert hc; (try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq, Decidable.not_not]); ($(⟨norm⟩) <;> sx_side)))
-      else `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; sx_side))))
+        `(tactic| (intro hc; exfalso; revert hc; (try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq, Decidable.not_not]); ($(⟨norm⟩) <;> $(⟨sd⟩))))
+      else `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; $(⟨sd⟩)))))
     let gs ← evalTacticAt tac g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
     saved.restore; return false
 
-/-- The interpreter table's step-lemma prefixes, in the order tried. -/
-def ixPrefixes : List String := ["it", "itD", "itT", "itH", "itO"]
+/-- The step-lemma prefixes tried, in order: the interpreter's, then `itS…`
+(newlib's stdio table at a function the interpreter's table also has). -/
+def ixPre : List String := ["it", "itD", "itT", "itH", "itO", "itS", "itDS", "itTS", "itHS", "itOS"]
 
 /-- The step lemmas of the instruction at `pc`, in the order tried. -/
-def ixCandidates (pc : Nat) (pfxs : List String := ixPrefixes) : TacticM (List Name) := do
+def ixCandidates (pc : Nat) (pre : List String := ixPre) :
+    TacticM (List Name) := do
   let env ← getEnv
   let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
-  return (pfxs.map mk).filter env.contains
+  return (pre.map mk).filter env.contains
 
 /-- Apply one candidate: the continuation goals (an `SWP` conclusion) and the
 side conditions `sx_side` could not close; `none` when it does not apply. -/
-def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool) :
-    TacticM (Option (List MVarId × List MVarId)) := do
+def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool)
+    (side : Option Syntax := none) : TacticM (Option (List MVarId × List MVarId)) := do
   let saved ← saveState
   try
     let gs ← evalTacticAt (← `(tactic| apply $(mkIdent nm) $(⟨h⟩))) g
@@ -113,7 +127,7 @@ def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool
       let ty ← g.withContext (do instantiateMVars (← g.getType))
       if ← g.withContext (forallTelescopeReducing ty fun _ b => isSWP b) then
         conts := conts ++ [g]
-      else if !(← ixTrySide norm g) then
+      else if !(← ixTrySide norm g side) then
         pending := pending ++ [g]
     if strict && !pending.isEmpty then
       saved.restore; return none
@@ -124,14 +138,15 @@ def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool
 /-- One step at a literal PC: the first candidate whose side conditions all
 close; failing that, the first candidate that applies, with its side
 conditions left pending. -/
-def ixStep (norm : Syntax) (h : Syntax) (g : MVarId) (pfxs : List String := ixPrefixes) :
+def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
+    (pre : List String := ixPre) (side : Option Syntax := none) :
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
-  let cands ← ixCandidates pc pfxs
+  let cands ← ixCandidates pc pre
   for nm in cands do
-    if let some r ← ixApply norm h g nm true then return some r
+    if let some r ← ixApply norm h g nm true side then return some r
   for nm in cands do
-    if let some r ← ixApply norm h g nm false then return some r
+    if let some r ← ixApply norm h g nm false side then return some r
   return none
 
 /-- `ix_run h`, `ix_run [n] h`, `ix_run h using [e,…]`, `ix_run h at pc…`.
@@ -146,8 +161,9 @@ syntax "ix_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)
 /-- The driver behind `ix_run` (`explore`) and `ix_run1`. -/
 def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
-    (pfxs : List String := ixPrefixes) (tab : Option (TSyntax `tactic) := none)
-    (condFacts : Bool := false) :
+    (pre : List String := ixPre)
+    (mkNorm : Array Term → TacticM Syntax := ixNorm) (clearPruned : Bool := false)
+    (budgetPct : Nat := 0) (condFacts : Bool := false) :
     TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
     let stopPCs : List Nat := match stops with
@@ -156,7 +172,7 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     let facts : Array Term := match fs with
       | some fs => fs.getElems
       | none => #[]
-    let norm ← ixNorm facts tab
+    let norm ← mkNorm facts
     let mut pending : List MVarId := []
     let mut stuck : List MVarId := []
     let first ← getMainGoal
@@ -170,13 +186,19 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       catch _ => saved.restore; pure first
     -- a worklist of paths, each with its own step budget
     let mut work : List (MVarId × Nat) := [(first, budget)]
+    let ctx ← readThe Core.Context
     while !work.isEmpty do
       let (cur, fuel) := work.head!
       work := work.tail!
       if fuel == 0 then stuck := stuck ++ [cur]; continue
+      -- a budgeted run (a proof piece) stops once it used `budgetPct`% of the
+      -- declaration's heartbeats, leaving the rest to the next piece
+      if budgetPct != 0 && ctx.maxHeartbeats != 0 then
+        let used := (← IO.getNumHeartbeats) - ctx.initHeartbeats
+        if used * 100 > ctx.maxHeartbeats * budgetPct then stuck := stuck ++ [cur]; continue
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
-      let some (conts, pend) ← ixStep norm h cur pfxs | stuck := stuck ++ [cur]; continue
+      let some (conts, pend) ← ixStep norm h cur pre | stuck := stuck ++ [cur]; continue
       pending := pending ++ pend
       match conts with
       | [c] =>
@@ -200,11 +222,12 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
         else
           stuck := stuck ++ [c]
       | [t, f] =>
-        if ← ixTryPrune norm t condFacts then
-          let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := stuck ++ [f]; continue
+        let introTac ← if clearPruned then `(tactic| intro _) else `(tactic| intro hc)
+        if ← ixTryPrune norm t none condFacts then
+          let [f'] ← evalTacticAt introTac f | stuck := stuck ++ [f]; continue
           work := (f', fuel - 1) :: work
-        else if ← ixTryPrune norm f condFacts then
-          let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := stuck ++ [t]; continue
+        else if ← ixTryPrune norm f none condFacts then
+          let [t'] ← evalTacticAt introTac t | stuck := stuck ++ [t]; continue
           work := (t', fuel - 1) :: work
         else if !explore then
           stuck := stuck ++ [t, f]
