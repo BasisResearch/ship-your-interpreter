@@ -282,3 +282,32 @@ Hole ledger: before 3, after 3 (`newlib.snprintf`, `out.snprintfFn`, `out.snprin
 Checks: `lake build Vsa VsaIris VsaIris.Audit VsaBoot` green (2755 jobs), `check_iris_holes.py` ok (3),
 `check_final_axioms.sh` 24/24, discipline OK, `gen_exit_handlers.py --check` ok,
 `endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
+
+### N2 (2026-09-25): the last holes
+
+| lane | head | merge on `iris-main` | conflicts |
+|---|---|---|---|
+| N2 (`out.snprintfInt`, `out.snprintfFn`, `newlib.snprintf` proved; shared bytes bounded by the RAM top) | `7b34d26` | `35624a3` | `SharedGeometry.lean`, `ControlBootHeap.lean` (N2's `SharedReadWin.ram : k + 8 ≤ 0x88000000` over B3's `2^32`), `INTERP_DESIGN.md` (both sides); report archived as `LANES-n2.md` |
+
+B3's boot witnesses now decide N2's bound (`OwnOk.sharedWin : r.1 + r.2 + 7 ≤ 0x88000000` at every
+trace); N2's proofs needed no change for B1's orientation index.
+
+Hole ledger: before 3, after 0. `IrisHoles` is the empty structure and `IrisHoles.proved : IrisHoles`.
+Checks: `lake build Vsa VsaIris VsaIris.Audit VsaBoot` green (2807 jobs), `check_iris_holes.py`
+ok (0), `check_final_axioms.sh` 24/24, discipline OK; `endToEnd_refinement`,
+`endToEnd_refinement_loaded`, `Gen.Proof.loaded`, `proofElf_halts` depend on
+`[propext, Classical.choice, Quot.sound]`.
+
+## Final state (all nine INT2 lanes merged)
+
+```lean
+theorem Vsa.Sim.EndToEnd.endToEnd_refinement (h : VsaIris.Interp.IrisHoles) :
+    ∀ p c, Loaded interpRunLayout p (fillZero c) →
+      (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+with `IrisHoles` empty (`IrisHoles.proved`). `Loaded` has loader-derived witnesses (B3,
+`Vsa/Sim/Boot/Gen/*.lean`) at the real entry state of the proof ELF and `arithmetic`, `for`,
+`functions1`, `functions2`, `scope`, `strings`, `while`, `err_divzero`, `err_undefined`;
+`recursion` lacks only `capacity` (out of kernel reach) and `err_parse` never reaches `interp_run`.
+`proofElf_halts : IrisHoles → Halts c "55\n2500\n36\n" 0` at the proof ELF's real entry state.
