@@ -278,7 +278,7 @@ import VsaIris.Vsa.Stderr.Promote
 import VsaIris.Vsa.Stderr.FprintfHead
 import VsaIris.Vsa.Fprintf.Sprint
 import VsaIris.Vsa.Fprintf.Strlen
-import VsaIris.Vsa.Fprintf.InnerLld
+import VsaIris.Vsa.Fprintf.InnerS
 import VsaIris.Vsa.ExitH.Iris
 import VsaIris.Vsa.Stderr.SprintHook
 import VsaIris.Vsa.Stderr.SEmpty
