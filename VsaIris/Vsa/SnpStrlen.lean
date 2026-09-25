@@ -80,6 +80,9 @@ def SLKeep (R' R : Nat → BitVec 64) : Prop :=
 theorem SLKeep.trans {R R' R'' : Nat → BitVec 64} (h1 : SLKeep R' R) (h2 : SLKeep R'' R') :
     SLKeep R'' R := fun z a b c d e f => (h2 z a b c d e f).trans (h1 z a b c d e f)
 
+theorem SLKeep.get {R' R : Nat → BitVec 64} (h : SLKeep R' R) (z : Nat) (hz : z < 10 ∨ 15 < z) :
+    R' z = R z := h z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)
+
 macro "sl_keep" : tactic =>
   `(tactic| (intro z h1 h2 h3 h4 h5 h6; simp only [upd_apply, h1, h2, h3, h4, h5, h6, ite_false]))
 

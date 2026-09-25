@@ -23,13 +23,29 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   `ssputs_nw` (`__ssputs_r` on the string `FILE`: copies `min len _w`,
   advances `_p`, lowers `_w`; postcondition `PutsOut`). Tools: `nw_gen`
   (rebase the tracking memory), `snp_ld`/`snp_sd`, `bv_nat`, `Copied`.
-- Lessons: a declaration holds ~20 driver steps before the 200k budget; split
+- Lessons: grep filters on `linter` hide parse errors (the token list names
+  `register_linter_set`); check with `grep error`. A doc comment cannot precede
+  `#ix_chain`. A declaration holds ~20 driver steps before the 200k budget; split
   long runs into lemmas at call/branch boundaries and rebase memory with
   `nw_gen`; state memory facts at `BitVec.ofNat` addresses (`ofNat_add_ofNat`
   in `nx_run using`).
 
+- **Output chain** (`SnpPrint.lean`): `ssprint_nw` (`__ssprint_r`: every iovec
+  piece appended to the printed stream `BufAt`, cut at `n - 1`; uio emptied).
+- **`strlen_nw`** (`SnpStrlen.lean`): any alignment, bytes readable through
+  data or ownership (`StrRead`), word loads past the NUL as partly known loads;
+  VSA's `detect_all_ones` decides the word test; tail arms by `#sl_tail`.
+- **`_svfprintf_r` prologue** (`SnpSvf.lean`: `svf_entry`): entry →
+  `strlen(".")` → `memset` → spills → loop-head invariant `SvfAt` (named
+  fields; caller spills `SvfSaved`; frame outside `SvfW`). Piece chains rebase
+  the state into named structures (`SvfPro`) to stay under budget.
+- `SnpGeom` now puts the stack scratch and destination above newlib's static
+  data (`0x8001c168`).
+
 ## In flight
-- `__ssprint_r` (the iov loop over `ssputs_nw`), then `_svfprintf_r`.
+- `_svfprintf_r` format loop: literal scan (`__ascii_mbtowc` per byte),
+  literal piece, `%s` (strlen path), `%d`/`%lld` (sign, digits), PRINT and
+  flush via `ssprint_nw`, final flush, epilogue.
 
 ## Plan
 1. Leaf runs over `NW`: `__ascii_mbtowc` (one char), `strlen` of a data string
