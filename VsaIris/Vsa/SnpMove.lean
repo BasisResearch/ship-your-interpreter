@@ -324,4 +324,138 @@ theorem mm32_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
       exact hb (ofNat_ne_of_lt (by omega) (by omega) (by omega))) _ _ ?_ ?_ ?_ ?_ hcp4
     all_goals mm_regs
 
+theorem MWKeep.trans {R R' R'' : Nat → BitVec 64} (h : MWKeep R' R) (h' : MWKeep R'' R') :
+    MWKeep R'' R := fun z a b c d e => (h' z a b c d e).trans (h z a b c d e)
+
+/-- **`memmove`'s 32-byte loop** (`0x80006a48`), `m` blocks left: it copies
+`[c, L)` and falls through at `0x80006a74`. -/
+theorem mm_loop32 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem}
+    {DA : List Nat} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (d src len L : Nat) (g : Nat → BitVec 8) (R0 : Nat → BitVec 64) (Mt0 : Mem)
+    (G : MoveGeom s dst n d src len) (hd8 : d % 8 = 0) (hL : L ≤ len) (hL32 : L % 32 = 0)
+    (hk : ∀ R' Mt', MWKeep R' R0 → R' 11 = BitVec.ofNat 64 (src + L) →
+      R' 14 = BitVec.ofNat 64 (d + L) → Copied Mt' Mt0 d src L g →
+      NW live Dt DA (snpS s dst n) Q 0x80006a74#64 R' Mt') :
+    ∀ m c (R : Nat → BitVec 64) (Mt : Mem), c + 32 * m = L → 0 < m →
+      R 11 = BitVec.ofNat 64 (src + c) → R 14 = BitVec.ofNat 64 (d + c) →
+      R 16 = BitVec.ofNat 64 (d + L) → MWKeep R R0 → Copied Mt Mt0 d src c g →
+      ReadWin Dt DA (snpS s dst n) Mt src (src + len) g →
+      NW live Dt DA (snpS s dst n) Q 0x80006a48#64 R Mt := by
+  intro m
+  induction m with
+  | zero => intro _ _ _ _ h; omega
+  | succ m ih =>
+    intro c R Mt hcm _ h11 h14 h16 hkp hcp hw
+    refine mm32_step hlive d src len L c g R Mt Mt0 G hd8 hL (by omega) (by omega) hw hcp h11 h14 h16
+      ?_ ?_
+    · intro hlt R' Mt' h11' h14' h16' hkp' hcp' hw'
+      exact ih (c + 32) R' Mt' (by omega) (by omega) h11' h14' (h16'.trans h16) (hkp.trans hkp')
+        hcp' hw'
+    · intro heq R' Mt' h11' h14' _ hkp' hcp'
+      rw [heq] at h11' h14' hcp'
+      exact hk R' Mt' (hkp.trans hkp') h11' h14' hcp'
+
+theorem ofNat_sub_ofNat (x y : Nat) (hy : y < 2 ^ 64) :
+    BitVec.ofNat 64 x - BitVec.ofNat 64 y = BitVec.ofNat 64 (x + (2 ^ 64 - y)) := by
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_sub, BitVec.toNat_ofNat]; omega
+
+/-- **One iteration of `memmove`'s 8-byte loop** (`0x80006aac`): `a6 = d - src`,
+the loop ends when `a1` reaches `src + E`. -/
+theorem mm8_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem}
+    {DA : List Nat} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (d src len E c : Nat) (g : Nat → BitVec 8) (R : Nat → BitVec 64) (Mt Mt0 : Mem)
+    (G : MoveGeom s dst n d src len) (hd8 : d % 8 = 0) (hE : E ≤ len) (hc : c + 8 ≤ E)
+    (hc8 : c % 8 = 0)
+    (hw : ReadWin Dt DA (snpS s dst n) Mt src (src + len) g) (hcp : Copied Mt Mt0 d src c g)
+    (h11 : R 11 = BitVec.ofNat 64 (src + c)) (h14 : R 14 = BitVec.ofNat 64 (src + E))
+    (h16 : R 16 = BitVec.ofNat 64 (d + (2 ^ 64 - src)))
+    (hkL : c + 8 < E → ∀ R' Mt', R' 11 = BitVec.ofNat 64 (src + (c + 8)) →
+      R' 14 = R 14 → R' 16 = R 16 → MWKeep R' R →
+      Copied Mt' Mt0 d src (c + 8) g → ReadWin Dt DA (snpS s dst n) Mt' src (src + len) g →
+      NW live Dt DA (snpS s dst n) Q 0x80006aac#64 R' Mt')
+    (hkX : c + 8 = E → ∀ R' Mt', R' 11 = BitVec.ofNat 64 (src + (c + 8)) →
+      R' 14 = R 14 → R' 16 = R 16 → MWKeep R' R →
+      Copied Mt' Mt0 d src (c + 8) g → NW live Dt DA (snpS s dst n) Q 0x80006ac0#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80006aac#64 R Mt := by
+  obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G
+  nx_run hlive using [h11, h14, h16]
+  snp_ld hw
+  nx_run hlive using [h11, h14, h16] at 0x80006abc
+  snp_sd hcp, hw => hcp1, hw1
+  nx_run hlive using [h11, h14, h16] at 0x80006aac 0x80006ac0
+  all_goals rename_i hb
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hb ⊢)
+  all_goals (rw [ofNat_add_ofNat] at hb; try rw [h14] at hb)
+  · refine hkL (Nat.lt_of_le_of_ne hc (fun e => hb (by rw [show src + c + 8 = src + E by omega])))
+      _ _ ?_ ?_ ?_ ?_ hcp1 hw1
+    all_goals mm_regs
+  · refine hkX (by
+      apply Classical.byContradiction; intro hne
+      exact hb (ofNat_ne_of_lt (by omega) (by omega) (by omega))) _ _ ?_ ?_ ?_ ?_ hcp1
+    all_goals mm_regs
+
+/-- Registers `memmove` keeps: all but `a1`–`a7`, `t1`, `t3`. -/
+abbrev MMFrame (R R0 : Nat → BitVec 64) : Prop :=
+  ∀ z, z ≠ 11 → z ≠ 12 → z ≠ 13 → z ≠ 14 → z ≠ 15 → z ≠ 16 → z ≠ 17 → z ≠ 6 → z ≠ 28 →
+    R z = R0 z
+
+theorem MMFrame.of_mm {R R0 : Nat → BitVec 64} (h : MMKeep R R0) : MMFrame R R0 :=
+  fun z a _ b c d _ _ _ _ => h z a b c d
+
+theorem MMFrame.of_mw {R R0 : Nat → BitVec 64} (h : MWKeep R R0) : MMFrame R R0 :=
+  fun z a _ b c _ _ e f _ => h z a b c e f
+
+theorem MMFrame.trans {R R' R'' : Nat → BitVec 64} (h : MMFrame R' R) (h' : MMFrame R'' R') :
+    MMFrame R'' R := fun z a b c d e f g i j => (h' z a b c d e f g i j).trans (h z a b c d e f g i j)
+
+/-- **`memmove`'s byte tail** (`0x800069fc`): `k` bytes left after `c` copied,
+`a5 = d + c`, `a1 = src + c`, `a2 = k`. At the `ret` the copy is complete. -/
+theorem mm_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem}
+    {DA : List Nat} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (d src len c k : Nat) (g : Nat → BitVec 8) (R R0 : Nat → BitVec 64) (Mt Mt0 : Mem)
+    (G : MoveGeom s dst n d src len) (hck : c + k = len)
+    (hw : ReadWin Dt DA (snpS s dst n) Mt src (src + len) g) (hcp : Copied Mt Mt0 d src c g)
+    (h12 : R 12 = BitVec.ofNat 64 k) (h15 : R 15 = BitVec.ofNat 64 (d + c))
+    (h11 : R 11 = BitVec.ofNat 64 (src + c)) (hkp : MMFrame R R0)
+    (hal : (R0 1).toNat % 4 = 0)
+    (hk : ∀ R' Mt', MMFrame R' R0 → Copied Mt' Mt0 d src len g →
+      NW live Dt DA (snpS s dst n) Q (R0 1) R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x800069fc#64 R Mt := by
+  obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hs1, hs2, hs3, hdisj⟩ := G
+  have hR1 : R 1 = R0 1 := hkp 1 (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide) (by decide) (by decide)
+  nx_run hlive using [h12, h15, h11] at 0x80006a0c 0x80006ae0
+  all_goals (rename_i hb; try simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hb; try rw [h12] at hb)
+  · -- k = 0: `ret`
+    have hk64 : k < 2 ^ 64 := by omega
+    have hk0 : k = 0 := by
+      have := congrArg BitVec.toNat hb; simp at this; omega
+    subst hk0
+    rw [Nat.add_zero] at hck
+    subst hck
+    refine nt_80006ae0 hlive ?_ ?_
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hR1]; exact hal
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hR1]
+      refine hk _ Mt (hkp.trans fun z _ _ h13 _ _ _ _ _ _ => ?_) hcp
+      simp only [upd_apply, h13, ite_false]
+  · -- the byte loop from `j = c`
+    have hk64 : k < 2 ^ 64 := by omega
+    have hk0 : 0 < k := by
+      rcases Nat.eq_zero_or_pos k with h | h
+      · exact (hb (by rw [h12, h])).elim
+      · exact h
+    refine mm_byteLoop hlive d src len (fun i => g (src + i)) R Mt0 hd1 hdd1 hdd2 hdn hs1 hs2 hs3
+      hdisj (fun i hi => (hw (src + i) (by omega) (by omega)).transport
+        (hcp.rest _ (by omega)).symm) (by rw [hR1]; exact hal)
+      (fun R' Mt' hk' hd hr => by rw [hR1]; exact hk R' Mt' (hkp.trans (MMFrame.of_mm hk')) ⟨hd, hr⟩)
+      k c _ Mt hck hk0 ?_ ?_ ?_ ?_ hcp.done hcp.rest
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ofNat_add_ofNat]
+      apply BitVec.eq_of_toNat_eq
+      simp only [BitVec.toNat_ofNat]; omega
+    · intro z h11' h13 h14 h15'
+      simp only [upd_apply, h13, ite_false]
+
 end VsaIris.Sym
