@@ -222,3 +222,7 @@ import VsaIris.Interp.HeapCall
 import VsaIris.Interp.EnvCalls
 import VsaIris.Interp.ProofEnvNew
 import VsaIris.Interp.E5
+import VsaIris.Vsa.SymOut
+import VsaIris.Vsa.Jalr
+import VsaIris.Vsa.NewlibRun
+import VsaIris.Vsa.NewlibSteps
