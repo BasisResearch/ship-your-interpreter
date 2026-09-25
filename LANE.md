@@ -4,6 +4,8 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
 `newlib.snprintf` (`VsaIris/HOLES.md`). All three run `snprintf` →
 `_svfprintf_r` on a string `FILE` (`__ssprint_r` → `__ssputs_r` → `memmove`).
 
+## Status: done — newlib.snprintf discharged (11381c47); IrisHoles is empty on this branch. Ready for INT2 to merge (keep B3's P7 structure and fold in this branch's RAM bound).
+
 ## Done
 - **Statement change: `StdioOK` pins the C locale** (`Vsa/Sim/LocaleData.lean`;
   `BootHeapFacts.locale`, control witness `Control.locale_mem`; INTERP_DESIGN.md
@@ -79,7 +81,7 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   `out.snprintf*` specs; stack and buffer above newlib's data. Callers in
   `ProofStringify` use `ms_callNewlibA` (verbatim from lane N1).
 
-## In flight
+## In flight (none: finished at 11381c47)
 - **`newlib.snprintf` discharged** (`Sym.snprintf_ok`, `Vsa/SnpGen.lean`):
   `SnprintfProved` passed to `NewlibCore.full`; consumers `rtErr_spec` (stack
   bound, `InpGeom.above`), `wp_topAbrupt`, `cloArityTail` supply the premises;
