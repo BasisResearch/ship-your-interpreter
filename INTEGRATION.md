@@ -185,3 +185,17 @@ the §8 inventory, no other arm is missing.
   it) are supplied at the top (A).
 - Duplicates E5 lists to fold later: `execSP_off`/`execSP_offF`, `ms_callEvalPx`/`ms_callEvalPF`, and
   `ms_truthyCall` (roughly `ms_callHelperVal` with `valueTruthySpec`).
+
+## Lane INT2: the newlib lanes
+
+### N1 + N4 (2026-09-25)
+
+| lane | head | merge on `iris-main` | conflicts |
+|---|---|---|---|
+| N1 | `cf3c915` | fast-forward | none |
+| N4 (contains N3 at `02baa6d`: `newlib.fwrite` proved) | `52b1e9d` | `b05d880` | `VsaIris.lean` (import union; N1 renamed `Stdout.FwriteOut` to `Stdout.StrOut`), `HOLES.md` (proved rows dropped, N3's narrowed `newlib.fprintf` row kept), `LANE.md` (archived as `LANES-n1.md`, `LANES-n4.md`) |
+
+Hole ledger: before 10 (`newlib.{snprintf,fprintf,fwrite,exitHandlers}`, `out.{fputs,fputc,fwrite,fprintf,snprintfFn,snprintfInt}`);
+after 5 (`newlib.snprintf`, `newlib.fprintf`, `out.fprintf`, `out.snprintfFn`, `out.snprintfInt`).
+Checks: `lake build Vsa VsaIris VsaIris.Audit` green (2700 jobs), `check_iris_holes.py` ok (5),
+`endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
