@@ -1983,4 +1983,78 @@ theorem svf_digStep {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     · intro z a b c d e f g h i k l m
       simp only [upd_apply, c, h, i, l, ite_false]; exact kR2 z a b d e f g k m
 
+theorem imgM_sb_ofNat (Mt : Mem) (a k : Nat) (hk : k < 256) :
+    imgM (writeLog Mt [(a, 1, BitVec.ofNat 64 k)]) a = BitVec.ofNat 8 k := by
+  have e : BitVec.ofNat 64 k = BitVec.zeroExtend 64 (BitVec.ofNat 8 k) := by
+    apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat, BitVec.toNat_setWidth]; omega
+  rw [e, imgM_sb_zext]
+
+theorem DigKeep.trans {R R' R'' : Nat → BitVec 64} (h1 : DigKeep R' R) (h2 : DigKeep R'' R') :
+    DigKeep R'' R := fun z a b c d e f g h i j k l => (h2 z a b c d e f g h i j k l).trans (h1 z a b c d e f g h i j k l)
+
+theorem ten_pow_20 : 2 ^ 64 < 10 ^ 20 := by decide
+
+/-- **The digit loop** (`0x8000831c`): the digits of `mag` stored downwards from
+`sp + 348`, `K` of them, low digit first; the exit (`0x80008358`) with the
+digit-count bounds `digits_eq_natToString` takes. -/
+theorem svf_digLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (mag : Nat) (hm : mag < 2 ^ 64) (Rs : Nat → BitVec 64) (Mts : Mem) (SG : SnpGeom s dst n)
+    (hX : ∀ K R' Mt', 1 ≤ K → mag / 10 ^ (K - 1) ≤ 9 → (K = 1 ∨ 9 < mag / 10 ^ (K - 2)) → K ≤ 20 →
+      R' 26 = BitVec.ofNat 64 (s - 864 + 348 - K) → R' 23 = BitVec.ofNat 64 K → DigKeep R' Rs →
+      (∀ i, i < K → imgM Mt' (s - 864 + 348 - 1 - i) = digB mag i) →
+      (∀ a, (a < s - 864 + 348 - K ∨ s - 864 + 348 ≤ a) → imgM Mt' a = imgM Mts a) →
+      NW live Dt DA (snpS s dst n) Q 0x80008358#64 R' Mt') :
+    ∀ f j (R : Nat → BitVec 64) (Mt : Mem), j + f = 20 → R 8 = BitVec.ofNat 64 (mag / 10 ^ j) →
+      R 25 = BitVec.ofNat 64 (s - 864 + 348 - j) → R 23 = BitVec.ofNat 64 j → R 27 = 0#64 →
+      DigKeep R Rs → (j = 0 ∧ 9 < mag ∨ 9 < mag / 10 ^ (j - 1)) →
+      (∀ i, i < j → imgM Mt (s - 864 + 348 - 1 - i) = digB mag i) →
+      (∀ a, (a < s - 864 + 348 - j ∨ s - 864 + 348 ≤ a) → imgM Mt a = imgM Mts a) →
+      NW live Dt DA (snpS s dst n) Q 0x8000831c#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  intro f
+  induction f with
+  | zero =>
+    intro j R Mt hjf _ _ _ _ _ hc _ _
+    exfalso
+    rcases hc with ⟨h0, _⟩ | hc
+    · omega
+    · have h1 : 10 ^ (j - 1) * 10 ≤ mag := by
+        have := (Nat.le_div_iff_mul_le (Nat.pow_pos (by decide : 0 < 10) (n := j - 1))).mp (by omega : 10 ≤ mag / 10 ^ (j - 1))
+        rw [Nat.mul_comm]; exact this
+      have h2 : 10 ^ (j - 1) * 10 = 10 ^ 20 := by rw [← Nat.pow_succ]; congr 1; omega
+      have := ten_pow_20; omega
+  | succ f ih =>
+    intro j R Mt hjf h8 h25 h23 h27 hkp hc hdig hM
+    have hj : j < 20 := by omega
+    refine svf_digStep hlive mag j R Mt SG h8 h25 h23 h27 hj hm ?_ ?_
+    · intro hlt R' h8' h25' h23' h27' hkp'
+      refine ih (j + 1) R' _ (by omega) h8' h25' h23' h27' (hkp.trans hkp') (.inr (by simpa using hlt))
+        (fun i hi => ?_) (fun a ha => ?_)
+      · rcases Nat.lt_or_ge i j with h | h
+        · rw [imgM_miss_nat _ _ (by omega) (by omega)]; exact hdig i h
+        · have hij : i = j := by omega
+          subst hij
+          rw [show s - 864 + 348 - 1 - i = (BitVec.ofNat 64 (s - 864 + 348 - i - 1)).toNat by
+            rw [toNat_ofNat_lt (by omega)]; omega]
+          rw [imgM_sb_ofNat _ _ _ (by omega)]
+          unfold digB; congr 1; omega
+      · rw [imgM_miss_nat _ _ (by omega) (by omega)]; exact hM a (by omega)
+    · intro hle R' h26' h23' hkp'
+      refine hX (j + 1) R' _ (by omega) (by simpa using hle) ?_ (by omega) h26' h23' (hkp.trans hkp')
+        (fun i hi => ?_) (fun a ha => ?_)
+      · rcases hc with ⟨h0, _⟩ | hc
+        · left; omega
+        · right; simpa using hc
+      · rcases Nat.lt_or_ge i j with h | h
+        · rw [imgM_miss_nat _ _ (by omega) (by omega)]; exact hdig i h
+        · have hij : i = j := by omega
+          subst hij
+          rw [show s - 864 + 348 - 1 - i = (BitVec.ofNat 64 (s - 864 + 348 - i - 1)).toNat by
+            rw [toNat_ofNat_lt (by omega)]; omega]
+          rw [imgM_sb_ofNat _ _ _ (by omega)]
+          unfold digB; congr 1; omega
+      · rw [imgM_miss_nat _ _ (by omega) (by omega)]; exact hM a (by omega)
+
 end VsaIris.Sym
