@@ -112,7 +112,7 @@ theorem bootHeapFacts :
   stderr := stderr_mem
   locale := locale_mem
   stderrStream := stderrStream_mem
-  shared_geom := sharedGeom
+  shared_geom := sharedGeom.toReadWin
 
 
 theorem bootHeap : BootHeap heapMem heapArena phif phic 0x82000000 2 ownershipData

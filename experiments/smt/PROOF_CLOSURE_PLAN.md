@@ -4363,3 +4363,52 @@ every `c/tests/*.wl` build, reconstructed at `interp_run`'s entry):
   dependent (REVIEW.md M1); `CStr` restricts programs to ASCII (L1).
 
 Decisions (2026-09-25): P1–P6 approved. P1+P2 → lane B1, P3 → lane B2, P4 → lane B3. P5 (README names `capacity`/`stack_admissible` and every `Loaded` requirement) and P6 (tower core and residual-ledger tooling removed; `StmtDispatchClose` kept) landed on `lane-v`.
+
+
+### Lane B3: loader-derived boot traces (2026-09-25)
+
+Reflected boot traces of the proof ELF and every `c/tests/*.wl` build
+(`scripts/gen_boot_witness.py`, `Vsa/Sim/Boot/`, library `VsaBoot`): the
+entry memory is `writeLog (loadedMem script) log` with the emulator's store
+log, and `LogOk` (kernel-checked per program) gives every byte.
+
+- **C4, machine-checked (not covered by P1–P4).** The natives' `Value` name
+  pointers are `.rodata` literals (`value_native("print", …)`: `0x80019538`,
+  `0x80019540`, `0x80019548`); `FrameOwned.values` makes them `shared`
+  (`ValueOwned`/`SharedCString`), and `BootHeapFacts.shared_geom`
+  (`SharedGeom.ram`) puts every shared byte at or above `0x8001acf0`.
+  `Vsa.Sim.Boot.nativeName_obstruction` derives `False` from
+  `InterpRunReadyFacts` and three memory reads; `Gen/<Prog>.c4_obstruction`
+  instantiates it at each program's real entry memory, for every register
+  file. The review's checker counted only AST strings as shared. Affected
+  declaration: `LayoutInstance.BootHeapFacts.shared_geom`. Missing supplier: a
+  shared-byte geometry admitting `.rodata` (the Iris consumers
+  `readOK_of_sharedGeom`, `sharedWin_of_geom` need only RAM, the HTIF
+  exclusion and the stack exclusion; `RoByte` is `shared ∨ CodeByte`, a
+  persistent union), or native values whose names are heap copies (a binary
+  change). REVIEW.md P7. **Resolved** (user decision 2026-09-25): the field is
+  `SharedReadWin` (`Vsa/Sim/SharedGeometry.lean`), witnessed by
+  `OwnOk.readWin` at every trace; the obstruction was removed with the fix.
+- Witnesses: `Gen/<Prog>.loaded : Loaded interpRunLayout prog (fillZero c)` at
+  the real entry state of 10 traces, no premises (P3 merged: stack presence
+  from the zero fill); `EndToEnd.lean` `*_halts` from `IrisHoles` alone.
+- `recursion.wl`'s `capacity`: `capOk` does not finish in the kernel
+  (`fib(20)`, ~22k frames, list-backed store). Missing supplier: a cost
+  bound not by evaluation (e.g. a symbolic cost lemma for the program).
+
+### P3 landed (lane B2, 2026-09-25): the machine is insensitive to absent bytes
+
+`REVIEW.md` C3 is resolved by statement: `endToEnd_refinement` is now stated at
+`Vsa.Densify.fillZero c` (every absent RAM byte inserted as `some 0`), and
+`Vsa/Densify.lean` proves `Halts c out e ↔ Halts (fillZero c) out e` and
+`Diverges c ↔ Diverges (fillZero c)` from `Vsa.Densify.Gen.stepOnce_resp`: a
+logical-relations proof (`Resp`, `Vsa/Densify/Resp.lean`) over the 307 monadic
+functions of the executable Sail model in `stepOnce`'s call graph
+(`experiments/densify/closure.tsv`, generated theorems `Vsa/Densify/Gen*.lean`
+from `scripts/gen_resp.py`, the two recursive groups by hand). Every memory
+access of the model goes through lean-sail's `readByte` (`getD 0`) and
+`writeByte` (`insert`); no Sail path inspects presence. The previous statement
+is `endToEnd_refinement_loaded`; `Control.loaded_fill` witnesses the new
+hypothesis at the control. No hole was added. Open: C1/C2 (P1/P2, other lanes),
+and P4's loader-derived witnesses; see `INTERP_DESIGN.md` "STATEMENT CHANGE
+(lane B2, P3)".

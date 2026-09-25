@@ -23,8 +23,103 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 
 - **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
+- **P1–P4 accepted (user, 2026-09-25; `REVIEW.md` §4).** The review found `Loaded interpRunLayout p c` false at every configuration the binary reaches (C1 console flags, C2 script bytes in the rodata pin, C3 stack presence). P1 (console flags at the boundary), P2 (the script blob out of the rodata pin) and P4 (loader-derived witnesses) are separate lanes. P3 (lane B2, this branch): the final theorem is stated at the fill-with-zero `fillZero c` of the configuration, whose presence fields hold by construction, and the machine is proved insensitive to absent bytes. (see the next STATEMENT CHANGE)
+
+## STATEMENT CHANGE (lane B2, P3): `endToEnd_refinement` at `fillZero c`
+
+`Vsa.Sim.EndToEnd.endToEnd_refinement` (`VsaIris/Interp/EndToEnd.lean`) now reads
+
+```lean
+theorem endToEnd_refinement (h : IrisHoles) :
+    ∀ p c, Loaded interpRunLayout p (fillZero c) →
+      (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+where `Vsa.Densify.fillZero c` (`Vsa/Densify/Transport.lean`) is `c` with every
+absent RAM byte `[0x80000000, 0x88000000)` inserted as `some 0`
+(`fillZeroMem_get`: present bytes keep their values, `fillZeroMem_ram`: every
+RAM byte is present). The previous statement is kept verbatim as
+`endToEnd_refinement_loaded`; `Refinement.lean`, `InterpSim`, `Loaded` and
+every boundary structure are unchanged.
+
+- **Why.** C3: `InterpRunPhysicalFacts.stack_bytes` and adequacy's
+  `VsaOk.live topLive` demand all 8 MiB of stack *present* in the Sail map,
+  which the loader (`p_filesz` bytes only) never produces. The machine cannot
+  observe presence: `readByte = getD 0`, `writeByte = insert`.
+- **The proof (`Vsa/Densify/`).** `SEqv σ σ'` (same registers, choice state,
+  cycle counter, console, and total read of every byte) and `Resp x` (a Sail
+  computation maps `SEqv` states to equal results and `SEqv` states) in
+  `Resp.lean`; every lean-sail primitive is `Resp` (`PS.*`; `readByte` by
+  `getD`, `writeByte` by `MemEqv.insert`). `Resp` for the 307 monadic model
+  functions in `stepOnce`'s call graph: generated (`scripts/gen_resp.py` from
+  `experiments/densify/closure.tsv`, itself from `experiments/densify/Closure.lean`)
+  as one theorem per function, `unfold` + `resp_auto` (`Tactic.lean`: bind,
+  pure, lift, early-return blocks, fuel and `for` loops, `if`/`match`, join
+  points, calls to the already-proved callees), in `GenA/GenB/GenC.lean`; by
+  hand for the `currentlyEnabled` mutual block (`RecMutual.lean`, functional
+  induction) and the page walk (`RecPt.lean`). `Gen.stepOnce_resp` closes it.
+  `Transport.lean`: lockstep `Step`/`Halted`/`Steps`/`StepsN` under `CEqv`,
+  hence `halts_iff_of_ceqv`/`diverges_iff_of_ceqv`; `Densify.lean`:
+  `halts_fillZero`, `diverges_fillZero`.
+- **No Sail path inspects presence.** The only accesses to the memory field
+  are lean-sail's `readByte` (`get? … |>.getD 0`) and `writeByte` (`insert`);
+  the model's PMA/PMP/MMIO/HTIF checks are address-based (`Resp` proved for
+  `pmaCheck`, `pmpCheck`, `within_mmio_*`, `htif_load/store`, `clint_*`).
+  Two model functions are `panic` stubs (`get_16_random_bits`,
+  `load_reservation`: `pure default`), respectful as stated.
+- **Not vacuous.** `Control.loaded_fill : Loaded interpRunLayout
+  nativeNameProgram (fillZero heapConfig)` (`ControlLoaded.lean`): the control
+  memory is dense on RAM, so `fillZero heapConfig = heapConfig`
+  (`fillZero_eq_of_dense`). On the real boot states,
+  `experiments/review-v/check_loaded.py` evaluates every first-order field in
+  the `fillZero` view (renamed from `dense`): `stack_bytes` holds for all 35
+  traced programs, every byte the loader or the boot wrote lies in RAM
+  (`fillZero covers the map`), and the only failures left are C1/C2 (P1/P2).
+- **Consequence for the hole lanes (N1–N5).** None: `IrisHoles`, the helper
+  specs and their preconditions are untouched; the change is at the top only.
+- **Discipline.** `scripts/gen_resp.py --check` is stage a3 of
+  `scripts/check_all.sh`; `check_final_axioms.sh` audits `halts_fillZero`,
+  `diverges_fillZero`, `stepOnce_resp`, `endToEnd_refinement_loaded` and
+  `Control.loaded_fill`. No `maxHeartbeats`/`maxRecDepth` is raised: the
+  330-alternative CSR name tables are unfolded head-only (`delta_head_matcher`)
+  and split by a syntactic `dite` step (`resp_dite_head`), never traversed.
 
 - **P1–P4 approved (user, 2026-09-25; `REVIEW.md` §4).** `Loaded` must hold at the state the binary actually reaches at `interp_run`'s entry. P1 (console flags) and P2 (script bytes) are lane B1's; each changed field is checked against the traced corpus (`experiments/review-v/check_loaded.py`) and keeps the control witness. (see the next two STATEMENT CHANGEs)
+
+- **P7 approved (user, 2026-09-25; `REVIEW.md` C4/§4 P7).** Shared bytes may lie in `.rodata`: the boundary's shared-byte geometry is the read window the Iris consumers need (`ReadOK`, `SharedWin`), not "above the static image". (lane B3; see the next STATEMENT CHANGE)
+
+- **P4 landed (lane B3, 2026-09-25).** `Loaded` is witnessed at the binary's real `interp_run` entry state (loader memory + traced stores, zero-filled per P3) for the proof ELF and every `c/tests/*.wl` build but `recursion` (`capacity` out of kernel reach): `Vsa/Sim/Boot/Gen/<Prog>.loaded`, generated; `Vsa/Sim/Boot/EndToEnd.lean` applies `endToEnd_refinement` there. No statement change besides P7.
+
+## STATEMENT CHANGE (lane B3, P7): the boundary's shared bytes may lie in `.rodata`
+
+`interp_init` defines the natives with `value_native("print", …)`, so each
+native value's name pointer is a `.rodata` literal (`0x80019538`,
+`0x80019540`, `0x80019548` in every build), and `FrameOwned.values` makes
+those bytes shared. `BootHeapFacts.shared_geom : SharedGeom shared stackSL`
+required every shared byte at or above `0x8001acf0`, so no reachable
+configuration was `Loaded` (REVIEW.md C4; lane B3 refuted it at every traced
+entry memory before the change).
+
+```lean
+structure SharedReadWin (shared : Nat → Prop) (SL : StackLayout) : Prop where  -- Vsa/Sim/SharedGeometry.lean
+  ram   : ∀ k, shared k → 0x80000000 ≤ k ∧ k + 8 ≤ 0x100000000
+  htif  : ∀ k, shared k → k + 8 ≤ tohostAddr ∨ tohostAddr + 16 ≤ k
+  stack : ∀ k, shared k → k < SL.lo ∨ SL.hi ≤ k
+BootHeapFacts.shared_geom : SharedReadWin shared stackSL        -- was SharedGeom shared stackSL
+```
+
+- **What narrowed / widened.** `Loaded` widens: `SharedGeom.toReadWin` shows
+  the old field implies the new one. `SharedGeom` itself is unchanged (its
+  legacy consumers keep it).
+- **Consumers re-checked.** The field's only consumers are
+  `readOK_of_sharedGeom` (`Interp/TopRun.lean`, gives `ReadOK`) and
+  `sharedWin_of_geom` (`Interp/World.lean`, gives `SharedWin`); both now take
+  `SharedReadWin` and need exactly its three fields. The boundary world owns
+  `RoByte shared ∨ CodeByte` persistently, so a shared `.rodata` byte is not
+  owned twice.
+- **Witnessed by the real boot state.** `OwnOk.readWin` (`Vsa/Sim/Boot/Owned.lean`)
+  at every generated trace (`Gen/<Prog>.ownOk`, field `sharedWin`); the
+  control witness uses `sharedGeom.toReadWin`.
 
 ## STATEMENT CHANGE (lane B1, P1): `stdout` is unoriented at the boundary; `StdioOK` admits both orientations
 
