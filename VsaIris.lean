@@ -272,3 +272,4 @@ import VsaIris.Vsa.Stdout.Fputc
 import VsaIris.Vsa.Stdout.Sfvwrite
 import VsaIris.Vsa.Stdout.FwriteOut
 import VsaIris.Vsa.Stderr.VfpEntry
+import VsaIris.Vsa.Stderr.VfpErr
