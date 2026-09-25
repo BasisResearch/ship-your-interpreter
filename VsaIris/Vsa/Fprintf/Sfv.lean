@@ -161,4 +161,149 @@ theorem sfv_exit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     | (exfalso; simp at h32; done)
     | (exfalso; simp at h10; done)
 
+/-- Branch-condition arithmetic: `toNat` of offset addresses as `Nat`. -/
+macro "fp_arith " h:ident : tactic => `(tactic| (simp (disch := omega) only [toNat_add_lit,
+  BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod, ofNat_add_ofNat, BitVec.add_assoc,
+  BitVec.reduceAdd] at $h:ident))
+
+/-- **The copy pass, up to `memmove`**: from the head with `L > 0` bytes left
+and room (`k > 0` bytes buffered, or `L < 1024`), `memmove(_p, src, c)` with
+`c = min(L, 1024 - k)`, returning to `0x8000e294`. -/
+theorem sfv_copyA (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
+    {R Rh : Nat → BitVec 64} {s f U fp : BitVec 64} {need nxt k L src : Nat}
+    (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - need)
+    (hf1 : s.toNat - need ≤ f.toNat) (hf2 : f.toNat + 1208 ≤ s.toNat) (hfa : f.toNat % 8 = 0)
+    (hk : k < 1024) (hL : 0 < L) (hL2 : L < 2 ^ 31) (hroom : 0 < k ∨ L < 1024)
+    (hRh : SfvRef Rh f U fp) (hR : SfvRegs R Rh nxt L src (f + BitVec.ofNat 64 (184 + k)))
+    (hw : ldv .lw Mt (f + 12#64).toNat = BitVec.ofNat 64 (1024 - k))
+    (hBl : ldv .ld Mt (f + 24#64).toNat = f + 184#64) (hsz : ldv .lw Mt (f + 32#64).toNat = 1024#64)
+    (hkm : ∀ R', R' 10 = f + BitVec.ofNat 64 (184 + k) → R' 11 = BitVec.ofNat 64 src →
+      R' 12 = BitVec.ofNat 64 (min L (1024 - k)) → R' 18 = BitVec.ofNat 64 (min L (1024 - k)) →
+      R' 1 = 0x8000e294#64 → SfvRegs R' Rh nxt L src (f + BitVec.ofNat 64 (184 + k)) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800069c4#64 R' Mt) :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dfc0#64 R Mt := by
+  obtain ⟨h8, _, _, _, _⟩ := hR.k2 hRh
+  have h19 := hR.len; have h22 := hR.src; have h15 := hR.p; have h13 := hR.flags; have hn := hR.nxt
+  refine it_8000dfc0 hlive (fun hc => ?_) (fun _ => ?_)
+  · exfalso; rw [h19] at hc; have := congrArg BitVec.toNat hc; simp only [BitVec.toNat_ofNat] at this; omega
+  nx_run hlive using [h8, h19, h22, h15, h13, hw, hBl, hsz, BitVec.add_assoc, ofNat_add_ofNat] at 2147510724
+  all_goals (simp (config := {failIfUnchanged := false}) only [upd_apply, Nat.reduceEqDiff, ite_true,
+    ite_false, h19, h15, h13, h22, hn] at *)
+  all_goals (try simp (disch := omega) only [toNat_add_lit, BitVec.toNat_ofNat, Nat.reducePow,
+    Nat.reduceMod] at *)
+  all_goals first
+    | (exfalso; omega)
+    | (refine hkm _ (by rsimp) (by rsimp) ?_ ?_ (by rsimp)
+          ⟨by rsimp; exact hR.nxt, by rsimp; exact hR.len, by rsimp; exact hR.src, by rsimp; exact hR.p,
+            by rsimp; exact hR.flags, by keep_chain hR.keep⟩ <;>
+        (rsimp; congr 1; omega))
+
+
+/-- `subw` of two small counts. -/
+theorem subw_ofNat {a b : Nat} (ha : a < 2 ^ 31) (hb : b ≤ a) :
+    BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) - BitVec.extractLsb 31 0 (BitVec.ofNat 64 b)) =
+      BitVec.ofNat 64 (a - b) := by
+  have e : BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) - BitVec.extractLsb 31 0 (BitVec.ofNat 64 b) =
+      BitVec.ofNat 32 (a - b) := by
+    apply BitVec.eq_of_toNat_eq
+    simp only [BitVec.toNat_sub, BitVec.extractLsb_toNat, BitVec.toNat_ofNat, Nat.shiftRight_zero]
+    omega
+  rw [e]
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_signExtend]
+  have hmsb : (BitVec.ofNat 32 (a - b)).msb = false := by
+    rw [BitVec.msb_eq_decide]; simp only [decide_eq_false_iff_not, Nat.not_le, BitVec.toNat_ofNat]; omega
+  rw [hmsb]
+  simp only [Bool.false_eq_true, ite_false, Nat.add_zero, BitVec.toNat_setWidth, BitVec.toNat_ofNat]
+  omega
+
+/-- **After `memmove`** (`0x8000e294`): `_p` and `_w` advance by the `c`
+copied bytes; a full buffer is flushed (`_fflush_r`). The pass continues at
+`0x8000e258` with the buffered bytes `pend'` and the printed `out` splitting
+`pend ++ copied`. -/
+theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 : Mem}
+    {R Rh : Nat → BitVec 64} {s f U fp : BitVec 64} {need nxt L src c : Nat} {pend : List (BitVec 8)}
+    {g : Nat → BitVec 8}
+    (hs1 : s.toNat - need + 256 ≤ fp.toNat) (hs2 : fp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hfpa : fp.toNat % 16 = 0)
+    (hf1 : fp.toNat ≤ f.toNat) (hf2 : f.toNat + 1208 ≤ s.toNat) (hfa : f.toNat % 8 = 0)
+    (hc0 : 0 < c) (hc : c + pend.length ≤ 1024)
+    (hRh : SfvRef Rh f U fp) (hkeep : ∀ x ∈ sfvKeep, R x = Rh x)
+    (h9 : R 9 = BitVec.ofNat 64 nxt) (h19 : R 19 = BitVec.ofNat 64 L) (h22 : R 22 = BitVec.ofNat 64 src)
+    (h18 : R 18 = BitVec.ofNat 64 c)
+    (hF0 : SbFile Mt0 f pend) (hcp : Copied Mt Mt0 ((f + 184#64).toNat + pend.length) src c g)
+    (hk : ∀ R' M' pend' out, pend ++ copyBytes g src c = out ++ pend' → R' 18 = BitVec.ofNat 64 c →
+      R' 9 = BitVec.ofNat 64 nxt → R' 19 = BitVec.ofNat 64 L → R' 22 = BitVec.ofNat 64 src →
+      (∀ x ∈ sfvKeep, R' x = Rh x) → SbFile M' f pend' → Frame M' Mt0 (SfvReg f.toNat fp.toNat) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000e258#64 R' M') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e294#64 R Mt := by
+  obtain ⟨h8, h20, h21, h24, h2⟩ := (⟨hkeep 8 (by decide) |>.trans hRh.file, hkeep 20 (by decide) |>.trans hRh.uio,
+    hkeep 21 (by decide) |>.trans hRh.reent, hkeep 24 (by decide) |>.trans hRh.imax,
+    hkeep 2 (by decide) |>.trans hRh.sp⟩ : R 8 = f ∧ R 20 = U ∧ R 21 = 0x8001b538#64 ∧ R 24 = 0x7fffffff#64 ∧ R 2 = fp)
+  have hk1024 := hF0.len
+  have hB : (f + 184#64).toNat = f.toNat + 184 := by
+    rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
+  have hFr : Frame Mt Mt0 (SfvReg f.toNat fp.toNat) :=
+    Frame.copied hcp fun b h1 h2 => by unfold SfvReg; omega
+  have hp : ldv .ld Mt f.toNat = f + BitVec.ofNat 64 (184 + pend.length) := by
+    rw [Frame.ldv (Reg := fun a => (f + 184#64).toNat + pend.length ≤ a ∧ a < (f + 184#64).toNat + pend.length + c)
+      (Frame.copied hcp fun b h1 h2 => ⟨h1, h2⟩) .ld (fun j hj => by simp only [widthOfM] at hj; omega)]
+    exact hF0.p
+  have hw : ldv .lw Mt (f + 12#64).toNat = BitVec.ofNat 64 (1024 - pend.length) := by
+    have e12 : (f + 12#64).toNat = f.toNat + 12 := by
+      rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
+    rw [Frame.ldv (Reg := fun a => (f + 184#64).toNat + pend.length ≤ a ∧ a < (f + 184#64).toNat + pend.length + c)
+      (Frame.copied hcp fun b h1 h2 => ⟨h1, h2⟩) .lw (fun j hj => by simp only [widthOfM] at hj; omega)]
+    exact hF0.w
+  have esw := subw_ofNat (a := 1024 - pend.length) (b := c) (by omega) (by omega)
+  have hf3 : f.toNat + 1208 < 2 ^ 32 := by omega
+  nx_run hlive using [h8, h18, hp, hw, esw, BitVec.add_assoc, ofNat_add_ofNat] at 2147541592 2147544524
+  · -- room left: continue at the tail
+    rename_i hb
+    rsimp at hb
+    have hlt : pend.length + c < 1024 := by
+      apply Classical.byContradiction; intro hge
+      exact hb (by rw [show 1024 - pend.length - c = 0 by omega])
+    obtain ⟨hF', hFr'⟩ := hF0.advance hcp hlt (by omega) (.inr hf1) hf3 (by omega)
+    have e := putcs_nil
+    rw [show t = t ++ putcs [] by simp]
+    refine hk _ _ (pend ++ copyBytes g src c) [] (by simp) (by rsimp; exact h18) (by rsimp; exact h9)
+      (by rsimp; exact h19) (by rsimp; exact h22) (by keep_chain hkeep) hF' hFr'
+  · -- the buffer is full: flush it
+    rename_i hb
+    rsimp at hb
+    have heq : pend.length + c = 1024 := by
+      have := congrArg BitVec.toNat (Classical.not_not.mp hb); simp only [BitVec.toNat_ofNat] at this; omega
+    obtain ⟨hx, hFr', hbuf⟩ := hF0.advanceCore hcp (by omega) (by omega) (.inr hf1) hf3 (by omega)
+    have hB : (f + 184#64).toNat = f.toNat + 184 := by
+      rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
+    refine fflushF_run (bs := pend ++ copyBytes g src c) (sp := fp) (B := f + 184#64) (ra := 0x8000e2bc#64)
+      hlive ⟨hs1, hs2, hs3, hs4, hfpa, by decide, hfa,
+      hf1, by omega, by rsimp, by rsimp <;> exact h21, by rsimp <;> exact h8, by rsimp <;> exact h2, hx.sinit, hx.flags,
+      hx.flagsU, hx.flags2, hx.base, ?_, hx.size, hx.writer, hx.cookie, hx.sfl, hx.sfd⟩
+      (by simp; omega) (by simp; omega) (by omega) (by simp; omega) ?_ (by unfold tohostAddr; simp; omega)
+      ?_ ?_ (fun R' hR => ?_)
+    · intro e; have := congrArg BitVec.toNat e; simp only [BitVec.toNat_add, BitVec.toNat_ofNat] at this; omega
+    · simp only [List.length_append, copyBytes_length, heq]
+      rw [ldv_ld_miss _ _ (by simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega), ldv_store_hit,
+        ← heq, BitVec.add_assoc, ofNat_add_ofNat, Nat.add_assoc]
+    · intro i hi; simp only [List.length_append, copyBytes_length] at hi
+      rw [hB]; omega
+    · intro i hi
+      have hi' := hi; simp only [List.length_append, copyBytes_length] at hi'
+      exact .inl ⟨Or.inr (Or.inr ⟨by rw [hB]; omega, by rw [hB]; omega⟩), hbuf i hi⟩
+    · -- back from `_fflush_r` (0 returned): the tail
+      nx_ret hR
+      nx_run hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, BitVec.add_assoc] at 2147541592
+      obtain ⟨hF'', hFr''⟩ := SbFile.flushed (ra := 0x8000e2bc#64) (s0 := R 8) (s1 := R 9) (s2 := R 18)
+        (s3 := R 19) hx hFr' (by omega) hf1 hf3 (by omega)
+      refine hk _ _ [] (pend ++ copyBytes g src c) (by simp) (by rsimp; rw [rk18]; exact h18)
+        (by rsimp; rw [rk9]; exact h9) (by rsimp; rw [rk19]; exact h19) (by rsimp; rw [rk22]; exact h22)
+        ?_ hF'' hFr''
+      intro x hx
+      simp only [sfvKeep, List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
+        (simp only [rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27]; exact hkeep _ (by decide))
+
+
 end VsaIris.Sym.Fp
