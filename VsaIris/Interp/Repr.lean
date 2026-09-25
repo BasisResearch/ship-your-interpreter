@@ -232,7 +232,7 @@ structure ReadOK (k : Nat) : Prop where
   lo : 0x80000000 ≤ k
   hi : k < 0x100000000
   off : k < Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k
-  win : k + 8 ≤ 0x100000000 ∧ (k + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k)
+  win : k + 8 ≤ 0x88000000 ∧ (k + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k)
 
 /-- Persistent AST ownership with its read set's address facts. -/
 def astEG (a : Nat) (e : Expr) : IProp GF :=

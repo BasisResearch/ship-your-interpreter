@@ -279,7 +279,7 @@ theorem inExt_of_sub {e e' : Nat × Nat} (h : e'.1 = e.1 ∧ e'.2 ≤ e.2) {a : 
   unfold InExt at ha ⊢; omega
 
 /-- The shared bytes' geometry gives every shared byte a string read window. -/
-theorem sharedWin_of_geom {P : Nat → Prop} (h : Vsa.Sim.SharedGeom P stackSL) : SharedWin P := by
+theorem sharedWin_of_geom {P : Nat → Prop} (h : Vsa.Sim.SharedReadWin P stackSL) : SharedWin P := by
   intro k hk
   have h1 := h.ram k hk
   have h2 := h.htif k hk

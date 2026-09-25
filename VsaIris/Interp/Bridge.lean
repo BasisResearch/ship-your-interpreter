@@ -212,7 +212,7 @@ theorem cstrImg_of_cstring {m : Mem} {p : Nat} {s : String} (h : CString m p s) 
 view the AST and the runtime strings live in; it gives `StrWin` to every
 string of the view (`strWin_of_shared`). -/
 def SharedWin (P : Nat → Prop) : Prop :=
-  ∀ k, P k → 0x80000000 ≤ k ∧ k + 8 ≤ 0x100000000 ∧ (k + 8 ≤ htifLo ∨ htifLo + 16 ≤ k)
+  ∀ k, P k → 0x80000000 ≤ k ∧ k + 8 ≤ 0x88000000 ∧ (k + 8 ≤ htifLo ∨ htifLo + 16 ≤ k)
 
 theorem strWin_of_shared {P : Nat → Prop} {p len : Nat} (hw : SharedWin P)
     (hP : ∀ i, i ≤ len → P (p + i)) : StrWin p len := by
