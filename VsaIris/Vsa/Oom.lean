@@ -205,7 +205,7 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     (cs : Nat → BitVec 64) (o : String) :
     PC ↦ᵣ BitVec.ofNat 64 S.head ∗ ra ↦ᵣ r ∗ sp ↦ᵣ s' ∗ clobbered argRegs ∗ clobbered tmpRegs ∗
       sepL calleeSaved (fun q => q ↦ᵣ cs q) ∗ gp ↦ᵣ□ gpV ∗ binImg ∗ stackScratch s n ∗
-      stdioOwn ∗ consoleOwn o ∗ (abortRes N L Room inp s n -∗ Wp.W Φ)
+      stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ (abortRes N L Room inp s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   have hHA := H.at
   have h1 := hsp.need; have h2 := hsp.lo; have h3 := hsp.fits; have h4 := hsp.frame
@@ -214,7 +214,7 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   have hsp' : OomSp S s' := ⟨by unfold tohostAddr; omega, by omega, h6⟩
   have hcodeL := hS.text.live hlive
   unfold VsaIris.sp VsaIris.ra VsaIris.gp
-  iintro ⟨Hpc, Hra, Hsp, Hargs, Htmp, Hsaved, #Hgp, #Himg, Hscr, Hstd, Hcon, Hk⟩
+  iintro ⟨Hpc, Hra, Hsp, Hargs, Htmp, Hsaved, #Hgp, #Himg, Hscr, Hstd, Hno, Hcon, Hk⟩
   ihave #Hcode := instrAt_of_binImg hS.text $$ Himg
   -- the stack: `[s-n, s'-768)`, `fwrite`'s scratch, the spill window, the rest
   unfold stackScratch
@@ -347,13 +347,13 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   iapply Hk
   unfold abortRes
   iapply abortAt_intro
-  isplitl [Hpc Hra Ha0 Hsp Hargs Htmp Hsaved Hstd Hcon]
+  isplitl [Hpc Hra Ha0 Hsp Hargs Htmp Hsaved Hstd Hno Hcon]
   · unfold abortCore oomCore
     iright
     ihave ⟨Hs0, Hsaved⟩ := (sepL_calleeSaved cs).1 $$ Hsaved
     iexists s', BitVec.ofNat 64 (S.head + 4 * S.stage + 8 + 4), cs 8, o ++ o'
     unfold VsaIris.sp VsaIris.ra
-    iframe Hpc Ha0 Hra Hs0 Hsp Htmp Hcon
+    iframe Hpc Ha0 Hra Hs0 Hsp Htmp Hno Hcon
     isplitr
     · ipureintro
       exact ⟨h1, h2, by unfold exitNeed exitHandlersNeed; omega, by omega, h5, h6⟩

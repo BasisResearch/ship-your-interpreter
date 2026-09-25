@@ -231,7 +231,9 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
   · -- out of memory
     iintro ⟨-, HA⟩ HK HS
     unfold oomAt
-    icases HA with ⟨Hpc, Hsp, Hcl, Hst, -⟩
+    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hh, Hheap⟩
+    ihave Hno := heapRes_isHeap _ _ _ _ $$ Hheap
+    ihave Hno := Stdio.isHeap_errno _ Stdio.vsaLayoutP_errno _ $$ Hno
     ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [Hcl HK]
     · iframe Hcl HK
     ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
@@ -244,7 +246,7 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
       ⟨hn2, hlo, by rw [e16]; omega, by rw [e16]; show (R 2).toNat - 16 + 0 ≤ (R 2).toNat; omega,
         hhi, by rw [e16]; have := hsp.align; omega⟩ cs st.out
     rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002a38.head = 0x80002a38#64 from rfl]
-    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Hc
+    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Hno Hc
     iintro HA
     iapply Hk
     iframe HA HS
@@ -370,7 +372,9 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
   · -- out of memory
     iintro ⟨-, HA, Hval⟩ HK HS
     unfold oomAt
-    icases HA with ⟨Hpc, Hsp, Hcl, Hst, -⟩
+    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hh, Hheap⟩
+    ihave Hno := heapRes_isHeap _ _ _ _ $$ Hheap
+    ihave Hno := Stdio.isHeap_errno _ Stdio.vsaLayoutP_errno _ $$ Hno
     rw [show VsaIris.ra :: 10 :: retClob ++ defineSaved = envOomRegs from rfl]
     ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [Hcl HK]
     · iframe Hcl HK
@@ -385,7 +389,7 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
         hhi, by rw [e64]; have := hsp.align; omega⟩
       cs st.out
     rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002bd0.head = 0x80002bd0#64 from rfl]
-    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Hc
+    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Hno Hc
     iintro HA
     iapply Hk
     iframe HA Hval HS

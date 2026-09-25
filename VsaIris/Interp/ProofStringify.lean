@@ -738,7 +738,9 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
     rw [BitVec.toNat_add]; simp; omega
   unfold SgRest
-  iintro ⟨⟨#Hcode, #Himg, -, -, -, Hstd, Hcon, Hst, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hcode, #Himg, -, -, Hheap, Hstd, Hcon, Hst, Hk⟩, Hms⟩
+  ihave Hno := heapRes_isHeap _ _ _ _ $$ Hheap
+  ihave Hno := isHeap_errno _ vsaLayoutP_errno _ $$ Hno
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave ⟨HF, HP⟩ := ownSet_split _ (InExt (s.toNat - 112, 112)) _ $$ HS
   ihave HF := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ HF
@@ -759,7 +761,7 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       by rw [e112]; unfold stringifyNeed snprintfNeed fwriteNeed; omega,
       by rw [e112]; show s.toNat - 112 + 0 ≤ s.toNat; omega, hs2, by rw [e112]; omega⟩ _ o
   rw [show BitVec.ofNat 64 OomSites.oom80003140.head = 2147496256#64 from rfl]
-  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hcon
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hno Hcon
   iintro HA
   iapply Hk
   isplitl []

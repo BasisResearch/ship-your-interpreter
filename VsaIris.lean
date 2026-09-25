@@ -263,3 +263,5 @@ import VsaIris.Interp.ProofStrlen
 import VsaIris.Interp.ProofStrcpy
 import VsaIris.Interp.ProofStrHeap
 import VsaIris.Interp.ProofStrcpyH
+import VsaIris.Vsa.ErrnoHeap
+import VsaIris.Vsa.ExitH.Iris

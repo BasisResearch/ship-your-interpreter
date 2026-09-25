@@ -675,8 +675,10 @@ open VsaIris.VsaHeap
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ [Hslack2 Hst]
   · iframe Hslack2 Hst
   unfold mallocRes
-  icases Hres with (⟨%⟨hq0, -⟩, -⟩ | ⟨%hf3, Hh, Hblk⟩)
+  icases Hres with (⟨%⟨hq0, -⟩, Hh0⟩ | ⟨%hf3, Hh, Hblk⟩)
   · -- NULL: the out-of-memory block
+    ihave Hno := heapRes_isHeap _ _ _ _ $$ Hh0
+    ihave Hno := Stdio.isHeap_errno _ Stdio.vsaLayoutP_errno _ $$ Hno
     ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
     · iframe Hcode Hro
     iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
@@ -685,9 +687,9 @@ open VsaIris.VsaHeap
           evalPost N vsaLayoutP vsaRoomB inp .uncounted st' d (.binary .add l r) v sret s rv) -∗
           (wpW (vsaModel live)).W Φ) ∧
         (abortAt Core s (evalNeed (.binary .add l r) d) ∗ slot24 sret.toNat -∗
-          (wpW (vsaModel live)).W Φ)) ∗ errCtx inp))
+          (wpW (vsaModel live)).W Φ)) ∗ errCtx inp ∗ Stdio.errnoOwn))
     rotate_left
-    · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hrest Hslack Hk HE
+    · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hrest Hslack Hk HE Hno
     intro F'
     refine BinaryAddP_run8z (s := s) hlive hsf hs' hs2 hs3 ?_ ?_ ?_
     · ix_reg; ix_keep [hkeep12, hkeep10, hkeep8, hkeep6, hkeep4, hkeep2, hkeep1]
@@ -695,7 +697,7 @@ open VsaIris.VsaHeap
     intros
     apply swp_closeF
     unfold F' evalArmF
-    iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hrest, Hslack⟩, Hk⟩, #HE⟩, Hms⟩
+    iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hrest, Hslack⟩, Hk⟩, #HE, Hno⟩, Hms⟩
     ihave #Hbin := errCtx_img inp $$ HE
     unfold catRest
     icases Hrest with ⟨-, Hcon, Hio, -, -⟩
@@ -707,7 +709,7 @@ open VsaIris.VsaHeap
     · iframe Hslack Hst
     ihave Hk := and_elim_r $$ Hk
     iapply ms_evalOom (wpW _) hE hsg (by unfold fwriteNeed; omega)
-    iframe Hcode Hbin Hms Hst Hio Hcon
+    iframe Hcode Hbin Hms Hst Hio Hno Hcon
     isplitl []
     · ipureintro; ix_reg; ix_keep [hkeep12, hkeep10, hkeep8, hkeep6, hkeep4, hkeep2, hkeep1]
     iintro HA

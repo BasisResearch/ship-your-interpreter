@@ -276,14 +276,14 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     PC ↦ᵣ 0x800045ec#64 ∗ (10 : Nat) ↦ᵣ v ∗ ra ↦ᵣ rv ∗ (8 : Nat) ↦ᵣ 0x8001b970#64 ∗
       clobbered (argRegs.drop 1) ∗ callFrame sM fprintfNeed (calleeSaved.drop 1) cs ∗
       ownImg (InExt (sM.toNat + 752, 16)) imgT ∗ ownImg (InExt (sM.toNat + 496, 256)) errImg ∗
-      stdioOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
+      stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
     ⊢ Wp.W Φ := by
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
   unfold fprintfNeed tohostAddr at h1
   have hcodeL := mainErrCode_text.live hlive
   unfold callFrame VsaIris.sp VsaIris.ra
   iintro ⟨Hpc, Ha0, Hra, Hs0, Hargs, ⟨Hsp, Hscr, Hsaved, Htmp, #Hgp, #Himg⟩, HT, Herr, Hstd,
-    Hcon, HΦ⟩
+    Hno, Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg mainErrCode_text $$ Himg
   -- `_impure_ptr` and `_impure_data._stderr`
   ihave ⟨%simg, %⟨hok, himp⟩, Hw, Hrest, #Himp⟩ := stdioAt_open StdioOK StdWin $$ Hstd
@@ -461,6 +461,8 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
       iexact Hsaved
   isplitl [Hstd]
   · iapply stdioAt_mono (fun img h => .inr ⟨by simp, h⟩) $$ Hstd
+  isplitl [Hno]
+  · iexact Hno
   iintro %o'' -
   rw [show (70#64 : BitVec 64).toNat = 70 from rfl, String.append_assoc]
   iapply HΦ

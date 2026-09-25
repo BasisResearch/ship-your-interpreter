@@ -219,7 +219,7 @@ theorem wp_interpRet1 {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ie
       ownImg (InExt ((sM - 176#64).toNat, 176)) imgI ∗
       stackScratch (sM - 176#64) (fprintfNeed - 176) ∗
       ownImg (InExt (sM.toNat + 752, 16)) imgT ∗ ownImg (InExt (sM.toNat + 496, 256)) errImg ∗
-      stdioOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
+      stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
     ⊢ Wp.W Φ := by
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
   unfold fprintfNeed tohostAddr at h1
@@ -231,7 +231,7 @@ theorem wp_interpRet1 {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ie
   simp only [sepL_cons, sepL_nil]
   iintro ⟨Hpc, Ha0, Hs5, Hra, Hsp, ⟨⟨%s0v, Hs0⟩, ⟨%s1v, Hs1⟩, ⟨%s2v, Hs2⟩, ⟨%s3v, Hs3⟩,
     ⟨%s4v, Hs4⟩, ⟨%s6v, Hs6⟩, -⟩, Hs7, Hargs, Htmp, #Hgp, #Himg, HI, Hscr, HT, Herr, Hstd,
-    Hcon, HΦ⟩
+    Hno, Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg interpLandCode_text $$ Himg
   ihave HI := (ownImg_range _ _ _).1 $$ HI
   -- `interp_run`'s epilogue and `ret` to `main`
@@ -271,7 +271,7 @@ theorem wp_interpRet1 {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ie
   iapply wp_mainErrTail H live hlive Wp sM 1#64 0x800045ec#64
     (landSaved (sM - 176#64) imgI cs) o imgT errImg hsM (by decide) hra herr
   unfold callFrame VsaIris.sp VsaIris.ra
-  iframe Hpc Ha0 Hra Hs0 Hsp Htmp Hgp Himg HT Herr Hstd Hcon HΦ
+  iframe Hpc Ha0 Hra Hs0 Hsp Htmp Hgp Himg HT Herr Hstd Hno Hcon HΦ
   icases Hs7 with ⟨H23, H24, H25, H26, H27, -⟩
   isplitl [Hargs]
   · iexact Hargs
@@ -308,7 +308,7 @@ theorem wp_landing {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr)
       ownImg (InExt ((sM - 176#64).toNat, 176)) imgI ∗ blockOwn (sM.toNat + 280) 4 ∗
       stackScratch (sM - 176#64) (fprintfNeed - 176) ∗
       ownImg (InExt (sM.toNat + 752, 16)) imgT ∗ ownImg (InExt (sM.toNat + 496, 256)) errImg ∗
-      stdioOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
+      stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
     ⊢ Wp.W Φ := by
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
   unfold fprintfNeed tohostAddr at h1
@@ -320,7 +320,7 @@ theorem wp_landing {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr)
   simp only [sepL_cons, sepL_nil]
   iintro ⟨Hpc, Ha0, Hra, Hsp, ⟨⟨%s0v, Hs0⟩, ⟨%s1v, Hs1⟩, ⟨%s2v, Hs2⟩, ⟨%s3v, Hs3⟩, ⟨%s4v, Hs4⟩,
     ⟨%s5v, Hs5⟩, ⟨%s6v, Hs6⟩, -⟩, Hs7, Hargs, Htmp, #Hgp, #Himg, HI, Hcd, Hscr, HT, Herr, Hstd,
-    Hcon, HΦ⟩
+    Hno, Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg interpLandCode_text $$ Himg
   ihave ⟨⟨%a5v, Ha5⟩, Hargs⟩ := clobbered_take (r := 15) (by decide) $$ Hargs
   ihave HI := (ownImg_range _ _ _).1 $$ HI
@@ -386,7 +386,7 @@ theorem wp_landing {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr)
   iapply wp_interpRet1 H live hlive Wp sM rv v cs o imgI imgT errImg hsM hraI hs0I hra herr
   unfold VsaIris.sp VsaIris.ra
   simp only [sepL_cons, sepL_nil]
-  iframe Hpc Ha0 Hs5 Hra Hsp Hargs Htmp Hgp Himg HI Hscr HT Herr Hstd Hcon HΦ Hs7
+  iframe Hpc Ha0 Hs5 Hra Hsp Hargs Htmp Hgp Himg HI Hscr HT Herr Hstd Hno Hcon HΦ Hs7
   iframe Hs0 Hs1 Hs2 Hs3 Hs4 Hs6
 
 end Wp

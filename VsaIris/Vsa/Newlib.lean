@@ -4,6 +4,7 @@ import VsaIris.Vsa.Console
 import Vsa.Sim.Code.FixedImage
 import Vsa.Sim.LayoutInstance
 import VsaIris.Vsa.HeapShape
+import VsaIris.Vsa.StdioErr
 
 /-!
 # `IrisHoles.newlib`: the newlib calls on the error and exit paths (H5)
@@ -19,7 +20,10 @@ now. Each is an exact Iris statement about the fixed binary, a field of
 * `fwrite` (`0x80005260`) to `stderr`: the out-of-memory message (gcc turned
   `fprintf(stderr, "out of memory\n")` into `fwrite(msg, 1, 14, stderr)`);
 * `exitHandlers`: the newlib interior of `exit` (`0x80004778`–`0x80004788`:
-  `__call_exitprocs(e, 0)`, then the installed `__stdio_exit_handler`).
+  `__call_exitprocs(e, 0)`, then the installed `__stdio_exit_handler`). This
+  one is proved (`ExitH.exitHandlers_spec`, lane N4) from the post-write
+  state's `CloseReady`: `IrisHoles.newlib` is `NewlibCore` (the other three),
+  and `NewlibCore.full` adds it.
 
 Every statement holds for both WPs (`∀ Wp`), so the total route's `exit(0)`
 uses the same fields. `stderr` output reaches the console: `_write` ignores
@@ -244,15 +248,17 @@ def fwriteSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
 state or from `Ierr`. From `Ierr` it may print (the `stderr` close path). From
 the boundary state (`quiet`: no `stderr` write happened) it prints nothing:
 `stdout` is unbuffered (`main`'s `setvbuf(stdout, 0, _IONBF, 0)`), so no
-stream has pending bytes to flush. `term_sim`'s `exit(0)` needs this. -/
+stream has pending bytes to flush. `term_sim`'s `exit(0)` needs this. It owns
+`errno` (`errnoOwn`): `_close_r` clears it on each of the three closes. -/
 def exitHandlersSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
     (o : String) (Φ : Nat × String → IProp GF) (quiet : Bool) : IProp GF :=
   iprop(PC ↦ᵣ exitHandlersPC ∗ ra ↦ᵣ r ∗ (8 : Nat) ↦ᵣ e ∗ argsAt [e, 0#64] ∗
-      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ consoleOwn o ∗
+      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ errnoOwn ∗ consoleOwn o ∗
       callFrame s exitHandlersNeed (calleeSaved.drop 1) cs ∗
       (PC ↦ᵣ exitHandlersEnd -∗ (∃ w, ra ↦ᵣ w) -∗ (8 : Nat) ↦ᵣ e -∗ clobbered argRegs -∗
-        stdioAt (fun _ => True) -∗ (∃ o', ⌜quiet = true → o' = ""⌝ ∗ consoleOwn (o ++ o')) -∗
+        stdioAt (fun _ => True) -∗ errnoOwn -∗
+        (∃ o', ⌜quiet = true → o' = ""⌝ ∗ consoleOwn (o ++ o')) -∗
         callFrame s exitHandlersNeed (calleeSaved.drop 1) cs -∗ Wp.W Φ)
     -∗ Wp.W Φ)
 
@@ -260,9 +266,9 @@ end Specs
 
 /-! ## The holes -/
 
-/-- The newlib statements at the post-`stderr`-write state `Ierr`, for every
-Iris instance, every `live` set holding the code, and both WPs. -/
-structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
+/-- The assumed newlib statements at the post-`stderr`-write state `Ierr`,
+for every Iris instance, every `live` set holding the code, and both WPs. -/
+structure NewlibCoreAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
   /-- `snprintf` with a `%s`/`%d` format (`runtime_error`, `interp_run`). -/
   snprintf : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s dst n fmt : BitVec 64) (args : List (BitVec 64))
@@ -284,15 +290,25 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
     CodeLive live → (∀ i, i < n.toNat → Sro (ptr.toNat + i) ∨ Sown (ptr.toNat + i)) →
     SpIn s fwriteNeed →
     ⊢ fwriteSpec Ierr live Wp s ptr n cs Sro Sown rd o
-  /-- The newlib interior of `exit`. -/
+
+
+/-- The newlib statements the proofs use: the assumed ones and `exit`'s
+interior, which `ExitH/Iris.lean` proves from `CloseReady`
+(`NewlibCore.full`, `VsaIris/Interp/HolesExit.lean`). -/
+structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop extends NewlibCoreAt Ierr where
+  /-- The newlib interior of `exit` (proved: `ExitH.exitHandlers_spec`). -/
   exitHandlers : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
     (o : String) (Φ : Nat × String → IProp GF) (quiet : Bool),
     CodeLive live → SpIn s exitHandlersNeed →
     ⊢ exitHandlersSpec Ierr live Wp s e r cs o Φ quiet
 
-/-- **`IrisHoles.newlib`**: the newlib statements hold at some post-write
-state. -/
+/-- **`IrisHoles.newlib`**: the assumed newlib statements hold at some
+post-write state from which `exit`'s close path runs (`Stdio.CloseReady`: the
+common fields and `stderr` idle or written). -/
+def NewlibCore : Prop := ∃ Ierr, NewlibCoreAt Ierr ∧ ∀ img, Ierr img → CloseReady img
+
+/-- The newlib statements the proofs use hold at some post-write state. -/
 def NewlibHoles : Prop := ∃ Ierr, NewlibHolesAt Ierr
 
 /-- The post-`stderr`-write state the holes are instantiated at. -/

@@ -10,7 +10,8 @@ import Vsa.Sim.Code._exit
 # `exit(e)` ends the run with code `e` (H5)
 
 From `exit`'s entry (`0x80004764`) with `a0 = e`, the machine runs `exit`'s
-prologue, its newlib interior (`IrisHoles.newlib.exitHandlers`), `mv a0,s0`,
+prologue, its newlib interior (`NewlibHolesAt.exitHandlers`, proved by
+`ExitH.exitHandlers_spec`), `mv a0,s0`,
 `jal _exit`, `_exit`'s `slli/srli/ori/auipc`, and the `tohost` store, which
 halts with code `e` (F2's `Inst.wp_exitW`). The continuation is only the
 postcondition at every output extending the console: this is the last step
@@ -202,7 +203,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
     (quiet : Bool) (he : e.toNat < 2 ^ 31) (hs : SpIn s exitNeed) :
     PC ↦ᵣ exitEntry ∗ ra ↦ᵣ r ∗ (8 : Nat) ↦ᵣ s0v ∗ argsAt [e] ∗
       callFrame s exitNeed (calleeSaved.drop 1) cs ∗
-      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ consoleOwn o ∗
+      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ errnoOwn ∗ consoleOwn o ∗
       (∀ o', ⌜quiet = true → o' = ""⌝ -∗ Φ (e.toNat, o ++ o'))
     ⊢ Wp.W Φ := by
   have hlo := hs.lo
@@ -220,8 +221,8 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   unfold callFrame argsAt
   simp only [List.zipIdx_cons, List.zipIdx_nil, sepL_cons, sepL_nil, Nat.add_zero,
     List.length_singleton]
-  iintro ⟨Hpc, Hra, Hs0, ⟨⟨Ha0, -⟩, Hargs⟩, ⟨Hsp, Hscr, Hsaved, Htmp, #Hgp, #Himg⟩, Hstdio, Hcon,
-    HΦ⟩
+  iintro ⟨Hpc, Hra, Hs0, ⟨⟨Ha0, -⟩, Hargs⟩, ⟨Hsp, Hscr, Hsaved, Htmp, #Hgp, #Himg⟩, Hstdio, Hno,
+    Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg exitCode_text $$ Himg
   ihave #HcodeE := instrAt_of_binImg exitCodeE_text $$ Himg
   -- `exit`'s frame
@@ -264,14 +265,14 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
     List.length_cons, List.length_nil] at hh
   iapply hh
   unfold VsaIris.sp VsaIris.ra
-  iframe Hpc Hra Hs0 Ha0 Ha1 Hstdio Hcon Hsp Hsaved Htmp Hgp Himg
+  iframe Hpc Hra Hs0 Ha0 Ha1 Hstdio Hno Hcon Hsp Hsaved Htmp Hgp Himg
   isplitl [Hargs]
   · rw [show List.drop (0 + 1 + 1) argRegs = (List.drop 1 argRegs).erase 11 from rfl]
     iexact Hargs
   isplitl [Hscr]
   · rw [show exitHandlersNeed = exitNeed - (16#64 : BitVec 64).toNat from rfl]
     iexact Hscr
-  iintro Hpc ⟨%rv, Hra⟩ Hs0 Hargs Hstdio ⟨%o', %hq, Hcon⟩ ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩
+  iintro Hpc ⟨%rv, Hra⟩ Hs0 Hargs Hstdio - ⟨%o', %hq, Hcon⟩ ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩
   -- `mv a0,s0`
   ihave ⟨⟨%a0v, Ha0⟩, Hargs⟩ := clobbered_take (r := 10) (by decide) $$ Hargs
   iapply wp_segW live Wp exitMvSeg (mvL a0v e) [] 0x80004788#64
