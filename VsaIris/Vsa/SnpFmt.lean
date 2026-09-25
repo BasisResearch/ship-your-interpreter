@@ -267,4 +267,78 @@ theorem svf_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
           (by simp at hlen ⊢; omega) (by simpa [Nat.add_assoc] using A') ?_
         simpa [List.append_assoc] using hret
 
+
+/-- **A `%s`/`%d` format's whole loop**: from the loop head with nothing
+printed to `_svfprintf_r`'s return with the rendering `fmtRen`. -/
+theorem loop_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
+    (hal : (R0 1).toNat % 4 = 0) (p ap : Nat) (bs : List (BitVec 8)) (cs : List Conv)
+    (args : List (BitVec 64)) (F : FmtAt Dt DA p bs) (hp : parseFmt bs = some cs)
+    (hcs : cs.length ≤ args.length) (HA : ArgsAt Mt0 ap args) (hap1 : s - 40 ≤ ap)
+    (hap2 : ap + 8 * args.length ≤ s) (HS : StrArgs Dt DA cs args)
+    (hlen : (fmtRen (imgM Dt) bs args).length + 21 < 2 ^ 31) :
+    SvfLoopRun live Dt DA Q s dst n R0 Mt0 p ap (fmtRen (imgM Dt) bs args) := by
+  intro R Mt A hret
+  exact svf_fmt hlive SG DO hmb hmx hal bs.length bs p ap args cs [] R Mt (Nat.le_refl _) F hp hcs HA
+    hap1 hap2 HS (by simpa using hlen) (by simpa using A) (by simpa using hret)
+
+/-- The rendering is at most the format plus `B` per conversion, for `%s`
+strings of at most `B` bytes. -/
+theorem fmtRen_length_le (g : Nat → BitVec 8) (B : Nat) (hB : 20 ≤ B) :
+    ∀ (m : Nat) (bs : List (BitVec 8)) (cs : List Conv) (args : List (BitVec 64)), bs.length ≤ m →
+      parseFmt bs = some cs → cs.length ≤ args.length →
+      (∀ i (h : i < cs.length) (h' : i < args.length), cs[i] = .str →
+        (cstrOf g (args[i]).toNat (2 ^ 32)).length ≤ B) →
+      (fmtRen g bs args).length ≤ bs.length + cs.length * B := by
+  intro m
+  induction m with
+  | zero =>
+    intro bs cs args hm hp _ _
+    have hbs : bs = [] := List.eq_nil_of_length_eq_zero (by omega)
+    subst hbs
+    simp [fmtRen]
+  | succ m IH =>
+    intro bs cs args hm hp hcs hS
+    rcases fmt_split bs with hl | ⟨lit, x, rfl, hl⟩
+    · rw [fmtRen_lit_all g args bs hl]; omega
+    · rw [parseFmt_lit lit _ hl] at hp
+      rw [fmtRen_lit g args lit _ hl]
+      rcases x with _ | ⟨c, r⟩
+      · simp [parseFmt] at hp
+      simp only [parseFmt, ite_true] at hp
+      rcases args with _ | ⟨a, args⟩
+      · have : cs ≠ [] := by
+          intro h; subst h
+          by_cases hs : c = 0x73#8 <;> simp_all <;> (by_cases hd : c = 0x64#8 <;> simp_all)
+        cases cs with
+        | nil => exact absurd rfl this
+        | cons _ _ => simp at hcs
+      rw [fmtRen_conv]
+      have hrl : r.length ≤ m := by simp at hm; omega
+      by_cases hs : c = 0x73#8
+      · subst hs
+        simp only [ite_true] at hp
+        obtain ⟨cs', hp', rfl⟩ : ∃ cs', parseFmt r = some cs' ∧ cs = .str :: cs' := by
+          cases h : parseFmt r <;> simp_all
+        have h1 := hS 0 (by simp) (by simp) rfl
+        have h2 := IH r cs' args hrl hp' (by simp at hcs; omega)
+          (fun i h h' hc => hS (i + 1) (by simp; omega) (by simp; omega) (by simpa using hc))
+        simp only [ite_true, List.length_append, List.length_cons] at h1 h2 ⊢
+        simp only [List.getElem_cons_zero] at h1
+        rw [Nat.succ_mul]
+        omega
+      · obtain ⟨cs', hp', rfl⟩ : ∃ cs', parseFmt r = some cs' ∧ cs = .int :: cs' := by
+          if hd : c = 0x64#8 then
+            subst hd; simp only [show (0x64#8 : BitVec 8) ≠ 0x73#8 by decide, ite_false, ite_true] at hp
+            cases h : parseFmt r <;> simp_all
+          else simp [hs, hd] at hp
+        have h1 := intToString_length_le (sx32 a)
+        have h2 := IH r cs' args hrl hp' (by simp at hcs; omega)
+          (fun i h h' hc => hS (i + 1) (by simp; omega) (by simp; omega) (by simpa using hc))
+        simp only [hs, ite_false, List.length_append, List.length_cons] at h2 ⊢
+        rw [Nat.succ_mul]
+        omega
+
 end VsaIris.Sym

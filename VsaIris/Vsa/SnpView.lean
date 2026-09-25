@@ -141,10 +141,10 @@ theorem snpImg_byte {a : Nat} (h : impureW a ∨ rodataDom a) :
     iapply snpBin_byte (.inr ⟨h.resolve_left hi, rfl⟩) $$ Hb
 
 /-- **The run's read-only cells**: `gp`, the code, and a data view. -/
-theorem roOwn_snp (P : IProp GF) [Persistent P] (f : Nat → BitVec 8) (DA : List Nat)
-    (hv : P ⊢ sepL (dataOf (viewMem f DA) DA) (fun p => p.1 ↦ₘ□ p.2)) :
+theorem roOwn_snp (P : IProp GF) [Persistent P] (Dt : Mem) (DA : List Nat)
+    (hv : P ⊢ sepL (dataOf Dt DA) (fun p => p.1 ↦ₘ□ p.2)) :
     iprop(gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗ P) ⊢@{IProp GF}
-      roOwn roR (snpText ++ dataOf (viewMem f DA) DA) := by
+      roOwn roR (snpText ++ dataOf Dt DA) := by
   unfold roOwn
   iintro ⟨#Hgp, #Himg, #HP⟩
   isplitl []
