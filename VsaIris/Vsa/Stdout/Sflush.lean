@@ -16,7 +16,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 /-- The memory after `__sflush_r(reent, f)` returns: its five spills, `_p`
 reset to the base, `_w` to `0`, and `__swrite`'s effect (`swriteMt`). -/
-abbrev sflushMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
+@[nx_mt] abbrev sflushMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   swriteMt (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551600#64).toNat, 8, s0)]) [((sp + 18446744073709551576#64).toNat, 8, s3)])
     [((sp + 18446744073709551608#64).toNat, 8, ra)]) [((sp + 18446744073709551584#64).toNat, 8, s2)])
@@ -30,7 +30,7 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f F B ra s0 s1 s2 s3 : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 128 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h8 : R 8 = s0) (h9 : R 9 = s1) (h18 : R 18 = s2) (h19 : R 19 = s3)
     (hfS : f.toNat = 0x8001bb20)
     (hfa : f.toNat % 8 = 0) (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
@@ -86,7 +86,7 @@ theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f F B ra s0 s1 s2 s3 : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 128 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h8 : R 8 = s0) (h9 : R 9 = s1) (h18 : R 18 = s2) (h19 : R 19 = s3)
     (hfS : f.toNat = 0x8001bb20)
     (hfa : f.toNat % 8 = 0) (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
@@ -112,6 +112,7 @@ theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     hF hF8 hF3 hBl hB0 hP hwr hck hsfl hsfd hb3 hbd hsrc (toInt_ofNat_small (by omega))
     (subw_add_ofNat hn2) ?_
   intros
+  simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 

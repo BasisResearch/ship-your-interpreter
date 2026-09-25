@@ -175,6 +175,7 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     | ge => iapply caseP_BinaryGe S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
   | call f args =>
     iapply caseP_CallArm S.hlive hE S.nativeEntries (dispSupply_of_cloSupply S.cloSupply)
+      ErrnoOwn.errnoLend_vsa
       (evalArgsP_all S.hlive _ d env args) S.vkind S.nPrint S.nPrintln S.nAssert
       (hroomPrintln f args d)
       (callCloP_of S.hlive hE S.vnull S.envNew S.envDefine S.cloSupply S.inpAl)

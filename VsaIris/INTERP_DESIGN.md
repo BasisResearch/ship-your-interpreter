@@ -1473,3 +1473,25 @@ without the fact and no other resource carries it:
     each one `decide`): `__ascii_mbtowc`, `1`, `"."` at `0x80019770`.
   - **Every hole that returns `stdioOwn` must now also restore the locale**;
     nothing writes it (`setlocale` is not linked into any path).
+
+### STATEMENT CHANGES (N1)
+
+- **The stdout calls borrow `errno`.** `_write_r` runs `sw zero,1272(gp)`
+  (`errno = 0`, `0x8001ba08`) on every console write, so every stdout/stderr
+  write path stores to that word. It is an allocator global
+  (`VsaHeap.allocGlobal`: `_sbrk_r` clears it too), owned by the heap
+  resource, not by `stdioOwn`; a spec that owns only `stdioOwn` cannot run
+  the store (the ghost map must change with the machine). `NewlibOut.outSpec`
+  now takes and returns `Stdio.stdioW := stdioOwn ∗ errnoOwn` (`errnoOwn`:
+  the word at any value). The global `errno` is only ever written with 0 and
+  never read on these paths; `_sbrk`'s ENOMEM goes to `_impure_data._errno`.
+- **The heap lends it.** `ErrnoOwn.heapRes_errno`: `heapRes vsaLayoutP
+  vsaRoomB ρ H ⊢ errnoOwn ∗ (errnoOwn -∗ heapRes …)`; the shape never reads the
+  word (`BlockHeapAt.transport_read`, `vsaRead`). Generic-layout arms take
+  `ErrnoOwn.ErrnoLend L Room`; `TermSim`/`StuckSim` supply `errnoLend_vsa`.
+- **Consumers.** `valuePrintSpec`, `nativePrintSpec`, `nativePrintlnSpec`,
+  `natOutSpec` and `world_out` carry `stdioW` where they carried `stdioOwn`;
+  `callNativeOut`, `caseT_CallPrint`, `caseT_CallPrintln`, `caseP_CallArm`
+  take `hEL : ErrnoLend L Room`. The same applies to H5's stderr/exit holes
+  (`newlib.fprintf`, `newlib.fwrite`, `newlib.exitHandlers`, N3) and to
+  `out.fprintf` (N5): their write paths reach `_write_r`.
