@@ -37,15 +37,16 @@ structure BufAt (Mt : Mem) (s dst n : Nat) (total : List (BitVec 8)) : Prop wher
   bytes : ∀ i, i < min total.length (n - 1) → imgM Mt (dst + i) = total.getD i 0
 
 /-- The geometry of a `snprintf(dst, n, …)` call at `sp = s`: the stack
-scratch `[s - 1024, s)` in RAM above the HTIF words, the destination window
-above them too and apart from the stack. -/
+scratch `[s - 1024, s)` in RAM above newlib's static data (`stdioFoot` ends at
+`0x8001c168`; the prologue's locale loads pass the frame's spills), the
+destination window above it too and apart from the stack. -/
 structure SnpGeom (s dst n : Nat) : Prop where
-  s_lo : 0x8001ad10 + 1024 ≤ s
+  s_lo : 0x8001c168 + 1024 ≤ s
   s_hi : s ≤ 0x88000000
   s_al : s % 16 = 0
   n_pos : 0 < n
   n_hi : n < 2 ^ 31
-  d_lo : 0x8001ad10 ≤ dst
+  d_lo : 0x8001c168 ≤ dst
   d_hi : dst + n ≤ 0x100000000
   d_sep : dst + n ≤ s - 1024 ∨ s ≤ dst
 
@@ -99,7 +100,7 @@ theorem ssputs_buf {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
   simp only [snpFP] at *
   have hm : min total.length (n - 1) ≤ n - 1 := Nat.min_le_right _ _
   refine ssputs_nw hlive (s - 928) (s - 264) (dst + min total.length (n - 1)) b l
-    (n - 1 - min total.length (n - 1)) g R Mt (by omega) (by omega) (by omega) hs2 hs1 (by omega)
+    (n - 1 - min total.length (n - 1)) g R Mt (by omega) (by omega) (by omega) hs2 (by omega) (by omega)
     (by omega) (by omega) (by omega) ⟨by omega, ⟨by omega, by omega⟩, hd2, hb1, by omega, by omega,
       by omega⟩ (by omega) (by omega) (by omega) h2 h11 h12 h13 hl (by omega) hww hpw hfl hal
     (hwin.shrink (by omega)) (fun R' Mt' h10' h2' h8' h9' hkp PO => hk R' Mt' h10' h2' h8' h9' hkp ?_ ?_)
