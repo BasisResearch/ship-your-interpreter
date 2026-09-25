@@ -55,13 +55,17 @@ private def hex8 (n : Nat) : String :=
 
 /-- The normalizer run after every step and before every side condition:
 register lookups, the caller's facts (`using`), store forwarding. -/
-def ixNorm (facts : Array Term) : TacticM Syntax := do
+def ixNorm (facts : Array Term) (tab : Option (TSyntax `tactic) := none) : TacticM Syntax := do
+  let tab ← match tab with
+    | some t => pure t
+    | none => `(tactic| ix_tab)
+  let tab : TSyntax ``Lean.Parser.Tactic.tacticSeq ← `(Lean.Parser.Tactic.tacticSeq| $tab:tactic)
   if facts.isEmpty then
-    `(tactic| ((try sx_norm) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem)))
+    `(tactic| ((try sx_norm) <;> (try $tab) <;> (try sx_norm) <;> (try ix_mem)))
   else
     let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
       facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-    `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem)))
+    `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try $tab) <;> (try sx_norm) <;> (try ix_mem)))
 
 /-- Try `sx_side` (after the normalizers) on a goal; `true` when it closes. -/
 def ixTrySide (norm : Syntax) (g : MVarId) : TacticM Bool := do
@@ -84,11 +88,14 @@ def ixTryPrune (norm : Syntax) (g : MVarId) : TacticM Bool := do
   catch _ =>
     saved.restore; return false
 
+/-- The interpreter table's step-lemma prefixes, in the order tried. -/
+def ixPrefixes : List String := ["it", "itD", "itT", "itH", "itO"]
+
 /-- The step lemmas of the instruction at `pc`, in the order tried. -/
-def ixCandidates (pc : Nat) : TacticM (List Name) := do
+def ixCandidates (pc : Nat) (pfxs : List String := ixPrefixes) : TacticM (List Name) := do
   let env ← getEnv
   let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
-  return [mk "it", mk "itD", mk "itT", mk "itH", mk "itO"].filter env.contains
+  return (pfxs.map mk).filter env.contains
 
 /-- Apply one candidate: the continuation goals (an `SWP` conclusion) and the
 side conditions `sx_side` could not close; `none` when it does not apply. -/
@@ -114,10 +121,10 @@ def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool
 /-- One step at a literal PC: the first candidate whose side conditions all
 close; failing that, the first candidate that applies, with its side
 conditions left pending. -/
-def ixStep (norm : Syntax) (h : Syntax) (g : MVarId) :
+def ixStep (norm : Syntax) (h : Syntax) (g : MVarId) (pfxs : List String := ixPrefixes) :
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
-  let cands ← ixCandidates pc
+  let cands ← ixCandidates pc pfxs
   for nm in cands do
     if let some r ← ixApply norm h g nm true then return some r
   for nm in cands do
@@ -135,7 +142,8 @@ syntax "ix_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)
 
 /-- The driver behind `ix_run` (`explore`) and `ix_run1`. -/
 def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
-    (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num))) :
+    (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
+    (pfxs : List String := ixPrefixes) (tab : Option (TSyntax `tactic) := none) :
     TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
     let stopPCs : List Nat := match stops with
@@ -144,7 +152,7 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     let facts : Array Term := match fs with
       | some fs => fs.getElems
       | none => #[]
-    let norm ← ixNorm facts
+    let norm ← ixNorm facts tab
     let mut pending : List MVarId := []
     let mut stuck : List MVarId := []
     let first ← getMainGoal
@@ -164,7 +172,7 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       if fuel == 0 then stuck := stuck ++ [cur]; continue
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
-      let some (conts, pend) ← ixStep norm h cur | stuck := stuck ++ [cur]; continue
+      let some (conts, pend) ← ixStep norm h cur pfxs | stuck := stuck ++ [cur]; continue
       pending := pending ++ pend
       match conts with
       | [c] =>
