@@ -374,4 +374,37 @@ theorem fpr_s {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     rw [e2, Nat.zero_add, hbl] at hL3
     exact fpr_nl hlive hS hL3 hI3 hF hnlA hnl (by omega) h1 h2 hra hk
 
+/-- **`fprintf(stderr, "%s\n", p)`, the whole run**: `fprintfHead_run` to
+the loop head, then `fpr_s`. -/
+theorem fprintfErr_run {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
+    {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
+    {s ra p : BitVec 64} {n : Nat}
+    (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - 4096) (hal : s.toNat % 16 = 0)
+    (hra : ra.toNat % 4 = 0)
+    (h1 : R 1 = ra) (h2 : R 2 = s) (h10 : R 10 = 0x8001bbd8#64) (h11 : R 11 = 0x800195e0#64)
+    (h12 : R 12 = p) (hDt : ldv .ld Dt 0x8001b970 = 0x8001b538#64)
+    (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
+    (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8)
+    (hC : ConsoleMt Mt) (hE : ErrMt Mt) (hL : LocaleMt Mt)
+    (hstr : FprStr live Dt DA s p n)
+    (hF0 : Fp.FmtAt Dt (fprDA DA) 0x800195e0 [37#8]) (hSF : Fp.SFmt Dt (fprDA DA) 0x800195e0)
+    (hF : Fp.FmtAt Dt (fprDA DA) 0x800195e2 [10#8, 0#8])
+    (hnlA : 0x800195e2 ∈ DA) (hnl : imgM Dt 0x800195e2 = 10#8)
+    (hk : ∀ R' Mf, RetOK R R' (BitVec.ofNat 64 (n + 1)) → FprPost Mt Mf s →
+      SWPO live (stdioText ++ dataOf Dt (fprDA DA)) iRegs (outS s 4096) Q
+        (t ++ putcs (strBs Dt p.toNat n) ++ putcs [10#8]) ra R' Mf) :
+    SWPO live (stdioText ++ dataOf Dt (fprDA DA)) iRegs (outS s 4096) Q t 0x800061c0#64 R Mt := by
+  refine fprintfHead_run hlive t Mt R s ra p hs3 hs4 hal hra h1 h2 h10 h11 h12 hDt hdA hdv hC hE hL
+    fun R' M hF' => ?_
+  have hsp : (s + 18446744073709550944#64).toNat = s.toNat - 672 := toNat_add_neg (by decide) (by omega)
+  have e56 : (s + 18446744073709551560#64).toNat = s.toNat - 56 := toNat_add_neg (by decide) (by omega)
+  have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := toNat_add_neg (by decide) (by omega)
+  have hS : FprSp s (s + 18446744073709550944#64) := ⟨by rw [hsp]; omega, hs4, hs3, by rw [hsp]; omega⟩
+  refine fpr_s hlive (R0 := R) hS hF'.loop ⟨⟨hF'.loc, hF'.flagsU, hF'.flagsS, hF'.fd, hF'.cursor, hF'.base,
+    hF'.cookie, hF'.writer, hF'.flags2⟩, hF'.spills, ?_, hF'.frame⟩ ?_ ?_ hstr hF0 hSF hF hnlA hnl h1 h2 hra hk
+  · rw [hsp, show s.toNat - 672 + 616 = s.toNat - 56 by omega, ← e56]; exact hF'.fra
+  · rw [hF'.ap, BitVec.add_assoc]; rfl
+  · rw [hsp, show s.toNat - 672 + 624 = s.toNat - 48 by omega, ← e48]; exact hF'.arg
+
 end VsaIris.Sym
