@@ -1,6 +1,6 @@
 # Lane N3: newlib stderr holes (`newlib.fprintf`, `newlib.fwrite`)
 
-Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). Merged `hub/lane-n4` at `52b1e9d` (exitHandlers proved; exit takes errno) and `hub/lane-n5` at `88e8da1`.
+Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). Merged `hub/lane-n4` at `52b1e9d` (exitHandlers proved; exit takes errno) and `hub/lane-n5` at `4423d4b`.
 Merged
 `hub/iris-main` at `286c2ad` and `hub/lane-n1` at `34fe574` (errno lending, `outSpec`, `sfvwrite_run`).
 
@@ -10,13 +10,19 @@ Merged
   axioms `propext, Classical.choice, Quot.sound`). HOLES row and `NewlibHolesAt.fwrite`
   removed; `Oom.wp_oomBlock` consumes the theorem. Statement changes: INTERP_DESIGN.md §10
   "STATEMENT CHANGES (N3)".
-- **`newlib.fprintf`**: statement narrowed to `main`'s only call (INTERP_DESIGN N3), consumers
-  rewired (errno lent from the dropped world). Run pieces proved: `vfpEntry_run` (shared with N5),
-  `vfpErr_run` (stderr setup via `swsetupErr_run`), `sprintErr_run` (the unbuffered
-  one-piece flush; `_vfprintf_r` flushes after each conversion and at the end), `sprintErr_hook` +
-  `SprintPost.printRet` (N5's `vfp_printH` hook for stderr, empty piece included), `LRO.promote` (owned string through the data view). Waiting on N5's
-  format-loop pieces (`vfp_head` landed; `%s` with a strlen hook and the end next), then the
-  fprintf prologue/epilogue glue and the Iris wrapper.
+- **`newlib.fprintf`: proved** (`Newlib.fprintf_proved`, `fprintf_ok`,
+  `VsaIris/Vsa/Stderr/FprintfSpec.lean`; axioms `propext, Classical.choice, Quot.sound`).
+  The run: `fprintfHead_run` (prologue, `vfpEntry_run`, `vfpErr_run`, `vfp_head` → `FprLoop`),
+  `FprintfBody` (`fpr_s`: `%s` staged and flushed or empty; `fpr_nl`: `"\n"`; `fpr_end`: the
+  last flush, `vfp_end`, the epilogue; `FprMid` carries `stderr`, the spills and the frame).
+  The owned string enters the data view through `LRO.promote`. HOLES row removed; the field
+  moved from the assumed `NewlibCoreAt` to `NewlibHolesAt.fprintf : FprintfProved`, which
+  `NewlibCore.full` takes from `Supply`/`EndToEnd` (the proof imports N5's loop, above
+  `MainErr`). Statement changes: INTERP_DESIGN.md §10 "STATEMENT CHANGES (N3)".
+- Both N3 holes are discharged.
+- Tooling note: core `omega` hits "maximum recursion depth" on goals with a Nat
+  subtraction such as `a < P - 256` (even pure Nat, no imports). Use
+  `Nat.lt_sub_of_add_lt` / `Nat.add_lt_of_lt_sub`, or split the disjunction first.
 
 ## Findings (checked against `experiments/disasm.txt`)
 
@@ -28,7 +34,7 @@ Merged
 3. `StdioOK` pins `stderr`'s `_bf._base`/`_write` (`StderrStream`, N3) and the locale
    (`LocaleData`, N2).
 4. `%s` calls word-at-a-time `strlen` (`0x8000cfc8`): up to 7 bytes past the NUL, outside
-   `FmtArgsOK`'s coverage (to be handled by havoc loads or a statement change).
+   `FmtArgsOK`'s coverage: `fprintfSpec` owns the buffer, its over-read in RAM off tohost.
 5. The state after one `stderr` write is `StdioErrOK` (flags `0x201a`, `_p = _bf._base =
    stderr + 119`; `StdioErr.lean`, `stdioErrOK_of_write`).
 
@@ -55,5 +61,4 @@ Merged
 
 ## Next
 
-- `newlib.fprintf`: `_vfprintf_r` format loop (`%s`, `%d`) on the stderr path; `errnoOwn` in
-  `fprintfSpec`; the `strlen` over-read; memset's `jr` (no step lemma at `0x80006b38`).
+- Nothing left in N3's scope.

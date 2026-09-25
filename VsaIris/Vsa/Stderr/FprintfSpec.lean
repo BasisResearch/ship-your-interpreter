@@ -435,4 +435,9 @@ theorem fprintf_proved (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel l
 
 end
 
+/-- **`newlib.fprintf`, discharged.** -/
+theorem fprintf_ok : FprintfProved :=
+  fun live Wp s p n bv cs o hcl hz hn hp1 hp2 hp3 hsp hs4 =>
+    fprintf_proved live Wp s p n bv cs o hcl hz hn hp1 hp2 hp3 hsp hs4
+
 end VsaIris.Newlib
