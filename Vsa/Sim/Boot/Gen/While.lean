@@ -1,4 +1,3 @@
-import Vsa.Sim.Boot.Obstruction
 import Vsa.Sim.Boot.Physical
 import Vsa.While.Programs
 
@@ -642,17 +641,6 @@ theorem mem_get (x : Nat) : (bootMem script log)[x]? = bootView script runs x :=
 
 theorem view : ViewOf (bootMem script log) (bootView script runs) := bootMem_view logOk
 
-/-- REVIEW.md C4 at this program's real entry memory: the first native's value
-name is the `.rodata` literal at `0x80019538`, so no register file makes it `Loaded`. -/
-theorem c4_obstruction {g : Nat → BitVec 64} {steps stmts count : Nat} {inp : BitVec 64}
-    {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena}
-    {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : Vsa.Sim.LayoutInstance.InterpRunReadyFacts (bootConfig (bootMem script log) g steps)
-      stmts count inp N A φf φc aLeft) : False :=
-  nativeName_obstruction F (e := 0x8001c180) (pv := 0x8001c200) (p := 0x80019538)
-    (by simp only [bootConfig_mem]; boot_read view) (by simp only [bootConfig_mem]; boot_read view)
-    (by simp only [bootConfig_mem]; boot_read view) (by decide)
-
 /-- The global frame and the shared bytes at the entry. -/
 def own : BootOwn where
   env := 0x8001c180
@@ -1039,16 +1027,14 @@ theorem heapOk : heapCheck (bootView script runs) own.exts
   decide +kernel
 
 /-- **The witness.** The real entry state is `Loaded` for `prog`, given the
-two boundary facts it does not meet: every stack byte present (REVIEW.md C3,
-lane B2's P3) and the shared bytes above `.rodata` (C4, refuted by
-`c4_obstruction`; P7). -/
+boundary fact it does not meet until lane B2's P3: every stack byte present
+(REVIEW.md C3). -/
 theorem loaded
     (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →
-      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b)
-    (hgeom : Vsa.Sim.SharedGeom own.shared Vsa.Sim.LayoutInstance.stackSL) :
+      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b) :
     Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog
       (bootConfig (bootMem script log) regs entrySteps) :=
   loaded_of view ⟨mainRa, text, rodata, statics, console, exitRuntime, globals, depth, hstack⟩
-    bootRegs ownOk frameOk storeOk heapOk heapFactsOk hgeom progOk capacityOk fitsOk
+    bootRegs ownOk frameOk storeOk heapOk heapFactsOk progOk capacityOk fitsOk
 
 end Vsa.Sim.Boot.Gen.While

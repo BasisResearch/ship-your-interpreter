@@ -26,6 +26,39 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 
 - **P1–P4 approved (user, 2026-09-25; `REVIEW.md` §4).** `Loaded` must hold at the state the binary actually reaches at `interp_run`'s entry. P1 (console flags) and P2 (script bytes) are lane B1's; each changed field is checked against the traced corpus (`experiments/review-v/check_loaded.py`) and keeps the control witness. (see the next two STATEMENT CHANGEs)
 
+- **P7 approved (user, 2026-09-25; `REVIEW.md` C4/§4 P7).** Shared bytes may lie in `.rodata`: the boundary's shared-byte geometry is the read window the Iris consumers need (`ReadOK`, `SharedWin`), not "above the static image". (lane B3; see the next STATEMENT CHANGE)
+
+## STATEMENT CHANGE (lane B3, P7): the boundary's shared bytes may lie in `.rodata`
+
+`interp_init` defines the natives with `value_native("print", …)`, so each
+native value's name pointer is a `.rodata` literal (`0x80019538`,
+`0x80019540`, `0x80019548` in every build), and `FrameOwned.values` makes
+those bytes shared. `BootHeapFacts.shared_geom : SharedGeom shared stackSL`
+required every shared byte at or above `0x8001acf0`, so no reachable
+configuration was `Loaded` (REVIEW.md C4; lane B3 refuted it at every traced
+entry memory before the change).
+
+```lean
+structure SharedReadWin (shared : Nat → Prop) (SL : StackLayout) : Prop where  -- Vsa/Sim/SharedGeometry.lean
+  ram   : ∀ k, shared k → 0x80000000 ≤ k ∧ k + 8 ≤ 0x100000000
+  htif  : ∀ k, shared k → k + 8 ≤ tohostAddr ∨ tohostAddr + 16 ≤ k
+  stack : ∀ k, shared k → k < SL.lo ∨ SL.hi ≤ k
+BootHeapFacts.shared_geom : SharedReadWin shared stackSL        -- was SharedGeom shared stackSL
+```
+
+- **What narrowed / widened.** `Loaded` widens: `SharedGeom.toReadWin` shows
+  the old field implies the new one. `SharedGeom` itself is unchanged (its
+  legacy consumers keep it).
+- **Consumers re-checked.** The field's only consumers are
+  `readOK_of_sharedGeom` (`Interp/TopRun.lean`, gives `ReadOK`) and
+  `sharedWin_of_geom` (`Interp/World.lean`, gives `SharedWin`); both now take
+  `SharedReadWin` and need exactly its three fields. The boundary world owns
+  `RoByte shared ∨ CodeByte` persistently, so a shared `.rodata` byte is not
+  owned twice.
+- **Witnessed by the real boot state.** `OwnOk.readWin` (`Vsa/Sim/Boot/Owned.lean`)
+  at every generated trace (`Gen/<Prog>.ownOk`, field `sharedWin`); the
+  control witness uses `sharedGeom.toReadWin`.
+
 ## STATEMENT CHANGE (lane B1, P1): `stdout` is unoriented at the boundary; `StdioOK` admits both orientations
 
 `Vsa/Sim/ConsoleStream.lean`: the structure is `ConsoleStreamAt (oriented : Bool) m`,

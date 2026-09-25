@@ -4384,9 +4384,11 @@ log, and `LogOk` (kernel-checked per program) gives every byte.
   `readOK_of_sharedGeom`, `sharedWin_of_geom` need only RAM, the HTIF
   exclusion and the stack exclusion; `RoByte` is `shared ∨ CodeByte`, a
   persistent union), or native values whose names are heap copies (a binary
-  change). REVIEW.md P7; statement change pending the user's decision.
-- Witnesses: `Gen/<Prog>.loaded` for 10 traces, premises exactly C3's stack
-  presence and C4's `SharedGeom`; `EndToEnd.lean` `*_halts`.
+  change). REVIEW.md P7. **Resolved** (user decision 2026-09-25): the field is
+  `SharedReadWin` (`Vsa/Sim/SharedGeometry.lean`), witnessed by
+  `OwnOk.readWin` at every trace; the obstruction was removed with the fix.
+- Witnesses: `Gen/<Prog>.loaded` for 10 traces; the one remaining premise is
+  C3's stack presence (lane B2, P3); `EndToEnd.lean` `*_halts`.
 - `recursion.wl`'s `capacity`: `capOk` does not finish in the kernel
   (`fib(20)`, ~22k frames, list-backed store). Missing supplier: a cost
   bound not by evaluation (e.g. a symbolic cost lemma for the program).

@@ -567,7 +567,6 @@ def cmd_program(args):
         ln = lean_name(name)
         nchunks = (len(log) + CHUNK - 1) // CHUNK
         out = [
-            "import Vsa.Sim.Boot.Obstruction",
             "import Vsa.Sim.Boot.Physical",
             "import Vsa.While.Programs",
             "",
@@ -631,17 +630,6 @@ def cmd_program(args):
             "  bootMem_get logOk x",
             "",
             "theorem view : ViewOf (bootMem script log) (bootView script runs) := bootMem_view logOk",
-            "",
-            "/-- REVIEW.md C4 at this program's real entry memory: the first native's value",
-            f"name is the `.rodata` literal at `{gname:#x}`, so no register file makes it `Loaded`. -/",
-            "theorem c4_obstruction {g : Nat → BitVec 64} {steps stmts count : Nat} {inp : BitVec 64}",
-            "    {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena}",
-            "    {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}",
-            "    (F : Vsa.Sim.LayoutInstance.InterpRunReadyFacts (bootConfig (bootMem script log) g steps)",
-            "      stmts count inp N A φf φc aLeft) : False :=",
-            f"  nativeName_obstruction F (e := {genv:#x}) (pv := {gpv:#x}) (p := {gname:#x})",
-            "    (by simp only [bootConfig_mem]; boot_read view) (by simp only [bootConfig_mem]; boot_read view)",
-            "    (by simp only [bootConfig_mem]; boot_read view) (by decide)",
             "",
             "/-- The global frame and the shared bytes at the entry. -/",
             "def own : BootOwn where",
@@ -737,17 +725,15 @@ def cmd_program(args):
             "",
         ] + ([] if name in SLOW_COST else [
             "/-- **The witness.** The real entry state is `Loaded` for `prog`, given the",
-            "two boundary facts it does not meet: every stack byte present (REVIEW.md C3,",
-            "lane B2's P3) and the shared bytes above `.rodata` (C4, refuted by",
-            "`c4_obstruction`; P7). -/",
+            "boundary fact it does not meet until lane B2's P3: every stack byte present",
+            "(REVIEW.md C3). -/",
             "theorem loaded",
             "    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →",
-            "      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b)",
-            "    (hgeom : Vsa.Sim.SharedGeom own.shared Vsa.Sim.LayoutInstance.stackSL) :",
+            "      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b) :",
             "    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog",
             "      (bootConfig (bootMem script log) regs entrySteps) :=",
             "  loaded_of view ⟨mainRa, text, rodata, statics, console, exitRuntime, globals, depth, hstack⟩",
-            "    bootRegs ownOk frameOk storeOk heapOk heapFactsOk hgeom progOk capacityOk fitsOk",
+            "    bootRegs ownOk frameOk storeOk heapOk heapFactsOk progOk capacityOk fitsOk",
             "",
         ]) + [
             f"end Vsa.Sim.Boot.Gen.{ln}",
@@ -762,7 +748,7 @@ def cmd_program(args):
 def write_index():
     """`VsaBoot.lean`: the boot infrastructure and every generated trace."""
     mods = ["Vsa.While.CostEval", "Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Ast", "Vsa.Sim.Boot.Capacity", "Vsa.Sim.Boot.Heap",
-            "Vsa.Sim.Boot.Obstruction", "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Elf", "Vsa.Sim.Boot.EndToEnd"]
+            "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical", "Vsa.Sim.Boot.Elf", "Vsa.Sim.Boot.EndToEnd"]
     mods += [f"Vsa.Sim.Boot.Gen.{f.stem}" for f in sorted((BOOT_DIR / "Gen").glob("*.lean"))]
     (ROOT / "VsaBoot.lean").write_text("".join(f"import {m}\n" for m in mods))
 

@@ -1,4 +1,3 @@
-import Vsa.Sim.Boot.Obstruction
 import Vsa.Sim.Boot.Physical
 import Vsa.While.Programs
 
@@ -856,17 +855,6 @@ theorem mem_get (x : Nat) : (bootMem script log)[x]? = bootView script runs x :=
   bootMem_get logOk x
 
 theorem view : ViewOf (bootMem script log) (bootView script runs) := bootMem_view logOk
-
-/-- REVIEW.md C4 at this program's real entry memory: the first native's value
-name is the `.rodata` literal at `0x80019538`, so no register file makes it `Loaded`. -/
-theorem c4_obstruction {g : Nat → BitVec 64} {steps stmts count : Nat} {inp : BitVec 64}
-    {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena}
-    {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : Vsa.Sim.LayoutInstance.InterpRunReadyFacts (bootConfig (bootMem script log) g steps)
-      stmts count inp N A φf φc aLeft) : False :=
-  nativeName_obstruction F (e := 0x8001c180) (pv := 0x8001c200) (p := 0x80019538)
-    (by simp only [bootConfig_mem]; boot_read view) (by simp only [bootConfig_mem]; boot_read view)
-    (by simp only [bootConfig_mem]; boot_read view) (by decide)
 
 /-- The global frame and the shared bytes at the entry. -/
 def own : BootOwn where

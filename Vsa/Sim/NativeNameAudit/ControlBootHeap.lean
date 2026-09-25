@@ -76,7 +76,7 @@ theorem bootHeapFacts :
     decide
   frame := bootFrameChunks
   stderr := stderr_mem
-  shared_geom := sharedGeom
+  shared_geom := sharedGeom.toReadWin
 
 
 theorem bootHeap : BootHeap heapMem heapArena phif phic 0x82000000 2 ownershipData

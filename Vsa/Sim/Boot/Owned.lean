@@ -107,6 +107,10 @@ structure OwnOk (B : BootOwn) : Prop where
     0x80000000 ≤ r.1 ∧ r.1 + r.2 ≤ 0x100000000 ∧
       (r.1 + r.2 ≤ 0x8001ad00 ∨ 0x8001c168 ≤ r.1) ∧
       (r.1 + r.2 ≤ 0x87800000 ∨ 0x88000000 ≤ r.1)
+  /-- Shared ranges leave the word loop's 8-byte slack below `2^32` and keep
+  every byte's 8-byte read window off the 16 HTIF bytes (`SharedReadWin`). -/
+  sharedWin : ∀ r ∈ B.sharedRanges, r.1 + r.2 + 7 ≤ 0x100000000 ∧
+    (r.1 + r.2 + 7 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ r.1)
   /-- Shared ranges avoid the mutable extents. -/
   sharedImmutable : ∀ r ∈ B.sharedRanges, ∀ e ∈ B.mutableExts, ExtDisjoint r e
   /-- Shared ranges in the arena are live extents; the rest lie outside it. -/
@@ -175,6 +179,17 @@ theorem immutable :
     unfold ExtentByte at hk hin
     unfold ExtDisjoint at hd
     omega
+
+/-- The shared bytes' read window (REVIEW.md P7). -/
+theorem readWin : SharedReadWin B.shared stackSL := by
+  have e : tohostAddr = 0x8001ad00 := rfl
+  have hlo : stackSL.lo = 0x87800000 := rfl
+  have hhi : stackSL.hi = 0x88000000 := rfl
+  refine ⟨?_, ?_, ?_⟩ <;> rintro k ⟨r, hr, hk⟩ <;> unfold ExtentByte at hk <;>
+    have h1 := h.sharedRam r hr <;> have h2 := h.sharedWin r hr
+  · exact ⟨by omega, by omega⟩
+  · rw [e]; omega
+  · rw [hlo, hhi]; omega
 
 theorem reserved : Reserved bootArena B.exts B.shared := by
   refine ⟨?_⟩
@@ -413,7 +428,7 @@ structure HeapFactsOk (v : Nat → Option (BitVec 8)) (B : BootOwn) (top brkv : 
 theorem bootHeapFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} {B : BootOwn}
     (hv : PartialView m v) (hf : FrameOk v B) {top brkv : Nat} {chunks : List DlHeap.Chunk}
     {sblk nblk vblk : Nat × Nat} (h : HeapFactsOk v B top brkv chunks sblk nblk vblk)
-    (hgeom : SharedGeom B.shared stackSL) :
+    (hgeom : SharedReadWin B.shared stackSL) :
     BootHeapFacts m B.shared B.env top brkv chunks (B.frame sblk nblk vblk) where
   top_room := h.top_room
   brk_page := h.brk_page

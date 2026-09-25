@@ -755,12 +755,12 @@ section Boundary
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris.Newlib
   Vsa.RuntimeRepr Vsa.Sim.LayoutInstance VsaIris.VsaHeap
 
-theorem readOK_of_sharedGeom {P : Nat → Prop} (h : Vsa.Sim.SharedGeom P stackSL) :
+theorem readOK_of_sharedGeom {P : Nat → Prop} (h : Vsa.Sim.SharedReadWin P stackSL) :
     ∀ k, P k → ReadOK k := fun k hk => by
   have h1 := h.ram k hk; have h2 := h.htif k hk
   have e : Vsa.Sim.tohostAddr = 0x8001ad00 := rfl
   rw [e] at h2
-  exact ⟨by omega, by omega, .inr (by rw [e]; omega), by omega, .inr (by rw [e]; omega)⟩
+  exact ⟨by omega, by omega, by rw [e]; omega, by omega, by rw [e]; omega⟩
 
 /-- **The entry's pure facts at the boundary**: `Boot`'s witnesses, the
 read-only view being the boundary's shared bytes. -/

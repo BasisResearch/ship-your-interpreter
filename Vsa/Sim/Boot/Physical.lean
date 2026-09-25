@@ -98,7 +98,6 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v
     {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
     (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
     {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
-    (hgeom : SharedGeom B.shared stackSL)
     (hprog : ∀ p : Program, ProgramRepr m stmts count p →
       ProgramReprWithin m B.shared stmts count p)
     (hcap : ∀ p : Program, ProgramRepr m stmts count p →
@@ -169,7 +168,7 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v
       boot := ⟨B.data, top, brkv, chunks, binsOf L, B.frame sblk nblk vblk,
         initialOwned_of hpv ho hf rfl hh hprog hcap,
         ⟨heapAt_of_check hpv hh (fun e _ hr => B.realloc_mem hr), hcap⟩,
-        bootHeapFacts_of hpv hf hH hgeom⟩
+        bootHeapFacts_of hpv hf hH ho.readWin⟩
       stack_admissible := hfit
       gprs := bootState_gprs m g
       s0_impure := by rw [← R.s0]; exact hgpr 7 (by decide) }
@@ -185,7 +184,6 @@ theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v)
     {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
     (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
     {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
-    (hgeom : SharedGeom B.shared stackSL)
     {p0 : Program} {fuel cfuel : Nat}
     (hdec : decodesTo v B.sharedB fuel stmts count p0 = true)
     (hcap : capOk cfuel p0 top = true) (hfit : programStackFits p0 = true) :
@@ -196,7 +194,7 @@ theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v)
     fun p hp => hp.unique hwithin.erase
   refine ⟨stmts, count, hwithin.erase, BitVec.ofNat 64 interpObject, bootNatives, bootArena,
     fun _ => B.env, fun _ => 0, 0, ?_⟩
-  exact readyFacts_of hv M R ho hf hstore hh hH hgeom
+  exact readyFacts_of hv M R ho hf hstore hh hH
     (fun p hp => huniq p hp ▸ hwithin)
     (fun p hp => huniq p hp ▸ capacity_of_capOk hcap)
     (fun p hp => huniq p hp ▸ ProgramStackFits.of_check hfit)

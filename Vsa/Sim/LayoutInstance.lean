@@ -401,10 +401,12 @@ structure BootHeapFacts (m : Vsa.MemRepr.Mem) (shared : Nat → Prop) (e top brk
   frame : BootFrameChunks m chunks shared e F
   /-- `_impure_data._stderr = &__sf[2]` (INTERP_DESIGN.md Q6). -/
   stderr : Vsa.MemRepr.read64 m impureStderrAddr = some exitStderr
-  /-- Every shared byte is RAM with the word loop's slack, off the HTIF words
-  and the stack. User decision (2026-09-24, integration): the Iris route's
-  string reads need it (`SharedWin`). -/
-  shared_geom : SharedGeom shared stackSL
+  /-- Every shared byte is RAM with the word loop's slack, its read window
+  off the HTIF words, and off the stack. User decisions: 2026-09-24
+  (integration; the Iris route's string reads need it, `SharedWin`) and
+  2026-09-25 (REVIEW.md P7: shared bytes may lie in `.rodata`, where the
+  natives' value names are). -/
+  shared_geom : SharedReadWin shared stackSL
 
 /-- The initial ownership, one allocator walk of it, and the facts above, about
 the same witnesses. -/
