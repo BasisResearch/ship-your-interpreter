@@ -69,13 +69,18 @@ RO_LD = [0x80019370] + [0x80019f28 + 8 * i for i in range(6)] + [0x80019fe0 + 8 
 # lane N1: newlib's stdout path (`fputc`, `fputs`, `fwrite`, `fprintf` on an
 # unbuffered `stdout`, down to `_write`'s `tohost` stores)
 STDIO_FUNCS = ['_write', '_write_r', '__swrite', '__sflush_r', '_fflush_r', '__swbuf_r', '_putc_r',
-               'fputc', '__retarget_lock_acquire_recursive', '__retarget_lock_release_recursive']
+               'fputc', '__retarget_lock_acquire_recursive', '__retarget_lock_release_recursive',
+               # lane N3: `fwrite(…, stderr)`: the first write sets `stderr` up
+               # (`__swsetup_r` → `__smakebuf_r` → `__swhatbuf_r` → `_fstat_r` → `_fstat` → `memset`)
+               'fwrite', '_fwrite_r', '__muldi3', '__hidden___udivdi3', '__sfvwrite_r', '__swsetup_r',
+               '__smakebuf_r', '__swhatbuf_r', '_fstat_r', '_fstat', 'memset']
 # PCs with no step lemma (their code bytes and `stdio_code_<pc>` stay): `_write`'s
 # putchar store (printed by `swp_putc`)
 STDIO_SKIP = {0x8000005c}
 TABLE = 'stdio' if '--table' in sys.argv and sys.argv[sys.argv.index('--table') + 1] == 'stdio' \
     else 'interp'
 SKIP = set()
+INTERP_FUNCS = FUNCS
 if TABLE == 'stdio':
     FUNCS, TABLES, TABLE_LOADS, RO_LD, SKIP = STDIO_FUNCS, [], set(), [], STDIO_SKIP
 PER_FILE = 120
@@ -667,9 +672,30 @@ STDIO_RENAME = [
 ]
 
 
+def shared_pcs():
+    """PCs of functions in both tables (the libgcc helpers `_fwrite_r` calls):
+    their segment and lemma names in the stdio table get a `u`/`y` suffix
+    (`iy_`, `iu_`, `jalxu_`), which `nx_run` also tries."""
+    out, fn = set(), None
+    for l in open(ROOT / 'experiments/disasm.txt'):
+        m = re.match(r'^([0-9a-f]+) <(.*)>:$', l)
+        if m:
+            fn = m.group(2)
+            continue
+        m = re.match(r'^\s+([0-9a-f]+):\t([0-9a-f]{8})', l)
+        if m and fn in INTERP_FUNCS and fn in FUNCS:
+            out.add(int(m.group(1), 16))
+    return out
+
+
 def stdio_rename(text):
     for pat, rep in STDIO_RENAME:
         text = re.sub(pat, rep, text)
+    for pc in sorted(shared_pcs()):
+        h = f'{pc:08x}'
+        text = re.sub(r'\bix(T|F)?_' + h, r'iy\1_' + h, text)
+        text = re.sub(r'\bit(D|H|T|O)?_' + h, r'iu\1_' + h, text)
+        text = re.sub(r'\bjalx_' + h, 'jalxu_' + h, text)
     return text
 
 

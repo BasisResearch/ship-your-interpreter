@@ -155,7 +155,9 @@ def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       if fuel == 0 then stuck := stuck ++ [cur]; continue
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
-      let some (conts, pend) ← ixStep norm h cur | stuck := stuck ++ [cur]; continue
+      let some (conts, pend) ← ixStep norm h cur
+          ["it", "itD", "itT", "itH", "itO", "iu", "iuD", "iuT", "iuH", "iuO"]
+        | stuck := stuck ++ [cur]; continue
       pending := pending ++ pend
       match conts with
       | [c] =>
