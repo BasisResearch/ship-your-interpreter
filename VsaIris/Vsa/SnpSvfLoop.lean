@@ -35,14 +35,15 @@ theorem svf_head {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
 /-- The data view off everything the run owns, in RAM off the HTIF words. -/
-structure DataOff (DA : List Nat) (s dst n : Nat) : Prop where
+structure DataOff (Dt : Mem) (DA : List Nat) (s dst n : Nat) : Prop where
   ram : ∀ a ∈ DA, 0x80000000 ≤ a ∧ a + 8 ≤ 0x100000000
   htif : ∀ a ∈ DA, a + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ a
   stack : ∀ a ∈ DA, a < s - 1024 ∨ s ≤ a
   dst : ∀ a ∈ DA, a < dst ∨ dst + n ≤ a
+  tab : TabAt Dt DA
 
 /-- A run of data bytes is a piece `_svfprintf_r` may print. -/
-theorem pieceSrc_of_data {DA : List Nat} {s dst n b l : Nat} (DO : DataOff DA s dst n)
+theorem pieceSrc_of_data {Dt : Mem} {DA : List Nat} {s dst n b l : Nat} (DO : DataOff Dt DA s dst n)
     (SG : SnpGeom s dst n) (hl31 : l < 2 ^ 31) (hd' : InDA DA b (b + l + 1)) :
     PieceSrc DA s dst n b l := by
   have hs1 := SG.s_lo
@@ -119,7 +120,7 @@ the `'%s'` at `p + k`, the string at the `va_list`'s `ap`. -/
 theorem svf_iterS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
-    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
     (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
     (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 total.length) total R Mt)
     (k : Nat) (FG : FmtGeom DA p (k + 1))
@@ -152,7 +153,7 @@ theorem svf_iterS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   rw [hsc] at CA
   have hap' := (ld_ap SG CA.st.core.frame hap1 hap2).trans hap
   refine svf_convS hlive (p + k) a len R4 Mt4 SG CA hLl hap' hap1 hap2 (by omega) hstr
-    (by have := hstr.lo; omega) (pieceSrc_of_data DO SG (by omega) hstr.dom) (by omega) (by omega)
+    (by have := hstr.lo; omega) (pieceSrc_of_data DO SG (by omega) hstr.dom) (by omega) (by omega) DO.tab
     fun R5 Mt5 PI => ?_
   refine svf_print hlive R5 Mt5 SG PI fun R6 Mt6 g hg1 hg2 A6 => hk R6 Mt6 ?_
   have e1 : total.length + (p + k - p) + (len + sgN 0) = total.length + k + len := by simp [sgN]
@@ -269,7 +270,7 @@ theorem svf_intTail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
 theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
-    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
     (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
     (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 total.length) total R Mt)
     (k : Nat) (FG : FmtGeom DA p (k + 3))
@@ -301,7 +302,7 @@ theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (by omega) (by omega) (by omega) fun R4 Mt4 CA => ?_
   rw [hl1] at CA
   refine svf_disp hlive (p + k + 1) 0x6c _ (.inr (.inr ⟨rfl, rfl⟩)) R4 Mt4 (by omega) CA.r25 CA.r24
-    CA.r26 CA.r22 fun R5 h25 h24 hkp5 => ?_
+    CA.r26 CA.r22 DO.tab fun R5 h25 h24 hkp5 => ?_
   have h6 : R5 6 = 0#64 := (hkp5 6 (by decide) (by decide) (by decide) (by decide)).trans CA.r6
   refine svf_convLL hlive (p + k + 2) R5 Mt4 (fun b h1 h2 => FG.dom b (by omega) (by omega))
     (by omega) (by omega) (by omega) hl2 h25 h6 fun R6 h25' h24' h6' hkp6 => ?_
@@ -311,7 +312,7 @@ theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   have k22 : R6 22 = 0x8001a0fc#64 := (hkp6 22 (by decide) (by decide) (by decide) (by decide)).trans
     ((hkp5 22 (by decide) (by decide) (by decide) (by decide)).trans CA.r22)
   refine svf_disp hlive (p + k + 2 + 1) 0x64 _ (.inr (.inl ⟨rfl, rfl⟩)) R6 Mt4 (by omega) h25' h24'
-    k26 k22 fun R7 h25'' _ hkp7 => ?_
+    k26 k22 DO.tab fun R7 h25'' _ hkp7 => ?_
   have kk : ∀ z, z ≠ 6 → z ≠ 14 → z ≠ 15 → z ≠ 24 → z ≠ 25 → R7 z = R4 z := fun z a b c d e =>
     (hkp7 z b c d e).trans ((hkp6 z a c d e).trans (hkp5 z b c d e))
   have St7 := CA.st.update SG (R' := R7) (fun z hz => kk z (by omega) (by omega) (by omega) (by omega) (by omega))
@@ -334,7 +335,7 @@ run `[p, p + k)`, then the NUL. -/
 theorem svf_iterEnd {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
-    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
     (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
     (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 total.length) total R Mt)
     (k : Nat) (FG : FmtGeom DA p k)

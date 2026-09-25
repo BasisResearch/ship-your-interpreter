@@ -20,6 +20,22 @@ macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (apply snpRO_mem_img; (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]); decide))
 
+/-- `_svfprintf_r`'s conversion table (`0x8001a0fc`, 91 words, `.rodata`) in
+the run's data view: read like the format, not fetched, so it needs no
+liveness. -/
+structure TabAt (Dt : Mem) (DA : List Nat) : Prop where
+  dom : InDA DA 0x8001a0fc 0x8001a268
+  img : ∀ a, 0x8001a0fc ≤ a → a < 0x8001a268 → imgM Dt a = snpROImg a
+
+theorem TabAt.lw {Dt : Mem} {DA : List Nat} (h : TabAt Dt DA) {a : Nat} (h1 : 0x8001a0fc ≤ a)
+    (h2 : a + 4 ≤ 0x8001a268) : ldv .lw Dt a = ldvf .lw snpROImg a := by
+  unfold ldv ldvf bytesAt
+  congr 1
+  refine List.map_congr_left fun j hj => ?_
+  have := List.mem_range.mp hj
+  simp only [widthOfM] at this
+  exact h.img _ (by omega) (by omega)
+
 /-- **The conversion table** (`0x80007798`): the character `c` in `s8` at
 the cursor `x` (`s9`) dispatches through `0x8001a0fc` to `%s`, `%d` or the
 `l` modifier. -/
@@ -28,13 +44,17 @@ theorem svf_disp {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (hc : c = 0x73 ∧ tgt = 0x80007f4c#64 ∨ c = 0x64 ∧ tgt = 0x80008008#64 ∨ c = 0x6c ∧ tgt = 0x80008534#64)
     (R : Nat → BitVec 64) (Mt : Mem) (hx : x + 1 < 2 ^ 64)
     (h25 : R 25 = BitVec.ofNat 64 x) (h24 : R 24 = BitVec.ofNat 64 c) (h26 : R 26 = 90#64)
-    (h22 : R 22 = 0x8001a0fc#64)
+    (h22 : R 22 = 0x8001a0fc#64) (hT : TabAt Dt DA)
     (hk : ∀ R', R' 25 = BitVec.ofNat 64 (x + 1) → R' 24 = BitVec.ofNat 64 c →
       (∀ z, z ≠ 14 → z ≠ 15 → z ≠ 24 → z ≠ 25 → R' z = R z) → NW live Dt DA S Q tgt R' Mt) :
     NW live Dt DA S Q 0x80007798#64 R Mt := by
+  have hTd := hT.dom
+  have ts := (hT.lw (a := 0x8001a248) (by decide) (by decide)).trans snpRO_lw_8001a248
+  have td := (hT.lw (a := 0x8001a20c) (by decide) (by decide)).trans snpRO_lw_8001a20c
+  have tl := (hT.lw (a := 0x8001a22c) (by decide) (by decide)).trans snpRO_lw_8001a22c
   rcases hc with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
   all_goals nx_runF hlive using [ofNat_add_ofNat, h22, h24, h25, h26, sext_zero, BitVec.add_zero,
-    BitVec.reduceToNat] at 0x80007f4c 0x80008008 0x80008534 0x800077f8
+    BitVec.reduceToNat, ts, td, tl] at 0x80007f4c 0x80008008 0x80008534 0x800077f8
   all_goals refine hk _ ?_ ?_ ?_
   all_goals (try intro z h14 h15 h24' h25')
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h14, h15, h24', h25'])
@@ -214,12 +234,13 @@ theorem svf_convS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (hap : ldv .ld Mt (BitVec.ofNat 64 ap).toNat = BitVec.ofNat 64 a) (hap1 : s - 40 ≤ ap)
     (hap2 : ap + 8 ≤ s) (hq : q + 3 < 2 ^ 64) (hstr : DStr Dt DA a len) (ha0 : a ≠ 0)
     (hsrc : PieceSrc DA s dst n a len) (hc : c + len + 1 < 2 ^ 31) (hsum : sumLen L + len + 1 < 2 ^ 31)
+    (hT : TabAt Dt DA)
     (hk : ∀ R' Mt', PrintIn DA s dst n R0 Mt0 (q + 2) (ap + 8) c total L a len 0 R' Mt' →
       NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R' Mt') :
     NW live Dt DA (snpS s dst n) Q 0x80007798#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
-  refine svf_disp hlive (q + 1) 0x73 _ (.inl ⟨rfl, rfl⟩) R Mt (by omega) CA.r25 CA.r24 CA.r26 CA.r22
+  refine svf_disp hlive (q + 1) 0x73 _ (.inl ⟨rfl, rfl⟩) R Mt (by omega) CA.r25 CA.r24 CA.r26 CA.r22 hT
     fun R1 h25 h24 hkp => ?_
   have hsa := SG.s_al
   have St := CA.st

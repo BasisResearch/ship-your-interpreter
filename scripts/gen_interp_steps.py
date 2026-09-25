@@ -189,7 +189,8 @@ def mem_proof(a):
     for side, other in reversed(path):
         pf = (f'List.mem_append_left {other} ({pf})' if side == 'L'
               else f'List.mem_append_right {other} ({pf})')
-    return f'List.mem_append_left interpRO ({pf})'
+    # snp: the conversion table is data (the run's view), not text (only code is live)
+    return pf if TGT == 'snp' else f'List.mem_append_left interpRO ({pf})'
 
 
 def gen_code():
@@ -207,8 +208,13 @@ def gen_code():
     C.append('def interpRO : List (Nat × BitVec 8) :=')
     C.append('  [' + ',\n   '.join(', '.join(f'(0x{a:x}, 0x{b:02x}#8)' for a, b in ro[i:i + 8])
                                   for i in range(0, len(ro), 8)) + ']\n')
-    C.append('/-- The read-only bytes every interpreter run fetches or loads. -/')
-    C.append('def interpText : List (Nat × BitVec 8) := interpCode ++ interpRO\n')
+    if TGT == 'snp':
+        C.append('/-- The code bytes a `snprintf` run fetches. The table is read through the\n'
+                 'run\'s data view (`SnpSvfConv.TabAt`): only `.text` is live (`CodeLive`). -/')
+        C.append('def interpText : List (Nat × BitVec 8) := interpCode\n')
+    else:
+        C.append('/-- The read-only bytes every interpreter run fetches or loads. -/')
+        C.append('def interpText : List (Nat × BitVec 8) := interpCode ++ interpRO\n')
     C.append('/-- The jump tables as a byte function (`0` off the tables). -/')
     C.append('def interpROImg (a : Nat) : BitVec 8 := (interpRO.lookup a).getD 0\n')
     for pc in PCS:
@@ -413,7 +419,7 @@ def emit(pc):
     (by decide) (by decide) (by decide) (fun _ => {hgp(ks)}) (by decide) (fun _ => rfl)
     (fun _ x hx hg hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with {alts} <;> first | rfl | exact absurd rfl hg | exact absurd rfl hr)
     hk""")
-        if pc in TABLE_LOADS:
+        if pc in TABLE_LOADS and TGT != 'snp':
             thm.append(hdr('itT', pc) + f"""
     (hea : LdOK {ea} {wd})
     (hLDT : ∀ b ∈ accAddrs {ea} {wd}, (b, interpROImg b) ∈ interpRO)

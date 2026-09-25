@@ -41,7 +41,7 @@ theorem snp_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     (hra : ldv .ld Mt (BitVec.ofNat 64 (s - 272 + 216)).toNat = ra)
     (hS0 : ldv .ld Mt (BitVec.ofNat 64 (s - 272 + 208)).toNat = s0)
     (hS1 : ldv .ld Mt (BitVec.ofNat 64 (s - 272 + 200)).toNat = s1) (hal : ra.toNat % 4 = 0)
-    (hk : ∀ R' Mt', R' 2 = BitVec.ofNat 64 s → R' 8 = s0 → R' 9 = s1 →
+    (hk : ∀ R' Mt', R' 1 = ra → R' 2 = BitVec.ofNat 64 s → R' 8 = s0 → R' 9 = s1 →
       (∀ z, 18 ≤ z → z ≤ 27 → R' z = R z) →
       (∀ i, i < min total.length (n - 1) → imgM Mt' (dst + i) = total.getD i 0) →
       imgM Mt' (dst + min total.length (n - 1)) = 0#8 →
@@ -66,7 +66,8 @@ theorem snp_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     rw [toNat_ofNat_lt (by omega), show s - 272 + 8 = snpFP s by simp only [snpFP]; omega]; exact hpw
   nx_runF [20] hlive using [ofNat_add_ofNat, h2, h8, h10, hng, hn0', hpw', hra, hS0, hS1]
   have hmin : min total.length (n - 1) < n := by omega
-  refine hk _ _ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine hk _ _ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [show s - 272 + 272 = s by omega]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -180,7 +181,7 @@ theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (total : List (BitVec 8)) (hlen : total.length < 2 ^ 31)
     (hloop : ∀ R0' Mt0', SnpAtSvf s dst n R Mt R0' Mt0' →
       SvfLoopRun live Dt DA Q s dst n R0' Mt0' (R0' 12).toNat (R0' 13).toNat total)
-    (hk : ∀ R' Mt', R' 2 = R 2 → (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z) →
+    (hk : ∀ R' Mt', R' 1 = R 1 → R' 2 = R 2 → (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z) →
       SnpOut Mt Mt' s dst n total → NW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
     NW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
   have hs1 := SG.s_lo
@@ -203,8 +204,8 @@ theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   rw [SA.r1]
   refine snp_epi hlive total R3 Mt3 Mt SG h2' ((hkeep 8 (.inl rfl)).trans SA.r8) h10' hlen hB (R 1) (R 8) (R 9)
     ((ld3 216 (by omega) (by omega)).trans SA.ra) ((ld3 208 (by omega) (by omega)).trans SA.s0)
-    ((ld3 200 (by omega) (by omega)).trans SA.s1) hal fun R4 Mt4 h24 h84 h94 hk4 hb hnul hfr4 => ?_
-  refine hk R4 Mt4 (h24.trans h2.symm) ?_ ⟨hb, hnul, fun a ha1 ha2 => ?_⟩
+    ((ld3 200 (by omega) (by omega)).trans SA.s1) hal fun R4 Mt4 h14 h24 h84 h94 hk4 hb hnul hfr4 => ?_
+  refine hk R4 Mt4 h14 (h24.trans h2.symm) ?_ ⟨hb, hnul, fun a ha1 ha2 => ?_⟩
   · intro z hz
     rcases hz with rfl | rfl | ⟨h1, h2⟩
     · exact h84
@@ -254,7 +255,7 @@ theorem intToString_length_le (v : BitVec 64) : (strBytes (Vsa.While.intToString
 /-- **`"%lld"`'s loop**: one `%lld` iteration, then the NUL. -/
 theorem loop_lld {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
-    (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
     (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
     (hal : (R0 1).toNat % 4 = 0) (p ap : Nat) (FG : FmtGeom DA p 4)
     (h0 : imgM Dt p = 37#8) (h1 : imgM Dt (p + 1) = 0x6c#8) (h2 : imgM Dt (p + 2) = 0x6c#8)
@@ -277,7 +278,7 @@ theorem loop_lld {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
 the NUL. -/
 theorem loop_fn {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
-    (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff DA s dst n)
+    (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
     (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
     (hal : (R0 1).toNat % 4 = 0) (p ap : Nat) (FG : FmtGeom DA p 7)
     (hb : ∀ i, i < 4 → imgM Dt (p + i) ≠ 0#8 ∧ imgM Dt (p + i) ≠ 37#8)

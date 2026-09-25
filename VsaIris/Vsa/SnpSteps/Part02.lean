@@ -2548,21 +2548,6 @@ theorem ntP_800077b4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     (fun _ x hx hg hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg | exact absurd rfl hr)
     hk
 
-theorem ntT_800077b4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ snpText, live p.1)
-    (hea : LdOK ((R 15) + sign_extend (m := 64) (0x000#12)).toNat 4)
-    (hLDT : ∀ b ∈ accAddrs ((R 15) + sign_extend (m := 64) (0x000#12)).toNat 4, (b, snpROImg b) ∈ snpRO)
-    (hk : NW live Dt DA S Q 0x800077b8#64 (upd R 15 (ldvf .lw snpROImg ((R 15) + sign_extend (m := 64) (0x000#12)).toNat)) Mt) :
-    NW live Dt DA S Q 0x800077b4#64 R Mt :=
-  swp_stepD nx_800077b4 [15] [bytesAt snpROImg ((R 15) + sign_extend (m := 64) (0x000#12)).toNat 4] [] [] 0 rfl (by decide) (by decide) (by decide)
-    (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold nx_800077b4 ChainFacts; chain_facts hm with "VsaIris.Sym.snp_at_"; exact ⟨hea, lpins4_fn (fun b hb => by rw [hm _ (List.mem_append_right _ (hLDT b hb))]; rfl)⟩)
-    (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
-    (fun a h => by cases h) rfl
-    (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)
-    (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
-
 theorem nt_800077b8 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ snpText, live p.1)
