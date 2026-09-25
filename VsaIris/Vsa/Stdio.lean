@@ -2,6 +2,7 @@ import VsaIris.MallocRun
 import VsaIris.Vsa.ImpureRO
 import Vsa.Sim.ExitRuntimeData
 import Vsa.Sim.LocaleData
+import Vsa.Sim.StderrStream
 
 /-!
 # newlib's runtime data (INTERP_DESIGN.md §4.2, package H5)
@@ -52,7 +53,7 @@ inside `stdioFoot`). -/
 def StdioOK (img : Nat → BitVec 8) : Prop :=
   ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) →
     ConsoleStream m ∧ ExitRuntimeData m ∧ read64 m stderrPtrAddr = some exitStderr ∧
-      LocaleData m
+      LocaleData m ∧ StderrStream m
 
 section Own
 

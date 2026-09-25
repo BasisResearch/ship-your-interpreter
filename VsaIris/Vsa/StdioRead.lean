@@ -51,7 +51,7 @@ theorem mem_dataList {a : Nat} (h : stdioFoot a) : a ∈ dataList := by
 theorem StdioOK.facts {img : Nat → BitVec 8} (h : StdioOK img) :
     ConsoleStream (fillMem img dataList) ∧ ExitRuntimeData (fillMem img dataList) ∧
       read64 (fillMem img dataList) stderrPtrAddr = some exitStderr ∧
-      LocaleData (fillMem img dataList) :=
+      LocaleData (fillMem img dataList) ∧ StderrStream (fillMem img dataList) :=
   h (fillMem img dataList) (fun _ ha => fillMem_get (l := dataList) img (mem_dataList ha))
 
 /-- A word of the image, from a `read64` fact about its canonical memory. -/

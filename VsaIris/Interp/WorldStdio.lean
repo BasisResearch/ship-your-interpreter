@@ -121,14 +121,19 @@ theorem LocaleData.of_img {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
   mbMax := readLE_img h 1 _ hl.mbMax (by stdio_in_locale)
   decPoint := readLE_img h 8 _ hl.decPoint (by stdio_in_locale)
 
+theorem StderrStream.of_img {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
+    (hs : StderrStream m) : StderrStream m' where
+  base := readLE_img h 8 _ hs.base (by stdio_in)
+  writer := readLE_img h 8 _ hs.writer (by stdio_in)
+
 /-- **newlib's data at the boundary**: the memory's own image satisfies
 `StdioOK`. The `stderr` pointer is the one fact the boundary does not state
 (INTERP_DESIGN.md Q6); `BootGap.stderr` carries it. -/
 theorem stdioOK_of_mem {m : Mem} (hc : ConsoleStream m) (he : ExitRuntimeData m)
-    (hs : read64 m stderrPtrAddr = some exitStderr) (hl : LocaleData m) :
+    (hs : read64 m stderrPtrAddr = some exitStderr) (hl : LocaleData m) (hw : StderrStream m) :
     StdioOK (memImg m) := by
   intro m' h
   exact ⟨ConsoleStream.of_img h hc, ExitRuntimeData.of_img h he,
-    readLE_img h 8 _ hs (by stdio_in), LocaleData.of_img h hl⟩
+    readLE_img h 8 _ hs (by stdio_in), LocaleData.of_img h hl, StderrStream.of_img h hw⟩
 
 end VsaIris.Interp
