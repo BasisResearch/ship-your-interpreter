@@ -145,14 +145,14 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
       ldv .ld M (U + 16#64).toNat = BitVec.ofNat 64 (bs.length + piecesLen rest) →
       IovAt Mb nxt rest → (s.toNat - need ≤ nxt ∧ nxt + 16 * rest.length ≤ s.toNat ∧ nxt % 8 = 0 ∧
         ∀ a, nxt ≤ a → a < nxt + 16 * rest.length → ¬ LoopReg f.toNat fp.toNat U.toNat a) →
-      PieceReads Dt DA (outS s need) Mb src bs → SrcOK f.toNat fp.toNat U.toNat src bs.length →
+      PieceReads Dt DA (outS s need) Mb src bs → (0 < bs.length → SrcOK f.toNat fp.toNat U.toNat src bs.length) →
       (∀ p ∈ rest, PieceReads Dt DA (outS s need) Mb p.1 p.2 ∧ SrcOK f.toNat fp.toNat U.toNat p.1 p.2.length) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t0 ++ putcs done) 0x8000dfc0#64 R M := by
   intro n
   induction n with
   | zero => intro _ _ _ _ _ _ _ _ h; omega
   | succ n ih =>
-    intro done pend bs src nxt rest R M hμ hrel hpos hsmall hR hF hFr hres hiov hnxt hsrc hsok hrest
+    intro done pend bs src nxt rest R M hμ hrel hpos hsmall hR hF hFr hres hiov hnxt hsrc hsok' hrest
     have hfsz : f.toNat + 1208 < 2 ^ 32 := by have := G.hf2; have := G.hs3; omega
     -- a pass of `c` bytes ends at the tail: back to the head, or out
     have tailK : ∀ (c : Nat) (R3 : Nat → BitVec 64) (M3 : Mem) (pend' out : List (BitVec 8)),
@@ -163,6 +163,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t0 ++ putcs done ++ putcs out)
           0x8000e258#64 R3 M3 := by
       intro c R3 M3 pend' out hc0 hcL hsplit h18 h9 h19 h22 hkeep hF3 hFr3
+      have hsok := hsok' (by omega)
       have hres3 : ldv .ld M3 (U + 16#64).toNat = BitVec.ofNat 64 (bs.length + piecesLen rest) := by
         rw [hFr3.ldv .ld (fun j hj hr => by
           simp only [widthOfM] at hj
@@ -190,9 +191,9 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
       · -- back to the head
         rw [hF3.p] at hR'
         refine ih (done ++ out) pend' (bs.drop c) (src + c) nxt rest R' _ ?_ ?_ ?_ ?_ (by simpa using hR')
-          hF4 hFr4 ?_ hiov hnxt (hsrc.drop c) ⟨by have := hsok.lo; omega, by have := hsok.hi; simp; omega,
+          hF4 hFr4 ?_ hiov hnxt (hsrc.drop c) (fun _ => ⟨by have := hsok.lo; omega, by have := hsok.hi; simp; omega,
             by have := hsok.htif; simp; omega, fun i hi => by
-              simp at hi; rw [Nat.add_assoc]; exact hsok.out (c + i) (by omega)⟩ hrest
+              simp at hi; rw [Nat.add_assoc]; exact hsok.out (c + i) (by omega)⟩) hrest
         · simp; omega
         · rw [hrel, List.append_assoc, ← List.take_append_drop c bs, List.append_assoc, ← List.append_assoc pend,
             hsplit]; simp [List.append_assoc]
@@ -232,7 +233,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
           exact hs0
         · rw [hFr.ldv .ld (fun j hj => by simp only [widthOfM] at hj; rw [hnd8, Nat.add_assoc]; exact hnr (8 + j) (by omega))]
           exact hl0
-        · refine ih done pend p.2 p.1 (nxt + 16) rest' R' M ?_ ?_ ?_ ?_ hR' hF hFr ?_ ?_ ?_ hp.1 hp.2 ?_
+        · refine ih done pend p.2 p.1 (nxt + 16) rest' R' M ?_ ?_ ?_ ?_ hR' hF hFr ?_ ?_ ?_ hp.1 (fun _ => hp.2) ?_
           · simp [piecesLen] at hμ ⊢; omega
           · rw [hrel]; simp [piecesBytes]
           · simpa [piecesLen] using hpos
@@ -246,7 +247,8 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
           · simp at hn2
             exact ⟨by omega, by omega, by omega, fun a h1 h2 => hnreg a (by omega) (by simp; omega)⟩
           · intro q hq; exact hrest q (List.mem_cons_of_mem _ hq)
-    · by_cases hdir : pend.length = 0 ∧ 1024 ≤ bs.length
+    · have hsok := hsok' hL0
+      by_cases hdir : pend.length = 0 ∧ 1024 ≤ bs.length
       · -- a direct write
         obtain ⟨hk0, hL1⟩ := hdir
         have hp0 : pend = [] := List.eq_nil_of_length_eq_zero hk0
@@ -305,5 +307,143 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
           exact hR1.keep x hx
         rw [copyBytes_win _ _ _ (by omega)] at hsplit
         exact tailK _ R3 M3 pend' out hc0 (by omega) hsplit h18' h9' h19' h22' hkeep' hF3 hFr3
+
+/-- **The loop from its first head** (`s3 = 0`: every piece still to fetch),
+its base memory and reference registers being the head's own. -/
+theorem sfv_start (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
+    (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA)
+    {s fp f U : BitVec 64} {need A : Nat} {R0 : Nat → BitVec 64} (Rh : Nat → BitVec 64) (Mb : Mem)
+    {pend0 : List (BitVec 8)} {iovs : List (Nat × List (BitVec 8))} {t : String}
+    (G : SfvGeom s fp f U need) (hRh : SfvRef Rh f U fp) (hsp : SfvSpills Mb fp R0)
+    (h0 : R0 2 = fp + 96#64) (hra : (R0 1).toNat % 4 = 0) (h26 : Rh 26 = R0 26) (h27 : Rh 27 = R0 27)
+    (hR : SfvRegs Rh Rh A 0 0 (f + BitVec.ofNat 64 (184 + pend0.length))) (hF : SbFile Mb f pend0)
+    (hres : ldv .ld Mb (U + 16#64).toNat = BitVec.ofNat 64 (piecesLen iovs))
+    (htot : 0 < piecesLen iovs) (htot2 : piecesLen iovs < 2 ^ 31) (hiov : IovAt Mb A iovs)
+    (hA : s.toNat - need ≤ A ∧ A + 16 * iovs.length ≤ s.toNat ∧ A % 8 = 0 ∧
+      ∀ a, A ≤ a → a < A + 16 * iovs.length → ¬ LoopReg f.toNat fp.toNat U.toNat a)
+    (hsrcs : ∀ p ∈ iovs, PieceReads Dt DA (outS s need) Mb p.1 p.2 ∧ SrcOK f.toNat fp.toNat U.toNat p.1 p.2.length)
+    (hk : ∀ R' M' out pend', pend0 ++ piecesBytes iovs = out ++ pend' → RetOK R0 R' 0#64 → SbFile M' f pend' →
+      Frame M' Mb (LoopReg f.toNat fp.toNat U.toNat) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R0 1) R' M') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dfc0#64 Rh Mb := by
+  have e : t = t ++ putcs [] := by simp
+  rw [e]
+  exact sfv_loop hlive hlive' hsub G hRh hsp h0 hra h26 h27 pend0 (piecesBytes iovs) t hk
+    (piecesLen iovs + iovs.length + 1) [] pend0 [] 0 A iovs Rh Mb (by simp) (by simp) (by simpa using htot)
+    (by simpa using htot2) (by simpa using hR) hF (Frame.refl _ _) (by simpa using hres) hiov hA
+    (fun i h => absurd h (by simp)) (fun h => absurd h (by simp)) hsrcs
+
+/-- The memory after `__sfvwrite_r`'s prologue (eleven spills below `sp`). -/
+abbrev sfvProMt (Mt : Mem) (sp v8 v20 v21 v1 v9 v18 v19 v22 v23 v24 v25 : BitVec 64) : Mem :=
+  writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog
+      (writeLog (writeLog Mt [((sp + 18446744073709551600#64).toNat, 8, v8)])
+      [((sp + 18446744073709551568#64).toNat, 8, v20)]) [((sp + 18446744073709551560#64).toNat, 8, v21)])
+      [((sp + 18446744073709551608#64).toNat, 8, v1)]) [((sp + 18446744073709551592#64).toNat, 8, v9)])
+      [((sp + 18446744073709551584#64).toNat, 8, v18)]) [((sp + 18446744073709551576#64).toNat, 8, v19)])
+      [((sp + 18446744073709551552#64).toNat, 8, v22)]) [((sp + 18446744073709551544#64).toNat, 8, v23)])
+      [((sp + 18446744073709551536#64).toNat, 8, v24)]) [((sp + 18446744073709551528#64).toNat, 8, v25)]
+
+theorem sfvProMt_frame (Mt : Mem) {sp : BitVec 64} (hsp : 96 ≤ sp.toNat) (v8 v20 v21 v1 v9 v18 v19 v22 v23 v24 v25 : BitVec 64) :
+    Frame (sfvProMt Mt sp v8 v20 v21 v1 v9 v18 v19 v22 v23 v24 v25) Mt (fun a => sp.toNat - 96 ≤ a ∧ a < sp.toNat) := by
+  unfold sfvProMt
+  frame_chain
+
+/-- The spills of `__sfvwrite_r`'s prologue, read back. -/
+theorem sfvProMt_spills (Mt : Mem) {sp : BitVec 64} (hsp : 96 ≤ sp.toNat) (hsp2 : sp.toNat < 2 ^ 32)
+    {R : Nat → BitVec 64} :
+    SfvSpills (sfvProMt Mt sp (R 8) (R 20) (R 21) (R 1) (R 9) (R 18) (R 19) (R 22) (R 23) (R 24) (R 25))
+      (sp + 18446744073709551520#64) R := by
+  unfold sfvProMt
+  constructor <;> (simp only [BitVec.add_assoc, BitVec.reduceAdd]; nx_mem)
+
+/-- The bytes a `__sfvwrite_r(reent, f, uio)` call changes, `sp` its entry
+stack pointer: its frame and its callees' (`[sp - 352, sp)`), the `FILE`'s
+`_p`/`_w`/buffer, the residual, `stdout`'s flags, `errno`. -/
+def SfvCallReg (f sp U : Nat) (a : Nat) : Prop := LoopReg f (sp - 96) U a ∨ (sp - 96 ≤ a ∧ a < sp)
+
+/-- **`__sfvwrite_r(reent, f, uio)`** on `__sbprintf`'s stack `FILE` holding
+`pend0`, with the pieces `iovs` (the `uio`'s `iov` array at `A`, residual
+their total): back at `ra` with 0, having printed `out` and buffered `pend'`,
+`pend0 ++ bytes = out ++ pend'`, and changed only `SfvCallReg`. -/
+#ix_seg sfvwrite_A {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
+    {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
+    (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
+    {s sp f U : BitVec 64} {need A : Nat} {pend0 : List (BitVec 8)} {iovs : List (Nat × List (BitVec 8))}
+    (hs1 : s.toNat - need + 352 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
+    (hf1 : sp.toNat ≤ f.toNat) (hf2 : f.toNat + 1208 ≤ s.toNat) (hfa : f.toNat % 8 = 0)
+    (hU1 : sp.toNat ≤ U.toNat) (hU2 : U.toNat + 24 ≤ s.toNat) (hUa : U.toNat % 8 = 0)
+    (hfU : U.toNat + 24 ≤ f.toNat ∨ f.toNat + 1208 ≤ U.toNat)
+    (hA : s.toNat - need ≤ A ∧ A + 16 * iovs.length ≤ s.toNat ∧ A % 8 = 0 ∧
+      ∀ a, A ≤ a → a < A + 16 * iovs.length → ¬ SfvCallReg f.toNat sp.toNat U.toNat a)
+    (h1ra : (R 1).toNat % 4 = 0)
+    (h2 : R 2 = sp) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = f) (h12 : R 12 = U)
+    (hF : SbFile Mt f pend0) (hiovp : ldv .ld Mt U.toNat = BitVec.ofNat 64 A)
+    (hres : ldv .ld Mt (U + 16#64).toNat = BitVec.ofNat 64 (piecesLen iovs))
+    (htot : 0 < piecesLen iovs) (htot2 : piecesLen iovs < 2 ^ 31) (hiov : IovAt Mt A iovs)
+    (hsrcs : ∀ p ∈ iovs, PieceReads Dt DA (outS s need) Mt p.1 p.2 ∧
+      SrcOK f.toNat (sp.toNat - 96) U.toNat p.1 p.2.length ∧ ∀ i, i < p.2.length → ¬ (sp.toNat - 96 ≤ p.1 + i ∧ p.1 + i < sp.toNat))
+    (hk : ∀ R' M' out pend', pend0 ++ piecesBytes iovs = out ++ pend' → RetOK R R' 0#64 → SbFile M' f pend' →
+      Frame M' Mt (SfvCallReg f.toNat sp.toNat U.toNat) →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de8c#64 R Mt   by
+    have hfl := hF.flags; have hBl := hF.base; have hp := hF.p
+    have htotd : BitVec.ofNat 64 (piecesLen iovs) ≠ 0#64 := fun e => by
+      have := congrArg BitVec.toNat e; simp only [BitVec.toNat_ofNat] at this; omega
+    have hB0 : f + 184#64 ≠ 0#64 := fun e => by
+      have := congrArg BitVec.toNat e; simp only [BitVec.toNat_add, BitVec.toNat_ofNat] at this; omega
+    nx_run hlive using [h2, h10, h11, h12, hfl, hBl, hp, hiovp, hres, BitVec.add_assoc] at 2147540928
+
+#ix_piece sfvwrite_B from sfvwrite_A by
+  have hfp : (sp + 18446744073709551520#64).toNat = sp.toNat - 96 := by
+    rw [toNat_add_neg (by omega) (by omega)]
+  have hU16 : (U + 16#64).toNat = U.toNat + 16 := by
+    rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
+  have hFro := sfvProMt_frame Mt (sp := sp) (by omega) (R 8) (R 20) (R 21) (R 1) (R 9) (R 18) (R 19) (R 22)
+    (R 23) (R 24) (R 25)
+  refine sfv_start (R0 := R) (fp := sp + 18446744073709551520#64) (f := f) (U := U) (A := A) (pend0 := pend0)
+    (iovs := iovs) hlive hlive' hsub _ _ ?G ?hRh ?hsp ?h0 h1ra
+    (by rsimp) (by rsimp) ?hR ?hF ?hres htot htot2 ?hiov ?hA ?hsrcs ?hk
+  case G =>
+    constructor <;> (try rw [hfp]) <;> omega
+  case hRh =>
+    refine ⟨by rsimp, by rsimp, by rsimp, by rsimp; decide, by rsimp⟩
+  case hsp =>
+    exact sfvProMt_spills Mt (by omega) (by omega)
+  case h0 =>
+    rw [h2, BitVec.add_assoc]; simp
+  case hR =>
+    exact ⟨by rsimp, by rsimp <;> rfl, by rsimp <;> rfl, by rsimp, by rsimp, fun _ _ => rfl⟩
+  case hF =>
+    exact hF.frame_out hFro (by omega) fun b hb => by omega
+  case hres =>
+    rw [hFro.ldv .ld (fun j hj => by simp only [widthOfM] at hj; rw [hU16]; omega)]; exact hres
+  case hiov =>
+    intro j hj
+    have hA2 := hA.2.1
+    have hj16 : A + 16 * j + 16 ≤ A + 16 * iovs.length := by
+      have : j + 1 ≤ iovs.length := hj
+      omega
+    have e1 : (BitVec.ofNat 64 (A + 16 * j)).toNat = A + 16 * j := by simp only [BitVec.toNat_ofNat]; omega
+    have e2 : (BitVec.ofNat 64 (A + 16 * j + 8)).toNat = A + 16 * j + 8 := by
+      simp only [BitVec.toNat_ofNat]; omega
+    have hout : ∀ k, k < 16 → ¬ (sp.toNat - 96 ≤ A + 16 * j + k ∧ A + 16 * j + k < sp.toNat) := fun k hk h =>
+      hA.2.2.2 _ (by omega) (by omega) (.inr h)
+    obtain ⟨h1', h2'⟩ := hiov j hj
+    exact ⟨by rw [hFro.ldv .ld (fun k hk => by simp only [widthOfM] at hk; rw [e1]; exact hout k (by omega))]; exact h1',
+      by rw [hFro.ldv .ld (fun k hk => by simp only [widthOfM] at hk; rw [e2, Nat.add_assoc]; exact hout (8 + k) (by omega))]; exact h2'⟩
+  case hA =>
+    refine ⟨hA.1, hA.2.1, hA.2.2.1, fun a h1 h2 hr => hA.2.2.2 a h1 h2 (.inl (by rw [hfp] at hr; exact hr))⟩
+  case hsrcs =>
+    intro p hp
+    obtain ⟨hr, hok, hout⟩ := hsrcs p hp
+    exact ⟨hr.transport fun i hi => hFro _ (hout i hi), by rw [hfp]; exact hok⟩
+  case hk =>
+    intro R' M' out pend' hrel hret hF' hFr'
+    refine hk R' M' out pend' hrel hret hF' ?_
+    exact (hFro.mono fun a h => .inr h).trans (hFr'.mono fun a h => .inl (by rw [hfp] at h; exact h))
+
+
+#nx_chain sfvwrite_chain := [sfvwrite_A, sfvwrite_B]
 
 end VsaIris.Sym.Fp
