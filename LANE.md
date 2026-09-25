@@ -1,6 +1,7 @@
 # Lane N3: newlib stderr holes (`newlib.fprintf`, `newlib.fwrite`)
 
-Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). Merged
+Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). Merged `hub/lane-n4` at `52b1e9d` (exitHandlers proved; exit takes errno) and `hub/lane-n5` at `88e8da1`.
+Merged
 `hub/iris-main` at `286c2ad` and `hub/lane-n1` at `34fe574` (errno lending, `outSpec`, `sfvwrite_run`).
 
 ## Status
@@ -11,8 +12,8 @@ Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). M
   "STATEMENT CHANGES (N3)".
 - **`newlib.fprintf`**: statement narrowed to `main`'s only call (INTERP_DESIGN N3), consumers
   rewired (errno lent from the dropped world). Run pieces proved: `vfpEntry_run` (shared with N5),
-  `vfpErr_run` (stderr setup via `swsetupErr_run`), `sprintErr_run`/`sprintErr0_run` (the
-  unbuffered two-piece flush), `LRO.promote` (owned string through the data view). Waiting on N5's
+  `vfpErr_run` (stderr setup via `swsetupErr_run`), `sprintErr_run` (the unbuffered
+  one-piece flush; `_vfprintf_r` flushes after each conversion and at the end), `LRO.promote` (owned string through the data view). Waiting on N5's
   format-loop pieces (`vfp_head` landed; `%s` with a strlen hook and the end next), then the
   fprintf prologue/epilogue glue and the Iris wrapper.
 
