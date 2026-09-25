@@ -5,28 +5,20 @@ interpreter compiled to bare-metal RV64 with HTIF I/O. The proof relates an
 inductive big-step semantics of WHILE to the binary's execution in the
 Sail-generated RISC-V model.
 
-**The result.** `Vsa.Sim.EndToEnd.endToEnd_refinement`
-([`VsaIris/Interp/EndToEnd.lean`](VsaIris/Interp/EndToEnd.lean)) is proved
-unconditionally: its only hypothesis, `VsaIris.Interp.IrisHoles`
-([`VsaIris/Interp/Holes.lean`](VsaIris/Interp/Holes.lean)), is a structure with
-no fields, and every newlib and allocator routine the binary calls is proved
-against the real machine code. The only axioms are `propext`,
-`Classical.choice` and `Quot.sound`. [`docs/RESULT.md`](docs/RESULT.md) tells the
-story in prose.
+![endToEnd_refinement](docs/theorem.png)
 
-![The end-to-end theorem](docs/theorem.png)
+```lean
+theorem endToEnd_refinement (h : IrisHoles) :
+    ∀ p c, Loaded interpRunLayout p (fillZero c) →
+      (∀ out, BigStep p out ↔ Halts c out 0) ∧
+      (Diverges c → ¬ ∃ out, BigStep p out)
+```
 
-The hypothesis `Loaded` is built from real boot traces of the binary for ten
-programs (`Vsa/Sim/Boot/`, library `VsaBoot`), and
-[`Vsa/Sim/Boot/EndToEnd.lean`](Vsa/Sim/Boot/EndToEnd.lean) applies the theorem at
-those real entry states, for example `proofElf_halts`: the proof ELF halts
-printing `55 2500 36` with exit code 0. `Loaded` asks two things of a
-program: its modelled heap use fits the arena (`capacity`) and its recursion
-fits the stack (`stack_admissible`). [`REVIEW.md`](REVIEW.md) is the adversarial
-soundness review of the final theorem's hypotheses. The proof uses Iris
-(iris-lean) with a port of MachCSL's machine-code separation logic
-([`VsaIris/`](VsaIris), design in
-[`VsaIris/INTERP_DESIGN.md`](VsaIris/INTERP_DESIGN.md)).
+- Statement: [`VsaIris/Interp/EndToEnd.lean`](VsaIris/Interp/EndToEnd.lean). `IrisHoles` has no fields ([`VsaIris/Interp/Holes.lean`](VsaIris/Interp/Holes.lean)).
+- Axioms: `propext`, `Classical.choice`, `Quot.sound`.
+- `Loaded` witnesses from real boot traces of ten programs: [`Vsa/Sim/Boot/`](Vsa/Sim/Boot). The proof ELF: `proofElf_halts` ([`Vsa/Sim/Boot/EndToEnd.lean`](Vsa/Sim/Boot/EndToEnd.lean)).
+- Assumptions on the program: `capacity` (heap fits the arena), `stack_admissible` (recursion fits the stack).
+- Soundness review of the hypotheses: [`REVIEW.md`](REVIEW.md). Iris layer and its design: [`VsaIris/`](VsaIris), [`VsaIris/INTERP_DESIGN.md`](VsaIris/INTERP_DESIGN.md).
 
 The tooling that makes this tractable is documented separately in
 [`TOOLING.md`](TOOLING.md): proof generators, validation commands, and
