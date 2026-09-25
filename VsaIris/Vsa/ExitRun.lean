@@ -299,14 +299,3 @@ macro "exit_stepWritten" : tactic => `(tactic| (nx_forget_sp (s.toNat - 256); nx
 
 end VsaIris.Sym
 
-namespace VsaIris.Sym
-open Lean Elab Command in
-#eval show CommandElabM Unit from do
-  for i in [1:31] do
-    for v in ["Idle", "Written"] do
-      let n := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"exit{v}_{if i < 10 then "0" else ""}{i}"
-      let some ci := (← getEnv).find? n | logInfo m!"{n} missing"
-      let s := toString (← liftTermElabM (Meta.ppExpr ci.type))
-      let i0 := (s.splitOn "Q (").getLast!
-      logInfo m!"{n}: {(i0.take 20)}"
-end VsaIris.Sym

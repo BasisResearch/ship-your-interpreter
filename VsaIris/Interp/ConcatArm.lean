@@ -234,7 +234,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 `stringify` calls. -/
 def catRest (N : NativeAddrs) (inp d : Nat) (st : St) (H B : List (Nat × Nat)) : IProp GF :=
   iprop(storeRepr N st.store B ∗ consoleOwn st.out ∗ Stdio.stdioOwn ∗
-    interpCtxE inp d (errAny inp) ∗ ⌜∀ b ∈ B, b ∈ H⌝)
+    interpCtxE inp d (errAny inp) ∗ ⌜∀ b ∈ B, b ∈ H⌝ ∗ Newlib.binImg)
 
 /-- The world again, with a heap that keeps every block of the old one. -/
 theorem world_of_catRest (N : NativeAddrs) (inp d : Nat) (st : St) (ρ : Regime)
@@ -242,10 +242,12 @@ theorem world_of_catRest (N : NativeAddrs) (inp d : Nat) (st : St) (ρ : Regime)
     heapRes (GF := GF) vsaLayoutP vsaRoomB ρ H' ∗ catRest N inp d st H B ⊢
       world N vsaLayoutP vsaRoomB inp ρ st d := by
   unfold catRest world worldE
-  iintro ⟨Hh, Hs, Hc, Hio, Hi, %hB⟩
+  iintro ⟨Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
   iexists H', B
   iframe Hh Hs Hc Hio Hi
-  ipureintro; exact fun b hb => hH b (hB b hb)
+  isplitr
+  · ipureintro; exact fun b hb => hH b (hB b hb)
+  · iexact Hb
 
 end World
 

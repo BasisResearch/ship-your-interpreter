@@ -36,7 +36,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   iintro {INTRO0}%k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
   icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
-  unfold astEG
+{WCTX}  unfold astEG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨aL, aR, hn, hrl, hrr, haL, haR⟩ := binNode_of_repr hrepr hgeo
   have hneed : 1088 ≤ evalNeed (.binary {OP} l r) d := by

@@ -241,15 +241,18 @@ def fwriteSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
 /-- The newlib interior of `exit(e)`: from `jal __call_exitprocs` at
 `0x80004778` (`a0 = s0 = e`, `a1 = 0`, `sp` after `exit`'s prologue) to its
 `mv a0,s0` at `0x80004788`, with `s0` still `e`. Runs from newlib's boundary
-state or from `Ierr`; may print (the `stderr`/`stdout` close path). -/
+state or from `Ierr`. From `Ierr` it may print (the `stderr` close path). From
+the boundary state (`quiet`: no `stderr` write happened) it prints nothing:
+`stdout` is unbuffered (`main`'s `setvbuf(stdout, 0, _IONBF, 0)`), so no
+stream has pending bytes to flush. `term_sim`'s `exit(0)` needs this. -/
 def exitHandlersSpec (Ierr : (Nat → BitVec 8) → Prop) (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
-    (o : String) (Φ : Nat × String → IProp GF) : IProp GF :=
+    (o : String) (Φ : Nat × String → IProp GF) (quiet : Bool) : IProp GF :=
   iprop(PC ↦ᵣ exitHandlersPC ∗ ra ↦ᵣ r ∗ (8 : Nat) ↦ᵣ e ∗ argsAt [e, 0#64] ∗
-      stdioAt (fun img => StdioOK img ∨ Ierr img) ∗ consoleOwn o ∗
+      stdioAt (fun img => StdioOK img ∨ (quiet = false ∧ Ierr img)) ∗ consoleOwn o ∗
       callFrame s exitHandlersNeed (calleeSaved.drop 1) cs ∗
       (PC ↦ᵣ exitHandlersEnd -∗ (∃ w, ra ↦ᵣ w) -∗ (8 : Nat) ↦ᵣ e -∗ clobbered argRegs -∗
-        stdioAt (fun _ => True) -∗ (∃ o', consoleOwn (o ++ o')) -∗
+        stdioAt (fun _ => True) -∗ (∃ o', ⌜quiet = true → o' = ""⌝ ∗ consoleOwn (o ++ o')) -∗
         callFrame s exitHandlersNeed (calleeSaved.drop 1) cs -∗ Wp.W Φ)
     -∗ Wp.W Φ)
 
@@ -284,9 +287,9 @@ structure NewlibHolesAt (Ierr : (Nat → BitVec 8) → Prop) : Prop where
   /-- The newlib interior of `exit`. -/
   exitHandlers : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
-    (o : String) (Φ : Nat × String → IProp GF),
+    (o : String) (Φ : Nat × String → IProp GF) (quiet : Bool),
     CodeLive live → SpIn s exitHandlersNeed →
-    ⊢ exitHandlersSpec Ierr live Wp s e r cs o Φ
+    ⊢ exitHandlersSpec Ierr live Wp s e r cs o Φ quiet
 
 /-- **`IrisHoles.newlib`**: the newlib statements hold at some post-write
 state. -/

@@ -130,7 +130,7 @@ theorem access_physicalFacts :
   gp := (physical_carrier accessMem).gp
   main_ra := access_mainRa
   htif_payload := (physical_carrier accessMem).htif_payload
-  s0 := ⟨0, (physical_carrier accessMem).s0⟩
+  s0 := (physical_carrier accessMem).s0
   s1 := ⟨0, (physical_carrier accessMem).s1⟩
   s2 := ⟨0, (physical_carrier accessMem).s2⟩
   s3 := ⟨0, (physical_carrier accessMem).s3⟩

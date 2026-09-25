@@ -38,9 +38,10 @@ open Vsa.While Vsa.Sim.LayoutInstance
 /-! ## The budget -/
 
 /-- The budget of a node with structural need `need`, at call depth `d`:
-its own chain, every remaining call level, and the callee-`value_*` frame. -/
+its own chain, every remaining call level, the callee-`value_*` frame, and
+the helpers' headroom (`runtime_error`, the natives' `fprintf`; Q7). -/
 def stackBudget (need d : Nat) : Nat :=
-  need + (maxCallDepth - d) * perCallBudget + evalFrame
+  need + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom
 
 /-- `eval_expr`'s budget, verbatim from `EvalEntry.stackBudget`. -/
 def evalNeed (e : Expr) (d : Nat) : Nat := stackBudget e.stackNeed d
@@ -49,10 +50,12 @@ def evalNeed (e : Expr) (d : Nat) : Nat := stackBudget e.stackNeed d
 def execNeed (s : Stmt) (d : Nat) : Nat := stackBudget s.stackNeed d
 
 theorem evalNeed_def (e : Expr) (d : Nat) :
-    evalNeed e d = e.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame := rfl
+    evalNeed e d = e.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom :=
+    rfl
 
 theorem execNeed_def (s : Stmt) (d : Nat) :
-    execNeed s d = s.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame := rfl
+    execNeed s d = s.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom :=
+    rfl
 
 /-! ## The two arithmetic lemmas -/
 
@@ -228,6 +231,7 @@ theorem execNeed_of_stackFits {p : Program} (h : ProgramStackFits p)
   have hlo : stackSL.lo = 0x87800000 := rfl
   have hspv : spEntry = 0x87fffd00 := rfl
   have hfr : interpRunFrame = 176 := rfl
+  have hhr : helperHeadroom = 2048 := rfl
   rw [execNeed_def, Nat.sub_zero]
   omega
 

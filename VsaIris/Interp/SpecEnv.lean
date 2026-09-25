@@ -1,6 +1,7 @@
 import VsaIris.Interp.Store
 import VsaIris.Vsa.AllocHoles
 import VsaIris.CallAbort
+import VsaIris.Vsa.ImpureText
 
 /-!
 # `env_*` helper specifications (INTERP_DESIGN.md §9, package H1)
@@ -15,6 +16,10 @@ predicates: the one store `storeRepr`, the persistent `frameAt`/`strAt`, the
 value slots `valAt`/`slot24`, and the allocator's `heapRes` in either regime
 (`heapStore`, the heap-and-store part of `world`).
 
+* Every helper spec carries its code context `codeX` (the binary's image and
+  `_impure_ptr`, `ImpureText.lean`) and `gp` in its precondition, so it is a
+  closed statement (`Supply.lean`); a caller frames both from `world` and
+  `codeRes`.
 * `env_get`/`env_set` never allocate and always return: `fnSpecW`.
 * `env_new`/`env_define` allocate. In the counted regime (total mode) they
   cannot fail, and consume exactly the cost model's charge
@@ -113,18 +118,38 @@ def heapStore (N : NativeAddrs) (ρ : Regime) (s : Store) : IProp GF :=
 /-- `world` is the heap and store beside the console and the context. -/
 theorem world_heapStore (N : NativeAddrs) (inp : Nat) (ρ : Regime) (st : St) (d : Nat) :
     world (GF := GF) N vsaLayoutP vsaRoomB inp ρ st d ⊣⊢
-      heapStore N ρ st.store ∗ consoleOwn st.out ∗ Stdio.stdioOwn ∗ interpCtx inp d := by
+      heapStore N ρ st.store ∗ consoleOwn st.out ∗ Stdio.stdioOwn ∗ interpCtx inp d ∗
+        Newlib.binImg := by
   unfold world worldE heapStore interpCtx
   constructor
-  · iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
-    iframe Hc Hio Hi
+  · iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
+    iframe Hc Hio Hi Hb
     iexists H, B
     iframe Hh Hs
     ipureintro; exact hB
-  · iintro ⟨⟨%H, %B, Hh, Hs, %hB⟩, Hc, Hio, Hi⟩
+  · iintro ⟨⟨%H, %B, Hh, Hs, %hB⟩, Hc, Hio, Hi, #Hb⟩
     iexists H, B
     iframe Hh Hs Hc Hio Hi
-    ipureintro; exact hB
+    isplitr
+    · ipureintro; exact hB
+    · iexact Hb
+
+/-- **The store out of the world**, and back (the heap, console, newlib's
+data and the context stay in the closer). -/
+theorem world_store (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
+    (st : St) (d : Nat) :
+    world (GF := GF) N L Room inp ρ st d ⊢
+      ∃ B, storeRepr N st.store B ∗ (storeRepr N st.store B -∗ world N L Room inp ρ st d) := by
+  unfold world worldE
+  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
+  iexists B
+  iframe Hs
+  iintro Hs
+  iexists H, B
+  iframe Hh Hs Hc Hio Hi
+  isplitr
+  · ipureintro; exact hB
+  · iexact Hb
 
 /-- What `env_get` leaves in its `out` slot and `a0`: the value found through
 the parent chain (`Store.get?`), or nothing and `0`. -/
@@ -173,10 +198,12 @@ def strlenSpec (Wp : MachWP (GF := GF) M) : IProp GF :=
     (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ (10 : Nat) ↦ᵣ p ∗ clobbered retClob ∗ strAt p.toNat x))
     (fun _ => iprop((10 : Nat) ↦ᵣ BitVec.ofNat 64 x.length ∗ clobbered retClob)))
 
-/-- `memcpy(dst, src, n)` from read-only bytes into an owned block. -/
+/-- `memcpy(dst, src, n)` from read-only bytes into an owned block above the HTIF
+words (newlib's word stores may touch the destination's whole aligned words). -/
 def memcpySpec (Wp : MachWP (GF := GF) M) : IProp GF :=
   iprop(□ ∀ (dst src : BitVec 64) (n : Nat) (img : Nat → BitVec 8), fnSpecW Wp memcpyPC
-    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ RamWin src.toNat n⌝ ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin dst.toNat n ∧ htifLo + 16 ≤ dst.toNat ∧
+        RamWin src.toNat n⌝ ∗
       (10 : Nat) ↦ᵣ dst ∗ (11 : Nat) ↦ᵣ src ∗ (12 : Nat) ↦ᵣ BitVec.ofNat 64 n ∗
       clobbered argClob ∗ blockOwn dst.toNat n ∗ roImg (InExt (src.toNat, n)) img))
     (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
@@ -198,7 +225,7 @@ def envNewSpec (Wp : MachWP (GF := GF) M) (N : NativeAddrs) : IProp GF :=
       (saved : List (Nat × BitVec 64)), ⌜saved.map Prod.fst = newSaved⌝ →
     fnSpecAbort Wp envNewPC
       (fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp s envNewNeed⌝ ∗ (10 : Nat) ↦ᵣ par ∗ sp ↦ᵣ s ∗
-        gp ↦ᵣ□ gpV ∗ clobbered retClob ∗ savedOwn saved ∗ stackScratch s envNewNeed ∗
+        gp ↦ᵣ□ gpV ∗ codeX ∗ clobbered retClob ∗ savedOwn saved ∗ stackScratch s envNewNeed ∗
         parentAt po par.toNat ∗ heapStore N (ρ.plus envBytes) st))
       (fun _ => iprop(∃ e : BitVec 64, (10 : Nat) ↦ᵣ e ∗ sp ↦ᵣ s ∗ clobbered retClob ∗
         savedOwn saved ∗ stackScratch s envNewNeed ∗ heapStore N ρ (st.allocFrame po).1 ∗
@@ -215,7 +242,7 @@ def envGetSpec (Wp : MachWP (GF := GF) M) (N : NativeAddrs) : IProp GF :=
       (fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp s envGetNeed ∧ SlotWin out.toNat⌝ ∗
         (10 : Nat) ↦ᵣ e ∗ (11 : Nat) ↦ᵣ pn ∗ (12 : Nat) ↦ᵣ out ∗ sp ↦ᵣ s ∗
         clobbered argClob ∗ savedOwn saved ∗ stackScratch s envGetNeed ∗ frameAt fa e.toNat ∗
-        strAt pn.toNat x ∗ slot24 out.toNat ∗ storeRepr N st B))
+        strAt pn.toNat x ∗ slot24 out.toNat ∗ storeRepr N st B ∗ gp ↦ᵣ□ gpV ∗ codeX))
       (fun _ => iprop(∃ res : BitVec 64, (10 : Nat) ↦ᵣ res ∗ sp ↦ᵣ s ∗ clobbered retClob ∗
         savedOwn saved ∗ stackScratch s envGetNeed ∗ storeRepr N st B ∗
         getOut N st fa x out res)))
@@ -229,7 +256,7 @@ def envSetSpec (Wp : MachWP (GF := GF) M) (N : NativeAddrs) : IProp GF :=
       (fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp s envGetNeed ∧ SlotWin pv.toNat⌝ ∗
         (10 : Nat) ↦ᵣ e ∗ (11 : Nat) ↦ᵣ pn ∗ (12 : Nat) ↦ᵣ pv ∗ sp ↦ᵣ s ∗
         clobbered argClob ∗ savedOwn saved ∗ stackScratch s envGetNeed ∗ frameAt fa e.toNat ∗
-        strAt pn.toNat x ∗ valAt N pv.toNat v ∗ storeRepr N st B))
+        strAt pn.toNat x ∗ valAt N pv.toNat v ∗ storeRepr N st B ∗ gp ↦ᵣ□ gpV ∗ codeX))
       (fun _ => iprop(∃ res : BitVec 64, (10 : Nat) ↦ᵣ res ∗ sp ↦ᵣ s ∗ clobbered retClob ∗
         savedOwn saved ∗ stackScratch s envGetNeed ∗ valAt N pv.toNat v ∗
         setOut N st B fa x v res)))
@@ -243,7 +270,7 @@ def envDefineSpec (Wp : MachWP (GF := GF) M) (N : NativeAddrs) : IProp GF :=
     fnSpecAbort Wp envDefinePC
       (fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp s envDefineNeed ∧ SlotWin pv.toNat⌝ ∗
         (10 : Nat) ↦ᵣ e ∗ (11 : Nat) ↦ᵣ pn ∗ (12 : Nat) ↦ᵣ pv ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpV ∗
-        clobbered argClob ∗ savedOwn saved ∗ stackScratch s envDefineNeed ∗ frameAt fa e.toNat ∗
+        codeX ∗ clobbered argClob ∗ savedOwn saved ∗ stackScratch s envDefineNeed ∗ frameAt fa e.toNat ∗
         strAt pn.toNat x ∗ valAt N pv.toNat v ∗ heapStore N (ρ.plus (defineCost st fa x)) st))
       (fun _ => iprop(sp ↦ᵣ s ∗ clobbered (10 :: retClob) ∗ savedOwn saved ∗
         stackScratch s envDefineNeed ∗ valAt N pv.toNat v ∗ heapStore N ρ (st.define fa x v)))

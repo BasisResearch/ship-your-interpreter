@@ -79,13 +79,13 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
     {store' : Store} {a : Addr}
     (halloc : st.store.allocClosure ⟨env, nm, ps, body⟩ = (store', a))
     (D : EvalECost st d env (.fn nm ps body) ⟨store', st.out⟩ (.closure a) closureBytes) :
-    textOwn allocText ⊢ evalSpecT_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp st d env
+    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp st d env
       (.fn nm ps body) ⟨store', st.out⟩ (.closure a) closureBytes D by
-  iintro #Ht
   unfold evalSpecT_body fnSpecW
   iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
   icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
+  ihave ⟨Hw, -, #Ht⟩ := world_allocText N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   unfold astEG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := leafNode_fn hrepr hgeo
@@ -146,7 +146,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
   iintro ⟨⟨#Ht, #Hcode, #Hro, #Hfb, Hst, Hw, Hk⟩, Hms⟩
   -- `malloc(16)`, charged `closureBytes`
   unfold world worldE
-  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
+  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hbw⟩
   ihave ⟨Hs, %⟨heNZ, -, -⟩⟩ := storeRepr_frameInfo N $$ [Hs Hfb]
   · iframe Hs Hfb
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.fn nm ps body) d - 1088)
@@ -199,10 +199,11 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
       stackScratch (s + 18446744073709550528#64) (evalNeed (.fn nm ps body) d - 1088) ∗
       heapRes vsaLayoutP vsaRoomB (.counted k) (((R2 10).toNat, 16) :: H) ∗
       storeRepr N st.store B ∗ consoleOwn st.out ∗ Stdio.stdioOwn ∗ interpCtxE inp d (errAny inp) ∗
+      Newlib.binImg ∗
       (PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N vsaLayoutP vsaRoomB inp (.counted k) ⟨store', st.out⟩ d
         (.fn nm ps body) (.closure a) sret s rv -∗ (twpW (vsaModel live)).W Φ)))
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hh Hs Hc Hio Hi Hk
+  · iframe Hdv Hms Hcode Hro Hfb Hst Hh Hs Hc Hio Hi Hbw Hk
   intro F'
   refine {ARM}T_run2 (aX := aX) (s := s) (sret := sret) (pv := R2 10) (aE := aE) hlive hsf hs'
     hs2 hs3 (by ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2) hA2 ?_
@@ -226,7 +227,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
   apply swp_closeM
   intro Mt3 hMt3
   unfold F'
-  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hh, Hs, Hc, Hio, Hi, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hh, Hs, Hc, Hio, Hi, #Hbw, Hk⟩, Hms⟩
 
 #ix_piece {ARM}T_p3 from {ARM}T_p2 by
   -- the closure object and the result
@@ -250,12 +251,16 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
   ihave ⟨Hms, Hblk⟩ := ms_split (S := frS (s.toNat - 1088) sret.toNat)
     (T := InExt ((R2 10).toNat, 16)) (fun b h1 h2 => hdb b h1 h2) $$ Hms
   ihave #HaE := astEG_of_view hrepr hgeo $$ Hro
-  ihave #HaX := astEG_astE _ _ $$ HaE
+  have hobj : ClosObj (imgM Mt3) (R2 10).toNat aX.toNat aE.toNat :=
+    ⟨hpne, heNZ, eB0, eB8, fun k hk => by
+      simp only [VsaIris.InExt] at hk
+      exact ⟨by omega, by omega, Or.inr (by unfold Vsa.Sim.tohostAddr; omega),
+        by omega, Or.inr (by unfold Vsa.Sim.tohostAddr; omega)⟩⟩
   iapply (twpW (vsaModel live)).fupd
   imod storeRepr_allocClosure (N := N) (s := st.store) (s' := store') (B := B)
     (cd := ⟨env, nm, ps, body⟩) (p := (R2 10).toNat) (q := aX.toNat) (e := aE.toNat)
-    (img := imgM Mt3) hcl hfr hpne heNZ eB0 eB8 hbody $$ [Hs Hblk] with ⟨Hs, #Hca⟩
-  · iframe Hs Hblk HaX Hfb
+    (img := imgM Mt3) hcl hfr hobj hbody $$ [Hs Hblk] with ⟨Hs, #Hca⟩
+  · iframe Hs Hblk HaE Hfb
   imodintro
   ihave ⟨Hpc, Hra, Hregs, HS, Hval⟩ := ms_exit_sret N (v := .closure a) hdj $$ [Hms]
   · iframe Hms
@@ -281,7 +286,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
   unfold world worldE
   iexists ((R2 10).toNat, 16) :: H, B
   iframe Hh Hs Hc Hio Hi
-  ipureintro; exact fun b hb => List.mem_cons_of_mem _ (hB b hb)
+  isplitr
+  · ipureintro; exact fun b hb => List.mem_cons_of_mem _ (hB b hb)
+  · iexact Hbw
 
 #ix_chain caseT_{ARM} := [{ARM}T_p1, {ARM}T_p2, {ARM}T_p3]
 

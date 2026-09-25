@@ -115,8 +115,10 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.var x) d - 1088) (m := envGetNeed)
     (by rw [hsf]; omega)
     (by omega) $$ Hst
+  ihave ⟨Hw, #Hcx⟩ := world_codeX N L Room inp _ _ d $$ Hw
+  ihave #Hgpv := codeRes_gpM $$ Hcode
   unfold world worldE
-  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
+  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hbw⟩
   ihave #Hget := hget
   unfold envGetSpec
   ihave #Hg := Hget $$ %st.store %B %env %x %(R1 10) %(R1 11) %(R1 12) %(R1 2)
@@ -131,10 +133,10 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
      ⟨(by rw [ho]; omega), (by rw [ho]; omega),
        (by rw [ho]; unfold htifLo; unfold Vsa.Sim.tohostAddr at *; omega), (by rw [ho]; omega)⟩⟩
     (X := iprop(stackScratch (R1 2) envGetNeed ∗ frameAt env (R1 10).toNat ∗
-      strAt (R1 11).toNat x ∗ slot24 (R1 12).toNat ∗ storeRepr N st.store B))
+      strAt (R1 11).toNat x ∗ slot24 (R1 12).toNat ∗ storeRepr N st.store B ∗ gp ↦ᵣ□ MallocFast.gpV ∗ codeX))
     (Y := fun res => iprop(stackScratch (R1 2) envGetNeed ∗ storeRepr N st.store B ∗
       getOut N st.store env x (R1 12) res))
-  iframe Hg Hcode Hms Hs Hout
+  iframe Hg Hcode Hms Hs Hout Hgpv Hcx
   isplitl [Hst]
   · rw [e2, e10, e11, hqt]; iframe Hst Hfb Hx
   iintro %R2 %hkeep2 ⟨Hst, Hs, Hget⟩ Hms
@@ -167,7 +169,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
       unfold world worldE
       iexists H, B
       iframe Hh Hs Hc Hio Hi
-      ipureintro; exact hB
+      isplitr
+      · ipureintro; exact hB
+      · iexact Hbw
     intro F'
     refine it_{R2} hlive (fun _ => ?_) (fun hc => absurd (by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hres) hc)
@@ -218,7 +222,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     unfold world worldE
     iexists H, B
     iframe Hh Hs Hc Hio Hi
-    ipureintro; exact hB
+    isplitr
+    · ipureintro; exact hB
+    · iexact Hbw
   intro F'
   -- `beqz a0`: found
   refine it_{R2} hlive (fun hc => by

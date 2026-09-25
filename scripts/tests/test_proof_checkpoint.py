@@ -131,7 +131,7 @@ class CheckpointTests(unittest.TestCase):
                     "--output",
                     str(self.path.parent / "output"),
                     "--module",
-                    "Vsa.Sim.EndToEnd",
+                    "Vsa.Sim.TermAssembly",
                     "--checkpoint",
                     str(self.path),
                 ]

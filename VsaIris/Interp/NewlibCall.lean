@@ -101,6 +101,9 @@ theorem codeRes_gp : codeRes (GF := GF) ⊢ gp ↦ᵣ□ Newlib.gpV := by
   iintro ⟨⟨#H, -⟩, -⟩
   rw [show Newlib.gpV = MallocFast.gpV from rfl]; iexact H
 
+/-- `gp` from the code resource, at the allocator's name for its value. -/
+theorem codeRes_gpM : codeRes (GF := GF) ⊢ gp ↦ᵣ□ MallocFast.gpV := codeRes_gp
+
 /-- The registers after a newlib call: the arguments and temporaries at new
 values, `sp` and the callee-saved registers as before. -/
 theorem regFile_after (R : Nat → BitVec 64) (s : BitVec 64) (hs : R 2 = s) :

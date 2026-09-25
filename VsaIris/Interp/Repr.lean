@@ -1,5 +1,6 @@
 import VsaIris.MallocRun
 import VsaIris.Vsa.Stdio
+import VsaIris.Vsa.BinDom
 import Vsa.RuntimeRepr
 import Vsa.MemReprWithin
 import Vsa.While.StackNeed
@@ -170,12 +171,14 @@ theorem closAt_agree (ca p p' : Nat) : closAt (GF := GF) ca p ∗ closAt ca p' �
 
 /-! ## Read-only images, strings, the AST -/
 
-/-- `S` owned read-only at the image `img`. -/
-def roImg (S : Nat → Prop) (img : Nat → BitVec 8) : IProp GF :=
-  iprop(□ ∀ k, ⌜S k⌝ → k ↦ₘ□ img k)
+/- `roImg` (`S` owned read-only at an image) is in `VsaIris/Vsa/ImpureRO.lean`. -/
 
-instance (S : Nat → Prop) (img : Nat → BitVec 8) : Persistent (roImg (GF := GF) S img) := by
-  unfold roImg; infer_instance
+/-- The binary's `.text` and `.rodata`, persistent (newlib's code and every
+constant a helper reads; `world` owns it). -/
+def _root_.VsaIris.Newlib.binImg : IProp GF :=
+  iprop(roImg Newlib.textDom Newlib.textByte ∗ roImg Newlib.rodataDom Newlib.rodataByte)
+
+instance : Persistent (Newlib.binImg (GF := GF)) := by unfold Newlib.binImg; infer_instance
 
 /-- The bytes of a C string: ASCII, nonzero, then a NUL (`CStr`). -/
 def CStrImg (img : Nat → BitVec 8) (p : Nat) (s : String) : Prop :=
@@ -221,6 +224,31 @@ instance (a : Nat) (s : Stmt) : Persistent (astS (GF := GF) a s) := by unfold as
 instance (a n : Nat) (ss : List Stmt) : Persistent (astSs (GF := GF) a n ss) := by
   unfold astSs; infer_instance
 
+/-- A byte a load may read: RAM, off the HTIF words. `win` is the string
+routines' over-read window from the byte (H1's `SharedWin`): `strlen` and
+`strcmp` load whole aligned words, so every string of an AST view needs its
+8-byte window (E1, INTERP_DESIGN.md §10 "STATEMENT CHANGES (E1)"). -/
+structure ReadOK (k : Nat) : Prop where
+  lo : 0x80000000 ≤ k
+  hi : k < 0x100000000
+  off : k < Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k
+  win : k + 8 ≤ 0x100000000 ∧ (k + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k)
+
+/-- Persistent AST ownership with its read set's address facts. -/
+def astEG (a : Nat) (e : Expr) : IProp GF :=
+  iprop(∃ (P : Nat → Prop) (m : Mem), ⌜ExprReprWithin m P a e ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m)
+
+instance (a : Nat) (e : Expr) : Persistent (astEG (GF := GF) a e) := by
+  unfold astEG; infer_instance
+
+omit I in
+theorem astEG_astE (a : Nat) (e : Expr) : astEG (GF := GF) a e ⊢ astE a e := by
+  unfold astEG astE
+  iintro ⟨%P, %m, %⟨h, _⟩, H⟩
+  iexists P, m
+  iframe H
+  ipureintro; exact h
+
 /-! ## Values -/
 
 /-- The meaning of a 24-byte `Value`'s three words (`ValueRepr`), persistent. -/
@@ -256,12 +284,22 @@ theorem valAt_slot (N : NativeAddrs) (a : Nat) (v : Value) :
 
 /-! ## Closures -/
 
+/-- The pure layout of a closure object at `p` in its image: nonnull, its
+`fn_expr` word `q` and `env` word `e`, and the 16 bytes' read geometry (the
+closure call and `value_print` load both words). -/
+structure ClosObj (img : Nat → BitVec 8) (p q e : Nat) : Prop where
+  p_ne : p ≠ 0
+  e_ne : e ≠ 0
+  fn : imgLE img p 8 = q
+  env : imgLE img (p + 8) 8 = e
+  objOK : ∀ k, InExt (p, 16) k → ReadOK k
+
 /-- A closure object (`ClosureRepr`), persistent: its 16 bytes (`fn_expr`,
-`env`), the `EX_FN` node, and the captured frame's address. -/
+`env`) with their read geometry, the `EX_FN` node's view with its read
+geometry (`astEG`), and the captured frame's address. -/
 def closOwn (ca : Nat) (cd : ClosureData) : IProp GF :=
-  iprop(∃ (p q e : Nat) (img : Nat → BitVec 8), closAt ca p ∗
-    ⌜p ≠ 0 ∧ e ≠ 0 ∧ imgLE img p 8 = q ∧ imgLE img (p + 8) 8 = e⌝ ∗
-    roImg (InExt (p, 16)) img ∗ astE q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e)
+  iprop(∃ (p q e : Nat) (img : Nat → BitVec 8), closAt ca p ∗ ⌜ClosObj img p q e⌝ ∗
+    roImg (InExt (p, 16)) img ∗ astEG q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e)
 
 instance (ca : Nat) (cd : ClosureData) : Persistent (closOwn (GF := GF) ca cd) := by
   unfold closOwn; infer_instance
@@ -461,10 +499,13 @@ def errStr (inp : Nat) : IProp GF :=
 
 /-- The fields every mode shares, with `err_msg` as `E`: `globals` read-only
 (it points at frame 0 forever), `call_depth = d` exclusive (with its
-padding). -/
+padding), and `d ≤ maxCallDepth` (`call_value` checks `++call_depth >
+MAX_CALL_DEPTH` before a body runs and resets it on the error; lane E4: the
+closure call's signed depth test agrees with `Call.closure`'s `d <
+maxCallDepth` only below `2^31`). -/
 def interpCoreE (inp d : Nat) (E : IProp GF) : IProp GF :=
   iprop(∃ g, wordRO inp 8 g ∗ frameAt 0 g ∗ wordAt (inp + interpDepthOff) 4 d ∗
-    blockOwn (inp + interpDepthOff + 4) 4 ∗ E)
+    ⌜d ≤ Vsa.While.maxCallDepth⌝ ∗ blockOwn (inp + interpDepthOff + 4) 4 ∗ E)
 
 /-- The fields every mode shares; `err_msg` exclusive at any contents. -/
 def interpCore (inp d : Nat) : IProp GF := interpCoreE inp d (errAny inp)
@@ -477,9 +518,12 @@ instance (inp : Nat) (jb : Nat → BitVec 8) : Persistent (jmpRO (GF := GF) inp 
   unfold jmpRO; infer_instance
 
 /-- The context inside `interp_run`, after `setjmp`, with `err_msg` as `E`:
-the `jmp_buf` is read-only (H5 reads the landing registers off it). -/
+the `jmp_buf` is read-only (H5 reads the landing registers off it), its saved
+`ra` word 4-aligned (`runtime_error`'s `longjmp` returns there; `setjmp`
+stored `0x80004428`; lane E4: every `runtime_error` site needs it, in either
+mode). -/
 def interpCtxE (inp d : Nat) (E : IProp GF) : IProp GF :=
-  iprop(interpCoreE inp d E ∗ ∃ jb, jmpRO inp jb)
+  iprop(interpCoreE inp d E ∗ ∃ jb, jmpRO inp jb ∗ ⌜(imgW jb (inp + interpJmpOff)).toNat % 4 = 0⌝)
 
 /-- The context inside `interp_run`, after `setjmp`. -/
 def interpCtx (inp d : Nat) : IProp GF := interpCtxE inp d (errAny inp)
@@ -516,12 +560,32 @@ blocks are live, so `free`/`realloc` of a frame array finds its block in
 def worldE (E : IProp GF) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
   iprop(∃ H B, heapRes L Room ρ H ∗ storeRepr N st.store B ∗ consoleOwn st.out ∗
-    Stdio.stdioOwn ∗ interpCtxE inp d E ∗ ⌜∀ b ∈ B, b ∈ H⌝)
+    Stdio.stdioOwn ∗ interpCtxE inp d E ∗ ⌜∀ b ∈ B, b ∈ H⌝ ∗ Newlib.binImg)
 
 /-- Everything an evaluation threads. -/
 def world (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
   worldE (errAny inp) N L Room inp ρ st d
+
+/-- The binary's image, out of the world (persistent). -/
+theorem worldE_binImg (E : IProp GF) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
+    (inp : Nat) (ρ : Regime) (st : St) (d : Nat) :
+    worldE E N L Room inp ρ st d ⊢ worldE E N L Room inp ρ st d ∗ Newlib.binImg := by
+  unfold worldE
+  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
+  isplitl [Hh Hs Hc Hio Hi]
+  · iexists H, B
+    iframe Hh Hs Hc Hio Hi
+    isplitr
+    · ipureintro; exact hB
+    · iexact Hb
+  · iexact Hb
+
+/-- The binary's image out of the world. -/
+theorem world_binImg (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
+    (ρ : Regime) (st : St) (d : Nat) :
+    world (GF := GF) N L Room inp ρ st d ⊢ world N L Room inp ρ st d ∗ Newlib.binImg :=
+  worldE_binImg _ N L Room inp ρ st d
 
 end Repr
 

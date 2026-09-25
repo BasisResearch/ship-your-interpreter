@@ -132,6 +132,7 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     ⊢ (wpW (vsaModel live)).W Φ := by
   unfold envNewSpec
   iintro ⟨#Hen, #Hcode, #Himg, Hms, Hst, #Hfr, Hw, Hk⟩
+  ihave ⟨Hw, #Hcx⟩ := world_codeX N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   ihave #Hgp := codeRes_gp $$ Hcode
   ihave ⟨Hh, Hc, Hio, Hi⟩ := (world_heapStore N inp .uncounted st d).1 $$ Hw
   ihave ⟨%H, %B, Hhr, Hs, %hB⟩ := (show heapStore (GF := GF) N .uncounted st.store ⊢
@@ -146,14 +147,14 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
   iapply (ms_callRegsAbort (wpW _) hexec hcode (L := envNewL) (K := [23, 24, 25, 26, 27])
     (by decide)
     (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp (R 2) envNewNeed⌝ ∗ (10 : Nat) ↦ᵣ R 10 ∗
-      sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗ clobbered retClob ∗ savedOwn (newSaved.map fun k => (k, R k)) ∗
+      sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗ codeX ∗ clobbered retClob ∗ savedOwn (newSaved.map fun k => (k, R k)) ∗
       stackScratch (R 2) envNewNeed ∗ parentAt (some env) (R 10).toNat ∗
       heapStore N (Regime.uncounted.plus envBytes) st.store))
     (Q := fun _ => iprop(∃ e : BitVec 64, (10 : Nat) ↦ᵣ e ∗ sp ↦ᵣ R 2 ∗ clobbered retClob ∗
       savedOwn (newSaved.map fun k => (k, R k)) ∗ stackScratch (R 2) envNewNeed ∗
       heapStore N .uncounted (st.store.allocFrame (some env)).1 ∗
       frameAt st.store.frames.size e.toNat))
-    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ stackScratch (R 2) envNewNeed ∗
+    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ codeX ∗ stackScratch (R 2) envNewNeed ∗
       parentAt (some env) (R 10).toNat ∗ heapStore N .uncounted st.store))
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ newSaved, f k = R k⌝ ∗
       stackScratch (R 2) envNewNeed ∗ heapStore N .uncounted (st.store.allocFrame (some env)).1 ∗
@@ -161,11 +162,11 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
   case hP =>
     simp only [envNewL, sepL_cons]
-    iintro ⟨⟨H10, H2, Hcs⟩, #Hgp', Hst, #Hpar', Hh⟩
+    iintro ⟨⟨H10, H2, Hcs⟩, #Hgp', #Hcx', Hst, #Hpar', Hh⟩
     ihave ⟨Hcl, Hsv⟩ := (sepL_append _ _ _).1 $$ Hcs
     unfold VsaIris.sp savedOwn
     rw [show Newlib.gpV = MallocFast.gpV from rfl, Regime.plus_uncounted]
-    iframe H10 H2 Hgp' Hst Hpar' Hh
+    iframe H10 H2 Hgp' Hcx' Hst Hpar' Hh
     isplitl []
     · ipureintro; exact ⟨hi4, hsp⟩
     isplitl [Hcl]
@@ -199,7 +200,7 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     refine ⟨trivial, fun k hk => ?_⟩
     obtain ⟨h10, h2⟩ := (show ∀ y ∈ newSaved, y ≠ 10 ∧ y ≠ 2 by decide) k hk
     simp [h10, h2, hk]
-  iframe Hspec Hcode Hms Hgp Hst
+  iframe Hspec Hcode Hms Hgp Hcx Hst
   isplitl [Hhr Hs]
   · isplitl []
     · simp only [parentAt]; iframe Hfr; ipureintro; exact hne
@@ -276,6 +277,7 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     ⊢ (wpW (vsaModel live)).W Φ := by
   unfold envDefineSpec
   iintro ⟨#Hed, #Hcode, #Himg, Hms, Hst, #Hfr, #Hstr, Hval, Hw, Hk⟩
+  ihave ⟨Hw, #Hcx⟩ := world_codeX N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   ihave #Hgp := codeRes_gp $$ Hcode
   ihave ⟨Hh, Hc, Hio, Hi⟩ := (world_heapStore N inp .uncounted st d).1 $$ Hw
   ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := R 2) hn2 hn $$ Hst
@@ -285,13 +287,13 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     (by decide)
     (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp (R 2) envDefineNeed ∧ SlotWin (R 12).toNat⌝ ∗
       (10 : Nat) ↦ᵣ R 10 ∗ (11 : Nat) ↦ᵣ R 11 ∗ (12 : Nat) ↦ᵣ R 12 ∗ sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗
-      clobbered argClob ∗ savedOwn (defineSaved.map fun k => (k, R k)) ∗
+      codeX ∗ clobbered argClob ∗ savedOwn (defineSaved.map fun k => (k, R k)) ∗
       stackScratch (R 2) envDefineNeed ∗ frameAt fa (R 10).toNat ∗ strAt (R 11).toNat x ∗
       valAt N (R 12).toNat v ∗ heapStore N (Regime.uncounted.plus (defineCost st.store fa x)) st.store))
     (Q := fun _ => iprop(sp ↦ᵣ R 2 ∗ clobbered (10 :: retClob) ∗
       savedOwn (defineSaved.map fun k => (k, R k)) ∗ stackScratch (R 2) envDefineNeed ∗
       valAt N (R 12).toNat v ∗ heapStore N .uncounted (st.store.define fa x v)))
-    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
+    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ codeX ∗ stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
       heapStore N .uncounted st.store ∗ frameAt fa (R 10).toNat ∗ strAt (R 11).toNat x))
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ defineSaved, f k = R k⌝ ∗
       stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
@@ -299,11 +301,11 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
   case hP =>
     simp only [envDefineL, sepL_cons]
-    iintro ⟨⟨H10, H11, H12, H2, Hcs⟩, #Hgp', Hst, Hval, Hh, #Hfr, #Hstr⟩
+    iintro ⟨⟨H10, H11, H12, H2, Hcs⟩, #Hgp', #Hcx', Hst, Hval, Hh, #Hfr, #Hstr⟩
     ihave ⟨Hcl, Hsv⟩ := (sepL_append _ _ _).1 $$ Hcs
     unfold VsaIris.sp savedOwn
     rw [show Newlib.gpV = MallocFast.gpV from rfl, Regime.plus_uncounted]
-    iframe H10 H11 H12 H2 Hgp' Hst Hfr Hstr Hval Hh
+    iframe H10 H11 H12 H2 Hgp' Hcx' Hst Hfr Hstr Hval Hh
     isplitl []
     · ipureintro; exact ⟨hi4, hsp, hpv⟩
     isplitl [Hcl]
@@ -344,7 +346,7 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     refine ⟨trivial, fun k hk => ?_⟩
     have h2 := (show ∀ y ∈ defineSaved, y ≠ 2 by decide) k hk
     simp [h2, hk]
-  iframe Hspec Hcode Hms Hgp Hst Hval Hh Hfr Hstr
+  iframe Hspec Hcode Hms Hgp Hcx Hst Hval Hh Hfr Hstr
   isplit
   · -- the return branch
     iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hval, Hh⟩ Hms

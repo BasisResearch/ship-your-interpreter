@@ -2,7 +2,7 @@
 """Fail if IrisHoles fields and VsaIris/HOLES.md rows disagree, or if any VsaIris
 file outside the design skeleton contains sorry/admit/axiom.
 
-`structure IrisHoles` may live in the skeleton (`Interp/Specs.lean`). A field
+`structure IrisHoles` lives in `Interp/Holes.lean`. A field
 `f : T` contributes `f.g` for each field `g` of `structure T`, following
 `def T … : Prop := ∃ …, U …` to `structure U`; a field of type `True` is a
 placeholder whose `f.*` rows are reported but not checked."""
@@ -38,7 +38,6 @@ if m and fields != checked:
     bad.append(f"IrisHoles fields {sorted(fields - checked)} lack HOLES.md rows; "
                f"rows {sorted(checked - fields)} lack fields")
 for p in files:
-    if 'Interp/Specs.lean' in str(p): continue
     t = re.sub(r'/-.*?-/|--[^\n]*', '', p.read_text(), flags=re.S)
     if re.search(r'\b(sorry|admit)\b|^\s*axiom\s', t, re.M): bad.append(f"hole tactic/axiom in {p.relative_to(root)}")
 note = "".join(f"; placeholder `{f} : True` ({len([r for r in rows if r.startswith(f + '.')])} rows unchecked)"

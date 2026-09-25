@@ -641,6 +641,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     (jalx_80002b40 live fun p hp => hl _ (env_code_80002b40 p hp)) (by decide) (R := R5)
     (n := C.x.length + 1) (img := ximg) h12'
     ⟨by rw [hp10]; omega, by rw [hp10]; omega, by rw [hp10]; unfold htifLo; omega⟩
+    (by rw [hp10]; unfold htifLo; omega)
     ⟨by rw [hpn11]; omega, by rw [hpn11]; omega, by rw [hpn11]; unfold htifLo at hxht ⊢; omega⟩
   isplitl []
   · iapply instrAt_of_text env_code_80002b40 $$ Ht
