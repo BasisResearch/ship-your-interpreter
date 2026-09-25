@@ -25,9 +25,40 @@ abbrev snpNeed : Nat := 1024
 def snpS (s dst n : Nat) (a : Nat) : Prop :=
   stdioFoot a ∨ (s - snpNeed ≤ a ∧ a < s) ∨ (dst ≤ a ∧ a < dst + n)
 
+/-- The data view holds the range `[lo, hi)`. Runs carry one fact per read
+range (the format, each `%s` argument, `"."`); `sx_side` applies them. -/
+def InDA (DA : List Nat) (lo hi : Nat) : Prop := ∀ b, lo ≤ b → b < hi → b ∈ DA
+
+theorem InDA.mem {DA : List Nat} {lo hi b : Nat} (h : InDA DA lo hi) (h1 : lo ≤ b) (h2 : b < hi) :
+    b ∈ DA := h b h1 h2
+
+open Lean Elab Tactic Meta in
+/-- Close `b ∈ DA` from some `InDA DA lo hi` hypothesis and `omega`. -/
+elab "snp_inda" : tactic => do
+  let g ← getMainGoal
+  let lctx ← g.withContext getLCtx
+  for d in lctx do
+    if d.isImplementationDetail then continue
+    let ty ← g.withContext (instantiateMVars d.type)
+    unless ty.getAppFn.isConstOf ``InDA do continue
+    let saved ← saveState
+    try
+      let gs ← evalTacticAt (← `(tactic| (refine InDA.mem $(mkIdent d.userName) ?_ ?_ <;> omega))) g
+      if gs.isEmpty then
+        replaceMainGoal []
+        return
+      saved.restore
+    catch _ => saved.restore
+  throwError "snp_inda: no InDA fact covers the access"
+
+/-- Data-view side conditions: some `InDA` fact covers the access. -/
+macro_rules
+  | `(tactic| sx_side) =>
+    `(tactic| (intro b hb; rw [mem_accAddrs_iff] at hb; sx_pre; sx_lits; sx_bv; sx_lits; snp_inda))
+
 /-- Owned-byte side conditions of a `snprintf` run. -/
 macro_rules
   | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, snpS, stdioFoot, InRange] at *; sx_addr))
+    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, snpS, snpNeed, stdioFoot, InRange] at *; sx_addr))
 
 end VsaIris.Sym
