@@ -17,7 +17,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp B ra : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 256 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = sp)
     (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
     (hB1 : 0x80000000 ≤ B.toNat) (hb2 : B.toNat + bs.length ≤ 0x88000000)
@@ -72,7 +72,7 @@ theorem fflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp B ra : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 256 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = sp)
     (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
     (hB1 : 0x80000000 ≤ B.toNat) (hb2 : B.toNat + bs.length ≤ 0x88000000)

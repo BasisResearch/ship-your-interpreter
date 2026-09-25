@@ -16,7 +16,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s ra : BitVec 64} {need : Nat} {c : BitVec 8}
     (hs1 : s.toNat - need + 512 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : s.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : s.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = BitVec.zeroExtend 64 c) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = s)
     (hc : ConsoleMt Mt) :
     SWPO live (stdioText ++ dataOf impDt (accAddrs 0x8001b970 8)) iRegs (outS s need) Q t 0x800062e0#64 R Mt
@@ -45,7 +45,7 @@ theorem fputc_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s ra : BitVec 64} {need : Nat} {c : BitVec 8}
     (hs1 : s.toNat - need + 512 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : s.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : s.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = BitVec.zeroExtend 64 c) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = s)
     (hc : ConsoleMt Mt)
     (hk : ∀ R' M', RetOK R R' (BitVec.zeroExtend 64 c &&& 255#64) → MemKeep Mt M' (outKeep s 512) →

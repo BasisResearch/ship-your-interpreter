@@ -31,7 +31,7 @@ theorem ofNat_zeroExtend8 (c : BitVec 8) :
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp ra : BitVec 64} {need : Nat} {c : BitVec 8}
     (hs1 : s.toNat - need + 320 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = BitVec.zeroExtend 64 c)
     (h12 : R 12 = 0x8001bb20#64) (h2 : R 2 = sp)
     (hsinit : ldv .ld Mt 0x8001b580 = 0x80005d2c#64) (hlbf : ldv .lw Mt 0x8001bb48 = 0#64)
@@ -83,7 +83,7 @@ theorem swbuf_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) 
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp ra : BitVec 64} {need : Nat} {c : BitVec 8}
     (hs1 : s.toNat - need + 320 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = BitVec.zeroExtend 64 c)
     (h12 : R 12 = 0x8001bb20#64) (h2 : R 2 = sp)
     (hsinit : ldv .ld Mt 0x8001b580 = 0x80005d2c#64) (hlbf : ldv .lw Mt 0x8001bb48 = 0#64)
@@ -134,7 +134,7 @@ theorem swbuf_run' {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp ra : BitVec 64} {need : Nat} {c : BitVec 8}
     (hs1 : s.toNat - need + 320 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = BitVec.zeroExtend 64 c)
     (h12 : R 12 = 0x8001bb20#64) (h2 : R 2 = sp)
     (hsinit : ldv .ld Mt 0x8001b580 = 0x80005d2c#64) (hlbf : ldv .lw Mt 0x8001bb48 = 0#64)

@@ -30,7 +30,7 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f F B ra s0 s1 s2 s3 : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 128 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h8 : R 8 = s0) (h9 : R 9 = s1) (h18 : R 18 = s2) (h19 : R 19 = s3)
     (hfS : f.toNat = 0x8001bb20)
     (hfa : f.toNat % 8 = 0) (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
@@ -86,7 +86,7 @@ theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f F B ra s0 s1 s2 s3 : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 128 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h8 : R 8 = s0) (h9 : R 9 = s1) (h18 : R 18 = s2) (h19 : R 19 = s3)
     (hfS : f.toNat = 0x8001bb20)
     (hfa : f.toNat % 8 = 0) (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
