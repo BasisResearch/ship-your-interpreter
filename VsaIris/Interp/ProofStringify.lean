@@ -1535,7 +1535,7 @@ theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
         (by ix_reg) (by ix_reg) (fB _ (by ix_reg) (by ix_reg) (fun y h1 h2 h9 h10 h11 h14 h15 => by
           simp [upd, h1, h2, h9, h10, h11, h14, h15]))
 
-/-- **An integer**: `snprintf(buf, 64, "%lld", i)` (`IrisHoles.out.snprintfInt`),
+/-- **An integer**: `snprintf(buf, 64, "%lld", i)` (`Sym.snprintfInt_out`),
 then the shared tail. -/
 theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
@@ -2108,7 +2108,7 @@ theorem sg_cloAnon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     exact f0.hslot k (by simp only [InExt]; omega)
 
 /-- **A named closure**: `snprintf(buf, 64, "<fn %s>", name)`
-(`IrisHoles.out.snprintfFn`), then the shared tail. -/
+(`Sym.snprintfFn_out`), then the shared tail. -/
 theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2158,7 +2158,7 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   have hsg' : SpIn (s + 18446744073709551504#64) snprintfNeed :=
     ⟨by rw [e112]; unfold snprintfNeed Vsa.Sim.tohostAddr; omega, by rw [e112]; omega,
       by rw [e112]; omega⟩
-  ihave #Hsp := Hout.snprintfFn live Wp (s + 18446744073709551504#64)
+  ihave #Hsp := snprintfFn_out live Wp (s + 18446744073709551504#64)
     (s + 18446744073709551504#64 + 16#64) (BitVec.ofNat 64 nm) x (upd (upd (upd (upd (upd (upd (upd (upd R 15 (BitVec.ofNat 64 cp)) 15 (BitVec.ofNat 64 q)) 13
       (BitVec.ofNat 64 nm)) 9 (s + 18446744073709551504#64 + 16#64))
       10 (s + 18446744073709551504#64 + 16#64)) 12 2147586100#64) 12 2147586760#64) 11 64#64) cx.hcl hsg'

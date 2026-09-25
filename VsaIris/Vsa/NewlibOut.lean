@@ -17,6 +17,9 @@ Each is an exact Iris statement about the fixed binary, in H5's calling
 convention (`argsAt`, `callFrame`), a field of `OutHoles` (hence of
 `IrisHoles`) with a row in `VsaIris/HOLES.md`. Unlike H5's `stderr` calls,
 these are exact about what they print: the console grows by the fragment.
+The `snprintf` statements are proved (`VsaIris.Sym.snprintfInt_out`,
+`VsaIris.Sym.snprintfFn_out`, `Vsa/SnpHoles.lean`) for a stack and buffer
+above newlib's data.
 
 Stack needs are measured frame chains of the binary (`fputs` 576, `fputc`
 528, `fwrite` 608, `fprintf` 3200), rounded up; `snprintf`'s is H5's.
@@ -119,12 +122,5 @@ structure OutHoles : Prop where
     (frag o : String), CodeLive live → SpIn s fprintfNeed →
     ⊢ outSpec live Wp fprintfEntry [stdoutFile, fmt, arg] (fprintfOut fmt arg frag) s fprintfNeed
         cs o frag
-  /-- `snprintf(buf, 64, "<fn %s>", name)` renders into the buffer, for a stack
-  and a buffer above newlib's data (INTERP_DESIGN.md §10, N2). -/
-  snprintfFn : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (s buf name : BitVec 64) (x : String)
-    (cs : Nat → BitVec 64), CodeLive live → SpIn s snprintfNeed →
-    0x8001c168 ≤ s.toNat - snprintfNeed → 0x8001c168 ≤ buf.toNat → buf.toNat + 64 ≤ 0x100000000 →
-    ⊢ snprintfFnSpec live Wp s buf name x cs
 
 end VsaIris.Newlib

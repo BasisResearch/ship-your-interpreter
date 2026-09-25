@@ -80,11 +80,11 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   `ProofStringify` use `ms_callNewlibA` (verbatim from lane N1).
 
 ## In flight
-- `out.snprintfFn`: `loop_fn` is proved; the instance needs the name's
-  `strAt` bytes in the view (`sepL_view` over `roImg (InExt …)`), `DStr`/`PieceSrc`
-  from `StrWin`, and the `fnRender` post (cut at 63).
-- `newlib.snprintf`: `%d` iteration, the `parseFmt` induction, owned readable
-  bytes (`readable Sro Sown`).
+- `newlib.snprintf`: `%d` iteration (`svf_iterD`), the `parseFmt` induction,
+  owned readable bytes (`readable Sro Sown`: prove the run with them in the
+  view, then `LocalRun.promote`). Expected statement change: readable bytes in
+  RAM off the HTIF words (bounds the rendering below `2^31` too), stack and
+  destination above newlib's data.
 - Integration note: lane N1 also defines `VsaIris.Sym.NW` (its stdout table);
   this lane's `NW` (`SnpRunDef.lean`) must be renamed when the two merge.
   `snpCall_regs`/`snpOwnSet_ro_off` duplicate N1's `call_regs`/`ownSet_ro_off`.
@@ -102,6 +102,8 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
    `HelperRun.helper_leaf`), then the three holes.
 
 ## Holes
-- Closed: `out.snprintfInt`.
-- Ledgered: `out.snprintfFn` (statement narrowed as above), `newlib.snprintf`
+- Closed: `out.snprintfInt`, `out.snprintfFn` (`Sym.snprintfFn_out`: the
+  name's `strAt` bytes in the view, agreeing with `.rodata` where they overlap
+  (`fnName_agree`); `fnRender` by `cstrImg_cut`).
+- Ledgered: `newlib.snprintf`
   (expected change: the readable bytes and destination need RAM geometry).
