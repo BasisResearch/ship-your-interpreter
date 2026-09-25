@@ -18,6 +18,7 @@ locals, which `nx_run`'s normalizer uses (`simp only [*]`).
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 /-- **A fresh register file** equal to the current one. -/
 theorem swp_fresh {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat}

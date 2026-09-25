@@ -11,6 +11,7 @@ clears the `uio`'s residual and piece count and returns `__sfvwrite_r`'s 0.
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout
 
 /-- The bytes a `__sprint_r(reent, f, uio)` call changes, `sp` its entry
 stack pointer. -/

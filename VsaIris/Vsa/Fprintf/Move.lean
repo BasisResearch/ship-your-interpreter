@@ -26,6 +26,7 @@ condition from one.
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.MallocFast VsaIris.Interp
+open scoped VsaIris.Sym.Stdout
 
 /-! ## Coverage facts -/
 
