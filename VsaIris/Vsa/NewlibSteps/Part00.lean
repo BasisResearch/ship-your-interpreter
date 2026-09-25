@@ -577,6 +577,16 @@ theorem njalx_800000e0 (live : Nat → Prop)
     apply BitVec.eq_of_toNat_eq; decide] at h
 
 
+theorem nt_800000e0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    (hlive : ∀ p ∈ newlibText, live p.1)
+    (hk : NW live Dt DA S Q 0x80006aec#64 (upd R VsaIris.ra (BitVec.ofNat 64 (0x800000e0 + 4))) Mt) :
+    NW live Dt DA S Q 0x800000e0#64 R Mt :=
+  swp_jal 0x800000e0 [0xef#8, 0x60#8, 0xd0#8, 0x20#8] 0x80006aec#64
+    (njalx_800000e0 live fun p hp => hlive _ (newlib_code_800000e0 p hp))
+    (fun p hp => List.mem_append_left _ (newlib_code_800000e0 p hp))
+    (by decide) (by decide) rfl hk
+
 theorem nt_800000e4 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ newlibText, live p.1)
@@ -1327,6 +1337,16 @@ theorem njalx_80004778 (live : Nat → Prop)
     apply BitVec.eq_of_toNat_eq; decide] at h
 
 
+theorem nt_80004778 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    (hlive : ∀ p ∈ newlibText, live p.1)
+    (hk : NW live Dt DA S Q 0x800070a8#64 (upd R VsaIris.ra (BitVec.ofNat 64 (0x80004778 + 4))) Mt) :
+    NW live Dt DA S Q 0x80004778#64 R Mt :=
+  swp_jal 0x80004778 [0xef#8, 0x20#8, 0x10#8, 0x13#8] 0x800070a8#64
+    (njalx_80004778 live fun p hp => hlive _ (newlib_code_80004778 p hp))
+    (fun p hp => List.mem_append_left _ (newlib_code_80004778 p hp))
+    (by decide) (by decide) rfl hk
+
 theorem nt_8000477c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ newlibText, live p.1)
@@ -1481,6 +1501,16 @@ theorem njalx_8000478c (live : Nat → Prop)
   rwa [show BitVec.addInt (0x8000478c#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x8000478c + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
+
+theorem nt_8000478c {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    (hlive : ∀ p ∈ newlibText, live p.1)
+    (hk : NW live Dt DA S Q 0x80000180#64 (upd R VsaIris.ra (BitVec.ofNat 64 (0x8000478c + 4))) Mt) :
+    NW live Dt DA S Q 0x8000478c#64 R Mt :=
+  swp_jal 0x8000478c [0xef#8, 0xb0#8, 0x5f#8, 0x9f#8] 0x80000180#64
+    (njalx_8000478c live fun p hp => hlive _ (newlib_code_8000478c p hp))
+    (fun p hp => List.mem_append_left _ (newlib_code_8000478c p hp))
+    (by decide) (by decide) rfl hk
 
 theorem nt_80005078 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
@@ -1693,6 +1723,16 @@ theorem njalx_800050ac (live : Nat → Prop)
   rwa [show BitVec.addInt (0x800050ac#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800050ac + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
+
+theorem nt_800050ac {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    (hlive : ∀ p ∈ newlibText, live p.1)
+    (hk : NW live Dt DA S Q 0x80004640#64 (upd R VsaIris.ra (BitVec.ofNat 64 (0x800050ac + 4))) Mt) :
+    NW live Dt DA S Q 0x800050ac#64 R Mt :=
+  swp_jal 0x800050ac [0xef#8, 0xf0#8, 0x4f#8, 0xd9#8] 0x80004640#64
+    (njalx_800050ac live fun p hp => hlive _ (newlib_code_800050ac p hp))
+    (fun p hp => List.mem_append_left _ (newlib_code_800050ac p hp))
+    (by decide) (by decide) rfl hk
 
 theorem nt_800050b0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
