@@ -34,7 +34,7 @@ theorem imgLE_fillR_out (M : Mem) {lo n a k : Nat} (g : Nat → BitVec 8)
 
 set_option hygiene false in
 /-- One piece of the run up to `__swrite`. -/
-macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, h13, hC.impure,
+macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, h13, stdioRO_ld_8001b970,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000efd4))
 
@@ -52,11 +52,11 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
     (hb3 : ptr.toNat + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ ptr.toNat)
     (hbd : ∀ i, i < bs.length → (ptr.toNat + i < s.toNat - 768 ∨ s.toNat ≤ ptr.toNat + i) ∧
       ¬ stdioFoot (ptr.toNat + i) ∧ (ptr.toNat + i < 0x8001ba08 ∨ 0x8001ba0c ≤ ptr.toNat + i))
-    (hsrc : ∀ i (h : i < bs.length), ByteSrc (outS s 768) Mt Dt DA (ptr.toNat + i) bs[i])
+    (hsrc : ∀ i (h : i < bs.length), ByteSrc (errS s 768) Mt Dt DA (ptr.toNat + i) bs[i])
     (hk : ∀ R' Mt', RetOK R R' n → FwritePost Mt Mt' s →
-      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s 768) Q (t ++ putcs bs) ra R' Mt') :
-    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s 768) Q t 0x80005260#64 R Mt by
-  nx_runB hlive using [h1, h2, h10, h11, h12, h13, hC.impure,
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (errS s 768) Q (t ++ putcs bs) ra R' Mt') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (errS s 768) Q t 0x80005260#64 R Mt by
+  nx_runB hlive using [h1, h2, h10, h11, h12, h13, stdioRO_ld_8001b970,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000efd4
 
@@ -127,7 +127,7 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
 set_option hygiene false in
 /-- One piece of the run after `__swrite` returns. -/
 macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
-  rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, hbn, hC.impure, hC.sinit, hE.lockMode,
+  rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, hbn, stdioRO_ld_8001b970, hC.sinit, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, BitVec.reduceXOr, BitVec.reduceAnd, BitVec.reduceOr])
 
 #ix_piece fwriteErr_16 from fwriteErr_15 by

@@ -48,29 +48,6 @@ section Code
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- One image byte, read-only. -/
-theorem binImg_byte {a : Nat} {b : BitVec 8}
-    (h : (textDom a ∧ textByte a = b) ∨ (rodataDom a ∧ rodataByte a = b)) :
-    binImg (GF := GF) ⊢ a ↦ₘ□ b := by
-  unfold binImg roImg
-  iintro ⟨#Ht, #Hr⟩
-  rcases h with ⟨hd, rfl⟩ | ⟨hd, rfl⟩
-  · iapply Ht $$ %a %hd
-  · iapply Hr $$ %a %hd
-
-/-- A list of image bytes, read-only. -/
-theorem binImg_sepL :
-    ∀ l : List (Nat × BitVec 8),
-      (∀ p ∈ l, (textDom p.1 ∧ textByte p.1 = p.2) ∨ (rodataDom p.1 ∧ rodataByte p.1 = p.2)) →
-      binImg (GF := GF) ⊢ sepL l (fun p => p.1 ↦ₘ□ p.2)
-  | [], _ => by iintro _; simp only [sepL_nil]; iempintro
-  | q :: l, h => by
-    simp only [sepL_cons]
-    iintro #H
-    isplitl
-    · iapply binImg_byte (h q List.mem_cons_self) $$ H
-    · iapply binImg_sepL l (fun p hp => h p (List.mem_cons_of_mem _ hp)) $$ H
-
 /-- **The interpreter's text from the image.** -/
 theorem binImg_textOwn : binImg (GF := GF) ⊢ textOwn interpText :=
   binImg_sepL interpText interpText_img_mem
