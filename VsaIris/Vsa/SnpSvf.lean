@@ -1,5 +1,6 @@
 import VsaIris.Vsa.SnpPrint
 import VsaIris.Vsa.SnpStrlen
+import VsaIris.Vsa.SnpArith
 
 /-!
 # `_svfprintf_r` on `snprintf`'s string `FILE`
@@ -1878,5 +1879,108 @@ theorem svf_intD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     | (rw [ldv_lbu_sb45, vSg_neg' hc]; done)
     | (rw [vMag_pos' hc]; simp; done)
     | (rw [vMag_neg' hc]; apply BitVec.eq_of_toNat_eq; simp; done)
+
+/-! ## The digits -/
+
+/-- The digit byte `k` places up. -/
+def digB (m k : Nat) : BitVec 8 := BitVec.ofNat 8 (48 + m / 10 ^ k % 10)
+
+/-- The registers one digit iteration keeps. -/
+def DigKeep (R' R : Nat → BitVec 64) : Prop :=
+  ∀ z, z ≠ 1 → z ≠ 5 → z ≠ 8 → z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → z ≠ 15 → z ≠ 22 → z ≠ 23 →
+    z ≠ 25 → z ≠ 26 → R' z = R z
+
+/-- The memory after digit `j`'s store. -/
+abbrev digMem (Mt : Mem) (s mag j : Nat) : Mem :=
+  writeLog Mt [((BitVec.ofNat 64 (s - 864 + 348 - j - 1)).toNat, 1, BitVec.ofNat 64 (mag / 10 ^ j % 10 + 48))]
+
+/-- **One digit** (`0x8000831c`): `mag / 10^j % 10` stored below the digits so
+far, the quotient by `10`, the loop test on the old value. -/
+theorem svf_digStep {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    (mag j : Nat) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (h8 : R 8 = BitVec.ofNat 64 (mag / 10 ^ j)) (h25 : R 25 = BitVec.ofNat 64 (s - 864 + 348 - j))
+    (h23 : R 23 = BitVec.ofNat 64 j) (h27 : R 27 = 0#64) (hj : j < 20) (hm : mag < 2 ^ 64)
+    (hL : 9 < mag / 10 ^ j → ∀ R', R' 8 = BitVec.ofNat 64 (mag / 10 ^ (j + 1)) →
+      R' 25 = BitVec.ofNat 64 (s - 864 + 348 - (j + 1)) → R' 23 = BitVec.ofNat 64 (j + 1) →
+      R' 27 = 0#64 → DigKeep R' R → NW live Dt DA (snpS s dst n) Q 0x8000831c#64 R' (digMem Mt s mag j))
+    (hX : mag / 10 ^ j ≤ 9 → ∀ R', R' 26 = BitVec.ofNat 64 (s - 864 + 348 - (j + 1)) →
+      R' 23 = BitVec.ofNat 64 (j + 1) → DigKeep R' R →
+      NW live Dt DA (snpS s dst n) Q 0x80008358#64 R' (digMem Mt s mag j)) :
+    NW live Dt DA (snpS s dst n) Q 0x8000831c#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  nx_runF hlive using [h8, h25, h23, h27] at 0x800046f4
+  refine VsaIris.Interp.umod_nw hlive (BitVec.ofNat 64 (mag / 10 ^ j)) 10#64 0x80008328#64 _ Mt
+    (by decide) ?_ ?_ ?_ (by decide) fun R1 hm1 hk1 => ?_
+  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; done))
+  have hq1 : mag / 10 ^ j < 2 ^ 64 := by have := Nat.div_le_self mag (10 ^ j); omega
+  have hd : R1 10 = BitVec.ofNat 64 (mag / 10 ^ j % 10) := by
+    have e10 : (10#64).toNat = 10 := rfl
+    apply BitVec.eq_of_toNat_eq
+    rw [hm1, e10, toNat_ofNat_lt hq1, toNat_ofNat_lt (by omega)]
+  have kk : ∀ z, (z = 8 ∨ z = 23 ∨ z = 25 ∨ z = 27) → R1 z = R z := fun z hz => by
+    rw [hk1 z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
+    rcases hz with rfl | rfl | rfl | rfl <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  have k8 := (kk 8 (by omega)).trans h8
+  have k23 := (kk 23 (by omega)).trans h23
+  have k25 := (kk 25 (by omega)).trans h25
+  have k27 := (kk 27 (by omega)).trans h27
+  have kR1 : ∀ z, z ≠ 1 → z ≠ 5 → z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → R1 z = R z := fun z a b c d e f => by
+    rw [hk1 z a b c d e f]; simp only [upd_apply, a, c, d, ite_false]
+  clear hk1 kk
+  have ea : BitVec.ofNat 64 (s - 864 + 348 - j) + 18446744073709551615#64 =
+      BitVec.ofNat 64 (s - 864 + 348 - j - 1) := by
+    apply BitVec.eq_of_toNat_eq
+    rw [addr_m1 (by omega) (by omega), toNat_ofNat_lt (by omega)]
+  have ed : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 (mag / 10 ^ j % 10) + 48#64)) =
+      BitVec.ofNat 64 (mag / 10 ^ j % 10 + 48) := by
+    rw [ofNat_add_ofNat]; exact VsaIris.Interp.sext32_ofNat_eq (by omega)
+  have ej : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 j + 1#64)) = BitVec.ofNat 64 (j + 1) := by
+    rw [ofNat_add_ofNat]; exact VsaIris.Interp.sext32_ofNat_eq (by omega)
+  nx_runF hlive using [hd, k8, k23, k25, k27, ea, ed, ej] at 0x800046ac
+  refine VsaIris.Interp.udiv_nw hlive (BitVec.ofNat 64 (mag / 10 ^ j)) 10#64 0x80008308#64 _ _
+    (by decide) ?_ ?_ ?_ (by decide) fun R2 hq2 _ hk2 => ?_
+  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; done))
+  have hq : R2 10 = BitVec.ofNat 64 (mag / 10 ^ (j + 1)) := by
+    have e10 : (10#64).toNat = 10 := rfl
+    apply BitVec.eq_of_toNat_eq
+    rw [hq2, e10, toNat_ofNat_lt hq1, toNat_ofNat_lt (by
+      have := Nat.div_le_self (mag / 10 ^ j) 10; rw [Nat.pow_succ, ← Nat.div_div_eq_div_mul]; omega),
+      Nat.pow_succ, Nat.div_div_eq_div_mul]
+  have j8 : R2 8 = BitVec.ofNat 64 (mag / 10 ^ j) := by
+    rw [hk2 8 (by decide) (by decide) (by decide) (by decide)]
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact k8
+  have j26 : R2 26 = BitVec.ofNat 64 (s - 864 + 348 - j - 1) := by
+    rw [hk2 26 (by decide) (by decide) (by decide) (by decide)]
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  have j23 : R2 23 = BitVec.ofNat 64 (j + 1) := by
+    rw [hk2 23 (by decide) (by decide) (by decide) (by decide)]
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  have j27 : R2 27 = 0#64 := by
+    rw [hk2 27 (by decide) (by decide) (by decide) (by decide)]
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact k27
+  have kR2 : ∀ z, z ≠ 1 → z ≠ 5 → z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → z ≠ 23 → z ≠ 26 → R2 z = R z :=
+    fun z a b c d e f g h => by
+      rw [hk2 z c d e f]; simp only [upd_apply, a, c, d, g, h, ite_false]; exact kR1 z a b c d e f
+  clear hk2
+  nx_runF hlive using [hq, j8, j26, j23] at 0x8000831c 0x80008358
+  all_goals rename_i hc
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
+  all_goals rw [toNat_ofNat_lt hq1] at hc
+  · refine hX (by simpa using hc) _ ?_ ?_ ?_
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [j26]
+      rw [show s - 864 + 348 - j - 1 = s - 864 + 348 - (j + 1) by omega]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact j23
+    · intro z a b c d e f g h i k l m
+      simp only [upd_apply, c, h, i, l, ite_false]; exact kR2 z a b d e f g k m
+  · refine hL (by simp at hc; omega) _ ?_ ?_ ?_ ?_ ?_
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      rw [show s - 864 + 348 - j - 1 = s - 864 + 348 - (j + 1) by omega]
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact j23
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact j27
+    · intro z a b c d e f g h i k l m
+      simp only [upd_apply, c, h, i, l, ite_false]; exact kR2 z a b d e f g k m
 
 end VsaIris.Sym
