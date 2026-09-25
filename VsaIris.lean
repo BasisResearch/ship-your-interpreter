@@ -281,6 +281,7 @@ import VsaIris.Vsa.Stderr.FprintfBody
 import VsaIris.Vsa.Stderr.FprintfSpec
 import VsaIris.Vsa.Fprintf.Sprint
 import VsaIris.Vsa.Fprintf.Strlen
+import VsaIris.Vsa.Fprintf.Out
 import VsaIris.Vsa.Fprintf.ScanTo
 import VsaIris.Vsa.Fprintf.InnerS
 import VsaIris.Vsa.ExitH.Iris

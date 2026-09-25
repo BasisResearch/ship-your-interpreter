@@ -132,8 +132,10 @@ elab "bv_side_contra" : tactic => do
     evalTactic (← `(tactic| (intro hc; apply hc; intro hc2; bv_toNat_contra hc2)))
   else throwError "bv_side_contra: not an address (in)equality"
 
-macro_rules
+namespace Stdout
+scoped macro_rules
   | `(tactic| sx_side) => `(tactic| bv_side_contra)
+end Stdout
 
 open Lean Elab Tactic Meta in
 /-- `sx_side` on a closed goal (a branch on literal words): `decide`, before
@@ -145,7 +147,9 @@ elab "closed_decide" : tactic => do
   if ty.hasFVar || ty.hasMVar then throwError "closed_decide: not closed"
   evalTactic (← `(tactic| decide))
 
-macro_rules
+namespace Stdout
+scoped macro_rules
   | `(tactic| sx_side) => `(tactic| closed_decide)
+end Stdout
 
 end VsaIris.Sym

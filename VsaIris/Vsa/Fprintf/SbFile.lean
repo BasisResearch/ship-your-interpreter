@@ -23,7 +23,7 @@ open scoped VsaIris.Sym.Stdout
 
 /-- Store forwarding through `fillR` regions too (a load off a region reads
 the memory below it). -/
-macro_rules
+scoped macro_rules
   | `(tactic| nx_mem) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
       ldv_ld_miss, ldv_lw_miss, ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
       ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss, ldv_ld_fillR_miss, ldv_lw_fillR_miss,

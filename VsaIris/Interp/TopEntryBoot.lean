@@ -1,5 +1,6 @@
 import VsaIris.Interp.TopRunP
 import VsaIris.Interp.TopBoundary
+import VsaIris.Vsa.InterpImg
 
 /-!
 # `interp_run`'s entry resources from adequacy's (lane A, INTERP_DESIGN.md §5.2)
@@ -10,7 +11,7 @@ Adequacy hands the client one register points-to per entry of `topRegs`
 register file and `codeRes`. This file supplies them:
 
 * **the code** (`codeRes_of_boundary`): `interpText` is a slice of the fixed
-  image (`interpText_img`, one kernel `decide`), so `binImg` holds it
+  image (`interpText_img`, `Vsa/InterpImg.lean`), so `binImg` holds it
   persistently (`binImg_textOwn`); `gp`'s exclusive points-to becomes
   persistent by a ghost update (`reg_persist`);
 * **the registers** (`topRegs_carve`): `topRegs` is `PC`, `ra`, `gp`, `tp` and
@@ -27,22 +28,6 @@ open VsaIris VsaIris.Sym VsaIris.Inst VsaIris.Newlib VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.LayoutInstance Vsa.While Vsa.RuntimeRepr
 
 /-! ## The interpreter's code is a slice of the fixed image -/
-
-/-- Every byte of `interpText` is the fixed binary's `.text` or `.rodata`
-byte at its address. -/
-theorem interpText_img :
-    interpText.all (fun p =>
-      (decide (textDom p.1) && textByte p.1 == p.2) ||
-        (decide (rodataDom p.1) && rodataByte p.1 == p.2)) = true := by
-  decide +kernel
-
-theorem interpText_img_mem :
-    ∀ p ∈ interpText, (textDom p.1 ∧ textByte p.1 = p.2) ∨
-      (rodataDom p.1 ∧ rodataByte p.1 = p.2) := by
-  intro p hp
-  have h := List.all_eq_true.1 interpText_img p hp
-  simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-  exact h
 
 section Code
 

@@ -175,6 +175,7 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Newlib.fwrite_proved
 #print axioms VsaIris.Newlib.fprintf_proved
 #print axioms VsaIris.Newlib.fprintf_ok
+#print axioms VsaIris.Sym.Fp.fprintf_out
 #print axioms VsaIris.Newlib.OomSites.oom80002a38_ok
 #print axioms VsaIris.Newlib.OomSites.oom80002bd0_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003140_ok

@@ -1,6 +1,7 @@
 import VsaIris.Interp.NewlibCall
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Vsa.Stdout.StrOut
+import VsaIris.Vsa.Fprintf.Out
 
 /-!
 # `value_print` (lane H2)
@@ -233,8 +234,8 @@ theorem vp_int (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw]
   refine vp_swp_close Wp (Xr := fprintfOut 0x800192c0#64 w (intToString w.toInt))
     (frag := intToString w.toInt)
-    (H.fprintf live Wp 0x800192c0#64 w s _ (intToString w.toInt) o c.hcl
-      (spIn_of_stackGeom c.hsg (by decide)))
+    (VsaIris.Sym.Fp.fprintf_out live Wp 0x800192c0#64 w s _ (intToString w.toInt) o c.hcl c.hlive
+      (spIn_of_stackGeom c.hsg (by decide)) (VsaIris.Sym.Fp.stackMb_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX (by rw [← hn]; rfl) c.hMa
   case hvs =>
@@ -291,8 +292,9 @@ theorem vp_native (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   refine vp_swp_close Wp
     (Xr := fprintfOut 0x800192d8#64 (imgW (imgM Ma) (p.toNat + 8)) ("<native fn " ++ nativeName f ++ ">"))
     (frag := "<native fn " ++ nativeName f ++ ">")
-    (H.fprintf live Wp 0x800192d8#64 (imgW (imgM Ma) (p.toNat + 8)) s _
-      ("<native fn " ++ nativeName f ++ ">") o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
+    (VsaIris.Sym.Fp.fprintf_out live Wp 0x800192d8#64 (imgW (imgM Ma) (p.toNat + 8)) s _
+      ("<native fn " ++ nativeName f ++ ">") o c.hcl c.hlive (spIn_of_stackGeom c.hsg (by decide))
+      (VsaIris.Sym.Fp.stackMb_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX (by cases f <;> rfl) c.hMa
   case hvs =>
@@ -398,8 +400,8 @@ theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw8, ecp, hq, eq8, hnm, hnz']
   refine vp_swp_close Wp (Xr := fprintfOut 0x800192c8#64 (BitVec.ofNat 64 nm) ("<fn " ++ x ++ ">"))
     (frag := "<fn " ++ x ++ ">")
-    (H.fprintf live Wp 0x800192c8#64 (BitVec.ofNat 64 nm) s _ ("<fn " ++ x ++ ">") o c.hcl
-      (spIn_of_stackGeom c.hsg (by decide)))
+    (VsaIris.Sym.Fp.fprintf_out live Wp 0x800192c8#64 (BitVec.ofNat 64 nm) s _ ("<fn " ++ x ++ ">") o c.hcl
+      c.hlive (spIn_of_stackGeom c.hsg (by decide)) (VsaIris.Sym.Fp.stackMb_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) c.hal (by helper_keep) c.hsg (by decide) outSpec_P
     outSpec_Q ?hX hdisp.symm c.hMa
   case hvs =>

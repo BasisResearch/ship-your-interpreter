@@ -102,8 +102,8 @@ local macro "s_close" : tactic => `(tactic| (
     (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
     (hX1 : 0x80000000 ≤ X.toNat) (hX2 : X.toNat + 2 < 0x8001ad00)
     (hap1 : sp.toNat + 592 ≤ ap.toNat) (hap2 : ap.toNat + 8 ≤ s.toNat) (hapa : ap.toNat % 8 = 0)
-    (hn : iovs.length ≤ 6) (hlen : piecesLen iovs + bs.length < 2 ^ 30) (hpos : 0 < piecesLen iovs + bs.length)
-    (hcnt : cnt + bs.length < 2 ^ 30)
+    (hn : iovs.length ≤ 6) (hlen : piecesLen iovs + bs.length < 2 ^ 31) (hpos : 0 < piecesLen iovs + bs.length)
+    (hcnt : cnt + bs.length < 2 ^ 31)
     (hP : VfpPend R Mt sp reent f cnt iovs) (h25 : R 25 = X) (hF : SFmt Dt DA X.toNat)
     (hap : ldv .ld Mt (sp + 24#64).toNat = ap) (hv : ldv .ld Mt ap.toNat = str) (hs0 : str ≠ 0#64)
     (hstr : ∀ (R0 : Nat → BitVec 64) (Mt0 : Mem), R0 1 = 0x8000cfcc#64 → R0 10 = str →
