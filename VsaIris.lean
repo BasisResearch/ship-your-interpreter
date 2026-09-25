@@ -149,6 +149,7 @@ import VsaIris.Vsa.SnpSnprintf
 import VsaIris.Vsa.SnpView
 import VsaIris.Vsa.SnpIris
 import VsaIris.Vsa.SnpHoles
+import VsaIris.Vsa.SnpFmt
 import VsaIris.Interp.IRun
 import VsaIris.Interp.Steps
 import VsaIris.Interp.ITac

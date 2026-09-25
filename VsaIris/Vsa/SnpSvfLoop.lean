@@ -330,6 +330,67 @@ theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   rw [show p + k + 2 + 1 + 1 = p + k + 4 by omega] at A9
   exact A9
 
+theorem lw_ap {s dst n ap : Nat} {Mt Mt0 : Mem} (SG : SnpGeom s dst n)
+    (hfr : ∀ a, ¬ SvfW s dst n a → imgM Mt a = imgM Mt0 a) (hap1 : s - 40 ≤ ap) (hap2 : ap + 8 ≤ s) :
+    ldv .lw Mt (BitVec.ofNat 64 ap).toNat = ldv .lw Mt0 (BitVec.ofNat 64 ap).toNat := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hdsep := SG.d_sep
+  rw [toNat_ofNat_lt (by omega)]
+  exact ldv_agree .lw fun i hi => hfr _ (by simp only [SvfW, snpFP, widthOfM] at hi ⊢; omega)
+
+/-- **A `%d` iteration** (`0x80007720` → `0x80007720`): the literal run
+`[p, p + k)`, `"%d"` at `p + k`, the 32-bit value at `ap` (sign-extended). -/
+theorem svf_iterD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
+    (hmb : ldv .ld Mt0 0x8001b880 = 0x80012268#64) (hmx : ldv .lbu Mt0 0x8001b8f8 = 1#64)
+    (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 total.length) total R Mt)
+    (k : Nat) (FG : FmtGeom DA p (k + 1))
+    (hb : ∀ i, i < k → imgM Dt (p + i) ≠ 0#8 ∧ imgM Dt (p + i) ≠ 37#8)
+    (hpc : imgM Dt (p + k) = 37#8) (hd : imgM Dt (p + k + 1) = 0x64#8)
+    (v : BitVec 64) (hv : ldv .lw Mt0 (BitVec.ofNat 64 ap).toNat = v)
+    (hap1 : s - 40 ≤ ap) (hap2 : ap + 8 ≤ s) (hc : total.length + k + 21 < 2 ^ 31)
+    (hk : ∀ R' Mt', SvfAt s dst n R0 Mt0 (p + k + 2) (ap + 8)
+      (BitVec.ofNat 64 (total.length + k + (strBytes (Vsa.While.intToString v.toInt)).length))
+      (total ++ pieceBytes (imgM Dt) p k ++ strBytes (Vsa.While.intToString v.toInt)) R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hFlo := FG.lo
+  have hFhi := FG.hi
+  have hFht := FG.htif
+  refine svf_head hlive R Mt SG A fun R1 A1 h22 => ?_
+  refine svf_scan hlive SG hmb hmx k p R1 Mt A1 h22 ⟨fun b h1 h2 => FG.dom b h1 (by omega), hFlo,
+    by omega, by omega⟩ hb (fun h => absurd (h.symm.trans hpc) (by decide)) (fun _ R2 Mt2 A2 h22' h10 => ?_) (.inr hpc)
+  refine svf_lit hlive 0x8000775c#64 0x8000776c#64 (.inl ⟨rfl, rfl⟩) R2 Mt2 SG A2 h22'
+    (by simpa using h10) (by omega) (by omega) (by omega) (fun _ => pieceSrc_of_data DO SG (by omega)
+      (fun b h1 h2 => FG.dom b h1 (by omega))) ?_
+  intro R3 Mt3 L hL St3 h22''
+  have hLl : L.length ≤ 1 := by rcases hL with ⟨rfl, _⟩ | ⟨rfl, _⟩ <;> simp
+  have hLs : sumLen L = k := by rcases hL with ⟨rfl, _⟩ | ⟨rfl, _⟩ <;> simp [sumLen] <;> omega
+  refine svf_convStart hlive (p + k) R3 Mt3 SG St3 h22'' (fun b h1 h2 => FG.dom b (by omega) (by omega))
+    (by omega) (by omega) (by omega) fun R4 Mt4 CA => ?_
+  rw [hd] at CA
+  refine svf_disp hlive (p + k + 1) 0x64 _ (.inr (.inl ⟨rfl, rfl⟩)) R4 Mt4 (by omega) CA.r25 CA.r24
+    CA.r26 CA.r22 DO.tab fun R7 h25'' _ hkp7 => ?_
+  have St7 := CA.st.update SG (R' := R7) (fun z hz => hkp7 z (by omega) (by omega) (by omega) (by omega))
+    (hkp7 23 (by decide) (by decide) (by decide) (by decide)) (fun _ _ => rfl) CA.st.core.fmt
+    CA.st.core.ret CA.st.core.ap
+  have hv' := (lw_ap SG CA.st.core.frame hap1 hap2).trans hv
+  refine svf_intD hlive (p + k + 1 + 1) v R7 Mt4 SG St7 CA.sign h25''
+    ((hkp7 6 (by decide) (by decide) (by decide) (by decide)).trans CA.r6)
+    ((hkp7 20 (by decide) (by decide) (by decide) (by decide)).trans CA.r20)
+    ((hkp7 27 (by decide) (by decide) (by decide) (by decide)).trans CA.r27) hv' hap1 hap2
+    fun R8 Mt8 IA => ?_
+  refine svf_intTail hlive v R8 Mt8 SG IA hLl (by omega) (by omega) fun R9 Mt9 g hg A9 => hk R9 Mt9 ?_
+  rw [catPieces_lit g hL, show p + k - p = k by omega,
+    pieceBytes_congr (g' := imgM Dt) fun i hi => hg _ (DO.stack _ (FG.dom _ (by omega) (by omega)))] at A9
+  rw [show p + k + 1 + 1 = p + k + 2 by omega] at A9
+  exact A9
+
 /-- **The last iteration** (`0x80007720` → `_svfprintf_r`'s return): the literal
 run `[p, p + k)`, then the NUL. -/
 theorem svf_iterEnd {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
