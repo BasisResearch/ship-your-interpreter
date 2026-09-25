@@ -219,3 +219,16 @@ Checks: build green (2682 jobs), `check_iris_holes.py` ok (5), `check_final_axio
 Hole ledger: before 5, after 4 (`newlib.snprintf`, `out.fprintf`, `out.snprintfFn`, `out.snprintfInt`).
 Phase 1 done: 6 of 10 holes proved. Checks: build green (2707 jobs), `check_iris_holes.py` ok (4),
 `endToEnd_refinement` axioms `[propext, Classical.choice, Quot.sound]`.
+
+### N5 (2026-09-25)
+
+| lane | head | merge on `iris-main` | conflicts |
+|---|---|---|---|
+| N5 (`out.fprintf` proved) | `1fab162` | `24dadaf` | `HOLES.md` and `OutHoles` (`out.fputs`/`out.fprintf` both proved: rows and fields dropped), `ProofValuePrint.lean` imports and `Fprintf/Out.lean`'s import (N1 renamed `Stdout.FwriteOut` to `Stdout.StrOut`; same names), `NewlibOut.lean` doc; report archived as `LANES-n5.md` |
+
+Hole ledger: before 4, after 3 (`newlib.snprintf`, `out.snprintfFn`, `out.snprintfInt`).
+Checks: build green (2714 jobs), `check_iris_holes.py` ok (3), `endToEnd_refinement` axioms
+`[propext, Classical.choice, Quot.sound]`.
+
+B1 (next): its `StdioOK := ∃ o, StdioOKAt o` changes the precondition of every newlib run; the
+proved N1/N3/N4/N5 runs assumed `stdout` oriented. Being rebased on branch `int2-b1`.
