@@ -84,9 +84,9 @@ theorem StdioOKAt.written {o : Bool} {img img' : Nat → BitVec 8} (h : StdioOKA
   · show readLE m 0x8001bb2c 4 = _
     rw [img_of _ _ (fun k hk => by unfold stdioFoot InRange; omega), hw]
   · show readLE m 0x8001bb30 2 = _
-    rw [img_of _ _ (fun k hk => by unfold stdioFoot InRange; omega), hf]
+    rw [img_of _ _ (fun k hk => by unfold stdioFoot InRange; omega), hf]; rfl
   · rw [show consoleStdout + 16 = 0x8001bb30 by rfl, hmS _ (by unfold stdioFoot InRange; omega), hb0.1]
-  · rw [show consoleStdout + 17 = 0x8001bb31 by rfl, hmS _ (by unfold stdioFoot InRange; omega), hb0.2]
+  · rw [show consoleStdout + 17 = 0x8001bb31 by rfl, hmS _ (by unfold stdioFoot InRange; omega), hb0.2]; rfl
   · exact (ag 2 _ (F _ _ (by decide))).symm.trans hc.fd
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hc.base
   · exact (ag 4 _ (F _ _ (by decide))).symm.trans hc.bufSize
