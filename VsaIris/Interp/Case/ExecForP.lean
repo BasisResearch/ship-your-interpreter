@@ -110,7 +110,7 @@ theorem caseP_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
     ihave ⟨HC, Hst⟩ := abortAt_elim _ _ _ $$ HA
     ihave HC := hcore (R1 2) (execNeed (.forStmt init cnd step b) d - 176) (by rw [h12]; exact hle')
       (by rw [h12, hfg.sf]; have := hf.stack.lo; simp only [Vsa.Sim.LayoutInstance.stackSL] at this; omega)
-      (by rw [h12, hfg.sf]; have := hfg.hi; omega) $$ HC
+      (by rw [h12, hfg.sf]; have := hf.stack.top; omega) $$ HC
     iapply abortAt_intro
     iframe HC
     rw [h12]

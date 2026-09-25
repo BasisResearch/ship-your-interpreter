@@ -1,3 +1,4 @@
+import VsaIris.Vsa.StdioRead
 import VsaIris.Vsa.Stdio
 import VsaIris.Interp.Bridge
 import VsaIris.Vsa.HeapShape

@@ -31,9 +31,9 @@ theorem storeRepr_bodies (N : NativeAddrs) (st : Store) (B : List (Nat × Nat)) 
 theorem StackGeom.lowerE {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 1088 ≤ n)
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088) :
     StackGeom (s + 18446744073709550528#64) (n - 1088) := by
-  have h1 := h.le; have h2 := h.lo; have h3 := h.hi; have h4 := h.al
+  have h1 := h.le; have h2 := h.lo; have h3 := h.hi; have h4 := h.al; have h5 := h.top
   simp only [Vsa.Sim.LayoutInstance.stackSL] at h2 h3
-  refine ⟨by rw [hsf]; omega, ?_, ?_, ?_⟩ <;> rw [hsf] <;>
+  refine ⟨by rw [hsf]; omega, ?_, ?_, ?_, ?_⟩ <;> rw [hsf] <;>
     (try simp only [Vsa.Sim.LayoutInstance.stackSL]) <;> omega
 
 /-- A helper's `sp` below `eval_expr`'s frame. -/

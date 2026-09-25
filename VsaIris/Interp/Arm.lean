@@ -666,16 +666,17 @@ structure EvalCallGeom (s : BitVec 64) (np nc o : Nat) : Prop where
 
 theorem evalCallGeom {s : BitVec 64} {np nc : Nat} (hsg : StackGeom s np) (hle : nc + 1088 ≤ np)
     {o : Nat} (ho : o + 24 ≤ 1088) (ho8 : o % 8 = 0) : EvalCallGeom s np nc o := by
-  have h1 := hsg.le; have h2 := hsg.lo; have h3 := hsg.hi; have h4 := hsg.al
+  have h1 := hsg.le; have h2 := hsg.lo; have h3 := hsg.hi; have h4 := hsg.al; have h5 := hsg.top
   simp only [Vsa.Sim.LayoutInstance.stackSL] at h2 h3
   have hsp : (evalSP s).toNat = s.toNat - 1088 := by
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   have hsl : (evalSP s + BitVec.ofNat 64 o).toNat = s.toNat - 1088 + o := by
     rw [BitVec.toNat_add, hsp, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := o) (by omega)]
     exact Nat.mod_eq_of_lt (by omega)
-  refine ⟨hsp, hsl, ⟨by omega, ?_, ?_, ?_⟩, by omega, by omega, ⟨?_, ?_, ?_⟩⟩
+  refine ⟨hsp, hsl, ⟨by omega, ?_, ?_, ?_, ?_⟩, by omega, by omega, ⟨?_, ?_, ?_⟩⟩
   · simp only [Vsa.Sim.LayoutInstance.stackSL]; omega
   · simp only [Vsa.Sim.LayoutInstance.stackSL]; omega
+  · omega
   · omega
   · rw [hsl]; omega
   · rw [hsl]; unfold Vsa.Sim.tohostAddr; omega
@@ -845,6 +846,69 @@ theorem execSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) :
   inext
   iapply H
 
+/-- **A child call into `exec_stmt`, partial mode, keeping the frame image**,
+through the Löb hypothesis: the continuation `K` is threaded to the return
+branch (with the child's derivation); on abort, `K` takes the stack below the
+arm's `sp`, the `ret` slot and the frame bytes at the arm's tracking memory
+`Mt` (the child never writes them). -/
+theorem ms_callExecPM {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code execEntryPC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {Core : IProp GF} {st : St} {d env : Nat} {sm : Stmt}
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {aS aE aRet s : BitVec 64} {m : Nat}
+    {K : IProp GF}
+    (hsg : StackGeom s (execNeed sm d)) (hm : execNeed sm d ≤ m) (hms : m ≤ s.toNat)
+    (hslg : SlotGeom aRet) (hbb : sm.bodiesBound perCallBudget = true)
+    (hab : K ⊢ iprop(abortAt Core s m ∗ slot24 aRet.toNat ∗ ownSet S (fun a => a ↦ₘ imgM Mt a)) -∗
+      (wpW (vsaModel live)).W Φ) :
+    ⌜ExecRegs R (BitVec.ofNat 64 inp) aS aE aRet s⌝ ∗
+      ▷ execSpecP_body (vsaModel live) N L Room inp Core st d env sm ∗ codeRes ∗
+      □ astSG aS.toNat sm ∗ □ frameAt env aE.toNat ∗
+      ms (BitVec.ofNat 64 i) R S Mt ∗ stackScratch s m ∗ slot24 aRet.toNat ∗
+      world N L Room inp .uncounted st d ∗ K ∗
+      (∀ (R' : Nat → BitVec 64) (st' : St) (status : Status), ⌜ExecS st d env sm st' status⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status⌝ -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s m -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp .uncounted st' d -∗ K -∗
+        (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  unfold ms execSpecP_body
+  iintro ⟨%hregs, Hspec, #Hcode, #Hast, #Hfr, ⟨Hpc, Hra, Hregs, HS⟩, Hst, Hslot, Hw, HK, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hms hm $$ Hst
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave Hspec := Hspec $$ %aS %aE %aRet %s %R
+  have hab' := hab
+  simp only [wpW_W] at hab' ⊢
+  iapply wp_callAbort_later hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hregs Hst Hslot Hw]
+  · unfold execPre
+    iframe Hregs Hst Hslot Hw Hcode Hast Hfr
+    ipureintro
+    exact ⟨hal, hregs, hsg, hslg, hbb⟩
+  isplit
+  · iintro Hpc Hra ⟨%st', %status, %hE, Hpost⟩
+    unfold execPost
+    icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    iapply Hk $$ %R' %st' %status %hE %hkeep [Hpc Hra Hregs HS] Hst Hret Hw HK
+    rw [regFile_upd_ra]
+    simp only [upd_same]
+    iframe Hpc Hra Hregs HS
+  · iintro ⟨HA, Hslot⟩
+    unfold abortAt
+    icases HA with ⟨HC, Hst⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    ihave HA := abortAt_intro _ _ _ $$ [HC Hst]
+    · iframe HC Hst
+    ihave HK := hab' $$ HK
+    iapply HK
+    iframe HA Hslot HS
+
 /-- **A child call into `exec_stmt`, partial mode**, through the Löb
 hypothesis. The return branch is `ms_callExecT`'s, with the child's
 derivation. On abort, the arm hands its abort continuation the stack below
@@ -873,39 +937,13 @@ theorem ms_callExecP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
         (Kret ∧ (iprop(abortAt Core s m ∗ slot24 aRet.toNat ∗ ownSet S byteAny) -∗
           (wpW (vsaModel live)).W Φ)) -∗
         (wpW (vsaModel live)).W Φ)
-    ⊢ (wpW (vsaModel live)).W Φ := by
-  unfold ms execSpecP_body
-  iintro ⟨%hregs, Hspec, #Hcode, #Hast, #Hfr, ⟨Hpc, Hra, Hregs, HS⟩, Hst, Hslot, Hw, HK, Hk⟩
-  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hms hm $$ Hst
-  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
-  ihave Hspec := Hspec $$ %aS %aE %aRet %s %R
-  simp only [wpW_W]
-  iapply wp_callAbort_later hexec
-  iframe Hi Hspec Hpc Hra
-  isplitl [Hregs Hst Hslot Hw]
-  · unfold execPre
-    iframe Hregs Hst Hslot Hw Hcode Hast Hfr
-    ipureintro
-    exact ⟨hal, hregs, hsg, hslg, hbb⟩
-  isplit
-  · iintro Hpc Hra ⟨%st', %status, %hE, Hpost⟩
-    unfold execPost
-    icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
-    iapply Hk $$ %R' %st' %status %hE %hkeep [Hpc Hra Hregs HS] Hst Hret Hw HK
-    rw [regFile_upd_ra]
-    simp only [upd_same]
-    iframe Hpc Hra Hregs HS
-  · iintro ⟨HA, Hslot⟩
-    unfold abortAt
-    icases HA with ⟨HC, Hst⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
+    ⊢ (wpW (vsaModel live)).W Φ :=
+  ms_callExecPM hexec hcode hal hsg hm hms hslg hbb (by
+    iintro HK ⟨HA, Hslot, HS⟩
     ihave HS := ownSet_forget _ _ $$ HS
     ihave HK := and_elim_r $$ HK
     iapply HK
-    iframe HC Hst Hslot HS
+    iframe HA Hslot HS)
 
 /-- **A helper call**, for either WP: at the `jal` at `i` into a helper meeting
 `helperSpec`, the arm hands over the body's registers (the helper's argument

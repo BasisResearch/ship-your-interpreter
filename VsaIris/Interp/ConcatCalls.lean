@@ -120,7 +120,7 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iapply Hk
   unfold abortRes abortAt
   icases HA with ⟨Hcore, Hst⟩
-  ihave Hcore := hE.core s n (by omega) (by omega) (by omega) $$ Hcore
+  ihave Hcore := hE.core s n (by omega) (by omega) hsg.top $$ Hcore
   iframe Hcore Hst
 
 /-- **`memcpy(R 10, R 11, n)` from an owned source**, from a run: the

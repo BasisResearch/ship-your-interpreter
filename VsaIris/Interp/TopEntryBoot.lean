@@ -205,21 +205,18 @@ theorem interpRun_total_top (H : NewlibHoles) (hlive : ∀ p ∈ interpText, liv
 
 /-- **`interp_run`'s whole run from adequacy's resources, partial mode.** -/
 theorem interpRun_partial_top (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1)
-    (hcl : CodeLive live) {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) {Core : IProp GF}
+    (hcl : CodeLive live) {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
     {Φ : Nat × String → IProp GF}
-    (hloop : interpSeqPX_body (GF := GF) live b.N VsaHeap.vsaLayoutP VsaHeap.vsaRoomB
-      inpTop Core 0 0 p)
     (hspecs : errCtx (GF := GF) inpTop ⊢
-      execSpecsP (vsaModel live) b.N VsaHeap.vsaLayoutP VsaHeap.vsaRoomB inpTop Core)
-    (hcore : Core ⊢
-      abortCore b.N VsaHeap.vsaLayoutP VsaHeap.vsaRoomB inpTop sFr (sFr.toNat - stackSL.lo))
+      execSpecsP (vsaModel live) b.N VsaHeap.vsaLayoutP VsaHeap.vsaRoomB inpTop
+        (evalCore b.N VsaHeap.vsaLayoutP VsaHeap.vsaRoomB inpTop))
     (hΦ0 : ∀ st', ExecSeq initSt 0 0 p st' .normal → ⊢ Φ (0, st'.out))
     (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) :
     bootRes b .uncounted ∗ sepL topRegs (fun r => r ↦ᵣ vsaReg c r) ⊢@{IProp GF}
       |==> (wpW (GF := GF) (vsaModel live)).W Φ :=
   (topEntry_of_regs b _).trans (bupd_mono (sep_elim_left.trans
     (interpRun_partial_boot H hlive hcl b (topRegs_ready b.ready).args (topRegs_ready b.ready).s0
-      hloop hspecs hcore hΦ0 hΦe)))
+      hspecs hΦ0 hΦe)))
 
 end Runs
 

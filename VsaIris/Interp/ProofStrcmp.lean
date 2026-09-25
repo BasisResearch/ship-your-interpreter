@@ -94,7 +94,7 @@ theorem maskText_rodata : ∀ t ∈ maskText, rodataDom t.1 ∧ rodataByte t.1 =
 
 omit I in
 /-- Read-only bytes of a view as a list of persistent cells. -/
-theorem roImg_list (S : Nat → Prop) (img : Nat → BitVec 8) :
+theorem roImg_strList (S : Nat → Prop) (img : Nat → BitVec 8) :
     ∀ l : List (Nat × BitVec 8), (∀ t ∈ l, S t.1 ∧ img t.1 = t.2) →
       roImg (GF := GF) S img ⊢ sepL l (fun t => t.1 ↦ₘ□ t.2)
   | [], _ => by iintro _; simp only [sepL_nil]; iempintro
@@ -106,12 +106,12 @@ theorem roImg_list (S : Nat → Prop) (img : Nat → BitVec 8) :
       unfold roImg
       rw [← he]
       iapply H $$ %t.1 %hs
-    · iapply roImg_list S img l (fun u hu => h u (List.mem_cons_of_mem _ hu)) $$ H
+    · iapply roImg_strList S img l (fun u hu => h u (List.mem_cons_of_mem _ hu)) $$ H
 
 omit I in
 theorem roImg_strT (p len : Nat) (img : Nat → BitVec 8) :
     roImg (GF := GF) (InExt (p, len + 1)) img ⊢ sepL (strT p len img) (fun t => t.1 ↦ₘ□ t.2) :=
-  roImg_list _ _ _ fun t ht => by
+  roImg_strList _ _ _ fun t ht => by
     unfold strT at ht
     obtain ⟨k, hk, rfl⟩ := List.mem_map.mp ht
     have := List.mem_range.mp hk
@@ -177,7 +177,7 @@ theorem strcmp_core (live : Nat → Prop) (hcl : CodeLive live)
   have hrun := strcmpRun ctx (rv := rvE) rfl rfl hp hq (fun _ => 0)
   ihave #Hcode := instrAt_of_binImg strcmpCode_text $$ Himg
   ihave #Hrod := binImg_rodata $$ Himg
-  ihave #Hmask := roImg_list (GF := GF) rodataDom rodataByte maskText maskText_rodata $$ Hrod
+  ihave #Hmask := roImg_strList (GF := GF) rodataDom rodataByte maskText maskText_rodata $$ Hrod
   ihave #Hsx := roImg_strT (GF := GF) p.toNat x.toList.length ix $$ Hx
   ihave #Hsy := roImg_strT (GF := GF) q.toNat y.toList.length iy $$ Hy
   iapply wp_localRunW Wp _ _ _ hrun

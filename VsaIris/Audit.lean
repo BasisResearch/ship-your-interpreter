@@ -174,7 +174,6 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Newlib.OomSites.oom80003140_ok
 #print axioms VsaIris.Newlib.Setjmp.setjmp_spec
 #print axioms VsaIris.Newlib.Landing.wp_interpRet1
-#print axioms VsaIris.Newlib.TopAbrupt.wp_topAbrupt
 #print axioms VsaIris.Newlib.TopAbrupt.topRet_ok
 #print axioms VsaIris.Newlib.TopAbrupt.topBrk_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003e28_ok
