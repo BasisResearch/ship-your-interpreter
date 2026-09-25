@@ -286,3 +286,4 @@ import VsaIris.Vsa.Stderr.SprintHook
 import VsaIris.Vsa.Fprintf.SConv
 import VsaIris.Vsa.Stderr.SEmpty
 import VsaIris.Vsa.Fprintf.End
+import VsaIris.Vsa.Fprintf.Inner
