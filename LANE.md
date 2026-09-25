@@ -39,9 +39,8 @@ Lean emulator on the proof ELF, all `c/tests/*.wl` (script blob patched in
 place; three minified, `functions.wl` split) and 23 adversarial programs
 (depth 999/1000, 58/59/70-character closure names, INT64_MIN division,
 33 arguments, 440-deep nesting, non-ASCII, every runtime error, OOM). All
-match the semantics' prediction; see `REVIEW.md` §2. The three long runs
-(`recursion`, `adv_oom_term`, `adv_oom_div`) were still running when this
-was written; `adv_big_ok` likewise.
+match the semantics' prediction, including both out-of-memory programs
+(`out of memory`, exit 1); see `REVIEW.md` §2.
 
 ## Hygiene committed
 
