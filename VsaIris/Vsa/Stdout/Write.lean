@@ -47,6 +47,14 @@ persistent data view (`Dt` on `DA`). -/
 def ByteSrc (S : Nat → Prop) (Mt Dt : Mem) (DA : List Nat) (a : Nat) (b : BitVec 8) : Prop :=
   (S a ∧ imgM Mt a = b) ∨ (a ∈ DA ∧ imgM Dt a = b)
 
+/-- A byte source survives a store off the byte. -/
+theorem ByteSrc.store {S : Nat → Prop} {Mt Dt : Mem} {DA : List Nat} {a : Nat} {b : BitVec 8}
+    (h : ByteSrc S Mt Dt DA a b) {addr w : Nat} (v : BitVec 64) (hd : a < addr ∨ addr + w ≤ a) :
+    ByteSrc S (writeLog Mt [(addr, w, v)]) Dt DA a b := by
+  rcases h with ⟨h1, h2⟩ | h
+  · exact .inl ⟨h1, by rw [imgM_store_miss _ _ hd, h2]⟩
+  · exact .inr h
+
 theorem ldv_lbu (M : Mem) (a : Nat) : ldv .lbu M a = zero_extend (m := 64) (imgM M a) := by
   simp [ldv, bytesAt, bytesVal, widthOfM]
 
@@ -244,6 +252,35 @@ theorem write_run (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (B
           obtain ⟨h10, h11x, h13, h14, h15, h16⟩ := hx
           rw [upd_apply, if_neg h10, hkeep x h11x h15 h16]
           simp [upd_apply, h13, h14]
+
+/-- `_write`'s end state as an explicit register file: `a0 = n`, the
+clobbered `a1`, `a3`–`a6` at some values. -/
+abbrev writeRegs (R : Nat → BitVec 64) (v11 v13 v14 v15 v16 : BitVec 64) : Nat → BitVec 64 :=
+  upd (upd (upd (upd (upd (upd R 10 (R 12)) 11 v11) 13 v13) 14 v14) 15 v15) 16 v16
+
+/-- **`_write`**, with the end state as an explicit register file (the form
+`ix_run` continues from). -/
+theorem write_run' (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (BitVec 8))
+    (hlo : 0x80000000 ≤ buf) (hhi : buf + bs.length ≤ 0x100000000)
+    (hht : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)
+    (hsrc : ∀ i (h : i < bs.length), ByteSrc S Mt Dt DA (buf + i) bs[i])
+    (R : Nat → BitVec 64) (t : String) (h11 : R 11 = BitVec.ofNat 64 buf)
+    (h12 : R 12 = BitVec.ofNat 64 bs.length) (hal : (R 1).toNat % 4 = 0)
+    (hk : ∀ v11 v13 v14 v15 v16 : BitVec 64,
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q (t ++ putcs bs) (R 1)
+        (writeRegs R v11 v13 v14 v15 v16) Mt) :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x8000003c#64 R Mt := by
+  refine write_run hl buf bs hlo hhi hht hsrc R t h11 h12 hal fun R' hw => ?_
+  refine swp_congr (fun x _ hx => ?_) (hk (R' 11) (R' 13) (R' 14) (R' 15) (R' 16))
+  simp only [upd_apply]
+  by_cases e16 : x = 16; · simp [e16]
+  by_cases e15 : x = 15; · simp [e15]
+  by_cases e14 : x = 14; · simp [e14]
+  by_cases e13 : x = 13; · simp [e13]
+  by_cases e11 : x = 11; · simp [e11]
+  by_cases e10 : x = 10; · simp [e10, hw.a0]
+  simp only [e16, e15, e14, e13, e11, e10, ite_false]
+  exact (hw.keep x (by simpa [VsaIris.PC] using hx) (by simp [e16, e15, e14, e13, e11, e10])).symm
 
 end Loop
 
