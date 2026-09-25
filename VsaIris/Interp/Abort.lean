@@ -192,12 +192,17 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     exact ⟨by unfold exitNeed exitHandlersNeed Vsa.Sim.tohostAddr; omega, by omega, h6⟩
   have he : (1#64 : BitVec 64).toNat < 2 ^ 31 := by decide
   have HA := H.at
-  iapply wp_exitCall HA live hlive Wp s' r 1#64 v0 cs o he hsp'
+  iapply wp_exitCall HA live hlive Wp s' r 1#64 v0 cs o false he hsp'
   unfold argsAt callFrame stackScratch exitNeed exitHandlersNeed
   simp only [List.zipIdx_cons, List.zipIdx_nil, sepL_cons, sepL_nil, Nat.add_zero,
     List.length_singleton]
-  iframe Hpc Hra Hs0 Ha0 Hargs Hsp Hscr Hsaved Htmp Hgp Himg Hstd Hcon
-  iintro %o'
+  iframe Hpc Hra Hs0 Ha0 Hargs Hsp Hscr Hsaved Htmp Hgp Himg Hcon
+  isplitl [Hstd]
+  · iapply stdioAt_mono (fun img h => by
+      rcases h with h | h
+      · exact .inl h
+      · exact .inr ⟨by simp, h⟩) $$ Hstd
+  iintro %o' -
   rw [show (1#64 : BitVec 64).toNat = 1 from rfl]
   iapply hΦ
 

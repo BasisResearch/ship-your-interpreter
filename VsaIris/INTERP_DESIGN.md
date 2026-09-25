@@ -23,6 +23,32 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
 - **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
 
+## STATEMENT CHANGE (lane A, Q7 decided 2026-09-25): the helpers' stack headroom
+
+`Vsa.Sim.LayoutInstance.helperHeadroom = 2048` is added to
+`ProgramStackFits.need` (a narrowing of `Loaded`, as Q1) and to the Iris
+budget `stackBudget need d = need + (maxCallDepth - d) * perCallBudget +
+evalFrame + helperHeadroom`.
+
+- **Why.** At call depth `maxCallDepth` the budget left `evalFrame = 1088`
+  bytes below a leaf arm's frame, but `runtime_error` needs `rtErrNeed = 1248`
+  (so `ErrRoom (.var x) maxCallDepth` was false), and a native call's
+  `fprintf` chain needs `nativePrintlnNeed = 4224` below a call node that
+  left 2176 (E4's `hroom`). The constant is the larger shortfall.
+- **Consequence.** `ErrRoom e d` holds at every depth (`errRoom`); E4's
+  `hroom` holds at every depth.
+- **Not vacuous.** The control program and every `c/tests/*.wl` witness
+  (`StackAdmissibleWitness.lean`) still decide `programStackFits` (about
+  2.24 MB of slack).
+
+## STATEMENT CHANGE (lane A): `newlib.exitHandlers` is exact from `StdioOK`
+
+`exitHandlersSpec` takes `quiet : Bool`: with `quiet = true` it starts from
+`StdioOK` only and the continuation's output extension is empty. `term_sim`
+needs `Halts c st'.out 0` exactly; the old field allowed `exit(0)` to print.
+It holds of the binary: `main` makes `stdout` unbuffered, so the close path
+flushes nothing. `wp_exitCall` takes `quiet`; H5's error exits pass `false`.
+
 ## STATEMENT CHANGE (integration): the global frame's capacity and the shared bytes' geometry
 
 `BootFrameChunks` gains `cap_canon : F.cap = 8` (the capacity `env_define`

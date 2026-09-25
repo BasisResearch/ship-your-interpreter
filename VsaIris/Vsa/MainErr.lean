@@ -419,7 +419,7 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
   have hs768 : (sM + sign_extend (m := 64) (0x300#12)).toNat = sM.toNat + 768 :=
     addr_off sM _ 768 (by decide) (by omega)
   iapply wp_exitCall H live hlive Wp (sM + sign_extend (m := 64) (0x300#12)) 0x80000038#64 70#64
-    (imgW imgT (sM.toNat + 752)) cs (o ++ o') (by decide)
+    (imgW imgT (sM.toNat + 752)) cs (o ++ o') false (by decide)
     ⟨by rw [hs768]; unfold exitNeed exitHandlersNeed tohostAddr; omega, by rw [hs768]; omega,
       by rw [hs768]; omega⟩
   unfold argsAt callFrame VsaIris.sp VsaIris.ra exitEntry
@@ -446,8 +446,8 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
           simp [cs', this])]
       iexact Hsaved
   isplitl [Hstd]
-  · iapply stdioAt_mono (fun img h => .inr h) $$ Hstd
-  iintro %o''
+  · iapply stdioAt_mono (fun img h => .inr ⟨by simp, h⟩) $$ Hstd
+  iintro %o'' -
   rw [show (70#64 : BitVec 64).toNat = 70 from rfl, String.append_assoc]
   iapply HΦ
 

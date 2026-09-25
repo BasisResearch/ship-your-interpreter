@@ -22,10 +22,8 @@ What the call needs beyond `evalPre`, named:
   (`interp_run`'s `setjmp` wrote it, `TopLanding`), which holds all three at
   the top, so the partial cases take `leafErrCtx` as a persistent premise beside
   the Löb hypothesis.
-* `ErrRoom e d`: `runtime_error`'s stack below the arm's frame. It holds for
-  `d < maxCallDepth` (`errRoom_of_lt`); at the deepest level it is
-  INTERP_DESIGN.md Q7 (open: `rtErrNeed = 1248` exceeds the budget's 1088-byte
-  leaf headroom).
+* `ErrRoom e d`: `runtime_error`'s stack below the arm's frame. It holds at
+  every depth (`errRoom`): the budget's `helperHeadroom` (Q7) pays for it.
 * `evalCore`: the landing core over the whole stack segment, the one `Core`
   every nested abort widens to (`abortCore_mono`), so the partial cases with
   error arms are stated at `Core := evalCore`.
@@ -47,16 +45,15 @@ structure ErrCtxOK (inp : Nat) (jb : Nat → BitVec 8) : Prop where
 structure ErrRoom (e : Expr) (d : Nat) : Prop where
   room : RtErr.rtErrNeed + evalFrame ≤ evalNeed e d
 
-theorem errRoom_of_lt {e : Expr} {d : Nat} (h : d < maxCallDepth) : ErrRoom e d :=
+/-- `runtime_error` fits below every arm's frame at every depth: the budget's
+`helperHeadroom` (Q7, user decision 2026-09-25) pays for it. -/
+theorem errRoom (e : Expr) (d : Nat) : ErrRoom e d :=
   ⟨by
     have := Expr.stackNeed_ge e
-    unfold evalNeed stackBudget RtErr.rtErrNeed snprintfNeed perCallBudget
-    unfold maxCallDepth at h
-    have : 1 ≤ 1000 - d := by omega
-    have : 6144 ≤ (1000 - d) * 6144 := by
-      calc 6144 = 1 * 6144 := by omega
-        _ ≤ (1000 - d) * 6144 := Nat.mul_le_mul_right _ this
-    unfold maxCallDepth; omega⟩
+    unfold evalNeed stackBudget RtErr.rtErrNeed snprintfNeed Vsa.Sim.LayoutInstance.helperHeadroom
+    omega⟩
+
+theorem errRoom_of_lt {e : Expr} {d : Nat} (_h : d < maxCallDepth) : ErrRoom e d := errRoom e d
 
 section Res
 

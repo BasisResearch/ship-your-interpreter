@@ -280,6 +280,13 @@ level consumes a real machine frame, and the heap ends where the stack begins
 /-- `interp_run`'s machine frame, bytes (`800043ec: addi sp,sp,-176`). -/
 def interpRunFrame : Nat := 176
 
+/-- Stack headroom below every `eval_expr` frame beyond ItemZero's
+`evalFrame` (user decision Q7, 2026-09-25). A leaf arm at the deepest call
+level owns `evalFrame` bytes below its frame, but `runtime_error` needs 1248
+(its 224-byte frame plus `snprintf`'s 1024) and a native call's `fprintf`
+chain 4224 below a call node's 2176: the larger shortfall, `4224 - 2176`. -/
+def helperHeadroom : Nat := 2048
+
 /-- A program fits the stack: every top-level statement's ItemZero need at
 depth 0 (`ExecEntry.stackBudget`: `s.stackNeed + maxCallDepth * perCallBudget +
 evalFrame`) lies between `stackSL.lo` and `interp_run`'s post-spill `sp`, and
@@ -287,14 +294,14 @@ every `.fn` body fits one call level. Decidable over the concrete AST
 (`programStackFits`). -/
 structure ProgramStackFits (p : Vsa.While.Program) : Prop where
   need : stackSL.lo + Vsa.While.Stmt.stackNeedList p +
-    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame +
+    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame + helperHeadroom +
     interpRunFrame ≤ spEntry
   bodies : Vsa.While.Stmt.bodiesBoundList Vsa.While.perCallBudget p = true
 
 /-- The kernel-computable checker for `ProgramStackFits`. -/
 def programStackFits (p : Vsa.While.Program) : Bool :=
   decide (stackSL.lo + Vsa.While.Stmt.stackNeedList p +
-    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame +
+    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame + helperHeadroom +
     interpRunFrame ≤ spEntry) &&
   Vsa.While.Stmt.bodiesBoundList Vsa.While.perCallBudget p
 
