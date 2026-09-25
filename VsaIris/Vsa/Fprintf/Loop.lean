@@ -87,14 +87,14 @@ structure VfpHeadPost (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64)
     {s sp : BitVec 64} {need : Nat}
     (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
     (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
-    (h2 : R 2 = sp) (h3 : R 3 = 0x8001b510#64)
+    (h2 : R 2 = sp)
     (hk : ∀ R' Mt', VfpHeadPost R R' Mt Mt' sp →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b0#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a944#64 R Mt by
-  nf_go 2 [14] hlive using [h2, h3, BitVec.add_assoc] at 2147527088
+  nf_go 2 [14] hlive using [h2, BitVec.add_assoc] at 2147527088
 
 #ix_piece vfpHead_2 from vfpHead_1 by
-  nf_go 1 [14] hlive using [h2, h3, BitVec.add_assoc] at 2147527088
+  nf_go 1 [14] hlive using [h2, BitVec.add_assoc] at 2147527088
 
 #ix_piece vfpHead_3 from vfpHead_2 by
   refine hk _ _ ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -112,7 +112,21 @@ structure VfpHeadPost (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64)
     (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
      unfold HeadReg; omega)
 
-/-! **`vfp_head`**: `_vfprintf_r`'s head, `0x8000a944` → `0x8000a9b0` (post `VfpHeadPost`). -/
-#ix_chain vfp_head := [vfpHead_1, vfpHead_2, vfpHead_3, vfpHead_4]
+/-! **`vfp_headC`**: `_vfprintf_r`'s head, `0x8000a944` → `0x8000a9b0` (post `VfpHeadPost`). -/
+#ix_chain vfp_headC := [vfpHead_1, vfpHead_2, vfpHead_3, vfpHead_4]
+
+/-- **`vfp_head`** (`vfp_headC` with a `gp` premise, which the run does not
+need: `gp` is a read-only register of the step table). -/
+theorem vfp_head {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
+    {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
+    {s sp : BitVec 64} {need : Nat}
+    (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
+    (h2 : R 2 = sp) (_h3 : R 3 = 0x8001b510#64)
+    (hk : ∀ R' Mt', VfpHeadPost R R' Mt Mt' sp →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b0#64 R' Mt') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a944#64 R Mt :=
+  vfp_headC hlive hs1 hs2 hs3 hs4 hal h2 hk
 
 end VsaIris.Sym.Fp
