@@ -282,6 +282,145 @@ def run_tree(runs):
     return go(0, len(runs))
 
 
+def entry_memory(work, name, log):
+    """The entry memory as a dict: loader pieces, then the stores."""
+    pieces = read_pieces(work / "pieces.tsv")[str(work / "elfs" / f"{name}.elf")]
+    mem = piece_bytes(pieces)
+    for a, w, v in log:
+        for j in range(w):
+            mem[a + j] = (v >> (8 * j)) & 0xFF
+    return mem
+
+
+def rd(mem, a, n):
+    return sum(mem[a + i] << (8 * i) for i in range(n))
+
+
+def ast_bytes(mem, stmts, count):
+    """Every byte the representation relations read for the program at
+    `stmts` (node fields, pointer arrays, strings with their NUL)."""
+    seen = set()
+
+    def touch(a, n):
+        seen.update(range(a, a + n))
+
+    def cstr(a):
+        k = a
+        while mem[k] != 0:
+            k += 1
+        touch(a, k - a + 1)
+
+    def expr(a):
+        k = rd(mem, a, 4)
+        touch(a, 4)
+        if k == 0:
+            touch(a + 8, 8)
+        elif k in (1, 4):
+            touch(a + 8, 8); cstr(rd(mem, a + 8, 8))
+        elif k == 2:
+            touch(a + 8, 4)
+        elif k == 5:
+            touch(a + 8, 16); cstr(rd(mem, a + 8, 8)); expr(rd(mem, a + 16, 8))
+        elif k in (6, 7):
+            touch(a + 8, 4); touch(a + 16, 16); expr(rd(mem, a + 16, 8)); expr(rd(mem, a + 24, 8))
+        elif k == 8:
+            touch(a + 8, 4); touch(a + 16, 8); expr(rd(mem, a + 16, 8))
+        elif k == 9:
+            touch(a + 8, 16); touch(a + 24, 4)
+            expr(rd(mem, a + 8, 8))
+            args, argc = rd(mem, a + 16, 8), rd(mem, a + 24, 4)
+            for i in range(argc):
+                touch(args + 8 * i, 8); expr(rd(mem, args + 8 * i, 8))
+        elif k == 10:
+            touch(a + 8, 16); touch(a + 24, 4); touch(a + 32, 8)
+            nm = rd(mem, a + 8, 8)
+            if nm:
+                cstr(nm)
+            params, pc = rd(mem, a + 16, 8), rd(mem, a + 24, 4)
+            for i in range(pc):
+                touch(params + 8 * i, 8); cstr(rd(mem, params + 8 * i, 8))
+            stmt(rd(mem, a + 32, 8))
+        elif k != 3:
+            raise SystemExit(f"bad expr kind {k} at {a:#x}")
+
+    def opt_stmt(f):
+        touch(f, 8)
+        if rd(mem, f, 8):
+            stmt(rd(mem, f, 8))
+
+    def opt_expr(f):
+        touch(f, 8)
+        if rd(mem, f, 8):
+            expr(rd(mem, f, 8))
+
+    def stmt(a):
+        k = rd(mem, a, 4)
+        touch(a, 4)
+        if k in (0, 6):
+            touch(a + 8, 8)
+            if rd(mem, a + 8, 8):
+                expr(rd(mem, a + 8, 8))
+        elif k == 1:
+            touch(a + 8, 16); cstr(rd(mem, a + 8, 8))
+            if rd(mem, a + 16, 8):
+                expr(rd(mem, a + 16, 8))
+        elif k == 2:
+            touch(a + 8, 8); touch(a + 16, 4)
+            st, n = rd(mem, a + 8, 8), rd(mem, a + 16, 4)
+            for i in range(n):
+                touch(st + 8 * i, 8); stmt(rd(mem, st + 8 * i, 8))
+        elif k == 3:
+            touch(a + 8, 24); expr(rd(mem, a + 8, 8)); stmt(rd(mem, a + 16, 8))
+            if rd(mem, a + 24, 8):
+                stmt(rd(mem, a + 24, 8))
+        elif k == 4:
+            touch(a + 8, 16); expr(rd(mem, a + 8, 8)); stmt(rd(mem, a + 16, 8))
+        elif k == 5:
+            opt_stmt(a + 8); opt_expr(a + 16); opt_expr(a + 24); touch(a + 32, 8)
+            stmt(rd(mem, a + 32, 8))
+        elif k not in (7, 8):
+            raise SystemExit(f"bad stmt kind {k} at {a:#x}")
+
+    for i in range(count):
+        touch(stmts + 8 * i, 8); stmt(rd(mem, stmts + 8 * i, 8))
+    return seen
+
+
+def heap_walk(mem):
+    top, brkv = rd(mem, 0x8001AD20, 8), rd(mem, 0x8001B990, 8)
+    p, chunks = 0x8001C170, []
+    while p != top:
+        h = rd(mem, p + 8, 8)
+        sz = h // 4 * 4
+        chunks.append((p, sz, rd(mem, p + sz + 8, 8) % 2 == 1))
+        p += sz
+    bins = []
+    for i in range(128):
+        b = 0x8001AD10 + 16 * i
+        q, qs = rd(mem, b + 16, 8), []
+        while i > 0 and q != b:
+            qs.append(q); q = rd(mem, q + 16, 8)
+        bins.append(qs)
+    while bins and not bins[-1]:
+        bins.pop()
+    return top, brkv, chunks, bins
+
+
+def boot_own(mem, stmts, count, chunks):
+    env = rd(mem, 0x87FFFE10, 8)
+    cap, pn, pv = rd(mem, env + 4, 4), rd(mem, env + 8, 8), rd(mem, env + 16, 8)
+    keys = [rd(mem, pn + 8 * i, 8) for i in range(3)]
+    names = [rd(mem, pv + 24 * i + 8, 8) for i in range(3)]
+    live = [(c + 16, sz - 8) for c, sz, inuse in chunks if inuse]
+    touched = ast_bytes(mem, stmts, count)
+    ast = sorted({e for e in live for k in [None] if any(e[0] <= b < e[0] + e[1] for b in touched)})
+    frame = {e for e in live if e[0] <= env < e[0] + e[1] or e[0] in (pn, pv)}
+    assert not (set(ast) & frame), "AST bytes in the global frame's blocks"
+    missing = [b for b in touched if not any(e[0] <= b < e[0] + e[1] for e in ast)]
+    assert not missing, f"AST bytes outside live payloads: {missing[:3]}"
+    return dict(env=env, cap=cap, pn=pn, pv=pv, keys=keys, names=names, ast=ast)
+
+
 def cmd_program(args):
     work = Path(args.work)
     for name in args.names:
@@ -294,10 +433,18 @@ def cmd_program(args):
         enc = [a | (w << 32) | (v << 36) for a, w, v in log]
         pages = [enc[i:i + LOG_PAGE] for i in range(0, len(enc), LOG_PAGE)]
         regs = [int(x, 16) for x in entry[4:35]]
+        mem = entry_memory(work, name, log)
+        stmts, count = int(entry[4 + 10], 16), int(entry[4 + 11], 16)
+        top, brkv, chunks, bins = heap_walk(mem)
+        own = boot_own(mem, stmts, count, chunks)
+        genv = rd(mem, 0x87FFFE10, 8)
+        gpv = rd(mem, genv + 16, 8)
+        gname = rd(mem, gpv + 8, 8)
         ln = lean_name(name)
         nchunks = (len(log) + CHUNK - 1) // CHUNK
         out = [
-            "import Vsa.Sim.Boot.Image",
+            "import Vsa.Sim.Boot.Obstruction",
+            "import Vsa.Sim.Boot.Owned",
             "",
             "/-!",
             f"# Boot trace of `{name}.wl` (generated by `scripts/gen_boot_witness.py program`)",
@@ -358,12 +505,62 @@ def cmd_program(args):
             "theorem mem_get (x : Nat) : (bootMem script log)[x]? = bootView script runs x :=",
             "  bootMem_get logOk x",
             "",
+            "theorem view : ViewOf (bootMem script log) (bootView script runs) := bootMem_view logOk",
+            "",
+            "/-- REVIEW.md C4 at this program's real entry memory: the first native's value",
+            f"name is the `.rodata` literal at `{gname:#x}`, so no register file makes it `Loaded`. -/",
+            "theorem c4_obstruction {g : Nat → BitVec 64} {steps stmts count : Nat} {inp : BitVec 64}",
+            "    {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena}",
+            "    {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}",
+            "    (F : Vsa.Sim.LayoutInstance.InterpRunReadyFacts (bootConfig (bootMem script log) g steps)",
+            "      stmts count inp N A φf φc aLeft) : False :=",
+            f"  nativeName_obstruction F (e := {genv:#x}) (pv := {gpv:#x}) (p := {gname:#x})",
+            "    (by simp only [bootConfig_mem]; boot_read view) (by simp only [bootConfig_mem]; boot_read view)",
+            "    (by simp only [bootConfig_mem]; boot_read view) (by decide)",
+            "",
+            "/-- The global frame and the shared bytes at the entry. -/",
+            "def own : BootOwn where",
+            f"  env := {own['env']:#x}",
+            f"  cap := {own['cap']}",
+            f"  pn := {own['pn']:#x}",
+            f"  pv := {own['pv']:#x}",
+        ] + [f"  key{i} := {k:#x}" for i, k in enumerate(own['keys'])] + [
+            f"  name{i} := {k:#x}" for i, k in enumerate(own['names'])] + [
+            "  ast :=",
+            "    [" + ",\n     ".join(f"({a:#x}, {n:#x})" for a, n in own['ast']) + "]",
+            "",
+            "/-- The dlmalloc heap: the chunk walk from `_end` and the bin lists. -/",
+            f"def top : Nat := {top:#x}",
+            f"def brkv : Nat := {brkv:#x}",
+            "def chunks : List Vsa.Sim.DlHeap.Chunk :=",
+            "  [" + ",\n   ".join(f"⟨{a:#x}, {sz:#x}, {'true' if u else 'false'}⟩" for a, sz, u in chunks) + "]",
+            "def bins : List (List Nat) := " + repr(bins).replace("'", ""),
+            "",
+            "theorem ownOk : OwnOk own := by",
+            "  constructor <;> decide +kernel",
+            "",
+            "theorem frameOk : FrameOk (bootView script runs) own := by",
+            "  constructor <;> decide +kernel",
+            "",
+            "theorem heapOk : heapCheck (bootView script runs) own.exts",
+            "    [(own.pn, 8 * own.cap), (own.pv, 24 * own.cap)] top brkv chunks bins = true := by",
+            "  decide +kernel",
+            "",
             f"end Vsa.Sim.Boot.Gen.{ln}",
         ]
         dst = BOOT_DIR / "Gen" / f"{ln}.lean"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text("\n".join(out) + "\n")
         print("wrote", dst, len(log), "stores", len(runs), "runs")
+    write_index()
+
+
+def write_index():
+    """`VsaBoot.lean`: the boot infrastructure and every generated trace."""
+    mods = ["Vsa.Sim.Boot.Image", "Vsa.Sim.Boot.Store", "Vsa.Sim.Boot.Heap",
+            "Vsa.Sim.Boot.Obstruction", "Vsa.Sim.Boot.Owned", "Vsa.Sim.Boot.Physical"]
+    mods += [f"Vsa.Sim.Boot.Gen.{f.stem}" for f in sorted((BOOT_DIR / "Gen").glob("*.lean"))]
+    (ROOT / "VsaBoot.lean").write_text("".join(f"import {m}\n" for m in mods))
 
 
 if __name__ == "__main__":

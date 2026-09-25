@@ -4362,3 +4362,29 @@ every `c/tests/*.wl` build, reconstructed at `interp_run`'s entry):
 - `capacity` and `stack_admissible` make `Loaded` program-execution
   dependent (REVIEW.md M1); `CStr` restricts programs to ASCII (L1).
 
+
+### Lane B3: loader-derived boot traces (2026-09-25)
+
+Reflected boot traces of the proof ELF and every `c/tests/*.wl` build
+(`scripts/gen_boot_witness.py`, `Vsa/Sim/Boot/`, library `VsaBoot`): the
+entry memory is `writeLog (loadedMem script) log` with the emulator's store
+log, and `LogOk` (kernel-checked per program) gives every byte.
+
+- **C4, machine-checked (not covered by P1–P4).** The natives' `Value` name
+  pointers are `.rodata` literals (`value_native("print", …)`: `0x80019538`,
+  `0x80019540`, `0x80019548`); `FrameOwned.values` makes them `shared`
+  (`ValueOwned`/`SharedCString`), and `BootHeapFacts.shared_geom`
+  (`SharedGeom.ram`) puts every shared byte at or above `0x8001acf0`.
+  `Vsa.Sim.Boot.nativeName_obstruction` derives `False` from
+  `InterpRunReadyFacts` and three memory reads; `Gen/<Prog>.c4_obstruction`
+  instantiates it at each program's real entry memory, for every register
+  file. The review's checker counted only AST strings as shared. Affected
+  declaration: `LayoutInstance.BootHeapFacts.shared_geom`. Missing supplier: a
+  shared-byte geometry admitting `.rodata` (the Iris consumers
+  `readOK_of_sharedGeom`, `sharedWin_of_geom` need only RAM, the HTIF
+  exclusion and the stack exclusion; `RoByte` is `shared ∨ CodeByte`, a
+  persistent union), or native values whose names are heap copies (a binary
+  change). REVIEW.md P7; statement change pending the user's decision.
+- `capacity` needs the cost of every terminating derivation of the
+  represented program: a cost evaluator with a completeness theorem (in
+  progress).
