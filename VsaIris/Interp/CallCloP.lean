@@ -498,40 +498,248 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iapply Hk $$ %_ %Value.null %hC
 
 
-/-- **The arity error's obligation** (a NAMED premise, `PROOF_CLOSURE_PLAN.md`
-lane E4): from the arity exit (`0x80003d60`), `snprintf` formats the message
-into the frame's buffer `sp+144`, then `runtime_error(in, line, "%s",
-sp+144)` aborts. `rtErr_spec` takes the buffer's bytes as `readable` owned
-bytes and does not return them on abort, so the frame cannot rejoin the arm's
-`abortAt Core s n`. Supplier: `rtErr_spec` (H5) returning its owned readable
-bytes with `abortRes`. -/
-def CloArityP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
-    (Core : IProp GF) : Prop :=
-  ∀ (Φ : Nat × String → IProp GF) (ρ : Regime) (st : St) (R : Nat → BitVec 64) (Mt1 Mt : Mem)
-    (s aX sret ret q line : BitVec 64) (rv : Nat → BitVec 64) (argc dep n : Nat) (P : Nat → Prop)
-    (m : Mem) (cd : ClosureData) (prm bod nam : BitVec 64),
-    EvalFrameG s → StackGeom s n → 1088 + RtErr.rtErrNeed ≤ n → cd.params.length ≠ argc →
-    (inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8) →
-    CloAr R Mt1 Mt s aX sret (BitVec.ofNat 64 inp) ret q line rv argc dep →
-    FnNode m P q cd.params.length prm bod nam → (∀ k, P k → ReadOK k) → SharedWin P →
-    (cd.name = none ∧ nam = 0#64 ∨ ∃ x, cd.name = some x ∧ nam ≠ 0#64 ∧ CStringWithin m P nam.toNat x) →
+/-- The arity message buffer `sp+144` (96 bytes). -/
+abbrev arityBuf (s : BitVec 64) : Nat → Prop := InExt (s.toNat - 1088 + 144, 96)
+
+/-- **The arity error's tail** (`jal snprintf` at `0x80003d84`, the name in
+`a3` a C string readable at `rd`): the message is formatted into the frame's
+buffer `sp+144`, then `runtime_error(in, line, "%s", sp+144)` reads it
+(`ms_rtErrEvalOwn`) and aborts; the buffer rejoins the frame. -/
+theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
+    (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core) {ρ : Regime} {st : St} {d : Nat}
+    {s line a3 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {n : Nat}
+    {Sro : Nat → Prop} {rd : Nat → BitVec 8}
+    (hfg : EvalFrameG s) (hsg : StackGeom s n) (hn : 1088 + RtErr.rtErrNeed ≤ n)
+    (h2 : R 2 = s + 18446744073709550528#64) (h10 : R 10 = s + 18446744073709550528#64 + 144#64)
+    (h11 : R 11 = 96#64) (h12 : R 12 = 0x800194a8#64) (h13 : R 13 = a3)
+    (h18 : R 18 = BitVec.ofNat 64 inp) (h23 : R 23 = line)
+    (hro : ∀ a, rodataDom a → Sro a ∧ rd a = rodataByte a) (hs : ∃ t, CStrCov Sro rd a3.toNat t) :
+    codeRes ∗ errCtx inp ∗ readable Sro (fun _ => False) rd ∗
+      ms 0x80003d84#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
+      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
+      world N vsaLayoutP vsaRoomB inp ρ st d ∗ (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  have hsf := hfg.sf; have hs0 := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  have h144 := evalSP_off' hfg 144 (by decide)
+  have hle := hsg.le
+  have hn' : 2336 ≤ n := by unfold RtErr.rtErrNeed snprintfNeed at hn; omega
+  have hro0 : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  iintro ⟨#Hcode, #HE, Hrd, Hms, Hst, Hw, Hab⟩
+  -- the buffer out of the run's bytes
+  ihave Hms := ms_iff (T := fun k => (InExt (s.toNat - 1088, 1088) k ∧ ¬ arityBuf s k) ∨ arityBuf s k)
+    (fun k => by
+      constructor
+      · intro h; by_cases h' : arityBuf s k
+        · exact .inr h'
+        · exact .inl ⟨h, h'⟩
+      · rintro (⟨h, _⟩ | h)
+        · exact h
+        · simp only [arityBuf, InExt] at h ⊢; omega) $$ Hms
+  ihave ⟨Hms, Hbuf⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  ihave Hbuf := ownSet_forget _ _ $$ Hbuf
+  -- newlib's data out of the world
+  ihave ⟨Hhs, Hc, Hio, Hi, #Hb⟩ := (world_heapStore N inp ρ st d).1 $$ Hw
+  -- `snprintf(sp+144, 96, fmt, name, paramc, argc)`
+  have hsp : SpIn (s + 18446744073709550528#64) snprintfNeed := ⟨by rw [hsf]; unfold snprintfNeed Vsa.Sim.tohostAddr; omega,
+    by rw [hsf]; omega, by rw [hsf]; omega⟩
+  have hf := hE.newlib.at.snprintf (hlc := hlc) (GF := GF) live (wpW (vsaModel live)) (s + 18446744073709550528#64) (s + 18446744073709550528#64 + 144#64)
+    96#64 0x800194a8#64 [a3, R 14, R 15] R Sro (fun _ => False) rd hE.code (by simp) (by decide) (by decide)
+    (arity_fmt (fun a ha => ⟨.inl (hro a ha).1, (hro a ha).2⟩)
+      (by obtain ⟨t, ht⟩ := hs; exact ⟨t, ⟨fun i hi => ⟨.inl (ht.bytes i hi).1, (ht.bytes i hi).2⟩,
+        ⟨.inl ht.nul.1, ht.nul.2⟩⟩⟩) _ _) hsp
+  unfold snprintfSpec at hf
+  ihave #Hf := hf
+  ihave #Hgp := codeRes_gp $$ Hcode
+  have hbuft : (s + 18446744073709550528#64 + 144#64).toNat = s.toNat - 1088 + 144 := h144
+  iapply ms_callNewlib (wpW _) (i := 0x80003d84) (entry := snprintfEntry)
+    (jalx_80003d84 live (fun p hp => hlive _ (interp_code_80003d84 p hp))) interp_code_80003d84
+    (vs := [s + 18446744073709550528#64 + 144#64, 96#64, 0x800194a8#64, a3, R 14, R 15])
+    (P := fun _ => iprop(argsAt ([s + 18446744073709550528#64 + 144#64, 96#64, 0x800194a8#64] ++
+        [a3, R 14, R 15]) ∗
+      blockOwn (s + 18446744073709550528#64 + 144#64).toNat (96#64 : BitVec 64).toNat ∗
+      readable Sro (fun _ => False) rd ∗ Stdio.stdioOwn ∗
+      callFrame (s + 18446744073709550528#64) snprintfNeed Newlib.calleeSaved R))
+    (Q := fun _ => iprop(clobbered argRegs ∗
+      cstrBuf (s + 18446744073709550528#64 + 144#64).toNat (96#64 : BitVec 64).toNat ∗
+      readable Sro (fun _ => False) rd ∗ Stdio.stdioOwn ∗
+      callFrame (s + 18446744073709550528#64) snprintfNeed Newlib.calleeSaved R))
+    (X := iprop(blockOwn (s + 18446744073709550528#64 + 144#64).toNat 96 ∗
+      readable Sro (fun _ => False) rd ∗ Stdio.stdioOwn))
+    (Y := iprop(cstrBuf (s + 18446744073709550528#64 + 144#64).toNat 96 ∗
+      readable Sro (fun _ => False) rd ∗ Stdio.stdioOwn))
+    (need := snprintfNeed) (n := n - 1088) (by simp)
+    (fun j hj => by
+      simp only [List.length_cons, List.length_nil] at hj
+      rcases j with _ | _ | _ | _ | _ | _ | j
+      · exact h10
+      · exact h11
+      · exact h12
+      · exact h13
+      · rfl
+      · rfl
+      · omega)
+    h2 (by rw [hsf]; omega) (by unfold snprintfNeed; omega)
+    (fun r => by
+      simp only [List.cons_append, List.nil_append, show (96#64 : BitVec 64).toNat = 96 from rfl]
+      iintro ⟨Ha, ⟨Hbo, Hr, Hio⟩, Hf⟩; iframe Ha Hbo Hr Hio Hf)
+    (fun r => by
+      simp only [show (96#64 : BitVec 64).toNat = 96 from rfl]
+      iintro ⟨Ha, Hcb, Hr, Hio, Hf⟩; iframe Ha Hcb Hr Hio Hf)
+  iframe Hf Hcode Hms Hst Hgp Hb Hio Hrd
+  isplitl [Hbuf]
+  · unfold blockOwn; rw [hbuft]; iexact Hbuf
+  iintro %R3 %hk3 ⟨Hcb, -, Hio⟩ Hms Hst
+  -- `jal runtime_error(in, line, "%s", sp+144, 0)`
+  iapply wp_swpF (wpW _) (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ errCtx inp ∗
+      cstrBuf (s + 18446744073709550528#64 + 144#64).toNat 96 ∗
+      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
+      world N vsaLayoutP vsaRoomB inp ρ st d ∗ (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)))
+  rotate_left
+  · rw [hro0]; iframe Hcode HE Hcb Hst Hab Hms
+    iapply (world_heapStore N inp ρ st d).2
+    iframe Hhs Hc Hio Hi Hb
+  intro F'
+  refine CloE_runA2 (m := ∅) hlive ?_
+  apply swp_closeRM
+  intro R4 Mt4 hR4 hMt4
+  unfold F'
+  iintro ⟨⟨#Hcode, #HE, Hcb, Hst, Hw, Hab⟩, Hms⟩
+  unfold cstrBuf
+  icases Hcb with ⟨%bimg, Hbo, %hnul⟩
+  ihave #Himg := errCtx_img inp $$ HE
+  have hoff2 : ∀ a, arityBuf s a → ¬ rodataDom a := fun a ha hr => by
+    simp only [arityBuf, InExt] at ha; unfold rodataDom at hr; omega
+  let rd2 : Nat → BitVec 8 := fun a => if rodataDom a then rodataByte a else bimg a
+  have hfmt : FmtArgsOK (fun a => rodataDom a ∨ arityBuf s a) rd2 0x80019038#64
+      [s + 18446744073709550528#64 + 144#64, 0#64] :=
+    pctS_fmt (fun a ha => ⟨.inl ha, by simp [rd2, ha]⟩)
+      (by
+        rw [hbuft]
+        refine cstrCov_of_nul (n := 96) (fun i hi => .inr ⟨Nat.le_add_right _ _, by omega⟩) ?_
+        obtain ⟨k, hk, h0⟩ := hnul
+        refine ⟨k, hk, ?_⟩
+        have : ¬ rodataDom (s.toNat - 1088 + 144 + k) := hoff2 _ ⟨Nat.le_add_right _ _, by omega⟩
+        show (if rodataDom (s.toNat - 1088 + 144 + k) then _ else _) = _
+        rw [ite_eq_right_of_eq_false _ _ (eq_false this)]
+        rw [hbuft] at h0; exact h0) _
+  have hk : ∀ y ∈ [2, 18, 23], R3 y = R y := fun y hy =>
+    hk3 y ((by decide : ∀ z ∈ [2, 18, 23], z ∈ fRegs) y hy)
+      ((by decide : ∀ z ∈ [2, 18, 23], z ∉ callerSaved) y hy)
+  iapply ms_rtErrEvalOwn (wpW _) hE (jalx_80003da0 live (fun p hp => hlive _ (interp_code_80003da0 p hp)))
+    interp_code_80003da0 (Sown := arityBuf s) (fun a ha => by simp only [arityBuf, InExt] at ha ⊢; omega)
+    hfmt hsg hn (R := R4) (line := line)
+  iframe Hcode HE Hms Hst Hw Hab
+  isplitl []
+  · ipureintro
+    subst hR4
+    refine ⟨?_, ?_, by ix_reg, ?_, by ix_reg, ?_⟩
+    · ix_reg; rw [hk 18 (by decide)]; exact h18
+    · ix_reg; rw [hk 23 (by decide)]; exact h23
+    · ix_reg; rw [hk 2 (by decide), h2]
+    · ix_reg; rw [hk 2 (by decide)]; exact h2
+  unfold readable
+  isplitl []
+  · iapply roImg_congr (S := rodataDom) (f := rodataByte) (g := rd2) (fun a ha => by simp [rd2, ha])
+    iapply binImg_rodata $$ Himg
+  · rw [hbuft]
+    iapply ownSet_congr (S := arityBuf s) (Φ := fun a => a ↦ₘ bimg a) (Ψ := fun a => a ↦ₘ rd2 a)
+      (fun a ha => by simp [rd2, hoff2 a ha]) $$ Hbo
+
+/-- **The arity error** (`0x80003d60`, the argument count and `paramc`
+differ), partial: the name (the `EX_FN` node's, or `"<fn>"`), then the tail
+(`cloArityTail`): `snprintf` into the frame's buffer, `runtime_error`, the
+abort. -/
+theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
+    (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core) {ρ : Regime} {st : St}
+    {R : Nat → BitVec 64} {Mt1 Mt : Mem} {s aX sret ret q line : BitVec 64} {rv : Nat → BitVec 64}
+    {argc dep n : Nat} {P : Nat → Prop} {m : Mem} {pc : Nat} {prm bod nam : BitVec 64}
+    (hfg : EvalFrameG s) (hsg : StackGeom s n) (hn : 1088 + RtErr.rtErrNeed ≤ n)
+    (hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8) (hdle : dep ≤ maxCallDepth)
+    (har : CloAr R Mt1 Mt s aX sret (BitVec.ofNat 64 inp) ret q line rv argc dep)
+    (hfn : FnNode m P q pc prm bod nam) (hwin : SharedWin P)
+    (hname : nam = 0#64 ∨ ∃ x, nam ≠ 0#64 ∧ CStringWithin m P nam.toNat x) :
     codeRes ∗ errCtx inp ∗ roOn P m ∗ ms 0x80003d60#64 R (cloS s (BitVec.ofNat 64 inp)) Mt1 ∗
       (∀ (d' : Nat) (img' : Nat → BitVec 8), ownImg (InExt (inp + 8, 4)) img' -∗
-          ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)
-    ⊢ (wpW (vsaModel live)).W Φ
+          ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗
+          world N vsaLayoutP vsaRoomB inp ρ st d') ∗
+      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
+      (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
+  have hro0 : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  iintro ⟨#Hcode, #HE, #Hro, Hms, Hcl, Hst, Hab⟩
+  ihave #Himg := errCtx_img inp $$ HE
+  -- the depth word back to the world, unchanged
+  ihave Hms := ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp + 8, 4) b)
+    (fun k => by simp only [cloS]; rw [hinpN]) $$ Hms
+  ihave ⟨Hms, Hd⟩ := ms_split (S := InExt (s.toNat - 1088, 1088)) (T := InExt (inp + 8, 4))
+    (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ Hms
+  ihave Hw := Hcl $$ %dep %(imgM Mt1) Hd %⟨by have := har.depth; rwa [hinpN] at this, hdle⟩
+  -- the name
+  ihave #Hdv := roOwn_data (DA := accAddrs (q.toNat + 8) 8)
+    (fun a ha => hfn.view a (by simp only [fnView, List.mem_append, mem_accAddrs_iff] at ha ⊢; omega))
+    $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(codeRes ∗ errCtx inp ∗ roOn P m ∗
+      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ world N vsaLayoutP vsaRoomB inp ρ st dep ∗
+      (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)))
+  rotate_left
+  · iframe Hdv Hms Hcode HE Hro Hst Hw; iexact Hab
+  intro F'
+  refine CloE_runA (nam := nam) hlive hsf hs hs2 hs3 hfn.lo (by have := hfn.hi; omega)
+    (by have := hfn.off; omega) har.s5 har.sp hfn.nam ?_ ?_
+  · -- anonymous: `"<fn>"`
+    intro _
+    apply swp_closeRM
+    intro R2 Mt2 hR2 hMt2
+    unfold F'
+    iintro ⟨⟨#Hcode, #HE, #Hro, Hst, Hw, Hab⟩, Hms⟩
+    ihave #Himg := errCtx_img inp $$ HE
+    ihave #Hrd := readable_rodata $$ Himg
+    iapply cloArityTail hlive hE (a3 := 0x800192d0#64) (R := R2) (line := line) (Sro := rodataDom)
+      (rd := rodataByte) hfg hsg hn
+      (by rw [hR2]; ix_reg; exact har.sp) (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg)
+      (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg; exact har.s2)
+      (by rw [hR2]; ix_reg; exact har.s7)
+      (fun a ha => ⟨ha, rfl⟩) (anonName_cstr (fun a ha => ⟨ha, rfl⟩))
+    iframe Hcode HE Hrd Hms Hst Hw Hab
+  · -- named: the `EX_FN` node's name
+    intro hnz
+    apply swp_closeRM
+    intro R2 Mt2 hR2 hMt2
+    unfold F'
+    iintro ⟨⟨#Hcode, #HE, #Hro, Hst, Hw, Hab⟩, Hms⟩
+    ihave #Himg := errCtx_img inp $$ HE
+    obtain ⟨x, -, hcs⟩ := hname.resolve_left hnz
+    ihave #Hstr := strAt_of_cstringWithin hcs hwin $$ Hro
+    ihave ⟨%rd, Hrd, %⟨hrdro, hcimg⟩⟩ := readable_str $$ [Himg Hstr]
+    · isplitl
+      · iexact Himg
+      · iexact Hstr
+    iapply cloArityTail hlive hE (a3 := nam) (R := R2) (line := line)
+      (Sro := fun a => rodataDom a ∨ InExt (nam.toNat, x.toList.length + 1) a) (rd := rd) hfg hsg hn
+      (by rw [hR2]; ix_reg; exact har.sp) (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg)
+      (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg) (by rw [hR2]; ix_reg; exact har.s2)
+      (by rw [hR2]; ix_reg; exact har.s7)
+      (fun a ha => ⟨Or.inl ha, hrdro a ha⟩)
+      ⟨_, cstrCov_of_img (fun i hi => .inr (by simp only [InExt]; omega)) hcimg⟩
+    iframe Hcode HE Hrd Hms Hst Hw Hab
 
 /-- **The closure call from the kind dispatch, partial mode**: the closure's
 resources, the depth word, `callCloHead`, then its three exits (`cloCallP`,
-the arity error `CloArityP`, the depth error `cloErrDepth`). -/
+the arity error `cloErrArity`, the depth error `cloErrDepth`). -/
 theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core)
     (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p)
     (hen : ⊢ envNewSpec (GF := GF) (wpW (vsaModel live)) N)
     (hed : ⊢ envDefineSpec (GF := GF) (wpW (vsaModel live)) N)
-    (hsup : CloSupply (GF := GF) N) (harity : CloArityP live N vsaLayoutP vsaRoomB inp Core)
-    (hinpA : inp % 8 = 0)
+    (hsup : CloSupply (GF := GF) N) (hinpA : inp % 8 = 0)
     {st2 : St} {d : Nat} {ca : Addr} {vs : List Value}
     {f : Expr} {args : List Expr} {s aX sret ret w0 w1 w2 : BitVec 64} {rv R : Nat → BitVec 64}
     {Mt : Mem}
@@ -604,12 +812,10 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     iexact Hcl
   isplit
   · iintro %R1 %Mt1 %line %⟨hne, har⟩ Hms
-    iapply harity Φ .uncounted st2 R1 Mt1 Mt s aX sret ret (BitVec.ofNat 64 q) line rv vs.length d _
-      P m cd (BitVec.ofNat 64 prm) (BitVec.ofNat 64 bod) (BitVec.ofNat 64 nam) hfg hsg hrt hne hi3 har hfn
-      hcf.geo hcf.win (by
+    iapply cloErrArity hlive hE (ρ := .uncounted) (st := st2) hfg hsg hrt hi3 hdle har hfn hcf.win (by
         rcases hname with ⟨h1, h2⟩ | ⟨x, h1, h2, h3⟩
-        · exact .inl ⟨h1, by rw [h2]⟩
-        · exact .inr ⟨x, h1, fun h => h2 (by rw [← hnmt, h]; rfl), by rw [hnmt]; exact h3⟩)
+        · exact .inl (by rw [h2])
+        · exact .inr ⟨x, fun h => h2 (by rw [← hnmt, h]; rfl), by rw [hnmt]; exact h3⟩)
     iframe Hcode HE Hro Hms Hst
     isplitl [Hcl]
     · rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
@@ -632,21 +838,20 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     iframe HA Hsr
 
 /-- **`CallCloP` proved** (the premise of `caseP_CallArm`), from the helpers'
-specs, `CloSupply` and the arity error's obligation (`CloArityP`). -/
+specs and `CloSupply`. -/
 theorem callCloP_of (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {inp : Nat}
     {Core : IProp GF} (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core)
     (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p)
     (hen : ⊢ envNewSpec (GF := GF) (wpW (vsaModel live)) N)
     (hed : ⊢ envDefineSpec (GF := GF) (wpW (vsaModel live)) N)
-    (hsup : CloSupply (GF := GF) N) (harity : CloArityP live N vsaLayoutP vsaRoomB inp Core)
-    (hinpA : inp % 8 = 0) :
+    (hsup : CloSupply (GF := GF) N) (hinpA : inp % 8 = 0) :
     CallCloP (GF := GF) live N vsaLayoutP vsaRoomB inp Core := by
   intro Φ st d env f args sret aE aX s ret w0 w1 w2 rv R Mt st1 st2 vs ca hregs hsg hbb hal hslg hf ha
     hlen hcall
   have hvl : vs.length = args.length := evalArgs_length ha
   rw [← hvl] at hcall
   iintro ⟨#IH, #IHs, #HE, #Hcode, #Hast, #Hfb, #Hv, Hav, Hms, Hst, Hw, Hsr, Hk⟩
-  iapply callClosureP hlive hE hvn hen hed hsup harity hinpA hsg hal hregs.sp hslg hcall
+  iapply callClosureP hlive hE hvn hen hed hsup hinpA hsg hal hregs.sp hslg hcall
     (by unfold maxArgs at hlen; omega)
   iframe IHs HE Hcode Hast Hv Hav Hms Hst Hw Hsr
   unfold CloKP

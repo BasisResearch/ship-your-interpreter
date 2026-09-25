@@ -7,7 +7,12 @@ CHANGES (E4)". Rows: `scripts/iris_arms/arms.d/e4-call.tsv`. Audit:
 `VsaIris/Interp/E4Audit.lean`, imported by `VsaIris/Audit.lean`. Every
 theorem's axioms are ⊆ {propext, Classical.choice, Quot.sound}.
 
-## Status: every arm in both modes; one named obligation
+## Status: done, every arm in both modes
+
+**Lane A: merge `hub/lane-e4`.** It carries the call family, the H5 change to
+`rtErr_spec` below, and the E4 statement changes. The named premises are
+the ones already known: `CloSupply`, `hroom` and the interpreter struct's
+placement.
 
 | arm / outcome | total | partial |
 |---|---|---|
@@ -17,7 +22,7 @@ theorem's axioms are ⊆ {propext, Classical.choice, Quot.sound}.
 | too many arguments, not callable, assert failure | – (no derivation) | `caseP_CallArm` |
 | call depth, `break`/`continue` escaping a body | – | `callCloP_of` (`cloErrDepth`, `cloExitEsc`) |
 | out of memory (`env_new`, `env_define`) | – | `callCloP_of` (E5's `ms_callEnvNewP`/`ms_callEnvDefineP`, `wp_oomBlock`) |
-| arity mismatch | – | the named obligation `CloArityP` (below) |
+| arity mismatch | – | `callCloP_of` (`cloErrArity`: `snprintf` into the frame's buffer, `ms_rtErrEvalOwn`) |
 
 The recursor applies `caseP_CallArm` with `hclo := callCloP_of …`.
 
@@ -30,17 +35,13 @@ The recursor applies `caseP_CallArm` with `hclo := callCloP_of …`.
   `vsaLayoutP`/`vsaRoomB`.
 - Partial: `caseP_CallArm` needs `evalSpecsP ∗ errCtx ∗ execDispsP`
   (STATEMENT CHANGE, §10). Its closure branch is
-  `callCloP_of hlive hE hvn hen hed hsup harity hinpA`.
+  `callCloP_of hlive hE hvn hen hed hsup hinpA`.
 - Named premises (all in `PROOF_CLOSURE_PLAN.md`, lane E4 entries):
   - `CloSupply N`: a closure's object, its `EX_FN` view and its environment
     binding, from the store. It subsumes `DispSupply`.
   - The native stack room `hroom` (Q7 family).
   - The interpreter struct's placement (`InpGeom`, `inp < 2^64`,
     `inp % 8 = 0`).
-  - **`CloArityP`**: the arity error. Its obstruction is that `rtErr_spec`
-    (H5) does not return the owned readable bytes (the message buffer in
-    `eval_expr`'s frame). With them returned, the proof is a composition of
-    existing runs (`CloE_runA`, `CloE_runA2`).
 
 ## Statement changes (INTERP_DESIGN.md §10 "STATEMENT CHANGES (E4)")
 
@@ -50,6 +51,13 @@ The recursor applies `caseP_CallArm` with `hclo := callCloP_of …`.
 - `interpCoreE`: `d ≤ maxCallDepth`.
 - `nativeAssertSpec`'s abort carries `⌜¬ AssertOk vs⌝`.
 - `caseP_CallArm` takes `execDispsP`, and `CallCloP` takes `execSpecsP`.
+- **H5's `rtErr_spec` (made by E4; lane H5 is closed):** its abort branch
+  also returns the format's readable bytes (`abortRes ∗ readable Sro Sown rd`),
+  which `snprintf` only reads. This strengthens the spec. Users were
+  re-proved with their statements unchanged: E1 `LeafErr`, H2
+  `ProofNativeAssert`, and E2 `ErrArm`. `ms_rtErrEval` is now an instance of
+  the new `ms_rtErrEvalOwn`, which lends owned frame bytes such as the arity
+  message buffer and rejoins them on abort.
 
 ## Layers (hand; Wp-generic unless noted)
 
@@ -73,11 +81,11 @@ The recursor applies `caseP_CallArm` with `hclo := callCloP_of …`.
 | print / println (T) | 72 / 72 | `callOut_T` 71 | `CallNative` 289, `CallNativeOut` 288 |
 | assert (T) | 66 | `callAssert_T` 65 | `CallNativeSeg` 369 |
 | closure (T) | 75 | `callClo_T` 74 | `CallClosure` 431, `CallCloHead` 406, `CallCloRuns` 199, `CallCloBind` 602, `CallCloBody` 201, `CallCloExit` 360, `CallCloT` 388 |
-| every outcome (P) | 163 | `callArm_P` 162 | `CallCloP` 673, `CallNotCallable` 165 |
+| every outcome (P) | 163 | `callArm_P` 162 | `CallCloP` 878, `CallNotCallable` 165 |
 | shared prefix | – | – | `CallJalr` 358, `CallArm` 124, `CallSeg` 221, `CallPrefix` 371, `CallPrefixP` 289, `CallErr` 75 |
 
 Generated: 448 lines (5 files). Templates: 372 lines; family
-`e4_call.py`: 60 lines. Layers: 5,235 lines.
+`e4_call.py`: 60 lines. Layers: about 5,430 lines.
 
 Generator additions (additions only): step kinds `helperR` (an indirect
 `jalr` helper) and `loop` (a loop lemma taken as a hypothesis). Families:
