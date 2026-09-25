@@ -41,15 +41,16 @@ open scoped VsaIris.Sym.Stdout
 #ix_chain sprintErr0_run := [sprintErr0_01]
 
 /-- **`stderr`'s flush, as `vfp_printH`'s hook**: one staged piece `bs`
-(possibly empty) at `p` in the data view. -/
+(possibly empty) at `p` in the data view, returning to any aligned `ra`
+(`0x8000b8d4` after a conversion, the end's link after the last flush). -/
 theorem sprintErr_hook {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
-    {s : BitVec 64} {need : Nat} {sp p : BitVec 64} {bs : List (BitVec 8)}
+    {s : BitVec 64} {need : Nat} {ra sp p : BitVec 64} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 256 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat)
     (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
-    (hk : bs.length < 2 ^ 30)
-    (h1 : R 1 = 0x8000b8d4#64) (h2 : R 2 = sp) (h10 : R 10 = 0x8001b538#64)
+    (hk : bs.length < 2 ^ 30) (hra : ra.toNat % 4 = 0)
+    (h1 : R 1 = ra) (h2 : R 2 = sp) (h10 : R 10 = 0x8001b538#64)
     (h11 : R 11 = 0x8001bbd8#64) (h12 : R 12 = sp + 224#64)
     (hres : ldv .ld Mt (sp + 240#64).toNat = BitVec.ofNat 64 bs.length)
     (hiov : ldv .ld Mt (sp + 224#64).toNat = sp + 352#64)
@@ -64,17 +65,17 @@ theorem sprintErr_hook {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     (hwr : ldv .ld Mt 0x8001bc18 = 0x8000efd4#64) (hck : ldv .ld Mt 0x8001bc08 = 0x8001bbd8#64)
     (hfin : ∀ R' M' out, RetOK R R' 0#64 → (out = bs ∧ SprintPost Mt M' sp) →
       SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs
-      (outS s need) Q (t ++ putcs out) 0x8000b8d4#64 R' M') :
+      (outS s need) Q (t ++ putcs out) ra R' M') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000e8cc#64 R Mt := by
   by_cases hb : bs.length = 0
   · have e : bs = [] := List.eq_nil_of_length_eq_zero hb
     subst e
-    refine sprintErr0_run hlive t Mt R s need _ sp hs1 hs2 hs3 hs4 hal (by decide) h1 h2 h12
+    refine sprintErr0_run hlive t Mt R s need _ sp hs1 hs2 hs3 hs4 hal hra h1 h2 h12
       (by rw [hres]; rfl) hflU hfl fun R' M' hr hP => ?_
     have := hfin R' M' [] hr ⟨rfl, hP⟩
     simpa [putcs] using this
-  · exact sprintErr_run hlive t Mt R s need _ sp p bs hs1 hs2 hs3 hs4 hal (by decide) hk
+  · exact sprintErr_run hlive t Mt R s need _ sp p bs hs1 hs2 hs3 hs4 hal hra hk
       (by omega) (by simp only [eq_iff_iff, iff_false]; intro h
                      have := congrArg BitVec.toNat h; simp at this; omega)
       h1 h2 h10 h11 h12 hres hiov hp hk0 hp1 hp2 hp3 hpd hpsrc hfl hfd hbase hwr hck
