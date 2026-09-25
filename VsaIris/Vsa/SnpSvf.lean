@@ -1381,6 +1381,27 @@ theorem SvfSt.update {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {M
   simp only [snpIov] at h1 h2
   exact hM a (.inr (.inr ⟨by omega, by omega⟩))
 
+/-- `SvfSt` in a memory agreeing on everything it reads. -/
+theorem SvfSt.agree {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
+    {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
+    {R : Nat → BitVec 64} {Mt Mt' : Mem}
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (SG : SnpGeom s dst n)
+    (hM : ∀ a, (StKeep s a ∨ (s - 864 ≤ a ∧ a < s - 864 + 8) ∨ (s - 864 + 16 ≤ a ∧ a < s - 864 + 32)) →
+      imgM Mt' a = imgM Mt a) :
+    SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt' := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have ag : ∀ off, (off + 8 ≤ 8 ∨ (16 ≤ off ∧ off + 8 ≤ 32)) →
+      ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + off)).toNat = ldv .ld Mt (BitVec.ofNat 64 (s - 864 + off)).toNat :=
+    fun off h => by
+      rw [toNat_ofNat_lt (by omega)]
+      exact ldv_agree .ld fun i hi => hM _ (.inr (by simp only [widthOfM] at hi; omega))
+  refine St.update SG (fun _ _ => rfl) rfl (fun a ha => hM a (.inl ha)) ?_
+    ((ag 16 (by omega)).trans St.core.ret) ((ag 24 (by omega)).trans St.core.ap)
+  have := ag 0 (by omega)
+  simp only [Nat.add_zero] at this
+  exact this.trans St.core.fmt
+
 /-- The conversion's state at the table (`0x80007798`): the cursor past the
 `'%'`, no sign, no flags, precision `-1`, width `0`. -/
 structure ConvAt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
@@ -2171,7 +2192,7 @@ theorem svf_digExit0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
     {L : List (Nat × Nat)} {m K : Nat} (Rs R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
     (St : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L Rs Mt) (t1 : BitVec 64)
-    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : SvfRegs R Rs) (h23 : Rs 23 = Rs 23)
+    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : ∀ z, z = 2 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → R z = Rs z)
     (h26 : R 26 = BitVec.ofNat 64 (s - 864 + 348 - K)) (DG : DigitsAt Mt s m K)
     (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 0)
     (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
@@ -2217,7 +2238,7 @@ theorem svf_digExit45 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
     {L : List (Nat × Nat)} {m K : Nat} (Rs R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
     (St : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L Rs Mt) (t1 : BitVec 64)
-    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : SvfRegs R Rs) (h23 : Rs 23 = Rs 23)
+    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : ∀ z, z = 2 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → R z = Rs z)
     (h26 : R 26 = BitVec.ofNat 64 (s - 864 + 348 - K)) (DG : DigitsAt Mt s m K)
     (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 45)
     (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
@@ -2265,14 +2286,73 @@ theorem svf_digExit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
     {L : List (Nat × Nat)} {m sg K : Nat} (Rs R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
     (St : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L Rs Mt) (t1 : BitVec 64)
-    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : SvfRegs R Rs)
+    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : ∀ z, z = 2 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → R z = Rs z)
     (h26 : R 26 = BitVec.ofNat 64 (s - 864 + 348 - K)) (DG : DigitsAt Mt s m K)
     (hsg : sg = 0 ∨ sg = 45) (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 sg)
     (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
     (hk : IntPrintK live Dt DA Q s dst n R0 Mt0 p ap c total L m sg) :
     NW live Dt DA (snpS s dst n) Q 0x80008358#64 R Mt := by
   rcases hsg with rfl | rfl
-  · exact svf_digExit0 hlive Rs R Mt SG St t1 ht1 DS hR rfl h26 DG h167 hL hc hsum hk
-  · exact svf_digExit45 hlive Rs R Mt SG St t1 ht1 DS hR rfl h26 DG h167 hL hc hsum hk
+  · exact svf_digExit0 hlive Rs R Mt SG St t1 ht1 DS hR h26 DG h167 hL hc hsum hk
+  · exact svf_digExit45 hlive Rs R Mt SG St t1 ht1 DS hR h26 DG h167 hL hc hsum hk
+
+/-- **Several digits** (`0x80008100`, `m > 9`): the spills, the digit loop, its
+exit, `PRINT`. -/
+theorem svf_digMulti {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} {m sg : Nat} (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (IA : IntAt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L m sg R Mt) (hm9 : 9 < m)
+    (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
+    (hk : IntPrintK live Dt DA Q s dst n R0 Mt0 p ap c total L m sg) :
+    NW live Dt DA (snpS s dst n) Q 0x80008100#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := IA.st.core.r2
+  have h14 := IA.r14
+  have h9 : (9#64).toNat < (BitVec.ofNat 64 m).toNat := by rw [toNat_ofNat_lt IA.mlt]; simp; omega
+  have h1024 : R 6 &&& 1024#64 = 0#64 := by rcases IA.r6 with h | h <;> rw [h] <;> decide
+  nx_runF hlive using [ofNat_add_ofNat, h2, h14, h9, h1024] at 0x8000831c
+  refine svf_digLoop hlive m IA.mlt _ _ SG (fun K R' Mt' hK1 hub hlb hK h26 h23 hkp hdig hM => ?_) 20 0 _ _
+    rfl (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; simp)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; simp)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+    (fun _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl) (.inl ⟨rfl, hm9⟩)
+    (fun i hi => absurd hi (by omega)) (fun _ _ => rfl)
+  have hMM : ∀ a, (a < s - 864 + 328 ∨ s - 864 + 348 ≤ a) →
+      imgM Mt' a = imgM (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog Mt
+        [((BitVec.ofNat 64 (s - 864 + 48)).toNat, 8, R 23)])
+        [((BitVec.ofNat 64 (s - 864 + 56)).toNat, 8, R 20)])
+        [((BitVec.ofNat 64 (s - 864 + 120)).toNat, 8, R 8)])
+        [((BitVec.ofNat 64 (s - 864 + 32)).toNat, 8, R 28)])
+        [((BitVec.ofNat 64 (s - 864 + 40)).toNat, 8, R 6)])
+        [((BitVec.ofNat 64 (s - 864 + 112)).toNat, 8, BitVec.ofNat 64 (s - 864 + 348))]) a :=
+    fun a ha => hM a (by omega)
+  have agree : ∀ (k : MKind) (off : Nat), (off + widthOfM k ≤ 328) →
+      ldv k Mt' (BitVec.ofNat 64 (s - 864 + off)).toNat = ldv k (writeLog (writeLog (writeLog (writeLog
+        (writeLog (writeLog Mt
+        [((BitVec.ofNat 64 (s - 864 + 48)).toNat, 8, R 23)])
+        [((BitVec.ofNat 64 (s - 864 + 56)).toNat, 8, R 20)])
+        [((BitVec.ofNat 64 (s - 864 + 120)).toNat, 8, R 8)])
+        [((BitVec.ofNat 64 (s - 864 + 32)).toNat, 8, R 28)])
+        [((BitVec.ofNat 64 (s - 864 + 40)).toNat, 8, R 6)])
+        [((BitVec.ofNat 64 (s - 864 + 112)).toNat, 8, BitVec.ofNat 64 (s - 864 + 348))])
+        (BitVec.ofNat 64 (s - 864 + off)).toNat :=
+    fun k off h => by rw [toNat_ofNat_lt (by omega)]; exact ldv_agree k fun i hi => hMM _ (by omega)
+  refine svf_digExit hlive R R' Mt' SG (IA.st.agree SG fun a ha => ?_) (R 6) IA.r6 ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+    (fun z hz => ?_) h26 ⟨hK1, hK, hub, hlb, hdig⟩ IA.sg01 ?_ hL hc hsum hk
+  · rw [hMM a (by unfold StKeep SvfKeep at ha; omega)]; unfold StKeep SvfKeep at ha; svf_mem
+  · rw [agree .ld 48 (by simp only [widthOfM]; omega)]; svf_mem
+  · rw [agree .ld 56 (by simp only [widthOfM]; omega)]; svf_mem; exact IA.r20
+  · rw [agree .ld 120 (by simp only [widthOfM]; omega)]; svf_mem
+  · rw [agree .ld 32 (by simp only [widthOfM]; omega)]; svf_mem; exact IA.r28
+  · rw [agree .ld 40 (by simp only [widthOfM]; omega)]; svf_mem
+  · rw [agree .ld 112 (by simp only [widthOfM]; omega)]; svf_mem
+  · rw [hkp z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)
+      (by omega) (by omega) (by omega) (by omega)]
+    rcases hz with rfl | rfl | rfl | rfl | rfl <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · rw [agree .lbu 167 (by simp only [widthOfM]; omega)]; svf_mem; exact IA.sign
 
 end VsaIris.Sym
