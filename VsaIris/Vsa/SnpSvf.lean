@@ -934,13 +934,17 @@ theorem extract_m1 : BitVec.extractLsb 31 0 18446744073709551615#64 = 4294967295
 
 theorem extract_0 : BitVec.extractLsb 31 0 0#64 = 0#32 := by decide
 
+/-- The sign byte and the digit buffer: what the flush prints from the stack. -/
+def PZone (s a : Nat) : Prop :=
+  (s - 864 + 160 ≤ a ∧ a < s - 864 + 224) ∨ (s - 864 + 248 ≤ a ∧ a < s - 864 + 352)
+
 /-- `PRINT`'s continuation after the sign (`0x800078bc`). -/
 def PrintMidK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (p ap : Nat) (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat))
-    (sg : Nat) (R : Nat → BitVec 64) : Prop :=
+    (sg : Nat) (R : Nat → BitVec 64) (Mk : Mem) : Prop :=
   ∀ R' Mt' L', L' = L ++ (if sg = 0 then [] else [(s - 864 + 167, 1)]) →
-    SvfSt DA s dst n R0 Mt0 p ap rt total L' R' Mt' →
+    SvfSt DA s dst n R0 Mt0 p ap rt total L' R' Mt' → (∀ a, PZone s a → imgM Mt' a = imgM Mk a) →
     ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64 → R' 12 = BitVec.ofNat 64 (sumLen L') →
     R' 6 = R 6 → R' 16 = R 16 → R' 22 = R 22 → R' 26 = R 26 → R' 28 = R 28 →
     NW live Dt DA (snpS s dst n) Q 0x800078bc#64 R' Mt'
@@ -957,7 +961,7 @@ theorem svf_printSign0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.
     (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
     (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 0)
     (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
-    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 0 R) :
+    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 0 R Mt) :
     NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
@@ -970,7 +974,7 @@ theorem svf_printSign0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.
   rcases h20 with h20 | h20
   all_goals nx_runF hlive using [ofNat_add_ofNat, h2, h23, hcn, hres, h132, h28, h16, h22, h167, h20, extract_0, extract_m1, hn0, hn1] at 0x800078bc
   all_goals refine hk _ Mt L (by simp) ⟨St.core.scratch SG ?_ fun _ _ => rfl, ?_, St.cnt, St.res,
-    St.iov, St.src, St.len, St.sum⟩ h32 ?_ ?_ ?_ ?_ ?_ ?_
+    St.iov, St.src, St.len, St.sum⟩ (fun _ _ => rfl) h32 ?_ ?_ ?_ ?_ ?_ ?_
   all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals (try exact h23)
@@ -987,14 +991,15 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
     (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
     (k6 : R 6 = Rk 6) (k16 : R 16 = Rk 16) (k22 : R 22 = Rk 22) (k26 : R 26 = Rk 26)
     (k28 : R 28 = Rk 28) (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
-    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 45 Rk) :
+    (Mk : Mem) (hMk : ∀ a, PZone s a → imgM Mt a = imgM Mk a)
+    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 45 Rk Mk) :
     NW live Dt DA (snpS s dst n) Q 0x80007878#64 R Mt := by
   have hn0 := negw_toInt (size := size) (by omega)
   have hn1 := negw1_toInt (size := size) (by omega)
   rcases h20 with h20 | h20
   all_goals nx_runF hlive using [h5, h27, h22, h20, extract_0, extract_m1, hn0, hn1] at 0x800078bc
   all_goals refine hk _ Mt _ (by simp) ⟨St.core.scratch SG ?_ fun _ _ => rfl, ?_, St.cnt, St.res,
-    St.iov, St.src, St.len, St.sum⟩ h32 ?_ ?_ ?_ ?_ ?_ ?_
+    St.iov, St.src, St.len, St.sum⟩ hMk h32 ?_ ?_ ?_ ?_ ?_ ?_
   all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals first | exact St.r23 | exact k6 | exact k16 | exact k22 | exact k26 | exact k28 |
@@ -1012,7 +1017,7 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
     (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
     (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 45)
     (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
-    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 45 R) :
+    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 45 R Mt) :
     NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
@@ -1028,7 +1033,7 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
   have hsa := SG.s_al
   nx_runF hlive using [ofNat_add_ofNat, h2, h23, hsx] at 0x80007878
   refine svf_sign45_tail hlive R _ _ SG (St.push SG (signSrc SG) (by omega) hsum ?_ ?_ ?_ ?_ ?_ ?_ ?_)
-    ?_ ?_ ?_ size ?_ hsize h20 ?_ ?_ ?_ ?_ ?_ ?_ hk
+    ?_ ?_ ?_ size ?_ hsize h20 ?_ ?_ ?_ ?_ ?_ ?_ Mt ?_ hk
   · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -1041,6 +1046,7 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
   · exact h22
   · svf_mem; exact h32
+  · intro a ha; unfold PZone at ha; svf_mem
 
 -- `PRINT`'s head with a `'-'` sign byte.
 #ix_chain svf_printSign45 := [svfSign45_p1, svfSign45_p2]
@@ -1060,7 +1066,7 @@ theorem svf_printSign {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
     (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 sg)
     (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
-    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L sg R) :
+    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L sg R Mt) :
     NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt := by
   rcases hsg with rfl | rfl
   · exact svf_printSign0 hlive R Mt SG St hL h132 h28 size (by simpa using h16) h22 (by omega) h20 h167 h32 hk
@@ -1069,8 +1075,8 @@ theorem svf_printSign {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
 /-- `PRINT`'s continuation after the body (`0x80007914`, the flush test). -/
 def PrintEndK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
-    (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) : Prop :=
-  ∀ R' Mt', SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L R' Mt' →
+    (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) (Mk : Mem) : Prop :=
+  ∀ R' Mt', SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L R' Mt' → (∀ a, PZone s a → imgM Mt' a = imgM Mk a) →
     ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64 →
     R' 12 = BitVec.ofNat 64 (sumLen L) → NW live Dt DA (snpS s dst n) Q 0x80007914#64 R' Mt'
 
@@ -1107,7 +1113,8 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (h12 : R 12 = BitVec.ofNat 64 (sumLen L)) (h4 : R 6 &&& 4#64 = 0#64) (h28 : R 28 = 0#64)
     (rs : Nat) (h16 : R 16 = BitVec.ofNat 64 rs) (hrs : c + rs < 2 ^ 31)
     (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
-    (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total L) :
+    (Mk : Mem) (hMk : ∀ a, PZone s a → imgM Mt a = imgM Mk a)
+    (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total L Mk) :
     NW live Dt DA (snpS s dst n) Q 0x800078ec#64 R Mt := by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
@@ -1122,14 +1129,14 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       rw [h16, h28] at hc
       simp (disch := omega) only [toInt_ofNat_small, BitVec.reduceToInt] at hc; omega
     subst e
-    refine hk _ _ ?_ (by svf_mem; exact h32) ?_
+    refine hk _ _ ?_ (fun a ha => by rw [← hMk a ha]; unfold PZone at ha; svf_mem) (by svf_mem; exact h32) ?_
     · rw [show c + 0 = 0 + c by omega]
       refine St.setRet (BitVec.ofNat 64 (0 + c)) SG ?_ ?_
       · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
           simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h12
-  · refine hk _ _ ?_ (by svf_mem; exact h32) ?_
+  · refine hk _ _ ?_ (fun a ha => by rw [← hMk a ha]; unfold PZone at ha; svf_mem) (by svf_mem; exact h32) ?_
     · rw [Nat.add_comm]
       refine St.setRet (BitVec.ofNat 64 (rs + c)) SG ?_ ?_
       · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
@@ -1148,7 +1155,7 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (h16 : R 16 = BitVec.ofNat 64 rs) (hsrc : PieceSrc DA s dst n cp size)
     (hsum : sumLen L + size < 2 ^ 31) (hrs : c + rs < 2 ^ 31)
     (h32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64)
-    (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total (L ++ [(cp, size)])) :
+    (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total (L ++ [(cp, size)]) Mt) :
     NW live Dt DA (snpS s dst n) Q 0x800078bc#64 R Mt by
   have hs1 := SG.s_lo
   have hs2 := SG.s_hi
@@ -1162,7 +1169,7 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
 #ix_piece svfBody_p2 from svfBody_p1 by
   nx_runF hlive using [ofNat_add_ofNat, h2, h23] at 0x800078ec
   refine svf_body_tail hlive _ _ SG (St.push SG hsrc (by omega) hsum ?_ ?_ ?_ ?_ ?_ ?_ ?_) ?_ ?_ ?_ rs ?_
-    hrs (by svf_mem; exact h32) hk
+    hrs (by svf_mem; exact h32) Mt (fun a ha => by unfold PZone at ha; svf_mem) hk
   · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -1417,5 +1424,73 @@ theorem svf_convStart {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   · svf_mem; exact St.core.ap
   · svf_mem
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+
+/-! ## `PRINT` and the flush, composed -/
+
+/-- The sign's pieces and length. -/
+def sgL (s sg : Nat) : List (Nat × Nat) := if sg = 0 then [] else [(s - 864 + 167, 1)]
+
+def sgN (sg : Nat) : Nat := if sg = 0 then 0 else 1
+
+/-- **A conversion's body is ready** (`0x8000782c`): the pending pieces `L`
+(at most the literal run), the body `(cp, size)`, the sign byte `sg` at
+`sp + 167`, no padding flags, width `0`, precision `0` or `-1`, no buffer to
+free. -/
+structure PrintIn (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap c : Nat)
+    (total : List (BitVec 8)) (L : List (Nat × Nat)) (cp size sg : Nat) (R : Nat → BitVec 64)
+    (Mt : Mem) : Prop where
+  st : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L R Mt
+  len : L.length ≤ 1
+  r132 : R 6 &&& 132#64 = 0#64
+  r256 : R 6 &&& 256#64 = 0#64
+  r4 : R 6 &&& 4#64 = 0#64
+  r28 : R 28 = 0#64
+  sg01 : sg = 0 ∨ sg = 45
+  r16 : R 16 = BitVec.ofNat 64 (size + sgN sg)
+  r22 : R 22 = BitVec.ofNat 64 size
+  r26 : R 26 = BitVec.ofNat 64 cp
+  r20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64
+  sign : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 sg
+  m32 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64
+  src : PieceSrc DA s dst n cp size
+  cB : c + size + 1 < 2 ^ 31
+  sumB : sumLen L + size + 1 < 2 ^ 31
+
+/-- **`PRINT`, the flush, the back edge** (`0x8000782c` → `0x80007720`): the
+stream grows by the pending pieces, the sign and the body, read through some
+`g` that agrees with the entry memory on the sign and digit bytes and with
+the data view off the stack. -/
+theorem svf_print {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} {cp size sg : Nat} (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (PI : PrintIn DA s dst n R0 Mt0 p ap c total L cp size sg R Mt)
+    (hk : ∀ R' Mt' (g : Nat → BitVec 8), (∀ a, PZone s a → g a = imgM Mt a) →
+      (∀ a, (a < s - 1024 ∨ s ≤ a) → g a = imgM Dt a) →
+      SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 (c + (size + sgN sg)))
+        (total ++ catPieces g (L ++ sgL s sg ++ [(cp, size)])) R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hsum := PI.sumB
+  refine svf_printSign hlive R Mt SG PI.st PI.len PI.r132 PI.r28 size sg PI.sg01 PI.r16 PI.r22
+    (by have := PI.cB; omega) (by omega) PI.r20 PI.sign PI.m32 ?_
+  intro R1 Mt1 L1 hL1 St1 hz1 h32a h12 h6 h16 h22 h26 h28
+  have hL1' : L1.length ≤ 2 := by
+    rw [hL1]; have := PI.len; rcases PI.sg01 with h | h <;> subst h <;> simp <;> omega
+  have hs1' : sumLen L1 + size < 2 ^ 31 := by
+    rw [hL1]; rcases PI.sg01 with h | h <;> subst h <;> simp [sumLen_append_one] <;> omega
+  refine svf_printBody hlive R1 Mt1 SG St1 hL1' h12 (h6 ▸ PI.r256) (h6 ▸ PI.r4) (h28.trans PI.r28)
+    cp size (size + sgN sg) (h22.trans PI.r22) (h26.trans PI.r26) (h16.trans PI.r16) PI.src hs1'
+    (by have := PI.cB; unfold sgN; split <;> omega) h32a ?_
+  intro R2 Mt2 St2 hz2 h32b h12'
+  refine svf_flush hlive R2 Mt2 SG St2 h32b h12' fun R3 Mt3 A => hk R3 Mt3 (gOf s Dt Mt2) ?_ ?_ ?_
+  · intro a ha
+    unfold gOf; rw [if_pos (by unfold PZone at ha; omega)]
+    exact (hz2 a ha).trans (hz1 a ha)
+  · intro a ha
+    unfold gOf; rw [if_neg (by omega)]
+  · rw [hL1] at A
+    simpa [sgL, List.append_assoc] using A
 
 end VsaIris.Sym
