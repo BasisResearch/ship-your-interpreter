@@ -22,7 +22,7 @@ theorem Code.FixedRodataLoaded.equalityTable {m : Mem} (h : FixedRodataLoaded m)
     JumpTable m := by
   unfold JumpTable
   repeat' apply And.intro
-  all_goals exact FixedBytesLoaded.byteAt h (by decide) (by decide)
+  all_goals exact h.byteAt (by decide) (by decide)
 
 /-- Equality's operand copies retain the complete static interpreter image. -/
 theorem EqDispatchOperands.image

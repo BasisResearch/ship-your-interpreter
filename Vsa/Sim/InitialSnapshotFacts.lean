@@ -11,7 +11,7 @@ structure SnapshotMemoryFacts (m : Mem) : Prop where
   text : Code.FixedTextLoaded m
   rodata : Code.FixedRodataLoaded m
   statics : Code.ImageStaticsLoaded m
-  console : ConsoleStream m
+  console : ConsoleBoot m
   exitRuntime : ExitRuntimeData m
   globals : read64 m interpObject = some 0x81000000
   depth : read32 m (interpObject + 8) = some 0

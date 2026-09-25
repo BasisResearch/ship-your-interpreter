@@ -34,19 +34,30 @@ def ConsoleFoot (a : Nat) : Prop :=
   (consoleStdout ≤ a ∧ a < consoleStdout + 184) ∨
   a = consoleBuf
 
-/-- Stable initialized stdout state at interpreter and native-call boundaries.
-The `_w = 0`, one-byte buffer, and `__swrite` callback force `fputc` down the
-terminal-write path rather than allowing an arbitrary buffered `FILE`. -/
-structure ConsoleStream (m : Mem) : Prop where
+/-- `stdout`'s `_flags`: `__SWR | __SNBF` (`0x000a`) as `main`'s
+`setvbuf(stdout, 0, _IONBF, 0)` leaves it, and `0x200a` once a write has
+oriented the stream (`__SORD`, set by `ORIENT` at the head of `_fputs_r`,
+`_fwrite_r`, `_vfprintf_r` and `__swbuf_r`; `Vsa.Sim.ConsoleOrient`). -/
+@[reducible] def consoleFlags (oriented : Bool) : Nat := if oriented then 0x200a else 0x000a
+
+/-- The high byte of `consoleFlags`. -/
+@[reducible] def consoleFlag1 (oriented : Bool) : BitVec 8 := if oriented then 0x20#8 else 0x00#8
+
+/-- Initialized stdout state at interpreter and native-call boundaries, at
+orientation `oriented`. The `_w = 0`, one-byte buffer, and `__swrite` callback
+force `fputc` down the terminal-write path rather than allowing an arbitrary
+buffered `FILE`. `interp_run`'s entry is unoriented (`ConsoleBoot`); the first
+write orients it and every later boundary is `ConsoleStream`. -/
+structure ConsoleStreamAt (oriented : Bool) (m : Mem) : Prop where
   impure : read64 m consoleImpurePtrAddr = some consoleReent
   stdout : read64 m (consoleReent + 16) = some consoleStdout
   sinit : read64 m (consoleReent + 72) = some consoleSinit
   cursor : read64 m (consoleStdout + 0) = some consoleBuf
   readCount : read32 m (consoleStdout + 8) = some 0
   writeCount : read32 m (consoleStdout + 12) = some 0
-  flags : readLE m (consoleStdout + 16) 2 = some 0x200a
+  flags : readLE m (consoleStdout + 16) 2 = some (consoleFlags oriented)
   flag0 : m[consoleStdout + 16]? = some 0x0a#8
-  flag1 : m[consoleStdout + 17]? = some 0x20#8
+  flag1 : m[consoleStdout + 17]? = some (consoleFlag1 oriented)
   fd : readLE m (consoleStdout + 18) 2 = some 1
   base : read64 m (consoleStdout + 24) = some consoleBuf
   bufSize : read32 m (consoleStdout + 32) = some 1
@@ -56,6 +67,13 @@ structure ConsoleStream (m : Mem) : Prop where
   lock : read64 m (consoleStdout + 160) = some 0
   lockMode : read32 m (consoleStdout + 176) = some 0
   bufferByte : ∃ b : BitVec 8, m[consoleBuf]? = some b
+
+/-- `stdout` after its first write (`_flags = 0x200a`): the state at every
+boundary after a console write, and the one the write paths flush from. -/
+abbrev ConsoleStream (m : Mem) : Prop := ConsoleStreamAt true m
+
+/-- `stdout` at `interp_run`'s entry (`_flags = 0x000a`, not yet oriented). -/
+abbrev ConsoleBoot (m : Mem) : Prop := ConsoleStreamAt false m
 
 /-- The transient FILE state at the concrete `_fflush_r`/`__sflush_r` call.
 `__swbuf_r` has installed the byte and advanced `_p` by one.  Because stdout
@@ -110,15 +128,15 @@ theorem readLE_two_one_bytes {m : Mem} {a : Nat}
             omega
           simpa [e0, e1] using And.intro h0 h1
 
-theorem ConsoleStream.of_eq {m m' : Mem} (h : m = m')
-    (hc : ConsoleStream m) : ConsoleStream m' := by
+theorem ConsoleStreamAt.of_eq {o : Bool} {m m' : Mem} (h : m = m')
+    (hc : ConsoleStreamAt o m) : ConsoleStreamAt o m' := by
   subst m'
   exact hc
 
 /-- Preservation by pointwise agreement on the concrete fields. -/
-theorem ConsoleStream.of_agree {m m' : Mem}
+theorem ConsoleStreamAt.of_agree {o : Bool} {m m' : Mem}
     (h : ∀ a, ConsoleFoot a → m'[a]? = m[a]?)
-    (hc : ConsoleStream m) : ConsoleStream m' := by
+    (hc : ConsoleStreamAt o m) : ConsoleStreamAt o m' := by
   have hag : AgreeP ConsoleFoot m m' := fun a ha => (h a ha).symm
   refine {
     impure := ?_, stdout := ?_, sinit := ?_, cursor := ?_,
@@ -160,6 +178,55 @@ theorem ConsoleStream.of_agree {m m' : Mem}
     exact hc.lockMode
   · obtain ⟨b, hb⟩ := hc.bufferByte
     exact ⟨b, (h consoleBuf (Or.inr (Or.inr (Or.inr rfl)))).trans hb⟩
+
+/-- **The first write orients `stdout`.** `ORIENT` (`_fputs_r` `0x80006418`,
+`_fwrite_r` `0x800050f0`, `_vfprintf_r` `0x8000a8fc`, `__swbuf_r`
+`0x8000f1b4`) stores `_flags | __SORD` with `sh` and `_flags2 & ~__SWID` with
+`sw`: on `ConsoleStreamAt o` the first is `0x200a` (low byte unchanged, high
+byte `0x20`) and the second rewrites `_flags2 = 0` with `0`. Any memory that
+agrees with `m` on the rest of `ConsoleFoot` and holds `0x20` at
+`consoleStdout + 17` is the oriented `ConsoleStream`, from either orientation
+(so a later `ORIENT`, which the binary skips, would be harmless too). -/
+theorem ConsoleStreamAt.orient {o : Bool} {m m' : Mem}
+    (h : ∀ a, ConsoleFoot a → a ≠ consoleStdout + 17 → m'[a]? = m[a]?)
+    (h17 : m'[consoleStdout + 17]? = some 0x20#8)
+    (hc : ConsoleStreamAt o m) : ConsoleStream m' := by
+  let P : Nat → Prop := fun a => ConsoleFoot a ∧ a ≠ consoleStdout + 17
+  have hag : AgreeP P m m' := fun a ha => (h a ha.1 ha.2).symm
+  have hF : ∀ (n a : Nat), (∀ k, k < n → P (a + k)) → readLE m' a n = readLE m a n :=
+    fun n a hk => (readLE_agreeP hag n a hk).symm
+  have r : ∀ (n a : Nat), ((consoleImpurePtrAddr ≤ a ∧ a + n ≤ consoleImpurePtrAddr + 8) ∨
+      (consoleReent ≤ a ∧ a + n ≤ consoleReent + 256) ∨
+      (consoleStdout ≤ a ∧ a + n ≤ consoleStdout + 184)) →
+      (a + n ≤ consoleStdout + 17 ∨ consoleStdout + 18 ≤ a) →
+      readLE m' a n = readLE m a n := by
+    intro n a h1 h2
+    refine hF n a fun k hk => ⟨?_, by omega⟩
+    unfold ConsoleFoot; omega
+  have b16 : m'[consoleStdout + 16]? = some 0x0a#8 :=
+    (h _ (Or.inr (Or.inr (Or.inl ⟨by omega, by omega⟩))) (by omega)).trans hc.flag0
+  refine {
+    impure := ?_, stdout := ?_, sinit := ?_, cursor := ?_,
+    readCount := ?_, writeCount := ?_, flags := ?_, flag0 := b16, flag1 := h17,
+    fd := ?_, base := ?_, bufSize := ?_, lineBufSize := ?_, cookie := ?_, writer := ?_,
+    lock := ?_, lockMode := ?_, bufferByte := ?_ }
+  · exact (r 8 _ (Or.inl ⟨by omega, by omega⟩) (by left; decide)).trans hc.impure
+  · exact (r 8 _ (Or.inr (Or.inl ⟨by omega, by omega⟩)) (by left; decide)).trans hc.stdout
+  · exact (r 8 _ (Or.inr (Or.inl ⟨by omega, by omega⟩)) (by left; decide)).trans hc.sinit
+  · exact (r 8 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by left; omega)).trans hc.cursor
+  · exact (r 4 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by left; omega)).trans hc.readCount
+  · exact (r 4 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by left; omega)).trans hc.writeCount
+  · simp [readLE, b16, h17, consoleFlags]
+  · exact (r 2 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.fd
+  · exact (r 8 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.base
+  · exact (r 4 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.bufSize
+  · exact (r 4 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.lineBufSize
+  · exact (r 8 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.cookie
+  · exact (r 8 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.writer
+  · exact (r 8 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.lock
+  · exact (r 4 _ (Or.inr (Or.inr ⟨by omega, by omega⟩)) (by right; omega)).trans hc.lockMode
+  · obtain ⟨b, hb⟩ := hc.bufferByte
+    exact ⟨b, (h consoleBuf (Or.inr (Or.inr (Or.inr rfl))) (by decide)).trans hb⟩
 
 theorem ConsoleFlushState.of_agree {m m' : Mem} {ch : BitVec 8}
     (h : ∀ a, ConsoleFoot a → m'[a]? = m[a]?)

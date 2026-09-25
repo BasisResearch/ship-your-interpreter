@@ -12,7 +12,8 @@ image `Newlib.binImg` over them (INTERP_DESIGN.md §10 "STATEMENT CHANGES
 namespace VsaIris.Newlib
 
 def textDom (a : Nat) : Prop := 0x80000000 ≤ a ∧ a < 0x80018be0
-def rodataDom (a : Nat) : Prop := 0x80018be0 ≤ a ∧ a < 0x8001acf0
+/-- `.rodata` after the embedded script (`Vsa.Sim.Code.FixedRodataLoaded`). -/
+def rodataDom (a : Nat) : Prop := 0x80018da6 ≤ a ∧ a < 0x8001acf0
 
 instance (a : Nat) : Decidable (textDom a) := by unfold textDom; infer_instance
 instance (a : Nat) : Decidable (rodataDom a) := by unfold rodataDom; infer_instance

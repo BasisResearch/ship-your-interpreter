@@ -22,7 +22,9 @@ now. Each is an exact Iris statement about the fixed binary, a field of
   `__call_exitprocs(e, 0)`, then the installed `__stdio_exit_handler`).
 
 Every statement holds for both WPs (`∀ Wp`), so the total route's `exit(0)`
-uses the same fields. `stderr` output reaches the console: `_write` ignores
+uses the same fields. Every precondition's `StdioOK` admits `stdout` unoriented
+(`_flags = 0x000a`, no console write yet: a run that printed nothing reaches
+`exit` so) or oriented (`0x200a`); see `Vsa.Sim.ConsoleStreamAt`. `stderr` output reaches the console: `_write` ignores
 its descriptor and stores to `tohost`, so `fprintf`/`fwrite` hand back
 `consoleOwn (o ++ o')` for some `o'`.
 

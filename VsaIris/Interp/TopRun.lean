@@ -797,11 +797,8 @@ theorem binImg_of_roOn {m : Mem} (ht : Vsa.Sim.Code.FixedTextLoaded m)
   · imodintro
     iintro %k %hk
     iapply H $$ %k %(rodataByte k) %(by unfold CodeByte; unfold rodataDom at hk; omega) %(by
-      have := hr (k - 0x80018be0) (by
-        unfold rodataDom at hk; unfold Vsa.Sim.Code.fixedRodataSize; omega)
-      rw [show Vsa.Sim.Code.fixedRodataBase + (k - 0x80018be0) = k by
-        unfold rodataDom at hk; unfold Vsa.Sim.Code.fixedRodataBase; omega] at this
-      exact this)
+      unfold rodataDom at hk
+      exact hr.byteAt hk.1 hk.2)
 
 variable [I : InterpGS GF] {live : Nat → Prop}
 
