@@ -113,9 +113,39 @@ macro_rules
       simp (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod] at hc'
       omega))
+open Lean Elab Tactic Meta in
+/-- `sx_side` on a refuted branch `¬ (x = y)` or `¬ (x ≠ y)`: the `toNat`
+contradiction. The shape is checked syntactically first: unifying the branch
+fact with `_ = _` would unfold an arbitrary condition (`Int.lt` of literal
+words recurses past the depth limit, which `first` does not catch). -/
+elab "bv_side_contra" : tactic => do
+  let g ← getMainGoal
+  let ty ← instantiateMVars (← g.getType)
+  let p? : Option Expr :=
+    if ty.isAppOfArity ``Not 1 then some ty.appArg!
+    else if ty.isArrow && ty.bindingBody!.isConstOf ``False then some ty.bindingDomain!
+    else none
+  let some p := p? | throwError "bv_side_contra: not a refuted branch"
+  if p.isAppOfArity ``Eq 3 then
+    evalTactic (← `(tactic| (intro hc; bv_toNat_contra hc)))
+  else if (p.isAppOfArity ``Not 1 && p.appArg!.isAppOfArity ``Eq 3) || p.isAppOfArity ``Ne 3 then
+    evalTactic (← `(tactic| (intro hc; apply hc; intro hc2; bv_toNat_contra hc2)))
+  else throwError "bv_side_contra: not an address (in)equality"
+
 macro_rules
-  | `(tactic| sx_side) => `(tactic| (intro hc; bv_toNat_contra hc))
+  | `(tactic| sx_side) => `(tactic| bv_side_contra)
+
+open Lean Elab Tactic Meta in
+/-- `sx_side` on a closed goal (a branch on literal words): `decide`, before
+any rule that searches the context (`assumption` against a literal `Int.lt`
+unfolds past the recursion limit). -/
+elab "closed_decide" : tactic => do
+  let g ← getMainGoal
+  let ty ← instantiateMVars (← g.getType)
+  if ty.hasFVar || ty.hasMVar then throwError "closed_decide: not closed"
+  evalTactic (← `(tactic| decide))
+
 macro_rules
-  | `(tactic| sx_side) => `(tactic| (intro hc; apply hc; intro hc2; bv_toNat_contra hc2))
+  | `(tactic| sx_side) => `(tactic| closed_decide)
 
 end VsaIris.Sym
