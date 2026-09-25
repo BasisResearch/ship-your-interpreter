@@ -99,3 +99,23 @@ open Lean Elab Tactic Meta in
     setGoals out
 
 end VsaIris.Sym
+
+namespace VsaIris.Sym
+
+/-- Branch conditions over offset addresses (`x + k = y`, `x + k ≠ y`), refuted
+through `toNat` arithmetic before `sx_side`'s last resort `decide` (which
+diverges on a symbolic `BitVec`, and `first`/`try` do not catch its
+recursion-depth exception). -/
+syntax "bv_toNat_contra " ident : tactic
+macro_rules
+  | `(tactic| bv_toNat_contra $h) => `(tactic| (
+      have hc' := congrArg BitVec.toNat $h
+      simp (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
+        BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod] at hc'
+      omega))
+macro_rules
+  | `(tactic| sx_side) => `(tactic| (intro hc; bv_toNat_contra hc))
+macro_rules
+  | `(tactic| sx_side) => `(tactic| (intro hc; apply hc; intro hc2; bv_toNat_contra hc2))
+
+end VsaIris.Sym
