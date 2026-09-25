@@ -59,6 +59,47 @@ def InnerReg (f sp : Nat) (a : Nat) : Prop :=
   (sp - 384 ≤ a ∧ a < sp + 592) ∨ (f ≤ a ∧ a < f + 1208) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨
     (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
 
+/-- **The start of `_vfprintf_r(reent, f, P, ap)` on the stack `FILE`**, at the
+loop head: the loop state, the caller's callee-saved registers spilled, the
+memory changed only in the frame, `ap` in its slot. -/
+structure VfpBegin (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp f P : BitVec 64) : Prop where
+  loop : VfpLoop R' Mt' sp 0x8001b538#64 f P 0
+  spills : VfpSpills Mt' sp R
+  frame : Frame Mt' Mt (fun a => sp.toNat ≤ a ∧ a < sp.toNat + 592)
+  ap : ldv .ld Mt' (sp.toNat + 24) = R 13
+
+theorem vfp_begin (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
+    {s sp f P : BitVec 64} {need : Nat} {pend0 : List (BitVec 8)}
+    (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
+    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0)
+    (hf1 : sp.toNat + 592 ≤ f.toNat) (hf2 : f.toNat + 1208 ≤ s.toNat) (hfa : f.toNat % 8 = 0)
+    (h2 : R 2 = sp + 592#64) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = f) (h12 : R 12 = P)
+    (hdec : ldv .ld Mt 0x8001b898 = 0x80019770#64) (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
+    (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8) (hF : SbFile Mt f pend0)
+    (hk : ∀ R' Mt', VfpBegin R R' Mt Mt' sp f P →
+      SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b0#64 R' Mt') :
+    SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
+  have hsp : (sp + 592#64).toNat = sp.toNat + 592 := sp_lit (by omega)
+  have hsp' : R 2 - 592#64 = sp := by rw [h2, BitVec.add_sub_cancel]
+  refine vfpEntry_run hlive t Mt R s need (by rw [h2, hsp]; omega) (by rw [h2, hsp]; omega) hs3 hs4
+    (by rw [h2, hsp]; omega) (R 1) _ _ _ _ rfl h10 h11 h12 rfl hdec hdA hdv fun R1 Mt1 E => ?_
+  rw [hsp'] at E
+  have hFrE : Frame Mt1 Mt (fun a => sp.toNat ≤ a ∧ a < sp.toNat + 592) := E.frame
+  have hF1 : SbFile Mt1 f pend0 := hF.frame_out hFrE (by omega) fun b hb => by omega
+  refine vfp_fileSb hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa E.sp_eq (E.s0.trans h10) (E.s4.trans h11) hF1
+    fun R2 k2 => ?_
+  refine vfp_headC hlive hs1 hs2 hs3 hs4 hal ((k2 2 (by decide)).trans E.sp_eq) fun R3 Mt3 H => ?_
+  have e8 : R2 8 = 0x8001b538#64 := (k2 8 (by decide)).trans (E.s0.trans h10)
+  have e20 : R2 20 = f := (k2 20 (by decide)).trans (E.s4.trans h11)
+  have e22 : R2 22 = P := (k2 22 (by decide)).trans (E.s6.trans h12)
+  have HL := H.loop; rw [e8, e20, e22] at HL
+  refine hk R3 Mt3 ⟨HL, vfpSpills_of E H (fun x hx => by
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      exact (k2 _ (by decide)).trans (E.keep _ (by decide))) (by omega),
+    hFrE.trans (H.frame.mono fun a h => by unfold HeadReg at h; omega),
+    (H.frame.ldv .ld fun j hj h => by simp only [widthOfM] at hj; unfold HeadReg at h; omega).trans E.ap⟩
+
 theorem vfpInnerLld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp f ap v : BitVec 64} {need : Nat} {pend0 : List (BitVec 8)}
@@ -77,33 +118,15 @@ theorem vfpInnerLld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
       (∀ x ∈ vfpSaved, R' x = R x) → SbFile M' f pend' → LocMb M' → Frame M' Mt (InnerReg f.toNat sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
-  have hsp : (sp + 592#64).toNat = sp.toNat + 592 := sp_lit (by omega)
-  have hsp' : R 2 - 592#64 = sp := by
-    rw [h2, BitVec.add_sub_cancel]
-  refine vfpEntry_run hlive t Mt R s need (by rw [h2, hsp]; omega) (by rw [h2, hsp]; omega) hs3 hs4
-    (by rw [h2, hsp]; omega) (R 1) _ _ _ _ rfl h10 h11 h12 h13 hdec hdA hdv fun R1 Mt1 E => ?_
-  rw [hsp'] at E
-  have hFrE : Frame Mt1 Mt (fun a => sp.toNat ≤ a ∧ a < sp.toNat + 592) := E.frame
-  have hF1 : SbFile Mt1 f pend0 := hF.frame_out hFrE (by omega) fun b hb => by omega
-  refine vfp_fileSb hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa E.sp_eq (E.s0.trans h10) (E.s4.trans h11) hF1
-    fun R2 k2 => ?_
-  refine vfp_headC hlive hs1 hs2 hs3 hs4 hal ((k2 2 (by decide)).trans E.sp_eq) fun R3 Mt3 H => ?_
+  refine vfp_begin hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa h2 h10 h11 h12 hdec hdA hdv hF fun R3 Mt3 B => ?_
   have hsp6 : sp.toNat + 600 < 2 ^ 64 := by omega
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk => sp_lit (by omega)
-  have e8 : R2 8 = 0x8001b538#64 := (k2 8 (by decide)).trans (E.s0.trans h10)
-  have e20 : R2 20 = f := (k2 20 (by decide)).trans (E.s4.trans h11)
-  have e22 : R2 22 = 0x800192c0#64 := (k2 22 (by decide)).trans (E.s6.trans h12)
-  have HL := H.loop; rw [e8, e20, e22] at HL
-  have hFr3 : Frame Mt3 Mt (fun a => sp.toNat ≤ a ∧ a < sp.toNat + 592) :=
-    hFrE.trans (H.frame.mono fun a h => by unfold HeadReg at h; omega)
-  have hsv3 : VfpSpills Mt3 sp R := vfpSpills_of E H (fun x hx => by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      exact (k2 _ (by decide)).trans (E.keep _ (by decide))) hsp6
+  have HL := B.loop
+  have hFr3 := B.frame
+  have hsv3 := B.spills
   have hloc3 : LocMb Mt3 := hL.frame hFr3 (fun a h1 h2 h => by omega) (fun h => by omega)
   have hF3 : SbFile Mt3 f pend0 := hF.frame_out hFr3 (by omega) fun b hb => by omega
-  have hap3 : ldv .ld Mt3 (sp.toNat + 24) = ap :=
-    ((H.frame.ldv .ld fun j hj h => by simp only [widthOfM] at hj; unfold HeadReg at h; omega).trans E.ap).trans h13
+  have hap3 : ldv .ld Mt3 (sp.toNat + 24) = ap := B.ap.trans h13
   have hv3 : ldv .ld Mt3 ap.toNat = v :=
     (hFr3.ldv .ld fun j hj h => by simp only [widthOfM] at hj; omega).trans hv
   have hP0' : FmtAt Dt DA (0x800192c0#64 : BitVec 64).toNat ([] ++ [37#8]) := hP0
