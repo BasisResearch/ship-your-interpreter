@@ -789,3 +789,262 @@ theorem svf_lit1Z {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   · rw [h22'']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h22
 
 
+
+/-- **The scan's stop** (`0x8000775c` at a `'%'`, `0x80007960` at the NUL): the
+literal run `[p, q)` becomes a piece, then the conversion at `q`
+(`0x8000776c`) or the end (`0x800079b0`). -/
+theorem svf_lit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c q : Nat} {total : List (BitVec 8)}
+    (pc0 pc1 : BitVec 64) (hpc : pc0 = 0x8000775c#64 ∧ pc1 = 0x8000776c#64 ∨
+      pc0 = 0x80007960#64 ∧ pc1 = 0x800079b0#64)
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total R Mt) (h22 : R 22 = BitVec.ofNat 64 q)
+    (h10 : R 10 = if pc0 = 0x8000775c#64 then 1#64 else 0#64) (hpq : p ≤ q) (hq : q < 2 ^ 64)
+    (hc : c + (q - p) < 2 ^ 31) (hsrc : p < q → PieceSrc DA s dst n p (q - p))
+    (hk : SvfConvK live Dt DA Q s dst n R0 Mt0 p ap c q total pc1) :
+    NW live Dt DA (snpS s dst n) Q pc0 R Mt := by
+  rcases Nat.eq_or_lt_of_le hpq with he | hlt
+  · exact svf_lit0 hlive pc0 pc1 hpc R Mt SG A h22 h10 hpq hq hc hsrc he hk
+  · rcases hpc with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+    · exact svf_lit1P hlive R Mt SG A h22 (by simpa using h10) hq hc (hsrc hlt) hlt hk
+    · exact svf_lit1Z hlive R Mt SG A h22 (by simpa using h10) hq hc (hsrc hlt) hlt hk
+
+/-! ## `PRINT`: the sign and body pieces -/
+
+/-- The four slots a piece's append writes: its iovec entry, `resid`, the count. -/
+def PushW (s k a : Nat) : Prop :=
+  (s - 864 + 352 + 16 * k ≤ a ∧ a < s - 864 + 352 + 16 * k + 16) ∨
+    (s - 864 + 232 ≤ a ∧ a < s - 864 + 236) ∨ (s - 864 + 240 ≤ a ∧ a < s - 864 + 248)
+
+theorem sumLen_append_one (L : List (Nat × Nat)) (b l : Nat) :
+    sumLen (L ++ [(b, l)]) = sumLen L + l := by
+  simp [sumLen, List.map_append, List.sum_append]
+
+/-- **One piece appended to the `uio`**: the new entry, count and `resid`
+loaded from the new memory, everything else unchanged. -/
+theorem SvfSt.push {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
+    {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
+    {R R' : Nat → BitVec 64} {Mt Mt' : Mem} {b l : Nat}
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (SG : SnpGeom s dst n)
+    (hsrc : PieceSrc DA s dst n b l) (hlen : L.length < 3) (hsum : sumLen L + l < 2 ^ 31)
+    (hR : SvfRegs R' R) (h23 : R' 23 = BitVec.ofNat 64 (s - 864 + 352 + 16 * (L.length + 1)))
+    (hM : ∀ a, ¬ PushW s L.length a → imgM Mt' a = imgM Mt a)
+    (hb : ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 352 + 16 * L.length)).toNat = BitVec.ofNat 64 b)
+    (hl : ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 352 + 16 * L.length + 8)).toNat = BitVec.ofNat 64 l)
+    (hres : ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 240)).toNat = BitVec.ofNat 64 (sumLen L + l))
+    (hcnt : ldv .lw Mt' (BitVec.ofNat 64 (s - 864 + 232)).toNat = BitVec.ofNat 64 (L.length + 1)) :
+    SvfSt DA s dst n R0 Mt0 p ap rt total (L ++ [(b, l)]) R' Mt' := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hL3 := St.len
+  have ag : ∀ (k : MKind) (off : Nat), off + widthOfM k ≤ 592 →
+      ¬ (∃ a, off ≤ a ∧ a < off + widthOfM k ∧ PushW s L.length (s - 864 + a)) →
+      ldv k Mt' (s - 864 + off) = ldv k Mt (s - 864 + off) :=
+    fun k off h1 h2 => ldv_agree k fun i hi => hM _ fun h => h2 ⟨off + i, by omega, by omega, by
+      rw [show s - 864 + (off + i) = s - 864 + off + i by omega]; exact h⟩
+  have agN : ∀ (k : MKind) (off : Nat), off + widthOfM k ≤ 592 →
+      ¬ (∃ a, off ≤ a ∧ a < off + widthOfM k ∧ PushW s L.length (s - 864 + a)) →
+      ldv k Mt' (BitVec.ofNat 64 (s - 864 + off)).toNat = ldv k Mt (BitVec.ofNat 64 (s - 864 + off)).toNat :=
+    fun k off h1 h2 => by rw [toNat_ofNat_lt (by omega)]; exact ag k off h1 h2
+  refine ⟨St.core.update SG hR (fun a ha => hM a ?_) ?_ ?_ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · unfold SvfKeep at ha; unfold PushW; omega
+  · have := agN .ld 0 (by simp only [widthOfM]; omega) (by rintro ⟨a, h1, h2, h3⟩; unfold PushW at h3; simp only [widthOfM] at h2; omega)
+    simp only [Nat.add_zero] at this; exact this.trans St.core.fmt
+  · exact (agN .ld 16 (by simp only [widthOfM]; omega) (by rintro ⟨a, h1, h2, h3⟩; unfold PushW at h3; simp only [widthOfM] at h2; omega)).trans St.core.ret
+  · exact (agN .ld 24 (by simp only [widthOfM]; omega) (by rintro ⟨a, h1, h2, h3⟩; unfold PushW at h3; simp only [widthOfM] at h2; omega)).trans St.core.ap
+  · rw [h23]; simp [Nat.mul_add]
+  · rw [hcnt]; simp
+  · rw [hres, sumLen_append_one]
+  · intro j hj
+    rw [List.length_append, List.length_singleton] at hj
+    rcases Nat.lt_or_ge j L.length with hj' | hj'
+    · rw [List.getElem_append_left hj']
+      obtain ⟨e1, e2⟩ := St.iov j hj'
+      simp only [snpIov] at e1 e2 ⊢
+      refine ⟨?_, ?_⟩
+      · rw [show s - 512 + 16 * j = s - 864 + (352 + 16 * j) by omega, ag .ld _ (by simp only [widthOfM]; omega)
+          (by rintro ⟨a, h1, h2, h3⟩; unfold PushW at h3; simp only [widthOfM] at h2; omega)]
+        rw [show s - 864 + (352 + 16 * j) = s - 512 + 16 * j by omega]; exact e1
+      · rw [show s - 512 + 16 * j + 8 = s - 864 + (352 + 16 * j + 8) by omega, ag .ld _ (by simp only [widthOfM]; omega)
+          (by rintro ⟨a, h1, h2, h3⟩; unfold PushW at h3; simp only [widthOfM] at h2; omega)]
+        rw [show s - 864 + (352 + 16 * j + 8) = s - 512 + 16 * j + 8 by omega]; exact e2
+    · have hjL : j = L.length := by omega
+      subst hjL
+      rw [List.getElem_append_right (Nat.le_refl _)]
+      simp only [Nat.sub_self, List.getElem_singleton, snpIov]
+      rw [toNat_ofNat_lt (by omega)] at hb hl
+      refine ⟨?_, ?_⟩
+      · rw [show s - 512 + 16 * L.length = s - 864 + 352 + 16 * L.length by omega]; exact hb
+      · rw [show s - 512 + 16 * L.length + 8 = s - 864 + 352 + 16 * L.length + 8 by omega]; exact hl
+  · intro j hj
+    rw [List.length_append, List.length_singleton] at hj
+    rcases Nat.lt_or_ge j L.length with hj' | hj'
+    · rw [List.getElem_append_left hj']; exact St.src j hj'
+    · have hjL : j = L.length := by omega
+      subst hjL
+      rw [List.getElem_append_right (Nat.le_refl _)]
+      simpa using hsrc
+  · simp; omega
+  · rw [sumLen_append_one]; exact hsum
+
+/-- The sign byte's piece (`sp + 167`). -/
+theorem signSrc {DA : List Nat} {s dst n : Nat} (SG : SnpGeom s dst n) :
+    PieceSrc DA s dst n (s - 864 + 167) 1 := by
+  have := SG.s_lo; have := SG.s_hi; have := SG.d_sep; have := SG.d_lo
+  exact ⟨⟨by omega, by omega, by omega, by omega, by simp only [snpFP]; omega, by omega, by omega⟩,
+    by decide, .inr ⟨by omega, by omega⟩⟩
+
+/-- The `subw` of `PRINT`'s width and precision tests, as integers. -/
+theorem negw_toInt {size : Nat} (h : size < 2 ^ 31) :
+    (BitVec.signExtend 64 (0#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 size))).toInt = -(size : Int) := by
+  rw [BitVec.toInt_signExtend_of_le (by decide)]
+  rw [BitVec.toInt_eq_toNat_cond]
+  simp only [BitVec.toNat_sub, BitVec.extractLsb_toNat, BitVec.toNat_ofNat]
+  split <;> omega
+
+theorem negw1_toInt {size : Nat} (h : size < 2 ^ 31) :
+    (BitVec.signExtend 64 (4294967295#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 size))).toInt = -1 - (size : Int) := by
+  rw [BitVec.toInt_signExtend_of_le (by decide)]
+  rw [BitVec.toInt_eq_toNat_cond]
+  have e : (4294967295#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 size)).toNat = 4294967295 - size := by
+    rw [BitVec.toNat_sub]
+    have : (BitVec.extractLsb 31 0 (BitVec.ofNat 64 size)).toNat = size := by
+      rw [BitVec.extractLsb_toNat, BitVec.toNat_ofNat]; omega
+    rw [this]
+    have h2 : (4294967295#32).toNat = 4294967295 := rfl
+    rw [h2]; omega
+  rw [e]
+  split <;> omega
+
+theorem extract_m1 : BitVec.extractLsb 31 0 18446744073709551615#64 = 4294967295#32 := by decide
+
+theorem extract_0 : BitVec.extractLsb 31 0 0#64 = 0#32 := by decide
+
+/-- `PRINT`'s continuation after the sign (`0x800078bc`). -/
+def PrintMidK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
+    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
+    (Mt0 : Mem) (p ap : Nat) (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat))
+    (sg : Nat) (R : Nat → BitVec 64) : Prop :=
+  ∀ R' Mt' L', L' = L ++ (if sg = 0 then [] else [(s - 864 + 167, 1)]) →
+    SvfSt DA s dst n R0 Mt0 p ap rt total L' R' Mt' → R' 12 = BitVec.ofNat 64 (sumLen L') →
+    R' 6 = R 6 → R' 16 = R 16 → R' 22 = R 22 → R' 26 = R 26 → R' 28 = R 28 →
+    NW live Dt DA (snpS s dst n) Q 0x800078bc#64 R' Mt'
+
+theorem svf_printSign0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (hL : L.length ≤ 1)
+    (h132 : R 6 &&& 132#64 = 0#64) (h28 : R 28 = 0#64) (size : Nat)
+    (h16 : R 16 = BitVec.ofNat 64 size)
+    (h22 : R 22 = BitVec.ofNat 64 size) (hsize : size < 2 ^ 31)
+    (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
+    (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 0)
+    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 0 R) :
+    NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have h2 := St.core.r2
+  have h23 := St.r23
+  have hcn := St.cnt
+  have hres := St.res
+  have hn0 := negw_toInt hsize
+  have hn1 := negw1_toInt hsize
+  rcases h20 with h20 | h20
+  all_goals nx_runF hlive using [ofNat_add_ofNat, h2, h23, hcn, hres, h132, h28, h16, h22, h167, h20, extract_0, extract_m1, hn0, hn1] at 0x800078bc
+  all_goals refine hk _ Mt L (by simp) ⟨St.core.scratch SG ?_ fun _ _ => rfl, ?_, St.cnt, St.res,
+    St.iov, St.src, St.len, St.sum⟩ ?_ ?_ ?_ ?_ ?_ ?_
+  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  all_goals (try exact h23)
+
+/-- After the sign piece (`0x80007878`): no second prefix, no zero padding,
+the precision test. -/
+theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (Rk R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total (L ++ [(s - 864 + 167, 1)]) R Mt)
+    (h5 : R 5 = 0#64) (h27 : R 27 = 0#64) (h12 : R 12 = BitVec.ofNat 64 (sumLen L + 1))
+    (size : Nat) (h22 : R 22 = BitVec.ofNat 64 size) (hsize : size + 1 < 2 ^ 31)
+    (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
+    (k6 : R 6 = Rk 6) (k16 : R 16 = Rk 16) (k22 : R 22 = Rk 22) (k26 : R 26 = Rk 26)
+    (k28 : R 28 = Rk 28) (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 45 Rk) :
+    NW live Dt DA (snpS s dst n) Q 0x80007878#64 R Mt := by
+  have hn0 := negw_toInt (size := size) (by omega)
+  have hn1 := negw1_toInt (size := size) (by omega)
+  rcases h20 with h20 | h20
+  all_goals nx_runF hlive using [h5, h27, h22, h20, extract_0, extract_m1, hn0, hn1] at 0x800078bc
+  all_goals refine hk _ Mt _ (by simp) ⟨St.core.scratch SG ?_ fun _ _ => rfl, ?_, St.cnt, St.res,
+    St.iov, St.src, St.len, St.sum⟩ ?_ ?_ ?_ ?_ ?_ ?_
+  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  all_goals first | exact St.r23 | exact k6 | exact k16 | exact k22 | exact k26 | exact k28 |
+    (rw [h12, sumLen_append_one])
+
+#ix_piece svfSign45_p1 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (hL : L.length ≤ 1)
+    (h132 : R 6 &&& 132#64 = 0#64) (h28 : R 28 = 0#64) (size : Nat)
+    (h16 : R 16 = BitVec.ofNat 64 (size + 1))
+    (h22 : R 22 = BitVec.ofNat 64 size) (hsize : size + 1 < 2 ^ 31) (hsum : sumLen L + 1 < 2 ^ 31)
+    (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
+    (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 45)
+    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 45 R) :
+    NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have h2 := St.core.r2
+  have h23 := St.r23
+  have hcn := St.cnt
+  have hres := St.res
+  have hn2 := negw_toInt (size := size + 1) (by omega)
+  nx_runF hlive using [ofNat_add_ofNat, h2, h23, hcn, hres, h132, h28, h16, h22, h167, hn2] at 0x8000785c 0x80008c38
+
+#ix_piece svfSign45_p2 from svfSign45_p1 by
+  have hsx := VsaIris.Interp.sext32_ofNat_eq (a := L.length + 1) (by omega)
+  have hsa := SG.s_al
+  nx_runF hlive using [ofNat_add_ofNat, h2, h23, hsx] at 0x80007878
+  refine svf_sign45_tail hlive R _ _ SG (St.push SG (signSrc SG) (by omega) hsum ?_ ?_ ?_ ?_ ?_ ?_ ?_)
+    ?_ ?_ ?_ size ?_ hsize h20 ?_ ?_ ?_ ?_ ?_ hk
+  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    rw [show s - 864 + 352 + 16 * L.length + 16 = s - 864 + 352 + 16 * (L.length + 1) by omega]
+  · intro a ha; unfold PushW at ha; svf_mem
+  · svf_mem
+  · svf_mem
+  · svf_mem
+  · svf_mem
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · exact h22
+
+-- `PRINT`'s head with a `'-'` sign byte.
+#ix_chain svf_printSign45 := [svfSign45_p1, svfSign45_p2]
+
+/-- **`PRINT`'s head** (`0x8000782c`): no padding (width `0`), the sign byte at
+`sp + 167` becomes a piece if set, the precision test passes. -/
+theorem svf_printSign {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)}
+    (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (hL : L.length ≤ 1)
+    (h132 : R 6 &&& 132#64 = 0#64) (h28 : R 28 = 0#64) (size : Nat)
+    (sg : Nat) (hsg : sg = 0 ∨ sg = 45)
+    (h16 : R 16 = BitVec.ofNat 64 (size + if sg = 0 then 0 else 1))
+    (h22 : R 22 = BitVec.ofNat 64 size) (hsize : size + 1 < 2 ^ 31) (hsum : sumLen L + 1 < 2 ^ 31)
+    (h20 : R 20 = 0#64 ∨ R 20 = 18446744073709551615#64)
+    (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 sg)
+    (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L sg R) :
+    NW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt := by
+  rcases hsg with rfl | rfl
+  · exact svf_printSign0 hlive R Mt SG St hL h132 h28 size (by simpa using h16) h22 (by omega) h20 h167 hk
+  · exact svf_printSign45 hlive R Mt SG St hL h132 h28 size (by simpa using h16) h22 hsize hsum h20 h167 hk
+
+end VsaIris.Sym
