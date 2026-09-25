@@ -1,0 +1,1980 @@
+== adv_arity
+  PASS pc: entry step 20425, 2494 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 422 mismatching bytes, 422 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2841 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 324 in [0x8001c330, 0x8001c76b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c770 brk=0x8001d000 chunks=28 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 422 mismatching bytes, 422 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 324 in [0x8001c330, 0x8001c76b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c770 brk=0x8001d000 chunks=28 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var f = fn f(a) {return a;}; println(f(1, 2));
+== adv_assert2
+  PASS pc: entry step 16808, 2448 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 3
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 1765 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 328 in [0x8001c330, 0x8001c76b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c770 brk=0x8001d000 chunks=29 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 328 in [0x8001c330, 0x8001c76b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c770 brk=0x8001d000 chunks=29 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println('a'); assert(false, 'boom'); println('b');
+== adv_break
+  PASS pc: entry step 13735, 1828 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 1829 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 116 in [0x8001c330, 0x8001c4d7]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c4f0 brk=0x8001d000 chunks=14 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 116 in [0x8001c330, 0x8001c4d7]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c4f0 brk=0x8001d000 chunks=14 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println(1); break;
+== adv_depth1000
+  PASS pc: entry step 29464, 3295 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 3113 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 616 in [0x8001c330, 0x8001ca6b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ca70 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 616 in [0x8001c330, 0x8001ca6b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ca70 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var f = fn f(n) {if ((n == 0)) {return 0;} return (1 + f((n - 1)));}; println(f(1000));
+== adv_depth999
+  PASS pc: entry step 29427, 3295 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 3113 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 616 in [0x8001c330, 0x8001ca6b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ca70 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 421 mismatching bytes, 421 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 616 in [0x8001c330, 0x8001ca6b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ca70 brk=0x8001d000 chunks=44 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var f = fn f(n) {if ((n == 0)) {return 0;} return (1 + f((n - 1)));}; println(f(999));
+== adv_empty
+  PASS pc: entry step 9901, 1455 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 0
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 449 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 0 in [0x0, 0x0]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c3b0 brk=0x8001d000 chunks=7 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 0 in [0x0, 0x0]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c3b0 brk=0x8001d000 chunks=7 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: 
+== adv_intmin
+  PASS pc: entry step 55189, 5096 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 5
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 432 mismatching bytes, 432 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2729 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 1268 in [0x8001c330, 0x8001cefb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001cf00 brk=0x8001d000 chunks=69 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 432 mismatching bytes, 432 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 1268 in [0x8001c330, 0x8001cefb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001cf00 brk=0x8001d000 chunks=69 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println(((-9223372036854775807) - 1)); println((((-9223372036854775807) - 1) / (-1))); println((((-9223372036854775807) - 1) % (-1))); println((((1000000 * 1000000) * 1000000) * 1000000)); println(((-
+== adv_longname
+  PASS pc: entry step 23573, 3207 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 4
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 428 mismatching bytes, 428 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2825 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 940 in [0x8001c330, 0x8001cb4b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001cb50 brk=0x8001d000 chunks=45 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 428 mismatching bytes, 428 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 940 in [0x8001c330, 0x8001cb4b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001cb50 brk=0x8001d000 chunks=45 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = fn aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa() {return 0;}; println(('' + aaaaaaaaaaaaaaaaaaaa
+== adv_loopvar
+  PASS pc: entry step 29484, 3611 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 4
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 426 mismatching bytes, 426 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2209 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 683 in [0x8001c330, 0x8001cb8b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001cb90 brk=0x8001d000 chunks=53 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 426 mismatching bytes, 426 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 683 in [0x8001c330, 0x8001cb8b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001cb90 brk=0x8001d000 chunks=53 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var i = 0; var s = ''; while ((i < 400)) {(s = (s + 'ab')); (i = (i + 1));} println((s == ('ab' + s)), i);
+== adv_modzero
+  PASS pc: entry step 16768, 2078 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2165 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 200 in [0x8001c330, 0x8001c5bb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c5c0 brk=0x8001d000 chunks=19 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 200 in [0x8001c330, 0x8001c5bb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c5c0 brk=0x8001d000 chunks=19 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var a = 0; println((5 % a));
+== adv_name58
+  PASS pc: entry step 17276, 2303 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2173 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 399 in [0x8001c330, 0x8001c74b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c750 brk=0x8001d000 chunks=25 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 399 in [0x8001c330, 0x8001c74b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c750 brk=0x8001d000 chunks=25 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb = fn bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb() {return 0;}; println(('' + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+== adv_name59
+  PASS pc: entry step 17280, 2304 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2173 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 401 in [0x8001c330, 0x8001c74b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c750 brk=0x8001d000 chunks=25 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 401 in [0x8001c330, 0x8001c74b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c750 brk=0x8001d000 chunks=25 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc = fn ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc() {return 0;}; println(('' + cccccccccccccccccccccccccccccccccccccccccc
+== adv_native
+  PASS pc: entry step 28316, 3681 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2861 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 746 in [0x8001c330, 0x8001cbcb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001cbd0 brk=0x8001d000 chunks=51 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 746 in [0x8001c330, 0x8001cbcb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001cbd0 brk=0x8001d000 chunks=51 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println(('' + println), println, ('' + fn () {return 1;})); println((print == print), (fn () {return 1;} == fn () {return 1;}));
+== adv_nest
+  PASS pc: entry step 91424, 16363 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 1
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 452 mismatching bytes, 452 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 35433 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 10660 in [0x8001c330, 0x8002173b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x80021740 brk=0x80022000 chunks=453 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 452 mismatching bytes, 452 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 10660 in [0x8001c330, 0x8002173b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x80021740 brk=0x80022000 chunks=453 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println((-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-
+== adv_nest_odd
+  PASS pc: entry step 84519, 15076 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 1
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 448 mismatching bytes, 448 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 32457 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 9724 in [0x8001c330, 0x80020feb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x80020ff0 brk=0x80022000 chunks=414 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 448 mismatching bytes, 448 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 9724 in [0x8001c330, 0x80020feb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x80020ff0 brk=0x80022000 chunks=414 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println((-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-(-
+== adv_nonascii
+  PASS pc: entry step 11909, 1752 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 1
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 1765 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  FAIL ProgramRepr decodes[sparse]: 1 errors: ["str: bad CString at 0x8001c4a0 (b'h')"]
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 102 in [0x8001c330, 0x8001c4db]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c4e0 brk=0x8001d000 chunks=14 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  FAIL ProgramRepr decodes[dense]: 1 errors: ["str: bad CString at 0x8001c4a0 (b'h')"]
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 102 in [0x8001c330, 0x8001c4db]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c4e0 brk=0x8001d000 chunks=14 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println('h');
+== adv_notcallable
+  PASS pc: entry step 16080, 2169 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 3
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2081 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 222 in [0x8001c330, 0x8001c63b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c640 brk=0x8001d000 chunks=22 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 222 in [0x8001c330, 0x8001c63b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c640 brk=0x8001d000 chunks=22 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var x = 1; println('a'); x();
+== adv_strcmp
+  PASS pc: entry step 19462, 3103 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 1
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 1829 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 613 in [0x8001c330, 0x8001ca5b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ca60 brk=0x8001d000 chunks=47 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 425 mismatching bytes, 425 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 613 in [0x8001c330, 0x8001ca5b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ca60 brk=0x8001d000 chunks=47 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println(('abc' < 'abd'), ('b' > 'abc'), ('a' <= 'a'), ('a' >= 'b'), ('a' == 'a'), ('a' != 'a'), ('' < 'a'));
+== adv_toomany
+  PASS pc: entry step 81145, 7011 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2841 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 1056 in [0x8001c330, 0x8001ce87]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001cf80 brk=0x8001d000 chunks=59 free=2 nonempty bins=[(1, 1), (4, 1)]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 1056 in [0x8001c330, 0x8001ce87]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001cf80 brk=0x8001d000 chunks=59 free=2 nonempty bins=[(1, 1), (4, 1)]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var f = fn f() {return 0;}; println(f(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33));
+== adv_truthy
+  PASS pc: entry step 29060, 4007 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 427 mismatching bytes, 427 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 3441 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 888 in [0x8001c330, 0x8001cd33]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001cd40 brk=0x8001d000 chunks=58 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 427 mismatching bytes, 427 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 888 in [0x8001c330, 0x8001cd33]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001cd40 brk=0x8001d000 chunks=58 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println((!(!'')), (!(!'a')), (!(!0)), (!(!1)), (!(!null)), (!(!fn () {return 0;}))); if ('') {println('t');} else {println('f');}
+== arithmetic
+  PASS pc: entry step 106390, 9680 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 12
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2729 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 2748 in [0x8001c330, 0x8001dd1b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001dd20 brk=0x8001e000 chunks=148 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 2748 in [0x8001c330, 0x8001dd1b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001dd20 brk=0x8001e000 chunks=148 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println((1 + (2 * 3))); println(((1 + 2) * 3)); println((10 / 3)); println((10 % 3)); println(((-5) + 3)); println(((2 * 3) + (4 * 5))); println((1000000 * 1000000)); println(((7 - 2) - 1)); println((
+== err_divzero
+  PASS pc: entry step 18184, 2263 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 2
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2809 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 250 in [0x8001c330, 0x8001c63b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c640 brk=0x8001d000 chunks=22 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 250 in [0x8001c330, 0x8001c63b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c640 brk=0x8001d000 chunks=22 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var a = 10; println((a / (a - 10)));
+== err_undefined
+  PASS pc: entry step 12365, 1761 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 1
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 1781 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 105 in [0x8001c330, 0x8001c4db]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001c4e0 brk=0x8001d000 chunks=14 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 105 in [0x8001c330, 0x8001c4db]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001c4e0 brk=0x8001d000 chunks=14 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println(nope);
+== for
+  PASS pc: entry step 120300, 12637 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 13
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 441 mismatching bytes, 441 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 3013 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 3442 in [0x8001c330, 0x8001ea7b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ea80 brk=0x8001f000 chunks=225 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 441 mismatching bytes, 441 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 3442 in [0x8001c330, 0x8001ea7b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ea80 brk=0x8001f000 chunks=225 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: for (var i = 1; (i <= 15); (i = (i + 1))) {if (((i % 15) == 0)) {println('FizzBuzz');} else if (((i % 3) == 0)) {println('Fizz');} else if (((i % 5) == 0)) {println('Buzz');} else {println(i);}} var s
+== functions1
+  PASS pc: entry step 72465, 8441 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 13
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 4345 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 2370 in [0x8001c330, 0x8001debb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001dec0 brk=0x8001e000 chunks=160 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 429 mismatching bytes, 429 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 2370 in [0x8001c330, 0x8001debb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001dec0 brk=0x8001e000 chunks=160 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var make_adder = fn make_adder(n) {return fn (x) {return (x + n);};}; var add5 = make_adder(5); println(add5(10)); var apply_twice = fn apply_twice(f, x) {return f(f(x));}; println(apply_twice(add5, 1
+== functions2
+  PASS pc: entry step 62110, 7318 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 10
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 4597 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 1932 in [0x8001c330, 0x8001d9db]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001d9e0 brk=0x8001e000 chunks=132 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 423 mismatching bytes, 423 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 1932 in [0x8001c330, 0x8001d9db]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001d9e0 brk=0x8001e000 chunks=132 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var make_adder = fn make_adder(n) {return fn (x) {return (x + n);};}; var add5 = make_adder(5); var f = add5; println((f == add5)); println(make_adder); println(fn (x) {return x;}); var compose = fn c
+== proof
+  PASS pc: entry step 85483, 8837 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 12
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  PASS rodata_image[sparse]: 0 mismatching bytes, 0 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2273 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 2306 in [0x8001c330, 0x8001ddbb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ddc0 brk=0x8001e000 chunks=154 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  PASS rodata_image[dense]: 0 mismatching bytes, 0 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 2306 in [0x8001c330, 0x8001ddbb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ddc0 brk=0x8001e000 chunks=154 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var i = 0; var sum = 0; while ((i < 10)) {(i = (i + 1)); (sum = (sum + i));} println(sum); var n = 0; var total = 0; while (true) {(n = (n + 1)); if ((n > 100)) {break;} if (((n % 2) == 0)) {continue;
+== scope
+  PASS pc: entry step 75486, 8002 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 14
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 3089 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 2039 in [0x8001c330, 0x8001da2b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001da30 brk=0x8001e000 chunks=135 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 430 mismatching bytes, 430 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 2039 in [0x8001c330, 0x8001da2b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001da30 brk=0x8001e000 chunks=135 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var x = 1; {var x = 2; println(x); (x = 3); println(x);} println(x); var y = 10; {(y = 20);} println(y); var g = 5; var shadow = fn shadow(g) {return (g * 2);}; println(shadow(7), g); var count = 0; w
+== strings
+  PASS pc: entry step 36228, 5031 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 9
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2189 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 1367 in [0x8001c330, 0x8001d22b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001d230 brk=0x8001e000 chunks=93 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 431 mismatching bytes, 431 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 1367 in [0x8001c330, 0x8001d22b]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001d230 brk=0x8001e000 chunks=93 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: println((('hello' + ' ') + 'world')); println(('value: ' + 42)); println((1 + '2')); var s = 'abc'; println((s == 'abc'), (s != 'def')); println(('a' < 'b'), ('abc' <= 'abc')); println('line1\nline2')
+== while
+  PASS pc: entry step 86320, 9005 stores replayed
+  PASS interp_arg a0=inp: 0x87fffe10
+  PASS stmts_arg a1: 0x8001c330
+  PASS count_arg a2: 12
+  PASS repl_arg a3=0: 0x0
+  PASS ra: 0x800045ec
+  PASS sp: 0x87fffd00
+  PASS gp: 0x8001b510
+  PASS s0_impure: 0x8001b970
+  PASS OutRepr output='': sailOutput chunks at entry: 0
+  PASS stmts_align: 
+  PASS stmts_ram: 
+  PASS stmts_win: 
+  PASS stmts_stack: 
+  PASS stack_ok: 
+  PASS main_ra[sparse]: 0x80000038
+  PASS text_image[sparse]: 0 mismatching bytes
+  FAIL rodata_image[sparse]: 436 mismatching bytes, 436 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[sparse]: []
+  FAIL console[sparse]: failed: flags
+  PASS exit_runtime[sparse]: failed: 
+  PASS BootHeapFacts.stderr[sparse]: 0x8001bbd8
+  PASS globals present[sparse]: 0x8001c180
+  PASS call_depth=0[sparse]: 
+  PASS interp_geom[sparse]: 
+  PASS setjmp_geom (WinRAM inp+16)[sparse]: 
+  FAIL stack_bytes[sparse]: 2273 of 8388608 stack bytes present in the map
+  PASS bss present[sparse]: 2008 of 2008 .bss bytes present
+  PASS store (FrameRepr initSt, natives)[sparse]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[sparse]: cap=8
+  PASS arrays aligned[sparse]: 
+  PASS ProgramRepr decodes[sparse]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[sparse]: 0 bytes
+  PASS AST off global-frame header/arrays[sparse]: 0 bytes
+  PASS SharedGeom[sparse]: 0 shared bytes violate
+  PASS AST location[sparse]: AST bytes 2306 in [0x8001c330, 0x8001ddbb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[sparse]: failed: ; top=0x8001ddc0 brk=0x8001e000 chunks=154 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[sparse]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[sparse]: 
+  PASS binding keys are whole payloads[sparse]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  PASS main_ra[dense]: 0x80000038
+  PASS text_image[dense]: 0 mismatching bytes
+  FAIL rodata_image[dense]: 436 mismatching bytes, 436 inside the script blob [0x80018be0,0x80018da5)
+  PASS statics[dense]: []
+  FAIL console[dense]: failed: flags
+  PASS exit_runtime[dense]: failed: 
+  PASS BootHeapFacts.stderr[dense]: 0x8001bbd8
+  PASS globals present[dense]: 0x8001c180
+  PASS call_depth=0[dense]: 
+  PASS interp_geom[dense]: 
+  PASS setjmp_geom (WinRAM inp+16)[dense]: 
+  PASS stack_bytes[dense]: dense view: all present by construction
+  PASS store (FrameRepr initSt, natives)[dense]: count=3 cap=8 pn=0x8001c1b0 pv=0x8001c200 parent=0 names=[('print', True), ('println', True), ('assert', True)]
+  PASS cap_canon (cap=8)[dense]: cap=8
+  PASS arrays aligned[dense]: 
+  PASS ProgramRepr decodes[dense]: 0 errors: []
+  PASS ast_owned (AST off writable ELF/stack)[dense]: 0 bytes
+  PASS AST off global-frame header/arrays[dense]: 0 bytes
+  PASS SharedGeom[dense]: 0 shared bytes violate
+  PASS AST location[dense]: AST bytes 2306 in [0x8001c330, 0x8001ddbb]; heap=[0x8001c170,0x87800000) rodata-literals=0
+  PASS HeapAt[dense]: failed: ; top=0x8001ddc0 brk=0x8001e000 chunks=154 free=0 nonempty bins=[]
+  PASS shared heap bytes in in-use payloads[dense]: 0 AST bytes in free chunks/headers/top
+  PASS BootFrameChunks (whole in-use payloads, unshared)[dense]: 
+  PASS binding keys are whole payloads[dense]: [('0x8001c2d0', 6), ('0x8001c2f0', 8), ('0x8001c310', 7)]
+  AST: var i = 0; var sum = 0; while ((i < 10)) {(i = (i + 1)); (sum = (sum + i));} println(sum); var n = 0; var total = 0; while (true) {(n = (n + 1)); if ((n > 100)) {break;} if (((n % 2) == 0)) {continue;

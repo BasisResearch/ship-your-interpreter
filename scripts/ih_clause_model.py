@@ -4,7 +4,7 @@
 Every clause in `scripts/ih_clauses.tsv` emits `Vsa.Sim.IHClause.<Name>.Residuals`
 with one field per recursor case (`scripts/gen_ih_clause.py`).  This module is
 the shared read-only view of those fields for the Level-4 automation
-(`ih_clause_status.py`, `ih_clause_fuzz.py`, `ih_clause_ledger.py`): the case
+(`ih_clause_status.py`, `ih_clause_fuzz.py`): the case
 model comes from the generator itself, the wiring from the generated module,
 and the discharger vocabulary from `Vsa/Sim/IHClauseSupport.lean`.  Nothing
 here runs Lean.

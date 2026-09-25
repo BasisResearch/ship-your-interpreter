@@ -753,3 +753,24 @@ Vsa/Sim/rows/TermRouting.lean
 Vsa/While/Cost.lean
 Vsa/While/StmtDispatchClose.lean
 Vsa/While/Trichotomy.lean
+
+# Legacy pre-Iris files (added 2026-08-24..2026-09-05, before the 2026-09-11 rule revision);
+# flagged by R1/R5/R7 at hub/iris-main 286c2ad. Recorded by the lane V review (REVIEW.md, hygiene).
+Vsa/Sim/CallEntry.lean
+Vsa/Sim/DriveToLoopHeadSpans.lean
+Vsa/Sim/EnvGetRecursive.lean
+Vsa/Sim/EnvSetScanCore.lean
+Vsa/Sim/EnvSetSites.lean
+Vsa/Sim/EvalIntSim2.lean
+Vsa/Sim/EvalValueReturnTail.lean
+Vsa/Sim/ExecRecCommon.lean
+Vsa/Sim/ExecSimCommon.lean
+Vsa/Sim/ExecWhileIndexed.lean
+Vsa/Sim/LayoutInstance.lean
+Vsa/Sim/MidArmFieldIH.lean
+Vsa/Sim/StoreInvariant.lean
+Vsa/Sim/TermSimAssembly.lean
+Vsa/Sim/WhileGeomSuppliers.lean
+Vsa/Sim/rows/CallClosureSplice.lean
+Vsa/Sim/rows/EnvDefineScanLoop.lean
+Vsa/Sim/rows/ExecWhileRouteRows.lean

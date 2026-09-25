@@ -1,0 +1,1 @@
+var a=0;println(5%a);

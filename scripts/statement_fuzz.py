@@ -47,8 +47,8 @@ when `which z3` succeeds, else listed **UNDECIDABLE**.
   the drifting real `Skel*` names.
 
 Usage:
-  python3 scripts/statement_fuzz.py --import Vsa.Sim.rows.AssemblySkeleton \
-      --prop Vsa.Sim.TermAssembly.Skel.SkelHNeg --layout --unfold NegResid
+  python3 scripts/statement_fuzz.py --import Vsa.Sim.rows.IHClause_Trivial \
+      --prop Vsa.Sim.IHClause.Trivial.Residuals --layout
   python3 scripts/statement_fuzz.py --acceptance
 """
 
@@ -398,7 +398,8 @@ def fuzz_one(imp, prop, is_layout, unfold, log):
 # hermetic acceptance
 # --------------------------------------------------------------------------
 
-ACCEPTANCE_PROBE = r"""import Vsa.Sim.rows.AssemblySkeleton
+ACCEPTANCE_PROBE = r"""import Vsa.Alloc
+import Vsa.Refinement
 
 open Vsa.Alloc (StackLayout StackOK)
 open Vsa.Refine (Layout)

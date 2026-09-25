@@ -1,0 +1,1 @@
+var s="x";var i=0;while(i<26){s=s+s;i=i+1;}println(1);

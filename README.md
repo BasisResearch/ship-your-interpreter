@@ -5,11 +5,14 @@ interpreter compiled to bare-metal RV64 with HTIF I/O. The proof relates an
 inductive big-step semantics of WHILE to the binary's execution in the
 Sail-generated RISC-V model.
 
-The full Lean source build passes. The end-to-end theorem remains conditional
-on the `RemainingWork` record. The
+The full Lean source build passes. The end-to-end theorem
+`Vsa.Sim.EndToEnd.endToEnd_refinement` (`VsaIris/Interp/EndToEnd.lean`) is
+proved from the named newlib holes `VsaIris.Interp.IrisHoles`
+(`VsaIris/HOLES.md`). The
 [proof closure plan](experiments/smt/PROOF_CLOSURE_PLAN.md) records completed
 proofs, remaining obligations, and validation results. Permitted axioms are
-`propext`, `Classical.choice`, and `Quot.sound`.
+`propext`, `Classical.choice`, and `Quot.sound`. `REVIEW.md` is the
+adversarial soundness review of the final theorem's hypotheses.
 
 The tooling that makes this tractable is documented separately in
 [`TOOLING.md`](TOOLING.md): proof generators, validation commands, and
@@ -47,6 +50,55 @@ theorem refinement {L : Layout} (H : InterpSim L) :
 memory representation, via the inductive `ProgramRepr`. `InterpSim` is the
 forward-simulation obligation. Every derivable behaviour is realised by the
 machine, and underivable programs never halt cleanly.
+
+The theorem is instantiated at `L := Vsa.Sim.LayoutInstance.interpRunLayout`
+(`Vsa/Sim/LayoutInstance.lean`), whose `Loaded` is
+`∃ a n, ProgramRepr c.σ.mem a n p ∧ InterpRunReady c a n`. It is the
+theorem's whole hypothesis, so read it as the contract with the loaded
+binary. `InterpRunReadyFacts` requires, at `interp_run`'s entry:
+
+- **Machine state.** `pc = 0x800043ec`; the ABI arguments `a0 = &interp`
+  (`0x87fffe10`), `a1 = stmts`, `a2 = count`, `a3 = 0` (script mode);
+  `ra`, `sp = 0x87fffd00`, `gp`, `s0 = &_impure_ptr`; every general register
+  present; `GoodState` (machine mode, `misa`/`mstatus` at their reset
+  values, traps undelegated, HTIF idle); `main`'s saved return address.
+- **Image and runtime data.** The exact `.text` and `.rodata` bytes of
+  `c/while-riscv-htif.elf` (`FixedTextLoaded`, `FixedRodataLoaded`), the
+  static pins `snprintf`/`vfprintf` read, newlib's stdout `FILE`
+  (`ConsoleStream`: unbuffered, one-byte buffer, `__swrite`), the idle
+  `stdin`/`stderr` `FILE`s and empty `atexit` list (`ExitRuntimeData`),
+  `_impure_data._stderr`, and no console output yet (`OutRepr`).
+- **The interpreter object.** `Interp.globals` and `call_depth = 0`, the
+  object and its `jmp_buf` inside RAM above the HTIF words, and 8 MiB of
+  stack below `sp` with every stack byte present in the memory map.
+- **The AST.** `stmts` is an 8-aligned array of `count` `Stmt*` in RAM,
+  `ProgramRepr` holds for `p`, and the AST's bytes are immutable shared
+  bytes: outside the writable ELF sections, the stack, the global frame's
+  header and arrays, and every allocation the interpreter may write
+  (`InitialOwned`). Strings are ASCII (`CStr` requires bytes below 128).
+- **The initial store.** The global frame holds exactly `print`, `println`,
+  `assert` (`StoreRepr initSt.store` with their entry addresses), with
+  capacity 8, in three whole in-use dlmalloc chunks (`BootFrameChunks`).
+- **The allocator.** dlmalloc's heap `[_end, __heap_end)` in its canonical
+  shape (`DlHeap.HeapAt`: a chunk walk from `_end` to the top chunk, free
+  chunks on exactly one well-formed bin, page-aligned break, 32-bit
+  `binblocks`, the top chunk at least 16 bytes below the break).
+- **Two program-dependent assumptions**, both universally quantified over
+  the program the memory represents:
+  - `InitialAllocatorAt.capacity` — for every terminating derivation of
+    `p` with modeled allocation cost `n` (`Vsa/While/Cost.lean`),
+    `2 * n + 8256 ≤ __heap_end − top`: the heap has room for the run. A
+    terminating program that allocates more than the free heap is *not*
+    `Loaded`; the binary prints `out of memory` and exits 1, and the
+    theorem says nothing about it.
+  - `stack_admissible` — `ProgramStackFits p`: the statically computed
+    stack need of `p` (nesting depth of its statements and expressions,
+    the 1000-deep call budget, the evaluator frame, the helpers'
+    headroom, `interp_run`'s frame) fits below `sp`, and every function
+    body fits one call level.
+
+`REVIEW.md` audits this hypothesis against the binary's real entry state;
+the fields that no real run satisfies are listed there with proposals.
 
 ```lean
 structure InterpSim (L : Layout) : Prop where
