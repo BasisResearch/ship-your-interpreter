@@ -8,19 +8,17 @@ the reflected state (no `native_decide`), generated per program. The
 witnesses can close only after P1 (console flags) and P2 (script bytes, lane
 B1) and P3 (stack presence, lane B2).
 
-## Status: witnesses built modulo P3 (lane B2) and C4 (needs a user decision)
+## Status: witnesses built modulo P3 (lane B2, not yet pushed); C4 resolved by P7
 
-## Found: C4 (new vacuity, machine-checked)
+## P7 (C4), approved by the user 2026-09-25 and landed
 
-The natives' `Value` name pointers are `.rodata` literals (`0x80019538`,
-`0x80019540`, `0x80019548`); `FrameOwned.values` makes those bytes `shared`,
-and `BootHeapFacts.shared_geom` (`SharedGeom.ram`) requires every shared byte
-at or above `0x8001acf0`. `Vsa.Sim.Boot.nativeName_obstruction`
-(`Obstruction.lean`) refutes `InterpRunReadyFacts` from three reads; every
-generated trace instantiates it (`Gen/<Prog>.c4_obstruction`) at its real
-entry memory. Proposed fix P7 (REVIEW.md): the shared bytes' geometry admits
-`.rodata` (the Iris consumers need only `ReadOK`/`SharedWin`). Pending the
-user's decision; recorded in PROOF_CLOSURE_PLAN.md.
+`BootHeapFacts.shared_geom : SharedReadWin shared stackSL`
+(`Vsa/Sim/SharedGeometry.lean`): shared bytes may lie in `.rodata`, where the
+natives' value names are. Consumers `readOK_of_sharedGeom` (TopRun) and
+`sharedWin_of_geom` (World) re-checked; control uses `SharedGeom.toReadWin`;
+every trace witnesses it (`OwnOk.readWin`). INTERP_DESIGN.md "STATEMENT
+CHANGE (lane B3, P7)"; REVIEW.md C4 resolved. The obstruction theorem was
+removed with the fix (commit `2b62ce16` has it).
 
 ## Done
 
@@ -29,12 +27,13 @@ user's decision; recorded in PROOF_CLOSURE_PLAN.md.
   every `c/tests/*.wl` build reaching `interp_run` except `recursion`
   (arithmetic, for, functions1/2, scope, strings, while, err_divzero,
   err_undefined), `loaded : Loaded interpRunLayout prog (bootConfig (bootMem
-  script log) regs entrySteps)` with exactly two premises: every stack byte
-  present (C3, lane B2) and `SharedGeom own.shared stackSL` (C4, refuted).
+  script log) regs entrySteps)` with one premise: every stack byte present
+  (C3). `loadedAt` holds over any memory the entry view is a partial view of,
+  so B2's `fillZero` discharges the premise when it lands.
   `prog_eq` identifies `prog` with the `Programs.lean` source for while,
   arithmetic, for, scope, strings, recursion.
 - **Capstone** `Vsa/Sim/Boot/EndToEnd.lean`: `proofElf_halts` (and five more):
-  `IrisHoles` + the two open premises ⊢ the real proof-ELF entry state
+  `IrisHoles` + stack presence ⊢ the real proof-ELF entry state
   `Halts … "55\n2500\n36\n" 0`. Axioms `[propext, Classical.choice, Quot.sound]`.
 - Loader: `initializeMemory_eq : ElfLoads elf script → initializeMemory .B64
   elf = loadedMem script` (`Elf.lean`); `check-elf` evaluates `ElfLoads`
@@ -50,7 +49,6 @@ user's decision; recorded in PROOF_CLOSURE_PLAN.md.
 
 ## Open
 
-- C4 / P7 (statement change, user decision pending).
 - P3 (lane B2): then `hstack` goes via densification.
 - `recursion.wl`: `capOk` out of kernel reach (`fib(20)` allocates ~22k
   frames in the list-backed store); its trace has every other fact.
