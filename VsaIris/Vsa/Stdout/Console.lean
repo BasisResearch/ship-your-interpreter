@@ -17,8 +17,13 @@ namespace VsaIris.Sym
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
-/-- The `stdout` fields a write path loads, as load values of `Mt`. -/
-structure ConsoleMt (Mt : Mem) : Prop where
+/-- `stdout`'s `_flags` as a load value: `0x200a` oriented, `0x000a` before
+the first write (`consoleFlags`, lane B1). -/
+abbrev consoleFlagsV (o : Bool) : BitVec 64 := if o then 0x200a#64 else 0x000a#64
+
+/-- The `stdout` fields a write path loads, as load values of `Mt`, with
+`_flags = fl` (`consoleFlagsV o`). -/
+structure ConsoleMt (fl : BitVec 64) (Mt : Mem) : Prop where
   /-- `_impure_data.__cleanup` (`__sinit` has run) -/
   sinit : ldv .ld Mt 0x8001b580 = 0x80005d2c#64
   /-- `_impure_data._stdout` -/
@@ -27,9 +32,9 @@ structure ConsoleMt (Mt : Mem) : Prop where
   p : ldv .ld Mt 0x8001bb20 = 0x8001bb97#64
   /-- `_w` -/
   w : ldv .lw Mt 0x8001bb2c = 0#64
-  /-- `_flags` (`__SWR | __SNBF | __SORD`) -/
-  flagsU : ldv .lhu Mt 0x8001bb30 = 0x200a#64
-  flagsS : ldv .lh Mt 0x8001bb30 = 0x200a#64
+  /-- `_flags` (`__SWR | __SNBF`, and `__SORD` once oriented) -/
+  flagsU : ldv .lhu Mt 0x8001bb30 = fl
+  flagsS : ldv .lh Mt 0x8001bb30 = fl
   /-- `_file` -/
   fd : ldv .lh Mt 0x8001bb32 = 1#64
   /-- `_bf._base` -/
@@ -73,8 +78,8 @@ theorem ldv_lhu_of_imgLE {Mt : Mem} {a v : Nat} (h : imgLE (imgM Mt) a 2 = v) :
     ldv .lhu Mt a = BitVec.ofNat 64 v := by rw [ldv_lhu_img, h]
 
 /-- **`stdout` at the boundary, as loads.** -/
-theorem consoleMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
-    (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) : ConsoleMt Mt := by
+theorem consoleMt_of {o : Bool} {img : Nat → BitVec 8} (h : StdioOKAt o img) {Mt : Mem}
+    (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) : ConsoleMt (consoleFlagsV o) Mt := by
   obtain ⟨hc, _, _⟩ := h.facts
   have F : ∀ a n, 0x8001b520 ≤ a → a + n ≤ 0x8001b538 ∨ (0x8001b53c ≤ a ∧ a + n ≤ 0x8001b960) ∨
       (0x8001b978 ≤ a ∧ a + n ≤ 0x8001b990) ∨ (0x8001ba68 ≤ a ∧ a + n ≤ 0x8001c168) →
@@ -85,8 +90,10 @@ theorem consoleMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.stdout (F _ _ (by decide) (by decide)))
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.cursor (F _ _ (by decide) (by decide)))
   · exact (ldv_lw_of_imgLE (stdio_imgLE hM hc.writeCount (F _ _ (by decide) (by decide)))).trans (by decide)
-  · exact ldv_lhu_of_imgLE (stdio_imgLE hM hc.flags (F _ _ (by decide) (by decide)))
-  · exact (ldv_lh_of_imgLE (stdio_imgLE hM hc.flags (F _ _ (by decide) (by decide)))).trans (by decide)
+  · exact (ldv_lhu_of_imgLE (stdio_imgLE hM hc.flags (F _ _ (by decide) (by decide)))).trans
+      (by cases o <;> decide)
+  · exact (ldv_lh_of_imgLE (stdio_imgLE hM hc.flags (F _ _ (by decide) (by decide)))).trans
+      (by cases o <;> decide)
   · exact (ldv_lh_of_imgLE (stdio_imgLE hM hc.fd (F _ _ (by decide) (by decide)))).trans (by decide)
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.base (F _ _ (by decide) (by decide)))
   · exact (ldv_lw_of_imgLE (stdio_imgLE hM hc.bufSize (F _ _ (by decide) (by decide)))).trans (by decide)

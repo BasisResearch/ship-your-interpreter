@@ -32,7 +32,7 @@ theorem stdioFoot_rng (a n : Nat)
 
 
 /-- The fields the close path reads besides `stderr`'s `FILE`, as loads. -/
-structure CloseMt (Mt : Mem) : Prop where
+structure CloseMt (fl : BitVec 64) (Mt : Mem) : Prop where
   atexit : ldv .ld Mt 0x8001b9f8 = 0x0#64
   handler : ldv .ld Mt 0x8001b9b0 = 0x80005d18#64
   glueNext : ldv .ld Mt 0x8001b520 = 0x0#64
@@ -50,8 +50,8 @@ structure CloseMt (Mt : Mem) : Prop where
   in_lb : ldv .ld Mt 0x8001bae0 = 0x0#64
   in_lock : ldv .ld Mt 0x8001bb08 = 0x0#64
   in_mode : ldv .lw Mt 0x8001bb18 = 0x0#64
-  out_flagsU : ldv .lhu Mt 0x8001bb30 = 0x200a#64
-  out_flags : ldv .lh Mt 0x8001bb30 = 0x200a#64
+  out_flagsU : ldv .lhu Mt 0x8001bb30 = fl
+  out_flags : ldv .lh Mt 0x8001bb30 = fl
   out_fd : ldv .lh Mt 0x8001bb32 = 0x1#64
   out_base : ldv .ld Mt 0x8001bb38 = 0x8001bb97#64
   out_p : ldv .ld Mt 0x8001bb20 = 0x8001bb97#64
@@ -91,8 +91,8 @@ structure ErrWrittenMt (Mt : Mem) : Prop where
   mode : ldv .lw Mt 0x8001bc88 = 0x0#64
 
 /-- `CloseMt` from `CloseCommon`. -/
-theorem closeMt_of {img : Nat → BitVec 8} {Mt : Mem}
-    (h : CloseCommon (fillMem img dataList)) (hM : ∀ a, stdioFoot a → imgM Mt a = img a) : CloseMt Mt :=
+theorem closeMt_of {o : Bool} {img : Nat → BitVec 8} {Mt : Mem}
+    (h : CloseCommon o (fillMem img dataList)) (hM : ∀ a, stdioFoot a → imgM Mt a = img a) : CloseMt (consoleFlagsV o) Mt :=
   ⟨ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.atexit (stdioFoot_rng 0x8001b9f8 8 (by decide))),
    ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdioHandler (stdioFoot_rng 0x8001b9b0 8 (by decide))),
    ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.glueNext (stdioFoot_rng 0x8001b520 8 (by decide))),
@@ -110,8 +110,8 @@ theorem closeMt_of {img : Nat → BitVec 8} {Mt : Mem}
    ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.lineBuffer (stdioFoot_rng 0x8001bae0 8 (by decide))),
    ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.lock (stdioFoot_rng 0x8001bb08 8 (by decide))),
    (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.lockMode (stdioFoot_rng 0x8001bb18 4 (by decide)))).trans (by decide),
-   ldv_lhu_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide))),
-   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide)))).trans (by decide),
+   (ldv_lhu_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide)))).trans (by cases o <;> decide),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide)))).trans (by cases o <;> decide),
    (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.fd (stdioFoot_rng 0x8001bb32 2 (by decide)))).trans (by decide),
    ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.base (stdioFoot_rng 0x8001bb38 8 (by decide))),
    ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.cursor (stdioFoot_rng 0x8001bb20 8 (by decide))),

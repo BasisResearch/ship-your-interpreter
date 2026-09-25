@@ -34,9 +34,10 @@ structure ErrWrittenFile (m : Mem) (file : Nat) : Prop where
   lockMode : read32 m (file + 176) = some 0
 
 /-- What `exit`'s close path reads besides `stderr`'s `FILE`: VSA's
-`ConsoleStream` and `ExitRuntimeData` without its `stderr` field. -/
-structure CloseCommon (m : Mem) : Prop where
-  console : ConsoleStream m
+`ConsoleStreamAt o` (`stdout` oriented or not, lane B1) and `ExitRuntimeData`
+without its `stderr` field. -/
+structure CloseCommon (o : Bool) (m : Mem) : Prop where
+  console : ConsoleStreamAt o m
   atexit : read64 m exitAtexitAddr = some 0
   stdioHandler : read64 m exitStdioHandlerAddr = some exitStdioHandler
   glueNext : read64 m exitGlueAddr = some 0
@@ -47,31 +48,40 @@ structure CloseCommon (m : Mem) : Prop where
   stdoutUngetc : read64 m (consoleStdout + 88) = some 0
   stdoutLine : read64 m (consoleStdout + 120) = some 0
 
-theorem CloseCommon.of_exitRuntimeData {m : Mem} (hc : ConsoleStream m) (h : ExitRuntimeData m) :
-    CloseCommon m :=
+theorem CloseCommon.of_exitRuntimeData {o : Bool} {m : Mem} (hc : ConsoleStreamAt o m)
+    (h : ExitRuntimeData m) : CloseCommon o m :=
   ⟨hc, h.atexit, h.stdioHandler, h.glueNext, h.glueCount, h.glueFiles, h.stdin, h.stdoutClose,
     h.stdoutUngetc, h.stdoutLine⟩
 
-/-- **newlib's data after one write to `stderr`**, read off an image of
-`stdioFoot` like `StdioOK`. -/
-def StdioErrOK (img : Nat → BitVec 8) : Prop :=
+/-- **newlib's data after one write to `stderr`**, at `stdout` orientation
+`o`, read off an image of `stdioFoot` like `StdioOKAt`. -/
+def StdioErrOKAt (o : Bool) (img : Nat → BitVec 8) : Prop :=
   ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) →
-    CloseCommon m ∧ ErrWrittenFile m exitStderr ∧ read64 m stderrPtrAddr = some exitStderr
+    CloseCommon o m ∧ ErrWrittenFile m exitStderr ∧ read64 m stderrPtrAddr = some exitStderr
+
+/-- newlib's data after one write to `stderr`, `stdout` oriented or not (a
+`stderr` write leaves `stdout` as it found it). -/
+def StdioErrOK (img : Nat → BitVec 8) : Prop := ∃ o, StdioErrOKAt o img
 
 /-- The two states `exit`'s close path starts from, as one read-off
 description: the common part and `stderr` idle or written. -/
-def CloseReady (img : Nat → BitVec 8) : Prop :=
+def CloseReadyAt (o : Bool) (img : Nat → BitVec 8) : Prop :=
   ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) →
-    CloseCommon m ∧ (ExitIdleFile m exitStderr 0x12 2 ∨ ErrWrittenFile m exitStderr)
+    CloseCommon o m ∧ (ExitIdleFile m exitStderr 0x12 2 ∨ ErrWrittenFile m exitStderr)
+
+/-- `CloseReadyAt` at some `stdout` orientation. -/
+def CloseReady (img : Nat → BitVec 8) : Prop := ∃ o, CloseReadyAt o img
 
 theorem StdioOK.closeReady {img : Nat → BitVec 8} (h : StdioOK img) : CloseReady img :=
-  fun m hm => by
+  let ⟨o, h⟩ := h
+  ⟨o, fun m hm => by
     obtain ⟨hc, hx, _⟩ := h m hm
-    exact ⟨CloseCommon.of_exitRuntimeData hc hx, .inl hx.stderr⟩
+    exact ⟨CloseCommon.of_exitRuntimeData hc hx, .inl hx.stderr⟩⟩
 
 theorem StdioErrOK.closeReady {img : Nat → BitVec 8} (h : StdioErrOK img) : CloseReady img :=
-  fun m hm => by
+  let ⟨o, h⟩ := h
+  ⟨o, fun m hm => by
     obtain ⟨hc, hx, _⟩ := h m hm
-    exact ⟨hc, .inr hx⟩
+    exact ⟨hc, .inr hx⟩⟩
 
 end VsaIris.Stdio

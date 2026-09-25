@@ -47,11 +47,11 @@ theorem exitExtra_off {a : Nat} (h : ExitRuntimeExtraFoot a) : stdioFoot a ∧ �
   unfold stdioFoot InRange outW
   omega
 
-/-- **`StdioOK` after a flushed stdout write.** -/
-theorem StdioOK.written {img img' : Nat → BitVec 8} (h : StdioOK img)
+/-- **`StdioOKAt` after a flushed stdout write.** -/
+theorem StdioOKAt.written {o : Bool} {img img' : Nat → BitVec 8} (h : StdioOKAt o img)
     (hkeep : ∀ a, stdioFoot a → ¬ outW a → img' a = img a)
     (hp : imgLE img' 0x8001bb20 8 = 0x8001bb97) (hw : imgLE img' 0x8001bb2c 4 = 0)
-    (hf : imgLE img' 0x8001bb30 2 = 0x200a) : StdioOK img' := by
+    (hf : imgLE img' 0x8001bb30 2 = 0x200a) : StdioOKAt true img' := by
   intro m hm
   obtain ⟨hc, he, hs, hl, hst⟩ := h.facts
   have hag : AgreeP (fun a => stdioFoot a ∧ ¬ outW a) (fillMem img dataList) m := fun a ha => by
@@ -102,5 +102,14 @@ theorem StdioOK.written {img img' : Nat → BitVec 8} (h : StdioOK img)
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hl.decPoint
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hst.base
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hst.writer
+
+/-- **`StdioOK` after a flushed stdout write**, from either orientation: the
+write leaves `stdout` oriented. -/
+theorem StdioOK.written {img img' : Nat → BitVec 8} (h : StdioOK img)
+    (hkeep : ∀ a, stdioFoot a → ¬ outW a → img' a = img a)
+    (hp : imgLE img' 0x8001bb20 8 = 0x8001bb97) (hw : imgLE img' 0x8001bb2c 4 = 0)
+    (hf : imgLE img' 0x8001bb30 2 = 0x200a) : StdioOK img' :=
+  let ⟨_, h⟩ := h
+  (h.written hkeep hp hw hf).ok
 
 end VsaIris.Stdio

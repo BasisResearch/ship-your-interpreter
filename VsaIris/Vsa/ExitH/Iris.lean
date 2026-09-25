@@ -1,5 +1,7 @@
 import VsaIris.Vsa.ExitH.RunIdle
 import VsaIris.Vsa.ExitH.RunWritten
+import VsaIris.Vsa.ExitH.RunIdleU
+import VsaIris.Vsa.ExitH.RunWrittenU
 import VsaIris.Vsa.Newlib
 
 /-!
@@ -78,8 +80,9 @@ def ExitQ (s e : BitVec 64) (cs : Nat → BitVec 64) (rv : Nat → BitVec 64) (_
 
 /-- **`exit`'s interior as one symbolic run**, from either `stderr` state. -/
 theorem exit_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {R : Nat → BitVec 64}
-    {Mt : Mem} {s e : BitVec 64} {cs : Nat → BitVec 64} (hs : ExitSp s) (h2 : R 2 = s)
-    (h8 : R 8 = e) (h11 : R 11 = 0#64) (hsv : ∀ x ∈ savedX, R x = cs x) (hC : CloseMt Mt)
+    {Mt : Mem} {s e : BitVec 64} {cs : Nat → BitVec 64} {o : Bool} (hs : ExitSp s) (h2 : R 2 = s)
+    (h8 : R 8 = e) (h11 : R 11 = 0#64) (hsv : ∀ x ∈ savedX, R x = cs x)
+    (hC : CloseMt (consoleFlagsV o) Mt)
     (hE : ErrIdleMt Mt ∨ ErrWrittenMt Mt) :
     NW live ∅ [] (exitS s) (ExitQ s e cs) 0x80004778#64 R Mt := by
   have hin : ∀ x ∈ savedX, x ∈ iRegs ∧ x ≠ VsaIris.PC := by decide
@@ -89,7 +92,9 @@ theorem exit_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {
       ⟨hm.pc, (hm.regs 2 (by decide) (by decide)).trans hend.sp,
         (hm.regs 8 (by decide) (by decide)).trans hend.s0,
         fun x hx => (hm.regs x (hin x hx).1 (hin x hx).2).trans ((hend.saved x hx).trans (hsv x hx))⟩
-  rcases hE with hE | hE
+  cases o <;> rcases hE with hE | hE
+  · exact exitIdleU_chain hlive hs h2 h8 h11 hC hE hk
+  · exact exitWrittenU_chain hlive hs h2 h8 h11 hC hE hk
   · exact exitIdle_chain hlive hs h2 h8 h11 hC hE hk
   · exact exitWritten_chain hlive hs h2 h8 h11 hC hE hk
 
@@ -228,9 +233,10 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
     constructor <;> intro h <;> omega) $$ HS
   -- the fields the run reads
   have hcr : CloseReady img := hP.elim StdioOK.closeReady (fun h => hI _ h.2)
+  obtain ⟨_, hcr⟩ := hcr
   obtain ⟨hcc, hst⟩ := hcr (fillMem img dataList)
     (fun _ ha => fillMem_get (l := dataList) img (mem_dataList ha))
-  have hC : CloseMt Mt := closeMt_of hcc exitMt_stdio
+  have hC := closeMt_of hcc exitMt_stdio (Mt := Mt)
   have hE : ErrIdleMt Mt ∨ ErrWrittenMt Mt :=
     hst.imp (fun h => errIdleMt_of h exitMt_stdio) (fun h => errWrittenMt_of h exitMt_stdio)
   -- the registers

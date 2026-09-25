@@ -36,7 +36,7 @@ structure ErrMt (Mt : Mem) : Prop where
 /-- **`stderr` at the boundary, as loads.** -/
 theorem errMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
     (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) : ErrMt Mt := by
-  obtain ⟨_, he, _, _, hs⟩ := h.facts
+  obtain ⟨_, _, he, _, _, hs⟩ := h.facts
   have F : ∀ a n, 0x8001ba68 ≤ a → a + n ≤ 0x8001c168 → ∀ i, i < n →
       stdioFoot (a + i) ∧ ¬ impureW (a + i) := by
     intro a n h1 h2 i hi; unfold stdioFoot InRange impureW; omega
@@ -78,7 +78,7 @@ structure LocaleMt (Mt : Mem) : Prop where
 /-- **The locale, as loads.** -/
 theorem localeMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
     (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) : LocaleMt Mt := by
-  obtain ⟨_, _, _, hl, _⟩ := h.facts
+  obtain ⟨_, _, _, _, hl, _⟩ := h.facts
   have F : ∀ a n, 0x8001b798 ≤ a → a + n ≤ 0x8001b960 → ∀ i, i < n →
       stdioFoot (a + i) ∧ ¬ impureW (a + i) := by
     intro a n h1 h2 i hi; unfold stdioFoot InRange impureW; omega

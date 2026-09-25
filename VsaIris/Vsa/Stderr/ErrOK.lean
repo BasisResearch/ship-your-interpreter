@@ -53,11 +53,11 @@ macro "field_in" : tactic => `(tactic| (intro k hk; simp only [stdioFoot, InRang
   exitStdioHandlerAddr, exitGlueAddr, exitStdin, exitStderr, stderrPtrAddr] at *; omega))
 
 /-- **After one write to `stderr`**, newlib's data is `StdioErrOK`. -/
-theorem stdioErrOK_of_write {img img' : Nat → BitVec 8} (h : StdioOK img)
+theorem stdioErrOK_of_writeAt {o : Bool} {img img' : Nat → BitVec 8} (h : StdioOKAt o img)
     (hfr : ∀ a, stdioFoot a → ¬ errWritten a → img' a = img a)
     (hcur : imgLE img' 0x8001bbd8 8 = 0x8001bc4f) (hfl : imgLE img' 0x8001bbe8 2 = 0x201a)
     (hbase : imgLE img' 0x8001bbf0 8 = 0x8001bc4f) (hlm : imgLE img' 0x8001bc88 4 = 0) :
-    StdioErrOK img' := by
+    StdioErrOKAt o img' := by
   intro m hm
   obtain ⟨hc, he, hs, _, _⟩ := h.facts
   have K := fun {a n v : Nat} (h0 : readLE (fillMem img dataList) a n = some v)
@@ -122,5 +122,14 @@ theorem stdioErrOK_of_write {img img' : Nat → BitVec 8} (h : StdioOK img)
   · exact field_new hm hlm (by field_in)
   -- `_impure_data._stderr`
   · exact K hs (by field_in)
+
+/-- **After one write to `stderr`**, at either `stdout` orientation. -/
+theorem stdioErrOK_of_write {img img' : Nat → BitVec 8} (h : StdioOK img)
+    (hfr : ∀ a, stdioFoot a → ¬ errWritten a → img' a = img a)
+    (hcur : imgLE img' 0x8001bbd8 8 = 0x8001bc4f) (hfl : imgLE img' 0x8001bbe8 2 = 0x201a)
+    (hbase : imgLE img' 0x8001bbf0 8 = 0x8001bc4f) (hlm : imgLE img' 0x8001bc88 4 = 0) :
+    StdioErrOK img' :=
+  let ⟨o, h⟩ := h
+  ⟨o, stdioErrOK_of_writeAt h hfr hcur hfl hbase hlm⟩
 
 end VsaIris.Stdio

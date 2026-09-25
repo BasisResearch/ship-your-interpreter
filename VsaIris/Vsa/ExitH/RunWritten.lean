@@ -5,7 +5,7 @@ import VsaIris.Vsa.ExitH.Tac
 # `exit`'s newlib interior with `stderr` written (lane N4)
 
 `exitWritten_run`: from `jal __call_exitprocs` (`0x80004778`) with `a1 = 0`,
-`sp = s`, `s0 = e`, the close path's fields (`CloseMt`) and `stderr`
+`sp = s`, `s0 = e`, the close path's fields (`CloseMt 0x200a#64`) and `stderr`
 after one write (`ErrWrittenMt`), the run reaches `mv a0,s0`
 (`0x80004788`) with `sp`, `s0` and `s1`–`s11` as at the entry (`ExitEnd`).
 A chain of `45` pieces of at most 10 steps each (`scripts/gen_exit_handlers.py`).
@@ -23,7 +23,7 @@ macro "xh_stepWritten" : tactic => `(tactic| (intros; xh_clean; xh_forget_sp (s.
 #ix_piece exitWritten_01 {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     {s e : BitVec 64} (hs : ExitSp s) (h2 : R 2 = s) (h8 : R 8 = e) (h11 : R 11 = 0#64)
-    (hC : CloseMt Mt) (hE : ErrWrittenMt Mt)
+    (hC : CloseMt 0x200a#64 Mt) (hE : ErrWrittenMt Mt)
     (hk : ∀ R' Mt', ExitEnd R s e R' → NW live ∅ [] (exitS s) Q 0x80004788#64 R' Mt') :
     NW live ∅ [] (exitS s) Q 0x80004778#64 R Mt
   by
