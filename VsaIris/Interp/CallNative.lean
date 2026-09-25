@@ -1,3 +1,4 @@
+import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Interp.CallArm
 import VsaIris.Interp.SpecValue
 
@@ -199,9 +200,9 @@ def natOutSpec (Wp : MachWP (GF := GF) M) (entry : BitVec 64) (need : Nat)
   helperSpec M Wp entry callerSaved
     (fun rv => rv 10 = sret ∧ rv 12 = BitVec.ofNat 64 vs.length ∧ rv 13 = args ∧ rv 2 = s)
     iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
-      valsAt N args.toNat vs ∗ dispResL st vs ∗ Newlib.binImg ∗ Stdio.stdioOwn ∗ consoleOwn o ∗
+      valsAt N args.toNat vs ∗ dispResL st vs ∗ Newlib.binImg ∗ Stdio.stdioW ∗ consoleOwn o ∗
       stackAt s need)
-    (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ Stdio.stdioOwn ∗
+    (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ Stdio.stdioW ∗
       consoleOwn o' ∗ stackAt s need))
 
 theorem nativePrintSpec_eq (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs : List Value)
@@ -224,17 +225,20 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 /-- **The world, opened for a printing native**: the console, newlib's data
 and the binary's image, the store, and the way back with a new console. -/
 theorem world_out (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
-    (st : St) (d : Nat) :
+    (st : St) (d : Nat) (hE : ErrnoOwn.ErrnoLend (GF := GF) L Room) :
     world (GF := GF) N L Room inp ρ st d ⊢
-      consoleOwn st.out ∗ Stdio.stdioOwn ∗ Newlib.binImg ∗ ∃ B, storeRepr N st.store B ∗
-        (∀ o, consoleOwn o -∗ Stdio.stdioOwn -∗ storeRepr N st.store B -∗
+      consoleOwn st.out ∗ Stdio.stdioW ∗ Newlib.binImg ∗ ∃ B, storeRepr N st.store B ∗
+        (∀ o, consoleOwn o -∗ Stdio.stdioW -∗ storeRepr N st.store B -∗
           world N L Room inp ρ ⟨st.store, o⟩ d) := by
   unfold world worldE
   iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
-  iframe Hc Hio Hb
+  ihave ⟨He, Hh⟩ := hE ρ H $$ Hh
+  unfold Stdio.stdioW
+  iframe Hc Hio He Hb
   iexists B
   iframe Hs
-  iintro %o Hc Hio Hs
+  iintro %o Hc ⟨Hio, He⟩ Hs
+  ihave Hh := Hh $$ He
   iexists H, B
   iframe Hh Hs Hc Hio Hi
   ipureintro; exact hB

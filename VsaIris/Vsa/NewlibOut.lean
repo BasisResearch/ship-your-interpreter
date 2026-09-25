@@ -60,13 +60,16 @@ instance (fmt arg : BitVec 64) (frag : String) : Persistent (fprintfOut (GF := G
   unfold fprintfOut; infer_instance
 
 /-- A stdout call: arguments `args`, the read-only input `R`; the console grows
-by `frag` and newlib's data stays in its boundary state. -/
+by `frag` and newlib's data stays in its boundary state. The call borrows
+libgloss's `errno` (`_write_r` clears it on every write; an allocator global,
+lent by `ErrnoOwn.heapRes_errno`). -/
 def outSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (entry : BitVec 64)
     (args : List (BitVec 64)) (R : IProp GF) (s : BitVec 64) (need : Nat) (cs : Nat → BitVec 64)
     (o frag : String) : IProp GF :=
   fnSpecW Wp entry
-    (fun _ => iprop(argsAt args ∗ R ∗ stdioOwn ∗ consoleOwn o ∗ callFrame s need calleeSaved cs))
-    (fun _ => iprop(clobbered argRegs ∗ stdioOwn ∗ consoleOwn (o ++ frag) ∗
+    (fun _ => iprop(argsAt args ∗ R ∗ stdioW ∗ consoleOwn o ∗
+      callFrame s need calleeSaved cs))
+    (fun _ => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
       callFrame s need calleeSaved cs))
 
 /-- `snprintf(buf, 64, "<fn %s>", name)`: the rendering, cut to 63 characters,

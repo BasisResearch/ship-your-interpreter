@@ -52,9 +52,20 @@ def StdioOK (img : Nat → BitVec 8) : Prop :=
   ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) →
     ConsoleStream m ∧ ExitRuntimeData m ∧ read64 m stderrPtrAddr = some exitStderr
 
+/-- libgloss's `errno` word (`0x8001ba08`). `_write_r` (every console
+write) and `_sbrk_r` clear it; its value is never read on either path. It is
+an allocator global (`VsaHeap.allocGlobal`), which a write call borrows
+(`ErrnoOwn.heapRes_errno`). -/
+def errnoFoot (a : Nat) : Prop := InRange 0x8001ba08 0x8001ba0c a
+
+instance : DecidablePred errnoFoot := fun a => by unfold errnoFoot InRange; infer_instance
+
 section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+
+/-- The `errno` word, owned at any value. -/
+def errnoOwn : IProp GF := ownSet errnoFoot byteAny
 
 /-- The bytes of newlib's data `stdioAt` owns exclusively: all but `_impure_ptr`. -/
 def stdioExcl (a : Nat) : Prop := stdioFoot a ∧ ¬ impureW a
@@ -66,6 +77,10 @@ def stdioAt (P : (Nat → BitVec 8) → Prop) : IProp GF :=
 
 /-- newlib's runtime data in its boundary state. -/
 abbrev stdioOwn : IProp GF := stdioAt StdioOK
+
+/-- A stdout writer's state: newlib's data in its boundary state and the
+`errno` word every console write clears (lane N1). -/
+def stdioW : IProp GF := iprop(stdioOwn ∗ errnoOwn)
 
 theorem stdioAt_mono {P Q : (Nat → BitVec 8) → Prop} (h : ∀ img, P img → Q img) :
     stdioAt (GF := GF) P ⊢ stdioAt Q := by

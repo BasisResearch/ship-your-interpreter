@@ -330,11 +330,13 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
       halloc Dseq hst hf ha ihseq.2.1 ($S).vnull ($S).envNew ($S).envDefine
   case cloPrint =>
     intro st d vs st0 st1 env f args nf na Df hlen Da hf ha
-    exact caseT_CallPrint ($S).hlive ($S).nativeEntries (dispSupply_of_cloSupply ($S).cloSupply) Df hlen Da hf
+    exact caseT_CallPrint ($S).hlive ($S).nativeEntries (dispSupply_of_cloSupply ($S).cloSupply)
+      ErrnoOwn.errnoLend_vsa Df hlen Da hf
       ha ($S).nPrint (hroomPrint f args d)
   case cloPrintln =>
     intro st d vs st0 st1 env f args nf na Df hlen Da hf ha
-    exact caseT_CallPrintln ($S).hlive ($S).nativeEntries (dispSupply_of_cloSupply ($S).cloSupply) Df hlen Da
+    exact caseT_CallPrintln ($S).hlive ($S).nativeEntries (dispSupply_of_cloSupply ($S).cloSupply)
+      ErrnoOwn.errnoLend_vsa Df hlen Da
       hf ha ($S).nPrintln (hroomPrintln f args d)
   case cloAssert =>
     intro st d vs v m hvm htr st0 st1 env f args nf na Df hlen Da hf ha

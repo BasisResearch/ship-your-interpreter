@@ -180,9 +180,9 @@ def valuePrintSpec (Wp : MachWP (GF := GF) M) (p s : BitVec 64) (v : Value) (st 
     (o : String) : IProp GF :=
   helperSpec M Wp valuePrintPC callerSaved
     (fun rv => rv 10 = p ∧ rv 11 = stdoutFile ∧ rv 2 = s)
-    iprop(valAt N p.toNat v ∗ ⌜SlotGeom p⌝ ∗ dispRes st v ∗ binImg ∗ stdioOwn ∗ consoleOwn o ∗
+    iprop(valAt N p.toNat v ∗ ⌜SlotGeom p⌝ ∗ dispRes st v ∗ binImg ∗ stdioW ∗ consoleOwn o ∗
       stackAt s printNeed)
-    (fun _ => iprop(valAt N p.toNat v ∗ stdioOwn ∗ consoleOwn (o ++ v.display st) ∗
+    (fun _ => iprop(valAt N p.toNat v ∗ stdioW ∗ consoleOwn (o ++ v.display st) ∗
       stackAt s printNeed))
 
 /-- `native_print(sret, in, argc, args, line)`: prints the arguments separated
@@ -192,9 +192,9 @@ def nativePrintSpec (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs : L
   helperSpec M Wp nativePrintPC callerSaved
     (fun rv => rv 10 = sret ∧ rv 12 = BitVec.ofNat 64 vs.length ∧ rv 13 = args ∧ rv 2 = s)
     iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
-      valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioOwn ∗ consoleOwn o ∗
+      valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioW ∗ consoleOwn o ∗
       stackAt s nativePrintNeed)
-    (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
+    (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
       consoleOwn (o ++ printArgs st vs) ∗ stackAt s nativePrintNeed))
 
 /-- `native_println(sret, in, argc, args, line)`: `native_print`, then a
@@ -204,9 +204,9 @@ def nativePrintlnSpec (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs :
   helperSpec M Wp nativePrintlnPC callerSaved
     (fun rv => rv 10 = sret ∧ rv 12 = BitVec.ofNat 64 vs.length ∧ rv 13 = args ∧ rv 2 = s)
     iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
-      valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioOwn ∗ consoleOwn o ∗
+      valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioW ∗ consoleOwn o ∗
       stackAt s nativePrintlnNeed)
-    (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
+    (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
       consoleOwn (o ++ printArgs st vs ++ "\n") ∗ stackAt s nativePrintlnNeed))
 
 /-- `Call.assertOk`'s premise: one or two arguments, the first truthy. -/

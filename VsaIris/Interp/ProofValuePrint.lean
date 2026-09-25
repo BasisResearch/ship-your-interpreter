@@ -28,11 +28,11 @@ the return continuation. -/
 def Fvp (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (p s r : BitVec 64) (v : Value) (st : Store) (o : String) (rv : Nat → BitVec 64) (Ma : Mem)
     (E : IProp GF) : IProp GF :=
-  iprop(valImg N (imgM Ma) p.toNat v ∗ dispRes st v ∗ E ∗ binImg ∗ stdioOwn ∗ consoleOwn o ∗
+  iprop(valImg N (imgM Ma) p.toNat v ∗ dispRes st v ∗ E ∗ binImg ∗ stdioW ∗ consoleOwn o ∗
     stackScratch s printNeed ∗ codeRes ∗
     (PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
       (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
-        (valAt N p.toNat v ∗ stdioOwn ∗ consoleOwn (o ++ v.display st) ∗ stackAt s printNeed)) -∗
+        (valAt N p.toNat v ∗ stdioW ∗ consoleOwn (o ++ v.display st) ∗ stackAt s printNeed)) -∗
       Wp.W Φ))
 
 /-- **Closing a `value_print` run at a newlib tail call.** -/
@@ -46,9 +46,9 @@ theorem vp_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     (hlen : vs.length ≤ 8) (hvs : ∀ i (h : i < vs.length), R (10 + i) = vs[i]) (hs : R 2 = s)
     (h1 : R 1 = r) (hkeep : ∀ x ∈ fRegs, x ∉ callerSaved → R x = rv x)
     (hsg : StackGeom s printNeed) (hneed : need ≤ printNeed)
-    (hP : ∀ r, iprop(argsAt vs ∗ (Xr ∗ stdioOwn ∗ consoleOwn o) ∗
+    (hP : ∀ r, iprop(argsAt vs ∗ (Xr ∗ stdioW ∗ consoleOwn o) ∗
       callFrame s need Newlib.calleeSaved R) ⊢ P r)
-    (hQ : ∀ r, Q r ⊢ iprop(clobbered argRegs ∗ (stdioOwn ∗ consoleOwn (o ++ frag)) ∗
+    (hQ : ∀ r, Q r ⊢ iprop(clobbered argRegs ∗ (stdioW ∗ consoleOwn (o ++ frag)) ∗
       callFrame s need Newlib.calleeSaved R))
     (hX : valImg N (imgM Ma) p.toNat v ∗ dispRes st v ∗ E ∗ binImg ⊢ Xr)
     (hfrag : frag = v.display st)
@@ -109,8 +109,8 @@ omit I in
 /-- An `outSpec` precondition from H5's calling convention. -/
 theorem outSpec_P {vs : List (BitVec 64)} {Xr : IProp GF} {o : String} {s : BitVec 64} {need : Nat}
     {cs : Nat → BitVec 64} (r : BitVec 64) :
-    iprop(argsAt vs ∗ (Xr ∗ stdioOwn ∗ consoleOwn o) ∗ callFrame s need Newlib.calleeSaved cs) ⊢
-      (fun (_ : BitVec 64) => iprop(argsAt vs ∗ Xr ∗ stdioOwn ∗ consoleOwn o ∗
+    iprop(argsAt vs ∗ (Xr ∗ stdioW ∗ consoleOwn o) ∗ callFrame s need Newlib.calleeSaved cs) ⊢
+      (fun (_ : BitVec 64) => iprop(argsAt vs ∗ Xr ∗ stdioW ∗ consoleOwn o ∗
         callFrame s need Newlib.calleeSaved cs)) r := by
   dsimp only
   iintro ⟨Ha, ⟨Hx, Hs, Hc⟩, Hf⟩
@@ -118,9 +118,9 @@ theorem outSpec_P {vs : List (BitVec 64)} {Xr : IProp GF} {o : String} {s : BitV
 
 omit I in
 theorem outSpec_Q {o frag : String} {s : BitVec 64} {need : Nat} {cs : Nat → BitVec 64} (r : BitVec 64) :
-    (fun (_ : BitVec 64) => iprop(clobbered argRegs ∗ stdioOwn ∗ consoleOwn (o ++ frag) ∗
+    (fun (_ : BitVec 64) => iprop(clobbered argRegs ∗ stdioW ∗ consoleOwn (o ++ frag) ∗
         callFrame s need Newlib.calleeSaved cs)) r ⊢
-      iprop(clobbered (GF := GF) argRegs ∗ (stdioOwn ∗ consoleOwn (o ++ frag)) ∗
+      iprop(clobbered (GF := GF) argRegs ∗ (stdioW ∗ consoleOwn (o ++ frag)) ∗
         callFrame s need Newlib.calleeSaved cs) := by
   dsimp only
   iintro ⟨Ha, Hs, Hc, Hf⟩
@@ -538,7 +538,7 @@ abbrev VpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
     (p s r : BitVec 64) (v : Value) (st : Store) (o : String) (rv : Nat → BitVec 64) : IProp GF :=
   iprop(PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
     (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
-      (valAt N p.toNat v ∗ stdioOwn ∗ consoleOwn (o ++ v.display st) ∗ stackAt s printNeed)) -∗
+      (valAt N p.toNat v ∗ stdioW ∗ consoleOwn (o ++ v.display st) ∗ stackAt s printNeed)) -∗
     Wp.W Φ)
 
 /-- **`value_print` on a closure**: the data view from `dispRes`, then the
@@ -549,7 +549,7 @@ theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     (hp : ValPure N (.closure ca) (imgW (imgM Ma) p.toNat) (imgW (imgM Ma) (p.toNat + 8))
       (imgW (imgM Ma) (p.toNat + 16))) :
     codeRes ∗ valImg N (imgM Ma) p.toNat (.closure ca) ∗ dispRes st (.closure ca) ∗ binImg ∗
-      stdioOwn ∗ consoleOwn o ∗ stackScratch s printNeed ∗ VpK Wp Φ N p s r (.closure ca) st o rv ∗
+      stdioW ∗ consoleOwn o ∗ stackScratch s printNeed ∗ VpK Wp Φ N p s r (.closure ca) st o rv ∗
       ms valuePrintPC (upd rv 1 r) (InExt (p.toNat, 24)) Ma
     ⊢ Wp.W Φ := by
   iintro ⟨#Hcode, #Hw, #Hd, #Himg, Hstd, Hcon, Hst, Hk, Hms⟩
