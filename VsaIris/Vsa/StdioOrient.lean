@@ -74,13 +74,30 @@ theorem StdioOKAt.orient {o : Bool} {img img' : Nat → BitVec 8} (h : StdioOKAt
     by_cases e : a = consoleFlagHi
     · subst e; simp [m0]
     · rw [hm0 a e, hm a ha, hkeep a ha e]
-  obtain ⟨hc, he, hs⟩ := h m0 h0
+  obtain ⟨hc, he, hs, hl, hw⟩ := h m0 h0
+  have ag : ∀ n a, (∀ k, k < n → a + k ≠ consoleFlagHi) → readLE m0 a n = readLE m a n :=
+    fun n a hk => readLE_agreeP (P := fun a => a ≠ consoleFlagHi) (fun a ha => hm0 a ha) n a hk
   refine ⟨ConsoleStreamAt.orient (fun a _ ha => (hm0 a ha).symm) ?_ hc,
-    he.transport fun a ha => hm0 a (consoleFlagHi_off_exit ha), ?_⟩
+    he.transport fun a ha => hm0 a (consoleFlagHi_off_exit ha), ?_, ⟨?_, ?_, ?_⟩, ⟨?_, ?_⟩⟩
   · rw [hm _ consoleFlagHi_stdio, hhi]
   · rw [← hs]; unfold read64
-    refine (readLE_agreeP (P := fun a => a ≠ consoleFlagHi) (fun a ha => hm0 a ha) 8 _ ?_).symm
+    refine (ag 8 _ ?_).symm
     intro k hk; unfold stderrPtrAddr consoleFlagHi consoleReent consoleStdout; omega
+  · rw [← hl.mbtowc]; unfold read64
+    refine (ag 8 _ ?_).symm
+    intro k hk; unfold localeMbtowcAddr consoleFlagHi consoleStdout; omega
+  · rw [← hl.mbMax]
+    refine (ag 1 _ ?_).symm
+    intro k hk; unfold localeMbMaxAddr consoleFlagHi consoleStdout; omega
+  · rw [← hl.decPoint]; unfold read64
+    refine (ag 8 _ ?_).symm
+    intro k hk; unfold localeDecPointAddr consoleFlagHi consoleStdout; omega
+  · rw [← hw.base]; unfold read64
+    refine (ag 8 _ ?_).symm
+    intro k hk; unfold exitStderr consoleFlagHi consoleStdout; omega
+  · rw [← hw.writer]; unfold read64
+    refine (ag 8 _ ?_).symm
+    intro k hk; unfold exitStderr consoleFlagHi consoleStdout; omega
 
 /-- An oriented image is a boundary image. -/
 theorem StdioOK.of_oriented {img : Nat → BitVec 8} (h : StdioOKAt true img) : StdioOK img :=
