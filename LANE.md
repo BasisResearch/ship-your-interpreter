@@ -1,52 +1,52 @@
-# Lane N3: newlib stderr holes (`newlib.fprintf`, `newlib.fwrite`)
+# Lane N5: newlib hole `out.fprintf` (`fprintf(stdout, fmt, arg)`)
 
-Branch `lane-n3`. `newlib.exitHandlers` moved to lane N4 (parent, 2026-09-25). Merged
-`hub/iris-main` at `286c2ad` and `hub/lane-n1` at `34fe574` (errno lending, `outSpec`, `sfvwrite_run`).
+Branch `lane-n5`. Formats: `"%lld"` (`0x800192c0`), `"<fn %s>"` (`0x800192c8`),
+`"<native fn %s>"` (`0x800192d8`); stack need `fprintfNeed` = 4096. Merges `hub/lane-n3`
+(one stdio step table for N1/N3/N5, scoped stdout `sx_side` rules, `vfpEntry_run`).
+(LANE.md is per lane: after merging another lane's branch, keep this file.)
 
-## Status
+## The path (checked against `experiments/disasm.txt`)
 
-- **`newlib.fwrite`: proved** (`Newlib.fwrite_proved`, `VsaIris/Vsa/Stderr/FwriteSpec.lean`;
-  axioms `propext, Classical.choice, Quot.sound`). HOLES row and `NewlibHolesAt.fwrite`
-  removed; `Oom.wp_oomBlock` consumes the theorem. Statement changes: INTERP_DESIGN.md §10
-  "STATEMENT CHANGES (N3)".
-- **`newlib.fprintf`**: open (next).
+`stdout` is `0x200a` (unbuffered), so the outer `_vfprintf_r(stdout)` hands off to
+`__sbprintf` (`0x8000ac20`). `__sbprintf` builds a fully buffered `FILE` at `sp + 24`
+(flags `0x2008`, 1024-byte buffer at `sp + 208`, `stdout`'s cookie and `_write`), runs
+`_vfprintf_r` on it, and finishes with `_fflush_r`. The inner `_vfprintf_r`:
+entry (N3's `vfpEntry_run`) → `0x8000a944` head → main loop `0x8000a9b0`: scan the
+literal run through `mbtowc` → literal iov → `%` parse through the jump table
+`0x8001a288` → conversion (`%lld`: sign, decimal loop over `__umoddi3`/`__udivdi3`;
+`%s`: `strlen`) → iovs → `__sprint_r` → `__sfvwrite_r` (copy/flush/direct write) → loop.
 
-## Findings (checked against `experiments/disasm.txt`)
+## Done (all `lake build`-checked; axioms `propext, Classical.choice, Quot.sound`)
 
-1. `fprintf(stderr, …)` does not reach `__sbprintf`: `stderr` is `__SRW|__SNBF` (`0x12`), so
-   after `__swsetup_r` the test `(flags & 0x1a) == 0x0a` (`0x8000abe8`) fails. The path is
-   `_vfprintf_r` → `__sprint_r` → `__sfvwrite_r` → `__swrite` → `_write_r` → `_write`.
-2. `errno` (`0x8001ba08`) is written by `_write_r`/`_fstat_r`/`_close_r`: the stderr/exit specs
-   own it (`Stdio.errnoOwn`, N1's definition).
-3. `StdioOK` pins `stderr`'s `_bf._base`/`_write` (`StderrStream`, N3) and the locale
-   (`LocaleData`, N2).
-4. `%s` calls word-at-a-time `strlen` (`0x8000cfc8`): up to 7 bytes past the NUL, outside
-   `FmtArgsOK`'s coverage (to be handled by havoc loads or a statement change).
-5. The state after one `stderr` write is `StdioErrOK` (flags `0x201a`, `_p = _bf._base =
-   stderr + 119`; `StdioErr.lean`, `stdioErrOK_of_write`).
+- `Fprintf/Move.lean`: `memmove_run` (forward paths, `ReadB`/`ReadWin` sources).
+- `Fprintf/Flush.lean`: `sflushF_run(0)`, `fflushF_run(0)` on the stack `FILE`.
+- `Fprintf/SbFile.lean`: `SbFile M f pend`, `Frame`, `PieceReads`, advance/flush lemmas.
+- `Fprintf/Sfv.lean`, `Fprintf/SfvLoop.lean`: all of `__sfvwrite_r` on the stack `FILE`
+  (`sfvwrite_chain`).
+- `Fprintf/Sprint.lean`: `sprint_run` (`__sprint_r`).
+- `Fprintf/Arith.lean`: `udiv_sw`, `umoddi3_sw`, `moddi3_sw` (E2's routines through
+  `swpo_bridge`).
+- `Fprintf/Strlen.lean`: `LocalRun.embed`, `strlen_sw` (H3's `strlen` in a stdout run).
+- `Fprintf/Scan.lean`: `vfp_mb` (one `mbtowc` round trip), `vfp_lit`, `vfp_scan`
+  (literal-run induction; `FmtAt`, `LocMb`, `MbReg`).
+- `Fprintf/Digits.lean`: `vfp_digits` (decimal loop `0x8000ca80` → `0x8000cab8`; `digBytes n`
+  = `natDigits (n+1) n` of `SnprintfSpec.lean`, whose `intToString_of_bv` gives the sign split).
 
-## For N1
+## In flight
 
-- Merging your layer: `StdioOK.written` now also transports `LocaleData`/`StderrStream`
-  (five conjuncts). Your hand-edited `Case/CallArmP`, `CallPrintT`, `CallPrintlnT` (`hEL`)
-  were not in the templates; I added `hEL` to `callArm_P.lean`/`callOut_T.lean` so
-  `gen_iris_cases.py` reproduces them (stage a3 was stale).
-- Merged your `34fe574` (scoped stdout `sx_side` rules): my stderr rule is scoped the same way
-  (`Stderr/Swrite.lean`). `Tac.lean` keeps your version plus `nx_runB` (`nxRunCore … budgetPct`,
-  budgeted `#ix_piece` runs); `ITac.ixPre` holds the candidate prefixes (with your `itS…`).
-  The stdio table adds `__swsetup_r`, `__smakebuf_r`, `__swhatbuf_r`, `_fstat_r`, `_fstat`,
-  `memset`, `__hidden___udivdi3` (stderr's first write).
-- `errS` is gone: stderr runs use your `outS` and the `impDt`-style data view
-  (`_impure_ptr` from `Dt`).
+`%lld` prefix (`0x8000a9fc` → sign / decimal loop), emit + `__sprint_r` back to the loop
+head, `%s`, loop end + epilogue, `__sbprintf`, outer `_vfprintf_r` + `fprintf`, the Iris
+wrapper to `outSpec`.
 
-## For N4 (`exitHandlers`)
+## Statement issues
 
-- `Abort.oomCore` now carries `errnoOwn` (the OOM `fwrite` borrowed it); `wp_abortOom` drops
-  it until `exitHandlersSpec` takes it (the close path writes `errno`).
-- `StdioErrOK`, `CloseReady`, `CloseCommon` in `StdioErr.lean`; the old exit run is at
-  commit `0e15f23` (`ExitRun.lean`, `gen_exit_run.py`).
+- `_write_r` writes `errno` (`0x8001ba08`): `outSpec` lends it (N1's `ErrnoOwn`), as for
+  every `out.*` hole.
+- The C locale (`mbtowc` pointer, `mb_cur_max`, decimal point): N2's `LocaleData` /
+  N3's `LocaleMt` in `StdioOK`.
 
-## Next
+## For N3 / N2
 
-- `newlib.fprintf`: `_vfprintf_r` format loop (`%s`, `%d`) on the stderr path; `errnoOwn` in
-  `fprintfSpec`; the `strlen` over-read; memset's `jr` (no step lemma at `0x80006b38`).
+Reuse `vfp_scan`/`vfp_lit` for any format's literal runs and `vfp_digits` for `%d`/`%lld`
+magnitudes; the conversion pieces will take `strlen` and the print as hook hypotheses and
+the format/jump-table bytes as `Dt` facts (agreed with N3).
