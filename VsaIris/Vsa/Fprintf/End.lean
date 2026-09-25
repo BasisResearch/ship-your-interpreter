@@ -187,4 +187,17 @@ theorem vfp_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   · exact vfp_end0 hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp hP hE hS hra h0 (hk0 h0)
   · exact vfp_end1 hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp hP hE hS hra hpl h0 hSh hPR hk1
 
+theorem SbOut.endRet {Mt M' : Mem} {sp f : BitVec 64} {pend0 pend' : List (BitVec 8)}
+    {iovs : List (Nat × List (BitVec 8))} {out : List (BitVec 8)} (h : SbOut Mt M' sp f pend0 pend' iovs out)
+    (hF : SbFile Mt f pend0) (hsp : 0x80100000 ≤ sp.toNat) (hsp2 : sp.toNat + 600 < 2 ^ 64)
+    (hf : sp.toNat + 592 ≤ f.toNat) : EndRet Mt M' sp f := by
+  have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk =>
+    sp_lit (by omega)
+  refine ⟨?_, h.file.flags.trans hF.flags.symm, h.file.flags2.trans hF.flags2.symm, fun k h1 h2 =>
+    h.frame.ldv .ld fun j hj => SbOut.notReg hsp2 _ (by omega) (by simp [widthOfM] at hj; omega)
+      (by simp [widthOfM] at hj; omega) (by omega)⟩
+  rw [eo 16 (by omega)]
+  exact h.frame.ldv .ld fun j hj => SbOut.notReg hsp2 _ (by omega) (by simp [widthOfM] at hj; omega)
+    (by simp [widthOfM] at hj; omega) (by omega)
+
 end VsaIris.Sym.Fp
