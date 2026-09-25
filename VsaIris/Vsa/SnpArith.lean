@@ -215,4 +215,32 @@ theorem udiv_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     · intro z h10' h11' h12 h13
       simp only [upd_apply, h10', h11', h12, h13, ite_false]
 
+/-- **`__umoddi3`** (`0x800046f4`): `udivdi3` through `t0`, then `a0 = a1`;
+at the return (`jr t0` to `r`) `a0 = n % d`, every register but `a0`–`a3`,
+`t0` and `ra` as at the entry. -/
+theorem umod_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
+    {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R : Nat → BitVec 64)
+    (Mt : Mem) (hd : d ≠ 0#64) (h10 : R 10 = n) (h11 : R 11 = d) (hr : R 1 = r)
+    (hal : r.toNat % 4 = 0)
+    (hk : ∀ R', (R' 10).toNat = n.toNat % d.toNat →
+      (∀ z, z ≠ 1 → z ≠ 5 → z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → R' z = R z) →
+      NW live Dt DA S Q r R' Mt) :
+    NW live Dt DA S Q 0x800046f4#64 R Mt := by
+  nx_run hlive using [h10, h11] at 0x800046ac
+  refine udiv_nw hlive n d 0x800046fc#64 _ Mt hd ?_ ?_ ?_ (by decide) fun R' hq hm hkp => ?_
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h11
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  have h5 : R' 5 = r := by
+    rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
+  nx_run hlive using [h5]
+  refine hk _ ?_ fun z h1 h5' h10' h11' h12 h13 => ?_
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hm
+  · simp only [upd_apply, h10', ite_false]
+    rw [hkp z h10' h11' h12 h13]
+    simp only [upd_apply, h1, h5', ite_false]
+
 end VsaIris.Interp
+
