@@ -1,0 +1,373 @@
+import VsaIris.Vsa.SnpView
+import VsaIris.Vsa.NewlibOut
+import VsaIris.Interp.NewlibCall
+import VsaIris.Interp.HelperRun
+
+/-!
+# From a `snprintf` run to its Iris specification (lane N2)
+
+A `snprintf` hole is a `fnSpecW` in H5's calling convention: argument
+registers (`argsAt`), the destination block (`blockOwn`), newlib's data
+(`stdioOwn`), the call frame (`callFrame`: `sp`, 1024 bytes of stack, the
+callee-saved registers, the temporaries, `gp`, the image), and read-only
+inputs. `snpSpec_of_run` turns a run over `NW` from the entry into that
+specification: the registers become one register file (`snpCall_regs`), the
+owned bytes one set `snpS` (`snpBytes`, every disjointness from ownership),
+the read-only cells the run's code and data view (`roOwn_snp`), and the end
+state gives the bytes back (`snpBytes_back`) with the destination's image.
+
+The register and read-only-disjointness lemmas follow lane N1's
+`Vsa/Stdout/OutSpec.lean` (`argsAt_fn`, `call_regs`, `ownSet_ro_off`).
+-/
+
+namespace VsaIris.Sym
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib
+open VsaIris.Inst
+
+section Regs
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+
+theorem snpArgRegs_nodup (k : Nat) : (argRegs.drop k).Nodup :=
+  List.Nodup.sublist (List.drop_sublist _ _) (by decide)
+
+/-- `argsAt` as one register function. -/
+theorem snpArgsAt_fn : ∀ (k : Nat) (ws : List (BitVec 64)), k + ws.length ≤ 8 →
+    iprop(sepL (GF := GF) (ws.zipIdx k) (fun p => (10 + p.2) ↦ᵣ p.1) ∗
+      clobbered (argRegs.drop (k + ws.length))) ⊢
+      ∃ fa : Nat → BitVec 64, sepL (argRegs.drop k) (fun r => r ↦ᵣ fa r) ∗
+        ⌜∀ i (h : i < ws.length), fa (10 + k + i) = ws[i]⌝
+  | k, [], _ => by
+    simp only [List.zipIdx_nil, sepL_nil, List.length_nil, Nat.add_zero]
+    iintro ⟨-, H⟩
+    ihave ⟨%f, H⟩ := clobbered_fn _ (snpArgRegs_nodup k) $$ H
+    iexists f
+    iframe H
+    ipureintro; intro i h; simp at h
+  | k, w :: ws, hk => by
+    have hk8 : k < 8 := by simp at hk; omega
+    have hdrop : argRegs.drop k = (10 + k) :: argRegs.drop (k + 1) := by
+      revert hk8; generalize k = j; intro hj
+      rcases j with _ | _ | _ | _ | _ | _ | _ | _ | j <;> first | rfl | omega
+    have hnot : 10 + k ∉ argRegs.drop (k + 1) := by
+      have := snpArgRegs_nodup k; rw [hdrop] at this; exact (List.nodup_cons.mp this).1
+    rw [List.zipIdx_cons, sepL_cons]
+    iintro ⟨⟨H0, H⟩, Hc⟩
+    ihave ⟨%fa, Hs, %hfa⟩ := snpArgsAt_fn (k + 1) ws (by simp at hk; omega) $$ [H Hc]
+    · simp only [List.length_cons, show k + (ws.length + 1) = k + 1 + ws.length by omega]
+      iframe H Hc
+    iexists fun r => if r = 10 + k then w else fa r
+    rw [hdrop, sepL_cons]
+    isplitl
+    · isplitl [H0]
+      · simp only [ite_true]; iexact H0
+      rw [sepL_congr (Φ := fun r => iprop(r ↦ᵣ (if r = 10 + k then w else fa r)))
+        (Ψ := fun r => iprop(r ↦ᵣ fa r)) (fun r hr => by
+        simp [show r ≠ 10 + k from fun e => hnot (e ▸ hr)])]
+      iexact Hs
+    · ipureintro
+      intro i h
+      rcases i with _ | i
+      · simp
+      · have := hfa i (by simp at h; omega)
+        simp only [List.getElem_cons_succ]
+        rw [if_neg (by omega), ← this]; congr 1; omega
+
+/-- **A call's registers as one register file.** -/
+theorem snpCall_regs (entry r s : BitVec 64) (vs : List (BitVec 64)) (cs : Nat → BitVec 64)
+    (hlen : vs.length ≤ 8) :
+    iprop(VsaIris.PC ↦ᵣ entry ∗ VsaIris.ra ↦ᵣ r ∗ argsAt (GF := GF) vs ∗ sp ↦ᵣ s ∗
+      sepL Newlib.calleeSaved (fun x => x ↦ᵣ cs x) ∗ clobbered tmpRegs) ⊢
+      ∃ rv : Nat → BitVec 64, iprop(VsaIris.PC ↦ᵣ entry ∗ VsaIris.ra ↦ᵣ rv 1 ∗ regFile rv) ∗
+        ⌜rv 1 = r ∧ rv 2 = s ∧ (∀ i (h : i < vs.length), rv (10 + i) = vs[i]) ∧
+          ∀ x ∈ Newlib.calleeSaved, rv x = cs x⌝ := by
+  classical
+  iintro ⟨Hpc, Hra, Ha, Hsp, Hcs, Ht⟩
+  have h0 := snpArgsAt_fn (GF := GF) 0 vs (by omega)
+  simp only [Nat.zero_add, List.drop_zero] at h0
+  unfold argsAt
+  ihave ⟨%fa, Ha, %hfa⟩ := h0 $$ Ha
+  ihave ⟨%ft, Ht⟩ := clobbered_fn tmpRegs (by decide) $$ Ht
+  let rv : Nat → BitVec 64 := fun x =>
+    if x = 1 then r else if x = 2 then s else
+      if x ∈ argRegs then fa x else if x ∈ tmpRegs then ft x else cs x
+  iexists rv
+  isplitl
+  · have e1 : rv 1 = r := by simp [rv]
+    rw [e1]
+    iframe Hpc Hra
+    · iapply (regFile_newlib rv).2
+      have e2 : rv 2 = s := by simp [rv]
+      rw [e2]
+      iframe Hsp
+      rw [sepL_congr (Φ := fun x => iprop(x ↦ᵣ rv x)) (Ψ := fun x => iprop(x ↦ᵣ cs x))
+        (l := Newlib.calleeSaved) (fun x hx => by
+          simp only [Newlib.calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+            simp [rv, argRegs, tmpRegs])]
+      rw [sepL_congr (Φ := fun x => iprop(x ↦ᵣ rv x)) (Ψ := fun x => iprop(x ↦ᵣ ft x))
+        (l := tmpRegs) (fun x hx => by
+          simp only [tmpRegs, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [rv, argRegs, tmpRegs])]
+      rw [sepL_congr (Φ := fun x => iprop(x ↦ᵣ rv x)) (Ψ := fun x => iprop(x ↦ᵣ fa x))
+        (l := argRegs) (fun x hx => by
+          simp only [argRegs, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [rv, argRegs])]
+      iframe Hcs Ht Ha
+  · ipureintro
+    refine ⟨by simp [rv], by simp [rv], fun i h => ?_, fun x hx => ?_⟩
+    · have := hfa i h
+      have hi : 10 + i ∈ argRegs := by
+        simp only [argRegs, List.mem_cons, List.not_mem_nil, _root_.or_false]; omega
+      simp only [rv, hi, ite_true]
+      rw [if_neg (by omega), if_neg (by omega)]
+      simpa using this
+    · simp only [Newlib.calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+        simp [rv, argRegs, tmpRegs]
+
+end Regs
+
+/-! ## The owned bytes -/
+
+/-- The owned byte sets of a `snprintf` call, pairwise disjoint (from their
+ownership). -/
+structure SnpDisj (s dst n : Nat) : Prop where
+  stdio_stack : ∀ a, stdioExcl a → ¬ InExt (s - 1024, 1024) a
+  stdio_dst : ∀ a, stdioExcl a → ¬ InExt (dst, n) a
+  stack_dst : ∀ a, InExt (s - 1024, 1024) a → ¬ InExt (dst, n) a
+
+theorem snpS_iff {s dst n : Nat} (hs : 1024 ≤ s) (a : Nat) :
+    snpS s dst n a ↔ stdioExcl a ∨ InExt (s - 1024, 1024) a ∨ InExt (dst, n) a := by
+  unfold snpS stdioExcl impureW InExt snpNeed
+  constructor
+  · rintro (h | ⟨h1, h2⟩ | h)
+    · exact .inl h
+    · exact .inr (.inl ⟨h1, by simp only; omega⟩)
+    · exact .inr (.inr h)
+  · rintro (h | ⟨h1, h2⟩ | h)
+    · exact .inl h
+    · exact .inr (.inl ⟨h1, by simp only at h2; omega⟩)
+    · exact .inr (.inr h)
+
+section Own
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+
+/-- **The owned bytes of a `snprintf` call**, at one tracking memory:
+newlib's exclusive data at its image, the stack and the destination at any
+values. -/
+theorem snpBytes (img : Nat → BitVec 8) (s dst n : Nat) (hs : 1024 ≤ s) :
+    iprop(ownSet (GF := GF) stdioExcl (fun a => a ↦ₘ img a) ∗ blockOwn (s - 1024) 1024 ∗
+      blockOwn dst n) ⊢
+      ∃ Mt : Mem, ownSet (snpS s dst n) (fun a => a ↦ₘ imgM Mt a) ∗
+        ⌜(∀ a, stdioExcl a → imgM Mt a = img a) ∧ SnpDisj s dst n⌝ := by
+  classical
+  iintro ⟨Hx, Hst, Hd⟩
+  unfold blockOwn
+  ihave ⟨%fs, Hst⟩ := ownSet_fn _ $$ Hst
+  ihave ⟨%fd, Hd⟩ := ownSet_fn _ $$ Hd
+  ihave %d1 := ownSet_disj _ _ _ _ $$ [Hx Hst]
+  · iframe Hx Hst
+  ihave %d2 := ownSet_disj _ _ _ _ $$ [Hx Hd]
+  · iframe Hx Hd
+  ihave %d3 := ownSet_disj _ _ _ _ $$ [Hst Hd]
+  · iframe Hst Hd
+  let f : Nat → BitVec 8 := fun a =>
+    if stdioExcl a then img a else if InExt (s - 1024, 1024) a then fs a else fd a
+  ihave Hx := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ f a)) (fun a ha => by simp [f, ha]) $$ Hx
+  ihave Hst := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ f a))
+    (fun a ha => by simp [f, ha, show ¬ stdioExcl a from fun h => d1 a h ha]) $$ Hst
+  ihave Hd := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ f a))
+    (fun a ha => by simp [f, show ¬ stdioExcl a from fun h => d2 a h ha,
+      show ¬ InExt (s - 1024, 1024) a from fun h => d3 a h ha]) $$ Hd
+  ihave H := ownSet_join _ _ _ (fun a h1 h2 => d3 a h1 h2) $$ [Hst Hd]
+  · iframe Hst Hd
+  ihave H := ownSet_join stdioExcl (fun a => InExt (s - 1024, 1024) a ∨ InExt (dst, n) a) _
+    (fun a (h1 : stdioExcl a) (h2 : InExt (s - 1024, 1024) a ∨ InExt (dst, n) a) => by
+      rcases h2 with h2 | h2
+      · exact d1 a h1 h2
+      · exact d2 a h1 h2) $$ [Hx H]
+  · iframe Hx H
+  ihave H := ownSet_iff (T := snpS s dst n) _ (fun a => (snpS_iff hs a).symm) $$ H
+  ihave ⟨%M, H, %hM⟩ := ownSet_trackedAt _ f $$ H
+  iexists M
+  iframe H
+  ipureintro
+  refine ⟨fun a ha => ?_, ⟨d1, d2, d3⟩⟩
+  rw [hM a ((snpS_iff hs a).2 (.inl ha))]
+  simp [f, ha]
+
+/-- **The owned bytes back**: newlib's data, the stack, the destination. -/
+theorem snpBytes_back (mv : Nat → BitVec 8) (s dst n : Nat) (hs : 1024 ≤ s)
+    (D : SnpDisj s dst n) :
+    ownSet (GF := GF) (snpS s dst n) (fun a => a ↦ₘ mv a) ⊢
+      ownSet stdioExcl (fun a => a ↦ₘ mv a) ∗ blockOwn (s - 1024) 1024 ∗
+        ownImg (InExt (dst, n)) mv := by
+  iintro H
+  ihave ⟨Hx, H⟩ := ownSet_split _ stdioExcl _ $$ H
+  ihave ⟨Hd, Hs⟩ := ownSet_split _ (InExt (dst, n)) _ $$ H
+  isplitl [Hx]
+  · iapply ownSet_iff _ (fun a => ⟨fun h => h.2, fun h => ⟨(snpS_iff hs a).2 (.inl h), h⟩⟩) $$ Hx
+  isplitl [Hs]
+  · unfold blockOwn
+    ihave Hs := ownSet_forget _ mv $$ Hs
+    iapply ownSet_iff _ (fun a => ⟨fun ⟨⟨h1, h2⟩, h3⟩ => by
+      rcases (snpS_iff hs a).1 h1 with h | h | h
+      · exact absurd h h2
+      · exact h
+      · exact absurd h h3,
+      fun h => ⟨⟨(snpS_iff hs a).2 (.inr (.inl h)), fun h' => D.stdio_stack a h' h⟩,
+        D.stack_dst a h⟩⟩) $$ Hs
+  · iapply ownSet_iff _ (fun a => ⟨fun h => h.2, fun h => ⟨⟨(snpS_iff hs a).2 (.inr (.inr h)),
+      fun h' => D.stdio_dst a h' h⟩, h⟩⟩) $$ Hd
+
+/-- A persistent byte is not in an owned list. -/
+theorem snpSepL_ro_ne (y : Nat) (b : BitVec 8) (f : Nat → BitVec 8) :
+    ∀ l : List Nat, sepL (GF := GF) l (fun a => a ↦ₘ f a) ∗ (y ↦ₘ□ b) ⊢ ⌜y ∉ l⌝
+  | [] => by iintro _; ipureintro; simp
+  | x :: xs => by
+    rw [sepL_cons]
+    iintro ⟨⟨Hx, Hxs⟩, #Hy⟩
+    ihave %h1 := memRO_excl_ne y x b (f x) $$ [Hx]
+    · iframe Hy Hx
+    ihave %h2 := snpSepL_ro_ne y b f xs $$ [Hxs]
+    · iframe Hxs Hy
+    ipureintro
+    simp only [List.mem_cons, not_or]
+    exact ⟨h1, h2⟩
+
+/-- Persistent bytes are off an owned byte set. -/
+theorem snpOwnSet_ro_off (S : Nat → Prop) (f : Nat → BitVec 8) :
+    ∀ text : List (Nat × BitVec 8), ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗
+      sepL text (fun p => p.1 ↦ₘ□ p.2) ⊢ ⌜∀ p ∈ text, ¬ S p.1⌝
+  | [] => by iintro _; ipureintro; simp
+  | q :: qs => by
+    rw [sepL_cons]
+    iintro ⟨HS, #Hq, #Hqs⟩
+    ihave %h2 := snpOwnSet_ro_off S f qs $$ [HS]
+    · iframe HS Hqs
+    rw [show ownSet S (fun a => a ↦ₘ f a) = iprop(∃ l : List Nat,
+        ⌜l.Nodup ∧ ∀ a, a ∈ l ↔ S a⌝ ∗ sepL l (fun a => a ↦ₘ f a)) from rfl]
+    icases HS with ⟨%l, %⟨_, hmem⟩, Hl⟩
+    ihave %h1 := snpSepL_ro_ne q.1 q.2 f l $$ [Hl]
+    · iframe Hl Hq
+    ipureintro
+    intro p hp
+    rcases List.mem_cons.mp hp with rfl | hp
+    · exact fun h => h1 ((hmem _).2 h)
+    · exact h2 p hp
+
+end Own
+
+/-! ## The specification from a run -/
+
+section Spec
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+
+/-- What a `snprintf` run's end state keeps: `ra`, `sp` and the
+callee-saved registers, and every byte outside its stack and the
+destination. -/
+structure SnpRet (R : Nat → BitVec 64) (Mt : Mem) (s dst n : Nat) (R' : Nat → BitVec 64)
+    (Mt' : Mem) : Prop where
+  ra : R' 1 = R 1
+  sp : R' 2 = R 2
+  saved : ∀ x ∈ Newlib.calleeSaved, R' x = R x
+  frame : ∀ a, ¬ (s - 1024 ≤ a ∧ a < s) → ¬ (dst ≤ a ∧ a < dst + n) → imgM Mt' a = imgM Mt a
+
+/-- **A `snprintf` call from its run.** The run, from the call's registers
+and owned bytes (newlib's data at a `StdioOK` image, the locale words as
+loads), reads the data view the read-only input `Rr` supplies and ends in
+`SnpRet` with the destination's image satisfying `Post`. -/
+theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live))
+    {Pre Post' : BitVec 64 → IProp GF} {args : List (BitVec 64)} {Rr : IProp GF}
+    {s : BitVec 64} {dst n : Nat} {cs : Nat → BitVec 64} {X : Type} {f : X → Nat → BitVec 8}
+    {DA : X → List Nat} {Pf : X → Prop} {Post : (Nat → BitVec 8) → Prop}
+    (hlen : args.length ≤ 8) (hs : 1024 ≤ s.toNat)
+    (hP : ∀ r, Pre r ⊢ iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt args ∗ blockOwn dst n ∗ Rr ∗ stdioOwn ∗
+      callFrame s snprintfNeed Newlib.calleeSaved cs))
+    (hQ : ∀ r, iprop(clobbered argRegs ∗ (∃ img, ownImg (InExt (dst, n)) img ∗ ⌜Post img⌝) ∗
+      stdioOwn ∗ callFrame s snprintfNeed Newlib.calleeSaved cs) ⊢ Post' r)
+    (hdata : iprop(Rr ∗ binImg ∗ impureRO) ⊢
+      ∃ x, sepL (dataOf (viewMem (f x) (DA x)) (DA x)) (fun p => p.1 ↦ₘ□ p.2) ∗ ⌜Pf x⌝)
+    (hrun : ∀ (x : X) (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (R : Nat → BitVec 64)
+      (Mt : Mem), Pf x → (R 1).toNat % 4 = 0 → R 2 = s →
+      (∀ i (h : i < args.length), R (10 + i) = args[i]) → LocaleMt Mt →
+      (∀ a ∈ DA x, ¬ snpS s.toNat dst n a) → SnpDisj s.toNat dst n →
+      (∀ R' Mt', SnpRet R Mt s.toNat dst n R' Mt' → Post (imgM Mt') →
+        NW live (viewMem (f x) (DA x)) (DA x) (snpS s.toNat dst n) Q (R 1) R' Mt') →
+      NW live (viewMem (f x) (DA x)) (DA x) (snpS s.toNat dst n) Q 0x80005c44#64 R Mt) :
+    ⊢ fnSpecW Wp snprintfEntry Pre Post' := by
+  classical
+  unfold fnSpecW
+  unfold snprintfEntry
+  iintro !> %r %Φ Hpc Hra HP Hk
+  ihave ⟨%hal, Hargs, Hbuf, HR, Hstd, Hcf⟩ := hP r $$ HP
+  unfold callFrame
+  icases Hcf with ⟨Hsp, Hst, Hcs, Ht, #Hgp, #Himg⟩
+  ihave ⟨%R, ⟨Hpc, Hra, Hregs⟩, %⟨h1, h2, hargs, hcs⟩⟩ := snpCall_regs 0x80005c44#64 r s args cs hlen $$
+    [Hpc Hra Hargs Hsp Hcs Ht]
+  · iframe Hpc Hra Hargs Hsp Hcs Ht
+  unfold stdioOwn stdioAt
+  icases Hstd with ⟨%img, %⟨hok, himp⟩, Hx, #Himp⟩
+  ihave ⟨%x, #Hd, %hPf⟩ := hdata $$ [HR]
+  · iframe HR Himg Himp
+  unfold stackScratch snprintfNeed
+  ihave ⟨%Mt, HS, %⟨hMt, D⟩⟩ := snpBytes img s.toNat dst n hs $$ [Hx Hst Hbuf]
+  · iframe Hx Hst Hbuf
+  ihave ⟨⟨HS, -⟩, %hoff⟩ := keep_pure (snpOwnSet_ro_off (snpS s.toNat dst n) (imgM Mt)
+    (dataOf (viewMem (f x) (DA x)) (DA x))) $$ [HS]
+  · iframe HS Hd
+  have hoff' : ∀ a ∈ DA x, ¬ snpS s.toNat dst n a := fun a ha =>
+    hoff (a, _) (List.mem_map_of_mem (f := fun a => (a, imgM (viewMem (f x) (DA x)) a)) ha)
+  let F : IProp GF := iprop((PC ↦ᵣ r -∗ ra ↦ᵣ r -∗ Post' r -∗ Wp.W Φ) ∗ gp ↦ᵣ□ Newlib.gpV ∗
+    binImg ∗ impureRO)
+  have hrun' := hrun x (RunK Wp Φ F (snpS s.toNat dst n)) R Mt hPf (by rw [h1]; exact hal) h2 hargs
+    (localeMt_of hok hMt) hoff' D fun R' Mt' K hpost => ?_
+  · iapply wp_swpF Wp (F := F) hrun'
+    isplitl []
+    · iapply roOwn_snp _ (f x) (DA x) .rfl $$ [Hd]
+      iframe Hgp Himg Hd
+    unfold ms
+    dsimp only [F]
+    iframe Hpc Hra Hregs HS Hk Hgp Himg Himp
+  -- the end of the run
+  refine swp_closeF Wp ?_
+  unfold ms
+  dsimp only [F]
+  iintro ⟨⟨Hk, #Hgp, #Himg, #Himp⟩, Hpc, Hra, Hregs, HS⟩
+  ihave ⟨Hsp, Hcs, Ht, Ha⟩ := (regFile_newlib R').1 $$ Hregs
+  ihave ⟨Hx, Hst, Hd⟩ := snpBytes_back (imgM Mt') s.toNat dst n hs D $$ HS
+  rw [h1, K.ra, h1]
+  iapply Hk $$ Hpc Hra
+  iapply hQ r
+  isplitl [Ha]
+  · iapply clobbered_of_fn _ R' $$ Ha
+  isplitl [Hd]
+  · iexists imgM Mt'
+    iframe Hd
+    ipureintro; exact hpost
+  isplitl [Hx]
+  · unfold stdioOwn stdioAt
+    iexists img
+    isplitr
+    · ipureintro; exact ⟨hok, himp⟩
+    iframe Himp
+    iapply ownSet_congr (fun a (ha : stdioExcl a) => by
+      rw [K.frame a (fun h => D.stdio_stack a ha ⟨h.1, by simp only; omega⟩)
+        (fun h => D.stdio_dst a ha h), hMt a ha]) $$ Hx
+  · unfold callFrame stackScratch snprintfNeed
+    rw [K.sp, h2]
+    iframe Hsp Hst Hgp Himg
+    isplitl [Hcs]
+    · rw [sepL_congr (Φ := fun x => iprop(x ↦ᵣ R' x)) (Ψ := fun x => iprop(x ↦ᵣ cs x))
+        (l := Newlib.calleeSaved) (fun z hz => by rw [K.saved z hz, hcs z hz])]
+      iexact Hcs
+    · iapply clobbered_of_fn _ R' $$ Ht
+
+end Spec
+
+end VsaIris.Sym

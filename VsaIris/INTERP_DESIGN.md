@@ -1473,3 +1473,21 @@ without the fact and no other resource carries it:
     each one `decide`): `__ascii_mbtowc`, `1`, `"."` at `0x80019770`.
   - **Every hole that returns `stdioOwn` must now also restore the locale**;
     nothing writes it (`setlocale` is not linked into any path).
+- **The `out.snprintf*` holes take an aligned return address and a stack and
+  buffer above newlib's data.** `snprintfIntSpec`/`snprintfFnSpec` carry
+  `⌜r.toNat % 4 = 0⌝` in their precondition: `snprintf` returns through
+  `jalr zero, 0(ra)`, a successful step only to a 4-aligned target (lane N1's
+  change to `outSpec`, same reason). `OutHoles.snprintfFn` (and the proved
+  `Sym.snprintfInt_out`, `Vsa/SnpHoles.lean`) take `0x8001c168 ≤ s - 1024`,
+  `0x8001c168 ≤ buf` and `buf + 64 ≤ 2^32` besides `SpIn`: `SpIn` bounds the
+  stack only below by the HTIF words, so the 1024-byte frame may lie over
+  `.data`/`.bss` (whose bytes the run reads: the locale words, `_impure_ptr`),
+  and nothing places `buf` off the HTIF words or in 32-bit RAM. `stringify`'s
+  callers (`sg_intArm`, `sg_fnArm`) derive all three from `SgCtx.hs1` (the
+  stack region starts at `0x87800000`) and pass the alignment through
+  `ms_callNewlibA`.
+- **Not a statement change: the conversion table is data.** `_svfprintf_r`
+  dispatches through a jump table in `.rodata` (`0x8001a0fc`). The holes'
+  `CodeLive` makes only `.text` live, so `snpText` holds the code alone and the
+  table is read through the run's data view (`SnpSvfConv.TabAt`, from
+  `binImg`), like the format string.

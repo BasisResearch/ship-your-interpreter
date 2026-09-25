@@ -65,11 +65,29 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
   the format's loop `SvfLoopRun`; post `SnpOut` (stream cut at `n - 1`, NUL,
   frame).
 
+- **`out.snprintfInt` proved** (`Sym.snprintfInt_out`, `Vsa/SnpHoles.lean`):
+  `snprintf_nw` + `loop_lld` through the generic Iris wrapper
+  `snpSpec_of_run` (`Vsa/SnpIris.lean`: registers from `argsAt`/`callFrame`,
+  owned bytes glued into `snpS` with every disjointness from ownership
+  (`snpBytes`/`snpBytes_back`), read-only cells from `gp`/`binImg`/the view).
+  Data views: `Vsa/SnpView.lean` (`viewMem`, `sepL_view`, `snpImg`,
+  `BaseView`: `"."`, the conversion table `TabAt`, `_impure_ptr`), the locale
+  as loads (`localeMt_of`), `intToString` bytes as a C string.
+- The conversion table is read through the data view (`TabAt`), so `snpText`
+  is code only and `CodeLive` suffices (generator: `--target snp`).
+- Statement changes (INTERP_DESIGN §10 N2): aligned return address in the
+  `out.snprintf*` specs; stack and buffer above newlib's data. Callers in
+  `ProofStringify` use `ms_callNewlibA` (verbatim from lane N1).
+
 ## In flight
-- `SvfLoopRun` for `"%lld"` and `"<fn %s>"`; `%d` iteration; the general
-  `parseFmt` induction for `newlib.snprintf`.
-- The Iris layer: `wp_localRunW`, readable bytes as the data view
-  (`LocalRun.promote`), `binImg` → text and rodata, then the three holes.
+- `out.snprintfFn`: `loop_fn` is proved; the instance needs the name's
+  `strAt` bytes in the view (`sepL_view` over `roImg (InExt …)`), `DStr`/`PieceSrc`
+  from `StrWin`, and the `fnRender` post (cut at 63).
+- `newlib.snprintf`: `%d` iteration, the `parseFmt` induction, owned readable
+  bytes (`readable Sro Sown`).
+- Integration note: lane N1 also defines `VsaIris.Sym.NW` (its stdout table);
+  this lane's `NW` (`SnpRunDef.lean`) must be renamed when the two merge.
+  `snpCall_regs`/`snpOwnSet_ro_off` duplicate N1's `call_regs`/`ownSet_ro_off`.
 
 ## Plan
 1. Leaf runs over `NW`: `__ascii_mbtowc` (one char), `strlen` of a data string
@@ -84,7 +102,6 @@ Branch `lane-n2` (pushed to `hub`). Holes: `out.snprintfInt`, `out.snprintfFn`,
    `HelperRun.helper_leaf`), then the three holes.
 
 ## Holes
-- Unchanged: `newlib.snprintf`, `out.snprintfFn`, `out.snprintfInt` still ledgered.
-- Expected statement changes (to be recorded when made): the destination
-  buffer and the readable bytes need RAM geometry (`sb` needs `tohost + 16 ≤
-  ea`, loads need RAM off HTIF); the holes state none.
+- Closed: `out.snprintfInt`.
+- Ledgered: `out.snprintfFn` (statement narrowed as above), `newlib.snprintf`
+  (expected change: the readable bytes and destination need RAM geometry).

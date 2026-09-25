@@ -74,7 +74,7 @@ and a NUL, in `buf[0, 64)`. -/
 def snprintfFnSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s buf name : BitVec 64) (x : String) (cs : Nat → BitVec 64) : IProp GF :=
   fnSpecW Wp snprintfEntry
-    (fun _ => iprop(argsAt [buf, 64#64, 0x800192c8#64, name] ∗ blockOwn buf.toNat 64 ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt [buf, 64#64, 0x800192c8#64, name] ∗ blockOwn buf.toNat 64 ∗
       strAt name.toNat x ∗ stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
     (fun _ => iprop(clobbered argRegs ∗
       (∃ img, ownImg (InExt (buf.toNat, 64)) img ∗ ⌜CStrImg img buf.toNat (fnRender x)⌝) ∗
@@ -85,7 +85,7 @@ def snprintfFnSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)
 def snprintfIntSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s buf i : BitVec 64) (cs : Nat → BitVec 64) : IProp GF :=
   fnSpecW Wp snprintfEntry
-    (fun _ => iprop(argsAt [buf, 64#64, 0x800192c0#64, i] ∗ blockOwn buf.toNat 64 ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ argsAt [buf, 64#64, 0x800192c0#64, i] ∗ blockOwn buf.toNat 64 ∗
       stdioOwn ∗ callFrame s snprintfNeed calleeSaved cs))
     (fun _ => iprop(clobbered argRegs ∗
       (∃ img, ownImg (InExt (buf.toNat, 64)) img ∗ ⌜CStrImg img buf.toNat (intToString i.toInt)⌝) ∗
@@ -119,14 +119,12 @@ structure OutHoles : Prop where
     (frag o : String), CodeLive live → SpIn s fprintfNeed →
     ⊢ outSpec live Wp fprintfEntry [stdoutFile, fmt, arg] (fprintfOut fmt arg frag) s fprintfNeed
         cs o frag
-  /-- `snprintf(buf, 64, "<fn %s>", name)` renders into the buffer. -/
+  /-- `snprintf(buf, 64, "<fn %s>", name)` renders into the buffer, for a stack
+  and a buffer above newlib's data (INTERP_DESIGN.md §10, N2). -/
   snprintfFn : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s buf name : BitVec 64) (x : String)
     (cs : Nat → BitVec 64), CodeLive live → SpIn s snprintfNeed →
+    0x8001c168 ≤ s.toNat - snprintfNeed → 0x8001c168 ≤ buf.toNat → buf.toNat + 64 ≤ 0x100000000 →
     ⊢ snprintfFnSpec live Wp s buf name x cs
-  /-- `snprintf(buf, 64, "%lld", i)` renders the integer into the buffer. -/
-  snprintfInt : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (live : Nat → Prop)
-    (Wp : MachWP (GF := GF) (vsaModel live)) (s buf i : BitVec 64) (cs : Nat → BitVec 64),
-    CodeLive live → SpIn s snprintfNeed → ⊢ snprintfIntSpec live Wp s buf i cs
 
 end VsaIris.Newlib
