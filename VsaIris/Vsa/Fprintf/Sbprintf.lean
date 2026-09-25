@@ -18,16 +18,30 @@ open scoped VsaIris.Sym.Stdout
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
 /-- `stdout`'s fields `__sbprintf` copies, and the boundary data the flush
-reads. -/
-structure StdoutSb (M : Mem) : Prop where
-  flagsU : ldv .lhu M 0x8001bb30 = 0x200a#64
-  flags : ldv .lh M 0x8001bb30 = 0x200a#64
+reads, with `_flags = fl`: `0x000a` at `interp_run`'s entry, `0x200a` once
+the `ORIENT` block has run (`consoleFlagsV`). -/
+structure StdoutSbAt (fl : BitVec 64) (M : Mem) : Prop where
+  flagsU : ldv .lhu M 0x8001bb30 = fl
+  flags : ldv .lh M 0x8001bb30 = fl
   fdU : ldv .lhu M 0x8001bb32 = 1#64
   fd : ldv .lh M 0x8001bb32 = 1#64
   flags2 : ldv .lw M 0x8001bbd0 = 0#64
   cookie : ldv .ld M 0x8001bb50 = 0x8001bb20#64
   writer : ldv .ld M 0x8001bb60 = 0x8000efd4#64
   sinit : ldv .ld M 0x8001b580 = 0x80005d2c#64
+
+/-- `stdout` oriented (`_flags = 0x200a`): what `__sbprintf` reads. -/
+abbrev StdoutSb (M : Mem) : Prop := StdoutSbAt 0x200a#64 M
+
+/-- The fields survive a change off `0x8001b580..0x8001bbd4`. -/
+theorem StdoutSbAt.frame {fl : BitVec 64} {M M' : Mem} {Reg : Nat → Prop} (h : StdoutSbAt fl M)
+    (hF : Frame M' M Reg) (hR : ∀ a, 0x8001b580 ≤ a → a < 0x8001bbd4 → ¬ Reg a) : StdoutSbAt fl M' := by
+  have l : ∀ (kd : MKind) (a : Nat), 0x8001b580 ≤ a → a + widthOfM kd ≤ 0x8001bbd4 →
+      ldv kd M' a = ldv kd M a := fun kd a h1 h2 => hF.ldv kd fun j hj => hR _ (by omega) (by omega)
+  exact ⟨(l _ _ (by decide) (by decide)).trans h.flagsU, (l _ _ (by decide) (by decide)).trans h.flags,
+    (l _ _ (by decide) (by decide)).trans h.fdU, (l _ _ (by decide) (by decide)).trans h.fd,
+    (l _ _ (by decide) (by decide)).trans h.flags2, (l _ _ (by decide) (by decide)).trans h.cookie,
+    (l _ _ (by decide) (by decide)).trans h.writer, (l _ _ (by decide) (by decide)).trans h.sinit⟩
 
 /-- The bytes `__sbprintf` changes: its frame and the callee frames below,
 `stdout`'s flags, `errno`. -/

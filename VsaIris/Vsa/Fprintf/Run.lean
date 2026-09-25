@@ -30,11 +30,11 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     (himp : ldv .ld Dt 0x8001b970 = 0x8001b538#64) (hDA : Cover (· ∈ DA) 0x8001b970 0x8001b978)
     (hdec : ldv .ld Mt 0x8001b898 = 0x80019770#64) (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
     (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8)
-    (hSo : StdoutSb Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64)
+    {o : Bool} (hSo : StdoutSbAt (consoleFlagsV o) Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64)
     (hV : ∀ (R0 : Nat → BitVec 64) (Mt0 : Mem), R0 2 = s - 1936#64 → R0 10 = 0x8001b538#64 →
       R0 11 = s - 1936#64 + 24#64 → R0 12 = R 11 → R0 13 = s - 80#64 + 32#64 → R0 1 = 0x8000de30#64 →
       SbFile Mt0 (s - 1936#64 + 24#64) [] →
-      Frame Mt0 Mt (fun a => s.toNat - 1936 ≤ a ∧ a < s.toNat) →
+      Frame Mt0 Mt (fun a => (s.toNat - 1936 ≤ a ∧ a < s.toNat) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32)) →
       ldv .ld Mt0 (s - 80#64 + 32#64).toNat = R 12 →
       (∀ R' M' out pend', bytes = out ++ pend' → R' 2 = s - 1936#64 → R' 1 = 0x8000de30#64 →
         R' 10 = BitVec.ofNat 64 N → (∀ x ∈ vfpSaved, R' x = R0 x) → SbFile M' (s - 1936#64 + 24#64) pend' →
@@ -60,43 +60,35 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     (fun R0 Mt0 h2' h10' h11' h12' h13' h1' hfr0 harg hk0 => ?_) (fun R' M' hr hf hl => hk R' M' hr (by rw [e80] at hf; exact hf) hl)
   have hl0 : ∀ (kd : MKind) (a : Nat), a + 8 ≤ s.toNat - 80 → widthOfM kd ≤ 8 → ldv kd Mt0 a = ldv kd Mt a :=
     fun kd a ha hw => hfr0.ldv kd fun j hj h => by rw [e80] at h; omega
-  have hSo0 : StdoutSb Mt0 := ⟨(hl0 _ _ (by omega) (by decide)).trans hSo.flagsU,
-    (hl0 _ _ (by omega) (by decide)).trans hSo.flags, (hl0 _ _ (by omega) (by decide)).trans hSo.fdU,
-    (hl0 _ _ (by omega) (by decide)).trans hSo.fd, (hl0 _ _ (by omega) (by decide)).trans hSo.flags2,
-    (hl0 _ _ (by omega) (by decide)).trans hSo.cookie, (hl0 _ _ (by omega) (by decide)).trans hSo.writer,
-    (hl0 _ _ (by omega) (by decide)).trans hSo.sinit⟩
+  have hSo0 := hSo.frame hfr0 fun a h1 h2 h => by rw [e80] at h; omega
   refine vfp_outer (sp := s - 80#64 - 592#64) (N := N) (bytes := bytes) hlive (by rw [e672]; omega)
     (by rw [e672]; omega) hs3 hs4 (by rw [e672]; omega) (by rw [h1']; decide) (by rw [h2', hso])
     h10' (h11'.trans hstd) h12' h13' ((hl0 _ _ (by omega) (by decide)).trans hdec) hdA hdv hSo0
     (by rw [hl0 _ _ (by omega) (by decide)]; exact hbase)
-    (fun R1 Mt1 h2'' h10'' h11'' h12'' h13'' h1'' hfr1 hk1 => ?_) fun R' M' e10 e2 e1 ek hfr hl => ?_
+    (fun R1 Mt1 h2'' h10'' h11'' h12'' h13'' h1'' hSo1 hfr1 hk1 => ?_) fun R' M' e10 e2 e1 ek hfr hl => ?_
   rotate_left
   · rw [h1']; exact hk0 R' M' e10 (e2.trans h2') (e1.trans h1') (fun x hx => (ek x hx))
       (by rw [e672] at hfr; rw [e80, Nat.sub_sub]; exact hfr) hl
   have e48 : (s - 80#64 + 32#64).toNat = s.toNat - 48 := by rw [toNat_add_lit (by rw [e80]; omega), e80]; omega
-  have hl1 : ∀ (kd : MKind) (a : Nat), a + 8 ≤ s.toNat - 672 ∨ s.toNat - 80 ≤ a → widthOfM kd ≤ 8 →
-      ldv kd Mt1 a = ldv kd Mt0 a :=
-    fun kd a ha hw => hfr1.ldv kd fun j hj h => by rw [e672] at h; omega
-  have hSo1 : StdoutSb Mt1 := ⟨(hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.flagsU,
-    (hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.flags, (hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.fdU,
-    (hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.fd, (hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.flags2,
-    (hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.cookie, (hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.writer,
-    (hl1 _ _ (.inl (by omega)) (by decide)).trans hSo0.sinit⟩
+  have hl1 : ∀ (kd : MKind) (a : Nat), s.toNat - 80 ≤ a → widthOfM kd ≤ 8 → ldv kd Mt1 a = ldv kd Mt0 a :=
+    fun kd a ha hw => hfr1.ldv kd fun j hj h => by rw [e672] at h; rcases h with h | ⟨h, h'⟩ <;> omega
   refine sbprintf_run (sp := s - 1936#64) (N := N) (bytes := bytes) hlive hlive' hsub (by rw [e1936]; omega)
     (by rw [e1936]; omega) hs3 hs4 (by rw [e1936]; omega) (by rw [h1'']; decide) hN hbl (h2''.trans hsb'.symm)
     h10'' h11'' rfl rfl hSo1 (fun R2 Mt2 a2 a10 a11 a12 a13 a1 hsbf hfr2 hk2 => ?_)
     fun R' M' e10 e2 e1 ek hfr hl => ?_
-  · have hfrA : Frame Mt2 Mt (fun a => s.toNat - 1936 ≤ a ∧ a < s.toNat) := by
+  · have hfrA : Frame Mt2 Mt (fun a => (s.toNat - 1936 ≤ a ∧ a < s.toNat) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32)) := by
       refine ((hfr0.mono fun a h => ?_).trans (hfr1.mono fun a h => ?_)).trans (hfr2.mono fun a h => ?_)
       · rw [e80] at h
-        exact ⟨Nat.le_trans (Nat.sub_le_sub_left (by decide) _) h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
+        exact .inl ⟨Nat.le_trans (Nat.sub_le_sub_left (by decide) _) h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
       · rw [e672] at h
-        exact ⟨Nat.le_trans (Nat.sub_le_sub_left (by decide) _) h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
+        rcases h with h | h
+        · exact .inl ⟨Nat.le_trans (Nat.sub_le_sub_left (by decide) _) h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
+        · exact .inr h
       · rw [e1936] at h
-        exact ⟨h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
+        exact .inl ⟨h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
     have hA : ldv .ld Mt2 (s - 80#64 + 32#64).toNat = R 12 := by
       rw [hfr2.ldv .ld fun j hj h => by simp only [widthOfM] at hj; rw [e1936, e48] at h; omega,
-        hl1 _ _ (.inr (by rw [e48]; omega)) (by decide)]
+        hl1 _ _ (by rw [e48]; omega) (by decide)]
       exact harg
     exact hV R2 Mt2 a2 a10 a11 (by rw [a12, h12'']; try rw [h12']) (by rw [a13, h13'']; try rw [h13'])
       a1 hsbf hfrA hA hk2
@@ -129,7 +121,7 @@ theorem fprintf_via (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
     (himp : ldv .ld Dt 0x8001b970 = 0x8001b538#64) (hDA : Cover (· ∈ DA) 0x8001b970 0x8001b978)
     (hdec : ldv .ld Mt 0x8001b898 = 0x80019770#64) (hdA : 0x80019770 ∈ DA ∧ 0x80019771 ∈ DA)
     (hdv : imgM Dt 0x80019770 = 0x2e#8 ∧ imgM Dt 0x80019771 = 0#8)
-    (hSo : StdoutSb Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64) (hloc : LocMb Mt)
+    {o : Bool} (hSo : StdoutSbAt (consoleFlagsV o) Mt) (hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64) (hloc : LocMb Mt)
     (hI : ∀ (R0 : Nat → BitVec 64) (Mt0 : Mem),
       InnerAt s need (s - 2528#64) (s - 1936#64 + 24#64) (s - 80#64 + 32#64) →
       R0 2 = s - 2528#64 + 592#64 → R0 10 = 0x8001b538#64 → R0 11 = s - 1936#64 + 24#64 → R0 12 = R 11 →
@@ -158,7 +150,7 @@ theorem fprintf_via (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
     constructor <;> (try rw [e2528]) <;> (try rw [ef]) <;> (try rw [eap]) <;> omega
   refine fprintf_sb hlive hlive' hsub (N := N) (bytes := bytes) hneed hs2 hs3 hs4 hal hra hN hbl h2 hstd himp
     hDA hdec hdA hdv hSo hbase (fun R0 Mt0 a2 a10 a11 a12 a13 a1 hsb hfr harg hk0 => ?_) hk
-  have hl : ∀ (kd : MKind) (a : Nat), a + 8 ≤ s.toNat - 1936 → widthOfM kd ≤ 8 → ldv kd Mt0 a = ldv kd Mt a :=
+  have hl : ∀ (kd : MKind) (a : Nat), a + 8 ≤ 0x8001bb30 → widthOfM kd ≤ 8 → ldv kd Mt0 a = ldv kd Mt a :=
     fun kd a ha hw => hfr.ldv kd fun j hj h => by omega
   have hloc0 : LocMb Mt0 := hloc.frame hfr (fun a h1 h2 h => by omega) (fun h => by omega)
   refine hI R0 Mt0 G (a2.trans esp.symm) a10 a11 a12 a13 (by rw [a1]; decide)

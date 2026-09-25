@@ -18,8 +18,10 @@ import VsaIris.Vsa.Stderr.FprintfSpec
   name's bytes (`soImg`); where they overlap they agree (`roImg_agree`);
 * `"%lld"` runs `fprintf_lld` (`putcs (lldBytes v) = intToString v.toInt`),
   `"<fn %s>"`/`"<native fn %s>"` run `fprintf_s`;
+* `stdout` may be unoriented at entry (`StdioOK`: `_flags` `0x000a` or
+  `0x200a`, `consoleMt_of`); `_vfprintf_r` orients it (`vfp_outer`);
 * the end state is `OutEnd` (`outEnd_of`): the frame `FpReg`, `stdout`'s
-  pointer and count untouched, its flags rewritten with their value.
+  pointer and count untouched, its flags oriented (`0x200a`).
 -/
 
 namespace VsaIris.Sym.Fp
@@ -370,9 +372,10 @@ theorem fprintf_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live
       iframe Hs Hgp Himg Hi
   obtain ⟨bv, sa, name, lit⟩ := x
   dsimp only at hPf hoff ⊢
-  have hcm := consoleMt_of hok fun a ha hi => hMt a ⟨ha, hi⟩
+  obtain ⟨ob, hokA⟩ := id hok
+  have hcm := consoleMt_of hokA fun a ha hi => hMt a ⟨ha, hi⟩
   have hlm := localeMt_of hok fun a ha hi => hMt a ⟨ha, hi⟩
-  have hSo : StdoutSb Mt := ⟨hcm.flagsU, hcm.flagsS, ldv_lhu_of_lh (by decide) hcm.fd, hcm.fd, hcm.lockMode,
+  have hSo : StdoutSbAt (consoleFlagsV ob) Mt := ⟨hcm.flagsU, hcm.flagsS, ldv_lhu_of_lh (by decide) hcm.fd, hcm.fd, hcm.lockMode,
     hcm.cookie, hcm.writer, hcm.sinit⟩
   have hbase : ldv .ld Mt 0x8001bb38 ≠ 0#64 := by rw [hcm.base]; decide
   have hloc : LocMb Mt := ⟨hlm.mbtowc, hlm.mbMax⟩
