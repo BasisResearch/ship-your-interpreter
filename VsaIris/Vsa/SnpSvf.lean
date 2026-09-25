@@ -69,9 +69,22 @@ theorem imgM_miss_nat (Mt : Mem) {a y w : Nat} (v : BitVec 64) (hy : y < 2 ^ 64)
     imgM (writeLog Mt [((BitVec.ofNat 64 y).toNat, w, v)]) a = imgM Mt a := by
   rw [toNat_ofNat_lt hy]; exact imgM_store_miss Mt v h
 
+/-- A byte load of a byte store of `zext b`. -/
+theorem ldv_lbu_sb (Mt : Mem) (a : Nat) (b : BitVec 8) :
+    ldv .lbu (writeLog Mt [(a, 1, BitVec.zeroExtend 64 b)]) a = BitVec.ofNat 64 b.toNat := by
+  simp only [ldv, bytesVal, bytesAt, widthOfM, List.range_one, List.map_cons, List.map_nil,
+    List.getD_cons_zero, Nat.add_zero, imgM_sb_zext]
+  apply BitVec.eq_of_toNat_eq
+  simp only [LeanRV64DExecutable.zero_extend, Sail.BitVec.zeroExtend, BitVec.toNat_setWidth,
+    BitVec.toNat_ofNat]
+
+theorem ldv_lbu_sb0 (Mt : Mem) (a : Nat) : ldv .lbu (writeLog Mt [(a, 1, 0#64)]) a = 0#64 := by
+  have := ldv_lbu_sb Mt a 0#8
+  simpa using this
+
 /-- Loads and bytes through a run's stores at `ofNat` addresses. -/
 macro "svf_mem" : tactic =>
-  `(tactic| (simp (disch := (first | omega | (simp only [widthOfM]; omega))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4]))
+  `(tactic| (simp (disch := (first | omega | (simp only [widthOfM]; omega))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4, ldv_lbu_sb0]))
 
 /-- `_svfprintf_r` after `memset` (`0x800076a4`), from the entry registers `R0`
 and memory `Mt0`: the frame at `s - 864`, the first spills, the `FILE`'s
@@ -1300,5 +1313,109 @@ theorem svf_flush {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
       · have := PO.res
         simp only [snpU] at this
         rw [toNat_ofNat_lt (by omega), show s - 864 + 240 = s - 640 + 16 by omega]; exact this
+
+/-! ## The conversion dispatch -/
+
+/-- A jump-table load at a literal address: the bytes are the table's. -/
+macro_rules
+  | `(tactic| sx_side) =>
+    `(tactic| (apply snpRO_mem_img; (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]); decide))
+
+/-- **The conversion table** (`0x80007798`): the character `c` in `s8` at
+the cursor `x` (`s9`) dispatches through `0x8001a0fc` to `%s`, `%d` or the
+`l` modifier. -/
+theorem svf_disp {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S : Nat → Prop} (x c : Nat) (tgt : BitVec 64)
+    (hc : c = 0x73 ∧ tgt = 0x80007f4c#64 ∨ c = 0x64 ∧ tgt = 0x80008008#64 ∨ c = 0x6c ∧ tgt = 0x80008534#64)
+    (R : Nat → BitVec 64) (Mt : Mem) (hx : x + 1 < 2 ^ 64)
+    (h25 : R 25 = BitVec.ofNat 64 x) (h24 : R 24 = BitVec.ofNat 64 c) (h26 : R 26 = 90#64)
+    (h22 : R 22 = 0x8001a0fc#64)
+    (hk : ∀ R', R' 25 = BitVec.ofNat 64 (x + 1) → R' 24 = BitVec.ofNat 64 c →
+      (∀ z, z ≠ 14 → z ≠ 15 → z ≠ 24 → z ≠ 25 → R' z = R z) → NW live Dt DA S Q tgt R' Mt) :
+    NW live Dt DA S Q 0x80007798#64 R Mt := by
+  rcases hc with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+  all_goals nx_runF hlive using [ofNat_add_ofNat, h22, h24, h25, h26, sext_zero, BitVec.add_zero,
+    BitVec.reduceToNat] at 0x80007f4c 0x80008008 0x80008534 0x800077f8
+  all_goals refine hk _ ?_ ?_ ?_
+  all_goals (try intro z h14 h15 h24' h25')
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h14, h15, h24', h25'])
+  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+  all_goals first | rfl | (rw [h24]; decide) | skip
+
+/-- The bytes `SvfSt` reads besides the format, return and argument slots:
+`SvfKeep`, the `uio` and the iovec array. -/
+def StKeep (s a : Nat) : Prop :=
+  SvfKeep s a ∨ (s - 864 + 224 ≤ a ∧ a < s - 864 + 248) ∨ (s - 864 + 352 ≤ a ∧ a < s - 864 + 480)
+
+/-- **`SvfSt` across a stretch of a conversion**: the kept bytes and fixed
+registers unchanged, new format, return and argument slots. -/
+theorem SvfSt.update {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
+    {p ap p' ap' : Nat} {rt rt' : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
+    {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (SG : SnpGeom s dst n)
+    (hR : SvfRegs R' R) (h23 : R' 23 = R 23) (hM : ∀ a, StKeep s a → imgM Mt' a = imgM Mt a)
+    (hf : ldv .ld Mt' (BitVec.ofNat 64 (s - 864)).toNat = BitVec.ofNat 64 p')
+    (hr : ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 16)).toNat = rt')
+    (ha : ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 24)).toNat = BitVec.ofNat 64 ap') :
+    SvfSt DA s dst n R0 Mt0 p' ap' rt' total L R' Mt' := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hL := St.len
+  have ag : ∀ (k : MKind) (off : Nat), 224 ≤ off → off + widthOfM k ≤ 248 →
+      ldv k Mt' (BitVec.ofNat 64 (s - 864 + off)).toNat = ldv k Mt (BitVec.ofNat 64 (s - 864 + off)).toNat :=
+    fun k off h1 h2 => by
+      rw [toNat_ofNat_lt (by omega)]
+      exact ldv_agree k fun i hi => hM _ (.inr (.inl ⟨by omega, by omega⟩))
+  refine ⟨St.core.update SG hR (fun a ha => hM a (.inl ha)) hf hr ha, h23.trans St.r23,
+    (ag .lw 232 (by omega) (by simp only [widthOfM]; omega)).trans St.cnt,
+    (ag .ld 240 (by omega) (by simp only [widthOfM]; omega)).trans St.res,
+    St.iov.transport (by omega) (fun a h1 h2 => ?_), St.src, St.len, St.sum⟩
+  simp only [snpIov] at h1 h2
+  exact hM a (.inr (.inr ⟨by omega, by omega⟩))
+
+/-- The conversion's state at the table (`0x80007798`): the cursor past the
+`'%'`, no sign, no flags, precision `-1`, width `0`. -/
+structure ConvAt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
+    (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat)) (x c : Nat)
+    (R : Nat → BitVec 64) (Mt : Mem) : Prop where
+  st : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt
+  sign : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = 0#64
+  r25 : R 25 = BitVec.ofNat 64 x
+  r24 : R 24 = BitVec.ofNat 64 c
+  r6 : R 6 = 0#64
+  r20 : R 20 = 18446744073709551615#64
+  r27 : R 27 = 0#64
+  r26 : R 26 = 90#64
+  r22 : R 22 = 0x8001a0fc#64
+
+/-- **A conversion starts** (`0x8000776c`, the `'%'` at `q`): the cursor
+advanced past it, the sign cleared, the specification's defaults, the
+character after the `'%'` loaded. -/
+theorem svf_convStart {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
+    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
+    {L : List (Nat × Nat)} (q : Nat) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
+    (St : SvfSt DA s dst n R0 Mt0 p ap rt total L R Mt) (h22 : R 22 = BitVec.ofNat 64 q)
+    (hq : InDA DA (q + 1) (q + 2)) (hq1 : 0x80000000 ≤ q) (hq2 : q + 2 ≤ 0x100000000)
+    (hq3 : q + 2 ≤ 0x8001ad00 ∨ 0x8001ad08 ≤ q)
+    (hk : ∀ R' Mt', ConvAt DA s dst n R0 Mt0 (q + 1) ap rt total L (q + 1) (imgM Dt (q + 1)).toNat R' Mt' →
+      NW live Dt DA (snpS s dst n) Q 0x80007798#64 R' Mt') :
+    NW live Dt DA (snpS s dst n) Q 0x8000776c#64 R Mt := by
+  have hs1 := SG.s_lo
+  have hs2 := SG.s_hi
+  have hsa := SG.s_al
+  have h2 := St.core.r2
+  have hbq := lbu_img_ofNat Dt (q + 1) (by omega)
+  nx_runF hlive using [ofNat_add_ofNat, h2, h22, hbq] at 0x80007798
+  refine hk _ _ ⟨St.update SG ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · intro a ha; unfold StKeep SvfKeep at ha; svf_mem
+  · svf_mem
+  · svf_mem; exact St.core.ret
+  · svf_mem; exact St.core.ap
+  · svf_mem
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
 end VsaIris.Sym
