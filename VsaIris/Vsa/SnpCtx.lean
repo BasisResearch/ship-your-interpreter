@@ -20,10 +20,12 @@ open Vsa.MemRepr Vsa.Sim VsaIris.Stdio
 /-- The stack a `snprintf` call may use (`snprintfNeed`). -/
 abbrev snpNeed : Nat := 1024
 
-/-- The bytes a `snprintf` run owns: newlib's data, the scratch
+/-- The bytes a `snprintf` run owns: newlib's data but `_impure_ptr` (read
+only, `impureRO`; the run reads it through the data view), the scratch
 `[s - 1024, s)` and the destination `[dst, dst + n)`. -/
 def snpS (s dst n : Nat) (a : Nat) : Prop :=
-  stdioFoot a ∨ (s - snpNeed ≤ a ∧ a < s) ∨ (dst ≤ a ∧ a < dst + n)
+  (stdioFoot a ∧ ¬ (0x8001b970 ≤ a ∧ a < 0x8001b978)) ∨ (s - snpNeed ≤ a ∧ a < s) ∨
+    (dst ≤ a ∧ a < dst + n)
 
 /-- The data view holds the range `[lo, hi)`. Runs carry one fact per read
 range (the format, each `%s` argument, `"."`); `sx_side` applies them. -/
