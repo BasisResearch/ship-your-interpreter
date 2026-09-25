@@ -40,6 +40,7 @@ import Vsa.Sim.InitialSeqInterpResources
 import Vsa.ElfRun
 import Vsa.ElfMono
 import Vsa.Machine
+import Vsa.Densify
 import Vsa.MemRepr
 import Vsa.While.Ast
 import Vsa.While.Semantics

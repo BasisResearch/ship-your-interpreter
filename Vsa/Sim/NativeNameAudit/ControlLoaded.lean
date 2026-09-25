@@ -1,4 +1,5 @@
 import Vsa.Sim.NativeNameAudit.ControlBootHeap
+import Vsa.Densify.Transport
 
 namespace Vsa.Sim.NativeNameAudit.Control
 open Vsa.Sim.OutputAliasLoaded Vsa.Sim.LayoutInstance
@@ -28,7 +29,31 @@ theorem loaded : Vsa.Refine.Loaded interpRunLayout nativeNameProgram heapConfig 
   rw [physicalConfigS0_mem]
   exact heapAstReads.programWithin.erase
 
+/-- The control memory is dense on RAM: the snapshot holds every RAM byte and
+the heap log only inserts. -/
+theorem heapConfig_dense : ∀ a, Vsa.Densify.ramBase ≤ a → a < Vsa.Densify.ramBase + Vsa.Densify.ramSize →
+    (heapConfig.σ.mem[a]?).isSome := by
+  intro a hlo hhi
+  unfold Vsa.Densify.ramBase at hlo
+  unfold Vsa.Densify.ramBase Vsa.Densify.ramSize at hhi
+  have hs : snapshotMem[a]? = some (snapshotByte a) := by
+    rw [snapshot_lookup, if_pos ⟨hlo, by omega⟩]
+  show ((physicalConfigS0 heapMem).σ.mem[a]?).isSome
+  rw [physicalConfigS0_mem]
+  obtain ⟨b', hb'⟩ : ∃ b', heapMem[a]? = some b' := memExtends_writeLog snapshotMem fullLog a _ hs
+  rw [hb']
+  rfl
+
+/-- **The control witness of the final theorem's hypothesis**: the dense
+control configuration is its own fill-with-zero. -/
+theorem loaded_fill :
+    Vsa.Refine.Loaded interpRunLayout nativeNameProgram (Vsa.Densify.fillZero heapConfig) := by
+  have e := Vsa.Densify.fillZero_eq_of_dense heapConfig_dense
+  rw [e]
+  exact loaded
+
 #print axioms readyFacts
 #print axioms loaded
+#print axioms loaded_fill
 
 end Vsa.Sim.NativeNameAudit.Control

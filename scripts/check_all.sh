@@ -64,6 +64,8 @@ python3 -B scripts/gen_interp_steps.py --table stdio --check \
   || fail "stage a3: VsaIris/Vsa/Stdout/{Code,Steps}*.lean is stale (gen_interp_steps.py --table stdio)"
 python3 -B scripts/gen_iris_cases.py --check \
   || fail "stage a3: VsaIris/Interp/Case/*.lean is stale (gen_iris_cases.py from scripts/iris_arms/arms.tsv)"
+python3 -B scripts/gen_resp.py --check \
+  || fail "stage a3: Vsa/Densify/Gen*.lean is stale (gen_resp.py from experiments/densify/closure.tsv)"
 
 # ------------------------------------------------------------ (b) grep gate
 echo "== stage a4: proof-discipline gate (exponentiating layer mandatory for new files)"
