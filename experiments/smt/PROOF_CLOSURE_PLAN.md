@@ -4385,6 +4385,8 @@ log, and `LogOk` (kernel-checked per program) gives every byte.
   exclusion and the stack exclusion; `RoByte` is `shared ∨ CodeByte`, a
   persistent union), or native values whose names are heap copies (a binary
   change). REVIEW.md P7; statement change pending the user's decision.
-- `capacity` needs the cost of every terminating derivation of the
-  represented program: a cost evaluator with a completeness theorem (in
-  progress).
+- Witnesses: `Gen/<Prog>.loaded` for 10 traces, premises exactly C3's stack
+  presence and C4's `SharedGeom`; `EndToEnd.lean` `*_halts`.
+- `recursion.wl`'s `capacity`: `capOk` does not finish in the kernel
+  (`fib(20)`, ~22k frames, list-backed store). Missing supplier: a cost
+  bound not by evaluation (e.g. a symbolic cost lemma for the program).
