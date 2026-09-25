@@ -196,7 +196,7 @@ for line in (root / 'scripts/h5_sites.tsv').read_text().splitlines():
             f'    chain_facts ({nm}CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.{nm}Code_at_"',
             '  liPc _ := rfl',
             '  liFin _ := by show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide',
-            f'  fwCert := {nm}Fw_cert', '  fwPc := rfl', '  fwTgt := rfl', '  fwText := by decide +kernel',
+            f'  fwCert := {nm}Fw_cert', '  fwPc := rfl', '  fwTgt := rfl', '  fwText := by decide +kernel', '  fwAlign := by decide',
             f'  exCert := {nm}Ex_cert', '  exPc := rfl', '  exTgt := rfl', '  exText := by decide +kernel', '']
 oom += ['end VsaIris.Newlib.OomSites', '']
 oomtext = '\n'.join(oom)

@@ -129,7 +129,7 @@ abbrev NplK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPr
     IProp GF :=
   iprop(PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
     (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
-      (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
+      (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
         consoleOwn (o ++ printArgs st vs ++ "\n") ∗ stackAt s nativePrintlnNeed)) -∗ Wp.W Φ)
 
 /-- What `native_println` carries across its calls. -/
@@ -163,7 +163,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (hra : ldv .ld M (s + 18446744073709551568#64 + 40#64).toNat = r)
     (hs0 : ldv .ld M (s + 18446744073709551568#64 + 32#64).toNat = rv 8) :
     codeRes ∗ binImg ∗ ms 0x80002f94#64 R (nplF s) M ∗ slot24 sret.toNat ∗
-      valAt N (s + 18446744073709551568#64).toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
+      valAt N (s + 18446744073709551568#64).toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
       consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s + 18446744073709551568#64) nativePrintNeed ∗
       NplK Wp Φ N sret args s r vs st o rv ⊢ Wp.W Φ := by
   iintro ⟨#Hcode, #Himg, Hms, Hsl, Hnull, Hvs, Hstd, Hcon, Hst, Hk⟩
@@ -187,10 +187,10 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       consoleOwn (o ++ printArgs st vs) ∗ FnplR Wp Φ N sret args s r vs st o rv))
   rotate_left
   · unfold ioRest
-    icases Hio with ⟨Hio, #Hr⟩
+    icases Hio with ⟨Hio, #Hr, Herr⟩
     isplitl []
     · iapply codeRes_imp; iframe Hcode Hr
-    unfold FnplR; iframe Hcode Himg Hio Hr Hcon Hsl Hnull Hvs Hst Hk Hms
+    unfold FnplR; iframe Hcode Himg Hio Hr Herr Hcon Hsl Hnull Hvs Hst Hk Hms
   intro F'
   refine npl_mid c.hlive hio1 hio2 ?_
   intros; apply swp_closeF
@@ -209,8 +209,8 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (jalx_80002fa0 live (fun p hp => c.hlive _ (interp_code_80002fa0 p hp))) interp_code_80002fa0
     (R := upd (upd (upd R 15 2147595576#64) 10 10#64) 11 2147597088#64)
     (S := nplF s) (Mt := M1) (n := nativePrintNeed)
-    (fun cs => H.fputc live Wp (10#8) (s + 18446744073709551568#64) cs (o ++ printArgs st vs) hcl
-      (spIn_of_stackGeom hsg (by decide)))
+    (fun cs => VsaIris.Sym.fputc_out live Wp (10#8) (s + 18446744073709551568#64) cs (o ++ printArgs st vs) hcl
+      (spIn_of_stackGeom hsg (by decide)) (VsaIris.Sym.bss_of_stackGeom hsg (by decide)))
     (by simp) (fun j hj => by
       simp only [List.length_cons, List.length_nil] at hj
       rcases j with _ | _ | j
@@ -227,7 +227,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have k4 := fun x (hx : x ∈ fRegs) (hc : x ∉ callerSaved) => hk4 x hx hc
   -- to `jal value_null`
   iapply wp_swpF Wp (S := nplF s) (R := upd R4 1 (BitVec.ofNat 64 (0x80002fa0 + 4))) (Mt := M1)
-    (pc := 0x80002fa4#64) (F := iprop(codeRes ∗ stdioOwn ∗ consoleOwn (o ++ printArgs st vs ++ "\n") ∗
+    (pc := 0x80002fa4#64) (F := iprop(codeRes ∗ stdioW ∗ consoleOwn (o ++ printArgs st vs ++ "\n") ∗
       FnplR Wp Φ N sret args s r vs st o rv))
   rotate_left
   · rw [hro]; unfold FnplR; iframe Hcode Hstd Hcon Hsl Hnull Hvs Hst Hk Hms
@@ -260,7 +260,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iapply wp_swpF Wp (S := nplF s) (pc := 0x80002fac#64) (R := upd R5 1 (BitVec.ofNat 64 (0x80002fa8 + 4)))
     (Mt := M1)
     (F := iprop(codeRes ∗ valAt N (s + 18446744073709551568#64).toNat .null ∗ valAt N sret.toNat .null ∗
-      valsAt N args.toNat vs ∗ stdioOwn ∗ consoleOwn (o ++ printArgs st vs ++ "\n") ∗
+      valsAt N args.toNat vs ∗ stdioW ∗ consoleOwn (o ++ printArgs st vs ++ "\n") ∗
       stackScratch (s + 18446744073709551568#64) nativePrintNeed ∗ NplK Wp Φ N sret args s r vs st o rv))
   rotate_left
   · rw [hro]; iframe Hcode Hnull Hnull2 Hvs Hstd Hcon Hst Hk Hms
@@ -363,7 +363,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
   -- the prologue
   iapply wp_swpF Wp (S := nplF s) (R := upd rv 1 r) (Mt := M) (pc := nativePrintlnPC)
     (F := iprop(codeRes ∗ dispResL st vs ∗ binImg ∗ slot24 sret.toNat ∗ slot24 (s + 18446744073709551568#64).toNat ∗
-      valsAt N args.toNat vs ∗ stdioOwn ∗ consoleOwn o ∗
+      valsAt N args.toNat vs ∗ stdioW ∗ consoleOwn o ∗
       stackScratch (s + 18446744073709551568#64) nativePrintNeed ∗ NplK Wp Φ N sret args s r vs st o rv))
   rotate_left
   · rw [hro]; iframe Hcode Hd Himg Hsl Hslot Hvs Hstd Hcon Hst Hk Hms
@@ -386,10 +386,10 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
       rv 13 = args ∧ rv 2 = s + 18446744073709551568#64)
     (Pre := iprop(slot24 (s + 18446744073709551568#64).toNat ∗
       ⌜SlotGeom (s + 18446744073709551568#64) ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
-      valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioOwn ∗ consoleOwn o ∗
+      valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioW ∗ consoleOwn o ∗
       stackAt (s + 18446744073709551568#64) nativePrintNeed))
     (Post := fun _ => iprop(valAt N (s + 18446744073709551568#64).toNat .null ∗ valsAt N args.toNat vs ∗
-      stdioOwn ∗ consoleOwn (o ++ printArgs st vs) ∗ stackAt (s + 18446744073709551568#64) nativePrintNeed))
+      stdioW ∗ consoleOwn (o ++ printArgs st vs) ∗ stackAt (s + 18446744073709551568#64) nativePrintNeed))
   isplitl []
   · ipureintro
     refine ⟨by ix_reg, ?_, ?_, by ix_reg⟩

@@ -145,16 +145,17 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   unfold mallocRes
   icases Hres with (⟨%⟨hp0, -⟩, Hh⟩ | ⟨%⟨hfresh, hp16⟩, Hh, Hblk⟩)
   · -- NULL: `beqz` to the out-of-memory block
+    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hh
     ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
     · iframe Hcode Hro
     iapply wp_swpF (wpW _) (F := iprop(leafErrCtx inp ∗ codeRes ∗
         stackScratch (s + 18446744073709550528#64) (evalNeed (.fn nm ps body) d - 1088) ∗
-        Stdio.stdioOwn ∗ consoleOwn st.out ∗
+        Stdio.stdioOwn ∗ Stdio.errnoOwn ∗ consoleOwn st.out ∗
         (abortAt (evalCore N vsaLayoutP vsaRoomB inp) s (evalNeed (.fn nm ps body) d) ∗
           slot24 sret.toNat -∗ (wpW (vsaModel live)).W Φ)))
     rotate_left
     · ihave Hk := and_elim_r $$ Hk
-      iframe HE Hdv Hms Hcode Hst Hio Hc Hk
+      iframe HE Hdv Hms Hcode Hst Hio Herr Hc Hk
     intro F'
     refine {ARM}P_run2o (aX := aX) (s := s) (sret := sret) (aE := aE) hlive hsf hs' hs2 hs3
       (by ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2) hA1 ?_
@@ -167,7 +168,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
     apply swp_closeRM
     intro R3 Mt3 hR3 hMt3
     unfold F'
-    iintro ⟨⟨#HE, #Hcode, Hst, Hio, Hc, Hk⟩, Hms⟩
+    iintro ⟨⟨#HE, #Hcode, Hst, Hio, Herr, Hc, Hk⟩, Hms⟩
     iapply ev_oom (wpW _) (N := N) (L := vsaLayoutP) (Room := vsaRoomB) (inp := inp) HN hcl
       OomSites.oom80003e28_ok (s := s) (sret := sret) (n := evalNeed (.fn nm ps body) d) hsg
       ⟨by omega, by unfold Vsa.Sim.tohostAddr; omega,
@@ -176,11 +177,12 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
              unfold evalNeed stackBudget; simp only [Expr.stackNeed, evalFrame]; omega
            rw [hsf]; omega,
         by show (evalSP s).toNat + 1032 ≤ s.toNat
-           rw [hsf]; omega, hs2, by rw [hsf]; omega⟩
+           rw [hsf]; omega, hs2, by rw [hsf]; omega,
+        by unfold fwriteNeed; rw [hsf]; omega⟩
       hdj (R := R3) (M := Mt3)
       (by subst hR3; ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2)
     rw [show BitVec.ofNat 64 OomSites.oom80003e28.head = 0x80003e28#64 from rfl]
-    iframe HE Hcode Hms Hst Hio Hc Hk
+    iframe HE Hcode Hms Hst Hio Herr Hc Hk
 
 #ix_piece {ARM}P_p2 from {ARM}P_pOom by
   -- the fresh block joins the run's bytes

@@ -263,5 +263,16 @@ import VsaIris.Interp.ProofStrlen
 import VsaIris.Interp.ProofStrcpy
 import VsaIris.Interp.ProofStrHeap
 import VsaIris.Interp.ProofStrcpyH
-import VsaIris.Vsa.ErrnoHeap
+-- lane N1: newlib's stdout path
+import VsaIris.LocalRunO
+import VsaIris.Vsa.SymRunO
+import VsaIris.Vsa.SymJalr
+import VsaIris.Vsa.ErrnoOwn
+import VsaIris.Vsa.Stdout.Fputc
+import VsaIris.Vsa.Stdout.Sfvwrite
+import VsaIris.Vsa.Stdout.FwriteOut
+import VsaIris.Vsa.Stderr.VfpEntry
+import VsaIris.Vsa.Stderr.VfpErr
+import VsaIris.Vsa.Stderr.SprintErr
+import VsaIris.Vsa.Stderr.SprintErr0
 import VsaIris.Vsa.ExitH.Iris

@@ -14,11 +14,13 @@ bytes, `a0 = n`, the memory is `swriteMt` (two stack slots, the flags,
 
 namespace VsaIris.Sym
 
+open scoped VsaIris.Sym.Stdout
+
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 /-- The memory after `__swrite(stdout, buf, n)` returns: `__swrite`'s `ra`
 slot, the flags, `_write_r`'s `s0`/`ra` slots, `errno`. -/
-abbrev swriteMt (Mt : Mem) (sp ra s0 : BitVec 64) : Mem :=
+@[nx_mt] abbrev swriteMt (Mt : Mem) (sp ra s0 : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551608#64).toNat, 8, ra)]) [(2147597104, 2, 8202#64)])
     [((sp + 18446744073709551600#64).toNat, 8, s0)]) [((sp + 18446744073709551608#64).toNat, 8, ra)])
@@ -33,7 +35,7 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
 theorem swrite_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp ra s0 : BitVec 64} {need : Nat} {buf : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 64 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (h1 : R 1 = ra)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (h1 : R 1 = ra)
     (hra : ra.toNat % 4 = 0) (h8 : R 8 = s0) (hb1 : 0x80000000 ≤ buf) (hb2 : buf + bs.length ≤ 0x100000000)
     (hb3 : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)
     (hbd : ∀ i, i < bs.length → (buf + i < sp.toNat - 64 ∨ sp.toNat ≤ buf + i) ∧
@@ -52,6 +54,7 @@ theorem swrite_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Me
     all_goals (have := hbd i hi; nx_addr)
   sx_norm
   nx_run hlive using [h13, h12, h2, h1, h8, BitVec.add_assoc]
+  simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 end VsaIris.Sym

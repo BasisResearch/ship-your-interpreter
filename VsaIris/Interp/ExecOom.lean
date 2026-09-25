@@ -1,6 +1,7 @@
 import VsaIris.Interp.ExecEnv
 import VsaIris.Interp.SpecErr
 import VsaIris.Vsa.OomSites
+import VsaIris.Vsa.ErrnoOwn
 
 /-!
 # Allocating helpers from an exec arm, partial mode (lane E5)
@@ -117,7 +118,7 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {inp : Nat} {st : St} {d env : Nat}
     {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {n : Nat}
     (hsp : EnvSp (R 2) envNewNeed) (hn : envNewNeed ≤ n) (hn2 : n ≤ (R 2).toNat)
-    (hlo : Vsa.Sim.tohostAddr + 16 ≤ (R 2).toNat - n) (hfit : (R 2).toNat - n + Newlib.fwriteNeed + 16 ≤ (R 2).toNat)
+    (hlo : 0x80100000 ≤ (R 2).toNat - n) (hfit : (R 2).toNat - n + Newlib.fwriteNeed + 16 ≤ (R 2).toNat)
     (hhi : (R 2).toNat ≤ 0x88000000) :
     envNewSpec (wpW (vsaModel live)) N ∗ codeRes ∗ Newlib.binImg ∗ ms (BitVec.ofNat 64 i) R S Mt ∗
       stackScratch (R 2) n ∗ □ frameAt env (R 10).toNat ∗
@@ -231,9 +232,8 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
   · -- out of memory
     iintro ⟨-, HA⟩ HK HS
     unfold oomAt
-    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hh, Hheap⟩
-    ihave Hno := heapRes_isHeap _ _ _ _ $$ Hheap
-    ihave Hno := Stdio.isHeap_errno _ Stdio.vsaLayoutP_errno _ $$ Hno
+    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩
+    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
     ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [Hcl HK]
     · iframe Hcl HK
     ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
@@ -243,10 +243,11 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
       simp only [BitVec.toNat_ofNat]; have := hsp.lo; unfold htifLo envNewNeed at this; omega)
     iapply Newlib.Oom.wp_oomBlock HN live hcl (wpW _) N vsaLayoutP vsaRoomB inp
       Newlib.OomSites.oom80002a38 Newlib.OomSites.oom80002a38_ok (R 2) (R 2 - 16#64) r n
-      ⟨hn2, hlo, by rw [e16]; omega, by rw [e16]; show (R 2).toNat - 16 + 0 ≤ (R 2).toNat; omega,
-        hhi, by rw [e16]; have := hsp.align; omega⟩ cs st.out
+      ⟨hn2, by unfold Vsa.Sim.tohostAddr; omega, by rw [e16]; omega,
+        by rw [e16]; show (R 2).toNat - 16 + 0 ≤ (R 2).toNat; omega,
+        hhi, by rw [e16]; have := hsp.align; omega, by rw [e16]; unfold Newlib.fwriteNeed at hfit ⊢; omega⟩ cs st.out
     rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002a38.head = 0x80002a38#64 from rfl]
-    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Hno Hc
+    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Herr Hc
     iintro HA
     iapply Hk
     iframe HA HS
@@ -263,7 +264,7 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {inp : Nat} {st : St} {d : Nat} {fa : Addr}
     {x : String} {v : Value} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {n : Nat}
     (hsp : EnvSp (R 2) envDefineNeed) (hpv : SlotWin (R 12).toNat) (hn : envDefineNeed ≤ n)
-    (hn2 : n ≤ (R 2).toNat) (hlo : Vsa.Sim.tohostAddr + 16 ≤ (R 2).toNat - n)
+    (hn2 : n ≤ (R 2).toNat) (hlo : 0x80100000 ≤ (R 2).toNat - n)
     (hfit : (R 2).toNat - n + Newlib.fwriteNeed + 64 ≤ (R 2).toNat)
     (hhi : (R 2).toNat ≤ 0x88000000) :
     envDefineSpec (wpW (vsaModel live)) N ∗ codeRes ∗ Newlib.binImg ∗ ms (BitVec.ofNat 64 i) R S Mt ∗
@@ -372,9 +373,8 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
   · -- out of memory
     iintro ⟨-, HA, Hval⟩ HK HS
     unfold oomAt
-    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hh, Hheap⟩
-    ihave Hno := heapRes_isHeap _ _ _ _ $$ Hheap
-    ihave Hno := Stdio.isHeap_errno _ Stdio.vsaLayoutP_errno _ $$ Hno
+    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩
+    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
     rw [show VsaIris.ra :: 10 :: retClob ++ defineSaved = envOomRegs from rfl]
     ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [Hcl HK]
     · iframe Hcl HK
@@ -385,11 +385,12 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
       simp only [BitVec.toNat_ofNat]; have := hsp.lo; unfold htifLo envDefineNeed at this; omega)
     iapply Newlib.Oom.wp_oomBlock HN live hcl (wpW _) N vsaLayoutP vsaRoomB inp
       Newlib.OomSites.oom80002bd0 Newlib.OomSites.oom80002bd0_ok (R 2) (R 2 - 64#64) r n
-      ⟨hn2, hlo, by rw [e64]; omega, by rw [e64]; show (R 2).toNat - 64 + 0 ≤ (R 2).toNat; omega,
-        hhi, by rw [e64]; have := hsp.align; omega⟩
+      ⟨hn2, by unfold Vsa.Sim.tohostAddr; omega, by rw [e64]; omega,
+        by rw [e64]; show (R 2).toNat - 64 + 0 ≤ (R 2).toNat; omega,
+        hhi, by rw [e64]; have := hsp.align; omega, by rw [e64]; unfold Newlib.fwriteNeed at hfit ⊢; omega⟩
       cs st.out
     rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002bd0.head = 0x80002bd0#64 from rfl]
-    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Hno Hc
+    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Herr Hc
     iintro HA
     iapply Hk
     iframe HA Hval HS

@@ -51,6 +51,40 @@ theorem stderr_mem : read64 heapMem impureStderrAddr = some exitStderr := by
     decide
   · unfold impureStderrAddr consoleReent; omega
 
+/-- The C locale's data, read off the snapshot through both logs. -/
+theorem locale_mem : LocaleData heapMem where
+  mbtowc := by
+    refine read64_heap ?_ fun j hj => unchanged_low ?_
+    · simp only [localeMbtowcAddr, asciiMbtowc, read64, readLE, lookup]
+      decide
+    · unfold localeMbtowcAddr; omega
+  mbMax := by
+    have h : heapMem[localeMbMaxAddr]? = mem[localeMbMaxAddr]? :=
+      unchanged_low (by unfold localeMbMaxAddr; omega)
+    have e : readLE heapMem localeMbMaxAddr 1 = readLE mem localeMbMaxAddr 1 := by
+      simp only [readLE, h]
+    rw [e]
+    simp only [localeMbMaxAddr, readLE, lookup]
+    decide
+  decPoint := by
+    refine read64_heap ?_ fun j hj => unchanged_low ?_
+    · simp only [localeDecPointAddr, decPointStr, read64, readLE, lookup]
+      decide
+    · unfold localeDecPointAddr; omega
+
+/-- `stderr`'s buffer base and write callback, read off the snapshot. -/
+theorem stderrStream_mem : StderrStream heapMem where
+  base := by
+    refine read64_heap ?_ fun j hj => unchanged_low ?_
+    · simp only [exitStderr, read64, readLE, lookup]
+      decide
+    · unfold exitStderr; omega
+  writer := by
+    refine read64_heap ?_ fun j hj => unchanged_low ?_
+    · simp only [exitStderr, consoleSwrite, read64, readLE, lookup]
+      decide
+    · unfold exitStderr; omega
+
 /-- `binblocks`: empty bins, the word is zero. -/
 theorem binblocks_mem : read64 heapMem binblocksAddr = some 0 := by
   refine read64_heap ?_ fun j hj => unchanged_low ?_
@@ -76,6 +110,8 @@ theorem bootHeapFacts :
     decide
   frame := bootFrameChunks
   stderr := stderr_mem
+  locale := locale_mem
+  stderrStream := stderrStream_mem
   shared_geom := sharedGeom
 
 

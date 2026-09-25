@@ -68,7 +68,7 @@ def struct(name, rows):
 
 def conv(f, k, a, v, src):
     """The load fact from its `read*` source, through `hM`."""
-    base = f'(stdio_imgLE hM h.{src} (stdioFoot_rng {a:#x} {WIDTH[k]} (by decide)))'
+    base = f'(stdio_imgLE (fun a ha _ => hM a ha) h.{src} (stdioFoot_rng {a:#x} {WIDTH[k]} (by decide)))'
     if k == 'ld':
         return f'ldv_ld_of_imgLE {base}'
     if k == 'lhu':
@@ -104,15 +104,15 @@ namespace VsaIris.Sym
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
-/-- A range of newlib's data, checked. -/
+/-- A range of newlib's data off `_impure_ptr`, checked. -/
 theorem stdioFoot_rng (a n : Nat)
     (h : (decide (0x8001b520 ≤ a ∧ a + n ≤ 0x8001b538) || decide (0x8001b53c ≤ a ∧ a + n ≤ 0x8001b960) ||
-      decide (0x8001b970 ≤ a ∧ a + n ≤ 0x8001b990) || decide (0x8001b9b0 ≤ a ∧ a + n ≤ 0x8001ba08) ||
+      decide (0x8001b978 ≤ a ∧ a + n ≤ 0x8001b990) || decide (0x8001b9b0 ≤ a ∧ a + n ≤ 0x8001ba08) ||
       decide (0x8001ba0c ≤ a ∧ a + n ≤ 0x8001ba18) || decide (0x8001ba68 ≤ a ∧ a + n ≤ 0x8001c168)) = true) :
-    ∀ i, i < n → stdioFoot (a + i) := by
+    ∀ i, i < n → stdioFoot (a + i) ∧ ¬ impureW (a + i) := by
   intro i hi
   simp only [Bool.or_eq_true, decide_eq_true_eq] at h
-  unfold stdioFoot InRange
+  unfold stdioFoot InRange impureW
   omega
 
 ''']
@@ -159,6 +159,7 @@ A chain of `{n}` pieces of at most {STEPS[err]} steps each (`scripts/gen_exit_ha
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
 
 set_option hygiene false in
 /-- One piece of the `{err}` run. -/

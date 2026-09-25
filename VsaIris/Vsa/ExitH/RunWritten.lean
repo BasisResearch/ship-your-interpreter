@@ -14,6 +14,7 @@ A chain of `45` pieces of at most 10 steps each (`scripts/gen_exit_handlers.py`)
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
 
 set_option hygiene false in
 /-- One piece of the `Written` run. -/

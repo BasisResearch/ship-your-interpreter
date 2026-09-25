@@ -41,7 +41,7 @@ theorem ok_facts {m : Std.ExtHashMap Nat (BitVec 8)} {rv s0v sM : BitVec 64}
     (hpin : ∀ k, sM.toNat + 752 ≤ k → k < sM.toNat + 752 + 16 → (m[k]?).getD 0 = imgT k) :
     ChainFacts m m (bL 0#64 rv s0v sM) (bLds sM imgT) mainOkSeg := by
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
-  unfold fprintfNeed tohostAddr at h1
+  unfold fprintfNeed at h1
   unfold mainOkSeg ChainFacts
   chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
   · -- `bnez a0`: not taken
@@ -117,7 +117,7 @@ theorem wp_mainOkTail (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive 
       stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ Φ (0, o)
     ⊢ Wp.W Φ := by
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
-  unfold fprintfNeed tohostAddr at h1
+  unfold fprintfNeed at h1
   have hcodeL := mainErrCode_text.live hlive
   unfold VsaIris.sp VsaIris.ra
   iintro ⟨Hpc, Ha0, Hra, Hs0, Hargs, Hsp, Hsaved, Htmp, #Hgp, #Himg, HT, Herr, Hstd, Hno, Hcon, HΦ⟩

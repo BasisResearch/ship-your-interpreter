@@ -1,3 +1,4 @@
+import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.OomSites
@@ -270,7 +271,7 @@ theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
       (abortAt (evalCore N L Room inp) s n ∗ slot24 sret.toNat -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   unfold leafErrCtx
-  iintro ⟨⟨#Himg, -⟩, #Hcode, Hms, Hst, Hstd, Hno, Hcon, Hk⟩
+  iintro ⟨⟨#Himg, -⟩, #Hcode, Hms, Hst, Hstd, Herr, Hcon, Hk⟩
   have hs1 := hsg.le; have hs2 := hsg.lo; have hs3 := hsg.hi
   unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3
   simp only at hs2 hs3
@@ -287,7 +288,7 @@ theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   ihave #Hgp := codeRes_gp $$ Hcode
   rw [hR2]
   iapply Oom.wp_oomBlock HN live hcl Wp N L Room inp S hS s (evalSP s) _ n hsp _ o
-  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hno Hcon
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Herr Hcon
   iintro HA
   unfold abortRes abortAt
   icases HA with ⟨Hcore, Hst⟩

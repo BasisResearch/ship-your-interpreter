@@ -3,6 +3,7 @@ import VsaIris.Interp.CallMalloc
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Vsa.OomSites
+import VsaIris.Vsa.ErrnoOwn
 
 /-!
 # `stringify` (lane H2)
@@ -541,9 +542,6 @@ theorem strBytes_of_cstrImg {img : Nat → BitVec 8} {q : Nat} {x : String} (h :
     have := congrArg BitVec.toNat h0
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)] at this
     simp at this; omega
-  ascii k hk := by
-    obtain ⟨e, h1, h2⟩ := h.1 k hk
-    rw [e, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; exact h2
   nul := h.2
 
 /-- A C string's image read through another image agreeing on it. -/
@@ -739,8 +737,7 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     rw [BitVec.toNat_add]; simp; omega
   unfold SgRest
   iintro ⟨⟨#Hcode, #Himg, -, -, Hheap, Hstd, Hcon, Hst, Hk⟩, Hms⟩
-  ihave Hno := heapRes_isHeap _ _ _ _ $$ Hheap
-  ihave Hno := isHeap_errno _ vsaLayoutP_errno _ $$ Hno
+  ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave ⟨HF, HP⟩ := ownSet_split _ (InExt (s.toNat - 112, 112)) _ $$ HS
   ihave HF := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ HF
@@ -759,9 +756,10 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     ⟨by unfold stringifyNeed snprintfNeed; omega,
       by unfold stringifyNeed snprintfNeed Vsa.Sim.tohostAddr; omega,
       by rw [e112]; unfold stringifyNeed snprintfNeed fwriteNeed; omega,
-      by rw [e112]; show s.toNat - 112 + 0 ≤ s.toNat; omega, hs2, by rw [e112]; omega⟩ _ o
+      by rw [e112]; show s.toNat - 112 + 0 ≤ s.toNat; omega, hs2, by rw [e112]; omega,
+      by rw [e112]; unfold fwriteNeed; omega⟩ _ o
   rw [show BitVec.ofNat 64 OomSites.oom80003140.head = 2147496256#64 from rfl]
-  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hno Hcon
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Herr Hcon
   iintro HA
   iapply Hk
   isplitl []

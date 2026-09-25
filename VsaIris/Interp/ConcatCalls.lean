@@ -1,3 +1,4 @@
+import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Interp.SpecConcat
 import VsaIris.Interp.CallFree
 import VsaIris.Interp.BinEq
@@ -101,7 +102,7 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   unfold fwriteNeed at hn
   have hsf : (evalSP s).toNat = s.toNat - 1088 := by
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  iintro ⟨%h2, #Hcode, #Himg, Hms, Hst, Hstd, Hno, Hcon, Hk⟩
+  iintro ⟨%h2, #Hcode, #Himg, Hms, Hst, Hstd, Herr, Hcon, Hk⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave Hst := evalFrame_join hs4 (by omega) $$ [Hst HS]
   · iframe Hst HS
@@ -113,9 +114,10 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iapply Oom.wp_oomBlock hE.newlib live hE.code Wp N L Room inp OomSites.oom80003e28
     OomSites.oom80003e28_ok s (evalSP s) _ n
     ⟨by omega, by unfold Vsa.Sim.tohostAddr; omega, by rw [hsf]; unfold fwriteNeed; omega,
-      by rw [hsf]; show s.toNat - 1088 + 1032 ≤ s.toNat; omega, hs2, by rw [hsf]; omega⟩ _ o
+      by rw [hsf]; show s.toNat - 1088 + 1032 ≤ s.toNat; omega, hs2, by rw [hsf]; omega,
+      by rw [hsf]; unfold fwriteNeed; omega⟩ _ o
   rw [show BitVec.ofNat 64 OomSites.oom80003e28.head = 0x80003e28#64 from rfl]
-  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hno Hcon
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Herr Hcon
   iintro HA
   iapply Hk
   unfold abortRes abortAt

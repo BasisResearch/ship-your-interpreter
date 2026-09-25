@@ -1,5 +1,5 @@
 import VsaIris.Vsa.Landing
-import VsaIris.Vsa.ErrnoHeap
+import VsaIris.Vsa.ErrnoOwn
 
 /-!
 # The abort resource and its continuation (INTERP_DESIGN.md §4.2, H5)
@@ -13,7 +13,8 @@ abort is one of two machine states:
   and `sp` from the `jmp_buf` (`landingRegs`), with `a0 = 1` and the PC at the
   restored `ra`; the world is intact with `err_msg` a C string (`errStr`);
 * **`exit(1)`'s entry after an out-of-memory `fwrite`** (`oomCore s n`): `a0 = 1`,
-  newlib's data after a `stderr` write, and a stack pointer `s'` with room for
+  newlib's data after a `stderr` write, the `errno` word `fwrite` borrowed
+  (which `exit`'s close path writes too), and a stack pointer `s'` with room for
   `exit` inside the site's region `[s - n, s)` (`OomSp`).
 
 The second depends on the site's region, and is monotone in it
@@ -225,8 +226,8 @@ structure TopLanding (inp : Nat) (sM : BitVec 64) (jb0 imgI imgT : Nat → BitVe
 
 /-- **The landing**: `interp_run` returns 1, `main` prints `err_msg` and exits
 70. -/
-theorem wp_abortLanding (H : NewlibHoles) (hL : ∀ a, errnoFoot a → L.global a) (live : Nat → Prop)
-    (hlive : CodeLive live)
+theorem wp_abortLanding (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
+    (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hΦ : ∀ o, ⊢ Φ (70, o)) (sM : BitVec 64) (jb0 imgI imgT : Nat → BitVec 8)
     (hT : TopLanding inp sM jb0 imgI imgT) :
@@ -239,8 +240,8 @@ theorem wp_abortLanding (H : NewlibHoles) (hL : ∀ a, errnoFoot a → L.global 
   iintro ⟨⟨%ρ, %st, %d, %jb, ⟨%Hh, %B, Hheap, -, Hcon, Hstd,
     ⟨⟨%g, -, -, ⟨%dimg, Hd, -⟩, -, -, ⟨%eimg, Herr, %hnul⟩⟩, -⟩, -, -⟩, #Hjb,
     ⟨Hpc, Hra, Hsp, Ha0, Hsaved, Hargs, Htmp⟩⟩, Hscr, #Hjb0, HI, HT, #Hgp, #Himg⟩
-  ihave Hno := heapRes_isHeap L Room ρ Hh $$ Hheap
-  ihave Hno := isHeap_errno L hL Hh $$ Hno
+  -- `fprintf` borrows `errno` from the heap the landing drops
+  ihave ⟨Herrno, -⟩ := hEL _ _ $$ Hheap
   ihave %hag := jmpRO_agree inp jb jb0 $$ [Hjb Hjb0]
   · iframe Hjb Hjb0
   have hw : ∀ i, i ≤ 13 → jbWord inp jb i = jbWord inp jb0 i := fun i hi => jbWord_congr hag hi
@@ -258,10 +259,10 @@ theorem wp_abortLanding (H : NewlibHoles) (hL : ∀ a, errnoFoot a → L.global 
     refine ⟨k, hk, ?_⟩
     rw [show sM.toNat + 496 + k = inp + interpErrOff + k by unfold interpErrOff; omega]
     exact h0
-  iapply wp_landing H.at live hlive Wp sM 1#64 0x80004428#64 (fun r => jbWord inp jb (r - 15))
+  iapply wp_landing H live hlive Wp sM 1#64 0x80004428#64 (fun r => jbWord inp jb (r - 15))
     st.out imgI imgT eimg hT.main (by decide) hT.inI hT.raI hT.s0I hT.raT herr
   simp only [sepL_cons, sepL_nil, Nat.reduceSub]
-  iframe Hpc Ha0 Hra Hsp Hargs Htmp Hgp Himg HI Hd Hscr HT Herr Hstd Hno Hcon
+  iframe Hpc Ha0 Hra Hsp Hargs Htmp Hgp Himg HI Hd Hscr HT Herr Hstd Herrno Hcon
   isplitl [H8 H9 H18 H19 H20 H21 H22]
   · isplitl [H8]
     · iexists _; iexact H8
@@ -290,8 +291,8 @@ WP: `interp_run` calls `exec_stmt` with `sp = sM - 176` (its frame below
 saved pair) ends the run with a nonzero exit code. With
 `Φ := fun v => ⌜v.1 ≠ 0⌝` and `Inst.vsa_adequacyP_nonzero` this is
 `Halts c out e ∧ e ≠ 0` for every run that aborts. -/
-theorem wp_abort (H : NewlibHoles) (hL : ∀ a, errnoFoot a → L.global a) (live : Nat → Prop)
-    (hlive : CodeLive live)
+theorem wp_abort (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
+    (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hΦ : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) (sM : BitVec 64) (n : Nat)
     (hn : fprintfNeed - 176 ≤ n) (hns : n ≤ (sM - 176#64).toNat)
@@ -306,7 +307,7 @@ theorem wp_abort (H : NewlibHoles) (hL : ∀ a, errnoFoot a → L.global a) (liv
   unfold abortCore
   icases HC with (Hl | Ho)
   · ihave ⟨-, Hscr⟩ := stackScratch_narrow hns hn $$ Hscr
-    iapply wp_abortLanding N L Room inp H hL live hlive Wp (fun o => hΦ 70 o (by decide)) sM jb0
+    iapply wp_abortLanding N L Room inp H hEL live hlive Wp (fun o => hΦ 70 o (by decide)) sM jb0
       imgI imgT hT
     iframe Hl Hscr Hjb0 HI HT Hgp Himg
   · iapply wp_abortOom H live hlive Wp (fun o => hΦ 1 o (by decide)) (sM - 176#64) n

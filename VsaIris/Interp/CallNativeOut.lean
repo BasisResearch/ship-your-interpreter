@@ -57,10 +57,10 @@ theorem ms_callNatOut {live : Nat → Prop} (N : NativeAddrs) (Wp : MachWP (GF :
     natOutSpec (vsaModel live) N Wp entry need sret args sp vs st o o' ∗ codeRes ∗
       ms (BitVec.ofNat 64 i) R S Mt ∗
       iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
-        valsAt N args.toNat vs ∗ dispResL st vs ∗ Newlib.binImg ∗ Stdio.stdioOwn ∗ consoleOwn o ∗
+        valsAt N args.toNat vs ∗ dispResL st vs ∗ Newlib.binImg ∗ Stdio.stdioW ∗ consoleOwn o ∗
         stackAt sp need) ∗
       (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗
-        iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ Stdio.stdioOwn ∗
+        iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ Stdio.stdioW ∗
           consoleOwn o' ∗ stackAt sp need) -∗
         ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
@@ -136,7 +136,8 @@ end Defs
     (hentry : N.addr nf = entry.toNat) (hent4 : entry.toNat % 4 = 0) (hlen : vs.length ≤ 32)
     (hsg : StackGeom s n) (hn : 1088 ≤ n) (hneed : need + 1088 ≤ n) (hslg : SlotGeom sret)
     (hal : ret.toNat % 4 = 0) (hd : DispSupply (GF := GF) N) (hsp : rv 2 = s)
-    (hcall : CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 vs.length) :
+    (hcall : CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 vs.length)
+    (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room) :
     NatOutSpecs live N Wp entry need out ∗ codeRes ∗ □ astEG aX.toNat (.call fe args) ∗
       □ valOf N (.native nf) w0 w1 w2 ∗ argVals N (imgM Mt) (argsBase s) 0 vs ∗
       ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
@@ -198,7 +199,7 @@ end Defs
   ihave #Hav1 := argVals_agree N (argsBase s) vs 0 hag $$ Hav
   ihave ⟨Hms, Hvals⟩ := ms_carveVals N hreg $$ [Hms Hav1]
   · iframe Hms Hav1
-  ihave ⟨Hcon, Hio, #Hbin, %B, Hstore, Hclose⟩ := world_out N L Room inp ρ st2 d $$ Hw
+  ihave ⟨Hcon, Hio, #Hbin, %B, Hstore, Hclose⟩ := world_out N L Room inp ρ st2 d hEL $$ Hw
   ihave ⟨Hstore, #Hdisp⟩ := dispResL_of_argVals N hd st2.store B (imgM Mt1) (argsBase s) vs 0 $$
     [Hstore Hav1]
   · iframe Hstore Hav1

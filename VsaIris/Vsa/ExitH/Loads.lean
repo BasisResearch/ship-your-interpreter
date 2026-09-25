@@ -19,15 +19,15 @@ namespace VsaIris.Sym
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
-/-- A range of newlib's data, checked. -/
+/-- A range of newlib's data off `_impure_ptr`, checked. -/
 theorem stdioFoot_rng (a n : Nat)
     (h : (decide (0x8001b520 ≤ a ∧ a + n ≤ 0x8001b538) || decide (0x8001b53c ≤ a ∧ a + n ≤ 0x8001b960) ||
-      decide (0x8001b970 ≤ a ∧ a + n ≤ 0x8001b990) || decide (0x8001b9b0 ≤ a ∧ a + n ≤ 0x8001ba08) ||
+      decide (0x8001b978 ≤ a ∧ a + n ≤ 0x8001b990) || decide (0x8001b9b0 ≤ a ∧ a + n ≤ 0x8001ba08) ||
       decide (0x8001ba0c ≤ a ∧ a + n ≤ 0x8001ba18) || decide (0x8001ba68 ≤ a ∧ a + n ≤ 0x8001c168)) = true) :
-    ∀ i, i < n → stdioFoot (a + i) := by
+    ∀ i, i < n → stdioFoot (a + i) ∧ ¬ impureW (a + i) := by
   intro i hi
   simp only [Bool.or_eq_true, decide_eq_true_eq] at h
-  unfold stdioFoot InRange
+  unfold stdioFoot InRange impureW
   omega
 
 
@@ -93,63 +93,63 @@ structure ErrWrittenMt (Mt : Mem) : Prop where
 /-- `CloseMt` from `CloseCommon`. -/
 theorem closeMt_of {img : Nat → BitVec 8} {Mt : Mem}
     (h : CloseCommon (fillMem img dataList)) (hM : ∀ a, stdioFoot a → imgM Mt a = img a) : CloseMt Mt :=
-  ⟨ldv_ld_of_imgLE (stdio_imgLE hM h.atexit (stdioFoot_rng 0x8001b9f8 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdioHandler (stdioFoot_rng 0x8001b9b0 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.glueNext (stdioFoot_rng 0x8001b520 8 (by decide))),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.glueCount (stdioFoot_rng 0x8001b528 4 (by decide)))).trans (by decide),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.glueFiles (stdioFoot_rng 0x8001b530 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.console.sinit (stdioFoot_rng 0x8001b580 8 (by decide))),
-   ldv_lhu_of_imgLE (stdio_imgLE hM h.stdin.flags_read (stdioFoot_rng 0x8001ba78 2 (by decide))),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.stdin.flags_read (stdioFoot_rng 0x8001ba78 2 (by decide)))).trans (by decide),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.stdin.descriptor_read (stdioFoot_rng 0x8001ba7a 2 (by decide)))).trans (by decide),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.stdin.readCount (stdioFoot_rng 0x8001ba70 4 (by decide)))).trans (by decide),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.stdin.savedReadCount (stdioFoot_rng 0x8001bad8 4 (by decide)))).trans (by decide),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdin.cookie (stdioFoot_rng 0x8001ba98 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdin.closeCallback (stdioFoot_rng 0x8001bab8 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdin.ungetcBuffer (stdioFoot_rng 0x8001bac0 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdin.lineBuffer (stdioFoot_rng 0x8001bae0 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdin.lock (stdioFoot_rng 0x8001bb08 8 (by decide))),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.stdin.lockMode (stdioFoot_rng 0x8001bb18 4 (by decide)))).trans (by decide),
-   ldv_lhu_of_imgLE (stdio_imgLE hM h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide))),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide)))).trans (by decide),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.console.fd (stdioFoot_rng 0x8001bb32 2 (by decide)))).trans (by decide),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.console.base (stdioFoot_rng 0x8001bb38 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.console.cursor (stdioFoot_rng 0x8001bb20 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.console.cookie (stdioFoot_rng 0x8001bb50 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdoutClose (stdioFoot_rng 0x8001bb70 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdoutUngetc (stdioFoot_rng 0x8001bb78 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.stdoutLine (stdioFoot_rng 0x8001bb98 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.console.lock (stdioFoot_rng 0x8001bbc0 8 (by decide))),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.console.lockMode (stdioFoot_rng 0x8001bbd0 4 (by decide)))).trans (by decide)⟩
+  ⟨ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.atexit (stdioFoot_rng 0x8001b9f8 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdioHandler (stdioFoot_rng 0x8001b9b0 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.glueNext (stdioFoot_rng 0x8001b520 8 (by decide))),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.glueCount (stdioFoot_rng 0x8001b528 4 (by decide)))).trans (by decide),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.glueFiles (stdioFoot_rng 0x8001b530 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.sinit (stdioFoot_rng 0x8001b580 8 (by decide))),
+   ldv_lhu_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.flags_read (stdioFoot_rng 0x8001ba78 2 (by decide))),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.flags_read (stdioFoot_rng 0x8001ba78 2 (by decide)))).trans (by decide),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.descriptor_read (stdioFoot_rng 0x8001ba7a 2 (by decide)))).trans (by decide),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.readCount (stdioFoot_rng 0x8001ba70 4 (by decide)))).trans (by decide),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.savedReadCount (stdioFoot_rng 0x8001bad8 4 (by decide)))).trans (by decide),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.cookie (stdioFoot_rng 0x8001ba98 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.closeCallback (stdioFoot_rng 0x8001bab8 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.ungetcBuffer (stdioFoot_rng 0x8001bac0 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.lineBuffer (stdioFoot_rng 0x8001bae0 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.lock (stdioFoot_rng 0x8001bb08 8 (by decide))),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdin.lockMode (stdioFoot_rng 0x8001bb18 4 (by decide)))).trans (by decide),
+   ldv_lhu_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide))),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.flags (stdioFoot_rng 0x8001bb30 2 (by decide)))).trans (by decide),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.fd (stdioFoot_rng 0x8001bb32 2 (by decide)))).trans (by decide),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.base (stdioFoot_rng 0x8001bb38 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.cursor (stdioFoot_rng 0x8001bb20 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.cookie (stdioFoot_rng 0x8001bb50 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdoutClose (stdioFoot_rng 0x8001bb70 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdoutUngetc (stdioFoot_rng 0x8001bb78 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.stdoutLine (stdioFoot_rng 0x8001bb98 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.lock (stdioFoot_rng 0x8001bbc0 8 (by decide))),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.console.lockMode (stdioFoot_rng 0x8001bbd0 4 (by decide)))).trans (by decide)⟩
 
 /-- `ErrIdleMt` from `stderr` idle. -/
 theorem errIdleMt_of {img : Nat → BitVec 8} {Mt : Mem}
     (h : ExitIdleFile (fillMem img dataList) exitStderr 0x12 2) (hM : ∀ a, stdioFoot a → imgM Mt a = img a) : ErrIdleMt Mt :=
-  ⟨ldv_lhu_of_imgLE (stdio_imgLE hM h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide))),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide)))).trans (by decide),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.descriptor_read (stdioFoot_rng 0x8001bbea 2 (by decide)))).trans (by decide),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.readCount (stdioFoot_rng 0x8001bbe0 4 (by decide)))).trans (by decide),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.savedReadCount (stdioFoot_rng 0x8001bc48 4 (by decide)))).trans (by decide),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.cookie (stdioFoot_rng 0x8001bc08 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.closeCallback (stdioFoot_rng 0x8001bc28 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.ungetcBuffer (stdioFoot_rng 0x8001bc30 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.lineBuffer (stdioFoot_rng 0x8001bc50 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.lock (stdioFoot_rng 0x8001bc78 8 (by decide))),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.lockMode (stdioFoot_rng 0x8001bc88 4 (by decide)))).trans (by decide)⟩
+  ⟨ldv_lhu_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide))),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide)))).trans (by decide),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.descriptor_read (stdioFoot_rng 0x8001bbea 2 (by decide)))).trans (by decide),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.readCount (stdioFoot_rng 0x8001bbe0 4 (by decide)))).trans (by decide),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.savedReadCount (stdioFoot_rng 0x8001bc48 4 (by decide)))).trans (by decide),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.cookie (stdioFoot_rng 0x8001bc08 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.closeCallback (stdioFoot_rng 0x8001bc28 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.ungetcBuffer (stdioFoot_rng 0x8001bc30 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.lineBuffer (stdioFoot_rng 0x8001bc50 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.lock (stdioFoot_rng 0x8001bc78 8 (by decide))),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.lockMode (stdioFoot_rng 0x8001bc88 4 (by decide)))).trans (by decide)⟩
 
 /-- `ErrWrittenMt` from `stderr` written. -/
 theorem errWrittenMt_of {img : Nat → BitVec 8} {Mt : Mem}
     (h : ErrWrittenFile (fillMem img dataList) exitStderr) (hM : ∀ a, stdioFoot a → imgM Mt a = img a) : ErrWrittenMt Mt :=
-  ⟨ldv_lhu_of_imgLE (stdio_imgLE hM h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide))),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide)))).trans (by decide),
-   (ldv_lh_of_imgLE (stdio_imgLE hM h.descriptor_read (stdioFoot_rng 0x8001bbea 2 (by decide)))).trans (by decide),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.base (stdioFoot_rng 0x8001bbf0 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.cursor (stdioFoot_rng 0x8001bbd8 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.cookie (stdioFoot_rng 0x8001bc08 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.closeCallback (stdioFoot_rng 0x8001bc28 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.ungetcBuffer (stdioFoot_rng 0x8001bc30 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.lineBuffer (stdioFoot_rng 0x8001bc50 8 (by decide))),
-   ldv_ld_of_imgLE (stdio_imgLE hM h.lock (stdioFoot_rng 0x8001bc78 8 (by decide))),
-   (ldv_lw_of_imgLE (stdio_imgLE hM h.lockMode (stdioFoot_rng 0x8001bc88 4 (by decide)))).trans (by decide)⟩
+  ⟨ldv_lhu_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide))),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.flags_read (stdioFoot_rng 0x8001bbe8 2 (by decide)))).trans (by decide),
+   (ldv_lh_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.descriptor_read (stdioFoot_rng 0x8001bbea 2 (by decide)))).trans (by decide),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.base (stdioFoot_rng 0x8001bbf0 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.cursor (stdioFoot_rng 0x8001bbd8 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.cookie (stdioFoot_rng 0x8001bc08 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.closeCallback (stdioFoot_rng 0x8001bc28 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.ungetcBuffer (stdioFoot_rng 0x8001bc30 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.lineBuffer (stdioFoot_rng 0x8001bc50 8 (by decide))),
+   ldv_ld_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.lock (stdioFoot_rng 0x8001bc78 8 (by decide))),
+   (ldv_lw_of_imgLE (stdio_imgLE (fun a ha _ => hM a ha) h.lockMode (stdioFoot_rng 0x8001bc88 4 (by decide)))).trans (by decide)⟩
 
 end VsaIris.Sym

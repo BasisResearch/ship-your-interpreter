@@ -1,5 +1,6 @@
 import VsaIris.Vsa.SegRO
 import VsaIris.Interp.Abort
+import VsaIris.Vsa.Stderr.FwriteSpec
 
 /-!
 # The out-of-memory block: `fwrite` then `exit(1)` (H5)
@@ -143,6 +144,8 @@ structure OomSite.OK (S : OomSite) : Prop where
   fwPc : S.fw.pc = S.head + 4 * S.stage
   fwTgt : S.fw.tgt = fwriteEntry
   fwText : TextAt S.fw.pc S.fw.code
+  /-- `fwrite` returns to an aligned address. -/
+  fwAlign : S.fw.pc % 4 = 0
   exCert : S.ex.Cert
   exPc : S.ex.pc = S.head + 4 * S.stage + 8
   exTgt : S.ex.tgt = exitEntry
@@ -157,6 +160,8 @@ structure OomBlockSp (S : OomSite) (s : BitVec 64) (n : Nat) (s' : BitVec 64) : 
   frame : s'.toNat + S.frameTop ≤ s.toNat
   hi : s.toNat ≤ 0x88000000
   align : s'.toNat % 16 = 0
+  /-- `fwrite`'s frame is above newlib's data (the stack segment). -/
+  data : 0x80100000 ≤ s'.toNat - fwriteNeed
 
 /-- A log inside `[lo, hi)` misses every address outside it. -/
 theorem outL_of_in {lo hi a : Nat} (ha : a < lo ∨ hi ≤ a) :
@@ -207,14 +212,13 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
       sepL calleeSaved (fun q => q ↦ᵣ cs q) ∗ gp ↦ᵣ□ gpV ∗ binImg ∗ stackScratch s n ∗
       stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ (abortRes N L Room inp s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hHA := H.at
   have h1 := hsp.need; have h2 := hsp.lo; have h3 := hsp.fits; have h4 := hsp.frame
-  have h5 := hsp.hi; have h6 := hsp.align
+  have h5 := hsp.hi; have h6 := hsp.align; have h7 := hsp.data
   unfold fwriteNeed tohostAddr at *
   have hsp' : OomSp S s' := ⟨by unfold tohostAddr; omega, by omega, h6⟩
   have hcodeL := hS.text.live hlive
   unfold VsaIris.sp VsaIris.ra VsaIris.gp
-  iintro ⟨Hpc, Hra, Hsp, Hargs, Htmp, Hsaved, #Hgp, #Himg, Hscr, Hstd, Hno, Hcon, Hk⟩
+  iintro ⟨Hpc, Hra, Hsp, Hargs, Htmp, Hsaved, #Hgp, #Himg, Hscr, Hstd, Herr, Hcon, Hk⟩
   ihave #Hcode := instrAt_of_binImg hS.text $$ Himg
   -- the stack: `[s-n, s'-768)`, `fwrite`'s scratch, the spill window, the rest
   unfold stackScratch
@@ -293,8 +297,13 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     (fun q => q ↦ᵣ cs q)).2 $$ [Hsp1 Hsaved]
   · rw [hS.spillsSaved]; iframe Hsp1 Hsaved
   -- `fwrite(msg, 1, 14, stderr)` below `s'`
-  have hfw := hHA.fwrite live Wp s' oomMsg 14#64 cs rodataDom (fun _ => False) rodataByte o hlive
-    (fun i hi => .inl (oomMsg_text i hi)) ⟨by unfold fwriteNeed tohostAddr; omega, by omega, h6⟩
+  have hfw := fwrite_proved live Wp s' oomMsg 14#64 cs rodataDom (fun _ => False) rodataByte o hlive
+    ⟨by unfold fwriteNeed tohostAddr; omega, by omega, h6⟩ (by unfold fwriteNeed; omega) (by decide)
+    (by decide) (fun i hi => oomMsg_text i hi) (by decide) (by decide) (by unfold tohostAddr; decide)
+    (fun i hi => by
+      have hi' : i < 14 := hi
+      have := oomMsg_text i hi'
+      unfold rodataDom at this; unfold stdioFoot errnoFoot InRange fwriteNeed; omega)
   unfold fwriteSpec at hfw
   have hj : JalExec (vsaModel live) S.fw.pc S.fw.code fwriteEntry :=
     hS.fwTgt ▸ JalSite.exec hS.fwCert live (hS.fwText.live hlive)
@@ -305,11 +314,15 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   rw [hS.fwPc]
   unfold VsaIris.ra
   iframe Hpc Hra
-  isplitl [Ha0 Ha1 Ha2 Ha3 Ha5 Hargs Hstd Hcon Hsp Hscr Hsaved Htmp]
+  isplitl [Ha0 Ha1 Ha2 Ha3 Ha5 Hargs Hstd Herr Hcon Hsp Hscr Hsaved Htmp]
   · unfold argsAt callFrame readable VsaIris.sp stackScratch fwriteNeed VsaIris.gp
     simp only [List.zipIdx_cons, List.zipIdx_nil, sepL_cons, sepL_nil, List.length_cons,
       List.length_nil, Nat.add_zero, Nat.reduceAdd]
-    iframe Ha0 Ha1 Ha2 Ha3 Hstd Hcon Hsp Hscr Hsaved Htmp Hgp Himg
+    iframe Ha0 Ha1 Ha2 Ha3 Hstd Herr Hcon Hsp Hscr Hsaved Htmp Hgp Himg
+    isplitr
+    · ipureintro
+      have a := hS.fwAlign; rw [hS.fwPc] at a
+      simp only [BitVec.toNat_ofNat]; omega
     isplitl [Ha5 Hargs]
     · rw [show List.drop 4 argRegs = [14, 15, 16, 17] from rfl]
       iapply clobbered_put (r := 15) (rs := [14, 15, 16, 17]) (by decide)
@@ -324,7 +337,7 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   -- `li a0,1; jal exit`
   rw [show S.head + 4 * S.stage + 4 = S.head + 4 * S.stage + 4 from rfl]
   unfold callFrame VsaIris.sp readable stackScratch fwriteNeed VsaIris.gp
-  iintro Hpc Hra ⟨Hargs, -, Hstd, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
+  iintro Hpc Hra ⟨Hargs, -, Hstd, Herr, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
   ihave ⟨⟨%b0v, Ha0⟩, Hargs⟩ := clobbered_take (r := 10) (by decide) $$ Hargs
   iapply wp_segW live Wp S.li [(10, b0v)] [] (BitVec.ofNat 64 (S.head + 4 * S.stage + 4))
     (codeFoot S.head S.code) [] 0 hS.liLen hS.liWf (by change KeysOK [10]; decide) hS.liWr
@@ -347,13 +360,13 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   iapply Hk
   unfold abortRes
   iapply abortAt_intro
-  isplitl [Hpc Hra Ha0 Hsp Hargs Htmp Hsaved Hstd Hno Hcon]
+  isplitl [Hpc Hra Ha0 Hsp Hargs Htmp Hsaved Hstd Herr Hcon]
   · unfold abortCore oomCore
     iright
     ihave ⟨Hs0, Hsaved⟩ := (sepL_calleeSaved cs).1 $$ Hsaved
     iexists s', BitVec.ofNat 64 (S.head + 4 * S.stage + 8 + 4), cs 8, o ++ o'
     unfold VsaIris.sp VsaIris.ra
-    iframe Hpc Ha0 Hra Hs0 Hsp Htmp Hno Hcon
+    iframe Hpc Ha0 Hra Hs0 Hsp Htmp Herr Hcon
     isplitr
     · ipureintro
       exact ⟨h1, h2, by unfold exitNeed exitHandlersNeed; omega, by omega, h5, h6⟩

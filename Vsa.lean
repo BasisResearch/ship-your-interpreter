@@ -756,6 +756,8 @@ import Vsa.Sim.rows.ValuePrintArms
 import Vsa.Sim.rows.ValuePrintContract
 import Vsa.Sim.rows.NativePrintFinite
 import Vsa.Sim.ConsoleStream
+import Vsa.Sim.LocaleData
+import Vsa.Sim.StderrStream
 -- gen_fn whole-function summary layer (plan a, 2026-09-01)
 import Vsa.Sim.FnSummary
 import Vsa.Sim.SegToTripleFramed

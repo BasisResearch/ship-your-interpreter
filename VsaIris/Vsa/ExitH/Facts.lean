@@ -28,7 +28,10 @@ def exitS (s : BitVec 64) (a : Nat) : Prop :=
   (stdioFoot a ∧ ¬ (0x8001b970 ≤ a ∧ a < 0x8001b978)) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨
     (s.toNat - 256 ≤ a ∧ a < s.toNat)
 
-macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [exitS, stdioFoot, InRange] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
+namespace XH
+/-- Byte-set side goals over `exitS` (scoped: open `VsaIris.Sym.XH`). -/
+scoped macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [exitS, stdioFoot, InRange] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
+end XH
 
 /-- Where the 256 bytes below `sp` may sit: RAM above the HTIF words, off
 newlib's data (the Iris ownership of both makes them disjoint). -/

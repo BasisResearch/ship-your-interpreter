@@ -96,13 +96,6 @@ theorem roImg_foot (S : Nat → Prop) (img : Nat → BitVec 8) :
       iapply H $$ %a %(h a List.mem_cons_self)
     · iapply roImg_foot S img l (fun b hb => h b (List.mem_cons_of_mem _ hb)) $$ H
 
-/-- **Code from the image.** -/
-theorem instrAt_of_binImg {i : Nat} {code : List (BitVec 8)} (h : TextAt i code) :
-    binImg (GF := GF) ⊢ instrAt i code := by
-  unfold binImg instrAt
-  iintro ⟨#H, -⟩
-  iapply roImg_sepL textDom textByte code.zipIdx (fun k => i + k) h $$ H
-
 /-- One image byte, read-only. -/
 theorem binImg_byte {a : Nat} {b : BitVec 8}
     (h : (textDom a ∧ textByte a = b) ∨ (rodataDom a ∧ rodataByte a = b)) :
@@ -125,6 +118,13 @@ theorem binImg_sepL :
     isplitl
     · iapply binImg_byte (h q List.mem_cons_self) $$ H
     · iapply binImg_sepL l (fun p hp => h p (List.mem_cons_of_mem _ hp)) $$ H
+
+/-- **Code from the image.** -/
+theorem instrAt_of_binImg {i : Nat} {code : List (BitVec 8)} (h : TextAt i code) :
+    binImg (GF := GF) ⊢ instrAt i code := by
+  unfold binImg instrAt
+  iintro ⟨#H, -⟩
+  iapply roImg_sepL textDom textByte code.zipIdx (fun k => i + k) h $$ H
 
 end
 

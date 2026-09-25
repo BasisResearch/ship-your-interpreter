@@ -110,6 +110,8 @@ theorem ldv_lbu_fillR_miss (M : Mem) {lo n a : Nat} (g : Nat → BitVec 8)
     (h : a + 1 ≤ lo ∨ lo + n ≤ a) : ldv .lbu (fillR M lo n g) a = ldv .lbu M a :=
   ldv_fillR_miss .lbu M g h
 
+attribute [irreducible] fillR
+
 /-! ## Registers in normal form -/
 
 theorem upd_upd_same (R : Nat → BitVec 64) (k : Nat) (v w : BitVec 64) :

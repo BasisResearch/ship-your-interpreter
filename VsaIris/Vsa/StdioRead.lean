@@ -50,7 +50,8 @@ theorem mem_dataList {a : Nat} (h : stdioFoot a) : a ∈ dataList := by
 /-- The canonical memory of a `StdioOK` image. -/
 theorem StdioOK.facts {img : Nat → BitVec 8} (h : StdioOK img) :
     ConsoleStream (fillMem img dataList) ∧ ExitRuntimeData (fillMem img dataList) ∧
-      read64 (fillMem img dataList) stderrPtrAddr = some exitStderr :=
+      read64 (fillMem img dataList) stderrPtrAddr = some exitStderr ∧
+      LocaleData (fillMem img dataList) ∧ StderrStream (fillMem img dataList) :=
   h (fillMem img dataList) (fun _ ha => fillMem_get (l := dataList) img (mem_dataList ha))
 
 /-- A word of the image, from a `read64` fact about its canonical memory. -/
@@ -75,7 +76,7 @@ theorem StdioOK.impure {img : Nat → BitVec 8} (h : StdioOK img) :
 /-- `_impure_data._stderr` holds `&__sf[2]`. -/
 theorem StdioOK.stderr {img : Nat → BitVec 8} (h : StdioOK img) :
     imgW img stderrPtrAddr = BitVec.ofNat 64 exitStderr :=
-  StdioOK.word h.facts.2.2 (dataList_range (by decide) (by decide))
+  StdioOK.word h.facts.2.2.1 (dataList_range (by decide) (by decide))
 
 /-- The bytes of a little-endian number, one by one. -/
 theorem imgLE_byte (img : Nat → BitVec 8) : ∀ {n a i : Nat}, i < n →

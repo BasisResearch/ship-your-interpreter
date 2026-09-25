@@ -61,7 +61,7 @@ theorem place_of_disj {s : Nat}
   have h8 := c 0x8001ba17
   have h9 := c 0x8001ba68
   have h10 := c 0x8001c167
-  simp only [stdioFoot, InRange, impureW, errnoFoot, errnoAddr, not_or, not_and, Decidable.not_not,
+  simp only [stdioFoot, InRange, impureW, errnoFoot, not_or, not_and, Decidable.not_not,
     Decidable.imp_iff_not_or] at h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
   omega
 
@@ -199,11 +199,11 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
   let Mt := exitMt img fe fs s
   have hwin : ∀ a, InExt (s.toNat - 256, 256) a → ¬ stdioFoot a ∧ ¬ errnoFoot a := by
     intro a ha; unfold InExt at ha; simp only at ha
-    unfold stdioFoot errnoFoot errnoAddr InRange; omega
+    unfold stdioFoot errnoFoot InRange; omega
   have hSx : ∀ a, stdioExcl a → imgM Mt a = img a := fun a ha => exitMt_stdio a ha.1
   have hSe : ∀ a, errnoFoot a → imgM Mt a = fe a := fun a ha => by
-    have hn : ¬ stdioFoot a := by unfold errnoFoot errnoAddr at ha; unfold stdioFoot InRange; omega
-    rw [imgM_exitMt (mem_exitList (.inr (.inl (by unfold errnoFoot errnoAddr at ha; omega))))]
+    have hn : ¬ stdioFoot a := by unfold errnoFoot InRange at ha; unfold stdioFoot InRange; omega
+    rw [imgM_exitMt (mem_exitList (.inr (.inl (by unfold errnoFoot InRange at ha; omega))))]
     unfold exitImg; rw [if_neg hn, if_pos ha]
   have hSs : ∀ a, InExt (s.toNat - 256, 256) a → imgM Mt a = fs a := fun a ha => by
     have hw := hwin a ha
@@ -216,7 +216,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
   ihave Hscr := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ imgM Mt a))
     (fun a ha => by rw [hSs a ha]) $$ Hscr
   ihave HS := ownSet_join _ _ _ (fun a (h1 : stdioExcl a) (h2 : errnoFoot a) => by
-    unfold errnoFoot errnoAddr at h2; unfold stdioExcl stdioFoot InRange at h1; omega) $$ [Hx Herr]
+    unfold errnoFoot InRange at h2; unfold stdioExcl stdioFoot InRange at h1; omega) $$ [Hx Herr]
   · iframe Hx Herr
   ihave HS := ownSet_join _ _ _ (fun a (h1 : stdioExcl a ∨ errnoFoot a) h2 => by
     rcases h1 with h1 | h1
@@ -224,7 +224,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
     · exact (hwin a h2).2 h1) $$ [HS Hscr]
   · iframe HS Hscr
   ihave HS := ownSet_iff (T := exitS s) _ (fun a => by
-    unfold exitS stdioExcl impureW errnoFoot errnoAddr InExt stdioFoot InRange; simp only
+    unfold exitS stdioExcl impureW errnoFoot InRange InExt stdioFoot InRange; simp only
     constructor <;> intro h <;> omega) $$ HS
   -- the fields the run reads
   have hcr : CloseReady img := hP.elim StdioOK.closeReady (fun h => hI _ h.2)
@@ -285,14 +285,14 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
   -- the owned bytes, back in three parts
   ihave HS := ownSet_iff (T := fun a => (stdioExcl a ∨ errnoFoot a) ∨ InExt (s.toNat - 256, 256) a)
     _ (fun a => by
-      unfold exitS stdioExcl impureW errnoFoot errnoAddr InExt stdioFoot InRange; simp only
+      unfold exitS stdioExcl impureW errnoFoot InRange InExt stdioFoot InRange; simp only
       constructor <;> intro h <;> omega) $$ HS
   ihave ⟨HS, Hw⟩ := ownSet_unglue _ _ _ (fun a (h1 : stdioExcl a ∨ errnoFoot a) h2 => by
     rcases h1 with h1 | h1
     · exact (hwin a h2).1 h1.1
     · exact (hwin a h2).2 h1) $$ HS
   ihave ⟨Hx, He⟩ := ownSet_unglue _ _ _ (fun a (h1 : stdioExcl a) (h2 : errnoFoot a) => by
-    unfold errnoFoot errnoAddr at h2; unfold stdioExcl stdioFoot InRange at h1; omega) $$ HS
+    unfold errnoFoot InRange at h2; unfold stdioExcl stdioFoot InRange at h1; omega) $$ HS
   ihave He := ownSet_forget errnoFoot mv' $$ He
   ihave Hw := ownSet_forget _ mv' $$ Hw
   iapply Hk $$ Hpc' [Hra] Hs0' [Ha0 Ha1 Hargs] [Hx] He [Hcon] [Hsp' Hw Hsaved Htmp]
@@ -325,11 +325,11 @@ end VsaIris.Newlib.ExitH
 namespace VsaIris.Newlib
 
 /-- **The newlib statements from the assumed ones**: `exit`'s interior is
-proved (`ExitH.exitHandlers_spec`) at the core's post-write state. -/
-theorem NewlibCore.full (h : NewlibCore) : NewlibHoles := by
-  obtain ⟨Ierr, hc, hI⟩ := h
-  exact ⟨Ierr, { hc with
+proved (`ExitH.exitHandlers_spec`) at `StdioErrOK`, a state the close path
+runs from (`StdioErrOK.closeReady`). -/
+theorem NewlibCore.full (h : NewlibCore) : NewlibHoles :=
+  { toNewlibCoreAt := h
     exitHandlers := fun live Wp s e r cs o Φ quiet hcl hs =>
-      ExitH.exitHandlers_spec hI live Wp s e r cs o Φ quiet hcl hs }⟩
+      ExitH.exitHandlers_spec (fun _ h => Stdio.StdioErrOK.closeReady h) live Wp s e r cs o Φ quiet hcl hs }
 
 end VsaIris.Newlib

@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Mem
 import VsaIris.Vsa.StdioRead
+import VsaIris.Vsa.ImpureRO
 
 /-!
 # `stdout` at the boundary, as loads (lane N1)
@@ -18,8 +19,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
 /-- The `stdout` fields a write path loads, as load values of `Mt`. -/
 structure ConsoleMt (Mt : Mem) : Prop where
-  /-- `_impure_ptr` -/
-  impure : ldv .ld Mt 0x8001b970 = 0x8001b538#64
   /-- `_impure_data.__cleanup` (`__sinit` has run) -/
   sinit : ldv .ld Mt 0x8001b580 = 0x80005d2c#64
   /-- `_impure_data._stdout` -/
@@ -49,15 +48,16 @@ structure ConsoleMt (Mt : Mem) : Prop where
   lockMode : ldv .lw Mt 0x8001bbd0 = 0#64
 
 theorem stdio_imgLE {img : Nat → BitVec 8} {Mt : Mem}
-    (hM : ∀ a, stdioFoot a → imgM Mt a = img a) {a n v : Nat}
-    (hr : readLE (fillMem img dataList) a n = some v) (hin : ∀ i, i < n → stdioFoot (a + i)) :
+    (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) {a n v : Nat}
+    (hr : readLE (fillMem img dataList) a n = some v)
+    (hin : ∀ i, i < n → stdioFoot (a + i) ∧ ¬ impureW (a + i)) :
     imgLE (imgM Mt) a n = v := by
   have h := readLE_memImg hr
   rw [← h]
   refine imgLE_congr fun i hi => ?_
-  rw [hM _ (hin i hi)]
+  rw [hM _ (hin i hi).1 (hin i hi).2]
   unfold memImg
-  rw [fillMem_get img (mem_dataList (hin i hi))]
+  rw [fillMem_get img (mem_dataList (hin i hi).1)]
   rfl
 
 theorem ldv_ld_of_imgLE {Mt : Mem} {a v : Nat} (h : imgLE (imgM Mt) a 8 = v) :
@@ -74,14 +74,13 @@ theorem ldv_lhu_of_imgLE {Mt : Mem} {a v : Nat} (h : imgLE (imgM Mt) a 2 = v) :
 
 /-- **`stdout` at the boundary, as loads.** -/
 theorem consoleMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
-    (hM : ∀ a, stdioFoot a → imgM Mt a = img a) : ConsoleMt Mt := by
+    (hM : ∀ a, stdioFoot a → ¬ impureW a → imgM Mt a = img a) : ConsoleMt Mt := by
   obtain ⟨hc, _, _⟩ := h.facts
   have F : ∀ a n, 0x8001b520 ≤ a → a + n ≤ 0x8001b538 ∨ (0x8001b53c ≤ a ∧ a + n ≤ 0x8001b960) ∨
-      (0x8001b970 ≤ a ∧ a + n ≤ 0x8001b990) ∨ (0x8001ba68 ≤ a ∧ a + n ≤ 0x8001c168) →
-      ∀ i, i < n → stdioFoot (a + i) := by
-    intro a n h1 h2 i hi; unfold stdioFoot InRange; omega
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.impure (F _ _ (by decide) (by decide)))
+      (0x8001b978 ≤ a ∧ a + n ≤ 0x8001b990) ∨ (0x8001ba68 ≤ a ∧ a + n ≤ 0x8001c168) →
+      ∀ i, i < n → stdioFoot (a + i) ∧ ¬ impureW (a + i) := by
+    intro a n h1 h2 i hi; unfold stdioFoot InRange impureW; omega
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.sinit (F _ _ (by decide) (by decide)))
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.stdout (F _ _ (by decide) (by decide)))
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.cursor (F _ _ (by decide) (by decide)))
@@ -96,5 +95,16 @@ theorem consoleMt_of {img : Nat → BitVec 8} (h : StdioOK img) {Mt : Mem}
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.writer (F _ _ (by decide) (by decide)))
   · exact ldv_ld_of_imgLE (stdio_imgLE hM hc.lock (F _ _ (by decide) (by decide)))
   · exact (ldv_lw_of_imgLE (stdio_imgLE hM hc.lockMode (F _ _ (by decide) (by decide)))).trans (by decide)
+
+/-- `_impure_ptr` as a persistent data view (`impureRO`). -/
+def impDt : Mem := fillMem impureByte (List.range' 0x8001b970 8)
+
+theorem ldv_impDt : ldv .ld impDt 0x8001b970 = 0x8001b538#64 := by
+  have e : ∀ j, j < 8 → imgM impDt (0x8001b970 + j) = impureByte (0x8001b970 + j) := fun j hj => by
+    unfold imgM impDt
+    rw [fillMem_get impureByte (List.mem_range'.mpr ⟨j, hj, by simp⟩)]; rfl
+  have h : imgLE (imgM impDt) 0x8001b970 8 = 0x8001b538 := by
+    rw [imgLE_congr (img' := impureByte) e]; decide
+  exact ldvf_ld_imgLE h
 
 end VsaIris.Sym

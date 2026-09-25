@@ -16,13 +16,15 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast
 
-/-- Store forwarding through a forgotten region (`fillR`) too. -/
-macro_rules
+namespace XH
+/-- Store forwarding through a forgotten region (`fillR`) too (scoped). -/
+scoped macro_rules
   | `(tactic| nx_mem) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
       ldv_ld_miss, ldv_lw_miss, ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
       ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss,
       ldv_ld_fillR_miss, ldv_lw_fillR_miss, ldv_lwu_fillR_miss, ldv_lh_fillR_miss,
       ldv_lhu_fillR_miss, ldv_lbu_fillR_miss])
+end XH
 
 section Compact
 

@@ -91,7 +91,7 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
     interp_code_80004238 (by decide) (st := st) (d := d) (env := env) (R := R1)
     (n := execNeed (.forStmt init cnd step b) d - 176) hsp hbig (by rw [h12]; exact hle')
     (by rw [h12, hfg.sf]; have := hf.stack.lo; simp only [Vsa.Sim.LayoutInstance.stackSL] at this;
-        unfold Vsa.Sim.tohostAddr; omega)
+        omega)
     (by rw [h12, hfg.sf]; have := Stmt.stackNeed_ge (.forStmt init cnd step b); have := hf.stack.le
         unfold execNeed stackBudget evalFrame Newlib.fwriteNeed at *; unfold execFrame at *; omega)
     (by rw [h12, hfg.sf]; have := hfg.hi; omega)

@@ -172,6 +172,7 @@ import VsaIris.Interp.Case.UnaryNegP
 #print axioms VsaIris.Newlib.RtErr.rtErr_spec
 #print axioms VsaIris.Inst.seg_runFactR
 #print axioms VsaIris.Newlib.Oom.wp_oomBlock
+#print axioms VsaIris.Newlib.fwrite_proved
 #print axioms VsaIris.Newlib.OomSites.oom80002a38_ok
 #print axioms VsaIris.Newlib.OomSites.oom80002bd0_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003140_ok

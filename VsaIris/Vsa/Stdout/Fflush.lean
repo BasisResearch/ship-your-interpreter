@@ -11,13 +11,15 @@ and its lock mode is 0, so it takes the (no-op) recursive lock, runs
 
 namespace VsaIris.Sym
 
+open scoped VsaIris.Sym.Stdout
+
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 #ix_seg fflush_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp B ra : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 256 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = sp)
     (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
     (hB1 : 0x80000000 ≤ B.toNat) (hb2 : B.toNat + bs.length ≤ 0x88000000)
@@ -57,7 +59,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 #nx_chain fflush_chain := [fflush_A, fflush_B, fflush_C]
 
 /-- The memory after `_fflush_r(reent, stdout)` returns. -/
-abbrev fflushMt (Mt : Mem) (sp B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
+@[nx_mt] abbrev fflushMt (Mt : Mem) (sp B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   writeLog (sflushMt
     (writeLog (writeLog (writeLog (writeLog Mt [((sp + 18446744073709551608#64).toNat, 8, ra)])
       [((sp + 18446744073709551592#64).toNat, 8, 2147595576#64)])
@@ -72,7 +74,7 @@ theorem fflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp B ra : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 256 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
-    (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
+    (hs4 : 0x8001c168 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) (hra : ra.toNat % 4 = 0)
     (h1 : R 1 = ra) (h10 : R 10 = 0x8001b538#64) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = sp)
     (hn : 0 < bs.length) (hn2 : bs.length < 2 ^ 31)
     (hB1 : 0x80000000 ≤ B.toNat) (hb2 : B.toNat + bs.length ≤ 0x88000000)
@@ -94,6 +96,7 @@ theorem fflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
   refine fflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h2 hn hn2 hB1 hb2 hsinit hF hlm hlock
     hBl hB0 hP hwr hck hsfd hb3 hbd hsrc ?_
   intros
+  simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
 end VsaIris.Sym
