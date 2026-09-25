@@ -81,7 +81,11 @@ STDIO_FUNCS = ['_write', '_write_r', '__swrite', '__sflush_r', '_fflush_r', '__s
                # (`__sprint_r` → `__sfvwrite_r` → `memmove`, `_fflush_r`); the locale leaves
                'fprintf', '_vfprintf_r', '__sbprintf', '__sprint_r', 'memmove',
                '_localeconv_r', '__locale_mb_cur_max', '__ascii_mbtowc', 'strlen',
-               '__retarget_lock_init_recursive', '__retarget_lock_close_recursive']
+               '__retarget_lock_init_recursive', '__retarget_lock_close_recursive',
+               # lane N4: `exit`'s newlib interior (`__call_exitprocs`, the stdio exit
+               # handler, `_fwalk_sglue` closing the three `FILE`s)
+               'exit', '__call_exitprocs', 'stdio_exit_handler', '_fwalk_sglue', '_fclose_r',
+               '__sclose', '_close_r', '_close', '__sfp_lock_acquire', '__sfp_lock_release']
 # Functions whose code bytes are in `stdioText` without step lemmas: the string
 # leaves (`strCode`), run by their own symbolic run (`StrLeaf.strlenRunL`)
 # framed into a stdout run (`swpo_leaf`). `strlen` also has step lemmas (N5 steps

@@ -1,4 +1,4 @@
-import VsaIris.Vsa.Stderr.Swrite
+import VsaIris.Vsa.Stderr.SwsetupErr
 import VsaIris.Vsa.Stderr.Mem
 import VsaIris.Vsa.SymCompactTac
 import VsaIris.Vsa.Stderr.ErrOK
@@ -7,8 +7,8 @@ import VsaIris.Vsa.Stderr.ErrOK
 # `fwrite(ptr, 1, n, stderr)`, the first write, as a printing run (lane N3)
 
 `fwrite` → `_fwrite_r` (`__muldi3` for `1 * n`, orientation `__SORD`) →
-`__sfvwrite_r`, whose `cantwrite` calls `__swsetup_r` (sets `__SWR`;
-`__smakebuf_r` installs `_nbuf` for the unbuffered stream) and then writes the
+`__sfvwrite_r`, whose `cantwrite` calls `__swsetup_r` (`swsetupErr_run`: sets
+`__SWR`, `__smakebuf_r` installs `_nbuf` for the unbuffered stream) and then writes the
 single `iov` in one chunk (`n < 2^30`) through `fp->_write = __swrite`
 (`swriteErr_run`), then `__udivdi3` for the item count.
 -/
@@ -37,7 +37,14 @@ set_option hygiene false in
 /-- One piece of the run up to `__swrite`. -/
 macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
-  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000efd4))
+  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000f230))
+
+set_option hygiene false in
+/-- One piece of the run after `__swsetup_r` returns, up to `__swrite`. -/
+macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
+  rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, h10, h11, h12, h13, hDt,
+  hC.sinit, hE.fd, hE.cookie, hE.writer, hE.lock, hE.lockMode,
+  BitVec.add_assoc, BitVec.zero_add, hn0, BitVec.reduceXOr] at 0x8000efd4))
 
 #ix_piece fwriteErr_01 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -60,7 +67,7 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s 768) Q t 0x80005260#64 R Mt by
   nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
-  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000efd4
+  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000f230
 
 #ix_piece fwriteErr_02 from fwriteErr_01 by
   fwrite_step
@@ -78,28 +85,41 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
   fwrite_step
 
 #ix_piece fwriteErr_07 from fwriteErr_06 by
-  fwrite_step
+  refine swsetupErr_run (hlive := hlive) (t := t) (s := s) (need := 768) (hs3 := hs3) (hs4 := hs4)
+    (hDt := hDt) (ra := 0x8000df74#64) (sp := s + 18446744073709551408#64) (h1 := ?h1) (h2 := ?h2)
+    (hs1 := ?hs1) (hs2 := ?hs2) (hal := ?hal) (hra := ?hra)
+    (h10 := ?h10) (h11 := ?h11) (hsinit := ?hsinit) (hflU := ?hflU) (hflS := ?hflS) (hfd := ?hfd)
+    (hbase := ?hbase) (hk := fun R' hR => ?_)
+  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h2, BitVec.add_assoc,
+    BitVec.reduceAdd]; done))
+  case hs1 | hs2 | hal => nx_fdisch
+  case hra => decide
+  case hsinit => nx_mem; exact hC.sinit
+  case hflU | hflS => nx_mem; decide
+  case hfd => nx_mem; exact hE.fd
+  case hbase => nx_mem; exact hE.base
 
 #ix_piece fwriteErr_08 from fwriteErr_07 by
-  fwrite_step
+  nx_ret hR
+  fwrite_mid
 
 #ix_piece fwriteErr_09 from fwriteErr_08 by
-  fwrite_step
+  fwrite_mid
 
 #ix_piece fwriteErr_10 from fwriteErr_09 by
-  fwrite_step
+  fwrite_mid
 
 #ix_piece fwriteErr_11 from fwriteErr_10 by
-  fwrite_step
+  fwrite_mid
 
 #ix_piece fwriteErr_12 from fwriteErr_11 by
-  fwrite_step
+  fwrite_mid
 
 #ix_piece fwriteErr_13 from fwriteErr_12 by
-  fwrite_step
+  fwrite_mid
 
 #ix_piece fwriteErr_14 from fwriteErr_13 by
-  fwrite_step
+  fwrite_mid
 
 #ix_piece fwriteErr_15 from fwriteErr_14 by
   nx_clear_conds
@@ -107,7 +127,8 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
     (ra := 0x8000df20#64) (s0 := 0x8001bbd8#64) hlive ?_ ?_ hs3 hs4 ?_ ?_ (by decide) ?_
     hb1 hb2 hb3 ?_ (fun i hi => ?_) ?_ ?_ ?_ ?_ ?_ ?_ (fun R' hR => ?_)
   all_goals try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.ofNat_toNat,
-    BitVec.setWidth_eq, h1, h2, h10, h11, h12, h13, hbn]; done)
+    BitVec.setWidth_eq, h1, h2, h10, h11, h12, h13, hbn, rk1, rk2, rk8, rk9, rk18, rk19, rk20, rk21,
+    rk22, rk23, rk24, rk25, rk26, rk27]; done)
   case refine_1 => nx_addr
   case refine_2 => nx_addr
   case refine_3 => nx_addr
@@ -127,13 +148,23 @@ macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11
   case refine_13 => nx_mem; exact hE.fd
 
 set_option hygiene false in
+/-- A second callee's return (`__swrite` after `__swsetup_r`): the first
+return's kept-register facts are saved as `sk<r>`, the new ones (`rk<r>`)
+rewritten through them. -/
+macro "nx_ret2 " h:ident : tactic => `(tactic| (
+  have sk1 := rk1; have sk2 := rk2; have sk8 := rk8; have sk9 := rk9; have sk10 := rk10; have sk18 := rk18; have sk19 := rk19; have sk20 := rk20; have sk21 := rk21; have sk22 := rk22; have sk23 := rk23; have sk24 := rk24; have sk25 := rk25; have sk26 := rk26; have sk27 := rk27
+  clear rk1 rk2 rk8 rk9 rk10 rk18 rk19 rk20 rk21 rk22 rk23 rk24 rk25 rk26 rk27
+  nx_ret $h
+  (try simp only [sk1, sk2, sk8, sk9, sk10, sk18, sk19, sk20, sk21, sk22, sk23, sk24, sk25, sk26, sk27] at rk1 rk2 rk8 rk9 rk18 rk19 rk20 rk21 rk22 rk23 rk24 rk25 rk26 rk27)))
+
+set_option hygiene false in
 /-- One piece of the run after `__swrite` returns. -/
 macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
   rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, hbn, hDt, hC.sinit, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, BitVec.reduceXOr, BitVec.reduceAnd, BitVec.reduceOr])
 
 #ix_piece fwriteErr_16 from fwriteErr_15 by
-  nx_ret hR
+  nx_ret2 hR
   fwrite_tail
 
 #ix_piece fwriteErr_17 from fwriteErr_16 by
@@ -182,7 +213,7 @@ macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk
   fwrite_tail
 
 #ix_piece fwriteErr_32 from fwriteErr_31 by
-  simp only [swriteErrMt]
+  try simp only [swriteErrMt, swsetupErrMt]
   nx_forget (s.toNat - 768) 768
   nx_compactR
 

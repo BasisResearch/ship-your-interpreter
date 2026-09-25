@@ -1,4 +1,5 @@
 import VsaIris.Vsa.Landing
+import VsaIris.Vsa.ErrnoOwn
 
 /-!
 # The abort resource and its continuation (INTERP_DESIGN.md §4.2, H5)
@@ -175,7 +176,7 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     (hΦ : ∀ o, ⊢ Φ (1, o)) (s : BitVec 64) (n : Nat) :
     oomCore s n ∗ stackScratch s n ∗ gp ↦ᵣ□ gpV ∗ binImg ⊢ Wp.W Φ := by
   unfold oomCore
-  iintro ⟨⟨%s', %r, %v0, %o, %hs, Hpc, Ha0, Hra, Hs0, Hsp, Hargs, Htmp, Hsaved, Hstd, -, Hcon⟩,
+  iintro ⟨⟨%s', %r, %v0, %o, %hs, Hpc, Ha0, Hra, Hs0, Hsp, Hargs, Htmp, Hsaved, Hstd, Hno, Hcon⟩,
     Hscr, #Hgp, #Himg⟩
   have h1 := hs.need; have h2 := hs.lo; have h3 := hs.fits; have h4 := hs.below
   have h5 := hs.hi; have h6 := hs.align
@@ -203,6 +204,8 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
       rcases h with h | h
       · exact .inl h
       · exact .inr ⟨by simp, h⟩) $$ Hstd
+  isplitl [Hno]
+  · iexact Hno
   iintro %o' -
   rw [show (1#64 : BitVec 64).toNat = 1 from rfl]
   iapply hΦ
@@ -223,7 +226,8 @@ structure TopLanding (inp : Nat) (sM : BitVec 64) (jb0 imgI imgT : Nat → BitVe
 
 /-- **The landing**: `interp_run` returns 1, `main` prints `err_msg` and exits
 70. -/
-theorem wp_abortLanding (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
+theorem wp_abortLanding (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
+    (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hΦ : ∀ o, ⊢ Φ (70, o)) (sM : BitVec 64) (jb0 imgI imgT : Nat → BitVec 8)
     (hT : TopLanding inp sM jb0 imgI imgT) :
@@ -233,9 +237,11 @@ theorem wp_abortLanding (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLiv
     ⊢ Wp.W Φ := by
   have hinp := hT.inp_eq
   unfold landingCore worldE interpCtxE interpCoreE errStr landingRegs wordAt
-  iintro ⟨⟨%ρ, %st, %d, %jb, ⟨%Hh, %B, -, -, Hcon, Hstd,
+  iintro ⟨⟨%ρ, %st, %d, %jb, ⟨%Hh, %B, Hheap, -, Hcon, Hstd,
     ⟨⟨%g, -, -, ⟨%dimg, Hd, -⟩, -, -, ⟨%eimg, Herr, %hnul⟩⟩, -⟩, -, -⟩, #Hjb,
     ⟨Hpc, Hra, Hsp, Ha0, Hsaved, Hargs, Htmp⟩⟩, Hscr, #Hjb0, HI, HT, #Hgp, #Himg⟩
+  -- `fprintf` borrows `errno` from the heap the landing drops
+  ihave ⟨Herrno, -⟩ := hEL _ _ $$ Hheap
   ihave %hag := jmpRO_agree inp jb jb0 $$ [Hjb Hjb0]
   · iframe Hjb Hjb0
   have hw : ∀ i, i ≤ 13 → jbWord inp jb i = jbWord inp jb0 i := fun i hi => jbWord_congr hag hi
@@ -253,10 +259,10 @@ theorem wp_abortLanding (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLiv
     refine ⟨k, hk, ?_⟩
     rw [show sM.toNat + 496 + k = inp + interpErrOff + k by unfold interpErrOff; omega]
     exact h0
-  iapply wp_landing H.at live hlive Wp sM 1#64 0x80004428#64 (fun r => jbWord inp jb (r - 15))
+  iapply wp_landing H live hlive Wp sM 1#64 0x80004428#64 (fun r => jbWord inp jb (r - 15))
     st.out imgI imgT eimg hT.main (by decide) hT.inI hT.raI hT.s0I hT.raT herr
   simp only [sepL_cons, sepL_nil, Nat.reduceSub]
-  iframe Hpc Ha0 Hra Hsp Hargs Htmp Hgp Himg HI Hd Hscr HT Herr Hstd Hcon
+  iframe Hpc Ha0 Hra Hsp Hargs Htmp Hgp Himg HI Hd Hscr HT Herr Hstd Herrno Hcon
   isplitl [H8 H9 H18 H19 H20 H21 H22]
   · isplitl [H8]
     · iexists _; iexact H8
@@ -285,7 +291,8 @@ WP: `interp_run` calls `exec_stmt` with `sp = sM - 176` (its frame below
 saved pair) ends the run with a nonzero exit code. With
 `Φ := fun v => ⌜v.1 ≠ 0⌝` and `Inst.vsa_adequacyP_nonzero` this is
 `Halts c out e ∧ e ≠ 0` for every run that aborts. -/
-theorem wp_abort (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
+theorem wp_abort (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
+    (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hΦ : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) (sM : BitVec 64) (n : Nat)
     (hn : fprintfNeed - 176 ≤ n) (hns : n ≤ (sM - 176#64).toNat)
@@ -300,7 +307,7 @@ theorem wp_abort (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
   unfold abortCore
   icases HC with (Hl | Ho)
   · ihave ⟨-, Hscr⟩ := stackScratch_narrow hns hn $$ Hscr
-    iapply wp_abortLanding N L Room inp H live hlive Wp (fun o => hΦ 70 o (by decide)) sM jb0
+    iapply wp_abortLanding N L Room inp H hEL live hlive Wp (fun o => hΦ 70 o (by decide)) sM jb0
       imgI imgT hT
     iframe Hl Hscr Hjb0 HI HT Hgp Himg
   · iapply wp_abortOom H live hlive Wp (fun o => hΦ 1 o (by decide)) (sM - 176#64) n

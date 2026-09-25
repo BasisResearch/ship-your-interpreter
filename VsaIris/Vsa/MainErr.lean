@@ -114,7 +114,8 @@ abbrev bLds (sM : BitVec 64) (imgT : Nat → BitVec 8) : List (List (BitVec 8)) 
 
 /-- `main`'s stack pointer: its 768-byte frame in RAM above the HTIF words. -/
 structure MainSp (sM : BitVec 64) : Prop where
-  lo : Vsa.Sim.tohostAddr + 16 + fprintfNeed ≤ sM.toNat
+  /-- The frame and `fprintf`'s below it lie above newlib's data (the stack segment). -/
+  lo : 0x80100000 + fprintfNeed ≤ sM.toNat
   hi : sM.toNat + 768 ≤ 0x88000000
   align : sM.toNat % 16 = 0
 
@@ -124,7 +125,7 @@ theorem b_facts {m : Std.ExtHashMap Nat (BitVec 8)} {a0v rv s0v sM : BitVec 64}
     (hpin : ∀ k, sM.toNat + 752 ≤ k → k < sM.toNat + 752 + 16 → (m[k]?).getD 0 = imgT k) :
     ChainFacts m m (bL a0v rv s0v sM) (bLds sM imgT) mainErrBSeg := by
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
-  unfold fprintfNeed tohostAddr at h1
+  unfold fprintfNeed at h1
   unfold mainErrBSeg ChainFacts
   chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
   · -- `ld ra,760(sp)`
@@ -176,33 +177,6 @@ theorem crt0_pc :
       0x80004764#64 := rfl
 
 theorem crt0_fin : finReg crt0JSeg [(10, (70#64 : BitVec 64))] [] 10 = 70#64 := rfl
-
-/-- `main`'s format `"%s\n"` (`0x800195e0`, `.rodata`). -/
-def fmtLine : BitVec 64 := 0x800195e0#64
-
-theorem fmtLine_ok {R : Nat → Prop} {rd : Nat → BitVec 8}
-    (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {errp : BitVec 64}
-    (hs : ∃ t, CStrCov R rd errp.toNat t) : FmtArgsOK R rd fmtLine [errp] := by
-  obtain ⟨t, ht⟩ := hs
-  have hb : ∀ i, i < 4 → R (0x800195e0 + i) ∧ rd (0x800195e0 + i) = rodataByte (0x800195e0 + i) :=
-    fun i hi => hro _ ⟨by omega, by omega⟩
-  refine ⟨[0x25#8, 0x73#8, 0x0a#8], [.str], ⟨fun i hi => ?_, ?_⟩, by decide, by simp, ?_⟩
-  · obtain ⟨hR, hrd⟩ := hb i (by simp at hi; omega)
-    refine ⟨hR, ?_, ?_⟩
-    · rw [show fmtLine.toNat = 0x800195e0 from rfl, hrd]
-      have : i = 0 ∨ i = 1 ∨ i = 2 := by simp at hi; omega
-      rcases this with rfl | rfl | rfl <;>
-        simp only [List.getElem_cons_zero, List.getElem_cons_succ] <;> decide +kernel
-    · have : i = 0 ∨ i = 1 ∨ i = 2 := by simp at hi; omega
-      rcases this with rfl | rfl | rfl <;>
-        simp only [List.getElem_cons_zero, List.getElem_cons_succ] <;> decide
-  · obtain ⟨hR, hrd⟩ := hb 3 (by omega)
-    exact ⟨hR, by rw [show fmtLine.toNat = 0x800195e0 from rfl]; simp only [List.length_cons,
-      List.length_nil]; rw [hrd]; decide +kernel⟩
-  · intro i hi _
-    have : i = 0 := by simp at hi; omega
-    subst this
-    exact ⟨t, ht⟩
 
 /-! ## The rule -/
 
@@ -267,7 +241,7 @@ theorem sepL_calleeSaved (f : Nat → BitVec 64) :
 stack (the saved pair `imgT` with `ra = crt0`'s link, and `fprintfNeed`
 bytes below `sp`), `err_msg` holding a C string at `sp+496`, newlib's data in
 its boundary state and the console at `o`: the run halts with code 70. -/
-theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr)
+theorem wp_mainErrTail (H : NewlibHoles)
     (live : Nat → Prop) (hlive : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (sM v rv : BitVec 64) (cs : Nat → BitVec 64) (o : String)
     (imgT errImg : Nat → BitVec 8) (hsM : MainSp sM) (hv : v ≠ 0#64)
@@ -276,14 +250,14 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     PC ↦ᵣ 0x800045ec#64 ∗ (10 : Nat) ↦ᵣ v ∗ ra ↦ᵣ rv ∗ (8 : Nat) ↦ᵣ 0x8001b970#64 ∗
       clobbered (argRegs.drop 1) ∗ callFrame sM fprintfNeed (calleeSaved.drop 1) cs ∗
       ownImg (InExt (sM.toNat + 752, 16)) imgT ∗ ownImg (InExt (sM.toNat + 496, 256)) errImg ∗
-      stdioOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
+      stdioOwn ∗ errnoOwn ∗ consoleOwn o ∗ (∀ o', Φ (70, o ++ o'))
     ⊢ Wp.W Φ := by
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
-  unfold fprintfNeed tohostAddr at h1
+  unfold fprintfNeed at h1
   have hcodeL := mainErrCode_text.live hlive
   unfold callFrame VsaIris.sp VsaIris.ra
   iintro ⟨Hpc, Ha0, Hra, Hs0, Hargs, ⟨Hsp, Hscr, Hsaved, Htmp, #Hgp, #Himg⟩, HT, Herr, Hstd,
-    Hcon, HΦ⟩
+    Herrno, Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg mainErrCode_text $$ Himg
   -- `_impure_ptr` and `_impure_data._stderr`
   ihave ⟨%simg, %⟨hok, himp⟩, Hw, Hrest, #Himp⟩ := stdioAt_open StdioOK StdWin $$ Hstd
@@ -327,22 +301,11 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
   -- `fprintf(stderr, "%s\n", in->err_msg)`
   let errp : BitVec 64 := sM + sign_extend (m := 64) (0x1f0#12)
   have herrp : errp.toNat = sM.toNat + 496 := addr_off sM _ 496 (by decide) (by omega)
-  let Sown : Nat → Prop := InExt (sM.toNat + 496, 256)
-  let rd : Nat → BitVec 8 := fun a => if rodataDom a then rodataByte a else errImg a
-  have hoff : ∀ a, Sown a → ¬ rodataDom a := fun a ha hr => by
-    simp only [Sown, InExt] at ha; unfold rodataDom at hr; omega
-  have hfmt : FmtArgsOK (fun a => rodataDom a ∨ Sown a) rd fmtLine [errp] :=
-    fmtLine_ok (fun a ha => ⟨.inl ha, by simp [rd, ha]⟩)
-      (cstrCov_of_nul (n := 256) (fun i hi => .inr (by rw [herrp]; simp only [Sown, InExt]; omega))
-        (by
-          obtain ⟨k, hk, h0⟩ := herr
-          refine ⟨k, hk, ?_⟩
-          rw [herrp]
-          have : ¬ rodataDom (sM.toNat + 496 + k) := hoff _ (by simp only [Sown, InExt]; omega)
-          simp [rd, this, h0]))
   let cs' : Nat → BitVec 64 := fun r => if r = 8 then 0x8001b970#64 else cs r
-  have hf := H.fprintf live Wp sM fmtLine [errp] cs' rodataDom Sown rd o hlive (by simp) hfmt
-    ⟨by unfold fprintfNeed tohostAddr; omega, by omega, h3⟩
+  have hf := H.fprintf live Wp sM errp 256 errImg cs' o hlive
+    (by obtain ⟨k, hk, h0⟩ := herr; exact ⟨k, hk, by rw [herrp]; exact h0⟩) (by decide)
+    (by rw [herrp]; omega) (by rw [herrp]; omega) (by unfold tohostAddr; rw [herrp]; omega)
+    ⟨by unfold fprintfNeed tohostAddr; omega, by omega, h3⟩ (by unfold fprintfNeed; omega)
   have hjt : TextAt mainJalFprintf.pc mainJalFprintf.code := by decide
   have hj : JalExec (vsaModel live) mainJalFprintf.pc mainJalFprintf.code fprintfEntry :=
     JalSite.exec mainJalFprintf_cert live (hjt.live hlive)
@@ -355,11 +318,13 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     show BitVec.ofNat 64 (mainJalFprintf.pc + 4) = 0x80004618#64 from rfl]
   unfold VsaIris.ra
   iframe Hpc Hra
-  isplitl [Ha0 Ha1 Ha2 Ha5 Hargs Herr Hstd Hcon Hsp Hscr Hs0 Hsaved Htmp]
-  · unfold argsAt readable callFrame VsaIris.sp fmtLine
+  isplitl [Ha0 Ha1 Ha2 Ha5 Hargs Herr Hstd Herrno Hcon Hsp Hscr Hs0 Hsaved Htmp]
+  · unfold argsAt callFrame VsaIris.sp errLineFmt
     simp only [List.cons_append, List.nil_append, List.zipIdx_cons, List.zipIdx_nil, sepL_cons,
       sepL_nil, List.length_cons, List.length_nil, Nat.add_zero, Nat.reduceAdd]
-    iframe Ha0 Ha1 Ha2 Hstd Hcon Hsp Hscr Htmp Hgp
+    iframe Ha0 Ha1 Ha2 Hstd Herrno Hcon Hsp Hscr Htmp Hgp
+    isplitr
+    · ipureintro; decide
     isplitl [Ha5 Hargs]
     · rw [show List.drop 3 argRegs = [13, 14, 15, 16, 17] from rfl]
       iapply clobbered_put (r := 15) (rs := [13, 14, 15, 16, 17]) (by decide)
@@ -369,11 +334,7 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
       iexists _
       iexact Ha5
     isplitl [Herr]
-    · isplitr
-      · iapply roImg_congr (S := rodataDom) (f := rodataByte) (g := rd)
-          (fun a ha => by simp [rd, ha])
-        iapply binImg_rodata $$ Himg
-      · iapply ownSet_congr (fun a ha => by simp [rd, hoff a ha]) $$ Herr
+    · rw [herrp]; iexact Herr
     isplitl [Hs0 Hsaved]
     · iapply (sepL_calleeSaved cs').2
       isplitl [Hs0]
@@ -386,8 +347,9 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
         iexact Hsaved
     iexact Himg
   -- `li a0,70; j; ld ra,760(sp); ld s0,752(sp); addi sp,sp,768; ret`
-  unfold callFrame readable VsaIris.sp
-  iintro Hpc Hra ⟨Hargs, ⟨Hro, Herr⟩, Hstd, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
+  unfold callFrame VsaIris.sp
+  iintro Hpc Hra ⟨Hargs, Herr, Hstd, Herrno, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
+  rw [herrp]
   ihave ⟨Hs0, Hsaved⟩ := (sepL_calleeSaved cs').1 $$ Hsaved
   ihave ⟨⟨%a0v, Ha0⟩, Hargs⟩ := clobbered_take (r := 10) (by decide) $$ Hargs
   ihave HT := (ownImg_range _ _ _).1 $$ HT
@@ -444,7 +406,7 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
   · rw [show List.drop 1 argRegs = argRegs.erase 10 from rfl]; iexact Hargs
   isplitl [Herr HT Hsaved]
   · isplitl [Herr HT]
-    · ihave He := blockOwn_of_ownImg (sM.toNat + 496) 256 rd $$ Herr
+    · ihave He := blockOwn_of_ownImg (sM.toNat + 496) 256 errImg $$ Herr
       ihave Ht := blockOwn_of_ownImg (sM.toNat + 752) 16 imgT $$ HT
       ihave Hb := blockOwn_join (sM.toNat + 496) 256 (sM.toNat + 752) 16 272 (by omega) (by omega)
         $$ [He Ht]
@@ -461,6 +423,8 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
       iexact Hsaved
   isplitl [Hstd]
   · iapply stdioAt_mono (fun img h => .inr ⟨by simp, h⟩) $$ Hstd
+  isplitl [Herrno]
+  · iexact Herrno
   iintro %o'' -
   rw [show (70#64 : BitVec 64).toNat = 70 from rfl, String.append_assoc]
   iapply HΦ

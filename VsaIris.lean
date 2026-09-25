@@ -272,6 +272,13 @@ import VsaIris.Vsa.Stdout.Fputc
 import VsaIris.Vsa.Stdout.Sfvwrite
 import VsaIris.Vsa.Stdout.FwriteOut
 import VsaIris.Vsa.Stderr.VfpEntry
+import VsaIris.Vsa.Stderr.VfpErr
+import VsaIris.Vsa.Stderr.SprintErr
+import VsaIris.Vsa.Stderr.Promote
+import VsaIris.Vsa.Stderr.FprintfHead
 import VsaIris.Vsa.Fprintf.Sprint
 import VsaIris.Vsa.Fprintf.Strlen
 import VsaIris.Vsa.Fprintf.Inner
+import VsaIris.Vsa.ExitH.Iris
+import VsaIris.Vsa.Stderr.SprintHook
+import VsaIris.Vsa.Stderr.SEmpty

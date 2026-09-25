@@ -29,9 +29,6 @@ theorem dot_lctx {live : Nat → Prop} (hcl : ∀ p ∈ strCode, live p.1) {bv :
   str := ⟨fun k hk => by
       obtain rfl : k = 0 := by omega
       rw [show (0x80019770#64).toNat + 0 = 0x80019770 from rfl, h0]; decide,
-    fun k hk => by
-      obtain rfl : k = 0 := by omega
-      rw [show (0x80019770#64).toNat + 0 = 0x80019770 from rfl, h0]; decide,
     by rw [show (0x80019770#64).toNat + 1 = 0x80019771 from rfl, h1]; rfl⟩
   retAlign := by decide
   code := hcl
