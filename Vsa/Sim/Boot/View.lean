@@ -95,33 +95,41 @@ theorem bootView_below {script : Nat} {t : RunTree} {lo : Nat} (h : t.above lo =
   unfold bootView logView
   rw [RunTree.fin_none_below h hx]
 
-/-- The `.text` image is the loader's when every store lies above it. -/
-theorem bootMem_text {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t)
-    (ha : t.above 0x80018be0 = true) : Code.FixedTextLoaded (bootMem script L) := by
-  intro off hoff
+/-- The view's `.text` bytes are the loader's when every store lies above it. -/
+theorem bootView_text {script : Nat} {t : RunTree} (ha : t.above 0x80018be0 = true)
+    {off : Nat} (hoff : off < Code.fixedTextSize) :
+    bootView script t (Code.fixedTextBase + off) = some (Code.fixedTextByte off) := by
   unfold Code.fixedTextSize at hoff
-  show (bootMem script L)[0x80000000 + off]? = _
+  show bootView script t (0x80000000 + off) = _
   have hp := inPieces_seg (x := 0x80000000 + off) (by omega) (by omega)
   have h1 : ¬ 0x80000000 + off < 0x80000000 := by omega
   have h2 : 0x80000000 + off < 0x80018be0 := by omega
-  rw [bootMem_view h, bootView_below ha h2]
+  rw [bootView_below ha h2]
   simp only [imageView, hp, imageByte, h1, h2, ↓reduceIte, Nat.add_sub_cancel_left]
 
-/-- `.rodata` after the script blob and its NUL is the loader's when every
-store lies above it (REVIEW.md P2's pin). -/
-theorem bootMem_rodata {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t)
-    (ha : t.above 0x8001acf0 = true) : Code.FixedRodataLoaded (bootMem script L) := by
-  intro off hlo hoff
+/-- The view's `.rodata` bytes after the script blob and its NUL are the
+loader's when every store lies above it (REVIEW.md P2's pin). -/
+theorem bootView_rodata {script : Nat} {t : RunTree} (ha : t.above 0x8001acf0 = true)
+    {off : Nat} (hlo : Code.fixedScriptSize ≤ off) (hoff : off < Code.fixedRodataSize) :
+    bootView script t (Code.fixedRodataBase + off) = some (Code.fixedRodataByte off) := by
   unfold Code.fixedRodataSize at hoff
   unfold Code.fixedScriptSize at hlo
-  show (bootMem script L)[0x80018be0 + off]? = _
+  show bootView script t (0x80018be0 + off) = _
   have hp := inPieces_seg (x := 0x80018be0 + off) (by omega) (by omega)
   have h1 : ¬ 0x80018be0 + off < 0x80000000 := by omega
   have h2 : ¬ 0x80018be0 + off < 0x80018be0 := by omega
   have h3 : ¬ 0x80018be0 + off < 0x80018be0 + 453 := by omega
   have h4 : 0x80018be0 + off < 0x8001acf0 := by omega
-  rw [bootMem_view h, bootView_below ha h4]
+  rw [bootView_below ha h4]
   simp only [imageView, hp, imageByte, h1, h2, h3, h4, ↓reduceIte, Nat.add_sub_cancel_left]
+
+theorem bootMem_text {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t)
+    (ha : t.above 0x80018be0 = true) : Code.FixedTextLoaded (bootMem script L) :=
+  fun _ hoff => (bootMem_view h _).trans (bootView_text ha hoff)
+
+theorem bootMem_rodata {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t)
+    (ha : t.above 0x8001acf0 = true) : Code.FixedRodataLoaded (bootMem script L) :=
+  fun _ hlo hoff => (bootMem_view h _).trans (bootView_rodata ha hlo hoff)
 
 end Vsa.Sim.Boot
 

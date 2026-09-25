@@ -979,32 +979,25 @@ theorem heapFactsOk : HeapFactsOk (bootView script runs) own top brkv chunks
     (0x8001c180, 0x28) (0x8001c1b0, 0x48) (0x8001c200, 0xc8) := by
   constructor <;> decide +kernel
 
-theorem mainRa : Vsa.MemRepr.read64 (bootMem script log) 0x87fffff8 = some 0x80000038 := by
-  boot_read view
-
-theorem text : Vsa.Sim.Code.FixedTextLoaded (bootMem script log) :=
-  bootMem_text logOk (by decide +kernel)
-
-/-- `.rodata` after the script blob (REVIEW.md P2's pin). -/
-theorem rodata : Vsa.Sim.Code.FixedRodataLoaded (bootMem script log) :=
-  bootMem_rodata logOk (by decide +kernel)
-
-/-- `stdout` unoriented at the entry (REVIEW.md P1). -/
-theorem console : Vsa.Sim.ConsoleBoot (bootMem script log) := by boot_facts view
-
-theorem statics : Vsa.Sim.Code.ImageStaticsLoaded (bootMem script log) := by
-  unfold Vsa.Sim.Code.ImageStaticsLoaded Vsa.Sim.Code.imgLldFmt Vsa.Sim.Code.imgDecPointStr
-    Vsa.Sim.Code.imgParseSlotD Vsa.Sim.Code.imgParseSlotL Vsa.Sim.Code.imgFnSlot
-    Vsa.Sim.Code.imgDecPointPtr Vsa.Sim.Code.imgMbCurMax Vsa.Sim.Code.imgImpurePtr
-  boot_facts view
-
-theorem exitRuntime : Vsa.Sim.ExitRuntimeData (bootMem script log) := by boot_facts view
-
-theorem globals : Vsa.MemRepr.read64 (bootMem script log) Vsa.Sim.LayoutInstance.interpObject =
-    some own.env := by boot_read view
-
-theorem depth : Vsa.MemRepr.read32 (bootMem script log)
-    (Vsa.Sim.LayoutInstance.interpObject + 8) = some 0 := by boot_read view
+/-- The entry's read facts, in any memory the entry view is a partial view
+of: the real (sparse) memory and every extension of it, such as its zero fill. -/
+theorem memFacts {m : Vsa.MemRepr.Mem} (hv : PartialView m (bootView script runs))
+    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →
+      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, m[k]? = some b) :
+    BootMemFacts m own.env where
+  mainRa := by boot_readp hv
+  text := hv.text (by decide +kernel)
+  rodata := hv.rodata (by decide +kernel)
+  statics := by
+    unfold Vsa.Sim.Code.ImageStaticsLoaded Vsa.Sim.Code.imgLldFmt Vsa.Sim.Code.imgDecPointStr
+      Vsa.Sim.Code.imgParseSlotD Vsa.Sim.Code.imgParseSlotL Vsa.Sim.Code.imgFnSlot
+      Vsa.Sim.Code.imgDecPointPtr Vsa.Sim.Code.imgMbCurMax Vsa.Sim.Code.imgImpurePtr
+    boot_factsp hv
+  console := by boot_factsp hv
+  exitRuntime := by boot_factsp hv
+  globals := by boot_readp hv
+  depth := by boot_readp hv
+  stackBytes := hstack
 
 /-- The represented program, decoded from the entry memory. -/
 def prog : Vsa.While.Program :=
@@ -1023,15 +1016,22 @@ theorem heapOk : heapCheck (bootView script runs) own.exts
     [(own.pn, 8 * own.cap), (own.pv, 24 * own.cap)] top brkv chunks bins = true := by
   decide +kernel
 
-/-- **The witness.** The real entry state is `Loaded` for `prog`, given the
-boundary fact it does not meet until lane B2's P3: every stack byte present
-(REVIEW.md C3). -/
+/-- **The witness**, at the entry registers over any memory extending the
+entry memory in which every stack byte is present. -/
+theorem loadedAt {m : Vsa.MemRepr.Mem} (hv : PartialView m (bootView script runs))
+    (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →
+      k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, m[k]? = some b) :
+    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog (bootConfig m regs entrySteps) :=
+  loaded_of hv (memFacts hv hstack) bootRegs ownOk frameOk storeOk heapOk heapFactsOk progOk
+    capacityOk fitsOk
+
+/-- The real entry state is `Loaded` for `prog`, given every stack byte present
+(REVIEW.md C3; lane B2's P3 discharges it through the zero fill). -/
 theorem loaded
     (hstack : ∀ k, Vsa.Sim.LayoutInstance.stackSL.lo ≤ k →
       k < Vsa.Sim.LayoutInstance.stackSL.hi → ∃ b : BitVec 8, (bootMem script log)[k]? = some b) :
     Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout prog
       (bootConfig (bootMem script log) regs entrySteps) :=
-  loaded_of view ⟨mainRa, text, rodata, statics, console, exitRuntime, globals, depth, hstack⟩
-    bootRegs ownOk frameOk storeOk heapOk heapFactsOk progOk capacityOk fitsOk
+  loadedAt view.partial hstack
 
 end Vsa.Sim.Boot.Gen.Functions2

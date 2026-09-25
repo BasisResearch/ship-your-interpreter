@@ -34,14 +34,14 @@ def maskView (out : Nat → Bool) (v : Nat → Option (BitVec 8)) (k : Nat) : Op
 
 /-- A mask of a view is a partial view of every memory agreeing outside the mask. -/
 theorem maskView_partial {m m' : Mem} {v : Nat → Option (BitVec 8)} {out : Nat → Bool}
-    (h : ViewOf m v) (hag : ∀ k, out k = false → m[k]? = m'[k]?) :
+    (h : PartialView m v) (hag : ∀ k, out k = false → m[k]? = m'[k]?) :
     PartialView m' (maskView out v) := by
   intro k b hk
   unfold maskView at hk
   cases ho : out k
   · rw [ho] at hk
     simp only [Bool.false_eq_true, ↓reduceIte] at hk
-    rw [← hag k ho, h k, hk]
+    rw [← hag k ho, h k b hk]
   · rw [ho] at hk
     cases hk
 
@@ -61,6 +61,41 @@ theorem PartialView.readLE {m : Mem} {v : Nat → Option (BitVec 8)} (h : Partia
         rw [hrest] at hr
         simp only [Vsa.MemRepr.readLE, h a b hb, ih hrest]
         exact hr
+
+theorem PartialView.get {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView m v)
+    {k : Nat} {b : BitVec 8} (hb : v k = some b) : m[k]? = some b := h k b hb
+
+theorem PartialView.present {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView m v)
+    {k : Nat} (hs : (v k).isSome = true) : ∃ b : BitVec 8, m[k]? = some b := by
+  obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp hs
+  exact ⟨b, h k b hb⟩
+
+theorem PartialView.readPresent {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView m v)
+    {a n : Nat} (hs : (readLEv v a n).isSome = true) : ∃ w, Vsa.MemRepr.readLE m a n = some w := by
+  obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp hs
+  exact ⟨w, h.readLE hw⟩
+
+theorem PartialView.text {m : Mem} {script : Nat} {t : RunTree}
+    (h : PartialView m (bootView script t)) (ha : t.above 0x80018be0 = true) :
+    Code.FixedTextLoaded m :=
+  fun _ hoff => h.get (bootView_text ha hoff)
+
+theorem PartialView.rodata {m : Mem} {script : Nat} {t : RunTree}
+    (h : PartialView m (bootView script t)) (ha : t.above 0x8001acf0 = true) :
+    Code.FixedRodataLoaded m :=
+  fun _ hlo hoff => h.get (bootView_rodata ha hlo hoff)
+
+/-- Decide one read fact through a partial view `h`. -/
+macro "boot_readp " h:term : tactic =>
+  `(tactic| first
+    | (apply PartialView.readPresent $h; decide +kernel)
+    | (apply PartialView.present $h; decide +kernel)
+    | (apply PartialView.readLE $h; decide +kernel)
+    | (apply PartialView.get $h; decide +kernel))
+
+/-- Split a structure of read facts and decide each through the partial view `h`. -/
+macro "boot_factsp " h:term : tactic =>
+  `(tactic| repeat' (first | apply And.intro | boot_readp $h | constructor))
 
 /-! ## Strings -/
 

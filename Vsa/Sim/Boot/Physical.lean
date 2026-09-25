@@ -33,7 +33,7 @@ theorem prologueMask_false {k : Nat} (h : prologueMask k = false) :
 
 /-- The initial store and its survival through the prologue, from one check
 of the global frame at `e` over the masked view. -/
-theorem store_of_check {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v)
+theorem store_of_check {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
     {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {e : Nat} (he : φf 0 = e)
     (ha : A.contains e 32 ∧ e % 8 = 0)
     (hf : frameCheck (maskView prologueMask v) N e initFrame = true) :
@@ -90,7 +90,7 @@ theorem bootArena_protected :
   omega
 
 /-- **The boundary at a boot trace's entry**, from the per-trace facts. -/
-theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v)
+theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
     {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
     (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
     (ho : OwnOk B) (hf : FrameOk v B)
@@ -113,7 +113,7 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v
     exact ⟨⟨this.2.1, this.2.2⟩, ho.envAligned⟩
   obtain ⟨hst, hsurv⟩ := store_of_check hv (φf := fun _ => B.env) (φc := fun _ => (0 : Nat))
     (A := bootArena) rfl harena hstore
-  have hpv : PartialView m v := hv.partial
+  have hpv : PartialView m v := hv
   refine
     { good := bootState_good m g
       tick := Nat.mod_lt _ (by decide)
@@ -176,7 +176,7 @@ theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v
 /-- **`Loaded` at a boot trace's entry.** The represented program is the one
 the decoder finds within the shared bytes (`hdec`); its cost and stack need
 are decided (`hcap`, `hfit`). -/
-theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v)
+theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
     {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
     (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
     (ho : OwnOk B) (hf : FrameOk v B)
@@ -189,7 +189,7 @@ theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : ViewOf m v)
     (hcap : capOk cfuel p0 top = true) (hfit : programStackFits p0 = true) :
     Vsa.Refine.Loaded interpRunLayout p0 (bootConfig m g steps) := by
   have hwithin : ProgramReprWithin m B.shared stmts count p0 :=
-    (decodesTo_sound hv.partial hdec).mono (fun _ hk => B.shared_of_sharedB hk)
+    (decodesTo_sound hv hdec).mono (fun _ hk => B.shared_of_sharedB hk)
   have huniq : ∀ p, ProgramRepr m stmts count p → p = p0 :=
     fun p hp => hp.unique hwithin.erase
   refine ⟨stmts, count, hwithin.erase, BitVec.ofNat 64 interpObject, bootNatives, bootArena,
