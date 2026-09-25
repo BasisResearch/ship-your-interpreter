@@ -133,9 +133,11 @@ def nxTryPrune (facts : Array Term) (norm : Syntax) (g : MVarId) : TacticM Bool 
 
 open Lean Elab Tactic Meta in
 def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
-    (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num))) :
+    (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
+    (budgetPct : Nat := 0) :
     TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
+    let ctx ← readThe Core.Context
     let stopPCs : List Nat := match stops with
       | some ss => ss.toList.map (·.getNat)
       | none => []
@@ -160,6 +162,11 @@ def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       let (cur, fuel) := work.head!
       work := work.tail!
       if fuel == 0 then stuck := stuck ++ [cur]; continue
+      -- lane N3: a budgeted run (a proof piece) stops once it used `budgetPct`% of
+      -- the declaration's heartbeats
+      if budgetPct != 0 && ctx.maxHeartbeats != 0 then
+        let used := (← IO.getNumHeartbeats) - ctx.initHeartbeats
+        if used * 100 > ctx.maxHeartbeats * budgetPct then stuck := stuck ++ [cur]; continue
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
       let some (conts, pend) ← ixStep norm h cur | stuck := stuck ++ [cur]; continue
@@ -208,9 +215,14 @@ with `nxNorm`; a continuation's binders (a callee's havoc values) are all
 introduced. -/
 syntax "nx_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
+/-- `nx_runB …`: `nx_run` that stops at 55% of the declaration's heartbeat
+budget (lane N3: one `#ix_piece` of a long run). -/
+syntax "nx_runB " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
+
 open Lean Elab Tactic Meta in
 elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
+  | `(tactic| nx_runB $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops 55
 
 /-- `nx_addr` for byte-ownership goals: unfold `outS` first. -/
 macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
@@ -233,7 +245,7 @@ namespace Stdout
 /-- A load from the data view's first block (`_impure_ptr`, in a view
 `accAddrs 0x8001b970 8 ++ DAs` that also holds a string). -/
 scoped macro_rules
-  | `(tactic| sx_side) => `(tactic| (intro b hb; exact List.mem_append_left _ hb))
+  | `(tactic| sx_side) => `(tactic| (intro b hb; apply List.mem_append_left; exact hb))
 end Stdout
 
 namespace Stdout

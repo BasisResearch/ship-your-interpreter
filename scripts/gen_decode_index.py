@@ -34,7 +34,7 @@ def main() -> int:
     index: dict[str, str] = {}
     dupes: list[tuple[str, str, str]] = []
 
-    for path in sorted(DECODE_DIR.glob("Batch*.lean")):
+    for path in sorted(DECODE_DIR.glob("Batch*.lean")) + [DECODE_DIR / "RetSupp.lean"]:
         module = f"Vsa.Sim.DecodeTable.{path.stem}"
         for line in path.read_text().splitlines():
             m = THEOREM_RE.match(line)

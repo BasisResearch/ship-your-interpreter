@@ -271,3 +271,8 @@ import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Vsa.Stdout.Fputc
 import VsaIris.Vsa.Stdout.Sfvwrite
 import VsaIris.Vsa.Stdout.StrOut
+import VsaIris.Vsa.Stderr.VfpEntry
+import VsaIris.Vsa.Stderr.VfpErr
+import VsaIris.Vsa.Stderr.SprintErr
+import VsaIris.Vsa.Stderr.SprintErr0
+import VsaIris.Vsa.ExitH.Iris

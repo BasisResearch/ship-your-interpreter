@@ -699,16 +699,24 @@ theorem wordGuard (ctx : Ctx live P r len bv) {σ : MState}
       == BitVec.allOnes 64) = tk := by
   have hpos : (P + BitVec.ofNat 64 t).toNat = P.toNat + t :=
     ptrN P t (by have := ctx.regions.nowrap; omega)
-  have hcs : CStr σ.mem P.toNat (charsOf P.toNat len bv) := cstr_of_reads ctx.str hread
   have hvalue : bytesVal .ld (wordBytesAt bv (P.toNat + t)) = ldBytesT σ (P + BitVec.ofNat 64 t) := by
     rw [wordBytes_eq hread t ht, ldBytesT_wordAt, hpos]
     exact sext64_self _
   rw [strlenWordVal_eq, hvalue]
   cases tk
-  · refine beq_eq_false_iff_ne.mpr (detect_nottakenG σ P len t (charsOf P.toNat len bv) hcs
-      (charsOf_length _ _ _) ht (by have := of_decide_eq_false htk; omega) hpos)
-  · exact beq_iff_eq.mpr (detect_takenG σ P len t (charsOf P.toNat len bv) hcs
-      (charsOf_length _ _ _) hpos (of_decide_eq_true htk))
+  · refine beq_eq_false_iff_ne.mpr fun hall => ?_
+    have hle := of_decide_eq_false htk
+    rw [detect_all_ones] at hall
+    have hk : len - t < 8 := by omega
+    have := hall (len - t) hk
+    rw [ldBytesT_byte σ _ _ hk, hpos, show P.toNat + t + (len - t) = P.toNat + len by omega,
+      hread.bytes len (by omega), ctx.str.nul] at this
+    exact this rfl
+  · refine beq_iff_eq.mpr ((detect_all_ones _).2 fun k hk => ?_)
+    have hle := of_decide_eq_true htk
+    rw [ldBytesT_byte σ _ _ hk, hpos, show P.toNat + t + k = P.toNat + (t + k) by omega,
+      hread.bytes (t + k) (by omega)]
+    exact ctx.str.nonzero (t + k) (by omega)
 
 /-- **The word scan.** `n` is the fuel: at most `n` more full words fit before
 the NUL. -/
