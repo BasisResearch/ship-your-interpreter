@@ -51,6 +51,7 @@ end VsaIris
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Inst.Strlen
+open scoped VsaIris.Sym.Stdout
 open VsaIris.Interp.StrLeaf
 
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}

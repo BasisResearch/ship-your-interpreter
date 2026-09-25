@@ -207,7 +207,7 @@ flushes nothing. `wp_exitCall` takes `quiet`; H5's error exits pass `false`.
 ## STATEMENT CHANGE (lane N4): `exit`'s interior is proved; it owns `errno`
 
 `IrisHoles.newlib` is `Newlib.NewlibCore := NewlibCoreAt StdioErrOK`: the
-assumed statements (`snprintf`, `fprintf`) at N3's post-write state.
+assumed statement (`snprintf`) at N3's post-write state.
 `exitHandlers` is no longer assumed: `ExitH.exitHandlers_spec` proves it from
 any state satisfying `CloseReady` (`VsaIris/Vsa/StdioErr.lean`: the common
 fields `CloseCommon` and `stderr` idle or written), and `NewlibCore.full`
@@ -1603,3 +1603,14 @@ corrected statement and why:
   `wp_abortLanding`, `wp_abort`, `wp_topAbort`, `wp_topAbrupt` take
   `ErrnoOwn.ErrnoLend L Room` and lend it from the world they drop
   (`world_exitPartsE`); `interpRun_partial` supplies `errnoLend_vsa`.
+- **`newlib.fprintf` is proved** (`Newlib.fprintf_proved`,
+  `Vsa/Stderr/FprintfSpec.lean`: `fprintfErr_run`, the whole call as one
+  printing symbolic run, `fprintfHead_run` then `FprintfBody`'s stages over
+  N5's `vfp_toTerm`/`s_stage`/`s_empty`/`vfp_printH`/`vfp_end`, under
+  `wp_lroW`). The string is read through the run's data view and owned by the
+  caller: `LRO.promote` runs with its bytes owned and returns them unchanged.
+  The proof imports N5's format loop, which imports the interpreter's
+  arithmetic proofs (`Interp.ProofArith`), above `MainErr`. So `fprintf` is no
+  longer a field of the assumed `NewlibCoreAt`: it is `NewlibHolesAt.fprintf :
+  FprintfProved`, and `NewlibCore.full` takes the proof (`fprintf_ok`) from its
+  callers (`Supply`, `EndToEnd`).
