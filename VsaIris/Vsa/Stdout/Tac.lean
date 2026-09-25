@@ -206,7 +206,7 @@ elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
 
 /-- `nx_addr` for byte-ownership goals: unfold `outS` first. -/
-macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); omega))
+macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
 
 macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
 /-- The address-range hypothesis of a byte-set side condition, as arithmetic. -/
@@ -299,8 +299,8 @@ theorem callRet_of {R Rf : Nat → BitVec 64} {a0 : BitVec 64} (h10 : Rf 10 = a0
 load through the run's stores, an address bound, a literal fact. -/
 syntax "nx_disch" : tactic
 macro_rules
-  | `(tactic| nx_disch) => `(tactic| first
-      | rfl | assumption | decide
+  | `(tactic| nx_disch) => `(tactic| (fail_if_success show SWP _ _ _ _ _ _ _ _); first
+      | assumption
       | (nx_norm; first | done | rfl | assumption)
       | (nx_mem; first | done | rfl | assumption | (nx_console; done))
       | (nx_norm; nx_mem; first | done | rfl | assumption | (nx_console; done))

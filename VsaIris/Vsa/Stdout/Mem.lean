@@ -138,7 +138,7 @@ theorem toNat_add_neg {x : BitVec 64} {k : Nat} (hk : k < 2 ^ 64) (h : 2 ^ 64 â‰
 syntax "nx_addr" : tactic
 macro_rules
   | `(tactic| nx_addr) => `(tactic| ((try simp (disch := omega) only [mem_accAddrs_iff, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat,
-      Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd, and_true, true_and]); omega))
+      Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd, and_true, true_and]); first | done | omega))
 
 /-- Store forwarding at every width, for stdio runs. -/
 syntax "nx_mem" : tactic
