@@ -134,6 +134,92 @@ theorem abortAt_of_evalCallee {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
   · iframe Hst HS
   iframe Hcore Hst
 
+/-- **`runtime_error` from an eval arm, reading owned frame bytes** (`jal` at
+`i`, `sp = s - 1088`): the format's `%s` arguments may also lie in bytes
+`Sown` of the arm's frame (a message buffer), lent to the call as `readable`
+and carved out of the run's bytes. It never returns; on abort, H5's resource
+and the lent bytes (`rtErr_spec` returns them) rejoin the arm's
+`abortAt Core s n`. -/
+theorem ms_rtErrEvalOwn (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
+    (hE : ErrEnv N L Room inp live Core)
+    {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code RtErr.rtErrEntry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    {s line fmt x1 x2 : BitVec 64} {n : Nat} {ρ : Regime} {st : St} {d : Nat}
+    {Sro Sown : Nat → Prop} {rd : Nat → BitVec 8}
+    (hown : ∀ a, Sown a → InExt (s.toNat - 1088, 1088) a)
+    (hfmt : FmtArgsOK (fun a => Sro a ∨ Sown a) rd fmt [x1, x2])
+    (hsg : StackGeom s n) (hn : 1088 + RtErr.rtErrNeed ≤ n)
+    {R : Nat → BitVec 64} {Mt : Mem} :
+    ⌜RtErrEvalAt R inp line fmt x1 x2 s⌝ ∗ codeRes ∗ errCtx inp ∗ readable Sro Sown rd ∗
+      ms (BitVec.ofNat 64 i) R (fun a => InExt (s.toNat - 1088, 1088) a ∧ ¬ Sown a) Mt ∗
+      stackScratch (evalSP s) (n - 1088) ∗ world N L Room inp ρ st d ∗
+      (abortAt Core s n -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  iintro ⟨%hR, #Hcode, #HE, Hrd, Hms, Hst, Hw, Hab⟩
+  unfold errCtx
+  icases HE with ⟨#Himg, %jb, #Hjb, %hjb⟩
+  have hs1 := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs1 hs2
+  simp only at hs1 hs2
+  unfold RtErr.rtErrNeed snprintfNeed at hn
+  have hsf : (evalSP s).toNat = s.toNat - 1088 := by
+    rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  have hsp : SpIn (evalSP s) RtErr.rtErrNeed :=
+    ⟨by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed Vsa.Sim.tohostAddr; omega,
+      by rw [hsf]; omega, by rw [hsf]; omega⟩
+  have hinp := hE.inpGeom
+  have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
+  have hjb' : (jbWord (BitVec.ofNat 64 inp).toNat jb 0).toNat % 4 = 0 := by rw [hinpN]; exact hjb
+  have hspec := RtErr.rtErr_spec hE.newlib live hE.code Wp N L Room (BitVec.ofNat 64 inp)
+    (evalSP s) line fmt x1 x2 R Sro Sown rd jb ρ st d hsp hinp hfmt hjb'
+  rw [hinpN] at hspec
+  ihave #Hspec := hspec
+  ihave #Hgp := codeRes_gp $$ Hcode
+  iapply ms_callNewlibAbort Wp hexec hcode (vs := [BitVec.ofNat 64 inp, line, fmt, x1, x2])
+    (P := fun _ => iprop(argsAt [BitVec.ofNat 64 inp, line, fmt, x1, x2] ∗
+      callFrame (evalSP s) RtErr.rtErrNeed Newlib.calleeSaved R ∗
+      readable Sro Sown rd ∗ jmpRO inp jb ∗
+      world N L Room inp ρ st d))
+    (Q := fun _ => iprop(False))
+    (A := iprop(abortRes N L Room inp (evalSP s) RtErr.rtErrNeed ∗ readable Sro Sown rd))
+    (X := iprop(readable Sro Sown rd ∗ jmpRO inp jb ∗
+      world N L Room inp ρ st d)) (Y := iprop(False))
+    (need := RtErr.rtErrNeed) (n := n - 1088) (by simp)
+    (fun j hj => by
+      simp only [List.length_cons, List.length_nil] at hj
+      rcases j with _ | _ | _ | _ | _ | j
+      · exact hR.h10
+      · exact hR.h11
+      · exact hR.h12
+      · exact hR.h13
+      · exact hR.h14
+      · omega)
+    hR.h2 (by rw [hsf]; omega) (by unfold RtErr.rtErrNeed snprintfNeed; omega)
+    (fun r => by iintro ⟨Ha, ⟨Hr, Hj, Hw⟩, Hf⟩; iframe Ha Hf Hr Hj Hw)
+    (fun r => by iintro H; iexfalso; iexact H)
+  iframe Hspec Hcode Hms Hst Hgp Himg Hrd Hjb Hw
+  isplit
+  · iintro %R' %_ Hf
+    iexfalso; iexact Hf
+  · iintro ⟨HA, Hrd⟩ Hslack HS
+    ihave HS := ownSet_forget _ _ $$ HS
+    unfold readable
+    icases Hrd with ⟨-, Hown⟩
+    ihave Hown := ownSet_forget _ _ $$ Hown
+    ihave HS := ownSet_join (fun a => InExt (s.toNat - 1088, 1088) a ∧ ¬ Sown a) Sown byteAny
+      (fun a h1 h2 => h1.2 h2) $$ [HS Hown]
+    · iframe HS Hown
+    ihave HS := ownSet_iff _ (T := InExt (s.toNat - 1088, 1088)) (fun a => ⟨fun h => h.elim (·.1)
+      (hown a), fun h => by
+        by_cases h' : Sown a
+        · exact .inr h'
+        · exact .inl ⟨h, h'⟩⟩) $$ HS
+    iapply Hab
+    iapply abortAt_of_evalCallee hE.core hsg (need := RtErr.rtErrNeed) (by unfold RtErr.rtErrNeed snprintfNeed; omega)
+    rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]
+    iframe HA Hslack HS
+
 /-- **`runtime_error` from an eval arm** (`jal` at `i`, `sp = s - 1088`): it
 never returns; on abort, H5's resource becomes the arm's `abortAt Core s n`:
 the call's stack, the slack below it and the frame bytes rejoin the stack
@@ -154,57 +240,11 @@ theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
       (abortAt Core s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   iintro ⟨%hR, #Hcode, #HE, Hrd, Hms, Hst, Hw, Hab⟩
-  unfold errCtx
-  icases HE with ⟨#Himg, %jb, #Hjb, %hjb⟩
-  have hs1 := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs1 hs2
-  simp only at hs1 hs2
-  unfold RtErr.rtErrNeed snprintfNeed at hn
-  have hsf : (evalSP s).toNat = s.toNat - 1088 := by
-    rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hsp : SpIn (evalSP s) RtErr.rtErrNeed :=
-    ⟨by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed Vsa.Sim.tohostAddr; omega,
-      by rw [hsf]; omega, by rw [hsf]; omega⟩
-  have hinp := hE.inpGeom
-  have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
-  have hjb' : (jbWord (BitVec.ofNat 64 inp).toNat jb 0).toNat % 4 = 0 := by rw [hinpN]; exact hjb
-  have hspec := RtErr.rtErr_spec hE.newlib live hE.code Wp N L Room (BitVec.ofNat 64 inp)
-    (evalSP s) line fmt x1 x2 R Sro (fun _ => False) rd jb ρ st d hsp hinp hfmt hjb'
-  rw [hinpN] at hspec
-  ihave #Hspec := hspec
-  ihave #Hgp := codeRes_gp $$ Hcode
-  iapply ms_callNewlibAbort Wp hexec hcode (vs := [BitVec.ofNat 64 inp, line, fmt, x1, x2])
-    (P := fun _ => iprop(argsAt [BitVec.ofNat 64 inp, line, fmt, x1, x2] ∗
-      callFrame (evalSP s) RtErr.rtErrNeed Newlib.calleeSaved R ∗
-      readable Sro (fun _ => False) rd ∗ jmpRO inp jb ∗
-      world N L Room inp ρ st d))
-    (Q := fun _ => iprop(False))
-    (A := abortRes N L Room inp (evalSP s) RtErr.rtErrNeed)
-    (X := iprop(readable Sro (fun _ => False) rd ∗ jmpRO inp jb ∗
-      world N L Room inp ρ st d)) (Y := iprop(False))
-    (need := RtErr.rtErrNeed) (n := n - 1088) (by simp)
-    (fun j hj => by
-      simp only [List.length_cons, List.length_nil] at hj
-      rcases j with _ | _ | _ | _ | _ | j
-      · exact hR.h10
-      · exact hR.h11
-      · exact hR.h12
-      · exact hR.h13
-      · exact hR.h14
-      · omega)
-    hR.h2 (by rw [hsf]; omega) (by unfold RtErr.rtErrNeed snprintfNeed; omega)
-    (fun r => by iintro ⟨Ha, ⟨Hr, Hj, Hw⟩, Hf⟩; iframe Ha Hf Hr Hj Hw)
-    (fun r => by iintro H; iexfalso; iexact H)
-  iframe Hspec Hcode Hms Hst Hgp Himg Hrd Hjb Hw
-  isplit
-  · iintro %R' %_ Hf
-    iexfalso; iexact Hf
-  · iintro HA Hslack HS
-    ihave HS := ownSet_forget _ _ $$ HS
-    iapply Hab
-    iapply abortAt_of_evalCallee hE.core hsg (need := RtErr.rtErrNeed) (by unfold RtErr.rtErrNeed snprintfNeed; omega)
-    rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]
-    iframe HA Hslack HS
+  ihave Hms := ms_iff (T := fun a => InExt (s.toNat - 1088, 1088) a ∧ ¬ False)
+    (fun a => ⟨fun h => ⟨h, id⟩, fun h => h.1⟩) $$ Hms
+  iapply ms_rtErrEvalOwn Wp hE hexec hcode (Sown := fun _ => False) (fun a h => h.elim) hfmt hsg hn
+  iframe Hcode HE Hrd Hms Hst Hw Hab
+  ipureintro; exact hR
 
 
 /-- A binary node's budget leaves `runtime_error` room below the arm's frame:

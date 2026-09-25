@@ -409,7 +409,8 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       callFrame (s + 18446744073709551536#64) RtErr.rtErrNeed Newlib.calleeSaved R ∗
       readable Sro (fun _ => False) rd ∗ jmpRO inp.toNat jb ∗ world N L Room inp.toNat ρ st d))
     (Q := fun _ => iprop(False))
-    (A := abortRes N L Room inp.toNat (s + 18446744073709551536#64) RtErr.rtErrNeed)
+    (A := iprop(abortRes N L Room inp.toNat (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
+      readable Sro (fun _ => False) rd))
     (X := iprop(readable Sro (fun _ => False) rd ∗ jmpRO inp.toNat jb ∗
       world N L Room inp.toNat ρ st d)) (Y := iprop(False))
     (need := RtErr.rtErrNeed) (n := RtErr.rtErrNeed) (by simp)
@@ -429,7 +430,7 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   isplit
   · iintro %R' %_ Hf
     iexfalso; iexact Hf
-  · iintro HA - HS
+  · iintro ⟨HA, -⟩ - HS
     unfold abortRes abortAt
     icases HA with ⟨Hcore, Hst⟩
     ihave Hcore := abortCore_mono N L Room inp.toNat (sc := s + 18446744073709551536#64)

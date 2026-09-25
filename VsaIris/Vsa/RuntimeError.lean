@@ -485,7 +485,8 @@ the arguments with a `%s`/`%d` format whose `%s` arguments are readable, its
 stack (`rtErrNeed` bytes), every callee-saved register, the `jmp_buf`
 read-only at `jb` (whose `ra` slot is 4-aligned) and the world, the call never
 returns, and its abort branch receives the `longjmp` landing with its whole
-stack region: `abortRes s rtErrNeed`. -/
+stack region, `abortRes s rtErrNeed`, and the format's readable bytes, which
+`snprintf` only reads (a caller's owned message buffer rejoins its frame). -/
 theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : Vsa.RuntimeRepr.NativeAddrs) (L : DlLayout)
     (Room : RoomPred) (inp s line fmt x1 x2 : BitVec 64) (cs : Nat → BitVec 64)
@@ -497,7 +498,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
       (fun _ => iprop(argsAt [inp, line, fmt, x1, x2] ∗ callFrame s rtErrNeed calleeSaved cs ∗
         readable Sro Sown rd ∗ jmpRO inp.toNat jb ∗ world N L Room inp.toNat ρ st d))
       (fun _ => iprop(False))
-      (abortRes N L Room inp.toNat s rtErrNeed) := by
+      (iprop(abortRes N L Room inp.toNat s rtErrNeed ∗ readable Sro Sown rd)) := by
   have hHA := H.at
   have h1 := hs.lo; have h2 := hs.hi; have h3 := hs.align
   unfold rtErrNeed snprintfNeed tohostAddr at h1
@@ -799,6 +800,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   -- the abort: the landing, with `runtime_error`'s whole stack region
   ihave Hk := and_elim_r $$ Hk
   iapply Hk
+  iframe Hrdb
   unfold abortRes
   iapply abortAt_intro
   isplitr [Hscr Hbody Hgap Hfr]

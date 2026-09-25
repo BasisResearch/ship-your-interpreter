@@ -4243,25 +4243,16 @@ top-level `live` like `CodeLive`. Its supplier is the instantiation of
   boundary (`interp_run`'s `inp` is `&interp` in `.bss`; Q-family with the
   jmp_buf alignment already added to `interpCtxE`).
 
-## The closure call's arity error cannot rejoin its frame (lane E4, 2026-09-24)
+## The closure call's arity error (lane E4, resolved 2026-09-25)
 
-- Declaration: `CloArityP` (`VsaIris/Interp/CallCloP.lean`), a premise of
-  `callCloP_of` (the proof of `CallCloP`, `caseP_CallArm`'s closure branch).
-  It states the arity exit (`0x80003d60`): `snprintf(sp+144, 96, "%s: expected
-  %d arguments, got %d", name, paramc, argc)` and then `runtime_error(in, line,
-  "%s", sp+144)`.
-- Obstruction: the message buffer is in `eval_expr`'s frame. `rtErr_spec`
-  (`VsaIris/Vsa/RuntimeError.lean:489-500`) takes format arguments as
-  `readable Sro Sown rd`. Its abort post is `abortRes` alone, so owned readable
-  bytes passed in are not returned. The frame then cannot rejoin the arm's
-  `abortAt Core s n = Core ∗ stackScratch s n`. E2's `ms_rtErrEval` covers
-  read-only arguments only (`Sown = False`).
-- Supplier: H5 strengthens `rtErr_spec`'s abort to `abortRes ∗ ownImg Sown rd`
-  (its `snprintf` only reads them). With that, the proof is `CloE_runA`,
-  `NewlibHoles.snprintf` into the carved buffer, `CloE_runA2`, and the
-  strengthened call.
+- **Resolved.** `rtErr_spec` (`VsaIris/Vsa/RuntimeError.lean`) now returns
+  the readable bytes on abort (`abortRes ∗ readable Sro Sown rd`; its
+  `snprintf` only reads them). E2's `ms_rtErrEvalOwn` (`ErrArm.lean`) lends
+  owned frame bytes to it and rejoins them; `ms_rtErrEval` is its `Sown = ∅`
+  instance, statement unchanged. `cloErrArity` (`CallCloP.lean`) proves the
+  arity error, and `callCloP_of` no longer takes `CloArityP`.
 
-### Iris route, E1: `ErrRoom` (Q7) is a named premise of the error arms
+## Iris route, E1: `ErrRoom` (Q7) is a named premise of the error arms
 
 `caseP_Var` and `caseP_Assign` (`VsaIris/Interp/Case/{Var,Assign}P.lean`)
 take `ErrRoom e d : rtErrNeed + evalFrame ≤ evalNeed e d`

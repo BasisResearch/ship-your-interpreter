@@ -31,3 +31,7 @@ import VsaIris.Interp.CallCloP
 #print axioms VsaIris.Interp.cloCallP
 #print axioms VsaIris.Interp.callClosureP
 #print axioms VsaIris.Interp.callCloP_of
+#print axioms VsaIris.Interp.cloArityTail
+#print axioms VsaIris.Interp.cloErrArity
+#print axioms VsaIris.Interp.ms_rtErrEvalOwn
+#print axioms VsaIris.Newlib.RtErr.rtErr_spec
