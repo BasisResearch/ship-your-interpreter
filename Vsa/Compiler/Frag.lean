@@ -269,4 +269,47 @@ theorem run_libc (hfit : Fits code) {pos tgt : Nat} {A : AM} {x y r : BitVec 64}
   rw [e3]
   simp only [pcOf_succ]
 
+/-! ## Console and exit -/
+
+theorem tohostW_toNat : tohostW.toNat = tohostAddr := by decide
+
+theorem run_putcW (hfit : Fits code) {pos : Nat} {A : AM} {c : BitVec 8}
+    (hseg : Seg code pos (li s3 (putcWord c) ++ li s2 tohostW ++ [.sd s3 s2]))
+    (hA : A.pc = pcOf pos) :
+    Star code A ⟨pcOf (pos + (li s3 (putcWord c)).length + (li s2 tohostW).length + 1),
+      gset (gset A.regs s3 (putcWord c)) s2 tohostW, A.mem,
+      A.out.push (toString (Char.ofNat c.toNat))⟩ := by
+  obtain ⟨h12, h3⟩ := hseg.append
+  obtain ⟨h1, h2⟩ := h12.append
+  have r1 := run_li hfit h1 hA (by decide : 1 ≤ s3 ∧ s3 ≤ 31)
+  have r2 := run_li hfit h2 (A := ⟨pcOf (pos + (li s3 (putcWord c)).length),
+    gset A.regs s3 (putcWord c), A.mem, A.out⟩) rfl (by decide : 1 ≤ s2 ∧ s2 ≤ 31)
+  refine r1.trans (r2.trans (Star.single ?_))
+  rw [step_htif hfit h3.head (by simp [Nat.add_assoc]) (Has.set_self _ _ (by decide) (by decide))
+    ((Has.set_self _ _ (by decide) (by decide)).set_other (by decide)) tohostW_toNat,
+    htifOut_putc, pcOf_succ]
+
+theorem run_putc (hfit : Fits code) {pos : Nat} {A : AM} {ch : Char} (hch : ch.toNat < 256)
+    (hseg : Seg code pos (putc ch)) (hA : A.pc = pcOf pos) :
+    ∃ L, Star code A ⟨pcOf (pos + (putc ch).length), L, A.mem, A.out.push (toString ch)⟩ := by
+  have := run_putcW hfit (c := BitVec.ofNat 8 ch.toNat) hseg hA
+  have hc : Char.ofNat (BitVec.ofNat 8 ch.toNat).toNat = ch := by
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hch, Char.ofNat_toNat]
+  rw [hc] at this
+  exact ⟨_, by simpa [putc, Nat.add_assoc] using this⟩
+
+theorem run_exit (hfit : Fits code) {pos : Nat} {A : AM} {e : Nat} (he : e = 0 ∨ e = 70)
+    (hseg : Seg code pos (exitCode e)) (hA : A.pc = pcOf pos) :
+    ∃ B, Star code A B ∧ B.mem = A.mem ∧ B.out = A.out ∧ astep code B = some (.halt e) := by
+  unfold exitCode at hseg
+  obtain ⟨h12, h3⟩ := hseg.append
+  obtain ⟨h1, h2⟩ := h12.append
+  have r1 := run_li hfit h1 hA (by decide : 1 ≤ s3 ∧ s3 ≤ 31)
+  have r2 := run_li hfit h2 (A := ⟨pcOf (pos + (li s3 (exitWord (BitVec.ofNat 64 e))).length),
+    gset A.regs s3 (exitWord (BitVec.ofNat 64 e)), A.mem, A.out⟩) rfl (by decide : 1 ≤ s2 ∧ s2 ≤ 31)
+  refine ⟨_, r1.trans r2, rfl, rfl, ?_⟩
+  rw [step_htif hfit h3.head (by simp [Nat.add_assoc]) (Has.set_self _ _ (by decide) (by decide))
+    ((Has.set_self _ _ (by decide) (by decide)).set_other (by decide)) tohostW_toNat,
+    htifOut_exit e he]
+
 end Vsa.Compiler
