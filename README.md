@@ -196,7 +196,7 @@ big-step semantics and iris-lean's BI (`vProp := UPred Res`).
   whole script prints `55\n2500\n36\n` (`Whole.whileWl_spec`: `break`,
   `continue`, and a nested loop whose body reaches the globals through two
   scopes). `firstLoop_halts` and `whileWl_halts` (`Machine.lean`) are the
-  machine consequences.
+  machine consequences. `ClosureExample.lean` calls a function literal.
 
 ## Building
 
