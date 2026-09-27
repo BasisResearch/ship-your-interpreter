@@ -182,10 +182,12 @@ theorem loop_step (Φ : Status → vProp)
     · iexact H0
     · iexact Ho
 
-/-- The final `println(sum)`. -/
-theorem println_spec :
+/-- The final `println(sum)`, followed by any continuation `rest`. -/
+theorem println_spec (rest : List Stmt) (Φ : Status → vProp)
+    (hrest : iprop(0 ↦f G (.int (10 : Nat)) (.int (sumTo 10)) ∗ outIs "55\n") ⊢
+      wpSeq 0 0 rest Φ) :
     iprop(0 ↦f G (.int (10 : Nat)) (.int (sumTo 10)) ∗ outIs "") ⊢
-      wpSeq 0 0 [.expr (.call (.var "println") [.var "sum"])] (PostOut (· = "55\n")) := by
+      wpSeq 0 0 (.expr (.call (.var "println") [.var "sum"]) :: rest) Φ := by
   iintro ⟨H0, Ho⟩
   iapply wp_seq_cons
   iapply wp_expr
@@ -207,18 +209,19 @@ theorem println_spec :
   have hs : "" ++ printArgs₀ [.int ((sumTo 10 : Nat) : Int)] ++ "\n" = "55\n" := by decide
   rw [hs]
   simp only [seqK]
-  iapply wp_seq_nil
-  unfold PostOut
-  isplit
-  · ipureintro; rfl
-  · iexists "55\n"
-    isplit
-    · ipureintro; rfl
-    · iexact Ho
+  iapply hrest
+  isplitl [H0]
+  · iexact H0
+  · iexact Ho
 
-/-- **The first loop of `tests/while.wl` prints `55`.** -/
-theorem firstLoop_spec : initOwn ⊢ wpSeq 0 0 firstLoop (PostOut (· = "55\n")) := by
+/-- The first loop followed by any continuation `rest`: `rest` starts with
+`i = 10`, `sum = 55` in the global frame and `55\n` on the console. -/
+theorem firstLoop_then (rest : List Stmt) (Φ : Status → vProp)
+    (hrest : iprop(0 ↦f G (.int (10 : Nat)) (.int (sumTo 10)) ∗ outIs "55\n") ⊢
+      wpSeq 0 0 rest Φ) :
+    initOwn ⊢ wpSeq 0 0 (firstLoop ++ rest) Φ := by
   rw [firstLoop_eq]
+  simp only [List.cons_append, List.nil_append]
   unfold initOwn
   iintro ⟨H0, Ho⟩
   -- var i = 0;
@@ -248,7 +251,7 @@ theorem firstLoop_spec : initOwn ⊢ wpSeq 0 0 firstLoop (PostOut (· = "55\n"))
     (loop_step _ (by
       iintro ⟨H0, Ho⟩
       simp only [seqK]
-      iapply println_spec
+      iapply (println_spec rest Φ hrest)
       isplitl [H0]
       · iexact H0
       · iexact Ho)) 10)
@@ -259,6 +262,20 @@ theorem firstLoop_spec : initOwn ⊢ wpSeq 0 0 firstLoop (PostOut (· = "55\n"))
   · isplitl [H0]
     · iexact H0
     · iexact Ho
+
+/-- **The first loop of `tests/while.wl` prints `55`.** -/
+theorem firstLoop_spec : initOwn ⊢ wpSeq 0 0 firstLoop (PostOut (· = "55\n")) := by
+  have h := firstLoop_then [] (PostOut (· = "55\n")) (by
+    iintro ⟨_, Ho⟩
+    iapply wp_seq_nil
+    unfold PostOut
+    isplit
+    · ipureintro; rfl
+    · iexists "55\n"
+      isplit
+      · ipureintro; rfl
+      · iexact Ho)
+  rwa [List.append_nil] at h
 
 /-- Big-step consequence: `firstLoop` runs to completion printing exactly
 `55\n`. -/

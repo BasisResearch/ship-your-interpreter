@@ -38,6 +38,7 @@ incremental builds.
 | `Vsa/While/Programs.lean`, `Vsa/While/Validation.lean` | the `c/tests/*.wl` scripts as deep embeddings, plus kernel-checked theorems `BigStep prog "<binary's output>"` that validate the semantics against I/O examples obtained by running the binary |
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
+| `VsaIris/WhileLogic/` | **the source-level program logic**: an Iris-style separation logic for WHILE over iris-lean's `UPred`, with total-correctness weakest preconditions sound against `BigStep`, adequacy down to the machine, and a verified loop (see below) |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
 | `experiments/` | Lean proof probes, SMT and fuzz validation, and coverage data |
@@ -166,6 +167,33 @@ a deterministic target. `InterpSim` stays an explicit hypothesis.
 The simulation lemmas in `Vsa/Sim/` relate compiled
 `eval_expr`/`exec_stmt`/`interp_run` code to the big-step rules by induction on
 derivations.
+
+## The WHILE program logic
+
+`VsaIris/WhileLogic/` is a separation logic for WHILE programs, built on the
+big-step semantics and iris-lean's BI (`vProp := UPred Res`).
+
+- **Resources** (`Res.lean`). Partial stores: an exclusive cell per scope,
+  `a ↦f F` (parent pointer and bindings), an exclusive cell per closure,
+  `c ↦c cd`, and the console, `outIs o`.
+- **Weakest preconditions** (`WPGen.lean`, `WP.lean`). `wpR lo R Φ` is the
+  total-correctness WP of a big-step relation `R`. It quantifies over the frame
+  resource, so every WP satisfies the frame rule (`wpR_frame`, `Triple.frame`).
+  `wpE`/`wpArgs`/`wpCall`/`wpS`/`wpSeq` instantiate it at
+  `EvalE`/`EvalArgs`/`Call`/`ExecS`/`ExecSeq`.
+- **Rules**. Variable lookup and assignment in the current or the parent scope,
+  `var`, blocks (fresh scope), `if`, `while` (`wp_while`: invariant `I k`
+  with a decreasing variant `k`), `break`/`continue`/`return`, sequencing,
+  function literals and closure calls (fresh parameter scope at depth `d + 1`),
+  `print`/`println` (append to the console), and `assert`.
+- **Adequacy** (`Adequacy.lean`, `Machine.lean`). From
+  `initOwn ⊢ wpSeq 0 0 p (PostOut Q)`, `adequacy_bigStep` gives
+  `∃ out, BigStep p out ∧ Q out`. `adequacy_machine` composes this with
+  `endToEnd_refinement`: every configuration with `p` loaded halts with exit
+  code 0, prints an output satisfying `Q`, and does not diverge.
+- **Example** (`Example.lean`). The first loop of `tests/while.wl` prints `55`
+  (`firstLoop_spec`), proved with a loop invariant.
+  `Machine.lean`'s `firstLoop_halts` states the machine consequence.
 
 ## Building
 

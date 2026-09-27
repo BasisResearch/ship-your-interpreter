@@ -177,7 +177,7 @@ theorem wp_null {Φ : Value → vProp} : Φ .null ⊢ wpE d env .null Φ :=
   wpR_ret fun σ => EvalE.null σ d env
 
 theorem wp_var {Φ : Value → vProp} (x : String) : wpGet env x Φ ⊢ wpE d env (.var x) Φ :=
-  wpR_weaken (Nat.le_refl _) fun σ σ' v ⟨h1, h2⟩ => h1 ▸ EvalE.var σ d env x v h2
+  wpR_weaken (Nat.le_refl _) fun σ _ v ⟨h1, h2⟩ => h1 ▸ EvalE.var σ d env x v h2
 
 theorem wp_assign {Φ : Value → vProp} (x : String) (e : Expr) :
     wpE d env e (fun v => wpSet env x v (Φ v)) ⊢ wpE d env (.assign x e) Φ := by
@@ -201,7 +201,7 @@ theorem wp_binary {Φ : Value → vProp} (op : BinOp) (l r : Expr) :
 /-- A store-independent operator result. -/
 theorem wp_bin {Φ : Value → vProp} {op : BinOp} {lv rv v : Value}
     (h : ∀ s, binOpSem s op lv rv = some v) : Φ v ⊢ wpBin op lv rv Φ :=
-  wpR_ret fun σ => ⟨rfl, h _⟩
+  wpR_ret fun _ => ⟨rfl, h _⟩
 
 theorem wp_or {Φ : Value → vProp} (l r : Expr) :
     wpE d env l (fun lv => bif lv.truthy then Φ (.bool true)
@@ -386,7 +386,7 @@ theorem wp_call_closure_with {Φ : Value → vProp} {Rest : vProp} {c : Nat}
       simp [store', Store.allocFrame, Array.getElem?_push, fr, hb]
     · show (l.foldl _ store').frames[fr]? = _
       rw [hfr fr]; simp only [↓reduceIte]
-      simp [store', Store.allocFrame, Array.getElem?_push, fr, F0]
+      simp [store', Store.allocFrame, fr, F0]
     · show (l.foldl _ store').closures = _
       rw [hcl]; rfl
   have hwf1 : σ1.store.WF := hwfl (hwf.allocFrame henv)
@@ -520,7 +520,7 @@ theorem wp_varInit {Φ : Status → vProp} (x : String) (e : Expr) :
 theorem wp_varNull {Φ : Status → vProp} (x : String) :
     wpDef env x .null (Φ .normal) ⊢ wpS d env (.varDecl x none) Φ :=
   (wpR_map (f := fun _ => Status.normal)).trans (wpR_weaken (Nat.le_refl _)
-    fun σ σ1 _ ⟨_, hσ, h⟩ => h ▸ hσ ▸ ExecS.varNull σ d env x)
+    fun σ _ _ ⟨_, hσ, h⟩ => h ▸ hσ ▸ ExecS.varNull σ d env x)
 
 /-- Block (allocation form): the body runs in a fresh empty frame whose parent
 is the current one. -/
@@ -537,7 +537,7 @@ theorem wp_block_with {Φ : Status → vProp} {Rest : vProp} (ss : List Stmt)
     rw [← setF_eq_sing_op _ _ _ hx1]
     refine rep_setF hrep hrf1 (fun b hb => ?_) ?_ rfl rfl
     · simp [σ1, Store.allocFrame, Array.getElem?_push, a, hb]
-    · simp [σ1, Store.allocFrame, Array.getElem?_push, a, F0]
+    · simp [σ1, Store.allocFrame, a, F0]
   have hwf1 : σ1.store.WF := hwf.allocFrame (Nat.lt_of_succ_le hlo)
   have hsz1 : σ1.store.frames.size = a + 1 := by simp [σ1, Store.allocFrame, a]
   have hW := hK a n ⟨singF a F0 • x.val, validN_op_left (hrep1 ▸ abs_validN σ1 n)⟩
