@@ -43,6 +43,20 @@ theorem Star.single {code : List Ins} {A B : AM} (h : astep code A = some (.run 
 /-- `A` runs to some state satisfying `P`. -/
 abbrev Reaches (code : List Ins) (A : AM) (P : AM → Prop) : Prop := ∃ B, Star code A B ∧ P B
 
+theorem ex_step {code : List Ins} {A S : AM} {Q : AM → Prop} (e : astep code A = some (.run S))
+    (h : Reaches code S Q) : Reaches code A Q := by
+  obtain ⟨B, hs, hq⟩ := h; exact ⟨B, Star.step e hs, hq⟩
+
+theorem ex_trans {code : List Ins} {A S : AM} {Q : AM → Prop} (e : Star code A S)
+    (h : Reaches code S Q) : Reaches code A Q := by
+  obtain ⟨B, hs, hq⟩ := h; exact ⟨B, e.trans hs, hq⟩
+
+theorem ex_bind {code : List Ins} {A : AM} {P Q : AM → Prop} (h : Reaches code A P)
+    (k : ∀ B, P B → Reaches code B Q) : Reaches code A Q := by
+  obtain ⟨B, s, hp⟩ := h
+  obtain ⟨C, s', hq⟩ := k B hp
+  exact ⟨C, s.trans s', hq⟩
+
 /-- `A` runs for `n` steps without halting. -/
 abbrev Runs (code : List Ins) (n : Nat) (A : AM) : Prop := ∃ B, StarN code n A B
 

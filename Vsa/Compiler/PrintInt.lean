@@ -239,20 +239,6 @@ end
 
 /-! ## Forward chaining -/
 
-theorem ex_step {code : List Ins} {A S : AM} {Q : AM → Prop} (e : astep code A = some (.run S))
-    (h : Reaches code S Q) : Reaches code A Q := by
-  obtain ⟨B, hs, hq⟩ := h; exact ⟨B, Star.step e hs, hq⟩
-
-theorem ex_trans {code : List Ins} {A S : AM} {Q : AM → Prop} (e : Star code A S)
-    (h : Reaches code S Q) : Reaches code A Q := by
-  obtain ⟨B, hs, hq⟩ := h; exact ⟨B, e.trans hs, hq⟩
-
-theorem ex_bind {code : List Ins} {A : AM} {P Q : AM → Prop} (h : Reaches code A P)
-    (k : ∀ B, P B → Reaches code B Q) : Reaches code A Q := by
-  obtain ⟨B, s, hp⟩ := h
-  obtain ⟨C, s', hq⟩ := k B hp
-  exact ⟨C, s.trans s', hq⟩
-
 theorem zopz_ge (v : BitVec 64) : guardB BrOp.ge.bop v 0 = decide (v.toInt ≥ 0) := by
   simp [guardB, BrOp.bop, zopz0zKzJ_s]
 
