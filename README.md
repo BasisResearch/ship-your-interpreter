@@ -48,6 +48,7 @@ incremental builds.
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
 | `Vsa/While/Types.lean`, `Vsa/While/Type*.lean` | **a static type system for WHILE**, its preservation and progress theorems against `BigStep`, and worked examples |
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
+| `VsaIris/WhileLogic/` | **the source-level program logic**: an Iris-style separation logic for WHILE over iris-lean's `UPred`, with total-correctness weakest preconditions sound against `BigStep`, adequacy down to the machine, and a verified loop (see below) |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
 | `Vsa/AbsInt/` | **verified abstract interpretation** of WHILE: a domain interface, a generic abstract interpreter, constant/sign/interval/kind domains and their products, soundness for `BigStep` and for runtime-error verdicts; the machine corollary is in `VsaIris/AbsInt/Machine.lean` |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
@@ -223,6 +224,39 @@ and carried to the machine by `endToEnd_refinement`.
   that every run ends with `sum = 55`, `total = 2500`, `acc = 36`.
   `whileWl_machine` (`VsaIris/AbsInt/Machine.lean`) states this for the
   loaded binary: a clean halt comes from such a run.
+
+## The WHILE program logic
+
+`VsaIris/WhileLogic/` is a separation logic for WHILE programs, built on the
+big-step semantics and iris-lean's BI (`vProp := UPred Res`).
+
+- **Resources** (`Res.lean`). Partial stores: an exclusive cell per scope,
+  `a ↦f F` (parent pointer and bindings), an exclusive cell per closure,
+  `c ↦c cd`, and the console, `outIs o`.
+- **Weakest preconditions** (`WPGen.lean`, `WP.lean`). `wpR lo R Φ` is the
+  total-correctness WP of a big-step relation `R`. It quantifies over the frame
+  resource, so every WP satisfies the frame rule (`wpR_frame`, `Triple.frame`).
+  `wpE`/`wpArgs`/`wpCall`/`wpS`/`wpSeq` instantiate it at
+  `EvalE`/`EvalArgs`/`Call`/`ExecS`/`ExecSeq`.
+- **Rules**. Variable lookup and assignment in the current or the parent scope,
+  `var`, blocks (fresh scope), `if`, `while` (`wp_while`: invariant `I k`
+  with a decreasing variant `k`), `for` (`wp_for` allocates the loop scope and
+  runs the initializer; `wp_for_loop` is the invariant/variant rule for the
+  condition, body and step), `break`/`continue`/`return`, sequencing,
+  function literals and closure calls (fresh parameter scope at depth `d + 1`),
+  `print`/`println` (append to the console), and `assert`.
+- **Adequacy** (`Adequacy.lean`, `Machine.lean`). From
+  `initOwn ⊢ wpSeq 0 0 p (PostOut Q)`, `adequacy_bigStep` gives
+  `∃ out, BigStep p out ∧ Q out`. `adequacy_machine` composes this with
+  `endToEnd_refinement`: every configuration with `p` loaded halts with exit
+  code 0, prints an output satisfying `Q`, and does not diverge.
+- **Examples**. The first loop of `tests/while.wl` prints `55`
+  (`Example.firstLoop_spec`, a loop invariant with variant `10 - n`). The
+  whole script prints `55\n2500\n36\n` (`Whole.whileWl_spec`: `break`,
+  `continue`, and a nested loop whose body reaches the globals through two
+  scopes). `firstLoop_halts` and `whileWl_halts` (`Machine.lean`) are the
+  machine consequences. `ClosureExample.lean` calls a function literal;
+  `ForExample.lean` sums `1..100` with a `for` loop (`5050`).
 
 ## Building
 

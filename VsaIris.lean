@@ -308,3 +308,6 @@ import VsaIris.Vsa.Stderr.SEmpty
 import VsaIris.Vsa.Fprintf.End
 import VsaIris.Vsa.Fprintf.Inner
 import VsaIris.AbsInt.Machine
+import VsaIris.WhileLogic.Machine
+import VsaIris.WhileLogic.ClosureExample
+import VsaIris.WhileLogic.ForExample

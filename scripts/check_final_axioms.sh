@@ -73,6 +73,18 @@ THEOREMS=(
   Vsa.Sim.orientVfprintf_log                      # P1: _vfprintf_r's ORIENT block, decided
   VsaIris.Stdio.StdioOKAt.orient                  # P1: the image form
   Vsa.Sim.Code.FixedRodataLoaded.byteAt           # P2: the rodata pin after the script
+  Vsa.While.Logic.adequacy_bigStep                # WhileLogic: a proved program has a BigStep behaviour satisfying the post
+  Vsa.While.Logic.adequacy_machine                # WhileLogic: … and every Loaded configuration halts with it (exit 0)
+  Vsa.While.Logic.Triple.frame                    # WhileLogic: the frame rule
+  Vsa.While.Logic.wp_while                        # WhileLogic: the loop rule (invariant + variant)
+  Vsa.While.Logic.wp_call_closure                 # WhileLogic: closure calls
+  Vsa.While.Logic.Example.firstLoop_spec          # WhileLogic: while.wl's first loop prints 55
+  Vsa.While.Logic.firstLoop_halts                 # … at the machine
+  Vsa.While.Logic.Whole.whileWl_spec              # WhileLogic: all of while.wl prints 55 2500 36
+  Vsa.While.Logic.whileWl_halts                   # … at the machine
+  Vsa.While.Logic.ClosureExample.closure_spec     # WhileLogic: a closure call prints 42
+  Vsa.While.Logic.wp_for_loop                     # WhileLogic: the for-loop rule (invariant + variant)
+  Vsa.While.Logic.ForExample.for_spec             # WhileLogic: a for loop prints 5050
 )
 AXFILE="$(mktemp /tmp/vsa_final_axioms.XXXXXX)".lean
 mv "${AXFILE%.lean}" "$AXFILE"
@@ -84,6 +96,9 @@ mv "${AXFILE%.lean}" "$AXFILE"
   echo "import Vsa.Sim.StackAdmissibleWitness"
   echo "import VsaIris.Vsa.StdioOrient"
   echo "import VsaBoot"
+  echo "import VsaIris.WhileLogic.Machine"
+  echo "import VsaIris.WhileLogic.ClosureExample"
+  echo "import VsaIris.WhileLogic.ForExample"
   for t in "${THEOREMS[@]}"; do echo "#print axioms $t"; done
 } > "$AXFILE"
 OUT="$(lake env lean "$AXFILE" 2>&1)"; STATUS=$?
