@@ -109,6 +109,26 @@ def assertOk : List A → Bool
   | [a, _] => !mayF a
   | _ => false
 
+/-- State after calling a value of `a`: natives keep the state; other
+callees are not analysed. -/
+def callSt (a : A) (σ : AState A) : AState A :=
+  match asNative a with
+  | some _ => σ
+  | none => if σ.isBot then .bot else .top
+
+/-- Result of calling a value of `a`. -/
+def callVal (a : A) : A :=
+  match asNative a with
+  | some _ => ofValue .null
+  | none => top
+
+/-- Errors a call of a value of `a` on arguments `avs` may raise. -/
+def callAl (a : A) (avs : List A) : List Kind :=
+  match asNative a with
+  | some .assert => if assertOk avs then [] else [.assert]
+  | some _ => []
+  | none => Kind.inCall
+
 mutual
 
 /-- Abstract `eval_expr`; unreachable states give unreachable results. -/
@@ -149,12 +169,9 @@ def aeval (σ : AState A) (e : Expr) : ERes A :=
   | .call f args =>
     let rf := aeval σ f
     let ra := aevalArgs rf.st args
-    let pre := rf.al ∪ (if args.length ≤ maxArgs then [] else [.call]) ∪ ra.2.2
-    match asNative rf.val with
-    | some .print | some .println => ⟨ra.1, ofValue .null, pre⟩
-    | some .assert =>
-      ⟨ra.1, ofValue .null, pre ∪ if assertOk ra.2.1 then [] else [.assert]⟩
-    | none => ⟨if ra.1.isBot then .bot else .top, top, pre ∪ Kind.inCall⟩
+    ⟨callSt rf.val ra.1, callVal rf.val,
+      rf.al ∪ (if args.length ≤ maxArgs then [] else [.call]) ∪ ra.2.2 ∪
+        callAl rf.val ra.2.1⟩
   | .fn _ _ _ => ⟨σ, closure, []⟩
 
 /-- Abstract left-to-right argument evaluation. -/

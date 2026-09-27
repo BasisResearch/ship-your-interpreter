@@ -184,14 +184,19 @@ local macro "absint_rec" r:ident h:term : tactic => `(tactic| (
     unfold_aeval hσ
     obtain ⟨h1, h2⟩ := ihf as σ hd hσ
     obtain ⟨h3, _⟩ := iha as _ hd h1
-    cases hn : asNative (aeval σ f).val with
-    | none =>
-      simp only [SGam.isBot_false h3, Bool.false_eq_true, ↓reduceIte]
-      exact ⟨trivial, top_sound⟩
-    | some g =>
+    refine ⟨?_, ?_⟩ <;> simp only [callSt, callVal] <;>
+      cases hn : asNative (aeval σ f).val
+    · simp only [SGam.isBot_false h3, Bool.false_eq_true, ↓reduceIte]
+      trivial
+    · rename_i g
       have hfv := asNative_sound h2 hn
       subst hfv
-      cases g <;> cases hcall <;> exact ⟨h3, ofValue_sound _⟩
+      cases g <;> cases hcall <;> exact h3
+    · exact top_sound
+    · rename_i g
+      have hfv := asNative_sound h2 hn
+      subst hfv
+      cases g <;> cases hcall <;> exact ofValue_sound _
   case fn =>
     intro st d env name params body store' a halloc as σ hd hσ
     unfold_aeval hσ
@@ -351,6 +356,11 @@ local macro "absint_rec" r:ident h:term : tactic => `(tactic| (
 theorem eval_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {e : Expr}
     {v : Value} (h : EvalE st d env e st' v) : MEval A st d env e st' v := by
   absint_rec EvalE.rec h
+
+/-- Soundness for argument lists. -/
+theorem args_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {es : List Expr}
+    {vs : List Value} (h : EvalArgs st d env es st' vs) : MArgs A st d env es st' vs := by
+  absint_rec EvalArgs.rec h
 
 /-- Soundness for statements. -/
 theorem exec_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {s : Stmt}
