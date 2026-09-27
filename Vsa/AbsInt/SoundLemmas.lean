@@ -13,7 +13,7 @@ account for both the unrolled iterations and the checked post-fixpoint of
 
 namespace Vsa.AbsInt
 
-open Vsa.While AbsDom
+open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
 
