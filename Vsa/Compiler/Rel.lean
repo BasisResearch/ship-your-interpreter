@@ -1,4 +1,5 @@
 import Vsa.Compiler.Frag
+import Vsa.Compiler.Compile
 import Vsa.Compiler.Subset
 
 /-!

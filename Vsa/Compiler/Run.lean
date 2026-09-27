@@ -1,4 +1,4 @@
-import Vsa.Compiler.Compile
+import Vsa.Compiler.Gen
 
 /-!
 # Runs of the abstract machine
