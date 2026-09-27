@@ -537,6 +537,15 @@ theorem WP_li_iff {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : BitVec
   · next hs =>
     simp [WP, List.range, List.range.loop, h0, hrd, gset_gset, SrcOK, li_value]
 
+theorem WP_li_end {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : BitVec 64}
+    {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
+    (hrd : 1 ≤ rd ∧ rd ≤ 31) :
+    WP code P pos (li rd n) K L m o ↔ K (gset L rd n) m o := by
+  have := WP_li_iff (code := code) (P := P) (pos := pos) (is := []) (K := K) (L := L) (m := m) (o := o)
+    (n := n) hrd
+  rw [List.append_nil] at this
+  rw [this, WP_nil]
+
 theorem li_length_small {rd : Nat} {n : BitVec 64} (h : n.toInt < 2048 ∧ -2048 ≤ n.toInt) :
     (li rd n).length = 1 := by simp [li, h]
 

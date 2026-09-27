@@ -512,7 +512,7 @@ macro_rules
         sext_zero12, zero_add64, zero_add64', add_zero64, natCast_lit, BitVec.toInt_zero, toNat_ofNat6, Nat.reduceMod, BitVec.reduceToNat,
         List.take_append, List.take_of_length_le, WP_libc_iff, libc_length, libRes_mulE, libRes_divE, libRes_modE,
         keysG_lib', keysG_lib10, srcVal_lib, srcVal_lib10, sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
-        WP_li_iff, li_length_small, li_length_big, isLib_jOff_gen, isLib_of_JOK, Bool.false_eq_true, if_false,
+        WP_li_iff, WP_li_end, li_length_small, li_length_big, isLib_jOff_gen, isLib_of_JOK, Bool.false_eq_true, if_false,
         Int.ofNat_lt, Int.ofNat_le, BitVec.reduceEq, ne_eq, not_true_eq_false, not_false_eq_true, List.append_assoc, Nat.add_sub_cancel,
         tohostW_toNat, putcWord_low,
         Br, J, Call, mvi, addi, addiN, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
