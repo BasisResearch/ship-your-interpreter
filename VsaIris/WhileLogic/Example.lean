@@ -47,7 +47,7 @@ theorem sumTo_le : ∀ n, n ≤ 10 → sumTo n ≤ 55 := by decide
 theorem G_set_i (a b c : Value) : (G a b).setVar "i" c = G c b := rfl
 theorem G_set_sum (a b c : Value) : (G a b).setVar "sum" c = G a c := rfl
 
-theorem wrap64_nat {m : Nat} (h : m ≤ 1000) : wrap64 (m : Int) = m :=
+theorem wrap64_nat {m : Nat} (h : m ≤ 1000000) : wrap64 (m : Int) = m :=
   wrap64_eq_self ⟨by omega, by omega⟩
 
 /-- Loop state after `n` iterations, with variant `k = 10 - n`. -/
