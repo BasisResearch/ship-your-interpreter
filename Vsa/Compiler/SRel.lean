@@ -97,6 +97,7 @@ structure StoreRel (F : FrMap) (H : CloMap) (s : Store) (m : Mem) (hF h : Nat) :
     F[a]? = some (f, L) → FrameAt H m h f L (parAddr F fr) fr
   region : ∀ (a f : Nat) (L : List String), F[a]? = some (f, L) →
     frameBase ≤ f ∧ f + frSize L ≤ hF ∧ f % 8 = 0 ∧ L.length ≤ 120
+  nodup : ∀ (a f : Nat) (L : List String), F[a]? = some (f, L) → L.Nodup
   disjoint : ∀ (a b fa fb : Nat) (La Lb : List String), a < b → F[a]? = some (fa, La) →
     F[b]? = some (fb, Lb) → fa + frSize La ≤ fb
   parents : ParentsLt s
