@@ -413,4 +413,245 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
 
 end
 
+/-! ## The expression simulation -/
+
+/-- Temporaries an expression uses above its base depth. -/
+def tdepth : Expr → Nat
+  | .assign _ e => tdepth e
+  | .unary _ e => tdepth e
+  | .binary _ l r => 1 + max (tdepth l) (tdepth r)
+  | _ => 0
+
+/-- The value kind the subset predicate promises. -/
+def ValTy (Γn : NScope) (e : Expr) (v : Value) : Prop :=
+  (IntE Γn e → ∃ n, v = .int n ∧ InRange n) ∧ (BoolE Γn e → ∃ b, v = .bool b)
+
+/-- What running an expression's code achieves. -/
+def ExprOK (code : List Ins) (Γ : Scope) (e : Expr) (k pos : Nat) (st : St) (d : Nat) (env : Addr)
+    (A B : AM) : Prop :=
+  (∃ v st', EvalE st d env e st' v ∧ ValTy Γ.names e v ∧ st'.out = st.out ∧ B.out = A.out ∧
+      B.pc = pcOf (pos + (cexpr Γ k pos e).length) ∧ Has B.regs a0 (word v) ∧
+      Chain st'.store B.mem env Γ ∧ (∀ j < k, rdW B.mem (tempAddr j) = rdW A.mem (tempAddr j))) ∨
+    (astep code B = some (.halt 70) ∧ ∀ v st', ¬ EvalE st d env e st' v)
+
+theorem resolve_of_mem {x : String} : ∀ {Γ : Scope}, Γ.names.Mem x → ∃ i, Γ.resolve x = some i
+  | [], ⟨f, hf, _⟩ => by simp [Scope.names] at hf
+  | f :: g, h => by
+    simp only [Scope.resolve]
+    cases hl : f.lookup x with
+    | some i => exact ⟨i, rfl⟩
+    | none =>
+      obtain ⟨f', hf', hx⟩ := h
+      simp only [Scope.names, List.map_cons, List.mem_cons] at hf'
+      rcases hf' with rfl | hf'
+      · exfalso
+        obtain ⟨⟨y, i⟩, hy, rfl⟩ := List.mem_map.mp hx
+        have : f.lookup y ≠ none := by
+          clear hl hx
+          induction f with
+          | nil => simp at hy
+          | cons q f ih =>
+            obtain ⟨z, j⟩ := q
+            simp only [List.lookup_cons]
+            split
+            · simp
+            · next hne =>
+              rcases List.mem_cons.mp hy with h | h
+              · cases h; simp at hne
+              · exact ih h
+        exact this hl
+      · exact resolve_of_mem ⟨f', hf', hx⟩
+
+section
+variable {code : List Ins}
+
+theorem sim_int (hL : Layout code) {Γ : Scope} {n : Int} {k pos : Nat} {st : St} {d : Nat}
+    {env : Addr} {A : AM} (hE : CondE Γ.names (.int n))
+    (hseg : Seg code pos (cexpr Γ k pos (.int n))) (hA : A.pc = pcOf pos)
+    (hc : Chain st.store A.mem env Γ) :
+    ∃ B, Star code A B ∧ ExprOK code Γ (.int n) k pos st d env A B := by
+  have hn : InRange n := by
+    rcases hE with h | h
+    · exact h
+    · exact h.elim
+  refine ⟨_, run_li hL.1 hseg hA (by decide), .inl ⟨.int n, st, .int _ _ _ _, ⟨fun _ => ⟨n, rfl, hn⟩,
+    fun h => h.elim⟩, rfl, rfl, rfl, Has.set_self _ _ (by decide) (by decide), hc, fun _ _ => rfl⟩⟩
+
+theorem sim_bool (hL : Layout code) {Γ : Scope} {b : Bool} {k pos : Nat} {st : St} {d : Nat}
+    {env : Addr} {A : AM} (hseg : Seg code pos (cexpr Γ k pos (.bool b))) (hA : A.pc = pcOf pos)
+    (hc : Chain st.store A.mem env Γ) :
+    ∃ B, Star code A B ∧ ExprOK code Γ (.bool b) k pos st d env A B := by
+  have e := step_addi hL.1 hseg.head hA (by decide) (Has.zero _)
+  refine ⟨_, Star.single e, .inl ⟨.bool b, st, .bool _ _ _ _, ⟨fun h => h.elim,
+    fun _ => ⟨b, rfl⟩⟩, rfl, rfl, rfl, ?_, hc, fun _ _ => rfl⟩⟩
+  cases b <;> exact Has.set_self _ _ (by decide) (by decide)
+
+theorem sim_var (hL : Layout code) {Γ : Scope} (hsl : ∀ i ∈ Γ.slots, i < 2 ^ 24) {x : String}
+    {k pos : Nat} {st : St} {d : Nat} {env : Addr} {A : AM} (hE : CondE Γ.names (.var x))
+    (hseg : Seg code pos (cexpr Γ k pos (.var x))) (hA : A.pc = pcOf pos)
+    (hc : Chain st.store A.mem env Γ) :
+    ∃ B, Star code A B ∧ ExprOK code Γ (.var x) k pos st d env A B := by
+  have hm : Γ.names.Mem x := by
+    rcases hE with h | h
+    · exact h
+    · exact h.elim
+  obtain ⟨i, hi⟩ := resolve_of_mem hm
+  have hseg' : Seg code pos (liN s2 (varAddr i) ++ [.ld a0 s2]) := by simpa [cexpr, hi] using hseg
+  have r := run_ldA hL.1 hseg' hA (by decide) (varAddr_ld (hsl i (resolve_mem hi)))
+  refine ⟨_, r, .inl ⟨.int (slotV A.mem i), st, .var _ _ _ _ _ (hc.get? hi),
+    ⟨fun _ => ⟨_, rfl, InRange.toInt _⟩, fun h => h.elim⟩, rfl, rfl, by simp [cexpr, hi, Nat.add_assoc], ?_,
+    hc, fun _ _ => rfl⟩⟩
+  simp only [word, slotV, BitVec.ofInt_toInt]
+  exact Has.set_self _ _ (by decide) (by decide)
+
+/-- The simulation property of one expression, for all entry states. -/
+def SimE (code : List Ins) (Γ : Scope) (e : Expr) : Prop :=
+  ∀ (k pos : Nat) (st : St) (d : Nat) (env : Addr) (A : AM), CondE Γ.names e →
+    k + tdepth e < 2 ^ 17 → Seg code pos (cexpr Γ k pos e) →
+    PosOK (pos + (cexpr Γ k pos e).length) → A.pc = pcOf pos → Chain st.store A.mem env Γ →
+    ∃ B, Star code A B ∧ ExprOK code Γ e k pos st d env A B
+
+theorem Seg.pos_eq {code : List Ins} {pos pos' : Nat} {s : List Ins} (h : pos = pos')
+    (hs : Seg code pos s) : Seg code pos' s := h ▸ hs
+
+theorem slots_ne_temp {i j : Nat} (hi : i < 2 ^ 24) (hj : j < 2 ^ 17) :
+    tempAddr j + 8 ≤ varAddr i := by
+  unfold tempAddr varAddr tempBase varBase; omega
+
+theorem sim_assign (hL : Layout code) {Γ : Scope} (hnd : Γ.slots.Nodup)
+    (hsl : ∀ i ∈ Γ.slots, i < 2 ^ 24) {x : String} {e : Expr} (ih : SimE code Γ e) :
+    SimE code Γ (.assign x e) := by
+  intro k pos st d env A hE hk hseg hpos hA hc
+  have hE' : Γ.names.Mem x ∧ IntE Γ.names e := by
+    rcases hE with h | h
+    · exact h
+    · exact h.elim
+  obtain ⟨i, hi⟩ := resolve_of_mem hE'.1
+  have hil := hsl i (resolve_mem hi)
+  have hcx : cexpr Γ k pos (.assign x e) = cexpr Γ k pos e ++ (liN s2 (varAddr i) ++ [.sd a0 s2]) := by
+    simp [cexpr, hi]
+  rw [hcx] at hseg hpos
+  obtain ⟨hs1, hs2⟩ := hseg.append
+  simp only [List.length_append] at hpos
+  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A (.inl hE'.2) (by simpa [tdepth] using hk) hs1
+    (by unfold PosOK at *; omega) hA hc
+  rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
+  · obtain ⟨n, rfl, hn⟩ := hty.1 hE'.2
+    have r2 := run_stA hL.1 hs2 hBpc hB0 (by decide) (varAddr_st hil)
+    obtain ⟨s'', hset, hc'', -, -⟩ := hBc.set (v := n) st'.store.frames.size hBc.env_lt hi hnd
+      (slotV_write_self _ _ _ hn) (fun j _ hj => slotV_write_other _ _ _ _ hj)
+    refine ⟨_, r1.trans r2, .inl ⟨.int n, ⟨s'', st'.out⟩, .assign _ _ _ _ _ _ _ _ hev hset,
+      ⟨fun _ => ⟨n, rfl, hn⟩, fun h => h.elim⟩, hout, hBo, by simp [hcx, Nat.add_assoc],
+      (hB0.set_other (by decide)), hc'', fun j hj => ?_⟩⟩
+    rw [rdW_write_other _ _ _ _ (.inl (slots_ne_temp hil (by simp [tdepth] at hk; omega))), hBt j hj]
+  · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
+    cases h with | assign _ _ _ _ _ _ _ _ he _ => exact hne _ _ he
+
+theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
+    (ihl : SimE code Γ l) (ihr : SimE code Γ r) (hsl : Simple l) (hsr : Simple r) :
+    SimE code Γ (.binary op l r) := by
+  intro k pos st d env A hE hk hseg hpos hA hc
+  have hE' : (ArithOp op ∨ CmpOp op) ∧ IntE Γ.names l ∧ IntE Γ.names r := by
+    rcases hE with ⟨h1, h2, h3⟩ | ⟨h1, h2, h3⟩
+    · exact ⟨.inl h1, h2, h3⟩
+    · exact ⟨.inr h1, h2, h3⟩
+  simp only [tdepth] at hk
+  have hk0 : k < 2 ^ 17 := by omega
+  -- the five parts of the code
+  let cl := cexpr Γ k pos l
+  let stc := liN s2 (tempAddr k) ++ [Ins.sd a0 s2]
+  let p1 := pos + cl.length + stc.length
+  let cr := cexpr Γ (k + 1) p1 r
+  let ldc := [mv a1 a0] ++ liN s2 (tempAddr k) ++ [Ins.ld a0 s2]
+  let p4 := p1 + cr.length + ldc.length
+  have hcx : cexpr Γ k pos (.binary op l r) = cl ++ stc ++ cr ++ ldc ++ cbin p4 op := rfl
+  have l1 : cl.length = (cexpr Γ k pos l).length := rfl
+  have l3 : cr.length = (cexpr Γ (k + 1) p1 r).length := rfl
+  have lp1 : p1 = pos + cl.length + stc.length := rfl
+  have lp4 : p4 = p1 + cr.length + ldc.length := rfl
+  have lst : stc.length = (liN s2 (tempAddr k)).length + 1 := by simp [stc]
+  have lld : ldc.length = (liN s2 (tempAddr k)).length + 2 := by simp [ldc]
+  rw [hcx] at hseg hpos
+  simp only [List.length_append] at hpos
+  obtain ⟨hs1234, hs5⟩ := hseg.append
+  obtain ⟨hs123, hs4⟩ := hs1234.append
+  obtain ⟨hs12, hs3⟩ := hs123.append
+  obtain ⟨hs1, hs2⟩ := hs12.append
+  have hs3' : Seg code p1 cr :=
+    Seg.pos_eq (by simp only [List.length_append]; rw [lp1]; omega) hs3
+  have hs4' : Seg code (p1 + cr.length) ldc :=
+    Seg.pos_eq (by simp only [List.length_append]; rw [lp1]; omega) hs4
+  have hs5' : Seg code p4 (cbin p4 op) :=
+    Seg.pos_eq (by simp only [List.length_append]; rw [lp4, lp1]; omega) hs5
+  have hpos4 : PosOK (p4 + (cbin p4 op).length) := by
+    unfold PosOK at *; have h4 := lp4; have h1' := lp1; omega
+  -- left operand
+  obtain ⟨B1, r1, hB1⟩ := ihl k pos st d env A (.inl hE'.2.1) (by omega) hs1
+    (by unfold PosOK at *; omega) hA hc
+  rcases hB1 with ⟨lv, st1, hevl, htyl, houtl, hB1o, hB1pc, hB1a0, hB1c, hB1t⟩ | ⟨hh, hne⟩
+  rotate_left
+  · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
+    cases h with | binary _ _ _ _ _ _ _ _ _ _ _ hl _ _ => exact hne _ _ hl
+  obtain ⟨a, rfl, ha⟩ := htyl.1 hE'.2.1
+  -- spill it
+  have r2 := run_stA hL.1 hs2 hB1pc hB1a0 (by decide) (tempAddr_st hk0)
+  have hc2 : Chain st1.store (applyW B1.mem (tempAddr k, 8, word (.int a))) env Γ :=
+    hB1c.transport fun i _ => slotV_write_low _ _ _ _ (tempAddr_low hk0)
+  -- right operand
+  obtain ⟨B3, r3, hB3⟩ := ihr (k + 1) p1 st1 d env
+    ⟨pcOf (pos + (cexpr Γ k pos l).length + (liN s2 (tempAddr k)).length + 1),
+      gset B1.regs s2 (BitVec.ofNat 64 (tempAddr k)),
+      applyW B1.mem (tempAddr k, 8, word (.int a)), B1.out⟩ (.inl hE'.2.2) (by omega) hs3'
+    (by rw [← l3]; unfold PosOK at *; omega) (by simp only [lp1, lst, l1]; congr 1) hc2
+  rcases hB3 with ⟨rv, st3, hevr, htyr, houtr, hB3o, hB3pc, hB3a0, hB3c, hB3t⟩ | ⟨hh, hne⟩
+  rotate_left
+  · refine ⟨B3, r1.trans (r2.trans r3), .inr ⟨hh, fun v st' h => ?_⟩⟩
+    cases h with | binary _ _ _ _ _ _ _ _ _ _ _ hl hr _ =>
+    obtain ⟨rfl, -⟩ := EvalE.det l hsl hl hevl
+    exact hne _ _ hr
+  obtain ⟨b, rfl, hb⟩ := htyr.1 hE'.2.2
+  rw [← l3] at hB3pc
+  -- reload the left operand
+  have hmv : astep code B3 = some (.run ⟨pcOf (p1 + cr.length + 1),
+      gset B3.regs a1 (BitVec.ofInt 64 b), B3.mem, B3.out⟩) := by
+    rw [step_addi hL.1 hs4'.head hB3pc (by decide) hB3a0]
+    have : (sign_extend (0#12) : BitVec 64) = 0 := by decide
+    simp [word, this]
+  have hs4'' : Seg code (p1 + cr.length + 1) (liN s2 (tempAddr k) ++ [Ins.ld a0 s2]) :=
+    (Seg.append (s := [mv a1 a0]) (t := liN s2 (tempAddr k) ++ [Ins.ld a0 s2])
+      (by simpa [ldc] using hs4')).2
+  have r4 := run_ldA hL.1 hs4'' (A := ⟨pcOf (p1 + cr.length + 1), gset B3.regs a1 (BitVec.ofInt 64 b),
+    B3.mem, B3.out⟩) rfl (by decide) (tempAddr_ld hk0)
+  have hlv : rdW B3.mem (tempAddr k) = BitVec.ofInt 64 a := by
+    rw [hB3t k (by omega)]; exact rdW_write _ _ _
+  rw [hlv] at r4
+  -- the operator
+  obtain ⟨B5, r5, hB5⟩ := sim_cbin hL hE'.1 ha hb (A := ⟨pcOf p4, gset (gset (gset B3.regs a1
+    (BitVec.ofInt 64 b)) s2 (BitVec.ofNat 64 (tempAddr k))) a0 (BitVec.ofInt 64 a), B3.mem, B3.out⟩)
+    hs5' rfl hpos4
+    (Has.set_self _ _ (by decide) (by decide))
+    (((Has.set_self _ _ (by decide) (by decide)).set_other (by decide)).set_other (by decide))
+  have r4' : Star code B3 ⟨pcOf p4, gset (gset (gset B3.regs a1 (BitVec.ofInt 64 b)) s2
+      (BitVec.ofNat 64 (tempAddr k))) a0 (BitVec.ofInt 64 a), B3.mem, B3.out⟩ := by
+    refine Star.step hmv ?_
+    have e : p1 + cr.length + 1 + (liN s2 (tempAddr k)).length + 1 = p4 := by rw [lp4, lld]; omega
+    rw [e] at r4; exact r4
+  have run := r1.trans (r2.trans (r3.trans (r4'.trans r5)))
+  rcases hB5 with ⟨v, hB5o, hsem, hB5pc, hB5m, hB5a0, hari, hcmp⟩ | ⟨hh, hnone⟩
+  · refine ⟨B5, run, .inl ⟨v, st3, .binary _ _ _ _ _ _ _ _ _ _ _ hevl hevr (hsem _),
+      ⟨fun h => hari (by rcases h with ⟨h1, -⟩; exact h1), fun h => hcmp h.1⟩,
+      houtr.trans houtl, ?_, ?_, hB5a0, ?_, ?_⟩⟩
+    · rw [hB5o]; exact hB3o.trans hB1o
+    · rw [hB5pc, hcx]; congr 1; simp only [List.length_append]; rw [lp4, lp1]; omega
+    · rw [hB5m]; exact hB3c
+    · intro j hj
+      rw [hB5m, hB3t j (by omega), rdW_write_other _ _ _ _ (by unfold tempAddr; omega), hB1t j hj]
+  · refine ⟨B5, run, .inr ⟨hh, fun v st' h => ?_⟩⟩
+    cases h with | binary _ _ _ _ _ _ _ _ _ _ _ hl hr hop =>
+    obtain ⟨rfl, rfl⟩ := EvalE.det l hsl hl hevl
+    obtain ⟨rfl, rfl⟩ := EvalE.det r hsr hr hevr
+    rw [hnone] at hop; cases hop
+
+end
+
 end Vsa.Compiler
