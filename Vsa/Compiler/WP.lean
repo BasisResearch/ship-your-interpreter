@@ -490,6 +490,47 @@ theorem li_length_small {rd : Nat} {n : BitVec 64} (h : n.toInt < 2048 ∧ -2048
 theorem li_length_big {rd : Nat} {n : BitVec 64} (h : ¬ (n.toInt < 2048 ∧ -2048 ≤ n.toInt)) :
     (li rd n).length = 11 := by simp [li, h, List.range, List.range.loop]
 
+theorem libc_off_facts {pos tgt : Nat} (ht : tgt = mulPC ∨ tgt = divPC ∨ tgt = modPC)
+    (hp : PosOK (pos + 2)) :
+    isLib (pos + 2) (BitVec.ofInt 21 ((tgt : Int) - (codeBase + 4 * (pos + 2)))) = true ∧
+      libAddr (pos + 2) (BitVec.ofInt 21 ((tgt : Int) - (codeBase + 4 * (pos + 2)))) = tgt := by
+  have hb : codeBase = 0x80004800 := rfl
+  have htt : tohostAddr = 0x8001ad00 := rfl
+  have hm : mulPC = 0x80004640 := rfl
+  have hd : divPC = 0x800046a4 := rfl
+  have hmo : modPC = 0x80004728 := rfl
+  unfold PosOK at hp
+  have hj : (BitVec.ofInt 21 ((tgt : Int) - (codeBase + 4 * (pos + 2)))).toInt
+      = (tgt : Int) - (codeBase + 4 * (pos + 2)) := by
+    rw [BitVec.toInt_ofInt]
+    apply Int.bmod_eq_of_le <;> simp <;> omega
+  have he : (BitVec.ofInt 21 ((tgt : Int) - (codeBase + 4 * (pos + 2)))).toNat % 2 = 0 := by
+    rw [BitVec.toNat_ofInt]; omega
+  have hl : libAddr (pos + 2) (BitVec.ofInt 21 ((tgt : Int) - (codeBase + 4 * (pos + 2)))) = tgt := by
+    unfold libAddr; rw [hj]; omega
+  refine ⟨?_, hl⟩
+  simp only [isLib, hl, he, beq_self_eq_true, Bool.true_and, Bool.or_eq_true, beq_iff_eq]
+  omega
+
+/-- A libgcc call sequence followed by `is`. -/
+theorem WP_libc_iff {code : List Ins} {P : AM → Prop} {pos tgt : Nat} {is : List Ins}
+    {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
+    (ht : tgt = mulPC ∨ tgt = divPC ∨ tgt = modPC) (hp : PosOK (pos + 2)) :
+    WP code P pos (libc pos tgt ++ is) K L m o ↔
+      SrcOK 10 (keysG L) ∧ SrcOK 11 (keysG L) ∧
+      (match libRes tgt (srcVal 10 L) (srcVal 11 L) with
+        | some r => WP code P (pos + 3) is K ((10, r) :: eraseAll clobbered (gset (gset L 12 0) 13 0)) m o
+        | none => False) := by
+  obtain ⟨hl, ha⟩ := libc_off_facts ht hp
+  have hz : (0 : BitVec 64) + sign_extend (0 : BitVec 12) = 0 := by decide
+  simp only [libc, List.cons_append, List.nil_append, WP, srcVal_zero, hz, if_neg (show (1 : Nat) ≠ 0 by decide),
+    if_true, hl, ha, srcVal_gset, show (10 : Nat) ≠ 0 by decide, show (11 : Nat) ≠ 0 by decide,
+    show (10 : Nat) ≠ 12 by decide, show (10 : Nat) ≠ 13 by decide, show (11 : Nat) ≠ 12 by decide,
+    show (11 : Nat) ≠ 13 by decide, if_false, SrcOK, keysG_gset, Nat.add_assoc, ra]
+  simp only [show (1 : Nat) + 1 + 1 = 3 by rfl, show (0 : Nat) ≤ 31 by decide, show (12 : Nat) ≤ 31 by decide,
+    show (13 : Nat) ≤ 31 by decide, show (1 : Nat) ≤ 12 by decide, show (1 : Nat) ≤ 13 by decide]
+  simp
+
 /-! ## Branch offsets -/
 
 /-- Byte offset of a branch from instruction `src` to instruction `dst`. -/

@@ -44,6 +44,8 @@ theorem zero_add64' (x : BitVec 64) : (0 : BitVec 64) + x = x := by simp
 
 theorem toNat_ofNat6 (k : Nat) : (BitVec.ofNat 6 k).toNat = k % 64 := by simp
 
+theorem natCast_lit (n : Nat) : ((no_index (OfNat.ofNat n : Nat)) : Int) = (OfNat.ofNat n : Int) := rfl
+
 theorem add_zero64 (x : BitVec 64) : x + (0 : BitVec 64) = x := by simp
 
 theorem ofNat_add_lit (a k : Nat) (hk : k < 2 ^ 63) :
@@ -164,6 +166,81 @@ theorem keep_gset {S : List Nat} {L L' : GRegs} {rd : Nat} {v : BitVec 64} (h : 
     rw [lookupG_set, if_neg (fun e => hr (by rw [e]; exact h))] at this
     exact this
   · intro hk; exact hk.gset h
+
+theorem libc_length (pos tgt : Nat) : (libc pos tgt).length = 3 := rfl
+
+theorem libRes_mulE (x y : BitVec 64) : libRes mulPC x y = some (x * y) := by simp [libRes]
+
+theorem libRes_divE (x y : BitVec 64) (h : y.toInt ≠ 0) :
+    libRes divPC x y = some (BitVec.ofInt 64 (x.toInt.tdiv y.toInt)) := by
+  simp [libRes, show divPC ≠ mulPC by decide, h]
+
+theorem libRes_modE (x y : BitVec 64) (h : y.toInt ≠ 0) :
+    libRes modPC x y = some (BitVec.ofInt 64 (x.toInt.tmod y.toInt)) := by
+  simp [libRes, show modPC ≠ mulPC by decide, show modPC ≠ divPC by decide, h]
+
+theorem keysG_lib (L : GRegs) (r : BitVec 64) (n : Nat) :
+    n ∈ keysG ((10, r) :: eraseAll clobbered L) ↔ n = 10 ∨ (n ∉ clobbered ∧ n ∈ keysG L) := by
+  constructor
+  · intro h
+    obtain ⟨v, hv⟩ := mem_keysG_lookup h
+    simp only [lookupG] at hv
+    by_cases h10 : n = 10
+    · exact .inl h10
+    · rw [if_neg (Ne.symm h10), lookupG_eraseAll] at hv
+      split at hv
+      · cases hv
+      · next hc => exact .inr ⟨hc, mem_keysG_of_lookup hv⟩
+  · rintro (h | ⟨hc, h⟩)
+    · subst h; simp [keysG]
+    · obtain ⟨v, hv⟩ := mem_keysG_lookup h
+      exact mem_keysG_of_lookup (v := v) (by
+        by_cases h10 : n = 10
+        · subst h10; simp [clobbered] at hc
+        · simp only [lookupG, if_neg (Ne.symm h10)]; rw [lookupG_eraseAll, if_neg hc, hv])
+
+theorem keysG_lib' (L : GRegs) (r : BitVec 64) (n : Nat) (hn : n ∉ clobbered) :
+    n ∈ keysG ((10, r) :: eraseAll clobbered L) ↔ n ∈ keysG L := by
+  rw [keysG_lib]; constructor
+  · rintro (h | ⟨-, h⟩)
+    · subst h; simp [clobbered] at hn
+    · exact h
+  · intro h; exact .inr ⟨hn, h⟩
+
+theorem keysG_lib10 (L : GRegs) (r : BitVec 64) : 10 ∈ keysG ((10, r) :: eraseAll clobbered L) :=
+  (keysG_lib L r 10).mpr (.inl rfl)
+
+theorem srcVal_lib (L : GRegs) (r : BitVec 64) (n : Nat) (hn : n ∉ clobbered) :
+    srcVal n ((10, r) :: eraseAll clobbered L) = srcVal n L := by
+  have h10 : n ≠ 10 := fun e => hn (by subst e; simp [clobbered])
+  cases n with
+  | zero => rfl
+  | succ k =>
+    simp only [srcVal, lookupG, if_neg (Ne.symm h10)]
+    rw [lookupG_eraseAll, if_neg hn]
+
+theorem srcVal_lib10 (L : GRegs) (r : BitVec 64) : srcVal 10 ((10, r) :: eraseAll clobbered L) = r := by
+  simp [srcVal, lookupG]
+
+theorem has_lib {L : GRegs} {r w : BitVec 64} {n : Nat} (hn : n ∉ clobbered) :
+    Has ((10, r) :: eraseAll clobbered L) n w ↔ Has L n w := by
+  have h10 : n ≠ 10 := fun e => hn (by subst e; simp [clobbered])
+  simp only [Has, lookupG, if_neg (Ne.symm h10), lookupG_eraseAll, if_neg hn]
+
+theorem has_lib10 {L : GRegs} {r w : BitVec 64} :
+    Has ((10, r) :: eraseAll clobbered L) 10 w ↔ r = w := by
+  simp [Has, lookupG]
+
+theorem keep_lib {S : List Nat} {L0 L : GRegs} {r : BitVec 64} (hs : ∀ n ∈ clobbered, n ∈ S) :
+    Keep S L0 ((10, r) :: eraseAll clobbered L) ↔ Keep S L0 L := by
+  constructor
+  · intro hk n hn
+    have := hk n hn
+    have hc : n ∉ clobbered := fun h => hn (hs n h)
+    have h10 : n ≠ 10 := fun e => hc (by subst e; simp [clobbered])
+    simp only [lookupG, if_neg (Ne.symm h10), lookupG_eraseAll, if_neg hc] at this
+    exact this
+  · intro hk; exact hk.lib hs
 
 theorem has_mem {L : GRegs} {n : Nat} {v : BitVec 64} (h : Has L n v) (hn : n ≠ 0) :
     n ∈ keysG L := by
@@ -322,8 +399,9 @@ macro_rules
         Nat.reduceAdd, Nat.reduceSub, Nat.reduceLeDiff, Nat.reduceMul, Nat.reducePow,
         ofNat_add_lit, ofNat_add_neg, shl_ofNat, true_and, and_true,
         true_or, or_true, false_or, or_false, decide_eq_true_eq, BitVec.zero_add, BitVec.add_zero,
-        sext_zero12, zero_add64, zero_add64', add_zero64, toNat_ofNat6, Nat.reduceMod, BitVec.reduceToNat,
-        List.take_append, List.take_of_length_le, sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
+        sext_zero12, zero_add64, zero_add64', add_zero64, natCast_lit, BitVec.toInt_zero, toNat_ofNat6, Nat.reduceMod, BitVec.reduceToNat,
+        List.take_append, List.take_of_length_le, WP_libc_iff, libc_length, libRes_mulE, libRes_divE, libRes_modE,
+        keysG_lib', keysG_lib10, srcVal_lib, srcVal_lib10, sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
         WP_li_iff, li_length_small, li_length_big, List.append_assoc, Nat.add_sub_cancel,
         tohostW_toNat, putcWord_low,
         Br, J, Call, mvi, addi, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
@@ -334,7 +412,8 @@ syntax "reg_simp" ("[" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| reg_simp) => `(tactic| reg_simp [])
   | `(tactic| reg_simp [$xs,*]) => `(tactic|
-      simp (disch := decide) only [has_gset, keep_gset, reduceIte, Nat.reduceEqDiff,
+      simp (disch := decide) only [has_gset, keep_gset, has_lib, has_lib10, keep_lib, reduceIte,
+        Nat.reduceEqDiff,
         a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5, t6, s2, s3, s4, s5, s6, s9, s10,
         s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
 
