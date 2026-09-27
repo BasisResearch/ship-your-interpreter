@@ -465,7 +465,7 @@ theorem sim_mod {A : AM} {c : Config} (hc : Corr c A) (hpc : A.pc = 0x80004728#6
 
 /-! ## HTIF stores -/
 
-theorem sext_zero12 : sign_extend (m := 64) (0#12) = 0#64 := by decide
+theorem sext12_zero : sign_extend (m := 64) (0#12) = 0#64 := by decide
 
 /-- The facts every tohost `sd rs2, 0(rs1)` step lemma consumes. -/
 theorem sd_tohost_facts {A : AM} {c : Config} (hc : Corr c A) (rs2 rs1 : Nat)
@@ -485,7 +485,7 @@ theorem sd_tohost_facts {A : AM} {c : Config} (hc : Corr c A) (rs2 rs1 : Nat)
       (by rw [get?_afterPrelude _ _ (by decide)]; exact hG.mseccfg),
     rX_src c.σ A.pc rs1 h1.1 _ (srcPin_srcVal c.σ A.regs rs1 h1.2 hc.regs),
     rX_src c.σ A.pc rs2 h2.1 _ (srcPin_srcVal c.σ A.regs rs2 h2.2 hc.regs), ?_⟩
-  rw [sext_zero12, BitVec.add_zero]
+  rw [sext12_zero, BitVec.add_zero]
   apply BitVec.eq_of_toNat_eq
   rw [hea]; simp [tohostAddr]
 
@@ -617,7 +617,7 @@ theorem ld_memFacts (m : Mem) (L : GRegs) (rd rs1 : Nat) (pc : BitVec 64)
     MemFacts m L (rd8 m (srcVal rs1 L).toNat) ((Ins.ld rd rs1).toM pc) := by
   have he : eaddrM ((Ins.ld rd rs1).toM pc) L = srcVal rs1 L := by
     show srcVal rs1 L + sign_extend (m := 64) (0#12) = _
-    rw [sext_zero12, BitVec.add_zero]
+    rw [sext12_zero, BitVec.add_zero]
   show (0x80000000 ≤ (eaddrM _ L).toNat ∧ _ ∧ _) ∧ LPins8 m (eaddrM _ L).toNat _
   rw [he]
   exact ⟨hb, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
@@ -749,7 +749,7 @@ theorem step_sim {code : List Ins} {A A' : AM} {c : Config} (hc : Corr c A)
           · rename_i hbd; cases h
             have he : eaddrM ((Ins.sd rs2 rs1).toM A.pc) A.regs = srcVal rs1 A.regs := by
               show srcVal rs1 A.regs + sign_extend (m := 64) (0#12) = _
-              rw [sext_zero12, BitVec.add_zero]
+              rw [sext12_zero, BitVec.add_zero]
             have hmf : MemFacts A.mem A.regs [] ((Ins.sd rs2 rs1).toM A.pc) := by
               show 0x80000000 ≤ (eaddrM _ A.regs).toNat ∧ _
               rw [he]; exact hbd

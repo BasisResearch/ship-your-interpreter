@@ -1,5 +1,5 @@
 import Vsa.Compiler.StmtS
-import Vsa.Compiler.Lift
+import Vsa.Compiler.AbsLift
 
 /-!
 # Compiler correctness
@@ -22,37 +22,6 @@ open Vsa.Machine (Config Step Steps StepsN Halted Halts Diverges output)
 def compileBytes (p : Program) : List (BitVec 8) :=
   (compile p).flatMap fun i => [byte i.encode 0, byte i.encode 1, byte i.encode 2, byte i.encode 3]
 
-/-! ## From abstract runs to machine runs -/
-
-/-- `c'` realizes `B` after at least `k` machine steps from `c`, with the code
-and libgcc still in memory. -/
-structure RunSim (code : List Ins) (k : Nat) (c : Config) (B : AM) (c' : Config) : Prop where
-  steps : Steps c c'
-  count : c.steps + k ≤ c'.steps
-  corr : Corr c' B
-  code : CodeAt B.mem code
-  lib : LibLoaded B.mem
-
-theorem run_sim {code : List Ins} (hfit : Fits code) : ∀ {k : Nat} {A B : AM}, StarN code k A B →
-    ∀ {c : Config}, Corr c A → CodeAt A.mem code → LibLoaded A.mem →
-    ∃ c', RunSim code k c B c'
-  | _, _, _, .refl _, c, hc, hcode, hlib => ⟨c, .refl _, by simp, hc, hcode, hlib⟩
-  | _, _, _, .step hs rest, c, hc, hcode, hlib => by
-    obtain ⟨c1, hs1, hlt1, hc1⟩ := step_sim hc hcode hlib hs
-    have hag := astep_mem_low hs
-    obtain ⟨c2, hs2, hlt2, hc2, hcode2, hlib2⟩ := run_sim hfit rest hc1 (CodeAt.of_low hfit hag hcode)
-      (LibLoaded.of_low hag hlib)
-    exact ⟨c2, Vsa.Machine.Steps.trans hs1 hs2, by omega, hc2, hcode2, hlib2⟩
-
-theorem StepsN.truncate' : ∀ {m : Nat} {a b : Config}, StepsN m a b → ∀ n, n ≤ m → ∃ c, StepsN n a c
-  | _, a, _, .zero _, n, h => ⟨a, by rw [Nat.le_zero.mp h]; exact .zero _⟩
-  | _, a, _, .succ s rest, n, h => by
-    cases n with
-    | zero => exact ⟨a, .zero _⟩
-    | succ n =>
-      obtain ⟨c, hc⟩ := StepsN.truncate' rest n (by omega)
-      exact ⟨c, .succ s hc⟩
-
 /-! ## The program image -/
 
 /-- The compiled statement list. -/
@@ -60,8 +29,6 @@ def body (p : Program) : List Ins := (cseq ⟨[[]], 0, 0, 0⟩ mainPos p).1
 
 theorem compile_eq (p : Program) :
     compile p = [Ins.jal 0 (jOff 0 mainPos)] ++ errCode ++ printCode ++ body p ++ exitCode 0 := rfl
-
-theorem Seg.self (code : List Ins) : Seg code 0 code := fun j _ => by simp
 
 theorem compile_segs (p : Program) :
     Seg (compile p) 0 [Ins.jal 0 (jOff 0 mainPos)] ∧ Seg (compile p) errPos errCode ∧
@@ -82,33 +49,9 @@ theorem compile_segs (p : Program) :
 
 theorem mainPos_val : mainPos = 100 := rfl
 
-theorem flatMap4_get {α : Type} (f : Ins → List α) (hf : ∀ i, (f i).length = 4) :
-    ∀ (l : List Ins) (k : Nat) (i : Ins), l[k]? = some i → ∀ j < 4,
-      (l.flatMap f)[4 * k + j]? = (f i)[j]?
-  | [], k, i, h, _, _ => by simp at h
-  | a :: l, 0, i, h, j, hj => by
-    simp at h; subst h
-    rw [List.flatMap_cons, List.getElem?_append_left (by rw [hf]; omega)]
-    simp
-  | a :: l, k + 1, i, h, j, hj => by
-    rw [List.flatMap_cons, List.getElem?_append_right (by rw [hf]; omega), hf]
-    rw [show 4 * (k + 1) + j - 4 = 4 * k + j by omega]
-    exact flatMap4_get f hf l k i (by simpa using h) j hj
-
 theorem codeAt_of_bytes {p : Program} {m : Mem}
     (h : ∀ k, k < (compileBytes p).length → m[codeBase + k]? = (compileBytes p)[k]?) :
-    CodeAt m (compile p) := by
-  intro k i hk j hj
-  have hlen : (compileBytes p).length = 4 * (compile p).length := by
-    unfold compileBytes
-    induction compile p with
-    | nil => rfl
-    | cons a l ih => simp only [List.flatMap_cons, List.length_append, ih]; simp; omega
-  have hk' : k < (compile p).length := (List.getElem?_eq_some_iff.mp hk).1
-  rw [Nat.add_assoc, h _ (by omega), compileBytes,
-    flatMap4_get _ (fun _ => rfl) _ k i hk j hj]
-  have : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 := by omega
-  rcases this with rfl | rfl | rfl | rfl <;> rfl
+    CodeAt m (compile p) := codeAt_of_codeBytes h
 
 /-! ## The abstract machine runs the program -/
 
@@ -119,9 +62,6 @@ theorem at0 (p : Program) (hfit : Fits (compile p)) : At (compile p) ctx0 mainPo
   have hpo := Seg.end_ok hfit h5 (by simp [exitCode])
   refine ⟨⟨hfit, h2, h3⟩, by simp [ctx0], by simp [ctx0, Scope.slots], by simp [ctx0, Scope.slots],
     by simp [ctx0], by simp [ctx0], by unfold PosOK at *; omega⟩
-
-/-- The initial abstract state: at `codeBase`, no known registers. -/
-def A0 (m : Mem) (o : Array String) : AM := ⟨pcOf 0, [], m, o⟩
 
 theorem enter (p : Program) (hfit : Fits (compile p)) (m : Mem) (o : Array String) :
     astep (compile p) (A0 m o) = some (.run ⟨pcOf mainPos, [], m, o⟩) := by
@@ -168,24 +108,6 @@ theorem abstract_stuck (p : Program) (hsup : Supported p) (hfit : Fits (compile 
   by_cases hh : Reaches (compile p) (A0 m o) (fun B => astep (compile p) B = some (.halt 70))
   · exact .inl hh
   · exact .inr fun n => (hf n).resolve_left hh
-
-/-! ## The machine -/
-
-theorem halts_of_abstract {code : List Ins} (hfit : Fits code) {A B : AM} {c : Config} {e : Nat}
-    (hc : Corr c A) (hcode : CodeAt A.mem code) (hlib : LibLoaded A.mem) (r : Star code A B)
-    (hh : astep code B = some (.halt e)) : Halts c (String.join B.out.toList) e := by
-  obtain ⟨k, hk⟩ := r
-  obtain ⟨c', hs, -, hc', hcode', -⟩ := run_sim hfit hk hc hcode hlib
-  obtain ⟨σf, hH, ho⟩ := halt_sim hc' hcode' hh
-  exact ⟨c', σf, hs, hH, ho⟩
-
-theorem diverges_of_abstract {code : List Ins} (hfit : Fits code) {A : AM} {c : Config}
-    (hc : Corr c A) (hcode : CodeAt A.mem code) (hlib : LibLoaded A.mem)
-    (h : ∀ n, Runs code n A) : Diverges c := by
-  intro n
-  obtain ⟨B, hB⟩ := h n
-  obtain ⟨c', hs, hle, -⟩ := run_sim hfit hB hc hcode hlib
-  exact StepsN.truncate' (Vsa.Machine.Steps.toN_of_stepsField hs) n (by omega)
 
 /-- **Compiler correctness.** For every program `p` in the supported subset, and
 every machine configuration whose memory holds the code bytes of `compile p` at
