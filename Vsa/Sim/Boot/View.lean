@@ -43,25 +43,6 @@ theorem ViewOf.read32 {m : Mem} {v : Nat → Option (BitVec 8)} (h : ViewOf m v)
 theorem isSome_exists {α : Type} {o : Option α} (h : o.isSome = true) : ∃ b, o = some b :=
   Option.isSome_iff_exists.mp h
 
-/-- Rewrite every read of `m` in the goal through the view `h : ViewOf m v`
-and decide it in the kernel. Handles `readLE`/`read32`/`read64` equations,
-byte lookups, and presence (`∃ b, … = some b`). -/
-macro "boot_read " h:term : tactic =>
-  `(tactic| first
-    | (apply isSome_exists
-       first
-         | rw [ViewOf.readLE $h]
-         | rw [ViewOf.read64 $h]
-         | rw [ViewOf.read32 $h]
-         | rw [$h:term]
-       decide +kernel)
-    | (first
-         | rw [ViewOf.read64 $h]
-         | rw [ViewOf.read32 $h]
-         | rw [ViewOf.readLE $h]
-         | rw [$h:term]
-       decide +kernel))
-
 /-! ## The boot memory's view -/
 
 theorem bootMem_view {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t) :

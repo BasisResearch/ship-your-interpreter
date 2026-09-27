@@ -290,38 +290,6 @@ theorem frame_sd_auto (m base_mem : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (
 
 open Lean Elab Tactic Meta
 
-/-- Build a proof of `srcVal n L = base` by peeling the `runGM` fold layer-by-layer
-with `srcVal_runGM_ne` (each layer's `∀ a ∈ body, a.rd ≠ n` by `decide`) — never
-reducing the fold — bottoming out at the entry pins with `rfl` (`defeq`, over the
-shallow entry `L` only).  This replaces the per-leaf `by rfl` `hsrc`/`h2`, whose
-`rfl` reduced the whole threaded tower (the Fix-1a lever). -/
-private partial def srcvalPeelProof (goalTy : Expr) : MetaM Expr := do
-  let some (_, lhs, _rhs) := goalTy.eq? | throwError "srcval_peel: goal is not an Eq"
-  match lhs.getAppFnArgs with
-  | (``srcVal, #[nE, lE]) =>
-      match lE.getAppFnArgs with
-      | (``runGM, #[bodyE, lE', ldsE]) =>
-          -- `srcVal_runGM_ne n body : (∀ a ∈ body, a.rd ≠ n) → ∀ L lds, …`
-          let f ← mkAppOptM ``srcVal_runGM_ne #[some nE, some bodyE]
-          let premTy := (← inferType f).bindingDomain!
-          let prem ← mkDecideProof premTy
-          -- `lem : srcVal n (runGM body L' lds) = srcVal n L'`
-          let lem ← mkAppM' (← mkAppM' f #[prem]) #[lE', ldsE]
-          -- recurse on `srcVal n L' = base`
-          let innerLhs := mkApp2 (mkConst ``srcVal) nE lE'
-          let innerTy ← mkEq innerLhs _rhs
-          let innerPf ← srcvalPeelProof innerTy
-          mkEqTrans lem innerPf
-      | _ => mkEqRefl lhs   -- entry pins: `srcVal n L = base` by `rfl` (shallow `L`)
-  | _ => mkEqRefl lhs
-
-/-- `srcval_peel` closes a `srcVal n L = base` goal by peeling the `runGM` tower with
-`srcVal_runGM_ne` (Fix 1a) — `O(1)` structural work per layer, no fold reduction. -/
-elab "srcval_peel" : tactic => do
-  let g ← getMainGoal
-  let pf ← g.withContext (srcvalPeelProof (← instantiateMVars (← g.getType)))
-  g.assign pf
-
 set_option maxRecDepth 100000
 
 /-! ## Acceptance 3 — compose `eqDispatch_facts` into a live `Triple`
