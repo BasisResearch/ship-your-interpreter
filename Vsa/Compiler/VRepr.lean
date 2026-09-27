@@ -71,7 +71,7 @@ theorem dispW_of_repr {H : CloMap} {s : Store} {m : Mem} {h : Nat} {v : Value} {
   | int n =>
     obtain ⟨rfl, rfl, h1, h2⟩ := hv
     simp only [DispW, Value.display, toInt_ofInt_small n h1 h2, if_true]
-  | str s0 => obtain ⟨rfl, hs⟩ := hv; simp [DispW, Value.display]; exact hs.1
+  | str s0 => obtain ⟨rfl, hs⟩ := hv; simp [DispW, Value.display]; exact hs.str
   | closure a =>
     obtain ⟨rfl, ha⟩ := hv
     have hlt : a < s.closures.size := by
@@ -81,7 +81,7 @@ theorem dispW_of_repr {H : CloMap} {s : Store} {m : Mem} {h : Nat} {v : Value} {
     simp only [DispW, show (4 : BitVec 64) ≠ 2 by decide, show (4 : BitVec 64) ≠ 3 by decide,
       if_false, if_true, Value.display, hcd]
     refine ⟨d, ho.disp, ?_, ho.lo, ho.hi⟩
-    have := ho.dispStr.1
+    have := ho.dispStr.str
     cases hn : cd.name with
     | none => simp only [hn, dispName] at this; exact this
     | some n => simp only [hn, dispName] at this; exact this
@@ -111,5 +111,13 @@ theorem catW_of_repr {H : CloMap} {s : Store} {m : Mem} {h : Nat} {v : Value} {t
     | none => simp only [hn, catName] at this; exact this
     | some n => simp only [hn, catName] at this; exact this
   | native f => obtain ⟨rfl, rfl⟩ := hv; cases f <;> simp [CatW, Value.catDisplay]
+
+/-- The value `v` is in `(a0, a1)`. -/
+def InA (H : CloMap) (m : Mem) (h : Nat) (L : GRegs) (v : Value) : Prop :=
+  ∃ t p, Has L a0 t ∧ Has L a1 p ∧ VRepr H m h v t p
+
+theorem VRepr.tag_int {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec 64}
+    (hv : VRepr H m h v t p) : t = 2 ↔ ∃ n, v = .int n := by
+  cases v <;> simp only [VRepr] at hv <;> (obtain ⟨rfl, _⟩ := hv) <;> simp <;> decide
 
 end Vsa.Compiler

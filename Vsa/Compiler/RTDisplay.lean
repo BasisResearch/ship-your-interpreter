@@ -253,7 +253,10 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
 /-! ## `catstr` -/
 
 /-- A string object for `cs` at `q`, ending below the object pointer `h`. -/
-def StrBelow (m : Mem) (h q : Nat) (cs : List Char) : Prop := StrW m q cs ∧ q + 8 + 8 * cs.length ≤ h
+structure StrBelow (m : Mem) (h q : Nat) (cs : List Char) : Prop where
+  str : StrW m q cs
+  lo : objBase ≤ q
+  hi : q + 8 + 8 * cs.length ≤ h
 
 /-- What `catstr` renders for the pair `(t, p)` in memory `m` with object pointer `h`. -/
 def CatW (m : Mem) (h : Nat) (t p : BitVec 64) (cs : List Char) : Prop :=
@@ -317,6 +320,9 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
   have hpn : p = BitVec.ofNat 64 p.toNat := by simp
   have hfs : ∀ i (hi : i < fixedStrs.length), StrBelow m h (fixedAddr i) (fixedStrs[i]'hi).toList :=
     fun i hi => ⟨hfx i hi, by
+      have : i < 8 := hi
+      rcases (show i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 by omega) with
+        rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;> decide, by
       have : fixedAddr i + 8 + 8 * (fixedStrs[i]'hi).toList.length ≤ fixedAddr 7 + 40 := by
         have : i < 8 := hi
         rcases (show i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 by omega) with
@@ -390,7 +396,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
       have hcl : cs.length ≤ 20 := by split at hlen <;> omega
       refine reaches_mono (cs_ret hR (by reg_simp; try exact g27) hal) ?_
       rintro B ⟨h1, h2, h3, h4⟩
-      refine ⟨h3, .inl ⟨h1, h + 8 + 8 * cs.length, h, ?_, ⟨by rw [h2]; exact hstr, by omega⟩, ?_,
+      refine ⟨h3, .inl ⟨h1, h + 8 + 8 * cs.length, h, ?_, ⟨by rw [h2]; exact hstr, by omega, by omega⟩, ?_,
         ⟨by omega, by omega⟩, fun a ha h5 h6 => by rw [h2]; exact hfr a ha h5 h6, ?_⟩⟩
       · rw [h4]; reg_simp
       · rw [h4]; reg_simp
@@ -523,7 +529,7 @@ theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h :
   have hob : objBase = 0x90000000 := rfl
   have hoe : objEnd = 0xE0000000 := rfl
   obtain ⟨hh1, hh2, hh3⟩ := hh
-  obtain ⟨hxs, hxb⟩ := hx; obtain ⟨hys, hyb⟩ := hy
+  obtain ⟨hxs, -, hxb⟩ := hx; obtain ⟨hys, -, hyb⟩ := hy
   have := hxs.lo; have := hxs.al; have := hys.lo; have := hys.al
   have k11 := has_mem h11 (by decide); have k13 := has_mem h13 (by decide)
   have k1 := has_mem hr (by decide); have k8 := has_mem h8 (by decide)

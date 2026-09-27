@@ -441,7 +441,7 @@ macro_rules
         List.take_append, List.take_of_length_le, WP_libc_iff, libc_length, libRes_mulE, libRes_divE, libRes_modE,
         keysG_lib', keysG_lib10, srcVal_lib, srcVal_lib10, sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
         WP_li_iff, li_length_small, li_length_big, isLib_of_JOK, Bool.false_eq_true, if_false,
-        Int.ofNat_lt, Int.ofNat_le, List.append_assoc, Nat.add_sub_cancel,
+        Int.ofNat_lt, Int.ofNat_le, BitVec.reduceEq, ne_eq, not_true_eq_false, not_false_eq_true, List.append_assoc, Nat.add_sub_cancel,
         tohostW_toNat, putcWord_low,
         Br, J, Call, mvi, addi, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
         t6, s2, s3, s4, s5, s6, s9, s10, s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
@@ -451,7 +451,7 @@ syntax "reg_simp" ("[" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| reg_simp) => `(tactic| reg_simp [])
   | `(tactic| reg_simp [$xs,*]) => `(tactic|
-      simp (disch := decide) only [has_gset, keep_gset, has_lib, has_lib10, keep_lib, reduceIte,
+      simp (disch := decide) only [has_gset, keep_gset, has_lib, has_lib10, keep_lib, reduceIte, BitVec.reduceEq,
         Nat.reduceEqDiff,
         a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5, t6, s2, s3, s4, s5, s6, s9, s10,
         s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
