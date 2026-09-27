@@ -3,21 +3,11 @@ import VsaIris.Vsa.Fprintf.SbFile
 import VsaIris.Vsa.Fprintf.Loop
 import VsaIris.Vsa.Stderr.ErrOK
 
-/-!
-# `fprintf(stderr, fmt, p)` up to `_vfprintf_r`'s direct path (lane N3)
-
-`fprintf` (`0x800061c0`) spills its variadic registers (`a2`–`a7` at
-`sp + 32 …`, `ap = sp + 32`), loads `_impure_ptr` and calls `_vfprintf_r`;
-`vfpEntry_run` and `vfpErr_run` take it to `0x8000a944`.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- The bytes a `fprintf(stderr, …)` run may change: the call's 4096-byte
-stack window, `stderr`'s written fields, `errno`. -/
 def FprReg (s : BitVec 64) (a : Nat) : Prop :=
   (s.toNat - 4096 ≤ a ∧ a < s.toNat) ∨ Stdio.errWritten a ∨ Stdio.errnoFoot a
 
@@ -28,14 +18,8 @@ theorem headReg_fprReg {s : BitVec 64} {a : Nat} (hs : 0x80100000 ≤ s.toNat - 
   refine .inl ?_
   rcases h with h | h | h | h | h | h | h | h <;> exact ⟨by omega, by omega⟩
 
-/-- The registers `_vfprintf_r` saves: the caller's, with `ra` its link into
-`fprintf`. -/
 def fprC (R : Nat → BitVec 64) (x : Nat) : BitVec 64 := if x = 1 then 0x80006204#64 else R x
 
-/-- **`_vfprintf_r` at its loop head on `stderr`** (`sp = s - 672`): the loop
-state, the locale, `stderr` set up for writing, the caller's registers
-spilled, `ap` and the `%s` argument, `fprintf`'s link, and the memory changed
-only inside `FprReg`. -/
 structure FprLoop (R : Nat → BitVec 64) (M Mt : Mem) (s p ra : BitVec 64) (C : Nat → BitVec 64) :
     Prop where
   loop : Fp.VfpLoop R M (s + 18446744073709550944#64) 0x8001b538#64 0x8001bbd8#64 0x800195e0#64 0
@@ -55,8 +39,7 @@ structure FprLoop (R : Nat → BitVec 64) (M Mt : Mem) (s p ra : BitVec 64) (C :
   frame : Fp.Frame M Mt (FprReg s)
 
 set_option hygiene false in
-/-- A load of `stderr`'s or `_impure_data`'s fields through `vfpEntry_run`'s
-frame (`hF`) and `fprintf`'s spills, down to the entry memory. -/
+
 macro "fh_tr" : tactic => `(tactic| (
   refine (hF.ldv _ fun j hj => by
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h2, widthOfM]
@@ -121,8 +104,7 @@ macro "fh_tr" : tactic => `(tactic| (
     rw [BitVec.sub_eq_add_neg, BitVec.add_assoc]; rfl
 
 set_option hygiene false in
-/-- A load at the loop head back through `vfp_head`'s frame and
-`vfpErr_run`'s explicit stores. -/
+
 local macro "fl_head" : tactic => `(tactic| (
   refine (hHP.frame.ldv _ fun j hj => by
     simp only [widthOfM] at hj; unfold Fp.HeadReg; rw [hsp]; omega).trans ?_
@@ -130,7 +112,7 @@ local macro "fl_head" : tactic => `(tactic| (
   nx_mem))
 
 set_option hygiene false in
-/-- …then back through `vfpEntry_run`'s frame and `fprintf`'s spills. -/
+
 local macro "fl_entry" : tactic => `(tactic| (
   refine (hF.ldv _ fun j hj => by simp only [widthOfM] at hj ⊢; rw [hsp]; omega).trans ?_
   nx_mem))
@@ -194,8 +176,6 @@ local macro "fl_entry" : tactic => `(tactic| (
     repeat (refine Fp.Frame.snoc ?_ ?_)
     all_goals first | exact Fp.Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub] at h1 h2; unfold FprReg; omega)
 
-/-! **`fprintfHead_run`**: `fprintf(stderr, "%s\n", p)` from its entry to
-`_vfprintf_r`'s loop head (`FprLoop`). -/
 #ix_chain fprintfHead_run := [fprintfHead_01, fprintfHead_02, fprintfHead_03]
 
 end VsaIris.Sym

@@ -5,7 +5,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- `within_mmio_readable a w = false` for a RAM window. -/
 theorem within_mmio_readable_ram_false_width
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) (w : Nat)
     (hbase : σ.regs.get? Register.htif_tohost_base
@@ -41,7 +40,6 @@ theorem within_mmio_readable_ram_false_width
   intro hbad
   omega
 
-/-- Concrete RAM checks for a scalar access accepted without splitting. -/
 theorem RamReadChecks.of_scalar
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) (w : Nat)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
@@ -59,7 +57,6 @@ theorem RamReadChecks.of_scalar
     vpmpaddr hcfg haddr
   mmio := within_mmio_readable_ram_false_width σ a w hbase hlo hhi hhtif
 
-/-- Standard machine-state invariants discharge the register checks. -/
 theorem RamReadChecks.of_good {σ : Vsa.Machine.MState} (h : GoodState σ)
     (a : BitVec 64) (w : Nat)
     (hlo : 0x80000000 ≤ a.toNat) (hhi : a.toNat + w ≤ 0x100000000)

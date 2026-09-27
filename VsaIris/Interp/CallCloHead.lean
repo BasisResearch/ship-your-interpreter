@@ -1,16 +1,5 @@
 import VsaIris.Interp.CallClosure
 
-/-!
-# The closure call's head (lane E4)
-
-`callCloHead` (either WP): from the kind dispatch `0x80003254` on a closure
-value, runs K1a-K1d (`CallClosure.lean`) with the call node's, the closure
-object's and the `EX_FN` node's data views and the depth word joined into the
-run's bytes (`cloS`): `fn_expr`, the arity test, `++in->call_depth`, the depth
-test, `cl->env`. Three exits (`CloHeadK`): the `jal env_new` (`CloHd`), the
-arity error (`CloAr`), the depth error (`CloDp`).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
@@ -39,7 +28,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   unfold astEG
   icases Hast with ⟨%Pc, %mc, %⟨hrepr, hgeo⟩, #Hroc⟩
   obtain ⟨aF, hnd, -, -⟩ := callNode_of_repr hrepr hgeo
-  -- run K1a: the kind tests
+
   ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hroc]
   · iframe Hcode Hroc
   iapply wp_swpF Wp (F := iprop(codeRes ∗ roImg (InExt (w1.toNat, 16)) img ∗ roOn P m ∗
@@ -59,7 +48,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   intro R1 Mt1 hR1 hMt1
   unfold F'
   iintro ⟨⟨#Hcode, #Himg, #Hro, Hdep, Hk⟩, Hms⟩
-  -- run K1b: `fn_expr` from the closure object
+
   have hc1 := hcf.objOK w1.toNat (by simp [InExt]); have hc16 := hcf.objOK (w1.toNat + 15) (by simp [InExt])
   ihave ⟨%Dt, #Hdc, %hDt⟩ := roOwn_roImg (p := w1.toNat) (n := 16) $$ [Hcode Himg]
   · iframe Hcode Himg
@@ -81,7 +70,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iintro ⟨⟨#Hcode, #Himg, #Hro, Hdep, Hk⟩, Hms⟩
 
 #ix_piece callCloHead_p2 from callCloHead_p1 by
-  -- the depth word into the run's bytes
+
   ihave ⟨%Md, Hdep, %hMd⟩ := ownSet_trackedAt _ dimg $$ Hdep
   ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [Hms Hdep]
   · iframe Hms Hdep
@@ -92,7 +81,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   have hdep3 : imgLE (imgM M3) (inp.toNat + 8) 4 = dep := by
     rw [imgLE_congr (img' := dimg) (fun i hi => (hM3d _ (by simp [InExt]; omega)).trans
       (hMd _ (by simp [InExt]; omega))), hdep]
-  -- the `EX_FN` node
+
   have hqlt : q < 2 ^ 64 := by rw [← hcf.fn]; have := imgLE_lt img w1.toNat 8; omega
   have hqt : (BitVec.ofNat 64 q).toNat = q := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]
   have hrepq : ExprReprWithin m P (BitVec.ofNat 64 q).toNat (.fn cd.name cd.params cd.body) := by
@@ -102,7 +91,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
     (fun a ha => hfn.view a (by simp only [List.mem_append, mem_accAddrs_iff] at ha ⊢; omega))
     $$ [Hcode Hro]
   · iframe Hcode Hro
-  -- run K1c: the arity test, the depth bump, the depth test
+
   have hdl : ldv .lw M3 (inp + 8#64).toNat = BitVec.ofNat 64 dep := by
     rw [show (inp + 8#64).toNat = inp.toNat + 8 by
       simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; have := hinpG.hi; omega]
@@ -138,7 +127,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   rotate_right
 
 #ix_piece callCloHead_p3 from callCloHead_p2 by
-  -- run K1d: `cl->env`, `argc` spilled
+
   ihave ⟨%Dt', #Hdc, %hDt'⟩ := roOwn_roImg (p := w1.toNat) (n := 16) $$ [Hcode Himg]
   · iframe Hcode Himg
   have he : ldv .ld Dt' (w1 + 8#64).toNat = BitVec.ofNat 64 e := by
@@ -161,7 +150,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iintro ⟨Hk, Hms⟩
   unfold CloHeadK
   ihave Hk := and_elim_l $$ Hk
-  -- the count is `paramc`, the depth fits
+
   have h15 : R2 15 = BitVec.ofNat 64 argc := by subst hR2; subst hR1; ix_reg; exact hcall.a5
   have hpeq : cd.params.length = argc := by
     have h := heq; simp only [upd_apply, Nat.reduceEqDiff, ite_false, ne_eq, Decidable.not_not] at h
@@ -173,7 +162,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
     rw [idx_succ, sext32_ofNat_toInt (by unfold maxCallDepth at hdle; omega)] at h
     have : ((1000#64 : BitVec 64).toInt : Int) = 1000 := by decide
     unfold maxCallDepth; omega
-  -- the memory: the spills and the depth word written, the rest as at the dispatch
+
   have hi8 : (inp + 8#64).toNat = inp.toNat + 8 := by
     simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; have := hinpG.hi; omega
   have hun : ∀ a, InExt (s.toNat - 1088, 1088) a → ¬ InExt (s.toNat - 1088, 8) a →
@@ -248,7 +237,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iapply Hk $$ %R4 %Mt4 %vl %⟨hpeq, hdok, hhd⟩ Hms
 
 #ix_piece callCloHead_p2b from callCloHead_p2 at 2 by
-  -- the arity error: the count is not `paramc`
+
   unfold CloHeadK
   ihave Hk := and_elim_r $$ Hk
   ihave Hk := and_elim_l $$ Hk
@@ -304,7 +293,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iapply Hk $$ %R3 %Mt3 %vl %⟨hpne, har⟩ Hms
 
 #ix_piece callCloHead_p2c from callCloHead_p2 at 3 by
-  -- the depth error: the bumped depth exceeds the maximum
+
   unfold CloHeadK
   ihave Hk := and_elim_r $$ Hk
   ihave Hk := and_elim_r $$ Hk
@@ -376,11 +365,6 @@ open VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_chain callCloHead_c := [callCloHead_p1, callCloHead_p2, callCloHead_p3]
 
-/-- **The closure call's head**, for either WP: from the kind dispatch on a
-closure, with its resources (`CloFactsE`) and the depth word, the runs read
-`fn_expr`, `paramc` and `cl->env`, bump the depth, and leave at the
-`jal env_new` (count = `paramc`, depth within the maximum), the arity error
-or the depth error (`CloHeadK`). -/
 theorem callCloHead {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}

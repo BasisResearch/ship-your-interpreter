@@ -3,73 +3,11 @@ import Vsa.Sim.StateNF
 import Vsa.Sim.StepAddi
 import Vsa.Sim.StepBeq
 
-/-!
-# `GoodState`-preservation machinery (M2 framing)
-
-Every per-instruction step lemma ends by re-establishing `GoodState σ'`, where
-`σ'` is `σ` plus a short chain of register writes (`insert`s) to registers that
-are *not* pinned by `GoodState`'s non-`∃` fields (`minstret_increment`, `nextPC`,
-`PC`, `minstret`, an `rd` GPR, and on tick steps `mcycle`/`mtime`/`mip`).
-`StepAddi.lean` / `StepBeq.lean` each spend ~250 lines of mechanical
-field-by-field reconstruction on this. This file factors that into one reusable
-single-insert preservation lemma (`GoodState.insert_nonpinned`) plus a chaining
-tactic (`goodstate_frame`), so a step-lemma author writes one line.
-
-## Design
-
-`GoodState` has two kinds of fields (see `Vsa/Sim/GoodState.lean`):
-
-* 21 **pinned** fields — `σ.regs.get? R = some c` at a *fixed* value `c`
-  (`cur_privilege`, `misa`, `mstatus`, `mie`, `mseccfg`, `satp`, `mtvec`,
-  `mideleg`, `medeleg`, `hart_state`, `htif_done`, `htif_tohost`,
-  `htif_tohost_base`, `elp`, `pmpcfg_n`, `pmpaddr_n`, `pma_regions`, `menvcfg`,
-  `mcountinhibit`, `mcyclecfg`, `minstretcfg`);
-* 10 **`∃`-fields** — `∃ v, σ.regs.get? R = some v` (`mip`, `sig_meip`,
-  `sig_seip`, `mtime`, `mtimecmp`, `minstret`, `minstret_increment`, `mcycle`,
-  `nextPC`, `PC`).
-
-`NonPinned r` (via the decidable `isNonPinned` Bool) holds exactly for registers
-that are *not* one of the 21 pinned ones. Inserting to such an `r` preserves
-every pinned field (the key differs, so the read reads through) and every
-`∃`-field (either the key differs and reads through, or it matches and the newly
-inserted value witnesses the `∃`).
-
-### The dependent-cast trap
-
-`Std.ExtDHashMap.get?_insert` reads
-
-```
-(m.insert k v).get? a = if h : (k == a) then some (cast ⋯ v) else m.get? a
-```
-
-The `dite` branch types depend on the condition, so `rw [hne]` on the
-`(k == a)` discriminant fails with "motive is not type correct" (the `cast`
-carries a proof of `k = a`). Two ways this file sidesteps it:
-
-* pinned read-through (`get?_insert_pinned`): discharge the `dite` with
-  `simp only [hne, …]` (simp handles the `Decidable`-dependent motive), never
-  `rw`;
-* `∃`-preservation (`exists_get?_insert`): case-split on `(r == A)`; in the
-  `true` branch the goal `∃ w, some (cast ⋯ v) = some w` is closed by `⟨_, rfl⟩`
-  — **the existential absorbs the cast entirely**, no transport needed.
-
-`pin_of_isNonPinned` derives the disequality `(r == A) = false` from
-`NonPinned r` and `A` pinned *without* any `cases` on `Register` (which would
-blow up to ~160×160 goals): it uses `beq_eq_false_iff_ne` plus the fact that
-`isNonPinned r = true ≠ false = isNonPinned A`.
--/
-
 open LeanRV64DExecutable Sail ConcurrencyInterfaceV1
 open Vsa.Machine (MState)
 
 namespace Vsa.Sim
 
-/-! ## `NonPinned` -/
-
-/-- `true` iff `r` is **not** one of `GoodState`'s 21 pinned (non-`∃`) registers,
-i.e. `r` is one of the machine-mutated registers a hot-path step may write
-(GPRs, `PC`, `nextPC`, `minstret`, `minstret_increment`, `mcycle`, `mtime`,
-`mip`, …). Decidable, so `NonPinned` side goals close by `decide`. -/
 def isNonPinned (r : Register) : Bool :=
   match r with
   | .cur_privilege | .misa | .mstatus | .mie | .mseccfg | .satp | .mtvec
@@ -78,24 +16,13 @@ def isNonPinned (r : Register) : Bool :=
   | .menvcfg | .mcountinhibit | .mcyclecfg | .minstretcfg => false
   | _ => true
 
-/-- `r` is not pinned by `GoodState`'s non-`∃` fields. Definitionally
-`isNonPinned r = true`, so `(by decide)` discharges it for concrete `r`. -/
 abbrev NonPinned (r : Register) : Prop := isNonPinned r = true
 
-/-- From `NonPinned r` and a pinned register `A` (`isNonPinned A = false`),
-the two registers are distinct, so `(r == A) = false`. Proved without any
-`cases` on `Register`: distinct `isNonPinned` values force `r ≠ A`. -/
 theorem pin_of_isNonPinned {r A : Register}
     (hr : isNonPinned r = true) (hA : isNonPinned A = false) : (r == A) = false := by
   apply beq_eq_false_iff_ne.mpr
   intro h; subst h; rw [hr] at hA; exact absurd hA (by decide)
 
-/-! ## Single-insert read-through primitives -/
-
-/-- Reading a register `A` distinct from the inserted key `r` (`(r == A) = false`)
-reads through the insert. Discharges the dependent `dite` of
-`Std.ExtDHashMap.get?_insert` with `simp only` — `rw [hne]` fails here because the
-branch types depend on the discriminant (the `cast`). -/
 theorem get?_insert_pinned (regs : Std.ExtDHashMap Register RegisterType)
     (r : Register) (v : RegisterType r) (A : Register)
     (hne : (r == A) = false) :
@@ -103,10 +30,6 @@ theorem get?_insert_pinned (regs : Std.ExtDHashMap Register RegisterType)
   rw [Std.ExtDHashMap.get?_insert]
   simp only [hne, dif_neg, Bool.false_eq_true, not_false_eq_true]
 
-/-- Definedness (`∃`-shape) of a register is preserved by any single insert:
-if `A = r` the freshly inserted value witnesses the `∃` (the goal
-`∃ w, some (cast ⋯ v) = some w` closes by `⟨_, rfl⟩`, so the dependent `cast`
-is absorbed by the existential); otherwise the old witness reads through. -/
 theorem exists_get?_insert (regs : Std.ExtDHashMap Register RegisterType)
     (r : Register) (v : RegisterType r) (A : Register)
     (h : ∃ w, regs.get? A = some w) : ∃ w, (regs.insert r v).get? A = some w := by
@@ -115,12 +38,6 @@ theorem exists_get?_insert (regs : Std.ExtDHashMap Register RegisterType)
   · simp only [hc, dif_pos]; exact ⟨_, rfl⟩
   · simp only [hc, dif_neg, Bool.not_eq_true]; exact h
 
-/-! ## The single-insert `GoodState` preservation lemma -/
-
-/-- **The reusable frame lemma.** Inserting a value `v` into a non-pinned register
-`r` preserves `GoodState`: every pinned field reads through (its key differs from
-`r`), and every `∃`-field stays defined. Chain it once per write in a step's
-insert-chain (see `goodstate_frame`). -/
 theorem GoodState.insert_nonpinned {σ : MState} (hG : GoodState σ)
     {r : Register} (hr : NonPinned r) (v : RegisterType r) :
     GoodState {σ with regs := σ.regs.insert r v} := by
@@ -163,14 +80,6 @@ theorem GoodState.insert_nonpinned {σ : MState} (hG : GoodState σ)
   case nextPC => exact E _ hG.nextPC
   case PC => exact E _ hG.PC
 
-/-! ## Orthogonal dimensions: memory and HTIF output
-
-`GoodState` reads only `σ.regs`, so writes to `σ.mem` (stores) and pushes to
-`σ.sailOutput` (HTIF console) preserve it definitionally. -/
-
-/-- `GoodState` depends only on `σ.regs`: if two states share their register map,
-one is `GoodState` iff the other is. Bridges the record-update states whose `.regs`
-projection is defeq to `σ.regs` but not syntactically equal (so `exact hG` fails). -/
 theorem GoodState.of_regs_eq {σ σ' : MState} (h : σ'.regs = σ.regs)
     (hG : GoodState σ) : GoodState σ' := by
   constructor
@@ -206,25 +115,6 @@ theorem GoodState.of_regs_eq {σ σ' : MState} (h : σ'.regs = σ.regs)
   case nextPC => rw [h]; exact hG.nextPC
   case PC => rw [h]; exact hG.PC
 
-/-! ## The chaining tactic
-
-`goodstate_frame h` re-establishes `GoodState` of any state that is `h`'s state
-plus a chain of non-pinned register inserts: it peels one `insert_nonpinned` per
-write (each `NonPinned` side goal discharged by `decide`, each inserted value
-`v` inferred by unification with the target insert-chain), then closes with `h`.
-
-Usage in a step lemma:
-```
-```
-Equivalently, the plain iterated-application form (no tactic):
-```
-exact hG.insert_nonpinned (by decide) _ |>.insert_nonpinned (by decide) _ |> …
-```
--/
-
-/-- Re-establish `GoodState` of a non-pinned insert-chain over the state of `h`.
-Peels `GoodState.insert_nonpinned` (discharging `NonPinned` by `decide`, inferring
-each inserted value) until the goal is `h`'s `GoodState`. -/
 syntax (name := goodstateFrame) "goodstate_frame " term : tactic
 
 macro_rules
@@ -233,14 +123,5 @@ macro_rules
       (repeat' first
         | exact $h
         | (apply GoodState.insert_nonpinned (hr := by decide))))
-
-/-! ## Validation against `StepAddi` / `StepBeq` shapes
-
-`sigmaPost σ pc vminstret` (`StepAddi.lean`) is the five-write chain
-`minstret_increment := true`, `nextPC := pc+4`, `x10 := …`, `PC := pc+4`,
-`minstret := v+1` — none pinned. The following `example`s confirm the machinery
-reproduces `goodstate_sigmaPost` (and the `StepBeq` variants) in one line, so the
-hand-written ~250-line reconstructions in those files could be replaced. (They are
-left intact per the task; this is forward-looking validation only.) -/
 
 end Vsa.Sim

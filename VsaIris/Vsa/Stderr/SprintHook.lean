@@ -2,15 +2,6 @@ import VsaIris.Vsa.Stderr.SprintErr
 import VsaIris.Vsa.Fprintf.Print
 import VsaIris.Vsa.Fprintf.End
 
-/-!
-# `stderr`'s flush as `vfp_printH`'s hook (lane N3)
-
-N5's `vfp_printH` takes the `__sprint_r(reent, f, sp + 224)` call as a hook.
-On `stderr` with one staged piece `bs` it is `sprintErr_run` (nonempty) or
-`__sprint_r`'s early return (empty: the residual is 0, `0x8000e8d4`): either
-way the continuation gets `out = bs` and `SprintPost`.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -38,12 +29,8 @@ open scoped VsaIris.Sym.Stdout
   all_goals (nx_mem; try decide)
   all_goals first | exact hflU | exact hfl | exact hres
 
-/-! **`sprintErr0_run`**: `__sprint_r` with a zero residual returns at once. -/
 #ix_chain sprintErr0_run := [sprintErr0_01]
 
-/-- **`stderr`'s flush, as `vfp_printH`'s hook**: one staged piece `bs`
-(possibly empty) at `p` in the data view, returning to any aligned `ra`
-(`0x8000b8d4` after a conversion, the end's link after the last flush). -/
 theorem sprintErr_hook {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
@@ -82,7 +69,6 @@ theorem sprintErr_hook {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       h1 h2 h10 h11 h12 hres hiov hp hk0 hp1 hp2 hp3 hpd hpsrc hfl hfd hbase hwr hck
       fun R' M' hr hP => hfin R' M' bs hr ⟨rfl, hP⟩
 
-/-- **The loop's frame slots survive the flush** (`vfp_printH`'s `hPR`). -/
 theorem SprintPost.printRet {Mt M' : Mem} {sp : BitVec 64} (h : SprintPost Mt M' sp)
     (hsp1 : 0x80100000 ≤ sp.toNat) (hsp2 : sp.toNat + 592 ≤ 0x88000000) :
     Fp.PrintRet Mt M' sp := by
@@ -98,9 +84,6 @@ theorem SprintPost.printRet {Mt M' : Mem} {sp : BitVec 64} (h : SprintPost Mt M'
   exact ⟨by simpa using T 0 (by omega), T 8 (by omega), T 16 (by omega), T 32 (by omega),
     T 224 (by omega), h.res⟩
 
-/-- **The end's slots survive the last flush** (`vfp_end`'s hook post): the
-count, `stderr`'s flags (rewritten with the same `0x201a`) and `_flags2`, the
-spills. -/
 theorem SprintPost.endRet {Mt M' : Mem} {sp : BitVec 64} (h : SprintPost Mt M' sp)
     (hfl : ldv .lh Mt 0x8001bbe8 = 0x201a#64)
     (hsp1 : 0x80100000 ≤ sp.toNat) (hsp2 : sp.toNat + 592 ≤ 0x88000000) :

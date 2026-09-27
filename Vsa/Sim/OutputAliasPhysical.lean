@@ -1,10 +1,6 @@
 import Vsa.Sim.LayoutInstance
 import Std.Data.ExtDHashMap.Lemmas
 
-/- Explicit physical state for the finite alias witness. Memory is a parameter.
-   This constructs a state satisfying register predicates; it does not claim
-   that startup reaches this register map, or assume a GoodState witness. -/
-
 open LeanRV64DExecutable Sail ConcurrencyInterfaceV1
 open Vsa.Machine Vsa.MemRepr Vsa.RuntimeRepr Vsa.Alloc
 open Vsa.Sim Vsa.Sim.LayoutInstance
@@ -444,13 +440,6 @@ theorem physical_good (m : Mem) : GoodState (physicalState m) where
   nextPC := ⟨_, physicalRegs_nextPC⟩
   PC := ⟨_, physicalRegs_PC⟩
 
-/-! ## The snapshot with `main`'s `s0`
-
-`main` sets `s0 = &_impure_ptr` (`0x80004590: addi s0,gp,1120`) before
-`jal interp_run`. The boundary states it (`InterpRunReadyFacts.s0_impure`);
-the historical alias witness keeps `physicalRegs` (`s0 = 0`). -/
-
-/-- `&_impure_ptr`, `main`'s `s0` at `interp_run`'s entry. -/
 def impureS0 : BitVec 64 := 0x8001b970#64
 
 def physicalRegsS0 : Std.ExtDHashMap Register RegisterType :=
@@ -464,7 +453,6 @@ def physicalConfigS0 (m : Mem) : Config := ⟨physicalStateS0 m, 0, 0⟩
 @[simp] theorem physicalConfigS0_mem (m : Mem) :
     (physicalConfigS0 m).σ.mem = m := rfl
 
-/-- `GoodState` names no general register, so it survives a change of `s0`. -/
 theorem goodState_of_regs_s0 {σ σ' : MState} (g : GoodState σ)
     (hr : ∀ r : Register, (Register.x8 == r) = false → σ'.regs.get? r = σ.regs.get? r) :
     GoodState σ' := by

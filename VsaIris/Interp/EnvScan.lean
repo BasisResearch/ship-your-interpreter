@@ -1,41 +1,11 @@
 import VsaIris.Interp.EnvScanCore
 
-/-!
-# The scan and the parent chain of `env_get`/`env_set`, at the Iris level
-
-`env_get` and `env_set` are one code shape at two addresses (`EnvScanCore.lean`):
-a prologue, a walk up the parent chain, in each frame a scan of the names
-with a `strcmp` call per name, and a hit arm that differs (copy the value out,
-or write it in). A `ScanSite` records one address's PCs and its first-order
-spans (`EnvGetSpans.lean`, generated `EnvSetSpans.lean`); the lemmas here are
-proved once over it:
-
-* `scan_frame`: one frame's scan, an induction on the names left, taking the
-  `strcmp` call against `strcmpSpec`; it ends at the frame's end or at the hit
-  PC with the first match;
-* `scan_tail`, `scan_chain`: the walk up the chain, a strong induction on the
-  frame address (parents are older, `StoreInvariant.parents`); each frame is
-  opened with `storeRepr_open`, closed unchanged on a miss, and handed open to
-  the hit continuation;
-* `scan_entry`: the ABI entry — the register file (`regsOf_entry`), the stack
-  frame and value slot, the prologue span — into the chain;
-* `scan_exit`: the ABI return from a span's register file.
-
-The chain carries its path from the start frame (`ChainFrom`: each step a
-frame without the name), from which `env_get` reads `Store.get?`
-(`ChainFrom.look`) and `env_set` reads `Store.set?`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 
-/-! ## The lookup the machine performs -/
-
-/-- `Store.lookup` needs no more gas than the frame address plus one: parents
-point to older frames. -/
 theorem lookup_stable {st : Store} (hp : StoreParents st) (x : String) :
     ∀ a, a < st.frames.size → ∀ g, a < g → st.lookup g a x = st.lookup (a + 1) a x := by
   intro a
@@ -58,7 +28,6 @@ theorem lookup_stable {st : Store} (hp : StoreParents st) (x : String) :
         rw [ih p hpa (Nat.lt_trans hpa ha) g' (Nat.lt_of_lt_of_le hpa hag),
           ih p hpa (Nat.lt_trans hpa ha) a hpa]
 
-/-- The chain answer from frame `a`. -/
 def look (st : Store) (a : Addr) (x : String) : Option Value := st.lookup (a + 1) a x
 
 theorem get?_eq_look {st : Store} (hp : StoreParents st) {a : Addr} (ha : a < st.frames.size)
@@ -89,8 +58,6 @@ theorem look_parent {st : Store} (hps : StoreParents st) {a p : Addr} {f : Frame
   simp only [Store.lookup, hf, Option.bind_eq_bind, Option.bind_some, h.find?_eq_none, hp]
   exact lookup_stable hps x p (Nat.lt_trans hpa ha) a hpa
 
-/-! ## Code bytes -/
-
 section Code
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -109,7 +76,6 @@ theorem sepL_of_all {α} (Φ : α → IProp GF) [∀ x, Persistent (Φ x)] :
       iintro %z %hz
       iapply H $$ %z %(List.mem_cons_of_mem _ hz)
 
-/-- A call site's code bytes out of the whole text. -/
 theorem instrAt_of_text {text : List (Nat × BitVec 8)} {i : Nat} {code : List (BitVec 8)}
     (h : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ text) :
     textOwn (GF := GF) text ⊢ instrAt i code := by
@@ -124,22 +90,16 @@ theorem instrAt_of_text {text : List (Nat × BitVec 8)} {i : Nat} {code : List (
 
 end Code
 
-/-! ## A call to `strcmp` from a span's register file -/
-
 section Call
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
 
-/-- The registers a `strcmp` call touches: `ra`, `a0` and every caller-saved one. -/
 def strcmpKs : List Nat := VsaIris.ra :: 10 :: retClob
 
 theorem strcmpKs_nodup : strcmpKs.Nodup := by decide
 theorem strcmpKs_sub : ∀ k ∈ strcmpKs, k ∈ gprs := by decide
 theorem gprs_nodup : gprs.Nodup := by decide
 
-/-- **`jal strcmp` from a span.** `a0`/`a1` point at the two strings; the
-continuation gets the file with `a0` zero exactly on equal strings, `ra` at
-the return address, and every register outside `strcmpKs` unchanged. -/
 theorem wp_call_strcmp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code strcmpPC)
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {R : Nat → BitVec 64} {xi x : String} :
@@ -199,22 +159,19 @@ theorem wp_call_strcmp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
 
 end Call
 
-/-! ## One frame's scan -/
-
 section Scan
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
 omit I in
-/-- An element of a persistent list over `zipIdx`. -/
+
 theorem sepL_zipIdx_get {α} (Φ : α × Nat → IProp GF) [∀ x, Persistent (Φ x)] (l : List α)
     {i : Nat} (hi : i < l.length) : sepL l.zipIdx Φ ⊢ Φ (l[i], i) := by
   iintro H
   ihave #Hall := sepL_persist_all Φ l.zipIdx $$ H
   iapply Hall $$ %(l[i], i) %(by rw [List.mem_zipIdx_iff_getElem?]; simp)
 
-/-- Binding `i` of a frame: its name string and its value's meaning. -/
 theorem bindings_get (N : NativeAddrs) (img : Nat → BitVec 8) (pn pv : Nat)
     (vars : List (String × Value)) {i : Nat} (hi : i < vars.length) :
     bindings (GF := GF) N img pn pv vars ⊢
@@ -222,8 +179,6 @@ theorem bindings_get (N : NativeAddrs) (img : Nat → BitVec 8) (pn pv : Nat)
   unfold bindings
   exact sepL_zipIdx_get _ vars hi
 
-/-- The constants of one `env_get` call: entry `sp`, return address, the
-name, the output slot, the callee-saved values. -/
 structure GetCall where
   s : BitVec 64
   r : BitVec 64
@@ -231,10 +186,9 @@ structure GetCall where
   out : BitVec 64
   x : String
   saved : List (Nat × BitVec 64)
-  /-- The value slot's bytes at the entry. -/
+
   so : Nat → BitVec 8
 
-/-- What the entry guarantees about a call's constants. -/
 structure GetCall.OK (C : GetCall) : Prop where
   sp : EnvSp C.s envGetNeed
   slot : SlotWin C.out.toNat
@@ -242,7 +196,6 @@ structure GetCall.OK (C : GetCall) : Prop where
   saved : C.saved.map Prod.fst = getSaved
   sep : C.out.toNat + 24 ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ C.out.toNat
 
-/-- The state inside frame `G` (image `img`, `n` bindings) between spans. -/
 structure InFrame (C : GetCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 8)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   stack : GetStack C.s.toNat C.r (pairVal C.saved) R Mt
@@ -255,7 +208,6 @@ structure InFrame (C : GetCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 
   sepStk : ∀ a, frameS G a → a < C.s.toNat - 64 ∨ C.s.toNat ≤ a
   slot : ∀ a, C.out.toNat ≤ a → a < C.out.toNat + 24 → imgM Mt a = C.so a
 
-/-- The frame state reads only `sp`, `s3`, `s4`, `s5`, `s6`. -/
 theorem InFrame.regs {C : GetCall} {G : FrameGeom} {n : Nat} {img : Nat → BitVec 8}
     {R R' : Nat → BitVec 64} {Mt : Mem} (h : InFrame C G n img R Mt) (hs : 64 ≤ C.s.toNat)
     (hk : ∀ k, k = 2 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R' k = R k) :
@@ -279,7 +231,6 @@ theorem take_succ_all {l : List (String × Value)} {i : Nat} {x : String} (hi : 
   · exact h p hp
   · exact hne
 
-/-- Two intervals, one of which misses every byte of the other, are apart. -/
 theorem interval_apart {a n b m : Nat} (hn : 0 < n) (hm : 0 < m)
     (h : ∀ c, b ≤ c → c < b + m → c < a ∨ a + n ≤ c) : a + n ≤ b ∨ b + m ≤ a := by
   apply Classical.byContradiction
@@ -289,13 +240,10 @@ theorem interval_apart {a n b m : Nat} (hn : 0 < n) (hm : 0 < m)
 
 end Scan
 
-/-! ## Opening and closing a frame -/
-
 section Frames
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The frame layout reads only the frame's bytes. -/
 theorem FrameLayout.congr {img img' : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : FrameLayout img G n) (hag : ∀ a, frameS G a → img' a = img a) : FrameLayout img' G n := by
   have hs := h.sblk
@@ -308,15 +256,12 @@ theorem FrameLayout.congr {img img' : Nat → BitVec 8} {G : FrameGeom} {n : Nat
     vals := by rw [e 16 8 (by omega)]; exact h.vals
     parent := by rw [e 24 8 (by omega)]; exact h.parent }
 
-/-- The store's pure part. -/
 theorem storeRepr_pure (N : NativeAddrs) (s : Store) (B : List (Nat × Nat)) :
     storeRepr (GF := GF) N s B ⊢ ⌜Vsa.Sim.StoreInvariant s⌝ := by
   unfold storeRepr
   iintro ⟨%mf, %mc, %Bs, -, -, %hp, -, -⟩
   ipureintro; exact hp.inv
 
-/-- **Open one frame for reading**: its image comes out, and the same image
-closes it again (the store unchanged). -/
 theorem storeRepr_openRead (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢
       ∃ (f : Frame) (Gm : FrameGeom) (img : Nat → BitVec 8),
@@ -352,7 +297,7 @@ theorem storeRepr_openRead (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)}
   ipureintro; exact hlay
 
 omit I in
-/-- **Join a frame's blocks** to `env_get`'s own bytes, at one tracking memory. -/
+
 theorem get_join (s out : Nat) (Gm : FrameGeom) (Mt : Mem) (img : Nat → BitVec 8) :
     ownSet (GF := GF) (baseS s out) (fun a => a ↦ₘ imgM Mt a) ∗ ownImg (BlocksCover Gm.blocks) img ⊢
       ∃ Mt' : Mem, ⌜(∀ a, baseS s out a → imgM Mt' a = imgM Mt a) ∧
@@ -376,7 +321,7 @@ theorem get_join (s out : Nat) (Gm : FrameGeom) (Mt : Mem) (img : Nat → BitVec
     rw [hag a (.inr ha)]; simp [glue, hb]
 
 omit I in
-/-- **Split a frame's blocks** back off, at the frame's own image. -/
+
 theorem get_split {s out : Nat} {Gm : FrameGeom} {Mt : Mem} {img : Nat → BitVec 8}
     (hd : ∀ a, frameS Gm a → ¬ baseS s out a) (himg : ∀ a, frameS Gm a → imgM Mt a = img a) :
     ownSet (GF := GF) (getS s out Gm) (fun a => a ↦ₘ imgM Mt a) ⊢
@@ -390,11 +335,6 @@ theorem get_split {s out : Nat} {Gm : FrameGeom} {Mt : Mem} {img : Nat → BitVe
 
 end Frames
 
-/-! ## A site: one address of the scan code -/
-
-/-- The loop over one frame's names (`scan_frame`): the load of name `i`,
-`jal strcmp`, and the test. Its name register is `nameR`, its count register
-`cntR`; the index is `s0` and the names cursor `s1`. -/
 structure ScanLoop (live : Nat → Prop) where
   scan : BitVec 64
   jal : Nat
@@ -421,10 +361,6 @@ structure ScanLoop (live : Nat → Prop) where
          (R 10 ≠ 0#64 ∧ i + 1 = n ∧ pc' = tail ∧ CmpNext i R R') ∨
          (R 10 = 0#64 ∧ pc' = hit ∧ R' = R)))
 
-/-- **One address of the chain-scan code** (`env_get`/`env_set`): the frame
-loop, the entry, the frame head, the parent step and the epilogue, as
-first-order spans (`EnvGetSpans.lean`, the generated `EnvSetSpans.lean`). The
-hit arm is not part of it. -/
 structure ScanSite (live : Nat → Prop) extends ScanLoop live where
   nameIs : nameR = 19
   cntIs : cntR = 18
@@ -454,7 +390,6 @@ structure ScanSite (live : Nat → Prop) extends ScanLoop live where
     Span live (getS s out G) epi R Mt
       (fun pc' R' Mt' => pc' = r ∧ Mt' = Mt ∧ GetRet s r sv (R 10) R')
 
-/-- The first match `j` of a frame, as `FirstMatch`. -/
 theorem firstMatch_of_index {vars : List (String × Value)} {x : String} {v : Value} {j : Nat}
     (hj : vars[j]? = some (x, v)) (hne : ∀ p ∈ vars.take j, p.1 ≠ x) : FirstMatch vars x v := by
   have hlt : j < vars.length := by
@@ -466,16 +401,11 @@ theorem firstMatch_of_index {vars : List (String × Value)} {x : String} {v : Va
   conv => lhs; rw [← List.take_append_drop j vars, List.drop_eq_getElem_cons hlt]
   rw [hvj]
 
-/-! ## The chain's path -/
-
-/-- The frames the walk reaches from `fa` looking for `x`: `fa`, and the
-parent of every reached frame without `x`. -/
 inductive ChainFrom (st : Store) (x : String) (fa : Addr) : Addr → Prop where
   | refl : ChainFrom st x fa fa
   | step {a p : Addr} {f : Frame} : ChainFrom st x fa a → st.frames[a]? = some f →
       FrameMiss f.vars x → f.parent = some p → ChainFrom st x fa p
 
-/-- Along the path, the lookup does not change. -/
 theorem ChainFrom.look {st : Store} (hps : StoreParents st) {x : String} {fa a : Addr}
     (h : ChainFrom st x fa a) : look st fa x = look st a x := by
   induction h with
@@ -486,7 +416,6 @@ section Open
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- **Open one frame**, keeping `storeRepr_open`'s closer for any frame. -/
 theorem storeRepr_openAt (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢
       ∃ (f : Frame) (Gm : FrameGeom) (img : Nat → BitVec 8) (B₁ B₂ : List (Nat × Nat)),
@@ -513,7 +442,6 @@ theorem storeRepr_openAt (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {
   iframe Hown Hb Hp HGe Hc
   ipureintro; exact ⟨hf, hGe, hlay, hinv, hbl ▸ hB⟩
 
-/-- **Close a frame unchanged.** -/
 theorem storeRepr_closeSame (N : NativeAddrs) {s : Store} {fa : Addr} {f : Frame}
     {Gm : FrameGeom} {img : Nat → BitVec 8} {B₁ B₂ : List (Nat × Nat)}
     (hf : s.frames[fa]? = some f) (hinv : Vsa.Sim.StoreInvariant s)
@@ -550,7 +478,6 @@ section ScanLoop
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- A name slot of the frame is its own bytes: in the names block. -/
 theorem frameS_name {img : Nat → BitVec 8} {G : FrameGeom} {n i j : Nat}
     (h : FrameLayout img G n) (hi : i < n) (hj : j < 8) : frameS G (G.pn + 8 * i + j) := by
   obtain ⟨hcap, h1, h2, -, -, -, -⟩ := h.slot hi
@@ -563,9 +490,6 @@ theorem frameS_val {img : Nat → BitVec 8} {G : FrameGeom} {n i j : Nat}
   unfold frameS InExt
   exact .inr ⟨hcap, .inr ⟨by omega, by omega⟩⟩
 
-/-- What the frame loop needs of the state between spans (`Inv`): the frame's
-layout and image, the name register, and stability under the registers the
-loop writes. -/
 structure ScanInv (Sx : ScanLoop live) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 8)
     (pn : BitVec 64) (Inv : (Nat → BitVec 64) → Mem → Prop) : Prop where
   lay : ∀ {R Mt}, Inv R Mt → FrameLayout (imgM Mt) G n
@@ -574,9 +498,6 @@ structure ScanInv (Sx : ScanLoop live) (G : FrameGeom) (n : Nat) (img : Nat → 
   regs : ∀ {R R' Mt}, Inv R Mt →
     (∀ k, k ∉ strcmpKs → k ≠ 8 → k ≠ 9 → k ≠ 10 → k ≠ 11 → R' k = R k) → Inv R' Mt
 
-/-- **One frame's scan**, from name `i` on. It ends at the frame's end
-(`Sx.tail`, every name differs from `x`) or at the hit (`Sx.hit`) with the
-first match `j`. -/
 theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (Sx : ScanLoop live) (N : NativeAddrs) {s out : Nat} {pn : BitVec 64} {x : String}
     {f : Frame} {G : FrameGeom} {img : Nat → BitVec 8} {Inv : (Nat → BitVec 64) → Mem → Prop}
@@ -630,7 +551,7 @@ theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     iframe Ht Hgp Hpc HR HS
     iintro %pc3 %R3 %Mt3 %⟨rfl, hcase⟩ Hpc HR HS
     rcases hcase with ⟨hne0, hlt, rfl, hnx⟩ | ⟨hne0, heq, rfl, hnx⟩ | ⟨heq0, rfl, hR3⟩
-    · -- the next name
+    ·
       have hxi : (f.vars[i]).1 ≠ x := fun h => hne0 (hres.2 h)
       have k3 : ∀ k, k ∉ strcmpKs → k ≠ 8 → k ≠ 9 → k ≠ 10 → k ≠ 11 → R3 k = R k :=
         fun k hk h8 h9 h10 h11 => (hnx.keep k h8 h9).trans (k2 k hk h10 h11)
@@ -641,7 +562,7 @@ theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       iapply ih (i + 1) R3 _ (by omega) hlt (take_succ_all hi hne hxi) hnx.idx h9'
         ((hnx.keep Sx.cntR hc8 hc9).trans h18') (hI.regs hF k3)
       iframe Ht Hgp Hcmp Hx Hb Hpc HR HS HKK
-    · -- the frame is exhausted
+    ·
       have hxi : (f.vars[i]).1 ≠ x := fun h => hne0 (hres.2 h)
       have k3 : ∀ k, k ∉ strcmpKs → k ≠ 8 → k ≠ 9 → k ≠ 10 → k ≠ 11 → R3 k = R k :=
         fun k hk h8 h9 h10 h11 => (hnx.keep k h8 h9).trans (k2 k hk h10 h11)
@@ -652,7 +573,7 @@ theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
         exact this p hp
       ihave Kex := and_elim_l $$ HKK
       iapply Kex $$ %R3 %_ %⟨hI.regs hF k3, hmiss⟩ Hpc HR HS
-    · -- the hit
+    ·
       subst hR3
       have hx : (f.vars[i]).1 = x := hres.1 heq0
       ihave Khit := and_elim_r $$ HKK
@@ -666,7 +587,6 @@ section Info
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- A frame address names an allocated frame at a nonzero `Env*`. -/
 theorem storeRepr_frameInfo (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢
       storeRepr N s B ∗ ⌜e ≠ 0 ∧ fa < s.frames.size ∧ Vsa.Sim.StoreInvariant s⌝ := by
@@ -682,21 +602,18 @@ theorem storeRepr_frameInfo (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)
   · simp [Array.getElem?_eq_none h] at hf
 
 omit I in
-/-- `blockOwn` at some image. -/
+
 theorem blockOwn_img (p n : Nat) :
     blockOwn (GF := GF) p n ⊢ ∃ f : Nat → BitVec 8, ownSet (InExt (p, n)) (fun a => a ↦ₘ f a) :=
   ownSet_fn _
 
 end Info
 
-/-! ## The parent chain -/
-
 section Chain
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- `InFrame` is a frame-loop invariant for the get/set sites (name in `s3`). -/
 theorem inFrame_scanInv {Sx : ScanSite live} (C : GetCall) {G : FrameGeom} {n : Nat}
     {img : Nat → BitVec 8} (hs : 64 ≤ C.s.toNat) :
     ScanInv Sx.toScanLoop G n img C.pn (InFrame C G n img) where
@@ -707,14 +624,12 @@ theorem inFrame_scanInv {Sx : ScanSite live} (C : GetCall) {G : FrameGeom} {n : 
     rcases hk' with rfl | rfl | rfl | rfl | rfl <;>
       exact hk _ (by decide) (by decide) (by decide) (by decide) (by decide)
 
-/-- The closer of an open frame (`storeRepr_openAt`). -/
 abbrev frameCloser (N : NativeAddrs) (st : Store) (fa : Addr) (B₁ B₂ : List (Nat × Nat)) :
     IProp GF :=
   iprop(∀ (s' : Store) (f' : Frame) (bl' : List (Nat × Nat)),
     ⌜s'.closures = st.closures ∧ s'.frames.toList = st.frames.toList.set fa f' ∧
       Vsa.Sim.StoreInvariant s'⌝ -∗ frameOwn N fa f' bl' -∗ storeRepr N s' (B₁ ++ bl' ++ B₂))
 
-/-- The return after the whole chain missed: `a0 = 0`, the store unchanged. -/
 def scanMissK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (C : GetCall) (st : Store) (B : List (Nat × Nat)) (fa : Addr) : IProp GF :=
   iprop(∀ (R' : Nat → BitVec 64) (Mt' : Mem) (fa'' : Addr) (f'' : Frame),
@@ -724,7 +639,6 @@ def scanMissK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → I
     VsaIris.PC ↦ᵣ C.r -∗ regsOf gprs R' -∗
     ownSet (baseS C.s.toNat C.out.toNat) (fun a => a ↦ₘ imgM Mt' a) -∗ storeRepr N st B -∗ Wp.W Φ)
 
-/-- The hit: frame `fa'` open at its first match `j`, parked at the site's hit PC. -/
 def scanHitK (Sx : ScanSite live) (Wp : MachWP (GF := GF) (vsaModel live))
     (Φ : Nat × String → IProp GF) (N : NativeAddrs) (C : GetCall) (st : Store)
     (B : List (Nat × Nat)) (fa : Addr) : IProp GF :=
@@ -739,7 +653,6 @@ def scanHitK (Sx : ScanSite live) (Wp : MachWP (GF := GF) (vsaModel live))
     bindings N img Gm.pn Gm.pv f.vars -∗ parentAt f.parent Gm.par -∗ frameAt fa' Gm.e -∗
     frameCloser N st fa' B₁ B₂ -∗ Wp.W Φ)
 
-/-- The scan code from the head of frame `fa'` of the chain. -/
 def ScanChainAt (Sx : ScanSite live) (Wp : MachWP (GF := GF) (vsaModel live))
     (Φ : Nat × String → IProp GF) (N : NativeAddrs) (C : GetCall) (st : Store)
     (B : List (Nat × Nat)) (fa fa' : Addr) : Prop :=
@@ -750,8 +663,6 @@ def ScanChainAt (Sx : ScanSite live) (Wp : MachWP (GF := GF) (vsaModel live))
       ownSet (baseS C.s.toNat C.out.toNat) (fun a => a ↦ₘ imgM Mt a) ∗ storeRepr N st B ∗
       (scanMissK Wp Φ N C st B fa ∧ scanHitK Sx Wp Φ N C st B fa) ⊢ Wp.W Φ)
 
-/-- **After a frame's scan found nothing**: on to the parent, or return 0 at
-the root. -/
 theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (Sx : ScanSite live) (N : NativeAddrs) (C : GetCall) (hC : C.OK)
     {st : Store} {B : List (Nat × Nat)} {fa fa' : Addr} {f : Frame} {Gm : FrameGeom}
@@ -775,7 +686,7 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iframe Ht Hgp Hpc HR HS
   iintro %pc1 %R1 %Mt1 %⟨rfl, hk, hcase⟩ Hpc HR HS
   rcases hcase with ⟨hpar, rfl, h20⟩ | ⟨hpar, rfl, h10⟩
-  · -- the parent frame
+  ·
     ihave HB := get_split hdisj hF.img $$ HS
     icases HB with ⟨HB, HF⟩
     ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [Hclose HF]
@@ -804,7 +715,7 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
           (hk 21 (by decide) (by decide)).trans hF.out, hF.slot⟩
       rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hparlt]
       iframe Ht Hgp Hcmp Hx Hpa Hpc HR HB Hst HK
-  · -- the root: return 0
+  ·
     have hstk : GetStack C.s.toNat C.r (pairVal C.saved) R1 Mt1 :=
       hF.stack.congr (hk 2 (by decide) (by decide)) (hk 22 (by decide) (by decide))
         (fun _ _ _ => rfl) hs64
@@ -828,8 +739,6 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       iapply Kmiss $$ %R2 %_ %fa' %f
         %⟨by rw [h10] at hret; exact hret, hpath, hf, hmiss, hfp, hF.slot⟩ Hpc HR HB Hst
 
-/-- **The parent chain**: the scan code from any frame's head, by strong
-induction on the frame address (parents are older). -/
 theorem scan_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (Sx : ScanSite live) (N : NativeAddrs) (C : GetCall) (hC : C.OK)
     {st : Store} {B : List (Nat × Nat)} {fa : Addr} :
@@ -861,12 +770,12 @@ theorem scan_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iframe Ht Hgp Hpc HR HS
   iintro %pc1 %R1 %Mt2 %⟨rfl, hcase⟩ Hpc HR HS
   rcases hcase with ⟨hn0, rfl, hk⟩ | ⟨hpos, rfl, hsc⟩
-  · -- an empty frame
+  ·
     have hnil : f.vars = [] := List.eq_nil_of_length_eq_zero hn0
     iapply scan_tail Wp Sx N C hC ih hpath hf hinv hB hlay (by rw [hnil]; intro p hp; cases hp) hdisj
       (hF.regs hs64 fun k hk' => hk k (by omega))
     iframe Ht Hgp Hcmp Hx Hb Hp HGe Hclose Hpc HR HS HK
-  · -- scan the names
+  ·
     obtain ⟨-, -, hn2, -, -, hnw, -⟩ := hF.lay.slot hpos
     iapply scan_frame Wp Sx.toScanLoop N (inFrame_scanInv (Sx := Sx) C hs64) f.vars.length 0 R1 _
       (by omega) hpos (by simp) hsc.idx
@@ -886,15 +795,13 @@ theorem scan_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
 
 end Chain
 
-/-! ## The ABI entry and return -/
-
 section Abi
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
 omit I in
-/-- **The return's registers** out of a span's file. -/
+
 theorem scan_exit_regs {s r : BitVec 64} {saved : List (Nat × BitVec 64)}
     (hsv : saved.map Prod.fst = getSaved) {R' : Nat → BitVec 64} {res : BitVec 64}
     (hret : GetRet s.toNat r (pairVal saved) res R') :
@@ -924,7 +831,7 @@ theorem scan_exit_regs {s r : BitVec 64} {saved : List (Nat × BitVec 64)}
   iframe Hra Ha0 Hsp Hsv Hcl
 
 omit I in
-/-- **The return's bytes**: the stack frame back as scratch, and the slot. -/
+
 theorem scan_exit_bytes {s out : Nat} {Mt : Mem} (hs64 : 64 ≤ s)
     (hsep : out + 24 ≤ s - 64 ∨ s ≤ out) :
     ownSet (GF := GF) (baseS s out) (fun a => a ↦ₘ imgM Mt a) ⊢
@@ -938,8 +845,6 @@ theorem scan_exit_bytes {s out : Nat} {Mt : Mem} (hs64 : 64 ≤ s)
   unfold blockOwn
   iapply ownSet_forget $$ Hstk
 
-/-- **The ABI entry** of `env_get`/`env_set`: the register file, the stack
-frame and the value slot, the prologue span, then the chain from `fa`. -/
 theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (Sx : ScanSite live) (N : NativeAddrs) {st : Store} {B : List (Nat × Nat)} {fa : Addr}
     {x : String} {e pn out s r : BitVec 64} {saved : List (Nat × BitVec 64)}

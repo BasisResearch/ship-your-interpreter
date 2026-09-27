@@ -1,20 +1,5 @@
 import VsaIris.MachWP
 
-/-!
-# Instruction and function specifications, MachCSL style
-
-Paper §4.3-4.6 and Figures 7-8. Every specification is a wand that ends in
-the run's total WP: the caller supplies, as its last premise, "the rest of
-the run" from the state the callee returns in. There are no Hoare
-postconditions; the return is a continuation (`RET`'s spec, Figure 8b,
-hands `pc ↦ r` to it).
-
-Instruction leaves take an *exec fact* about the model as a hypothesis
-(MachCSL's leaf lemmas discharge it by evaluating the Sail decoder, see
-claude-notes/design/execution-model.md "Decode: the fast concrete-state
-bridge"; VSA already has these facts as `StepObs`/`segEval` results).
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -23,16 +8,12 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- `instr i` (paper Fig. 8): the instruction bytes at `i`, read-only and
-persistent, as `kernel_text` provides them (MachCSL `text_pointsto … □`,
-execution-model.md "Kernel CODE bytes are ↦ₓ□"). -/
 def instrAt (i : Nat) (code : List (BitVec 8)) : IProp GF :=
   sepL (code.zipIdx) (fun p => (i + p.2) ↦ₘ□ p.1)
 
 instance (i : Nat) (code : List (BitVec 8)) : Persistent (instrAt (GF := GF) i code) := by
   unfold instrAt; infer_instance
 
-/-- The read footprint an instruction fetch contributes. -/
 def codeFoot (i : Nat) (code : List (BitVec 8)) : List (Nat × DFrac × BitVec 8) :=
   code.zipIdx.map (fun p => (i + p.2, DFrac.discard, p.1))
 
@@ -44,7 +25,6 @@ theorem instrAt_eq (i : Nat) (code : List (BitVec 8)) :
   | nil => rfl
   | cons x xs ih => simp only [sepL_cons, List.map_cons, ih]
 
-/-- The exec fact for `jal ra, tgt` at `i`. -/
 def JalExec (M : MachineModel) (i : Nat) (code : List (BitVec 8)) (tgt : BitVec 64) : Prop :=
   ∀ v σ, M.ok σ → FootHolds (M := M) σ [] (codeFoot i code)
       [(PC, BitVec.ofNat 64 i, tgt), (ra, v, BitVec.ofNat 64 (i + 4))] [] →
@@ -52,8 +32,6 @@ def JalExec (M : MachineModel) (i : Nat) (code : List (BitVec 8)) (tgt : BitVec 
       LocalStep (M := M) σ σ' [(PC, BitVec.ofNat 64 i, tgt), (ra, v, BitVec.ofNat 64 (i + 4))] [] ∧
       M.out σ' = M.out σ
 
-/-- **JAL** to a call target, for either WP: `ra` becomes the return address
-`i + 4`. -/
 theorem wp_jalW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} {tgt v : BitVec 64} (hexec : JalExec M i code tgt) :
     instrAt (GF := GF) i code ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗
@@ -68,13 +46,6 @@ theorem wp_jalW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i 
   iintro ⟨-, -, ⟨Hpc, Hra, -⟩, -⟩
   iapply Hk $$ Hpc Hra
 
-/-- A function specification in MachCSL's continuation style (paper Fig. 7,
-`SpecKalloc.v:30-56` `wp_kalloc_sconf_body`), for either WP: for every return
-address `r` and every global postcondition `Φ`, entering at `entry` with
-`ra ↦ r` and the precondition, and handing over the continuation from
-`pc ↦ r` with the postcondition, runs to completion. It is persistent, like
-MachCSL's specs (a `Module Type` parameter), so a caller may use it any number
-of times. -/
 def fnSpecW (Wp : MachWP (GF := GF) M) (entry : BitVec 64) (P Q : BitVec 64 → IProp GF) :
     IProp GF :=
   iprop(□ ∀ (r : BitVec 64) (Φ : Nat × String → IProp GF),
@@ -85,10 +56,6 @@ instance (Wp : MachWP (GF := GF) M) (entry : BitVec 64) (P Q : BitVec 64 → IPr
     Persistent (fnSpecW Wp entry P Q) := by
   unfold fnSpecW; infer_instance
 
-/-- **Call**, for either WP. A `jal ra, entry` at `i` into a function meeting
-`fnSpecW`: the caller hands over the precondition and gets the postcondition
-back at `i + 4`. Whatever else the caller owns is framed by the continuation
-wand; the callee's spec never mentions it (paper §4.6 "Framing ownership"). -/
 theorem wp_callW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} {entry v : BitVec 64} {P Q : BitVec 64 → IProp GF}
     (hexec : JalExec M i code entry) :

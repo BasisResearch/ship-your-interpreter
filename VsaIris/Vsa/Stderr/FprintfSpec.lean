@@ -2,30 +2,12 @@ import VsaIris.Vsa.Stderr.FprintfBody
 import VsaIris.Vsa.Stderr.FwriteSpec
 import VsaIris.Vsa.Stderr.Promote
 
-/-!
-# `newlib.fprintf`, proved (lane N3)
-
-`fprintf_proved`: `Newlib.fprintfSpec` for every Iris instance and both WPs,
-from `fprintfErr_run` (the whole call as one printing symbolic run) and N1's
-`wp_lroW`, as `fwrite_proved`:
-
-* the run owns `outS s 4096` (`outS_own`);
-* its data view (`fpDt`) holds `_impure_ptr` (`impureRO`), the `.rodata` it
-  reads (`binImg`: the format `"%s\n"`, the decimal point `"."`, the
-  conversion jump table) and the string up to its NUL. The string's bytes are
-  owned by the caller (`ownImg`): `LRO.promote` runs with them owned, and
-  hands them back unchanged;
-* at the return, `FprPost` makes the data `StdioErrOK` (`fpQ_of`).
--/
-
 namespace VsaIris.Newlib
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 open VsaIris.Interp.StrLeaf VsaIris.Inst.Strlen
-
-/-! ## Loads as little-endian values -/
 
 theorem imgLE8_of_ld {M : Mem} {a : Nat} {v : BitVec 64} (h : ldv .ld M a = v) :
     imgLE (imgM M) a 8 = v.toNat := by
@@ -53,16 +35,11 @@ theorem imgLE4_of_lw0 {M : Mem} {a : Nat} (h : ldv .lw M a = 0#64) : imgLE (imgM
   simp only [BitVec.toNat_ofNat, BitVec.toNat_zero] at this hl
   omega
 
-/-! ## The end state -/
-
-/-- What the run ends in: some output after `o`, `pc`/`ra` at the return,
-`sp` and the saved registers back, newlib's data `StdioErrOK`. -/
 def FpQ (o : String) (r s : BitVec 64) (cs : Nat → BitVec 64) (img : Nat → BitVec 8) (t : String)
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop :=
   (∃ o', t = o ++ o') ∧ rv 32 = r ∧ rv 1 = r ∧ rv 2 = s ∧ (∀ x ∈ calleeSaved, rv x = cs x) ∧
     StdioErrOK (fwOut img mv)
 
-/-- **The run's end is `FpQ`.** -/
 theorem fpQ_of {o o' : String} {r s n : BitVec 64} {cs : Nat → BitVec 64}
     {img : Nat → BitVec 8} {M Mt' : Mem} {rv R' : Nat → BitVec 64} {rv' : Nat → BitVec 64}
     {mv' : Nat → BitVec 8} (hok : StdioOK img) (hM : ∀ a, stdioExcl a → imgM M a = img a)
@@ -103,20 +80,13 @@ theorem fpQ_of {o o' : String} {r s n : BitVec 64} {cs : Nat → BitVec 64}
   · rw [hcur _ _ (F _ _ (by decide) (by decide))]; exact imgLE8_of_ld hp.err.base
   · rw [hcur _ _ (F _ _ (by decide) (by decide))]; exact imgLE4_of_lw0 hp.err.flags2
 
-/-! ## The data view -/
-
-/-- The `.rodata` the run reads: the format `"%s\n"`, the decimal point `"."`,
-the conversion jump table. -/
 abbrev fpRo : List Nat := accAddrs 0x800195e0 4 ++ accAddrs 0x80019770 2 ++ accAddrs 0x8001a288 364
 
-/-- The data view's addresses: the `.rodata` read, the string and its NUL. -/
 abbrev fpDA (p len : Nat) : List Nat := fpRo ++ accAddrs p (len + 1)
 
-/-- The data view's image: `_impure_ptr`, `.rodata`, the string's bytes. -/
 def fpImg (bv : Nat → BitVec 8) (a : Nat) : BitVec 8 :=
   if impureW a then impureByte a else if rodataDom a then rodataByte a else bv a
 
-/-- The data view. -/
 def fpDt (bv : Nat → BitVec 8) (p len : Nat) : Mem := fillMem (fpImg bv) (fprDA (fpDA p len))
 
 theorem imgM_fpDt {bv : Nat → BitVec 8} {p len a : Nat} (h : a ∈ fprDA (fpDA p len)) :
@@ -197,13 +167,10 @@ theorem fp_sfmt (bv : Nat → BitVec 8) (p len : Nat) :
       rw [imgLE_congr (img' := rodataByte) e]; decide
     rw [ldv_lw_of_imgLE h]; decide
 
-/-! ## Ownership -/
-
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- Read-only bytes and exclusively owned ones do not share an address. -/
 theorem roImg_ownImg_disj (S T : Nat → Prop) (img img' : Nat → BitVec 8) :
     roImg (GF := GF) S img ∗ ownImg T img' ⊢ ⌜∀ a, S a → ¬ T a⌝ := by
   refine (forall_intro fun a => ?_).trans pure_forall.2
@@ -211,7 +178,6 @@ theorem roImg_ownImg_disj (S T : Nat → Prop) (img img' : Nat → BitVec 8) :
   · exact (roImg_ownImg_off ha).trans (pure_mono fun h _ => h)
   · exact (pure_intro fun h => absurd h ha)
 
-/-- The `.rodata` and `_impure_ptr` the run reads, read-only. -/
 theorem roImg_fp : iprop(binImg ∗ impureRO) ⊢@{IProp GF}
     roImg (fun a => impureW a ∨ rodataDom a) (fwImg rodataByte) := by
   iintro ⟨#Hb, #Hi⟩
@@ -219,8 +185,6 @@ theorem roImg_fp : iprop(binImg ∗ impureRO) ⊢@{IProp GF}
   iapply roImg_fw rodataDom rodataByte
   iframe Hi Hr
 
-/-- **The run's read-only cells**, without the string: `gp`, the code, the
-`.rodata` read, `_impure_ptr`. -/
 theorem fpView (bv : Nat → BitVec 8) (p len : Nat) :
     iprop(gp ↦ᵣ□ gpV ∗ binImg ∗ impureRO) ⊢@{IProp GF}
       roOwn roR (stdioText ++ dataOf (fpDt bv p len) (fprDA fpRo)) := by
@@ -255,9 +219,6 @@ theorem fpView (bv : Nat → BitVec 8) (p len : Nat) :
 
 end
 
-/-! ## The call -/
-
-/-- The first index where `P` holds. -/
 theorem first_of_exists {P : Nat → Prop} : ∀ k, P k → ∃ m, m ≤ k ∧ P m ∧ ∀ j, j < m → ¬ P j
   | 0, h => ⟨0, Nat.le_refl _, h, fun j hj => absurd hj (Nat.not_lt_zero _)⟩
   | k + 1, h => by
@@ -272,9 +233,6 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`fprintf(stderr, "%s\n", p)`, proved**: a NUL within the `n < 2^30`
-owned bytes at `p`, in RAM off the tohost cells; the stack (below `s`, above
-newlib's data), newlib's data and `errno`. -/
 theorem fprintf_proved (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s p : BitVec 64) (n : Nat) (bv : Nat → BitVec 8) (cs : Nat → BitVec 64) (o : String)
     (hcl : CodeLive live) (hz : ∃ k, k < n ∧ bv (p.toNat + k) = 0) (hn : n < 2 ^ 30)
@@ -435,7 +393,6 @@ theorem fprintf_proved (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel l
 
 end
 
-/-- **`newlib.fprintf`, discharged.** -/
 theorem fprintf_ok : FprintfProved :=
   fun live Wp s p n bv cs o hcl hz hn hp1 hp2 hp3 hsp hs4 =>
     fprintf_proved live Wp s p n bv cs o hcl hz hn hp1 hp2 hp3 hsp hs4

@@ -1,26 +1,11 @@
 import VsaIris.Interp.CallCloBind
 import VsaIris.Interp.ExecBlock
 
-/-!
-# The closure call: the body's entry (lane E4)
-
-From `jal value_null(sp+144)` (`0x80003328`, the parameters bound) to G's
-closure loop head (`0x80003354`) or, for an empty body, the normal end
-(`0x80003954`), for either WP (`cloBodyEntry`): `value_null` fills the result
-slot, the slot is lent out (`slot24`, as `closureSeq{T,P}_body` take it), and
-`CloB_runB` reads the body node and its count.
-
-`CloAt`: what every exit of the path needs of the registers and the frame
-(the caller's `sret`, `in`, the callee-saved registers the path never
-writes, the spills).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The registers and frame words every exit of the closure path needs. -/
 structure CloAt (R : Nat → BitVec 64) (Mt : Mem) (s inp sret ret : BitVec 64) (rv : Nat → BitVec 64) :
     Prop where
   sp : R 2 = s + 18446744073709550528#64
@@ -29,7 +14,6 @@ structure CloAt (R : Nat → BitVec 64) (Mt : Mem) (s inp sret ret : BitVec 64) 
   keep : ∀ x ∈ [20, 22, 24, 25, 26, 27], R x = rv x
   spills : CloSpills Mt s ret rv
 
-/-- `CloAt` through a write to a register it does not speak of. -/
 theorem CloAt.upd {R : Nat → BitVec 64} {Mt : Mem} {s inp sret ret : BitVec 64} {rv : Nat → BitVec 64}
     (h : CloAt R Mt s inp sret ret rv) {x : Nat} (hx : x ∉ [2, 9, 18, 20, 22, 24, 25, 26, 27])
     (w : BitVec 64) : CloAt (upd R x w) Mt s inp sret ret rv := by
@@ -43,7 +27,6 @@ theorem CloAt.upd {R : Nat → BitVec 64} {Mt : Mem} {s inp sret ret : BitVec 64
       simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hy; omega
     simp only [upd_apply, this, ite_false]; exact h.keep y hy
 
-/-- The result slot `sp+144` of `eval_expr`'s frame. -/
 theorem cloSlotGeom {s : BitVec 64} (hfg : EvalFrameG s) :
     SlotGeom (s + 18446744073709550528#64 + 144#64) := by
   have h := evalSP_off' hfg 144 (by decide)
@@ -57,9 +40,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- **The body's entry**, for either WP: `value_null(sp+144)`, the slot lent
-out, the body node's count: G's loop head at index `0` (a nonempty body) or
-the normal end (an empty one). -/
 theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs}
     (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N Wp p)
@@ -89,7 +69,7 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   have h144 := hoff 144 (by decide)
   obtain ⟨arr, count, hsn, hcnt, hlen, hbn⟩ := blockNode_of hbr hpg
   iintro ⟨#Hcode, #Hro, Hms, HF, Hk⟩
-  -- `value_null(sp+144)`
+
   ihave Hvn := hvn $$ %(s + 18446744073709550528#64 + 144#64)
   unfold valueNullSpec
   iapply ms_callHelperSlot Wp (i := 0x80003328)
@@ -101,7 +81,7 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   isplitl []
   · ipureintro; exact hpd.a0
   iintro %R1 %w0 %w1 %w2 %hk1 #-
-  -- the slot lent out
+
   iintro Hms
   ihave Hms := ms_iff (T := fun k => closureS s k ∨ InExt ((s + 18446744073709550528#64 + 144#64).toNat, 24) k)
     (fun k => by
@@ -114,7 +94,7 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => by
     simp only [closureS, InExt] at h1 h2; rw [h144] at h2; exact h1.2 ⟨by omega, by omega⟩) $$ Hms
   ihave Hslot := ownSet_forget _ _ $$ Hslot
-  -- the body node and its count
+
   have hk2 : ∀ y ∈ fRegs, upd R1 1 (BitVec.ofNat 64 (0x80003328 + 4)) y = R y := fun y hy => by
     have : y ≠ 1 := fun h => by subst h; simp at hy
     simp only [upd_apply, this, ite_false]; exact hk1 y hy (by simp)
@@ -155,7 +135,7 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
         · omega
         · exact (hbn h).small)
     ((hk2 21 (by decide)).trans hpd.s5) hbod hcnt ?_ ?_
-  · -- a nonempty body: G's loop head
+  ·
     intro hgt
     apply swp_closeRM
     intro R2 Mt2 hR2 hMt2
@@ -177,7 +157,7 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
     iintro ⟨⟨HF, Hslot, Hk⟩, Hms⟩
     ihave Hk := and_elim_l $$ Hk
     iapply Hk $$ %_ %_ %(BitVec.ofNat 64 arr) %count %⟨hne, hbn hpos, hch, hat2⟩ HF Hms Hslot
-  · -- an empty body: the normal end
+  ·
     intro hle
     apply swp_closeRM
     intro R2 Mt2 hR2 hMt2

@@ -1,30 +1,12 @@
 import VsaIris.Interp.SpecLoop
 import VsaIris.Interp.NewlibCall
 
-/-!
-# The loop kit (lane E6): calls and slots shared by the `while`/`for` loops
-
-* `wp_callAbort_laterX`: `wp_callAbort_later` whose `jal` also strips the later
-  of one more resource `X` (a loop's own Löb hypothesis: the condition's
-  `jal eval_expr` at the head of each iteration pays for the back edge).
-* `ms_callEvalPx`: a child call into `eval_expr` from `exec_stmt`'s frame,
-  partial mode (`ms_callEvalP` is its twin in `eval_expr`'s frame). On abort
-  the child's slot rejoins the frame bytes.
-* `ms_truthyCall`: `value_truthy` on a frame slot holding a represented
-  value's three words, for either WP (the condition copy at `sp+16`).
-* `execSlot`: the geometry of a slot of `exec_stmt`'s frame.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst
 open Vsa.MemRepr Vsa.Sim Vsa.While Vsa.RuntimeRepr
 
-/-! ## Pure geometry -/
-
-/-- A slot of `exec_stmt`'s frame at offset `o` below the lowered `sp`: its
-address as a plain sum, and its slot geometry. -/
 structure ExecSlot (s : BitVec 64) (o : Nat) : Prop where
   addr : (s + 18446744073709551440#64 + BitVec.ofNat 64 o).toNat = s.toNat - 176 + o
   geo : SlotGeom (s + 18446744073709551440#64 + BitVec.ofNat 64 o)
@@ -40,33 +22,27 @@ theorem execSlot {s : BitVec 64} (h : ExecFrameGeom s) {o : Nat} (ho : o + 24 �
   · rw [e]; unfold Vsa.Sim.tohostAddr; omega
   · rw [e]; omega
 
-/-- A frame address as a plain sum (the runs' and calls' address side
-conditions become linear arithmetic; `ix_fwd using [execSP_off hfg]`). -/
 theorem execSP_off {s : BitVec 64} (h : ExecFrameGeom s) (c : Nat) (hc : c < 4096) :
     (s + 18446744073709551440#64 + BitVec.ofNat 64 c).toNat = s.toNat - 176 + c := by
   have h1 := h.sf; have h2 := h.lo; have h3 := h.hi
   rw [BitVec.toNat_add, h1, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := c) (by omega)]
   exact Nat.mod_eq_of_lt (by omega)
 
-/-- A slot inside the frame's scratch words is in the frame. -/
 theorem execSlot_in {s : BitVec 64} {o : Nat} (hs : ExecSlot s o) (ho : o + 24 ≤ 176) :
     ∀ b, InExt ((s + 18446744073709551440#64 + BitVec.ofNat 64 o).toNat, 24) b → execS s b := by
   intro b hb; rw [hs.addr] at hb; simp only [InExt] at hb ⊢; omega
 
-/-- A slot inside the scratch words `[sp+16, sp+128)`. -/
 theorem execSlot_W {s : BitVec 64} {o : Nat} (hs : ExecSlot s o) (h16 : 16 ≤ o)
     (ho : o + 24 ≤ 128) :
     ∀ b, InExt ((s + 18446744073709551440#64 + BitVec.ofNat 64 o).toNat, 24) b → execW s b := by
   intro b hb; rw [hs.addr] at hb; simp only [InExt] at hb ⊢; omega
 
-/-- Writing a scratch slot leaves the frame outside the scratch words. -/
 theorem Untouched.slotWrite {s : BitVec 64} {o : Nat} (hs : ExecSlot s o) (h16 : 16 ≤ o)
     (ho : o + 24 ≤ 128) (Mt : Mem) (w0 w1 w2 : BitVec 64) :
     Untouched (execS s) (execW s) Mt
       (slotWrite Mt (s + 18446744073709551440#64 + BitVec.ofNat 64 o).toNat w0 w1 w2) :=
   fun a _ hw => imgM_slotWrite_out w0 w1 w2 fun hin => hw (execSlot_W hs h16 ho a hin)
 
-/-- A store of `w ≤ 8` bytes at `sp + o` inside the scratch words leaves the rest. -/
 theorem Untouched.store {s : BitVec 64} {o w : Nat} (hs : ExecFrameGeom s) (h16 : 16 ≤ o)
     (ho : o + w ≤ 128) (Mt : Mem) (v : BitVec 64) :
     Untouched (execS s) (execW s) Mt
@@ -90,7 +66,6 @@ section Shared
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The code alone is a run's read-only list with an empty data view. -/
 theorem roOwn_code (m : Mem) : codeRes (GF := GF) ⊢ roOwn roR (interpText ++ dataOf m []) := by
   unfold codeRes; simp only [dataOf, List.map_nil, List.append_nil]; exact .rfl
 
@@ -100,17 +75,14 @@ theorem statusRet_brk [InterpGS GF] (N : NativeAddrs) (a : Nat) :
 theorem statusRet_cont [InterpGS GF] (N : NativeAddrs) (a : Nat) :
     statusRet (GF := GF) N a .cont = slot24 a := rfl
 
-/-- The named destructurer of `astSG`. -/
 theorem astSG_elim (a : Nat) (sm : Stmt) :
     astSG (GF := GF) a sm ⊢ ∃ (P : Nat → Prop) (m : Mem),
       ⌜StmtReprWithin m P a sm ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m := .rfl
 
-/-- The named destructurer of `astEG`. -/
 theorem astEG_elim (a : Nat) (e : Expr) :
     astEG (GF := GF) a e ⊢ ∃ (P : Nat → Prop) (m : Mem),
       ⌜ExprReprWithin m P a e ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m := .rfl
 
-/-- A child statement's persistent AST, from the parent's view. -/
 theorem astSG_of_view {m : Mem} {P : Nat → Prop} {a : Nat} {sm : Stmt}
     (h : StmtReprWithin m P a sm) (hg : ∀ k, P k → ReadOK k) :
     roOn (GF := GF) P m ⊢ astSG a sm := by
@@ -128,8 +100,6 @@ theorem KeepRegs.calleeSaved_upd {R R' : Nat → BitVec 64} (h : KeepRegs callee
     have hne : y ≠ x := fun e => hx (e ▸ hy)
     rw [upd_apply, ite_eq_right_iff.mpr (fun h => absurd h hne)]; exact h y hy
 
-/-- An `exec_stmt` arm's head registers survive a run that keeps the
-callee-saved ones. -/
 theorem StmtHead.keep {R R' : Nat → BitVec 64} {s aS inp aRet aEnv : BitVec 64}
     (h : StmtHead R s aS inp aRet aEnv) (hk : KeepRegs calleeSaved R R') :
     StmtHead R' s aS inp aRet aEnv :=
@@ -139,23 +109,18 @@ theorem StmtHead.keep {R R' : Nat → BitVec 64} {s aS inp aRet aEnv : BitVec 64
 
 theorem KeepRegs.refl' (ks : List Nat) (R : Nat → BitVec 64) : KeepRegs ks R R := fun _ _ => rfl
 
-/-- A register update off the kept list keeps it. -/
 theorem KeepRegs.upd_right {ks : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R')
     {x : Nat} (hx : x ∉ ks) (w : BitVec 64) : KeepRegs ks R (upd R' x w) :=
   fun y hy => by
     have hne : y ≠ x := fun e => hx (e ▸ hy)
     rw [upd_apply, ite_eq_right_iff.mpr (fun h => absurd h hne)]; exact h y hy
 
-/-- A helper that keeps every body register off its clobber list keeps the
-callee-saved ones when none is clobbered. -/
 theorem KeepRegs.of_helper {clob : List Nat} {R R' : Nat → BitVec 64}
     (h : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) (hc : ∀ x ∈ calleeSaved, x ∈ fRegs ∧ x ∉ clob) :
     KeepRegs calleeSaved R R' := fun x hx => h x (hc x hx).1 (hc x hx).2
 
-/-- A run's end registers (an `upd` chain off the kept list) keep them. -/
 macro "keep_upd" : tactic => `(tactic| ((repeat (apply KeepRegs.upd_right _ (by decide))); exact KeepRegs.refl' _ _))
 
-/-- A store inside the written words leaves the rest of the frame. -/
 theorem Untouched.store' {S W : Nat → Prop} (M : Mem) {b w : Nat} (v : BitVec 64)
     (h : ∀ a, b ≤ a → a < b + w → W a) : Untouched S W M (writeLog M [(b, w, v)]) :=
   fun a _ hw => imgM_store_miss _ _ (by
@@ -167,10 +132,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
 omit I in
-/-- **Call under a later, with one more later-guarded resource** (partial
-mode): the `jal`'s step strips the later of the callee's spec AND of `X`,
-which the return continuation receives. A loop's Löb hypothesis rides on the
-condition's call this way. -/
+
 theorem wp_callAbort_laterX {M : MachineModel} {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} {entry v : BitVec 64} {P Q : BitVec 64 → IProp GF} {A X : IProp GF}
     (hexec : JalExec M i code entry) :
@@ -195,12 +157,6 @@ theorem wp_callAbort_laterX {M : MachineModel} {Φ : Nat × String → IProp GF}
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ HA
 
-/-- **A child call into `eval_expr` from `exec_stmt`'s frame, partial mode**,
-through the Löb hypothesis; the `jal` also strips the later of `X`. The
-return branch is `ms_callEvalT`'s with the child's derivation and `X`. On
-abort, the child's slot rejoins the frame bytes `S` and the arm aborts with
-the stack below its `sp` and its frame bytes. The continuation pair
-`Kret ∧ Kab` is used by both branches and handed on. -/
 theorem ms_callEvalPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code evalEntryPC)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
@@ -260,11 +216,6 @@ theorem ms_callEvalPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
     iapply HK
     iframe HC Hst HS
 
-/-- **`value_truthy` on a slot of the frame bytes**, for either WP: the slot
-`p` (inside the owned bytes `S`) holds the three words of a represented
-value `v` in the tracking memory's image. The helper leaves the truthiness
-bit in `a0`, clobbers `a0`/`a4`/`a5`, and changes no owned byte outside the
-slot. -/
 theorem ms_truthyCall (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code valueTruthyPC)
@@ -296,10 +247,6 @@ theorem ms_truthyCall (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   · iframe Hms Hval
   iapply Hk $$ %R' %M' %⟨hkeep, hr, hag⟩ Hms
 
-/-- **A child call into `exec_stmt`, partial mode, whose `jal` also strips
-the later of `X`** (`ms_callExecP` with `wp_callAbort_laterX`): the `for`
-loop's body call pays its Löb hypothesis (an iteration may have no
-condition). -/
 theorem ms_callExecPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code execEntryPC)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
@@ -358,7 +305,6 @@ theorem ms_callExecPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
     iapply HK
     iframe HC Hst Hslot HS
 
-/-- Any status's `ret` slot is a slot (the `for` init discards it). -/
 theorem statusRet_slot (N : NativeAddrs) (a : Nat) :
     ∀ status, statusRet (GF := GF) N a status ⊢ slot24 a
   | .ret v => valAt_slot N a v

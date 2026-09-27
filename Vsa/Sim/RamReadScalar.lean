@@ -5,7 +5,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- Actual chunk calls plus exact width coverage supply the total byte result. -/
 theorem checked_mem_read_split_total (σ : Vsa.Machine.MState) (a : BitVec 64)
     (w n d : Nat) (info : Phys_Mem_Access_Info) (hd : 0 < d) (he : n * d = w)
     (hp : SplitReadPlan σ a w n d info)
@@ -19,7 +18,6 @@ theorem checked_mem_read_split_total (σ : Vsa.Machine.MState) (a : BitVec 64)
   rw [splitReadAccum_bytesT σ.mem a.toNat n d hd _ (fun _ _ => rfl)] at h
   exact h
 
-/-- Sail's integer chunk address equals the nonwrapping scalar-plan address. -/
 theorem ramChunkAddress_scalar (a : BitVec 64) (k i : Nat) :
     ramChunkAddress a (2 ^ scalarChunkExp a k) i =
       physaddr.Physaddr (scalarChunkAddress a k i) := by
@@ -27,7 +25,6 @@ theorem ramChunkAddress_scalar (a : BitVec 64) (k i : Nat) :
     ← Int.natCast_mul, BitVec.ofInt_natCast]
   rfl
 
-/-- GoodState and the original RAM window supply every actual chunk check. -/
 theorem SplitReadChunk.of_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (a : BitVec 64) (k i : Nat) (hi : i < 2 ^ (k - scalarChunkExp a k))
     (hlo : 0x80000000 ≤ a.toNat) (hhi : a.toNat + 2 ^ k ≤ 0x100000000)
@@ -46,8 +43,6 @@ theorem SplitReadChunk.of_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     rw [hf.address] at h
     exact h
 
-/-- Every scalar RAM read succeeds with its total bytes, including misaligned
-and granule-crossing addresses. No data-alignment premise is required. -/
 theorem checked_mem_read_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (a : BitVec 64) (k : Nat) (hk : k ≤ 3)
     (hlo : 0x80000000 ≤ a.toNat) (hhi : a.toNat + 2 ^ k ≤ 0x100000000)

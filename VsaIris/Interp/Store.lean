@@ -1,20 +1,5 @@
 import VsaIris.Interp.Repr
 
-/-!
-# The store: one opener, allocation, discard, two-owner facts (package R)
-
-* `storeRepr_open`: the ONE frame opener every `env_*` spec uses (xv6iris
-  `claude-notes/spec-modules.md`, "Simultaneous borrows of a sealed bundle
-  need ONE opener"); `storeRepr_open_define` specializes the closer to
-  `Store.define`.
-* `storeRepr_allocFrame` (`env_new`) and `storeRepr_allocClosure` (`EX_FN`):
-  the ghost maps grow by a persistent fragment.
-* `ownImg_persist`/`strAt_of_owned`: discard exclusively written bytes to
-  read-only ones, AFTER the write (INTERP_DESIGN.md §10.6).
-* Two owners (§10.7): the store's blocks are pairwise disjoint and off the
-  allocator's footprint (`storeRepr_blocks_off_heap`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProofMode
@@ -25,8 +10,6 @@ section Store
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable (N : NativeAddrs)
-
-/-! ## The frame list -/
 
 theorem framesOwn_length :
     ∀ (i : Nat) (fs : List Frame) (Bs : List (List (Nat × Nat))),
@@ -40,7 +23,6 @@ theorem framesOwn_length :
   | _, [], _ :: _ => by rw [framesOwn_nil_cons]; exact false_elim
   | _, _ :: _, [] => by rw [framesOwn_cons_nil]; exact false_elim
 
-/-- Split off frame `i + k`, with the closer that puts back any frame. -/
 theorem framesOwn_open :
     ∀ (k i : Nat) (fs : List Frame) (Bs : List (List (Nat × Nat))) (f : Frame),
       fs[k]? = some f →
@@ -76,7 +58,6 @@ theorem framesOwn_open :
     iframe Hg
     iapply Hc $$ %f' %bl' Hf'
 
-/-- A list with `l[k]? = some x` is `take k ++ x :: drop (k+1)`. -/
 theorem list_split_at {α} {l : List α} {k : Nat} {x : α} (h : l[k]? = some x) :
     l = l.take k ++ x :: l.drop (k + 1) := by
   have hk : k < l.length := by
@@ -86,12 +67,6 @@ theorem list_split_at {α} {l : List α} {k : Nat} {x : α} (h : l[k]? = some x)
   have hx : l[k] = x := by simpa [List.getElem?_eq_getElem hk] using h
   conv => lhs; rw [← List.take_append_drop k l, List.drop_eq_getElem_cons hk, hx]
 
-/-! ## The one opener -/
-
-/-- **The frame opener.** Frame `fa` comes out with its blocks `bl`, the rest
-of the store's blocks around it; the closer takes back any frame `f'` at the
-same address with any blocks `bl'`, for any store `s'` that differs from `s`
-only at frame `fa`. -/
 theorem storeRepr_open {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f : Frame}
     (hf : s.frames[fa]? = some f) :
     storeRepr (GF := GF) N s B ⊢ ∃ bl B₁ B₂, ⌜B = B₁ ++ bl ++ B₂⌝ ∗ frameOwn N fa f bl ∗
@@ -127,14 +102,12 @@ theorem storeRepr_open {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f : Fram
     simp [List.set_eq_take_append_cons_drop, hlt]
   · intro a cd h; rw [hcl] at h; exact hbb a cd h
 
-/-- The frame `env_define` leaves (`Store.define`'s update of one frame). -/
 def defineFrame (f : Frame) (x : String) (v : Value) : Frame :=
   { f with vars := if f.vars.any (·.1 == x) then (f.vars.map fun p => if p.1 == x then (x, v) else p)
                    else f.vars ++ [(x, v)] }
 
 instance : Inhabited Frame := ⟨⟨none, []⟩⟩
 
-/-- `Store.define` changes only the defined frame. -/
 theorem define_frames_toList {s : Store} {fa : Addr} {f : Frame} (hf : s.frames[fa]? = some f)
     (x : String) (v : Value) :
     (s.define fa x v).frames.toList = s.frames.toList.set fa (defineFrame f x v) := by
@@ -144,10 +117,8 @@ theorem define_frames_toList {s : Store} {fa : Addr} {f : Frame} (hf : s.frames[
   rw [hf']
   rfl
 
-/-! ## Address lookups -/
-
 omit I in
-/-- A persistent list element can be read without consuming the list. -/
+
 theorem sepL_persist_all {α} (Φ : α → IProp GF) [∀ x, Persistent (Φ x)] :
     ∀ l : List α, sepL l Φ ⊢ □ ∀ x, ⌜x ∈ l⌝ → Φ x
   | [] => by
@@ -165,7 +136,6 @@ theorem sepL_persist_all {α} (Φ : α → IProp GF) [∀ x, Persistent (Φ x)] 
     · iexact Hy
     · iapply Hys $$ %x %hx
 
-/-- A frame address fragment names an allocated frame. -/
 theorem storeRepr_frameAt {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢ ⌜fa < s.frames.size⌝ := by
   unfold storeRepr frameAt
@@ -174,7 +144,6 @@ theorem storeRepr_frameAt {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
   ipureintro
   exact (hp.maps.frames fa).1 (by simp [h])
 
-/-- A closure address fragment names an allocated closure. -/
 theorem storeRepr_closAt {s : Store} {B : List (Nat × Nat)} {ca p : Nat} :
     storeRepr (GF := GF) N s B ∗ closAt ca p ⊢ ⌜ca < s.closures.size⌝ := by
   unfold storeRepr closAt
@@ -200,9 +169,6 @@ theorem closuresOwn_get :
     rw [show i + (k + 1) = i + 1 + k by omega]
     iapply closuresOwn_get (i + 1) cs k cd h $$ H
 
-/-! ## The empty store and allocation -/
-
-/-- The empty store over the two freshly allocated (empty) maps. -/
 theorem storeRepr_empty :
     ghost_map_auth (GF := GF) I.frameName (DFrac.own 1) (∅ : NatMap Nat) ∗
       ghost_map_auth I.closName (DFrac.own 1) (∅ : NatMap Nat) ⊢
@@ -246,8 +212,6 @@ theorem framesOwn_snoc (i : Nat) (fs : List Frame) (Bs : List (List (Nat × Nat)
       iapply ih (i + 1) Bs (by omega)
       iframe Hr Hf
 
-/-- **Frame allocation** (`env_new`): a frame body at a fresh `Env*` joins the
-store as frame `s.frames.size`, whose address fragment is handed out. -/
 theorem storeRepr_allocFrame {s s' : Store} {B : List (Nat × Nat)} {f : Frame} {Gm : FrameGeom}
     (hfr : s'.frames.toList = s.frames.toList ++ [f]) (hcl : s'.closures = s.closures)
     (hinv' : Vsa.Sim.StoreInvariant s') :
@@ -286,8 +250,6 @@ theorem storeRepr_allocFrame {s s' : Store} {B : List (Nat × Nat)} {f : Frame} 
   iframe He Hbody
   ipureintro; rfl
 
-/-! ## Discarding written bytes to read-only ones -/
-
 omit I in
 theorem mem_persist (a : Nat) (b : BitVec 8) : (a ↦ₘ b) ⊢@{IProp GF} |==> a ↦ₘ□ b := by
   unfold memPointsTo
@@ -307,9 +269,7 @@ theorem sepL_persist_bytes (img : Nat → BitVec 8) :
     iframe Hx Hxs
 
 omit I in
-/-- **Discard.** Exclusively owned bytes become read-only forever. Used AFTER
-the last write (INTERP_DESIGN.md §10.6): a string buffer once copied, a
-closure object once filled, the `jmp_buf` once `setjmp` ran. -/
+
 theorem ownImg_persist (S : Nat → Prop) (img : Nat → BitVec 8) :
     ownImg (GF := GF) S img ⊢ |==> roImg S img := by
   unfold ownImg ownSet roImg
@@ -322,7 +282,7 @@ theorem ownImg_persist (S : Nat → Prop) (img : Nat → BitVec 8) :
   iapply Hall $$ %k %((hmem k).2 hk)
 
 omit I in
-/-- A freshly written C string, discarded. -/
+
 theorem strAt_of_owned {p : Nat} {s : String} {img : Nat → BitVec 8} (h : CStrImg img p s)
     (hw : StrWin p s.toList.length) :
     ownImg (GF := GF) (InExt (p, s.toList.length + 1)) img ⊢ |==> strAt p s := by
@@ -335,7 +295,7 @@ theorem strAt_of_owned {p : Nat} {s : String} {img : Nat → BitVec 8} (h : CStr
   ipureintro; exact ⟨h, hw⟩
 
 omit I in
-/-- A read-only byte and an exclusively owned image do not share an address. -/
+
 theorem roImg_ownImg_off {S T : Nat → Prop} {img img' : Nat → BitVec 8} {a : Nat}
     (ha : S a) : roImg (GF := GF) S img ∗ ownImg T img' ⊢ ⌜¬ T a⌝ := by
   unfold roImg ownImg ownSet
@@ -362,8 +322,6 @@ theorem roImg_ownImg_off {S T : Nat → Prop} {img img' : Nat → BitVec 8} {a :
   · iframe Ha Hl
   ipureintro; exact hn
 
-/-- Every existing closure object is off a block the caller owns exclusively,
-so its pointer is not the block's start. -/
 theorem closuresOwn_fresh {p : Nat} {img : Nat → BitVec 8} {mc : NatMap Nat} :
     ∀ (i : Nat) (cs : List ClosureData),
       closuresOwn (GF := GF) i cs ∗ ghost_map_auth I.closName (DFrac.own 1) mc ∗
@@ -408,10 +366,6 @@ theorem closuresOwn_snoc (i : Nat) (cs : List ClosureData) (cd : ClosureData) :
     iapply ih (i + 1)
     iframe Hr Hd
 
-/-- **Closure allocation** (`EX_FN`): a filled 16-byte closure object is
-discarded to read-only and joins the store as closure `s.closures.size`.
-Its pointer is fresh against every existing closure by ownership
-(`closuresOwn_fresh`), which maintains `StoreMaps.clos_inj`. -/
 theorem storeRepr_allocClosure {s s' : Store} {B : List (Nat × Nat)} {cd : ClosureData}
     {p q e : Nat} {img : Nat → BitVec 8}
     (hcl : s'.closures.toList = s.closures.toList ++ [cd]) (hfr : s'.frames = s.frames)
@@ -490,10 +444,8 @@ theorem storeRepr_allocClosure {s s' : Store} {B : List (Nat × Nat)} {cd : Clos
   ipureintro
   exact hobj
 
-/-! ## Two owners (INTERP_DESIGN.md §10.7) -/
-
 omit I in
-/-- Two exclusively owned images join into one over the union. -/
+
 theorem ownImg_join (S T : Nat → Prop) (f g : Nat → BitVec 8) :
     ownImg (GF := GF) S f ∗ ownImg T g ⊢
       ∃ h, ownImg (fun a => S a ∨ T a) h ∗ ⌜∀ a, S a → ¬ T a⌝ := by
@@ -522,7 +474,6 @@ theorem blocksCover_append (bl bl' : List (Nat × Nat)) (a : Nat) :
     · exact ⟨b, .inl hb, ha⟩
     · exact ⟨b, .inr hb, ha⟩
 
-/-- A frame owns every byte of its blocks, which are pairwise disjoint. -/
 theorem frameOwn_cover (fa : Addr) (f : Frame) (bl : List (Nat × Nat)) :
     frameOwn (GF := GF) N fa f bl ⊢
       ∃ img, ownImg (BlocksCover bl) img ∗ ⌜bl.Pairwise ExtDisj⌝ := by
@@ -533,7 +484,6 @@ theorem frameOwn_cover (fa : Addr) (f : Frame) (bl : List (Nat × Nat)) :
   iframe Hown
   ipureintro; exact hlay.disjoint
 
-/-- All frames together own the bytes of all their blocks, pairwise disjoint. -/
 theorem framesOwn_cover :
     ∀ (i : Nat) (fs : List Frame) (Bs : List (List (Nat × Nat))),
       framesOwn (GF := GF) N i fs Bs ⊢
@@ -565,7 +515,6 @@ theorem framesOwn_cover :
       rw [List.flatten_cons, List.pairwise_append]
       refine ⟨hp1, hp2, fun b hb b' hb' a ha ha' => hd a ⟨b, hb, ha⟩ ⟨b', hb', ha'⟩⟩
 
-/-- The store's blocks are pairwise disjoint. -/
 theorem storeRepr_blocks_disjoint {s : Store} {B : List (Nat × Nat)} :
     storeRepr (GF := GF) N s B ⊢ ⌜B.Pairwise ExtDisj⌝ := by
   unfold storeRepr

@@ -5,33 +5,12 @@ import VsaIris.Interp.NewlibCall
 import VsaIris.Interp.HelperRun
 import VsaIris.Vsa.StrlenOwned
 
-/-!
-# From a `snprintf` run to its Iris specification (lane N2)
-
-A `snprintf` hole is a `fnSpecW` in H5's calling convention: argument
-registers (`argsAt`), the destination block (`blockOwn`), newlib's data
-(`stdioOwn`), the call frame (`callFrame`: `sp`, 1024 bytes of stack, the
-callee-saved registers, the temporaries, `gp`, the image), and read-only
-inputs. `snpSpec_of_run` turns a run over `SnpW` from the entry into that
-specification: the registers become one register file (`call_regs`), the
-owned bytes one set `snpS` (`snpBytes`, every disjointness from ownership),
-the read-only cells the run's code and data view (`roOwn_snp`), and the end
-state gives the bytes back (`snpBytes_back`) with the destination's image.
-
-The register and read-only-disjointness lemmas are lane N1's
-(`Vsa/Stdout/OutSpec.lean`: `call_regs`, `ownSet_ro_off`).
--/
-
 namespace VsaIris.Sym
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib
 open VsaIris.Inst
 
-/-! ## The owned bytes -/
-
-/-- The owned byte sets of a `snprintf` call, pairwise disjoint (from their
-ownership). -/
 structure SnpDisj (s dst n : Nat) : Prop where
   stdio_stack : ∀ a, stdioExcl a → ¬ InExt (s - 1024, 1024) a
   stdio_dst : ∀ a, stdioExcl a → ¬ InExt (dst, n) a
@@ -54,9 +33,6 @@ section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The owned bytes of a `snprintf` call**, at one tracking memory:
-newlib's exclusive data at its image, the stack and the destination at any
-values. -/
 theorem snpBytes (img : Nat → BitVec 8) (s dst n : Nat) (hs : 1024 ≤ s) :
     iprop(ownSet (GF := GF) stdioExcl (fun a => a ↦ₘ img a) ∗ blockOwn (s - 1024) 1024 ∗
       blockOwn dst n) ⊢
@@ -98,7 +74,6 @@ theorem snpBytes (img : Nat → BitVec 8) (s dst n : Nat) (hs : 1024 ≤ s) :
   rw [hM a ((snpS_iff hs a).2 (.inl ha))]
   simp [f, ha]
 
-/-- **The owned bytes back**: newlib's data, the stack, the destination. -/
 theorem snpBytes_back (mv : Nat → BitVec 8) (s dst n : Nat) (hs : 1024 ≤ s)
     (D : SnpDisj s dst n) :
     ownSet (GF := GF) (snpS s dst n) (fun a => a ↦ₘ mv a) ⊢
@@ -124,15 +99,10 @@ theorem snpBytes_back (mv : Nat → BitVec 8) (s dst n : Nat) (hs : 1024 ≤ s)
 
 end Own
 
-/-! ## The specification from a run -/
-
 section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- What a `snprintf` run's end state keeps: `ra`, `sp` and the
-callee-saved registers, and every byte outside its stack and the
-destination. -/
 structure SnpRet (R : Nat → BitVec 64) (Mt : Mem) (s dst n : Nat) (R' : Nat → BitVec 64)
     (Mt' : Mem) : Prop where
   ra : R' 1 = R 1
@@ -140,10 +110,6 @@ structure SnpRet (R : Nat → BitVec 64) (Mt : Mem) (s dst n : Nat) (R' : Nat �
   saved : ∀ x ∈ Newlib.calleeSaved, R' x = R x
   frame : ∀ a, ¬ (s - 1024 ≤ a ∧ a < s) → ¬ (dst ≤ a ∧ a < dst + n) → imgM Mt' a = imgM Mt a
 
-/-- **A `snprintf` call from its run.** The run, from the call's registers
-and owned bytes (newlib's data at a `StdioOK` image, the locale words as
-loads), reads the data view the read-only input `Rr` supplies and ends in
-`SnpRet` with the destination's image satisfying `Post`. -/
 theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live))
     {Pre Post' : BitVec 64 → IProp GF} {args : List (BitVec 64)} {Rr : IProp GF}
     {s : BitVec 64} {dst n : Nat} {cs : Nat → BitVec 64} {X : Type} {f : X → Nat → BitVec 8}
@@ -198,7 +164,7 @@ theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
     unfold ms
     dsimp only [F]
     iframe Hpc Hra Hregs HS Hk Hgp Himg Himp
-  -- the end of the run
+
   refine swp_closeF Wp ?_
   unfold ms
   dsimp only [F]
@@ -232,11 +198,6 @@ theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
       iexact Hcs
     · iapply clobbered_of_fn _ R' $$ Ht
 
-/-- **A `snprintf` call whose run reads owned bytes.** Like `snpSpec_of_run`,
-but the read-only input `Rr` opens to a data view whose addresses `DAro` are
-read-only and `DAown` owned (`O`): the run is proved with both in the view,
-then `LocalRun.promote` makes the owned ones part of the run's owned set, and
-hands them back unchanged. The end state is a pure predicate. -/
 theorem snpSpec_of_runO {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live))
     {Pre Post' : BitVec 64 → IProp GF} {args : List (BitVec 64)} {Rr : IProp GF}
     {s : BitVec 64} {dst n : Nat} {cs : Nat → BitVec 64} {X : Type} {f : X → Nat → BitVec 8}
@@ -285,13 +246,13 @@ theorem snpSpec_of_runO {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel 
   · iframe HS Hd
   ihave %hoff2 := ownSet_disj _ _ _ _ $$ [HO HS]
   · iframe HO HS
-  -- the run's data view
+
   let Dt := viewMem (f x) (DAro x ++ DAown x)
   have hoff : ∀ a ∈ DAro x ++ DAown x, ¬ snpS s.toNat dst n a := fun a ha => by
     rcases List.mem_append.mp ha with h | h
     · exact hoff1 (a, _) (List.mem_map_of_mem (f := fun a => (a, imgM Dt a)) h)
     · exact fun hs' => hoff2 a ((hO a).2 h) hs'
-  -- the end state, as a pure predicate
+
   let Qe : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop := fun rv mv =>
     rv 32 = r ∧ rv 1 = r ∧ rv 2 = s ∧ (∀ z ∈ Newlib.calleeSaved, rv z = cs z) ∧
       (∀ a, stdioExcl a → mv a = img a) ∧ Post mv
@@ -361,7 +322,7 @@ theorem snpSpec_of_runO {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel 
     ihave H := ownSet_join _ _ _ (fun a h1 h2 => hoff2 a h2 h1) $$ [HS HO]
     · iframe HS HO
     iapply ownSet_iff _ (fun a => (hS' a).symm) $$ H
-  -- the end of the run
+
   iintro %rv' %mv' %⟨⟨e32, e1, e2, ecs, estd, hpost⟩, hback⟩ Hregs HS
   ihave HS := ownSet_iff _ hS' $$ HS
   ihave ⟨HS, HO⟩ := ownSet_split _ (snpS s.toNat dst n) _ $$ HS

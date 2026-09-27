@@ -2,39 +2,12 @@ import VsaIris.Interp.Abort
 import VsaIris.Vsa.AluStep
 import Vsa.Sim.JmpSites
 
-/-!
-# `runtime_error` and `longjmp`: an error aborts (H5)
-
-`runtime_error(in, line, fmt, a1, a2)` (`0x80002da8`) formats the message into
-a stack buffer, formats `"runtime error [line %d]: %s"` into `in->err_msg`
-(both through `IrisHoles.newlib.snprintf`), and calls
-`longjmp(in->on_error, 1)`, which restores `ra`, `s0`–`s11` and `sp` from the
-`jmp_buf` and returns 1 to `interp_run`'s `setjmp` return. It never returns
-to its caller: its `fnSpecAbort` has an empty return branch and hands the
-abort branch the `longjmp` landing (`landingCore`) with its whole stack region.
-
-```
-80002da8: addi sp,sp,-224; sd s0,208(sp); sd s1,200(sp); mv s0,a0; mv s1,a1;
-          mv a0,sp; li a1,192; sd ra,216(sp)
-80002dc8: jal snprintf                     body = snprintf(sp, 192, fmt, a1, a2)
-80002dcc: li a1,256; mv a4,sp; mv a3,s1; addi a0,s0,224; auipc a2; addi a2
-80002de4: jal snprintf                     snprintf(err_msg, 256, fmt2, line, body)
-80002de8: addi a0,s0,16; li a1,1
-80002df0: jal longjmp
-8000703c: ld ra,0(a0) … ld s11,96(a0); ld sp,104(a0)
-80007074: seqz a0,a1                       (observed ALU step: no `sltiu` in `MKind`)
-80007078: add a0,a0,a1; ret
-```
--/
-
 namespace VsaIris.Newlib.RtErr
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites
   VsaIris.Newlib.Exit VsaIris.Newlib.MainErr VsaIris.Newlib.Landing
-
-/-! ## Segments -/
 
 #derive_case rtASeg chain
   [(0x80002da8#64, 0xf2010113#32),
@@ -78,15 +51,11 @@ open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites
   [(0x80007078#64, 0x00b50533#32)] terminator ⟨0x8000707c#64, 0x00008067#32, 0x67#8, 0x80#8,
       0x00#8, 0x00#8, .jr, 1, 0, 0#13, 0#21, 0x000#12⟩
 
-/-! ## Segment facts -/
-
-/-- `runtime_error`'s stack: its 224-byte frame and `snprintf`'s scratch below. -/
 def rtErrNeed : Nat := 224 + snprintfNeed
 
 abbrev aL (s s0v s1v inp line r : BitVec 64) : GRegs :=
   [(2, s), (8, s0v), (9, s1v), (10, inp), (11, line), (1, r)]
 
-/-- The frame below `s`, in RAM above the HTIF words, 16-aligned. -/
 structure Frame224 (s : BitVec 64) : Prop where
   lo : Vsa.Sim.tohostAddr + 16 + 224 ≤ s.toNat
   hi : s.toNat ≤ 0x88000000
@@ -98,7 +67,6 @@ theorem frame_sub (s : BitVec 64) (h : Frame224 s) :
   rw [show (sign_extend (m := 64) (0xf20#12) : BitVec 64) = -(224#64) by decide, ← BitVec.sub_eq_add_neg]
   exact toNat_sub_frame (by simp; unfold tohostAddr at h1; omega)
 
-/-- An address `sp' + off` in `runtime_error`'s frame. -/
 theorem sp_off (s : BitVec 64) (hg : Frame224 s) (off : Nat) (imm : BitVec 12)
     (himm : (sign_extend (m := 64) imm : BitVec 64).toNat = off) (hoff : off < 224) :
     ∀ x : BitVec 64, x = s + sign_extend (m := 64) (0xf20#12) + sign_extend (m := 64) imm →
@@ -165,7 +133,6 @@ theorem b_pc (a1v a4v s' a3v line a0v inp a2v : BitVec 64) :
     evalBlocksPC 0x80002dcc#64 (SegEvalState.init (bL a1v a4v s' a3v line a0v inp a2v) [])
       rtBSeg = 0x80002de4#64 := rfl
 
-/-- `runtime_error`'s second format, `"runtime error [line %d]: %s"`. -/
 def fmt2 : BitVec 64 := 0x80019318#64
 
 theorem b_fin (a1v a4v s' a3v line a0v inp a2v : BitVec 64) :
@@ -202,7 +169,6 @@ theorem c_fin (a0v inp a1v : BitVec 64) :
     finReg rtCSeg (cL a0v inp a1v) [] 8 = inp ∧ finReg rtCSeg (cL a0v inp a1v) [] 11 = 1#64 :=
   ⟨rfl, rfl, by show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide⟩
 
-/-- The `jmp_buf` at `jbp`, in RAM above the HTIF words. -/
 structure JbGeom (jbp : BitVec 64) : Prop where
   lo : Vsa.Sim.tohostAddr + 16 ≤ jbp.toNat
   hi : jbp.toNat + 112 ≤ 0x100000000
@@ -358,7 +324,6 @@ theorem lj2_fin (rv : BitVec 64) :
     finReg lj2Seg [(10, 0#64), (11, 1#64), (1, rv)] [] 1 = rv :=
   ⟨by show 0#64 + 1#64 = _; decide, rfl, rfl⟩
 
-/-- `longjmp`'s `seqz a0,a1` with `a1 = 1`. -/
 theorem seqz_step (live : Nat → Prop) (hlive : ∀ p ∈ codeFoot ljCodeBase ljCode, live p.1)
     (old : BitVec 64) : ∀ c : Vsa.Machine.Config, VsaOk live c →
       FootHolds (M := vsaModel live) c [(11, DFrac.own 1, 1#64)] (codeFoot ljCodeBase ljCode)
@@ -408,7 +373,6 @@ theorem seqz_step (live : Nat → Prop) (hlive : ∀ p ∈ codeFoot ljCodeBase l
     rwa [show zero_extend (m := 64) (bool_to_bit (zopz0zI_u (1#64 : BitVec 64)
       (sign_extend (m := 64) (0x001#12)))) = 0#64 by decide] at hobs⟩
 
-/-- The bytes of `fmt2`. -/
 def fmt2Bytes : List (BitVec 8) := [0x72#8, 0x75#8, 0x6e#8, 0x74#8, 0x69#8, 0x6d#8, 0x65#8, 0x20#8, 0x65#8, 0x72#8, 0x72#8, 0x6f#8, 0x72#8, 0x20#8, 0x5b#8, 0x6c#8, 0x69#8, 0x6e#8, 0x65#8, 0x20#8, 0x25#8, 0x64#8, 0x5d#8, 0x3a#8, 0x20#8, 0x25#8, 0x73#8]
 
 theorem fmt2_text : ∀ i (h : i < fmt2Bytes.length),
@@ -434,8 +398,6 @@ theorem fmt2_ok {R : Nat → Prop} {rd : Nat → BitVec 8}
     · omega
   subst this
   exact ⟨t, ht⟩
-
-/-! ## The rule -/
 
 section Split
 
@@ -468,11 +430,8 @@ theorem sp224 (s : BitVec 64) : s + sign_extend (m := 64) (0xf20#12) = s - 224#6
   rw [show (sign_extend (m := 64) (0xf20#12) : BitVec 64) = -(224#64) by decide,
     ← BitVec.sub_eq_add_neg]
 
-/-- `runtime_error`'s entry. -/
 abbrev rtErrEntry : BitVec 64 := 0x80002da8#64
 
-/-- `struct Interp` in RAM above the HTIF words and newlib's data (its
-`err_msg` is `snprintf`'s destination, lane N2). -/
 structure InpGeom (inp : BitVec 64) : Prop where
   lo : Vsa.Sim.tohostAddr + 16 ≤ inp.toNat
   hi : inp.toNat + 480 ≤ 0x88000000
@@ -481,9 +440,6 @@ structure InpGeom (inp : BitVec 64) : Prop where
 section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-
-/-! The arithmetic of `rtErr_spec`'s `snprintf` frames, apart from the
-proof's large context. -/
 
 theorem rt_sa {x : Nat} (a : 0x8001c168 ≤ x - rtErrNeed) : 0x8001c168 + 1248 ≤ x := by
   unfold rtErrNeed snprintfNeed at a; omega
@@ -494,13 +450,6 @@ theorem rt_k3 {x : Nat} (a : x ≤ 0x88000000) : x - 224 + 192 ≤ 0x100000000 :
 theorem rt_k4 {x : Nat} (a : 0x8001c168 ≤ x) : 0x8001c168 ≤ x + 224 := by omega
 theorem rt_k5 {x : Nat} (a : x + 480 ≤ 0x88000000) : x + 224 + 256 ≤ 0x100000000 := by omega
 
-/-- **`runtime_error(in, line, fmt, a1, a2)` aborts**, for either WP. Given
-the arguments with a `%s`/`%d` format whose `%s` arguments are readable, its
-stack (`rtErrNeed` bytes), every callee-saved register, the `jmp_buf`
-read-only at `jb` (whose `ra` slot is 4-aligned) and the world, the call never
-returns, and its abort branch receives the `longjmp` landing with its whole
-stack region, `abortRes s rtErrNeed`, and the format's readable bytes, which
-`snprintf` only reads (a caller's owned message buffer rejoins its frame). -/
 theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : Vsa.RuntimeRepr.NativeAddrs) (L : DlLayout)
     (Room : RoomPred) (inp s line fmt x1 x2 : BitVec 64) (cs : Nat → BitVec 64)
@@ -534,7 +483,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   ihave ⟨Hs0, Hsaved⟩ := (sepL_calleeSaved cs).1 $$ Hsaved
   ihave ⟨Hs1, Hsaved⟩ := (sepL_calleeSaved1 cs).1 $$ Hsaved
   ihave #Hcode := instrAt_of_binImg rtErrCode_text $$ Himg
-  -- the frame: body `[s-224, s-32)`, a gap, and the three spills `[s-24, s)`
+
   ihave ⟨Hscr, Hfr⟩ := stackScratch_frame (s := s) (f := 224#64) (n := rtErrNeed)
     (by unfold rtErrNeed snprintfNeed; omega) (by decide) $$ Hscr
   rw [hs224]
@@ -546,7 +495,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   ihave ⟨%Wf, %hWf, Hfr⟩ := sepL_byteAny_exists _ $$ Hfr
   have hWfm : ∀ a, (∃ q ∈ Wf, q.1 = a) ↔ a ∈ List.range' (s.toNat - 24) 24 := by
     intro a; rw [← hWf]; simp
-  -- the prologue
+
   iapply wp_segW live Wp rtASeg (aL s (cs 8) (cs 9) inp line r) [] 0x80002da8#64
     (codeFoot rtErrCodeBase rtErrCode) Wf 7 (by decide)
     (by change ChainOK _ [2, 8, 9, 10, 11, 1] _; decide)
@@ -571,10 +520,10 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   rw [← instrAt_eq]
   iframe Hpc Hsp Hs0 Hs1 Ha0 Ha1 Hra Hfr Hcode
   iintro Hpc ⟨Hsp, Hs0, Hs1, Ha0, Ha1, Hra, -⟩ Hfr -
-  -- open the world: newlib's data and `err_msg`
+
   unfold world worldE interpCtxE interpCoreE errAny
   icases Hw with ⟨%Hh, %B, Hheap, Hstore, Hcon, Hstd, ⟨⟨%g, Hg, Hfa, Hd, %hdle, Hpad, Herr⟩, Hjb'⟩, %hBH, -⟩
-  -- `snprintf(body, 192, fmt, a1, a2)`
+
   let cs1 : Nat → BitVec 64 := fun q => if q = 8 then inp else if q = 9 then line else cs q
   have hsp1 : SpIn (s - 224#64) snprintfNeed :=
     ⟨by rw [hs224]; unfold snprintfNeed tohostAddr; omega, by rw [hs224]; omega,
@@ -617,7 +566,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
         have h9 : q ≠ 9 := by intro e; subst e; revert hq; decide
         simp [cs1, h8, h9])]
     iframe Hs1 Hsaved
-  -- stage `snprintf(err_msg, 256, fmt2, line, body)`
+
   unfold callFrame VsaIris.sp
   iintro Hpc Hra ⟨Hargs, Hbody, Hrdb, Hstd, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
   ihave ⟨Hs0, Hsaved⟩ := (sepL_calleeSaved cs1).1 $$ Hsaved
@@ -642,7 +591,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   rw [show cs1 8 = inp from rfl, show cs1 9 = line from rfl]
   iframe Hpc Ha1 Ha4 Hsp Ha3 Hs1 Ha0 Hs0 Ha2 Hcode
   iintro Hpc ⟨Ha1, Ha4, Hsp, Ha3, Hs1, Ha0, Hs0, Ha2, -⟩ - -
-  -- `snprintf(err_msg, 256, "runtime error [line %d]: %s", line, body)`
+
   unfold cstrBuf
   icases Hbody with ⟨%bimg, Hbody, %hbnul⟩
   have herrp : (inp + sign_extend (m := 64) (0x0e0#12)).toNat = inp.toNat + 224 :=
@@ -706,7 +655,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
     iapply (sepL_calleeSaved1 cs1).2
     rw [show cs1 9 = line from rfl]
     iframe Hs1 Hsaved
-  -- `a0 = &in->on_error; a1 = 1; jal longjmp`
+
   unfold callFrame VsaIris.sp readable
   iintro Hpc Hra ⟨Hargs, Herr, ⟨-, Hbody⟩, Hstd, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
   ihave ⟨Hs0, Hsaved⟩ := (sepL_calleeSaved cs1).1 $$ Hsaved
@@ -737,7 +686,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   rw [show rtJalLongjmp.tgt = 0x8000703c#64 from rfl]
   iintro Hpc Hra
   iapply Wp.lat_intro
-  -- `longjmp`: restore `ra`, `s0`–`s11`, `sp` from the `jmp_buf`
+
   have hjbp : (inp + sign_extend (m := 64) (0x010#12)).toNat = inp.toNat + 16 :=
     addr_off inp _ 16 (by decide) (by omega)
   have hjg : JbGeom (inp + sign_extend (m := 64) (0x010#12)) :=
@@ -799,7 +748,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
     · rw [← instrAt_eq]; iexact Hlj
     iexact Hjbf
   iintro Hpc ⟨Ha0, Hra, Hs0, H9, H18, H19, H20, H21, H22, H23, H24, H25, H26, H27, Hsp, -⟩ - -
-  -- `seqz a0,a1` (`a1 = 1`)
+
   iapply wp_aluA0W Wp 0x80007074 (codeFoot ljCodeBase ljCode) [(11, DFrac.own 1, 1#64)]
     (inp + sign_extend (m := 64) (0x010#12)) 0#64 (seqz_step live hljL _)
   simp only [sepL_cons, sepL_nil]
@@ -808,7 +757,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   isplitl [Hpc]
   · iexact Hpc
   iintro Hpc Ha0 ⟨Ha1, -⟩ -
-  -- `add a0,a0,a1; ret` to the restored `ra`
+
   have hjw0 : imgW jb (inp.toNat + 16 + 0) = jbWord inp.toNat jb 0 := rfl
   iapply wp_segW live Wp lj2Seg [(10, 0#64), (11, 1#64), (1, jbWord inp.toNat jb 0)] []
     0x80007078#64 (codeFoot ljCodeBase ljCode) [] 1 (by decide)
@@ -823,7 +772,7 @@ theorem rtErr_spec (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive liv
   isplitl [Hpc]
   · iexact Hpc
   iintro Hpc ⟨Ha0, Ha1, Hra, -⟩ - -
-  -- the abort: the landing, with `runtime_error`'s whole stack region
+
   ihave Hk := and_elim_r $$ Hk
   iapply Hk
   iframe Hrdb

@@ -4,33 +4,11 @@ import VsaIris.Vsa.InterpImg
 import Vsa.Sim.SnprintfSpec39
 import VsaIris.Vsa.Stderr.FprintfSpec
 
-/-!
-# `out.fprintf`, proved (lane N5)
-
-`fprintf_out`: `NewlibOut.outSpec` for `fprintf(stdout, fmt, arg)` with
-`value_print`'s formats (`fprintfOut`), through `outSpec_of_run`:
-
-* the run's data view (`soDt`) holds `_impure_ptr` (`impureRO`), the
-  `.rodata` it reads (the three formats, the decimal point `"."`, the
-  conversion jump table), the interpreter's code and tables (`interpText`:
-  the arithmetic helpers of the digit loop) and, for `%s`, the name up to its
-  NUL (`strAt`). Its image is `_impure_ptr`, else the binary, else the
-  name's bytes (`soImg`); where they overlap they agree (`roImg_agree`);
-* `"%lld"` runs `fprintf_lld` (`putcs (lldBytes v) = intToString v.toInt`),
-  `"<fn %s>"`/`"<native fn %s>"` run `fprintf_s`;
-* `stdout` may be unoriented at entry (`StdioOK`: `_flags` `0x000a` or
-  `0x200a`, `consoleMt_of`); `_vfprintf_r` orients it (`vfp_outer`);
-* the end state is `OutEnd` (`outEnd_of`): the frame `FpReg`, `stdout`'s
-  pointer and count untouched, its flags oriented (`0x200a`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib VsaIris.Inst
 open Vsa.While (natToString intToString natDigits)
-
-/-! ## What `%lld` prints -/
 
 theorem putcs_digBytes (n : Nat) : putcs (digBytes n) = natToString n := by
   have hc : ∀ c ∈ natDigits (n + 1) n, c.toNat < 256 := fun c hc => by
@@ -50,7 +28,6 @@ theorem putcs_lldBytes (v : BitVec 64) : putcs (lldBytes v) = intToString v.toIn
   · have hn : ¬ isNeg v := h
     rw [if_neg hn, if_neg hn, if_neg h, List.nil_append, putcs_digBytes]
 
-/-- A signed halfword load of a small value is the unsigned one. -/
 theorem ldv_lhu_of_lh {M : Mem} {a v : Nat} (hv : v < 2 ^ 15) (h : ldv .lh M a = BitVec.ofNat 64 v) :
     ldv .lhu M a = BitVec.ofNat 64 v := by
   rw [ldv_lh_img] at h; rw [ldv_lhu_img]
@@ -63,24 +40,15 @@ theorem ldv_lhu_of_lh {M : Mem} {a v : Nat} (hv : v < 2 ^ 15) (h : ldv .lh M a =
   simp only [BitVec.toNat_ofNat]
   split at h3 <;> omega
 
-/-! ## The data view -/
-
-/-- The data view's image: `_impure_ptr`, else the binary's `.text`/`.rodata`,
-else `bv` (the name's bytes). -/
 def soImg (bv : Nat → BitVec 8) (a : Nat) : BitVec 8 :=
   if impureW a then impureByte a else if textDom a then textByte a else if rodataDom a then rodataByte a
   else bv a
 
-/-- The `.rodata` the run reads: the formats (`0x800192c0`, `0x800192c8`,
-`0x800192d8`), the decimal point, the conversion jump table. -/
 abbrev soRo : List Nat := accAddrs 0x800192c0 40 ++ accAddrs 0x80019770 2 ++ accAddrs 0x8001a288 364
 
-/-- The data view's addresses: `_impure_ptr`, the `.rodata` read, the
-interpreter's code and tables, the string `sa`. -/
 abbrev soDA (sa : List Nat) : List Nat :=
   accAddrs 0x8001b970 8 ++ soRo ++ interpText.map Prod.fst ++ sa
 
-/-- The data view. -/
 def soDt (bv : Nat → BitVec 8) (sa : List Nat) : Mem := fillMem (soImg bv) (soDA sa)
 
 variable {bv : Nat → BitVec 8} {sa : List Nat}
@@ -110,7 +78,6 @@ theorem ldv_soDt (bv : Nat → BitVec 8) (sa : List Nat) :
 theorem soDA_imp : Cover (· ∈ soDA sa) 0x8001b970 0x8001b978 := fun b h1 h2 =>
   List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (mem_accAddrs_iff.2 ⟨h1, by omega⟩)))
 
-/-- The interpreter's code and tables read as themselves. -/
 theorem soDt_interp : ∀ p ∈ interpText, p ∈ dataOf (soDt bv sa) (soDA sa) := by
   intro p hp
   have hA : p.1 ∈ soDA sa :=
@@ -137,7 +104,6 @@ theorem lw_soDt {a v : Nat} (h : ∀ j, j < 4 → a + j ∈ soRo) (hv : imgLE ro
   refine ldv_lw_of_imgLE ?_
   rw [imgLE_congr (img' := rodataByte) fun j hj => soDt_ro (h j hj)]; exact hv
 
-/-- A format string in `.rodata`, read through the view. -/
 theorem fmtAt_so {P : Nat} {bs : List (BitVec 8)} (hP : ∀ i, i < bs.length → P + i ∈ soRo)
     (hlo : 0x80000000 ≤ P) (hhi : P + bs.length < 0x8001ad00)
     (hb : ∀ i (h : i < bs.length), rodataByte (P + i) = bs[i]) : FmtAt (soDt bv sa) (soDA sa) P bs where
@@ -178,13 +144,9 @@ theorem so_dotv : imgM (soDt bv sa) 0x80019770 = 0x2e#8 ∧ imgM (soDt bv sa) 0x
   ⟨by rw [soDt_ro (soRo_dot (by decide) (by decide))]; decide,
    by rw [soDt_ro (soRo_dot (by decide) (by decide))]; decide⟩
 
-/-! ## The formats -/
-
-/-- A string format of `value_print`: its address and the literal before `%s`. -/
 structure SFmtCase (fmt : BitVec 64) (lit : String) : Prop where
   cases : (fmt = 0x800192c8#64 ∧ lit = "<fn ") ∨ (fmt = 0x800192d8#64 ∧ lit = "<native fn ")
 
-/-- The facts `fprintf_s` reads about a string format. -/
 structure SFmtFacts (Dt : Mem) (DA : List Nat) (fmt : BitVec 64) (lit : List (BitVec 8)) : Prop where
   ne : lit ≠ []
   bytes : ∀ b ∈ lit, b ≠ 0#8 ∧ b ≠ 37#8
@@ -213,8 +175,6 @@ theorem sFmtFacts_of {fmt : BitVec 64} {lit : String} (h : SFmtCase fmt lit) :
       fmtAt_so (fun i hi => soRo_fmt (by rw [t]; omega) (by simp only [List.length_append, List.length_singleton, e] at hi ⊢; rw [t]; omega))
         (by decide) (by decide) (by decide)⟩
 
-/-- The `%s` case of the data witness: the name at `arg`, read-only, and its
-bytes as the view shows them. -/
 structure StrCase (fmt arg : BitVec 64) (frag : String) (bv : Nat → BitVec 8) (name lit : String) : Prop where
   fmt : SFmtCase fmt lit
   frag : frag = lit ++ name ++ ">"
@@ -222,20 +182,16 @@ structure StrCase (fmt arg : BitVec 64) (frag : String) (bv : Nat → BitVec 8) 
   win : StrWin arg.toNat name.toList.length
   agree : ∀ a, InExt (arg.toNat, name.toList.length + 1) a → soImg bv a = bv a
 
-/-- The data witness of `fprintf_out`: `"%lld"` with no string, or a name. -/
 inductive SoPf (fmt arg : BitVec 64) (frag : String) :
     (Nat → BitVec 8) → List Nat → String → String → Prop
   | lld {bv name lit} : fmt = 0x800192c0#64 → frag = intToString arg.toInt → SoPf fmt arg frag bv [] name lit
   | str {bv name lit} : StrCase fmt arg frag bv name lit →
       SoPf fmt arg frag bv (accAddrs arg.toNat (name.toList.length + 1)) name lit
 
-/-! ## Ownership -/
-
 section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- `_impure_ptr`, the binary and `bv` on `S`, as one read-only image. -/
 theorem roImg_so (S : Nat → Prop) (bv : Nat → BitVec 8) :
     iprop(impureRO ∗ binImg ∗ roImg S bv) ⊢@{IProp GF}
       roImg (fun a => impureW a ∨ textDom a ∨ rodataDom a ∨ S a) (soImg bv) := by
@@ -261,7 +217,6 @@ theorem roImg_none (f : Nat → BitVec 8) : ⊢@{IProp GF} roImg (fun _ => False
   iintro %k %hk
   exact hk.elim
 
-/-- **The run's read-only cells**: `gp`, the stdio code, and the view. -/
 theorem soView (S : Nat → Prop) (bv : Nat → BitVec 8) (sa : List Nat) (hS : ∀ a ∈ sa, S a) :
     iprop(gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗ impureRO ∗ roImg S bv) ⊢@{IProp GF}
       roOwn roR (stdioText ++ dataOf (soDt bv sa) (soDA sa)) := by
@@ -294,7 +249,6 @@ theorem soView (S : Nat → Prop) (bv : Nat → BitVec 8) (sa : List Nat) (hS : 
     (fun k hk => (imgM_soDt hk).symm) $$ H
   iapply roImg_list _ (imgM (soDt bv sa)) _ (fun a ha => ha) $$ H
 
-/-- A name's bytes agree with the view's image on its window. -/
 theorem so_agree (p n : Nat) (img : Nat → BitVec 8) :
     iprop(impureRO ∗ binImg ∗ roImg (InExt (p, n)) img) ⊢@{IProp GF}
       ⌜∀ a, InExt (p, n) a → soImg img a = img a⌝ := by
@@ -309,7 +263,6 @@ theorem so_agree (p n : Nat) (img : Nat → BitVec 8) :
 
 end Own
 
-/-- The interpreter's stack lies above the first megabyte of RAM. -/
 theorem stackMb_of_stackGeom {s : BitVec 64} {n need : Nat} (h : StackGeom s n) (hle : need ≤ n) :
     0x80100000 ≤ s.toNat - need := by
   have h1 := h.le; have h2 := h.lo
@@ -321,7 +274,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- A name, read-only, as the `%s` data witness. -/
 theorem soData_str {fmt : BitVec 64} {frag : String} (arg : BitVec 64) (name lit : String)
     (hf : SFmtCase fmt lit) (hfr : frag = lit ++ name ++ ">") :
     iprop(strAt arg.toNat name ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗ impureRO) ⊢@{IProp GF}
@@ -339,10 +291,6 @@ theorem soData_str {fmt : BitVec 64} {frag : String} (arg : BitVec 64) (name lit
     iframe Hgp Himg Hi Hs
   · ipureintro; exact .str ⟨hf, hfr, hc, hw, hag⟩
 
-/-- **`fprintf(stdout, fmt, arg)`, proved** (`OutHoles.fprintf`), with the
-interpreter's code live (the digit loop's arithmetic helpers) and the stack
-above the first megabyte of RAM (`__sbprintf`'s stack `FILE` and the callee
-frames below it). -/
 theorem fprintf_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (fmt arg s : BitVec 64) (cs : Nat → BitVec 64) (frag o : String) (hcl : CodeLive live)
     (hlive' : ∀ p ∈ interpText, live p.1) (hsp : SpIn s fprintfNeed)

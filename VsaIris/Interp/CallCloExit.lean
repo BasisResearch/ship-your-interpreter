@@ -1,20 +1,6 @@
 import VsaIris.Interp.CallCloBody
 import VsaIris.Interp.LeafCalls
 
-/-!
-# The closure call's exits (lane E4)
-
-For either WP, at the depth `d + 1` the body ran at:
-
-* `cloExitN` (`0x80003954`, a normal end, or an empty body):
-  `--in->call_depth` (the world back at `d`), `value_null(sret)`, the spills
-  reloaded, the shared epilogue.
-* `cloExitR` (`0x8000337c`, status `3`): `--in->call_depth`, the result slot
-  `sp+144` copied to `sret`, the epilogue.
-
-`ms_joinSlot144`: the lent result slot back into the frame.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
@@ -26,8 +12,6 @@ section Exits
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The lent result slot back into the frame, at a tracking memory agreeing
-with the run's on the rest. -/
 theorem ms_joinSlot144 {pc : BitVec 64} {R : Nat → BitVec 64} {s : BitVec 64} {Mt : Mem}
     (hfg : EvalFrameG s) :
     ms (GF := GF) pc R (closureS s) Mt ∗ slot24 (s + 18446744073709550528#64 + 144#64).toNat ⊢
@@ -50,9 +34,6 @@ theorem ms_joinSlot144 {pc : BitVec 64} {R : Nat → BitVec 64} {s : BitVec 64} 
         · exact .inl ⟨h, h'⟩) $$ Hms
   · ipureintro; exact h1
 
-/-- **A normal end** (`0x80003954`), for either WP: the depth word back to
-`d`, `value_null(sret)`, the spills reloaded, the epilogue; the caller gets its
-callee-saved registers, its stack, `null` at `sret`, the world at depth `d`. -/
 theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {ρ : Regime} {st : St} {d : Nat}
@@ -112,7 +93,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   intro R4 Mt4 hR4 hMt4
   unfold F'
   iintro ⟨⟨#Hcode, Hsr, Hcl, Hst, Hk⟩, Hms⟩
-  -- the depth word back to the world, at `d`
+
   ihave ⟨Hms, Hd⟩ := ms_split (S := InExt (s.toNat - 1088, 1088)) (T := InExt (inp + 8, 4))
     (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$
     [Hms]
@@ -128,7 +109,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
       exact Nat.mod_eq_of_lt (by unfold maxCallDepth at hdle; omega)
     rw [hMt4, hi8, imgLE_store4_hit, hv]
   ihave Hw := Hcl $$ %d %(imgM Mt4) Hd %⟨hdep4, by omega⟩
-  -- `value_null(sret)`
+
   have h10 : R4 10 = sret := by rw [hR4]; ix_reg; exact hat.s1
   ihave Hvn := hvn $$ %sret
   unfold valueNullSpec
@@ -141,7 +122,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   isplitl [Hsr]
   · iframe Hsr; ipureintro; exact hslg
   iintro %R5 %hk5 Hval Hms
-  -- the spills reloaded, the epilogue
+
   have hoff := evalSP_off' hfg
   have hfr : ∀ k, closureS s k → imgM Mt4 k = imgM Mt k := fun k hk => by
     simp only [closureS, InExt] at hk
@@ -187,10 +168,6 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     ix_reg
     exact hat.keep _ (by decide)
 
-/-- **A `return`** (`0x8000337c`, status `3`), for either WP: the depth word
-back to `d`, the result slot `sp+144` copied to `sret`, the spills reloaded,
-the epilogue; the caller gets its callee-saved registers, its stack, the value
-at `sret`, the world at depth `d`. -/
 theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {ρ : Regime} {st : St} {d : Nat} {v : Value}
@@ -219,13 +196,13 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   have hwd := world_depth (GF := GF) N L Room inp ρ st (d + 1)
   rw [show inp + interpDepthOff = inp + 8 from rfl] at hwd
   iintro ⟨#Hcode, Hms, Hv, Hsr, Hw, Hst, Hk⟩
-  -- the result slot back into the frame
+
   ihave Hv := (show valAt (GF := GF) N (s + 18446744073709550528#64 + 144#64).toNat v ⊢
     valAt N (s.toNat - 1088 + 144) v by rw [h144]) $$ Hv
   ihave ⟨%w0, %w1, %w2, #Hw3, Hms⟩ := ms_joinSlot N (S := InExt (s.toNat - 1088, 1088))
     (a := s.toNat - 1088 + 144) (fun b hb => by simp only [InExt] at hb ⊢; omega) $$ [Hms Hv]
   · iframe Hms Hv
-  -- the depth word
+
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
   ihave ⟨%Md, Hd, %hMd⟩ := ownSet_trackedAt _ dimg $$ Hd
   ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [Hms Hd]
@@ -267,7 +244,7 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   intro R4 Mt4 hR4 hMt4
   unfold F'
   iintro ⟨⟨#Hcode, #Hw3, Hsr, Hcl, Hst, Hk⟩, Hms⟩
-  -- the depth word back to the world, at `d`
+
   ihave ⟨Hms, Hd⟩ := ms_split (S := InExt (s.toNat - 1088, 1088)) (T := InExt (inp + 8, 4))
     (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ [Hms]
   · iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp + 8, 4) b)
@@ -282,7 +259,7 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
       exact Nat.mod_eq_of_lt (by unfold maxCallDepth at hdle; omega)
     rw [hMt4, hi8, imgLE_store4_hit, hv]
   ihave Hw := Hcl $$ %d %(imgM Mt4) Hd %⟨hdep4, by omega⟩
-  -- `sret` joined for the copy
+
   ihave ⟨%M5, Hms, %⟨hM5, hd5⟩⟩ := ms_join_sret $$ [Hms Hsr]
   · iframe Hms Hsr
   have hr4 : sret.toNat + 24 ≤ s.toNat - 1088 ∨ s.toNat ≤ sret.toNat := by

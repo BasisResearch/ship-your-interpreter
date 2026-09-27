@@ -3,43 +3,20 @@ import VsaIris.Vsa.AllocBase
 import VsaIris.Vsa.AllocTac
 import VsaIris.Vsa.MallocFastChain
 
-/-!
-# `_malloc_r` on the general heap: entry, exit, and the tracking memory
-
-A malloc run starts from the caller's owned values and the page-aligned
-heap. `mallocChgRun_of_aw` reduces `MallocChgRun` at the binary to one `AW`
-goal at `malloc`'s entry:
-
-* the register file is the entry valuation;
-* the tracking memory `mt0` is the heap witness `m1` with the stack window
-  inserted.
-
-`malloc_exit` closes a run at the return. The ABI frame restored, a fresh
-block in `a0`, and the page-aligned heap with its credits on the tracking
-memory give `MallocRoomEnd`. Every path of `_malloc_r` is a chain of step
-lemmas between these two, through the join lemmas of `MallocPaths.lean`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 
-/-- The bytes a malloc call owns at the binary. -/
 abbrev mS (H : List (Nat × Nat)) (s : BitVec 64) : Nat → Prop :=
   mallocBytes vsaLayoutP H s allocHeadroom
 
-/-- What a counted malloc run ends in. -/
 abbrev mQ (H : List (Nat × Nat)) (n r s : BitVec 64) (saved : List (Nat × BitVec 64)) (k : Nat) :
     (Nat → BitVec 64) → (Nat → BitVec 8) → Prop :=
   MallocRoomEnd vsaLayoutP vsaRoomB H n r s saved k
 
-/-- The tracking memory at entry: the heap witness with the stack window. -/
 abbrev mt0 (m1 : Mem) (s : BitVec 64) (mv : Nat → BitVec 8) : Mem :=
   stackBase m1 (s.toNat - allocHeadroom) allocHeadroom mv
 
-/-- **A run from the symbolic run at entry.** An `AW` goal at the entry
-valuation over the tracking memory `mt0` is a run from every owned image the
-heap witness `m1` holds, the stack window off the footprint. -/
 theorem aw_run {live : Nat → Prop} {H : List (Nat × Nat)} {s pc : BitVec 64}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} {m1 : Mem}
@@ -59,7 +36,6 @@ theorem aw_run {live : Nat → Prop} {H : List (Nat × Nat)} {s pc : BitVec 64}
     rw [ite_eq_right_iff.2 (fun h => absurd h hns), him a hh]
     rfl
 
-/-- **`MallocChgRun` from the symbolic run at entry.** -/
 theorem mallocChgRun_of_aw {live : Nat → Prop}
     (hrun : ∀ (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
       (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k c : Nat) (m1 : Mem) (top brkv : Nat)
@@ -77,9 +53,6 @@ theorem mallocChgRun_of_aw {live : Nat → Prop}
   exact aw_run (hrun H n s r saved rv mv k c m1 top brkv chunks bins hsv hchg hsp hral he
     hst him hheap hcap hdisj) he.pc him hdisj
 
-/-- **A return.** At the return address with the ABI frame restored and the
-bytes `F` of the owned set present, the run is done in every final state
-`Q` accepts from the restored frame, `a0` and the image of `F`. -/
 theorem malloc_ret {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {F : Nat → Prop} {r s : BitVec 64}
     {saved : List (Nat × BitVec 64)} {R : Nat → BitVec 64} {Mt : Mem}
@@ -106,16 +79,12 @@ theorem malloc_ret {live : Nat → Prop} {S : Nat → Prop}
     | none => rw [h] at hp; cases hp
     | some b => rfl
 
-/-- The footprint of a heap extended by a block is within the heap's. -/
 theorem vsaFoot_cons_sub {H : List (Nat × Nat)} {e : Nat × Nat} :
     ∀ a, vsaFoot (e :: H) a → vsaFoot H a := by
   rintro a (hg | ⟨h1, h2, h3⟩)
   · exact .inl hg
   · exact .inr ⟨h1, h2, fun e' he => h3 e' (List.mem_cons_of_mem _ he)⟩
 
-/-- **The return.** At the return address with the ABI frame restored, a
-fresh aligned block in `a0` and the page-aligned heap with `k` credits on
-the tracking memory, the run is done. -/
 theorem malloc_exit {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
     {saved : List (Nat × BitVec 64)} {k : Nat} {R : Nat → BitVec 64} {Mt : Mem}
     {top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}

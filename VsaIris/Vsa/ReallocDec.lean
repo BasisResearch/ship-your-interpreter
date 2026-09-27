@@ -1,20 +1,10 @@
 import VsaIris.Vsa.ReallocTail
 
-/-!
-# `_realloc_r`'s dispatch
-
-At `0x800052e0` the old chunk `X` below the block is decoded. A chunk
-already at least the request's `nb` goes straight to the tail; otherwise the
-state `RD` is handed to the growth paths at `0x800052f0`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The state at `0x800052f0`: the frame, the heap, the old chunk `X` of size
-`S < nb` (header `hdr0`) holding the old block, and its registers. -/
 structure RD (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) (brkv : Nat)
     (chunks : List Chunk) (bins : Nat → List Nat) (X S hdr0 nb : Nat) : Prop where
   frame : RFrame C R Mt
@@ -34,8 +24,6 @@ structure RD (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) (brkv : Nat)
   a4 : (R 14).toNat = S
   a5 : (R 15).toNat = nb
 
-/-- **The dispatch** (`0x800052e0`): decode `X`; a chunk of at least `nb`
-bytes is the tail's (`realloc_tail`), any other the growth paths'. -/
 theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {nb brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (F : RFrame C R Mt) (Hp : RHeap C B Mt brkv chunks bins) (hnb : NbOK C.n nb) (hnb31 : nb < 2 ^ 31)
@@ -80,7 +68,7 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   have h15' : (R 15).toInt = (nb : Int) := toInt_small h15 (by omega)
   refine st_800052ec O.live (fun hcmp => ?_) (fun hcmp => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h14, h15', Int.ofNat_le] at hcmp
-  · -- the chunk already holds the request
+  ·
     obtain ⟨cs₁, cs₂, hsplit⟩ := List.append_of_mem hc
     have Hr := Hp.heap.reblock hc rfl hca (n' := C.n.toNat) (show C.n.toNat + 8 ≤ S by omega)
     rw [hsplit, ← hca] at Hr
@@ -101,7 +89,7 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     · exact hX
     · exact hSv
     · exact h15
-  · -- the chunk must grow
+  ·
     refine hk _ X S hdr0 ⟨F.of_regs ?_ ?_ ?_, Hp, hnb, hnb31, hc, hca, hdr, hsz, hlow, by omega,
       ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [h8, hca]

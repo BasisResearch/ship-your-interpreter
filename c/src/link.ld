@@ -1,6 +1,3 @@
-/* Linker script for bare-metal RISC-V on the QEMU `virt` machine.
- * RAM starts at 0x80000000; QEMU loads the ELF at its link address
- * when started with `-bios none -kernel while-riscv.elf`. */
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
 
@@ -23,9 +20,6 @@ SECTIONS
         *(.srodata .srodata.*)
     } > RAM
 
-    /* HTIF mailbox (tohost/fromhost); HTIF hosts such as Spike and the
-     * sail-riscv emulators find it via the section name. Empty in the
-     * semihosting build. */
     .tohost : ALIGN(64) {
         *(.tohost)
     } > RAM

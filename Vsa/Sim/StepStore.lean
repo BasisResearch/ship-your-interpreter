@@ -3,50 +3,6 @@ import Vsa.Sim.StepAddi
 import Vsa.Sim.ExecuteAlu
 import Vsa.Sim.Frame
 
-/-!
-# M2 memory-writing STORE-class validation — generic `step_store`
-
-Step-characterization (`Machine.Step` + `GoodState` preservation, tick and notick
-variants) for the *entire STORE class* (`sb`/`sh`/`sw`/`sd`), the memory-writing
-dual of `Vsa/Sim/StepAlu.lean` (register-writing ALU class). Generic over an
-arbitrary decoded `ast` and an abstract execute hypothesis, so instantiating with
-`ExecuteStore.lean`'s execute equation gives every-width store step lemmas for
-free.
-
-## Factoring: generic over `ast`, abstract `hexec`
-
-Every `ExecuteStore.lean` clause will conclude
-`(execute ast).run <state> = .ok RETIRE_SUCCESS σ'` where `σ'` is the caller's
-chosen byte-memory replacement `{state with mem := m'}`. In the skeleton the
-execute runs on `afterNextPC (afterPrelude σ) pc` (which already carries
-`nextPC := pc+4` from the prelude), and — unlike the ALU class — a STORE op
-touches **no registers at all**, only `MEMORY`. So the STORE `σ₃` is a *single*
-`mem := m'` record update on top of the skeleton's `σ₂`
-(`afterNextPC (afterPrelude σ) pc`), with the register map carried through
-untouched.
-
-We prove **one** generic `try_step_store` parameterized by the symbolic word `w`,
-a decode fact `hdec` (abstract `ast`), and an abstract
-`hexec : (execute ast).run (afterNextPC (afterPrelude σ) pc)
-   = .ok RETIRE_SUCCESS (sigma3_store σ pc m')`, threaded through the skeleton
-`try_step_execute_char`. Every concrete op (`sb`/`sh`/`sw`/`sd`, at any address /
-data value) is then a one-line instantiation supplying its `ExecuteStore` clause
-as `hexec`; the byte-map computation lives at that instantiation site, never here.
-
-Because the STORE `σ₃` overwrites `mem` only, **no `rd` disequalities are needed**
-(there is no `rd`), and the postlude register read-backs on `σ₃`
-(`hart_state`, `nextPC = pc+4`, `minstret_increment = true`, `minstret`) reduce
-directly through the `afterNextPC`/`afterPrelude` frame lemmas: the `mem := m'`
-update leaves `σ₃.regs` syntactically equal to `(afterNextPC (afterPrelude σ) pc).regs`
-by the structure projection, so no insert peeling is required.
-
-`GoodState` is a register-only invariant, so the trailing `mem := m'` update
-never disturbs it: the STORE final-state framing is *identical* to a hypothetical
-"no register write" ALU step, and the `mem` field frames through the entire
-`try_step` postlude (which writes only `PC`/`minstret`) plus `tick_clock` (which
-writes only `mcycle`/`mtime`/`mip`) transparently.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -57,27 +13,14 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## The skeleton's `σ₃` for the STORE class (single `mem := m'` update) -/
-
-/-- `σ₃` after `execute ast` in the skeleton for the STORE class: the prelude +
-`nextPC := pc+4` state (`σ₂`) with the byte memory replaced by `m'`. STORE ops
-touch neither `nextPC`/`PC` nor any GPR in execute (only `MEMORY`), so this is a
-single `mem := m'` record update on top of `σ₂`, the memory-writing dual of
-`StepAlu.sigma3_alu`. -/
 abbrev sigma3_store (σ : MState) (pc : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8)) : MState :=
   {(afterNextPC (afterPrelude σ) pc) with mem := m'}
 
-/-- Register read-back through `sigma3_store` for any `R`: the `mem := m'` update
-leaves the register map untouched, so this reduces to reading `R` on `σ₂` (the
-structure projection `.regs` of `{σ₂ with mem := m'}` is `σ₂.regs` by `rfl`). -/
 theorem get?_sigma3_store_regs (σ : MState) (pc : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8)) (R : Register) :
     (sigma3_store σ pc m').regs.get? R = (afterNextPC (afterPrelude σ) pc).regs.get? R := rfl
 
-/-- Read-back of `R ∉ {nextPC, minstret_increment}` through `sigma3_store` equals
-reading `R` on `σ`: the `mem` update leaves regs untouched, then delegate to the
-`afterNextPC`/`afterPrelude` frame lemmas of `StepAddi.lean`. -/
 theorem get?_sigma3_store_pinned (σ : MState) (pc : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8)) (R : Register)
     (hnpc : (Register.nextPC == R) = false)
@@ -86,14 +29,6 @@ theorem get?_sigma3_store_pinned (σ : MState) (pc : BitVec 64)
   rw [get?_sigma3_store_regs]
   exact get?_afterNextPC σ pc R hnpc hmi
 
-/-! ## Generic `try_step` on a STORE instruction (abstract `hexec`) -/
-
-/-- **`try_step` on a STORE instruction**, generic over the decoded `ast` and the
-resulting byte memory `m'`, with the execute step supplied abstractly as `hexec`.
-`try_step u true` on a `GoodState` at a code pc holding the four instruction bytes
-reduces to `pure false` with the canonical postlude chain over `sigma3_store`:
-`nextPC := pc+4` (from prelude), `mem := m'` (from execute), then `PC := pc+4`,
-`minstret := vminstret+1`. No `rd` — the STORE writes only memory. -/
 theorem try_step_store
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (m' : Std.ExtHashMap Nat (BitVec 8))
@@ -147,7 +82,7 @@ theorem try_step_store
   have hlpad : (is_landing_pad_expected ()).run (afterPrelude σ) = .ok false (afterPrelude σ) :=
     is_landing_pad_expected_false (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.elp)
-  -- postlude read-backs on sigma3_store (regs untouched by the mem update)
+
   have hhart₃ : (sigma3_store σ pc m').regs.get? Register.hart_state = some (HartState.HART_ACTIVE ()) := by
     rw [get?_sigma3_store_pinned σ pc m' _ (by decide) (by decide)]
     exact hG.hart_state
@@ -171,18 +106,11 @@ theorem try_step_store
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-! ## Final `try_step` state and its `GoodState` / `htif_done` read-backs -/
-
-/-- The `try_step`-final state (skeleton `σ₅`) for the STORE class:
-`nextPC := pc+4`, `mem := m'`, then `PC := pc+4`, `minstret := vminstret+1`. -/
 abbrev sigmaPost_store (σ : MState) (pc vminstret : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8)) : MState :=
   {(({(sigma3_store σ pc m') with regs := (sigma3_store σ pc m').regs.insert Register.PC (BitVec.addInt pc 4)}) : MState) with
     regs := (({(sigma3_store σ pc m') with regs := (sigma3_store σ pc m').regs.insert Register.PC (BitVec.addInt pc 4)}) : MState).regs.insert Register.minstret (BitVec.addInt vminstret 1)}
 
-/-- Read-back of `R` outside the STORE register write-set `{minstret, PC, nextPC,
-minstret_increment}` through the STORE write chain equals reading from `σ` (the
-`mem := m'` update is register-transparent). -/
 theorem get?_sigmaPost_store (σ : MState) (pc vminstret : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8)) (R : Register)
     (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
@@ -195,38 +123,25 @@ theorem get?_sigmaPost_store (σ : MState) (pc vminstret : BitVec 64)
   simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_sigma3_store_pinned σ pc m' R h4 h5
 
-/-- `GoodState` preserved by the STORE step. `GoodState` is register-only, so the
-`mem := m'` update is transparent; the register write chain is `nextPC := pc+4`,
-`PC := pc+4`, `minstret := vminstret+1` (all non-pinned). Built by
-`GoodState.of_regs_eq` to strip the `mem` update, then iterated
-`GoodState.insert_nonpinned` for the three register writes. -/
 theorem goodstate_sigmaPost_store (σ : MState) (pc vminstret : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8))
     (hG : GoodState σ) : GoodState (sigmaPost_store σ pc vminstret m') := by
-  -- The register map of the final state is:
-  --   ((afterNextPC (afterPrelude σ) pc).regs.insert PC …).insert minstret …
-  -- i.e. σ.regs.insert minstret_increment .insert nextPC .insert PC .insert minstret,
-  -- all non-pinned; the mem field is register-transparent.
+
   have hbase : GoodState (afterNextPC (afterPrelude σ) pc) :=
     ((hG.insert_nonpinned (r := Register.minstret_increment) (by decide) _).insert_nonpinned
       (r := Register.nextPC) (by decide) _)
-  -- sigma3_store shares its register map with (afterNextPC (afterPrelude σ) pc).
+
   have hstore : GoodState (sigma3_store σ pc m') :=
     GoodState.of_regs_eq (σ := afterNextPC (afterPrelude σ) pc) (σ' := sigma3_store σ pc m') rfl hbase
   exact ((hstore.insert_nonpinned (r := Register.PC) (by decide) _).insert_nonpinned
     (r := Register.minstret) (by decide) _)
 
-/-- `htif_done` reads back `false` on the STORE final state. -/
 theorem htif_done_sigmaPost_store (σ : MState) (pc vminstret : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8))
     (hG : GoodState σ) : (sigmaPost_store σ pc vminstret m').regs.get? Register.htif_done = some false := by
   rw [get?_sigmaPost_store σ pc vminstret m' _ (by decide) (by decide) (by decide) (by decide)]
   exact hG.htif_done
 
-/-! ## `stepOnce` (no clock tick) -/
-
-/-- `stepOnce i u` on a STORE instruction (`i+1 ≠ 2`): `try_step` (⇒ `false`,
-`mem := m'` and PC := pc+4 written), then continues with `(.inr (i+1, u+1))`. -/
 theorem stepOnce_store_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (m' : Std.ExtHashMap Nat (BitVec 8))
@@ -259,23 +174,12 @@ theorem stepOnce_store_notick
     exact htick
   simp only [htick', Bool.false_eq_true, if_false, EStateM.pure]
 
-/-! ## Tick state and `stepOnce` (with clock tick)
-
-On the `i+1 = 2` boundary the model splices `tick_clock` (`Tick.lean`) over the
-`sigmaPost` state, writing `mcycle`, `mtime`, `mip`. Built explicitly (not peeled
-from an abbrev) per the record-update let-bomb gotcha (Frame.lean). -/
-
-/-- STORE tick final state: `sigmaPost_store` + `tick_clock` writes
-(`mcycle += 1`, `mtime += 1`, `mip`'s MTI bit from `mtimecmp ≤u mtime+1`). -/
 noncomputable abbrev sigmaTick_store
     (σ : MState) (pc vminstret : BitVec 64) (m' : Std.ExtHashMap Nat (BitVec 8))
     (vmip vmtime vmtimecmp vmcycle : BitVec 64) : MState :=
   {(sigmaPost_store σ pc vminstret m') with
     regs := (((((sigmaPost_store σ pc vminstret m').regs.insert Register.mcycle (BitVec.addInt vmcycle 1)).insert Register.mtime (BitVec.addInt vmtime 1)).insert Register.mip (Sail.BitVec.updateSubrange vmip 7 7 (bool_to_bit (zopz0zIzJ_u vmtimecmp (BitVec.addInt vmtime 1))))))}
 
-/-- `stepOnce i u` on a STORE instruction when `i+1 = 2` (clock tick): as
-`stepOnce_store_notick`, but the trailing `i+1 == 2` guard fires, splicing
-`tick_clock` (via `tick_clock_char`) and resetting the tick counter to `0`. -/
 theorem stepOnce_store_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (m' : Std.ExtHashMap Nat (BitVec 8))
@@ -321,10 +225,6 @@ theorem stepOnce_store_tick
   rw [htc]
   rfl
 
-/-! ## `Machine.Step` wrappers -/
-
-/-- **`step_store` (no clock tick).** One architectural step on a STORE
-instruction, wrapped as `Vsa.Machine.Step`, with `GoodState` preserved. -/
 theorem step_store_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (m' : Std.ExtHashMap Nat (BitVec 8))
@@ -348,10 +248,6 @@ theorem step_store_notick
       hb0 hb1 hb2 hb3 hlo hhi halign htick),
    goodstate_sigmaPost_store σ pc vminstret m' hG⟩
 
-/-- **`step_store` (with clock tick).** As `step_store_notick` on the `i+1 = 2`
-boundary: the tick counter resets to `0`, `σ''` carries the `tick_clock` write
-chain. `GoodState` preserved (tick touches only `mcycle`/`mtime`/`mip`; the STORE
-touches only memory + `PC`/`minstret`/`nextPC`/`minstret_increment`). -/
 theorem step_store_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (m' : Std.ExtHashMap Nat (BitVec 8))

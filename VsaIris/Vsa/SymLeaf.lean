@@ -1,28 +1,13 @@
 import VsaIris.Vsa.SymRunO
 
-/-!
-# A leaf call inside a symbolic run (lane N1)
-
-A callee that is a silent local run on a SMALLER footprint (fewer registers
-`rs'`, fewer owned bytes `S'`, a sub-list `T` of the read-only bytes, no
-read-only register) — `strlen` (`StrLeaf.strlenRunL`) — runs inside a
-caller's `SWPO` run: `LocalRun.frame` widens it to the caller's footprint,
-keeping every caller register outside `rs'` and every caller byte outside
-`S'`, and `swpo_leaf` continues the caller from each state the callee ends
-in. The continuation is an `LRO` (a least fixed point), so it needs no fuel
-bound uniform in the callee's end state.
--/
-
 namespace VsaIris
 
 variable {M : MachineModel}
 
-/-- The caller's registers outside `rs'` and bytes outside `S'` as at `rv0`/`mv0`. -/
 def LeafFrame (rs rs' : List Nat) (S S' : Nat → Prop) (rv0 : Nat → BitVec 64) (mv0 : Nat → BitVec 8)
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop :=
   (∀ x ∈ rs, x ∉ rs' → rv x = rv0 x) ∧ (∀ a, S a → ¬ S' a → mv a = mv0 a)
 
-/-- **Framing a local run** into a larger footprint. -/
 theorem LocalRun.frame {ro : List (Nat × BitVec 64)} {text T : List (Nat × BitVec 8)}
     {rs rs' : List Nat} {S S' : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hT : ∀ q ∈ T, q ∈ text) (hrs : ∀ r ∈ rs', r ∈ rs) (hS : ∀ a, S' a → S a)
@@ -49,10 +34,6 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
 
-/-- **A leaf call inside a printing run.** From every state matching the
-call's entry, the leaf's run on `[] / T / rs' / S'` ends in `Q1`; from each
-such end state, with the caller's other registers and bytes as at the call,
-the caller's run continues. -/
 theorem swpo_leaf {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat}
     {S : Nat → Prop} {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String}
     {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}

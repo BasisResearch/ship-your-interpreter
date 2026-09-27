@@ -11,35 +11,14 @@ import VsaIris.Vsa.AllocSteps.Part09
 import VsaIris.Vsa.AllocSteps.Part10
 import VsaIris.Vsa.AllocSteps.Part11
 
-/-!
-# Driving the step table
-
-`sx_run h` runs the allocator's code symbolically from an `AW … pc R Mt`
-goal. It applies the step lemma `st_<pc>` named by the goal's PC literal
-(with `h : ∀ p ∈ allocText, live p.1`), and repeats on the continuation. Side
-conditions go to `sx_side`, a tactic the caller extends with `macro_rules`.
-By default it tries `decide`, then `simp` with the register-file lemmas, then
-`omega`. A branch whose condition `sx_side` refutes is pruned. The run stops
-at a branch it cannot decide, at a `ret` (PC `R 1`), or after the fuel
-(default 400 instructions; `sx_run [n] h` sets it). It leaves the undischarged side conditions and
-the reached goals.
-
-`sx_norm` normalizes register-file lookups (`upd`) and `sign_extend` of
-literals, which keeps the symbolic values readable.
--/
-
 namespace VsaIris.Sym
 
 open Lean Elab Tactic Meta
 
-/-- Side-condition discharger. Extend with `macro_rules | `(tactic| sx_side) => …`. -/
 syntax "sx_side" : tactic
 
-/-- A register file read at a literal register. -/
 theorem upd_apply (R : Nat → BitVec 64) (k : Nat) (v : BitVec 64) (r : Nat) :
     upd R k v r = if r = k then v else R r := rfl
-
-/-! ### `toNat` of the allocator's masks -/
 
 theorem toNat_and_m16 (x : BitVec 64) : (x &&& 18446744073709551600#64).toNat = x.toNat / 16 * 16 := by
   rw [show (18446744073709551600#64 : BitVec 64) = BitVec.allOnes 64 <<< 4 by decide,
@@ -53,8 +32,6 @@ theorem toNat_and_m2 (x : BitVec 64) : (x &&& 18446744073709551614#64).toNat = x
   rw [show (18446744073709551614#64 : BitVec 64) = BitVec.allOnes 64 <<< 1 by decide,
     VsaIris.MallocFast.and_high_toNat x 1 (by decide)]
 
-/-- Normalize register lookups (`upd` at literal registers), literal
-immediates and Sail shifts, everywhere. -/
 syntax "sx_norm" : tactic
 macro_rules
   | `(tactic| sx_norm) =>
@@ -67,7 +44,6 @@ macro_rules
         BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
         BitVec.reduceAppend, not_true_eq_false] at *)
 
-/-- Unfold the access predicates and fold literal immediates. -/
 syntax "sx_pre" : tactic
 macro_rules
   | `(tactic| sx_pre) =>
@@ -77,57 +53,45 @@ macro_rules
         Vsa.Sim.DlHeap.heapEnd, Vsa.Sim.DlHeap.binAt, Vsa.Sim.DlHeap.avAddr,
         Vsa.Sim.DlHeap.chunkSize, and_true, true_and] at *)
 
-/-- `BitVec` sums as `Nat` sums modulo `2^64`. `BitVec.toNat_add` goes
-through `rw`: `simp` with it does not terminate on large literals. -/
 syntax "sx_bv" : tactic
 macro_rules
   | `(tactic| sx_bv) => `(tactic| repeat rw [BitVec.toNat_add] at *)
 
-/-- Literal `toNat`s and powers. -/
 syntax "sx_lits" : tactic
 macro_rules
   | `(tactic| sx_lits) => `(tactic| try simp only [BitVec.reduceToNat, Nat.reducePow,
       toNat_and_m16, toNat_and_m4, toNat_and_m2, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight,
       Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow, BitVec.toNat_ofNat] at *)
 
-/-- Addresses and unsigned comparisons as `Nat` arithmetic, then `omega`. -/
 syntax "sx_addr" : tactic
 macro_rules
   | `(tactic| sx_addr) => `(tactic| (sx_pre; sx_lits; sx_bv; sx_lits; sx_bv; first | done | omega))
 
 macro_rules | `(tactic| sx_side) => `(tactic| sx_addr)
 
-/-- A refuted word disequality (`bnez` on a word that is zero): compare `toNat`s. -/
 macro_rules
   | `(tactic| sx_side) => `(tactic| (intro hc; apply hc; apply BitVec.eq_of_toNat_eq; sx_addr))
 
-/-- A refuted word equality (`beq`/`bne` against a constant): compare `toNat`s. -/
 macro_rules
   | `(tactic| sx_side) => `(tactic| (intro hc; have hc' := congrArg BitVec.toNat hc; clear hc; revert hc'; sx_addr))
 
-/-- A doubleword load through a disjoint store. -/
 theorem ldv_ld_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a + 8 ≤ b ∨ b + w ≤ a) :
     ldv .ld (Vsa.Sim.writeLog Mt [(b, w, v)]) a = ldv .ld Mt a :=
   ldv_store_miss .ld Mt v h
 
-/-- A doubleword load at the address of the latest doubleword store. -/
 theorem ldv_ld_hit_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (v : BitVec 64) (h : a = b) :
     ldv .ld (Vsa.Sim.writeLog Mt [(b, 8, v)]) a = v := by
   subst h; exact ldv_store_hit Mt a v
 
-/-- A load at an address equal to one with a known doubleword (for `simp` with
-`sx_addr` discharging the address). -/
 theorem ldv_at {Mt : Vsa.MemRepr.Mem} {a' x : Nat} (h : Vsa.MemRepr.read64 Mt a' = some x) :
     ∀ a, a = a' → ldv .ld Mt a = BitVec.ofNat 64 x := by
   intro a he; subst he
   exact ldv_ld (by rw [h, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ h)])
 
-/-- A word load through a disjoint store. -/
 theorem ldv_lw_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a + 4 ≤ b ∨ b + w ≤ a) :
     ldv .lw (Vsa.Sim.writeLog Mt [(b, w, v)]) a = ldv .lw Mt a :=
   ldv_store_miss .lw Mt v h
 
-/-- A word load at the address of a zeroing word store (`sw zero`). -/
 theorem ldv_lw_zero_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (h : a = b) :
     ldv .lw (Vsa.Sim.writeLog Mt [(b, 4, 0#64)]) a = 0#64 := by
   subst h
@@ -141,23 +105,18 @@ theorem ldv_lw_zero_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (h : a = b) :
   rw [h0, h1, h2, h3]
   decide
 
-/-- `read64` at the address of the latest doubleword store (for `simp`). -/
 theorem read64_hit_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (v : BitVec 64) (h : a = b) :
     Vsa.MemRepr.read64 (Vsa.Sim.writeLog Mt [(b, 8, v)]) a = some v.toNat := by
   subst h; exact read64_store_hit Mt a v
 
-/-- `read64` through a disjoint store (for `simp`). -/
 theorem read64_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a + 8 ≤ b ∨ b + w ≤ a) :
     Vsa.MemRepr.read64 (Vsa.Sim.writeLog Mt [(b, w, v)]) a = Vsa.MemRepr.read64 Mt a :=
   read64_store_miss Mt v h
 
-/-- Store forwarding: a doubleword load reads the latest store at its address,
-through stores to disjoint addresses (`sx_addr` decides disjointness). -/
 syntax "sx_mem" : tactic
 macro_rules
   | `(tactic| sx_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss, ldv_lw_zero_eq] at *)
 
-/-- The PC literal of an `SWP` goal, if any. -/
 def swpPC? (ty : Expr) : MetaM (Option Nat) := do
   let ty ← whnfR ty
   let ty := ty.consumeMData
@@ -168,7 +127,6 @@ def swpPC? (ty : Expr) : MetaM (Option Nat) := do
   | some ⟨_, v⟩ => return some v.toNat
   | none => return none
 
-/-- Whether a goal is an `SWP` goal (a continuation). -/
 def isSWP (ty : Expr) : MetaM Bool := do
   let ty ← whnfR ty
   return ty.consumeMData.getAppFn.isConstOf ``SWP
@@ -177,7 +135,6 @@ private def hex8 (n : Nat) : String :=
   let s := String.ofList (Nat.toDigits 16 n)
   String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s
 
-/-- Try `sx_side` on a goal; `true` when it closes. -/
 private def trySide (g : MVarId) : TacticM Bool := do
   let saved ← saveState
   try
@@ -187,7 +144,6 @@ private def trySide (g : MVarId) : TacticM Bool := do
   catch _ =>
     saved.restore; return false
 
-/-- Close a branch goal `C → AW …` when `sx_side` refutes `C`. -/
 private def tryPrune (g : MVarId) : TacticM Bool := do
   let saved ← saveState
   try
@@ -197,8 +153,6 @@ private def tryPrune (g : MVarId) : TacticM Bool := do
   catch _ =>
     saved.restore; return false
 
-/-- One step: apply `st_<pc>` to the main goal. Returns the new goals, the
-continuation last, or `none` when the goal has no literal PC. -/
 def sxStep (h : Syntax) (g : MVarId) : TacticM (Option (List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
   let nm := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"st_{hex8 pc}"
@@ -207,8 +161,6 @@ def sxStep (h : Syntax) (g : MVarId) : TacticM (Option (List MVarId)) := do
   let gs ← evalTacticAt stx g
   return some gs
 
-/-- `sx_run h`, `sx_run [n] h`, `sx_run h at pc…`: run until stuck, at most
-`n` steps, stopping before any listed PC. -/
 syntax "sx_run " ("[" num "] ")? term (" at " num+)? : tactic
 
 elab_rules : tactic
@@ -224,7 +176,7 @@ elab_rules : tactic
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := [cur]; break
       let some gs ← sxStep h cur | stuck := [cur]; break
-      -- classify: the goals whose type is an `SWP` goal (after intros) continue
+
       let mut conts : List MVarId := []
       for g in gs do
         let ty ← g.withContext (do instantiateMVars (← g.getType))
@@ -234,8 +186,7 @@ elab_rules : tactic
           pending := pending ++ [g]
       match conts with
       | [c] =>
-        -- a plain step, or a continuation whose PC is symbolic; keep the
-        -- register values in normal form as they are produced
+
         let c ← do
           let saved ← saveState
           try
@@ -248,7 +199,7 @@ elab_rules : tactic
         else
           stuck := [c]; break
       | [t, f] =>
-        -- a branch: prune a refuted side, continue on the other
+
         if ← tryPrune t then
           let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := [f]; break
           cur := f'

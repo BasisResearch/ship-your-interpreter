@@ -1,27 +1,16 @@
 import VsaIris.Vsa.ReallocCtx
 
-/-!
-# `_realloc_r`'s prologue
-
-From the entry to the first join (`0x800052e0`): the frame, the lock, and
-the request's chunk size, or the error return (`errno := ENOMEM`, NULL) for a
-request no chunk can hold.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `sltu` then `xori 1`: zero exactly when the comparison held. -/
 theorem sltu_xori_eq (x y : BitVec 64) :
     (zero_extend (m := 64) (bool_to_bit (zopz0zI_u x y)) ^^^ 1#64) = 0#64 ↔ x.toNat < y.toNat := by
   by_cases hl : x.toNat < y.toNat
   · rw [(ult_iff x y).2 hl]; exact ⟨fun _ => hl, fun _ => by decide⟩
   · rw [(ult_false_iff x y).2 (by omega)]; exact ⟨fun h => absurd h (by decide), fun h => absurd h hl⟩
 
-/-- **The error return** (`0x800054b8`): `errno := ENOMEM`, NULL, the old
-block kept, for a request the arena cannot hold. -/
 theorem realloc_errno {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (F : RFrame C R Mt) (Hp : RHeap C B Mt brkv chunks bins) (h9 : R 9 = reentV)
@@ -105,12 +94,12 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
   sx_run [2] O.live at 0x800052c0
   refine st_800052c0 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- `n + 23 ≤ 46` (or wraps): the minimum chunk
+  ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
     sx_run [3] O.live at 0x800052d8
     refine st_800052d8 O.live (fun h1 => ?_) (fun h1 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at h1
-    · -- a wrapped request
+    ·
       rw [show (32#64).toNat = 32 from rfl] at h1
       have hlt := C.n.isLt
       refine realloc_errno O (F2 _ ?_ ?_ ?_) Hp1 ?_ (Starved.of_lt ?_) <;>
@@ -146,7 +135,7 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
     refine st_800052dc O.live (fun h2 => ?_) (fun h2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq, sltu_xori_eq, hnb,
         Decidable.not_not] at h2 <;> rw [show (2147483648#64 : BitVec 64).toNat = 2 ^ 31 from rfl] at h2
-    · -- the chunk would not fit in 31 bits
+    ·
       refine realloc_errno O (F2 _ ?_ ?_ ?_) Hp1 ?_ (Starved.of_lt ?_) <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · exact E.a0

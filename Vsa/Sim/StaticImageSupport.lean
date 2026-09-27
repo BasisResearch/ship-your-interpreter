@@ -5,10 +5,8 @@ import Vsa.Alloc
 namespace Vsa.Sim
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.Alloc Vsa.Sim.Code
 
-/-- The immutable text and rodata interval of the fixed interpreter. -/
 def StaticImageByte (k : Nat) : Prop := 0x80000000 ≤ k ∧ k < 0x8001acf0
 
-/-- Exact static bytes protected from recursive stack and allocator writes. -/
 structure StaticImageSupport (m : Mem) (SL : StackLayout) (A : Arena) : Prop where
   text : FixedTextLoaded m
   rodata : FixedRodataLoaded m

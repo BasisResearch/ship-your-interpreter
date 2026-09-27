@@ -1,30 +1,6 @@
 import VsaIris.LocalRun
 import VsaIris.MachWP
 
-/-!
-# Printing local runs (lane N1)
-
-`LocalRun` (LocalRun.lean) describes a silent run over an owned footprint. A
-newlib stdout call prints: `_write`'s `tohost` store (`Inst.putc_runFact`)
-sits inside a run of hundreds of silent instructions, inside loops. This
-module extends the owned-footprint rule to runs that print:
-
-* `SegFromO`: one segment from owned values, which may print a string `o`;
-  its continuation receives `o`.
-* `LRO … Q t rv mv`: the run from owned values `rv`/`mv` with the console at
-  `t` reaches `Q t' rv' mv'`. It is the least predicate closed under "done"
-  and "one segment, then the rest", encoded impredicatively, so a run's
-  length needs no uniform fuel bound: the successor of a segment may run for
-  a number of segments that depends on its state (a loop over a string's
-  bytes).
-* `wp_lroW`: owning the footprint and the console cell `t` proves the run,
-  for either WP, by induction on `LRO`. Each segment is one `lagRun` whose
-  footprint carries the console cell (as `RunFactO.lagFootPrint` does).
-* `lro_of_localRun`: a silent `LocalRun` ending in `LRO` is an `LRO`, so every
-  `SWP` step lemma (`SymRun.lean`, the generated step tables) drives a
-  printing run between its printing steps.
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -33,10 +9,6 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- One segment of a printing run: from every well-formed state holding the
-owned values, the machine runs exactly `k + 1` steps, changing only owned
-cells, appending some string `o` to the output; `P o` holds of the
-successor's values. -/
 def SegFromO (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8))
     (rs : List Nat) (S : Nat → Prop) (k : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8)
     (P : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : Prop :=
@@ -55,7 +27,6 @@ theorem SegFromO.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec
   obtain ⟨σ', o, hre, hok', hregs, hmems, hout, hp⟩ := h σ hok hro hrs hS
   exact ⟨σ', o, hre, hok', hregs, hmems, hout, hP _ _ _ hp⟩
 
-/-- A silent segment is a printing segment that prints `""`. -/
 theorem SegFrom.toO {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {k : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     {P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -65,9 +36,6 @@ theorem SegFrom.toO {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8
   obtain ⟨σ', hre, hok', hregs, hmems, hout, hp⟩ := h σ hok hro hrs hS
   exact ⟨σ', "", hre, hok', hregs, hmems, by rw [hout, String.append_empty], rfl, hp⟩
 
-/-- **A printing run** from owned values `rv`/`mv` with the console at `t`:
-the least predicate closed under `Q` (done) and one segment followed by a run
-from the successor (`LRO.done`, `LRO.seg`, eliminated by `LRO.ind`). -/
 def LRO (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8))
     (rs : List Nat) (S : Nat → Prop)
     (Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop)
@@ -94,8 +62,6 @@ theorem LRO.seg {t : String} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} (k
     LRO M ro text rs S Q t rv mv :=
   fun X hd hs => hs _ _ _ k (h.mono fun _ _ _ hr => hr X hd hs)
 
-/-- **Silent runs into printing runs.** A `LocalRun` whose end condition is
-a printing run from the end values is a printing run. -/
 theorem lro_of_localRun {t : String} :
     ∀ n rv mv, LocalRun M ro text rs S (LRO M ro text rs S Q t) n rv mv →
       LRO M ro text rs S Q t rv mv
@@ -108,9 +74,6 @@ theorem lro_of_localRun {t : String} :
       rw [String.append_empty]
       exact lro_of_localRun n rv' mv' hr
 
-/-- **A printing segment is a lagged run** over the run footprint and the
-console cell: the lookup reads the console from its authority (`ConAgree`),
-and the commit moves the cell to the end state's output. -/
 theorem SegFromO.lagFoot {rs l : List Nat} (hmem : ∀ a, a ∈ l ↔ S a) {K : Nat}
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} {t : String}
     {P : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -155,16 +118,11 @@ theorem SegFromO.lagFoot {rs l : List Nat} (hmem : ∀ a, a ∈ l ↔ S a) {K : 
     cases hv
     rfl
 
-/-- The continuation of a printing run. -/
 abbrev runKontO (Wp : MachWP (GF := GF) M) (Φ : Nat × String → IProp GF) (rs : List Nat)
     (S : Nat → Prop) (Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : IProp GF :=
   iprop(∀ t' rv' mv', ⌜Q t' rv' mv'⌝ -∗ sepL rs (fun r => r ↦ᵣ rv' r) -∗
     ownSet S (fun a => a ↦ₘ mv' a) -∗ consoleOwn t' -∗ Wp.W Φ)
 
-/-- **The printing owned-footprint run rule**, for either WP. Owning the
-run's registers and bytes at their current values, the read-only cells and
-the console cell at `t`, and handing the continuation the end values and the
-console, proves the run. -/
 theorem wp_lroW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF}
     {t : String} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     (h : LRO M ro text rs S Q t rv mv) :
@@ -192,9 +150,6 @@ theorem wp_lroW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF}
     iframe Hl
     ipureintro; exact ⟨hnd, hmem⟩
 
-/-- **A printing `RunFactO` is a printing segment**: the owned-footprint
-reading of a run fact that appends `o` (`segFrom_of_runFact`'s printing
-twin). -/
 theorem segFromO_of_runFactO {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
     {RW : List (Nat × BitVec 64 × BitVec 64)} {MW : List (Nat × BitVec 8 × BitVec 8)}

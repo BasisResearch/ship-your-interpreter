@@ -3,18 +3,6 @@ import VsaIris.Vsa.Stdout.Fwrite
 import VsaIris.Vsa.Stdout.Fputs
 import VsaIris.Vsa.BvLits
 
-/-!
-# `out.fwrite` and `out.fputs` (lane N1)
-
-`fwrite(buf, 1, n, stdout)` of a C string's `n` bytes and `fputs(str,
-stdout)` as Iris specifications (`NewlibOut.outSpec`), from their symbolic
-runs (`fwrite_run`, `fputs_run`) through `outSpec_of_run`. The run's data
-view is `_impure_ptr` followed by the string's first `m` bytes (`strDt`; `m =
-n` for `fwrite`, `n + 1` with the NUL for `fputs`, whose `strlen` reads it),
-both persistent (`impureRO`, `strAt`); where they overlap they agree
-(`roImg_agree`), recorded in `StrView` by `strView_open`.
--/
-
 namespace VsaIris.Sym
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -38,13 +26,10 @@ theorem strBytes_length (s : String) : (strBytes s).length = s.toList.length := 
 theorem putcs_strBytes (s : String) (h : ∀ c ∈ s.toList, c.toNat < 256) : putcs (strBytes s) = s := by
   rw [strBytes, putcs_chars _ h, String.ofList_toList]
 
-/-- The data view's image: `_impure_ptr`'s bytes, else the string's. -/
 def strG (img : Nat → BitVec 8) (a : Nat) : BitVec 8 := if impureW a then impureByte a else img a
 
-/-- The data view's addresses: `_impure_ptr`, then the string's `n` bytes at `p`. -/
 def strDA (p n : Nat) : List Nat := accAddrs 0x8001b970 8 ++ List.range' p n
 
-/-- The data view of a stdout run over a string. -/
 def strDt (img : Nat → BitVec 8) (p n : Nat) : Mem := fillMem (strG img) (strDA p n)
 
 theorem imgM_strDt {img : Nat → BitVec 8} {p n a : Nat} (h : a ∈ strDA p n) :
@@ -68,7 +53,6 @@ section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- `_impure_ptr` and a string, persistently, as one image. -/
 theorem roImg_strG (p n : Nat) (img : Nat → BitVec 8) :
     iprop(impureRO ∗ roImg (InExt (p, n + 1)) img) ⊢@{IProp GF}
       roImg (fun a => impureW a ∨ InExt (p, n + 1) a) (strG img) := by
@@ -80,7 +64,6 @@ theorem roImg_strG (p n : Nat) (img : Nat → BitVec 8) :
   · unfold strG; rw [if_pos hi]; iapply H1 $$ %k %hi
   · unfold strG; rw [if_neg hi]; iapply H2 $$ %k %(hk.resolve_left hi)
 
-/-- **The read-only cells of a stdout run over a string.** -/
 theorem roOwn_str (p n m : Nat) (hm : m ≤ n + 1) (img : Nat → BitVec 8) :
     iprop(gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗ impureRO ∗ roImg (InExt (p, n + 1)) img) ⊢@{IProp GF}
       roOwn roR (stdioText ++ dataOf (strDt img p m) (strDA p m)) := by
@@ -106,15 +89,11 @@ theorem roOwn_str (p n m : Nat) (hm : m ≤ n + 1) (img : Nat → BitVec 8) :
     (fun k hk => (imgM_strDt hk).symm) $$ H
   iapply roImg_list _ (imgM (strDt img p m)) _ (fun a ha => ha) $$ H
 
-/-- What a stdout run knows of a string argument's image: the C string, its
-window, and agreement with `_impure_ptr` where they overlap. -/
 structure StrView (img : Nat → BitVec 8) (p : Nat) (x : String) : Prop where
   cstr : CStrImg img p x
   win : StrWin p x.toList.length
   imp : ∀ a, InExt (p, x.toList.length + 1) a → impureW a → impureByte a = img a
 
-/-- **Opening a string argument** as a stdout run's data view over its first
-`m ≤ n + 1` bytes. -/
 theorem strView_open (p m : Nat) (x : String) (hm : m ≤ x.toList.length + 1) :
     iprop(strAt p x ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗ impureRO) ⊢@{IProp GF}
       ∃ img, roOwn roR (stdioText ++ dataOf (strDt img p m) (strDA p m)) ∗ ⌜StrView img p x⌝ := by
@@ -135,7 +114,6 @@ theorem strView_open (p m : Nat) (x : String) (hm : m ≤ x.toList.length + 1) :
 
 end Own
 
-/-- The view's image on the string is the string's image. -/
 theorem StrView.dt {img : Nat → BitVec 8} {p m : Nat} {x : String} (h : StrView img p x)
     {i : Nat} (hi : i < m) (hm : m ≤ x.toList.length + 1) :
     imgM (strDt img p m) (p + i) = img (p + i) := by
@@ -145,14 +123,11 @@ theorem StrView.dt {img : Nat → BitVec 8} {p m : Nat} {x : String} (h : StrVie
   · rename_i hi'; exact h.imp _ ⟨by simp, by omega⟩ hi'
   · rfl
 
-/-- The string's bytes, as the view holds them. -/
 theorem StrView.bytes {img : Nat → BitVec 8} {p m : Nat} {x : String} (h : StrView img p x)
     {i : Nat} (hi : i < x.toList.length) (hm : x.toList.length ≤ m) (hm' : m ≤ x.toList.length + 1) :
     imgM (strDt img p m) (p + i) = (strBytes x)[i]'(by rw [strBytes_length]; exact hi) := by
   rw [h.dt (by omega) hm', (h.cstr.1 i hi).1]; simp [strBytes]
 
-/-- The string avoids newlib's first owned byte, so it is shorter than
-`__sfvwrite_r`'s chunk cap. -/
 theorem StrView.short {img : Nat → BitVec 8} {p m : Nat} {x : String} (h : StrView img p x)
     {s : BitVec 64} {need : Nat} (hm : x.toList.length ≤ m)
     (hoff : ∀ q ∈ dataOf (strDt img p m) (strDA p m), ¬ outS s need q.1) :
@@ -165,7 +140,6 @@ theorem StrView.short {img : Nat → BitVec 8} {p m : Nat} {x : String} (h : Str
   unfold outS stdioFoot Stdio.InRange impureW
   left; constructor <;> omega
 
-/-- The string's characters print as the string. -/
 theorem StrView.putcs {img : Nat → BitVec 8} {p : Nat} {x : String} (h : StrView img p x) :
     putcs (strBytes x) = x :=
   putcs_strBytes x fun c hc => by
@@ -176,8 +150,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`fwrite(buf, 1, n, stdout)`** of a C string's `n` bytes prints them
-(`OutHoles.fwrite`, with the stack above `.bss`). -/
 theorem fwrite_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (buf s : BitVec 64) (cs : Nat → BitVec 64) (frag o : String) (hcl : CodeLive live)
     (hsp : SpIn s fwriteNeed) (hbss : 0x8001c168 ≤ s.toNat - fwriteNeed) :
@@ -216,8 +188,6 @@ theorem fwrite_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)
   · rw [ldv_keep8 hK (fun i hi => by simp only [dataKeep]; omega)]; exact hcm.p
   · rw [ldv_keep4 hK (fun i hi => by simp only [dataKeep]; omega)]; exact hcm.w
 
-/-- **`fputs(str, stdout)`** prints the string (`OutHoles.fputs`, with the
-stack above `.bss`). -/
 theorem fputs_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (str s : BitVec 64) (cs : Nat → BitVec 64) (frag o : String) (hcl : CodeLive live)
     (hsp : SpIn s outNeed) (hbss : 0x8001c168 ≤ s.toNat - outNeed) :

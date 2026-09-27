@@ -1,23 +1,10 @@
 import VsaIris.Interp.HeapCall
 import VsaIris.Interp.ReallocNullRun
 
-/-!
-# `realloc` in either regime
-
-`env_define` grows a frame's two arrays with `realloc`: from `NULL` on the
-first growth (`reallocNullRho_spec`, from `reallocNullChgRun_proved`/`reallocNullLocalRun_proved`) and
-from a live block afterwards (`reallocRho_spec`, from H4's
-`reallocChgRun_proved` and `AllocSpecs.reallocUncounted`). As for
-`malloc` (`mallocRho_spec`), one spec covers both regimes; NULL is possible
-only uncounted.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.VsaHeap VsaIris.MallocFast VsaIris.Sym
-
-/-! ## The heap depends on its live list only up to permutation -/
 
 section Congr
 
@@ -62,9 +49,6 @@ theorem vsaRoomB_congr {img : Nat → BitVec 8} {H H' : List (Nat × Nat)} {k : 
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The heap resource up to a permutation of its live list** (e.g. bringing
-a block to the front for `realloc`). A permutation, not only membership: the
-shape keeps the live starts distinct (`Starts`). -/
 theorem heapRes_congr {ρ : Regime} {H H' : List (Nat × Nat)} (hx : H.Perm H') :
     heapRes (GF := GF) vsaLayoutP vsaRoomB ρ H ⊢ heapRes vsaLayoutP vsaRoomB ρ H' := by
   have hf : heapFoot vsaLayoutP H = heapFoot vsaLayoutP H' := by
@@ -100,7 +84,7 @@ theorem vsaRegsDistinct {saved : List (Nat × BitVec 64)} (hsv : saved.map Prod.
   rw [hsv]; exact RegsDistinct.of_nodup vsaAllocRegs_nodup
 
 omit I in
-/-- **`realloc(NULL, n)` in regime `ρ`** (= `malloc(n)`), charged `c` credits when counted. -/
+
 theorem reallocNullRho_spec (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (ρ : Regime) (H : List (Nat × Nat)) (n s : BitVec 64)
     (c : Nat) (hc : vsaChg n.toNat c) (saved : List (Nat × BitVec 64))
@@ -215,8 +199,6 @@ theorem reallocNullRho_spec (hlive : AllocLive live)
       iintro Hpc Hra HQ
       iapply Hk $$ Hpc Hra HQ
 
-/-- `realloc(p, nNew)`'s outcome in regime `ρ`: NULL with the old block and
-heap unchanged (only uncounted), or a fresh block holding the old contents. -/
 def reallocRes (ρ : Regime) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat)
     (old : Nat → BitVec 8) (p' : BitVec 64) : IProp GF :=
   iprop((⌜p' = 0#64 ∧ ρ = .uncounted⌝ ∗ heapRes vsaLayoutP vsaRoomB ρ ((p.toNat, nOld) :: H) ∗
@@ -226,8 +208,7 @@ def reallocRes (ρ : Regime) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew 
       ∃ v : Nat → BitVec 8, ⌜Copies old v p.toNat p'.toNat nOld⌝ ∗ blockOwnAt p'.toNat nNew v))
 
 omit I in
-/-- **`realloc` of a live block in regime `ρ`**, charged `c` credits for the
-new size when counted. -/
+
 theorem reallocRho_spec (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (ρ : Regime) (H : List (Nat × Nat)) (p : BitVec 64)
     (nOld nNew : Nat) (s : BitVec 64) (old : Nat → BitVec 8) (c : Nat) (hc : vsaChg nNew c)

@@ -4,34 +4,11 @@ import VsaIris.Vsa.StdioRead
 import Vsa.Sim.rows.ErrSegCrt0
 import Vsa.Sim.Muldi3Spec
 
-/-!
-# `main`'s error line and `exit(70)` (H5)
-
-`interp_run` returned nonzero to `main` (`0x800045ec`, `a0 ≠ 0`). `main` loads
-`stderr` through `_impure_ptr`, calls `fprintf(stderr, "%s\n", in->err_msg)`
-(`IrisHoles.newlib.fprintf`), returns 70 to `crt0`, whose `j exit` enters
-`exit(70)` (`Exit.wp_exitCall`).
-
-```
-800045ec: bnez a0,80004600
-80004600: ld a5,0(s0); addi a2,sp,496; auipc a1,0x15; addi a1,a1,-40; ld a0,24(a5)
-80004614: jal fprintf
-80004618: li a0,70; j 800045f0
-800045f0: ld ra,760(sp); ld s0,752(sp); addi sp,sp,768; ret
-80000038: j exit
-```
-
-`exit` runs at `main`'s stack top: its frame is `main`'s saved pair and its
-newlib interior uses `err_msg` (`Newlib.exitHandlersNeed`).
--/
-
 namespace VsaIris.Newlib.MainErr
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites VsaIris.Newlib.Exit
-
-/-! ## Segments -/
 
 #derive_case mainErrASeg chain
   [] terminator ⟨0x800045ec#64, 0x00051a63#32, 0x63#8, 0x1a#8, 0x05#8, 0x00#8,
@@ -53,12 +30,9 @@ open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites VsaI
 abbrev aL (v a5v a2v a1v s0v sM : BitVec 64) : GRegs :=
   [(10, v), (15, a5v), (12, a2v), (11, a1v), (8, s0v), (2, sM)]
 
-/-- The two stdio words `main` loads: `_impure_ptr`, then `_impure_data._stderr`. -/
 abbrev aLds (simg : Nat → BitVec 8) : List (List (BitVec 8)) :=
   [imgWord simg consoleImpurePtrAddr, imgWord simg stderrPtrAddr]
 
-/-- The read footprint of the two stdio words: `_impure_ptr` read-only
-(`Stdio.impureRO`), `_impure_data._stderr` owned. -/
 abbrev stdFoot (simg : Nat → BitVec 8) : List (Nat × DFrac × BitVec 8) :=
   imgFootD consoleImpurePtrAddr 8 simg ++ imgFoot stderrPtrAddr 8 simg
 
@@ -70,13 +44,13 @@ theorem a_facts {m : Std.ExtHashMap Nat (BitVec 8)} {v a5v a2v a1v sM : BitVec 6
     ChainFacts m m (aL v a5v a2v a1v 0x8001b970#64 sM) (aLds simg) mainErrASeg := by
   unfold mainErrASeg ChainFacts
   chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
-  · -- `bnez a0`: taken
+  ·
     show (v != 0#64) = true
     simpa using hv
-  · -- `ld a5,0(s0)`
+  ·
     exact ldFact (img := simg) rfl rfl (by decide) (by decide) (by decide)
       (fun k hk => hpin _ (.inl ⟨by omega, by omega⟩))
-  · -- `ld a0,24(a5)`, `a5` the loaded `_impure_ptr`
+  ·
     have ha5 := hok.impure
     refine ldFact (img := simg) rfl ?_ (by decide) (by decide) (by decide)
       (fun k hk => hpin _ (.inr ⟨by omega, by omega⟩))
@@ -108,13 +82,11 @@ theorem a_fin (v a5v a2v a1v s0v sM : BitVec 64) {simg : Nat → BitVec 8} (hok 
 
 abbrev bL (a0v rv s0v sM : BitVec 64) : GRegs := [(10, a0v), (1, rv), (8, s0v), (2, sM)]
 
-/-- `main`'s saved pair: `ra` at `sp+760`, `s0` at `sp+752`. -/
 abbrev bLds (sM : BitVec 64) (imgT : Nat → BitVec 8) : List (List (BitVec 8)) :=
   [imgWord imgT (sM.toNat + 760), imgWord imgT (sM.toNat + 752)]
 
-/-- `main`'s stack pointer: its 768-byte frame in RAM above the HTIF words. -/
 structure MainSp (sM : BitVec 64) : Prop where
-  /-- The frame and `fprintf`'s below it lie above newlib's data (the stack segment). -/
+
   lo : 0x80100000 + fprintfNeed ≤ sM.toNat
   hi : sM.toNat + 768 ≤ 0x88000000
   align : sM.toNat % 16 = 0
@@ -128,19 +100,19 @@ theorem b_facts {m : Std.ExtHashMap Nat (BitVec 8)} {a0v rv s0v sM : BitVec 64}
   unfold fprintfNeed at h1
   unfold mainErrBSeg ChainFacts
   chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
-  · -- `ld ra,760(sp)`
+  ·
     have e : ∀ x : BitVec 64, x = sM + sign_extend (m := 64) (0x2f8#12) →
         x.toNat = sM.toNat + 760 := by
       intro x hx; rw [hx]; exact addr_off sM _ 760 (by decide) (by omega)
     exact ldFact (img := imgT) rfl (e _ rfl) (by omega) (by omega) (.inr (by unfold tohostAddr; omega))
       (fun k hk => hpin _ (by omega) (by omega))
-  · -- `ld s0,752(sp)`
+  ·
     have e : ∀ x : BitVec 64, x = sM + sign_extend (m := 64) (0x2f0#12) →
         x.toNat = sM.toNat + 752 := by
       intro x hx; rw [hx]; exact addr_off sM _ 752 (by decide) (by omega)
     exact ldFact (img := imgT) rfl (e _ rfl) (by omega) (by omega) (.inr (by unfold tohostAddr; omega))
       (fun k hk => hpin _ (by omega) (by omega))
-  · -- `ret` to the loaded `ra`
+  ·
     have e : ∀ x : BitVec 64, x = bytesVal .ld (imgWord imgT (sM.toNat + 760)) →
         (BitVec.update (x + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
       intro x hx; rw [hx, bytesVal_imgWord, hra]; decide
@@ -178,14 +150,10 @@ theorem crt0_pc :
 
 theorem crt0_fin : finReg crt0JSeg [(10, (70#64 : BitVec 64))] [] 10 = 70#64 := rfl
 
-/-! ## The rule -/
-
 section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The stdio window `main` owns: `_impure_data._stderr` (`_impure_ptr` is
-read-only, `Stdio.impureRO`). -/
 def StdWin (k : Nat) : Prop := InExt (stderrPtrAddr, 8) k
 
 def stdWinList : List Nat := List.range' stderrPtrAddr 8
@@ -201,7 +169,6 @@ theorem stdWin_mem (k : Nat) : (stdioExcl k ∧ StdWin k) ↔ k ∈ stdWinList :
   · rintro ⟨i, hi, rfl⟩
     exact ⟨⟨by omega, by omega⟩, ⟨by simp, by simp; omega⟩⟩
 
-/-- **The stdio footprint** from the owned window and `_impure_ptr`. -/
 theorem stdWin_foot (simg : Nat → BitVec 8) (hi : ImpureImg simg) :
     ownSet (GF := GF) (fun k => stdioExcl k ∧ StdWin k) (fun k => k ↦ₘ simg k) ∗ impureRO ⊢
       sepL (stdFoot simg) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) := by
@@ -218,7 +185,6 @@ theorem stdWin_foot (simg : Nat → BitVec 8) (hi : ImpureImg simg) :
     ihave H := ownSet_iff _ stdWin_mem $$ H
     iapply ownSet_to_sepL _ stdWinList_nodup $$ H
 
-/-- **And back**: the owned window out of the stdio footprint. -/
 theorem stdWin_back (simg : Nat → BitVec 8) :
     sepL (GF := GF) (stdFoot simg) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ⊢
       ownSet (fun k => stdioExcl k ∧ StdWin k) (fun k => k ↦ₘ simg k) := by
@@ -236,11 +202,6 @@ theorem sepL_calleeSaved (f : Nat → BitVec 64) :
   rw [sepL_cons]
   exact .rfl
 
-/-- **`main`'s error line, then `exit(70)`**, for either WP. At `main`'s
-`jal interp_run` link with a nonzero result, `s0 = &_impure_ptr`, `main`'s
-stack (the saved pair `imgT` with `ra = crt0`'s link, and `fprintfNeed`
-bytes below `sp`), `err_msg` holding a C string at `sp+496`, newlib's data in
-its boundary state and the console at `o`: the run halts with code 70. -/
 theorem wp_mainErrTail (H : NewlibHoles)
     (live : Nat → Prop) (hlive : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (sM v rv : BitVec 64) (cs : Nat → BitVec 64) (o : String)
@@ -259,7 +220,7 @@ theorem wp_mainErrTail (H : NewlibHoles)
   iintro ⟨Hpc, Ha0, Hra, Hs0, Hargs, ⟨Hsp, Hscr, Hsaved, Htmp, #Hgp, #Himg⟩, HT, Herr, Hstd,
     Herrno, Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg mainErrCode_text $$ Himg
-  -- `_impure_ptr` and `_impure_data._stderr`
+
   ihave ⟨%simg, %⟨hok, himp⟩, Hw, Hrest, #Himp⟩ := stdioAt_open StdioOK StdWin $$ Hstd
   ihave Hw := stdWin_foot simg himp $$ [Hw]
   · iframe Hw Himp
@@ -298,7 +259,7 @@ theorem wp_mainErrTail (H : NewlibHoles)
   ihave Hw := stdWin_back simg $$ Hw
   ihave Hstd := stdioAt_close StdioOK StdWin simg hok himp $$ [Hw Hrest]
   · iframe Hw Hrest Himp
-  -- `fprintf(stderr, "%s\n", in->err_msg)`
+
   let errp : BitVec 64 := sM + sign_extend (m := 64) (0x1f0#12)
   have herrp : errp.toNat = sM.toNat + 496 := addr_off sM _ 496 (by decide) (by omega)
   let cs' : Nat → BitVec 64 := fun r => if r = 8 then 0x8001b970#64 else cs r
@@ -346,7 +307,7 @@ theorem wp_mainErrTail (H : NewlibHoles)
             simp [cs', this])]
         iexact Hsaved
     iexact Himg
-  -- `li a0,70; j; ld ra,760(sp); ld s0,752(sp); addi sp,sp,768; ret`
+
   unfold callFrame VsaIris.sp
   iintro Hpc Hra ⟨Hargs, Herr, Hstd, Herrno, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
   rw [herrp]
@@ -378,7 +339,7 @@ theorem wp_mainErrTail (H : NewlibHoles)
   iintro Hpc ⟨Ha0, Hra, Hs0, Hsp, -⟩ - HMR
   ihave ⟨-, HT⟩ := (sepL_append _ _ _).1 $$ HMR
   ihave HT := (ownImg_range _ _ _).2 $$ HT
-  -- `crt0`'s `j exit`
+
   have hcrtL := crt0JCode_text.live hlive
   ihave #Hcrt := instrAt_of_binImg crt0JCode_text $$ Himg
   iapply wp_segW live Wp crt0JSeg [(10, (70#64 : BitVec 64))] [] 0x80000038#64
@@ -391,7 +352,7 @@ theorem wp_mainErrTail (H : NewlibHoles)
   rw [← instrAt_eq]
   iframe Hpc Ha0 Hcrt
   iintro Hpc ⟨Ha0, -⟩ - -
-  -- `exit(70)` at `main`'s stack top
+
   have hs768 : (sM + sign_extend (m := 64) (0x300#12)).toNat = sM.toNat + 768 :=
     addr_off sM _ 768 (by decide) (by omega)
   iapply wp_exitCall H live hlive Wp (sM + sign_extend (m := 64) (0x300#12)) 0x80000038#64 70#64

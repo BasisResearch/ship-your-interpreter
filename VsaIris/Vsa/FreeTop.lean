@@ -1,23 +1,10 @@
 import VsaIris.Vsa.FreeTrim
 
-/-!
-# `_free_r`'s top merge
-
-A chunk whose successor is the top joins it (`0x80007534`), after absorbing a
-free predecessor: the merged chunk becomes the top (`PHeapAt.toTop`, over the
-virtual heap of `PHeapAt.coalPrev`). A top at the trim threshold goes to
-`_malloc_trim_r` (`trim_run`).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The state at `0x80007558`: the chunk `p` of size `sz` ending at the top,
-in use in the virtual heap `V`, with no live block at `p + 16` and its header
-carrying `PREV_INUSE`; the machine memory `Mt` agrees with `V` on the
-footprint but on `p`'s header. `p` is in `a4`, the merged size in `a3`. -/
 structure FTop (C : MCtx) (R : Nat → BitVec 64) (Mt V : Mem) (brkv : Nat) (cs : List Chunk)
     (bins : Nat → List Nat) (p sz : Nat) : Prop where
   frame : FFrame C R Mt
@@ -33,8 +20,6 @@ structure FTop (C : MCtx) (R : Nat → BitVec 64) (Mt V : Mem) (brkv : Nat) (cs 
   a4 : (R 14).toNat = p
   a3 : (R 13).toNat = brkv - p
 
-/-- **The merged top** (`0x80007558`): `p` becomes the top; below the trim
-threshold `_free_r` returns, otherwise it calls `_malloc_trim_r` first. -/
 theorem top_tail {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt V : Mem} {brkv : Nat}
     {cs : List Chunk} {bins : Nat → List Nat} {p sz : Nat} (T : FTop C R Mt V brkv cs bins p sz) :
     AW C.live C.S C.Q 0x80007558#64 R Mt := by
@@ -105,8 +90,6 @@ theorem top_tail {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt V : Mem} {br
   · rfl
   · exact T.s0
 
-/-- The numbers of a free predecessor `p` of `x = p + psz` (size `sz`): where
-`p` and its bin nodes lie. -/
 structure PvGeo (C : MCtx) (p psz sz predP succP : Nat) : Prop where
   p16 : p % 16 = 0
   plo : 0x8001c170 ≤ p
@@ -176,8 +159,6 @@ theorem PvGeo.of_heap {C : MCtx} {Mt : Mem} {brkv : Nat} {cs₀ rest : List Chun
     by rw [hpend]; exact HH.bnd_ne_node P.i1 hpnode bX 8 (by omega) (by omega),
     h.heap.node_foot P.i0 P.i1 hpredm, h.heap.node_foot P.i0 P.i1 hsuccm⟩
 
-/-- The machine memory after unlinking the free predecessor `p` agrees with
-the coalesced virtual heap `b2Mem` off `p`'s header. -/
 theorem pv_agree {C : MCtx} {Mt : Mem} {p psz sz hdr0 predP succP : Nat}
     (G : PvGeo C p psz sz predP succP) (hdr : read64 Mt (p + psz + 8) = some hdr0)
     {v1 v2 : BitVec 64} (h1 : v1.toNat = predP) (h2 : v2.toNat = succP) :
@@ -209,8 +190,6 @@ theorem pv_agree {C : MCtx} {Mt : Mem} {p psz sz hdr0 predP succP : Nat}
     rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
       writeLog_out] <;> simp only [OutL, and_true] <;> omega
 
-/-- **The top merge** (`0x80007534`): a chunk `x` whose successor is the top
-absorbs a free predecessor, if any, and becomes the top (`top_tail`). -/
 theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {x sz hdr0 nh : Nat}
     (D : FDec C R Mt q n brkv chunks bins x sz hdr0 nh) (hT : x + sz = C.top0) :
@@ -251,7 +230,7 @@ theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n 
   refine st_80007534 O.live ?_
   have hsum : (R 15 + R 13).toNat = brkv - x := by rw [BitVec.toNat_add, ha5, ha3]; omega
   refine st_80007538 O.live (fun h1 => ?_) (fun h0 => ?_)
-  · -- the predecessor in use: `x` itself becomes the top
+  ·
     have hodd : hdr0 % 2 = 1 := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false] at h1
       have : (R 6).toNat ≠ 0 := fun h => h1 (BitVec.eq_of_toNat_eq h)
@@ -263,7 +242,7 @@ theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n 
     · exact D.a7
     · exact ha4
     · exact hsum
-  -- a free predecessor `p`: unlink it and absorb `x`
+
   have hpf : hdr0 % 2 = 0 := by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false, ne_eq, Decidable.not_not] at h0
     rw [h0] at ht1; simp at ht1; omega
@@ -283,7 +262,7 @@ theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n 
   have hsl := Vsa.Sim.read64_lt _ _ _ P.fd
   have hpl := Vsa.Sim.read64_lt _ _ _ P.bk
   have ha1 := D.a1
-  -- the footer word below `x`
+
   have hEx : (R 11 + sign_extend (m := 64) (0xff0#12)).toNat = p + psz := by
     sx_norm; rw [BitVec.toNat_add, ha1, ← K.addr]; simp; omega
   refine st_8000753c O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -351,8 +330,6 @@ theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n 
   · exact hEp
   · rw [BitVec.toNat_add, hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpsl]; omega
 
-/-- **`_free_r`** (`0x80007350`, a non-NULL block): the prologue, the
-dispatch on the top (`0x80007398`), and every path to the epilogue. -/
 theorem free_body {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {q n brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (E : FEntry C q R) (Hp : FHeap C C.Mt0 q n brkv chunks bins) :

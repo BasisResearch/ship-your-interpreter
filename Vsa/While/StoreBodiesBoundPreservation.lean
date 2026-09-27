@@ -1,13 +1,5 @@
 import Vsa.While.StackNeed
 
-/-!
-# Preservation of bounded closure bodies
-
-Execution preserves `StoreBodiesBound`.  The proof follows the nine-way
-mutual semantics recursor because expression evaluation, calls, statements,
-and loop auxiliaries can invoke one another.
--/
-
 namespace Vsa.While
 
 private theorem Stmt.bodiesBound_if_then {P : Nat} {c : Expr} {t : Stmt}

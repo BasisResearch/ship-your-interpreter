@@ -1,18 +1,6 @@
 import VsaIris.Vsa.MallocSplit
 import VsaIris.Vsa.HeapMoveAt
 
-/-!
-# Re-binning a too-small last remainder
-
-`0x8000491c` is reached when the last remainder `v` (already detached from
-bin 1, `MDetach`) is smaller than the request. It goes to its own bin: at the
-head of small bin `sz / 8` (`rebin_small`), or at its sorted position in a
-large bin (`0x80004c70`). Both set the bin's block bit in `binblocks` and
-continue at the block search's test (`bb_entry`, `0x80004968`).
-
-The heap edit is `PHeapAt.moveBinAt` (`HeapMoveAt.lean`).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
@@ -33,8 +21,6 @@ theorem lor_bit_keep (bb k t : Nat) (h : bb / 2 ^ t % 2 = 1) : (bb ||| 2 ^ k) / 
 theorem lor_lt (bb k : Nat) (h : bb < 2 ^ 32) (hk : k < 32) : bb ||| 2 ^ k < 2 ^ 32 :=
   Nat.or_lt_two_pow h (Nat.pow_lt_pow_right (by omega) hk)
 
-/-- The address of bin `j`'s `fd` word as the code forms it:
-`av + (sext32 (2 j + 2) << 3)`. -/
 theorem binfd_toNat {x : BitVec 64} {j : Nat} (hx : x.toNat = j) (hj : j < 2 ^ 20) :
     (2147593488#64 + BitVec.signExtend 64 (BitVec.extractLsb 31 0 (x <<< 1 + 2#64)) <<< 3).toNat =
       binAt j + 16 := by
@@ -49,17 +35,12 @@ theorem binfd_toNat {x : BitVec 64} {j : Nat} (hx : x.toNat = j) (hj : j < 2 ^ 2
   simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
   omega
 
-/-- A byte outside the footprint is outside every footprint range. -/
 theorem out_of_foot {H : List (Nat × Nat)} {a b w : Nat} (hnf : ¬ vsaFoot H a)
     (hf : ∀ k, k < w → vsaFoot H (b + k)) : a < b ∨ b + w ≤ a :=
   Classical.byContradiction fun hc => hnf (by
     have := hf (a - b) (by omega)
     rwa [show b + (a - b) = a by omega] at this)
 
-/-- **The heap after the small re-binning.** The machine's five stores (`v`'s
-links, the bitmap with the block bit set, bin `j`'s `fd` and the old first
-member's `bk`), with the stored words named by their values, leave the heap
-with `v` at the head of bin `j = sz / 8` and bin 1 empty. -/
 theorem rebin_small_heap {C : MCtx} {Mt Mt' : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {v sz j oldfirst bb : Nat}
     (Hp : MHeap C Mt brkv chunks bins) (D : MDetach C Mt Mt' bins 1 v) (hfree : FreeAt chunks v sz)
@@ -85,7 +66,7 @@ theorem rebin_small_heap {C : MCtx} {Mt Mt' : Mem} {brkv : Nat} {chunks : List C
   have hvmem : v ∈ bins 1 := by rw [D.bin]; exact List.mem_cons_self
   have hvJ : v ∉ bins j := fun hc => by
     have := HH.bin_unique (by omega) hjn (by decide) (by unfold numBins; decide) hc hvmem; omega
-  -- the old first member of bin `j`
+
   have hofm : oldfirst = binAt j ∨ oldfirst ∈ bins j := by
     have := List.mem_of_mem_head? hfirst
     rcases List.mem_append.mp this with hm | hm
@@ -104,7 +85,7 @@ theorem rebin_small_heap {C : MCtx} {Mt Mt' : Mem} {brkv : Nat} {chunks : List C
   unfold binAt avAddr at hgj hg1 ⊢
   unfold binblocksAddr avAddr
   unfold heapStart binAt avAddr at hoLoc
-  -- the reads the move needs
+
   have e1 : fdOf (writeLog (writeLog (writeLog (writeLog (writeLog Mt'
       [(v + 16, 8, w0)]) [(v + 24, 8, w1)]) [(0x8001ad10 + 8, 8, w2)])
       [(0x8001ad10 + 16 * j + 16, 8, w3)]) [(oldfirst + 24, 8, w3)]) (binAt 1) = some (binAt 1) := by
@@ -182,9 +163,6 @@ theorem rebin_small_heap {C : MCtx} {Mt Mt' : Mem} {brkv : Nat} {chunks : List C
         have := B.node_foot (x := oldfirst) (by omega) hjn hofm (24 + k) (by omega) (by omega)
         rwa [show oldfirst + (24 + k) = oldfirst + 24 + k by omega] at this)
 
-/-- **Re-bin the last remainder** (`0x8000491c`): a remainder of at most 511
-bytes goes to the head of its small bin, and the block search's test follows
-with the updated bitmap. A larger one takes the large-bin path (`0x80004c70`). -/
 theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz : Nat}
     (F : MFrame C R Mt') (Hp : MHeap C Mt brkv chunks bins) (D : MDetach C Mt Mt' bins 1 v)
@@ -219,14 +197,14 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     exact hbb
   have hbblt := Hp.heap.bb_lt bb hbb
   rw [← upd_self_eq ha6]
-  -- `li a3,511; ld a1,8(a6)`: the bitmap
+
   sx_run [2] O.live
   unfold binblocksAddr avAddr at hbb'
   simp (disch := sx_addr) only [ldv_at hbb']
   have hbbv : (BitVec.ofNat 64 bb).toNat = bb := by
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   refine st_80004924 O.live (fun hl => ?_) (fun hs => ?_)
-  · -- a large remainder
+  ·
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hl
     refine hlarge (by rw [ht1] at hl; exact hl) _ bb (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_
       hbb ?_ <;> try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -237,7 +215,7 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     · exact V.t4
     · exact h8
     · exact hbbv
-  · -- a small remainder: the head of bin `sz / 8`
+  ·
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hs
     rw [ht1] at hs
     have hs' : sz ≤ 511 := by
@@ -245,7 +223,7 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
       omega
     have hjn : sz / 8 < numBins := by unfold numBins; omega
     have hgj := binAt_geo (sz / 8) hjn
-    -- bin `j`'s first member
+
     have hringJ := (binList_iff_ring.1 (HH.bins_list (sz / 8) (by omega) hjn)).1
     obtain ⟨oldfirst, hof⟩ : ∃ f, (bins (sz / 8) ++ [binAt (sz / 8)]).head? = some f := by
       rcases h : bins (sz / 8) with _ | ⟨x, xs⟩ <;> simp
@@ -264,7 +242,7 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     · sx_norm; rw [hA3]; exact O.bin_link hjn (.inl rfl)
     sx_norm
     rw [hA3, ldv_at hfdJ' _ rfl]
-    -- the bit of block `j / 4`
+
     refine st_80004940 O.live ?_
     refine st_80004944 O.live ?_
     refine st_80004948 O.live ?_
@@ -297,7 +275,7 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
       rcases honode with h | ⟨cx, hcx, rfl, _, _⟩
       · exact .inl h
       · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; exact .inr ⟨this.1, by omega⟩
-    -- `sd a0,16(a5); sd a2,24(a5)`: `v`'s links
+
     refine st_80004954 O.live ?_ ?_ ?_
     · sx_norm; sx_addr
     · sx_norm; exact O.foot (fun k hk => by
@@ -311,10 +289,10 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
         rwa [show v + 16 + (8 + k) = (R 15 + 24#64).toNat + k by sx_addr] at this)
     sx_norm
     rw [show (R 15 + 24#64).toNat = v + 24 by sx_addr, hA2]
-    -- `sd a1,8(a6)`: the bitmap
+
     refine st_8000495c O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
     sx_norm
-    -- `sd a5,0(a3); sd a5,24(a0)`: bin `j`'s `fd` and the old first member's `bk`
+
     refine st_80004960 O.live ?_ ?_ ?_
     · sx_norm; rw [hA3]; unfold StOK Vsa.Sim.tohostAddr; unfold binAt avAddr at hglo ⊢; omega
     · sx_norm; rw [hA3]; exact O.bin_link hjn (.inl rfl)

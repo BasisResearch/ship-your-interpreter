@@ -1,23 +1,5 @@
 import VsaIris.Vsa.Fprintf.Sbprintf
 
-/-!
-# `_vfprintf_r(reent, stdout, fmt, ap)` and `fprintf` (lane N5)
-
-On `stdout` (unbuffered, `__SNBF|__SWR`, `_flags2 = 0`) `_vfprintf_r` takes
-the stub lock and then orients the stream: the `ORIENT` test on this route is
-at `0x8000af54` (`bltz` → `0x8000a918` when oriented, else `j 0x8000a8fc`).
-From `_flags = 0x000a` (`interp_run`'s entry) the block
-`0x8000a8fc`–`0x8000a914` stores `_flags2 & ~0x2000 = 0` (the bytes it read:
-`Frame.restore`) and `_flags = 0x200a` (`stdoutSb_orient`). Both routes meet
-at `0x8000a924` with `stdout` oriented at a memory `Mo` differing from the
-entry's at most in `_flags` (`swp_flagsGen`, `vfp_outer_1`); one script
-(`vfp_tail`) continues both (`vfp_outer_2`, `vfp_outer_3`). The prologue then
-takes the `__sbprintf` branch (`(flags & 0x1a) == 0x0a`, a
-descriptor, no `__SNPT`): after the entry (N3's `vfpEntry_run`) and the
-stub lock it calls `__sbprintf(reent, stdout, fmt, ap)` (the hook `hS`,
-`sbprintf_run`) and returns its count (`vfp_outer`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -28,15 +10,11 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- The bytes the outer `_vfprintf_r` changes: its frame, `__sbprintf`'s and
-the callee frames below, `stdout`'s flags, `errno`. -/
 def OuterReg (sp : Nat) (a : Nat) : Prop :=
   (sp - 2288 ≤ a ∧ a < sp + 592) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
 
-/-- `stdout`'s `_flags`, the bytes `ORIENT` changes. -/
 abbrev FlagsReg (a : Nat) : Prop := 0x8001bb30 ≤ a ∧ a < 0x8001bb32
 
-/-- A store of the bytes already there. -/
 theorem Frame.restore (M : Mem) {Reg : Nat → Prop} {b w : Nat} (v : BitVec 64)
     (hw : w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8) (hv : imgLE (imgM M) b w = v.toNat % 2 ^ (8 * w)) :
     Frame (writeLog M [(b, w, v)]) M Reg := fun a _ => by
@@ -53,12 +31,9 @@ theorem imgLE4_of_ldv_lw {M : Mem} {a : Nat} (h : ldv .lw M a = 0#64) : imgLE (i
     BitVec.toNat_signExtend, BitVec.toNat_ofNat] at h3
   split at h3 <;> omega
 
-/-- The memory after `ORIENT`'s stores (`sw 0` to `_flags2`, `sh 0x200a` to `_flags`). -/
 abbrev orientMem (M : Mem) : Mem :=
   writeLog (writeLog M [(0x8001bbd0, 4, 0#64)]) [(0x8001bb30, 2, 0x200a#64)]
 
-/-- **`ORIENT` from either orientation**: `_flags2` is rewritten with its
-bytes, `_flags` becomes `0x200a`, the other fields are untouched. -/
 theorem stdoutSb_orient {fl : BitVec 64} {M : Mem} (h : StdoutSbAt fl M) :
     Frame (orientMem M) M FlagsReg ∧ StdoutSb (orientMem M) := by
   have hF : Frame (orientMem M) M FlagsReg :=
@@ -72,8 +47,6 @@ theorem stdoutSb_orient {fl : BitVec 64} {M : Mem} (h : StdoutSbAt fl M) :
   · rw [ldv_lhu_hit _ _ rfl]; decide
   · rw [ldv_lh_hit _ _ rfl]; decide
 
-/-- A run state at a memory `Mo` that differs from `M0` at most in `_flags`
-and holds the oriented fields. -/
 theorem swp_flagsGen {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64} {R : Nat → BitVec 64} {M0 M : Mem}
     (hF : Frame M M0 FlagsReg) (hS : StdoutSb M)
@@ -116,8 +89,7 @@ theorem swp_flagsGen {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs :
   have hap := E.ap
   have h2w : PLift (R 2 = sp + 592#64) := ⟨h2⟩
   clear hl hsp' hsp h2
-  -- the `ORIENT` test (`0x8000af54`); both routes meet at `0x8000a924` with
-  -- `_flags = 0x200a`, the dead `a2`/`a3` apart
+
   cases o
   case' true =>
     have hSo1 : StdoutSb Mt1 := hSo1
@@ -131,9 +103,7 @@ theorem swp_flagsGen {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs :
     refine swp_flagsGen (stdoutSb_orient hSo1).1 (stdoutSb_orient hSo1).2 fun Mo hFo hSoO => ?_
 
 set_option hygiene false in
-/-- From the rejoin `0x8000a924` (`stdout` oriented at `Mo`, which differs
-from `Mt1` at most in `_flags`): the `__sbprintf` branch, the call (`hS`), the
-epilogue (`hk`). The same script closes both routes' leftovers. -/
+
 local macro "vfp_tail" : tactic => `(tactic| (
         have lo : ∀ (kd : MKind) (a : Nat), a + widthOfM kd ≤ 0x8001bb30 ∨ 0x8001bb32 ≤ a →
             ldv kd Mo a = ldv kd Mt1 a := fun kd a ha => hFo.ldv kd fun j hj h => by
@@ -180,7 +150,6 @@ local macro "vfp_tail" : tactic => `(tactic| (
 
 #ix_piece vfp_outer_3 from vfp_outer_1 at 2 by vfp_tail
 
-/-! **`vfp_outer`**: the outer `_vfprintf_r` on `stdout`, from either orientation. -/
 #ix_tree vfp_outer := vfp_outer_1 [vfp_outer_2, vfp_outer_3]
 
 end VsaIris.Sym.Fp

@@ -25,20 +25,6 @@ import Vsa.Sim.DecodeTable.Batch05Part15
 import Vsa.Sim.DecodeTable.Batch03Part28
 import Vsa.Sim.DecodeTable.Batch02Part23
 
-/-!
-# Layer 3 — per-site observational step lemmas for `setjmp` / `longjmp`
-
-One `StepObs` lemma per instruction of newlib RV64 soft-float `setjmp`
-(`0x80006ffc`, 16 insts: 14 `sd` + `li a0,0` + `ret`) and `longjmp`
-(`0x8000703c`, 17 insts: 14 `ld` + `seqz`/`add` + `ret`).
-
-Stores use `exec_sd_val` (width-8 `sd`, base = `a0`, offset = the slot). Loads
-are **ALU-class** sites (`sign_extend` of the dword → `sigmaPost_alu`), via
-`exec_ld` from `ValueSites`. `seqz a0,a1` is `SLTIU a0,a1,1`; `add a0,a0,a1` is
-`RTYPE ADD`. Everything reuses the `stepObs_*` wrappers, `decode_*` table,
-`writeMap8`/`sdData_val`.  Byte-word facts get an `_jmp` suffix (collision sweep).
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -50,22 +36,10 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## Byte-word / non-RVC facts -/
-
 theorem w_0015b513_jmp : ((((0x00#8).append (0x15#8)).append (0xb5#8)).append (0x13#8)) = (0x0015b513#32 : BitVec 32) := by
   apply BitVec.eq_of_toNat_eq; decide
 theorem nr_0015b513_jmp : Sail.BitVec.extractLsb ((((0x00#8).append (0x15#8)).append (0xb5#8)).append (0x13#8)) 1 0 = (0b11#2 : BitVec 2) := by
   apply BitVec.eq_of_toNat_eq; decide
-
-/-! ## setjmp: the 14 `sd rX, off(a0)` sites (base = a0 = x10) -/
-
-/-! ## setjmp: `li a0,0` @ 0x80007034 (`addi a0,x0,0`, rd = x10). -/
-
-/-! ## setjmp: `ret` @ 0x80007038 (`jalr x0,ra,0`). -/
-
-/-! ## longjmp: the 14 `ld rX, off(a0)` ALU-class sites (base = a0 = x10) -/
-
-/-! ## longjmp: `seqz a0,a1` @ 0x80007074 (`SLTIU a0,a1,1`, rd = x10, rs1 = x11). -/
 
 theorem exec_seqz_jmp (σ : MState) (pc : BitVec 64) (v11 : BitVec 64)
     (hx11 : σ.regs.get? Register.x11 = some v11) :
@@ -109,9 +83,5 @@ theorem site_80007074_jmp
     (exec_seqz_jmp σ (0x80007074#64) v11 hx11)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
-
-/-! ## longjmp: `add a0,a0,a1` @ 0x80007078 (`RTYPE ADD`, rs2 = x11, rs1 = x10, rd = x10). -/
-
-/-! ## longjmp: `ret` @ 0x8000707c (`jalr x0,ra,0`). -/
 
 end Vsa.Sim

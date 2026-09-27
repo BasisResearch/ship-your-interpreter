@@ -1,19 +1,6 @@
 import VsaIris.Vsa.Stdout.Tac
 import VsaIris.Vsa.SymCompact
 
-/-!
-# Compacting a symbolic run's state, as tactics (lane N3)
-
-Over `SymCompact.lean`'s lemmas, for `SWP`/`SWPO` goals of any run:
-
-* `nx_forget lo n`: forget the bytes `[lo, lo + n)` and erase the stores
-  inside them;
-* `nx_forget_sp lo`: forget the bytes from `lo` up to the current `sp` (dead
-  by the ABI);
-* `nx_forget_reg k₁ …`: forget dead registers' values;
-* `nx_compactR`: the register file with one update per register.
--/
-
 namespace VsaIris.Sym
 
 theorem toNat_sub_lit {x : BitVec 64} {k : Nat} (hk : k < 2 ^ 64) (h : k ≤ x.toNat) :
@@ -22,8 +9,6 @@ theorem toNat_sub_lit {x : BitVec 64} {k : Nat} (hk : k < 2 ^ 64) (h : k ≤ x.t
   have := x.isLt
   omega
 
-/-- The address side conditions of `fillR_writeLog_in`/`_out`: `BitVec`
-offsets from a base as `Nat` arithmetic. -/
 syntax "nx_fdisch" : tactic
 macro_rules
   | `(tactic| nx_fdisch) => `(tactic| (
@@ -32,20 +17,14 @@ macro_rules
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
       omega))
 
-/-- Address side conditions with nested literal offsets (`sp + c₁ + c₂`),
-as `nx_fdisch` normalizes them. -/
 macro_rules | `(tactic| nx_addr) => `(tactic| nx_fdisch)
 
-/-- `nx_forget lo n`: forget the bytes `[lo, lo + n)` (a dead stack region)
-and erase the stores inside it (`swp_forget_region`). -/
 syntax "nx_forget " term:max term:max : tactic
 macro_rules
   | `(tactic| nx_forget $lo $n) =>
     `(tactic| (apply swp_forget_region $lo $n <;> intro _ <;>
       (try simp (disch := nx_fdisch) only [fillR_writeLog_in, fillR_writeLog_out])))
 
-/-- `nx_forget_reg k₁ k₂ …`: forget dead registers' values
-(`swp_forget_reg`). -/
 syntax "nx_forget_reg " num+ : tactic
 macro_rules
   | `(tactic| nx_forget_reg $ks*) => do
@@ -54,14 +33,10 @@ macro_rules
       t ← `(tactic| ($t; apply swp_forget_reg $k; intro _))
     return t
 
-/-! ## Compacting the register file -/
-
 section CompactR
 
 open Lean Elab Tactic Meta
 
-/-- The updates of an `upd` chain, outermost first, one per register, and its
-base. -/
 partial def updChain (e : Expr) (seen : List Nat) (acc : Array (Expr × Expr)) :
     MetaM (Expr × Array (Expr × Expr)) := do
   let e := e.consumeMData
@@ -76,8 +51,6 @@ partial def updChain (e : Expr) (seen : List Nat) (acc : Array (Expr × Expr)) :
     else updChain args[0]! (kn :: seen) (acc.push (k, args[2]!))
   else return (e, acc)
 
-/-- Two register files agree on every owned register: one literal register at
-a time. -/
 macro "nx_regEq" : tactic => `(tactic| (
   intro r hr _
   simp only [iRegs, List.mem_cons, List.not_mem_nil, or_false] at hr
@@ -85,9 +58,6 @@ macro "nx_regEq" : tactic => `(tactic| (
     h | h | h | h | h | h | h | h | h <;> subst h <;>
     simp only [upd, Nat.reduceEqDiff, ite_true, ite_false, reduceIte]))
 
-/-- `nx_compactR`: replace the register file of an `SWP` goal by the same
-function with one update per register (`swp_congr`, checked per owned
-register). -/
 elab "nx_compactR" : tactic => do
   let g ← getMainGoal
   let ty ← g.withContext (do whnfR (← instantiateMVars (← g.getType)))
@@ -104,7 +74,6 @@ elab "nx_compactR" : tactic => do
 
 end CompactR
 
-/-- Store forwarding (lane N1's `nx_mem`) through forgotten regions too. -/
 macro_rules
   | `(tactic| nx_mem) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
       ldv_ld_miss, VsaIris.Interp.ldv_lw_miss, VsaIris.Interp.ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
@@ -112,8 +81,7 @@ macro_rules
       ldv_lwu_fillR_miss, ldv_lh_fillR_miss, ldv_lhu_fillR_miss, ldv_lbu_fillR_miss])
 
 open Lean Elab Tactic Meta in
-/-- `nx_clear_conds`: clear the branch conditions a run accumulated (`hc✝`),
-which only slow later side conditions down. -/
+
 elab "nx_clear_conds" : tactic => do
   let g ← getMainGoal
   let fvs ← g.withContext do

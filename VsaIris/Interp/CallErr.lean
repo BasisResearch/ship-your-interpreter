@@ -1,30 +1,11 @@
 import VsaIris.Interp.ErrArm
 import VsaIris.Interp.CallPrefix
 
-/-!
-# The call arm's error messages (lane E4)
-
-The call arm's runtime errors (`interp.c:177-207`), each through
-`runtime_error(in, line, fmt, a1, a2)` (E2's `ms_rtErrEval`):
-
-| error | `fmt` (`.rodata`) | arguments |
-|---|---|---|
-| too many arguments | `0x80019470` `"too many arguments (max 32)"` | `0, 0` |
-| call depth | `0x800194d0` `"stack overflow (call depth > 1000)"` | `0, 0` |
-| `break`/`continue` escaping a body | `0x800194f8` `"'break'/'continue' outside of a loop"` | `0, 0` |
-| not callable | `0x80019490` `"cannot call a %s value"` | the kind's name, `0` |
-| arity | `0x80019038` `"%s"` | the frame buffer `sp+144` (`snprintf`'d), `0` |
-
-`rodata_fmt0`: a `.rodata` message without conversions is safe to print with
-any arguments (one `decide` over the image per message).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- A `.rodata` format without conversions: its `n` bytes, then the NUL. -/
 theorem rodata_fmt0 {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p n : Nat)
     (hb : ∀ i, i < n → rodataDom (p + i) ∧ rodataByte (p + i) ≠ 0)
@@ -56,7 +37,6 @@ theorem escape_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     FmtArgsOK R rd 0x800194f8#64 [x1, x2] :=
   rodata_fmt0 hro 0x800194f8 36 (by decide) (by decide) (by decide) (by decide) x1 x2
 
-/-- `"cannot call a %s value"` with a C string argument. -/
 theorem notCallable_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {x1 : BitVec 64}
     (hs : ∃ t, CStrCov R rd x1.toNat t) (x2 : BitVec 64) :
@@ -72,8 +52,6 @@ theorem notCallable_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     subst this
     exact hs
 
-/-- A `.rodata` format whose only conversions are `convs`, its `%s`
-arguments C strings: one `decide` per format for the bytes. -/
 theorem rodata_fmtS {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p n : Nat) (convs : List Conv)
     (hb : ∀ i, i < n → rodataDom (p + i) ∧ rodataByte (p + i) ≠ 0)
@@ -91,7 +69,6 @@ theorem rodata_fmtS {R : Nat → Prop} {rd : Nat → BitVec 8}
   obtain ⟨h1, h2⟩ := hb i h
   exact ⟨h1, by simp, by simpa using h2⟩
 
-/-- `"%s expects %d argument(s), got %d"`: the name a C string. -/
 theorem arity_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {x1 : BitVec 64}
     (hs : ∃ t, CStrCov R rd x1.toNat t) (x2 x3 : BitVec 64) :
@@ -103,7 +80,6 @@ theorem arity_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
       | 1, _ => cases hc
       | 2, _ => cases hc)
 
-/-- `"%s"`: its argument a C string. -/
 theorem pctS_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {x1 : BitVec 64}
     (hs : ∃ t, CStrCov R rd x1.toNat t) (x2 : BitVec 64) :
@@ -113,7 +89,6 @@ theorem pctS_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
       match i, hi with
       | 0, _ => exact hs)
 
-/-- An anonymous closure's name, `"<fn>"` (`0x800192d0`). -/
 theorem anonName_cstr {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) :
     ∃ t, CStrCov R rd (0x800192d0#64 : BitVec 64).toNat t :=

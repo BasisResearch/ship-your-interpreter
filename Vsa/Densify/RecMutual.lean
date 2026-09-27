@@ -1,24 +1,11 @@
 import Vsa.Densify.GenA
 
-/-!
-# `Resp` for the `currentlyEnabled` mutual block
-
-`PlatformConfig.lean`'s `mutual` block (`check_stateen_bit`, `currentlyEnabled`,
-`get_hstateen`, `get_sstateen`, `get_xLPE`, `is_hstateen_accessible`,
-`is_sstateen_accessible`, `is_zfinx_enabled_by_stateen`,
-`virtual_memory_supported`) recurses by a measure, so `unfold` cannot close it
-by itself. Each member's functional induction principle (`*.induct`) carries
-the same nine motives; every case is one unfolding plus `resp_auto`, with the
-recursive calls closed by the induction hypotheses.
--/
-
 namespace Vsa.Densify.RecMutual
 
 open Sail ConcurrencyInterfaceV1 LeanRV64DExecutable LeanRV64DExecutable.Functions
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Densify.Gen
 
-/-- One case of the block's induction: unfold the head and discharge. -/
 macro "mutual_case" : tactic => `(tactic| (
   intros
   first

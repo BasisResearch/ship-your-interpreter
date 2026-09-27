@@ -244,74 +244,27 @@ import Vsa.Sim.DecodeTable.Batch16Part27
 import Vsa.Sim.DecodeTable.Batch16Part32
 import Vsa.Sim.DecodeTable.Batch17
 
-/-!
-# `chain_facts` — auto-discharge the mechanical half of a whole `ChainFacts` bundle
-
-`#derive_case name chain …` emits `theorem name_seg (…) (hfacts : ChainFacts σ.mem
-σ.mem L lds name) (hwf : ChainOK …) …`.  The `hfacts` argument is the chained,
-memory-threaded analogue of a single block's `BBlockFacts`: it recurses over the
-block list, producing `BBlockFacts mc m L lds b ∧ ChainFacts mc … bs` at each
-cons and terminating in `True`.
-
-`block_facts` (`BlockTactics.lean`) already auto-closes the *mechanical* leaves
-of ONE block (code byte pins + decode facts) from a single loaded-image
-hypothesis and a symbol-name prefix.  This file lifts that to the WHOLE
-`ChainFacts` bundle so a caller can write
-
-```
-chain_facts h with "<prefix>"
-```
-
-to CLOSE the `ChainFacts` goal a `name_seg` carries as a hypothesis, instead of
-assuming it.  It walks the chain: for each block it closes every
-`BytePinsM`/`DecodeFactM`/`BytePinsT`/`DecodeFactT`/`True` leaf by generating and
-applying the named `Code.<fn>_at_<pc>` / `DecodeTable.decode_<word>` lemma from
-the instruction literal, and leaves the genuinely data-dependent leaves
-(load/store `MemFacts` windows + byte pins, branch/jump terminator guards) as
-fresh goals in program order — exactly the leftovers `block_facts` leaves,
-concatenated block-by-block down the chain.
-
-The whole algorithm is a re-export of `block_facts`'s `bfSolve` walker: that
-walker already has a `ChainFacts`/`BBlockFacts` container case (it reduces one
-layer with `whnf` and keeps walking), so the same recursion that handles one
-block handles the whole chain — the mechanical leaves read only the reduced
-`mkLine` instruction literal (its `pc`/`word` fields), never the threaded
-`writeLog`/`runGM`/`ldsRunM`/`stepMemM` state, so they close identically at
-every depth.  (`bfSolve` is `private` to `BlockTactics.lean`, so the walker is
-reproduced here rather than imported.)
-
-No `sorry`/`native_decide`/`bv_decide`/Mathlib.  Verify with
-`lake env lean Vsa/Sim/ChainFactsTac.lean`.
--/
-
 open Lean Elab Tactic Meta
 open LeanRV64DExecutable (Register)
 
 namespace Vsa.Sim
 
-/-- `Nat` payload of a `BitVec` literal expression, via Lean's own evaluator. -/
 private def cfBvLitNat? (e : Expr) : MetaM (Option Nat) := do
   match ← getBitVecValue? e with
   | some ⟨_, v⟩ => return some v.toNat
   | none => return none
 
-/-- Lowercase hex (no `0x`), zero-padded to 8 digits — the form the generated
-`Code.*_at_<pc>` / `DecodeTable.decode_<word>` lemma names use. -/
 private def cfHexName (n : Nat) : String :=
   let s := (Nat.toDigits 16 n).asString
   (String.mk (List.replicate (8 - s.length) '0')) ++ s
 
-/-- Field `idx` (0 = pc, 1 = word) of a reduced `MInstr`/`TInstr` `.mk` literal. -/
 private def cfStructField? (a : Expr) (idx : Nat) : Option Expr := a.getAppArgs[idx]?
 
-/-- The instruction literal is the last explicit arg of the leaf predicate. -/
 private def cfLastArg? (ty : Expr) : MetaM (Option Expr) := do
   match ty.getAppArgs.back? with
   | some a => return some (← whnf a)
   | none => return none
 
-/-- Close one `BytePins*`/`DecodeFact*` leaf `g` by generating the lemma name
-from the instruction literal's `pc`/`word` field. -/
 private def cfCloseLeaf (h : Term) (g : MVarId) (ty : Expr) (nm : Nat → String)
     (fieldIdx : Nat) (applyH : Bool) : TacticM Unit := do
   let some a ← cfLastArg? ty | throwError "chain_facts: no instruction literal"
@@ -320,13 +273,6 @@ private def cfCloseLeaf (h : Term) (g : MVarId) (ty : Expr) (nm : Nat → String
   let stx ← if applyH then `($(mkIdent (nm n).toName) $h) else `($(mkIdent (nm n).toName))
   g.assign (← g.withContext (Term.elabTermEnsuringType stx ty))
 
-/-- Walk a `ChainFacts` (or `BBlockFacts`) goal `g`: reduce container layers
-(`ChainFacts`/`BBlockFacts`/`ProgFactsM`/`TermPins`/`TermFactsO`) with `whnf`
-(which unfolds the concrete chain/block + the list recursion but stops at the
-next `And`/leaf head), close every mechanical `BytePins*`/`DecodeFact*` leaf by
-generated name, and return the data-dependent leftovers (`MemFacts`, branch
-guards) in program order.  This is `block_facts`'s `bfSolve` walker verbatim; the
-`ChainFacts` container case is what makes it traverse a whole chain. -/
 private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId) :
     TacticM (List MVarId) := do
   let decodeName (w : Nat) : String := "Vsa.Sim.DecodeTable.decode_" ++ cfHexName w
@@ -345,36 +291,18 @@ private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId) :
   | some ``True => g.assign (mkConst ``True.intro); return []
   | some ``ChainFacts | some ``BBlockFacts | some ``ProgFactsM
   | some ``TermPins | some ``TermFactsO =>
-      -- reduce one container layer, keep walking
+
       let g' ← g.change (← g.withContext (whnf ty))
       cfSolve h prefixStr g'
   | _ =>
-      -- `MemFacts` for an ALU op, and a fall-through terminator's stuck
-      -- `match … .term`, are defeq `True`: close them. Genuine data-dependent
-      -- leaves (`MemFacts` for a load/store, branch guards) are left in order.
+
       if ← g.withContext (isDefEq ty (mkConst ``True)) then
         g.assign (mkConst ``True.intro); return []
       else
         return [g]
 
-/-- `chain_facts h with "<prefix>"` closes every mechanical leaf of a
-`ChainFacts` (or `BBlockFacts`) goal from the single loaded-image hypothesis `h`
-and the `Code.*_at_` symbol prefix, leaving the data-dependent leaves
-(load/store windows + pins, terminator guards) as fresh goals in program order. -/
 elab "chain_facts " h:term " with " pfx:str : tactic => do
   let leftovers ← cfSolve h pfx.getString (← getMainGoal)
   setGoals leftovers
-
-/-! ## Demo — close a real, whole-chain `ChainFacts` goal end-to-end
-
-`chainFactsDemo` is the pure-ALU segment `0x80003538 … 0x80003548` of `eval_expr`
-(`slli/srli/auipc/addi/add`, no terminator): every element's `MemFacts` is `True`
-and there are no terminator guards, so `chain_facts` discharges the WHOLE
-`ChainFacts` bundle with **zero** leftover goals from one `Eval_exprLoaded`
-hypothesis.  This is the whole-chain analogue of a single-block `block_facts`
-call, and the exact obligation a `#derive_case … _seg` row would otherwise take
-as a hypothesis. -/
-
-   -- add   x15,x15,x14
 
 end Vsa.Sim

@@ -1,10 +1,5 @@
 import Vsa.Sim.InitValues
 
-/-! Decode table batch 18 (lane N3): the instruction words of newlib's stderr/stdout write
-path, `_vfprintf_r` and the exit handlers (`scripts/gen_interp_steps.py --target newlib`)
-that batches 01-17 miss. Template of `experiments/gen_decode_table.py` (fast form), at the
-default elaboration budget. -/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 

@@ -1,30 +1,15 @@
 import VsaIris.Vsa.Stderr.VfpEntry
 import VsaIris.Vsa.Stderr.SwsetupErr
 
-/-!
-# `_vfprintf_r` on `stderr`: the stream's first-write setup (lane N3)
-
-From `0x8000a8d0` (`VfpEntry`) on the idle `stderr` (flags `__SRW | __SNBF`,
-no lock, `_flags2 = 0`): the (no-op) lock, orientation (`__SORD`), then
-`cantwrite` → `__swsetup_r` (`swsetupErr_run`); the stream is not the
-unbuffered-and-writable shape `__sbprintf` takes (`flags & 0x1a ≠ 0x0a`, it
-is `__SRW` too), so the run reaches `0x8000a944`, the direct path's
-initialization, which N5's format loop starts from.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- The memory at `0x8000a944`: orientation (`_flags2`'s lock bit cleared,
-`__SORD` set), then `__swsetup_r`'s writes (`swsetupErrMt`). -/
 abbrev vfpErrMt (Mt : Mem) (sp : BitVec 64) : Mem :=
   swsetupErrMt (writeLog (writeLog Mt [(0x8001bc88, 4, 0#64)]) [(0x8001bbe8, 2, 0x2012#64)]) sp
     0x8000abd8#64
 
-/-- The registers at `0x8000a944`: `sp`, `s0`/`s4`/`s6` (`reent`, `fp`,
-`fmt`), the other callee-saved registers as at `0x8000a8d0`. -/
 structure VfpHead (R R' : Nat → BitVec 64) : Prop where
   sp_eq : R' 2 = R 2
   s0 : R' 8 = R 8
@@ -33,7 +18,7 @@ structure VfpHead (R R' : Nat → BitVec 64) : Prop where
   keep : ∀ x ∈ [9, 18, 19, 21, 23, 24, 25, 26, 27], R' x = R x
 
 set_option hygiene false in
-/-- One piece of the setup run. -/
+
 macro "vfperr_step" : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsinit, hflU, hflS, hmode,
   hlock, hfd, hbase, BitVec.add_assoc, BitVec.zero_add] at 0x8000f230 0x8000a944))
 
@@ -77,7 +62,6 @@ macro "vfperr_step" : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsi
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, rk9, rk18, rk19, rk21, rk23, rk24,
       rk25, rk26, rk27]
 
-/-! **`vfpErr_run`**: `_vfprintf_r` on the idle `stderr`, `0x8000a8d0` → `0x8000a944`. -/
 #ix_chain vfpErr_run := [vfpErr_01, vfpErr_02]
 
 end VsaIris.Sym

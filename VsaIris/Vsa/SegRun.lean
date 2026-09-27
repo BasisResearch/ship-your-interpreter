@@ -1,35 +1,6 @@
 import VsaIris.Vsa.Tools
 import VsaIris.LocalRun
 
-/-!
-# Reflected segments as local-run steps
-
-`VsaIris/LocalRun.lean` gives the fuel-bounded owned-footprint run rule
-`wp_localRunW` (the loop rule, for either WP; xv6iris `ProofMemset.v:1-9`
-"bounded loop, not iLöb") and `segFrom_of_runFact`, which turns ONE VSA
-`RunFact` into ONE `SegFrom` step of such a run.
-
-This file closes the gap for the shape every H3 helper has: a leaf function
-(`strlen`, `strcmp`, the `memcpy` loops) is a chain of reflected segments that
-WRITE NO MEMORY, over a fixed set of owned registers. `segFrom_of_seg`
-instantiates `segFrom_of_runFact` at `Inst.seg_runFact` with an empty written
-set, so a caller supplies only
-
-* the segment's own four `decide`s (`hlen`, `hwf`, `hkeys`, `hwr`);
-* silence (`hsilent`: the reflected write log is empty, one `decide`);
-* the segment's `ChainFacts` (exactly what `segToTriple`/`chain_facts` needs);
-* where each read byte lives (`hMR`: persistent text, or an owned byte);
-* the register pins, read off the run's register valuation.
-
-`readBytes_present` is the companion: the read footprint of such a step is
-present with its values, which is what VSA's fetch facts (`Code.*Loaded`) and
-its string predicates (`CStr`) consume.
-
-Discipline (CLAUDE.md): this is the abstraction the per-site batteries would
-otherwise duplicate. A helper proof instantiates it; it never re-runs
-`seg_runFact` by hand.
--/
-
 namespace VsaIris.Inst
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -41,13 +12,6 @@ section SegRun
 
 variable {live : Nat → Prop}
 
-/-- **A reflected segment as one local-run step.** The segment `bs` from
-`pc0` pins the registers `L` (each owned, at its current value in the run's
-valuation `rv`), reads the bytes `MR` (each either a persistent text byte or
-an owned byte at its current value) and writes the owned bytes `W` (at their
-current values). The successor's valuation has the reflected end PC, the
-reflected final value of every pin, every written byte at its value after the
-reflected write log, and every other owned register and byte unchanged. -/
 theorem segFrom_of_segW {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} (bs : List BBlock) (L : GRegs)
     (lds : List (List (BitVec 8))) (pc0 : BitVec 64) (MR : List (Nat × DFrac × BitVec 8))
@@ -97,17 +61,6 @@ theorem segFrom_of_segW {ro : List (Nat × BitVec 64)} {text : List (Nat × BitV
     · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
       exact hne q hq
 
-/-! ## Leaf functions
-
-A leaf function (`strlen`, `strcmp`, `memcpy`, the `snprintf` digit loop)
-touches a FIXED set of GPRs, reads a fixed footprint and writes a fixed owned
-byte set, so the whole function — loops, branches, tails and all — is ONE
-`LocalRun` over ONE pin list. `leafL`/`leafStep` package that: a segment of
-such a run contributes its `ChainFacts` and nothing else, and `hwf`, `hkeys`
-and `hwr` are one `decide` each on the literal register list. -/
-
-/-- The pin list of a leaf function: the registers it touches, at the run's
-current values. -/
 def leafL (regs : List Nat) (rv : Nat → BitVec 64) : GRegs := regs.map (fun k => (k, rv k))
 
 theorem keysG_leafL : ∀ (regs : List Nat) (rv : Nat → BitVec 64), keysG (leafL regs rv) = regs
@@ -116,7 +69,6 @@ theorem keysG_leafL : ∀ (regs : List Nat) (rv : Nat → BitVec 64), keysG (lea
     show k :: keysG (leafL ks rv) = k :: ks
     rw [keysG_leafL ks rv]
 
-/-- **One reflected segment of a leaf function's run.** -/
 theorem leafStep {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} (regs : List Nat) (m : Nat)
@@ -148,20 +100,6 @@ theorem leafStep {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     exact ⟨.tail _ hk, rfl⟩
   · exact h2 (k, rv k) (List.mem_map_of_mem (f := fun k => (k, rv k)) hk)
 
-/-! ## Instructions outside the reflected block model
-
-`MKind` (`Vsa/Sim/BlockMem.lean:549`) does not cover every RISC-V instruction
-gcc emitted: `sltu` (`snez`) is the one `strlen` needs. Such an instruction
-still has a generated VSA site lemma (`stepObs_alu`): ONE step that advances
-the PC by four, writes ONE GPR, and leaves memory, the output and every other
-register alone. `AluStep` is that fact in the Iris machine's own vocabulary
-and `runFact_of_aluStep` turns it into one local-run step, exactly as
-`jalExec_of_site` does for a `jal`. -/
-
-/-- **One observational ALU step.** From a well-formed state parked at `i`
-with the read registers `RR` and read bytes `MR` at their values: one step to
-a well-formed state with the PC at `i + 4`, `rd` holding `val`, and every
-other register, every byte and the output unchanged. -/
 def AluStep (live : Nat → Prop) (i : Nat) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (rd : Nat) (val : BitVec 64) : Prop :=
   ∀ c : Config, VsaOk live c → vsaReg c VsaIris.PC = BitVec.ofNat 64 i →
@@ -172,7 +110,6 @@ def AluStep (live : Nat → Prop) (i : Nat) (RR : List (Nat × DFrac × BitVec 6
       (∀ a, (vsaModel live).mem c' a = (vsaModel live).mem c a) ∧
       (vsaModel live).out c' = (vsaModel live).out c
 
-/-- **An observational ALU step as a one-step `RunFact`.** -/
 theorem runFact_of_aluStep {live : Nat → Prop} {i : Nat}
     {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
     {rd : Nat} {old val : BitVec 64} (h : AluStep live i RR MR rd val) :
@@ -196,7 +133,6 @@ theorem runFact_of_aluStep {live : Nat → Prop} {i : Nat}
   · intro q hq; cases hq
   · intro a _; exact hmem a
 
-/-- Fuel is a bound: a run that finishes in `n` segments finishes in `n+1`. -/
 theorem localRun_succ {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
     ∀ (n : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8),
@@ -220,11 +156,6 @@ theorem localRun_le {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8
     · rwa [show m + 1 = n from by omega]
     · exact localRun_succ m rv mv (ih hm)
 
-/-- **The read footprint is present with its values.** A step's read bytes
-are either persistent text or owned; either way, in any `VsaOk` state that
-holds the footprint and keeps them `live`, they are present in memory with
-the footprint's values. This is what VSA's `Code.*Loaded` fetch predicates
-and its string predicates (`CStr`) consume. -/
 theorem readBytes_present {c : Config} (hok : VsaOk live c)
     (MR : List (Nat × DFrac × BitVec 8))
     (hmr : ∀ p ∈ MR, (vsaModel live).mem c p.1 = p.2.2)

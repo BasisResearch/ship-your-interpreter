@@ -4,7 +4,6 @@ import Vsa.Sim.MemRegion
 namespace Vsa.Sim
 open Vsa.MemRepr Vsa.While
 
-/-- Legacy whole-node bounds cover each represented subread. -/
 theorem NodeIn.covers {lo hi a off width : Nat} (h : NodeIn lo hi a)
     (hw : off + width ≤ 40) : Covers (regionP lo hi) (a + off) width := by
   intro i hi'
@@ -12,7 +11,6 @@ theorem NodeIn.covers {lo hi a off width : Nat} (h : NodeIn lo hi a)
   have hhi := h.hi_ge
   constructor <;> omega
 
-/-- A legacy pointer-array cell covers its eight-byte read. -/
 theorem CellIn.covers {lo hi a : Nat} (h : CellIn lo hi a) :
     Covers (regionP lo hi) a 8 := by
   intro i hi'
@@ -20,7 +18,6 @@ theorem CellIn.covers {lo hi a : Nat} (h : CellIn lo hi a) :
   have hhi := h.hi_ge
   constructor <;> omega
 
-/-- A represented string in a legacy region has hereditary byte coverage. -/
 theorem cstringWithin_of_region {m : Mem} {lo hi a : Nat} {s : String}
     (h : CString m a s) (hin : StrIn lo hi a s) :
     CStringWithin m (regionP lo hi) a s := by
@@ -63,7 +60,6 @@ local macro "within_region" rec:ident m:ident lo:ident hi:ident h:ident : tactic
         | (apply NodeIn.covers <;> first | (solve | simp_all) | decide)
   ))
 
-/-- Convert the legacy hereditary region using its actual representation. -/
 theorem stmtReprWithin_of_region {m : Mem} {lo hi a : Nat} {s : Stmt}
     (h : StmtRepr m a s) :
     StmtIn m lo hi a s → StmtReprWithin m (regionP lo hi) a s := by

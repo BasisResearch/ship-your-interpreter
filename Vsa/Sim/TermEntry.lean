@@ -2,61 +2,6 @@ import Vsa.Sim.TermSimClose
 import Vsa.Sim.ErrorSim
 import Vsa.Sim.HtifLift
 
-/-!
-# Layer 8 — the CLEAN-EXIT(0) entry bridge: discharging `hEntryHalts`
-
-`TermSimClose.termSimClosed` reduces `InterpSim.term_sim` to a single named
-residual `hEntryHalts` (the M6 program-entry bridge):
-
-```
-∀ p c out st' t,
-  Loaded L p c → st'.out = out →
-  mExecSeq initSt 0 0 p st' .normal t → Halts c out 0
-```
-
-i.e. given the top-level statement loop executed the program to `st'` with
-`.normal` status (the `mExecSeq` datum, produced by the `term_sim` recursor from
-the M4 case bundle), the machine halts with **exit code 0** printing
-`out = st'.out`.  This file supplies the two halves:
-
-* **the clean-exit tail** (`.normal` → `interp_run` returns 0 → `main` returns 0
-  → crt0 `j exit` → `_exit` forms `(0<<<1)|1` in `a5` → `sd a5,tohost` →
-  HTIF halt with code 0), and
-* **the prologue bridge** (`Loaded L p c` → the machine at `interp_run` entry
-  reaches the top-level statement-loop head so the `mExecSeq` motive applies).
-
-## The exit-0 vs exit-70 path — what we reuse
-
-The runtime-error path (`Vsa/Sim/ErrorSim.lean` / `Vsa/Sim/ErrorTail.lean`)
-already decoded the SIBLING exit(70) chain.  The clean path is its exit-0 twin:
-
-* **`main` returns 0, not 70** (`li a0,0` where the error arm does `li a0,70`);
-* **the `beqz a0` at the `setjmp` continuation is NOT taken** (the clean path
-  never longjmps back — `a0 = 0` at the continuation), where the error arm takes
-  `bnez a0`;
-* **`_exit` forms `(0<<<1)|1 = 1` in `a5`**, not `(70<<<1)|1`;
-* the crt0 `j exit` and `_exit` `sd a5,tohost` store site are **the same
-  instructions**; only the payload word (`a5`) and the latched exit code differ.
-
-Concretely: `Vsa/Sim/ErrorTail.lean`'s exit-store bridge (`sigmaExit`,
-`exec_sd_tohost_exit`, `try_step_tohost_exit`, `stepOnce_tohost_exit`,
-`exitStoreHalts`) is written for exit code `70`.  Its `mem_write_value_tohost_exit`
-core (`Vsa/Sim/HtifLift.lean`) is already **generic in the exit code `e`** (via
-`e.toNat < 2^47` and `data = (e<<<1)|1`).  §1 below re-derives those four steps
-parameterized over an arbitrary `e` (the `70`-specific `by decide` bounds become
-the standing `hsmall : e.toNat < 2^47` hypothesis), then §2 specializes at
-`e = 0` to obtain `exitStoreHalts0` (the exit-store → HTIF-halt-**0** bridge).
-
-§3 assembles the clean-exit tail by MIRRORING `errorTailHalts`: a tail-chain
-residual `ExitTailChain0` (the `interp_run`-normal-return / `main` / crt0 / exit
-span — the exit-0 twin of `ErrorTailChain`) composed with `exitStoreHalts0`.
-§4 states the prologue bridge and assembles `entryHalts`, shaped to discharge
-`termSimClosed`'s `hEntryHalts`, conditional only on the same
-M6-layout/`SnprintfContract`-style residuals the exit-70 path carries.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -72,17 +17,6 @@ namespace Vsa.Sim
 
 local notation "SpecSt" => Vsa.While.St
 
-/-! ## §1. The exit-store bridge, generic in the exit code `e`
-
-Verbatim re-derivation of `Vsa/Sim/ErrorTail.lean`'s exit-store steps, but with the
-literal exit code `70` replaced by an arbitrary `e : BitVec 64` (with the device
-byte-zero bound `e.toNat < 2^47` threaded as `hsmall`).  The `mem_write_value`
-core (`mem_write_value_tohost_exit`) is already `e`-generic, so only the ghost
-post-state (`sigmaExitG`) and the outer `stepOnce` return code change. -/
-
-/-- `sigmaExit` generic in the latched exit code `e`.  The execute-post-state of
-the `sd a5,tohost` store: `σ₂ = afterNextPC (afterPrelude σ) pc` with the five HTIF
-inserts, `htif_exit_code := e`. -/
 abbrev sigmaExitG (σ : MState) (pc : BitVec 64) (data e : BitVec 64) : MState :=
   {(afterNextPC (afterPrelude σ) pc) with
     regs := (((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert
@@ -91,7 +25,6 @@ abbrev sigmaExitG (σ : MState) (pc : BitVec 64) (data e : BitVec 64) : MState :
             Register.htif_done true).insert
           Register.htif_exit_code e}
 
-/-- `exec_sd_tohost_exit` generic in the exit code `e`. -/
 theorem exec_sd_tohost_G
     (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regidx)
     (v1 vdata data e : BitVec 64) (th : BitVec 64)
@@ -130,7 +63,7 @@ theorem exec_sd_tohost_G
     rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hpw
   have hth₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost = some th := by
     rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hth
-  -- `mem_write_value` at tohost → the HTIF exit transition (post-state = sigmaExitG).
+
   have hmwv := mem_write_value_tohost_exit (afterNextPC (afterPrelude σ) pc) e data
     initMstatus initPmpaddr th hpriv hmstatus (by decide) hpma hcfg hpaddr hbase hpw₂ hth₂ hsmall hexit
   have hatohost : (BitVec.ofNat 64 tohostAddr).toNat = tohostAddr := by
@@ -169,7 +102,6 @@ theorem exec_sd_tohost_G
   simp only [execute]
   exact hchar
 
-/-- `sigmaExitFinal` generic in the exit code `e`. -/
 abbrev sigmaExitFinalG (σ : MState) (pc npc vminstret data e : BitVec 64) : MState :=
   {(({(sigmaExitG σ pc data e) with
         regs := (sigmaExitG σ pc data e).regs.insert Register.PC npc}) : MState) with
@@ -177,7 +109,6 @@ abbrev sigmaExitFinalG (σ : MState) (pc npc vminstret data e : BitVec 64) : MSt
         regs := (sigmaExitG σ pc data e).regs.insert Register.PC npc}) : MState).regs.insert
           Register.minstret (BitVec.addInt vminstret 1))}
 
-/-- `try_step_tohost_exit` generic in the exit code `e`. -/
 theorem try_step_tohost_G
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs2 rs1 : regidx)
@@ -281,7 +212,6 @@ theorem try_step_tohost_G
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-- `htif_done` reads `true` on the generic exit-store post-state. -/
 theorem htif_done_sigmaExitG_final (σ : MState) (pc npc vminstret data e : BitVec 64) :
     (sigmaExitFinalG σ pc npc vminstret data e).regs.get? Register.htif_done = some true := by
   show (((((sigmaExitG σ pc data e).regs.insert Register.PC npc).insert
@@ -302,7 +232,6 @@ theorem htif_done_sigmaExitG_final (σ : MState) (pc npc vminstret data e : BitV
     dif_neg, reduceCtorEq, not_false_eq_true]
   rw [Std.ExtDHashMap.get?_insert_self]
 
-/-- `htif_exit_code` reads `e` on the generic exit-store post-state. -/
 theorem htif_exit_code_sigmaExitG_final (σ : MState) (pc npc vminstret data e : BitVec 64) :
     (sigmaExitFinalG σ pc npc vminstret data e).regs.get? Register.htif_exit_code = some e := by
   show (((((sigmaExitG σ pc data e).regs.insert Register.PC npc).insert
@@ -320,8 +249,6 @@ theorem htif_exit_code_sigmaExitG_final (σ : MState) (pc npc vminstret data e :
     Register.htif_exit_code e).get? Register.htif_exit_code = _
   rw [Std.ExtDHashMap.get?_insert_self]
 
-/-- `stepOnce_tohost_exit` generic in the exit code `e`: the exit-store `stepOnce`
-halts with code `e.toNat`. -/
 theorem stepOnce_tohost_G
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs2 rs1 : regidx)
@@ -362,45 +289,5 @@ theorem stepOnce_tohost_G
   rw [hts]
   simp only [Bool.false_eq_true, if_false, EStateM.pure, EStateM.bind, EStateM.get,
     hdone', if_true, hcode']
-
-/-! ## §2. The clean-exit(0) store-site predicate and halt bridge
-
-Specialize §1 at `e = 0`: the `_exit` prologue formed `(0<<<1)|1 = 1` in `a5`, so
-the store data is `1`, the latched exit code is `0`.  `ExitStorePre0` is the
-exit-0 twin of `ErrorTail.ExitStorePreExit`; `exitStoreHalts0` is the exit-0 twin
-of `exitStoreHalts`. -/
-
-/-! ## §3. The clean-exit tail — MIRROR of `errorTailHalts`
-
-The exit-0 twin of `ErrorTail.ErrorTailChain`: from the `interp_run` NORMAL-return
-continuation (the statement loop finished with `.normal`, `a0 = 0` at the
-`setjmp`-continuation so the `beqz a0` is NOT taken — the error arm's `bnez a0`
-sibling), the machine runs the `interp_run`-return / `main` (`li a0,0`; ret) / crt0
-(`j exit`) / `_exit`-prologue span to the clean-exit store site `ExitStorePre0`.
-Held opaque here (the decode span is the exit-0 twin of the exit-70 `ExitPathSeg`
-battery, to be discharged by the same seg machinery), exactly as `ErrorTailChain`
-holds the error span opaque. -/
-
-/-! ## §4. The program-entry bridge — `entryHalts`
-
-`termSimClosed`'s `hEntryHalts` residual: from `Loaded L p c`, `st'.out = out`, and
-the whole-program `mExecSeq initSt 0 0 p st' .normal t` simulation datum, land
-`Halts c out 0`.
-
-`entryHalts` assembles it via TWO named residuals — the same shape the exit-70
-path carries:
-
-* **`hPrologue`** (the prologue bridge): `Loaded L p c` transports the machine from
-  the `interp_run` entry through the statement loop (consuming the `mExecSeq`
-  `SegEntry → SegExit` simulation Triple), landing at the `interp_run`
-  normal-return continuation config `ra0` with `a0 = 0` and the console output
-  equal to `st'.out`.  This is the M6 `Loaded ↔ SegEntry` unification + statement-
-  loop drive (the exit-0 twin of the exit-70 path's `runtime_error_spec`
-  precondition + `hre`), held as a hypothesis.
-* **`ExitTailChain0`** (the tail span, §3), discharged concretely by
-  `cleanExitTail` into `exitStoreHalts0`.
-
-Composing `hPrologue` (→ the `.normal`-return continuation) with `cleanExitTail`
-(→ `Halts c out 0`) discharges `hEntryHalts` verbatim. -/
 
 end Vsa.Sim

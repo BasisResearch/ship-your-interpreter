@@ -1,31 +1,11 @@
 import VsaIris.Vsa.MainErr
 
-/-!
-# `main`'s normal line and `exit(0)` (lane A)
-
-`interp_run` returned `0` to `main` (`0x800045ec`, `a0 = 0`). `main` restores
-its saved pair and returns `0` to `crt0`, whose `j exit` enters `exit(0)`
-(`Exit.wp_exitCall` with `quiet = true`: newlib's data is still at its
-boundary state, so the output is exactly the console's).
-
-```
-800045ec: bnez a0,80004600          (not taken)
-800045f0: ld ra,760(sp); ld s0,752(sp); addi sp,sp,768; ret
-80000038: j exit
-```
-
-`exit` runs at `main`'s stack top: its frame is `main`'s saved pair and its
-newlib interior uses `err_msg`, as on the error line (`MainErr`).
--/
-
 namespace VsaIris.Newlib.MainOk
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites VsaIris.Newlib.Exit
   VsaIris.Newlib.MainErr
-
-/-! ## Segments -/
 
 #derive_case mainOkSeg chain
   [] terminator ⟨0x800045ec#64, 0x00051a63#32, 0x63#8, 0x1a#8, 0x05#8, 0x00#8,
@@ -44,21 +24,21 @@ theorem ok_facts {m : Std.ExtHashMap Nat (BitVec 8)} {rv s0v sM : BitVec 64}
   unfold fprintfNeed at h1
   unfold mainOkSeg ChainFacts
   chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
-  · -- `bnez a0`: not taken
+  ·
     rfl
-  · -- `ld ra,760(sp)`
+  ·
     have e : ∀ x : BitVec 64, x = sM + sign_extend (m := 64) (0x2f8#12) →
         x.toNat = sM.toNat + 760 := by
       intro x hx; rw [hx]; exact addr_off sM _ 760 (by decide) (by omega)
     exact ldFact (img := imgT) rfl (e _ rfl) (by omega) (by omega) (.inr (by unfold tohostAddr; omega))
       (fun k hk => hpin _ (by omega) (by omega))
-  · -- `ld s0,752(sp)`
+  ·
     have e : ∀ x : BitVec 64, x = sM + sign_extend (m := 64) (0x2f0#12) →
         x.toNat = sM.toNat + 752 := by
       intro x hx; rw [hx]; exact addr_off sM _ 752 (by decide) (by omega)
     exact ldFact (img := imgT) rfl (e _ rfl) (by omega) (by omega) (.inr (by unfold tohostAddr; omega))
       (fun k hk => hpin _ (by omega) (by omega))
-  · -- `ret` to the loaded `ra`
+  ·
     have e : ∀ x : BitVec 64, x = bytesVal .ld (imgWord imgT (sM.toNat + 760)) →
         (BitVec.update (x + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
       intro x hx; rw [hx, bytesVal_imgWord, hra]; decide
@@ -95,17 +75,10 @@ theorem crt0_pc0 :
 
 theorem crt0_fin0 : finReg crt0JSeg [(10, (0#64 : BitVec 64))] [] 10 = 0#64 := rfl
 
-/-! ## The rule -/
-
 section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`main`'s normal line, then `exit(0)`**, for either WP. At `main`'s
-`jal interp_run` link with `a0 = 0`, `main`'s saved pair `imgT` (`ra` =
-`crt0`'s link), `err_msg`'s 256 bytes at `sp+496` (the stack `exit` uses),
-newlib's data at its boundary state and the console at `o`: the run halts
-with code 0 and output exactly `o`. -/
 theorem wp_mainOkTail (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (sM rv s0v : BitVec 64) (cs : Nat → BitVec 64) (o : String) (imgT : Nat → BitVec 8)
@@ -123,7 +96,7 @@ theorem wp_mainOkTail (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive 
   iintro ⟨Hpc, Ha0, Hra, Hs0, Hargs, Hsp, Hsaved, Htmp, #Hgp, #Himg, HT, Herr, Hstd, Hno, Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg mainErrCode_text $$ Himg
   ihave HT := (ownImg_range _ _ _).1 $$ HT
-  -- `bnez a0` (not taken); `ld ra,760(sp); ld s0,752(sp); addi sp,sp,768; ret`
+
   iapply wp_segW live Wp mainOkSeg (bL 0#64 rv s0v sM) (bLds sM imgT)
     0x800045ec#64 (codeFoot mainErrCodeBase mainErrCode ++ imgFoot (sM.toNat + 752) 16 imgT) [] 4
     (by decide)
@@ -149,7 +122,7 @@ theorem wp_mainOkTail (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive 
   iintro Hpc ⟨Ha0, Hra, Hs0, Hsp, -⟩ - HMR
   ihave ⟨-, HT⟩ := (sepL_append _ _ _).1 $$ HMR
   ihave HT := (ownImg_range _ _ _).2 $$ HT
-  -- `crt0`'s `j exit`
+
   have hcrtL := crt0JCode_text.live hlive
   ihave #Hcrt := instrAt_of_binImg crt0JCode_text $$ Himg
   iapply wp_segW live Wp crt0JSeg [(10, (0#64 : BitVec 64))] [] 0x80000038#64
@@ -162,7 +135,7 @@ theorem wp_mainOkTail (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive 
   rw [← instrAt_eq]
   iframe Hpc Ha0 Hcrt
   iintro Hpc ⟨Ha0, -⟩ - -
-  -- `exit(0)` at `main`'s stack top, quietly
+
   have hs768 : (sM + sign_extend (m := 64) (0x300#12)).toNat = sM.toNat + 768 :=
     addr_off sM _ 768 (by decide) (by omega)
   iapply wp_exitCall H.at live hlive Wp (sM + sign_extend (m := 64) (0x300#12)) 0x80000038#64 0#64

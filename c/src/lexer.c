@@ -25,8 +25,6 @@ static Token error_tok(Lexer *lx, const char *msg) {
     return t;
 }
 
-/* Skip whitespace and comments. Returns an error message for an
- * unterminated block comment, NULL otherwise. */
 static const char *skip_ws(Lexer *lx) {
     for (;;) {
         char c = *lx->cur;
@@ -122,7 +120,7 @@ Token lexer_next(Lexer *lx) {
             lx->cur++;
         }
         if (!*lx->cur) return error_tok(lx, "unterminated string literal");
-        lx->cur++; /* closing quote */
+        lx->cur++;
         return make_tok(lx, T_STRING, start);
     }
     default:

@@ -27,8 +27,6 @@ static void runtime_error(Interp *in, int line, const char *fmt,
     longjmp(in->on_error, 1);
 }
 
-/* --- built-in functions ------------------------------------------------ */
-
 static Value native_print(Interp *in, int argc, Value *args, int line) {
     (void)in; (void)line;
     for (int i = 0; i < argc; i++) {
@@ -71,8 +69,6 @@ void interp_init(Interp *in) {
     define_native(in, "println", native_println);
     define_native(in, "assert", native_assert);
 }
-
-/* --- expression evaluation --------------------------------------------- */
 
 static long long int_operand(Interp *in, Value v, int line, const char *op) {
     if (v.kind != VAL_INT)
@@ -269,8 +265,6 @@ static Value eval_expr(Interp *in, Expr *e, Env *env) {
     return value_null();
 }
 
-/* --- statement execution ----------------------------------------------- */
-
 static ExecStatus exec_stmt(Interp *in, Stmt *s, Env *env, Value *ret) {
     switch (s->kind) {
     case ST_EXPR:
@@ -306,7 +300,7 @@ static ExecStatus exec_stmt(Interp *in, Stmt *s, Env *env, Value *ret) {
         }
         return EXEC_NORMAL;
     case ST_FOR: {
-        Env *outer = env_new(env); /* scope for the init variable */
+        Env *outer = env_new(env);
         if (s->as.for_stmt.init)
             exec_stmt(in, s->as.for_stmt.init, outer, ret);
         for (;;) {

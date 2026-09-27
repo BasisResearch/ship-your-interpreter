@@ -2,35 +2,14 @@ import VsaIris.Vsa.HeapTake
 import VsaIris.Vsa.FreeFastHeap
 import VsaIris.Vsa.MallocFastHeap
 
-/-!
-# Carving a remainder off a chunk
-
-`_malloc_r` serves a request from a free chunk larger than `nb + MINSIZE` by
-splitting it: the last remainder (`0x80004da0`) and the block walk's victim
-(`0x80004d14`). The chunk is unlinked from its bin, its first `nb` bytes are
-handed out, and the rest becomes a free chunk that is the only member of the
-last-remainder bin 1.
-
-The heap edit factors in two. The unlink with the victim marked in use is
-`PHeapAt.take`, stated over a memory that the proof chooses (the machine never
-writes the next chunk's `PREV_INUSE`, but the intermediate memory may set it).
-`PHeapAt.carve` is the rest: an in-use chunk `v` of size `sz` shrinks to `nb`,
-and `v + nb` becomes a free chunk of size `sz - nb` on the empty bin 1. Eight
-words change: the two chunks' headers, the remainder's links, bin 1's links,
-the remainder's footer and the next chunk's header (`PREV_INUSE` cleared).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast VsaIris.Sym
 
-/-- The words a carve writes: `v`'s header, the remainder's header and links,
-bin 1's links, the remainder's footer, and the next chunk's header. -/
 def CarveW (v nb sz : Nat) (a : Nat) : Prop :=
   (v + 8 ≤ a ∧ a < v + 16) ∨ (v + nb + 8 ≤ a ∧ a < v + nb + 32) ∨
     (binAt 1 + 16 ≤ a ∧ a < binAt 1 + 32) ∨ (v + sz ≤ a ∧ a < v + sz + 16)
 
-/-- The coalescing condition of a chunk list, as a named predicate. -/
 def Coal (L : List Chunk) : Prop :=
   ∀ i (hi : i + 1 < L.length), L[i].inuse = true ∨ L[i + 1].inuse = true
 
@@ -49,8 +28,6 @@ theorem coal_cons_cons {x y : Chunk} {L : List Chunk} :
 
 theorem coal_single (x : Chunk) : Coal [x] := fun i hi => by simp at hi
 
-/-- Replacing a chunk by an in-use chunk and another one, where the chunk
-after them is in use, keeps coalescing. -/
 theorem coal_carve {a b c : Chunk} (ha : a.inuse = true) :
     ∀ {cs₁ cs₂ : List Chunk}, Coal (cs₁ ++ c :: cs₂) → (∀ d ∈ cs₂.head?, d.inuse = true) →
       Coal (cs₁ ++ a :: b :: cs₂)
@@ -70,8 +47,6 @@ theorem coal_carve {a b c : Chunk} (ha : a.inuse = true) :
     obtain ⟨hx, h'⟩ := coal_cons_cons.1 h
     exact coal_cons_cons.2 ⟨hx, coal_carve ha (cs₁ := y :: cs₁) h' hd⟩
 
-/-- The first chunk of a walk, named: its header, the header after it, and
-the rest of the walk. -/
 structure WalkHead (m : Mem) (p top : Nat) (c : Chunk) (cs : List Chunk) : Prop where
   addr : c.addr = p
   hdr : ∃ hh, read64 m (p + 8) = some hh ∧ chunkSize hh = c.size ∧ hh % 4 < 2
@@ -85,11 +60,6 @@ theorem walkHead {m : Mem} {p top : Nat} {c : Chunk} {cs : List Chunk}
   cases h with
   | chunk hh hlow hmin hal hn rest => exact ⟨rfl, ⟨_, hh, rfl, hlow⟩, hmin, hal, ⟨_, hn, rfl⟩, rest⟩
 
-/-- **Carve a remainder off an in-use chunk.** The in-use chunk `v` of size
-`sz` shrinks to `nb`; `v + nb` becomes a free chunk of size `sz - nb`, the
-only member of the empty bin 1. The previous chunk is in use (`hprev`), and
-so is the next one, which is not the top (`hnext`, `hnt`). Live extents in
-`v`'s payload end within its first `nb` bytes (`hext`). -/
 theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {v sz nb : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨v, sz, true⟩ :: cs₂) bins)
@@ -119,7 +89,7 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hv16 : v % 16 = 0 := hal _ hV
   simp only at hVb hv16
   unfold heapStart at hlo hVb
-  -- the walk around `v`
+
   obtain ⟨mid, W1, W2⟩ := HH.walk.append_inv
   have HV := walkHead W2
   have hmid : v = mid := HV.addr
@@ -128,7 +98,7 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   obtain ⟨hh, hhr, hhs, hhl⟩ := HV.hdr
   obtain ⟨h', hnr, hnp⟩ := HV.next
   simp only at hhs hnr hnp
-  -- the chunk after `v`
+
   obtain ⟨d, cs₃, rfl⟩ : ∃ d cs₃, cs₂ = d :: cs₃ := by
     rcases hc : cs₂ with _ | ⟨d, cs₃⟩
     · have := HV.rest; rw [hc] at this; exfalso; cases this; exact hnt rfl
@@ -144,7 +114,7 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hW3le := HD.rest.le
   have hW1b := W1.chunk_bounds
   have hbin1 := binAt_geo 1 (by unfold numBins; decide)
-  -- words the carve does not write
+
   have keep : ∀ a, (∀ k, k < 8 → vsaFoot H (a + k)) →
       (a + 8 ≤ v + 8 ∨ v + sz + 16 ≤ a ∨ (v + 16 ≤ a ∧ a + 8 ≤ v + nb + 8)) →
       (a + 8 ≤ binAt 1 + 16 ∨ binAt 1 + 32 ≤ a) → read64 m' a = read64 m a := by
@@ -157,7 +127,7 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       · unfold allocGlobal InRange at hg; unfold binAt avAddr at hbin1 hb ⊢; omega
       · unfold heapStart at h1; omega
     · unfold binAt avAddr at hb ⊢; omega
-  -- the new walk
+
   have hdsz : chunkSize hd0 = d.size := hd0s
   obtain ⟨hd', hd'r, hd's, hd'l, hd'p⟩ := hnx hd0 hd0r
   have W3 : ChunkWalk m' (v + sz + d.size) top cs₃ := by
@@ -210,14 +180,14 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · have := hW1b c hc; unfold binAt avAddr; unfold heapStart at this; omega
     · have := hprev h1 hh1
       unfold prevInuse; rw [show (nb + 1) % 2 = 1 by omega, this]
-  -- the old and new chunk lists
+
   have hmemL : ∀ c, c ∈ cs₁ ++ ⟨v, sz, true⟩ :: d :: cs₃ ↔
       c ∈ cs₁ ∨ c = ⟨v, sz, true⟩ ∨ c = d ∨ c ∈ cs₃ := by
     intro c; simp only [List.mem_append, List.mem_cons]
   have hmemL' : ∀ c, c ∈ cs₁ ++ ⟨v, nb, true⟩ :: ⟨v + nb, sz - nb, false⟩ :: d :: cs₃ ↔
       c ∈ cs₁ ∨ c = ⟨v, nb, true⟩ ∨ c = ⟨v + nb, sz - nb, false⟩ ∨ c = d ∨ c ∈ cs₃ := by
     intro c; simp only [List.mem_append, List.mem_cons]
-  -- a free chunk of the old heap is before `v` or after `d`
+
   have hfree_loc : ∀ c ∈ cs₁ ++ ⟨v, sz, true⟩ :: d :: cs₃, c.inuse = false →
       (c ∈ cs₁ ∧ c.addr + c.size ≤ v) ∨ (c ∈ cs₃ ∧ v + sz + d.size ≤ c.addr) := by
     intro c hc hf
@@ -235,7 +205,7 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rcases hfree_loc c hc hf with ⟨h1, h2⟩ | ⟨h1, h2⟩
     · have := (hW1b c h1).2.2; omega
     · omega
-  -- globals the carve does not write
+
   have Kg : ∀ a, (∀ k, k < 8 → allocGlobal (a + k)) → (a + 8 ≤ binAt 1 + 16 ∨ binAt 1 + 32 ≤ a) →
       read64 m' a = read64 m a := by
     intro a hg hb
@@ -252,7 +222,7 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have kTop : read64 m' topAddr = read64 m topAddr :=
     Kg _ (gAv _ (by unfold topAddr avAddr; omega) (by unfold topAddr avAddr; omega))
       (by unfold topAddr binAt avAddr; omega)
-  -- links of old bin nodes other than bin 1's header
+
   have Klink : ∀ j x, 0 < j → j < numBins → j ≠ 1 → (x = binAt j ∨ x ∈ bins j) →
       fdOf m' x = fdOf m x ∧ bkOf m' x = bkOf m x := by
     intro j x hj0 hj hj1 hx
@@ -385,7 +355,7 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rcases (hmemL' c).1 hc with h1 | rfl | rfl | rfl | h1
     · exact hold c (by simp [h1]) hf
     · cases hf
-    · -- the remainder, on bin 1
+    ·
       refine ⟨1, by omega, by unfold numBins; omega, by rw [updBins_same]; simp, ?_⟩
       intro j hj0 hj hm
       refine Classical.byContradiction fun hj1 => ?_
@@ -413,8 +383,6 @@ theorem PHeapAt.carve {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact ⟨c, by simp, hu, h1, h2⟩
     · exact ⟨c, by simp [h3], hu, h1, h2⟩
 
-/-- The neighbours of a free chunk: the chunk before it is in use (its header
-has `PREV_INUSE`), and the one after is an in-use chunk, not the top. -/
 structure FreeNbrs (m : Mem) (top v sz : Nat) (cs₂ : List Chunk) : Prop where
   prev : ∀ h0, read64 m (v + 8) = some h0 → h0 % 2 = 1
   not_top : v + sz ≠ top
@@ -479,19 +447,12 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.freeNbrs {m : Mem} {H : List (Nat × Nat)} 
       subst hd
       exact coal_after_free rfl hC
 
-/-- The footprint shrinks when a block becomes live. -/
 theorem vsaFoot_of_cons {e : Nat × Nat} {H : List (Nat × Nat)} {a : Nat}
     (h : vsaFoot (e :: H) a) : vsaFoot H a := by
   rcases h with h | ⟨h1, h2, h3⟩
   · exact .inl h
   · exact .inr ⟨h1, h2, fun e' he' => h3 e' (List.mem_cons_of_mem _ he')⟩
 
-/-- **Split a free chunk.** The free chunk `v` of size `sz` leaves its bin `i`,
-its first `nb` bytes become the in-use chunk holding the block `(v + 16, n)`,
-and the rest becomes a free chunk, the only member of bin 1 (empty once `v`
-has left it). The machine writes the unlink (unless `v` came off bin 1, whose
-links the carve rewrites), `v`'s header, the remainder's header, links and
-footer, and bin 1's links; the next chunk's header is kept. -/
 theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {v sz : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨v, sz, false⟩ :: cs₂) bins)
@@ -524,7 +485,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   simp only at hVb hsz16
   have hbrk := HH.brk_le; have htle := HH.top_le
   unfold heapStart at hVb; unfold heapEnd at hbrk
-  -- the next chunk's header in `m`
+
   obtain ⟨hd, hdr, hdp⟩ := (walk_next_of HH.walk).1
   simp only at hdr hdp
   have hdlt := Vsa.Sim.read64_lt _ _ _ hdr
@@ -538,7 +499,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       · exact ⟨d, cs₃, h1, h2⟩
     obtain ⟨hd0, hd0r, _, hd0l⟩ := walk_header HH.walk d (by simp)
     rw [hda, hdr] at hd0r; cases hd0r; exact hd0l
-  -- the bin nodes around `v`
+
   have hvmem : v ∈ bins i := by rw [hbin]; exact List.mem_append_right _ List.mem_cons_self
   have hpredm : pred = binAt i ∨ pred ∈ bins i := by
     have := List.mem_of_getLast? hpred
@@ -560,7 +521,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rcases hsnode with rfl | ⟨cx, hcx, rfl, _, _⟩
     · have := binAt_geo i hi; omega
     · have := HH.walk.chunk_bounds cx hcx; omega
-  -- off bin 1, `v` was its only member
+
   have hone : i = 1 → pred = binAt 1 ∧ succ = binAt 1 := by
     intro hi1
     subst hi1
@@ -583,7 +544,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     have hq : v + sz = top ∨ ∃ c ∈ cs₁ ++ ⟨v, sz, false⟩ :: cs₂, c.addr = v + sz :=
       .inr ⟨d, by rw [h1]; simp, h2⟩
     exact fun k h1 h2 => ⟨HH.bnd_ne_node hi hpnode hq k h1 h2, HH.bnd_ne_node hi hsnode hq k h1 h2⟩
-  -- the virtual memory after the take: `v` unlinked and marked in use
+
   have hvnx := hvb 8 (by omega) (by omega)
   have hvnx16 := hvb 16 (by omega) (by omega)
   have hvnx' := hnb' 8 (by omega) (by omega)
@@ -619,7 +580,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       rw [hdr] at hd'r; cases hd'r
       exact ⟨by unfold chunkSize; omega, by omega⟩)
     (by unfold prevInuse; rw [beq_iff_eq]; omega) (fun a _ ha => e4 a ha)
-  -- only `v` ends at `v + sz`
+
   have hmap : (cs₁ ++ ⟨v, sz, false⟩ :: cs₂).map (reflag (v + sz) true) =
       cs₁ ++ ⟨v, sz, true⟩ :: cs₂ := by
     have hid : ∀ c ∈ cs₁ ++ cs₂, reflag (v + sz) true c = c := by
@@ -647,7 +608,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       List.map_congr_left (l := cs₂) (fun c hc => hid c (List.mem_append_right _ hc))]
     simp [reflag]
   rw [hmap] at H1
-  -- carve the remainder off, from the virtual memory to the machine's
+
   have hvh1 : ∀ h0, read64 (writeLog (writeLog (writeLog m [(pred + 16, 8, BitVec.ofNat 64 succ)])
       [(succ + 24, 8, BitVec.ofNat 64 pred)]) [(v + sz + 8, 8, BitVec.ofNat 64 (hd + 1))])
       (v + 8) = some h0 → h0 % 2 = 1 := by
@@ -657,7 +618,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     exact NB.prev h0 hh0
   refine H1.carve hnb16 hnb32 hsz hb1 hvh1 NB.next NB.not_top ?_ hvh hrh hrfd hrbk hbfd hbbk hft
     ?_ ?_
-  · -- live extents in `v` are the new block
+  ·
     intro e he h1 h2
     rcases List.mem_cons.mp he with rfl | he
     · simp only; omega
@@ -677,7 +638,7 @@ theorem PHeapAt.splitFree {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · unfold TakeW at hT
       unfold CarveW at hna
       rcases hT with hT | hT | hT
-      · -- the predecessor's `fd`: bin 1's when `v` came off bin 1
+      ·
         by_cases hi1 : i = 1
         · rw [(hone hi1).1] at hT
           exact absurd (.inr (.inr (.inl ⟨hT.1, by omega⟩))) hna

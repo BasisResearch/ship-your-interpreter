@@ -3,28 +3,6 @@ import VsaIris.Interp.SpecEnv
 import VsaIris.Interp.SpecErr
 import VsaIris.Interp.CallRegs
 
-/-!
-# `strcmp` in Iris, for either WP
-
-INTERP_DESIGN.md §9 (H3's `strcmp`). The whole function is one bounded run
-(`Strcmp.strcmpRun`, `VsaIris/Vsa/StrcmpRun.lean`), so the Iris layer is ONE
-`wp_localRunW` application (xv6iris `ProofMemset.v:1-9`, "bounded loop, not
-iLöb"), stated for an abstract `Wp : MachWP` and so serving both WPs.
-
-Ownership: the code, the `.rodata` mask and the two strings' bytes (the
-characters and the NUL, `strAt`) are persistent; the run owns only the ten
-registers it touches. The at most seven bytes past each NUL that the aligned
-word loop loads are NOT owned: `strAt`'s window (`StrWin`) makes them RAM off
-the HTIF words, and the run reads them at whatever the machine holds
-(`Strcmp.cmpStep`). Their values change no result: branch outcomes that depend
-on them are case splits of the run.
-
-* `strcmp_core`: the run in continuation form, from a register valuation.
-* `strcmp_spec_env`: `strcmpSpec` (`SpecEnv.lean`, `fnSpecW`, `a0 = 0 ↔ x = y`).
-* `strcmp_spec_ord`: `strcmpOrdSpec` (`SpecErr.lean`, the sign class `StrcmpSign`).
-* `strcmp_spec_v`: `strcmpSpecV` (`SpecValue.lean`), from `strcmp_spec_ord`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -33,16 +11,12 @@ open Vsa.While Vsa.MemRepr Vsa.Sim
 open VsaIris.Inst.Strcmp
 open VsaIris.Inst.Strlen (codeText instrAt_text sepL_mono_mem)
 
-/-! ## The sign class from the byte-lexicographic sign -/
-
 theorem allNonzero_of_cstr {img : Nat → BitVec 8} {a : Nat} {s : String}
     (h : CStrImg img a s) : AllNonzero s.toList := by
   intro c hc
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hc
   exact (h.1 i hi).2.1
 
-/-- **`strcmp`'s sign class** from the byte-lexicographic sign of two strings
-without interior NULs. -/
 theorem strcmpSign_class {res : BitVec 64} {x y : String} (hx : AllNonzero x.toList)
     (hy : AllNonzero y.toList) (h : strcmpSign res = strcmpSpecSign x.toList y.toList) :
     StrcmpSign res x y := by
@@ -85,15 +59,12 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-! ## The read cells -/
-
-/-- `strcmp`'s code is the image's. -/
 theorem strcmpCode_text : TextAt cmpBase strcmpCode := by decide +kernel
 
 theorem maskText_rodata : ∀ t ∈ maskText, rodataDom t.1 ∧ rodataByte t.1 = t.2 := by decide
 
 omit I in
-/-- Read-only bytes of a view as a list of persistent cells. -/
+
 theorem roImg_strList (S : Nat → Prop) (img : Nat → BitVec 8) :
     ∀ l : List (Nat × BitVec 8), (∀ t ∈ l, S t.1 ∧ img t.1 = t.2) →
       roImg (GF := GF) S img ⊢ sepL l (fun t => t.1 ↦ₘ□ t.2)
@@ -117,7 +88,6 @@ theorem roImg_strT (p len : Nat) (img : Nat → BitVec 8) :
     have := List.mem_range.mp hk
     exact ⟨⟨by simp, by simp; omega⟩, rfl⟩
 
-/-- The side conditions of a run, from the two strings' facts. -/
 theorem strcmpCtx {live : Nat → Prop} (hcl : CodeLive live) {p q r : BitVec 64} {x y : String}
     {ix iy : Nat → BitVec 8} (hx : CStrImg ix p.toNat x ∧ StrWin p.toNat x.toList.length)
     (hy : CStrImg iy q.toNat y ∧ StrWin q.toNat y.toList.length) (hal : r.toNat % 4 = 0) :
@@ -150,16 +120,10 @@ theorem strcmpCtx {live : Nat → Prop} (hcl : CodeLive live) {p q r : BitVec 64
   obtain ⟨z, hz, rfl⟩ := List.mem_map.mp ht
   exact hcl _ (strcmpCode_text z hz).1
 
-/-! ## The run in Iris -/
-
-/-- The nine GPRs besides `ra` the run touches. -/
 abbrev cregs : List Nat := [5, 6, 7, 10, 11, 12, 13, 14, 15]
 
 omit I in
-/-- **`strcmp` in continuation style, for either WP.** Entered at `0x80006ea0`
-with the return address `r`, `a0 = p`, `a1 = q` and the strings `x`, `y`: the
-continuation receives the PC at `r`, `ra` restored, and the nine registers at
-values whose `a0` has `strcmp`'s sign class. -/
+
 theorem strcmp_core (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {p q r : BitVec 64} {x y : String} (hal : r.toNat % 4 = 0) (rv0 : Nat → BitVec 64)
@@ -224,17 +188,13 @@ theorem strcmp_core (live : Nat → Prop) (hcl : CodeLive live)
   iapply Hk $$ %rv' %(strcmpSign_class (allNonzero_of_cstr hx.1) (allNonzero_of_cstr hy.1) hsg)
     Hpc Hra Hregs
 
-/-! ## The three specifications -/
-
-/-- The registers of a body other than `strcmp`'s. -/
 abbrev cOther : List Nat :=
   [2, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 
 theorem fRegs_perm_c : fRegs.Perm (cregs ++ cOther) := by decide
 
 omit I in
-/-- **`strcmp` with its sign class** (`strcmpOrdSpec`, `SpecErr.lean`), for
-either WP. -/
+
 theorem strcmp_spec_ord (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
     ⊢ strcmpOrdSpec (GF := GF) (vsaModel live) Wp := by
@@ -261,8 +221,6 @@ theorem strcmp_spec_ord (live : Nat → Prop) (hcl : CodeLive live)
   · ipureintro
     simpa using hs
 
-/-- **`strcmp`'s equality** (`strcmpSpecV`, `SpecValue.lean`), for either WP:
-the sign class's first field. -/
 theorem strcmp_spec_v (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
     ⊢ strcmpSpecV (GF := GF) (vsaModel live) Wp := by
@@ -284,7 +242,6 @@ theorem strcmp_spec_v (live : Nat → Prop) (hcl : CodeLive live)
   ipureintro
   exact ⟨hkeep, hs.eq⟩
 
-/-- The registers `strcmpSpec` hands over, besides `a0`/`a1`. -/
 abbrev cClob : List Nat := [12, 5, 6, 7, 13, 14, 15]
 abbrev cRest : List Nat := [16, 17, 28, 29, 30, 31]
 
@@ -294,8 +251,7 @@ theorem retClob_perm : retClob.Perm ((11 :: cClob) ++ cRest) := by decide
 theorem cregs_perm' : cregs.Perm ([10] ++ (11 :: cClob)) := by decide
 
 omit I in
-/-- **`strcmp`'s environment spec** (`strcmpSpec`, `SpecEnv.lean`), for
-either WP. -/
+
 theorem strcmp_spec_env (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
     binImg (GF := GF) ⊢ strcmpSpec Wp := by

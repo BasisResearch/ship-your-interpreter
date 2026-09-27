@@ -1,31 +1,12 @@
 import VsaIris.Interp.Arm
 
-/-!
-# `seqLoop`: the statement-sequence loop (INTERP_DESIGN.md §4.3), block site
-
-`exec_stmt`'s block arm runs its statements with a do-while loop
-(`0x800041a4`..`0x800041dc`): the head loads the statement pointer and spills
-the index (`sp+8`), the `jal exec_stmt` at `0x800041c4`, then `bnez a0` leaves
-on an abrupt status and `blt` loops while statements remain. The loop is
-stated as the recursor motive of `ExecSeqCost` (`blockSeqT_body`, total mode),
-proved case by case (`blockSeqT_consNormal`, `blockSeqT_consAbrupt`); the
-recursor supplies the induction.
-
-The two runs are `#ix_seg` lemmas (`BlockLoop_runA`: head to the call;
-`BlockLoop_runB`: status test and back edge, three outcomes).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The bytes of a block node (statement array pointer and count) and its
-statement array a run reads. -/
 abbrev blockView (a arr count : Nat) : List Nat := accAddrs (a + 8) 12 ++ accAddrs arr (8 * count)
 
-/-- The loop head's registers: the node, the interpreter, the `ret` slot, the
-inner frame pointer, the lowered `sp`, the index. -/
 structure BlockHead (R : Nat → BitVec 64) (s aS inp aRet aInner : BitVec 64) (idx : Nat) : Prop where
   sp : R 2 = s + 18446744073709551440#64
   s0 : R 8 = aS
@@ -34,7 +15,6 @@ structure BlockHead (R : Nat → BitVec 64) (s aS inp aRet aInner : BitVec 64) (
   s3 : R 19 = aInner
   a6 : R 16 = BitVec.ofNat 64 idx
 
-/-- An element of a represented statement array. -/
 theorem stmtArray_get {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {ss : List Vsa.While.Stmt}, StmtArrayReprWithin m P a n ss →
       ∀ j (h : j < ss.length), ∃ p, read64 m (a + 8 * j) = some p ∧ StmtReprWithin m P p ss[j]
@@ -49,7 +29,6 @@ theorem stmtArray_length {m : Mem} {P : Nat → Prop} :
   | _, _, _, .nil => rfl
   | _, _, _, .cons _ _ _ hrest => by simp [stmtArray_length hrest]
 
-/-- `addi` then `sext.w` of a small index: the next index. -/
 theorem idx_succ (idx : Nat) : BitVec.ofNat 64 idx + 1#64 = BitVec.ofNat 64 (idx + 1) := by
   apply BitVec.eq_of_toNat_eq; simp [BitVec.toNat_add]
 
@@ -93,8 +72,6 @@ theorem ofNat_toInt_small {a : Nat} (h : a < 2 ^ 31) : (BitVec.ofNat 64 a).toInt
     IW live m (blockView aS.toNat arr.toNat count) (InExt (s.toNat - 176, 176)) Q 0x800041c8#64 R Mt
   by ix_run hlive using [h8, h2, h10, hi, hcnt, hsf] at 0x800041a4 0x8000409c
 
-/-- A block node over a geometric view: its array pointer and count reads,
-placement, and the represented statement array. -/
 structure BlockNode (m : Mem) (P : Nat → Prop) (aS arr : BitVec 64) (count : Nat)
     (all : List Vsa.While.Stmt) : Prop where
   arrw : ldv .ld m (aS + 8#64).toNat = arr
@@ -110,7 +87,6 @@ structure BlockNode (m : Mem) (P : Nat → Prop) (aS arr : BitVec 64) (count : N
   geo : ∀ k, P k → ReadOK k
   view : ∀ a ∈ blockView aS.toNat arr.toNat count, P a ∧ (m[a]?).isSome
 
-/-- `exec_stmt`'s entry `sp` with its 176-byte frame below it. -/
 structure ExecFrameGeom (s : BitVec 64) : Prop where
   sf : (s + 18446744073709551440#64).toNat = s.toNat - 176
   lo : 0x87800000 + 176 ≤ s.toNat
@@ -130,7 +106,6 @@ theorem drop_cons_facts {α : Type} {all : List α} {idx : Nat} {x : α} {xs : L
 theorem KeepRegs.trans {ks : List Nat} {R R' R'' : Nat → BitVec 64} (h1 : KeepRegs ks R R')
     (h2 : KeepRegs ks R' R'') : KeepRegs ks R R'' := fun x hx => (h2 x hx).trans (h1 x hx)
 
-/-- A statement pointer's address in the array (`slli`/`add` of the index). -/
 theorem arr_elem_addr {arr : BitVec 64} {idx count : Nat} (h : arr.toNat + 8 * count ≤ 0x100000000)
     (hi : idx < count) : (arr + BitVec.ofNat 64 idx <<< 3).toNat = arr.toNat + 8 * idx := by
   rw [BitVec.toNat_add, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat]
@@ -139,7 +114,6 @@ theorem arr_elem_addr {arr : BitVec 64} {idx count : Nat} (h : arr.toNat + 8 * c
   rw [Nat.mod_eq_of_lt (a := idx * 8) (by omega), Nat.mod_eq_of_lt (by omega)]
   omega
 
-/-- A child's stack geometry inside the region below the lowered `sp`. -/
 theorem StackGeom.narrow {s : BitVec 64} {m n : Nat} (h : StackGeom s m) (hn : n ≤ m) :
     StackGeom s n :=
   ⟨by have := h.le; omega, by have := h.lo; omega, h.hi, h.al, h.top⟩
@@ -149,13 +123,6 @@ section Motive
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- **The block loop, total mode**: the motive of `ExecSeqCost` at the block
-site. From the loop head with the statements `ss` (a nonempty suffix of the
-block's array `all`, from index `idx`), the loop runs them against the
-derivation and leaves at the epilogue (`0x8000409c`) with the status in `a0`,
-the `ret` slot as `statusRet`, the callee-saved registers kept, and the
-frame invariant `Inv` (which the index spill at `sp+8` preserves). `F` is
-the arm's frame, handed through. -/
 def blockSeqT_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (inp : Nat) (st : St) (d inner : Nat) (ss : List Vsa.While.Stmt) (st' : St) (status : Status)
     (n : Nat) (_D : ExecSeqCost st d inner ss st' status n) : Prop :=
@@ -177,19 +144,11 @@ def blockSeqT_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room 
         world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)
       ⊢ (twpW (vsaModel live)).W Φ)
 
-/-- The empty sequence never reaches the loop head (the arm's `blez` skips the
-loop): the motive holds vacuously. -/
 theorem blockSeqT_nil (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (inp : Nat) (st : St) (d inner : Nat) :
     blockSeqT_body (GF := GF) live N L Room inp st d inner [] st .normal 0 (.nil st d inner) :=
   fun _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ h => absurd rfl h
 
-/-- **The block loop, partial mode**: by structure on the statements `ss`
-(the outcomes are not known in advance). Each statement runs through the Löb
-hypothesis `execSpecsP`; the loop leaves at the epilogue with SOME outcome
-and its derivation `ExecSeq`, or aborts, handing its abort continuation the
-stack below the lowered `sp`, the `ret` slot and the frame bytes. The two
-continuations are an additive pair (INTERP_DESIGN.md §10.1). -/
 def blockSeqP_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (inp : Nat) (Core : IProp GF) (d inner : Nat) (ss : List Vsa.While.Stmt) : Prop :=
   ∀ (Φ : Nat × String → IProp GF) (st : St) (idx count : Nat) (aS arr aRet aInner s : BitVec 64)
@@ -224,8 +183,6 @@ theorem statusCode_eq_zero {status : Status} (h : statusCode status = 0#64) : st
 
 end Motive
 
-/-! ## The cases (proof pieces, one declaration each) -/
-
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_piece blockSeqT_consNormal_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -251,7 +208,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     rw [arr_elem_addr hbn.ahi hidx]; exact ldv_ld_read64 hp
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
-  -- the head run: load the statement, spill the index
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
@@ -273,7 +230,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ _ hinv
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- the statement
+
   ihave H1 := h1
   rw [show k + (n1 + n2) = k + n2 + n1 by omega]
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
@@ -292,7 +249,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   rw [statusRet_normal]
 
 #ix_piece blockSeqT_consNormal_p2 from blockSeqT_consNormal_p1 by
-  -- the status test and the back edge
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
@@ -314,9 +271,9 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   refine BlockLoop_runB (sc := 0#64) (arr := arr) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo hbn.hi
     hbn.off hidx hbn.small ((hR1 8 (by decide)).trans hbh.s0) ((hR1 2 (by decide)).trans hbh.sp)
     (by ix_reg; exact hst0) (by rw [hMt1]; ix_fwd) hbn.cntw ?_ ?_ ?_
-  · -- an abrupt status: not this derivation's
+  ·
     intro hc; exfalso; apply hc; ix_reg; exact hst0
-  · -- more statements: the tail's loop
+  ·
     intro _ hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, idx_succ,
       sext32_ofNat_toInt (show idx + 1 < 2 ^ 31 by have := hbn.small; omega),
@@ -344,7 +301,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
         exact ⟨by ix_reg; exact (hR1 2 (by decide)).trans hbh.sp, by ix_reg; exact (hR1 8 (by decide)).trans hbh.s0,
           by ix_reg; exact (hR1 9 (by decide)).trans hbh.s1, by ix_reg; exact (hR1 18 (by decide)).trans hbh.s2,
           by ix_reg; exact (hR1 19 (by decide)).trans hbh.s3, by ix_reg; exact idx_succ idx⟩
-  · -- the last statement: the loop leaves normally
+  ·
     intro _ hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, idx_succ,
       sext32_ofNat_toInt (show idx + 1 < 2 ^ 31 by have := hbn.small; omega),
@@ -391,7 +348,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     rw [arr_elem_addr hbn.ahi hidx]; exact ldv_ld_read64 hp
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
-  -- the head run: load the statement, spill the index
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
@@ -413,7 +370,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ _ hinv
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- the statement
+
   ihave H1 := h1
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
     (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
@@ -430,7 +387,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
 
 #ix_piece blockSeqT_consAbrupt_p2 from blockSeqT_consAbrupt_p1 by
-  -- the status test: an abrupt status leaves the loop
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
@@ -507,7 +464,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ _ hinv
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, #IH, HK⟩, Hms⟩
-  -- the statement, through the Löb hypothesis
+
   ihave H1 := execSpecsP_at Core st d inner sm $$ IH
   iapply ms_callExecP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
     (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
@@ -530,7 +487,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   iintro %R' %st' %status %hE %⟨hkeep, hst0⟩ Hms Hst Hret Hw HK
 
 #ix_piece blockSeqP_cons_p2 from blockSeqP_cons_p1 by
-  -- the status test and the back edge
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (wpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
@@ -555,7 +512,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   refine BlockLoop_runB (sc := statusCode status) (arr := arr) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo
     hbn.hi hbn.off hidx hbn.small ((hR1 8 (by decide)).trans hbh.s0) ((hR1 2 (by decide)).trans hbh.sp)
     (by ix_reg; exact hst0) (by rw [hMt1]; ix_fwd) hbn.cntw ?_ ?_ ?_
-  · -- an abrupt status leaves the loop
+  ·
     intro hc
     have hne : status ≠ .normal := by
       intro e; apply hc; ix_reg; rw [hst0, e]; rfl
@@ -566,7 +523,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     ihave HK := and_elim_l $$ HK
     iapply HK $$ %_ %Mt1 %st' %status %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne)
       %⟨hR1, by ix_reg; exact hst0, hinv1⟩ HF Hms Hst Hret Hw
-  · -- normal, more statements: the tail's loop
+  ·
     intro hc0 hc
     have hn : status = .normal := statusCode_eq_zero
       (Classical.byContradiction fun hne => hc0 (by ix_reg; rw [hst0]; exact hne))
@@ -604,7 +561,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
         exact ⟨by ix_reg; exact (hR1 2 (by decide)).trans hbh.sp, by ix_reg; exact (hR1 8 (by decide)).trans hbh.s0,
           by ix_reg; exact (hR1 9 (by decide)).trans hbh.s1, by ix_reg; exact (hR1 18 (by decide)).trans hbh.s2,
           by ix_reg; exact (hR1 19 (by decide)).trans hbh.s3, by ix_reg; exact idx_succ idx⟩
-  · -- normal, the last statement: the loop leaves normally
+  ·
     intro hc0 hc
     have hn : status = .normal := statusCode_eq_zero
       (Classical.byContradiction fun hne => hc0 (by ix_reg; rw [hst0]; exact hne))
@@ -632,8 +589,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_chain blockSeqP_cons := [blockSeqP_cons_p1, blockSeqP_cons_p2]
 
-/-- **The block loop, partial mode, for every statement list** (structural
-induction; each statement through the Löb hypothesis). -/
 theorem blockSeqP_all {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1) (N : NativeAddrs) (L : DlLayout)
     (Room : RoomPred) (inp : Nat) (Core : IProp GF) (d inner : Nat) :

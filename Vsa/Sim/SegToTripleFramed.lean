@@ -1,48 +1,12 @@
 import Vsa.Sim.BlockAdapter
 import Vsa.Sim.DeriveCase
 
-/-!
-# `SegToTripleFramed` — the FRAMED seg→`Triple` marshalling (gen_fn layer)
-
-`segToTriple` (DeriveCaseRow.lean) discards three clauses of `segEval_sound`
-that a whole-function fold cannot live without: the register FRAME clause (all
-non-noise, non-written registers preserved), sailOutput preservation, and the
-computed register outcome (`GHolds … out.regs`).  A function fold threads an
-ABI keep-set (ra/sp/gp/s0…), the console output, and the HTIF mailbox registers
-(`htif_payload_writes`/`htif_tohost` — `noiseRegs` excludes them, so the frame
-clause transports them across any body seg) through EVERY block; this file
-lands that marshalling ONCE:
-
-* `segToTripleFramed` — `segToTriple` keeping ALL of `segEval_sound`'s
-  conclusion (probe-proven 2026-09-01, lifted verbatim).
-* `FrameOK keep bs` — decidable admissibility of a keep-set against a seg:
-  every kept pin a genuine GPR, not noise, not written by the chain; the chain
-  writes no HTIF mailbox register.  ONE `decide` per row instantiation.
-* `FramedSegPre`/`FramedSegPost` — the named-field pre/post every gen_fn block
-  row uses: `SegPre` + keep-set + output + HTIF mailbox pins; the computed
-  outcome + all of them transported.
-* `segRowFramed` — the generic framed block row: `Triple FramedSegPre
-  FramedSegPost` from two `decide`s.  gen_fn's per-block emission is an
-  INSTANTIATION of this (seg + L literals + the decides), nothing more.
-
-`gprGet`/`gprReg` note: `σ.regs.get? (gprReg n)` is DEPENDENTLY typed
-(`Option (RegisterType (gprReg n))`), so the frame transport cases on the
-concrete index 1..31 — each branch a defeq `exact` — exactly the type-level
-trick `BlockPilot.lean` documents for `gprGet` itself.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
--/
-
 open LeanRV64DExecutable Vsa Register
 open Vsa.Machine (MState Config Steps)
 open Vsa.Logic (Triple)
 
 namespace Vsa.Sim
 
-/-- Keep-set admissibility against a seg, in exactly the `Bool`-equation form
-the frame clause consumes: every kept key a genuine GPR index whose register is
-neither noise nor written by the chain; and the chain writes no HTIF mailbox
-register.  Concrete at every instantiation — ONE kernel `decide` per row. -/
 def FrameOK (ks : List Nat) (bs : List BBlock) : Prop :=
   (∀ n ∈ ks, (1 ≤ n ∧ n ≤ 31) ∧
     (∀ rr ∈ noiseRegs, (rr == gprReg n) = false) ∧
@@ -54,9 +18,6 @@ instance instDecFrameOK (ks : List Nat) (bs : List BBlock) :
     Decidable (FrameOK ks bs) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
-/-- One kept pin transported across a frame clause: full case analysis on the
-concrete GPR index (each branch defeq — the `RegisterType` dependent-typing
-trick). -/
 theorem gprGet_of_frame {σ' σ : MState} {wrs : List Nat} (n : Nat)
     (h1 : 1 ≤ n) (h31 : n ≤ 31)
     (hnoise : ∀ rr ∈ noiseRegs, (rr == gprReg n) = false)
@@ -98,15 +59,5 @@ theorem gprGet_of_frame {σ' σ : MState} {wrs : List Nat} (n : Nat)
   | 30, _, _, hn, hw => exact hframe (gprReg 30) hn hw
   | 31, _, _, hn, hw => exact hframe (gprReg 31) hn hw
   | n + 32, _, h31, _, _ => exact absurd h31 (by omega)
-
-/-! ## The callee-saved `s1..s11` keep bundle
-
-Every whole-function summary must preserve the FULL ABI callee-saved set — a
-post without it is unconsumable at any real call seam where the caller holds
-s-regs live (observation `fn-summary-posts-lack-callee-saved-keeps`).  `SRegs`
-bundles the eleven values ONCE; `sKeepL` is the keep list every fold appends
-to its per-arm keeps (`keysG` stays a literal, so `FrameOK` is still ONE
-kernel `decide` per row, and `GHolds σ (keep ++ sKeepL v)` still whnfs to the
-pin nest — the trailing component IS `GHolds σ (sKeepL v)`). -/
 
 end Vsa.Sim

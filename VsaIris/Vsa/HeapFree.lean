@@ -2,27 +2,10 @@ import VsaIris.Vsa.HeapCarve
 import VsaIris.Vsa.HeapMoveAt
 import Vsa.Sim.WriteLogRead
 
-/-!
-# The heap edits of `_free_r`
-
-`_free_r` releases the chunk below its argument, coalescing it with a free
-neighbour on either side, and either links the result into a bin or merges it
-into the top. The edits compose through virtual intermediate memories, each a
-page-aligned heap:
-
-* `PHeapAt.drop`: a live block leaves the list.
-* `PHeapAt.unlink`: a free chunk leaves its bin and is marked in use
-  (`PHeapAt.take` without a block).
-* `PHeapAt.absorb`: an in-use chunk absorbs the in-use chunk after it.
-* `PHeapAt.toTop`: the in-use chunk below the top becomes the top.
-* `PHeapAt.release`: an in-use chunk becomes free and joins a bin.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast VsaIris.Sym
 
-/-- **A live block leaves the list.** -/
 theorem PHeapAt.drop {m : Mem} {e : Nat × Nat} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m (e :: H) top brkv chunks bins) :
     PHeapAt m H top brkv chunks bins :=
@@ -31,8 +14,6 @@ theorem PHeapAt.drop {m : Mem} {e : Nat × Nat} {H : List (Nat × Nat)} {top brk
       exact := fun e' he' _ => h.heap.heap.exact e' (List.mem_cons_of_mem _ he')
         (List.mem_cons_of_mem _ he') }, h.heap.top_room⟩, h.brk_page, h.bb_lt⟩
 
-/-- **Unlink a free chunk.** `PHeapAt.take` without handing out a block: `v`
-leaves bin `i` and the next header's `PREV_INUSE` marks it in use. -/
 theorem PHeapAt.unlink {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {i : Nat} (hi0 : 0 < i) (hi : i < numBins) {pre post : List Nat} {v : Nat}
@@ -49,7 +30,6 @@ theorem PHeapAt.unlink {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {ch
   (h.take hi0 hi hbin hc hcv (n := 0) (by have := (h.heap.heap.walk.chunk_bounds c hc).2.2; omega)
     hpred hsucc hfd hbk hhdr hsz hpi hag).drop
 
-/-- Merging two adjacent chunks into an in-use one keeps coalescing. -/
 theorem coal_merge {X Y M : Chunk} (hM : M.inuse = true) :
     ∀ {cs₁ cs₂ : List Chunk}, Coal (cs₁ ++ X :: Y :: cs₂) → Coal (cs₁ ++ M :: cs₂)
   | [], [], _ => by simpa using coal_single M
@@ -63,11 +43,6 @@ theorem coal_merge {X Y M : Chunk} (hM : M.inuse = true) :
     simp only [List.cons_append] at h ⊢
     exact coal_cons_cons.2 ⟨(coal_cons_cons.1 h).1, coal_merge hM (cs₁ := w :: cs₁) (coal_cons_cons.1 h).2⟩
 
-/-- **An in-use chunk absorbs the next one.** The in-use chunk `x` of size `a`
-and the in-use chunk after it, of size `b`, become one in-use chunk of size
-`a + b`: `x`'s header records the size with its `PREV_INUSE` kept, and the
-absorbed header may change. No live block starts in the absorbed chunk
-(`hno`). -/
 theorem PHeapAt.absorb {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {x a b : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂) bins)
@@ -91,7 +66,7 @@ theorem PHeapAt.absorb {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hy16 : (x + a) % 16 = 0 := hal _ hY
   simp only at hXb hYb hx16 hy16
   unfold heapStart at hlo hXb hYb
-  -- the walk around `x`
+
   obtain ⟨mid, W1, W2⟩ := HH.walk.append_inv
   have HX := walkHead W2
   have hmid : x = mid := HX.addr
@@ -107,7 +82,7 @@ theorem PHeapAt.absorb {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have ha16 : a % 16 = 0 := HX.al
   have hb16 : b % 16 = 0 := HY.al
   have hW3le := HY.rest.le
-  -- words the absorb does not write
+
   have keep : ∀ w, (∀ k, k < 8 → vsaFoot H (w + k)) → (w + 8 ≤ x + 8 ∨ x + 16 ≤ w) →
       (w + 8 ≤ x + a + 8 ∨ x + a + 16 ≤ w) → read64 m' w = read64 m w := by
     intro w hf h1 h2
@@ -117,7 +92,7 @@ theorem PHeapAt.absorb {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     have := hg 0 (by omega); have := hg 7 (by omega)
     unfold allocGlobal InRange at *
     exact keep w (fun k hk => .inl (hg k hk)) (.inl (by omega)) (.inl (by omega))
-  -- the new walk
+
   have W3 : ChunkWalk m' (x + a + b) top cs₂ := by
     refine HY.rest.transport_headers fun q hq => (keep _ ?_ ?_ ?_).symm
     · rcases hq with rfl | ⟨c, hc, rfl⟩
@@ -148,7 +123,7 @@ theorem PHeapAt.absorb {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       (fun h1 hh1 => ⟨h', hhdr, hpi h1 hh1⟩) WX
     · have := hW1b c hc; exact .inl (by omega)
     · have := hW1b c hc; exact .inl (by omega)
-  -- the old and new chunk lists
+
   have hmemL : ∀ c, c ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ ↔
       c ∈ cs₁ ∨ c = ⟨x, a, true⟩ ∨ c = ⟨x + a, b, true⟩ ∨ c ∈ cs₂ := by
     intro c; simp only [List.mem_append, List.mem_cons]
@@ -174,7 +149,7 @@ theorem PHeapAt.absorb {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · simp [h1]
     · cases hf
     · simp [h1]
-  -- links of bin nodes
+
   have Klink : ∀ j y, 0 < j → j < numBins → (y = binAt j ∨ y ∈ bins j) →
       fdOf m' y = fdOf m y ∧ bkOf m' y = bkOf m y := by
     intro j y hj0 hj hy
@@ -275,16 +250,11 @@ theorem PHeapAt.absorb {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact absurd h1.symm (hno e he)
     · exact ⟨c, by simp [h3], hu, h1, h2⟩
 
-/-- A prefix of a coalesced list is coalesced. -/
 theorem coal_of_append {cs ds : List Chunk} (h : Coal (cs ++ ds)) : Coal cs := by
   intro i hi
   have := h i (by simp; omega)
   rwa [List.getElem_append_left (by omega), List.getElem_append_left (by omega)] at this
 
-/-- **The chunk below the top becomes the top.** The in-use chunk `x` just
-below the top, its predecessor in use and no live block in it (`hno`), merges
-into the top: `av->top := x` and `x`'s header records the size to the break
-with `PREV_INUSE`. -/
 theorem PHeapAt.toTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ : List Chunk} {bins : Nat → List Nat} {x a : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ [⟨x, a, true⟩]) bins)
@@ -436,7 +406,6 @@ theorem PHeapAt.toTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact ⟨c, h3, hu, h1, h2⟩
     · exact absurd h1.symm (hno e he)
 
-/-- Freeing a chunk between two in-use ones keeps coalescing. -/
 theorem coal_release {X X' : Chunk} :
     ∀ {cs₁ cs₂ : List Chunk}, Coal (cs₁ ++ X :: cs₂) → (∀ c ∈ cs₁.getLast?, c.inuse = true) →
       (∀ d ∈ cs₂.head?, d.inuse = true) → Coal (cs₁ ++ X' :: cs₂)
@@ -453,17 +422,10 @@ theorem coal_release {X X' : Chunk} :
     exact coal_cons_cons.2 ⟨(coal_cons_cons.1 h).1, coal_release (cs₁ := w :: cs₁)
       (coal_cons_cons.1 h).2 (fun c hc => hl c (by simpa using hc)) hd⟩
 
-/-- The words a release writes: the chunk's links, the insertion point's two
-links, `binblocks`, and the chunk's footer with the next header. -/
 def RelW (v sz pred succ : Nat) (w : Nat) : Prop :=
   (v + 16 ≤ w ∧ w < v + 32) ∨ (pred + 16 ≤ w ∧ w < pred + 24) ∨ (succ + 24 ≤ w ∧ w < succ + 32) ∨
     (binblocksAddr ≤ w ∧ w < binblocksAddr + 8) ∨ (v + sz ≤ w ∧ w < v + sz + 16)
 
-/-- **Release an in-use chunk into a bin.** The in-use chunk `v`, with no live
-block in it (`hno`), its predecessor in use and an in-use chunk after it (not
-the top), becomes free: the next header's `PREV_INUSE` is cleared, its footer
-written, and it is linked into bin `j` between `pred` and `succ`, with `j`'s
-block bit set. Bin 1 takes it only when empty. -/
 theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {v sz : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨v, sz, true⟩ :: cs₂) bins)
@@ -498,7 +460,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hv16 : v % 16 = 0 := hal _ hV
   simp only at hVb hv16
   unfold heapStart at hlo hVb
-  -- the walk around `v`
+
   obtain ⟨mid, W1, W2⟩ := HH.walk.append_inv
   have HV := walkHead W2
   have hmid : v = mid := HV.addr
@@ -520,7 +482,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     HD.rest.chunk_bounds
   have hW3le := HD.rest.le
   have hW1b := W1.chunk_bounds
-  -- the chunks around `v`
+
   have hmemL : ∀ c, c ∈ cs₁ ++ ⟨v, sz, true⟩ :: d :: cs₃ ↔
       c ∈ cs₁ ∨ c = ⟨v, sz, true⟩ ∨ c = d ∨ c ∈ cs₃ := by
     intro c; simp only [List.mem_append, List.mem_cons]
@@ -544,7 +506,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     obtain ⟨c, hc, hca, hf⟩ := HH.member hk0 hk hm
     have := HH.chunk_eq hc hV hca
     rw [this] at hf; cases hf
-  -- the insertion point's nodes
+
   have hpm : pred = binAt j ∨ pred ∈ bins j := by
     have := List.mem_of_getLast? hpred
     rcases List.mem_cons.mp this with h1 | h1
@@ -555,7 +517,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rcases List.mem_append.mp this with h1 | h1
     · exact .inr (by rw [hpos]; exact List.mem_append_right _ h1)
     · exact .inl (List.mem_singleton.mp h1)
-  -- a bin node: its header, or a free chunk before `v` or after `d`
+
   have hnodeLoc : ∀ k, 0 < k → k < numBins → ∀ y, (y = binAt k ∨ y ∈ bins k) →
       y % 16 = 0 ∧ ((y = binAt k ∧ 0x8001ad20 ≤ y ∧ y + 32 ≤ 0x8001b520) ∨
         (0x8001c170 ≤ y ∧ (y + 32 ≤ v ∨ v + sz + d.size ≤ y) ∧
@@ -590,7 +552,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     obtain ⟨h16, ⟨_, h1, h2⟩ | ⟨h1, h2, _⟩⟩ := hnodeLoc j hj0 hj succ hsm
     · exact ⟨h16, .inl ⟨h1, h2⟩⟩
     · exact ⟨h16, .inr ⟨h1, h2⟩⟩
-  -- words the release does not write
+
   have keep : ∀ w, (∀ k, k < 8 → vsaFoot H (w + k)) → w % 8 = 0 →
       w ≠ v + 16 → w ≠ v + 24 → w ≠ pred + 16 → w ≠ succ + 24 → w ≠ binblocksAddr →
       w ≠ v + sz → w ≠ v + sz + 8 → read64 m' w = read64 m w := by
@@ -612,7 +574,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     refine Kg w hg hw8 h2 ?_ ?_ (by unfold binblocksAddr avAddr; omega)
     · rcases hpN with ⟨_, ⟨_, _⟩ | ⟨_, _ | _⟩⟩ <;> (try unfold heapStart at *) <;> (try unfold topAddr avAddr at *) <;> omega
     · rcases hsN with ⟨_, ⟨_, _⟩ | ⟨_, _ | _⟩⟩ <;> (try unfold heapStart at *) <;> (try unfold topAddr avAddr at *) <;> omega
-  -- the new walk
+
   have W3 : ChunkWalk m' (v + sz + d.size) top cs₃ := by
     refine HD.rest.transport_headers fun q hq => ?_
     have hq16 : q % 16 = 0 := by
@@ -676,7 +638,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     unfold heapStart at this
     exact keep _ (foot_header B (.inr ⟨c, by simp [hc], rfl⟩)) (by omega) (by omega) (by omega)
       (by omega) (by omega) (by unfold binblocksAddr avAddr; omega) (by omega) (by omega)
-  -- the chunk before `v` is in use
+
   have hlast : ∀ c ∈ cs₁.getLast?, c.inuse = true := by
     intro c hc
     obtain ⟨ys, rfl⟩ := List.getLast?_eq_some_iff.1 hc
@@ -690,7 +652,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rw [hcv] at hnr
     have := hprev hn hnr
     rw [← hnp]; unfold prevInuse; simp only [beq_iff_eq]; omega
-  -- bin `j`'s ring, split at the insertion point
+
   have hvJ : v ∉ bins j := hvfree j hj0 hj
   have hbinsJ : updBins bins j (pre' ++ v :: post') j = pre' ++ v :: post' := updBins_same _ _ _
   have hbinsK : ∀ k, k ≠ j → updBins bins j (pre' ++ v :: post') k = bins k :=
@@ -721,7 +683,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · rcases List.mem_append.mp hy with h1 | h1
       · exact .inr (by rw [hpos]; exact List.mem_append_right _ h1)
       · exact .inl (List.mem_singleton.mp h1)
-  -- links of nodes away from the written ones
+
   have Kfd : ∀ k, 0 < k → k < numBins → ∀ y, (y = binAt k ∨ y ∈ bins k) → y ≠ pred →
       fdOf m' y = fdOf m y := by
     intro k hk0 hk y hy hne
@@ -789,7 +751,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       rcases List.mem_cons.mp this with h1 | h1
       · exact hane (hap.trans h1)
       · exact hdisj pred h1 a hapost hap.symm
-  -- nodes of other bins are none of the written nodes
+
   have hoNe : ∀ k, 0 < k → k < numBins → k ≠ j → ∀ y, (y = binAt k ∨ y ∈ bins k) →
       y ≠ pred ∧ y ≠ succ := by
     intro k hk0 hk hkj y hy
@@ -836,7 +798,7 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
         · exact .inl h1
       exact ⟨Kfd k hk0 hk a (hnode a ha) (hoNe k hk0 hk hkj a (hnode a ha)).1,
         Kbk k hk0 hk b (hnode b hb) (hoNe k hk0 hk hkj b (hnode b hb)).2⟩
-  -- globals
+
   have gAv : ∀ w, 0x8001ad10 ≤ w → w + 8 ≤ 0x8001b520 → ∀ k, k < 8 → allocGlobal (w + k) :=
     fun w h1 h2 k hk => .inl ⟨by omega, by omega⟩
   have gHi : ∀ w, 0x8001b990 ≤ w → w + 8 ≤ 0x8001b9b0 → ∀ k, k < 8 → allocGlobal (w + k) :=
@@ -1013,7 +975,6 @@ theorem PHeapAt.release {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact ⟨c, by simp, hu, h1, h2⟩
     · exact ⟨c, by simp [h3], hu, h1, h2⟩
 
-/-- Reflagging at `q` changes only the chunk ending there. -/
 theorem map_reflag_eq {q : Nat} {b : Bool} {cs₁ cs₂ : List Chunk} {N : Chunk}
     (hN : N.addr + N.size = q) (h1 : ∀ c ∈ cs₁, c.addr + c.size ≠ q)
     (h2 : ∀ c ∈ cs₂, c.addr + c.size ≠ q) :
@@ -1026,7 +987,6 @@ theorem map_reflag_eq {q : Nat} {b : Bool} {cs₁ cs₂ : List Chunk} {N : Chunk
   rw [e1, e2]
   simp [reflag, hN]
 
-/-- The chunks of a walk end at distinct places: only `N` ends where it does. -/
 theorem walk_ends_ne {m : Mem} {p top : Nat} {cs₁ cs₂ : List Chunk} {N : Chunk}
     (hw : ChunkWalk m p top (cs₁ ++ N :: cs₂)) :
     (∀ c ∈ cs₁, c.addr + c.size ≠ N.addr + N.size) ∧ (∀ c ∈ cs₂, c.addr + c.size ≠ N.addr + N.size) := by
@@ -1041,10 +1001,6 @@ theorem walk_ends_ne {m : Mem} {p top : Nat} {cs₁ cs₂ : List Chunk} {N : Chu
   · have := hW1b c hc; have := HN.min; have := HN.addr; omega
   · have := hW2b c hc; have := HN.addr; omega
 
-/-- **Coalesce with the next chunk.** The in-use chunk `Y` of size `a` absorbs
-the free chunk after it (size `b`, on bin `i`): the free chunk is unlinked
-(its `pred`'s `fd` and `succ`'s `bk`) and marked in use in a virtual header,
-and `Y`'s header records `a + b`; the absorbed header may hold any word. -/
 theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {Y a b : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: cs₂) bins)
@@ -1070,7 +1026,7 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hbrk := HH.brk_le; have htle := HH.top_le
   have hlo := HH.walk.le
   unfold heapStart heapEnd at *
-  -- the neighbours of the free chunk
+
   have hw : ChunkWalk m heapStart top ((cs₁ ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: cs₂) := by
     simpa using HH.walk
   have HH' : HeapAt m H (fun e => e ∈ H) top brkv ((cs₁ ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: cs₂) bins := by
@@ -1095,7 +1051,7 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   obtain ⟨hdh, hdhr, _, hdhl⟩ := walk_header HH.walk d hdm
   rw [hda, hdnr] at hdhr
   obtain rfl : hdn = hdh := Option.some.inj hdhr
-  -- the bin nodes
+
   have hvmem : Y + a ∈ bins i := by rw [hbin]; exact List.mem_append_right _ List.mem_cons_self
   have hpredm : pred = binAt i ∨ pred ∈ bins i := by
     have := List.mem_of_getLast? hpred
@@ -1124,7 +1080,7 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rcases hsnode with rfl | ⟨cx, hcx, rfl, _, _⟩
     · have := binAt_geo i hi; omega
     · have := HH.walk.chunk_bounds cx hcx; omega
-  -- step 1: unlink the free chunk
+
   generalize hM1 : writeLog (writeLog (writeLog m [(pred + 16, 8, BitVec.ofNat 64 succ)])
     [(succ + 24, 8, BitVec.ofNat 64 pred)]) [(Y + a + b + 8, 8, BitVec.ofNat 64 (hdn ||| 1))] = M1
   have hor1 : (hdn ||| 1) = hdn / 2 * 2 + 1 := by
@@ -1160,7 +1116,7 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     (cs₁ ++ [⟨Y, a, true⟩]) ++ ⟨Y + a, b, false⟩ :: d :: cs₃ by simp,
     map_reflag_eq (q := Y + a + b) rfl hends.1 hends.2] at H1'
   simp only [List.append_assoc, List.singleton_append] at H1'
-  -- step 2: absorb it
+
   have hno : ∀ e ∈ H, e.1 ≠ Y + a + 16 := by
     intro e he heq
     obtain ⟨c, hc, hu, h1, _⟩ := HH.exact e he he
@@ -1175,10 +1131,6 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     (fun h0 hr => hpi' h0 (by rw [← hY8]; exact hr))
     (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
 
-/-- **Coalesce with the previous chunk.** The free chunk `P` of size `a` (on
-bin `i`) absorbs the in-use chunk after it (size `b`, holding no block,
-`hno`): `P` is unlinked and marked in use in a virtual header, and `P`'s
-header records `a + b`; the absorbed header may hold any word. -/
 theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {P a b : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂) bins)
@@ -1209,7 +1161,7 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   simp only at hxhr
   rw [hxr] at hxhr
   obtain rfl : hx = hxh := Option.some.inj hxhr
-  -- the bin nodes
+
   have hpredm : pred = binAt i ∨ pred ∈ bins i := by
     have := List.mem_of_getLast? hpred
     rcases List.mem_cons.mp this with h1 | h1
@@ -1236,7 +1188,7 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rcases hsnode with rfl | ⟨cx, hcx, rfl, _, _⟩
     · have := binAt_geo i hi; omega
     · have := HH.walk.chunk_bounds cx hcx; omega
-  -- step 1: unlink `P`
+
   generalize hM1 : writeLog (writeLog (writeLog m [(pred + 16, 8, BitVec.ofNat 64 succ)])
     [(succ + 24, 8, BitVec.ofNat 64 pred)]) [(P + a + 8, 8, BitVec.ofNat 64 (hx ||| 1))] = M1
   have hor1 : (hx ||| 1) = hx / 2 * 2 + 1 := by
@@ -1267,7 +1219,7 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hends := walk_ends_ne (cs₁ := cs₁) (N := ⟨P, a, false⟩) (cs₂ := ⟨P + a, b, true⟩ :: cs₂) HH.walk
   simp only at hends
   rw [map_reflag_eq (q := P + a) rfl hends.1 hends.2] at H1'
-  -- step 2: absorb the chunk after it
+
   have hP8 : read64 M1 (P + 8) = read64 m (P + 8) := by
     rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
       read64_store_miss _ _ (by omega)]
@@ -1283,8 +1235,6 @@ namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast VsaIris.Sym
 
-/-- **Two memories agree** on a set of bytes when they read the same word at
-each of a list of doublewords and agree on the bytes outside them. -/
 theorem agree_of_words {m1 m2 : Mem} {P : Nat → Prop} (W : List Nat)
     (hw : ∀ w ∈ W, ∃ v, read64 m1 w = some v ∧ read64 m2 w = some v)
     (hout : ∀ a, P a → (∀ w ∈ W, a < w ∨ w + 8 ≤ a) → m1[a]? = m2[a]?) :
@@ -1298,8 +1248,6 @@ theorem agree_of_words {m1 m2 : Mem} {P : Nat → Prop} (W : List Nat)
   · exact hout a ha fun w hwW => Classical.byContradiction fun hc =>
       hin ⟨w, hwW, by omega, by omega⟩
 
-/-- **A doubleword store over two memories**: they agree after it at every
-byte where they agreed before or that the store covers. -/
 theorem wl1_congr {m1 m2 : Mem} {b : Nat} {v : BitVec 64} {a : Nat}
     (h : (a < b ∨ b + 8 ≤ a) → m1[a]? = m2[a]?) :
     (writeLog m1 [(b, 8, v)])[a]? = (writeLog m2 [(b, 8, v)])[a]? := by
@@ -1312,7 +1260,6 @@ theorem wl1_congr {m1 m2 : Mem} {b : Nat} {v : BitVec 64} {a : Nat}
       simp [entryRead, writeEntryByte]
   · rw [h (by omega)]
 
-/-- A doubleword read through a store elsewhere. -/
 theorem rd_miss {Mt : Mem} {a b w : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + w ≤ a) :
     read64 (writeLog Mt [(b, w, v)]) a = read64 Mt a := read64_store_miss Mt v h
 

@@ -1,27 +1,12 @@
 import VsaIris.Interp.EnvScan
 import VsaIris.Interp.EnvSetHit
 
-/-!
-# `env_set`, proved (INTERP_DESIGN.md §9 H1)
-
-`envSet_spec : textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ⊢ envSetSpec Wp N`,
-for every `MachWP`.
-
-`env_set` is the scan code (`EnvScan.lean`) at `setSite` — its spans are the
-generated `EnvSetSpans.lean` — with the hit arm `set_hit` (write the caller's
-value into `vals[i]`, return 1, `EnvSetHit.lean`). The machine's store is
-`Store.set?`'s: the chain's path keeps the assignment (`ChainFrom.setAt`),
-the root misses (`setAt_root`), and at the first match the spec's map-update
-is the one-slot write (`FirstMatch.single_update`, names unique).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 
-/-- `env_set`'s address of the scan code. -/
 def setSite (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanSite live where
   entry := 0x80002cdc#64
   head := 0x80002d0c#64
@@ -46,9 +31,6 @@ def setSite (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanSite 
   sParent := set_parent hl
   sEpi := set_epi hl
 
-/-! ## The assignment the machine performs -/
-
-/-- `Store.set` needs no more gas than the frame address plus one. -/
 theorem set_stable {st : Store} (hp : StoreParents st) (x : String) (v : Value) :
     ∀ a, a < st.frames.size → ∀ g, a < g → st.set g a x v = st.set (a + 1) a x v := by
   intro a
@@ -70,7 +52,6 @@ theorem set_stable {st : Store} (hp : StoreParents st) (x : String) (v : Value) 
         rw [ih p hpa (Nat.lt_trans hpa ha) g' (Nat.lt_of_lt_of_le hpa hag),
           ih p hpa (Nat.lt_trans hpa ha) a hpa]
 
-/-- The assignment's result from frame `a`. -/
 def setAt (st : Store) (a : Addr) (x : String) (v : Value) : Option Store :=
   st.set (a + 1) a x v
 
@@ -104,14 +85,12 @@ theorem setAt_hit {st : Store} {a : Addr} {f : Frame} {x : String} {v v₀ : Val
   unfold setAt
   simp [Store.set, hf, h.any_eq_true]
 
-/-- Along the path, the assignment does not change. -/
 theorem ChainFrom.setAt {st : Store} (hps : StoreParents st) {x : String} {v : Value}
     {fa a : Addr} (h : ChainFrom st x fa a) : Interp.setAt st fa x v = Interp.setAt st a x v := by
   induction h with
   | refl => rfl
   | step _ hf hm hp ih => exact ih.trans (setAt_parent hps hf hm hp)
 
-/-- Under unique names, the spec's map-update is the one-slot write. -/
 theorem map_replace_eq_set {vars : List (String × Value)} {x : String} {v v₀ : Value} {j : Nat}
     (hj : vars[j]? = some (x, v₀)) (hu : FrameNamesUnique vars) :
     vars.map (fun p => if p.1 == x then (x, v) else p) = vars.set j (x, v) := by
@@ -133,13 +112,10 @@ theorem map_replace_eq_set {vars : List (String × Value)} {x : String} {v v₀ 
       exact hk this.symm
     simp [hne]
 
-/-! ## The frame after the write -/
-
 section Frame
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- A value's meaning reads only its 24 bytes. -/
 theorem valImg_agree (N : NativeAddrs) {img img' : Nat → BitVec 8} {a : Nat} (v : Value)
     (h : ∀ o, o < 24 → img' (a + o) = img (a + o)) :
     valImg (GF := GF) N img' a v = valImg N img a v := by
@@ -150,8 +126,6 @@ theorem valImg_agree (N : NativeAddrs) {img img' : Nat → BitVec 8} {a : Nat} (
   unfold valImg
   rw [show a = a + 0 from rfl, w 0 (by omega), w 8 (by omega), w 16 (by omega)]
 
-/-- **The bindings after writing value `j`**: the names are unchanged, the
-other values unchanged, value `j` the new one. -/
 theorem bindings_set (N : NativeAddrs) {img img' : Nat → BitVec 8} {pn pv : Nat}
     {vars : List (String × Value)} {j : Nat} {x : String} {v : Value}
     (hj : j < vars.length) (hx : vars[j].1 = x)
@@ -188,7 +162,7 @@ theorem bindings_set (N : NativeAddrs) {img img' : Nat → BitVec 8} {pn pv : Na
     iframe Hname Hval
 
 omit I in
-/-- The frame layout reads only the `Env` struct's bytes. -/
+
 theorem FrameLayout.congr_struct {img img' : Nat → BitVec 8} {Gm : FrameGeom} {n : Nat}
     (h : FrameLayout img Gm n) (hag : ∀ a, Gm.e ≤ a → a < Gm.e + 32 → img' a = img a) :
     FrameLayout img' Gm n := by
@@ -203,9 +177,6 @@ theorem FrameLayout.congr_struct {img img' : Nat → BitVec 8} {Gm : FrameGeom} 
 
 end Frame
 
-/-! ## `env_set` -/
-
-/-- The store after assigning at frame `a`. -/
 def setStore (st : Store) (a : Addr) (x : String) (v : Value) : Store :=
   { st with frames := st.frames.modify a fun f =>
       { f with vars := f.vars.map fun p => if p.1 == x then (x, v) else p } }
@@ -224,7 +195,6 @@ section Write
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The value slot is off the written value `j` (the frame's blocks are). -/
 theorem copyOut_slot {out : Nat} {Gm : FrameGeom} {n j : Nat} {Mt Mt4 : Mem}
     {fo : Nat → BitVec 8} (hlay : FrameLayout (imgM Mt) Gm n) (hlt : j < n)
     (hsepOut : ∀ a, frameS Gm a → a < out ∨ out + 24 ≤ a)
@@ -244,9 +214,6 @@ theorem copyOut_slot {out : Nat} {Gm : FrameGeom} {n j : Nat} {Mt Mt4 : Mem}
   intro o ho
   exact (hco.frame _ (by omega)).trans (hslot _ (by omega) (by omega))
 
-/-- **Write value `j` of an open frame, and close it** (`env_set`'s and
-`env_define`'s hit): the 24-byte copy `vals[j] := *out` (`CopyOut`), then the
-frame's closer at the store `st'` whose frame `fa` has value `j` replaced. -/
 theorem frame_write_close (N : NativeAddrs) {s out : Nat} {st st' : Store} {fa : Addr}
     {f : Frame} {Gm : FrameGeom} {img : Nat → BitVec 8} {Mt Mt4 : Mem}
     {B₁ B₂ : List (Nat × Nat)} {j : Nat} {x : String} {v : Value} {fo : Nat → BitVec 8}
@@ -337,7 +304,6 @@ section Main
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- **`env_set`** (`env.c:56`), for every `MachWP`. -/
 theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ envText, live p.1)
     (N : NativeAddrs) :
     textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ⊢ envSetSpec Wp N := by
@@ -370,7 +336,7 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   isplitl [Hstk]
   · unfold stackScratch blockOwn; iexact Hstk
   isplit
-  · -- `x` unbound on the chain: return 0, the store unchanged
+  ·
     unfold scanMissK
     iintro %R' %Mt' %fa'' %f'' %⟨hret, hpath, hf, hmiss, hroot, hslotm⟩ Hpc HR HB Hst
     have hnone : st.set? fa x v = none := (hset fa'' hpath).trans (setAt_root hf hmiss hroot)
@@ -392,7 +358,7 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     dsimp only
     iframe Hst
     ipureintro; rfl
-  · -- the first match in frame `fa'`: write the value, return 1
+  ·
     unfold scanHitK
     iintro %fa' %f %Gm %img %j %v0 %R %Mt %B₁ %B₂
       %⟨hpath, hf, hj, hne, hF, h8, hB, hinv', hlay, hdisj⟩ Hpc HR HS #Hb #Hp #HGe Hclose
@@ -439,7 +405,7 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       ⟨rfl, by rw [setStore_frames_toList hf, hmap], hinv.set? hsome⟩ $$ [HS Hclose]
     · iframe HS Hb Hp HGe Hclose Hv
     rw [← hB]
-    -- the return
+
     ihave ⟨Hra, Ha0, Hsp, Hsv, Hcl⟩ := scan_exit_regs hsv hret $$ HR
     ihave ⟨Hstk, Hout⟩ := scan_exit_bytes (Mt := Mt4) hs64 hsep $$ HB
     iapply Hk $$ Hpc Hra
@@ -461,4 +427,3 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
 end Main
 
 end VsaIris.Interp
-

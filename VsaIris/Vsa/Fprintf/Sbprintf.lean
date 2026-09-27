@@ -1,15 +1,5 @@
 import VsaIris.Vsa.Fprintf.InnerS
 
-/-!
-# `__sbprintf(reent, stdout, fmt, ap)` (lane N5)
-
-`__sbprintf` (`0x8000dda8`) builds a fully buffered `FILE` at `sp + 24`
-(flags `stdout`'s minus `__SNBF`: `0x2008`, a 1024-byte buffer at
-`sp + 208`, `stdout`'s descriptor, cookie and `_write`), runs `_vfprintf_r` on
-it (the hook `hV`: `vfpInnerLld` or `vfpInnerS`), flushes it (`_fflush_r`:
-`fflushF_run`, or `fflushF_run0` with nothing left), and returns the count.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -17,9 +7,6 @@ open scoped VsaIris.Sym.Stdout
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
-/-- `stdout`'s fields `__sbprintf` copies, and the boundary data the flush
-reads, with `_flags = fl`: `0x000a` at `interp_run`'s entry, `0x200a` once
-the `ORIENT` block has run (`consoleFlagsV`). -/
 structure StdoutSbAt (fl : BitVec 64) (M : Mem) : Prop where
   flagsU : ldv .lhu M 0x8001bb30 = fl
   flags : ldv .lh M 0x8001bb30 = fl
@@ -30,10 +17,8 @@ structure StdoutSbAt (fl : BitVec 64) (M : Mem) : Prop where
   writer : ldv .ld M 0x8001bb60 = 0x8000efd4#64
   sinit : ldv .ld M 0x8001b580 = 0x80005d2c#64
 
-/-- `stdout` oriented (`_flags = 0x200a`): what `__sbprintf` reads. -/
 abbrev StdoutSb (M : Mem) : Prop := StdoutSbAt 0x200a#64 M
 
-/-- The fields survive a change off `0x8001b580..0x8001bbd4`. -/
 theorem StdoutSbAt.frame {fl : BitVec 64} {M M' : Mem} {Reg : Nat → Prop} (h : StdoutSbAt fl M)
     (hF : Frame M' M Reg) (hR : ∀ a, 0x8001b580 ≤ a → a < 0x8001bbd4 → ¬ Reg a) : StdoutSbAt fl M' := by
   have l : ∀ (kd : MKind) (a : Nat), 0x8001b580 ≤ a → a + widthOfM kd ≤ 0x8001bbd4 →
@@ -43,8 +28,6 @@ theorem StdoutSbAt.frame {fl : BitVec 64} {M M' : Mem} {Reg : Nat → Prop} (h :
     (l _ _ (by decide) (by decide)).trans h.flags2, (l _ _ (by decide) (by decide)).trans h.cookie,
     (l _ _ (by decide) (by decide)).trans h.writer, (l _ _ (by decide) (by decide)).trans h.sinit⟩
 
-/-- The bytes `__sbprintf` changes: its frame and the callee frames below,
-`stdout`'s flags, `errno`. -/
 def SbpReg (sp : Nat) (a : Nat) : Prop :=
   (sp - 1024 ≤ a ∧ a < sp + 1264) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
 
@@ -71,8 +54,6 @@ theorem sbInner_reg {sp : BitVec 64} (hsp : sp.toNat + 2048 < 2 ^ 64) :
   · exact .inr (.inl h)
   · exact .inr (.inr h)
 
-/-- **`__sbprintf` after the flush** (`0x8000de80`): no `__SERR` on the stack
-`FILE`, the (stub) lock closed, the frame restored, the count returned. -/
 theorem sbprintf_tail {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {M : Mem} {R C : Nat → BitVec 64}
@@ -93,7 +74,7 @@ theorem sbprintf_tail {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp
 
 set_option hygiene false in
-/-- The end of `__sbprintf` after the flush (both flushes): the tail and the post. -/
+
 local macro "sb_finish" : tactic => `(tactic| (
       have hSf := sbSfv_reg (sp := sp) (by omega)
       have hIR := sbInner_reg (sp := sp) (by omega)
@@ -240,7 +221,6 @@ local macro "sb_finish" : tactic => `(tactic| (
   sb_finish
   case hsfl => exact hFl.1.sfl
 
-/-! **`sbprintf_run`**: `__sbprintf(reent, stdout, fmt, ap)` with the inner run a hook. -/
 #ix_tree sbprintf_run := sbprintf_1 [sbprintf_2 [sbprintf_3 [sbprintf_4a, sbprintf_4b]]]
 
 end VsaIris.Sym.Fp

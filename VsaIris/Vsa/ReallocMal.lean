@@ -1,16 +1,5 @@
 import VsaIris.Vsa.ReallocMove
 
-/-!
-# `_realloc_r` through a new block
-
-When the old chunk cannot grow in place, `_realloc_r` calls `_malloc_r`
-(`rcall_malloc`). NULL returns NULL with the old block kept. A new chunk
-right after the old one is merged into it and handed to the tail. Any other
-new block receives the old payload (`S - 8` bytes: inline for up to 72, else
-`memmove_fwd`), the old block is freed (`rcall_free`), and the new block is
-returned.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
@@ -20,8 +9,6 @@ section Copy
 
 variable {live : Nat → Prop} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- One word of an inline copy: `ld rT,offL(rS); sd rT,offS(rD)` copying word
-`j` of `copyW`. -/
 theorem cp_pair {rT rS rD : Nat} (hTD : rD ≠ rT) {pcL pcS pcN : BitVec 64} {offL offS : BitVec 12}
     {R : Nat → BitVec 64} {M0 : Mem} {d s j : Nat}
     (stL : ∀ {R : Nat → BitVec 64} {Mt : Mem},
@@ -47,8 +34,6 @@ theorem cp_pair {rT rS rD : Nat} (hTD : rD ≠ rT) {pcL pcS pcN : BitVec 64} {of
   rw [hS', upd_same, hL, ← copyW_succ]
   exact hk
 
-/-- The three-word tail of the malloc path's inline copy (`0x800053a8`): words
-`j … j+2` from `a4` to `a5`. -/
 theorem mal_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p ∈ allocText, live p.1)
     {R : Nat → BitVec 64} {j : Nat} (h14 : (R 14).toNat = s + 8 * j) (h15 : (R 15).toNat = d + 8 * j)
     (hj : 8 * j + 24 ≤ L)
@@ -77,13 +62,10 @@ theorem mal_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p �
     l1 l2 s1 s2 ?_
   exact hk _ fun x h12 h14 => by simp only [upd_apply, h12, h14, ite_false]
 
-/-- Forget a register file's shape, keeping only facts about it. -/
 theorem aw_forget {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (P : (Nat → BitVec 64) → Prop) (hP : P R) (hk : ∀ R', P R' → AW live S Q pc R' Mt) :
     AW live S Q pc R Mt := hk R hP
 
-/-- The registers an inline copy's prefix keeps: `sp`, `s0-s3`, `a0` (the
-destination), `a2` (the length), `a3` and `a5`. -/
 structure CPKeep (R R' : Nat → BitVec 64) : Prop where
   sp : R' 2 = R 2
   s0 : R' 8 = R 8
@@ -104,14 +86,11 @@ theorem CPKeep.upd {R R' : Nat → BitVec 64} (K : CPKeep R R') {k : Nat} (v : B
     by rw [upd_other _ _ (Ne.symm h15)]; exact K.a5, by rw [upd_other _ _ (Ne.symm h18)]; exact K.s2,
     by rw [upd_other _ _ (Ne.symm h19)]; exact K.s3⟩
 
-/-- `CPKeep` through writes to other registers. -/
 macro "cp_keep" h:term : tactic => `(tactic| (refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;>
   first | exact ($h).sp | exact ($h).s0 | exact ($h).s1 | exact ($h).a0 | exact ($h).a2 |
     exact ($h).a3 | exact ($h).a5 | exact ($h).s2 | exact ($h).s3))
 
-/-- The inline copy's prefixes (`0x80005398`, a payload of 24, 40, 56 or 72
-bytes): up to three pairs of words, then the tail. -/
 theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p ∈ allocText, live p.1)
     (hL : L = 24 ∨ L = 40 ∨ L = 56 ∨ L = 72)
     {R : Nat → BitVec 64} (h8 : (R 8).toNat = s) (h10 : (R 10).toNat = d) (h12 : (R 12).toNat = L)
@@ -127,7 +106,7 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
   have n32 : (sign_extend (m := 64) (0x020#12) : BitVec 64) = BitVec.ofNat 64 32 := rfl
   have n40 : (sign_extend (m := 64) (0x028#12) : BitVec 64) = BitVec.ofNat 64 40 := rfl
   have n48 : (sign_extend (m := 64) (0x030#12) : BitVec 64) = BitVec.ofNat 64 48 := rfl
-  -- the tail from word `j`, the base registers at `s + 8 j` and `d + 8 j`
+
   have tail : ∀ j (R' : Nat → BitVec 64), j + 3 = L / 8 → (R' 14).toNat = s + 8 * j →
       (R' 15).toNat = d + 8 * j → R' 2 = R 2 → R' 8 = R 8 → R' 9 = R 9 → R' 13 = R 13 →
       R' 18 = R 18 → R' 19 = R 19 → AW live S Q 0x800053a8#64 R' (copyW M0 d s j) := by
@@ -137,7 +116,7 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
     exact hk R'' (by rw [hR 2 (by decide) (by decide), g2]) (by rw [hR 8 (by decide) (by decide), g8])
       (by rw [hR 9 (by decide) (by decide), g9]) (by rw [hR 13 (by decide) (by decide), g13])
       (by rw [hR 18 (by decide) (by decide), g18]) (by rw [hR 19 (by decide) (by decide), g19])
-  -- a word pair from the `s0`/`a0` bases
+
   have pair : ∀ (j : Nat) {pcL pcS pcN : BitVec 64} {off : BitVec 12} (rT : Nat) (R1 : Nat → BitVec 64),
       rT ≠ 2 → rT ≠ 8 → rT ≠ 9 → rT ≠ 10 → rT ≠ 12 → rT ≠ 13 → rT ≠ 15 → rT ≠ 18 → rT ≠ 19 →
       (sign_extend (m := 64) off : BitVec 64) = BitVec.ofNat 64 (8 * j) → 8 * j + 8 ≤ L →
@@ -163,7 +142,7 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
   refine st_8000539c hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x027#12) : BitVec 64).toNat = 39 from rfl] at hc
-  · -- 40, 56 or 72 bytes: the first word, with `li a4,55` before its store
+  ·
     have K0 : CPKeep R R := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 0) (by omega) (by omega)
     obtain ⟨s1, s2⟩ := A.st (a := d + 8 * 0) (by omega) (by omega) (by omega)
@@ -185,14 +164,14 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
         ldv .ld (copyW M0 d s 0) (s + 8 * 0) := by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [hv, ← copyW_succ]
     refine aw_forget (fun R1 => CPKeep R R1 ∧ (R1 14).toNat = 55) ⟨by cp_keep K0, rfl⟩ fun R1 ⟨K1, g14⟩ => ?_
-    -- the second word
+
     refine pair 1 11 R1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) n8 (by omega) (st_800055cc hlive) (st_800055d0 hlive) K1 fun v => ?_
     have K2 := K1.upd v (k := 11) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide)
     refine st_800055d4 hlive (fun hc' => ?_) (fun hc' => ?_) <;>
       rw [upd_other _ _ (by decide), upd_other _ _ (by decide), g14, K1.a2, h12] at hc'
-    · -- 56 or 72 bytes: words 2 and 3
+    ·
       refine pair 2 14 _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
         (by decide) (by decide) (by decide) n16 (by omega) (st_800056f0 hlive) (st_800056f4 hlive) K2
         fun v2 => ?_
@@ -204,7 +183,7 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
       have K4 := K3.upd v3 (k := 14) (by decide) (by decide) (by decide) (by decide) (by decide)
         (by decide) (by decide) (by decide) (by decide)
       refine st_80005700 hlive (fun hc'' => ?_) (fun hc'' => ?_)
-      · -- 72 bytes: words 4 and 5, then the tail
+      ·
         have hL72 : L = 72 := by
           have := congrArg BitVec.toNat hc''; rw [K4.a2, K4.a5, h12, h15] at this; exact this
         obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 4) (by omega) (by omega)
@@ -246,7 +225,7 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
         · exact K1.a3
         · exact K1.s2
         · exact K1.s3
-      · -- 56 bytes: the tail from word 4
+      ·
         have hL56 : L = 56 := by
           have : L ≠ 72 := fun h => hc'' (BitVec.eq_of_toNat_eq (by rw [K4.a2, K4.a5, h12, h15, h]))
           omega
@@ -263,7 +242,7 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
         · exact K1.a3
         · exact K1.s2
         · exact K1.s3
-    · -- 40 bytes: the tail from word 2
+    ·
       refine st_800055d8 hlive ?_
       refine st_800055dc hlive ?_
       refine st_800055e0 hlive ?_
@@ -277,7 +256,7 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
       · exact K1.a3
       · exact K1.s2
       · exact K1.s3
-  · -- 24 bytes: the tail alone
+  ·
     have hL24 : L = 24 := by omega
     refine st_800053a0 hlive ?_
     refine st_800053a4 hlive ?_
@@ -288,9 +267,6 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
 
 end Copy
 
-/-- **The malloc path's copy** (`0x8000538c`): the old payload's `S - 8` bytes
-to the new block, inline or by `memmove` (which spills the new block at
-`sp`). -/
 theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} {d s S : Nat}
     (A : CPArgs C.S d s (S - 8)) (hS32 : 32 ≤ S) (hS16 : S % 16 = 0)
     (hslotD : C.s.toNat - 64 + 8 ≤ d ∨ d + (S - 8) ≤ C.s.toNat - 64)
@@ -313,7 +289,7 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
   refine st_80005394 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hL] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x048#12) : BitVec 64).toNat = 72 from rfl] at hc
-  · -- over 72 bytes: `memmove`
+  ·
     refine st_80005658 O.live ?_
     have eS : (R 2 + sign_extend (m := 64) (0x000#12)).toNat = C.s.toNat - 64 := by
       rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl, hsp,
@@ -333,7 +309,7 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     · rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl,
         addr_add h8 0 (by omega)]; rfl
     · exact hL
-    -- back from `memmove`: reload the new block and join
+
     rw [show (BitVec.ofNat 64 (2147505760 + 4) : BitVec 64) = 0x80005664#64 from rfl]
     have hslot : read64 (copyW (writeLog Mt [(C.s.toNat - 64, 8, R 10)]) d s ((S - 8) / 8))
         (C.s.toNat - 64) = some (R 10).toNat := by
@@ -355,7 +331,7 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     · rw [hK.s3]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
     · have ho : OutL [(C.s.toNat - 64, 8, R 10)] a := ⟨by simp only; omega, trivial⟩
       rw [writeLog_out _ _ _ ho]
-  · -- up to 72 bytes: inline
+  ·
     have hLs : S - 8 = 24 ∨ S - 8 = 40 ∨ S - 8 = 56 ∨ S - 8 = 72 := by omega
     exact mal_inline A O.live hLs (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h8)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h10)
@@ -368,15 +344,12 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
         (by rw [g18]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
         (by rw [g19]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]) fun _ _ => rfl
 
-/-- The epilogue's third copy (`0x800053dc`). -/
 theorem repi3 {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → R' 10 = R 13 → AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x800053dc#64 R Mt :=
   repi_core O (st_800053dc O.live) (st_800053e0 O.live) (st_800053e4 O.live) (st_800053e8 O.live)
     (st_800053ec O.live) (st_800053f0 O.live) F hfin
 
-/-- **Free the old block and return the new one** (`0x800053c0`): the copied
-heap holds both blocks; `_free_r(p)`, unlock, return `p'`. -/
 theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc : Mem}
     {p' top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (F : RFrame C R Mc) (h8 : (R 8).toNat = B.p) (h9 : R 9 = reentV) (h13 : (R 13).toNat = p')
@@ -395,7 +368,7 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
   have eS : (R 2 + sign_extend (m := 64) (0x000#12)).toNat = C.s.toNat - 64 := by
     rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl, hsp,
       addr_add hs64 0 (by omega)]; omega
-  -- the new block's bytes are footprint of the others
+
   have hblk : ∀ k, k < C.n.toNat → vsaFoot C.H (p' + k) ∧ ¬ vsaFoot ((p', C.n.toNat) :: C.H) (p' + k) := by
     have hst' : Starts ((p', C.n.toNat) :: C.H) := by
       unfold Starts at *
@@ -440,7 +413,7 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
   · rw [h9]; rfl
   · rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl,
       addr_add h8 0 (by omega)]; rfl
-  -- back from `_free_r`
+
   obtain ⟨top', brkv', chunks', bins', H3, htop'⟩ := hfh
   have hkeep : ∀ a, ((C.s.toNat - 64 ≤ a ∧ a < C.s.toNat) ∨ ¬ vsaFoot ((p', C.n.toNat) :: C.H) a ∧
       vsaFoot C.H a) → Mt'[a]? = M2[a]? := by
@@ -493,9 +466,6 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
     rw [hkeep _ (.inr ⟨hn, hf⟩), hM2o _ (hfoot _ hf)]
     exact hdata k hk
 
-/-- The state back from the nested `_malloc_r` with a block `p'`: the frame and
-the three spills (`nb`, `X`, `S`), the heap holding both blocks with `X`
-unchanged (`LiveKeep`), the new block fresh, and the old contents in place. -/
 structure RMal (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) (X S nb p' top brkv : Nat)
     (chunks : List Chunk) (bins : Nat → List Nat) : Prop where
   frame : RFrame C R Mt
@@ -528,14 +498,11 @@ theorem RMal.of_regs {C : MCtx} {B : RB} {R R' : Nat → BitVec 64} {Mt : Mem}
     RMal C B R' Mt X S nb p' top brkv chunks bins :=
   { M with frame := M.frame.of_regs h2 h18 h19, s0 := h8 ▸ M.s0, s1 := h9 ▸ M.s1, a0 := h10 ▸ M.a0 }
 
-/-- Both blocks with `p'` fresh start at distinct addresses. -/
 theorem RMal.starts2 {C : MCtx} {B : RB} {R : Nat → BitVec 64} {Mt : Mem} {X S nb p' top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (M : RMal C B R Mt X S nb p' top brkv chunks bins) :
     Starts ((p', C.n.toNat) :: (B.p, B.nOld) :: C.H) :=
   M.starts.cons M.fresh.start
 
-/-- **The new chunk right after the old one** (`0x800055b0`): merge them and
-go to the tail. -/
 theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {X S nb p' top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (M : RMal C B R Mt X S nb p' top brkv chunks bins) (hp' : p' = X + S + 16)
@@ -547,7 +514,7 @@ theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   have hS16 := (walk_sizes HH.walk _ hXm).1
   have hx16 := HH.aligned.1 _ hXm
   simp only at hXb hS16 hx16
-  -- the new block's chunk `N` right after `X`
+
   obtain ⟨cN, hcN, huN, hcNa, hcNn⟩ := HH.exact _ List.mem_cons_self List.mem_cons_self
   simp only at hcNa hcNn
   obtain ⟨Na, ns, Ni⟩ := cN
@@ -589,7 +556,7 @@ theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   have hns : (BitVec.ofNat 64 hN &&& sign_extend (m := 64) (0xffc#12)).toNat = ns := by
     rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
       toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hNlt, ← hNs]; rfl
-  -- the virtual heap: the new block dropped, `X` absorbing `N`, the block grown
+
   have hv : (BitVec.ofNat 64 (S + ns + hX % 2)).toNat = S + ns + hX % 2 := by
     rw [BitVec.toNat_ofNat]; omega
   generalize hV : writeLog Mt [(X + 8, 8, BitVec.ofNat 64 (S + ns + hX % 2))] = V
@@ -607,7 +574,7 @@ theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   have Hr := Ha.reblock (c := ⟨X, S + ns, true⟩) (by simp) rfl M.addr (n' := C.n.toNat)
     (by simp only; omega)
   rw [← M.addr] at Hr
-  -- the header after the merged chunk
+
   have hw2 := HH.walk
   rw [hsp] at hw2
   obtain ⟨⟨hn, hnr, hnp⟩, _⟩ := walk_next_of (cs₁ := cs₁ ++ [⟨X, S, true⟩]) (by simpa using hw2)
@@ -629,8 +596,6 @@ theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   · rw [BitVec.toNat_add, h14, hns, Nat.mod_eq_of_lt (by omega)]
   · exact h15
 
-/-- **NULL from the nested `_malloc_r`** (`0x80005364`): unlock and return NULL,
-the old block kept. -/
 theorem mal_null {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     (F : RFrame C R Mt) (h10 : R 10 = 0#64)
     (hheap : ∃ top brkv chunks bins, PHeapAt Mt ((B.p, B.nOld) :: C.H) top brkv chunks bins)
@@ -667,9 +632,6 @@ theorem mal_null {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     rw [h13]; rfl
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h10
 
-/-- **Back from `_malloc_r` with a block** (`0x80005364`): reload the spills;
-a new chunk right after the old one is merged (`mal_merge`), any other gets
-the old payload (`mal_copy`) and the old block is freed (`mal_free`). -/
 theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {X S nb p' top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (M : RMal C B R Mt X S nb p' top brkv chunks bins) :
@@ -721,7 +683,7 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
   refine st_80005374 O.live (fun hc => absurd hc ?_) (fun _ => ?_)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]
     intro h0; have := congrArg BitVec.toNat h0; rw [M.a0] at this; simp at this; omega
-  -- `X`'s header, unchanged in size
+
   have hXf : ∀ k, k < 8 → vsaFoot C.H (X + 8 + k) := fun k hk =>
     vsaFoot_cons_sub _ (vsaFoot_cons_sub _ (foot_header M.heap.heap (.inr ⟨_, hXm, rfl⟩) k hk))
   have eX : (R 8 + sign_extend (m := 64) (0xff8#12)).toNat = X + 8 := by
@@ -745,7 +707,7 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
       addr_sub M.a0 16 (by omega) (by omega)]
   refine st_80005388 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- the new chunk is right after `X`
+  ·
     have hm : X + S = p' - 16 := by
       have := congrArg BitVec.toNat hc
       rw [BitVec.toNat_add, hXv, hS', hN, Nat.mod_eq_of_lt (by omega)] at this; exact this
@@ -758,7 +720,7 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hXv)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [BitVec.toNat_ofNat]; omega)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [BitVec.toNat_ofNat]; omega)
-  -- copy the old payload into the new block
+
   have hne : X + S ≠ p' - 16 := fun h => hc (BitVec.eq_of_toNat_eq (by
     rw [BitVec.toNat_add, hXv, hS', hN, Nat.mod_eq_of_lt (by omega)]; exact h))
   have hst2 := M.starts2
@@ -775,7 +737,7 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
     HO.payload_foot hXm hnoX _ (by simp only; omega) (by simp only; omega)
   have hdstF : ∀ k, k < C.n.toNat → vsaFoot C.H (p' + k) := HN.block_foot hstN
   have hSn : S - 8 < C.n.toNat := by rw [hnb] at M; have := M.lt; unfold physSize at this; omega
-  -- where the new block lies relative to `X`
+
   obtain ⟨cN, hcN, _, hcNa, hcNn⟩ := HH.exact _ List.mem_cons_self List.mem_cons_self
   simp only at hcNa hcNn
   have hNb := HH.walk.chunk_bounds cN hcN
@@ -817,7 +779,7 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
   · rw [BitVec.toNat_ofNat]; omega
   · rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from rfl, BitVec.add_zero]
   · exact hsp
-  -- the copied memory: the new block's first `S - 8` bytes, the slot at `sp`
+
   have hdS : p' + (S - 8) ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ p' := by
     by_cases hA : C.s.toNat ≤ p'
     · exact .inr hA
@@ -869,8 +831,6 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
       show X + 16 + k = B.p + k by rw [M.addr]]
     exact M.data k hk
 
-/-- **The malloc path** (`0x80005350`): spill `S`, `X` and `nb`, call
-`_malloc_r(n)`, and continue on its result (`mal_ok`, `mal_null`). -/
 theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) :
@@ -919,7 +879,7 @@ theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
       have := off_stack_of D.heap.disj fun k hk => vsaFoot_cons_sub _ (hf k hk)
       simp only at this; omega), show B.p - 8 = X + 8 by omega]
     exact D.hdr
-  -- the spills and the frame words are off the callee's window
+
   have hwin : ∀ a, C.s.toNat - 64 ≤ a → a < C.s.toNat → ¬ MWin ((B.p, B.nOld) :: C.H)
       (C.s + 18446744073709551552#64) a := fun a h1 h2 hw => by
     rcases hw with hf | ⟨h3, h4⟩
@@ -928,7 +888,7 @@ theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   have hFr : ∀ (Mt' : Mem), (∀ a, ¬ MWin ((B.p, B.nOld) :: C.H) (C.s + 18446744073709551552#64) a →
       Mt'[a]? = M1[a]?) → ∀ a, C.s.toNat - 64 ≤ a → a + 8 ≤ C.s.toNat → read64 Mt' a = read64 M1 a :=
     fun Mt' hf a h1 h2 => read64_keep fun k hk => hf _ (hwin _ (by omega) (by omega))
-  -- block bytes are off the callee's window too
+
   have hbA : ∀ k, k < B.nOld → heapStart ≤ B.p + k ∧ B.p + k < heapEnd := by
     obtain ⟨c, hc, _, h8, h9⟩ := D.heap.heap.heap.heap.live _ List.mem_cons_self
     have := D.heap.heap.heap.heap.walk.chunk_bounds c hc
@@ -983,7 +943,7 @@ theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   · exact hsp
   · rw [D.s1]; rfl
   · exact D.a1
-  · -- a fresh block
+  ·
     obtain ⟨top', brkv', chunks', bins', H', htop', hkeep⟩ := hheap'
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at g2 g8 g9 g18 g19
     have F' := hF R' Mt' g2 g18 g19 hframe'
@@ -1002,7 +962,7 @@ theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
         read64_store_hit, D.a4]
     · rw [g8, D.s0]
     · rw [g9, D.s1]
-  · -- NULL
+  ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at g2 g8 g9 g18 g19
     exact mal_null O (hF R' Mt' g2 g18 g19 hframe') h10 hheap' (hpres' Mt' hframe' hpres'')
       (hdata' Mt' hframe') hst

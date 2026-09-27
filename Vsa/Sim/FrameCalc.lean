@@ -1,17 +1,5 @@
 import Vsa.Sim.SegEvalSound
 
-/-!
-# `FrameCalc` — canonical marshalling and frame calculus
-
-A frame calculation records one write log, its concrete memory equation, and
-the proof that every write lies in an allowed window. Calculations compose by
-log append. Their concrete seam is therefore `writeLog_append`, never reduction
-of `ExtHashMap`.
-
-Timing witness (2026-08-26): `lake build Vsa.Sim.FrameCalc` completed the
-touched target in 2.6s.
--/
-
 open LeanRV64DExecutable Vsa
 open Vsa.Machine (MState)
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While
@@ -48,7 +36,6 @@ theorem logInW_append {ws1 ws2 : List W} {l1 l2 : List WEntry}
   | cons e l ih =>
       exact ⟨insideW_append_left h1.1, ih h1.2⟩
 
-/-- A canonical memory-frame calculation. -/
 structure FrameCalc (ws : List W) (m0 m : Std.ExtHashMap Nat (BitVec 8)) where
   log : List WEntry
   mem_eq : m = writeLog m0 log
@@ -56,7 +43,6 @@ structure FrameCalc (ws : List W) (m0 m : Std.ExtHashMap Nat (BitVec 8)) where
 
 namespace FrameCalc
 
-/-- Compose calculations. The output log is syntactically `l1 ++ l2`. -/
 def trans {ws1 ws2 : List W} {m0 m1 m2 : Std.ExtHashMap Nat (BitVec 8)}
     (h1 : FrameCalc ws1 m0 m1) (h2 : FrameCalc ws2 m1 m2) :
     FrameCalc (ws1 ++ ws2) m0 m2 := by
@@ -70,7 +56,6 @@ def trans {ws1 ws2 : List W} {m0 m1 m2 : Std.ExtHashMap Nat (BitVec 8)}
             _ = writeLog (writeLog m0 l1) l2 := congrArg (fun x => writeLog x l2) heq1
             _ = writeLog m0 (l1 ++ l2) := (writeLog_append m0 l1 l2).symm
 
-/-- Forget the log and expose the ordinary `FrameOn` interface. -/
 theorem frameOn {ws : List W} {m0 m : Std.ExtHashMap Nat (BitVec 8)}
     (h : FrameCalc ws m0 m) : FrameOn ws m0 m := by
   rw [h.mem_eq]
@@ -78,7 +63,6 @@ theorem frameOn {ws : List W} {m0 m : Std.ExtHashMap Nat (BitVec 8)}
 
 end FrameCalc
 
-/-- Standard marshalling outputs grouped for O(1) projection. -/
 structure MarshalFacts (ws : List W) (m0 m : Std.ExtHashMap Nat (BitVec 8))
     (sigma0 sigma : MState) (pins : List Pin) (kept : List Register) where
   memory : FrameCalc ws m0 m

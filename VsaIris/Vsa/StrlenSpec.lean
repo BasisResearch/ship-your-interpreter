@@ -1,21 +1,5 @@
 import VsaIris.Vsa.Strlen
 
-/-!
-# `strlen` in Iris, for either WP
-
-INTERP_DESIGN.md §9, package H3. The whole function is one bounded
-owned-footprint run (`Strlen.strlenRun`), so the Iris layer is ONE
-`wp_localRunW` application (`VsaIris/LocalRun.lean`, the loop rule; xv6iris
-`ProofMemset.v:1-9`, "bounded loop, not iLöb"). The spec is stated for an
-abstract `Wp : MachWP`, so it serves both `term_sim` (total) and `stuck_sim`
-(partial).
-
-Ownership follows INTERP_DESIGN.md §3: the code and the string's bytes (the
-characters and the NUL) are PERSISTENT, and the at most seven bytes past the
-NUL that the word loop over-reads — they belong to the caller's heap block —
-are owned and handed back unchanged.
--/
-
 namespace VsaIris.Inst.Strlen
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -27,7 +11,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The eight registers `strlen` touches, at the entry. -/
 def entryRegs (P r v11 v12 v13 v14 v15 : BitVec 64) : Nat → BitVec 64 := fun k =>
   if k = VsaIris.PC then 0x80006cf0#64
   else if k = 1 then r

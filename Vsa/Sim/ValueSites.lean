@@ -24,31 +24,6 @@ import Vsa.Sim.Code.Value_int
 import Vsa.Sim.Code.Value_str
 import Vsa.Sim.Code.Value_truthy
 
-/-!
-# Layer 3 — per-site observational step lemmas for the `value_*` leaf constructors
-
-One observational-step (`StepObs`) lemma per instruction of the five runtime-value
-leaf functions (`c/src/value.c`):
-
-* `value_null`  (3 insts @0x800027ec): `sw zero,0(a0); sd zero,8(a0); ret`
-* `value_bool`  (5 insts @0x800027f8): `snez a1,a1; li a5,1; sw a1,8(a0); sw a5,0(a0); ret`
-* `value_int`   (4 insts @0x8000280c): `li a5,2; sd a1,8(a0); sw a5,0(a0); ret`
-* `value_str`   (4 insts @0x8000281c): `li a5,3; sd a1,8(a0); sw a5,0(a0); ret`
-* `value_truthy`(12 insts @0x8000282c): kind dispatch (`lw`/`beq`/`snez`/`ld`).
-
-**ABI (LP64, verified against the disasm + `value.c`):** a 24-byte `Value` is
-returned via an **sret** pointer — the caller passes the buffer address in `a0`
-(`x10`). `value_bool/int/str` take their payload in `a1` (`x11`). `value_truthy`
-takes its `Value` argument **by reference** (24 > 16 bytes ⇒ not in registers):
-`a0` holds a pointer to the `Value`, read back with `lw a5,0(a0)` (kind) and
-`ld/lw …,8(a0)` (payload). None of these functions touch `sp`.
-
-This file introduces **width-4 (`sw`) store sites** — a first (memcpy used `sb`/`sd`)
-— following the `sb` recipe at width 4 over `vmem_write_addr_4`, plus **width-8
-(`sd`)** over `vmem_write_addr_8` and **signed loads** (`lw`/`ld`) over
-`execute_load_signed_char`.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -60,26 +35,17 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## Width-4 / width-8 store data slices and effective addresses
-
-A `sw rs2,off(rs1)` stores the low 4 bytes of `rs2` (`swData`); a `sd` the low
-8 bytes (`sdData_val`). The effective address is `rs1 + sext off`. -/
-
-/-- The store data slice for width 4: `extractLsb vdata 31 0` (auto-`setWidth (8*4)`). -/
 abbrev swData (vdata : BitVec 64) : BitVec (8 * 4) :=
   Sail.BitVec.extractLsb vdata ((4 *i 8) -i 1) 0
 
-/-- The store data slice for width 8: `extractLsb vdata 63 0` (auto-`setWidth (8*8)`). -/
 abbrev sdData_val (vdata : BitVec 64) : BitVec (8 * 8) :=
   Sail.BitVec.extractLsb vdata ((8 *i 8) -i 1) 0
 
-/-- The width-4 write-map: `mem` updated with 4 little-endian bytes at `a`. -/
 abbrev writeMap4 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d : BitVec (8 * 4)) :
     Std.ExtHashMap Nat (BitVec 8) :=
   ((((mem.insert a (d.extractLsb' 0 8)).insert (a + 1) (d.extractLsb' 8 8)).insert
     (a + 2) (d.extractLsb' 16 8)).insert (a + 3) (d.extractLsb' 24 8))
 
-/-- The width-8 write-map: `mem` updated with 8 little-endian bytes at `a`. -/
 abbrev writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d : BitVec (8 * 8)) :
     Std.ExtHashMap Nat (BitVec 8) :=
   ((((((((mem.insert a (d.extractLsb' 0 8)).insert (a + 1) (d.extractLsb' 8 8)).insert
@@ -87,11 +53,6 @@ abbrev writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d : BitVec (8 
     (a + 4) (d.extractLsb' 32 8)).insert (a + 5) (d.extractLsb' 40 8)).insert
     (a + 6) (d.extractLsb' 48 8)).insert (a + 7) (d.extractLsb' 56 8))
 
-/-! ## Generic width-4 `sw` execute characterization
-
-A `sw rs2,off(rs1)` at `afterNextPC (afterPrelude σ) pc`, given the base `rs1 = vbase`
-and data `rs2 = vdata`, with the effective address `vbase + sext off` in RAM, above
-the HTIF window, and 4-aligned, produces `sigma3_store σ pc (writeMap4 …)`. -/
 theorem exec_sw (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regidx)
     (vbase vdata : BitVec 64) (hG : GoodState σ)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
@@ -146,7 +107,6 @@ theorem exec_sw (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regi
   simp only [execute]
   exact hchar
 
-/-! ## Generic width-8 `sd` execute characterization -/
 theorem exec_sd_val (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regidx)
     (vbase vdata : BitVec 64) (hG : GoodState σ)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
@@ -201,32 +161,6 @@ theorem exec_sd_val (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : 
   simp only [execute]
   exact hchar
 
-/-! ## Byte-word / non-RVC facts for every value_* instruction word -/
-
-/-! ## `value_null` (@0x800027ec): `sw zero,0(a0); sd zero,8(a0); ret` -/
-
-/-! ## `value_bool` (@0x800027f8): `snez a1,a1; li a5,1; sw a1,8(a0); sw a5,0(a0); ret` -/
-
-/-! ## `value_int` (@0x8000280c): `li a5,2; sd a1,8(a0); sw a5,0(a0); ret` -/
-
-/-! ## `value_str` (@0x8000281c): `li a5,3; sd a1,8(a0); sw a5,0(a0); ret` -/
-
-/-! ## `value_truthy` (@0x8000282c): kind dispatch (`lw`/`beq`/`snez`/`ld`)
-
-**ABI:** the 24-byte `Value` argument is passed **by reference** (24 > 16 ⇒ not in
-registers): `a0` holds a pointer to the caller's `Value`. `lw a5,0(a0)` reads the
-kind tag (4 bytes); `beq a5,{1,2}` dispatches; `ld a0,8(a0)` / `lw a0,8(a0)` reads
-the payload. The result in `a0`:
-* kind = 1 (bool): `lw a0,8(a0)` — the (4-byte) bool payload;
-* kind = 2 (int):  `ld a0,8(a0); snez a0,a0` — `(i ≠ 0 ? 1 : 0)`;
-* else (0/3/4/5):  `snez a0,a5` where `a5 = kind` — `0` for null, `1` for str/fn/native.
-
-This matches `Value.truthy` exactly (`c/src/value.c` vs `Vsa/While/Semantics.lean`).
--/
-
-/-- Generic signed 8-byte load `ld rd,off(rs1)` at `afterNextPC …`: reads the LE
-dword at `vbase + sext off` and writes it (sign_extend of a full 64-bit value is
-itself) to `rd`. -/
 theorem exec_ld (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : MState) (vbase : BitVec 64) (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
     (hG : GoodState σ)

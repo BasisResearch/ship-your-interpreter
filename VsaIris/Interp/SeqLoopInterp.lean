@@ -1,32 +1,13 @@
 import VsaIris.Interp.SeqLoop
 
-/-!
-# `seqLoop`, `interp_run` site (INTERP_DESIGN.md §4.3, §4.4)
-
-`interp_run`'s statement loop (`0x8000448c`..`0x80004488`): a cursor `s0`
-walks the program's statement array to the bound `s2`; `main` passes
-`repl = 0` (`0x800045e0 li a3,0`), so each iteration initializes the result
-slot `sp+88` with `value_null`, calls `exec_stmt` in the global frame
-(`in->globals`, read from `in` spilled at `sp+0`), and routes the status:
-`ret` to `0x80004540`, `brk`/`cont` to `0x80004564` (the two runtime errors),
-the program's end to the epilogue `0x80004514`, otherwise the next statement.
-The loop owns neither the statement array nor `in->globals`: the runs read
-them through one merged view `Dt` (`InterpData`). The frame bytes are not
-written by the loop, so the tracking memory is the same at every exit.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The `interp_run` loop's owned frame bytes: its 176-byte frame without the
-result slot `sp+88`, which the loop lends each statement. -/
 abbrev interpS (s : BitVec 64) : Nat → Prop :=
   fun b => InExt (s.toNat - 176, 176) b ∧ ¬ InExt (s.toNat - 176 + 88, 24) b
 
-/-- The bytes an `interp_run` iteration reads that it does not own: the
-statement array and `in->globals`. -/
 abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) ++ accAddrs inp 8
 
 #ix_seg InterpLoop_runA {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -66,8 +47,6 @@ abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) +
     IW live Dt (interpView arr.toNat count inp) (interpS s) Q 0x80004478#64 R Mt
   by ix_run hlive using [h10, h19, h20, h8, h18] at 0x8000448c 0x80004514 0x80004540 0x80004564
 
-/-- The loop head's registers: the cursor, the array's end, the status
-constants `3` and `1`, the lowered `sp`. -/
 structure InterpHead (R : Nat → BitVec 64) (s arr : BitVec 64) (idx count : Nat) : Prop where
   sp : R 2 = s + 18446744073709551440#64
   cur : R 8 = arr + BitVec.ofNat 64 (8 * idx)
@@ -75,8 +54,6 @@ structure InterpHead (R : Nat → BitVec 64) (s arr : BitVec 64) (idx count : Na
   s3 : R 19 = 3#64
   s4 : R 20 = 1#64
 
-/-- The merged view the runs read: the statement array (agreeing with the
-AST view `m`) and `in->globals`, with their placement. -/
 structure InterpData (Dt m : Mem) (P : Nat → Prop) (arr : BitVec 64) (count inp : Nat)
     (g : BitVec 64) (all : List Vsa.While.Stmt) : Prop where
   agree : ∀ a, arr.toNat ≤ a → a < arr.toNat + 8 * count → imgM Dt a = imgM m a
@@ -91,23 +68,17 @@ structure InterpData (Dt m : Mem) (P : Nat → Prop) (arr : BitVec 64) (count in
   repr : StmtArrayReprWithin m P arr.toNat count all
   geo : ∀ k, P k → ReadOK k
 
-/-- The frame words the loop reads: the `repl` flag (`0`) and `in`. -/
 structure InterpFrame (Mt : Mem) (s : BitVec 64) (inp : Nat) : Prop where
   flag : ldv .ld Mt (s + 18446744073709551440#64 + 8#64).toNat = 0#64
   inp : ldv .ld Mt (s.toNat - 176) = BitVec.ofNat 64 inp
 
-/-- What the loop keeps: the callee-saved registers but the cursor `s0` and
-the statement pointer `s1`. -/
 abbrev interpKeep : List Nat := [2, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
 
-/-- The loop's exits by status: the epilogue, the `ret` error, the
-`brk`/`cont` error. -/
 def interpExit : Status → BitVec 64
   | .normal => 0x80004514#64
   | .ret _ => 0x80004540#64
   | _ => 0x80004564#64
 
-/-- A load from the statement array, through the merged view. -/
 theorem InterpData.elem {Dt m : Mem} {P : Nat → Prop} {arr g : BitVec 64} {count inp : Nat}
     {all : List Vsa.While.Stmt} (h : InterpData Dt m P arr count inp g all) {idx p : Nat}
     (hi : idx < count) (hp : read64 m (arr.toNat + 8 * idx) = some p) :
@@ -121,7 +92,6 @@ theorem InterpData.elem {Dt m : Mem} {P : Nat → Prop} {arr g : BitVec 64} {cou
     h.agree _ (by omega) (by omega), h.agree _ (by omega) (by omega), h.agree _ (by omega) (by omega),
     h.agree _ (by omega) (by omega), h.agree _ (by omega) (by omega)]
 
-/-- The cursor after `addi s0,s0,8` meets the bound exactly at the end. -/
 theorem cursor_step {arr : BitVec 64} {idx count : Nat} (h : arr.toNat + 8 * count ≤ 0x100000000)
     (hi : idx < count) :
     (arr + BitVec.ofNat 64 (8 * idx) + 8#64 = arr + BitVec.ofNat 64 (8 * count) ↔ idx + 1 = count) ∧
@@ -147,12 +117,6 @@ section Motive
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- **The `interp_run` loop, total mode**: the motive of `ExecSeqCost` at the
-`interp_run` site. From the loop head with the program's statements `ss` (a
-nonempty suffix of the array `all`, from index `idx`), in the global frame
-`genv` (`in->globals = g`), the loop runs them against the derivation and
-leaves at `interpExit status` with the `ret` slot `sp+88` as `statusRet` and
-the registers `interpKeep` kept; the frame bytes are unchanged. -/
 def interpSeqT_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (inp : Nat) (st : St) (d genv : Nat) (ss : List Vsa.While.Stmt) (st' : St) (status : Status)
     (n : Nat) (_D : ExecSeqCost st d genv ss st' status n) : Prop :=
@@ -179,8 +143,6 @@ theorem interpSeqT_nil (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (R
     interpSeqT_body (GF := GF) live N L Room inp st d genv [] st .normal 0 (.nil st d genv) :=
   fun _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ h => absurd rfl h
 
-/-- **The `interp_run` loop, partial mode** (structural in the program's
-statements, each through the Löb hypothesis; as `blockSeqP_body`). -/
 def interpSeqP_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (inp : Nat) (Core : IProp GF) (d genv : Nat) (ss : List Vsa.While.Stmt) : Prop :=
   ∀ (Φ : Nat × String → IProp GF) (st : St) (idx count : Nat) (s arr g : BitVec 64)
@@ -214,8 +176,6 @@ theorem interpSeqP_nil (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (R
 
 end Motive
 
-/-! ## The cases -/
-
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_piece interpSeqT_consNormal_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -240,7 +200,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hel := hdat.elem hidx hp
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, Hk⟩
-  -- the head: the flag is clear, the statement pointer
+
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗
       roOwn roR (interpText ++ dataOf Dt (interpView arr.toNat count inp)) ∗ frameAt genv g.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗
@@ -259,7 +219,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   apply swp_closeF
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- value_null into the result slot
+
   ihave Hvn := hvn $$ %(s + 18446744073709551440#64 + 88#64)
   unfold valueNullSpec
   iapply ms_callHelper (twpW _) (i := 0x8000445c)
@@ -272,7 +232,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   · iframe Hslot; ipureintro; exact hslg
   iintro %R1 %hkeep1 Hval Hms
   ihave Hslot := valAt_slot $$ Hval
-  -- stage exec_stmt: the interpreter, the statement, the global frame, the slot
+
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗
       roOwn roR (interpText ++ dataOf Dt (interpView arr.toNat count inp)) ∗ frameAt genv g.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗
@@ -293,7 +253,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   apply swp_closeF
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- the statement
+
   ihave H1 := h1
   rw [show k + (n1 + n2) = k + n2 + n1 by omega]
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004474)
@@ -312,7 +272,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   rw [statusRet_normal]
 
 #ix_piece interpSeqT_consNormal_p2 from interpSeqT_consNormal_p1 by
-  -- the status routing and the back edge
+
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗
       roOwn roR (interpText ++ dataOf Dt (interpView arr.toNat count inp)) ∗ frameAt genv g.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗
@@ -341,13 +301,13 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have e18r : R' 18 = arr + BitVec.ofNat 64 (8 * count) := by simpa [upd_apply] using e18
   have e20r : R' 20 = 1#64 := by simpa [upd_apply] using e20
   refine InterpLoop_runB (sc := 0#64) (idx := idx) hlive e10 e19 e20 e8 e18 ?_ ?_ ?_ ?_
-  · -- `ret`: not this derivation's
+  ·
     intro hc; exfalso; rw [e10, e19] at hc; exact absurd hc (by decide)
-  · -- `brk`/`cont`: not this derivation's
+  ·
     intro _ hc; exfalso
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, e20r] at hc
     exact absurd hc (by decide)
-  · -- the program's end: the loop leaves normally
+  ·
     intro _ _ hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, e18r] at hc
     have hend := hstep.1 hc
@@ -367,7 +327,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       refine KeepRegs.trans hR1 ?_
       keep_split
       all_goals ix_reg
-  · -- more statements: the tail's loop
+  ·
     intro _ _ hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, e18r] at hc
     have hmore : idx + 1 ≠ count := fun e => hc (hstep.2 e)
@@ -414,7 +374,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hel := hdat.elem hidx hp
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, Hk⟩
-  -- the head: the flag is clear, the statement pointer
+
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗
       roOwn roR (interpText ++ dataOf Dt (interpView arr.toNat count inp)) ∗ frameAt genv g.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗
@@ -433,7 +393,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   apply swp_closeF
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- value_null into the result slot
+
   ihave Hvn := hvn $$ %(s + 18446744073709551440#64 + 88#64)
   unfold valueNullSpec
   iapply ms_callHelper (twpW _) (i := 0x8000445c)
@@ -446,7 +406,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   · iframe Hslot; ipureintro; exact hslg
   iintro %R1 %hkeep1 Hval Hms
   ihave Hslot := valAt_slot $$ Hval
-  -- stage exec_stmt: the interpreter, the statement, the global frame, the slot
+
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗
       roOwn roR (interpText ++ dataOf Dt (interpView arr.toNat count inp)) ∗ frameAt genv g.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗
@@ -467,7 +427,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   apply swp_closeF
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- the statement
+
   ihave H1 := h1
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004474)
     (jalx_80004474 live (fun p hp => hlive _ (interp_code_80004474 p hp)))
@@ -484,7 +444,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
 
 #ix_piece interpSeqT_consAbrupt_p2 from interpSeqT_consAbrupt_p1 by
-  -- the status routing: an abrupt status leaves to its error
+
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗
       roOwn roR (interpText ++ dataOf Dt (interpView arr.toNat count inp)) ∗ frameAt genv g.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗
@@ -509,7 +469,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     ix_keep [hkeep, hkeep1]; exact hh.cur
   have e20r : R' 20 = 1#64 := by simpa [upd_apply] using e20
   refine InterpLoop_runB (sc := statusCode status) (idx := idx) hlive e10 e19 e20 e8 e18 ?_ ?_ ?_ ?_
-  · -- `ret`
+  ·
     intro hc
     rw [e10, e19] at hc
     cases status with
@@ -521,7 +481,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       rw [interpExit_ret]
       iapply Hk $$ %_ %hR1 HF Hms Hst Hret Hw
     | _ => exfalso; exact absurd hc (by decide)
-  · -- `brk`/`cont`
+  ·
     intro hc0 hc
     rw [e10, e19] at hc0
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, e20r] at hc
@@ -697,14 +657,14 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     (hR1 2 (by decide)).trans hh.sp
   have e18r : R' 18 = arr + BitVec.ofNat 64 (8 * count) := by simpa [upd_apply] using e18
   have e20r : R' 20 = 1#64 := by simpa [upd_apply] using e20
-  -- `s1` still holds the statement node (the top reads its `line` at an abrupt exit)
+
   have e9 : upd R' 1 (BitVec.ofNat 64 (2147501172 + 4)) 9 = BitVec.ofNat 64 p := by
     ix_keep [hkeep, hkeep1]
   have hread9 : ReadOK (upd R' 1 (BitVec.ofNat 64 (2147501172 + 4)) 9).toNat := by
     rw [e9, hpt]; exact hdat.geo _ (by simpa using hsp.tagCovers 0 (by decide))
   obtain ⟨hstep, hnext⟩ := cursor_step (arr := arr) hdat.ahi hidx
   refine InterpLoop_runB (sc := statusCode status) (idx := idx) hlive e10 e19 e20 e8 e18 ?_ ?_ ?_ ?_
-  · -- `ret`: the loop leaves with it
+  ·
     intro hc
     rw [e10, e19] at hc
     have hne : status ≠ .normal := by intro e; subst e; exact absurd hc (by decide)
@@ -719,7 +679,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       iapply HK $$ %_ %st' %(Status.ret v) %(ExecSeq.consAbrupt _ _ _ _ _ _ _ hE hne)
         %⟨hR1, fun _ => hread9⟩ HF Hms Hst Hret Hw
     | _ => exfalso; exact absurd hc (by decide)
-  · -- `brk`/`cont`: the loop leaves with it
+  ·
     intro hc0 hc
     rw [e10, e19] at hc0
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, e20r] at hc
@@ -745,7 +705,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
         %⟨hR1', fun _ => by rw [upd_other _ _ (by decide)]; exact hread9⟩ HF Hms Hst Hret Hw
     | ret v => exact absurd rfl hc0
     | normal => exact absurd rfl hne
-  · -- the program's end
+  ·
     intro hc0 hc hend
     rw [e10, e19] at hc0
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, e20r, e18r] at hc hend
@@ -771,7 +731,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       refine KeepRegs.trans hR1 ?_
       keep_split
       all_goals ix_reg
-  · -- more statements: the tail's loop
+  ·
     intro hc0 hc hend
     rw [e10, e19] at hc0
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, e20r, e18r] at hc hend
@@ -809,7 +769,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_chain interpSeqP_cons := [interpSeqP_cons_p1, interpSeqP_cons_p2]
 
-/-- **The `interp_run` loop, partial mode, for every program.** -/
 theorem interpSeqP_all {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs}
     (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p)

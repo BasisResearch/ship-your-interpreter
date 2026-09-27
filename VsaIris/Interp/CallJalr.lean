@@ -2,27 +2,6 @@ import VsaIris.Interp.CallRegs
 import VsaIris.CallAbort
 import Vsa.Sim.EvalCallNative3
 
-/-!
-# An indirect call (`jalr ra, 0(rs)`) (lane E4)
-
-The call arm dispatches a native through its function pointer:
-`0x800039f4 jalr a6` (`interp.c:174`, `callee.as.native.fn(in, argc, args,
-line)`), with `a6` the value's third word, `N.addr f` for `.native f`.
-
-* `JalrExec M i code rs tgt`: the exec fact of a linking `jalr` at `i` whose
-  source register `rs` holds the target `tgt` — `JalExec` with `rs` as a read
-  footprint entry (the shape of `RetExec`, which reads `ra`).
-* `wp_jalrW`, `wp_callRW`, `wp_callAbortR`: the `jal` rules of `Call.lean` /
-  `CallAbort.lean` for it, for either WP.
-* `jalrExec_of_site` (VSA instance): a `jalr` site's per-state fact (`JalStep`
-  and its console frame, from a state whose `rs` holds `tgt`) is the Iris
-  `JalrExec`; `jalrx_800039f4` is the native dispatch's, over VSA's hand site
-  `site_800039f4_nw` (`EvalCallNative3.lean`).
-* `ms_callHelperR`, `ms_callAbortR`: the call from a symbolic run's state
-  (`ms`), `a6` read from the run's register file (the `jalr` twins of
-  `ms_callHelper`).
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -31,7 +10,6 @@ section Generic
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- The exec fact for `jalr ra, 0(rs)` at `i`, `rs` holding `tgt`. -/
 def JalrExec (M : MachineModel) (i : Nat) (code : List (BitVec 8)) (rs : Nat) (tgt : BitVec 64) :
     Prop :=
   ∀ v σ, M.ok σ → FootHolds (M := M) σ [(rs, DFrac.own 1, tgt)] (codeFoot i code)
@@ -40,7 +18,6 @@ def JalrExec (M : MachineModel) (i : Nat) (code : List (BitVec 8)) (rs : Nat) (t
       LocalStep (M := M) σ σ' [(PC, BitVec.ofNat 64 i, tgt), (ra, v, BitVec.ofNat 64 (i + 4))] [] ∧
       M.out σ' = M.out σ
 
-/-- **JALR** to a call target, for either WP. -/
 theorem wp_jalrW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} {rs : Nat} {tgt v : BitVec 64} (hexec : JalrExec M i code rs tgt) :
     instrAt (GF := GF) i code ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ rs ↦ᵣ tgt ∗
@@ -55,8 +32,6 @@ theorem wp_jalrW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i
   iintro ⟨⟨Hrs, -⟩, -, ⟨Hpc, Hra, -⟩, -⟩
   iapply Hk $$ Hpc Hra Hrs
 
-/-- **Indirect call** into a function meeting `fnSpecAbort`, for either WP;
-the source register is handed back into the precondition. -/
 theorem wp_callAbortR (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} {rs : Nat} {entry v : BitVec 64} {P Q : BitVec 64 → IProp GF}
     {A X : IProp GF} (hexec : JalrExec M i code rs entry) :
@@ -74,7 +49,6 @@ theorem wp_callAbortR (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp G
   ihave HP := HP $$ Hrs HX
   iapply Hspec $$ %(BitVec.ofNat 64 (i + 4)) %Φ Hpc Hra HP Hk
 
-/-- **Indirect call** into a function meeting `fnSpecW`, for either WP. -/
 theorem wp_callRW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} {rs : Nat} {entry v : BitVec 64} {P Q : BitVec 64 → IProp GF}
     {X : IProp GF} (hexec : JalrExec M i code rs entry) :
@@ -103,9 +77,6 @@ open LeanRV64DExecutable
 open Vsa.Machine (Config Step MState)
 open Vsa.Sim
 
-/-- **A `jalr ra, 0(rs)` site as an Iris exec fact** (the twin of
-`jalExec_of_site`): VSA's per-state fact, from any good state parked at `i`
-whose `rs` holds `tgt`, with the site's bytes present. -/
 theorem jalrExec_of_site (live : Nat → Prop) (i : Nat) (code : List (BitVec 8)) (rs : Nat)
     (tgt : BitVec 64) (hrs1 : 1 ≤ rs) (hrs31 : rs ≤ 31)
     (hlive : ∀ p ∈ codeFoot i code, live p.1)
@@ -167,8 +138,6 @@ theorem jalrExec_of_site (live : Nat → Prop) (i : Nat) (code : List (BitVec 8)
       change (σ2.mem[k]?).getD 0 = (c.σ.mem[k]?).getD 0
       rw [hmem]
 
-/-- A linking `jalr`'s observation as VSA's `JalStep` (the twin of
-`jalStep_of_obs`). -/
 theorem jalrStep_of_obs {σp σ2 : MState} {ip up i2 : Nat} {pc vm tgt link : BitVec 64}
     (hstep : Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩) (hi2 : i2 < 2) (hG2 : GoodState σ2)
     (hmem : σ2.mem = σp.mem)
@@ -206,8 +175,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Step MState)
 open Vsa.Sim VsaIris.Inst
 
-/-- **The native dispatch `jalr a6` (`0x800039f4`)** as an Iris exec fact,
-for every 4-aligned target (a native's entry). -/
 theorem jalrx_800039f4 (live : Nat → Prop)
     (hlive : ∀ p ∈ codeFoot 0x800039f4 [0xe7#8, 0x00#8, 0x08#8, 0x00#8], live p.1)
     (tgt : BitVec 64) (hal : tgt.toNat % 4 = 0) :
@@ -256,12 +223,10 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The body's registers but `a6`. -/
 abbrev fRegsNo16 : List Nat :=
   [2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
     29, 30, 31]
 
-/-- `a6` out of the register file. -/
 theorem regFile_a6 (R : Nat → BitVec 64) :
     regFile (GF := GF) R ⊣⊢ iprop((16 : Nat) ↦ᵣ R 16 ∗ sepL fRegsNo16 (fun x => x ↦ᵣ R x)) := by
   refine (regFile_cut (L := [16]) (K := fRegsNo16) (by decide) R).trans ?_
@@ -270,8 +235,6 @@ theorem regFile_a6 (R : Nat → BitVec 64) :
 
 variable {live : Nat → Prop}
 
-/-- **An indirect helper call from a run** (`jalr a6` at `i`, `a6 = entry`),
-for either WP: the `jalr` twin of `ms_callHelper`. -/
 theorem ms_callHelperR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalrExec (vsaModel live) i code 16 entry)
@@ -308,11 +271,6 @@ theorem ms_callHelperR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
-/-- **An indirect call from a run into a function that returns or aborts**
-(`jalr a6` at `i`, `a6 = entry`; `fnSpecAbort` over the run's registers, the
-shape of `nativeAssertSpec`), for either WP. `Pre` is the rest of the
-precondition; the return hands back some register file with `Post`, the
-abort `A`. -/
 theorem ms_callAbortR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalrExec (vsaModel live) i code 16 entry)

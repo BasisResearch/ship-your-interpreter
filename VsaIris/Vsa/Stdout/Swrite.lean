@@ -1,25 +1,11 @@
 import VsaIris.Vsa.Stdout.Tac
 
-/-!
-# `__swrite → _write_r → _write` on `stdout` (lane N1)
-
-Every stdout write ends here: `__sflush_r` and `__sfvwrite_r` call
-`fp->_write = __swrite(reent, stdout, buf, n)`, which clears `__SOFF` in
-`stdout`'s flags (unset at the boundary: the store rewrites `0x200a`),
-tail-calls `_write_r`, which clears `errno` and calls `_write` (the console
-loop, `write_run'`). `swrite_run` is the whole call: the console grows by the
-bytes, `a0 = n`, the memory is `swriteMt` (two stack slots, the flags,
-`errno`).
--/
-
 namespace VsaIris.Sym
 
 open scoped VsaIris.Sym.Stdout
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-/-- The memory after `__swrite(stdout, buf, n)` returns: `__swrite`'s `ra`
-slot, the flags, `_write_r`'s `s0`/`ra` slots, `errno`. -/
 @[nx_mt] abbrev swriteMt (Mt : Mem) (sp ra s0 : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551608#64).toNat, 8, ra)]) [(2147597104, 2, 8202#64)])
@@ -29,9 +15,6 @@ slot, the flags, `_write_r`'s `s0`/`ra` slots, `errno`. -/
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **`__swrite(reent, stdout, buf, n)`** prints `bs` (`n = |bs|` bytes at
-`buf`) and returns `n`. The buffer is off the call's frame, the flags and
-`errno`. -/
 theorem swrite_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp ra s0 : BitVec 64} {need : Nat} {buf : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 64 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)

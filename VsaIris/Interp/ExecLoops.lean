@@ -2,22 +2,11 @@ import VsaIris.Interp.ExecArm
 import VsaIris.Interp.SpecLoop
 import VsaIris.Interp.ExecEnv
 
-/-!
-# `exec_stmt`'s `while` and `for` arms: dispatch to the loop head, exits (lane E5)
-
-The loops are E6's (`SpecLoop.lean`: `whileT_body`/`whileP_body` at
-`0x8000403c`, `execInitT_body` at `0x8000423c`, `forLoopT_body` at
-`0x8000426c`). The arms: the kind dispatch to the loop head (the jump table
-lands the `while` tag on its head), the for arm's `env_new`, and the exits
-`loopExit status` (`wp_loopExit`: the shared exit or the `ret` epilogue).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
-/-- A `while` statement node: its tag. -/
 theorem whileNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {c : Vsa.While.Expr}
     {b : Vsa.While.Stmt} (h : StmtReprWithin m P aS.toNat (.whileStmt c b))
     (hg : ∀ k, P k → Interp.ReadOK k) : StmtNode m P aS 4 4 := by
@@ -43,9 +32,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- **A loop's exit**, for either WP: at `loopExit status` (E6) with the
-status in `a0`, the frame outside the loops' scratch words unchanged (so the
-spills hold), the arm returns through the shared exit or the `ret` epilogue. -/
 theorem wp_loopExit (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {ρ : Regime} {st' : St} {d : Nat} {sm : Stmt} {status : Status}
     {aRet s ret v8 v9 v18 v19 : BitVec 64} {R0 R1 R' : Nat → BitVec 64} {Mt Mt' : Mem}
@@ -77,7 +63,6 @@ theorem wp_loopExit (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
 
 end Exit
 
-/-- The stack below the lowered `sp`, as the loops state it. -/
 theorem StackGeom.lower {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 176 ≤ n)
     (hsf : (s + 18446744073709551440#64).toNat = s.toNat - 176) :
     StackGeom (s + 18446744073709551440#64) (n - 176) := by
@@ -86,7 +71,6 @@ theorem StackGeom.lower {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 176 
   refine ⟨by rw [hsf]; omega, ?_, ?_, ?_, ?_⟩ <;> rw [hsf] <;>
     (try simp only [Vsa.Sim.LayoutInstance.stackSL]) <;> omega
 
-/-- What the `while` loop needs of the arm's lowered stack. -/
 theorem whileFits_of {c : Vsa.While.Expr} {b : Vsa.While.Stmt} {d : Nat}
     (hbb : (Vsa.While.Stmt.whileStmt c b).bodiesBound Vsa.While.perCallBudget = true) :
     WhileFits d c b (execNeed (.whileStmt c b) d - 176) := by
@@ -95,13 +79,11 @@ theorem whileFits_of {c : Vsa.While.Expr} {b : Vsa.While.Stmt} {d : Nat}
   unfold Vsa.While.execFrame at h1 h2
   exact ⟨by omega, hbb.1, by omega, hbb.2⟩
 
-/-- The loop head's registers after the dispatch run. -/
 theorem stmtHead_of_disp {R R1 : Nat → BitVec 64} {inp aS aE aRet s : BitVec 64}
     (hd : DispRegs R inp aS aE aRet s) (h2 : R1 2 = R 2) (h8 : R1 8 = R 8) (h9 : R1 9 = R 9)
     (h18 : R1 18 = R 18) (h19 : R1 19 = R 19) : StmtHead R1 s aS inp aRet aE :=
   ⟨h2.trans hd.sp, h8.trans hd.s0, h9.trans hd.s1, h18.trans hd.s2, h19.trans hd.s3⟩
 
-/-- A `for` statement node: its tag. -/
 theorem forNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {i : Option Vsa.While.Stmt}
     {c st : Option Vsa.While.Expr} {b : Vsa.While.Stmt}
     (h : StmtReprWithin m P aS.toNat (.forStmt i c st b))
@@ -120,7 +102,6 @@ theorem forNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {i : Option Vsa
   by rw [← upd_eq_self h16]
      ix_run hlive using [h8, h14, hk, hku] at 0x80004238
 
-/-- What the `for` loop and its init need of the arm's lowered stack. -/
 theorem forFits_of {i : Option Vsa.While.Stmt} {c st : Option Vsa.While.Expr} {b : Vsa.While.Stmt}
     {d : Nat} (hbb : (Vsa.While.Stmt.forStmt i c st b).bodiesBound Vsa.While.perCallBudget = true) :
     ForFits d c st b (execNeed (.forStmt i c st b) d - 176) ∧

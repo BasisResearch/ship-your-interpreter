@@ -1,97 +1,17 @@
 import Vsa.While.Semantics
 
-/-!
-# Allocation-cost companion relations for the WHILE semantics
-
-This file is a **conservative extension** of `Vsa/While/Semantics.lean`:
-nothing in that file is changed or re-stated in a way that could weaken it.
-We add, for each of the nine big-step relations, a *cost companion* relation
-that carries one extra `Nat` output — an upper bound on the number of bytes
-the C evaluator (`c/src/interp.c`, `env.c`, `value.c`) requests from `malloc`
-while producing the very same derivation. The companions mirror the semantics
-constructor-for-constructor; each constructor's cost is *its own* allocation
-bytes plus the sum of its sub-derivations' costs.
-
-These relations provide source-level request accounting for completed
-derivations. They do not establish available physical heap capacity or
-allocator success. A machine capacity bridge must separately account for
-chunk headers, alignment, initial allocations, and fragmentation. Divergent
-and failing executions also need finite-prefix accounting.
-
-## Cost unit and the alignment convention
-
-The unit is rounded requested bytes. `roundUp16` rounds each modeled charge
-to a multiple of 16. This does not bound physical allocator consumption:
-metadata and minimum chunk sizes can require additional bytes. Array growth
-combines two requests into one charge, so per-allocation overhead must be
-restored by a separate accounting theorem.
-
-## C allocation sites mirrored (runtime only — lexer/parser out of scope)
-
-| site | C location | bytes requested |
-|------|------------|-----------------|
-| new frame (`env_new`) | `env.c:12-20`, called `interp.c:194,287,309` | `sizeof(Env) = 32` |
-| closure (`EX_FN`) | `interp.c:258-266` | `sizeof(Closure) = 16` |
-| binding name copy | `env.c:35` (`xmalloc(strlen(name)+1)`) | `len(name)+1` |
-| binding array growth | `env.c:29-33` (realloc names+vals at `count==cap`) | `32 * newcap` (`8*cap` names + `24*cap` vals) |
-| string concat result | `interp.c:118` | `la+lb+1` |
-| `stringify` operand | `interp.c:84-106` | `len(displayed)+1` |
-
-The growth policy (`env.c:29-33`): a frame starts `cap = 0`; on the define
-that would overflow, `cap := cap ? 2*cap : 8`, giving the cap sequence
-`8, 16, 32, 64, …`. The realloc requests `8*cap` (names, `char*`) + `24*cap`
-(vals, `Value`) = `32*cap` bytes. Realloc can reclaim or reuse the old arrays.
-The cumulative request policy sums the full new requests without refunds
-(`arrayCost` below); it does not assert that the old arrays leak.
-
-## Spec-invisible / data-dependent allocations — findings
-
-* **String literals (`EX_STR`, `interp.c:214`)**: `value_str(e->as.str_val)`
-  retains the parser-owned AST string pointer; there is **no runtime
-  `malloc`**. Correctly charged 0.
-* **`stringify` of an already-`VAL_STR` operand** still `malloc`s a copy
-  (`interp.c:85-89`); charged.
-* The modeled interpreter requests depend on source values and binding
-  counts. Relating these charges to the C capacity policy, bounded string
-  formatting, and libc allocation behavior remains a separate proof.
-* The globals frame and its three native bindings are built by `interp_init`
-  *before* `interp_run`; they are the pre-built `initSt` store, not produced
-  by any `allocFrame`/`define` in a derivation. Their bytes are the "initial
-  store contribution" of the store bound below, kept separate from the
-  derivation cost `n`.
--/
-
 namespace Vsa.While
 
-/-! ## Cost-model constants and closed-form charges -/
-
-/-- Round a byte request up to the allocator's 16-byte granule. -/
 def roundUp16 (n : Nat) : Nat := (n + 15) / 16 * 16
 
-/-- `sizeof(Env)` (`env.c` `env_new`): one frame allocation. -/
 def envBytes : Nat := 32
 
-/-- `sizeof(Closure)` (`interp.c` `EX_FN`): one closure allocation. -/
 def closureBytes : Nat := 16
 
-/-- Bytes for the name copy of a fresh binding (`env.c:35`,
-`xmalloc(strlen(name)+1)`), rounded to the granule. -/
 def nameCopyCost (x : String) : Nat := roundUp16 (x.length + 1)
 
-/-- The array-realloc charge for growing a frame to capacity `cap`
-(`env.c:31-32`): `8*cap` (names) + `24*cap` (vals), rounded. -/
 def arrayReallocCost (cap : Nat) : Nat := roundUp16 (32 * cap)
 
-/-- Cumulative names+vals array bytes for a frame that reaches `k` bindings.
-The frame grows through caps `8, 16, 32, …`; each growth to cap `c` requests
-`32*c` bytes across its two arrays. This cumulative policy gives no credit
-for storage reclaimed by realloc. `arrayCost k` sums the modeled requests
-over the caps a `k`-binding frame passes through.
-
-Implemented by fuel recursion over the cap it is currently at: starting from
-`cap = 0`, as long as the target `k` exceeds the current `cap` we pay for the
-next cap (`8` if `cap = 0`, else `2*cap`) and recurse. Fuel `k` always
-suffices since each step at least reaches the next power-of-two multiple. -/
 def arrayCostAux : (fuel cap k : Nat) → Nat
   | 0, _, _ => 0
   | fuel + 1, cap, k =>
@@ -100,15 +20,8 @@ def arrayCostAux : (fuel cap k : Nat) → Nat
       let cap' := if cap = 0 then 8 else 2 * cap
       arrayReallocCost cap' + arrayCostAux fuel cap' k
 
-/-- Cumulative array-allocation bytes for a frame reaching `k` bindings. -/
 def arrayCost (k : Nat) : Nat := arrayCostAux k 0 k
 
-/-- Marginal binding cost of `define`-ing `x` in frame `a` of `store`
-(`env_define`, `env.c:22-40`): if `x` is already bound the C returns early
-with no allocation (`0`); otherwise it copies the name, and — when the
-current binding count sits on a cap boundary — reallocs the arrays. The
-current count is read from the (spec-visible) frame; a missing frame yields
-`0` (the corresponding semantics rule cannot fire anyway). -/
 def defineCost (store : Store) (a : Addr) (x : String) : Nat :=
   match store.frames[a]? with
   | none => 0
@@ -117,55 +30,34 @@ def defineCost (store : Store) (a : Addr) (x : String) : Nat :=
     else
       let c := f.vars.length
       let growth :=
-        -- realloc iff count == cap, i.e. c ∈ {0, 8, 16, 32, …}
+
         if c = 0 then arrayReallocCost 8
         else if arrayCostAux (c + 1) 0 (c + 1) ≠ arrayCostAux c 0 c then
-          -- reached a new cap: charge the difference (the new realloc)
+
           arrayCostAux (c + 1) 0 (c + 1) - arrayCostAux c 0 c
         else 0
       nameCopyCost x + growth
 
-/-- Bytes `stringify` requests for value `v` (`interp.c:84-106`): a copy of
-its CONCAT-rendered form (`Value.catDisplay` — `stringify` drops the native
-name, falsity `stringify-native-name-mismatch`), rounded. Covers both the
-`VAL_STR` branch (copy the string) and the formatted branch. -/
 def stringifyCost (store : Store) (v : Value) : Nat :=
   roundUp16 ((v.catDisplay store).length + 1)
 
-/-- Bytes a string `+` requests (`interp.c:117-123`): `stringify` of each
-operand plus the concatenation buffer (`la+lb+1`). -/
 def concatCost (store : Store) (lv rv : Value) : Nat :=
   stringifyCost store lv + stringifyCost store rv +
     roundUp16 ((lv.catDisplay store).length + (rv.catDisplay store).length + 1)
 
-/-- Allocation charge of a single `binOpSem` evaluation on `interp.c`'s
-`eval_binary`: only string `+` allocates; every other operator is arithmetic
-or boolean and requests nothing. Mirrors `binOpSem`'s `add` string case. -/
 def binOpCost (store : Store) (op : BinOp) (lv rv : Value) : Nat :=
   match op, lv, rv with
   | .add, .str _, _ => concatCost store lv rv
   | .add, _, .str _ => concatCost store lv rv
   | _, _, _ => 0
 
-/-- The cumulative parameter-binding cost of a closure call: fold `defineCost`
-across the `params.zip vs` list exactly as `Call.closure` folds `define`,
-threading the growing store so each `defineCost` sees the frame count the C
-would. -/
 def bindParamsCost : Store → Addr → List (String × Value) → Nat
   | _, _, [] => 0
   | store, frame, (x, v) :: rest =>
     defineCost store frame x + bindParamsCost (store.define frame x v) frame rest
 
-/-! ## The companion cost relations
-
-Mirrors the nine mutual relations of `Semantics.lean` one-to-one. Each
-carries a trailing `Nat` cost; premises reuse the *same* semantic sub-costs,
-and the head cost is the site charge plus the sub-costs. Binder style follows
-the semantics exactly (explicit constructor arguments). -/
-
 mutual
 
-/-- Cost companion of `EvalE`. -/
 inductive EvalECost : St → Nat → Addr → Expr → St → Value → Nat → Prop where
   | int (st : St) (d : Nat) (env : Addr) (n : Int) :
     EvalECost st d env (.int n) st (.int n) 0
@@ -228,7 +120,6 @@ inductive EvalECost : St → Nat → Addr → Expr → St → Value → Nat → 
     st.store.allocClosure ⟨env, name, params, body⟩ = (store', a) →
     EvalECost st d env (.fn name params body) ⟨store', st.out⟩ (.closure a) closureBytes
 
-/-- Cost companion of `EvalArgs`. -/
 inductive EvalArgsCost : St → Nat → Addr → List Expr → St → List Value → Nat → Prop where
   | nil (st : St) (d : Nat) (env : Addr) : EvalArgsCost st d env [] st [] 0
   | cons (st : St) (d : Nat) (env : Addr) (e : Expr) (es : List Expr)
@@ -237,9 +128,6 @@ inductive EvalArgsCost : St → Nat → Addr → List Expr → St → List Value
     EvalArgsCost st' d env es st'' vs nes →
     EvalArgsCost st d env (e :: es) st'' (v :: vs) (ne + nes)
 
-/-- Cost companion of `Call`. The closure case charges one `env_new` (the
-fresh call frame, `interp.c:194`) plus the per-parameter binding costs plus
-the body cost. Natives allocate nothing. -/
 inductive CallCost : St → Nat → Value → List Value → St → Value → Nat → Prop where
   | closure (st : St) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
       (store' : Store) (frame : Addr) (st' : St) (status : Status)
@@ -264,7 +152,6 @@ inductive CallCost : St → Nat → Value → List Value → St → Value → Na
     v.truthy = true →
     CallCost st d (.native .assert) vs st .null 0
 
-/-- Cost companion of `ExecS`. -/
 inductive ExecSCost : St → Nat → Addr → Stmt → St → Status → Nat → Prop where
   | expr (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St) (v : Value)
       (n : Nat) :
@@ -336,7 +223,6 @@ inductive ExecSCost : St → Nat → Addr → Stmt → St → Status → Nat →
   | brk (st : St) (d : Nat) (env : Addr) : ExecSCost st d env .brk st .brk 0
   | cont (st : St) (d : Nat) (env : Addr) : ExecSCost st d env .cont st .cont 0
 
-/-- Cost companion of `ExecInit` (the init runs to ANY status; C swallows it). -/
 inductive ExecInitCost : St → Nat → Addr → Option Stmt → St → Nat → Prop where
   | none (st : St) (d : Nat) (env : Addr) : ExecInitCost st d env none st 0
   | some (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : St) (status : Status)
@@ -344,7 +230,6 @@ inductive ExecInitCost : St → Nat → Addr → Option Stmt → St → Nat → 
     ExecSCost st d env s st' status n →
     ExecInitCost st d env (some s) st' n
 
-/-- Cost companion of `ForLoop`. -/
 inductive ForLoopCost : St → Nat → Addr → Option Expr → Option Expr → Stmt → St →
     Status → Nat → Prop where
   | condFalse (st : St) (d : Nat) (env : Addr) (c : Expr) (step : Option Expr)
@@ -371,7 +256,6 @@ inductive ForLoopCost : St → Nat → Addr → Option Expr → Option Expr → 
     ForLoopCost st''' d env cnd step b st'''' status' nr →
     ForLoopCost st d env cnd step b st'''' status' (nc + nb + ns + nr)
 
-/-- Cost companion of `ForCond`. -/
 inductive ForCondCost : St → Nat → Addr → Option Expr → St → Nat → Prop where
   | none (st : St) (d : Nat) (env : Addr) : ForCondCost st d env none st 0
   | some (st : St) (d : Nat) (env : Addr) (c : Expr) (st' : St) (v : Value)
@@ -379,7 +263,6 @@ inductive ForCondCost : St → Nat → Addr → Option Expr → St → Nat → P
     EvalECost st d env c st' v nc → v.truthy = true →
     ForCondCost st d env (some c) st' nc
 
-/-- Cost companion of `ExecStep`. -/
 inductive ExecStepCost : St → Nat → Addr → Option Expr → St → Nat → Prop where
   | none (st : St) (d : Nat) (env : Addr) : ExecStepCost st d env none st 0
   | some (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St) (v : Value)
@@ -387,7 +270,6 @@ inductive ExecStepCost : St → Nat → Addr → Option Expr → St → Nat → 
     EvalECost st d env e st' v n →
     ExecStepCost st d env (some e) st' n
 
-/-- Cost companion of `ExecSeq`. -/
 inductive ExecSeqCost : St → Nat → Addr → List Stmt → St → Status → Nat → Prop where
   | nil (st : St) (d : Nat) (env : Addr) : ExecSeqCost st d env [] st .normal 0
   | consNormal (st : St) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
@@ -403,16 +285,6 @@ inductive ExecSeqCost : St → Nat → Addr → List Stmt → St → Status → 
 
 end
 
-/-! ## Existence of a cost derivation
-
-Every semantic derivation has a cost companion. Because the nine relations are
-mutually recursive, existence is proved for all of them simultaneously by the
-auto-generated mutual induction principle (`EvalE.rec`), with the motive for
-each relation being "there exists a cost". Each case picks the matching cost
-constructor and feeds it the sub-witnesses; the numeric output is whatever the
-constructor computes. -/
-
-/-- The nine existence motives, packaged so all recursor calls share them. -/
 private def M1 st d a e st' v (_ : EvalE st d a e st' v) : Prop :=
   ∃ n, EvalECost st d a e st' v n
 private def M2 st d a es st' vs (_ : EvalArgs st d a es st' vs) : Prop :=
@@ -432,13 +304,6 @@ private def M8 st d a step st' (_ : ExecStep st d a step st') : Prop :=
 private def M9 st d a ss st' status (_ : ExecSeq st d a ss st' status) : Prop :=
   ∃ n, ExecSeqCost st d a ss st' status n
 
-/-- The 50 minor premises of the mutual recursor, as standalone lemmas so the
-nine relation-existence projections below can each feed them to the recursor
-without duplicating proofs. The final `(_ : Rel.ctor …)` slot of each motive is
-proof-irrelevant, so the loose derivation term there is defeq to the exact one
-the recursor supplies. Each is proved in tactic mode with explicitly named
-`intro`s (matching the stated binders) so the proofs do not depend on fragile
-positional-underscore counts. -/
 private theorem c_int : ∀ st d env n, M1 st d env (.int n) st (.int n) (.int ..)
     := by
   intro _ _ _ _
@@ -805,9 +670,6 @@ private theorem c_qca : ∀ st d env s ss st' status
   obtain ⟨_, hn⟩ := ih
   exact ⟨_, .consAbrupt _ _ _ _ _ _ _ _ hn hne⟩
 
-/-- Existence of a cost derivation, established for all nine relations at once
-by the mutual recursor with the existence motives `M1..M9` and the 50 shared
-minor-premise lemmas above. -/
 theorem cost_exists_mutual :
     (∀ {st d a e st' v}, EvalE st d a e st' v → ∃ n, EvalECost st d a e st' v n) ∧
     (∀ {st d a es st' vs}, EvalArgs st d a es st' vs → ∃ n, EvalArgsCost st d a es st' vs n) ∧
@@ -830,47 +692,14 @@ theorem cost_exists_mutual :
    @fun st d a step st' h => ExecStep.rec (motive_1 := M1) (motive_2 := M2) (motive_3 := M3) (motive_4 := M4) (motive_5 := M5) (motive_6 := M6) (motive_7 := M7) (motive_8 := M8) (motive_9 := M9) c_int c_str c_bool c_null c_var c_assign c_bin c_ort c_orf c_anf c_ant c_neg c_not c_call c_fn c_anil c_acons c_clo c_pr c_prl c_as c_sexpr c_svi c_svn c_sblk c_sift c_siff c_sifn c_swf c_swb c_swr c_swl c_sfor c_sret c_srn c_sbrk c_scont c_inone c_isome c_lcf c_lbb c_lbr c_lloop c_cnone c_csome c_stnone c_stsome c_qnil c_qcn c_qca h,
    @fun st d a ss st' status h => ExecSeq.rec (motive_1 := M1) (motive_2 := M2) (motive_3 := M3) (motive_4 := M4) (motive_5 := M5) (motive_6 := M6) (motive_7 := M7) (motive_8 := M8) (motive_9 := M9) c_int c_str c_bool c_null c_var c_assign c_bin c_ort c_orf c_anf c_ant c_neg c_not c_call c_fn c_anil c_acons c_clo c_pr c_prl c_as c_sexpr c_svi c_svn c_sblk c_sift c_siff c_sifn c_swf c_swb c_swr c_swl c_sfor c_sret c_srn c_sbrk c_scont c_inone c_isome c_lcf c_lbb c_lbr c_lloop c_cnone c_csome c_stnone c_stsome c_qnil c_qcn c_qca h⟩
 
-/-- Existence of a cost derivation for statement sequences — the relation
-`BigStep` is built from. -/
 theorem execSeq_cost_exists {st d a ss st' status} :
     ExecSeq st d a ss st' status → ∃ n, ExecSeqCost st d a ss st' status n :=
   cost_exists_mutual.2.2.2.2.2.2.2.2
 
-/-! ## The store-derived cheap bound
-
-The `Store` is append-only (`allocFrame`/`allocClosure` push, `define` only
-rewrites `vars`), so frame and closure counts never shrink. The following are
-the pure-store facts that underlie deliverable 4; the derivation-level
-monotonicity (`execSeq_store_mono` below) then shows the final store's object
-counts dominate the initial store's — so the machine frame/closure allocation
-footprint is bounded by the final state alone (append-onlyness), without
-re-examining the derivation. -/
-
-/-- Store-count ordering: `a`'s frame and closure counts are both ≤ `b`'s. This
-is the append-only invariant, packaged for transitive chaining across a
-derivation. -/
 def StoreLe (a b : Store) : Prop :=
   a.frames.size ≤ b.frames.size ∧ a.closures.size ≤ b.closures.size
 
 theorem StoreLe.trans {a b c : Store} : StoreLe a b → StoreLe b c → StoreLe a c :=
   fun h1 h2 => ⟨Nat.le_trans h1.1 h2.1, Nat.le_trans h1.2 h2.2⟩
-
-/-! ## The top-level budget package (deliverable 5)
-
-`BigStepBudget p out n` says: the program `p` has a big-step derivation
-printing exactly `out` whose **allocation cost is at most `n` bytes**. It is
-the `BigStep` specification refined with a machine-allocation budget, and is
-exactly the hypothesis the M4/M6 arena-budget argument consumes (with
-`initSt`'s pre-built globals frame — 32 bytes plus its three native-name
-copies — accounted as the fixed initial store contribution, separate from
-`n`). -/
-
-/-! ## Per-relation store monotonicity (embedding wrappers)
-
-`execSeq_store_mono` proves the append-only invariant for all nine relations at
-once. The per-relation versions follow by embedding each derivation into a
-one-statement `ExecSeq` (`ExecS.expr` + `ExecSeq.consNormal`/`nil`) or by a
-direct two-constructor induction — no new recursors. These discharge the
-size-stability guards the simulation rows formerly assumed (`hSizeF`/`hSizeC`). -/
 
 end Vsa.While

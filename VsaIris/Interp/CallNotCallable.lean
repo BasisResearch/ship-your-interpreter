@@ -2,25 +2,11 @@ import VsaIris.Interp.CallNativeSeg
 import VsaIris.Interp.ErrArm
 import VsaIris.Interp.CallErr
 
-/-!
-# Calling a value that is not a function (lane E4)
-
-`interp.c:176-178`: a callee that is neither a native nor a closure
-(`null`, a boolean, an integer, a string) is a runtime error,
-`runtime_error(in, line, "cannot call a %s value", value_kind_name(callee), 0)`.
-At the kind dispatch the two kind tests fall through to `0x80003da4`, which
-copies the callee to `sp+64` and calls `value_kind_name` on it (E2's
-`ms_callKindName`); then `runtime_error` (E2's `ms_rtErrEval`) aborts.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
--- Run X1: the kind tests fall through, the callee copied to `sp+64` (its
--- first word's low half rewritten from the kind), `s3`-`s6` spilled; stop at
--- the `jal value_kind_name`.
 #ix_seg CallX_run1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s w0 w1 w2 : BitVec 64} {k : Nat}
@@ -37,7 +23,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
   by ix_run hlive using [h8, h2, hW0, hW1, hW2, hK, hk5, hk4, hsf] at 0x80003dcc
 
--- Run X2: after `value_kind_name`, stage `runtime_error(in, line, fmt, name, 0)`.
 #ix_seg CallX_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {DA : List Nat} {S : Nat → Prop} :
@@ -47,13 +32,10 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr
 
-/-- A doubleword load's low half after a word store at its address is the
-stored word's. -/
 theorem ldv_ld_lo32_store4 (Mt : Mem) (a : Nat) (v : BitVec 64) :
     (ldv .ld (writeLog Mt [(a, 4, v)]) a).toNat % 2 ^ 32 = v.toNat % 2 ^ 32 := by
   rw [ldv_ld_imgW, imgW_lo32, imgLE_store4_hit]
 
-/-- The values that are not callable: neither a native nor a closure. -/
 def NotCallable : Value → Prop
   | .native _ => False
   | .closure _ => False
@@ -68,9 +50,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- **Calling a value that is not a function**, for either WP: from the kind
-dispatch, `value_kind_name` then `runtime_error`, which aborts with the
-arm's `abortAt Core s n`. -/
 theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {Core : IProp GF} (hE : ErrEnv N L Room inp live Core)

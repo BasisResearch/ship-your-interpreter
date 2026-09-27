@@ -3,25 +3,12 @@ import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Vsa.Stderr.Mt
 import VsaIris.Vsa.SymCompactTac
 
-/-!
-# `_vfprintf_r`'s FILE-independent entry (lane N3, shared with N5)
-
-`_vfprintf_r(reent, fp, fmt, ap)` (`0x8000a884`) opens a 592-byte frame,
-spills `ra`, `s0`, `s4`, `s6` and `ap`, measures the locale's decimal point
-(`_localeconv_r`, then `strlen(".")`: H3's run inside the stdio run,
-`strlen_sw`), and clears its `mbstate` (`memset(sp + 200, 0, 8)`: eight byte
-stores through `memset`'s computed jump). At `0x8000a8d0` it starts reading
-`fp`. `vfpEntry_run` hands the continuation that state as named facts
-(`VfpEntry`): the registers it set, the spills and the frame.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 open VsaIris.Interp.StrLeaf VsaIris.Inst.Strlen
 
-/-- The locale's decimal point `"."` (`0x80019770`) as H3's `strlen` context. -/
 theorem dot_lctx {live : Nat → Prop} (hcl : ∀ p ∈ strCode, live p.1) {bv : Nat → BitVec 8}
     (h0 : bv 0x80019770 = 0x2e#8) (h1 : bv 0x80019771 = 0#8) :
     LCtx live 0x80019770#64 0x8000a8bc#64 1 bv where
@@ -33,7 +20,6 @@ theorem dot_lctx {live : Nat → Prop} (hcl : ∀ p ∈ strCode, live p.1) {bv :
   retAlign := by decide
   code := hcl
 
-/-- A byte store read back. -/
 theorem imgM_store1_eq (Mt : Mem) {a b : Nat} (v : BitVec 64) (h : a = b) :
     imgM (writeLog Mt [(b, 1, v)]) a = BitVec.ofNat 8 v.toNat := by
   subst h
@@ -42,11 +28,6 @@ theorem imgM_store1_eq (Mt : Mem) {a b : Nat} (v : BitVec 64) (h : a = b) :
   apply BitVec.eq_of_toNat_eq
   rw [this, BitVec.toNat_ofNat]
 
-/-- The state at `0x8000a8d0`, where `_vfprintf_r` starts reading `fp`:
-the frame `sp` (592 bytes below the entry's), `s0`/`s4`/`s6` the arguments,
-the other callee-saved registers kept, the memory changed only inside the
-frame, which holds the spills, `ap`, the decimal point and its length, and
-the cleared `mbstate`. -/
 structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : Prop where
   sp_eq : R' 2 = sp
   s0 : R' 8 = R 10
@@ -123,7 +104,6 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
     simp
   all_goals (rw [hsp]; simp (disch := nx_fdisch) only [ldv_ld_hit_eq, ldv_ld_miss, hdec, h1, h13])
 
-/-! **`vfpEntry_run`**: `_vfprintf_r`'s entry, `0x8000a884` → `0x8000a8d0`. -/
 #ix_chain vfpEntry_run := [vfpEntry_01, vfpEntry_02, vfpEntry_03, vfpEntry_04]
 
 end VsaIris.Sym

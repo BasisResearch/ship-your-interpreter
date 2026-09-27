@@ -1,17 +1,5 @@
 import VsaIris.Interp.ExecArm
 
-/-!
-# `exec_stmt`'s `if` arm: runs and the shared middle (lane E5)
-
-The arm (`0x800041e8`): the condition into the frame slot `sp+56`
-(`jal eval_expr` at `0x800041f8`), its three words copied to `sp+16`,
-`value_truthy` (`0x80004218`), then the route (`0x8000421c`): `li a6,8;
-auipc a4` (the dispatch registers), `beqz a0`; true: `ld s0,16(s0); j
-0x80004014`; false: `ld s0,24(s0); bnez s0,0x80004014`, else `li a0,0` and the
-shared exit. A branch re-enters the kind dispatch in the frame
-(`SpecExecDisp.lean`).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
@@ -80,10 +68,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs}
 
-/-- **The `if` arm's middle**, for either WP: from the condition's return
-(`0x800041fc`, its words `w0 w1 w2` at `sp+56` meaning `v`), the copy to
-`sp+16` and `value_truthy` reach the route `0x8000421c` with the truth bit in
-`a0`, the callee-saved registers and the spills kept. -/
 theorem wp_ifTruthy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {F : IProp GF} {v : Value} {R0 : Nat → BitVec 64} {M : Mem}
     {s ret v8 v9 v18 v19 w0 w1 w2 : BitVec 64}
@@ -157,9 +141,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- What the `if` arm knows at its route `0x8000421c`: the node, its view's
-geometry, the registers the dispatch had (callee-saved kept), the truth bit in
-`a0`, the spills. -/
 structure IfRoute (m : Mem) (P : Nat → Prop) (aS : BitVec 64) (c : Expr) (t : Stmt)
     (eo : Option Stmt) (R R3 : Nat → BitVec 64) (M3 : Mem) (s ret v8 v9 v18 v19 : BitVec 64)
     (v : Value) : Prop where
@@ -169,8 +150,6 @@ structure IfRoute (m : Mem) (P : Nat → Prop) (aS : BitVec 64) (c : Expr) (t : 
   a0 : R3 10 = if v.truthy then 1#64 else 0#64
   saved : ExecSaved M3 s ret v8 v9 v18 v19
 
-/-- **The `if` arm to its route, total mode**: the dispatch run, the
-condition through its spec into `sp+56`, the middle (`wp_ifTruthy`). -/
 theorem ifPrefixT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {st : St} {d env : Nat} {c : Expr} {t : Stmt} {eo : Option Stmt} {st' : St} {v : Value}
     {nc k : Nat} {aS aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -217,7 +196,7 @@ theorem ifPrefixT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   intro R0 Mt1 hR0 hMt1
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw⟩, Hms⟩
-  -- the condition
+
   ihave Hc := hc
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041f8)
     (jalx_800041f8 live (fun p hp => hlive _ (interp_code_800041f8 p hp)))
@@ -234,7 +213,7 @@ theorem ifPrefixT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   isplitl []
   · imodintro; rw [hn.condNat]; iapply astEG_of_view hn.condRepr hn.node.geo $$ Hro
   iintro %R1 %w0 %w1 %w2 %hkeep1 #Hv1 Hms Hst Hw
-  -- the copy, `value_truthy`
+
   have hk1 : KeepRegs calleeSaved R (upd R1 1 (BitVec.ofNat 64 (0x800041f8 + 4))) := by
     subst hR0
     intro x hx
@@ -280,7 +259,6 @@ theorem if_bodies {c : Expr} {t : Stmt} {eo : Option Stmt}
   · exact ⟨h.2, fun _ h => by cases h⟩
   · exact ⟨h.1.2, fun _ he => by cases he; exact h.2⟩
 
-/-- The registers of a branch re-dispatched from the route. -/
 theorem if_dispRegs {R R3 R4 : Nat → BitVec 64} {inp aS aS' aE aRet s : BitVec 64}
     (hd : DispRegs R inp aS aE aRet s) (hk : KeepRegs calleeSaved R R3)
     (h2 : R4 2 = R3 2) (h8 : R4 8 = aS') (h9 : R4 9 = R3 9) (h18 : R4 18 = R3 18)
@@ -289,8 +267,6 @@ theorem if_dispRegs {R R3 R4 : Nat → BitVec 64} {inp aS aS' aE aRet s : BitVec
   ⟨h2.trans ((hk 2 (by decide)).trans hd.sp), h8, h9.trans ((hk 9 (by decide)).trans hd.s1),
     h18.trans ((hk 18 (by decide)).trans hd.s2), h19.trans ((hk 19 (by decide)).trans hd.s3), h16, h14⟩
 
-/-- **The then branch, total mode**: the route's jump re-enters the dispatch
-with `s0` the then branch, whose spec finishes the arm. -/
 theorem ifRouteThenT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {st st' st'' : St} {d env : Nat} {c : Expr} {t : Stmt} {eo : Option Stmt} {status : Status}
     {nt k : Nat} {aS aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R R3 : Nat → BitVec 64}
@@ -344,7 +320,6 @@ theorem ifRouteThenT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iframe Hro
   ipureintro; exact ⟨by rw [hn.thnNat]; exact hn.thnRepr, hr.geo⟩
 
-/-- **The else branch, total mode.** -/
 theorem ifRouteElseT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {st st' st'' : St} {d env : Nat} {c : Expr} {t e : Stmt} {status : Status}
     {ne k : Nat} {aS aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R R3 : Nat → BitVec 64}
@@ -400,7 +375,6 @@ theorem ifRouteElseT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iframe Hro
   ipureintro; exact ⟨by rw [hn.elsNat]; exact her, hr.geo⟩
 
-/-- **No else branch, false**, for either WP: `li a0,0` and the shared exit. -/
 theorem ifRouteNone (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {ρ : Regime} {st st' : St} {d env : Nat} {c : Expr} {t : Stmt}
     {aS aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R R3 : Nat → BitVec 64}
@@ -453,9 +427,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- **The `if` arm to its route, partial mode**: the condition through the
-Löb hypothesis (`ms_callEvalPF`; its abort aborts the arm), then the middle.
-The continuation gets the condition's outcome with its derivation. -/
 theorem ifPrefixP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {Core : IProp GF} {st : St} {d env : Nat} {c : Expr} {t : Stmt} {eo : Option Stmt}
     {aS aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -509,7 +480,7 @@ theorem ifPrefixP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   intro R0 Mt1 hR0 hMt1
   unfold F'
   iintro ⟨⟨#IH, HF, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
-  -- the condition, through the Löb hypothesis
+
   ihave Hc := evalSpecsP_at Core st d env c $$ IH
   iapply ms_callEvalPF (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041f8)
     (jalx_800041f8 live (fun p hp => hlive _ (interp_code_800041f8 p hp)))
@@ -558,7 +529,6 @@ theorem ifPrefixP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     (by rw [show s.toNat - 176 + 72 = (execSP s + 56#64).toNat + 16 by omega]; try ix_fwd) hsv1 hK'
   iframe HF Hro Hfb Hst Hslot Hw HK Hcode Hms Hv1 Hvt
 
-/-- The partial continuation pair of an `if` arm. -/
 abbrev IfKP (Φ : Nat × String → IProp GF) (Core : IProp GF) (st : St) (d env : Nat)
     (sm : Stmt) (aRet s : BitVec 64) (R : Nat → BitVec 64) (ret v8 v9 v18 v19 : BitVec 64) :
     IProp GF :=
@@ -567,10 +537,6 @@ abbrev IfKP (Φ : Nat × String → IProp GF) (Core : IProp GF) (st : St) (d env
         aRet s R ret v8 v9 v18 v19) ∧
     (iprop(abortAt Core s (execNeed sm d) ∗ slot24 aRet.toNat) -∗ (wpW (vsaModel live)).W Φ))
 
-/-- **A branch re-dispatched in the frame, partial mode**: the route's run to
-the dispatch point pays the later of the Löb hypothesis for the branch
-(`wp_swpF_later`); the parent's continuation pair serves the branch
-(`execDispKP_redispatch`, the branch's derivations made the parent's by `hE`). -/
 theorem ifBranchP {Φ : Nat × String → IProp GF} {Core : IProp GF}
     {st st' : St} {d env : Nat} {sm sm' : Stmt}
     {aS' aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R R4 : Nat → BitVec 64} {M4 : Mem}
@@ -597,7 +563,6 @@ theorem ifBranchP {Φ : Nat × String → IProp GF} {Core : IProp GF}
   iframe Hms Hcode Hast Hfb Hst Hslot Hw
   ipureintro; exact hf
 
-/-- **The then branch, partial mode.** -/
 theorem ifRouteThenP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {Core : IProp GF} {st st' : St} {d env : Nat} {c : Expr} {t : Stmt} {eo : Option Stmt}
     {aS aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R R3 : Nat → BitVec 64}
@@ -652,7 +617,6 @@ theorem ifRouteThenP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iframe Hro
   ipureintro; exact ⟨by rw [hn.thnNat]; exact hn.thnRepr, hr.geo⟩
 
-/-- **The else branch, partial mode.** -/
 theorem ifRouteElseP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {Core : IProp GF} {st st' : St} {d env : Nat} {c : Expr} {t e : Stmt}
     {aS aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R R3 : Nat → BitVec 64}

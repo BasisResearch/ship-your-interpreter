@@ -40,19 +40,6 @@ import VsaIris.Interp.SeqLoopInterp
 import VsaIris.Interp.ExecDisp
 import VsaIris.Interp.TermSim
 
-/-!
-# `stuck_sim`'s recursion: Löb over the partial specs (lane A)
-
-INTERP_DESIGN.md §4.2, §5.3. One Löb induction proves `eval_expr`'s partial
-spec (`evalSpecP_body`) and `exec_stmt`'s dispatch-point partial spec
-(`execDispP_body`, E5) for every input at once. Each recursive `jal` inside a
-case pays the later (`evalSpecsP`/`execDispsP` are the Löb hypothesis under
-`□ ▷`). Each syntactic form goes to its generated `Case/*P` lemma; the abort
-core is `evalCore` (the whole stack segment's landing core, `LeafErr.lean`).
-The persistent `errCtx inp` (the binary image and the `jmp_buf` `interp_run`'s
-`setjmp` wrote) is the context. Premises: `StuckSupply`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -67,7 +54,6 @@ local notation "Mv" live => vsaModel live
 local notation "Lp" => vsaLayoutP
 local notation "Rp" => vsaRoomB
 
-/-- **The callee specs and named premises of the partial cases.** -/
 structure StuckSupply (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : Prop where
   hlive : ∀ p ∈ interpText, live p.1
   errEnv : ErrEnv (GF := GF) N Lp Rp inp live (evalCore N Lp Rp inp)
@@ -101,7 +87,6 @@ structure StuckSupply (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : Prop
   memcpyOwned : ⊢ memcpySpecOwned (GF := GF) (Mv live) (wpW (Mv live))
   strcpyHeap : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (Mv live) (wpW (Mv live)) d q y ρ H
 
-/-- The Löb conclusion, as one proposition. -/
 abbrev specsPI (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : IProp GF :=
   iprop((∀ st d env e, evalSpecP_body (GF := GF) (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) st d env e) ∧
     (∀ st d env sm, execDispP_body (GF := GF) (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) st d env sm))
@@ -124,7 +109,6 @@ theorem specsP_split (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) :
   · imodintro
     iapply later_mono hr $$ H
 
-/-- The expression cases. -/
 theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     (S : StuckSupply (GF := GF) live N inp) (st : St) (d env : Nat) (e : Expr) :
     errCtx inp ∗ evalSpecsP (GF := GF) (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) ∗
@@ -181,7 +165,6 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
       (callCloP_of S.hlive hE S.vnull S.envNew S.envDefine S.cloSupply S.inpAl)
     iframe HE Hctx HX
 
-/-- The statement cases. -/
 theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     (S : StuckSupply (GF := GF) live N inp) (st : St) (d env : Nat) (sm : Stmt) :
     errCtx inp ∗ evalSpecsP (GF := GF) (Mv live) N Lp Rp inp (evalCore N Lp Rp inp) ∗
@@ -210,8 +193,6 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   | brk => iapply caseP_ExecBrk S.hlive
   | cont => iapply caseP_ExecCont S.hlive
 
-/-- **`stuck_sim`'s recursion (Löb)**: under the error context, every
-expression and every statement meets its partial spec. -/
 theorem specsP_all {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     (S : StuckSupply (GF := GF) live N inp) :
     errCtx inp ⊢ □ specsPI (GF := GF) live N inp := by

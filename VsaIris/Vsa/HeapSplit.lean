@@ -1,35 +1,14 @@
 import VsaIris.Vsa.HeapTake
 import VsaIris.Vsa.MallocFastHeap
 
-/-!
-# The top split
-
-`_malloc_r` serves a request no bin can fill by cutting `nb` bytes off the top
-chunk (`0x80004bf0`): the victim's header becomes `nb | PREV_INUSE`, `av->top`
-advances by `nb`, and the new top's header records the remaining size. Three
-words change; everything else the heap shape reads is untouched.
-
-`PHeapAt.topSplit` proves the resulting shape: the walk gains one in-use chunk
-at its end (`ChunkWalk.extend`), the bins are unchanged, and the block
-`(top + 16, n)` is live. `PHeapAt.topSplit_fresh` gives its freshness, as
-`PHeapAt.take_fresh` does for a bin hit.
-
-The same three words serve `malloc_extend_top`'s in-place growth, so the
-statement takes the post-state's reads abstractly rather than a fixed write
-log: a caller supplies them from its own store chain.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast
 
-/-- The three words a top split writes: the victim's header, `av->top`, and
-the new top's header. -/
 def SplitW (top nb : Nat) (a : Nat) : Prop :=
   (top + 8 ≤ a ∧ a < top + 16) ∨ (topAddr ≤ a ∧ a < topAddr + 8) ∨
     (top + nb + 8 ≤ a ∧ a < top + nb + 16)
 
-/-- An aligned footprint word that is none of the three written words is kept. -/
 theorem split_keep {m m' : Mem} {H : List (Nat × Nat)} {top nb a : Nat}
     (hag : ∀ b, vsaFoot H b → ¬ SplitW top nb b → m'[b]? = m[b]?)
     (hfoot : ∀ k, k < 8 → vsaFoot H (a + k)) (ha : a % 8 = 0) (ht : top % 8 = 0)
@@ -40,9 +19,6 @@ theorem split_keep {m m' : Mem} {H : List (Nat × Nat)} {top nb a : Nat}
   unfold SplitW topAddr avAddr
   omega
 
-/-- **The top split.** Cutting `nb` bytes off the top chunk, leaving at least
-`MINSIZE` above, gives the page-aligned heap with one more in-use chunk and
-the block `(top + 16, n)` live. -/
 theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {nb n : Nat} (hnb16 : nb % 16 = 0) (hnb32 : 32 ≤ nb) (hn8 : n + 8 ≤ nb)
@@ -60,7 +36,7 @@ theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   obtain ⟨hal, htop16⟩ := hH.aligned
   have hnew : (⟨top, nb, true⟩ : Chunk) ∈ chunks ++ [⟨top, nb, true⟩] :=
     List.mem_append_right _ List.mem_cons_self
-  -- every global the shape reads is kept
+
   have Kg : ∀ a, ∀ _ : ∀ k, k < 8 → allocGlobal (a + k), a % 8 = 0 → a ≠ topAddr →
       a + 8 ≤ heapStart → read64 m' a = read64 m a := by
     intro a hg ha hne hs
@@ -108,7 +84,7 @@ theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       by unfold binblocksAddr avAddr; omega⟩) (by unfold binblocksAddr avAddr; omega)
       (by unfold topAddr binblocksAddr avAddr; omega)
       (by unfold binblocksAddr avAddr heapStart; omega)
-  -- the new chunk
+
   have hcs : chunkSize (nb + 1) = nb := by unfold chunkSize; omega
   have hpi : prevInuse (brkv - top - nb + 1) = true := by
     unfold prevInuse; rw [beq_iff_eq]; omega
@@ -204,8 +180,6 @@ theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · obtain ⟨c, hc, hu, h1, h2⟩ := hH.exact e he' he'
       exact ⟨c, List.mem_append_left _ hc, hu, h1, h2⟩
 
-/-- **The block the top split hands out is fresh**: inside the arena,
-16-aligned, and disjoint from every live extent. -/
 theorem PHeapAt.topSplit_fresh {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {nb n : Nat} (hn8 : n + 8 ≤ nb) (hroom : top + nb + 32 ≤ brkv) :

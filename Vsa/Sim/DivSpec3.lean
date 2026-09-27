@@ -9,40 +9,6 @@ import Vsa.Sim.DecodeTable.Batch15Part28
 import Vsa.Sim.DecodeTable.Batch15Part32
 import Vsa.Sim.DivLoops
 
-/-!
-# Layer 3 — total-correctness specs for the signed division wrappers `__moddi3` / `__divdi3`
-
-Config-level composition of the wrapper site steps (`Vsa/Sim/DivSites3.lean`,
-`DivSites2.lean`) around the shared unsigned core `udivdi3_spec`
-(`Vsa/Sim/DivLoops.lean`) into total-correctness triples for the two remaining
-libgcc signed-division wrapper entries:
-
-* `moddi3_spec` (`__moddi3`, entry `0x80004728`): signed remainder,
-  `result.toInt = n.toInt.tmod d.toInt` under `d ≠ 0`.
-* `divdi3_spec` (`__divdi3`, entry `0x800046a4`): signed quotient,
-  `result.toInt = n.toInt.tdiv d.toInt` under `d ≠ 0` excluding the `INT64_MIN / -1`
-  overflow input (`¬(n = intMin ∧ d = -1)`).
-
-## Why these two need distinct Q forms
-
-`Int.tmod` has the sign of the **dividend** and magnitude `|n| % |d|`; the
-`INT64_MIN` remainder never overflows (`INT64_MIN tmod (-1) = 0`, and the binary
-computes exactly that), so `moddi3` needs no overflow side-condition. `Int.tdiv`
-truncates toward zero; `INT64_MIN / -1 = 2^63` is not representable, and the
-`__divdi3` entry (`0x46a4`) does **not** route through the `__divsi3` overflow
-guard at `0x4758` (reached only from `0x46a0`, before `__divdi3`), so we exclude
-that single input with a documented `P` side-condition.
-
-## Sign quadrants (dividend `n = a0`, divisor `d = a1`)
-
-`__moddi3` branches on `bltz a1` (d<0) then `bltz a0` (n<0), re-checking `bgez a0`
-in the `d<0` arm. The core is always called with `|n|`, `|d|`; the remainder is
-negated (`neg a0,a1` at `0x4750`) exactly when `n < 0`. `__divdi3` negates each
-negative operand, calls the core on `|n|`, `|d|`, and negates the quotient exactly
-when the signs of `n`, `d` differ (mixed-sign path via `jal` at `0x471c`); the
-same-sign paths reuse the caller's return slot (`ret`/`x1`) directly.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -54,45 +20,32 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## Signed-value ↔ `toNat` / `natAbs` bridges (kernel-safe, group-algebra discipline) -/
-
-/-- `x` negative (top bit set): `x.toInt = x.toNat - 2^64`. -/
 theorem toInt_of_top (x : BitVec 64) (h : 2^63 ≤ x.toNat) :
     x.toInt = (x.toNat : Int) - 2^64 := by
   rw [BitVec.toInt_eq_toNat_cond]; have hx := x.isLt; rw [if_neg (by omega)]; simp
 
-/-- `x` nonnegative (top bit clear): `x.toInt = x.toNat`. -/
 theorem toInt_of_notop (x : BitVec 64) (h : x.toNat < 2^63) :
     x.toInt = (x.toNat : Int) := by
   rw [BitVec.toInt_eq_toNat_cond]; rw [if_pos (by omega)]
 
-/-- Negation `toNat` for a top-bit-set value: `(0 - x).toNat = 2^64 - x.toNat`. -/
 theorem neg_toNat_of_top (x : BitVec 64) (h : 2^63 ≤ x.toNat) :
     ((0#64) - x).toNat = 2^64 - x.toNat := by
   rw [BitVec.toNat_sub]; have hx := x.isLt
   simp only [BitVec.toNat_ofNat, Nat.zero_mod]; omega
 
-/-- `natAbs` of a top-bit-set value: `= 2^64 - x.toNat`. -/
 theorem natAbs_of_top (x : BitVec 64) (h : 2^63 ≤ x.toNat) :
     x.toInt.natAbs = 2^64 - x.toNat := by
   rw [toInt_of_top x h]; have hx := x.isLt
   rw [Int.natAbs_eq_iff]; right; push_cast; omega
 
-/-- `natAbs` of a top-bit-clear value: `= x.toNat`. -/
 theorem natAbs_of_notop (x : BitVec 64) (h : x.toNat < 2^63) :
     x.toInt.natAbs = x.toNat := by
   rw [toInt_of_notop x h]; simp
-
-/-! ## Signed branch-guard bridges (`bltz`/`bgez` ⇒ top-bit facts) -/
-
-/-! ## `Int.tmod` / `Int.tdiv` sign+magnitude characterizations -/
 
 theorem tmod_nonpos_of_nonpos (a b : Int) (h : a ≤ 0) : a.tmod b ≤ 0 := by
   have := Int.tmod_nonneg (a := -a) b (by omega)
   rw [Int.neg_tmod] at this; omega
 
-/-- If `|q| = |a| % |b|` and `q` carries `a`'s sign (nonneg with `a`, nonpos with
-`a`), then `q = a.tmod b`. -/
 theorem tmod_of_natAbs_sign (a b q : Int)
     (hmag : q.natAbs = a.natAbs % b.natAbs)
     (hsign : 0 ≤ a → 0 ≤ q) (hsign2 : a < 0 → q ≤ 0) :
@@ -115,10 +68,6 @@ theorem tmod_of_natAbs_sign (a b q : Int)
     · exact h
     · omega
 
-/-- If `|q| = |a| / |b|` and `q`'s sign is the product of `a`, `b`'s signs
-(nonneg when signs agree, nonpos when they differ), then `q = a.tdiv b`,
-provided `q` and `a.tdiv b` don't both have magnitude `0` with opposite chosen
-signs — captured by the sign hypotheses. -/
 theorem tdiv_of_natAbs_sign (a b q : Int) (hb : b ≠ 0)
     (hmag : q.natAbs = a.natAbs / b.natAbs)
     (hsign : (0 ≤ a ↔ 0 ≤ b) → 0 ≤ q)
@@ -127,19 +76,19 @@ theorem tdiv_of_natAbs_sign (a b q : Int) (hb : b ≠ 0)
   have hnat : (a.tdiv b).natAbs = a.natAbs / b.natAbs := Int.natAbs_tdiv a b
   have habs : q.natAbs = (a.tdiv b).natAbs := by rw [hmag, hnat]
   have hcases := Int.natAbs_eq_natAbs_iff.mp habs
-  -- sign of tdiv: nonneg iff (0≤a ↔ 0≤b) OR magnitude 0
+
   by_cases hz : a.natAbs / b.natAbs = 0
-  · -- both magnitudes 0
+  ·
     have hq0 : q = 0 := Int.natAbs_eq_zero.mp (by rw [hmag]; exact hz)
     have ht0 : a.tdiv b = 0 := Int.natAbs_eq_zero.mp (by rw [hnat]; exact hz)
     rw [hq0, ht0]
-  · -- magnitude positive: tdiv sign is strict
+  ·
     rcases hcases with h | h
     · exact h
     · exfalso
-      -- q = -(a.tdiv b), both nonzero ⇒ opposite strict signs ⇒ contradiction with sign hyps
+
       have htdne : a.tdiv b ≠ 0 := fun hc => hz (by rw [← hnat, hc]; simp)
-      -- pin the sign of `a.tdiv b` by the four quadrants of (0≤a, 0≤b)
+
       by_cases ha : 0 ≤ a <;> by_cases hb2 : 0 ≤ b
       · have hs : (0 ≤ a ↔ 0 ≤ b) := ⟨fun _ => hb2, fun _ => ha⟩
         have hq0 := hsign hs
@@ -164,32 +113,17 @@ theorem tdiv_of_natAbs_sign (a b q : Int) (hb : b ≠ 0)
           rwa [Int.neg_tdiv_neg] at this
         omega
 
-/-! ## Shared core-call helper
-
-At a `jal`-successor state `cent` (PC at the core entry, `x1 = q` the core return
-address, `x5 = r` the wrapper's saved `t0`), with core operands `A = x10`,
-`B = x11`, scratch `x12/x13/minstret` defined, core code loaded, `tick < 2`,
-`0 < B`, and `q` 4-aligned, run the core (`udivdi3_spec`, ghost instantiated at
-`cent` so `x5 = r` is recovered by the blanket frame) to its return `q` with
-`x10 = A / B`, `x11 = A % B`, `x5 = r` preserved. -/
-
-/-! ## Result-combination lemmas (unsigned remainder ⇒ signed `tmod`) -/
-
-/-- `|x.toInt| ≤ 2^63` for any `BitVec 64`. -/
 theorem natAbs_le (x : BitVec 64) : x.toInt.natAbs ≤ 2^63 := by
   by_cases h : x.toNat < 2^63
   · rw [natAbs_of_notop x h]; omega
   · rw [natAbs_of_top x (by omega)]; have := x.isLt; omega
 
-/-- Operand magnitude, nonnegative case: `x.toNat = |x.toInt|`. -/
 theorem mag_notop (x : BitVec 64) (h : x.toNat < 2^63) : x.toNat = x.toInt.natAbs :=
   (natAbs_of_notop x h).symm
 
-/-- Operand magnitude, negated negative case: `(0 - x).toNat = |x.toInt|`. -/
 theorem mag_neg_top (x : BitVec 64) (h : 2^63 ≤ x.toNat) : ((0#64) - x).toNat = x.toInt.natAbs := by
   rw [neg_toNat_of_top x h, natAbs_of_top x h]
 
-/-- Positive-dividend remainder: raw core remainder `A % B` is already `n tmod d`. -/
 theorem res_pos (n d A B : BitVec 64)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
     (hnneg : 0 ≤ n.toInt) (hd0 : d.toInt ≠ 0) :
@@ -206,7 +140,6 @@ theorem res_pos (n d A B : BitVec 64)
   · intro _; rw [hresInt]; exact Int.natCast_nonneg _
   · intro h; omega
 
-/-- Negative-dividend remainder: core remainder negated (`0 - (A % B)`) is `n tmod d`. -/
 theorem res_neg (n d A B : BitVec 64)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
     (hnneg : n.toInt < 0) (hd0 : d.toInt ≠ 0) :
@@ -234,14 +167,11 @@ theorem res_neg (n d A B : BitVec 64)
     · intro h; omega
     · intro _; rw [hresInt, hres]; omega
 
-/-! ## Result-combination lemmas (unsigned quotient ⇒ signed `tdiv`) -/
-
 theorem toInt_lt_2p63 (n : BitVec 64) : n.toInt < 2^63 := by
   by_cases h : n.toNat < 2^63
   · rw [toInt_of_notop n h]; have := n.isLt; omega
   · rw [toInt_of_top n (by omega)]; have := n.isLt; omega
 
-/-- `|n| / |d| ≤ 2^63`. -/
 theorem udiv_le (n d A B : BitVec 64)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs) :
     (A / B).toNat ≤ 2^63 := by
@@ -250,8 +180,6 @@ theorem udiv_le (n d A B : BitVec 64)
   calc n.toInt.natAbs / d.toInt.natAbs ≤ n.toInt.natAbs := Nat.div_le_self _ _
     _ ≤ 2^63 := h1
 
-/-- `|n| / |d| < 2^63` unless `n = INT64_MIN ∧ d = -1` (the sole `tdiv` overflow
-input; the `__divdi3` entry does not route through the `__divsi3` overflow guard). -/
 theorem udiv_lt_of_not_overflow (n d A B : BitVec 64)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
     (hsame : 0 ≤ n.toInt ↔ 0 ≤ d.toInt) (hd0 : d.toInt ≠ 0)
@@ -280,8 +208,6 @@ theorem udiv_lt_of_not_overflow (n d A B : BitVec 64)
     calc n.toInt.natAbs / d.toInt.natAbs ≤ n.toInt.natAbs / 2 := Nat.div_le_div_left hd2 (by omega)
       _ < 2^63 := by omega
 
-/-- Same-sign quotient: raw core quotient `A / B` is already `n tdiv d` (no
-overflow). -/
 theorem res_div_same (n d A B : BitVec 64)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
     (hsame : 0 ≤ n.toInt ↔ 0 ≤ d.toInt) (hd0 : d.toInt ≠ 0)
@@ -294,7 +220,6 @@ theorem res_div_same (n d A B : BitVec 64)
   · intro _; rw [hresInt]; exact Int.natCast_nonneg _
   · intro h; exact absurd hsame h
 
-/-- Mixed-sign quotient: negated core quotient `0 - (A / B)` is `n tdiv d`. -/
 theorem res_div_mixed (n d A B : BitVec 64)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
     (hdiff : ¬(0 ≤ n.toInt ↔ 0 ≤ d.toInt)) (hd0 : d.toInt ≠ 0) :
@@ -318,20 +243,5 @@ theorem res_div_mixed (n d A B : BitVec 64)
     · rw [natAbs_of_top _ hresTop, hres, hmag]; omega
     · intro h; exact absurd h hdiff
     · intro _; rw [hresInt, hres]; omega
-
-/-! ## `__moddi3` — signed remainder (entry `0x80004728`) -/
-
-/-! ### Shared "compute the tmod result and return" tail
-
-From a state `cA` at the core entry `0x800046ac` with core operands `A = x10`,
-`B = x11`, `x1 = q` (a core-return address, one of `0x4738`/`0x4750`), `x5 = r`
-(the saved `t0`), the wrapper (`__moddi3Loaded`) still loaded, run: core (via
-`core_call_tail_f`), then the fixup at `q` (either `mv a0,a1` at `0x4738`, or
-`neg a0,a1` at `0x4750`), then `jr t0` back to `r`. `negate = true` for the
-`0x4750` path (dividend negative). Delivers the strong `moddi3_post`, threading
-the entry ghost frame `hframe0` (`cA → g`) and `sailOutput = o` through the core
-and the two fixup steps. -/
-
-/-! ## `__divdi3` — signed quotient (entry `0x800046a4`) -/
 
 end Vsa.Sim

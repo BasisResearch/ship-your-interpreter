@@ -1,42 +1,30 @@
 import Vsa.While.Ast
 
-/-!
-# Deep-embedded WHILE programs
-
-Hand translations of the `c/tests/*.wl` scripts into the deep embedding.
-`whileWl` is the script linked into `while-riscv-htif.elf` — the program the
-refinement theorem is about. The others are validation inputs: the binary's
-output on each script is compared against the Lean semantics' output.
--/
-
 namespace Vsa.While.Programs
 
 open Expr Stmt
 
-/-- Shorthand: integer literal. -/
 private def i (n : Int) : Expr := .int n
-/-- Shorthand: variable reference. -/
+
 private def v (x : String) : Expr := .var x
-/-- Shorthand: `println(...)` statement. -/
+
 private def pl (args : List Expr) : Stmt := .expr (.call (v "println") args)
-/-- Shorthand: assignment statement `x = e;`. -/
+
 private def set (x : String) (e : Expr) : Stmt := .expr (.assign x e)
 
-/-- `tests/while.wl` — the script embedded in the ELF. -/
 def whileWl : Program := [
-  -- var i = 0; var sum = 0;
+
   .varDecl "i" (some (i 0)),
   .varDecl "sum" (some (i 0)),
-  -- while (i < 10) { i = i + 1; sum = sum + i; }
+
   .whileStmt (.binary .lt (v "i") (i 10)) (.block [
     set "i" (.binary .add (v "i") (i 1)),
     set "sum" (.binary .add (v "sum") (v "i"))]),
   pl [v "sum"],
-  -- var n = 0; var total = 0;
+
   .varDecl "n" (some (i 0)),
   .varDecl "total" (some (i 0)),
-  -- while (true) { n = n + 1; if (n > 100) { break; }
-  --                if (n % 2 == 0) { continue; } total = total + n; }
+
   .whileStmt (.bool true) (.block [
     set "n" (.binary .add (v "n") (i 1)),
     .ifStmt (.binary .gt (v "n") (i 100)) (.block [.brk]) none,
@@ -44,11 +32,10 @@ def whileWl : Program := [
       (.block [.cont]) none,
     set "total" (.binary .add (v "total") (v "n"))]),
   pl [v "total"],
-  -- var acc = 0; var a = 1;
+
   .varDecl "acc" (some (i 0)),
   .varDecl "a" (some (i 1)),
-  -- while (a <= 3) { var b = 1;
-  --   while (b <= 3) { acc = acc + a * b; b = b + 1; } a = a + 1; }
+
   .whileStmt (.binary .le (v "a") (i 3)) (.block [
     .varDecl "b" (some (i 1)),
     .whileStmt (.binary .le (v "b") (i 3)) (.block [
@@ -57,7 +44,6 @@ def whileWl : Program := [
     set "a" (.binary .add (v "a") (i 1))]),
   pl [v "acc"]]
 
-/-- `tests/arithmetic.wl` -/
 def arithmeticWl : Program := [
   pl [.binary .add (i 1) (.binary .mul (i 2) (i 3))],
   pl [.binary .mul (.binary .add (i 1) (i 2)) (i 3)],
@@ -76,9 +62,8 @@ def arithmeticWl : Program := [
       .logical .or (.bool true) (.bool false),
       .logical .and (i 1) (i 2), .logical .or (i 0) (i 0)]]
 
-/-- `tests/for.wl` -/
 def forWl : Program := [
-  -- fizzbuzz
+
   .forStmt (some (.varDecl "i" (some (i 1))))
     (some (.binary .le (v "i") (i 15)))
     (some (.assign "i" (.binary .add (v "i") (i 1))))
@@ -116,7 +101,6 @@ def forWl : Program := [
     (.block [set "line" (.binary .add (v "line") (v "i"))]),
   pl [v "line"]]
 
-/-- `tests/scope.wl` -/
 def scopeWl : Program := [
   .varDecl "x" (some (i 1)),
   .block [
@@ -141,7 +125,6 @@ def scopeWl : Program := [
     .str "math is broken"]),
   pl [.str "asserts ok"]]
 
-/-- `tests/strings.wl` -/
 def stringsWl : Program := [
   pl [.binary .add (.binary .add (.str "hello") (.str " ")) (.str "world")],
   pl [.binary .add (.str "value: ") (i 42)],

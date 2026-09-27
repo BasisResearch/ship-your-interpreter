@@ -1,41 +1,17 @@
 import VsaIris.Interp.CallCloRuns
 import VsaIris.Interp.ExecOom
 
-/-!
-# The closure call's parameter binding (lane E4)
-
-From `env_new`'s return (`0x800032c0`) to `jal value_null(sp+144)`
-(`0x80003328`): `argc` tested, then one `env_define(frame, params[j], &arg_j)`
-per argument, the argument copied to `sp+64` first (`CloB_run0`,
-`CloB_runL`, `CloB_runR`).
-
-`cloBind` is Wp-generic and abstracts the `env_define` call
-(`CloDefineStep`): the total case instantiates it with `ms_callEnvDefine`
-(credits `defineCost`), the partial one with `ms_callEnvDefineP` (out of
-memory through `wp_oomBlock`). The store advances as the semantics' fold
-(`Call.closure`: `(params.zip vs).foldl (·.define frame ·.1 ·.2)`).
-
-* `CloSpills`: the eval prologue's spills and the call arm's (`s3`, `s5`,
-  `s7`), which every run of the path keeps.
-* `CloPL`: the loop head's state; `CloPD`: the state at `jal value_null`.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The spilled words the closure path keeps (`[sp+1016, sp+1088)` but
-`s4`/`s6`'s slots): the prologue's `ra`, `s0`-`s2` and the arm's `s3`, `s5`,
-`s7`. -/
 structure CloSpills (Mt : Mem) (s ret : BitVec 64) (rv : Nat → BitVec 64) : Prop where
   saved : CallSaved Mt s ret (rv 8) (rv 9) (rv 18)
   s3 : ldv .ld Mt (s.toNat - 1088 + 1048) = rv 19
   s5 : ldv .ld Mt (s.toNat - 1088 + 1032) = rv 21
   s7 : ldv .ld Mt (s.toNat - 1088 + 1016) = rv 23
 
-/-- The spills survive a memory agreeing on their words (`[sp+1016, sp+1088)`
-but `s6`'s and `s4`'s slots, which the error paths and the loop use). -/
 theorem CloSpills.agree {Mt Mt' : Mem} {s ret : BitVec 64} {rv : Nat → BitVec 64}
     (h : CloSpills Mt s ret rv)
     (hag : ∀ k, s.toNat - 1088 + 1016 ≤ k → k < s.toNat - 1088 + 1088 →
@@ -50,7 +26,6 @@ theorem CloSpills.agree {Mt Mt' : Mem} {s ret : BitVec 64} {rv : Nat → BitVec 
    (ldv_agree fun j hj => hag _ (by omega) (by omega) (by omega) (by omega)).trans h.s5,
    (ldv_agree fun j hj => hag _ (by omega) (by omega) (by omega) (by omega)).trans h.s7⟩
 
-/-- An element of a represented parameter array. -/
 theorem paramsRepr_get {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {ps : List String}, ParamsReprWithin m P a n ps →
       ∀ j (h : j < ps.length), ∃ p, read64 m (a + 8 * j) = some p ∧ CStringWithin m P p ps[j]
@@ -60,8 +35,6 @@ theorem paramsRepr_get {m : Mem} {P : Nat → Prop} :
     obtain ⟨p, hp, hs⟩ := paramsRepr_get hrest j (by simpa using h)
     exact ⟨p, by rw [show a + 8 * (j + 1) = a + 8 + 8 * j by omega]; exact hp, hs⟩
 
-/-- Every byte of a represented parameter array's pointers is in the view
-and present. -/
 theorem paramsRepr_covers {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {ps : List String}, ParamsReprWithin m P a n ps →
       ∀ k, k < 8 * n → P (a + k) ∧ (m[a + k]?).isSome
@@ -73,21 +46,15 @@ theorem paramsRepr_covers {m : Mem} {P : Nat → Prop} :
       rw [show a + 8 + (k - 8) = a + k by omega] at h1 h2
       exact ⟨h1, h2⟩
 
-/-- `sext`-free offsets of the loop's loads. -/
 theorem sign_extend_8 : LeanRV64DExecutable.Functions.sign_extend (m := 64) 8#12 = 8#64 := by decide
 theorem sign_extend_16 : LeanRV64DExecutable.Functions.sign_extend (m := 64) 16#12 = 16#64 := by decide
 
 theorem ofNat_add8 (a : Nat) : BitVec.ofNat 64 a + 8#64 = BitVec.ofNat 64 (a + 8) := by
   apply BitVec.eq_of_toNat_eq; simp [BitVec.toNat_add]
 
-/-- The frame without the parameter slot `sp+64` (`env_define`'s value). -/
 abbrev cloSlot64 (s : BitVec 64) : Nat → Prop :=
   fun k => InExt (s.toNat - 1088, 1088) k ∧ ¬ InExt (s.toNat - 1088 + 64, 24) k
 
-/-- The parameter loop's head (`0x800032dc`) at parameter `j`: `s0` the
-argument's slot, `a5 = 8j`, `s6 = 8·argc` (the caller's `s6` spilled at
-`sp+1024`), the frame in `s3`, the node in `s5`; the argument array as at the
-dispatch (`Mt0`). -/
 structure CloPL (R : Nat → BitVec 64) (Mt Mt0 : Mem) (s inp sret ret fr q line : BitVec 64)
     (rv : Nat → BitVec 64) (argc j : Nat) : Prop where
   sp : R 2 = s + 18446744073709550528#64
@@ -104,8 +71,6 @@ structure CloPL (R : Nat → BitVec 64) (Mt Mt0 : Mem) (s inp sret ret fr q line
   s6m : ldv .ld Mt (s.toNat - 1088 + 1024) = rv 22
   args : ∀ a, InExt (argsBase s, 24 * argc) a → imgM Mt a = imgM Mt0 a
 
-/-- The state at `jal value_null(sp+144)` (`0x80003328`), the parameters
-bound. -/
 structure CloPD (R : Nat → BitVec 64) (Mt : Mem) (s inp sret ret fr q line : BitVec 64)
     (rv : Nat → BitVec 64) : Prop where
   sp : R 2 = s + 18446744073709550528#64
@@ -118,8 +83,6 @@ structure CloPD (R : Nat → BitVec 64) (Mt : Mem) (s inp sret ret fr q line : B
   keep : ∀ x ∈ [20, 22, 24, 25, 26, 27], R x = rv x
   spills : CloSpills Mt s ret rv
 
-/-- The state at `env_new`'s return (`0x800032c0`): `a0` the new frame,
-`argc` at `sp+0`, the argument array as at the dispatch (`Mt0`). -/
 structure CloEN (R : Nat → BitVec 64) (Mt Mt0 : Mem) (s inp sret ret fr q line : BitVec 64)
     (rv : Nat → BitVec 64) (argc : Nat) : Prop where
   sp : R 2 = s + 18446744073709550528#64
@@ -145,11 +108,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- **One parameter's `env_define`, abstract**: from `jal env_define` with
-`a0` the frame, `a1` the name, `a2 = sp+64` holding the value, the step's
-resources `W st ((x, v) :: rest)` become `W (st.define fa x v) rest` at the
-return. The total case supplies it with `ms_callEnvDefine`, the partial one
-with `ms_callEnvDefineP`. -/
 def CloDefineStep (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (W : Store → List (String × Value) → IProp GF) (s fr : BitVec 64) (fa n : Nat) :
     Prop :=
@@ -165,10 +123,6 @@ def CloDefineStep (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String �
           (cloSlot64 s) Mt -∗ Wp.W Φ)
     ⊢ Wp.W Φ
 
-/-- **One parameter** (`0x800032dc` round the back edge), for either WP: the
-argument `v` copied to `sp+64`, `env_define(frame, x, sp+64)` (abstract,
-`CloDefineStep`), then the next parameter's head or, after the last, the
-state at `jal value_null(sp+144)`. -/
 theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {W : Store → List (String × Value) → IProp GF}
     {s inp sret ret fr q line prm : BitVec 64} {rv R : Nat → BitVec 64} {Mt Mt0 : Mem}
@@ -243,7 +197,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   intro R1 Mt1 hR1 hMt1
   unfold F'
   iintro ⟨⟨#Hcode, #Hv, #Hstr, HW, Hst, Hk⟩, Hms⟩
-  -- the copied value out as `valAt` at `sp+64`
+
   have hout : ∀ k, (k < s.toNat - 1088 + 64 ∨ s.toNat - 1088 + 88 ≤ k) →
       (k < s.toNat - 1088 ∨ s.toNat - 1088 + 8 ≤ k) → imgM Mt1 k = imgM Mt k := by
     intro k h1 h2
@@ -291,7 +245,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   ihave Hval := (show valAt (GF := GF) N (s.toNat - 1088 + 64) v ⊢ valAt N (R1 12).toNat v by
     rw [h12']) $$ Hval
   ihave #Hstr' := (show strAt (GF := GF) pj x ⊢ strAt (R1 11).toNat x by rw [h11']) $$ Hstr
-  -- `env_define`
+
   iapply hdef R1 Mt1 st x v rest h2' h10' h12'
   iframe Hcode Hms HW Hval Hstr' Hst
   iintro %R' %hk Hst Hval HW Hms
@@ -322,7 +276,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
     hag k (by simp only [InExt]; omega) (by simp only [InExt]; omega) (by omega)
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
-  -- the back edge
+
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(W (st.define fa x v) rest ∗
       stackScratch (s + 18446744073709550528#64) n ∗
       ((∀ (R' : Nat → BitVec 64) (Mt' : Mem),
@@ -415,7 +369,6 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ %_ %M2 %⟨hj1, hpd⟩ Hms HW Hst
 
-/-- An element of an argument array's values. -/
 theorem argVals_get (N : NativeAddrs) (img : Nat → BitVec 8) (base : Nat) :
     ∀ (i : Nat) (vs : List Value) (j : Nat) (h : j < vs.length),
       argVals (GF := GF) N img base i vs ⊢ valImg N img (base + 24 * (i + j)) vs[j]
@@ -433,10 +386,6 @@ theorem argVals_get (N : NativeAddrs) (img : Nat → BitVec 8) (base : Nat) :
     iapply hr
     iexact H
 
-/-- **The parameter loop** (`0x800032dc`), for either WP: from parameter
-`j`, every remaining `(param, argument)` pair is defined in the frame
-(`CloDefineStep`), in order; the loop leaves at `jal value_null(sp+144)` with
-the store the semantics' fold gives (`Call.closure`). -/
 theorem cloParamLoop (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {W : Store → List (String × Value) → IProp GF}
     {s inp sret ret fr q line prm : BitVec 64} {rv : Nat → BitVec 64} {Mt0 : Mem}
@@ -500,9 +449,6 @@ theorem cloParamLoop (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
       · iintro %R' %Mt' %⟨heq, _⟩
         exact absurd heq hlast
 
-/-- **The parameters bound** (`0x800032c0` to `jal value_null(sp+144)`), for
-either WP: `s3 = frame`, then each `(param, argument)` pair defined in order
-(`cloParamLoop`); the store is the semantics' fold. -/
 theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {W : Store → List (String × Value) → IProp GF}
     {s inp sret ret fr q line prm : BitVec 64} {rv R : Nat → BitVec 64} {Mt Mt0 : Mem}
@@ -541,7 +487,7 @@ theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   intro F'
   have htoI : (BitVec.ofNat 64 argc).toInt = argc := ofNat_toInt_small (by omega)
   refine CloB_run0 (m := ∅) hlive hsf hs hs2 hs3 hen.a0 hen.sp hen.argcm ?_ ?_
-  · -- no arguments
+  ·
     intro hle
     apply swp_closeRM
     intro R1 Mt1 hR1 hMt1
@@ -562,7 +508,7 @@ theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
     ihave HW := (show W st (ps.zip vs) ⊢ W ((ps.zip vs).foldl (fun t p => t.define fa p.1 p.2) st) []
       by rw [hz]; exact .rfl) $$ HW
     iapply Hk $$ %_ %Mt %hpd Hms HW Hst
-  · -- the loop
+  ·
     intro hgt
     apply swp_closeRM
     intro R1 Mt1 hR1 hMt1

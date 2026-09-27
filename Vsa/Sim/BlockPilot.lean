@@ -3,104 +3,6 @@ import Vsa.Sim.ExecuteAlu
 import Vsa.Sim.Execute
 import Vsa.Sim.RegAccess
 
-/-!
-# `BlockPilot` — proof-by-reflection block lemma for straight-line ALU runs (PILOT)
-
-**Goal.** Replace the per-instruction site+ceremony composition (one `site_*`
-lemma + ~8 `obs_*` transport lines per instruction) for *straight-line
-ALU-register segments* by a single lemma, `block_alu_sound`, that consumes a
-concrete `List AInstr` program description and produces the whole `Steps` chain
-with a *computed* register outcome (`runG`) in one application.
-
-**Scope (deliberately minimal).** ADDI-class register-immediate (`addi`/`mv`/
-`li`, incl. `rs1 = x0`) and RTYPE `add` — the `stepObs_alu` shape with
-`sigmaPost_alu` posts.  No loads/stores/branches/jumps, no width variants.
-
-## Design
-
-* `AInstr` — fully concrete per-instruction data: pc, the 4 LE code bytes, the
-  assembled word, kind, GPR *indices* (`Nat`, not `Register`) and the ITYPE
-  immediate.  Keeping indices as `Nat` sidesteps `RegisterType` heterogeneity:
-  the four 33-branch dispatch batteries below (`rX_src`/`wX_gpr`/`obs_gpr_rd`/
-  `obs_gpr_other`) case on the concrete index, so every branch sees a concrete
-  register whose `RegisterType` reduces to `BitVec 64`.
-* `GRegs = List (Nat × BitVec 64)` — symbolic register pins keyed by concrete
-  GPR index (the `PinsHold` pattern of `RegPins.lean`, made *computable* on the
-  key side so the block semantics `runG` can look sources up and thread
-  updates).
-* `ProgFacts` — the per-element non-computable obligations: 4 byte pins from a
-  `Code.*Loaded` accessor, and a σ-generic decode fact (`DecodeFact`), which the
-  DecodeTable lemmas `decode_<word>` inhabit *directly*.
-* `BlockOK` — the computable VC: PC contiguity/range/alignment, byte/word
-  coherence, non-RVC check, register-index bounds, and source-availability
-  (domain threading), all `Decidable` and discharged by a single `by decide` at
-  the application site (everything it inspects is concrete structure; the
-  symbolic pin *values* are never consulted — the `pinsAvoid` discipline).
-* `block_alu_sound` — proved once by list induction, each step through
-  `stepObs_alu`; register-disequality side conditions at *symbolic* index are
-  closed by two bounded-∀ `decide` lemmas (`gpr_rd_ok`, `gprReg_beq_false`)
-  rather than per-site `by decide`s.
-
-## Measured verdict (acceptance test: the 3-mv chain `0x800143b4–0x800143bc`
-of `__ssputs_r`, real byte pins + DecodeTable lemmas, vs the same 3 steps via
-`site_143b4_sp`/`site_143b8_sp`/`site_143bc_sp` + `tr_setup_mv`-style ceremony;
-both derive the identical statement: `Steps (u+3)`, tick, `GoodState`, mem,
-`PC = 0x800143c0`, the three written registers, minstret, and an `x10` frame)
-
-* wall-clock `lake env lean` on the *use* site (5 runs each): reflection
-  **0.97–1.02 s** vs ceremony **1.01–1.03 s** — a wash; both are dominated by
-  the ≈ 0.55 s olean import of the `SsputsSites` closure.
-* `lean --profile` proof-work (elaboration + tactics + kernel): reflection
-  **≈ 57 ms** (15.3 + 31.7 + 10.2) vs ceremony **≈ 95 ms** (13.2 + 72.6 + 8.7)
-  — ≈ 1.7× less tactic work at 3 instructions.  Reflection's tactic cost is
-  two `decide`s (near-constant per block, tiny per-instruction VC evaluation);
-  ceremony's is per-instruction × per-tracked-register (`obs_*` transports and
-  their `by decide` batteries), so the gap grows with block length and pin
-  count (ceremony O(instrs × regs), reflection O(instrs) with small constants).
-* line count (identical theorem statement): ceremony **67** lines (≈ 50-line
-  body; ≈ 13–16 lines per instruction, and each additional *tracked register*
-  adds a transport line per instruction) vs reflection **36** lines (≈ 19-line
-  body of which 5 are the `mvBlock` data list; marginal cost = 1 data line +
-  2 `ProgFacts` entries per instruction, independent of tracked registers).
-* one-time cost: this file (≈ 840 lines, of which ≈ 300 are the scripted
-  dispatch batteries) compiles in **≈ 2.0 s**.
-
-**Verdict: modest win now, structural win at scale.**  Wall-clock is a wash at
-3 instructions (import-bound), but the reflection body is ≈ 2.6× smaller,
-per-instruction cost is 1 data line instead of a dozen ceremony lines, and the
-per-register transport dimension disappears entirely.
-
-**Obstructions hit** (none fatal): (1) `RegisterType` heterogeneity forces the
-`Nat`-indexed `gprGet`/`gprRT` dispatch layer — mechanical but 33 branches × 4
-lemmas of one-time boilerplate; (2) `decide` cannot touch symbolic indices, so
-all symbolic-index disequalities must be pre-packaged as bounded-∀ `decide`
-lemmas (`gpr_rd_ok`, `gprReg_beq_false`); at the *use* site the same gotcha
-transposes: `KeysOK (keysG L)`/`BlockOK … (keysG L) …` mention the symbolic pin
-values through `L`, so the caller must close them as
-`show KeysOK [14, 15] by decide` (the concrete-keys form) — the `pinsAvoid`
-`rfl`-not-`decide` lesson in `Prop` clothing; (3) the DecodeTable is per-word
-(no computable decoder on this side of the Sail model), so decode facts stay
-*inputs* (`ProgFacts`) rather than being computed — reflection covers the
-VC/frame/threading, not decode; (4) `omega`/`decide` do not see through
-unreduced structure projections of a destructured `AInstr` — side conditions
-must be restated (`have hrd31' : ard ≤ 31 := hrd31`) before automation.
-
-## Generalizing beyond ALU
-
-* **loads/stores**: `AInstr` grows an address expression over `GRegs` (base
-  pin + concrete offset); `BlockOK` can no longer be fully decidable — address
-  range/alignment/HTIF-window side conditions on *symbolic* addresses must move
-  to `ProgFacts`-style per-element hypotheses (computed VCs); the state
-  threading gains a memory component (`σ'.mem = m'` chains, `PinW`-style width
-  handling for the loaded value).
-* **branches**: a taken branch ends the block, so blocks become basic blocks
-  and the lemma family needs a terminator case (`stepObs_branch_*` at the end,
-  with the branch condition as a per-element hypothesis) — the list-induction
-  skeleton is unchanged.
-* **`x0` as `rd`** (nops): excluded (`1 ≤ rd`); would need a `wX_bits_zero`
-  no-op branch in `wX_gpr` and a no-op `stepG`.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
@@ -110,35 +12,24 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-- Concrete `regidx` from a GPR index. -/
 abbrev gprIdx (n : Nat) : regidx := regidx.Regidx (BitVec.ofNat 5 n)
 
-/-! ## Symbolic GPR pin lists with computable keys -/
-
-/-- Register pins keyed by GPR index: concrete keys, symbolic values. -/
 abbrev GRegs := List (Nat × BitVec 64)
 
-/-- Keys of a pin list. -/
 def keysG : GRegs → List Nat
   | [] => []
   | (n, _) :: L => n :: keysG L
 
-/-- Association lookup (first hit). -/
 def lookupG (n : Nat) : GRegs → Option (BitVec 64)
   | [] => none
   | (m, v) :: L => if m = n then some v else lookupG n L
 
-/-- Remove *all* entries with key `n`. -/
 def eraseG (n : Nat) : GRegs → GRegs
   | [] => []
   | (m, v) :: L => if m = n then eraseG n L else (m, v) :: eraseG n L
 
-/-- All keys are real GPR indices (`1..31`). -/
 abbrev KeysOK (d : List Nat) : Prop := ∀ n ∈ d, 1 ≤ n ∧ n ≤ 31
-/-- GPR index → `Register` (`1..31 ↦ x1..x31`).  `0` and `≥ 32` map to the junk
-default `x1`; every lemma about `gprReg` carries `1 ≤ n`/`n ≤ 31` bounds (or, for
-sources, handles `0` separately via `rX_bits_zero`), so the junk values are never
-consulted. -/
+
 def gprReg : Nat → Register
   | 1 => Register.x1
   | 2 => Register.x2
@@ -174,10 +65,6 @@ def gprReg : Nat → Register
   | 0 => Register.x1
   | _+32 => Register.x1
 
-/-- Homogeneous (`BitVec 64`-valued) GPR read, dispatching the heterogeneous
-`RegisterType` register file by concrete index.  This is the type-level trick that
-confines the pilot to GPRs: each branch has a *concrete* register, so
-`RegisterType Register.x<k>` reduces to `BitVec 64` and no cast is needed. -/
 def gprGet (σ : MState) : Nat → Option (BitVec 64)
   | 1 => σ.regs.get? Register.x1
   | 2 => σ.regs.get? Register.x2
@@ -213,8 +100,6 @@ def gprGet (σ : MState) : Nat → Option (BitVec 64)
   | 0 => none
   | _+32 => none
 
-/-- Inject a `BitVec 64` into `RegisterType (gprReg n)` (definitionally the
-identity in every branch — all GPRs and the junk default are `BitVec 64`). -/
 def gprRT : (n : Nat) → BitVec 64 → RegisterType (gprReg n)
   | 1, v => v
   | 2, v => v
@@ -249,31 +134,20 @@ def gprRT : (n : Nat) → BitVec 64 → RegisterType (gprReg n)
   | 31, v => v
   | 0, v => v
   | _+32, v => v
-/-! ## Pin satisfaction and the bounded-∀ `decide` battery
 
-`decide` rejects open terms, so every side condition the induction needs at a
-*symbolic* GPR index is pre-packaged here as a bounded-∀ statement over `n < 32`
-(decidable via `Nat.decidableBallLT`) and closed by one kernel `decide` each. -/
-
-/-- All pins hold (`gprGet`-phrased `PinsHold`). -/
 def GHolds (σ : MState) : GRegs → Prop
   | [] => True
   | (n, v) :: L => gprGet σ n = some v ∧ GHolds σ L
 
-/-- What a *source* read of index `n` requires of `σ`: nothing for `x0` (the
-value is `0`), the `gprGet` pin otherwise. -/
 def srcPin (σ : MState) : Nat → BitVec 64 → Prop
   | 0, v => v = 0#64
   | m+1, v => gprGet σ (m+1) = some v
 
-/-- Symbolic source value from the pin list (`x0 ↦ 0`). -/
 def srcVal (n : Nat) (L : GRegs) : BitVec 64 :=
   match n with
   | 0 => 0#64
   | m+1 => (lookupG (m+1) L).getD 0#64
 
-/-- The written GPR avoids the non-noise pinned/step registers, and is
-`NonPinned` — everything `stepObs_alu` needs of a symbolic `rd` index. -/
 theorem gpr_rd_ok : ∀ n, n < 32 → 1 ≤ n →
     ((gprReg n == Register.nextPC) = false ∧
      (gprReg n == Register.minstret_increment) = false ∧
@@ -281,12 +155,9 @@ theorem gpr_rd_ok : ∀ n, n < 32 → 1 ≤ n →
      (gprReg n == Register.hart_state) = false ∧
      NonPinned (gprReg n)) := by decide
 
-/-- `gprReg` is injective on `1..31`, `==`-phrased for the `obs_*` consumers. -/
 theorem gprReg_beq_false : ∀ n, n < 32 → ∀ m, m < 32 → 1 ≤ n → 1 ≤ m → n ≠ m →
     (gprReg n == gprReg m) = false := by decide
-/-- Generic GPR *source* read at the execute-time state
-`afterNextPC (afterPrelude σ) pc`, dispatching to the `rX_bits_x<k>` battery
-(`RegAccess.lean`) — `x0` reads `0` via `rX_bits_zero`. -/
+
 theorem rX_src (σ : MState) (pc : BitVec 64) :
     ∀ (n : Nat), n ≤ 31 → ∀ (v : BitVec 64), srcPin σ n v →
     (rX_bits (gprIdx n)).run (afterNextPC (afterPrelude σ) pc)
@@ -325,8 +196,6 @@ theorem rX_src (σ : MState) (pc : BitVec 64) :
   | 31, _, v, h => rX_bits_x31 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
   | _+32, hn, _, _ => absurd hn (by omega)
 
-/-- Generic GPR write, dispatching to the `wX_bits_x<k>` battery: the write is
-the single insert `regs.insert (gprReg n) (gprRT n d)`. -/
 theorem wX_gpr (s : MState) (d : BitVec 64) :
     ∀ (n : Nat), 1 ≤ n → n ≤ 31 →
     (wX_bits (gprIdx n) d).run s
@@ -365,7 +234,6 @@ theorem wX_gpr (s : MState) (d : BitVec 64) :
   | 31, _, _ => wX_bits_x31 s d
   | _+32, _, h => absurd h (by omega)
 
-/-- Read the written GPR back out of an ALU observation, `gprGet`-phrased. -/
 theorem obs_gpr_rd {σ' σ : MState} {pc vm : BitVec 64} :
     ∀ (n : Nat), 1 ≤ n → n ≤ 31 → ∀ (v : BitVec 64),
     ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg n) (gprRT n v)) →
@@ -404,8 +272,6 @@ theorem obs_gpr_rd {σ' σ : MState} {pc vm : BitVec 64} :
   | 31, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
   | _+32, _, h, _, _ => absurd h (by omega)
 
-/-- Transport a `gprGet` pin on `m` (with `gprReg n ≠ gprReg m`) through an ALU
-step writing `gprReg n`. -/
 theorem obs_gpr_other {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg n) (gprRT n v))) :
     ∀ (m : Nat), 1 ≤ m → m ≤ 31 → (gprReg n == gprReg m) = false →
@@ -443,7 +309,6 @@ theorem obs_gpr_other {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitVe
   | 30, _, _, hne, w, h => obs_alu_other hobs Register.x30 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
   | 31, _, _, hne, w, h => obs_alu_other hobs Register.x31 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
   | _+32, _, h, _, _, _ => absurd h (by omega)
-/-! ## Support lemmas: lookup/erase/pin-transport -/
 
 theorem gholds_lookup {σ : MState} {n : Nat} {v : BitVec 64} :
     ∀ (L : GRegs), GHolds σ L → lookupG n L = some v → gprGet σ n = some v := by
@@ -510,8 +375,6 @@ theorem mem_keysG_eraseG {n k : Nat} (hne : k ≠ n) :
       | head => exact List.mem_cons_self ..
       | tail _ htl => exact List.mem_cons_of_mem _ (ih htl)
 
-/-- Pins with keys ≠ the written index survive an ALU step (all stale entries
-for the written key having been erased). -/
 theorem gholds_eraseG {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg n) (gprRT n v)))
     (hn1 : 1 ≤ n) (hn31 : n ≤ 31) :
@@ -531,7 +394,6 @@ theorem gholds_eraseG {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitVe
         (gprReg_beq_false n (by omega) m (by omega) hn1 hm.1 (fun e => hne e.symm)) w hL.1,
         ih (fun k hk => hK k (List.mem_cons_of_mem _ hk)) hL.2⟩
 
-/-- The source-read obligation is met by the pin list (`x0` trivially). -/
 theorem srcPin_srcVal (σ : MState) (L : GRegs) :
     ∀ (n : Nat), (n = 0 ∨ n ∈ keysG L) → GHolds σ L → srcPin σ n (srcVal n L)
   | 0, _, _ => rfl
@@ -541,18 +403,11 @@ theorem srcPin_srcVal (σ : MState) (L : GRegs) :
     rw [hv]
     exact gholds_lookup L hL hv
 
-/-! ## The program description -/
-
-/-- Instruction kind: register-immediate `ADDI` (covers `addi`/`mv`/`li`) or
-register-register `ADD`. -/
 inductive AKind where
   | addi : AKind
   | add  : AKind
 deriving DecidableEq
 
-/-- One straight-line ALU instruction, fully concrete: address, the four LE code
-bytes, the assembled word, and the operands as GPR *indices*.  `rs2` is unused
-for `addi`, `imm` unused for `add`. -/
 structure AInstr where
   pc   : BitVec 64
   word : BitVec 32
@@ -566,20 +421,13 @@ structure AInstr where
   rs2  : Nat
   imm  : BitVec 12
 
-/-- Fall-through end PC of the block. -/
 def endPC (pc0 : BitVec 64) : List AInstr → BitVec 64
   | [] => pc0
   | a :: r => endPC (BitVec.addInt a.pc 4) r
 
-/-! ## Per-element obligations (`ProgFacts`) and the computable VC (`BlockOK`) -/
-
-/-- Source-index obligation: a GPR index, and either `x0` or available in the
-domain of pinned/previously-written registers. -/
 abbrev SrcOK (n : Nat) (dom : List Nat) : Prop :=
   n ≤ 31 ∧ (n = 0 ∨ n ∈ dom)
 
-/-- The computable per-instruction VC (all atoms decidable on the concrete
-structure; symbolic pin *values* are never inspected). -/
 abbrev InstrOK (pc0 : BitVec 64) (dom : List Nat) (a : AInstr) : Prop :=
   a.pc.toNat = pc0.toNat ∧
   (((a.b3.append a.b2).append a.b1).append a.b0).toNat = a.word.toNat ∧
@@ -592,8 +440,6 @@ abbrev InstrOK (pc0 : BitVec 64) (dom : List Nat) (a : AInstr) : Prop :=
   SrcOK a.rs1 dom ∧
   (¬ a.kind = AKind.add ∨ SrcOK a.rs2 dom)
 
-/-- The block VC: per-instruction VCs with PC contiguity and source-domain
-threading (`dom` accumulates written registers). -/
 def BlockOK (pc0 : BitVec 64) (dom : List Nat) : List AInstr → Prop
   | [] => True
   | a :: r => InstrOK pc0 dom a ∧ BlockOK (BitVec.addInt a.pc 4) (a.rd :: dom) r
@@ -605,7 +451,5 @@ instance instDecBlockOK (pc0 : BitVec 64) (dom : List Nat) :
     have : Decidable (BlockOK (BitVec.addInt a.pc 4) (a.rd :: dom) r) :=
       instDecBlockOK _ _ r
     inferInstanceAs (Decidable (_ ∧ _))
-
-/-! ## The block lemma -/
 
 end Vsa.Sim

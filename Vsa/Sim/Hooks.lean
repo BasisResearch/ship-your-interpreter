@@ -1,24 +1,6 @@
 import Vsa.Elf
 import Vsa.Sim.InitValues
 
-/-!
-# Layer-0 control-plane characterization lemmas of the fetch/step hot path
-
-The small "control-plane" lemmas of the instruction-fetch hot path
-(`PLAN-InterpSim.md` §Layer 0; `experiments/M1-fetch-path.md` "Proof plan
-implications"). Each discharges one helper on the M-mode / Bare / 4-aligned
-RV64I fetch chain, so the fetch characterization lemma composes them instead
-of re-unfolding the whole chain.
-
-These are stated for an arbitrary symbolic
-`σ : SequentialState RegisterType trivialChoiceSource` with only the minimal
-`σ.regs.get? R = some v` hypotheses each helper reads (following
-`Vsa/Sim/Dispatch.lean`), so the fetch skeleton lemma projects `GoodState`
-fields into them.
-
-Ordered bottom-up: later lemmas can use earlier ones.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 
@@ -27,18 +9,12 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-- `currentlyEnabled Ext_Ziccif` is `true` (pure `hartSupports`; no register
-read). Justifies the 4-byte fetch path at `Fetch.lean:237`. -/
 theorem currentlyEnabled_Ziccif
     (σ : SequentialState RegisterType trivialChoiceSource) :
     (currentlyEnabled extension.Ext_Ziccif).run σ = .ok true σ := by
   simp only [currentlyEnabled, hartSupports]
   simp [simp_sail, EStateM.run, pure, EStateM.pure]
 
-/-- `effectivePrivilege (InstructionFetch ()) m p = p`: the MPRV guard
-`bne (InstructionFetch ()) (InstructionFetch ())` is `false` for a fetch, so
-the privilege is returned unchanged (no register read). Reused by
-`translateAddr` and `mem_read`. -/
 theorem effectivePrivilege_fetch
     (σ : SequentialState RegisterType trivialChoiceSource)
     (m : BitVec 64) (p : Privilege) :
@@ -50,9 +26,6 @@ theorem effectivePrivilege_fetch
     decide
   simp [simp_sail, EStateM.run, pure, EStateM.pure, hc]
 
-/-- `translationMode Machine = Bare`: the `priv == Machine` guard is `true`,
-so `satp` is never read. Kills the entire page-table-walk subtree on the
-Machine/Bare fetch path. -/
 theorem translationMode_machine
     (σ : SequentialState RegisterType trivialChoiceSource) :
     (translationMode Privilege.Machine).run σ = .ok SATPMode.Bare σ := by
@@ -60,13 +33,6 @@ theorem translationMode_machine
   have hc : (Privilege.Machine == Privilege.Machine) = true := by decide
   simp [simp_sail, EStateM.run, pure, EStateM.pure, hc]
 
-/-- `translateAddr (Virtaddr a) (InstructionFetch ())` on the Machine/Bare
-fetch path returns `Ok (Physaddr (zero_extend a), PBMT_PMA, ())` reading only
-`cur_privilege` (= Machine) and `mstatus` (value irrelevant). Discharges
-`effectivePrivilege` (MPRV guard false ⇒ priv unchanged), `translationMode`
-(Machine ⇒ Bare, `satp` unread), `is_shadow_stack_access` (fetch ⇒ false), and
-`mode == Bare` ⇒ the identity translation, killing the entire PTW/TLB subtree.
-`SailME.run` boundary; `init_ext_ptw = ()`. -/
 theorem translateAddr_machine_fetch
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -97,9 +63,6 @@ theorem translateAddr_machine_fetch
     Bool.not_true, Bool.false_and, Bool.and_false,
     if_false, if_true, Bool.false_eq_true]
 
-/-- `is_landing_pad_expected () = false` given `elp = NO_LP_EXPECTED = 0#1`:
-`0#1 == landing_pad_bits_backwards LP_EXPECTED = 1#1` is `false`. Kills the
-CFI trap in `run_hart_active`. -/
 theorem is_landing_pad_expected_false
     (σ : SequentialState RegisterType trivialChoiceSource)
     (help : σ.regs.get? Register.elp = some (0#1 : RegisterType Register.elp)) :
@@ -108,9 +71,6 @@ theorem is_landing_pad_expected_false
   simp_all [simp_sail, bind, EStateM.bind, EStateM.run, pure, EStateM.pure,
     readReg, get, getThe, MonadStateOf.get, EStateM.get]
 
-/-- `should_inc_minstret Machine = true` given `mcountinhibit = 0#32`,
-`minstretcfg = 0#64` (the pinned init values): both filter bits are `0#1`, so
-the conjunction is `true`. -/
 theorem should_inc_minstret_machine
     (σ : SequentialState RegisterType trivialChoiceSource)
     (hmci : σ.regs.get? Register.mcountinhibit
@@ -123,10 +83,6 @@ theorem should_inc_minstret_machine
   simp_all [simp_sail, bind, EStateM.bind, EStateM.run, pure, EStateM.pure,
     readReg, get, getThe, MonadStateOf.get, EStateM.get]
 
-/-- `split_misaligned addr 4 e s = (1, 4)` for a 4-aligned address (any
-`e`, any splittability `s`): `do_not_split` is `true` via the alignment
-disjunct `Int.tmod (toNatInt a) 4 = 0`, collapsing the `untilFuelM` loop in
-`checked_mem_read` to a single iteration. Pure `SailM (Int × Int)`. -/
 theorem split_misaligned_aligned
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (e : Nat) (s : Splittability)
@@ -143,11 +99,6 @@ theorem split_misaligned_aligned
     refine Or.inr (Or.inl ?_)
     exact_mod_cast ha
 
-/-- `within_mmio_readable a 4 = false` for a code-region address: above the
-CLINT `[0x2000000,0x20c0000)` and SIG `[0xc000000,0xc000020)` windows, and
-below the HTIF `tohost` mailbox (pinned `htif_tohost_base = some tohostAddr`).
-A code pc `0x80000000 ≤ pc < 0x8001ad00` (code lives below `tohost`)
-satisfies these by `omega`. `get_config_rvfi () = false`. -/
 theorem within_mmio_readable_ram_false
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -179,17 +130,7 @@ theorem within_mmio_readable_ram_false
   omega
 
 open MemoryRegionType AtomicSupport Reservability misaligned_exception in
-/-- `pmaCheck (Physaddr a) 4 (InstructionFetch ()) PBMT_PMA false` succeeds
-with `Ok { splittable := CannotSplit, granule_size_exp := 0 }` for an address
-whose `[a, a+4)` window lies inside the executable RAM region
-`[0x80000000, 0x100000000)` (with `pma_regions` pinned to the init value): the
-first two `pma_regions` entries do not cover `[a,a+4)`, the RAM entry does and
-is `executable`, and 4-alignment makes `mag_pma_check` return
-`(CannotSplit, 0)`. `SailME.run` boundary. The region-walk lemma `hmatch` is
-proved by unfolding the 3-entry list and resolving the three `range_subset`
-comparisons (`Int.ofNat_le` + `bv_omega`); its statement mirrors the goal's
-discriminant exactly (`zero_extend (bits_of_physaddr (Physaddr a))`) so
-`simp [hmatch]` fires. -/
+
 theorem pmaCheck_ram_exec
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)

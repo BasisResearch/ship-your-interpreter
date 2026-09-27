@@ -1,14 +1,5 @@
 import VsaIris.Vsa.Stdout.Sflush
 
-/-!
-# `_fflush_r` on `stdout` (lane N1)
-
-`_fflush_r(reent, stdout)`: `stdout` is not a string `FILE` (`__SSTR` clear)
-and its lock mode is 0, so it takes the (no-op) recursive lock, runs
-`__sflush_r` (`sflush_run`), and releases the lock. The lock calls are
-`ret` stubs, which `nx_run` follows through the step table.
--/
-
 namespace VsaIris.Sym
 
 open scoped VsaIris.Sym.Stdout
@@ -58,7 +49,6 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
 #nx_chain fflush_chain := [fflush_A, fflush_B, fflush_C]
 
-/-- The memory after `_fflush_r(reent, stdout)` returns. -/
 @[nx_mt] abbrev fflushMt (Mt : Mem) (sp B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   writeLog (sflushMt
     (writeLog (writeLog (writeLog (writeLog Mt [((sp + 18446744073709551608#64).toNat, 8, ra)])
@@ -68,8 +58,6 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
     (sp + 18446744073709551584#64) (2147597088#64) B (2147544592#64) s0 s1 s2 s3)
     [((sp + 18446744073709551584#64).toNat, 8, 0#64)]
 
-/-- **`_fflush_r(reent, stdout)`** with `bs` pending in `stdout`'s buffer:
-prints it, returns 0. -/
 theorem fflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp B ra : BitVec 64} {need : Nat} {bs : List (BitVec 8)}

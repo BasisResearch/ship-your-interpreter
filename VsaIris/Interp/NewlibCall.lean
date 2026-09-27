@@ -2,24 +2,6 @@ import VsaIris.Interp.HelperRun
 import VsaIris.Vsa.Newlib
 import VsaIris.Interp.SpecValue
 
-/-!
-# Calling newlib from a symbolic run (lane H2)
-
-H5's newlib statements (`Newlib.lean`, `NewlibOut.lean`) use the calling
-convention `argsAt vs ∗ callFrame s need calleeSaved cs`: the argument
-registers, `sp` with its stack, the callee-saved registers at their values,
-the temporaries, `gp`, the image. A symbolic run's state is lane G's `ms`
-(one register valuation `regFile R`). The two are one resource cut
-differently (`regFile_newlib`), so a newlib call from a run is one rule:
-
-* `ms_tailNewlib`: a tail call (`j entry`, `ra` still the caller's): the
-  callee returns to the run's own caller;
-* `ms_callNewlib`: a call (`jal entry`): the run continues at `i + 4`.
-
-Both keep the callee-saved registers at the run's values and hand back the
-argument and temporary registers at new values.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -34,8 +16,6 @@ theorem fRegs_perm :
     fRegs.Perm (2 :: (Newlib.calleeSaved ++ (tmpRegs ++ argRegs))) := by
   decide
 
-/-- **The body's registers in H5's convention**: `sp`, the callee-saved
-registers, the temporaries, the arguments. -/
 theorem regFile_newlib (R : Nat → BitVec 64) :
     regFile (GF := GF) R ⊣⊢ iprop(sp ↦ᵣ R 2 ∗ sepL Newlib.calleeSaved (fun r => r ↦ᵣ R r) ∗
       sepL tmpRegs (fun r => r ↦ᵣ R r) ∗ sepL argRegs (fun r => r ↦ᵣ R r)) := by
@@ -45,7 +25,6 @@ theorem regFile_newlib (R : Nat → BitVec 64) :
   refine sep_congr_right ?_
   refine (sepL_append _ _ _).trans (sep_congr_right (sepL_append _ _ _))
 
-/-- The argument registers at the run's values give `argsAt`. -/
 theorem argsAt_of_regs (R : Nat → BitVec 64) :
     ∀ (vs : List (BitVec 64)), vs.length ≤ 8 → (∀ i (h : i < vs.length), R (10 + i) = vs[i]) →
       sepL (GF := GF) argRegs (fun r => r ↦ᵣ R r) ⊢ argsAt vs := by
@@ -85,7 +64,6 @@ theorem argsAt_of_regs (R : Nat → BitVec 64) :
   have := key 0 vs (by omega) (fun i h => by simpa using hvs i h)
   simpa using this
 
-/-- The stack geometry of a run gives H5's `SpIn`. -/
 theorem spIn_of_stackGeom {s : BitVec 64} {n need : Nat} (h : StackGeom s n) (hle : need ≤ n) :
     SpIn s need := by
   have h1 := h.le; have h2 := h.lo; have h3 := h.hi; have h4 := h.al
@@ -95,17 +73,13 @@ theorem spIn_of_stackGeom {s : BitVec 64} {n need : Nat} (h : StackGeom s n) (hl
 
 variable {live : Nat → Prop}
 
-/-- `gp` from the code resource. -/
 theorem codeRes_gp : codeRes (GF := GF) ⊢ gp ↦ᵣ□ Newlib.gpV := by
   unfold codeRes roOwn; simp only [sepL_cons, sepL_nil]
   iintro ⟨⟨#H, -⟩, -⟩
   rw [show Newlib.gpV = MallocFast.gpV from rfl]; iexact H
 
-/-- `gp` from the code resource, at the allocator's name for its value. -/
 theorem codeRes_gpM : codeRes (GF := GF) ⊢ gp ↦ᵣ□ MallocFast.gpV := codeRes_gp
 
-/-- The registers after a newlib call: the arguments and temporaries at new
-values, `sp` and the callee-saved registers as before. -/
 theorem regFile_after (R : Nat → BitVec 64) (s : BitVec 64) (hs : R 2 = s) :
     iprop(clobbered (GF := GF) argRegs ∗ clobbered tmpRegs ∗ sp ↦ᵣ s ∗
       sepL Newlib.calleeSaved (fun r => r ↦ᵣ R r)) ⊢
@@ -142,8 +116,6 @@ theorem regFile_after (R : Nat → BitVec 64) (s : BitVec 64) (hs : R 2 = s) :
     · subst h3; simp [rv', argRegs, tmpRegs, hs]
     · simp [rv', h1, h2, h3]
 
-/-- `ms_tailNewlib` whose callee precondition may use the return address's
-alignment (`NewlibOut.outSpec`: the callee's `ret`). -/
 theorem ms_tailNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {entry : BitVec 64} {P Q : BitVec 64 → IProp GF} {vs : List (BitVec 64)} {X Y : IProp GF}
     {s : BitVec 64} {need n : Nat} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem}
@@ -178,8 +150,6 @@ theorem ms_tailNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   · iframe Hargs Htmp Hsp Hcs
   iapply Hk $$ Hpc Hra Hregs HY HS Hst
 
-/-- `ms_callNewlib` whose callee precondition may use the return address's
-alignment. -/
 theorem ms_callNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
@@ -224,11 +194,6 @@ theorem ms_callNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
-/-- **A newlib call that may abort, from a run** (`jal entry` at `i`,
-`fnSpecAbort`): the return branch is `ms_callNewlib`'s; on abort, the
-continuation receives the abort resource, the run's owned bytes, and the stack
-below `s` the call did not take. Both branches come from the caller's one
-context (`∧`). -/
 theorem ms_callNewlibAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
@@ -278,7 +243,6 @@ theorem ms_callNewlibAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat ×
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ HA Hslack HS
 
-/-- A tracked part of a run's owned bytes, out of its state. -/
 theorem ms_split {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
     (hd : ∀ a, S a → ¬ T a) :
     ms (GF := GF) pc R (fun a => S a ∨ T a) M ⊢
@@ -288,7 +252,6 @@ theorem ms_split {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {
   ihave ⟨H1, H2⟩ := ownSet_split_tracked S T M hd $$ HS
   iframe Hpc Hra Hregs H1 H2
 
-/-- And back in, at one tracking memory agreeing with both. -/
 theorem ms_join {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M1 M2 : Mem} :
     ms (GF := GF) pc R S M1 ∗ ownSet T (fun a => a ↦ₘ imgM M2 a) ⊢
       ∃ M, ms pc R (fun a => S a ∨ T a) M ∗
@@ -302,7 +265,6 @@ theorem ms_join {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
   iframe Hpc Hra Hregs H
   ipureintro; exact h
 
-/-- A C string of the fixed `.rodata` is a persistent string. -/
 theorem strAt_rodata {p : Nat} {x : String}
     (hdom : ∀ i, i < x.toList.length + 1 → rodataDom (p + i)) (hc : CStrImg rodataByte p x)
     (hw : StrWin p x.toList.length) :
@@ -324,15 +286,13 @@ theorem strAt_rodata {p : Nat} {x : String}
 
 end
 
-/-! ## Value slots in a run's owned bytes (shared: H2's natives, E6's loops) -/
-
 section Carve
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 open Vsa.While Vsa.RuntimeRepr
 
 omit I in
-/-- A run's state over an equivalent owned set. -/
+
 theorem ms_iff {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
     (h : ∀ k, S k ↔ T k) : ms (GF := GF) pc R S M ⊢ ms pc R T M := by
   unfold ms
@@ -340,8 +300,6 @@ theorem ms_iff {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M 
   iframe Hpc Hra Hregs
   iapply ownSet_iff _ h $$ HS
 
-/-- **A value slot out of a run's owned bytes**: the slot's three words are
-those of a value's image, so the slot is the value. -/
 theorem ms_carveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
     {M : Mem} {a b : Nat} {img : Nat → BitVec 8} {v : Value} (hS : ∀ k, InExt (a, 24) k → S k)
     (h0 : imgW (imgM M) a = imgW img b) (h8 : imgW (imgM M) (a + 8) = imgW img (b + 8))
@@ -364,7 +322,6 @@ theorem ms_carveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {
   iapply valAt_of_img N
   iframe Hv Hslot
 
-/-- And back in: the run's other bytes unchanged. -/
 theorem ms_uncarveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
     {M : Mem} {a : Nat} {v : Value} (hS : ∀ k, InExt (a, 24) k → S k) :
     ms (GF := GF) pc R (fun k => S k ∧ ¬ InExt (a, 24) k) M ∗ valAt N a v ⊢

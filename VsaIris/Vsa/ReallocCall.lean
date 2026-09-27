@@ -1,34 +1,20 @@
 import VsaIris.Vsa.ReallocPro
 
-/-!
-# `_realloc_r`'s nested calls
-
-`_realloc_r` calls `_malloc_r` and `_free_r` from its 64-byte frame. Each
-call is the callee's whole proof (`malloc_all`, `free_body`) over a nested
-context: the realloc run's code, owned bytes and final postcondition, the
-callee's live blocks, the link address as its return address, `sp` 64 bytes
-below the caller's, and the current registers and memory as its entry
-values. The callee's return obligation is the continuation at the link.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `sp` 64 bytes below a realloc caller's. -/
 theorem sp64_toNat {s : BitVec 64} (h : SpOKA s) :
     (s + 18446744073709551552#64).toNat = s.toNat - 64 := by
   have := h.lo; have := h.hi
   unfold allocHeadroom Vsa.Sim.tohostAddr at *
   rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
 
-/-- The callee's scratch window lies in the caller's. -/
 theorem win64_le {t a : Nat} (h : t - 64 - mHead ≤ a) : t - allocHeadroom ≤ a := by
   rw [Nat.sub_sub] at h
   exact Nat.le_trans (Nat.sub_le_sub_left (by decide : 64 + mHead ≤ allocHeadroom) t) h
 
-/-- The nested call's shared obligations. -/
 theorem ROK.wok64 {C : MCtx} {B : RB} (O : ROK C B) {H' : List (Nat × Nat)} {link : BitVec 64}
     (hlink : link.toNat % 4 = 0) (hH' : ∀ a, vsaFoot H' a → vsaFoot C.H a) (n : BitVec 64)
     (R : Nat → BitVec 64) (Mt : Mem) (top : Nat) :
@@ -47,10 +33,6 @@ theorem ROK.wok64 {C : MCtx} {B : RB} (O : ROK C B) {H' : List (Nat × Nat)} {li
       rw [hs] at h1 h2
       exact O.deep a (win64_le h1) (by omega)
 
-/-- **A nested `_free_r(q)`** from `_realloc_r`'s frame, the block `(q, n)`
-live over the others `H'`: back at the link with the saved registers, the
-heap without the block, its top no higher, and the memory kept outside the
-callee's window. -/
 theorem rcall_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {H' : List (Nat × Nat)} {q n top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     {link : BitVec 64} (hlink : link.toNat % 4 = 0) (hH' : ∀ a, vsaFoot H' a → vsaFoot C.H a)
@@ -79,11 +61,6 @@ theorem rcall_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt
       simp only [Cf] at h1; rw [hs] at h1; exact win64_le h1)
       (by simp only [Cf] at h2; rw [hs] at h2; omega) (hH' a hf), fun _ _ => rfl⟩
 
-/-- **A nested `_malloc_r(n)`** from `_realloc_r`'s frame over the live
-blocks `H'`: back at the link with the saved registers, and either a fresh
-block with the heap extended by it and the top grown by at most its chunk,
-or NULL with the heap kept and the arena starved; the memory kept outside the
-callee's window. -/
 theorem rcall_malloc {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {H' : List (Nat × Nat)} {n : BitVec 64} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat}

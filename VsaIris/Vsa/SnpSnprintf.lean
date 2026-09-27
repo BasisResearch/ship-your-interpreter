@@ -1,21 +1,9 @@
 import VsaIris.Vsa.SnpSvfLoop
 
-/-!
-# `snprintf` in its run
-
-`snprintf(dst, n, fmt, a3…a7)` (`0x80005c44`, `sp = s`): the `va_list` spilled
-at `s - 40`, the string `FILE` at `s - 264` over `dst[0, n - 1)`,
-`_svfprintf_r`, the NUL at the `FILE`'s `_p`, the return. The format loop is
-a hypothesis `SvfLoopRun` a format discharges iteration by iteration
-(`SnpSvfLoop.lean`).
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
 
-/-- A format's whole loop: from the loop head with nothing printed to
-`_svfprintf_r`'s return with the stream `total`. -/
 def SvfLoopRun (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (p ap : Nat) (total : List (BitVec 8)) : Prop :=
@@ -23,15 +11,11 @@ def SvfLoopRun (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     SvfRetK live Dt DA Q s dst n R0 Mt0 (BitVec.ofNat 64 total.length) total →
     SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R Mt
 
-/-- What `snprintf` leaves: the stream cut at `n - 1` and a NUL in
-`dst[0, n)`, everything outside its scratch and `dst` unchanged. -/
 structure SnpOut (Mt Mt' : Mem) (s dst n : Nat) (total : List (BitVec 8)) : Prop where
   bytes : ∀ i, i < min total.length (n - 1) → imgM Mt' (dst + i) = total.getD i 0
   nul : imgM Mt' (dst + min total.length (n - 1)) = 0#8
   frame : ∀ a, ¬ (s - 1024 ≤ a ∧ a < s) → ¬ (dst ≤ a ∧ a < dst + n) → imgM Mt' a = imgM Mt a
 
-/-- **`snprintf`'s epilogue** (`0x80005cbc`, back from `_svfprintf_r`): the
-return count not below `-1`, the NUL at `_p`, the spills reloaded. -/
 theorem snp_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (total : List (BitVec 8)) (R : Nat → BitVec 64) (Mt Mt0 : Mem) (SG : SnpGeom s dst n)
@@ -89,7 +73,6 @@ theorem snez_pos {x : Nat} (h0 : 0 < x) (h : x < 2 ^ 64) :
     exact Int.ofNat_lt.mpr h0
   rw [e]; rfl
 
-/-- The flags word's low half (`sw a6,24(sp)` of `0xffff0208`). -/
 theorem lh_flags (Mt : Mem) (a : Nat) : ldv .lh (writeLog Mt [(a, 4, 18446744073709486600#64)]) a = 0x208#64 := by
   obtain ⟨h0, h1, _, _⟩ := pin4_of_writeLog Mt [] [] a (18446744073709486600#64) (by simp [OutLRange])
   simp only [List.nil_append] at h0 h1
@@ -98,7 +81,6 @@ theorem lh_flags (Mt : Mem) (a : Nat) : ldv .lh (writeLog Mt [(a, 4, 18446744073
     List.map_append, List.cons_append]
   rw [h0, h1]; decide
 
-/-- `snprintf`'s state at `_svfprintf_r`'s entry. -/
 structure SnpAtSvf (s dst n : Nat) (R : Nat → BitVec 64) (Mt : Mem) (R' : Nat → BitVec 64) (Mt' : Mem) :
     Prop where
   r1 : R' 1 = 0x80005cbc#64
@@ -115,8 +97,6 @@ structure SnpAtSvf (s dst n : Nat) (R : Nat → BitVec 64) (Mt : Mem) (R' : Nat 
   s1 : ldv .ld Mt' (BitVec.ofNat 64 (s - 272 + 200)).toNat = R 9
   frame : ∀ a, (a < s - 272 ∨ s ≤ a) → imgM Mt' a = imgM Mt a
 
-/-- **`snprintf`'s prologue** (`0x80005c44` → `_svfprintf_r`'s entry): the
-spills, the `va_list`, the string `FILE` over `dst`. -/
 theorem snp_pro {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
@@ -168,10 +148,6 @@ theorem snp_pro {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   · svf_mem
   · intro a ha; svf_mem
 
-/-- **`snprintf(dst, n, fmt, …)`** (`0x80005c44`) in its run, for a format
-whose loop renders `total` (`SvfLoopRun`, discharged per format): the
-caller's registers kept, `total` cut at `n - 1` and a NUL in `dst[0, n)`,
-nothing else outside the stack scratch changed. -/
 theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
@@ -213,8 +189,6 @@ theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     · exact (hk4 z h1 h2).trans ((hkeep z (.inr (.inr ⟨h1, h2⟩))).trans (SA.keep z h1 h2))
   · rw [hfr4 a ha2, hfr a (by have := SG.d_sep; simp only [SvfW, snpFP]; omega), SA.frame a (by omega)]
 
-/-! ## The formats of the two exact holes -/
-
 theorem pieceBytes_zero (g : Nat → BitVec 8) (b : Nat) : pieceBytes g b 0 = [] := by simp [pieceBytes]
 
 theorem natDigits_length_le : ∀ (fuel n k : Nat), 1 ≤ k → n < 10 ^ k →
@@ -234,7 +208,6 @@ theorem natDigits_length_le : ∀ (fuel n k : Nat), 1 ≤ k → n < 10 ^ k →
           show 10 ^ (k - 1) * 10 = 10 ^ k by rw [← Nat.pow_succ]; congr 1; omega]; exact hn)
       simp; omega
 
-/-- A 64-bit value renders in at most 20 characters. -/
 theorem intToString_length_le (v : BitVec 64) : (strBytes (Vsa.While.intToString v.toInt)).length ≤ 20 := by
   unfold strBytes
   rw [List.length_map, Vsa.Sim.intToString_of_bv v]
@@ -252,7 +225,6 @@ theorem intToString_length_le (v : BitVec 64) : (strBytes (Vsa.While.intToString
     simp only [show ("-" : String).toList.length = 1 from rfl]; omega
   · exact hn _ v.isLt
 
-/-- **`"%lld"`'s loop**: one `%lld` iteration, then the NUL. -/
 theorem loop_lld {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
@@ -274,8 +246,6 @@ theorem loop_lld {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (fun i hi => absurd hi (by omega)) (by simpa using h4) (by omega) hal ?_
   simpa [pieceBytes_zero] using hret
 
-/-- **`"<fn %s>"`'s loop**: the `%s` iteration after `"<fn "`, then `">"` and
-the NUL. -/
 theorem loop_fn {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)

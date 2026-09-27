@@ -2,21 +2,10 @@ import VsaIris.Vsa.SnpPrint
 import VsaIris.Vsa.SnpStrlen
 import VsaIris.Vsa.SnpArith
 
-/-!
-# `_svfprintf_r` on `snprintf`'s string `FILE`
-
-`_svfprintf_r(ptr, fp, fmt, ap)` at `sp = s - 272` (its frame `[s - 864,
-s - 272)`). The prologue asks the locale for the decimal point (`strlen(".")`)
-and clears the multibyte state; the format loop scans literal runs with the
-locale's `mbtowc` (`__ascii_mbtowc`), prints each run and each conversion as
-iovec pieces, and flushes them through `__ssprint_r` (`ssprint_nw`).
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
 
-/-- The locale's decimal point `"."` (`0x80019770`), a data string. -/
 structure DotAt (Dt : Mem) (DA : List Nat) : Prop where
   dom : InDA DA 0x80019770 0x80019772
   b0 : imgM Dt 0x80019770 = 0x2e#8
@@ -32,7 +21,6 @@ theorem DotAt.str {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} (h : 
   hi := by decide
   htif := by decide
 
-/-- The string `FILE`'s flags, unsigned. -/
 theorem lhu_of_lh {Mt : Mem} {a : Nat} (h : ldv .lh Mt a = 0x208#64) : ldv .lhu Mt a = 0x208#64 := by
   simp only [ldv, bytesVal, widthOfM] at h ⊢
   generalize ((bytesAt (imgM Mt) a 2).getD 1 0#8).append ((bytesAt (imgM Mt) a 2).getD 0 0#8) = v at h ⊢
@@ -49,7 +37,6 @@ theorem lhu_of_lh {Mt : Mem} {a : Nat} (h : ldv .lh Mt a = 0x208#64) : ldv .lhu 
   have hv : v = 0x208#16 := by rw [← e, h2]; decide
   subst hv; decide
 
-/-- A load past a store, both at `ofNat` addresses. -/
 theorem ldv_miss_nat (k : MKind) (Mt : Mem) {x y w : Nat} (v : BitVec 64) (hx : x < 2 ^ 64)
     (hy : y < 2 ^ 64) (h : x + widthOfM k ≤ y ∨ y + w ≤ x) :
     ldv k (writeLog Mt [((BitVec.ofNat 64 y).toNat, w, v)]) (BitVec.ofNat 64 x).toNat =
@@ -60,7 +47,6 @@ theorem imgM_miss_nat (Mt : Mem) {a y w : Nat} (v : BitVec 64) (hy : y < 2 ^ 64)
     imgM (writeLog Mt [((BitVec.ofNat 64 y).toNat, w, v)]) a = imgM Mt a := by
   rw [toNat_ofNat_lt hy]; exact imgM_store_miss Mt v h
 
-/-- A byte load of a byte store of `zext b`. -/
 theorem ldv_lbu_sb (Mt : Mem) (a : Nat) (b : BitVec 8) :
     ldv .lbu (writeLog Mt [(a, 1, BitVec.zeroExtend 64 b)]) a = BitVec.ofNat 64 b.toNat := by
   simp only [ldv, bytesVal, bytesAt, widthOfM, List.range_one, List.map_cons, List.map_nil,
@@ -73,13 +59,9 @@ theorem ldv_lbu_sb0 (Mt : Mem) (a : Nat) : ldv .lbu (writeLog Mt [(a, 1, 0#64)])
   have := ldv_lbu_sb Mt a 0#8
   simpa using this
 
-/-- Loads and bytes through a run's stores at `ofNat` addresses. -/
 macro "svf_mem" : tactic =>
   `(tactic| (simp (disch := (first | omega | (simp only [widthOfM]; omega))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4, ldv_lbu_sb0]))
 
-/-- `_svfprintf_r` after `memset` (`0x800076a4`), from the entry registers `R0`
-and memory `Mt0`: the frame at `s - 864`, the first spills, the `FILE`'s
-flags, and every byte outside the frame unchanged. -/
 structure SvfPro (s : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (R : Nat → BitVec 64) (Mt : Mem) :
     Prop where
   r2 : R 2 = BitVec.ofNat 64 (s - 864)
@@ -114,7 +96,6 @@ structure SvfPro (s : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (R : Nat → Bit
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
   intro R' h10' hkp
 
-/-- `strlen`'s kept registers, at the literal values the prologue set. -/
 macro "svf_keep " h:ident " [" zs:num,* "]" : tactic => do
   let mut t ← `(tactic| skip)
   for z in zs.getElems do
@@ -158,11 +139,8 @@ macro "svf_keep " h:ident " [" zs:num,* "]" : tactic => do
   · intro a ha
     svf_mem
 
--- `_svfprintf_r`'s prologue to `memset`'s return (`0x80007654` → `0x800076a4`).
 #ix_chain svfPro := [svfPro_p1, svfPro_p2, svfPro_p3, svfPro_p4, svfPro_p5]
 
-/-- The spill slots of `_svfprintf_r`'s frame hold the caller's `ra` and
-callee-saved registers. -/
 structure SvfSaved (Mt : Mem) (s : Nat) (R0 : Nat → BitVec 64) : Prop where
   ra : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 584)).toNat = R0 1
   s0 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 576)).toNat = R0 8
@@ -178,15 +156,9 @@ structure SvfSaved (Mt : Mem) (s : Nat) (R0 : Nat → BitVec 64) : Prop where
   s10 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 496)).toNat = R0 26
   s11 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 488)).toNat = R0 27
 
-/-- What `_svfprintf_r` (with `__ssprint_r` and `__ssputs_r` below it) may
-write: its frames `[s - 992, s - 272)`, the destination and the `FILE`. -/
 def SvfW (s dst n a : Nat) : Prop :=
   (s - 992 ≤ a ∧ a < s - 272) ∨ (dst ≤ a ∧ a < dst + n) ∨ (snpFP s ≤ a ∧ a < snpFP s + 16)
 
-/-- What the format loop keeps throughout: the format cursor `p` (at `sp`),
-the argument cursor `ap`, the return count `rt`, the stream printed so far
-`total` (in the buffer, cut at `n - 1`), the loop's fixed registers, the
-caller's spills, and everything outside `SvfW` as at the entry. -/
 structure SvfCore (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat) (rt : BitVec 64)
     (total : List (BitVec 8)) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   r2 : R 2 = BitVec.ofNat 64 (s - 864)
@@ -204,7 +176,6 @@ structure SvfCore (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : N
   buf : BufAt Mt s dst n total
   frame : ∀ a, ¬ SvfW s dst n a → imgM Mt a = imgM Mt0 a
 
-/-- **The format loop's head** (`0x80007720`): `SvfCore` and an empty `uio`. -/
 structure SvfAt (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat) (rt : BitVec 64)
     (total : List (BitVec 8)) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   core : SvfCore s dst n R0 Mt0 p ap rt total R Mt
@@ -268,12 +239,8 @@ structure SvfAt (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat
   · svf_mem
   · svf_mem
 
--- `memset`'s return to the loop head (`0x800076a4` → `0x80007720`).
 #ix_chain svfPro2 := [svfPro2_p1, svfPro2_p2, svfPro2_p3]
 
-/-- **`_svfprintf_r`'s prologue** (`0x80007654`, `sp = s - 272`, `fp = s - 264`):
-the loop head's state `SvfAt` with the format and argument cursors from `a2`,
-`a3`, nothing printed. -/
 theorem svf_entry {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
@@ -291,20 +258,13 @@ theorem svf_entry {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     svfPro2 hlive R Mt R' Mt' SG SP hB hK
   apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
 
-/-! ## The format scan -/
-
-/-- The loop's fixed registers. -/
 def SvfRegs (R' R : Nat → BitVec 64) : Prop :=
   ∀ z, z = 2 ∨ z = 8 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → R' z = R z
 
-/-- The bytes `SvfCore` reads besides the format, return and argument slots:
-the `FILE` and `uio` pointers, the spills, and everything outside the frames. -/
 def SvfKeep (s a : Nat) : Prop :=
   (s - 864 + 8 ≤ a ∧ a < s - 864 + 16) ∨ (s - 864 + 224 ≤ a ∧ a < s - 864 + 232) ∨
     (s - 864 + 488 ≤ a ∧ a < s - 272) ∨ a < s - 992 ∨ s - 272 ≤ a
 
-/-- **`SvfCore` across a stretch of the loop**: the kept bytes unchanged, the
-fixed registers kept, new format, return and argument slots. -/
 theorem SvfCore.update {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap p' ap' : Nat}
     {rt rt' : BitVec 64} {total : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (A : SvfCore s dst n R0 Mt0 p ap rt total R Mt) (SG : SnpGeom s dst n) (hR : SvfRegs R' R)
@@ -344,9 +304,6 @@ theorem SvfCore.update {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p a
   · exact (ag .ld 496 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s10
   · exact (ag .ld 488 (by simp only [widthOfM]; omega) (by simp only [widthOfM]; omega)).trans sv.s11
 
-/-- `SvfCore` survives a scratch write inside `[s - 864 + 168, s - 864 + 224)`
-(`mbtowc`'s character, the sign and digit buffers) and new values in the
-registers the loop does not fix. -/
 theorem SvfCore.scratch {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat}
     {rt : BitVec 64} {total : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (A : SvfCore s dst n R0 Mt0 p ap rt total R Mt) (SG : SnpGeom s dst n) (hR : SvfRegs R' R)
@@ -365,7 +322,6 @@ theorem SvfCore.scratch {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p 
   simp only [Nat.add_zero] at this
   exact this.trans A.fmt
 
-/-- Its layer over an empty `uio`. -/
 theorem SvfAt.scratch {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat}
     {rt : BitVec 64} {total : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (A : SvfAt s dst n R0 Mt0 p ap rt total R Mt) (SG : SnpGeom s dst n) (hR : SvfRegs R' R)
@@ -407,7 +363,6 @@ theorem snez_ofNat (b : BitVec 8) :
   · rename_i h; exact snez_zero h
   · rename_i h; exact snez_one h
 
-/-- The scan after `mbtowc` returned on the byte at `q` (`0x80007744`). -/
 structure ScanAt (Dt : Mem) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
     (rt : BitVec 64) (total : List (BitVec 8)) (q : Nat) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   svf : SvfAt s dst n R0 Mt0 p ap rt total R Mt
@@ -415,8 +370,6 @@ structure ScanAt (Dt : Mem) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem)
   r10 : R 10 = if imgM Dt q = 0#8 then 0#64 else 1#64
   wc : ldv .lw Mt (BitVec.ofNat 64 (s - 864 + 180)).toNat = BitVec.ofNat 64 (imgM Dt q).toNat
 
-/-- **One `mbtowc` call of the scan** (`0x80007724` → `0x80007744`): the
-locale's `__ascii_mbtowc` on the format byte at `q`. -/
 theorem svf_mbtowc {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -452,8 +405,6 @@ theorem svf_mbtowc {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact snez_ofNat _
   · exact ldv_lw_store4 Mt _ _ (by have := (imgM Dt q).isLt; omega)
 
-/-- The scan's branch on `mbtowc`'s result (`0x80007744`): the end of the
-format (`hZ`), a conversion (`hP`), or the next byte (`hN`). -/
 theorem svf_scan_br {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -498,16 +449,12 @@ theorem svf_scan_br {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
-/-- A format read by the scan: bytes `[q, q + k]` in the data view, in RAM off
-the HTIF words. -/
 structure FmtGeom (DA : List Nat) (q k : Nat) : Prop where
   dom : InDA DA q (q + k + 1)
   lo : 0x80000000 ≤ q
   hi : q + k + 1 ≤ 0x100000000
   htif : q + k + 1 ≤ 0x8001ad00 ∨ 0x8001ad08 ≤ q
 
-/-- **The literal scan** (`0x80007724`): `k` ordinary bytes from `q`, then the
-NUL (`hZ`, at `0x80007960`) or a `'%'` (`hP`, at `0x8000775c`). -/
 theorem svf_scan {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -554,17 +501,11 @@ theorem svf_scan {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
       (fun i hi => by rw [show q + 1 + i = q + (i + 1) by omega]; exact hb (i + 1) (by omega))
       hZ hP hend
 
-/-! ## Pending pieces -/
-
-/-- Where a piece's bytes come from: the data view outside the stack scratch
-(the format, a `%s` string) or the scratch itself (the sign, the digits). -/
 structure PieceSrc (DA : List Nat) (s dst n b l : Nat) : Prop where
   geom : PieceGeom s dst n b l
   small : l < 2 ^ 31
   src : (∀ a, b ≤ a → a < b + l → a ∈ DA ∧ (a < s - 1024 ∨ s ≤ a)) ∨ (s - 1024 ≤ b ∧ b + l ≤ s)
 
-/-- The bytes the flush prints: the scratch's at the flush, the data view's
-elsewhere. -/
 def gOf (s : Nat) (Dt Mt : Mem) (a : Nat) : BitVec 8 :=
   if s - 1024 ≤ a ∧ a < s then imgM Mt a else imgM Dt a
 
@@ -579,8 +520,6 @@ theorem piecesOK_of_src {Dt : Mem} {DA : List Nat} {Mt : Mem} {s dst n : Nat}
   · refine .inr ⟨.inr (.inl ⟨by simp only [snpNeed]; omega, by omega⟩), ?_⟩
     unfold gOf; rw [if_pos (by omega)]
 
-/-- **A conversion in progress**: `SvfCore` and the pending pieces `L` in the
-`uio` (at most three: a literal run, a sign, a body). -/
 structure SvfSt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
     (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat)) (R : Nat → BitVec 64)
     (Mt : Mem) : Prop where
@@ -593,7 +532,6 @@ structure SvfSt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : 
   len : L.length ≤ 3
   sum : sumLen L < 2 ^ 31
 
-/-- `subw` of two addresses a short distance apart. -/
 theorem subw_ofNat' {w c : Nat} (hcw : c ≤ w) (hw : w < 2 ^ 64) (hd : w - c < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 w) - BitVec.extractLsb 31 0 (BitVec.ofNat 64 c))
       = BitVec.ofNat 64 (w - c) := by
@@ -604,7 +542,6 @@ theorem subw_ofNat' {w c : Nat} (hcw : c ≤ w) (hw : w < 2 ^ 64) (hd : w - c < 
     omega]
   exact VsaIris.Interp.sext32_ofNat_eq (by omega)
 
-/-- `addw` of two small counts. -/
 theorem addw_ofNat {a b : Nat} (h : a + b < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) + BitVec.extractLsb 31 0 (BitVec.ofNat 64 b))
       = BitVec.ofNat 64 (a + b) := by
@@ -615,7 +552,6 @@ theorem addw_ofNat {a b : Nat} (h : a + b < 2 ^ 31) :
     omega]
   exact VsaIris.Interp.sext32_ofNat_eq h
 
-/-- The literal piece's stores make an `SvfSt` of one piece. -/
 theorem SvfSt.ofLit {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
     {p ap c len : Nat} {total : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt : Mem}
     (A : SvfAt s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total R Mt) (SG : SnpGeom s dst n)
@@ -655,9 +591,6 @@ theorem SvfSt.ofLit {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt
     exact hsrc
   · simp [sumLen]; omega
 
-/-- **The literal run's piece** (`0x80007970`): `(p, len)` appended to the
-`uio`, the return count advanced; then the conversion (`s4 ≠ 0`, `hP`) or the
-end (`hE`). -/
 theorem svf_litBody {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c len : Nat} {total : List (BitVec 8)}
@@ -694,14 +627,12 @@ theorem svf_litBody {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
-/-- The loop head's empty `uio` as pending pieces. -/
 theorem SvfSt.ofAt {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
     {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {R : Nat → BitVec 64} {Mt : Mem}
     (A : SvfAt s dst n R0 Mt0 p ap rt total R Mt) : SvfSt DA s dst n R0 Mt0 p ap rt total [] R Mt :=
   ⟨A.core, by simpa using A.r23, by simpa using A.cnt, by simpa [sumLen] using A.res,
     fun j hj => absurd hj (by simp), fun j hj => absurd hj (by simp), by simp, by simp [sumLen]⟩
 
-/-- The conversion's continuation after the literal run `[p, q)`. -/
 def SvfConvK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (p ap c q : Nat) (total : List (BitVec 8)) (pc : BitVec 64) : Prop :=
@@ -709,9 +640,6 @@ def SvfConvK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 (c + (q - p))) total L R' Mt' →
     R' 22 = BitVec.ofNat 64 q → SnpW live Dt DA (snpS s dst n) Q pc R' Mt'
 
-/-- **The scan's stop** (`0x8000775c` at a `'%'`, `0x80007960` at the NUL): the
-literal run `[p, q)` becomes a piece, then the conversion at `q`
-(`0x8000776c`) or the end (`0x800079b0`). -/
 theorem svf_lit0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c q : Nat} {total : List (BitVec 8)}
@@ -791,9 +719,6 @@ theorem svf_lit1Z {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
   · rw [h22'']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h22
 
-/-- **The scan's stop** (`0x8000775c` at a `'%'`, `0x80007960` at the NUL): the
-literal run `[p, q)` becomes a piece, then the conversion at `q`
-(`0x8000776c`) or the end (`0x800079b0`). -/
 theorem svf_lit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c q : Nat} {total : List (BitVec 8)}
@@ -811,9 +736,6 @@ theorem svf_lit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     · exact svf_lit1P hlive R Mt SG A h22 (by simpa using h10) hq hc (hsrc hlt) hlt hk
     · exact svf_lit1Z hlive R Mt SG A h22 (by simpa using h10) hq hc (hsrc hlt) hlt hk
 
-/-! ## `PRINT`: the sign and body pieces -/
-
-/-- The four slots a piece's append writes: its iovec entry, `resid`, the count. -/
 def PushW (s k a : Nat) : Prop :=
   (s - 864 + 352 + 16 * k ≤ a ∧ a < s - 864 + 352 + 16 * k + 16) ∨
     (s - 864 + 232 ≤ a ∧ a < s - 864 + 236) ∨ (s - 864 + 240 ≤ a ∧ a < s - 864 + 248)
@@ -822,8 +744,6 @@ theorem sumLen_append_one (L : List (Nat × Nat)) (b l : Nat) :
     sumLen (L ++ [(b, l)]) = sumLen L + l := by
   simp [sumLen, List.map_append, List.sum_append]
 
-/-- **One piece appended to the `uio`**: the new entry, count and `resid`
-loaded from the new memory, everything else unchanged. -/
 theorem SvfSt.push {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
     {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
     {R R' : Nat → BitVec 64} {Mt Mt' : Mem} {b l : Nat}
@@ -889,14 +809,12 @@ theorem SvfSt.push {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0
   · simp; omega
   · rw [sumLen_append_one]; exact hsum
 
-/-- The sign byte's piece (`sp + 167`). -/
 theorem signSrc {DA : List Nat} {s dst n : Nat} (SG : SnpGeom s dst n) :
     PieceSrc DA s dst n (s - 864 + 167) 1 := by
   have := SG.s_lo; have := SG.s_hi; have := SG.d_sep; have := SG.d_lo
   exact ⟨⟨by omega, by omega, by omega, by omega, by simp only [snpFP]; omega, by omega, by omega⟩,
     by decide, .inr ⟨by omega, by omega⟩⟩
 
-/-- The `subw` of `PRINT`'s width and precision tests, as integers. -/
 theorem negw_toInt {size : Nat} (h : size < 2 ^ 31) :
     (BitVec.signExtend 64 (0#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 size))).toInt = -(size : Int) := by
   rw [BitVec.toInt_signExtend_of_le (by decide)]
@@ -922,11 +840,9 @@ theorem extract_m1 : BitVec.extractLsb 31 0 18446744073709551615#64 = 4294967295
 
 theorem extract_0 : BitVec.extractLsb 31 0 0#64 = 0#32 := by decide
 
-/-- The sign byte and the digit buffer: what the flush prints from the stack. -/
 def PZone (s a : Nat) : Prop :=
   (s - 864 + 160 ≤ a ∧ a < s - 864 + 224) ∨ (s - 864 + 248 ≤ a ∧ a < s - 864 + 352)
 
-/-- `PRINT`'s continuation after the sign (`0x800078bc`). -/
 def PrintMidK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (p ap : Nat) (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat))
@@ -967,8 +883,6 @@ theorem svf_printSign0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals (try exact h23)
 
-/-- After the sign piece (`0x80007878`): no second prefix, no zero padding,
-the precision test. -/
 theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -1036,11 +950,8 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
   · svf_mem; exact h32
   · intro a ha; unfold PZone at ha; svf_mem
 
--- `PRINT`'s head with a `'-'` sign byte.
 #ix_chain svf_printSign45 := [svfSign45_p1, svfSign45_p2]
 
-/-- **`PRINT`'s head** (`0x8000782c`): no padding (width `0`), the sign byte at
-`sp + 167` becomes a piece if set, the precision test passes. -/
 theorem svf_printSign {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -1060,7 +971,6 @@ theorem svf_printSign {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   · exact svf_printSign0 hlive R Mt SG St hL h132 h28 size (by simpa using h16) h22 (by omega) h20 h167 h32 hk
   · exact svf_printSign45 hlive R Mt SG St hL h132 h28 size (by simpa using h16) h22 hsize hsum h20 h167 h32 hk
 
-/-- `PRINT`'s continuation after the body (`0x80007914`, the flush test). -/
 def PrintEndK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) (Mk : Mem) : Prop :=
@@ -1068,7 +978,6 @@ def PrintEndK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 32)).toNat = 0#64 →
     R' 12 = BitVec.ofNat 64 (sumLen L) → SnpW live Dt DA (snpS s dst n) Q 0x80007914#64 R' Mt'
 
-/-- The return count stored anew (`sd a5,16(sp)`). -/
 theorem SvfSt.setRet {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
     {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
     {R R' : Nat → BitVec 64} {Mt : Mem} (rt' : BitVec 64)
@@ -1091,8 +1000,6 @@ theorem SvfSt.setRet {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {M
   · svf_mem; exact St.res
   · exact hM a (by simp only [snpIov] at h1 h2; omega)
 
-/-- `PRINT`'s return count (`0x800078ec`): `ret += max(width, realsz)` with
-width `0`. -/
 theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
@@ -1170,13 +1077,8 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals first | exact h4 | exact h28 | exact h16 | (rw [sumLen_append_one])
 
--- `PRINT`'s body piece and return count (`0x800078bc` → `0x80007914`).
 #ix_chain svf_printBody := [svfBody_p1, svfBody_p2]
 
-/-! ## The flush and the back edge -/
-
-/-- **The back edge** (`0x80007918`): the count cleared, no buffer to free,
-`s7` back at the iovec array, the loop head. -/
 theorem svf_back {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -1204,8 +1106,6 @@ theorem svf_back {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   · svf_mem
   · svf_mem; exact hres
 
-/-- `SvfCore` after `__ssprint_r`: the stream grown, everything outside
-`PrintFrame` unchanged. -/
 theorem SvfCore.flushed {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat}
     {rt : BitVec 64} {total total' : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (C : SvfCore s dst n R0 Mt0 p ap rt total R Mt) (SG : SnpGeom s dst n) (hR : SvfRegs R' R)
@@ -1248,8 +1148,6 @@ theorem SvfCore.flushed {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p 
   · exact (ag 496 (by omega) (by omega)).trans sv.s10
   · exact (ag 488 (by omega) (by omega)).trans sv.s11
 
-/-- **The flush** (`0x80007914`): the pending pieces through `__ssprint_r`
-(`ssprint_nw`) when `resid ≠ 0`, then the back edge. -/
 theorem svf_flush {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -1309,17 +1207,10 @@ theorem svf_flush {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
         simp only [snpU] at this
         rw [toNat_ofNat_lt (by omega), show s - 864 + 240 = s - 640 + 16 by omega]; exact this
 
-/-! ## `PRINT` and the flush, composed -/
-
-/-- The sign's pieces and length. -/
 def sgL (s sg : Nat) : List (Nat × Nat) := if sg = 0 then [] else [(s - 864 + 167, 1)]
 
 def sgN (sg : Nat) : Nat := if sg = 0 then 0 else 1
 
-/-- **A conversion's body is ready** (`0x8000782c`): the pending pieces `L`
-(at most the literal run), the body `(cp, size)`, the sign byte `sg` at
-`sp + 167`, no padding flags, width `0`, precision `0` or `-1`, no buffer to
-free. -/
 structure PrintIn (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap c : Nat)
     (total : List (BitVec 8)) (L : List (Nat × Nat)) (cp size sg : Nat) (R : Nat → BitVec 64)
     (Mt : Mem) : Prop where
@@ -1340,10 +1231,6 @@ structure PrintIn (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 
   cB : c + size + 1 < 2 ^ 31
   sumB : sumLen L + size + 1 < 2 ^ 31
 
-/-- **`PRINT`, the flush, the back edge** (`0x8000782c` → `0x80007720`): the
-stream grows by the pending pieces, the sign and the body, read through some
-`g` that agrees with the entry memory on the sign and digit bytes and with
-the data view off the stack. -/
 theorem svf_print {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
@@ -1377,11 +1264,6 @@ theorem svf_print {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   · rw [hL1] at A
     simpa [sgL, List.append_assoc] using A
 
-/-! ## The end of the format -/
-
-/-- `_svfprintf_r`'s return to its caller: the caller's registers restored,
-`a0` the return count, the stream `total` in the buffer, everything outside
-`SvfW` as at the entry. -/
 def SvfRetK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (rt : BitVec 64) (total : List (BitVec 8)) : Prop :=
@@ -1389,8 +1271,6 @@ def SvfRetK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     R' 10 = rt → BufAt Mt' s dst n total → (∀ a, ¬ SvfW s dst n a → imgM Mt' a = imgM Mt0 a) →
     SnpW live Dt DA (snpS s dst n) Q (R0 1) R' Mt'
 
-/-- **The epilogue** (`0x800079c8`, the `FILE`'s error flag clear): the spills
-reloaded, `a0 = ret`, `sp += 592`, `ret`. -/
 theorem svf_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -1419,8 +1299,6 @@ theorem svf_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
       all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
-/-- **The end of the format** (`0x800079b0`): the pending pieces flushed
-through `__ssprint_r` if any, then the epilogue. -/
 theorem svf_end {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}

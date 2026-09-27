@@ -1,22 +1,5 @@
 import VsaIris.Interp.EnvDefineGrow
 
-/-!
-# `env_define`, proved (INTERP_DESIGN.md §9 H1)
-
-`envDefine_spec : textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗
-strlenSpec Wp ∗ memcpySpec Wp ⊢ envDefineSpec Wp N`, for every `MachWP`, in both
-regimes, from H4's proved allocator (`allocSpecs`) and `realloc(NULL, n)`
-(`reallocNullHoles_proved`).
-
-The entry opens frame `fa` (`storeRepr_openAt`), runs the prologue and the
-count test, then: an empty frame grows (`def_empty`, `def_grow`); otherwise the
-name loop (`scan_frame` at `defLoop`, invariant `DefFrame`) finds the name
-(`def_hit`: `Store.define`'s replacement) or misses it, and the capacity test
-(`def_cap`) grows a full frame (`def_grow`) or appends at once
-(`def_append`). The counted regime's charge `defineCost` splits as the name
-copy plus `growthCost` (`defineCost_miss`, `growthCost_eq`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -43,7 +26,6 @@ section Main
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- **`env_define`** (`env.c:22`), for every `MachWP`, both regimes. -/
 theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ envText, live p.1)
     (hlive : AllocLive live) (N : NativeAddrs) :
     textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strlenSpec Wp ∗
@@ -56,14 +38,14 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
   imodintro
   iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp, hslot⟩, Ha0, Ha1, Ha2, Hsp, -, -, Hcl, Hsv, Hstk, #Hfa, #Hx, Hval,
     Hhs⟩ HK
-  -- the heap and the store; the frame opened
+
   ihave ⟨%H, %B, Hh, Hst, %hBH⟩ := heapStore_parts N _ st $$ Hhs
   ihave ⟨Hst, %hBd⟩ := keep_pure (storeRepr_blocks_disjoint N) $$ Hst
   ihave ⟨%f, %Gm, %img, %B₁, %B₂, %⟨hf, hGe, hlay, hinv, hB⟩, Hown, #Hb, #Hp, #HGe, Hclose⟩ :=
     storeRepr_openAt N $$ [Hst Hfa]
   · iframe Hst Hfa
   subst hB
-  -- the value slot, apart from the stack
+
   ihave ⟨%fo, Hout, #Hv⟩ := valAt_parts N _ v $$ Hval
   ihave ⟨⟨Hout, Hstk⟩, %hdo⟩ := keep_pure (ownSet_off _ _ fo) $$ [Hout Hstk]
   · iframe Hout; unfold stackScratch blockOwn; iexact Hstk
@@ -77,7 +59,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
   let C : DefCall := ⟨s, r, pn, pv, x, v, saved, fo⟩
   have hC : C.OK := ⟨hsp, hslot, hr, hsv, hsep⟩
   have hs64 : 64 ≤ s.toNat := by have := hsp.lo; unfold envDefineNeed htifLo at this; omega
-  -- the frame's bytes: the stack frame, the value slot and the frame's blocks
+
   ihave ⟨Hscr, Hfr⟩ := def_stack_split hC $$ [Hstk]
   · unfold stackScratch blockOwn; iexact Hstk
   simp only [C]
@@ -100,7 +82,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
     have := hdisj a ha; unfold baseS at this; omega
   have hsepO : ∀ a, frameS Gm a → a < pv.toNat ∨ pv.toNat + 24 ≤ a := fun a ha => by
     have := hdisj a ha; unfold baseS at this; omega
-  -- the register file
+
   have hperm : (([(VsaIris.ra, r), (10, e), (11, pn), (12, pv), (VsaIris.sp, s)] ++ saved).map
       Prod.fst ++ argClob).Perm gprs := by
     simp only [List.map_append, List.map_cons, List.map_nil, hsv]; decide
@@ -125,7 +107,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hk
     rw [hR0 p (List.mem_append_right _ hp), pairVal_of_mem saved (by rw [hsv]; decide) p hp]
   have he0 : (R0 10).toNat = Gm.e := by rw [hR 10 e (by simp), hGe]
-  -- the prologue
+
   unfold envDefinePC
   iapply wp_span Wp (def_pro hl (s := s.toNat) (out := pv.toNat) (n := f.vars.length) (G := Gm)
     (R := R0) (Mt := Mt1) hC.s64 hsp.hi hsp.align
@@ -142,13 +124,13 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
   have he20 : (R1 20).toNat = Gm.e := by rw [h20]; exact he0
   have hname1 : R1 18 = pn := by rw [h18, hR 11 pn (by simp)]
   have hvp1 : R1 21 = pv := by rw [h21, hR 12 pv (by simp)]
-  -- the count test
+
   iapply wp_span Wp (def_head hl (s := s.toNat) (out := pv.toNat) hlay2 he1 h19)
   iframe Ht Hgp Hpc HR HS
   iintro %pc2 %R2 %Mt3 %⟨rfl, hcase⟩ Hpc HR HS
   have hBH' : ∀ b ∈ B₁ ++ Gm.blocks ++ B₂, b ∈ H := hBH
   rcases hcase with ⟨hn0, rfl, rfl⟩ | ⟨hpos, rfl, hhd⟩
-  · -- an empty frame: the first growth
+  ·
     have hnil : f.vars = [] := List.eq_nil_of_length_eq_zero hn0
     have hmiss : ¬ f.vars.any (·.1 == x) := by simp [hnil]
     have hlay0 : FrameLayout (imgM Mt3) Gm 0 := hn0 ▸ hlay2
@@ -175,7 +157,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
     iapply def_grow Wp hl hlive N hC hGR hf hinv hmiss hdisj hBH' hBd
     iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose
     unfold defK; iexact HK
-  · -- the name loop
+  ·
     have hF : DefFrame C Gm f.vars.length img R2 Mt3 :=
       { stack := hstk.congr (hhd.keep 2 (by decide) (by decide) (by decide)) (fun _ _ _ => rfl) hs64
         name := (hhd.keep 18 (by decide) (by decide) (by decide)).trans hname1
@@ -196,7 +178,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
     rw [show (defLoop live hl).scan = 0x80002ab0#64 from rfl]
     iframe Ht Hgp Hcmp Hx Hb Hpc HR HS
     isplit
-    · -- `x` unbound in the frame: grow or append
+    ·
       iintro %R3 %Mt4 %⟨hF3, hmissF⟩ Hpc HR HS
       rw [show (defLoop live hl).tail = 0x80002b14#64 from rfl]
       have hmiss : ¬ f.vars.any (·.1 == x) := by
@@ -210,7 +192,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
       iintro %pc4 %R4 %Mt5 %⟨rfl, hcase⟩ Hpc HR HS
       rcases growthCost_eq f.vars.length with ⟨hc1, -, hgc⟩ | ⟨hc1, -, hgc⟩
       · rcases hcase with ⟨hcn, rfl, hg⟩ | ⟨hcn, -, -⟩
-        · -- a full frame: grow
+        ·
           have hnc : nextCap f.vars.length = 2 * Gm.cap := by
             unfold nextCap; rw [if_neg (by omega), hcn]
           have hGR : GrowReady C Gm f.vars.length img R4 _ :=
@@ -235,7 +217,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
         · exact absurd (hF3.lay.cap_canon.trans hc1) hcn
       · rcases hcase with ⟨hcn, -, -⟩ | ⟨hcn, rfl, hk4⟩
         · exact absurd (hcn ▸ hF3.lay.cap_canon) (by omega)
-        · -- room left: append
+        ·
           have hAR : AppReady C Gm Gm f.vars.length img R4 _ :=
             { stack := hF3.stack.congr (hk4 2 (by decide)) (fun _ _ _ => rfl) hs64
               name := (hk4 18 (by decide)).trans hF3.name
@@ -253,7 +235,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
           iapply def_append Wp hl (allocSpecs live hlive) N hC hAR hf hinv hmiss hdisj hBH'
           iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose
           unfold defK; iexact HK
-    · -- `x` bound: replace its value
+    ·
       iintro %j %v0 %R3 %Mt4 %⟨hj, -, hF3, h8⟩ Hpc HR HS
       rw [show (defLoop live hl).hit = 0x80002ac0#64 from rfl]
       have hany : f.vars.any (·.1 == x) := by
@@ -267,4 +249,3 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
 end Main
 
 end VsaIris.Interp
-

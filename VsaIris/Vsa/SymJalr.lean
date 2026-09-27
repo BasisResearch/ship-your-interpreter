@@ -1,22 +1,6 @@
 import VsaIris.Vsa.SymObs
 import Vsa.Sim.SnprintfSitesRet5
 
-/-!
-# Indirect calls in symbolic runs (lane N1)
-
-`jalr ra, imm(rs1)` (a call through a function pointer: `__sflush_r` calls
-`fp->_write`) is outside the reflected block model (`TKind` has `jr` only).
-VSA proves it by observation: `stepObs_jalr` gives ONE step to
-`(rs1 + imm) & ~1` that writes the link into `ra` and leaves memory and every
-other register alone.
-
-* `JalrStep`: such a step at every well-formed state parked at `i` whose
-  source registers and code bytes hold;
-* `jalrStep_of_obs`: the observation (generated per site) as a `JalrStep`;
-* `swp_jalr`: a `JalrStep` as one step of a symbolic run (`swp_jal`'s twin
-  with a register target).
--/
-
 namespace VsaIris.Sym
 
 open Iris
@@ -24,8 +8,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Step MState)
 open Vsa.Sim VsaIris.Inst VsaIris.MallocFast
 
-/-- One indirect call at `i`: the PC becomes `tgt`, `ra` the link, nothing
-else changes. -/
 def JalrStep (live : Nat → Prop) (i : Nat) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (tgt link : BitVec 64) : Prop :=
   ∀ c : Config, VsaOk live c → vsaReg c VsaIris.PC = BitVec.ofNat 64 i →
@@ -36,9 +18,6 @@ def JalrStep (live : Nat → Prop) (i : Nat) (RR : List (Nat × DFrac × BitVec 
       (∀ a, (vsaModel live).mem c' a = (vsaModel live).mem c a) ∧
       (vsaModel live).out c' = (vsaModel live).out c
 
-/-- **An observed `jalr` as a `JalrStep`.** `hsite` is the observation at
-every well-formed state parked at `i` whose source registers `RR` (GPRs) and
-code bytes `MR` hold (the generated per-site proof). -/
 theorem jalrStep_of_obs {live : Nat → Prop} {i : Nat} {RR : List (Nat × DFrac × BitVec 64)}
     {MR : List (Nat × DFrac × BitVec 8)} {tgt link : BitVec 64}
     (hRRk : ∀ q ∈ RR, 1 ≤ q.1 ∧ q.1 ≤ 31)
@@ -105,7 +84,6 @@ theorem jalrStep_of_obs {live : Nat → Prop} {i : Nat} {RR : List (Nat × DFrac
   · show Vsa.Machine.output σ' = Vsa.Machine.output c.σ
     unfold Vsa.Machine.output; rw [hobs.2]
 
-/-- **An indirect call as a one-step `RunFact`.** -/
 theorem runFact_of_jalrStep {live : Nat → Prop} {i : Nat}
     {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
     {tgt link old : BitVec 64} (h : JalrStep live i RR MR tgt link) :
@@ -134,8 +112,6 @@ section SWP
 variable {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
   {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **An indirect call in a symbolic run**: `ra` takes the link, the run
-continues at the target. -/
 theorem swp_jalr {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Vsa.MemRepr.Mem}
     (i : Nat) (code : List (BitVec 8)) (ks : List Nat) (tgt : BitVec 64)
     (hstep : JalrStep live i (ks.map fun k => (k, DFrac.own 1, R k)) (codeFoot i code) tgt

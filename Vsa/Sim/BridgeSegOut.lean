@@ -7,8 +7,6 @@ open Register
 open Vsa.Machine (MState Config Step Steps)
 open Vsa.Alloc
 
-/-- A reflected `jal` step that also exposes preservation of the output
-stream.  `BridgeSeg.JalStep` omits this machine field. -/
 def JalStepO (calleeEntry link : BitVec 64) (σp : MState) (ip up : Nat) : Prop :=
   ∃ (σ2 : MState) (i2 : Nat),
     Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
@@ -21,7 +19,6 @@ def JalStepO (calleeEntry link : BitVec 64) (σp : MState) (ip up : Nat) : Prop 
       ∀ (w : BitVec 64), gprGet σp n = some w → gprGet σ2 n = some w) ∧
     (∀ R, AbiPreserved R = true → σ2.regs.get? R = σp.regs.get? R)
 
-/- Output-preserving upgrade of `jalStep_of_obs`. -/
 theorem jalStepO_of_obs {σp σ2 : MState} {ip up i2 : Nat}
     {jalPC vm : BitVec 64} {imm : BitVec 21} {calleeEntry link : BitVec 64}
     (hstep : Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩) (hi2 : i2 < 2)
@@ -38,8 +35,6 @@ theorem jalStepO_of_obs {σp σ2 : MState} {ip up i2 : Nat}
   refine ⟨σ2, i2, hs, hi', hG', hmem', ?_, hpc', hra', hmi', hnonra', habi'⟩
   rw [hobs.out, sailOutput_sigmaPost_jal]
 
-/-- Execute a reflected segment and its `jal`, preserving `sailOutput` across
-both finite machine pieces. -/
 theorem bridgeOfSegOut (bs : List BBlock) (L : GRegs)
     (lds : List (List (BitVec 8)))
     (σ : MState) (i u : Nat) (pc0 calleeEntry link vm : BitVec 64)

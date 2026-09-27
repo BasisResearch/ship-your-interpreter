@@ -1,24 +1,10 @@
 import VsaIris.Vsa.StrlenSpec
 import VsaIris.Vsa.BinImg
 
-/-!
-# Read-only bytes of a local run, owned instead; `strlen` on an owned buffer
-
-H3's `strlen_specW` reads the string through persistent points-to (the
-string's bytes are in the run's read-only `text`). A caller that owns the
-string (a stack buffer, a fresh heap block: `stringify`, the concat rule)
-must not give the bytes up. `LocalRun.promote` moves read-only cells of a
-local run into its owned set: a segment never writes outside its owned set,
-so the promoted bytes come back unchanged. `strlen_specOwnedW` is H3's run,
-promoted.
--/
-
 namespace VsaIris
 
 variable {M : MachineModel}
 
-/-- **Promoting read-only cells to owned ones.** The run holds with the
-cells `t2` owned instead of read-only, and hands them back unchanged. -/
 theorem LocalRun.promote {ro : List (Nat × BitVec 64)} {t1 t2 : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hd : ∀ p ∈ t2, ¬ S p.1) :
@@ -51,7 +37,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The string's bytes and the slack: `[P, P + len + 8)`. -/
 def ownedStr (p len : Nat) (a : Nat) : Prop := p ≤ a ∧ a < p + len + 8
 
 theorem ownedStr_iff (p len : Nat) (bv : Nat → BitVec 8) (a : Nat) :
@@ -71,8 +56,6 @@ theorem ownedStr_iff (p len : Nat) (bv : Nat → BitVec 8) (a : Nat) :
       exact ⟨a - p, by omega, by rw [show p + (a - p) = a by omega]⟩
     · left; omega
 
-/-- **`strlen(p)` on an owned string**, for either WP: H3's run with the
-string's bytes owned and handed back unchanged, with the slack. -/
 theorem strlen_specOwnedW {Φ : Nat × String → IProp GF} (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) {P r : BitVec 64} {len : Nat}
     {bv : Nat → BitVec 8} (ctx : Ctx live P r len bv) (v11 v12 v13 v14 v15 : BitVec 64) :
@@ -131,13 +114,8 @@ theorem strlen_specOwnedW {Φ : Nat × String → IProp GF} (live : Nat → Prop
   ihave HS3 := ownSet_iff _ (fun a => ownedStr_iff P.toNat len bv a) $$ HS2
   iapply Hk $$ Hpc Hra Ha0 HC HS3
 
-/-- `strlen`'s code is the image's. -/
 theorem strlenCode_text : TextAt codeBase strlenCode := by decide +kernel
 
-/-- **`strlen` on an owned buffer as a function spec**, for a call from a
-run: the string's window `[P, P + len + 8)` owned (the string, its NUL, the
-word loop's over-read), handed back unchanged, the length in `a0`. `live`
-must hold the code (`CodeLive`) and the window. -/
 theorem strlenOwned_fn (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {P : BitVec 64} {len : Nat} {bv : Nat → BitVec 8}
     (hreg : ReadRegions P len) (hstr : StrBytes P.toNat len bv)

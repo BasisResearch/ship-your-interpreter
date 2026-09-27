@@ -1,14 +1,5 @@
 import VsaIris.Vsa.Stdout.Mem
 
-/-!
-# The low half of a doubleword load (lane N3)
-
-`__swsetup_r` tests `fp->_flags & (__SSTR | __SMBF)` with a doubleword load of
-the flags word (`ld a4,16(a5); andi a4,a4,640`, `0x8000f2b4`) right after a
-halfword store to the flags. Only the low 16 bits matter, and those are the
-halfword: `ldv_ld_and_lhu`.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast
@@ -27,7 +18,6 @@ theorem ldv_ld_toNat (M : Mem) (a : Nat) : (ldv .ld M a).toNat = imgLE (imgM M) 
   rw [show ldv .ld M a = ldvf .ld (imgM M) a from rfl, ldvf_ld_imgLE rfl, BitVec.toNat_ofNat]
   exact Nat.mod_eq_of_lt (by have := imgLE_lt (imgM M) a 8; omega)
 
-/-- **A doubleword load masked to its low half** is the halfword load, masked. -/
 theorem ldv_ld_and_lhu (M : Mem) (a : Nat) (c : BitVec 64) (hc : c.toNat < 2 ^ 16) :
     ldv .ld M a &&& c = ldv .lhu M a &&& c := by
   apply BitVec.eq_of_toNat_eq
@@ -44,7 +34,6 @@ end VsaIris.Sym
 namespace VsaIris.Sym
 open Vsa.Sim Vsa.MemRepr
 
-/-- `__swsetup_r`'s mask (`__SSTR | __SMBF`) of the doubleword flags load. -/
 theorem ldv_ld_and_640 (M : Mem) (a : Nat) : ldv .ld M a &&& 640#64 = ldv .lhu M a &&& 640#64 :=
   ldv_ld_and_lhu M a _ (by decide)
 
@@ -52,7 +41,6 @@ end VsaIris.Sym
 
 namespace VsaIris.Sym
 
-/-- `sext.w` of a word below `2^31` is the word. -/
 theorem sext_extract32_small {n : BitVec 64} (h : n.toNat < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 n) = n := by
   apply BitVec.eq_of_toNat_eq

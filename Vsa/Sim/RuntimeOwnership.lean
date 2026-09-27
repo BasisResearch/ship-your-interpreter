@@ -1,11 +1,6 @@
 import Vsa.Sim.HeapOwnershipGeometry
 import Vsa.Sim.StoreInvariant
 
-/-! Data-only ownership with empty arrays and shared immutable payloads.
-No allocator or execution supplier is assumed.
-`readable` and `writes` are byte predicates to instantiate at the calling
-boundary. They do not state that execution terminates or allocation succeeds. -/
-
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc
 
 namespace Vsa.Sim.RuntimeOwnership
@@ -29,8 +24,6 @@ def Allocated (alloc : Allocations) (role : Role) (p n : Nat) : Prop :=
 
 def ExtentByte (e : Extent) (k : Nat) : Prop := e.1 ≤ k ∧ k < e.1 + e.2
 
-/-- Different allocation roles cannot designate overlapping extents.
-Copied names have separate roles but are immutable after initialization. -/
 structure Ledger (A : Arena) (exts : List Extent) (alloc : Allocations) : Prop where
   arena : HeapArena A exts
   live : ∀ role p n, Allocated alloc role p n → (p, n) ∈ exts
@@ -38,25 +31,19 @@ structure Ledger (A : Arena) (exts : List Extent) (alloc : Allocations) : Prop w
     Allocated alloc r p n → Allocated alloc s q size → r ≠ s →
     ExtDisjoint (p, n) (q, size)
 
-/-- Shared payload bytes may alias each other, including suffix sharing.
-They remain outside every mutable allocation and the caller's additional
-write footprint (stack, allocator metadata, output, interpreter fields). -/
 structure Immutable (alloc : Allocations) (shared readable writes : Nat → Prop) : Prop where
   readable : ∀ k, shared k → readable k
   outsideWrites : ∀ k, shared k → ¬ writes k
   outsideMutable : ∀ role p n, Role.mutable role → Allocated alloc role p n →
     ∀ k, shared k → ¬ ExtentByte (p, n) k
 
-/-- Zero capacity has canonical NULL storage and consumes no live extent. -/
 def ArrayOwned (alloc : Allocations) (role : Role) (p width cap : Nat) : Prop :=
   (cap = 0 ∧ p = 0) ∨ (0 < cap ∧ Allocated alloc role p (width * cap))
 
-/-- CString supplies byte presence. `shared` supplies geometry and stability. -/
 structure SharedCString (m : Mem) (shared : Nat → Prop) (p : Nat) (s : String) : Prop where
   repr : CString m p s
   bytes : ∀ k, k ≤ s.length → shared (p + k)
 
-/-- Binding keys are copied allocations, unlike native/AST payload pointers. -/
 structure CopiedCString (m : Mem) (alloc : Allocations) (shared : Nat → Prop)
     (role : Role) (p : Nat) (s : String) : Prop where
   allocated : Allocated alloc role p (s.length + 1)
@@ -68,13 +55,11 @@ def ValueOwned (m : Mem) (shared : Nat → Prop) (a : Nat) : Value → Prop
       SharedCString m shared p (nativeName f)
   | _ => True
 
-/-- Runtime array pointers and their common capacity. -/
 structure ArrayState where
   cap : Nat
   names : Nat
   values : Nat
 
-/-- Reads and ownership of one frame's backing arrays. -/
 structure FrameArraysOwned (m : Mem) (phiF : Addr → Nat) (alloc : Allocations)
     (shared : Nat → Prop) (fa : Addr) (f : Vsa.While.Frame) (a : ArrayState) : Prop where
   capRead : read32 m (phiF fa + 4) = some a.cap

@@ -8,30 +8,6 @@ import VsaIris.Interp.LeafCalls
 import VsaIris.Vsa.MainOk
 import VsaIris.Interp.ExecDisp
 
-/-!
-# `interp_run`'s whole run, total mode (lane A, INTERP_DESIGN.md §4.4, §5.2)
-
-From `interp_run`'s entry (`0x800043ec`, the boundary state of
-`InterpRunPhysicalFacts`) to the machine's halt:
-
-* **the prologue** (`wp_topPrologue`, either WP): the 176-byte frame's spills
-  (`wp_topSpill`), `jal setjmp` (`ms_callSetjmp`, over H5's `setjmp_spec`;
-  `wp_topSetjmp` turns `worldPre`'s exclusive `jmp_buf` into `world`'s
-  read-only one), and the count test (`wp_topHead`): an empty program goes to
-  the epilogue with `s5 = 0`, a nonempty one reaches the statement loop's head
-  `0x8000448c` with exactly its preconditions (`TopLoopFacts`, `topLoopRes`);
-* **the normal return** (`wp_topNormal`, either WP): the epilogue at
-  `0x80004514` with `s5 = 0`, `ret` to `main`, `main`'s normal line and
-  `exit(0)` (`MainOk.wp_mainOkTail`, quietly: the output is the console's);
-* **the theorem** `interpRun_total`: with the loop motive `interpSeqT_body` at
-  the program's derivation, the run halts with `(0, st'.out)`;
-  `interpRun_total_boot` states it from `bootRes`.
-
-The entry is one named-field structure of pure facts (`TopEntry`, from `Boot`
-by `topEntry_of_boot`) and one resource (`topPre`, from `bootRes` by
-`topPre_of_bootRes`). The partial run is `TopRunP.lean`.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
@@ -80,10 +56,6 @@ theorem sepL_args_split (f : Nat → BitVec 64) :
   rw [show argRegs = 10 :: [11, 12, 13, 14, 15, 16, 17] from rfl, sepL_cons]
   exact .rfl
 
-/-- **`interp_run`'s `jal setjmp` from a run** (`0x80004424`): `setjmp` fills
-the first 112 bytes of the `jmp_buf` at `a0 = jbp` with the link, `s0`–`s11`
-and `sp` (`SetjmpImg`), and returns `0`; the run continues at `0x80004428`
-with every other register kept. -/
 theorem ms_callSetjmp (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {jbp : BitVec 64} (hjb : JbAt jbp)
@@ -133,13 +105,10 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- `interp_run`'s entry `sp` (`main`'s frame, `spEntry`). -/
 abbrev sTop : BitVec 64 := 0x87fffd00#64
 
-/-- `interp_run`'s lowered `sp` (its 176-byte frame). -/
 abbrev sFr : BitVec 64 := sTop + 18446744073709551440#64
 
-/-- `struct Interp` in `main`'s frame (`interpObject`). -/
 abbrev inpTop : Nat := 0x87fffe10
 
 theorem mainSp_top : MainSp sTop := ⟨by decide, by decide, by decide⟩
@@ -153,7 +122,6 @@ theorem calleeSaved_split (f : Nat → BitVec 64) :
   rw [show Newlib.calleeSaved = 8 :: Newlib.calleeSaved.drop 1 from rfl, sepL_cons]
   exact .rfl
 
-/-- `world_exitParts` with `errno` lent by the dropped heap. -/
 theorem world_exitPartsE (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room) (ρ : Regime) (st : St) (d : Nat) :
     world (GF := GF) N L Room inpTop ρ st d ⊢
@@ -165,10 +133,6 @@ theorem world_exitPartsE (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
   iframe Hcon Hstd Herrno Himg
   iapply blockOwn_cast (by unfold interpErrOff; decide) (by unfold interpErrLen; rfl) $$ Herr
 
-/-- **`interp_run` returns `0`, `main` returns `0`, `exit(0)`**, for either
-WP: at `interp_run`'s epilogue (`0x80004514`) with `s5 = 0`, its frame's
-spilled link `0x800045ec`, the world at `st`, and `main`'s saved pair: the run
-halts with code 0 and output `st.out`. -/
 theorem wp_topNormal (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {ρ : Regime} {st : St} {d : Nat}
@@ -211,8 +175,6 @@ theorem wp_topNormal (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1) 
   rw [show List.drop 1 argRegs = [11, 12, 13, 14, 15, 16, 17] from rfl]
   iexact Hargs
 
-/-- The spills `interp_run`'s prologue leaves in its frame: `in`, the `repl`
-flag, the count, the statement array, the link, `main`'s `s0`. -/
 structure TopSpills (Mt : Mem) (R0 : Nat → BitVec 64) (ret : BitVec 64) : Prop where
   inp : ldv .ld Mt (sTop.toNat - 176) = R0 10
   flag : ldv .ld Mt (sFr + 8#64).toNat = R0 13
@@ -222,9 +184,7 @@ structure TopSpills (Mt : Mem) (R0 : Nat → BitVec 64) (ret : BitVec 64) : Prop
   s0 : ldv .ld Mt (sFr + 160#64).toNat = R0 8
 
 omit I in
-/-- **`interp_run`'s spills** (`0x800043ec`..`0x80004420`), for either WP:
-the 176-byte frame below `sTop` becomes the run's owned bytes; the run reaches
-the `jal setjmp` with `a0 = in + 16`. -/
+
 theorem wp_topSpill (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {R0 : Nat → BitVec 64} {ret : BitVec 64} {F : IProp GF}
     (h2 : R0 2 = sTop)
@@ -263,7 +223,6 @@ theorem wp_topSpill (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
     · ix_fwd; ix_reg
     · ix_fwd; ix_reg
 
-/-- The `jmp_buf` words `setjmp` wrote: the landing `ra` and `sp`. -/
 structure JbTop (jb : Nat → BitVec 8) (sI : BitVec 64) : Prop where
   ra : jbWord inpTop jb 0 = 0x80004428#64
   sp : jbWord inpTop jb 13 = sI
@@ -288,10 +247,6 @@ theorem jbTop_of {img img2 : Nat → BitVec 8} {R : Nat → BitVec 64}
     rw [e] at this
     simpa [Setjmp.sjVal, interpJmpOff] using this
 
-/-- **`setjmp`, then the world**, for either WP: at `interp_run`'s
-`jal setjmp` with `a0 = in + 16`, `setjmp` fills the `jmp_buf` (taken out of
-`worldPre`'s exclusive one and made read-only), returns `0`, and the world is
-`world`, the `jmp_buf`'s landing words named (`JbTop`). -/
 theorem wp_topSetjmp (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {ρ : Regime} {st : St} {d : Nat}
@@ -355,10 +310,7 @@ theorem shl3_ofNat {a : Nat} (h : a < 2 ^ 31) :
   omega
 
 omit I in
-/-- **The count test** (`0x80004428`..`0x80004454`), for either WP: `setjmp`
-returned `0` (`bnez` not taken), `s5 = 0`; an empty program goes to the
-epilogue `0x80004514`, a nonempty one sets up the loop head `0x8000448c`
-(`s0` the array, `s2` its end, `s3 = 3`, `s4 = 1`). -/
+
 theorem wp_topHead (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {R : Nat → BitVec 64} {Mt : Mem} {F : IProp GF}
     {stmts count : Nat} (hc : count < 2 ^ 31)
@@ -408,8 +360,6 @@ theorem wp_topHead (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
 
 end Normal
 
-/-! ## The entry state and the loop head -/
-
 section Entry
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris.Newlib
@@ -418,8 +368,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- `interp_run`'s argument registers at its entry (`InterpRunPhysicalFacts`:
-`sp`, `in`, `stmts`, `count`, `repl = 0`). -/
 structure TopRegs (R0 : Nat → BitVec 64) (stmts count : Nat) : Prop where
   sp : R0 2 = sTop
   a0 : R0 10 = BitVec.ofNat 64 inpTop
@@ -427,11 +375,6 @@ structure TopRegs (R0 : Nat → BitVec 64) (stmts count : Nat) : Prop where
   a2 : R0 12 = BitVec.ofNat 64 count
   a3 : R0 13 = 0#64
 
-/-- **`interp_run`'s entry, the pure facts** (`InterpRunPhysicalFacts` and
-`Boot`, INTERP_DESIGN.md §5.1): the argument registers `in`, `stmts`,
-`count`, `repl = 0` and `sp = spEntry` in `R0`; the program's statement array
-over the read-only view `P` of the boundary memory `m`; its placement; the
-stack admissibility; `in->globals = g`; `main`'s saved `ra` (`crt0`'s link). -/
 structure TopEntry (m : Mem) (P : Nat → Prop) (stmts count : Nat) (p : Program) (g : Nat)
     (R0 : Nat → BitVec 64) : Prop where
   regs : TopRegs R0 stmts count
@@ -443,19 +386,12 @@ structure TopEntry (m : Mem) (P : Nat → Prop) (stmts count : Nat) (p : Program
   globals : read64 m inpTop = some g
   mainRa : read64 m 0x87fffff8 = some 0x80000038
 
-/-- **`interp_run`'s entry, the resources** (the registers at `R0`, `PC`
-at `interp_run`, `ra` at `main`'s link, and `bootRes`'s pieces this proof
-uses: `worldPre`, frame 0's address, the read-only view `P`, the stack below
-`spEntry`, `main`'s frame outside `struct Interp`), with the code
-(`codeRes`: the interpreter's text and `gp`) and the binary's image. -/
 def topPre (N : NativeAddrs) (ρ : Regime) (m : Mem) (P : Nat → Prop) (g : Nat)
     (R0 : Nat → BitVec 64) : IProp GF :=
   iprop(PC ↦ᵣ 0x800043ec#64 ∗ ra ↦ᵣ 0x800045ec#64 ∗ regFile R0 ∗ codeRes ∗ binImg ∗
     worldPre N vsaLayoutP vsaRoomB inpTop ρ initSt 0 ∗ frameAt 0 g ∗ roOn P m ∗
     blockOwn stackSL.lo (spEntry - stackSL.lo) ∗ ownImg (CallerByte inpTop) (memImg m))
 
-/-- The loop head's pure facts after the prologue: the loop's registers, the
-frame words it reads, `s5 = 0`, the spilled link and `main`'s `s0`. -/
 structure TopLoopFacts (R0 : Nat → BitVec 64) (stmts count : Nat) (R : Nat → BitVec 64)
     (Mt : Mem) : Prop where
   head : InterpHead R sTop (BitVec.ofNat 64 stmts) 0 count
@@ -464,9 +400,6 @@ structure TopLoopFacts (R0 : Nat → BitVec 64) (stmts count : Nat) (R : Nat →
   ra : ldv .ld Mt (sFr + 168#64).toNat = 0x800045ec#64
   s0 : ldv .ld Mt (sFr + 160#64).toNat = R0 8
 
-/-- The loop head's resources: the run's frame without the result slot, the
-slot, the code and data view the loop reads, the stack below the frame, the
-world after `setjmp`, `main`'s saved pair, and the `jmp_buf`. -/
 def topLoopRes (N : NativeAddrs) (ρ : Regime) (m : Mem) (P : Nat → Prop) (stmts count g : Nat)
     (R : Nat → BitVec 64) (Mt : Mem) : IProp GF :=
   iprop(ms 0x8000448c#64 R (interpS sTop) Mt ∗ slot24 (sFr + 88#64).toNat ∗ codeRes ∗ binImg ∗
@@ -476,7 +409,6 @@ def topLoopRes (N : NativeAddrs) (ρ : Regime) (m : Mem) (P : Nat → Prop) (stm
     ownImg (InExt (sTop.toNat + 752, 16)) (memImg m) ∗
     (∃ jb, ⌜JbTop jb sFr⌝ ∗ jmpRO inpTop jb))
 
-/-- A represented statement array's bytes: in the view, present. -/
 theorem stmtArray_view {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {ss : List Stmt}, StmtArrayReprWithin m P a n ss →
       ∀ b, a ≤ b → b < a + 8 * n → P b ∧ (m[b]?).isSome
@@ -489,8 +421,7 @@ theorem stmtArray_view {m : Mem} {P : Nat → Prop} :
     · exact stmtArray_view hrest b (by omega) (by omega)
 
 omit I in
-/-- `in->globals` read-only out of the world's word, as a read-only view of
-the boundary memory. -/
+
 theorem roOn_globals {m : Mem} {g : Nat} (hg : read64 m inpTop = some g) {img : Nat → BitVec 8}
     (hi : imgLE img inpTop 8 = g) :
     roImg (GF := GF) (InExt (inpTop, 8)) img ⊢ roOn (InExt (inpTop, 8)) m := by
@@ -517,7 +448,6 @@ theorem roOn_or {P Q : Nat → Prop} {m : Mem} :
   · iapply HP $$ %k %b %hk %hb
   · iapply HQ $$ %k %b %hk %hb
 
-/-- `in->globals`, read-only, out of the world (which keeps it). -/
 theorem world_globals (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
     (st : St) (d : Nat) :
     world (GF := GF) N L Room inp ρ st d ⊢ world N L Room inp ρ st d ∗
@@ -538,8 +468,6 @@ theorem world_globals (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : 
   iframe Hg Hf
   ipureintro; exact hg
 
-/-- The loop's data view: the statement array and `in->globals`, in the view
-`P ∨ in`, present. -/
 theorem topView {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} {g : Nat}
     {R0 : Nat → BitVec 64} (hE : TopEntry m P stmts count p g R0) :
     ∀ a ∈ interpView stmts count inpTop, (P a ∨ InExt (inpTop, 8) a) ∧ (m[a]?).isSome := by
@@ -556,10 +484,6 @@ theorem imgW_mainRa {m : Mem} (h : read64 m 0x87fffff8 = some 0x80000038) :
   apply BitVec.eq_of_toNat_eq
   rw [show sTop.toNat + 760 = 0x87fffff8 by decide, imgW_read64 h]; rfl
 
-/-- **`interp_run`'s prologue**, for either WP: the spills, `setjmp`, the
-count test. An empty program returns `0` to `main`, which exits `0` with the
-boundary output (`hΦ0`); a nonempty one reaches the loop head with
-`topLoopRes` and `TopLoopFacts` (`K1`). -/
 theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {ρ : Regime} {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program}
@@ -578,7 +502,7 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
     simp only [spEntry, stackSL_hi, show sTop.toNat = 0x87fffd00 from rfl,
       show inpTop = 0x87fffe10 from rfl]; omega) $$ HT
   ihave Hframe := blockOwn_cast (p' := sTop.toNat - 176) (n' := 176) (by decide) (by decide) $$ Hframe
-  -- the spills
+
   iapply wp_topSpill hlive Wp (ret := 0x800045ec#64) (F := iprop(binImg ∗
       worldPre N vsaLayoutP vsaRoomB inpTop ρ initSt 0 ∗ frameAt 0 g ∗ roOn P m ∗
       blockOwn stackSL.lo (spEntry - interpRunFrame - stackSL.lo) ∗
@@ -587,13 +511,13 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
   · iframe Himg Hwp Hfr Hro Hfree HT Hcode Hpc Hra Hregs Hframe
   intro R1 Mt1 h2 h10 h1 hkeep hsp
   iintro ⟨⟨#Himg, Hwp, #Hfr, #Hro, Hfree, HT⟩, #Hcode, Hms⟩
-  -- `setjmp`
+
   have h10' : R1 10 = BitVec.ofNat 64 (inpTop + 16) := by rw [h10, hE.regs.a0]; rfl
   iapply wp_topSetjmp hlive hcl Wp h10'
   iframe Hcode Himg Hms Hwp
   iintro %jb %hjb #Hjb Hw Hms
   rw [h2] at hjb
-  -- the count test
+
   iapply wp_topHead hlive Wp (stmts := stmts) (count := count)
     (R := upd (upd R1 10 0#64) 1 0x80004428#64) (Mt := Mt1) (F := iprop(binImg ∗
       world N vsaLayoutP vsaRoomB inpTop ρ initSt 0 ∗ frameAt 0 g ∗ roOn P m ∗
@@ -602,7 +526,7 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
     (by ix_reg; exact h2) (by ix_reg) (hsp.cnt.trans hE.regs.a2) (hsp.arr.trans hE.regs.a1) ?_ ?_
   rotate_left 2
   · iframe Himg Hw Hfr Hro Hfree HT Hjb Hcode Hms
-  · -- the empty program
+  ·
     intro h0 R' h2' h21'
     iintro ⟨⟨#Himg, Hw, -, -, -, HT, -⟩, #Hcode, Hms⟩
     ihave ⟨Hms, -⟩ := ms_carveSlot (a := sTop.toNat - 176 + 88)
@@ -610,7 +534,7 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
     ihave HΦ := hΦ0 h0
     iapply wp_topNormal H hlive hcl Wp ErrnoOwn.errnoLend_vsa h2' h21' hsp.ra (imgW_mainRa hE.mainRa)
     iframe Hcode Hms Hw HT HΦ
-  · -- the loop head
+  ·
     intro hpos R' hh h21'
     iintro ⟨⟨#Himg, Hw, #Hfr, #Hro, Hfree, HT, #Hjb⟩, #Hcode, Hms⟩
     ihave ⟨Hms, Hslot⟩ := ms_carveSlot (a := sTop.toNat - 176 + 88)
@@ -645,8 +569,6 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
 
 end Entry
 
-/-! ## The loop head's pure facts from the entry -/
-
 section Facts
 
 open Vsa.Sim.LayoutInstance
@@ -662,7 +584,6 @@ theorem g_toNat {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} {
   have := readLE_lt hE.globals
   rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by simpa using this)]
 
-/-- The loop's data view over the boundary memory. -/
 theorem topData {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} {g : Nat}
     {R0 : Nat → BitVec 64} (hE : TopEntry m P stmts count p g R0) :
     InterpData m m P (BitVec.ofNat 64 stmts) count inpTop (BitVec.ofNat 64 g) p := by
@@ -690,14 +611,11 @@ theorem topNeeds {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} 
   have e : sFr.toNat = spEntry - interpRunFrame := by decide
   omega
 
-/-- The count is the program's length. -/
 theorem topCount {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} {g : Nat}
     {R0 : Nat → BitVec 64} (hE : TopEntry m P stmts count p g R0) : p.length = count :=
   stmtArray_length hE.repr
 
 end Facts
-
-/-! ## `interp_run`'s whole run -/
 
 section Run
 
@@ -707,10 +625,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- **`interp_run`'s whole run, total mode** (INTERP_DESIGN.md §4.4, §5.2):
-from `interp_run`'s entry (`topPre` in the counted regime at the program's
-cost `n`) and the loop motive at the program's derivation `D`, the machine
-halts with code 0 and output `st'.out`. -/
 theorem interpRun_total (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive live)
     {N : NativeAddrs} {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} {g : Nat}
     {R0 : Nat → BitVec 64} {st' : St} {n : Nat} (hE : TopEntry m P stmts count p g R0)
@@ -748,8 +662,6 @@ theorem interpRun_total (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.
 
 end Run
 
-/-! ## From the boundary (`Boot`, `bootRes`) -/
-
 section Boundary
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris.Newlib
@@ -762,8 +674,6 @@ theorem readOK_of_sharedGeom {P : Nat → Prop} (h : Vsa.Sim.SharedReadWin P sta
   rw [e] at h2
   exact ⟨by omega, by omega, by rw [e]; omega, by omega, by rw [e]; omega⟩
 
-/-- **The entry's pure facts at the boundary**: `Boot`'s witnesses, the
-read-only view being the boundary's shared bytes. -/
 theorem topEntry_of_boot {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
     {R0 : Nat → BitVec 64} (hR : TopRegs R0 b.stmts b.count) :
     TopEntry c.σ.mem b.D.shared b.stmts b.count p (b.φf 0) R0 where
@@ -780,7 +690,6 @@ theorem topEntry_of_boot {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The binary's image out of the boundary's read-only code view. -/
 theorem binImg_of_roOn {m : Mem} (ht : Vsa.Sim.Code.FixedTextLoaded m)
     (hr : Vsa.Sim.Code.FixedRodataLoaded m) : roOn (GF := GF) CodeByte m ⊢ binImg := by
   unfold binImg roImg roOn
@@ -802,8 +711,6 @@ theorem binImg_of_roOn {m : Mem} (ht : Vsa.Sim.Code.FixedTextLoaded m)
 
 variable [I : InterpGS GF] {live : Nat → Prop}
 
-/-- **The entry's resources at the boundary**: `bootRes` (`world_of_boundary`)
-with the entry registers and the interpreter's code (`codeRes`). -/
 theorem topPre_of_bootRes {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) (ρ : Regime)
     (R0 : Nat → BitVec 64) :
     bootRes b ρ ∗ PC ↦ᵣ 0x800043ec#64 ∗ ra ↦ᵣ 0x800045ec#64 ∗ regFile R0 ∗ codeRes ⊢
@@ -815,8 +722,6 @@ theorem topPre_of_bootRes {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) 
   ihave #Himg := binImg_of_roOn b.ready.text_image b.ready.rodata_image $$ Hcode
   iframe Hw Hfr Hsh Hstk Hcal Hpc Hra Hregs Hc Himg
 
-/-- **`interp_run`'s whole run from the boundary, total mode**: `bootRes` in
-the counted regime at the program's cost, the entry registers and the code. -/
 theorem interpRun_total_boot (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1)
     (hcl : CodeLive live) {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
     {R0 : Nat → BitVec 64} (hR : TopRegs R0 b.stmts b.count) {st' : St} {n : Nat}

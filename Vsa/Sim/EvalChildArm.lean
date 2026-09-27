@@ -5,45 +5,7 @@ import Vsa.Sim.EnvGetSpec3
 import Vsa.Sim.EvalRecCommon
 import Vsa.While.Cost
 
-/-!
-# `EvalChildArm` — the parametric `exec_stmt` arm → `eval_expr` child dispatch
-
-Every `exec_stmt` arm that evaluates ONE child expression (`expr`, `ret e`,
-`varDecl x e`, `if`, `while`) reaches `jal eval_expr` through the same machine
-shape: the shared prologue and jump-table dispatch (`execBlockA`), a reflected
-straight-line prefix that loads the child pointer and marshals the four ABI
-arguments (`a0 := esp + sret`, `a1 := interp`, `a2 := child`, `a3 := env`), and
-the `jal`.  The while condition closed this seam with arm-specific files
-(`WhileCondPrefix`, `WhileCondDispatchClosed`).  This file states the seam ONCE
-over an arm descriptor and two certificates:
-
-* `EvalChildArm` — the descriptor: statement tag, arm PC, the reflected prefix,
-  the `jal` PC and immediate, the sub-result-slot immediate, the child field
-  offset;
-* `EvalChildArm.Cert` — decidable facts about the descriptor (chain
-  well-formedness, ABI avoidance, the register fold, end PC, empty write log,
-  the `jal` site);
-* `EvalChildArm.Sem s e` — how the arm's statement constructor exposes its
-  child: tag, child field, hereditary region projection, stack budget, bodies
-  bound, and the prefix chain facts.
-
-`EvalChildArm.dispatch` then yields, from `ExecEntry` for `s`, the child's
-`EvalEntry` for `e` plus an `EvalChildArm.Carrier` retaining the parent frame
-across the recursive call; `EvalChildArm.exitKit_at_exit` recovers the parent
-facts at the child's widened exit, and `EvalChildArm.normalExitPre_of_exit`
-parks a normal completion at the arm's `li a0,0` for `normalExitTail`.  Instances are one descriptor, one `#derive_case`
-prefix, and two certificate records each (`rows/EvalChildArm*.lean`).
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib; no `maxHeartbeats`
-bump.  Axioms of every theorem ⊆ {propext, Classical.choice, Quot.sound}.
--/
-
 namespace Vsa.Sim
-
--- discipline: allow(R7-conj-tower-def) every `∃` here is either the fixed StepObs
--- site post shape (`Cert.jal_site`), a saved-register or selected-map witness INSIDE a
--- named-field structure (`Carrier`, `ExitKit`, `CallState`), or the reached-config
--- existential of a run; all are consumed through named fields, never positional chains.
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Register
 open Vsa.Machine (MState Config Step Steps)
@@ -53,9 +15,6 @@ open Vsa.Sim.Code
 
 local notation "SpecSt" => Vsa.While.St
 
-/-! ## Statement tags and their arm PCs -/
-
-/-- The `exec_stmt` jump-table target of statement tag `k`. -/
 def execArmPC : Nat → BitVec 64
   | 0 => execArmExpr
   | 1 => execArmVarDecl
@@ -68,7 +27,6 @@ def execArmPC : Nat → BitVec 64
   | 8 => execArmCont
   | _ => 0#64
 
-/-- The tag-indexed slot pin of the batched table pins. -/
 theorem StmtTablePins.slotOf {m : Mem} (h : StmtTablePins m) (k : Nat) (hk : k ≤ 8) :
     StmtSlotPinned k (execArmPC k) m := by
   match k, hk with
@@ -83,62 +41,46 @@ theorem StmtTablePins.slotOf {m : Mem} (h : StmtTablePins m) (k : Nat) (hk : k �
   | 8, _ => exact h.slot8
   | n + 9, hk => exact absurd hk (by omega)
 
-/-! ## The descriptor -/
-
-/-- An `exec_stmt` arm that evaluates one child expression through
-`jal eval_expr` at the lowered frame `esp = sp - 176`. -/
 structure EvalChildArm where
-  /-- Statement tag (jump-table index). -/
+
   kind : Nat
-  /-- Arm entry PC (the jump-table target); the prefix starts here. -/
+
   armPC : BitVec 64
-  /-- The reflected prefix from `armPC` up to (excluding) the `jal`. -/
+
   seg : List BBlock
-  /-- PC of `jal eval_expr`. -/
+
   jalPC : BitVec 64
-  /-- Decoded 21-bit `jal` immediate. -/
+
   jalImm : BitVec 21
-  /-- `addi a0,sp,<sretImm>`: the sub-result slot offset from `esp`. -/
+
   sretImm : BitVec 12
-  /-- The child pointer field offset inside the statement node. -/
+
   childOff : Nat
 
 namespace EvalChildArm
 
-/-- The link PC written by the `jal`. -/
 def retPC (D : EvalChildArm) : BitVec 64 := BitVec.addInt D.jalPC 4
 
-/-- The sub-result slot offset as a number. -/
 def sretOff (D : EvalChildArm) : Nat := D.sretImm.toNat
 
-/-- The sub-result slot address at the lowered stack pointer. -/
 def sret (D : EvalChildArm) (esp : BitVec 64) : BitVec 64 :=
   esp + sign_extend (m := 64) D.sretImm
 
-/-- The five pinned registers every prefix reads. -/
 def regs (esp aStmt aInterp aRet aEnv : BitVec 64) : GRegs :=
   [(2, esp), (8, aStmt), (9, aInterp), (18, aRet), (19, aEnv)]
 
-/-- One total 64-bit machine read, as the eight positional bytes the reflected
-evaluator consumes. -/
 def wordLds8 (m : Mem) (a : Nat) : List (BitVec 8) :=
   [(m[a]?).getD 0, (m[a + 1]?).getD 0, (m[a + 2]?).getD 0,
    (m[a + 3]?).getD 0, (m[a + 4]?).getD 0, (m[a + 5]?).getD 0,
    (m[a + 6]?).getD 0, (m[a + 7]?).getD 0]
 
-/-- The one total load every prefix makes: the child pointer. -/
 def lds (D : EvalChildArm) (m : Mem) (aStmt : BitVec 64) : List (List (BitVec 8)) :=
   [wordLds8 m (aStmt.toNat + D.childOff)]
 
-/-- The reflected outcome of the prefix. -/
 def out (D : EvalChildArm) (esp aStmt aInterp aRet aEnv : BitVec 64) (m : Mem) :
     SegEvalState :=
   evalBlocks D.seg (SegEvalState.init (regs esp aStmt aInterp aRet aEnv) (D.lds m aStmt))
 
-/-! ## The decidable certificate -/
-
-/-- Facts about the descriptor alone.  Every field of an instance closes by
-`decide`, `rfl`, or the generated `jal` site lemma. -/
 structure Cert (D : EvalChildArm) : Prop where
   arm_align : D.armPC.toNat % 4 = 0
   ret_align : D.retPC.toNat % 4 = 0
@@ -179,15 +121,10 @@ structure Cert (D : EvalChildArm) : Prop where
       ReadsLikePost σ' (sigmaPost_jal σ D.jalPC vmi D.jalImm Register.x1
         (BitVec.addInt D.jalPC 4))
 
-/-- The two facts only the prologue-and-dispatch entry needs: the arm is the
-jump-table target of its tag.  An in-frame entry (the for-loop head) has none. -/
 structure EntryCert (D : EvalChildArm) : Prop where
   kind_le : D.kind ≤ 8
   arm_of_kind : execArmPC D.kind = D.armPC
 
-/-! ## The semantic certificate -/
-
-/-- How the arm's statement constructor exposes its child expression. -/
 structure Sem (D : EvalChildArm) (s : Stmt) (e : Expr) : Prop where
   kind_of_repr : ∀ (m : Mem) (a : Nat), StmtRepr m a s → read32 m a = some D.kind
   child_of_repr : ∀ (m : Mem) (a : Nat), StmtRepr m a s →
@@ -201,8 +138,6 @@ structure Sem (D : EvalChildArm) (s : Stmt) (e : Expr) : Prop where
     ExecGround m SL A sp aRet aStmt.toNat s → Exec_stmtLoaded m →
     read64 m (aStmt.toNat + D.childOff) = some aChild.toNat →
     ChainFacts m m (regs esp aStmt aInterp aRet aEnv) (D.lds m aStmt) D.seg
-
-/-! ## Geometry of the sub-result slot -/
 
 theorem esp_toNat (sp : BitVec 64) (hsp : 176 ≤ sp.toNat) :
     (sp - 176#64).toNat = sp.toNat - 176 := by
@@ -221,9 +156,6 @@ theorem sret_toNat (D : EvalChildArm) (C : D.Cert) (sp : BitVec 64)
   have := C.sret_room
   rw [Nat.mod_eq_of_lt (by omega)]
 
-/-! ## The reflected `ld` value -/
-
-/-- The reflected eight-byte load of a represented pointer is that pointer. -/
 theorem bytesVal_ld_wordLds (m : Mem) (a : Nat) (v : BitVec 64)
     (hread : read64 m a = some v.toNat) :
     bytesVal MKind.ld (wordLds8 m a) = v := by
@@ -238,9 +170,6 @@ theorem bytesVal_ld_wordLds (m : Mem) (a : Nat) (v : BitVec 64)
   rw [word8_toNat_recon]
   exact hrec
 
-/-! ## The prefix run -/
-
-/-- Exact state after the prefix and its `jal`. -/
 structure CallState (D : EvalChildArm)
     (g : (R : Register) → Option (RegisterType R))
     (esp aInterp aChild aEnv : BitVec 64) (m : Mem) (out : Array String)
@@ -259,7 +188,6 @@ structure CallState (D : EvalChildArm)
   out : cfg.σ.sailOutput = out
   frame : ∀ R, AbiPreserved R = true → cfg.σ.regs.get? R = g R
 
-/-- Run the reflected prefix and the `jal` from the arm entry. -/
 theorem prefix_run (D : EvalChildArm) (C : D.Cert)
     {m : Mem} {aStmt aInterp aEnv aRet aChild esp : BitVec 64} {cfg : Config}
     (hfacts : ChainFacts m m (regs esp aStmt aInterp aRet aEnv) (D.lds m aStmt) D.seg)
@@ -325,11 +253,6 @@ theorem prefix_run (D : EvalChildArm) (C : D.Cert)
     rw [hl]
     rfl
 
-/-! ## The carrier -/
-
-/-- Static identity of the parent `exec_stmt` frame carried across the child
-`eval_expr` call.  `EvalEntry`/`EvalExitD` abstract over the caller; this
-record retains the enclosing frame, its AST, and its memory geometry. -/
 structure Carrier (D : EvalChildArm) (s : Stmt) (e : Expr)
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -374,7 +297,6 @@ structure Carrier (D : EvalChildArm) (s : Stmt) (e : Expr)
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ gC R = g R
 
-/-- The child entry reached by the arm, with the parent carrier. -/
 def DispatchPost (D : EvalChildArm) (s : Stmt) (e : Expr)
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -385,11 +307,6 @@ def DispatchPost (D : EvalChildArm) (s : Stmt) (e : Expr)
     EvalEntry gC N A SL φf φc st d env e (sp - 176#64) D.retPC (D.sret (sp - 176#64))
       aInterp aC mC cfg
 
-/-! ## Child ground -/
-
-/-- The expression ground bundle of a child expression.  Its AST witness is a
-projection of the enclosing statement region; static eval geometry comes from
-`EvalCallSupport`. -/
 theorem _root_.Vsa.Sim.ExecGround.child_evalGround {m : Mem} {SL : StackLayout} {A : Arena}
     {sp aRet spEval sret aStmt aChild : BitVec 64} {s : Stmt} {e : Expr}
     (h : ExecGround m SL A sp aRet aStmt.toNat s)
@@ -440,13 +357,8 @@ private theorem eval_child_headroom (e : Expr) (extra : Nat) :
   simp only [evalFrame] at hn
   omega
 
-/-! ## The arm state -/
-
 end EvalChildArm
 
-/-- The machine state at an in-frame arm PC with the entry facts a child call
-needs.  `EvalChildArm.armState_of_entry` reaches it through the prologue and
-the jump table; the for-loop head and the post-body routes reach it in-frame. -/
 structure ArmState (armPC : BitVec 64) (s : Stmt)
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -498,7 +410,6 @@ structure ArmState (armPC : BitVec 64) (s : Stmt)
 
 namespace EvalChildArm
 
-/-- The arm state of a descriptor: the in-frame state at its arm PC. -/
 abbrev ArmState (D : EvalChildArm) (s : Stmt)
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -506,8 +417,6 @@ abbrev ArmState (D : EvalChildArm) (s : Stmt)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 ment : Mem) (cfg : Config) : Prop :=
   Vsa.Sim.ArmState D.armPC s g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0 ment cfg
 
-/-- **The parametric child call from the arm state.**  Run the arm prefix and
-the `jal`; land at the child's `EvalEntry` with the parent carrier. -/
 theorem dispatch_of_armState (D : EvalChildArm) (C : D.Cert) {s : Stmt} {e : Expr}
     (S : D.Sem s e)
     {g : (R : Register) → Option (RegisterType R)}
@@ -691,10 +600,6 @@ theorem dispatch_of_armState (D : EvalChildArm) (C : D.Cert) {s : Stmt} {e : Exp
     · rcases hA.ground.eval_call.table_stack with hd | hd <;>
         simp only [jumpTableBase] at hd <;> rw [hesp] <;> omega
 
-/-- The prologue and the jump-table dispatch reach the arm state of any
-tag: the arm is the jump-table target of the statement's tag, and the tag is
-read from the statement representation.  Every arm entered through the
-prologue (an expression child, a helper call, a null bridge) starts here. -/
 theorem _root_.Vsa.Sim.armState_of_entry_kind (kind : Nat) (armPC : BitVec 64)
     (hkle : kind ≤ 8) (harm : execArmPC kind = armPC) (halign : armPC.toNat % 4 = 0)
     {s : Stmt}
@@ -789,7 +694,6 @@ theorem _root_.Vsa.Sim.armState_of_entry_kind (kind : Nat) (armPC : BitVec 64)
       stmt := hStmt
       envset := hDefined }
 
-/-- The prologue and the jump-table dispatch reach the arm state. -/
 theorem armState_of_entry (D : EvalChildArm) (C : D.Cert) (E : D.EntryCert)
     {s : Stmt} {e : Expr} (S : D.Sem s e)
     {g : (R : Register) → Option (RegisterType R)}
@@ -802,11 +706,6 @@ theorem armState_of_entry (D : EvalChildArm) (C : D.Cert) (E : D.EntryCert)
   armState_of_entry_kind D.kind D.armPC E.kind_le E.arm_of_kind C.arm_align
     S.kind_of_repr hEntry
 
-/-! ## The dispatch -/
-
-/-- **The parametric arm dispatch.**  From the statement entry, run the
-prologue, the jump-table dispatch, the arm prefix, and the `jal`; land at the
-child's `EvalEntry` with the parent carrier. -/
 theorem dispatch (D : EvalChildArm) (C : D.Cert) (E : D.EntryCert) {s : Stmt} {e : Expr}
     (S : D.Sem s e)
     (g : (R : Register) → Option (RegisterType R))
@@ -820,8 +719,6 @@ theorem dispatch (D : EvalChildArm) (C : D.Cert) (E : D.EntryCert) {s : Stmt} {e
   obtain ⟨cA, ment, hsA, hA⟩ := D.armState_of_entry C E S hEntry
   obtain ⟨cC, hsC, hPost⟩ := D.dispatch_of_armState C S hA
   exact ⟨cC, hsA.trans hsC, hPost⟩
-
-/-! ## The child exit -/
 
 end EvalChildArm
 

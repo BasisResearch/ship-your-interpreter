@@ -1,60 +1,38 @@
 import Vsa.While.Semantics
 
-/-!
-# Store invariants and first-match chain witnesses
-
-This module isolates the pure specification facts needed by `env_get` and
-`env_set`.  The witnesses follow the C implementation's order: scan one frame
-from index zero, then follow its parent.
--/
-
 open Vsa Vsa.While
 
 namespace Vsa.Sim
 
-/-- A closure reference bound on a spec value: if `v` is `.closure ca`, then
-`ca < size`.  (Every other variant carries no closure index.) -/
 def ValueClosuresBounded (size : Nat) : Value → Prop
   | .closure ca => ca < size
   | _ => True
 
-/-- **`StoreClosuresBounded s`** — every closure address stored in any frame
-binding of `s` is `< s.closures.size` (it was returned by an earlier
-`allocClosure`).  This is the well-formedness invariant that makes the closures
-map monotone on the store's *own* references, so a `PhiExtends`-widening of `φc`
-leaves `StoreRepr` intact.  Named-field structure per CLAUDE.md. -/
 structure StoreClosuresBounded (s : Store) : Prop where
   bounded : ∀ fa, (h : fa < s.frames.size) →
     ∀ i, (hi : i < s.frames[fa].vars.length) →
       ValueClosuresBounded s.closures.size (s.frames[fa].vars[i].2)
 
-/-- No frame contains two bindings with the same name. -/
 def FrameNamesUnique (vars : List (String × Value)) : Prop :=
   (vars.map Prod.fst).Nodup
 
-/-- Every represented frame has unique binding names. -/
 def StoreUnique (s : Store) : Prop :=
   ∀ fa, (h : fa < s.frames.size) → FrameNamesUnique s.frames[fa].vars
 
-/-- Parent pointers are valid and point to older frames. -/
 def StoreParents (s : Store) : Prop :=
   ∀ fa, (h : fa < s.frames.size) → ∀ parent,
     s.frames[fa].parent = some parent → parent < fa
 
-/-- The store-shape invariant required by the C environment operations. -/
 structure StoreInvariant (s : Store) : Prop where
   unique : StoreUnique s
   parents : StoreParents s
 
-/-- A decomposition at the first binding named `x`.  `before.length` is the
-machine scan index. -/
 inductive FirstMatch (vars : List (String × Value)) (x : String) (v : Value) : Prop where
   | intro (before after : List (String × Value)) :
       vars = before ++ (x, v) :: after →
       (∀ p ∈ before, p.1 ≠ x) →
       FirstMatch vars x v
 
-/-- No binding in this frame is named `x`. -/
 def FrameMiss (vars : List (String × Value)) (x : String) : Prop :=
   ∀ p ∈ vars, p.1 ≠ x
 
@@ -96,7 +74,6 @@ theorem FirstMatch.any_eq_true {vars : List (String × Value)} {x : String} {v :
   rw [hsplit]
   simp
 
-/-- `List.find?` exposes exactly a first-match decomposition. -/
 theorem firstMatch_iff_find? {vars : List (String × Value)} {x : String} {v : Value} :
     FirstMatch vars x v ↔ vars.find? (fun p => p.1 == x) = some (x, v) := by
   constructor
@@ -160,8 +137,6 @@ theorem exists_firstMatch_iff_any {vars : List (String × Value)} {x : String} :
       subst name
       exact ⟨value, firstMatch_iff_find?.mpr hfind⟩
 
-/-- A successful assignment path.  The hit result is definitionally the Lean
-store update; uniqueness later reduces that update to one C slot. -/
 inductive SetChain (s : Store) (x : String) (newValue : Value) :
     Nat → Addr → Store → Prop where
   | hit {gas a f oldValue} :
@@ -175,7 +150,6 @@ inductive SetChain (s : Store) (x : String) (newValue : Value) :
       SetChain s x newValue gas parent s' →
       SetChain s x newValue (gas + 1) a s'
 
-/-- The assignment chain witness is exactly the successful Lean update. -/
 theorem set_eq_some_iff_chain (s : Store) (x : String) (newValue : Value) :
     ∀ gas a s', s.set gas a x newValue = some s' ↔
       SetChain s x newValue gas a s' := by
@@ -226,8 +200,6 @@ theorem set_eq_some_iff_chain (s : Store) (x : String) (newValue : Value) :
         simp only [bind, Option.bind]
         rw [hmiss.any_eq_false, hparent]
         exact (ih _ _).mpr htail
-
-/-! ## Preservation of the store-shape invariant -/
 
 def replaceBindingValue (x : String) (newValue : Value) (p : String × Value) :
     String × Value :=
@@ -408,7 +380,6 @@ theorem StoreInvariant.set? {s s' : Store} {a : Addr}
     (hset : s.set? a x newValue = some s') : StoreInvariant s' :=
   hinv.set hset
 
-/-- Index form consumed by the C scan loop. -/
 theorem FirstMatch.index {vars : List (String × Value)} {x : String}
     {value : Value} (hfirst : FirstMatch vars x value) :
     ∃ (i : Nat) (hi : i < vars.length),
@@ -426,7 +397,6 @@ theorem FirstMatch.index {vars : List (String × Value)} {x : String}
     rw [hget]
     exact hbefore before[j] (List.getElem_mem hj)
 
-/-- The concrete initial interpreter store satisfies the environment invariant. -/
 theorem storeInvariant_initSt : StoreInvariant initSt.store := by
   constructor
   · intro fa hfa
@@ -437,7 +407,5 @@ theorem storeInvariant_initSt : StoreInvariant initSt.store := by
     have hfa0 : fa = 0 := by simpa [initSt] using hfa
     subst fa
     simp [initSt] at hparent
-
-/-! ## Constructor-facing semantic bridges -/
 
 end Vsa.Sim

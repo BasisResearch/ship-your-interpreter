@@ -1,20 +1,10 @@
 import VsaIris.Vsa.MallocBlocks
 
-/-!
-# `_malloc_r`'s block walk: the loops
-
-The bin loop within a block (`bw_bins`), the check of the bins below the
-scan's start and the clearing of an exhausted block's bit (`bw_clear`), the
-search for the next set bit (`bw_next`, `bw_find`), and the walk over the
-blocks (`bw_walk`).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The walk's invariant depends only on `sp`, `s0`-`s3`, `a4`, `a6` and `t4`. -/
 theorem BW.of_eq {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     {nb : Nat} {R R' : Nat → BitVec 64} (W : BW C Mt brkv chunks bins nb R)
     (h2 : R' 2 = R 2) (h8 : R' 8 = R 8) (h9 : R' 9 = R 9) (h18 : R' 18 = R 18) (h19 : R' 19 = R 19)
@@ -23,14 +13,10 @@ theorem BW.of_eq {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins 
   ⟨W.frame.of_regs h2 h9 h18 h19, W.heap, W.nbok, W.nb31, W.b1, by rw [h14]; exact W.a4,
     by rw [h16]; exact W.a6, by rw [h29]; exact W.t4, by rw [h8]; exact W.s0⟩
 
-/-- `x & 3` is `x mod 4`. -/
 theorem and3_toNat (x : BitVec 64) : (x &&& 3#64).toNat = x.toNat % 4 := by
   rw [BitVec.toNat_and, show (3#64 : BitVec 64).toNat = 2 ^ 2 - 1 by decide,
     Nat.and_two_pow_sub_one_eq_mod]
 
-/-- The state of a block's scan: the walk's invariant, the scan's start bin
-`start` in `a7` (its block's bit in `a0`, its header in `t5`), `31` in `t3`,
-and the search may start at `start`. -/
 structure BWBlock (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
     (nb start : Nat) (R : Nat → BitVec 64) : Prop where
   bw : BW C Mt brkv chunks bins nb R
@@ -71,12 +57,8 @@ theorem getLast_cons_rev (b : Nat) (l : List Nat) :
   | nil => simp
   | cons x xs => simp
 
-/-- The end of a block's scan: `t6` at the next block. -/
 abbrev bend (start : Nat) : Nat := 4 * (start / 4 + 1)
 
-/-- **The bin loop** (`0x800049c8` for bin `k`): scan bin `k` (`bw_member`);
-exhausted, it is empty, and the scan moves to bin `k + 1`, or leaves the block
-at `0x80004e48` with all of `[start, bend start)` empty. -/
 theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb start : Nat}
     (hblk : ∀ R', BWBlock C Mt brkv chunks bins nb start R' → (R' 31).toNat = bend start →
@@ -113,7 +95,7 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
       B.keep fun x h6 h11 h12 h13 h15 h31 => (h x h6 h11 h12 h13 h15 h31).trans
         (hkp x h11 h12 h13 h15)
     refine st_80004d08 O.live (fun hz => ?_) (fun hnz => ?_)
-    · -- the block's end
+    ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hz
       have hz' := congrArg BitVec.toNat hz
       rw [show (3#64 : BitVec 64) = (3#64 : BitVec 64) from rfl, and3_toNat, hk1] at hz'
@@ -125,7 +107,7 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
       by_cases hjk : j = k
       · subst hjk; exact hemp
       · exact hprev j hj1 (by omega)
-    · -- the next bin
+    ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
       have hnz' : (k + 1) % 4 ≠ 0 := by
         intro h0; apply hnz; apply BitVec.eq_of_toNat_eq
@@ -179,9 +161,6 @@ theorem clr_keep {x m : BitVec 64} {b : Nat} (hm : m.toNat = 2 ^ b) (t : Nat)
 theorem clr_le {x m : BitVec 64} : ((m ^^^ 18446744073709551615#64) &&& x).toNat ≤ x.toNat := by
   rw [BitVec.toNat_and]; exact Nat.and_le_right
 
-/-- The state at the next-block search (`0x80004e64`): the walk's invariant,
-block `b`'s bit in `a0`, the bitmap `bb` (as in memory) in `a5`, the next
-block's first bin in `t6`, and `31` in `t3`. -/
 structure BWNext (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
     (nb b bb : Nat) (R : Nat → BitVec 64) : Prop where
   bw : BW C Mt brkv chunks bins nb R
@@ -193,8 +172,6 @@ structure BWNext (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins 
   lo : binIndex nb < 4 * (b + 1)
   bl : b < 32
 
-/-- **An exhausted block** (`0x80004e48`): the bins below the scan's start
-are checked; all empty, the block's bit is cleared (`0x80004e54`). -/
 theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb start : Nat} (hs4 : 4 ≤ start) (hsn : start < numBins)
     (hlo : binIndex nb < bend start)
@@ -208,7 +185,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
   unfold bend at hlo
   induction n with
   | zero =>
-    -- the block's first bin: clear the bit
+
     intro i R hn hi1 hi2 W h17 h30 h10 h31 h28 hemp
     unfold bend at h31 hemp
     have HH := W.heap.heap.heap.heap
@@ -309,7 +286,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
       have hs : (R 17 - 1#64).toNat = i - 1 := by rw [BitVec.toNat_sub, h17]; simp; omega
       rw [toNat_sx32_small _ (by rw [hs]; unfold numBins at hi1n; omega), hs]
     refine st_80004e44 O.live (fun hne => ?_) (fun heq => ?_)
-    · -- a lower bin holds chunks: keep the bit
+    ·
       obtain ⟨bb, hbb⟩ := Option.isSome_iff_exists.1 HH.binblocks_present
       have hbbl := W.heap.heap.bb_lt bb hbb
       have hbbA : binblocksAddr = 2147593496 := rfl
@@ -327,7 +304,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
       · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
       · exact h31
       · exact h28
-    · -- empty too: on down
+    ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at heq
       have hfb : f = binAt (i - 1) := by
         have := congrArg BitVec.toNat heq
@@ -372,7 +349,6 @@ theorem bit_test {m x : BitVec 64} {c : Nat} (hm : m.toNat = 2 ^ c) :
     · subst hi; rw [Nat.testBit_eq_decide_div_mod_eq]; simp [h]
     · simp [hi]
 
-/-- A bitmap at least `2 ^ c` has a set bit at or above `c`. -/
 theorem exists_set_bit {bb c : Nat} (h : 2 ^ c ≤ bb) (hlt : bb < 2 ^ 32) :
     ∃ t, c ≤ t ∧ t < 32 ∧ bb / 2 ^ t % 2 = 1 := by
   have hb0 : bb ≠ 0 := by have := Nat.one_le_two_pow (n := c); omega
@@ -388,16 +364,12 @@ theorem exists_set_bit {bb c : Nat} (h : 2 ^ c ≤ bb) (hlt : bb < 2 ^ 32) :
       exact (Nat.div_lt_iff_lt_mul hp).2 (by omega)
     rw [this]
 
-/-- The next-block search's continuation: the scan of block `c`, whose bit is
-set, from its first bin. -/
 abbrev BWBlockAt (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
     (nb b bb : Nat) : Prop :=
   ∀ (R' : Nat → BitVec 64) c, BW C Mt brkv chunks bins nb R' → b < c → c < 32 →
     bb / 2 ^ c % 2 = 1 → (R' 17).toNat = 4 * c → (R' 10).toNat = 2 ^ c → (R' 28).toNat = 31 →
     AW C.live C.S C.Q 0x800049a8#64 R' Mt
 
-/-- The inner search (`0x80004e78`): bit `c` of the bitmap is clear; try the
-next one. -/
 theorem bw_next_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb b bb t : Nat} (ht : bb / 2 ^ t % 2 = 1) (ht32 : t < 32)
     (hblk : BWBlockAt C Mt brkv chunks bins nb b bb) :
@@ -423,7 +395,7 @@ theorem bw_next_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : Li
     have hbt := bit_test (x := R 15) h10'
     rw [h15] at hbt
     refine st_80004e84 O.live (fun hz => ?_) (fun hnz => ?_)
-    · -- bit `c + 1` clear: on
+    ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hz
       have hc1 : bb / 2 ^ (c + 1) % 2 = 0 := hbt.1 hz
       have hct' : c + 1 < t := by
@@ -434,7 +406,7 @@ theorem bw_next_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : Li
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h31')
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15)
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h28)
-    · -- bit `c + 1` set: its block
+    ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
       have hc1 : bb / 2 ^ (c + 1) % 2 = 1 := by
         have := mt hbt.2 hnz; omega
@@ -445,8 +417,6 @@ theorem bw_next_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : Li
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h28)
 
-/-- **The next block** (`0x80004e64`): no set bit above block `b` sends the
-walk to the top; otherwise the next set bit's block is scanned. -/
 theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb b bb : Nat}
     (N : BWNext C Mt brkv chunks bins nb b bb R)
@@ -469,7 +439,7 @@ theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
     have : 2 ^ (b + 1) < 2 ^ 64 := Nat.pow_lt_pow_right (by omega) (by omega)
     simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
   refine st_80004e6c O.live (fun hle => ?_) (fun hgt => ?_)
-  · -- no set bit above: the top
+  ·
     exact htop _ (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, N.a5, h1] at hgt
     have hge : 2 ^ (b + 1) ≤ bb := by have := Nat.one_le_two_pow (n := b + 1); omega
@@ -499,8 +469,6 @@ theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a5)
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t3)
 
-/-- **A block's scan** (`0x800049a8`): bin `start`'s header in `t5`/`t1`, its
-last member in `a3`, then the bin loop from `start`. -/
 theorem bw_block {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
     (W : BW C Mt brkv chunks bins nb R) (h17 : (R 17).toNat = start)
@@ -555,9 +523,6 @@ theorem bw_block {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
   · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt]
     rw [getLast_cons_rev] at hl; cases hl; rfl
 
-/-- **A block from its scan to its clearing**: the scan (`bw_block`) finds
-nothing, so the block's bins below the start are checked and its bit
-possibly cleared (`bw_clear`) before the next-block search. -/
 theorem bw_scan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
     (W : BW C Mt brkv chunks bins nb R) (h17 : (R 17).toNat = start)
@@ -574,12 +539,9 @@ theorem bw_scan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
     exact bw_clear O hs4 hsn (by unfold bend; omega) hnext _ start R' rfl (by omega) (Nat.le_refl _)
       B.bw B.a7 B.t5 B.a0 h31 B.t3 hemp
 
-/-- The walk's exit to the top (`0x80004a2c`), from any memory. -/
 abbrev BWTop (C : MCtx) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat) (nb : Nat) : Prop :=
   ∀ R' Mt', BW C Mt' brkv chunks bins nb R' → AW C.live C.S C.Q 0x80004a2c#64 R' Mt'
 
-/-- **The walk over the blocks** (`0x80004e64` after block `b`): an induction
-over the blocks left. -/
 theorem bw_walk {C : MCtx} (O : MOK C) {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb : Nat} (htop : BWTop C brkv chunks bins nb) :
     ∀ n b Mt bb (R : Nat → BitVec 64), 32 - b ≤ n → BWNext C Mt brkv chunks bins nb b bb R →
@@ -597,7 +559,6 @@ theorem bw_walk {C : MCtx} (O : MOK C) {brkv : Nat} {chunks : List Chunk}
     rw [hc4] at N''
     exact ih c Mt'' bb'' R'' (by omega) N''
 
-/-- **A found block** (`0x800049a4`): `t3 = 31`, then the walk from `start`. -/
 theorem bw_found {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
     (htop : BWTop C brkv chunks bins nb)
@@ -609,8 +570,6 @@ theorem bw_found {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
   refine bw_scan O (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) h17 h10 (by sx_norm) hsf hs4 hsn
     fun R' Mt' bb' N => bw_walk O htop _ _ Mt' bb' R' (Nat.le_refl _) N
 
-/-- The initial search's loop (`0x80004994`): block `c`'s bit is clear; try
-the next. -/
 theorem bw_find_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb bb t : Nat} (htop : BWTop C brkv chunks bins nb)
     (ht : bb / 2 ^ t % 2 = 1) (ht32 : t < 32) :
@@ -657,7 +616,6 @@ theorem binIndex_ge4 {nb : Nat} (h : 32 ≤ nb) : 4 ≤ binIndex nb := by
   unfold binIndex
   repeat (first | omega | split)
 
-/-- The search's start is at or above the request's bin. -/
 theorem scanFrom_ge {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb idx : Nat}
     (HH : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) (hsf : ScanFrom chunks bins nb idx)
@@ -670,14 +628,11 @@ theorem scanFrom_ge {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks :
     rw [← hbi h1]
     exact binIndex_mono hly
 
-/-- `_malloc_r`'s exit to the top, for the walk: `top_path`, `extend_top`. -/
 theorem bwTop {C : MCtx} (O : MOK C) {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb : Nat} : BWTop C brkv chunks bins nb := fun R' _ W =>
   top_path O W.frame W.heap (idx := (R' 17).toNat) ⟨W.a4, rfl, W.a6⟩ W.s0 W.nbok W.nb31
     fun hsm _ F4 G4 T4 h84 => extend_top O F4 W.heap G4 T4 h84 W.nbok W.nb31 hsm
 
-/-- **The block walk** (`0x80004978`): the first block at or above the
-request's with its bit set, then the walk (`bw_found`, `bw_find_loop`). -/
 theorem bw_find {C : MCtx} (O : MOK C) :
     ∀ R' Mt brkv' chunks' bins' nb idx bb, MFrame C R' Mt →
       MHeap C Mt brkv' chunks' bins' → bins' 1 = [] → ScanFrom chunks' bins' nb idx →
@@ -759,8 +714,6 @@ theorem bw_find {C : MCtx} (O : MOK C) :
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11) (by omega)
 
-/-- **`_malloc_r` from its entry, on every path.** `malloc_paths` with its
-last join, the block walk (`bw_find`), discharged. -/
 theorem malloc_all {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (E : MEntry C R) (Hp : MHeap C C.Mt0 brkv chunks bins) :

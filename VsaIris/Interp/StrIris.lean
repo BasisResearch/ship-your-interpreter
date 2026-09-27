@@ -2,15 +2,6 @@ import VsaIris.Interp.StrSteps
 import VsaIris.Interp.SpecEnv
 import VsaIris.Vsa.BinImg
 
-/-!
-# The string leaves' runs in the Iris logic
-
-Shared plumbing between the `SW` runs (`StrRun.lean`) and the function
-specs: the code from `binImg`, a persistent string's bytes as the run's data,
-the run rule at a symbolic state (`wp_sw`), and the register marshalling of
-`fnSpecW`'s `clobbered` lists into the owned list `sRegs`.
--/
-
 namespace VsaIris.Interp.StrLeaf
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -22,7 +13,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 variable {live : Nat → Prop}
 
-/-- A C string image gives the string's byte facts (as `ProofStringify`). -/
 theorem strBytes_of_img {img : Nat → BitVec 8} {q : Nat} {x : String}
     (h : VsaIris.Interp.CStrImg img q x) : StrBytes q x.toList.length img where
   nonzero k hk := by
@@ -33,7 +23,6 @@ theorem strBytes_of_img {img : Nat → BitVec 8} {q : Nat} {x : String}
     simp at this; omega
   nul := h.2
 
-/-- A string's window as `strlen`'s read geometry. -/
 theorem regions_of_win {P : BitVec 64} {len : Nat} (h : VsaIris.Interp.StrWin P.toNat len) :
     ReadRegions P len := by
   have hlo := h.lo; have hhi := h.hi; have ht := h.htif
@@ -46,7 +35,6 @@ theorem regions_of_win {P : BitVec 64} {len : Nat} (h : VsaIris.Interp.StrWin P.
 theorem pc_reg (v : BitVec 64) : VsaIris.PC ↦ᵣ v ⊣⊢@{IProp GF} (32 : Nat) ↦ᵣ v := .rfl
 theorem ra_reg (v : BitVec 64) : VsaIris.ra ↦ᵣ v ⊣⊢@{IProp GF} (1 : Nat) ↦ᵣ v := .rfl
 
-/-- The code of both leaves is live. -/
 theorem strCode_live (hcl : CodeLive live) : ∀ p ∈ strCode, live p.1 := by
   intro p hp
   rcases List.mem_append.mp hp with hp | hp
@@ -55,7 +43,6 @@ theorem strCode_live (hcl : CodeLive live) : ∀ p ∈ strCode, live p.1 := by
   · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
     exact hcl _ (strcpyCode_text q hq).1
 
-/-- The code of both leaves, from the binary's image. -/
 theorem strCode_of_binImg : binImg (GF := GF) ⊢ sepL strCode (fun q => q.1 ↦ₘ□ q.2) := by
   iintro #H
   ihave #H1 := instrAt_of_binImg strlenCode_text $$ H
@@ -65,7 +52,6 @@ theorem strCode_of_binImg : binImg (GF := GF) ⊢ sepL strCode (fun q => q.1 ↦
   rw [← instrAt_text, ← instrAt_text]
   iframe H1 H2
 
-/-- Read-only bytes of an image as a list of persistent points-to. -/
 theorem roImg_list (S : Nat → Prop) (img : Nat → BitVec 8) :
     ∀ l : List (Nat × BitVec 8), (∀ q ∈ l, S q.1 ∧ img q.1 = q.2) →
       VsaIris.Interp.roImg (GF := GF) S img ⊢ sepL l (fun q => q.1 ↦ₘ□ q.2)
@@ -89,7 +75,6 @@ theorem roImg_strText (p len : Nat) (img : Nat → BitVec 8) :
     have := List.mem_range.mp hk
     exact ⟨⟨by simp, by simp; omega⟩, rfl⟩
 
-/-- No bytes. -/
 theorem ownSet_none (Φ : Nat → IProp GF) : ⊢ ownSet (fun _ => False) Φ := by
   unfold ownSet
   iexists []
@@ -97,7 +82,6 @@ theorem ownSet_none (Φ : Nat → IProp GF) : ⊢ ownSet (fun _ => False) Φ := 
   · ipureintro; exact ⟨List.nodup_nil, fun a => by simp⟩
   · simp only [sepL_nil]; iempintro
 
-/-- **A string leaf's run at a symbolic state**, for either WP. -/
 theorem wp_sw (Wp : MachWP (GF := GF) (vsaModel live)) {D : List (Nat × BitVec 8)}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {Φ : Nat × String → IProp GF}
@@ -108,9 +92,6 @@ theorem wp_sw (Wp : MachWP (GF := GF) (vsaModel live)) {D : List (Nat × BitVec 
   obtain ⟨n, hn⟩ := h
   exact wp_localRunW Wp n rv (imgM Mt) (hn rv (imgM Mt) ⟨hpc, hR, fun _ _ => rfl⟩)
 
-/-! ## Registers -/
-
-/-- The argument registers `fnSpecW`'s clobber lists leave to the leaf. -/
 abbrev leafTemps : List Nat := [11, 12, 13, 14, 15, 16]
 abbrev retRest : List Nat := [5, 6, 7, 17, 28, 29, 30, 31]
 
@@ -121,7 +102,6 @@ theorem clobbered_split {l a b : List Nat} (h : l.Perm (a ++ b)) :
   unfold clobbered
   exact (sepL_perm _ h).trans (sepL_append _ _ _)
 
-/-- The register file of a leaf's entry. -/
 def entryRv (e r a0 a1 : BitVec 64) (f : Nat → BitVec 64) (k : Nat) : BitVec 64 :=
   if k = 32 then e else if k = 1 then r else if k = 10 then a0 else if k = 11 then a1 else f k
 

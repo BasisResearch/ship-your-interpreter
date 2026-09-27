@@ -2,42 +2,14 @@ import VsaIris.Interp.SpecEval
 import VsaIris.Interp.Bridge
 import VsaIris.Interp.ITac
 
-/-!
-# The arm layer: symbolic runs between Iris steps (lane G)
-
-INTERP_DESIGN.md §6. A generated case lemma (`Case/*T.lean`, `Case/*P.lean`)
-is a chain of three kinds of step over ONE resource, the machine state of the
-arm at a symbolic point (`ms pc R S Mt`: the PC, `ra`, the body's registers at
-the valuation `R`, and the owned frame bytes `S` at the tracking memory
-`Mt`'s image):
-
-* a **run** (`wp_swpF`): a first-order symbolic run (`SWP`, driven by
-  `ix_run`) from `ms pc R S Mt`, in continuation form: its post (`RunK`) is
-  the rest of the arm, an Iris entailment from the frame `F` and the end
-  state's machine state (`swp_closeF`). The end state is whatever the run
-  computed, and nothing about it is written down;
-* a **child call** (`ms_callEvalT`): the recursive call into
-  `eval_expr` through its spec, the result slot carved out of `S` and joined
-  back as three written words (`slotWrite`) whose meaning is `□ valOf`;
-* a **helper call** (`ms_callHelper`): a runtime helper through its
-  `helperSpec`.
-
-After a call the tracking memory is the old one with the slot's three words
-written, so the store forwarding of the symbolic runs (`sx_mem`) reads the
-child's result and every frame word the child did not touch.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 
-/-! ## Tracking memories and byte images -/
-
 theorem iRegs_eq : iRegs = 32 :: 1 :: fRegs := rfl
 
-/-- A tracking memory holding any byte function on a finite address list. -/
 theorem exists_mem_img (f : Nat → BitVec 8) : ∀ l : List Nat, ∃ Mt : Mem, ∀ a ∈ l, imgM Mt a = f a
   | [] => ⟨∅, fun _ h => by cases h⟩
   | a :: l => by
@@ -50,7 +22,6 @@ theorem exists_mem_img (f : Nat → BitVec 8) : ∀ l : List Nat, ∃ Mt : Mem, 
     · rw [if_neg (by simpa using e)]
       exact h b ((List.mem_cons.mp hb).resolve_left (Ne.symm e))
 
-/-- Little-endian decoding is injective on the bytes. -/
 theorem imgLE_inj {f g : Nat → BitVec 8} :
     ∀ {n a : Nat}, imgLE f a n = imgLE g a n → ∀ j, j < n → f (a + j) = g (a + j)
   | 0, _, _, j, hj => absurd hj (Nat.not_lt_zero j)
@@ -68,17 +39,14 @@ theorem imgLE_imgM_store (Mt : Mem) (a : Nat) (w : BitVec 64) :
     imgLE (imgM (writeLog Mt [(a, 8, w)])) a 8 = w.toNat :=
   readLE_memImg (read64_store_hit Mt a w)
 
-/-- The bytes of a doubleword just stored. -/
 theorem imgM_store_img {Mt : Mem} {a : Nat} {img : Nat → BitVec 8} {j : Nat} (hj : j < 8) :
     imgM (writeLog Mt [(a, 8, imgW img a)]) (a + j) = img (a + j) := by
   refine imgLE_inj (n := 8) ?_ j hj
   rw [imgLE_imgM_store, imgW_toNat]
 
-/-- A slot's three words written into a tracking memory. -/
 abbrev slotWrite (Mt : Mem) (a : Nat) (w0 w1 w2 : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog Mt [(a, 8, w0)]) [(a + 8, 8, w1)]) [(a + 16, 8, w2)]
 
-/-- Writing an image's three words reads back the image on the slot. -/
 theorem imgM_slotWrite_in {Mt : Mem} {a b : Nat} (img : Nat → BitVec 8) (h : InExt (a, 24) b) :
     imgM (slotWrite Mt a (imgW img a) (imgW img (a + 8)) (imgW img (a + 16))) b = img b := by
   obtain ⟨h1, h2⟩ := h
@@ -96,14 +64,11 @@ theorem imgM_slotWrite_in {Mt : Mem} {a b : Nat} (img : Nat → BitVec 8) (h : I
   have := imgM_store_img (Mt := Mt) (a := a) (img := img) (j := b - a) (by omega)
   rwa [show a + (b - a) = b by omega] at this
 
-/-- Off the slot, writing its words changes nothing. -/
 theorem imgM_slotWrite_out {Mt : Mem} {a b : Nat} (w0 w1 w2 : BitVec 64) (h : ¬ InExt (a, 24) b) :
     imgM (slotWrite Mt a w0 w1 w2) b = imgM Mt b := by
   simp only [InExt] at h
   rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
     imgM_store_miss _ _ (by omega)]
-
-/-! ## Load values through the little-endian image -/
 
 theorem toNat_append4 (f : Nat → BitVec 8) (a : Nat) :
     (((((f (a + 3)).append (f (a + 2))).append (f (a + 1))).append (f a)) : BitVec (8 * 4)).toNat =
@@ -125,7 +90,6 @@ theorem bytesAt8 (f : Nat → BitVec 8) (a : Nat) :
     bytesAt f a 8 = [f a, f (a + 1), f (a + 2), f (a + 3), f (a + 4), f (a + 5), f (a + 6),
       f (a + 7)] := rfl
 
-/-- A signed word load of a small value. -/
 theorem ldvf_lw_imgLE {f : Nat → BitVec 8} {a k : Nat} (h : imgLE f a 4 = k) (hk : k < 2 ^ 31) :
     ldvf .lw f a = BitVec.ofNat 64 k := by
   have hw := toNat_append4 f a
@@ -144,7 +108,6 @@ theorem ldvf_lw_imgLE {f : Nat → BitVec 8} {a k : Nat} (h : imgLE f a 4 = k) (
   simp only [Bool.false_eq_true, if_false, Nat.add_zero, BitVec.toNat_setWidth]
   rw [hw, Nat.mod_eq_of_lt (show k < 2 ^ 64 by omega)]
 
-/-- An unsigned word load. -/
 theorem ldvf_lwu_imgLE {f : Nat → BitVec 8} {a k : Nat} (h : imgLE f a 4 = k) :
     ldvf .lwu f a = BitVec.ofNat 64 k := by
   have hw := toNat_append4 f a
@@ -175,7 +138,6 @@ theorem toNat_append8 (f : Nat → BitVec 8) (a : Nat) :
   simp only [Nat.shiftLeft_eq, Nat.reducePow]
   omega
 
-/-- A doubleword load. -/
 theorem ldvf_ld_imgLE {f : Nat → BitVec 8} {a k : Nat} (h : imgLE f a 8 = k) :
     ldvf .ld f a = BitVec.ofNat 64 k := by
   have hw := toNat_append8 f a
@@ -196,7 +158,6 @@ theorem ldv_lwu_read32 {m : Mem} {a k : Nat} (h : read32 m a = some k) :
 theorem ldv_ld_read64 {m : Mem} {a k : Nat} (h : read64 m a = some k) :
     ldv .ld m a = BitVec.ofNat 64 k := ldvf_ld_imgLE (readLE_memImg h)
 
-/-- A word load of the low half of a doubleword just stored. -/
 theorem ldv_lw_store8 (Mt : Mem) {a b : Nat} (v : BitVec 64) (h : a = b)
     (hk : v.toNat % 2 ^ 32 < 2 ^ 31) :
     ldv .lw (writeLog Mt [(b, 8, v)]) a = BitVec.ofNat 64 (v.toNat % 2 ^ 32) := by
@@ -211,12 +172,10 @@ theorem ldv_lw_store8 (Mt : Mem) {a b : Nat} (v : BitVec 64) (h : a = b)
   rw [e] at hs this
   omega
 
-/-- A word load through a disjoint store. -/
 theorem ldv_lw_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 4 ≤ b ∨ b + w ≤ a) :
     ldv .lw (writeLog Mt [(b, w, v)]) a = ldv .lw Mt a :=
   ldv_store_miss .lw Mt v h
 
-/-- Store forwarding for doubleword and word loads (`ix_run`'s normalizer). -/
 macro_rules
   | `(tactic| ix_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
       ldv_ld_miss, ldv_lw_miss, ldv_lw_store8] at *)
@@ -225,13 +184,9 @@ section Res
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The machine state of an arm at a symbolic point**: the PC, `ra` (at
-`R 1`), the body's registers at `R`, and the owned bytes `S` at the tracking
-memory `Mt`'s image. -/
 def ms (pc : BitVec 64) (R : Nat → BitVec 64) (S : Nat → Prop) (Mt : Mem) : IProp GF :=
   iprop(PC ↦ᵣ pc ∗ ra ↦ᵣ R 1 ∗ regFile R ∗ ownSet S (fun a => a ↦ₘ imgM Mt a))
 
-/-- An owned byte set at any image is a tracking memory's image. -/
 theorem ownSet_mem (S : Nat → Prop) (f : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ f a) ⊢ ∃ Mt : Mem, ownSet S (fun a => a ↦ₘ imgM Mt a) := by
   unfold ownSet
@@ -243,32 +198,22 @@ theorem ownSet_mem (S : Nat → Prop) (f : Nat → BitVec 8) :
   rw [sepL_congr (Ψ := fun a => iprop(a ↦ₘ imgM Mt a)) (fun a ha => by rw [hMt a ha])] at *
   iexact Hl
 
-/-- `ra` is not a body register. -/
 theorem regFile_upd_ra (R : Nat → BitVec 64) (x : BitVec 64) :
     regFile (GF := GF) (upd R 1 x) = regFile R := by
   unfold regFile
   exact sepL_congr fun r hr => by
     rw [upd_other _ _ (fun e => by subst e; revert hr; decide)]
 
-/-- Registers at a valuation are the body's registers and the PC/`ra`. -/
 theorem sepL_iRegs (rv : Nat → BitVec 64) :
     sepL (GF := GF) iRegs (fun r => r ↦ᵣ rv r) ⊣⊢ iprop(PC ↦ᵣ rv 32 ∗ ra ↦ᵣ rv 1 ∗ regFile rv) := by
   rw [iRegs_eq]; simp only [sepL_cons]; exact .rfl
 
 variable {live : Nat → Prop}
 
-/-- The post of a symbolic run in continuation form: from the end state's
-registers and bytes, with the frame `F`, the rest of the arm is proved. -/
 abbrev RunK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (F : IProp GF) (S : Nat → Prop) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop :=
   F ∗ sepL iRegs (fun r => r ↦ᵣ rv r) ∗ ownSet S (fun a => a ↦ₘ mv a) ⊢ Wp.W Φ
 
-/-- **A symbolic run**, for either WP, in continuation form: from the
-machine state at `pc`, the run `h` reaches an end state from which the rest
-of the arm, with the frame `F`, is proved (`swp_closeF`). The read-only bytes
-`text` (code, jump tables, the AST view) are persistent. The frame is
-`let`-bound in the premise: the proof introduces it as an opaque local, so the
-symbolic run's normalizers (`simp … at *`) never rewrite inside it. -/
 theorem wp_swpF (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem}
@@ -298,8 +243,6 @@ theorem wp_swpF (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   iapply hq
   iframe HF Hregs HS
 
-/-- **The end of a symbolic run**: at the symbolic end state, the rest of the
-arm is an Iris entailment over the machine state there. -/
 theorem swp_closeF (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (h : F ∗ ms pc R S Mt ⊢ Wp.W Φ) :
@@ -322,7 +265,6 @@ theorem swp_closeF (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     iexact Hregs
   iapply ownSet_congr (fun a ha => by rw [hm.img a ha]) $$ HS
 
-/-- An element of a persistent separating list. -/
 theorem sepL_elem_persist {α : Type} (Φ : α → IProp GF) [∀ x, Persistent (Φ x)] {x : α} :
     ∀ {l : List α}, x ∈ l → sepL l Φ ⊢ Φ x
   | y :: ys, hx => by
@@ -331,7 +273,6 @@ theorem sepL_elem_persist {α : Type} (Φ : α → IProp GF) [∀ x, Persistent 
     · iintro ⟨H, -⟩; iexact H
     · iintro ⟨-, H⟩; iapply sepL_elem_persist Φ hx $$ H
 
-/-- A persistent byte list covers every sub-footprint of it. -/
 theorem sepL_bytes_sub {T : List (Nat × BitVec 8)} :
     ∀ {l : List (Nat × DFrac × BitVec 8)}, (∀ q ∈ l, q.2.1 = DFrac.discard ∧ (q.1, q.2.2) ∈ T) →
       sepL (GF := GF) T (fun p => p.1 ↦ₘ□ p.2) ⊢ sepL l (fun q => q.1 ↦ₘ{q.2.1} q.2.2)
@@ -344,7 +285,6 @@ theorem sepL_bytes_sub {T : List (Nat × BitVec 8)} :
     · rw [h1]; iapply sepL_elem_persist (fun p : Nat × BitVec 8 => iprop(p.1 ↦ₘ□ p.2)) h2 $$ H
     · iapply sepL_bytes_sub (fun q hq => h q (List.mem_cons_of_mem _ hq)) $$ H
 
-/-- An instruction's bytes, from the interpreter's code. -/
 theorem instrAt_of_codeRes {i : Nat} {code : List (BitVec 8)}
     (h : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText) : codeRes (GF := GF) ⊢ instrAt i code := by
   unfold codeRes roOwn
@@ -355,17 +295,12 @@ theorem instrAt_of_codeRes {i : Nat} {code : List (BitVec 8)}
   obtain ⟨p, _, rfl⟩ := List.mem_map.mp hq
   rfl
 
-/-- `swp_closeF` with the end memory named: the rest of the arm holds for a
-memory variable equal to it, so seam invariants (`EvalSaved`) are stated about
-a variable and the end memory's term is not carried further. -/
 theorem swp_closeM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (h : ∀ Mt', Mt' = Mt → F ∗ ms pc R S Mt' ⊢ Wp.W Φ) :
     SWP live text iRegs S (RunK Wp Φ F S) pc R Mt :=
   swp_closeF Wp (h Mt rfl)
 
-/-- `swp_closeF` with the end registers and memory named (a loop's next
-iteration is stated over them). -/
 theorem swp_closeRM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem}
@@ -375,14 +310,10 @@ theorem swp_closeRM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
 
 end Res
 
-/-! ## Entry, exit, the data view -/
-
 section Ends
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **Entering an arm**: the PC, `ra`, the body's registers and the owned
-frame bytes become the machine state, at some tracking memory. -/
 theorem ms_intro {pc r : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} :
     PC ↦ᵣ pc ∗ ra ↦ᵣ r ∗ regFile R ∗ ownSet S byteAny ⊢@{IProp GF}
       ∃ Mt, ms pc (upd R 1 r) S Mt := by
@@ -395,8 +326,6 @@ theorem ms_intro {pc r : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} :
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
-/-- **Leaving an arm**: the machine state gives back the PC, `ra`, the
-registers and the frame bytes. -/
 theorem ms_exit {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} :
     ms pc R S Mt ⊢@{IProp GF} PC ↦ᵣ pc ∗ ra ↦ᵣ R 1 ∗ regFile R ∗ ownSet S byteAny := by
   unfold ms
@@ -404,7 +333,6 @@ theorem ms_exit {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt 
   iframe Hpc Hra Hregs
   iapply ownSet_forget $$ HS
 
-/-- The present bytes of a read-only view, one by one. -/
 theorem roOn_view {P : Nat → Prop} {m : Mem} :
     ∀ {DA : List Nat}, (∀ a ∈ DA, P a ∧ (m[a]?).isSome) →
       roOn (GF := GF) P m ⊢ sepL DA (fun a => iprop(a ↦ₘ□ imgM m a))
@@ -421,9 +349,6 @@ theorem roOn_view {P : Nat → Prop} {m : Mem} :
     · iapply roOn_byte hP hb $$ H
     · iapply roOn_view (fun b hb => h b (List.mem_cons_of_mem _ hb)) $$ H
 
-/-- **The data view of a run**: the code, `gp`, and the bytes `DA` of a
-read-only memory view, persistent. Every byte of `DA` is in the view's set
-and present. -/
 theorem roOwn_data {P : Nat → Prop} {m : Mem} {DA : List Nat}
     (h : ∀ a ∈ DA, P a ∧ (m[a]?).isSome) :
     codeRes (GF := GF) ∗ roOn P m ⊢ roOwn roR (interpText ++ dataOf m DA) := by
@@ -438,14 +363,8 @@ theorem roOwn_data {P : Nat → Prop} {m : Mem} {DA : List Nat}
 
 end Ends
 
-/-! ## AST nodes -/
-
-/-- The bytes of a two-child node a run reads: the tag, the operator word,
-the two child pointers (not the line field at `+4`). -/
 abbrev binView (a : Nat) : List Nat := accAddrs a 4 ++ accAddrs (a + 8) 4 ++ accAddrs (a + 16) 16
 
-/-- What a two-child node (`binary`, `logical`) gives the runs: its word
-reads at the node's register value, its view, and its placement. -/
 structure BinNode (m : Mem) (P : Nat → Prop) (aX : BitVec 64) (tag tok : Nat)
     (aL aR : BitVec 64) : Prop where
   kind : ldv .lw m aX.toNat = BitVec.ofNat 64 tag
@@ -462,7 +381,6 @@ theorem isSome_of_readLE {m : Mem} {n a v : Nat} (h : readLE m a n = some v) {i 
     (hi : i < n) : (m[a + i]?).isSome := by
   rw [readLE_mapped h i hi]; rfl
 
-/-- A binary node's facts, from its representation over a geometric view. -/
 theorem binNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : BinOp} {l r : Expr}
     (h : ExprReprWithin m P aX.toNat (.binary op l r)) (hg : ∀ k, P k → ReadOK k) :
     ∃ aL aR : Nat, BinNode m P aX 6 (binOpTok op) (BitVec.ofNat 64 aL) (BitVec.ofNat 64 aR) ∧
@@ -503,7 +421,6 @@ theorem binNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : BinO
         · obtain ⟨j, rfl⟩ : ∃ j, a = aX.toNat + 24 + j := ⟨a - (aX.toNat + 24), by omega⟩
           exact ⟨cr j (by omega), isSome_of_readLE hr (by omega)⟩
 
-/-- A value's kind tag, the low word of its first slot word (`ValueKind`). -/
 def valTag : Value → Nat
   | .null => 0 | .bool _ => 1 | .int _ => 2 | .str _ => 3 | .closure _ => 4 | .native _ => 5
 
@@ -511,7 +428,6 @@ section AstRes
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- A child's persistent AST, from the parent's view. -/
 theorem astEG_of_view {m : Mem} {P : Nat → Prop} {a : Nat} {e : Expr}
     (h : ExprReprWithin m P a e) (hg : ∀ k, P k → ReadOK k) :
     roOn (GF := GF) P m ⊢ astEG a e := by
@@ -521,15 +437,10 @@ theorem astEG_of_view {m : Mem} {P : Nat → Prop} {a : Nat} {e : Expr}
   iframe H
   ipureintro; exact ⟨h, hg⟩
 
-/-- **The frame of an `eval_expr` arm** beside its machine state: the code,
-the AST view, the frame binding, the stack below the lowered `sp`, the result
-slot (`Out`: `slot24` before the result is written, `valAt` after), the world
-`Wd` and the return continuation `K`. -/
 def evalArmF [InterpGS GF] (P : Nat → Prop) (m : Mem) (env : Nat) (aE s' : BitVec 64) (n' : Nat)
     (Out Wd K : IProp GF) : IProp GF :=
   iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗ stackScratch s' n' ∗ Out ∗ Wd ∗ K)
 
-/-- A represented value's first word carries its kind tag. -/
 theorem valOf_tag [InterpGS GF] (N : NativeAddrs) (v : Value) (w0 w1 w2 : BitVec 64) :
     valOf (GF := GF) N v w0 w1 w2 ⊢ ⌜w0.toNat % 2 ^ 32 = valTag v⌝ := by
   cases v <;> unfold valOf <;> simp only [valTag]
@@ -540,19 +451,14 @@ theorem valOf_tag [InterpGS GF] (N : NativeAddrs) (v : Value) (w0 w1 w2 : BitVec
 
 end AstRes
 
-/-- Read a register of a symbolic end state (an `upd` chain at a literal). -/
 macro "ix_reg" : tactic => `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
 
 theorem keep_reg {ks : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R') {x : Nat}
     (hx : x ∈ ks) : R' x = R x := h x hx
 
-/-- A word's low half, as a loaded value, when it is a small tag. -/
 theorem ofNat_lo32 {w : BitVec 64} {k : Nat} (h : w.toNat % 2 ^ 32 = k) :
     BitVec.ofNat 64 (w.toNat % 2 ^ 32) = BitVec.ofNat 64 k := by rw [h]
 
-/-- A load fact over a tracking memory built by the runs and calls: forward
-through the stores and the calls' slot words (`sx_addr` decides each
-disjointness). -/
 syntax "ix_fwd" (" using " "[" term,* "]")? : tactic
 macro_rules
   | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | sx_addr) only [slotWrite, ldv_store_hit,
@@ -561,7 +467,6 @@ macro_rules
     let lems ← hs.getElems.mapM fun h => `(Lean.Parser.Tactic.simpLemma| $h:term)
     `(tactic| ((try simp (disch := decide) only [$lems,*]); ix_fwd))
 
-/-- Machine addition of two 64-bit integers is the source's wrapping sum. -/
 theorem toInt_add_wrap (x y : BitVec 64) : (x + y).toInt = wrap64 (x.toInt + y.toInt) := by
   unfold wrap64; rw [BitVec.toInt_add, BitVec.toInt_ofInt]
 
@@ -569,8 +474,6 @@ theorem keep_helper {clob : List Nat} {R R' : Nat → BitVec 64}
     (h : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) {x : Nat} (hx : x ∈ fRegs) (hc : x ∉ clob) :
     R' x = R x := h x hx hc
 
-/-- A register through calls: read each end state, step back through each
-call's kept registers (`h₁` the latest), and read the state before. -/
 syntax "ix_keep " "[" term,* "]" : tactic
 macro_rules
   | `(tactic| ix_keep [$hs,*]) => do
@@ -581,45 +484,30 @@ macro_rules
       t ← `(tactic| ($t; $st; $sh; (try ix_reg)))
     `(tactic| ($t; (try rfl)))
 
-/-- Machine subtraction of two 64-bit integers is the source's wrapping
-difference. -/
 theorem toInt_sub_wrap (x y : BitVec 64) : (x - y).toInt = wrap64 (x.toInt - y.toInt) := by
   unfold wrap64; rw [BitVec.toInt_sub, BitVec.toInt_ofInt]
 
-/-- Split a `KeepRegs` goal over a literal register list into one goal per
-register. -/
 macro "keep_split" : tactic => `(tactic| (intro x hx; simp only [calleeSaved, List.mem_cons,
   List.not_mem_nil, _root_.or_false] at hx; repeat' (first | subst hx | rcases hx with hx | hx)))
 
 theorem KeepRegs.sub {ks ks' : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R')
     (hs : ∀ x ∈ ks', x ∈ ks) : KeepRegs ks' R R' := fun x hx => h x (hs x hx)
 
-/-! ## `eval_expr`'s frame -/
-
-/-- `eval_expr`'s stack pointer after its prologue (`addi sp,sp,-1088`), in the
-form the runs compute. -/
 abbrev evalSP (s : BitVec 64) : BitVec 64 := s + 18446744073709550528#64
 
 theorem evalSP_eq (s : BitVec 64) : s - 1088#64 = evalSP s := by
   rw [BitVec.sub_eq_add_neg]; rfl
 
-/-- The epilogue's `addi sp,sp,1088` restores the entry `sp`. -/
 theorem evalSP_restore (s : BitVec 64) : evalSP s + 1088#64 = s := by
   rw [BitVec.add_assoc, show (18446744073709550528#64 + 1088#64 : BitVec 64) = 0#64 by decide,
     BitVec.add_zero]
 
-/-- A frame address as a plain sum: `(evalSP s + c).toNat = s.toNat - 1088 + c`
-for the offsets inside the frame. With it, the runs' and calls' address side
-conditions are linear arithmetic, without `% 2^64`. -/
 theorem evalSP_off {s : BitVec 64} (hsf : (evalSP s).toNat = s.toNat - 1088)
     (hs : s.toNat ≤ 0x100000000) (c : Nat) (hc : c < 4096) :
     (evalSP s + BitVec.ofNat 64 c).toNat = s.toNat - 1088 + c := by
   rw [BitVec.toNat_add, hsf, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := c) (by omega)]
   exact Nat.mod_eq_of_lt (by omega)
 
-/-- **`eval_expr`'s prologue spills**, the seam invariant every eval arm
-carries from its prologue to its epilogue: the return address and `s0`-`s3`
-at the top of the frame. -/
 structure EvalSaved (Mt : Mem) (s ret v8 v9 v18 v19 : BitVec 64) : Prop where
   ra : ldv .ld Mt (s.toNat - 1088 + 1080) = ret
   s0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8
@@ -627,7 +515,6 @@ structure EvalSaved (Mt : Mem) (s ret v8 v9 v18 v19 : BitVec 64) : Prop where
   s2 : ldv .ld Mt (s.toNat - 1088 + 1056) = v18
   s3 : ldv .ld Mt (s.toNat - 1088 + 1048) = v19
 
-/-- The spills survive a store below them. -/
 theorem EvalSaved.store {Mt : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
     (h : EvalSaved Mt s ret v8 v9 v18 v19) {a w : Nat} (v : BitVec 64)
     (ha : a + w ≤ s.toNat - 1088 + 1048) :
@@ -638,15 +525,12 @@ theorem EvalSaved.store {Mt : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
    by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s2,
    by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s3⟩
 
-/-- The spills survive a child's result written into a frame slot below them. -/
 theorem EvalSaved.slotWrite {Mt : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
     (h : EvalSaved Mt s ret v8 v9 v18 v19) {a : Nat} (w0 w1 w2 : BitVec 64)
     (ha : a + 24 ≤ s.toNat - 1088 + 1048) :
     EvalSaved (slotWrite Mt a w0 w1 w2) s ret v8 v9 v18 v19 :=
   ((h.store w0 (by omega)).store w1 (by omega)).store w2 (by omega)
 
-/-- Carry `EvalSaved` back through a memory's stores and calls' slot words
-to a memory it is known for (`hoff` normalizes the frame addresses). -/
 syntax "ix_saved " term " using " term : tactic
 macro_rules
   | `(tactic| ix_saved $h using $hoff) => `(tactic| (
@@ -654,8 +538,6 @@ macro_rules
       repeat refine EvalSaved.store ?_ _ (by first | omega | (rw [($hoff:term)] <;> first | omega | decide));
       exact $h))
 
-/-- The geometry of a child call from `eval_expr`'s frame: the child runs at
-the lowered `sp` with its budget, its result slot at frame offset `o`. -/
 structure EvalCallGeom (s : BitVec 64) (np nc o : Nat) : Prop where
   sp : (evalSP s).toNat = s.toNat - 1088
   slot : (evalSP s + BitVec.ofNat 64 o).toNat = s.toNat - 1088 + o
@@ -686,8 +568,6 @@ section FrameRes
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **Leaving `eval_expr`'s frame**: the frame bytes rejoin the stack below
-the entry `sp`. -/
 theorem evalFrame_join {s : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hf : 1088 ≤ n) :
     stackScratch (GF := GF) (evalSP s) (n - 1088) ∗ ownSet (InExt (s.toNat - 1088, 1088)) byteAny ⊢
       stackScratch s n := by
@@ -698,14 +578,11 @@ theorem evalFrame_join {s : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hf : 1088
 
 end FrameRes
 
-/-! ## Calls -/
-
 section Calls
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- Carve a 24-byte slot out of the owned frame bytes. -/
 theorem ownSet_carve_slot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, InExt (a, 24) b → S b) :
     ownSet (GF := GF) S (fun b => b ↦ₘ imgM Mt b) ⊢
       ownSet (fun b => S b ∧ ¬ InExt (a, 24) b) (fun b => b ↦ₘ imgM Mt b) ∗ slot24 a := by
@@ -716,8 +593,6 @@ theorem ownSet_carve_slot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, In
   ihave H1 := ownSet_forget _ _ $$ H1
   iapply ownSet_iff _ (fun b => ⟨fun hb => hb.2, fun hb => ⟨h b hb, hb⟩⟩) $$ H1
 
-/-- Join a slot holding a represented value back into the owned frame bytes:
-the tracking memory gets the slot's three words, whose meaning is `valOf`. -/
 theorem ownSet_join_slot {S : Nat → Prop} {Mt : Mem} {a : Nat} {v : Value}
     (h : ∀ b, InExt (a, 24) b → S b) :
     ownSet (GF := GF) (fun b => S b ∧ ¬ InExt (a, 24) b) (fun b => b ↦ₘ imgM Mt b) ∗ valAt N a v ⊢
@@ -739,12 +614,6 @@ theorem ownSet_join_slot {S : Nat → Prop} {Mt : Mem} {a : Nat} {v : Value}
     · exact .inr hs
     · exact .inl ⟨hb, hs⟩⟩) $$ H
 
-/-- **A child call into `eval_expr`, total mode.** At the `jal` at `i`, the
-arm hands the child the body's registers (argument pins `EvalRegs`), the
-result slot carved out of its frame bytes, the stack below its `sp`, the code,
-the AST and frame bindings and the world at `k + n` credits; it gets back the
-callee-saved registers, the slot's three words with their meaning, and the
-world at `k` credits. -/
 theorem ms_callEvalT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code evalEntryPC)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
@@ -792,10 +661,6 @@ theorem ms_callEvalT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
-/-- **A child call into `exec_stmt`, total mode.** The arm passes its own
-`ret` slot through (the block arm's `mv a3,s2`), so the frame bytes stay with
-the arm untouched; it gets back the callee-saved registers, the status in
-`a0`, and the slot as `statusRet`. -/
 theorem ms_callExecT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code execEntryPC)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
@@ -837,7 +702,6 @@ theorem ms_callExecT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
-/-- The Löb hypothesis at one statement. -/
 theorem execSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) :
     execSpecsP (vsaModel live) N L Room inp Core ⊢
       ▷ execSpecP_body (vsaModel live) N L Room inp Core st d env sm := by
@@ -846,11 +710,6 @@ theorem execSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) :
   inext
   iapply H
 
-/-- **A child call into `exec_stmt`, partial mode, keeping the frame image**,
-through the Löb hypothesis: the continuation `K` is threaded to the return
-branch (with the child's derivation); on abort, `K` takes the stack below the
-arm's `sp`, the `ret` slot and the frame bytes at the arm's tracking memory
-`Mt` (the child never writes them). -/
 theorem ms_callExecPM {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code execEntryPC)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
@@ -909,10 +768,6 @@ theorem ms_callExecPM {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
     iapply HK
     iframe HA Hslot HS
 
-/-- **A child call into `exec_stmt`, partial mode**, through the Löb
-hypothesis. The return branch is `ms_callExecT`'s, with the child's
-derivation. On abort, the arm hands its abort continuation the stack below
-its `sp`, the `ret` slot (the child's, handed back) and its frame bytes. -/
 theorem ms_callExecP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code execEntryPC)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
@@ -945,10 +800,6 @@ theorem ms_callExecP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
     iapply HK
     iframe HA Hslot HS)
 
-/-- **A helper call**, for either WP: at the `jal` at `i` into a helper meeting
-`helperSpec`, the arm hands over the body's registers (the helper's argument
-facts `pins` on them) and `Pre`; it gets back the registers the helper keeps
-and `Post`. The frame bytes stay with the arm. -/
 theorem ms_callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
@@ -978,7 +829,6 @@ theorem ms_callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
-/-- The Löb hypothesis at one child. -/
 theorem evalSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (e : Expr) :
     evalSpecsP (vsaModel live) N L Room inp Core ⊢
       ▷ evalSpecP_body (vsaModel live) N L Room inp Core st d env e := by
@@ -987,7 +837,6 @@ theorem evalSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (e : Expr) :
   inext
   iapply H
 
-/-- The frame bytes whole again, the slot at any contents. -/
 theorem ownSet_unslot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, InExt (a, 24) b → S b) :
     ownSet (GF := GF) (fun b => S b ∧ ¬ InExt (a, 24) b) (fun b => b ↦ₘ imgM Mt b) ∗ slot24 a ⊢
       ownSet S byteAny := by
@@ -1001,13 +850,6 @@ theorem ownSet_unslot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, InExt 
     · exact .inr hs
     · exact .inl ⟨hb, hs⟩⟩) $$ H
 
-/-- **A child call into `eval_expr`, partial mode**, through the Löb
-hypothesis (the `jal` pays the later). The return branch is `ms_callEvalT`'s,
-with the child's derivation. On abort, the arm rebuilds its own frame (the
-child's stack, the slack, the frame bytes, the child's slot handed back) and
-aborts itself with `abortAt Core s₀ n₀ ∗ slot24 sret₀` (its own result slot is
-`Out`, `hOut`). The arm's continuation pair `Kret ∧ Kab` is used by both
-branches (INTERP_DESIGN.md §10.1) and handed on. -/
 theorem ms_callEvalP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code evalEntryPC)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)

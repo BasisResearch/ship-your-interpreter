@@ -1,22 +1,10 @@
 import VsaIris.Vsa.MallocBlocks2
 
-/-!
-# `_malloc_r` at the binary, both regimes
-
-`malloc` (`0x80004790`) moves the request to `a1`, loads `_impure_ptr` into
-`a0` and jumps to `_malloc_r`, whose every path `malloc_all` proves.
-`mHeap_entry` builds the run's heap invariant from the entry heap witness;
-`mallocChgRun_proved` and `mallocLocalRun_proved` are the counted and
-uncounted runs `AllocHoles` asked for.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **The heap invariant at entry.** The heap witness `m1` with the stack
-window inserted holds the heap, off the stack. -/
 theorem mHeap_entry {C : MCtx} {m1 : Mem} {s : BitVec 64} {mv : Nat → BitVec 8} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (hs0 : C.s = s) (hMt : C.Mt0 = mt0 m1 s mv)
     (hsp : SpOKA s) (him : ImgOn (vsaFoot C.H) mv m1)
@@ -38,8 +26,6 @@ theorem mHeap_entry {C : MCtx} {m1 : Mem} {s : BitVec 64} {mv : Nat → BitVec 8
   · exact Nat.le_trans (Nat.sub_le_sub_left (by decide : 256 ≤ 512) _) h1
   · rw [Nat.sub_add_cancel hs]; exact h2
 
-/-- **`malloc`** (`0x80004790`): `a1 := a0`, `a0 := _impure_ptr`, then
-`_malloc_r` (`malloc_all`). -/
 theorem malloc_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (hra : R 1 = C.r) (hsp : R 2 = C.s) (ha0 : R 10 = C.n) (h8 : R 8 = C.rv0 8)
@@ -61,7 +47,6 @@ theorem malloc_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv : Nat}
   · exact h18
   · exact h19
 
-/-- **Counted `malloc` at the binary** (formerly `IrisHoles.alloc.mallocChgRun`). -/
 theorem mallocChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     MallocChgRun (vsaModel live) vsaLayoutP vsaRoomB vsaChg SpOKA mallocEntryBV gpV vsaClob
       vsaSaved allocHeadroom allocText := by
@@ -78,7 +63,6 @@ theorem mallocChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
   simp only [mChgCtx] at h
   exact h
 
-/-- **Uncounted `malloc` at the binary** (formerly `IrisHoles.alloc.mallocLocalRun`). -/
 theorem mallocLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     MallocLocalRun (vsaModel live) vsaLayoutP SpOKA mallocEntryBV gpV vsaClob vsaSaved
       allocHeadroom allocText := by

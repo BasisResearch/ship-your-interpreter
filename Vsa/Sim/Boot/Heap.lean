@@ -1,28 +1,15 @@
 import Vsa.Sim.Boot.Store
 import Vsa.Sim.DlHeap
 
-/-!
-# The dlmalloc heap shape from a byte view
-
-`heapCheck` decides every field of `DlHeap.HeapAt` over a partial byte view,
-for generated witnesses: the chunk walk from `_end` to the top chunk, the bin
-lists (`binsL`, one list per bin), the live extents and the exact (realloc)
-extents. `heapAt_of_check` turns a passing check into `HeapAt`.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr Vsa.Sim.DlHeap
 
-/-- `read64` over a view. -/
 abbrev r64 (v : Nat → Option (BitVec 8)) (a : Nat) : Option Nat := readLEv v a 8
 
 theorem PartialView.read64 {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView m v)
     {a x : Nat} (hr : r64 v a = some x) : Vsa.MemRepr.read64 m a = some x := h.readLE hr
 
-/-! ## The chunk walk -/
-
-/-- The walk from `p` to `top` is `cs`. -/
 def walkCheck (v : Nat → Option (BitVec 8)) (top : Nat) : Nat → List Chunk → Bool
   | p, [] => p == top
   | p, c :: cs =>
@@ -60,9 +47,6 @@ theorem walkCheck_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialVi
         subst hsz hin
         exact .chunk (h.read64 h1) hlow hmin (by omega) (h.read64 h2) (ih hrest)
 
-/-! ## Bins -/
-
-/-- Bin `b`'s circular list from `q` (predecessor `prev`) is `qs`. -/
 def chainCheck (v : Nat → Option (BitVec 8)) (b : Nat) : Nat → Nat → List Nat → Bool
   | q, prev, [] => q == b && r64 v (b + 24) == some prev
   | q, prev, q' :: qs =>
@@ -90,7 +74,6 @@ theorem chainCheck_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialV
       rw [hx] at hn
       exact .link hne (h.read64 hp) (h.read64 hx) (ih hn)
 
-/-- Bin `i`'s list. -/
 def binList (v : Nat → Option (BitVec 8)) (i : Nat) (qs : List Nat) : Bool :=
   match r64 v (binAt i + 16) with
   | some first => chainCheck v (binAt i) first (binAt i) qs
@@ -105,12 +88,8 @@ theorem binList_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView
     rw [hf] at hc
     exact ⟨first, h.read64 hf, chainCheck_sound h hc⟩
 
-/-- Bin lists, one per bin index (missing indices are empty). -/
 def binsOf (L : List (List Nat)) (i : Nat) : List Nat := L.getD i []
 
-/-! ## The whole shape -/
-
-/-- Consecutive chunks are never both free. -/
 def coalescedCheck : List Chunk → Bool
   | c :: d :: cs => (c.inuse || d.inuse) && coalescedCheck (d :: cs)
   | _ => true
@@ -132,7 +111,6 @@ theorem coalescedCheck_sound : ∀ {cs : List Chunk}, coalescedCheck cs = true �
         have := ih hc.2 i (by simp at hi ⊢; omega)
         simpa using this
 
-/-- The bin indices `1 … 127`. -/
 def binIdxs : List Nat := (List.range 127).map (· + 1)
 
 theorem mem_binIdxs {i : Nat} (h0 : 0 < i) (h1 : i < numBins) : i ∈ binIdxs := by
@@ -140,7 +118,6 @@ theorem mem_binIdxs {i : Nat} (h0 : 0 < i) (h1 : i < numBins) : i ∈ binIdxs :=
   simp only [List.mem_map, List.mem_range]
   exact ⟨i - 1, by omega, by omega⟩
 
-/-- Every field of `HeapAt` over the view. -/
 def heapCheck (v : Nat → Option (BitVec 8)) (exts exact : List (Nat × Nat)) (top brkv : Nat)
     (chunks : List Chunk) (L : List (List Nat)) : Bool :=
   r64 v sbrkBaseAddr == some heapStart &&
@@ -173,7 +150,6 @@ def heapCheck (v : Nat → Option (BitVec 8)) (exts exact : List (Nat × Nat)) (
   exact.all (fun e => chunks.any fun c =>
     c.inuse && c.addr + 16 == e.1 && decide (e.2 + 8 ≤ c.size))
 
-/-- A passing `heapCheck` is the heap shape; realloc extents must be among `exact`. -/
 theorem heapAt_of_check {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView m v)
     {exts exact : List (Nat × Nat)} {reallocs : Nat × Nat → Prop} {top brkv : Nat}
     {chunks : List Chunk} {L : List (List Nat)}

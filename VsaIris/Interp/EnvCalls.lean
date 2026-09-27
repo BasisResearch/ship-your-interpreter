@@ -1,14 +1,6 @@
 import VsaIris.Interp.EnvScan
 import VsaIris.Interp.HeapCall
 
-/-!
-# Allocator calls from an `env_*` span
-
-`wp_call_malloc`: a `jal malloc` from a span's register file, in either regime
-(`mallocRho_spec`). The call takes `ra`, `a0` and the caller-saved registers;
-`sp` and `s0-s3` come back at their values, `s4-s6` are not touched.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -20,12 +12,11 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
   {live : Nat → Prop}
 
 omit I in
-/-- A register points-to up to the register's and the value's equalities. -/
+
 theorem regPt_congr {x y : Nat} {v w : BitVec 64} (hx : x = y) (hv : v = w) :
     (x ↦ᵣ v) ⊢@{IProp GF} (y ↦ᵣ w) := by
   subst hx; subst hv; exact .rfl
 
-/-- The registers a `malloc` call hands over. -/
 abbrev mallocKs : List Nat := VsaIris.ra :: 10 :: VsaIris.sp :: (vsaClob ++ vsaSaved)
 
 theorem mallocKs_nodup : mallocKs.Nodup := by decide
@@ -37,9 +28,6 @@ theorem mallocKs_saved (k : Nat) (h1 : k ∈ mallocKs) (h2 : k ∉ VsaIris.ra ::
     List.not_mem_nil, or_false] at h1 h2 h3 ⊢
   omega
 
-/-- **`jal malloc` from a span**, in regime `ρ`, charged `c` credits for the
-request in `a0`. The continuation gets the result in `a0`, `ra` at the return
-address, `sp` and `s0-s6` unchanged, and `malloc`'s outcome. -/
 theorem wp_call_malloc (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code mallocEntryBV)

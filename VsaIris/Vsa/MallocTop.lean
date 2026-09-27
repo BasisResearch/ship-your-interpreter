@@ -1,24 +1,11 @@
 import VsaIris.Vsa.MallocLR
 import VsaIris.Vsa.HeapSplit
 
-/-!
-# `_malloc_r`'s top path
-
-`0x80004a2c` is reached when no bin can serve the request. The top chunk is
-read and measured; if it holds `nb` with `MINSIZE` to spare the top is split
-(`0x80004bf0`) and the victim returned, otherwise `malloc_extend_top` runs
-(`0x80004a48`).
-
-`top_split` proves the split arm end to end over `PHeapAt.topSplit`; the
-extension is the one residual.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `slti`'s result is zero exactly when the comparison fails. -/
 theorem sltiV_eq_zero (a b : BitVec 64) : sltiV a b = 0#64 ↔ ¬ (a.toInt < b.toInt) := by
   unfold sltiV
   by_cases h : a.toInt < b.toInt <;>
@@ -26,22 +13,18 @@ theorem sltiV_eq_zero (a b : BitVec 64) : sltiV a b = 0#64 ↔ ¬ (a.toInt < b.t
       LeanRV64DExecutable.Functions.bool_to_bit, LeanRV64DExecutable.zero_extend,
       LeanRV64DExecutable.Functions.bool_bit_forwards, Sail.BitVec.zeroExtend]
 
-/-- A difference of two small unsigned words, as a signed value. -/
 theorem sub_toInt {x y : BitVec 64} {sz nb : Nat} (hx : x.toNat = sz) (hy : y.toNat = nb)
     (hle : nb ≤ sz) (hsz : sz < 2 ^ 62) : (x - y).toInt = ((sz - nb : Nat) : Int) := by
   have hxy : (x - y).toNat = sz - nb := by
     rw [BitVec.toNat_sub, hx, hy]; omega
   rw [BitVec.toInt_eq_toNat_cond, hxy, if_pos (by omega)]
 
-/-- The registers at `malloc_extend_top`'s entry (`0x80004a48`): the top in
-`a5`, its size in `t1`, the shortfall `t1 - a4` in `a3`, the request in `a4`. -/
 structure TopRegs (nb top topsz : Nat) (R : Nat → BitVec 64) : Prop where
   a5 : (R 15).toNat = top
   t1 : (R 6).toNat = topsz
   a3 : R 13 = R 6 - R 14
   a4 : (R 14).toNat = nb
 
-/-- `x | 1` of an even word is `x + 1`. -/
 theorem or1_toNat {x : BitVec 64} {v : Nat} (hx : x.toNat = v) (he : v % 2 = 0) :
     (x ||| 1#64).toNat = v + 1 := by
   have hoe := or_one_even x (by rw [hx]; exact he)
@@ -51,17 +34,12 @@ theorem or1_toNat {x : BitVec 64} {v : Nat} (hx : x.toNat = v) (he : v % 2 = 0) 
   simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
   omega
 
-/-- The registers at the top split (`0x80004bf0`): the top in `a5`, the
-request in `a4`, the remainder in `a3`, `__malloc_av_` in `a6`. -/
 structure SplitRegs (nb top rem : Nat) (R : Nat → BitVec 64) : Prop where
   a5 : (R 15).toNat = top
   a4 : (R 14).toNat = nb
   a3 : (R 13).toNat = rem
   a6 : R 16 = 0x8001ad10#64
 
-/-- **The top split** (`0x80004bf0`): cut `nb` bytes off the top, which has at
-least `MINSIZE` to spare, unlock, and return the old top's payload. Reached
-from the top path and from `malloc_extend_top`. -/
 theorem top_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
@@ -97,7 +75,7 @@ theorem top_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     Classical.byContradiction fun hcx => Hp.disj a (by unfold mHead; omega) (by omega) ha
   have hnsT := hns (C.top0 + 8) (hfootTop _ (by omega) (by omega))
   have hnsR := hns (C.top0 + nb + 8) (hfootTop _ (by omega) (by omega))
-  -- `ori a2,a4,1; sd a2,8(a5)`
+
   refine st_80004bf0 O.live ?_
   refine st_80004bf4 O.live ?_ ?_ ?_
   · sx_norm; rw [hEh]; unfold StOK Vsa.Sim.tohostAddr; omega
@@ -105,7 +83,7 @@ theorem top_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     exact O.foot (fun k hk => hfootTop _ (by omega) (by omega))
   sx_norm
   rw [hEh]
-  -- `add a4,a5,a4; sd a5,8(sp)`
+
   refine st_80004bf8 O.live ?_
   sx_norm
   have hEs : ((R 2) + 8#64).toNat = C.s.toNat - 96 + 8 := by rw [hs2]; sx_addr
@@ -114,7 +92,7 @@ theorem top_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   · sx_norm; rw [hEs]; exact O.stack (by unfold mHead; omega) (by omega)
   sx_norm
   rw [hEs]
-  -- `ori a3,a3,1; sd a4,16(a6)`
+
   refine st_80004c00 O.live ?_
   refine st_80004c04 O.live ?_ ?_ ?_
   · sx_norm; rw [hEtop]; unfold StOK Vsa.Sim.tohostAddr topAddr avAddr; omega
@@ -182,8 +160,6 @@ theorem top_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   exact ha0
 
-/-- **The top path** (`0x80004a2c`): the top chunk is measured and either
-split (proved here, through the return) or grown by `malloc_extend_top`. -/
 theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
@@ -210,12 +186,12 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have htoplt : C.top0 < 2 ^ 64 := by omega
   have hEtop : ((R 16) + sign_extend (m := 64) (0x010#12)).toNat = topAddr := by
     rw [ha6]; unfold topAddr avAddr; rfl
-  -- `ld a5,16(a6)`: the top chunk
+
   refine st_80004a2c O.live ?_ ?_ ?_
   · rw [hEtop]; unfold LdOK Vsa.Sim.tohostAddr topAddr avAddr; omega
   · rw [hEtop]; exact O.glob (by unfold topAddr avAddr; omega) (by unfold topAddr avAddr; omega)
   rw [ldv_at htptr _ hEtop]
-  -- `ld a2,8(a5)`: the top's header
+
   have hEh : ((BitVec.ofNat 64 C.top0) + sign_extend (m := 64) (0x008#12)).toNat =
       C.top0 + 8 := by sx_addr
   refine st_80004a30 O.live ?_ ?_ ?_
@@ -232,7 +208,7 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     omega
   refine st_80004a3c O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- the top is smaller than the request
+  ·
     rw [htsizev, ha4] at hc
     refine hext (by omega) _ (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_⟩ ?_ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -252,7 +228,7 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     refine st_80004a44 O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, sltiV_eq_zero, Decidable.not_not,
         hsub, h32] at hc2
-    · -- the remainder is at least `MINSIZE`: split the top
+    ·
       have hdt : ((BitVec.ofNat 64 (brkv - C.top0 + 1) &&& 18446744073709551612#64) - R 14).toNat
           = brkv - C.top0 - nb := by
         rw [BitVec.toNat_sub, htsizev, ha4]; omega
@@ -262,7 +238,7 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       · exact ha4
       · exact hdt
       · exact ha6
-    · -- the remainder is too small: grow the top
+    ·
       refine hext (by omega) _ (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_⟩ ?_ <;>
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · exact ha4
@@ -273,9 +249,6 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       · exact ha4
       · exact h8
 
-/-! ## The block search's entry -/
-
-/-- `sraiw x,y,2` on a value below `2 ^ 31`. -/
 theorem sraiw2_toNat {x : BitVec 64} {i : Nat} (hx : x.toNat = i) (hi : i < 2 ^ 31) :
     (BitVec.signExtend 64
       (shift_bits_right_arith (BitVec.extractLsb 31 0 x) (2#5))).toNat = i / 4 := by
@@ -296,7 +269,6 @@ theorem sraiw2_toNat {x : BitVec 64} {i : Nat} (hx : x.toNat = i) (hi : i < 2 ^ 
   rw [BitVec.signExtend_eq_setWidth_of_msb_false hm2, BitVec.toNat_setWidth, hn]
   omega
 
-/-- `sll x,1,y`: the bit the block search tests. -/
 theorem shl_one {y : BitVec 64} {j : Nat} (hy : y.toNat = j) (hj : j < 64) :
     ((1#64 : BitVec 64) <<< (BitVec.extractLsb 5 0 y).toNat).toNat = 2 ^ j := by
   have he : (BitVec.extractLsb 5 0 y).toNat = j := by
@@ -306,11 +278,6 @@ theorem shl_one {y : BitVec 64} {j : Nat} (hy : y.toNat = j) (hj : j < 64) :
   have hlt : (2 : Nat) ^ j < 2 ^ 64 := Nat.pow_lt_pow_right (a := 2) (by omega) hj
   omega
 
-/-- **The block search's test** (`0x80004968`): with the bitmap `bb` in `a1`,
-form the bit of the request's block. A bitmap below that bit means no block
-at or above it has a chunk, so the top is tried (`0x80004a2c`); otherwise the
-search walks the blocks (`0x80004978`). The re-binding of a too-small last
-remainder enters here with the bitmap it just updated. -/
 theorem bb_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx bb : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
@@ -334,13 +301,11 @@ theorem bb_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have ha0 := shl_one ha5 (by omega)
   refine st_80004974 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- no block at or above the request's has a chunk: the top
+  ·
     exact htop _ (F.of_regs rfl rfl rfl rfl) ⟨ha4, ha7, ha6⟩ h8
   · rw [ha0, h11] at hc
     exact hblocks (by omega) _ (F.of_regs rfl rfl rfl rfl) ⟨ha4, ha7, ha6⟩ h8 h29 h11 ha0
 
-/-- **The block search's entry** (`0x80004be8`): read `binblocks` into `a1`
-and test it (`bb_entry`). -/
 theorem bb_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
@@ -374,9 +339,6 @@ theorem bb_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hbb)]
   · exact h29
 
-/-- **The block search's entry through the top split.** `bb_check` with
-`top_path` closing the top arm: the block walk (`0x80004978`) and the top's
-growth (`0x80004a48`) remain. -/
 theorem bb_top {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)

@@ -6,13 +6,11 @@ open MemoryRegionType AtomicSupport Reservability misaligned_exception
 
 namespace Vsa.Sim
 
-/-- Natural widths have the same bit representation in Sail and Lean. -/
 theorem to_bits_nat (w l : Nat) : (to_bits (l := l) w : BitVec l) = BitVec.ofNat l w := by
   apply BitVec.eq_of_toNat_eq
   simp [to_bits, get_slice_int, BitVec.extractLsb']
   exact Nat.mod_mod_of_dvd w (Nat.pow_dvd_pow 2 (by omega))
 
-/-- The configured readable RAM region, including its 16-byte misaligned granule. -/
 def ramPmaRegion : PMA_Region where
   base := 0x80000000#64
   size := 0x80000000#64
@@ -35,7 +33,6 @@ def ramPmaRegion : PMA_Region where
     vector_misaligned_atomicity_granule_size_exp := 4 }
   include_in_device_tree := true
 
-/-- The PMA region lookup depends on the complete window, not natural alignment. -/
 theorem matchingPmaRam (a : BitVec 64) (w : Nat)
     (hlo : 0x80000000 ≤ a.toNat) (hhi : a.toNat + w ≤ 0x100000000) :
     matching_pma_region_bits_range initPmaRegions
@@ -54,15 +51,12 @@ theorem matchingPmaRam (a : BitVec 64) (w : Nat)
   · simp only [Bool.and_eq_true, decide_eq_true_eq]
     rintro ⟨h1, _⟩; have := Int.ofNat_le.mp h1; bv_omega
 
-/-- Scalar loads within one supported granule do not split. -/
 def ramReadSingle (a : BitVec 64) (w : Nat) : Bool :=
   is_aligned_paddr (physaddr.Physaddr a) w || allowed_misaligned a w 4
 
-/-- Exact access policy for scalar RAM reads of at most eight bytes. -/
 def ramReadInfo (a : BitVec 64) (w : Nat) : Phys_Mem_Access_Info :=
   if ramReadSingle a w then ⟨Splittability.CannotSplit, 0⟩ else ⟨Splittability.CanSplit, 4⟩
 
-/-- Misalignment selects the configured split policy; it is not an access fault. -/
 theorem pmaCheck_ram_scalar (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat)
     (hpma : σ.regs.get? Register.pma_regions = some (initPmaRegions : RegisterType Register.pma_regions))
@@ -98,7 +92,6 @@ theorem pmaCheck_ram_scalar (σ : SequentialState RegisterType trivialChoiceSour
     simp [ramReadInfo, ramReadSingle, Functions.xlen, Sail.BitVec.extractLsb,
       BitVec.extractLsb, h, EStateM.pure, EStateM.bind]
 
-/-- An access marked indivisible never splits, regardless of address alignment. -/
 theorem split_misaligned_cannotSplit
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w e : Nat) :
@@ -108,7 +101,6 @@ theorem split_misaligned_cannotSplit
     show (Splittability.CannotSplit == Splittability.CannotSplit) = true from rfl,
     simp_sail, EStateM.run, pure, EStateM.pure]
 
-/-- The RAM policy selects one access or the executable split planner. -/
 theorem split_misaligned_ram
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) :

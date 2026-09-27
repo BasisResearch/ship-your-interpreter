@@ -1,30 +1,11 @@
 import VsaIris.MallocRun
 
-/-!
-# Allocation charged in credits
-
-The counted regime (`heapRes (.counted k)`, INTERP_DESIGN §3) charges
-`malloc` the cost model's credits for its request, not one credit per call.
-`Vsa/While/Cost.lean` counts rounded requested bytes, and a derivation of
-cost `n` starts with `n` more credits than it leaves. So `mallocChgSpec`
-spends `c` credits on a request `n` admitted by a charge relation `Chg n c`.
-The binary's instance is `vsaChg` (`Vsa/HeapRoom.lean`).
-
-`MallocChgRun` is the first-order run behind it. `mallocChgSpec_of_run`
-turns the run into the spec through `allocCall_of_localRun`, as
-`mallocRoomSpec_of_run` does for the one-credit form.
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 
-/-- A request (bytes) and the credits it is charged. -/
 abbrev ChgRel := Nat → Nat → Prop
 
-/-- **`_malloc_r`'s charged run, first-order.** A request `n` charged `c`
-credits, from a heap with `k + c` credits, returns a fresh block and leaves
-`k`. -/
 def MallocChgRun (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob savedRegs : List Nat)
     (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
@@ -40,8 +21,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- `malloc` in the counted regime: `c` credits buy a fresh block for a
-request they cover. -/
 def mallocChgSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat) (H : List (Nat × Nat)) (n s : BitVec 64)
@@ -55,7 +34,6 @@ def mallocChgSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred) (C
       (⌜FreshBlock L H p.toNat n.toNat ∧ p.toNat % 16 = 0⌝ ∗
         isHeapRoom L Room ((p.toNat, n.toNat) :: H) k ∗ blockOwn p.toNat n.toNat)))
 
-/-- **`mallocChgSpec` from the charged run.** -/
 theorem mallocChgSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
     {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64} {clob savedRegs : List Nat}
     {headroom : Nat} {text : List (Nat × BitVec 8)}
@@ -97,7 +75,6 @@ theorem mallocChgSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room : R
     iintro Hpc Hra HQ
     iapply Hk $$ Hpc Hra HQ
 
-/-- **The counted allocator as a module parameter.** -/
 structure DlMallocChgImpl (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (mallocEntry gpv : BitVec 64) (clob savedRegs : List Nat)
     (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop where
@@ -115,13 +92,6 @@ theorem dlMallocChgImpl_of_run {M : MachineModel} {L : DlLayout} {Room : RoomPre
 
 end Spec
 
-/-! ## Reallocation, charged
-
-`realloc(p, nNew)` growing a live block `(p, nOld)` in the counted regime:
-`c` credits for `nNew` buy a fresh block holding the old contents, never
-NULL. -/
-
-/-- What a charged realloc run ends in. -/
 structure ReallocChgEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat)) (p : BitVec 64)
     (nOld nNew : Nat) (old : Nat → BitVec 8) (r s : BitVec 64) (saved : List (Nat × BitVec 64))
     (k : Nat) (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
@@ -132,7 +102,6 @@ structure ReallocChgEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat))
   room : Room mv' (((rv' a0).toNat, nNew) :: H) k
   copies : Copies old mv' p.toNat (rv' a0).toNat nOld
 
-/-- **`_realloc_r`'s charged grow run, first-order.** -/
 def ReallocChgRun (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob savedRegs : List Nat)
     (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
@@ -151,14 +120,12 @@ section Realloc
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- `realloc`'s counted result: a fresh block with the old contents. -/
 def reallocChgPost (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat)) (p : BitVec 64)
     (nOld nNew : Nat) (old : Nat → BitVec 8) (k : Nat) (p' : BitVec 64) : IProp GF :=
   iprop(⌜FreshBlock L H p'.toNat nNew ∧ p'.toNat % 16 = 0⌝ ∗
     isHeapRoom L Room ((p'.toNat, nNew) :: H) k ∗
     ∃ v : Nat → BitVec 8, ⌜Copies old v p.toNat p'.toNat nOld⌝ ∗ blockOwnAt p'.toNat nNew v)
 
-/-- **`realloc` in the counted regime.** -/
 def reallocChgSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat) (H : List (Nat × Nat)) (p : BitVec 64)
@@ -171,7 +138,6 @@ def reallocChgSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred) (
     (fun _ => iprop(∃ p', a0 ↦ᵣ p' ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ reallocChgPost L Room H p nOld nNew old k p'))
 
-/-- **`reallocChgSpec` from the charged run.** -/
 theorem reallocChgSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
     {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64} {clob savedRegs : List Nat}
     {headroom : Nat} {text : List (Nat × BitVec 8)}
@@ -244,11 +210,5 @@ theorem reallocChgSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room : 
     iapply Hk $$ Hpc Hra HQ
 
 end Realloc
-
-/-! ## Regimes
-
-`heapRes` (INTERP_DESIGN §3) is `isHeapRoom` counted and `isHeap` uncounted.
-Credits are monotone: a heap with room for `k + j` has room for `k`. The
-counted heap forgets to the uncounted one. -/
 
 end VsaIris

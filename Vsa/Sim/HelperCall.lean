@@ -1,31 +1,5 @@
 import Vsa.Sim.StmtChildArm
 
-/-!
-# `HelperCall` — the parametric in-frame runtime-helper call of `exec_stmt`
-
-Every remaining statement leaf calls a runtime helper from inside the
-`exec_stmt` frame and continues at the helper's return: `value_null` at the
-two null bridges (`ret;`, `var x;`), `env_define` at the declaration tail,
-`env_new` at the block and for arms.  This file states that seam once:
-
-* a descriptor `HelperCall` (head PC, reflected prefix, `jal` site, callee
-  entry) and its decided certificate `Cert`;
-* `parked_of_gholds` runs the prefix and the `jal` from any parked state and
-  lands at the callee entry (`Parked`: link register, reflected registers and
-  write log, ABI frame); `parked_of_ready` enters from a `RouteReady`,
-  `parked_of_armState` from an `ArmState`;
-* `Return` is the helper's return as a route-ready state plus its memory
-  footprint; each callee supplies one adapter `xReturn_of_parked` from its
-  contract (`HelperCallNull.lean` for `value_null`);
-* `RouteHead.toRouteReady`, `ArmState.frameFacts`, and
-  `FrameFacts.afterStackHelper` connect the return to the existing
-  continuation kit (`route_of_ready`, `ArmState.of_routeHead`,
-  `normalExitPre_of_routeHead`, the retslot resume).
-
-An instance is one `#derive_case` prefix, one descriptor, a certificate of
-`decide`s, and a chain-facts theorem.
--/
-
 namespace Vsa.Sim
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Register
@@ -36,27 +10,6 @@ open Vsa.Sim.Code
 
 local notation "SpecSt" => Vsa.While.St
 
-/-! ## Connecting to the continuation kit -/
-
-/-! ## Byte-level facts of a three-word copy
-
-Every in-frame value copy is three `ld`s followed by three `sd`s; its
-reflected write log is three `writeMap8`s of the loaded words.  The facts
-below hold for any source and destination. -/
-
-/-! ## A copied value's payload
-
-A 24-byte value copy moves the tag and the payload pointer, not the payload.
-The copy represents the value at the destination when the payload (a string,
-if any) lies outside the copied window. -/
-
-/-! ## Four-byte loads and routes that rewrite `s3`
-
-The block arm reads the statement count with `lw` and rewrites `s3` to the
-fresh scope before its loop head; both fall outside the eight-byte and
-`abiButS0` conventions of the earlier layers. -/
-
-/-- A non-negative 32-bit word sign-extends to its value. -/
 theorem sext32_of_lt (b0 b1 b2 b3 : BitVec 8) (k : Nat) (hk : k < 2 ^ 31)
     (hrec : b0.toNat + 256 * (b1.toNat + 256 * (b2.toNat + 256 * b3.toNat)) = k) :
     (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)) : BitVec 64)

@@ -1,21 +1,5 @@
 import VsaIris.Lag
 
-/-!
-# Stepping the machine
-
-`mTWP M Φ` is MachCSL's `mWP Loop` (xv6iris `iris/RiscvPtsto.v:2804-2809`,
-`wp_triv`), made total and given a postcondition on the exit value. MachCSL
-has no postcondition because its loop never stops; here `Φ (e, out)` is what
-must hold when the machine signals HTIF exit `e` having printed `out`.
-
-The step rules follow MachCSL's layering (claude-notes/design/
-execution-model.md, "WP layering"): `wp_exec_step` takes an exec witness
-computed from the state (their `wp_exec_step`, "caller gives
-`exec riscv_step σ = Some (tt, σ')`"); `wp_local_step` is the footprint form
-every instruction leaf is stated in (their `wp_instr`), where the witness
-may only depend on owned cells and the step may only change owned cells.
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -24,18 +8,10 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] (M : MachineModel)
 
-/-- `mWP Loop` (RiscvPtsto.v:2809), total, with an exit postcondition. Its
-prover receives the CPU token, which fixes the lag counter at zero
-(Ptsto.lean §Lag). -/
 abbrev mTWP (Φ : Nat × String → IProp GF) : IProp GF :=
   iprop(cpuTok -∗ WP (MachineModel.Loop M) @ Stuckness.NotStuck; ⊤ [{ Φ }])
 
 end
-
-/-! ## Separating conjunction over a list
-
-A local big-op with a structural definition, so footprint lemmas go by plain
-list induction. -/
 
 section SepL
 
@@ -57,14 +33,10 @@ instance sepL_persistent {α} (l : List α) (P : α → IProp GF)
 
 end SepL
 
-/-! ## Footprint lemmas on one ghost map -/
-
 section GhostList
 
 variable {GF : BundledGFunctors} {V : Type} [GhostMapG GF Nat V NatMap]
 
-/-- Reading a list of owned cells against the authoritative map; the cells
-and the authority are handed back. -/
 theorem ghost_map_lookup_list (γ : GName) (m : NatMap V) :
     ∀ (R : List (Nat × DFrac × V)),
       ghost_map_auth (GF := GF) γ (DFrac.own 1) m ∗ sepL R (fun p => ghost_map_elem γ p.2.1 p.1 p.2.2)
@@ -88,8 +60,6 @@ theorem ghost_map_lookup_list (γ : GName) (m : NatMap V) :
     · exact hx
     · exact hxs p hp
 
-/-- Updating a list of fully owned cells; the new authoritative map agrees
-with the old one off the written keys and takes a written value on them. -/
 theorem ghost_map_update_list (γ : GName) :
     ∀ (W : List (Nat × V × V)) (m : NatMap V),
       ghost_map_auth (GF := GF) γ (DFrac.own 1) m ∗ sepL W (fun p => ghost_map_elem γ (DFrac.own 1) p.1 p.2.1)
@@ -134,14 +104,10 @@ theorem ghost_map_update_list (γ : GName) :
 
 end GhostList
 
-/-! ## The machine step rules -/
-
 section Rules
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- The exit rule: when the machine signals HTIF exit, the postcondition
-must hold at the exit value. -/
 theorem wp_exec_halt {Φ : Nat × String → IProp GF} :
     (∀ σ, mstateInterp (GF := GF) M σ ={⊤}=∗
         ⌜∃ e out, M.step σ = .halt e out⌝ ∗
@@ -175,11 +141,6 @@ theorem wp_exec_halt {Φ : Nat × String → IProp GF} :
     iapply BigSepL.bigSepL_nil.2
     iempintro
 
-/-- The effect of a run on the architectural state, relative to a
-footprint: the written registers `RW` and bytes `MW` take their new values,
-everything else is unchanged. (MachCSL states this per instruction leaf as an
-`exec` equation over `set_reg`/`write_bytes`; VSA's reflected write logs are
-exactly this shape.) -/
 structure LocalStep (σ σ' : M.State) (RW : List (Nat × BitVec 64 × BitVec 64))
     (MW : List (Nat × BitVec 8 × BitVec 8)) : Prop where
   reg_new : ∀ p ∈ RW, M.reg σ' p.1 = p.2.2
@@ -187,8 +148,6 @@ structure LocalStep (σ σ' : M.State) (RW : List (Nat × BitVec 64 × BitVec 64
   mem_new : ∀ p ∈ MW, M.mem σ' p.1 = p.2.2
   mem_frame : ∀ k, (∀ p ∈ MW, p.1 ≠ k) → M.mem σ' k = M.mem σ k
 
-/-- Footprint ownership before a step: read-only registers `RR` and bytes
-`MR` at any fraction, and written cells at their old values. -/
 def footPre (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8)) :
     IProp GF :=
@@ -201,7 +160,6 @@ def footPost (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac ×
   iprop(sepL RR (fun p => p.1 ↦ᵣ{p.2.1} p.2.2) ∗ sepL MR (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ∗
     sepL RW (fun p => p.1 ↦ᵣ p.2.2) ∗ sepL MW (fun p => p.1 ↦ₘ p.2.2))
 
-/-- The pure facts a footprint pins in any state. -/
 def FootHolds (σ : M.State) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (RW : List (Nat × BitVec 64 × BitVec 64))
     (MW : List (Nat × BitVec 8 × BitVec 8)) : Prop :=
@@ -222,9 +180,6 @@ private theorem sepL_full_eq (γ : GName) {W : Type} (f : W → Nat × V) :
 
 end FootMaps
 
-/-- Reading a footprint against the two authorities: any state the
-authorities agree with satisfies the footprint facts. Everything is handed
-back. -/
 theorem foot_lookup (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8)) :
@@ -257,9 +212,6 @@ theorem foot_lookup (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
   · exact hr _ _ (hRW (p.1, DFrac.own 1, p.2.1) (List.mem_map_of_mem hp))
   · exact hm _ _ (hMW (p.1, DFrac.own 1, p.2.1) (List.mem_map_of_mem hp))
 
-/-- Committing a run's effect to the authorities: the written cells take
-their new values, and the authorities move from agreeing with `σ0` to
-agreeing with `σf`. -/
 theorem foot_update {σ0 σf : M.State} (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
@@ -290,16 +242,10 @@ theorem foot_update {σ0 σf : M.State} (mr : NatMap (BitVec 64)) (mm : NatMap (
     · exact hloc.mem_new p hp
     · rw [hloc.mem_frame k hnot]; exact hm k v hk
 
-/-- The console effect of a run (INTERP_DESIGN.md §2 F2): `none` prints
-nothing, `some o` appends `o` to the output. -/
 def OutStep (σ σ' : M.State) : Option String → Prop
   | none => M.out σ' = M.out σ
   | some o => M.out σ' = M.out σ ++ o
 
-/-- The hypothesis of the segment rule: from every well-formed state where
-the footprint holds, the machine takes exactly `n + 1` normal steps to a
-well-formed state, with an effect confined to the written cells and the
-console effect `o`. -/
 def RunFactO (M : MachineModel) (n : Nat) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (RW : List (Nat × BitVec 64 × BitVec 64))
     (MW : List (Nat × BitVec 8 × BitVec 8)) (o : Option String) : Prop :=
@@ -307,17 +253,11 @@ def RunFactO (M : MachineModel) (n : Nat) (RR : List (Nat × DFrac × BitVec 64)
     ∃ σ', ReachesN M (n + 1) σ σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' RW MW ∧
       OutStep (M := M) σ σ' o
 
-/-- A run that prints nothing: the shape of VSA's `segEval_sound`
-(`VsaIris/Vsa/Instance.lean`, `seg_runFact`), whose `sailOutput` frame is the
-last conjunct. A run that does not own the console cannot print. -/
 abbrev RunFact (M : MachineModel) (n : Nat) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (RW : List (Nat × BitVec 64 × BitVec 64))
     (MW : List (Nat × BitVec 8 × BitVec 8)) : Prop :=
   RunFactO M n RR MR RW MW none
 
-/-- A `RunFact` is a lagged run over the footprint `footPre`: the lookup and
-commit are `foot_lookup` and `foot_update`, and the console authority is kept
-(`LagFoot.ofRM`). -/
 theorem RunFact.lagFoot {n : Nat} {RR : List (Nat × DFrac × BitVec 64)}
     {MR : List (Nat × DFrac × BitVec 8)} {RW : List (Nat × BitVec 64 × BitVec 64)}
     {MW : List (Nat × BitVec 8 × BitVec 8)} (hexec : RunFact M n RR MR RW MW) :
@@ -328,15 +268,10 @@ theorem RunFact.lagFoot {n : Nat} {RR : List (Nat × DFrac × BitVec 64)}
     (fun mr mm _ _ hr hm hp => foot_update (M := M) mr mm RR MR RW MW hr hm hp.1)
     (fun _ _ hp => hp.2)
 
-/-- The hypothesis of the halt rule: from every well-formed state holding
-the (read-only) footprint, the machine's next step is the exit with code `e`,
-and the exit reports the output printed so far. VSA's instance is the HTIF
-exit store (`Inst.exit_haltFact`), which leaves `sailOutput` untouched. -/
 def HaltFact (M : MachineModel) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (e : Nat) : Prop :=
   ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR [] [] → M.step σ = .halt e (M.out σ)
 
-/-- The total loop WP satisfies the single-step rule with no later. -/
 theorem twp_stepRule {Φ : Nat × String → IProp GF} :
     StepRule M id (WP (MachineModel.Loop M) @ Stuckness.NotStuck; ⊤ [{ Φ }]) := by
   unfold StepRule

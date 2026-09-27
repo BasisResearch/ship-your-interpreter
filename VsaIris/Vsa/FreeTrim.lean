@@ -1,30 +1,17 @@
 import VsaIris.Vsa.FreePaths
 import VsaIris.Vsa.Sbrk
 
-/-!
-# `_malloc_trim_r`
-
-`_free_r` calls `_malloc_trim_r(reent, 0)` when the merged top reaches the
-trim threshold. It releases the whole pages above the top's first page
-(`extra = ((topsize + 4063) / 4096 - 1) * 4096`) when there are any and the
-break is where the top ends: `sbrk(0)` then `sbrk(-extra)`, which cannot fail.
-The top keeps its address; its header and the break move down
-(`PHeapAt.topResize`).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The pages `_malloc_trim_r` releases from a top of size `ts`. -/
 def trimExtra (ts : Nat) : Nat := ((ts + 4063) / 4096 - 1) * 4096
 
 theorem trimExtra_le {ts : Nat} (h16 : ts % 16 = 0) (h : 4096 ≤ trimExtra ts) :
     trimExtra ts + 48 ≤ ts := by
   unfold trimExtra at *; omega
 
-/-- The extra's word as the code forms it. -/
 theorem trimE_word {x : BitVec 64} {t : Nat} (hx : x.toNat = t + 4063) (ht : t < 2 ^ 40) :
     ((x >>> 12 + 18446744073709551615#64) <<< 12).toNat =
       (if (t + 4063) / 4096 = 0 then 2 ^ 64 - 4096 else trimExtra t) := by
@@ -35,14 +22,12 @@ theorem trimE_word {x : BitVec 64} {t : Nat} (hx : x.toNat = t + 4063) (ht : t <
   unfold trimExtra
   split <;> omega
 
-/-- `_malloc_trim_r` trims exactly when the extra is at least a page. -/
 theorem trimE {x : BitVec 64} {t : Nat} (hx : x.toNat = t + 4063) (ht : t < 2 ^ 40) :
     ((x >>> 12 + 18446744073709551615#64) <<< 12).toInt < (4096#64).toInt ↔ trimExtra t < 4096 := by
   rw [BitVec.toInt_eq_toNat_cond, trimE_word hx ht, show (4096#64 : BitVec 64).toInt = 4096 from rfl]
   unfold trimExtra
   split <;> split <;> omega
 
-/-- The heap through a store to the stack window. -/
 theorem PHeapAt.store_stack {C : MCtx} {M : Mem} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt M C.H top brkv chunks bins)
     (hd : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a) {a w : Nat} {v : BitVec 64}
@@ -54,8 +39,6 @@ theorem PHeapAt.store_stack {C : MCtx} {M : Mem} {top brkv : Nat} {chunks : List
       exact hd x (by omega) (by omega) hx.1, trivial⟩
     rw [writeLog_out _ _ _ ho]
 
-/-- The state at `_malloc_trim_r`'s call (`0x80007574`): `_free_r`'s frame,
-the heap with the top `Y` below the entry top, and the call's arguments. -/
 structure TrimIn (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) (Y brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) : Prop where
   frame : FFrame C R Mt
@@ -69,9 +52,6 @@ structure TrimIn (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) (Y brkv : Nat) (c
   ra : R 1 = 0x80007578#64
   s0 : R 8 = reentV
 
-/-- The state inside `_malloc_trim_r` (after its prologue): the heap, the
-caller's frame slots, the spilled registers in its 48-byte frame, and the
-top `Y` in `s3`'s `av`, its size in `s1`, the extra in `s0`. -/
 structure TrimSt (C : MCtx) (R : Nat → BitVec 64) (M : Mem) (Y brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) : Prop where
   heap : PHeapAt M C.H Y brkv chunks bins
@@ -91,9 +71,6 @@ structure TrimSt (C : MCtx) (R : Nat → BitVec 64) (M : Mem) (Y brkv : Nat) (ch
   s3 : R 19 = 0x8001ad10#64
   s1 : (R 9).toNat = brkv - Y
 
-/-- **`_malloc_trim_r`'s head** (`0x8000722c`): the frame, the lock, the top
-and its size, and the extra; no whole page to release goes to the return
-(`0x8000729c`), otherwise to `sbrk(0)` (`0x80007284`). -/
 theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (T : TrimIn C R Mt Y brkv chunks bins)
     (hno : ∀ R' M, TrimSt C R' M Y brkv chunks bins → AW C.live C.S C.Q 0x8000729c#64 R' M)
@@ -152,7 +129,7 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
       = brkv - Y + 4063 := by
     rw [BitVec.toNat_sub, BitVec.toNat_add, BitVec.toNat_add, hts, T.a1]
     simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  -- the state after the prologue
+
   have F := T.frame
   have hS : ∀ R' : Nat → BitVec 64, R' 2 = R 2 + 18446744073709551568#64 → R' 18 = R 10 →
       R' 19 = 2147593488#64 → (R' 9).toNat = brkv - Y → TrimSt C R' M1 Y brkv chunks bins := by
@@ -181,7 +158,7 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
     · rw [h18, T.a0]
     · rw [h19]
   refine st_80007280 O.live (fun hlt => ?_) (fun hge => ?_)
-  · -- no whole page to release
+  ·
     exact hno _ _ (hS _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
@@ -197,8 +174,6 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hts))
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hE) hyes2
 
-/-- **`_malloc_trim_r`'s epilogue** (`0x8000729c`, from any `TrimSt`): release
-the lock, restore the frame and return to `_free_r`. -/
 theorem trim_ret {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
     (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
@@ -223,7 +198,6 @@ theorem trim_ret {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
   simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
 
-/-- The trim state through a `_sbrk_r` call that keeps the break. -/
 theorem TrimSt.sbrk {C : MCtx} {R R' : Nat → BitVec 64} {M M' : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
     (hsp : (R 2).toNat = C.s.toNat - 80) (hs : 256 ≤ C.s.toNat) (P : SbrkPost R R' M M' brkv)
@@ -276,7 +250,6 @@ theorem TrimSt.sbrk {C : MCtx} {R R' : Nat → BitVec 64} {M M' : Mem} {Y brkv :
     | (rw [rslot _ (by omega) (by omega)]; exact S.ss2)
     | (rw [rslot _ (by omega) (by omega)]; exact S.ss3)
 
-/-- The call-site conditions of a `_sbrk_r` call from `_malloc_trim_r`. -/
 theorem TrimSt.sbrkPre {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
     {Rc : Nat → BitVec 64} (h2 : Rc 2 = R 2) (h1 : (Rc 1).toNat % 4 = 0) {nbrk : Nat}
@@ -308,7 +281,6 @@ theorem TrimSt.upd {C : MCtx} {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
     (h9 : R' 9 = R 9) : TrimSt C R' M Y brkv chunks bins :=
   { S with sp := h2 ▸ S.sp, s2 := h18 ▸ S.s2, s3 := h19 ▸ S.s3, s1 := h9 ▸ S.s1 }
 
-/-- **`sbrk(0)`** (`0x80007284`): the break is where the top ends. -/
 theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
     (hE : (R 8).toNat = trimExtra (brkv - Y))
@@ -360,9 +332,6 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [h10]; apply BitVec.eq_of_toNat_eq; rw [hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
 
-/-- After `sbrk(-extra)` (`0x800072d0`): the trim state before the call at
-`M`, the memory after it with the break lowered by the extra, and the
-registers kept but for `a0` (the old break), `a4`, `a5`. -/
 structure TrimMid (C : MCtx) (R : Nat → BitVec 64) (M M' : Mem) (Y brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) : Prop where
   st : TrimSt C R M Y brkv chunks bins
@@ -373,7 +342,6 @@ structure TrimMid (C : MCtx) (R : Nat → BitVec 64) (M M' : Mem) (Y brkv : Nat)
   pres : ∀ a : Nat, (M[a]?).isSome → (M'[a]?).isSome
   a0 : R 10 = BitVec.ofNat 64 brkv
 
-/-- **`sbrk(-extra)`** (`0x800072c4`): the break moves down by the extra. -/
 theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
     (hE : (R 8).toNat = trimExtra (brkv - Y)) (hE4 : 4096 ≤ trimExtra (brkv - Y))
@@ -413,8 +381,6 @@ theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
     P.pres, h10⟩
   rw [hr 8 (by decide) (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hE
 
-/-- `_malloc_trim_r`'s last state before the unlock: the frame slots, `sp`
-and `s2`, and `_free_r`'s finished heap. -/
 structure TrimOut (C : MCtx) (R : Nat → BitVec 64) (M : Mem) : Prop where
   done : FDone C M
   fs0 : read64 M (C.s.toNat - 32 + 16) = some (C.rv0 8).toNat
@@ -427,8 +393,6 @@ structure TrimOut (C : MCtx) (R : Nat → BitVec 64) (M : Mem) : Prop where
   sp : R 2 = C.s + 18446744073709551536#64
   s2 : R 18 = reentV
 
-/-- **The release's return** (`0x800072f8`): unlock, restore the frame and
-return to `_free_r`. -/
 theorem trim_out {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} (S : TrimOut C R M)
     (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
     AW C.live C.S C.Q 0x800072f8#64 R M := by
@@ -452,9 +416,6 @@ theorem trim_out {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} (S : T
   rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
   simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
 
-/-- **The release** (`0x800072d0`): the old break is not `-1`; the top's
-header takes the size less the extra, `mallinfo` drops by the extra, and the
-heap is in shape at the lowered break (`PHeapAt.topResize`). -/
 theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (T : TrimMid C R M M' Y brkv chunks bins)
     (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
@@ -471,7 +432,7 @@ theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y 
   have hEp : trimExtra (brkv - Y) % 4096 = 0 := by unfold trimExtra; omega
   have hs2n : (R 2).toNat = C.s.toNat - 80 := by
     rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  -- the call left the footprint alone but for the break's globals
+
   have hkeep : ∀ a, vsaFoot C.H a → ¬ (brkAddr ≤ a ∧ a < brkAddr + 8) → ¬ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) →
       ¬ (0x8001b538 ≤ a ∧ a < 0x8001b53c) → M'[a]? = M[a]? := by
     intro a ha h1 h2 h3
@@ -595,9 +556,6 @@ theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y 
     | (rw [rslot _ (by omega) (by omega)]; exact S.ss2)
     | (rw [rslot _ (by omega) (by omega)]; exact S.ss3)
 
-/-- **`_malloc_trim_r`** (`0x8000722c`, from `_free_r`'s call): back at
-`0x80007578` with `_free_r`'s frame and its heap finished, at the same top
-and a break no higher. -/
 theorem trim_run {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (T : TrimIn C R Mt Y brkv chunks bins)
     (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
