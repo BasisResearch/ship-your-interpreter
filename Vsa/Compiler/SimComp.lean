@@ -61,6 +61,12 @@ theorem InTmp.grow {H H' : CloMap} {m m' : Mem} {h h' sp fs k j : Nat} {v : Valu
   rw [hk.low _ (by omega) (by omega) (by omega), hk.low _ (by omega) (by omega) (by omega)]
   exact hv.grow hH hag hh
 
+theorem Seg.cast {code : List Ins} {pos pos' : Nat} {is : List Ins} (h : Seg code pos is) (e : pos = pos') :
+    Seg code pos' is := e ▸ h
+
+theorem reaches_pc {code : List Ins} {q q' : Nat} {L : GRegs} {m : Mem} {o : Array String} {P : AM → Prop}
+    (e : q = q') (h : Reaches code ⟨pcOf q', L, m, o⟩ P) : Reaches code ⟨pcOf q, L, m, o⟩ P := e ▸ h
+
 /-- Sequencing: run an expression, then continue from its end. -/
 theorem ESpec.bind {code : List Ins} {T : List String} {st : St} {d : Nat} {env : Addr} {e : Expr}
     {st1 : St} {v1 : Value} {n1 : Nat} (hE : ESpec code T st d env e st1 v1 n1) {V : View}
