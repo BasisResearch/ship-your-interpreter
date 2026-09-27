@@ -171,7 +171,7 @@ theorem Has.lib {L : GRegs} {n : Nat} {v r : BitVec 64}
   · refine ⟨h31, .inr ⟨hne, ?_⟩⟩
     simp only [lookupG]
     rw [if_neg (by omega), lookupG_eraseAll, if_neg (by simp [clobbered]; omega),
-      lookupG_set, if_neg hn.2.2.2.2.2, lookupG_set, if_neg hn.2.2.2.2.1, hl]
+      lookupG_set, if_neg (by omega), lookupG_set, if_neg (by omega), hl]
 
 syntax "has_core" : tactic
 syntax "has_tac" : tactic
@@ -240,15 +240,15 @@ end
 /-! ## Forward chaining -/
 
 theorem ex_step {code : List Ins} {A S : AM} {Q : AM → Prop} (e : astep code A = some (.run S))
-    (h : ∃ B, Star code S B ∧ Q B) : ∃ B, Star code A B ∧ Q B := by
+    (h : Reaches code S Q) : Reaches code A Q := by
   obtain ⟨B, hs, hq⟩ := h; exact ⟨B, Star.step e hs, hq⟩
 
 theorem ex_trans {code : List Ins} {A S : AM} {Q : AM → Prop} (e : Star code A S)
-    (h : ∃ B, Star code S B ∧ Q B) : ∃ B, Star code A B ∧ Q B := by
+    (h : Reaches code S Q) : Reaches code A Q := by
   obtain ⟨B, hs, hq⟩ := h; exact ⟨B, e.trans hs, hq⟩
 
-theorem ex_bind {code : List Ins} {A : AM} {P Q : AM → Prop} (h : ∃ B, Star code A B ∧ P B)
-    (k : ∀ B, P B → ∃ C, Star code B C ∧ Q C) : ∃ C, Star code A C ∧ Q C := by
+theorem ex_bind {code : List Ins} {A : AM} {P Q : AM → Prop} (h : Reaches code A P)
+    (k : ∀ B, P B → Reaches code B Q) : Reaches code A Q := by
   obtain ⟨B, s, hp⟩ := h
   obtain ⟨C, s', hq⟩ := k B hp
   exact ⟨C, s.trans s', hq⟩
@@ -324,7 +324,7 @@ include hfit hseg
 /-- From the sign test at `57`, `a0` becomes `|a0|`. -/
 theorem run_abs {A : AM} {v : BitVec 64} (hA : A.pc = pcOf 57) (h10 : Has A.regs a0 v)
     (hv : -10 < v.toInt ∧ v.toInt < 10) :
-    ∃ B, Star code A B ∧ B.pc = pcOf 59 ∧ B.mem = A.mem ∧ B.out = A.out ∧
+    Reaches code A fun B => B.pc = pcOf 59 ∧ B.mem = A.mem ∧ B.out = A.out ∧
       Has B.regs a0 (BitVec.ofNat 64 v.toInt.natAbs) ∧
       ∀ n w, n ≠ a0 → Has A.regs n w → Has B.regs n w := by
   have P := fun k (hk : k ≤ 100) => print_posOK hfit hseg hk
@@ -352,8 +352,7 @@ theorem run_digit {A : AM} {x r : BitVec 64} {j : Nat}
     (hA : A.pc = pcOf 52) (h4 : Has A.regs s4 x) (h5 : Has A.regs s5 (BitVec.ofNat 64 j))
     (h6 : Has A.regs s6 (BitVec.ofNat 64 (bufBase + 8 * j))) (h11 : Has A.regs s11 r)
     (hj : j < 20) :
-    ∃ B, Star code A B ∧
-      B.pc = (if BitVec.ofInt 64 (x.toInt.tdiv 10) = 0 then pcOf 70 else pcOf 52) ∧
+    Reaches code A fun B => B.pc = (if BitVec.ofInt 64 (x.toInt.tdiv 10) = 0 then pcOf 70 else pcOf 52) ∧
       Has B.regs s4 (BitVec.ofInt 64 (x.toInt.tdiv 10)) ∧
       Has B.regs s5 (BitVec.ofNat 64 (j + 1)) ∧
       Has B.regs s6 (BitVec.ofNat 64 (bufBase + 8 * (j + 1))) ∧ Has B.regs s11 r ∧
@@ -433,7 +432,7 @@ theorem run_digits : ∀ (N : Nat) (x : BitVec 64) (j : Nat) (ds : List Nat) (A 
     A.pc = pcOf 52 → Has A.regs s4 x → Has A.regs s5 (BitVec.ofNat 64 j) →
     Has A.regs s6 (BitVec.ofNat 64 (bufBase + 8 * j)) → Has A.regs s11 r →
     ds.length = j → (ds ++ digitsLE N).length ≤ 19 →
-    ∃ B, Star code A B ∧ B.pc = pcOf 70 ∧
+    Reaches code A fun B => B.pc = pcOf 70 ∧
       Has B.regs s5 (BitVec.ofNat 64 (ds ++ digitsLE N).length) ∧
       Has B.regs s6 (BitVec.ofNat 64 (bufBase + 8 * (ds ++ digitsLE N).length)) ∧
       Has B.regs s11 r ∧ B.out = A.out ∧
@@ -493,7 +492,7 @@ theorem run_out1 {A : AM} {i d : Nat} {r : BitVec 64}
     (hA : A.pc = pcOf 70) (h5 : Has A.regs s5 (BitVec.ofNat 64 (i + 1)))
     (h6 : Has A.regs s6 (BitVec.ofNat 64 (bufBase + 8 * (i + 1)))) (h11 : Has A.regs s11 r)
     (hi : i < 20) (hd : d < 10) (hcell : rdW A.mem (bufBase + 8 * i) = BitVec.ofNat 64 (d + 48)) :
-    ∃ B, Star code A B ∧ B.pc = (if i = 0 then pcOf 98 else pcOf 70) ∧
+    Reaches code A fun B => B.pc = (if i = 0 then pcOf 98 else pcOf 70) ∧
       Has B.regs s5 (BitVec.ofNat 64 i) ∧ Has B.regs s6 (BitVec.ofNat 64 (bufBase + 8 * i)) ∧
       Has B.regs s11 r ∧ B.mem = A.mem ∧ outStr B = outStr A ++ toString (Nat.digitChar d) := by
   have P := fun k (hk : k ≤ 100) => print_posOK hfit hseg hk
@@ -556,7 +555,7 @@ theorem run_outs : ∀ (i : Nat) (A : AM) (ds : List Nat) (r : BitVec 64),
     Has A.regs s6 (BitVec.ofNat 64 (bufBase + 8 * (i + 1))) → Has A.regs s11 r →
     i < 20 → i < ds.length →
     (∀ q, q ≤ i → ds[q]! < 10 ∧ rdW A.mem (bufBase + 8 * q) = BitVec.ofNat 64 (ds[q]! + 48)) →
-    ∃ B, Star code A B ∧ B.pc = pcOf 98 ∧ Has B.regs s11 r ∧ B.mem = A.mem ∧
+    Reaches code A fun B => B.pc = pcOf 98 ∧ Has B.regs s11 r ∧ B.mem = A.mem ∧
       outStr B = outStr A ++ ((ds.take (i + 1)).map Nat.digitChar).reverse.foldl String.push "" := by
   intro i
   induction i with
@@ -583,7 +582,7 @@ theorem run_outs : ∀ (i : Nat) (A : AM) (ds : List Nat) (r : BitVec 64),
 /-- Prologue: save `ra`, copy `n`, print `-` if `n < 0`; lands at the buffer setup `40`. -/
 theorem run_prologue {A : AM} {n r : BitVec 64} (hA : A.pc = pcOf 14)
     (ha0 : Has A.regs a0 n) (hra : Has A.regs ra r) :
-    ∃ B, Star code A B ∧ B.pc = pcOf 40 ∧ Has B.regs s4 n ∧ Has B.regs s11 r ∧ B.mem = A.mem ∧
+    Reaches code A fun B => B.pc = pcOf 40 ∧ Has B.regs s4 n ∧ Has B.regs s11 r ∧ B.mem = A.mem ∧
       outStr B = outStr A ++ (if n.toInt < 0 then "-" else "") := by
   have P := fun k (hk : k ≤ 100) => print_posOK hfit hseg hk
   refine ex_step (step_addi_eq hfit (pI hseg (j := 0) (k := 14) rfl rfl) hA (by decide) hra
@@ -613,7 +612,7 @@ to `r` having printed `intToString n.toInt`, and changes memory only inside the
 digit buffer `[bufBase, bufBase + 160)`. -/
 theorem run_print' {A : AM} {n r : BitVec 64} {k : Nat} (hA : A.pc = pcOf 14)
     (ha0 : Has A.regs a0 n) (hra : Has A.regs ra r) (hr : r = pcOf k) (hk : PosOK k) :
-    ∃ B, Star code A B ∧ B.pc = r ∧ outStr B = outStr A ++ intToString n.toInt ∧
+    Reaches code A fun B => B.pc = r ∧ outStr B = outStr A ++ intToString n.toInt ∧
       ∀ a, (a + 8 ≤ bufBase ∨ bufBase + 8 * 20 ≤ a) → rdW B.mem a = rdW A.mem a := by
   have P := fun k (hk : k ≤ 100) => print_posOK hfit hseg hk
   have hb : bufBase = 0x80080000 := rfl
@@ -669,7 +668,7 @@ end
 theorem run_print {code : List Ins} {k : Nat} (hfit : Fits code) (hseg : Seg code printPos printCode)
     {A : AM} {n r : BitVec 64} (hA : A.pc = pcOf printPos)
     (ha0 : Has A.regs a0 n) (hra : Has A.regs ra r) (hr : r = pcOf k) (hk : PosOK k) :
-    ∃ B, Star code A B ∧ B.pc = r ∧ outStr B = outStr A ++ intToString n.toInt ∧
+    Reaches code A fun B => B.pc = r ∧ outStr B = outStr A ++ intToString n.toInt ∧
       ∀ a, (a + 8 ≤ bufBase ∨ bufBase + 8 * 20 ≤ a) → rdW B.mem a = rdW A.mem a :=
   run_print' hfit hseg hA ha0 hra hr hk
 

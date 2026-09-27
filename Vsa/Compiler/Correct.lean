@@ -198,6 +198,8 @@ theorem compile_correct (p : Program) (hsup : Supported p)
       Code.__moddi3Loaded c.σ.mem) :
     (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out) := by
   have hfit' : Fits (compile p) := hfit
+  have hlib' : LibLoaded (A0 c.σ.mem c.σ.sailOutput).mem :=
+    let ⟨h1, h2, h3, h4, h5⟩ := hlib; ⟨h1, h2, h3, h4, h5⟩
   have hc : Corr c (A0 c.σ.mem c.σ.sailOutput) :=
     ⟨hgood, htick, by rw [hpc]; rfl, trivial, (fun _ h => by cases h), rfl, rfl, hpw⟩
   have hca : CodeAt (A0 c.σ.mem c.σ.sailOutput).mem (compile p) := codeAt_of_bytes hcode
@@ -205,7 +207,7 @@ theorem compile_correct (p : Program) (hsup : Supported p)
   have term : ∀ out, BigStep p out → Halts c out 0 := by
     intro out hb
     obtain ⟨B, r, hh, hBo⟩ := abstract_term p hsup hfit' c.σ.mem c.σ.sailOutput ho hb
-    have := halts_of_abstract hfit' hc hca hlib r hh
+    have := halts_of_abstract hfit' hc hca hlib' r hh
     rwa [hBo] at this
   refine ⟨fun out => ⟨term out, fun hH => ?_⟩, fun hd ⟨out, hb⟩ => hd.not_halts (term out hb)⟩
   by_cases hnb' : BigStep p out
@@ -217,9 +219,9 @@ theorem compile_correct (p : Program) (hsup : Supported p)
     obtain ⟨rfl, -⟩ := hH.deterministic (term out' hb')
     exact hnb hb'
   · rcases abstract_stuck p hsup hfit' c.σ.mem c.σ.sailOutput ho hex with ⟨B, r, hh⟩ | hdiv
-    · have := halts_of_abstract hfit' hc hca hlib r hh
+    · have := halts_of_abstract hfit' hc hca hlib' r hh
       exact absurd (hH.deterministic this).2 (by decide)
-    · exact (diverges_of_abstract hfit' hc hca hlib hdiv).not_halts hH
+    · exact (diverges_of_abstract hfit' hc hca hlib' hdiv).not_halts hH
 
 #print axioms compile_correct
 

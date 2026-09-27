@@ -45,9 +45,12 @@ def CodeAt (m : Mem) (code : List Ins) : Prop :=
   ∀ k i, code[k]? = some i → ∀ j < 4, m[codeBase + 4 * k + j]? = some (byte i.encode j)
 
 /-- libgcc's multiply and signed divide/remainder routines are in memory. -/
-def LibLoaded (m : Mem) : Prop :=
-  Code.__muldi3Loaded m ∧ Code.__divdi3Loaded m ∧ Code.__umoddi3Loaded m ∧
-    Code.__hidden___udivdi3Loaded m ∧ Code.__moddi3Loaded m
+structure LibLoaded (m : Mem) : Prop where
+  mul : Code.__muldi3Loaded m
+  div : Code.__divdi3Loaded m
+  umod : Code.__umoddi3Loaded m
+  udiv : Code.__hidden___udivdi3Loaded m
+  mod : Code.__moddi3Loaded m
 
 structure AM where
   pc : BitVec 64

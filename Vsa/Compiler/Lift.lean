@@ -20,6 +20,12 @@ namespace Vsa.Compiler
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa Vsa.Sim
 open Vsa.Machine (MState Config Step Steps Halted Halts output)
 
+/-- `c` runs to a configuration realizing `A`. -/
+abbrev ReachCorr (c : Config) (A : AM) : Prop := ∃ c', Steps c c' ∧ Corr c' A
+
+/-- `c` runs, with at least one step, to a configuration realizing `A`. -/
+abbrev StepsCorr (c : Config) (A : AM) : Prop := ∃ c', Steps c c' ∧ c.steps < c'.steps ∧ Corr c' A
+
 theorem applyW8_low (m : Mem) (ea : Nat) (v : BitVec 64) (j : Nat) (hj : j < ea) :
     (applyW m (ea, 8, v))[j]? = m[j]? := writeMap8_low_miss m ea _ j hj
 
@@ -75,12 +81,14 @@ theorem LibLoaded.of_low {m m' : Mem}
     (hagree : ∀ j, j < tohostAddr + 16 → m'[j]? = m[j]?) (h : LibLoaded m) :
     LibLoaded m' := by
   have hag : ∀ j, j < tohostAddr → m'[j]? = m[j]? := fun j hj => hagree j (by omega)
-  unfold LibLoaded Code.__muldi3Loaded Code.__muldi3Chunk0 Code.__divdi3Loaded
-    Code.__divdi3Chunk0 Code.__umoddi3Loaded Code.__umoddi3Chunk0
-    Code.__hidden___udivdi3Loaded Code.__hidden___udivdi3Chunk0 Code.__hidden___udivdi3Chunk1
-    Code.__moddi3Loaded Code.__moddi3Chunk0 at h ⊢
-  simp (disch := (simp only [tohostAddr]; decide)) only [hag]
-  exact h
+  obtain ⟨h1, h2, h3, h4, h5⟩ := h
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
+  · simp only [Code.__muldi3Loaded, Code.__muldi3Chunk0, Code.__divdi3Loaded,
+      Code.__divdi3Chunk0, Code.__umoddi3Loaded, Code.__umoddi3Chunk0,
+      Code.__hidden___udivdi3Loaded, Code.__hidden___udivdi3Chunk0, Code.__hidden___udivdi3Chunk1,
+      Code.__moddi3Loaded, Code.__moddi3Chunk0] at h1 h2 h3 h4 h5 ⊢
+    simp (disch := (simp only [tohostAddr]; decide)) only [hag]
+    assumption
 
 /-! ## Straight-line instructions through `block_mem_run` -/
 
@@ -125,8 +133,7 @@ theorem sim_M (i : Ins) (hi : i.IsM) {A : AM} {c : Config} (hc : Corr c A)
       (i.toM A.pc).rs2)
     (bs : List (BitVec 8)) (hmf : MemFacts A.mem A.regs bs (i.toM A.pc))
     (hrd : (i.toM A.pc).kind = .sd ∨ (1 ≤ (i.toM A.pc).rd ∧ (i.toM A.pc).rd ≤ 31)) :
-    ∃ c', Steps c c' ∧ c.steps < c'.steps ∧
-      Corr c' ⟨BitVec.addInt A.pc 4, stepGM (i.toM A.pc) A.regs bs,
+    StepsCorr c ⟨BitVec.addInt A.pc 4, stepGM (i.toM A.pc) A.regs bs,
         stepMemM A.mem (i.toM A.pc) A.regs, A.out⟩ := by
   obtain ⟨σ, t, u⟩ := c
   obtain ⟨vm, hvm⟩ := hc.good.minstret
@@ -166,8 +173,7 @@ theorem sim_T (i : Ins) (hi : i.IsT) (tk : Bool) {A : AM} {c : Config} (hc : Cor
     (hk : TermKindOK (keysG A.regs) A.pc (i.toT A.pc tk).rs1 (i.toT A.pc tk).rs2
       (i.toT A.pc tk).imm13 (i.toT A.pc tk).imm21 (i.toT A.pc tk).kind)
     (htf : TermFactsT A.regs (i.toT A.pc tk)) :
-    ∃ c', Steps c c' ∧ c.steps < c'.steps ∧
-      Corr c' { A with pc := tgtPCT (i.toT A.pc tk) A.regs } := by
+    StepsCorr c { A with pc := tgtPCT (i.toT A.pc tk) A.regs } := by
   obtain ⟨σ, t, u⟩ := c
   obtain ⟨vm, hvm⟩ := hc.good.minstret
   obtain ⟨fpc, fw, f0, f1, f2, f3⟩ := toT_fields i A.pc tk
@@ -311,8 +317,7 @@ theorem sim_jal_link (off : BitVec 21) {A : AM} {c : Config} (hc : Corr c A)
     (hlo : 0x80000000 ≤ A.pc.toNat) (hhi : A.pc.toNat + 4 ≤ tohostAddr)
     (hal : A.pc.toNat % 4 = 0)
     (htgt : (A.pc + sign_extend (m := 64) (evenJ off)).toNat % 4 = 0) :
-    ∃ c', Steps c c' ∧ c.steps < c'.steps ∧
-      Corr c' (AM.mk (A.pc + sign_extend (m := 64) (evenJ off))
+    StepsCorr c (AM.mk (A.pc + sign_extend (m := 64) (evenJ off))
         ((1, BitVec.addInt A.pc 4) :: eraseG 1 A.regs) A.mem A.out) := by
   obtain ⟨σ, t, u⟩ := c
   obtain ⟨vm, hvm⟩ := hc.good.minstret
@@ -419,12 +424,12 @@ theorem sim_mul {A : AM} {c : Config} (hc : Corr c A) (hpc : A.pc = 0x80004640#6
     {r x y : BitVec 64} (hr : lookupG 1 A.regs = some r) (hral : r.toNat % 4 = 0)
     (hx : lookupG 10 A.regs = some x) (hy : lookupG 11 A.regs = some y)
     (h12 : 12 ∈ keysG A.regs) (h13 : 13 ∈ keysG A.regs) (hlib : LibLoaded A.mem) :
-    ∃ c', Steps c c' ∧ Corr c' ⟨r, (10, x * y) :: eraseAll clobbered A.regs, A.mem, A.out⟩ := by
+    ReachCorr c ⟨r, (10, x * y) :: eraseAll clobbered A.regs, A.mem, A.out⟩ := by
   obtain ⟨v12, h12'⟩ := corr_reg_ex hc h12
   obtain ⟨v13, h13'⟩ := corr_reg_ex hc h13
   obtain ⟨c', hs, hG, hmem, hout, hpc', h10, _, ht, hfr⟩ :=
     muldi3_spec (fun R => c.σ.regs.get? R) x y r c.σ.mem c.σ.sailOutput c
-      ⟨⟨v12, v13, ⟨hc.good, hc.mem ▸ hlib.1, rfl, rfl, hpc ▸ hc.pc, corr_reg hc hx,
+      ⟨⟨v12, v13, ⟨hc.good, hc.mem ▸ hlib.mul, rfl, rfl, hpc ▸ hc.pc, corr_reg hc hx,
         corr_reg hc hy, h12', h13', corr_reg hc hr, hc.good.minstret, hc.tick,
         fun _ _ => rfl⟩⟩, hral⟩
   exact ⟨c', hs, corr_after_lib hc hG ht hmem hout hpc' h10 (fun R h => hfr R h.1)⟩
@@ -433,11 +438,11 @@ theorem sim_div {A : AM} {c : Config} (hc : Corr c A) (hpc : A.pc = 0x800046a4#6
     {r x y : BitVec 64} (hr : lookupG 1 A.regs = some r) (hral : r.toNat % 4 = 0)
     (hx : lookupG 10 A.regs = some x) (hy : lookupG 11 A.regs = some y) (hy0 : y.toInt ≠ 0)
     (h12 : 12 ∈ keysG A.regs) (h13 : 13 ∈ keysG A.regs) (hlib : LibLoaded A.mem) :
-    ∃ c', Steps c c' ∧ Corr c' ⟨r, (10, BitVec.ofInt 64 (x.toInt.tdiv y.toInt)) ::
+    ReachCorr c ⟨r, (10, BitVec.ofInt 64 (x.toInt.tdiv y.toInt)) ::
       eraseAll clobbered A.regs, A.mem, A.out⟩ := by
   obtain ⟨c', hs, post⟩ :=
     divdi3_wrap_spec (fun R => c.σ.regs.get? R) x y r c.σ.mem c.σ.sailOutput c
-      ⟨hc.good, hc.mem ▸ hlib.2.1, hc.mem ▸ hlib.2.2.1, hc.mem ▸ hlib.2.2.2.1, rfl, rfl,
+      ⟨hc.good, hc.mem ▸ hlib.div, hc.mem ▸ hlib.umod, hc.mem ▸ hlib.udiv, rfl, rfl,
         hpc ▸ hc.pc, corr_reg hc hx, corr_reg hc hy, corr_reg hc hr, hc.good.minstret,
         corr_reg_ex hc h12, corr_reg_ex hc h13, hc.tick, hy0, hral, fun _ _ => rfl⟩
   exact ⟨c', hs, corr_after_lib hc post.good post.tick post.mem post.output post.pc
@@ -447,11 +452,11 @@ theorem sim_mod {A : AM} {c : Config} (hc : Corr c A) (hpc : A.pc = 0x80004728#6
     {r x y : BitVec 64} (hr : lookupG 1 A.regs = some r) (hral : r.toNat % 4 = 0)
     (hx : lookupG 10 A.regs = some x) (hy : lookupG 11 A.regs = some y) (hy0 : y.toInt ≠ 0)
     (h12 : 12 ∈ keysG A.regs) (h13 : 13 ∈ keysG A.regs) (hlib : LibLoaded A.mem) :
-    ∃ c', Steps c c' ∧ Corr c' ⟨r, (10, BitVec.ofInt 64 (x.toInt.tmod y.toInt)) ::
+    ReachCorr c ⟨r, (10, BitVec.ofInt 64 (x.toInt.tmod y.toInt)) ::
       eraseAll clobbered A.regs, A.mem, A.out⟩ := by
   obtain ⟨c', hs, hG, hmem, hout, hpc', ht, hfr, res, h10, hres⟩ :=
     moddi3_spec (fun R => c.σ.regs.get? R) x y r c.σ.mem c.σ.sailOutput c
-      ⟨hc.good, hc.mem ▸ hlib.2.2.2.2, hc.mem ▸ hlib.2.2.2.1, rfl, rfl, hpc ▸ hc.pc,
+      ⟨hc.good, hc.mem ▸ hlib.mod, hc.mem ▸ hlib.udiv, rfl, rfl, hpc ▸ hc.pc,
         corr_reg hc hx, corr_reg hc hy, corr_reg hc hr, hc.good.minstret,
         corr_reg_ex hc h12, corr_reg_ex hc h13, hc.tick, hy0, hral, fun _ _ => rfl⟩
   have hres' : BitVec.ofInt 64 (x.toInt.tmod y.toInt) = res := by
@@ -491,8 +496,7 @@ theorem sim_putc {A : AM} {c : Config} (hc : Corr c A) (rs2 rs1 : Nat)
     (h1 : SrcOK rs1 (keysG A.regs)) (h2 : SrcOK rs2 (keysG A.regs))
     (hea : (srcVal rs1 A.regs).toNat = tohostAddr)
     (hv : srcVal rs2 A.regs = putcWord ((srcVal rs2 A.regs).setWidth 8)) :
-    ∃ c', Steps c c' ∧ c.steps < c'.steps ∧
-      Corr c' (AM.mk (BitVec.addInt A.pc 4) A.regs A.mem
+    StepsCorr c (AM.mk (BitVec.addInt A.pc 4) A.regs A.mem
         (A.out.push (toString (Char.ofNat ((srcVal rs2 A.regs).setWidth 8).toNat)))) := by
   obtain ⟨hdec, hrs1, hrs2, haddr⟩ := sd_tohost_facts hc rs2 rs1 h1 h2 hea
   obtain ⟨σ, t, u⟩ := c
@@ -625,7 +629,7 @@ theorem sim_libcall (off : BitVec 21) {A A' : AM} {c : Config} (hc : Corr c A)
     (htgt : (A.pc + sign_extend (m := 64) (evenJ off)).toNat % 4 = 0)
     (hlib : LibLoaded A.mem)
     (h : libCall (A.pc + sign_extend (m := 64) (evenJ off)).toNat A = some (.run A')) :
-    ∃ c', Steps c c' ∧ c.steps < c'.steps ∧ Corr c' A' := by
+    StepsCorr c A' := by
   obtain ⟨c1, hs1, hlt1, hc1⟩ := sim_jal_link off hc hb hlo hhi hal htgt
   have hret : (BitVec.addInt A.pc 4).toNat % 4 = 0 := by
     rw [addInt4_toNat _ (by simp only [tohostAddr] at hhi; omega)]; omega
@@ -659,8 +663,7 @@ theorem sim_libcall (off : BitVec 21) {A A' : AM} {c : Config} (hc : Corr c A)
       have fin : ∀ res c', Steps c1 c' →
           Corr c' ⟨BitVec.addInt A.pc 4, (10, res) :: eraseAll clobbered
             ((1, BitVec.addInt A.pc 4) :: eraseG 1 A.regs), A.mem, A.out⟩ →
-          ∃ c', Steps c c' ∧ c.steps < c'.steps ∧
-            Corr c' ⟨BitVec.addInt A.pc 4, (10, res) :: eraseAll clobbered A.regs, A.mem, A.out⟩ :=
+          StepsCorr c ⟨BitVec.addInt A.pc 4, (10, res) :: eraseAll clobbered A.regs, A.mem, A.out⟩ :=
         fun res c' hs hc' => ⟨c', hs1.trans hs, Nat.lt_of_lt_of_le hlt1 hs.steps_le,
           hc'.sub (hsub res)⟩
       split at h
@@ -685,7 +688,7 @@ theorem sim_libcall (off : BitVec 21) {A A' : AM} {c : Config} (hc : Corr c A)
 theorem step_sim {code : List Ins} {A A' : AM} {c : Config} (hc : Corr c A)
     (hcode : CodeAt A.mem code) (hlib : LibLoaded A.mem)
     (h : astep code A = some (.run A')) :
-    ∃ c', Steps c c' ∧ c.steps < c'.steps ∧ Corr c' A' := by
+    StepsCorr c A' := by
   unfold astep at h
   split at h
   · rename_i i hf
