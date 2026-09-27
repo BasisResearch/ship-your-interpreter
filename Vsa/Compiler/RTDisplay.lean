@@ -263,7 +263,7 @@ def CatW (m : Mem) (h : Nat) (t p : BitVec 64) (cs : List Char) : Prop :=
   if t = 3 then StrBelow m h p.toNat cs
   else if t = 2 then cs = (intToString p.toInt).toList
   else if t = 4 then ∃ d, rdW m (p.toNat + 24) = BitVec.ofNat 64 d ∧ StrBelow m h d cs ∧
-    tohostAddr + 16 ≤ p.toNat ∧ p.toNat + 32 ≤ 2 ^ 32
+    objBase ≤ p.toNat ∧ p.toNat + 32 ≤ h ∧ p.toNat % 8 = 0
   else if t = 1 then cs = (if p = 0 then "false" else "true").toList
   else if t = 5 then cs = "<native fn>".toList
   else cs = "null".toList
@@ -408,7 +408,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
   · -- closure
     next ht4 =>
     rw [if_pos ht4] at hc'
-    obtain ⟨d, hdd, hds, hp1, hp2⟩ := hc'
+    obtain ⟨d, hdd, hds, hp1, hp2, -⟩ := hc'
     have hp24 : (p + 24#64).toNat = p.toNat + 24 := by rw [BitVec.toNat_add]; simp; omega
     apply run_seg hR.fits hR.cs 41 (csPos + 41) rfl [addi a1 a1 24, .ld a1 a1, J (csPos + 43) (csPos + 81)]
       (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)

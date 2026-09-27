@@ -49,8 +49,8 @@ def catName : Option String → String
 /-- The object of a closure named `name` at `p`, whose print and concatenation
 renderings are the string objects at `d` and `c` below `h`. -/
 structure CloObj (m : Mem) (h p : Nat) (name : Option String) (d c : Nat) : Prop where
-  lo : tohostAddr + 16 ≤ p
-  hi : p + 32 ≤ 2 ^ 32
+  lo : objBase ≤ p
+  hi : p + 32 ≤ h
   al : p % 8 = 0
   disp : rdW m (p + 16) = BitVec.ofNat 64 d
   dispStr : StrBelow m h d (dispName name).toList
@@ -64,7 +64,8 @@ structure CloOK (H : CloMap) (s : Store) (m : Mem) (h : Nat) : Prop where
     ∃ d c, CloObj m h p cd.name d c
 
 theorem dispW_of_repr {H : CloMap} {s : Store} {m : Mem} {h : Nat} {v : Value} {t p : BitVec 64}
-    (hv : VRepr H m h v t p) (hc : CloOK H s m h) : DispW m t p (v.display s).toList := by
+    (hv : VRepr H m h v t p) (hc : CloOK H s m h) (hh : h ≤ objEnd) :
+    DispW m t p (v.display s).toList := by
   cases v with
   | null => obtain ⟨rfl, rfl⟩ := hv; simp [DispW, Value.display]
   | bool b => obtain ⟨rfl, rfl⟩ := hv; cases b <;> simp [DispW, Value.display]
@@ -80,7 +81,11 @@ theorem dispW_of_repr {H : CloMap} {s : Store} {m : Mem} {h : Nat} {v : Value} {
     obtain ⟨d, c, ho⟩ := hc.obj a cd _ hcd ha
     simp only [DispW, show (4 : BitVec 64) ≠ 2 by decide, show (4 : BitVec 64) ≠ 3 by decide,
       if_false, if_true, Value.display, hcd]
-    refine ⟨d, ho.disp, ?_, ho.lo, ho.hi⟩
+    have ho1 := ho.lo; have ho2 := ho.hi
+    have hob : objBase = 0x90000000 := rfl
+    have hoe : objEnd = 0xE0000000 := rfl
+    have ht : tohostAddr = 0x8001ad00 := rfl
+    refine ⟨d, ho.disp, ?_, by omega, by omega⟩
     have := ho.dispStr.str
     cases hn : cd.name with
     | none => simp only [hn, dispName] at this; exact this
@@ -105,7 +110,7 @@ theorem catW_of_repr {H : CloMap} {s : Store} {m : Mem} {h : Nat} {v : Value} {t
     obtain ⟨d, c, ho⟩ := hc.obj a cd _ hcd ha
     simp only [CatW, show (4 : BitVec 64) ≠ 2 by decide, show (4 : BitVec 64) ≠ 3 by decide,
       if_false, if_true, Value.catDisplay, hcd]
-    refine ⟨c, ho.cat, ?_, ho.lo, ho.hi⟩
+    refine ⟨c, ho.cat, ?_, ho.lo, ho.hi, ho.al⟩
     have := ho.catStr
     cases hn : cd.name with
     | none => simp only [hn, catName] at this; exact this
@@ -172,5 +177,37 @@ theorem payload_eq_iff {H : CloMap} {m : Mem} {h : Nat} {l r : Value} {t p1 p2 :
     constructor
     · intro e; simp [natId_inj e]
     · intro e; simp at e; rw [e]
+
+/-- `m'` agrees with `m` on the object heap below `h`. -/
+def ObjAgree (m m' : Mem) (h : Nat) : Prop :=
+  ∀ a, a % 8 = 0 → objBase ≤ a → a + 8 ≤ h → rdW m' a = rdW m a
+
+theorem StrBelow.mono {m m' : Mem} {h h' q : Nat} {cs : List Char} (hs : StrBelow m h q cs)
+    (hag : ObjAgree m m' h) (hh : h ≤ h') : StrBelow m' h' q cs :=
+  ⟨hs.str.transport (fun a h1 h2 h3 => hag a h3 (by have := hs.lo; omega) (by have := hs.hi; omega)),
+    hs.lo, by have := hs.hi; omega⟩
+
+theorem CatW.mono {m m' : Mem} {h h' : Nat} {t p : BitVec 64} {cs : List Char} (hc : CatW m h t p cs)
+    (hag : ObjAgree m m' h) (hh : h ≤ h') : CatW m' h' t p cs := by
+  unfold CatW at hc ⊢
+  split
+  · next h3 => rw [if_pos h3] at hc; exact hc.mono hag hh
+  · next h3 =>
+    rw [if_neg h3] at hc
+    split
+    · next h2 => rw [if_pos h2] at hc; exact hc
+    · next h2 =>
+      rw [if_neg h2] at hc
+      split
+      · next h4 =>
+        rw [if_pos h4] at hc
+        obtain ⟨d, hd, hs, hp1, hp2, hp3⟩ := hc
+        exact ⟨d, by rw [hag _ (by omega) (by omega) (by omega)]; exact hd, hs.mono hag hh, hp1, by omega, hp3⟩
+      · next h4 => rw [if_neg h4] at hc; exact hc
+
+theorem VRepr.mono {H : CloMap} {m m' : Mem} {h h' : Nat} {v : Value} {t p : BitVec 64}
+    (hv : VRepr H m h v t p) (hag : ObjAgree m m' h) (hh : h ≤ h') : VRepr H m' h' v t p := by
+  cases v <;> simp only [VRepr] at hv ⊢
+  all_goals first | exact hv | exact ⟨hv.1, hv.2.mono hag hh⟩
 
 end Vsa.Compiler
