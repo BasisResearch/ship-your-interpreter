@@ -1,5 +1,5 @@
 import Vsa.While.TypeProgress
-import Vsa.While.TypeCheck
+import Vsa.While.TypeInfer
 import Vsa.While.Programs
 
 /-!
@@ -12,6 +12,10 @@ import Vsa.While.Programs
 * `badSub_illTyped`, `badAssign_illTyped`: two programs rejected under every
   typing environment; `badSub_err` shows the first one does reach a runtime
   error.
+* `whileWl_inferred`: inference (`infer`, `Vsa/While/TypeInfer.lean`) computes
+  the typing of `whileWl`; with `infer_sound` this gives `whileWl_wellTyped_inferred`.
+  `validation_inferred`: inference succeeds on all validation programs except
+  `recursionWl`.
 * `divProg_wellTyped`, `divProg_err`: a well-typed program that reaches the
   division-by-zero error the type system leaves in place.
 
@@ -134,5 +138,24 @@ theorem divProg_wellTyped : WellTyped (mkΔ []) divProg :=
 theorem divProg_err : ExecSeqErrN initSt 0 0 divProg :=
   .head _ _ _ _ _ (.expr _ _ _ _ (.callArgs _ _ _ _ _ _ _ (.var _ _ _ _ _ rfl) (by decide)
     (.head _ _ _ _ _ (.divZero _ _ _ _ _ _ _ _ _ (.inl rfl) (.int _ _ _ _) (.int _ _ _ _)))))
+
+/-! ## Inference -/
+
+theorem whileWl_inferred :
+    (infer Programs.whileWl).toOption = some [("i", .int), ("sum", .int), ("n", .int),
+      ("total", .int), ("acc", .int), ("a", .int), ("b", .int)] := by decide +kernel
+
+theorem whileWl_wellTyped_inferred :
+    WellTyped (envOf [("i", .int), ("sum", .int), ("n", .int), ("total", .int), ("acc", .int),
+      ("a", .int), ("b", .int)]) Programs.whileWl := by
+  apply infer_sound
+  have h := whileWl_inferred
+  revert h
+  cases infer Programs.whileWl <;> simp [Except.toOption]
+
+theorem validation_inferred :
+    Programs.all.map (fun (n, p) => (n, (infer p).toOption.isSome)) =
+      [("while", true), ("arithmetic", true), ("for", true), ("functions", true),
+       ("recursion", false), ("scope", true), ("strings", true)] := by decide +kernel
 
 end Vsa.While.Types

@@ -186,8 +186,25 @@ return type and the loop context. `WellTyped Δ p` is the program judgment.
   `endToEnd_refinement`, a loaded well-typed program's machine run that halts
   with a nonzero exit code reaches one of those errors or diverges at the
   source level.
+* `typeCheck_iff` (`Vsa/While/TypeCheck.lean`): the checker `typeCheck Δ p`
+  decides `WellTyped Δ p`, so `decide` proves typings.
+* `infer_sound` (`Vsa/While/TypeInfer.lean`): `infer p` finds a typing
+  environment by unification and returns it only when `typeCheck` accepts it.
+  Inference is sound but not proved complete.
 * `Vsa/While/TypeExamples.lean`: `whileWl` and the other validation programs
-  type-check; `badSub` and `badAssign` are rejected under every `Δ`.
+  type-check and are inferred; `badSub` and `badAssign` are rejected under
+  every `Δ`.
+
+`whilecheck` type-checks `.wl` files outside Lean. It parses them with the
+grammar of `c/src/parser.c` (`Vsa/While/Parse.lean`, not verified), infers
+types, and prints the table the checker accepted:
+
+```sh
+lake build whilecheck
+.lake/build/bin/whilecheck c/tests/functions.wl
+.lake/build/bin/whilecheck --selftest c/tests   # parser vs. Programs.lean
+scripts/test_whilecheck.sh
+```
 
 ## Building
 
