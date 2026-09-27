@@ -707,6 +707,7 @@ import Vsa.Sim.SpliceFold
 import Vsa.Sim.rows.StrdupTailSpliceFold
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
+import Vsa.While.Exclusive
 import Vsa.Sim.InterpSimBundle
 import Vsa.Sim.DeriveMeta
 import Vsa.Sim.DeriveMetaTowers
