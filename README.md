@@ -39,6 +39,7 @@ incremental builds.
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
+| `Vsa/Compiler/` | a verified WHILE → RV64 compiler for a subset of WHILE (see below) |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
 | `experiments/` | Lean proof probes, SMT and fuzz validation, and coverage data |
 | `experiments/smt/PROOF_CLOSURE_PLAN.md` | Current proof status, remaining work, and incremental-build rules |
@@ -166,6 +167,42 @@ a deterministic target. `InterpSim` stays an explicit hypothesis.
 The simulation lemmas in `Vsa/Sim/` relate compiled
 `eval_expr`/`exec_stmt`/`interp_run` code to the big-step rules by induction on
 derivations.
+
+## A verified compiler for a WHILE subset
+
+`Vsa/Compiler/` compiles programs in a subset of WHILE directly to RV64
+instructions (`compile`, `Compile.lean`). `Supported` (`Subset.lean`) admits
+integer and boolean expressions over statically resolved variables
+(`+ - * / %`, comparisons, `!`, unary `-`, assignment), `if`/`while`/blocks,
+`break`/`continue` inside loops, declarations with an initializer, and
+`print`/`println` of up to 32 integers. Each declaration site has a static slot.
+Where the semantics has no derivation (for example, division by zero), the
+code exits with code 70.
+
+```lean
+theorem compile_correct (p : Program) (hsup : Supported p)
+    (hfit : 0x80004800 + 4 * (compile p).length ≤ 0x8001ad00) (c : Config)
+    (hgood : GoodState c.σ) (htick : c.tick < 2)
+    (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
+    (hpw : c.σ.regs.get? Register.htif_payload_writes = some 0#4)
+    (hout : output c.σ = "")
+    (hcode : ∀ k, k < (compileBytes p).length →
+      c.σ.mem[0x80004800 + k]? = (compileBytes p)[k]?)
+    (hlib : Code.__muldi3Loaded c.σ.mem ∧ Code.__divdi3Loaded c.σ.mem ∧
+      Code.__umoddi3Loaded c.σ.mem ∧ Code.__hidden___udivdi3Loaded c.σ.mem ∧
+      Code.__moddi3Loaded c.σ.mem) :
+    (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+The proof relates machine configurations to an abstract machine (`Machine.lean`,
+`Lift.lean`: one abstract step is at least one Sail step, and libgcc calls are
+single abstract steps through `muldi3_spec`/`divdi3_wrap_spec`/`moddi3_spec`),
+proves forward simulation by induction on derivations (`StmtT.lean`), and shows
+that a program without a derivation reaches the error exit or runs forever
+(`StmtS.lean`). `whileWl_compiled_halts` (`WhileWl.lean`) instantiates the
+theorem at `c/tests/while.wl`: the compiled code prints `55\n2500\n36\n` and
+exits `0`. `experiments/compiler/RunCompiled.lean` runs compiled programs on the
+executable Sail model.
 
 ## Building
 
