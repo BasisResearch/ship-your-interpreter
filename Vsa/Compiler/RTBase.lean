@@ -384,6 +384,46 @@ theorem rdW_tagsW (m : Mem) (a : Nat) (ha : a % 8 = 0) : ∀ (k b : Nat), b % 8 
       · rw [if_pos h2, if_pos (by omega)]
       · rw [if_neg h2, if_neg (by omega)]
 
+theorem char_lt_iff (a b : Char) : a < b ↔ a.toNat < b.toNat := Iff.rfl
+
+theorem char_eq_of_toNat {a b : Char} (h : a.toNat = b.toNat) : a = b := by
+  rw [← Char.ofNat_toNat a, ← Char.ofNat_toNat b, h]
+
+theorem cmpL_spec : ∀ (xs ys : List Char),
+    (cmpL xs ys = -1 ↔ xs < ys) ∧ (cmpL xs ys = 0 ↔ xs = ys) ∧ (cmpL xs ys = 1 ↔ ys < xs)
+  | [], [] => by simp [cmpL]
+  | [], y :: ys => by simp [cmpL]
+  | x :: xs, [] => by simp [cmpL]
+  | x :: xs, y :: ys => by
+    obtain ⟨ih1, ih2, ih3⟩ := cmpL_spec xs ys
+    simp only [cmpL]
+    by_cases h1 : x.toNat < y.toNat
+    · simp only [h1, if_true]
+      refine ⟨⟨fun _ => List.Lex.rel h1, fun _ => trivial⟩, by simp; intro e; subst e; omega, ?_⟩
+      simp only [show (-1 : Int) ≠ 1 by decide, false_iff]
+      intro h
+      cases h with
+      | rel h => exact absurd h (by simp only [char_lt_iff]; omega)
+      | cons h => omega
+    · by_cases h2 : y.toNat < x.toNat
+      · simp only [h1, h2, if_true, if_false]
+        refine ⟨?_, by simp; intro e; subst e; omega, ⟨fun _ => List.Lex.rel h2, fun _ => trivial⟩⟩
+        simp only [show (1 : Int) ≠ -1 by decide, false_iff]
+        intro h
+        cases h with
+        | rel h => exact absurd h (by simp only [char_lt_iff]; omega)
+        | cons h => omega
+      · simp only [h1, h2, if_false]
+        have hxy : x = y := char_eq_of_toNat (by omega)
+        subst hxy
+        refine ⟨ih1.trans ⟨List.Lex.cons, fun h => ?_⟩, by rw [ih2]; simp, ih3.trans ⟨List.Lex.cons, fun h => ?_⟩⟩
+        · cases h with
+          | rel h => exact absurd h (by simp only [char_lt_iff]; omega)
+          | cons h => exact h
+        · cases h with
+          | rel h => exact absurd h (by simp only [char_lt_iff]; omega)
+          | cons h => exact h
+
 /-! ## String objects -/
 
 /-- The string object at `p` holds the characters `cs`. -/
@@ -452,6 +492,7 @@ macro_rules
   | `(tactic| reg_simp) => `(tactic| reg_simp [])
   | `(tactic| reg_simp [$xs,*]) => `(tactic|
       simp (disch := decide) only [has_gset, keep_gset, has_lib, has_lib10, keep_lib, reduceIte, BitVec.reduceEq,
+        BitVec.reduceOfInt,
         Nat.reduceEqDiff,
         a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5, t6, s2, s3, s4, s5, s6, s9, s10,
         s11, ra, spR, hpO, envR, hpF, depR, $xs,*])

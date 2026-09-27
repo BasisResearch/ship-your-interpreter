@@ -120,4 +120,8 @@ theorem VRepr.tag_int {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec
     (hv : VRepr H m h v t p) : t = 2 ↔ ∃ n, v = .int n := by
   cases v <;> simp only [VRepr] at hv <;> (obtain ⟨rfl, _⟩ := hv) <;> simp <;> decide
 
+theorem VRepr.tag_str {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec 64}
+    (hv : VRepr H m h v t p) : t = 3 → ∃ s, v = .str s := by
+  cases v <;> simp only [VRepr] at hv <;> (obtain ⟨rfl, _⟩ := hv) <;> simp <;> decide
+
 end Vsa.Compiler
