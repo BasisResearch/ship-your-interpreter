@@ -58,4 +58,13 @@ theorem StarN.pos_of_pc {code : List Ins} {k : Nat} {A B : AM} (h : StarN code k
   | refl => exact absurd rfl hne
   | step => omega
 
+/-- One jump to `q`. -/
+theorem step_jump {code : List Ins} (hfit : Fits code) {p q : Nat} {A : AM}
+    (hk : code[p]? = some (.jal 0 (jOff p q))) (hA : A.pc = pcOf p) (hp : PosOK p) (hq : PosOK q) :
+    astep code A = some (.run ⟨pcOf q, A.regs, A.mem, A.out⟩) := by
+  have hb : codeBase = 0x80004800 := rfl
+  have ht : tohostAddr = 0x8001ad00 := rfl
+  have hj := pcOf_jump p q hp hq
+  rw [step_j hfit hk hA (by rw [hj, pcOf_toNat (by unfold PosOK at hq; omega)]; omega), hj]
+
 end Vsa.Compiler

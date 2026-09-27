@@ -1,5 +1,6 @@
 import Vsa.Compiler.StmtRel
 import Vsa.Compiler.CompileFacts
+import Vsa.Compiler.Fail
 
 /-!
 # Statement-level fragments
@@ -67,13 +68,6 @@ theorem Seg.end_ok {code : List Ins} {pos : Nat} {s : List Ins} (hfit : Fits cod
 section
 variable {code : List Ins}
 
-theorem step_jump (hfit : Fits code) {p q : Nat} {A : AM}
-    (hk : code[p]? = some (.jal 0 (jOff p q))) (hA : A.pc = pcOf p) (hp : PosOK p) (hq : PosOK q) :
-    astep code A = some (.run ⟨pcOf q, A.regs, A.mem, A.out⟩) := by
-  have hb : codeBase = 0x80004800 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  have hj := pcOf_jump p q hp hq
-  rw [step_j hfit hk hA (by rw [hj, pcOf_toNat (by unfold PosOK at hq; omega)]; omega), hj]
 
 /-- `bne a0, x0, +8; jal x0, L`: fall into the next code when `a0 ≠ 0`, else jump to `L`. -/
 theorem run_cond (hfit : Fits code) {q L : Nat} {A : AM} {w : BitVec 64}
