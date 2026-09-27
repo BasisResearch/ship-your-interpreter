@@ -1,3 +1,0 @@
-emitter sources are copied verbatim to experiments/smt/bmc/src/; the driver compares bytes
-elf	c/while-riscv-htif.elf
-elf_bytes	138880
