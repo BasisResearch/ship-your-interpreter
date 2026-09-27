@@ -680,6 +680,7 @@ structure AddRet (H : CloMap) (m m' : Mem) (h h' : Nat) (L L' : GRegs) (v : Valu
   hp : Has L' hpO (BitVec.ofNat 64 h')
   grow : h ≤ h'
   room : h' ≤ objEnd
+  al : h' % 8 = 0
   frame : ∀ a, a % 8 = 0 → (a + 8 ≤ h ∨ h' ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
     rdW m' a = rdW m a
   val : InA H m' h' L' v
@@ -688,6 +689,19 @@ structure AddRet (H : CloMap) (m m' : Mem) (h h' : Nat) (L L' : GRegs) (v : Valu
 /-- The heap need of a concatenation. -/
 def catNeed (s : Store) (l r : Value) : Nat :=
   344 + 8 * ((l.catDisplay s).length + (r.catDisplay s).length)
+
+/-- The heap need of `+`: a concatenation's, or none. -/
+def addNeed (s : Store) (l r : Value) : Nat :=
+  match l, r with
+  | .str _, _ => catNeed s l r
+  | _, .str _ => catNeed s l r
+  | _, _ => 0
+
+theorem addNeed_str {s : Store} {l r : Value} (h : (∃ a, l = .str a) ∨ ∃ b, r = .str b) :
+    addNeed s l r = catNeed s l r := by
+  rcases h with ⟨a, rfl⟩ | ⟨b, rfl⟩
+  · simp [addNeed]
+  · cases l <;> simp [addNeed]
 
 theorem add_ret {L' : GRegs} {m : Mem} {o : Array String} {rr : BitVec 64}
     (h26 : Has L' s10 rr) (hal : rr.toNat % 4 = 0) :
@@ -707,7 +721,8 @@ theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o :
     (hh : ObjPtr h) (hfx : FixedOK m) (hfb : fixedAddr 7 + 40 ≤ h) (hc : CloOK H s m h)
     (hk0 : Keep addClob L0 L) :
     Reaches code ⟨pcOf (addPos + 9), L, m, o⟩ (fun B => B.out = o ∧
-      ((B.pc = rr ∧ ∃ h', AddRet H m B.mem h h' L0 B.regs (.str (l.catDisplay s ++ r.catDisplay s))) ∨
+      ((B.pc = rr ∧ ∃ h', h' ≤ h + catNeed s l r ∧
+          AddRet H m B.mem h h' L0 B.regs (.str (l.catDisplay s ++ r.catDisplay s))) ∨
         (B.pc = pcOf errPos ∧ objEnd < h + catNeed s l r))) := by
   have hbb : bufBase = 0x80080000 := rfl
   have hob : objBase = 0x90000000 := rfl
@@ -784,9 +799,10 @@ theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o :
   wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
   refine reaches_mono (add_ret hR (by reg_simp; exact g26'') hal) ?_
   rintro B ⟨hpc, hm, ho, hregs⟩
-  refine ⟨ho, .inl ⟨hpc, h2 + 8 + 8 * ((l.catDisplay s).toList ++ (r.catDisplay s).toList).length, ?_⟩⟩
+  refine ⟨ho, .inl ⟨hpc, h2 + 8 + 8 * ((l.catDisplay s).toList ++ (r.catDisplay s).toList).length, ?_, ?_⟩⟩
+  · unfold catNeed; simp only [List.length_append, String.length_toList]; omega
   rw [hm, hregs]
-  refine ⟨by reg_simp; exact g8'', by omega, groom3, fun a ha h5 h6 => ?_, ?_, ?_⟩
+  refine ⟨by reg_simp; exact g8'', by omega, groom3, by omega, fun a ha h5 h6 => ?_, ?_, ?_⟩
   · rw [gfr3 a ha (by omega), gfr2 a ha (by omega) h6, gfr1 a ha (by omega) h6]
   · refine ⟨3, BitVec.ofNat 64 h2, by reg_simp, by reg_simp; exact g11'', rfl, ?_⟩
     rw [String.toList_append, toNat_ofNat_lt (show h2 < 2 ^ 64 by omega)]
@@ -803,8 +819,8 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
     (hh : ObjPtr h) (hfx : FixedOK m) (hfb : fixedAddr 7 + 40 ≤ h) (hc : CloOK H s m h) :
     Reaches code ⟨pcOf addPos, L, m, o⟩ (fun B => B.out = o ∧
       match binOpSem s .add l r with
-      | some v => (B.pc = rr ∧ ∃ h', AddRet H m B.mem h h' L B.regs v) ∨
-          (B.pc = pcOf errPos ∧ objEnd < h + catNeed s l r)
+      | some v => (B.pc = rr ∧ ∃ h', h' ≤ h + addNeed s l r ∧ AddRet H m B.mem h h' L B.regs v) ∨
+          (B.pc = pcOf errPos ∧ objEnd < h + addNeed s l r)
       | none => B.pc = pcOf errPos) := by
   have hops' := hops
   obtain ⟨h10, h11, h12, h13, vl, vr⟩ := hops
@@ -828,11 +844,11 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
       Has L' s10 rr →
       Reaches code ⟨pcOf (addPos + 9), L', m, o⟩ (fun B => B.out = o ∧
         match binOpSem s .add l r with
-        | some v => (B.pc = rr ∧ ∃ h', AddRet H m B.mem h h' L B.regs v) ∨
-            (B.pc = pcOf errPos ∧ objEnd < h + catNeed s l r)
+        | some v => (B.pc = rr ∧ ∃ h', h' ≤ h + addNeed s l r ∧ AddRet H m B.mem h h' L B.regs v) ∨
+            (B.pc = pcOf errPos ∧ objEnd < h + addNeed s l r)
         | none => B.pc = pcOf errPos) := by
     intro hs L' hk g10 g11 g12 g13 g8 g26
-    rw [binOpSem_add_str hs]
+    rw [binOpSem_add_str hs, addNeed_str hR hs]
     exact add_cat hR ⟨g10, g11, g12, g13, vl, vr⟩ g8 g26 hal hh hfx hfb hc hk
   have hstr1 : t1 = 3 → (∃ a, l = .str a) ∨ ∃ b, r = .str b := fun h => .inl (vl.tag_str h)
   have hstr2 : t2 = 3 → (∃ a, l = .str a) ∨ ∃ b, r = .str b := fun h => .inr (vr.tag_str h)
@@ -860,9 +876,9 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
         rintro B ⟨hpc, hm, ho, hregs⟩
         refine ⟨ho, ?_⟩
         rw [binOpSem_add_int]
-        refine .inl ⟨hpc, h, ?_⟩
+        refine .inl ⟨hpc, h, by omega, ?_⟩
         rw [hm, hregs]
-        refine ⟨by reg_simp; exact h8, Nat.le_refl _, hh.hi, fun _ _ _ _ => rfl, ?_, ?_⟩
+        refine ⟨by reg_simp; exact h8, Nat.le_refl _, hh.hi, hh.al, fun _ _ _ _ => rfl, ?_, ?_⟩
         · refine ⟨2, BitVec.ofInt 64 a + BitVec.ofInt 64 b, by reg_simp; exact h10, by reg_simp, rfl,
             by rw [ofInt_wrap, BitVec.ofInt_add], I64_wrap _⟩
         · reg_simp; exact Keep.refl _ _
