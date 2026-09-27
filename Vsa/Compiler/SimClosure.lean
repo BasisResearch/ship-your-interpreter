@@ -92,7 +92,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
     (by reg_simp []) hvs htmp hmax) ?_
   rintro E (⟨h1, h2⟩ | hE)
   · refine reach_here (.inl ⟨h1, fun hr => ?_⟩)
-    have := hr.1; have hLl := hc6.1; unfold envBytes at hn; omega
+    have := hr.1; have hLl := hc6.2.1; unfold envBytes at hn; omega
   -- the body
   have hc4' := hc4
   rw [fnCode_eq] at hc4'
@@ -112,11 +112,11 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
       fnPost, List.length_cons, List.length_nil, hlb]; simp [fnBody]; omega)
   have hctx := fnCtx_ok (frameNames cd.params cd.body) Γc (posOK_le hPend (by omega) : PosOK (fnBody cd.params q +
     (gseq T (fnCtx (frameNames cd.params cd.body :: Γc) 0) (fnBody cd.params q) cd.body).length + 2))
-  refine ex_bind (hB _ _ (sp - frameSize cd.body) (frameSize cd.body) _ E hE.ms hE.pc hc6.2.2 hctx sBody
+  refine ex_bind (hB _ _ (sp - frameSize cd.body) (frameSize cd.body) _ E hE.ms hE.pc hc6.2.2.2 hctx sBody
     (by rw [hlb]; exact posOK_le hPend (by omega)) (by simp [frameSize])) ?_
   rintro B (⟨h1, h2⟩ | ⟨Ve, hpost⟩)
   · refine reach_here (.inl ⟨h1, fun hr => h2 ⟨?_, ?_⟩⟩)
-    · have := hr.1; have hLl := hc6.1; simp only [View.enter]; unfold envBytes at hn; omega
+    · have := hr.1; have hLl := hc6.2.1; simp only [View.enter]; unfold envBytes at hn; omega
     · have := hr.2; simp only [View.enter]; omega
   -- after the body
   have hEst := hE.stack
@@ -124,13 +124,13 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
     have := hm.stk.room
     have : maxFS ≤ (maxCallDepth - d) * maxFS := Nat.le_mul_of_pos_left _ (by omega)
     have hM : maxFS = 2048 := rfl
-    have := hc6.2.1; simp only [frameSize]; omega
+    have := hc6.2.2.1; simp only [frameSize]; omega
   have hfs' : frameSize cd.body ≤ sp := by
     have := hm.stk.room
     have : maxFS ≤ (maxCallDepth - d) * maxFS := Nat.le_mul_of_pos_left _ (by omega)
     have hM : maxFS = 2048 := rfl
-    have := hc6.2.1; simp only [frameSize]; omega
-  have hfsz : frameSize cd.body ≤ 1936 := by have := hc6.2.1; simp only [frameSize]; omega
+    have := hc6.2.2.1; simp only [frameSize]; omega
+  have hfsz : frameSize cd.body ≤ 1936 := by have := hc6.2.2.1; simp only [frameSize]; omega
   have hfs16 : 16 ≤ frameSize cd.body := by simp only [frameSize]; omega
   have hspal : (sp - frameSize cd.body) % 16 = 0 := by simp only [frameSize]; omega
   have hsv : rdW B.mem (sp - frameSize cd.body) = pcOf (ccCL k vs.length pos + 6) := by
@@ -161,7 +161,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
     obtain ⟨fq, hfq⟩ := hm.chn.head'
     have hfa := hvgrow.grows.fa hfq
     have hw : Within V Ve n := by
-      have h1 := hpost.within.1; have h2 := hpost.within.2; have hLl := hc6.1
+      have h1 := hpost.within.1; have h2 := hpost.within.2; have hLl := hc6.2.1
       simp only [View.enter] at h1 h2; unfold envBytes at hn
       exact ⟨by omega, by omega⟩
     refine reach_here (.inr ⟨by rw [hfin], Ve, ?_⟩)

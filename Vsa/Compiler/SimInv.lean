@@ -51,7 +51,7 @@ def fnCode (T : List String) (Γ : List (List String)) (params : List String) (b
 
 /-- A function's code is well formed under `Γ`. -/
 def WfFn (T : List String) (Γ : List (List String)) (params : List String) (body : List Stmt) : Prop :=
-  (frameNames params body).length ≤ 120 ∧ tSeq body ≤ 120 ∧ WfSeq T (frameNames params body :: Γ) body
+  params.length ≤ 120 ∧ (frameNames params body).length ≤ 120 ∧ tSeq body ≤ 120 ∧ WfSeq T (frameNames params body :: Γ) body
 
 /-- Every closure's object points to its environment and its function's code. -/
 def CloCode (code : List Ins) (T : List String) (V : View) (s : Store) (m : Mem) : Prop :=

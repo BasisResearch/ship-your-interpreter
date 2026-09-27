@@ -12,20 +12,23 @@ namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
+/-- The forward simulation of each of the nine cost relations. -/
+structure Sims (code : List Ins) (T : List String) : Prop where
+  e : ∀ {st d a e st' v n}, EvalECost st d a e st' v n → ESpec code T st d a e st' v n
+  a : ∀ {st d a es st' vs n}, EvalArgsCost st d a es st' vs n → ASpec code T st d a es st' vs n
+  c : ∀ {st d fv vs st' v n}, CallCost st d fv vs st' v n → CSpec code T st d fv vs st' v n
+  s : ∀ {st d a s st' t n}, ExecSCost st d a s st' t n → SSpec code T st d a s st' t n
+  xi : ∀ {st d a i st' n}, ExecInitCost st d a i st' n → XISpec code T st d a i st' n
+  fl : ∀ {st d a c s b st' t n}, ForLoopCost st d a c s b st' t n → FLSpec code T st d a c s b st' t n
+  fc : ∀ {st d a c st' n}, ForCondCost st d a c st' n → FCSpec code T st d a c st' n
+  xs : ∀ {st d a s st' n}, ExecStepCost st d a s st' n → XSSpec code T st d a s st' n
+  q : ∀ {st d a ss st' t n}, ExecSeqCost st d a ss st' t n → QSpec code T st d a ss st' t n
+
 section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
 
-theorem sim_all :
-    (∀ {st d a e st' v n}, EvalECost st d a e st' v n → ESpec code T st d a e st' v n) ∧
-    (∀ {st d a es st' vs n}, EvalArgsCost st d a es st' vs n → ASpec code T st d a es st' vs n) ∧
-    (∀ {st d fv vs st' v n}, CallCost st d fv vs st' v n → CSpec code T st d fv vs st' v n) ∧
-    (∀ {st d a s st' t n}, ExecSCost st d a s st' t n → SSpec code T st d a s st' t n) ∧
-    (∀ {st d a i st' n}, ExecInitCost st d a i st' n → XISpec code T st d a i st' n) ∧
-    (∀ {st d a c s b st' t n}, ForLoopCost st d a c s b st' t n → FLSpec code T st d a c s b st' t n) ∧
-    (∀ {st d a c st' n}, ForCondCost st d a c st' n → FCSpec code T st d a c st' n) ∧
-    (∀ {st d a s st' n}, ExecStepCost st d a s st' n → XSSpec code T st d a s st' n) ∧
-    (∀ {st d a ss st' t n}, ExecSeqCost st d a ss st' t n → QSpec code T st d a ss st' t n) := by
+theorem sim_all : Sims code T := by
   have c_int := fun st d env n => sInt (T := T) hR st d env n
   have c_str := fun st d env s => sStr (T := T) hR st d env s
   have c_bool := fun st d env b => sBool (T := T) hR st d env b

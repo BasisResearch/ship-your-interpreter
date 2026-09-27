@@ -31,7 +31,7 @@ def WfE (T : List String) (Γ : List (List String)) : Expr → Prop
   | .call f args => WfE T Γ f ∧ WfArgs T Γ args
   | .fn name params body =>
     Latin1 (dispName name) ∧ Latin1 (catName name) ∧ dispName name ∈ T ∧ catName name ∈ T ∧
-      (frameNames params body).length ≤ 120 ∧ tSeq body ≤ 120 ∧
+      params.length ≤ 120 ∧ (frameNames params body).length ≤ 120 ∧ tSeq body ≤ 120 ∧
       WfSeq T (frameNames params body :: Γ) body
 
 def WfArgs (T : List String) (Γ : List (List String)) : List Expr → Prop

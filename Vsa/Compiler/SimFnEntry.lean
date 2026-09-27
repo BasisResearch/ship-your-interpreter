@@ -159,7 +159,7 @@ theorem run_entry {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List S
     Reaches code A (fun B => (B.pc = pcOf errPos ∧
         frameEnd < V.hF + 8 + 16 * (frameNames cd.params cd.body).length) ∨
       Entered code T V st d cd Γc vs sp (frameSize cd.body) q r (BitVec.ofNat 64 (V.fa env)) A B) := by
-  obtain ⟨hwL, hwT, hwB⟩ := hwf
+  obtain ⟨-, hwL, hwT, hwB⟩ := hwf
   obtain ⟨dA, cA, hco⟩ := hm.rel.clo.obj a cd p hcd hp
   have hco1 := hco.lo
   have hco2 := hco.hi
