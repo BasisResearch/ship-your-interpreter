@@ -46,6 +46,7 @@ incremental builds.
 | `Vsa/While/Derive.lean` | `bigstep_derive`, a syntax-directed tactic that *constructs* derivation trees of the big-step relation for closed programs. Untrusted meta-code; the kernel checks the derivations |
 | `Vsa/While/Programs.lean`, `Vsa/While/Validation.lean` | the `c/tests/*.wl` scripts as deep embeddings, plus kernel-checked theorems `BigStep prog "<binary's output>"` that validate the semantics against I/O examples obtained by running the binary |
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
+| `Vsa/While/Types.lean`, `Vsa/While/Type*.lean` | **a static type system for WHILE**, its preservation and progress theorems against `BigStep`, and worked examples |
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
@@ -175,6 +176,27 @@ a deterministic target. `InterpSim` stays an explicit hypothesis.
 The simulation lemmas in `Vsa/Sim/` relate compiled
 `eval_expr`/`exec_stmt`/`interp_run` code to the big-step rules by induction on
 derivations.
+
+## Type safety
+
+`Vsa/While/Types.lean` types WHILE with simple types, function types and
+singleton builtin types under one program-wide typing environment
+`Δ : String → Ty`; typing tracks the names bound along the scope chain, the
+return type and the loop context. `WellTyped Δ p` is the program judgment.
+
+* `preservation` (`Vsa/While/TypePreservation.lean`): each of the nine
+  big-step relations preserves store typing, and values and completion statuses
+  have their static types.
+* `progress` and `type_soundness` (`Vsa/While/TypeProgress.lean`): every
+  runtime error of a well-typed program is division or remainder by zero, a
+  failed `assert`, or the call-depth cap (`ExecSeqErrN`), so a well-typed
+  program terminates normally, reaches one of those errors, or diverges.
+* `wellTyped_machine` (`VsaIris/Interp/TypeSafety.lean`): with
+  `endToEnd_refinement`, a loaded well-typed program's machine run that halts
+  with a nonzero exit code reaches one of those errors or diverges at the
+  source level.
+* `Vsa/While/TypeExamples.lean`: `whileWl` and the other validation programs
+  type-check; `badSub` and `badAssign` are rejected under every `Δ`.
 
 ## Building
 
