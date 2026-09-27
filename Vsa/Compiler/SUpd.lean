@@ -359,20 +359,31 @@ theorem setPost_of_slot {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : N
 
 /-! ## Growth -/
 
-/-- `F'`/`s'` extend `F`/`s`: every frame and its object stay. -/
+/-- `F'`/`s'` extend `F`/`s`: every frame stays with its parent, and its object stays. -/
 structure Grows (F : FrMap) (s : Store) (F' : FrMap) (s' : Store) : Prop where
-  frames : ∀ (b : Nat) (fr : Frame), s.frames[b]? = some fr → s'.frames[b]? = some fr
+  frames : ∀ (b : Nat) (fr : Frame), s.frames[b]? = some fr →
+    ∃ fr', s'.frames[b]? = some fr' ∧ fr'.parent = fr.parent
   objs : ∀ (b : Nat) (q : Nat × List String), F[b]? = some q → F'[b]? = some q
 
-theorem Grows.refl (F : FrMap) (s : Store) : Grows F s F s := ⟨fun _ _ h => h, fun _ _ h => h⟩
+theorem Grows.refl (F : FrMap) (s : Store) : Grows F s F s := ⟨fun _ fr h => ⟨fr, h, rfl⟩, fun _ _ h => h⟩
 
 theorem Grows.trans {F F' F'' : FrMap} {s s' s'' : Store} (h1 : Grows F s F' s') (h2 : Grows F' s' F'' s'') :
-    Grows F s F'' s'' := ⟨fun b fr h => h2.frames b fr (h1.frames b fr h), fun b q h => h2.objs b q (h1.objs b q h)⟩
+    Grows F s F'' s'' := by
+  refine ⟨fun b fr h => ?_, fun b q h => h2.objs b q (h1.objs b q h)⟩
+  obtain ⟨fr1, h1', e1⟩ := h1.frames b fr h
+  obtain ⟨fr2, h2', e2⟩ := h2.frames b fr1 h1'
+  exact ⟨fr2, h2', e2.trans e1⟩
+
+theorem Grows.of_shape {F : FrMap} {s s' : Store} (h : SameShape s s') : Grows F s F s' := ⟨h.2, fun _ _ h => h⟩
 
 theorem ChainL.grow {F F' : FrMap} {s s' : Store} (hg : Grows F s F' s') :
     ∀ {a : Addr} {Γ : List (List String)}, ChainL F s a Γ → ChainL F' s' a Γ
-  | _, _, .top hfr hpar hF => .top (hg.frames _ _ hfr) hpar (hg.objs _ _ hF)
-  | _, _, .cons hfr hpar hF hc => .cons (hg.frames _ _ hfr) hpar (hg.objs _ _ hF) (ChainL.grow hg hc)
+  | _, _, .top hfr hpar hF => by
+    obtain ⟨fr', h1, h2⟩ := hg.frames _ _ hfr
+    exact .top h1 (by rw [h2, hpar]) (hg.objs _ _ hF)
+  | _, _, .cons hfr hpar hF hc => by
+    obtain ⟨fr', h1, h2⟩ := hg.frames _ _ hfr
+    exact .cons h1 (by rw [h2, hpar]) (hg.objs _ _ hF) (ChainL.grow hg hc)
 
 theorem getElem?_push_lt {α : Type} {xs : Array α} {x : α} {b : Nat} (h : b < xs.size) :
     (xs.push x)[b]? = xs[b]? := by
@@ -507,7 +518,7 @@ theorem StoreRel.alloc_frame {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF 
   · exact (let hc := hs.clo.transport hobj (Nat.le_refl _); ⟨by simp [Store.allocFrame, hc.len], hc.obj⟩)
   · rw [hget]
     have hb := (Array.getElem?_eq_some_iff.mp hfr).1
-    rw [if_neg (by omega), if_pos hb]; exact hfr
+    rw [if_neg (by omega), if_pos hb]; exact ⟨fr, hfr, rfl⟩
   · rw [hFget, if_pos hlen.symm]
   · intro b hb8 hout
     rw [hrd b hb8, if_neg (by omega), if_neg (by omega)]
