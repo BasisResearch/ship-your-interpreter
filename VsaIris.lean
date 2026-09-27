@@ -307,3 +307,4 @@ import VsaIris.Vsa.Fprintf.End
 import VsaIris.Vsa.Fprintf.Inner
 import VsaIris.WhileLogic.Machine
 import VsaIris.WhileLogic.ClosureExample
+import VsaIris.WhileLogic.ForExample

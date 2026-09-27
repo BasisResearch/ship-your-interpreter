@@ -73,6 +73,8 @@ THEOREMS=(
   Vsa.While.Logic.Whole.whileWl_spec              # WhileLogic: all of while.wl prints 55 2500 36
   Vsa.While.Logic.whileWl_halts                   # … at the machine
   Vsa.While.Logic.ClosureExample.closure_spec     # WhileLogic: a closure call prints 42
+  Vsa.While.Logic.wp_for_loop                     # WhileLogic: the for-loop rule (invariant + variant)
+  Vsa.While.Logic.ForExample.for_spec             # WhileLogic: a for loop prints 5050
 )
 AXFILE="$(mktemp /tmp/vsa_final_axioms.XXXXXX)".lean
 mv "${AXFILE%.lean}" "$AXFILE"
@@ -85,6 +87,7 @@ mv "${AXFILE%.lean}" "$AXFILE"
   echo "import VsaBoot"
   echo "import VsaIris.WhileLogic.Machine"
   echo "import VsaIris.WhileLogic.ClosureExample"
+  echo "import VsaIris.WhileLogic.ForExample"
   for t in "${THEOREMS[@]}"; do echo "#print axioms $t"; done
 } > "$AXFILE"
 OUT="$(lake env lean "$AXFILE" 2>&1)"; STATUS=$?

@@ -522,11 +522,14 @@ theorem wp_varNull {Φ : Status → vProp} (x : String) :
   (wpR_map (f := fun _ => Status.normal)).trans (wpR_weaken (Nat.le_refl _)
     fun σ _ _ ⟨_, hσ, h⟩ => h ▸ hσ ▸ ExecS.varNull σ d env x)
 
-/-- Block (allocation form): the body runs in a fresh empty frame whose parent
-is the current one. -/
-theorem wp_block_with {Φ : Status → vProp} {Rest : vProp} (ss : List Stmt)
-    (hK : ∀ a, iprop(a ↦f ⟨some env, []⟩ ∗ Rest) ⊢ wpSeq d a ss Φ) :
-    Rest ⊢ wpS d env (.block ss) Φ := by
+/-- Allocation of a fresh empty frame whose parent is the current one, then a
+relation `R2 a` in the new frame `a` (the shared core of blocks and `for`). -/
+theorem wpR_allocFrame {α : Type} {Φ : α → vProp} {Rest : vProp}
+    {R2 : Nat → St → St → α → Prop} {R' : St → St → α → Prop}
+    (hK : ∀ a, iprop(a ↦f ⟨some env, []⟩ ∗ Rest) ⊢ wpR (a + 1) (R2 a) Φ)
+    (hR : ∀ σ σ2 r, R2 σ.store.frames.size ⟨(σ.store.allocFrame (some env)).1, σ.out⟩ σ2 r →
+      R' σ σ2 r) :
+    Rest ⊢ wpR (env + 1) R' Φ := by
   intro n x H σ rf hwf hlo hrep
   let a := σ.store.frames.size
   let F0 : Frame := ⟨some env, []⟩
@@ -542,8 +545,15 @@ theorem wp_block_with {Φ : Status → vProp} {Rest : vProp} (ss : List Stmt)
   have hsz1 : σ1.store.frames.size = a + 1 := by simp [σ1, Store.allocFrame, a]
   have hW := hK a n ⟨singF a F0 • x.val, validN_op_left (hrep1 ▸ abs_validN σ1 n)⟩
     (sep_holds.mpr ⟨singF a F0, x.val, rfl, ownM_self _ _ _, H⟩)
-  obtain ⟨σ', st, r', hex, hwf', hsz', hrep', hΦ⟩ := hW σ1 rf hwf1 (by omega) hrep1
-  exact ⟨σ', st, r', ExecS.block σ d env ss _ a σ' st rfl hex, hwf', by omega, hrep', hΦ⟩
+  obtain ⟨σ', r, r', hex, hwf', hsz', hrep', hΦ⟩ := hW σ1 rf hwf1 (by omega) hrep1
+  exact ⟨σ', r, r', hR σ σ' r hex, hwf', by omega, hrep', hΦ⟩
+
+/-- Block (allocation form): the body runs in a fresh empty frame whose parent
+is the current one. -/
+theorem wp_block_with {Φ : Status → vProp} {Rest : vProp} (ss : List Stmt)
+    (hK : ∀ a, iprop(a ↦f ⟨some env, []⟩ ∗ Rest) ⊢ wpSeq d a ss Φ) :
+    Rest ⊢ wpS d env (.block ss) Φ :=
+  wpR_allocFrame hK fun σ σ2 st h => ExecS.block σ d env ss _ _ σ2 st rfl h
 
 /-- Block. -/
 theorem wp_block {Φ : Status → vProp} (ss : List Stmt) :
@@ -630,6 +640,147 @@ theorem wp_while {Φ : Status → vProp} (c : Expr) (b : Stmt) (I : Nat → vPro
     · exact .rfl
     · exact wpR_mono fun st => loopK_mono hdown st
 
+end stmt
+
+/-! ### `for` loops -/
+
+/-- The `for` loop proper (`ForLoop`), running in the loop's outer frame. -/
+abbrev wpFor (d env : Nat) (cnd step : Option Expr) (b : Stmt) (Φ : Status → vProp) : vProp :=
+  wpR (env + 1) (fun σ σ' st => ForLoop σ d env cnd step b σ' st) Φ
+
+/-- The optional initializer; its status is discarded (`ExecInit`). -/
+def initK (d env : Nat) : Option Stmt → vProp → vProp
+  | none, K => K
+  | some s, K => wpS d env s (fun _ => K)
+
+/-- The optional step expression; its value is discarded (`ExecStep`). -/
+def stepK (d env : Nat) : Option Expr → vProp → vProp
+  | none, K => K
+  | some e, K => wpE d env e (fun _ => K)
+
+/-- The condition: a missing one is truthy; a falsy one ends the loop
+normally. -/
+def condK (d env : Nat) (Φ : Status → vProp) : Option Expr → vProp → vProp
+  | none, K => K
+  | some c, K => wpE d env c (fun v => bif v.truthy then K else Φ .normal)
+
+theorem initK_mono {d env : Nat} {K K' : vProp} (h : K ⊢ K') :
+    ∀ i, initK d env i K ⊢ initK d env i K'
+  | none => h
+  | some _ => wpR_mono fun _ => h
+
+theorem stepK_mono {d env : Nat} {K K' : vProp} (h : K ⊢ K') :
+    ∀ e, stepK d env e K ⊢ stepK d env e K'
+  | none => h
+  | some _ => wpR_mono fun _ => h
+
+theorem condK_mono {d env : Nat} {Φ : Status → vProp} {K K' : vProp} (h : K ⊢ K') :
+    ∀ c, condK d env Φ c K ⊢ condK d env Φ c K'
+  | none => h
+  | some _ => wpR_mono fun v => by cases v.truthy; exact .rfl; exact h
+
+section forLoop
+
+variable {d env : Nat}
+
+theorem initK_wp {Φ : Status → vProp} {K : vProp} {R : St → St → Status → Prop}
+    (hK : K ⊢ wpR (env + 1) R Φ) :
+    ∀ i, initK d env i K ⊢
+      wpR (env + 1) (fun σ σ2 st => ∃ σ1, ExecInit σ d env i σ1 ∧ R σ1 σ2 st) Φ
+  | none => hK.trans (wpR_weaken (Nat.le_refl _) fun σ _ _ h => ⟨σ, ExecInit.none σ d env, h⟩)
+  | some s => wpR_bind' (Nat.le_refl _) (fun _ => hK)
+      fun σ σ1 _ _ _ hs h => ⟨σ1, ExecInit.some σ d env s σ1 _ hs, h⟩
+
+theorem stepK_wp {Φ : Status → vProp} {K : vProp} {R : St → St → Status → Prop}
+    (hK : K ⊢ wpR (env + 1) R Φ) :
+    ∀ e, stepK d env e K ⊢
+      wpR (env + 1) (fun σ σ2 st => ∃ σ1, ExecStep σ d env e σ1 ∧ R σ1 σ2 st) Φ
+  | none => hK.trans (wpR_weaken (Nat.le_refl _) fun σ _ _ h => ⟨σ, ExecStep.none σ d env, h⟩)
+  | some e => wpR_bind' (Nat.le_refl _) (fun _ => hK)
+      fun σ σ1 _ v _ he h => ⟨σ1, ExecStep.some σ d env e σ1 v he, h⟩
+
+/-- One unfolding of the `for` loop proper: condition, body, step, repeat. -/
+theorem wp_for_unfold {Φ : Status → vProp} (cnd step : Option Expr) (b : Stmt) :
+    condK d env Φ cnd (wpS d env b (loopK Φ (stepK d env step (wpFor d env cnd step b Φ)))) ⊢
+      wpFor d env cnd step b Φ := by
+  let rest : Status → St → St → Status → Prop := fun stb σ1 σ2 st =>
+    ((stb = .normal ∨ stb = .cont) ∧
+      ∃ σs, ExecStep σ1 d env step σs ∧ ForLoop σs d env cnd step b σ2 st) ∨
+    (stb = .brk ∧ σ2 = σ1 ∧ st = .normal) ∨
+    (∃ rv, stb = .ret rv ∧ σ2 = σ1 ∧ st = .ret rv)
+  let body : St → St → Status → Prop := fun σ σ2 st =>
+    ∃ σ1 stb, ExecS σ d env b σ1 stb ∧ rest stb σ1 σ2 st
+  have hstep := stepK_wp (d := d) (Φ := Φ) (K := wpFor d env cnd step b Φ) .rfl step
+  have hbody : wpS d env b (loopK Φ (stepK d env step (wpFor d env cnd step b Φ))) ⊢
+      wpR (env + 1) body Φ := by
+    refine wpR_bind' (R2 := rest) (Nat.le_refl _) (fun stb => ?_)
+      fun σ σ1 σ2 stb st h1 h2 => ⟨σ1, stb, h1, h2⟩
+    cases stb with
+    | normal => exact hstep.trans (wpR_weaken (Nat.le_refl _) fun _ _ _ h => .inl ⟨.inl rfl, h⟩)
+    | cont => exact hstep.trans (wpR_weaken (Nat.le_refl _) fun _ _ _ h => .inl ⟨.inr rfl, h⟩)
+    | brk => exact wpR_ret (Φ := Φ) (a := .normal) fun _ => .inr (.inl ⟨rfl, rfl, rfl⟩)
+    | ret rv => exact wpR_ret (Φ := Φ) (a := .ret rv) fun _ => .inr (.inr ⟨rv, rfl, rfl, rfl⟩)
+  -- a passed condition followed by one iteration is a `ForLoop` derivation
+  have hloop : ∀ σ σ1 σ3 st, ForCond σ d env cnd σ1 → body σ1 σ3 st →
+      ForLoop σ d env cnd step b σ3 st := by
+    rintro σ σ1 σ3 st hc ⟨σ2, stb, hb, hr⟩
+    rcases hr with ⟨hstb, σs, hs, hl⟩ | ⟨hstb, hσ, hst⟩ | ⟨rv, hstb, hσ, hst⟩
+    · exact ForLoop.loop σ d env cnd step b σ1 σ2 σs σ3 stb st hc hb hstb hs hl
+    · subst stb σ3 st; exact ForLoop.bodyBreak σ d env cnd step b σ1 σ2 hc hb
+    · subst stb σ3 st; exact ForLoop.bodyRet σ d env cnd step b σ1 σ2 rv hc hb
+  cases cnd with
+  | none =>
+    exact hbody.trans (wpR_weaken (Nat.le_refl _) fun σ _ _ h =>
+      hloop σ σ _ _ (ForCond.none σ d env) h)
+  | some c =>
+    refine wpR_bind' (R2 := fun v σ σ2 st => (v.truthy = true ∧ body σ σ2 st) ∨
+        (v.truthy = false ∧ σ2 = σ ∧ st = .normal)) (Nat.le_refl _) (fun v => ?_) ?_
+    · cases ht : v.truthy
+      · exact wpR_ret (Φ := Φ) (a := .normal) fun _ => .inr ⟨rfl, rfl, rfl⟩
+      · exact hbody.trans (wpR_weaken (Nat.le_refl _) fun _ _ _ h => .inl ⟨rfl, h⟩)
+    · rintro σ σ1 σ2 v st hc (⟨ht, hb⟩ | ⟨ht, hσ, hst⟩)
+      · exact hloop σ σ1 σ2 st (ForCond.some σ d env c σ1 v hc ht) hb
+      · subst σ2 st; exact ForLoop.condFalse σ d env c step b σ1 v hc ht
+
+/-- **`for` loop rule (total correctness).** The invariant `I k` with variant
+`k`: each iteration either leaves (falsy condition, `break`, `return`) or,
+after the body and the step, re-establishes the invariant at a smaller
+variant. With no condition, the loop must be left by `break` or `return`. -/
+theorem wp_for_loop {Φ : Status → vProp} (cnd step : Option Expr) (b : Stmt)
+    (I : Nat → vProp)
+    (hI : ∀ k, I k ⊢ condK d env Φ cnd
+      (wpS d env b (loopK Φ (stepK d env step iprop(∃ k', ⌜k' < k⌝ ∧ I k'))))) :
+    ∀ k, I k ⊢ wpFor d env cnd step b Φ := by
+  intro k
+  refine Nat.strongRecOn k fun k ih => ?_
+  have hdown : iprop(∃ k', ⌜k' < k⌝ ∧ I k') ⊢ wpFor d env cnd step b Φ := by
+    iintro ⟨%k', %hk, H⟩
+    iapply (ih k' hk)
+    iexact H
+  exact (hI k).trans ((condK_mono (wpR_mono fun st =>
+    loopK_mono (stepK_mono hdown step) st) cnd).trans (wp_for_unfold cnd step b))
+
+/-- `for` statement (allocation form): the initializer and the loop run in a
+fresh frame whose parent is the current one. -/
+theorem wp_for_with {Φ : Status → vProp} {Rest : vProp} (init : Option Stmt)
+    (cnd step : Option Expr) (b : Stmt)
+    (hK : ∀ a, iprop(a ↦f ⟨some env, []⟩ ∗ Rest) ⊢ initK d a init (wpFor d a cnd step b Φ)) :
+    Rest ⊢ wpS d env (.forStmt init cnd step b) Φ :=
+  wpR_allocFrame (fun a => (hK a).trans (initK_wp .rfl init))
+    fun σ σ2 st ⟨σ1, hi, hl⟩ => ExecS.forStart σ d env init cnd step b _ _ σ1 σ2 st rfl hi hl
+
+/-- `for` statement. -/
+theorem wp_for {Φ : Status → vProp} (init : Option Stmt) (cnd step : Option Expr) (b : Stmt) :
+    iprop(∀ a, a ↦f ⟨some env, []⟩ -∗ initK d a init (wpFor d a cnd step b Φ)) ⊢
+      wpS d env (.forStmt init cnd step b) Φ :=
+  wp_for_with init cnd step b fun a => by iintro ⟨Ha, H⟩; iapply H; iexact Ha
+
+end forLoop
+
+section stmt'
+
+variable {d env : Nat}
+
 theorem wp_ret {Φ : Status → vProp} (e : Expr) :
     wpE d env e (fun v => Φ (.ret v)) ⊢ wpS d env (.ret (some e)) Φ :=
   wpR_map.trans (wpR_weaken (Nat.le_refl _)
@@ -661,7 +812,7 @@ theorem wp_seq_cons {Φ : Status → vProp} (s : Stmt) (ss : List Stmt) :
     · subst st; exact ExecSeq.consNormal σ d env s ss σ1 σ2 st' hs hss
     · subst σ2 st'; exact ExecSeq.consAbrupt σ d env s ss σ1 st hs hst
 
-end stmt
+end stmt'
 
 /-! ## The frame rule and Hoare triples -/
 

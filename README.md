@@ -183,7 +183,9 @@ big-step semantics and iris-lean's BI (`vProp := UPred Res`).
   `EvalE`/`EvalArgs`/`Call`/`ExecS`/`ExecSeq`.
 - **Rules**. Variable lookup and assignment in the current or the parent scope,
   `var`, blocks (fresh scope), `if`, `while` (`wp_while`: invariant `I k`
-  with a decreasing variant `k`), `break`/`continue`/`return`, sequencing,
+  with a decreasing variant `k`), `for` (`wp_for` allocates the loop scope and
+  runs the initializer; `wp_for_loop` is the invariant/variant rule for the
+  condition, body and step), `break`/`continue`/`return`, sequencing,
   function literals and closure calls (fresh parameter scope at depth `d + 1`),
   `print`/`println` (append to the console), and `assert`.
 - **Adequacy** (`Adequacy.lean`, `Machine.lean`). From
@@ -196,7 +198,8 @@ big-step semantics and iris-lean's BI (`vProp := UPred Res`).
   whole script prints `55\n2500\n36\n` (`Whole.whileWl_spec`: `break`,
   `continue`, and a nested loop whose body reaches the globals through two
   scopes). `firstLoop_halts` and `whileWl_halts` (`Machine.lean`) are the
-  machine consequences. `ClosureExample.lean` calls a function literal.
+  machine consequences. `ClosureExample.lean` calls a function literal;
+  `ForExample.lean` sums `1..100` with a `for` loop (`5050`).
 
 ## Building
 
