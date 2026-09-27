@@ -81,6 +81,59 @@ def WP (code : List Ins) (P : AM → Prop) (pos : Nat) :
     | .jalr rs => SrcOK rs (keysG L) ∧ (srcVal rs L).toNat % 4 = 0 ∧
         Reaches code ⟨srcVal rs L, L, m, o⟩ P
 
+section WPEq
+variable {code : List Ins} {P : AM → Prop} {pos : Nat} {is : List Ins}
+  {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
+
+/-! Equations of `WP`, one per instruction form. `wp_simp` rewrites with these
+instead of unfolding `WP`. The equations are proved propositionally, so simp
+uses them as rewrites rather than definitional unfoldings, and the kernel never
+reduces `WP` (and with it jump offsets) on symbolic positions. -/
+
+theorem WP_nil : WP code P pos [] K L m o = K L m o := by rw [WP]
+theorem WP_addi {rd rs imm} : WP code P pos (.addi rd rs imm :: is) K L m o =
+    ((1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs (keysG L) ∧
+      WP code P (pos + 1) is K (gset L rd (srcVal rs L + sign_extend imm)) m o) := by rw [WP]
+theorem WP_ori {rd rs imm} : WP code P pos (.ori rd rs imm :: is) K L m o =
+    ((1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs (keysG L) ∧
+      WP code P (pos + 1) is K (gset L rd (srcVal rs L ||| sign_extend imm)) m o) := by rw [WP]
+theorem WP_slli {rd rs sh} : WP code P pos (.slli rd rs sh :: is) K L m o =
+    ((1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs (keysG L) ∧
+      WP code P (pos + 1) is K (gset L rd (srcVal rs L <<< sh.toNat)) m o) := by rw [WP]
+theorem WP_add {rd r1 r2} : WP code P pos (.add rd r1 r2 :: is) K L m o =
+    ((1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK r1 (keysG L) ∧ SrcOK r2 (keysG L) ∧
+      WP code P (pos + 1) is K (gset L rd (srcVal r1 L + srcVal r2 L)) m o) := by rw [WP]
+theorem WP_sub {rd r1 r2} : WP code P pos (.sub rd r1 r2 :: is) K L m o =
+    ((1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK r1 (keysG L) ∧ SrcOK r2 (keysG L) ∧
+      WP code P (pos + 1) is K (gset L rd (srcVal r1 L - srcVal r2 L)) m o) := by rw [WP]
+theorem WP_ld {rd rs} : WP code P pos (.ld rd rs :: is) K L m o =
+    ((1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs (keysG L) ∧ LdOK (srcVal rs L).toNat ∧
+      WP code P (pos + 1) is K (gset L rd (rdW m (srcVal rs L).toNat)) m o) := by rw [WP]
+theorem WP_sd {rs2 rs1} : WP code P pos (.sd rs2 rs1 :: is) K L m o =
+    (SrcOK rs1 (keysG L) ∧ SrcOK rs2 (keysG L) ∧
+      (if (srcVal rs1 L).toNat = tohostAddr then
+        srcVal rs2 L = putcWord ((srcVal rs2 L).setWidth 8) ∧
+        WP code P (pos + 1) is K L m (o.push (toString (Char.ofNat ((srcVal rs2 L).setWidth 8).toNat)))
+      else StOK (srcVal rs1 L).toNat ∧
+        WP code P (pos + 1) is K L (applyW m ((srcVal rs1 L).toNat, 8, srcVal rs2 L)) o)) := by rw [WP]
+theorem WP_br {op r1 r2 off} : WP code P pos (.br op r1 r2 off :: is) K L m o =
+    (SrcOK r1 (keysG L) ∧ SrcOK r2 (keysG L) ∧ BrOK pos off ∧
+      (if guardB op.bop (srcVal r1 L) (srcVal r2 L) then Reaches code ⟨pcOf (brT pos off), L, m, o⟩ P
+      else WP code P (pos + 1) is K L m o)) := by rw [WP]
+theorem WP_jal0 {off} : WP code P pos (.jal 0 off :: is) K L m o =
+    (JOK pos off ∧ Reaches code ⟨pcOf (jT pos off), L, m, o⟩ P) := by rw [WP]; rfl
+theorem WP_jal1 {off} : WP code P pos (.jal 1 off :: is) K L m o =
+    (if isLib pos off then
+      SrcOK 10 (keysG L) ∧ SrcOK 11 (keysG L) ∧ 12 ∈ keysG L ∧ 13 ∈ keysG L ∧
+      (match libRes (libAddr pos off) (srcVal 10 L) (srcVal 11 L) with
+        | some r => WP code P (pos + 1) is K ((10, r) :: eraseAll clobbered L) m o
+        | none => False)
+    else JOK pos off ∧ Reaches code ⟨pcOf (jT pos off), gset L 1 (pcOf (pos + 1)), m, o⟩ P) := by rw [WP]; rfl
+theorem WP_jalr {rs} : WP code P pos (.jalr rs :: is) K L m o =
+    (SrcOK rs (keysG L) ∧ (srcVal rs L).toNat % 4 = 0 ∧ Reaches code ⟨srcVal rs L, L, m, o⟩ P) := by rw [WP]
+
+end WPEq
+
 /-! ## Registers as sources -/
 
 theorem mem_keysG_lookup {n : Nat} : ∀ {L : GRegs}, n ∈ keysG L → ∃ v, lookupG n L = some v
@@ -592,6 +645,21 @@ theorem jT_jOff_of {s d : Nat} (hs : PosOK s) (hd : PosOK d) : jT s (jOff s d) =
 
 theorem JOK_jOff_of {s d : Nat} (hs : PosOK s) (hd : PosOK d) : JOK s (jOff s d) ↔ True :=
   iff_true_intro (jOff_ok hs hd).2
+
+theorem brT_bOff_gen {s s' d : Nat} (he : s' = s) (hd : PosOK d) (h1 : s ≤ d + 1000)
+    (h2 : d ≤ s + 1000) : brT s (bOff s' d) = d := by subst he; exact (bOff_ok hd h1 h2).1
+
+theorem BrOK_bOff_gen {s s' d : Nat} (he : s' = s) (hd : PosOK d) (h1 : s ≤ d + 1000)
+    (h2 : d ≤ s + 1000) : BrOK s (bOff s' d) ↔ True := by subst he; exact iff_true_intro (bOff_ok hd h1 h2).2
+
+theorem jT_jOff_gen {s s' d : Nat} (he : s' = s) (hs : PosOK s) (hd : PosOK d) : jT s (jOff s' d) = d := by
+  subst he; exact (jOff_ok hs hd).1
+
+theorem JOK_jOff_gen {s s' d : Nat} (he : s' = s) (hs : PosOK s) (hd : PosOK d) :
+    JOK s (jOff s' d) ↔ True := by subst he; exact iff_true_intro (jOff_ok hs hd).2
+
+theorem isLib_jOff_gen {s s' d : Nat} (he : s' = s) (hs : PosOK s) (hd : PosOK d) :
+    isLib s (jOff s' d) = false := by subst he; exact isLib_of_JOK (jOff_ok hs hd).2
 
 theorem sext_ofInt12 (k : Int) (h : -2048 ≤ k ∧ k < 2048) :
     (sign_extend (BitVec.ofInt 12 k) : BitVec 64) = BitVec.ofInt 64 k := sext12_ofInt k h.1 h.2

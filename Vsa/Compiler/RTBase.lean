@@ -128,10 +128,41 @@ theorem run_seg {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat}
   subst hj
   exact WP_sound hfit _ _ _ L m o (seg_at h k l he) hK hw
 
+theorem seg_end_posOK {code : List Ins} (hfit : Fits code) {pos : Nat} {is : List Ins}
+    (hseg : Seg code pos is) (hne : is ≠ []) : PosOK (pos + is.length) := by
+  have hl : 0 < is.length := List.length_pos_iff.mpr hne
+  have := hseg (is.length - 1) (by omega)
+  have hlt : pos + (is.length - 1) < code.length := by
+    rcases Nat.lt_or_ge (pos + (is.length - 1)) code.length with h | h
+    · exact h
+    · rw [List.getElem?_eq_none h, List.getElem?_eq_getElem (by omega)] at this; cases this
+  unfold PosOK; unfold Fits at hfit; omega
+
 theorem posOK_lt {k : Nat} (h : k < 20000) : PosOK k := by
   have ht : tohostAddr = 0x8001ad00 := rfl
   have hb : codeBase = 0x80004800 := rfl
   unfold PosOK; omega
+
+/-- A jump to `d`, stated for symbolic positions so that the kernel never
+evaluates the offset `jOff pos d`. -/
+theorem WP_J {code : List Ins} {P : AM → Prop} {pos s d : Nat} {is : List Ins}
+    {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
+    (he : s = pos) (hs : PosOK pos) (hd : PosOK d) :
+    WP code P pos (J s d :: is) K L m o ↔ Reaches code ⟨pcOf d, L, m, o⟩ P := by
+  subst he
+  obtain ⟨h1, h2⟩ := jOff_ok hs hd
+  simp only [WP, J, reduceIte, h1, h2, true_and]
+
+/-- A call of the routine at `d`. -/
+theorem WP_Call {code : List Ins} {P : AM → Prop} {pos s d : Nat} {is : List Ins}
+    {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
+    (he : s = pos) (hs : PosOK pos) (hd : PosOK d) :
+    WP code P pos (Call s d :: is) K L m o ↔
+      Reaches code ⟨pcOf d, gset L 1 (pcOf (pos + 1)), m, o⟩ P := by
+  subst he
+  obtain ⟨h1, h2⟩ := jOff_ok hs hd
+  simp only [WP, Call, reduceIte, h1, h2, true_and, isLib_of_JOK h2, Bool.false_eq_true,
+    Nat.one_ne_zero]
 
 /-- A jump `J k t` at `k`. -/
 theorem run_J {code : List Ins} (hfit : Fits code) {k t : Nat} (hk : code[k]? = some (J k t))
@@ -469,21 +500,22 @@ syntax "wp_simp" ("[" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| wp_simp) => `(tactic| wp_simp [])
   | `(tactic| wp_simp [$xs,*]) => `(tactic|
-      simp (disch := first | decide | omega) only [WP, List.drop, List.take, List.drop_zero, List.drop_append,
+      simp (disch := first | decide | omega) only [↓ WP_J, ↓ WP_Call, WP_nil, WP_addi, WP_ori, WP_slli, WP_add, WP_sub, WP_ld, WP_sd,
+        WP_br, WP_jal0, WP_jal1, WP_jalr, List.drop, List.take, List.drop_zero, List.drop_append,
         List.drop_eq_nil_of_le, List.length_append, List.length_cons, List.length_nil, putcR, liN,
         List.cons_append, List.nil_append,
-        srcVal_gset, keysG_gset, srcVal_zero, sext_ofInt12, brT_bOff_of, BrOK_bOff_of, jT_jOff_of,
-        JOK_jOff_of, guard_eq, guard_ne, guard_lt, guard_ge, SrcOK, reduceIte, Nat.reduceEqDiff,
+        srcVal_gset, keysG_gset, srcVal_zero, sext_ofInt12, brT_bOff_gen, BrOK_bOff_gen, jT_jOff_gen,
+        JOK_jOff_gen, guard_eq, guard_ne, guard_lt, guard_ge, SrcOK, reduceIte, Nat.reduceEqDiff,
         Nat.reduceAdd, Nat.reduceSub, Nat.reduceLeDiff, Nat.reduceMul, Nat.reducePow,
         ofNat_add_lit, ofNat_add_neg, shl_ofNat, true_and, and_true,
         true_or, or_true, false_or, or_false, decide_eq_true_eq, BitVec.zero_add, BitVec.add_zero,
         sext_zero12, zero_add64, zero_add64', add_zero64, natCast_lit, BitVec.toInt_zero, toNat_ofNat6, Nat.reduceMod, BitVec.reduceToNat,
         List.take_append, List.take_of_length_le, WP_libc_iff, libc_length, libRes_mulE, libRes_divE, libRes_modE,
         keysG_lib', keysG_lib10, srcVal_lib, srcVal_lib10, sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
-        WP_li_iff, li_length_small, li_length_big, isLib_of_JOK, Bool.false_eq_true, if_false,
+        WP_li_iff, li_length_small, li_length_big, isLib_jOff_gen, isLib_of_JOK, Bool.false_eq_true, if_false,
         Int.ofNat_lt, Int.ofNat_le, BitVec.reduceEq, ne_eq, not_true_eq_false, not_false_eq_true, List.append_assoc, Nat.add_sub_cancel,
         tohostW_toNat, putcWord_low,
-        Br, J, Call, mvi, addi, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
+        Br, J, Call, mvi, addi, addiN, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
         t6, s2, s3, s4, s5, s6, s9, s10, s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
 
 /-- Discharge register-file goals (`Has`, `Keep`) through chains of writes. -/
