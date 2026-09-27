@@ -177,4 +177,173 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
 
 end
 
+/-! ## Declarations -/
+
+/-- The scope, slot, and next counter after declaring `x` (as `cseq` computes them). -/
+def declInfo (C : Ctx) (x : String) : Scope × Nat × Nat :=
+  match C.Γ with
+  | f :: g => match f.lookup x with
+    | some i => (C.Γ, i, C.next)
+    | none => (((x, C.next) :: f) :: g, C.next, C.next + 1)
+  | [] => ([[(x, C.next)]], C.next, C.next + 1)
+
+def declCode (C : Ctx) (pos : Nat) (x : String) (e : Expr) : List Ins :=
+  cexpr C.Γ 0 pos e ++ liN s2 (varAddr (declInfo C x).2.1) ++ [Ins.sd a0 s2]
+
+theorem cseq_decl (C : Ctx) (pos : Nat) (x : String) (e : Expr) (ss : List Stmt) :
+    cseq C pos (.varDecl x (some e) :: ss) =
+      (declCode C pos x e ++ (cseq ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩
+        (pos + (declCode C pos x e).length) ss).1,
+       (cseq ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩
+        (pos + (declCode C pos x e).length) ss).2) := by
+  obtain ⟨Γ, n, b, c⟩ := C
+  cases Γ with
+  | nil => rfl
+  | cons f g => cases hl : f.lookup x <;> simp [cseq, declInfo, declCode, hl]
+
+theorem cseq_other (C : Ctx) (pos : Nat) (s : Stmt) (ss : List Stmt)
+    (hd : ∀ x e, s ≠ .varDecl x (some e)) :
+    cseq C pos (s :: ss) = ((cstmt C pos s).1 ++
+      (cseq ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ (pos + (cstmt C pos s).1.length) ss).1,
+      (cseq ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ (pos + (cstmt C pos s).1.length) ss).2) := by
+  cases s with
+  | varDecl x i =>
+    cases i with
+    | some e => exact absurd rfl (hd x e)
+    | none => rfl
+  | _ => rfl
+
+theorem declInfo_cases (C : Ctx) (x : String) (hne : C.Γ ≠ []) :
+    ∃ f g, C.Γ = f :: g ∧
+      ((∃ i, f.lookup x = some i ∧ declInfo C x = (C.Γ, i, C.next)) ∨
+        (f.lookup x = none ∧ declInfo C x = (((x, C.next) :: f) :: g, C.next, C.next + 1))) := by
+  obtain ⟨Γ, n, b, c⟩ := C
+  cases Γ with
+  | nil => exact absurd rfl hne
+  | cons f g =>
+    refine ⟨f, g, rfl, ?_⟩
+    cases hl : f.lookup x with
+    | some i => exact .inl ⟨i, rfl, by simp [declInfo, hl]⟩
+    | none => exact .inr ⟨rfl, by simp [declInfo, hl]⟩
+
+theorem lookup_ne_none_of_mem {y : String} {j : Nat} :
+    ∀ {f : List (String × Nat)}, (y, j) ∈ f → f.lookup y ≠ none
+  | [], h => by simp at h
+  | (z, k) :: f, h => by
+    simp only [List.lookup_cons]
+    split
+    · simp
+    · next hne =>
+      rcases List.mem_cons.mp h with h | h
+      · cases h; simp at hne
+      · exact lookup_ne_none_of_mem h
+
+theorem declInfo_names (C : Ctx) (x : String) (hne : C.Γ ≠ []) :
+    (declInfo C x).1.names = NScope.declare C.Γ.names x := by
+  obtain ⟨Γ, n, b, c⟩ := C
+  cases Γ with
+  | nil => exact absurd rfl hne
+  | cons f g =>
+    simp only [declInfo, Scope.names, List.map_cons, NScope.declare]
+    cases hl : f.lookup x with
+    | some i =>
+      have : x ∈ f.map Prod.fst := List.mem_map.mpr ⟨(x, i), lookup_mem hl, rfl⟩
+      simp [this]
+    | none =>
+      have : x ∉ f.map Prod.fst := by
+        intro h
+        obtain ⟨⟨y, j⟩, hy, rfl⟩ := List.mem_map.mp h
+        exact lookup_ne_none_of_mem hy hl
+      simp [this]
+
+section
+variable {code : List Ins}
+
+theorem sim_decl {C : Ctx} {pos : Nat} {x : String} {e : Expr} {st : St} {d : Nat} {env : Addr}
+    {A : AM} (hAt : At code C pos) (hnat : ¬ IsNative x) (he : IntE C.Γ.names e)
+    (hseg : Seg code pos (declCode C pos x e)) (hA : A.pc = pcOf pos) (hsr : SR C.Γ env st A) :
+    ∃ B, Star code A B ∧
+      ((∃ st1, ExecS st d env (.varDecl x (some e)) st1 .normal ∧
+          (∀ st'' t, ExecS st d env (.varDecl x (some e)) st'' t → st'' = st1 ∧ t = .normal) ∧
+          B.pc = pcOf (pos + (declCode C pos x e).length) ∧ SR (declInfo C x).1 env st1 B ∧
+          SameParents st.store st1.store ∧
+          At code ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ (pos + (declCode C pos x e).length)) ∨
+        (astep code B = some (.halt 70) ∧ ∀ st' t, ¬ ExecS st d env (.varDecl x (some e)) st' t)) := by
+  have hs := IntE.simple he
+  have hend := Seg.end_ok hAt.fits hseg (by simp [declCode])
+  unfold declCode at hseg hend
+  rw [List.append_assoc] at hseg
+  obtain ⟨hs1, hs2⟩ := hseg.append
+  simp only [List.length_append, List.length_cons, List.length_nil] at hend
+  obtain ⟨B1, r1, hB1⟩ := sim_expr hAt.lay hAt.nd hAt.slot_bound e hs 0 pos st d env A (.inl he)
+    (by have := tdepth_le C.Γ e 0 pos hs; have := hend.small; omega) hs1
+    (by unfold PosOK at *; omega) hA hsr.1
+  rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, -⟩ | ⟨hh, hne⟩
+  rotate_left
+  · refine ⟨B1, r1, .inr ⟨hh, fun st'' t h => ?_⟩⟩
+    cases h with | varInit _ _ _ _ _ _ _ he' => exact hne _ _ he'
+  obtain ⟨n, rfl, hn⟩ := hty.1 he
+  obtain ⟨f, g, hΓ, hdi⟩ := declInfo_cases C x hAt.ne
+  have hslot : (declInfo C x).2.1 < 2 ^ 24 := by
+    have := hAt.nextle; have := hAt.posok.small
+    rcases hdi with ⟨i, hl, hdi⟩ | ⟨hl, hdi⟩
+    · rw [hdi]; exact hAt.slot_bound i (resolve_mem (x := x) (by simp [hΓ, Scope.resolve, hl]))
+    · rw [hdi]; simp; omega
+  have r2 := run_stA hAt.fits hs2 hBpc hB0 (by decide) (varAddr_st hslot)
+  have hexec : ExecS st d env (.varDecl x (some e)) ⟨st'.store.define env x (.int n), st'.out⟩ .normal :=
+    .varInit _ _ _ _ _ _ _ hev
+  have huniq : ∀ st'' t, ExecS st d env (.varDecl x (some e)) st'' t →
+      st'' = ⟨st'.store.define env x (.int n), st'.out⟩ ∧ t = .normal := by
+    intro st'' t h
+    cases h with | varInit _ _ _ _ _ _ _ he' =>
+    obtain ⟨rfl, rfl⟩ := EvalE.det e hs he' hev
+    exact ⟨rfl, rfl⟩
+  refine ⟨_, r1.trans r2, .inl ⟨_, hexec, huniq, by simp only [declCode, List.length_append]; congr 1; simp; omega, ?_,
+    (EvalE.sameParents e hs hev).trans (sameParents_define _ _ _ _), ?_⟩⟩
+  · refine ⟨?_, by simp only [outStr]; rw [hBo]; exact hsr.2.trans hout.symm⟩
+    have hc := hBc
+    rw [hΓ] at hc
+    have hnd := hAt.nd
+    rw [hΓ] at hnd
+    rcases hdi with ⟨i, hl, hdi⟩ | ⟨hl, hdi⟩
+    · rw [hdi, hΓ]
+      exact hc.define_old hl hnd (slotV_write_self _ _ _ hn) (fun j _ hj => slotV_write_other _ _ _ _ hj)
+    · rw [hdi]
+      dsimp only
+      refine hc.define_new hl hnat (fun h => ?_) (slotV_write_self _ _ _ hn)
+        (fun j hj => slotV_write_other _ _ _ _ ?_)
+      · have := hAt.lt _ (hΓ ▸ h); omega
+      · intro e; subst e; have := hAt.lt _ (hΓ ▸ hj); omega
+  · have hn0 := hAt.nextle
+    have hlt := hAt.lt
+    have hnat0 := hAt.nat
+    have hnd0 := hAt.nd
+    rw [hΓ] at hlt hnat0 hnd0
+    have hpos' : PosOK (pos + (declCode C pos x e).length) := by
+      unfold PosOK; simp only [declCode, List.length_append, List.length_cons, List.length_nil]; omega
+    refine ⟨hAt.lay, ?_, ?_, ?_, ?_, ?_, hpos'⟩ <;>
+      rcases hdi with ⟨i, hl, hdi⟩ | ⟨hl, hdi⟩ <;> simp only [hdi]
+    · rw [hΓ]; simp
+    · simp
+    · rw [hΓ]; exact hnd0
+    · simp only [slots_cons, List.map_cons, List.cons_append] at hnd0 ⊢
+      exact List.nodup_cons.mpr ⟨fun h => (by have := hlt _ (by rw [slots_cons]; exact h); omega), hnd0⟩
+    · rw [hΓ]; exact hlt
+    · intro j hj
+      simp only [slots_cons, List.map_cons, List.cons_append, List.mem_cons] at hj
+      rcases hj with rfl | hj
+      · omega
+      · have := hlt j (by rw [slots_cons]; exact hj); omega
+    · rw [hΓ]; exact hnat0
+    · intro fr hfr y hy
+      rcases List.mem_cons.mp hfr with rfl | hfr
+      · have hyx : y ≠ x := fun e => hnat (e ▸ hy)
+        simp only [List.lookup_cons, show (y == x) = false by simpa using hyx]
+        exact hnat0 f (List.mem_cons_self ..) y hy
+      · exact hnat0 fr (List.mem_cons_of_mem _ hfr) y hy
+    · simp only [declCode, List.length_append, List.length_cons, List.length_nil]; omega
+    · simp only [declCode, List.length_append, List.length_cons, List.length_nil]; omega
+
+end
+
 end Vsa.Compiler
