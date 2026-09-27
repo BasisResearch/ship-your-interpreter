@@ -124,4 +124,53 @@ theorem VRepr.tag_str {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec
     (hv : VRepr H m h v t p) : t = 3 → ∃ s, v = .str s := by
   cases v <;> simp only [VRepr] at hv <;> (obtain ⟨rfl, _⟩ := hv) <;> simp <;> decide
 
+/-- The tag of a value. -/
+def tagOf : Value → BitVec 64
+  | .null => 0 | .bool _ => 1 | .int _ => 2 | .str _ => 3 | .closure _ => 4 | .native _ => 5
+
+theorem VRepr.tag {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec 64}
+    (hv : VRepr H m h v t p) : t = tagOf v := by
+  cases v <;> simp only [VRepr] at hv <;> exact hv.1
+
+theorem equal_tag {l r : Value} (h : l.equal r = true) : tagOf l = tagOf r := by
+  cases l <;> cases r <;> simp_all [Value.equal, tagOf]
+
+/-- Closure objects are at distinct addresses. -/
+def CloInj (H : CloMap) : Prop := ∀ (a b p : Nat), H[a]? = some p → H[b]? = some p → a = b
+
+theorem ofInt_inj {a b : Int} (ha : I64 a) (hb : I64 b) (h : BitVec.ofInt 64 a = BitVec.ofInt 64 b) :
+    a = b := by
+  have := congrArg BitVec.toInt h
+  rwa [toInt_ofInt_small a ha.1 ha.2, toInt_ofInt_small b hb.1 hb.2] at this
+
+theorem natId_inj {f g : NativeFn} (h : natId f = natId g) : f = g := by
+  cases f <;> cases g <;> simp_all [natId] <;> revert h <;> decide
+
+/-- For equal tags other than strings, payload equality is value equality. -/
+theorem payload_eq_iff {H : CloMap} {m : Mem} {h : Nat} {l r : Value} {t p1 p2 : BitVec 64}
+    (hinj : CloInj H) (hl : VRepr H m h l t p1) (hr : VRepr H m h r t p2) (h3 : t ≠ 3) :
+    p1 = p2 ↔ l.equal r = true := by
+  cases l <;> cases r <;> simp only [VRepr] at hl hr <;>
+    (obtain ⟨rfl, hl⟩ := hl) <;> (obtain ⟨ht, hr⟩ := hr) <;> simp only [Value.equal] <;>
+    first | (exact absurd ht (by decide)) | skip
+  · subst hl hr; simp
+  · rename_i a b; subst hl hr; cases a <;> cases b <;> simp <;> decide
+  · rename_i a b; obtain ⟨rfl, ha⟩ := hl; obtain ⟨rfl, hb⟩ := hr
+    constructor
+    · intro e; simp [ofInt_inj ha hb e]
+    · intro e; simp at e; rw [e]
+  · exact absurd rfl h3
+  · rename_i a b
+    constructor
+    · intro e; subst e; have := hinj a b _ hl hr; simp [this]
+    · intro e
+      have e' : a = b := by simpa using e
+      subst e'
+      rw [hl] at hr
+      exact BitVec.eq_of_toNat_eq (Option.some.inj hr)
+  · rename_i f g; subst hl hr
+    constructor
+    · intro e; simp [natId_inj e]
+    · intro e; simp at e; rw [e]
+
 end Vsa.Compiler

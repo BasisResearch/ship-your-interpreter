@@ -530,6 +530,133 @@ theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
       rw [if_pos ht2]
       exact hnone (binOpSem_ord_none hop hint hs2) _
 
+/-- Registers `==` may change. -/
+def eqClob : List Nat := [ra, t0, t1, t2, t3, t4, t5, a0, a1, s10]
+
+/-- **Equality.** -/
+theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
+    {l r : Value} {t1 p1 t2 p2 rr : BitVec 64} (hops : Operands H m h L l r t1 p1 t2 p2)
+    (hinj : CloInj H) (hra : Has L ra rr) (hal : rr.toNat % 4 = 0) :
+    Reaches code ⟨pcOf eqPos, L, m, o⟩ (fun B => B.pc = rr ∧ B.out = o ∧ B.mem = m ∧
+      Has B.regs a0 1 ∧ Has B.regs a1 (if l.equal r then 1 else 0) ∧ Keep eqClob L B.regs) := by
+  obtain ⟨h10, h11, h12, h13, vl, vr⟩ := hops
+  have k10 := has_mem h10 (by decide); have k11 := has_mem h11 (by decide)
+  have k12 := has_mem h12 (by decide); have k13 := has_mem h13 (by decide)
+  have k1 := has_mem hra (by decide)
+  have e10 := srcVal_of_has h10; have e11 := srcVal_of_has h11; have e12 := srcVal_of_has h12
+  have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hra
+  simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
+  -- the endings
+  have hdone : ∀ (L' : GRegs) (b : Bool), b = l.equal r → Keep eqClob L L' → Has L' s10 rr →
+      Has L' a1 (if b then 1 else 0) →
+      Reaches code ⟨pcOf (eqPos + 10), L', m, o⟩ (fun B => B.pc = rr ∧ B.out = o ∧ B.mem = m ∧
+        Has B.regs a0 1 ∧ Has B.regs a1 (if l.equal r then 1 else 0) ∧ Keep eqClob L B.regs) := by
+    intro L' b hb hk g26 g11
+    subst hb
+    have k26 := has_mem g26 (by decide); have e26 := srcVal_of_has g26
+    simp only [s10] at k26 e26
+    apply run_seg hR.fits hR.eq 10 (eqPos + 10) rfl [mvi a0 1, mv ra s10, ret] (by decide)
+      (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+    wp_simp [k26, e26]
+    refine ⟨hal, reach_here ⟨rfl, rfl, rfl, by reg_simp, by reg_simp; exact g11, by reg_simp; exact hk⟩⟩
+  have htrue : ∀ (L' : GRegs), l.equal r = true → Keep eqClob L L' → Has L' s10 rr →
+      Reaches code ⟨pcOf (eqPos + 5), L', m, o⟩ (fun B => B.pc = rr ∧ B.out = o ∧ B.mem = m ∧
+        Has B.regs a0 1 ∧ Has B.regs a1 (if l.equal r then 1 else 0) ∧ Keep eqClob L B.regs) := by
+    intro L' he hk g26
+    apply run_seg hR.fits hR.eq 5 (eqPos + 5) rfl [mvi a1 1, J (eqPos + 6) (eqPos + 10)] (by decide)
+      (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+    wp_simp [eqPos, cmpPos, modPos, divPos, mulPos, subPos, addPos, ccPos, csPos, dpPos, nfPos, trPos,
+      scPos, cpPos, itPos, psPos]
+    exact hdone _ true he.symm (by reg_simp; exact hk) (by reg_simp; exact g26) (by reg_simp)
+  have hfalse : ∀ (L' : GRegs), l.equal r = false → Keep eqClob L L' → Has L' s10 rr →
+      Reaches code ⟨pcOf (eqPos + 9), L', m, o⟩ (fun B => B.pc = rr ∧ B.out = o ∧ B.mem = m ∧
+        Has B.regs a0 1 ∧ Has B.regs a1 (if l.equal r then 1 else 0) ∧ Keep eqClob L B.regs) := by
+    intro L' he hk g26
+    apply run_seg hR.fits hR.eq 9 (eqPos + 9) rfl [mvi a1 0] (by decide)
+      (KP := fun L'' m'' o'' => L'' = gset L' a1 0 ∧ m'' = m ∧ o'' = o)
+      (fun L'' m'' o'' ⟨e1, e2, e3⟩ => by
+        subst e1 e2 e3
+        exact hdone _ false he.symm (hk.gset (by decide)) (by reg_simp; exact g26) (by reg_simp; rfl))
+    wp_simp
+  have ht1 := vl.tag; have ht2 := vr.tag
+  apply run_seg hR.fits hR.eq 0 eqPos (by simp) [mv s10 ra, Br .ne a0 a2 (eqPos + 1) (eqPos + 9),
+    mvi t0 3, Br .eq a0 t0 (eqPos + 3) (eqPos + 7), Br .ne a1 a3 (eqPos + 4) (eqPos + 9)] (by decide)
+    (KP := fun L' m' o' => L' = gset (gset L 26 rr) 5 3#64 ∧ m' = m ∧ o' = o ∧ l.equal r = true)
+    (fun L' m' o' ⟨e1, e2, e3, he⟩ => by
+      subst e1 e2 e3
+      exact htrue _ he (by reg_simp; exact Keep.refl _ _) (by reg_simp))
+  wp_simp [eqPos, cmpPos, modPos, divPos, mulPos, subPos, addPos, ccPos, csPos, dpPos, nfPos, trPos,
+    scPos, cpPos, itPos, psPos, k10, k11, k12, k13, k1, e10, e11, e12, e13, e1]
+  split
+  · -- different tags
+    next hne =>
+    have he : l.equal r = false := by
+      cases hq : l.equal r
+      · rfl
+      · exact absurd (by rw [ht1, ht2]; exact equal_tag hq) hne
+    exact hfalse _ he (by reg_simp; exact Keep.refl _ _) (by reg_simp)
+  · next heq =>
+    have heq' : t1 = t2 := by simpa using heq
+    split
+    · -- strings
+      next h3 =>
+      obtain ⟨a, rfl⟩ := vl.tag_str h3
+      obtain ⟨b, rfl⟩ := vr.tag_str (heq' ▸ h3)
+      obtain ⟨-, ha⟩ := vl; obtain ⟨-, hb⟩ := vr
+      have hpa : p1 = BitVec.ofNat 64 p1.toNat := by simp
+      have hpb : p2 = BitVec.ofNat 64 p2.toNat := by simp
+      apply run_seg hR.fits hR.eq 7 (eqPos + 7) rfl [Call (eqPos + 7) scPos] (by decide)
+        (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+      wp_simp [eqPos, cmpPos, modPos, divPos, mulPos, subPos, addPos, ccPos, csPos, dpPos, nfPos, trPos,
+        scPos, cpPos, itPos, psPos]
+      refine ex_bind (run_sc hR.fits hR.sc (p := p1.toNat) (q := p2.toNat)
+        (by reg_simp; rw [← hpa]; exact h11) (by reg_simp; rw [← hpb]; exact h13)
+        (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) ha.str hb.str) ?_
+      rintro B ⟨hpc, hm, ho, h10', hk'⟩
+      obtain ⟨pc, L2, m2, o2⟩ := B
+      simp only at hpc hm ho h10' hk'; subst pc m2 o2
+      have k10' := has_mem h10' (by decide); have e10' := srcVal_of_has h10'
+      simp only [a0] at k10' e10'
+      have g26 : Has L2 s10 rr := hk'.has (by decide) (by reg_simp)
+      have hK : Keep eqClob L L2 := Keep.trans (by reg_simp; exact Keep.refl _ _) (hk'.mono (by decide))
+      obtain ⟨c1, c2, c3⟩ := cmpL_spec a.toList b.toList
+      apply run_seg hR.fits hR.eq 8 (eqPos + 8) rfl [Br .eq a0 0 (eqPos + 8) (eqPos + 5)] (by decide)
+        (KP := fun L' m' o' => L' = L2 ∧ m' = m ∧ o' = o ∧ (Value.str a).equal (.str b) = false)
+        (fun L' m' o' ⟨e1, e2, e3, he⟩ => by
+          subst e1 e2 e3
+          exact hfalse _ he hK g26)
+      wp_simp [eqPos, cmpPos, modPos, divPos, mulPos, subPos, addPos, ccPos, csPos, dpPos, nfPos, trPos,
+        scPos, cpPos, itPos, psPos, k10', e10']
+      have hc := cmpL_range a.toList b.toList
+      have hz0 : BitVec.ofInt 64 (cmpL a.toList b.toList) = 0 ↔ cmpL a.toList b.toList = 0 := by
+        constructor
+        · intro e
+          have := congrArg BitVec.toInt e
+          rw [toInt_ofInt_small _ (by omega) (by omega)] at this
+          simpa using this
+        · intro e; rw [e]; rfl
+      split
+      · next hz =>
+        have hz' : cmpL a.toList b.toList = 0 := hz0.mp hz
+        have hab : a = b := String.toList_inj.mp (c2.mp hz')
+        exact htrue _ (by simp [Value.equal, hab]) hK g26
+      · next hz =>
+        have hz' : cmpL a.toList b.toList ≠ 0 := fun e => hz (hz0.mpr e)
+        simp only [Value.equal, beq_eq_false_iff_ne, ne_eq]
+        intro hab; subst hab; exact hz' (c2.mpr rfl)
+    · -- same tag, not a string: compare payloads
+      next h3 =>
+      have hpe := payload_eq_iff hinj vl (heq' ▸ vr) h3
+      split
+      · next hp =>
+        have he : l.equal r = false := by
+          cases hq : l.equal r
+          · rfl
+          · exact absurd (hpe.mpr hq) hp
+        exact hfalse _ he (by reg_simp; exact Keep.refl _ _) (by reg_simp)
+      · next hp => exact hpe.mp (by simpa using hp)
+
+
 end
 
 end Vsa.Compiler
