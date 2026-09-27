@@ -451,6 +451,144 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     exact hdone _ _ (hc' ▸ hfs 0 (by decide)) (by reg_simp) (by reg_simp) (by reg_simp; exact h8)
       (by reg_simp; exact Keep.refl _ _)
 
+/-! ## `concat` -/
+
+/-- Memory after `concat` builds the object for `xs ++ ys` at `h`. -/
+def ccMem (m : Mem) (p q h : Nat) (xs ys : List Char) : Mem :=
+  copyW (copyW (applyW m (h, 8, BitVec.ofNat 64 (xs.length + ys.length))) (p + 8) (h + 8) xs.length)
+    (q + 8) (h + 8 + 8 * xs.length) ys.length
+
+theorem ccMem_facts {m : Mem} {p q h : Nat} {xs ys : List Char} (hx : StrW m p xs) (hy : StrW m q ys)
+    (hxb : p + 8 + 8 * xs.length ≤ h) (hyb : q + 8 + 8 * ys.length ≤ h) (hh : h % 8 = 0)
+    (hlo : tohostAddr + 16 ≤ h) (hhi : h + 8 + 8 * (xs.length + ys.length) ≤ 2 ^ 32) :
+    StrW (ccMem m p q h xs ys) h (xs ++ ys) ∧
+      ∀ a, a % 8 = 0 → (a + 8 ≤ h ∨ h + 8 + 8 * (xs.length + ys.length) ≤ a) →
+        rdW (ccMem m p q h xs ys) a = rdW m a := by
+  have hpa := hx.al; have hqa := hy.al
+  have R : ∀ a, a % 8 = 0 → rdW (ccMem m p q h xs ys) a =
+      if h + 8 + 8 * xs.length ≤ a ∧ a < h + 8 + 8 * xs.length + 8 * ys.length then
+        rdW m (q + 8 + (a - (h + 8 + 8 * xs.length)))
+      else if h + 8 ≤ a ∧ a < h + 8 + 8 * xs.length then rdW m (p + 8 + (a - (h + 8)))
+      else if a = h then BitVec.ofNat 64 (xs.length + ys.length) else rdW m a := by
+    intro a ha
+    unfold ccMem
+    rw [rdW_copyW _ _ _ (by omega) _ _ ha]
+    split
+    · rw [rdW_copyW _ _ _ (by omega) _ _ (by omega), if_neg (by omega), rdW_upd hh (by omega),
+        if_neg (by omega)]
+    · rw [rdW_copyW _ _ _ (by omega) _ _ ha]
+      split
+      · rw [rdW_upd hh (by omega), if_neg (by omega)]
+      · rw [rdW_upd hh ha]
+  refine ⟨⟨hlo, by simp; omega, hh, ?_, ?_, ?_⟩, ?_⟩
+  · rw [R h hh, if_neg (by omega), if_neg (by omega), if_pos rfl]; simp
+  · intro i hi
+    rw [R _ (by omega)]
+    simp only [List.length_append] at hi
+    by_cases h1 : i < xs.length
+    · rw [if_neg (by omega), if_pos (by omega), List.getElem_append_left h1]
+      rw [show p + 8 + (h + 8 + 8 * i - (h + 8)) = p + 8 + 8 * i by omega]
+      exact hx.chars i h1
+    · rw [if_pos (by omega), List.getElem_append_right (by omega)]
+      rw [show q + 8 + (h + 8 + 8 * i - (h + 8 + 8 * xs.length)) = q + 8 + 8 * (i - xs.length) by omega]
+      exact hy.chars _ (by omega)
+  · intro c hc
+    rcases List.mem_append.mp hc with hc | hc
+    · exact hx.small c hc
+    · exact hy.small c hc
+  · intro a ha hout
+    rw [R a ha, if_neg (by omega), if_neg (by omega), if_neg (by omega)]
+
+/-- Registers `concat` may change. -/
+def ccClob : List Nat := [ra, t0, t2, t3, t4, t5, t6, a1, a4, a5, a6, a7, s11, hpO]
+
+/-- `concat` returned: a fresh object for `cs` at the old object pointer `h`. -/
+structure CcRet (m m' : Mem) (h : Nat) (cs : List Char) (L L' : GRegs) : Prop where
+  ptr : Has L' a1 (BitVec.ofNat 64 h)
+  str : StrW m' h cs
+  hp : Has L' hpO (BitVec.ofNat 64 (h + 8 + 8 * cs.length))
+  room : h + 8 + 8 * cs.length ≤ objEnd
+  frame : ∀ a, a % 8 = 0 → (a + 8 ≤ h ∨ h + 8 + 8 * cs.length ≤ a) → rdW m' a = rdW m a
+  keep : Keep ccClob L L'
+
+/-- **`concat`.** -/
+theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h : Nat}
+    {xs ys : List Char} (h11 : Has L a1 (BitVec.ofNat 64 p)) (h13 : Has L a3 (BitVec.ofNat 64 q))
+    (hr : Has L ra r) (h8 : Has L hpO (BitVec.ofNat 64 h)) (hal : r.toNat % 4 = 0) (hh : ObjPtr h)
+    (hx : StrBelow m h p xs) (hy : StrBelow m h q ys) :
+    Reaches code ⟨pcOf ccPos, L, m, o⟩ (fun B => B.out = o ∧
+      ((B.pc = r ∧ CcRet m B.mem h (xs ++ ys) L B.regs) ∨
+        (B.pc = pcOf errPos ∧ objEnd < h + 8 + 8 * (xs.length + ys.length)))) := by
+  have ht : tohostAddr = 0x8001ad00 := rfl
+  have hob : objBase = 0x90000000 := rfl
+  have hoe : objEnd = 0xE0000000 := rfl
+  obtain ⟨hh1, hh2, hh3⟩ := hh
+  obtain ⟨hxs, hxb⟩ := hx; obtain ⟨hys, hyb⟩ := hy
+  have := hxs.lo; have := hxs.al; have := hys.lo; have := hys.al
+  have k11 := has_mem h11 (by decide); have k13 := has_mem h13 (by decide)
+  have k1 := has_mem hr (by decide); have k8 := has_mem h8 (by decide)
+  have e11 := srcVal_of_has h11; have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hr
+  have e8 := srcVal_of_has h8
+  simp only [a1, a3, ra, hpO] at k11 k13 k1 k8 e11 e13 e1 e8
+  have hpn : (BitVec.ofNat 64 p).toNat = p := toNat_ofNat_lt (by omega)
+  have hqn : (BitVec.ofNat 64 q).toNat = q := toNat_ofNat_lt (by omega)
+  have hhn : (BitVec.ofNat 64 h).toNat = h := toNat_ofNat_lt (by omega)
+  apply run_seg hR.fits hR.cc 0 ccPos (by simp)
+    ([mv s11 ra, .ld t3 a1, .ld t4 a3, .add t5 t3 t4, .slli t6 t5 3, addi t6 t6 8, .add t6 hpO t6] ++
+      liN t2 objEnd ++ [Br .lt t2 t6 (ccPos + 18) errPos, mv a4 hpO, .sd t5 a4, addi a5 a4 8,
+        addi a6 a1 8, mv a7 t3, Call (ccPos + 24) cpPos]) (by decide)
+    (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, k13, k1, k8, e11, e13,
+    e1, e8, hpn, hqn, hhn, hxs.len, hys.len, show h ≠ tohostAddr by omega]
+  refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ⟨by omega, by omega, .inr (by omega)⟩, ?_⟩
+  split
+  · next hov => exact reach_here ⟨rfl, .inr ⟨rfl, by omega⟩⟩
+  · next hov =>
+  refine ⟨⟨by omega, by omega, by omega, hh3⟩, ?_⟩
+  have hcp1 : CopyOK (p + 8) (h + 8) xs.length :=
+    ⟨by omega, by omega, .inr (by omega), by omega, by omega, by omega, by omega, .inr (by omega)⟩
+  refine ex_bind (run_cp hR.fits hR.cp (by reg_simp) (by reg_simp) (by reg_simp)
+    (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) hcp1) ?_
+  rintro B ⟨hpc, hm, ho, h15, h16, hk⟩
+  obtain ⟨pc, L2, m2, o2⟩ := B
+  simp only at hpc hm ho h15 h16 hk; subst hpc hm ho
+  have g13 : Has L2 a3 (BitVec.ofNat 64 q) := hk.has (by decide) (by reg_simp; exact h13)
+  have g29 : Has L2 t4 (BitVec.ofNat 64 ys.length) := hk.has (by decide) (by reg_simp)
+  have g14 : Has L2 a4 (BitVec.ofNat 64 h) := hk.has (by decide) (by reg_simp)
+  have g27 : Has L2 s11 r := hk.has (by decide) (by reg_simp)
+  have g8 : Has L2 hpO (BitVec.ofNat 64 h) := hk.has (by decide) (by reg_simp; exact h8)
+  have k13' := has_mem g13 (by decide); have e13' := srcVal_of_has g13
+  have k29 := has_mem g29 (by decide); have e29 := srcVal_of_has g29
+  simp only [a3, t4] at k13' e13' k29 e29
+  apply run_seg hR.fits hR.cc 25 (ccPos + 25) rfl [addi a6 a3 8, mv a7 t4, Call (ccPos + 27) cpPos]
+    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k13', e13', k29, e29]
+  have hcp2 : CopyOK (q + 8) (h + 8 + 8 * xs.length) ys.length :=
+    ⟨by omega, by omega, .inr (by omega), by omega, by omega, by omega, by omega, .inr (by omega)⟩
+  refine ex_bind (run_cp hR.fits hR.cp (by reg_simp) (by reg_simp; exact h15) (by reg_simp)
+    (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) hcp2) ?_
+  rintro B ⟨hpc, hm, ho, h15', h16', hk'⟩
+  obtain ⟨pc, L3, m3, o3⟩ := B
+  simp only at hpc hm ho h15' h16' hk'; subst hpc hm ho
+  have g14' : Has L3 a4 (BitVec.ofNat 64 h) := hk'.has (by decide) (by reg_simp; exact g14)
+  have g27' : Has L3 s11 r := hk'.has (by decide) (by reg_simp; exact g27)
+  have k15 := has_mem h15' (by decide); have e15 := srcVal_of_has h15'
+  have k14 := has_mem g14' (by decide); have e14 := srcVal_of_has g14'
+  have k27 := has_mem g27' (by decide); have e27 := srcVal_of_has g27'
+  simp only [a5, a4, s11] at k15 e15 k14 e14 k27 e27
+  apply run_seg hR.fits hR.cc 28 (ccPos + 28) rfl [mv hpO a5, mv a1 a4, mv ra s11, ret]
+    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k15, e15, k14, e14, k27, e27]
+  obtain ⟨hstr, hfr⟩ := ccMem_facts hR hxs hys hxb hyb hh3 (by omega) (by omega)
+  refine ⟨hal, reach_here ⟨rfl, .inl ⟨rfl, ?_, hstr, ?_, by simp; omega, fun a ha h1 => ?_, ?_⟩⟩⟩
+  · reg_simp
+  · reg_simp; simp only [List.length_append]; bv_eq
+  · have := hfr a ha (by simpa using h1); exact this
+  · reg_simp
+    refine Keep.trans (Keep.trans ?_ (hk.mono (by decide))) (Keep.trans ?_ (hk'.mono (by decide)))
+    · reg_simp; exact Keep.refl _ _
+    · reg_simp; exact Keep.refl _ _
+
 end
 
 end Vsa.Compiler
