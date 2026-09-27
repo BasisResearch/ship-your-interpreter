@@ -1,13 +1,9 @@
 name = "Vsa"
-defaultTargets = ["Vsa"]
+defaultTargets = ["VsaBoot"]
 
 [[lean_lib]]
 name = "Vsa"
 leanOptions.backward.isDefEq.respectTransparency = false
-
-[[lean_exe]]
-name = "vsa_run"
-root = "VsaRun"
 
 [[lean_lib]]
 name = "VsaIris"
