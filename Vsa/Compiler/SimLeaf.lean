@@ -30,6 +30,16 @@ theorem run_whole {code : List Ins} {P : AM → Prop} (hfit : Fits code) {pos : 
     Reaches code ⟨pcOf pos, L, m, o⟩ P :=
   WP_sound hfit _ _ _ L m o hseg (fun _ _ _ h => h) h
 
+/-- Run the rest of a straight-line block from instruction `k`. -/
+theorem run_from {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat} {c : List Ins}
+    (hseg : Seg code b c) (k j : Nat) (hj : b + k = j) (hk : k ≤ c.length) {L : GRegs} {m : Mem}
+    {o : Array String}
+    (h : WP code P j (c.drop k) (fun L' m' o' => Reaches code ⟨pcOf (b + c.length), L', m', o'⟩ P) L m o) :
+    Reaches code ⟨pcOf j, L, m, o⟩ P := by
+  subst hj
+  exact WP_sound hfit _ _ _ L m o (hseg.drop k) (fun L' m' o' h' => by
+    rw [List.length_drop, show b + k + (c.length - k) = b + c.length by omega]; exact h') h
+
 theorem ChainL.head' {F : FrMap} {s : Store} {a : Addr} {Γ : List (List String)} (h : ChainL F s a Γ) :
     ∃ f, F[a]? = some (f, Γ.headD []) := by
   cases h with
