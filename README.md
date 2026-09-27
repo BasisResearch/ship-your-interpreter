@@ -39,7 +39,7 @@ incremental builds.
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
-| `Vsa/Compiler/` | a verified WHILE → RV64 compiler for a subset of WHILE (see below) |
+| `Vsa/Compiler/` | verified WHILE → RV64 compilers: a subset compiler and the full compiler (see below) |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
 | `experiments/` | Lean proof probes, SMT and fuzz validation, and coverage data |
 | `experiments/smt/PROOF_CLOSURE_PLAN.md` | Current proof status, remaining work, and incremental-build rules |
@@ -203,6 +203,62 @@ that a program without a derivation reaches the error exit or runs forever
 theorem at `c/tests/while.wl`: the compiled code prints `55\n2500\n36\n` and
 exits `0`. `experiments/compiler/RunCompiled.lean` runs compiled programs on the
 executable Sail model.
+
+## The full WHILE compiler
+
+`compileG` (`CodeGen.lean`) compiles the whole language: integers, booleans,
+`null`, strings, closures with captured environments, calls to user functions
+and to `print`/`println`/`assert`, `return`, `for`, `while`, `if`, blocks,
+`break`/`continue`, and assignment. Values are tag/payload pairs; strings and
+closures live in a bump-allocated object heap, frames in a bump-allocated frame
+region with one static layout per scope, and calls use a machine stack bounded
+by `maxCallDepth`. The code links a runtime (`RTCode.lean`: truthiness,
+printing, integer formatting, string concatenation and comparison, equality,
+frame allocation) and libgcc's multiply/divide routines.
+
+`SupportedG p` (`CorrectG.lean`) requires the program to be well formed against
+its string table and global frame (`WfSeq`, `Wf.lean`) and its static image to
+be small (`SetupOK`). Heap exhaustion is excluded with the existing cost
+semantics: every behaviour must have a `BigStepBudget` of `heapUnits`
+(`0x3F8000`) units, at most 64 heap bytes each.
+
+```lean
+theorem compileG_correct (p : Program) (hsup : SupportedG p)
+    (hfit : 0x80004800 + 4 * (compileG p).length ≤ 0x8001ad00)
+    (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (c : Config)
+    (hgood : GoodState c.σ) (htick : c.tick < 2)
+    (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
+    (hpw : c.σ.regs.get? Register.htif_payload_writes = some 0#4)
+    (hout : output c.σ = "")
+    (hcode : ∀ k, k < (compileGBytes p).length →
+      c.σ.mem[0x80004800 + k]? = (compileGBytes p)[k]?)
+    (hlib : Code.__muldi3Loaded c.σ.mem ∧ Code.__divdi3Loaded c.σ.mem ∧
+      Code.__umoddi3Loaded c.σ.mem ∧ Code.__hidden___udivdi3Loaded c.σ.mem ∧
+      Code.__moddi3Loaded c.σ.mem) :
+    (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+Proof structure:
+
+- `WP.lean`, `RTBase.lean`: a weakest-precondition calculus over the abstract
+  machine and the `wp_simp` normal form; each runtime routine is proved once
+  against the semantics (`RTLeaf`, `RTItos`, `RTDisplay`, `RTOps`).
+- `SimInv.lean`: the invariant `MS` relating a semantic state to a machine
+  state (store relation `StoreRel`, object image, closure code, register and
+  stack discipline).
+- `SimAll.lean`: `sim_all` simulates every derivation of the nine cost
+  relations (`Vsa/While/Cost.lean`), by their recursor, with one lemma per rule
+  (`Sim*.lean`); a derivation of cost `n` either completes or stops at the error
+  exit because the heap has no room for `n` units.
+- `StuckAll.lean`: `stuck_all` shows that a phrase without an execution reaches
+  the error exit or runs for at least `n` steps, for every `n` (strong induction
+  on `n`; loop iterations and closure calls take at least one step).
+- `SetupRun.lean`: the setup code writes the string table, allocates the
+  global frame and binds the natives, establishing `MS` for `initSt`.
+
+`CompiledG.lean` instantiates the theorem at `functionsWl`, `forWl`, `scopeWl`
+and `stringsWl` (`*_compiledG_halts`). `experiments/compiler/RunCompiledG.lean`
+runs compiled programs on the executable Sail model.
 
 ## Building
 
