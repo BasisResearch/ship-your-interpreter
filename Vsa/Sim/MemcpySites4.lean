@@ -1,12 +1,5 @@
-import Vsa.Sim.StepObs
-import Vsa.Sim.ExecuteAlu
-import Vsa.Sim.ExecuteBranch
-import Vsa.Sim.RegAccess
-import Vsa.Sim.DecodeTable.Batch01Part04
-import Vsa.Sim.DecodeTable.Batch01Part16
 import Vsa.Sim.DecodeTable.Batch03Part15
 import Vsa.Sim.DecodeTable.Batch03Part16
-import Vsa.Sim.DecodeTable.Batch03Part22
 import Vsa.Sim.DecodeTable.Batch03Part31
 import Vsa.Sim.DecodeTable.Batch04Part09
 import Vsa.Sim.DecodeTable.Batch07Part23
@@ -16,11 +9,11 @@ import Vsa.Sim.DecodeTable.Batch08Part19
 import Vsa.Sim.DecodeTable.Batch09Part18
 import Vsa.Sim.DecodeTable.Batch11Part23
 import Vsa.Sim.DecodeTable.Batch16Part21
-import Vsa.Sim.Code.Memcpy
-import Vsa.Sim.DivSites
-import Vsa.Sim.MemcpySites
 import Vsa.Sim.MemcpySites2
-import Vsa.Sim.MemcpySites3
+import Vsa.Sim.DecodeTable.Batch03Part21
+import Vsa.Sim.DecodeTable.Batch03Part23
+import Vsa.Sim.DecodeTable.Batch04Part11
+import Vsa.Sim.DecodeTable.Batch16Part27
 
 /-!
 # Layer 3 — per-site observational step lemmas for `memcpy`'s dispatch prologue

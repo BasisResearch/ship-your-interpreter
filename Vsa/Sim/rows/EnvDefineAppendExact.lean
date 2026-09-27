@@ -1,13 +1,5 @@
-import Vsa.Sim.RuntimeOwnershipAllocation
-import Vsa.Sim.RuntimeOwnershipSeparation
-import Vsa.Sim.EnvDefBridges4
-import Vsa.Sim.EnvDefBridges3
-import Vsa.Sim.rows.EnvDefineEpilogue
-import Vsa.Sim.BlockAdapter
-import Vsa.Sim.ReprCopy
 import Vsa.Sim.EqNeReprReadback
 import Vsa.Sim.EnvCallBridge
-import Vsa.Sim.HeapOps
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Register

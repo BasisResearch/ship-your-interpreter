@@ -2,9 +2,8 @@ import Vsa.Sim.ExecBrkCont
 import Vsa.Sim.BridgeSegOut
 import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.EnvGetSpec3
-import Vsa.Sim.ValueTruthySpec
 import Vsa.Sim.EvalRecCommon
-import Vsa.Sim.ExecNormalExitTail
+import Vsa.While.Cost
 
 /-!
 # `EvalChildArm` — the parametric `exec_stmt` arm → `eval_expr` child dispatch

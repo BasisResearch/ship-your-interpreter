@@ -1,6 +1,4 @@
-import Vsa.Sim.rows.DriveSpillGen
-import Vsa.Sim.WriteLogNF
-import Vsa.Sim.ReprSurvival
+import Vsa.Sim.BridgeSeg
 
 open Vsa.MemRepr LeanRV64DExecutable LeanRV64DExecutable.Functions
 

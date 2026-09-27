@@ -1,6 +1,6 @@
 import Vsa.Sim.Hooks
 import Vsa.Sim.Pmp
-import Vsa.Sim.MemRead
+import Vsa.Sim.StateNF
 
 /-!
 # M1 — Instruction fetch characterization on the M-mode / Bare / 4-aligned RV64I hot path

@@ -1,6 +1,4 @@
 import VsaIris.Vsa.Console
-import Vsa.Sim.BridgeSeg
-import Vsa.Sim.DecodeTable
 
 /-!
 # A `jal ra, tgt` site as an exec fact

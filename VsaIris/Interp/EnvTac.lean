@@ -1,6 +1,7 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Interp.EnvSteps
 import VsaIris.Interp.Repr
+import VsaIris.Interp.EnvSteps.Part00
+import VsaIris.Interp.EnvSteps.Part01
 
 /-!
 # `sx_side` for `env_*` spans

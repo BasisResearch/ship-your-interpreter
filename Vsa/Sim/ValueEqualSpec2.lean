@@ -1,7 +1,5 @@
 import Vsa.Sim.ValueEqualSpec
-import Vsa.Sim.ValueEqualSites2
-import Vsa.Sim.ObsAvoid
-import Vsa.Sim.ValueEqualityIdentity
+import Vsa.Sim.StoreInvariant
 
 /-!
 # Layer 3 — total-correctness spec for `value_equal`, part 2 (payload variants + merge)

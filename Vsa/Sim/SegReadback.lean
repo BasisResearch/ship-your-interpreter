@@ -1,6 +1,4 @@
 import Vsa.Sim.SegFrameFactsAuto
-import Vsa.Sim.ChainFactsTac
-import Vsa.Sim.rows.StrCmpSignTail
 
 /-!
 # `SegReadback` — mechanize two `#derive_case`/`chain_facts` hand patterns

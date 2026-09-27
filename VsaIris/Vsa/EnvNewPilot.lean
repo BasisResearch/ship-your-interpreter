@@ -1,6 +1,5 @@
 import VsaIris.Vsa.Tools
 import VsaIris.Vsa.MallocConsumer
-import Vsa.Sim.EnvNewSuccessSuffix
 
 namespace VsaIris.Inst.EnvNew
 

@@ -1,9 +1,4 @@
-import Vsa.Sim.SegFrameFacts
-import Vsa.Sim.BlockAdapter
-import Vsa.Sim.ChainFactsTac
 import Vsa.Sim.EqNeDispatchSeg
-import Vsa.Sim.DivDispatchSeg
-import Vsa.Sim.DeriveCaseRow
 
 /-!
 # `seg_frame_facts` — discharge a whole seg's `ChainFacts` bundle from ONE `FrameBundle`

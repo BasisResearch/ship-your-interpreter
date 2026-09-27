@@ -1,6 +1,9 @@
-import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.MemcpySpec
-import Vsa.Sim.DivSites2
+import Vsa.Sim.DecodeTable.Batch01Part10
+import Vsa.Sim.DecodeTable.Batch08Part12
+import Vsa.Sim.DecodeTable.Batch15Part28
+import Vsa.Sim.DecodeTable.Batch15Part32
+import Vsa.Sim.DivLoops
 
 /-!
 # `RegPins` — list-driven register-frame transport

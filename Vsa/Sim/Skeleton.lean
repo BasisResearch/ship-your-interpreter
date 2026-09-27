@@ -1,11 +1,8 @@
 import Vsa.Sim.Dispatch
 import Vsa.Sim.Fetch
-import Vsa.Sim.Decode
 import Vsa.Sim.Execute
-import Vsa.Sim.Hooks
 import Vsa.Sim.Tick
 import Vsa.Sim.GoodState
-import Vsa.Sim.StateNF
 
 /-!
 # Layer 0, item 3 — the `try_step` skeleton lemma

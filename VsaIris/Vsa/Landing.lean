@@ -1,5 +1,4 @@
 import VsaIris.Vsa.MainErr
-import Vsa.Sim.ExitPathSpans
 
 /-!
 # The `longjmp` landing: `interp_run` returns 1, `main` exits 70 (H5)

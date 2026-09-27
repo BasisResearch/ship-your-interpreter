@@ -1,6 +1,6 @@
-import Vsa.Sim.BridgeSegFramed
 import Vsa.Sim.SegReadback
 import Vsa.Sim.TripleCat
+import Vsa.Sim.BridgeSeg
 
 namespace Vsa.Sim
 

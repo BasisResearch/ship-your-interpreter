@@ -1,6 +1,5 @@
-import Vsa.Sim.ErrorTail
 import Vsa.Sim.HtifLift
-import Vsa.Sim.Tick
+import Vsa.Sim.ErrorSim
 
 /-!
 # Step-level observation layer for the HTIF console-putchar store (`HtifStepObs`)

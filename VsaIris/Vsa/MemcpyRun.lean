@@ -1,10 +1,9 @@
 import VsaIris.Vsa.SymData
 import VsaIris.Vsa.SymObs
-import VsaIris.Vsa.StrlenSeg
 import VsaIris.Vsa.BinImg
-import Vsa.Sim.MemcpySites4
 import Vsa.Sim.MemcpySpec4
-import Vsa.Sim.MemcpyCopyWordMemory
+import Vsa.Sim.EqNeReprReadback
+import Vsa.Sim.EvalChildArm
 
 /-!
 # `memcpy`'s symbolic runs

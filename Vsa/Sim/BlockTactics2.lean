@@ -1,8 +1,22 @@
-import Vsa.Sim.NegBlockProto
-import Vsa.Alloc
 import Vsa.Sim.InterpEntry
-import Vsa.Sim.RegPins
-import Lean
+import Vsa.Sim.BlockDecode
+import Vsa.Sim.BlockTactics
+import Vsa.Sim.DecodeTable.Batch01Part14
+import Vsa.Sim.DecodeTable.Batch03Part09
+import Vsa.Sim.DecodeTable.Batch03Part19
+import Vsa.Sim.DecodeTable.Batch04Part07
+import Vsa.Sim.DecodeTable.Batch09Part03
+import Vsa.Sim.DecodeTable.Batch09Part05
+import Vsa.Sim.DecodeTable.Batch09Part07
+import Vsa.Sim.DecodeTable.Batch09Part24
+import Vsa.Sim.DecodeTable.Batch09Part25
+import Vsa.Sim.DecodeTable.Batch09Part31
+import Vsa.Sim.DecodeTable.Batch10Part09
+import Vsa.Sim.DecodeTable.Batch11Part11
+import Vsa.Sim.DecodeTable.Batch11Part21
+import Vsa.Sim.DecodeTable.Batch13Part26
+import Vsa.Sim.DecodeTable.Batch15Part07
+import Vsa.Sim.RamReadPins
 
 /-!
 # Stage C — block-frame discharge helpers (`BlockTactics2`)

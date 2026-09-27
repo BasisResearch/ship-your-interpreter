@@ -1,8 +1,6 @@
-import Vsa.Sim.rows.LoopHeadDispatchSeg
-import Vsa.Sim.rows.LoopHeadArgSetupSeg
 import Vsa.Sim.ExecEntry
 import Vsa.Sim.InductionScaffold
-import Vsa.Sim.ValueSpec
+import Vsa.Sim.BridgeSeg
 
 /-!
 # `LoopHeadDispatch` — the interp_run loop-head → `exec_stmt` entry span (Task #69)

@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Malloc
-import Vsa.Sim.AllocLedger
 import Vsa.Sim.AllocCapacity
+import Vsa.Sim.rows.CallClosureRow
+import Vsa.Sim.rows.EnvDefineContractUpdate
 
 /-!
 # Feeding a VSA allocator consumer from the Iris spec

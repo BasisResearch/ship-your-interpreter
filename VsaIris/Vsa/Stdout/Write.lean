@@ -1,8 +1,36 @@
-import VsaIris.Vsa.Stdout.Steps
 import VsaIris.Vsa.SymRunO
-import VsaIris.Vsa.SymJalr
 import VsaIris.Interp.ITac
 import VsaIris.Vsa.BvLits
+import VsaIris.Vsa.Stdout.Steps.Part00
+import VsaIris.Vsa.Stdout.Steps.Part01
+import VsaIris.Vsa.Stdout.Steps.Part02
+import VsaIris.Vsa.Stdout.Steps.Part03
+import VsaIris.Vsa.Stdout.Steps.Part04
+import VsaIris.Vsa.Stdout.Steps.Part05
+import VsaIris.Vsa.Stdout.Steps.Part06
+import VsaIris.Vsa.Stdout.Steps.Part07
+import VsaIris.Vsa.Stdout.Steps.Part08
+import VsaIris.Vsa.Stdout.Steps.Part09
+import VsaIris.Vsa.Stdout.Steps.Part11
+import VsaIris.Vsa.Stdout.Steps.Part12
+import VsaIris.Vsa.Stdout.Steps.Part14
+import VsaIris.Vsa.Stdout.Steps.Part18
+import VsaIris.Vsa.Stdout.Steps.Part19
+import VsaIris.Vsa.Stdout.Steps.Part20
+import VsaIris.Vsa.Stdout.Steps.Part23
+import VsaIris.Vsa.Stdout.Steps.Part25
+import VsaIris.Vsa.Stdout.Steps.Part26
+import VsaIris.Vsa.Stdout.Steps.Part33
+import VsaIris.Vsa.Stdout.Steps.Part34
+import VsaIris.Vsa.Stdout.Steps.Part35
+import VsaIris.Vsa.Stdout.Steps.Part36
+import VsaIris.Vsa.Stdout.Steps.Part37
+import VsaIris.Vsa.Stdout.Steps.Part38
+import VsaIris.Vsa.Stdout.Steps.Part39
+import VsaIris.Vsa.Stdout.Steps.Part40
+import VsaIris.Vsa.Stdout.Steps.Part41
+import VsaIris.Vsa.Stdout.Steps.Part42
+import VsaIris.Vsa.Stdout.Steps.Part43
 
 /-!
 # `_write`: the console loop (lane N1)

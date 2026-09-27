@@ -1,4 +1,24 @@
-import Vsa.Sim.SnprintfSpec38
+import Vsa.Sim.DecodeTable.Batch02Part14
+import Vsa.Sim.DecodeTable.Batch04Part05
+import Vsa.Sim.DecodeTable.Batch07Part01
+import Vsa.Sim.DecodeTable.Batch07Part24
+import Vsa.Sim.DecodeTable.Batch08Part11
+import Vsa.Sim.DecodeTable.Batch08Part18
+import Vsa.Sim.DecodeTable.Batch10Part05
+import Vsa.Sim.DecodeTable.Batch10Part26
+import Vsa.Sim.DecodeTable.Batch11Part05
+import Vsa.Sim.DecodeTable.Batch11Part10
+import Vsa.Sim.DecodeTable.Batch11Part14
+import Vsa.Sim.DecodeTable.Batch13Part30
+import Vsa.Sim.DecodeTable.Batch14Part16
+import Vsa.Sim.DecodeTable.Batch14Part32
+import Vsa.Sim.DecodeTable.Batch15Part09
+import Vsa.Sim.DecodeTable.Batch15Part19
+import Vsa.Sim.FrameOn
+import Vsa.Sim.PinW
+import Vsa.Sim.SnprintfSitesRet5
+import Vsa.Sim.SnprintfSpec15
+import Vsa.Sim.SnprintfSpec20
 
 /-!
 # M3 Layer-3 — `SnprintfSpec39` : the byte-for-byte `intToString` bridge

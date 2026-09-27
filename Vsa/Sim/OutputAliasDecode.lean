@@ -1,6 +1,4 @@
-import LeanRiscv
 import Vsa.Sim.InitValues
-import Vsa.Sim.DecodeTable.DecodeCommon
 
 /-! Additive decode providers for the explicit output-alias trace.
 ASTs were discovered using the actual decoder; each theorem below is checked

@@ -1,7 +1,4 @@
 import Vsa.Sim.StepObs
-import Vsa.Sim.ExecuteAlu
-import Vsa.Sim.ExecuteBranch
-import Vsa.Sim.RegAccess
 import Vsa.Sim.DecodeTable.Batch01Part01
 import Vsa.Sim.DecodeTable.Batch01Part04
 import Vsa.Sim.DecodeTable.Batch01Part15
@@ -18,7 +15,6 @@ import Vsa.Sim.DecodeTable.Batch11Part22
 import Vsa.Sim.DecodeTable.Batch16Part09
 import Vsa.Sim.DecodeTable.Batch16Part13
 import Vsa.Sim.DecodeTable.Batch16Part26
-import Vsa.Sim.Code.«__hidden___udivdi3»
 
 /-!
 # Layer 3 — per-site observational step lemmas for `__hidden___udivdi3`

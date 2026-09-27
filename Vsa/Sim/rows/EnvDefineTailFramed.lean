@@ -1,5 +1,4 @@
 import Vsa.Sim.rows.EnvDefineUpdateExact
-import Vsa.Sim.BridgeSegFramed
 
 /-!
 # `EnvDefineTailFramed` — keep-set-framed update block and epilogue of `env_define`

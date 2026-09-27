@@ -1,5 +1,4 @@
 import Vsa.Sim.JmpSpec
-import Vsa.While.ErrorSem
 import Vsa.Refinement
 
 /-!

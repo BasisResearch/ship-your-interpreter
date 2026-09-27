@@ -1,5 +1,6 @@
-import Vsa.Sim.ErrorTail
 import Vsa.Sim.TermSimClose
+import Vsa.Sim.ErrorSim
+import Vsa.Sim.HtifLift
 
 /-!
 # Layer 8 — the CLEAN-EXIT(0) entry bridge: discharging `hEntryHalts`

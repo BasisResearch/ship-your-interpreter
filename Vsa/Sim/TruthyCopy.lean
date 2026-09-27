@@ -1,6 +1,5 @@
 import Vsa.Sim.EvalChildArm
 import Vsa.Sim.PinW
-import Vsa.Sim.BridgeSegFramed
 
 /-!
 # `TruthyCopy` — the parametric condition-copy and `value_truthy` seam

@@ -1,6 +1,31 @@
-import Vsa.Sim.EnvDefSpec
-import Vsa.Sim.StrlenSpec
-import Vsa.Sim.MemcpySpec
+import Vsa.Sim.DecodeTable.Batch01Part08
+import Vsa.Sim.DecodeTable.Batch01Part22
+import Vsa.Sim.DecodeTable.Batch02Part03
+import Vsa.Sim.DecodeTable.Batch02Part08
+import Vsa.Sim.DecodeTable.Batch03Part06
+import Vsa.Sim.DecodeTable.Batch03Part18
+import Vsa.Sim.DecodeTable.Batch03Part19
+import Vsa.Sim.DecodeTable.Batch03Part26
+import Vsa.Sim.DecodeTable.Batch04Part06
+import Vsa.Sim.DecodeTable.Batch05Part12
+import Vsa.Sim.DecodeTable.Batch05Part20
+import Vsa.Sim.DecodeTable.Batch05Part21
+import Vsa.Sim.DecodeTable.Batch05Part26
+import Vsa.Sim.DecodeTable.Batch05Part27
+import Vsa.Sim.DecodeTable.Batch05Part29
+import Vsa.Sim.DecodeTable.Batch05Part30
+import Vsa.Sim.DecodeTable.Batch06Part02
+import Vsa.Sim.DecodeTable.Batch06Part17
+import Vsa.Sim.DecodeTable.Batch06Part28
+import Vsa.Sim.DecodeTable.Batch06Part30
+import Vsa.Sim.DecodeTable.Batch06Part31
+import Vsa.Sim.DecodeTable.Batch07Part07
+import Vsa.Sim.DecodeTable.Batch07Part12
+import Vsa.Sim.DecodeTable.Batch07Part17
+import Vsa.Sim.DecodeTable.Batch07Part23
+import Vsa.Sim.DecodeTable.Batch11Part15
+import Vsa.Sim.DecodeTable.Batch16Part01
+import Vsa.Sim.StrcmpSpecW3
 
 /-!
 # Layer 3 — `env_define` spec, part 2: append/grow scaffolding + `ReallocContract`

@@ -1,7 +1,4 @@
-import Vsa.While.ErrorSem
-import Vsa.While.Trichotomy
 import Vsa.Sim.ErrorSimFull
-import Vsa.Triple
 
 /-!
 # Layer 5 — the divergence forward-simulation (`divergenceSim`)

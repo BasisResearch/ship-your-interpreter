@@ -1,7 +1,5 @@
-import Vsa.Sim.BlockTerm
 import Vsa.Sim.WriteLogNF
 import Vsa.Sim.BlockTactics2
-import Vsa.Sim.BlockTermDemo
 
 /-!
 # `FrameMeta` — the two ONE-TIME framing metatheorems

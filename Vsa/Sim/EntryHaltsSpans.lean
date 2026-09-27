@@ -1,5 +1,5 @@
 import Vsa.Sim.EntryHalts
-import Vsa.Sim.ExitPathSpans
+import Vsa.Sim.BlockTactics
 
 /-!
 # Layer 8 — discharging the two `EntryHalts` span seams

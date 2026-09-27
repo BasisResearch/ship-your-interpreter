@@ -1,6 +1,4 @@
 import Vsa.Sim.rows.InitSomeReturn
-import Vsa.Sim.EntryGroundKit
-import Vsa.Sim.ExecRecCommon
 import Vsa.While.StoreBodiesBoundPreservation
 
 /-! # Present-initializer return adapter

@@ -1,5 +1,5 @@
-import Vsa.Sim.DeriveCaseRow
-import Vsa.Sim.Code.Strlen
+import Vsa.Sim.BlockAdapter
+import Vsa.Sim.DeriveCase
 
 /-! Reflected strlen blocks from `scripts/gen_fn.py --fn strlen --entry 0x80006cf0`.
 The supported generated segment declarations are retained. The final snez

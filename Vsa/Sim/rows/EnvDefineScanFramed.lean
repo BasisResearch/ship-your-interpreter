@@ -1,8 +1,7 @@
-import Vsa.Sim.rows.EnvDefineScanLoop
-import Vsa.Sim.rows.EnvDefineScanCallOut
 import Vsa.Sim.SegToTripleFramed
-import Vsa.Sim.BridgeSegFramed
-import Vsa.Alloc
+import Vsa.Sim.BridgeSeg
+import Vsa.Sim.EnvGetSpec3
+import Vsa.Sim.rows.EnvDefineEpilogueCore
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Register

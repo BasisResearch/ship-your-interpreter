@@ -1,4 +1,5 @@
-import Vsa.Sim.DeriveCaseRow
+import Vsa.Sim.BlockAdapter
+import Vsa.Sim.DeriveCase
 
 /-!
 # `SegToTripleFramed` — the FRAMED seg→`Triple` marshalling (gen_fn layer)

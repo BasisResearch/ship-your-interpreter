@@ -1,9 +1,5 @@
-import Vsa.Sim.ExecExprRet
-import Vsa.Sim.ExecRet
-import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.TermSimClose
-import Vsa.Sim.rows.EvalChildArmExpr
-import Vsa.Sim.rows.EvalChildArmRet
+import Vsa.Sim.EvalChildArm
 
 /-!
 # Layer 4 — M4 RECURSIVE `ExecS` cases re-landed at `ExecExitD` (`hSExpr`/`hSRet`)

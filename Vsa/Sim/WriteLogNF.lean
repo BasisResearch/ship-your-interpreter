@@ -1,6 +1,9 @@
 import Vsa.Sim.BlockMem
 import Vsa.Sim.FrameOn
-import Vsa.Sim.SnprintfSpec25
+import Vsa.Sim.DecodeTable.Batch10Part26
+import Vsa.Sim.DecodeTable.Batch13Part30
+import Vsa.Sim.SnprintfSitesRet5
+import Vsa.Sim.SnprintfSpec20
 
 /-!
 # `WriteLogNF` — the write log as the canonical post-memory form
