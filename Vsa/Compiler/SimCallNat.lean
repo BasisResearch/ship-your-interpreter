@@ -91,6 +91,61 @@ theorem cPrint (st : St) (d : Nat) (vs : List Value) :
   have g11 : Has (gset (gset L2 10 0) 11 0) a1 0 := by reg_simp []
   exact epost_native (B := ⟨pcOf (ccFin k vs.length pos), gset (gset L2 10 0) 11 0, m2, o2⟩) hm hS hk hd2 hout g10 g11
 
+theorem cPrintln (st : St) (d : Nat) (vs : List Value) :
+    CSpec code T st d (.native .println) vs ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ .null 0 := by
+  intro V env Γ sp fs k pos A hm hA hf hvs hmax hseg hP htmp
+  have hs := CCSegs.of hseg
+  have hfin := ccFin_eq k vs.length pos
+  obtain ⟨pc, L, m, o⟩ := A
+  simp only at hA; subst hA
+  obtain ⟨ht5, hp1⟩ : rdW m (sp + 16 + 16 * k) = 5 ∧ rdW m (sp + 16 + 16 * k + 8) = 1 := hf
+  refine ex_bind (run_dispatch hR hs hP hm.hsp hm.stk (by omega)) ?_
+  rintro ⟨pc1, L1, m1, o1⟩ ⟨hm1, ho1, hk1, -, hpc1⟩
+  simp only at hm1 ho1 hk1 hpc1; subst hm1 ho1 hpc1
+  rw [ht5, hp1] at *
+  simp only [dispTgt, show (5 : BitVec 64) ≠ 4 by decide, show (1 : BitVec 64) ≠ 0 by decide, if_false,
+    if_true] at *
+  have hpl := hs.pl
+  simp only [ccPlC] at hpl
+  obtain ⟨sl, sz⟩ := hpl.append
+  obtain ⟨sl, sn⟩ := sl.append
+  have hlp : (putc '\n').length = 23 := by decide
+  simp only [List.length_append, hlp] at sz
+  have hpos : ccPL k vs.length pos + (printLoopG (ccPL k vs.length pos) (k + 1) vs.length).length + 25 + 1 ≤
+      ccFin k vs.length pos := by
+    simp only [ccFin, ccCL_eq, ccPlC_length, printLoopG_len]; omega
+  refine ex_bind (run_printLoop hR (s := st.store) hm.stk hm.rel.clo hm.img.ptr.hi vs (k + 1) _ L1 _ _ sl
+    (posOK_le hP (by omega)) (hk1.has (by decide) hm.hsp) (by omega) hvs (ObjAgree.refl _ _) hm.img.fixed) ?_
+  rintro ⟨pc2, L2, m2, o2⟩ ⟨hpc2, ho2, hd2, hk2⟩
+  simp only at hpc2 ho2 hd2 hk2; subst hpc2
+  apply run_whole hR.fits sn
+  wp_simp [putc]
+  apply run_whole hR.fits (sz.cast (pos' := ccPL k vs.length pos + (printLoopG (ccPL k vs.length pos) (k + 1)
+    vs.length).length + 23) (by omega))
+  wp_simp []
+  have hj := hs.plJ.cast (pos' := ccPL k vs.length pos + (printLoopG (ccPL k vs.length pos) (k + 1)
+    vs.length).length + 23 + 2) (by simp only [ccCL_eq, ccPlC_length, printLoopG_len]; omega)
+  have hCL : ccCL k vs.length pos = ccPL k vs.length pos + (printLoopG (ccPL k vs.length pos) (k + 1)
+      vs.length).length + 23 + 2 + 1 := by simp only [ccCL_eq, ccPlC_length, printLoopG_len]; omega
+  have hF : PosOK (ccFin k vs.length pos) := posOK_le hP (by omega)
+  apply run_jumps hR.fits hj
+  wp_simp [hF]
+  refine reach_here (.inr ⟨by rw [hfin], V, ?_⟩)
+  have hk : Keep (a0 :: a1 :: t0 :: t1 :: t2 :: prClob) L (gset (gset (gset (gset L2 19 (putcWord
+      (BitVec.ofNat 8 '\n'.toNat))) 18 tohostW) 10 0) 11 0) := by
+    reg_simp []; exact (hk1.mono (by decide)).trans (hk2.mono (by decide))
+  have hout : String.join (o2.push (toString (Char.ofNat (BitVec.ofNat 8 '\n'.toNat).toNat))).toList =
+      st.out ++ printArgs st.store vs ++ "\n" := by
+    show ostr _ = _; rw [ostr_push, ho2, show ostr o1 = st.out from hm.out]; rfl
+  have hS : Scratch (a0 :: a1 :: t0 :: t1 :: t2 :: prClob) := by decide
+  have g10 : Has (gset (gset (gset (gset L2 19 (putcWord (BitVec.ofNat 8 '\n'.toNat))) 18 tohostW) 10 0) 11 0)
+    a0 0 := by reg_simp []
+  have g11 : Has (gset (gset (gset (gset L2 19 (putcWord (BitVec.ofNat 8 '\n'.toNat))) 18 tohostW) 10 0) 11 0)
+    a1 0 := by reg_simp []
+  exact epost_native (B := ⟨pcOf (ccFin k vs.length pos), gset (gset (gset (gset L2 19 (putcWord
+      (BitVec.ofNat 8 '\n'.toNat))) 18 tohostW) 10 0) 11 0, m2,
+    o2.push (toString (Char.ofNat (BitVec.ofNat 8 '\n'.toNat).toNat))⟩) hm hS hk hd2 hout g10 g11
+
 end
 
 end Vsa.Compiler
