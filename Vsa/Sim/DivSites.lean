@@ -87,15 +87,6 @@ A verbatim clone of `execute_btype_bge_taken`/`_nottaken`, guard predicate
 
 /-! ### 0x800046d4 — `li a0,0` = `addi a0,x0,0` (rd = x10, rs1 = x0) -/
 
-theorem exec_li_a0_0 (σ : MState) (pc : BitVec 64) :
-    (execute (instruction.ITYPE (0x000#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, iop.ADDI))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS
-          (sigma3_alu σ pc Register.x10 ((0#64) + sign_extend (m := 64) (0x000#12))) :=
-  execute_itype_addi_char (0x000#12) (regidx.Regidx 0x00#5) (regidx.Regidx 0x0a#5) (0#64)
-    (afterNextPC (afterPrelude σ) pc) (sigma3_alu σ pc Register.x10 ((0#64) + sign_extend (m := 64) (0x000#12)))
-    (rX_bits_zero _) (wX_bits_x10 _ ((0#64) + sign_extend (m := 64) (0x000#12)))
-
 /-! ### 0x800046dc — `sub a1,a1,a2` (rd = x11, rs1 = x11, rs2 = x12) -/
 
 /-! ### 0x800046e0 — `or a0,a0,a3` (rd = x10, rs1 = x10, rs2 = x13) -/

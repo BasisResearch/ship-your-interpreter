@@ -53,25 +53,4 @@ theorem BigStep.cost {p : Program} {out : String} (h : BigStep p out) :
   obtain ⟨n, hn⟩ := ExecSeqCost.exists hseq
   exact ⟨st', n, hn, hout⟩
 
-/-- The cost companions' mutual recursor with the forgetful motives: each
-cost constructor is closed by the semantic constructor of the same name, fed
-the forgotten children. `constructor` takes the first constructor whose
-conclusion unifies, so constructors sharing a conclusion with an earlier one
-(`ifFalse` after `ifTrue`, …) are named explicitly in the fallback. -/
-local macro "cost_sound_rec " r:ident h:ident : tactic => `(tactic| (
-  refine $r
-    (motive_1 := fun st d a e st' v _ _ => EvalE st d a e st' v)
-    (motive_2 := fun st d a es st' vs _ _ => EvalArgs st d a es st' vs)
-    (motive_3 := fun st d fv vs st' v _ _ => Call st d fv vs st' v)
-    (motive_4 := fun st d a s st' status _ _ => ExecS st d a s st' status)
-    (motive_5 := fun st d a init st' _ _ => ExecInit st d a init st')
-    (motive_6 := fun st d a cnd step b st' status _ _ => ForLoop st d a cnd step b st' status)
-    (motive_7 := fun st d a cnd st' _ _ => ForCond st d a cnd st')
-    (motive_8 := fun st d a step st' _ _ => ExecStep st d a step st')
-    (motive_9 := fun st d a ss st' status _ _ => ExecSeq st d a ss st' status)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ $h
-  all_goals intros
-  all_goals first | (constructor <;> assumption) |
-    (apply EvalE.orFalse <;> assumption) | (apply EvalE.andTrue <;> assumption) | (apply Call.closure <;> assumption) | (apply Call.print <;> assumption) | (apply Call.println <;> assumption) | (apply Call.assertOk <;> assumption) | (apply ExecS.ifFalse <;> assumption) | (apply ExecS.ifNone <;> assumption) | (apply ExecS.whileFalse <;> assumption) | (apply ExecS.whileBreak <;> assumption) | (apply ExecS.whileRet <;> assumption) | (apply ExecS.whileLoop <;> assumption) | (apply ForLoop.condFalse <;> assumption) | (apply ForLoop.bodyBreak <;> assumption) | (apply ForLoop.bodyRet <;> assumption) | (apply ForLoop.loop <;> assumption) | (apply ExecSeq.consNormal <;> assumption) | (apply ExecSeq.consAbrupt <;> assumption)))
-
 end Vsa.While

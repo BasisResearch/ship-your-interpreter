@@ -90,13 +90,4 @@ theorem MarshalFacts.frameOn {ws : List W} {m0 m : Std.ExtHashMap Nat (BitVec 8)
     (h : MarshalFacts ws m0 m sigma0 sigma pins kept) : FrameOn ws m0 m :=
   h.memory.frameOn
 
-/-- Projection-only marshalling tactic. It performs no simplification or search. -/
-macro "marshal" : tactic =>
-  `(tactic|
-    first
-    | exact MarshalFacts.frameOn (by assumption)
-    | exact MarshalFacts.pin_values (by assumption)
-    | exact MarshalFacts.kept_regs (by assumption)
-    | exact FrameCalc.frameOn (by assumption))
-
 end Vsa.Sim

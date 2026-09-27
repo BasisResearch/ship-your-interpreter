@@ -108,13 +108,6 @@ theorem ldvf_readWin {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {l
   have := List.mem_range.mp hj
   exact (h (a + j) (by omega) (by omega)).img hD hS
 
-/-- A partly known load (`itP_<pc>`'s continuation) inside a readable
-window `h`: the value is the window's, after moving the window across the
-run's stores (all outside it). -/
-macro "fp_ld " h:term : tactic =>
-  `(tactic| (rintro ⟨f, hfD, hfS, hv⟩; subst hv; rw [ldvf_readWin (ReadWin.transport $h (fun a h1 h2 => by
-      first | rfl | (simp (disch := nx_addr) only [imgM_store_miss]))) hfD hfS _ (by nx_addr) (by simp only [widthOfM]; nx_addr)]; clear hfD hfS f))
-
 /-- A byte load's value from any consistent image. -/
 theorem ldvf_lbu_readB {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {a : Nat}
     {b : BitVec 8} (h : ReadB Dt DA S Mt a b) {f : Nat → BitVec 8}

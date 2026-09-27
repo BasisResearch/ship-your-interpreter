@@ -164,11 +164,6 @@ theorem sfv_exit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     | (exfalso; simp at h32; done)
     | (exfalso; simp at h10; done)
 
-/-- Branch-condition arithmetic: `toNat` of offset addresses as `Nat`. -/
-macro "fp_arith " h:ident : tactic => `(tactic| (simp (disch := omega) only [toNat_add_lit,
-  BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod, ofNat_add_ofNat, BitVec.add_assoc,
-  BitVec.reduceAdd] at $h:ident))
-
 /-- **The copy pass, up to `memmove`**: from the head with `L > 0` bytes left
 and room (`k > 0` bytes buffered, or `L < 1024`), `memmove(_p, src, c)` with
 `c = min(L, 1024 - k)`, returning to `0x8000e294`. -/

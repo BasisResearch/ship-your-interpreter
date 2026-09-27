@@ -47,11 +47,4 @@ theorem segEval_sound (bs : List BBlock) (σ : MState) (i u : Nat)
   · rw [evalBlocks_regs]
     exact hregs
 
-/-- Close a `segEval_sound` goal from named hypotheses and one small kernel
-`decide` for the concrete `ChainOK` side condition. -/
-macro "seg_eval" : tactic =>
-  `(tactic|
-    apply segEval_sound <;>
-      first | assumption | decide)
-
 end Vsa.Sim

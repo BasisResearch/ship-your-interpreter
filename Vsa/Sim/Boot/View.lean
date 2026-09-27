@@ -125,12 +125,3 @@ theorem bootView_rodata {script : Nat} {t : RunTree} (ha : t.above 0x8001acf0 = 
 
 end Vsa.Sim.Boot
 
-namespace Vsa.Sim.Boot
-
-/-- Split a structure of read facts and decide each through the view `h`.
-Conjunctions split first, so `boot_read` only sees single reads (a goal
-still mentioning the memory itself must never reach the kernel). -/
-macro "boot_facts " h:term : tactic =>
-  `(tactic| repeat' (first | apply And.intro | boot_read $h | constructor))
-
-end Vsa.Sim.Boot

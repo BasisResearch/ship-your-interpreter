@@ -92,69 +92,13 @@ Not-taken (a5 = 0): fall through to pc+4. -/
 
 /-! ### Site 0x80006cfc — `lui a5,0x7f7f8` = `lui x15,0x7f7f8` -/
 
-theorem exec_lui_a5 (σ : MState) (pc : BitVec 64) :
-    (execute (instruction.UTYPE (0x7f7f8#20, regidx.Regidx 0x0f#5, uop.LUI))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS
-          (sigma3_alu σ pc Register.x15 (sign_extend (m := 64) ((0x7f7f8#20) +++ 0x000#12))) :=
-  execute_utype_lui_char (0x7f7f8#20) (regidx.Regidx 0x0f#5)
-    (afterNextPC (afterPrelude σ) pc)
-    (sigma3_alu σ pc Register.x15 (sign_extend (m := 64) ((0x7f7f8#20) +++ 0x000#12)))
-    (wX_bits_x15 _ (sign_extend (m := 64) ((0x7f7f8#20) +++ 0x000#12)))
-
-theorem lui_a5_word :
-    (((0x7f#8).append (0x7f#8)).append (0x87#8)).append (0xb7#8) = (0x7f7f87b7#32 : BitVec 32) := by
-  apply BitVec.eq_of_toNat_eq; decide
-
-theorem lui_a5_notrvc :
-    Sail.BitVec.extractLsb ((((0x7f#8).append (0x7f#8)).append (0x87#8)).append (0xb7#8)) 1 0
-      = (0b11#2 : BitVec 2) := by
-  apply BitVec.eq_of_toNat_eq; decide
-
 /-! ## Magic-constant setup (`0x80006d00 … 0x80006d0c`) -/
 
 /-! ### Site 0x80006d00 — `addi a5,a5,-129` = `addi x15,x15,0xf7f` -/
 
-theorem exec_addi_a5_m129 (σ : MState) (pc : BitVec 64) (v15 : BitVec 64)
-    (hx15 : σ.regs.get? Register.x15 = some v15) :
-    (execute (instruction.ITYPE (0xf7f#12, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, iop.ADDI))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS
-          (sigma3_alu σ pc Register.x15 (v15 + sign_extend (m := 64) (0xf7f#12))) := by
-  have hx15₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x15 = some v15 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx15
-  exact execute_itype_addi_char (0xf7f#12) (regidx.Regidx 0x0f#5) (regidx.Regidx 0x0f#5) v15
-    (afterNextPC (afterPrelude σ) pc) (sigma3_alu σ pc Register.x15 (v15 + sign_extend (m := 64) (0xf7f#12)))
-    (rX_bits_x15 _ v15 hx15₂)
-    (wX_bits_x15 _ (v15 + sign_extend (m := 64) (0xf7f#12)))
-
-theorem addi_a5_m129_word :
-    (((0xf7#8).append (0xf7#8)).append (0x87#8)).append (0x93#8) = (0xf7f78793#32 : BitVec 32) := by
-  apply BitVec.eq_of_toNat_eq; decide
-
-theorem addi_a5_m129_notrvc :
-    Sail.BitVec.extractLsb ((((0xf7#8).append (0xf7#8)).append (0x87#8)).append (0x93#8)) 1 0
-      = (0b11#2 : BitVec 2) := by
-  apply BitVec.eq_of_toNat_eq; decide
-
 /-! ### Site 0x80006d04 — `slli a3,a5,0x20` = `slli x13,x15,0x20` -/
 
 /-! ### Site 0x80006d08 — `add a3,a3,a5` = `add x13,x13,x15` -/
-
-theorem exec_add_a3_a3_a5 (σ : MState) (pc : BitVec 64) (v13 v15 : BitVec 64)
-    (hx13 : σ.regs.get? Register.x13 = some v13)
-    (hx15 : σ.regs.get? Register.x15 = some v15) :
-    (execute (instruction.RTYPE (regidx.Regidx 0x0f#5, regidx.Regidx 0x0d#5, regidx.Regidx 0x0d#5, rop.ADD))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS (sigma3_alu σ pc Register.x13 (v13 + v15)) := by
-  have hx13₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x13 = some v13 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx13
-  have hx15₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x15 = some v15 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx15
-  exact execute_rtype_add_char (regidx.Regidx 0x0f#5) (regidx.Regidx 0x0d#5) (regidx.Regidx 0x0d#5)
-    v13 v15 (afterNextPC (afterPrelude σ) pc) (sigma3_alu σ pc Register.x13 (v13 + v15))
-    (rX_bits_x13 _ v13 hx13₂) (rX_bits_x15 _ v15 hx15₂)
-    (wX_bits_x13 _ (v13 + v15))
 
 /-! ### Site 0x80006d0c — `li a1,-1` = `addi x11,x0,0xfff` -/
 
@@ -177,39 +121,9 @@ Effective address `a := v14 + sext 0`; loads the eight little-endian bytes
 
 /-! ### Site 0x80006d1c — `add a5,a5,a3` = `add x15,x15,x13` -/
 
-theorem exec_add_a5_a5_a3 (σ : MState) (pc : BitVec 64) (v15 v13 : BitVec 64)
-    (hx15 : σ.regs.get? Register.x15 = some v15)
-    (hx13 : σ.regs.get? Register.x13 = some v13) :
-    (execute (instruction.RTYPE (regidx.Regidx 0x0d#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, rop.ADD))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS (sigma3_alu σ pc Register.x15 (v15 + v13)) := by
-  have hx15₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x15 = some v15 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx15
-  have hx13₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x13 = some v13 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx13
-  exact execute_rtype_add_char (regidx.Regidx 0x0d#5) (regidx.Regidx 0x0f#5) (regidx.Regidx 0x0f#5)
-    v15 v13 (afterNextPC (afterPrelude σ) pc) (sigma3_alu σ pc Register.x15 (v15 + v13))
-    (rX_bits_x15 _ v15 hx15₂) (rX_bits_x13 _ v13 hx13₂)
-    (wX_bits_x15 _ (v15 + v13))
-
 /-! ### Site 0x80006d20 — `or a5,a5,a2` = `or x15,x15,x12` -/
 
 /-! ### Site 0x80006d24 — `or a5,a5,a3` = `or x15,x15,x13` -/
-
-theorem exec_or_a5_a5_a3 (σ : MState) (pc : BitVec 64) (v15 v13 : BitVec 64)
-    (hx15 : σ.regs.get? Register.x15 = some v15)
-    (hx13 : σ.regs.get? Register.x13 = some v13) :
-    (execute (instruction.RTYPE (regidx.Regidx 0x0d#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, rop.OR))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS (sigma3_alu σ pc Register.x15 (v15 ||| v13)) := by
-  have hx15₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x15 = some v15 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx15
-  have hx13₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x13 = some v13 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx13
-  exact execute_rtype_or_char (regidx.Regidx 0x0d#5) (regidx.Regidx 0x0f#5) (regidx.Regidx 0x0f#5)
-    v15 v13 (afterNextPC (afterPrelude σ) pc) (sigma3_alu σ pc Register.x15 (v15 ||| v13))
-    (rX_bits_x15 _ v15 hx15₂) (rX_bits_x13 _ v13 hx13₂)
-    (wX_bits_x15 _ (v15 ||| v13))
 
 /-! ### Site 0x80006d28 — `beq a5,a1,0x80006d10` = `beq x15,x11` (loop back-edge)
 
