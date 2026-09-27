@@ -91,6 +91,8 @@ def J (src dst : Nat) : Ins := .jal 0 (jOff src dst)
 def Call (src dst : Nat) : Ins := .jal 1 (jOff src dst)
 def mvi (rd : Nat) (n : Int) : Ins := .addi rd 0 (BitVec.ofInt 12 n)
 def addi (rd rs : Nat) (n : Int) : Ins := .addi rd rs (BitVec.ofInt 12 n)
+/-- `addi` with a computed non-negative immediate. -/
+def addiN (rd rs n : Nat) : Ins := .addi rd rs (BitVec.ofNat 12 n)
 def ret : Ins := .jalr ra
 
 /-- Print the byte in `r`. -/
