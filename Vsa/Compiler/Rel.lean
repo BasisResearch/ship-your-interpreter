@@ -311,4 +311,141 @@ theorem Chain.set {s : Store} {m m' : Mem} {x : String} {i : Nat} {v : Int} :
           have hi : i ∈ Scope.slots (g0 :: gs) := resolve_mem hr
           exact (List.nodup_append.mp hnd).2.2 _ (List.mem_map_of_mem hq) _ hi e
 
+/-! ## Declaration -/
+
+/-- The frame update of `Store.define`. -/
+def defineVars (x : String) (v : Value) (vars : List (String × Value)) : List (String × Value) :=
+  if vars.any (·.1 == x) then rebind x v vars else vars ++ [(x, v)]
+
+theorem define_eq (s : Store) (a : Addr) (x : String) (v : Value) :
+    s.define a x v = { s with frames := s.frames.modify a fun f => { f with vars := defineVars x v f.vars } } := rfl
+
+/-- A chain whose head frame is updated at `env`, the rest untouched. -/
+theorem Chain.head_update {s s' : Store} {m m' : Mem} {env : Addr} {f f' : List (String × Nat)}
+    {g : Scope} (h : Chain s m env (f :: g))
+    (hframe : ∀ fr, s.frames[env]? = some fr → ∃ fr', s'.frames[env]? = some fr' ∧
+      fr'.parent = fr.parent ∧ FrameOK fr' f' m' (g = []))
+    (hlow : ∀ j, j < env → s'.frames[j]? = s.frames[j]?)
+    (hmem : ∀ i ∈ Scope.slots g, slotV m' i = slotV m i) :
+    Chain s' m' env (f' :: g) := by
+  match g, h with
+  | [], h =>
+    obtain ⟨rfl, fr, hfr, hpar, -⟩ := h
+    obtain ⟨fr', hfr', hpar', hok'⟩ := hframe fr hfr
+    exact ⟨rfl, fr', hfr', hpar'.trans hpar, by simpa using hok'⟩
+  | g0 :: gs, h =>
+    obtain ⟨fr, p, hfr, hpar, hlt, -, hc⟩ := h
+    obtain ⟨fr', hfr', hpar', hok'⟩ := hframe fr hfr
+    exact ⟨fr', p, hfr', hpar'.trans hpar, hlt, by simpa using hok',
+      (hc.frames_congr fun j hj => hlow j (Nat.lt_of_le_of_lt hj hlt)).transport hmem⟩
+
+theorem Chain.define_old {s : Store} {m m' : Mem} {env : Addr} {f : List (String × Nat)}
+    {g : Scope} {x : String} {i : Nat} {n : Int}
+    (h : Chain s m env (f :: g)) (hx : f.lookup x = some i) (hnd : (Scope.slots (f :: g)).Nodup)
+    (hv : slotV m' i = n) (ho : ∀ j ∈ Scope.slots (f :: g), j ≠ i → slotV m' j = slotV m j) :
+    Chain (s.define env x (.int n)) m' env (f :: g) := by
+  rw [slots_cons] at hnd ho
+  have hi := List.mem_map_of_mem (f := Prod.snd) (lookup_mem hx)
+  refine h.head_update ?_ ?_ ?_
+  · intro fr hfr
+    have hok : FrameOK fr f m (g = []) := by
+      match g, h with
+      | [], h => obtain ⟨rfl, fr0, hfr0, -, hok⟩ := h; rw [hfr] at hfr0; cases hfr0; simpa using hok
+      | _ :: _, h => obtain ⟨fr0, p, hfr0, -, -, hok, -⟩ := h; rw [hfr] at hfr0; cases hfr0; simpa using hok
+    have hany := any_of_find? (find?_of_FrameOK_some hok hx)
+    refine ⟨{ fr with vars := defineVars x (.int n) fr.vars },
+      by rw [define_eq, getElem?_modify_self' _ _ _ hfr], rfl, ?_⟩
+    simp only [defineVars, hany, if_true]
+    exact hok.rebind hx (List.nodup_append.mp hnd).1 hv
+      (fun p hp hne => ho _ (List.mem_append_left _ (List.mem_map_of_mem hp)) hne)
+  · intro j hj; rw [define_eq, getElem?_modify_ne' _ _ _ _ (Nat.ne_of_gt hj)]
+  · intro k hk
+    exact ho k (List.mem_append_right _ hk) (fun e => by
+      subst e; exact (List.nodup_append.mp hnd).2.2 _ hi _ hk rfl)
+
+theorem nativeVars_find?_none {x : String} (hx : ¬ IsNative x) :
+    nativeVars.find? (·.1 == x) = none := by
+  unfold IsNative at hx
+  simp only [nativeVars, List.find?_cons, List.find?_nil]
+  have h1 : ("print" == x) = false := by simp; intro e; exact hx (.inl e.symm)
+  have h2 : ("println" == x) = false := by simp; intro e; exact hx (.inr (.inl e.symm))
+  have h3 : ("assert" == x) = false := by simp; intro e; exact hx (.inr (.inr e.symm))
+  simp [h1, h2, h3]
+
+theorem Chain.define_new {s : Store} {m m' : Mem} {env : Addr} {f : List (String × Nat)}
+    {g : Scope} {x : String} {k : Nat} {n : Int}
+    (h : Chain s m env (f :: g)) (hx : f.lookup x = none) (hnat : ¬ IsNative x)
+    (hk : k ∉ Scope.slots (f :: g))
+    (hv : slotV m' k = n) (ho : ∀ j ∈ Scope.slots (f :: g), slotV m' j = slotV m j) :
+    Chain (s.define env x (.int n)) m' env (((x, k) :: f) :: g) := by
+  rw [slots_cons] at hk ho
+  refine h.head_update ?_ (fun j hj => by rw [define_eq, getElem?_modify_ne' _ _ _ _ (Nat.ne_of_gt hj)])
+    (fun j hj => ho j (List.mem_append_right _ hj))
+  · intro fr hfr
+    have hok : FrameOK fr f m (g = []) := by
+      match g, h with
+      | [], h => obtain ⟨rfl, fr0, hfr0, -, hok⟩ := h; rw [hfr] at hfr0; cases hfr0; simpa using hok
+      | _ :: _, h => obtain ⟨fr0, p, hfr0, -, -, hok, -⟩ := h; rw [hfr] at hfr0; cases hfr0; simpa using hok
+    have hnone : fr.vars.find? (·.1 == x) = none := by
+      rw [hok x, hx]
+      by_cases hg : g = [] <;> simp [hg, nativeVars_find?_none hnat]
+    refine ⟨{ fr with vars := defineVars x (.int n) fr.vars },
+      by rw [define_eq, getElem?_modify_self' _ _ _ hfr], rfl, ?_⟩
+    simp only [defineVars, not_any_of_find? hnone, Bool.false_eq_true, if_false]
+    intro y
+    rw [List.find?_append]
+    by_cases hyx : y = x
+    · subst hyx
+      rw [hnone]
+      simp [hv]
+    · have : ((x, k) :: f).lookup y = f.lookup y := by
+        simp [List.lookup_cons, show (y == x) = false by simpa using hyx]
+      rw [this, hok y]
+      cases hf : f.lookup y with
+      | some j =>
+        simp only
+        rw [ho j (List.mem_append_left _ (List.mem_map_of_mem (lookup_mem hf)))]
+        rfl
+      | none =>
+        simp only
+        split
+        · cases hn : nativeVars.find? (·.1 == y) with
+          | some q => rfl
+          | none => simp [List.find?_cons, show (x == y) = false by simpa using Ne.symm hyx]
+        · simp [List.find?_cons, show (x == y) = false by simpa using Ne.symm hyx]
+
+/-! ## Frame allocation, natives, and the initial state -/
+
+theorem Chain.push {s : Store} {m : Mem} {fr : Frame} {env : Addr} {Γ : Scope}
+    (h : Chain s m env Γ) : Chain { s with frames := s.frames.push fr } m env Γ :=
+  h.frames_congr fun j hj => by
+    rw [Array.getElem?_push]; simp [Nat.ne_of_lt (Nat.lt_of_le_of_lt hj h.env_lt)]
+
+theorem Chain.alloc {s : Store} {m : Mem} {env : Addr} {Γ : Scope} (h : Chain s m env Γ) :
+    Chain (s.allocFrame (some env)).1 m (s.allocFrame (some env)).2 ([] :: Γ) := by
+  match Γ, h with
+  | [], h => exact h.elim
+  | f :: g, h =>
+    refine ⟨⟨some env, []⟩, env, ?_, rfl, h.env_lt, fun x => by simp, h.push⟩
+    simp [Store.allocFrame]
+
+theorem Chain.native {s : Store} {m : Mem} {x : String} {q : Value} : ∀ {env : Addr} {Γ : Scope}
+    (gas : Nat), Chain s m env Γ → env < gas → (∀ f ∈ Γ, f.lookup x = none) →
+    nativeVars.find? (·.1 == x) = some (x, q) → s.lookup gas env x = some q
+  | env, [], _, h, _, _, _ => h.elim
+  | env, [f], gas + 1, h, _, hn, hq => by
+    obtain ⟨rfl, fr, hfr, -, hok⟩ := h
+    have : fr.vars.find? (·.1 == x) = some (x, q) := by
+      rw [hok x, hn f (List.mem_singleton_self _)]; exact hq
+    simp [Store.lookup, hfr, this]
+  | env, f :: g :: gs, gas + 1, h, hg, hn, hq => by
+    obtain ⟨fr, p, hfr, hp, hlt, hok, hc⟩ := h
+    simp only [Store.lookup, hfr, find?_of_FrameOK_none hok (hn f (List.mem_cons_self ..)), hp,
+      Option.bind_eq_bind, Option.bind_some]
+    exact Chain.native gas hc (Nat.lt_of_lt_of_le hlt (Nat.le_of_lt_succ hg))
+      (fun f' hf' => hn f' (List.mem_cons_of_mem _ hf')) hq
+
+theorem chain_init (m : Mem) : Chain initSt.store m 0 [[]] :=
+  ⟨rfl, _, rfl, rfl, fun x => rfl⟩
+
 end Vsa.Compiler
