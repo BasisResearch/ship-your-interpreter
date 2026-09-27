@@ -91,6 +91,10 @@ theorem run_block {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Na
 theorem reach_here {code : List Ins} {A : AM} {Q : AM → Prop} (h : Q A) : Reaches code A Q :=
   ⟨A, Star.refl _ _, h⟩
 
+theorem reaches_mono {code : List Ins} {A : AM} {P Q : AM → Prop} (h : Reaches code A P)
+    (hPQ : ∀ B, P B → Q B) : Reaches code A Q := by
+  obtain ⟨B, s, hp⟩ := h; exact ⟨B, s, hPQ B hp⟩
+
 /-- The console text of an output array. -/
 def ostr (o : Array String) : String := String.join o.toList
 
@@ -130,6 +134,28 @@ theorem Keep.has {S : List Nat} {L L' : GRegs} (h : Keep S L L') {r : Nat} {v : 
   · exact Has.zero _
   · exact ⟨h31, .inr ⟨hne, by rw [h r hr, hl]⟩⟩
 
+theorem has_gset {L : GRegs} {rd n : Nat} {v w : BitVec 64} (h : 1 ≤ rd ∧ rd ≤ 31) :
+    Has (gset L rd v) n w ↔ if n = rd then v = w else Has L n w := by
+  split
+  · next e => subst e; exact ⟨fun h' => by
+      have := (Has.set_self L v h.1 h.2).src.2; rw [← this]; exact h'.src.2, fun e' => e' ▸ Has.set_self L v h.1 h.2⟩
+  · next e =>
+    constructor
+    · intro h'
+      obtain ⟨h31, (⟨rfl, rfl⟩ | ⟨hne, hl⟩)⟩ := h'
+      · exact Has.zero _
+      · exact ⟨h31, .inr ⟨hne, by rw [lookupG_set, if_neg e] at hl; exact hl⟩⟩
+    · intro h'; exact h'.set_other e
+
+theorem keep_gset {S : List Nat} {L L' : GRegs} {rd : Nat} {v : BitVec 64} (h : rd ∈ S) :
+    Keep S L (gset L' rd v) ↔ Keep S L L' := by
+  constructor
+  · intro hk r hr
+    have := hk r hr
+    rw [lookupG_set, if_neg (fun e => hr (by rw [e]; exact h))] at this
+    exact this
+  · intro hk; exact hk.gset h
+
 theorem has_mem {L : GRegs} {n : Nat} {v : BitVec 64} (h : Has L n v) (hn : n ≠ 0) :
     n ∈ keysG L := by
   obtain ⟨-, (⟨rfl, -⟩ | ⟨-, hl⟩)⟩ := h
@@ -160,6 +186,61 @@ theorem Agree.upd_out {m : Mem} {lo hi a : Nat} {v : BitVec 64} (ha : a % 8 = 0)
     (hout : a + 8 ≤ lo ∨ hi ≤ a) : Agree m (applyW m (a, 8, v)) lo hi := fun b h1 h2 h3 => by
   rw [rdW_upd ha h3, if_neg (by omega)]
 
+/-- Memory after copying the first `k` words from `s` to `d`. -/
+def copyW (m : Mem) (s d : Nat) : Nat → Mem
+  | 0 => m
+  | k + 1 => applyW (copyW m s d k) (d + 8 * k, 8, rdW m (s + 8 * k))
+
+theorem rdW_copyW (m : Mem) (s d : Nat) (hd : d % 8 = 0) : ∀ (k a : Nat), a % 8 = 0 →
+    rdW (copyW m s d k) a = if d ≤ a ∧ a < d + 8 * k then rdW m (s + (a - d)) else rdW m a
+  | 0, a, _ => by rw [if_neg (by omega)]; rfl
+  | k + 1, a, ha => by
+    simp only [copyW]
+    rw [rdW_upd (by omega) ha, rdW_copyW m s d hd k a ha]
+    by_cases h1 : a = d + 8 * k
+    · subst h1; simp only [if_true]
+      rw [if_pos (by omega)]; congr 1; omega
+    · rw [if_neg h1]
+      by_cases h2 : d ≤ a ∧ a < d + 8 * k
+      · rw [if_pos h2, if_pos (by omega)]
+      · rw [if_neg h2, if_neg (by omega)]
+
+theorem toNat_ofNat_lt {x : Nat} (h : x < 2 ^ 64) : (BitVec.ofNat 64 x).toNat = x := by
+  rw [BitVec.toNat_ofNat]; omega
+
+theorem ofNat_ne_zero {x : Nat} (h0 : 0 < x) (h : x < 2 ^ 64) : BitVec.ofNat 64 x ≠ 0 := by
+  intro e
+  have := congrArg BitVec.toNat e
+  rw [toNat_ofNat_lt h] at this
+  simp at this; omega
+
+/-- Three-way lexicographic comparison of character lists. -/
+def cmpL : List Char → List Char → Int
+  | [], [] => 0
+  | [], _ :: _ => -1
+  | _ :: _, [] => 1
+  | a :: as, b :: bs => if a.toNat < b.toNat then -1 else if b.toNat < a.toNat then 1 else cmpL as bs
+
+theorem take_succ_eq {xs ys : List Char} {i : Nat} (h : xs.take i = ys.take i) (hx : i < xs.length)
+    (hy : i < ys.length) (he : xs[i] = ys[i]) : xs.take (i + 1) = ys.take (i + 1) := by
+  rw [List.take_add_one, List.take_add_one, List.getElem?_eq_getElem hx, List.getElem?_eq_getElem hy,
+    h, he]
+
+theorem cmpL_cons (a b : Char) (as bs : List Char) : cmpL (a :: as) (b :: bs) =
+    if a.toNat < b.toNat then -1 else if b.toNat < a.toNat then 1 else cmpL as bs := rfl
+
+theorem cmpL_drop : ∀ (i : Nat) (xs ys : List Char), xs.take i = ys.take i → i ≤ xs.length →
+    i ≤ ys.length → cmpL (xs.drop i) (ys.drop i) = cmpL xs ys
+  | 0, _, _, _, _, _ => rfl
+  | i + 1, x :: xs, y :: ys, h, h1, h2 => by
+    simp only [List.take_succ_cons, List.cons.injEq] at h
+    obtain ⟨rfl, h⟩ := h
+    simp only [List.drop_succ_cons]
+    rw [cmpL_drop i xs ys h (by simp at h1; omega) (by simp at h2; omega)]
+    simp [cmpL]
+  | i + 1, [], _, _, h1, _ => by simp at h1
+  | i + 1, _ :: _, [], _, _, h2 => by simp at h2
+
 /-! ## String objects -/
 
 /-- The string object at `p` holds the characters `cs`. -/
@@ -189,6 +270,14 @@ theorem loop_run {code : List Ins} {I : Nat → AM → Prop} {Q : AM → Prop}
   | 0, A, h => base A h
   | n + 1, A, h => ex_bind (step n A h) (fun B hB => loop_run step base n B hB)
 
+/-- A loop that may also leave early. -/
+theorem loop_run' {code : List Ins} {I : Nat → AM → Prop} {Q : AM → Prop}
+    (step : ∀ n A, I (n + 1) A → Reaches code A (fun B => I n B ∨ Q B))
+    (base : ∀ A, I 0 A → Reaches code A Q) :
+    ∀ n A, I n A → Reaches code A Q
+  | 0, A, h => base A h
+  | n + 1, A, h => ex_bind (step n A h) (fun B hB => hB.elim (loop_run' step base n B) (reach_here))
+
 /-! ## Normal form of `WP` goals -/
 
 /-- Compute a `WP` goal: unfold the instructions, evaluate register reads and
@@ -209,5 +298,21 @@ macro_rules
         tohostW_toNat, putcWord_low,
         Br, J, Call, mvi, addi, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
         t6, s2, s3, s4, s5, s6, s9, s10, s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
+
+/-- Discharge register-file goals (`Has`, `Keep`) through chains of writes. -/
+syntax "reg_simp" ("[" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
+macro_rules
+  | `(tactic| reg_simp) => `(tactic| reg_simp [])
+  | `(tactic| reg_simp [$xs,*]) => `(tactic|
+      simp (disch := decide) only [has_gset, keep_gset, reduceIte, Nat.reduceEqDiff,
+        a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5, t6, s2, s3, s4, s5, s6, s9, s10,
+        s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
+
+/-- Close an equation between `BitVec.ofNat 64` words by arithmetic on the naturals. -/
+macro "bv_eq" : tactic => `(tactic| first
+  | with_reducible rfl
+  | (apply congrArg (BitVec.ofNat 64); omega)
+  | (rw [ofNat_add_lit _ _ (by decide)]; apply congrArg (BitVec.ofNat 64); omega)
+  | (rw [ofNat_add_neg _ _ (by decide) (by omega)]; apply congrArg (BitVec.ofNat 64); omega))
 
 end Vsa.Compiler

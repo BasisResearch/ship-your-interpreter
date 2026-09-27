@@ -146,6 +146,233 @@ theorem run_ps (hseg : Seg code psPos (psCode psPos)) {L : GRegs} {m : Mem} {o :
   · exact (((Keep.refl _ _).gset (by decide)).gset (by decide))
   · simp
 
+/-! ## `copy` -/
+
+/-- Registers `copy` may change. -/
+def cpClob : List Nat := [t0, a5, a6, a7]
+
+/-- The `copy` loop head with `j` words left. -/
+def CpInv (L0 : GRegs) (m : Mem) (o : Array String) (s d n : Nat) (r : BitVec 64)
+    (j : Nat) (A : AM) : Prop :=
+  A.pc = pcOf cpPos ∧ A.mem = copyW m s d (n - j) ∧ A.out = o ∧ j ≤ n ∧
+    Has A.regs a7 (BitVec.ofNat 64 j) ∧ Has A.regs a6 (BitVec.ofNat 64 (s + 8 * (n - j))) ∧
+    Has A.regs a5 (BitVec.ofNat 64 (d + 8 * (n - j))) ∧ Has A.regs ra r ∧ Keep cpClob L0 A.regs
+
+/-- The source words are readable, the target words writable, and the two disjoint. -/
+structure CopyOK (s d n : Nat) : Prop where
+  src_lo : 0x80000000 ≤ s
+  src_hi : s + 8 * n ≤ 2 ^ 32
+  src_ht : s + 8 * n ≤ tohostAddr ∨ tohostAddr + 8 ≤ s
+  dst_lo : tohostAddr + 16 ≤ d
+  dst_hi : d + 8 * n ≤ 2 ^ 32
+  dst_al : d % 8 = 0
+  src_al : s % 8 = 0
+  disj : d + 8 * n ≤ s ∨ s + 8 * n ≤ d
+
+theorem run_cp (hseg : Seg code cpPos (cpCode cpPos)) {L : GRegs} {m : Mem} {o : Array String}
+    {s d n : Nat} {r : BitVec 64}
+    (h16 : Has L a6 (BitVec.ofNat 64 s)) (h15 : Has L a5 (BitVec.ofNat 64 d))
+    (h17 : Has L a7 (BitVec.ofNat 64 n)) (hr : Has L ra r) (hal : r.toNat % 4 = 0)
+    (hok : CopyOK s d n) :
+    Reaches code ⟨pcOf cpPos, L, m, o⟩ (fun B => B.pc = r ∧ B.mem = copyW m s d n ∧ B.out = o ∧
+      Has B.regs a5 (BitVec.ofNat 64 (d + 8 * n)) ∧ Has B.regs a6 (BitVec.ofNat 64 (s + 8 * n)) ∧
+      Keep cpClob L B.regs) := by
+  have ht : tohostAddr = 0x8001ad00 := rfl
+  have hd8 := hok.dst_al
+  refine loop_run (I := CpInv L m o s d n r) (fun j A hA => ?_) (fun A hA => ?_) n _
+    ⟨rfl, by simp [copyW], rfl, Nat.le_refl _, h17, by simpa using h16, by simpa using h15, hr,
+      Keep.refl _ _⟩
+  · obtain ⟨hpc, hm, ho, hj, h7, h6, h5, h1, hk⟩ := hA
+    obtain ⟨pc, L', m', o'⟩ := A
+    simp only at hpc hm ho h7 h6 h5 h1 hk; subst hpc hm ho
+    have k7 := has_mem h7 (by decide); have k6 := has_mem h6 (by decide)
+    have k5 := has_mem h5 (by decide)
+    have e7 := srcVal_of_has h7; have e6 := srcVal_of_has h6; have e5 := srcVal_of_has h5
+    simp only [a5, a6, a7] at k7 k6 k5 e7 e6 e5
+    have hsn : (BitVec.ofNat 64 (s + 8 * (n - (j + 1)))).toNat = s + 8 * (n - (j + 1)) :=
+      toNat_ofNat_lt (by have := hok.src_hi; omega)
+    have hdn : (BitVec.ofNat 64 (d + 8 * (n - (j + 1)))).toNat = d + 8 * (n - (j + 1)) :=
+      toNat_ofNat_lt (by have := hok.dst_hi; omega)
+    have hj0 : BitVec.ofNat 64 (j + 1) ≠ 0 := ofNat_ne_zero (by omega) (by have := hok.dst_hi; omega)
+    have hsrc : rdW (copyW m s d (n - (j + 1))) (s + 8 * (n - (j + 1))) =
+        rdW m (s + 8 * (n - (j + 1))) := by
+      have := hok.disj; have := hok.src_al
+      rw [rdW_copyW m s d hd8 _ _ (by omega), if_neg (by omega)]
+    apply run_at' hfit hseg 0 cpPos rfl
+    wp_simp [cpCode, cpPos, scPos, itPos, psPos, k7, k6, k5, e7, e6, e5, hsn, hdn, hj0, hsrc]
+    have hne : d + 8 * (n - (j + 1)) ≠ tohostAddr := by have := hok.dst_lo; omega
+    rw [if_neg hne]
+    have e : n - j = n - (j + 1) + 1 := by omega
+    have := hok.src_lo; have := hok.src_hi; have := hok.src_ht; have := hok.dst_lo
+    have := hok.dst_hi; have := hok.src_al
+    refine ⟨⟨by omega, by omega, by omega⟩,
+      ⟨by omega, by omega, by omega, by omega⟩,
+      reach_here ⟨rfl, by rw [e]; rfl, rfl, by omega, ?_, ?_, ?_, ?_, ?_⟩⟩ <;>
+      simp (disch := decide) only [has_gset, keep_gset, a5, a6, a7, ra, cpClob, t0, reduceIte,
+        Nat.reduceEqDiff]
+    · congr 1; omega
+    · congr 1; omega
+    · exact h1
+    · exact hk
+  · obtain ⟨hpc, hm, ho, hj, h7, h6, h5, h1, hk⟩ := hA
+    obtain ⟨pc, L', m', o'⟩ := A
+    simp only at hpc hm ho h7 h6 h5 h1 hk; subst hpc hm ho
+    have k7 := has_mem h7 (by decide); have k1 := has_mem h1 (by decide)
+    have e7 := srcVal_of_has h7; have e1 := srcVal_of_has h1
+    simp only [a7, ra] at k7 k1 e7 e1
+    apply run_at' hfit hseg 0 cpPos rfl
+    wp_simp [cpCode, cpPos, scPos, itPos, psPos, k7, e7]
+    apply run_at' hfit hseg 7 (cpPos + 7) rfl
+    wp_simp [cpCode, cpPos, scPos, itPos, psPos, k1, e1]
+    exact ⟨hal, reach_here ⟨rfl, by simp, rfl, by simpa [a5] using h5, by simpa [a6] using h6, hk⟩⟩
+
+/-! ## `strcmp` -/
+
+/-- Registers `strcmp` may change. -/
+def scClob : List Nat := [t0, t1, t2, t3, t4, t5, a0]
+
+/-- The `strcmp` loop head after `i` equal characters; `j` characters of the
+left string remain. -/
+def ScInv (L0 : GRegs) (m : Mem) (o : Array String) (p q : Nat) (xs ys : List Char)
+    (r : BitVec 64) (j : Nat) (A : AM) : Prop :=
+  A.pc = pcOf (scPos + 4) ∧ A.mem = m ∧ A.out = o ∧ j ≤ xs.length ∧
+    xs.length - j ≤ ys.length ∧ xs.take (xs.length - j) = ys.take (xs.length - j) ∧
+    Has A.regs t0 (BitVec.ofNat 64 j) ∧
+    Has A.regs t1 (BitVec.ofNat 64 (ys.length - (xs.length - j))) ∧
+    Has A.regs t2 (BitVec.ofNat 64 (p + 8 + 8 * (xs.length - j))) ∧
+    Has A.regs t3 (BitVec.ofNat 64 (q + 8 + 8 * (xs.length - j))) ∧
+    Has A.regs ra r ∧ Keep scClob L0 A.regs
+
+theorem run_sc (hseg : Seg code scPos (scCode scPos)) {L : GRegs} {m : Mem} {o : Array String}
+    {p q : Nat} {xs ys : List Char} {r : BitVec 64}
+    (h11 : Has L a1 (BitVec.ofNat 64 p)) (h13 : Has L a3 (BitVec.ofNat 64 q))
+    (hr : Has L ra r) (hal : r.toNat % 4 = 0) (hx : StrW m p xs) (hy : StrW m q ys) :
+    Reaches code ⟨pcOf scPos, L, m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
+      Has B.regs a0 (BitVec.ofInt 64 (cmpL xs ys)) ∧ Keep scClob L B.regs) := by
+  have ht : tohostAddr = 0x8001ad00 := rfl
+  have hxl := hx.lo; have hxh := hx.hi; have hyl := hy.lo; have hyh := hy.hi
+  -- the three exits
+  have hexit : ∀ (e : Nat) (v : Int), (e = 16 ∧ v = -1 ∨ e = 18 ∧ v = 1 ∨ e = 20 ∧ v = 0) →
+      cmpL xs ys = v → ∀ L', Has L' ra r → Keep scClob L L' →
+      Reaches code ⟨pcOf (scPos + e), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
+        Has B.regs a0 (BitVec.ofInt 64 (cmpL xs ys)) ∧ Keep scClob L B.regs) := by
+    intro e v he hv L' h1 hk
+    have k1 := has_mem h1 (by decide); have e1 := srcVal_of_has h1
+    simp only [ra] at k1 e1
+    rw [hv]
+    rcases he with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
+    · apply run_at' hfit hseg _ _ rfl
+      wp_simp [scCode, scPos, cpPos, itPos, psPos, k1, e1]
+      refine ⟨hal, reach_here ⟨rfl, rfl, rfl, ?_, ?_⟩⟩ <;>
+        simp (disch := decide) only [has_gset, keep_gset, a0, reduceIte, BitVec.reduceOfInt, hk] <;> rfl
+  have hcmp : ∀ i, i ≤ xs.length → i ≤ ys.length → xs.take i = ys.take i →
+      cmpL xs ys = cmpL (xs.drop i) (ys.drop i) := fun i h1 h2 h3 => (cmpL_drop i xs ys h3 h1 h2).symm
+  -- the loop
+  have hloop := loop_run' (code := code) (I := ScInv L m o p q xs ys r)
+    (Q := fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
+      Has B.regs a0 (BitVec.ofInt 64 (cmpL xs ys)) ∧ Keep scClob L B.regs)
+    (fun j A hA => ?_) (fun A hA => ?_)
+  rotate_left
+  · -- one character
+    obtain ⟨hpc, hm, ho, hj, hi, htk, h5, h6, h7, h28, h1, hk⟩ := hA
+    obtain ⟨pc, L', m', o'⟩ := A
+    simp only at hpc hm ho h5 h6 h7 h28 h1 hk; subst hpc hm ho
+    have k5 := has_mem h5 (by decide); have k6 := has_mem h6 (by decide)
+    have k7 := has_mem h7 (by decide); have k28 := has_mem h28 (by decide)
+    have k1 := has_mem h1 (by decide)
+    have e5 := srcVal_of_has h5; have e6 := srcVal_of_has h6; have e7 := srcVal_of_has h7
+    have e28 := srcVal_of_has h28; have e1 := srcVal_of_has h1
+    simp only [t0, t1, t2, t3, ra] at k5 k6 k7 k28 k1 e5 e6 e7 e28 e1
+    generalize hI : xs.length - (j + 1) = i at *
+    have hix : i < xs.length := by omega
+    have hj0 : BitVec.ofNat 64 (j + 1) ≠ 0 := ofNat_ne_zero (by omega) (by omega)
+    apply run_at' hfit hseg 4 (scPos + 4) rfl
+    wp_simp [scCode, scPos, cpPos, itPos, psPos, k5, k6, k7, k28, k1, e5, e6, e7, e28, e1, hj0]
+    by_cases hyi : ys.length - i = 0
+    · have hyi' : ys.length = i := by omega
+      rw [if_pos (by rw [hyi]; rfl)]
+      refine reaches_mono (hexit 18 1 (.inr (.inl ⟨rfl, rfl⟩)) ?_ L' h1 hk) (fun B hB => .inr hB)
+      have hyd : ys.drop i = [] := List.drop_eq_nil_of_le (by omega)
+      rw [hcmp i (by omega) (by omega) htk, hyd, List.drop_eq_getElem_cons hix]
+      rfl
+    · rw [if_neg (ofNat_ne_zero (by omega) (by omega))]
+      have hiy : i < ys.length := by omega
+      have hcx := hx.chars i hix; have hcy := hy.chars i hiy
+      have hsx := hx.small _ (List.getElem_mem hix); have hsy := hy.small _ (List.getElem_mem hiy)
+      have hn1 : (BitVec.ofNat 64 (p + 8 + 8 * i)).toNat = p + 8 + 8 * i := toNat_ofNat_lt (by omega)
+      have hn2 : (BitVec.ofNat 64 (q + 8 + 8 * i)).toNat = q + 8 + 8 * i := toNat_ofNat_lt (by omega)
+      simp (disch := first | decide | omega) only [hn1, hn2, hcx, hcy, toInt_ofNat_small]
+      refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ⟨by omega, by omega, .inr (by omega)⟩, ?_⟩
+      have hd : cmpL xs ys = cmpL (xs[i] :: xs.drop (i + 1)) (ys[i] :: ys.drop (i + 1)) := by
+        rw [hcmp i (by omega) (by omega) htk, List.drop_eq_getElem_cons hix,
+          List.drop_eq_getElem_cons hiy]
+      split
+      · next hlt =>
+        refine reaches_mono (hexit 16 (-1) (.inl ⟨rfl, rfl⟩) ?_ _ ?_ ?_) (fun B hB => .inr hB)
+        · rw [hd, cmpL_cons, if_pos (by omega)]
+        · reg_simp; exact h1
+        · reg_simp; exact hk
+      · next hlt =>
+        split
+        · next hgt =>
+          refine reaches_mono (hexit 18 1 (.inr (.inl ⟨rfl, rfl⟩)) ?_ _ ?_ ?_) (fun B hB => .inr hB)
+          · rw [hd, cmpL_cons, if_neg (by omega), if_pos (by omega)]
+          · reg_simp; exact h1
+          · reg_simp; exact hk
+        · next hgt =>
+          have heq : xs[i] = ys[i] := by
+            have e : xs[i].toNat = ys[i].toNat := by omega
+            rw [← Char.ofNat_toNat xs[i], ← Char.ofNat_toNat ys[i], e]
+          refine reach_here (.inl ⟨rfl, rfl, rfl, by omega, by omega, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩)
+          · have e : xs.length - j = i + 1 := by omega
+            rw [e]
+            exact take_succ_eq htk hix hiy heq
+          all_goals reg_simp
+          all_goals first | exact h1 | exact hk | bv_eq
+  · -- left exhausted
+    obtain ⟨hpc, hm, ho, hj, hi, htk, h5, h6, h7, h28, h1, hk⟩ := hA
+    obtain ⟨pc, L', m', o'⟩ := A
+    simp only at hpc hm ho h5 h6 h7 h28 h1 hk; subst hpc hm ho
+    have k5 := has_mem h5 (by decide); have k6 := has_mem h6 (by decide)
+    have e5 := srcVal_of_has h5; have e6 := srcVal_of_has h6
+    simp only [t0, t1] at k5 k6 e5 e6
+    simp only [Nat.sub_zero] at hi htk h6 e6
+    apply run_at' hfit hseg 4 (scPos + 4) rfl
+    wp_simp [scCode, scPos, cpPos, itPos, psPos, k5, k6, e5, e6]
+    apply run_block hfit hseg 15 1 (scPos + 15) rfl
+      (KP := fun L'' m'' o'' => L'' = L' ∧ m'' = m' ∧ o'' = o' ∧ ¬ ys.length - xs.length = 0)
+      (fun L'' m'' o'' h => by
+        obtain ⟨rfl, rfl, rfl, hyi⟩ := h
+        refine hexit 16 (-1) (.inl ⟨rfl, rfl⟩) ?_ _ h1 hk
+        have hxd : xs.drop xs.length = [] := List.drop_eq_nil_of_le (by omega)
+        rw [hcmp xs.length (by omega) hi htk, hxd, List.drop_eq_getElem_cons (by omega)]
+        rfl) (by simp [scCode])
+    wp_simp [scCode, scPos, cpPos, itPos, psPos, k5, k6, e5, e6]
+    by_cases hyi : ys.length - xs.length = 0
+    · rw [if_pos (by rw [hyi]; rfl)]
+      refine hexit 20 0 (.inr (.inr ⟨rfl, rfl⟩)) ?_ L' h1 hk
+      have hxd : xs.drop xs.length = [] := List.drop_eq_nil_of_le (by omega)
+      have hyd : ys.drop xs.length = [] := List.drop_eq_nil_of_le (by omega)
+      rw [hcmp xs.length (by omega) hi htk, hxd, hyd]
+      rfl
+    · rw [if_neg (ofNat_ne_zero (by omega) (by omega))]
+      exact hyi
+  -- entry
+  have k11 := has_mem h11 (by decide); have k13 := has_mem h13 (by decide)
+  have e11 := srcVal_of_has h11; have e13 := srcVal_of_has h13
+  simp only [a1, a3] at k11 k13 e11 e13
+  have hpn : (BitVec.ofNat 64 p).toNat = p := toNat_ofNat_lt (by omega)
+  have hqn : (BitVec.ofNat 64 q).toNat = q := toNat_ofNat_lt (by omega)
+  apply run_block hfit hseg 0 4 scPos rfl
+    (KP := fun L' m' o' => ScInv L m o p q xs ys r xs.length ⟨pcOf (scPos + 4), L', m', o'⟩)
+    (fun L' m' o' h => hloop _ _ h) (by simp [scCode])
+  wp_simp [scCode, scPos, cpPos, itPos, psPos, k11, k13, e11, e13, hpn, hqn, hx.len, hy.len]
+  refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ⟨by omega, by omega, .inr (by omega)⟩,
+    rfl, rfl, rfl, Nat.le_refl _, by simp, by simp, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  all_goals reg_simp [Nat.sub_self, Nat.sub_zero, Nat.mul_zero, Nat.add_zero]
+  · exact hr
+  · exact Keep.refl _ _
+
 end
 
 end Vsa.Compiler
