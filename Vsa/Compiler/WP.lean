@@ -467,6 +467,29 @@ theorem WP_li_append {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : Bit
     WP code P pos (li rd n ++ is) K L m o := by
   rw [WP_append]; exact WP_li hrd h
 
+/-- `li rd n` followed by `is`, as an equivalence. -/
+theorem WP_li_iff {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : BitVec 64} {is : List Ins}
+    {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
+    (hrd : 1 ≤ rd ∧ rd ≤ 31) :
+    WP code P pos (li rd n ++ is) K L m o ↔
+      WP code P (pos + (li rd n).length) is K (gset L rd n) m o := by
+  have h0 : rd ≠ 0 := by omega
+  rw [WP_append]
+  unfold li
+  split
+  · next hs =>
+    simp only [WP, srcVal_gset, srcVal_zero, SrcOK]
+    rw [sext12_ofInt _ hs.2 hs.1, BitVec.ofInt_toInt]
+    simp [hrd]
+  · next hs =>
+    simp [WP, List.range, List.range.loop, h0, hrd, gset_gset, SrcOK, li_value]
+
+theorem li_length_small {rd : Nat} {n : BitVec 64} (h : n.toInt < 2048 ∧ -2048 ≤ n.toInt) :
+    (li rd n).length = 1 := by simp [li, h]
+
+theorem li_length_big {rd : Nat} {n : BitVec 64} (h : ¬ (n.toInt < 2048 ∧ -2048 ≤ n.toInt)) :
+    (li rd n).length = 11 := by simp [li, h, List.range, List.range.loop]
+
 /-! ## Branch offsets -/
 
 /-- Byte offset of a branch from instruction `src` to instruction `dst`. -/
@@ -498,6 +521,27 @@ theorem jOff_ok {src dst : Nat} (hs : PosOK src) (hd : PosOK dst) :
   · rw [hi]; omega
   · rw [hi]; omega
   · rw [hj]; unfold PosOK; omega
+
+instance (pos : Nat) (off : BitVec 13) : Decidable (BrOK pos off) := by
+  unfold BrOK; infer_instance
+
+instance (pos : Nat) (off : BitVec 21) : Decidable (JOK pos off) := by
+  unfold JOK; infer_instance
+
+theorem brT_bOff_of {s d : Nat} (hd : PosOK d) (h1 : s ≤ d + 1000) (h2 : d ≤ s + 1000) :
+    brT s (bOff s d) = d := (bOff_ok hd h1 h2).1
+
+theorem BrOK_bOff_of {s d : Nat} (hd : PosOK d) (h1 : s ≤ d + 1000) (h2 : d ≤ s + 1000) :
+    BrOK s (bOff s d) ↔ True := iff_true_intro (bOff_ok hd h1 h2).2
+
+theorem jT_jOff_of {s d : Nat} (hs : PosOK s) (hd : PosOK d) : jT s (jOff s d) = d :=
+  (jOff_ok hs hd).1
+
+theorem JOK_jOff_of {s d : Nat} (hs : PosOK s) (hd : PosOK d) : JOK s (jOff s d) ↔ True :=
+  iff_true_intro (jOff_ok hs hd).2
+
+theorem sext_ofInt12 (k : Int) (h : -2048 ≤ k ∧ k < 2048) :
+    (sign_extend (BitVec.ofInt 12 k) : BitVec 64) = BitVec.ofInt 64 k := sext12_ofInt k h.1 h.2
 
 /-! ## Branch guards -/
 
