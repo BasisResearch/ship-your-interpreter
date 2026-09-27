@@ -441,10 +441,11 @@ def strObjCode (s : String) (a : Nat) : List Ins :=
 def strTabCode (T : List String) : List Ins :=
   (List.range T.length).flatMap fun i => strObjCode (T.getD i "") (objBase + strOff T i)
 
+/-- Bind native `i` in slot `i` of the global frame. -/
+def natCode (i : Nat) : List Ins := [mvi a0 5, mvi a1 i] ++ storeSlot i
+
 /-- Bind the natives in the global frame. -/
-def nativeCode : List Ins :=
-  (List.range 3).flatMap fun i =>
-    [addiN t6 envR (8 + 16 * i), mvi t0 5, .sd t0 t6, addi t6 t6 8, mvi t0 i, .sd t0 t6]
+def nativeCode : List Ins := natCode 0 ++ natCode 1 ++ natCode 2
 
 /-- Where the program starts. -/
 def mainPos : Nat := rtEnd
