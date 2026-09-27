@@ -153,4 +153,100 @@ theorem cseq_next (C : Ctx) (pos : Nat) : ∀ (ss : List Stmt),
 
 end
 
+mutual
+
+/-- Code length and slot counter do not depend on the loop targets. -/
+theorem cstmt_targets (C : Ctx) (b c : Nat) (pos : Nat) : ∀ (s : Stmt),
+    (cstmt ⟨C.Γ, C.next, b, c⟩ pos s).1.length = (cstmt C pos s).1.length ∧
+      (cstmt ⟨C.Γ, C.next, b, c⟩ pos s).2 = (cstmt C pos s).2
+  | .expr e => by
+    cases e with
+    | call f args =>
+      cases f with
+      | var x => simp [cstmt]
+      | _ => simp [cstmt]
+    | _ => simp [cstmt]
+  | .block ss => by
+    have := cseq_targets ⟨[] :: C.Γ, C.next, C.brk, C.cont⟩ b c pos ss
+    simp only [cstmt]; exact ⟨this.1, this.2.2⟩
+  | .ifStmt cnd t e => by
+    have h1 := cstmt_targets C b c (pos + (cexpr C.Γ 0 pos cnd).length + 2) t
+    cases e with
+    | none => simp only [cstmt, List.length_append, List.length_cons, List.length_nil]; omega
+    | some e =>
+      have h2 := cstmt_targets ⟨C.Γ, (cstmt C (pos + (cexpr C.Γ 0 pos cnd).length + 2) t).2, C.brk, C.cont⟩
+        b c (pos + (cexpr C.Γ 0 pos cnd).length + 2 +
+          (cstmt C (pos + (cexpr C.Γ 0 pos cnd).length + 2) t).1.length + 1) e
+      dsimp only at h2
+      simp only [cstmt, List.length_append, List.length_cons, List.length_nil, h1.1, h1.2]
+      exact ⟨by rw [h2.1], h2.2⟩
+  | .whileStmt cnd body => by
+    have h1 := cstmt_targets ⟨C.Γ, C.next, 0, 0⟩ b c (pos + (cexpr C.Γ 0 pos cnd).length + 2) body
+    have h2 := cstmt_targets C 0 0 (pos + (cexpr C.Γ 0 pos cnd).length + 2) body
+    have h3 := cstmt_targets C (pos + (cexpr C.Γ 0 pos cnd).length + 2 +
+      (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos cnd).length + 2) body).1.length + 1) pos
+      (pos + (cexpr C.Γ 0 pos cnd).length + 2) body
+    have h4 := cstmt_targets C (pos + (cexpr C.Γ 0 pos cnd).length + 2 +
+      (cstmt ⟨C.Γ, C.next, b, c⟩ (pos + (cexpr C.Γ 0 pos cnd).length + 2) body).1.length + 1) pos
+      (pos + (cexpr C.Γ 0 pos cnd).length + 2) body
+    dsimp only at h1 h2 h3 h4
+    simp only [cstmt, List.length_append, List.length_cons, List.length_nil]
+    all_goals trivial
+  | .varDecl _ _ => by simp [cstmt]
+  | .forStmt _ _ _ _ => by simp [cstmt]
+  | .ret _ => by simp [cstmt]
+  | .brk => by simp [cstmt]
+  | .cont => by simp [cstmt]
+
+theorem cseq_targets (C : Ctx) (b c : Nat) (pos : Nat) : ∀ (ss : List Stmt),
+    (cseq ⟨C.Γ, C.next, b, c⟩ pos ss).1.length = (cseq C pos ss).1.length ∧
+      (cseq ⟨C.Γ, C.next, b, c⟩ pos ss).2.1 = (cseq C pos ss).2.1 ∧
+      (cseq ⟨C.Γ, C.next, b, c⟩ pos ss).2.2 = (cseq C pos ss).2.2
+  | [] => by simp [cseq]
+  | s :: ss => by
+    by_cases hd : ∃ x e, s = .varDecl x (some e)
+    · obtain ⟨x, e, rfl⟩ := hd
+      obtain ⟨Γ0, n0, b0, c0⟩ := C
+      cases Γ0 with
+      | nil =>
+        have ih := cseq_targets ⟨[[(x, n0)]], n0 + 1, b0, c0⟩ b c (pos + ((cexpr [] 0 pos e) ++
+          liN s2 (varAddr n0) ++ [Ins.sd a0 s2]).length) ss
+        dsimp only at ih
+        simp only [cseq]; simp only [List.length_append, List.length_cons, List.length_nil] at ih ⊢
+        simpa using ih
+      | cons f g =>
+        cases hl : f.lookup x with
+        | some i =>
+          have ih := cseq_targets ⟨f :: g, n0, b0, c0⟩ b c (pos + ((cexpr (f :: g) 0 pos e) ++
+            liN s2 (varAddr i) ++ [Ins.sd a0 s2]).length) ss
+          dsimp only at ih
+          simp only [cseq, hl]; simp only [List.length_append, List.length_cons, List.length_nil] at ih ⊢
+          simpa using ih
+        | none =>
+          have ih := cseq_targets ⟨((x, n0) :: f) :: g, n0 + 1, b0, c0⟩ b c
+            (pos + ((cexpr (f :: g) 0 pos e) ++ liN s2 (varAddr n0) ++ [Ins.sd a0 s2]).length) ss
+          dsimp only at ih
+          simp only [cseq, hl]; simp only [List.length_append, List.length_cons, List.length_nil] at ih ⊢
+          simpa using ih
+    · have hc : ∀ C' : Ctx, cseq C' pos (s :: ss) = ((cstmt C' pos s).1 ++
+          (cseq { C' with next := (cstmt C' pos s).2 } (pos + (cstmt C' pos s).1.length) ss).1,
+          (cseq { C' with next := (cstmt C' pos s).2 } (pos + (cstmt C' pos s).1.length) ss).2) := by
+        intro C'
+        cases s with
+        | varDecl x i =>
+          cases i with
+          | some e => exact absurd ⟨x, e, rfl⟩ hd
+          | none => rfl
+        | _ => rfl
+      rw [hc, hc]
+      have h1 := cstmt_targets C b c pos s
+      have ih := cseq_targets ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ b c
+        (pos + (cstmt C pos s).1.length) ss
+      dsimp only at ih ⊢
+      rw [h1.1, h1.2]
+      simp only [List.length_append]
+      exact ⟨by rw [ih.1, h1.1], ih.2.1, ih.2.2⟩
+
+end
+
 end Vsa.Compiler
