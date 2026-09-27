@@ -1,4 +1,5 @@
 import Vsa.While.TypeProgress
+import Vsa.While.TypeCheck
 import Vsa.While.Programs
 
 /-!
@@ -18,61 +19,14 @@ import Vsa.While.Programs
 declared, and the type system requires names referenced in a closure body to
 be defined where the closure is created.
 
-Typing derivations are found by `wt_search`, which applies the typing rules
-syntactically; `MustExitSeq` side conditions are decided by `mustExitSeqB`.
+Positive examples are decided by the verified checker (`typeCheck_iff`,
+`Vsa/While/TypeCheck.lean`) through `decide`. The rejections hold for every
+typing environment, so they are proved by inverting the typing rules.
 -/
 
 namespace Vsa.While.Types
 
 open Vsa.While
-
-mutual
-/-- Boolean decision procedure for `MustExit`. -/
-def mustExitB : Stmt → Bool
-  | .ret _ => true
-  | .brk => true
-  | .cont => true
-  | .block ss => mustExitSeqB ss
-  | .ifStmt _ t (some e) => mustExitB t && mustExitB e
-  | _ => false
-/-- Boolean decision procedure for `MustExitSeq`. -/
-def mustExitSeqB : List Stmt → Bool
-  | [] => false
-  | s :: ss => mustExitB s || mustExitSeqB ss
-end
-
-mutual
-theorem mustExit_of_b : ∀ {s : Stmt}, mustExitB s = true → MustExit s
-  | .ret _, _ => .ret _
-  | .brk, _ => .brk
-  | .cont, _ => .cont
-  | .block ss, h => .block ss (mustExitSeq_of_b (by simpa [mustExitB] using h))
-  | .ifStmt c t (some e), h => by
-    simp only [mustExitB, Bool.and_eq_true] at h
-    exact .ite c t e (mustExit_of_b h.1) (mustExit_of_b h.2)
-  | .ifStmt _ _ none, h => by simp [mustExitB] at h
-  | .expr _, h => by simp [mustExitB] at h
-  | .varDecl _ _, h => by simp [mustExitB] at h
-  | .whileStmt _ _, h => by simp [mustExitB] at h
-  | .forStmt _ _ _ _, h => by simp [mustExitB] at h
-theorem mustExitSeq_of_b : ∀ {ss : List Stmt}, mustExitSeqB ss = true → MustExitSeq ss
-  | [], h => by simp [mustExitSeqB] at h
-  | s :: ss, h => by
-    simp only [mustExitSeqB, Bool.or_eq_true] at h
-    rcases h with h | h
-    · exact .head s ss (mustExit_of_b h)
-    · exact .tail s ss (mustExitSeq_of_b h)
-end
-
-/-- Proof search for typing derivations. -/
-macro "wt_search" : tactic => `(tactic|
-  repeat' (first
-    | decide
-    | exact Or.inl rfl
-    | exact Or.inr (mustExitSeq_of_b (by decide))
-    | apply WtS.varRec
-    | constructor))
-
 
 /-- A typing environment: the builtins, the listed names, and `int` for every
 other name. -/
@@ -87,7 +41,7 @@ theorem mkΔ_builtins (l : List (String × Ty)) : BuiltinsTyped (mkΔ l) := ⟨r
 
 /-- **`tests/while.wl`, the program in the ELF, is well-typed.** -/
 theorem whileWl_wellTyped : WellTyped (mkΔ []) Programs.whileWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.whileWl; wt_search⟩⟩
+  by decide
 
 private abbrev ii : Ty := .fn [.int] .int
 
@@ -95,19 +49,19 @@ theorem functionsWl_wellTyped : WellTyped (mkΔ [("make_adder", .fn [.int] ii), 
     ("apply_twice", .fn [ii, .int] .int), ("f", ii), ("make_counter", .fn [] (.fn [] .int)),
     ("c", .fn [] .int), ("c2", .fn [] .int), ("compose", .fn [ii, ii] ii), ("g", ii),
     ("inc", ii), ("dbl", ii)]) Programs.functionsWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.functionsWl; wt_search⟩⟩
+  by decide
 
 theorem scopeWl_wellTyped : WellTyped (mkΔ [("shadow", ii)]) Programs.scopeWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.scopeWl; wt_search⟩⟩
+  by decide
 
 theorem forWl_wellTyped : WellTyped (mkΔ [("line", .str)]) Programs.forWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.forWl; wt_search⟩⟩
+  by decide
 
 theorem arithmeticWl_wellTyped : WellTyped (mkΔ []) Programs.arithmeticWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.arithmeticWl; wt_search⟩⟩
+  by decide
 
 theorem stringsWl_wellTyped : WellTyped (mkΔ [("s", .str)]) Programs.stringsWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.stringsWl; wt_search⟩⟩
+  by decide
 
 /-- `var fact = fn fact(n) { if (n <= 1) { return 1; } return n * fact(n - 1); };
 println(fact(10));` -/
@@ -119,7 +73,7 @@ def recProg : Program := [
   .expr (.call (.var "println") [.call (.var "fact") [.int 10]])]
 
 theorem recProg_wellTyped : WellTyped (mkΔ [("fact", ii)]) recProg :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold recProg; wt_search⟩⟩
+  by decide
 
 /-! ## Rejected programs -/
 
@@ -175,7 +129,7 @@ theorem badAssign_illTyped (Δ : TyEnv) : ¬ WellTyped Δ badAssign := by
 def divProg : Program := [.expr (.call (.var "println") [.binary .div (.int 1) (.int 0)])]
 
 theorem divProg_wellTyped : WellTyped (mkΔ []) divProg :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold divProg; wt_search⟩⟩
+  by decide
 
 theorem divProg_err : ExecSeqErrN initSt 0 0 divProg :=
   .head _ _ _ _ _ (.expr _ _ _ _ (.callArgs _ _ _ _ _ _ _ (.var _ _ _ _ _ rfl) (by decide)
