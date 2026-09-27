@@ -39,6 +39,19 @@ theorem cmpL_range : ∀ (xs ys : List Char), cmpL xs ys = -1 ∨ cmpL xs ys = 0
       · exact .inr (.inr rfl)
       · exact cmpL_range xs ys
 
+theorem binOpSem_add_str {s : Store} {l r : Value} (h : (∃ a, l = .str a) ∨ ∃ b, r = .str b) :
+    binOpSem s .add l r = some (.str (l.catDisplay s ++ r.catDisplay s)) := by
+  rcases h with ⟨a, rfl⟩ | ⟨b, rfl⟩
+  · simp [binOpSem]
+  · cases l <;> simp [binOpSem]
+
+theorem binOpSem_add_int {s : Store} (a b : Int) :
+    binOpSem s .add (.int a) (.int b) = some (.int (wrap64 (a + b))) := by simp [binOpSem]
+
+theorem binOpSem_add_none {s : Store} {l r : Value} (h1 : ¬ ((∃ a, l = .str a) ∨ ∃ b, r = .str b))
+    (h2 : ¬ ((∃ a, l = .int a) ∧ ∃ b, r = .int b)) : binOpSem s .add l r = none := by
+  cases l <;> cases r <;> simp_all [binOpSem]
+
 /-- Selector of an ordering comparison in `a4`. -/
 def selOf : BinOp → Nat
   | .lt => 0 | .le => 1 | .gt => 2 | .ge => 3 | _ => 0
@@ -782,6 +795,86 @@ theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o :
     exact Keep.trans hk0 (Keep.trans (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk1.mono (by decide)))
       (Keep.trans (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk2.mono (by decide)))
         (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk3.mono (by decide)))))
+
+/-- **Addition and concatenation.** -/
+theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
+    {l r : Value} {t1 p1 t2 p2 rr : BitVec 64} (hops : Operands H m h L l r t1 p1 t2 p2)
+    (h8 : Has L hpO (BitVec.ofNat 64 h)) (hra : Has L ra rr) (hal : rr.toNat % 4 = 0)
+    (hh : ObjPtr h) (hfx : FixedOK m) (hfb : fixedAddr 7 + 40 ≤ h) (hc : CloOK H s m h) :
+    Reaches code ⟨pcOf addPos, L, m, o⟩ (fun B => B.out = o ∧
+      match binOpSem s .add l r with
+      | some v => (B.pc = rr ∧ ∃ h', AddRet H m B.mem h h' L B.regs v) ∨
+          (B.pc = pcOf errPos ∧ objEnd < h + catNeed s l r)
+      | none => B.pc = pcOf errPos) := by
+  have hops' := hops
+  obtain ⟨h10, h11, h12, h13, vl, vr⟩ := hops
+  have := hh.lo; have := hh.hi; have := hh.al
+  have k10 := has_mem h10 (by decide); have k11 := has_mem h11 (by decide)
+  have k12 := has_mem h12 (by decide); have k13 := has_mem h13 (by decide)
+  have k1 := has_mem hra (by decide)
+  have e10 := srcVal_of_has h10; have e11 := srcVal_of_has h11; have e12 := srcVal_of_has h12
+  have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hra
+  simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
+  apply run_seg hR.fits hR.add 0 addPos (by simp) [mv s10 ra,
+    mvi t0 3, Br .eq a0 t0 (addPos + 2) (addPos + 9), Br .eq a2 t0 (addPos + 3) (addPos + 9),
+    mvi t0 2, Br .ne a0 t0 (addPos + 5) errPos, Br .ne a2 t0 (addPos + 6) errPos,
+    .add a1 a1 a3, J (addPos + 8) (addPos + 21)] (by decide)
+    (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k10, k11, k12, k13, k1,
+    e10, e11, e12, e13, e1]
+  -- the concatenation path
+  have hcat : ((∃ a, l = .str a) ∨ ∃ b, r = .str b) → ∀ L', Keep addClob L L' →
+      Has L' a0 t1 → Has L' a1 p1 → Has L' a2 t2 → Has L' a3 p2 → Has L' hpO (BitVec.ofNat 64 h) →
+      Has L' s10 rr →
+      Reaches code ⟨pcOf (addPos + 9), L', m, o⟩ (fun B => B.out = o ∧
+        match binOpSem s .add l r with
+        | some v => (B.pc = rr ∧ ∃ h', AddRet H m B.mem h h' L B.regs v) ∨
+            (B.pc = pcOf errPos ∧ objEnd < h + catNeed s l r)
+        | none => B.pc = pcOf errPos) := by
+    intro hs L' hk g10 g11 g12 g13 g8 g26
+    rw [binOpSem_add_str hs]
+    exact add_cat hR ⟨g10, g11, g12, g13, vl, vr⟩ g8 g26 hal hh hfx hfb hc hk
+  have hstr1 : t1 = 3 → (∃ a, l = .str a) ∨ ∃ b, r = .str b := fun h => .inl (vl.tag_str h)
+  have hstr2 : t2 = 3 → (∃ a, l = .str a) ∨ ∃ b, r = .str b := fun h => .inr (vr.tag_str h)
+  split
+  · next ht =>
+    exact hcat (hstr1 (by simpa using ht)) _ (by reg_simp; exact Keep.refl _ _) (by reg_simp; exact h10)
+      (by reg_simp; exact h11) (by reg_simp; exact h12) (by reg_simp; exact h13) (by reg_simp; exact h8)
+      (by reg_simp)
+  · next ht1 =>
+    split
+    · next ht =>
+      exact hcat (hstr2 (by simpa using ht)) _ (by reg_simp; exact Keep.refl _ _) (by reg_simp; exact h10)
+        (by reg_simp; exact h11) (by reg_simp; exact h12) (by reg_simp; exact h13) (by reg_simp; exact h8)
+        (by reg_simp)
+    · next ht2 =>
+      have hns : ¬ ((∃ a, l = .str a) ∨ ∃ b, r = .str b) := by
+        rintro (⟨a, rfl⟩ | ⟨b, rfl⟩)
+        · exact ht1 (by rw [vl.tag]; rfl)
+        · exact ht2 (by rw [vr.tag]; rfl)
+      by_cases hint : (∃ a, l = .int a) ∧ ∃ b, r = .int b
+      · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hint
+        obtain ⟨rfl, rfl, ha1, ha2⟩ := vl; obtain ⟨rfl, rfl, hb1, hb2⟩ := vr
+        simp only [BitVec.reduceEq, ne_eq, not_true_eq_false, if_false, ite_false]
+        refine reaches_mono (add_ret hR (by reg_simp) hal) ?_
+        rintro B ⟨hpc, hm, ho, hregs⟩
+        refine ⟨ho, ?_⟩
+        rw [binOpSem_add_int]
+        refine .inl ⟨hpc, h, ?_⟩
+        rw [hm, hregs]
+        refine ⟨by reg_simp; exact h8, Nat.le_refl _, hh.hi, fun _ _ _ _ => rfl, ?_, ?_⟩
+        · refine ⟨2, BitVec.ofInt 64 a + BitVec.ofInt 64 b, by reg_simp; exact h10, by reg_simp, rfl,
+            by rw [ofInt_wrap, BitVec.ofInt_add], I64_wrap _⟩
+        · reg_simp; exact Keep.refl _ _
+      · have hn := binOpSem_add_none (s := s) hns hint
+        have ht : t1 ≠ 2#64 ∨ t2 ≠ 2#64 := Classical.byContradiction fun hc => by
+          simp only [not_or] at hc
+          exact hint ⟨vl.tag_int.mp (Classical.not_not.mp hc.1), vr.tag_int.mp (Classical.not_not.mp hc.2)⟩
+        split
+        · exact reach_here ⟨rfl, by rw [hn]⟩
+        · split
+          · exact reach_here ⟨rfl, by rw [hn]⟩
+          · next h1 h2 => simp_all
 
 end
 
