@@ -57,6 +57,7 @@ existing theorem or generated segment with the required shape.
 | Layout, image and transport facts | `gen_layout.py`, `gen_image_pins.py`, `gen_transport.py` |
 | Decode imports | `gen_decode_index.py` |
 | Owned source recursion | `python3 -B -m scripts.gen_allocator_cases` |
+| Kind-indexed error judgment for the abstract interpreter | `gen_errk.py` |
 | Code pins and environment sites | `experiments/gen_code_lemmas.py`, `experiments/gen_envget_sites.py` |
 
 Script paths are under `scripts/` unless shown otherwise. Use `--help`
