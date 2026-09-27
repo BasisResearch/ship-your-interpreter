@@ -182,7 +182,6 @@ theorem cmpStep {live : Nat → Prop} {T : List (Nat × BitVec 8)} {r : BitVec 6
     · exact hro.2 p h
     · obtain ⟨a, _, rfl⟩ := List.mem_map.mp h; rfl⟩ hr hm
 
-
 /-! ## Strings and the read cells -/
 
 /-- The bytes of a C string at `p`: the characters' codes, then the NUL, as

@@ -66,7 +66,6 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800039a8#64 R Mt
   by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hsf, hal]
 
-
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 

@@ -636,10 +636,6 @@ theorem logOk : LogOk log runs :=
   ⟨fun _ hi => chunks_cover stores_ok (Nat.zero_le _) (by change _ < 9005 at hi; omega),
     runs_ok⟩
 
-/-- The entry memory, byte by byte. -/
-theorem mem_get (x : Nat) : (bootMem script log)[x]? = bootView script runs x :=
-  bootMem_get logOk x
-
 theorem view : ViewOf (bootMem script log) (bootView script runs) := bootMem_view logOk
 
 /-- The global frame and the shared bytes at the entry. -/

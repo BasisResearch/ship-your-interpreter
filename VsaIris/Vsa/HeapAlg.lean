@@ -148,14 +148,6 @@ theorem binList_iff_ring {m : Mem} {i : Nat} {qs : List Nat} :
 
 /-! ## Link words -/
 
-/-- The link words of 16-aligned nodes: `fd` of one never overlaps `bk` of
-another, and distinct nodes' same-kind words are disjoint. -/
-theorem linkWords_disjoint {x y : Nat} (hx : x % 16 = 0) (hy : y % 16 = 0) :
-    (x + 16 + 8 ≤ y + 24 ∨ y + 24 + 8 ≤ x + 16) ∧
-    (x ≠ y → (x + 16 + 8 ≤ y + 16 ∨ y + 16 + 8 ≤ x + 16) ∧
-      (x + 24 + 8 ≤ y + 24 ∨ y + 24 + 8 ≤ x + 24)) := by
-  refine ⟨by omega, fun hne => ⟨by omega, by omega⟩⟩
-
 /-! ## Unlinking -/
 
 /-- **Unlink a node.** Removing `y` from between `x` and `z` needs exactly
@@ -186,7 +178,6 @@ theorem links_link {m m' : Mem} {pre post : List Nat} {x y z : Nat}
   obtain ⟨hpre, _, _, hpost⟩ := h
   exact ⟨hpre.transport fun a b hab => hag a b (.inl hab), h1, h2, h3, h4,
     hpost.transport fun a b hab => hag a b (.inr hab)⟩
-
 
 /-! ## The chunk walk -/
 
@@ -280,7 +271,6 @@ theorem walk_next_of {m : Mem} {p top : Nat} {c : Chunk} :
     cases w with
     | chunk _ _ _ _ _ rest => exact walk_next_of rest
 
-
 /-! ## Bins and the reflagged walk -/
 
 /-- Bin `i` replaced by `l`. -/
@@ -327,7 +317,6 @@ theorem coalesced_reflag_true {cs : List Chunk} {q : Nat}
   · exact .inl (reflag_inuse_true h1)
   · exact .inr (reflag_inuse_true h1)
 
-
 /-! ## Adjacent pairs -/
 
 theorem pair_mem {a b : Nat} {l : List Nat} (h : [a, b] <:+: l) : a ∈ l ∧ b ∈ l := by
@@ -367,7 +356,6 @@ theorem pair_ne_head {a b x : Nat} {l : List Nat} (h : [a, b] <:+: x :: l)
     obtain ⟨rfl, _⟩ := List.cons.inj e
     simp only [List.append_assoc, List.cons_append, List.nil_append, List.nodup_cons] at hnd
     exact hnd.1 (by simp)
-
 
 /-! ## Reading a ring -/
 

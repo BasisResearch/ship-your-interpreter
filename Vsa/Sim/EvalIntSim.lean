@@ -50,11 +50,6 @@ is left to the composition, where each chunk is discharged locally against the
 `FixedMap` region bundle; folding all 58 into one lemma blows the elaborator's whnf
 budget, so the composition threads them chunk-wise.) The reusable region-form
 agreement fact, ready to feed a chunk transfer, is: -/
-theorem code_agree_of_stack_write8_ee (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : Nat)
-    (d : BitVec (8 * 8)) (lo len : Nat)
-    (hdis : lo + len ≤ a8 ∨ a8 + 8 ≤ lo) :
-    AgreeOn (lo, len) mem (writeMap8 mem a8 d) :=
-  agree_of_write8_disjoint mem a8 d (lo, len) (by simp only [RDisjoint]; omega)
 
 /-! ## The recorded goal (the remaining end-to-end walk)
 
@@ -76,6 +71,4 @@ epilogue restores (callee-saved recovered from the untouched spill slots via
 `value_int`'s mem framing) and `ret`. The four `EvalExit` obligations discharge via
 `intResult_bridge` (identity φ), `evalInt_spec_forces` (`st'=st`, `PhiExtends.refl`),
 and the memory frame. -/
-#check (EvalIntSimGoal : Prop)
-
 end Vsa.Sim

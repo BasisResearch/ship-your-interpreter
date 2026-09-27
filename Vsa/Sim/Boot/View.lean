@@ -123,14 +123,6 @@ theorem bootView_rodata {script : Nat} {t : RunTree} (ha : t.above 0x8001acf0 = 
   rw [bootView_below ha h4]
   simp only [imageView, hp, imageByte, h1, h2, h3, h4, ↓reduceIte, Nat.add_sub_cancel_left]
 
-theorem bootMem_text {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t)
-    (ha : t.above 0x80018be0 = true) : Code.FixedTextLoaded (bootMem script L) :=
-  fun _ hoff => (bootMem_view h _).trans (bootView_text ha hoff)
-
-theorem bootMem_rodata {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t)
-    (ha : t.above 0x8001acf0 = true) : Code.FixedRodataLoaded (bootMem script L) :=
-  fun _ hlo hoff => (bootMem_view h _).trans (bootView_rodata ha hlo hoff)
-
 end Vsa.Sim.Boot
 
 namespace Vsa.Sim.Boot

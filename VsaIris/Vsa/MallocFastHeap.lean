@@ -303,15 +303,4 @@ theorem FastAt.split {m : Mem} {H : List (Nat × Nat)} {maxReq k top brkv : Nat}
             · left; omega
             · right; omega }⟩
 
-/-- On the fast path itself: after the top split for `malloc(24)` (a 32-byte
-chunk), VSA's `AllocationReserve` over the ledger with the returned block is
-false for every positive credit count, while the corrected `Reserve` is
-preserved by `FastAt.split`. -/
-theorem split24_vsa_reserve_false {m : Mem} {H : List (Nat × Nat)} {top brkv maxReq k : Nat}
-    (htop : heapStart ≤ top) (hhi : top + 32 ≤ heapEnd) (hk : 0 < k) :
-    ¬ AllocationReserve vsaArena (splitMem m top 32 brkv) ((top + 16, 24) :: H) maxReq k := by
-  have Rt : read64 (splitMem m top 32 brkv) topAddr = some (top + 32) :=
-    split_read_top htop (by unfold heapEnd at hhi; omega)
-  exact vsa_reserve_fails_after_split vsaArena _ H maxReq k top hk Rt
-
 end VsaIris.VsaHeap

@@ -86,59 +86,6 @@ theorem frame_ea (a : MInstr) (L : GRegs) (base : BitVec 64) (off : Nat)
   have := fb.hi
   rw [Nat.mod_eq_of_lt (by omega)]
 
-/-- **Discharge a `ld` window from the `FrameBundle`.**  Any `base`-relative 8-byte
-load at a small aligned offset gets its `MemFacts` for FREE: the bounds by `omega`
-from the bundle, the byte pins from total reads.  Returns the read bytes as the load-data
-list so the caller can assemble the seg's `lds`.  No `spill_addr`/`read64_bytes`
-ritual, no operand data. -/
-theorem frame_ld (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)
-    (base : BitVec 64) (off : Nat) (fb : FrameBundle m base)
-    (hk : a.kind = .ld)
-    (hsrc : srcVal a.rs1 L = base) (himm : (sign_extend (m := 64) a.imm : BitVec 64).toNat = off)
-    (hoff : off + 8 ≤ 0x108) (hoff8 : off % 8 = 0) :
-    ∃ bs : List (BitVec 8), MemFacts m L bs a := by
-  have hea : (eaddrM a L).toNat = base.toNat + off :=
-    frame_ea a L base off hsrc himm (by omega) fb
-  let b0 := bytesT1 m (base.toNat + off)
-  let b1 := bytesT1 m (base.toNat + off + 1)
-  let b2 := bytesT1 m (base.toNat + off + 2)
-  let b3 := bytesT1 m (base.toNat + off + 3)
-  let b4 := bytesT1 m (base.toNat + off + 4)
-  let b5 := bytesT1 m (base.toNat + off + 5)
-  let b6 := bytesT1 m (base.toNat + off + 6)
-  let b7 := bytesT1 m (base.toNat + off + 7)
-  refine ⟨[b0, b1, b2, b3, b4, b5, b6, b7], ?_⟩
-  refine memFacts_ld_frame m L a b0 b1 b2 b3 b4 b5 b6 b7 hk
-    (by rw [hea]; have := fb.lo; omega)
-    (by rw [hea]; have := fb.hi; omega)
-    (by rw [hea]; have := fb.htif; right; omega)
-    (by rw [hea]) (by rw [hea]) (by rw [hea])
-    (by rw [hea]) (by rw [hea]) (by rw [hea])
-    (by rw [hea]) (by rw [hea])
-
-/-- **Discharge a `sd` window from the `FrameBundle`.**  Any `base`-relative 8-byte
-store at a small aligned offset gets its `MemFacts` for FREE — bounds only, no pins,
-no data.  `bs` is whatever the seg threads there. -/
-theorem frame_sd (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)
-    (base : BitVec 64) (off : Nat) (bs : List (BitVec 8)) (fb : FrameBundle m base)
-    (hk : a.kind = .sd)
-    (hsrc : srcVal a.rs1 L = base) (himm : (sign_extend (m := 64) a.imm : BitVec 64).toNat = off)
-    (hoff : off + 8 ≤ 0x108) (hoff8 : off % 8 = 0) :
-    MemFacts m L bs a := by
-  have hea : (eaddrM a L).toNat = base.toNat + off :=
-    frame_ea a L base off hsrc himm (by omega) fb
-  refine memFacts_sd_frame m L a bs hk
-    (by rw [hea]; have := fb.lo; omega)
-    (by rw [hea]; have := fb.hi; omega)
-    (by rw [hea]; have := fb.htif; omega)
-    (by rw [hea]; have := fb.al; omega)
-
-#print axioms memFacts_ld_frame
-#print axioms memFacts_sd_frame
-#print axioms frame_ea
-#print axioms frame_ld
-#print axioms frame_sd
-
 /-! ## Composing into a seg's `SegPre` (the next step)
 
 To build `SegPre <arm>Dispatch` from a `FrameBundle`, the caller: (1) reads each

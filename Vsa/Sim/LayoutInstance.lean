@@ -90,20 +90,6 @@ set_option maxHeartbeats 400000
 
 /-- `interp_run` entry PC (symbol `interp_run`). -/
 def interpRunEntry : Nat := 0x800043ec
-/-- `interp_run` code region `[0x800043ec, 0x80004588)` (up to `main`). -/
-def interpRunCode : Region := (0x800043ec, 0x80004588 - 0x800043ec)
-
-/-- `eval_expr` entry PC (symbol `eval_expr`). -/
-def evalExprEntry : Nat := 0x80003164
-/-- `exec_stmt` entry PC (symbol `exec_stmt`). -/
-def execStmtEntry : Nat := 0x80003fe0
-/-- `runtime_error` entry PC (symbol `runtime_error`). -/
-def runtimeErrorEntry : Nat := 0x80002da8
-/-- `_exit` entry PC (symbol `_exit`). -/
-def exitEntry : Nat := 0x80000180
-
-/-- The binary-`.op` dispatch jump table base (`.rodata`, 11 × 4-byte entries). -/
-def jumpTableBase : Nat := 0x80019f58
 
 /-- The C-stack region `[__stack_top - __stack_size, __stack_top)` =
 `[0x87800000, 0x88000000)` (linker `__stack_top = 0x88000000`,
@@ -123,44 +109,7 @@ def interpObject : Nat := 0x87fffe10
 
 Each atom is a single `decide`/`omega` over concrete literals. -/
 
-/-- **The M6 geometry predicate, proved for the real binary.**  All three atoms
-(`stack_ram`, `stack_win`, `code_stack_disjoint`) are `decide`/`omega` over the
-concrete `Nat` region bounds — the geometry residual the close leaves open. -/
-theorem layoutGeomPredL : LayoutGeomPred interpRunCode stackSL spEntry where
-  stack_ram := by decide
-  stack_win := by
-    show tohostAddr + 16 ≤ (0x87800000 : Nat)
-    rw [tohostAddr_val]; decide
-  code_stack_disjoint := by
-    show spEntry ≤ interpRunCode.1 ∨ interpRunCode.1 + interpRunCode.2 ≤ stackSL.lo
-    right; decide
-
-/-- **The concrete `GeomFacts`.**  This discharges the geometry residual for the
-final close: every Layer-4 case projects its geometry off this record via `geom`. -/
-def geomFactsL : GeomFacts interpRunCode stackSL spEntry :=
-  geomFacts_of_layout layoutGeomPredL
-
 /-! ## Per-object geometry the dispatch / entry cases carry -/
-
-/-- The dispatch **jump table** (`0x80019f58`, 44 bytes) sits BELOW the HTIF
-window, so it is not a full `ObjGeom`; but it is disjoint from the C-stack
-scribble `[stackSL.lo, spEntry)` — the only atom the slot-survival reasoning
-consumes. -/
-theorem jumpTableDisjoint : StackDisjoint jumpTableBase 44 stackSL spEntry where
-  stack_disjoint := by
-    show jumpTableBase + 44 ≤ stackSL.lo ∨ spEntry ≤ jumpTableBase
-    left; decide
-
-/-- The `interp_run` **code** region (`0x800043ec`, `0x19c` bytes) sits BELOW the
-HTIF window (`0x80004588 < tohostAddr = 0x8001ad00`) and is only 4-aligned (entry
-`0x…3ec`), so — like the jump table — it is NOT a full `ObjGeom`.  The only atom
-the `code ↔ stack` reasoning consumes is its disjointness from the C-stack
-scribble `[stackSL.lo, spEntry)`, which `StackDisjoint` packages. -/
-theorem interpRunCodeDisjoint :
-    StackDisjoint interpRunCode.1 interpRunCode.2 stackSL spEntry where
-  stack_disjoint := by
-    show interpRunCode.1 + interpRunCode.2 ≤ stackSL.lo ∨ spEntry ≤ interpRunCode.1
-    left; decide
 
 /-! ## The concrete refinement boundary -/
 
@@ -236,45 +185,6 @@ structure InterpRunPhysicalFacts
     StoreRepr m' N A φf φc Vsa.While.initSt.store
   arena_budget : A.lo + aLeft ≤ A.hi
 
-/-- Mutable storage excluded from the represented AST at the initial snapshot. -/
-abbrev AstMutableByte (m : Vsa.MemRepr.Mem) (A : Arena)
-    (globalEnv k : Nat) : Prop :=
-  Vsa.Sim.AstMutableByte m stackSL A globalEnv k
-
-/-- The approved physical boundary with hereditary AST read ownership. -/
-structure InterpRunOwnedFacts
-    (c : Config) (stmts count : Nat) (inp : BitVec 64)
-    (N : NativeAddrs) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
-    (aLeft : Nat) : Prop extends
-    InterpRunPhysicalFacts c stmts count inp N A φf φc aLeft where
-  ast_owned : ∀ p : Vsa.While.Program,
-    Vsa.MemRepr.ProgramRepr c.σ.mem stmts count p →
-    Vsa.MemRepr.ProgramReprWithin c.σ.mem
-      (fun k => ¬ AstMutableByte c.σ.mem A (φf 0) k) stmts count p
-
-namespace BeforeRuntimeOwnership
-
-/-- Historical AST-only ownership and readability boundary. -/
-structure InterpRunReadyFacts
-    (c : Config) (stmts count : Nat) (inp : BitVec 64)
-    (N : NativeAddrs) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
-    (aLeft : Nat) : Prop extends
-    InterpRunOwnedFacts c stmts count inp N A φf φc aLeft where
-  ast_readable : ∀ p : Vsa.While.Program,
-    Vsa.MemRepr.ProgramRepr c.σ.mem stmts count p →
-    Vsa.MemRepr.ProgramReprWithin c.σ.mem
-      (fun k => 0x80000000 ≤ k ∧ k < 0x100000000) stmts count p
-
-def InterpRunReady (c : Config) (stmts count : Nat) : Prop :=
-  ∃ (inp : BitVec 64) (N : NativeAddrs) (A : Arena)
-    (φf φc : Vsa.While.Addr → Nat) (aLeft : Nat),
-    InterpRunReadyFacts c stmts count inp N A φf φc aLeft
-
-def interpRunLayout : Vsa.Refine.Layout where
-  atInterpRun c a n := InterpRunReady c a n
-
-end BeforeRuntimeOwnership
-
 /-! ## Stack admissibility (INTERP_DESIGN.md Q1, §10.4)
 
 The boundary's `stack_ok` is the constant `176 + 1088`, but each recursion
@@ -320,24 +230,6 @@ theorem ProgramStackFits.of_check {p : Vsa.While.Program}
 every program the memory represents fits the stack. -/
 def StackAdmissible (m : Vsa.MemRepr.Mem) (stmts count : Nat) : Prop :=
   ∀ p : Vsa.While.Program, Vsa.MemRepr.ProgramRepr m stmts count p → ProgramStackFits p
-
-/-- The first `exec_stmt` call's ItemZero budget, from the fit: `interp_run`
-calls `exec_stmt` at `spEntry - 176` with depth 0. -/
-theorem ProgramStackFits.execBudget {p : Vsa.While.Program} (h : ProgramStackFits p)
-    {s : Vsa.While.Stmt} (hs : s ∈ p) :
-    StackOK stackSL (BitVec.ofNat 64 (spEntry - interpRunFrame))
-      (s.stackNeed + (Vsa.While.maxCallDepth - 0) * Vsa.While.perCallBudget +
-        Vsa.While.evalFrame) := by
-  have hle := Vsa.While.Stmt.stackNeedList_mem_le hs
-  have hn := h.need
-  have hsp : (BitVec.ofNat 64 (spEntry - interpRunFrame)).toNat = spEntry - interpRunFrame := by
-    decide
-  have hlo : stackSL.lo = 0x87800000 := rfl
-  have hhi : stackSL.hi = 0x88000000 := rfl
-  have hspv : spEntry = 0x87fffd00 := rfl
-  have hfr : interpRunFrame = 176 := rfl
-  rw [Nat.sub_zero]
-  refine ⟨?_, ?_, ?_⟩ <;> rw [hsp] <;> omega
 
 /-! ## The boundary heap's frame chunks and allocator words (A0's `BootGap`)
 
@@ -453,122 +345,6 @@ structure InterpRunReadyFacts
   reload it. User decision (2026-09-24, boundary facts). -/
   s0_impure : c.σ.regs.get? Register.x8 = some (0x8001b970#64 : BitVec 64)
 
-/-- The initial ownership, projected from `boot`. -/
-theorem InterpRunReadyFacts.ownership
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
-    ∃ D : RuntimeOwnership.InitialOwnershipData,
-      RuntimeOwnership.InitialOwned c.σ.mem A stackSL φf φc stmts count D := by
-  obtain ⟨D, _, _, _, _, _, h⟩ := F.boot
-  exact ⟨D, h.owned⟩
-
-theorem InterpRunReadyFacts.ast_owned
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft)
-    (p : Vsa.While.Program) (hp : Vsa.MemRepr.ProgramRepr c.σ.mem stmts count p) :
-    Vsa.MemRepr.ProgramReprWithin c.σ.mem
-      (fun k => ¬ RuntimeOwnership.InitialWriteByte stackSL k) stmts count p := by
-  obtain ⟨D, h⟩ := F.ownership
-  exact h.ast_owned p hp
-
-theorem InterpRunReadyFacts.ast_readable
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft)
-    (p : Vsa.While.Program) (hp : Vsa.MemRepr.ProgramRepr c.σ.mem stmts count p) :
-    Vsa.MemRepr.ProgramReprWithin c.σ.mem
-      (fun k => 0x80000000 ≤ k ∧ k < 0x100000000) stmts count p := by
-  obtain ⟨D, h⟩ := F.ownership
-  exact h.ast_readable p hp
-
-namespace BeforeAstReadability
-
-/-- Historical ownership-only boundary, retained for the checked denied read. -/
-def InterpRunReady (c : Config) (stmts count : Nat) : Prop :=
-  ∃ (inp : BitVec 64) (N : NativeAddrs) (A : Arena)
-    (φf φc : Vsa.While.Addr → Nat) (aLeft : Nat),
-    InterpRunOwnedFacts c stmts count inp N A φf φc aLeft
-
-/-- The concrete layout before the approved AST readability correction. -/
-def interpRunLayout : Vsa.Refine.Layout where
-  atInterpRun c a n := InterpRunReady c a n
-
-end BeforeAstReadability
-
-namespace BeforeAstOwnership
-
-/-- Historical physical boundary, retained for the checked output-alias run. -/
-def InterpRunReady (c : Config) (stmts count : Nat) : Prop :=
-  ∃ (inp : BitVec 64) (N : NativeAddrs) (A : Arena)
-    (φf φc : Vsa.While.Addr → Nat) (aLeft : Nat),
-    InterpRunPhysicalFacts c stmts count inp N A φf φc aLeft
-
-/-- The concrete layout before the approved AST ownership correction. -/
-def interpRunLayout : Vsa.Refine.Layout where
-  atInterpRun c a n := InterpRunReady c a n
-
-end BeforeAstOwnership
-
-/-- The interpreter code is a projection of the complete fixed text image. -/
-theorem InterpRunReadyFacts.run_code
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
-    Code.Interp_runLoaded c.σ.mem :=
-  F.text_image.Interp_runLoaded
-
-/-- Setjmp uses the same fixed image as the interpreter. -/
-theorem InterpRunReadyFacts.setjmp_code
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
-    Code.SetjmpLoaded c.σ.mem :=
-  F.text_image.SetjmpLoaded
-
-/-- Every concrete 24-byte result slot inside the declared stack has all three
-words present.  This is the exact initialization fact recursive value copies use. -/
-theorem InterpRunReadyFacts.valueWordsTotal
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat}
-    {aLeft a : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft)
-    (hlo : stackSL.lo ≤ a) (hhi : a + 24 ≤ stackSL.hi) :
-    ValueWordsTotal c.σ.mem a :=
-  valueWordsTotal_of_interval F.stack_bytes hlo hhi
-
-/-- The `interp_run` statement-result slot is `88` bytes above its post-spill
-stack pointer.  Its complete 24-byte value image is present at entry. -/
-theorem InterpRunReadyFacts.interpRetWords
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat}
-    {aLeft : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
-    ValueWordsTotal c.σ.mem (spEntry - 176 + 88) := by
-  apply F.valueWordsTotal <;> decide
-
-/-- Main's saved s0 word is readable from existing stack-byte presence. -/
-theorem InterpRunReadyFacts.main_saved_s0
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
-    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
-    ∃ v : BitVec 64, Vsa.MemRepr.read64 c.σ.mem 0x87fffff0 = some v.toNat := by
-  obtain ⟨_, v, _, _, hv, _⟩ :=
-    F.valueWordsTotal (a := 0x87ffffe8) (by decide) (by decide)
-  exact ⟨v, hv⟩
-
-/-- The top-level interpreter starts in the distinguished allocated global
-environment.  This is derived from `initSt`; it is not an extra runtime
-assumption. -/
-theorem InterpRunReadyFacts.envValid
-    {c : Config} {stmts count : Nat} {inp : BitVec 64}
-    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat}
-    {aLeft : Nat}
-    (_F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
-    EnvValid Vsa.While.initSt 0 :=
-  EnvValid.init
-
 /-- A non-circular, post-startup refinement boundary.  It asserts the concrete
 runtime snapshot from which the decoded `interp_run` prologue can be proved; it
 does not assume a machine execution or `InterpInitStoreRepr`. -/
@@ -582,60 +358,6 @@ def InterpRunReady (c : Config) (stmts count : Nat) : Prop :=
 def interpRunLayout : Vsa.Refine.Layout where
   atInterpRun c a n := InterpRunReady c a n
 
-/-- Forgetting ownership recovers the exact historical boundary. -/
-theorem InterpRunReady.to_beforeAstOwnership {c : Config} {a n : Nat}
-    (h : InterpRunReady c a n) : BeforeAstOwnership.InterpRunReady c a n := by
-  obtain ⟨inp, N, A, φf, φc, budget, F⟩ := h
-  exact ⟨inp, N, A, φf, φc, budget, F.toInterpRunPhysicalFacts⟩
-
-theorem loaded_beforeAstOwnership {p : Vsa.While.Program} {c : Config}
-    (h : Vsa.Refine.Loaded interpRunLayout p c) :
-    Vsa.Refine.Loaded BeforeAstOwnership.interpRunLayout p c := by
-  obtain ⟨a, n, hp, hr⟩ := h
-  exact ⟨a, n, hp, hr.to_beforeAstOwnership⟩
-
-namespace BeforeRuntimeOwnership
-
-/-- Forgetting readability recovers the exact historical ownership boundary. -/
-theorem InterpRunReady.to_beforeAstReadability {c : Config} {a n : Nat}
-    (h : InterpRunReady c a n) : BeforeAstReadability.InterpRunReady c a n := by
-  obtain ⟨inp, N, A, φf, φc, budget, F⟩ := h
-  exact ⟨inp, N, A, φf, φc, budget, F.toInterpRunOwnedFacts⟩
-
-theorem loaded_beforeAstReadability {p : Vsa.While.Program} {c : Config}
-    (h : Vsa.Refine.Loaded interpRunLayout p c) :
-    Vsa.Refine.Loaded BeforeAstReadability.interpRunLayout p c := by
-  obtain ⟨a, n, hp, hr⟩ := h
-  exact ⟨a, n, hp, hr.to_beforeAstReadability⟩
-
-end BeforeRuntimeOwnership
-
-/-- Expose the concrete ready witness from `Loaded`. -/
-theorem loaded_interpRunReady {p : Vsa.While.Program} {c : Vsa.Machine.Config}
-    (h : Vsa.Refine.Loaded interpRunLayout p c) :
-    ∃ a n, Vsa.MemRepr.ProgramRepr c.σ.mem a n p ∧ InterpRunReady c a n := by
-  exact h
-
-/-- A loaded configuration is a live Sail state, excluding the HTIF-latched
-counterexample admitted by the former three-register boundary. -/
-theorem loaded_goodState {p : Vsa.While.Program} {c : Vsa.Machine.Config}
-    (h : Vsa.Refine.Loaded interpRunLayout p c) : GoodState c.σ := by
-  obtain ⟨_a, _n, _hp, _inp, _N, _A, _φf, _φc, _aLeft, F⟩ := h
-  exact F.good
-
-theorem loaded_tick {p : Vsa.While.Program} {c : Vsa.Machine.Config}
-    (h : Vsa.Refine.Loaded interpRunLayout p c) : c.tick < 2 := by
-  obtain ⟨_a, _n, _hp, _inp, _N, _A, _φf, _φc, _aLeft, F⟩ := h
-  exact F.tick
-
-/-- The concrete refinement boundary is explicitly post-CRT. This projection
-does not pretend that the zero-initialized ELF data already satisfies newlib's
-runtime `FILE` state. -/
-theorem loaded_consoleBoot {p : Vsa.While.Program} {c : Vsa.Machine.Config}
-    (h : Vsa.Refine.Loaded interpRunLayout p c) : ConsoleBoot c.σ.mem := by
-  obtain ⟨_a, _n, _hp, _inp, _N, _A, _φf, _φc, _aLeft, F⟩ := h
-  exact F.console
-
 /-! ## Statics — reuse `ImageStaticsLoaded`
 
 The static-data hypotheses are ALREADY fully discharged from one predicate in
@@ -643,17 +365,7 @@ The static-data hypotheses are ALREADY fully discharged from one predicate in
 single derivation handle so a case can name ONE predicate for all statics: given
 `Code.ImageStaticsLoaded c.σ.mem`, every static byte-pin / packaged predicate
 (`LldFmtLoaded`, the digit tables, `_impure_ptr`, …) is an O(1) projection. -/
-theorem layoutStaticsLoaded {m : Std.ExtHashMap Nat (BitVec 8)}
-    (h : Code.ImageStaticsLoaded m) :
-    Code.LldFmtLoaded m ∧ m[(0x80019770 : Nat)]? = some (0x2e#8) :=
-  ⟨imageStatics_lldFmt h, imageStatics_hdb0 h⟩
 
 /-! ## `#print axioms` sanity — must be `{propext, Classical.choice, Quot.sound}`. -/
-
-#print axioms layoutGeomPredL
-#print axioms geomFactsL
-#print axioms jumpTableDisjoint
-#print axioms interpRunCodeDisjoint
-#print axioms layoutStaticsLoaded
 
 end Vsa.Sim.LayoutInstance

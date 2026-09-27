@@ -497,7 +497,6 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iframe Hcode Hms Hslot Hsr Hw Hst
     iapply Hk $$ %_ %Value.null %hC
 
-
 /-- The arity message buffer `sp+144` (96 bytes). -/
 abbrev arityBuf (s : BitVec 64) : Nat → Prop := InExt (s.toNat - 1088 + 144, 96)
 

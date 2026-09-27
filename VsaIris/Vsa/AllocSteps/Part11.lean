@@ -1120,7 +1120,6 @@ theorem jalx_80007574 (live : Nat → Prop)
   rwa [show BitVec.addInt (0x80007574#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80007574 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
-
 theorem st_80007574 {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ allocText, live p.1)

@@ -50,16 +50,6 @@ call-splice idiom, so a caller writes `callSeg pre callee suf` instead of a bare
 nested `Triple.seq (Triple.seq …) …` whose associativity/seam order must be
 re-derived at each site. -/
 
-/-- **The `jal rd` call-splice combinator.**  `prefix ≫ callee ≫ suffix`.
-Given the caller prefix `Triple P Mid1`, the named callee contract
-`Triple Mid1 Mid2`, and the caller return-suffix `Triple Mid2 Q`, produce the
-whole call site `Triple P Q`.  This is exactly the composition line at the end of
-`callClosureSim`, extracted so every call site reuses it. -/
-theorem callSeg {P Mid1 Mid2 Q : Config → Prop}
-    (pre : Triple P Mid1) (callee : Triple Mid1 Mid2) (suf : Triple Mid2 Q) :
-    Triple P Q :=
-  Triple.seq (Triple.seq pre callee) suf
-
 /-! ## Seam-massaging variant
 
 In practice the callee contract is stated over its OWN entry/exit predicates
@@ -70,32 +60,12 @@ between them needs a `Triple.conseq`.  `callSegConseq` threads two entailments
 (`hin : Mid1 ⊆ C_in`, `hout : C_out ⊆ Mid2`) so the caller can drop the callee
 contract in at its native predicates without re-plumbing the seams. -/
 
-/-- **Seam-adapted call-splice.**  Same `prefix ≫ callee ≫ suffix`, but the named
-callee contract is stated over its own boundary predicates `C_in`/`C_out`; the
-seam entailments `hin`/`hout` glue the prefix post `Mid1` into `C_in` and the
-callee exit `C_out` into the suffix pre `Mid2`.  This is `callSeg` with a
-`Triple.conseq` wrapped around the callee — the exact glue a real call site needs
-when the callee contract's predicates are named independently. -/
-theorem callSegConseq {P Mid1 Mid2 Q C_in C_out : Config → Prop}
-    (pre : Triple P Mid1) (callee : Triple C_in C_out) (suf : Triple Mid2 Q)
-    (hin : ∀ c, Mid1 c → C_in c) (hout : ∀ c, C_out c → Mid2 c) :
-    Triple P Q :=
-  callSeg pre (Triple.conseq callee hin hout) suf
-
 /-! ## Demo (a): the abstract 3-seam splice mirroring `callClosureSim`
 
 Over abstract `P/Mid1/Mid2/Q` predicates, `callSeg` reconstructs the exact shape
 of `callClosureSim`'s final composition: prefix seam ≫ body-IH (callee) ≫ return
 seam.  This is the combinator firing — the whole `Call.closure` crux composition
 reduced to the reusable idiom. -/
-theorem callSegDemo {P Mid1 Mid2 Q : Config → Prop}
-    (hEntry : Triple P Mid1)      -- the ClosureEntrySpec prefix seam
-    (hBodyIH : Triple Mid1 Mid2)  -- the recursive body IH (the callee contract)
-    (hRet : Triple Mid2 Q) :      -- the ClosureRetSpec return seam
-    Triple P Q :=
-  callSeg hEntry hBodyIH hRet
-
-#print axioms callSegDemo
 
 /-! ## Demo (b): reproducing `callClosureSim`'s composition line
 
@@ -106,27 +76,10 @@ to yield the `CallEntryP → CallExitP` call-site Triple.  Here `CallEntryP`,
 `Config → Prop` placeholders standing for the concrete predicates in
 `EvalCallClosure.lean`; the point is that the SAME `callSeg` call reproduces the
 crux's composition without the hand-rolled nested `Triple.seq`. -/
-theorem callClosureSimShape
-    {CallEntryP SegEntryBody SegExitBody CallExitP : Config → Prop}
-    (hEntry : Triple CallEntryP SegEntryBody)   -- prefix: dispatch → body-loop head
-    (hBodyIH : Triple SegEntryBody SegExitBody) -- body-IH: the recursor's mExecSeq
-    (hRet : Triple SegExitBody CallExitP) :     -- return: body-exit → epilogue join
-    Triple CallEntryP CallExitP :=
-  callSeg hEntry hBodyIH hRet
-
-#print axioms callClosureSimShape
 
 /-! ## Demo (c): the seam-massaging variant firing
 
 The callee contract stated over independent boundaries `C_in`/`C_out`, glued into
 the prefix/suffix seams by `callSegConseq`. -/
-theorem callSegConseqDemo
-    {P Mid1 Mid2 Q C_in C_out : Config → Prop}
-    (pre : Triple P Mid1) (callee : Triple C_in C_out) (suf : Triple Mid2 Q)
-    (hin : ∀ c, Mid1 c → C_in c) (hout : ∀ c, C_out c → Mid2 c) :
-    Triple P Q :=
-  callSegConseq pre callee suf hin hout
-
-#print axioms callSegConseqDemo
 
 end Vsa.Sim

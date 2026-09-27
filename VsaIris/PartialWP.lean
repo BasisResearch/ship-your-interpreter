@@ -101,13 +101,6 @@ theorem wpP_exec_halt {Φ : Nat × String → IProp GF} :
     iapply BigSepL.bigSepL_nil.2
     iempintro
 
-/-- The total WP implies the partial one (iris-lean `twp.to_wp`). Used only
-where a partial proof reuses a result proved in total mode alone. -/
-theorem twp_wp {Φ : Nat × String → IProp GF} : mTWP (GF := GF) M Φ ⊢ mWP M Φ := by
-  iintro H Htok
-  iapply twp.to_wp
-  iapply H $$ Htok
-
 /-- Fancy updates in front of the total loop WP are absorbed. -/
 theorem fupd_mTWP {Φ : Nat × String → IProp GF} :
     (|={⊤}=> mTWP (GF := GF) M Φ) ⊢ mTWP M Φ := by

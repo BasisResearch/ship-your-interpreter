@@ -134,15 +134,6 @@ theorem mw_congr {pc : BitVec 64} {R R' : Nat → BitVec 64} {Mt : Mem}
   exact ⟨N, fun rv mv hm => hN rv mv
     ⟨hm.pc, fun r hr hne => (hm.regs r hr hne).trans (hR r hr hne).symm, hm.img⟩⟩
 
-theorem mw_congr_mem {pc : BitVec 64} {R : Nat → BitVec 64} {Mt Mt' : Mem}
-    (hM : ∀ a, S a → imgM Mt' a = imgM Mt a) (h : MW live X n img S Q pc R Mt') :
-    MW live X n img S Q pc R Mt := by
-  obtain ⟨N, hN⟩ := h
-  exact ⟨N, fun rv mv hm => hN rv mv ⟨hm.pc, hm.regs, fun a ha => (hm.img a ha).trans (hM a ha).symm⟩⟩
-
-theorem mw_pc {pc pc' : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} (e : pc = pc')
-    (h : MW live X n img S Q pc' R Mt) : MW live X n img S Q pc R Mt := e ▸ h
-
 /-- `swp_segLD` with no read-only register, over `mText ++ srcText`. -/
 theorem mw_segL {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))

@@ -60,26 +60,7 @@ open Vsa.Logic
 
 namespace Vsa.Sim
 
-/-- Frame geometry is unchanged by a write-log fold. -/
-theorem frameBundle_writeLog {m : Std.ExtHashMap Nat (BitVec 8)} {base : BitVec 64}
-    (log : List WEntry) (fb : FrameBundle m base) : FrameBundle (writeLog m log) base where
-  lo := fb.lo
-  hi := fb.hi
-  htif := fb.htif
-  al := fb.al
-
 /-! ## The per-window leaves (offset read off `a.imm`) -/
-
-/-- A `ld` window `MemFacts` from a `FrameBundle` over the load's own memory, with
-the offset read off `a.imm`; the tactic supplies `hk`/`hsrc`/`hoff`/`hoff8` by
-`decide`/`rfl`.  Returns the read bytes for the caller's `lds`. -/
-theorem frame_ld_auto (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)
-    (base : BitVec 64) (fb : FrameBundle m base) (hk : a.kind = .ld)
-    (hsrc : srcVal a.rs1 L = base)
-    (hoff : (sign_extend (m := 64) a.imm : BitVec 64).toNat + 8 ≤ 0x108)
-    (hoff8 : (sign_extend (m := 64) a.imm : BitVec 64).toNat % 8 = 0) :
-    ∃ bs : List (BitVec 8), MemFacts m L bs a :=
-  frame_ld m L a base ((sign_extend (m := 64) a.imm : BitVec 64).toNat) fb hk hsrc rfl hoff hoff8
 
 /-! ### Loads via an explicit (`L`-independent) read window
 
@@ -491,16 +472,6 @@ elab "seg_frame_facts " h:term " with " pfx:str " using " fbE:term : tactic => d
 
 set_option maxRecDepth 100000
 
-/-- **Acceptance 1.**  The whole `eq` arm spill-and-setup block's `ChainFacts`
-bundle — six `ld` reloads + six `sd` field spills, no branch guards — discharged
-from ONE `FrameBundle σ.mem sp` and the loaded image. -/
-theorem eqDispatch_facts (σ : MState) (sp : BitVec 64)
-    (fb : FrameBundle σ.mem sp) (h : Vsa.Sim.Code.Eval_exprLoaded σ.mem) :
-    ∃ lds, ChainFacts σ.mem σ.mem (eqDispL sp) lds eqDispatch := by
-  seg_frame_facts h with "Vsa.Sim.Code.eval_expr_at_" using fb
-
-#print axioms eqDispatch_facts
-
 /-! ## Acceptance 3 — compose `eqDispatch_facts` into a live `Triple`
 
 `eqDispatchRow` (`EqNeDispatchSeg`) is `Triple (SegPre eqDispatch (eqDispL sp) lds …)
@@ -509,36 +480,6 @@ supplies the `ChainFacts` conjunct of `SegPre` — so from a config parked at th
 entry with a `FrameBundle` (instead of a hand-assembled `lds` + `ChainFacts`), we get
 a `Triple` whose entry needs only frame geometry.  `SegFramePre` is that
 frame-bundle entry predicate; `eqDispatchRow_frame` is the composed row. -/
-
-/-- The frame-bundle arm entry: parked at `pc0` with a `FrameBundle` over the frame
-base `sp` (and the loaded code image) in place of a concrete `lds` + its `ChainFacts`
-bundle. -/
-def SegFramePre (L : GRegs) (sp pc0 : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Vsa.Machine.Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.regs.get? Register.PC = some pc0 ∧
-  (∃ vm, c.σ.regs.get? Register.minstret = some vm) ∧
-  GHolds c.σ L ∧ KeysOK (keysG L) ∧ FrameBundle m0 sp ∧
-  Vsa.Sim.Code.Eval_exprLoaded m0 ∧ c.tick < 2
-
-/-- **The composed `eq` row.**  From the frame-bundle entry `SegFramePre` — no
-hand-supplied `lds`/`ChainFacts`, just a `FrameBundle m0 sp` and the loaded image —
-the whole `eq` arm spill-and-setup block runs to `EqDispatchPost` for the `lds` the
-frame reads.  The `ChainFacts` obligation `eqDispatchRow` carries is discharged by
-`eqDispatch_facts`; this is the item-1 SegPre composition. -/
-theorem eqDispatchRow_frame (sp : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (SegFramePre (eqDispL sp) sp 0x800036e4#64 m0)
-      (fun c => ∃ lds, EqDispatchPost sp lds m0 c) := by
-  intro c hpre
-  obtain ⟨hG, hmem, hpc, hmi, hL, hkeys, fb, hload, htick⟩ := hpre
-  -- read the frame's `lds` + its `ChainFacts` from the bundle
-  obtain ⟨lds, hfacts⟩ :=
-    eqDispatch_facts c.σ sp (hmem ▸ fb) (hmem ▸ hload)
-  -- run `eqDispatchRow` at this `lds`
-  obtain ⟨c', hstep, hpost⟩ := eqDispatchRow sp lds m0 c
-    ⟨hG, hmem, hpc, hmi, hL, hkeys, hfacts, htick⟩
-  exact ⟨c', hstep, lds, hpost⟩
-
-#print axioms eqDispatchRow_frame
 
 /-! ## Acceptance 2 — the `div` arm (cross-block): the WHOLE four-block `ChainFacts`,
 no seal, no heartbeat bump
@@ -561,42 +502,5 @@ With those, `divDispatch_facts` assembles the four-block `ChainFacts` in seconds
 (axiom-clean, no `maxHeartbeats` slop), leaving exactly ONE residual — the seg's genuine
 semantic guard, the divisor-nonzero `beqz` — supplied by the caller as `Wr ≠ 0`.  The
 two int-kind `bne` guards close inside the tactic (`rfl` on the bounded pin tower). -/
-
-/-- **Acceptance 2.**  The whole `div` arm dispatch (FOUR blocks, cross-block loads
-under earlier stores) as one `ChainFacts` bundle — discharged from ONE `FrameBundle
-σ.mem v2`, the loaded image, and the divisor-nonzero fact `Wr ≠ 0`.  No seal, no
-heartbeat bump: the kernel never reduces the threaded `writeLog`/`runGM` tower. -/
-theorem divDispatch_facts (σ : MState) (v2 sret Wr Wl : BitVec 64) (hWr : Wr ≠ 0)
-    (fb : FrameBundle σ.mem v2) (h : Vsa.Sim.Code.Eval_exprLoaded σ.mem) :
-    ∃ lds, ChainFacts σ.mem σ.mem (divDispL v2 sret Wr Wl) lds divDispatch := by
-  seg_frame_facts h with "Vsa.Sim.Code.eval_expr_at_" using fb
-  -- the only residual is the divisor-nonzero guard `guardB BEQ (srcVal 17 L) 0 = false`
-  show guardB bop.BEQ (srcVal 17 _) (srcVal 0 _) = false
-  rw [show srcVal 17 _ = Wr from by srcval_peel]
-  simp only [guardB]
-  exact beq_eq_false_iff_ne.mpr hWr
-
-#print axioms divDispatch_facts
-
-/-- **The composed `div` row.**  From the frame-bundle arm entry `SegFramePre` (a
-`FrameBundle m0 v2` + loaded image, no hand-supplied `lds`/`ChainFacts`) plus `Wr ≠ 0`,
-the whole `div` arm dispatch runs to `DivDispatchPost` — `divDispatch_facts` supplies
-the `ChainFacts` that `divDispatchRow` carries.  The `div` analogue of
-`eqDispatchRow_frame`, closing the item-1 `SegPre` composition for the cross-block arm. -/
-theorem divDispatchRow_frame (v2 sret Wr Wl : BitVec 64) (out0 : Array String)
-    (gpre : (R : Register) → Option (RegisterType R)) (hWr : Wr ≠ 0)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (fun c => SegFramePre (divDispL v2 sret Wr Wl) v2 0x800037dc#64 m0 c ∧
-        c.σ.sailOutput = out0 ∧ (∀ R : Register, c.σ.regs.get? R = gpre R))
-      (fun c => ∃ lds, DivDispatchPost v2 sret Wr Wl lds m0 out0 gpre c) := by
-  intro c hpre
-  obtain ⟨⟨hG, hmem, hpc, hmi, hL, hkeys, fb, hload, htick⟩, hsail, hgpre⟩ := hpre
-  obtain ⟨lds, hfacts⟩ :=
-    divDispatch_facts c.σ v2 sret Wr Wl hWr (hmem ▸ fb) (hmem ▸ hload)
-  obtain ⟨c', hstep, hpost⟩ := divDispatchRow v2 sret Wr Wl lds m0 out0 gpre c
-    ⟨⟨hG, hmem, hpc, hmi, hL, hkeys, hfacts, htick⟩, hsail, hgpre⟩
-  exact ⟨c', hstep, lds, hpost⟩
-
-#print axioms divDispatchRow_frame
 
 end Vsa.Sim

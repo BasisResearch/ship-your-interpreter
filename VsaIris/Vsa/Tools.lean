@@ -28,24 +28,6 @@ section Tools
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-theorem codeFoot_append (i : Nat) (c₁ c₂ : List (BitVec 8)) :
-    codeFoot i (c₁ ++ c₂) = codeFoot i c₁ ++ codeFoot (i + c₁.length) c₂ := by
-  unfold codeFoot
-  rw [List.zipIdx_append, List.map_append, List.zipIdx_eq_map_add (l := c₂), List.map_map]
-  congr 1
-  apply List.map_congr_left
-  intro p _
-  simp [Nat.add_assoc]
-
-theorem sepL_append' {α} (l₁ l₂ : List α) (Φ : α → IProp GF) :
-    sepL (l₁ ++ l₂) Φ ⊣⊢ sepL l₁ Φ ∗ sepL l₂ Φ := sepL_append l₁ l₂ Φ
-
-/-- A function's code splits into consecutive slices. -/
-theorem instrAt_append (i : Nat) (c₁ c₂ : List (BitVec 8)) :
-    instrAt (GF := GF) i (c₁ ++ c₂) ⊣⊢ instrAt i c₁ ∗ instrAt (i + c₁.length) c₂ := by
-  rw [instrAt_eq, instrAt_eq, instrAt_eq, codeFoot_append]
-  exact sepL_append _ _ _
-
 theorem sepL_perm {α} {l₁ l₂ : List α} (Φ : α → IProp GF) (h : l₁.Perm l₂) :
     sepL l₁ Φ ⊣⊢ sepL l₂ Φ := by
   induction h with
@@ -90,38 +72,6 @@ theorem sepL_byteAny_exists : ∀ l : List Nat,
     ipureintro
     simp [hW]
 
-/-- Forget the values of owned bytes. -/
-theorem sepL_forget (W : List (Nat × BitVec 8)) (f : Nat → BitVec 8) :
-    sepL (GF := GF) W (fun q => q.1 ↦ₘ f q.1) ⊢ sepL (W.map Prod.fst) byteAny := by
-  rw [sepL_map]
-  apply sepL_mono
-  intro q
-  iintro H
-  iexists f q.1
-  iexact H
-
-/-- Forget the values of owned bytes listed as read footprint entries. -/
-theorem sepL_map_forget (W : List (Nat × BitVec 8)) (f : Nat → BitVec 8) :
-    sepL (GF := GF) (W.map fun q => (q.1, DFrac.own 1, f q.1)) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ⊢
-      sepL (W.map Prod.fst) byteAny := by
-  rw [sepL_map, sepL_map]
-  apply sepL_mono
-  intro q
-  iintro H
-  iexists f q.1
-  iexact H
-
-/-- Forget the values of a read footprint listed by address. -/
-theorem sepL_map_forget' (l : List Nat) (f : Nat → BitVec 8) :
-    sepL (GF := GF) (l.map fun a => (a, DFrac.own 1, f a)) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ⊢
-      sepL l byteAny := by
-  rw [sepL_map]
-  apply sepL_mono
-  intro a
-  iintro H
-  iexists f a
-  iexact H
-
 /-- A duplicate-free list of owned bytes is an owned byte set. -/
 theorem sepL_to_ownSet (l : List Nat) (hnd : l.Nodup) (Φ : Nat → IProp GF) :
     sepL l Φ ⊢ ownSet (fun a => a ∈ l) Φ := by
@@ -139,56 +89,6 @@ theorem ownSet_to_sepL (l : List Nat) (hnd : l.Nodup) (Φ : Nat → IProp GF) :
   unfold ownSet
   iintro ⟨%l', %⟨hnd', hmem⟩, H⟩
   iapply (sepL_perm Φ ((List.perm_ext_iff_of_nodup hnd' hnd).mpr hmem)).1 $$ H
-
-/-- Two lists of exclusively owned bytes have disjoint addresses. -/
-theorem sepL_disjoint (W₁ W₂ : List (Nat × BitVec 8)) (f g : Nat × BitVec 8 → BitVec 8) :
-    sepL (GF := GF) W₁ (fun q => q.1 ↦ₘ f q) ∗ sepL W₂ (fun q => q.1 ↦ₘ g q) ⊢
-      sepL W₁ (fun q => q.1 ↦ₘ f q) ∗ sepL W₂ (fun q => q.1 ↦ₘ g q) ∗
-        ⌜∀ q₁ ∈ W₁, ∀ q₂ ∈ W₂, q₁.1 ≠ q₂.1⌝ := by
-  induction W₁ with
-  | nil =>
-    iintro ⟨H1, H2⟩
-    iframe H1 H2
-    ipureintro; intro _ h; cases h
-  | cons x xs ih =>
-    rw [sepL_cons]
-    iintro ⟨⟨Hx, Hxs⟩, H2⟩
-    ihave ⟨Hxs, H2, %hxs⟩ := ih $$ [Hxs H2]
-    · iframe Hxs H2
-    have hone : ∀ l : List (Nat × BitVec 8),
-        (x.1 ↦ₘ f x) ∗ sepL l (fun q => q.1 ↦ₘ g q) ⊢@{IProp GF}
-          (x.1 ↦ₘ f x) ∗ sepL l (fun q => q.1 ↦ₘ g q) ∗ ⌜∀ q ∈ l, x.1 ≠ q.1⌝ := by
-      intro l
-      induction l with
-      | nil => iintro ⟨Hx, H⟩; iframe Hx H; ipureintro; intro _ h; cases h
-      | cons y ys ihy =>
-        rw [sepL_cons]
-        iintro ⟨Hx, Hy, Hys⟩
-        ihave %hy := mem_ne x.1 y.1 _ (f x) (g y) $$ Hx Hy
-        ihave ⟨Hx, Hys, %hys⟩ := ihy $$ [Hx Hys]
-        · iframe Hx Hys
-        iframe Hx Hy Hys
-        ipureintro
-        intro q hq
-        rcases List.mem_cons.mp hq with rfl | hq
-        · exact hy
-        · exact hys q hq
-    ihave ⟨Hx, H2, %hx⟩ := hone W₂ $$ [Hx H2]
-    · iframe Hx H2
-    iframe Hx Hxs H2
-    ipureintro
-    intro q hq
-    rcases List.mem_cons.mp hq with rfl | hq
-    · exact hx
-    · exact hxs q hq
-
-theorem codeFoot_bounds {i : Nat} {code : List (BitVec 8)} {p : Nat × DFrac × BitVec 8}
-    (h : p ∈ codeFoot i code) : i ≤ p.1 ∧ p.1 < i + code.length := by
-  unfold codeFoot at h
-  obtain ⟨q, hq, rfl⟩ := List.mem_map.mp h
-  have := List.snd_lt_of_mem_zipIdx hq
-  simp at this ⊢
-  omega
 
 /-- Owned code bytes that `live` keeps present are present with their
 values. -/

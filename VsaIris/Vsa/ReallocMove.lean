@@ -72,11 +72,6 @@ structure MMKeep (R R' : Nat → BitVec 64) : Prop where
 
 theorem MMKeep.refl (R : Nat → BitVec 64) : MMKeep R R := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-theorem MMKeep.trans {R R' R'' : Nat → BitVec 64} (h : MMKeep R R') (h' : MMKeep R' R'') :
-    MMKeep R R'' :=
-  ⟨h'.ra.trans h.ra, h'.sp.trans h.sp, h'.s0.trans h.s0, h'.s1.trans h.s1, h'.a0.trans h.a0,
-    h'.s2.trans h.s2, h'.s3.trans h.s3⟩
-
 theorem MMKeep.of_eq {R R' R'' : Nat → BitVec 64} (h : MMKeep R R') (e1 : R'' 1 = R' 1)
     (e2 : R'' 2 = R' 2) (e8 : R'' 8 = R' 8) (e9 : R'' 9 = R' 9) (e10 : R'' 10 = R' 10)
     (e18 : R'' 18 = R' 18) (e19 : R'' 19 = R' 19) : MMKeep R R'' :=

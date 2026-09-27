@@ -70,8 +70,4 @@ theorem checked_mem_read_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ
     · intro i hi
       exact SplitReadChunk.of_scalar hg a k i hi hlo hhi hhtif
 
-#print axioms checked_mem_read_split_total
-#print axioms ramChunkAddress_scalar
-#print axioms SplitReadChunk.of_scalar
-#print axioms checked_mem_read_ram_scalar
 end Vsa.Sim

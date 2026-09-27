@@ -119,20 +119,10 @@ open Vsa.RuntimeRepr
 open Vsa.MemRepr
 open Vsa.While
 open Vsa.Alloc
-open Vsa.Sim.Scaffold
 
 local notation "SpecSt" => Vsa.While.St
 
 /-! ## `native_assert` entry / sub-call PCs -/
-
-/-- `native_assert` entry (`interp_init`'s `assert` C fn ptr). -/
-def nativeAssertPC : Nat := 0x80002df4
-/-- Link address after `native_assert`'s `jal value_truthy`. -/
-def nativeAssertTruthyRetPC : Nat := 0x80002e48
-/-- Link address after `native_assert`'s `jal value_null`. -/
-def nativeAssertNullRetPC : Nat := 0x80002e5c
-/-- The `beqz a0` truthy gate (`!truthy ⇒ runtime_error`, M5). -/
-def nativeAssertGatePC : Nat := 0x80002e50
 
 /-! ## `Call.assertOk` — the native `assert` case (truthy arg → `.null`, no output)
 
@@ -151,44 +141,5 @@ the remaining machine work: it threads the ~26-site `native_assert` internal run
 `value_truthy_spec` (`ValueTruthySpec`) on the `sp+16` copy of `args[0]` — via
 `valueRepr_copy_of_writeWindow` (`ReprCopy`) — and `value_null_spec` (`ValueSpec`)
 on the CALL sret, plus the dispatch/arm/join wrapper in `eval_expr`'s frame. -/
-
-/-- The abstract native-branch contract for `Call.assertOk`: from the dispatch
-entry (with the argument vector `vs` materialised and `fv = .native .assert`
-staged, i.e. `CallEntryP`) the machine reaches the epilogue join (`CallExitP`)
-with the spec state UNCHANGED — the `assert` success path produces `.null`,
-appends nothing, and mutates neither store nor output.
-
-This is the reusable residual for the whole native branch (dispatch → `jalr` →
-`native_assert` truthy path → join); it is discharged by threading the internal
-`native_assert` run against `value_truthy_spec` / `value_null_spec`. -/
-def NativeAssertOkSpec
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) : Prop :=
-  Triple
-    (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-    (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size st m0)
-
-/-- **`Call.assertOk` minor premise** (native `assert`, truthy arg → `.null`, no
-output) at the machine level. From the `EX_CALL` dispatch the native branch runs
-to the epilogue join with the spec state UNCHANGED (matching `Call.assertOk`,
-which returns `st` itself). CONDITIONAL on `NativeAssertOkSpec` — the named
-native-branch residual (dispatch decode + `jalr a6 = N.addr .assert` + the
-`native_assert` truthy path + the `value_truthy`/`value_null` sub-calls). The
-`Call.assertOk` spec derivation is threaded (its premises `vs = [v] ∨ vs = [v,m]`
-and `v.truthy = true` gate the truthy machine path). -/
-theorem callAssertOk
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem)
-    (vs : List Value) (v mv : Value)
-    (_hvs : vs = [v] ∨ vs = [v, mv])
-    (_htruthy : v.truthy = true)
-    (_hCall : Call st d (.native .assert) vs st .null)
-    (hNative : NativeAssertOkSpec g N A SL φf φc st d dLeft aLeft m0) :
-    Triple
-      (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-      (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size st m0) :=
-  hNative
 
 end Vsa.Sim

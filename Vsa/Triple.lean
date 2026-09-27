@@ -34,20 +34,6 @@ theorem Steps.trans {a b c : Config} (h₁ : Steps a b) (h₂ : Steps b c) :
 theorem Steps.single {a b : Config} (h : Step a b) : Steps a b :=
   .head h (.refl b)
 
-/-- `StepsN` composes, adding lengths. -/
-theorem StepsN.trans_add {m n : Nat} {a b c : Config}
-    (h₁ : StepsN m a b) (h₂ : StepsN n b c) : StepsN (m + n) a c := by
-  induction h₁ with
-  | zero => simpa using h₂
-  | succ s _ ih => exact Nat.succ_add _ n ▸ .succ s (ih h₂)
-
-/-- Every counted run is a `Steps` run. -/
-theorem StepsN.toSteps {n : Nat} {a b : Config} (h : StepsN n a b) :
-    Steps a b := by
-  induction h with
-  | zero => exact .refl _
-  | succ s _ ih => exact .head s ih
-
 end Vsa.Machine
 
 namespace Vsa.Logic
@@ -71,13 +57,6 @@ theorem of_imp {P Q : Config → Prop} (h : ∀ c, P c → Q c) : Triple P Q :=
 
 /-- Reflexivity. -/
 theorem rfl {P : Config → Prop} : Triple P P := of_imp fun _ h => h
-
-/-- One-step rule: lift a step-characterization lemma into the logic. -/
-theorem of_step {P Q : Config → Prop}
-    (h : ∀ c, P c → ∃ c', Step c c' ∧ Q c') : Triple P Q := by
-  intro c hc
-  obtain ⟨c', hs, hq⟩ := h c hc
-  exact ⟨c', .single hs, hq⟩
 
 /-- Consequence: strengthen the precondition, weaken the postcondition. -/
 theorem conseq {P P' Q Q' : Config → Prop} (h : Triple P Q)
@@ -103,13 +82,6 @@ theorem cases {P₁ P₂ Q : Config → Prop} (h₁ : Triple P₁ Q)
   cases hc with
   | inl h => exact h₁ c h
   | inr h => exact h₂ c h
-
-/-- Existential precondition: a triple uniform in a ghost variable. -/
-theorem exists_pre {α : Sort _} {P : α → Config → Prop} {Q : Config → Prop}
-    (h : ∀ x, Triple (P x) Q) : Triple (fun c => ∃ x, P x c) Q := by
-  intro c hc
-  obtain ⟨x, hx⟩ := hc
-  exact h x c hx
 
 /-- Total-correctness loop rule, bounded form: induction on an upper bound
 of the measure (plain `Nat` induction — no strong-recursion dependency). -/
@@ -148,48 +120,12 @@ end Triple
 
 namespace TripleN
 
-/-- Forget the count. -/
-theorem toTriple {n : Nat} {P Q : Config → Prop} (h : TripleN n P Q) :
-    Triple P Q := by
-  intro c hc
-  obtain ⟨m, c', _, hs, hq⟩ := h c hc
-  exact ⟨c', hs.toSteps, hq⟩
-
-/-- A plain triple is a `TripleN 0`. -/
-theorem of_triple {P Q : Config → Prop} (h : Triple P Q) : TripleN 0 P Q := by
-  intro c hc
-  obtain ⟨c', hs, hq⟩ := h c hc
-  obtain ⟨m, hm⟩ := hs.toN
-  exact ⟨m, c', Nat.zero_le m, hm, hq⟩
-
 /-- Weaken the step bound. -/
 theorem mono {m n : Nat} {P Q : Config → Prop} (hmn : m ≤ n)
     (h : TripleN n P Q) : TripleN m P Q := by
   intro c hc
   obtain ⟨k, c', hk, hs, hq⟩ := h c hc
   exact ⟨k, c', Nat.le_trans hmn hk, hs, hq⟩
-
-/-- One-step rule with count 1. -/
-theorem of_step {P Q : Config → Prop}
-    (h : ∀ c, P c → ∃ c', Step c c' ∧ Q c') : TripleN 1 P Q := by
-  intro c hc
-  obtain ⟨c', hs, hq⟩ := h c hc
-  exact ⟨1, c', Nat.le_refl 1, .succ hs (.zero c'), hq⟩
-
-/-- Consequence. -/
-theorem conseq {n : Nat} {P P' Q Q' : Config → Prop} (h : TripleN n P Q)
-    (hP : ∀ c, P' c → P c) (hQ : ∀ c, Q c → Q' c) : TripleN n P' Q' := by
-  intro c hc
-  obtain ⟨m, c', hm, hs, hq⟩ := h c (hP c hc)
-  exact ⟨m, c', hm, hs, hQ c' hq⟩
-
-/-- Sequencing adds counts. -/
-theorem seq {m n : Nat} {P Q R : Config → Prop} (h₁ : TripleN m P Q)
-    (h₂ : TripleN n Q R) : TripleN (m + n) P R := by
-  intro c hc
-  obtain ⟨m₁, c₁, hm₁, hs₁, hq⟩ := h₁ c hc
-  obtain ⟨m₂, c₂, hm₂, hs₂, hr⟩ := h₂ c₁ hq
-  exact ⟨m₁ + m₂, c₂, Nat.add_le_add hm₁ hm₂, hs₁.trans_add hs₂, hr⟩
 
 end TripleN
 

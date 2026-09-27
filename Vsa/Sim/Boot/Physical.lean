@@ -211,41 +211,4 @@ theorem loaded_at {σ : Vsa.Machine.MState} {v : Nat → Option (BitVec 8)}
     (fun p hp => huniq p hp ▸ capacity_of_capOk hcap)
     (fun p hp => huniq p hp ▸ ProgramStackFits.of_check hfit)
 
-/-- The boundary at the witness register file `bootState` (the instance of
-`readyFacts_at` at `bootConfig`). -/
-theorem readyFacts_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
-    {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
-    (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
-    (ho : OwnOk B) (hf : FrameOk v B)
-    (hstore : frameCheck (maskView prologueMask v) bootNatives B.env initFrame = true)
-    {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
-    (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
-    {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
-    (hprog : ∀ p : Program, ProgramRepr m stmts count p →
-      ProgramReprWithin m B.shared stmts count p)
-    (hcap : ∀ p : Program, ProgramRepr m stmts count p →
-      ∀ st' n, ExecSeqCost initSt 0 0 p st' .normal n →
-        2 * n + DlHeap.extendSlack ≤ DlHeap.heapEnd - top)
-    (hfit : StackAdmissible m stmts count) :
-    InterpRunReadyFacts (bootConfig m g steps) stmts count (BitVec.ofNat 64 interpObject)
-      bootNatives bootArena (fun _ => B.env) (fun _ => 0) 0 :=
-  readyFacts_at (σ := bootState m g) hv (bootState_entryRegs m g) rfl
-    (Nat.mod_lt _ (by decide)) M R ho hf hstore hh hH hprog hcap hfit
-
-/-- `Loaded` at the witness register file (the instance of `loaded_at` at `bootConfig`). -/
-theorem loaded_of {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
-    {g : Nat → BitVec 64} {steps stmts count : Nat} {B : BootOwn}
-    (M : BootMemFacts m B.env) (R : BootRegs g stmts count)
-    (ho : OwnOk B) (hf : FrameOk v B)
-    (hstore : frameCheck (maskView prologueMask v) bootNatives B.env initFrame = true)
-    {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
-    (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
-    {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
-    {p0 : Program} {fuel cfuel : Nat}
-    (hdec : decodesTo v B.sharedB fuel stmts count p0 = true)
-    (hcap : capOk cfuel p0 top = true) (hfit : programStackFits p0 = true) :
-    Vsa.Refine.Loaded interpRunLayout p0 (bootConfig m g steps) :=
-  loaded_at (σ := bootState m g) hv (bootState_entryRegs m g) rfl (Nat.mod_lt _ (by decide))
-    M R ho hf hstore hh hH hdec hcap hfit
-
 end Vsa.Sim.Boot

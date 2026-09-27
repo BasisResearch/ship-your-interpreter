@@ -286,7 +286,6 @@ theorem wp_interpRet1 (H : NewlibHoles)
   simp only [↓reduceIte, Nat.reduceEqDiff]
   iframe Hs1 Hs2 Hs3 Hs4 Hs5 Hs6 H23 H24 H25 H26 H27
 
-
 /-- **The landing, then `exit(70)`**, for either WP. At `interp_run`'s
 `setjmp` return with a nonzero `a0` and `sp` at `interp_run`'s frame
 `sM - 176` (holding `in = sM + 272`, `main`'s link and `main`'s `s0`),

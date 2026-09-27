@@ -63,6 +63,4 @@ theorem checked_mem_read_single_of_ram
   simp [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Functions.zeros,
     show 8 * w - 1 + 1 = 8 * w from by omega, Int.toNat_mul]
 
-
-#print axioms checked_mem_read_single_of_ram
 end Vsa.Sim

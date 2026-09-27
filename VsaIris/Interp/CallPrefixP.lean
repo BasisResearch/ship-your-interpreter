@@ -19,7 +19,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr
 
-
 /-- A call node's budget leaves `runtime_error` room below the arm's frame. -/
 theorem evalNeed_call_rtErr (f : Expr) (args : List Expr) (d : Nat) :
     1088 + RtErr.rtErrNeed ≤ evalNeed (.call f args) d := by
@@ -153,7 +152,6 @@ end CloP
   · imodintro; rw [hFt]; iapply astEG_of_view hrf hgeo $$ Hro
   iintro %R1' %w0 %w1 %w2 %st1 %fv %hEf %hkeep1 #Hv1 Hms Hst Hw Hslot Hk
 
-
 #ix_piece callPrefixP_p2 from callPrefixP_p1 by
   -- the count test and its three exits
   have h8 : upd R1' 1 (BitVec.ofNat 64 (0x800031bc + 4)) 8 = aX := by
@@ -173,7 +171,6 @@ end CloP
   isplit
   rotate_left
   all_goals iintro %R2 %Mt2 %hB Hms
-
 
 #ix_piece callPrefixP_p3 from callPrefixP_p2 by
   -- the argument loop (E6)
@@ -204,7 +201,6 @@ end CloP
   · iintro H
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ H
-
 
 #ix_piece callPrefixP_p2c from callPrefixP_p2 at 3 by
   -- no arguments: straight to the dispatch
@@ -257,7 +253,6 @@ end CloP
   iframe Hab Hslot
 
 #ix_chain callPrefixP_c := [callPrefixP_p1, callPrefixP_p2, callPrefixP_p3]
-
 
 /-- **The call prefix, partial mode**: from `eval_expr`'s entry on a call node,
 with the Löb hypothesis, the error context and the argument loop (E6), the

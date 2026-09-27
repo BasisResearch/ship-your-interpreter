@@ -267,7 +267,6 @@ theorem svf_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
           (by simp at hlen ⊢; omega) (by simpa [Nat.add_assoc] using A') ?_
         simpa [List.append_assoc] using hret
 
-
 /-- **A `%s`/`%d` format's whole loop**: from the loop head with nothing
 printed to `_svfprintf_r`'s return with the rendering `fmtRen`. -/
 theorem loop_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}

@@ -19,7 +19,6 @@ section Total
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-
 /-- The closures' body bound, from the store's pure part. -/
 theorem storeRepr_bodies (N : NativeAddrs) (st : Store) (B : List (Nat × Nat)) :
     storeRepr (GF := GF) N st B ⊢ ⌜StoreBodiesBound st perCallBudget⌝ := by
@@ -267,7 +266,6 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       iframe Hcode Hms Hslot Hsr Hw Hst
       iexact Hk
     · cases hr
-
 
 /-- A run's owned bytes are disjoint from any other owned bytes. -/
 theorem ms_disj {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {Mt : Mem}

@@ -48,10 +48,6 @@ theorem execSP_off {s : BitVec 64} (h : ExecFrameGeom s) (c : Nat) (hc : c < 409
   rw [BitVec.toNat_add, h1, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := c) (by omega)]
   exact Nat.mod_eq_of_lt (by omega)
 
-/-- The lowered `sp` of `exec_stmt` is the slot at offset `0`. -/
-theorem execSP_toNat {s : BitVec 64} (h : ExecFrameGeom s) :
-    (s + 18446744073709551440#64).toNat = s.toNat - 176 := h.sf
-
 /-- A slot inside the frame's scratch words is in the frame. -/
 theorem execSlot_in {s : BitVec 64} {o : Nat} (hs : ExecSlot s o) (ho : o + 24 ≤ 176) :
     ∀ b, InExt ((s + 18446744073709551440#64 + BitVec.ofNat 64 o).toNat, 24) b → execS s b := by

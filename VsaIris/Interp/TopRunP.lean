@@ -47,7 +47,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     IW live m [] (interpS sTop) Q 0x80004580#64 R Mt
   by ix_run hlive using [h2, hRA, interpS]
 
-
 section Abrupt
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst VsaIris.Newlib
@@ -478,9 +477,3 @@ end Run
 
 end VsaIris.Interp
 
-#print axioms VsaIris.Interp.wp_topAbrupt
-#print axioms VsaIris.Interp.topRet_runs
-#print axioms VsaIris.Interp.topBrk_runs
-#print axioms VsaIris.Interp.evalCore_top
-#print axioms VsaIris.Interp.interpRun_partial
-#print axioms VsaIris.Interp.interpRun_partial_boot

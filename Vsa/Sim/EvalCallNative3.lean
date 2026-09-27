@@ -96,43 +96,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-- **The indirect native dispatch `jalr a6` (`0x800039f4`).** Links
-`ra := 0x800039f8` and jumps to the bit-0-cleared `a6` — which, for a
-`ValueRepr (.native f)`-staged `fv`, is `N.addr f` (the native entry). Hand
-site over `stepObs_jalr` (`SnprintfSitesRet5.lean`), mirroring the locale
-`mbtowc` indirect call (`site_80007740_rt5`). Reusable by assert/print/println
-(they differ only in `a6`'s value). -/
-theorem site_800039f4_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v16 : BitVec 64)
-    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
-    (hminstret : σ.regs.get? Register.minstret = some vminstret)
-    (hx16 : σ.regs.get? Register.x16 = some v16)
-    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
-    (hpcv : pc = (0x800039f4#64 : BitVec 64))
-    (htgt : (BitVec.update (v16 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0)
-    (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = σ.mem ∧
-      ReadsLikePost σ' (sigmaPost_jalr σ pc vminstret
-        (BitVec.update (v16 + sign_extend (m := 64) (0x000#12)) 0 0#1)
-        Register.x1 (BitVec.addInt pc 4)) := by
-  subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_800039f4 hmem
-  refine stepObs_jalr σ i u (0x800039f4#64) vminstret v16 (0x000800e7#32) (0x000#12)
-    (regidx.Regidx 0x10#5) (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x800039f4#64) 4)
-    (0xe7#8) (0x00#8) (0x08#8) (0x00#8)
-    hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
-    (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_000800e7 (afterPrelude σ)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (rX_bits_x16 _ v16
-      (by rw [get?_afterNextPC σ (0x800039f4#64) _ (by decide) (by decide)]; exact hx16))
-    htgt
-    (by decide) (by decide) (by decide) (by decide) (by decide) ?_ hi
-  exact wX_bits_x1 _ (BitVec.addInt (0x800039f4#64) 4)
-
 /-! ## `jalr` target = `N.addr f` (from `ValueRepr (.native f)`)
 
 The `jalr a6` target is the bit-0-cleared `a6`. `a6` is loaded at `0x8000325c`

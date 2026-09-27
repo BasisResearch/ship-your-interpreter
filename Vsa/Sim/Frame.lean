@@ -206,17 +206,6 @@ theorem GoodState.of_regs_eq {σ σ' : MState} (h : σ'.regs = σ.regs)
   case nextPC => rw [h]; exact hG.nextPC
   case PC => rw [h]; exact hG.PC
 
-/-- A `GoodState` is preserved by replacing the byte memory (stores don't touch
-registers). -/
-theorem GoodState.set_mem {σ : MState} (hG : GoodState σ)
-    (m' : Std.ExtHashMap Nat (BitVec 8)) : GoodState {σ with mem := m'} :=
-  GoodState.of_regs_eq (σ := σ) (σ' := {σ with mem := m'}) rfl hG
-
-/-- A `GoodState` is preserved by replacing the HTIF output buffer. -/
-theorem GoodState.set_sailOutput {σ : MState} (hG : GoodState σ)
-    (o' : Array String) : GoodState {σ with sailOutput := o'} :=
-  GoodState.of_regs_eq (σ := σ) (σ' := {σ with sailOutput := o'}) rfl hG
-
 /-! ## The chaining tactic
 
 `goodstate_frame h` re-establishes `GoodState` of any state that is `h`'s state
@@ -226,8 +215,6 @@ write (each `NonPinned` side goal discharged by `decide`, each inserted value
 
 Usage in a step lemma:
 ```
-example (hG : GoodState σ) : GoodState (sigmaPost σ pc vminstret) := by
-  goodstate_frame hG
 ```
 Equivalently, the plain iterated-application form (no tactic):
 ```
@@ -255,41 +242,5 @@ macro_rules
 reproduces `goodstate_sigmaPost` (and the `StepBeq` variants) in one line, so the
 hand-written ~250-line reconstructions in those files could be replaced. (They are
 left intact per the task; this is forward-looking validation only.) -/
-
-/-- The ADDI five-write chain shape is handled by the chaining tactic. Matches
-`Vsa.Sim.goodstate_sigmaPost` (`StepAddi.lean`). -/
-example (σ : MState) (pc vminstret : BitVec 64) (hG : GoodState σ) :
-    GoodState (sigmaPost σ pc vminstret) := by
-  goodstate_frame hG
-
-/-- The same, in the explicit iterated-application form (five inserts). -/
-example (σ : MState) (pc vminstret : BitVec 64) (hG : GoodState σ) :
-    GoodState (sigmaPost σ pc vminstret) :=
-  ((((hG.insert_nonpinned (by decide) _).insert_nonpinned (by decide) _).insert_nonpinned
-    (by decide) _).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _
-
-/-- The taken-BGEU write chain (`StepBeq.lean`) — a five-write chain with two
-`nextPC` writes and no GPR — is handled identically. Matches
-`Vsa.Sim.goodstate_sigmaPost_taken`. -/
-example (σ : MState) (pc vminstret : BitVec 64) (hG : GoodState σ) :
-    GoodState (sigmaPost_taken σ pc vminstret) := by
-  goodstate_frame hG
-
-/-- The not-taken-BGEU write chain (`StepBeq.lean`). Matches
-`Vsa.Sim.goodstate_sigmaPost_nottaken`. -/
-example (σ : MState) (pc vminstret : BitVec 64) (hG : GoodState σ) :
-    GoodState (sigmaPost_nottaken σ pc vminstret) := by
-  goodstate_frame hG
-
-/-- The ADDI **tick** write chain (`StepAddi.lean`'s `sigmaTick`): `sigmaPost`
-followed by the `tick_clock` writes `mcycle`, `mtime`, `mip` — all non-pinned.
-Confirms the tick dimension (`mcycle`/`mtime`/`mip`) frames the same way. Matches
-the `GoodState` half of `Vsa.Sim.step_addi_tick`. -/
-example (σ : MState) (pc vminstret vmip vmtime vmtimecmp vmcycle : BitVec 64)
-    (hG : GoodState σ) :
-    GoodState (sigmaTick σ pc vminstret vmip vmtime vmtimecmp vmcycle) := by
-  have hpost : GoodState (sigmaPost σ pc vminstret) := by goodstate_frame hG
-  exact ((hpost.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
-    (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
 
 end Vsa.Sim

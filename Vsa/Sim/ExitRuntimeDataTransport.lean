@@ -10,14 +10,6 @@ open Vsa.MemRepr
 
 namespace Vsa.Sim
 
-/-- All extra runtime fields lie below the concrete C stack. -/
-theorem exitRuntimeExtraFoot_below_stack {a : Nat} (h : ExitRuntimeExtraFoot a) :
-    a < 0x87800000 := by
-  obtain ⟨region, hregion, _, hhi⟩ := h
-  have hb : ∀ region ∈ exitRuntimeExtraRegions,
-      region.1 + region.2 ≤ 0x87800000 := by decide
-  exact Nat.lt_of_lt_of_le hhi (hb region hregion)
-
 private theorem readLE_exitRegion_agree
     {regions : List (Nat × Nat)} {m m' : Mem}
     (hag : AgreeP (ExitRegionFoot regions) m m')
@@ -99,8 +91,5 @@ theorem ExitRuntimeData.transport {m m' : Mem}
     stdoutLine :=
       (hr (consoleStdout + 120) 8 (by simp [exitRuntimeExtraRegions])).symm.trans
         h.stdoutLine }
-
-#print axioms ExitIdleFile.transport
-#print axioms ExitRuntimeData.transport
 
 end Vsa.Sim

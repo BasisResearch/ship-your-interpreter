@@ -34,5 +34,4 @@ theorem untilFuelM_sequence {α ε error state : Type}
         simpa [hn] using hf'
   exact go n 0 (by omega)
 
-#print axioms untilFuelM_sequence
 end Vsa.Sim

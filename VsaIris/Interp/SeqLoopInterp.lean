@@ -43,7 +43,6 @@ abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) +
     IW live Dt (interpView arr.toNat count inp) (interpS s) Q 0x8000448c#64 R Mt
   by ix_run hlive using [h8, h2, hflag, hel, hsf, interpS] at 0x8000445c
 
-
 #ix_seg InterpLoop_runH {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
     {s arr g : BitVec 64} {count inp : Nat}
@@ -59,7 +58,6 @@ abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) +
     show (BitVec.ofNat 64 inp).toNat = inp from by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]]
     at 0x80004474
 
-
 #ix_seg InterpLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
     {s arr sc : BitVec 64} {idx count inp : Nat}
@@ -67,7 +65,6 @@ abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) +
     (h8 : R 8 = arr + BitVec.ofNat 64 (8 * idx)) (h18 : R 18 = arr + BitVec.ofNat 64 (8 * count)) :
     IW live Dt (interpView arr.toNat count inp) (interpS s) Q 0x80004478#64 R Mt
   by ix_run hlive using [h10, h19, h20, h8, h18] at 0x8000448c 0x80004514 0x80004540 0x80004564
-
 
 /-- The loop head's registers: the cursor, the array's end, the status
 constants `3` and `1`, the lowered `sp`. -/
@@ -139,7 +136,6 @@ theorem cursor_step {arr : BitVec 64} {idx count : Nat} (h : arr.toNat + 8 * cou
     simp [BitVec.toNat_add] at this
     omega
   · intro h'; subst h'; rfl
-
 
 theorem interpExit_normal : interpExit .normal = 0x80004514#64 := rfl
 theorem interpExit_ret (v : Value) : interpExit (.ret v) = 0x80004540#64 := rfl
@@ -397,7 +393,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_chain interpSeqT_consNormal := [interpSeqT_consNormal_p1, interpSeqT_consNormal_p2]
 
-
 #ix_piece interpSeqT_consAbrupt_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
@@ -488,7 +483,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   · imodintro; rw [hpt]; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hsp, hdat.geo⟩
   iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
 
-
 #ix_piece interpSeqT_consAbrupt_p2 from interpSeqT_consAbrupt_p1 by
   -- the status routing: an abrupt status leaves to its error
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗
@@ -566,7 +560,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     cases status <;> first | exact absurd rfl hne | exact absurd rfl hc0 | exact hc (by decide)
 
 #ix_chain interpSeqT_consAbrupt := [interpSeqT_consAbrupt_p1, interpSeqT_consAbrupt_p2]
-
 
 #ix_piece interpSeqP_cons_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -671,7 +664,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   isplitl []
   · imodintro; rw [hpt]; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hsp, hdat.geo⟩
   iintro %R' %st' %status %hE %⟨hkeep, hst0⟩ Hms Hst Hret Hw HK
-
 
 #ix_piece interpSeqP_cons_p2 from interpSeqP_cons_p1 by
   iapply wp_swpF (wpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗

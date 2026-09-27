@@ -285,17 +285,6 @@ theorem get?_htif_tohost_sigmaPutcharFinal (σ : MState)
       Register.htif_tohost (zeros (n := 64))).get? Register.htif_tohost) = _
   rw [Std.ExtDHashMap.get?_insert_self]
 
-/-- Memory is untouched by the putchar store (regs + sailOutput updates only). -/
-theorem mem_sigmaPutcharFinal (σ : MState) (pc npc vminstret data : BitVec 64) (c : BitVec 8) :
-    (sigmaPutcharFinal σ pc npc vminstret data c).mem = σ.mem := rfl
-
-/-- The putchar final state's console output is `σ`'s with ONE character pushed
-(the prelude/nextPC/postlude writes are all regs-only, so this is `rfl`). -/
-theorem sailOutput_sigmaPutcharFinal (σ : MState) (pc npc vminstret data : BitVec 64)
-    (c : BitVec 8) :
-    (sigmaPutcharFinal σ pc npc vminstret data c).sailOutput
-      = σ.sailOutput.push (toString (Char.ofNat c.toNat)) := rfl
-
 /-- **`GoodState` survives the putchar store** (post-amendment:
 `GoodState.htif_tohost` is presence-only, witnessed by the tower's final
 `zeros` write). Every field whose register is OUTSIDE the putchar write-set
@@ -894,14 +883,5 @@ theorem stepObs_tohost_putchar
         get?_htif_tohost_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c⟩, ?_⟩
     intro R h1 h2 h3 h4 h5 h6 h7 _ _ _
     exact get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c R h2 h1 h7 h6 h5 h4 h3
-
-#print axioms goodstate_sigmaPutcharFinal
-#print axioms goodstate_sigmaTick_putchar
-#print axioms try_step_tohost_putchar
-#print axioms stepOnce_tohost_putchar_notick
-#print axioms stepOnce_tohost_putchar_tick
-#print axioms step_tohost_putchar_notick
-#print axioms step_tohost_putchar_tick
-#print axioms stepObs_tohost_putchar
 
 end Vsa.Sim

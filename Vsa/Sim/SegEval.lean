@@ -62,15 +62,6 @@ theorem evalBlocks_regs : ∀ (bs : List BBlock) (s : SegEvalState),
   | [], _ => rfl
   | b :: bs, s => evalBlocks_regs bs (evalBlock s b)
 
-/-- The reflected positional-load component is the corresponding body fold. -/
-theorem evalBlocks_loads : ∀ (bs : List BBlock) (s : SegEvalState),
-    (evalBlocks bs s).loads =
-      bs.foldl (fun loads b => ldsRunM b.body loads) s.loads
-  | [], _ => rfl
-  | b :: bs, s => by
-      rw [evalBlocks_cons, evalBlocks_loads]
-      simp only [evalBlock, List.foldl_cons]
-
 /-- Applying the accumulated first-order log equals `BlockTerm`'s threaded
 memory calculation. This is the single abstract-to-concrete memory seam. -/
 theorem writeLog_evalBlocks : ∀ (bs : List BBlock) (s : SegEvalState)
@@ -94,9 +85,5 @@ theorem writeLog_evalBlocks_init (bs : List BBlock) (m : Std.ExtHashMap Nat (Bit
 @[simp] theorem evalBlocks_init_regs_nil (regs : GRegs)
     (loads : List (List (BitVec 8))) :
     (evalBlocks [] (SegEvalState.init regs loads)).regs = regs := rfl
-
-#print axioms writeLog_evalBlocks
-#print axioms writeLog_evalBlocks_init
-#print axioms evalBlocks_regs
 
 end Vsa.Sim

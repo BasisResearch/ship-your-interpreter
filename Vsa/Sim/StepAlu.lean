@@ -419,39 +419,4 @@ supplied by `RegAccess.lean` / `DecodeTable` at the real instantiation site); th
 point is that `execute_rtype_add_char` plugs straight into `try_step_alu`'s
 abstract `hexec` with the canonical single-`rd` insert `σ₃`. -/
 
-/-- **`try_step` on `add x15, x15, x14`** (census word `0x00e787b3`, count 32),
-composing `execute_rtype_add_char` through the generic `try_step_alu`. `rd = x15`,
-`rs1 = x15`, `rs2 = x14`; the write value is `v1 + v2`. -/
-theorem try_step_alu_add_x15_x15_x14
-    (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret v1 v2 : BitVec 64)
-    (b0 b1 b2 b3 : BitVec 8)
-    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
-    (hminstret : σ.regs.get? Register.minstret = some vminstret)
-    (hword : (((b3.append b2).append b1).append b0) = (0x00e787b3#32 : BitVec 32))
-    (hnotrvc : Sail.BitVec.extractLsb (((b3.append b2).append b1).append b0) 1 0 = (0b11#2 : BitVec 2))
-    (hdec : (ext_decode (0x00e787b3#32 : BitVec 32)).run (afterPrelude σ)
-      = .ok (instruction.RTYPE (regidx.Regidx 0x0e#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, rop.ADD)) (afterPrelude σ))
-    (hrs1 : (rX_bits (regidx.Regidx 0x0f#5)).run (afterNextPC (afterPrelude σ) pc)
-      = .ok v1 (afterNextPC (afterPrelude σ) pc))
-    (hrs2 : (rX_bits (regidx.Regidx 0x0e#5)).run (afterNextPC (afterPrelude σ) pc)
-      = .ok v2 (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits (regidx.Regidx 0x0f#5) (v1 + v2)).run (afterNextPC (afterPrelude σ) pc)
-      = .ok () (sigma3_alu σ pc Register.x15 (v1 + v2)))
-    (hb0 : σ.mem[pc.toNat]? = some b0) (hb1 : σ.mem[pc.toNat + 1]? = some b1)
-    (hb2 : σ.mem[pc.toNat + 2]? = some b2) (hb3 : σ.mem[pc.toNat + 3]? = some b3)
-    (hlo : 0x80000000 ≤ pc.toNat) (hhi : pc.toNat + 4 ≤ tohostAddr) (halign : pc.toNat % 4 = 0) :
-    (try_step u true).run σ
-      = .ok false
-          {(({(sigma3_alu σ pc Register.x15 (v1 + v2)) with regs := (sigma3_alu σ pc Register.x15 (v1 + v2)).regs.insert Register.PC (BitVec.addInt pc 4)}) : MState) with
-            regs := (({(sigma3_alu σ pc Register.x15 (v1 + v2)) with regs := (sigma3_alu σ pc Register.x15 (v1 + v2)).regs.insert Register.PC (BitVec.addInt pc 4)}) : MState).regs.insert Register.minstret (BitVec.addInt vminstret 1)} :=
-  try_step_alu σ u pc vminstret (0x00e787b3#32 : BitVec 32)
-    (instruction.RTYPE (regidx.Regidx 0x0e#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, rop.ADD))
-    Register.x15 (v1 + v2) b0 b1 b2 b3
-    hG hpc hminstret hword hnotrvc hdec
-    (execute_rtype_add_char (regidx.Regidx 0x0e#5) (regidx.Regidx 0x0f#5) (regidx.Regidx 0x0f#5)
-      v1 v2 (afterNextPC (afterPrelude σ) pc) (sigma3_alu σ pc Register.x15 (v1 + v2))
-      hrs1 hrs2 hwr)
-    (by decide) (by decide) (by decide) (by decide)
-    hb0 hb1 hb2 hb3 hlo hhi halign
-
 end Vsa.Sim

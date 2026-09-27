@@ -38,8 +38,6 @@ theorem jalStepO_of_obs {σp σ2 : MState} {ip up i2 : Nat}
   refine ⟨σ2, i2, hs, hi', hG', hmem', ?_, hpc', hra', hmi', hnonra', habi'⟩
   rw [hobs.out, sailOutput_sigmaPost_jal]
 
-#print axioms jalStepO_of_obs
-
 /-- Execute a reflected segment and its `jal`, preserving `sailOutput` across
 both finite machine pieces. -/
 theorem bridgeOfSegOut (bs : List BBlock) (L : GRegs)
@@ -88,7 +86,5 @@ theorem bridgeOfSegOut (bs : List BBlock) (L : GRegs)
   · rw [hmem2]; exact hmem'
   · rw [hout2]; exact hout'
   · intro R hR; exact (habiJal R hR).trans (habiBody R hR)
-
-#print axioms bridgeOfSegOut
 
 end Vsa.Sim

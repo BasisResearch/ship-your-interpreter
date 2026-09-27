@@ -903,5 +903,4 @@ theorem svf_digits {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
   · exact svf_digMulti hlive R Mt SG IA h hL hc hsum hk
   · exact svf_dig1 hlive R Mt SG IA h hL hc hsum hk
 
-
 end VsaIris.Sym

@@ -27,19 +27,6 @@ namespace Vsa
 
 open Sail in
 open LeanRV64DExecutable.Functions in
-/-- Set up the machine exactly like the reference emulator
-(`lean_emulator/LeanRiscv.lean`): model init, register/HTIF init from the
-ELF, then entry point into `PC`. -/
-def setupElf (elf : ELF64File) : SailM Unit := do
-  sail_model_init ()
-  initializeRegisters elf
-  init_model ""
-  cycle_count ()
-  -- init_model resets the PC, so set it (again) afterwards.
-  writeReg PC (elf.file_header.e_entry : UInt64).toBitVec
-
-open Sail in
-open LeanRV64DExecutable.Functions in
 /-- One iteration of the Sail model's top-level `loop`: check for the HTIF
 exit signal, otherwise `try_step`, mirroring the retired-instruction
 counting and clock ticking of the reference loop. `.inl` = halted with

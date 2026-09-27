@@ -280,7 +280,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep2, hk1]
 
-
 #ix_chain caseP_Var := [VarP_p1, VarP_p2, VarP_p3, VarP_p4]
 
 end VsaIris.Interp

@@ -129,10 +129,4 @@ theorem split_misaligned_ram
     rw [if_neg]
     exact h
 
-
-#print axioms to_bits_nat
-#print axioms matchingPmaRam
-#print axioms pmaCheck_ram_scalar
-#print axioms split_misaligned_cannotSplit
-#print axioms split_misaligned_ram
 end Vsa.Sim

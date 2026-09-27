@@ -32,16 +32,6 @@ theorem DotAt.str {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} (h : 
   hi := by decide
   htif := by decide
 
-/-- An indirect jump's target with bit 0 cleared (`memset`'s `jr 12(a3)`),
-as a mask the literal simprocs evaluate. -/
-theorem update0_and (x : BitVec 64) : Sail.BitVec.update x 0 0#1 = x &&& 0xFFFFFFFFFFFFFFFE#64 := by
-  show Sail.BitVec.updateSubrange' x 0 1 (0#1) = _
-  have hmask : (~~~(((BitVec.allOnes 1).zeroExtend 64) <<< 0) : BitVec 64) = 0xFFFFFFFFFFFFFFFE#64 := by
-    apply BitVec.eq_of_toNat_eq; decide
-  have hy : (((0#1 : BitVec 1).zeroExtend 64) <<< 0 : BitVec 64) = 0#64 := by
-    apply BitVec.eq_of_toNat_eq; decide
-  simp only [Sail.BitVec.updateSubrange', hmask, hy, BitVec.or_zero, BitVec.and_comm]
-
 /-- The string `FILE`'s flags, unsigned. -/
 theorem lhu_of_lh {Mt : Mem} {a : Nat} (h : ldv .lh Mt a = 0x208#64) : ldv .lhu Mt a = 0x208#64 := by
   simp only [ldv, bytesVal, widthOfM] at h ⊢
@@ -170,7 +160,6 @@ macro "svf_keep " h:ident " [" zs:num,* "]" : tactic => do
 
 -- `_svfprintf_r`'s prologue to `memset`'s return (`0x80007654` → `0x800076a4`).
 #ix_chain svfPro := [svfPro_p1, svfPro_p2, svfPro_p3, svfPro_p4, svfPro_p5]
-
 
 /-- The spill slots of `_svfprintf_r`'s frame hold the caller's `ra` and
 callee-saved registers. -/
@@ -801,8 +790,6 @@ theorem svf_lit1Z {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
   · rw [h22'']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h22
-
-
 
 /-- **The scan's stop** (`0x8000775c` at a `'%'`, `0x80007960` at the NUL): the
 literal run `[p, q)` becomes a piece, then the conversion at `q`
@@ -1498,6 +1485,5 @@ theorem svf_end {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
         all_goals (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact kk _ (by omega))
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
-
 
 end VsaIris.Sym

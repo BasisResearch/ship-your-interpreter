@@ -76,9 +76,6 @@ def vsaModel (live : Nat → Prop) : MachineModel where
   out c := output c.σ
   ok := VsaOk live
 
-/-- The bytes present in a configuration's memory. -/
-def liveOf (c : Config) (a : Nat) : Prop := (c.σ.mem[a]?).isSome
-
 /-! ## The model's step is `Machine.Step` -/
 
 theorem vsaStep_next {c c' : Config} (h : vsaStep c = .next c') : Step c c' := by
@@ -115,22 +112,6 @@ theorem steps_of_reaches {live : Nat → Prop} {c c' : (vsaModel live).State}
   | step s _ ih => exact .head (vsaStep_next s) ih
 
 /-! ## Adequacy down to `Machine.Halts` -/
-
-/-- **Adequacy for VSA.** If, from ownership of the initial registers `mr`
-and bytes `mm` (agreeing with `c`), the loop's total WP holds with
-postcondition "exit 0 with output `out`", then VSA's machine halts with
-output `out` and exit code 0 — `Vsa.Machine.Halts c out 0`, verbatim. -/
-theorem vsa_adequacy {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop) (c : Config)
-    (out : String) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
-    (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
-    (hok : VsaOk live c)
-    (H : AdequacyHyp GF (vsaModel live) mr mm (output c.σ) (fun v => v = (0, out))) :
-    Vsa.Machine.Halts c out 0 := by
-  obtain ⟨e, out', ⟨cf, hre, hh⟩, hφ⟩ :=
-    mach_adequacy (GF := GF) (M := vsaModel live) c mr mm hr hm hok _ H
-  cases hφ
-  obtain ⟨σf, hhalt, hout⟩ := vsaStep_halt hh
-  exact ⟨cf, σf, steps_of_reaches hre, hhalt, hout⟩
 
 /-- A counted run of the model is a counted run of the machine. -/
 theorem stepsN_of_reachesN {live : Nat → Prop} {n : Nat} {c c' : (vsaModel live).State}
@@ -525,26 +506,6 @@ theorem wp_segW {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   iframe HMR Hpc HL HW
   iintro ⟨-, HMR, ⟨Hpc, HL⟩, HW⟩
   iapply Hk $$ Hpc HL HW HMR
-
-/-- **The segment rule for VSA** (total). -/
-theorem wp_seg {Φ : Nat × String → IProp GF} (live : Nat → Prop) (bs : List BBlock)
-    (L : GRegs) (lds : List (List (BitVec 8))) (pc0 : BitVec 64)
-    (MR : List (Nat × DFrac × BitVec 8)) (W : List (Nat × BitVec 8)) (n : Nat)
-    (hlen : evalBlocksFuel bs = n + 1)
-    (hwf : ChainOK pc0 (keysG L) bs) (hkeys : KeysOK (keysG L))
-    (hwr : ∀ k ∈ wrChain bs, k ∈ keysG L)
-    (hcover : ∀ a, (∀ p ∈ W, p.1 ≠ a) → OutL (segOut bs L lds).log a)
-    (hfacts : ∀ c : Config, VsaOk live c →
-      FootHolds (M := vsaModel live) c [] MR (segRW bs L lds pc0) (segMW bs L lds W) →
-      ChainFacts c.σ.mem c.σ.mem L lds bs) :
-    VsaIris.PC ↦ᵣ pc0 ∗ sepL L (fun p => p.1 ↦ᵣ p.2) ∗ sepL W (fun p => p.1 ↦ₘ p.2) ∗
-      sepL MR (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ∗
-      (VsaIris.PC ↦ᵣ evalBlocksPC pc0 (SegEvalState.init L lds) bs -∗
-        sepL L (fun p => p.1 ↦ᵣ finReg bs L lds p.1) -∗
-        sepL W (fun p => p.1 ↦ₘ newByte bs L lds W p.1) -∗
-        sepL MR (fun p => p.1 ↦ₘ{p.2.1} p.2.2) -∗ mTWP (vsaModel live) Φ)
-    ⊢ mTWP (vsaModel live) Φ :=
-  wp_segW live (twpW _) bs L lds pc0 MR W n hlen hwf hkeys hwr hcover hfacts
 
 end Wp
 

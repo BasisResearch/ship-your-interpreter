@@ -55,8 +55,6 @@ theorem errRoom (e : Expr) (d : Nat) : ErrRoom e d :=
     unfold evalNeed stackBudget RtErr.rtErrNeed snprintfNeed Vsa.Sim.LayoutInstance.helperHeadroom
     omega⟩
 
-theorem errRoom_of_lt {e : Expr} {d : Nat} (_h : d < maxCallDepth) : ErrRoom e d := errRoom e d
-
 section Res
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]

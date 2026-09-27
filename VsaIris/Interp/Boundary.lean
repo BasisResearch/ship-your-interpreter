@@ -25,41 +25,6 @@ open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
 /-! ## Address lists -/
 
-/-- Every address of one extent. -/
-def extAddrs (e : Nat × Nat) : List Nat := (List.range e.2).map (e.1 + ·)
-
-theorem mem_extAddrs {e : Nat × Nat} {a : Nat} : a ∈ extAddrs e ↔ InExt e a := by
-  unfold extAddrs InExt
-  simp only [List.mem_map, List.mem_range]
-  constructor
-  · rintro ⟨i, hi, rfl⟩; omega
-  · intro h; exact ⟨a - e.1, by omega, by omega⟩
-
-theorem extAddrs_nodup (e : Nat × Nat) : (extAddrs e).Nodup :=
-  List.Pairwise.map (fun i => e.1 + i) (fun a b h => by omega) List.nodup_range
-
-/-- Every address of a list of blocks. -/
-def blockAddrs (bl : List (Nat × Nat)) : List Nat := bl.flatMap extAddrs
-
-theorem mem_blockAddrs {bl : List (Nat × Nat)} {a : Nat} :
-    a ∈ blockAddrs bl ↔ BlocksCover bl a := by
-  unfold blockAddrs BlocksCover
-  simp only [List.mem_flatMap, mem_extAddrs]
-
-/-- Pairwise-disjoint blocks enumerate without repeats. -/
-theorem blockAddrs_nodup {bl : List (Nat × Nat)} (h : bl.Pairwise ExtDisj) :
-    (blockAddrs bl).Nodup := by
-  induction bl with
-  | nil => simp [blockAddrs]
-  | cons b bs ih =>
-    rw [List.pairwise_cons] at h
-    simp only [blockAddrs, List.flatMap_cons]
-    refine List.nodup_append.2 ⟨extAddrs_nodup b, ih h.2, ?_⟩
-    intro a ha a' ha' hab
-    subst hab
-    obtain ⟨b', hb', hin⟩ := mem_blockAddrs.1 ha'
-    exact h.1 b' hb' a (mem_extAddrs.1 ha) hin
-
 /-! ## The finite byte map of an address list -/
 
 /-- The finite byte map holding `img` on exactly the addresses of `l`. -/
@@ -121,19 +86,6 @@ theorem ownImg_of_memMap {S : Nat → Prop} {img : Nat → BitVec 8} {l : List N
   · ipureintro; exact ⟨hnd, hmem⟩
   iapply sepL_of_memMap img l hnd $$ H
 
-/-- **A read-only view** out of the boundary map: one discard. -/
-theorem roOn_of_memMap {P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem} {l : List Nat}
-    (hnd : l.Nodup) (hmem : ∀ a, a ∈ l ↔ P a)
-    (hag : ∀ k b, P k → m[k]? = some b → img k = b) :
-    ([∗map] k ↦ v ∈ imgMap img l, iprop(k ↦ₘ v)) ⊢ |==> roOn (GF := GF) P m := by
-  iintro H
-  iapply roOn_of_ownImg hag
-  iapply ownImg_of_memMap hnd hmem $$ H
-
 end Boundary
-
-#print axioms sepL_of_memMap
-#print axioms ownImg_of_memMap
-#print axioms roOn_of_memMap
 
 end VsaIris.Interp

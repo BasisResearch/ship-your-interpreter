@@ -219,5 +219,3 @@ theorem strlen_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
 
 end VsaIris.Interp.StrLeaf
 
-#print axioms VsaIris.Interp.StrLeaf.strlen_spec_env
-#print axioms VsaIris.Interp.StrLeaf.strlen_heap_spec

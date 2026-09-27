@@ -286,11 +286,6 @@ theorem copyBytes_win (bs : List (BitVec 8)) (src c : Nat) (hc : c ≤ bs.length
   rw [copyBytes_get, List.getElem_take]
   simp [win, List.getD_eq_getElem?_getD, show i < bs.length by omega]
 
-theorem win_drop (bs : List (BitVec 8)) (src c : Nat) (a : Nat) (h : src + c ≤ a) :
-    win (bs.drop c) (src + c) a = win bs src a := by
-  simp only [win, List.getD_eq_getElem?_getD, List.getElem?_drop]
-  congr 2; omega
-
 /-- A piece's bytes readable at `M`. -/
 def PieceReads (Dt : Mem) (DA : List Nat) (S : Nat → Prop) (M : Mem) (src : Nat) (bs : List (BitVec 8)) :
     Prop := ∀ i (h : i < bs.length), ReadB Dt DA S M (src + i) bs[i]

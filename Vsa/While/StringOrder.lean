@@ -100,30 +100,10 @@ recursion invariant.  `cstr_allNonzero` extracts it from a `CStr` witness. -/
 /-- Every char of the list has a nonzero codepoint (the `CStr` interior invariant). -/
 def AllNonzero (cs : List Char) : Prop := ∀ c ∈ cs, 0 < c.toNat
 
-theorem allNonzero_nil : AllNonzero [] := by intro c hc; cases hc
 theorem allNonzero_tail {a : Char} {as : List Char} (h : AllNonzero (a :: as)) :
     AllNonzero as := fun c hc => h c (List.mem_cons_of_mem a hc)
 theorem allNonzero_head {a : Char} {as : List Char} (h : AllNonzero (a :: as)) :
     0 < a.toNat := h a (List.mem_cons_self ..)
-
-/-- **`cstr_allNonzero`** — a `CStr` witness supplies the `AllNonzero` recursion
-invariant: every stored char is `Char.ofNat b.toNat` with `b ≠ 0` and `b.toNat < 128`,
-so its codepoint `(Char.ofNat b.toNat).toNat = b.toNat` (by `char_ofNat_toNat`) is
-positive.  This is the one fact `StrCmpOrderClose` needs to feed the proved order
-bridges (`strcmpSpecSign_{neg,pos}_iff_lex`) from a `strcmp_post` `CStr` witness. -/
-theorem cstr_allNonzero {m : Vsa.MemRepr.Mem} {a : Nat} {cs : List Char}
-    (h : Vsa.MemRepr.CStr m a cs) : AllNonzero cs := by
-  induction h with
-  | nil _ => exact allNonzero_nil
-  | @cons a b cs hmem hbne hlt _htail ih =>
-    intro c hc
-    rcases List.mem_cons.mp hc with hhead | htail
-    · subst hhead
-      rw [char_ofNat_toNat b hlt]
-      have : b.toNat ≠ 0 := fun hz => hbne (by
-        apply BitVec.eq_of_toNat_eq; rw [hz]; rfl)
-      omega
-    · exact ih c htail
 
 /-! ## The ORDER BRIDGE — byte-lex sign ↔ `List.Lex` codepoint order -/
 
@@ -244,7 +224,6 @@ theorem strcmpSpecSign_range (csa csb : List Char) :
     strcmpSpecSign csa csb = -1 ∨ strcmpSpecSign csa csb = 0 ∨ strcmpSpecSign csa csb = 1 :=
   isign_range _ _
 
-
 /-- `List.Lex` codepoint order is trichotomous. -/
 theorem list_lex_trichotomy (csa csb : List Char) :
     csa < csb ∨ csa = csb ∨ csb < csa :=
@@ -268,10 +247,5 @@ theorem strcmpSpecSign_self_zero (cs : List Char) (h : AllNonzero cs) :
   · exact absurd ((strcmpSpecSign_neg_iff_lex cs cs h h).mp hn) (List.lt_irrefl cs)
   · exact hz
   · exact absurd ((strcmpSpecSign_pos_iff_lex cs cs h h).mp hp) (List.lt_irrefl cs)
-
-#print axioms strcmpSpecSign_neg_iff_lex
-#print axioms strcmpSpecSign_pos_iff_lex
-#print axioms eq_of_strcmpSpecSign_zero_ascii
-#print axioms cstr_allNonzero
 
 end Vsa.While

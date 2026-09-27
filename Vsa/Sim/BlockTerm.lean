@@ -912,37 +912,6 @@ theorem bblock_run_bt (b : BBlock) (σ : MState) (i u : Nat) (pc0 vm : BitVec 64
     · intro R hn hw
       exact (hframe2 R hn).trans (hframe1 R hn hw)
 
-/-- **The basic-block lemma.**  A straight-line body + optional branch/jump
-terminator, from an entry state with pinned PC / minstret / source registers:
-the full `Steps` chain to the *computed* target PC (`endPCB` — branch target
-when taken, fall-through when not, jump target), with the computed register
-outcome (`runGM`), computed memory outcome (`writeLog`), tick invariant,
-`GoodState`, HTIF output unchanged, and the register frame outside
-`noiseRegs ∪ wrRegsM`.  The branch guard is the caller hypothesis inside
-`BBlockFacts` (`TermFactsO`, phrased over the computed end-of-body values);
-the structural VC `BBlockOK` closes by one `decide`. -/
-theorem bblock_sound_bt (b : BBlock) (σ : MState) (i u : Nat)
-    (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : BBlockFacts σ.mem σ.mem L lds b)
-    (hwf : BBlockOK pc0 (keysG L) b)
-    (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + blenB b⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = writeLog σ.mem (wlogM b.body L lds) ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC = some (endPCB pc0 b L lds) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' (runGM b.body L lds) ∧
-      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-        (∀ n ∈ wrRegsM b.body, (gprReg n == R) = false) →
-        σ'.regs.get? R = σ.regs.get? R) :=
-  bblock_run_bt b σ i u pc0 vm L lds σ.mem σ.mem (keysG L)
-    hG hpc hmi rfl (fun _ _ => rfl) hL hkeys (fun _ h => h) hfacts hwf hi
-
 /-! ## Chains of basic blocks -/
 
 /-- `jr` may only terminate the last block (its target is symbolic). -/
@@ -1048,31 +1017,6 @@ instance instDecNoJr : (bs : List BBlock) → Decidable (NoJr bs)
   | _ :: bs =>
     have : Decidable (NoJr bs) := instDecNoJr bs
     inferInstanceAs (Decidable (_ ∧ _))
-
-/-- Concrete-only chain end PC (well-defined under `NoJr`). -/
-def chainEndPCc (pc0 : BitVec 64) : List BBlock → BitVec 64
-  | [] => pc0
-  | b :: bs => chainEndPCc (nextPC0 pc0 b) bs
-
-/-- Under `NoJr`, `chainEndPC` ignores the pin list — the use site rewrites to
-the concrete `chainEndPCc` and closes it by `decide` (obstruction (8)). -/
-theorem chainEndPC_eq_bt : ∀ (bs : List BBlock) (pc0 : BitVec 64) (L : GRegs)
-    (lds : List (List (BitVec 8))), NoJr bs →
-    chainEndPC pc0 L lds bs = chainEndPCc pc0 bs := by
-  intro bs
-  induction bs with
-  | nil => intro pc0 L lds _; rfl
-  | cons b bs ih =>
-    intro pc0 L lds h
-    obtain ⟨hb, hbs⟩ := (h : TermNotJrO b.term ∧ NoJr bs)
-    cases bs with
-    | nil =>
-      show endPCB pc0 b L lds = nextPC0 pc0 b
-      exact endPCB_eq_nextPC0_bt b pc0 L lds hb
-    | cons b2 rest =>
-      show chainEndPC (nextPC0 pc0 b) (runGM b.body L lds) (ldsRunM b.body lds) (b2 :: rest)
-        = chainEndPCc (nextPC0 pc0 b) (b2 :: rest)
-      exact ih _ _ _ hbs
 
 /-! ## The chain lemma -/
 

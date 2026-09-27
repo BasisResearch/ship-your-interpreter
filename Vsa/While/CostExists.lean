@@ -42,23 +42,6 @@ theorem costExists : CostExists := by
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := cost_exists_mutual
   exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩
 
-theorem EvalECost.exists {st d a e st' v} (h : EvalE st d a e st' v) :
-    ∃ n, EvalECost st d a e st' v n := costExists.evalE h
-theorem EvalArgsCost.exists {st d a es st' vs} (h : EvalArgs st d a es st' vs) :
-    ∃ n, EvalArgsCost st d a es st' vs n := costExists.evalArgs h
-theorem CallCost.exists {st d fv vs st' v} (h : Call st d fv vs st' v) :
-    ∃ n, CallCost st d fv vs st' v n := costExists.call h
-theorem ExecSCost.exists {st d a s st' status} (h : ExecS st d a s st' status) :
-    ∃ n, ExecSCost st d a s st' status n := costExists.execS h
-theorem ExecInitCost.exists {st d a init st'} (h : ExecInit st d a init st') :
-    ∃ n, ExecInitCost st d a init st' n := costExists.execInit h
-theorem ForLoopCost.exists {st d a cnd step b st' status}
-    (h : ForLoop st d a cnd step b st' status) :
-    ∃ n, ForLoopCost st d a cnd step b st' status n := costExists.forLoop h
-theorem ForCondCost.exists {st d a cnd st'} (h : ForCond st d a cnd st') :
-    ∃ n, ForCondCost st d a cnd st' n := costExists.forCond h
-theorem ExecStepCost.exists {st d a step st'} (h : ExecStep st d a step st') :
-    ∃ n, ExecStepCost st d a step st' n := costExists.execStep h
 theorem ExecSeqCost.exists {st d a ss st' status} (h : ExecSeq st d a ss st' status) :
     ∃ n, ExecSeqCost st d a ss st' status n := costExists.execSeq h
 
@@ -69,20 +52,6 @@ theorem BigStep.cost {p : Program} {out : String} (h : BigStep p out) :
   obtain ⟨st', hseq, hout⟩ := h
   obtain ⟨n, hn⟩ := ExecSeqCost.exists hseq
   exact ⟨st', n, hn, hout⟩
-
-/-- Every cost derivation forgets to its semantic derivation, per relation. -/
-structure CostSound : Prop where
-  evalE : ∀ {st d a e st' v n}, EvalECost st d a e st' v n → EvalE st d a e st' v
-  evalArgs : ∀ {st d a es st' vs n}, EvalArgsCost st d a es st' vs n → EvalArgs st d a es st' vs
-  call : ∀ {st d fv vs st' v n}, CallCost st d fv vs st' v n → Call st d fv vs st' v
-  execS : ∀ {st d a s st' status n}, ExecSCost st d a s st' status n → ExecS st d a s st' status
-  execInit : ∀ {st d a init st' n}, ExecInitCost st d a init st' n → ExecInit st d a init st'
-  forLoop : ∀ {st d a cnd step b st' status n}, ForLoopCost st d a cnd step b st' status n →
-    ForLoop st d a cnd step b st' status
-  forCond : ∀ {st d a cnd st' n}, ForCondCost st d a cnd st' n → ForCond st d a cnd st'
-  execStep : ∀ {st d a step st' n}, ExecStepCost st d a step st' n → ExecStep st d a step st'
-  execSeq : ∀ {st d a ss st' status n}, ExecSeqCost st d a ss st' status n →
-    ExecSeq st d a ss st' status
 
 /-- The cost companions' mutual recursor with the forgetful motives: each
 cost constructor is closed by the semantic constructor of the same name, fed
@@ -104,40 +73,5 @@ local macro "cost_sound_rec " r:ident h:ident : tactic => `(tactic| (
   all_goals intros
   all_goals first | (constructor <;> assumption) |
     (apply EvalE.orFalse <;> assumption) | (apply EvalE.andTrue <;> assumption) | (apply Call.closure <;> assumption) | (apply Call.print <;> assumption) | (apply Call.println <;> assumption) | (apply Call.assertOk <;> assumption) | (apply ExecS.ifFalse <;> assumption) | (apply ExecS.ifNone <;> assumption) | (apply ExecS.whileFalse <;> assumption) | (apply ExecS.whileBreak <;> assumption) | (apply ExecS.whileRet <;> assumption) | (apply ExecS.whileLoop <;> assumption) | (apply ForLoop.condFalse <;> assumption) | (apply ForLoop.bodyBreak <;> assumption) | (apply ForLoop.bodyRet <;> assumption) | (apply ForLoop.loop <;> assumption) | (apply ExecSeq.consNormal <;> assumption) | (apply ExecSeq.consAbrupt <;> assumption)))
-
-theorem costSound : CostSound where
-  evalE h := by cost_sound_rec EvalECost.rec h
-  evalArgs h := by cost_sound_rec EvalArgsCost.rec h
-  call h := by cost_sound_rec CallCost.rec h
-  execS h := by cost_sound_rec ExecSCost.rec h
-  execInit h := by cost_sound_rec ExecInitCost.rec h
-  forLoop h := by cost_sound_rec ForLoopCost.rec h
-  forCond h := by cost_sound_rec ForCondCost.rec h
-  execStep h := by cost_sound_rec ExecStepCost.rec h
-  execSeq h := by cost_sound_rec ExecSeqCost.rec h
-
-theorem EvalECost.sound {st d a e st' v n} (h : EvalECost st d a e st' v n) :
-    EvalE st d a e st' v := costSound.evalE h
-theorem EvalArgsCost.sound {st d a es st' vs n} (h : EvalArgsCost st d a es st' vs n) :
-    EvalArgs st d a es st' vs := costSound.evalArgs h
-theorem CallCost.sound {st d fv vs st' v n} (h : CallCost st d fv vs st' v n) :
-    Call st d fv vs st' v := costSound.call h
-theorem ExecSCost.sound {st d a s st' status n} (h : ExecSCost st d a s st' status n) :
-    ExecS st d a s st' status := costSound.execS h
-theorem ExecInitCost.sound {st d a init st' n} (h : ExecInitCost st d a init st' n) :
-    ExecInit st d a init st' := costSound.execInit h
-theorem ForLoopCost.sound {st d a cnd step b st' status n}
-    (h : ForLoopCost st d a cnd step b st' status n) :
-    ForLoop st d a cnd step b st' status := costSound.forLoop h
-theorem ForCondCost.sound {st d a cnd st' n} (h : ForCondCost st d a cnd st' n) :
-    ForCond st d a cnd st' := costSound.forCond h
-theorem ExecStepCost.sound {st d a step st' n} (h : ExecStepCost st d a step st' n) :
-    ExecStep st d a step st' := costSound.execStep h
-theorem ExecSeqCost.sound {st d a ss st' status n} (h : ExecSeqCost st d a ss st' status n) :
-    ExecSeq st d a ss st' status := costSound.execSeq h
-
-#print axioms costExists
-#print axioms BigStep.cost
-#print axioms costSound
 
 end Vsa.While

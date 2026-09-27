@@ -402,7 +402,6 @@ theorem jalx_800052b0 (live : Nat → Prop)
   rwa [show BitVec.addInt (0x800052b0#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800052b0 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
-
 theorem st_800052b0 {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ allocText, live p.1)
@@ -1108,7 +1107,6 @@ theorem jalx_80005360 (live : Nat → Prop)
   rwa [show BitVec.addInt (0x80005360#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80005360 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
-
 theorem st_80005360 {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ allocText, live p.1)
@@ -1548,7 +1546,6 @@ theorem jalx_800053cc (live : Nat → Prop)
   rwa [show BitVec.addInt (0x800053cc#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800053cc + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
-
 theorem st_800053cc {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ allocText, live p.1)
@@ -1600,7 +1597,6 @@ theorem jalx_800053d4 (live : Nat → Prop)
   refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x800053d4#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800053d4 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
-
 
 theorem st_800053d4 {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
@@ -2025,7 +2021,6 @@ theorem jalx_80005444 (live : Nat → Prop)
   refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x80005444#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80005444 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
-
 
 theorem st_80005444 {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}

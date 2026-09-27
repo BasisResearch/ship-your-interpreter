@@ -144,22 +144,6 @@ theorem define_frames_toList {s : Store} {fa : Addr} {f : Frame} (hf : s.frames[
   rw [hf']
   rfl
 
-/-- The opener with the closer specialized to `env_define`'s semantic update. -/
-theorem storeRepr_open_define {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f : Frame}
-    (hf : s.frames[fa]? = some f) (x : String) (v : Value) (hinv : Vsa.Sim.StoreInvariant s) :
-    storeRepr (GF := GF) N s B ⊢ ∃ bl B₁ B₂, ⌜B = B₁ ++ bl ++ B₂⌝ ∗ frameOwn N fa f bl ∗
-      (∀ bl' : List (Nat × Nat), frameOwn N fa (defineFrame f x v) bl' -∗
-        storeRepr N (s.define fa x v) (B₁ ++ bl' ++ B₂)) := by
-  iintro H
-  ihave ⟨%bl, %B₁, %B₂, %hB, Hfa, Hc⟩ := storeRepr_open N hf $$ H
-  iexists bl, B₁, B₂
-  iframe Hfa
-  isplitr
-  · ipureintro; exact hB
-  iintro %bl' Hfa'
-  iapply Hc $$ %(s.define fa x v) %_ %bl'
-    %⟨rfl, define_frames_toList hf x v, hinv.define s fa x v⟩ Hfa'
-
 /-! ## Address lookups -/
 
 omit I in
@@ -215,17 +199,6 @@ theorem closuresOwn_get :
     iintro ⟨-, H⟩
     rw [show i + (k + 1) = i + 1 + k by omega]
     iapply closuresOwn_get (i + 1) cs k cd h $$ H
-
-/-- Every closure of the store is readable, persistently, without opening. -/
-theorem storeRepr_closure {s : Store} {B : List (Nat × Nat)} {ca : Addr} {cd : ClosureData}
-    (h : s.closures[ca]? = some cd) :
-    storeRepr (GF := GF) N s B ⊢ closOwn ca cd := by
-  unfold storeRepr
-  iintro ⟨%mf, %mc, %Bs, -, -, -, -, Hcl⟩
-  have h' : s.closures.toList[ca]? = some cd := by rw [Array.getElem?_toList]; exact h
-  have := closuresOwn_get (GF := GF) 0 s.closures.toList ca cd h'
-  rw [Nat.zero_add] at this
-  iapply this $$ Hcl
 
 /-! ## The empty store and allocation -/
 
@@ -599,37 +572,6 @@ theorem storeRepr_blocks_disjoint {s : Store} {B : List (Nat × Nat)} :
   iintro ⟨%mf, %mc, %Bs, -, -, %hp, Hfr, -⟩
   ihave ⟨%img, -, %h⟩ := framesOwn_cover N 0 s.frames.toList Bs $$ Hfr
   ipureintro; rw [hp.blocks]; exact h
-
-/-- **Store vs heap.** No byte of a store block is in the allocator's
-footprint: every store block is covered by live extents (with `B ⊆ H`, its
-own entry). A store owning a block the allocator also owns is refuted. -/
-theorem storeRepr_blocks_off_heap {s : Store} {B : List (Nat × Nat)} {L : DlLayout}
-    {H : List (Nat × Nat)} :
-    storeRepr (GF := GF) N s B ∗ isHeap L H ⊢ ⌜∀ b ∈ B, ∀ a, InExt b a → ¬ heapFoot L H a⌝ := by
-  unfold storeRepr isHeap
-  iintro ⟨⟨%mf, %mc, %Bs, -, -, %hp, Hfr, -⟩, %img, -, Hheap⟩
-  ihave ⟨%img', Hown, -⟩ := framesOwn_cover N 0 s.frames.toList Bs $$ Hfr
-  ihave %hd := ownSet_disj _ _ img' img $$ [Hown Hheap]
-  · iframe Hown Hheap
-  ipureintro
-  intro b hb a ha
-  exact hd a ⟨b, hp.blocks ▸ hb, ha⟩
-
-/-- The same at the level of the world, for either regime. -/
-theorem world_blocks_off_heap {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {ρ : Regime} {st : St} {d : Nat} :
-    world (GF := GF) N L Room inp ρ st d ⊢
-      ∃ (H B : List (Nat × Nat)), ⌜(∀ b ∈ B, b ∈ H) ∧ B.Pairwise ExtDisj ∧
-        ∀ b ∈ B, ∀ a, InExt b a → ¬ heapFoot L H a⌝ := by
-  unfold world worldE
-  iintro ⟨%H, %B, Hh, Hs, -, -, -, %hBH, -⟩
-  ihave Hh := heapRes_isHeap L Room ρ H $$ Hh
-  ihave ⟨Hs, %hdisj⟩ := keep_pure (storeRepr_blocks_disjoint N) $$ Hs
-  ihave %hoff := storeRepr_blocks_off_heap N $$ [Hs Hh]
-  · iframe Hs Hh
-  iexists H, B
-  ipureintro
-  exact ⟨hBH, hdisj, hoff⟩
 
 end Store
 

@@ -84,9 +84,7 @@ theorem evalArgs_length : ∀ {st d env es st' vs},
   | _, _, _, _, _, _, .cons _ _ _ _ _ _ _ _ _ _ h => by
     simp [evalArgs_length h]
 
-
 end Lemmas
-
 
 section Defs
 

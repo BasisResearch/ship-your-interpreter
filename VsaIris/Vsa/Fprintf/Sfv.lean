@@ -201,7 +201,6 @@ theorem sfv_copyA (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
             by rsimp; exact hR.flags, by keep_chain hR.keep⟩ <;>
         (rsimp; congr 1; omega))
 
-
 /-- `subw` of two small counts. -/
 theorem subw_ofNat {a b : Nat} (ha : a < 2 ^ 31) (hb : b ≤ a) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) - BitVec.extractLsb 31 0 (BitVec.ofNat 64 b)) =
@@ -308,7 +307,6 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
       rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
         (simp only [rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27]; exact hkeep _ (by decide))
 
-
 theorem ReadB.byteSrc {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {a : Nat} {b : BitVec 8}
     (h : ReadB Dt DA S Mt a b) : ByteSrc S Mt Dt DA a b := by
   rcases h with h | h
@@ -400,6 +398,5 @@ theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
         (simp only [rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27];
          rw [hkp _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp;
          exact hR.keep _ (by decide))
-
 
 end VsaIris.Sym.Fp

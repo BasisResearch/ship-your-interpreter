@@ -200,7 +200,6 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
       ite_true]; exact hg10
   iapply Hk $$ %_ %hkeep %h10 Hd HB Hms
 
-
 /-- `ms_callMemcpyOwnedR` at named arguments, the register facts a pure premise. -/
 theorem ms_callMemcpyOwned (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp)

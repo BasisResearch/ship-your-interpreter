@@ -223,43 +223,6 @@ theorem putc_runFact (live : Nat → Prop) (S : TohostSite) (hS : S.Cert) (c : B
     change (σ'.mem[a]?).getD 0 = (cfg.σ.mem[a]?).getD 0
     rw [hmem']
 
-section Wp
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
-
-/-- **The putchar rule on VSA**, for either WP. Owning the PC at the site,
-the base and putchar word, the code and the console cell `s`, the store
-prints `c`: the continuation gets the PC past the store and the console at
-`s ++ c`. -/
-theorem wp_putcW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    (S : TohostSite) (hS : S.Cert) (c : BitVec 8) (q1 q2 : DFrac) (s : String)
-    (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
-    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 S.pc ∗
-      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} putcWord c ∗ consoleOwn s ∗
-      (VsaIris.PC ↦ᵣ BitVec.ofNat 64 (S.pc + 4) -∗ S.rs1 ↦ᵣ{q1} S.base -∗
-        S.rs2 ↦ᵣ{q2} putcWord c -∗ consoleOwn (s ++ putcStr c) -∗ Wp.W Φ)
-    ⊢ Wp.W Φ := by
-  iintro ⟨#Hi, Hpc, H1, H2, Hs, Hk⟩
-  iapply Wp.runOut 0 _ _ _ _ (putcStr c) s (putc_runFact live S hS c q1 q2 hlive)
-  unfold footPre footPost
-  rw [← instrAt_eq]
-  simp only [sepL_cons, sepL_nil]
-  iframe Hi Hs H1 H2 Hpc
-  iintro ⟨⟨H1, H2, -⟩, -, ⟨Hpc, -⟩, -⟩ Hs
-  iapply Hk $$ Hpc H1 H2 Hs
-
-/-- The putchar rule for the total WP. -/
-theorem wp_putc {Φ : Nat × String → IProp GF} (S : TohostSite) (hS : S.Cert) (c : BitVec 8)
-    (q1 q2 : DFrac) (s : String) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
-    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 S.pc ∗
-      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} putcWord c ∗ consoleOwn s ∗
-      (VsaIris.PC ↦ᵣ BitVec.ofNat 64 (S.pc + 4) -∗ S.rs1 ↦ᵣ{q1} S.base -∗
-        S.rs2 ↦ᵣ{q2} putcWord c -∗ consoleOwn (s ++ putcStr c) -∗ mTWP (vsaModel live) Φ)
-    ⊢ mTWP (vsaModel live) Φ :=
-  wp_putcW (twpW (vsaModel live)) S hS c q1 q2 s hlive
-
-end Wp
-
 /-! ## The exit store halts, reporting the console -/
 
 /-- **The exit store as a halt.** From the site's footprint with the exit
@@ -310,15 +273,6 @@ theorem wp_exitW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   isplitr
   · iempintro
   iempintro
-
-/-- Halt/console agreement for the total WP. -/
-theorem wp_exit {Φ : Nat × String → IProp GF} (S : TohostSite) (hS : S.Cert) (e : BitVec 64)
-    (he : e.toNat < 2 ^ 47) (q0 q1 q2 : DFrac) (s : String)
-    (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
-    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ{q0} BitVec.ofNat 64 S.pc ∗
-      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} exitWord e ∗ consoleOwn s ∗ Φ (e.toNat, s)
-    ⊢ mTWP (vsaModel live) Φ :=
-  wp_exitW (twpW (vsaModel live)) S hS e he q0 q1 q2 s hlive
 
 end Wp
 

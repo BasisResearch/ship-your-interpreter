@@ -87,12 +87,4 @@ theorem FFrame.store {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : FFrame C
   s2 := F.s2
   s3 := F.s3
 
-theorem MSp.sp32 {s : BitVec 64} (h : MSp s) (d : Nat) (hd : d ≤ 32) :
-    (s + 18446744073709551584#64 + BitVec.ofNat 64 d).toNat = s.toNat - 32 + d := by
-  have := h.lo; have := h.hi
-  unfold mHead Vsa.Sim.tohostAddr at *
-  rw [BitVec.toNat_add, BitVec.toNat_add]
-  simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
-  omega
-
 end VsaIris.VsaHeap

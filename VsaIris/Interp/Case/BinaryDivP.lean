@@ -378,7 +378,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
        exact hR'k _ (by decide))
 
-
 #ix_piece BinaryDivP_z1 from BinaryDivP_p2 at 2 by
   -- the divisor is zero: `runtime_error(in, line, "division by zero", 0, 0)`
   unfold valOf

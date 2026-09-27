@@ -49,36 +49,7 @@ open Vsa.While
 open Vsa.Machine (Config Halts Diverges)
 open Vsa.Refine (Layout Loaded)
 open Vsa.Sim
-open Vsa.Sim.InterpSimBundle (DivFamily)
 
 local notation "SpecSt" => Vsa.While.St
-
-/-- **The per-load divergence-correspondence residual.**  For every loaded
-`(p, c)`, a correspondence `Corr` together with its per-step progress residual
-`DivStep Corr` and the entry correspondence `Corr c initSt 0 0 p`.
-
-This is the machine-side obligation the divergence arm is gated on: the
-still-running forward simulation from the compiled interpreter's per-statement
-step relation.  It is *definitionally* `DivFamily L`, surfaced as a single named
-residual with the machine content spelled out so the capstone can consume it
-directly.
-
-It is discharged, per statement kind, by the M4 `exec_stmt` case Triples
-(`execExprSimC`, `execBlockSim`, `execWhileSim`, …) restricted to their
-progress-only ("≥ 1 step, still corresponds") skeleton — the same Triples that
-supply `hterm`.  The entry `Corr c initSt 0 0 p` is the interpreter's program
-load correspondence packaged in `Loaded L p c`. -/
-def DivCorrFamily (L : Layout) : Prop :=
-  ∀ (p : Program) (c : Config), Loaded L p c →
-    ∃ Corr : Config → SpecSt → Nat → Addr → List Stmt → Prop,
-      DivStep Corr ∧ Corr c initSt 0 0 p
-
-/-- **`DivFamily` from the per-load correspondence residual.**  The endgame's
-`hdivFam` obligation is exactly `DivCorrFamily L` — this records that equality as
-a proved lemma so the capstone (`interpSimClosed_of_families`) can be fed
-`DivCorrFamily L` directly.  The reduction is definitional; its content is the
-naming of the single machine-side residual the divergence arm rests on. -/
-theorem divFamily_of_corr (L : Layout) (h : DivCorrFamily L) : DivFamily L :=
-  h
 
 end Vsa.Sim.DivFamily

@@ -884,27 +884,6 @@ theorem Boot.bytes_own {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
         heapFoot vsaLayoutP b.H k ∨ StackByte k ∨ StaticByte k) (memImg c.σ.mem) :=
   ownImg_of_memMap (bootAddrs_nodup _ _ _) (mem_bootAddrs fun _ hk => b.bootByte_lt hroom hG hk)
 
-/-- **Text out of a read-only view**: every `textOwn` a block lemma needs is
-a projection of `roOn CodeByte m` (the fixed binary is in the memory). -/
-theorem textOwn_of_roOn {P : Nat → Prop} {m : Mem} :
-    ∀ {text : List (Nat × BitVec 8)}, (∀ q ∈ text, P q.1 ∧ m[q.1]? = some q.2) →
-      roOn (GF := GF) P m ⊢ textOwn text
-  | [], _ => by
-    unfold textOwn
-    iintro _
-    simp only [sepL_nil]
-    iempintro
-  | q :: text, h => by
-    unfold textOwn
-    iintro #H
-    simp only [sepL_cons]
-    isplitl []
-    · iapply roOn_byte (h q (.head _)).1 (h q (.head _)).2 $$ H
-    · have ht := textOwn_of_roOn (P := P) (m := m) (text := text)
-        (fun q' hq' => h q' (.tail _ hq'))
-      unfold textOwn at ht
-      iapply ht $$ H
-
 /-- Cut an owned extent at `k`. -/
 theorem ownImg_ext_split (a n k q r : Nat) (img : Nat → BitVec 8) (hk : k ≤ n)
     (hq : q = a + k) (hr : r = n - k) :
@@ -1144,13 +1123,5 @@ theorem world_of_boundary (b : Boot c p) (ρ : Regime) (hρ : RegimeOK b.top ρ)
   iframe Hf Hc Hm Hcon
 
 end Assembly
-
-#print axioms boot_of_bytes
-#print axioms world_of_boundary
-
-#print axioms Boot.frameBridge
-#print axioms Vsa.Sim.DlHeap.HeapAt.grow
-#print axioms pShape_of_blockHeapAt
-#print axioms roomB_of_blockHeapAt
 
 end VsaIris.Interp

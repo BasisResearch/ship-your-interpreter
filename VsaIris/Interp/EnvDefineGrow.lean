@@ -49,10 +49,6 @@ theorem obRest_perm {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
     simp only [Option.toList_some, List.singleton_append, obRest]
     exact List.perm_cons_erase (hob b rfl)
 
-theorem obRest_mem {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
-    (hob : ∀ b, ob = some b → b ∈ H) (e : Nat × Nat) : e ∈ H ↔ e ∈ ob.toList ++ obRest ob H :=
-  (obRest_perm hob).mem_iff
-
 theorem obRest_sub {ob : Option (Nat × Nat)} {H : List (Nat × Nat)} {e : Nat × Nat}
     (he : e ∈ H) (hne : ∀ b, ob = some b → e ≠ b) : e ∈ obRest ob H := by
   cases ob with

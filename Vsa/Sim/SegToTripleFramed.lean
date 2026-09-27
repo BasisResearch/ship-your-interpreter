@@ -38,36 +38,6 @@ open Vsa.Logic (Triple)
 
 namespace Vsa.Sim
 
-/-- `segToTriple` keeping segEval_sound's frame clause AND sailOutput
-preservation AND the computed register outcome (all discarded by plain
-`segToTriple`). -/
-theorem segToTripleFramed (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (pc0 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (Q : Config → Prop)
-    (hwf : ChainOK pc0 (keysG L) bs)
-    (hpost : ∀ (c : Config) (σ' : MState) (i' u' : Nat),
-      GoodState σ' → i' < 2 →
-      σ'.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log →
-      σ'.sailOutput = c.σ.sailOutput →
-      σ'.regs.get? Register.PC
-        = some (evalBlocksPC pc0 (SegEvalState.init L lds) bs) →
-      (∃ w, σ'.regs.get? Register.minstret = some w) →
-      GHolds σ' (evalBlocks bs (SegEvalState.init L lds)).regs →
-      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-        (∀ n ∈ wrChain bs, (gprReg n == R) = false) →
-        σ'.regs.get? R = c.σ.regs.get? R) →
-      Q ⟨σ', i', u'⟩) :
-    Triple (SegPre bs L lds pc0 m0) Q := by
-  intro c hpre
-  obtain ⟨hG, hmem, hpc, ⟨vm, hmi⟩, hL, hkeys, hfacts, htick⟩ := hpre
-  obtain ⟨σ', i', hs, hi', hG', hmem', hout, hpc', hmi', hregs, hframe⟩ :=
-    segEval_sound bs c.σ c.tick c.steps pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf htick
-  rw [hmem] at hmem'
-  exact ⟨⟨σ', i', c.steps + evalBlocksFuel bs⟩, hs,
-    hpost c σ' i' (c.steps + evalBlocksFuel bs) hG' hi' hmem' hout hpc' hmi' hregs hframe⟩
-
-#print axioms segToTripleFramed
-
 /-- Keep-set admissibility against a seg, in exactly the `Bool`-equation form
 the frame clause consumes: every kept key a genuine GPR index whose register is
 neither noise nor written by the chain; and the chain writes no HTIF mailbox
@@ -128,91 +98,6 @@ theorem gprGet_of_frame {σ' σ : MState} {wrs : List Nat} (n : Nat)
   | 31, _, _, hn, hw => exact hframe (gprReg 31) hn hw
   | n + 32, _, h31, _, _ => exact absurd h31 (by omega)
 
-/-- Transport a kept pin list across a frame clause. -/
-theorem gholds_keep_of_frame {σ' σ : MState} {wrs : List Nat}
-    (keep : GRegs)
-    (hok : ∀ n ∈ keysG keep, (1 ≤ n ∧ n ≤ 31) ∧
-      (∀ rr ∈ noiseRegs, (rr == gprReg n) = false) ∧
-      (∀ m ∈ wrs, (gprReg m == gprReg n) = false))
-    (hframe : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-      (∀ m ∈ wrs, (gprReg m == R) = false) →
-      σ'.regs.get? R = σ.regs.get? R)
-    (hkeep : GHolds σ keep) : GHolds σ' keep := by
-  induction keep with
-  | nil => trivial
-  | cons p L ih =>
-    obtain ⟨n, v⟩ := p
-    obtain ⟨hv, hL⟩ := hkeep
-    obtain ⟨⟨h1, h31⟩, hnoise, hwr⟩ := hok n (List.mem_cons_self ..)
-    exact ⟨(gprGet_of_frame n h1 h31 hnoise hwr hframe).trans hv,
-      ih (fun m hm => hok m (List.mem_cons_of_mem _ hm)) hL⟩
-
-/-- **The framed block-row precondition**: `SegPre` + the ABI keep-set + the
-console output + the HTIF mailbox pins.  What a function fold knows arriving at
-any block. -/
-structure FramedSegPre (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (pc0 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (keep : GRegs) (outp : Array String) (pwv : BitVec 4)
-    (c : Config) : Prop where
-  seg : SegPre bs L lds pc0 m0 c
-  keep : GHolds c.σ keep
-  out : c.σ.sailOutput = outp
-  pw : c.σ.regs.get? Register.htif_payload_writes = some pwv
-  th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
-
-/-- **The framed block-row post**: the computed seg outcome (end PC, write-log
-memory, computed registers) with the keep-set, output, and HTIF mailbox pins
-TRANSPORTED, plus the tick budget for the next block. -/
-structure FramedSegPost (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (pc0 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (keep : GRegs) (outp : Array String) (pwv : BitVec 4)
-    (c : Config) : Prop where
-  good : GoodState c.σ
-  tick : c.tick < 2
-  mem : c.σ.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log
-  pc : c.σ.regs.get? Register.PC
-    = some (evalBlocksPC pc0 (SegEvalState.init L lds) bs)
-  minstret : ∃ w, c.σ.regs.get? Register.minstret = some w
-  regs : GHolds c.σ (evalBlocks bs (SegEvalState.init L lds)).regs
-  keep : GHolds c.σ keep
-  out : c.σ.sailOutput = outp
-  pw : c.σ.regs.get? Register.htif_payload_writes = some pwv
-  th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
-
-/-- **The generic framed block row.**  From the row's two kernel `decide`s
-(`ChainOK`, `FrameOK`), the whole block runs `FramedSegPre → FramedSegPost`.
-Every gen_fn block row is an instantiation of this at its seg/L literals. -/
-theorem segRowFramed (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (pc0 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (keep : GRegs) (outp : Array String) (pwv : BitVec 4)
-    (hwf : ChainOK pc0 (keysG L) bs)
-    (hfr : FrameOK (keysG keep) bs) :
-    Triple (FramedSegPre bs L lds pc0 m0 keep outp pwv)
-      (FramedSegPost bs L lds pc0 m0 keep outp pwv) := by
-  intro c hpre
-  obtain ⟨hG, hmem, hpc, ⟨vm, hmi⟩, hL, hkeys, hfacts, htick⟩ := hpre.seg
-  obtain ⟨σ', i', hs, hi', hG', hmem', hout, hpc', hmi', hregs, hframe⟩ :=
-    segEval_sound bs c.σ c.tick c.steps pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf htick
-  rw [hmem] at hmem'
-  refine ⟨⟨σ', i', c.steps + evalBlocksFuel bs⟩, hs, ?_⟩
-  exact
-    { good := hG'
-      tick := hi'
-      mem := hmem'
-      pc := hpc'
-      minstret := hmi'
-      regs := hregs
-      keep := gholds_keep_of_frame keep hfr.1 hframe hpre.keep
-      out := hout.trans hpre.out
-      pw := (hframe Register.htif_payload_writes (by decide)
-        (fun m hm => (hfr.2 m hm).1)).trans hpre.pw
-      th := by
-        obtain ⟨v, hv⟩ := hpre.th
-        exact ⟨v, (hframe Register.htif_tohost (by decide)
-          (fun m hm => (hfr.2 m hm).2)).trans hv⟩ }
-
-#print axioms segRowFramed
-
 /-! ## The callee-saved `s1..s11` keep bundle
 
 Every whole-function summary must preserve the FULL ABI callee-saved set — a
@@ -222,24 +107,5 @@ bundles the eleven values ONCE; `sKeepL` is the keep list every fold appends
 to its per-arm keeps (`keysG` stays a literal, so `FrameOK` is still ONE
 kernel `decide` per row, and `GHolds σ (keep ++ sKeepL v)` still whnfs to the
 pin nest — the trailing component IS `GHolds σ (sKeepL v)`). -/
-
-/-- The callee-saved `s1..s11` entry values (`x9`, `x18..x27`), bundled. -/
-structure SRegs where
-  s1 : BitVec 64
-  s2 : BitVec 64
-  s3 : BitVec 64
-  s4 : BitVec 64
-  s5 : BitVec 64
-  s6 : BitVec 64
-  s7 : BitVec 64
-  s8 : BitVec 64
-  s9 : BitVec 64
-  s10 : BitVec 64
-  s11 : BitVec 64
-
-/-- The `s1..s11` keep list (concrete keys — `FrameOK`/`KeysOK` still decide). -/
-def sKeepL (v : SRegs) : GRegs :=
-  [(9, v.s1), (18, v.s2), (19, v.s3), (20, v.s4), (21, v.s5), (22, v.s6),
-   (23, v.s7), (24, v.s8), (25, v.s9), (26, v.s10), (27, v.s11)]
 
 end Vsa.Sim

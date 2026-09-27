@@ -25,7 +25,6 @@ open Vsa.MemRepr Vsa.Sim
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
-
 #ix_piece BinaryNeP_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
@@ -181,8 +180,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave #Hv2c := Hv2
   ihave %htr := valOf_tag N rv' u0 u1 u2 $$ Hv2c
   have htr' : u0.toNat % 2 ^ 32 < 2 ^ 31 := by rw [htr]; cases rv' <;> simp [valTag]
-
-
 
 #ix_piece BinaryNeP_ok1 from BinaryNeP_p2 at 1 by
   -- run 3: operator dispatch and the operand copies, to `value_equal`
@@ -360,7 +357,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep6, hkeep4, hkeep2, hkeep1]
-
 
 #ix_tree caseP_BinaryNe := BinaryNeP_p1 [BinaryNeP_p2 [BinaryNeP_ok1 [BinaryNeP_ok2 [BinaryNeP_ok3 [BinaryNeP_ok4]]]]]
 

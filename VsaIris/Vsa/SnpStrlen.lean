@@ -36,11 +36,6 @@ theorem ldvf_ld_byte (f : Nat → BitVec 8) (t k : Nat) (hk : k < 8) :
   | 6, _ => rfl
   | 7, _ => rfl
 
-theorem byte_ne_zero_iff (b : BitVec 8) : b ≠ 0 ↔ b.toNat ≠ 0 := by
-  constructor
-  · intro h h0; exact h (BitVec.eq_of_toNat_eq h0)
-  · intro h h0; exact h (by rw [h0]; rfl)
-
 /-- A word of nonzero bytes passes the loop test. -/
 theorem word_all_ones (f : Nat → BitVec 8) (t : Nat) (h : ∀ k, k < 8 → f (t + k) ≠ 0) :
     strlenWordVal (ldvf .ld f t) = BitVec.allOnes 64 :=

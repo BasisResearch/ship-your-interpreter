@@ -56,26 +56,4 @@ theorem wX_bits_x10 (σ : SequentialState RegisterType trivialChoiceSource)
     reg_name_forwards, get_config_use_abi_names, encdec_reg_forwards_matches,
     Functions.not, Bool.not_false, Bool.false_eq_true, reduceIte]
 
-/-- Full `ADDI x10, x0, imm` execute clause: reads `x0` (constant zero), adds the
-sign-extended immediate, writes `x10`, retires. The result state is the single
-`x10` insert; the value is the model's literal `0#64 + sign_extend imm`. -/
-theorem execute_addi_x0_x10 (σ : SequentialState RegisterType trivialChoiceSource)
-    (imm : BitVec 12) :
-    (execute (instruction.ITYPE
-        (imm, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, iop.ADDI))).run σ
-      = .ok RETIRE_SUCCESS
-          {σ with regs :=
-            σ.regs.insert Register.x10 (0#64 + sign_extend (m := 64) imm)} := by
-  simp only [execute, execute_ITYPE,
-    rX_bits, rX, PreSail.writeReg,
-    wX_bits, wX, regval_from_reg, regval_into_reg,
-    bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
-    Sail.BitVec.toNatInt, Int.ofNat_eq_natCast, Int.toNat_natCast, BitVec.reduceToNat,
-    bne_iff_ne, ne_eq, reduceCtorEq, not_false_eq_true, if_true,
-    xreg_write_callback, xreg_full_write_callback, modify, modifyGet,
-    MonadStateOf.modifyGet, EStateM.modifyGet,
-    reg_name_forwards, get_config_use_abi_names, encdec_reg_forwards_matches,
-    Functions.not, Bool.not_false, Bool.false_eq_true, reduceIte, zero_reg, zeros,
-    BitVec.zero_eq]
-
 end Vsa.Sim

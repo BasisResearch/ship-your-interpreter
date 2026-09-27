@@ -134,18 +134,6 @@ theorem run {Φ : Nat × String → IProp GF} (n : Nat)
   iapply Wp.lat_intro
   iapply Hk $$ Hf
 
-/-- `wp_instr` in footprint form: the one-step case of `run`. -/
-theorem local_step {Φ : Nat × String → IProp GF}
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (hexec : ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR RW MW →
-      ∃ σ', M.step σ = .next σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' RW MW ∧
-        M.out σ' = M.out σ) :
-    footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ Wp.W Φ) ⊢ Wp.W Φ :=
-  Wp.run 0 RR MR RW MW fun σ hok hf => by
-    obtain ⟨σ', hs, hok', hloc, hout⟩ := hexec σ hok hf
-    exact ⟨σ', .succ hs (.zero σ'), hok', hloc, hout⟩
-
 /-- The one-step rule with the step modality. -/
 theorem local_stepL {Φ : Nat × String → IProp GF}
     (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
@@ -157,36 +145,6 @@ theorem local_stepL {Φ : Nat × String → IProp GF}
   Wp.runL 0 RR MR RW MW fun σ hok hf => by
     obtain ⟨σ', hs, hok', hloc, hout⟩ := hexec σ hok hf
     exact ⟨σ', .succ hs (.zero σ'), hok', hloc, hout⟩
-
-/-- **The printing segment rule** (the `putc` rule, INTERP_DESIGN.md §2 F2),
-with the step modality. A run that appends `o` to the output needs the
-console cell, and hands it back advanced by `o`. -/
-theorem runOutL {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (o s : String) (hexec : RunFactO M n RR MR RW MW (some o)) :
-    footPre (GF := GF) RR MR RW MW ∗ consoleOwn s ∗
-      (footPost RR MR RW MW -∗ consoleOwn (s ++ o) -∗ Wp.lat (Wp.W Φ)) ⊢ Wp.W Φ := by
-  iintro ⟨Hf, Hs, Hk⟩
-  iapply Wp.lagRun (hexec.lagFootPrint s)
-  iframe Hf Hs
-  iintro %_ %_ %_ ⟨Hf, Hs⟩
-  iapply Hk $$ Hf Hs
-
-/-- **The printing segment rule** (the `putc` rule), for either WP. The VSA
-instance is the HTIF tohost store (`Inst.wp_putcW`). -/
-theorem runOut {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (o s : String) (hexec : RunFactO M n RR MR RW MW (some o)) :
-    footPre (GF := GF) RR MR RW MW ∗ consoleOwn s ∗
-      (footPost RR MR RW MW -∗ consoleOwn (s ++ o) -∗ Wp.W Φ) ⊢ Wp.W Φ := by
-  iintro ⟨Hf, Hs, Hk⟩
-  iapply Wp.runOutL n RR MR RW MW o s hexec
-  iframe Hf Hs
-  iintro Hf Hs
-  iapply Wp.lat_intro
-  iapply Hk $$ Hf Hs
 
 /-- **Halt/console agreement**, for either WP. At an exit step, the exit
 value's output is the console cell's contents: `Φ (e, s)` is all the
@@ -225,54 +183,6 @@ theorem haltConsole {Φ : Nat × String → IProp GF}
 end MachWP
 
 /-! ## The historical names, at the total instance -/
-
-/-- **The segment rule** for the total WP. If from every well-formed state
-satisfying the footprint the machine runs `n + 1` steps with an effect
-confined to the written cells (`RunFact`), then owning the footprint and
-proving the rest of the run from the updated footprint proves the run.
-Everything the caller owns outside the footprint is framed by the wand (paper
-§4.6). -/
-theorem wp_run {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (hexec : RunFact M n RR MR RW MW) :
-    footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ mTWP M Φ) ⊢ mTWP M Φ :=
-  (twpW M).run n RR MR RW MW hexec
-
-/-- `wp_instr` in footprint form for the total WP. -/
-theorem wp_local_step {Φ : Nat × String → IProp GF}
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (hexec : ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR RW MW →
-      ∃ σ', M.step σ = .next σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' RW MW ∧
-        M.out σ' = M.out σ) :
-    footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ mTWP M Φ) ⊢ mTWP M Φ :=
-  (twpW M).local_step RR MR RW MW hexec
-
-/-- **The printing segment rule** for the total WP. -/
-theorem wp_runOut {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (o s : String) (hexec : RunFactO M n RR MR RW MW (some o)) :
-    footPre (GF := GF) RR MR RW MW ∗ consoleOwn s ∗
-      (footPost RR MR RW MW -∗ consoleOwn (s ++ o) -∗ mTWP M Φ) ⊢ mTWP M Φ :=
-  (twpW M).runOut n RR MR RW MW o s hexec
-
-/-- **Halt/console agreement** for the total WP. -/
-theorem wp_halt_console {Φ : Nat × String → IProp GF}
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8)) (e : Nat)
-    (s : String) (hh : HaltFact M RR MR e) :
-    footPre (GF := GF) RR MR [] [] ∗ consoleOwn s ∗ Φ (e, s) ⊢ mTWP M Φ :=
-  (twpW M).haltConsole RR MR e s hh
-
-/-- **`run_later`**: the partial segment rule, whose continuation may assume
-a later. Löb pays for recursion with it. -/
-theorem wp_run_later {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (hexec : RunFact M n RR MR RW MW) :
-    footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ ▷ mWP M Φ) ⊢ mWP M Φ :=
-  (wpW M).runL n RR MR RW MW hexec
 
 end
 

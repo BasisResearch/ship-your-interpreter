@@ -153,20 +153,6 @@ theorem abortCore_mono {sc sp : BitVec 64} {nc np : Nat} (hnp : np ≤ sp.toNat)
     ipureintro
     exact hs.mono hnp hlo hle hsc hhi
 
-/-- **A callee's abort resource widens to its caller's core**: what
-`fnSpecAbort_mono` needs to call a child whose spec carries `abortRes` with
-F3's `wp_callArmAbort` at the caller's `Core := abortCore s n`. -/
-theorem abortRes_widen {sc sp : BitVec 64} {nc np : Nat} (hnp : np ≤ sp.toNat)
-    (hlo : Vsa.Sim.tohostAddr + 16 ≤ sp.toNat - np) (hle : sp.toNat - np ≤ sc.toNat - nc)
-    (hsc : sc.toNat ≤ sp.toNat) (hhi : sp.toNat ≤ 0x88000000) :
-    abortRes N L Room inp sc nc ⊢ abortAt (GF := GF) (abortCore N L Room inp sp np) sc nc := by
-  unfold abortRes
-  iintro H
-  ihave ⟨HC, Hs⟩ := abortAt_elim _ _ _ $$ H
-  ihave HC := abortCore_mono N L Room inp hnp hlo hle hsc hhi $$ HC
-  iapply abortAt_intro
-  iframe HC Hs
-
 /-! ## The continuation -/
 
 omit I in

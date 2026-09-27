@@ -109,10 +109,6 @@ theorem cloSupply {N : NativeAddrs} : CloSupply (GF := GF) N := by
   exact ⟨hcd, hobj.fn, hobj.env, hobj.objOK, hrepr, hgeo,
     fun k hk => ⟨(hgeo k hk).lo, (hgeo k hk).win.1, (hgeo k hk).win.2⟩⟩
 
-/-- `DispSupply`, from the store (`cloSupply`). -/
-theorem dispSupply {N : NativeAddrs} : DispSupply (GF := GF) N :=
-  dispSupply_of_cloSupply cloSupply
-
 end Defs
 
 section Views

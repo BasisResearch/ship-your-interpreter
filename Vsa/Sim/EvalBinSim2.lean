@@ -58,35 +58,11 @@ namespace Vsa.Sim
 
 /-! ## The `wrap64` bridge for the `add` exit value -/
 
-/-- `value_int` produces `.int (BitVec.ofNat 64 pay.toNat).toInt` with the payload
-`pay = Wl + Wr` (the machine 64-bit `add`). Since `Wl.toInt = a`, `Wr.toInt = b`
-(the operands' `.int` `ValueRepr` payloads), this equals `.int (wrap64 (a + b))`. -/
-theorem add_wrap_bridge (Wl Wr : BitVec 64) (a b : Int)
-    (ha : Wl.toInt = a) (hb : Wr.toInt = b) :
-    (BitVec.ofNat 64 (Wl + Wr).toNat).toInt = wrap64 (a + b) := by
-  rw [ofNat_toNat_self64, ← ha, ← hb]
-  unfold wrap64
-  rw [BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_toInt]
-
 /-! ## `AddSlotPinned` — the operator jump-table slot pin for `.add`
 
 The `CSWTCH.18` operator table lives at `0x80019f84` (`= 0x80019f58 + 0x2c`);
 slot `op-index` (`= binOpTok op - 11`) at `+ 4*index`, storing a signed 32-bit
 offset added back to the table base. `.add` (token 11, index 0) → slot bytes
 `04 99 fe ff` @ `0x80019f84`, target `0x80019f84 + (Int32)0xfffe9904 = 0x80003888`. -/
-def opTableBase : Nat := 0x80019f84
 
-def AddSlotPinned (m : Mem) : Prop :=
-  m[(opTableBase + 0 : Nat)]? = some (0x04 : BitVec 8) ∧
-  m[(opTableBase + 1 : Nat)]? = some (0x99 : BitVec 8) ∧
-  m[(opTableBase + 2 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(opTableBase + 3 : Nat)]? = some (0xff : BitVec 8)
-
-/-- `AddSlotPinned` survives a `writeMap8` disjoint from `[opTableBase, +4)`. -/
-theorem addSlot_writeMap8 (m : Mem) (a8 : Nat) (d : BitVec (8 * 8))
-    (hdis : a8 + 8 ≤ opTableBase ∨ opTableBase + 4 ≤ a8) (h : AddSlotPinned m) :
-    AddSlotPinned (writeMap8 m a8 d) := by
-  obtain ⟨p0, p1, p2, p3⟩ := h
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    (rw [getElem_writeMap8_disjoint m a8 _ d (by omega)]; assumption)
 end Vsa.Sim

@@ -38,15 +38,6 @@ def initMisa : BitVec 64 := 0x800000000034112f#64
 /-- mstatus after init: SXL=UXL=RV64, everything else (incl. MIE, MPRV) 0. -/
 def initMstatus : BitVec 64 := 0x0000000a00000000#64
 
-/-- mseccfg after init (MML=MMWP=RLB=0, no landing pads enabled). -/
-def initMseccfg : BitVec 64 := 0#64
-
-/-- mie after init: all interrupts disabled — the crux of `dispatch_none`. -/
-def initMie : BitVec 64 := 0#64
-
-/-- mideleg/medeleg/mip/satp/mtvec after init. -/
-def initZero64 : BitVec 64 := 0#64
-
 /-- pmpcfg_n after init: every entry OFF and unlocked. -/
 def initPmpcfg : Vector Pmpcfg_ent 64 := Vector.replicate 64 (0#8)
 

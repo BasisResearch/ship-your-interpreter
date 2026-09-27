@@ -29,21 +29,6 @@ open LeanRV64DExecutable Vsa
 
 namespace Vsa.Sim
 
-/-- Reads inside `[lo, hi)` are unchanged by an insert whose key is outside. -/
-theorem getElem?_insert_outside (lo hi : Nat) (mem : Std.ExtHashMap Nat (BitVec 8))
-    (k : Nat) (v : BitVec 8) (hk : k < lo ∨ hi ≤ k)
-    (a : Nat) (ha1 : lo ≤ a) (ha2 : a < hi) :
-    (mem.insert k v)[a]? = mem[a]? := by
-  rw [Std.ExtHashMap.getElem?_insert, if_neg (by simp only [beq_iff_eq]; omega)]
-
-/-- Reads inside `[lo, hi)` are unchanged by an 8-byte store whose window is
-outside. -/
-theorem getElem?_writeMap8_outside (lo hi : Nat) (mem : Std.ExtHashMap Nat (BitVec 8))
-    (k : Nat) (d : BitVec (8 * 8)) (hk : k + 8 ≤ lo ∨ hi ≤ k)
-    (a : Nat) (ha1 : lo ≤ a) (ha2 : a < hi) :
-    (writeMap8 mem k d)[a]? = mem[a]? :=
-  getElem?_writeMap8_out mem k d a (by omega)
-
 /-- Reads inside `[lo, hi)` are unchanged by a 4-byte store whose window is
 outside. -/
 theorem getElem?_writeMap4_outside (lo hi : Nat) (mem : Std.ExtHashMap Nat (BitVec 8))

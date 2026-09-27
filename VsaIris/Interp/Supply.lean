@@ -452,6 +452,3 @@ theorem supplies_of : Supplies where
 
 end VsaIris.Interp
 
-#print axioms VsaIris.Interp.termSupply
-#print axioms VsaIris.Interp.stuckSupply
-#print axioms VsaIris.Interp.supplies_of

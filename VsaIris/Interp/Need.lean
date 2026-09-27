@@ -49,10 +49,6 @@ def evalNeed (e : Expr) (d : Nat) : Nat := stackBudget e.stackNeed d
 /-- `exec_stmt`'s budget, verbatim from `ExecEntry.stackBudget`. -/
 def execNeed (s : Stmt) (d : Nat) : Nat := stackBudget s.stackNeed d
 
-theorem evalNeed_def (e : Expr) (d : Nat) :
-    evalNeed e d = e.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom :=
-    rfl
-
 theorem execNeed_def (s : Stmt) (d : Nat) :
     execNeed s d = s.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom :=
     rfl
@@ -77,10 +73,6 @@ theorem stackBudget_call {nb np d : Nat} (hd : d < maxCallDepth) (hb : nb ≤ pe
   rw [hk, Nat.succ_mul]
   omega
 
-/-- The budget is monotone in the structural need. -/
-theorem stackBudget_mono {n n' d : Nat} (h : n ≤ n') : stackBudget n d ≤ stackBudget n' d := by
-  unfold stackBudget; omega
-
 /-! ## The four bridges
 
 A parent arm hands a child its budget at the same depth, after spilling `f`
@@ -95,9 +87,6 @@ theorem execNeed_child {s s' : Stmt} {d f : Nat} (h : s'.stackNeed + f ≤ s.sta
 
 theorem evalNeed_of_stmt {e : Expr} {s : Stmt} {d f : Nat} (h : e.stackNeed + f ≤ s.stackNeed) :
     evalNeed e d + f ≤ execNeed s d := stackBudget_child h
-
-theorem execNeed_of_expr {s : Stmt} {e : Expr} {d f : Nat} (h : s.stackNeed + f ≤ e.stackNeed) :
-    execNeed s d + f ≤ evalNeed e d := stackBudget_child h
 
 /-! ## The arms
 
@@ -239,26 +228,5 @@ theorem execNeed_of_stackFits {p : Program} (h : ProgramStackFits p)
 theorem bodiesBound_of_stackFits {p : Program} (h : ProgramStackFits p)
     {s : Stmt} (hs : s ∈ p) : s.bodiesBound perCallBudget = true :=
   Stmt.bodiesBound_of_mem h.bodies hs
-
-section Iris
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-/-- **The boundary carve**: from the owned C stack below `interp_run`'s
-post-spill `sp`, hand the first `exec_stmt` call its `execNeed` scratch and
-keep the rest. The premise is `Loaded interpRunLayout`'s `stack_admissible`
-field (Q1, S1), through `ProgramStackFits.execNeed_fits`. -/
-theorem stackScratch_boundary {p : Program} (h : ProgramStackFits p) {s : Stmt} (hs : s ∈ p)
-    {sp0 : BitVec 64} (hsp : sp0.toNat = spEntry - interpRunFrame) :
-    blockOwn (GF := GF) stackSL.lo (sp0.toNat - stackSL.lo) ⊢
-      blockOwn stackSL.lo (sp0.toNat - stackSL.lo - execNeed s 0) ∗
-        stackScratch sp0 (execNeed s 0) := by
-  have hfit := execNeed_of_stackFits h hs
-  unfold stackScratch
-  iapply blockOwn_split stackSL.lo (sp0.toNat - stackSL.lo)
-    (sp0.toNat - stackSL.lo - execNeed s 0) (sp0.toNat - execNeed s 0) (execNeed s 0)
-    (by omega) (by omega) (by omega)
-
-end Iris
 
 end VsaIris.Interp

@@ -30,7 +30,6 @@ theorem stdioFoot_rng (a n : Nat)
   unfold stdioFoot InRange impureW
   omega
 
-
 /-- The fields the close path reads besides `stderr`'s `FILE`, as loads. -/
 structure CloseMt (fl : BitVec 64) (Mt : Mem) : Prop where
   atexit : ldv .ld Mt 0x8001b9f8 = 0x0#64

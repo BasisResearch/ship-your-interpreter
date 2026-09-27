@@ -110,27 +110,6 @@ def ImageStaticsLoaded (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
   imgMbCurMax mem ∧
   imgImpurePtr mem
 
-theorem imageStatics_lldFmt_range {mem : ExtHashMap Nat (BitVec 8)}
-    (h : ImageStaticsLoaded mem) : imgLldFmt mem := h.1
-
-theorem imageStatics_decPointStr_range {mem : ExtHashMap Nat (BitVec 8)}
-    (h : ImageStaticsLoaded mem) : imgDecPointStr mem := h.2.1
-
-theorem imageStatics_parseSlotD_range {mem : ExtHashMap Nat (BitVec 8)}
-    (h : ImageStaticsLoaded mem) : imgParseSlotD mem := h.2.2.1
-
-theorem imageStatics_parseSlotL_range {mem : ExtHashMap Nat (BitVec 8)}
-    (h : ImageStaticsLoaded mem) : imgParseSlotL mem := h.2.2.2.1
-
-theorem imageStatics_fnSlot_range {mem : ExtHashMap Nat (BitVec 8)}
-    (h : ImageStaticsLoaded mem) : imgFnSlot mem := h.2.2.2.2.1
-
-theorem imageStatics_decPointPtr_range {mem : ExtHashMap Nat (BitVec 8)}
-    (h : ImageStaticsLoaded mem) : imgDecPointPtr mem := h.2.2.2.2.2.1
-
-theorem imageStatics_mbCurMax_range {mem : ExtHashMap Nat (BitVec 8)}
-    (h : ImageStaticsLoaded mem) : imgMbCurMax mem := h.2.2.2.2.2.2.1
-
 theorem imageStatics_impurePtr_range {mem : ExtHashMap Nat (BitVec 8)}
     (h : ImageStaticsLoaded mem) : imgImpurePtr mem := h.2.2.2.2.2.2.2
 

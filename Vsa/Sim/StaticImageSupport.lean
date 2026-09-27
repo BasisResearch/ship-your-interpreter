@@ -42,15 +42,4 @@ theorem StaticImageSupport.outsideStack {m : Mem} {SL : StackLayout} {A : Arena}
   intro hs
   rcases h.stack with hd | hd <;> obtain ⟨_, _⟩ := hk <;> omega
 
-theorem StaticImageSupport.outsideArena {m : Mem} {SL : StackLayout} {A : Arena}
-    (h : StaticImageSupport m SL A) {k : Nat} (hk : StaticImageByte k) :
-    ¬ (A.lo ≤ k ∧ k < A.hi) := by
-  intro ha
-  rcases h.arena with hd | hd <;> obtain ⟨_, _⟩ := hk <;> omega
-
-#print axioms StaticImageSupport.transport
-#print axioms StaticImageSupport.stack_disjoint
-#print axioms StaticImageSupport.arena_disjoint
-#print axioms StaticImageSupport.outsideStack
-#print axioms StaticImageSupport.outsideArena
 end Vsa.Sim

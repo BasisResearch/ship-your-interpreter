@@ -61,7 +61,6 @@ theorem vmem_read_addr_of_pageSplit
   exact congrArg (fun x => EStateM.Result.ok (Result.Ok x) σ)
     (updateSubrange_zeros_load w hwpos v)
 
-
 /-- Scalar checked reads lifted through the existing translation adapters. -/
 theorem translate_and_read_value_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (a : BitVec 64) (k : Nat) (hk : k ≤ 3)
@@ -115,9 +114,4 @@ theorem vmem_read_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     hg.mstatus (by decide) hg.mseccfg hrs
     (vmem_read_addr_ram_scalar hg (vbase + offset) k hk hlo hhi hhtif)
 
-#print axioms translate_and_read_value_ram_scalar
-#print axioms vmem_read_addr_ram_scalar
-#print axioms vmem_read_ram_scalar
-
-#print axioms vmem_read_addr_of_pageSplit
 end Vsa.Sim

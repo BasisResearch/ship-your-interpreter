@@ -97,33 +97,6 @@ theorem segFrom_of_segW {ro : List (Nat × BitVec 64)} {text : List (Nat × BitV
     · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
       exact hne q hq
 
-/-- **A read-only reflected segment as one local-run step**: `segFrom_of_segW`
-with an empty written set (`hsilent`: the reflected write log is empty). -/
-theorem segFrom_of_seg {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
-    {rs : List Nat} {S : Nat → Prop} (bs : List BBlock) (L : GRegs)
-    (lds : List (List (BitVec 8))) (pc0 : BitVec 64) (MR : List (Nat × DFrac × BitVec 8))
-    (n : Nat) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
-    {P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
-    (hlen : evalBlocksFuel bs = n + 1)
-    (hwf : ChainOK pc0 (keysG L) bs) (hkeys : KeysOK (keysG L))
-    (hwr : ∀ k ∈ wrChain bs, k ∈ keysG L)
-    (hsilent : (segOut bs L lds).log = [])
-    (hfacts : ∀ c : Config, VsaOk live c →
-      FootHolds (M := vsaModel live) c [] MR (segRW bs L lds pc0) [] →
-      ChainFacts c.σ.mem c.σ.mem L lds bs)
-    (hMR : ∀ q ∈ MR, (q.1, q.2.2) ∈ text ∨ (S q.1 ∧ mv q.1 = q.2.2))
-    (hPC : VsaIris.PC ∈ rs) (hpc : rv VsaIris.PC = pc0)
-    (hL : ∀ q ∈ L, q.1 ∈ rs ∧ q.2 = rv q.1)
-    (hP : ∀ (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8),
-      rv' VsaIris.PC = evalBlocksPC pc0 (SegEvalState.init L lds) bs →
-      (∀ q ∈ L, rv' q.1 = finReg bs L lds q.1) →
-      (∀ k ∈ rs, k ≠ VsaIris.PC → (∀ q ∈ L, q.1 ≠ k) → rv' k = rv k) →
-      (∀ a, S a → mv' a = mv a) → P rv' mv') :
-    SegFrom (vsaModel live) ro text rs S n rv mv P :=
-  segFrom_of_segW bs L lds pc0 MR [] n hlen hwf hkeys hwr
-    (fun a _ => by rw [hsilent]; trivial) hfacts hMR (fun q hq => nomatch hq) hPC hpc hL
-    (fun rv' mv' h1 h2 h3 _ h5 => hP rv' mv' h1 h2 h3 (fun a ha => h5 a ha (fun q hq => nomatch hq)))
-
 /-! ## Leaf functions
 
 A leaf function (`strlen`, `strcmp`, `memcpy`, the `snprintf` digit loop)

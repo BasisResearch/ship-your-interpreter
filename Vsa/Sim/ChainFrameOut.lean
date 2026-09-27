@@ -75,39 +75,6 @@ membership predicate WITHOUT `decide`-ing over the whole `W` (which would be O(|
 `beq`s at *each* register query); they are `List.forall_mem_*` folds over the
 concrete `noiseRegs` list, so each is a fixed 7-way (resp. 8-way) conjunction. -/
 
-/-- The seven noise-register disequalities assemble into the `noiseRegs`-membership
-avoidance predicate `StepFrameOut.of_jr`/`of_branch_*`/`of_store` write-sets need. -/
-theorem noiseAvoid {R : Register}
-    (hms : (Register.minstret == R) = false) (hpc : (Register.PC == R) = false)
-    (hnp : (Register.nextPC == R) = false)
-    (hmii : (Register.minstret_increment == R) = false)
-    (hmc : (Register.mcycle == R) = false) (hmt : (Register.mtime == R) = false)
-    (hmip : (Register.mip == R) = false) :
-    ∀ r ∈ noiseRegs, (r == R) = false := by
-  intro r hr
-  simp only [noiseRegs, List.mem_cons, List.not_mem_nil, or_false] at hr
-  rcases hr with h | h | h | h | h | h | h <;> subst h <;> assumption
-
-/-- Prepend a written destination `rd` to `noiseAvoid`: the avoidance for an
-`of_alu`/`of_jal` step's `rd :: noiseRegs` write-set. -/
-theorem consAvoid {R rd : Register} (hrd : (rd == R) = false)
-    (hnoise : ∀ r ∈ noiseRegs, (r == R) = false) :
-    ∀ r ∈ rd :: noiseRegs, (r == R) = false := by
-  intro r hr
-  rcases List.mem_cons.mp hr with h | h
-  · subst h; exact hrd
-  · exact hnoise r h
-
-/-- Join two avoidances across a `++`: the whole-run avoidance for `W₁ ++ W₂` from
-each segment's avoidance, mirroring `StepFrameOut.trans`'s write-set append. -/
-theorem appendAvoid {R : Register} {W₁ W₂ : List Register}
-    (h1 : ∀ r ∈ W₁, (r == R) = false) (h2 : ∀ r ∈ W₂, (r == R) = false) :
-    ∀ r ∈ W₁ ++ W₂, (r == R) = false := by
-  intro r hr
-  rcases List.mem_append.mp hr with h | h
-  · exact h1 r h
-  · exact h2 r h
-
 /-- Map a `sigmaPost_*` head constant to the `StepFrameOut.of_*` smart-constructor
 name.  Returns `none` for a non-`sigmaPost` head so the caller can fail with the
 offending hyp's name. -/
@@ -194,83 +161,5 @@ step, terminated by a `jr`/`j` (`jump_x0`).  Each contributes ONE constructor; t
 whole-run frame + output fall out of the fold, and `.out` / `.get` deliver the
 run's output-invariance and any callee-saved register's transported value in one
 line each.  Compare `StepFrameOut`'s hand-written 4-step demo `.trans` nest. -/
-section Demo
-
-theorem chainFrameOut_demo (σ σ1 σ2 σ3 σ4 σ5 σ6 σ7 σ8 : MState)
-    (pc1 pc2 pc3 pc4 pc5 pc6 pc7 pc8 vm1 vm2 vm3 vm4 vm5 vm6 vm7 vm8 : BitVec 64)
-    (rd1 rd2 rd3 rd5 rd6 rd8 rdj4 rdj7 : Register)
-    (v1 : RegisterType rd1) (v2 : RegisterType rd2) (v3 : RegisterType rd3)
-    (v5 : RegisterType rd5) (v6 : RegisterType rd6) (v8v : RegisterType rd8)
-    (imm4 : BitVec 21) (link4 : RegisterType rdj4)
-    (imm7 : BitVec 21) (link7 : RegisterType rdj7)
-    (h1 : ReadsLikePost σ1 (sigmaPost_alu σ pc1 vm1 rd1 v1))
-    (h2 : ReadsLikePost σ2 (sigmaPost_alu σ1 pc2 vm2 rd2 v2))
-    (h3 : ReadsLikePost σ3 (sigmaPost_alu σ2 pc3 vm3 rd3 v3))
-    (h4 : ReadsLikePost σ4 (sigmaPost_jal σ3 pc4 vm4 imm4 rdj4 link4))
-    (h5 : ReadsLikePost σ5 (sigmaPost_alu σ4 pc5 vm5 rd5 v5))
-    (h6 : ReadsLikePost σ6 (sigmaPost_alu σ5 pc6 vm6 rd6 v6))
-    (h7 : ReadsLikePost σ7 (sigmaPost_jal σ6 pc7 vm7 imm7 rdj7 link7))
-    (h8 : ReadsLikePost σ8 (sigmaPost_alu σ7 pc8 vm8 rd8 v8v)) :
-    StepFrameOut
-      ((rd1 :: noiseRegs) ++ (rd2 :: noiseRegs) ++ (rd3 :: noiseRegs)
-        ++ (rdj4 :: noiseRegs) ++ (rd5 :: noiseRegs) ++ (rd6 :: noiseRegs)
-        ++ (rdj7 :: noiseRegs) ++ (rd8 :: noiseRegs))
-      σ σ8 := by
-  chain_frame_out [h1, h2, h3, h4, h5, h6, h7, h8]
-
--- The whole-run `.out` + `.get` over a ~44-element unioned `W`: both `by decide`
--- side-conditions stay cheap (O(|W|) `List.all`, no `sigmaPost`/`ExtHashMap`) — the
--- 8-step fold measures ~7ms and the whole-run `.get`'s `by decide` ~18ms.
-theorem chainFrameOut_get_demo (σ σ1 σ2 σ3 σ4 σ5 σ6 σ7 σ8 : MState)
-    (pc1 pc2 pc3 pc4 pc5 pc6 pc7 pc8 vm1 vm2 vm3 vm4 vm5 vm6 vm7 vm8 : BitVec 64)
-    (v1 : RegisterType Register.x5) (v2 : RegisterType Register.x6)
-    (v3 : RegisterType Register.x7) (v5 : RegisterType Register.x10)
-    (v6 : RegisterType Register.x11) (v8v : RegisterType Register.x12)
-    (imm4 : BitVec 21) (link4 : RegisterType Register.x1)
-    (imm7 : BitVec 21) (link7 : RegisterType Register.x1)
-    (h1 : ReadsLikePost σ1 (sigmaPost_alu σ pc1 vm1 Register.x5 v1))
-    (h2 : ReadsLikePost σ2 (sigmaPost_alu σ1 pc2 vm2 Register.x6 v2))
-    (h3 : ReadsLikePost σ3 (sigmaPost_alu σ2 pc3 vm3 Register.x7 v3))
-    (h4 : ReadsLikePost σ4 (sigmaPost_jal σ3 pc4 vm4 imm4 Register.x1 link4))
-    (h5 : ReadsLikePost σ5 (sigmaPost_alu σ4 pc5 vm5 Register.x10 v5))
-    (h6 : ReadsLikePost σ6 (sigmaPost_alu σ5 pc6 vm6 Register.x11 v6))
-    (h7 : ReadsLikePost σ7 (sigmaPost_jal σ6 pc7 vm7 imm7 Register.x1 link7))
-    (h8 : ReadsLikePost σ8 (sigmaPost_alu σ7 pc8 vm8 Register.x12 v8v))
-    {w : RegisterType Register.x9} (hσ : σ.regs.get? Register.x9 = some w) :
-    σ8.sailOutput = σ.sailOutput ∧ σ8.regs.get? Register.x9 = some w := by
-  have cfo :
-      StepFrameOut
-        ((Register.x5 :: noiseRegs) ++ (Register.x6 :: noiseRegs)
-          ++ (Register.x7 :: noiseRegs) ++ (Register.x1 :: noiseRegs)
-          ++ (Register.x10 :: noiseRegs) ++ (Register.x11 :: noiseRegs)
-          ++ (Register.x1 :: noiseRegs) ++ (Register.x12 :: noiseRegs))
-        σ σ8 := by
-    chain_frame_out [h1, h2, h3, h4, h5, h6, h7, h8]
-  exact ⟨cfo.out, cfo.get Register.x9 (by decide) hσ⟩
-
-/-- `chain_out` derives the whole-run output invariance without naming `W`. -/
-theorem chainOut_demo (σ σ1 σ2 σ3 σ4 σ5 σ6 σ7 σ8 : MState)
-    (pc1 pc2 pc3 pc4 pc5 pc6 pc7 pc8 vm1 vm2 vm3 vm4 vm5 vm6 vm7 vm8 : BitVec 64)
-    (rd1 rd2 rd3 rd5 rd6 rd8 rdj4 rdj7 : Register)
-    (v1 : RegisterType rd1) (v2 : RegisterType rd2) (v3 : RegisterType rd3)
-    (v5 : RegisterType rd5) (v6 : RegisterType rd6) (v8v : RegisterType rd8)
-    (imm4 : BitVec 21) (link4 : RegisterType rdj4)
-    (imm7 : BitVec 21) (link7 : RegisterType rdj7)
-    (h1 : ReadsLikePost σ1 (sigmaPost_alu σ pc1 vm1 rd1 v1))
-    (h2 : ReadsLikePost σ2 (sigmaPost_alu σ1 pc2 vm2 rd2 v2))
-    (h3 : ReadsLikePost σ3 (sigmaPost_alu σ2 pc3 vm3 rd3 v3))
-    (h4 : ReadsLikePost σ4 (sigmaPost_jal σ3 pc4 vm4 imm4 rdj4 link4))
-    (h5 : ReadsLikePost σ5 (sigmaPost_alu σ4 pc5 vm5 rd5 v5))
-    (h6 : ReadsLikePost σ6 (sigmaPost_alu σ5 pc6 vm6 rd6 v6))
-    (h7 : ReadsLikePost σ7 (sigmaPost_jal σ6 pc7 vm7 imm7 rdj7 link7))
-    (h8 : ReadsLikePost σ8 (sigmaPost_alu σ7 pc8 vm8 rd8 v8v)) :
-    σ8.sailOutput = σ.sailOutput := by
-  chain_out [h1, h2, h3, h4, h5, h6, h7, h8]
-
-end Demo
-
-#print axioms chainFrameOut_demo
-#print axioms chainFrameOut_get_demo
-#print axioms chainOut_demo
 
 end Vsa.Sim

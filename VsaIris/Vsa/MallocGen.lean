@@ -37,8 +37,6 @@ abbrev mQ (H : List (Nat × Nat)) (n r s : BitVec 64) (saved : List (Nat × BitV
 abbrev mt0 (m1 : Mem) (s : BitVec 64) (mv : Nat → BitVec 8) : Mem :=
   stackBase m1 (s.toNat - allocHeadroom) allocHeadroom mv
 
-theorem aRegs_eq : aRegs = allocRegs vsaClob vsaSaved := rfl
-
 /-- **A run from the symbolic run at entry.** An `AW` goal at the entry
 valuation over the tracking memory `mt0` is a run from every owned image the
 heap witness `m1` holds, the stack window off the footprint. -/

@@ -115,7 +115,6 @@ theorem dlMallocChgImpl_of_run {M : MachineModel} {L : DlLayout} {Room : RoomPre
 
 end Spec
 
-
 /-! ## Reallocation, charged
 
 `realloc(p, nNew)` growing a live block `(p, nOld)` in the counted regime:
@@ -251,24 +250,5 @@ end Realloc
 `heapRes` (INTERP_DESIGN §3) is `isHeapRoom` counted and `isHeap` uncounted.
 Credits are monotone: a heap with room for `k + j` has room for `k`. The
 counted heap forgets to the uncounted one. -/
-
-section Regime
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-/-- A capacity predicate that is downward closed in the credits. -/
-def RoomMono (Room : RoomPred) : Prop :=
-  ∀ img H k j, Room img H (k + j) → Room img H k
-
-theorem isHeapRoom_mono {L : DlLayout} {Room : RoomPred} (hm : RoomMono Room)
-    (H : List (Nat × Nat)) (k j : Nat) :
-    isHeapRoom (GF := GF) L Room H (k + j) ⊢ isHeapRoom L Room H k := by
-  unfold isHeapRoom
-  iintro ⟨%img, %⟨hs, hr⟩, HF⟩
-  iexists img
-  iframe HF
-  ipureintro; exact ⟨hs, hm img H k j hr⟩
-
-end Regime
 
 end VsaIris

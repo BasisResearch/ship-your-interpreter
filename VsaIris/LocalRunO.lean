@@ -108,12 +108,6 @@ theorem lro_of_localRun {t : String} :
       rw [String.append_empty]
       exact lro_of_localRun n rv' mv' hr
 
-theorem LRO.mono {Q' : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
-    (hQ : ∀ t rv mv, Q t rv mv → Q' t rv mv) {t : String} {rv : Nat → BitVec 64}
-    {mv : Nat → BitVec 8} (h : LRO M ro text rs S Q t rv mv) : LRO M ro text rs S Q' t rv mv :=
-  LRO.ind (X := LRO M ro text rs S Q') (fun t' rv' mv' hq => LRO.done (hQ t' rv' mv' hq))
-    (fun _ _ _ k hs => LRO.seg k hs) h
-
 /-- **A printing segment is a lagged run** over the run footprint and the
 console cell: the lookup reads the console from its authority (`ConAgree`),
 and the commit moves the cell to the end state's output. -/

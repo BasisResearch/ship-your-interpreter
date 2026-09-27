@@ -68,15 +68,4 @@ theorem writeLog_getElem_disjoint (k : Nat) :
     exact applyW_getElem_disjoint m e k (hw e (List.mem_cons_self ..))
       (hdisj e (List.mem_cons_self ..))
 
-/-- The reusable survival adapter: a `writeLog`-fold memory agrees with the entry
-memory on every address a predicate `P` picks out, provided `P` avoids every store
-window. Feeds directly into `read64_agreeP` / `read32_agreeP` and the
-`StoreRepr`-survival premises the domain proofs discharge. -/
-theorem writeLog_agreeP_disjoint (m : Std.ExtHashMap Nat (BitVec 8))
-    (log : List WEntry) (P : Nat → Prop)
-    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
-    (hdisj : ∀ k, P k → ∀ e ∈ log, k < e.1 ∨ e.1 + e.2.1 ≤ k) :
-    AgreeP P m (writeLog m log) :=
-  fun k hk => (writeLog_getElem_disjoint k log m hw (hdisj k hk)).symm
-
 end Vsa.Sim

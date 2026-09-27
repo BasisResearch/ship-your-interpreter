@@ -116,7 +116,6 @@ theorem lenEnd (hR1 : R 1 = r) (h10 : R 10 = BitVec.ofNat 64 len) {Mt : Mem} :
   sr_done fun _ _ hm => ⟨hm.pc, by rw [hm.regs 1 (by decide) (by decide), hR1],
     by rw [hm.regs 10 (by decide) (by decide), h10]⟩
 
-
 /-- A load inside the read window is `LdOK`. -/
 theorem ldok (c : LCtx live P r len bv) {k w : Nat} (h : k + w ≤ len + 8) :
     LdOK (P.toNat + k) w := by

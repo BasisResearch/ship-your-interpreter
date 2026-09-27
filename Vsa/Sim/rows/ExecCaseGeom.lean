@@ -71,47 +71,6 @@ residual — the exec twin of `LeafWidenP`.
 
 `ExecLeafMemPin`/`ExecExitPinned` are defined upstream (`ExecBrkCont.lean`).  THIN
 ALIAS of the parametric `Widen` (`WidenMeta.lean`) at the pinned exit family. -/
-abbrev ExecLeafWidenP
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st' : Vsa.While.St) (status : Status) (sp r aRet : BitVec 64) (m0 : Mem) : Prop :=
-  Widen (ExecExitPinned g N A SL φf φc st' status sp r aRet m0)
-    N A φf φc st'.store.frames.size st'.store.closures.size st' m0 (stackFoot SL)
-
-/-- **`execLeafWidenP_of_entry`** — the pinned-exit exec widener follows from the
-(47e-widened) `ExecEntry.store_survives` alone, at the identity φ-pair.  Since
-brk/cont leave the store unchanged the exit store is `st.store` (= `st'.store`),
-which the entry survival re-represents over any `[SL.lo,SL.hi)`-confined change;
-`pres` is the pin's first half; `surv` chains the pin's `m0`-agreement into the
-widened entry survival.  Mirrors `leafWidenP_of_entry` (`EvalLeafD.lean`) exactly. -/
-theorem execLeafWidenP_of_entry
-    {g : (R : Register) → Option (RegisterType R)}
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {st : Vsa.While.St} {d : Nat} {env : Addr} {s : Stmt} {status : Status}
-    {sp r aInterp aStmt aEnv aRet : BitVec 64} {m0 : Mem} {c : Config}
-    (hc : ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c) :
-    ExecLeafWidenP g N A SL φf φc st status sp r aRet m0 where
-  pres := fun _ hx => hx.2.pres
-  surv := fun _ hx =>
-    ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, fun m' hm' => by
-      refine hc.store_survives m' (fun k hk => ?_)
-      have hksp : ¬ (SL.lo ≤ k ∧ k < sp.toNat) := fun hcon =>
-        hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hc.stackOK.2.1⟩
-      rw [hc.mem]
-      exact (hx.2.agree k hksp).symm.trans (hm' k hk)⟩
-
-/-- **The pinned leaf widening.** `ExecExitPinned … c ∧ ExecLeafWidenP …` gives
-`ExecExitD … c` — the `mExecS` motive shape.  Exec twin of `evalExitD_of_pinnedExit`;
-a THIN COROLLARY of the parametric family bridge `execExitD_of_widen`. -/
-theorem execExitD_of_pinnedExecExit
-    {g : (R : Register) → Option (RegisterType R)}
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {st' : Vsa.While.St} {status : Status} {sp r aRet : BitVec 64} {m0 : Mem} {c : Config}
-    (hx : ExecExitPinned g N A SL φf φc st' status sp r aRet m0 c)
-    (hW : ExecLeafWidenP g N A SL φf φc st' status sp r aRet m0) :
-    ExecExitD g N A SL φf φc st'.store.frames.size st'.store.closures.size
-      st' status sp r aRet m0 c :=
-  ⟨hx.1, hW.pres c hx, hW.surv c hx⟩
 
 /-! ## `ExecCaseGeom` — the per-leaf geometry bundle (the recursor-supplied residual)
 
@@ -119,16 +78,6 @@ The union of the `execBlockA` jump-table inputs (`hslot` + its stack-disjointnes
 `htableStk`) and the `ExecLeafWiden` widener.  Parameterized by the case ROW
 `(k, armPC, status)`.  This is the statement-side twin of the EvalE rows' per-case
 residual (`IntLeafResid`/…): one bundle threaded once, projected per row. -/
-def ExecCaseGeom
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (status : Status) (k : Nat) (armPC : BitVec 64)
-    (sp r aRet : BitVec 64) (m0 : Mem) : Prop :=
-  StmtSlotPinned k armPC m0 ∧
-  (stmtJumpTableBase + 4 * k + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * k) ∧
-  -- wave 48d (X3-c): the PINNED widener (over `ExecExitPinned`), entry-derivable
-  -- via `execLeafWidenP_of_entry` — the plain `ExecLeafWiden` was underivable.
-  ExecLeafWidenP g N A SL φf φc st status sp r aRet m0
 
 /-! ## The register-only leaf `*D` lemmas
 
@@ -138,43 +87,5 @@ now at `ExecExitPinned`) with `execExitD_of_pinnedExecExit`, threading the pinne
 `out0 := c.σ.sailOutput` by `rfl`.  These are exactly the `mExecS`-motive
 (`ExecExitD`) minor premises `termSimClosed` consumes as `hSBrk`/`hSCont`, at the
 recursor-supplied `ExecCaseGeom`. -/
-
-/-- **`execBrkSimD`** — the `ExecS.brk` leaf at `ExecExitD` (the `ExecIH` shape). -/
-theorem execBrkSimD
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (d : Nat) (env : Addr)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
-    (hE : ExecS st d env .brk st .brk)
-    (hG : ExecCaseGeom g N A SL φf φc st .brk 7 execArmBrk sp r aRet m0) :
-    Triple
-      (ExecEntry g N A SL φf φc st d env .brk sp r aInterp aStmt aEnv aRet m0)
-      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st .brk sp r aRet m0) := by
-  intro c hEntry
-  obtain ⟨hslot, htableStk, hW⟩ := hG
-  obtain ⟨c', hs, hExitP⟩ :=
-    execBrkSim g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0 c.σ.sailOutput
-      hE hslot htableStk c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_pinnedExecExit hExitP hW⟩
-
-/-- **`execContSimD`** — the `ExecS.cont` leaf at `ExecExitD` (the `ExecIH` shape). -/
-theorem execContSimD
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (d : Nat) (env : Addr)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
-    (hE : ExecS st d env .cont st .cont)
-    (hG : ExecCaseGeom g N A SL φf φc st .cont 8 execArmCont sp r aRet m0) :
-    Triple
-      (ExecEntry g N A SL φf φc st d env .cont sp r aInterp aStmt aEnv aRet m0)
-      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st .cont sp r aRet m0) := by
-  intro c hEntry
-  obtain ⟨hslot, htableStk, hW⟩ := hG
-  obtain ⟨c', hs, hExitP⟩ :=
-    execContSim g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0 c.σ.sailOutput
-      hE hslot htableStk c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_pinnedExecExit hExitP hW⟩
 
 end Vsa.Sim

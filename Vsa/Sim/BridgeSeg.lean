@@ -103,8 +103,6 @@ bridge closes it with ONE `decide`.  This is what lets the marshalled args survi
 the `jal` (which writes only `x1`). -/
 def KeysAvoidRa (L : GRegs) : Prop := ∀ n ∈ keysG L, n ≠ 1
 
-instance (L : GRegs) : Decidable (KeysAvoidRa L) := by unfold KeysAvoidRa; infer_instance
-
 /-- Lift `GHolds` through the `jal` step: every pinned register is in `1..31`
 (`KeysOK`) and differs from `x1` (`KeysAvoidRa`), so the `JalStep`'s `nonRa`
 `gprGet`-transport carries each pin. -/
@@ -187,84 +185,5 @@ theorem jalStep_of_obs {σp σ2 : MState} {ip up i2 : Nat}
         (abiPreserved_ne hR (by decide)) (abiPreserved_ne hR (by decide))
         (abiPreserved_ne hR (by decide)) (abiPreserved_ne hR (by decide))
         (abiPreserved_ne hR (by decide)))
-
-/-- **`bridgeOfSeg` — the factored Shape-A bridge combinator (∃-form).**
-
-A drop-in replacement for a hand `*Prefix_run` (e.g. `capComputePrefix_run`).
-From the entry state `σ` parked at the bridge entry `pc0` (`GHolds σ L`, the entry
-memory `= m0`), it runs the `#derive_case` seg body `bs` (up to the jal) via
-`segEval_sound`, then takes the `jal` step supplied by `hjal : JalStep …`, and
-returns the whole landed run: parked at `calleeEntry`, `x1 = link`, the computed
-marshalled registers `GHolds σ' out.regs` surviving the jal, memory
-`writeLog m0 out.log`, a `minstret` witness, and the ABI callee-saved frame back
-to the entry `σ` — everything the callee's `*_closed` wrapper needs.
-
-* `hwf` — the seg's ONE kernel `decide` (`ChainOK pc0 (keysG L) bs`).
-* `hAvoid` — the ABI-frame datum, ONE `decide` (`WrChainAvoidAbi bs`: no register
-  the body writes is callee-saved).
-* `hKeysOut`/`hRaOut` — two `decide`s on the concrete seg outcome keys (in `1..31`,
-  none is `x1`), so the marshalled args survive the jal.
-* `hjal` — the per-callee `JalStep` (the bridge's existing `site_*_ed` jal lemma).
-
-The ~30-line per-register `get?_sigmaPost_*` frame chain each hand `*Prefix_run`
-wrote is entirely replaced by `abiFrame_of_wrChain hAvoid` (one `decide`) for the
-whole body; the jal's own (small) frame comes packaged in `JalStep`.  The concrete
-`writeLog m0 out.log` memory is exposed directly — the per-store disjointness a
-`*_closed` wrapper needs (e.g. the cap word) is read off it with
-`getElem_writeMap4_disjoint`, exactly as the hand version does. -/
-theorem bridgeOfSeg (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (σ : MState) (i u : Nat) (pc0 calleeEntry link vm : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hmem : σ.mem = m0)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : ChainFacts σ.mem σ.mem L lds bs)
-    (hi : i < 2)
-    (hwf : ChainOK pc0 (keysG L) bs)
-    (hAvoid : WrChainAvoidAbi bs)
-    (hKeysOut : KeysOK (keysG (evalBlocks bs (SegEvalState.init L lds)).regs))
-    (hRaOut : KeysAvoidRa (evalBlocks bs (SegEvalState.init L lds)).regs)
-    (hjal : ∀ (σ' : MState) (i' u' : Nat),
-      GoodState σ' → i' < 2 →
-      σ'.regs.get? Register.PC = some (evalBlocksPC pc0 (SegEvalState.init L lds) bs) →
-      (∃ w, σ'.regs.get? Register.minstret = some w) →
-      -- the seg-post memory (so the per-callee jal site lemma can discharge its own
-      -- loaded-code precondition off the computed `writeLog`), and the marshalled regs:
-      σ'.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log →
-      GHolds σ' (evalBlocks bs (SegEvalState.init L lds)).regs →
-      JalStep calleeEntry link σ' i' u') :
-    ∃ (σ2 : MState) (i2 : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel bs + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
-      σ2.regs.get? Register.PC = some calleeEntry ∧
-      σ2.regs.get? Register.x1 = some link ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      GHolds σ2 (evalBlocks bs (SegEvalState.init L lds)).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log ∧
-      -- ABI callee-saved frame across the whole bridge (body + jal), FREE:
-      (∀ R, AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  -- run the seg body (FREE): whole Steps chain, computed end-PC = jalPC, computed
-  -- marshalled regs, computed memory, and the raw wrChain frame clause.
-  obtain ⟨σ', i', hs, hi', hG', hmem', _hout, hpc', hmi', hregs, hframe⟩ :=
-    segEval_sound bs σ i u pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf hi
-  -- the ABI frame of the body, FREE (one `decide` in `hAvoid`).
-  have habiBody : ∀ R, AbiPreserved R = true → σ'.regs.get? R = σ.regs.get? R :=
-    abiFrame_of_wrChain hAvoid hframe
-  -- rewrite the seg memory under the pinned entry memory `m0`.
-  rw [hmem] at hmem'
-  -- take the jal step from the parked config (feeding it the seg-post memory + regs).
-  obtain ⟨σ2, i2, hstep2, hi2, hG2, hmem2, hpc2, hra2, hmi2, hnonra2, habiJal⟩ :=
-    hjal σ' i' (u + evalBlocksFuel bs) hG' hi' hpc' hmi' hmem' hregs
-  refine ⟨σ2, i2, Steps.trans hs (Steps.single hstep2), hi2, hG2, hpc2, hra2, hmi2, ?_, ?_, ?_⟩
-  · -- marshalled registers survive the jal (only `x1` written); lift `GHolds` pointwise.
-    exact gholds_of_jal hnonra2 _ hKeysOut hRaOut hregs
-  · -- memory: the jal changes nothing, so `σ2.mem = σ'.mem = writeLog m0 out.log`.
-    rw [hmem2]; exact hmem'
-  · -- ABI frame across body ∘ jal (both callee-saved-preserving).
-    intro R hR; exact (habiJal R hR).trans (habiBody R hR)
-
-#print axioms bridgeOfSeg
 
 end Vsa.Sim

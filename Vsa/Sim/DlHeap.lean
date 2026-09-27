@@ -153,26 +153,4 @@ theorem ChunkWalk.le {m : Mem} {p top : Nat} {cs : List Chunk}
   | top => exact Nat.le_refl _
   | chunk _ _ _ _ _ _ ih => omega
 
-/-- A heap whose top chunk has no readable header is not admitted. -/
-theorem HeapAt.top_header_present {m : Mem} {exts : List (Nat × Nat)}
-    {reallocs : Nat × Nat → Prop} {top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (h : HeapAt m exts reallocs top brkv chunks bins) : (read64 m (top + 8)).isSome := by
-  rw [h.top_header]
-  rfl
-
-theorem not_initialAllocator_of_top {m : Mem} {exts : List (Nat × Nat)}
-    {reallocs : Nat × Nat → Prop} {stmts count t : Nat} (htop : read64 m topAddr = some t)
-    (hnone : read64 m (t + 8) = none) : ¬ InitialAllocator m exts reallocs stmts count := by
-  rintro ⟨top, brkv, chunks, bins, h⟩
-  have ht := h.heap.top_ptr
-  rw [htop] at ht
-  cases ht
-  have hs := h.heap.top_header_present
-  rw [hnone] at hs
-  exact absurd hs (by decide)
-
-#print axioms ChunkWalk.le
-#print axioms HeapAt.top_header_present
-#print axioms not_initialAllocator_of_top
-
 end Vsa.Sim.DlHeap

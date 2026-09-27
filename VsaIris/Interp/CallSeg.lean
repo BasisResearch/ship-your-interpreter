@@ -161,7 +161,6 @@ theorem callSegB (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
     rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg
 
-
 /-- **The state at the kind dispatch, from the segments' end states**: the
 state at the callee's `jal` (`CallA`), the callee's kept registers and result
 words, the count test (`CallB`), and the argument loop (its kept registers,

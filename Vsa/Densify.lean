@@ -28,12 +28,4 @@ theorem halts_fillZero (c : Config) (out : String) (e : Nat) :
 theorem diverges_fillZero (c : Config) : Diverges c ↔ Diverges (fillZero c) :=
   diverges_iff_of_ceqv stepOnce_resp (ceqv_fillZero c)
 
-/-- More generally, any two zero-equivalent configurations behave alike. -/
-theorem halts_iff_ceqv {c c' : Config} (h : CEqv c c') (out : String) (e : Nat) :
-    Halts c out e ↔ Halts c' out e :=
-  halts_iff_of_ceqv stepOnce_resp h out e
-
-theorem diverges_iff_ceqv {c c' : Config} (h : CEqv c c') : Diverges c ↔ Diverges c' :=
-  diverges_iff_of_ceqv stepOnce_resp h
-
 end Vsa.Densify

@@ -75,113 +75,22 @@ open Vsa.RuntimeRepr
 open Vsa.MemRepr
 open Vsa.Alloc
 open Vsa.While (Frame Store)
-open Vsa.Sim.Code (Env_defineLoaded StrcmpLoaded)
+open Vsa.Sim.Code (StrcmpLoaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-- Exact memory image of the eight env_define prologue spills. -/
-def envDefineSpillMem (m : Mem) (sp : Nat)
-    (ra s0 s1 s2 s3 s4 s5 s6 : BitVec 64) : Mem :=
-  let m1 := writeMap8 m (sp + 24) (sdData_val s3)
-  let m2 := writeMap8 m1 (sp + 32) (sdData_val s2)
-  let m3 := writeMap8 m2 (sp + 16) (sdData_val s4)
-  let m4 := writeMap8 m3 (sp + 8) (sdData_val s5)
-  let m5 := writeMap8 m4 (sp + 56) (sdData_val ra)
-  let m6 := writeMap8 m5 (sp + 48) (sdData_val s0)
-  let m7 := writeMap8 m6 (sp + 40) (sdData_val s1)
-  writeMap8 m7 sp (sdData_val s6)
-
 /-! ## 64-byte frame stride arithmetic
 
 The prologue does `addi sp,sp,-64` (`sext 0xfc0 = -64`) and the epilogue `addi sp,sp,64`
 (`sext 0x040 = 64`).  These mirror `EnvNewSpec.sp_sub16`/`sp_restore` scaled to 64. -/
 
-/-- `sp + sext 0xfc0 = sp - 64` (the prologue `addi sp,sp,-64`). -/
-theorem sp_sub64 (sp : BitVec 64) :
-    (sp + sign_extend (m := 64) (0xfc0#12)) = sp - 64#64 := by
-  have hs : (sign_extend (m := 64) (0xfc0#12) : BitVec 64) = -(64#64) := by
-    apply BitVec.eq_of_toNat_eq; decide
-  rw [hs]
-  apply BitVec.eq_of_toNat_eq
-  rw [BitVec.toNat_add, BitVec.toNat_sub]
-  have hn : (-(64#64) : BitVec 64).toNat = 2^64 - 64 := by decide
-  have h64 : (64#64 : BitVec 64).toNat = 64 := by decide
-  rw [hn, h64]; have := sp.isLt; omega
-
-/-- `(sp - 64) + sext 0x040 = sp` (the epilogue `addi sp,sp,64` restore). -/
-theorem sp_restore64 (sp : BitVec 64) :
-    (sp - 64#64) + sign_extend (m := 64) (0x040#12) = sp := by
-  have hs : (sign_extend (m := 64) (0x040#12) : BitVec 64) = 64#64 := by
-    apply BitVec.eq_of_toNat_eq; decide
-  rw [hs]
-  apply BitVec.eq_of_toNat_eq
-  rw [BitVec.toNat_add, BitVec.toNat_sub]
-  have h64 : (64#64 : BitVec 64).toNat = 64 := by decide
-  rw [h64]; have := sp.isLt; omega
-
-/-- `(sp - 64).toNat = sp.toNat - 64` when `64 ≤ sp.toNat`. -/
-theorem sp_sub64_toNat (sp : BitVec 64) (h : 64 ≤ sp.toNat) :
-    (sp - 64#64).toNat = sp.toNat - 64 := by
-  have h64 : (64#64 : BitVec 64).toNat = 64 := by decide
-  rw [BitVec.toNat_sub, h64]
-  have := sp.isLt
-  omega
-
 /-! ## Spill-offset address folds (offsets `0x000..0x038` from the frame base)
 
 Each spill stores 8 bytes at `sp_new + off` for `off ∈ {0x00,0x08,0x10,0x18,0x20,0x28,
 0x30,0x38}`; the epilogue reloads them.  These fold `base + sext off` to `base + off`. -/
-
-/-- `base + sext 0x000 = base`. -/
-theorem off_ed_00 (base : BitVec 64) :
-    (base + sign_extend (m := 64) (0x000#12)).toNat = base.toNat := by
-  rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by
-    apply BitVec.eq_of_toNat_eq; decide, BitVec.add_zero]
-
-/-- `base + sext 0x008 = base + 8` (no wrap). -/
-theorem off_ed_08 (base : BitVec 64) (h : base.toNat + 8 < 2^64) :
-    (base + sign_extend (m := 64) (0x008#12)).toNat = base.toNat + 8 := by
-  have hs : (sign_extend (m := 64) (0x008#12) : BitVec 64).toNat = 8 := by decide
-  rw [BitVec.toNat_add, hs]; omega
-
-/-- `base + sext 0x010 = base + 16` (no wrap). -/
-theorem off_ed_10 (base : BitVec 64) (h : base.toNat + 16 < 2^64) :
-    (base + sign_extend (m := 64) (0x010#12)).toNat = base.toNat + 16 := by
-  have hs : (sign_extend (m := 64) (0x010#12) : BitVec 64).toNat = 16 := by decide
-  rw [BitVec.toNat_add, hs]; omega
-
-/-- `base + sext 0x018 = base + 24` (no wrap). -/
-theorem off_ed_18 (base : BitVec 64) (h : base.toNat + 24 < 2^64) :
-    (base + sign_extend (m := 64) (0x018#12)).toNat = base.toNat + 24 := by
-  have hs : (sign_extend (m := 64) (0x018#12) : BitVec 64).toNat = 24 := by decide
-  rw [BitVec.toNat_add, hs]; omega
-
-/-- `base + sext 0x020 = base + 32` (no wrap). -/
-theorem off_ed_20 (base : BitVec 64) (h : base.toNat + 32 < 2^64) :
-    (base + sign_extend (m := 64) (0x020#12)).toNat = base.toNat + 32 := by
-  have hs : (sign_extend (m := 64) (0x020#12) : BitVec 64).toNat = 32 := by decide
-  rw [BitVec.toNat_add, hs]; omega
-
-/-- `base + sext 0x028 = base + 40` (no wrap). -/
-theorem off_ed_28 (base : BitVec 64) (h : base.toNat + 40 < 2^64) :
-    (base + sign_extend (m := 64) (0x028#12)).toNat = base.toNat + 40 := by
-  have hs : (sign_extend (m := 64) (0x028#12) : BitVec 64).toNat = 40 := by decide
-  rw [BitVec.toNat_add, hs]; omega
-
-/-- `base + sext 0x030 = base + 48` (no wrap). -/
-theorem off_ed_30 (base : BitVec 64) (h : base.toNat + 48 < 2^64) :
-    (base + sign_extend (m := 64) (0x030#12)).toNat = base.toNat + 48 := by
-  have hs : (sign_extend (m := 64) (0x030#12) : BitVec 64).toNat = 48 := by decide
-  rw [BitVec.toNat_add, hs]; omega
-
-/-- `base + sext 0x038 = base + 56` (no wrap). -/
-theorem off_ed_38 (base : BitVec 64) (h : base.toNat + 56 < 2^64) :
-    (base + sign_extend (m := 64) (0x038#12)).toNat = base.toNat + 56 := by
-  have hs : (sign_extend (m := 64) (0x038#12) : BitVec 64).toNat = 56 := by decide
-  rw [BitVec.toNat_add, hs]; omega
 
 /-! ## `Env_defineLoaded` survives the spill / update stores
 
@@ -189,56 +98,6 @@ Each prologue `sd`, and each update-block `sd`, inserts an 8-byte `writeMap8` wi
 `Env_defineLoaded` survives because the (concrete) code addresses `[0x80002a5c,
 0x80002c10)` are disjoint from the (out-of-range) spill / update windows.  This is the
 `EnvNewSpec.loaded_env_writeMap8` analogue for `env_define`'s 7-chunk code predicate. -/
-theorem loaded_envdef_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : Nat)
-    (d : BitVec (8 * 8))
-    (hdis : a8 + 8 ≤ 0x80002a5c ∨ 0x80002c10 ≤ a8) (h : Env_defineLoaded mem) :
-    Env_defineLoaded (writeMap8 mem a8 d) := by
-  obtain ⟨c0, c1, c2, c3, c4, c5, c6⟩ := h
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simp only [Vsa.Sim.Code.env_defineChunk0] at c0 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk1] at c1 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk2] at c2 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk3] at c3 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk4] at c4 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk5] at c5 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk6] at c6 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-
-/-- `StrcmpLoaded` survives an 8-byte write outside the strcmp text. -/
-theorem loaded_strcmp_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : Nat)
-    (d : BitVec (8 * 8))
-    (hdis : a8 + 8 ≤ 0x80006ea0 ∨ 0x80006fcc ≤ a8) (h : StrcmpLoaded mem) :
-    StrcmpLoaded (writeMap8 mem a8 d) := by
-  obtain ⟨c0, c1, c2, c3, c4⟩ := h
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · simp only [Vsa.Sim.Code.strcmpChunk0] at c0 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.strcmpChunk1] at c1 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.strcmpChunk2] at c2 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.strcmpChunk3] at c3 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.strcmpChunk4] at c4 ⊢
-    repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
 
 /-! ## The update-block address computation (`vals + 24*hit`)
 
@@ -257,61 +116,12 @@ The update block computes the destination slot for the 24-byte `Value` copy:
 the final `a5` value is `vals + 24*hit` (as a `BitVec`, under the no-wrap bound
 `24*hit < 2^64` — always true since `hit < count ≤ 2^31` for a live frame). -/
 
-/-- The machine's `slli;add;slli;add` chain computes `24*hit` in `a4` (given `x8 = hit`
-as a `BitVec` whose `toNat = hit`, and `24*hit < 2^64`).  Returns the `BitVec` value
-`shift_bits_left (shift_bits_left hitv 1 + hitv) 3` reduced to `BitVec.ofNat 64 (24*hit)`. -/
-theorem update_a4_stride (hitv : BitVec 64) (hit : Nat) (hhit : hitv.toNat = hit)
-    (hnw : 24 * hit < 2^64) :
-    (shift_bits_left ((shift_bits_left hitv (Sail.BitVec.extractLsb (0x01#6) 5 0)) + hitv)
-        (Sail.BitVec.extractLsb (0x03#6) 5 0)).toNat = 24 * hit := by
-  rw [shl1_lit, shl3_lit, slli3_toNat, BitVec.toNat_add, slli1_toNat, hhit]
-  -- goal: ((hit*2 % 2^64 + hit) % 2^64 * 8) % 2^64 = 24 * hit
-  have h2 : hit * 2 % 2^64 = hit * 2 := by omega
-  rw [h2, Nat.mod_eq_of_lt (show hit * 2 + hit < 2^64 by omega)]
-  -- ((hit*2 + hit) * 8) % 2^64 = 24 * hit
-  have h3 : (hit * 2 + hit) * 8 = 24 * hit := by omega
-  rw [h3, Nat.mod_eq_of_lt hnw]
-
-/-- The final update-slot address `a5 = vals + 24*hit` as a `BitVec`, under no-wrap of
-both `24*hit` and `vals + 24*hit`.  This is what the `sd a1/a2/a3, 0/8/16(a5)` stores
-target; combined with `off_ed_00`/`off_ed_08`/`off_ed_10` it gives the three concrete
-byte addresses `pv+24*hit`, `pv+24*hit+8`, `pv+24*hit+16`. -/
-theorem update_slot_addr (valsv hitv : BitVec 64) (hit : Nat) (hhit : hitv.toNat = hit)
-    (hnw : 24 * hit < 2^64) :
-    (valsv + (shift_bits_left ((shift_bits_left hitv (Sail.BitVec.extractLsb (0x01#6) 5 0)) + hitv)
-        (Sail.BitVec.extractLsb (0x03#6) 5 0))).toNat
-      = (valsv.toNat + 24 * hit) % 2^64 := by
-  rw [BitVec.toNat_add, update_a4_stride hitv hit hhit hnw]
-
 /-! ## `strcmp` writes NO memory — spill survival is trivial
 
 On Path 1 the only call is `strcmp`, whose post asserts `c.σ.mem = m0` (memory
 unchanged).  Hence every spill byte, and the `FrameRepr` of the env, survive each
 scan-iteration `strcmp` call *without* any privFoot/disjointness ledger — the
 "easier than env_new's malloc case" the plan flags. -/
-
-/-- `strcmp`'s post leaves memory unchanged: from a `strcmp_post` witness the returned
-config's memory equals the pinned entry memory `m0`.  (Projection of `strcmp_post`.) -/
-theorem strcmp_mem_unchanged (g : (R : Register) → Option (RegisterType R))
-    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
-    (h : strcmp_post g r pa pb sa sb m0 o c) : c.σ.mem = m0 :=
-  h.2.2.2.1
-
-/-- Any byte survives a `strcmp` call: the memory at the returned config equals the
-memory at entry.  Corollary used to carry the spilled callee-saveds and the env
-`FrameRepr` across each scan iteration. -/
-theorem byte_survives_strcmp (g : (R : Register) → Option (RegisterType R))
-    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
-    (h : strcmp_post g r pa pb sa sb m0 o c) (a : Nat) : c.σ.mem[a]? = m0[a]? := by
-  rw [strcmp_mem_unchanged g r pa pb sa sb m0 o c h]
-
-/-- `Env_defineLoaded` survives a `strcmp` call: the returned memory equals `m0`, so the
-code text is unchanged.  (Rewrite of `strcmp_mem_unchanged` into the loaded predicate.) -/
-theorem loaded_envdef_survives_strcmp (g : (R : Register) → Option (RegisterType R))
-    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
-    (h : strcmp_post g r pa pb sa sb m0 o c) (hload : Env_defineLoaded m0) :
-    Env_defineLoaded c.σ.mem := by
-  rw [strcmp_mem_unchanged g r pa pb sa sb m0 o c h]; exact hload
 
 /-! ## Region / disjointness bundle for `env_define` Path 1
 
@@ -321,45 +131,6 @@ its 8 spill slots), the env / vals / names region facts, and the update-slot dis
 the frame code, and the stack).  Parameterised by the entry `sp`, the env pointer `e`,
 the vals base `pv`, the names base `pn`, and the hit index `hit`.  The scalar `count` is
 the frame binding count. -/
-structure EnvDefRegions (sp e pv pn hit count : Nat) : Prop where
-  /-- 64-byte frame lies in RAM, above the HTIF window, 16-aligned (⇒ 8-aligned). -/
-  sp_ge : 64 ≤ sp
-  frame_lo : 0x80000000 ≤ sp - 64
-  frame_hi : sp ≤ 0x100000000
-  frame_win : tohostAddr + 16 ≤ sp - 64
-  frame_align : sp % 16 = 0
-  /-- The 64-byte frame is disjoint from the `env_define` code text. -/
-  frame_code_disjoint : sp ≤ 0x80002a5c ∨ 0x80002c10 ≤ sp - 64
-  /-- The frame is also disjoint from strcmp text and the env count word. -/
-  frame_strcmp_disjoint : sp ≤ 0x80006ea0 ∨ 0x80006fcc ≤ sp - 64
-  frame_header_disjoint : sp ≤ e ∨ e + 4 ≤ sp - 64
-  /-- The signed `lw` count is a positive-range 32-bit integer. -/
-  count_signed : count < 2^31
-  header_lo : 0x80000000 ≤ e
-  header_hi : e + 4 ≤ 0x100000000
-  header_htif : e + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ e
-  header_align : e % 4 = 0
-  /-- The update slot `[pv+24*hit, pv+24*hit+24)` lies in RAM, above the HTIF window,
-  8-aligned, and disjoint from the code text and the 64-byte stack frame. -/
-  slot_lo : 0x80000000 ≤ pv + 24 * hit
-  slot_hi : pv + 24 * hit + 24 ≤ 0x100000000
-  slot_win : tohostAddr + 16 ≤ pv + 24 * hit
-  slot_align : (pv + 24 * hit) % 8 = 0
-  slot_code_disjoint : pv + 24 * hit + 24 ≤ 0x80002a5c ∨ 0x80002c10 ≤ pv + 24 * hit
-  slot_stack_disjoint : pv + 24 * hit + 24 ≤ sp - 64 ∨ sp ≤ pv + 24 * hit
-  /-- The update slot is disjoint from the env header `[e, e+32)` (so the count/cap and
-  the names/vals pointers survive the value store — `frameRepr_after_update`'s (a)/(b)). -/
-  slot_header_disjoint : pv + 24 * hit + 24 ≤ e ∨ e + 32 ≤ pv + 24 * hit
-  /-- The update slot is disjoint from every name pointer slot `[pn+8*j, pn+8*j+8)`
-  (`j < count`) — names untouched by the value store. -/
-  slot_names_disjoint : ∀ j, j < count → (pv + 24 * hit + 24 ≤ pn + 8 * j ∨ pn + 8 * j + 8 ≤ pv + 24 * hit)
-  /-- The update slot is disjoint from every OTHER value slot `[pv+24*j, pv+24*j+24)`
-  (`j < count`, `j ≠ hit`) — other values untouched. -/
-  slot_values_disjoint : ∀ j, j < count → j ≠ hit →
-    (pv + 24 * hit + 24 ≤ pv + 24 * j ∨ pv + 24 * j + 24 ≤ pv + 24 * hit)
-  /-- The hit index is in range and its 24-byte extent does not wrap. -/
-  hit_lt : hit < count
-  slot_nowrap : pv + 24 * hit + 24 < 2^64
 
 /-! ## The prologue `Steps`-chain (site a5c → the `blez` guard at a90)
 
@@ -372,113 +143,6 @@ establishing the spilled-register memory and the pinned live registers `s4=env`,
 
 `ProloguePost` records the post-prologue state facts the scan/update need.  The `blez`,
 scan `Triple.loop`, update block and epilogue continue from here (documented boundary). -/
-
-/-- Post-prologue state predicate at PC `0x80002a90`: live registers pinned, spill memory
-written, `Env_defineLoaded` preserved, `sp` at the new frame base `sp-64`.  (`env`, the
-count `cnt`, and the reduced tick are threaded; the 7 spilled callee-saveds are recorded
-implicitly via the memory being the 7-fold `writeMap8` of `m0`, needed by the epilogue.) -/
-def ProloguePost
-    (g : (R : Register) → Option (RegisterType R))
-    (env name pv r sp : BitVec 64) (cnt : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ Env_defineLoaded c.σ.mem ∧ StrcmpLoaded c.σ.mem ∧ c.tick < 2 ∧
-  c.σ.regs.get? Register.PC = some (0x80002a90#64 : BitVec 64) ∧
-  c.σ.regs.get? Register.x2 = some (sp - 64#64) ∧      -- sp := sp - 64
-  c.σ.regs.get? Register.x20 = some env ∧              -- s4 := a0 (env)
-  c.σ.regs.get? Register.x18 = some name ∧             -- s2 := a1 (name)
-  c.σ.regs.get? Register.x21 = some pv ∧               -- s5 := a2 (&v)
-  c.σ.regs.get? Register.x19 = some cnt ∧              -- s3 := count (lw)
-  (∃ vmi, c.σ.regs.get? Register.minstret = some vmi)
-
-/-- Peel a successful 32-bit little-endian read into its four bytes. -/
-theorem read32_bytes_ed (m : Mem) (a k : Nat) (h : read32 m a = some k) :
-    ∃ b0 b1 b2 b3 : BitVec 8,
-      m[a]? = some b0 ∧ m[a + 1]? = some b1 ∧ m[a + 2]? = some b2 ∧
-      m[a + 3]? = some b3 ∧
-      b0.toNat + 256 * (b1.toNat + 256 * (b2.toNat + 256 * b3.toNat)) = k := by
-  simp only [read32, readLE, bind, Option.bind] at h
-  match hb0 : m[a]?, hb1 : m[a + 1]?, hb2 : m[a + 2]?, hb3 : m[a + 3]? with
-  | some b0, some b1, some b2, some b3 =>
-      refine ⟨b0, b1, b2, b3, rfl, rfl, rfl, rfl, ?_⟩
-      rw [hb0, hb1, hb2, hb3] at h
-      have hk := Option.some.inj h
-      omega
-  | none, _, _, _ => rw [hb0] at h; simp at h
-  | some _, none, _, _ => rw [hb0, hb1] at h; simp at h
-  | some _, some _, none, _ => rw [hb0, hb1, hb2] at h; simp at h
-  | some _, some _, some _, none => rw [hb0, hb1, hb2, hb3] at h; simp at h
-
-/-- A nonnegative signed 32-bit count sign-extends to its 64-bit encoding. -/
-theorem sext_count_ed (b0 b1 b2 b3 : BitVec 8) (k : Nat) (hk : k < 2^31)
-    (hrec : b0.toNat + 256 * (b1.toNat + 256 * (b2.toNat + 256 * b3.toNat)) = k) :
-    (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)) : BitVec 64)
-      = BitVec.ofNat 64 k := by
-  have hw : ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)).toNat = k := by
-    simp only [BitVec.append_eq, BitVec.toNat_append]
-    have h0 := b0.isLt; have h1 := b1.isLt; have h2 := b2.isLt; have h3 := b3.isLt
-    rw [← Nat.shiftLeft_add_eq_or_of_lt (by omega),
-      ← Nat.shiftLeft_add_eq_or_of_lt (by omega),
-      ← Nat.shiftLeft_add_eq_or_of_lt (by omega)]
-    simp only [Nat.shiftLeft_eq, Nat.reducePow]
-    omega
-  apply BitVec.eq_of_toNat_eq
-  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show k < 2^64 by omega)]
-  simp only [sign_extend, Sail.BitVec.signExtend, BitVec.toNat_signExtend]
-  have hmsb : ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)).msb = false := by
-    rw [BitVec.msb_eq_decide]
-    simp only [decide_eq_false_iff_not, Nat.not_le]
-    omega
-  rw [hmsb]
-  simp only [Bool.false_eq_true, if_false, Nat.add_zero, BitVec.toNat_setWidth]
-  rw [hw]
-  omega
-
-/-- Registers needed after the first spill and before the three final moves. -/
-def PrologueCarry (σ : MState) (sp env name pv r v18 v20 v21 v8 v9 v22 : BitVec 64) : Prop :=
-  σ.regs.get? Register.x2 = some (sp - 64#64) ∧
-  σ.regs.get? Register.x10 = some env ∧ σ.regs.get? Register.x11 = some name ∧
-  σ.regs.get? Register.x12 = some pv ∧ σ.regs.get? Register.x1 = some r ∧
-  σ.regs.get? Register.x18 = some v18 ∧ σ.regs.get? Register.x20 = some v20 ∧
-  σ.regs.get? Register.x21 = some v21 ∧ σ.regs.get? Register.x8 = some v8 ∧
-  σ.regs.get? Register.x9 = some v9 ∧ σ.regs.get? Register.x22 = some v22
-
-theorem prologueCarry_store {σ σ' : MState} {pc vm : BitVec 64} {m' : Mem}
-    {sp env name pv r v18 v20 v21 v8 v9 v22 : BitVec 64}
-    (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m'))
-    (h : PrologueCarry σ sp env name pv r v18 v20 v21 v8 v9 v22) :
-    PrologueCarry σ' sp env name pv r v18 v20 v21 v8 v9 v22 := by
-  rcases h with ⟨h2, h10, h11, h12, h1, h18, h20, h21, h8, h9, h22⟩
-  exact ⟨
-    obs_store_other' hobs Register.x2 (by decide) h2,
-    obs_store_other' hobs Register.x10 (by decide) h10,
-    obs_store_other' hobs Register.x11 (by decide) h11,
-    obs_store_other' hobs Register.x12 (by decide) h12,
-    obs_store_other' hobs Register.x1 (by decide) h1,
-    obs_store_other' hobs Register.x18 (by decide) h18,
-    obs_store_other' hobs Register.x20 (by decide) h20,
-    obs_store_other' hobs Register.x21 (by decide) h21,
-    obs_store_other' hobs Register.x8 (by decide) h8,
-    obs_store_other' hobs Register.x9 (by decide) h9,
-    obs_store_other' hobs Register.x22 (by decide) h22⟩
-
-theorem prologueCarry_lw19 {σ σ' : MState} {pc vm value : BitVec 64}
-    {sp env name pv r v18 v20 v21 v8 v9 v22 : BitVec 64}
-    (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm Register.x19 value))
-    (h : PrologueCarry σ sp env name pv r v18 v20 v21 v8 v9 v22) :
-    PrologueCarry σ' sp env name pv r v18 v20 v21 v8 v9 v22 := by
-  rcases h with ⟨h2, h10, h11, h12, h1, h18, h20, h21, h8, h9, h22⟩
-  exact ⟨
-    obs_alu_other' hobs Register.x2 (by decide) h2,
-    obs_alu_other' hobs Register.x10 (by decide) h10,
-    obs_alu_other' hobs Register.x11 (by decide) h11,
-    obs_alu_other' hobs Register.x12 (by decide) h12,
-    obs_alu_other' hobs Register.x1 (by decide) h1,
-    obs_alu_other' hobs Register.x18 (by decide) h18,
-    obs_alu_other' hobs Register.x20 (by decide) h20,
-    obs_alu_other' hobs Register.x21 (by decide) h21,
-    obs_alu_other' hobs Register.x8 (by decide) h8,
-    obs_alu_other' hobs Register.x9 (by decide) h9,
-    obs_alu_other' hobs Register.x22 (by decide) h22⟩
 
 /-! ### Note on the prologue proof
 
@@ -527,105 +191,7 @@ genuinely-proved `Steps` chain for the first two sites: `addi sp,sp,-64` (a5c) t
 preserved.  This exercises the exact site-lemma + observation-readback + offset-fold +
 code-survival pattern the full chain scales up, so the remaining ~38 sites are the same
 move repeated. -/
-theorem env_define_prologue_addi
-    (sp v19 vmi : BitVec 64) (c : Config)
-    (hG : GoodState c.σ) (hloaded : Env_defineLoaded c.σ.mem)
-    (hpc : c.σ.regs.get? Register.PC = some (0x80002a5c#64 : BitVec 64))
-    (hsp : c.σ.regs.get? Register.x2 = some sp)
-    (hs19 : c.σ.regs.get? Register.x19 = some v19)
-    (hmi : c.σ.regs.get? Register.minstret = some vmi)
-    (htick : c.tick < 2) :
-    ∃ c' vmi', Step c c' ∧
-      c'.σ.regs.get? Register.PC = some (0x80002a60#64 : BitVec 64) ∧
-      c'.σ.regs.get? Register.x2 = some (sp - 64#64) ∧
-      c'.σ.regs.get? Register.x19 = some v19 ∧
-      c'.σ.regs.get? Register.minstret = some vmi' ∧
-      GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ c'.tick < 2 := by
-  -- === 0x80002a5c: addi sp,sp,-64  ⇒ x2 := sp - 64 ===
-  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
-    site_80002a5c_ed c.σ c.tick c.steps (0x80002a5c#64) vmi sp hG hpc hmi hsp hloaded rfl htick
-  have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
-  have hpc1 : σ1.regs.get? Register.PC = some (0x80002a60#64 : BitVec 64) := by
-    have := obs_alu_pc hobs1
-    rwa [show BitVec.addInt (0x80002a5c#64 : BitVec 64) 4 = (0x80002a60#64 : BitVec 64) from by decide] at this
-  have hsp1 : σ1.regs.get? Register.x2 = some (sp - 64#64) := by
-    have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
-    rwa [sp_sub64 sp] at this
-  have hs19_1 := obs_alu_other hobs1 Register.x19 (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide) (by decide) hs19
-  obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
-  have hloaded1 : Env_defineLoaded σ1.mem := hmem1 ▸ hloaded
-  exact ⟨⟨σ1, i1, c.steps + 1⟩, vmi1, hstep1, hpc1, hsp1, hs19_1, hmi1,
-    hG1, hloaded1, hi1⟩
 
-theorem env_define_prologue_store
-    (env pv sp v19 vmi : BitVec 64) (hit count : Nat) (c : Config)
-    (hRG : EnvDefRegions sp.toNat env.toNat pv.toNat 0 hit count)
-    (hG : GoodState c.σ) (hloaded : Env_defineLoaded c.σ.mem)
-    (hpc : c.σ.regs.get? Register.PC = some (0x80002a60#64 : BitVec 64))
-    (hsp : c.σ.regs.get? Register.x2 = some (sp - 64#64))
-    (hs19 : c.σ.regs.get? Register.x19 = some v19)
-    (hmi : c.σ.regs.get? Register.minstret = some vmi)
-    (htick : c.tick < 2) :
-    ∃ c', Step c c' ∧
-      c'.σ.regs.get? Register.PC = some (0x80002a64#64 : BitVec 64) ∧
-      c'.σ.regs.get? Register.x2 = some (sp - 64#64) ∧
-      GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem := by
-  -- sp_new facts
-  have hsp16 : (64 : Nat) ≤ sp.toNat := hRG.sp_ge
-  have hspn_toNat : (sp - 64#64).toNat = sp.toNat - 64 := sp_sub64_toNat sp hsp16
-  -- the spill address sp_new + 0x018 = sp_new + 24
-  have hspn24 : ((sp - 64#64) + sign_extend (m := 64) (0x018#12)).toNat = (sp - 64#64).toNat + 24 := by
-    apply off_ed_18; rw [hspn_toNat]; have := sp.isLt; omega
-  have hcodeDisjoint : (sp - 64#64).toNat + 24 + 8 ≤ 0x80002a5c ∨
-      0x80002c10 ≤ (sp - 64#64).toNat + 24 := by
-    rw [hspn_toNat]
-    have := hRG.frame_code_disjoint
-    have := hRG.sp_ge
-    omega
-  have hloadedWrite :
-      Env_defineLoaded (writeMap8 c.σ.mem ((sp - 64#64).toNat + 24) (sdData_val v19)) :=
-    loaded_envdef_writeMap8 c.σ.mem ((sp - 64#64).toNat + 24) (sdData_val v19)
-      hcodeDisjoint hloaded
-  -- === 0x80002a60: sd s3,24(sp)  ⇒ mem += spill (s3) @ sp_new+24 ===
-  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
-    site_80002a60_ed c.σ c.tick c.steps (0x80002a60#64) vmi (sp - 64#64) v19 hG hpc hmi hsp hs19 hloaded rfl
-      (by rw [hspn24, hspn_toNat]; have := hRG.frame_lo; have := hRG.frame_win; omega)
-      (by rw [hspn24, hspn_toNat]; have := hRG.frame_hi; omega)
-      (by rw [hspn24, hspn_toNat]; have := hRG.frame_win; omega)
-      (by rw [hspn24, hspn_toNat]; have := hRG.frame_align; omega) htick
-  have hstep2 : Step c ⟨σ2, i2, c.steps + 1⟩ := by cases c; exact hs2
-  have hpc2 : σ2.regs.get? Register.PC = some (0x80002a64#64 : BitVec 64) := by
-    have := obs_store_pc hobs2
-    rwa [show BitVec.addInt (0x80002a60#64 : BitVec 64) 4 = (0x80002a64#64 : BitVec 64) from by decide] at this
-  have hsp2 := obs_store_other hobs2 Register.x2 (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide) hsp
-  have hloaded2 : Env_defineLoaded σ2.mem := by
-    have hmem2' :
-        σ2.mem = writeMap8 c.σ.mem ((sp - 64#64).toNat + 24) (sdData_val v19) := by
-      simpa only [mem_afterNextPC, hspn24] using hmem2
-    exact hmem2' ▸ hloadedWrite
-  exact ⟨⟨σ2, i2, c.steps + 1⟩, hstep2, hpc2, hsp2, hG2, hloaded2⟩
-
-theorem env_define_prologue_head
-    (env pv sp v19 vmi : BitVec 64) (hit count : Nat) (c : Config)
-    (hRG : EnvDefRegions sp.toNat env.toNat pv.toNat 0 hit count)
-    (hG : GoodState c.σ) (hloaded : Env_defineLoaded c.σ.mem)
-    (hpc : c.σ.regs.get? Register.PC = some (0x80002a5c#64 : BitVec 64))
-    (hsp : c.σ.regs.get? Register.x2 = some sp)
-    (hs19 : c.σ.regs.get? Register.x19 = some v19)
-    (hmi : c.σ.regs.get? Register.minstret = some vmi)
-    (htick : c.tick < 2) :
-    ∃ c', Steps c c' ∧
-      c'.σ.regs.get? Register.PC = some (0x80002a64#64 : BitVec 64) ∧
-      c'.σ.regs.get? Register.x2 = some (sp - 64#64) ∧
-      GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem := by
-  obtain ⟨c1, vmi1, hstep1, hpc1, hsp1, hs19_1, hmi1, hG1, hloaded1, htick1⟩ :=
-    env_define_prologue_addi sp v19 vmi c hG hloaded hpc hsp hs19 hmi htick
-  obtain ⟨c2, hstep2, hpc2, hsp2, hG2, hloaded2⟩ :=
-    env_define_prologue_store env pv sp v19 vmi1 hit count c1 hRG hG1 hloaded1 hpc1 hsp1
-      hs19_1 hmi1 htick1
-  exact ⟨c2, (Steps.single hstep1).trans (Steps.single hstep2), hpc2, hsp2, hG2, hloaded2⟩
 /- The complete 13-site proof draft below is retained for the next modular step.
   have hstrload2 : StrcmpLoaded σ2.mem := by
     rw [hmem2, mem_afterNextPC]

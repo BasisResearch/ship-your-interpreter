@@ -85,11 +85,6 @@ theorem CStringWithin.map {m m' : Mem} {P Q : Nat → Prop} {a : Nat} {s : Strin
   exact ⟨⟨cs, cstr_transport_within hagree hc (fun i hi => hP i (hlen ▸ hi)), hs⟩,
     fun i hi => hPQ _ (hP i hi)⟩
 
-/-- Preserve string representation under agreement on its fixed owned bytes. -/
-theorem CStringWithin.transport {m m' : Mem} {P : Nat → Prop} {a : Nat} {s : String}
-    (h : CStringWithin m P a s) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    CStringWithin m' P a s := h.map hagree (fun _ hp => hp)
-
 /-- Widen the allowed string bytes without changing memory. -/
 theorem CStringWithin.mono {m : Mem} {P Q : Nat → Prop} {a : Nat} {s : String}
     (h : CStringWithin m P a s) (hPQ : ∀ k, P k → Q k) : CStringWithin m Q a s :=
@@ -266,110 +261,10 @@ inductive StmtArrayReprWithin (m : Mem) (P : Nat → Prop) : Nat → Nat → Lis
 end
 
 /-- Forget hereditary ownership. -/
-theorem ExprReprWithin.erase {m : Mem} {P : Nat → Prop} {a : Nat} {e : Expr}
-    (h : ExprReprWithin m P a e) :
-    ExprRepr m a e := by
-  apply ExprReprWithin.rec
-    (motive_1 := fun a e _ => ExprRepr m a e)
-    (motive_2 := fun a n es _ => ExprArrayRepr m a n es)
-    (motive_3 := fun a n xs _ => ParamsRepr m a n xs)
-    (motive_4 := fun a s _ => StmtRepr m a s)
-    (motive_5 := fun a s _ => OptStmtRepr m a s)
-    (motive_6 := fun a e _ => OptExprRepr m a e)
-    (motive_7 := fun a n ss _ => StmtArrayRepr m a n ss)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h
-  all_goals
-    intros
-    constructor
-    all_goals first
-      | assumption
-      | exact CStringWithin.erase ‹_›
-
-/-- Forget hereditary ownership. -/
-theorem ExprArrayReprWithin.erase {m : Mem} {P : Nat → Prop} {a n : Nat} {es : List Expr}
-    (h : ExprArrayReprWithin m P a n es) :
-    ExprArrayRepr m a n es := by
-  apply ExprArrayReprWithin.rec
-    (motive_1 := fun a e _ => ExprRepr m a e)
-    (motive_2 := fun a n es _ => ExprArrayRepr m a n es)
-    (motive_3 := fun a n xs _ => ParamsRepr m a n xs)
-    (motive_4 := fun a s _ => StmtRepr m a s)
-    (motive_5 := fun a s _ => OptStmtRepr m a s)
-    (motive_6 := fun a e _ => OptExprRepr m a e)
-    (motive_7 := fun a n ss _ => StmtArrayRepr m a n ss)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h
-  all_goals
-    intros
-    constructor
-    all_goals first
-      | assumption
-      | exact CStringWithin.erase ‹_›
-
-/-- Forget hereditary ownership. -/
-theorem ParamsReprWithin.erase {m : Mem} {P : Nat → Prop} {a n : Nat} {xs : List String}
-    (h : ParamsReprWithin m P a n xs) :
-    ParamsRepr m a n xs := by
-  apply ParamsReprWithin.rec
-    (motive_1 := fun a e _ => ExprRepr m a e)
-    (motive_2 := fun a n es _ => ExprArrayRepr m a n es)
-    (motive_3 := fun a n xs _ => ParamsRepr m a n xs)
-    (motive_4 := fun a s _ => StmtRepr m a s)
-    (motive_5 := fun a s _ => OptStmtRepr m a s)
-    (motive_6 := fun a e _ => OptExprRepr m a e)
-    (motive_7 := fun a n ss _ => StmtArrayRepr m a n ss)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h
-  all_goals
-    intros
-    constructor
-    all_goals first
-      | assumption
-      | exact CStringWithin.erase ‹_›
-
-/-- Forget hereditary ownership. -/
 theorem StmtReprWithin.erase {m : Mem} {P : Nat → Prop} {a : Nat} {s : Stmt}
     (h : StmtReprWithin m P a s) :
     StmtRepr m a s := by
   apply StmtReprWithin.rec
-    (motive_1 := fun a e _ => ExprRepr m a e)
-    (motive_2 := fun a n es _ => ExprArrayRepr m a n es)
-    (motive_3 := fun a n xs _ => ParamsRepr m a n xs)
-    (motive_4 := fun a s _ => StmtRepr m a s)
-    (motive_5 := fun a s _ => OptStmtRepr m a s)
-    (motive_6 := fun a e _ => OptExprRepr m a e)
-    (motive_7 := fun a n ss _ => StmtArrayRepr m a n ss)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h
-  all_goals
-    intros
-    constructor
-    all_goals first
-      | assumption
-      | exact CStringWithin.erase ‹_›
-
-/-- Forget hereditary ownership. -/
-theorem OptStmtReprWithin.erase {m : Mem} {P : Nat → Prop} {a : Nat} {s : Option Stmt}
-    (h : OptStmtReprWithin m P a s) :
-    OptStmtRepr m a s := by
-  apply OptStmtReprWithin.rec
-    (motive_1 := fun a e _ => ExprRepr m a e)
-    (motive_2 := fun a n es _ => ExprArrayRepr m a n es)
-    (motive_3 := fun a n xs _ => ParamsRepr m a n xs)
-    (motive_4 := fun a s _ => StmtRepr m a s)
-    (motive_5 := fun a s _ => OptStmtRepr m a s)
-    (motive_6 := fun a e _ => OptExprRepr m a e)
-    (motive_7 := fun a n ss _ => StmtArrayRepr m a n ss)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h
-  all_goals
-    intros
-    constructor
-    all_goals first
-      | assumption
-      | exact CStringWithin.erase ‹_›
-
-/-- Forget hereditary ownership. -/
-theorem OptExprReprWithin.erase {m : Mem} {P : Nat → Prop} {a : Nat} {e : Option Expr}
-    (h : OptExprReprWithin m P a e) :
-    OptExprRepr m a e := by
-  apply OptExprReprWithin.rec
     (motive_1 := fun a e _ => ExprRepr m a e)
     (motive_2 := fun a n es _ => ExprArrayRepr m a n es)
     (motive_3 := fun a n xs _ => ParamsRepr m a n xs)
@@ -580,30 +475,15 @@ theorem StmtArrayReprWithin.map {m m' : Mem} {P Q : Nat → Prop} {a n : Nat} {s
       | exact (Covers.read64_eq ‹_› hagree).symm.trans ‹_›
       | exact (Covers.readI64_eq ‹_› hagree).symm.trans ‹_›
 
-/-- Preserve the entire represented graph under agreement on owned bytes. -/
-theorem ExprReprWithin.transport {m m' : Mem} {P : Nat → Prop} {a : Nat} {e : Expr}
-    (h : ExprReprWithin m P a e) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    ExprReprWithin m' P a e := h.map hagree (fun _ hp => hp)
-
 /-- Widen the allowed set; immutable sharing remains unrestricted. -/
 theorem ExprReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a : Nat} {e : Expr}
     (h : ExprReprWithin m P a e) (hPQ : ∀ k, P k → Q k) :
     ExprReprWithin m Q a e := h.map (fun _ _ => rfl) hPQ
 
-/-- Preserve the entire represented graph under agreement on owned bytes. -/
-theorem ExprArrayReprWithin.transport {m m' : Mem} {P : Nat → Prop} {a n : Nat} {es : List Expr}
-    (h : ExprArrayReprWithin m P a n es) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    ExprArrayReprWithin m' P a n es := h.map hagree (fun _ hp => hp)
-
 /-- Widen the allowed set; immutable sharing remains unrestricted. -/
 theorem ExprArrayReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a n : Nat} {es : List Expr}
     (h : ExprArrayReprWithin m P a n es) (hPQ : ∀ k, P k → Q k) :
     ExprArrayReprWithin m Q a n es := h.map (fun _ _ => rfl) hPQ
-
-/-- Preserve the entire represented graph under agreement on owned bytes. -/
-theorem ParamsReprWithin.transport {m m' : Mem} {P : Nat → Prop} {a n : Nat} {xs : List String}
-    (h : ParamsReprWithin m P a n xs) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    ParamsReprWithin m' P a n xs := h.map hagree (fun _ hp => hp)
 
 /-- Widen the allowed set; immutable sharing remains unrestricted. -/
 theorem ParamsReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a n : Nat} {xs : List String}
@@ -620,30 +500,15 @@ theorem StmtReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a : Nat} {s : Stmt}
     (h : StmtReprWithin m P a s) (hPQ : ∀ k, P k → Q k) :
     StmtReprWithin m Q a s := h.map (fun _ _ => rfl) hPQ
 
-/-- Preserve the entire represented graph under agreement on owned bytes. -/
-theorem OptStmtReprWithin.transport {m m' : Mem} {P : Nat → Prop} {a : Nat} {s : Option Stmt}
-    (h : OptStmtReprWithin m P a s) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    OptStmtReprWithin m' P a s := h.map hagree (fun _ hp => hp)
-
 /-- Widen the allowed set; immutable sharing remains unrestricted. -/
 theorem OptStmtReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a : Nat} {s : Option Stmt}
     (h : OptStmtReprWithin m P a s) (hPQ : ∀ k, P k → Q k) :
     OptStmtReprWithin m Q a s := h.map (fun _ _ => rfl) hPQ
 
-/-- Preserve the entire represented graph under agreement on owned bytes. -/
-theorem OptExprReprWithin.transport {m m' : Mem} {P : Nat → Prop} {a : Nat} {e : Option Expr}
-    (h : OptExprReprWithin m P a e) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    OptExprReprWithin m' P a e := h.map hagree (fun _ hp => hp)
-
 /-- Widen the allowed set; immutable sharing remains unrestricted. -/
 theorem OptExprReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a : Nat} {e : Option Expr}
     (h : OptExprReprWithin m P a e) (hPQ : ∀ k, P k → Q k) :
     OptExprReprWithin m Q a e := h.map (fun _ _ => rfl) hPQ
-
-/-- Preserve the entire represented graph under agreement on owned bytes. -/
-theorem StmtArrayReprWithin.transport {m m' : Mem} {P : Nat → Prop} {a n : Nat} {ss : List Stmt}
-    (h : StmtArrayReprWithin m P a n ss) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    StmtArrayReprWithin m' P a n ss := h.map hagree (fun _ hp => hp)
 
 /-- Widen the allowed set; immutable sharing remains unrestricted. -/
 theorem StmtArrayReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a n : Nat} {ss : List Stmt}
@@ -659,42 +524,9 @@ theorem ProgramReprWithin.erase {m : Mem} {P : Nat → Prop} {a n : Nat} {p : Pr
     (h : ProgramReprWithin m P a n p) : ProgramRepr m a n p :=
   ⟨h.1.erase, h.2⟩
 
-/-- Agreement on the fixed owned set preserves the complete program. -/
-theorem ProgramReprWithin.transport {m m' : Mem} {P : Nat → Prop} {a n : Nat} {p : Program}
-    (h : ProgramReprWithin m P a n p) (hagree : ∀ k, P k → m[k]? = m'[k]?) :
-    ProgramReprWithin m' P a n p := ⟨h.1.transport hagree, h.2⟩
-
 /-- Widen the program's allowed byte set. -/
 theorem ProgramReprWithin.mono {m : Mem} {P Q : Nat → Prop} {a n : Nat} {p : Program}
     (h : ProgramReprWithin m P a n p) (hPQ : ∀ k, P k → Q k) :
     ProgramReprWithin m Q a n p := ⟨h.1.mono hPQ, h.2⟩
-
-#print axioms ExprReprWithin.erase
-#print axioms ExprReprWithin.transport
-#print axioms ExprReprWithin.mono
-#print axioms ExprArrayReprWithin.erase
-#print axioms ExprArrayReprWithin.transport
-#print axioms ExprArrayReprWithin.mono
-#print axioms ParamsReprWithin.erase
-#print axioms ParamsReprWithin.transport
-#print axioms ParamsReprWithin.mono
-#print axioms StmtReprWithin.erase
-#print axioms StmtReprWithin.transport
-#print axioms StmtReprWithin.mono
-#print axioms OptStmtReprWithin.erase
-#print axioms OptStmtReprWithin.transport
-#print axioms OptStmtReprWithin.mono
-#print axioms OptExprReprWithin.erase
-#print axioms OptExprReprWithin.transport
-#print axioms OptExprReprWithin.mono
-#print axioms StmtArrayReprWithin.erase
-#print axioms StmtArrayReprWithin.transport
-#print axioms StmtArrayReprWithin.mono
-#print axioms CStringWithin.erase
-#print axioms CStringWithin.transport
-#print axioms CStringWithin.mono
-#print axioms ProgramReprWithin.erase
-#print axioms ProgramReprWithin.transport
-#print axioms ProgramReprWithin.mono
 
 end Vsa.MemRepr

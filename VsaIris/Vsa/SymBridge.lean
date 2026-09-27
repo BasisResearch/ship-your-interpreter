@@ -68,14 +68,4 @@ theorem swpo_bridge {T1 T2 : List (Nat × BitVec 8)} (ht : ∀ p ∈ T1, p ∈ T
     SWPO live T2 rs S Q t pc R Mt :=
   swp_text_mono ht (run _ fun pc' R' Mt' hc => swp_done fun _ _ hm => swpo_run (hk pc' R' Mt' hc) hm)
 
-/-- A table in the data view: its bytes are data bytes when the view's
-addresses list them and its memory agrees. -/
-theorem mem_dataOf {T : List (Nat × BitVec 8)} {Dt : Mem} {DA : List Nat}
-    (hA : ∀ p ∈ T, p.1 ∈ DA) (hD : ∀ p ∈ T, imgM Dt p.1 = p.2) :
-    ∀ p ∈ T, p ∈ dataOf Dt DA := by
-  intro p hp
-  have e : p = (p.1, imgM Dt p.1) := by rw [hD p hp]
-  rw [e]
-  exact List.mem_map_of_mem (f := fun a => (a, imgM Dt a)) (hA p hp)
-
 end VsaIris.Sym

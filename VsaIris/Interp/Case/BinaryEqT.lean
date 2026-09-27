@@ -204,9 +204,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave %htr := valOf_tag N rv' u0 u1 u2 $$ Hv2c
   have htr' : u0.toNat % 2 ^ 32 < 2 ^ 31 := by rw [htr]; exact valTag_lt _
 
-
-
-
 #ix_piece BinaryEqT_p3 from BinaryEqT_p2 by
   -- run 3: operator dispatch and the operand copies, to `value_equal`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
@@ -363,7 +360,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep6, hkeep4, hkeep2, hkeep1]
-
 
 #ix_chain caseT_BinaryEq := [BinaryEqT_p1, BinaryEqT_p2, BinaryEqT_p3,
   BinaryEqT_p4, BinaryEqT_p5, BinaryEqT_p6]

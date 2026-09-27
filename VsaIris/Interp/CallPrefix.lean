@@ -54,7 +54,6 @@ structure CallAt (R : Nat → BitVec 64) (Mt : Mem) (s aX sret inp ret : BitVec 
   sv18 : ldv .ld Mt (s.toNat - 1088 + 1056) = rv 18
   sv23 : ldv .ld Mt (s.toNat - 1088 + 1016) = rv 23
 
-
 theorem Expr.bodiesBoundList_mem {P : Nat} : ∀ {es : List Expr} {e : Expr},
     Expr.bodiesBoundList P es = true → e ∈ es → e.bodiesBound P = true
   | _ :: _, _, h, .head _ => by simp only [Expr.bodiesBoundList, Bool.and_eq_true] at h; exact h.1
@@ -259,7 +258,6 @@ open VsaIris.Inst Vsa.RuntimeRepr
     unfold F'
     iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hw, #Hv1, Hk⟩, Hms⟩
   rotate_left
-
 
 #ix_piece callPrefixT_p3 from callPrefixT_p2 by
   -- the argument loop

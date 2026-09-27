@@ -247,7 +247,6 @@ theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   iframe Hcode HE Hrd Hms Hst Hw Hab
   ipureintro; exact hR
 
-
 /-- A binary node's budget leaves `runtime_error` room below the arm's frame:
 each child needs at least two frames. -/
 theorem evalNeed_binary_rtErr (op : BinOp) (l r : Expr) (d : Nat) :

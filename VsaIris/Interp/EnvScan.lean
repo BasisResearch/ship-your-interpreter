@@ -289,7 +289,6 @@ theorem interval_apart {a n b m : Nat} (hn : 0 < n) (hm : 0 < m)
 
 end Scan
 
-
 /-! ## Opening and closing a frame -/
 
 section Frames
@@ -663,7 +662,6 @@ theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
 
 end ScanLoop
 
-
 section Info
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -690,7 +688,6 @@ theorem blockOwn_img (p n : Nat) :
   ownSet_fn _
 
 end Info
-
 
 /-! ## The parent chain -/
 

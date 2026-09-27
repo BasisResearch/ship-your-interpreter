@@ -20,7 +20,6 @@ open Vsa.MemRepr Vsa.Sim
 from `+8` to `+w` (never the line field at `+4`). -/
 abbrev stmtView (a w : Nat) : List Nat := accAddrs a 4 ++ accAddrs (a + 8) (w - 8)
 
-
 /-- What a statement node gives the runs: its tag reads at the node's
 register value, its placement (`w` bytes from the node), its view. -/
 structure StmtNode (m : Mem) (P : Nat → Prop) (aS : BitVec 64) (tag w : Nat) : Prop where

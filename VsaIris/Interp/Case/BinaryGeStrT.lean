@@ -203,9 +203,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave %htr := valOf_tag N (.str y) u0 u1 u2 $$ Hv2c
   have htr' : u0.toNat % 2 ^ 32 < 2 ^ 31 := by rw [htr]; exact valTag_lt _
 
-
-
-
 #ix_piece BinaryGeStrT_p3 from BinaryGeStrT_p2 by
   -- run 3: operator dispatch, the string/string test, to `strcmp`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

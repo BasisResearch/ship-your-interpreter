@@ -10,49 +10,6 @@ structure Reserved (A : Arena) (exts : List Extent) (shared : Nat → Prop) : Pr
   live : ∀ k, shared k → A.lo ≤ k → k < A.hi →
     ∃ e ∈ exts, ExtentByte e k
 
-/-- A fresh allocated extent cannot overlap a reserved immutable byte. -/
-theorem Reserved.outsideFresh {A : Arena} {exts : List Extent} {shared : Nat → Prop}
-    (h : Reserved A exts shared) {p n : Nat} (ha : A.contains p n)
-    (hf : ∀ e ∈ exts, ExtDisjoint (p, n) e) :
-    ∀ k, shared k → ¬ ExtentByte (p, n) k := by
-  intro k hk hin
-  obtain ⟨hlo, hhi⟩ := ha
-  obtain ⟨hkl, hkh⟩ := hin
-  obtain ⟨e, he, hek⟩ := h.live k hk (by omega) (by omega)
-  have hd := hf e he
-  obtain ⟨hel, heh⟩ := hek
-  change p + n ≤ e.1 ∨ e.1 + e.2 ≤ p at hd
-  omega
-
-/-- Extending a ledger retains every previously reserved immutable byte. -/
-theorem Reserved.mono {A : Arena} {exts exts' : List Extent} {shared : Nat → Prop}
-    (h : Reserved A exts shared) (he : ∀ e ∈ exts, e ∈ exts') :
-    Reserved A exts' shared := by
-  constructor
-  intro k hk hlo hhi
-  obtain ⟨e, hem, heb⟩ := h.live k hk hlo hhi
-  exact ⟨e, he e hem, heb⟩
-
-/-- Live reservations protect in-arena shared bytes from private metadata.
-Outside the arena, private writes must belong to the caller's write footprint. -/
-theorem Reserved.outsidePrivate
-    {A : Arena} {exts : List Extent} {alloc : Allocations}
-    {shared readable writes privFoot : Nat → Prop}
-    (h : Reserved A exts shared) (hi : Immutable alloc shared readable writes)
-    (hlive : ∀ e ∈ exts, ∀ i < e.2, ¬ privFoot (e.1 + i))
-    (hout : ∀ k, privFoot k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k) :
-    ∀ k, shared k → ¬ privFoot k := by
-  intro k hk hp
-  by_cases ha : A.lo ≤ k ∧ k < A.hi
-  · obtain ⟨e, he, hbyte⟩ := h.live k hk ha.1 ha.2
-    obtain ⟨hlo, hhi⟩ := hbyte
-    have hbound : k - e.1 < e.2 := by omega
-    have heq : e.1 + (k - e.1) = k := by omega
-    have hn := hlive e he (k - e.1) hbound
-    rw [heq] at hn
-    exact hn hp
-  · exact hi.outsideWrites k hk (hout k hp ha)
-
 /-- Assign a newly allocated extent to one runtime role. -/
 def Allocations.insert (alloc : Allocations) (role : Role) (p n : Nat) : Allocations :=
   fun r => if r = role then some (p, n) else alloc r
@@ -113,25 +70,6 @@ theorem Ledger.insert {A : Arena} {exts : List Extent} {alloc : Allocations}
           simpa only [Allocated, Allocations.insert_other es] using hs
         exact h.separated r s q size b width oldr olds hne
 
-/-- Reserved immutable bytes survive adding a fresh allocation role. -/
-theorem Immutable.insert {A : Arena} {exts : List Extent} {alloc : Allocations}
-    {shared readable writes : Nat → Prop}
-    (h : Immutable alloc shared readable writes) (hr : Reserved A exts shared)
-    {role : Role} {p n : Nat} (ha : A.contains p n)
-    (hf : ∀ e ∈ exts, ExtDisjoint (p, n) e) :
-    Immutable (alloc.insert role p n) shared readable writes := by
-  refine ⟨h.readable, h.outsideWrites, ?_⟩
-  intro r q size hm halloc k hk
-  by_cases heq : r = role
-  · subst r
-    have e : (p, n) = (q, size) := Option.some.inj
-      ((show alloc.insert role p n role = some (p, n)
-        from Allocations.insert_same).symm.trans halloc)
-    simpa only [e] using hr.outsideFresh ha hf k hk
-  · have old : Allocated alloc r q size := by
-      simpa only [Allocated, Allocations.insert_other heq] using halloc
-    exact h.outsideMutable r q size hm old k hk
-
 /-- Runtime memory ownership over the allocator's current live extent ledger.
 It contains data and byte geometry only; allocator execution is proved separately. -/
 structure HeapOwned (A : Arena) (exts : List Extent) (m : Mem)
@@ -141,13 +79,5 @@ structure HeapOwned (A : Arena) (exts : List Extent) (m : Mem)
   immutable : Immutable alloc shared readable writes
   reserved : Reserved A exts shared
   store : StoreOwned m phiF phiC alloc shared s
-
-#print axioms Allocations.insert_same
-#print axioms Allocations.insert_other
-#print axioms Ledger.insert
-#print axioms Immutable.insert
-#print axioms Reserved.outsideFresh
-#print axioms Reserved.mono
-#print axioms Reserved.outsidePrivate
 
 end Vsa.Sim.RuntimeOwnership

@@ -57,37 +57,11 @@ namespace Vsa.Sim
 
 /-! ## The `wrap64` bridge for the `sub` exit value -/
 
-/-- `value_int` produces `.int (BitVec.ofNat 64 pay.toNat).toInt` with the payload
-`pay = Wl - Wr` (the machine 64-bit `sub`). Since `Wl.toInt = a`, `Wr.toInt = b`
-(the operands' `.int` `ValueRepr` payloads), this equals `.int (wrap64 (a - b))`. -/
-theorem sub_wrap_bridge (Wl Wr : BitVec 64) (a b : Int)
-    (ha : Wl.toInt = a) (hb : Wr.toInt = b) :
-    (BitVec.ofNat 64 (Wl - Wr).toNat).toInt = wrap64 (a - b) := by
-  rw [ofNat_toNat_self64, ← ha, ← hb]
-  unfold wrap64
-  have h : (BitVec.ofInt 64 (Wl.toInt - Wr.toInt)) = Wl - Wr := by
-    apply BitVec.eq_of_toInt_eq
-    rw [BitVec.toInt_sub, BitVec.toInt_ofInt]
-  rw [h]
-
 /-! ## `SubSlotPinned` — the operator jump-table slot pin for `.sub`
 
 The `CSWTCH.18` operator table lives at `0x80019f84` (`= 0x80019f58 + 0x2c`);
 slot `op-index` (`= binOpTok op - 11`) at `+ 4*index`, storing a signed 32-bit
 offset added back to the table base. `.sub` (token 12, index 1) → slot bytes
 `5c 99 fe ff` @ `0x80019f88`, target `0x80019f84 + (Int32)0xfffe995c = 0x800038e0`. -/
-def SubSlotPinned (m : Mem) : Prop :=
-  m[(opTableBase + 4 : Nat)]? = some (0x5c : BitVec 8) ∧
-  m[(opTableBase + 5 : Nat)]? = some (0x99 : BitVec 8) ∧
-  m[(opTableBase + 6 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(opTableBase + 7 : Nat)]? = some (0xff : BitVec 8)
-
-/-- `SubSlotPinned` survives a `writeMap8` disjoint from `[opTableBase, +4)`. -/
-theorem subSlot_writeMap8 (m : Mem) (a8 : Nat) (d : BitVec (8 * 8))
-    (hdis : a8 + 8 ≤ opTableBase + 4 ∨ opTableBase + 8 ≤ a8) (h : SubSlotPinned m) :
-    SubSlotPinned (writeMap8 m a8 d) := by
-  obtain ⟨p0, p1, p2, p3⟩ := h
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    (rw [getElem_writeMap8_disjoint m a8 _ d (by omega)]; assumption)
 
 end Vsa.Sim

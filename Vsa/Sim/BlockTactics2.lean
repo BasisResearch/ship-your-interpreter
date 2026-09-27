@@ -41,17 +41,6 @@ theorem abiPreserved_ne {R X : Register} (hR : AbiPreserved R = true)
   · rfl
   · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hR; exact absurd hR (by decide)
 
-/-- `AbiPreservedNoise R` discharges the first frame side-condition,
-`∀ rr ∈ noiseRegs, (rr == R) = false`, by unpacking its seven noise-register
-disequalities. -/
-theorem abiNoise_noiseRegs {R : Register} (hR : AbiPreservedNoise R) :
-    ∀ rr ∈ noiseRegs, (rr == R) = false := by
-  obtain ⟨_, hpc', hnpc', hmi', hmii', hmc', hmt', hmip'⟩ := hR
-  intro rr hrr
-  simp only [noiseRegs, List.mem_cons, List.not_mem_nil,
-    or_false] at hrr
-  rcases hrr with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> assumption
-
 /-- `block_frame_wr [i₀, …, iₖ]` closes a goal
 `∀ n ∈ wrRegsM b.body, (gprReg n == R) = false` (or the `wrChain` variant) where
 `[i₀, …, iₖ]` is the block's concrete list of written GPR indices (as it reduces

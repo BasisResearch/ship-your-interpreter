@@ -77,9 +77,6 @@ def memcpySpecOwned (Wp : MachWP (GF := GF) M) : IProp GF :=
       ownImg (InExt (dst.toNat, n)) (fun a => img (a - dst.toNat + src.toNat)) ∗
       ownImg (InExt (src.toNat, n)) img)))
 
-instance (Wp : MachWP (GF := GF) M) : Persistent (memcpySpecOwned M Wp) := by
-  unfold memcpySpecOwned; infer_instance
-
 /-- `strcpy(dst, src)` of a read-only C string into an owned buffer above the
 HTIF words. -/
 def strcpySpec (Wp : MachWP (GF := GF) M) : IProp GF :=
@@ -90,9 +87,6 @@ def strcpySpec (Wp : MachWP (GF := GF) M) : IProp GF :=
       strAt src.toNat x))
     (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
       (∃ img, ownImg (InExt (dst.toNat, n)) img ∗ ⌜CStrImg img dst.toNat x⌝))))
-
-instance (Wp : MachWP (GF := GF) M) : Persistent (strcpySpec M Wp) := by
-  unfold strcpySpec; infer_instance
 
 /-- **`stringify(&v)`**, a function that returns OR aborts, in regime `ρ`
 (`malloc`'s `c` credits when counted). It returns a fresh heap block holding

@@ -135,13 +135,4 @@ theorem writeLog_getElem?_logRead (m : Std.ExtHashMap Nat (BitVec 8))
   rw [writeLog_getElem?_fold, List.foldl_eq_foldr_reverse]
   exact (logReadNewest_eq_foldr (fun a => m[a]?) log.reverse address).symm
 
-/-- Substitute an already-proved initial byte interface before reducing a log. -/
-theorem writeLog_getElem?_logRead_of_initial
-    (m : Std.ExtHashMap Nat (BitVec 8)) (initial : Nat → Option (BitVec 8))
-    (h : ∀ a, m[a]? = initial a) (log : List WEntry) (address : Nat) :
-    (writeLog m log)[address]? = logRead initial log address := by
-  rw [writeLog_getElem?_logRead]
-  have heq : (fun a => m[a]?) = initial := funext h
-  rw [heq]
-
 end Vsa.Sim

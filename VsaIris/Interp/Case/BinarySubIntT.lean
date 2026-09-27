@@ -28,7 +28,6 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003164#64 R Mt
   by ix_run hlive using [h10, h11, h12, h13, h2, hk6, hk6u, hsf] at 0x800034f8
 
-
 #ix_seg BinarySubIntT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s aE inp aR w1 kL : BitVec 64}
@@ -44,7 +43,6 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800034fc#64 R Mt
   by ix_run hlive using [h8, h2, h18, hright, hA, hK, hP, hsf] at 0x80003518
 
-
 #ix_seg BinarySubIntT_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s sret w1 : BitVec 64}
@@ -58,7 +56,6 @@ open Vsa.MemRepr Vsa.Sim
     (hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = 2#64) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x8000351c#64 R Mt
   by ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x8000391c
-
 
 #ix_seg BinarySubIntT_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -74,7 +71,6 @@ open Vsa.MemRepr Vsa.Sim
     (hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003920#64 R Mt
   by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
-
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
@@ -295,7 +291,5 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   all_goals ix_keep [hkeep3, hkeep2, hkeep1]
 
 #ix_chain caseT_BinarySubInt := [BinarySubIntT_p1, BinarySubIntT_p2, BinarySubIntT_p3, BinarySubIntT_p4]
-
-
 
 end VsaIris.Interp

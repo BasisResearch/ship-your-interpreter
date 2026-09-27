@@ -23,9 +23,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs}
 
-instance {M : MachineModel} (Wp : MachWP (GF := GF) M) : Persistent (envNewSpec Wp N) := by
-  unfold envNewSpec; infer_instance
-
 instance {M : MachineModel} (Wp : MachWP (GF := GF) M) : Persistent (envDefineSpec Wp N) := by
   unfold envDefineSpec; infer_instance
 

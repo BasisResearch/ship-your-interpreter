@@ -237,14 +237,6 @@ macro_rules
 
 /-! ## Stack arithmetic -/
 
-theorem MSp.sp96 {s : BitVec 64} (h : MSp s) (d : Nat) (hd : d ≤ 96) :
-    (s + 18446744073709551520#64 + BitVec.ofNat 64 d).toNat = s.toNat - 96 + d := by
-  have := h.lo; have := h.hi
-  unfold mHead Vsa.Sim.tohostAddr at *
-  rw [BitVec.toNat_add, BitVec.toNat_add]
-  simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
-  omega
-
 /-- A footprint doubleword lies wholly below or above the stack window. -/
 theorem MHeap.off_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) {a : Nat}

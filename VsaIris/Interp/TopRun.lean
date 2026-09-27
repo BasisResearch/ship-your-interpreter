@@ -46,7 +46,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x800043ec#64 R Mt
   by ix_run hlive using [h2, hsf] at 0x80004424
 
-
 #ix_seg TopHead_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s arr cnt : BitVec 64}
@@ -58,7 +57,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004428#64 R Mt
   by ix_run hlive using [h2, h10, hcnt, harr, hsf] at 0x8000448c 0x80004514
 
-
 #ix_seg TopEpi_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64}
@@ -68,8 +66,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hRA : ldv .ld Mt (s + 18446744073709551440#64 + 168#64).toNat = 0x800045ec#64) :
     IW live m [] (interpS s) Q 0x80004514#64 R Mt
   by ix_run hlive using [h2, hRA, hsf, interpS]
-
-
 
 section Setjmp
 
@@ -156,16 +152,6 @@ theorem calleeSaved_split (f : Nat → BitVec 64) :
       iprop((8 : Nat) ↦ᵣ f 8 ∗ sepL (Newlib.calleeSaved.drop 1) (fun r => r ↦ᵣ f r)) := by
   rw [show Newlib.calleeSaved = 8 :: Newlib.calleeSaved.drop 1 from rfl, sepL_cons]
   exact .rfl
-
-/-- The world's `err_msg` and newlib/console pieces, for the last exit. -/
-theorem world_exitParts (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (ρ : Regime) (st : St)
-    (d : Nat) :
-    world (GF := GF) N L Room inpTop ρ st d ⊢
-      blockOwn (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ consoleOwn st.out ∗ binImg := by
-  unfold world worldE interpCtxE interpCoreE errAny
-  iintro ⟨%H, %B, -, -, Hcon, Hstd, ⟨⟨%g, -, -, -, -, -, Herr⟩, -⟩, -, #Himg⟩
-  iframe Hcon Hstd Himg
-  iapply blockOwn_cast (by unfold interpErrOff; decide) (by unfold interpErrLen; rfl) $$ Herr
 
 /-- `world_exitParts` with `errno` lent by the dropped heap. -/
 theorem world_exitPartsE (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)

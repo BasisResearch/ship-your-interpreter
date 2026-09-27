@@ -139,7 +139,6 @@ theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP 
     · exact ldv_eqOn .ld (fun j hj => hmiss _ (by simp only [widthOfM] at hj; omega))
   iapply Hk $$ %R1 %Mt1 %vl %hnat Hms Hvals
 
-
 /-- **After the native** (`0x800039f8`), for either WP: the argument array
 back into the frame, `s7` restored, the shared epilogue; the continuation gets
 the callee-saved registers kept, the stack back, `PC`/`ra` at the return. -/
@@ -213,7 +212,6 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   · ix_reg; exact (evalSP_restore s).trans hsp.symm
   all_goals ix_reg
   all_goals exact hks _ (by decide)
-
 
 /-- The frame without the argument array and the values: the whole frame. -/
 theorem natS_join (N : NativeAddrs) {s : BitVec 64} {vs : List Value} {M : Mem}

@@ -111,7 +111,6 @@ theorem keysG_pinsOf (R : Nat → BitVec 64) : ∀ ks : List Nat, keysG (pinsOf 
   | [] => rfl
   | k :: ks => by simp only [pinsOf, List.map_cons, keysG]; rw [← pinsOf, keysG_pinsOf R ks]
 
-
 /-! ## Values the step table names -/
 
 /-- `n` bytes of an image from `a`, in address order (a load's byte list). -/
@@ -183,7 +182,6 @@ theorem lpins2_img {m : Mem} {Mt : Mem} {a : Nat}
     exact ⟨by simpa using h0, (h _ (mem_accAddrs (j := 1) (by omega))).trans
       (bytesAt_getD (imgM Mt) a (n := 2) (by omega)).symm⟩
 
-
 /-- A load's address side conditions (`MemFacts`' first conjunct): RAM, off
 the HTIF words. -/
 abbrev LdOK (ea w : Nat) : Prop :=
@@ -196,7 +194,6 @@ abbrev StOK (ea w : Nat) : Prop :=
 /-- A byte store's address side conditions (`sb`). -/
 abbrev StOKb (ea : Nat) : Prop :=
   0x80000000 ≤ ea ∧ ea + 1 ≤ 0x100000000 ∧ tohostAddr + 16 ≤ ea
-
 
 /-! ## The tracking memory -/
 
@@ -315,14 +312,6 @@ theorem swp_congr_mem {pc : BitVec 64} {R : Nat → BitVec 64} {Mt Mt' : Mem}
   obtain ⟨n, hn⟩ := h
   exact ⟨n, fun rv mv hm => hn rv mv ⟨hm.pc, hm.regs, fun a ha => (hm.img a ha).trans (hM a ha).symm⟩⟩
 
-/-- A case split on a pure fact. -/
-theorem swp_cases {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} (P : Prop)
-    (h1 : P → SWP live text rs S Q pc R Mt) (h2 : ¬ P → SWP live text rs S Q pc R Mt) :
-    SWP live text rs S Q pc R Mt := by
-  by_cases h : P
-  · exact h1 h
-  · exact h2 h
-
 /-- One reflected segment over an arbitrary pin list `L` (the core of
 `swp_seg`). -/
 theorem swp_segL {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -406,7 +395,6 @@ theorem swp_segL {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         unfold imgM
         rw [writeLog_out _ _ _ (hcover a hw)]
 
-
 /-- **One reflected segment.** `seg_step` over an arbitrary code list: the
 pins are the registers `ks` read off `R` (`gp` at its fixed value), the loaded
 (`LD`) and written (`W`) owned bytes are read off the tracking memory, and the
@@ -438,7 +426,6 @@ theorem swp_seg {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
   · rcases hks x hx with h | ⟨h1, h2⟩
     · exact absurd h hg
     · exact .inl ⟨h1, h2, by simp [hg]⟩
-
 
 /-- **One `jal`** (a call): the link register takes the return address and
 the run continues at the target. -/
@@ -476,7 +463,6 @@ theorem swp_jal {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         · exact fun e => hne e.symm
         · exact fun e => hr1 e.symm
     · rw [h4 a ha (fun p hp => by cases hp), hm.img a ha]
-
 
 /-- **One reflected segment, successor named.** `swp_seg` with the successor
 state given: each pinned register's final value (`finReg` on the left, the

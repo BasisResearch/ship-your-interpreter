@@ -344,8 +344,4 @@ theorem strcmp_spec_env (live : Nat → Prop) (hcl : CodeLive live)
 
 end Spec
 
-#print axioms strcmp_spec_env
-#print axioms strcmp_spec_ord
-#print axioms strcmp_spec_v
-
 end VsaIris.Interp

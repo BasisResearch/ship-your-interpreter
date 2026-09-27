@@ -133,130 +133,6 @@ The width-4/8 generics (`exec_lw`/`exec_ld`/`exec_sw`/`exec_sd_val`) live in
 `ValueSites`; width 1 only existed as the per-site `exec_c48`/`exec_c54`
 (`MemcpySites`).  These are those shapes with generic registers/immediate. -/
 
-/-- Generic unsigned 1-byte load `lbu rd,off(rs1)` at `afterNextPC …`: reads the
-byte at `vbase + sext off` and writes `zero_extend b0` to `rd`.  No alignment
-side condition at width 1. -/
-theorem exec_lbu_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
-    (σ' : MState) (vbase : BitVec 64) (b0 : BitVec 8)
-    (hG : GoodState σ)
-    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
-      = .ok vbase (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits rd (zero_extend (m := 64) (b0 : BitVec (8 * 1)))).run
-        (afterNextPC (afterPrelude σ) pc) = .ok () σ')
-    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 1 ≤ 0x100000000)
-    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 1 ≤ tohostAddr
-      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0) :
-    (execute (instruction.LOAD (off, rs1, rd, true, 1))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS σ' := by
-  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
-  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
-  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
-  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
-  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
-  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
-  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
-  have hread := vmem_read_data_one (afterNextPC (afterPrelude σ) pc) rs1
-    (sign_extend (m := 64) off) vbase b0 initMstatus initPmpaddr
-    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif
-    (by rw [mem_afterNextPC]; exact h0)
-  exact execute_load_unsigned_char off rs1 rd 1 (b0 : BitVec (8 * 1))
-    (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
-
-theorem exec_lh_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
-    (σ' : MState) (vbase : BitVec 64) (b0 b1 : BitVec 8)
-    (hG : GoodState σ)
-    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
-      = .ok vbase (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits rd (sign_extend (m := 64) (b1.append b0 : BitVec (8 * 2)))).run
-        (afterNextPC (afterPrelude σ) pc) = .ok () σ')
-    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ 0x100000000)
-    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ tohostAddr
-      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (halign : (vbase + sign_extend (m := 64) off).toNat % 2 = 0)
-    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0)
-    (h1 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 1]? = some b1) :
-    (execute (instruction.LOAD (off, rs1, rd, false, 2))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS σ' := by
-  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
-  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
-  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
-  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
-  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
-  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
-  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
-  have hread := vmem_read_data_two (afterNextPC (afterPrelude σ) pc) rs1
-    (sign_extend (m := 64) off) vbase b0 b1 initMstatus initPmpaddr
-    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif halign
-    (by rw [mem_afterNextPC]; exact h0) (by rw [mem_afterNextPC]; exact h1)
-  exact execute_load_signed_char off rs1 rd 2 (b1.append b0 : BitVec (8 * 2))
-    (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
-
-theorem exec_lhu_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
-    (σ' : MState) (vbase : BitVec 64) (b0 b1 : BitVec 8)
-    (hG : GoodState σ)
-    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
-      = .ok vbase (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits rd (zero_extend (m := 64) (b1.append b0 : BitVec (8 * 2)))).run
-        (afterNextPC (afterPrelude σ) pc) = .ok () σ')
-    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ 0x100000000)
-    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ tohostAddr
-      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (halign : (vbase + sign_extend (m := 64) off).toNat % 2 = 0)
-    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0)
-    (h1 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 1]? = some b1) :
-    (execute (instruction.LOAD (off, rs1, rd, true, 2))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS σ' := by
-  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
-  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
-  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
-  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
-  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
-  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
-  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
-  have hread := vmem_read_data_two (afterNextPC (afterPrelude σ) pc) rs1
-    (sign_extend (m := 64) off) vbase b0 b1 initMstatus initPmpaddr
-    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif halign
-    (by rw [mem_afterNextPC]; exact h0) (by rw [mem_afterNextPC]; exact h1)
-  exact execute_load_unsigned_char off rs1 rd 2 (b1.append b0 : BitVec (8 * 2))
-    (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
-
 /-- Generic width-1 `sb rs2,off(rs1)` execute characterization: stores the low
 byte of `rs2` at `vbase + sext off`; post memory is the single insert.  No
 alignment side condition at width 1. -/
@@ -838,22 +714,6 @@ its total-read pin in one rewrite.  This is the migration path for every
 pre-48k supplier: `⟨h0, h1, h2, h3⟩` becomes `lpins4_of_present h0 h1 h2 h3`. -/
 theorem lpin_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {a : Nat} {b : BitVec 8}
     (h : m[a]? = some b) : (m[a]?).getD 0 = b := by rw [h]; rfl
-
-theorem lpins4_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
-    (h0 : m[ea]? = some (bs.getD 0 0#8)) (h1 : m[ea + 1]? = some (bs.getD 1 0#8))
-    (h2 : m[ea + 2]? = some (bs.getD 2 0#8)) (h3 : m[ea + 3]? = some (bs.getD 3 0#8)) :
-    LPins4 m ea bs :=
-  ⟨lpin_of_present h0, lpin_of_present h1, lpin_of_present h2, lpin_of_present h3⟩
-
-theorem lpins8_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
-    (h0 : m[ea]? = some (bs.getD 0 0#8)) (h1 : m[ea + 1]? = some (bs.getD 1 0#8))
-    (h2 : m[ea + 2]? = some (bs.getD 2 0#8)) (h3 : m[ea + 3]? = some (bs.getD 3 0#8))
-    (h4 : m[ea + 4]? = some (bs.getD 4 0#8)) (h5 : m[ea + 5]? = some (bs.getD 5 0#8))
-    (h6 : m[ea + 6]? = some (bs.getD 6 0#8)) (h7 : m[ea + 7]? = some (bs.getD 7 0#8)) :
-    LPins8 m ea bs :=
-  ⟨lpin_of_present h0, lpin_of_present h1, lpin_of_present h2, lpin_of_present h3,
-   lpin_of_present h4, lpin_of_present h5, lpin_of_present h6, lpin_of_present h7⟩
-
 
 /-! ### Total-read bridges — `bytesT* = ` the pinned byte append
 
@@ -3070,36 +2930,5 @@ theorem block_mem_run (is : List MInstr) :
       · intro R hn hrds
         exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
           (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
-
-/-- **The block lemma.** A concrete list of straight-line ALU/load/store
-instructions, with per-element byte pins + decode facts + data-dependent
-address side conditions and load-data pins (`ProgFactsM`) and a decidable
-structural VC (`BlockOKM`, one `by decide`), turns an entry state with pinned
-PC / minstret / source registers into the full `Steps` chain with: tick
-invariant, `GoodState`, HTIF output unchanged, the fall-through PC, the
-*computed* register outcome `runGM is L lds`, the *computed* memory outcome
-`writeLog σ.mem (wlogM is L lds)`, and the register frame outside
-`noiseRegs ∪ wrRegsM is`. -/
-theorem block_mem_sound (is : List MInstr) (σ : MState) (i u : Nat)
-    (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : ProgFactsM σ.mem σ.mem L lds is)
-    (hwf : BlockOKM pc0 (keysG L) is)
-    (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + is.length⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = writeLog σ.mem (wlogM is L lds) ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC = some (endPCM pc0 is) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' (runGM is L lds) ∧
-      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-        (∀ n ∈ wrRegsM is, (gprReg n == R) = false) →
-        σ'.regs.get? R = σ.regs.get? R) :=
-  block_mem_run is σ i u pc0 vm L lds σ.mem σ.mem (keysG L)
-    hG hpc hmi rfl (fun _ _ => rfl) hL hkeys (fun _ h => h) hfacts hwf hi
 
 end Vsa.Sim

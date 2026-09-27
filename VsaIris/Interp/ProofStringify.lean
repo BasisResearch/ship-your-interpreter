@@ -272,7 +272,6 @@ macro_rules
   by
     ix_run1 hlive using [h2, hal, hra, hs0, hs1']
 
-
 /- A closure: the prologue and the kind dispatch, to its arm (`0x8000301c`). -/
 #ix_seg sg_cloH {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
@@ -1456,7 +1455,6 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       f.sra, f.ss0, f.ss1, f.hslot⟩
   unfold SgRest
   iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
-
 
 /-- **A bool**: `strcpy(buf, b ? "true" : "false")`, then the shared tail. -/
 theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}

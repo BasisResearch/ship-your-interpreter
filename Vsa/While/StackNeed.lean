@@ -217,38 +217,12 @@ theorem _root_.Vsa.Alloc.StackOK.mono {SL : Vsa.Alloc.StackLayout}
     (hok : Vsa.Alloc.StackOK SL sp h) : Vsa.Alloc.StackOK SL sp h' :=
   ⟨Nat.le_trans (Nat.add_le_add_left hle SL.lo) hok.1, hok.2.1, hok.2.2⟩
 
-/-- **The child-frame budget step** (the B1 fan-out kit's ONE arithmetic
-lemma): a parent's budgeted `StackOK` at `sp` yields a child's budgeted
-`StackOK` at the frame-lowered `sp - f`, whenever the child headroom plus the
-consumed frame fits the parent headroom (`hle`; for every structural node this
-is definitional — node need = frame + max over children).  Every
-recursive-arm sim / stage-pre supplier forwards its child budget through
-this, never by per-site `BitVec.toNat_sub` re-derivation. -/
-theorem _root_.Vsa.Alloc.StackOK.child {SL : Vsa.Alloc.StackLayout}
-    {sp f : BitVec 64} {h h' : Nat}
-    (hf16 : f.toNat % 16 = 0) (hle : h' + f.toNat ≤ h)
-    (hok : Vsa.Alloc.StackOK SL sp h) : Vsa.Alloc.StackOK SL (sp - f) h' := by
-  obtain ⟨h1, h2, h3⟩ := hok
-  have hsub : (sp - f).toNat = sp.toNat - f.toNat := by
-    rw [BitVec.toNat_sub]
-    have := sp.isLt; have := f.isLt
-    omega
-  refine ⟨?_, ?_, ?_⟩ <;> rw [hsub] <;> omega
-
 /-! The `bodiesBound` projection kit: named eliminations from a composite
 node's `.fn`-bodies bound to its children's (the boolean `&&` towers are
 never split positionally at use sites). -/
 
-theorem Expr.bodiesBound_assign {P : Nat} {x : String} {e : Expr}
-    (h : (Expr.assign x e).bodiesBound P = true) : e.bodiesBound P = true := h
-
 theorem Expr.bodiesBound_unary {P : Nat} {op : UnOp} {e : Expr}
     (h : (Expr.unary op e).bodiesBound P = true) : e.bodiesBound P = true := h
-
-theorem Expr.bodiesBound_binary {P : Nat} {op : BinOp} {l r : Expr}
-    (h : (Expr.binary op l r).bodiesBound P = true) :
-    l.bodiesBound P = true ∧ r.bodiesBound P = true := by
-  simp only [Expr.bodiesBound, Bool.and_eq_true] at h; exact h
 
 theorem Expr.bodiesBound_logical {P : Nat} {op : LogOp} {l r : Expr}
     (h : (Expr.logical op l r).bodiesBound P = true) :
@@ -259,13 +233,5 @@ theorem Expr.bodiesBound_call {P : Nat} {f : Expr} {args : List Expr}
     (h : (Expr.call f args).bodiesBound P = true) :
     f.bodiesBound P = true ∧ Expr.bodiesBoundList P args = true := by
   simp only [Expr.bodiesBound, Bool.and_eq_true] at h; exact h
-
-theorem Stmt.bodiesBound_expr {P : Nat} {e : Expr}
-    (h : (Stmt.expr e).bodiesBound P = true) : e.bodiesBound P = true := h
-
-#print axioms Expr.stackNeed_ge
-#print axioms Stmt.stackNeed_ge
-#print axioms Vsa.Alloc.StackOK.mono
-#print axioms Vsa.Alloc.StackOK.child
 
 end Vsa.While

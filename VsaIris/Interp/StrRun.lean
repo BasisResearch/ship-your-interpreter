@@ -59,30 +59,10 @@ theorem sr_congr {pc : BitVec 64} {R R' : Nat → BitVec 64} {Mt : Mem}
   exact ⟨n, fun rv mv hm => hn rv mv ⟨hm.pc, fun r hr hne =>
     (hm.regs r hr hne).trans (hR r hr hne).symm, hm.img⟩⟩
 
-/-- Only the owned bytes of the tracking memory matter. -/
-theorem sr_congr_mem {pc : BitVec 64} {R : Nat → BitVec 64} {Mt Mt' : Mem}
-    (hM : ∀ a, S a → imgM Mt' a = imgM Mt a) (h : SR live T D S Q pc R Mt') :
-    SR live T D S Q pc R Mt := by
-  obtain ⟨n, hn⟩ := h
-  exact ⟨n, fun rv mv hm => hn rv mv ⟨hm.pc, hm.regs, fun a ha => (hm.img a ha).trans (hM a ha).symm⟩⟩
-
-theorem sr_mono {Q' : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
-    (hQ : ∀ rv mv, Q rv mv → Q' rv mv) {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
-    (h : SR live T D S Q pc R Mt) : SR live T D S Q' pc R Mt := by
-  obtain ⟨n, hn⟩ := h
-  exact ⟨n, fun rv mv hm => LocalRun.mono hQ n rv mv (hn rv mv hm)⟩
-
 theorem pinsOf_mem {ks : List Nat} {R : Nat → BitVec 64} {p : Nat × BitVec 64}
     (hks : ∀ x ∈ ks, x ≠ gp) (hp : p ∈ pinsOf ks R) : p.1 ∈ ks ∧ R p.1 = p.2 := by
   obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hp
   exact ⟨hx, by simp [hks x hx]⟩
-
-/-- The text list of a run: code, then data. -/
-theorem textLoaded_code {T D : List (Nat × BitVec 8)} {c : Config}
-    (hok : VsaOk live c) (hlive : ∀ p ∈ T, live p.1)
-    {MR : List (Nat × DFrac × BitVec 8)}
-    (hMR : ∀ p ∈ textMRof T ++ MR, (vsaModel live).mem c p.1 = p.2.2) :
-    TextLoaded T c.σ.mem := textLoaded_of_foot hok hlive hMR
 
 /-- **One reflected segment that reads no data** (ALU, store, branch, jump,
 `ret`). The pins are the registers `ks` read off `R` (all owned; no `gp`),

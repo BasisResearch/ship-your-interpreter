@@ -24,7 +24,6 @@ def splitReadInsert (n d i : Nat) (data : BitVec (8 * (n : Int) * (d : Int)).toN
       ((8 * (i : Int) * (d : Int)).toNat) v
   updated.setWidth (8 * (n : Int) * (d : Int)).toNat
 
-
 /-- Assembly after the first i chunks, using the same insertion as Sail. -/
 def splitReadAccum (n d : Nat) (values : Nat → BitVec (8 * d)) : Nat → BitVec (8 * (n : Int) * (d : Int)).toNat
   | 0 => 0
@@ -143,7 +142,4 @@ theorem splitReadLoop_trace (σ : Vsa.Machine.MState) (a : BitVec 64) (w n d : N
     by_cases heq : i = n <;>
       simp [splitReadTrace, he, heq, ExceptT.run, pure, ExceptT.pure, ExceptT.mk, EStateM.pure]
 
-#print axioms splitReadLoop_trace
-
-#print axioms splitReadBody_trace
 end Vsa.Sim

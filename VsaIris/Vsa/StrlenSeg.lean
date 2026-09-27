@@ -201,29 +201,6 @@ theorem reads_of_foot {live : Nat → Prop} {c : Config} {p len : Nat} {bv : Nat
     (x := (p + k, bv (p + k))) (List.mem_append_right _ ?_)
   exact mem_regionText p len k bv hk
 
-/-- Liveness of the read footprint, from the two intervals. -/
-theorem strlenCode_length : strlenCode.length = 212 := by
-  simp only [strlenCode, List.length_append]
-  rfl
-
-theorem strlenMR_live {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8}
-    (hcode : ∀ a, codeBase ≤ a → a < codeBase + 212 → live a)
-    (hstr : ∀ a, p ≤ a → a < p + len + 8 → live a) :
-    ∀ q ∈ strlenMR p len bv, live q.1 := by
-  intro q hq
-  rcases List.mem_append.mp (mem_memFoot hq) with h | h
-  · obtain ⟨x, hx, he⟩ := List.mem_map.mp h
-    have hlt : x.2 < 212 := by
-      have := List.snd_lt_of_mem_zipIdx hx
-      rw [strlenCode_length] at this
-      omega
-    have h1 : codeBase + x.2 = q.1 := congrArg Prod.fst he
-    exact hcode _ (by omega) (by omega)
-  · obtain ⟨k, hk, he⟩ := List.mem_map.mp h
-    have hk' := List.mem_range.mp hk
-    have h1 : p + k = q.1 := congrArg Prod.fst he
-    exact hstr _ (by omega) (by omega)
-
 /-- Where each read byte lives: persistent text, or an owned slack byte. -/
 theorem strlenMR_split {p len : Nat} {bv mv : Nat → BitVec 8}
     (hslack : ∀ a, slackSet p len a → mv a = bv a) :
@@ -247,56 +224,11 @@ theorem strlenMR_split {p len : Nat} {bv mv : Nat → BitVec 8}
 
 /-! ## The string as a `CStr` -/
 
-/-- The characters of the region. -/
-def charsOf (p len : Nat) (bv : Nat → BitVec 8) : List Char :=
-  (List.range len).map (fun k => Char.ofNat (bv (p + k)).toNat)
-
-theorem charsOf_length (p len : Nat) (bv : Nat → BitVec 8) :
-    (charsOf p len bv).length = len := by simp [charsOf]
-
 /-- A NUL-terminated string in the region (`strlen` reads any nonzero bytes;
 `cstr_of_bytes` also takes them ASCII). -/
 structure StrBytes (p len : Nat) (bv : Nat → BitVec 8) : Prop where
   nonzero : ∀ k, k < len → bv (p + k) ≠ 0
   nul : bv (p + len) = 0
-
-theorem charsOf_succ (p len : Nat) (bv : Nat → BitVec 8) :
-    charsOf p (len + 1) bv = Char.ofNat (bv p).toNat :: charsOf (p + 1) len bv := by
-  unfold charsOf
-  rw [List.range_succ_eq_map, List.map_cons, List.map_map]
-  simp only [Nat.add_zero, Function.comp_def]
-  congr 1
-  apply List.map_congr_left
-  intro k _
-  rw [show p + (k + 1) = p + 1 + k from by omega]
-
-theorem cstr_of_bytes {m : Std.ExtHashMap Nat (BitVec 8)} : ∀ (len p : Nat) (bv : Nat → BitVec 8),
-    StrBytes p len bv → (∀ k, k < len → (bv (p + k)).toNat < 128) →
-    (∀ k, k ≤ len → m[p + k]? = some (bv (p + k))) → CStr m p (charsOf p len bv)
-  | 0, p, bv, hb, _, hm => by
-    refine .nil ?_
-    have h0 := hm 0 (by omega)
-    have hn := hb.nul
-    rw [Nat.add_zero] at h0 hn
-    rw [h0, hn]
-  | len + 1, p, bv, hb, hasc, hm => by
-    rw [charsOf_succ]
-    refine .cons (b := bv p) ?_ ?_ ?_ ?_
-    · have := hm 0 (by omega); rwa [Nat.add_zero] at this
-    · have := hb.nonzero 0 (by omega); rwa [Nat.add_zero] at this
-    · have := hasc 0 (by omega); rwa [Nat.add_zero] at this
-    · refine cstr_of_bytes len (p + 1) bv
-        ⟨fun k hk => by rw [show p + 1 + k = p + (k + 1) from by omega]; exact hb.nonzero _ (by omega),
-         by rw [show p + 1 + len = p + (len + 1) from by omega]; exact hb.nul⟩
-        (fun k hk => by rw [show p + 1 + k = p + (k + 1) from by omega]; exact hasc _ (by omega))
-        fun k hk => by
-          rw [show p + 1 + k = p + (k + 1) from by omega]; exact hm _ (by omega)
-
-theorem cstr_of_reads {m : Std.ExtHashMap Nat (BitVec 8)} {p len : Nat} {bv : Nat → BitVec 8}
-    (hb : StrBytes p len bv) (hasc : ∀ k, k < len → (bv (p + k)).toNat < 128)
-    (hr : Reads p len bv m) : CStr m p (charsOf p len bv) :=
-  cstr_of_bytes len p bv hb hasc fun k hk => hr.bytes k (by omega)
-
 
 /-! ## One pin list, one step
 
@@ -318,8 +250,6 @@ def strlenL (rv : Nat → BitVec 64) : GRegs :=
   [(1, rv 1), (10, rv 10), (11, rv 11), (12, rv 12), (13, rv 13), (14, rv 14), (15, rv 15)]
 
 theorem strlenL_eq (rv : Nat → BitVec 64) : strlenL rv = leafL strlenRegs rv := rfl
-
-theorem keysG_strlenL (rv : Nat → BitVec 64) : keysG (strlenL rv) = strlenRegs := rfl
 
 /-- **The run's end condition**: parked at the return address with the length
 in `a0`, `ra` restored, and the owned slack bytes unchanged. -/

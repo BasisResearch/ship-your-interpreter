@@ -40,7 +40,6 @@ open Vsa.MemRepr Vsa.Sim
 
 #ix_tree BinaryMulIntT_run3 := BinaryMulIntT_run3_1 [BinaryMulIntT_run3_2]
 
-
 #ix_seg BinaryMulIntT_run3b {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
     {R : Nat → BitVec 64} {s sret : BitVec 64}
@@ -49,8 +48,6 @@ open Vsa.MemRepr Vsa.Sim
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003874#64 R Mt
   by ix_run hlive using [h9, hsf] at 0x8000387c
-
-
 
 #ix_seg BinaryMulIntT_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -66,7 +63,6 @@ open Vsa.MemRepr Vsa.Sim
     (hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003880#64 R Mt
   by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
-
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
@@ -311,7 +307,5 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
        exact hR'k _ (by decide))
 
 #ix_chain caseT_BinaryMulInt := [BinaryMulIntT_p1, BinaryMulIntT_p2, BinaryMulIntT_p3, BinaryMulIntT_p4]
-
-
 
 end VsaIris.Interp

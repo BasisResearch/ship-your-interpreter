@@ -49,69 +49,6 @@ namespace Vsa.Sim
 `ExecExitSim … status` is the packaged output every dispatch/loop sim produces at a
 fixed ghost layout and entry `sailOutput` array `out0`: the `Triple` from the
 `ExecEntry ∧ out=out0` precondition to the plain `ExecExit`. -/
-def ExecExitSim
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st st' : Vsa.While.St) (d : Nat) (env : Addr) (s : Stmt) (status : Status)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (out0 : Array String) : Prop :=
-  Triple
-    (fun c => ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c
-      ∧ c.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-      st' status sp r aRet m0)
-
-/-- **`execIH_of_exitSim`** — the ONE exit-sim → motive combinator, over the full
-ghost-∀.  Given, for every ghost layout, a widener `hW` and a producer `hSim` of the
-packaged exit Triple (at every entry `out0`), yields the `ExecIH` motive.  The body:
-enter the ghost-∀, instantiate `out0 := c.σ.sailOutput` (`rfl` on the entry
-conjunct), and widen the exit via `execExitD_of_execExit_rec`.  Every dispatch/loop
-`*SimD` reduces to instantiating this. -/
-theorem execIH_of_exitSim
-    {st st' : Vsa.While.St} {d : Nat} {env : Addr} {s : Stmt} {status : Status}
-    (hW : ∀ (g : (R : Register) → Option (RegisterType R))
-      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
-      ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-        st' status sp r aRet m0)
-    (hSim : ∀ (g : (R : Register) → Option (RegisterType R))
-      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (out0 : Array String),
-      ExecExitSim g N A SL φf φc st st' d env s status sp r aInterp aStmt aEnv aRet m0 out0) :
-    ExecIH st d env s st' status := by
-  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry
-  obtain ⟨c', hs, hExit⟩ :=
-    hSim g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c.σ.sailOutput c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_execExit_rec hExit
-    (hW g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)⟩
-
-/-- **`execIH_of_exitSim'`** — the ENTRY-CONDITIONED variant (ITEM ZERO /
-falsity #12, shape 1): the widener and the sim producer are supplied only at
-ghost layouts for which a real entry configuration exists (`ExecEntry … c`).
-This is the combinator the amended `*Resid` rows use — the residual bundles are
-conditioned on entry reality, so the projections happen under `hE`. -/
-theorem execIH_of_exitSim'
-    {st st' : Vsa.While.St} {d : Nat} {env : Addr} {s : Stmt} {status : Status}
-    (hW : ∀ (g : (R : Register) → Option (RegisterType R))
-      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
-      ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c →
-      ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-        st' status sp r aRet m0)
-    (hSim : ∀ (g : (R : Register) → Option (RegisterType R))
-      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
-      ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c →
-      ∀ out0 : Array String,
-      ExecExitSim g N A SL φf φc st st' d env s status sp r aInterp aStmt aEnv aRet m0 out0) :
-    ExecIH st d env s st' status := by
-  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry
-  obtain ⟨c', hs, hExit⟩ :=
-    hSim g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry c.σ.sailOutput
-      c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_execExit_rec hExit
-    (hW g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry)⟩
 
 end Vsa.Sim
 
-#print axioms Vsa.Sim.execIH_of_exitSim
-#print axioms Vsa.Sim.execIH_of_exitSim'

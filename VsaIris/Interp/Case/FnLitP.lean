@@ -29,7 +29,6 @@ open Vsa.MemRepr Vsa.Sim
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x800033d0#64 R Mt
   by ix_run hlive using [h2, hA, hsf] at 0x800033d4
 
-
 #ix_seg FnLitP_runOom {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s sret : BitVec 64}

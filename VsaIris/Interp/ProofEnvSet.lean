@@ -462,4 +462,3 @@ end Main
 
 end VsaIris.Interp
 
-#print axioms VsaIris.Interp.envSet_spec

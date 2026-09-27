@@ -151,31 +151,6 @@ We state it region-generically (over the same `code`/`SL`/`sp` a case carries):
 the predicate is literally the conjunction of the record's atoms, so
 `geomFacts_of_layout` is a repackaging (the interesting content is that M6 proves
 `LayoutGeomPred` ONCE from the numeric layout, then every case projects). -/
-structure LayoutGeomPred (code : Region) (SL : StackLayout) (sp : Nat) : Prop where
-  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
-  stack_win : tohostAddr + 16 ≤ SL.lo
-  code_stack_disjoint : sp ≤ code.1 ∨ code.1 + code.2 ≤ SL.lo
-
-/-- **The M6 interface.**  One `LayoutGeomPred` (proved once from the concrete
-`Layout`) yields the `GeomFacts` every case projects.  Structurally trivial by
-design — the point is that the *derivation site* is single (rule 6), not that the
-repackaging is deep. -/
-theorem geomFacts_of_layout {code : Region} {SL : StackLayout} {sp : Nat}
-    (h : LayoutGeomPred code SL sp) : GeomFacts code SL sp :=
-  ⟨h.stack_ram, h.stack_win, h.code_stack_disjoint⟩
-
-/-- Companion: derive an `ObjGeom` from the raw atoms M6's layout pins for one
-object (the per-object analog of `geomFacts_of_layout`).  A case's block helper
-takes `ObjGeom obj SL sp` and projects; M6 builds it here from the numeric
-layout facts.  Stated so `simp only [RSub, ramRegion]; omega` closes the `in_ram`
-side from plain `lo`/`hi` bounds. -/
-theorem objGeom_of_bounds {obj : Region} {SL : StackLayout} {sp : Nat}
-    (halign : obj.1 % 8 = 0)
-    (hlo : 0x80000000 ≤ obj.1) (hhi : obj.1 + obj.2 ≤ 0x100000000)
-    (hwin : tohostAddr + 16 ≤ obj.1)
-    (hstk : obj.1 + obj.2 ≤ SL.lo ∨ sp ≤ obj.1) :
-    ObjGeom obj SL sp :=
-  ⟨halign, by simp only [RSub, ramRegion, ramLo, ramHi]; omega, hwin, hstk⟩
 
 /-! ## `StackDisjoint` — the D-atom alone, for below-HTIF objects
 
@@ -197,24 +172,12 @@ so the discharge is a truly O(1) `exact`. -/
 theorem StackDisjoint.disj {lo len : Nat} {SL : StackLayout} {sp : Nat}
     (h : StackDisjoint lo len SL sp) : lo + len ≤ SL.lo ∨ sp ≤ lo := h.stack_disjoint
 
-/-- An `ObjGeom` (full A–D bundle) contains the D-atom, so it forgets to a
-`StackDisjoint` — the two share the geometry vocabulary. -/
-theorem ObjGeom.toStackDisjoint {obj : Region} {SL : StackLayout} {sp : Nat}
-    (h : ObjGeom obj SL sp) : StackDisjoint obj.1 obj.2 SL sp := ⟨h.stack_disjoint⟩
-
 /-! ## Bridge to `Regions.FixedMap`
 
 A case that already has a `FixedMap block code stack` (the freshly-written-block
 bundle) can read an `ObjGeom` for the block off it, given the stack region is the
 `[SL.lo, sp)` window (`stack = (SL.lo, sp - SL.lo)`).  This lets the block-writing
 specs and the entry-geometry cases share ONE geometry vocabulary. -/
-theorem ObjGeom.of_fixedMap {block code : Region} {SL : StackLayout} {sp : Nat}
-    (h : FixedMap block code (SL.lo, sp - SL.lo)) (hsp : SL.lo ≤ sp) :
-    ObjGeom block SL sp := by
-  refine ⟨h.aligned, h.in_ram, h.above_tohost, ?_⟩
-  have := h.stack_disjoint
-  simp only [RDisjoint] at this
-  omega
 
 /-! ## `geom` — the O(1) discharge tactic
 
@@ -247,38 +210,5 @@ macro "geom" : tactic =>
 
 Each must depend only on `{propext, Classical.choice, Quot.sound}` — no
 `sorry`/`axiom`/`native_decide`/`bv_decide`. -/
-
-section Sanity
-
-example (obj : Region) (SL : StackLayout) (sp : Nat) (h : ObjGeom obj SL sp) :
-    obj.1 % 8 = 0 := by geom
-
-example (obj : Region) (SL : StackLayout) (sp : Nat) (h : ObjGeom obj SL sp) :
-    tohostAddr + 16 ≤ obj.1 := by geom
-
-example (obj : Region) (SL : StackLayout) (sp : Nat) (h : ObjGeom obj SL sp) :
-    obj.1 + obj.2 ≤ SL.lo ∨ sp ≤ obj.1 := by geom
-
-example (obj : Region) (SL : StackLayout) (sp : Nat) (h : ObjGeom obj SL sp) :
-    0x80000000 ≤ obj.1 := by geom
-
-example (code : Region) (SL : StackLayout) (sp : Nat) (h : GeomFacts code SL sp) :
-    tohostAddr + 16 ≤ SL.lo := by geom
-
-example (code : Region) (SL : StackLayout) (sp : Nat) (h : GeomFacts code SL sp) :
-    sp ≤ code.1 ∨ code.1 + code.2 ≤ SL.lo := by geom
-
-example {code : Region} {SL : StackLayout} {sp : Nat} (h : LayoutGeomPred code SL sp) :
-    GeomFacts code SL sp := geomFacts_of_layout h
-
-example (lo len : Nat) (SL : StackLayout) (sp : Nat) (h : StackDisjoint lo len SL sp) :
-    lo + len ≤ SL.lo ∨ sp ≤ lo := by geom
-
-end Sanity
-
-#print axioms ObjGeom.ram_lo
-#print axioms ObjGeom.of_fixedMap
-#print axioms geomFacts_of_layout
-#print axioms objGeom_of_bounds
 
 end Vsa.Sim

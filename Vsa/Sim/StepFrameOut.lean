@@ -77,10 +77,6 @@ structure StepFrameOut (W : List Register) (σ σ' : MState) : Prop where
 
 namespace StepFrameOut
 
-/-- The empty step: identical states, empty write-set. -/
-theorem refl (σ : MState) : StepFrameOut [] σ σ :=
-  ⟨Eq.refl _, fun _ _ => Eq.refl _⟩
-
 /-- Compose two steps. The output-eqs chain; the frame holds on the union `W₁ ++
 W₂` of the two write-sets (a register avoided by both is avoided by the join),
 mirroring `FrameCalc.trans`'s log append. -/
@@ -226,16 +222,6 @@ theorem of_store {σ σ' : MState} {pc vm : BitVec 64}
     exact (hobs.1 R hmc hmt hmip).trans
       (get?_sigmaPost_store σ pc vm m' R hms hpc hnp hmi')
 
-/-- Transport a `get?` value across a step in **one line**, the ergonomic
-replacement for `obs_CLASS_other hobs R (by decide)×8 hσ`:
-`sfo.get R (by decide) hσ`. -/
-theorem get {W : List Register} {σ σ' : MState}
-    (sfo : StepFrameOut W σ σ') (R : Register)
-    (hR : (W.all fun r => !(r == R)) = true)
-    {w : RegisterType R} (hσ : σ.regs.get? R = some w) :
-    σ'.regs.get? R = some w :=
-  (sfo.frame R (all_notin hR)).trans hσ
-
 end StepFrameOut
 
 /-! ## Demo — a representative multi-step frame+output chain
@@ -245,45 +231,5 @@ combined register-frame + output-preservation over the whole 4-step run. This is
 the ergonomic payoff: each step contributes ONE `.of_CLASS hobs` line and the
 run's frame/output fall out of `.trans`, versus ~5-10 hand-threaded lines/step
 (a `by decide × 8` register wall + a `sailOutput` rewrite) previously. -/
-section Demo
-
-example (σ σ1 σ2 σ3 σ4 : MState)
-    (pc1 pc2 pc3 pc4 vm1 vm2 vm3 vm4 : BitVec 64)
-    (rd1 rd2 rd3 rdj : Register)
-    (v1 : RegisterType rd1) (v2 : RegisterType rd2) (v3 : RegisterType rd3)
-    (imm : BitVec 21) (link : RegisterType rdj)
-    (h1 : ReadsLikePost σ1 (sigmaPost_alu σ pc1 vm1 rd1 v1))
-    (h2 : ReadsLikePost σ2 (sigmaPost_alu σ1 pc2 vm2 rd2 v2))
-    (h3 : ReadsLikePost σ3 (sigmaPost_alu σ2 pc3 vm3 rd3 v3))
-    (h4 : ReadsLikePost σ4 (sigmaPost_jal σ3 pc4 vm4 imm rdj link)) :
-    StepFrameOut
-      ((rd1 :: noiseRegs) ++ (rd2 :: noiseRegs) ++ (rd3 :: noiseRegs) ++ (rdj :: noiseRegs))
-      σ σ4 :=
-  (((StepFrameOut.of_alu h1).trans (StepFrameOut.of_alu h2)).trans
-    (StepFrameOut.of_alu h3)).trans (StepFrameOut.of_jal h4)
-
--- The chain delivers BOTH the output-preservation (`.out`) and any non-written
--- register's transported value (`.get`) over the whole run in one line each.
-example (σ σ1 σ2 σ3 σ4 : MState)
-    (pc1 pc2 pc3 pc4 vm1 vm2 vm3 vm4 : BitVec 64)
-    (v1 : RegisterType Register.x5) (v2 : RegisterType Register.x6)
-    (v3 : RegisterType Register.x7)
-    (imm : BitVec 21) (link : RegisterType Register.x1)
-    (h1 : ReadsLikePost σ1 (sigmaPost_alu σ pc1 vm1 Register.x5 v1))
-    (h2 : ReadsLikePost σ2 (sigmaPost_alu σ1 pc2 vm2 Register.x6 v2))
-    (h3 : ReadsLikePost σ3 (sigmaPost_alu σ2 pc3 vm3 Register.x7 v3))
-    (h4 : ReadsLikePost σ4 (sigmaPost_jal σ3 pc4 vm4 imm Register.x1 link))
-    {w : RegisterType Register.x18} (hσ : σ.regs.get? Register.x18 = some w) :
-    σ4.sailOutput = σ.sailOutput ∧ σ4.regs.get? Register.x18 = some w := by
-  have sfo := (((StepFrameOut.of_alu h1).trans (StepFrameOut.of_alu h2)).trans
-    (StepFrameOut.of_alu h3)).trans (StepFrameOut.of_jal h4)
-  exact ⟨sfo.out, sfo.get Register.x18 (by decide) hσ⟩
-
-end Demo
-
-#print axioms StepFrameOut.trans
-#print axioms StepFrameOut.of_alu
-#print axioms StepFrameOut.of_jr
-#print axioms StepFrameOut.get
 
 end Vsa.Sim

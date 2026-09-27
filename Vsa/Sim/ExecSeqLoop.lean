@@ -84,14 +84,6 @@ set_option maxRecDepth 1000000
 
 /-! ## Loop-head / continuation PCs of the block do-while -/
 
-/-- The block do-while loop head (`0x800041a4`), where `ExecSeqEntry` is stated
-for the remaining statement list. -/
-def execSeqLoopPC : Nat := 0x800041a4
-
-/-- The shared statement epilogue entry (`0x8000409c`), where both the abrupt
-exit and the normal fallthrough land — the `ExecSeqExit` continuation PC. -/
-def execSeqContPC : Nat := 0x8000409c
-
 /-! ## `ExecSeqStep` — one machine loop iteration (the per-statement hypothesis)
 
 From `ExecSeqEntry` at the loop head `p` for a NON-empty remaining list `s :: ss`
@@ -124,25 +116,6 @@ without a per-statement size-stability trick (statements grow the frame store, s
 the expression-side `hSizeF ▸` idiom does not apply). Discharging this stronger
 extension is part of the residual loop-body glue — it is where the block arm's
 frame-allocation accounting lands. -/
-def ExecSeqStep
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (φf φc : Addr → Nat)
-    (st : St) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
-    (sp r : BitVec 64) (p q : Nat) (m0 : Mem)
-    (st' stFin : St) (status : Status) : Prop :=
-  ExecS st d env s st' status →
-    Triple
-      (ExecSeqEntry g N A SL φf φc st d env (s :: ss) sp r p m0)
-      (fun c =>
-        (status = .normal ∧
-          ∃ (φf' φc' : Addr → Nat),
-            PhiExtends φf φf' stFin.store.frames.size ∧
-            PhiExtends φc φc' stFin.store.closures.size ∧
-            ExecSeqEntry g N A SL φf' φc' st' d env ss sp r p c.σ.mem c)
-        ∨ (status ≠ .normal ∧
-          ExecSeqExit g N A SL φf φc st.store.frames.size st.store.closures.size
-            st' status sp r q m0 c))
 
 /-! ## `execSeqExit_extend` — re-base an `ExecSeqExit` to earlier φ-maps
 
@@ -155,29 +128,6 @@ sizes `nf'`/`nc'` of a LATER entry state) is also an exit for the earlier maps
 compose the `PhiExtends` legs and weaken the bound with `PhiExtends.mono`. This
 is what threads the per-iteration φ-extensions through `execSeqLoop`'s tail
 recursion. -/
-theorem execSeqExit_extend
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (φf φc φf' φc' : Addr → Nat)
-    (nf nc nf' nc' : Nat)
-    (st' : St) (status : Status) (sp r : BitVec 64) (q : Nat) (m0 : Mem)
-    (mNow : Mem) (c : Config)
-    (hmf : nf ≤ nf') (hmc : nc ≤ nc')
-    (hpf : PhiExtends φf φf' nf')
-    (hpc : PhiExtends φc φc' nc')
-    (hexit : ExecSeqExit g N A SL φf' φc' nf' nc' st' status sp r q mNow c) :
-    ExecSeqExit g N A SL φf φc nf nc st' status sp r q m0 c := by
-  obtain ⟨φf'', φc'', hpf'', hpc'', hstore⟩ := hexit.store
-  exact
-    { good := hexit.good
-      tick := hexit.tick
-      pc := hexit.pc
-      store := ⟨φf'', φc'',
-        PhiExtends.mono hmf (hpf.trans hpf''),
-        PhiExtends.mono hmc (hpc.trans hpc''), hstore⟩
-      out := hexit.out
-      frame := hexit.frame
-      minstret := hexit.minstret }
 
 /-! ## `execSeqLoop` — the loop rule (the reusable heart)
 
@@ -195,80 +145,5 @@ re-exposes the composed extension as `ExecSeqExit`'s existential.
 plus the loop control". It is stated for the FIXED loop-head/continuation PCs
 `p = execSeqLoopPC`, `q = execSeqContPC`, quantified over the remaining suffix and
 intermediate state, so a single hypothesis covers every iteration. -/
-theorem execSeqLoop
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (d : Nat) (env : Addr)
-    (sp r : BitVec 64) (p q : Nat)
-    -- The whole-sequence spec derivation, and its per-suffix packaging via
-    -- `hstep`, are provided abstractly. `hstep` is parametric in the suffix and
-    -- the intermediate maps/state, so it applies at every iteration.
-    (hstep : ∀ (φf φc : Addr → Nat) (st : St) (s : Stmt) (ss : List Stmt)
-        (st' stFin : St) (status : Status) (m0 : Mem),
-        ExecSeqStep g N A SL φf φc st d env s ss sp r p q m0 st' stFin status)
-    -- The empty-sequence fallthrough hop `p → q` (`li a0,0; j 0x8000409c`), which
-    -- also terminates every finished `consNormal` chain. A one-instruction
-    -- straight-line Triple; the residual loop-tail glue.
-    (hnil : ∀ (φf φc : Addr → Nat) (st : St) (m0 : Mem),
-        Triple
-          (ExecSeqEntry g N A SL φf φc st d env [] sp r p m0)
-          (ExecSeqExit g N A SL φf φc st.store.frames.size st.store.closures.size
-            st .normal sp r q m0)) :
-    ∀ (ss : List Stmt) (φf φc : Addr → Nat) (st st' : St) (status : Status)
-      (m0 : Mem),
-      ExecSeq st d env ss st' status →
-      Triple
-        (ExecSeqEntry g N A SL φf φc st d env ss sp r p m0)
-        (ExecSeqExit g N A SL φf φc st.store.frames.size st.store.closures.size
-          st' status sp r q m0) := by
-  -- `ExecSeq` is mutually inductive, so we cannot `induction` on the derivation
-  -- directly. Instead we induct on the statement list `ss` (the measure), and
-  -- `cases` the `ExecSeq` derivation to peel `nil`/`consNormal`/`consAbrupt` at
-  -- each length. `st`/`st'`/`status`/maps/`m0` are all generalized (re-introduced
-  -- after the induction) so the tail recursion can re-instantiate them.
-  intro ss
-  induction ss with
-  | nil =>
-    intro φf φc st st' status m0 hSeq
-    cases hSeq with
-    | nil =>
-      -- Empty sequence: the machine falls through to its normal exit
-      -- (`li a0,0; j 0x8000409c`). This `p → q` hop is the `hnil` residual; it
-      -- also terminates every finished `consNormal` chain.
-      exact hnil φf φc st m0
-  | cons s ss ih =>
-    intro φf φc st st' status m0 hSeq
-    cases hSeq with
-    | consNormal _ _ _ _ _ stMid _ _ hS hSeqTail =>
-      -- Non-empty, head runs to `.normal`: one iteration loops back to `p`,
-      -- then recurse on the tail from the intermediate state `stMid`.
-      intro c hc
-      obtain ⟨c₁, hs₁, hpost⟩ :=
-        hstep φf φc st s ss stMid st' .normal m0 hS c hc
-      rcases hpost with ⟨_, φf', φc', hpf, hpc, hEntry'⟩ | ⟨hne, _⟩
-      · obtain ⟨c₂, hs₂, hexit⟩ :=
-          ih φf' φc' stMid st' status c₁.σ.mem hSeqTail c₁ hEntry'
-        -- The tail's exit is stated for the extended maps `φf'`/`φc'` (fixed at
-        -- `stMid`'s entry sizes); re-expose it against the original `φf`/`φc`
-        -- (fixed at `st`'s sizes) by composing the φ-extensions, weakening the
-        -- agreement bounds along the store-size monotonicity of the sub-runs.
-        have hSle := execS_store_mono hS
-        have hTle := execSeq_store_mono hSeqTail
-        refine ⟨c₂, hs₁.trans hs₂, ?_⟩
-        exact execSeqExit_extend g N A SL φf φc φf' φc'
-          st.store.frames.size st.store.closures.size
-          stMid.store.frames.size stMid.store.closures.size
-          st' status sp r q m0 c₁.σ.mem c₂
-          hSle.1 hSle.2
-          (PhiExtends.mono hTle.1 hpf) (PhiExtends.mono hTle.2 hpc) hexit
-      · exact absurd _root_.rfl hne
-    | consAbrupt _ _ _ _ _ _ _ hS hne =>
-      -- Non-empty, head runs abrupt: one iteration exits to `q`.
-      intro c hc
-      obtain ⟨c₁, hs₁, hpost⟩ :=
-        hstep φf φc st s ss st' st' status m0 hS c hc
-      rcases hpost with ⟨heq, _⟩ | ⟨_, hexit⟩
-      · exact absurd heq hne
-      · exact ⟨c₁, hs₁, hexit⟩
 
 end Vsa.Sim

@@ -99,13 +99,6 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 abbrev ownImg (S : Nat → Prop) (img : Nat → BitVec 8) : IProp GF :=
   ownSet S (fun a => a ↦ₘ img a)
 
-/-- Read-only bytes. -/
-def bytesRO (a : Nat) (bs : List (BitVec 8)) : IProp GF :=
-  sepL bs.zipIdx (fun p => (a + p.2) ↦ₘ□ p.1)
-
-instance (a : Nat) (bs : List (BitVec 8)) : Persistent (bytesRO (GF := GF) a bs) := by
-  unfold bytesRO; infer_instance
-
 /-- Read-only view of a memory on `P`: every byte of `m` in `P` is owned
 read-only at its value. The persistent AST is `ExprReprWithin` over such a
 view (`astE`). -/
@@ -208,21 +201,8 @@ def strAt (p : Nat) (s : String) : IProp GF :=
 instance (p : Nat) (s : String) : Persistent (strAt (GF := GF) p s) := by
   unfold strAt; infer_instance
 
-/-- Persistent AST ownership: `ExprReprWithin` over a read-only view. The
-view `m` and its allowed bytes `P` are existential; every consumer reads
-through the representation derivation (child projections, reads), and two
-views agree where both are defined (`roOn` fragments are one ghost map). -/
-def astE (a : Nat) (e : Expr) : IProp GF :=
-  iprop(∃ (P : Nat → Prop) (m : Mem), ⌜ExprReprWithin m P a e⌝ ∗ roOn P m)
-def astS (a : Nat) (s : Stmt) : IProp GF :=
-  iprop(∃ (P : Nat → Prop) (m : Mem), ⌜StmtReprWithin m P a s⌝ ∗ roOn P m)
 def astSs (a n : Nat) (ss : List Stmt) : IProp GF :=
   iprop(∃ (P : Nat → Prop) (m : Mem), ⌜StmtArrayReprWithin m P a n ss⌝ ∗ roOn P m)
-
-instance (a : Nat) (e : Expr) : Persistent (astE (GF := GF) a e) := by unfold astE; infer_instance
-instance (a : Nat) (s : Stmt) : Persistent (astS (GF := GF) a s) := by unfold astS; infer_instance
-instance (a n : Nat) (ss : List Stmt) : Persistent (astSs (GF := GF) a n ss) := by
-  unfold astSs; infer_instance
 
 /-- A byte a load may read: RAM, off the HTIF words. `win` is the string
 routines' over-read window from the byte (H1's `SharedWin`): `strlen` and
@@ -242,12 +222,6 @@ instance (a : Nat) (e : Expr) : Persistent (astEG (GF := GF) a e) := by
   unfold astEG; infer_instance
 
 omit I in
-theorem astEG_astE (a : Nat) (e : Expr) : astEG (GF := GF) a e ⊢ astE a e := by
-  unfold astEG astE
-  iintro ⟨%P, %m, %⟨h, _⟩, H⟩
-  iexists P, m
-  iframe H
-  ipureintro; exact h
 
 /-! ## Values -/
 
@@ -484,9 +458,6 @@ def wordAt (a n v : Nat) : IProp GF :=
 def wordRO (a n v : Nat) : IProp GF :=
   iprop(∃ img, roImg (InExt (a, n)) img ∗ ⌜imgLE img a n = v⌝)
 
-instance (a n v : Nat) : Persistent (wordRO (GF := GF) a n v) := by
-  unfold wordRO; infer_instance
-
 /-- `err_msg` at any contents. -/
 def errAny (inp : Nat) : IProp GF := blockOwn (inp + interpErrOff) interpErrLen
 
@@ -547,11 +518,6 @@ def heapRes (L : DlLayout) (Room : RoomPred) : Regime → List (Nat × Nat) → 
   | .uncounted, H => isHeap L H
 
 omit I in
-theorem heapRes_isHeap (L : DlLayout) (Room : RoomPred) (ρ : Regime) (H : List (Nat × Nat)) :
-    heapRes (GF := GF) L Room ρ H ⊢ isHeap L H := by
-  cases ρ with
-  | counted k => exact isHeapRoom_forget L Room H k
-  | uncounted => exact .rfl
 
 /-- Everything an evaluation threads, with `err_msg` as `E`: heap, store,
 console, newlib's runtime data, interpreter context. `B ⊆ H`: the store's

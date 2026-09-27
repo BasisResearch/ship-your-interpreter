@@ -251,7 +251,6 @@ theorem fflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1
   · simp_all [upd_apply]
   · ret_keep
 
-
 #ix_seg fflushF0_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f B ra : BitVec 64} {need : Nat}

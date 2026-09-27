@@ -76,22 +76,9 @@ namespace Vsa.Sim
 
 /-! ## (c) — the ABI register-frame metatheorem -/
 
-/-- **The `decide`-checkable disjointness datum** for a block: no GPR the block
-writes is `AbiPreserved`.  First-order over the block body (`wrRegsM is` is a
-concrete `List Nat`); for any concrete block this closes by ONE kernel `decide`
-(`WrRegsAvoidAbi is := by decide`). -/
-def WrRegsAvoidAbi (is : List MInstr) : Prop :=
-  ∀ n ∈ wrRegsM is, AbiPreserved (gprReg n) = false
-
 /-- The chain analogue over `wrChain bs`. -/
 def WrChainAvoidAbi (bs : List BBlock) : Prop :=
   ∀ n ∈ wrChain bs, AbiPreserved (gprReg n) = false
-
-instance (is : List MInstr) : Decidable (WrRegsAvoidAbi is) := by
-  unfold WrRegsAvoidAbi; infer_instance
-
-instance (bs : List BBlock) : Decidable (WrChainAvoidAbi bs) := by
-  unfold WrChainAvoidAbi; infer_instance
 
 /-- **Noise never collides with a callee-saved register.**  `noiseRegs` is the
 seven machine-control registers (PC/nextPC/minstret/…); none is `AbiPreserved`,
@@ -104,31 +91,10 @@ theorem noise_ne_abi {R : Register} (hR : AbiPreserved R = true) :
   rcases hrr with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
     exact abiPreserved_ne hR (by decide)
 
-/-- **The wrRegs guard, discharged by `decide`.**  Given `WrRegsAvoidAbi is`
-(one decide) and `AbiPreserved R = true`, every written register `gprReg n`
-differs from `R` — because `gprReg n` is not callee-saved but `R` is. -/
-theorem wrRegs_ne_abi {is : List MInstr} (hAvoid : WrRegsAvoidAbi is)
-    {R : Register} (hR : AbiPreserved R = true) :
-    ∀ n ∈ wrRegsM is, (gprReg n == R) = false :=
-  fun n hn => abiPreserved_ne hR (hAvoid n hn)
-
 theorem wrChain_ne_abi {bs : List BBlock} (hAvoid : WrChainAvoidAbi bs)
     {R : Register} (hR : AbiPreserved R = true) :
     ∀ n ∈ wrChain bs, (gprReg n == R) = false :=
   fun n hn => abiPreserved_ne hR (hAvoid n hn)
-
-/-- **ABI-frame metatheorem (block).**  Any frame clause of the shape the block
-soundness lemmas produce collapses — under `WrRegsAvoidAbi is` (one `decide`) —
-to the callee-contract shape `∀ R, AbiPreserved R → get? R = get? R`.  This is
-the whole content of a "framed variant": the register-preservation obligation,
-free. -/
-theorem abiFrame_of_wrRegs {is : List MInstr} {σ' σ : MState}
-    (hAvoid : WrRegsAvoidAbi is)
-    (hframe : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-      (∀ n ∈ wrRegsM is, (gprReg n == R) = false) →
-      σ'.regs.get? R = σ.regs.get? R) :
-    ∀ R, AbiPreserved R = true → σ'.regs.get? R = σ.regs.get? R :=
-  fun R hR => hframe R (noise_ne_abi hR) (wrRegs_ne_abi hAvoid hR)
 
 /-- **ABI-frame metatheorem (chain).**  Same, over `wrChain bs`. -/
 theorem abiFrame_of_wrChain {bs : List BBlock} {σ' σ : MState}
@@ -141,116 +107,10 @@ theorem abiFrame_of_wrChain {bs : List BBlock} {σ' σ : MState}
 
 /-! ## (d) — the footprint metatheorem -/
 
-/-- The whole chain's write-log footprint, as a predicate over the (possibly
-symbolic) per-block logs threaded through the fold — the memory analogue of
-`wrChain`.  `OutChain bs m L lds a` says `a` is outside every block's log.
-Recursive, so a concrete chain unfolds to a conjunction of `OutL` facts. -/
-def OutChain : List BBlock → Std.ExtHashMap Nat (BitVec 8) → GRegs →
-    List (List (BitVec 8)) → Nat → Prop
-  | [], _, _, _, _ => True
-  | b :: bs, m, L, lds, a =>
-    OutL (wlogM b.body L lds) a ∧
-    OutChain bs (writeLog m (wlogM b.body L lds)) (runGM b.body L lds)
-      (ldsRunM b.body lds) a
-
-/-- Reads outside every block's log footprint pass through the whole `memChain`
-fold (the chain lift of `writeLog_out`). -/
-theorem outL_memChain (bs : List BBlock) :
-    ∀ (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (lds : List (List (BitVec 8)))
-      (a : Nat), OutChain bs m L lds a → (memChain bs m L lds)[a]? = m[a]? := by
-  induction bs with
-  | nil => intro m L lds a _; rfl
-  | cons b bs ih =>
-    intro m L lds a hout
-    obtain ⟨houtb, houtr⟩ := hout
-    show (memChain bs (writeLog m (wlogM b.body L lds)) (runGM b.body L lds)
-      (ldsRunM b.body lds))[a]? = m[a]?
-    rw [ih _ _ _ a houtr, writeLog_out m (wlogM b.body L lds) a houtb]
-
-/-- **Footprint metatheorem (block).**  From the block soundness lemma's memory
-post `σ'.mem = writeLog σ.mem (wlogM is L lds)`, reads outside the log agree
-with the entry memory — the mem-frame post as a predicate over the (symbolic)
-log.  No ground addresses required. -/
-theorem memFrame_of_block {σ' σ : MState} {is : List MInstr}
-    {L : GRegs} {lds : List (List (BitVec 8))}
-    (hmem : σ'.mem = writeLog σ.mem (wlogM is L lds)) :
-    ∀ a, OutL (wlogM is L lds) a → σ'.mem[a]? = σ.mem[a]? :=
-  fun a ha => by rw [hmem]; exact writeLog_out σ.mem (wlogM is L lds) a ha
-
-/-- **Footprint metatheorem (chain).**  Same over `memChain`. -/
-theorem memFrame_of_chain {σ' σ : MState} {bs : List BBlock}
-    {L : GRegs} {lds : List (List (BitVec 8))}
-    (hmem : σ'.mem = memChain bs σ.mem L lds) :
-    ∀ a, OutChain bs σ.mem L lds a → σ'.mem[a]? = σ.mem[a]? :=
-  fun a ha => by rw [hmem]; exact outL_memChain bs σ.mem L lds a ha
-
 /-! ## Packaged framed soundness — the block/chain lemma with the frame already
 collapsed to the ABI + footprint shape.  A caller `obtain`s the framed post
 directly; the two `WrRegsAvoidAbi`/`WrChainAvoidAbi` premises are `by decide`
 per shape. -/
-
-/-- **The framed block soundness lemma.**  `block_mem_sound` with its register
-frame collapsed to the ABI callee shape (via `abiFrame_of_wrRegs`, one `decide`)
-and the memory post exposed as the footprint frame (via `memFrame_of_block`).
-Every field is the underlying lemma's own; only the two frame clauses are
-rewrapped. -/
-theorem block_mem_sound_framed (is : List MInstr) (σ : MState) (i u : Nat)
-    (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : ProgFactsM σ.mem σ.mem L lds is)
-    (hwf : BlockOKM pc0 (keysG L) is)
-    (hi : i < 2)
-    (hAvoid : WrRegsAvoidAbi is) :
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + is.length⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = writeLog σ.mem (wlogM is L lds) ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC = some (endPCM pc0 is) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' (runGM is L lds) ∧
-      -- (c) ABI callee frame, free:
-      (∀ R, AbiPreserved R = true → σ'.regs.get? R = σ.regs.get? R) ∧
-      -- (d) footprint frame, free:
-      (∀ a, OutL (wlogM is L lds) a → σ'.mem[a]? = σ.mem[a]?) := by
-  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH', hframe⟩ :=
-    block_mem_sound is σ i u pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf hi
-  exact ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH',
-    abiFrame_of_wrRegs hAvoid hframe, memFrame_of_block hmem'⟩
-
-/-- **The framed chain soundness lemma.**  `bblocks_sound_bt` with its register
-frame collapsed to the ABI callee shape (via `abiFrame_of_wrChain`, one
-`decide`) and the memory post exposed as the `OutChain` footprint frame.  This
-is the reusable "framed variant" of ANY reflected callee chain — the whole
-callee-frame + footprint obligation, discharged by two `decide`s at the use
-site. -/
-theorem bblocks_sound_framed (bs : List BBlock) (σ : MState) (i u : Nat)
-    (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : ChainFacts σ.mem σ.mem L lds bs)
-    (hwf : ChainOK pc0 (keysG L) bs)
-    (hi : i < 2)
-    (hAvoid : WrChainAvoidAbi bs) :
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + chainLen bs⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = memChain bs σ.mem L lds ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC = some (chainEndPC pc0 L lds bs) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' (runChain bs L lds) ∧
-      -- (c) ABI callee frame, free:
-      (∀ R, AbiPreserved R = true → σ'.regs.get? R = σ.regs.get? R) ∧
-      -- (d) footprint frame, free:
-      (∀ a, OutChain bs σ.mem L lds a → σ'.mem[a]? = σ.mem[a]?) := by
-  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH', hframe⟩ :=
-    bblocks_sound_bt bs σ i u pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf hi
-  exact ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH',
-    abiFrame_of_wrChain hAvoid hframe, memFrame_of_chain hmem'⟩
 
 /-! ## Demonstration — the framed `memmove` dispatch variant, FREE
 
@@ -274,48 +134,5 @@ across each — O(sites) `have`s, a multi-session per-callee re-derivation.
 
 AFTER (below): `abiFrame_of_wrChain (by decide) hframe` + `memFrame_of_chain`.
 Two lines.  No site threading. -/
-
-/-- The memmove-dispatch segment's **ABI callee frame, free** — every
-callee-saved register is preserved across the whole 4-block segment.  Derived
-from `mv_dispatch_setup_block`'s raw frame clause by `abiFrame_of_wrChain` with
-the wrChain-disjointness closed by ONE `decide` (`[15,15,13,13,13]` avoids
-`AbiPreserved`), plus the noise disequalities free from `AbiPreserved R`.
-
-Contrast the raw clause (`mv_dispatch_setup_block`, lines 102–104): the same
-consumer would otherwise write `hframe R (abiNoise_noiseRegs hR)
-(by block_frame_wr [15,15,13,13,13])` at *every* use site. -/
-theorem mv_dispatch_setup_abiFramed (σ : MState) (i u : Nat)
-    (vm r dst src : BitVec 64) (n : Nat)
-    (hn1 : 1 ≤ n) (hn31 : n ≤ 31)
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some (0x800069c4#64))
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hx10 : σ.regs.get? Register.x10 = some dst)
-    (hx11 : σ.regs.get? Register.x11 = some src)
-    (hx12 : σ.regs.get? Register.x12 = some (BitVec.ofNat 64 n))
-    (hx1 : σ.regs.get? Register.x1 = some r)
-    (hmem : Vsa.Sim.Code.MemmoveLoaded σ.mem)
-    (hd : dst.toNat + n ≤ src.toNat)
-    (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 8⟩ ∧ i' < 2 ∧
-      σ'.regs.get? Register.PC = some (0x80006a0c#64) ∧
-      σ'.regs.get? Register.x15 = some dst ∧
-      σ'.regs.get? Register.x13 = some (dst + BitVec.ofNat 64 n) ∧
-      -- (c) callee-saved ABI frame across the segment, FREE:
-      (∀ R, AbiPreserved R = true → σ'.regs.get? R = σ.regs.get? R) ∧
-      -- (d) memory unchanged (this segment's log is empty; the footprint frame
-      -- degenerates to full memory equality):
-      σ'.mem = σ.mem := by
-  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', _, _, _, _, ha15, ha13, hmi', hframe⟩ :=
-    mv_dispatch_setup_block σ i u vm r dst src n hn1 hn31 hG hpc hmi hx10 hx11 hx12 hx1 hmem hd hi
-  -- the WHOLE framed variant, no site threading.  The wrRegs-disjointness of the
-  -- written list `[15,15,13,13,13]` from `AbiPreserved` is ONE `decide` (via the
-  -- reusable `listAvoidAbi` datum); the noise disequalities are free.
-  refine ⟨σ', i', hsteps, hi', hpc', ha15, ha13, ?_, hmem'⟩
-  have hAvoid : ∀ nn ∈ ([15, 15, 13, 13, 13] : List Nat), AbiPreserved (gprReg nn) = false := by
-    decide
-  exact fun R hR => hframe R (noise_ne_abi hR)
-    (fun nn hnn => abiPreserved_ne hR (hAvoid nn hnn))
 
 end Vsa.Sim

@@ -64,50 +64,6 @@ Per the `EnvDefBridges3` ledger the span is 1 load + 1 store + 2 branch sites:
 Two blocks (one terminator each): `[ld;sd] ▷ beqz(false)` then `[] ▷ bnez(true)`.
 Both branches WRITE NO GPR (BlockTerm's `br` class), so the whole thing is ONE
 `#derive_case` seg — no `bridgeOfSeg`, the branch terminators are in-model. -/
-#derive_case appendHeadSeg chain
-  [(0x80002bc0#64, 0x008a3783#32),   -- ld a5,8(s4)   (x15 := env->names)
-   (0x80002bc4#64, 0x00aa3823#32)]   -- sd a0,16(s4)  (env->vals := a0)
-    terminator ⟨0x80002bc8#64, 0x00078463#32, 0x63#8, 0x84#8, 0x07#8, 0x00#8,
-      .br bop.BEQ false, 15, 0, 0x0008#13, 0#21, 0#12⟩ ;;
-  []
-    terminator ⟨0x80002bcc#64, 0xf40518e3#32, 0xe3#8, 0x18#8, 0x05#8, 0xf4#8,
-      .br bop.BNE true, 10, 0, 0x1f50#13, 0#21, 0#12⟩
-
-/-- The append-head entry pins: `x20 = s4 = env` (base for both accesses),
-`x10 = a0 = realloc(vals) result` (stored, and the `bnez` guard). -/
-def appendHeadL (s4Ptr a0 : BitVec 64) : GRegs := [(20, s4Ptr), (10, a0)]
-
-/-- Post: parked at the append head `0x80002b1c` (the `bnez` success target), memory
-= the entry memory with `env->vals` (word at `s4+16`) overwritten by `a0`, computed
-off the seg's write-log. -/
-def AppendHeadPost (s4Ptr a0 : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧
-  c.σ.mem = writeLog m0 (evalBlocks appendHeadSeg
-    (SegEvalState.init (appendHeadL s4Ptr a0) lds)).log ∧
-  c.σ.regs.get? Register.PC = some 0x80002b1c#64
-
-/-- **`appendHeadRow`** — the grow-path append-head span as a `Triple`, via
-`segToTriple` over the branch-terminated `appendHeadSeg`.  `hwf` is the row's one
-kernel `decide` (`ChainOK`); `hpost` projects the computed end PC (the `bnez` target
-`0x80002b1c`) and the write-log memory off the `#derive_case` outcome.  Replaces the
-hand `site_80002bc0_ed .. site_80002bcc_ed` battery (~4×30-line `stepObs_*` + a run). -/
-theorem appendHeadRow (s4Ptr a0 : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (SegPre appendHeadSeg (appendHeadL s4Ptr a0) lds 0x80002bc0#64 m0)
-      (AppendHeadPost s4Ptr a0 lds m0) := by
-  apply segToTriple appendHeadSeg (appendHeadL s4Ptr a0) lds 0x80002bc0#64 m0
-    (AppendHeadPost s4Ptr a0 lds m0)
-    (by have h : keysG (appendHeadL s4Ptr a0) = [20, 10] := rfl
-        rw [h]; show ChainOK 0x80002bc0#64 [20, 10] appendHeadSeg; decide)
-  intro σ' i' u' hG' _hi' hmem' hpc' _hmi' _hregs
-  refine ⟨hG', hmem', ?_⟩
-  rw [hpc']
-  show some (evalBlocksPC 0x80002bc0#64 (SegEvalState.init (appendHeadL s4Ptr a0) lds)
-    appendHeadSeg) = some 0x80002b1c#64
-  rfl
-
-#print axioms appendHeadRow
 
 /-! ## Item 2 — the append-path store block `0x80002b44..0x80002b8c`
 
@@ -141,64 +97,6 @@ the seg's canonical `writeLog` (`out.log`); the FrameRepr reconstruction that tu
 write-log into `env_define_update_post`'s `Store.define` result is the LANDED
 `frameRepr_append` (`EnvDefBridges3`) — NOT re-proved here (it is the genuinely spec-side
 part, and its content is already discharged). -/
-#derive_case appendStoreSeg chain
-  [(0x80002b44#64, 0x000a2783#32),   -- lw   a5,0(s4)
-   (0x80002b48#64, 0x008a3603#32),   -- ld   a2,8(s4)
-   (0x80002b4c#64, 0x010a3703#32),   -- ld   a4,16(s4)
-   (0x80002b50#64, 0x00179693#32),   -- slli a3,a5,0x1
-   (0x80002b54#64, 0x00379893#32),   -- slli a7,a5,0x3
-   (0x80002b58#64, 0x00f686b3#32),   -- add  a3,a3,a5
-   (0x80002b5c#64, 0x000ab803#32),   -- ld   a6,0(s5)
-   (0x80002b60#64, 0x008ab503#32),   -- ld   a0,8(s5)
-   (0x80002b64#64, 0x010ab583#32),   -- ld   a1,16(s5)
-   (0x80002b68#64, 0x01160633#32),   -- add  a2,a2,a7
-   (0x80002b6c#64, 0x00369693#32),   -- slli a3,a3,0x3
-   (0x80002b70#64, 0x00963023#32),   -- sd   s1,0(a2)
-   (0x80002b74#64, 0x00d70733#32),   -- add  a4,a4,a3
-   (0x80002b78#64, 0x0017879b#32),   -- addiw a5,a5,1
-   (0x80002b7c#64, 0x01073023#32),   -- sd   a6,0(a4)
-   (0x80002b80#64, 0x00a73423#32),   -- sd   a0,8(a4)
-   (0x80002b84#64, 0x00b73823#32),   -- sd   a1,16(a4)
-   (0x80002b88#64, 0x00fa2023#32)]   -- sw   a5,0(s4)
-    terminator ⟨0x80002b8c#64, 0xf61ff06f#32, 0x6f#8, 0xf0#8, 0x1f#8, 0xf6#8,
-      .j, 0, 0, 0#13, 0x1fff60#21, 0#12⟩
-
-/-- The store-block entry pins: `x20 = s4 = env`, `x21 = s5 = &v` (value struct),
-`x9 = s1 = the copied name pointer` (result of the memcpy into the fresh block). -/
-def appendStoreL (s4Ptr s5Ptr s1Ptr : BitVec 64) : GRegs :=
-  [(20, s4Ptr), (21, s5Ptr), (9, s1Ptr)]
-
-/-- Post: parked at the shared finalize tail `0x80002aec`, memory = the entry memory
-with the seg's five stores applied (computed off the write-log). -/
-def AppendStorePost (s4Ptr s5Ptr s1Ptr : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧
-  c.σ.mem = writeLog m0 (evalBlocks appendStoreSeg
-    (SegEvalState.init (appendStoreL s4Ptr s5Ptr s1Ptr) lds)).log ∧
-  c.σ.regs.get? Register.PC = some 0x80002aec#64
-
-/-- **`appendStoreRow`** — the append-path store block as a `Triple`, via `segToTriple`
-over the `j`-terminated `appendStoreSeg`.  `hwf` is the row's one kernel `decide`;
-`hpost` projects the computed end PC (the `j` target `0x80002aec`) and the write-log
-memory off the outcome.  Replaces the ~18-site hand `stepObs_alu`/`stepObs_store`
-battery (loads, shifts, adds, five stores) + its run + 33-branch frame that the legacy
-idiom would build. -/
-theorem appendStoreRow (s4Ptr s5Ptr s1Ptr : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (SegPre appendStoreSeg (appendStoreL s4Ptr s5Ptr s1Ptr) lds 0x80002b44#64 m0)
-      (AppendStorePost s4Ptr s5Ptr s1Ptr lds m0) := by
-  apply segToTriple appendStoreSeg (appendStoreL s4Ptr s5Ptr s1Ptr) lds 0x80002b44#64 m0
-    (AppendStorePost s4Ptr s5Ptr s1Ptr lds m0)
-    (by have h : keysG (appendStoreL s4Ptr s5Ptr s1Ptr) = [20, 21, 9] := rfl
-        rw [h]; show ChainOK 0x80002b44#64 [20, 21, 9] appendStoreSeg; decide)
-  intro σ' i' u' hG' _hi' hmem' hpc' _hmi' _hregs
-  refine ⟨hG', hmem', ?_⟩
-  rw [hpc']
-  show some (evalBlocksPC 0x80002b44#64 (SegEvalState.init (appendStoreL s4Ptr s5Ptr s1Ptr) lds)
-    appendStoreSeg) = some 0x80002aec#64
-  rfl
-
-#print axioms appendStoreRow
 
 /-! ## Item 3 — the update-path HIT store block `0x80002ac0..0x80002ae8` (the `hUpdate` prefix)
 
@@ -227,52 +125,6 @@ replaced) is the spec residual, served by the same readback discipline as
 `frameRepr_append`.  No `jal`, no `bridgeOfSeg`; the scan loop above is the only genuine
 seam left, and it is a `loopFromBody`/`env_get_scan_spec'` residual (named, not built
 here). -/
-#derive_case updateStoreSeg chain
-  [(0x80002ac0#64, 0x010a3783#32),   -- ld   a5,16(s4)
-   (0x80002ac4#64, 0x00141713#32),   -- slli a4,s0,0x1
-   (0x80002ac8#64, 0x000ab583#32),   -- ld   a1,0(s5)
-   (0x80002acc#64, 0x008ab603#32),   -- ld   a2,8(s5)
-   (0x80002ad0#64, 0x010ab683#32),   -- ld   a3,16(s5)
-   (0x80002ad4#64, 0x00870733#32),   -- add  a4,a4,s0
-   (0x80002ad8#64, 0x00371713#32),   -- slli a4,a4,0x3
-   (0x80002adc#64, 0x00e787b3#32),   -- add  a5,a5,a4
-   (0x80002ae0#64, 0x00b7b023#32),   -- sd   a1,0(a5)
-   (0x80002ae4#64, 0x00c7b423#32),   -- sd   a2,8(a5)
-   (0x80002ae8#64, 0x00d7b823#32)]   -- sd   a3,16(a5)
-
-/-- The update-store entry pins: `x20 = s4 = env`, `x21 = s5 = &v`, `x8 = s0 = the
-found index i` (from the scan loop). -/
-def updateStoreL (s4Ptr s5Ptr idx : BitVec 64) : GRegs :=
-  [(20, s4Ptr), (21, s5Ptr), (8, idx)]
-
-/-- Post: parked at the shared finalize tail `0x80002aec`, memory = entry memory with
-the three `vals[i]` stores applied (computed off the write-log). -/
-def UpdateStorePost (s4Ptr s5Ptr idx : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧
-  c.σ.mem = writeLog m0 (evalBlocks updateStoreSeg
-    (SegEvalState.init (updateStoreL s4Ptr s5Ptr idx) lds)).log ∧
-  c.σ.regs.get? Register.PC = some 0x80002aec#64
-
-/-- **`updateStoreRow`** — the update-path HIT store block as a `Triple`, via
-`segToTriple`.  Lands the computed write-log post parked at the shared tail
-`0x80002aec`.  This is the straight-line part of the `hUpdate` prefix; the scan LOOP
-preceding it stays a `loopFromBody`/`env_get_scan_spec'` seam (named residual). -/
-theorem updateStoreRow (s4Ptr s5Ptr idx : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (SegPre updateStoreSeg (updateStoreL s4Ptr s5Ptr idx) lds 0x80002ac0#64 m0)
-      (UpdateStorePost s4Ptr s5Ptr idx lds m0) := by
-  apply segToTriple updateStoreSeg (updateStoreL s4Ptr s5Ptr idx) lds 0x80002ac0#64 m0
-    (UpdateStorePost s4Ptr s5Ptr idx lds m0)
-    (by have h : keysG (updateStoreL s4Ptr s5Ptr idx) = [20, 21, 8] := rfl
-        rw [h]; show ChainOK 0x80002ac0#64 [20, 21, 8] updateStoreSeg; decide)
-  intro σ' i' u' hG' _hi' hmem' hpc' _hmi' _hregs
-  refine ⟨hG', hmem', ?_⟩
-  rw [hpc']
-  show some (evalBlocksPC 0x80002ac0#64 (SegEvalState.init (updateStoreL s4Ptr s5Ptr idx) lds)
-    updateStoreSeg) = some 0x80002aec#64
-  rfl
-
-#print axioms updateStoreRow
+   -- sd   a3,16(a5)
 
 end Vsa.Sim

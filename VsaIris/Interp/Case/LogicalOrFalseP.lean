@@ -111,7 +111,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   · imodintro; rw [hLt]; iapply astEG_of_view hrl hgeo $$ Hro
   iintro %R1 %w0 %w1 %w2 %st1 %lv %hEl %hkeep1 #Hv1 Hms Hst Hw Hslot Hk
 
-
 #ix_piece LogicalOrFalseP_p2 from LogicalOrFalseP_p1 by
   -- run 2: operator test, copy the left value to `sp+64`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

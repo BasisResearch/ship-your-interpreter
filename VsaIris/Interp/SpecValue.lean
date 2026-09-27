@@ -43,7 +43,6 @@ open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
 /-! ## Entries, clobbers, stack needs -/
 
-abbrev valueNullPC : BitVec 64 := 0x800027ec#64
 abbrev valueBoolPC : BitVec 64 := 0x800027f8#64
 abbrev valueStrPC : BitVec 64 := 0x8000281c#64
 abbrev valueTruthyPC : BitVec 64 := 0x8000282c#64

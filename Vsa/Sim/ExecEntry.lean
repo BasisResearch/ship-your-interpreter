@@ -473,49 +473,5 @@ re-represented for the spec post-state `st'` with extended φ-maps; memory outsi
 the arena/stack window framed to `m0`. On the `ret v` arm the `retslot` buffer at
 `aRet` additionally holds `ValueRepr v` (stated as a disjunct keyed on
 `status`). -/
-structure ExecExit
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (φf φc : Addr → Nat)          -- the ENTRY maps
-    (nf nc : Nat)                 -- the ENTRY agreement sizes
-    (st' : St) (status : Status)
-    (sp r aRet : BitVec 64)
-    (m0 : Mem)
-    (c : Config) : Prop where
-  /-- Control state re-established. -/
-  good : GoodState c.σ
-  /-- Tick parity still `< 2`. -/
-  tick : c.tick < 2
-  /-- PC at the return target (bit-0-cleared `r`, the `ret` semantics). -/
-  pc : c.σ.regs.get? Register.PC =
-    some (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1)
-  /-- Result register: the status code. -/
-  a0 : c.σ.regs.get? Register.x10 = some (StatusCode status)
-  /-- Return address preserved. -/
-  ra : c.σ.regs.get? Register.x1 = some r
-  /-- `sp` restored to entry. -/
-  spReg : c.σ.regs.get? Register.x2 = some sp
-  /-- `minstret` present. -/
-  minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
-  /-- **The store is re-represented** for `st'.store` with extended maps. -/
-  store : ∃ (φf' φc' : Addr → Nat),
-    PhiExtends φf φf' nf ∧
-    PhiExtends φc φc' nc ∧
-    StoreRepr c.σ.mem N A φf' φc' st'.store
-  /-- Console output correspondence for `st'`. -/
-  out : OutRepr c.σ st'
-  /-- On the `ret v` arm the `retslot` holds `ValueRepr v` (extended `φc`). Other
-  statuses leave `retslot` unconstrained. -/
-  retval : ∀ v, status = .ret v →
-    ∃ φc', PhiExtends φc φc' nc ∧
-      ValueRepr c.σ.mem N φc' aRet.toNat v
-  /-- The blanket ghost frame: every callee-preserved register restored to `g R`. -/
-  frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
-  /-- Memory outside the arena and the stack window `[SL.lo, sp)` is unchanged
-  from `m0`, except the `retslot` buffer `[aRet, aRet+24)` (written only on
-  `ret`). -/
-  memFrame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
-    ¬ (A.lo ≤ a ∧ a < A.hi) →
-    (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ c.σ.mem[a]? = m0[a]?
 
 end Vsa.Sim

@@ -74,14 +74,6 @@ set_option maxHeartbeats 800000
 
 /-! ## Boundary predicate at the `exit` entry -/
 
-/-- Parked at the `exit` entry (`0x80004764`) with the exit status `a0 = 70`,
-`GoodState`, tick-bounded, and the console output still `out`. -/
-def AtExitEntry (out : String) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.tick < 2 ∧
-  c.σ.regs.get? Register.PC = some (0x80004764#64 : BitVec 64) ∧
-  c.σ.regs.get? Register.x10 = some (70#64 : BitVec 64) ∧
-  output c.σ = out
-
 /-! ## The crt0-`j` frame residual (the byte pins the `AtCrt0Exit` pre lacks)
 
 `AtCrt0Exit`'s precondition names only `{GoodState, tick<2, PC = 0x80000038,
@@ -90,49 +82,8 @@ bytes at 0x80000038 (`ChainFacts` for the one-block `crt0JSeg`), which are not i
 any `Code` module.  We package exactly that `ChainFacts` obligation as the named
 residual `Crt0JFrame`.  This is the exit-70 analogue of `ExitPrologGeom`
 (the `_exit`-code residual). -/
-def Crt0JFrame (out : String) : Prop :=
-  ∀ c : Config, AtCrt0Exit out c →
-    ChainFacts c.σ.mem c.σ.mem [(10, (70#64 : BitVec 64))] [] crt0JSeg
 
 /-! ## The crt0 `j exit` seam discharged (conditional on `Crt0JFrame`) -/
-
-/-- **The crt0 `j exit` seam.**  From `AtCrt0Exit out` (`PC = 0x80000038`,
-`a0 = 70`), the single `j exit` lands at the `exit` entry `0x80004764` with `a0`
-unchanged (empty body) and `output` unchanged (no `tohost` store — `bblocks_sound_bt`
-gives `σ'.sailOutput = σ.sailOutput`), i.e. `AtExitEntry out`.  ONE
-`bblocks_sound_bt` over the decoded one-block `crt0JSeg`, conditional only on the
-`Crt0JFrame` byte pins. -/
-theorem crt0ExitPre_of (out : String) (hframe : Crt0JFrame out) :
-    Triple (AtCrt0Exit out) (AtExitEntry out) := by
-  intro c hpre
-  obtain ⟨hG, htick, hpc, hx10, hout⟩ := hpre
-  obtain ⟨vm, hmi⟩ := hG.minstret
-  have hcf : ChainFacts c.σ.mem c.σ.mem [(10, (70#64 : BitVec 64))] [] crt0JSeg :=
-    hframe c ⟨hG, htick, hpc, hx10, hout⟩
-  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH, _hframe⟩ :=
-    bblocks_sound_bt crt0JSeg c.σ c.tick c.steps (0x80000038#64) vm
-      [(10, (70#64 : BitVec 64))] []
-      hG hpc hmi ⟨hx10, trivial⟩
-      (show KeysOK [10] by decide)
-      hcf
-      (show ChainOK (0x80000038#64) [10] crt0JSeg by decide)
-      htick
-  refine ⟨⟨σ', i', c.steps + chainLen crt0JSeg⟩, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · cases c; exact hsteps
-  · exact hG'
-  · exact hi'
-  · -- PC = chainEndPC … = 0x80004764 (the `j` target; NoJr ⇒ concrete).
-    have hce : chainEndPC (0x80000038#64) [(10, (70#64 : BitVec 64))] [] crt0JSeg
-        = (0x80004764#64 : BitVec 64) := by
-      rw [chainEndPC_eq_bt crt0JSeg (0x80000038#64) _ _ (by decide)]
-      apply BitVec.eq_of_toNat_eq; decide
-    rw [hce] at hpc'; exact hpc'
-  · -- a0 = 70: empty body ⇒ runChain preserves the pin (key 10).
-    have hlk : lookupG 10 (runChain crt0JSeg [(10, (70#64 : BitVec 64))] [])
-        = some (70#64 : BitVec 64) := by rfl
-    exact gholds_lookup (runChain crt0JSeg [(10, (70#64 : BitVec 64))] []) hGH hlk
-  · -- output unchanged.
-    unfold output; rw [hout']; unfold output at hout; exact hout
 
 /-! ## The NAMED exit-interior contract
 
@@ -146,20 +97,7 @@ console mailbox on the error-exit path.  Named because their callee bytes are no
 pinned in `Code` and the `__atexit`-empty / stdio-handler-null facts are
 whole-program runtime invariants, not decode facts.  The exit-70 analogue of
 `FprintfStderrNeutral`. -/
-def ExitInteriorNeutral (out : String) : Prop :=
-  Triple (AtExitEntry out) (AtExitProlog out)
 
 /-! ## `Crt0ExitSeg` discharged (conditional on `Crt0JFrame` + `ExitInteriorNeutral`) -/
-
-/-- **`Crt0ExitSeg` discharged.**  The decoded crt0 `j exit` seam (`crt0ExitPre_of`,
-conditional on the `Crt0JFrame` byte pins) composed with the NAMED exit-interior
-contract (`ExitInteriorNeutral out`) gives the whole `AtCrt0Exit → AtExitProlog`
-segment `Triple`, i.e. `Crt0ExitSeg out`. -/
-theorem crt0ExitSeg_of (out : String)
-    (hframe : Crt0JFrame out) (hint : ExitInteriorNeutral out) :
-    Crt0ExitSeg out :=
-  Triple.seq (crt0ExitPre_of out hframe) hint
-
-#print axioms crt0ExitSeg_of
 
 end Vsa.Sim

@@ -292,7 +292,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   subst hL hRoom
   rw [binOpCost_concat hcat]
 
-
 #ix_piece BinaryConcatT_p3 from BinaryConcatT_p2 by
   -- run 3: operator dispatch, the string test, the left operand's copy, to `stringify`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

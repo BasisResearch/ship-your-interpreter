@@ -115,16 +115,6 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 def astSG (a : Nat) (s : Stmt) : IProp GF :=
   iprop(∃ (P : Nat → Prop) (m : Mem), ⌜StmtReprWithin m P a s ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m)
 
-instance (a : Nat) (s : Stmt) : Persistent (astSG (GF := GF) a s) := by
-  unfold astSG; infer_instance
-
-theorem astSG_astS (a : Nat) (s : Stmt) : astSG (GF := GF) a s ⊢ astS a s := by
-  unfold astSG astS
-  iintro ⟨%P, %m, %⟨h, _⟩, H⟩
-  iexists P, m
-  iframe H
-  ipureintro; exact h
-
 /-- The `ret` slot: the returned value when the status is `.ret v`, any
 contents otherwise. -/
 def statusRet (N : NativeAddrs) (aRet : Nat) : Status → IProp GF
