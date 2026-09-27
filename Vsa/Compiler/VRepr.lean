@@ -210,4 +210,15 @@ theorem VRepr.mono {H : CloMap} {m m' : Mem} {h h' : Nat} {v : Value} {t p : Bit
   cases v <;> simp only [VRepr] at hv ⊢
   all_goals first | exact hv | exact ⟨hv.1, hv.2.mono hag hh⟩
 
+theorem fixed_bound (i : Nat) (hi : i < fixedStrs.length) :
+    objBase ≤ fixedAddr i ∧ fixedAddr i + 8 + 8 * (fixedStrs[i]'hi).toList.length ≤ fixedAddr 7 + 40 := by
+  have : i < 8 := hi
+  rcases (show i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 by omega) with
+    rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;> revert hi <;> decide
+
+theorem FixedOK.mono {m m' : Mem} {h : Nat} (hfx : FixedOK m) (hag : ObjAgree m m' h)
+    (hfb : fixedAddr 7 + 40 ≤ h) : FixedOK m' := fun i hi => by
+  obtain ⟨h1, h2⟩ := fixed_bound i hi
+  exact (hfx i hi).transport (fun a ha1 ha2 ha3 => hag a ha3 (by omega) (by omega))
+
 end Vsa.Compiler

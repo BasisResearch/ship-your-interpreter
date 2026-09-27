@@ -657,6 +657,132 @@ theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
       · next hp => exact hpe.mp (by simpa using hp)
 
 
+/-- Registers `+` may change. -/
+def addClob : List Nat :=
+  [ra, t0, t1, t2, t3, t4, t5, t6, a0, a1, a2, a3, a4, a5, a6, a7, s2, s4, s5, s6, s9, s10, s11, hpO]
+
+/-- `+` returned `v`: the object heap grew from `h` to `h'` and memory changed only
+there and in the digit buffer. -/
+structure AddRet (H : CloMap) (m m' : Mem) (h h' : Nat) (L L' : GRegs) (v : Value) : Prop where
+  hp : Has L' hpO (BitVec.ofNat 64 h')
+  grow : h ≤ h'
+  room : h' ≤ objEnd
+  frame : ∀ a, a % 8 = 0 → (a + 8 ≤ h ∨ h' ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
+    rdW m' a = rdW m a
+  val : InA H m' h' L' v
+  keep : Keep addClob L L'
+
+/-- The heap need of a concatenation. -/
+def catNeed (s : Store) (l r : Value) : Nat :=
+  344 + 8 * ((l.catDisplay s).length + (r.catDisplay s).length)
+
+theorem add_ret {L' : GRegs} {m : Mem} {o : Array String} {rr : BitVec 64}
+    (h26 : Has L' s10 rr) (hal : rr.toNat % 4 = 0) :
+    Reaches code ⟨pcOf (addPos + 21), L', m, o⟩ (fun B => B.pc = rr ∧ B.mem = m ∧ B.out = o ∧
+      B.regs = gset L' ra rr) := by
+  have k26 := has_mem h26 (by decide); have e26 := srcVal_of_has h26
+  simp only [s10] at k26 e26
+  apply run_seg hR.fits hR.add 21 (addPos + 21) rfl [mv ra s10, ret] (by decide)
+    (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [k26, e26]
+  exact ⟨hal, reach_here ⟨rfl, rfl, rfl, rfl⟩⟩
+
+/-- The concatenation path of `+`, from `addPos + 9`. -/
+theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o : Array String}
+    {l r : Value} {t1 p1 t2 p2 rr : BitVec 64} (hops : Operands H m h L l r t1 p1 t2 p2)
+    (h8 : Has L hpO (BitVec.ofNat 64 h)) (h26 : Has L s10 rr) (hal : rr.toNat % 4 = 0)
+    (hh : ObjPtr h) (hfx : FixedOK m) (hfb : fixedAddr 7 + 40 ≤ h) (hc : CloOK H s m h)
+    (hk0 : Keep addClob L0 L) :
+    Reaches code ⟨pcOf (addPos + 9), L, m, o⟩ (fun B => B.out = o ∧
+      ((B.pc = rr ∧ ∃ h', AddRet H m B.mem h h' L0 B.regs (.str (l.catDisplay s ++ r.catDisplay s))) ∨
+        (B.pc = pcOf errPos ∧ objEnd < h + catNeed s l r))) := by
+  have hbb : bufBase = 0x80080000 := rfl
+  have hob : objBase = 0x90000000 := rfl
+  have hoe : objEnd = 0xE0000000 := rfl
+  obtain ⟨h10, h11, h12, h13, vl, vr⟩ := hops
+  have := hh.lo; have := hh.hi; have := hh.al
+  have k12 := has_mem h12 (by decide); have k13 := has_mem h13 (by decide)
+  have e12 := srcVal_of_has h12; have e13 := srcVal_of_has h13
+  simp only [a2, a3] at k12 k13 e12 e13
+  have hxs := catW_of_repr vl hc
+  have hys := catW_of_repr vr hc
+  apply run_seg hR.fits hR.add 9 (addPos + 9) rfl [mv t5 a2, mv t6 a3, Call (addPos + 11) csPos]
+    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k12, k13, e12, e13]
+  -- the left rendering
+  refine ex_bind (run_cs hR (by reg_simp; exact h10) (by reg_simp; exact h11)
+    (Has.set_self _ _ (by decide) (by decide)) (by reg_simp; exact h8)
+    (pcOf_aligned (posOK_lt (by decide))) hh hfx hfb hxs) ?_
+  rintro B ⟨ho1, hB | ⟨hpc, hov⟩⟩
+  rotate_left
+  · exact reach_here ⟨ho1, .inr ⟨hpc, by unfold catNeed; omega⟩⟩
+  obtain ⟨hpc, h1, q1, hret1⟩ := hB
+  obtain ⟨pc, L1, m1, o1⟩ := B
+  simp only at ho1 hpc hret1; subst pc o1
+  obtain ⟨g11, gs1, g8, ⟨gr1, gr1'⟩, groom1, gal1, gfr1, gk1⟩ := hret1
+  have hag1 : ObjAgree m m1 h := fun a ha h1' h2' => gfr1 a ha (.inl h2') (.inr (by omega))
+  have g30 : Has L1 t5 t2 := gk1.has (by decide) (by reg_simp)
+  have g31 : Has L1 t6 p2 := gk1.has (by decide) (by reg_simp)
+  have g26 : Has L1 s10 rr := gk1.has (by decide) (by reg_simp; try exact h26)
+  have k11 := has_mem g11 (by decide); have e11 := srcVal_of_has g11
+  have k30 := has_mem g30 (by decide); have e30 := srcVal_of_has g30
+  have k31 := has_mem g31 (by decide); have e31 := srcVal_of_has g31
+  simp only [a1, t5, t6] at k11 e11 k30 e30 k31 e31
+  apply run_seg hR.fits hR.add 12 (addPos + 12) rfl [mv s2 a1, mv a0 t5, mv a1 t6,
+    Call (addPos + 15) csPos] (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, e11, k30, e30,
+    k31, e31]
+  -- the right rendering
+  refine ex_bind (run_cs hR (by reg_simp) (by reg_simp)
+    (Has.set_self _ _ (by decide) (by decide)) (by reg_simp; exact g8)
+    (pcOf_aligned (posOK_lt (by decide))) ⟨by omega, groom1, gal1⟩ (hfx.mono hag1 hfb) (by omega)
+    (hys.mono hag1 gr1)) ?_
+  rintro B ⟨ho2, hB | ⟨hpc, hov⟩⟩
+  rotate_left
+  · exact reach_here ⟨ho2, .inr ⟨hpc, by unfold catNeed; omega⟩⟩
+  obtain ⟨hpc, h2, q2, hret2⟩ := hB
+  obtain ⟨pc, L2, m2, o2⟩ := B
+  simp only at ho2 hpc hret2; subst pc o2
+  obtain ⟨g11', gs2, g8', ⟨gr2, gr2'⟩, groom2, gal2, gfr2, gk2⟩ := hret2
+  have hag2 : ObjAgree m1 m2 h1 := fun a ha h1' h2' => gfr2 a ha (.inl h2') (.inr (by omega))
+  have g18 : Has L2 s2 (BitVec.ofNat 64 q1) := gk2.has (by decide) (by reg_simp; try exact g11)
+  have g26' : Has L2 s10 rr := gk2.has (by decide) (by reg_simp; try exact g26)
+  have k11' := has_mem g11' (by decide); have e11' := srcVal_of_has g11'
+  have k18 := has_mem g18 (by decide); have e18 := srcVal_of_has g18
+  simp only [a1, s2] at k11' e11' k18 e18
+  apply run_seg hR.fits hR.add 16 (addPos + 16) rfl [mv a3 a1, mv a1 s2, Call (addPos + 18) ccPos]
+    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11', e11', k18, e18]
+  -- the concatenation
+  refine ex_bind (run_cc hR (by reg_simp) (by reg_simp) (Has.set_self _ _ (by decide) (by decide))
+    (by reg_simp; exact g8') (pcOf_aligned (posOK_lt (by decide))) ⟨by omega, groom2, gal2⟩
+    (gs1.mono hag2 gr2) gs2) ?_
+  rintro B ⟨ho3, hB | ⟨hpc, hov⟩⟩
+  rotate_left
+  · refine reach_here ⟨ho3, .inr ⟨hpc, ?_⟩⟩
+    unfold catNeed; simp only [String.length_toList] at hov; omega
+  obtain ⟨hpc, hret3⟩ := hB
+  obtain ⟨pc, L3, m3, o3⟩ := B
+  simp only at ho3 hpc hret3; subst pc o3
+  obtain ⟨g11'', gs3, g8'', groom3, gfr3, gk3⟩ := hret3
+  have g26'' : Has L3 s10 rr := gk3.has (by decide) (by reg_simp; try exact g26')
+  apply run_seg hR.fits hR.add 19 (addPos + 19) rfl [mvi a0 3, J (addPos + 20) (addPos + 21)]
+    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
+  wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+  refine reaches_mono (add_ret hR (by reg_simp; exact g26'') hal) ?_
+  rintro B ⟨hpc, hm, ho, hregs⟩
+  refine ⟨ho, .inl ⟨hpc, h2 + 8 + 8 * ((l.catDisplay s).toList ++ (r.catDisplay s).toList).length, ?_⟩⟩
+  rw [hm, hregs]
+  refine ⟨by reg_simp; exact g8'', by omega, groom3, fun a ha h5 h6 => ?_, ?_, ?_⟩
+  · rw [gfr3 a ha (by omega), gfr2 a ha (by omega) h6, gfr1 a ha (by omega) h6]
+  · refine ⟨3, BitVec.ofNat 64 h2, by reg_simp, by reg_simp; exact g11'', rfl, ?_⟩
+    rw [String.toList_append, toNat_ofNat_lt (show h2 < 2 ^ 64 by omega)]
+    exact ⟨gs3, by omega, by simp only [List.length_append] at groom3 ⊢; omega⟩
+  · reg_simp
+    exact Keep.trans hk0 (Keep.trans (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk1.mono (by decide)))
+      (Keep.trans (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk2.mono (by decide)))
+        (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk3.mono (by decide)))))
+
 end
 
 end Vsa.Compiler

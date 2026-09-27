@@ -81,6 +81,9 @@ theorem natAbs_le (x : BitVec 64) : x.toInt.natAbs ≤ 2 ^ 63 := by
 theorem digits_len (x : BitVec 64) : (digitsLE x.toInt.natAbs).length ≤ 19 :=
   digitsLE_length_le 18 _ (by have := natAbs_le x; simp only [Nat.reducePow, Nat.reduceAdd] at *; omega)
 
+theorem intToString_len_le (x : BitVec 64) : (intToString x.toInt).toList.length ≤ 20 := by
+  have hl := intToString_length x.toInt; have hK := digits_len x; split at hl <;> omega
+
 /-- Registers the digit loop may change. -/
 def itLoopClob : List Nat := [ra, t0, a0, a1, a2, a3, s4, s5, s6]
 
@@ -252,8 +255,8 @@ def ItCopy (L0 : GRegs) (m : Mem) (o : Array String) (d : Nat) (r : BitVec 64) (
     (∀ q, q < i → rdW A.mem (bufBase + 8 * q) = BitVec.ofNat 64 (ds[q]! + 48)) ∧
     rdW A.mem d = BitVec.ofNat 64 (sg + ds.length) ∧
     (∀ q, q < sg + ds.length - i → rdW A.mem (d + 8 + 8 * q) = BitVec.ofNat 64 (itChar sg ds q)) ∧
-    (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 168 ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
-      rdW A.mem a = rdW m a)
+    (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 8 + 8 * (sg + ds.length) ≤ a) →
+      (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) → rdW A.mem a = rdW m a)
 
 /-- The destination of `itos`: writable, aligned, and apart from the digit buffer. -/
 structure ItDest (d : Nat) : Prop where
@@ -269,8 +272,8 @@ theorem it_copy {L0 : GRegs} {m : Mem} {o : Array String} {d : Nat} {r : BitVec 
       Has B.regs a3 (BitVec.ofNat 64 (d + 8 + 8 * (sg + ds.length))) ∧ Keep itClob L0 B.regs ∧
       rdW B.mem d = BitVec.ofNat 64 (sg + ds.length) ∧
       (∀ q, q < sg + ds.length → rdW B.mem (d + 8 + 8 * q) = BitVec.ofNat 64 (itChar sg ds q)) ∧
-      (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 168 ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
-        rdW B.mem a = rdW m a)) := by
+      (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 8 + 8 * (sg + ds.length) ≤ a) →
+        (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) → rdW B.mem a = rdW m a)) := by
   have hb : bufBase = 0x80080000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
   have := hd.lo; have := hd.hi; have := hd.al; have := hd.buf
@@ -337,7 +340,8 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
       StrW B.mem d (intToString x.toInt).toList ∧
       Has B.regs a3 (BitVec.ofNat 64 (d + 8 + 8 * (intToString x.toInt).toList.length)) ∧
       Keep itClob L B.regs ∧
-      (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 168 ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
+      (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 8 + 8 * (intToString x.toInt).toList.length ≤ a) →
+        (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
         rdW B.mem a = rdW m a)) := by
   have hb : bufBase = 0x80080000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
@@ -352,14 +356,16 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
         StrW B.mem d (intToString x.toInt).toList ∧
         Has B.regs a3 (BitVec.ofNat 64 (d + 8 + 8 * (intToString x.toInt).toList.length)) ∧
         Keep itClob L B.regs ∧
-        (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 168 ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
+        (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 8 + 8 * (intToString x.toInt).toList.length ≤ a) →
+        (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
           rdW B.mem a = rdW m a)) := by
     intro sg hsg A hA
     have hsg1 : sg ≤ 1 := by rw [hsg]; split <;> omega
     refine reaches_mono (it_copy hfit hseg hd hsg1 (by omega) hds hal _ _ hA) ?_
     rintro B ⟨hpc, ho, h13, hk, hl, hc, hfr⟩
     rw [← hsg] at hlen
-    refine ⟨hpc, ho, ⟨by omega, by omega, hd.al, by rw [hl, hlen], fun q hq => ?_, ?_⟩, by rw [hlen]; exact h13, hk, hfr⟩
+    refine ⟨hpc, ho, ⟨by omega, by omega, hd.al, by rw [hl, hlen], fun q hq => ?_, ?_⟩, by rw [hlen]; exact h13, hk,
+      fun a ha h1 h2 => hfr a ha (by rw [hlen] at h1; exact h1) h2⟩
     · rw [hc q (by omega), itChar_eq, ← hsg]
     · intro c hc'
       obtain ⟨q, hq, rfl⟩ := List.getElem_of_mem hc'
@@ -380,7 +386,8 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
         StrW B.mem d (intToString x.toInt).toList ∧
         Has B.regs a3 (BitVec.ofNat 64 (d + 8 + 8 * (intToString x.toInt).toList.length)) ∧
         Keep itClob L B.regs ∧
-        (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 168 ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
+        (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 8 + 8 * (intToString x.toInt).toList.length ≤ a) →
+        (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
           rdW B.mem a = rdW m a)) := by
     intro L2 m2 h21 h22 h16 h17 h25 hk hcells hfr
     have k21 := has_mem h21 (by decide); have k16 := has_mem h16 (by decide)

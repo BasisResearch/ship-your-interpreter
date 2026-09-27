@@ -152,7 +152,9 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
     refine reaches_mono (dp_ps hR 47 (by decide) (by decide) (Has.set_self _ _ (by decide) (by decide))
       (hcs ▸ hstr) (g26.set_other (by decide)) hal ((hk2.gset (by decide)))) ?_
     rintro B ⟨h1, h2, h3, h4⟩
-    exact ⟨h1, fun a ha h5 h6 => by rw [h2]; exact hfr a ha h5 h6, h3, h4⟩
+    have hl20 := intToString_len_le p
+    exact ⟨h1, fun a ha h5 h6 => by
+      rw [h2]; exact hfr a ha (by rcases h5 with h5 | h5; exact .inl h5; exact .inr (by omega)) h6, h3, h4⟩
   · next ht2 =>
   have hd' := hd
   unfold DispW at hd'
@@ -278,7 +280,9 @@ structure CsRet (m m' : Mem) (h h' q : Nat) (cs : List Char) (L L' : GRegs) : Pr
   str : StrBelow m' h' q cs
   hp : Has L' hpO (BitVec.ofNat 64 h')
   grow : h ≤ h' ∧ h' ≤ h + 168
-  frame : ∀ a, a % 8 = 0 → (a + 8 ≤ h ∨ h + 168 ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
+  room : h' ≤ objEnd
+  al : h' % 8 = 0
+  frame : ∀ a, a % 8 = 0 → (a + 8 ≤ h ∨ h' ≤ a) → (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
     rdW m' a = rdW m a
   keep : Keep csClob L L'
 
@@ -337,7 +341,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     intro q L' hq h27 h11' h8' hk
     refine reaches_mono (cs_ret hR h27 hal) ?_
     rintro B ⟨h1, h2, h3, h4⟩
-    refine ⟨h3, .inl ⟨h1, h, q, ?_, by rw [h2]; exact hq, ?_, ⟨Nat.le_refl _, by omega⟩,
+    refine ⟨h3, .inl ⟨h1, h, q, ?_, by rw [h2]; exact hq, ?_, ⟨Nat.le_refl _, by omega⟩, hh2, hh3,
       fun a _ _ _ => by rw [h2], ?_⟩⟩
     · rw [h4]; exact h11'.set_other (by decide)
     · rw [h4]; exact h8'.set_other (by decide)
@@ -397,7 +401,8 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
       refine reaches_mono (cs_ret hR (by reg_simp; try exact g27) hal) ?_
       rintro B ⟨h1, h2, h3, h4⟩
       refine ⟨h3, .inl ⟨h1, h + 8 + 8 * cs.length, h, ?_, ⟨by rw [h2]; exact hstr, by omega, by omega⟩, ?_,
-        ⟨by omega, by omega⟩, fun a ha h5 h6 => by rw [h2]; exact hfr a ha h5 h6, ?_⟩⟩
+        ⟨by omega, by omega⟩, by omega, by omega, fun a ha h5 h6 => by
+          rw [h2]; exact hfr a ha (by rw [← hc']; exact h5) h6, ?_⟩⟩
       · rw [h4]; reg_simp
       · rw [h4]; reg_simp
       · rw [h4]; reg_simp
