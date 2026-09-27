@@ -311,3 +311,4 @@ import VsaIris.AbsInt.Machine
 import VsaIris.WhileLogic.Machine
 import VsaIris.WhileLogic.ClosureExample
 import VsaIris.WhileLogic.ForExample
+import VsaIris.Interp.TrichotomyCorollaries

@@ -23,6 +23,11 @@ THEOREMS=(
   Vsa.Sim.EndToEnd.endToEnd_trichotomy_loaded     # the same at a literally `Loaded` configuration
   Vsa.Sim.EndToEnd.EndToEndTrichotomy.fails_iff   # failing machine behaviour ↔ error or divergence
   Vsa.Sim.EndToEnd.exactlyOne                     # exactly one semantic outcome per program
+  Vsa.Sim.EndToEnd.wellTyped_trichotomy          # VsaIris/Interp/TrichotomyCorollaries.lean: types, sharpened
+  Vsa.Sim.EndToEnd.wellTyped_terminating_halt    # a non-diverging well-typed program exits nonzero only on a non-type error
+  Vsa.Sim.EndToEnd.noAlarm_machine               # absint: without alarms the binary fails only for diverging programs
+  Vsa.Sim.EndToEnd.noAlarm_terminating           # absint: an alarm-free terminating program exits 0
+  Vsa.Sim.EndToEnd.adequacy_exact                # logic: every halt is exit 0 with the postcondition; no error, no divergence
   VsaIris.Interp.partialSim_iris                  # partial correctness: exit 0 with a BigStep output, or 70/1, or diverge
   VsaIris.Interp.stuck_codes_of                   # stuck_sim with the exit code pinned to 70 or 1
   Vsa.While.bigStep_not_err                       # Vsa/While/Exclusive.lean: termination excludes error
@@ -91,6 +96,7 @@ mv "${AXFILE%.lean}" "$AXFILE"
 {
   echo "import VsaIris.Interp.EndToEnd"
   echo "import VsaIris.Interp.EndToEndTrichotomy"
+  echo "import VsaIris.Interp.TrichotomyCorollaries"
   echo "import VsaIris.Interp.WorldVacuity"
   echo "import Vsa.Sim.NativeNameAudit.ControlLoaded"
   echo "import Vsa.Sim.StackAdmissibleWitness"
