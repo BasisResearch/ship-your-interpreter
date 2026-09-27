@@ -59,6 +59,11 @@ end
 /-- Conditions and expression statements: integer or boolean. -/
 def CondE (Γ : NScope) (e : Expr) : Prop := IntE Γ e ∨ BoolE Γ e
 
+/-- Declaring `x` in the innermost frame. -/
+def NScope.declare : NScope → String → NScope
+  | f :: g, x => (if x ∈ f then f else x :: f) :: g
+  | [], x => [[x]]
+
 mutual
 
 /-- A supported statement in statement position (not a declaration). `loop`
@@ -80,7 +85,7 @@ def SupSeq (Γ : NScope) (loop : Bool) : List Stmt → Prop
   | [] => True
   | .varDecl x (some e) :: ss =>
     ¬ IsNative x ∧ IntE Γ e ∧
-      SupSeq (match Γ with | f :: g => (x :: f) :: g | [] => [[x]]) loop ss
+      SupSeq (NScope.declare Γ x) loop ss
   | s :: ss => SupS Γ loop s ∧ SupSeq Γ loop ss
 
 /-- Integer call arguments. -/
