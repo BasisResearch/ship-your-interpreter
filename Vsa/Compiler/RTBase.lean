@@ -106,6 +106,44 @@ theorem reaches_mono {code : List Ins} {A : AM} {P Q : AM → Prop} (h : Reaches
     (hPQ : ∀ B, P B → Q B) : Reaches code A Q := by
   obtain ⟨B, s, hp⟩ := h; exact ⟨B, s, hPQ B hp⟩
 
+/-- An explicit piece of a routine's code. -/
+theorem seg_at {code : List Ins} {b : Nat} {c : List Ins} (h : Seg code b c) (k : Nat) (l : List Ins)
+    (he : (c.drop k).take l.length = l) : Seg code (b + k) l := by
+  intro j hj
+  have := (h.drop k) j (by
+    have := congrArg List.length he
+    simp only [List.length_take] at this
+    omega)
+  rw [this, ← he]
+  simp [List.getElem?_take, hj]
+
+/-- Run an explicit piece of a routine's code, then continue with `K`. -/
+theorem run_seg {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat} {c : List Ins}
+    (h : Seg code b c) (k j : Nat) (hj : b + k = j) (l : List Ins)
+    (he : (c.drop k).take l.length = l)
+    {KP : GRegs → Mem → Array String → Prop}
+    (hK : ∀ L m o, KP L m o → Reaches code ⟨pcOf (j + l.length), L, m, o⟩ P)
+    {L : GRegs} {m : Mem} {o : Array String}
+    (hw : WP code P j l KP L m o) : Reaches code ⟨pcOf j, L, m, o⟩ P := by
+  subst hj
+  exact WP_sound hfit _ _ _ L m o (seg_at h k l he) hK hw
+
+theorem posOK_lt {k : Nat} (h : k < 20000) : PosOK k := by
+  have ht : tohostAddr = 0x8001ad00 := rfl
+  have hb : codeBase = 0x80004800 := rfl
+  unfold PosOK; omega
+
+/-- A jump `J k t` at `k`. -/
+theorem run_J {code : List Ins} (hfit : Fits code) {k t : Nat} (hk : code[k]? = some (J k t))
+    (hs : PosOK k) (ht : PosOK t) {L : GRegs} {m : Mem} {o : Array String} {Q : AM → Prop}
+    (h : Reaches code ⟨pcOf t, L, m, o⟩ Q) : Reaches code ⟨pcOf k, L, m, o⟩ Q := by
+  obtain ⟨hj, hok⟩ := jOff_ok hs ht
+  have htgt := jT_pc hfit (lt_of_seg_head hk) hok
+  rw [hj] at htgt
+  have e := step_j hfit hk (A := ⟨pcOf k, L, m, o⟩) rfl (by rw [htgt]; exact pcOf_aligned ht)
+  rw [htgt] at e
+  exact ex_step e h
+
 /-- The console text of an output array. -/
 def ostr (o : Array String) : String := String.join o.toList
 
@@ -402,7 +440,7 @@ macro_rules
         sext_zero12, zero_add64, zero_add64', add_zero64, natCast_lit, BitVec.toInt_zero, toNat_ofNat6, Nat.reduceMod, BitVec.reduceToNat,
         List.take_append, List.take_of_length_le, WP_libc_iff, libc_length, libRes_mulE, libRes_divE, libRes_modE,
         keysG_lib', keysG_lib10, srcVal_lib, srcVal_lib10, sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
-        WP_li_iff, li_length_small, li_length_big, List.append_assoc, Nat.add_sub_cancel,
+        WP_li_iff, li_length_small, li_length_big, isLib_of_JOK, Bool.false_eq_true, if_false, List.append_assoc, Nat.add_sub_cancel,
         tohostW_toNat, putcWord_low,
         Br, J, Call, mvi, addi, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
         t6, s2, s3, s4, s5, s6, s9, s10, s11, ra, spR, hpO, envR, hpF, depR, $xs,*])

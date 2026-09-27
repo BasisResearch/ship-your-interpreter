@@ -531,6 +531,18 @@ theorem WP_libc_iff {code : List Ins} {P : AM → Prop} {pos tgt : Nat} {is : Li
     show (13 : Nat) ≤ 31 by decide, show (1 : Nat) ≤ 12 by decide, show (1 : Nat) ≤ 13 by decide]
   simp
 
+theorem isLib_of_JOK {pos : Nat} {off : BitVec 21} (h : JOK pos off) : isLib pos off = false := by
+  obtain ⟨h4, h0, hp⟩ := h
+  have ht : tohostAddr = 0x8001ad00 := rfl
+  have hb : codeBase = 0x80004800 := rfl
+  have hm : mulPC = 0x80004640 := rfl
+  have hd : divPC = 0x800046a4 := rfl
+  have hmo : modPC = 0x80004728 := rfl
+  unfold PosOK at hp
+  simp only [isLib, libAddr, Bool.and_eq_false_iff, beq_eq_false_iff_ne, Bool.or_eq_false_iff, ne_eq]
+  right
+  refine ⟨⟨?_, ?_⟩, ?_⟩ <;> omega
+
 /-! ## Branch offsets -/
 
 /-- Byte offset of a branch from instruction `src` to instruction `dst`. -/
