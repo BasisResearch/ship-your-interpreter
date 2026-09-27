@@ -357,4 +357,160 @@ theorem setPost_of_slot {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : N
     unfold frSize at h2
     rw [rdW_two (by omega) hb, if_neg (by omega), if_neg (by omega)]
 
+/-! ## Growth -/
+
+/-- `F'`/`s'` extend `F`/`s`: every frame and its object stay. -/
+structure Grows (F : FrMap) (s : Store) (F' : FrMap) (s' : Store) : Prop where
+  frames : ∀ (b : Nat) (fr : Frame), s.frames[b]? = some fr → s'.frames[b]? = some fr
+  objs : ∀ (b : Nat) (q : Nat × List String), F[b]? = some q → F'[b]? = some q
+
+theorem Grows.refl (F : FrMap) (s : Store) : Grows F s F s := ⟨fun _ _ h => h, fun _ _ h => h⟩
+
+theorem Grows.trans {F F' F'' : FrMap} {s s' s'' : Store} (h1 : Grows F s F' s') (h2 : Grows F' s' F'' s'') :
+    Grows F s F'' s'' := ⟨fun b fr h => h2.frames b fr (h1.frames b fr h), fun b q h => h2.objs b q (h1.objs b q h)⟩
+
+theorem ChainL.grow {F F' : FrMap} {s s' : Store} (hg : Grows F s F' s') :
+    ∀ {a : Addr} {Γ : List (List String)}, ChainL F s a Γ → ChainL F' s' a Γ
+  | _, _, .top hfr hpar hF => .top (hg.frames _ _ hfr) hpar (hg.objs _ _ hF)
+  | _, _, .cons hfr hpar hF hc => .cons (hg.frames _ _ hfr) hpar (hg.objs _ _ hF) (ChainL.grow hg hc)
+
+theorem getElem?_push_lt {α : Type} {xs : Array α} {x : α} {b : Nat} (h : b < xs.size) :
+    (xs.push x)[b]? = xs[b]? := by
+  rw [Array.getElem?_push]; simp [Nat.ne_of_lt h]
+
+theorem getElem?_append_lt {α : Type} {xs : List α} {x : α} {b : Nat} (h : b < xs.length) :
+    (xs ++ [x])[b]? = xs[b]? := List.getElem?_append_left h
+
+/-- The machine address of a frame's parent, given the parent's address. -/
+def parOf (F : FrMap) : Option Addr → Nat
+  | some b => (F[b]?.map Prod.fst).getD 0
+  | none => 0
+
+theorem parAddr_eq_parOf (F : FrMap) (fr : Frame) : parAddr F fr = parOf F fr.parent := by
+  unfold parAddr parOf; cases fr.parent <;> rfl
+
+/-- **Frame allocation.** A fresh frame of unbound slots with layout `L` at `hF`,
+whose first word is its parent's address, matches `Store.allocFrame`. -/
+theorem StoreRel.alloc_frame {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat}
+    (hs : StoreRel F H s m hF h) {L : List String} {par : Option Addr}
+    (hpar : ∀ b, par = some b → b < s.frames.size) (hal : hF % 8 = 0) (hfb : frameBase ≤ hF)
+    (hroom : hF + 8 + 16 * L.length ≤ frameEnd) (hnd : L.Nodup) (hl : L.length ≤ 120) :
+    StoreRel (F ++ [(hF, L)]) H (s.allocFrame par).1
+      (tagsW (applyW m (hF, 8, BitVec.ofNat 64 (parOf F par))) (hF + 8) L.length) (hF + 8 + 16 * L.length) h ∧
+    Grows F s (F ++ [(hF, L)]) (s.allocFrame par).1 ∧ (s.allocFrame par).2 = s.frames.size ∧
+    (F ++ [(hF, L)])[s.frames.size]? = some (hF, L) ∧ OutFrames m
+      (tagsW (applyW m (hF, 8, BitVec.ofNat 64 (parOf F par))) (hF + 8) L.length) (hF + 8 + 16 * L.length) ∧
+    Agree m (tagsW (applyW m (hF, 8, BitVec.ofNat 64 (parOf F par))) (hF + 8) L.length) 0 hF := by
+  have hb : frameBase = 0x80100000 := rfl
+  have he : frameEnd = 0x90000000 := rfl
+  have hob : objBase = 0x90000000 := rfl
+  have htop := hs.top
+  have hlen := hs.len
+  have hrd : ∀ b, b % 8 = 0 → rdW (tagsW (applyW m (hF, 8, BitVec.ofNat 64 (parOf F par))) (hF + 8) L.length) b =
+      if hF + 8 ≤ b ∧ b < hF + 8 + 16 * L.length ∧ (b - (hF + 8)) % 16 = 0 then 6#64
+      else if b = hF then BitVec.ofNat 64 (parOf F par) else rdW m b := by
+    intro b hb8
+    rw [rdW_tagsW _ _ (by omega) _ _ hb8, rdW_upd hal hb8]
+  have hlow : Agree m (tagsW (applyW m (hF, 8, BitVec.ofNat 64 (parOf F par))) (hF + 8) L.length) 0 hF :=
+    fun b _ h2 h3 => by rw [hrd b h3, if_neg (by omega), if_neg (by omega)]
+  have hobj : ObjAgree m (tagsW (applyW m (hF, 8, BitVec.ofNat 64 (parOf F par))) (hF + 8) L.length) h :=
+    fun b h3 h1 h2 => by rw [hrd b h3, if_neg (by omega), if_neg (by omega)]
+  have hFlt : ∀ b q, F[b]? = some q → b < F.length := fun b q h => (List.getElem?_eq_some_iff.mp h).1
+  have hsz : (s.allocFrame par).1.frames.size = s.frames.size + 1 := by simp [Store.allocFrame]
+  have hget : ∀ b, (s.allocFrame par).1.frames[b]? =
+      if b = s.frames.size then some ⟨par, []⟩ else if b < s.frames.size then s.frames[b]? else none := by
+    intro b
+    simp only [Store.allocFrame, Array.getElem?_push]
+    split
+    · next e => subst e; simp
+    · next e =>
+      split
+      · rfl
+      · next e' => exact Array.getElem?_eq_none (by omega)
+  have hFget : ∀ b, (F ++ [(hF, L)])[b]? =
+      if b = F.length then some (hF, L) else if b < F.length then F[b]? else none := by
+    intro b
+    split
+    · next e => subst e; simp
+    · next e =>
+      split
+      · next e' => exact getElem?_append_lt e'
+      · next e' => exact List.getElem?_eq_none (by simp; omega)
+  have hparOf : ∀ q : Option Addr, (∀ b, q = some b → b < F.length) → parOf (F ++ [(hF, L)]) q = parOf F q := by
+    intro q hq
+    cases q with
+    | none => rfl
+    | some b => simp only [parOf, getElem?_append_lt (hq b rfl)]
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, hs.inj, by omega⟩,
+    ⟨fun b fr hfr => ?_, fun b q hq => (getElem?_append_lt (hFlt b q hq)).trans hq⟩, rfl, ?_, ?_, ?_⟩
+  · simp [hsz, hlen]
+  · intro a fr f L' hfr hF'
+    rw [hget] at hfr; rw [hFget] at hF'
+    rw [parAddr_eq_parOf]
+    by_cases ha : a = s.frames.size
+    · subst ha
+      rw [if_pos rfl] at hfr; rw [if_pos hlen.symm] at hF'
+      cases hfr; cases hF'
+      rw [hparOf _ (fun b hb => by rw [hlen]; exact hpar b hb)]
+      refine ⟨by rw [hrd hF hal, if_neg (by omega), if_pos rfl], ?_, ?_, ?_⟩
+      · intro i x v _ hx; simp [lookupVar] at hx
+      · intro i x hi _
+        have := (List.getElem?_eq_some_iff.mp hi).1
+        rw [hrd _ (by omega), if_pos ⟨by omega, by omega, by omega⟩]; rfl
+      · intro x hx; simp [lookupVar] at hx
+    · rw [if_neg ha] at hfr; rw [if_neg (by omega)] at hF'
+      split at hfr
+      · next hlt =>
+        rw [if_pos (by omega)] at hF'
+        obtain ⟨h1, h2, h3, -⟩ := hs.region a f L' hF'
+        have hfa := hs.frame a fr f L' hfr hF'
+        rw [parAddr_eq_parOf] at hfa
+        rw [hparOf _ (fun b hb => Nat.lt_trans (hs.parents a fr b hfr hb) (by rw [hlen]; exact hlt))]
+        exact hfa.transport (hlow.mono (by omega) h2) h3 hobj (Nat.le_refl _)
+      · cases hfr
+  · intro a f L' hF'
+    rw [hFget] at hF'
+    split at hF'
+    · cases hF'; unfold frSize; exact ⟨hfb, by omega, hal, hl⟩
+    · split at hF'
+      · obtain ⟨h1, h2, h3, h4⟩ := hs.region a f L' hF'; exact ⟨h1, by omega, h3, h4⟩
+      · cases hF'
+  · intro a f L' hF'
+    rw [hFget] at hF'
+    split at hF'
+    · cases hF'; exact hnd
+    · split at hF'
+      · exact hs.nodup a f L' hF'
+      · cases hF'
+  · intro a b fa fb La Lb hab ha hb'
+    rw [hFget] at ha hb'
+    split at ha
+    · split at hb'
+      · omega
+      · split at hb'
+        · omega
+        · cases hb'
+    · split at ha
+      · split at hb'
+        · cases hb'; obtain ⟨-, h2, -, -⟩ := hs.region a fa La ha; exact h2
+        · split at hb'
+          · exact hs.disjoint a b fa fb La Lb hab ha hb'
+          · cases hb'
+      · cases ha
+  · intro a fr b hfr hb'
+    rw [hget] at hfr
+    split at hfr
+    · next e => cases hfr; have := hpar b hb'; rw [e]; exact this
+    · split at hfr
+      · have := hs.parents a fr b hfr hb'; omega
+      · cases hfr
+  · exact (let hc := hs.clo.transport hobj (Nat.le_refl _); ⟨by simp [Store.allocFrame, hc.len], hc.obj⟩)
+  · rw [hget]
+    have hb := (Array.getElem?_eq_some_iff.mp hfr).1
+    rw [if_neg (by omega), if_pos hb]; exact hfr
+  · rw [hFget, if_pos hlen.symm]
+  · intro b hb8 hout
+    rw [hrd b hb8, if_neg (by omega), if_neg (by omega)]
+  · exact hlow
+
 end Vsa.Compiler
