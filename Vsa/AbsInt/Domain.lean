@@ -38,6 +38,33 @@ inductive Kind where
   | abrupt
   deriving DecidableEq, Repr
 
+/-- Union of alarm lists without duplicates. -/
+def Kind.union (l m : List Kind) : List Kind :=
+  l.foldr (fun k acc => if k ∈ acc then acc else k :: acc) m
+
+instance : Union (List Kind) := ⟨Kind.union⟩
+
+theorem Kind.mem_union {k : Kind} {l m : List Kind} : k ∈ l ∪ m ↔ k ∈ l ∨ k ∈ m := by
+  show k ∈ Kind.union l m ↔ _
+  induction l with
+  | nil => simp [Kind.union]
+  | cons j l ih =>
+    simp only [Kind.union, List.foldr_cons] at ih ⊢
+    split
+    · rename_i h
+      rw [ih]
+      constructor
+      · rintro (h' | h')
+        · exact Or.inl (List.mem_cons_of_mem j h')
+        · exact Or.inr h'
+      · rintro (h' | h')
+        · rcases List.mem_cons.mp h' with rfl | h'
+          · exact ih.mp h
+          · exact Or.inl h'
+        · exact Or.inr h'
+    · rw [List.mem_cons, ih, List.mem_cons]
+      exact or_assoc.symm
+
 /-- All kinds except `abrupt` (what an unanalysed closure body may raise). -/
 def Kind.inCall : List Kind := [.unbound, .type, .divZero, .call, .assert]
 
@@ -71,6 +98,8 @@ class AbsDom (A : Type) where
   asNative : A → Option NativeFn
   /-- Refine the left operand `a` knowing `(l op r).truthy = t` for `r ∈ b`. -/
   refine : BinOp → Bool → A → A → A
+  /-- `true` only for an empty abstract value. -/
+  isBot : A → Bool
   le_sound : ∀ {a b v}, le a b = true → Gam a v → Gam b v
   join_l : ∀ {a b v}, Gam a v → Gam (join a b) v
   join_r : ∀ {a b v}, Gam b v → Gam (join a b) v
@@ -90,6 +119,7 @@ class AbsDom (A : Type) where
   asNative_sound : ∀ {a v f}, Gam a v → asNative a = some f → v = .native f
   refine_sound : ∀ {s op t l r w a b}, Gam a l → Gam b r →
     binOpSem s op l r = some w → w.truthy = t → Gam (refine op t a b) l
+  isBot_sound : ∀ {a v}, isBot a = true → ¬ Gam a v
 
 namespace AbsDom
 
