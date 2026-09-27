@@ -104,5 +104,6 @@ structure StoreRel (F : FrMap) (H : CloMap) (s : Store) (m : Mem) (hF h : Nat) :
   clo : CloOK H s m h
   inj : CloInj H
   top : hF ≤ frameEnd
+  lo : frameBase ≤ hF
 
 end Vsa.Compiler

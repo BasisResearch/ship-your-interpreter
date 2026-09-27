@@ -66,7 +66,7 @@ structure StackOK (d sp fs : Nat) : Prop where
   room : stackLo + (maxCallDepth - d) * maxFS ≤ sp
   top : sp + fs ≤ stackHi
   al : sp % 16 = 0
-  fsz : fs ≤ maxFS
+  fsz : fs ≤ 1936
 
 /-- **The simulation invariant.** -/
 structure MS (code : List Ins) (T : List String) (V : View) (st : St) (d : Nat) (env : Addr)

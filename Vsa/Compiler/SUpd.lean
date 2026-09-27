@@ -94,6 +94,7 @@ theorem StoreRel.transport {F : FrMap} {H : CloMap} {s : Store} {m m' : Mem} {hF
   clo := hs.clo.transport ho hh
   inj := hs.inj
   top := hs.top
+  lo := hs.lo
 
 /-! ## Frame updates -/
 
@@ -216,7 +217,7 @@ theorem StoreRel.write_slot {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h
     · exact ⟨frb, hfb, rfl⟩
   refine ⟨by simp [hs.len], ?_, hs.region, hs.nodup, hs.disjoint, ?_,
     (let hc := hs.clo.transport hobj (Nat.le_refl _); ⟨hc.len, hc.obj⟩),
-    hs.inj, hs.top⟩
+    hs.inj, hs.top, hs.lo⟩
   · intro b frb fb Lb hfb hFb
     simp only [Array.getElem?_modify] at hfb
     split at hfb
@@ -452,7 +453,7 @@ theorem StoreRel.alloc_frame {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF 
     cases q with
     | none => rfl
     | some b => simp only [parOf, getElem?_append_lt (hq b rfl)]
-  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, hs.inj, by omega⟩,
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, hs.inj, by omega, by have := hs.lo; omega⟩,
     ⟨fun b fr hfr => ?_, fun b q hq => (getElem?_append_lt (hFlt b q hq)).trans hq⟩, rfl, ?_, ?_, ?_⟩
   · simp [hsz, hlen]
   · intro a fr f L' hfr hF'

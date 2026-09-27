@@ -37,7 +37,7 @@ theorem StoreRel.alloc_clo {F : FrMap} {H : CloMap} {s : Store} {m m' : Mem} {hF
   have hlen := hs.clo.len
   have hH : H <+: H ++ [h] := List.prefix_append _ _
   refine ⟨hs.len, fun a fr f L hfr' hF' => ?_, hs.region, hs.nodup, hs.disjoint, hs.parents, ⟨?_, ?_⟩, ?_,
-    hs.top⟩
+    hs.top, hs.lo⟩
   · obtain ⟨h1, h2, h3, -⟩ := hs.region a f L hF'
     exact (hs.frame a fr f L hfr' hF').grow hH (hfr.mono h1 h2) h3 hag (by omega)
   · simp [Store.allocClosure, hlen]
