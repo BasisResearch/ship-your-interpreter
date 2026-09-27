@@ -373,6 +373,100 @@ theorem run_sc (hseg : Seg code scPos (scCode scPos)) {L : GRegs} {m : Mem} {o :
   · exact hr
   · exact Keep.refl _ _
 
+/-! ## `newframe` -/
+
+/-- Registers `newframe` may change. -/
+def nfClob : List Nat := [t0, t1, t2, t3, t4, a4, hpF]
+
+/-- The `newframe` loop head with `j` slots left. -/
+def NfInv (L0 : GRegs) (m : Mem) (o : Array String) (f par n : Nat) (r : BitVec 64)
+    (j : Nat) (A : AM) : Prop :=
+  A.pc = pcOf (nfPos + 20) ∧ A.mem = tagsW (applyW m (f, 8, BitVec.ofNat 64 par)) (f + 8) (n - j) ∧
+    A.out = o ∧ j ≤ n ∧
+    Has A.regs t4 (BitVec.ofNat 64 j) ∧ Has A.regs t2 (BitVec.ofNat 64 (f + 8 + 16 * (n - j))) ∧
+    Has A.regs t3 6#64 ∧ Has A.regs t0 (BitVec.ofNat 64 (f + 8 + 16 * n)) ∧
+    Has A.regs a4 (BitVec.ofNat 64 f) ∧ Has A.regs ra r ∧ Keep nfClob L0 A.regs ∧
+    f + 8 + 16 * n ≤ frameEnd
+
+/-- The frame region has room for a frame of `n` slots at `f`. -/
+structure FrameRoom (f n : Nat) : Prop where
+  lo : frameBase ≤ f
+  al : f % 8 = 0
+  hi : f + 8 + 16 * n ≤ frameEnd
+
+theorem run_nf (hseg : Seg code nfPos (nfCode nfPos)) {L : GRegs} {m : Mem} {o : Array String}
+    {f par n : Nat} {r : BitVec 64}
+    (h15 : Has L a5 (BitVec.ofNat 64 n)) (h16 : Has L a6 (BitVec.ofNat 64 par))
+    (h23 : Has L hpF (BitVec.ofNat 64 f)) (hr : Has L ra r) (hal : r.toNat % 4 = 0)
+    (hf : frameBase ≤ f ∧ f % 8 = 0 ∧ f ≤ frameEnd) (hn : n ≤ 1000) :
+    Reaches code ⟨pcOf nfPos, L, m, o⟩ (fun B =>
+      (B.pc = r ∧ f + 8 + 16 * n ≤ frameEnd ∧
+        B.mem = tagsW (applyW m (f, 8, BitVec.ofNat 64 par)) (f + 8) n ∧ B.out = o ∧
+        Has B.regs a4 (BitVec.ofNat 64 f) ∧ Has B.regs hpF (BitVec.ofNat 64 (f + 8 + 16 * n)) ∧
+        Keep nfClob L B.regs) ∨
+      (B.pc = pcOf errPos ∧ frameEnd < f + 8 + 16 * n)) := by
+  have ht : tohostAddr = 0x8001ad00 := rfl
+  have hfb : frameBase = 0x80100000 := rfl
+  have hfe : frameEnd = 0x90000000 := rfl
+  obtain ⟨hf1, hf2, hf3⟩ := hf
+  have hloop := loop_run (code := code) (I := NfInv L m o f par n r)
+    (Q := fun B => (B.pc = r ∧ f + 8 + 16 * n ≤ frameEnd ∧
+        B.mem = tagsW (applyW m (f, 8, BitVec.ofNat 64 par)) (f + 8) n ∧ B.out = o ∧
+        Has B.regs a4 (BitVec.ofNat 64 f) ∧ Has B.regs hpF (BitVec.ofNat 64 (f + 8 + 16 * n)) ∧
+        Keep nfClob L B.regs) ∨ (B.pc = pcOf errPos ∧ frameEnd < f + 8 + 16 * n))
+    (fun j A hA => ?_) (fun A hA => ?_)
+  rotate_left
+  · obtain ⟨hpc, hm, ho, hj, h29, h7, h28, h5, h14, h1, hk, hroom⟩ := hA
+    obtain ⟨pc, L', m', o'⟩ := A
+    simp only at hpc hm ho h29 h7 h28 h5 h14 h1 hk; subst hpc hm ho
+    have k29 := has_mem h29 (by decide); have k7 := has_mem h7 (by decide)
+    have k28 := has_mem h28 (by decide)
+    have e29 := srcVal_of_has h29; have e7 := srcVal_of_has h7; have e28 := srcVal_of_has h28
+    simp only [t2, t3, t4] at k29 k7 k28 e29 e7 e28
+    have hj0 : BitVec.ofNat 64 (j + 1) ≠ 0 := ofNat_ne_zero (by omega) (by omega)
+    have han : (BitVec.ofNat 64 (f + 8 + 16 * (n - (j + 1)))).toNat = f + 8 + 16 * (n - (j + 1)) :=
+      toNat_ofNat_lt (by omega)
+    apply run_at' hfit hseg 20 (nfPos + 20) rfl
+    wp_simp [nfCode, nfPos, trPos, scPos, cpPos, itPos, psPos, k29, k7, k28, e29, e7, e28, hj0, han]
+    rw [if_neg (by omega)]
+    have e : n - j = n - (j + 1) + 1 := by omega
+    refine ⟨⟨by omega, by omega, by omega, by omega⟩, reach_here ⟨rfl, by rw [e]; rfl, rfl, by omega,
+      ?_, ?_, ?_, ?_, ?_, ?_, ?_, hroom⟩⟩
+    all_goals reg_simp
+    all_goals first | exact h1 | exact hk | exact h28 | exact h5 | exact h14 | bv_eq
+  · obtain ⟨hpc, hm, ho, hj, h29, h7, h28, h5, h14, h1, hk, hroom⟩ := hA
+    obtain ⟨pc, L', m', o'⟩ := A
+    simp only at hpc hm ho h29 h7 h28 h5 h14 h1 hk; subst hpc hm ho
+    have k29 := has_mem h29 (by decide); have k5 := has_mem h5 (by decide)
+    have k1 := has_mem h1 (by decide)
+    have e29 := srcVal_of_has h29; have e5 := srcVal_of_has h5; have e1 := srcVal_of_has h1
+    simp only [t0, t4, ra] at k29 k5 k1 e29 e5 e1
+    apply run_at' hfit hseg 20 (nfPos + 20) rfl
+    wp_simp [nfCode, nfPos, trPos, scPos, cpPos, itPos, psPos, k29, e29]
+    apply run_at' hfit hseg 25 (nfPos + 25) rfl
+    wp_simp [nfCode, nfPos, trPos, scPos, cpPos, itPos, psPos, k5, e5, k1, e1]
+    refine ⟨hal, reach_here (.inl ⟨rfl, by omega, by simp, rfl, ?_, ?_, ?_⟩)⟩
+    all_goals reg_simp
+    all_goals first | exact h14 | exact hk | bv_eq
+  -- entry
+  have k15 := has_mem h15 (by decide); have k16 := has_mem h16 (by decide)
+  have k23 := has_mem h23 (by decide)
+  have e15 := srcVal_of_has h15; have e16 := srcVal_of_has h16; have e23 := srcVal_of_has h23
+  simp only [a5, a6, hpF] at k15 k16 k23 e15 e16 e23
+  have hfn : (BitVec.ofNat 64 f).toNat = f := toNat_ofNat_lt (by omega)
+  apply run_block hfit hseg 0 20 nfPos rfl
+    (KP := fun L' m' o' => NfInv L m o f par n r n ⟨pcOf (nfPos + 20), L', m', o'⟩)
+    (fun L' m' o' h => hloop _ _ h) (by len_ok [nfCode])
+  wp_simp [nfCode, nfPos, trPos, scPos, cpPos, itPos, psPos, k15, k16, k23, e15, e16, e23, hfn]
+  split
+  · next hc => exact reach_here (.inr ⟨rfl, by omega⟩)
+  · next hc =>
+    rw [if_neg (by omega)]
+    refine ⟨⟨by omega, by omega, by omega, by omega⟩, rfl, by simp [tagsW], rfl, Nat.le_refl _,
+      ?_, ?_, ?_, ?_, ?_, ?_, ?_, by omega⟩
+    all_goals reg_simp [Nat.sub_self, Nat.mul_zero, Nat.add_zero]
+    all_goals first | exact hr | exact Keep.refl _ _ | bv_eq
+
 end
 
 end Vsa.Compiler

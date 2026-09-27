@@ -42,8 +42,17 @@ theorem zero_add64 (x : BitVec 64) : 0#64 + x = x := by simp
 
 theorem zero_add64' (x : BitVec 64) : (0 : BitVec 64) + x = x := by simp
 
+theorem toNat_ofNat6 (k : Nat) : (BitVec.ofNat 6 k).toNat = k % 64 := by simp
+
+theorem add_zero64 (x : BitVec 64) : x + (0 : BitVec 64) = x := by simp
+
 theorem ofNat_add_lit (a k : Nat) (hk : k < 2 ^ 63) :
     BitVec.ofNat 64 a + BitVec.ofNat 64 k = BitVec.ofNat 64 (a + k) := BitVec.ofNat_add_ofNat ..
+
+theorem shl_ofNat (n k : Nat) : (BitVec.ofNat 64 n) <<< k = BitVec.ofNat 64 (n * 2 ^ k) := by
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.shiftLeft_eq]
+  rw [Nat.mod_mul_mod]
 
 theorem ofNat_add_neg (a k : Nat) (hk : 2 ^ 63 ≤ k ∧ k < 2 ^ 64) (ha : 2 ^ 64 - k ≤ a) :
     BitVec.ofNat 64 a + BitVec.ofNat 64 k = BitVec.ofNat 64 (a - (2 ^ 64 - k)) := by
@@ -241,6 +250,25 @@ theorem cmpL_drop : ∀ (i : Nat) (xs ys : List Char), xs.take i = ys.take i →
   | i + 1, [], _, _, h1, _ => by simp at h1
   | i + 1, _ :: _, [], _, _, h2 => by simp at h2
 
+/-- Memory after writing tag `6` into the first `k` slots of a frame whose slots start at `a`. -/
+def tagsW (m : Mem) (a : Nat) : Nat → Mem
+  | 0 => m
+  | k + 1 => applyW (tagsW m a k) (a + 16 * k, 8, 6#64)
+
+theorem rdW_tagsW (m : Mem) (a : Nat) (ha : a % 8 = 0) : ∀ (k b : Nat), b % 8 = 0 →
+    rdW (tagsW m a k) b =
+      if a ≤ b ∧ b < a + 16 * k ∧ (b - a) % 16 = 0 then 6#64 else rdW m b
+  | 0, b, _ => by rw [if_neg (by omega)]; rfl
+  | k + 1, b, hb => by
+    simp only [tagsW]
+    rw [rdW_upd (by omega) hb, rdW_tagsW m a ha k b hb]
+    by_cases h1 : b = a + 16 * k
+    · subst h1; rw [if_pos rfl, if_pos (by omega)]
+    · rw [if_neg h1]
+      by_cases h2 : a ≤ b ∧ b < a + 16 * k ∧ (b - a) % 16 = 0
+      · rw [if_pos h2, if_pos (by omega)]
+      · rw [if_neg h2, if_neg (by omega)]
+
 /-! ## String objects -/
 
 /-- The string object at `p` holds the characters `cs`. -/
@@ -287,13 +315,15 @@ macro_rules
   | `(tactic| wp_simp) => `(tactic| wp_simp [])
   | `(tactic| wp_simp [$xs,*]) => `(tactic|
       simp (disch := first | decide | omega) only [WP, List.drop, List.take, List.drop_zero, List.drop_append,
-        List.drop_eq_nil_of_le, List.length_append, List.length_cons, List.length_nil, putcR, List.cons_append, List.nil_append,
+        List.drop_eq_nil_of_le, List.length_append, List.length_cons, List.length_nil, putcR, liN,
+        List.cons_append, List.nil_append,
         srcVal_gset, keysG_gset, srcVal_zero, sext_ofInt12, brT_bOff_of, BrOK_bOff_of, jT_jOff_of,
         JOK_jOff_of, guard_eq, guard_ne, guard_lt, guard_ge, SrcOK, reduceIte, Nat.reduceEqDiff,
         Nat.reduceAdd, Nat.reduceSub, Nat.reduceLeDiff, Nat.reduceMul, Nat.reducePow,
-        ofNat_add_lit, ofNat_add_neg, true_and, and_true,
+        ofNat_add_lit, ofNat_add_neg, shl_ofNat, true_and, and_true,
         true_or, or_true, false_or, or_false, decide_eq_true_eq, BitVec.zero_add, BitVec.add_zero,
-        sext_zero12, zero_add64, zero_add64', sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
+        sext_zero12, zero_add64, zero_add64', add_zero64, toNat_ofNat6, Nat.reduceMod, BitVec.reduceToNat,
+        List.take_append, List.take_of_length_le, sext_lo, sext_hi, BitVec.reduceOfInt, BitVec.reduceAdd, toInt_ofNat_small, toInt_ofNat_big,
         WP_li_iff, li_length_small, li_length_big, List.append_assoc, Nat.add_sub_cancel,
         tohostW_toNat, putcWord_low,
         Br, J, Call, mvi, addi, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
@@ -314,5 +344,9 @@ macro "bv_eq" : tactic => `(tactic| first
   | (apply congrArg (BitVec.ofNat 64); omega)
   | (rw [ofNat_add_lit _ _ (by decide)]; apply congrArg (BitVec.ofNat 64); omega)
   | (rw [ofNat_add_neg _ _ (by decide) (by omega)]; apply congrArg (BitVec.ofNat 64); omega))
+
+/-- Lengths of routine code with constants. -/
+macro "len_ok" "[" xs:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic|
+  simp (disch := decide) [liN, li_length_big, li_length_small, putcR, libc, List.length_append, $xs,*])
 
 end Vsa.Compiler
