@@ -26,6 +26,9 @@ case_ accept strcat 'fn g(s, n) { var r = ""; for (var k = 0; k < n; k = k + 1) 
 case_ accept higher 'fn apply(f, v) { return f(v); } println(apply(fn (q) { return q < "m"; }, "abc"));'
 case_ accept natives 'var p = println; p(1, "x", true); assert(1 == 1, "msg");'
 case_ accept noreturn 'fn f(x) { println(x); } f(1);'
+case_ accept lateTypes 'fn k(a, b) { var c = a + b; return c < "m"; } var w = k(1, "s");'
+case_ accept nativeParam 'fn apply(f) { return f(1); } var r = apply(println);'
+case_ reject recursionFwd 'fn f(n) { return g(n); } fn g(n) { return n; }'
 case_ reject strminus 'println("a" - 1);'
 case_ reject retype 'var x = 1; x = "s";'
 case_ reject fallthrough 'fn f(x) { if (x > 0) { return 1; } }'
@@ -34,6 +37,12 @@ case_ reject breakout 'break;'
 case_ reject arity 'fn f(a) { return a; } f(1, 2);'
 case_ reject assertarity 'assert();'
 case_ reject callint 'var x = 1; x();'
+
+# many ambiguous `+` before an error: rejected without exponential search
+{ for i in $(seq 1 200); do echo "fn f$i(a$i, b$i) { return a$i + b$i; }"; done
+  echo 'println("a" - 1);'; } > "$tmp/many.wl"
+if timeout 20 "$BIN" "$tmp/many.wl" >/dev/null; then echo "FAIL: many.wl accepted"; fail=1
+elif [ $? = 124 ]; then echo "FAIL: many.wl timed out"; fail=1; fi
 
 [ $fail = 0 ] && echo "whilecheck tests: OK"
 exit $fail

@@ -222,16 +222,16 @@ def unifyW (W : List V) (σ : Subst) : List (Tm × Tm) → Option Subst
   | (.var v, t) :: E =>
     if t = .var v then unifyW W σ E
     else if v ∈ t.vars then none
-    else if h : v ∈ W ∧ v ∉ dom σ then unifyW W (bindS v t σ) (bindE v t E) else none
+    else if _h : v ∈ W ∧ v ∉ dom σ then unifyW W (bindS v t σ) (bindE v t E) else none
   | (t, .var v) :: E =>
     if v ∈ t.vars then none
-    else if h : v ∈ W ∧ v ∉ dom σ then unifyW W (bindS v t σ) (bindE v t E) else none
+    else if _h : v ∈ W ∧ v ∉ dom σ then unifyW W (bindS v t σ) (bindE v t E) else none
   | (.leaf _, .node _ _ _) :: _ => none
   | (.node _ _ _, .leaf _) :: _ => none
 termination_by E => (cnt W σ, sizeE E)
 decreasing_by
   all_goals first
-    | (apply Prod.Lex.left; exact cnt_bindS_lt _ h.1 h.2)
+    | (apply Prod.Lex.left; exact cnt_bindS_lt _ _h.1 _h.2)
     | (apply Prod.Lex.right; simp only [sizeE, Tm.size]; omega)
 
 /-! ## Unfolding -/
@@ -287,7 +287,7 @@ theorem satE_cons {θ : V → Tm} {a b : Tm} {E : List (Tm × Tm)} :
 
 theorem mem_varsE_cons {w : V} {a b : Tm} {E : List (Tm × Tm)} :
     w ∈ varsE ((a, b) :: E) ↔ w ∈ a.vars ∨ w ∈ b.vars ∨ w ∈ varsE E := by
-  simp [varsE, or_assoc]
+  simp [varsE]
 
 theorem mem_varsE_bindE {w v : V} {t : Tm} {E : List (Tm × Tm)} (h : w ∈ varsE (bindE v t E)) :
     (w ∈ varsE E ∧ w ≠ v) ∨ w ∈ t.vars := by
