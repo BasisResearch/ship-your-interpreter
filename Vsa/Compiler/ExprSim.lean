@@ -652,6 +652,120 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
     obtain ⟨rfl, rfl⟩ := EvalE.det r hsr hr hevr
     rw [hnone] at hop; cases hop
 
+theorem sim_neg (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e) :
+    SimE code Γ (.unary .neg e) := by
+  intro k pos st d env A hE hk hseg hpos hA hc
+  have hE' : IntE Γ.names e := by
+    rcases hE with h | h
+    · exact h
+    · exact h.elim
+  have hcx : cexpr Γ k pos (.unary .neg e) = cexpr Γ k pos e ++ [.sub a0 0 a0] := rfl
+  rw [hcx] at hseg hpos
+  obtain ⟨hs1, hs2⟩ := hseg.append
+  simp only [List.length_append, List.length_cons, List.length_nil] at hpos
+  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A (.inl hE') (by simpa [tdepth] using hk) hs1
+    (by unfold PosOK at *; omega) hA hc
+  rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
+  · obtain ⟨n, rfl, hn⟩ := hty.1 hE'
+    have e1 := step_sub hL.1 hs2.head hBpc (by decide) (Has.zero _) hB0
+    refine ⟨_, r1.trans (Star.single e1), .inl ⟨.int (wrap64 (-n)), st', .neg _ _ _ _ _ _ hev,
+      ⟨fun _ => ⟨_, rfl, InRange.wrap64 _⟩, fun h => h.elim⟩, hout, hBo, by simp [hcx, Nat.add_assoc],
+      ?_, hBc, hBt⟩⟩
+    simp only [word, ofInt_wrap64, BitVec.ofInt_neg, BitVec.zero_sub]
+    exact Has.set_self _ _ (by decide) (by decide)
+  · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
+    cases h with | neg _ _ _ _ _ _ he => exact hne _ _ he
+
+theorem sim_not (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e) :
+    SimE code Γ (.unary .not e) := by
+  intro k pos st d env A hE hk hseg hpos hA hc
+  have hE' : CondE Γ.names e := by
+    rcases hE with h | h
+    · exact h.elim
+    · exact h
+  have hcx : cexpr Γ k pos (.unary .not e) = cexpr Γ k pos e ++
+      [.addi s3 0 1, .br .eq a0 0 (bSkip 1), .addi s3 0 0, mv a0 s3] := rfl
+  rw [hcx] at hseg hpos
+  obtain ⟨hs1, hs2⟩ := hseg.append
+  simp only [List.length_append, List.length_cons, List.length_nil] at hpos
+  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A hE' (by simpa [tdepth] using hk) hs1
+    (by unfold PosOK at *; omega) hA hc
+  rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
+  · obtain ⟨L, r2, hL0⟩ := run_cmp hL.1 hs2 hBpc (by unfold PosOK at *; omega) hB0 (Has.zero _)
+      (by decide) (by decide)
+    have hg : guardB BrOp.eq.bop (word v) 0 = !v.truthy := by
+      rcases hE' with hi | hb
+      · obtain ⟨n, rfl, hn⟩ := hty.1 hi
+        simp only [BrOp.bop, word, Value.truthy, guardB]
+        by_cases h : n = 0
+        · subst h; decide
+        · have : BitVec.ofInt 64 n ≠ (0 : BitVec 64) := fun e => h (by
+            have := congrArg BitVec.toInt e; rwa [toInt_ofInt_range hn] at this)
+          rw [beq_eq_false_iff_ne.mpr this]; simp [h]
+      · obtain ⟨b, rfl⟩ := hty.2 hb
+        cases b <;> decide
+    rw [hg] at hL0
+    refine ⟨_, r1.trans r2, .inl ⟨.bool (!v.truthy), st', .not _ _ _ _ _ _ hev,
+      ⟨fun h => h.elim, fun _ => ⟨_, rfl⟩⟩, hout, hBo, by simp [hcx, Nat.add_assoc], ?_, hBc, hBt⟩⟩
+    cases hv : v.truthy <;> simp [word, hv] at hL0 ⊢ <;> exact hL0
+  · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
+    cases h with | not _ _ _ _ _ _ he => exact hne _ _ he
+
+/-- **Expression simulation.** -/
+theorem sim_expr (hL : Layout code) {Γ : Scope} (hnd : Γ.slots.Nodup)
+    (hsl : ∀ i ∈ Γ.slots, i < 2 ^ 24) : ∀ (e : Expr), Simple e → SimE code Γ e
+  | .int _, _ => fun _ _ _ _ _ _ hE _ hseg _ hA hc => sim_int hL hE hseg hA hc
+  | .bool _, _ => fun _ _ _ _ _ _ _ _ hseg _ hA hc => sim_bool hL hseg hA hc
+  | .var _, _ => fun _ _ _ _ _ _ hE _ hseg _ hA hc => sim_var hL hsl hE hseg hA hc
+  | .assign _ e, hs => sim_assign hL hnd hsl (sim_expr hL hnd hsl e hs)
+  | .binary _ l r, hs =>
+    sim_binary hL (sim_expr hL hnd hsl l hs.1) (sim_expr hL hnd hsl r hs.2) hs.1 hs.2
+  | .unary .neg e, hs => sim_neg hL (sim_expr hL hnd hsl e hs)
+  | .unary .not e, hs => sim_not hL (sim_expr hL hnd hsl e hs)
+  | .str _, hs => hs.elim
+  | .null, hs => hs.elim
+  | .logical _ _ _, hs => hs.elim
+  | .call _ _, hs => hs.elim
+  | .fn _ _ _, hs => hs.elim
+
 end
+
+mutual
+theorem IntE.simple {Γn : NScope} : ∀ {e : Expr}, IntE Γn e → Simple e
+  | .int _, _ => trivial
+  | .var _, _ => trivial
+  | .assign _ e, h => IntE.simple (e := e) h.2
+  | .binary _ l r, h => ⟨IntE.simple h.2.1, IntE.simple h.2.2⟩
+  | .unary .neg e, h => IntE.simple (e := e) h
+  | .unary .not _, h => h.elim
+  | .str _, h => h.elim
+  | .bool _, h => h.elim
+  | .null, h => h.elim
+  | .logical _ _ _, h => h.elim
+  | .call _ _, h => h.elim
+  | .fn _ _ _, h => h.elim
+
+theorem BoolE.simple {Γn : NScope} : ∀ {e : Expr}, BoolE Γn e → Simple e
+  | .bool _, _ => trivial
+  | .binary _ l r, h => ⟨IntE.simple h.2.1, IntE.simple h.2.2⟩
+  | .unary .not e, h => by
+    rcases h with h | h
+    · exact IntE.simple (e := e) h
+    · exact BoolE.simple (e := e) h
+  | .unary .neg _, h => h.elim
+  | .int _, h => h.elim
+  | .str _, h => h.elim
+  | .var _, h => h.elim
+  | .assign _ _, h => h.elim
+  | .null, h => h.elim
+  | .logical _ _ _, h => h.elim
+  | .call _ _, h => h.elim
+  | .fn _ _ _, h => h.elim
+end
+
+theorem CondE.simple {Γn : NScope} {e : Expr} (h : CondE Γn e) : Simple e := by
+  rcases h with h | h
+  · exact IntE.simple h
+  · exact BoolE.simple h
 
 end Vsa.Compiler
