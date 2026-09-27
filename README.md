@@ -191,9 +191,12 @@ big-step semantics and iris-lean's BI (`vProp := UPred Res`).
   `∃ out, BigStep p out ∧ Q out`. `adequacy_machine` composes this with
   `endToEnd_refinement`: every configuration with `p` loaded halts with exit
   code 0, prints an output satisfying `Q`, and does not diverge.
-- **Example** (`Example.lean`). The first loop of `tests/while.wl` prints `55`
-  (`firstLoop_spec`), proved with a loop invariant.
-  `Machine.lean`'s `firstLoop_halts` states the machine consequence.
+- **Examples**. The first loop of `tests/while.wl` prints `55`
+  (`Example.firstLoop_spec`, a loop invariant with variant `10 - n`). The
+  whole script prints `55\n2500\n36\n` (`Whole.whileWl_spec`: `break`,
+  `continue`, and a nested loop whose body reaches the globals through two
+  scopes). `firstLoop_halts` and `whileWl_halts` (`Machine.lean`) are the
+  machine consequences.
 
 ## Building
 

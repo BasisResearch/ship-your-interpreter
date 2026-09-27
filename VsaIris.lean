@@ -305,3 +305,4 @@ import VsaIris.Vsa.Stderr.SprintHook
 import VsaIris.Vsa.Stderr.SEmpty
 import VsaIris.Vsa.Fprintf.End
 import VsaIris.Vsa.Fprintf.Inner
+import VsaIris.WhileLogic.Machine
