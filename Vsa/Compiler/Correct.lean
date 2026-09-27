@@ -24,9 +24,18 @@ def compileBytes (p : Program) : List (BitVec 8) :=
 
 /-! ## From abstract runs to machine runs -/
 
+/-- `c'` realizes `B` after at least `k` machine steps from `c`, with the code
+and libgcc still in memory. -/
+structure RunSim (code : List Ins) (k : Nat) (c : Config) (B : AM) (c' : Config) : Prop where
+  steps : Steps c c'
+  count : c.steps + k ≤ c'.steps
+  corr : Corr c' B
+  code : CodeAt B.mem code
+  lib : LibLoaded B.mem
+
 theorem run_sim {code : List Ins} (hfit : Fits code) : ∀ {k : Nat} {A B : AM}, StarN code k A B →
     ∀ {c : Config}, Corr c A → CodeAt A.mem code → LibLoaded A.mem →
-    ∃ c', Steps c c' ∧ c.steps + k ≤ c'.steps ∧ Corr c' B ∧ CodeAt B.mem code ∧ LibLoaded B.mem
+    ∃ c', RunSim code k c B c'
   | _, _, _, .refl _, c, hc, hcode, hlib => ⟨c, .refl _, by simp, hc, hcode, hlib⟩
   | _, _, _, .step hs rest, c, hc, hcode, hlib => by
     obtain ⟨c1, hs1, hlt1, hc1⟩ := step_sim hc hcode hlib hs
@@ -126,7 +135,7 @@ theorem sr0 (m : Mem) (o : Array String) (ho : String.join o.toList = "") :
 /-- A big-step behaviour is reached, and the code then exits with `0`. -/
 theorem abstract_term (p : Program) (hsup : Supported p) (hfit : Fits (compile p)) (m : Mem)
     (o : Array String) (ho : String.join o.toList = "") {out : String} (hb : BigStep p out) :
-    ∃ B, Star (compile p) (A0 m o) B ∧ astep (compile p) B = some (.halt 0) ∧
+    Reaches (compile p) (A0 m o) fun B => astep (compile p) B = some (.halt 0) ∧
       String.join B.out.toList = out := by
   obtain ⟨st', D, rfl⟩ := hb
   obtain ⟨-, -, -, h4, h5⟩ := compile_segs p
@@ -142,13 +151,13 @@ theorem abstract_term (p : Program) (hsup : Supported p) (hfit : Fits (compile p
 /-- Without a big-step behaviour the code reaches the error exit or runs forever. -/
 theorem abstract_stuck (p : Program) (hsup : Supported p) (hfit : Fits (compile p)) (m : Mem)
     (o : Array String) (ho : String.join o.toList = "") (hnb : ¬ ∃ out, BigStep p out) :
-    (∃ B, Star (compile p) (A0 m o) B ∧ astep (compile p) B = some (.halt 70)) ∨
-      ∀ n, ∃ B, StarN (compile p) n (A0 m o) B := by
+    Reaches (compile p) (A0 m o) (fun B => astep (compile p) B = some (.halt 70)) ∨
+      ∀ n, Runs (compile p) n (A0 m o) := by
   obtain ⟨-, -, -, h4, h5⟩ := compile_segs p
   have hAt := at0 p hfit
   have hbl : (body p).length = (cseq ctx0 mainPos p).1.length := rfl
   have hpos := Seg.end_ok hfit h5 (by simp [exitCode])
-  have hne : ¬ ∃ st' t, ExecSeq initSt 0 0 p st' t := by
+  have hne : ¬ HasSeqExec initSt 0 0 p := by
     rintro ⟨st', t, D⟩
     obtain ⟨-, -, -, -, -, -, hnorm, -⟩ := seqT (code := compile p) D ctx0 false mainPos _ [] [] rfl hAt
       hsup h4 (by unfold PosOK at *; omega) (fun h => by cases h) rfl (sr0 m o ho)
@@ -156,7 +165,7 @@ theorem abstract_stuck (p : Program) (hsup : Supported p) (hfit : Fits (compile 
   have hf : ∀ n, Fail (compile p) n (A0 m o) := fun n =>
     Fail.of_star (Star.single (enter p hfit m o)) (seqFail_all n initSt 0 0 p ctx0 false mainPos _ [] []
       rfl hAt hsup h4 (by unfold PosOK at *; omega) (fun h => by cases h) rfl (sr0 m o ho) hne)
-  by_cases hh : ∃ B, Star (compile p) (A0 m o) B ∧ astep (compile p) B = some (.halt 70)
+  by_cases hh : Reaches (compile p) (A0 m o) (fun B => astep (compile p) B = some (.halt 70))
   · exact .inl hh
   · exact .inr fun n => (hf n).resolve_left hh
 
@@ -172,7 +181,7 @@ theorem halts_of_abstract {code : List Ins} (hfit : Fits code) {A B : AM} {c : C
 
 theorem diverges_of_abstract {code : List Ins} (hfit : Fits code) {A : AM} {c : Config}
     (hc : Corr c A) (hcode : CodeAt A.mem code) (hlib : LibLoaded A.mem)
-    (h : ∀ n, ∃ B, StarN code n A B) : Diverges c := by
+    (h : ∀ n, Runs code n A) : Diverges c := by
   intro n
   obtain ⟨B, hB⟩ := h n
   obtain ⟨c', hs, hle, -⟩ := run_sim hfit hB hc hcode hlib

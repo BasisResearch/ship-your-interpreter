@@ -19,7 +19,7 @@ def TSpec (code : List Ins) (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : S
   ∀ (C : Ctx) (loop : Bool) (pos : Nat) (A : AM), At code C pos → SupS C.Γ.names loop s →
     Seg code pos (cstmt C pos s).1 → PosOK (pos + (cstmt C pos s).1.length) →
     (loop = true → PosOK C.brk ∧ PosOK C.cont) → A.pc = pcOf pos → SR C.Γ env st A →
-    ∃ B, Star code A B ∧ B.pc = pcOf (exitPos C (pos + (cstmt C pos s).1.length) t) ∧
+    Reaches code A fun B => B.pc = pcOf (exitPos C (pos + (cstmt C pos s).1.length) t) ∧
       SR C.Γ env st' B ∧ SameParents st.store st'.store ∧ (∀ v, t ≠ .ret v) ∧
       (loop = false → t = .normal)
 
@@ -30,7 +30,7 @@ def SeqSpec (code : List Ins) (st : St) (d : Nat) (env : Addr) (ss : List Stmt) 
     C.Γ = f :: g → At code C pos → SupSeq C.Γ.names loop ss →
     Seg code pos (cseq C pos ss).1 → PosOK (pos + (cseq C pos ss).1.length) →
     (loop = true → PosOK C.brk ∧ PosOK C.cont) → A.pc = pcOf pos → SR C.Γ env st A →
-    ∃ B, Star code A B ∧ B.pc = pcOf (exitPos C (pos + (cseq C pos ss).1.length) t) ∧
+    Reaches code A fun B => B.pc = pcOf (exitPos C (pos + (cseq C pos ss).1.length) t) ∧
       outStr B = st'.out ∧ SameParents st.store st'.store ∧ (∀ v, t ≠ .ret v) ∧
       (loop = false → t = .normal) ∧
       ∃ f', Chain st'.store B.mem env (f' :: g) ∧ (t = .normal → (cseq C pos ss).2.1 = f' :: g)
@@ -110,7 +110,7 @@ theorem condT {C : Ctx} {pos L : Nat} {c : Expr} {st st1 : St} {d : Nat} {env : 
     (hseg : Seg code pos (cexpr C.Γ 0 pos c ++ [.br .ne a0 0 (bSkip 1),
       .jal 0 (jOff (pos + (cexpr C.Γ 0 pos c).length + 1) L)]))
     (hL : PosOK L) (hA : A.pc = pcOf pos) (hsr : SR C.Γ env st A) (hev : EvalE st d env c st1 v) :
-    ∃ B, Star code A B ∧ SR C.Γ env st1 B ∧ SameParents st.store st1.store ∧
+    Reaches code A fun B => SR C.Γ env st1 B ∧ SameParents st.store st1.store ∧
       B.pc = pcOf (if v.truthy then pos + (cexpr C.Γ 0 pos c).length + 2 else L) := by
   obtain ⟨B, r, hB⟩ := sim_cond (d := d) hAt hc hseg hL hA hsr
   rcases hB with ⟨st1', v', hev', hsr', hsp, hpc⟩ | ⟨_, hne⟩
@@ -241,7 +241,7 @@ theorem tWhile {st st1 st' : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt} {v
     rw [hpc2]; simp only [exitPos]; rw [hend]
   · exact absurd rfl (hret2 rv)
   · -- back to the loop head
-    have hback : ∃ B3, Star code B2 B3 ∧ B3.pc = pcOf pos ∧ B3.mem = B2.mem ∧ B3.out = B2.out := by
+    have hback : Reaches code B2 fun B3 => B3.pc = pcOf pos ∧ B3.mem = B2.mem ∧ B3.out = B2.out := by
       rcases htb with rfl | rfl
       · simp only [exitPos] at hpc2
         refine ⟨_, Star.single (step_jump hAt.fits (Seg.pos_eq (pos' := pos + (cexpr C.Γ 0 pos c).length
@@ -286,16 +286,10 @@ theorem sConsDecl {st st1 st' : St} {d : Nat} {env : Addr} {x : String} {e : Exp
   rotate_left
   · exact absurd D (hne _ _)
   obtain ⟨rfl, -⟩ := huniq _ _ D
-  obtain ⟨f0, g0, hΓ0, hdi⟩ := declInfo_cases C x hAt.ne
-  rw [hΓ] at hΓ0; cases hΓ0
-  have hΓ' : ∃ f', (declInfo C x).1 = f' :: g := by
-    rcases hdi with ⟨i, -, hdi⟩ | ⟨-, hdi⟩
-    · exact ⟨f, by rw [hdi, hΓ]⟩
-    · exact ⟨_, by rw [hdi]⟩
-  obtain ⟨f1, hf1⟩ := hΓ'
+  have hf1 := declInfo_cons x hΓ
   simp only [List.length_append] at hpos ⊢
   obtain ⟨B2, r2, hpc2, hout2, hsp2, hret2, hnorm2, f', hc2, hΓ2⟩ :=
-    ih ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ loop _ B1 f1 g hf1 hAt1
+    ih ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ loop _ B1 _ g hf1 hAt1
       (by rw [declInfo_names C x hAt.ne]; exact hss) hs2 (by rw [← Nat.add_assoc] at hpos; exact hpos)
       hloop hpc1 hsr1
   refine ⟨B2, r1.trans r2, by rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega,
@@ -358,12 +352,12 @@ theorem seqT {code : List Ins} : ∀ {st : St} {d : Nat} {env : Addr} {ss : List
     {t : Status}, ExecSeq st d env ss st' t → SeqSpec code st d env ss st' t
   | _, _, _, _, _, _, .nil _ _ _ => sNil
   | _, _, _, _, _, _, .consNormal _ _ _ s _ _ _ _ h1 h2 => by
-    by_cases hd : ∃ x e, s = .varDecl x (some e)
+    by_cases hd : IsDecl s
     · obtain ⟨x, e, rfl⟩ := hd
       exact sConsDecl h1 (seqT h2)
     · exact sConsStmt (fun x e h => hd ⟨x, e, h⟩) (stmtT h1) (.inl ⟨rfl, seqT h2⟩)
   | _, _, _, _, _, _, .consAbrupt _ _ _ s _ _ _ h1 hne => by
-    by_cases hd : ∃ x e, s = .varDecl x (some e)
+    by_cases hd : IsDecl s
     · obtain ⟨x, e, rfl⟩ := hd
       cases h1 with | varInit => exact absurd rfl hne
     · exact sConsStmt (fun x e h => hd ⟨x, e, h⟩) (stmtT h1) (.inr ⟨hne, rfl, rfl⟩)

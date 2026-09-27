@@ -14,6 +14,16 @@ namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim
 
+/-- `s` has an execution from `st`. -/
+abbrev HasExec (st : St) (d : Nat) (env : Addr) (s : Stmt) : Prop := ∃ st' t, ExecS st d env s st' t
+
+/-- `ss` has an execution from `st`. -/
+abbrev HasSeqExec (st : St) (d : Nat) (env : Addr) (ss : List Stmt) : Prop :=
+  ∃ st' t, ExecSeq st d env ss st' t
+
+/-- `s` declares a variable with an initializer (compiled by `cseq`, not `cstmt`). -/
+abbrev IsDecl (s : Stmt) : Prop := ∃ x e, s = .varDecl x (some e)
+
 /-- `s'` extends `s` without changing any existing frame's parent. -/
 def SameParents (s s' : Store) : Prop :=
   s.frames.size ≤ s'.frames.size ∧

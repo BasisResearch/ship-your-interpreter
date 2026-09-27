@@ -16,10 +16,10 @@ open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
 /-- The code fails within `n` steps: the error exit, or `n` steps of running. -/
 def Fail (code : List Ins) (n : Nat) (A : AM) : Prop :=
-  (∃ B, Star code A B ∧ astep code B = some (.halt 70)) ∨ (∃ B, StarN code n A B)
+  Reaches code A (fun B => astep code B = some (.halt 70)) ∨ Runs code n A
 
 theorem StarN.truncate {code : List Ins} : ∀ {m : Nat} {A B : AM}, StarN code m A B →
-    ∀ n, n ≤ m → ∃ B', StarN code n A B'
+    ∀ n, n ≤ m → Runs code n A
   | _, A, _, .refl _, n, h => ⟨A, by rw [Nat.le_zero.mp h]; exact .refl _⟩
   | _, A, _, .step hs rest, n, h => by
     cases n with
@@ -50,7 +50,7 @@ def SFail (code : List Ins) (n : Nat) (st : St) (d : Nat) (env : Addr) (s : Stmt
   ∀ (C : Ctx) (loop : Bool) (pos : Nat) (A : AM), At code C pos → SupS C.Γ.names loop s →
     Seg code pos (cstmt C pos s).1 → PosOK (pos + (cstmt C pos s).1.length) →
     (loop = true → PosOK C.brk ∧ PosOK C.cont) → A.pc = pcOf pos → SR C.Γ env st A →
-    (¬ ∃ st' t, ExecS st d env s st' t) → Fail code n A
+    (¬ HasExec st d env s) → Fail code n A
 
 /-- Failure of one statement list without an execution. -/
 def SeqFail (code : List Ins) (n : Nat) (st : St) (d : Nat) (env : Addr) (ss : List Stmt) : Prop :=
@@ -58,7 +58,7 @@ def SeqFail (code : List Ins) (n : Nat) (st : St) (d : Nat) (env : Addr) (ss : L
     C.Γ = f :: g → At code C pos → SupSeq C.Γ.names loop ss →
     Seg code pos (cseq C pos ss).1 → PosOK (pos + (cseq C pos ss).1.length) →
     (loop = true → PosOK C.brk ∧ PosOK C.cont) → A.pc = pcOf pos → SR C.Γ env st A →
-    (¬ ∃ st' t, ExecSeq st d env ss st' t) → Fail code n A
+    (¬ HasSeqExec st d env ss) → Fail code n A
 
 theorem pcOf_inj {a b : Nat} (ha : PosOK a) (hb : PosOK b) (h : pcOf a = pcOf b) : a = b := by
   have := congrArg BitVec.toNat h
@@ -78,7 +78,7 @@ section
 variable {code : List Ins}
 
 theorem StmtOK.fail {C : Ctx} {pos : Nat} {s : Stmt} {st : St} {d : Nat} {env : Addr} {B : AM}
-    (h : StmtOK code C pos s st d env B) (hne : ¬ ∃ st' t, ExecS st d env s st' t) (n : Nat)
+    (h : StmtOK code C pos s st d env B) (hne : ¬ HasExec st d env s) (n : Nat)
     {A : AM} (r : Star code A B) : Fail code n A := by
   rcases h with ⟨st', t, D, -⟩ | ⟨hh, -⟩
   · exact absurd ⟨st', t, D⟩ hne
@@ -209,7 +209,7 @@ theorem fWhile {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt}
       (cstmt ⟨C.Γ, C.next, pos + (cexpr C.Γ 0 pos c).length + 2 + blen + 1, pos⟩
         (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length) := by
     rw [hcb]; unfold PosOK at *; omega
-  by_cases hb : ∃ st2 tb, ExecS st1 d env b st2 tb
+  by_cases hb : HasExec st1 d env b
   rotate_left
   · exact Fail.of_star r1 (ihb st1 _ true _ B1 hAtb hsb hsegb hposb (fun _ => ⟨hpe, hAt.posok⟩) hpc1 hsr1
       (fun ⟨st', t, D⟩ => hb ⟨st', t, D⟩))
@@ -217,8 +217,8 @@ theorem fWhile {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt}
   obtain ⟨B2, r2, hpc2, hsr2, -, hret2, -⟩ := stmtT (code := code) D _ true _ B1 hAtb hsb hsegb hposb
     (fun _ => ⟨hpe, hAt.posok⟩) hpc1 hsr1
   rw [hcb] at hpc2
-  have hrest : ∃ B3, Star code B2 B3 ∧ B3.pc = pcOf pos ∧ B3.mem = B2.mem ∧ B3.out = B2.out ∧
-      ¬ ∃ st' t, ExecS st2 d env (.whileStmt c b) st' t := by
+  have hrest : Reaches code B2 fun B3 => B3.pc = pcOf pos ∧ B3.mem = B2.mem ∧ B3.out = B2.out ∧
+      ¬ HasExec st2 d env (.whileStmt c b) := by
     cases tb with
     | normal =>
       simp only [exitPos] at hpc2
@@ -252,15 +252,9 @@ theorem fDecl {n : Nat} {st : St} {d : Nat} {env : Addr} {x : String} {e : Expr}
   obtain ⟨hs1, hs2⟩ := hseg.append
   obtain ⟨B1, r1, hB1⟩ := sim_decl (d := d) hAt hnat he hs1 hA hsr
   rcases hB1 with ⟨st1, D, -, hpc1, hsr1, -, hAt1⟩ | ⟨hh, -⟩
-  · obtain ⟨f0, g0, hΓ0, hdi⟩ := declInfo_cases C x hAt.ne
-    rw [hΓ] at hΓ0; cases hΓ0
-    have hΓ' : ∃ f', (declInfo C x).1 = f' :: g := by
-      rcases hdi with ⟨i, -, hdi⟩ | ⟨-, hdi⟩
-      · exact ⟨f, by rw [hdi, hΓ]⟩
-      · exact ⟨_, by rw [hdi]⟩
-    obtain ⟨f1, hf1⟩ := hΓ'
+  · have hf1 := declInfo_cons x hΓ
     simp only [List.length_append] at hpos
-    exact Fail.of_star r1 (ih st1 ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ loop _ B1 f1 g
+    exact Fail.of_star r1 (ih st1 ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ loop _ B1 _ g
       hf1 hAt1 (by rw [declInfo_names C x hAt.ne]; exact hss) hs2
       (by rw [← Nat.add_assoc] at hpos; exact hpos) hloop hpc1 hsr1
       (fun ⟨st', t, D'⟩ => hne ⟨st', t, .consNormal _ _ _ _ _ _ _ _ D D'⟩))
@@ -276,7 +270,7 @@ theorem fCons {n : Nat} {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List S
   obtain ⟨hsg1, hsg2⟩ := hseg.append
   simp only [List.length_append] at hpos
   have hp1 : PosOK (pos + (cstmt C pos s).1.length) := by unfold PosOK at *; omega
-  by_cases hex : ∃ st1 t1, ExecS st d env s st1 t1
+  by_cases hex : HasExec st d env s
   · obtain ⟨st1, t1, D⟩ := hex
     by_cases ht1 : t1 = .normal
     · subst ht1

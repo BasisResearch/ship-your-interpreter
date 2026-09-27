@@ -12,14 +12,26 @@ namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
+/-- The code of `s` completed with the unique execution `st' t` of `s`. -/
+structure StmtDone (C : Ctx) (pos : Nat) (s : Stmt) (st : St) (d : Nat) (env : Addr) (B : AM)
+    (st' : St) (t : Status) : Prop where
+  exec : ExecS st d env s st' t
+  uniq : ∀ st'' t', ExecS st d env s st'' t' → st'' = st' ∧ t' = t
+  pc : B.pc = pcOf (exitPos C (pos + (cstmt C pos s).1.length) t)
+  rel : SR C.Γ env st' B
+  parents : SameParents st.store st'.store
+  noRet : ∀ v, t ≠ .ret v
+
+/-- The code of `s` reached the runtime-error exit and `s` has no execution. -/
+structure StmtErr (code : List Ins) (s : Stmt) (st : St) (d : Nat) (env : Addr) (B : AM) : Prop where
+  halt : astep code B = some (.halt 70)
+  noExec : ∀ st' t, ¬ ExecS st d env s st' t
+
 /-- What running a statement's code achieves in one case: the unique execution
-and the relation at the exit it reaches. -/
+and the relation at the exit it reaches, or the error exit. -/
 def StmtOK (code : List Ins) (C : Ctx) (pos : Nat) (s : Stmt) (st : St) (d : Nat) (env : Addr)
     (B : AM) : Prop :=
-  (∃ st' t, ExecS st d env s st' t ∧ (∀ st'' t', ExecS st d env s st'' t' → st'' = st' ∧ t' = t) ∧
-      B.pc = pcOf (exitPos C (pos + (cstmt C pos s).1.length) t) ∧ SR C.Γ env st' B ∧
-      SameParents st.store st'.store ∧ (∀ v, t ≠ .ret v)) ∨
-    (astep code B = some (.halt 70) ∧ ∀ st' t, ¬ ExecS st d env s st' t)
+  (∃ st' t, StmtDone C pos s st d env B st' t) ∨ StmtErr code s st d env B
 
 theorem cargs_end (Γ : Scope) : ∀ (args : List Expr) (k pos : Nat),
     (cargs Γ k pos args).2 = pos + (cargs Γ k pos args).1.length
@@ -33,7 +45,7 @@ theorem printArgs_ints (s : Store) (ns : List Int) :
     printArgs s (ns.map Value.int) = String.intercalate " " (ns.map intToString) := by
   simp [printArgs, Function.comp_def, Value.display]
 
-theorem vals_ints : ∀ (vs : List Value), (∀ v ∈ vs, ∃ n, v = .int n ∧ InRange n) →
+theorem vals_ints : ∀ (vs : List Value), (∀ v ∈ vs, IsInt v) →
     ∃ ns : List Int, vs = ns.map Value.int ∧ ∀ x ∈ ns, InRange x
   | [], _ => ⟨[], rfl, by simp⟩
   | v :: vs, h => by
@@ -50,7 +62,7 @@ variable {code : List Ins}
 theorem sim_exprStmt {C : Ctx} {pos : Nat} {e : Expr} {st : St} {d : Nat} {env : Addr} {A : AM}
     (hAt : At code C pos) (he : CondE C.Γ.names e) (hnc : ∀ f args, e ≠ .call f args)
     (hseg : Seg code pos (cstmt C pos (.expr e)).1) (hA : A.pc = pcOf pos) (hsr : SR C.Γ env st A) :
-    ∃ B, Star code A B ∧ StmtOK code C pos (.expr e) st d env B := by
+    Reaches code A (StmtOK code C pos (.expr e) st d env) := by
   have hce : cstmt C pos (.expr e) = (cexpr C.Γ 0 pos e, C.next) := by
     cases e with
     | call f args => exact absurd rfl (hnc f args)
@@ -86,7 +98,7 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
     (hseg : Seg code pos (cstmt C pos (.expr (.call (.var f) args))).1)
     (hpos : PosOK (pos + (cstmt C pos (.expr (.call (.var f) args))).1.length))
     (hA : A.pc = pcOf pos) (hsr : SR C.Γ env st A) :
-    ∃ B, Star code A B ∧ StmtOK code C pos (.expr (.call (.var f) args)) st d env B := by
+    Reaches code A (StmtOK code C pos (.expr (.call (.var f) args)) st d env) := by
   obtain ⟨hf, hlen, hargs⟩ := hs
   have hce : cstmt C pos (.expr (.call (.var f) args)) =
       ((cargs C.Γ 0 pos args).1 ++ printLoop 0 (cargs C.Γ 0 pos args).2 args.length ++
@@ -154,7 +166,7 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
       Chain st''.store B.mem env C.Γ →
       outStr B = st''.out ++ printArgs st''.store (ns.map Value.int) ++
         (if f = "println" then "\n" else "") →
-      ∃ B, Star code A B ∧ StmtOK code C pos (.expr (.call (.var f) args)) st d env B := by
+      Reaches code A (StmtOK code C pos (.expr (.call (.var f) args)) st d env) := by
     intro B r hpc hc hob
     refine ⟨B, r, .inl ⟨_, .normal, hexec, fun s' t h => ?_, by rw [hce]; exact hpc,
       ⟨hc, hob⟩, hsp, by simp⟩⟩
@@ -256,19 +268,32 @@ theorem declInfo_names (C : Ctx) (x : String) (hne : C.Γ ≠ []) :
         exact lookup_ne_none_of_mem hy hl
       simp [this]
 
+/-- The code of `var x = e;` completed with its unique execution, leaving the
+scope and layout of the declaration's successor. -/
+structure DeclDone (code : List Ins) (C : Ctx) (pos : Nat) (x : String) (e : Expr) (st : St) (d : Nat)
+    (env : Addr) (B : AM) (st1 : St) : Prop where
+  exec : ExecS st d env (.varDecl x (some e)) st1 .normal
+  uniq : ∀ st'' t, ExecS st d env (.varDecl x (some e)) st'' t → st'' = st1 ∧ t = .normal
+  pc : B.pc = pcOf (pos + (declCode C pos x e).length)
+  rel : SR (declInfo C x).1 env st1 B
+  parents : SameParents st.store st1.store
+  next : At code ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ (pos + (declCode C pos x e).length)
+
+/-- Declaring into a nonempty scope keeps its tail. -/
+theorem declInfo_cons {C : Ctx} {f : List (String × Nat)} {g : Scope} (x : String) (hΓ : C.Γ = f :: g) :
+    (declInfo C x).1 = (declInfo C x).1.headD [] :: g := by
+  obtain ⟨Γ, n, b, c⟩ := C
+  cases hΓ
+  cases hl : f.lookup x <;> simp [declInfo, hl]
+
 section
 variable {code : List Ins}
 
 theorem sim_decl {C : Ctx} {pos : Nat} {x : String} {e : Expr} {st : St} {d : Nat} {env : Addr}
     {A : AM} (hAt : At code C pos) (hnat : ¬ IsNative x) (he : IntE C.Γ.names e)
     (hseg : Seg code pos (declCode C pos x e)) (hA : A.pc = pcOf pos) (hsr : SR C.Γ env st A) :
-    ∃ B, Star code A B ∧
-      ((∃ st1, ExecS st d env (.varDecl x (some e)) st1 .normal ∧
-          (∀ st'' t, ExecS st d env (.varDecl x (some e)) st'' t → st'' = st1 ∧ t = .normal) ∧
-          B.pc = pcOf (pos + (declCode C pos x e).length) ∧ SR (declInfo C x).1 env st1 B ∧
-          SameParents st.store st1.store ∧
-          At code ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ (pos + (declCode C pos x e).length)) ∨
-        (astep code B = some (.halt 70) ∧ ∀ st' t, ¬ ExecS st d env (.varDecl x (some e)) st' t)) := by
+    Reaches code A fun B =>
+      (∃ st1, DeclDone code C pos x e st d env B st1) ∨ StmtErr code (.varDecl x (some e)) st d env B := by
   have hs := IntE.simple he
   have hend := Seg.end_ok hAt.fits hseg (by simp [declCode])
   unfold declCode at hseg hend
