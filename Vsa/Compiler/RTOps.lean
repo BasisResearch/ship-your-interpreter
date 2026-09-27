@@ -13,10 +13,19 @@ namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
+/-- `v` is an integer. -/
+def IsIntV (v : Value) : Prop := ∃ a, v = .int a
+
+/-- `v` is a string. -/
+def IsStrV (v : Value) : Prop := ∃ a, v = .str a
+
+@[simp] theorem isIntV_int (a : Int) : IsIntV (.int a) := ⟨a, rfl⟩
+@[simp] theorem isStrV_str (a : String) : IsStrV (.str a) := ⟨a, rfl⟩
+
 /-- Integer operators have no result on anything but two integers. -/
 theorem binOpSem_int_none {s : Store} {op : BinOp} {l r : Value}
     (hop : op = .sub ∨ op = .mul ∨ op = .div ∨ op = .mod)
-    (h : ¬ ((∃ a, l = .int a) ∧ ∃ b, r = .int b)) : binOpSem s op l r = none := by
+    (h : ¬ (IsIntV l ∧ IsIntV r)) : binOpSem s op l r = none := by
   rcases hop with rfl | rfl | rfl | rfl <;>
   cases l <;> cases r <;> simp_all [binOpSem]
 
@@ -39,7 +48,7 @@ theorem cmpL_range : ∀ (xs ys : List Char), cmpL xs ys = -1 ∨ cmpL xs ys = 0
       · exact .inr (.inr rfl)
       · exact cmpL_range xs ys
 
-theorem binOpSem_add_str {s : Store} {l r : Value} (h : (∃ a, l = .str a) ∨ ∃ b, r = .str b) :
+theorem binOpSem_add_str {s : Store} {l r : Value} (h : IsStrV l ∨ IsStrV r) :
     binOpSem s .add l r = some (.str (l.catDisplay s ++ r.catDisplay s)) := by
   rcases h with ⟨a, rfl⟩ | ⟨b, rfl⟩
   · simp [binOpSem]
@@ -48,8 +57,8 @@ theorem binOpSem_add_str {s : Store} {l r : Value} (h : (∃ a, l = .str a) ∨ 
 theorem binOpSem_add_int {s : Store} (a b : Int) :
     binOpSem s .add (.int a) (.int b) = some (.int (wrap64 (a + b))) := by simp [binOpSem]
 
-theorem binOpSem_add_none {s : Store} {l r : Value} (h1 : ¬ ((∃ a, l = .str a) ∨ ∃ b, r = .str b))
-    (h2 : ¬ ((∃ a, l = .int a) ∧ ∃ b, r = .int b)) : binOpSem s .add l r = none := by
+theorem binOpSem_add_none {s : Store} {l r : Value} (h1 : ¬ (IsStrV l ∨ IsStrV r))
+    (h2 : ¬ (IsIntV l ∧ IsIntV r)) : binOpSem s .add l r = none := by
   cases l <;> cases r <;> simp_all [binOpSem]
 
 /-- Selector of an ordering comparison in `a4`. -/
@@ -83,7 +92,7 @@ theorem binOpSem_ord_str {s : Store} {op : BinOp} (hop : IsOrd op) (a b : String
     rcases hc with hc | hc | hc <;> simp_all
 
 theorem binOpSem_ord_none {s : Store} {op : BinOp} (hop : IsOrd op) {l r : Value}
-    (hi : ¬ ((∃ a, l = .int a) ∧ ∃ b, r = .int b)) (hs : ¬ ((∃ a, l = .str a) ∧ ∃ b, r = .str b)) :
+    (hi : ¬ (IsIntV l ∧ IsIntV r)) (hs : ¬ (IsStrV l ∧ IsStrV r)) :
     binOpSem s op l r = none := by
   rcases hop with rfl | rfl | rfl | rfl <;> cases l <;> cases r <;> simp_all [binOpSem]
 
@@ -119,7 +128,7 @@ theorem run_sub {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
   wp_simp [subCode, subPos, mulPos, addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos,
     psPos, k10, k11, k12, k13, k1, e10, e11, e12, e13, e1]
-  by_cases hint : (∃ a, l = .int a) ∧ ∃ b, r = .int b
+  by_cases hint : IsIntV l ∧ IsIntV r
   · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hint
     obtain ⟨rfl, rfl, -⟩ := vl; obtain ⟨rfl, rfl, -⟩ := vr
     refine ⟨hal, reach_here ⟨rfl, rfl, ?_⟩⟩
@@ -156,7 +165,7 @@ theorem run_mul {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
   simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
   apply run_seg hR.fits hR.mul 0 mulPos (by simp) (mulCode mulPos) (by simp)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  by_cases hint : (∃ a, l = .int a) ∧ ∃ b, r = .int b
+  by_cases hint : IsIntV l ∧ IsIntV r
   · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hint
     obtain ⟨rfl, rfl, ha1, ha2⟩ := vl; obtain ⟨rfl, rfl, hb1, hb2⟩ := vr
     have hat : (BitVec.ofInt 64 a).toInt = a := toInt_ofInt_small a ha1 ha2
@@ -199,7 +208,7 @@ theorem run_div {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
   simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
   apply run_seg hR.fits hR.div 0 divPos (by simp) (divCode divPos) (by simp)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  by_cases hint : (∃ a, l = .int a) ∧ ∃ b, r = .int b
+  by_cases hint : IsIntV l ∧ IsIntV r
   · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hint
     obtain ⟨rfl, rfl, ha1, ha2⟩ := vl; obtain ⟨rfl, rfl, hb1, hb2⟩ := vr
     have hat : (BitVec.ofInt 64 a).toInt = a := toInt_ofInt_small a ha1 ha2
@@ -249,7 +258,7 @@ theorem run_mod {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
   simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
   apply run_seg hR.fits hR.mod 0 modPos (by simp) (modCode modPos) (by simp)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  by_cases hint : (∃ a, l = .int a) ∧ ∃ b, r = .int b
+  by_cases hint : IsIntV l ∧ IsIntV r
   · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hint
     obtain ⟨rfl, rfl, ha1, ha2⟩ := vl; obtain ⟨rfl, rfl, hb1, hb2⟩ := vr
     have hat : (BitVec.ofInt 64 a).toInt = a := toInt_ofInt_small a ha1 ha2
@@ -464,7 +473,7 @@ theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
   wp_simp [cmpPos, eqPos, modPos, divPos, mulPos, subPos, addPos, ccPos, csPos, dpPos, nfPos, trPos,
     scPos, cpPos, itPos, psPos, k10, k11, k12, k13, k1, e10, e11, e12, e13, e1]
-  by_cases hint : (∃ a, l = .int a) ∧ ∃ b, r = .int b
+  by_cases hint : IsIntV l ∧ IsIntV r
   · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hint
     obtain ⟨rfl, rfl, ha1, ha2⟩ := vl; obtain ⟨rfl, rfl, hb1, hb2⟩ := vr
     have hat : (BitVec.ofInt 64 a).toInt = a := toInt_ofInt_small a ha1 ha2
@@ -506,7 +515,7 @@ theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
         (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
       wp_simp [cmpPos, eqPos, modPos, divPos, mulPos, subPos, addPos, ccPos, csPos, dpPos, nfPos, trPos,
         scPos, cpPos, itPos, psPos, k10, k12, e10, e12]
-      by_cases hs2 : (∃ a, l = .str a) ∧ ∃ b, r = .str b
+      by_cases hs2 : IsStrV l ∧ IsStrV r
       · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hs2
         obtain ⟨rfl, ha⟩ := vl; obtain ⟨rfl, hb⟩ := vr
         simp only [BitVec.reduceEq, ne_eq, not_true_eq_false, if_false, ite_false]
@@ -538,7 +547,7 @@ theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
     · next ht1 =>
       have ht1' : t1 = 2 := by simpa using ht1
       have ht2 : ¬ t2 = 2#64 := fun h2 => hint ⟨vl.tag_int.mp ht1', vr.tag_int.mp h2⟩
-      have hs2 : ¬ ((∃ a, l = .str a) ∧ ∃ b, r = .str b) := by
+      have hs2 : ¬ (IsStrV l ∧ IsStrV r) := by
         rintro ⟨⟨a, rfl⟩, -⟩; obtain ⟨rfl, -⟩ := vl; exact absurd ht1' (by decide)
       rw [if_pos ht2]
       exact hnone (binOpSem_ord_none hop hint hs2) _
@@ -697,7 +706,7 @@ def addNeed (s : Store) (l r : Value) : Nat :=
   | _, .str _ => catNeed s l r
   | _, _ => 0
 
-theorem addNeed_str {s : Store} {l r : Value} (h : (∃ a, l = .str a) ∨ ∃ b, r = .str b) :
+theorem addNeed_str {s : Store} {l r : Value} (h : IsStrV l ∨ IsStrV r) :
     addNeed s l r = catNeed s l r := by
   rcases h with ⟨a, rfl⟩ | ⟨b, rfl⟩
   · simp [addNeed]
@@ -839,7 +848,7 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
   wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k10, k11, k12, k13, k1,
     e10, e11, e12, e13, e1]
   -- the concatenation path
-  have hcat : ((∃ a, l = .str a) ∨ ∃ b, r = .str b) → ∀ L', Keep addClob L L' →
+  have hcat : (IsStrV l ∨ IsStrV r) → ∀ L', Keep addClob L L' →
       Has L' a0 t1 → Has L' a1 p1 → Has L' a2 t2 → Has L' a3 p2 → Has L' hpO (BitVec.ofNat 64 h) →
       Has L' s10 rr →
       Reaches code ⟨pcOf (addPos + 9), L', m, o⟩ (fun B => B.out = o ∧
@@ -850,8 +859,8 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
     intro hs L' hk g10 g11 g12 g13 g8 g26
     rw [binOpSem_add_str hs, addNeed_str hR hs]
     exact add_cat hR ⟨g10, g11, g12, g13, vl, vr⟩ g8 g26 hal hh hfx hfb hc hk
-  have hstr1 : t1 = 3 → (∃ a, l = .str a) ∨ ∃ b, r = .str b := fun h => .inl (vl.tag_str h)
-  have hstr2 : t2 = 3 → (∃ a, l = .str a) ∨ ∃ b, r = .str b := fun h => .inr (vr.tag_str h)
+  have hstr1 : t1 = 3 → IsStrV l ∨ IsStrV r := fun h => .inl (vl.tag_str h)
+  have hstr2 : t2 = 3 → IsStrV l ∨ IsStrV r := fun h => .inr (vr.tag_str h)
   split
   · next ht =>
     exact hcat (hstr1 (by simpa using ht)) _ (by reg_simp; exact Keep.refl _ _) (by reg_simp; exact h10)
@@ -864,11 +873,11 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
         (by reg_simp; exact h11) (by reg_simp; exact h12) (by reg_simp; exact h13) (by reg_simp; exact h8)
         (by reg_simp)
     · next ht2 =>
-      have hns : ¬ ((∃ a, l = .str a) ∨ ∃ b, r = .str b) := by
+      have hns : ¬ (IsStrV l ∨ IsStrV r) := by
         rintro (⟨a, rfl⟩ | ⟨b, rfl⟩)
         · exact ht1 (by rw [vl.tag]; rfl)
         · exact ht2 (by rw [vr.tag]; rfl)
-      by_cases hint : (∃ a, l = .int a) ∧ ∃ b, r = .int b
+      by_cases hint : IsIntV l ∧ IsIntV r
       · obtain ⟨⟨a, rfl⟩, ⟨b, rfl⟩⟩ := hint
         obtain ⟨rfl, rfl, ha1, ha2⟩ := vl; obtain ⟨rfl, rfl, hb1, hb2⟩ := vr
         simp only [BitVec.reduceEq, ne_eq, not_true_eq_false, if_false, ite_false]
