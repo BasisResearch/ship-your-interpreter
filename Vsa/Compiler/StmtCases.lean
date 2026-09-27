@@ -150,7 +150,7 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
   have hs2' : Seg code (cargs C.Γ 0 pos args).2 (printLoop 0 (cargs C.Γ 0 pos args).2 ns.length) :=
     Seg.pos_eq hend.symm hs2
   have hpl := printLoop_length 0 (cargs C.Γ 0 pos args).2 (pos + (cargs C.Γ 0 pos args).1.length) ns.length
-  obtain ⟨B2, r2, hB2pc, hB2o, hB2m⟩ := run_printLoop hAt.lay ns 0 _ B1
+  obtain ⟨B2, r2, hB2pc, hB2o, hB2m⟩ := run_printLoop₀ hAt.lay ns 0 _ B1
     (fun j hj => by simpa [word] using hB1t j hj) hns (by have := hvl; rw [hmax] at hlen; omega)
     hs2' (by unfold PosOK at *; have := hend; have := hpl; omega) hB1pc
   have hc2 : Chain st''.store B2.mem env C.Γ := hB1c.transport fun i hi => by

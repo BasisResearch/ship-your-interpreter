@@ -183,14 +183,14 @@ theorem cseq_length_le (C : Ctx) (pos : Nat) : ∀ (ss : List Stmt),
 end
 
 theorem compile_length_le (p : Program) : (compile p).length ≤ 123 + seqSize p := by
-  have h1 := cseq_length_le ⟨[[]], 0, 0, 0⟩ mainPos p
+  have h1 := cseq_length_le ⟨[[]], 0, 0, 0⟩ mainPos₀ p
   have h2 : (exitCode 0).length ≤ 23 := by
     have := li_length_le s3 (exitWord (BitVec.ofNat 64 0))
     have := li_length_le s2 tohostW
     simp only [exitCode, List.length_append, List.length_cons, List.length_nil]; omega
-  have hm : mainPos = 100 := rfl
-  have : (compile p).length = mainPos + (cseq ⟨[[]], 0, 0, 0⟩ mainPos p).1.length + (exitCode 0).length := by
-    simp only [compile, List.length_append, List.length_cons, List.length_nil, mainPos, printPos, errPos]
+  have hm : mainPos₀ = 100 := rfl
+  have : (compile p).length = mainPos₀ + (cseq ⟨[[]], 0, 0, 0⟩ mainPos₀ p).1.length + (exitCode 0).length := by
+    simp only [compile, List.length_append, List.length_cons, List.length_nil, mainPos₀, printPos, errPos]
     try omega
   omega
 

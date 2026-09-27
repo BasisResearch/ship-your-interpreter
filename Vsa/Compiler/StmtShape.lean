@@ -91,7 +91,7 @@ theorem sim_cond {C : Ctx} {pos L : Nat} {c : Expr} {st : St} {d : Nat} {env : A
     (by have := tdepth_le C.Γ c 0 pos hs; have := hend.small; omega) hs1
     (by unfold PosOK at *; omega) hA hsr.1
   rcases hB1 with ⟨v, st1, hev, hty, hout, hBo, hBpc, hB0, hBc, -⟩ | ⟨hh, hne⟩
-  · have r2 := run_cond hAt.fits hs2 hBpc (by unfold PosOK at *; omega) hL hB0
+  · have r2 := run_cond₀ hAt.fits hs2 hBpc (by unfold PosOK at *; omega) hL hB0
     refine ⟨_, r1.trans r2, .inl ⟨st1, v, hev, ⟨hBc, ?_⟩, EvalE.sameParents c hs hev, ?_⟩⟩
     · simp only [outStr]; rw [hBo, hout]; exact hsr.2
     · have := word_truthy hc hty

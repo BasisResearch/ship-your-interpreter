@@ -158,7 +158,7 @@ section
 variable {code : List Ins}
 
 /-- `s3 := 1; b r1 r2 skip; s3 := 0; a0 := s3`. -/
-theorem run_cmp (hfit : Fits code) {p r1 r2 : Nat} {b : BrOp} {A : AM} {x y : BitVec 64}
+theorem run_cmp₀ (hfit : Fits code) {p r1 r2 : Nat} {b : BrOp} {A : AM} {x y : BitVec 64}
     (hseg : Seg code p [.addi s3 0 1, .br b r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3])
     (hA : A.pc = pcOf p) (hp : PosOK (p + 4))
     (h1 : Has A.regs r1 x) (h2 : Has A.regs r2 y) (hr1 : r1 ≠ s3) (hr2 : r2 ≠ s3) :
@@ -202,15 +202,15 @@ end
 
 /-! ## Operator tails -/
 
-theorem guard_lt {a b : Int} (ha : InRange a) (hb : InRange b) :
+theorem guard_lt₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
     guardB bop.BLT (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a < b) := by
   simp [guardB, zopz0zI_s, toInt_ofInt_range ha, toInt_ofInt_range hb]
 
-theorem guard_ge {a b : Int} (ha : InRange a) (hb : InRange b) :
+theorem guard_ge₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
     guardB bop.BGE (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a ≥ b) := by
   simp [guardB, zopz0zKzJ_s, toInt_ofInt_range ha, toInt_ofInt_range hb]
 
-theorem guard_eq {a b : Int} (ha : InRange a) (hb : InRange b) :
+theorem guard_eq₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
     guardB bop.BEQ (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a = b) := by
   simp only [guardB, beq_iff_eq]
   by_cases h : a = b
@@ -218,7 +218,7 @@ theorem guard_eq {a b : Int} (ha : InRange a) (hb : InRange b) :
   · have : BitVec.ofInt 64 a ≠ BitVec.ofInt 64 b := fun e => h ((ofInt_inj_range ha hb).mp e)
     simp [h, this]
 
-theorem guard_ne {a b : Int} (ha : InRange a) (hb : InRange b) :
+theorem guard_ne₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
     guardB bop.BNE (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a ≠ b) := by
   simp only [guardB]
   by_cases h : a = b
@@ -258,7 +258,7 @@ theorem sim_cmp (hfit : Fits code) {op : BinOp} {br : BrOp} {r1 r2 : Nat} {p : N
   have hc : cbin p op = [.addi s3 0 1, .br br r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3] := by
     rcases hcmp with rfl|rfl|rfl|rfl|rfl|rfl <;> simp_all [cbin, cmpBranch]
   rw [hc] at hseg hpos ⊢
-  obtain ⟨L, hs, hL⟩ := run_cmp hfit hseg hA hpos hx hy hr1 hr2
+  obtain ⟨L, hs, hL⟩ := run_cmp₀ hfit hseg hA hpos hx hy hr1 hr2
   refine ⟨_, hs, .inl ⟨.bool c, rfl, hsem, rfl, rfl, ?_, fun h => absurd h hna, fun _ => ⟨c, rfl⟩⟩⟩
   rw [hg x y hx hy] at hL
   cases c <;> simpa [word] using hL
@@ -391,37 +391,37 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _)]
-          exact guard_lt ha hb)
+          exact guard_lt₀ ha hb)
         h0 h1 (by decide) (by decide) hseg hA hpos (.inl rfl) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a ≤ b)) (fun s => by simp [binOpSem])
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h1.src.2 : x = _), (hy.src.2.symm.trans h0.src.2 : y = _),
-            guard_ge hb ha])
+            guard_ge₀ hb ha])
         h1 h0 (by decide) (by decide) hseg hA hpos (.inr (.inl rfl)) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a > b)) (fun s => by simp [binOpSem])
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h1.src.2 : x = _), (hy.src.2.symm.trans h0.src.2 : y = _),
-            guard_lt hb ha])
+            guard_lt₀ hb ha])
         h1 h0 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inl rfl))) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a ≥ b)) (fun s => by simp [binOpSem])
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
-            guard_ge ha hb])
+            guard_ge₀ ha hb])
         h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inl rfl)))) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a = b)) (fun s => by simp [binOpSem, Value.equal]; rfl)
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
-            guard_eq ha hb])
+            guard_eq₀ ha hb])
         h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inl rfl))))) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a ≠ b)) (fun s => by simp [binOpSem, Value.equal]; rfl)
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
-            guard_ne ha hb])
+            guard_ne₀ ha hb])
         h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inr rfl))))) hna
 
 end
@@ -715,7 +715,7 @@ theorem sim_not (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e)
   obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A hE' (by simpa [tdepth] using hk) hs1
     (by unfold PosOK at *; omega) hA hc
   rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
-  · obtain ⟨L, r2, hL0⟩ := run_cmp hL.1 hs2 hBpc (by unfold PosOK at *; omega) hB0 (Has.zero _)
+  · obtain ⟨L, r2, hL0⟩ := run_cmp₀ hL.1 hs2 hBpc (by unfold PosOK at *; omega) hB0 (Has.zero _)
       (by decide) (by decide)
     have hg : guardB BrOp.eq.bop (word v) 0 = !v.truthy := by
       rcases hE' with hi | hb

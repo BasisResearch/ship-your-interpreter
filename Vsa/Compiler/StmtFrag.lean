@@ -70,7 +70,7 @@ variable {code : List Ins}
 
 
 /-- `bne a0, x0, +8; jal x0, L`: fall into the next code when `a0 ≠ 0`, else jump to `L`. -/
-theorem run_cond (hfit : Fits code) {q L : Nat} {A : AM} {w : BitVec 64}
+theorem run_cond₀ (hfit : Fits code) {q L : Nat} {A : AM} {w : BitVec 64}
     (hseg : Seg code q [.br .ne a0 0 (bSkip 1), .jal 0 (jOff (q + 1) L)])
     (hA : A.pc = pcOf q) (hq : PosOK (q + 2)) (hL : PosOK L) (h0 : Has A.regs a0 w) :
     Star code A ⟨pcOf (if w = 0 then L else q + 2), A.regs, A.mem, A.out⟩ := by
@@ -220,7 +220,7 @@ theorem printPos_ok : PosOK printPos := by decide
 
 theorem printPos_toNat : (pcOf printPos).toNat = codeBase + 4 * printPos := pcOf_toNat (by decide)
 
-theorem run_printLoop (hL : Layout code) : ∀ (ns : List Int) (k pos : Nat) (A : AM),
+theorem run_printLoop₀ (hL : Layout code) : ∀ (ns : List Int) (k pos : Nat) (A : AM),
     (∀ j (hj : j < ns.length), rdW A.mem (tempAddr (k + j)) = BitVec.ofInt 64 ns[j]) →
     (∀ x ∈ ns, InRange x) → k + ns.length ≤ 64 → Seg code pos (printLoop k pos ns.length) →
     PosOK (pos + (printLoop k pos ns.length).length) → A.pc = pcOf pos →
@@ -285,7 +285,7 @@ theorem run_printLoop (hL : Layout code) : ∀ (ns : List Int) (k pos : Nat) (A 
         intro j hj
         rw [htemp, show k + 1 + j = k + (j + 1) by omega, hv (j + 1) (by simp; omega)]
         simp
-      obtain ⟨B4, r4, hB4pc, hB4o, hB4m⟩ := run_printLoop hL xs (k + 1) (q + 1 + (putc ' ').length)
+      obtain ⟨B4, r4, hB4pc, hB4o, hB4m⟩ := run_printLoop₀ hL xs (k + 1) (q + 1 + (putc ' ').length)
         ⟨pcOf (q + 1 + (putc ' ').length), L3, B2.mem, B2.out.push (toString ' ')⟩ hv'
         (fun y hy => hr y (List.mem_cons_of_mem _ hy)) (by omega) (Seg.pos_eq (by omega) hs4)
         (Seg.end_ok hL.1 (Seg.pos_eq (by omega) hs4) (by

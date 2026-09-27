@@ -24,6 +24,10 @@ structure SupportedG (p : Program) : Prop where
   wf : WfSeq (strTab p) [globalNames p] p
   setup : SetupOK p
 
+/-- The heap budget in cost units: the frame region above the global frame
+holds `64 * heapUnits` bytes. -/
+def heapUnits : Nat := 0x3F8000
+
 /-- The context of the top-level statements. -/
 def ctxG (p : Program) : GCtx := ⟨[globalNames p], 0, none, none, none⟩
 
@@ -123,17 +127,16 @@ theorem reach_body (m : Mem) (o : Array String) (ho : String.join o.toList = "")
   exact ⟨B, Star.step hstep r, hB⟩
 
 /-- A big-step behaviour is reached, and the code then exits with `0`. -/
-theorem absG_term (hcap : ∀ out n, BigStepBudget p out n → 64 * n ≤ 0xFE00000) (m : Mem) (o : Array String)
+theorem absG_term (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (m : Mem) (o : Array String)
     (ho : String.join o.toList = "") {out : String} (hb : BigStep p out) :
     Reaches (compileG p) (A0 m o) fun B => astep (compileG p) B = some (.halt 0) ∧
       String.join B.out.toList = out := by
-  obtain ⟨st', D, rfl⟩ := hb
-  obtain ⟨n, C⟩ := ExecSeqCost.exists D
+  obtain ⟨st', n, C, rfl, hle⟩ := hcap out hb
   have hs := gsegs p
   have hR := RTLoaded.of hfit hs.rt
   have hP := seg_end_posOK hfit hs.exit (by simp [exitCode])
   have hbl : (bodyG p).length = (gseq (strTab p) (ctxG p) (mainPos + (setupCode p).length) p).length := rfl
-  have hn := hcap _ n ⟨st', n, C, rfl, Nat.le_refl _⟩
+  have hn : 64 * n ≤ 0xFE00000 := by unfold heapUnits at hle; omega
   have hroom : Room (view0 p) n := by
     have := hsup.setup.glob; have := hsup.setup.tab
     have hfb : frameBase = 0x80100000 := rfl; have hfe : frameEnd = 0x90000000 := rfl
@@ -184,7 +187,7 @@ theorem absG_stuck (m : Mem) (o : Array String) (ho : String.join o.toList = "")
 end
 
 /-- **Correctness of the full compiler.** For every supported WHILE program
-`p` whose big-step executions allocate at most `0xFE00000 / 64` cost units
+`p` whose big-step behaviours have allocation cost at most `heapUnits`
 (`BigStepBudget`; the machine uses at most 64 heap bytes per unit), and every
 machine configuration whose memory holds the bytes of `compileG p` at
 `0x80004800` (below `tohost`), libgcc's multiply and signed divide/remainder
@@ -194,7 +197,7 @@ machine halts with exit code `0` and output `out` exactly when `out` is a
 big-step behaviour of `p`, and a diverging machine means `p` has none. -/
 theorem compileG_correct (p : Program) (hsup : SupportedG p)
     (hfit : 0x80004800 + 4 * (compileG p).length ≤ 0x8001ad00)
-    (hcap : ∀ out n, BigStepBudget p out n → 64 * n ≤ 0xFE00000) (c : Config)
+    (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
     (hpw : c.σ.regs.get? Register.htif_payload_writes = some 0#4)

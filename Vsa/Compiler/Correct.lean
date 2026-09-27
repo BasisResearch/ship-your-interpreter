@@ -25,15 +25,15 @@ def compileBytes (p : Program) : List (BitVec 8) :=
 /-! ## The program image -/
 
 /-- The compiled statement list. -/
-def body (p : Program) : List Ins := (cseq ⟨[[]], 0, 0, 0⟩ mainPos p).1
+def body (p : Program) : List Ins := (cseq ⟨[[]], 0, 0, 0⟩ mainPos₀ p).1
 
 theorem compile_eq (p : Program) :
-    compile p = [Ins.jal 0 (jOff 0 mainPos)] ++ errCode ++ printCode ++ body p ++ exitCode 0 := rfl
+    compile p = [Ins.jal 0 (jOff 0 mainPos₀)] ++ errCode ++ printCode ++ body p ++ exitCode 0 := rfl
 
 theorem compile_segs (p : Program) :
-    Seg (compile p) 0 [Ins.jal 0 (jOff 0 mainPos)] ∧ Seg (compile p) errPos errCode ∧
-      Seg (compile p) printPos printCode ∧ Seg (compile p) mainPos (body p) ∧
-      Seg (compile p) (mainPos + (body p).length) (exitCode 0) := by
+    Seg (compile p) 0 [Ins.jal 0 (jOff 0 mainPos₀)] ∧ Seg (compile p) errPos errCode ∧
+      Seg (compile p) printPos printCode ∧ Seg (compile p) mainPos₀ (body p) ∧
+      Seg (compile p) (mainPos₀ + (body p).length) (exitCode 0) := by
   have h := Seg.self (compile p)
   rw [compile_eq] at h
   obtain ⟨h1234, h5⟩ := h.append
@@ -45,9 +45,9 @@ theorem compile_segs (p : Program) :
   · exact h2
   · exact h3
   · exact h4
-  · exact Seg.pos_eq (by simp [mainPos, printPos, errPos]; omega) h5
+  · exact Seg.pos_eq (by simp [mainPos₀, printPos, errPos]; omega) h5
 
-theorem mainPos_val : mainPos = 100 := rfl
+theorem mainPos_val : mainPos₀ = 100 := rfl
 
 theorem codeAt_of_bytes {p : Program} {m : Mem}
     (h : ∀ k, k < (compileBytes p).length → m[codeBase + k]? = (compileBytes p)[k]?) :
@@ -57,20 +57,20 @@ theorem codeAt_of_bytes {p : Program} {m : Mem}
 
 def ctx0 : Ctx := ⟨[[]], 0, 0, 0⟩
 
-theorem at0 (p : Program) (hfit : Fits (compile p)) : At (compile p) ctx0 mainPos := by
+theorem at0 (p : Program) (hfit : Fits (compile p)) : At (compile p) ctx0 mainPos₀ := by
   obtain ⟨-, h2, h3, h4, h5⟩ := compile_segs p
   have hpo := Seg.end_ok hfit h5 (by simp [exitCode])
   refine ⟨⟨hfit, h2, h3⟩, by simp [ctx0], by simp [ctx0, Scope.slots], by simp [ctx0, Scope.slots],
     by simp [ctx0], by simp [ctx0], by unfold PosOK at *; omega⟩
 
 theorem enter (p : Program) (hfit : Fits (compile p)) (m : Mem) (o : Array String) :
-    astep (compile p) (A0 m o) = some (.run ⟨pcOf mainPos, [], m, o⟩) := by
+    astep (compile p) (A0 m o) = some (.run ⟨pcOf mainPos₀, [], m, o⟩) := by
   obtain ⟨h1, -⟩ := compile_segs p
   have := at0 p hfit
   exact step_jump hfit h1.head rfl (by unfold PosOK Fits at *; decide) this.posok
 
 theorem sr0 (m : Mem) (o : Array String) (ho : String.join o.toList = "") :
-    SR ctx0.Γ 0 initSt ⟨pcOf mainPos, [], m, o⟩ := ⟨chain_init m, ho⟩
+    SR ctx0.Γ 0 initSt ⟨pcOf mainPos₀, [], m, o⟩ := ⟨chain_init m, ho⟩
 
 /-- A big-step behaviour is reached, and the code then exits with `0`. -/
 theorem abstract_term (p : Program) (hsup : Supported p) (hfit : Fits (compile p)) (m : Mem)
@@ -80,9 +80,9 @@ theorem abstract_term (p : Program) (hsup : Supported p) (hfit : Fits (compile p
   obtain ⟨st', D, rfl⟩ := hb
   obtain ⟨-, -, -, h4, h5⟩ := compile_segs p
   have hAt := at0 p hfit
-  have hbl : (body p).length = (cseq ctx0 mainPos p).1.length := rfl
+  have hbl : (body p).length = (cseq ctx0 mainPos₀ p).1.length := rfl
   have hpos := Seg.end_ok hfit h5 (by simp [exitCode])
-  obtain ⟨B, r, hpc, hout, -, -, -, -⟩ := seqT (code := compile p) D ctx0 false mainPos _ [] [] rfl hAt
+  obtain ⟨B, r, hpc, hout, -, -, -, -⟩ := seqT (code := compile p) D ctx0 false mainPos₀ _ [] [] rfl hAt
     hsup h4 (by unfold PosOK at *; omega) (fun h => by cases h) rfl (sr0 m o ho)
   obtain ⟨B', r', -, hBo, hh⟩ := run_exit hfit (by decide : (0 : Nat) = 0 ∨ 0 = 70) h5 (by
     rw [hpc]; rfl)
@@ -95,15 +95,15 @@ theorem abstract_stuck (p : Program) (hsup : Supported p) (hfit : Fits (compile 
       ∀ n, Runs (compile p) n (A0 m o) := by
   obtain ⟨-, -, -, h4, h5⟩ := compile_segs p
   have hAt := at0 p hfit
-  have hbl : (body p).length = (cseq ctx0 mainPos p).1.length := rfl
+  have hbl : (body p).length = (cseq ctx0 mainPos₀ p).1.length := rfl
   have hpos := Seg.end_ok hfit h5 (by simp [exitCode])
   have hne : ¬ HasSeqExec initSt 0 0 p := by
     rintro ⟨st', t, D⟩
-    obtain ⟨-, -, -, -, -, -, hnorm, -⟩ := seqT (code := compile p) D ctx0 false mainPos _ [] [] rfl hAt
+    obtain ⟨-, -, -, -, -, -, hnorm, -⟩ := seqT (code := compile p) D ctx0 false mainPos₀ _ [] [] rfl hAt
       hsup h4 (by unfold PosOK at *; omega) (fun h => by cases h) rfl (sr0 m o ho)
     exact hnb ⟨st'.out, st', by rw [← hnorm rfl]; exact D, rfl⟩
   have hf : ∀ n, Fail (compile p) n (A0 m o) := fun n =>
-    Fail.of_star (Star.single (enter p hfit m o)) (seqFail_all n initSt 0 0 p ctx0 false mainPos _ [] []
+    Fail.of_star (Star.single (enter p hfit m o)) (seqFail_all n initSt 0 0 p ctx0 false mainPos₀ _ [] []
       rfl hAt hsup h4 (by unfold PosOK at *; omega) (fun h => by cases h) rfl (sr0 m o ho) hne)
   by_cases hh : Reaches (compile p) (A0 m o) (fun B => astep (compile p) B = some (.halt 70))
   · exact .inl hh

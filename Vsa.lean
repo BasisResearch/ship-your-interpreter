@@ -858,3 +858,4 @@ import Vsa.Sim.CallArgumentsFrame
 import Vsa.Sim.CallArgumentValues
 import Vsa.Sim.CallClosureGeometry
 import Vsa.Compiler.WhileWl
+import Vsa.Compiler.CompiledG

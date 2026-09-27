@@ -173,13 +173,13 @@ theorem not_any_of_find? {l : List (String × Value)} {x : String}
   simpa using h
 
 /-- Rebinding `x` in a frame's variable list. -/
-def rebind (x : String) (v : Value) (vars : List (String × Value)) : List (String × Value) :=
+def rebind₀ (x : String) (v : Value) (vars : List (String × Value)) : List (String × Value) :=
   vars.map fun p => if p.1 == x then (x, v) else p
 
-theorem find?_rebind (x y : String) (v : Value) (vars : List (String × Value)) :
-    (rebind x v vars).find? (·.1 == y) =
+theorem find?_rebind₀ (x y : String) (v : Value) (vars : List (String × Value)) :
+    (rebind₀ x v vars).find? (·.1 == y) =
       if y = x then (vars.find? (·.1 == y)).map (fun _ => (x, v)) else vars.find? (·.1 == y) := by
-  unfold rebind
+  unfold rebind₀
   rw [List.find?_map]
   have hc : ((·.1 == y) ∘ fun p : String × Value => if p.1 == x then (x, v) else p) = (·.1 == y) := by
     funext p; simp only [Function.comp]; split <;> simp_all
@@ -212,10 +212,10 @@ theorem FrameOK.rebind {fr : Frame} {f : List (String × Nat)} {m m' : Mem} {b :
     {x : String} {i : Nat} {v : Int} (h : FrameOK fr f m b) (hx : f.lookup x = some i)
     (hnd : (f.map Prod.snd).Nodup) (hv : slotV m' i = v)
     (ho : ∀ p ∈ f, p.2 ≠ i → slotV m' p.2 = slotV m p.2) :
-    FrameOK { fr with vars := rebind x (.int v) fr.vars } f m' b := by
+    FrameOK { fr with vars := rebind₀ x (.int v) fr.vars } f m' b := by
   intro y
   simp only
-  rw [find?_rebind]
+  rw [find?_rebind₀]
   by_cases hyx : y = x
   · subst hyx; rw [if_pos rfl, h y, hx]; simp [hv]
   · rw [if_neg hyx, h y]
@@ -270,7 +270,7 @@ theorem Chain.set {s : Store} {m m' : Mem} {x : String} {i : Nat} {v : Int} :
         exact (List.nodup_append.mp hnd).2.2 _ hi _ hk rfl
       have hof : ∀ p ∈ f, p.2 ≠ i → slotV m' p.2 = slotV m p.2 :=
         fun p hp hne => ho _ (List.mem_append_left _ (List.mem_map_of_mem hp)) hne
-      let upd : Frame → Frame := fun fr => { fr with vars := rebind x (.int v) fr.vars }
+      let upd : Frame → Frame := fun fr => { fr with vars := rebind₀ x (.int v) fr.vars }
       let s' : Store := { s with frames := s.frames.modify env upd }
       match g, h with
       | [], h =>
@@ -316,9 +316,9 @@ theorem Chain.set {s : Store} {m m' : Mem} {x : String} {i : Nat} {v : Int} :
 
 /-- The frame update of `Store.define`. -/
 def defineVars (x : String) (v : Value) (vars : List (String × Value)) : List (String × Value) :=
-  if vars.any (·.1 == x) then rebind x v vars else vars ++ [(x, v)]
+  if vars.any (·.1 == x) then rebind₀ x v vars else vars ++ [(x, v)]
 
-theorem define_eq (s : Store) (a : Addr) (x : String) (v : Value) :
+theorem define_eq₀ (s : Store) (a : Addr) (x : String) (v : Value) :
     s.define a x v = { s with frames := s.frames.modify a fun f => { f with vars := defineVars x v f.vars } } := rfl
 
 /-- A chain whose head frame is updated at `env`, the rest untouched. -/
@@ -355,11 +355,11 @@ theorem Chain.define_old {s : Store} {m m' : Mem} {env : Addr} {f : List (String
       | _ :: _, h => obtain ⟨fr0, p, hfr0, -, -, hok, -⟩ := h; rw [hfr] at hfr0; cases hfr0; simpa using hok
     have hany := any_of_find? (find?_of_FrameOK_some hok hx)
     refine ⟨{ fr with vars := defineVars x (.int n) fr.vars },
-      by rw [define_eq, getElem?_modify_self' _ _ _ hfr], rfl, ?_⟩
+      by rw [define_eq₀, getElem?_modify_self' _ _ _ hfr], rfl, ?_⟩
     simp only [defineVars, hany, if_true]
     exact hok.rebind hx (List.nodup_append.mp hnd).1 hv
       (fun p hp hne => ho _ (List.mem_append_left _ (List.mem_map_of_mem hp)) hne)
-  · intro j hj; rw [define_eq, getElem?_modify_ne' _ _ _ _ (Nat.ne_of_gt hj)]
+  · intro j hj; rw [define_eq₀, getElem?_modify_ne' _ _ _ _ (Nat.ne_of_gt hj)]
   · intro k hk
     exact ho k (List.mem_append_right _ hk) (fun e => by
       subst e; exact (List.nodup_append.mp hnd).2.2 _ hi _ hk rfl)
@@ -380,7 +380,7 @@ theorem Chain.define_new {s : Store} {m m' : Mem} {env : Addr} {f : List (String
     (hv : slotV m' k = n) (ho : ∀ j ∈ Scope.slots (f :: g), slotV m' j = slotV m j) :
     Chain (s.define env x (.int n)) m' env (((x, k) :: f) :: g) := by
   rw [slots_cons] at hk ho
-  refine h.head_update ?_ (fun j hj => by rw [define_eq, getElem?_modify_ne' _ _ _ _ (Nat.ne_of_gt hj)])
+  refine h.head_update ?_ (fun j hj => by rw [define_eq₀, getElem?_modify_ne' _ _ _ _ (Nat.ne_of_gt hj)])
     (fun j hj => ho j (List.mem_append_right _ hj))
   · intro fr hfr
     have hok : FrameOK fr f m (g = []) := by
@@ -391,7 +391,7 @@ theorem Chain.define_new {s : Store} {m m' : Mem} {env : Addr} {f : List (String
       rw [hok x, hx]
       by_cases hg : g = [] <;> simp [hg, nativeVars_find?_none hnat]
     refine ⟨{ fr with vars := defineVars x (.int n) fr.vars },
-      by rw [define_eq, getElem?_modify_self' _ _ _ hfr], rfl, ?_⟩
+      by rw [define_eq₀, getElem?_modify_self' _ _ _ hfr], rfl, ?_⟩
     simp only [defineVars, not_any_of_find? hnone, Bool.false_eq_true, if_false]
     intro y
     rw [List.find?_append]

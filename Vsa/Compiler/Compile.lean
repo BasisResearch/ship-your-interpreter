@@ -9,7 +9,7 @@ namespace Vsa.Compiler
 
 open Vsa.While
 
-def mainPos : Nat := printPos + printCode.length
+def mainPos₀ : Nat := printPos + printCode.length
 
 /-! ## Scopes -/
 
@@ -157,7 +157,7 @@ end
 /-- The whole program. -/
 def compile (p : Program) : List Ins :=
   let initΓ : Scope := [[]]
-  let (body, _, _) := cseq ⟨initΓ, 0, 0, 0⟩ mainPos p
-  [.jal 0 (jOff 0 mainPos)] ++ errCode ++ printCode ++ body ++ exitCode 0
+  let (body, _, _) := cseq ⟨initΓ, 0, 0, 0⟩ mainPos₀ p
+  [.jal 0 (jOff 0 mainPos₀)] ++ errCode ++ printCode ++ body ++ exitCode 0
 
 end Vsa.Compiler

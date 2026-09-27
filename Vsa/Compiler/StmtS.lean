@@ -6,7 +6,7 @@ import Vsa.Compiler.Fail
 
 If a supported statement (list) has no execution from a related state, its code
 reaches the runtime-error exit or runs for at least `n` steps, for every `n`
-(`noS`/`noSeq`, by strong induction on `n` and structural recursion on the
+(`noS₀`/`noSeq`, by strong induction on `n` and structural recursion on the
 syntax). Executions of the parts that do exist are run with the forward
 simulation.
 -/
@@ -65,7 +65,7 @@ theorem fBlock {n : Nat} {st : St} {d : Nat} {env : Addr} {ss : List Stmt}
     [] C.Γ rfl hAt.block hs hseg hpos hloop hA ⟨hc0, hsr.2⟩
     (fun ⟨st', t, D⟩ => hne ⟨st', t, .block _ _ _ _ _ _ _ _ rfl D⟩)
 
-theorem fIfNone {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s : Stmt}
+theorem fIfNone₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s : Stmt}
     (ih : ∀ st', SFail code n st' d env s) : SFail code n st d env (.ifStmt c s none) := by
   intro C loop pos A hAt hs hseg hpos hloop hA hsr hne
   obtain ⟨hc, hst⟩ := hs
@@ -85,7 +85,7 @@ theorem fIfNone {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s : Stmt}
     · exact absurd ⟨st1, .normal, .ifNone _ _ _ _ _ _ _ hev (by simpa using ht)⟩ hne
   · exact .inl ⟨B1, r1, hh⟩
 
-theorem fIfSome {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 : Stmt}
+theorem fIfSome₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 : Stmt}
     (ih1 : ∀ st', SFail code n st' d env s1) (ih2 : ∀ st', SFail code n st' d env s2) :
     SFail code n st d env (.ifStmt c s1 (some s2)) := by
   intro C loop pos A hAt hs hseg hpos hloop hA hsr hne
@@ -118,7 +118,7 @@ theorem fIfSome {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 : S
         hpc1 hsr1 (fun ⟨st', t, D⟩ => hne ⟨st', t, .ifFalse _ _ _ _ _ _ _ _ _ _ hev (by simpa using ht) D⟩))
   · exact .inl ⟨B1, r1, hh⟩
 
-theorem fWhile {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt}
+theorem fWhile₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt}
     (ihb : ∀ st', SFail code n st' d env b)
     (IHn : ∀ m < n, ∀ st', SFail code m st' d env (.whileStmt c b)) :
     SFail code n st d env (.whileStmt c b) := by
@@ -195,7 +195,7 @@ theorem fWhile {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt}
   refine Fail.of_prefix hall (IHn (n - (k1 + k2)) (by omega) st2 C loop pos B3 hAt hs0 hseg0 hpos0 hloop
     hpc3 ⟨by rw [hm3]; exact hsr2.1, by simp only [outStr] at *; rw [ho3]; exact hsr2.2⟩ hne3)
 
-theorem fNil {n : Nat} {st : St} {d : Nat} {env : Addr} : SeqFail code n st d env [] :=
+theorem fNil₀ {n : Nat} {st : St} {d : Nat} {env : Addr} : SeqFail code n st d env [] :=
   fun _ _ _ _ _ _ _ _ _ _ _ _ _ _ hne => absurd ⟨st, .normal, .nil _ _ _⟩ hne
 
 theorem fDecl {n : Nat} {st : St} {d : Nat} {env : Addr} {x : String} {e : Expr} {ss : List Stmt}
@@ -216,7 +216,7 @@ theorem fDecl {n : Nat} {st : St} {d : Nat} {env : Addr} {x : String} {e : Expr}
       (fun ⟨st', t, D'⟩ => hne ⟨st', t, .consNormal _ _ _ _ _ _ _ _ D D'⟩))
   · exact .inl ⟨B1, r1, hh⟩
 
-theorem fCons {n : Nat} {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List Stmt}
+theorem fCons₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List Stmt}
     (hd : ∀ x e, s ≠ .varDecl x (some e)) (ihs : ∀ st', SFail code n st' d env s)
     (ihss : ∀ st', SeqFail code n st' d env ss) : SeqFail code n st d env (s :: ss) := by
   intro C loop pos A f g hΓ hAt hs hseg hpos hloop hA hsr hne
@@ -244,14 +244,14 @@ end
 
 mutual
 
-theorem noS {code : List Ins} (n : Nat) (IHn : ∀ m < n, ∀ st d env s, SFail code m st d env s) :
+theorem noS₀ {code : List Ins} (n : Nat) (IHn : ∀ m < n, ∀ st d env s, SFail code m st d env s) :
     ∀ (s : Stmt) (st : St) (d : Nat) (env : Addr), SFail code n st d env s
   | .expr _, _, _, _ => fExpr
   | .block ss, _, _, _ => fBlock (fun st' env' => noSeq n IHn ss st' _ env')
-  | .ifStmt _ s none, _, _, _ => fIfNone (fun st' => noS n IHn s st' _ _)
+  | .ifStmt _ s none, _, _, _ => fIfNone₀ (fun st' => noS₀ n IHn s st' _ _)
   | .ifStmt _ s1 (some s2), _, _, _ =>
-    fIfSome (fun st' => noS n IHn s1 st' _ _) (fun st' => noS n IHn s2 st' _ _)
-  | .whileStmt _ b, _, d, env => fWhile (fun st' => noS n IHn b st' _ _) (fun m hm st' => IHn m hm st' d env _)
+    fIfSome₀ (fun st' => noS₀ n IHn s1 st' _ _) (fun st' => noS₀ n IHn s2 st' _ _)
+  | .whileStmt _ b, _, d, env => fWhile₀ (fun st' => noS₀ n IHn b st' _ _) (fun m hm st' => IHn m hm st' d env _)
   | .brk, _, _, _ => fBrk
   | .cont, _, _, _ => fCont
   | .varDecl _ _, _, _, _ => fun _ _ _ _ _ hs => hs.elim
@@ -260,33 +260,33 @@ theorem noS {code : List Ins} (n : Nat) (IHn : ∀ m < n, ∀ st d env s, SFail 
 
 theorem noSeq {code : List Ins} (n : Nat) (IHn : ∀ m < n, ∀ st d env s, SFail code m st d env s) :
     ∀ (ss : List Stmt) (st : St) (d : Nat) (env : Addr), SeqFail code n st d env ss
-  | [], _, _, _ => fNil
+  | [], _, _, _ => fNil₀
   | .varDecl _ (some _) :: ss, _, _, _ => fDecl (fun st' => noSeq n IHn ss st' _ _)
   | .varDecl x none :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .expr e :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .block b :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .ifStmt c t e :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .whileStmt c b :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .forStmt i c s b :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .ret e :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .brk :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
   | .cont :: ss, _, _, _ =>
-    fCons (fun _ _ h => by cases h) (fun st' => noS n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
+    fCons₀ (fun _ _ h => by cases h) (fun st' => noS₀ n IHn _ st' _ _) (fun st' => noSeq n IHn ss st' _ _)
 
 end
 
 theorem sfail_all {code : List Ins} : ∀ n st d env s, SFail code n st d env s := by
   intro n
   induction n using Nat.strongRecOn with
-  | ind n ih => exact fun st d env s => noS n ih s st d env
+  | ind n ih => exact fun st d env s => noS₀ n ih s st d env
 
 theorem seqFail_all {code : List Ins} (n : Nat) (st : St) (d : Nat) (env : Addr) (ss : List Stmt) :
     SeqFail code n st d env ss :=
