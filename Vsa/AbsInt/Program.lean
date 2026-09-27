@@ -61,6 +61,19 @@ theorem bigStep_global (cfg : Cfg) {p : Program} {st' : St}
     Gam ((analyze (A := A) cfg p).norm.lookup x).1 v :=
   (SGam.lookup rfl (bigStep_final cfg h)).1 v hx
 
+/-- A global the analysis finds certainly bound is bound in the final store,
+to a value in its abstract value. -/
+theorem bigStep_global_some (cfg : Cfg) {p : Program} {st' : St}
+    (h : ExecSeq initSt 0 0 p st' .normal) {x : String} {a : A}
+    (hl : (analyze (A := A) cfg p).norm.lookup x = (a, false)) :
+    (st'.store.get? 0 x).isSome = true ∧ ∀ v, st'.store.get? 0 x = some v → Gam a v := by
+  have hs := SGam.lookup (x := x) (env := 0) rfl (bigStep_final (A := A) cfg h)
+  rw [hl] at hs
+  refine ⟨?_, hs.1⟩
+  cases hv : st'.store.get? 0 x with
+  | none => cases hs.2 hv
+  | some _ => rfl
+
 /-- A program whose normal completion the analysis finds unreachable has no
 `BigStep` behaviour. -/
 theorem no_bigStep_of_bot (cfg : Cfg) {p : Program}

@@ -28,6 +28,8 @@ structure Cfg where
   unroll : Nat := 200
   /-- Widening iterations before falling back to `⊤`. -/
   widenFuel : Nat := 60
+  /-- Narrowing steps after a post-fixpoint is found. -/
+  narrowFuel : Nat := 2
   deriving Repr
 
 variable {A : Type} [AbsDom A]
@@ -204,16 +206,23 @@ def fixIter (F : AState A → AState A) : Nat → AState A → AState A
   | 0, J => J
   | n + 1, J => if (F J).le J then J else fixIter F n (J.widen (F J))
 
-/-- A checked post-fixpoint of `F` above `I`, or `⊤`. -/
-def postFix (F : AState A → AState A) (fuel : Nat) (I : AState A) : AState A :=
-  if I.le (fixIter F fuel I) && (F (fixIter F fuel I)).le (fixIter F fuel I) then
-    fixIter F fuel I
-  else .top
+/-- `J` is a post-fixpoint of `F` above `I`. -/
+def isPost (F : AState A → AState A) (I J : AState A) : Bool := I.le J && (F J).le J
+
+/-- Narrowing: replace a post-fixpoint `J` by `I ⊔ F J` while that is still a
+post-fixpoint. -/
+def narrowIter (F : AState A → AState A) (I : AState A) : Nat → AState A → AState A
+  | 0, J => J
+  | n + 1, J => if isPost F I (I.join (F J)) then narrowIter F I n (I.join (F J)) else J
+
+/-- A checked post-fixpoint of `F` above `I`, narrowed, or `⊤`. -/
+def postFix (F : AState A → AState A) (fuel narrow : Nat) (I : AState A) : AState A :=
+  if isPost F I (fixIter F fuel I) then narrowIter F I narrow (fixIter F fuel I) else .top
 
 /-- Abstract loop: up to `k` unrolled iterations, then a post-fixpoint. An
 unrolled head state whose successor it already covers is a post-fixpoint. -/
 def loopAbs (cfg : Cfg) (F : AState A → LStep A) : Nat → AState A → SRes A
-  | 0, I => (F (postFix (fun J => (F J).next) cfg.widenFuel I)).out
+  | 0, I => (F (postFix (fun J => (F J).next) cfg.widenFuel cfg.narrowFuel I)).out
   | k + 1, I =>
     if (F I).next.isBot || (F I).next.le I then (F I).out
     else (F I).out.join (loopAbs cfg F k (F I).next)

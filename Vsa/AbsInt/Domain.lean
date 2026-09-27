@@ -74,6 +74,11 @@ def binFailKind : BinOp → Value → Value → Kind
   | .mod, .int _, .int 0 => .divZero
   | _, _, _ => .type
 
+theorem binFailKind_mem {op : BinOp} {l r : Value} :
+    binFailKind op l r ∈ [Kind.type, .divZero] := by
+  unfold binFailKind
+  split <;> simp
+
 /-- A value domain with its concretisation and sound transfer functions. -/
 class AbsDom (A : Type) where
   top : A

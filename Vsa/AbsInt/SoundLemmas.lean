@@ -96,25 +96,38 @@ theorem SOK.any {as : List Addr} {r : SRes A} {st : Status} {s : Store}
 
 /-! ## Loops -/
 
-theorem postFix_ge {F : AState A → AState A} {n : Nat} {I : AState A}
-    {as : List Addr} {s : Store} (h : SGam as s I) : SGam as s (postFix F n I) := by
+theorem narrowIter_isPost {F : AState A → AState A} {I : AState A} :
+    ∀ {n : Nat} {J : AState A}, isPost F I J = true → isPost F I (narrowIter F I n J) = true
+  | 0, _, h => h
+  | n + 1, J, h => by
+    simp only [narrowIter]
+    split
+    · rename_i h'
+      exact narrowIter_isPost h'
+    · exact h
+
+theorem postFix_cases (F : AState A → AState A) (n m : Nat) (I : AState A) :
+    postFix F n m I = .top ∨ isPost F I (postFix F n m I) = true := by
   unfold postFix
   split
-  · rename_i hc
-    simp only [Bool.and_eq_true] at hc
-    exact SGam.le hc.1 h
-  · trivial
+  · rename_i h
+    exact Or.inr (narrowIter_isPost h)
+  · exact Or.inl rfl
 
-theorem postFix_post {F : AState A → AState A} {n : Nat} {I : AState A}
-    {as : List Addr} {s : Store} (h : SGam as s (F (postFix F n I))) :
-    SGam as s (postFix F n I) := by
-  unfold postFix at h ⊢
-  split
-  · rename_i hc
-    rw [if_pos hc] at h
-    simp only [Bool.and_eq_true] at hc
-    exact SGam.le hc.2 h
-  · trivial
+theorem postFix_ge {F : AState A → AState A} {n m : Nat} {I : AState A}
+    {as : List Addr} {s : Store} (h : SGam as s I) : SGam as s (postFix F n m I) := by
+  rcases postFix_cases F n m I with he | hp
+  · rw [he]; trivial
+  · simp only [isPost, Bool.and_eq_true] at hp
+    exact SGam.le hp.1 h
+
+theorem postFix_post {F : AState A → AState A} {n m : Nat} {I : AState A}
+    {as : List Addr} {s : Store} (h : SGam as s (F (postFix F n m I))) :
+    SGam as s (postFix F n m I) := by
+  rcases postFix_cases F n m I with he | hp
+  · rw [he]; trivial
+  · simp only [isPost, Bool.and_eq_true] at hp
+    exact SGam.le hp.2 h
 
 /-- A loop run from `s₀` completing with `st` in `s₁` is covered by every
 post-fixpoint and by every unrolling. -/
