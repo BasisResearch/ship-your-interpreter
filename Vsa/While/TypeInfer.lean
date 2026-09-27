@@ -1,26 +1,34 @@
-import Vsa.While.TypeCheck
+import Vsa.While.TypeSearch
 
 /-!
-# Type inference
+# Type inference and the WHILE type checker
 
-`infer p` computes a typing environment for `p` by unification and returns it
-only when the verified checker accepts it, so every result is sound
-(`infer_sound`). A result is a finite table of name types; `envOf` extends it
-to a `TyEnv` with the builtins and `int` for every other name.
+`infer p` finds a typing environment for `p` whenever one exists:
 
-The solver works over types with variables (`TyV`), one variable per program
-name. `+` (integer or string concatenation) and the comparisons (integers or
-strings) are overloaded: their constraints wait until an operand's type is
-known and otherwise default to integers. A callee whose type is still unknown
-at a call is taken to be a function. Remaining variables default to `int`.
+* `infer_sound`: a result types `p`;
+* `infer_complete`: if any `Δ` types `p`, `infer p` succeeds;
+* `whileTyped p = true ↔ ∃ Δ, WellTyped Δ p` (`whileTyped_iff`), so
+  `Typable p` is decidable.
 
-Inference is not proved complete: a program that is well-typed under some `Δ`
-can be rejected when a default choice is wrong.
+`infer` runs the complete search of `Vsa/While/TypeSearch.lean` and confirms its
+result with the verified checker (`typeCheck_iff`). When there is no typing,
+the unverified diagnostic solver `Diag.solve` produces the error message; it
+never decides acceptance.
 -/
 
 namespace Vsa.While.Types
 
 open Vsa.While
+
+/-! ## Diagnostics
+
+A unification solver over types with variables (`TyV`) that tracks scoping,
+loop and return context and reports the first failure in words. `+` and the
+comparisons wait until an operand's type is known and otherwise default to
+integers. It is only used for error messages. -/
+
+namespace Diag
+
 
 /-- Types with unification variables. -/
 inductive TyV where
@@ -395,14 +403,7 @@ def inferSeq (c : Ctx) : List Stmt → InferM (List String)
 
 end
 
-/-- The typing environment of a name table: builtins, the table, `int`
-elsewhere. -/
-def envOf (l : List (String × Ty)) : TyEnv := fun x =>
-  if x = "print" then .native .print else if x = "println" then .native .println
-  else if x = "assert" then .native .assert
-  else (l.lookup x).getD .int
-
-/-- The untrusted solver: a name table from unification. -/
+/-- The diagnostic solver's name table. -/
 def solve (p : Program) : Except String (List (String × Ty)) := do
   let go : InferM (List (String × Ty)) := do
     discard <| inferSeq { S := builtinNames, R := none, L := false, where_ := "the program" } p
@@ -412,24 +413,90 @@ def solve (p : Program) : Except String (List (String × Ty)) := do
       (x, ground s.σ 1000 t))
   (·.1) <$> go.run {}
 
-/-- **Type inference**, checked: the solver's name table, accepted by the
-verified checker. -/
-def infer (p : Program) : Except String (List (String × Ty)) :=
+/-- The first problem the diagnostic solver finds. -/
+def message (p : Program) : String :=
   match solve p with
-  | .error e => .error e
-  | .ok l => if typeCheck (envOf l) p then .ok l else .error "no typing found: the checker \
-    rejects the inferred types (an overloaded operator was defaulted to integers)"
+  | .error e => e
+  | .ok _ => "no typing environment exists"
+
+end Diag
+
+/-! ## Inference -/
+
+/-- **Type inference.** -/
+def infer (p : Program) : Except String TyEnv :=
+  match searchProg p with
+  | some s => if typeCheck (envOfSubst s.σ) p then .ok (envOfSubst s.σ) else .error (Diag.message p)
+  | none => .error (Diag.message p)
 
 /-- **Inference is sound.** -/
-theorem infer_sound {p : Program} {l : List (String × Ty)} (h : infer p = .ok l) :
-    WellTyped (envOf l) p := by
+theorem infer_sound {p : Program} {Δ : TyEnv} (h : infer p = .ok Δ) : WellTyped Δ p := by
   unfold infer at h
   split at h
-  · cases h
   · split at h
-    · rename_i hc
-      cases h
-      exact typeCheck_iff.mp hc
+    · rename_i hc; cases h; exact typeCheck_iff.mp hc
     · cases h
+  · cases h
+
+/-- **Inference is complete.** -/
+theorem infer_complete {p : Program} {Δ : TyEnv} (h : WellTyped Δ p) :
+    ∃ Δ', infer p = .ok Δ' := by
+  obtain ⟨s, hs⟩ := search_complete h
+  have hc := typeCheck_iff.mpr (search_sound h hs)
+  exact ⟨envOfSubst s.σ, by simp [infer, hs, hc]⟩
+
+/-- A program is typable when some typing environment types it. -/
+def Typable (p : Program) : Prop := ∃ Δ, WellTyped Δ p
+
+/-- **The WHILE type checker.** -/
+def whileTyped (p : Program) : Bool :=
+  match infer p with
+  | .ok _ => true
+  | .error _ => false
+
+/-- **The type checker decides typability.** -/
+theorem whileTyped_iff {p : Program} : whileTyped p = true ↔ Typable p := by
+  constructor
+  · intro h
+    unfold whileTyped at h
+    split at h
+    · rename_i Δ hΔ; exact ⟨Δ, infer_sound hΔ⟩
+    · cases h
+  · rintro ⟨Δ, h⟩
+    obtain ⟨Δ', hΔ'⟩ := infer_complete h
+    simp [whileTyped, hΔ']
+
+instance (p : Program) : Decidable (Typable p) := decidable_of_iff _ whileTyped_iff
+
+/-- The names a program declares, in order of first declaration. -/
+def programNames (p : Program) : List String :=
+  (go p).foldl (fun acc x => if x ∈ acc then acc else acc ++ [x]) []
+where
+  go : List Stmt → List String
+    | [] => []
+    | s :: ss => goS s ++ go ss
+  goS : Stmt → List String
+    | .expr e => goE e
+    | .varDecl x none => [x]
+    | .varDecl x (some e) => x :: goE e
+    | .block ss => go ss
+    | .ifStmt c t (some e) => goE c ++ goS t ++ goS e
+    | .ifStmt c t none => goE c ++ goS t
+    | .whileStmt c b => goE c ++ goS b
+    | .forStmt (some i) _ _ b => goS i ++ goS b
+    | .forStmt none _ _ b => goS b
+    | .ret (some e) => goE e
+    | _ => []
+  goE : Expr → List String
+    | .assign _ e => goE e
+    | .binary _ l r => goE l ++ goE r
+    | .logical _ l r => goE l ++ goE r
+    | .unary _ e => goE e
+    | .call f args => goE f ++ goArgs args
+    | .fn _ params body => params ++ go body
+    | _ => []
+  goArgs : List Expr → List String
+    | [] => []
+    | e :: es => goE e ++ goArgs es
 
 end Vsa.While.Types

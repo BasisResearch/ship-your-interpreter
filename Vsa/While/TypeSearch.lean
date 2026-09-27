@@ -78,16 +78,21 @@ def tNULL : Tm := .leaf 3
 
 /-! ## The search -/
 
-/-- Search state: substitution and next auxiliary variable. -/
+/-- A disjunction of equation systems. -/
+abbrev Disj := List (List (Tm × Tm))
+
+/-- Search state: substitution, next auxiliary variable, and the disjunctions
+still to be decided. -/
 structure SS where
   σ : Subst
   n : Nat
+  pend : List Disj
 
 def unifyS (s : SS) (E : List (Tm × Tm)) : Option SS :=
-  (unifyTop s.σ E).map fun σ => ⟨σ, s.n⟩
+  (unifyTop s.σ E).map fun σ => { s with σ := σ }
 
 /-- The first alternative that succeeds. -/
-def firstSome {α : Type} (f : α → Option SS) : List α → Option SS
+def firstSome {α β : Type} (f : α → Option β) : List α → Option β
   | [] => none
   | a :: as =>
     match f a with
@@ -113,11 +118,28 @@ def callAlts (f : Tm) (ts : List Tm) (r : Tm) : List (List (Tm × Tm) × Tm) :=
   [([(f, .node 0 (tList ts) r)], r), ([(f, .leaf 4)], tNULL), ([(f, .leaf 5)], tNULL)] ++
     (if ts.length = 1 ∨ ts.length = 2 then [([(f, .leaf 6)], tNULL)] else [])
 
+/-- The alternatives consistent with `σ`. -/
+def viable (σ : Subst) (alts : List (List (Tm × Tm) × Tm)) : List (List (Tm × Tm) × Tm) :=
+  alts.filter fun a => (unifyTop σ a.1).isSome
+
+/-- Apply one of several typing rules: fail if none is consistent, commit if
+exactly one is, and otherwise record the choice as a disjunction over a fresh
+result variable. -/
+def branch (alts : List (List (Tm × Tm) × Tm)) (s : SS) (k : SS → Tm → Option SS) :
+    Option SS :=
+  match viable s.σ alts with
+  | [] => none
+  | [a] => (unifyS s a.1).bind fun s' => k s' a.2
+  | a :: b :: rest =>
+    k { s with n := s.n + 1,
+               pend := ((a :: b :: rest).map fun c => (.var (.aux s.n), c.2) :: c.1) :: s.pend }
+      (.var (.aux s.n))
+
 /-- A function literal, given the search of its body. -/
 def fnWrap (params : List String) (body : List Stmt)
     (bs : Option Tm → SS → (SS → Option SS) → Option SS) (s : SS)
     (k : SS → Tm → Option SS) : Option SS :=
-  bs (some (.var (.aux s.n))) ⟨s.σ, s.n + 1⟩ fun s₂ =>
+  bs (some (.var (.aux s.n))) { s with n := s.n + 1 } fun s₂ =>
     (unifyS s₂ (if mustExitSeqB body then [] else [(.var (.aux s.n), tNULL)])).bind fun s₃ =>
       k s₃ (.node 0 (tList (params.map pvar)) (.var (.aux s.n)))
 
@@ -133,15 +155,14 @@ def srchE : Expr → SS → (SS → Tm → Option SS) → Option SS
     srchE e s fun s₁ t => (unifyS s₁ [(t, pvar x)]).bind fun s₂ => k s₂ (pvar x)
   | .binary op l r, s, k =>
     srchE l s fun s₁ tl => srchE r s₁ fun s₂ tr =>
-      firstSome (fun a => (unifyS s₂ a.1).bind fun s₃ => k s₃ a.2) (binAlts op tl tr)
+      branch (binAlts op tl tr) s₂ k
   | .logical _ l r, s, k => srchE l s fun s₁ _ => srchE r s₁ fun s₂ _ => k s₂ tBOOL
   | .unary .neg e, s, k =>
     srchE e s fun s₁ t => (unifyS s₁ [(t, tINT)]).bind fun s₂ => k s₂ tINT
   | .unary .not e, s, k => srchE e s fun s₁ _ => k s₁ tBOOL
   | .call f args, s, k =>
     srchE f s fun s₁ tf => srchArgs args s₁ fun s₂ ts =>
-      firstSome (fun a => (unifyS ⟨s₂.σ, s₂.n + 1⟩ a.1).bind fun s₃ => k s₃ a.2)
-        (callAlts tf ts (.var (.aux s₂.n)))
+      branch (callAlts tf ts (.var (.aux s₂.n))) { s₂ with n := s₂.n + 1 } k
   | .fn _ params body, s, k => fnWrap params body (srchSeq body) s k
 
 def srchArgs : List Expr → SS → (SS → List Tm → Option SS) → Option SS
@@ -183,10 +204,51 @@ def srchSeq : List Stmt → Option Tm → SS → (SS → Option SS) → Option S
 end
 
 /-- The initial state: the builtins bound. -/
-def s₀ : SS := ⟨[(.name "print", .leaf 4), (.name "println", .leaf 5), (.name "assert", .leaf 6)], 0⟩
+def s₀ : SS :=
+  ⟨[(.name "print", .leaf 4), (.name "println", .leaf 5), (.name "assert", .leaf 6)], 0, []⟩
+
+/-- The number of consistent alternatives of a disjunction. -/
+def nViable (σ : Subst) (d : Disj) : Nat := (d.filter fun E => (unifyTop σ E).isSome).length
+
+/-- An element with the least measure. -/
+def pickMin {α : Type} (f : α → Nat) : List α → Option α
+  | [] => none
+  | a :: as =>
+    match pickMin f as with
+    | none => some a
+    | some b => if f b < f a then some b else some a
+
+theorem pickMin_mem {α : Type} {f : α → Nat} : ∀ {l : List α} {a : α}, pickMin f l = some a → a ∈ l
+  | [], _, h => by cases h
+  | b :: bs, a, h => by
+    simp only [pickMin] at h
+    split at h
+    · cases h; exact List.mem_cons_self
+    · rename_i c hc
+      split at h
+      · cases h; exact List.mem_cons_of_mem _ (pickMin_mem hc)
+      · cases h; exact List.mem_cons_self
+
+/-- Decide the recorded disjunctions: fail as soon as one has no consistent
+alternative, otherwise branch on one with the fewest. -/
+def resolve (σ : Subst) (ds : List Disj) : Option Subst :=
+  if ds.any fun d => nViable σ d == 0 then none
+  else
+    match h : pickMin (nViable σ) ds with
+    | none => some σ
+    | some d =>
+      firstSome (fun E => (unifyTop σ E).bind fun σ' => resolve σ' (ds.erase d))
+        (d.filter fun E => (unifyTop σ E).isSome)
+termination_by ds.length
+decreasing_by
+  have hd := pickMin_mem h
+  rw [List.length_erase_of_mem hd]
+  have := List.length_pos_of_mem hd
+  omega
 
 /-- **The search.** -/
-def searchProg (p : Program) : Option SS := srchSeq p none s₀ some
+def searchProg (p : Program) : Option SS :=
+  srchSeq p none s₀ fun s => (resolve s.σ s.pend).map fun σ => { s with σ := σ, pend := [] }
 
 /-- The typing environment of a solution. -/
 def envOfSubst (σ : Subst) : TyEnv := fun x => dec (canon σ (.name x))
@@ -262,10 +324,11 @@ theorem firstSome_ne_none {α : Type} {f : α → Option SS} :
       · exact firstSome_ne_none h hf
 
 theorem unifyS_sound {s s' : SS} {E : List (Tm × Tm)} (h : unifyS s E = some s') :
-    s'.n = s.n ∧ (Idem s.σ → Idem s'.σ) ∧ ∀ θ, Sat θ s'.σ → Sat θ s.σ ∧ SatE θ E := by
+    s'.n = s.n ∧ s'.pend = s.pend ∧ (Idem s.σ → Idem s'.σ) ∧
+      ∀ θ, Sat θ s'.σ → Sat θ s.σ ∧ SatE θ E := by
   simp only [unifyS] at h
   obtain ⟨σ, hσ, rfl⟩ := Option.map_eq_some_iff.mp h
-  exact ⟨rfl, fun hi => unifyTop_idem hi hσ, fun θ hs => unifyTop_sound hσ hs⟩
+  exact ⟨rfl, rfl, fun hi => unifyTop_idem hi hσ, fun θ hs => unifyTop_sound hσ hs⟩
 
 theorem satE_one {θ : V → Tm} {a b : Tm} (h : SatE θ [(a, b)]) : a.bind θ = b.bind θ :=
   h (a, b) (by simp)
@@ -316,30 +379,60 @@ theorem callAlts_sound {θ : V → Tm} {f r : Tm} {ts : List Tm} {alt : List (Tm
 
 /-! ## Soundness -/
 
+/-- An assignment satisfies every recorded disjunction. -/
+def SatP (θ : V → Tm) (ds : List Disj) : Prop := ∀ d ∈ ds, ∃ E ∈ d, SatE θ E
+
 /-- The search moved from `s` to `s'`, and every solution of `s'` solves `s`
 and satisfies `P`. -/
 structure Step (s s' : SS) (P : (V → Tm) → Prop) : Prop where
   idem : Idem s.σ → Idem s'.σ
-  sat : ∀ θ, Sat θ s'.σ → Sat θ s.σ ∧ P θ
+  pend : ∀ d ∈ s.pend, d ∈ s'.pend
+  sat : ∀ θ, Sat θ s'.σ → SatP θ s'.pend → Sat θ s.σ ∧ P θ
 
 theorem Step.trans {s₁ s₂ s₃ : SS} {P Q : (V → Tm) → Prop} (h₁ : Step s₁ s₂ P)
     (h₂ : Step s₂ s₃ Q) : Step s₁ s₃ fun θ => P θ ∧ Q θ :=
-  ⟨fun h => h₂.idem (h₁.idem h), fun θ h => by
-    obtain ⟨h, hq⟩ := h₂.sat θ h
-    obtain ⟨h, hp⟩ := h₁.sat θ h
-    exact ⟨h, hp, hq⟩⟩
+  ⟨fun h => h₂.idem (h₁.idem h), fun d hd => h₂.pend d (h₁.pend d hd), fun θ h hp => by
+    obtain ⟨h, hq⟩ := h₂.sat θ h hp
+    obtain ⟨h, hp'⟩ := h₁.sat θ h fun d hd => hp d (h₂.pend d hd)
+    exact ⟨h, hp', hq⟩⟩
 
 theorem Step.mono {s s' : SS} {P Q : (V → Tm) → Prop} (h : Step s s' P)
     (hPQ : ∀ θ, Sat θ s'.σ → P θ → Q θ) : Step s s' Q :=
-  ⟨h.idem, fun θ hs => ⟨(h.sat θ hs).1, hPQ θ hs (h.sat θ hs).2⟩⟩
+  ⟨h.idem, h.pend, fun θ hs hp => ⟨(h.sat θ hs hp).1, hPQ θ hs (h.sat θ hs hp).2⟩⟩
 
 theorem Step.unify {s s' : SS} {E : List (Tm × Tm)} (h : unifyS s E = some s') :
-    Step s s' fun θ => SatE θ E :=
-  ⟨(unifyS_sound h).2.1, (unifyS_sound h).2.2⟩
+    Step s s' fun θ => SatE θ E := by
+  obtain ⟨_, hp, hi, hs⟩ := unifyS_sound h
+  exact ⟨hi, fun d hd => hp ▸ hd, fun θ h _ => hs θ h⟩
 
-theorem Step.refl (s : SS) : Step s s fun _ => True := ⟨id, fun _ h => ⟨h, trivial⟩⟩
+theorem Step.refl (s : SS) : Step s s fun _ => True :=
+  ⟨id, fun _ h => h, fun _ h _ => ⟨h, trivial⟩⟩
 
-theorem Step.fresh (s : SS) : Step s ⟨s.σ, s.n + 1⟩ fun _ => True := ⟨id, fun _ h => ⟨h, trivial⟩⟩
+theorem Step.fresh (s : SS) : Step s { s with n := s.n + 1 } fun _ => True :=
+  ⟨id, fun _ h => h, fun _ h _ => ⟨h, trivial⟩⟩
+
+theorem mem_viable {σ : Subst} {alts : List (List (Tm × Tm) × Tm)} {a : List (Tm × Tm) × Tm}
+    (h : a ∈ viable σ alts) : a ∈ alts ∧ (unifyTop σ a.1).isSome = true := by
+  simpa [viable] using h
+
+theorem branch_sound {alts : List (List (Tm × Tm) × Tm)} {s : SS} {k : SS → Tm → Option SS}
+    {res : SS} (h : branch alts s k = some res) :
+    ∃ s' τ, k s' τ = some res ∧
+      Step s s' fun θ => ∃ a ∈ alts, SatE θ a.1 ∧ τ.bind θ = a.2.bind θ := by
+  unfold branch at h
+  split at h
+  · cases h
+  · rename_i a hv
+    obtain ⟨s', hu, hk⟩ := bind_some_inv h
+    have ha := (mem_viable (hv ▸ List.mem_singleton_self a : a ∈ viable s.σ alts)).1
+    exact ⟨s', _, hk, (Step.unify hu).mono fun θ _ hE => ⟨a, ha, hE, rfl⟩⟩
+  · rename_i a b rest hv
+    refine ⟨_, _, h, ⟨id, fun d hd => List.mem_cons_of_mem _ hd, fun θ hs hp => ⟨hs, ?_⟩⟩⟩
+    obtain ⟨E, hE, hsat⟩ := hp _ List.mem_cons_self
+    obtain ⟨c, hc, rfl⟩ := List.mem_map.mp hE
+    have hc' := (mem_viable (hv ▸ hc : c ∈ viable s.σ alts)).1
+    exact ⟨c, hc', fun e he => hsat e (List.mem_cons_of_mem _ he),
+      hsat _ List.mem_cons_self⟩
 
 theorem fnWrap_sound {params : List String} {body : List Stmt} {Sb S'' : List String}
     (hb : ∀ R s k res, srchSeq body R s k = some res →
@@ -389,10 +482,12 @@ theorem soundE : (e : Expr) → ∀ {Δ : TyEnv} {S : List String} {T : Ty}, WtE
       simp only [srchE] at h
       obtain ⟨s₁, tl, h₁, st₁⟩ := soundE l Dl s _ res h
       obtain ⟨s₂, tr, h₂, st₂⟩ := soundE r Dr s₁ _ res h₁
-      obtain ⟨a, ha, h₃⟩ := firstSome_some h₂
-      obtain ⟨s₃, hu, hk⟩ := bind_some_inv h₃
-      refine ⟨s₃, _, hk, ((st₁.trans st₂).trans (Step.unify hu)).mono
-        fun θ _ ⟨⟨hl, hr⟩, hE⟩ => .binary _ _ _ _ _ _ _ hl hr (binAlts_sound ha hE)⟩
+      obtain ⟨s₃, τ, hk, st₃⟩ := branch_sound h₂
+      refine ⟨s₃, τ, hk, ((st₁.trans st₂).trans st₃).mono
+        fun θ _ ⟨⟨hl, hr⟩, a, ha, hE, hτ⟩ => ?_⟩
+      have : dT θ τ = dT θ a.2 := by simp only [dT, hτ]
+      rw [this]
+      exact .binary _ _ _ _ _ _ _ hl hr (binAlts_sound ha hE)
   | .logical op l r, _, _, _, D, s, k, res, h => by
     cases D with
     | logical _ _ _ _ _ _ Dl Dr =>
@@ -422,11 +517,12 @@ theorem soundE : (e : Expr) → ∀ {Δ : TyEnv} {S : List String} {T : Ty}, WtE
       simp only [srchE] at h
       obtain ⟨s₁, tf, h₁, st₁⟩ := soundE f Df s _ res h
       obtain ⟨s₂, ts, h₂, st₂⟩ := soundArgs args Da s₁ _ res h₁
-      obtain ⟨a, ha, h₃⟩ := firstSome_some h₂
-      obtain ⟨s₃, hu, hk⟩ := bind_some_inv h₃
-      refine ⟨s₃, _, hk, (((st₁.trans st₂).trans (Step.fresh s₂)).trans (Step.unify hu)).mono
-        fun θ _ ⟨⟨⟨hf, ha'⟩, _⟩, hE⟩ =>
-          .call _ _ _ _ _ _ hf hlen ha' (callAlts_sound ha hE)⟩
+      obtain ⟨s₃, τ, hk, st₃⟩ := branch_sound h₂
+      refine ⟨s₃, τ, hk, (((st₁.trans st₂).trans (Step.fresh s₂)).trans st₃).mono
+        fun θ _ ⟨⟨⟨hf, ha'⟩, _⟩, a, ha, hE, hτ⟩ => ?_⟩
+      have : dT θ τ = dT θ a.2 := by simp only [dT, hτ]
+      rw [this]
+      exact .call _ _ _ _ _ _ hf hlen ha' (callAlts_sound ha hE)
   | .fn name params body, _, _, _, D, s, k, res, h => by
     cases D with
     | fn _ _ _ _ r S' Db _ =>
@@ -605,6 +701,10 @@ def BndS (n : Nat) (σ : Subst) : Prop := ∀ m, V.aux m ∈ varsS σ → m < n
 /-- The assignment gives each program name its `Δ` type. -/
 def Names (Δ : TyEnv) (θ : V → Tm) : Prop := ∀ x, θ (.name x) = enc (Δ x)
 
+/-- The auxiliary variables of the recorded disjunctions are below `n`. -/
+def BndP (n : Nat) (ds : List Disj) : Prop :=
+  ∀ d ∈ ds, ∀ E ∈ d, ∀ e ∈ E, BndT n e.1 ∧ BndT n e.2
+
 /-- Search invariant: `θ` solves the state, which is idempotent and uses
 auxiliary variables below its counter. -/
 structure Inv (Δ : TyEnv) (θ : V → Tm) (s : SS) : Prop where
@@ -612,6 +712,8 @@ structure Inv (Δ : TyEnv) (θ : V → Tm) (s : SS) : Prop where
   idem : Idem s.σ
   bnd : BndS s.n s.σ
   names : Names Δ θ
+  pend : SatP θ s.pend
+  bndP : BndP s.n s.pend
 
 /-- Two assignments agree on the auxiliary variables below `n`. -/
 def Agree (θ θ' : V → Tm) (n : Nat) : Prop := ∀ m < n, θ (.aux m) = θ' (.aux m)
@@ -652,7 +754,8 @@ theorem unifyS_complete {Δ : TyEnv} {θ : V → Tm} {s : SS} {E : List (Tm × T
     (hI : Inv Δ θ s) (hE : SatE θ E) (hb : ∀ e ∈ E, BndT s.n e.1 ∧ BndT s.n e.2) :
     ∃ s', unifyS s E = some s' ∧ Inv Δ θ s' ∧ s'.n = s.n := by
   obtain ⟨σ, hσ, hs⟩ := unifyTop_complete hI.idem hI.sat hE
-  refine ⟨⟨σ, s.n⟩, by simp [unifyS, hσ], ⟨hs, unifyTop_idem hI.idem hσ, ?_, hI.names⟩, rfl⟩
+  refine ⟨{ s with σ := σ }, by simp [unifyS, hσ],
+    ⟨hs, unifyTop_idem hI.idem hσ, ?_, hI.names, hI.pend, hI.bndP⟩, rfl⟩
   intro m hm
   rcases unifyTop_vars hσ hm with h | h
   · exact hI.bnd m h
@@ -673,20 +776,76 @@ def upd (θ : V → Tm) (n : Nat) (t : Tm) : V → Tm := fun v => if v = .aux n 
 
 theorem upd_self (θ : V → Tm) (n : Nat) (t : Tm) : upd θ n t (.aux n) = t := by simp [upd]
 
+theorem satE_agree {Δ : TyEnv} {θ θ' : V → Tm} {n : Nat} {E : List (Tm × Tm)}
+    (hθ : Names Δ θ) (hθ' : Names Δ θ') (ha : Agree θ θ' n)
+    (hb : ∀ e ∈ E, BndT n e.1 ∧ BndT n e.2) (h : SatE θ E) : SatE θ' E := by
+  intro e he
+  rw [← bind_agree hθ hθ' ha (hb e he).1, ← bind_agree hθ hθ' ha (hb e he).2]
+  exact h e he
+
+theorem BndP.mono {n m : Nat} {ds : List Disj} (h : BndP n ds) (hnm : n ≤ m) : BndP m ds :=
+  fun d hd E hE e he => ⟨(h d hd E hE e he).1.mono hnm, (h d hd E hE e he).2.mono hnm⟩
+
 theorem Inv.fresh {Δ : TyEnv} {θ : V → Tm} {s : SS} (hI : Inv Δ θ s) (t : Tm) :
-    Inv Δ (upd θ s.n t) ⟨s.σ, s.n + 1⟩ ∧ Agree θ (upd θ s.n t) s.n := by
+    Inv Δ (upd θ s.n t) { s with n := s.n + 1 } ∧ Agree θ (upd θ s.n t) s.n := by
   have hagree : Agree θ (upd θ s.n t) s.n := fun m hm => by
     simp [upd]; omega
   have hnames : Names Δ (upd θ s.n t) := fun x => by simp [upd, hI.names x]
-  refine ⟨⟨fun p hp => ?_, hI.idem, fun m hm => by have := hI.bnd m hm; show m < s.n + 1; omega, hnames⟩, hagree⟩
-  have hp1 : p.1 ≠ .aux s.n := by
-    intro h
-    have := hI.bnd s.n (List.mem_flatMap.mpr ⟨p, hp, by simp [h]⟩)
-    omega
-  have hb : BndT s.n p.2 := fun m hm => hI.bnd m (List.mem_flatMap.mpr ⟨p, hp, by simp [hm]⟩)
-  simp only [upd, hp1, ↓reduceIte]
-  rw [← bind_agree hI.names hnames hagree hb]
-  exact hI.sat p hp
+  refine ⟨⟨fun p hp => ?_, hI.idem, fun m hm => by have := hI.bnd m hm; show m < s.n + 1; omega,
+    hnames, fun d hd => ?_, hI.bndP.mono (by simp)⟩, hagree⟩
+  · have hp1 : p.1 ≠ .aux s.n := by
+      intro h
+      have := hI.bnd s.n (List.mem_flatMap.mpr ⟨p, hp, by simp [h]⟩)
+      omega
+    have hb : BndT s.n p.2 := fun m hm => hI.bnd m (List.mem_flatMap.mpr ⟨p, hp, by simp [hm]⟩)
+    simp only [upd, hp1, ↓reduceIte]
+    rw [← bind_agree hI.names hnames hagree hb]
+    exact hI.sat p hp
+  · obtain ⟨E, hE, hsat⟩ := hI.pend d hd
+    exact ⟨E, hE, satE_agree hI.names hnames hagree (hI.bndP d hd E hE) hsat⟩
+
+theorem branch_complete {Δ : TyEnv} {θ : V → Tm} {s : SS} {alts : List (List (Tm × Tm) × Tm)}
+    {k : SS → Tm → Option SS} {a : List (Tm × Tm) × Tm} (hI : Inv Δ θ s) (ha : a ∈ alts)
+    (hE : SatE θ a.1) (hb : ∀ c ∈ alts, (∀ e ∈ c.1, BndT s.n e.1 ∧ BndT s.n e.2) ∧ BndT s.n c.2)
+    (hK : ∀ s' τ θ', Inv Δ θ' s' → Agree θ θ' s.n → s.n ≤ s'.n → BndT s'.n τ →
+      τ.bind θ' = a.2.bind θ → k s' τ ≠ none) :
+    branch alts s k ≠ none := by
+  have hav : a ∈ viable s.σ alts := by
+    obtain ⟨σ', hσ', _⟩ := unifyTop_complete hI.idem hI.sat hE
+    simp [viable, ha, hσ']
+  unfold branch
+  split
+  · rename_i hv; rw [hv] at hav; cases hav
+  · rename_i c hv
+    rw [hv, List.mem_singleton] at hav
+    subst hav
+    obtain ⟨s', hu, hI', hn'⟩ := unifyS_complete hI hE (hb a ha).1
+    rw [hu]
+    exact hK s' _ θ hI' Agree.rfl' (by omega) (by rw [hn']; exact (hb a ha).2) rfl
+  · rename_i c d rest hv
+    obtain ⟨hF, hagree⟩ := hI.fresh (a.2.bind θ)
+    have hmem : ∀ x ∈ c :: d :: rest, x ∈ alts := fun x hx => (mem_viable (hv ▸ hx)).1
+    refine hK _ _ _ ⟨hF.sat, hF.idem, hF.bnd, hF.names, ?_, ?_⟩ hagree (by simp) ?_ (upd_self _ _ _)
+    · intro D hD
+      rcases List.mem_cons.mp hD with rfl | hD
+      · refine ⟨(.var (.aux s.n), a.2) :: a.1, List.mem_map.mpr ⟨a, hv ▸ hav, rfl⟩, ?_⟩
+        intro e he
+        rcases List.mem_cons.mp he with rfl | he
+        · simp only [Tm.bind, upd_self]
+          exact bind_agree hI.names hF.names hagree (hb a ha).2
+        · exact satE_agree hI.names hF.names hagree (hb a ha).1 hE e he
+      · exact hF.pend D hD
+    · intro D hD
+      rcases List.mem_cons.mp hD with rfl | hD
+      · intro E hE e he
+        obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hE
+        have hbx := hb x (hmem x hx)
+        rcases List.mem_cons.mp he with rfl | he
+        · exact ⟨fun m hm => by simp [Tm.vars] at hm; show m < s.n + 1; omega,
+            hbx.2.mono (by simp)⟩
+        · exact ⟨(hbx.1 e he).1.mono (by simp), (hbx.1 e he).2.mono (by simp)⟩
+      · exact hF.bndP D hD
+    · intro m hm; simp [Tm.vars] at hm; show m < s.n + 1; omega
 
 /-- Continuation hypotheses. -/
 def KE (Δ : TyEnv) (θ : V → Tm) (s : SS) (T : Ty) (k : SS → Tm → Option SS) : Prop :=
@@ -931,11 +1090,10 @@ theorem cE_binary : ∀ op l r, CE l → CE r → CE (.binary op l r) := by
     refine ihE_r Dr s₁ θ₁ _ hI₁ fun s₂ τr θ₂ hI₂ ha₂ hn₂ hb₂ hτr => ?_
     have hτl' : τl.bind θ₂ = enc tl := by rw [← bind_agree hI₁.names hI₂.names ha₂ hb₁]; exact hτl
     obtain ⟨a, ha, hE, hres⟩ := binAlts_complete hbt hτl' hτr
-    obtain ⟨hbE, hbr⟩ := binAlts_bnd (hb₁.mono hn₂) hb₂ a ha
-    obtain ⟨s₃, hu, hI₃, hn₃⟩ := unifyS_complete hI₂ hE hbE
-    refine firstSome_ne_none ha ?_
-    rw [hu]
-    exact hK s₃ _ θ₂ hI₃ (ha₁.trans ha₂ hn₁) (by omega) (by rw [hn₃]; exact hbr) hres
+    refine branch_complete hI₂ ha hE (binAlts_bnd (hb₁.mono hn₂) hb₂)
+      fun s₃ τ θ₃ hI₃ ha₃ hn₃ hb₃ hτ => ?_
+    exact hK s₃ τ θ₃ hI₃ ((ha₁.trans ha₂ hn₁).trans ha₃ (by omega)) (by omega) hb₃
+      (hτ.trans hres)
 
 theorem cE_logical : ∀ op l r, CE l → CE r → CE (.logical op l r) := by
   intro op l r ihE_l ihE_r
@@ -985,14 +1143,12 @@ theorem cE_call : ∀ f args, CE f → CA args → CE (.call f args) := by
       exact (bind_agree hI₂.names hI₃.names ha₃ (hbs t ht)).symm
     obtain ⟨a, ha, hE, hres⟩ := callAlts_complete (r := .var (.aux s₂.n)) hct hτf' hτs'
       (by simp [Tm.bind, upd_self])
-    obtain ⟨hbE, hbr⟩ := callAlts_bnd (n := s₂.n + 1) (r := .var (.aux s₂.n))
+    refine branch_complete hI₃ ha hE (callAlts_bnd (n := s₂.n + 1) (r := .var (.aux s₂.n))
       ((hbf.mono hn₂).mono (by omega)) (fun t ht => (hbs t ht).mono (by omega))
-      (fun m hm => by simp [Tm.vars] at hm; omega) a ha
-    obtain ⟨s₄, hu, hI₄, hn₄⟩ := unifyS_complete hI₃ hE hbE
-    refine firstSome_ne_none ha ?_
-    rw [hu]
-    exact hK s₄ _ _ hI₄ ((ha₁.trans ha₂ hn₁).trans ha₃ (by omega)) (by simp at hn₄; omega)
-      (by rw [hn₄]; exact hbr) hres
+      (fun m hm => by simp [Tm.vars] at hm; omega)) fun s₄ τ θ₄ hI₄ ha₄ hn₄ hb₄ hτ => ?_
+    simp only at hn₄
+    exact hK s₄ τ θ₄ hI₄ (((ha₁.trans ha₂ hn₁).trans ha₃ (by omega)).trans ha₄
+      (by show s.n ≤ s₂.n + 1; omega)) (by omega) hb₄ (hτ.trans hres)
 
 theorem cE_fn : ∀ name params body, CQ body → CE (.fn name params body) := by
   intro name params body ihQ_body
@@ -1244,7 +1400,7 @@ end
 
 theorem inv_s₀ {Δ : TyEnv} (hB : BuiltinsTyped Δ) :
     Inv Δ (fun v => match v with | .name x => enc (Δ x) | .aux _ => .leaf 0) s₀ := by
-  refine ⟨?_, ⟨?_, ?_⟩, ?_, fun _ => rfl⟩
+  refine ⟨?_, ⟨?_, ?_⟩, ?_, fun _ => rfl, fun _ h => (by cases h), fun _ h => (by cases h)⟩
   · intro p hp
     simp only [s₀, List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl | rfl
@@ -1258,33 +1414,120 @@ theorem inv_s₀ {Δ : TyEnv} (hB : BuiltinsTyped Δ) :
   · intro m hm
     simp [s₀, varsS, Tm.vars] at hm
 
+/-! ## Deciding the recorded disjunctions -/
+
+theorem pickMin_none {α : Type} {f : α → Nat} : ∀ {l : List α}, pickMin f l = none → l = []
+  | [], _ => rfl
+  | a :: as, h => by
+    simp only [pickMin] at h
+    split at h
+    · cases h
+    · split at h <;> cases h
+
+theorem firstSome_some' {α β : Type} {f : α → Option β} {r : β} :
+    ∀ {l : List α}, firstSome f l = some r → ∃ a ∈ l, f a = some r
+  | [], h => by cases h
+  | a :: as, h => by
+    simp only [firstSome] at h
+    split at h
+    · rename_i r' hr; cases h; exact ⟨a, List.mem_cons_self, hr⟩
+    · obtain ⟨b, hb, h⟩ := firstSome_some' h
+      exact ⟨b, List.mem_cons_of_mem _ hb, h⟩
+
+theorem firstSome_ne_none' {α β : Type} {f : α → Option β} :
+    ∀ {l : List α} {a : α}, a ∈ l → f a ≠ none → firstSome f l ≠ none
+  | [], _, h, _ => by cases h
+  | b :: bs, a, h, hf => by
+    simp only [firstSome]
+    split
+    · simp
+    · rename_i hb
+      rcases List.mem_cons.mp h with rfl | h
+      · exact absurd hb hf
+      · exact firstSome_ne_none' h hf
+
+theorem resolve_sound (ds : List Disj) (σ σ' : Subst) (h : resolve σ ds = some σ') :
+    (Idem σ → Idem σ') ∧ ∀ θ, Sat θ σ' → Sat θ σ ∧ SatP θ ds := by
+  rw [resolve] at h
+  split at h
+  · cases h
+  · split at h
+    · rename_i hp
+      cases h
+      rw [pickMin_none hp]
+      exact ⟨id, fun θ hs => ⟨hs, fun _ h => by cases h⟩⟩
+    · rename_i d hp
+      have hd := pickMin_mem hp
+      obtain ⟨E, hE, h₁⟩ := firstSome_some' h
+      obtain ⟨σ₁, hu, h₂⟩ := bind_some_inv h₁
+      obtain ⟨hi, hs⟩ := resolve_sound (ds.erase d) σ₁ σ' h₂
+      refine ⟨fun h => hi (unifyTop_idem h hu), fun θ hθ => ?_⟩
+      obtain ⟨hσ₁, hP⟩ := hs θ hθ
+      obtain ⟨hσ, hEθ⟩ := unifyTop_sound hu hσ₁
+      refine ⟨hσ, fun d' hd' => ?_⟩
+      by_cases hdd : d' = d
+      · subst hdd; exact ⟨E, (List.mem_filter.mp hE).1, hEθ⟩
+      · exact hP d' ((List.mem_erase_of_ne hdd).mpr hd')
+termination_by ds.length
+decreasing_by
+  rw [List.length_erase_of_mem hd]; have := List.length_pos_of_mem hd; omega
+
+theorem resolve_complete (ds : List Disj) (σ : Subst) (θ : V → Tm) (hi : Idem σ)
+    (hs : Sat θ σ) (hP : SatP θ ds) : resolve σ ds ≠ none := by
+  have hviable : ∀ d ∈ ds, ∃ E ∈ d.filter (fun E => (unifyTop σ E).isSome), SatE θ E := by
+    intro d hd
+    obtain ⟨E, hE, hsat⟩ := hP d hd
+    obtain ⟨σ', hσ', _⟩ := unifyTop_complete hi hs hsat
+    exact ⟨E, List.mem_filter.mpr ⟨hE, by simp [hσ']⟩, hsat⟩
+  rw [resolve]
+  split
+  · rename_i hany
+    obtain ⟨d, hd, hz⟩ := List.any_eq_true.mp hany
+    obtain ⟨E, hE, _⟩ := hviable d hd
+    simp only [nViable, beq_iff_eq, List.length_eq_zero_iff] at hz
+    rw [hz] at hE; cases hE
+  · split
+    · simp
+    · rename_i d hp
+      have hd := pickMin_mem hp
+      obtain ⟨E, hE, hsat⟩ := hviable d hd
+      obtain ⟨σ₁, hu, hs₁⟩ := unifyTop_complete hi hs hsat
+      refine firstSome_ne_none' hE ?_
+      rw [hu]
+      exact resolve_complete (ds.erase d) σ₁ θ (unifyTop_idem hi hu) hs₁
+        fun d' hd' => hP d' (List.mem_of_mem_erase hd')
+termination_by ds.length
+decreasing_by
+  rw [List.length_erase_of_mem hd]; have := List.length_pos_of_mem hd; omega
+
 /-- **The search is complete.** -/
 theorem search_complete {Δ : TyEnv} {p : Program} (h : WellTyped Δ p) :
     ∃ s, searchProg p = some s := by
   obtain ⟨S', D⟩ := h.body
-  have := completeSeq p D none s₀ _ some (inv_s₀ h.builtins) ⟨rfl, fun _ h => by cases h⟩
-    (fun _ _ _ _ _ => by simp)
-  unfold searchProg
-  cases h' : srchSeq p none s₀ some with
-  | none => exact absurd h' this
-  | some s => exact ⟨s, rfl⟩
+  have := completeSeq p D none s₀ _
+    (fun s => (resolve s.σ s.pend).map fun σ => { s with σ := σ, pend := [] })
+    (inv_s₀ h.builtins) ⟨rfl, fun _ h => by cases h⟩
+    (fun s' θ' hI' _ _ => by
+      simpa using resolve_complete s'.pend s'.σ θ' hI'.idem hI'.sat hI'.pend)
+  exact Option.ne_none_iff_exists'.mp this
 
 /-- **The search is sound** for typable programs: its solution types the
 program. -/
 theorem search_sound {Δ : TyEnv} {p : Program} (h : WellTyped Δ p) {s : SS}
     (hs : searchProg p = some s) : WellTyped (envOfSubst s.σ) p := by
   obtain ⟨S', D⟩ := h.body
-  obtain ⟨s', hs', st⟩ := soundSeq p D none s₀ some s hs
-  rw [← Option.some.inj hs']
-  have hidem : Idem s'.σ := st.idem (inv_s₀ h.builtins).idem
-  obtain ⟨hs₀, hp⟩ := st.sat (canon s'.σ) (canon_sat hidem)
-  have hb : ∀ x c, (Unify.V.name x, Tm.leaf c) ∈ s₀.σ → envOfSubst s'.σ x = dec (.leaf c) := by
+  obtain ⟨s', hs', st⟩ := soundSeq p D none s₀ _ s hs
+  obtain ⟨σ', hr, rfl⟩ := Option.map_eq_some_iff.mp hs'
+  obtain ⟨hri, hrs⟩ := resolve_sound s'.pend s'.σ σ' hr
+  have hidem : Idem σ' := hri (st.idem (inv_s₀ h.builtins).idem)
+  obtain ⟨hσ, hP⟩ := hrs (canon σ') (canon_sat hidem)
+  obtain ⟨hs₀, hp⟩ := st.sat (canon σ') hσ hP
+  have hb : ∀ x c, (Unify.V.name x, Tm.leaf c) ∈ s₀.σ → envOfSubst σ' x = dec (.leaf c) := by
     intro x c hm
     have := hs₀ _ hm
     simp only [Tm.bind] at this
     simp only [envOfSubst, this]
-  refine ⟨⟨hb "print" 4 (by simp [s₀]), hb "println" 5 (by simp [s₀]),
-    hb "assert" 6 (by simp [s₀])⟩, S', ?_⟩
-  exact hp
+  exact ⟨⟨hb "print" 4 (by simp [s₀]), hb "println" 5 (by simp [s₀]),
+    hb "assert" 6 (by simp [s₀])⟩, S', hp⟩
 
 end Vsa.While.Types

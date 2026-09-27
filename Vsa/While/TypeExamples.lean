@@ -12,14 +12,13 @@ import Vsa.While.Programs
 * `badSub_illTyped`, `badAssign_illTyped`: two programs rejected under every
   typing environment; `badSub_err` shows the first one does reach a runtime
   error.
-* `whileWl_inferred`: inference (`infer`, `Vsa/While/TypeInfer.lean`) computes
-  the typing of `whileWl`; with `infer_sound` this gives `whileWl_wellTyped_inferred`.
-  `validation_inferred`: inference succeeds on all validation programs except
-  `recursionWl`.
+* The type checker `whileTyped` (`Vsa/While/TypeInfer.lean`) accepts `whileWl`
+  and the other validation programs and rejects `badSub`, `badAssign` and
+  `recursionWl` (`recursionWl_untypable`).
 * `divProg_wellTyped`, `divProg_err`: a well-typed program that reaches the
   division-by-zero error the type system leaves in place.
 
-`recursionWl` is rejected: `is_even` refers to `is_odd` before `is_odd` is
+`recursionWl` is untypable: `is_even` refers to `is_odd` before `is_odd` is
 declared, and the type system requires names referenced in a closure body to
 be defined where the closure is created.
 
@@ -139,23 +138,77 @@ theorem divProg_err : ExecSeqErrN initSt 0 0 divProg :=
   .head _ _ _ _ _ (.expr _ _ _ _ (.callArgs _ _ _ _ _ _ _ (.var _ _ _ _ _ rfl) (by decide)
     (.head _ _ _ _ _ (.divZero _ _ _ _ _ _ _ _ _ (.inl rfl) (.int _ _ _ _) (.int _ _ _ _)))))
 
-/-! ## Inference -/
+/-! ## The WHILE type checker -/
 
-theorem whileWl_inferred :
-    (infer Programs.whileWl).toOption = some [("i", .int), ("sum", .int), ("n", .int),
-      ("total", .int), ("acc", .int), ("a", .int), ("b", .int)] := by decide +kernel
+theorem whileWl_whileTyped : whileTyped Programs.whileWl = true :=
+  whileTyped_iff.mpr ⟨_, whileWl_wellTyped⟩
 
-theorem whileWl_wellTyped_inferred :
-    WellTyped (envOf [("i", .int), ("sum", .int), ("n", .int), ("total", .int), ("acc", .int),
-      ("a", .int), ("b", .int)]) Programs.whileWl := by
-  apply infer_sound
-  have h := whileWl_inferred
-  revert h
-  cases infer Programs.whileWl <;> simp [Except.toOption]
+theorem functionsWl_whileTyped : whileTyped Programs.functionsWl = true :=
+  whileTyped_iff.mpr ⟨_, functionsWl_wellTyped⟩
 
-theorem validation_inferred :
-    Programs.all.map (fun (n, p) => (n, (infer p).toOption.isSome)) =
-      [("while", true), ("arithmetic", true), ("for", true), ("functions", true),
-       ("recursion", false), ("scope", true), ("strings", true)] := by decide +kernel
+theorem scopeWl_whileTyped : whileTyped Programs.scopeWl = true :=
+  whileTyped_iff.mpr ⟨_, scopeWl_wellTyped⟩
+
+theorem forWl_whileTyped : whileTyped Programs.forWl = true :=
+  whileTyped_iff.mpr ⟨_, forWl_wellTyped⟩
+
+theorem arithmeticWl_whileTyped : whileTyped Programs.arithmeticWl = true :=
+  whileTyped_iff.mpr ⟨_, arithmeticWl_wellTyped⟩
+
+theorem stringsWl_whileTyped : whileTyped Programs.stringsWl = true :=
+  whileTyped_iff.mpr ⟨_, stringsWl_wellTyped⟩
+
+theorem badSub_whileTyped : whileTyped badSub = false :=
+  Bool.eq_false_iff.mpr fun h => by
+    obtain ⟨Δ, hΔ⟩ := whileTyped_iff.mp h
+    exact badSub_illTyped Δ hΔ
+
+theorem badAssign_whileTyped : whileTyped badAssign = false :=
+  Bool.eq_false_iff.mpr fun h => by
+    obtain ⟨Δ, hΔ⟩ := whileTyped_iff.mp h
+    exact badAssign_illTyped Δ hΔ
+
+theorem isEven_body_bad {Δ : TyEnv} {S : List String} {R : Option Ty} {S' : List String}
+    {b : List Stmt} (hS : "is_odd" ∉ S)
+    (hb : b = [.ifStmt (.binary .eq (.var "n") (.int 0)) (.block [.ret (some (.bool true))]) none,
+      .ret (some (.call (.var "is_odd") [.binary .sub (.var "n") (.int 1)]))]) :
+    ¬ WtSeq Δ S R false b S' := by
+  subst hb
+  intro h
+  cases h with
+  | cons _ _ _ _ _ _ _ h1 h2 =>
+    cases h1 with
+    | ifNone =>
+      cases h2 with
+      | cons _ _ _ _ _ _ _ h3 _ =>
+        cases h3 with
+        | ret _ _ _ _ he =>
+          cases he with
+          | call _ _ _ _ _ _ hf _ _ _ =>
+            cases hf with
+            | var _ _ hx => exact hS hx
+
+theorem recursionWl_untypable : ¬ Typable Programs.recursionWl := by
+  rintro ⟨Δ, _, S', h⟩
+  unfold Programs.recursionWl at h
+  -- `fact`, `println(fact(10))`, `fib`, `println(fib(20))`
+  cases h with | cons _ _ _ _ _ _ _ h₁ h =>
+  cases declOut_of_wt h₁
+  cases h with | cons _ _ _ _ _ _ _ h₂ h =>
+  cases declOut_of_wt h₂
+  cases h with | cons _ _ _ _ _ _ _ h₃ h =>
+  cases declOut_of_wt h₃
+  cases h with | cons _ _ _ _ _ _ _ h₄ h =>
+  cases declOut_of_wt h₄
+  -- `is_even` refers to `is_odd`, which is not yet declared
+  cases h with | cons _ _ _ _ _ _ _ hs _ =>
+  cases hs with
+  | varInit _ _ _ _ _ he =>
+    generalize Δ "is_even" = T at he
+    cases he with
+    | fn _ _ _ _ _ _ hb _ => exact isEven_body_bad (by decide) rfl hb
+  | varRec _ _ _ _ _ _ _ _ _ hb _ _ => exact isEven_body_bad (by decide) rfl hb
+theorem recursionWl_whileTyped : whileTyped Programs.recursionWl = false :=
+  Bool.eq_false_iff.mpr fun h => recursionWl_untypable (whileTyped_iff.mp h)
 
 end Vsa.While.Types

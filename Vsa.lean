@@ -712,6 +712,8 @@ import Vsa.While.TypeStore
 import Vsa.While.TypePreservation
 import Vsa.While.TypeProgress
 import Vsa.While.TypeCheck
+import Vsa.While.Unify
+import Vsa.While.TypeSearch
 import Vsa.While.TypeInfer
 import Vsa.While.Parse
 import Vsa.While.TypeExamples

@@ -5,12 +5,12 @@ import Vsa.While.Programs
 /-!
 # `whilecheck`: type-check WHILE programs
 
-`lake exe whilecheck FILE.wl ...` parses each file, infers a typing
-environment, and confirms it with the verified checker (`typeCheck_iff`,
-`infer_sound`). A program it accepts satisfies `WellTyped (envOf l) p` for the
-printed table `l`, so by `type_soundness` it terminates normally, divides or
-takes a remainder by zero, fails an `assert`, exceeds the call-depth cap, or
-diverges.
+`lake exe whilecheck FILE.wl ...` parses each file and runs the verified type
+checker `whileTyped` (`Vsa/While/TypeInfer.lean`): it accepts exactly the
+programs some typing environment types (`whileTyped_iff`), and prints the
+environment `infer` found, which types the program (`infer_sound`). By
+`type_soundness` an accepted program terminates normally, divides or takes a
+remainder by zero, fails an `assert`, exceeds the call-depth cap, or diverges.
 
 `lake exe whilecheck --selftest DIR` parses `DIR/<name>.wl` for every program
 of `Vsa/While/Programs.lean` and compares the result with the embedding.
@@ -24,10 +24,10 @@ def checkFile (path : String) : IO Bool := do
   | .error e => IO.println s!"{path}: {e}"; pure false
   | .ok p =>
     match infer p with
-    | .ok l =>
+    | .ok Δ =>
       IO.println s!"{path}: well-typed"
-      for (x, t) in l do
-        IO.println s!"  {x} : {Ty.render t}"
+      for x in programNames p do
+        IO.println s!"  {x} : {Diag.Ty.render (Δ x)}"
       pure true
     | .error e => IO.println s!"{path}: type error: {e}"; pure false
 
