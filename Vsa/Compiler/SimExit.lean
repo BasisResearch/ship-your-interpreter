@@ -61,6 +61,50 @@ theorem run_up {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (hs :
     refine ⟨by rw [g1]; congr 1 <;> omega, g2, g3, ?_, by rw [anc_succ_of hfr hpar]; exact g5⟩
     exact (Keep.gset (Keep.refl _ L) (by decide)).trans g4
 
+/-- **Exits.** The code of an exit to `t` reaches it with the invariant in the
+target's frame. -/
+theorem run_exitTo {T : List String} {V : View} {st : St} {d : Nat} {env : Addr} {C : GCtx} {sp fs pos : Nat}
+    {A : AM} (hm : MS code T V st d env C.Γ sp fs A) (hA : A.pc = pcOf pos) (hC : CtxOK C)
+    {t : Option (Nat × Nat)} (ht : ∀ p dt, t = some (p, dt) → dt ≤ C.blk ∧ PosOK p)
+    (hseg : Seg code pos (exitTo C.blk pos t)) (hP : PosOK (pos + (exitTo C.blk pos t).length)) :
+    Reaches code A (fun B => ExitAt code T V st d env C sp fs t B ∧ B.mem = A.mem ∧ B.out = A.out ∧
+      Keep [envR] A.regs B.regs) := by
+  obtain ⟨pc0, L, m, o⟩ := A
+  simp only at hA; subst hA
+  cases t with
+  | none =>
+    have hp0 : PosOK pos := posOK_le hP (by simp)
+    apply run_jumps hR.fits hseg
+    wp_simp [exitTo, hp0]
+    exact reach_here ⟨rfl, rfl, rfl, Keep.refl _ _⟩
+  | some pt =>
+    obtain ⟨p, dt⟩ := pt
+    obtain ⟨hdt, hpp⟩ := ht p dt rfl
+    have hblk := hC.blk
+    simp only [exitTo] at hseg hP
+    obtain ⟨s1, s2⟩ := hseg.append
+    simp only [List.length_append, List.length_replicate, List.length_singleton] at s2 hP
+    refine ex_bind (run_up hR hm.rel (C.blk - dt) hm.chn (by omega) pos L o s1 hm.henv) ?_
+    rintro ⟨pc1, L1, m1, o1⟩ ⟨hpc1, hm1, ho1, hk1, h9⟩
+    simp only at hpc1 hm1 ho1 hk1 h9; subst hpc1 hm1 ho1
+    have hpj : PosOK (pos + (C.blk - dt)) := posOK_le hP (by omega)
+    apply run_jumps hR.fits s2
+    wp_simp [hpj, hpp]
+    refine reach_here ⟨⟨rfl, ?_⟩, rfl, rfl, hk1⟩
+    exact {
+      rel := hm.rel
+      img := hm.img
+      clo := hm.clo
+      chn := hm.chn.up _ (by omega)
+      out := hm.out
+      ho := hk1.has (by decide) hm.ho
+      hf := hk1.has (by decide) hm.hf
+      henv := h9
+      hsp := hk1.has (by decide) hm.hsp
+      hdep := hk1.has (by decide) hm.hdep
+      stk := hm.stk
+      hfal := hm.hfal }
+
 end
 
 end Vsa.Compiler
