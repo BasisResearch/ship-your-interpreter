@@ -40,6 +40,9 @@ theorem Star.step {code : List Ins} {A B C : AM} (h : astep code A = some (.run 
 theorem Star.single {code : List Ins} {A B : AM} (h : astep code A = some (.run B)) :
     Star code A B := Star.step h (Star.refl _ _)
 
+/-- `A` runs to some state satisfying `P`. -/
+abbrev Reaches (code : List Ins) (A : AM) (P : AM → Prop) : Prop := ∃ B, Star code A B ∧ P B
+
 /-- The code fits below `tohost`. -/
 def Fits (code : List Ins) : Prop := codeBase + 4 * code.length ≤ tohostAddr
 

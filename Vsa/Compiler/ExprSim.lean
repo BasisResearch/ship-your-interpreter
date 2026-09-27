@@ -94,7 +94,7 @@ theorem run_stA (hfit : Fits code) {pos a rs : Nat} {A : AM} {w : BitVec 64}
 /-- A jump to the error exit halts with code 70. -/
 theorem run_err (hL : Layout code) {p : Nat} {A : AM}
     (hk : code[p]? = some (.jal 0 (jOff p errPos))) (hA : A.pc = pcOf p) (hp : PosOK p) :
-    ∃ B, Star code A B ∧ astep code B = some (.halt 70) := by
+    Reaches code A (fun B => astep code B = some (.halt 70)) := by
   obtain ⟨hfit, herr, -⟩ := hL
   have he : PosOK errPos := by unfold PosOK errPos; unfold Fits at hfit; decide
   have hj := pcOf_jump p errPos hp he
@@ -145,6 +145,12 @@ theorem ofInt_inj_range {a b : Int} (ha : InRange a) (hb : InRange b) :
   constructor
   · intro h; rw [← toInt_ofInt_range ha, ← toInt_ofInt_range hb, h]
   · intro h; rw [h]
+
+/-- An in-range integer value. -/
+abbrev IsInt (v : Value) : Prop := ∃ n, v = .int n ∧ InRange n
+
+/-- A boolean value. -/
+abbrev IsBool (v : Value) : Prop := ∃ b, v = .bool b
 
 /-! ## Branch comparisons -/
 
@@ -226,25 +232,32 @@ theorem Has.cons_self (L : GRegs) (n : Nat) (v : BitVec 64) (h1 : 1 ≤ n) (h31 
 section
 variable {code : List Ins}
 
+/-- A completed operator tail with result `v`. -/
+structure TailDone (op : BinOp) (a b : Int) (p len : Nat) (A B : AM) (v : Value) : Prop where
+  out : B.out = A.out
+  sem : ∀ s, binOpSem s op (.int a) (.int b) = some v
+  pc : B.pc = pcOf (p + len)
+  mem : B.mem = A.mem
+  res : Has B.regs a0 (word v)
+  arith : ArithOp op → IsInt v
+  cmp : CmpOp op → IsBool v
+
 /-- The result of an arithmetic operator tail. -/
 def TailOK (op : BinOp) (a b : Int) (p len : Nat) (A B : AM) : Prop :=
-  ((∃ v, B.out = A.out ∧ (∀ s, binOpSem s op (.int a) (.int b) = some v) ∧ B.pc = pcOf (p + len) ∧
-      B.mem = A.mem ∧ Has B.regs a0 (word v) ∧ (ArithOp op → ∃ n, v = .int n ∧ InRange n) ∧
-      (CmpOp op → ∃ c, v = .bool c)) ∨
-    (astep code B = some (.halt 70) ∧ ∀ s, binOpSem s op (.int a) (.int b) = none))
+  (∃ v, TailDone op a b p len A B v) ∨
+    (astep code B = some (.halt 70) ∧ ∀ s, binOpSem s op (.int a) (.int b) = none)
 
 theorem sim_cmp (hfit : Fits code) {op : BinOp} {br : BrOp} {r1 r2 : Nat} {p : Nat} {A : AM}
     {a b : Int} {c : Bool} (hcb : cmpBranch op = some (br, r1, r2))
     (hsem : ∀ s, binOpSem s op (.int a) (.int b) = some (.bool c))
     (hg : ∀ x y, Has A.regs r1 x → Has A.regs r2 y → guardB br.bop x y = c)
-    (hx : ∃ x, Has A.regs r1 x) (hy : ∃ y, Has A.regs r2 y) (hr1 : r1 ≠ s3) (hr2 : r2 ≠ s3)
+    {x y : BitVec 64} (hx : Has A.regs r1 x) (hy : Has A.regs r2 y) (hr1 : r1 ≠ s3) (hr2 : r2 ≠ s3)
     (hseg : Seg code p (cbin p op)) (hA : A.pc = pcOf p) (hpos : PosOK (p + (cbin p op).length))
     (hcmp : CmpOp op) (hna : ¬ ArithOp op) :
-    ∃ B, Star code A B ∧ @TailOK code op a b p (cbin p op).length A B := by
+    Reaches code A (@TailOK code op a b p (cbin p op).length A) := by
   have hc : cbin p op = [.addi s3 0 1, .br br r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3] := by
     rcases hcmp with rfl|rfl|rfl|rfl|rfl|rfl <;> simp_all [cbin, cmpBranch]
   rw [hc] at hseg hpos ⊢
-  obtain ⟨x, hx⟩ := hx; obtain ⟨y, hy⟩ := hy
   obtain ⟨L, hs, hL⟩ := run_cmp hfit hseg hA hpos hx hy hr1 hr2
   refine ⟨_, hs, .inl ⟨.bool c, rfl, hsem, rfl, rfl, ?_, fun h => absurd h hna, fun _ => ⟨c, rfl⟩⟩⟩
   rw [hg x y hx hy] at hL
@@ -275,7 +288,7 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
     {a b : Int} (ha : InRange a) (hb : InRange b)
     (hseg : Seg code p (cbin p op)) (hA : A.pc = pcOf p) (hpos : PosOK (p + (cbin p op).length))
     (h0 : Has A.regs a0 (BitVec.ofInt 64 a)) (h1 : Has A.regs a1 (BitVec.ofInt 64 b)) :
-    ∃ B, Star code A B ∧ @TailOK code op a b p (cbin p op).length A B := by
+    Reaches code A (@TailOK code op a b p (cbin p op).length A) := by
   have hfit := hL.1
   have hxa : (BitVec.ofInt 64 a).toInt = a := toInt_ofInt_range ha
   have hxb : (BitVec.ofInt 64 b).toInt = b := toInt_ofInt_range hb
@@ -379,37 +392,37 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _)]
           exact guard_lt ha hb)
-        ⟨_, h0⟩ ⟨_, h1⟩ (by decide) (by decide) hseg hA hpos (.inl rfl) hna
+        h0 h1 (by decide) (by decide) hseg hA hpos (.inl rfl) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a ≤ b)) (fun s => by simp [binOpSem])
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h1.src.2 : x = _), (hy.src.2.symm.trans h0.src.2 : y = _),
             guard_ge hb ha])
-        ⟨_, h1⟩ ⟨_, h0⟩ (by decide) (by decide) hseg hA hpos (.inr (.inl rfl)) hna
+        h1 h0 (by decide) (by decide) hseg hA hpos (.inr (.inl rfl)) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a > b)) (fun s => by simp [binOpSem])
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h1.src.2 : x = _), (hy.src.2.symm.trans h0.src.2 : y = _),
             guard_lt hb ha])
-        ⟨_, h1⟩ ⟨_, h0⟩ (by decide) (by decide) hseg hA hpos (.inr (.inr (.inl rfl))) hna
+        h1 h0 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inl rfl))) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a ≥ b)) (fun s => by simp [binOpSem])
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
             guard_ge ha hb])
-        ⟨_, h0⟩ ⟨_, h1⟩ (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inl rfl)))) hna
+        h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inl rfl)))) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a = b)) (fun s => by simp [binOpSem, Value.equal]; rfl)
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
             guard_eq ha hb])
-        ⟨_, h0⟩ ⟨_, h1⟩ (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inl rfl))))) hna
+        h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inl rfl))))) hna
     · exact sim_cmp hfit (by rfl) (c := decide (a ≠ b)) (fun s => by simp [binOpSem, Value.equal]; rfl)
         (fun x y hx hy => by
           simp only [BrOp.bop]
           rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
             guard_ne ha hb])
-        ⟨_, h0⟩ ⟨_, h1⟩ (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inr rfl))))) hna
+        h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inr rfl))))) hna
 
 end
 
@@ -424,22 +437,33 @@ def tdepth : Expr → Nat
 
 /-- The value kind the subset predicate promises. -/
 def ValTy (Γn : NScope) (e : Expr) (v : Value) : Prop :=
-  (IntE Γn e → ∃ n, v = .int n ∧ InRange n) ∧ (BoolE Γn e → ∃ b, v = .bool b)
+  (IntE Γn e → IsInt v) ∧ (BoolE Γn e → IsBool v)
+
+/-- A completed evaluation: `e` evaluates to `v` reaching `st'`, and the code's run ended
+at its exit with the value in `a0` and the store relation re-established. -/
+structure ExprDone (Γ : Scope) (e : Expr) (k pos : Nat) (st : St) (d : Nat) (env : Addr)
+    (A B : AM) (v : Value) (st' : St) : Prop where
+  eval : EvalE st d env e st' v
+  ty : ValTy Γ.names e v
+  out : st'.out = st.out
+  bout : B.out = A.out
+  pc : B.pc = pcOf (pos + (cexpr Γ k pos e).length)
+  res : Has B.regs a0 (word v)
+  rel : Chain st'.store B.mem env Γ
+  temps : ∀ j < k, rdW B.mem (tempAddr j) = rdW A.mem (tempAddr j)
 
 /-- What running an expression's code achieves. -/
 def ExprOK (code : List Ins) (Γ : Scope) (e : Expr) (k pos : Nat) (st : St) (d : Nat) (env : Addr)
     (A B : AM) : Prop :=
-  (∃ v st', EvalE st d env e st' v ∧ ValTy Γ.names e v ∧ st'.out = st.out ∧ B.out = A.out ∧
-      B.pc = pcOf (pos + (cexpr Γ k pos e).length) ∧ Has B.regs a0 (word v) ∧
-      Chain st'.store B.mem env Γ ∧ (∀ j < k, rdW B.mem (tempAddr j) = rdW A.mem (tempAddr j))) ∨
+  (∃ v st', ExprDone Γ e k pos st d env A B v st') ∨
     (astep code B = some (.halt 70) ∧ ∀ v st', ¬ EvalE st d env e st' v)
 
-theorem resolve_of_mem {x : String} : ∀ {Γ : Scope}, Γ.names.Mem x → ∃ i, Γ.resolve x = some i
+theorem resolve_of_mem {x : String} : ∀ {Γ : Scope}, Γ.names.Mem x → (Γ.resolve x).isSome
   | [], ⟨f, hf, _⟩ => by simp [Scope.names] at hf
   | f :: g, h => by
     simp only [Scope.resolve]
     cases hl : f.lookup x with
-    | some i => exact ⟨i, rfl⟩
+    | some i => rfl
     | none =>
       obtain ⟨f', hf', hx⟩ := h
       simp only [Scope.names, List.map_cons, List.mem_cons] at hf'
@@ -469,7 +493,7 @@ theorem sim_int (hL : Layout code) {Γ : Scope} {n : Int} {k pos : Nat} {st : St
     {env : Addr} {A : AM} (hE : CondE Γ.names (.int n))
     (hseg : Seg code pos (cexpr Γ k pos (.int n))) (hA : A.pc = pcOf pos)
     (hc : Chain st.store A.mem env Γ) :
-    ∃ B, Star code A B ∧ ExprOK code Γ (.int n) k pos st d env A B := by
+    Reaches code A (ExprOK code Γ (.int n) k pos st d env A) := by
   have hn : InRange n := by
     rcases hE with h | h
     · exact h
@@ -480,7 +504,7 @@ theorem sim_int (hL : Layout code) {Γ : Scope} {n : Int} {k pos : Nat} {st : St
 theorem sim_bool (hL : Layout code) {Γ : Scope} {b : Bool} {k pos : Nat} {st : St} {d : Nat}
     {env : Addr} {A : AM} (hseg : Seg code pos (cexpr Γ k pos (.bool b))) (hA : A.pc = pcOf pos)
     (hc : Chain st.store A.mem env Γ) :
-    ∃ B, Star code A B ∧ ExprOK code Γ (.bool b) k pos st d env A B := by
+    Reaches code A (ExprOK code Γ (.bool b) k pos st d env A) := by
   have e := step_addi hL.1 hseg.head hA (by decide) (Has.zero _)
   refine ⟨_, Star.single e, .inl ⟨.bool b, st, .bool _ _ _ _, ⟨fun h => h.elim,
     fun _ => ⟨b, rfl⟩⟩, rfl, rfl, rfl, ?_, hc, fun _ _ => rfl⟩⟩
@@ -490,12 +514,12 @@ theorem sim_var (hL : Layout code) {Γ : Scope} (hsl : ∀ i ∈ Γ.slots, i < 2
     {k pos : Nat} {st : St} {d : Nat} {env : Addr} {A : AM} (hE : CondE Γ.names (.var x))
     (hseg : Seg code pos (cexpr Γ k pos (.var x))) (hA : A.pc = pcOf pos)
     (hc : Chain st.store A.mem env Γ) :
-    ∃ B, Star code A B ∧ ExprOK code Γ (.var x) k pos st d env A B := by
+    Reaches code A (ExprOK code Γ (.var x) k pos st d env A) := by
   have hm : Γ.names.Mem x := by
     rcases hE with h | h
     · exact h
     · exact h.elim
-  obtain ⟨i, hi⟩ := resolve_of_mem hm
+  obtain ⟨i, hi⟩ := Option.isSome_iff_exists.mp (resolve_of_mem hm)
   have hseg' : Seg code pos (liN s2 (varAddr i) ++ [.ld a0 s2]) := by simpa [cexpr, hi] using hseg
   have r := run_ldA hL.1 hseg' hA (by decide) (varAddr_ld (hsl i (resolve_mem hi)))
   refine ⟨_, r, .inl ⟨.int (slotV A.mem i), st, .var _ _ _ _ _ (hc.get? hi),
@@ -509,7 +533,7 @@ def SimE (code : List Ins) (Γ : Scope) (e : Expr) : Prop :=
   ∀ (k pos : Nat) (st : St) (d : Nat) (env : Addr) (A : AM), CondE Γ.names e →
     k + tdepth e < 2 ^ 17 → Seg code pos (cexpr Γ k pos e) →
     PosOK (pos + (cexpr Γ k pos e).length) → A.pc = pcOf pos → Chain st.store A.mem env Γ →
-    ∃ B, Star code A B ∧ ExprOK code Γ e k pos st d env A B
+    Reaches code A (ExprOK code Γ e k pos st d env A)
 
 theorem Seg.pos_eq {code : List Ins} {pos pos' : Nat} {s : List Ins} (h : pos = pos')
     (hs : Seg code pos s) : Seg code pos' s := h ▸ hs
@@ -526,7 +550,7 @@ theorem sim_assign (hL : Layout code) {Γ : Scope} (hnd : Γ.slots.Nodup)
     rcases hE with h | h
     · exact h
     · exact h.elim
-  obtain ⟨i, hi⟩ := resolve_of_mem hE'.1
+  obtain ⟨i, hi⟩ := Option.isSome_iff_exists.mp (resolve_of_mem hE'.1)
   have hil := hsl i (resolve_mem hi)
   have hcx : cexpr Γ k pos (.assign x e) = cexpr Γ k pos e ++ (liN s2 (varAddr i) ++ [.sd a0 s2]) := by
     simp [cexpr, hi]
