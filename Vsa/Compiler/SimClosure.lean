@@ -29,9 +29,59 @@ theorem fnCtx_ok (L : List String) (Γ : List (List String)) {epi : Nat} (h : Po
     cases e'
     exact ⟨Nat.le_refl _, h⟩
 
+/-- After the call code's jump to a closure's function code at `q`. -/
+structure CloJumped (A J : AM) (q P sp k nv : Nat) (r : BitVec 64) : Prop where
+  pc : J.pc = pcOf q
+  mem : J.mem = A.mem
+  out : J.out = A.out
+  keep : Keep [a2, a3, a4, t3, ra, t0, t1, t2, t6] A.regs J.regs
+  hra : Has J.regs ra r
+  h12 : Has J.regs a2 (BitVec.ofNat 64 P)
+  h13 : Has J.regs a3 (BitVec.ofNat 64 (sp + 16 + 16 * (k + 1)))
+  h14 : Has J.regs a4 (BitVec.ofNat 64 nv)
+
 section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
+
+/-- The call code with a closure in temporary `k` jumps to its function code. -/
+theorem run_cloJump {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List String)} {sp fs k pos nv : Nat}
+    {A : AM} (hm : MS code T V st d env Γ sp fs A) (hA : A.pc = pcOf pos) {P q : Nat}
+    (ht : rdW A.mem (sp + 16 + 16 * k) = 4) (hp : rdW A.mem (sp + 16 + 16 * k + 8) = BitVec.ofNat 64 P)
+    (hn8 : (BitVec.ofNat 64 (P + 8)).toNat = P + 8) (hl8 : LdOK (P + 8)) (hq : rdW A.mem (P + 8) = pcOf q)
+    (hqq : PosOK q) (hseg : Seg code pos (callCode k nv pos)) (hP : PosOK (pos + (callCode k nv pos).length))
+    (htmp : 16 + 16 * (k + 1 + nv) ≤ fs) :
+    Reaches code A (fun J => CloJumped A J q P sp k nv (pcOf (ccCL k nv pos + 6))) := by
+  have hs := CCSegs.of hseg
+  have hfin := ccFin_eq k nv pos
+  obtain ⟨pc0, L0, m0, o0⟩ := A
+  simp only at hA ht hp hq; subst hA
+  refine ex_bind (run_dispatch hR hs hP hm.hsp hm.stk (by omega)) ?_
+  rintro ⟨pc1, L1, m1, o1⟩ ⟨hm1, ho1, hk1, g6, hpc1⟩
+  simp only at hm1 ho1 hk1 g6 hpc1; subst hm1 ho1 hpc1
+  rw [ht, hp] at *
+  simp only [dispTgt, if_true] at *
+  have hcl := hs.clo
+  simp only [ccClo] at hcl
+  have hfinL : ccCL k nv pos + 8 ≤ pos + (callCode k nv pos).length := by
+    rw [hfin]; simp only [ccFin]; omega
+  have k6 := has_mem g6 (by decide); have e6 := srcVal_of_has g6
+  have k2 := has_mem (hk1.has (by decide) hm.hsp) (by decide); have e2 := srcVal_of_has (hk1.has (by decide) hm.hsp)
+  simp only [t1, spR] at k6 e6 k2 e2
+  have hb := hm.stk.bounds
+  have hfs := hm.stk.fsz
+  have hL : stackLo = 0xE0000000 := rfl
+  have hH : stackHi = 0x100000000 := rfl
+  have ht' : tohostAddr = 0x8001ad00 := rfl
+  apply run_jumps hR.fits hcl
+  wp_simp [k6, e6, k2, e2, hn8, hl8, hq, BitVec.ofInt_natCast]
+  apply run_jumps hR.fits ((hcl.drop 7).cast (pos' := ccCL k nv pos + 7) rfl)
+  wp_simp [pcOf_aligned hqq]
+  refine reach_here ⟨rfl, rfl, rfl, by reg_simp []; exact hk1.mono (by decide), by reg_simp [] <;> rfl,
+    by reg_simp [], ?_, by reg_simp []⟩
+  reg_simp []
+  rw [show sp + (16 + 16 * (k + 1)) = sp + 16 + 16 * (k + 1) by omega]
+
 
 theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Value} {st' : St}
     {status : Status} {v : Value} {nb : Nat} (hcd : st.store.closures[a]? = some cd)
@@ -55,41 +105,27 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
   have hpw : pw = BitVec.ofNat 64 pw.toNat := by simp
   generalize hP' : pw.toNat = P at hpw hpa hc1 hc2 hco hco1 hco2 hco3
   subst hpw
-  refine ex_bind (run_dispatch hR hs hP hm.hsp hm.stk (by omega)) ?_
-  rintro ⟨pc1, L1, m1, o1⟩ ⟨hm1, ho1, hk1, g6, hpc1⟩
-  simp only at hm1 ho1 hk1 g6 hpc1; subst hm1 ho1 hpc1
-  rw [ht4, hPw] at *
-  simp only [dispTgt, if_true] at *
   have hcl := hs.clo
   simp only [ccClo] at hcl
   have hfinL : ccCL k vs.length pos + 8 ≤ pos + (callCode k vs.length pos).length := by
     rw [hfin]; simp only [ccFin]; omega
   have hq8 : PosOK (ccCL k vs.length pos + 8) := posOK_le hP hfinL
   have hqq : PosOK q := posOK_le hc5 (by omega)
-  have k6 := has_mem g6 (by decide); have e6 := srcVal_of_has g6
-  have k2 := has_mem (hk1.has (by decide) hm.hsp) (by decide); have e2 := srcVal_of_has (hk1.has (by decide) hm.hsp)
-  simp only [t1, spR] at k6 e6 k2 e2
   have hb := hm.stk.bounds
   have hfs := hm.stk.fsz
   have hL : stackLo = 0xE0000000 := rfl
   have hH : stackHi = 0x100000000 := rfl
   have hma : maxArgs = 32 := rfl
-  have n8 : (BitVec.ofNat 64 (P + 8)).toNat = P + 8 := toNat_ofNat_lt (by omega)
-  have l8 : LdOK (P + 8) := by unfold LdOK; omega
-  apply run_jumps hR.fits hcl
-  wp_simp [k6, e6, k2, e2, n8, l8, hc2, BitVec.ofInt_natCast]
-  apply run_jumps hR.fits ((hcl.drop 7).cast (pos' := ccCL k vs.length pos + 7) rfl)
-  wp_simp [pcOf_aligned hqq]
+  refine ex_bind (run_cloJump hR hm (A := ⟨pcOf pos, L0, m0, o0⟩) rfl ht4 hPw (toNat_ofNat_lt (by omega))
+    (by unfold LdOK; omega) hc2 hqq hseg hP htmp) fun J hJ => ?_
+  obtain ⟨pcJ, LJ, mJ, oJ⟩ := J
+  obtain ⟨hpcJ, hmJ, hoJ, hkJ, g1, g12, g13, g14⟩ := hJ
+  simp only at hpcJ hmJ hoJ hkJ g1 g12 g13 g14; subst mJ oJ
   -- the function
-  have hSq : Scratch [a2, a3, a4, t3, ra, t0, t1, t2, t6] := by decide
-  have hmq := hm.transport (B := ⟨pcOf q, gset (gset (gset (gset (gset (gset L1 12 (BitVec.ofNat 64 P)) 13
-    (BitVec.ofNat 64 (sp + (16 + 16 * (k + 1))))) 14 (BitVec.ofNat 64 vs.length)) 28 (BitVec.ofNat 64 (P + 8)))
-    28 (pcOf q)) 1 (pcOf (ccCL k vs.length pos + 1 + 1 + 1 + 1 + 1 + 1)), m1, o1⟩) hSq
-    (by reg_simp []; exact hk1.mono (by decide)) (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
-  refine ex_bind (run_entry hR (k := k) (r := pcOf (ccCL k vs.length pos + 6)) hmq hcd hpa hc1 hc3 hc4 hc5 hc6
-    hlen hd rfl (by reg_simp [] <;> rfl)
-    (by reg_simp []) (by reg_simp []; rw [show sp + (16 + 16 * (k + 1)) = sp + 16 + 16 * (k + 1) by omega])
-    (by reg_simp []) hvs htmp hmax) ?_
+  have hmq := hm.transport (B := ⟨pcJ, LJ, m0, o0⟩) (S := [a2, a3, a4, t3, ra, t0, t1, t2, t6]) (by decide) hkJ
+    (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
+  refine ex_bind (run_entry hR (k := k) hmq hcd hpa hc1 hc3 hc4 hc5 hc6 hlen hd hpcJ g1 g12 g13 g14 hvs htmp
+    hmax) ?_
   rintro E (⟨h1, h2⟩ | hE)
   · refine reach_here (.inl ⟨h1, fun hr => ?_⟩)
     have := hr.1; have hLl := hc6.2.1; unfold envBytes at hn; omega
@@ -137,7 +173,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
     rw [hpost.stack.low _ (Nat.le_refl _) (by omega) (by omega)]; exact hE.ra
   have hse : rdW B.mem (sp - frameSize cd.body + 8) = BitVec.ofNat 64 (V.fa env) := by
     rw [hpost.stack.low _ (by omega) (by omega) (by omega)]; exact hE.env
-  have hmB : Agree m1 B.mem sp stackHi := hE.stack.trans (by
+  have hmB : Agree m0 B.mem sp stackHi := hE.stack.trans (by
     have := hpost.stack.high; rwa [show sp - frameSize cd.body + frameSize cd.body = sp by omega] at this)
   have hvgrow : VGrow V st.store Ve st'.store := hE.grow.trans hpost.grow
   have hraa : (rdW B.mem (sp - frameSize cd.body)).toNat % 4 = 0 := by
@@ -151,7 +187,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
       InA Ve.H B.mem Ve.h R.regs v →
       Reaches code R (fun B => B.pc = pcOf errPos ∧ ¬Room V n ∨
         B.pc = pcOf (pos + (callCode k vs.length pos).length) ∧
-        ∃ V', EPost code T V st d env Γ sp fs (k + 1 + vs.length) ⟨pcOf pos, L0, m1, o1⟩ n st' v V' B) := by
+        ∃ V', EPost code T V st d env Γ sp fs (k + 1 + vs.length) ⟨pcOf pos, L0, m0, o0⟩ n st' v V' B) := by
     intro R MB hpcR hmR hoR g9 g2 g24 hkR hvR
     obtain ⟨pcR, LR, mR, oR⟩ := R
     simp only at hpcR hmR hoR g9 g2 g24 hkR hvR; subst hpcR hmR hoR
