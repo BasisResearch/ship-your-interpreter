@@ -256,7 +256,7 @@ theorem ex_bind {code : List Ins} {A : AM} {P Q : AM → Prop} (h : ∃ B, Star 
 theorem zopz_ge (v : BitVec 64) : guardB BrOp.ge.bop v 0 = decide (v.toInt ≥ 0) := by
   simp [guardB, BrOp.bop, zopz0zKzJ_s]
 
-theorem guard_ne (v : BitVec 64) : guardB BrOp.ne.bop v 0 = !(v == 0) := rfl
+theorem guard_ne_zero (v : BitVec 64) : guardB BrOp.ne.bop v 0 = !(v == 0) := rfl
 
 /-- `|t % 10|` as a word, from the `tmod` word and the sign test. -/
 theorem abs_digit (t : Int) :
@@ -413,7 +413,7 @@ theorem run_digit {A : AM} {x r : BitVec 64} {j : Nat}
     (i := .br .ne s4 0 (BitVec.ofInt 13 (-4 * ((17 : Nat) : Int)))) rfl rfl) rfl
     (Has.gs_self _ s4 (BitVec.ofInt 64 (x.toInt.tdiv 10)) (by decide)) (Has.zero _)
     (P _ (by decide)) (by decide) (by decide)) ?_
-  rw [guard_ne]
+  rw [guard_ne_zero]
   refine ⟨_, Star.refl _ _, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · by_cases h0 : BitVec.ofInt 64 (x.toInt.tdiv 10) = 0
     · simp [h0]
@@ -533,7 +533,7 @@ theorem run_out1 {A : AM} {i d : Nat} {r : BitVec 64}
     (i := .br .ne s5 0 (BitVec.ofInt 13 (-4 * ((27 : Nat) : Int)))) rfl rfl) rfl
     (Has.gs_self _ s5 (BitVec.ofNat 64 i) (by decide)) (Has.zero _)
     (P _ (by decide)) (by decide) (by decide)) ?_
-  rw [guard_ne]
+  rw [guard_ne_zero]
   refine ⟨_, Star.refl _ _, ?_, ?_, ?_, ?_, rfl, ?_⟩
   · by_cases h0 : i = 0
     · subst h0; simp
