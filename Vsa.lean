@@ -859,3 +859,6 @@ import Vsa.Sim.CallArgumentValues
 import Vsa.Sim.CallClosureGeometry
 import Vsa.Compiler.WhileWl
 import Vsa.Compiler.CompiledG
+import Vsa.Compiler.Check
+import Vsa.Compiler.Image
+import Vsa.Compiler.Parse
