@@ -260,6 +260,28 @@ Proof structure:
 and `stringsWl` (`*_compiledG_halts`). `experiments/compiler/RunCompiledG.lean`
 runs compiled programs on the executable Sail model.
 
+### `whilec`: the compiler as an executable
+
+```sh
+lake build whilec
+.lake/build/bin/whilec prog.wl -o prog.elf        # compile
+.lake/build/bin/whilec prog.wl --run              # compile, then run on the Sail RV64 model
+spike prog.elf                                    # run bare-metal (HTIF console)
+```
+
+`whilec` parses the source with the interpreter's grammar
+(`Vsa/Compiler/Parse.lean`, a line-for-line port of `c/src/parser.c`; it
+reproduces the ASTs of `Vsa/While/Programs.lean` for every file in
+`c/tests/`). It checks the premises of the theorem with `supportedGB` and
+`fitsB`, which are proved sound, so `checked_correct` applies to every program
+it accepts. It compiles the program with `compileG` and writes an ELF
+(`Vsa/Compiler/Image.lean`): the interpreter image `c/while-riscv-htif.elf`,
+which provides libgcc, `tohost` and `fromhost`, with the compiled code at
+`0x80004800` and the entry point set there. Programs print through the HTIF
+console. They exit with `0` on success and `70` on a runtime error
+(including heap exhaustion). `whilec` rejects unsupported programs and reports
+parse errors. The front end and the ELF writer are not verified.
+
 ## Building
 
 ```sh
