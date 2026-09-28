@@ -1,9 +1,10 @@
-/-! Native harness: run compiled WHILE programs on the executable Sail model
-(the interpreter ELF supplies libgcc and the reset state; the compiled code is
-written at `codeBase` and the PC set there). Run: `lake env lean experiments/compiler/RunCompiled.lean`. -/
 import Vsa.Compiler.Compile
 import Vsa.ElfRun
 import Vsa.While.Programs
+
+/-! Native harness: run compiled WHILE programs on the executable Sail model
+(the interpreter ELF supplies libgcc and the reset state; the compiled code is
+written at `codeBase` and the PC set there). Run: `lake env lean experiments/compiler/RunCompiled.lean`. -/
 open Vsa Vsa.Compiler Vsa.While LeanRV64DExecutable Sail ConcurrencyInterfaceV1 PreSail
 
 def codeBytes (code : List Ins) : List (BitVec 8) :=
