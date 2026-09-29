@@ -2,33 +2,7 @@ import Vsa.Sim.RamReadPins
 import Vsa.Sim.ValueSites
 import Vsa.Sim.EvalExprSites
 import Vsa.Sim.Code.Exec_stmt
-import Vsa.Sim.DecodeTable.Batch01Part04
-import Vsa.Sim.DecodeTable.Batch01Part10
-import Vsa.Sim.DecodeTable.Batch01Part13
-import Vsa.Sim.DecodeTable.Batch01Part14
-import Vsa.Sim.DecodeTable.Batch03Part03
-import Vsa.Sim.DecodeTable.Batch01Part15
-import Vsa.Sim.DecodeTable.Batch01Part19
-import Vsa.Sim.DecodeTable.Batch01Part22
-import Vsa.Sim.DecodeTable.Batch01Part24
-import Vsa.Sim.DecodeTable.Batch01Part29
-import Vsa.Sim.DecodeTable.Batch01Part32
-import Vsa.Sim.DecodeTable.Batch02Part20
-import Vsa.Sim.DecodeTable.Batch03Part01
-import Vsa.Sim.DecodeTable.Batch03Part17
-import Vsa.Sim.DecodeTable.Batch04Part24
-import Vsa.Sim.DecodeTable.Batch08Part20
-import Vsa.Sim.DecodeTable.Batch08Part32
-import Vsa.Sim.DecodeTable.Batch09Part01
-import Vsa.Sim.DecodeTable.Batch09Part03
-import Vsa.Sim.DecodeTable.Batch09Part04
-import Vsa.Sim.DecodeTable.Batch09Part05
-import Vsa.Sim.DecodeTable.Batch09Part07
-import Vsa.Sim.DecodeTable.Batch09Part09
-import Vsa.Sim.DecodeTable.Batch09Part10
-import Vsa.Sim.DecodeTable.Batch09Part12
-import Vsa.Sim.DecodeTable.Batch15Part22
-import Vsa.Sim.DecodeTable.Batch15Part31
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -59,7 +33,7 @@ theorem site_80003fe0_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x13#8) (0x01#8) (0x01#8) (0xf5#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_f5010113 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0xf5010113#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -97,7 +71,7 @@ theorem site_80003fe4_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x23#8) (0x30#8) (0x81#8) (0x0a#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_0a813023 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x0a813023#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -135,7 +109,7 @@ theorem site_80003fe8_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x23#8) (0x3c#8) (0x91#8) (0x08#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_08913c23 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x08913c23#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -173,7 +147,7 @@ theorem site_80003fec_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x23#8) (0x38#8) (0x21#8) (0x09#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_09213823 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x09213823#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -211,7 +185,7 @@ theorem site_80003ff0_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x23#8) (0x34#8) (0x31#8) (0x09#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_09313423 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x09313423#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -249,7 +223,7 @@ theorem site_80003ff4_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x23#8) (0x34#8) (0x11#8) (0x0a#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_0a113423 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x0a113423#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -281,7 +255,7 @@ theorem site_80003ff8_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x13#8) (0x84#8) (0x05#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00058413 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00058413#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -313,7 +287,7 @@ theorem site_80003ffc_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x93#8) (0x04#8) (0x05#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00050493 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00050493#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -345,7 +319,7 @@ theorem site_80004000_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x93#8) (0x09#8) (0x06#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00060993 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00060993#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -377,7 +351,7 @@ theorem site_80004004_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x13#8) (0x89#8) (0x06#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00068913 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00068913#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -408,7 +382,7 @@ theorem site_80004008_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret :
     (0x13#8) (0x08#8) (0x80#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00800813 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00800813#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -439,7 +413,7 @@ theorem site_80004010_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x13#8) (0x07#8) (0xc7#8) (0xfa#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_fac70713 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0xfac70713#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -482,7 +456,7 @@ theorem site_80004014_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x83#8) (0x27#8) (0x04#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00042783 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00042783#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -515,7 +489,7 @@ theorem site_80004018_nottaken_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vm
     (0x63#8) (0x6c#8) (0xf8#8) (0x06#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_06f86c63 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x06f86c63#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -547,7 +521,7 @@ theorem site_80004024_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0xb3#8) (0x87#8) (0xe7#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00e787b3 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00e787b3#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -592,7 +566,7 @@ theorem site_80004028_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0x83#8) (0xa7#8) (0x07#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_0007a783 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x0007a783#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -625,7 +599,7 @@ theorem site_8000402c_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (0xb3#8) (0x87#8) (0xe7#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00e787b3 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00e787b3#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -659,7 +633,7 @@ theorem site_80004030_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (regidx.Regidx 0x0f#5) (0x67#8) (0x80#8) (0x07#8) (0x00#8)
     hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
     (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00078067 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00078067#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -698,7 +672,7 @@ theorem site_8000400c_es
     Register.x14 ((0x8000400c#64 : BitVec 64) + sign_extend (m := 64) ((0x00016#20) +++ 0x000#12))
     (0x17#8) (0x67#8) (0x01#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00016717 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00016717#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -735,7 +709,7 @@ theorem site_8000401c_es
     Register.x15 (zero_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))
     (0x83#8) (0x67#8) (0x04#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00046783 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00046783#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -767,7 +741,7 @@ theorem site_80004020_es
     Register.x15 (shift_bits_left v15 (Sail.BitVec.extractLsb (0x02#6) 5 0))
     (0x93#8) (0x97#8) (0x27#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00279793 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00279793#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

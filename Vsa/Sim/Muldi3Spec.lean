@@ -1,12 +1,5 @@
 import Vsa.Triple
-import Vsa.Sim.DecodeTable.Batch01Part01
-import Vsa.Sim.DecodeTable.Batch01Part04
-import Vsa.Sim.DecodeTable.Batch01Part15
-import Vsa.Sim.DecodeTable.Batch01Part23
-import Vsa.Sim.DecodeTable.Batch02Part23
-import Vsa.Sim.DecodeTable.Batch02Part24
-import Vsa.Sim.DecodeTable.Batch04Part09
-import Vsa.Sim.DecodeTable.Batch16Part09
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.StepObs
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa

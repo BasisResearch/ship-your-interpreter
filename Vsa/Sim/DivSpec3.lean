@@ -1,12 +1,5 @@
 import Vsa.Sim.ObsAvoid
-import Vsa.Sim.DecodeTable.Batch01Part10
-import Vsa.Sim.DecodeTable.Batch08Part12
-import Vsa.Sim.DecodeTable.Batch11Part19
-import Vsa.Sim.DecodeTable.Batch11Part21
-import Vsa.Sim.DecodeTable.Batch15Part23
-import Vsa.Sim.DecodeTable.Batch15Part25
-import Vsa.Sim.DecodeTable.Batch15Part28
-import Vsa.Sim.DecodeTable.Batch15Part32
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.DivLoops
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa

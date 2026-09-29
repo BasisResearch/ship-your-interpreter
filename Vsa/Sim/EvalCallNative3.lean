@@ -1,13 +1,5 @@
 import Vsa.Sim.SnprintfSitesRet5
-import Vsa.Sim.DecodeTable.Batch02Part01
-import Vsa.Sim.DecodeTable.Batch01Part25
-import Vsa.Sim.DecodeTable.Batch07Part13
-import Vsa.Sim.DecodeTable.Batch07Part25
-import Vsa.Sim.DecodeTable.Batch07Part30
-import Vsa.Sim.DecodeTable.Batch09Part01
-import Vsa.Sim.DecodeTable.Batch13Part22
-import Vsa.Sim.DecodeTable.Batch13Part25
-import Vsa.Sim.DecodeTable.Batch15Part31
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.EvalCallNative
 import Vsa.Sim.EvalNotSim
 

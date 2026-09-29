@@ -1,47 +1,5 @@
 import Vsa.Sim.EnvGetSites
-import Vsa.Sim.DecodeTable.Batch16Part09
-import Vsa.Sim.DecodeTable.Batch16Part07
-import Vsa.Sim.DecodeTable.Batch15Part23
-import Vsa.Sim.DecodeTable.Batch10Part24
-import Vsa.Sim.DecodeTable.Batch09Part04
-import Vsa.Sim.DecodeTable.Batch08Part22
-import Vsa.Sim.DecodeTable.Batch07Part23
-import Vsa.Sim.DecodeTable.Batch07Part17
-import Vsa.Sim.DecodeTable.Batch07Part12
-import Vsa.Sim.DecodeTable.Batch07Part07
-import Vsa.Sim.DecodeTable.Batch06Part31
-import Vsa.Sim.DecodeTable.Batch06Part30
-import Vsa.Sim.DecodeTable.Batch06Part28
-import Vsa.Sim.DecodeTable.Batch06Part17
-import Vsa.Sim.DecodeTable.Batch06Part07
-import Vsa.Sim.DecodeTable.Batch06Part02
-import Vsa.Sim.DecodeTable.Batch05Part29
-import Vsa.Sim.DecodeTable.Batch05Part27
-import Vsa.Sim.DecodeTable.Batch05Part26
-import Vsa.Sim.DecodeTable.Batch05Part20
-import Vsa.Sim.DecodeTable.Batch05Part19
-import Vsa.Sim.DecodeTable.Batch05Part12
-import Vsa.Sim.DecodeTable.Batch05Part09
-import Vsa.Sim.DecodeTable.Batch05Part07
-import Vsa.Sim.DecodeTable.Batch04Part28
-import Vsa.Sim.DecodeTable.Batch04Part24
-import Vsa.Sim.DecodeTable.Batch03Part26
-import Vsa.Sim.DecodeTable.Batch03Part25
-import Vsa.Sim.DecodeTable.Batch03Part23
-import Vsa.Sim.DecodeTable.Batch03Part19
-import Vsa.Sim.DecodeTable.Batch03Part18
-import Vsa.Sim.DecodeTable.Batch03Part06
-import Vsa.Sim.DecodeTable.Batch02Part22
-import Vsa.Sim.DecodeTable.Batch02Part20
-import Vsa.Sim.DecodeTable.Batch02Part06
-import Vsa.Sim.DecodeTable.Batch02Part04
-import Vsa.Sim.DecodeTable.Batch01Part32
-import Vsa.Sim.DecodeTable.Batch01Part22
-import Vsa.Sim.DecodeTable.Batch01Part20
-import Vsa.Sim.DecodeTable.Batch01Part16
-import Vsa.Sim.DecodeTable.Batch01Part15
-import Vsa.Sim.DecodeTable.Batch01Part04
-import Vsa.Sim.DecodeTable.Batch01Part01
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -93,7 +51,7 @@ theorem site_80002c60_eg2
         : BitVec (8 * 8)))
     (0x03#8) (0xb5#8) (0x04#8) (0x00#8)
     hG hpc hminstret w_0004b503_eg nr_0004b503_eg
-    (Vsa.Sim.DecodeTable.decode_0004b503 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x0004b503#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

@@ -1,7 +1,7 @@
 import VsaIris.Vsa.Stdout.NRun
 import VsaIris.Vsa.SymJalr
 import VsaIris.Vsa.SymHavoc
-import Vsa.Sim.DecodeTable.Batch18
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
@@ -535,7 +535,7 @@ theorem jalx_8000e73c (live : Nat → Prop)
       (0xef#8) (0x00#8) (0xd0#8) (0x18#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_18d000ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x18d000ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
@@ -674,7 +674,7 @@ theorem jalx_8000e75c (live : Nat → Prop)
       (0xef#8) (0x80#8) (0x5f#8) (0x88#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_885f80ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x885f80ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
@@ -800,7 +800,7 @@ theorem jalx_8000e778 (live : Nat → Prop)
       (0xef#8) (0x80#8) (0x1f#8) (0x88#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_881f80ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x881f80ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))

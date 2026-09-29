@@ -1,19 +1,5 @@
-import Vsa.Sim.DecodeTable.Batch03Part15
-import Vsa.Sim.DecodeTable.Batch03Part16
-import Vsa.Sim.DecodeTable.Batch03Part31
-import Vsa.Sim.DecodeTable.Batch04Part09
-import Vsa.Sim.DecodeTable.Batch07Part23
-import Vsa.Sim.DecodeTable.Batch08Part13
-import Vsa.Sim.DecodeTable.Batch08Part14
-import Vsa.Sim.DecodeTable.Batch08Part19
-import Vsa.Sim.DecodeTable.Batch09Part18
-import Vsa.Sim.DecodeTable.Batch11Part23
-import Vsa.Sim.DecodeTable.Batch16Part21
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.MemcpySites2
-import Vsa.Sim.DecodeTable.Batch03Part21
-import Vsa.Sim.DecodeTable.Batch03Part23
-import Vsa.Sim.DecodeTable.Batch04Part11
-import Vsa.Sim.DecodeTable.Batch16Part27
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -61,7 +47,7 @@ theorem site_80006bd8
     Register.x12 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v12 (sign_extend (m := 64) (0x008#12)))))
     (0x13#8) (0x36#8) (0x86#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00863613 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00863613#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

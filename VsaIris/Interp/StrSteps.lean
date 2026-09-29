@@ -616,7 +616,7 @@ theorem slO_80006d64 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
           Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) (R 15))))
           (0x33#8) (0x35#8) (0xf0#8) (0x00#8)
           hG hpc hmi (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-          (Vsa.Sim.DecodeTable.decode_00f03533 (afterPrelude c.σ)
+          (Vsa.Sim.decodeW (w := 0x00f03533#32) (afterPrelude c.σ)
             (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
             (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
             (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))

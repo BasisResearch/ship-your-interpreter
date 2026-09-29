@@ -1,7 +1,7 @@
 import VsaIris.Vsa.Stdout.NRun
 import VsaIris.Vsa.SymJalr
 import VsaIris.Vsa.SymHavoc
-import Vsa.Sim.DecodeTable.Batch18
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
@@ -208,7 +208,7 @@ theorem jalx_80005170 (live : Nat → Prop)
       (0xef#8) (0x80#8) (0xd0#8) (0x51#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_51d080ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x51d080ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
@@ -342,7 +342,7 @@ theorem jalx_800051e4 (live : Nat → Prop)
       (0xef#8) (0x10#8) (0xd0#8) (0x5f#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_5fd010ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x5fd010ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
@@ -664,7 +664,7 @@ theorem jalx_80005254 (live : Nat → Prop)
       (0xef#8) (0x10#8) (0x50#8) (0x5a#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_5a5010ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x5a5010ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
@@ -1164,7 +1164,7 @@ theorem jalx_80006200 (live : Nat → Prop)
       (0xef#8) (0x40#8) (0x40#8) (0x68#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_684040ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x684040ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))

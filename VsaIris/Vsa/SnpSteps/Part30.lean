@@ -1,6 +1,6 @@
 import VsaIris.Vsa.SnpRunDef
 import VsaIris.Vsa.SymObs
-import Vsa.Sim.DecodeTable.Batch18
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
@@ -251,7 +251,7 @@ theorem jalxn_800143c0 (live : Nat → Prop)
       (0xef#8) (0x20#8) (0x4f#8) (0xe0#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_e04f20ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0xe04f20ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))

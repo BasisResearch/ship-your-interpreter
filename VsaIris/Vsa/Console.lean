@@ -2,8 +2,7 @@ import VsaIris.Vsa.Tools
 import VsaIris.MachWP
 import Vsa.Sim.HtifStepObs
 import Vsa.Sim.TermEntry
-import Vsa.Sim.DecodeTable.Batch14Part06
-import Vsa.Sim.DecodeTable.Batch17
+import Vsa.Sim.DecodeNF
 
 namespace VsaIris.Inst
 
@@ -245,7 +244,7 @@ def putcSite : TohostSite where
 theorem putcSite_cert : putcSite.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => DecodeTable.decode_caf83423 σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0xcaf83423#32) σ h1 h2 h3
   addr := by decide
   rs1 := by decide
   rs2 := by decide
@@ -268,7 +267,7 @@ def exitSite : TohostSite where
 theorem exitSite_cert : exitSite.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => DecodeTable.decode_b6f73a23 σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0xb6f73a23#32) σ h1 h2 h3
   addr := by decide
   rs1 := by decide
   rs2 := by decide

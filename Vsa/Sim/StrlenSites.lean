@@ -4,37 +4,7 @@ import Vsa.Sim.ExecuteBranch
 import Vsa.Sim.ExecuteLoad
 import Vsa.Sim.MemLoadTotal
 import Vsa.Sim.RegAccess
-import Vsa.Sim.DecodeTable.Batch01Part04
-import Vsa.Sim.DecodeTable.Batch01Part16
-import Vsa.Sim.DecodeTable.Batch01Part28
-import Vsa.Sim.DecodeTable.Batch02Part26
-import Vsa.Sim.DecodeTable.Batch03Part15
-import Vsa.Sim.DecodeTable.Batch03Part16
-import Vsa.Sim.DecodeTable.Batch03Part23
-import Vsa.Sim.DecodeTable.Batch04Part13
-import Vsa.Sim.DecodeTable.Batch04Part14
-import Vsa.Sim.DecodeTable.Batch04Part16
-import Vsa.Sim.DecodeTable.Batch04Part18
-import Vsa.Sim.DecodeTable.Batch04Part19
-import Vsa.Sim.DecodeTable.Batch04Part29
-import Vsa.Sim.DecodeTable.Batch05Part01
-import Vsa.Sim.DecodeTable.Batch06Part25
-import Vsa.Sim.DecodeTable.Batch07Part28
-import Vsa.Sim.DecodeTable.Batch08Part14
-import Vsa.Sim.DecodeTable.Batch08Part30
-import Vsa.Sim.DecodeTable.Batch11Part20
-import Vsa.Sim.DecodeTable.Batch13Part06
-import Vsa.Sim.DecodeTable.Batch15Part25
-import Vsa.Sim.DecodeTable.Batch15Part26
-import Vsa.Sim.DecodeTable.Batch16Part11
-import Vsa.Sim.DecodeTable.Batch16Part13
-import Vsa.Sim.DecodeTable.Batch16Part21
-import Vsa.Sim.DecodeTable.Batch16Part22
-import Vsa.Sim.DecodeTable.Batch16Part23
-import Vsa.Sim.DecodeTable.Batch16Part24
-import Vsa.Sim.DecodeTable.Batch16Part25
-import Vsa.Sim.DecodeTable.Batch16Part26
-import Vsa.Sim.DecodeTable.Batch16Part28
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.Code.Strlen
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
@@ -90,7 +60,7 @@ theorem site_80006d64
     Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15)))
     (0x33#8) (0x35#8) (0xf0#8) (0x00#8)
     hG hpc hminstret snez_a0_a5_word snez_a0_a5_notrvc
-    (Vsa.Sim.DecodeTable.decode_00f03533 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00f03533#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

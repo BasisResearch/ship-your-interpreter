@@ -1,11 +1,6 @@
 import Vsa.Sim.SnprintfSpec18
 import Vsa.Sim.EnvNewSpec
-import Vsa.Sim.DecodeTable.Batch01Part13
-import Vsa.Sim.DecodeTable.Batch01Part14
-import Vsa.Sim.DecodeTable.Batch01Part24
-import Vsa.Sim.DecodeTable.Batch04Part21
-import Vsa.Sim.DecodeTable.Batch08Part01
-import Vsa.Sim.DecodeTable.Batch15Part04
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

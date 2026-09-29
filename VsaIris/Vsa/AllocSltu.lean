@@ -1,6 +1,6 @@
 import VsaIris.Vsa.Strlen
 import VsaIris.Vsa.AllocRun
-import Vsa.Sim.DecodeTable.Batch04Part25
+import Vsa.Sim.DecodeNF
 
 namespace VsaIris.Sym
 
@@ -116,7 +116,7 @@ theorem sltuAluStep {live : Nat → Prop} (hlive : ∀ p ∈ allocText, live p.1
       Register.x14 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14)))
       (0x33#8) (0xb7#8) (0xe7#8) (0x00#8)
       hok.good hpcσ hvm sltu_word sltu_notrvc
-      (Vsa.Sim.DecodeTable.decode_00e7b733 (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x00e7b733#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.mseccfg))

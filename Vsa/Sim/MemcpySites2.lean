@@ -5,15 +5,7 @@ import Vsa.Sim.ExecuteLoad
 import Vsa.Sim.ExecuteStore
 import Vsa.Sim.MemStore
 import Vsa.Sim.RegAccess
-import Vsa.Sim.DecodeTable.Batch01Part19
-import Vsa.Sim.DecodeTable.Batch01Part25
-import Vsa.Sim.DecodeTable.Batch01Part26
-import Vsa.Sim.DecodeTable.Batch03Part22
-import Vsa.Sim.DecodeTable.Batch03Part24
-import Vsa.Sim.DecodeTable.Batch05Part23
-import Vsa.Sim.DecodeTable.Batch07Part02
-import Vsa.Sim.DecodeTable.Batch16Part13
-import Vsa.Sim.DecodeTable.Batch16Part18
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.Code.Memcpy
 import Vsa.Sim.DivSites
 import Vsa.Sim.MemcpySites

@@ -1,7 +1,7 @@
 import VsaIris.Vsa.Stdout.NRun
 import VsaIris.Vsa.SymJalr
 import VsaIris.Vsa.SymHavoc
-import Vsa.Sim.DecodeTable.Batch18
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
@@ -267,7 +267,7 @@ theorem jalx_80010280 (live : Nat → Prop)
       (0xef#8) (0xf0#8) (0x9e#8) (0xe1#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_e19ef0ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0xe19ef0ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
@@ -520,7 +520,7 @@ theorem jalx_80010520 (live : Nat → Prop)
       (0xef#8) (0xf0#8) (0xde#8) (0xb1#8)
       hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
       (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.DecodeTable.decode_b1def0ef (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0xb1def0ef#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
@@ -772,7 +772,7 @@ theorem itO_80012280 {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
           Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) (R 10))))
           (0x33#8) (0x35#8) (0xa0#8) (0x00#8)
           hG hpc hmi (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-          (Vsa.Sim.DecodeTable.decode_00a03533 (afterPrelude c.σ)
+          (Vsa.Sim.decodeW (w := 0x00a03533#32) (afterPrelude c.σ)
             (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
             (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
             (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))

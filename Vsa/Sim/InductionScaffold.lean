@@ -1,8 +1,4 @@
-import Vsa.Sim.DecodeTable.Batch04Part21
-import Vsa.Sim.DecodeTable.Batch09Part26
-import Vsa.Sim.DecodeTable.Batch11Part04
-import Vsa.Sim.DecodeTable.Batch14Part10
-import Vsa.Sim.DecodeTable.Batch16Part04
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.EnvGetSpec3
 import Vsa.Sim.EvalIntSim2
 import Vsa.Sim.EvalRecCommon

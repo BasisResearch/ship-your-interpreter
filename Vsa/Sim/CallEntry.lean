@@ -1,6 +1,6 @@
 import Vsa.Sim.InductionScaffold
 import Vsa.Sim.BlockTerm
-import Vsa.Sim.DecodeTable.Batch08Part19
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.ConsoleStream
 import Vsa.Sim.rows.StoreWF
 import Vsa.Sim.HeapOwnershipGeometry
