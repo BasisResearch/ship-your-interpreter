@@ -20,6 +20,15 @@ theorem endToEnd_refinement :
 - Assumptions on the program: `capacity` (heap fits the arena), `stack_admissible` (recursion fits the stack).
 - Soundness reviews of the hypotheses: [`REVIEW.md`](REVIEW.md), [`REVIEW2.md`](REVIEW2.md). Iris layer and its design: [`VsaIris/`](VsaIris), [`VsaIris/INTERP_DESIGN.md`](VsaIris/INTERP_DESIGN.md).
 
+The behavioural trichotomy (`endToEnd_trichotomy`,
+[`VsaIris/Interp/EndToEndTrichotomy.lean`](VsaIris/Interp/EndToEndTrichotomy.lean))
+adds, under the same hypothesis: every nonzero exit is `70` (runtime error) or
+`1` (out of memory), and the binary exits nonzero or diverges exactly when the
+program errs or diverges in the semantics (`BigStepErr`/`BigStepDiverges`,
+proved mutually exclusive in [`Vsa/While/Exclusive.lean`](Vsa/While/Exclusive.lean)).
+The binary does not separate the two: its heap is finite and a divergent
+program that allocates exits `1`.
+
 The tooling that makes this tractable is documented separately in
 [`TOOLING.md`](TOOLING.md): proof generators, validation commands, and
 incremental builds.
@@ -37,6 +46,7 @@ incremental builds.
 | `Vsa/While/Derive.lean` | `bigstep_derive`, a syntax-directed tactic that *constructs* derivation trees of the big-step relation for closed programs. Untrusted meta-code; the kernel checks the derivations |
 | `Vsa/While/Programs.lean`, `Vsa/While/Validation.lean` | the `c/tests/*.wl` scripts as deep embeddings, plus kernel-checked theorems `BigStep prog "<binary's output>"` that validate the semantics against I/O examples obtained by running the binary |
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
+| `Vsa/While/Types.lean`, `Vsa/While/Type*.lean` | **a static type system for WHILE**, its preservation and progress theorems against `BigStep`, and worked examples |
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
 | `VsaIris/WhileLogic/` | **the source-level program logic**: an Iris-style separation logic for WHILE over iris-lean's `UPred`, with total-correctness weakest preconditions sound against `BigStep`, adequacy down to the machine, and a verified loop (see below) |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
@@ -200,6 +210,48 @@ big-step semantics and iris-lean's BI (`vProp := UPred Res`).
   scopes). `firstLoop_halts` and `whileWl_halts` (`Machine.lean`) are the
   machine consequences. `ClosureExample.lean` calls a function literal;
   `ForExample.lean` sums `1..100` with a `for` loop (`5050`).
+## Type safety
+
+`Vsa/While/Types.lean` types WHILE with simple types, function types and
+singleton builtin types under one program-wide typing environment
+`Δ : String → Ty`; typing tracks the names bound along the scope chain, the
+return type and the loop context. `WellTyped Δ p` is the program judgment.
+
+* `preservation` (`Vsa/While/TypePreservation.lean`): each of the nine
+  big-step relations preserves store typing, and values and completion statuses
+  have their static types.
+* `progress` and `type_soundness` (`Vsa/While/TypeProgress.lean`): every
+  runtime error of a well-typed program is division or remainder by zero, a
+  failed `assert`, or the call-depth cap (`ExecSeqErrN`), so a well-typed
+  program terminates normally, reaches one of those errors, or diverges.
+* `wellTyped_machine` (`VsaIris/Interp/TypeSafety.lean`): with
+  `endToEnd_refinement`, a loaded well-typed program's machine run that halts
+  with a nonzero exit code reaches one of those errors or diverges at the
+  source level.
+* `typeCheck_iff` (`Vsa/While/TypeCheck.lean`): the checker `typeCheck Δ p`
+  decides `WellTyped Δ p`, so `decide` proves typings.
+* `infer_sound`, `infer_complete`, `whileTyped_iff`
+  (`Vsa/While/TypeInfer.lean`): `infer p` finds a typing environment exactly
+  when one exists, so the WHILE type checker `whileTyped p` decides
+  `Typable p := ∃ Δ, WellTyped Δ p`. It rests on verified first-order
+  unification (`Vsa/While/Unify.lean`) and a complete search
+  (`Vsa/While/TypeSearch.lean`) whose result `typeCheck` confirms.
+  `whileTyped_machine` (`VsaIris/Interp/TypeSafety.lean`) states machine-level
+  type safety for accepted programs.
+* `Vsa/While/TypeExamples.lean`: `whileWl` and the other validation programs
+  type-check; `badSub`, `badAssign` and `recursionWl` are untypable.
+
+`whilecheck` runs `whileTyped` on `.wl` files outside Lean. It parses them
+with the grammar of `c/src/parser.c` (`Vsa/While/Parse.lean`, not verified)
+and prints the inferred type of every declared name, or the first problem
+found:
+
+```sh
+lake build whilecheck
+.lake/build/bin/whilecheck c/tests/functions.wl
+.lake/build/bin/whilecheck --selftest c/tests   # parser vs. Programs.lean
+scripts/test_whilecheck.sh
+```
 
 ## Building
 

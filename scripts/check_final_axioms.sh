@@ -19,6 +19,16 @@ THEOREMS=(
   VsaIris.Interp.term_sim_of                      # term_sim from Supplies + NewlibHoles
   VsaIris.Interp.stuck_sim_of                     # stuck_sim from Supplies + NewlibHoles
   VsaIris.Interp.supplies_of                      # every callee spec closed (no hypotheses)
+  Vsa.Sim.EndToEnd.endToEnd_trichotomy           # VsaIris/Interp/EndToEndTrichotomy.lean: the behavioural trichotomy (at `fillZero c`)
+  Vsa.Sim.EndToEnd.endToEnd_trichotomy_loaded     # the same at a literally `Loaded` configuration
+  Vsa.Sim.EndToEnd.EndToEndTrichotomy.fails_iff   # failing machine behaviour ↔ error or divergence
+  Vsa.Sim.EndToEnd.exactlyOne                     # exactly one semantic outcome per program
+  VsaIris.Interp.partialSim_iris                  # partial correctness: exit 0 with a BigStep output, or 70/1, or diverge
+  VsaIris.Interp.stuck_codes_of                   # stuck_sim with the exit code pinned to 70 or 1
+  Vsa.While.bigStep_not_err                       # Vsa/While/Exclusive.lean: termination excludes error
+  Vsa.While.bigStep_not_diverges                  # termination excludes divergence
+  Vsa.While.err_not_diverges                      # error excludes divergence
+  Vsa.While.ExecSeq.det                           # big-step determinism
   Vsa.Refine.refinement                           # the generic composition (Vsa/Refinement.lean)
   Vsa.Sim.NativeNameAudit.Control.loaded          # the control witness of `Loaded interpRunLayout`
   Vsa.Sim.NativeNameAudit.Control.loaded_fill     # the same at `fillZero heapConfig` (THE theorem's hypothesis)
@@ -80,6 +90,7 @@ AXFILE="$(mktemp /tmp/vsa_final_axioms.XXXXXX)".lean
 mv "${AXFILE%.lean}" "$AXFILE"
 {
   echo "import VsaIris.Interp.EndToEnd"
+  echo "import VsaIris.Interp.EndToEndTrichotomy"
   echo "import VsaIris.Interp.WorldVacuity"
   echo "import Vsa.Sim.NativeNameAudit.ControlLoaded"
   echo "import Vsa.Sim.StackAdmissibleWitness"
