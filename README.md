@@ -270,7 +270,7 @@ correctness theorem has no program premise besides acceptance:
 
 ```lean
 theorem compileChecked_correct (p : Program) (code : List Ins)
-    (hc : compileChecked p = some code) (c : Config) … 
+    (hc : compileChecked p = some code) (c : Config) …
     (hcode : ∀ k, k < (codeBytes code).length →
       c.σ.mem[0x80004800 + k]? = (codeBytes code)[k]?) … :
     (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
