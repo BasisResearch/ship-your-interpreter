@@ -40,6 +40,14 @@ instance : ToExpr BootOwn where
       toExpr o.key2, toExpr o.name0, toExpr o.name1, toExpr o.name2, toExpr o.ast]
   toTypeExpr := mkConst ``BootOwn
 
+def rangeTreeExpr : RangeTree → Expr
+  | .leaf lo n => mkApp2 (mkConst ``RangeTree.leaf) (toExpr lo) (toExpr n)
+  | .node p l r => mkApp3 (mkConst ``RangeTree.node) (toExpr p) (rangeTreeExpr l) (rangeTreeExpr r)
+
+instance : ToExpr RangeTree where
+  toExpr := rangeTreeExpr
+  toTypeExpr := mkConst ``RangeTree
+
 def addLiteralDef {α : Type} [ToExpr α] (n : Name) (a : α) : CommandElabM Unit := liftCoreM do
   let value := toExpr a
   addDecl <| .defnDecl
@@ -67,6 +75,7 @@ set_option hygiene false in
   addLiteralDef (ns ++ `brkv) d.brkv
   addLiteralDef (ns ++ `chunks) d.chunks
   addLiteralDef (ns ++ `bins) d.bins
+  addLiteralDef (ns ++ `sharedT) d.sharedT
   addLiteralDef (ns ++ `stmts) d.stmts
   addLiteralDef (ns ++ `count) d.count
   elabCommand (← `(noncomputable def W : Witness where
@@ -80,46 +89,50 @@ set_option hygiene false in
     brkv := brkv
     chunks := chunks
     bins := bins
+    sharedT := sharedT
     stmts := stmts
     count := count
     prog := prog))
-  -- the log's stores, one theorem per block of 1024 entries
+  -- the log's stores, one theorem per block of 16 pages (1024 entries)
   let blocks := (len + 1023) / 1024
   let mut parts ← `(trivial)
   for j in [0:blocks] do
     let nm := mkIdent (Name.mkSimple s!"stores{j}")
     let jl := Syntax.mkNumLit (toString j)
-    elabCommand (← `(theorem $nm : storesIn W.log W.runs (1024 * $jl) 1024 = true := by
+    elabCommand (← `(theorem $nm : pagesOk log runs (16 * $jl) 16 = true := by
       decide +kernel))
     parts ← `(⟨$parts, $nm⟩)
   let bl := Syntax.mkNumLit (toString blocks)
-  elabCommand (← `(theorem runs_ok : ∀ r ∈ W.runs.runs, runOk W.log r r.len = true := by
+  elabCommand (← `(theorem runs_wf : runs.wfB 0 (2 ^ 40) = true := by decide +kernel))
+  elabCommand (← `(theorem runs_ok : ∀ r ∈ runs.runs, runOk log r r.len = true := by
     decide +kernel))
-  elabCommand (← `(theorem logOk : LogOk W.log W.runs :=
-    logOk_of_blocks (n := $bl) $parts (by decide) runs_ok))
-  elabCommand (← `(theorem aboveOk : W.runs.above 0x8001acf0 = true := by decide +kernel))
-  elabCommand (← `(theorem memRefOk : memRefCheck W.view = true := by decide +kernel))
+  elabCommand (← `(theorem logOk : LogOk log runs :=
+    logOk_of_pages (n := $bl) $parts runs_wf (by decide) runs_ok))
+  elabCommand (← `(theorem aboveOk : runs.above 0x8001acf0 = true := by decide +kernel))
+  elabCommand (← `(theorem memRefOk : memRefCheck (bootView script runs) = true := by decide +kernel))
   elabCommand (← `(theorem globalsOk :
-    readLEv W.view Vsa.Sim.LayoutInstance.interpObject 8 = some W.own.env := by decide +kernel))
-  elabCommand (← `(theorem ownOk : OwnOk W.own := by constructor <;> decide +kernel))
-  elabCommand (← `(theorem frameOk : FrameOk W.view W.own := by constructor <;> decide +kernel))
-  elabCommand (← `(theorem bootRegs : BootRegs W.regs W.stmts W.count := by
+    readLEv (bootView script runs) Vsa.Sim.LayoutInstance.interpObject 8 = some own.env := by decide +kernel))
+  elabCommand (← `(theorem ownOk : OwnOk own := by constructor <;> decide +kernel))
+  elabCommand (← `(theorem frameOk : FrameOk (bootView script runs) own := by constructor <;> decide +kernel))
+  elabCommand (← `(theorem bootRegs : BootRegs regs stmts count := by
     constructor <;> decide +kernel))
-  elabCommand (← `(theorem storeOk : frameCheck (maskView prologueMask W.view) bootNatives
-    W.own.env initFrame = true := by decide +kernel))
-  elabCommand (← `(theorem heapFactsOk : HeapFactsOk W.view W.own W.top W.brkv W.chunks
-    (W.own.env, 0x28) (W.own.pn, 0x48) (W.own.pv, 0xc8) := by constructor <;> decide +kernel))
-  elabCommand (← `(theorem heapOk : heapCheck W.view W.own.exts
-    [(W.own.pn, 8 * W.own.cap), (W.own.pv, 24 * W.own.cap)] W.top W.brkv W.chunks W.bins =
+  elabCommand (← `(theorem storeOk : frameCheck (maskView prologueMask (bootView script runs)) bootNatives
+    own.env initFrame = true := by decide +kernel))
+  elabCommand (← `(theorem heapFactsOk : HeapFactsOk (bootView script runs) own top brkv chunks
+    (own.env, 0x28) (own.pn, 0x48) (own.pv, 0xc8) := by constructor <;> decide +kernel))
+  elabCommand (← `(theorem heapOk : heapCheck (bootView script runs) own.exts
+    [(own.pn, 8 * own.cap), (own.pv, 24 * own.cap)] top brkv chunks bins =
       true := by decide +kernel))
+  elabCommand (← `(theorem sharedOk :
+    sharedT.ranges.all (fun r => own.sharedRanges.contains r) = true := by decide +kernel))
   elabCommand (← `(theorem progOk :
-    decodesTo W.view W.own.sharedB W.fuel W.stmts W.count W.prog = true := by decide +kernel))
-  elabCommand (← `(theorem capacityOk : capOk W.cfuel W.prog W.top = true := by decide +kernel))
-  elabCommand (← `(theorem fitsOk : Vsa.Sim.LayoutInstance.programStackFits W.prog = true := by
+    decodesTo (bootView script runs) sharedT.mem 100000 stmts count prog = true := by decide +kernel))
+  elabCommand (← `(theorem capacityOk : capOk 1000 prog top = true := by decide +kernel))
+  elabCommand (← `(theorem fitsOk : Vsa.Sim.LayoutInstance.programStackFits prog = true := by
     decide +kernel))
   elabCommand (← `(theorem ok : W.Ok :=
     ⟨logOk, aboveOk, memRefOk, globalsOk, ownOk, frameOk, bootRegs, storeOk, heapFactsOk,
-      heapOk, progOk, capacityOk, fitsOk⟩))
+      heapOk, sharedOk, progOk, capacityOk, fitsOk⟩))
   elabCommand (← `(theorem view : ViewOf (bootMem script log) (bootView script runs) := ok.view))
   elabCommand (← `(theorem loadedEntry {σ : Vsa.Machine.MState} (E : EntryRegs σ regs)
     (hout : Vsa.Machine.output σ = "") (hv : PartialView σ.mem (bootView script runs))

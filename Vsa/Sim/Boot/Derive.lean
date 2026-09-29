@@ -133,6 +133,20 @@ partial def stmts (v : Nat → Option (BitVec 8)) (a n : Nat) (acc : Array Nat) 
 
 end
 
+def rangeTree (rs : Array (Nat × Nat)) (lo : Nat) : Nat → RangeTree
+  | 0 => .leaf 0 0
+  | 1 => .leaf rs[lo]!.1 rs[lo]!.2
+  | n + 2 =>
+    let k := (n + 2) / 2
+    .node rs[lo + k]!.1 (rangeTree rs lo k) (rangeTree rs (lo + k) (n + 2 - k))
+termination_by n => n
+decreasing_by all_goals omega
+
+/-- The shared ranges of `B`, sorted by start, as a search tree. -/
+def sharedTree (B : BootOwn) : RangeTree :=
+  let rs := B.sharedRanges.toArray.qsort (fun a b => a.1 < b.1)
+  rangeTree rs 0 rs.size
+
 /-- Derived data of a boot witness. -/
 structure Data where
   runs : RunTree
@@ -141,6 +155,7 @@ structure Data where
   brkv : Nat
   chunks : List Chunk
   bins : List (List Nat)
+  sharedT : RangeTree
   stmts : Nat
   count : Nat
 
@@ -162,13 +177,15 @@ def data (script : Nat) (L : PackedLog) (regs : Nat → BitVec 64) : Data :=
   let ast := (cs.filter fun c => c.inuse && !roles.contains (c.addr + 16) &&
       reached.any fun a => decide (c.addr + 16 ≤ a ∧ a < c.addr + c.size + 8)).map
     fun c => (c.addr + 16, c.size - 8)
+  let own : BootOwn :=
+    { env, pn, pv
+      cap := (readLEv v (env + 4) 4).getD 0
+      key0 := keys[0]!, key1 := keys[1]!, key2 := keys[2]!
+      name0 := names[0]!, name1 := names[1]!, name2 := names[2]!
+      ast }
   { runs := t
-    own :=
-      { env, pn, pv
-        cap := (readLEv v (env + 4) 4).getD 0
-        key0 := keys[0]!, key1 := keys[1]!, key2 := keys[2]!
-        name0 := names[0]!, name1 := names[1]!, name2 := names[2]!
-        ast }
+    own
+    sharedT := sharedTree own
     top, brkv
     chunks := cs
     bins := bins v

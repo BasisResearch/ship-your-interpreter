@@ -1,5 +1,6 @@
 import Vsa.Sim.Boot.Physical
 import Vsa.Sim.Boot.Fill
+import Vsa.Sim.Boot.FastCheck
 
 /-!
 # Generic boot witnesses
@@ -162,6 +163,8 @@ structure Witness where
   brkv : Nat
   chunks : List DlHeap.Chunk
   bins : List (List Nat)
+  /-- The shared byte ranges as a search tree (the AST coverage predicate). -/
+  sharedT : RangeTree
   stmts : Nat
   count : Nat
   prog : Program
@@ -188,11 +191,17 @@ structure Ok : Prop where
     (W.own.env, 0x28) (W.own.pn, 0x48) (W.own.pv, 0xc8)
   heap : heapCheck W.view W.own.exts [(W.own.pn, 8 * W.own.cap), (W.own.pv, 24 * W.own.cap)]
     W.top W.brkv W.chunks W.bins = true
-  prog : decodesTo W.view W.own.sharedB W.fuel W.stmts W.count W.prog = true
+  sharedT : W.sharedT.ranges.all (fun r => W.own.sharedRanges.contains r) = true
+  prog : decodesTo W.view W.sharedT.mem W.fuel W.stmts W.count W.prog = true
   cap : capOk W.cfuel W.prog W.top = true
   fits : programStackFits W.prog = true
 
 variable {W}
+
+theorem Ok.shared (h : W.Ok) {k : Nat} (hk : W.sharedT.mem k = true) : W.own.shared k := by
+  obtain ⟨r, hr, hin⟩ := RangeTree.mem_sound hk
+  have := List.all_eq_true.mp h.sharedT r hr
+  exact ⟨r, List.elem_iff.mp this, hin⟩
 
 theorem Ok.memFacts (h : W.Ok) {m : Mem} (hv : PartialView m W.view)
     (hstack : ∀ k, stackSL.lo ≤ k → k < stackSL.hi → ∃ b : BitVec 8, m[k]? = some b) :
@@ -206,7 +215,7 @@ theorem Ok.loadedEntry (h : W.Ok) {σ : Vsa.Machine.MState} (E : EntryRegs σ W.
     {tick : Nat} (htick : tick < 2) (steps : Nat) :
     Vsa.Refine.Loaded interpRunLayout W.prog ⟨σ, tick, steps⟩ :=
   loaded_at hv E hout htick (h.memFacts hv hstack) h.regs h.own h.frame h.store h.heap
-    h.heapFacts h.prog h.cap h.fits
+    h.heapFacts (fun _ hk => h.shared hk) h.prog h.cap h.fits
 
 theorem Ok.loadedEntry_fill (h : W.Ok) {σ : Vsa.Machine.MState} (E : EntryRegs σ W.regs)
     (hout : Vsa.Machine.output σ = "") (hv : PartialView σ.mem W.view)
