@@ -1,1 +1,0 @@
-fn ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc(){return 0;}println(""+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc);

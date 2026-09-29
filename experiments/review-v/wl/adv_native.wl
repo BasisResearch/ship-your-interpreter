@@ -1,1 +1,0 @@
-println(""+println,println,""+fn(){return 1;});println(print==print,fn(){return 1;}==fn(){return 1;});
