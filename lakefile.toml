@@ -9,6 +9,10 @@ leanOptions.backward.isDefEq.respectTransparency = false
 name = "vsa_run"
 root = "VsaRun"
 
+[[lean_exe]]
+name = "whilecheck"
+root = "WhileCheck"
+
 [[lean_lib]]
 name = "VsaIris"
 

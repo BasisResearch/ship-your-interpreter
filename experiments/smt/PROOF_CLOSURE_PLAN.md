@@ -4461,3 +4461,33 @@ Obstructions recorded (not fixed):
 - **`IrisHoles` removed (lane V2, user request, 2026-09-25).** The record was
   empty; `endToEnd_refinement` and every capstone now take no hypothesis
   (INTERP_DESIGN.md "STATEMENT CHANGE (lane V2)").
+
+## Error and divergence are not separated on the binary (lane refine, 2026-09-27)
+
+`Vsa/While/Exclusive.lean` proves the three semantic outcomes exclusive
+(`bigStep_not_err`, `bigStep_not_diverges`, `err_not_diverges`, from
+`ExecSeq.det` and the fuel bounds `ExecSeq.bound`/`ExecSeqErr.bound`).
+`VsaIris/Interp/EndToEndTrichotomy.lean` (`endToEnd_trichotomy`) relates them
+to the binary: exit `0` is exactly `BigStep`, every nonzero exit is `70` or `1`
+(`AbortCode`, pinned through `wp_abortCodes`/`interpRun_partial`), and failing
+machine behaviour (nonzero exit or divergence) is exactly `BigStepErr ∨
+BigStepDiverges` (`EndToEndTrichotomy.fails_iff`).
+
+The separated forms are false and are not obligations:
+
+- `BigStepDiverges p → Diverges c` and `BigStepErr p → ∃ out, Halts c out 70`.
+  The heap is `[heapStart, heapEnd)` (about 126 MiB), `env_new`
+  (`c/src/env.c:13`) is never freed, and `DlHeap.InitialAllocatorAt.capacity`
+  covers terminating derivations only. `while (true) { { } }` diverges in the
+  semantics and leaves the binary through `xmalloc`'s `exit(1)`; running such a
+  loop `10^8` times before `1 / 0` errs in the semantics and exits `1`.
+  Evidence: the host build of `c/src` under `ulimit -v 204800` prints
+  `out of memory` and exits `1` on both programs. A machine-level Lean proof of
+  the OOM run (about 2.6 million iterations) is out of reach of `decide`.
+- A true `err_sim` needs a capacity premise for the error derivation (an error
+  analogue of `ExecSeqCost` and of `capacity`) and a total-mode recursion over
+  `ExecSeqErr` (the error arms exist only as partial-mode abort continuations,
+  `fnSpecAbort`, whose recursion is Löb over all outcomes). Neither exists.
+- Pinning the diagnostic text of a `70` exit needs the partial specs' abort
+  branch to carry the error derivation (`abortRes` carries none) and the
+  `snprintf`/`fprintf` output through `wp_abortLanding`.
