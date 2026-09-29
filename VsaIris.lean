@@ -275,6 +275,8 @@ import VsaIris.Interp.TopEntryBoot
 import VsaIris.Interp.Supply
 import VsaIris.Interp.EndToEnd
 import VsaIris.Interp.EndToEndChecked
+import VsaIris.Interp.TypeSafety
+import VsaIris.Interp.EndToEndTrichotomy
 import VsaIris.Interp.ProofStrcmp
 import VsaIris.Interp.ProofMemcpy
 import VsaIris.Interp.ProofStrlen
@@ -307,3 +309,6 @@ import VsaIris.Vsa.Stderr.SEmpty
 import VsaIris.Vsa.Fprintf.End
 import VsaIris.Vsa.Fprintf.Inner
 import VsaIris.AbsInt.Machine
+import VsaIris.WhileLogic.Machine
+import VsaIris.WhileLogic.ClosureExample
+import VsaIris.WhileLogic.ForExample

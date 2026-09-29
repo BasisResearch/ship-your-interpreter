@@ -707,6 +707,17 @@ import Vsa.Sim.SpliceFold
 import Vsa.Sim.rows.StrdupTailSpliceFold
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
+import Vsa.While.Types
+import Vsa.While.TypeStore
+import Vsa.While.TypePreservation
+import Vsa.While.TypeProgress
+import Vsa.While.TypeCheck
+import Vsa.While.Unify
+import Vsa.While.TypeSearch
+import Vsa.While.TypeInfer
+import Vsa.While.Parse
+import Vsa.While.TypeExamples
+import Vsa.While.Exclusive
 import Vsa.Sim.InterpSimBundle
 import Vsa.Sim.DeriveMeta
 import Vsa.Sim.DeriveMetaTowers

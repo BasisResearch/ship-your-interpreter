@@ -13,6 +13,10 @@ root = "VsaRun"
 name = "whilec"
 root = "WhileC"
 
+[[lean_exe]]
+name = "whilecheck"
+root = "WhileCheck"
+
 [[lean_lib]]
 name = "VsaIris"
 
