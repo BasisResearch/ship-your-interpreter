@@ -865,3 +865,4 @@ import Vsa.Compiler.Image
 import Vsa.Compiler.Parse
 import Vsa.AbsInt.Examples
 import Vsa.AbsInt.CostSound
+import Vsa.Sim.CheckedBoundary

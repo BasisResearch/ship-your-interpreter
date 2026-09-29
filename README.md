@@ -261,6 +261,27 @@ Proof structure:
 and `stringsWl` (`*_compiledG_halts`). `experiments/compiler/RunCompiledG.lean`
 runs compiled programs on the executable Sail model.
 
+### The checked compiler
+
+`compileChecked` (`Vsa/Compiler/Checked.lean`) returns `compileG p` only when
+`supportedGB p`, `fitsB p` and the allocation-cost analysis (`progCost` over
+`Const × Itv`, below) bounds every run of `p` by at most `heapUnits`. Its
+correctness theorem has no program premise besides acceptance:
+
+```lean
+theorem compileChecked_correct (p : Program) (code : List Ins)
+    (hc : compileChecked p = some code) (c : Config) … 
+    (hcode : ∀ k, k < (codeBytes code).length →
+      c.σ.mem[0x80004800 + k]? = (codeBytes code)[k]?) … :
+    (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+(the elided hypotheses are those of `compileG_correct` other than `hsup`,
+`hfit` and `hcap`). `whileWl_checked` accepts `while.wl` (bound 8272 units; its
+exact cost is 6992), and `whileWl_checked_halts` is the unconditional halting
+theorem for its compiled code. The analysis leaves calls into closures and
+string concatenation unbounded, so programs using them are rejected.
+
 ### `whilec`: the compiler as an executable
 
 ```sh
@@ -302,6 +323,21 @@ and carried to the machine by `endToEnd_refinement`.
   (an unreported error kind occurs in no run), `no_error_of_no_alarms`.
   Runtime errors of kind `k` are `ExecSeqErrK`, generated from `ErrorSem` by
   `scripts/gen_errk.py`.
+- Allocation cost (`CostAnalysis.lean`, `CostSound.lean`): `progCost cfg p`
+  bounds the allocation cost `Vsa/While/Cost.lean` assigns to any successful
+  run (`progCost_sound : progCost cfg p = some n → ∀ out, BigStep p out →
+  BigStepBudget p out n`). Frames, closures and bindings are charged from the
+  abstract states; binding counts are bounded by the abstract scope's names
+  (`NoDup.lean`). Loops are summed over the unrolled iterations; past them,
+  a zero-cost iteration costs nothing, and a counted condition `x < e` /
+  `x <= e` bounds the iterations when the offset domain (`Domains/Offset.lean`)
+  shows each iteration raises `x`. Calls into closures and string
+  concatenation are unbounded (`none`).
+  `loaded_of_checked` (`Vsa/Sim/CheckedBoundary.lean`) replaces the
+  heap-capacity and stack-admissibility premises of `Loaded` by this bound, the
+  `programStackFits` checker and a numeric free-heap fact (`HeapRoom`);
+  `endToEnd_checked` (`VsaIris/Interp/EndToEndChecked.lean`) is the resulting
+  end-to-end theorem.
 - Examples (`Examples.lean`, by `decide +kernel`): on `whileWl` the kind
   domain proves no type errors; `Const × Itv` proves no runtime error at all and
   that every run ends with `sum = 55`, `total = 2500`, `acc = 36`.
