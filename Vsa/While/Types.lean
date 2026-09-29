@@ -62,6 +62,45 @@ inductive Ty where
   | fn (ps : List Ty) (r : Ty)
   deriving Repr
 
+mutual
+
+/-- Decidable equality of types. -/
+def Ty.decEq : (a b : Ty) → Decidable (a = b)
+  | .int, .int => isTrue rfl
+  | .bool, .bool => isTrue rfl
+  | .str, .str => isTrue rfl
+  | .null, .null => isTrue rfl
+  | .native f, .native g =>
+    if h : f = g then isTrue (h ▸ rfl) else isFalse fun e => by cases e; exact h rfl
+  | .fn ps r, .fn qs u =>
+    match Ty.decEqList ps qs, Ty.decEq r u with
+    | isTrue h₁, isTrue h₂ => isTrue (h₁ ▸ h₂ ▸ rfl)
+    | isFalse h₁, _ => isFalse fun e => by cases e; exact h₁ rfl
+    | _, isFalse h₂ => isFalse fun e => by cases e; exact h₂ rfl
+  | .int, .bool | .int, .str | .int, .null | .int, .native _ | .int, .fn _ _
+  | .bool, .int | .bool, .str | .bool, .null | .bool, .native _ | .bool, .fn _ _
+  | .str, .int | .str, .bool | .str, .null | .str, .native _ | .str, .fn _ _
+  | .null, .int | .null, .bool | .null, .str | .null, .native _ | .null, .fn _ _
+  | .native _, .int | .native _, .bool | .native _, .str | .native _, .null
+  | .native _, .fn _ _
+  | .fn _ _, .int | .fn _ _, .bool | .fn _ _, .str | .fn _ _, .null
+  | .fn _ _, .native _ => isFalse fun e => by cases e
+
+/-- Decidable equality of type lists. -/
+def Ty.decEqList : (a b : List Ty) → Decidable (a = b)
+  | [], [] => isTrue rfl
+  | [], _ :: _ => isFalse fun e => by cases e
+  | _ :: _, [] => isFalse fun e => by cases e
+  | t :: ts, u :: us =>
+    match Ty.decEq t u, Ty.decEqList ts us with
+    | isTrue h₁, isTrue h₂ => isTrue (h₁ ▸ h₂ ▸ rfl)
+    | isFalse h₁, _ => isFalse fun e => by cases e; exact h₁ rfl
+    | _, isFalse h₂ => isFalse fun e => by cases e; exact h₂ rfl
+
+end
+
+instance : DecidableEq Ty := Ty.decEq
+
 /-- The program-wide typing environment. -/
 abbrev TyEnv := String → Ty
 

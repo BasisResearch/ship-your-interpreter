@@ -1,4 +1,5 @@
 import Vsa.While.TypeProgress
+import Vsa.While.TypeInfer
 import Vsa.While.Programs
 
 /-!
@@ -11,68 +12,24 @@ import Vsa.While.Programs
 * `badSub_illTyped`, `badAssign_illTyped`: two programs rejected under every
   typing environment; `badSub_err` shows the first one does reach a runtime
   error.
+* The type checker `whileTyped` (`Vsa/While/TypeInfer.lean`) accepts `whileWl`
+  and the other validation programs and rejects `badSub`, `badAssign` and
+  `recursionWl` (`recursionWl_untypable`).
 * `divProg_wellTyped`, `divProg_err`: a well-typed program that reaches the
   division-by-zero error the type system leaves in place.
 
-`recursionWl` is rejected: `is_even` refers to `is_odd` before `is_odd` is
+`recursionWl` is untypable: `is_even` refers to `is_odd` before `is_odd` is
 declared, and the type system requires names referenced in a closure body to
 be defined where the closure is created.
 
-Typing derivations are found by `wt_search`, which applies the typing rules
-syntactically; `MustExitSeq` side conditions are decided by `mustExitSeqB`.
+Positive examples are decided by the verified checker (`typeCheck_iff`,
+`Vsa/While/TypeCheck.lean`) through `decide`. The rejections hold for every
+typing environment, so they are proved by inverting the typing rules.
 -/
 
 namespace Vsa.While.Types
 
 open Vsa.While
-
-mutual
-/-- Boolean decision procedure for `MustExit`. -/
-def mustExitB : Stmt → Bool
-  | .ret _ => true
-  | .brk => true
-  | .cont => true
-  | .block ss => mustExitSeqB ss
-  | .ifStmt _ t (some e) => mustExitB t && mustExitB e
-  | _ => false
-/-- Boolean decision procedure for `MustExitSeq`. -/
-def mustExitSeqB : List Stmt → Bool
-  | [] => false
-  | s :: ss => mustExitB s || mustExitSeqB ss
-end
-
-mutual
-theorem mustExit_of_b : ∀ {s : Stmt}, mustExitB s = true → MustExit s
-  | .ret _, _ => .ret _
-  | .brk, _ => .brk
-  | .cont, _ => .cont
-  | .block ss, h => .block ss (mustExitSeq_of_b (by simpa [mustExitB] using h))
-  | .ifStmt c t (some e), h => by
-    simp only [mustExitB, Bool.and_eq_true] at h
-    exact .ite c t e (mustExit_of_b h.1) (mustExit_of_b h.2)
-  | .ifStmt _ _ none, h => by simp [mustExitB] at h
-  | .expr _, h => by simp [mustExitB] at h
-  | .varDecl _ _, h => by simp [mustExitB] at h
-  | .whileStmt _ _, h => by simp [mustExitB] at h
-  | .forStmt _ _ _ _, h => by simp [mustExitB] at h
-theorem mustExitSeq_of_b : ∀ {ss : List Stmt}, mustExitSeqB ss = true → MustExitSeq ss
-  | [], h => by simp [mustExitSeqB] at h
-  | s :: ss, h => by
-    simp only [mustExitSeqB, Bool.or_eq_true] at h
-    rcases h with h | h
-    · exact .head s ss (mustExit_of_b h)
-    · exact .tail s ss (mustExitSeq_of_b h)
-end
-
-/-- Proof search for typing derivations. -/
-macro "wt_search" : tactic => `(tactic|
-  repeat' (first
-    | decide
-    | exact Or.inl rfl
-    | exact Or.inr (mustExitSeq_of_b (by decide))
-    | apply WtS.varRec
-    | constructor))
-
 
 /-- A typing environment: the builtins, the listed names, and `int` for every
 other name. -/
@@ -87,7 +44,7 @@ theorem mkΔ_builtins (l : List (String × Ty)) : BuiltinsTyped (mkΔ l) := ⟨r
 
 /-- **`tests/while.wl`, the program in the ELF, is well-typed.** -/
 theorem whileWl_wellTyped : WellTyped (mkΔ []) Programs.whileWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.whileWl; wt_search⟩⟩
+  by decide
 
 private abbrev ii : Ty := .fn [.int] .int
 
@@ -95,19 +52,19 @@ theorem functionsWl_wellTyped : WellTyped (mkΔ [("make_adder", .fn [.int] ii), 
     ("apply_twice", .fn [ii, .int] .int), ("f", ii), ("make_counter", .fn [] (.fn [] .int)),
     ("c", .fn [] .int), ("c2", .fn [] .int), ("compose", .fn [ii, ii] ii), ("g", ii),
     ("inc", ii), ("dbl", ii)]) Programs.functionsWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.functionsWl; wt_search⟩⟩
+  by decide
 
 theorem scopeWl_wellTyped : WellTyped (mkΔ [("shadow", ii)]) Programs.scopeWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.scopeWl; wt_search⟩⟩
+  by decide
 
 theorem forWl_wellTyped : WellTyped (mkΔ [("line", .str)]) Programs.forWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.forWl; wt_search⟩⟩
+  by decide
 
 theorem arithmeticWl_wellTyped : WellTyped (mkΔ []) Programs.arithmeticWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.arithmeticWl; wt_search⟩⟩
+  by decide
 
 theorem stringsWl_wellTyped : WellTyped (mkΔ [("s", .str)]) Programs.stringsWl :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold Programs.stringsWl; wt_search⟩⟩
+  by decide
 
 /-- `var fact = fn fact(n) { if (n <= 1) { return 1; } return n * fact(n - 1); };
 println(fact(10));` -/
@@ -119,7 +76,7 @@ def recProg : Program := [
   .expr (.call (.var "println") [.call (.var "fact") [.int 10]])]
 
 theorem recProg_wellTyped : WellTyped (mkΔ [("fact", ii)]) recProg :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold recProg; wt_search⟩⟩
+  by decide
 
 /-! ## Rejected programs -/
 
@@ -175,10 +132,83 @@ theorem badAssign_illTyped (Δ : TyEnv) : ¬ WellTyped Δ badAssign := by
 def divProg : Program := [.expr (.call (.var "println") [.binary .div (.int 1) (.int 0)])]
 
 theorem divProg_wellTyped : WellTyped (mkΔ []) divProg :=
-  ⟨mkΔ_builtins _, ⟨_, by unfold divProg; wt_search⟩⟩
+  by decide
 
 theorem divProg_err : ExecSeqErrN initSt 0 0 divProg :=
   .head _ _ _ _ _ (.expr _ _ _ _ (.callArgs _ _ _ _ _ _ _ (.var _ _ _ _ _ rfl) (by decide)
     (.head _ _ _ _ _ (.divZero _ _ _ _ _ _ _ _ _ (.inl rfl) (.int _ _ _ _) (.int _ _ _ _)))))
+
+/-! ## The WHILE type checker -/
+
+theorem whileWl_whileTyped : whileTyped Programs.whileWl = true :=
+  whileTyped_iff.mpr ⟨_, whileWl_wellTyped⟩
+
+theorem functionsWl_whileTyped : whileTyped Programs.functionsWl = true :=
+  whileTyped_iff.mpr ⟨_, functionsWl_wellTyped⟩
+
+theorem scopeWl_whileTyped : whileTyped Programs.scopeWl = true :=
+  whileTyped_iff.mpr ⟨_, scopeWl_wellTyped⟩
+
+theorem forWl_whileTyped : whileTyped Programs.forWl = true :=
+  whileTyped_iff.mpr ⟨_, forWl_wellTyped⟩
+
+theorem arithmeticWl_whileTyped : whileTyped Programs.arithmeticWl = true :=
+  whileTyped_iff.mpr ⟨_, arithmeticWl_wellTyped⟩
+
+theorem stringsWl_whileTyped : whileTyped Programs.stringsWl = true :=
+  whileTyped_iff.mpr ⟨_, stringsWl_wellTyped⟩
+
+theorem badSub_whileTyped : whileTyped badSub = false :=
+  Bool.eq_false_iff.mpr fun h => by
+    obtain ⟨Δ, hΔ⟩ := whileTyped_iff.mp h
+    exact badSub_illTyped Δ hΔ
+
+theorem badAssign_whileTyped : whileTyped badAssign = false :=
+  Bool.eq_false_iff.mpr fun h => by
+    obtain ⟨Δ, hΔ⟩ := whileTyped_iff.mp h
+    exact badAssign_illTyped Δ hΔ
+
+theorem isEven_body_bad {Δ : TyEnv} {S : List String} {R : Option Ty} {S' : List String}
+    {b : List Stmt} (hS : "is_odd" ∉ S)
+    (hb : b = [.ifStmt (.binary .eq (.var "n") (.int 0)) (.block [.ret (some (.bool true))]) none,
+      .ret (some (.call (.var "is_odd") [.binary .sub (.var "n") (.int 1)]))]) :
+    ¬ WtSeq Δ S R false b S' := by
+  subst hb
+  intro h
+  cases h with
+  | cons _ _ _ _ _ _ _ h1 h2 =>
+    cases h1 with
+    | ifNone =>
+      cases h2 with
+      | cons _ _ _ _ _ _ _ h3 _ =>
+        cases h3 with
+        | ret _ _ _ _ he =>
+          cases he with
+          | call _ _ _ _ _ _ hf _ _ _ =>
+            cases hf with
+            | var _ _ hx => exact hS hx
+
+theorem recursionWl_untypable : ¬ Typable Programs.recursionWl := by
+  rintro ⟨Δ, _, S', h⟩
+  unfold Programs.recursionWl at h
+  -- `fact`, `println(fact(10))`, `fib`, `println(fib(20))`
+  cases h with | cons _ _ _ _ _ _ _ h₁ h =>
+  cases declOut_of_wt h₁
+  cases h with | cons _ _ _ _ _ _ _ h₂ h =>
+  cases declOut_of_wt h₂
+  cases h with | cons _ _ _ _ _ _ _ h₃ h =>
+  cases declOut_of_wt h₃
+  cases h with | cons _ _ _ _ _ _ _ h₄ h =>
+  cases declOut_of_wt h₄
+  -- `is_even` refers to `is_odd`, which is not yet declared
+  cases h with | cons _ _ _ _ _ _ _ hs _ =>
+  cases hs with
+  | varInit _ _ _ _ _ he =>
+    generalize Δ "is_even" = T at he
+    cases he with
+    | fn _ _ _ _ _ _ hb _ => exact isEven_body_bad (by decide) rfl hb
+  | varRec _ _ _ _ _ _ _ _ _ hb _ _ => exact isEven_body_bad (by decide) rfl hb
+theorem recursionWl_whileTyped : whileTyped Programs.recursionWl = false :=
+  Bool.eq_false_iff.mpr fun h => recursionWl_untypable (whileTyped_iff.mp h)
 
 end Vsa.While.Types
