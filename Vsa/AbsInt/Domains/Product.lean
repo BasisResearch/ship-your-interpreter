@@ -13,35 +13,36 @@ a singleton interval pins the constant, and a contradiction empties both.
 
 namespace Vsa.AbsInt
 
-open Vsa.While AbsDom
+open Vsa.While AbsOps AbsDom
+
+/-- A reduction of a product value. -/
+class ReduceOps (A B : Type) where
+  reduce : A × B → A × B
 
 /-- A sound reduction of a product value. -/
-class Reduce (A B : Type) [AbsDom A] [AbsDom B] where
-  reduce : A × B → A × B
+class Reduce (A B : Type) [AbsDom A] [AbsDom B] extends ReduceOps A B where
   reduce_sound : ∀ {p : A × B} {v : Value}, Gam p.1 v → Gam p.2 v →
     Gam (reduce p).1 v ∧ Gam (reduce p).2 v
 
 /-- No reduction. -/
+instance (priority := low) ReduceOps.none {A B : Type} : ReduceOps A B := ⟨id⟩
+
+/-- No reduction is sound. -/
 instance (priority := low) Reduce.none {A B : Type} [AbsDom A] [AbsDom B] : Reduce A B :=
-  ⟨id, fun h1 h2 => ⟨h1, h2⟩⟩
+  { reduce := id, reduce_sound := fun h1 h2 => ⟨h1, h2⟩ }
 
-section
+section Ops
 
-variable {A B : Type} [AbsDom A] [AbsDom B] [Reduce A B]
+variable {A B : Type} [AbsOps A] [AbsOps B] [ReduceOps A B]
 
 /-- Pair two component values and reduce. -/
-def pr (a : A) (b : B) : A × B := Reduce.reduce (a, b)
+def pr (a : A) (b : B) : A × B := ReduceOps.reduce (a, b)
 
-theorem gam_pr {a : A} {b : B} {v : Value} (ha : Gam a v) (hb : Gam b v) :
-    Gam (pr a b).1 v ∧ Gam (pr a b).2 v :=
-  Reduce.reduce_sound (p := (a, b)) ha hb
-
-instance : AbsDom (A × B) where
+instance prodOps : AbsOps (A × B) where
   top := (top, top)
   le a b := le a.1 b.1 && le a.2 b.2
   join a b := (join a.1 b.1, join a.2 b.2)
   widen a b := (widen a.1 b.1, widen a.2 b.2)
-  Gam a v := Gam a.1 v ∧ Gam a.2 v
   ofValue v := pr (ofValue v) (ofValue v)
   closure := (closure, closure)
   binop op a b := pr (binop op a.1 b.1) (binop op a.2 b.2)
@@ -53,7 +54,22 @@ instance : AbsDom (A × B) where
   asNative a := (asNative a.1).orElse fun _ => asNative a.2
   refine op t a b := pr (refine op t a.1 b.1) (refine op t a.2 b.2)
   isBot a := isBot a.1 || isBot a.2
+
+end Ops
+
+section
+
+variable {A B : Type} [AbsDom A] [AbsDom B] [Reduce A B]
+
+theorem gam_pr {a : A} {b : B} {v : Value} (ha : Gam a v) (hb : Gam b v) :
+    Gam (pr a b).1 v ∧ Gam (pr a b).2 v :=
+  Reduce.reduce_sound (p := (a, b)) ha hb
+
+instance prodDom : AbsDom (A × B) where
+  toAbsOps := prodOps
+  Gam a v := Gam a.1 v ∧ Gam a.2 v
   le_sound {a b v} hle h := by
+    change (AbsOps.le a.1 b.1 && AbsOps.le a.2 b.2) = true at hle
     simp only [Bool.and_eq_true] at hle
     exact ⟨le_sound hle.1 h.1, le_sound hle.2 h.2⟩
   join_l h := ⟨join_l h.1, join_l h.2⟩
@@ -65,14 +81,22 @@ instance : AbsDom (A × B) where
   closure_sound a := ⟨closure_sound a, closure_sound a⟩
   binop_sound h hl hr := gam_pr (binop_sound h hl.1 hr.1) (binop_sound h hl.2 hr.2)
   neg_sound h := gam_pr (neg_sound h.1) (neg_sound h.2)
-  mayT_sound h ht := by simp [mayT_sound h.1 ht, mayT_sound h.2 ht]
-  mayF_sound h ht := by simp [mayF_sound h.1 ht, mayF_sound h.2 ht]
-  binErr_sound h hl hr := by
+  mayT_sound {a v} h ht := by
+    show (AbsOps.mayT a.1 && AbsOps.mayT a.2) = true
+    simp [mayT_sound h.1 ht, mayT_sound h.2 ht]
+  mayF_sound {a v} h ht := by
+    show (AbsOps.mayF a.1 && AbsOps.mayF a.2) = true
+    simp [mayF_sound h.1 ht, mayF_sound h.2 ht]
+  binErr_sound {s op l r a b} h hl hr := by
+    show _ ∈ (AbsOps.binErr op a.1 b.1).filter (· ∈ AbsOps.binErr op a.2 b.2)
     simp only [List.mem_filter, decide_eq_true_eq]
     exact ⟨binErr_sound h hl.1 hr.1, binErr_sound h hl.2 hr.2⟩
-  negErr_sound h hv := by simp [negErr_sound h.1 hv, negErr_sound h.2 hv]
+  negErr_sound {a v} h hv := by
+    show (AbsOps.negErr a.1 && AbsOps.negErr a.2) = true
+    simp [negErr_sound h.1 hv, negErr_sound h.2 hv]
   asNative_sound {a v f} h hn := by
-    cases h1 : asNative a.1 with
+    change (AbsOps.asNative a.1).orElse (fun _ => AbsOps.asNative a.2) = some f at hn
+    cases h1 : AbsOps.asNative a.1 with
     | some g =>
       rw [h1] at hn
       cases hn
@@ -83,6 +107,7 @@ instance : AbsDom (A × B) where
   refine_sound hl hr hw ht :=
     gam_pr (refine_sound hl.1 hr.1 hw ht) (refine_sound hl.2 hr.2 hw ht)
   isBot_sound {a v} ha h := by
+    change (AbsOps.isBot a.1 || AbsOps.isBot a.2) = true at ha
     simp only [Bool.or_eq_true] at ha
     rcases ha with ha | ha
     · exact isBot_sound ha h.1

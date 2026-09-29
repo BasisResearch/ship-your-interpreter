@@ -20,7 +20,7 @@ every in-call error kind is raised.
 
 namespace Vsa.AbsInt
 
-open Vsa.While AbsDom
+open Vsa.While AbsOps AbsDom
 
 /-- Analysis parameters. -/
 structure Cfg where
@@ -32,7 +32,7 @@ structure Cfg where
   narrowFuel : Nat := 2
   deriving Repr
 
-variable {A : Type} [AbsDom A]
+variable {A : Type} [AbsOps A]
 
 /-- Result of abstract expression evaluation. -/
 structure ERes (A : Type) where

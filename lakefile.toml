@@ -10,6 +10,10 @@ name = "vsa_run"
 root = "VsaRun"
 
 [[lean_exe]]
+name = "whilec"
+root = "WhileC"
+
+[[lean_exe]]
 name = "whilecheck"
 root = "WhileCheck"
 

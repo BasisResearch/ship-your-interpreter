@@ -12,7 +12,7 @@ assignment for `Store.set?` (including its failure), scope entry for
 
 namespace Vsa.AbsInt
 
-open Vsa.While AbsDom
+open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
 

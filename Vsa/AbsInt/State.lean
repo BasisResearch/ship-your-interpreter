@@ -18,7 +18,7 @@ since the semantics never rewrites parent pointers.
 
 namespace Vsa.AbsInt
 
-open Vsa.While AbsDom
+open Vsa.While AbsOps AbsDom
 
 /-- An abstract binding. -/
 structure Bind (A : Type) where
@@ -247,7 +247,7 @@ end Concrete
 
 section Ops
 
-variable {A : Type} [AbsDom A]
+variable {A : Type} [AbsOps A]
 
 /-- Join of optional abstract values (`none` is empty). -/
 def joinOpt : Option A → Option A → Option A
@@ -299,10 +299,10 @@ def AState.comb (op : A → A → A) : AState A → AState A → AState A
   | _, _ => .top
 
 /-- State join. -/
-def AState.join (σ τ : AState A) : AState A := AState.comb AbsDom.join σ τ
+def AState.join (σ τ : AState A) : AState A := AState.comb AbsOps.join σ τ
 
 /-- State widening. -/
-def AState.widen (σ τ : AState A) : AState A := AState.comb AbsDom.widen σ τ
+def AState.widen (σ τ : AState A) : AState A := AState.comb AbsOps.widen σ τ
 
 /-- State order. -/
 def AState.le : AState A → AState A → Bool
@@ -323,9 +323,9 @@ def lookupL (x : String) : List (Scope A) → Option A × Bool
 /-- Abstract `env_get`: value and may-fail flag. -/
 def AState.lookup (σ : AState A) (x : String) : A × Bool :=
   match σ with
-  | .bot => (AbsDom.top, false)
-  | .top => (AbsDom.top, true)
-  | .sc l => ((lookupL x l).1.getD AbsDom.top, (lookupL x l).2)
+  | .bot => (AbsOps.top, false)
+  | .top => (AbsOps.top, true)
+  | .sc l => ((lookupL x l).1.getD AbsOps.top, (lookupL x l).2)
 
 /-- Abstract `env_define` in the innermost scope. -/
 def AState.define (σ : AState A) (x : String) (a : A) : AState A :=

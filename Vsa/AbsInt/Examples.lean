@@ -23,7 +23,7 @@ the soundness theorems turn it into a statement about every run.
 
 namespace Vsa.AbsInt.Examples
 
-open Vsa.While Vsa.While.Programs AbsDom
+open Vsa.While Vsa.While.Programs AbsOps AbsDom
 
 /-! ## Evaluation -/
 

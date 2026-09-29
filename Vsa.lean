@@ -868,4 +868,12 @@ import Vsa.Sim.CallArgumentsComplete
 import Vsa.Sim.CallArgumentsFrame
 import Vsa.Sim.CallArgumentValues
 import Vsa.Sim.CallClosureGeometry
+import Vsa.Compiler.WhileWl
+import Vsa.Compiler.CompiledG
+import Vsa.Compiler.Check
+import Vsa.Compiler.Checked
+import Vsa.Compiler.Image
+import Vsa.Compiler.Parse
 import Vsa.AbsInt.Examples
+import Vsa.AbsInt.CostSound
+import Vsa.Sim.CheckedBoundary

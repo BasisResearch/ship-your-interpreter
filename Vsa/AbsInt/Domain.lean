@@ -79,13 +79,13 @@ theorem binFailKind_mem {op : BinOp} {l r : Value} :
   unfold binFailKind
   split <;> simp
 
-/-- A value domain with its concretisation and sound transfer functions. -/
-class AbsDom (A : Type) where
+/-- The data of a value domain: lattice operations and transfer functions.
+The abstract interpreter needs only these. -/
+class AbsOps (A : Type) where
   top : A
   le : A → A → Bool
   join : A → A → A
   widen : A → A → A
-  Gam : A → Value → Prop
   /-- Abstraction of one concrete value (literals, natives, `null`). -/
   ofValue : Value → A
   /-- Abstraction of every closure value. -/
@@ -105,6 +105,13 @@ class AbsDom (A : Type) where
   refine : BinOp → Bool → A → A → A
   /-- `true` only for an empty abstract value. -/
   isBot : A → Bool
+
+open AbsOps in
+/-- A value domain: its operations, a concretisation, and soundness laws.
+Keeping the laws apart from `AbsOps` lets one abstract computation be read
+under several concretisations (`Vsa/AbsInt/Domains/Offset.lean`). -/
+class AbsDom (A : Type) extends AbsOps A where
+  Gam : A → Value → Prop
   le_sound : ∀ {a b v}, le a b = true → Gam a v → Gam b v
   join_l : ∀ {a b v}, Gam a v → Gam (join a b) v
   join_r : ∀ {a b v}, Gam b v → Gam (join a b) v
@@ -128,7 +135,11 @@ class AbsDom (A : Type) where
 
 namespace AbsDom
 
-variable {A : Type} [AbsDom A]
+open AbsOps
+
+section Ops
+
+variable {A : Type} [AbsOps A]
 
 /-- Abstraction of `.bool b` for the truth values `b` that may occur. -/
 def boolOf (canT canF : Bool) : A :=
@@ -136,6 +147,16 @@ def boolOf (canT canF : Bool) : A :=
     if canF then join (ofValue (.bool true)) (ofValue (.bool false))
     else ofValue (.bool true)
   else ofValue (.bool false)
+
+/-- Abstraction of the truthiness bit of a value of `a`. -/
+def truthOf (a : A) : A := boolOf (mayT a) (mayF a)
+
+/-- Abstraction of the negated truthiness bit (`!v.truthy`). -/
+def notOf (a : A) : A := boolOf (mayF a) (mayT a)
+
+end Ops
+
+variable {A : Type} [AbsDom A]
 
 theorem boolOf_sound {canT canF : Bool} {b : Bool}
     (hT : b = true → canT = true) (hF : b = false → canF = true) :
@@ -154,15 +175,9 @@ theorem boolOf_sound {canT canF : Bool} {b : Bool}
     · exact join_l (ofValue_sound _)
     · exact ofValue_sound _
 
-/-- Abstraction of the truthiness bit of a value of `a`. -/
-def truthOf (a : A) : A := boolOf (mayT a) (mayF a)
-
 theorem truthOf_sound {a : A} {v : Value} (h : Gam a v) :
     Gam (truthOf a) (.bool v.truthy) :=
   boolOf_sound (fun hv => mayT_sound h hv) (fun hv => mayF_sound h hv)
-
-/-- Abstraction of the negated truthiness bit (`!v.truthy`). -/
-def notOf (a : A) : A := boolOf (mayF a) (mayT a)
 
 theorem notOf_sound {a : A} {v : Value} (h : Gam a v) :
     Gam (notOf a) (.bool (!v.truthy)) :=

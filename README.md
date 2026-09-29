@@ -55,6 +55,7 @@ incremental builds.
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
 | `VsaIris/WhileLogic/` | **the source-level program logic**: an Iris-style separation logic for WHILE over iris-lean's `UPred`, with total-correctness weakest preconditions sound against `BigStep`, adequacy down to the machine, and a verified loop (see below) |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
+| `Vsa/Compiler/` | verified WHILE → RV64 compilers: a subset compiler and the full compiler (see below) |
 | `Vsa/AbsInt/` | **verified abstract interpretation** of WHILE: a domain interface, a generic abstract interpreter, constant/sign/interval/kind domains and their products, soundness for `BigStep` and for runtime-error verdicts; the machine corollary is in `VsaIris/AbsInt/Machine.lean` |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
 | `experiments/` | Lean proof probes, SMT and fuzz validation, and coverage data |
@@ -184,6 +185,141 @@ The simulation lemmas in `Vsa/Sim/` relate compiled
 `eval_expr`/`exec_stmt`/`interp_run` code to the big-step rules by induction on
 derivations.
 
+## A verified compiler for a WHILE subset
+
+`Vsa/Compiler/` compiles programs in a subset of WHILE directly to RV64
+instructions (`compile`, `Compile.lean`). `Supported` (`Subset.lean`) admits
+integer and boolean expressions over statically resolved variables
+(`+ - * / %`, comparisons, `!`, unary `-`, assignment), `if`/`while`/blocks,
+`break`/`continue` inside loops, declarations with an initializer, and
+`print`/`println` of up to 32 integers. Each declaration site has a static slot.
+Where the semantics has no derivation (for example, division by zero), the
+code exits with code 70.
+
+```lean
+theorem compile_correct (p : Program) (hsup : Supported p)
+    (hfit : 0x80004800 + 4 * (compile p).length ≤ 0x8001ad00) (c : Config)
+    (hgood : GoodState c.σ) (htick : c.tick < 2)
+    (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
+    (hpw : c.σ.regs.get? Register.htif_payload_writes = some 0#4)
+    (hout : output c.σ = "")
+    (hcode : ∀ k, k < (compileBytes p).length →
+      c.σ.mem[0x80004800 + k]? = (compileBytes p)[k]?)
+    (hlib : Code.__muldi3Loaded c.σ.mem ∧ Code.__divdi3Loaded c.σ.mem ∧
+      Code.__umoddi3Loaded c.σ.mem ∧ Code.__hidden___udivdi3Loaded c.σ.mem ∧
+      Code.__moddi3Loaded c.σ.mem) :
+    (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+The proof relates machine configurations to an abstract machine (`Machine.lean`,
+`Lift.lean`: one abstract step is at least one Sail step, and libgcc calls are
+single abstract steps through `muldi3_spec`/`divdi3_wrap_spec`/`moddi3_spec`),
+proves forward simulation by induction on derivations (`StmtT.lean`), and shows
+that a program without a derivation reaches the error exit or runs forever
+(`StmtS.lean`). `whileWl_compiled_halts` (`WhileWl.lean`) instantiates the
+theorem at `c/tests/while.wl`: the compiled code prints `55\n2500\n36\n` and
+exits `0`. `experiments/compiler/RunCompiled.lean` runs compiled programs on the
+executable Sail model.
+
+## The full WHILE compiler
+
+`compileG` (`CodeGen.lean`) compiles the whole language: integers, booleans,
+`null`, strings, closures with captured environments, calls to user functions
+and to `print`/`println`/`assert`, `return`, `for`, `while`, `if`, blocks,
+`break`/`continue`, and assignment. Values are tag/payload pairs; strings and
+closures live in a bump-allocated object heap, frames in a bump-allocated frame
+region with one static layout per scope, and calls use a machine stack bounded
+by `maxCallDepth`. The code links a runtime (`RTCode.lean`: truthiness,
+printing, integer formatting, string concatenation and comparison, equality,
+frame allocation) and libgcc's multiply/divide routines.
+
+`SupportedG p` (`CorrectG.lean`) requires the program to be well formed against
+its string table and global frame (`WfSeq`, `Wf.lean`) and its static image to
+be small (`SetupOK`). Heap exhaustion is excluded with the existing cost
+semantics: every behaviour must have a `BigStepBudget` of `heapUnits`
+(`0x3F8000`) units, at most 64 heap bytes each.
+
+```lean
+theorem compileG_correct (p : Program) (hsup : SupportedG p)
+    (hfit : 0x80004800 + 4 * (compileG p).length ≤ 0x8001ad00)
+    (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (c : Config)
+    (hgood : GoodState c.σ) (htick : c.tick < 2)
+    (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
+    (hpw : c.σ.regs.get? Register.htif_payload_writes = some 0#4)
+    (hout : output c.σ = "")
+    (hcode : ∀ k, k < (compileGBytes p).length →
+      c.σ.mem[0x80004800 + k]? = (compileGBytes p)[k]?)
+    (hlib : Code.__muldi3Loaded c.σ.mem ∧ Code.__divdi3Loaded c.σ.mem ∧
+      Code.__umoddi3Loaded c.σ.mem ∧ Code.__hidden___udivdi3Loaded c.σ.mem ∧
+      Code.__moddi3Loaded c.σ.mem) :
+    (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+Proof structure:
+
+- `WP.lean`, `RTBase.lean`: a weakest-precondition calculus over the abstract
+  machine and the `wp_simp` normal form; each runtime routine is proved once
+  against the semantics (`RTLeaf`, `RTItos`, `RTDisplay`, `RTOps`).
+- `SimInv.lean`: the invariant `MS` relating a semantic state to a machine
+  state (store relation `StoreRel`, object image, closure code, register and
+  stack discipline).
+- `SimAll.lean`: `sim_all` simulates every derivation of the nine cost
+  relations (`Vsa/While/Cost.lean`), by their recursor, with one lemma per rule
+  (`Sim*.lean`); a derivation of cost `n` either completes or stops at the error
+  exit because the heap has no room for `n` units.
+- `StuckAll.lean`: `stuck_all` shows that a phrase without an execution reaches
+  the error exit or runs for at least `n` steps, for every `n` (strong induction
+  on `n`; loop iterations and closure calls take at least one step).
+- `SetupRun.lean`: the setup code writes the string table, allocates the
+  global frame and binds the natives, establishing `MS` for `initSt`.
+
+`CompiledG.lean` instantiates the theorem at `functionsWl`, `forWl`, `scopeWl`
+and `stringsWl` (`*_compiledG_halts`). `experiments/compiler/RunCompiledG.lean`
+runs compiled programs on the executable Sail model.
+
+### The checked compiler
+
+`compileChecked` (`Vsa/Compiler/Checked.lean`) returns `compileG p` only when
+`supportedGB p`, `fitsB p` and the allocation-cost analysis (`progCost` over
+`Const × Itv`, below) bounds every run of `p` by at most `heapUnits`. Its
+correctness theorem has no program premise besides acceptance:
+
+```lean
+theorem compileChecked_correct (p : Program) (code : List Ins)
+    (hc : compileChecked p = some code) (c : Config) …
+    (hcode : ∀ k, k < (codeBytes code).length →
+      c.σ.mem[0x80004800 + k]? = (codeBytes code)[k]?) … :
+    (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
+```
+
+(the elided hypotheses are those of `compileG_correct` other than `hsup`,
+`hfit` and `hcap`). `whileWl_checked` accepts `while.wl` (bound 8272 units; its
+exact cost is 6992), and `whileWl_checked_halts` is the unconditional halting
+theorem for its compiled code. The analysis leaves calls into closures and
+string concatenation unbounded, so programs using them are rejected.
+
+### `whilec`: the compiler as an executable
+
+```sh
+lake build whilec
+.lake/build/bin/whilec prog.wl -o prog.elf        # compile
+.lake/build/bin/whilec prog.wl --run              # compile, then run on the Sail RV64 model
+spike prog.elf                                    # run bare-metal (HTIF console)
+```
+
+`whilec` parses the source with the interpreter's grammar
+(`Vsa/Compiler/Parse.lean`, a line-for-line port of `c/src/parser.c`; it
+reproduces the ASTs of `Vsa/While/Programs.lean` for every file in
+`c/tests/`). It checks the premises of the theorem with `supportedGB` and
+`fitsB`, which are proved sound, so `checked_correct` applies to every program
+it accepts. It compiles the program with `compileG` and writes an ELF
+(`Vsa/Compiler/Image.lean`): the interpreter image `c/while-riscv-htif.elf`,
+which provides libgcc, `tohost` and `fromhost`, with the compiled code at
+`0x80004800` and the entry point set there. Programs print through the HTIF
+console. They exit with `0` on success and `70` on a runtime error
+(including heap exhaustion). `whilec` rejects unsupported programs and reports
+parse errors. The front end and the ELF writer are not verified.
+
 ## Abstract interpretation
 
 `Vsa/AbsInt/` is a static analyser for WHILE, proved sound against `BigStep`
@@ -203,6 +339,21 @@ and carried to the machine by `endToEnd_refinement`.
   (an unreported error kind occurs in no run), `no_error_of_no_alarms`.
   Runtime errors of kind `k` are `ExecSeqErrK`, generated from `ErrorSem` by
   `scripts/gen_errk.py`.
+- Allocation cost (`CostAnalysis.lean`, `CostSound.lean`): `progCost cfg p`
+  bounds the allocation cost `Vsa/While/Cost.lean` assigns to any successful
+  run (`progCost_sound : progCost cfg p = some n → ∀ out, BigStep p out →
+  BigStepBudget p out n`). Frames, closures and bindings are charged from the
+  abstract states; binding counts are bounded by the abstract scope's names
+  (`NoDup.lean`). Loops are summed over the unrolled iterations; past them,
+  a zero-cost iteration costs nothing, and a counted condition `x < e` /
+  `x <= e` bounds the iterations when the offset domain (`Domains/Offset.lean`)
+  shows each iteration raises `x`. Calls into closures and string
+  concatenation are unbounded (`none`).
+  `loaded_of_checked` (`Vsa/Sim/CheckedBoundary.lean`) replaces the
+  heap-capacity and stack-admissibility premises of `Loaded` by this bound, the
+  `programStackFits` checker and a numeric free-heap fact (`HeapRoom`);
+  `endToEnd_checked` (`VsaIris/Interp/EndToEndChecked.lean`) is the resulting
+  end-to-end theorem.
 - Examples (`Examples.lean`, by `decide +kernel`): on `whileWl` the kind
   domain proves no type errors; `Const × Itv` proves no runtime error at all and
   that every run ends with `sum = 55`, `total = 2500`, `acc = 36`.

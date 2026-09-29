@@ -17,7 +17,7 @@ top-level `abrupt` error, so an unanalysed call covers any kind it raises by
 
 namespace Vsa.AbsInt
 
-open Vsa.While AbsDom
+open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
 

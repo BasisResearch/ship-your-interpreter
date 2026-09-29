@@ -12,7 +12,7 @@ computes for it.
 
 namespace Vsa.AbsInt
 
-open Vsa.While AbsDom
+open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
 
