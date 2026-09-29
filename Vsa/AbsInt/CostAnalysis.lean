@@ -188,6 +188,21 @@ def loopCost (cfg : Cfg) (F : AState A → LStep A) (itc : AState A → CB)
     else if (F I).next.le I then rank I
     else cadd (itc I) (loopCost cfg F itc rank k (F I).next)
 
+/-- Cost bound of one `for` iteration: condition, body (bounded by `sc`), step. -/
+def forItCostF (cfg : Cfg) (cnd step : Option Expr) (b : Stmt) (sc : AState A → CB)
+    (I : AState A) : CB :=
+  cadd (cadd (optCost cnd I)
+      (sc (match cnd with
+        | none => I
+        | some c => branch true c (optEval cnd I))))
+    (optCost step
+      ((aexec cfg (match cnd with
+        | none => I
+        | some c => branch true c (optEval cnd I)) b).norm.join
+       (aexec cfg (match cnd with
+        | none => I
+        | some c => branch true c (optEval cnd I)) b).cont))
+
 end Ops
 
 variable {A : Type} [AbsOps A] [ToItv A]
@@ -215,8 +230,8 @@ def scost (cfg : Cfg) (σ : AState A) (s : Stmt) : CB :=
   | .forStmt init cnd step b =>
     cadd (cadd (some envBytes) (scostOpt cfg σ.push init))
       (loopCost cfg (forF cfg cnd step b)
-        (fun I => forItCost cfg cnd step b I)
-        (fun J => rankCost (forItCost cfg cnd step b J)
+        (fun I => forItCostF cfg cnd step b (fun J => scost cfg J b) I)
+        (fun J => rankCost (forItCostF cfg cnd step b (fun J => scost cfg J b) J)
           (match cnd with
             | some c => iterBound (fun I => (forF cfg cnd step b I).next) c J
             | none => none))
@@ -229,26 +244,16 @@ def scostOpt (cfg : Cfg) (σ : AState A) : Option Stmt → CB
   | none => some 0
   | some s => scost cfg σ s
 
-/-- Cost bound of one `for` iteration: condition, body, step. -/
-def forItCost (cfg : Cfg) (cnd step : Option Expr) (b : Stmt) (I : AState A) : CB :=
-  cadd (cadd (optCost cnd I)
-      (scost cfg (match cnd with
-        | none => I
-        | some c => branch true c (optEval cnd I)) b))
-    (optCost step
-      ((aexec cfg (match cnd with
-        | none => I
-        | some c => branch true c (optEval cnd I)) b).norm.join
-       (aexec cfg (match cnd with
-        | none => I
-        | some c => branch true c (optEval cnd I)) b).cont))
-
 /-- Cost bound of a statement sequence. -/
 def seqcost (cfg : Cfg) (σ : AState A) : List Stmt → CB
   | [] => some 0
   | s :: ss => cadd (scost cfg σ s) (seqcost cfg (aexec cfg σ s).norm ss)
 
 end
+
+/-- Cost bound of one `for` iteration: condition, body, step. -/
+def forItCost (cfg : Cfg) (cnd step : Option Expr) (b : Stmt) (I : AState A) : CB :=
+  forItCostF cfg cnd step b (fun J => scost cfg J b) I
 
 /-- Bound on the allocation cost of any normal run of a program. -/
 def progCost (cfg : Cfg) (p : Program) : CB := seqcost (A := A) cfg initState p
