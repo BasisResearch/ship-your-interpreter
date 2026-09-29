@@ -28,6 +28,11 @@ program errs or diverges in the semantics (`BigStepErr`/`BigStepDiverges`,
 proved mutually exclusive in [`Vsa/While/Exclusive.lean`](Vsa/While/Exclusive.lean)).
 The binary does not separate the two: its heap is finite and a divergent
 program that allocates exits `1`.
+The type system, the abstract interpreter and the program logic carry this to
+the machine in
+[`VsaIris/Interp/TrichotomyCorollaries.lean`](VsaIris/Interp/TrichotomyCorollaries.lean)
+(`wellTyped_trichotomy`, `noAlarm_machine`, `noAlarm_terminating`,
+`adequacy_exact`).
 
 The tooling that makes this tractable is documented separately in
 [`TOOLING.md`](TOOLING.md): proof generators, validation commands, and
