@@ -95,38 +95,76 @@ theorem term_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     (b.bytes_agree b.G topLive) (vsaOk_of_ready b.ready) (fun v => v = (0, st'.out)) hA
   cases heq; rw [hout] at hh; exact hh
 
+/-- **Partial correctness on the Iris route**: from a loaded configuration,
+the machine diverges, or halts with exit code `0` and the output of a
+big-step behaviour, or halts with an `AbortCode` (`70`: a runtime error or a
+top-level `return`/`break`/`continue`; `1`: out of memory). The uncounted
+world, the Löb (`specsP_all`), the whole run (`interpRun_partial_top`), and
+partial adequacy (`vsa_adequacyP`). -/
+theorem partial_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
+    ∀ p c, Vsa.Refine.Loaded interpRunLayout p c →
+      Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧
+        (e = 0 ∧ BigStep p out ∨ AbortCode e) := by
+  intro p c hL
+  obtain ⟨b⟩ := boot_of_loaded hL
+  have hA : AdequacyHypP MachGF (vsaModel topLive) (regMap (vsaReg c) topRegs) (b.bytes b.G)
+      (Vsa.Machine.output c.σ) (fun v => v.1 = 0 ∧ BigStep p v.2 ∨ AbortCode v.1) := by
+    intro G
+    show ⊢ _ -∗ _ -∗ _ -∗ (wpW (GF := MachGF) (vsaModel topLive)).W
+      (fun v => iprop(⌜v.1 = 0 ∧ BigStep p v.2 ∨ AbortCode v.1⌝))
+    iintro Hr Hm Hc
+    ihave Hr := sepL_of_regMap (vsaReg c) topRegs topRegs_nodup $$ Hr
+    iapply wp_of_bupd (wpW (vsaModel topLive))
+      (Φ := fun v => iprop(⌜v.1 = 0 ∧ BigStep p v.2 ∨ AbortCode v.1⌝))
+    iapply boundary_bind b _ (regimeOK_uncounted b.top) (R := sepL topRegs (fun r => r ↦ᵣ vsaReg c r))
+      (fun γf γc => interpRun_partial_top (I := ⟨γf, γc⟩) H topLive_interp topLive_code b
+        (execSpecsP_top (I := ⟨γf, γc⟩)
+          (@Supplies.stuck Sp MachGF _ ⟨γf, γc⟩ b.N (nativeEntries_of b.ready.native_addrs)))
+        (fun st' hst => by ipureintro; exact Or.inl ⟨rfl, st', hst, rfl⟩)
+        (fun e o he => by ipureintro; exact Or.inr he))
+    iframe Hm Hc Hr
+  exact vsa_adequacyP topLive c (regMap (vsaReg c) topRegs) (b.bytes b.G)
+    (regAgree_regMap (M := vsaModel topLive) c topRegs) (b.bytes_agree b.G topLive)
+    (vsaOk_of_ready b.ready) _ hA
+
+/-- **`stuck_sim` with the exit code pinned**: a loaded program with no
+big-step behaviour diverges on the machine or exits `70` or `1`. -/
+theorem stuck_codes_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
+    ∀ p c, Vsa.Refine.Loaded interpRunLayout p c → (¬ ∃ out, BigStep p out) →
+      Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ AbortCode e := by
+  intro p c hL hnb
+  rcases partial_sim_of Sp H p c hL with hd | ⟨out, e, hh, ⟨-, hb⟩ | hcode⟩
+  · exact .inl hd
+  · exact absurd ⟨out, hb⟩ hnb
+  · exact .inr ⟨out, e, hh, hcode⟩
+
 /-- **`stuck_sim` on the Iris route.** -/
 theorem stuck_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     ∀ p c, Vsa.Refine.Loaded interpRunLayout p c → (¬ ∃ out, BigStep p out) →
       Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ e ≠ 0 := by
   intro p c hL hnb
-  obtain ⟨b⟩ := boot_of_loaded hL
-  have hA : AdequacyHypP MachGF (vsaModel topLive) (regMap (vsaReg c) topRegs) (b.bytes b.G)
-      (Vsa.Machine.output c.σ) (fun v => v.1 ≠ 0) := by
-    intro G
-    show ⊢ _ -∗ _ -∗ _ -∗ (wpW (GF := MachGF) (vsaModel topLive)).W (fun v => iprop(⌜v.1 ≠ 0⌝))
-    iintro Hr Hm Hc
-    ihave Hr := sepL_of_regMap (vsaReg c) topRegs topRegs_nodup $$ Hr
-    iapply wp_of_bupd (wpW (vsaModel topLive)) (Φ := fun v => iprop(⌜v.1 ≠ 0⌝))
-    iapply boundary_bind b _ (regimeOK_uncounted b.top) (R := sepL topRegs (fun r => r ↦ᵣ vsaReg c r))
-      (fun γf γc => interpRun_partial_top (I := ⟨γf, γc⟩) H topLive_interp topLive_code b
-        (execSpecsP_top (I := ⟨γf, γc⟩)
-          (@Supplies.stuck Sp MachGF _ ⟨γf, γc⟩ b.N (nativeEntries_of b.ready.native_addrs)))
-        (fun st' hst => absurd ⟨st'.out, st', hst, rfl⟩ hnb)
-        (fun e o he => by ipureintro; exact he))
-    iframe Hm Hc Hr
-  exact vsa_adequacyP_nonzero topLive c (regMap (vsaReg c) topRegs) (b.bytes b.G)
-    (regAgree_regMap (M := vsaModel topLive) c topRegs) (b.bytes_agree b.G topLive)
-    (vsaOk_of_ready b.ready) hA
+  rcases stuck_codes_of Sp H p c hL hnb with hd | ⟨out, e, hh, hcode⟩
+  · exact .inl hd
+  · exact .inr ⟨out, e, hh, hcode.ne_zero⟩
 
 end VsaIris.Interp
 
 namespace VsaIris.Interp
 
+/-- Every newlib call the interpreter makes, proved. -/
+theorem newlibHoles_proved : VsaIris.Newlib.NewlibHoles :=
+  VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok
+    VsaIris.Sym.snprintf_ok
+
 /-- **`InterpSim` at the concrete layout.** -/
 theorem interpSim_iris : Vsa.Refine.InterpSim Vsa.Sim.LayoutInstance.interpRunLayout :=
-  ⟨term_sim_of supplies_of (VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok VsaIris.Sym.snprintf_ok),
-    stuck_sim_of supplies_of (VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok VsaIris.Sym.snprintf_ok)⟩
+  ⟨term_sim_of supplies_of newlibHoles_proved, stuck_sim_of supplies_of newlibHoles_proved⟩
+
+/-- **Partial correctness at the concrete layout** (`partial_sim_of`). -/
+theorem partialSim_iris : ∀ p c, Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout p c →
+    Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧
+      (e = 0 ∧ Vsa.While.BigStep p out ∨ AbortCode e) :=
+  partial_sim_of supplies_of newlibHoles_proved
 
 end VsaIris.Interp
 

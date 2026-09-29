@@ -20,6 +20,15 @@ theorem endToEnd_refinement :
 - Assumptions on the program: `capacity` (heap fits the arena), `stack_admissible` (recursion fits the stack).
 - Soundness reviews of the hypotheses: [`REVIEW.md`](REVIEW.md), [`REVIEW2.md`](REVIEW2.md). Iris layer and its design: [`VsaIris/`](VsaIris), [`VsaIris/INTERP_DESIGN.md`](VsaIris/INTERP_DESIGN.md).
 
+The behavioural trichotomy (`endToEnd_trichotomy`,
+[`VsaIris/Interp/EndToEndTrichotomy.lean`](VsaIris/Interp/EndToEndTrichotomy.lean))
+adds, under the same hypothesis: every nonzero exit is `70` (runtime error) or
+`1` (out of memory), and the binary exits nonzero or diverges exactly when the
+program errs or diverges in the semantics (`BigStepErr`/`BigStepDiverges`,
+proved mutually exclusive in [`Vsa/While/Exclusive.lean`](Vsa/While/Exclusive.lean)).
+The binary does not separate the two: its heap is finite and a divergent
+program that allocates exits `1`.
+
 The tooling that makes this tractable is documented separately in
 [`TOOLING.md`](TOOLING.md): proof generators, validation commands, and
 incremental builds.
