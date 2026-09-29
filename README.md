@@ -40,6 +40,7 @@ incremental builds.
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
 | `Vsa/Compiler/` | verified WHILE → RV64 compilers: a subset compiler and the full compiler (see below) |
+| `Vsa/AbsInt/` | **verified abstract interpretation** of WHILE: a domain interface, a generic abstract interpreter, constant/sign/interval/kind domains and their products, soundness for `BigStep` and for runtime-error verdicts; the machine corollary is in `VsaIris/AbsInt/Machine.lean` |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
 | `experiments/` | Lean proof probes, SMT and fuzz validation, and coverage data |
 | `experiments/smt/PROOF_CLOSURE_PLAN.md` | Current proof status, remaining work, and incremental-build rules |
@@ -281,6 +282,31 @@ which provides libgcc, `tohost` and `fromhost`, with the compiled code at
 console. They exit with `0` on success and `70` on a runtime error
 (including heap exhaustion). `whilec` rejects unsupported programs and reports
 parse errors. The front end and the ELF writer are not verified.
+
+## Abstract interpretation
+
+`Vsa/AbsInt/` is a static analyser for WHILE, proved sound against `BigStep`
+and carried to the machine by `endToEnd_refinement`.
+
+- `AbsDom A` (`Domain.lean`): order, join, widening, `⊤`, concretisation
+  `Gam : A → Value → Prop`, and transfer functions, each with its soundness law.
+- `aexec` (`Interp.lean`): the abstract interpreter over the AST, generic in
+  `A`. Its states are scope chains (`State.lean`). Loops are unrolled up to
+  `Cfg.unroll` iterations, then covered by a checked post-fixpoint found by
+  widening and narrowing. Calls into closures are not analysed (the state
+  becomes `⊤`); natives the domain identifies are.
+- Domains (`Domains/`): `Const`, `Sign`, `Itv` (64-bit-wrap aware), `KSet`
+  (value kinds), and `A × B` with a `Reduce` hook; `Const × Itv` is reduced.
+- Soundness: `analyze_sound` (every completion of a run is in `γ` of the
+  analysis), `bigStep_global` (final values of globals), `kind_sound`
+  (an unreported error kind occurs in no run), `no_error_of_no_alarms`.
+  Runtime errors of kind `k` are `ExecSeqErrK`, generated from `ErrorSem` by
+  `scripts/gen_errk.py`.
+- Examples (`Examples.lean`, by `decide +kernel`): on `whileWl` the kind
+  domain proves no type errors; `Const × Itv` proves no runtime error at all and
+  that every run ends with `sum = 55`, `total = 2500`, `acc = 36`.
+  `whileWl_machine` (`VsaIris/AbsInt/Machine.lean`) states this for the
+  loaded binary: a clean halt comes from such a run.
 
 ## Building
 

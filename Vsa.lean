@@ -862,3 +862,4 @@ import Vsa.Compiler.CompiledG
 import Vsa.Compiler.Check
 import Vsa.Compiler.Image
 import Vsa.Compiler.Parse
+import Vsa.AbsInt.Examples
