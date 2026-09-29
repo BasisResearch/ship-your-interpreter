@@ -274,6 +274,7 @@ import VsaIris.Interp.TopRunP
 import VsaIris.Interp.TopEntryBoot
 import VsaIris.Interp.Supply
 import VsaIris.Interp.EndToEnd
+import VsaIris.Interp.EndToEndChecked
 import VsaIris.Interp.ProofStrcmp
 import VsaIris.Interp.ProofMemcpy
 import VsaIris.Interp.ProofStrlen
