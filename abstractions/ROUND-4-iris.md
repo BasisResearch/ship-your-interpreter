@@ -202,3 +202,38 @@ territory). Neither alone beats its setup on nine cases (A: −94 lines for 308;
 and both leave the memory/offset arithmetic of case 6 (~130 lines) untouched. By the rule for
 disjoint winners, one more iteration on the combination, with fresh cases and no new abstraction
 code (below).
+
+
+## 7. Combination iteration (fresh cases, no new layer code) — branch exp-R4c, commit bc7a1563
+
+Six fresh cases drawn before the branch existed, re-proved on SEAM + KEYFRAME together:
+
+| case | lines |
+|---|---|
+| `ArmAt.callTruthy` | 36 → 34 |
+| `VarT_p1` | 110 → 107 |
+| `evalKT_exit` | 12 → 11 |
+| `execP_cases` | 27 → 26 |
+| `na_falsy2o` | 54 → 52 |
+| `np_A` | 199 → 188 |
+| total | 438 → 418 (−5%) |
+
+## 8. Decision
+
+**No adoption.** On the primary measure (held-out lines + failed compiles) the candidates saved
+−14–16% on the pilot cases and −5% on the fresh cases, against 173–481 lines of setup; neither
+alone nor combined repays its setup on the cluster.
+
+Why: the census located the cluster's cost correctly in lines, but the lines are not proof-mode
+plumbing. The profile shows Iris tactics under 1.5 s even in the heaviest file, and both pilots
+report the same residue: memory/offset arithmetic, spec-specific resource bookkeeping, and
+continuation shapes that differ per callee. The last file-age quartile (the `ArmCore`/`ArmEval`
+refactor) already had the lowest per-unit cost (22.8 lines), so the existing layer works where
+it is used; the ~300 bypassing units are older code.
+
+What to do instead (next round's input): (1) route the bypassing units through the existing
+`ArmCore`/`ArmEval` combinators and `iframe ∗` (no new abstraction; a migration); (2) take the
+memory/offset arithmetic residue (`cloParamStep` ~130 lines and similar) to ROUND-3's `Win`
+keys, which Interp does not use yet; (3) no new proof-mode layer.
+
+Branches exp-R4a, exp-R4b, exp-R4c are kept unmerged for reference.
