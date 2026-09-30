@@ -1,6 +1,5 @@
 import VsaIris.Vsa.Stdout.Tac
 import VsaIris.Vsa.SymCompact
-import VsaIris.Vsa.SymExec
 import VsaIris.Vsa.RegionCore
 
 /-!
