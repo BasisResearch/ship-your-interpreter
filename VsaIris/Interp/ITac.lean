@@ -1,7 +1,4 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Vsa.StepTables.Interp0
-import VsaIris.Vsa.StepTables.Interp1
-import VsaIris.Vsa.StepTables.Interp2
 
 namespace VsaIris.Sym
 
@@ -29,10 +26,6 @@ macro "ix_ro" : tactic => `(tactic| exact interpRO_mem_img (by decide))
 
 macro_rules
   | `(tactic| sx_side) => `(tactic| ix_ro)
-
-private def hex8 (n : Nat) : String :=
-  let s := String.ofList (Nat.toDigits 16 n)
-  String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s
 
 def ixNormTab (facts : Array Term) (tab : Option (TSyntax `tactic)) : TacticM Syntax := do
   let tab ← match tab with
@@ -80,17 +73,18 @@ def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none)
 
 def ixPre : List String := ["it", "itD", "itT", "itH", "itO", "itS", "itDS", "itTS", "itHS", "itOS"]
 
-def ixCandidates (pc : Nat) (pre : List String := ixPre) :
+/-- The step lemmas of the families `pre` at `pc` for the run of `g`: elaborated from the
+    image (a hand-written step of the landed name takes precedence). -/
+def ixCandidates (g : MVarId) (pc : Nat) (pre : List String := ixPre) :
     TacticM (List Name) := do
-  let env ← getEnv
-  let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
-  return (pre.map mk).filter env.contains
+  let t? ← g.withContext do StepGen.swpTbl? (← g.getType)
+  return (← pre.filterMapM (StepGen.driverLemma? t? · pc)).eraseDups
 
 def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool)
     (side : Option Syntax := none) : TacticM (Option (List MVarId × List MVarId)) := do
   let saved ← saveState
   try
-    let gs ← evalTacticAt (← `(tactic| apply $(mkIdent nm) $(⟨h⟩))) g
+    let gs ← evalTacticAt (← `(tactic| apply $(mkCIdent nm) $(⟨h⟩))) g
     let mut conts : List MVarId := []
     let mut pending : List MVarId := []
     for g in gs do
@@ -109,16 +103,15 @@ def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
     (pre : List String := ixPre) (side : Option Syntax := none) :
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
-  let cands ← ixCandidates pc pre
+  let cands ← ixCandidates g pc pre
+  -- `IX_TRACE=1` lists the step lemmas a build still uses (one `IXPC <name>` line each)
+  let used (nm : Name) : TacticM Unit := do
+    if (← IO.getEnv "IX_TRACE").isSome then IO.eprintln s!"IXPC {nm}"
   for nm in cands do
-    if let some r ← ixApply norm h g nm true side then return some r
+    if let some r ← ixApply norm h g nm true side then used nm; return some r
   for nm in cands do
-    if let some r ← ixApply norm h g nm false side then return some r
+    if let some r ← ixApply norm h g nm false side then used nm; return some r
   return none
-
-syntax "ix_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
-
-syntax "ix_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
 def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
@@ -198,10 +191,6 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
           work := (t', fuel - 1) :: (f', fuel - 1) :: work
       | cs => stuck := stuck ++ cs
     setGoals (pending ++ stuck)
-
-elab_rules : tactic
-  | `(tactic| ix_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => ixRunCore true n h fs stops
-  | `(tactic| ix_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => ixRunCore false n h fs stops
 
 end VsaIris.Sym
 
@@ -296,6 +285,24 @@ syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident (" at " num)? " b
 
       forallTelescope (← inferType hk) fun ys T => do
         ixAddPiece declName (xs.extract 0 nv ++ ys) T stx[6] true (xs.extract nv xs.size)
+
+/-- `#ix_branch name (h : H) … from prev by tac`: a piece that starts at `prev`'s leftover state
+under additional hypotheses. Two runs that agree up to `prev` share the pieces up to `prev`
+and each continue with its own `#ix_branch`. -/
+syntax (name := ixBranch) "#ix_branch " ident bracketedBinder+ " from " ident " by " tacticSeq : command
+
+@[command_elab ixBranch] def elabIxBranch : CommandElab := fun stx => do
+  let declName := (← getCurrNamespace) ++ stx[1].getId
+  let prev ← liftCoreM <| realizeGlobalConstNoOverload stx[4]
+  liftTermElabM do
+    let info ← getConstInfo prev
+    forallTelescope info.type fun xs _ => do
+      let nv ← pieceVars xs
+      let some hk := xs[nv]? | throwError "#ix_branch: {prev} has no leftover"
+      forallTelescope (← inferType hk) fun ys T => do
+        Term.elabBinders stx[2].getArgs fun zs => do
+          Term.synthesizeSyntheticMVarsNoPostponing
+          ixAddPiece declName (xs.extract 0 nv ++ ys ++ zs) T stx[6] true (xs.extract nv xs.size)
 
 syntax (name := ixChain) "#ix_chain " ident " := " "[" ident,+ "]" : command
 

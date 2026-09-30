@@ -44,30 +44,6 @@ set_option hygiene false in
 /-- Later pieces: forget the dead stack below `sp` (one merged layer), compact the register file, then run. -/
 macro "xh_step " n:num " using " "[" fs:term,* "]" : tactic => `(tactic| (intros; nx_clean; nx_forget_sp (s.toNat - 256); nx_compactR; xh_run $n using [$fs,*]))
 
-section Branch
-
-open Lean Elab Command Term Meta
-
-/-- `#ix_branch name (h : H) … from prev by tac`: a piece that starts at `prev`'s leftover state
-under additional hypotheses. Two runs that agree up to `prev` share the pieces up to `prev`
-and each continue with its own `#ix_branch`. -/
-syntax (name := ixBranch) "#ix_branch " ident bracketedBinder+ " from " ident " by " tacticSeq : command
-
-@[command_elab ixBranch] def elabIxBranch : CommandElab := fun stx => do
-  let declName := (← getCurrNamespace) ++ stx[1].getId
-  let prev ← liftCoreM <| realizeGlobalConstNoOverload stx[4]
-  liftTermElabM do
-    let info ← getConstInfo prev
-    forallTelescope info.type fun xs _ => do
-      let nv ← pieceVars xs
-      let some hk := xs[nv]? | throwError "#ix_branch: {prev} has no leftover"
-      forallTelescope (← inferType hk) fun ys T => do
-        Term.elabBinders stx[2].getArgs fun zs => do
-          Term.synthesizeSyntheticMVarsNoPostponing
-          ixAddPiece declName (xs.extract 0 nv ++ ys ++ zs) T stx[6] true (xs.extract nv xs.size)
-
-end Branch
-
 set_option hygiene false in
 
 macro "xh_end" : tactic => `(tactic| (intros; nx_clean; nx_compactR; exact hk _ _ ⟨by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.add_assoc,
