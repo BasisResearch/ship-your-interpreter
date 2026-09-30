@@ -55,81 +55,23 @@ theorem gpr_rd_ok : ∀ n, n < 32 → 1 ≤ n →
 theorem gprReg_beq_false : ∀ n, n < 32 → ∀ m, m < 32 → 1 ≤ n → 1 ≤ m → n ≠ m →
     (gprReg n == gprReg m) = false := by decide
 
+theorem gprGet_afterNextPC (σ : MState) (pc : BitVec 64) (n : Nat) (h1 : 1 ≤ n) (h31 : n ≤ 31) :
+    gprGet (afterNextPC (afterPrelude σ) pc) n = gprGet σ n := by
+  gpr_cases n => exact get?_afterNextPC σ pc _ (by decide) (by decide)
+
 theorem rX_src (σ : MState) (pc : BitVec 64) :
     ∀ (n : Nat), n ≤ 31 → ∀ (v : BitVec 64), srcPin σ n v →
     (rX_bits (gprIdx n)).run (afterNextPC (afterPrelude σ) pc)
       = .ok v (afterNextPC (afterPrelude σ) pc)
   | 0, _, v, h => by rw [show v = 0#64 from h]; exact rX_bits_zero _
-  | 1, _, v, h => rX_bits_x1 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 2, _, v, h => rX_bits_x2 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 3, _, v, h => rX_bits_x3 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 4, _, v, h => rX_bits_x4 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 5, _, v, h => rX_bits_x5 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 6, _, v, h => rX_bits_x6 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 7, _, v, h => rX_bits_x7 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 8, _, v, h => rX_bits_x8 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 9, _, v, h => rX_bits_x9 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 10, _, v, h => rX_bits_x10 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 11, _, v, h => rX_bits_x11 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 12, _, v, h => rX_bits_x12 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 13, _, v, h => rX_bits_x13 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 14, _, v, h => rX_bits_x14 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 15, _, v, h => rX_bits_x15 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 16, _, v, h => rX_bits_x16 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 17, _, v, h => rX_bits_x17 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 18, _, v, h => rX_bits_x18 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 19, _, v, h => rX_bits_x19 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 20, _, v, h => rX_bits_x20 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 21, _, v, h => rX_bits_x21 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 22, _, v, h => rX_bits_x22 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 23, _, v, h => rX_bits_x23 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 24, _, v, h => rX_bits_x24 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 25, _, v, h => rX_bits_x25 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 26, _, v, h => rX_bits_x26 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 27, _, v, h => rX_bits_x27 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 28, _, v, h => rX_bits_x28 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 29, _, v, h => rX_bits_x29 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 30, _, v, h => rX_bits_x30 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | 31, _, v, h => rX_bits_x31 _ v (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact h)
-  | _+32, hn, _, _ => absurd hn (by omega)
+  | m+1, hn, v, h => rX_bits_gpr _ (m+1) (by omega) hn v
+      ((gprGet_afterNextPC σ pc (m+1) (by omega) hn).trans h)
 
 theorem wX_gpr (s : MState) (d : BitVec 64) :
     ∀ (n : Nat), 1 ≤ n → n ≤ 31 →
     (wX_bits (gprIdx n) d).run s
-      = .ok () {s with regs := s.regs.insert (gprReg n) (gprRT n d)}
-  | 0, h, _ => absurd h (by omega)
-  | 1, _, _ => wX_bits_x1 s d
-  | 2, _, _ => wX_bits_x2 s d
-  | 3, _, _ => wX_bits_x3 s d
-  | 4, _, _ => wX_bits_x4 s d
-  | 5, _, _ => wX_bits_x5 s d
-  | 6, _, _ => wX_bits_x6 s d
-  | 7, _, _ => wX_bits_x7 s d
-  | 8, _, _ => wX_bits_x8 s d
-  | 9, _, _ => wX_bits_x9 s d
-  | 10, _, _ => wX_bits_x10 s d
-  | 11, _, _ => wX_bits_x11 s d
-  | 12, _, _ => wX_bits_x12 s d
-  | 13, _, _ => wX_bits_x13 s d
-  | 14, _, _ => wX_bits_x14 s d
-  | 15, _, _ => wX_bits_x15 s d
-  | 16, _, _ => wX_bits_x16 s d
-  | 17, _, _ => wX_bits_x17 s d
-  | 18, _, _ => wX_bits_x18 s d
-  | 19, _, _ => wX_bits_x19 s d
-  | 20, _, _ => wX_bits_x20 s d
-  | 21, _, _ => wX_bits_x21 s d
-  | 22, _, _ => wX_bits_x22 s d
-  | 23, _, _ => wX_bits_x23 s d
-  | 24, _, _ => wX_bits_x24 s d
-  | 25, _, _ => wX_bits_x25 s d
-  | 26, _, _ => wX_bits_x26 s d
-  | 27, _, _ => wX_bits_x27 s d
-  | 28, _, _ => wX_bits_x28 s d
-  | 29, _, _ => wX_bits_x29 s d
-  | 30, _, _ => wX_bits_x30 s d
-  | 31, _, _ => wX_bits_x31 s d
-  | _+32, _, h => absurd h (by omega)
+      = .ok () {s with regs := s.regs.insert (gprReg n) (gprRT n d)} :=
+  wX_bits_gpr s d
 
 theorem obs_gpr_rd {σ' σ : MState} {pc vm : BitVec 64} :
     ∀ (n : Nat), 1 ≤ n → n ≤ 31 → ∀ (v : BitVec 64),
@@ -141,40 +83,9 @@ theorem obs_gpr_rd {σ' σ : MState} {pc vm : BitVec 64} :
 theorem obs_gpr_other {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg n) (gprRT n v))) :
     ∀ (m : Nat), 1 ≤ m → m ≤ 31 → (gprReg n == gprReg m) = false →
-    ∀ (w : BitVec 64), gprGet σ m = some w → gprGet σ' m = some w
-  | 0, h, _, _, _, _ => absurd h (by omega)
-  | 1, _, _, hne, w, h => obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 2, _, _, hne, w, h => obs_alu_other hobs Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 3, _, _, hne, w, h => obs_alu_other hobs Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 4, _, _, hne, w, h => obs_alu_other hobs Register.x4 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 5, _, _, hne, w, h => obs_alu_other hobs Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 6, _, _, hne, w, h => obs_alu_other hobs Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 7, _, _, hne, w, h => obs_alu_other hobs Register.x7 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 8, _, _, hne, w, h => obs_alu_other hobs Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 9, _, _, hne, w, h => obs_alu_other hobs Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 10, _, _, hne, w, h => obs_alu_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 11, _, _, hne, w, h => obs_alu_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 12, _, _, hne, w, h => obs_alu_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 13, _, _, hne, w, h => obs_alu_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 14, _, _, hne, w, h => obs_alu_other hobs Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 15, _, _, hne, w, h => obs_alu_other hobs Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 16, _, _, hne, w, h => obs_alu_other hobs Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 17, _, _, hne, w, h => obs_alu_other hobs Register.x17 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 18, _, _, hne, w, h => obs_alu_other hobs Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 19, _, _, hne, w, h => obs_alu_other hobs Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 20, _, _, hne, w, h => obs_alu_other hobs Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 21, _, _, hne, w, h => obs_alu_other hobs Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 22, _, _, hne, w, h => obs_alu_other hobs Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 23, _, _, hne, w, h => obs_alu_other hobs Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 24, _, _, hne, w, h => obs_alu_other hobs Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 25, _, _, hne, w, h => obs_alu_other hobs Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 26, _, _, hne, w, h => obs_alu_other hobs Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 27, _, _, hne, w, h => obs_alu_other hobs Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 28, _, _, hne, w, h => obs_alu_other hobs Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 29, _, _, hne, w, h => obs_alu_other hobs Register.x29 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 30, _, _, hne, w, h => obs_alu_other hobs Register.x30 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | 31, _, _, hne, w, h => obs_alu_other hobs Register.x31 (by decide) (by decide) (by decide) (by decide) (by decide) hne (by decide) (by decide) h
-  | _+32, _, h, _, _, _ => absurd h (by omega)
+    ∀ (w : BitVec 64), gprGet σ m = some w → gprGet σ' m = some w := by
+  intro m h1 h31 hne w h
+  gpr_cases m => refine obs_alu_other hobs _ ?_ ?_ ?_ ?_ ?_ hne ?_ ?_ h <;> decide
 
 theorem gholds_lookup {σ : MState} {n : Nat} {v : BitVec 64} :
     ∀ (L : GRegs), GHolds σ L → lookupG n L = some v → gprGet σ n = some v := by
