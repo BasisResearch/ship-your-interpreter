@@ -282,16 +282,14 @@ theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := 
   iintro ⟨HA, Hslot, HS, #Hjb, HT, #Hgp, #Himg⟩
   ihave ⟨HC, Hst⟩ := abortAt_elim _ _ _ $$ HA
   ihave HC := hcore $$ HC
-  ihave HA := abortAt_intro _ _ _ $$ [HC Hst]
-  · iframe HC Hst
+  ihave HA := abortAt_intro _ _ _ $$ [$]
   unfold slot24 blockOwn
   ihave ⟨%f, Hslot⟩ := ownSet_fn _ $$ Hslot
   ihave HI := ownSet_glue (interpS sTop) (InExt ((sFr + 88#64).toNat, 24)) (imgM Mt) f
     (fun a h1 h2 => by
       simp only [interpS, InExt, show (sFr + 88#64).toNat = sTop.toNat - 176 + 88 from by decide]
         at h1 h2
-      omega) $$ [HS Hslot]
-  · iframe HS Hslot
+      omega) $$ [$]
   ihave HI := ownSet_iff (T := InExt ((sTop - 176#64).toNat, 176)) _ (fun a => by
     simp only [interpS, InExt, show (sFr + 88#64).toNat = sTop.toNat - 176 + 88 from by decide,
       show (sTop - 176#64).toNat = sTop.toNat - 176 from by decide]
@@ -369,8 +367,7 @@ theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live 
     rw [stmts_toNat hE, g_toNat hE] at hK
     unfold topLoopRes
     iintro ⟨Hms, Hslot, #Hcode, #Himg, #Hro, #Hdv, #Hfr, Hst, Hw, HT, ⟨%jb, %hjb, #Hjb⟩⟩
-    ihave #Hctx := errCtx_of_jb hjb $$ [Himg Hjb]
-    · iframe Himg Hjb
+    ihave #Hctx := errCtx_of_jb hjb $$ [$]
     ihave #Hspec := hspecs $$ Hctx
     ihave #Hgp := codeRes_gp $$ Hcode
     iapply hK

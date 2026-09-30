@@ -607,8 +607,7 @@ theorem ownSet_join_slot {S : Nat → Prop} {Mt : Mem} {a : Nat} {v : Value}
       (imgW img (a + 8)) (imgW img (a + 16))) b)) (fun b hb => by rw [imgM_slotWrite_out _ _ _ hb.2]) $$ H1
   ihave H2 := ownSet_congr (Ψ := fun b => iprop(b ↦ₘ imgM (slotWrite Mt a (imgW img a)
       (imgW img (a + 8)) (imgW img (a + 16))) b)) (fun b hb => by rw [imgM_slotWrite_in img hb]) $$ H2
-  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [H1 H2]
-  · iframe H1 H2
+  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [$]
   iapply ownSet_iff _ (fun b => ⟨fun hb => hb.elim (·.1) (h b), fun hb => by
     by_cases hs : InExt (a, 24) b
     · exact .inr hs
@@ -652,10 +651,8 @@ theorem ms_callEvalT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   iintro Hpc Hra Hpost
   unfold evalPost
   icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hval, Hw⟩
-  ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-  · iframe Hslack Hst
-  ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [HS Hval]
-  · iframe HS Hval
+  ihave Hst := stackScratch_widen hms hm $$ [$]
+  ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [$]
   iapply Hk $$ %R' %w0 %w1 %w2 %hkeep Hv [Hpc Hra Hregs HS] Hst Hw
   rw [regFile_upd_ra]
   simp only [upd_same]
@@ -695,8 +692,7 @@ theorem ms_callExecT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   iintro Hpc Hra Hpost
   unfold execPost
   icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
-  ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-  · iframe Hslack Hst
+  ihave Hst := stackScratch_widen hms hm $$ [$]
   iapply Hk $$ %R' %hkeep [Hpc Hra Hregs HS] Hst Hret Hw
   rw [regFile_upd_ra]
   simp only [upd_same]
@@ -751,8 +747,7 @@ theorem ms_callExecPM {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro Hpc Hra ⟨%st', %status, %hE, Hpost⟩
     unfold execPost
     icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
+    ihave Hst := stackScratch_widen hms hm $$ [$]
     iapply Hk $$ %R' %st' %status %hE %hkeep [Hpc Hra Hregs HS] Hst Hret Hw HK
     rw [regFile_upd_ra]
     simp only [upd_same]
@@ -760,8 +755,7 @@ theorem ms_callExecPM {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro ⟨HA, Hslot⟩
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
+    ihave Hst := stackScratch_widen hms hm $$ [$]
     ihave HA := abortAt_intro _ _ _ $$ [HC Hst]
     · iframe HC Hst
     ihave HK := hab' $$ HK
@@ -843,8 +837,7 @@ theorem ownSet_unslot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, InExt 
   unfold slot24 blockOwn
   iintro ⟨H1, H2⟩
   ihave H1 := ownSet_forget _ _ $$ H1
-  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [H1 H2]
-  · iframe H1 H2
+  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [$]
   iapply ownSet_iff _ (fun b => ⟨fun hb => hb.elim (·.1) (h b), fun hb => by
     by_cases hs : InExt (a, 24) b
     · exact .inr hs
@@ -893,10 +886,8 @@ theorem ms_callEvalP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   · iintro Hpc Hra ⟨%st', %v, %hE, Hpost⟩
     unfold evalPost
     icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hval, Hw⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [HS Hval]
-    · iframe HS Hval
+    ihave Hst := stackScratch_widen hms hm $$ [$]
+    ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [$]
     iapply Hk $$ %R' %w0 %w1 %w2 %st' %v %hE %hkeep Hv [Hpc Hra Hregs HS] Hst Hw HOut HK
     rw [regFile_upd_ra]
     simp only [upd_same]
@@ -904,10 +895,8 @@ theorem ms_callEvalP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   · iintro ⟨HA, Hslot⟩
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave HS := ownSet_unslot hslot $$ [HS Hslot]
-    · iframe HS Hslot
+    ihave Hst := stackScratch_widen hms hm $$ [$]
+    ihave HS := ownSet_unslot hslot $$ [$]
     ihave Hst := evalFrame_join (s := s0) (n := n0) hn0s (by omega) $$ [Hst HS]
     · rw [show n0 - 1088 = m by omega]; iframe Hst HS
     ihave HOut := hOut $$ HOut

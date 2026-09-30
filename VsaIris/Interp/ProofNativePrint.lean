@@ -104,8 +104,7 @@ theorem valsAt_tracked (N : NativeAddrs) :
     ihave ⟨H1, H2⟩ := (valsAt_cons N a v vs).1 $$ H
     ihave ⟨%M1, HA, #Hv⟩ := valAt_tracked N a v $$ H1
     ihave ⟨%M2, HB, #Hvs⟩ := valsAt_tracked N vs (a + 24) $$ H2
-    ihave ⟨%M, H, %⟨hA, hB, _⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [HA HB]
-    · iframe HA HB
+    ihave ⟨%M, H, %⟨hA, hB, _⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [$]
     have e := valImg_agreeOn (GF := GF) (N := N) (v := v) (a := a) (fun k hk => (hA k hk).symm)
     ihave #Hvs' := valsImg_agree N vs (a + 24) (fun k hk => (hB k hk).symm) $$ Hvs
     iexists M
@@ -190,8 +189,7 @@ theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
   ihave ⟨%img, %⟨hok, -⟩, H1, H2, #Hr⟩ := stdioAt_open StdioOK ioW $$ Hio
   ihave H1 := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨ioW_stdio h, h⟩⟩) $$ H1
   ihave ⟨%Mi, H1, %hMi⟩ := ownSet_trackedAt _ img $$ H1
-  ihave ⟨%M', Hms, %⟨h1, h2, h3⟩⟩ := ms_join $$ [Hms H1]
-  · iframe Hms H1
+  ihave ⟨%M', Hms, %⟨h1, h2, h3⟩⟩ := ms_join $$ [$]
   iexists img, M'
   unfold ioRest
   iframe Hms H2 Hr Herr
@@ -550,8 +548,7 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   icases Hms with ⟨Hpc, Hra, Hregs, HS⟩
   ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M hdfa $$ HS
   ihave HF := ownSet_forget _ _ $$ HF
-  ihave Hst := npFrame_join (s := s) (by unfold printNeed fprintfNeed; omega) $$ [Hst HF]
-  · iframe Hst HF
+  ihave Hst := npFrame_join (s := s) (by unfold printNeed fprintfNeed; omega) $$ [$]
   subst hlen
   ihave #Hv' := valsImg_agree N vs args.toNat (fun k hk => (hargs k hk).symm) $$ Hv
   ihave Hvs := valsAt_of_tracked N M vs args.toNat $$ [HA Hv']
@@ -598,8 +595,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
     NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i) ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
-  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
-  · iframe Hms Hstd
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [$]
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
   unfold nativePrintNeed printNeed fprintfNeed at hs1
   have ha1 := c.ha.al; have ha2 := c.ha.lo; have ha3 := c.ha.hi
@@ -697,8 +693,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   ihave #Hvi := valsImg_get N (imgM Margs) vs args.toNat i (by omega) $$ Hv
   rw [← valImg_words (GF := GF) hv0 hv8 hv16] at *
   have hst80 : (s - 80#64).toNat = s.toNat - 80 := by rw [hsm, hsf]
-  ihave Hval := valAt_of_img N $$ [Hvi Hslot]
-  · iframe Hvi Hslot
+  ihave Hval := valAt_of_img N $$ [$]
   ihave #Hdi := (show dispResL (GF := GF) st vs ⊢ dispRes st (vs[i]'(by omega)) from by
     unfold dispResL
     exact sepL_elem_persist (dispRes st) (List.getElem_mem (show i < vs.length by omega))) $$ Hd
@@ -735,8 +730,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   iintro %R2 %hk2 ⟨Hval, Hstd, Hcon, ⟨Hst, -⟩⟩ Hms
   rw [hst80]
   ihave ⟨%Ms, HsS, #Hw⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M3, Hms, %⟨h3a, h3b, _⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
+  ihave ⟨%M3, Hms, %⟨h3a, h3b, _⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
 
   have hsv : ∀ o, 24 ≤ o → o + 8 ≤ 80 →
@@ -861,8 +855,7 @@ theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
-  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
-  · iframe Hms Hstd
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [$]
   have hio1 := ldv_impMem
   have hio2 : ldv .ld M1 0x8001b548 = 0x8001bb20#64 := by
     rw [ldv_ld_imgW]; unfold imgW
@@ -1028,8 +1021,7 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
   ihave ⟨Hst, HF⟩ := npFrame_split (s := s) (by unfold printNeed fprintfNeed; omega) $$ Hst
   ihave ⟨%f, HF⟩ := ownSet_fn _ $$ HF
   ihave ⟨%Mf, HF⟩ := ownSet_mem _ f $$ HF
-  ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [HF HA]
-  · iframe HF HA
+  ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [$]
   have c : NpCtx live sret args s r vs.length rv :=
     ⟨hlive, hal, h10, h12, h13, h2, by unfold nativePrintNeed printNeed fprintfNeed; omega, by omega,
       hs4, hsg.top, hg, ha, hn, hdfa⟩

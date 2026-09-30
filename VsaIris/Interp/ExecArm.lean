@@ -104,8 +104,7 @@ theorem execDisp_finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
   obtain ⟨_, hneed⟩ := execFrameGeom_of hsg
   iintro ⟨Hms, Hst, Hret, Hw, HK⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave Hst := execFrame_join hsg.le hneed $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := execFrame_join hsg.le hneed $$ [$]
   rw [hpc, hra]
   unfold execDispK
   iapply HK $$ %R' %hret Hpc Hra Hregs Hst Hret Hw
@@ -314,10 +313,8 @@ theorem ms_callEvalPF {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro Hpc Hra ⟨%st', %v, %hE, Hpost⟩
     unfold evalPost
     icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hval, Hw⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [HS Hval]
-    · iframe HS Hval
+    ihave Hst := stackScratch_widen hms hm $$ [$]
+    ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [$]
     iapply Hk $$ %R' %w0 %w1 %w2 %st' %v %hE %hkeep Hv [Hpc Hra Hregs HS] Hst Hw HOut HK
     rw [regFile_upd_ra]
     simp only [upd_same]
@@ -325,10 +322,8 @@ theorem ms_callEvalPF {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro ⟨HA, Hslot⟩
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave HS := ownSet_unslot hslot $$ [HS Hslot]
-    · iframe HS Hslot
+    ihave Hst := stackScratch_widen hms hm $$ [$]
+    ihave HS := ownSet_unslot hslot $$ [$]
     ihave Hst := frameF_join (s := s0) (n := n0) hsF hn0s (by omega) $$ [Hst HS]
     · rw [show n0 - f = m by omega]; iframe Hst HS
     ihave HK := and_elim_r $$ HK
@@ -363,8 +358,7 @@ theorem ms_slotIn {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
   unfold slot24 blockOwn
   ihave ⟨%f, Hslot⟩ := ownSet_fn _ $$ Hslot
   ihave ⟨%Mt, Hslot⟩ := ownSet_mem _ f $$ Hslot
-  ihave ⟨%M', Hms, %⟨h1, -, h3⟩⟩ := ms_join $$ [Hms Hslot]
-  · iframe Hms Hslot
+  ihave ⟨%M', Hms, %⟨h1, -, h3⟩⟩ := ms_join $$ [$]
   iexists M'
   iframe Hms
   ipureintro; exact ⟨h1, h3⟩
@@ -565,8 +559,7 @@ theorem wp_execRetCopy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
   obtain ⟨hfg, _⟩ := execFrameGeom_of hsg
   have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   iintro ⟨#Hcode, Hms, Hslot, #Hv, Hst, Hw, HK⟩
-  ihave ⟨%M2, Hms, %⟨hag, hd⟩⟩ := ms_slotIn $$ [Hms Hslot]
-  · iframe Hms Hslot
+  ihave ⟨%M2, Hms, %⟨hag, hd⟩⟩ := ms_slotIn $$ [$]
   have hrd := slot_apart (by decide) hd
   have hsv2 := hsv.congr hag
   have hag8 : ∀ o, o + 8 ≤ 176 → ∀ j, j < 8 → imgM M2 (s.toNat - 176 + o + j) =
@@ -697,8 +690,7 @@ theorem ms_callHelperSlot (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
   iintro %R' %hk Hval Hms
   unfold ms
   icases Hms with ⟨Hpc, Hra, Hregs, HS⟩
-  ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hS $$ [HS Hval]
-  · iframe HS Hval
+  ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hS $$ [$]
   iapply Hk $$ %R' %w0 %w1 %w2 %hk Hv
   iframe Hpc Hra Hregs HS
 
@@ -759,8 +751,7 @@ theorem ms_valUncarve (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64}
       · exact .inl ⟨h, h'⟩
   iintro ⟨Hms, Hval⟩
   ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
+  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [$]
   iexists M'
   isplitl
   · iapply ms_iffE hsl1 $$ Hms
@@ -808,8 +799,7 @@ theorem ms_callHelperVal (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × S
   · iframe Hval; ipureintro; exact hsl
   iintro %R' %hk ⟨Hval, HQ⟩ Hms
   ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
+  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iffE (fun k => (hsl1 k).symm) $$ Hms
   iapply Hk $$ %R' %M' %hk %(fun x hx hn => h1 x ⟨hx, hn⟩) HQ Hms
 
@@ -846,8 +836,7 @@ theorem execDispK_redispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat 
       execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm' status aRet s R3 ret v8 v9 v18 v19 := by
   unfold execDispK
   iintro ⟨Hsl, HK⟩ %R' %hret Hpc Hra Hregs Hst Hret Hw
-  ihave Hst := stackScratch_widen hsg.le hle $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen hsg.le hle $$ [$]
   iapply HK $$ %R' %⟨hret.sp, hret.s0, hret.s1, hret.s2, hret.s3,
     fun x hx => (hret.hi x hx).trans (hk x hx), hret.a0⟩ Hpc Hra Hregs Hst Hret Hw
 
@@ -889,8 +878,7 @@ theorem ifRedispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   obtain ⟨hfg, h176⟩ := execFrameGeom_of hf.stack
   iintro ⟨Hms, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw, HK⟩
   ihave ⟨Hsl, Hst⟩ := stack_redispatch hsg hle h176 hfg.sf $$ Hst
-  ihave HK := execDispK_redispatch Wp hsg hle hk $$ [Hsl HK]
-  · iframe Hsl HK
+  ihave HK := execDispK_redispatch Wp hsg hle hk $$ [$]
   iapply hchild
   unfold execDispPre
   iframe Hms Hcode Hast Hfb Hst Hslot Hw HK

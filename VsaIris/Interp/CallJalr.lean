@@ -260,8 +260,7 @@ theorem ms_callHelperR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   · iframe HK HPre
   isplitl []
   · iintro H16 ⟨HK, HPre⟩
-    ihave Hregs := (regFile_a6 R).2 $$ [H16 HK]
-    · iframe H16 HK
+    ihave Hregs := (regFile_a6 R).2 $$ [$]
     iframe Hregs HPre Hcode
     ipureintro; exact ⟨hal, hpins⟩
   iintro Hpc Hra Hpost
@@ -295,8 +294,7 @@ theorem ms_callAbortR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   · iframe HK HPre
   isplitl []
   · iintro H16 ⟨HK, HPre⟩
-    ihave Hregs := (regFile_a6 R).2 $$ [H16 HK]
-    · iframe H16 HK
+    ihave Hregs := (regFile_a6 R).2 $$ [$]
     iapply hP
     iframe Hregs HPre Hcode
   isplit

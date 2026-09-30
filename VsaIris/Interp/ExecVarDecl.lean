@@ -121,8 +121,7 @@ theorem varInitCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {
     (by decide) (by decide)
   have g1 : (execSP s + 104#64).toNat = s.toNat - 176 + 104 := g.slot
   have hbb : e.bodiesBound perCallBudget = true := hf.bodies
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
   iapply wp_swpF Wp (F := iprop(□ Hc ∗ □ Ht ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.varDecl x (some e)) d - 176) ∗ slot24 aRet.toNat ∗
       world N vsaLayoutP vsaRoomB inp ρin st d ∗ Kin))
@@ -193,8 +192,7 @@ theorem varNullCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {
   have hslg : SlotGeom (execSP s + 104#64) := by
     have := hfg.lo; have := hfg.hi; have := hfg.al
     refine ⟨?_, ?_, ?_⟩ <;> rw [g1] <;> (try unfold Vsa.Sim.tohostAddr) <;> omega
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
   iapply wp_swpF Wp (F := iprop(□ Ht ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.varDecl x none) d - 176) ∗ slot24 aRet.toNat ∗
       world N vsaLayoutP vsaRoomB inp ρ st d ∗ K))

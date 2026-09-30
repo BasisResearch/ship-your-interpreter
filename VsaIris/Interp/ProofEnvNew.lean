@@ -115,10 +115,8 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     | some pa =>
       unfold parentAt
       iintro ⟨Hs, -, #Hpa⟩
-      ihave %h := storeRepr_frameAt N $$ [Hs Hpa]
-      · iframe Hs Hpa
-      ipureintro; intro pa' hpa'; cases hpa'; exact h) $$ [Hst Hpar]
-  · iframe Hst Hpar
+      ihave %h := storeRepr_frameAt N $$ [$]
+      ipureintro; intro pa' hpa'; cases hpa'; exact h) $$ [$]
 
   rw [← hR2, show envBytes = 32 from rfl]
   iapply wp_call_malloc A Wp (i := 0x80002a10) (R := R1)
@@ -192,15 +190,13 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
 
     unfold blockOwn
     ihave ⟨%fb, Hblk⟩ := ownSet_fn _ $$ Hblk
-    ihave ⟨⟨Hfr, Hblk⟩, %hdb⟩ := keep_pure (ownSet_disj _ _ (imgM Mt1) fb) $$ [Hfr Hblk]
-    · iframe Hfr Hblk
+    ihave ⟨⟨Hfr, Hblk⟩, %hdb⟩ := keep_pure (ownSet_disj _ _ (imgM Mt1) fb) $$ [$]
     have hsep : p.toNat + 32 ≤ s.toNat - 16 ∨ s.toNat ≤ p.toNat := by
       have := interval_apart (a := p.toNat) (n := 32) (b := s.toNat - 16) (m := 16)
         (by omega) (by omega) fun c h1 h2 => by
           have := hdb c ⟨h1, by omega⟩; unfold InExt at this; omega
       omega
-    ihave HS := ownSet_glue _ _ (imgM Mt1) fb hdb $$ [Hfr Hblk]
-    · iframe Hfr Hblk
+    ihave HS := ownSet_glue _ _ (imgM Mt1) fb hdb $$ [$]
     ihave HS := ownSet_iff (T := fun a => (s.toNat - 16 ≤ a ∧ a < s.toNat) ∨
       (p.toNat ≤ a ∧ a < p.toNat + 32)) _ (fun a => by unfold InExt; exact Iff.rfl) $$ HS
     ihave ⟨%Mt2, %hag, HS⟩ := ownSet_tracked _ _ $$ HS

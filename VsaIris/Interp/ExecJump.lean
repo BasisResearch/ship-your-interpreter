@@ -124,8 +124,7 @@ theorem jumpCore (j : JumpK) (hlive : ∀ p ∈ interpText, live p.1) (Wp : Mach
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := j.node hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(stackScratch (execSP s) (execNeed j.stmt d - 176) ∗
       slot24 aRet.toNat ∗ world N L Room inp ρ st d ∗
       execDispK (vsaModel live) N L Room inp Wp Φ ρ st d j.stmt j.status aRet s R ret v8 v9 v18 v19))

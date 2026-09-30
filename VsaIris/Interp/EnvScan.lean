@@ -272,14 +272,12 @@ theorem storeRepr_openRead (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)}
   iintro ⟨Hs, #He⟩
   ihave ⟨Hs, %hinv⟩ := keep_pure (storeRepr_pure N s B) $$ Hs
   ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_frameAt N (s := s) (B := B) (fa := fa) (e := e))
-    $$ [Hs He]
-  · iframe Hs He
+    $$ [$]
   have hf : s.frames[fa]? = some s.frames[fa] := Array.getElem?_eq_getElem hlt
   ihave ⟨%bl, %B₁, %B₂, %hB, Hf, Hc⟩ := storeRepr_open N hf $$ Hs
   unfold frameOwn frameBody
   icases Hf with ⟨%Gm, %hbl, #HGe, %img, %hlay, Hown, #Hb, #Hp⟩
-  ihave %hGe := frameAt_agree fa Gm.e e $$ [HGe He]
-  · iframe HGe He
+  ihave %hGe := frameAt_agree fa Gm.e e $$ [$]
   iexists s.frames[fa], Gm, img
   iframe Hown Hb Hp
   isplitr
@@ -305,10 +303,8 @@ theorem get_join (s out : Nat) (Gm : FrameGeom) (Mt : Mem) (img : Nat → BitVec
         ownSet (getS s out Gm) (fun a => a ↦ₘ imgM Mt' a) := by
   iintro ⟨HB, HF⟩
   ihave ⟨⟨HB, HF⟩, %hd⟩ := keep_pure (ownSet_disj (baseS s out) (BlocksCover Gm.blocks) (imgM Mt) img)
-    $$ [HB HF]
-  · iframe HB HF
-  ihave H := ownSet_glue _ _ (imgM Mt) img hd $$ [HB HF]
-  · iframe HB HF
+    $$ [$]
+  ihave H := ownSet_glue _ _ (imgM Mt) img hd $$ [$]
   ihave H := ownSet_iff (T := getS s out Gm) _ (fun a => by
     unfold getS; rw [frameS_iff]) $$ H
   ihave ⟨%Mt', %hag, H⟩ := ownSet_tracked _ _ $$ H
@@ -430,14 +426,12 @@ theorem storeRepr_openAt (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {
   iintro ⟨Hs, #He⟩
   ihave ⟨Hs, %hinv⟩ := keep_pure (storeRepr_pure N s B) $$ Hs
   ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_frameAt N (s := s) (B := B) (fa := fa) (e := e))
-    $$ [Hs He]
-  · iframe Hs He
+    $$ [$]
   have hf : s.frames[fa]? = some s.frames[fa] := Array.getElem?_eq_getElem hlt
   ihave ⟨%bl, %B₁, %B₂, %hB, Hf, Hc⟩ := storeRepr_open N hf $$ Hs
   unfold frameOwn frameBody
   icases Hf with ⟨%Gm, %hbl, #HGe, %img, %hlay, Hown, #Hb, #Hp⟩
-  ihave %hGe := frameAt_agree fa Gm.e e $$ [HGe He]
-  · iframe HGe He
+  ihave %hGe := frameAt_agree fa Gm.e e $$ [$]
   iexists s.frames[fa], Gm, img, B₁, B₂
   iframe Hown Hb Hp HGe Hc
   ipureintro; exact ⟨hf, hGe, hlay, hinv, hbl ▸ hB⟩
@@ -591,8 +585,7 @@ theorem storeRepr_frameInfo (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢
       storeRepr N s B ∗ ⌜e ≠ 0 ∧ fa < s.frames.size ∧ Vsa.Sim.StoreInvariant s⌝ := by
   iintro ⟨Hs, #He⟩
-  ihave ⟨%f, %Gm, %img, %⟨hf, hGe, hlay, hinv⟩, Hown, -, -, Hclose⟩ := storeRepr_openRead N $$ [Hs He]
-  · iframe Hs He
+  ihave ⟨%f, %Gm, %img, %⟨hf, hGe, hlay, hinv⟩, Hown, -, -, Hclose⟩ := storeRepr_openRead N $$ [$]
   ihave Hs := Hclose $$ Hown
   iframe Hs
   ipureintro
@@ -750,10 +743,8 @@ theorem scan_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   have hs64 : 64 ≤ C.s.toNat := by have := hC.sp.lo; unfold htifLo at this; omega
   iintro ⟨#Ht, #Hgp, #Hcmp, #Hx, #Hfa, Hpc, HR, HS, Hst, HK⟩
   ihave ⟨%f, %Gm, %img, %B₁, %B₂, %⟨hf, hGe, hlay, hinv, hB⟩, Hown, #Hb, #Hp, #HGe, Hclose⟩ :=
-    storeRepr_openAt N $$ [Hst Hfa]
-  · iframe Hst Hfa
-  ihave ⟨%Mt1, %⟨hbase, himg, hdisj⟩, HS⟩ := get_join _ _ Gm Mt img $$ [HS Hown]
-  · iframe HS Hown
+    storeRepr_openAt N $$ [$]
+  ihave ⟨%Mt1, %⟨hbase, himg, hdisj⟩, HS⟩ := get_join _ _ Gm Mt img $$ [$]
   have hF : InFrame C Gm f.vars.length img R Mt1 :=
     { stack := hhead.stack.congr rfl rfl (fun a h1 h2 => hbase a (.inl ⟨h1, h2⟩)) hs64
       name := hhead.name
@@ -858,21 +849,18 @@ theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
         scanHitK Sx Wp Φ N ⟨s, r, pn, out, x, saved, fo⟩ st B fa)
     ⊢ Wp.W Φ := by
   iintro ⟨#Ht, #Hgp, #Hcmp, Hpc, Hra, Ha0, Ha1, Ha2, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hx, Hout, Hst, HK⟩
-  ihave ⟨Hst, %⟨hene, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [Hst Hfa]
-  · iframe Hst Hfa
+  ihave ⟨Hst, %⟨hene, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [$]
   have hs64 : 64 ≤ s.toNat := by have := hsp.lo; unfold htifLo envGetNeed at this; omega
   unfold stackScratch
   ihave ⟨%fs, Hstk⟩ := blockOwn_img _ _ $$ Hstk
-  ihave ⟨⟨Hstk, Hout⟩, %hdo⟩ := keep_pure (ownSet_disj _ _ fs fo) $$ [Hstk Hout]
-  · iframe Hstk Hout
+  ihave ⟨⟨Hstk, Hout⟩, %hdo⟩ := keep_pure (ownSet_disj _ _ fs fo) $$ [$]
   have hsep : out.toNat + 24 ≤ s.toNat - 64 ∨ s.toNat ≤ out.toNat := by
     have := interval_apart (a := out.toNat) (n := 24) (b := s.toNat - envGetNeed)
       (m := envGetNeed) (by omega) (by unfold envGetNeed; omega) fun c h1 h2 => by
         have := hdo c ⟨h1, h2⟩
         unfold InExt at this; omega
     unfold envGetNeed at this; omega
-  ihave HB := ownSet_glue _ _ fs fo hdo $$ [Hstk Hout]
-  · iframe Hstk Hout
+  ihave HB := ownSet_glue _ _ fs fo hdo $$ [$]
   ihave HB := ownSet_iff (T := baseS s.toNat out.toNat) _ (fun a => by
     unfold baseS InExt envGetNeed; omega) $$ HB
   ihave ⟨%Mt0, %hag, HB⟩ := ownSet_tracked _ _ $$ HB

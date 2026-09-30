@@ -263,8 +263,7 @@ theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
   have hel : ldv .ld m (BitVec.ofNat 64 arr + BitVec.ofNat 64 idx <<< 3).toNat = BitVec.ofNat 64 p := by
     rw [arr_elem_addr hn.ahi hidx]; exact ldv_ld_read64 hp
   have hoff := evalSP_off' hfg
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (aA : BitVec 64),
         ⌜EvalRegs R1 (s + 18446744073709550528#64 + 64#64) (BitVec.ofNat 64 inp) aA aE
             (s + 18446744073709550528#64) ∧ KeepRegs calleeSaved R R1 ∧

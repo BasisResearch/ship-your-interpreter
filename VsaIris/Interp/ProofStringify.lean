@@ -571,8 +571,7 @@ theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iframe H10 H11 H12 H13 H14 H15 HB
   iframe Hsl Hcode Hms HB
   iintro %g ⟨%hg10, HB⟩ Hms
-  ihave ⟨%M1, Hms, %⟨hM1a, hM1b, -⟩⟩ := ms_join $$ [Hms HB]
-  · iframe Hms HB
+  ihave ⟨%M1, Hms, %⟨hM1a, hM1b, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
   have hM1 : ∀ k, sgF s p k → imgM M1 k = imgM M k := fun k hk => by
     by_cases h : Strlen.ownedStr (s.toNat - 96) x.toList.length k
@@ -688,8 +687,7 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave HF := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ HF
   ihave HP := ownSet_iff _ (T := InExt (p.toNat, 24)) (fun k =>
     ⟨fun h => h.1.resolve_left h.2, fun h => ⟨.inr h, fun h' => cx.hdsp k h' h⟩⟩) $$ HP
-  ihave Hst := sgFrame_join (s := s) (by unfold stringifyNeed snprintfNeed; omega) $$ [Hst HF]
-  · iframe Hst HF
+  ihave Hst := sgFrame_join (s := s) (by unfold stringifyNeed snprintfNeed; omega) $$ [$]
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
   ihave Htmp := clobbered_of_fn _ _ $$ Htmp
   ihave Hargs := clobbered_of_fn _ _ $$ Hargs
@@ -903,8 +901,7 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd HB
   iframe Hmcs Hcode Hms Hblk HB Himg
   iintro %g ⟨%hg10, Hd, HB⟩ Hms
-  ihave ⟨%M2, Hms, %⟨hM2a, hM2b, -⟩⟩ := ms_join $$ [Hms HB]
-  · iframe Hms HB
+  ihave ⟨%M2, Hms, %⟨hM2a, hM2b, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
   have hM2 : ∀ k, sgF s p k → imgM M2 k = imgM M k := fun k hk => by
     by_cases h : InExt (s.toNat - 96, x.toList.length + 1) k
@@ -955,11 +952,9 @@ theorem sg_ret {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → 
   iintro ⟨⟨#Hcode, #Hv, Hh, Hd, Hstd, Hcon, Hst, Hk⟩, ⟨Hpc, Hra, Hregs, HS⟩⟩
   ihave ⟨HF, HP⟩ := ownSet_split_tracked _ _ M cx.hdsp $$ HS
   ihave HF := ownSet_forget _ _ $$ HF
-  ihave Hst := sgFrame_join (s := s) (by unfold stringifyNeed snprintfNeed; omega) $$ [Hst HF]
-  · iframe Hst HF
+  ihave Hst := sgFrame_join (s := s) (by unfold stringifyNeed snprintfNeed; omega) $$ [$]
   rw [← valImg_agreeOn (GF := GF) (N := N) (v := v) (fun k hk => f.hslot k hk)]
-  ihave Hval := valAt_of_img N $$ [Hv HP]
-  · iframe Hv HP
+  ihave Hval := valAt_of_img N $$ [$]
   ihave Hra := ptsto_eq (show _ = r by ix_reg) $$ Hra
   ihave Hk := and_elim_l $$ Hk
   iapply Hk $$ Hpc Hra
@@ -1059,8 +1054,7 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iframe Hat Hcode Hms Hst Hh
   iintro %R' %hk' Hst Hres Hms
   rw [f.h2]
-  ihave Hst := stackScratch_widen hn hm $$ [Hslack Hst]
-  · iframe Hslack Hst
+  ihave Hst := stackScratch_widen hn hm $$ [$]
   rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show x.toList.length + 1 < 2 ^ 64 by omega)]
   have k' : ∀ y ∈ fRegs, y ∉ callerSaved → R' y = R y := fun y hy hc => hk' y hy hc
   unfold mallocRes
@@ -1235,8 +1229,7 @@ theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       · exact .inl ⟨h, h'⟩
   iintro ⟨Hrest, Hms, ⟨%img, HB, %hx⟩⟩
   ihave ⟨%Mi, HB, %hMi⟩ := ownSet_trackedAt _ img $$ HB
-  ihave ⟨%M1, Hms, %⟨h1a, h1b, -⟩⟩ := ms_join $$ [Hms HB]
-  · iframe Hms HB
+  ihave ⟨%M1, Hms, %⟨h1a, h1b, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff hsl $$ Hms
   have hoff := sg_offs (s := s) (by omega)
   have hld : ∀ o, 16 ≤ o → o + 8 ≤ 112 → (o + 8 ≤ 16 ∨ 80 ≤ o) →
@@ -1901,8 +1894,7 @@ theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   iframe Hat Hcode Hms Hst Hh
   iintro %R' %hk' Hst Hres Hms
   rw [f.h2]
-  ihave Hst := stackScratch_widen hn hm $$ [Hslack Hst]
-  · iframe Hslack Hst
+  ihave Hst := stackScratch_widen hn hm $$ [$]
   rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hlt]
   have k' : ∀ y ∈ fRegs, y ∉ callerSaved → R' y = R y := fun y hy hc => hk' y hy hc
   unfold mallocRes
@@ -2172,8 +2164,7 @@ theorem sg_cloArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     have := read64_bytes_present hrw (k - (q + 8)) (by omega)
     rw [show q + 8 + (k - (q + 8)) = k by omega] at this
     rw [this]; rfl
-  ihave ⟨%Dt, #Hview, %⟨hc', hn⟩⟩ := roOwn_clod hP $$ [Hcode Hro Hon]
-  · iframe Hcode Hro Hon
+  ihave ⟨%Dt, #Hview, %⟨hc', hn⟩⟩ := roOwn_clod hP $$ [$]
   have hq0 := hPR (q + 8) (by have := hcov 0 (by omega); simpa using this)
   have hq01 := hq0.lo; have hq02 := hq0.hi
   have hcpl : cp < 2 ^ 64 := by rw [hcp]; exact (imgW (imgM Mp) (p.toNat + 8)).isLt
@@ -2344,8 +2335,7 @@ theorem stringify_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive 
   ihave ⟨Hst, HF⟩ := sgFrame_split (s := s) hs1 $$ Hst
   ihave ⟨%f, HF⟩ := ownSet_fn _ $$ HF
   ihave ⟨%Mf, HF⟩ := ownSet_mem _ f $$ HF
-  ihave ⟨%M, HM, %⟨-, hMa, hdsp⟩⟩ := ownSet_join_tracked _ _ Mf Ma $$ [HF HA]
-  · iframe HF HA
+  ihave ⟨%M, HM, %⟨-, hMa, hdsp⟩⟩ := ownSet_join_tracked _ _ Mf Ma $$ [$]
   have cx : SgCtx live p s r rv := ⟨hlive, hcl, hstk, hal, h10, h2, hs0, hs3, hs4, hsg.top, hg, hdsp⟩
   have hms : ms (GF := GF) stringifyPC (upd rv 1 r) (sgF s p) M =
       iprop(PC ↦ᵣ stringifyPC ∗ ra ↦ᵣ r ∗ regFile rv ∗

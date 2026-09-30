@@ -61,11 +61,9 @@ theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
         storeRepr N st B -∗ stackAt sp 16 -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   iintro ⟨%⟨h10, h11, h2⟩, #Hcode, #Hva, #Hvb, Hms, Hst, Hsk, #Hcmp, #Hbi, Hk⟩
-  ihave ⟨Hms, HA⟩ := ms_carveWords N hSa ha0 ha8 ha16 $$ [Hms Hva]
-  · iframe Hms Hva
+  ihave ⟨Hms, HA⟩ := ms_carveWords N hSa ha0 ha8 ha16 $$ [$]
   ihave ⟨Hms, HB⟩ := ms_carveWords N (S := fun k => S k ∧ ¬ InExt (pa.toNat, 24) k)
-    (fun k hk => ⟨hSb k hk, fun h => hab k h hk⟩) hb0 hb8 hb16 $$ [Hms Hvb]
-  · iframe Hms Hvb
+    (fun k hk => ⟨hSb k hk, fun h => hab k h hk⟩) hb0 hb8 hb16 $$ [$]
   ihave Hspec := hve $$ %pa %pb %sp %a %b %st %B
   unfold valueEqualSpec
   iapply ms_callHelper Wp hexec hcode hal
@@ -76,8 +74,7 @@ theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
   · iframe HA HB Hst Hsk Hcmp Hbi; ipureintro; exact ⟨hga, hgb, hni⟩
   iintro %R' %hkeep ⟨HA, HB, Hst, Hsk, %hr⟩ Hms
   ihave ⟨%M1, Hms, %hM1⟩ := ms_uncarveVal N (S := fun k => S k ∧ ¬ InExt (pa.toNat, 24) k)
-    (fun k hk => ⟨hSb k hk, fun h => hab k h hk⟩) $$ [Hms HB]
-  · iframe Hms HB
+    (fun k hk => ⟨hSb k hk, fun h => hab k h hk⟩) $$ [$]
   have hiff : ∀ k, ((S k ∧ ¬ InExt (pa.toNat, 24) k) ∧ ¬ InExt (pb.toNat, 24) k ∨
       InExt (pb.toNat, 24) k) ↔ (S k ∧ ¬ InExt (pa.toNat, 24) k) := fun k => by
     constructor
@@ -87,8 +84,7 @@ theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
     · intro h; by_cases h' : InExt (pb.toNat, 24) k
       · exact .inr h'
       · exact .inl ⟨h, h'⟩
-  ihave ⟨%M2, Hms, %hM2⟩ := ms_uncarveVal N hSa $$ [Hms HA]
-  · iframe Hms HA
+  ihave ⟨%M2, Hms, %hM2⟩ := ms_uncarveVal N hSa $$ [$]
   iapply Hk $$ %R' %M2 %hkeep %hr
     %(fun k hk ha hb => (hM2 k hk ha).trans (hM1 k ⟨hk, ha⟩ hb)) Hms Hst Hsk
 

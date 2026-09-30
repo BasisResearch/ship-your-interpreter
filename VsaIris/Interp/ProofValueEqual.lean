@@ -55,15 +55,13 @@ theorem veq_clo_facts (N : NativeAddrs) {st : Store} {B : List (Nat × Nat)}
   generalize imgW fb (pb + 8) = wb
   by_cases hw : wa = wb
   · subst hw
-    ihave ⟨H, %h⟩ := storeRepr_clos_inj N (a := ca) (b := cb) (p := wa.toNat) $$ [H Ha Hb]
-    · iframe H Ha Hb
+    ihave ⟨H, %h⟩ := storeRepr_clos_inj N (a := ca) (b := cb) (p := wa.toNat) $$ [$]
     iframe H
     ipureintro; exact ⟨fun _ => h, fun _ => rfl⟩
   · iframe H
     by_cases hc : ca = cb
     · subst hc
-      ihave %h := closAt_agree ca wa.toNat wb.toNat $$ [Ha Hb]
-      · iframe Ha Hb
+      ihave %h := closAt_agree ca wa.toNat wb.toNat $$ [$]
       ipureintro; exact absurd (BitVec.eq_of_toNat_eq h) hw
     · ipureintro; exact ⟨fun h => absurd h hw, fun h => absurd h hc⟩
 
@@ -485,16 +483,13 @@ theorem valueEqual_spec (hlive : ∀ p ∈ interpText, live p.1)
   unfold stackScratch blockOwn
   ihave ⟨%fk, Hsk⟩ := ownSet_fn _ $$ Hsk
   ihave ⟨%Mk, Hsk, %hMk⟩ := ownSet_trackedAt _ fk $$ Hsk
-  ihave ⟨%M1, H1, %⟨h1a, h1b, hdab⟩⟩ := ownSet_join_tracked _ _ Ma Mb $$ [HA HB]
-  · iframe HA HB
-  ihave ⟨%M, HS, %⟨hM1, _, hdk⟩⟩ := ownSet_join_tracked _ _ M1 Mk $$ [H1 Hsk]
-  · iframe H1 Hsk
+  ihave ⟨%M1, H1, %⟨h1a, h1b, hdab⟩⟩ := ownSet_join_tracked _ _ Ma Mb $$ [$]
+  ihave ⟨%M, HS, %⟨hM1, _, hdk⟩⟩ := ownSet_join_tracked _ _ M1 Mk $$ [$]
   have hMa : ∀ x, InExt (pa.toNat, 24) x → imgM M x = imgM Ma x := fun x hx =>
     (hM1 x (.inl hx)).trans (h1a x hx)
   have hMb : ∀ x, InExt (pb.toNat, 24) x → imgM M x = imgM Mb x := fun x hx =>
     (hM1 x (.inr hx)).trans (h1b x hx)
-  ihave ⟨Hst, %hclo⟩ := veq_clo_facts N (imgM Ma) (imgM Mb) pa.toNat pb.toNat a b $$ [Hst Hwa Hwb]
-  · iframe Hst Hwa Hwb
+  ihave ⟨Hst, %hclo⟩ := veq_clo_facts N (imgM Ma) (imgM Mb) pa.toNat pb.toNat a b $$ [$]
   iapply wp_swpF Wp (S := veqS pa pb s) (R := upd rv 1 r) (Mt := M) (pc := valueEqualPC)
     (F := Fveq Wp Φ N pa pb s r a b st B rv Ma Mb)
   rotate_left

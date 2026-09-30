@@ -41,8 +41,7 @@ theorem caseP_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
     rw [hfg.sf]; have := hf.stack.le; omega
   have halloc : st.store.allocFrame (some env) =
       ((st.store.allocFrame (some env)).1, st.store.frames.size) := rfl
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (wpW _) (F := iprop(evalSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inp Core ∗
       execSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inp Core ∗
       Newlib.binImg ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗

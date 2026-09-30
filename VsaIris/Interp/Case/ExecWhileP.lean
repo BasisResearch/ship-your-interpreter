@@ -25,8 +25,7 @@ theorem caseP_ExecWhile {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := whileNode_of hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (wpW _) (F := iprop(evalSpecsP (vsaModel live) N L Room inp Core ∗
       execSpecsP (vsaModel live) N L Room inp Core ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.whileStmt c b) d - 176) ∗ slot24 aRet.toNat ∗

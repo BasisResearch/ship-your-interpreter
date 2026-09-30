@@ -78,8 +78,7 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨aF, hnd, -, -⟩ := callNode_of_repr hrepr hgeo
   ihave %htag := valOf_tag N fv w0 w1 w2 $$ Hv
-  ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hnd.view $$ [$]
   iapply wp_swpF Wp (F := iprop(codeRes ∗ errCtx inp ∗
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
       world N L Room inp ρ st2 d ∗ (abortAt Core s n -∗ Wp.W Φ)))

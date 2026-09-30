@@ -197,10 +197,8 @@ theorem ms_callEvalPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro Hpc Hra ⟨%st', %v, %hE, Hpost⟩ HX
     unfold evalPost
     icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hval, Hw⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [HS Hval]
-    · iframe HS Hval
+    ihave Hst := stackScratch_widen hms hm $$ [$]
+    ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [$]
     iapply Hk $$ %R' %w0 %w1 %w2 %st' %v %hE %hkeep Hv [Hpc Hra Hregs HS] Hst Hw HX HK
     rw [regFile_upd_ra]
     simp only [upd_same]
@@ -208,10 +206,8 @@ theorem ms_callEvalPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro ⟨HA, Hslot⟩
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave HS := ownSet_unslot hslot $$ [HS Hslot]
-    · iframe HS Hslot
+    ihave Hst := stackScratch_widen hms hm $$ [$]
+    ihave HS := ownSet_unslot hslot $$ [$]
     ihave HK := and_elim_r $$ HK
     iapply HK
     iframe HC Hst HS
@@ -233,8 +229,7 @@ theorem ms_truthyCall (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     ⊢ Wp.W Φ := by
   iintro ⟨Hspec, #Hcode, Hms, #Hv, Hk⟩
   ihave ⟨Hms, Hval⟩ := ms_carveVal N (M := Mt) (a := p.toNat) (b := p.toNat) (img := imgM Mt) hS
-    rfl rfl rfl $$ [Hms Hv]
-  · iframe Hms Hv
+    rfl rfl rfl $$ [$]
   unfold valueTruthySpec
   iapply ms_callHelper Wp hexec hcode hal
   iframe Hspec Hcode Hms
@@ -243,8 +238,7 @@ theorem ms_truthyCall (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   isplitl [Hval]
   · iframe Hval; ipureintro; exact hslg
   iintro %R' %hkeep ⟨Hval, %hr⟩ Hms
-  ihave ⟨%M', Hms, %hag⟩ := ms_uncarveVal N hS $$ [Hms Hval]
-  · iframe Hms Hval
+  ihave ⟨%M', Hms, %hag⟩ := ms_uncarveVal N hS $$ [$]
   iapply Hk $$ %R' %M' %⟨hkeep, hr, hag⟩ Hms
 
 theorem ms_callExecPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
@@ -289,8 +283,7 @@ theorem ms_callExecPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro Hpc Hra ⟨%st', %status, %hE, Hpost⟩ HX
     unfold execPost
     icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
+    ihave Hst := stackScratch_widen hms hm $$ [$]
     iapply Hk $$ %R' %st' %status %hE %hkeep [Hpc Hra Hregs HS] Hst Hret Hw HX HK
     rw [regFile_upd_ra]
     simp only [upd_same]
@@ -298,8 +291,7 @@ theorem ms_callExecPx {Φ : Nat × String → IProp GF} {i : Nat} {code : List (
   · iintro ⟨HA, Hslot⟩
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
-    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
-    · iframe Hslack Hst
+    ihave Hst := stackScratch_widen hms hm $$ [$]
     ihave HS := ownSet_forget _ _ $$ HS
     ihave HK := and_elim_r $$ HK
     iapply HK

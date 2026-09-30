@@ -56,8 +56,7 @@ theorem retNullCore (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (vsaMo
   have hslg : SlotGeom (execSP s + 16#64) := by
     have := hfg.lo; have := hfg.hi; have := hfg.al
     refine ⟨?_, ?_, ?_⟩ <;> rw [g1] <;> (try unfold Vsa.Sim.tohostAddr) <;> omega
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(codeRes ∗
       stackScratch (execSP s) (execNeed (.ret none) d - 176) ∗ slot24 aRet.toNat ∗
       world N L Room inp ρ st d ∗

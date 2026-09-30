@@ -64,8 +64,7 @@ theorem wp_call_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     ipureintro; exact hi4
   · iintro ⟨Ha0, Hcl⟩
     ihave ⟨%f, Hcl⟩ := regsOf_of_clobbered retClob (by decide) $$ Hcl
-    ihave HR := regsOf_cons_fun 10 _ retClob (by decide) f $$ [Ha0 Hcl]
-    · iframe Ha0 Hcl
+    ihave HR := regsOf_cons_fun 10 _ retClob (by decide) f $$ [$]
     iexists (fun j => if j = 10 then BitVec.ofNat 64 x.length else f j)
     iframe HR
     ipureintro; simp
@@ -113,8 +112,7 @@ theorem wp_call_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     ipureintro; exact ⟨hi4, hd, hh, hs⟩
   · iintro ⟨Ha0, Hcl, Hout⟩
     ihave ⟨%f, Hcl⟩ := regsOf_of_clobbered retClob (by decide) $$ Hcl
-    ihave HR := regsOf_cons_fun 10 _ retClob (by decide) f $$ [Ha0 Hcl]
-    · iframe Ha0 Hcl
+    ihave HR := regsOf_cons_fun 10 _ retClob (by decide) f $$ [$]
     iexists (fun j => if j = 10 then R 10 else f j)
     iframe HR Hout
     ipureintro; simp

@@ -107,8 +107,7 @@ theorem whileStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pc, pb, hn, hrc, -, hpc, -⟩ := whileNode_of_repr hrepr hgeo
   have hPt : (BitVec.ofNat 64 pc).toNat = pc := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpc]
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aC : BitVec 64),
         ⌜EvalRegs R1 (s + 18446744073709551440#64 + 80#64) (BitVec.ofNat 64 inp) aC aEnv
             (s + 18446744073709551440#64) ∧ KeepRegs calleeSaved R R1⌝ -∗
@@ -191,8 +190,7 @@ theorem whileExitFalse (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p �
   iintro ⟨Hms, #Hcode, #Hast, Hk⟩
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pc, pb, hn, -, -, -, -⟩ := whileNode_of_repr hrepr hgeo
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(ms 0x8000409c#64 (upd R 10 0#64) (execS s) Mt -∗ Wp.W Φ))
   rotate_left
   · iframe Hdv Hms; iexact Hk
@@ -221,8 +219,7 @@ theorem whileStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p �
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pc, pb, hn, -, hrb, -, hpb⟩ := whileNode_of_repr hrepr hgeo
   have hPt : (BitVec.ofNat 64 pb).toNat = pb := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpb]
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aB : BitVec 64),
         ⌜ExecRegs R1 (BitVec.ofNat 64 inp) aB aEnv aRet (s + 18446744073709551440#64) ∧
           KeepRegs calleeSaved R R1⌝ -∗
@@ -400,8 +397,7 @@ theorem whileT_false (hlive : ∀ p ∈ interpText, live p.1)
   rw [hv] at h10
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pc, pb, hn, -, -, -, -⟩ := whileNode_of_repr hrepr hgeo
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(stackScratch (s + 18446744073709551440#64) m' ∗
       slot24 aRet.toNat ∗ world N L Room inp (.counted k) st' d ∗
       (∀ (R' : Nat → BitVec 64) (Mt' : Mem),

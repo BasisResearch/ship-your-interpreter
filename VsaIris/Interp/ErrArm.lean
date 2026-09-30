@@ -102,8 +102,7 @@ theorem abortAt_of_evalCallee {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
   ihave Hst := stackScratch_widen (s := evalSP s) (n := n - 1088) (m := need)
     (by rw [hsf]; omega) (by omega) $$ [Hslack Hst]
   · rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]; iframe Hslack Hst
-  ihave Hst := evalFrame_join hs4 (by omega) $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hs4 (by omega) $$ [$]
   iframe Hcore Hst
 
 theorem ms_rtErrEvalOwn (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -175,8 +174,7 @@ theorem ms_rtErrEvalOwn (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
     icases Hrd with ⟨-, Hown⟩
     ihave Hown := ownSet_forget _ _ $$ Hown
     ihave HS := ownSet_join (fun a => InExt (s.toNat - 1088, 1088) a ∧ ¬ Sown a) Sown byteAny
-      (fun a h1 h2 => h1.2 h2) $$ [HS Hown]
-    · iframe HS Hown
+      (fun a h1 h2 => h1.2 h2) $$ [$]
     ihave HS := ownSet_iff _ (T := InExt (s.toNat - 1088, 1088)) (fun a => ⟨fun h => h.elim (·.1)
       (hown a), fun h => by
         by_cases h' : Sown a
@@ -252,8 +250,7 @@ theorem ms_callKindName (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
   isplitl [Hslot]
   · iframe Hslot; ipureintro; exact ⟨hg, by rw [h0]; exact htag⟩
   iintro %R' %hkeep ⟨Hslot, %h10'⟩ Hms
-  ihave ⟨%M', Hms, %⟨hag1, hag2, -⟩⟩ := ms_join $$ [Hms Hslot]
-  · iframe Hms Hslot
+  ihave ⟨%M', Hms, %⟨hag1, hag2, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
   iapply Hk $$ %R' %M' %hkeep %h10' %(fun k hk => by
     by_cases h : InExt (p.toNat, 24) k

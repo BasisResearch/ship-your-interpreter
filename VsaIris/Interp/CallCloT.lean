@@ -75,8 +75,7 @@ theorem cloDefineStepT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
   isplitl []
   · rw [h10]; iexact Hfr
   iintro %R' %hk Hst Hval Hh Hms
-  ihave Hst := stackScratch_widen (s := R 2) hle hn1 $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen (s := R 2) hle hn1 $$ [$]
   iapply Hk $$ %R' %hk Hst Hval [Hh Hc Hio Hi] Hms
   iframe Hfr
   iapply (world_heapStore N inp _ ⟨st.define fa x v, out⟩ (d + 1)).2
@@ -150,8 +149,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   isplitl []
   · rw [hhd.a0]; iexact Hfe
   iintro %R2 %hk2 Hst Hw #Hnew Hms
-  ihave Hst := stackScratch_widen (s := R1 2) (by rw [h2]; exact hle) hnN $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen (s := R1 2) (by rw [h2]; exact hle) hnN $$ [$]
   rw [hst', hsz, h2]
 
   have hkp : ∀ y ∈ fRegs, y ∉ 10 :: retClob →
@@ -251,8 +249,7 @@ theorem ms_disj {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
       ms pc R S Mt ∗ ownSet T (fun a => a ↦ₘ g a) ∗ ⌜∀ a, S a → ¬ T a⌝ := by
   unfold ms
   iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, HT⟩
-  ihave ⟨⟨HS, HT⟩, %hd⟩ := keep_pure (ownSet_disj S T (imgM Mt) g) $$ [HS HT]
-  · iframe HS HT
+  ihave ⟨⟨HS, HT⟩, %hd⟩ := keep_pure (ownSet_disj S T (imgM Mt) g) $$ [$]
   iframe Hpc Hra Hregs HS HT
   ipureintro; exact hd
 
@@ -301,8 +298,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   unfold valOf
   icases Hv with ⟨%⟨hk4, hw1⟩, #Hca⟩
   ihave ⟨%B, Hs, Hcw⟩ := world_store N vsaLayoutP vsaRoomB inp _ st2 d $$ Hw
-  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [Hs Hca]
-  · iframe Hs Hca
+  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [$]
   ihave ⟨Hs, %hbod⟩ := keep_pure (storeRepr_bodies N st2.store B) $$ Hs
   ihave Hw := Hcw $$ Hs
   unfold CloRes
@@ -315,8 +311,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     (.counted (k + (envBytes + bindParamsCost store' frame (cd'.params.zip vs) + nb))) st2 d
   rw [show inp + interpDepthOff = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]; rfl] at hwd
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
-  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [Hms Hd]
-  · iframe Hms Hd
+  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [$]
   have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)

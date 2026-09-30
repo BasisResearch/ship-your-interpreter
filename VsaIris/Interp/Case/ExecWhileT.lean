@@ -23,8 +23,7 @@ theorem caseT_ExecWhile {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := whileNode_of hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.whileStmt c b) d - 176) ∗ slot24 aRet.toNat ∗
       world N L Room inp (.counted (k + n)) st d ∗

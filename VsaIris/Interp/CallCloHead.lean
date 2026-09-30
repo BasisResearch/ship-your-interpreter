@@ -29,8 +29,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   icases Hast with ⟨%Pc, %mc, %⟨hrepr, hgeo⟩, #Hroc⟩
   obtain ⟨aF, hnd, -, -⟩ := callNode_of_repr hrepr hgeo
 
-  ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hroc]
-  · iframe Hcode Hroc
+  ihave #Hdv := roOwn_data hnd.view $$ [$]
   iapply wp_swpF Wp (F := iprop(codeRes ∗ roImg (InExt (w1.toNat, 16)) img ∗ roOn P m ∗
       ownImg (InExt (inp.toNat + 8, 4)) dimg ∗
       CloHeadK live Wp Φ cd Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) rv argc dep))
@@ -50,8 +49,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iintro ⟨⟨#Hcode, #Himg, #Hro, Hdep, Hk⟩, Hms⟩
 
   have hc1 := hcf.objOK w1.toNat (by simp [InExt]); have hc16 := hcf.objOK (w1.toNat + 15) (by simp [InExt])
-  ihave ⟨%Dt, #Hdc, %hDt⟩ := roOwn_roImg (p := w1.toNat) (n := 16) $$ [Hcode Himg]
-  · iframe Hcode Himg
+  ihave ⟨%Dt, #Hdc, %hDt⟩ := roOwn_roImg (p := w1.toNat) (n := 16) $$ [$]
   have hq : ldv .ld Dt w1.toNat = BitVec.ofNat 64 q := by
     rw [ldv_ld_imgW]; unfold imgW
     rw [imgLE_congr (img' := img) (fun i hi => hDt _ (by omega) (by omega)), hcf.fn]
@@ -72,8 +70,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
 #ix_piece callCloHead_p2 from callCloHead_p1 by
 
   ihave ⟨%Md, Hdep, %hMd⟩ := ownSet_trackedAt _ dimg $$ Hdep
-  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [Hms Hdep]
-  · iframe Hms Hdep
+  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [$]
   have hi3 : inp.toNat + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp.toNat + 8 := by
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp.toNat + 8)) (by simp only [InExt]; omega)
@@ -89,8 +86,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   obtain ⟨prm, bod, nam, hfn, -, -, -, hps, hbody, hname⟩ := fnNode_of hrepq hcf.geo
   ihave #Hdf := roOwn_data (DA := accAddrs ((BitVec.ofNat 64 q).toNat + 24) 4)
     (fun a ha => hfn.view a (by simp only [List.mem_append, mem_accAddrs_iff] at ha ⊢; omega))
-    $$ [Hcode Hro]
-  · iframe Hcode Hro
+    $$ [$]
 
   have hdl : ldv .lw M3 (inp + 8#64).toNat = BitVec.ofNat 64 dep := by
     rw [show (inp + 8#64).toNat = inp.toNat + 8 by
@@ -128,8 +124,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_piece callCloHead_p3 from callCloHead_p2 by
 
-  ihave ⟨%Dt', #Hdc, %hDt'⟩ := roOwn_roImg (p := w1.toNat) (n := 16) $$ [Hcode Himg]
-  · iframe Hcode Himg
+  ihave ⟨%Dt', #Hdc, %hDt'⟩ := roOwn_roImg (p := w1.toNat) (n := 16) $$ [$]
   have he : ldv .ld Dt' (w1 + 8#64).toNat = BitVec.ofNat 64 e := by
     rw [show (w1 + 8#64).toNat = w1.toNat + 8 by
       simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; have := hc16.hi; omega]

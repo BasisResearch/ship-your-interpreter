@@ -34,8 +34,7 @@ theorem caseT_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
     have := Stmt.stackNeed_ge (.block ss); unfold execNeed stackBudget evalFrame envNewNeed allocHeadroom
     unfold execFrame at this; omega
   rw [show k + (envBytes + n) = k + n + envBytes by omega]
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.block ss) d - 176) ∗ slot24 aRet.toNat ∗
       world N vsaLayoutP vsaRoomB inp (.counted (k + n + envBytes)) st d ∗
@@ -71,8 +70,7 @@ theorem caseT_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
   iintro %R2 %hk2 Hst Hw #Hnew Hms
   rw [hst', hsz]
   rw [h12]
-  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [$]
   have hk2' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R2 1 (BitVec.ofNat 64 (0x80004190 + 4))) := by
     intro x hx
     simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hx

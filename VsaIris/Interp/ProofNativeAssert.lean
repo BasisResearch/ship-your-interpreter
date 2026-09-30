@@ -403,8 +403,7 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M hdfa $$ HS
     ihave HF := ownSet_forget _ _ $$ HF
     ihave Hst := naFrame_join (s := s) (by unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega)
-      $$ [Hst HF]
-    · iframe Hst HF
+      $$ [$]
     subst hlen
     ihave #Hv' := valsImg_agree N vs args.toNat (fun k hk => (hargs k hk).symm) $$ Hv
     ihave Hvs := valsAt_of_tracked N M vs args.toNat $$ [HA Hv']
@@ -645,8 +644,7 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   · rw [e16]; iframe Hval; ipureintro; exact hslg
   iintro %R3 %hk3 ⟨Hval, %h10⟩ Hms
   rw [e16]
-  ihave ⟨%M3, Hms, %hM3⟩ := ms_uncarveVal N hsl $$ [Hms Hval]
-  · iframe Hms Hval
+  ihave ⟨%M3, Hms, %hM3⟩ := ms_uncarveVal N hsl $$ [$]
   iapply (hB (upd R3 1 (BitVec.ofNat 64 (0x80002e44 + 4))) M3 ?f)
   rotate_left
   · unfold NaRest
@@ -769,8 +767,7 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M c.hdfa $$ HS
   ihave HF := ownSet_forget _ _ $$ HF
   ihave Hst := naFrame_join (s := s)
-    (by unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega) $$ [Hst HF]
-  · iframe Hst HF
+    (by unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega) $$ [$]
   have hsh := na_shape (hlen ▸ hok) ht
   subst hlen
   ihave #Hv' := valsImg_agree N vs args.toNat (fun k hk => (f.hargs k hk).symm) $$ Hv
@@ -1003,8 +1000,7 @@ theorem nativeAssert_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
   ihave ⟨Hst, HF⟩ := naFrame_split (s := s) hs1 $$ Hst
   ihave ⟨%f, HF⟩ := ownSet_fn _ $$ HF
   ihave ⟨%Mf, HF⟩ := ownSet_mem _ f $$ HF
-  ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [HF HA]
-  · iframe HF HA
+  ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [$]
   have c : NaCtx live sret inp args s line r vs.length rv jb :=
     ⟨hlive, hal, h10, h11, h12, h13, h14, h2, hs0, hs3, hs4, hsg.top, hg, ha, hn, hinp, hjb,
       hdfa⟩

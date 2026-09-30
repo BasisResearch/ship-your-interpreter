@@ -314,8 +314,7 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   unfold fnSpecW
   imodintro
   iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp, hslot⟩, Ha0, Ha1, Ha2, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hx, Hval, Hst, -, -⟩ Hk
-  ihave ⟨Hst, %⟨-, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [Hst Hfa]
-  · iframe Hst Hfa
+  ihave ⟨Hst, %⟨-, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [$]
   have hs64 : 64 ≤ s.toNat := by have := hsp.lo; unfold htifLo envGetNeed at this; omega
   have hset : ∀ a, ChainFrom st x fa a → st.set? fa x v = setAt st a x v := fun a h =>
     (set?_eq_setAt hinv.parents hfalt x v).trans (h.setAt hinv.parents)

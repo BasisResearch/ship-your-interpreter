@@ -114,8 +114,7 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
       · exact hqv a ha
       · refine hsn.view a ?_
         simp only [stmtView, List.mem_append, mem_accAddrs_iff] at ha ⊢
-        omega) $$ [Hcode Hro]
-  · iframe Hcode Hro
+        omega) $$ [$]
   iapply wp_swpF Wp (F := iprop(F ∗ slot24 (s + 18446744073709550528#64 + 144#64).toNat ∗
       ((∀ (R' : Nat → BitVec 64) (Mt' : Mem) (arr : BitVec 64) (count : Nat),
           ⌜body ≠ [] ∧ BlockNode m P bod arr count body ∧ ClosureHead R' s bod inp fr 0 ∧

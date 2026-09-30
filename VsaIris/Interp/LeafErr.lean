@@ -184,13 +184,11 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega) (by have := hsf; have := hsg.top; omega)
       $$ Hcore
     ihave Hst := stackScratch_widen (m := RtErr.rtErrNeed) hn1088
-      (by unfold RtErr.rtErrNeed snprintfNeed; omega) $$ [Hslack Hst]
-    · iframe Hslack Hst
+      (by unfold RtErr.rtErrNeed snprintfNeed; omega) $$ [$]
     ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M hdj $$ HS
     ihave HF := ownSet_forget _ _ $$ HF
     ihave HA := ownSet_forget _ _ $$ HA
-    ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [Hst HF]
-    · iframe Hst HF
+    ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [$]
     iapply Hab
     iframe Hcore Hst
     unfold slot24 blockOwn
@@ -223,8 +221,7 @@ theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   unfold fwriteNeed at hfit
   ihave ⟨Hpc, Hra, Hregs, HS, Hsl⟩ := ms_exit_sretAny hdj $$ Hms
-  ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [$]
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
   ihave Htmp := clobbered_of_fn _ _ $$ Htmp
   ihave Hargs := clobbered_of_fn _ _ $$ Hargs

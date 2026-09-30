@@ -46,8 +46,7 @@ theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   unfold fnSpecW
   imodintro
   iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp, hslot⟩, Ha0, Ha1, Ha2, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hx, Hout, Hst, -, -⟩ Hk
-  ihave ⟨Hst, %⟨-, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [Hst Hfa]
-  · iframe Hst Hfa
+  ihave ⟨Hst, %⟨-, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [$]
   have hs64 : 64 ≤ s.toNat := by have := hsp.lo; unfold htifLo envGetNeed at this; omega
   have hget : ∀ a, ChainFrom st x fa a → st.get? fa x = look st a x := fun a h =>
     (get?_eq_look hinv.parents hfalt x).trans (h.look hinv.parents)

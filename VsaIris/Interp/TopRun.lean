@@ -545,8 +545,7 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
     · iframe Hfr' Hfr
     subst hgg
     ihave #Hin := roOn_globals hE.globals hgi $$ Hgw
-    ihave #Hro2 := roOn_or (P := P) (Q := InExt (inpTop, 8)) $$ [Hro Hin]
-    · iframe Hro Hin
+    ihave #Hro2 := roOn_or (P := P) (Q := InExt (inpTop, 8)) $$ [$]
     have hK := K1 hpos R' Mt1 ⟨hh, ⟨?_, ?_⟩, h21', hsp.ra, hsp.s0⟩
     rotate_left
     · exact hsp.flag.trans hE.regs.a3

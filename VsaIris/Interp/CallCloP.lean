@@ -22,8 +22,7 @@ theorem frame_of_slot {s : BitVec 64} {a : Nat} (ha1 : s.toNat - 1088 ≤ a)
   unfold blockOwn
   iintro ⟨HS, HB⟩
   ihave H := ownSet_join (fun k => InExt (s.toNat - 1088, 1088) k ∧ ¬ InExt (a, 24) k) (InExt (a, 24))
-    byteAny (fun k h1 h2 => h1.2 h2) $$ [HS HB]
-  · iframe HS HB
+    byteAny (fun k h1 h2 => h1.2 h2) $$ [$]
   iapply ownSet_iff _ (fun k => ⟨fun h => h.elim (·.1) (fun h => by
     simp only [InExt] at h ⊢; omega), fun h => by
     by_cases h' : InExt (a, 24) k
@@ -121,12 +120,10 @@ theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
   have hc1 : (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (R 10 + 18446744073709551615#64))).toNat ≤ 1 := by
     rw [h10]; rcases hsc with rfl | rfl <;> decide
   iintro ⟨#Hcode, #HE, Hms, Hsl, Hw, Hst, Hab⟩
-  ihave ⟨%M1, Hms, %hM1⟩ := ms_joinSlot144 hfg $$ [Hms Hsl]
-  · iframe Hms Hsl
+  ihave ⟨%M1, Hms, %hM1⟩ := ms_joinSlot144 hfg $$ [$]
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
   ihave ⟨%Md, Hd, %hMd⟩ := ownSet_trackedAt _ dimg $$ Hd
-  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [Hms Hd]
-  · iframe Hms Hd
+  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [$]
   have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)
@@ -648,8 +645,7 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
 
   ihave #Hdv := roOwn_data (DA := accAddrs (q.toNat + 8) 8)
     (fun a ha => hfn.view a (by simp only [fnView, List.mem_append, mem_accAddrs_iff] at ha ⊢; omega))
-    $$ [Hcode Hro]
-  · iframe Hcode Hro
+    $$ [$]
   iapply wp_swpF (wpW _) (F := iprop(codeRes ∗ errCtx inp ∗ roOn P m ∗
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ world N vsaLayoutP vsaRoomB inp ρ st dep ∗
       (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)))
@@ -731,8 +727,7 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   unfold valOf
   icases Hv with ⟨%⟨hk4, hw1⟩, #Hca⟩
   ihave ⟨%B, Hs, Hcw⟩ := world_store N vsaLayoutP vsaRoomB inp _ st2 d $$ Hw
-  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [Hs Hca]
-  · iframe Hs Hca
+  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [$]
   ihave ⟨Hs, %hbod⟩ := keep_pure (storeRepr_bodies N st2.store B) $$ Hs
   ihave Hw := Hcw $$ Hs
   unfold CloRes
@@ -741,8 +736,7 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hwd := world_depth (GF := GF) N vsaLayoutP vsaRoomB inp .uncounted st2 d
   rw [show inp + interpDepthOff = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]; rfl] at hwd
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
-  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [Hms Hd]
-  · iframe Hms Hd
+  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [$]
   have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)

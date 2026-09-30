@@ -46,8 +46,7 @@ theorem retCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : 
     (by decide) (by decide)
   have g1 : (execSP s + 16#64).toNat = s.toNat - 176 + 16 := g.slot
   have hbb : e.bodiesBound perCallBudget = true := hf.bodies
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
   iapply wp_swpF Wp (F := iprop(□ Hyp ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.ret (some e)) d - 176) ∗ slot24 aRet.toNat ∗
       world N L Room inp ρin st d ∗ Kin))

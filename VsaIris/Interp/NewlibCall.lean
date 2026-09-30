@@ -144,10 +144,8 @@ theorem ms_tailNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave ⟨Hargs, HY, Hcf⟩ := hQ (R 1) $$ HQ
   unfold callFrame
   icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
-  ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
-  · iframe Hslack Hst
-  ihave Hregs := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
-  · iframe Hargs Htmp Hsp Hcs
+  ihave Hst := stackScratch_widen hn hneed $$ [$]
+  ihave Hregs := regFile_after R s hs $$ [$]
   iapply Hk $$ Hpc Hra Hregs HY HS Hst
 
 theorem ms_callNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -185,10 +183,8 @@ theorem ms_callNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave ⟨Hargs, HY, Hcf⟩ := hQ _ $$ HQ
   unfold callFrame
   icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
-  ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
-  · iframe Hslack Hst
-  ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
-  · iframe Hargs Htmp Hsp Hcs
+  ihave Hst := stackScratch_widen hn hneed $$ [$]
+  ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [$]
   iapply Hk $$ %R' %hk HY [Hpc Hra Hregs HS] Hst
   rw [regFile_upd_ra]
   simp only [upd_same]
@@ -231,10 +227,8 @@ theorem ms_callNewlibAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat ×
     ihave ⟨Hargs, HY, Hcf⟩ := hQ _ $$ HQ
     unfold callFrame
     icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
-    ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
-    · iframe Hargs Htmp Hsp Hcs
+    ihave Hst := stackScratch_widen hn hneed $$ [$]
+    ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [$]
     iapply Hk $$ %R' %hk HY [Hpc Hra Hregs HS] Hst
     rw [regFile_upd_ra]
     simp only [upd_same]
@@ -259,8 +253,7 @@ theorem ms_join {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
           ∀ a, S a → ¬ T a⌝ := by
   unfold ms
   iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, HT⟩
-  ihave ⟨%M, H, %h⟩ := ownSet_join_tracked S T M1 M2 $$ [HS HT]
-  · iframe HS HT
+  ihave ⟨%M, H, %h⟩ := ownSet_join_tracked S T M1 M2 $$ [$]
   iexists M
   iframe Hpc Hra Hregs H
   ipureintro; exact h
@@ -336,8 +329,7 @@ theorem ms_uncarveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64}
       · exact .inl ⟨h, h'⟩
   iintro ⟨Hms, Hval⟩
   ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
+  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [$]
   iexists M'
   isplitl
   · iapply ms_iff hsl $$ Hms

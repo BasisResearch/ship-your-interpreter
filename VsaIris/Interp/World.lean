@@ -909,8 +909,7 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
   imod roOn_of_ownImg (m := c.σ.mem) (fun k v _ hv => memImg_eq hv) $$ Hro with #Hro
   ihave #Hsh := roOn_mono (Q := RoByte b.D.shared) (P := b.D.shared) (m := c.σ.mem)
     (fun k h => Or.inl h) $$ Hro
-  ihave Hempty := storeRepr_empty (N := b.N) $$ [Hf Hc]
-  · iframe Hf Hc
+  ihave Hempty := storeRepr_empty (N := b.N) $$ [$]
   ihave Hbody := frameBody_of_frameRepr hrd (b.frameBridge hG) gap.sharedWin $$ [Hst]
   · iframe Hsh Hst
     isplitl []

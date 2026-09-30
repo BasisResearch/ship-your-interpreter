@@ -210,8 +210,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
 
-  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hbn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
       world N L Room inp (.counted (k + (n1 + n2))) st d ∗
@@ -251,8 +250,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_piece blockSeqT_consNormal_p2 from blockSeqT_consNormal_p1 by
 
-  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hbn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
       world N L Room inp (.counted (k + n2)) st' d ∗
@@ -350,8 +348,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
 
-  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hbn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
       world N L Room inp (.counted (k + n)) st d ∗
@@ -389,8 +386,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_piece blockSeqT_consAbrupt_p2 from blockSeqT_consAbrupt_p1 by
 
-  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hbn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗ statusRet N aRet.toNat status ∗
       world N L Room inp (.counted k) st' d ∗
@@ -441,8 +437,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     rw [arr_elem_addr hbn.ahi hidx]; exact ldv_ld_read64 hp
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, #IH, HK⟩
-  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hbn.view $$ [$]
   iapply wp_swpF (wpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
       world N L Room inp .uncounted st d ∗ execSpecsP (vsaModel live) N L Room inp Core ∗
@@ -489,8 +484,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_piece blockSeqP_cons_p2 from blockSeqP_cons_p1 by
 
-  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hbn.view $$ [$]
   iapply wp_swpF (wpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
       stackScratch (s + 18446744073709551440#64) m' ∗ statusRet N aRet.toNat status ∗
       world N L Room inp .uncounted st' d ∗ execSpecsP (vsaModel live) N L Room inp Core ∗

@@ -22,8 +22,7 @@ theorem ms_intro_sret {pc r : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} :
   ihave ⟨%M1, HF⟩ := ownSet_mem _ g1 $$ HF
   ihave ⟨%g2, HA⟩ := ownSet_fn _ $$ HA
   ihave ⟨%M2, HA⟩ := ownSet_mem _ g2 $$ HA
-  ihave ⟨%M, HS, %⟨-, -, hd⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [HF HA]
-  · iframe HF HA
+  ihave ⟨%M, HS, %⟨-, -, hd⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [$]
   iexists M
   unfold ms
   rw [regFile_upd_ra]
@@ -75,8 +74,7 @@ theorem ms_joinSlot (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {
       ∃ w0 w1 w2, □ valOf N v w0 w1 w2 ∗ ms pc R S (slotWrite Mt a w0 w1 w2) := by
   unfold ms
   iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, Hv⟩
-  ihave ⟨%w0, %w1, %w2, #Hw, HS⟩ := ownSet_join_slot h $$ [HS Hv]
-  · iframe HS Hv
+  ihave ⟨%w0, %w1, %w2, #Hw, HS⟩ := ownSet_join_slot h $$ [$]
   iexists w0, w1, w2
   iframe Hw Hpc Hra Hregs HS
 
@@ -85,8 +83,7 @@ theorem ms_unslot {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
     ms pc R (fun b => S b ∧ ¬ InExt (a, 24) b) Mt ∗ slot24 a ⊢@{IProp GF} ∃ Mt', ms pc R S Mt' := by
   unfold ms
   iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, Hsl⟩
-  ihave HS := ownSet_unslot h $$ [HS Hsl]
-  · iframe HS Hsl
+  ihave HS := ownSet_unslot h $$ [$]
   ihave ⟨%g, HS⟩ := ownSet_fn _ $$ HS
   ihave ⟨%M, HS⟩ := ownSet_mem _ g $$ HS
   iexists M
@@ -100,8 +97,7 @@ theorem ms_join_sret {pc : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} {Mt : 
   iintro ⟨Hms, HA⟩
   ihave ⟨%g, HA⟩ := ownSet_fn _ $$ HA
   ihave ⟨%M2, HA⟩ := ownSet_mem _ g $$ HA
-  ihave ⟨%M, Hms, %⟨h1, -, hd⟩⟩ := ms_join $$ [Hms HA]
-  · iframe Hms HA
+  ihave ⟨%M, Hms, %⟨h1, -, hd⟩⟩ := ms_join $$ [$]
   iexists M
   iframe Hms
   ipureintro; exact ⟨h1, hd⟩

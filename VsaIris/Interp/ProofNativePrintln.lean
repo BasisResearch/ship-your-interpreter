@@ -149,8 +149,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
     rw [BitVec.toNat_add]; simp; omega
 
-  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
-  · iframe Hms Hstd
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [$]
   have hio1 := ldv_impMem
   have hio2 : ldv .ld M1 0x8001b548 = 0x8001bb20#64 := by
     rw [ldv_ld_imgW]; unfold imgW
@@ -259,8 +258,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave Hslot := valAt_slot $$ Hnull
   ihave Hst := nplFrame_join (s := s) (by unfold nativePrintNeed printNeed fprintfNeed; omega)
-    $$ [Hst Hslot HS]
-  · iframe Hst Hslot HS
+    $$ [$]
   ihave Hra := ptsto_eq (show _ = r by ix_reg) $$ Hra
   iapply Hk $$ Hpc Hra
   iexists _
@@ -331,8 +329,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
     rw [BitVec.toNat_add]; simp; omega
   ihave ⟨Hst, Hslot, HF⟩ := nplFrame_split (s := s)
     (by unfold nativePrintNeed printNeed fprintfNeed; omega) $$ Hst
-  ihave ⟨%M, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
-  · iframe Hpc Hra Hregs HF
+  ihave ⟨%M, Hms⟩ := ms_intro $$ [$]
 
   iapply wp_swpF Wp (S := nplF s) (R := upd rv 1 r) (Mt := M) (pc := nativePrintlnPC)
     (F := iprop(codeRes ∗ dispResL st vs ∗ binImg ∗ slot24 sret.toNat ∗ slot24 (s + 18446744073709551568#64).toNat ∗

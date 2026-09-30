@@ -173,8 +173,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
       · exact hqv a ha
       · obtain ⟨h1, h2⟩ := mem_accAddrs_iff.1 ha
         obtain ⟨k, rfl⟩ : ∃ k, a = prm.toNat + 8 * j + k := ⟨a - (prm.toNat + 8 * j), by omega⟩
-        exact hpv k (by omega)) $$ [Hcode Hro]
-  · iframe Hcode Hro
+        exact hpv k (by omega)) $$ [$]
   iapply wp_swpF Wp (F := iprop(codeRes ∗ □ valImg N (imgM Mt0) (argsBase s + 24 * j) v ∗
       □ strAt pj x ∗ W st ((x, v) :: rest) ∗
       stackScratch (s + 18446744073709550528#64) n ∗
@@ -234,8 +233,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   ihave ⟨Hms, Hval⟩ := ms_carveVal N (S := InExt (s.toNat - 1088, 1088)) (a := s.toNat - 1088 + 64)
     (b := argsBase s + 24 * j)
     (img := imgM Mt0) (v := v) (fun k hk => by simp only [InExt] at hk ⊢; omega)
-    hw0 hw1 hw2 $$ [Hms Hv]
-  · iframe Hms Hv
+    hw0 hw1 hw2 $$ [$]
   have h2' : R1 2 = s + 18446744073709550528#64 := by rw [hR1]; ix_reg; exact hcl.sp
   have h10' : R1 10 = fr := by rw [hR1]; ix_reg; exact hcl.s3
   have h12' : (R1 12).toNat = s.toNat - 1088 + 64 := by rw [hR1]; ix_reg; exact hoff 64 (by decide)
@@ -252,8 +250,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   ihave Hval := (show valAt (GF := GF) N (R1 12).toNat v ⊢ valAt N (s.toNat - 1088 + 64) v by
     rw [h12']) $$ Hval
   ihave ⟨%M2, Hms, %hM2⟩ := ms_uncarveVal N (S := InExt (s.toNat - 1088, 1088))
-    (a := s.toNat - 1088 + 64) (fun k hk => by simp only [InExt] at hk ⊢; omega) $$ [Hms Hval]
-  · iframe Hms Hval
+    (a := s.toNat - 1088 + 64) (fun k hk => by simp only [InExt] at hk ⊢; omega) $$ [$]
   have hag : ∀ k, InExt (s.toNat - 1088, 1088) k → ¬ InExt (s.toNat - 1088 + 64, 24) k →
       (k < s.toNat - 1088 ∨ s.toNat - 1088 + 8 ≤ k) → imgM M2 k = imgM Mt k := fun k h1 h2 h3 =>
     (hM2 k h1 h2).trans (hout k (by simp only [InExt] at h2; omega) h3)

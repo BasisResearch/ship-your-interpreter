@@ -66,8 +66,7 @@ theorem abortAt_of_stringify {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} 
   have hsf : (evalSP s).toNat = s.toNat - 1088 := by
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   iintro ⟨HA, Hslot, HS, Hslack⟩
-  ihave HS := ownSet_unslot hp $$ [HS Hslot]
-  · iframe HS Hslot
+  ihave HS := ownSet_unslot hp $$ [$]
   iapply abortAt_of_evalCallee hC hsg hn
   rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]
   iframe HA Hslack HS
@@ -87,8 +86,7 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   iintro ⟨%h2, #Hcode, #Himg, Hms, Hst, Hstd, Herr, Hcon, Hk⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave Hst := evalFrame_join hs4 (by omega) $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hs4 (by omega) $$ [$]
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
   ihave Htmp := clobbered_of_fn _ _ $$ Htmp
   ihave Hargs := clobbered_of_fn _ _ $$ Hargs

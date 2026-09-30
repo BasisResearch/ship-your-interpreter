@@ -130,16 +130,11 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
     rw [hfg.sf]; have := hsg.le; omega
   iintro ⟨#Hed, #Hcode, #Hro, #Hfb, #Hv, Hms, Hst, Hslot, Hw, HK⟩
   ihave #Hstr := strAt_of_cstringWithin hn.nameStr (sharedWin_of_readOK hgeo) $$ Hro
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
 
-  iapply wp_swpF Wp (F := iprop(envDefineSpec Wp N ∗ frameAt env aE.toNat ∗ valOf N v w0 w1 w2 ∗
-      strAt pn x ∗ codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗ world N vsaLayoutP vsaRoomB inp (.counted (k + defineCost st.store env x)) st d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp Wp Φ (.counted k)
-        ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hed Hfb Hv Hstr Hcode Hst Hslot Hw HK
+  · icombine Hed Hfb Hv Hstr Hcode Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine VarArm_run2 (pn := BitVec.ofNat 64 pn) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.node.lo
     hn.node.hi hn.node.off h8 h2 hn.name ?_
@@ -198,26 +193,17 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
     rw [hr12]
   ihave Hst := eSt' $$ Hst
   ihave Hval := eVal' $$ Hval
-  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [Hms Hval]
-  · iframe Hms Hval
+  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [$]
   have hsv3 : ExecSaved M3 s ret v8 v9 v18 v19 := by
     have := hfg.lo
     exact hsv2.congrHi (fun y h1 h2' => hag y (by simp only [InExt]; omega)
       (by simp only [InExt]; rw [g16]; omega)) (by omega)
-  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [Hsl Hst]
-  · iframe Hsl Hst
-  ihave Hw := (world_heapStore N inp (.counted k) ⟨st.store.define env x v, st.out⟩ d).2 $$ [Hh Hc Hio Hi]
-  · iframe Hh Hc Hio Hi
+  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [$]
+  ihave Hw := (world_heapStore N inp (.counted k) ⟨st.store.define env x v, st.out⟩ d).2 $$ [$]
 
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗
-      world N vsaLayoutP vsaRoomB inp (.counted k) ⟨st.store.define env x v, st.out⟩ d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp Wp Φ (.counted k)
-        ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hms Hcode Hst Hslot Hw HK
-    iapply codeRes_text $$ Hcode
+  · icombine Hcode Hst Hslot Hw HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine VarArm_run3 (m := ∅) (s := s) hlive ?_
   intros
@@ -257,8 +243,7 @@ theorem ownSet_unslotAny {S : Nat → Prop} {a : Nat} (h : ∀ b, InExt (a, 24) 
     ownSet (GF := GF) (fun b => S b ∧ ¬ InExt (a, 24) b) byteAny ∗ slot24 a ⊢ ownSet S byteAny := by
   unfold slot24 blockOwn
   iintro ⟨H1, H2⟩
-  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [H1 H2]
-  · iframe H1 H2
+  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [$]
   iapply ownSet_iff _ (fun b => ⟨fun hb => hb.elim (·.1) (h b), fun hb => by
     by_cases hs : InExt (a, 24) b
     · exact .inr hs
@@ -297,19 +282,11 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     rw [hfg.sf]; have := hsg.le; omega
   iintro ⟨#Hed, #Hcode, #Himg, #Hro, #Hfb, #Hv, Hms, Hst, Hslot, Hw, HK⟩
   ihave #Hstr := strAt_of_cstringWithin hn.nameStr (sharedWin_of_readOK hgeo) $$ Hro
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
 
-  iapply wp_swpF (wpW _) (F := iprop(envDefineSpec (wpW (vsaModel live)) N ∗ Newlib.binImg ∗
-      frameAt env aE.toNat ∗ valOf N v w0 w1 w2 ∗
-      strAt pn x ∗ codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗ world N vsaLayoutP vsaRoomB inp .uncounted st d ∗
-      (execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (wpW (vsaModel live)) Φ .uncounted
-          ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19 ∧
-        (iprop(abortAt Core s (execNeed (.varDecl x eo) d) ∗ slot24 aRet.toNat) -∗
-          (wpW (vsaModel live)).W Φ))))
+  iapply wp_swpF (wpW _)
   rotate_left
-  · iframe Hdv Hms Hed Himg Hfb Hv Hstr Hcode Hst Hslot Hw HK
+  · icombine Hed Himg Hfb Hv Hstr Hcode Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine VarArm_run2 (pn := BitVec.ofNat 64 pn) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.node.lo
     hn.node.hi hn.node.off h8 h2 hn.name ?_
@@ -379,8 +356,7 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     iframe HC
     ihave Hval := valAt_slot $$ Hval
     rw [hr12] at *
-    ihave HS := ownSet_unslotAny hslotS $$ [HS Hval]
-    · iframe HS Hval
+    ihave HS := ownSet_unslotAny hslotS $$ [$]
     rw [h22]
     iapply execFrame_join hsg.le hneed $$ [Hst HS]
     iframe Hst HS
@@ -391,8 +367,7 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     rw [hr12]
   ihave Hst := eSt' $$ Hst
   ihave Hval := eVal' $$ Hval
-  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [Hms Hval]
-  · iframe Hms Hval
+  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [$]
   have hsv3 : ExecSaved M3 s ret v8 v9 v18 v19 := by
     have := hfg.lo
     exact hsv2.congrHi (fun y h1 h2' => hag y (by simp only [InExt]; omega)
@@ -400,14 +375,8 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
   ihave HK := and_elim_l $$ HK
 
   iapply wp_swpF (wpW _) (text := interpText ++ dataOf ∅ [])
-    (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗
-      world N vsaLayoutP vsaRoomB inp .uncounted ⟨st.store.define env x v, st.out⟩ d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (wpW (vsaModel live)) Φ .uncounted
-        ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hms Hcode Hst Hslot Hw HK
-    iapply codeRes_text $$ Hcode
+  · icombine Hcode Hst Hslot Hw HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine VarArm_run3 (m := ∅) (s := s) hlive ?_
   intros

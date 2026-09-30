@@ -95,8 +95,7 @@ theorem envNew_closed (henv : ∀ p ∈ envText, live p.1) (A : AllocSpecs live)
   · iintro ⟨#Hx, #Hg⟩
     ihave #Ht := codeX_envText $$ Hx
     ihave #Ha := codeX_allocText $$ Hx
-    ihave #H := h $$ [Ht Ha Hg]
-    · iframe Ht Ha Hg
+    ihave #H := h $$ [$]
     iapply H $$ %ρ %st %po %par %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, Hsp, #Hg, #Hx, Hrest⟩
@@ -118,8 +117,7 @@ theorem envDefine_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p
     ihave #Hcmp := strcmp_spec_env live hcl Wp $$ Hb
     ihave #Hsl := StrLeaf.strlen_spec_env live hcl Wp $$ Hb
     ihave #Hmc := memcpy_spec_env live hcl Wp $$ Hb
-    ihave #H := h $$ [Ht Ha Hg Hcmp Hsl Hmc]
-    · iframe Ht Ha Hg Hcmp Hsl Hmc
+    ihave #H := h $$ [$]
     iapply H $$ %ρ %st %fa %x %v %e %pn %pv %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, H11, H12, Hsp, #Hg, #Hx, Hrest⟩
@@ -137,8 +135,7 @@ theorem envGet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     ihave #Ht := codeX_envText $$ Hx
     ihave #Hcmp := strcmp_spec_env live hcl Wp $$ [Hx]
     · iapply codeX_binImg $$ Hx
-    ihave #H := h $$ [Ht Hg Hcmp]
-    · iframe Ht Hg Hcmp
+    ihave #H := h $$ [$]
     iapply H $$ %st %B %fa %x %e %pn %out %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, H11, H12, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hs, Hout, Hst, #Hg, #Hx⟩
@@ -156,8 +153,7 @@ theorem envSet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     ihave #Ht := codeX_envText $$ Hx
     ihave #Hcmp := strcmp_spec_env live hcl Wp $$ [Hx]
     · iapply codeX_binImg $$ Hx
-    ihave #H := h $$ [Ht Hg Hcmp]
-    · iframe Ht Hg Hcmp
+    ihave #H := h $$ [$]
     iapply H $$ %st %B %fa %x %v %e %pn %pv %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, H11, H12, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hs, Hval, Hst, #Hg, #Hx⟩

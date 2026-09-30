@@ -34,8 +34,7 @@ theorem caseP_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
     unfold execFrame at this; omega
   have hle' : execNeed (.block ss) d - 176 ≤ (execSP s).toNat := by
     rw [hfg.sf]; have := hf.stack.le; omega
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (wpW _) (F := iprop(execSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inp Core ∗
       Newlib.binImg ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.block ss) d - 176) ∗ slot24 aRet.toNat ∗

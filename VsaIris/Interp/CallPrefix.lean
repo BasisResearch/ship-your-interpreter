@@ -157,8 +157,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
   · iframe Hpc Hra Hregs; unfold blockOwn; iexact HF
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
       world N L Room inp (.counted (k + (nf + na))) st d ∗
@@ -200,8 +199,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_piece callPrefixT_p2 from callPrefixT_p1 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
       world N L Room inp (.counted (k + na)) st1 d ∗ □ valOf N fv w0 w1 w2 ∗

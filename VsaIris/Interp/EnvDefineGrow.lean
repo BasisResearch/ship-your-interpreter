@@ -118,21 +118,16 @@ theorem getS_join {s out : Nat} {Gf : FrameGeom} (hc : Gf.cap ≠ 0) (f0 v1 v2 :
         ownSet (getS s out Gf) (fun a => a ↦ₘ imgM Mt a) := by
   unfold blockOwnAt
   iintro ⟨H0, HN, HV⟩
-  ihave ⟨⟨H0, HN⟩, %d0N⟩ := keep_pure (ownSet_disj _ _ f0 v1) $$ [H0 HN]
-  · iframe H0 HN
-  ihave ⟨⟨H0, HV⟩, %d0V⟩ := keep_pure (ownSet_disj _ _ f0 v2) $$ [H0 HV]
-  · iframe H0 HV
-  ihave ⟨⟨HN, HV⟩, %dNV⟩ := keep_pure (ownSet_disj _ _ v1 v2) $$ [HN HV]
-  · iframe HN HV
-  ihave HNV := ownSet_glue _ _ v1 v2 dNV $$ [HN HV]
-  · iframe HN HV
+  ihave ⟨⟨H0, HN⟩, %d0N⟩ := keep_pure (ownSet_disj _ _ f0 v1) $$ [$]
+  ihave ⟨⟨H0, HV⟩, %d0V⟩ := keep_pure (ownSet_disj _ _ f0 v2) $$ [$]
+  ihave ⟨⟨HN, HV⟩, %dNV⟩ := keep_pure (ownSet_disj _ _ v1 v2) $$ [$]
+  ihave HNV := ownSet_glue _ _ v1 v2 dNV $$ [$]
   ihave H := ownSet_glue (growS s out Gf) (fun a => InExt (Gf.nblk.1, Gf.nblk.2) a ∨
       InExt (Gf.vblk.1, Gf.vblk.2) a) f0 (glue (InExt (Gf.nblk.1, Gf.nblk.2)) v1 v2)
     (fun a h0 h => by
       rcases h with h | h
       · exact d0N a h0 h
-      · exact d0V a h0 h) $$ [H0 HNV]
-  · iframe H0 HNV
+      · exact d0V a h0 h) $$ [$]
   ihave H := ownSet_iff (T := getS s out Gf) _ (fun a => by
     unfold getS growS frameS
     simp only [hc, ne_eq, not_false_eq_true, _root_.true_and, or_assoc]) $$ H
@@ -467,8 +462,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     ihave H0 := ownSet_iff (S := growS C.s.toNat C.vp.toNat G) (T := growS C.s.toNat C.vp.toNat G') _
       (fun a => Iff.rfl) $$ H0
     ihave ⟨%Mt4, %hJ, HS⟩ := getS_join (s := C.s.toNat) (out := C.vp.toNat) (Gf := G') hc'
-      (imgM Mt3) v1 v2 $$ [H0 HB1 HB2]
-    · iframe H0 HB1 HB2
+      (imgM Mt3) v1 v2 $$ [$]
     have hst4 : ∀ a, G.e ≤ a → a < G.e + 32 → imgM Mt4 a = imgM Mt3 a := fun a h1 h2 =>
       hJ.base a (.inr (show InExt G.sblk a from ⟨by omega, by omega⟩))
     have hsf : ∀ o w, o + w ≤ 32 → imgLE (imgM Mt4) (G.e + o) w = imgLE (imgM Mt3) (G.e + o) w :=

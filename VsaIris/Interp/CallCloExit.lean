@@ -21,8 +21,7 @@ theorem ms_joinSlot144 {pc : BitVec 64} {R : Nat → BitVec 64} {s : BitVec 64} 
   iintro ⟨Hms, HA⟩
   ihave ⟨%g, HA⟩ := ownSet_fn _ $$ HA
   ihave ⟨%M2, HA⟩ := ownSet_mem _ g $$ HA
-  ihave ⟨%M, Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HA]
-  · iframe Hms HA
+  ihave ⟨%M, Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [$]
   iexists M
   isplitl
   · iapply ms_iff (fun k => by
@@ -60,12 +59,10 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   have hwd := world_depth (GF := GF) N L Room inp ρ st (d + 1)
   rw [show inp + interpDepthOff = inp + 8 from rfl] at hwd
   iintro ⟨#Hcode, Hms, Hsl, Hsr, Hw, Hst, Hk⟩
-  ihave ⟨%M1, Hms, %hM1⟩ := ms_joinSlot144 hfg $$ [Hms Hsl]
-  · iframe Hms Hsl
+  ihave ⟨%M1, Hms, %hM1⟩ := ms_joinSlot144 hfg $$ [$]
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
   ihave ⟨%Md, Hd, %hMd⟩ := ownSet_trackedAt _ dimg $$ Hd
-  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [Hms Hd]
-  · iframe Hms Hd
+  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [$]
   have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)
@@ -156,8 +153,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   unfold F'
   iintro ⟨⟨Hst, Hval, Hw, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave Hst := evalFrame_join hsg.le hn $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hsg.le hn $$ [$]
   ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
   iapply Hk $$ %_ %?_ Hregs Hst Hval Hw Hpc Hra
   keep_split
@@ -200,13 +196,11 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   ihave Hv := (show valAt (GF := GF) N (s + 18446744073709550528#64 + 144#64).toNat v ⊢
     valAt N (s.toNat - 1088 + 144) v by rw [h144]) $$ Hv
   ihave ⟨%w0, %w1, %w2, #Hw3, Hms⟩ := ms_joinSlot N (S := InExt (s.toNat - 1088, 1088))
-    (a := s.toNat - 1088 + 144) (fun b hb => by simp only [InExt] at hb ⊢; omega) $$ [Hms Hv]
-  · iframe Hms Hv
+    (a := s.toNat - 1088 + 144) (fun b hb => by simp only [InExt] at hb ⊢; omega) $$ [$]
 
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
   ihave ⟨%Md, Hd, %hMd⟩ := ownSet_trackedAt _ dimg $$ Hd
-  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [Hms Hd]
-  · iframe Hms Hd
+  ihave ⟨%M3, Hms, %⟨hM3f, hM3d, hdisj⟩⟩ := ms_join $$ [$]
   have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)
@@ -260,8 +254,7 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     rw [hMt4, hi8, imgLE_store4_hit, hv]
   ihave Hw := Hcl $$ %d %(imgM Mt4) Hd %⟨hdep4, by omega⟩
 
-  ihave ⟨%M5, Hms, %⟨hM5, hd5⟩⟩ := ms_join_sret $$ [Hms Hsr]
-  · iframe Hms Hsr
+  ihave ⟨%M5, Hms, %⟨hM5, hd5⟩⟩ := ms_join_sret $$ [$]
   have hr4 : sret.toNat + 24 ≤ s.toNat - 1088 ∨ s.toNat ≤ sret.toNat := by
     refine Classical.byContradiction fun hc => ?_
     exact hd5 (max (s.toNat - 1088) sret.toNat) (by simp only [InExt]; omega)
@@ -318,10 +311,8 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   ihave Hv := (show valOf (GF := GF) N v w0 w1 w2 ⊢ valImg N (imgM (writeLog (writeLog (writeLog M5
       [(sret.toNat, 8, w0)]) [(sret.toNat + 8, 8, w1)]) [(sret.toNat + 16, 8, w2)])) sret.toNat v by
     unfold valImg; rw [g0, g1, g2]) $$ Hw3
-  ihave ⟨Hpc, Hra, Hregs, HS, Hval⟩ := ms_exit_sret N hd5 $$ [Hms Hv]
-  · iframe Hms Hv
-  ihave Hst := evalFrame_join hsg.le hn $$ [Hst HS]
-  · iframe Hst HS
+  ihave ⟨Hpc, Hra, Hregs, HS, Hval⟩ := ms_exit_sret N hd5 $$ [$]
+  ihave Hst := evalFrame_join hsg.le hn $$ [$]
   ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
   iapply Hk $$ %_ %?_ Hregs Hst Hval Hw Hpc Hra
   keep_split

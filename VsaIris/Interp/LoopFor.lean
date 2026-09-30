@@ -182,8 +182,7 @@ theorem forInitNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, hoi, -, -, -, -, -, -, -⟩ := forNode_of_repr hrepr hgeo
   simp only [OptS] at hoi; subst hoi
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64, ⌜KeepRegs initKeep R R' ∧ R' 19 = aOuter⌝ -∗
         ms 0x8000426c#64 R' (execS s) Mt -∗ Wp.W Φ))
   rotate_left
@@ -212,8 +211,7 @@ theorem forInitStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   iintro ⟨Hms, #Hcode, #Hast, Hk⟩
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, ⟨hpi0, hri⟩, -, -, -, hpi, -, -, -⟩ := forNode_of_repr hrepr hgeo
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aI : BitVec 64),
         ⌜ExecRegs R1 (BitVec.ofNat 64 inp) aI aOuter aRet (s + 18446744073709551440#64) ∧
           KeepRegs initKeep R R1 ∧ R1 19 = aOuter⌝ -∗
@@ -266,8 +264,7 @@ theorem forCondNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, hoc, -, -, -, -, -, -⟩ := forNode_of_repr hrepr hgeo
   simp only [OptE] at hoc; subst hoc
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64, ⌜KeepRegs calleeSaved R R'⌝ -∗
         ms 0x800042a8#64 R' (execS s) Mt -∗ Wp.W Φ))
   rotate_left
@@ -297,8 +294,7 @@ theorem forCondStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   iintro ⟨Hms, #Hcode, #Hast, Hk⟩
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, ⟨hpc0, hrc⟩, -, -, -, hpc, -, -⟩ := forNode_of_repr hrepr hgeo
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aC : BitVec 64),
         ⌜EvalRegs R1 (s + 18446744073709551440#64 + 104#64) (BitVec.ofNat 64 inp) aC aEnv
             (s + 18446744073709551440#64) ∧ KeepRegs calleeSaved R R1⌝ -∗
@@ -423,8 +419,7 @@ theorem forStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   iintro ⟨Hms, #Hcode, #Hast, Hk⟩
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, -, -, hrb, -, -, -, hpb⟩ := forNode_of_repr hrepr hgeo
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aB : BitVec 64),
         ⌜ExecRegs R1 (BitVec.ofNat 64 inp) aB aEnv aRet (s + 18446744073709551440#64) ∧
           KeepRegs calleeSaved R R1⌝ -∗
@@ -508,8 +503,7 @@ theorem forStepNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, -, hoe, -, -, -, -, -⟩ := forNode_of_repr hrepr hgeo
   simp only [OptE] at hoe; subst hoe
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64, ⌜KeepRegs calleeSaved R R'⌝ -∗
         ms 0x8000426c#64 R' (execS s) Mt -∗ Wp.W Φ))
   rotate_left
@@ -539,8 +533,7 @@ theorem forStepStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   iintro ⟨Hms, #Hcode, #Hast, Hk⟩
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, -, ⟨hpe0, hre⟩, -, -, -, hpe, -⟩ := forNode_of_repr hrepr hgeo
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aE : BitVec 64),
         ⌜EvalRegs R1 (s + 18446744073709551440#64 + 16#64) (BitVec.ofNat 64 inp) aE aEnv
             (s + 18446744073709551440#64) ∧ KeepRegs calleeSaved R R1⌝ -∗

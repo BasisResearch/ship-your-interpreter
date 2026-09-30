@@ -79,8 +79,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave ⟨%Mt0, Hms, %hdj⟩ := ms_intro_sret $$ [Hpc Hra Hregs HF Hslot]
   · iframe Hpc Hra Hregs Hslot; unfold blockOwn; iexact HF
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (s + 18446744073709550528#64) (evalNeed (.var x) d - 1088) ∗
       world N L Room inp (.counted (k + 0)) st d ∗
@@ -151,17 +150,14 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   rw [hgv]
   icases Hget with ⟨%hres, Hval⟩
   ihave ⟨%w0, %w1, %w2, #Hv, Hms⟩ := ms_joinSlot N (a := (R1 12).toNat) (S := frS (s.toNat - 1088) sret.toNat) (fun b hb => by
-    rw [ho] at hb; simp only [frS, VsaIris.InExt] at hb ⊢; omega) $$ [Hms Hval]
-  · iframe Hms Hval
+    rw [ho] at hb; simp only [frS, VsaIris.InExt] at hb ⊢; omega) $$ [$]
   rw [e2]
   ihave Hst := stackScratch_widen (n := evalNeed (.var x) d - 1088) (m := envGetNeed)
-    (by rw [hsf]; omega) (by omega) $$ [Hslack Hst]
-  · iframe Hslack Hst
+    (by rw [hsf]; omega) (by omega) $$ [$]
 
 #ix_piece VarT_p2 from VarT_p1 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (s + 18446744073709550528#64) (evalNeed (.var x) d - 1088) ∗
       world N L Room inp (.counted (k + 0)) st d ∗ □ valOf N v w0 w1 w2 ∗
@@ -209,8 +205,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     unfold valImg
     rw [eW0, eW1, eW2]
     iexact Hv
-  ihave Hst := evalFrame_join hsg.le hneed' $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hsg.le hneed' $$ [$]
   ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
   iapply Hk $$ Hpc Hra
   unfold evalPost
