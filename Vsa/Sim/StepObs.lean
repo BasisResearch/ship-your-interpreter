@@ -81,6 +81,23 @@ def ReadsLikePost (σ' spost : MState) : Prop :=
 theorem ReadsLikePost.rfl (s : MState) : ReadsLikePost s s :=
   ⟨fun _ _ _ _ => Eq.refl _, Eq.refl _⟩
 
+/-- **Commit (observational step).** Any retiring instruction, tick or not. -/
+theorem stepObs_retire {σ s : MState} {i u : Nat}
+    (hts : (try_step u true).run σ = .ok false s) (hG : GoodState σ) (hGs : GoodState s)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = s.mem ∧ ReadsLikePost σ' s := by
+  by_cases htick : i + 1 = 2
+  · obtain ⟨vmip, hmip⟩ := hGs.mip
+    obtain ⟨vmtime, hmtime⟩ := hGs.mtime
+    obtain ⟨vmtimecmp, hmtimecmp⟩ := hGs.mtimecmp
+    obtain ⟨vmcycle, hmcycle⟩ := hGs.mcycle
+    obtain ⟨hstep, hGt⟩ := step_retire_tick hts hG hGs hmip hmtime hmtimecmp hmcycle htick
+    exact ⟨_, 0, hstep, by decide, hGt, rfl, fun R hmc hmt hmi => by reg_reads [hmc, hmt, hmi], rfl⟩
+  · obtain ⟨hstep, hGt⟩ := step_retire_notick hts hG hGs htick
+    exact ⟨_, i + 1, hstep, by omega, hGt, rfl, ReadsLikePost.rfl _⟩
+
 theorem ReadsLikePost.out {σ' spost : MState} (h : ReadsLikePost σ' spost) :
     σ'.sailOutput = spost.sailOutput := h.2
 
@@ -167,21 +184,9 @@ theorem stepObs_branch_taken
     ∃ (σ' : MState) (i' : Nat),
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.mem = σ.mem ∧ ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret imm) := by
-  by_cases htick : i + 1 = 2
-  · have hGp := goodstate_sigmaPost_branch_taken σ pc vminstret imm hG
-    obtain ⟨vmip, hmip⟩ := hGp.mip
-    obtain ⟨vmtime, hmtime⟩ := hGp.mtime
-    obtain ⟨vmtimecmp, hmtimecmp⟩ := hGp.mtimecmp
-    obtain ⟨vmcycle, hmcycle⟩ := hGp.mcycle
-    obtain ⟨hstep, hGt⟩ := step_branch_taken_tick σ i u pc vminstret imm rs1 rs2 op w b0 b1 b2 b3
-      vmip vmtime vmtimecmp vmcycle hG hpc hminstret hmip hmtime hmtimecmp hmcycle
-      hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign htick
-    refine ⟨_, 0, hstep, by decide, hGt, rfl, ?_, rfl⟩
-    intro R hmc hmt hmi
-    exact get?_sigmaTick_branch_taken σ pc vminstret imm vmip vmtime vmtimecmp vmcycle R hmc hmt hmi
-  · obtain ⟨hstep, hGt⟩ := step_branch_taken_notick σ i u pc vminstret imm rs1 rs2 op w b0 b1 b2 b3
-      hG hpc hminstret hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign htick
-    exact ⟨_, i + 1, hstep, by omega, hGt, rfl, ReadsLikePost.rfl _⟩
+  exact stepObs_retire (try_step_branch_taken σ u pc vminstret imm rs1 rs2 op w b0 b1 b2 b3
+    hG hpc hminstret hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign)
+    hG (goodstate_sigmaPost_branch_taken σ pc vminstret imm hG) hi
 
 theorem stepObs_branch_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -335,23 +340,9 @@ theorem stepObs_jal
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.mem = σ.mem ∧
       ReadsLikePost σ' (sigmaPost_jal σ pc vminstret imm rd_reg link) := by
-  by_cases htick : i + 1 = 2
-  · have hGp := goodstate_sigmaPost_jal σ pc vminstret imm rd_reg hrd link hG
-    obtain ⟨vmip, hmip⟩ := hGp.mip
-    obtain ⟨vmtime, hmtime⟩ := hGp.mtime
-    obtain ⟨vmtimecmp, hmtimecmp⟩ := hGp.mtimecmp
-    obtain ⟨vmcycle, hmcycle⟩ := hGp.mcycle
-    obtain ⟨hstep, hGt⟩ := step_jal_tick σ i u pc vminstret w imm rd rd_reg link b0 b1 b2 b3
-      vmip vmtime vmtimecmp vmcycle hG hpc hminstret hmip hmtime hmtimecmp hmcycle
-      hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt
-      hrd_npc hrd_mi hrd_ms hrd_hart hrd hwr htick
-    refine ⟨_, 0, hstep, by decide, hGt, rfl, ?_, rfl⟩
-    intro R hmc hmt hmi
-    exact get?_sigmaTick_jal σ pc vminstret imm rd_reg link vmip vmtime vmtimecmp vmcycle R hmc hmt hmi
-  · obtain ⟨hstep, hGt⟩ := step_jal_notick σ i u pc vminstret w imm rd rd_reg link b0 b1 b2 b3
-      hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt
-      hrd_npc hrd_mi hrd_ms hrd_hart hrd hwr htick
-    exact ⟨_, i + 1, hstep, by omega, hGt, rfl, ReadsLikePost.rfl _⟩
+  exact stepObs_retire (try_step_jal σ u pc vminstret w imm rd rd_reg link b0 b1 b2 b3 hG hpc hminstret
+    hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt hrd_npc hrd_mi hrd_ms hrd_hart hwr)
+    hG (goodstate_sigmaPost_jal σ pc vminstret imm rd_reg hrd link hG) hi
 
 theorem get?_sigmaTick_store (σ : MState) (pc vminstret : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8))
