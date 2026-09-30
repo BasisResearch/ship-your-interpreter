@@ -171,4 +171,13 @@ theorem sdData_toNat (v : BitVec 64) : (sdData_val v).toNat = v.toNat := by
     intro W hW; rw [BitVec.toNat_ofNat, hW, Nat.mod_eq_of_lt hv]
   exact key _ (by decide)
 
+theorem obs_store_other_val {σ' σ : MState} {pc vm : BitVec 64} {m' : Std.ExtHashMap Nat (BitVec 8)}
+    (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m')) (R : Register) {w : RegisterType R}
+    (hmc : (Register.mcycle == R) = false) (hmt : (Register.mtime == R) = false)
+    (hmi : (Register.mip == R) = false)
+    (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
+    (h4 : (Register.nextPC == R) = false) (h5 : (Register.minstret_increment == R) = false)
+    (hσ : σ.regs.get? R = some w) : σ'.regs.get? R = some w :=
+  readback σ' _ hobs R hmc hmt hmi ((get?_sigmaPost_store σ pc vm m' R h1 h2 h4 h5).trans hσ)
+
 end Vsa.Sim

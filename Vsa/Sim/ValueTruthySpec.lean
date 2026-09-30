@@ -97,4 +97,14 @@ theorem snez_reg (v : BitVec 64) :
     rw [htrue, show (v != 0#64) = true from by simp only [bne_iff_ne, ne_eq]; exact h, cond_true]
     apply BitVec.eq_of_toNat_eq; decide
 
+theorem obs_branch_nottaken_other {σ' σ : MState} {pc vm : BitVec 64}
+    (hobs : ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vm)) (R : Register)
+    {w : RegisterType R} (hmc : (Register.mcycle == R) = false) (hmt : (Register.mtime == R) = false)
+    (hmi : (Register.mip == R) = false)
+    (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
+    (h4 : (Register.nextPC == R) = false) (h5 : (Register.minstret_increment == R) = false)
+    (hσ : σ.regs.get? R = some w) : σ'.regs.get? R = some w :=
+  readback σ' _ hobs R hmc hmt hmi
+    ((get?_sigmaPost_branch_nottaken σ pc vm R h1 h2 h4 h5).trans hσ)
+
 end Vsa.Sim

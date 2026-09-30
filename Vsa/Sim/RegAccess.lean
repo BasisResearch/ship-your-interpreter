@@ -174,6 +174,66 @@ theorem wX_bits_zero (σ : SequentialState RegisterType trivialChoiceSource)
     Int.ofNat_eq_natCast, Int.toNat_natCast, BitVec.reduceToNat,
     bne_self_eq_false, Bool.false_eq_true, if_false]
 
+theorem rX_bits_x1 (σ : SequentialState RegisterType trivialChoiceSource)
+    (v : BitVec 64) (h : σ.regs.get? Register.x1 = some v) :
+    (rX_bits (regidx.Regidx 0x01#5)).run σ = .ok v σ :=
+  rX_bits_gpr σ 1 (by decide) (by decide) v h
+
+theorem rX_bits_x5 (σ : SequentialState RegisterType trivialChoiceSource)
+    (v : BitVec 64) (h : σ.regs.get? Register.x5 = some v) :
+    (rX_bits (regidx.Regidx 0x05#5)).run σ = .ok v σ :=
+  rX_bits_gpr σ 5 (by decide) (by decide) v h
+
+theorem wX_bits_x5 (σ : SequentialState RegisterType trivialChoiceSource)
+    (d : BitVec 64) :
+    (wX_bits (regidx.Regidx 0x05#5) d).run σ
+      = .ok () {σ with regs := σ.regs.insert Register.x5 d} :=
+  wX_bits_gpr σ d 5 (by decide) (by decide)
+
+theorem rX_bits_x10 (σ : SequentialState RegisterType trivialChoiceSource)
+    (v : BitVec 64) (h : σ.regs.get? Register.x10 = some v) :
+    (rX_bits (regidx.Regidx 0x0a#5)).run σ = .ok v σ :=
+  rX_bits_gpr σ 10 (by decide) (by decide) v h
+
+theorem wX_bits_x10 (σ : SequentialState RegisterType trivialChoiceSource)
+    (d : BitVec 64) :
+    (wX_bits (regidx.Regidx 0x0a#5) d).run σ
+      = .ok () {σ with regs := σ.regs.insert Register.x10 d} :=
+  wX_bits_gpr σ d 10 (by decide) (by decide)
+
+theorem rX_bits_x11 (σ : SequentialState RegisterType trivialChoiceSource)
+    (v : BitVec 64) (h : σ.regs.get? Register.x11 = some v) :
+    (rX_bits (regidx.Regidx 0x0b#5)).run σ = .ok v σ :=
+  rX_bits_gpr σ 11 (by decide) (by decide) v h
+
+theorem wX_bits_x11 (σ : SequentialState RegisterType trivialChoiceSource)
+    (d : BitVec 64) :
+    (wX_bits (regidx.Regidx 0x0b#5) d).run σ
+      = .ok () {σ with regs := σ.regs.insert Register.x11 d} :=
+  wX_bits_gpr σ d 11 (by decide) (by decide)
+
+theorem rX_bits_x12 (σ : SequentialState RegisterType trivialChoiceSource)
+    (v : BitVec 64) (h : σ.regs.get? Register.x12 = some v) :
+    (rX_bits (regidx.Regidx 0x0c#5)).run σ = .ok v σ :=
+  rX_bits_gpr σ 12 (by decide) (by decide) v h
+
+theorem wX_bits_x12 (σ : SequentialState RegisterType trivialChoiceSource)
+    (d : BitVec 64) :
+    (wX_bits (regidx.Regidx 0x0c#5) d).run σ
+      = .ok () {σ with regs := σ.regs.insert Register.x12 d} :=
+  wX_bits_gpr σ d 12 (by decide) (by decide)
+
+theorem rX_bits_x13 (σ : SequentialState RegisterType trivialChoiceSource)
+    (v : BitVec 64) (h : σ.regs.get? Register.x13 = some v) :
+    (rX_bits (regidx.Regidx 0x0d#5)).run σ = .ok v σ :=
+  rX_bits_gpr σ 13 (by decide) (by decide) v h
+
+theorem wX_bits_x13 (σ : SequentialState RegisterType trivialChoiceSource)
+    (d : BitVec 64) :
+    (wX_bits (regidx.Regidx 0x0d#5) d).run σ
+      = .ok () {σ with regs := σ.regs.insert Register.x13 d} :=
+  wX_bits_gpr σ d 13 (by decide) (by decide)
+
 theorem wX_bits_x1 (σ : SequentialState RegisterType trivialChoiceSource)
     (d : BitVec 64) :
     (wX_bits (regidx.Regidx 0x01#5) d).run σ
