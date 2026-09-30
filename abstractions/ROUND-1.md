@@ -100,6 +100,36 @@ Rejected variant (informative): sampling or fuzzing the heap is a law check only
 
 ## 6. Pilot bake-off
 
+Held-out suite (no unproved cases exist, so: re-proofs to identical statements, fixed before
+any candidate was built): `free_nt` (FreePaths), `lr_split_ret` (MallocSplit), `realloc_next`
+(ReallocNext). Incumbent = the landed proofs. CPU = user time of `lake env lean <file>`,
+4 threads, min of two runs.
+
+### Candidate SP — surgery permits (S + V4 + V3), worktree syi-expF, commits 257089fd, 1ef64b84
+
+Setup: `VsaIris/Vsa/HeapPermit.lean`, 270 non-blank lines (237 new): sections `ChunkSec`/
+`FreeSec`/`NodeSec` read off `BlockHeapAt`; per-store window check `wl_win`; permits
+`split_permit`/`unlink_permit`/`absorb_permit` wrapping `splitFree`/`unlink`/`absorb`; `rd_log`.
+
+| case | proof lines | module CPU | failed compiles | what did the work |
+|---|---|---|---:|---|
+| `free_nt` | 82 → 58 (−29%) | 54.4 → 53.2 s | 0 | sections only (no heap edit on this path) |
+| `lr_split_ret` | 68 → 23 (−66%) | 20.7 → 20.3 s | 6 | split permit, `wl_win`, `rd_log` |
+| `realloc_next` | 110 → 75 (−32%) | 8.13 → 8.03 s | 1 | sections only |
+| `next_absorb` (refactor) | 151 → 108 (−28%) | same module | 5 | unlink + absorb permits |
+
+Net lines: three modules 2406 → 2230, plus 270 setup = +94 (breaks even after 2–3 more paths).
+Statements identical (`type_of%` check); axioms standard.
+Findings: permits win only where a path ends in a heap edit; V4 "one `decide` against the
+store list" is not achievable with symbolic addresses (one `omega` per store and read instead);
+composition of permit words untested (all words have length 1–2); the sections are really
+law L3 and overlap cluster K; the residue in `free_nt`/`realloc_next` is stepping, address
+normalisation, footprint side goals and register-field rebuilds (cluster K/T territory).
+CPU unchanged. Verdict for SP alone: shrinks the edit-ending proofs, does not bend the
+cluster's cost curve; keep as a small layer under a K/T winner.
+
+### Candidate KT — region-keyed memory (K + T + V1 + V5), worktree syi-expE
+
 (pending)
 
 ## 7. Decision
