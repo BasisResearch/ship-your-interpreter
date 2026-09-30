@@ -1,4 +1,5 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.LeafArms
 import VsaIris.Interp.LogArm
 import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
@@ -6,7 +7,6 @@ import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.BinaryAddP
 import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
-import VsaIris.Interp.Case.LeafBoolP
 import VsaIris.Interp.Case.ExecVarNullP
 import VsaIris.Interp.Case.FnLitP
 import VsaIris.Interp.Case.ExecExprP
@@ -14,7 +14,6 @@ import VsaIris.Interp.Case.UnaryNegTypeP
 import VsaIris.Interp.Case.ExecVarInitP
 import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
-import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.ExecForP
 import VsaIris.Interp.Case.UnaryNotP
 import VsaIris.Interp.Case.ExecRetP
@@ -22,8 +21,6 @@ import VsaIris.Interp.Case.ExecBrkP
 import VsaIris.Interp.Case.ExecContP
 import VsaIris.Interp.Case.ExecIfP
 import VsaIris.Interp.Case.ExecRetNullP
-import VsaIris.Interp.Case.LeafNullP
-import VsaIris.Interp.Case.LeafIntP
 import VsaIris.Interp.CallCloP
 import VsaIris.Interp.LoopWhile
 import VsaIris.Interp.LoopFor
@@ -110,10 +107,10 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   have hE := S.errEnv
   ihave #HL := leafErrCtx_of_errCtx hE.inpGeom hE.inpLt $$ Hctx
   cases e with
-  | int n => iapply caseP_LeafInt S.hlive S.vint $$ HE
-  | str x => iapply caseP_LeafStr S.hlive S.vstr $$ HE
-  | bool b => iapply caseP_LeafBool S.hlive S.vbool $$ HE
-  | null => iapply caseP_LeafNull S.hlive S.vnull $$ HE
+  | int n => iapply leafIntP S.hlive S.vint; iframe HE Hctx
+  | str x => iapply leafStrP S.hlive S.vstr; iframe HE Hctx
+  | bool b => iapply leafBoolP S.hlive S.vbool; iframe HE Hctx
+  | null => iapply leafNullP S.hlive S.vnull; iframe HE Hctx
   | var x =>
     iapply caseP_Var S.hlive hE.newlib hE.code (errRoom _ _) S.envGet
     iframe HL HE

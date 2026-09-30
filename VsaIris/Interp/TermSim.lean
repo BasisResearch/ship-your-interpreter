@@ -1,11 +1,8 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.LeafArms
 import VsaIris.Interp.LogArm
 import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
-import VsaIris.Interp.Case.LeafNullT
-import VsaIris.Interp.Case.LeafIntT
-import VsaIris.Interp.Case.LeafStrT
-import VsaIris.Interp.Case.LeafBoolT
 import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
@@ -242,10 +239,10 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     ?whileLoop ?forStart ?ret ?retNull ?brk ?cont
     ?initNone ?initSome ?condFalse ?bodyBreak ?bodyRet ?loop ?condNone ?condSome ?stepNone ?stepSome
     ?seqNil ?seqCons ?seqAbrupt $h
-  case int => intro st d env n; exact caseT_LeafInt ($S).hlive _ ($S).vint
-  case str => intro st d env x; exact caseT_LeafStr ($S).hlive _ ($S).vstr
-  case bool => intro st d env b; exact caseT_LeafBool ($S).hlive _ ($S).vbool
-  case null => intro st d env; exact caseT_LeafNull ($S).hlive _ ($S).vnull
+  case int => intro st d env n; exact leafIntT ($S).hlive _ ($S).vint
+  case str => intro st d env x; exact leafStrT ($S).hlive _ ($S).vstr
+  case bool => intro st d env b; exact leafBoolT ($S).hlive _ ($S).vbool
+  case null => intro st d env; exact leafNullT ($S).hlive _ ($S).vnull
   case var => intro st d env x v _; exact caseT_Var ($S).hlive _ ($S).envGet
   case assign =>
     intro st d env x e st' v store'' n De hset ihe; exact caseT_Assign ($S).hlive De hset _ ihe ($S).envSet
