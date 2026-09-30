@@ -1,5 +1,6 @@
 import Vsa.Sim.HtifLift
-import Vsa.Sim.ErrorSim
+import Vsa.Sim.JmpSpec
+import Vsa.Refinement
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

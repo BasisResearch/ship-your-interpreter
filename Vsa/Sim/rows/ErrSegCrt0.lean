@@ -1,6 +1,6 @@
 import Vsa.Sim.DeriveCase
-import Vsa.Sim.BlockTactics
-import Vsa.Sim.ErrorSim
+import Vsa.Sim.JmpSpec
+import Vsa.Refinement
 import Vsa.Sim.HtifLift
 
 open LeanRV64DExecutable Vsa

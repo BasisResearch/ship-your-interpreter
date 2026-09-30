@@ -1,4 +1,4 @@
-import Vsa.Sim.DivSpec
+import Vsa.Sim.Muldi3Spec
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

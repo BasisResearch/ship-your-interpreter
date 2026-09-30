@@ -1,7 +1,5 @@
 import Vsa.Sim.ValueSites
-import Vsa.Sim.DivSites
 import Vsa.Sim.Code.Longjmp
-import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
