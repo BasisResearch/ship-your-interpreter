@@ -80,7 +80,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   have HH := HB.heap
   have hXm : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
   have Xk := (HB.chunkK hXm).lower
-  open_fields Xk; clear Xk_hdrv Xk_nhdrv Xk_next
+  open_fields Xk; clear Xk_hdrv Xk_nhdrv Xk_next Xk_topal
   have hnb := T.nbok.eq
   have hnbS := T.nbS
   have hnP : C.n.toNat + 8 ≤ nb ∧ 32 ≤ nb ∧ nb % 16 = 0 := by rw [hnb]; unfold physSize; omega
