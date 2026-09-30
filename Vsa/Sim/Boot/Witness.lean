@@ -130,26 +130,6 @@ theorem bootMemFacts_of_ref {m : Mem} {e : Nat} (hr : PartialView m refView)
   depth := by boot_readp hr
   stackBytes := hstack
 
-/-- Stores `[0, 1024 n)` of the log, checked in blocks of 1024 (one theorem per block). -/
-def StoresUpTo (L : PackedLog) (t : RunTree) : Nat → Prop
-  | 0 => True
-  | n + 1 => StoresUpTo L t n ∧ storesIn L t (1024 * n) 1024 = true
-
-theorem StoresUpTo.spec {L : PackedLog} {t : RunTree} :
-    ∀ {n}, StoresUpTo L t n → ∀ i, i < 1024 * n → storeOk L t i = true := by
-  intro n
-  induction n with
-  | zero => intro _ i hi; omega
-  | succ n ih =>
-    intro h i hi
-    by_cases hn : i < 1024 * n
-    · exact ih h.1 i hn
-    · exact storesIn_spec h.2 (by omega) (by rw [Nat.mul_succ] at hi; omega)
-
-theorem logOk_of_blocks {L : PackedLog} {t : RunTree} {n : Nat} (hs : StoresUpTo L t n)
-    (hlen : L.len ≤ 1024 * n) (hr : ∀ r ∈ t.runs, runOk L r r.len = true) : LogOk L t :=
-  ⟨fun i hi => hs.spec i (by omega), hr⟩
-
 /-- Everything a boot witness supplies. The trace is `script`, `log`, `regs`, `entrySteps`;
 the rest is derived from it and checked by `Witness.Ok`. -/
 structure Witness where
