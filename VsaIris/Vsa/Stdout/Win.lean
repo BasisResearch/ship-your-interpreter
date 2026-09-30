@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Tac
 import VsaIris.Vsa.SymCompact
+import VsaIris.Vsa.SymExec
 import VsaIris.Vsa.RegionCore
 import VsaIris.Vsa.Stdout.WinRefute
 
@@ -161,6 +162,37 @@ theorem posP (hw : StackWin S sp n m) (h : c.toNat ≤ m) :
   have := hw.rgn.lo; have := hw.rgn.hi; have := sp.isLt
   rw [BitVec.toNat_add]; omega
 
+/-! The dominant form, `sp + c` with a negative literal `c`, in one step each (two accesses of
+one window: `SymExec.sepC_sound`). -/
+
+theorem ldOKN (hw : StackWin S sp n m) (h : w ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 64 - c.toNat ≤ n) :
+    LdOK (sp + c).toNat w :=
+  Win.ldOK hw (hw.posN h.2) ⟨by omega, by omega⟩
+
+theorem stOKN (hw : StackWin S sp n m)
+    (h : (w ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 64 - c.toNat ≤ n) ∧ (w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8) ∧
+      (2 ^ 64 - c.toNat) % w = 0) : StOK (sp + c).toNat w :=
+  Win.stOK hw (hw.posN h.1.2) ⟨⟨by omega, by omega⟩, h.2.1, h.2.2, by
+    rcases h.2.1 with rfl | rfl | rfl | rfl <;> rfl⟩
+
+theorem stOKbN (hw : StackWin S sp n m) (h : 1 ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 64 - c.toNat ≤ n) :
+    StOKb (sp + c).toNat :=
+  Win.stOKb hw (hw.posN h.2) ⟨by omega, by omega⟩
+
+theorem ownN (hw : StackWin S sp n m) (h : w ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 64 - c.toNat ≤ n) :
+    ∀ b, b ∈ accAddrs (sp + c).toNat w → S b :=
+  Win.own hw (hw.posN h.2) ⟨by omega, by omega⟩
+
+theorem static_stackN (hw : StackWin S sp n m) {w1 w2 : Nat}
+    (h : (0x8001b520 ≤ a ∧ a + w1 ≤ 0x8001c168) ∧ w2 ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 64 - c.toNat ≤ n) :
+    a + w1 ≤ (sp + c).toNat ∨ (sp + c).toNat + w2 ≤ a :=
+  Win.static_win hw (hw.posN h.2.2) ⟨h.1, by omega, by omega⟩
+
+theorem stack_staticN (hw : StackWin S sp n m) {w1 w2 : Nat}
+    (h : (0x8001b520 ≤ a ∧ a + w2 ≤ 0x8001c168) ∧ w1 ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 64 - c.toNat ≤ n) :
+    (sp + c).toNat + w1 ≤ a ∨ a + w2 ≤ (sp + c).toNat :=
+  (hw.static_stackN h).symm
+
 /-- A static access is outside the forgotten stack `[sp - n, sp + c)`. -/
 theorem static_out (hw : StackWin S sp n m)
     (h : 0x8001b520 ≤ a ∧ a + w ≤ 0x8001c168 ∧ 2 ^ 64 - c.toNat ≤ n) :
@@ -259,7 +291,7 @@ def isNatLit (e : Expr) : Bool := e.consumeMData.nat?.isSome || e.consumeMData.r
 position proof and its signed offset from the top. -/
 inductive AKey where
   | lit (v : Nat)
-  | pos (top : Expr) (prf : Term) (off : Int)
+  | pos (top : Expr) (prf : Term) (off : Int) (neg : Bool := false)
 
 def natLit? (e : Expr) : Option Nat :=
   let e := e.consumeMData
@@ -298,7 +330,7 @@ def akey? (e : Expr) : TacticM (Option AKey) := do
       let some ⟨_, v⟩ ← getBitVecValue? x.appArg! | return none
       if v.toNat ≥ 2 ^ 63 then
         return some (.pos b (← `(StackWin.posN (by with_reducible assumption) (by decide)))
-          ((v.toNat : Int) - 2 ^ 64))
+          ((v.toNat : Int) - 2 ^ 64) true)
       else return some (.pos b (← `(StackWin.posP (by with_reducible assumption) (by decide))) v.toNat)
     return some (.pos x (← `(pos0 _)) 0)
   match natOff? e with
@@ -373,31 +405,36 @@ def winKeyCore : TacticM Unit := withMainContext do
           if let (some w1, some w2) := (w1, w2) then
             unless a + w1 ≤ b || b + w2 ≤ a do throwWinRefuted
           `(tactic| decide)
-        | .pos x pa oa, .pos y pb ob =>
+        | .pos x pa oa na, .pos y pb ob nb =>
           if x == y then
             if let (some w1, some w2) := (w1, w2) then
               unless oa + w1 ≤ ob || ob + w2 ≤ oa do
                 if ← inCtxWin x [(oa, w1), (ob, w2)] then throwWinRefuted
-            `(tactic| exact Win.sep $pa $pb (by decide))
+            if na && nb then `(tactic| exact VsaIris.SymExec.sepC_sound (by decide))
+            else `(tactic| exact Win.sep $pa $pb (by decide))
           else `(tactic| first
             | exact Win.sepW (by with_reducible assumption) (by with_reducible assumption)
                 (by with_reducible assumption) $pa $pb (by decide)
             | exact Win.sepW' (by with_reducible assumption) (by with_reducible assumption)
                 (by with_reducible assumption) $pa $pb (by decide))
-        | .lit _, .pos _ pb _ => `(tactic| exact Win.static_win (by with_reducible assumption) $pb (by decide))
-        | .pos _ pa _, .lit _ => `(tactic| exact Win.win_static (by with_reducible assumption) $pa (by decide))
+        | .lit _, .pos _ pb _ nb =>
+          if nb then `(tactic| exact StackWin.static_stackN (by with_reducible assumption) (by decide))
+          else `(tactic| exact Win.static_win (by with_reducible assumption) $pb (by decide))
+        | .pos _ pa _ na, .lit _ =>
+          if na then `(tactic| exact StackWin.stack_staticN (by with_reducible assumption) (by decide))
+          else `(tactic| exact Win.win_static (by with_reducible assumption) $pa (by decide))
     else if let some (p, q) := t.app2? ``And then do
       -- `LO ≤ A ∧ A + w ≤ LO + N`
       unless p.isAppOfArity ``LE.le 4 && isWinLo p.appFn!.appArg! do throwError "win_key: shape"
       unless q.isAppOfArity ``LE.le 4 do throwError "win_key: shape"
-      let some (.pos _ _ _) ← akey? p.appArg! | throwError "win_key: key"
+      let some (.pos _ _ _ _) ← akey? p.appArg! | throwError "win_key: key"
       match extLit q.appArg! with
       | some true => `(tactic| exact StackWin.stack_inN (by with_reducible assumption) (by decide))
       | some false => `(tactic| exact StackWin.stack_in (by with_reducible assumption) (by decide))
       | none => throwError "win_key: shape"
     else if t.isAppOfArity ``LT.lt 4 then do
       -- `A < 2 ^ 64`
-      let some (.pos _ pa _) ← akey? t.appFn!.appArg! | throwError "win_key: key"
+      let some (.pos _ pa _ _) ← akey? t.appFn!.appArg! | throwError "win_key: key"
       `(tactic| exact Win.lt64 (by with_reducible assumption) $pa (by decide))
     else if t.isAppOfArity ``Eq 3 then do
       -- `A = B`
@@ -409,7 +446,7 @@ def winKeyCore : TacticM Unit := withMainContext do
         let some kb ← akey? B | throwError "win_key: key"
         match ka, kb with
         | .lit a, .lit b => if a == b then `(tactic| rfl) else throwWinRefuted
-        | .pos x pa oa, .pos y pb ob =>
+        | .pos x pa oa _, .pos y pb ob _ =>
           unless x == y do throwError "win_key: two bases"
           if oa == ob then `(tactic| exact Win.pos_eq $pa $pb (by decide))
           else if ← inCtxWin x [(oa, 0), (ob, 0)] then throwWinRefuted
@@ -439,17 +476,20 @@ def winAcc (stat : TSyntax `tactic) : TacticM Unit := withMainContext do
   let tac ← if t.isAppOfArity ``LdOK 2 then do
       match ← akey? t.appFn!.appArg! with
       | some (.lit _) => `(tactic| decide)
-      | some (.pos _ pa _) => `(tactic| exact Win.ldOK (by with_reducible assumption) $pa (by decide))
+      | some (.pos _ _ _ true) => `(tactic| exact StackWin.ldOKN (by with_reducible assumption) (by decide))
+      | some (.pos _ pa _ false) => `(tactic| exact Win.ldOK (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isAppOfArity ``StOK 2 then do
       match ← akey? t.appFn!.appArg! with
       | some (.lit _) => `(tactic| decide)
-      | some (.pos _ pa _) => `(tactic| exact Win.stOK (by with_reducible assumption) $pa (by decide))
+      | some (.pos _ _ _ true) => `(tactic| exact StackWin.stOKN (by with_reducible assumption) (by decide))
+      | some (.pos _ pa _ false) => `(tactic| exact Win.stOK (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isAppOfArity ``StOKb 1 then do
       match ← akey? t.appArg! with
       | some (.lit _) => `(tactic| decide)
-      | some (.pos _ pa _) => `(tactic| exact Win.stOKb (by with_reducible assumption) $pa (by decide))
+      | some (.pos _ _ _ true) => `(tactic| exact StackWin.stOKbN (by with_reducible assumption) (by decide))
+      | some (.pos _ pa _ false) => `(tactic| exact Win.stOKb (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isForall then do
       -- `∀ b, b ∈ accAddrs A w → S b`
@@ -459,7 +499,8 @@ def winAcc (stat : TSyntax `tactic) : TacticM Unit := withMainContext do
       let some acc := mem.getAppArgs.find? (·.isAppOfArity ``accAddrs 2) | throwError "win_acc: shape"
       match ← akey? acc.appFn!.appArg! with
       | some (.lit _) => pure stat
-      | some (.pos _ pa _) => `(tactic| exact Win.own (by with_reducible assumption) $pa (by decide))
+      | some (.pos _ _ _ true) => `(tactic| exact StackWin.ownN (by with_reducible assumption) (by decide))
+      | some (.pos _ pa _ false) => `(tactic| exact Win.own (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else throwError "win_acc: shape"
   withoutRecover (evalTactic tac)
