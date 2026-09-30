@@ -14,12 +14,11 @@ theorem rtail_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
     (hpres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome)
     (hdata : ∀ k, k < B.nOld → Mt[p + k]? = some (B.old (B.p + k))) :
     AW C.live C.S C.Q 0x80005440#64 R Mt := by
-  sx_run [12] O.live at 0x80005448
-  refine (step% st 0x80005448) O.live ?_
+  rgn_run O.live at 0x8000544c
   refine repi O (F.of_regs ?_ ?_ ?_) fun R' hR h10 => O.ok R' Mt ?_ <;>
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   have hp : (R' 10).toNat = p := by
-    rw [h10]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm; exact hs0
+    rw [h10]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hs0
   refine ⟨hR, ?_, ?_, ⟨top, brkv, chunks, bins, ?_, htop⟩, hpres, ?_⟩ <;> rw [hp]
   · exact hheap.fresh_of_block hst
   · exact hp16
