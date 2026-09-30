@@ -593,7 +593,7 @@ old file still compiles against the new oleans, the two versions were timed inte
 | CPU, 41 paired files that survive | 104.2 s | 85.1 s |
 | CPU, 6 deleted modules whose old version compiles | 6.7 s | 0 |
 | CPU, all `Vsa/Sim` top level, separate runs | 221.4 s | 215.4 s (after run at ≈1.14× load) |
-| diff vs the base f16fdb8d (code only) | | 82 files, +920 / −6,966 |
+| diff vs the base f16fdb8d (Lean only) | | 81 files, +731 / −6,966 |
 
 One named cost: a call site of `stepObs_exec` discharges its four retire reads with `reg_reads`
 where the per-kind lemma had done it once. Measured in isolation, 30 ALU-style retire reads plus
