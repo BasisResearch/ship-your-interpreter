@@ -26,13 +26,21 @@ These modules import only the machine layer. You can import them unchanged.
 | `VsaIris.Lang.RouteAt GF L live p c` | Iris obligations at one configuration: resources `mr`/`mm` agreeing with `c` (`RegAgree`, `MemAgree`, `VsaOk`), a total counted WP (`AdequacyHyp`, `twpW`) to `(e, out)` for each spec result, and a partial WP (`AdequacyHypP`, `wpW`) to an unobservable exit when there is none |
 | `VsaIris.Lang.IrisRoute.sim` | `(∀ p c, Loaded p c → Fits p → Nonempty (RouteAt …)) → L.Sim Loaded` |
 
+When it pays: the layer shares the refinement argument across language
+instances. With one instance it ties with a direct proof (ship-your-ocaml
+measured 2+2 lines either way on its held-out cases and kept its own run kernel);
+adopt it when a second language or a second semantics of one language is proved
+against the same machine.
+
 Instantiation recipes:
 
 - **A bytecode VM (small step).** Present the bytecode semantics as a
   `SmallStep` (`Next p s s' := step p s = .next s'`, and
   `Final p s e out := ∃ w, step p s = .halt e w ∧ console w = out`). Prove
   `Good p → Progress p`. Discharge `ArmSim` one interpreter dispatch arm at a
-  time, then read off `(ArmSim.simTotal A).refinement`.
+  time, then read off `(ArmSim.simTotal A).refinement`. Declare the
+  `SmallStep` value as an `abbrev`: with a plain `def`, instance search does not
+  find `Total (toLang …)`.
 - **A big-step source language.** Use `ofOutput` and `OutSim` as WHILE does,
   or a custom `Lang` with `Obs` when nonzero exits are specified.
 - **Through Iris.** Supply `RouteAt` from your boot data. The WHILE instance is
