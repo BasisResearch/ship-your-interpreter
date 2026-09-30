@@ -1,19 +1,5 @@
 import VsaIris.WhileLogic.Adequacy
 
-/-!
-# Worked example: a closure call
-
-```
-var f = fn f(x) { return x + 1; };
-println(f(41));
-```
-
-The function literal allocates a closure cell `c ↦c cd` (`wp_fn`); the call
-reads it, runs the body at depth `1` in a fresh frame binding `x`
-(`wp_call_closure`), and returns the body's `return` value (`retK`).
-`closure_spec` proves that the program prints `42`.
--/
-
 namespace Vsa.While.Logic.ClosureExample
 
 open Iris BI Vsa.While Vsa.While.Logic
@@ -26,11 +12,10 @@ def prog : Program := [
   .varDecl "f" (some (.fn (some "f") ["x"] fnBody)),
   .expr (.call (.var "println") [.call (.var "f") [.int 41]])]
 
-/-- **The program prints `42`.** -/
 theorem closure_spec : initOwn ⊢ wpSeq 0 0 prog (PostOut (· = "42\n")) := by
   unfold prog initOwn
   iintro ⟨H0, Ho⟩
-  -- var f = fn f(x) { return x + 1; };
+
   iapply wp_seq_cons
   iapply wp_varInit
   iapply wp_fn
@@ -40,7 +25,7 @@ theorem closure_spec : initOwn ⊢ wpSeq 0 0 prog (PostOut (· = "42\n")) := by
   · iexact H0
   iintro H0
   simp only [seqK]
-  -- println(f(41));
+
   iapply wp_seq_cons
   iapply wp_expr
   iapply (wp_call _ _ (by decide))
@@ -61,7 +46,7 @@ theorem closure_spec : initOwn ⊢ wpSeq 0 0 prog (PostOut (· = "42\n")) := by
   isplitl [Hc]
   · iexact Hc
   iintro %fr Hfr _
-  -- the body, at depth 1 in the fresh frame `fr`
+
   iapply wp_seq_cons
   iapply wp_ret
   iapply wp_binary

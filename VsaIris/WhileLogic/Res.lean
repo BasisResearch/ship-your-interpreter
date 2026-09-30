@@ -1,24 +1,6 @@
 import Iris.Instances.UPred
 import VsaIris.WhileLogic.Store
 
-/-!
-# Resources of the WHILE program logic
-
-The logic's assertions are iris-lean uniform predicates `UPred Res` over the
-camera `Res` of *partial stores*:
-
-* a frame heap `Nat → Option (Excl Frame)` (one exclusive cell per scope,
-  holding its parent pointer and full binding list),
-* a closure heap `Nat → Option (Excl ClosureData)`,
-* the console output `Option (Excl Out)`.
-
-Every component is discrete with Leibniz equality, so `≡{n}≡` on `Res` is
-`=` (`dist_eq`). A big-step state `σ` is abstracted to the full resource
-`abs σ`; a resource `r` describes part of `σ` in the presence of a frame `rf`
-when `abs σ = r • rf`. The lemmas below read owned cells off that equation
-and re-establish it after the store operations of the semantics.
--/
-
 namespace Vsa.While.Logic
 
 open Iris OFE CMRA Vsa.While
@@ -28,7 +10,6 @@ instance : OFE.Discrete Frame := ⟨id⟩
 instance : OFE ClosureData := OFE.ofDiscrete ClosureData
 instance : OFE.Discrete ClosureData := ⟨id⟩
 
-/-- The console contents, as a resource value. -/
 structure Out where
   s : String
 
@@ -37,9 +18,9 @@ instance : OFE.Discrete Out := ⟨id⟩
 
 abbrev FHeap := Nat → Option (Excl Frame)
 abbrev CHeap := Nat → Option (Excl ClosureData)
-/-- The camera of partial WHILE states. -/
+
 abbrev Res := FHeap × CHeap × Option (Excl Out)
-/-- Assertions of the WHILE program logic. -/
+
 abbrev vProp := UPred Res
 
 theorem dist_eq {n : Nat} {x y : Res} (h : x ≡{n}≡ y) : x = y := OFE.Discrete.discrete h
@@ -61,7 +42,6 @@ theorem opt_none_op {α} [OFE α] (x : Option (Excl α)) : none • x = x := by
 @[simp] theorem excl_op_some {α} [OFE α] (a : α) (w : Excl α) :
     (some (Excl.excl a) : Option (Excl α)) • some w = some Excl.invalid := rfl
 
-/-- An exclusive cell composed with a frame: the frame is empty there. -/
 theorem excl_op_eq {α} [OFE α] {a b : α} {y : Option (Excl α)}
     (h : some (Excl.excl b) = (some (Excl.excl a) : Option (Excl α)) • y) :
     y = none ∧ b = a := by
@@ -73,12 +53,9 @@ theorem op_eq_none {α} [OFE α] {x y : Option (Excl α)} (h : (none : Option (E
     x = none ∧ y = none := by
   cases x <;> cases y <;> first | exact ⟨rfl, rfl⟩ | cases h
 
-/-! ## Abstraction of states -/
-
 def absF (s : Store) : FHeap := fun a => s.frames[a]?.map .excl
 def absC (s : Store) : CHeap := fun c => s.closures[c]?.map .excl
 
-/-- The full resource of a big-step state. -/
 def abs (σ : St) : Res := (absF σ.store, absC σ.store, some (.excl ⟨σ.out⟩))
 
 theorem abs_validN (σ : St) (n : Nat) : ✓{n} abs σ := by
@@ -90,8 +67,6 @@ theorem abs_validN (σ : St) (n : Nat) : ✓{n} abs σ := by
 
 theorem validN_of_rep {σ : St} {r rf : Res} {n : Nat} (h : abs σ = r • rf) : ✓{n} r :=
   validN_op_left (h ▸ abs_validN σ n)
-
-/-! ## Reading owned cells -/
 
 theorem rep_frame {σ : St} {r rf : Res} {a : Nat} {F : Frame}
     (h : abs σ = r • rf) (hr : r.1 a = some (.excl F)) :
@@ -142,17 +117,12 @@ theorem rep_freshC {σ : St} {r rf : Res} {c : Nat}
   simp only [op_snd_fst, abs, absC, hc, Option.map_none] at this
   exact op_eq_none this
 
-/-! ## Re-establishing the representation after a store operation -/
-
-/-- Overwrite (or create) the frame cell at `a`. -/
 def Res.setF (r : Res) (a : Nat) (F : Frame) : Res :=
   (fun b => if b = a then some (.excl F) else r.1 b, r.2)
 
-/-- Overwrite (or create) the closure cell at `c`. -/
 def Res.setC (r : Res) (c : Nat) (cd : ClosureData) : Res :=
   (r.1, fun b => if b = c then some (.excl cd) else r.2.1 b, r.2.2)
 
-/-- Overwrite the output cell. -/
 def Res.setO (r : Res) (o : String) : Res := (r.1, r.2.1, some (.excl ⟨o⟩))
 
 theorem rep_setF {σ σ' : St} {r rf : Res} {a : Nat} {F : Frame}
@@ -218,9 +188,6 @@ theorem setF_op (r z : Res) (a : Nat) (F : Frame) (hz : z.1 a = none) :
   · subst hb; simp only [↓reduceIte, hz]; rfl
   · simp only [hb, ↓reduceIte]
 
-/-! ## Points-to assertions -/
-
-/-- The single frame cell `a ↦ F`. -/
 def singF (a : Nat) (F : Frame) : Res :=
   (fun b => if b = a then some (.excl F) else none, fun _ => none, none)
 
@@ -229,12 +196,10 @@ def singC (c : Nat) (cd : ClosureData) : Res :=
 
 def singO (o : String) : Res := (fun _ => none, fun _ => none, some (.excl ⟨o⟩))
 
-/-- `a ↦f F`: exclusive ownership of scope `a`, whose parent pointer and full
-binding list are `F`. -/
 def ptsF (a : Nat) (F : Frame) : vProp := UPred.ownM (singF a F)
-/-- `c ↦c cd`: exclusive ownership of closure `c`. -/
+
 def ptsC (c : Nat) (cd : ClosureData) : vProp := UPred.ownM (singC c cd)
-/-- `out o`: exclusive ownership of the console, whose contents are `o`. -/
+
 def outIs (o : String) : vProp := UPred.ownM (singO o)
 
 scoped infix:60 " ↦f " => ptsF
@@ -260,7 +225,6 @@ theorem singF_setF (a : Nat) (F F' : Frame) : (singF a F).setF a F' = singF a F'
 
 theorem singO_setO (o o' : String) : (singO o).setO o' = singO o' := rfl
 
-/-- Creating a frame cell in a resource that has none there. -/
 theorem setF_eq_sing_op (x : Res) (a : Nat) (F : Frame) (hx : x.1 a = none) :
     x.setF a F = singF a F • x := by
   refine Prod.ext (funext fun b => ?_) ?_
@@ -274,7 +238,6 @@ theorem setF_eq_sing_op (x : Res) (a : Nat) (F : Frame) (hx : x.1 a = none) :
     · exact (opt_none_op _).symm
     · exact (opt_none_op _).symm
 
-/-- Creating a closure cell in a resource that has none there. -/
 theorem setC_eq_sing_op (x : Res) (c : Nat) (cd : ClosureData) (hx : x.2.1 c = none) :
     x.setC c cd = singC c cd • x := by
   refine Prod.ext (funext fun b => (opt_none_op _).symm) (Prod.ext (funext fun b => ?_) ?_)

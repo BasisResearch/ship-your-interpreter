@@ -1,26 +1,10 @@
 import VsaIris.Interp.LoopKit
 
-/-!
-# The call arguments loop (lane E6), both modes
-
-INTERP_DESIGN.md §4.3; statements in `SpecLoop.lean` (`evalArgsT_body`,
-`evalArgsP_body`). `eval_expr`'s call arm fills `args[32]` (`sp+240`):
-
-```
-800031dc ld a2,16(s0); … ld a2,0(a2)        args[i]'s node
-800031fc sd a5,24(sp); … sd a6,16(sp); sd a3,8(sp); sd a4,0(sp)
-80003220 jal eval_expr                       (slot sp+64)
-80003224 … sd the three words to a4-768 = sp+240+24i; addi a6,a6,1
-80003250 bne a6,a5 → 800031dc                (else 80003254)
-```
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The bytes of a call node and its argument array a run reads. -/
 abbrev argsView (a arr argc : Nat) : List Nat := accAddrs (a + 16) 8 ++ accAddrs arr (8 * argc)
 
 #ix_seg ArgsLoop_runA {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -53,7 +37,6 @@ abbrev argsView (a arr argc : Nat) : List Nat := accAddrs (a + 16) 8 ++ accAddrs
     IW live m [] (InExt (s.toNat - 1088, 1088)) Q 0x80003224#64 R Mt
   by ix_run hlive using [h2, hA, hsf, hq0, hq8, hq16] at 0x800031dc 0x80003254
 
-/-- An element of a represented expression array. -/
 theorem exprArray_get {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {es : List Expr}, ExprArrayReprWithin m P a n es →
       ∀ j (h : j < es.length), ∃ p, read64 m (a + 8 * j) = some p ∧ ExprReprWithin m P p es[j]
@@ -68,8 +51,6 @@ theorem exprArray_length {m : Mem} {P : Nat → Prop} :
   | _, _, _, .nil => rfl
   | _, _, _, .cons _ _ _ hrest => by simp [exprArray_length hrest]
 
-/-- Every byte of a represented expression array's pointers is in the view
-and present. -/
 theorem exprArray_covers {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {es : List Expr}, ExprArrayReprWithin m P a n es →
       ∀ k, k < 8 * n → P (a + k) ∧ (m[a + k]?).isSome
@@ -80,7 +61,6 @@ theorem exprArray_covers {m : Mem} {P : Nat → Prop} :
     · have := exprArray_covers hrest (k - 8) (by omega)
       rwa [show a + 8 + (k - 8) = a + k by omega] at this
 
-/-- What a call node's argument array gives the runs. -/
 structure ArgsNode (m : Mem) (P : Nat → Prop) (aX arr : BitVec 64) (all : List Expr) : Prop where
   arrw : ldv .ld m (aX + 16#64).toNat = arr
   lo : 0x80000000 ≤ aX.toNat
@@ -92,8 +72,6 @@ structure ArgsNode (m : Mem) (P : Nat → Prop) (aX arr : BitVec 64) (all : List
   repr : ExprArrayReprWithin m P arr.toNat all.length all
   view : ∀ a ∈ argsView aX.toNat arr.toNat all.length, P a ∧ (m[a]?).isSome
 
-/-- A call node's argument array facts, from its representation (a nonempty
-argument list: the loop is entered only then). -/
 theorem argsNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr} {all : List Expr}
     (h : ExprReprWithin m P aX.toNat (.call f all)) (hg : ∀ k, P k → ReadOK k) (hne : all ≠ []) :
     ∃ arr : Nat, ArgsNode m P aX (BitVec.ofNat 64 arr) all ∧ arr < 2 ^ 64 := by
@@ -146,8 +124,6 @@ section Vals
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The argument values read the same through images that agree on their
-words. -/
 theorem argVals_congr (N : NativeAddrs) {img img' : Nat → BitVec 8} (base : Nat) :
     ∀ (i : Nat) (vs : List Value),
       (∀ j, j < 24 * vs.length → img (base + 24 * i + j) = img' (base + 24 * i + j)) →
@@ -171,7 +147,6 @@ theorem argVals_congr (N : NativeAddrs) {img img' : Nat → BitVec 8} (base : Na
         have := h (24 + j) (by simp at *; omega)
         rwa [show base + 24 * i + (24 + j) = base + 24 * (i + 1) + j by omega] at this) $$ Hr
 
-/-- One more argument value at the end. -/
 theorem argVals_snoc (N : NativeAddrs) (img : Nat → BitVec 8) (base : Nat) (v : Value) :
     ∀ (i : Nat) (pre : List Value),
       argVals (GF := GF) N img base i pre ∗ valImg N img (base + 24 * (i + pre.length)) v ⊢
@@ -196,7 +171,6 @@ theorem argVals_snoc (N : NativeAddrs) (img : Nat → BitVec 8) (base : Nat) (v 
 
 end Vals
 
-/-- A slot of `eval_expr`'s frame at offset `o` below the lowered `sp`. -/
 theorem evalSlot {s : BitVec 64} (h : EvalFrameG s) {o : Nat} (ho : o + 24 ≤ 1088)
     (ho8 : o % 8 = 0) :
     (s + 18446744073709550528#64 + BitVec.ofNat 64 o).toNat = s.toNat - 1088 + o ∧
@@ -210,7 +184,6 @@ theorem evalSlot {s : BitVec 64} (h : EvalFrameG s) {o : Nat} (ho : o + 24 ≤ 1
   · rw [e]; unfold Vsa.Sim.tohostAddr; omega
   · rw [e]; omega
 
-/-- A frame address of `eval_expr` as a plain sum (`ix_fwd using [evalSP_off' hfg]`). -/
 theorem evalSP_off' {s : BitVec 64} (h : EvalFrameG s) (c : Nat) (hc : c < 4096) :
     (s + 18446744073709550528#64 + BitVec.ofNat 64 c).toNat = s.toNat - 1088 + c := by
   have h1 := h.sf; have h2 := h.lo; have h3 := h.hi
@@ -220,7 +193,6 @@ theorem evalSP_off' {s : BitVec 64} (h : EvalFrameG s) (c : Nat) (hc : c < 4096)
 theorem sext32_ofNat_eq {a : Nat} (h : a < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a)) = BitVec.ofNat 64 a :=
   BitVec.eq_of_toInt_eq (by rw [sext32_ofNat_toInt h, ofNat_toInt_small h])
-
 
 theorem times24 {idx : Nat} (hi : idx < 32) :
     (BitVec.ofNat 64 idx <<< 1 + BitVec.ofNat 64 idx) <<< 3 = BitVec.ofNat 64 (24 * idx) := by
@@ -250,9 +222,6 @@ theorem args_slot_addr {s : BitVec 64} (h : EvalFrameG s) {idx : Nat} (hi : idx 
   rw [BitVec.toNat_add, hA, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hc2]
   rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
 
-/-- What the argument loop's staging leaves in the frame for the copy after
-the call: the count, the index and the frame pointer spilled, and the
-address of `args[idx]` (`a4 - 768`). -/
 structure ArgsSpill (Mt : Mem) (s aE : BitVec 64) (idx argc : Nat) : Prop where
   cnt : ldv .ld Mt (s + 18446744073709550528#64 + 24#64).toNat = BitVec.ofNat 64 argc
   ix : ldv .ld Mt (s + 18446744073709550528#64 + 16#64).toNat = BitVec.ofNat 64 idx
@@ -264,16 +233,12 @@ structure ArgsSpill (Mt : Mem) (s aE : BitVec 64) (idx argc : Nat) : Prop where
   a16 : (ldv .ld Mt (s + 18446744073709550528#64).toNat + 18446744073709550864#64).toNat =
     argsBase s + 24 * idx + 16
 
-/-! ## The runs' glue, for either WP -/
-
 section Glue
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
 
-/-- **Run A**: from the loop head, stage argument `idx` (`all[idx]`) for its
-`jal eval_expr` (`0x80003220`, slot `sp+64`), spilling the loop's registers. -/
 theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {f : Expr} {all : List Expr} {idx : Nat}
     {aX aE s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -350,11 +315,6 @@ theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
 
 end Glue
 
-/-- What one argument's copy leaves: the loop's registers reloaded (the
-count, the frame pointer, the next index), the callee-saved ones kept, the
-argument's three words in `args[idx]`, and the frame otherwise as before the
-argument was staged (`Mt0`), outside the written words and on the earlier
-arguments. -/
 structure ArgsCopied (R R' : Nat → BitVec 64) (Mt0 Mt' : Mem) (s aE : BitVec 64) (idx argc : Nat)
     (w0 w1 w2 : BitVec 64) : Prop where
   keep : KeepRegs calleeSaved R R'
@@ -374,7 +334,6 @@ theorem sign_extend_3336 : LeanRV64DExecutable.Functions.sign_extend (m := 64) 3
 theorem sign_extend_3344 : LeanRV64DExecutable.Functions.sign_extend (m := 64) 3344#12 =
     18446744073709550864#64 := by decide
 
-/-- The three words of a slot just stored, read back. -/
 theorem imgW_three (M : Mem) (q : Nat) (a b c : BitVec 64) :
     imgW (imgM (writeLog (writeLog (writeLog M [(q, 8, a)]) [(q + 8, 8, b)]) [(q + 16, 8, c)])) q = a ∧
     imgW (imgM (writeLog (writeLog (writeLog M [(q, 8, a)]) [(q + 8, 8, b)]) [(q + 16, 8, c)]))
@@ -389,7 +348,6 @@ theorem imgW_three (M : Mem) (q : Nat) (a b c : BitVec 64) :
   · rw [imgLE_imgM_store]
     simp
 
-/-- Off a slot's three stores, the image is unchanged. -/
 theorem imgM_three_out {M : Mem} {q x : Nat} (a b c : BitVec 64) (h : x < q ∨ q + 24 ≤ x) :
     imgM (writeLog (writeLog (writeLog M [(q, 8, a)]) [(q + 8, 8, b)]) [(q + 16, 8, c)]) x =
       imgM M x := by
@@ -401,9 +359,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 variable {live : Nat → Prop}
 
-/-- **Run B**: after argument `idx` returned into `sp+64` (its three words),
-the copy into `args[idx]`, the index step and the count test: back to the
-head while arguments remain, out to `0x80003254` after the last. -/
 theorem argsCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {w0 w1 w2 aE s : BitVec 64} {idx argc : Nat}
     {R : Nat → BitVec 64} {Mt0 Mt : Mem} (hfg : EvalFrameG s)
@@ -508,15 +463,12 @@ theorem argsCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ int
 
 end Copy
 
-/-! ## Both modes -/
-
 section Modes
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- The next head's registers and the argument values after one copy. -/
 theorem ArgsCopied.head {R R' : Nat → BitVec 64} {Mt0 Mt' : Mem} {s aX aE : BitVec 64}
     {idx argc : Nat} {w0 w1 w2 : BitVec 64} {Rh : Nat → BitVec 64}
     (hc : ArgsCopied R R' Mt0 Mt' s aE idx argc w0 w1 w2) (hk : KeepRegs calleeSaved Rh R)
@@ -532,8 +484,7 @@ theorem ArgsCopied.head {R R' : Nat → BitVec 64} {Mt0 Mt' : Mem} {s aX aE : Bi
   · exact hk' x (by simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false]; exact hx)
 
 omit I in
-/-- The argument values after one copy: the earlier ones unchanged, the new
-one in `args[idx]`. -/
+
 theorem argVals_step [InterpGS GF] {R R' : Nat → BitVec 64} {Mt0 Mt' : Mem} {s aE : BitVec 64}
     {idx argc : Nat} {w0 w1 w2 : BitVec 64} (N : NativeAddrs) {pre : List Value} {v : Value}
     (hc : ArgsCopied R R' Mt0 Mt' s aE idx argc w0 w1 w2) (hpre : pre.length = idx) :
@@ -549,9 +500,6 @@ theorem argVals_step [InterpGS GF] {R R' : Nat → BitVec 64} {Mt0 Mt' : Mem} {s
       hc.w0, hc.w1, hc.w2]
     iexact Hv
 
-/-- `EvalArgsCost.cons`, total mode: argument `idx` through its derivation
-`De`, its copy, then the rest (the tail's motive `hr`, over its derivation
-`D2`). -/
 theorem evalArgsT_cons (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {e : Expr} {es : List Expr} {st1 st2 : St} {v : Value}
     {vs : List Value} {ne nes : Nat}
@@ -613,9 +561,6 @@ theorem evalArgsT_cons (hlive : ∀ p ∈ interpText, live p.1)
     iapply argVals_step N hcp hpre
     iframe Hargs Hv
 
-/-- **The argument loop, partial mode** (`evalArgsP_body`), for every
-argument list: each argument through the Löb hypothesis (`ms_callEvalP`,
-whose abort rebuilds `eval_expr`'s frame), by structure on the list. -/
 theorem evalArgsP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF) (d env : Nat) :
     ∀ es, evalArgsP_body (GF := GF) live N L Room inp Core d env es
   | [] => evalArgsP_nil live N L Room inp Core d env
@@ -692,6 +637,5 @@ theorem evalArgsP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
       iframe Hargs Hv
 
 end Modes
-
 
 end VsaIris.Interp

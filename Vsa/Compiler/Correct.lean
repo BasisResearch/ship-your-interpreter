@@ -1,30 +1,14 @@
 import Vsa.Compiler.StmtS
 import Vsa.Compiler.AbsLift
 
-/-!
-# Compiler correctness
-
-`compile_correct`: for every supported WHILE program `p` and every machine
-configuration whose memory holds the bytes of `compile p` at `codeBase` (plus
-libgcc's `__muldi3`/`__divdi3`/`__moddi3` and their cores, as in the interpreter
-image), with the PC at `codeBase`, in a good machine state with an empty console,
-the machine halts with exit code `0` and output `out` exactly when `out` is a
-big-step behaviour of `p`, and a diverging machine means `p` has no behaviour —
-the shape of `endToEnd_refinement`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Step Steps StepsN Halted Halts Diverges output)
 
-/-- The machine code bytes of `compile p` (little-endian words). -/
 def compileBytes (p : Program) : List (BitVec 8) :=
   (compile p).flatMap fun i => [byte i.encode 0, byte i.encode 1, byte i.encode 2, byte i.encode 3]
 
-/-! ## The program image -/
-
-/-- The compiled statement list. -/
 def body (p : Program) : List Ins := (cseq ⟨[[]], 0, 0, 0⟩ mainPos₀ p).1
 
 theorem compile_eq (p : Program) :
@@ -53,8 +37,6 @@ theorem codeAt_of_bytes {p : Program} {m : Mem}
     (h : ∀ k, k < (compileBytes p).length → m[codeBase + k]? = (compileBytes p)[k]?) :
     CodeAt m (compile p) := codeAt_of_codeBytes h
 
-/-! ## The abstract machine runs the program -/
-
 def ctx0 : Ctx := ⟨[[]], 0, 0, 0⟩
 
 theorem at0 (p : Program) (hfit : Fits (compile p)) : At (compile p) ctx0 mainPos₀ := by
@@ -72,7 +54,6 @@ theorem enter (p : Program) (hfit : Fits (compile p)) (m : Mem) (o : Array Strin
 theorem sr0 (m : Mem) (o : Array String) (ho : String.join o.toList = "") :
     SR ctx0.Γ 0 initSt ⟨pcOf mainPos₀, [], m, o⟩ := ⟨chain_init m, ho⟩
 
-/-- A big-step behaviour is reached, and the code then exits with `0`. -/
 theorem abstract_term (p : Program) (hsup : Supported p) (hfit : Fits (compile p)) (m : Mem)
     (o : Array String) (ho : String.join o.toList = "") {out : String} (hb : BigStep p out) :
     Reaches (compile p) (A0 m o) fun B => astep (compile p) B = some (.halt 0) ∧
@@ -88,7 +69,6 @@ theorem abstract_term (p : Program) (hsup : Supported p) (hfit : Fits (compile p
     rw [hpc]; rfl)
   exact ⟨B', Star.step (enter p hfit m o) (r.trans r'), hh, by rw [hBo]; exact hout⟩
 
-/-- Without a big-step behaviour the code reaches the error exit or runs forever. -/
 theorem abstract_stuck (p : Program) (hsup : Supported p) (hfit : Fits (compile p)) (m : Mem)
     (o : Array String) (ho : String.join o.toList = "") (hnb : ¬ ∃ out, BigStep p out) :
     Reaches (compile p) (A0 m o) (fun B => astep (compile p) B = some (.halt 70)) ∨
@@ -109,13 +89,6 @@ theorem abstract_stuck (p : Program) (hsup : Supported p) (hfit : Fits (compile 
   · exact .inl hh
   · exact .inr fun n => (hf n).resolve_left hh
 
-/-- **Compiler correctness.** For every program `p` in the supported subset, and
-every machine configuration whose memory holds the code bytes of `compile p` at
-`0x80004800` (below `tohost`), libgcc's multiply and signed divide/remainder
-routines at their addresses in the interpreter image, with the PC at the code,
-in a good machine state (`GoodState`) with an idle HTIF mailbox and an empty
-console: the machine halts with exit code `0` and output `out` exactly when `out`
-is a big-step behaviour of `p`, and a diverging machine means `p` has none. -/
 theorem compile_correct (p : Program) (hsup : Supported p)
     (hfit : 0x80004800 + 4 * (compile p).length ≤ 0x8001ad00) (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)

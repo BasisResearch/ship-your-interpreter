@@ -5,30 +5,6 @@ import Vsa.Sim.TermEntry
 import Vsa.Sim.DecodeTable.Batch14Part06
 import Vsa.Sim.DecodeTable.Batch17
 
-/-!
-# The console on VSA's machine (INTERP_DESIGN.md §2, package F2)
-
-The generic console rules are `MachWP.runOut` (print) and
-`MachWP.haltConsole` (exit, with the output read off the console cell), in
-`MachWP.lean`, for either WP. This file
-instantiates both at VSA's HTIF `tohost` store.
-
-An HTIF console store is one `sd rs2, imm(rs1)` whose effective address is
-`tohost` (`0x8001ad00`). It is MMIO: memory is unchanged, and the Sail HTIF
-registers decide the effect (`Vsa/Sim/Htif.lean`):
-
-* the putchar word `0x0101…00 ||| c` appends the character `c` to
-  `sailOutput` and the machine continues (`stepObs_tohost_putchar`);
-* the exit word `(e <<< 1) ||| 1` sets `htif_done`, so the same `stepOnce`
-  halts with code `e` and the output unchanged (`stepOnce_tohost_G`).
-
-Both need the mailbox idle (`htif_payload_writes = 0`), which is
-`VsaOk.htifIdle`. One descriptor `TohostSite` (the store's PC, bytes, decoded
-fields and base register) with a decided `Cert` serves both. The newlib
-instances are `_write`'s putchar store at `0x8000005c` and `_exit`'s store at
-`0x80000190` (`experiments/disasm.txt`).
--/
-
 namespace VsaIris.Inst
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -36,9 +12,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Vsa.Machine (Config Step MState output)
 open Vsa.Sim
 
-/-! ## Output and PC arithmetic -/
-
-/-- Pushing a chunk onto `sailOutput` appends it to `output`. -/
 theorem output_push {σ σ' : MState} {x : String} (h : σ'.sailOutput = σ.sailOutput.push x) :
     output σ' = output σ ++ x := by
   unfold output
@@ -50,18 +23,12 @@ theorem addInt_ofNat_four (p : Nat) :
   apply BitVec.eq_of_toNat_eq
   simp [BitVec.addInt, BitVec.toNat_add]
 
-/-- The HTIF putchar command word for byte `c` (device 1, command 1). -/
 abbrev putcWord (c : BitVec 8) : BitVec 64 := 0x0101000000000000#64 ||| BitVec.zeroExtend 64 c
 
-/-- The HTIF exit command word for code `e`. -/
 abbrev exitWord (e : BitVec 64) : BitVec 64 := (e <<< 1) ||| 1#64
 
-/-- What one putchar store prints. -/
 abbrev putcStr (c : BitVec 8) : String := toString (Char.ofNat c.toNat)
 
-/-! ## The site descriptor -/
-
-/-- A `sd rs2, imm(rs1)` store to `tohost`, as read off the disassembly. -/
 structure TohostSite where
   pc : Nat
   b0 : BitVec 8
@@ -72,16 +39,13 @@ structure TohostSite where
   imm : BitVec 12
   rs1 : Nat
   rs2 : Nat
-  /-- The value of `rs1` the store uses (the `auipc` result). -/
+
   base : BitVec 64
 
 namespace TohostSite
 
-/-- The store's four code bytes. -/
 abbrev code (S : TohostSite) : List (BitVec 8) := [S.b0, S.b1, S.b2, S.b3]
 
-/-- The decided facts about a site: its bytes decode to the store, the store
-addresses `tohost`, and the PC is aligned in RAM below `tohost`. -/
 structure Cert (S : TohostSite) : Prop where
   word : ((S.b3.append S.b2).append S.b1).append S.b0 = S.w
   notrvc : Sail.BitVec.extractLsb (((S.b3.append S.b2).append S.b1).append S.b0) 1 0 =
@@ -99,13 +63,10 @@ structure Cert (S : TohostSite) : Prop where
   hi : S.pc + 4 ≤ tohostAddr
   align : S.pc % 4 = 0
 
-/-- The registers a site reads: the base and the stored word. -/
 abbrev regsRead (S : TohostSite) (q1 q2 : DFrac) (data : BitVec 64) :
     List (Nat × DFrac × BitVec 64) :=
   [(S.rs1, q1, S.base), (S.rs2, q2, data)]
 
-/-- Everything the store's step lemmas consume, at a state holding the site's
-footprint. -/
 structure Pins (S : TohostSite) (data : BitVec 64) (σ : MState) : Prop where
   pc : σ.regs.get? Register.PC = some (BitVec.ofNat 64 S.pc)
   rs1 : (rX_bits (gprIdx S.rs1)).run (afterNextPC (afterPrelude σ) (BitVec.ofNat 64 S.pc)) =
@@ -135,8 +96,6 @@ theorem rX_of_vsaReg {live : Nat → Prop} {c : Config} (hok : VsaOk live c) (pc
   obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
   exact rX_src c.σ pc (m + 1) hn.2 v hg
 
-/-- The site's footprint gives every pin its step lemmas consume. `RR` may
-list further registers (the exit rule's PC); `MR` must contain the code. -/
 theorem pins {live : Nat → Prop} {S : TohostSite} (hS : S.Cert) {data : BitVec 64}
     {c : Config} (hok : VsaOk live c) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1)
     (hpc : pcVal c.σ = BitVec.ofNat 64 S.pc)
@@ -162,9 +121,6 @@ theorem pins {live : Nat → Prop} {S : TohostSite} (hS : S.Cert) {data : BitVec
 
 end TohostSite
 
-/-! ## The putchar store prints one character -/
-
-/-- GPRs through the putchar step's register frame. -/
 theorem gprGet_of_putcFrame {σ' σ : MState}
     (hframe : ∀ R : Register,
       (Register.PC == R) = false → (Register.minstret == R) = false →
@@ -181,10 +137,6 @@ theorem gprGet_of_putcFrame {σ' σ : MState}
     | exact hframe _ (by decide) (by decide) (by decide) (by decide)
         (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
 
-/-- **The putchar store as a printing run.** From the site's footprint (the
-PC, the base register, the putchar word for `c` in `rs2`, the code bytes),
-one step advances the PC by 4, changes no other owned cell, and prints
-`c`. -/
 theorem putc_runFact (live : Nat → Prop) (S : TohostSite) (hS : S.Cert) (c : BitVec 8)
     (q1 q2 : DFrac) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
     RunFactO (vsaModel live) 0 (S.regsRead q1 q2 (putcWord c)) (codeFoot S.pc S.code)
@@ -223,48 +175,6 @@ theorem putc_runFact (live : Nat → Prop) (S : TohostSite) (hS : S.Cert) (c : B
     change (σ'.mem[a]?).getD 0 = (cfg.σ.mem[a]?).getD 0
     rw [hmem']
 
-section Wp
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
-
-/-- **The putchar rule on VSA**, for either WP. Owning the PC at the site,
-the base and putchar word, the code and the console cell `s`, the store
-prints `c`: the continuation gets the PC past the store and the console at
-`s ++ c`. -/
-theorem wp_putcW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    (S : TohostSite) (hS : S.Cert) (c : BitVec 8) (q1 q2 : DFrac) (s : String)
-    (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
-    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 S.pc ∗
-      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} putcWord c ∗ consoleOwn s ∗
-      (VsaIris.PC ↦ᵣ BitVec.ofNat 64 (S.pc + 4) -∗ S.rs1 ↦ᵣ{q1} S.base -∗
-        S.rs2 ↦ᵣ{q2} putcWord c -∗ consoleOwn (s ++ putcStr c) -∗ Wp.W Φ)
-    ⊢ Wp.W Φ := by
-  iintro ⟨#Hi, Hpc, H1, H2, Hs, Hk⟩
-  iapply Wp.runOut 0 _ _ _ _ (putcStr c) s (putc_runFact live S hS c q1 q2 hlive)
-  unfold footPre footPost
-  rw [← instrAt_eq]
-  simp only [sepL_cons, sepL_nil]
-  iframe Hi Hs H1 H2 Hpc
-  iintro ⟨⟨H1, H2, -⟩, -, ⟨Hpc, -⟩, -⟩ Hs
-  iapply Hk $$ Hpc H1 H2 Hs
-
-/-- The putchar rule for the total WP. -/
-theorem wp_putc {Φ : Nat × String → IProp GF} (S : TohostSite) (hS : S.Cert) (c : BitVec 8)
-    (q1 q2 : DFrac) (s : String) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
-    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 S.pc ∗
-      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} putcWord c ∗ consoleOwn s ∗
-      (VsaIris.PC ↦ᵣ BitVec.ofNat 64 (S.pc + 4) -∗ S.rs1 ↦ᵣ{q1} S.base -∗
-        S.rs2 ↦ᵣ{q2} putcWord c -∗ consoleOwn (s ++ putcStr c) -∗ mTWP (vsaModel live) Φ)
-    ⊢ mTWP (vsaModel live) Φ :=
-  wp_putcW (twpW (vsaModel live)) S hS c q1 q2 s hlive
-
-end Wp
-
-/-! ## The exit store halts, reporting the console -/
-
-/-- **The exit store as a halt.** From the site's footprint with the exit
-word for `e` in `rs2`, the machine's next step is the HTIF exit with code
-`e`, and the exit reports the output so far (the store prints nothing). -/
 theorem exit_haltFact (live : Nat → Prop) (S : TohostSite) (hS : S.Cert) (e : BitVec 64)
     (he : e.toNat < 2 ^ 47) (q0 q1 q2 : DFrac) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
     HaltFact (vsaModel live) ((VsaIris.PC, q0, BitVec.ofNat 64 S.pc) :: S.regsRead q1 q2 (exitWord e))
@@ -289,10 +199,6 @@ section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
 
-/-- **Halt/console agreement on VSA**, for either WP. At the exit store with
-the console cell `s`, the loop's WP holds as soon as the postcondition holds
-at `(e, s)`: the halting step reports exactly the console's contents. With
-adequacy this is `Halts c s e`. -/
 theorem wp_exitW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (S : TohostSite) (hS : S.Cert) (e : BitVec 64) (he : e.toNat < 2 ^ 47) (q0 q1 q2 : DFrac)
     (s : String) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
@@ -311,24 +217,8 @@ theorem wp_exitW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   · iempintro
   iempintro
 
-/-- Halt/console agreement for the total WP. -/
-theorem wp_exit {Φ : Nat × String → IProp GF} (S : TohostSite) (hS : S.Cert) (e : BitVec 64)
-    (he : e.toNat < 2 ^ 47) (q0 q1 q2 : DFrac) (s : String)
-    (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
-    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ{q0} BitVec.ofNat 64 S.pc ∗
-      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} exitWord e ∗ consoleOwn s ∗ Φ (e.toNat, s)
-    ⊢ mTWP (vsaModel live) Φ :=
-  wp_exitW (twpW (vsaModel live)) S hS e he q0 q1 q2 s hlive
-
 end Wp
 
-/-! ## From the exit to `Halts` -/
-
-/-- **Adequacy with any exit condition.** If, from the initial ownership and
-the console cell at the initial output, the loop's total WP holds with a pure
-postcondition `φ`, VSA's machine halts with some code `e` and output `out`
-satisfying `φ`. The exit rule (`wp_exit`) supplies `φ` at `(e, s)` with `s`
-the console cell, so the halting output is read from the ghost. -/
 theorem vsa_adequacy_exit {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop)
     (c : Config) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
@@ -340,10 +230,6 @@ theorem vsa_adequacy_exit {GF : BundledGFunctors} [MachGpreS GF] (live : Nat →
   obtain ⟨σf, hhalt, hout⟩ := vsaStep_halt hh
   exact ⟨e, out, ⟨cf, σf, steps_of_reaches hre, hhalt, hout⟩, hφ⟩
 
-/-! ## The newlib sites -/
-
-/-- `_write`'s console store, `0x8000005c: sd a5,-856(a6)`, with
-`a6 = 0x8001b058` from the `auipc` before it. -/
 def putcSite : TohostSite where
   pc := 0x8000005c
   b0 := 0x23#8
@@ -367,8 +253,6 @@ theorem putcSite_cert : putcSite.Cert where
   hi := by decide
   align := by decide
 
-/-- `_exit`'s store, `0x80000190: sd a5,-1164(a4)`, with `a4 = 0x8001b18c`
-from the `auipc` before it. -/
 def exitSite : TohostSite where
   pc := 0x80000190
   b0 := 0x23#8

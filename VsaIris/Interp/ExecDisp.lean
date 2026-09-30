@@ -1,23 +1,11 @@
 import VsaIris.Interp.SpecExecDisp
 import VsaIris.Interp.SeqLoop
 
-/-!
-# `exec_stmt`'s entry spec from its dispatch-point spec (lane E5)
-
-`execSpecT_of_disp` / `execSpecP_of_disp`: run the prologue
-(`0x80003fe0`..`0x80004010`: `addi sp,sp,-176`, the five spills, the argument
-moves, `li a6,8`, `auipc`/`addi a4`) and hand the dispatch-point spec its
-state. Callers of `exec_stmt` through a `jal` (the block, while and for arms,
-the closure body, `interp_run`) use the entry spec; the recursor proves the
-dispatch-point spec (INTERP_DESIGN.md §10 "STATEMENT CHANGES (E5)").
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
-/-- A frame address as a plain sum (`evalSP_off` for the 176-byte frame). -/
 theorem execSP_offF {s : BitVec 64} (hsf : (execSP s).toNat = s.toNat - 176)
     (hs : s.toNat ≤ 0x100000000) (c : Nat) (hc : c < 4096) :
     (execSP s + BitVec.ofNat 64 c).toNat = s.toNat - 176 + c := by
@@ -27,7 +15,6 @@ theorem execSP_offF {s : BitVec 64} (hsf : (execSP s).toNat = s.toNat - 176)
 theorem execSP_eq (s : BitVec 64) : s - 176#64 = execSP s := by
   rw [BitVec.sub_eq_add_neg]; rfl
 
-/-- The epilogue's `addi sp,sp,176` restores the entry `sp`. -/
 theorem execSP_restore (s : BitVec 64) : execSP s + 176#64 = s := by
   rw [BitVec.add_assoc, show (18446744073709551440#64 + 176#64 : BitVec 64) = 0#64 by decide,
     BitVec.add_zero]
@@ -41,9 +28,6 @@ theorem execSP_restore (s : BitVec 64) : execSP s + 176#64 = s := by
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80003fe0#64 R Mt
   by ix_run hlive using [h2, hsf] at 0x80004014
 
-
-/-- The entry `sp` of an `exec_stmt` call with its budget: the frame's
-geometry (`ExecFrameGeom`, the block loop's) and the frame's size. -/
 theorem execFrameGeom_of {s : BitVec 64} {sm : Vsa.While.Stmt} {d : Nat}
     (hsg : StackGeom s (execNeed sm d)) : ExecFrameGeom s ∧ 176 ≤ execNeed sm d := by
   have hneed : 176 ≤ execNeed sm d := by
@@ -64,14 +48,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 variable {live : Nat → Prop} {inp : Nat}
 
-/-- The code as a run's read-only text with an empty data view. -/
 theorem codeRes_text (m : Mem) : codeRes (GF := GF) ⊢ roOwn roR (interpText ++ dataOf m []) := by
   rw [show interpText ++ dataOf m [] = interpText by simp [dataOf]]; exact .rfl
 
-/-- **The prologue, for either WP**: from `exec_stmt`'s entry state (the
-registers at `rv`, the stack below `s`), the run reaches the dispatch point
-with the frame spilled; the dispatch-point continuation `K` then proves the
-rest. -/
 theorem wp_execProl (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {d : Nat} {sm : Stmt} {aS aE aRet s ret : BitVec 64}
     {rv : Nat → BitVec 64} {F : IProp GF}
@@ -126,7 +105,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- The registers `exec_stmt` returns with, as the entry spec states them. -/
 theorem keep_of_execRet {rv R R' : Nat → BitVec 64} {s : BitVec 64} {status : Status}
     (hs : rv 2 = s) (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] rv R)
     (h : ExecRet R R' s (rv 8) (rv 9) (rv 18) (rv 19) status) :
@@ -141,7 +119,6 @@ theorem keep_of_execRet {rv R R' : Nat → BitVec 64} {s : BitVec 64} {status : 
   · exact h.s3
   all_goals exact (h.hi _ (by decide)).trans (hk _ (by decide))
 
-/-- **The entry spec from the dispatch-point spec, total mode.** -/
 theorem execSpecT_of_disp (hlive : ∀ p ∈ interpText, live p.1) {st : St} {d env : Nat} {sm : Stmt}
     {st' : St} {status : Status} {n : Nat} (D : ExecSCost st d env sm st' status n) :
     execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env sm st' status n D ⊢
@@ -172,7 +149,6 @@ theorem execSpecT_of_disp (hlive : ∀ p ∈ interpText, live p.1) {st : St} {d 
   iframe Hregs Hst Hret Hw
   ipureintro; exact keep_of_execRet hregs.sp hk hret
 
-/-- **The entry spec from the dispatch-point spec, partial mode.** -/
 theorem execSpecP_of_disp (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF) {st : St}
     {d env : Nat} {sm : Stmt} :
     execDispP_body (GF := GF) (vsaModel live) N L Room inp Core st d env sm ⊢
@@ -213,7 +189,6 @@ theorem execSpecP_of_disp (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp
   · ihave Hk := and_elim_r $$ Hk
     iexact Hk
 
-/-- The Löb hypothesis at the entry, from the one at the dispatch point. -/
 theorem execSpecsP_of_disps (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF) :
     execDispsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
       execSpecsP (vsaModel live) N L Room inp Core := by
@@ -235,7 +210,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- The dispatch-point spec, total mode, as an entailment at given state. -/
 theorem execDispT_apply {st : St} {d env : Nat} {sm : Stmt} {st' : St} {status : Status} {n : Nat}
     {D : ExecSCost st d env sm st' status n}
     (h : ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env sm st' status n D)
@@ -249,7 +223,6 @@ theorem execDispT_apply {st : St} {d env : Nat} {sm : Stmt} {st' : St} {status :
   unfold execDispT_body
   iapply H $$ %Φ %k %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
 
-/-- The dispatch-point spec, partial mode, as an entailment at given state. -/
 theorem execDispP_apply {Core : IProp GF} {st : St} {d env : Nat} {sm : Stmt}
     (Φ : Nat × String → IProp GF) (aS aE aRet s : BitVec 64) (R : Nat → BitVec 64)
     (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) :
@@ -264,7 +237,6 @@ theorem execDispP_apply {Core : IProp GF} {st : St} {d env : Nat} {sm : Stmt}
   unfold execDispP_body
   iapply H $$ %Φ %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
 
-/-- The Löb hypothesis at one statement. -/
 theorem execDispsP_at (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) :
     execDispsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
       ▷ execDispP_body (vsaModel live) N L Room inp Core st d env sm := by

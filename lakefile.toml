@@ -1,5 +1,5 @@
 name = "Vsa"
-defaultTargets = ["Vsa"]
+defaultTargets = ["Vsa", "VsaIris", "VsaBoot", "vsa_run", "whilec", "whilecheck"]
 
 [[lean_lib]]
 name = "Vsa"

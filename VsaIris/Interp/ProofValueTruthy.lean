@@ -1,14 +1,6 @@
 import VsaIris.Interp.HelperRun
 import VsaIris.Interp.SpecValue
 
-/-!
-# `value_truthy` (lane H2)
-
-One symbolic run over the value's slot (read only): the kind word selects
-`bool` (`lw` of the payload), `int` (`ld` and `snez`) or the rest (`snez` of
-the kind).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -20,7 +12,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The run of `value_truthy`, per kind. -/
 theorem valueTruthy_run (hlive : ∀ p ∈ interpText, live p.1) (N : NativeAddrs) (p r : BitVec 64)
     (rv : Nat → BitVec 64) (Mt : Mem) (v : Value) (hg : SlotGeom p) (h10 : rv 10 = p)
     (hv : ValPure N v (imgW (imgM Mt) p.toNat) (imgW (imgM Mt) (p.toNat + 8)) (imgW (imgM Mt) (p.toNat + 16)))
@@ -72,7 +63,6 @@ theorem valueTruthy_run (hlive : ∀ p ∈ interpText, live p.1) (N : NativeAddr
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rw [snez_reg]; rfl
 
-/-- **`value_truthy`**, for either WP. -/
 theorem valueTruthy_spec (hlive : ∀ p ∈ interpText, live p.1)
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs) (p : BitVec 64) (v : Value) :
     ⊢ valueTruthySpec (vsaModel live) N Wp p v := by

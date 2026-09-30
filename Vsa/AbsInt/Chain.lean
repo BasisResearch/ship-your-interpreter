@@ -1,22 +1,10 @@
 import Vsa.AbsInt.State
 
-/-!
-# Soundness of the abstract state operations
-
-Each abstract operation of `Vsa/AbsInt/State.lean` is sound for the
-corresponding store operation of `Vsa/While/Semantics.lean` under the
-concretisation `SGam`: lookup for `Store.get?`, define for `Store.define`,
-assignment for `Store.set?` (including its failure), scope entry for
-`Store.allocFrame`, and join, widening and order.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
-
-/-! ## Frames -/
 
 theorem frameAt_iff {s : Store} {a : Addr} {P : Frame → Prop} :
     FrameAt s a P ↔ ∃ f, s.frames[a]? = some f ∧ P f := by
@@ -41,13 +29,10 @@ theorem FrameAt.lt_size {s : Store} {a : Addr} {P : Frame → Prop}
   obtain ⟨f, hf, _⟩ := frameAt_iff.mp hp
   exact (Array.getElem?_eq_some_iff.mp hf).1
 
-/-! ## Scopes -/
-
 omit [AbsDom A] in
 theorem Scope.get_cons (k : String) (b : Bind A) (S : Scope A) (y : String) :
     Scope.get ((k, b) :: S) y = if k = y then some b else S.get y := rfl
 
-/-- Overwriting one name keeps a scope description valid. -/
 theorem ScopeOK.update {S : Scope A} {vars vars' : List (String × Value)}
     {x : String} {b : Bind A} (hb : BindOK (some b) (vfind vars' x))
     (hS : ScopeOK S vars) (hrest : ∀ y, x ≠ y → vfind vars' y = vfind vars y) :
@@ -133,8 +118,6 @@ theorem leScope_get {S T : Scope A} (h : leScope S T = true) (y : String) :
     rw [get_eq_none_of_not_mem hy.1, get_eq_none_of_not_mem hy.2]
     rfl
 
-/-! ## Bindings -/
-
 theorem BindOK.combB_l {op : A → A → A} (hop : ∀ {a b v}, Gam a v → Gam (op a b) v)
     {b c : Option (Bind A)} {o : Option Value} (h : BindOK b o) :
     BindOK (combB op b c) o := by
@@ -191,9 +174,6 @@ theorem BindOK.leB {b c : Option (Bind A)} {o : Option Value}
       · rw [h'] at hm; cases hm
       · exact h'
 
-/-! ## Chains -/
-
-/-- A scope-level implication. -/
 def ScopeImp (S T : Scope A) : Prop := ∀ vars, ScopeOK S vars → ScopeOK T vars
 
 theorem Chain.bounds {s : Store} :
@@ -278,8 +258,6 @@ theorem pw_leScope :
     refine ⟨fun vars hS y => BindOK.leB (leScope_get hall.1 y) (hS y),
       pw_leScope (by simpa using h) hall.2⟩
 
-/-! ## States -/
-
 theorem SGam.comb_l {op : A → A → A} (hop : ∀ {a b v}, Gam a v → Gam (op a b) v)
     {as : List Addr} {s : Store} {σ : AState A} (τ : AState A) (h : SGam as s σ) :
     SGam as s (σ.comb op τ) := by
@@ -341,8 +319,6 @@ theorem SGam.le {as : List Addr} {s : Store} {σ τ : AState A}
       simp only [AState.le, Bool.and_eq_true, beq_iff_eq] at hle
       exact Chain.mono (pw_leScope hle.1 hle.2) h
 
-/-! ## Lookup -/
-
 theorem OptGam.joinOpt_l {a : A} {o : Option A} {v : Value} (h : Gam a v) :
     OptGam (joinOpt (some a) o) v := by
   cases o with
@@ -358,7 +334,6 @@ theorem OptGam.joinOpt_r {p o : Option A} {v : Value} (h : OptGam o v) :
     | none => exact h.elim
     | some b => exact AbsDom.join_r h
 
-/-- Soundness of `lookupL` for `Store.lookup` along the chain. -/
 theorem lookupL_sound {s : Store} {x : String} :
     ∀ {as : List Addr} {l : List (Scope A)} {a : Addr} {g : Nat},
       Chain s (a :: as) l → as.length < g →
@@ -371,7 +346,7 @@ theorem lookupL_sound {s : Store} {x : String} :
     obtain ⟨f, hfa, hpar, hS⟩ := frameAt_iff.mp hf
     have hx := hS x
     rw [lookup_succ, hfa]
-    -- the continuation past this frame
+
     have hcont : (∀ v, (match f.parent with
           | some p => s.lookup g p x
           | none => none) = some v → OptGam (lookupL x l).1 v) ∧
@@ -411,7 +386,6 @@ theorem lookupL_sound {s : Store} {x : String} :
           exact ⟨fun v h => by
             cases h; exact OptGam.joinOpt_l (hx.2 _ hv), fun h => by cases h⟩
 
-/-- Soundness of abstract `env_get`. -/
 theorem SGam.lookup {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
     {x : String} (hd : as.head? = some env) (h : SGam as s σ) :
     (∀ v, s.get? env x = some v → Gam (σ.lookup x).1 v) ∧
@@ -434,9 +408,6 @@ theorem SGam.lookup {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
       | none => rw [hr] at this; exact this.elim
       | some a => rw [hr] at this; exact this
 
-/-! ## Define -/
-
-/-- Soundness of abstract `env_define`. -/
 theorem SGam.define {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
     {x : String} {a : A} {v : Value} (hd : as.head? = some env)
     (h : SGam as s σ) (hv : Gam a v) : SGam as (s.define env x v) (σ.define x a) := by
@@ -465,8 +436,6 @@ theorem SGam.define {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
             exact ⟨fun _ => rfl, fun w hw => by cases hw; exact hv⟩
         · rw [define_frames, if_neg (Nat.ne_of_gt (hb.2.2 i hi))]
 
-/-! ## Assignment -/
-
 theorem set_succ (s : Store) (g : Nat) (a : Addr) (x : String) (v : Value) :
     s.set (g + 1) a x v =
       match s.frames[a]? with
@@ -483,7 +452,6 @@ theorem set_succ (s : Store) (g : Nat) (a : Addr) (x : String) (v : Value) :
   | none => rfl
   | some f => rfl
 
-/-- A weak update over an unchanged store is sound. -/
 theorem assignL_weak {s : Store} {x : String} {a : A} :
     ∀ {as : List Addr} {l : List (Scope A)}, Chain s as l →
       Chain s as (assignL x a true l).1
@@ -514,7 +482,6 @@ theorem assignL_weak {s : Store} {x : String} {a : A} :
       · rw [if_neg hm]
         exact ⟨upd false (Or.inr rfl), hlt, assignL_weak hc⟩
 
-/-- Soundness of `assignL` for a successful `Store.set`. -/
 theorem assignL_set {x : String} {av : A} {v : Value} (hv : Gam av v) :
     ∀ {as : List Addr} {l : List (Scope A)} {a : Addr} {g : Nat} {weak : Bool}
       {s s' : Store}, s.set g a x v = some s' → Chain s (a :: as) l →
@@ -530,7 +497,7 @@ theorem assignL_set {x : String} {av : A} {v : Value} (hv : Gam av v) :
     rw [set_succ, hfa] at hset
     simp only at hset
     by_cases hany : f.vars.any (·.1 == x) = true
-    · -- the binding is in this frame
+    ·
       rw [if_pos hany] at hset
       cases hset
       have hfr : ∀ i, (s.frames.modify a fun f =>
@@ -574,7 +541,7 @@ theorem assignL_set {x : String} {av : A} {v : Value} (hv : Gam av v) :
           · exact AbsDom.join_r hv
         · rw [if_neg hm]
           refine ⟨?_, hlt, Chain.congr hrest (assignL_weak hc)⟩
-          -- a may-bound scope that does bind `x`: weak update with `must := false`
+
           rw [frameAt_iff]
           refine ⟨{ f with vars := setVars f.vars x v }, ?_, hpar, ?_⟩
           · simp only [hfr, hfa]
@@ -582,7 +549,7 @@ theorem assignL_set {x : String} {av : A} {v : Value} (hv : Gam av v) :
           · refine ScopeOK.update ?_ hS (fun y hxy => by rw [vfind_setVars hany, if_neg hxy])
             rw [vfind_setVars hany, if_pos rfl]
             exact ⟨fun h => (by cases h), fun w hw => by cases hw; exact AbsDom.join_r hv⟩
-    · -- the binding is further up the chain
+    ·
       have hnone : vfind f.vars x = none :=
         vfind_none_of_not_any (Bool.eq_false_iff.mpr hany)
       rw [if_neg hany, hpar] at hset
@@ -617,7 +584,6 @@ theorem assignL_set {x : String} {av : A} {v : Value} (hv : Gam av v) :
             rw [hb] at hy
             exact ⟨fun h => (by cases h), fun w hw => AbsDom.join_l (hy.2 w hw)⟩
 
-/-- A failing `Store.set` is flagged by `assignL`. -/
 theorem assignL_none {x : String} {av : A} {v : Value} {s : Store} :
     ∀ {as : List Addr} {l : List (Scope A)} {a : Addr} {g : Nat} {weak : Bool},
       s.set g a x v = none → Chain s (a :: as) l → as.length < g →
@@ -636,7 +602,7 @@ theorem assignL_none {x : String} {av : A} {v : Value} {s : Store} :
     · have hnone : vfind f.vars x = none :=
         vfind_none_of_not_any (Bool.eq_false_iff.mpr hany)
       rw [if_neg hany, hpar] at hset
-      -- the rest of the chain fails too
+
       have hrest : ∀ weak', (assignL x av weak' l).2 = true := by
         intro weak'
         cases as with
@@ -658,7 +624,6 @@ theorem assignL_none {x : String} {av : A} {v : Value} {s : Store} :
         · rw [if_neg hm]
           exact hrest true
 
-/-- Soundness of abstract `env_set`, success and failure. -/
 theorem SGam.assign {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
     {x : String} {a : A} {v : Value} (hd : as.head? = some env)
     (h : SGam as s σ) (hv : Gam a v) :
@@ -676,10 +641,6 @@ theorem SGam.assign {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
       refine ⟨fun s' hs => (assignL_set hv hs h).1, fun hs => assignL_none hs h ?_⟩
       exact Nat.lt_of_le_of_lt hb.2.1 hb.1
 
-/-! ## Strengthening -/
-
-/-- Replacing the value of the binding a lookup resolves to is sound when the
-new abstract value covers the looked-up value. -/
 theorem strengthenL_sound {s : Store} {x : String} {av : A} {w : Value} :
     ∀ {as : List Addr} {l : List (Scope A)} {a : Addr} {g : Nat},
       Chain s (a :: as) l → s.lookup g a x = some w → Gam av w →
@@ -721,7 +682,6 @@ theorem strengthenL_sound {s : Store} {x : String} {av : A} {w : Value} :
       · rw [if_neg hm]
         exact ⟨hf, hlt, hc⟩
 
-/-- Soundness of `AState.strengthen`. -/
 theorem SGam.strengthen {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
     {x : String} {av : A} {w : Value} (hd : as.head? = some env)
     (h : SGam as s σ) (hl : s.get? env x = some w) (hw : Gam av w) :
@@ -736,9 +696,6 @@ theorem SGam.strengthen {as : List Addr} {env : Addr} {s : Store} {σ : AState A
       cases hd
       exact strengthenL_sound h hl hw
 
-/-! ## Scopes and closures -/
-
-/-- Entering a fresh scope (`Store.allocFrame`). -/
 theorem SGam.push {as : List Addr} {env : Addr} {s s' : Store} {inner : Addr}
     {σ : AState A} (hd : as.head? = some env) (h : SGam as s σ)
     (halloc : s.allocFrame (some env) = (s', inner)) :
@@ -764,7 +721,6 @@ theorem SGam.push {as : List Addr} {env : Addr} {s s' : Store} {inner : Addr}
           · exact Nat.lt_trans (hb.2.2 i hi) hb.1
         simp [Array.getElem?_push, Nat.ne_of_lt hi']
 
-/-- Leaving the innermost scope. -/
 theorem SGam.pop {as : List Addr} {inner : Addr} {s : Store} {σ : AState A}
     (h : SGam (inner :: as) s σ) : SGam as s σ.pop := by
   cases σ with
@@ -775,7 +731,6 @@ theorem SGam.pop {as : List Addr} {inner : Addr} {s : Store} {σ : AState A}
     | nil => exact h.elim
     | cons S l => exact h.2.2
 
-/-- States only read the frames of the store. -/
 theorem SGam.frames_eq {as : List Addr} {s s' : Store} {σ : AState A}
     (hfr : s'.frames = s.frames) (h : SGam as s σ) : SGam as s' σ := by
   cases σ with

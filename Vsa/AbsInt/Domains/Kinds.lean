@@ -1,19 +1,9 @@
 import Vsa.AbsInt.Domain
 
-/-!
-# The value-kind domain
-
-A finite set of value kinds: `null`, `bool`, `int`, `str`, `closure`, and
-each of the three natives. It proves the absence of type errors, call
-errors on natives, and unbound variables (with the state layer); it cannot
-exclude division by zero.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While
 
-/-- A set of value kinds. -/
 structure KSet where
   null : Bool := false
   bool : Bool := false
@@ -27,10 +17,8 @@ structure KSet where
 
 namespace KSet
 
-/-- Every kind. -/
 def all : KSet := ⟨true, true, true, true, true, true, true, true⟩
 
-/-- Membership of a value. -/
 def Mem (a : KSet) : Value → Prop
   | .null => a.null = true
   | .bool _ => a.bool = true
@@ -41,7 +29,6 @@ def Mem (a : KSet) : Value → Prop
   | .native .println => a.pln = true
   | .native .assert => a.ast = true
 
-/-- The kind of one value. -/
 def of : Value → KSet
   | .null => { null := true }
   | .bool _ => { bool := true }
@@ -61,15 +48,12 @@ def le (a b : KSet) : Bool :=
     (!a.str || b.str) && (!a.clo || b.clo) && (!a.prn || b.prn) &&
     (!a.pln || b.pln) && (!a.ast || b.ast)
 
-/-- Some kind other than `int`. -/
 def nonInt (a : KSet) : Bool :=
   a.null || a.bool || a.str || a.clo || a.prn || a.pln || a.ast
 
-/-- Some kind other than `str`. -/
 def nonStr (a : KSet) : Bool :=
   a.null || a.bool || a.int || a.clo || a.prn || a.pln || a.ast
 
-/-- Some kind other than `int` and `str`. -/
 def nsi (a : KSet) : Bool :=
   a.null || a.bool || a.clo || a.prn || a.pln || a.ast
 
@@ -78,7 +62,6 @@ def binop : BinOp → KSet → KSet → KSet
   | .sub, _, _ | .mul, _, _ | .div, _, _ | .mod, _, _ => { int := true }
   | _, _, _ => { bool := true }
 
-/-- Only integers, or only strings, on both sides. -/
 def cmpSafe (a b : KSet) : Bool :=
   (!a.nonInt && !b.nonInt) || (!a.nonStr && !b.nonStr)
 

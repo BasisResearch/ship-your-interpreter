@@ -1,21 +1,9 @@
 import Vsa.AbsInt.Domain
 
-/-!
-# The interval domain
-
-`range lo hi` is the set of integers between the bounds (`none` is
-unbounded); `top` is every value. Arithmetic results are 64-bit wrapped
-(`wrap64`): a result interval inside `[-2^63, 2^63)` is exact, otherwise it
-widens to the whole 64-bit range. Multiplication, division and remainder are
-exact on singletons. Widening drops unstable bounds. Comparisons against an
-interval refine the compared variable.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While
 
-/-- Integer intervals. -/
 inductive Itv where
   | bot
   | range (lo hi : Option Int)
@@ -24,12 +12,10 @@ inductive Itv where
 
 namespace Itv
 
-/-- Lower-bound membership. -/
 def InLo : Option Int → Int → Prop
   | none, _ => True
   | some l, n => l ≤ n
 
-/-- Upper-bound membership. -/
 def InHi : Option Int → Int → Prop
   | none, _ => True
   | some h, n => n ≤ h
@@ -40,13 +26,11 @@ def Gam : Itv → Value → Prop
   | range _ _, _ => False
   | top, _ => True
 
-/-- `a` is a weaker lower bound than `b`. -/
 def loLe : Option Int → Option Int → Bool
   | none, _ => true
   | some _, none => false
   | some a, some b => decide (a ≤ b)
 
-/-- `a` is a stronger upper bound than `b`. -/
 def hiLe : Option Int → Option Int → Bool
   | _, none => true
   | none, some _ => false
@@ -87,10 +71,8 @@ def widen : Itv → Itv → Itv
     range (if loLe l1 l2 then l1 else none) (if hiLe h2 h1 then h1 else none)
   | _, _ => top
 
-/-- The 64-bit range. -/
 def full : Itv := range (some (-2^63)) (some (2^63 - 1))
 
-/-- The interval of `wrap64 z` for `z` between the bounds. -/
 def wrapR (lo hi : Option Int) : Itv :=
   match lo, hi with
   | some l, some h => if -2^63 ≤ l ∧ h ≤ 2^63 - 1 then range lo hi else full
@@ -126,7 +108,6 @@ def subB : Option Int → Option Int → Option Int
   | some a, some b => some (a - b)
   | _, _ => none
 
-/-- The single value of a singleton interval. -/
 def single : Itv → Option Int
   | range (some a) (some b) => if a = b then some a else none
   | _ => none
@@ -143,7 +124,6 @@ theorem single_eq {a : Itv} {x n : Int} (hs : single a = some x) (h : Gam a (.in
     · cases hs
   · cases hs
 
-/-- Whether a comparison or equality operator. -/
 def isBool : BinOp → Bool
   | .eq | .ne | .lt | .le | .gt | .ge => true
   | _ => false
@@ -195,7 +175,6 @@ def binErr (op : BinOp) : Itv → Itv → List Kind
     | _ => []
   | _, _ => [.type, .divZero]
 
-/-- An interval, emptied when its bounds cross. -/
 def mk (lo hi : Option Int) : Itv :=
   match lo, hi with
   | some a, some b => if b < a then bot else range lo hi
@@ -232,7 +211,6 @@ theorem inHi_minHi {a b : Option Int} {n : Int} (ha : InHi a n) (hb : InHi b n) 
     InHi (minHi a b) n := by
   cases a <;> cases b <;> simp_all [minHi, InHi] <;> omega
 
-/-- Bounds of an interval (`top` is unbounded). -/
 def lo : Itv → Option Int
   | range l _ => l
   | _ => none
@@ -241,7 +219,6 @@ def hi : Itv → Option Int
   | range _ h => h
   | _ => none
 
-/-- Refine `x ∈ a` knowing `(x op r).truthy = t` for an integer `r ∈ [l2, h2]`. -/
 def refineR (op : BinOp) (t : Bool) (a : Itv) (l2 h2 : Option Int) : Itv :=
   match op, t with
   | .lt, true => mk a.lo (minHi a.hi (subB h2 (some 1)))
@@ -266,8 +243,6 @@ def isBot : Itv → Bool
   | bot => true
   | range (some a) (some b) => decide (b < a)
   | _ => false
-
-/-! ## Soundness -/
 
 theorem gam_le {a b : Itv} {v : Value} (hle : le a b = true) (h : Gam a v) : Gam b v := by
   cases a with
@@ -375,7 +350,6 @@ theorem inHi_subB {a b : Option Int} {n m : Int} (ha : InHi a n) (hb : InLo b m)
 theorem gam_single {z : Int} : InLo (some z) z ∧ InHi (some z) z := by
   simp [InLo, InHi]
 
-/-- Arithmetic other than `+` always yields a wrapped integer. -/
 theorem gam_full_arith {s : Store} {op : BinOp} {l r v : Value}
     (hop : (isBool op || op == .add) = false) (h : binOpSem s op l r = some v) :
     Gam full v := by

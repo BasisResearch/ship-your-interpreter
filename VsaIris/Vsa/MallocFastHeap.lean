@@ -3,45 +3,21 @@ import Vsa.Sim.ValueSpec
 import Vsa.Sim.EnvNewSpec
 import Vsa.Sim.InterpSpillReads
 
-/-!
-# The top split, at the level of the heap shape
-
-`_malloc_r`'s fast path for a request of chunk size `nb` from a heap with no
-free chunk and a clear `binblocks` bitmap splits the top chunk. It stores three
-words:
-
-* `top + 8`: the victim's header `nb | PREV_INUSE`;
-* `av->top` (`topAddr`): the new top `top + nb`;
-* `top + nb + 8`: the remainder's header `(size - nb) | PREV_INUSE`.
-
-It returns `top + 16`. `FastAt` is the heap shape at the fast path's entry:
-`BlockHeapAt`, every chunk in use, every bin empty, `binblocks` zero, and
-the corrected reserve (`Reserve`) for `k` credits. `FastAt.split` proves the three stores
-take `FastAt … (k + 1)` to `FastAt … k` with the new block live. This is the
-heap half of `MallocRoomRun` on the fast path; the machine half is the
-reflected segments in `MallocFastSegs.lean`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap
 
-/-- The fast path's restriction: no free chunk, no bin in use, and a clear
-`binblocks` bitmap (dlmalloc clears bits lazily, so empty bins alone do not
-imply it). -/
 structure FastHeap (m : Mem) (chunks : List Chunk) (bins : Nat → List Nat) : Prop where
   inuse : ∀ c ∈ chunks, c.inuse = true
   bins_empty : ∀ i, bins i = []
   binblocks : read64 m binblocksAddr = some 0
 
-/-- The heap at the fast path's entry, with `k` credits. -/
 structure FastAt (m : Mem) (H : List (Nat × Nat)) (maxReq k top brkv : Nat)
     (chunks : List Chunk) (bins : Nat → List Nat) : Prop where
   heap : BlockHeapAt m H top brkv chunks bins
   fast : FastHeap m chunks bins
   reserve : Reserve m H maxReq k
 
-/-- The three heap stores of the top split, in program order. -/
 def splitLog (top nb rem : Nat) : List WEntry :=
   [(top + 8, 8, BitVec.ofNat 64 (nb + 1)), (topAddr, 8, BitVec.ofNat 64 (top + nb)),
    (top + nb + 8, 8, BitVec.ofNat 64 (rem + 1))]
@@ -58,7 +34,6 @@ section Split
 variable {m : Mem} {H : List (Nat × Nat)} {maxReq k top brkv : Nat} {chunks : List Chunk}
   {bins : Nat → List Nat}
 
-/-- The entry facts the fast path's code reads, named. -/
 structure FastReads (m : Mem) (top brkv : Nat) : Prop where
   top_ptr : read64 m topAddr = some top
   top_header : read64 m (top + 8) = some (brkv - top + 1)
@@ -94,7 +69,6 @@ theorem FastAt.reads (h : FastAt m H maxReq k top brkv chunks bins) (hk : 0 < k)
     exact r.top_aligned
   brk_le := h.heap.heap.brk_le
 
-/-- The reserve's top chunk is the heap's top chunk. -/
 theorem FastAt.reserve_top (h : FastAt m H maxReq k top brkv chunks bins) (hk : 0 < k) :
     ∃ bytes, TopReserve m H maxReq k top bytes ∧ bytes = brkv - top := by
   obtain ⟨top', bytes, r⟩ := h.reserve hk
@@ -109,9 +83,6 @@ theorem FastAt.reserve_top (h : FastAt m H maxReq k top brkv chunks bins) (hk : 
 
 end Split
 
-/-- Extend a walk at its top: the old chunks' headers are unchanged, the
-top's header keeps its `PREV_INUSE` bit, and a new walk continues from the
-old top. -/
 theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.extend {m m' : Mem} {p top top' : Nat}
     {cs ds : List Chunk} (h : ChunkWalk m p top cs)
     (hdr : ∀ c ∈ cs, read64 (m') (c.addr + 8) = read64 m (c.addr + 8))
@@ -157,7 +128,6 @@ theorem split_read_rem (hv : rem + 1 < 2 ^ 64) :
     (BitVec.ofNat 64 (rem + 1)) rfl (by simp only [splitLog, List.drop, OutLRange])
   rwa [ofNat_toNat_lt hv] at this
 
-/-- Every other word reads as before. -/
 theorem split_read_off {a : Nat} (hg : a + 8 ≤ topAddr ∨ topAddr + 8 ≤ a)
     (hv : a + 8 ≤ top + 8 ∨ top + 16 ≤ a) (hr : a + 8 ≤ top + nb + 8 ∨ top + nb + 16 ≤ a) :
     read64 (writeLog m (splitLog top nb rem)) a = read64 m a :=
@@ -167,11 +137,9 @@ theorem split_read_off {a : Nat} (hg : a + 8 ≤ topAddr ∨ topAddr + 8 ≤ a)
 
 end SplitReads
 
-/-- The memory after the top split. -/
 abbrev splitMem (m : Mem) (top nb brkv : Nat) : Mem :=
   writeLog m (splitLog top nb (brkv - top - nb))
 
-/-- **The top split preserves the fast heap, spending one credit.** -/
 theorem FastAt.split {m : Mem} {H : List (Nat × Nat)} {maxReq k top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (h : FastAt m H maxReq (k + 1) top brkv chunks bins) {nb n : Nat}
@@ -195,7 +163,7 @@ theorem FastAt.split {m : Mem} {H : List (Nat × Nat)} {maxReq k top brkv : Nat}
   have hbrk := R.brk_le
   have htlo := R.top_lo
   unfold heapStart heapEnd at *
-  -- the numbers
+
   have hroom : nb + 32 ≤ brkv - top := by omega
   have Rv : read64 (splitMem m top nb brkv) (top + 8) = some (nb + 1) :=
     split_read_victim (by unfold heapStart; omega) hnb32 (by omega)
@@ -281,7 +249,7 @@ theorem FastAt.split {m : Mem} {H : List (Nat × Nat)} {maxReq k top brkv : Nat}
     · exact ⟨⟨top, nb, true⟩, List.mem_append_right _ List.mem_cons_self, rfl, rfl, by simp; omega⟩
     · obtain ⟨c, hc, hu, h1, h2⟩ := hH.exact e he' he'
       exact ⟨c, List.mem_append_left _ hc, hu, h1, h2⟩
-  · -- the reserve with one credit spent
+  ·
     rcases Nat.eq_zero_or_pos k with rfl | hk
     · exact Reserve.zero _ _ _
     intro _
@@ -302,16 +270,5 @@ theorem FastAt.split {m : Mem} {H : List (Nat × Nat)} {maxReq k top brkv : Nat}
           · rcases r.disjoint e he with d | d
             · left; omega
             · right; omega }⟩
-
-/-- On the fast path itself: after the top split for `malloc(24)` (a 32-byte
-chunk), VSA's `AllocationReserve` over the ledger with the returned block is
-false for every positive credit count, while the corrected `Reserve` is
-preserved by `FastAt.split`. -/
-theorem split24_vsa_reserve_false {m : Mem} {H : List (Nat × Nat)} {top brkv maxReq k : Nat}
-    (htop : heapStart ≤ top) (hhi : top + 32 ≤ heapEnd) (hk : 0 < k) :
-    ¬ AllocationReserve vsaArena (splitMem m top 32 brkv) ((top + 16, 24) :: H) maxReq k := by
-  have Rt : read64 (splitMem m top 32 brkv) topAddr = some (top + 32) :=
-    split_read_top htop (by unfold heapEnd at hhi; omega)
-  exact vsa_reserve_fails_after_split vsaArena _ H maxReq k top hk Rt
 
 end VsaIris.VsaHeap

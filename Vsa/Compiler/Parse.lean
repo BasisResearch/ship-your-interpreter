@@ -1,29 +1,9 @@
 import Vsa.While.Ast
 
-/-!
-# Front end: WHILE source text to `Program`
-
-A lexer and recursive-descent parser mirroring the C interpreter's
-(`c/src/lexer.c`, `c/src/parser.c`) rule for rule, so a source file denotes
-the same `Program` the interpreter runs. The input is a byte string: each byte
-is one character, as in the C code, so every string literal is Latin-1.
-
-* Integer literals are unsigned digit sequences, saturated at `2^63 - 1` like
-  `strtoll`; negative numbers are unary minus applied to a literal.
-* String literals resolve the escapes `\n \t \r \\ \" \0`; the contents end at
-  the first NUL, like a C string.
-* `fn name(params) { ... }` in declaration position declares `name`; other
-  function literals are anonymous.
-
-This front end is not verified; the correctness theorem starts from the
-`Program` it produces.
--/
-
 namespace Vsa.Compiler.Parse
 
 open Vsa.While
 
-/-- Tokens (`TokType` in `lexer.h`). -/
 inductive Tok where
   | ident (s : String)
   | num (n : Nat)
@@ -49,8 +29,6 @@ def isIdentChar (c : Char) : Bool := isAlpha c || isDigit c || c == '_'
 def lexError (line : Nat) (msg : String) : Except String α :=
   .error s!"parse error [line {line}]: {msg}"
 
-/-- Resolve the escapes of a string literal's contents; the result ends at the
-first NUL (`unescape_string`). -/
 def unescape (line : Nat) : List Char → Except String (List Char)
   | [] => pure []
   | '\\' :: c :: rest => do
@@ -65,7 +43,6 @@ def unescape (line : Nat) : List Char → Except String (List Char)
     | _ => lexError line "invalid escape sequence in string"
   | c :: rest => do pure (c :: (← unescape line rest))
 
-/-- Skip whitespace and comments (`skip_ws`). -/
 partial def skipWs (line : Nat) : List Char → Except String (Nat × List Char)
   | ' ' :: r | '\t' :: r | '\r' :: r => skipWs line r
   | '\n' :: r => skipWs (line + 1) r
@@ -79,8 +56,6 @@ partial def skipWs (line : Nat) : List Char → Except String (Nat × List Char)
     do let (line, r) ← block line r; skipWs line r
   | r => pure (line, r)
 
-/-- The body of a string literal after its opening quote: its raw contents and
-the rest (the lexer skips the character after a backslash). -/
 partial def strBody (line : Nat) : List Char → Except String (List Char × Nat × List Char)
   | [] => lexError line "unterminated string literal"
   | '"' :: r => pure ([], line, r)
@@ -96,7 +71,6 @@ def twoChar : List (Char × Char × String) :=
 
 def oneChar : List Char := ['(', ')', '{', '}', ',', ';', '+', '-', '*', '/', '%', '!', '=', '<', '>']
 
-/-- The token stream of a source (`lexer_next`, iterated to the end). -/
 partial def lex (line : Nat) (cs : List Char) (acc : Array Token) : Except String (Array Token) := do
   let (line, cs) ← skipWs line cs
   match cs with
@@ -131,7 +105,6 @@ def tokName : Tok → String
   | .kw s => s!"'{s}'"
   | .eof => "end of input"
 
-/-- Parser state: the token array and the current position. -/
 abbrev P := StateT Nat (ReaderT (Array Token) (Except String))
 
 def cur : P Token := do return (← read)[← get]!
@@ -161,7 +134,6 @@ def binOps : List (List (String × BinOp)) :=
   [[("==", .eq), ("!=", .ne)], [("<", .lt), ("<=", .le), (">", .gt), (">=", .ge)],
    [("+", .add), ("-", .sub)], [("*", .mul), ("/", .div), ("%", .mod)]]
 
-/-- `strtoll` on a digit string: saturates at `2^63 - 1`. -/
 def clampInt (n : Nat) : Int := if n < 2 ^ 63 then n else 2 ^ 63 - 1
 
 mutual
@@ -190,7 +162,6 @@ partial def logicAnd : P Expr := do
     e := .logical .and e (← binLevel 0)
   return e
 
-/-- One left-associative binary level: equality, comparison, term, factor. -/
 partial def binLevel (k : Nat) : P Expr := do
   let next : P Expr := if k + 1 < binOps.length then binLevel (k + 1) else unary
   let ops := binOps[k]!
@@ -236,7 +207,6 @@ partial def primary : P Expr := do
   | .kw "fn" => advance; fnExpr none
   | t => failAt c.line s!"unexpected {tokName t} in expression"
 
-/-- A function literal after `fn` (and its name, for declarations). -/
 partial def fnExpr (name : Option String) : P Expr := do
   expect (sym "(") "'(' after 'fn'"
   let mut ps : Array String := #[]
@@ -247,7 +217,6 @@ partial def fnExpr (name : Option String) : P Expr := do
   expect (sym ")") "')' after parameters"
   return .fn name ps.toList (← blockStmts)
 
-/-- A braced statement list. -/
 partial def blockStmts : P (List Stmt) := do
   expect (sym "{") "'{'"
   let mut ss : Array Stmt := #[]
@@ -323,7 +292,6 @@ partial def program : P (List Stmt) := do
     ss := ss.push (← declaration)
   return ss.toList
 
-/-- Parse a source given as bytes (one character per byte). -/
 def parseBytes (src : ByteArray) : Except String Program := do
   let cs := src.toList.map fun b => Char.ofNat b.toNat
   let toks ← lex 1 cs #[]

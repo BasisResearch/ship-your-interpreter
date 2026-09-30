@@ -2,21 +2,10 @@ import VsaIris.Vsa.SnpSvfConv
 import Vsa.Sim.SnprintfSpec39
 import VsaIris.Vsa.BvLits
 
-/-!
-# `_svfprintf_r`'s format loop
-
-One iteration of the loop (`0x80007720` back to `0x80007720`): the literal run,
-one conversion (`%s`, `%d`, `%lld`), `PRINT`, the flush. The data view's bytes
-lie in RAM off the HTIF words, off the stack scratch and off the destination
-(`DataOff`), so every literal run and `%s` string is a `PieceSrc`.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
 
-/-- The loop head's first instruction (`0x80007720`, `ld s6,0(sp)`): the
-cursor into `s6`. -/
 theorem svf_head {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -35,7 +24,6 @@ theorem svf_head {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
-/-- The data view off everything the run owns, in RAM off the HTIF words. -/
 structure DataOff (Dt : Mem) (DA : List Nat) (s dst n : Nat) : Prop where
   ram : ∀ a ∈ DA, 0x80000000 ≤ a ∧ a + 8 ≤ 0x100000000
   htif : ∀ a ∈ DA, a + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ a
@@ -43,7 +31,6 @@ structure DataOff (Dt : Mem) (DA : List Nat) (s dst n : Nat) : Prop where
   dst : ∀ a ∈ DA, a < dst ∨ dst + n ≤ a
   tab : TabAt Dt DA
 
-/-- A run of data bytes is a piece `_svfprintf_r` may print. -/
 theorem pieceSrc_of_data {Dt : Mem} {DA : List Nat} {s dst n b l : Nat} (DO : DataOff Dt DA s dst n)
     (SG : SnpGeom s dst n) (hl31 : l < 2 ^ 31) (hd' : InDA DA b (b + l + 1)) :
     PieceSrc DA s dst n b l := by
@@ -54,7 +41,7 @@ theorem pieceSrc_of_data {Dt : Mem} {DA : List Nat} {s dst n b l : Nat} (DO : Da
   have he := hd (b + l) (by omega) (by omega)
   have r1 := DO.ram b hb
   have r2 := DO.ram _ he
-  -- an interval of data bytes misses each owned interval
+
   have iv : ∀ lo hi, lo < hi → (∀ a, b ≤ a → a < b + l + 1 → a < lo ∨ hi ≤ a) → b + l ≤ lo ∨ hi ≤ b := by
     intro lo hi hlh h
     by_cases h1 : b + l ≤ lo
@@ -65,7 +52,7 @@ theorem pieceSrc_of_data {Dt : Mem} {DA : List Nat} {s dst n b l : Nat} (DO : Da
     have := h (max b lo) (Nat.le_max_left _ _) (by omega)
     omega
   have hstk0 : b + l ≤ s - 1024 ∨ s ≤ b := iv _ _ (by omega) fun a h1 h2 => DO.stack a (hd a h1 h2)
-  -- one truncated subtraction per `omega` call (two send it into deep recursion)
+
   have hstk : b + l + 1024 ≤ s ∨ s ≤ b := by
     rcases hstk0 with h | h
     · left; omega
@@ -98,15 +85,12 @@ theorem pieceBytes_congr {g g' : Nat → BitVec 8} {b l : Nat} (h : ∀ i, i < l
   unfold pieceBytes
   exact List.map_congr_left fun i hi => h i (List.mem_range.mp hi)
 
-/-- The literal run's pieces: none when the run is empty. -/
 theorem catPieces_lit (g : Nat → BitVec 8) {L : List (Nat × Nat)} {p q : Nat}
     (hL : L = [] ∧ p = q ∨ L = [(p, q - p)] ∧ p < q) : catPieces g L = pieceBytes g p (q - p) := by
   rcases hL with ⟨rfl, rfl⟩ | ⟨rfl, _⟩
   · simp [catPieces, pieceBytes]
   · simp [catPieces]
 
-/-- The `va_list` slot `ap` of `snprintf`'s frame: outside what
-`_svfprintf_r` writes. -/
 theorem ld_ap {s dst n ap : Nat} {Mt Mt0 : Mem} (SG : SnpGeom s dst n)
     (hfr : ∀ a, ¬ SvfW s dst n a → imgM Mt a = imgM Mt0 a) (hap1 : s - 40 ≤ ap) (hap2 : ap + 8 ≤ s) :
     ldv .ld Mt (BitVec.ofNat 64 ap).toNat = ldv .ld Mt0 (BitVec.ofNat 64 ap).toNat := by
@@ -116,8 +100,6 @@ theorem ld_ap {s dst n ap : Nat} {Mt Mt0 : Mem} (SG : SnpGeom s dst n)
   rw [toNat_ofNat_lt (by omega)]
   exact ldv_agree .ld fun i hi => hfr _ (by simp only [SvfW, snpFP, widthOfM] at hi ⊢; omega)
 
-/-- **A `%s` iteration** (`0x80007720` → `0x80007720`): the literal run `[p, p + k)`,
-the `'%s'` at `p + k`, the string at the `va_list`'s `ap`. -/
 theorem svf_iterS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
@@ -168,8 +150,6 @@ theorem svf_iterS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   rw [e1, e2, ← List.append_assoc] at A6
   exact A6
 
-/-! ## Renderings -/
-
 theorem vSg_eq (v : BitVec 64) : vSg v = if 2 ^ 63 ≤ v.toNat then 45 else 0 := by
   unfold vSg
   have := BitVec.toInt_eq_toNat_cond v
@@ -184,9 +164,6 @@ theorem vMag_eq (v : BitVec 64) : vMag v = if 2 ^ 63 ≤ v.toNat then (-v).toNat
   · rw [if_pos h, if_pos (by rw [this]; split <;> omega)]
   · rw [if_neg h, if_neg (by rw [this]; split <;> omega)]
 
-/-- **An integer's pieces are its decimal rendering**: the sign piece (`'-'`
-at `sp + 167` when set) and the `K` digits at `sp + 348 - K`, read through a
-`g` that agrees with the memory `Mt` holding them. -/
 theorem intPieces {s K : Nat} {v : BitVec 64} {g : Nat → BitVec 8} {Mt : Mem} (hs : 1024 ≤ s)
     (DG : DigitsAt Mt s (vMag v) K) (hg : ∀ a, PZone s a → g a = imgM Mt a)
     (hsg : imgM Mt (s - 864 + 167) = BitVec.ofNat 8 (vSg v)) :
@@ -231,8 +208,6 @@ theorem lbu_imgM {Mt : Mem} {a b : Nat} (hb : b < 256) (h : ldv .lbu Mt a = BitV
   have := (imgM Mt a).isLt
   omega
 
-/-- The integer conversion from the table through `PRINT` and the flush: the
-value `v` rendered after the pending literal pieces. -/
 def IntK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) (v : BitVec 64) : Prop :=
@@ -241,7 +216,6 @@ def IntK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
       (total ++ catPieces g L ++ strBytes (Vsa.While.intToString v.toInt)) R' Mt' →
     SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt'
 
-/-- From the integer's `IntAt` (`0x80008100`) to the loop head. -/
 theorem svf_intTail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
@@ -263,8 +237,6 @@ theorem svf_intTail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   refine hk R2 Mt2 g hg2 ?_
   rw [hlen]; exact A2
 
-/-- **A `%lld` iteration** (`0x80007720` → `0x80007720`): the literal run
-`[p, p + k)`, `"%lld"` at `p + k`, the 64-bit value at `ap`. -/
 theorem svf_iterLLD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
@@ -337,8 +309,6 @@ theorem lw_ap {s dst n ap : Nat} {Mt Mt0 : Mem} (SG : SnpGeom s dst n)
   rw [toNat_ofNat_lt (by omega)]
   exact ldv_agree .lw fun i hi => hfr _ (by simp only [SvfW, snpFP, widthOfM] at hi ⊢; omega)
 
-/-- **A `%d` iteration** (`0x80007720` → `0x80007720`): the literal run
-`[p, p + k)`, `"%d"` at `p + k`, the 32-bit value at `ap` (sign-extended). -/
 theorem svf_iterD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}
@@ -389,8 +359,6 @@ theorem svf_iterD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   rw [show p + k + 1 + 1 = p + k + 2 by omega] at A9
   exact A9
 
-/-- **The last iteration** (`0x80007720` → `_svfprintf_r`'s return): the literal
-run `[p, p + k)`, then the NUL. -/
 theorem svf_iterEnd {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {total : List (BitVec 8)}

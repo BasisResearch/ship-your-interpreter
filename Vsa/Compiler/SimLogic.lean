@@ -1,14 +1,9 @@
 import Vsa.Compiler.SimBin
 
-/-!
-# Forward simulation: short-circuit operators
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- The value a short-circuit operator yields without its right operand. -/
 def logShort : LogOp → Bool
   | .or => true
   | .and => false
@@ -29,7 +24,6 @@ section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
 
-/-- The left operand decides: `true || _` and `false && _`. -/
 theorem sLogShort {op : LogOp} {st : St} {d : Nat} {env : Addr} {l r : Expr} {st1 : St} {lv : Value}
     {n : Nat} (hE : ESpec code T st d env l st1 lv n) (ht : lv.truthy = logShort op) :
     ESpec code T st d env (.logical op l r) st1 (.bool (logShort op)) n := by
@@ -74,7 +68,6 @@ theorem sLogShort {op : LogOp} {st : St} {d : Nat} {env : Addr} {l r : Expr} {st
     · reg_simp []; exact (Keep.gset (Keep.refl _ L1) (by decide)).trans (hk2.mono (by decide))
     · exact ⟨_, _, by reg_simp [], by reg_simp [] <;> rfl, rfl, rfl⟩
 
-/-- Both operands run: `false || r` and `true && r`. -/
 theorem sLogFull {op : LogOp} {st : St} {d : Nat} {env : Addr} {l r : Expr} {st1 st2 : St}
     {lv rv : Value} {nl nr : Nat} (hEl : ESpec code T st d env l st1 lv nl) (ht : lv.truthy = !logShort op)
     (hEr : ESpec code T st1 d env r st2 rv nr) :

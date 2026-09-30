@@ -1,20 +1,10 @@
 import Vsa.Compiler.SimUnary
 import Vsa.Compiler.RTOps
 
-/-!
-# Binary operator code
-
-`run_op`: the code of a binary operator, on two represented operands in
-`(a0, a1)` and `(a2, a3)` whose `binOpSem` result is `v`, returns `v` and grows the
-object heap by at most `64` bytes per unit of `binOpCost`, or reaches the error
-exit without that room.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- The result of a binary operator's code. -/
 structure OpRet (H : CloMap) (m m' : Mem) (h h' c : Nat) (L L' : GRegs) (v : Value) : Prop where
   hp : Has L' hpO (BitVec.ofNat 64 h')
   grow : h ≤ h'
@@ -58,7 +48,6 @@ section
 variable {code : List Ins} (hR : RTLoaded code)
 include hR
 
-/-- A routine that keeps the memory and the object heap. -/
 theorem opRet_same {H : CloMap} {m : Mem} {h : Nat} {L L' : GRegs} {v : Value} {c : Nat} {S : List Nat}
     {r : BitVec 64} (hS : ∀ x ∈ S, x ∈ addClob) (hno : hpO ∉ S) (h8 : Has L hpO (BitVec.ofNat 64 h))
     (hh : ObjPtr h) (hv : InA H m h L' v) (hk : Keep S (gset L 1 r) L') : OpRet H m m h h c L L' v where

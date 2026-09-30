@@ -1,20 +1,9 @@
 import Vsa.AbsInt.Domain
 
-/-!
-# The constant domain
-
-The flat lattice over values: `bot`, one value, or `top`. Operators on two
-known values compute `binOpSem` exactly, except string concatenation with a
-closure, whose rendering depends on the store. Equality tests refine a
-variable to the constant it is compared with. The lattice has finite height,
-so widening is join.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While
 
-/-- Constants. -/
 inductive Const where
   | bot
   | val (v : Value)
@@ -44,10 +33,8 @@ def isClosure : Value → Bool
   | .closure _ => true
   | _ => false
 
-/-- The empty store, for operators that do not consult it. -/
 def store0 : Store := ⟨#[], #[]⟩
 
-/-- `binOpSem` does not consult the store unless a closure is rendered. -/
 theorem binOpSem_store {s s' : Store} {op : BinOp} {l r : Value}
     (hl : isClosure l = false) (hr : isClosure r = false) :
     binOpSem s op l r = binOpSem s' op l r := by
@@ -55,7 +42,6 @@ theorem binOpSem_store {s s' : Store} {op : BinOp} {l r : Value}
     rcases r with _ | _ | _ | _ | _ | (_ | _ | _) <;>
     simp_all [isClosure] <;> cases op <;> rfl
 
-/-- Whether `binOpSem` fails does not depend on the store. -/
 theorem binOpSem_none_store {s s' : Store} {op : BinOp} {l r : Value}
     (h : binOpSem s op l r = none) : binOpSem s' op l r = none := by
   rcases l with _ | _ | _ | _ | _ | (_ | _ | _) <;>
@@ -105,13 +91,12 @@ def asNative : Const → Option NativeFn
   | val (.native f) => some f
   | _ => none
 
-/-- `x == r` true (or `x != r` false) makes `x` the constant `r`. -/
 def refine : BinOp → Bool → Const → Const → Const
   | .eq, true, a, val r => if Gam' a r then val r else bot
   | .ne, false, a, val r => if Gam' a r then val r else bot
   | _, _, a, _ => a
 where
-  /-- Decidable membership. -/
+
   Gam' : Const → Value → Bool
     | bot, _ => false
     | val v, w => w == v
@@ -232,13 +217,13 @@ instance : AbsDom Const where
   refine_sound := by
     intro s op t l r w a b hl hr hw ht
     cases op <;> cases t <;> cases b <;> simp only [Const.refine] <;> try exact hl
-    · -- `x == r` is true
+    ·
       simp only [Const.Gam] at hr
       subst hr
       rcases l with _ | _ | _ | _ | _ | (_ | _ | _) <;> simp [binOpSem] at hw <;> subst hw <;>
         (have := Const.value_equal_eq ht; subst this;
          simp [Const.gam'_iff.2 hl, Const.Gam])
-    · -- `x != r` is false
+    ·
       simp only [Const.Gam] at hr
       subst hr
       rcases l with _ | _ | _ | _ | _ | (_ | _ | _) <;> simp [binOpSem] at hw <;> subst hw <;>

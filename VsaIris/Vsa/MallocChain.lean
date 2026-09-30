@@ -1,29 +1,9 @@
 import VsaIris.Vsa.MallocLarge
 
-/-!
-# `_malloc_r` from its entry, on the proved paths
-
-`malloc_paths` chains every `_malloc_r` join proved so far — the prologue and
-error return (`malloc_pro`), the small-bin check and take (`j_small`,
-`small_take`), the large-bin scan and take (`lscan`), the last-remainder check
-and its exact-fit return (`lr_last`), the last remainder's split (`lr_split`),
-its re-binning (`rebin`, `rebinL`), the block search's entry, the top split
-and `malloc_extend_top` (`bb_top`, `bb_entry`, `extend_top`) — into one statement
-from the function's entry `0x800047a8`.
-
-Its one hypothesis is the block walk over `binblocks` (`0x80004978`), which
-`bw_find` (`MallocBlocks2.lean`) proves; `malloc_all` there is the closed
-statement.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 
-/-- **From the last-remainder check** (`0x800048ec`) on the proved paths:
-the exact-fit or split remainder, its re-binning, the block search's entry,
-the top split and `malloc_extend_top`, with the block walk as the one
-hypothesis. Both the small path and the large scan end here. -/
 theorem from_lr {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb)
@@ -36,7 +16,7 @@ theorem from_lr {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       2 ^ (idx / 4) ≤ bb → (R' 11).toNat = bb → (R' 10).toNat = 2 ^ (idx / 4) →
       AW C.live C.S C.Q 0x80004978#64 R' Mt) :
     AW C.live C.S C.Q 0x800048ec#64 R Mt := by
-  -- after a re-binning: the block search's test
+
   have hnext : RebinNext C brkv chunks bins nb idx :=
     fun R'' Mt'' bins'' bb'' F'' Hp'' hb1 hsub G'' h29 h8'' hbb h11 =>
       bb_entry O F'' Hp'' G'' h8'' hidx hbb h11 h29
@@ -58,12 +38,6 @@ theorem from_lr {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (fun bb hbb hle R4 F4 G4 h84 h29' h11 h10 =>
       hblocks R4 Mt _ _ _ nb _ bb F4 Hp hb1 hsf hnb hnb31 hidx hidx1 G4 h29' h84 hbb hle h11 h10)
 
-/-- **`_malloc_r` on its proved paths.** From the entry, with the block walk
-still open as a hypothesis, a request either returns a block off a small bin,
-off its large bin, off the last remainder (whole or split), or off the top
-(split in place or after `sbrk` grew it) — or returns NULL because the arena
-cannot hold it. A too-small last remainder is re-binned on the way (`rebin`,
-`rebinL`). -/
 theorem malloc_paths {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (E : MEntry C R) (Hp : MHeap C C.Mt0 brkv chunks bins)

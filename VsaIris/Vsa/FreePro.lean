@@ -1,17 +1,10 @@
 import VsaIris.Vsa.FreeCtx
 
-/-!
-# `_free_r`'s prologue
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The heap before `_free_r` writes it: in shape with the block `(q, n)`
-live, the footprint of the heap without it present and off the stack, and
-every byte outside the write window at its entry value. -/
 structure FHeap (C : MCtx) (Mt : Mem) (q n brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) : Prop where
   heap : PHeapAt Mt ((q, n) :: C.H) C.top0 brkv chunks bins
@@ -20,7 +13,6 @@ structure FHeap (C : MCtx) (Mt : Mem) (q n brkv : Nat) (chunks : List Chunk)
   disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
-/-- The heap invariant through a store to the run's stack. -/
 theorem FHeap.store_stack {C : MCtx} {Mt : Mem} {q n brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (Hp : FHeap C Mt q n brkv chunks bins) {a w : Nat} {v : BitVec 64}
     (h1 : C.s.toNat - mHead ≤ a) (h2 : a + w ≤ C.s.toNat) :
@@ -36,9 +28,6 @@ theorem FHeap.store_stack {C : MCtx} {Mt : Mem} {q n brkv : Nat} {chunks : List 
   disj := Hp.disj
   frame := frame_store (win_stack h1 h2) Hp.frame
 
-/-- The chunk `_free_r` releases, as its prologue decodes it: the in-use
-chunk `x` below the block, its header `hdr0` and size `sz`, and the header
-`nh` after it. -/
 structure FChunk (Mt : Mem) (q : Nat) (chunks : List Chunk) (x sz hdr0 nh : Nat) : Prop where
   mem : (⟨x, sz, true⟩ : Chunk) ∈ chunks
   addr : x + 16 = q
@@ -47,10 +36,6 @@ structure FChunk (Mt : Mem) (q : Nat) (chunks : List Chunk) (x sz hdr0 nh : Nat)
   hlow : hdr0 % 4 < 2
   next : read64 Mt (x + sz + 8) = some nh
 
-/-- The state at `_free_r`'s first branch (`0x80007398`): the frame, the heap
-unwritten, the decoded chunk, and its registers (`av` in `a7`, the top in
-`a6`, the chunk in `a4`, its size in `a5`, the next chunk in `a2`, its header
-in `a0` and `PREV_INUSE` in `t1`, the next size in `a3`). -/
 structure FDec (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) (q n brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) (x sz hdr0 nh : Nat) : Prop where
   frame : FFrame C R Mt
@@ -67,8 +52,6 @@ structure FDec (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) (q n brkv : Nat) (c
   t1 : (R 6).toNat = hdr0 % 2
   a3 : (R 13).toNat = chunkSize nh
 
-/-- **`_free_r`'s prologue** (`0x80007350`): a non-NULL block, the frame, the
-lock, and the decoding of the chunk below the block. -/
 theorem free_pro {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {q n brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (E : FEntry C q R) (Hp : FHeap C C.Mt0 q n brkv chunks bins)
@@ -173,8 +156,6 @@ namespace VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **`_free_r`'s epilogue** (`0x80007434`): restore `s0` and `ra`, pop the
-frame, release the lock and return, owing `FRet`. -/
 theorem free_epi {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} (F : FFrame C R Mt)
     (hheap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins ∧ top ≤ C.top0)
     (hpres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome)

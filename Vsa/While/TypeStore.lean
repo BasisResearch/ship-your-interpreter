@@ -1,17 +1,8 @@
 import Vsa.While.Types
 
-/-!
-# Store lemmas for type soundness
-
-Store growth (`Ext`), typed lookup, allocation, definition, assignment and
-parameter binding, each preserving `StoreOK`.
--/
-
 namespace Vsa.While.Types
 
 open Vsa.While
-
-/-! ## Store growth -/
 
 theorem Ext.refl (s : Store) : Ext s s :=
   ⟨Nat.le_refl _, fun _ f h => ⟨f, h, rfl, fun _ hx => hx⟩, fun _ _ h => h⟩
@@ -36,7 +27,6 @@ theorem any_of_find? {vars : List (String × Value)} {x : String} {p : String ×
     (h : vars.find? (·.1 == x) = some p) : vars.any (·.1 == x) = true :=
   List.any_eq_true.mpr ⟨p, List.mem_of_find?_eq_some h, List.find?_some (p := fun (q : String × Value) => q.1 == x) h⟩
 
-/-- Unfolding one step of `Store.lookup`. -/
 theorem lookup_succ (s : Store) (g : Nat) (a : Addr) (x : String) :
     s.lookup (g + 1) a x =
       match s.frames[a]? with
@@ -119,7 +109,6 @@ theorem StatusOK.ext {Δ : TyEnv} {s s' : Store} {R : Option Ty} {L : Bool}
     obtain ⟨t, hR, hv⟩ := h
     exact ⟨t, hR, hv.ext hE⟩
 
-/-- A found binding has its name's type. -/
 theorem lookup_typed {Δ : TyEnv} {s : Store} (hS : StoreOK Δ s) (x : String) :
     ∀ g a v, s.lookup g a x = some v → ValTy Δ s v (Δ x) := by
   intro g
@@ -151,8 +140,6 @@ theorem lookup_typed {Δ : TyEnv} {s : Store} (hS : StoreOK Δ s) (x : String) :
 theorem get?_typed {Δ : TyEnv} {s : Store} (hS : StoreOK Δ s) {a : Addr} {x : String}
     {v : Value} (h : s.get? a x = some v) : ValTy Δ s v (Δ x) :=
   lookup_typed hS x _ a v h
-
-/-! ## Allocation -/
 
 theorem allocFrame_eq {s s' : Store} {p : Option Addr} {a : Addr}
     (h : s.allocFrame p = (s', a)) :
@@ -186,7 +173,6 @@ theorem allocFrame_storeOK {Δ : TyEnv} {s s' : Store} {p : Option Addr} {a : Ad
     simp at hq
   · exact (hS b f hf q hq).ext hE
 
-/-- A fresh frame sees every name bound along its parent's chain. -/
 theorem allocFrame_defined {s s' : Store} {p a : Addr} {x : String}
     (h : s.allocFrame (some p) = (s', a)) (hd : Defined s p x) : Defined s' a x := by
   have hE := allocFrame_ext h
@@ -225,9 +211,6 @@ theorem allocClosure_storeOK {Δ : TyEnv} {s s' : Store} {cd : ClosureData} {a :
   intro b f hf q hq
   exact (hS b f hf q hq).ext hE
 
-/-! ## Definition and assignment -/
-
-/-- The frame update performed by `Store.define`. -/
 def defineFrame (x : String) (v : Value) (f : Frame) : Frame :=
   { f with vars :=
       if f.vars.any (·.1 == x) then
@@ -318,7 +301,6 @@ theorem define_storeOK {Δ : TyEnv} {s : Store} {a : Addr} {x : String} {v : Val
       · exact (hS a f0 hf0 q hq).ext hE
   · exact (hS b f hf q hq).ext hE
 
-/-- The frame update performed by a successful `Store.set` step. -/
 def setFrame (x : String) (v : Value) (f : Frame) : Frame :=
   { f with vars := f.vars.map fun p => if p.1 == x then (x, v) else p }
 
@@ -383,7 +365,6 @@ theorem set_spec {Δ : TyEnv} {x : String} {v : Value} :
         | none => simp [hp] at h
         | some p => simp only [hp] at h; exact ih s s' p h
 
-/-- Assignment succeeds on a bound name. -/
 theorem set_of_lookup {x : String} {v : Value} :
     ∀ g (s : Store) (a : Addr) w, s.lookup g a x = some w → ∃ s', s.set g a x v = some s' := by
   intro g
@@ -416,8 +397,6 @@ theorem set?_of_defined {s : Store} {a : Addr} {x : String} (v : Value)
     (h : Defined s a x) : ∃ s', s.set? a x v = some s' := by
   obtain ⟨w, hw⟩ := h
   exact set_of_lookup _ s a w hw
-
-/-! ## Parameter binding -/
 
 theorem foldDefine_spec {Δ : TyEnv} {fr : Addr} :
     ∀ (ps : List String) (vs : List Value) (s : Store),

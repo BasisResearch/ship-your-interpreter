@@ -1,70 +1,22 @@
 import Vsa.While.ErrorSem
 
-/-!
-# A static type system for WHILE
-
-Simple types with function types, typed against the big-step semantics of
-`Vsa/While/Semantics.lean`.
-
-## Design
-
-* **Program-wide typing environment.** A program is typed under one
-  `Δ : String → Ty` that gives every identifier a single type throughout the
-  program (variables, parameters and the three builtins alike). WHILE scopes
-  are mutable frames that closures share and that later declarations extend,
-  so a name referenced in a closure body can resolve at run time to a
-  binding declared after the closure was created. With `Δ` every binding of
-  `x` in every frame has type `Δ x`, so which frame a lookup finds never
-  affects its type. Shadowing and redeclaration are allowed at the same type.
-
-* **Defined-name sets.** The typing judgments carry `S : List String`, the
-  names that are certainly bound along the current scope chain. A variable
-  read or assignment requires its name in `S`, which rules out the
-  undefined-variable and unbound-assignment errors. A declaration adds its
-  name; a block, branch or loop body does not export its declarations.
-  A closure body is typed with its parameters and the names defined where the
-  closure is created. `var f = fn (…) {…}` additionally makes `f` available in
-  the body (`WtS.varRec`), which types directly recursive functions.
-
-* **Control flow.** Statements are typed with an optional return type `R`
-  (`none`: `return` is rejected, as at the top level) and a loop flag `L`
-  (`break`/`continue` are accepted only when `L`). A function whose body can
-  complete normally returns `null`, so a function type `fn ps r` requires
-  `r = null` or `MustExitSeq body` (every path ends in
-  `return`/`break`/`continue`).
-
-* **Builtins.** `print`, `println` and `assert` have singleton types
-  `native f`; the print functions take any argument list and `assert` takes
-  one or two arguments. Calls take at most `maxArgs` arguments.
-
-The runtime errors this system rules out are undefined variables, unbound
-assignments, operator type errors, negation of a non-integer, calling a
-non-callable value, arity mismatches (closures and `assert`), too many
-arguments, dangling closures, `break`/`continue` escaping a function body, and
-an abrupt top-level status. The remaining runtime errors are division or
-remainder by zero, a failed `assert`, and exceeding the call-depth cap
-(`EvalErrN` below).
--/
-
 namespace Vsa.While.Types
 
 open Vsa.While
 
-/-- Types. -/
 inductive Ty where
   | int
   | bool
   | str
   | null
-  /-- The singleton type of one builtin function. -/
+
   | native (f : NativeFn)
-  /-- Closures taking parameters of types `ps` and returning `r`. -/
+
   | fn (ps : List Ty) (r : Ty)
   deriving Repr
 
 mutual
 
-/-- Decidable equality of types. -/
 def Ty.decEq : (a b : Ty) → Decidable (a = b)
   | .int, .int => isTrue rfl
   | .bool, .bool => isTrue rfl
@@ -86,7 +38,6 @@ def Ty.decEq : (a b : Ty) → Decidable (a = b)
   | .fn _ _, .int | .fn _ _, .bool | .fn _ _, .str | .fn _ _, .null
   | .fn _ _, .native _ => isFalse fun e => by cases e
 
-/-- Decidable equality of type lists. -/
 def Ty.decEqList : (a b : List Ty) → Decidable (a = b)
   | [], [] => isTrue rfl
   | [], _ :: _ => isFalse fun e => by cases e
@@ -101,11 +52,8 @@ end
 
 instance : DecidableEq Ty := Ty.decEq
 
-/-- The program-wide typing environment. -/
 abbrev TyEnv := String → Ty
 
-/-- Operator typing: `binOpSem` is defined on every pair of values of these
-types, except division and remainder by zero. -/
 inductive BinTy : BinOp → Ty → Ty → Ty → Prop where
   | addInt : BinTy .add .int .int .int
   | addStrL (t : Ty) : BinTy .add .str t .str
@@ -121,7 +69,6 @@ inductive BinTy : BinOp → Ty → Ty → Ty → Prop where
   | cmpStr (op : BinOp) : (op = .lt ∨ op = .le ∨ op = .gt ∨ op = .ge) →
       BinTy op .str .str .bool
 
-/-- Call typing: callee type, argument types, result type. -/
 inductive CallTy : Ty → List Ty → Ty → Prop where
   | fn (ps : List Ty) (r : Ty) : CallTy (.fn ps r) ps r
   | print (ts : List Ty) : CallTy (.native .print) ts .null
@@ -131,7 +78,6 @@ inductive CallTy : Ty → List Ty → Ty → Prop where
 
 mutual
 
-/-- A statement that never completes with status `normal`. -/
 inductive MustExit : Stmt → Prop where
   | ret (e : Option Expr) : MustExit (.ret e)
   | brk : MustExit .brk
@@ -140,7 +86,6 @@ inductive MustExit : Stmt → Prop where
   | ite (c : Expr) (t e : Stmt) : MustExit t → MustExit e →
       MustExit (.ifStmt c t (some e))
 
-/-- A statement sequence that never completes with status `normal`. -/
 inductive MustExitSeq : List Stmt → Prop where
   | head (s : Stmt) (ss : List Stmt) : MustExit s → MustExitSeq (s :: ss)
   | tail (s : Stmt) (ss : List Stmt) : MustExitSeq ss → MustExitSeq (s :: ss)
@@ -149,7 +94,6 @@ end
 
 mutual
 
-/-- Expression typing under the defined-name set `S`. -/
 inductive WtE (Δ : TyEnv) : List String → Expr → Ty → Prop where
   | int (S : List String) (n : Int) : WtE Δ S (.int n) .int
   | str (S : List String) (s : String) : WtE Δ S (.str s) .str
@@ -177,14 +121,11 @@ inductive WtE (Δ : TyEnv) : List String → Expr → Ty → Prop where
       (r = .null ∨ MustExitSeq body) →
       WtE Δ S (.fn name params body) (.fn (params.map Δ) r)
 
-/-- Argument-list typing. -/
 inductive WtArgs (Δ : TyEnv) : List String → List Expr → List Ty → Prop where
   | nil (S : List String) : WtArgs Δ S [] []
   | cons (S : List String) (e : Expr) (es : List Expr) (t : Ty) (ts : List Ty) :
       WtE Δ S e t → WtArgs Δ S es ts → WtArgs Δ S (e :: es) (t :: ts)
 
-/-- Statement typing: `WtS Δ S R L s S'` types `s` with defined names `S`,
-return type `R` and loop flag `L`; afterwards the names `S'` are defined. -/
 inductive WtS (Δ : TyEnv) : List String → Option Ty → Bool → Stmt →
     List String → Prop where
   | expr (S : List String) (R : Option Ty) (L : Bool) (e : Expr) (t : Ty) :
@@ -193,7 +134,7 @@ inductive WtS (Δ : TyEnv) : List String → Option Ty → Bool → Stmt →
       Δ x = .null → WtS Δ S R L (.varDecl x none) (x :: S)
   | varInit (S : List String) (R : Option Ty) (L : Bool) (x : String) (e : Expr) :
       WtE Δ S e (Δ x) → WtS Δ S R L (.varDecl x (some e)) (x :: S)
-  /-- `var x = fn (…) {…}`: the body may call `x` recursively. -/
+
   | varRec (S : List String) (R : Option Ty) (L : Bool) (x : String)
       (name : Option String) (params : List String) (body : List Stmt)
       (r : Ty) (S' : List String) :
@@ -224,7 +165,6 @@ inductive WtS (Δ : TyEnv) : List String → Option Ty → Bool → Stmt →
   | brk (S : List String) (R : Option Ty) : WtS Δ S R true .brk S
   | cont (S : List String) (R : Option Ty) : WtS Δ S R true .cont S
 
-/-- Typing of the optional `for` initializer. -/
 inductive WtInit (Δ : TyEnv) : List String → Option Ty → Bool → Option Stmt →
     List String → Prop where
   | none (S : List String) (R : Option Ty) (L : Bool) : WtInit Δ S R L none S
@@ -232,12 +172,10 @@ inductive WtInit (Δ : TyEnv) : List String → Option Ty → Bool → Option St
       (S' : List String) :
       WtS Δ S R L s S' → WtInit Δ S R L (some s) S'
 
-/-- Typing of an optional expression (`for` condition and step). -/
 inductive WtEO (Δ : TyEnv) : List String → Option Expr → Prop where
   | none (S : List String) : WtEO Δ S none
   | some (S : List String) (e : Expr) (t : Ty) : WtE Δ S e t → WtEO Δ S (some e)
 
-/-- Statement-sequence typing. -/
 inductive WtSeq (Δ : TyEnv) : List String → Option Ty → Bool → List Stmt →
     List String → Prop where
   | nil (S : List String) (R : Option Ty) (L : Bool) : WtSeq Δ S R L [] S
@@ -247,34 +185,23 @@ inductive WtSeq (Δ : TyEnv) : List String → Option Ty → Bool → List Stmt 
 
 end
 
-/-- The names bound in the initial global frame. -/
 def builtinNames : List String := ["print", "println", "assert"]
 
-/-- `Δ` agrees with the builtin bindings of `initSt`. -/
 structure BuiltinsTyped (Δ : TyEnv) : Prop where
   print : Δ "print" = .native .print
   println : Δ "println" = .native .println
   assert : Δ "assert" = .native .assert
 
-/-- **Well-typed programs.** The top level is typed with no return type and
-outside any loop, starting from the builtin names. -/
 structure WellTyped (Δ : TyEnv) (p : Program) : Prop where
   builtins : BuiltinsTyped Δ
   body : ∃ S', WtSeq Δ builtinNames none false p S'
 
-/-! ## Run-time typing -/
-
-/-- `x` is bound along the scope chain starting at frame `a`. -/
 def Defined (s : Store) (a : Addr) (x : String) : Prop :=
   ∃ v, s.get? a x = some v
 
-/-- Every name of `S` is bound along the chain starting at `a`. -/
 def DefAll (s : Store) (a : Addr) (S : List String) : Prop :=
   ∀ x ∈ S, Defined s a x
 
-/-- Value typing in a store. A closure has type `fn (params.map Δ) r` when its
-body is typed with return type `r` under its parameters and a name set `S`
-that is bound along its captured scope chain. -/
 inductive ValTy (Δ : TyEnv) (s : Store) : Value → Ty → Prop where
   | null : ValTy Δ s .null .null
   | bool (b : Bool) : ValTy Δ s (.bool b) .bool
@@ -288,39 +215,26 @@ inductive ValTy (Δ : TyEnv) (s : Store) : Value → Ty → Prop where
       DefAll s cd.env S →
       ValTy Δ s (.closure a) (.fn (cd.params.map Δ) r)
 
-/-- Pointwise value typing of a list of values. -/
 inductive ValTys (Δ : TyEnv) (s : Store) : List Value → List Ty → Prop where
   | nil : ValTys Δ s [] []
   | cons (v : Value) (vs : List Value) (t : Ty) (ts : List Ty) :
       ValTy Δ s v t → ValTys Δ s vs ts → ValTys Δ s (v :: vs) (t :: ts)
 
-/-- Every binding of every frame has its name's type. -/
 def StoreOK (Δ : TyEnv) (s : Store) : Prop :=
   ∀ (a : Addr) (f : Frame), s.frames[a]? = some f → ∀ p ∈ f.vars, ValTy Δ s p.2 (Δ p.1)
 
-/-- A completion status is permitted by return type `R` and loop flag `L`. -/
 def StatusOK (Δ : TyEnv) (s : Store) (R : Option Ty) (L : Bool) : Status → Prop
   | .normal => True
   | .brk => L = true
   | .cont => L = true
   | .ret v => ∃ t, R = some t ∧ ValTy Δ s v t
 
-/-- Store growth: frames and closures are never removed, frame parents never
-change, and a frame's bound names only grow. -/
 structure Ext (s s' : Store) : Prop where
   size_le : s.frames.size ≤ s'.frames.size
   frames : ∀ (a : Addr) (f : Frame), s.frames[a]? = some f → ∃ f' : Frame, s'.frames[a]? = some f' ∧
     f'.parent = f.parent ∧
     ∀ x, f.vars.any (·.1 == x) = true → f'.vars.any (·.1 == x) = true
   closures : ∀ (a : Addr) (cd : ClosureData), s.closures[a]? = some cd → s'.closures[a]? = some cd
-
-/-! ## Errors that the type system does not rule out
-
-`EvalErrN` … `ExecSeqErrN` are the restriction of the error judgment of
-`Vsa/While/ErrorSem.lean` to three leaves: division or remainder by zero
-(`divZero`), a failed `assert` (`assertFail`), and the call-depth cap
-(`depth`). Every other constructor propagates an error from a subderivation in
-the same evaluation order as the full judgment. -/
 
 mutual
 
@@ -333,7 +247,7 @@ inductive EvalErrN : St → Nat → Addr → Expr → Prop where
       (st' : St) (lv : Value) :
     EvalE st d env l st' lv → EvalErrN st' d env r →
     EvalErrN st d env (.binary op l r)
-  /-- Leaf: division or remainder by zero. -/
+
   | divZero (st : St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr)
       (st' st'' : St) (lv : Value) :
     (op = .div ∨ op = .mod) →
@@ -372,7 +286,7 @@ inductive EvalArgsErrN : St → Nat → Addr → List Expr → Prop where
     EvalArgsErrN st d env (e :: es)
 
 inductive CallErrN : St → Nat → Value → List Value → Prop where
-  /-- Leaf: the call-depth cap. -/
+
   | depth (st : St) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value) :
     st.store.closures[a]? = some cd → vs.length = cd.params.length →
     ¬ d < maxCallDepth → CallErrN st d (.closure a) vs
@@ -383,7 +297,7 @@ inductive CallErrN : St → Nat → Value → List Value → Prop where
     ExecSeqErrN ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store',
       st.out⟩ (d + 1) frame cd.body →
     CallErrN st d (.closure a) vs
-  /-- Leaf: `assert` of a falsy value. -/
+
   | assertFail (st : St) (d : Nat) (vs : List Value) (v m : Value) :
     (vs = [v] ∨ vs = [v, m]) → v.truthy = false →
     CallErrN st d (.native .assert) vs

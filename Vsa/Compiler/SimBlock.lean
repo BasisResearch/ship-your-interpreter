@@ -1,18 +1,9 @@
 import Vsa.Compiler.SimSeq
 
-/-!
-# Forward simulation: blocks
-
-A block allocates a frame of unbound slots for its layout below the current one,
-runs its statements there, and leaves it; an exit leaves it on the way to its
-target.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- An exit from inside a frame entered from `env`. -/
 theorem ExitAt.leave {code : List Ins} {T : List String} {V' : View} {st' : St} {d : Nat} {env inner : Addr}
     {C : GCtx} {L : List String} {sp fs : Nat} {tgt : Option (Nat × Nat)} {B : AM}
     (h : ExitAt code T V' st' d inner (C.enter L) sp fs tgt B) (htgt : ∀ p dt, tgt = some (p, dt) → dt ≤ C.blk)
@@ -46,7 +37,6 @@ theorem CtxOK.enter {C : GCtx} (h : CtxOK C) (L : List String) : CtxOK (C.enter 
   cont p dt e := by have := h.cont p dt e; simp only [GCtx.enter]; omega
   ret p dt e := by have := h.ret p dt e; simp only [GCtx.enter]; omega
 
-/-- The frame entered by a block or a `for`. -/
 structure Entered' (code : List Ins) (T : List String) (V : View) (st : St) (d : Nat) (env : Addr)
     (Γ : List (List String)) (sp fs : Nat) (L : List String) (A B : AM) : Prop where
   ms : MS code T (V.enter L) ⟨(st.store.allocFrame (some env)).1, st.out⟩ d st.store.frames.size (L :: Γ) sp fs B
@@ -114,7 +104,6 @@ theorem run_enterFrame {T : List String} {V : View} {st : St} {d : Nat} {env : A
     stk := hm.stk
     hfal := by simp only [View.enter]; omega }
 
-/-- Leave the frame entered at a block: `ld s1, 0(s1)`. -/
 theorem run_leave {T : List String} {V : View} {st : St} {d : Nat} {env inner : Addr} {Γ : List (List String)}
     {L : List String} {sp fs pos : Nat} {A : AM} (hm : MS code T V st d inner (L :: Γ) sp fs A)
     (hA : A.pc = pcOf pos) {fr : Frame} (hfr : st.store.frames[inner]? = some fr) (hpar : fr.parent = some env)

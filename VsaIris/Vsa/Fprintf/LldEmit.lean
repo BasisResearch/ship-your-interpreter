@@ -1,14 +1,5 @@
 import VsaIris.Vsa.Fprintf.Print
 
-/-!
-# `%lld`'s pieces (lane N5)
-
-From `0x8000b444` (`LldMag`: the digits `ds` end at `sp + 348`, the sign byte
-`sg` at `sp + 167`) `_vfprintf_r` checks the width and precision (none),
-appends the sign piece when `sg ≠ 0`, then the digits, counts them, and
-calls `__sprint_r` at `0x8000b8c4` (`lld_stage`; `vfp_print` goes on).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -16,7 +7,6 @@ open scoped VsaIris.Sym.Stdout
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
-/-- `subw 0, k` of a small positive count, as an integer. -/
 theorem negw_toInt {k : Nat} (h0 : 0 < k) (h : k < 2 ^ 31) :
     (BitVec.signExtend 64 (0#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 k))).toInt = -(k : Int) := by
   have ht : (0#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 k)).toNat = 4294967296 - k := by
@@ -25,7 +15,6 @@ theorem negw_toInt {k : Nat} (h0 : 0 < k) (h : k < 2 ^ 31) :
   rw [BitVec.toInt_signExtend_of_le (by decide), BitVec.toInt_eq_toNat_cond, ht, if_neg (by omega)]
   omega
 
-/-- `subw -1, k` of a small count, as an integer. -/
 theorem subw_m1_toInt {k : Nat} (h : k < 2 ^ 31) :
     (BitVec.signExtend 64 (4294967295#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 k))).toInt = -1 - (k : Int) := by
   have ht : (4294967295#32 - BitVec.extractLsb 31 0 (BitVec.ofNat 64 k)).toNat = 4294967295 - k := by
@@ -34,16 +23,11 @@ theorem subw_m1_toInt {k : Nat} (h : k < 2 ^ 31) :
   rw [BitVec.toInt_signExtend_of_le (by decide), BitVec.toInt_eq_toNat_cond, ht, if_neg (by omega)]
   omega
 
-/-- The `%lld` pieces: the sign byte when there is one, then the digits
-ending at `sp + 348`. -/
 def lldIovs (sp : Nat) (sg : BitVec 8) (ds : List (BitVec 8)) : List (Nat × List (BitVec 8)) :=
   (if sg = 0#8 then [] else [(sp + 167, [sg])]) ++ [(sp + 348 - ds.length, ds)]
 
-/-- The count `%lld` adds. -/
 def lldCnt (sg : BitVec 8) (ds : List (BitVec 8)) : Nat := (if sg = 0#8 then 0 else 1) + ds.length
 
-/-- The bytes `lld_stage` writes: the count, the slot at `sp + 48`, the
-`uio`'s count and residual, the first two iovs. -/
 def StageReg (sp : Nat) (a : Nat) : Prop :=
   (sp + 16 ≤ a ∧ a < sp + 24) ∨ (sp + 48 ≤ a ∧ a < sp + 56) ∨ (sp + 232 ≤ a ∧ a < sp + 248) ∨
     (sp + 352 ≤ a ∧ a < sp + 384)
@@ -131,8 +115,6 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
       (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
        unfold StageReg; omega)
 
-
-
 #ix_piece lldStage_3 from lldStage_1 at 2 by
   have hz : (BitVec.zeroExtend 64 sg = 0#64) = False := eq_false fun h => zext8_ne hs0 (h.trans (by decide))
   have hz' : (BitVec.zeroExtend 64 sg ≠ 0#64) = True := eq_true fun h => by rw [hz] at h; exact h
@@ -194,9 +176,6 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
       (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
        unfold StageReg; omega)
 
-
-
-/-! **`lld_stage`**: `%lld`'s pieces staged, `0x8000b444` → `0x8000b8c4`. -/
 #ix_tree lld_stage := lldStage_1 [lldStage_2 [lldStage_2b [lldStage_2c]], lldStage_3 [lldStage_3b [lldStage_3c]]]
 
 end VsaIris.Sym.Fp

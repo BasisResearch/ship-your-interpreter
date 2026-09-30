@@ -5,25 +5,12 @@ import VsaIris.Vsa.Tools
 import VsaIris.LocalRun
 import VsaIris.Vsa.MallocFastJal
 
-/-!
-# Chaining the fast path into a local run
-
-`seg_step` is the one step every piece of the fast path takes: a reflected
-segment (`seg_runFact`) from the current owned values becomes one `LocalRun`
-segment (`segFrom_of_runFact`). The continuation receives the successor's
-registers and its byte image. The image is tracked as the total read of a
-memory `Mt` that the segment's write log advances. The code is `pathText`,
-read-only; loaded owned bytes (`LD`) and written owned bytes (`W`) are listed
-explicitly. `jal_step` is the same for a `jal` site (`JalExec`).
--/
-
 namespace VsaIris.MallocFast
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst
 open Vsa.Machine (Config)
 
-/-- The allocator code as read-only footprint bytes. -/
 abbrev textMR : List (Nat × DFrac × BitVec 8) := pathText.map fun p => (p.1, DFrac.discard, p.2)
 
 section Steps
@@ -41,7 +28,6 @@ theorem pathLoaded_of_foot {c : Config} (hok : VsaOk live c) (hlive : ∀ p ∈ 
   intro p hp
   exact h _ (List.mem_map_of_mem (f := fun p : Nat × BitVec 8 => (p.1, DFrac.discard, p.2)) hp)
 
-/-- **One reflected segment of the allocator's run.** -/
 theorem seg_step {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} {Mt : Mem}
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8))) (pc0 : BitVec 64)
     (LD : List (Nat × DFrac × BitVec 8)) (W : List (Nat × BitVec 8)) (k : Nat)
@@ -112,7 +98,6 @@ theorem seg_step {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} {Mt 
         unfold imgM
         rw [writeLog_out _ _ _ (hcover a hout)]
 
-/-- **One `jal` of the allocator's run.** -/
 theorem jal_step {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} {Mt : Mem}
     (i : Nat) (code : List (BitVec 8)) (tgt : BitVec 64)
     (hexec : JalExec (vsaModel live) i code tgt)

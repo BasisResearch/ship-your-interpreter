@@ -1,25 +1,10 @@
 import VsaIris.Interp.HelperRun
 import VsaIris.Vsa.Stdout.Attr
 
-/-!
-# Store forwarding at every width (lane N1)
-
-newlib's stdio code stores `FILE` fields with `sw`/`sh`/`sb` and reloads
-them with `lw`/`lh`/`lhu`/`lbu` (`_putc_r` decrements `_w`, `__swbuf_r` reads
-it back; `__swrite` rewrites `_flags`, `_fflush_r` reloads it). `ix_mem`
-(`Arm.lean`) forwards doublewords and words through doubleword stores; this
-module adds every load kind through a store of any width: the misses
-(`ldv_*_miss`: disjoint bytes) and the hits (`ldv_*_hit`: the same address
-and width, value the stored value's low bytes, `ofNat` of a `%`, which the
-normalizer reduces for literal stores). `nx_mem` is `ix_mem` with them.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
-
-/-! ## Load values through the little-endian image -/
 
 theorem toNat_append2 (f : Nat → BitVec 8) (a : Nat) :
     (((f (a + 1)).append (f a)) : BitVec (8 * 2)).toNat = imgLE f a 2 := by
@@ -66,8 +51,6 @@ theorem ldv_lbu_img (M : Mem) (a : Nat) :
   rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), Nat.mul_zero, Nat.add_zero,
     Nat.mod_eq_of_lt (by omega)]
 
-/-! ## Stores read back -/
-
 theorem imgLE_store2_hit (Mt : Mem) (a : Nat) (v : BitVec 64) :
     imgLE (imgM (writeLog Mt [(a, 2, v)])) a 2 = v.toNat % 2 ^ 16 := by
   simp only [imgLE, imgM, writeLog, List.foldl_cons, List.foldl_nil, applyW]
@@ -105,8 +88,6 @@ theorem ldv_lbu_hit (Mt : Mem) {a b : Nat} (v : BitVec 64) (h : a = b) :
     ldv .lbu (writeLog Mt [(b, 1, v)]) a = BitVec.ofNat 64 (v.toNat % 2 ^ 8) := by
   subst h; rw [ldv_lbu_img, imgLE_store1_hit]
 
-/-! ## Disjoint stores -/
-
 theorem ldv_lh_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 2 ≤ b ∨ b + w ≤ a) :
     ldv .lh (writeLog Mt [(b, w, v)]) a = ldv .lh Mt a := ldv_store_miss .lh Mt v h
 theorem ldv_lhu_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 2 ≤ b ∨ b + w ≤ a) :
@@ -115,14 +96,6 @@ theorem ldv_lbu_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 1 ≤ b �
     ldv .lbu (writeLog Mt [(b, w, v)]) a = ldv .lbu Mt a := ldv_store_miss .lbu Mt v h
 theorem ldv_lwu_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 4 ≤ b ∨ b + w ≤ a) :
     ldv .lwu (writeLog Mt [(b, w, v)]) a = ldv .lwu Mt a := ldv_store_miss .lwu Mt v h
-
-/-! ### Goal-only address arithmetic
-
-`sx_addr` normalizes every hypothesis (`simp … at *`), which dominates a
-long run's cost: the context holds the run's facts and summaries. `nx_addr`
-rewrites only the goal: `(x + k#64).toNat` becomes `x.toNat + k` or
-`x.toNat - (2^64 - k)` (a negative offset), side conditions by `omega` from
-the context's bounds; then `omega`. -/
 
 theorem toNat_add_lit {x : BitVec 64} {k : Nat} (h : x.toNat + k < 2 ^ 64) :
     (x + BitVec.ofNat 64 k).toNat = x.toNat + k := by
@@ -141,14 +114,6 @@ macro_rules
   | `(tactic| nx_addr) => `(tactic| ((try simp (disch := omega) only [mem_accAddrs_iff, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat,
       Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd, and_true, true_and]); first | done | omega))
 
-/-! ## Abstract memory posts
-
-A callee's summary hands its caller a fresh memory `M'` with a frame fact
-`MemKeep M M' P`: every byte in `P` is unchanged. Loads whose bytes are all
-in `P` forward to the entry memory (`ldv_keep*`), so the caller never sees
-the callee's write log. -/
-
-/-- `M'` agrees with `M` on the bytes `P`. -/
 structure MemKeep (M M' : Mem) (P : Nat → Prop) : Prop where
   keep : ∀ a, P a → imgM M' a = imgM M a
 
@@ -175,7 +140,6 @@ theorem ldv_keep2u {M M' : Mem} {P : Nat → Prop} (h : MemKeep M M' P) {a : Nat
 theorem ldv_keep1u {M M' : Mem} {P : Nat → Prop} (h : MemKeep M M' P) {a : Nat}
     (hP : ∀ i, i < 1 → P (a + i)) : ldv .lbu M' a = ldv .lbu M a := ldv_keep_gen .lbu h hP
 
-/-- A store that rewrites a field's own bytes leaves them unchanged. -/
 theorem imgM_store_restore (M : Mem) {b w : Nat} (v : BitVec 64) (hw : w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8)
     (hv : imgLE (imgM M) b w = v.toNat % 2 ^ (8 * w)) {a : Nat} (ha : b ≤ a ∧ a < b + w) :
     imgM (writeLog M [(b, w, v)]) a = imgM M a := by
@@ -188,16 +152,12 @@ theorem imgM_store_restore (M : Mem) {b w : Nat} (v : BitVec 64) (hw : w = 1 ∨
   have e := imgLE_inj (hst.trans hv.symm) (a - b) (by omega)
   rwa [show b + (a - b) = a by omega] at e
 
-/-- Store forwarding through write logs. -/
 syntax "nx_mem_log" : tactic
 macro_rules
   | `(tactic| nx_mem_log) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
       ldv_ld_miss, ldv_lw_miss, ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
       ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss])
 
-/-- Load forwarding through a callee's frame: every `MemKeep` hypothesis of
-the context instantiates the `ldv_keep*` rewrites (the frame is not found by
-`simp`'s discharger, which does not assign it). -/
 syntax "nx_mem_keep" : tactic
 
 open Lean Elab Tactic Meta in
@@ -218,7 +178,6 @@ elab_rules : tactic
       catch _ => saved.restore
     unless progress do throwError "nx_mem_keep: no progress"
 
-/-- Store forwarding at every width, for stdio runs. -/
 syntax "nx_mem" : tactic
 macro_rules
   | `(tactic| nx_mem) => `(tactic| first

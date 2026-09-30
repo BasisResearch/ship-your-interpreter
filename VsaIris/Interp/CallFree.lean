@@ -1,14 +1,5 @@
 import VsaIris.Interp.CallMalloc
 
-/-!
-# `free` from a run, in either regime (lane E2)
-
-`freeRho_spec` is H4's two `free` specs (`AllocSpecs.freeCounted`/`.uncounted`)
-as one spec over `heapRes ρ`: the live block `(q, n)` at the head of the live
-list goes back with its bytes, the credits stay. `ms_callFree` is
-`ms_callRegs` against it, the twin of `ms_callMalloc`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -20,7 +11,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- **`free(q)` in regime `ρ`**: the block `(q, n)` leaves the live list. -/
 theorem freeRho_spec (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))
     (ρ : Regime) (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64)
     (saved : List (Nat × BitVec 64)) (hsv : saved.map Prod.fst = vsaSaved) :
@@ -44,12 +34,8 @@ theorem freeRho_spec (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel liv
     simp only [heapRes]
     iexact Hs
 
-/-- The registers a `free` call takes: those of a `malloc` call. -/
 abbrev freeL : List Nat := mallocL
 
-/-- **`free(R 10)` from a run** (`jal free` at `i`), regime `ρ`: the run
-continues at `i + 4` with the callee-saved registers and `sp` kept and the
-block `(R 10, n)` returned to the allocator. -/
 theorem ms_callFree (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code freeEntryBV)

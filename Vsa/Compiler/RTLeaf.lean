@@ -1,17 +1,9 @@
 import Vsa.Compiler.RTBase
 
-/-!
-# Leaf runtime routines: truthiness and string printing
-
-`run_tr`: `truthy` leaves `trW tag payload` in `a0`. `run_ps`: `printstr`
-appends the characters of a string object to the console.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- Truthiness of a value word pair. -/
 def trW (t p : BitVec 64) : BitVec 64 :=
   if t = 0 then 0 else if t.toInt < 3 then (if p = 0 then 0 else 1) else 1
 
@@ -63,10 +55,8 @@ theorem run_tr (hseg : Seg code trPos (trCode trPos)) {L : GRegs} {m : Mem}
       have : trW t p = 1 := by unfold trW; rw [if_neg ht, if_neg (by omega)]
       rw [this]; exact Has.set_self _ _ (by decide) (by decide)
 
-/-- Registers `printstr` may change. -/
 def psClob : List Nat := [t0, t1, t2, s2, s3]
 
-/-- The `printstr` loop head with `j` characters left. -/
 def PsInv (L0 : GRegs) (m : Mem) (o : Array String) (p : Nat) (cs : List Char) (r : BitVec 64)
     (j : Nat) (A : AM) : Prop :=
   A.pc = pcOf 16 ∧ A.mem = m ∧ j ≤ cs.length ∧ Has A.regs t0 (BitVec.ofNat 64 j) ∧
@@ -82,7 +72,7 @@ theorem run_ps (hseg : Seg code psPos (psCode psPos)) {L : GRegs} {m : Mem} {o :
   have ht : tohostAddr = 0x8001ad00 := rfl
   have hlo := hs.lo; have hhi := hs.hi
   have hpn : (BitVec.ofNat 64 p).toNat = p := by rw [BitVec.toNat_ofNat]; omega
-  -- the loop
+
   have hloop : ∀ j A, PsInv L m o p cs r j A → Reaches code A (fun B => B.pc = r ∧ B.mem = m ∧
       ostr B.out = ostr o ++ String.ofList cs ∧ Keep psClob L B.regs) := by
     refine loop_run (fun j A hA => ?_) (fun A hA => ?_)
@@ -130,7 +120,7 @@ theorem run_ps (hseg : Seg code psPos (psCode psPos)) {L : GRegs} {m : Mem} {o :
       wp_simp [psCode, psPos, k1, e1]
       refine ⟨hal, reach_here ⟨rfl, rfl, ?_, hk⟩⟩
       simpa using ho
-  -- entry
+
   have k11 := has_mem h11 (by decide); have k1 := has_mem hr (by decide)
   have e11 := srcVal_of_has h11; have e1 := srcVal_of_has hr
   simp only [a1, ra] at k11 k1 e11 e1
@@ -146,19 +136,14 @@ theorem run_ps (hseg : Seg code psPos (psCode psPos)) {L : GRegs} {m : Mem} {o :
   · exact (((Keep.refl _ _).gset (by decide)).gset (by decide))
   · simp
 
-/-! ## `copy` -/
-
-/-- Registers `copy` may change. -/
 def cpClob : List Nat := [t0, a5, a6, a7]
 
-/-- The `copy` loop head with `j` words left. -/
 def CpInv (L0 : GRegs) (m : Mem) (o : Array String) (s d n : Nat) (r : BitVec 64)
     (j : Nat) (A : AM) : Prop :=
   A.pc = pcOf cpPos ∧ A.mem = copyW m s d (n - j) ∧ A.out = o ∧ j ≤ n ∧
     Has A.regs a7 (BitVec.ofNat 64 j) ∧ Has A.regs a6 (BitVec.ofNat 64 (s + 8 * (n - j))) ∧
     Has A.regs a5 (BitVec.ofNat 64 (d + 8 * (n - j))) ∧ Has A.regs ra r ∧ Keep cpClob L0 A.regs
 
-/-- The source words are readable, the target words writable, and the two disjoint. -/
 structure CopyOK (s d n : Nat) : Prop where
   src_lo : 0x80000000 ≤ s
   src_hi : s + 8 * n ≤ 2 ^ 32
@@ -226,13 +211,8 @@ theorem run_cp (hseg : Seg code cpPos (cpCode cpPos)) {L : GRegs} {m : Mem} {o :
     wp_simp [cpCode, cpPos, scPos, itPos, psPos, k1, e1]
     exact ⟨hal, reach_here ⟨rfl, by simp, rfl, by simpa [a5] using h5, by simpa [a6] using h6, hk⟩⟩
 
-/-! ## `strcmp` -/
-
-/-- Registers `strcmp` may change. -/
 def scClob : List Nat := [t0, t1, t2, t3, t4, t5, a0]
 
-/-- The `strcmp` loop head after `i` equal characters; `j` characters of the
-left string remain. -/
 def ScInv (L0 : GRegs) (m : Mem) (o : Array String) (p q : Nat) (xs ys : List Char)
     (r : BitVec 64) (j : Nat) (A : AM) : Prop :=
   A.pc = pcOf (scPos + 4) ∧ A.mem = m ∧ A.out = o ∧ j ≤ xs.length ∧
@@ -251,7 +231,7 @@ theorem run_sc (hseg : Seg code scPos (scCode scPos)) {L : GRegs} {m : Mem} {o :
       Has B.regs a0 (BitVec.ofInt 64 (cmpL xs ys)) ∧ Keep scClob L B.regs) := by
   have ht : tohostAddr = 0x8001ad00 := rfl
   have hxl := hx.lo; have hxh := hx.hi; have hyl := hy.lo; have hyh := hy.hi
-  -- the three exits
+
   have hexit : ∀ (e : Nat) (v : Int), (e = 16 ∧ v = -1 ∨ e = 18 ∧ v = 1 ∨ e = 20 ∧ v = 0) →
       cmpL xs ys = v → ∀ L', Has L' ra r → Keep scClob L L' →
       Reaches code ⟨pcOf (scPos + e), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
@@ -267,13 +247,13 @@ theorem run_sc (hseg : Seg code scPos (scCode scPos)) {L : GRegs} {m : Mem} {o :
         simp (disch := decide) only [has_gset, keep_gset, a0, reduceIte, BitVec.reduceOfInt, hk] <;> rfl
   have hcmp : ∀ i, i ≤ xs.length → i ≤ ys.length → xs.take i = ys.take i →
       cmpL xs ys = cmpL (xs.drop i) (ys.drop i) := fun i h1 h2 h3 => (cmpL_drop i xs ys h3 h1 h2).symm
-  -- the loop
+
   have hloop := loop_run' (code := code) (I := ScInv L m o p q xs ys r)
     (Q := fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
       Has B.regs a0 (BitVec.ofInt 64 (cmpL xs ys)) ∧ Keep scClob L B.regs)
     (fun j A hA => ?_) (fun A hA => ?_)
   rotate_left
-  · -- one character
+  ·
     obtain ⟨hpc, hm, ho, hj, hi, htk, h5, h6, h7, h28, h1, hk⟩ := hA
     obtain ⟨pc, L', m', o'⟩ := A
     simp only at hpc hm ho h5 h6 h7 h28 h1 hk; subst hpc hm ho
@@ -329,7 +309,7 @@ theorem run_sc (hseg : Seg code scPos (scCode scPos)) {L : GRegs} {m : Mem} {o :
             exact take_succ_eq htk hix hiy heq
           all_goals reg_simp
           all_goals first | exact h1 | exact hk | bv_eq
-  · -- left exhausted
+  ·
     obtain ⟨hpc, hm, ho, hj, hi, htk, h5, h6, h7, h28, h1, hk⟩ := hA
     obtain ⟨pc, L', m', o'⟩ := A
     simp only at hpc hm ho h5 h6 h7 h28 h1 hk; subst hpc hm ho
@@ -357,7 +337,7 @@ theorem run_sc (hseg : Seg code scPos (scCode scPos)) {L : GRegs} {m : Mem} {o :
       rfl
     · rw [if_neg (ofNat_ne_zero (by omega) (by omega))]
       exact hyi
-  -- entry
+
   have k11 := has_mem h11 (by decide); have k13 := has_mem h13 (by decide)
   have e11 := srcVal_of_has h11; have e13 := srcVal_of_has h13
   simp only [a1, a3] at k11 k13 e11 e13
@@ -373,12 +353,8 @@ theorem run_sc (hseg : Seg code scPos (scCode scPos)) {L : GRegs} {m : Mem} {o :
   · exact hr
   · exact Keep.refl _ _
 
-/-! ## `newframe` -/
-
-/-- Registers `newframe` may change. -/
 def nfClob : List Nat := [t0, t1, t2, t3, t4, a4, hpF]
 
-/-- The `newframe` loop head with `j` slots left. -/
 def NfInv (L0 : GRegs) (m : Mem) (o : Array String) (f par n : Nat) (r : BitVec 64)
     (j : Nat) (A : AM) : Prop :=
   A.pc = pcOf (nfPos + 20) ∧ A.mem = tagsW (applyW m (f, 8, BitVec.ofNat 64 par)) (f + 8) (n - j) ∧
@@ -388,7 +364,6 @@ def NfInv (L0 : GRegs) (m : Mem) (o : Array String) (f par n : Nat) (r : BitVec 
     Has A.regs a4 (BitVec.ofNat 64 f) ∧ Has A.regs ra r ∧ Keep nfClob L0 A.regs ∧
     f + 8 + 16 * n ≤ frameEnd
 
-/-- The frame region has room for a frame of `n` slots at `f`. -/
 structure FrameRoom (f n : Nat) : Prop where
   lo : frameBase ≤ f
   al : f % 8 = 0
@@ -448,7 +423,7 @@ theorem run_nf (hseg : Seg code nfPos (nfCode nfPos)) {L : GRegs} {m : Mem} {o :
     refine ⟨hal, reach_here (.inl ⟨rfl, by omega, by simp, rfl, ?_, ?_, ?_⟩)⟩
     all_goals reg_simp
     all_goals first | exact h14 | exact hk | bv_eq
-  -- entry
+
   have k15 := has_mem h15 (by decide); have k16 := has_mem h16 (by decide)
   have k23 := has_mem h23 (by decide)
   have e15 := srcVal_of_has h15; have e16 := srcVal_of_has h16; have e23 := srcVal_of_has h23

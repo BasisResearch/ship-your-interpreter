@@ -1,16 +1,5 @@
 import VsaIris.Vsa.Fprintf.Top
 
-/-!
-# `fprintf(stdout, fmt, arg)` down to the inner `_vfprintf_r` (lane N5)
-
-`fprintf_sb` composes `fprintf_wrap`, `vfp_outer` and `sbprintf_run`: from
-`fprintf`'s entry (stack pointer `s`) to its return, with the inner
-`_vfprintf_r` on the stack `FILE` a hook (`vfpInnerLld`, `vfpInnerS`). The
-frames: `fprintf` at `s - 80`, the outer `_vfprintf_r` at `s - 672`,
-`__sbprintf` at `s - 1936` (its `FILE` at `s - 1912`), the inner run at
-`s - 2528`.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -95,9 +84,6 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   · rw [h1'']; refine hk1 R' M' e10 (e2.trans h2'') (e1.trans h1'') (fun x hx => ek x hx) ?_ hl
     rw [e1936] at hfr; rw [e672, Nat.sub_sub]; exact hfr
 
-/-- The inner `_vfprintf_r`'s geometry under `fprintf` (`sp = s - 2528`, the
-stack `FILE` at `f`, the argument slot at `ap`): the bounds `vfpInnerLld` and
-`vfpInnerS` take. -/
 structure InnerAt (s : BitVec 64) (need : Nat) (sp f ap : BitVec 64) : Prop where
   hs1 : s.toNat - need + 1024 ≤ sp.toNat
   hs2 : sp.toNat + 592 ≤ s.toNat
@@ -109,9 +95,6 @@ structure InnerAt (s : BitVec 64) (need : Nat) (sp f ap : BitVec 64) : Prop wher
   hap2 : ap.toNat + 8 ≤ s.toNat
   hapa : ap.toNat % 8 = 0
 
-/-- **`fprintf(stdout, fmt, arg)`** with the inner `_vfprintf_r` a hook in the
-shape `vfpInnerLld`/`vfpInnerS` take: its geometry (`InnerAt`), the stack
-`FILE` empty, the locale and the argument word read through the frames. -/
 theorem fprintf_via (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} {need N : Nat} {bytes : List (BitVec 8)}

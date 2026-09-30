@@ -2,8 +2,6 @@ import Vsa.Sim.RamReadPolicy
 
 namespace Vsa.Sim
 
-/-- A finite sequence of successful, state-preserving loop iterations.
-The condition stops exactly at the final indexed value. -/
 theorem untilFuelM_sequence {α ε error state : Type}
     (σ : state) (n : Nat) (x : Nat → α)
     (body : α → ExceptT ε (EStateM error state) α)
@@ -34,5 +32,4 @@ theorem untilFuelM_sequence {α ε error state : Type}
         simpa [hn] using hf'
   exact go n 0 (by omega)
 
-#print axioms untilFuelM_sequence
 end Vsa.Sim

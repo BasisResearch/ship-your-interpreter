@@ -2,90 +2,32 @@ import VsaIris.Stack
 import Vsa.While.StackNeed
 import Vsa.Sim.LayoutInstance
 
-/-!
-# `evalNeed` / `execNeed`: the stack budget of a node (work package F3)
-
-INTERP_DESIGN.md §2 F3. The stack a call to `eval_expr`/`exec_stmt` may use is
-ItemZero's budget, verbatim from `EvalEntry.stackBudget`
-(`Vsa/Sim/InterpEntry.lean:630`):
-
-```
-evalNeed e d = e.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame
-```
-
-xv6iris spells a budget as the sum, never as a round number
-(`durable-notes.md`, "A stack-budget premise is arithmetic"), so everything
-here is stated over `Expr.stackNeed`/`Stmt.stackNeed` and the two constants,
-and there is ONE arithmetic lemma underneath: `stackBudget_child`, the Iris
-route's `Vsa.Alloc.StackOK.child`. Every arm's own inequality is that lemma at
-the node's definitional need (`node.stackNeed = frame + max over children`).
-
-The second lemma is `stackBudget_call`: a closure body runs at depth `d + 1`,
-and one whole call level fits `perCallBudget` (`Expr.bodiesBound` /
-`StoreBodiesBound`), which is what makes the depth term pay for it.
-
-The boundary bridge is S1's: `ProgramStackFits` (`Vsa/Sim/LayoutInstance.lean`,
-the `Loaded` field Q1 added) gives the first `exec_stmt` call's `execNeed`
-below `interp_run`'s frame, both as arithmetic and as the Iris carve
-`stackScratch_boundary`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.While Vsa.Sim.LayoutInstance
 
-/-! ## The budget -/
-
-/-- The budget of a node with structural need `need`, at call depth `d`:
-its own chain, every remaining call level, the callee-`value_*` frame, and
-the helpers' headroom (`runtime_error`, the natives' `fprintf`; Q7). -/
 def stackBudget (need d : Nat) : Nat :=
   need + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom
 
-/-- `eval_expr`'s budget, verbatim from `EvalEntry.stackBudget`. -/
 def evalNeed (e : Expr) (d : Nat) : Nat := stackBudget e.stackNeed d
 
-/-- `exec_stmt`'s budget, verbatim from `ExecEntry.stackBudget`. -/
 def execNeed (s : Stmt) (d : Nat) : Nat := stackBudget s.stackNeed d
-
-theorem evalNeed_def (e : Expr) (d : Nat) :
-    evalNeed e d = e.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom :=
-    rfl
 
 theorem execNeed_def (s : Stmt) (d : Nat) :
     execNeed s d = s.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame + helperHeadroom :=
     rfl
 
-/-! ## The two arithmetic lemmas -/
-
-/-- **The child-frame step** (the Iris route's `Vsa.Alloc.StackOK.child`): if
-the child's structural need plus the frame the parent spills fits the parent's
-structural need, the child's budget plus that frame fits the parent's, at the
-SAME call depth. For every structural node the premise is definitional. -/
 theorem stackBudget_child {nc np d f : Nat} (h : nc + f ≤ np) :
     stackBudget nc d + f ≤ stackBudget np d := by
   unfold stackBudget; omega
 
-/-- **The call step**: a closure body runs at depth `d + 1`, and one whole
-call level fits `perCallBudget` (`Expr.bodiesBound`, `StoreBodiesBound`), so
-the depth term pays for the body and the parent's own frame is free. -/
 theorem stackBudget_call {nb np d : Nat} (hd : d < maxCallDepth) (hb : nb ≤ perCallBudget)
     (hp : evalFrame ≤ np) : stackBudget nb (d + 1) + evalFrame ≤ stackBudget np d := by
   unfold stackBudget
   have hk : maxCallDepth - d = (maxCallDepth - (d + 1)) + 1 := by omega
   rw [hk, Nat.succ_mul]
   omega
-
-/-- The budget is monotone in the structural need. -/
-theorem stackBudget_mono {n n' d : Nat} (h : n ≤ n') : stackBudget n d ≤ stackBudget n' d := by
-  unfold stackBudget; omega
-
-/-! ## The four bridges
-
-A parent arm hands a child its budget at the same depth, after spilling `f`
-bytes of frame. The four combinations of `eval`/`exec` parent and child are
-one lemma each over `stackBudget_child`. -/
 
 theorem evalNeed_child {e e' : Expr} {d f : Nat} (h : e'.stackNeed + f ≤ e.stackNeed) :
     evalNeed e' d + f ≤ evalNeed e d := stackBudget_child h
@@ -95,15 +37,6 @@ theorem execNeed_child {s s' : Stmt} {d f : Nat} (h : s'.stackNeed + f ≤ s.sta
 
 theorem evalNeed_of_stmt {e : Expr} {s : Stmt} {d f : Nat} (h : e.stackNeed + f ≤ s.stackNeed) :
     evalNeed e d + f ≤ execNeed s d := stackBudget_child h
-
-theorem execNeed_of_expr {s : Stmt} {e : Expr} {d f : Nat} (h : s.stackNeed + f ≤ e.stackNeed) :
-    execNeed s d + f ≤ evalNeed e d := stackBudget_child h
-
-/-! ## The arms
-
-One inequality per arm of the two recursors, each `..._child` at the node's
-definitional need. `evalFrame`/`execFrame` are the frames `eval_expr` and
-`exec_stmt` spill (`addi sp,sp,-1088` / `-176`). -/
 
 theorem evalNeed_assign (x : String) (e : Expr) (d : Nat) :
     evalNeed e d + evalFrame ≤ evalNeed (.assign x e) d :=
@@ -199,15 +132,11 @@ theorem execNeed_for_body (i : Option Stmt) (c st : Option Expr) (b : Stmt) (d :
     execNeed b d + execFrame ≤ execNeed (.forStmt i c st b) d :=
   execNeed_child (by simp only [Stmt.stackNeed]; omega)
 
-/-- **The call arm**: the closure body's statements run at depth `d + 1`,
-inside one `perCallBudget` level (`StoreBodiesBound`). -/
 theorem execNeed_callBody {s : Stmt} {body : List Stmt} {f : Expr} {args : List Expr} {d : Nat}
     (hd : d < maxCallDepth) (hb : Stmt.stackNeedList body ≤ perCallBudget) (hs : s ∈ body) :
     execNeed s (d + 1) + evalFrame ≤ evalNeed (.call f args) d :=
   stackBudget_call hd (Nat.le_trans (Stmt.stackNeedList_mem_le hs) hb)
     (by simp only [Expr.stackNeed]; omega)
-
-/-! ## `bodiesBound` through a list -/
 
 theorem Stmt.bodiesBound_of_mem {P : Nat} : ∀ {ss : List Stmt} {s : Stmt},
     Stmt.bodiesBoundList P ss = true → s ∈ ss → s.bodiesBound P = true
@@ -218,12 +147,6 @@ theorem Stmt.bodiesBound_of_mem {P : Nat} : ∀ {ss : List Stmt} {s : Stmt},
     | inl he => exact he ▸ h.1
     | inr ht => exact Stmt.bodiesBound_of_mem h.2 ht
 
-/-! ## The boundary (S1's `ProgramStackFits`) -/
-
-/-- **The first `exec_stmt` call's budget**, from `Loaded`'s stack
-admissibility: every top-level statement's `execNeed` at depth 0 fits below
-`interp_run`'s frame. This is `ProgramStackFits.execBudget`
-(`Vsa/Sim/LayoutInstance.lean`) as arithmetic on `execNeed`. -/
 theorem execNeed_of_stackFits {p : Program} (h : ProgramStackFits p)
     {s : Stmt} (hs : s ∈ p) : stackSL.lo + execNeed s 0 ≤ spEntry - interpRunFrame := by
   have hle := Stmt.stackNeedList_mem_le hs
@@ -235,30 +158,8 @@ theorem execNeed_of_stackFits {p : Program} (h : ProgramStackFits p)
   rw [execNeed_def, Nat.sub_zero]
   omega
 
-/-- Every top-level statement's `.fn` literals fit the per-call budget. -/
 theorem bodiesBound_of_stackFits {p : Program} (h : ProgramStackFits p)
     {s : Stmt} (hs : s ∈ p) : s.bodiesBound perCallBudget = true :=
   Stmt.bodiesBound_of_mem h.bodies hs
-
-section Iris
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-/-- **The boundary carve**: from the owned C stack below `interp_run`'s
-post-spill `sp`, hand the first `exec_stmt` call its `execNeed` scratch and
-keep the rest. The premise is `Loaded interpRunLayout`'s `stack_admissible`
-field (Q1, S1), through `ProgramStackFits.execNeed_fits`. -/
-theorem stackScratch_boundary {p : Program} (h : ProgramStackFits p) {s : Stmt} (hs : s ∈ p)
-    {sp0 : BitVec 64} (hsp : sp0.toNat = spEntry - interpRunFrame) :
-    blockOwn (GF := GF) stackSL.lo (sp0.toNat - stackSL.lo) ⊢
-      blockOwn stackSL.lo (sp0.toNat - stackSL.lo - execNeed s 0) ∗
-        stackScratch sp0 (execNeed s 0) := by
-  have hfit := execNeed_of_stackFits h hs
-  unfold stackScratch
-  iapply blockOwn_split stackSL.lo (sp0.toNat - stackSL.lo)
-    (sp0.toNat - stackSL.lo - execNeed s 0) (sp0.toNat - execNeed s 0) (execNeed s 0)
-    (by omega) (by omega) (by omega)
-
-end Iris
 
 end VsaIris.Interp

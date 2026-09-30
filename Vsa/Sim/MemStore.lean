@@ -1,42 +1,6 @@
 import Vsa.Sim.Hooks
 import Vsa.Sim.Pmp
 
-/-!
-# M2 — Data-store characterization on the M-mode / Bare / naturally-aligned hot path
-
-The store analogue of `Vsa/Sim/Fetch.lean`.  On the hot path (Machine mode,
-`mstatus.MPRV = 0` ⇒ effective privilege Machine, Bare translation, reset PMP
-config, data lives in the RAM PMA region `[0x80000000, 0x100000000)` and the
-window is disjoint from the HTIF `tohost` mailbox) an ordinary aligned data
-store of width `w ∈ {8,4,2,1}` runs the whole `mem_write_value` chain and lands
-in `write_ram`, inserting the `w` little-endian bytes of the value into
-`σ.mem`, leaving registers and `sailOutput` unchanged.
-
-Entry point characterized: **`mem_write_value`** (the function `vmem_write_addr`
-calls after address resolution + `mem_write_ea`).  The lift to `vmem_write` is
-left as remaining work — it needs `get_transformed_data_addr`/`ext_data_get_addr`
-(a GPR read + the identity `transform_effective_address`), which is
-address-resolution plumbing outside the memory path proper.  See the module
-footer.
-
-The chain (`experiments/M2-htif-path.md` #5): `mem_write_value →
-mem_write_value_meta → mem_write_value_priv_meta → checked_mem_write →
-check_pma_with_pmp_priority/pmaCheck/pmpCheck → within_mmio_writable →
-write_ram → sail_mem_write → writeBytes`.
-
-Differences from the fetch chain:
-- access type `Store Data` instead of `InstructionFetch ()`;
-- the MPRV `effectivePrivilege` guard is live for stores (`bne (Store) (Fetch)`
-  is `true`), discharged by `mstatus.MPRV = 0`;
-- `pmaCheck`'s `canAccess` bit is `attributes.writable` (an extra passing
-  `assert (not res_or_con)` precedes it);
-- `within_mmio_writable` (not `_readable`) routes RAM addresses to `write_ram`;
-- `write_ram`/`writeBytes` **mutates** `σ.mem` (per-byte `insert`), so `σ' ≠ σ`.
-
-All state-mutation is memory-only: `σ' = { σ with mem := … }` (register spine and
-`sailOutput` untouched).
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -46,12 +10,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## Control-plane helpers (store variants of the fetch lemmas) -/
-
-/-- `effectivePrivilege (Store Data) m Machine = Machine` when `mstatus.MPRV = 0`.
-Unlike the fetch case (guard vacuously false), for a store the
-`bne (Store) (Fetch)` conjunct is `true`, so the privilege stays `Machine`
-precisely because `MPRV = 0`. Reads no register (mstatus supplied as `m`). -/
 theorem effectivePrivilege_store
     (σ : SequentialState RegisterType trivialChoiceSource)
     (m : BitVec 64) (p : Privilege)
@@ -64,11 +22,6 @@ theorem effectivePrivilege_store
     decide
   simp [simp_sail, EStateM.run, pure, EStateM.pure, hc]
 
-/-- `split_misaligned addr w e s = (1, w)` for a `w`-aligned address (any
-`e`, any splittability `s`, any width `w > 0`): the alignment disjunct
-`Int.tmod (toNatInt a) w = 0` makes `do_not_split` true, collapsing the
-`untilFuelM` loop to a single iteration. Width-generic clone of
-`Vsa/Sim/Hooks.lean:split_misaligned_aligned`. -/
 theorem split_misaligned_aligned_w
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) (e : Nat) (s : Splittability)
@@ -86,14 +39,7 @@ theorem split_misaligned_aligned_w
     exact_mod_cast ha
 
 open MemoryRegionType AtomicSupport Reservability misaligned_exception in
-/-- `pmaCheck (Physaddr a) w (Store Data) PBMT_PMA false` succeeds with
-`Ok { splittable := CannotSplit, granule_size_exp := 0 }` for a `w`-byte store
-(`0 < w ≤ 8`) whose window `[a, a+w)` lies inside the writable RAM region
-`[0x80000000, 0x100000000)`. Writable-arm clone of
-`Vsa/Sim/Hooks.lean:pmaCheck_ram_exec`: same region walk, but the `Store Data`
-`canAccess` arm returns `attributes.writable` (after the passing
-`assert (not false)`), and `is_mag_applicable_access (Store Data) w = (w ≤ 8)`.
-The discriminant width `to_bits w` is supplied as `wbv` via `hwbv`. -/
+
 theorem pmaCheck_ram_write
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) (wbv : BitVec 64)
@@ -175,15 +121,6 @@ theorem pmaCheck_ram_write
   · simp only [Bool.or_eq_true, beq_iff_eq]
     exact Or.inl (by exact_mod_cast halign)
 
-/-- `within_mmio_writable (Physaddr a) w = false` for a RAM data address at or
-above the HTIF `tohost` mailbox but disjoint from it: above the CLINT
-`[0x2000000,0x20c0000)` and SIG `[0xc000000,0xc000020)` windows, and with
-`[a, a+w)` disjoint from the mailbox `[tohostAddr, tohostAddr+16)` (we take the
-honest "data lives ABOVE the mailbox" form `tohostAddr + 16 ≤ a`, which implies
-`within_htif_writable = false` since the model's HTIF window is only
-`[base, base+8) ⊆ [tohostAddr, tohostAddr+16)`). `width ≤ 8`,
-`get_config_rvfi () = false`. Routes the store to the RAM `write_ram` branch.
-Writable mirror of `Vsa/Sim/Hooks.lean:within_mmio_readable_ram_false`. -/
 theorem within_mmio_writable_ram_false
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat)
@@ -209,16 +146,6 @@ theorem within_mmio_writable_ram_false
   refine ⟨fun _ => by push_cast; omega, fun _ => by push_cast; omega,
     fun hcontra => by omega⟩
 
-/-! ## `write_ram` per width: the little-endian byte-insert spine
-
-`write_ram Write_plain (Physaddr a) w value ()` bottoms out in `sail_mem_write`
-→ `writeBytes a.toNat value`, which `List.forM`s `writeByte (a.toNat + k)
-(value.extractLsb' (8*k) 8)` for `k ∈ [0,w)` and returns `true`. Each
-`writeByte` is `modify {σ with mem := σ.mem.insert · ·}`, so the net effect is
-the `w`-fold `mem` insert-chain below (little-endian: byte `k` at `a.toNat + k`).
--/
-
-/-- 1-byte store (`sb`). `value.extractLsb' 0 8 = value` at width `8*1`. -/
 theorem write_ram_1
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (v : BitVec (8 * 1)) :
@@ -232,7 +159,6 @@ theorem write_ram_1
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
     get, getThe, MonadStateOf.get, EStateM.get]
 
-/-- 2-byte store (`sh`). -/
 theorem write_ram_2
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (v : BitVec (8 * 2)) :
@@ -247,7 +173,6 @@ theorem write_ram_2
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
     get, getThe, MonadStateOf.get, EStateM.get]
 
-/-- 4-byte store (`sw`). -/
 theorem write_ram_4
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (v : BitVec (8 * 4)) :
@@ -264,7 +189,6 @@ theorem write_ram_4
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
     get, getThe, MonadStateOf.get, EStateM.get]
 
-/-- 8-byte store (`sd`). -/
 theorem write_ram_8
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (v : BitVec (8 * 8)) :
@@ -285,26 +209,12 @@ theorem write_ram_8
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
     get, getThe, MonadStateOf.get, EStateM.get]
 
-/-! ## `checked_mem_write` on the `Store Data` RAM path.
-
-The store analogue of `checked_mem_read_data_*` (`Vsa/Sim/MemLoad.lean`).  Same
-`check_pma_with_pmp_priority`/`split_misaligned`(⇒N=1)/`pmpCheck` prefix, but the
-per-byte write branch takes the `within_mmio_writable = false` ⇒ `write_ram`
-route (via the width-`w` `within_mmio_writable_ram_false` and `write_ram_w`
-lemmas above).  The written `write_value = extractLsb data (8*w-1) 0` at the
-single unsplit access is `data` itself, so the RAM insert-chain is exactly the
-`write_ram_w` chain on `data`.  Proved per width. -/
-
-/-- `BitVec.addInt a 0 = a` at the `physaddrbits` width (local copy of
-`Vsa/Sim/Fetch.lean:addInt_zero_pa`, which is not in this file's import set). -/
 theorem ofInt_zero_gen' (n : Nat) : (BitVec.ofInt n 0) = 0#n := by
   apply BitVec.eq_of_toNat_eq; simp
 
 theorem addInt_zero_pa' (a : physaddrbits) : BitVec.addInt a (0 : Int) = a := by
   simp only [BitVec.addInt, ofInt_zero_gen', BitVec.add_zero]
 
-/-- `checked_mem_write (Physaddr a) 8 data (Store Data) PBMT_PMA Machine …`
-writes the eight little-endian bytes of `data` and returns `Ok true`. -/
 theorem checked_mem_write_8
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 8))
@@ -398,9 +308,6 @@ theorem checked_mem_write_8
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
     beq_self_eq_true, if_true]
 
-/-- `checked_mem_write (Physaddr a) 4 data (Store Data) PBMT_PMA Machine …`
-writes the four little-endian bytes of `data` and returns `Ok true`.  Width-4
-clone of `checked_mem_write_8`. -/
 theorem checked_mem_write_4
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 4))
@@ -486,9 +393,6 @@ theorem checked_mem_write_4
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
     beq_self_eq_true, if_true]
 
-/-- `checked_mem_write (Physaddr a) 2 data (Store Data) PBMT_PMA Machine …`
-writes the two little-endian bytes of `data` and returns `Ok true`.  Width-2
-clone of `checked_mem_write_8`. -/
 theorem checked_mem_write_2
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 2))
@@ -570,9 +474,6 @@ theorem checked_mem_write_2
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
     beq_self_eq_true, if_true]
 
-/-- `checked_mem_write (Physaddr a) 1 data (Store Data) PBMT_PMA Machine …`
-writes the single byte of `data` and returns `Ok true`.  Width-1 clone of
-`checked_mem_write_8`. -/
 theorem checked_mem_write_1
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 1))
@@ -651,17 +552,6 @@ theorem checked_mem_write_1
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
     beq_self_eq_true, if_true]
 
-/-! ## `mem_write_value` on the `Store Data` RAM path.
-
-`mem_write_value → mem_write_value_meta → mem_write_value_priv_meta →
-checked_mem_write`.  `mem_write_value_meta` reads `mstatus`/`cur_privilege` for
-`effectivePrivilege` (MPRV = 0 ⇒ Machine unchanged, via `effectivePrivilege_store`);
-`mem_write_value_priv_meta` fires the no-op `mem_write_callback` on the `Ok`
-result (discarded `let _ : Unit`).  Proved per width by composing
-`effectivePrivilege_store` with `checked_mem_write_w`. -/
-
-/-- `mem_write_value (Physaddr a) 8 data (Store Data) PBMT_PMA …` writes the
-eight bytes of `data`, returning `Ok true`. -/
 theorem mem_write_value_8
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 8))
@@ -706,7 +596,6 @@ theorem mem_write_value_8
   simp only [EStateM.bind, default_meta]
   rw [hcmw]
 
-/-- `mem_write_value (Physaddr a) 4 data …`. Width-4 clone. -/
 theorem mem_write_value_4
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 4))
@@ -747,7 +636,6 @@ theorem mem_write_value_4
   simp only [default_meta]
   rw [hcmw]
 
-/-- `mem_write_value (Physaddr a) 2 data …`. Width-2 clone. -/
 theorem mem_write_value_2
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 2))
@@ -786,7 +674,6 @@ theorem mem_write_value_2
   simp only [default_meta]
   rw [hcmw]
 
-/-- `mem_write_value (Physaddr a) 1 data …`. Width-1 clone. -/
 theorem mem_write_value_1
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 1))
@@ -821,17 +708,6 @@ theorem mem_write_value_1
   simp only [default_meta]
   rw [hcmw]
 
-/-! ## `mem_write_ea` on the `Store Data` RAM path.
-
-`mem_write_ea` is the write-effect-announcement phase `translate_and_write_value`
-runs *before* `mem_write_value`.  It reads `mstatus`/`cur_privilege` for
-`effectivePrivilege`, runs the same `check_pma_with_pmp_priority`/
-`split_misaligned`(⇒N=1)/`pmpCheck` prefix, but its per-byte action is the pure
-no-op `write_ram_ea` (returns `Unit`), so the whole thing is *state-preserving*
-and returns `Ok ()`.  Proved per width. -/
-
-/-- `mem_write_ea (Physaddr a) 8 (Store Data) PBMT_PMA …` returns `Ok ()`,
-unchanged state. -/
 theorem mem_write_ea_8
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -897,7 +773,6 @@ theorem mem_write_ea_8
     show (↑(0 : Nat) * (8 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
     hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
 
-/-- `mem_write_ea (Physaddr a) 4 …` returns `Ok ()`, unchanged. Width-4 clone. -/
 theorem mem_write_ea_4
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -963,7 +838,6 @@ theorem mem_write_ea_4
     show (↑(0 : Nat) * (4 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
     hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
 
-/-- `mem_write_ea (Physaddr a) 2 …` returns `Ok ()`, unchanged. Width-2 clone. -/
 theorem mem_write_ea_2
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -1029,7 +903,6 @@ theorem mem_write_ea_2
     show (↑(0 : Nat) * (2 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
     hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
 
-/-- `mem_write_ea (Physaddr a) 1 …` returns `Ok ()`, unchanged. Width-1 clone. -/
 theorem mem_write_ea_1
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -1094,15 +967,6 @@ theorem mem_write_ea_1
     show (↑(0 : Nat) * (1 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
     hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
 
-/-! ## `translateAddr` and `translate_and_write_value` on the `Store Data` path. -/
-
-/-- `translateAddr (Virtaddr a) (Store Data)` on the Machine/Bare data path
-returns `Ok (Physaddr (zero_extend a), PBMT_PMA, ())`, reading only `mstatus`
-(MPRV = 0) and `cur_privilege` (= Machine).  Store clone of
-`Vsa/Sim/MemLoad.lean:translateAddr_machine_data`: `effectivePrivilege` MPRV
-guard is live for a store access but `MPRV = 0` ⇒ priv unchanged;
-`translationMode Machine = Bare` (`satp` unread);
-`is_shadow_stack_access (Store Data) = false`; `mode == Bare` ⇒ identity. -/
 theorem translateAddr_machine_store
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -1136,196 +1000,6 @@ theorem translateAddr_machine_store
     ExceptT.bindCont, Bool.not_false, Bool.and_false,
     if_false, if_true, Bool.false_eq_true]
 
-/-- `translate_and_write_value (Virtaddr a) 8 data (Store Data) …` writes the
-eight bytes of `data` at `zero_extend a`, returning `Ok true`.  Composes
-`translateAddr_machine_store` (Bare identity), `mem_write_ea_8` (no-op `Ok ()`)
-and `mem_write_value_8`. -/
-theorem translate_and_write_value_8
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 8))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 8 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 8 = 0) :
-    (translate_and_write_value (virtaddr.Virtaddr a) 8 data
-        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)).insert
-              (a.toNat + 4) (data.extractLsb' 32 8)).insert
-              (a.toNat + 5) (data.extractLsb' 40 8)).insert
-              (a.toNat + 6) (data.extractLsb' 48 8)).insert
-              (a.toNat + 7) (data.extractLsb' 56 8)) } := by
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  have hea := mem_write_ea_8 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram halign
-  have hmwv := mem_write_value_8 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin halign
-  simp only [EStateM.run] at htr hea hmwv
-  unfold translate_and_write_value
-  simp only [bind, EStateM.bind, EStateM.run, pure]
-  rw [htr]
-  simp only [EStateM.bind, hze]
-  rw [hea]
-  simp only [EStateM.bind]
-  rw [hmwv]
-  simp only [EStateM.pure]
-
-/-- `translate_and_write_value (Virtaddr a) 4 data …`. Width-4 clone. -/
-theorem translate_and_write_value_4
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 4))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 4 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 4 = 0) :
-    (translate_and_write_value (virtaddr.Virtaddr a) 4 data
-        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)) } := by
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  have hea := mem_write_ea_4 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram halign
-  have hmwv := mem_write_value_4 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin halign
-  simp only [EStateM.run] at htr hea hmwv
-  unfold translate_and_write_value
-  simp only [bind, EStateM.bind, EStateM.run, pure]
-  rw [htr]
-  simp only [EStateM.bind, hze]
-  rw [hea]
-  simp only [EStateM.bind]
-  rw [hmwv]
-  simp only [EStateM.pure]
-
-/-- `translate_and_write_value (Virtaddr a) 2 data …`. Width-2 clone. -/
-theorem translate_and_write_value_2
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 2))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 2 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 2 = 0) :
-    (translate_and_write_value (virtaddr.Virtaddr a) 2 data
-        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)) } := by
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  have hea := mem_write_ea_2 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram halign
-  have hmwv := mem_write_value_2 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin halign
-  simp only [EStateM.run] at htr hea hmwv
-  unfold translate_and_write_value
-  simp only [bind, EStateM.bind, EStateM.run, pure]
-  rw [htr]
-  simp only [EStateM.bind, hze]
-  rw [hea]
-  simp only [EStateM.bind]
-  rw [hmwv]
-  simp only [EStateM.pure]
-
-/-- `translate_and_write_value (Virtaddr a) 1 data …`. Width-1 clone. -/
-theorem translate_and_write_value_1
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 1))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 1 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat) :
-    (translate_and_write_value (virtaddr.Virtaddr a) 1 data
-        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
-      = .ok (.Ok true) { σ with mem := σ.mem.insert a.toNat data } := by
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  have hea := mem_write_ea_1 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram
-  have hmwv := mem_write_value_1 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin
-  simp only [EStateM.run] at htr hea hmwv
-  unfold translate_and_write_value
-  simp only [bind, EStateM.bind, EStateM.run, pure]
-  rw [htr]
-  simp only [EStateM.bind, hze]
-  rw [hea]
-  simp only [EStateM.bind]
-  rw [hmwv]
-  simp only [EStateM.pure]
-
-/-! ## `transform_effective_address`, `vmem_write_addr`, `vmem_write`.
-
-`vmem_write` = `get_transformed_data_addr` (a `rX_bits` GPR read + the identity
-`transform_effective_address`) followed by `vmem_write_addr`.  On the M-mode/Bare
-hot path the address transform is the identity `Virtaddr (v1 + offset)` and the
-write path takes the aligned, no-split branch straight into
-`translate_and_write_value`.  These are the last links up to the instruction
-boundary; `execute_STORE` is characterized in `Vsa/Sim/ExecuteStore.lean`. -/
-
-/-- `get_pmlen (Store Data) Machine = 0` on the hot path: `is_pmm_applicable`
-is true (all `bne` conjuncts hold, `Machine == Machine` short-circuits the MXR
-disjunct, `xlen == 64`), and `get_pmm Machine = pmm_mode_backwards Seccfg.PMM =
-PMM_Disabled` (⇒ 0) when `Seccfg.PMM = 0`.  Reads `mstatus` (MXR, unused) and
-`mseccfg`. -/
 theorem get_pmlen_store_machine
     (σ : SequentialState RegisterType trivialChoiceSource)
     (vmstatus : RegisterType Register.mstatus)
@@ -1353,11 +1027,6 @@ theorem get_pmlen_store_machine
     get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hseccfg, bne, hpmmd,
     hcond, if_true]
 
-/-- `transform_effective_address (Virtaddr a) (Store Data)` is the identity on
-the Machine hot path: `effectivePrivilege` gives Machine (MPRV = 0),
-`get_pmlen = 0`, and `translationMode Machine = Bare`, so
-`pm_transform_PA (Virtaddr a) 0 = Virtaddr (zero_extend a)`.  Reads `mstatus`,
-`cur_privilege`, `mseccfg`. -/
 theorem transform_effective_address_store
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64)
@@ -1397,23 +1066,9 @@ theorem transform_effective_address_store
     rw [Nat.mod_eq_of_lt (by have := a.isLt; simpa using this)]
   rw [hext]
 
-/-! ## `split_on_page_boundary a width = (width, 0)` for an aligned in-page store.
-
-For a `width`-aligned address (`width ∈ {1,2,4,8}`) the `[a, a+width)` window never
-crosses a 4096-byte page boundary, so `intra_page_access` holds and the split is
-`(width, 0)`.  Store analogue of `Vsa/Sim/ExecuteLoad.lean:split_on_page_boundary_data_eight`
-per width, but the intra-page mask equality is proved via the bit-level helper
-`and_mask_shift` (`a &&& 0xF…F000 = (a >>> 12) <<< 12`) below rather than the
-`bv_omega` in the load file (which the current toolchain rejects).  Only the fact
-that it *runs* matters downstream — its value feeds `next_page_bytes`, which the
-Bare-path `do_split_access` ignores. -/
-
-/-- `0xF…F000 = allOnes <<< 12`: the 4096-byte page mask as a shifted allOnes. -/
 theorem page_mask_eq : (0xFFFFFFFFFFFFF000#64) = (BitVec.allOnes 64) <<< 12 := by
   apply BitVec.eq_of_toNat_eq; decide
 
-/-- `a &&& 0xF…F000 = (a >>> 12) <<< 12` — the page mask clears the low 12 bits.
-Proved bit-by-bit. -/
 theorem and_page_mask_shift (a : BitVec 64) :
     (a &&& 0xFFFFFFFFFFFFF000#64) = (a >>> 12) <<< 12 := by
   rw [page_mask_eq]; ext i
@@ -1502,38 +1157,6 @@ theorem split_on_page_boundary_store_2
     rw [hadd]; simp; omega
   simp only [hintra, if_true, bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
 
-theorem split_on_page_boundary_store_1
-    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) :
-    (split_on_page_boundary a 1).run σ = .ok (((1 : Nat) : Int), 0) σ := by
-  have hmask : (Sail.BitVec.updateSubrange ((ones (n := 64)) : BitVec 64)
-      (Functions.pagesize_bits -i 1) 0 (zeros (n := ((12 -i 1) -i (0 -i 1))))) = 0xFFFFFFFFFFFFF000#64 := by
-    apply BitVec.eq_of_toNat_eq; decide
-  simp only [split_on_page_boundary, Sail.BitVec.length, hmask]
-  have hai : BitVec.addInt a ((1 : Nat) : Int) = a + 1#64 := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.addInt]; rfl
-  have hsi : BitVec.subInt (a + 1#64) 1 = a := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.subInt]
-    have h64 : a.toNat < 2 ^ 64 := a.isLt
-    bv_omega
-  have hintra : ((a &&& 0xFFFFFFFFFFFFF000#64)
-      == (BitVec.subInt (BitVec.addInt a ((1 : Nat) : Int)) 1 &&& 0xFFFFFFFFFFFFF000#64)) = true := by
-    rw [hai, hsi]
-    simp only [beq_iff_eq]
-  simp only [hintra, if_true, bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
-
-/-! ## `vmem_write_addr` on the aligned, no-split `Store Data` hot path.
-
-`vmem_write_addr vaddr width data (Store Data) false false false` on the M-mode/
-Bare hot path: the alignment guard passes (`is_aligned_vaddr`), `do_split_access`
-is `false` (`translationMode Machine = Bare` ⇒ `bne Bare Bare = false`), so both
-page-split blocks are no-ops and `access_width = width`; the main block runs
-`translateAddr` (Bare identity), `mem_write_ea` (no-op `Ok ()`) and
-`mem_write_value` (the byte-insert chain).  `res = false` skips the reservation
-branch; `is_store_conditional (Store Data) = false` discharges the `res ==` assert.
-Proved per width, threading MemStore's top lemmas. -/
-
-/-- `vmem_write_addr (Virtaddr a) 8 data (Store Data) …` writes the eight bytes
-of `data` at `a`, returning `Ok true`. -/
 theorem vmem_write_addr_8
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 8))
@@ -1636,7 +1259,6 @@ theorem vmem_write_addr_8
     Bool.true_and, Bool.and_true]
   rfl
 
-
 theorem vmem_write_addr_4
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 4))
@@ -1730,7 +1352,6 @@ theorem vmem_write_addr_4
     EStateM.run, EStateM.bind, EStateM.pure, pure, Pure.pure,
     Bool.true_and, Bool.and_true]
   rfl
-
 
 theorem vmem_write_addr_2
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -1826,11 +1447,6 @@ theorem vmem_write_addr_2
     Bool.true_and, Bool.and_true]
   rfl
 
-
-/-- `(a &&& page_mask).toNat = a.toNat / 4096 * 4096` — the page mask clears the
-low 12 bits.  Local copy of `Vsa/Sim/ExecuteLoad.lean:and_page_mask_toNat` (that
-file imports this one, so we cannot depend on it); derived here from the local
-`and_page_mask_shift`. -/
 theorem and_page_mask_toNat_store (a : BitVec 64) :
     (a &&& 0xFFFFFFFFFFFFF000#64).toNat = a.toNat / 4096 * 4096 := by
   rw [and_page_mask_shift, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight,
@@ -1839,10 +1455,6 @@ theorem and_page_mask_toNat_store (a : BitVec 64) :
   have hb : a.toNat / 4096 < 2 ^ 52 := by omega
   rw [Nat.shiftLeft_eq, Nat.mod_eq_of_lt (by omega)]
 
-/-- `split_on_page_boundary a w = (w, 0)` for a `w`-aligned in-page access
-(`0 < w ≤ 8`).  Width-generic store-side version (the load side's
-`split_on_page_boundary_data_w` lives downstream in ExecuteLoad and cannot be
-imported here).  Subsumes `split_on_page_boundary_store_{8,4,2,1}` above. -/
 theorem split_on_page_boundary_store_w
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) (w : Nat)
     (hwpos : 0 < w) (hwle : w ≤ 8)
@@ -1873,26 +1485,6 @@ theorem split_on_page_boundary_store_w
     rw [haw, hpage]
   simp only [hintra, if_true, bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
 
-/-! ## Generic `vmem_write_addr_w` (width-parametric, abstract lower chain).
-
-The user directive: no width cloning.  This lemma proves `vmem_write_addr` for an
-arbitrary `w` (`1 ≤ w ≤ 8`, aligned, page-non-crossing) by taking the entire lower
-memory chain as ABSTRACT hypotheses:
-
-- `htr` — `translateAddr` returns Bare identity (`translateAddr_machine_store` is
-  itself width-independent, so callers pass it directly);
-- `hea` — `mem_write_ea` no-op `Ok ()` (the byte-independent EA record write);
-- `hmwv` — `mem_write_value` returns `Ok true` in some ABSTRACT post-state `σ'`
-  (the little-endian byte-insert chain lives entirely inside this hypothesis and
-  is never re-derived here);
-- `hwval` — the extract-collapse `setWidth (8*w) (extractLsb data (8*w-1) 0) = data`.
-
-Only the control-flow scaffolding (alignment guard false, `do_split_access` false
-so `access_width = width`, both page-split blocks skipped, the two `res ==`
-asserts) is discharged here — all width-generic.  `vmem_write_addr_{8,4,2}` above
-predate this lemma and are left intact; `vmem_write_addr_1` below is a thin
-instantiation.  This is the composition the StepStore lemmas will consume: the
-post-state is exactly the abstract `σ'` supplied by `mem_write_value_w`. -/
 theorem vmem_write_addr_w
     (σ σ' : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) (data : BitVec (8 * w))
@@ -1973,9 +1565,6 @@ theorem vmem_write_addr_w
     Bool.true_and, Bool.and_true]
   rfl
 
-/-- `vmem_write_addr (Virtaddr a) 1 data (Store Data) …` writes the single byte
-of `data` at `a`, returning `Ok true`.  Thin instantiation of `vmem_write_addr_w`
-threading MemStore's width-1 lower-chain lemmas. -/
 theorem vmem_write_addr_1
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 1))

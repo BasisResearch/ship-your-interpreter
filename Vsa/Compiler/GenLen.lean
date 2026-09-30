@@ -1,18 +1,9 @@
 import Vsa.Compiler.CodeGen
 
-/-!
-# Code lengths do not depend on exit targets
-
-The code generator computes the length of a loop body or function body with
-placeholder exit targets and then compiles it with the real ones; the lengths
-agree because only the frame counts of the exits enter the code's shape.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While
 
-/-- Two contexts that differ at most in their exit targets. -/
 structure GCtx.Sh (C C' : GCtx) : Prop where
   Γ : C.Γ = C'.Γ
   blk : C.blk = C'.blk

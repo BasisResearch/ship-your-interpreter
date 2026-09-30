@@ -1,14 +1,5 @@
 import VsaIris.Vsa.ReallocPrev
 
-/-!
-# `_realloc_r` into a free predecessor and a free successor
-
-Both neighbours of the old chunk are free: the successor is absorbed first
-(`next_absorb`), then the predecessor unlinked and the payload copied down
-(`pvG_rt` over the absorbed virtual heap). The copy is `pvN_inline` (the
-unrolled words at this path's code) or `memmove_fwd`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
@@ -18,8 +9,6 @@ section Copy
 
 variable {live : Nat → Prop} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- The three-word tail of the prev+X+next copy (`0x800056c8`): words
-`j … j+2` from `s0` to `a4`. -/
 theorem pvN_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p ∈ allocText, live p.1)
     {R0 R : Nat → BitVec 64} {j : Nat} (h8 : (R 8).toNat = s + 8 * j) (h14 : (R 14).toNat = d + 8 * j)
     (hj : 8 * j + 24 ≤ L) (K : PVKeep R0 R)
@@ -47,8 +36,6 @@ theorem pvN_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p �
     l1 l2 s1 s2 ?_
   exact hk _ (by pv_keep K)
 
-/-- The prev+X+next path's inline copy (`0x8000569c`, a payload of 24,
-40, 56 or 72 bytes, from `s0` to `t1 + 16`). -/
 theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ p ∈ allocText, live p.1)
     (hL : L = 24 ∨ L = 40 ∨ L = 56 ∨ L = 72) (hP : P + 16 = d)
     {R : Nat → BitVec 64} (h8 : (R 8).toNat = s) (h6 : (R 6).toNat = P) (h16 : (R 16).toNat = d)
@@ -68,11 +55,11 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
   have n56 : (sign_extend (m := 64) (0x038#12) : BitVec 64) = BitVec.ofNat 64 56 := rfl
   have n64 : (sign_extend (m := 64) (0x040#12) : BitVec 64) = BitVec.ofNat 64 64 := rfl
   have nm8 : (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) := rfl
-  -- the tail from word `j`
+
   have tail : ∀ j (R' : Nat → BitVec 64), j + 3 = L / 8 → (R' 8).toNat = s + 8 * j →
       (R' 14).toNat = d + 8 * j → PVKeep R R' → AW live S Q 0x800056c8#64 R' (copyW M0 d s j) :=
     fun j R' hj g8 g14 K => pvN_tail3 A hlive g8 g14 (by omega) K fun R'' K' => by rw [hj]; exact hk R'' K'
-  -- a word from `s0 + 8 j` to `t1 + 16 + 8 j`, while `s0 = s`
+
   have pair : ∀ (j : Nat) {pcL pcS pcN : BitVec 64} {offL offS : BitVec 12} (rT : Nat)
       (R1 : Nat → BitVec 64), rT ≠ 2 → rT ≠ 6 → rT ≠ 8 → rT ≠ 9 → rT ≠ 13 → rT ≠ 15 → rT ≠ 16 →
       rT ≠ 17 → rT ≠ 18 → rT ≠ 19 →
@@ -102,12 +89,12 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
   refine st_800056a4 hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x027#12) : BitVec 64).toNat = 39 from rfl] at hc
-  · -- 24 bytes: the tail alone
+  ·
     refine tail 0 _ (by omega) ?_ ?_ (by pv_keep (PVKeep.refl R)) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [h8]; rfl
     · rw [n0, e _ _ _ h16 (by omega)]
-  -- 40, 56 or 72 bytes: word 0, with `li a4,55` before its store
+
   refine aw_forget (fun R0 => PVKeep R R0 ∧ (R0 8).toNat = s ∧ (R0 12).toNat = L)
     ⟨by pv_keep (PVKeep.refl R), by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h8,
       by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12⟩ fun R0 ⟨K0, g8, g12⟩ => ?_
@@ -130,13 +117,13 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
         by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; rfl,
         by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact g12⟩
     fun R1 ⟨K1, g8, g14, g12⟩ => ?_
-  -- word 1
+
   refine pair 1 (offL := 0x008#12) (offS := 0x018#12) 11 R1 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) n8 n24 (by omega)
     (st_800056b4 hlive) (st_800056b8 hlive) K1 g8 fun v => ?_
   refine st_800056bc hlive (fun hc' => ?_) (fun hc' => ?_) <;>
     rw [upd_other _ _ (by decide), upd_other _ _ (by decide), g14, g12] at hc'
-  · -- 56 or 72 bytes: word 2, with `li a4,72` before its store, and word 3
+  ·
     have K2 := K1.upd v (k := 11) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide)
     obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 2) (by omega) (by omega)
@@ -163,7 +150,7 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
       (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) n24 n40 (by omega)
       (st_80005800 hlive) (st_80005804 hlive) K3 g8' fun v3 => ?_
     refine st_80005808 hlive (fun hc'' => ?_) (fun hc'' => ?_)
-    · -- 72 bytes: words 4 and 5, then the tail
+    ·
       have hL72 : L = 72 := by
         have := congrArg BitVec.toNat hc''
         simp only [upd_apply, Nat.reduceEqDiff, ite_false] at this; rw [g12', g14'] at this; exact this
@@ -202,7 +189,7 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · rw [g8']
       · rw [K4.t1, n64, e _ _ _ h6 (by omega)]; omega
-    · -- 56 bytes: the tail from word 4
+    ·
       have hL56 : L = 56 := by
         have : L ≠ 72 := fun h => hc'' (BitVec.eq_of_toNat_eq (by
           simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [g12', g14', h]))
@@ -214,7 +201,7 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · rw [n32, e _ _ _ g8' (by omega)]
       · rw [K3.t1, n48, e _ _ _ h6 (by omega)]; omega
-  · -- 40 bytes: the tail from word 2
+  ·
     refine st_800056c0 hlive ?_
     refine st_800056c4 hlive ?_
     refine tail 2 _ (by omega) ?_ ?_ (by pv_keep K1) <;>
@@ -224,9 +211,6 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
 
 end Copy
 
-/-- **The prev+X+next copy through `memmove`** (`0x80005778`): spill `t1`,
-`a5`, `a3`, `a6` at `sp`, `memmove(a6, s0, a2)`, reload them and join at
-`0x800056e0`. -/
 theorem pvN_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : Mem} {d s n : Nat}
     (A : MMArgs C.S d s n) (F : RFrame C R M1)
     (hslotD : d + n ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ d)
@@ -330,8 +314,6 @@ theorem pvN_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : M
       (fun i hi => by omega) a ha
   · rw [hK.s1]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
 
-/-- **The prev+X+next join** (`0x800056e0`): `s0 := a6`, `a4 := a3`,
-`a2 := t1`, then the tail over `pvG_rt`. -/
 theorem pvN_join {C : MCtx} {B : RB} (O : ROK C B) {Mt W : Mem} {brkv : Nat}
     {cs₀ rest : List Chunk} {bins : Nat → List Nat} {P ps S' L hdr0 hxv hn nb i : Nat}
     {pre post : List Nat} {predP succP : Nat}
@@ -348,9 +330,6 @@ theorem pvN_join {C : MCtx} {B : RB} (O : ROK C B) {Mt W : Mem} {brkv : Nat}
   refine pvG_rt O I (F.of_regs ?_ ?_ ?_) hMc ?_ ?_ ?_ ?_ ?_ <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, z, BitVec.add_zero] <;> assumption
 
-/-- **Both neighbours, the predecessor half** (`0x80005684`): with the
-successor already unlinked (`NAbs`), unlink `P`, copy the payload down and
-join the tail. -/
 theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₀ cs₃ : List Chunk} {P ps : Nat}
@@ -376,7 +355,7 @@ theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
   have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
   have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
   have n24 : (sign_extend (m := 64) (0x018#12) : BitVec 64) = BitVec.ofNat 64 24 := rfl
-  -- `P`'s links in the absorbed heap
+
   let C' : MCtx := { C with H := (B.p, B.nOld) :: C.H }
   obtain ⟨cs₀', p, psz, i, pre, post, predP, succP, PV⟩ :=
     pv_of_heap (C := C') (cs₁ := cs₀ ++ [⟨P, ps, false⟩]) (rest := cs₃) N.heap N.xW (by omega)
@@ -419,7 +398,7 @@ theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
     rw [n24, addr_add hvS2 24 (by omega)]
   have eP2 : (BitVec.ofNat 64 predP + sign_extend (m := 64) (0x010#12)).toNat = predP + 16 := by
     rw [n16, addr_add hvP2 16 (by omega)]
-  -- unlink `P`
+
   refine st_80005684 O.live (by rw [eB]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [eB]; exact O.foot gB) ?_
   rw [eB, ldv_at hbk _ rfl]
@@ -441,7 +420,7 @@ theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP2]; exact O.foot gP) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   rw [eP2]
-  -- the tail's state, the frame, the copy's arguments
+
   have hsz8 : B.nOld + 8 ≤ S := by
     obtain ⟨c0, hc0, _, hc0a, hc0n⟩ := HH.exact _ List.mem_cons_self List.mem_cons_self
     have := HH.chunk_eq hc0 hXm (by have := D.addr; simp only at hc0a ⊢; omega)
@@ -484,7 +463,7 @@ theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
       dS := fun k hk => O.own _ (.inl (hspan _ (by omega) (by omega))) }
   refine st_80005698 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc ⊢ <;> rw [h17, h12] at hc
-  · -- over 72 bytes: `memmove`
+  ·
     refine pvN_mm O { A with n32 := by omega } (F1.of_regs ?_ ?_ ?_) hdst hsrc ?_ ?_ ?_
       (fun R'' Mc F' hMc g13 g6 g15 g16 g9 => pvN_join O I F' hMc ?_ ?_ ?_ ?_ ?_) <;>
       (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
@@ -496,7 +475,7 @@ theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
     · rw [g6]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h6
     · rw [g13]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h13
     · rw [g15]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h15
-  · -- up to 72 bytes: inline
+  ·
     have hLs : S - 8 = 24 ∨ S - 8 = 40 ∨ S - 8 = 56 ∨ S - 8 = 72 := by omega
     refine pvN_inline A O.live hLs rfl ?_ ?_ ?_ ?_ fun R'' K => pvN_join O I
       ((F1.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_) (fun a _ => rfl) ?_ ?_ ?_ ?_ ?_ <;>
@@ -515,10 +494,6 @@ theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
     · rw [K.a3]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h13
     · rw [K.a5]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h15
 
-/-- **Into both free neighbours** (`0x8000566c`): unlink the successor `N`
-(`next_absorb`) and the predecessor `P`, copy the payload down to `P + 16`
-(inline up to 72 bytes, else `memmove`), and join the tail with the chunk
-`P` of `ps + S + ns` bytes. -/
 theorem realloc_pvXN {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₀ cs₃ : List Chunk} {P ps : Nat}
@@ -539,7 +514,7 @@ theorem realloc_pvXN {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := HB.top_room
   simp only at hXb hNb hx16 hS16 hns16
   unfold heapStart heapEnd at *
-  -- `N`'s links
+
   have hpn := FB.pred_node; have hsn := FB.succ_node
   obtain ⟨hp16, hpnode⟩ := HH.node FB.i0 FB.i1 hpn
   obtain ⟨hs16, hsnode⟩ := HH.node FB.i0 FB.i1 hsn
@@ -577,7 +552,7 @@ theorem realloc_pvXN {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     rw [n24, addr_add hvS 24 (by omega)]
   have eP : (BitVec.ofNat 64 pred + sign_extend (m := 64) (0x010#12)).toNat = pred + 16 := by
     rw [n16, addr_add hvP 16 (by omega)]
-  -- unlink `N`
+
   refine st_8000566c O.live (by rw [eNB]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [eNB]; exact O.foot fNB) ?_
   rw [eNB, ldv_at FB.bk _ rfl]

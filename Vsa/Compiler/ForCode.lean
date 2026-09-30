@@ -1,13 +1,5 @@
 import Vsa.Compiler.SimWhile
 
-/-!
-# The code of a `for` statement in pieces
-
-`gstmt_for` names the positions of a `for` statement's code: the frame entry,
-the initializer at `pos + 4`, the condition at `fHd`, the body at `fPb`, the
-step at `fPs`, the back jump, and the frame exit at `fEx`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -75,7 +67,6 @@ theorem fBody_length : (gstmt T ((fC1 C init b).loop (fEx T C pos init cnd step 
 
 end
 
-/-- The pieces of a `for` statement's code in place. -/
 structure ForSegs (code : List Ins) (T : List String) (C : GCtx) (pos : Nat) (init : Option Stmt)
     (cnd step : Option Expr) (b : Stmt) : Prop where
   ent : Seg code pos (enterFrame (forNames init b) pos)

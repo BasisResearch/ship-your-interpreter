@@ -1,28 +1,16 @@
 import Vsa.Compiler.StmtT
 import Vsa.Compiler.Fail
 
-/-!
-# Statements without an execution
-
-If a supported statement (list) has no execution from a related state, its code
-reaches the runtime-error exit or runs for at least `n` steps, for every `n`
-(`noS₀`/`noSeq`, by strong induction on `n` and structural recursion on the
-syntax). Executions of the parts that do exist are run with the forward
-simulation.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- Failure of one statement without an execution. -/
 def SFail (code : List Ins) (n : Nat) (st : St) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
   ∀ (C : Ctx) (loop : Bool) (pos : Nat) (A : AM), At code C pos → SupS C.Γ.names loop s →
     Seg code pos (cstmt C pos s).1 → PosOK (pos + (cstmt C pos s).1.length) →
     (loop = true → PosOK C.brk ∧ PosOK C.cont) → A.pc = pcOf pos → SR C.Γ env st A →
     (¬ HasExec st d env s) → Fail code n A
 
-/-- Failure of one statement list without an execution. -/
 def SeqFail (code : List Ins) (n : Nat) (st : St) (d : Nat) (env : Addr) (ss : List Stmt) : Prop :=
   ∀ (C : Ctx) (loop : Bool) (pos : Nat) (A : AM) (f : List (String × Nat)) (g : Scope),
     C.Γ = f :: g → At code C pos → SupSeq C.Γ.names loop ss →

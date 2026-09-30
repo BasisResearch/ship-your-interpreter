@@ -1,17 +1,6 @@
 import VsaIris.Interp.CallSeg
 import VsaIris.Interp.CallErr
 
-/-!
-# The call arm's prefix, partial mode (lane E4)
-
-`callPrefixP`: as `callPrefixT` (`CallPrefix.lean`), outcome-quantified: the
-callee through the Löb hypothesis (`ms_callEvalP`), the argument loop through
-E6's `evalArgsP_body`, and the too-many-arguments error (`interp.c:251`):
-`runtime_error(in, line, "too many arguments (max 32)", 0, 0)` (E2's
-`ms_rtErrEval`), which aborts. The continuation `CallK254P` receives the
-derivations of the callee and the arguments and the arm's additive pair back.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
@@ -19,15 +8,11 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr
 
-
-/-- A call node's budget leaves `runtime_error` room below the arm's frame. -/
 theorem evalNeed_call_rtErr (f : Expr) (args : List Expr) (d : Nat) :
     1088 + RtErr.rtErrNeed ≤ evalNeed (.call f args) d := by
   have := evalNeed_call_fn f args d; have := Expr.stackNeed_ge f
   unfold evalNeed stackBudget at *; unfold RtErr.rtErrNeed snprintfNeed evalFrame at *; omega
 
-/-- A call node's budget: its own frame, a child's frame, and the leaf
-headroom (`3 * evalFrame`). -/
 theorem evalNeed_call_ge (f : Expr) (args : List Expr) (d : Nat) :
     3264 ≤ evalNeed (.call f args) d := by
   have := evalNeed_call_fn f args d; have := Expr.stackNeed_ge f
@@ -37,9 +22,6 @@ section Defs
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The continuation of the call prefix, partial mode: the state at the kind
-dispatch with the callee's and the arguments' derivations, the result slot
-and the arm's pair (return, abort) back. -/
 def CallK254P (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (Core : IProp GF) (Φ : Nat × String → IProp GF) (st : St) (d env : Nat) (f : Expr)
     (args : List Expr) (s aX sret ret : BitVec 64) (rv : Nat → BitVec 64) (n : Nat)
@@ -61,8 +43,6 @@ section CloP
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- **The closure call from the kind dispatch, partial mode** (the call arm's
-closure branch; proved by the closure tail). -/
 def CallCloP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (Core : IProp GF) : Prop :=
   ∀ (Φ : Nat × String → IProp GF) (st : St) (d env : Nat) (f : Expr) (args : List Expr)
@@ -135,7 +115,7 @@ end CloP
   iapply callSegA hlive (wpW _) hregs hn hfg
   iframe Hdv Hms
   iintro %R1 %Mt1 %⟨hA, hra1⟩ Hms
-  -- the callee, through the Löb hypothesis
+
   ihave Hf := evalSpecsP_at Core st d env f $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800031bc)
     (jalx_800031bc live (fun p hp => hlive _ (interp_code_800031bc p hp)))
@@ -153,9 +133,8 @@ end CloP
   · imodintro; rw [hFt]; iapply astEG_of_view hrf hgeo $$ Hro
   iintro %R1' %w0 %w1 %w2 %st1 %fv %hEf %hkeep1 #Hv1 Hms Hst Hw Hslot Hk
 
-
 #ix_piece callPrefixP_p2 from callPrefixP_p1 by
-  -- the count test and its three exits
+
   have h8 : upd R1' 1 (BitVec.ofNat 64 (0x800031bc + 4)) 8 = aX := by
     ix_reg; rw [hkeep1 8 (by decide)]; exact hA.s0
   have h2 : upd R1' 1 (BitVec.ofNat 64 (0x800031bc + 4)) 2 = s + 18446744073709550528#64 := by
@@ -174,9 +153,8 @@ end CloP
   rotate_left
   all_goals iintro %R2 %Mt2 %hB Hms
 
-
 #ix_piece callPrefixP_p3 from callPrefixP_p2 by
-  -- the argument loop (E6)
+
   obtain ⟨hpos, hle, hB⟩ := hB
   have hne : args ≠ [] := by intro h; subst h; simp at hpos
   ihave #Hast := astEG_of_view hrepr hgeo $$ Hro
@@ -205,9 +183,8 @@ end CloP
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ H
 
-
 #ix_piece callPrefixP_p2c from callPrefixP_p2 at 3 by
-  -- no arguments: straight to the dispatch
+
   obtain ⟨hz, hB⟩ := hB
   have hnil : args = [] := List.eq_nil_of_length_eq_zero hz
   subst hnil
@@ -218,7 +195,7 @@ end CloP
   unfold argVals; iempintro
 
 #ix_piece callPrefixP_p2b from callPrefixP_p2 at 2 by
-  -- more than 32 arguments: `runtime_error`
+
   obtain ⟨hgt, hR2, hMt2⟩ := hB
   have h8' : R2 8 = aX := (hR2 8 (by decide) (by decide)).trans h8
   have h2' : R2 2 = s + 18446744073709550528#64 := (hR2 2 (by decide) (by decide)).trans h2
@@ -258,11 +235,6 @@ end CloP
 
 #ix_chain callPrefixP_c := [callPrefixP_p1, callPrefixP_p2, callPrefixP_p3]
 
-
-/-- **The call prefix, partial mode**: from `eval_expr`'s entry on a call node,
-with the Löb hypothesis, the error context and the argument loop (E6), the
-arm reaches the kind dispatch (`CallK254P`) or aborts (more than 32
-arguments, or a child's abort). -/
 theorem callPrefixP {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}

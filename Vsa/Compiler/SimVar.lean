@@ -1,19 +1,9 @@
 import Vsa.Compiler.SUpd
 
-/-!
-# Variable reads and assignments
-
-`walk_read`: from the frame of `a` in `t0`, the read walk of `x` over the chain
-of layouts of `a` loads the value `Store.lookup` finds, or reaches the error
-exit when it finds none. `walk_write` is the same for assignments and
-`Store.set`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- Registers a walk may change. -/
 def walkClob : List Nat := [t0, t1, t2, t3, a0, a1]
 
 theorem frame_bounds {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat}
@@ -29,7 +19,6 @@ theorem tagOf_ne6 (v : Value) : tagOf v ≠ 6 := by cases v <;> simp only [tagOf
 theorem VRepr.tag_ne6 {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec 64}
     (hv : VRepr H m h v t p) : t ≠ 6 := by rw [hv.tag]; exact tagOf_ne6 v
 
-/-- Run code ending in jumps. -/
 theorem run_jumps {code : List Ins} {P : AM → Prop} (hfit : Fits code) {pos : Nat} {is : List Ins}
     (hseg : Seg code pos is) {L : GRegs} {m : Mem} {o : Array String}
     (h : WP code P pos is (fun _ _ _ => False) L m o) : Reaches code ⟨pcOf pos, L, m, o⟩ P :=
@@ -45,9 +34,6 @@ section
 variable {code : List Ins} (hfit : Fits code)
 include hfit
 
-/-- **One frame of a read.** With the frame `f` of `fr` in `t0`, `readHere`
-loads `x` and jumps to `fin` when `fr` binds it, and otherwise falls through
-with `t0` unchanged. -/
 theorem read_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : Nat} {fr : Frame}
     (hfa : FrameAt H m h f l par fr) (hfb : frameBase ≤ f) (hfe : f + 8 + 16 * l.length ≤ frameEnd)
     (hl : l.length ≤ 120) (x : String) (fin : Nat) (hfin : PosOK fin) {pos : Nat} {L : GRegs} {o : Array String}
@@ -102,7 +88,6 @@ theorem read_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : Na
           exact Keep.refl _ _
         · refine ⟨rfl, _, _, ?_, ?_, hfa.bound i x v hLi hl⟩ <;> reg_simp []
 
-/-- **Variable read walk.** -/
 theorem walk_read {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (hs : StoreRel F H s m hF h)
     (x : String) (fin : Nat) (hfin : PosOK fin) :
     ∀ {a : Addr} {Γ : List (List String)}, ChainL F s a Γ → ∀ (pos f : Nat) (L : GRegs)
@@ -181,12 +166,8 @@ theorem walk_read {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (h
       rintro B ⟨hm, ho, hk', hB'⟩
       exact ⟨hm, ho, hk.trans ((Keep.gset (Keep.refl _ L1) (by decide : 5 ∈ walkClob)).trans hk'), hB'⟩
 
-/-- Registers an assignment walk may change. -/
 def writeClob : List Nat := [t0, t1, t2, t3]
 
-/-- **One frame of an assignment.** With the frame `f` of `fr` in `t0` and a
-value in `(a0, a1)`, `writeHere` stores it into the slot of `x` and jumps to
-`fin` when `fr` binds `x`, and otherwise falls through with `t0` unchanged. -/
 theorem write_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : Nat} {fr : Frame}
     (hfa : FrameAt H m h f l par fr) (hfb : frameBase ≤ f) (hfe : f + 8 + 16 * l.length ≤ frameEnd)
     (hl : l.length ≤ 120) (hal : f % 8 = 0) (x : String) (fin : Nat) (hfin : PosOK fin) {pos : Nat}
@@ -245,7 +226,6 @@ theorem write_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : N
         reg_simp [writeClob]
         exact Keep.refl _ _
 
-/-- **Assignment walk.** -/
 theorem walk_write {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (hs : StoreRel F H s m hF h)
     (x : String) (fin : Nat) (hfin : PosOK fin) {v : Value} {t p : BitVec 64} (hv : VRepr H m h v t p) :
     ∀ {a : Addr} {Γ : List (List String)}, ChainL F s a Γ → ∀ (pos f : Nat) (L : GRegs)

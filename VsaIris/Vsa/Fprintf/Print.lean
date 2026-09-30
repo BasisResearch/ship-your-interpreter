@@ -1,14 +1,5 @@
 import VsaIris.Vsa.Fprintf.ScanTo
 
-/-!
-# Printing a conversion's pieces (lane N5)
-
-After a conversion `_vfprintf_r` hands the pending iovs to `__sprint_r`
-(`0x8000b8c4`: `__sprint_r(reent, fp, sp + 224)`), then empties the array and
-goes back to the loop head (`vfp_print`). Every conversion's emit ends here;
-so does the final flush (`0x8000cf9c`, the same call).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -19,20 +10,15 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- A pending piece `__sprint_r` can print: readable, in RAM, off `tohost`,
-off the bytes the print changes. -/
 def PieceOK (Dt : Mem) (DA : List Nat) (s : BitVec 64) (need : Nat) (Mt : Mem) (f sp : BitVec 64)
     (p : Nat × List (BitVec 8)) : Prop :=
   PieceReads Dt DA (outS s need) Mt p.1 p.2 ∧ 0x80000000 ≤ p.1 ∧
     p.1 + p.2.length ≤ 0x100000000 ∧ (p.1 + p.2.length ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ p.1) ∧
     ∀ i, i < p.2.length → ¬ SprintReg f.toNat sp.toNat (sp.toNat + 224) (p.1 + i)
 
-/-- The bytes `vfp_print` changes. -/
 def PrintReg (f sp : Nat) (a : Nat) : Prop :=
   SprintReg f sp (sp + 224) a ∨ (sp + 232 ≤ a ∧ a < sp + 236)
 
-/-- What the loop reads back after a `__sprint_r` call: its frame slots
-unchanged, the residual cleared. -/
 structure PrintRet (Mt M' : Mem) (sp : BitVec 64) : Prop where
   reent : ldv .ld M' sp.toNat = ldv .ld Mt sp.toNat
   file : ldv .ld M' (sp + 8#64).toNat = ldv .ld Mt (sp + 8#64).toNat
@@ -41,9 +27,6 @@ structure PrintRet (Mt M' : Mem) (sp : BitVec 64) : Prop where
   base : ldv .ld M' (sp + 224#64).toNat = ldv .ld Mt (sp + 224#64).toNat
   resid : ldv .ld M' (sp + 240#64).toNat = 0#64
 
-/-- **The print, for any `FILE`**: the `__sprint_r(reent, f, sp + 224)` call
-is the hook `hS`, whose post `Post out M'` (the bytes `out` printed, the
-memory `M'`) gives back the loop's frame slots (`PrintRet`). -/
 theorem vfp_printH (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 8) → Mem → Prop}
     {t : String} {Mt : Mem} {R : Nat → BitVec 64} {s sp reent f P : BitVec 64} {need cnt : Nat}
     {iovs : List (Nat × List (BitVec 8))}
@@ -88,9 +71,6 @@ theorem vfp_printH (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 
   · nx_mem; rfl
   · rw [ldv_ld_miss _ _ (by rw [eo 232 (by omega), eo 240 (by omega)]; omega)]; exact H.resid
 
-/-- **What `__sprint_r` on the stack `FILE` hands back**: the bytes `out`
-printed (the rest `pend'` buffered), the `FILE`, the frame, the residual
-cleared. -/
 structure SbOut (Mt M' : Mem) (sp f : BitVec 64) (pend0 pend' : List (BitVec 8))
     (iovs : List (Nat × List (BitVec 8))) (out : List (BitVec 8)) : Prop where
   rel : pend0 ++ piecesBytes iovs = out ++ pend'
@@ -98,8 +78,6 @@ structure SbOut (Mt M' : Mem) (sp f : BitVec 64) (pend0 pend' : List (BitVec 8))
   frame : Frame M' Mt (SprintReg f.toNat sp.toNat (sp.toNat + 224))
   resid : ldv .ld M' (sp + 240#64).toNat = 0#64
 
-/-- **`__sprint_r(reent, f, sp + 224)` on the stack `FILE`** from any call site
-(return address `ra`), in the hook shape `vfp_printH`/`vfp_end` take. -/
 theorem sbSprint_hook (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp f ra : BitVec 64} {need cnt : Nat} {pend0 : List (BitVec 8)} {iovs : List (Nat × List (BitVec 8))}

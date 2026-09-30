@@ -4,13 +4,10 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- The actual page planner's pair for a short, nonwrapping read. -/
 def pageReadParts (a : BitVec 64) (w : Nat) : Int × Int :=
   if (a.toNat + (w - 1)) / 4096 = a.toNat / 4096 then ((w : Int), 0)
   else (8 - (a.toNat % 8 : Nat), (w : Int) - (8 - (a.toNat % 8 : Nat)))
 
-/-- Short RAM reads complete the actual page split computation even when
-misalignment crosses the page. Bare translation subsequently ignores this pair. -/
 theorem split_on_page_boundary_ram
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) (w : Nat)
     (hwpos : 0 < w) (hwle : w ≤ 8) (hwrap : a.toNat + w ≤ 2 ^ 64) :
@@ -49,5 +46,4 @@ theorem split_on_page_boundary_ram
       show (2 : Int) ^ (3 : Int) = 8 from by decide,
       bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
 
-#print axioms split_on_page_boundary_ram
 end Vsa.Sim

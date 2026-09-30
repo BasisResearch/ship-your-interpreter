@@ -1,25 +1,13 @@
 import VsaIris.Interp.EnvDefineArms
 
-/-!
-# `env_define`'s growth, at the Iris level
-
-`def_grow` (`0x80002b98`): `cap := cap'`, `realloc` the names array, store it,
-`realloc` the values array, store it; both non-NULL go on to the append
-(`def_append`) at the grown geometry, otherwise to the out-of-memory arm. The
-first growth reallocs from NULL (`cap = 0`), later ones from the live arrays:
-one proof over the optional old blocks (`wp_call_reallocOpt`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.VsaHeap VsaIris.MallocFast VsaIris.Sym
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 
-/-- An array block, absent while `cap = 0`. -/
 def obOf (c : Nat) (b : Nat × Nat) : Option (Nat × Nat) := if c = 0 then none else some b
 
-/-- The heap's live list without the old block. -/
 def obRest : Option (Nat × Nat) → List (Nat × Nat) → List (Nat × Nat)
   | none, H => H
   | some b, H => H.erase b
@@ -30,7 +18,6 @@ theorem Regime.plus_add (ρ : Regime) (a b : Nat) : (ρ.plus a).plus b = ρ.plus
 theorem Regime.plus_eq_uncounted {ρ : Regime} {c : Nat} (h : ρ.plus c = .uncounted) :
     ρ = .uncounted := by cases ρ <;> simp_all [Regime.plus]
 
-/-- Two entries of a pairwise-disjoint list, one nonempty, differ unless the same entry. -/
 theorem ne_of_pairwise_disj {B₁ B₂ bs : List (Nat × Nat)} {b c : Nat × Nat}
     (hd : (B₁ ++ bs ++ B₂).Pairwise ExtDisj) (hb : b ∈ B₁ ∨ b ∈ B₂) (hc : c ∈ bs) (hc0 : 0 < c.2) :
     b ≠ c := by
@@ -49,10 +36,6 @@ theorem obRest_perm {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
     simp only [Option.toList_some, List.singleton_append, obRest]
     exact List.perm_cons_erase (hob b rfl)
 
-theorem obRest_mem {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
-    (hob : ∀ b, ob = some b → b ∈ H) (e : Nat × Nat) : e ∈ H ↔ e ∈ ob.toList ++ obRest ob H :=
-  (obRest_perm hob).mem_iff
-
 theorem obRest_sub {ob : Option (Nat × Nat)} {H : List (Nat × Nat)} {e : Nat × Nat}
     (he : e ∈ H) (hne : ∀ b, ob = some b → e ≠ b) : e ∈ obRest ob H := by
   cases ob with
@@ -64,18 +47,17 @@ section Own
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
 omit I in
-/-- The heap with the old block in front. -/
+
 theorem heapRes_obFront {ρ : Regime} {ob : Option (Nat × Nat)} {H : List (Nat × Nat)}
     (hob : ∀ b, ob = some b → b ∈ H) :
     heapRes (GF := GF) vsaLayoutP vsaRoomB ρ H ⊢
       heapRes vsaLayoutP vsaRoomB ρ (ob.toList ++ obRest ob H) :=
   heapRes_congr (obRest_perm hob)
 
-/-- The owned set without the arrays: the base bytes and the struct block. -/
 def growS (s out : Nat) (G : FrameGeom) (a : Nat) : Prop := baseS s out a ∨ InExt G.sblk a
 
 omit I in
-/-- **The arrays split off** a frame's owned set. -/
+
 theorem getS_split {s out n : Nat} {Gf : FrameGeom} {img : Nat → BitVec 8} (f : Nat → BitVec 8)
     (hlay : FrameLayout img Gf n) (hdisj : ∀ a, frameS Gf a → ¬ baseS s out a) :
     ownSet (GF := GF) (getS s out Gf) (fun a => a ↦ₘ f a) ⊢
@@ -119,7 +101,6 @@ theorem getS_split {s out n : Nat} {Gf : FrameGeom} {img : Nat → BitVec 8} (f 
     obtain ⟨pv, nv⟩ := Gf.vblk
     iframe H0 HN HV
 
-/-- What the rejoined owned set holds. -/
 structure GrowJoin (s out : Nat) (G : FrameGeom) (f0 v1 v2 : Nat → BitVec 8) (Mt : Mem) : Prop where
   base : ∀ a, growS s out G a → imgM Mt a = f0 a
   names : ∀ a, InExt G.nblk a → imgM Mt a = v1 a
@@ -129,7 +110,7 @@ structure GrowJoin (s out : Nat) (G : FrameGeom) (f0 v1 v2 : Nat → BitVec 8) (
   dNV : ∀ a, InExt G.nblk a → ¬ InExt G.vblk a
 
 omit I in
-/-- **Fresh arrays joined** into a frame's owned set, at one tracking memory. -/
+
 theorem getS_join {s out : Nat} {Gf : FrameGeom} (hc : Gf.cap ≠ 0) (f0 v1 v2 : Nat → BitVec 8) :
     ownSet (GF := GF) (growS s out Gf) (fun a => a ↦ₘ f0 a) ∗ blockOwnAt Gf.nblk.1 Gf.nblk.2 v1 ∗
         blockOwnAt Gf.vblk.1 Gf.vblk.2 v2 ⊢
@@ -174,8 +155,6 @@ theorem getS_join {s out : Nat} {Gf : FrameGeom} (hc : Gf.cap ≠ 0) (f0 v1 v2 :
     have hn : ¬ InExt (Gf.nblk.1, Gf.nblk.2) a := fun h => dNV a h ha
     unfold glue; rw [if_neg h0, if_neg hn]
 
-/-- The part of a `realloc` outcome besides the heap: NULL (uncounted, the
-old block back) or a fresh block holding the old contents. -/
 def reallocRest (ρ : Regime) (H1 Hx : List (Nat × Nat)) (ob : Option (Nat × Nat)) (nNew : Nat)
     (old : Nat → BitVec 8) (p' : BitVec 64) : IProp GF :=
   iprop((⌜p' = 0#64 ∧ ρ = .uncounted⌝ ∗ obOwn ob old) ∨
@@ -184,7 +163,7 @@ def reallocRest (ρ : Regime) (H1 Hx : List (Nat × Nat)) (ob : Option (Nat × N
         blockOwnAt p'.toNat nNew v))
 
 omit I in
-/-- A NULL `realloc` result: uncounted. -/
+
 theorem reallocRest_null {ρ : Regime} {H1 Hx : List (Nat × Nat)} {ob : Option (Nat × Nat)}
     {nNew : Nat} {old : Nat → BitVec 8} {p' : BitVec 64} (hp : p'.toNat = 0) :
     reallocRest (GF := GF) ρ H1 Hx ob nNew old p' ⊢ ⌜ρ = .uncounted⌝ := by
@@ -194,7 +173,7 @@ theorem reallocRest_null {ρ : Regime} {H1 Hx : List (Nat × Nat)} {ob : Option 
   · exfalso; exact hf.1.nonzero hp
 
 omit I in
-/-- A non-NULL `realloc` result: the fresh block. -/
+
 theorem reallocRest_fresh {ρ : Regime} {H1 Hx : List (Nat × Nat)} {ob : Option (Nat × Nat)}
     {nNew : Nat} {old : Nat → BitVec 8} {p' : BitVec 64} (hp : p'.toNat ≠ 0) :
     reallocRest (GF := GF) ρ H1 Hx ob nNew old p' ⊢
@@ -207,7 +186,7 @@ theorem reallocRest_fresh {ρ : Regime} {H1 Hx : List (Nat × Nat)} {ob : Option
   · iframe Hv; ipureintro; exact hf
 
 omit I in
-/-- **A `realloc` outcome's heap**, covering the live list it came from. -/
+
 theorem reallocOptRes_heap {ρ : Regime} {H1 : List (Nat × Nat)} {ob : Option (Nat × Nat)}
     {nNew : Nat} {old : Nat → BitVec 8} {p' : BitVec 64} :
     reallocOptRes (GF := GF) ρ H1 ob nNew old p' ⊢
@@ -226,8 +205,6 @@ theorem reallocOptRes_heap {ρ : Regime} {H1 : List (Nat × Nat)} {ob : Option (
     · ipureintro; intro e he; exact List.mem_cons_of_mem _ he
     iright; iframe Hv; ipureintro; exact ⟨hf.1, hf.2, rfl⟩
 
-/-- The state at the growth (`0x80002b98`): a full frame (`cap = n`), `a5`
-the next cap, `a1` its names array's size, `s6` the old names array. -/
 structure GrowReady (C : DefCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 8)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   stack : DefStack C.s.toNat C.r (pairVal C.saved) R Mt
@@ -244,7 +221,6 @@ structure GrowReady (C : DefCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVe
   names : R 11 = BitVec.ofNat 64 (8 * nextCap n)
   arr : R 22 = BitVec.ofNat 64 G.pn
 
-/-- The values array (`24 * cap` bytes) is in the upper half of 32-bit RAM. -/
 theorem FrameLayout.vcap_lt {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : FrameLayout img G n) : 24 * G.cap < 2 ^ 31 := by
   rcases Nat.eq_zero_or_pos G.cap with h0 | hpos
@@ -255,7 +231,6 @@ theorem FrameLayout.vcap_lt {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
   unfold htifLo at this
   omega
 
-/-- The frame's three blocks are pairwise apart (with arrays). -/
 theorem FrameLayout.apart {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : FrameLayout img G n) (hc : G.cap ≠ 0) :
     ExtDisj G.sblk G.nblk ∧ ExtDisj G.sblk G.vblk ∧ ExtDisj G.nblk G.vblk := by
@@ -270,8 +245,6 @@ theorem nextCap_even (n : Nat) : nextCap n % 2 = 0 := by unfold nextCap; split <
 theorem roundUp16_32 (c : Nat) : roundUp16 (32 * c) = 8 * c + 24 * c := by
   unfold roundUp16; omega
 
-/-- **The growth** `0x80002b98`: both arrays `realloc`ed to the next cap,
-then the append at the grown geometry; NULL from either aborts. -/
 theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hl : ∀ p ∈ envText, live p.1)
     (hlive : AllocLive live) (N : NativeAddrs) {C : DefCall} (hC : C.OK) {ρ : Regime}
@@ -305,21 +278,21 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hc'cs : (f.vars.length = 0 ∧ nextCap f.vars.length = 8) ∨
       (0 < f.vars.length ∧ nextCap f.vars.length = 2 * f.vars.length) := by
     unfold nextCap; split <;> omega
-  -- the charges: names, values, the name copy
+
   have hcost : nameCopyCost C.x + arrayReallocCost (nextCap f.vars.length) =
       nameCopyCost C.x + 24 * nextCap f.vars.length + 8 * nextCap f.vars.length := by
     unfold arrayReallocCost; rw [roundUp16_32]; omega
   rw [hcost, ← Regime.plus_add, ← Regime.plus_add]
-  -- the arrays off the owned set
+
   ihave ⟨H0, HN, HV⟩ := getS_split (imgM Mt) hlay hdisj $$ HS
   have hS0 : ∀ a, G.e ≤ a → a < G.e + 32 → growS C.s.toNat C.vp.toNat G a :=
     fun a h1 h2 => .inr ⟨by omega, by omega⟩
-  -- `cap := cap'`, `a0 := names`
+
   iapply wp_span Wp (def_grow1 hl (S := growS C.s.toNat C.vp.toNat G) (R := R) (Mt := Mt) hew
     hR.env hS0)
   iframe Ht Hgp Hpc HR H0
   iintro %pc1 %R1 %Mt1 %⟨rfl, rfl, h10, hk1⟩ Hpc HR H0
-  -- `realloc(names, 8 * cap')`
+
   have hobN : ∀ b, obOf G.cap G.nblk = some b → b ∈ H := fun b hb => by
     by_cases h0 : G.cap = 0
     · simp [obOf, h0] at hb
@@ -363,7 +336,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
       have hb : k ≠ 10 := by rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
       rw [hk2 k ha, hk1 k hb]
-  -- `names := a0`, `a0 := vals`, `a1 := 24 * cap'`
+
   have hcap1 : imgLE (imgM (writeLog Mt [(G.e + 4, 4, R 15)])) (G.e + 4) 4 =
       nextCap f.vars.length := by
     rw [imgLE4_store, hR.cap, BitVec.toNat_ofNat]; omega
@@ -375,7 +348,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (by omega) hcap1 hpv1)
   iframe Ht Hgp Hpc HR H0
   iintro %pc3 %R3 %Mt2 %⟨rfl, rfl, h10v, h11v, h15v, hk3⟩ Hpc HR H0
-  -- `realloc(vals, 24 * cap')`
+
   have hvcl := hlay.vcap_lt
   have hobV : ∀ b, obOf G.cap G.vblk = some b → b ∈ obRest (obOf G.cap G.nblk) H := fun b hb => by
     by_cases h0 : G.cap = 0
@@ -419,7 +392,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro %R4 %p2 %⟨h10q, -, hk4⟩ Hpc HR Hscr Hres2
   rw [show BitVec.ofNat 64 (0x80002bbc + 4) = 0x80002bc0#64 from rfl]
   ihave ⟨%Hy, Hh, %hHy, Hrest2⟩ := reallocOptRes_heap $$ Hres2
-  -- `vals := a0`, and the test
+
   have e4 : ∀ k, k = 2 ∨ k = 8 ∨ k = 9 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R4 k = R k :=
     fun k hk => by
       have ha : k ∉ VsaIris.ra :: 10 :: vsaClob := by
@@ -435,7 +408,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (by rw [e4 20 (by omega)]; exact hR.env) hS0 hp1i)
   iframe Ht Hgp Hpc HR H0
   iintro %pc5 %R5 %Mt3 %⟨rfl, hk5, hcase⟩ Hpc HR H0
-  -- the struct stores miss everything but the three fields
+
   have hmiss3 : ∀ a, (a < G.e + 4 ∨ G.e + 24 ≤ a) →
       imgM (writeLog (writeLog (writeLog Mt [(G.e + 4, 4, R 15)]) [(G.e + 8, 8, R2 10)])
         [(G.e + 16, 8, R4 10)]) a = imgM Mt a := fun a ha => by
@@ -456,7 +429,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have h52n : (R5 2).toNat = C.s.toNat - 64 := by
     rw [hk5 2 (by decide), e4 2 (by omega)]; exact h2
   rcases hcase with ⟨hp1z, hp2z, rfl⟩ | ⟨hz, rfl⟩
-  · -- both arrays grown: the append at the grown geometry
+  ·
     have hp2n : p2.toNat ≠ 0 := fun h => hp2z (by rw [h10q]; exact BitVec.eq_of_toNat_eq h)
     ihave ⟨%⟨hf1, hal1, hHx1⟩, %v1, %hcp1, HB1⟩ := reallocRest_fresh hp1z $$ Hrest1
     ihave ⟨%⟨hf2, hal2, hHy2⟩, %v2, %hcp2, HB2⟩ := reallocRest_fresh hp2n $$ Hrest2
@@ -470,7 +443,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     let G' : FrameGeom := ⟨G.e, nextCap f.vars.length, p1.toNat, p2.toNat, G.par, G.sblk,
       (p1.toNat, 8 * nextCap f.vars.length), (p2.toNat, 24 * nextCap f.vars.length)⟩
     have hc' : G'.cap ≠ 0 := by show nextCap f.vars.length ≠ 0; omega
-    -- the struct's fields after the three stores
+
     have hcnt3 : imgLE (imgM (writeLog (writeLog (writeLog Mt [(G.e + 4, 4, R 15)])
         [(G.e + 8, 8, R2 10)]) [(G.e + 16, 8, R4 10)])) G.e 4 = f.vars.length := by
       rw [← hlay.count]; exact imgLE_congr fun i hi => hmiss3 _ (by omega)
@@ -604,7 +577,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
           · refine Classical.byContradiction fun hc => ?_
             exact hJ.dV a (.inl (.inl ⟨by omega, by omega⟩)) h
         slot := fun a h1 h2 => by rw [hJ.base a (.inl (.inr ⟨h1, h2⟩))]; exact hslot3 a h1 h2 }
-    -- the grown frame's blocks are live
+
     have hstep : ∀ e, e ∈ obRest (obOf G.cap G.nblk) H →
         (∀ b, obOf G.cap G.vblk = some b → e ≠ b) → e ∈ Hy := fun e he h2 => by
       rw [hHy2]; exact List.mem_cons_of_mem _ (obRest_sub (hHx e he) h2)
@@ -627,11 +600,11 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
           refine ⟨by simp [FrameGeom.blocks, h0], ?_⟩
           rw [(hlay.arrays (by omega)).1]; simp only; omega
       rcases hb with (hb | hb | hb | hb) | hb
-      · -- another frame's block
+      ·
         exact hstep b (obRest_sub (hBH b (List.mem_append_left _ (List.mem_append_left _ hb)))
           fun c hc => ne_of_pairwise_disj hBd (.inl hb) (hn0 c hc).1 (hn0 c hc).2)
           fun c hc => ne_of_pairwise_disj hBd (.inl hb) (hv0 c hc).1 (hv0 c hc).2
-      · -- the struct block
+      ·
         subst hb
         have hs0 : 0 < G.sblk.2 := by omega
         have hsin : G.sblk ∈ B₁ ++ G.blocks ++ B₂ :=
@@ -649,7 +622,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
             subst hc
             exact (hlay.apart h0).2.1 G.sblk.1 ⟨Nat.le_refl _, by omega⟩
               (by rw [← heq]; exact ⟨Nat.le_refl _, by omega⟩)
-      · -- the new names array
+      ·
         subst hb
         rw [hHy2]
         refine List.mem_cons_of_mem _ (obRest_sub (by rw [hHx1]; exact List.mem_cons_self)
@@ -658,7 +631,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         have hcp0 := (hv0 c hc).2
         exact hf1d c hcin p1.toNat ⟨Nat.le_refl _, by simp only; omega⟩
           (by rw [← heq]; exact ⟨Nat.le_refl _, by simp only; omega⟩)
-      · -- the new values array
+      ·
         subst hb; rw [hHy2]; exact List.mem_cons_self
       · exact hstep b (obRest_sub (hBH b (List.mem_append_right _ hb))
           fun c hc => ne_of_pairwise_disj hBd (.inr hb) (hn0 c hc).1 (hn0 c hc).2)
@@ -666,7 +639,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     rw [show R3 2 = C.s - 64#64 from h52.symm.trans (def_sp hC h52n)]
     iapply def_append Wp hl (allocSpecs live hlive) N hC hAR hf hinv hmiss hdisj' hBH'
     iframe Ht Hat Hgp Hsl Hmc Hx Hv Hpc HR HS Hscr Hh Hb Hp HGe Hclose HK
-  · -- NULL from either `realloc`: out of memory
+  ·
     ihave %hρ : ⌜ρ = .uncounted⌝ $$ [Hrest1 Hrest2]
     · rcases hz with hz | hz
       · ihave %h := reallocRest_null hz $$ Hrest1

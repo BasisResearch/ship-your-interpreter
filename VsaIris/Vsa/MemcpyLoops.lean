@@ -1,25 +1,11 @@
 import VsaIris.Vsa.MemcpySteps
 import VsaIris.Vsa.AllocTac
 
-/-!
-# `memcpy` as one run
-
-The whole function from its entry `0x80006bc8`, over the step table
-(`MemcpySteps.lean`): the dispatch, the destination-alignment head
-(`0x80006cbc`), the 72-byte loop (`0x80006c60`), the word loop (`0x80006c08`)
-with its normalization (`0x80006c1c`), and the byte loop (`0x80006c48`). Each
-loop is an induction whose motive is `MW` at the loop head, with the
-registers given by their `toNat`s and the copied prefix `Cp`.
--/
-
 namespace VsaIris.Memcpy
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast VsaIris.Sym
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-! ## Stores into the copied prefix -/
-
-/-- Bytes `D + k` (`P k`) hold the source's `X + k`. -/
 def CpS (D X : Nat) (img : Nat → BitVec 8) (P : Nat → Prop) (Mt : Mem) : Prop :=
   ∀ k, P k → imgM Mt (D + k) = img (X + k)
 
@@ -35,7 +21,6 @@ theorem imgM_sb (Mt : Mem) (a : Nat) (v : BitVec 64) (b : Nat) :
   · subst h; simp
   · simp only [beq_iff_eq, Ne.symm h, h, ite_false]; rfl
 
-/-- One byte copied: `sb` of an `lbu` from the source. -/
 theorem CpS.sb {D X : Nat} {img : Nat → BitVec 8} {P : Nat → Prop} {Mt : Mem}
     (h : CpS D X img P Mt) {a s o : Nat} (ha : a = D + o) (hs : s = X + o) :
     CpS D X img (fun k => P k ∨ k = o) (writeLog Mt [(a, 1, ldvf .lbu img s)]) := by
@@ -50,7 +35,6 @@ theorem CpS.sb {D X : Nat} {img : Nat → BitVec 8} {P : Nat → Prop} {Mt : Mem
   · rw [ite_eq_right_of_eq_false _ _ (eq_false (by omega))]
     exact h k (hk.resolve_right hko)
 
-/-- One word copied: `sd` of an `ld` from the source. -/
 theorem CpS.sd {D X : Nat} {img : Nat → BitVec 8} {P : Nat → Prop} {Mt : Mem}
     (h : CpS D X img P Mt) {a s o : Nat} (ha : a = D + o) (hs : s = X + o) :
     CpS D X img (fun k => P k ∨ (o ≤ k ∧ k < o + 8)) (writeLog Mt [(a, 8, ldvf .ld img s)]) := by
@@ -63,9 +47,6 @@ theorem CpS.sd {D X : Nat} {img : Nat → BitVec 8} {P : Nat → Prop} {Mt : Mem
   · rw [getElem?_writeMap8_out _ _ _ _ (by omega)]
     exact h k (hk.resolve_right hko)
 
-/-! ## The run's parameters -/
-
-/-- The destination and source windows, and the return address. -/
 structure Geo (dst src r : BitVec 64) (n : Nat) : Prop where
   dlo : 0x80000000 ≤ dst.toNat
   dhi : dst.toNat + n ≤ 0x100000000
@@ -75,13 +56,10 @@ structure Geo (dst src r : BitVec 64) (n : Nat) : Prop where
   shtif : src.toNat + n ≤ 0x8001ad00 ∨ 0x8001ad00 + 16 ≤ src.toNat
   ral : r.toNat % 4 = 0
 
-/-- The end of a `memcpy` run: back at `r`, `a0 = dst`, the destination
-holding the source image. -/
 def mQ (dst r : BitVec 64) (n X : Nat) (img : Nat → BitVec 8) (rv : Nat → BitVec 64)
     (mv : Nat → BitVec 8) : Prop :=
   rv VsaIris.PC = r ∧ rv 1 = r ∧ rv 10 = dst ∧ ∀ k, k < n → mv (dst.toNat + k) = img (X + k)
 
-/-- The run of `memcpy dst src n` returning to `r`. -/
 abbrev MR (live : Nat → Prop) (dst src r : BitVec 64) (n : Nat) (img : Nat → BitVec 8) :
     BitVec 64 → (Nat → BitVec 64) → Mem → Prop :=
   MW live src.toNat n img (VsaIris.InExt (dst.toNat, n)) (mQ dst r n src.toNat img)
@@ -90,14 +68,11 @@ section Loops
 
 variable {live : Nat → Prop} {dst src r : BitVec 64} {n : Nat} {img : Nat → BitVec 8}
 
-/-- The return, with the whole destination copied. -/
 theorem finish {R : Nat → BitVec 64} {Mt : Mem} (h1 : R 1 = r) (h10 : R 10 = dst)
     (hc : CpS dst.toNat src.toNat img (· < n) Mt) : MR live dst src r n img (R 1) R Mt :=
   mw_done fun rv mv hm => ⟨hm.pc.trans h1, (hm.regs 1 (by decide) (by decide)).trans h1,
     (hm.regs 10 (by decide) (by decide)).trans h10,
     fun k hk => (hm.img _ ⟨by omega, by omega⟩).trans (hc k hk)⟩
-
-/-! ## Arithmetic -/
 
 theorem toNat_and7 (x : BitVec 64) : (x &&& 7#64).toNat = x.toNat % 8 := and7_toNat x
 
@@ -105,11 +80,9 @@ theorem toNat_andm8 (x : BitVec 64) : (x &&& 18446744073709551608#64).toNat = x.
   rw [show (18446744073709551608#64 : BitVec 64) = BitVec.allOnes 64 <<< 3 by decide,
     VsaIris.MallocFast.and_high_toNat x 3 (by decide)]
 
-/-- A signed comparison of two small words is the unsigned one. -/
 theorem toInt_small {x : BitVec 64} (h : x.toNat < 2 ^ 63) : x.toInt = x.toNat :=
   BitVec.toInt_eq_toNat_of_lt (by omega)
 
-/-- Arithmetic side conditions: addresses, bounds and windows as `Nat` facts. -/
 syntax "mx_side" : tactic
 macro_rules
   | `(tactic| mx_side) => `(tactic| (
@@ -121,7 +94,6 @@ macro_rules
       (try intro b hb); (try have hb' := of_mem_accAddrs hb);
       (first | done | omega)))
 
-/-- A register equation or `toNat` fact after the register-file updates. -/
 syntax "mx_reg" : tactic
 macro_rules
   | `(tactic| mx_reg) => `(tactic| (first | assumption | (sx_norm; first | assumption | mx_side)))
@@ -171,7 +143,6 @@ theorem byteLoop {live : Nat → Prop} (hlive : ∀ p ∈ mText, live p.1) {dst 
 
 end Loops
 
-/-- The nine stores of one 72-byte iteration extend the copied prefix. -/
 syntax "bulk_cp " term : tactic
 macro_rules
   | `(tactic| bulk_cp $i) => `(tactic| exact
@@ -198,7 +169,6 @@ variable {live : Nat → Prop} (hlive : ∀ p ∈ mText, live p.1) {dst src r : 
   {img : Nat → BitVec 8} (G : Geo dst src r n)
 include hlive G
 
-/-- The trailing-byte test `0x80006c38`: bytes left, or return. -/
 theorem tailRun (i : Nat) (R : Nat → BitVec 64) (Mt : Mem) (hi : i ≤ n)
     (h11 : (R 11).toNat = src.toNat + i) (h14 : (R 14).toNat = dst.toNat + i)
     (h17 : (R 17).toNat = dst.toNat + n) (h1 : R 1 = r) (h10 : R 10 = dst)
@@ -210,7 +180,6 @@ theorem tailRun (i : Nat) (R : Nat → BitVec 64) (Mt : Mem) (hi : i ≤ n)
   · refine mst_80006c3c hlive (by rw [h1]; exact G.ral) ?_
     refine finish h1 h10 (hc.mono fun k hk => by omega)
 
-/-- The byte path `0x80006c40` from the entry registers. -/
 theorem bytePath (R : Nat → BitVec 64) (Mt : Mem)
     (h11 : (R 11).toNat = src.toNat) (h17 : (R 17).toNat = dst.toNat + n) (h1 : R 1 = r)
     (h10 : R 10 = dst) : MR live dst src r n img 0x80006c40#64 R Mt := by
@@ -233,8 +202,6 @@ theorem bytePath (R : Nat → BitVec 64) (Mt : Mem)
     rw [h10] at hlt
     omega
 
-/-- The word loop `0x80006c08` (`j` bytes copied, `m + 1` words left before the
-last aligned word), and its normalization `0x80006c1c` into the tail. -/
 theorem wordLoop (i0 : Nat) (hi0 : (dst.toNat + i0) % 8 = 0) :
     ∀ m j (R : Nat → BitVec 64) (Mt : Mem),
     dst.toNat + j + 8 * (m + 1) = (dst.toNat + n) / 8 * 8 → (dst.toNat + j) % 8 = 0 → i0 ≤ j →
@@ -278,7 +245,6 @@ theorem wordLoop (i0 : Nat) (hi0 : (dst.toNat + i0) % 8 = 0) :
       exact (hc.sd (o := j) (by mx_side) (by mx_side)).mono (fun k hk => by omega)
     · mx_side
 
-/-- The word-loop entry `0x80006bfc` at an aligned offset `i`. -/
 theorem wordEntry (i : Nat) (R : Nat → BitVec 64) (Mt : Mem) (hi : (dst.toNat + i) % 8 = 0)
     (hle : dst.toNat + i ≤ (dst.toNat + n) / 8 * 8)
     (h11 : (R 11).toNat = src.toNat + i) (h14 : (R 14).toNat = dst.toNat + i)
@@ -297,8 +263,6 @@ theorem wordEntry (i : Nat) (R : Nat → BitVec 64) (Mt : Mem) (hi : (dst.toNat 
       (by omega) hi (Nat.le_refl _) (by mx_reg) (by mx_reg) (by mx_reg) (by mx_reg) (by mx_reg)
       (by mx_reg) (by mx_reg) (by mx_reg) hc
 
-/-- The 72-byte loop `0x80006c60` at an aligned offset `i` with at least 72
-bytes before the last aligned word. -/
 theorem bulkLoop : ∀ m i (R : Nat → BitVec 64) (Mt : Mem),
     (dst.toNat + n) / 8 * 8 < dst.toNat + i + 72 * (m + 1) →
     dst.toNat + i + 72 ≤ (dst.toNat + n) / 8 * 8 → (dst.toNat + i) % 8 = 0 →
@@ -344,8 +308,6 @@ theorem bulkLoop : ∀ m i (R : Nat → BitVec 64) (Mt : Mem),
       exact wordEntry hlive G (i + 72) _ _ (by omega) (by omega) (by mx_reg) (by mx_reg) (by mx_reg)
         (by mx_reg) (by mx_reg) (by mx_reg) (by bulk_cp i)
 
-/-- The aligned entry `0x80006bec`: the last aligned word, then the 72-byte
-loop or the word loop. -/
 theorem alignedRun (i : Nat) (R : Nat → BitVec 64) (Mt : Mem) (hi : (dst.toNat + i) % 8 = 0)
     (hin : i ≤ n) (h11 : (R 11).toNat = src.toNat + i) (h14 : (R 14).toNat = dst.toNat + i)
     (h17 : (R 17).toNat = dst.toNat + n) (h1 : R 1 = r) (h10 : R 10 = dst)
@@ -363,8 +325,6 @@ theorem alignedRun (i : Nat) (R : Nat → BitVec 64) (Mt : Mem) (hi : (dst.toNat
   · exact wordEntry hlive G i _ Mt hi (by omega) (by mx_reg) (by mx_reg) (by mx_reg) (by mx_reg)
       (by mx_reg) (by mx_reg) hc
 
-/-- The destination-alignment head `0x80006cbc`: at most seven bytes, two per
-iteration, until the destination is aligned. -/
 theorem headLoop (h8 : 8 ≤ n) : ∀ m i (R : Nat → BitVec 64) (Mt : Mem),
     8 - (dst.toNat + i) % 8 ≤ m → (dst.toNat + i) % 8 ≠ 0 → dst.toNat % 8 + i < 8 →
     (R 11).toNat = src.toNat + i → (R 14).toNat = dst.toNat + i →
@@ -414,8 +374,6 @@ theorem headLoop (h8 : 8 ≤ n) : ∀ m i (R : Nat → BitVec 64) (Mt : Mem),
           ((((hc.sb (o := i) (by mx_side) (by mx_side)).sb (o := i + 1) (by mx_side)
             (by mx_side))).mono fun k hk => by omega)
 
-/-- **`memcpy` from its entry**: the dispatch into the byte path, the head, or
-the aligned path. -/
 theorem entryRun (R : Nat → BitVec 64) (Mt : Mem) (h10 : R 10 = dst) (h11 : R 11 = src)
     (h12 : R 12 = BitVec.ofNat 64 n) (h1 : R 1 = r) :
     MR live dst src r n img 0x80006bc8#64 R Mt := by
@@ -449,8 +407,6 @@ theorem entryRun (R : Nat → BitVec 64) (Mt : Mem) (h10 : R 10 = dst) (h11 : R 
     exact alignedRun hlive G 0 _ Mt e (by omega) (by mx_reg) (by mx_reg) (by mx_reg) (by mx_reg)
       (by mx_reg) (fun k hk => absurd hk (by omega))
 
-/-- **`memcpy` as one bounded local run** from its entry: `a0 = dst`,
-`a1 = src`, `a2 = n`, `ra = r`, the destination at any tracked image. -/
 theorem memcpyLocalRun (rv : Nat → BitVec 64) (Mt : Mem) (hpc : rv VsaIris.PC = 0x80006bc8#64)
     (h1 : rv 1 = r) (h10 : rv 10 = dst) (h11 : rv 11 = src) (h12 : rv 12 = BitVec.ofNat 64 n) :
     ∃ N, LocalRun (vsaModel live) [] (mText ++ srcText src.toNat n img) mRegs

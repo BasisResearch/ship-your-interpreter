@@ -1,14 +1,6 @@
 import VsaIris.Vsa.Fprintf.Run
 import VsaIris.Vsa.Stderr.StrCodeStdio
 
-/-!
-# `fprintf(stdout, "%lld", v)` and `fprintf(stdout, "<…%s>", str)` (lane N5)
-
-`fprintf_via` with the inner `_vfprintf_r` run of each format: `vfpInnerLld`
-prints `lldBytes v`; `vfpInnerS` prints `lit ++ bs ++ ">"` for a string `bs`
-at `str` in the data view, its `strlen` through `strlen_sw`.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -24,7 +16,6 @@ theorem lldBytes_len (v : BitVec 64) : (lldBytes v).length ≤ 21 := by
   have := digBytes_len (lldMag v).toNat (lldMag v).isLt
   unfold lldBytes; split <;> simp <;> omega
 
-/-- **`fprintf(stdout, "%lld", v)`** prints `lldBytes v`. -/
 theorem fprintf_lld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} {need : Nat}
@@ -46,16 +37,12 @@ theorem fprintf_lld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
   exact vfpInnerLld hlive hlive' hsub G.hs1 G.hs2 hs3 hs4 G.hal G.hf1 G.hf2 G.hfa G.hap1 G.hap2 G.hapa a1 a2 a10
     a11 (a12.trans hfmt) a13 hdec0 hdA hdv hsb hloc0 harg hL hP1 hP2 hk0
 
-/-- `__sprint_r`'s bytes under `fprintf` lie in the stdout run's footprint. -/
 theorem sprintReg_outS {s : BitVec 64} {need sp f a : Nat} (h1 : s.toNat - need + 1024 ≤ sp)
     (h2 : sp + 592 ≤ f) (h3 : f + 1208 ≤ s.toNat) (h : SprintReg f sp (sp + 224) a) : outS s need a := by
   unfold SprintReg SfvCallReg LoopReg SfvReg at h
   unfold outS stdioFoot Stdio.InRange impureW
   omega
 
-/-- **`fprintf(stdout, P, str)`** with `P` the format `lit ++ "%s>"`: prints
-`lit ++ bs ++ ">"`, `bs` the string at `str` (in the data view, off the run's
-footprint). -/
 theorem fprintf_s (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s P : BitVec 64} {need : Nat} {lit bs : List (BitVec 8)}
@@ -81,7 +68,7 @@ theorem fprintf_s (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800061c0#64 R Mt := by
   have hW1 := hW.lo; have hW2 := hW.hi; have hW3 := hW.htif
   unfold htifLo at hW3
-  -- the string lies below the stack window or above it
+
   have hbl : bs.length + 32 < 2 ^ 31 := by
     rcases Nat.lt_or_ge ((R 12).toNat) (s.toNat - need) with hlo | hhi
     · refine Nat.lt_of_not_le fun hc => hoff (s.toNat - need - (R 12).toNat) (by omega) ?_

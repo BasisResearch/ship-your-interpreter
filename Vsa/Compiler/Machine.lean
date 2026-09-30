@@ -6,26 +6,6 @@ import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.DivWrap
 import Vsa.Sim.DivSpec3
 
-/-!
-# The abstract target machine of the compiler
-
-`AM` is a functional model of the RV64 machine restricted to the compiler's
-instruction subset: a PC, a partial register file (`GRegs`, the block layer's
-pin list — a register absent from it holds an unknown value), the memory, and
-the HTIF console. `astep code A` executes the instruction the code list places at
-`A.pc`; `none` means the model does not describe the step (and the compiler never
-reaches such a state).
-
-A `jal ra` to one of libgcc's `__muldi3`/`__divdi3`/`__moddi3` is a single
-abstract step: the link, the routine's total-correctness triple
-(`muldi3_spec`, `divdi3_wrap_spec`, `moddi3_spec`), and the return. Hence every
-abstract step costs at least one machine step.
-
-`Corr c A` relates a Sail configuration to an abstract state. The lifting
-theorems (`step_sim`, `halt_sim`) are the only place that touches the Sail
-model; everything above is proved about `astep`.
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa Vsa.Sim
@@ -33,18 +13,15 @@ open Vsa.Machine (MState Config Step Steps Halted Halts output)
 
 abbrev Mem := Std.ExtHashMap Nat (BitVec 8)
 
-/-- Where compiled code is placed: after libgcc's routines in the image. -/
 def codeBase : Nat := 0x80004800
 
 def mulPC : Nat := 0x80004640
 def divPC : Nat := 0x800046a4
 def modPC : Nat := 0x80004728
 
-/-- Instruction `k` of `code` is encoded at `codeBase + 4k`. -/
 def CodeAt (m : Mem) (code : List Ins) : Prop :=
   ∀ k i, code[k]? = some i → ∀ j < 4, m[codeBase + 4 * k + j]? = some (byte i.encode j)
 
-/-- libgcc's multiply and signed divide/remainder routines are in memory. -/
 structure LibLoaded (m : Mem) : Prop where
   mul : Code.__muldi3Loaded m
   div : Code.__divdi3Loaded m
@@ -62,24 +39,19 @@ inductive Out where
   | run (A : AM)
   | halt (e : Nat)
 
-/-- The instruction at `pc`, if `pc` is an aligned code address below `tohost`. -/
 def fetch (code : List Ins) (pc : BitVec 64) : Option Ins :=
   if codeBase ≤ pc.toNat ∧ pc.toNat % 4 = 0 ∧ pc.toNat + 4 ≤ tohostAddr then
     code[(pc.toNat - codeBase) / 4]?
   else none
 
-/-- The eight bytes a doubleword load reads (the model's total read). -/
 def rd8 (m : Mem) (a : Nat) : List (BitVec 8) :=
   [(m[a]?).getD 0, (m[a + 1]?).getD 0, (m[a + 2]?).getD 0, (m[a + 3]?).getD 0,
    (m[a + 4]?).getD 0, (m[a + 5]?).getD 0, (m[a + 6]?).getD 0, (m[a + 7]?).getD 0]
 
-/-- The console-putchar command word for byte `c`. -/
 def putcWord (c : BitVec 8) : BitVec 64 := 0x0101000000000000#64 ||| BitVec.zeroExtend 64 c
 
-/-- The syscall-exit command word for exit code `e`. -/
 def exitWord (e : BitVec 64) : BitVec 64 := (e <<< 1) ||| 1#64
 
-/-- A doubleword store of `v` to `tohost`. -/
 def htifOut (v : BitVec 64) (A : AM) : Option Out :=
   if v = exitWord 0 then some (.halt 0)
   else if v = exitWord 70 then some (.halt 70)
@@ -88,12 +60,10 @@ def htifOut (v : BitVec 64) (A : AM) : Option Out :=
                         out := A.out.push (toString (Char.ofNat (v.setWidth 8).toNat)) })
   else none
 
-/-- Registers a libgcc routine may clobber. -/
 def clobbered : List Nat := [1, 5, 10, 11, 12, 13]
 
 def eraseAll (ns : List Nat) (L : GRegs) : GRegs := ns.foldl (fun L n => eraseG n L) L
 
-/-- `jal ra, tgt` into a libgcc routine: `a0 := a0 op a1`, return to `pc + 4`. -/
 def libCall (tgt : Nat) (A : AM) : Option Out :=
   match lookupG 10 A.regs, lookupG 11 A.regs with
   | some x, some y =>
@@ -107,7 +77,6 @@ def libCall (tgt : Nat) (A : AM) : Option Out :=
     else none
   | _, _ => none
 
-/-- One abstract instruction. -/
 def exec (i : Ins) (A : AM) : Option Out :=
   let L := A.regs
   let pc := A.pc
@@ -151,13 +120,11 @@ def exec (i : Ins) (A : AM) : Option Out :=
       some (.run ⟨BitVec.addInt pc 4, stepGM a L [], A.mem, A.out⟩)
     else none
 
-/-- One abstract step of the program `code`. -/
 def astep (code : List Ins) (A : AM) : Option Out :=
   match fetch code A.pc with
   | some i => exec i A
   | none => none
 
-/-- A Sail configuration realizes an abstract state. -/
 structure Corr (c : Config) (A : AM) : Prop where
   good : GoodState c.σ
   tick : c.tick < 2

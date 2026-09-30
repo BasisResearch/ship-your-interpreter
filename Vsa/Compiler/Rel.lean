@@ -2,49 +2,30 @@ import Vsa.Compiler.Frag
 import Vsa.Compiler.Compile
 import Vsa.Compiler.Subset
 
-/-!
-# The store relation
-
-`Chain s m env Γ` relates the semantics' frame chain starting at `env` to the
-compiler's scope `Γ` and the memory `m`: the frame at each chain position binds
-exactly the names of the corresponding scope (plus the natives in the global
-frame), each to the integer held in its static slot. The lemmas give the
-semantic effect of lookup, assignment, declaration and frame allocation.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim
 
-/-- The integer held in variable slot `i`. -/
 def slotV (m : Mem) (i : Nat) : Int := (rdW m (varAddr i)).toInt
 
-/-- The global frame's initial bindings. -/
 def nativeVars : List (String × Value) :=
   [("print", .native .print), ("println", .native .println), ("assert", .native .assert)]
 
-/-- A frame binds the scope's names to their slot values (and, in the global
-frame, the natives). -/
 def FrameOK (fr : Frame) (f : List (String × Nat)) (m : Mem) (global : Bool) : Prop :=
   ∀ x, fr.vars.find? (·.1 == x) =
     match f.lookup x with
     | some i => some (x, .int (slotV m i))
     | none => if global then nativeVars.find? (·.1 == x) else none
 
-/-- The frame chain from `env` realizes the scope `Γ` in memory `m`. -/
 def Chain (s : Store) (m : Mem) : Addr → Scope → Prop
   | _, [] => False
   | env, [f] => env = 0 ∧ ∃ fr, s.frames[0]? = some fr ∧ fr.parent = none ∧ FrameOK fr f m true
   | env, f :: g :: gs => ∃ fr p, s.frames[env]? = some fr ∧ fr.parent = some p ∧ p < env ∧
       FrameOK fr f m false ∧ Chain s m p (g :: gs)
 
-/-- The slot numbers of a scope. -/
 def Scope.slots (Γ : Scope) : List Nat := (Γ.flatMap id).map Prod.snd
 
-/-- Scope names, for the subset predicate. -/
 def Scope.names (Γ : Scope) : NScope := Γ.map (·.map Prod.fst)
-
-/-! ## Lookup -/
 
 theorem Chain.env_lt {s : Store} {m : Mem} : ∀ {env : Addr} {Γ : Scope},
     Chain s m env Γ → env < s.frames.size
@@ -96,8 +77,6 @@ theorem Chain.get? {s : Store} {m : Mem} {env : Addr} {Γ : Scope} {x : String} 
     s.get? env x = some (.int (slotV m i)) :=
   h.lookup s.frames.size h.env_lt hr
 
-/-! ## Memory transport -/
-
 theorem lookup_mem {x : String} {i : Nat} : ∀ {f : List (String × Nat)}, f.lookup x = some i → (x, i) ∈ f
   | [], h => by simp at h
   | (y, j) :: f, h => by
@@ -129,7 +108,6 @@ theorem Chain.transport {s : Store} {m m' : Mem} : ∀ {env : Addr} {Γ : Scope}
     · simp only [Scope.slots, List.flatMap_cons, List.map_append, List.mem_append] at hi ⊢
       exact .inr hi
 
-/-- Writes outside the variable-slot region leave slot values unchanged. -/
 theorem slotV_write_low (m : Mem) (a : Nat) (w : BitVec 64) (i : Nat) (ha : a + 8 ≤ varBase) :
     slotV (applyW m (a, 8, w)) i = slotV m i := by
   unfold slotV
@@ -147,8 +125,6 @@ theorem slotV_write_other (m : Mem) (i j : Nat) (w : BitVec 64) (h : j ≠ i) :
   unfold slotV
   rw [rdW_write_other _ _ _ _ (by unfold varAddr; omega)]
 
-/-! ## Store changes outside the chain -/
-
 theorem Chain.frames_congr {s s' : Store} {m : Mem} : ∀ {env : Addr} {Γ : Scope},
     Chain s m env Γ → (∀ j, j ≤ env → s'.frames[j]? = s.frames[j]?) → Chain s' m env Γ
   | env, [], h, _ => h.elim
@@ -160,8 +136,6 @@ theorem Chain.frames_congr {s s' : Store} {m : Mem} : ∀ {env : Addr} {Γ : Sco
     exact ⟨fr, p, by rw [hs env (Nat.le_refl _), hfr], hpp, hlt, hok,
       hc.frames_congr fun j hj => hs j (Nat.le_trans hj (Nat.le_of_lt hlt))⟩
 
-/-! ## Assignment -/
-
 theorem any_of_find? {l : List (String × Value)} {x : String} {q : String × Value}
     (h : l.find? (·.1 == x) = some q) : l.any (·.1 == x) = true := by
   rw [List.any_eq_true]
@@ -172,7 +146,6 @@ theorem not_any_of_find? {l : List (String × Value)} {x : String}
   rw [List.find?_eq_none] at h
   simpa using h
 
-/-- Rebinding `x` in a frame's variable list. -/
 def rebind₀ (x : String) (v : Value) (vars : List (String × Value)) : List (String × Value) :=
   vars.map fun p => if p.1 == x then (x, v) else p
 
@@ -312,16 +285,12 @@ theorem Chain.set {s : Store} {m m' : Mem} {x : String} {i : Nat} {v : Int} :
           have hi : i ∈ Scope.slots (g0 :: gs) := resolve_mem hr
           exact (List.nodup_append.mp hnd).2.2 _ (List.mem_map_of_mem hq) _ hi e
 
-/-! ## Declaration -/
-
-/-- The frame update of `Store.define`. -/
 def defineVars (x : String) (v : Value) (vars : List (String × Value)) : List (String × Value) :=
   if vars.any (·.1 == x) then rebind₀ x v vars else vars ++ [(x, v)]
 
 theorem define_eq₀ (s : Store) (a : Addr) (x : String) (v : Value) :
     s.define a x v = { s with frames := s.frames.modify a fun f => { f with vars := defineVars x v f.vars } } := rfl
 
-/-- A chain whose head frame is updated at `env`, the rest untouched. -/
 theorem Chain.head_update {s s' : Store} {m m' : Mem} {env : Addr} {f f' : List (String × Nat)}
     {g : Scope} (h : Chain s m env (f :: g))
     (hframe : ∀ fr, s.frames[env]? = some fr → ∃ fr', s'.frames[env]? = some fr' ∧
@@ -414,8 +383,6 @@ theorem Chain.define_new {s : Store} {m m' : Mem} {env : Addr} {f : List (String
           | some q => rfl
           | none => simp [List.find?_cons, show (x == y) = false by simpa using Ne.symm hyx]
         · simp [List.find?_cons, show (x == y) = false by simpa using Ne.symm hyx]
-
-/-! ## Frame allocation, natives, and the initial state -/
 
 theorem Chain.push {s : Store} {m : Mem} {fr : Frame} {env : Addr} {Γ : Scope}
     (h : Chain s m env Γ) : Chain { s with frames := s.frames.push fr } m env Γ :=

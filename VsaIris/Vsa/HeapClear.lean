@@ -1,14 +1,5 @@
 import VsaIris.Vsa.HeapTake
 
-/-!
-# Clearing a block's bit
-
-`_malloc_r`'s block search clears the `binblocks` bit of a block of four bins
-it found empty (`0x80004e54`). `BlockHeapAt.transport_read_bb` transports the
-shape through memories that agree on everything it reads but the bitmap, with
-the bitmap's facts supplied; `PHeapAt.clearBlock` is the clear.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast
@@ -144,9 +135,6 @@ theorem BlockHeapAt.transport_read_bb {m m' : Mem} {H : List (Nat × Nat)} {top 
       live := hH.live
       exact := hH.exact }
 
-
-/-- **Clear an empty block's bit.** When every bin of block `b` is empty, a
-bitmap that keeps every other set bit keeps the heap shape. -/
 theorem PHeapAt.clearBlock {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {b bb' : Nat} (hemp : ∀ i, 1 < i → i < numBins → i / 4 = b → bins i = [])

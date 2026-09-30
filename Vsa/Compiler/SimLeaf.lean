@@ -1,18 +1,9 @@
 import Vsa.Compiler.SimInv
 
-/-!
-# Forward simulation: statement of the expression case, and the leaves
-
-`ESpec`: the code of an expression with an evaluation of cost `n`, run from the
-invariant, reaches its end with the value in `(a0, a1)`, or the error exit
-without room for `n`. Literals and variables here.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- Forward simulation of an expression evaluation of cost `n`. -/
 def ESpec (code : List Ins) (T : List String) (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St)
     (v : Value) (n : Nat) : Prop :=
   ∀ (V : View) (Γ : List (List String)) (sp fs k pos : Nat) (A : AM),
@@ -23,14 +14,12 @@ def ESpec (code : List Ins) (T : List String) (st : St) (d : Nat) (env : Addr) (
       (B.pc = pcOf (pos + (gexpr T Γ k pos e).length) ∧
         ∃ V', EPost code T V st d env Γ sp fs k A n st' v V' B))
 
-/-- Run a whole straight-line block. -/
 theorem run_whole {code : List Ins} {P : AM → Prop} (hfit : Fits code) {pos : Nat} {is : List Ins}
     (hseg : Seg code pos is) {L : GRegs} {m : Mem} {o : Array String}
     (h : WP code P pos is (fun L' m' o' => Reaches code ⟨pcOf (pos + is.length), L', m', o'⟩ P) L m o) :
     Reaches code ⟨pcOf pos, L, m, o⟩ P :=
   WP_sound hfit _ _ _ L m o hseg (fun _ _ _ h => h) h
 
-/-- Run the rest of a straight-line block from instruction `k`. -/
 theorem run_from {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat} {c : List Ins}
     (hseg : Seg code b c) (k j : Nat) (hj : b + k = j) (hk : k ≤ c.length) {L : GRegs} {m : Mem}
     {o : Array String}

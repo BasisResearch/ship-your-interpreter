@@ -1,32 +1,12 @@
 import VsaIris.Vsa.Fprintf.Sfv
 
-/-!
-# `__sfvwrite_r`'s loop on `__sbprintf`'s stack `FILE` (lane N5)
-
-The loop over the `uio`'s pieces, by induction on the bytes and pieces left
-(`sfv_loop`). The state at the head is the current piece `(src, bs)`, the
-pieces after it (`rest`, an `iov` array at `nxt`), the buffered bytes `pend`
-(`SbFile`) and the bytes already printed `done`, with
-
-    pend0 ++ ALL = done ++ pend ++ bs ++ (rest's bytes),
-
-the memory changed from the loop's base `Mb` only inside `LoopReg` (the
-pass region `SfvReg` and the `uio`'s residual). Each pass is a fetch
-(`sfv_fetch`), a copy (`sfv_copyA` → `memmove_run` → `sfv_copyB`) or a
-direct write (`sfv_direct`), then the tail (`sfv_tail`) back to the head or
-out (`sfv_exit`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- The bytes the loop changes: a pass's (`SfvReg`) and the residual. -/
 def LoopReg (f fp U : Nat) (a : Nat) : Prop := SfvReg f fp a ∨ (U + 16 ≤ a ∧ a < U + 24)
 
-/-- The loop's placement: `__sfvwrite_r`'s frame at `fp` in the call's stack
-window, the `FILE` (with its buffer) and the `uio` above it. -/
 structure SfvGeom (s fp f U : BitVec 64) (need : Nat) : Prop where
   hs1 : s.toNat - need + 256 ≤ fp.toNat
   hs2 : fp.toNat + 96 ≤ s.toNat
@@ -41,22 +21,18 @@ structure SfvGeom (s fp f U : BitVec 64) (need : Nat) : Prop where
   hUa : U.toNat % 8 = 0
   hfU : U.toNat + 24 ≤ f.toNat ∨ f.toNat + 1208 ≤ U.toNat
 
-/-- A piece's source: RAM, off the HTIF words, outside what the loop changes. -/
 structure SrcOK (f fp U : Nat) (src len : Nat) : Prop where
   lo : 0x80000000 ≤ src
   hi : src + len ≤ 0x100000000
   htif : src + len ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ src
   out : ∀ i, i < len → ¬ LoopReg f fp U (src + i)
 
-/-- The `iov` entries of the pieces `rest` from `nxt`. -/
 def IovAt (M : Mem) (nxt : Nat) (rest : List (Nat × List (BitVec 8))) : Prop :=
   ∀ j (h : j < rest.length), ldv .ld M (BitVec.ofNat 64 (nxt + 16 * j)).toNat = BitVec.ofNat 64 rest[j].1 ∧
     ldv .ld M (BitVec.ofNat 64 (nxt + 16 * j + 8)).toNat = BitVec.ofNat 64 rest[j].2.length
 
-/-- The bytes of a list of pieces. -/
 def piecesBytes (rest : List (Nat × List (BitVec 8))) : List (BitVec 8) := (rest.map Prod.snd).flatten
 
-/-- The byte count of a list of pieces. -/
 def piecesLen (rest : List (Nat × List (BitVec 8))) : Nat := (rest.map fun p => p.2.length).sum
 
 theorem piecesLen_eq (rest : List (Nat × List (BitVec 8))) : piecesLen rest = (piecesBytes rest).length := by
@@ -64,8 +40,6 @@ theorem piecesLen_eq (rest : List (Nat × List (BitVec 8))) : piecesLen rest = (
   | nil => rfl
   | cons p rest ih => simp [piecesLen, piecesBytes] at *; omega
 
-/-- The stack `FILE` survives a change off its bytes, `stdout`'s flags and
-descriptor and `_impure_data.__cleanup`. -/
 theorem SbFile.frame_out {M M' : Mem} {f : BitVec 64} {pend : List (BitVec 8)} {Reg : Nat → Prop}
     (hF : SbFile M f pend) (hFr : Frame M' M Reg) (hf : f.toNat + 1208 < 2 ^ 64)
     (hR : ∀ b, Reg b → (b < f.toNat ∨ f.toNat + 1208 ≤ b) ∧ (b < 0x8001bb30 ∨ 0x8001bb34 ≤ b) ∧
@@ -100,7 +74,6 @@ theorem SbFile.frame_out {M M' : Mem} {f : BitVec 64} {pend : List (BitVec 8)} {
   · rw [out .lw 12 (by omega)]; exact hF.w
   · rw [hFr _ (fun hr => by have := hR _ hr; rw [e 184 (by omega)] at this; omega)]; exact hF.buf i h
 
-/-- The spills survive a change off `[fp, fp + 96)`. -/
 theorem SfvSpills.frame_out {M M' : Mem} {fp : BitVec 64} {R0 : Nat → BitVec 64} {Reg : Nat → Prop}
     (h : SfvSpills M fp R0) (hFr : Frame M' M Reg) (hfp : fp.toNat + 96 < 2 ^ 64)
     (hR : ∀ b, Reg b → b < fp.toNat ∨ fp.toNat + 96 ≤ b) : SfvSpills M' fp R0 := by
@@ -124,10 +97,6 @@ theorem add_ofNat_eq {f : BitVec 64} {n : Nat} : f + BitVec.ofNat 64 n = BitVec.
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **`__sfvwrite_r`'s loop** from its head, by induction on the pieces and
-bytes left. On the way out (`__sfvwrite_r` returns 0 to the entry's `ra`)
-the continuation `hk` gets the printed bytes `out` and the buffered `pend'`
-with `pend0 ++ ALL = out ++ pend'`. -/
 theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA)
     {s fp f U : BitVec 64} {need : Nat} {Rh R0 : Nat → BitVec 64} {Mb : Mem}
@@ -155,7 +124,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
   | succ n ih =>
     intro done pend bs src nxt rest R M hμ hrel hpos hsmall hR hF hFr hres hiov hnxt hsrc hsok' hrest
     have hfsz : f.toNat + 1208 < 2 ^ 32 := by have := G.hf2; have := G.hs3; omega
-    -- a pass of `c` bytes ends at the tail: back to the head, or out
+
     have tailK : ∀ (c : Nat) (R3 : Nat → BitVec 64) (M3 : Mem) (pend' out : List (BitVec 8)),
         0 < c → c ≤ bs.length → pend ++ bs.take c = out ++ pend' →
         R3 18 = BitVec.ofNat 64 c → R3 9 = BitVec.ofNat 64 nxt → R3 19 = BitVec.ofNat 64 bs.length →
@@ -175,7 +144,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         exact hres
       have hU16 : (U + 16#64).toNat = U.toNat + 16 := by
         rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; have := G.hU2; have := G.hs3; omega
-      -- the memory after the residual store, from the base
+
       have hFr4 : Frame (writeLog M3 [((U + 16#64).toNat, 8, BitVec.ofNat 64 (bs.length + piecesLen rest - c))])
           Mb (LoopReg f.toNat fp.toNat U.toNat) :=
         (hFr.trans (hFr3.mono fun a h => .inl h)).snoc fun b h1 h2 => .inr (by omega)
@@ -189,7 +158,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         (by have := G.hU1; have := G.hs1; omega) G.hU2 G.hUa (by have := G.hf1; have := G.hs1; omega) G.hf2
         G.hfU (by omega) (by omega) hcL (by omega) (by have := hsok.hi; omega) hRh h9 h19 h22 hkeep h18 hres3
         hF3.flags rfl (fun hne R' hR' => ?_) (fun heq R' hkeep' => ?_)
-      · -- back to the head
+      ·
         rw [hF3.p] at hR'
         refine ih (done ++ out) pend' (bs.drop c) (src + c) nxt rest R' _ ?_ ?_ ?_ ?_ (by simpa using hR')
           hF4 hFr4 ?_ hiov hnxt (hsrc.drop c) (fun _ => ⟨by have := hsok.lo; omega, by have := hsok.hi; simp; omega,
@@ -201,7 +170,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         · simp; omega
         · simp; omega
         · rw [ldv_store_hit]; congr 1; simp; omega
-      · -- the residual is zero: out
+      ·
         refine sfv_exit hlive G.hs3 G.hs4 (by have := G.hs1; omega) G.hs2 G.hfpa
           ((hkeep' 2 (by decide)).trans hRh.sp) h0 hra ((hkeep' 26 (by decide)).trans h26)
           ((hkeep' 27 (by decide)).trans h27) (hsp.frame_out hFr4 (by have := G.hs2; have := G.hs3; omega)
@@ -213,7 +182,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
           apply List.eq_nil_of_length_eq_zero; rw [← piecesLen_eq]; omega
         rw [hrel, hpr, List.append_nil, List.append_assoc, ← hsplit, ← hbc, List.take_length]
     rcases Nat.eq_zero_or_pos bs.length with hL0 | hL0
-    · -- the current piece is used up: fetch the next
+    ·
       obtain ⟨hn1, hn2, hna, hnreg⟩ := hnxt
       have hbs : bs = [] := List.eq_nil_of_length_eq_zero hL0
       subst hbs
@@ -250,7 +219,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
           · intro q hq; exact hrest q (List.mem_cons_of_mem _ hq)
     · have hsok := hsok' hL0
       by_cases hdir : pend.length = 0 ∧ 1024 ≤ bs.length
-      · -- a direct write
+      ·
         obtain ⟨hk0, hL1⟩ := hdir
         have hp0 : pend = [] := List.eq_nil_of_length_eq_zero hk0
         subst hp0
@@ -263,7 +232,7 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
           hsrcM.readWin hRh (by simpa using hR) hF (fun R' M' h18 h9 h19 h22 hkeep hF' hFr' => ?_)
         rw [copyBytes_win _ _ _ (by omega)]
         exact tailK _ R' M' [] _ (by omega) (by omega) (by simp) h18 h9 h19 h22 hkeep hF' hFr'
-      · -- a copy into the buffer
+      ·
         have hroom : 0 < pend.length ∨ bs.length < 1024 := by omega
         have hk1024 := hF.len
         have hB : (f + 184#64).toNat = f.toNat + 184 := by
@@ -309,8 +278,6 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         rw [copyBytes_win _ _ _ (by omega)] at hsplit
         exact tailK _ R3 M3 pend' out hc0 (by omega) hsplit h18' h9' h19' h22' hkeep' hF3 hFr3
 
-/-- **The loop from its first head** (`s3 = 0`: every piece still to fetch),
-its base memory and reference registers being the head's own. -/
 theorem sfv_start (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA)
     {s fp f U : BitVec 64} {need A : Nat} {R0 : Nat → BitVec 64} (Rh : Nat → BitVec 64) (Mb : Mem)
@@ -334,7 +301,6 @@ theorem sfv_start (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
     (by simpa using htot2) (by simpa using hR) hF (Frame.refl _ _) (by simpa using hres) hiov hA
     (fun i h => absurd h (by simp)) (fun h => absurd h (by simp)) hsrcs
 
-/-- The memory after `__sfvwrite_r`'s prologue (eleven spills below `sp`). -/
 abbrev sfvProMt (Mt : Mem) (sp v8 v20 v21 v1 v9 v18 v19 v22 v23 v24 v25 : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog
       (writeLog (writeLog Mt [((sp + 18446744073709551600#64).toNat, 8, v8)])
@@ -349,7 +315,6 @@ theorem sfvProMt_frame (Mt : Mem) {sp : BitVec 64} (hsp : 96 ≤ sp.toNat) (v8 v
   unfold sfvProMt
   frame_chain
 
-/-- The spills of `__sfvwrite_r`'s prologue, read back. -/
 theorem sfvProMt_spills (Mt : Mem) {sp : BitVec 64} (hsp : 96 ≤ sp.toNat) (hsp2 : sp.toNat < 2 ^ 32)
     {R : Nat → BitVec 64} :
     SfvSpills (sfvProMt Mt sp (R 8) (R 20) (R 21) (R 1) (R 9) (R 18) (R 19) (R 22) (R 23) (R 24) (R 25))
@@ -357,16 +322,7 @@ theorem sfvProMt_spills (Mt : Mem) {sp : BitVec 64} (hsp : 96 ≤ sp.toNat) (hsp
   unfold sfvProMt
   constructor <;> (simp only [BitVec.add_assoc, BitVec.reduceAdd]; nx_mem)
 
-/-- The bytes a `__sfvwrite_r(reent, f, uio)` call changes, `sp` its entry
-stack pointer: its frame and its callees' (`[sp - 352, sp)`), the `FILE`'s
-`_p`/`_w`/buffer, the residual, `stdout`'s flags, `errno`. -/
 def SfvCallReg (f sp U : Nat) (a : Nat) : Prop := LoopReg f (sp - 96) U a ∨ (sp - 96 ≤ a ∧ a < sp)
-
-/-! **`__sfvwrite_r(reent, f, uio)`** on `__sbprintf`'s stack `FILE` holding
-`pend0`, with the pieces `iovs` (the `uio`'s `iov` array at `A`, residual
-their total): back at `ra` with 0, having printed `out` and buffered `pend'`,
-`pend0 ++ bytes = out ++ pend'`, and changed only `SfvCallReg`
-(`sfvwrite_chain`: the prologue `sfvwrite_A`, then `sfv_start`). -/
 
 #ix_seg sfvwrite_A {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
@@ -445,7 +401,6 @@ their total): back at `ra` with 0, having printed `out` and buffered `pend'`,
     intro R' M' out pend' hrel hret hF' hFr'
     refine hk R' M' out pend' hrel hret hF' ?_
     exact (hFro.mono fun a h => .inr h).trans (hFr'.mono fun a h => .inl (by rw [hfp] at h; exact h))
-
 
 #nx_chain sfvwrite_chain := [sfvwrite_A, sfvwrite_B]
 

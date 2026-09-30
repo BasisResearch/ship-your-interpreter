@@ -1,18 +1,6 @@
 import VsaIris.Interp.ProofNativePrint
 import VsaIris.Interp.ProofValueTruthy
 
-/-!
-# `native_assert` (lane H2)
-
-`native_assert(sret, in, argc, args, line)`: with `argc ∉ {1, 2}` it calls
-`runtime_error(in, line, "assert() takes 1 or 2 arguments", 0, 0)`; otherwise
-it copies the first argument into its frame, asks `value_truthy`, and returns
-`null` (`value_null`) when truthy, else calls `runtime_error(in, line, "%s",
-msg, 0)` with `msg` the second argument's string or `"assertion failed"`.
-`runtime_error` never returns (H5's `rtErr_spec`): its abort resource, with
-the frame given back, is `native_assert`'s.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -20,16 +8,11 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib VsaIris.
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
-/-! ## The runs (`npF`: the 80-byte frame and the arguments) -/
-
-/-- `addiw a6,a2,-1; bltu 1,a6`: one or two arguments pass the arity test. -/
 theorem na_arity {n : Nat} (hn : n = 1 ∨ n = 2) :
     ¬ (1#64).toNat < (BitVec.signExtend 64
       (BitVec.extractLsb 31 0 (BitVec.ofNat 64 n + 18446744073709551615#64))).toNat := by
   rcases hn with rfl | rfl <;> decide
 
-/- The prologue, one or two arguments: the saved registers, the arity test,
-to the copy of the first argument. -/
 #ix_seg na_pro {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s args r : BitVec 64} {n : Nat}
@@ -46,7 +29,6 @@ to the copy of the first argument. -/
       | (intro hc; exfalso; revert hc; ix_reg; exact na_arity hn)
       | (intro _; ix_run1 hlive using [h12, h2, hsf] at 0x80002e1c)
 
-/- The copy of the first argument into the frame, to `jal value_truthy`. -/
 #ix_seg na_copy {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args : BitVec 64} {n : Nat} {w0 w1 w2 : BitVec 64}
@@ -62,8 +44,6 @@ to the copy of the first argument. -/
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h13, h2, hsf, hw0, hw1, hw2] at 0x80002e44
 
-/-- Any other count fails it (`argc - 1` as a 32-bit value is `-1` or at
-least `2`). -/
 theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (1#64).toNat < (BitVec.signExtend 64
       (BitVec.extractLsb 31 0 (BitVec.ofNat 64 n + 18446744073709551615#64))).toNat := by
@@ -85,8 +65,6 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     rw [e, BitVec.signExtend_eq_setWidth_of_msb_false hm]
     simp; omega
 
-/- The prologue, any other count: to `jal runtime_error` with the arity
-message. -/
 #ix_seg na_bad {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s args r : BitVec 64} {n : Nat}
@@ -103,7 +81,6 @@ message. -/
       | (intro hc; exfalso; apply hc; ix_reg; exact na_arity_bad hn hn2)
       | (intro _; ix_run1 hlive using [h12, h2, hsf] at 0x80002e90)
 
-/- After `value_truthy`, truthy: to `jal value_null`. -/
 #ix_seg na_ok {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args : BitVec 64} {n : Nat}
@@ -115,7 +92,6 @@ message. -/
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x80002e58
 
-/- The epilogue, after `value_null`. -/
 #ix_seg na_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args r v8 v9 v18 : BitVec 64} {n : Nat}
@@ -130,8 +106,6 @@ message. -/
   by
     ix_run1 hlive using [h2, hal, hra, hs0, hs1', hs2']
 
-/- After `value_truthy`, falsy, one argument: to `jal runtime_error` with
-`"assertion failed"`. -/
 #ix_seg na_fail1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args : BitVec 64} {n : Nat}
@@ -150,7 +124,6 @@ message. -/
       | (intro _; ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8] at 0x80002ebc)
       | skip
 
-/- Falsy, two arguments, the second a string: its payload is the message. -/
 #ix_seg na_fail2s {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args pw : BitVec 64} {n : Nat}
@@ -174,7 +147,6 @@ message. -/
       | (intro _; ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk, hp] at 0x80002ebc)
       | skip
 
-/- Falsy, two arguments, the second not a string: `"assertion failed"`. -/
 #ix_seg na_fail2o {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args kw : BitVec 64} {n : Nat}
@@ -198,15 +170,10 @@ message. -/
       | (intro _; ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk] at 0x80002ebc)
       | skip
 
-
-/-! ## `runtime_error`'s messages -/
-
-/-- `"assert() takes 1 or 2 arguments"` (`.rodata` `0x80019350`). -/
 def naArityBytes : List (BitVec 8) := [0x61#8, 0x73#8, 0x73#8, 0x65#8, 0x72#8, 0x74#8, 0x28#8,
   0x29#8, 0x20#8, 0x74#8, 0x61#8, 0x6b#8, 0x65#8, 0x73#8, 0x20#8, 0x31#8, 0x20#8, 0x6f#8, 0x72#8,
   0x20#8, 0x32#8, 0x20#8, 0x61#8, 0x72#8, 0x67#8, 0x75#8, 0x6d#8, 0x65#8, 0x6e#8, 0x74#8, 0x73#8]
 
-/-- `"assertion failed"` (`.rodata` `0x80019338`). -/
 def naFailBytes : List (BitVec 8) := [0x61#8, 0x73#8, 0x73#8, 0x65#8, 0x72#8, 0x74#8, 0x69#8,
   0x6f#8, 0x6e#8, 0x20#8, 0x66#8, 0x61#8, 0x69#8, 0x6c#8, 0x65#8, 0x64#8]
 
@@ -216,7 +183,6 @@ theorem naArity_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
   ⟨naArityBytes, [], ⟨cstrCov_rodata hro (by decide) (by decide), by decide, by simp,
     fun i hi => absurd hi (Nat.not_lt_zero _)⟩⟩
 
-/-- A C string's bytes, read through any `rd` that agrees with its image. -/
 theorem cstrCov_of_img {R : Nat → Prop} {rd : Nat → BitVec 8} {p : Nat} {x : String}
     (hR : ∀ i, i ≤ x.toList.length → R (p + i)) (hc : CStrImg rd p x)
     (hW : StrWin p x.toList.length) :
@@ -238,7 +204,6 @@ theorem cstrCov_of_img {R : Nat → Prop} {rd : Nat → BitVec 8} {p : Nat} {x :
     have := hW.lo; have := hW.hi; have := hW.htif
     unfold htifLo at *; unfold ReadAddr; omega
 
-/-- `"%s"` with a C string argument. -/
 theorem naS_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {x1 : BitVec 64}
     (hs : ∃ t, CStrCov R rd x1.toNat t) (x2 : BitVec 64) :
@@ -250,13 +215,10 @@ theorem naS_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
   subst this
   exact hs
 
-/-- The default message is a `.rodata` C string. -/
 theorem naFail_str {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) :
     ∃ t, CStrCov R rd (0x80019338#64 : BitVec 64).toNat t :=
   ⟨naFailBytes, cstrCov_rodata hro (by decide) (by decide)⟩
-
-/-! ## The Iris glue -/
 
 section Glue
 
@@ -264,8 +226,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 variable {live : Nat → Prop}
 
 omit I in
-/-- `native_assert`'s frame out of the stack below `s`: `runtime_error`'s
-stack below it. -/
+
 theorem naFrame_split {s : BitVec 64} (hs : nativeAssertNeed ≤ s.toNat) :
     stackScratch (GF := GF) s nativeAssertNeed ⊢
       stackScratch (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
@@ -281,7 +242,7 @@ theorem naFrame_split {s : BitVec 64} (hs : nativeAssertNeed ≤ s.toNat) :
   exact h
 
 omit I in
-/-- And back. -/
+
 theorem naFrame_join {s : BitVec 64} (hs : nativeAssertNeed ≤ s.toNat) :
     stackScratch (GF := GF) (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
         ownSet (InExt (s.toNat - 80, 80)) byteAny ⊢ stackScratch s nativeAssertNeed := by
@@ -296,7 +257,7 @@ theorem naFrame_join {s : BitVec 64} (hs : nativeAssertNeed ≤ s.toNat) :
   exact h
 
 omit I in
-/-- A run's owned bytes without an empty set. -/
+
 theorem ownImg_none (img : Nat → BitVec 8) : ⊢ ownImg (GF := GF) (fun _ => False) img := by
   unfold ownImg ownSet
   iexists []
@@ -305,7 +266,7 @@ theorem ownImg_none (img : Nat → BitVec 8) : ⊢ ownImg (GF := GF) (fun _ => F
   · simp only [sepL_nil]; iempintro
 
 omit I in
-/-- `.rodata` alone is readable. -/
+
 theorem readable_rodata : binImg (GF := GF) ⊢ readable rodataDom (fun _ => False) rodataByte := by
   unfold binImg readable
   iintro ⟨-, #H⟩
@@ -322,7 +283,7 @@ theorem roImg_sub {S T : Nat → Prop} {f : Nat → BitVec 8} (h : ∀ k, T k �
   iapply H $$ %k %(h k hk)
 
 omit I in
-/-- `.rodata` and a C string are readable at one image. -/
+
 theorem readable_str {p : Nat} {x : String} :
     binImg (GF := GF) ∗ strAt p x ⊢ ∃ rd : Nat → BitVec 8,
       readable (fun a => rodataDom a ∨ InExt (p, x.toList.length + 1) a) (fun _ => False) rd ∗
@@ -362,9 +323,6 @@ theorem readable_str {p : Nat} {x : String} :
         simp only [InExt]; omega
       simp only [hin, ite_true]; exact hc.2
 
-/-- The registers and memory at a `native_assert` `jal runtime_error`:
-`runtime_error(in, line, fmt, x1, 0)` with `sp = s - 80`, the arguments'
-bytes unchanged. -/
 structure NaRtErrAt (R : Nat → BitVec 64) (M Margs : Mem) (inp line fmt x1 s args : BitVec 64)
     (n : Nat) : Prop where
   h10 : R 10 = inp
@@ -375,10 +333,6 @@ structure NaRtErrAt (R : Nat → BitVec 64) (M Margs : Mem) (inp line fmt x1 s a
   h2 : R 2 = s + 18446744073709551536#64
   hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k
 
-/-- **`runtime_error` from a `native_assert` run** (`jal` at `i`, `sp = s - 80`):
-it never returns; on abort, H5's resource at `runtime_error`'s stack becomes
-`native_assert`'s: the frame rejoins the stack below `s`, the arguments'
-bytes rejoin their meanings, the result slot is handed back. -/
 theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code RtErr.rtErrEntry)
@@ -457,7 +411,6 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iapply Hab
     iframe Hsl Hvs Hcore Hst
 
-/-- `native_assert`'s continuation pair (its `fnSpecAbort` post and abort). -/
 abbrev NaK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (sret inp args s r : BitVec 64)
     (vs : List Value) (ρ : Regime) (st : St) (d : Nat) (rv : Nat → BitVec 64) : IProp GF :=
@@ -469,7 +422,6 @@ abbrev NaK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
     (⌜¬ AssertOk vs⌝ ∗ abortRes N L Room inp.toNat s nativeAssertNeed ∗ slot24 sret.toNat ∗
       valsAt N args.toNat vs -∗ Wp.W Φ))
 
-/-- An abort continuation that wants the abort's reason, given it. -/
 theorem wand_pure_apply {φ : Prop} {P Q : IProp GF} (h : φ) : iprop(⌜φ⌝ ∗ P -∗ Q) ⊢ iprop(P -∗ Q) := by
   iintro H HP
   iapply H
@@ -483,7 +435,6 @@ theorem not_assertOk_falsy {vs : List Value} (h0 : 0 < vs.length) (ht : (vs[0]'h
     ¬ AssertOk vs := by
   rintro ⟨v, m, (rfl | rfl), hv⟩ <;> simp_all
 
-/-- What a `native_assert` run carries. -/
 def NaRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (sret inp args s r : BitVec 64)
     (vs : List Value) (ρ : Regime) (st : St) (d : Nat) (rv : Nat → BitVec 64)
@@ -493,7 +444,6 @@ def NaRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
     stackScratch (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
     NaK Wp Φ N L Room sret inp args s r vs ρ st d rv)
 
-/-- The shared pure facts of a `native_assert` run. -/
 structure NaCtx (live : Nat → Prop) (sret inp args s line r : BitVec 64) (n : Nat)
     (rv : Nat → BitVec 64) (jb : Nat → BitVec 8) : Prop where
   hlive : ∀ p ∈ interpText, live p.1
@@ -515,7 +465,6 @@ structure NaCtx (live : Nat → Prop) (sret inp args s line r : BitVec 64) (n : 
   hjb : (jbWord inp.toNat jb 0).toNat % 4 = 0
   hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k
 
-/-- **Wrong argument count**: the arity message through `runtime_error`. -/
 theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
     {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
@@ -562,8 +511,6 @@ theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   simp (disch := omega) only [imgM_store_miss]
   exact hargs k hk
 
-/-- The state after `value_truthy` returns (`0x80002e48`): its answer in `a0`,
-the saved registers, the frame's words, the arguments' bytes. -/
 structure NaFacts (sret inp args s line r : BitVec 64) (n : Nat) (v : Value)
     (rv R : Nat → BitVec 64) (M Margs : Mem) : Prop where
   h10 : R 10 = if v.truthy then 1#64 else 0#64
@@ -580,8 +527,6 @@ structure NaFacts (sret inp args s line r : BitVec 64) (n : Nat) (v : Value)
   ss2 : ldv .ld M (s + 18446744073709551536#64 + 48#64).toNat = rv 18
   hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k
 
-/-- **One or two arguments**: the prologue, the copy of the first argument,
-`value_truthy` on it, the copy back into the frame. -/
 theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
     {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
@@ -608,7 +553,7 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     intro k hk
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show k < 2 ^ 64 by omega),
       Nat.mod_eq_of_lt (show args.toNat + k < 2 ^ 64 by omega)]
-  -- the prologue's stores leave the arguments' words
+
   have hA1 : ∀ k, InExt (args.toNat, 24 * n) k →
       imgM (writeLog (writeLog (writeLog (writeLog M
         [((s + 18446744073709551536#64 + 56#64).toNat, 8, rv 9)])
@@ -650,7 +595,7 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   unfold NaRest
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
   rw [hoff 16 (by omega), hoff 24 (by omega), hoff 32 (by omega)]
-  -- the copy slot holds the first argument's words
+
   have hv0 : ∀ M0 : Mem, imgW (imgM (writeLog (writeLog (writeLog M0
       [(s.toNat - 80 + 16, 8, imgW (imgM Margs) args.toNat)])
       [(s.toNat - 80 + 24, 8, imgW (imgM Margs) (args.toNat + 8))])
@@ -677,7 +622,7 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   ihave ⟨Hms, Hval⟩ := ms_carveVal N (a := s.toNat - 80 + 16) (b := args.toNat) (img := imgM Margs)
     (v := vs[0]'(by omega)) hsl (hv0 _) (hv8 _) (hv16 _) $$ [Hms Hv0]
   · iframe Hms Hv0
-  -- `value_truthy(sp + 16)`
+
   have e16 : (s + 18446744073709551536#64 + 16#64).toNat = s.toNat - 80 + 16 := hoff 16 (by omega)
   have hslg : SlotGeom (s + 18446744073709551536#64 + 16#64) :=
     ⟨by rw [e16]; omega, by rw [e16]; unfold Vsa.Sim.tohostAddr; omega, by rw [e16]; omega⟩
@@ -750,7 +695,6 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
            hoff 48 (by omega)]
          simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit])
 
-/-- One or two values, the first truthy: `Call.assertOk`'s premise. -/
 theorem na_shape {vs : List Value} (h : vs.length = 1 ∨ vs.length = 2)
     (ht : (vs[0]'(by omega)).truthy = true) :
     ∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy = true := by
@@ -760,8 +704,6 @@ theorem na_shape {vs : List Value} (h : vs.length = 1 ∨ vs.length = 2)
   · exact ⟨a, b, .inr rfl, ht⟩
   · simp at h
 
-/-- **Truthy**: `value_null(sret)`, the epilogue, the return with
-`Call.assertOk`'s premise. -/
 theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
     {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
@@ -791,7 +733,7 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   dsimp only [F']
   unfold NaRest
   iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
-  -- `value_null(sret)`
+
   ihave #Hvn := valueNull_spec c.hlive Wp N sret
   unfold valueNullSpec
   iapply ms_callHelper Wp (i := 0x80002e58)
@@ -807,7 +749,7 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   · iframe Hsl; ipureintro; exact c.hg
   iintro %R5 %hk5 Hnull Hms
   have k5 : ∀ x ∈ fRegs, R5 x = _ := fun x hx => hk5 x hx (by simp)
-  -- the epilogue
+
   iapply wp_swpF Wp (S := npF s args n) (R := upd R5 1 (BitVec.ofNat 64 (0x80002e58 + 4)))
     (Mt := M) (pc := 0x80002e5c#64)
     (F := iprop(codeRes ∗ valAt N sret.toNat .null ∗ valsImg N (imgM Margs) args.toNat vs ∗
@@ -868,7 +810,6 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, c.hs4⟩
 
-/-- **Falsy, one argument**: `runtime_error(in, line, "%s", "assertion failed", 0)`. -/
 theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
     {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
@@ -909,7 +850,6 @@ theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   exact ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
     by ix_reg; exact f.h2, f.hargs⟩
 
-/-- A kind other than the string's reads as another word. -/
 theorem kind_ne3 {v : Value} (h : Vsa.RuntimeRepr.kindTag v ≠ 3) :
     BitVec.ofNat 64 (Vsa.RuntimeRepr.kindTag v) ≠ 3#64 := by
   cases v <;> simp only [Vsa.RuntimeRepr.kindTag] at h ⊢ <;> first | decide | exact absurd rfl h
@@ -917,7 +857,6 @@ theorem kind_ne3 {v : Value} (h : Vsa.RuntimeRepr.kindTag v ≠ 3) :
 theorem kindTag_small (v : Value) : Vsa.RuntimeRepr.kindTag v < 2 ^ 31 := by
   cases v <;> simp only [Vsa.RuntimeRepr.kindTag] <;> decide
 
-/-- **Falsy, two arguments, the second not a string**: `"assertion failed"`. -/
 theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
     {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
@@ -973,7 +912,6 @@ theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   exact ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
     by ix_reg; exact f.h2, f.hargs⟩
 
-/-- **Falsy, two arguments, the second a string**: the string is the message. -/
 theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
     {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
@@ -1046,9 +984,6 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
 theorem kindTag_str {v : Value} (h : Vsa.RuntimeRepr.kindTag v = 3) : ∃ t, v = .str t := by
   cases v <;> simp only [Vsa.RuntimeRepr.kindTag] at h <;> first | exact ⟨_, rfl⟩ | omega
 
-/-- **`native_assert`**, for either WP, given H5's `NewlibHoles`: with one or
-two arguments, the first truthy, it returns `null`; otherwise it aborts
-through `runtime_error`. -/
 theorem nativeAssert_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
     (HN : NewlibHoles) (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs) (L : DlLayout)
     (Room : RoomPred) (sret inp args s line : BitVec 64) (vs : List Value) (ρ : Regime) (st : St)

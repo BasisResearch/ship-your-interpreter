@@ -1,14 +1,6 @@
 import Vsa.Compiler.SimFnExit
 import Vsa.Compiler.GenLen
 
-/-!
-# Forward simulation: calling a closure
-
-The call code jumps to the closure's function code with the return address in
-`ra`; the function enters its frame, runs its body (`QSpec`), and returns the
-body's result or `null`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -29,7 +21,6 @@ theorem fnCtx_ok (L : List String) (Γ : List (List String)) {epi : Nat} (h : Po
     cases e'
     exact ⟨Nat.le_refl _, h⟩
 
-/-- After the call code's jump to a closure's function code at `q`. -/
 structure CloJumped (A J : AM) (q P sp k nv : Nat) (r : BitVec 64) : Prop where
   pc : J.pc = pcOf q
   mem : J.mem = A.mem
@@ -44,7 +35,6 @@ section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
 
-/-- The call code with a closure in temporary `k` jumps to its function code. -/
 theorem run_cloJump {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List String)} {sp fs k pos nv : Nat}
     {A : AM} (hm : MS code T V st d env Γ sp fs A) (hA : A.pc = pcOf pos) {P q : Nat}
     (ht : rdW A.mem (sp + 16 + 16 * k) = 4) (hp : rdW A.mem (sp + 16 + 16 * k + 8) = BitVec.ofNat 64 P)
@@ -81,7 +71,6 @@ theorem run_cloJump {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List
     by reg_simp [], ?_, by reg_simp []⟩
   reg_simp []
   rw [show sp + (16 + 16 * (k + 1)) = sp + 16 + 16 * (k + 1) by omega]
-
 
 theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Value} {st' : St}
     {status : Status} {v : Value} {nb : Nat} (hcd : st.store.closures[a]? = some cd)
@@ -121,7 +110,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
   obtain ⟨pcJ, LJ, mJ, oJ⟩ := J
   obtain ⟨hpcJ, hmJ, hoJ, hkJ, g1, g12, g13, g14⟩ := hJ
   simp only at hpcJ hmJ hoJ hkJ g1 g12 g13 g14; subst mJ oJ
-  -- the function
+
   have hmq := hm.transport (B := ⟨pcJ, LJ, m0, o0⟩) (S := [a2, a3, a4, t3, ra, t0, t1, t2, t6]) (by decide) hkJ
     (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
   refine ex_bind (run_entry hR (k := k) hmq hcd hpa hc1 hc3 hc4 hc5 hc6 hlen hd hpcJ g1 g12 g13 g14 hvs htmp
@@ -129,7 +118,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
   rintro E (⟨h1, h2⟩ | hE)
   · refine reach_here (.inl ⟨h1, fun hr => ?_⟩)
     have := hr.1; have hLl := hc6.2.1; unfold envBytes at hn; omega
-  -- the body
+
   have hc4' := hc4
   rw [fnCode_eq] at hc4'
   obtain ⟨sPre, sRest⟩ := hc4'.append
@@ -154,7 +143,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
   · refine reach_here (.inl ⟨h1, fun hr => h2 ⟨?_, ?_⟩⟩)
     · have := hr.1; have hLl := hc6.2.1; simp only [View.enter]; unfold envBytes at hn; omega
     · have := hr.2; simp only [View.enter]; omega
-  -- after the body
+
   have hEst := hE.stack
   have hbsp : stackLo ≤ sp - frameSize cd.body := by
     have := hm.stk.room
@@ -178,7 +167,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
   have hvgrow : VGrow V st.store Ve st'.store := hE.grow.trans hpost.grow
   have hraa : (rdW B.mem (sp - frameSize cd.body)).toNat % 4 = 0 := by
     rw [hsv]; exact pcOf_aligned (posOK_le hq8 (by omega))
-  -- the return to the call code and the end of the call
+
   have finish : ∀ (R : AM) (MB : MS code T Ve st' (d + 1) st.store.frames.size
       (frameNames cd.params cd.body :: Γc) (sp - frameSize cd.body) (frameSize cd.body) B),
       R.pc = pcOf (ccCL k vs.length pos + 6) → R.mem = B.mem → R.out = B.out →

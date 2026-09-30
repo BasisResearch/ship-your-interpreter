@@ -1,108 +1,5 @@
 import Vsa.Sim.BlockMem
 
-/-!
-# `BlockTerm` — basic blocks: the reflection block lemma + BRANCH TERMINATORS
-
-Completes the reflection layer over `BlockMem`: a **basic block** is a
-straight-line `List MInstr` body (consumed by `block_mem_run`) plus an optional
-*terminator* — a conditional branch (`beq`/`bne`/`blt`/`bge`/`bltu`/`bgeu`,
-either polarity), an unconditional `j` (`jal x0`), or a `jr`/`ret`
-(`jalr x0`) — consumed by one `stepObs_branch_taken`/`stepObs_branch_nottaken`/
-`stepObs_j`/`stepObs_jr` step at the end.  On top of the single-block lemma
-(`bblock_sound_bt`) sits a **chain** lemma (`bblocks_sound_bt`): a list of
-basic blocks whose branch/jump targets are contiguity-checked by one decidable
-VC (`ChainOK`, closed by a single `by decide`), giving a whole multi-block
-branch-crossing path — `Steps`, computed registers, computed memory, final PC —
-in ONE application.  This is the shape the M4 dispatch-arm-epilogue segments
-consume (arm = dispatch block + arm body + epilogue = 3 blocks).
-
-## Measured verdict (acceptance test: the real `memmove` dispatch+setup
-segment `0x800069c4 (bgeu TAKEN) → 0x800069f0 … → 0x80006a0c` — 8 steps,
-4 basic blocks (empty body + taken bgeu; li + not-taken bltu; mv,addi +
-not-taken beqz; addi,add + fall-through), real byte pins (`Code/Memmove.lean`)
-and DecodeTable lemmas, ONE `bblocks_sound_bt` application (`BlockTermDemo`) vs
-the same 8 steps via the `SnprintfSpec18` per-site ceremony — `tr_dispatch_mv`
-arm 1 + `tr_setup_mv`, re-derived at identical hypotheses/conclusions in
-`/tmp/bt_ceremony.lean`)
-
-* `lean --profile` proof work (elaboration + tactic + kernel): reflection
-  **≈ 384 ms** (68 + 244 + 72) vs ceremony **≈ 1069 ms** (95 + 895 + 79) —
-  **≈ 2.8× less** at 8 steps / 5 tracked registers, consistent with
-  `BlockMem`'s 4× at 7 instructions; the branch ceremony's per-site cost
-  (guard massage + `obs_*` transports per register per site) is what the
-  terminator case absorbs into the computed `runGM`/`tgtPCT` outcome.
-* wall-clock `lean` on the use site (3 runs): reflection **3.0–3.1 s** vs
-  ceremony **3.6–3.7 s** — both dominated by the `SnprintfSpec18` olean import
-  (≈ 2.5 s), which the ceremony *needs* for its site lemmas and the demo only
-  imports for the shared guard-massage lemmas + `Code.Memmove` pins.
-* line count (identical theorem statement, ≈ 40 shared hypothesis/conclusion
-  lines): reflection proof body **43** lines + **21** block-data lines
-  (`mvB1..mvB4`) vs ceremony proof body **151** lines.  Marginal cost per
-  extra block in a chain: ≈ 5 data lines + 2 `ChainFacts` entries + 1 guard
-  fact; the ceremony pays ≈ 15–20 lines per site *and* one transport line per
-  (site × tracked register).
-* one-time cost: this file (≈ 700 lines) compiles in ≈ 30 s wall (import-
-  dominated; ≈ 1.6 s of it is proof work).
-
-**Verdict: WIN, same shape as `BlockMem` and compounding with it** — the chain
-lemma turns "N sites + N×R transports + per-branch PC-target massage" into
-"1 application + 1 `decide` + per-branch guard facts", and branch targets are
-checked (not asserted) by the `ChainOK` `decide`.
-
-## Design
-
-* `TInstr` — the terminator description (fully concrete structure: pc, word,
-  4 LE bytes, kind, source indices, the 13/21/12-bit immediates).  `TKind` =
-  `br op taken? | j | jr`.  `jal rd` (a call) is deliberately OUT of scope:
-  a call ends the chain at the callee anyway, so a `jal` terminator buys
-  nothing until callee specs compose — see "loop/call" below.
-* The branch **guard is a caller hypothesis** (`TermFactsT`), phrased over the
-  *computed* end-of-body register values: `guardB op (srcVal rs1 L') (srcVal
-  rs2 L') = taken` with `L' = runGM body L lds` — exactly like `BlockMem`'s
-  store-window facts, it whnf-reduces at the use site to a guard over the
-  computed symbolic values.  `jr`'s target-alignment fact is the same kind of
-  symbolic-value hypothesis; `j`/branch target alignment is concrete and lives
-  in the decidable VC.
-* `tgtPCT` computes the post-terminator PC (branch target when taken,
-  fall-through when not, jump target, cleared `rs1 + imm` for `jr`);
-  `endPCB`/`chainEndPC` lift it to blocks/chains.  For `br`/`j` the target is
-  concrete (`tgtPC0`), so chain contiguity is decided (`ChainOK` recurses from
-  `tgtPC0`, and each successor block's own `BlockOKM` pins its entry pc to
-  it); a `jr` may only terminate the *last* block of a chain (`TermChainO`).
-* No new 33-branch batteries: the terminator classes write **no GPR**, so one
-  `rfl` battery (`gprGet_eq_bt`) + one bounded-∀ `decide` lemma
-  (`gprReg_noise_bt`) + the per-class `sigmaPost` frame lemmas transport the
-  whole pin list (`gholds_regs_eq_bt`) — confirming the `BlockMem` header's
-  prediction ("no new batteries, only a last non-inductive step case").
-
-## What a loop (back-edge) needs: NOTHING NEW
-
-A back-edge is just a basic block whose terminator target is *its own head* —
-`bblock_sound_bt` with `tgtPCT = head` IS the loop-body lemma: it takes the
-loop invariant's register pins `L` to `runGM body L lds` and lands PC back at
-the head.  The existing loop combinators (`Triple.loop` / the `iterW`-style
-induction used by `MemcpySpec2`/`SnprintfSpec18.loop_body_mv`) consume exactly
-this shape: package `bblock_sound_bt`'s conclusion as the `St i → St (i+1)`
-step of the measure induction (the guard hypothesis at iteration `i` comes
-from the invariant, `taken = true` on the back-edge, `taken = false` on exit —
-two `bblock_sound_bt` instances of the SAME block datum).  The only per-loop
-work that remains is what was always semantic: the invariant itself and the
-guard's arithmetic at `i` vs `i+1`.
-
-## Obstructions hit
-
-(8) `chainEndPC` mentions the symbolic pin list (for a final `jr`), so the
-use site cannot `decide` it away; solved by `chainEndPCc` (the concrete-only
-end PC) + `chainEndPC_eq_bt` under a decidable `NoJr` side condition — one
-`rw [chainEndPC_eq_bt …]; decide` pair at the use site.  (9) a `jr` followed
-by more blocks would make the chain lemma unsound (the successor VC could be
-vacuously satisfiable by a constraint-free empty block), hence the explicit
-`TermChainO` conjunct in `ChainOK` — it is *not* redundant with contiguity.
-(10) the guard hypothesis must be phrased over computed values (`0#64 +
-sign_extend 0x01f`, not the pretty `0x1f#64`) — same phrasing rule as
-`BlockMem`'s obstruction (6); one `show`+`rw` per guard at the use site.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
@@ -112,10 +9,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## The branch guard, generic over the six BTYPE ops -/
-
-/-- The BTYPE guard of `op` at source values `v1`/`v2` (the model's
-`execute_BTYPE` comparison, op by op). -/
 def guardB (op : bop) (v1 v2 : BitVec 64) : Bool :=
   match op with
   | bop.BEQ  => v1 == v2
@@ -125,9 +18,6 @@ def guardB (op : bop) (v1 v2 : BitVec 64) : Bool :=
   | bop.BLTU => zopz0zI_u v1 v2
   | bop.BGEU => zopz0zKzJ_u v1 v2
 
-/-- Generic **taken**-branch execute characterization: any BTYPE op with
-`guardB op v1 v2 = true` runs to `sigma3_branch_taken` (folds the six
-per-op `execute_btype_*_taken` lemmas into one op-dispatch). -/
 theorem exec_btype_taken_bt (σ : MState) (pc : BitVec 64) (imm : BitVec 13)
     (rs1 rs2 : regidx) (op : bop) (v1 v2 : BitVec 64)
     (hG : GoodState σ)
@@ -153,9 +43,6 @@ theorem exec_btype_taken_bt (σ : MState) (pc : BitVec 64) (imm : BitVec 13)
   | BLTU => exact execute_btype_bltu_taken imm rs1 rs2 v1 v2 pc initMisa _ hrs1 hrs2 hpc' hmisa' htgt hv
   | BGEU => exact execute_btype_bgeu_taken imm rs1 rs2 v1 v2 pc initMisa _ hrs1 hrs2 hpc' hmisa' htgt hv
 
-/-- Generic **not-taken**-branch execute characterization
-(`guardB op v1 v2 = false` ⇒ execute leaves the state at
-`sigma3_branch_nottaken`). -/
 theorem exec_btype_nottaken_bt (σ : MState) (pc : BitVec 64) (imm : BitVec 13)
     (rs1 rs2 : regidx) (op : bop) (v1 v2 : BitVec 64)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
@@ -172,8 +59,6 @@ theorem exec_btype_nottaken_bt (σ : MState) (pc : BitVec 64) (imm : BitVec 13)
   | BGE => exact execute_btype_bge_nottaken imm rs1 rs2 v1 v2 _ hrs1 hrs2 hv
   | BLTU => exact execute_btype_bltu_nottaken imm rs1 rs2 v1 v2 _ hrs1 hrs2 hv
   | BGEU => exact execute_btype_bgeu_nottaken imm rs1 rs2 v1 v2 _ hrs1 hrs2 hv
-
-/-! ## Post-terminator read-backs (PC / minstret / frame), per class -/
 
 theorem pc_btaken_bt {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec 13}
     (hobs : ReadsLikePost σ' (sigmaPost_branch_taken σ pc vm imm)) :
@@ -222,7 +107,6 @@ theorem mi_jx0_bt {σ' σ : MState} {pc vm tgt : BitVec 64}
     (BitVec.addInt vm 1))).get? Register.minstret = _
   rw [Std.ExtDHashMap.get?_insert_self]
 
-/-- Frame through a taken-branch step (noise registers only are written). -/
 theorem frame_term_btaken_bt {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec 13}
     (hobs : ReadsLikePost σ' (sigmaPost_branch_taken σ pc vm imm))
     (R : Register) (hn : ∀ rr ∈ noiseRegs, (rr == R) = false) :
@@ -233,7 +117,6 @@ theorem frame_term_btaken_bt {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec
       (hn Register.minstret (by decide)) (hn Register.PC (by decide))
       (hn Register.nextPC (by decide)) (hn Register.minstret_increment (by decide)))
 
-/-- Frame through a not-taken-branch step. -/
 theorem frame_term_bnottaken_bt {σ' σ : MState} {pc vm : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vm))
     (R : Register) (hn : ∀ rr ∈ noiseRegs, (rr == R) = false) :
@@ -244,7 +127,6 @@ theorem frame_term_bnottaken_bt {σ' σ : MState} {pc vm : BitVec 64}
       (hn Register.minstret (by decide)) (hn Register.PC (by decide))
       (hn Register.nextPC (by decide)) (hn Register.minstret_increment (by decide)))
 
-/-- Frame through a `j`/`jr` (x0-jump) step. -/
 theorem frame_term_jx0_bt {σ' σ : MState} {pc vm tgt : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_jump_x0 σ pc vm tgt))
     (R : Register) (hn : ∀ rr ∈ noiseRegs, (rr == R) = false) :
@@ -255,15 +137,6 @@ theorem frame_term_jx0_bt {σ' σ : MState} {pc vm tgt : BitVec 64}
       (hn Register.minstret (by decide)) (hn Register.PC (by decide))
       (hn Register.nextPC (by decide)) (hn Register.minstret_increment (by decide)))
 
-/-! ## Pin-list transport through a GPR-preserving step (no per-class batteries)
-
-Terminators write no GPR, so the whole pin list survives whenever every
-non-noise register read is preserved.  ONE 33-branch dispatch
-(`obs_gpr_frame_bt`, the `obs_gpr_store` shape abstracted over the step class)
-serves all three terminator post-shapes through their `frame_term_*_bt`. -/
-
-/-- Any `gprGet` pin survives a step whose register frame preserves every
-non-noise register (the terminator classes). -/
 theorem obs_gpr_frame_bt {σ' σ : MState}
     (h : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
       σ'.regs.get? R = σ.regs.get? R) :
@@ -303,8 +176,6 @@ theorem obs_gpr_frame_bt {σ' σ : MState}
   | 31, _, _, w, hw => (h Register.x31 (by decide)).trans hw
   | _+32, _, h31, _, _ => absurd h31 (by omega)
 
-/-- The whole pin list survives any step that preserves every non-noise
-register read (list form of `obs_gpr_frame_bt`). -/
 theorem gholds_frame_bt {σ' σ : MState}
     (h : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
       σ'.regs.get? R = σ.regs.get? R) :
@@ -319,19 +190,11 @@ theorem gholds_frame_bt {σ' σ : MState}
     exact ⟨obs_gpr_frame_bt h n hn.1 hn.2 w hL.1,
       ih (fun k hk => hK k (List.mem_cons_of_mem _ hk)) hL.2⟩
 
-/-! ## The terminator description -/
-
-/-- Terminator kind: conditional branch (`op` and *which polarity fired*),
-unconditional `j` (`jal x0`), or `jr`/`ret` (`jalr x0`).  `jal rd` (calls) is
-out of scope — a call hands control to a callee spec anyway. -/
 inductive TKind where
   | br (op : bop) (taken : Bool) : TKind
   | j : TKind
   | jr : TKind
 
-/-- One terminator, fully concrete structure (symbolic values never enter).
-`rs1`/`rs2` are the branch sources (`rs1` also the `jr` base); the three
-immediates serve `br` (13-bit), `j` (21-bit), `jr` (12-bit) — unused ones 0. -/
 structure TInstr where
   pc    : BitVec 64
   word  : BitVec 32
@@ -346,16 +209,12 @@ structure TInstr where
   imm21 : BitVec 21
   imm12 : BitVec 12
 
-/-- The decoded AST the DecodeTable lemma for `t.word` must produce.
-(BTYPE tuple order is `(imm, rs2, rs1, op)`.) -/
 def astOfT (t : TInstr) : instruction :=
   match t.kind with
   | .br op _ => instruction.BTYPE (t.imm13, gprIdx t.rs2, gprIdx t.rs1, op)
   | .j => instruction.JAL (t.imm21, regidx.Regidx 0x00#5)
   | .jr => instruction.JALR (t.imm12, gprIdx t.rs1, regidx.Regidx 0x00#5)
 
-/-- The concrete part of the post-terminator PC (`0` junk for `jr`, whose
-target is symbolic; a `jr` never chains, so the junk is never consulted). -/
 def tgtPC0 (t : TInstr) : BitVec 64 :=
   match t.kind with
   | .br _ true => t.pc + sign_extend (m := 64) t.imm13
@@ -363,13 +222,11 @@ def tgtPC0 (t : TInstr) : BitVec 64 :=
   | .j => t.pc + sign_extend (m := 64) t.imm21
   | .jr => 0#64
 
-/-- The post-terminator PC over the end-of-body pin list `L`. -/
 def tgtPCT (t : TInstr) (L : GRegs) : BitVec 64 :=
   match t.kind with
   | .jr => BitVec.update (srcVal t.rs1 L + sign_extend (m := 64) t.imm12) 0 0#1
   | _ => tgtPC0 t
 
-/-- `t` is not a `jr` (whose target is symbolic ⇒ cannot chain). -/
 def TermNotJr : TKind → Prop
   | .jr => False
   | _ => True
@@ -387,15 +244,10 @@ theorem tgtPCT_eq_bt (t : TInstr) (L : GRegs) (h : TermNotJr t.kind) :
   | j => rfl
   | jr => exact (h : False).elim
 
-/-! ## Per-terminator facts (caller hypotheses) and the decidable VC -/
-
-/-- The four little-endian code-byte pins for the terminator, on the code
-memory `mc` (entry memory — code survives the block's stores internally). -/
 def BytePinsT (m : Std.ExtHashMap Nat (BitVec 8)) (t : TInstr) : Prop :=
   m[t.pc.toNat]? = some t.b0 ∧ m[t.pc.toNat + 1]? = some t.b1 ∧
   m[t.pc.toNat + 2]? = some t.b2 ∧ m[t.pc.toNat + 3]? = some t.b3
 
-/-- σ-generic decode fact — the DecodeTable lemma shape, inhabited directly. -/
 def DecodeFactT (t : TInstr) : Prop :=
   ∀ s : SequentialState RegisterType trivialChoiceSource,
     s.regs.get? Register.misa = some ((Vsa.Sim.initMisa) : RegisterType Register.misa) →
@@ -404,17 +256,12 @@ def DecodeFactT (t : TInstr) : Prop :=
     s.regs.get? Register.mseccfg = some ((0#64) : RegisterType Register.mseccfg) →
     (ext_decode t.word).run s = .ok (astOfT t) s
 
-/-- The data-dependent terminator fact, phrased over the **computed**
-end-of-body pin list `L`: the branch guard fired with the stated polarity
-(`br`), nothing (`j`), or the symbolic return-target alignment (`jr`). -/
 def TermFactsT (L : GRegs) (t : TInstr) : Prop :=
   match t.kind with
   | .br op taken => guardB op (srcVal t.rs1 L) (srcVal t.rs2 L) = taken
   | .j => True
   | .jr => (BitVec.update (srcVal t.rs1 L + sign_extend (m := 64) t.imm12) 0 0#1).toNat % 4 = 0
 
-/-- Kind-dependent decidable structure VC: source availability and (for
-concrete-target kinds) target alignment. -/
 def TermKindOK (dom : List Nat) (pc : BitVec 64) (rs1 rs2 : Nat)
     (i13 : BitVec 13) (i21 : BitVec 21) : TKind → Prop
   | .br _ _ => SrcOK rs1 dom ∧ SrcOK rs2 dom ∧
@@ -429,9 +276,6 @@ instance instDecTermKindOK (dom : List Nat) (pc : BitVec 64) (rs1 rs2 : Nat)
   | .j => inferInstanceAs (Decidable (_ = _))
   | .jr => inferInstanceAs (Decidable (_ ∧ _))
 
-/-- The decidable terminator VC at its own pc (word/byte coherence, non-RVC,
-code range/alignment, kind obligations).  The pc-contiguity link to the block
-body lives in `TermOKo`. -/
 abbrev TermWF (dom : List Nat) (t : TInstr) : Prop :=
   (((t.b3.append t.b2).append t.b1).append t.b0).toNat = t.word.toNat ∧
   (Sail.BitVec.extractLsb (((t.b3.append t.b2).append t.b1).append t.b0) 1 0).toNat
@@ -441,11 +285,6 @@ abbrev TermWF (dom : List Nat) (t : TInstr) : Prop :=
   t.pc.toNat % 4 = 0 ∧
   TermKindOK dom t.pc t.rs1 t.rs2 t.imm13 t.imm21 t.kind
 
-/-! ## The one-terminator step lemma -/
-
-/-- **One terminator step** from a state pinned at `t.pc`: a `Step` to the
-computed target `tgtPCT t L`, with `GoodState`, memory and HTIF output
-unchanged, the whole pin list `L` intact, and the noise-only register frame. -/
 theorem term_step_bt (t : TInstr) (σ : MState) (i u : Nat) (vm : BitVec 64)
     (L : GRegs) (dom : List Nat)
     (hG : GoodState σ)
@@ -532,19 +371,14 @@ theorem term_step_bt (t : TInstr) (σ : MState) (i u : Nat) (vm : BitVec 64)
       gholds_frame_bt (fun R hn => frame_term_jx0_bt hobs1 R hn) L hkeys hL,
       fun R hn => frame_term_jx0_bt hobs1 R hn⟩
 
-/-! ## Threading lemmas for the body run -/
-
-/-- Domain threading over a whole body (matches `BlockOKM`'s `domStepM`). -/
 def domRunM : List MInstr → List Nat → List Nat
   | [], dom => dom
   | a :: r, dom => domRunM r (domStepM a dom)
 
-/-- Load-data threading over a whole body. -/
 def ldsRunM : List MInstr → List (List (BitVec 8)) → List (List (BitVec 8))
   | [], lds => lds
   | a :: r, lds => ldsRunM r (stepLdsM a.kind lds)
 
-/-- The threaded domain stays inside the computed pin keys. -/
 theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
     (lds : List (List (BitVec 8))) (dom : List Nat),
     (∀ n ∈ dom, n ∈ keysG L) →
@@ -597,7 +431,6 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
     | sb => exact h
     | sh => exact h
 
-/-- The computed pin keys stay GPR indices (`1..31`), given the body VC. -/
 theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List Nat)
     (L : GRegs) (lds : List (List (BitVec 8))),
     BlockOKM pc0 dom is → KeysOK (keysG L) → KeysOK (keysG (runGM is L lds)) := by
@@ -716,11 +549,6 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
     | sb => exact ih _ _ _ _ hwfr hkeys
     | sh => exact ih _ _ _ _ hwfr hkeys
 
-/-- The computed write-log image agrees with the input memory below the HTIF
-window: every logged store lands above `tohostAddr + 16` (its `MemFacts`
-window fact), so the fold misses all low addresses.  This re-exports the
-block-internal code-pin-survival invariant to the *conclusion* side, where the
-terminator fetch (and the next chained block) needs it. -/
 theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
     ∀ (is : List MInstr) (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs)
       (lds : List (List (BitVec 8))),
@@ -795,38 +623,29 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
         hmf.2.2.1
       exact (ih _ _ _ hfr j hj).trans (writeMap2_low_miss m _ _ j (by omega))
 
-/-! ## The basic block -/
-
-/-- A basic block: straight-line body + optional terminator (`none` =
-fall-through into the next block). -/
 structure BBlock where
   body : List MInstr
   term : Option TInstr
 
-/-- Machine steps a block takes. -/
 def blenB (b : BBlock) : Nat :=
   match b.term with
   | none => b.body.length
   | some _ => b.body.length + 1
 
-/-- Post-block PC: fall-through end of the body, or the terminator target. -/
 def endPCB (pc0 : BitVec 64) (b : BBlock) (L : GRegs) (lds : List (List (BitVec 8))) :
     BitVec 64 :=
   match b.term with
   | none => endPCM pc0 b.body
   | some t => tgtPCT t (runGM b.body L lds)
 
-/-- Terminator byte-pin + decode obligations (nothing for fall-through). -/
 def TermPins (mc : Std.ExtHashMap Nat (BitVec 8)) : Option TInstr → Prop
   | none => True
   | some t => BytePinsT mc t ∧ DecodeFactT t
 
-/-- Terminator data-dependent facts, over the end-of-body pin list. -/
 def TermFactsO (L : GRegs) : Option TInstr → Prop
   | none => True
   | some t => TermFactsT L t
 
-/-- Terminator structural VC: pinned to the body's fall-through pc + `TermWF`. -/
 def TermOKo (pc0 : BitVec 64) (dom : List Nat) : Option TInstr → Prop
   | none => True
   | some t => t.pc.toNat = pc0.toNat ∧ TermWF dom t
@@ -836,21 +655,14 @@ instance instDecTermOKo (pc0 : BitVec 64) (dom : List Nat) :
   | none => isTrue trivial
   | some _ => inferInstanceAs (Decidable (_ ∧ _))
 
-/-- The per-block non-computable obligations. -/
 def BBlockFacts (mc m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs)
     (lds : List (List (BitVec 8))) (b : BBlock) : Prop :=
   ProgFactsM mc m L lds b.body ∧ TermPins mc b.term ∧
   TermFactsO (runGM b.body L lds) b.term
 
-/-- The per-block decidable VC. -/
 abbrev BBlockOK (pc0 : BitVec 64) (dom : List Nat) (b : BBlock) : Prop :=
   BlockOKM pc0 dom b.body ∧ TermOKo (endPCM pc0 b.body) (domRunM b.body dom) b.term
 
-/-! ## The single basic-block lemma -/
-
-/-- Generalized form (`mc` code memory, `m` current memory with low-address
-agreement, `dom` under-approximating the pinned keys) — the chain lemma
-threads through this. -/
 theorem bblock_run_bt (b : BBlock) (σ : MState) (i u : Nat) (pc0 vm : BitVec 64)
     (L : GRegs) (lds : List (List (BitVec 8)))
     (mc m : Std.ExtHashMap Nat (BitVec 8)) (dom : List Nat)
@@ -912,40 +724,6 @@ theorem bblock_run_bt (b : BBlock) (σ : MState) (i u : Nat) (pc0 vm : BitVec 64
     · intro R hn hw
       exact (hframe2 R hn).trans (hframe1 R hn hw)
 
-/-- **The basic-block lemma.**  A straight-line body + optional branch/jump
-terminator, from an entry state with pinned PC / minstret / source registers:
-the full `Steps` chain to the *computed* target PC (`endPCB` — branch target
-when taken, fall-through when not, jump target), with the computed register
-outcome (`runGM`), computed memory outcome (`writeLog`), tick invariant,
-`GoodState`, HTIF output unchanged, and the register frame outside
-`noiseRegs ∪ wrRegsM`.  The branch guard is the caller hypothesis inside
-`BBlockFacts` (`TermFactsO`, phrased over the computed end-of-body values);
-the structural VC `BBlockOK` closes by one `decide`. -/
-theorem bblock_sound_bt (b : BBlock) (σ : MState) (i u : Nat)
-    (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : BBlockFacts σ.mem σ.mem L lds b)
-    (hwf : BBlockOK pc0 (keysG L) b)
-    (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + blenB b⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = writeLog σ.mem (wlogM b.body L lds) ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC = some (endPCB pc0 b L lds) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' (runGM b.body L lds) ∧
-      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-        (∀ n ∈ wrRegsM b.body, (gprReg n == R) = false) →
-        σ'.regs.get? R = σ.regs.get? R) :=
-  bblock_run_bt b σ i u pc0 vm L lds σ.mem σ.mem (keysG L)
-    hG hpc hmi rfl (fun _ _ => rfl) hL hkeys (fun _ h => h) hfacts hwf hi
-
-/-! ## Chains of basic blocks -/
-
-/-- `jr` may only terminate the last block (its target is symbolic). -/
 def TermNotJrO : Option TInstr → Prop
   | none => True
   | some t => TermNotJr t.kind
@@ -954,7 +732,6 @@ instance instDecTermNotJrO : (o : Option TInstr) → Decidable (TermNotJrO o)
   | none => isTrue trivial
   | some t => instDecTermNotJr t.kind
 
-/-- Chainability of a block's terminator given its successors. -/
 def TermChainO : Option TInstr → List BBlock → Prop
   | _, [] => True
   | o, _ :: _ => TermNotJrO o
@@ -964,38 +741,29 @@ instance instDecTermChainO :
   | _, [] => isTrue trivial
   | o, _ :: _ => instDecTermNotJrO o
 
-/-- The concrete continuation PC of a block (target of `br`/`j`, fall-through
-end otherwise).  The successor block's own `BlockOKM` pins its entry pc to
-this, so chain contiguity is *checked* by the `ChainOK` `decide`. -/
 def nextPC0 (pc0 : BitVec 64) (b : BBlock) : BitVec 64 :=
   match b.term with
   | none => endPCM pc0 b.body
   | some t => tgtPC0 t
 
-/-- Total machine steps of a chain. -/
 def chainLen : List BBlock → Nat
   | [] => 0
   | b :: bs => blenB b + chainLen bs
 
-/-- Computed register outcome of a chain. -/
 def runChain : List BBlock → GRegs → List (List (BitVec 8)) → GRegs
   | [], L, _ => L
   | b :: bs, L, lds => runChain bs (runGM b.body L lds) (ldsRunM b.body lds)
 
-/-- Computed memory outcome of a chain. -/
 def memChain : List BBlock → Std.ExtHashMap Nat (BitVec 8) → GRegs →
     List (List (BitVec 8)) → Std.ExtHashMap Nat (BitVec 8)
   | [], m, _, _ => m
   | b :: bs, m, L, lds =>
     memChain bs (writeLog m (wlogM b.body L lds)) (runGM b.body L lds) (ldsRunM b.body lds)
 
-/-- Registers written by a chain. -/
 def wrChain : List BBlock → List Nat
   | [] => []
   | b :: bs => wrRegsM b.body ++ wrChain bs
 
-/-- Final PC of a chain (the last block's `endPCB`; symbolic only for a final
-`jr`). -/
 def chainEndPC (pc0 : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8))) :
     List BBlock → BitVec 64
   | [] => pc0
@@ -1004,7 +772,6 @@ def chainEndPC (pc0 : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8))) :
     | [] => endPCB pc0 b L lds
     | _ :: _ => chainEndPC (nextPC0 pc0 b) (runGM b.body L lds) (ldsRunM b.body lds) bs
 
-/-- The chained non-computable obligations, memory/pins/load-data threaded. -/
 def ChainFacts (mc : Std.ExtHashMap Nat (BitVec 8)) :
     Std.ExtHashMap Nat (BitVec 8) → GRegs → List (List (BitVec 8)) → List BBlock → Prop
   | _, _, _, [] => True
@@ -1013,9 +780,6 @@ def ChainFacts (mc : Std.ExtHashMap Nat (BitVec 8)) :
     ChainFacts mc (writeLog m (wlogM b.body L lds)) (runGM b.body L lds)
       (ldsRunM b.body lds) bs
 
-/-- The chained decidable VC: per-block VCs + chainability, recursing from the
-concrete continuation PC (contiguity enforced by the successor's `BlockOKM`/
-`TermOKo` at that pc). -/
 def ChainOK (pc0 : BitVec 64) (dom : List Nat) : List BBlock → Prop
   | [] => True
   | b :: bs => BBlockOK pc0 dom b ∧ TermChainO b.term bs ∧
@@ -1029,7 +793,6 @@ instance instDecChainOK (pc0 : BitVec 64) (dom : List Nat) :
       instDecChainOK _ _ bs
     inferInstanceAs (Decidable (_ ∧ _ ∧ _))
 
-/-- A non-final block's realized target equals its concrete continuation. -/
 theorem endPCB_eq_nextPC0_bt (b : BBlock) (pc0 : BitVec 64) (L : GRegs)
     (lds : List (List (BitVec 8))) (h : TermNotJrO b.term) :
     endPCB pc0 b L lds = nextPC0 pc0 b := by
@@ -1038,7 +801,6 @@ theorem endPCB_eq_nextPC0_bt (b : BBlock) (pc0 : BitVec 64) (L : GRegs)
   | none => rfl
   | some t => exact tgtPCT_eq_bt t _ h
 
-/-- No block of the chain ends in `jr` (⇒ the whole end PC is concrete). -/
 def NoJr : List BBlock → Prop
   | [] => True
   | b :: bs => TermNotJrO b.term ∧ NoJr bs
@@ -1049,34 +811,6 @@ instance instDecNoJr : (bs : List BBlock) → Decidable (NoJr bs)
     have : Decidable (NoJr bs) := instDecNoJr bs
     inferInstanceAs (Decidable (_ ∧ _))
 
-/-- Concrete-only chain end PC (well-defined under `NoJr`). -/
-def chainEndPCc (pc0 : BitVec 64) : List BBlock → BitVec 64
-  | [] => pc0
-  | b :: bs => chainEndPCc (nextPC0 pc0 b) bs
-
-/-- Under `NoJr`, `chainEndPC` ignores the pin list — the use site rewrites to
-the concrete `chainEndPCc` and closes it by `decide` (obstruction (8)). -/
-theorem chainEndPC_eq_bt : ∀ (bs : List BBlock) (pc0 : BitVec 64) (L : GRegs)
-    (lds : List (List (BitVec 8))), NoJr bs →
-    chainEndPC pc0 L lds bs = chainEndPCc pc0 bs := by
-  intro bs
-  induction bs with
-  | nil => intro pc0 L lds _; rfl
-  | cons b bs ih =>
-    intro pc0 L lds h
-    obtain ⟨hb, hbs⟩ := (h : TermNotJrO b.term ∧ NoJr bs)
-    cases bs with
-    | nil =>
-      show endPCB pc0 b L lds = nextPC0 pc0 b
-      exact endPCB_eq_nextPC0_bt b pc0 L lds hb
-    | cons b2 rest =>
-      show chainEndPC (nextPC0 pc0 b) (runGM b.body L lds) (ldsRunM b.body lds) (b2 :: rest)
-        = chainEndPCc (nextPC0 pc0 b) (b2 :: rest)
-      exact ih _ _ _ hbs
-
-/-! ## The chain lemma -/
-
-/-- Generalized chain run (the induction). -/
 theorem bblocks_run_bt (bs : List BBlock) :
     ∀ (σ : MState) (i u : Nat) (pc0 vm : BitVec 64) (L : GRegs)
       (lds : List (List (BitVec 8))) (mc m : Std.ExtHashMap Nat (BitVec 8))
@@ -1142,15 +876,6 @@ theorem bblocks_run_bt (bs : List BBlock) :
         exact (hframef R hn (fun n h => hw n (List.mem_append_right _ h))).trans
           (hframe1 R hn (fun n h => hw n (List.mem_append_left _ h)))
 
-/-- **The chain lemma.**  A list of basic blocks whose branch/jump targets
-chain (checked by the ONE `decide` on `ChainOK` — each successor's entry pc is
-pinned to the predecessor's concrete target), from an entry state with pinned
-PC / minstret / source registers: the whole multi-block `Steps` path with the
-computed final PC (`chainEndPC`; rewrite to the concrete `chainEndPCc` via
-`chainEndPC_eq_bt` + `decide` when no `jr` is involved), computed registers
-(`runChain`), computed memory (`memChain`), and the frame outside
-`noiseRegs ∪ wrChain`.  This is the M4 dispatch-arm-epilogue shape: one
-application per arm. -/
 theorem bblocks_sound_bt (bs : List BBlock) (σ : MState) (i u : Nat)
     (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)

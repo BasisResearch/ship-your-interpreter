@@ -2,17 +2,6 @@ import VsaIris.Vsa.Strlen
 import VsaIris.Vsa.AllocRun
 import Vsa.Sim.DecodeTable.Batch04Part25
 
-/-!
-# The allocator's `sltu` (`0x800052d0`)
-
-`_realloc_r`'s request check `sltu a4,a5,a4` is outside `MKind`, so
-`gen_alloc_steps.py` emits no step lemma for it. As for `strlen`'s `snez`
-(`Strlen.lean`), the instruction is VSA's observational ALU step
-(`stepObs_alu` with the decode-table entry `decode_00e7b733`), turned into a
-one-step run by `Inst.runFact_of_aluStep`; `swp_aluRR` makes any such step one
-`SWP` step, and `st_800052d0` is the lemma the generator would emit.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
@@ -25,8 +14,6 @@ section SWP
 variable {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
   {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **One observational ALU step**: `rd` takes the value and the run
-continues at the next instruction. -/
 theorem swp_aluRR {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (i : Nat) (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (rd : Nat) (val : BitVec 64) (hexec : AluStep live i RR MR rd val)
@@ -63,7 +50,6 @@ theorem swp_aluRR {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
 
 end SWP
 
-/-- `sltu a4,a5,a4` executes. -/
 theorem exec_sltu_a4_a5_a4 (σ : MState) (pc : BitVec 64) (v14 v15 : BitVec 64)
     (hx14 : σ.regs.get? Register.x14 = some v14) (hx15 : σ.regs.get? Register.x15 = some v15) :
     (execute (instruction.RTYPE (regidx.Regidx 0x0e#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0e#5,
@@ -80,7 +66,6 @@ theorem exec_sltu_a4_a5_a4 (σ : MState) (pc : BitVec 64) (v14 v15 : BitVec 64)
     (rX_bits_x15 _ v15 h15) (rX_bits_x14 _ v14 h14)
     (wX_bits_x14 _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14))))
 
-/-- The code bytes of the `sltu` are allocator text. -/
 theorem alloc_code_800052d0 :
     ∀ p ∈ codeFoot 0x800052d0 [0x33#8, 0xb7#8, 0xe7#8, 0x00#8], (p.1, p.2.2) ∈ allocText := by
   intro p hp
@@ -101,7 +86,6 @@ theorem sltu_notrvc :
       = (0b11#2 : BitVec 2) := by
   apply BitVec.eq_of_toNat_eq; decide
 
-/-- The `sltu` as one observational ALU step. -/
 theorem sltuAluStep {live : Nat → Prop} (hlive : ∀ p ∈ allocText, live p.1) (v14 v15 : BitVec 64) :
     AluStep live 0x800052d0 [(14, DFrac.own 1, v14), (15, DFrac.own 1, v15)]
       (codeFoot 0x800052d0 [0x33#8, 0xb7#8, 0xe7#8, 0x00#8]) 14
@@ -187,7 +171,6 @@ theorem sltuAluStep {live : Nat → Prop} (hlive : ∀ p ∈ allocText, live p.1
     unfold Vsa.Machine.output
     rw [hframe.out]
 
-/-- **`sltu a4,a5,a4`** (`0x800052d0`): `a4 := (a5 <u a4)`. -/
 theorem st_800052d0 {live : Nat → Prop} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
     (hlive : ∀ p ∈ allocText, live p.1)

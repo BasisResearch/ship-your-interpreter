@@ -1,46 +1,25 @@
 import Vsa.AbsInt.State
 
-/-!
-# The generic abstract interpreter
-
-`aeval`/`aexec` interpret WHILE syntax over `AState A` for any value domain
-`A`. Expression results carry the post-state, the abstract value and the
-alarms raised; statement results carry one post-state per completion status
-(`normal`, `break`, `continue`, `return`), the abstract returned value and
-the alarms.
-
-Loops (`loopAbs`) are first unrolled `Cfg.unroll` times; the remaining
-iterations are covered by a post-fixpoint found by widening (`postFix`),
-checked with `AState.le` and replaced by `⊤` if the check fails.
-
-Calls to natives the domain identifies (`asNative`) leave the store unchanged
-and return `null`. Any other call is not analysed: the state becomes `⊤` and
-every in-call error kind is raised.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
-/-- Analysis parameters. -/
 structure Cfg where
-  /-- Loop iterations analysed separately before widening. -/
+
   unroll : Nat := 200
-  /-- Widening iterations before falling back to `⊤`. -/
+
   widenFuel : Nat := 60
-  /-- Narrowing steps after a post-fixpoint is found. -/
+
   narrowFuel : Nat := 2
   deriving Repr
 
 variable {A : Type} [AbsOps A]
 
-/-- Result of abstract expression evaluation. -/
 structure ERes (A : Type) where
   st : AState A
   val : A
   al : List Kind
 
-/-- Result of abstract statement execution, one state per status. -/
 structure SRes (A : Type) where
   norm : AState A
   brk : AState A
@@ -49,32 +28,24 @@ structure SRes (A : Type) where
   retv : A
   al : List Kind
 
-/-- Unreachable expression result. -/
 def ERes.none : ERes A := ⟨.bot, top, []⟩
 
-/-- A statement result that completes normally in `σ`. -/
 def SRes.normal (σ : AState A) (al : List Kind := []) : SRes A :=
   ⟨σ, .bot, .bot, .bot, top, al⟩
 
-/-- Join of returned values, ignoring an unreachable side. -/
 def joinRet (σ₁ : AState A) (v₁ : A) (σ₂ : AState A) (v₂ : A) : A :=
   if σ₁.isBot then v₂ else if σ₂.isBot then v₁ else join v₁ v₂
 
-/-- Join of statement results. -/
 def SRes.join (r r' : SRes A) : SRes A :=
   ⟨r.norm.join r'.norm, r.brk.join r'.brk, r.cont.join r'.cont, r.ret.join r'.ret,
     joinRet r.ret r.retv r'.ret r'.retv, r.al ∪ r'.al⟩
 
-/-! ## Conditions -/
-
-/-- Expressions whose evaluation cannot change the state. -/
 def isPure : Expr → Bool
   | .int _ | .str _ | .bool _ | .null | .var _ => true
   | .binary _ l r | .logical _ l r => isPure l && isPure r
   | .unary _ e => isPure e
   | _ => false
 
-/-- Abstract value of a literal or variable operand. -/
 def pureVal (σ : AState A) : Expr → Option A
   | .int n => some (ofValue (.int n))
   | .str s => some (ofValue (.str s))
@@ -83,8 +54,6 @@ def pureVal (σ : AState A) : Expr → Option A
   | .var x => some (σ.lookup x).1
   | _ => none
 
-/-- Refine `σ` (the state after evaluating the pure condition `c`) knowing
-that `c`'s value has truthiness `t`. -/
 def filterE (t : Bool) (σ : AState A) : Expr → AState A
   | .binary op (.var x) r =>
     match pureVal σ r with
@@ -99,32 +68,24 @@ def filterE (t : Bool) (σ : AState A) : Expr → AState A
     if !t && isPure l && isPure r then filterE false (filterE false σ l) r else σ
   | _ => σ
 
-/-- Branch states after a condition with abstract value `a`. -/
 def branch (t : Bool) (c : Expr) (r : ERes A) : AState A :=
   if (if t then mayT r.val else mayF r.val) then filterE t r.st c else .bot
 
-/-! ## Expressions -/
-
-/-- `assert`'s arguments certainly pass. -/
 def assertOk : List A → Bool
   | [a] => !mayF a
   | [a, _] => !mayF a
   | _ => false
 
-/-- State after calling a value of `a`: natives keep the state; other
-callees are not analysed. -/
 def callSt (a : A) (σ : AState A) : AState A :=
   match asNative a with
   | some _ => σ
   | none => if σ.isBot then .bot else .top
 
-/-- Result of calling a value of `a`. -/
 def callVal (a : A) : A :=
   match asNative a with
   | some _ => ofValue .null
   | none => top
 
-/-- Errors a call of a value of `a` on arguments `avs` may raise. -/
 def callAl (a : A) (avs : List A) : List Kind :=
   match asNative a with
   | some .assert => if assertOk avs then [] else [.assert]
@@ -133,7 +94,6 @@ def callAl (a : A) (avs : List A) : List Kind :=
 
 mutual
 
-/-- Abstract `eval_expr`; unreachable states give unreachable results. -/
 def aeval (σ : AState A) (e : Expr) : ERes A :=
   if σ.isBot then ERes.none else
   match e with
@@ -176,7 +136,6 @@ def aeval (σ : AState A) (e : Expr) : ERes A :=
         callAl rf.val ra.2.1⟩
   | .fn _ _ _ => ⟨σ, closure, []⟩
 
-/-- Abstract left-to-right argument evaluation. -/
 def aevalArgs (σ : AState A) : List Expr → AState A × List A × List Kind
   | [] => (σ, [], [])
   | e :: es =>
@@ -186,55 +145,42 @@ def aevalArgs (σ : AState A) : List Expr → AState A × List A × List Kind
 
 end
 
-/-! ## Loops -/
-
-/-- One abstract loop iteration from head state `I`. -/
 structure LStep (A : Type) where
-  /-- States leaving the loop normally in this iteration. -/
+
   exitN : AState A
   ret : AState A
   retv : A
-  /-- Head state of the next iteration. -/
+
   next : AState A
   al : List Kind
 
-/-- The completions of one iteration. -/
 def LStep.out (r : LStep A) : SRes A := ⟨r.exitN, .bot, .bot, r.ret, r.retv, r.al⟩
 
-/-- Widening iteration towards a post-fixpoint of `F` above `J`. -/
 def fixIter (F : AState A → AState A) : Nat → AState A → AState A
   | 0, J => J
   | n + 1, J => if (F J).le J then J else fixIter F n (J.widen (F J))
 
-/-- `J` is a post-fixpoint of `F` above `I`. -/
 def isPost (F : AState A → AState A) (I J : AState A) : Bool := I.le J && (F J).le J
 
-/-- Narrowing: replace a post-fixpoint `J` by `I ⊔ F J` while that is still a
-post-fixpoint. -/
 def narrowIter (F : AState A → AState A) (I : AState A) : Nat → AState A → AState A
   | 0, J => J
   | n + 1, J => if isPost F I (I.join (F J)) then narrowIter F I n (I.join (F J)) else J
 
-/-- A checked post-fixpoint of `F` above `I`, narrowed, or `⊤`. -/
 def postFix (F : AState A → AState A) (fuel narrow : Nat) (I : AState A) : AState A :=
   if isPost F I (fixIter F fuel I) then narrowIter F I narrow (fixIter F fuel I) else .top
 
-/-- Abstract loop: up to `k` unrolled iterations, then a post-fixpoint. An
-unrolled head state whose successor it already covers is a post-fixpoint. -/
 def loopAbs (cfg : Cfg) (F : AState A → LStep A) : Nat → AState A → SRes A
   | 0, I => (F (postFix (fun J => (F J).next) cfg.widenFuel cfg.narrowFuel I)).out
   | k + 1, I =>
     if (F I).next.isBot || (F I).next.le I then (F I).out
     else (F I).out.join (loopAbs cfg F k (F I).next)
 
-/-- One `while` iteration. -/
 def whileStep (evalC : AState A → ERes A) (c : Expr) (execB : AState A → SRes A)
     (I : AState A) : LStep A :=
   let rc := evalC I
   let rb := execB (branch true c rc)
   ⟨(branch false c rc).join rb.brk, rb.ret, rb.retv, rb.norm.join rb.cont, rc.al ∪ rb.al⟩
 
-/-- One `for` iteration: condition, body, step. -/
 def forStep (evalC : AState A → ERes A) (cnd : Option Expr)
     (execB : AState A → SRes A) (evalS : AState A → ERes A) (step : Option Expr)
     (I : AState A) : LStep A :=
@@ -259,30 +205,23 @@ def forStep (evalC : AState A → ERes A) (cnd : Option Expr)
     | some _ => rs.al
   ⟨leave.join rb.brk, rb.ret, rb.retv, after, alC ∪ rb.al ∪ alS⟩
 
-/-! ## Statements -/
-
-/-- Abstract evaluation of an optional expression. -/
 def optEval (e : Option Expr) (I : AState A) : ERes A :=
   match e with
   | none => ERes.none
   | some e => aeval I e
 
-/-- Sequencing: `r'` runs from `r.norm`; abrupt completions of `r` are kept. -/
 def SRes.seq (r r' : SRes A) : SRes A :=
   { r' with brk := r.brk.join r'.brk, cont := r.cont.join r'.cont,
             ret := r.ret.join r'.ret, retv := joinRet r.ret r.retv r'.ret r'.retv,
             al := r.al ∪ r'.al }
 
-/-- Pop the loop/block scope from every completion. -/
 def SRes.pop (r : SRes A) : SRes A :=
   ⟨r.norm.pop, r.brk.pop, r.cont.pop, r.ret.pop, r.retv, r.al⟩
 
-/-- Every completion state of a result. -/
 def SRes.any (r : SRes A) : AState A := ((r.norm.join r.brk).join r.cont).join r.ret
 
 mutual
 
-/-- Abstract `exec_stmt`. -/
 def aexec (cfg : Cfg) (σ : AState A) : Stmt → SRes A
   | .expr e => let re := aeval σ e; SRes.normal re.st re.al
   | .varDecl x (some e) =>
@@ -309,12 +248,10 @@ def aexec (cfg : Cfg) (σ : AState A) : Stmt → SRes A
   | .brk => ⟨.bot, σ, .bot, .bot, top, []⟩
   | .cont => ⟨.bot, .bot, σ, .bot, top, []⟩
 
-/-- Abstract execution of an optional statement (absent: completes normally). -/
 def aexecOpt (cfg : Cfg) (σ : AState A) : Option Stmt → SRes A
   | none => SRes.normal σ
   | some s => aexec cfg σ s
 
-/-- Abstract statement sequence. -/
 def aexecSeq (cfg : Cfg) (σ : AState A) : List Stmt → SRes A
   | [] => SRes.normal σ
   | s :: ss =>
@@ -323,27 +260,19 @@ def aexecSeq (cfg : Cfg) (σ : AState A) : List Stmt → SRes A
 
 end
 
-/-- The iteration of `while (c) b`. -/
 def whileF (cfg : Cfg) (c : Expr) (b : Stmt) : AState A → LStep A :=
   whileStep (fun I => aeval I c) c (fun I => aexec cfg I b)
 
-/-- The iteration of `for (…; cnd; step) b`. -/
 def forF (cfg : Cfg) (cnd step : Option Expr) (b : Stmt) : AState A → LStep A :=
   forStep (optEval cnd) cnd (fun I => aexec cfg I b) (optEval step) step
 
-/-! ## Programs -/
-
-/-- The abstract initial state: the globals frame with the three natives. -/
 def initState : AState A :=
   .sc [[("print", ⟨ofValue (.native .print), true⟩),
         ("println", ⟨ofValue (.native .println), true⟩),
         ("assert", ⟨ofValue (.native .assert), true⟩)]]
 
-/-- Analyse a program from the initial state. -/
 def analyze (cfg : Cfg) (p : Program) : SRes A := aexecSeq cfg initState p
 
-/-- The alarms of a program: every error kind the analysis cannot exclude,
-including an abrupt top-level completion. -/
 def alarms (cfg : Cfg) (p : Program) : List Kind :=
   let r := analyze (A := A) cfg p
   r.al ∪ if r.brk.isBot && r.cont.isBot && r.ret.isBot then [] else [.abrupt]

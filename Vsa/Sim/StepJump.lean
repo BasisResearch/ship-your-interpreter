@@ -2,48 +2,6 @@ import Vsa.Sim.Skeleton
 import Vsa.Sim.ExecuteJump
 import Vsa.Sim.Frame
 
-/-!
-# M2 jump-class validation — `step_jal` / `step_jalr` (step level)
-
-Step-characterization lemmas (`Machine.Step` + `GoodState` preservation, tick and
-notick variants) for the JAL and JALR instruction classes, including the
-`rd = x0` pseudo forms (`j`/`jr`/`ret`). These compose the generic
-`ExecuteJump.lean` execute clauses (`execute_jal_char` / `execute_jal_x0_char` /
-`execute_jalr_char` / `execute_jalr_x0_char`) through the `try_step` skeleton
-(`try_step_execute_char`), exactly as `StepAddi.lean` / `StepBeq.lean` do for
-ADDI / BGEU.
-
-## Symbolic word + decode hypothesis
-
-Unlike `StepAddi`/`StepBeq` (which bake in a concrete spike word and prove its
-decode), these lemmas keep the instruction word `w : BitVec 32` **symbolic**,
-taking the four little-endian fetch bytes (`σ.mem[pc.toNat + k]? = some bₖ`, whose
-`append` in fetch's big-endian order is `w`), the non-RVC fact
-`extractLsb w 1 0 = 0b11#2`, and the decode fact
-`(ext_decode w).run (afterPrelude σ) = .ok (JAL …/JALR …) (afterPrelude σ)`, all as
-parameters, so a `DecodeTable` entry (concrete word, decode proof, `rd`/`rs1`)
-plugs in downstream.
-
-## The staged link value (skeleton subtlety)
-
-The skeleton stages `nextPC := pc+4` **before** execute (`afterNextPC`). On the
-skeleton's `σ₂` the staged `nextPC` value is `BitVec.addInt pc 4`, so
-`ExecuteJump`'s `hnpc : σ₂.regs.get? nextPC = some link` forces
-`link = BitVec.addInt pc 4` — the JAL/JALR link (`rd := pc+4`) comes out right
-automatically. Execute overwrites `nextPC := target`, and the skeleton's postlude
-sets `PC := target`; PC ends at the target, not pc+4.
-
-## `rd` framing
-
-For the non-`x0` forms `rd` is a GPR (non-pinned): the caller supplies the
-`wX_bits rd` write as `hwr` (a `wX_bits_xN` fact), `NonPinned rd_reg`, and the
-disequalities of `rd_reg` from the machine-mutated `∃`-registers it is read
-through (`nextPC`, `minstret`, `minstret_increment`) — all `(by decide)` for a
-concrete `rd_reg = xN`. `GoodState` is re-established with `Frame.lean`'s
-`GoodState.insert_nonpinned` / `goodstate_frame`. The `x0` forms bake in the
-`wX_bits_zero` no-op via the `_x0` execute variants (no `rd` write).
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -54,11 +12,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## JAL (rd ≠ x0) ---------------------------------------------------------- -/
-
-/-- `σ₃` after `execute (JAL (imm, rd))` in the skeleton (non-`x0`): the prelude +
-`nextPC := pc+4` state (`σ₂`) with `nextPC := pc + sext imm` overwritten, then
-`rd_reg := link` (`link = pc+4`). -/
 abbrev sigma3_jal (σ : MState) (pc : BitVec 64) (imm : BitVec 21)
     (rd_reg : Register) (link : RegisterType rd_reg) : MState :=
   {({(afterNextPC (afterPrelude σ) pc) with
@@ -68,10 +21,6 @@ abbrev sigma3_jal (σ : MState) (pc : BitVec 64) (imm : BitVec 21)
       regs := (afterNextPC (afterPrelude σ) pc).regs.insert Register.nextPC
         (pc + sign_extend (m := 64) imm)} : MState)).regs.insert rd_reg link}
 
-/-- Read-back of a register `R` distinct from `rd_reg` and `nextPC` through
-`sigma3_jal`'s two-insert chain: equals reading `R` on `σ` (for
-`minstret_increment` and `nextPC ≠ R`), delegating to the `afterNextPC`/
-`afterPrelude` frame lemmas of `StepAddi.lean`. -/
 theorem get?_sigma3_jal_pinned (σ : MState) (pc : BitVec 64) (imm : BitVec 21)
     (rd_reg : Register) (link : RegisterType rd_reg) (R : Register)
     (hrd : (rd_reg == R) = false)
@@ -86,7 +35,6 @@ theorem get?_sigma3_jal_pinned (σ : MState) (pc : BitVec 64) (imm : BitVec 21)
   simp only [hnpc, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_afterNextPC σ pc R hnpc hmi
 
-/-- **`try_step` on a symbolic JAL word** (`rd ≠ x0`). -/
 theorem try_step_jal
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (rd : regidx) (rd_reg : Register)
@@ -188,18 +136,6 @@ theorem try_step_jal
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-! ## JALR (rd ≠ x0) ---------------------------------------------------------
-
-JALR's execute is `execute_jalr_char`: it additionally reads `rs1` (via
-`rX_bits rs1`), and the branch target is `BitVec.update (rs1 + sext imm) 0 0#1`
-(bit 0 cleared). The post-state shape mirrors JAL's — `nextPC := target` then
-`rd_reg := link` — but the target is the JALR one, so we reuse the same
-`sigma3_jal`-style two-insert `abbrev` specialized to that target. -/
-
-/-- `σ₃` after `execute (JALR (imm, rs1, rd))` in the skeleton (non-`x0`): the
-prelude + `nextPC := pc+4` state (`σ₂`) with `nextPC := target` overwritten
-(`target = BitVec.update (rs1 + sext imm) 0 0#1`), then `rd_reg := link`
-(`link = pc+4`). -/
 abbrev sigma3_jalr (σ : MState) (pc : BitVec 64) (tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg) : MState :=
   {({(afterNextPC (afterPrelude σ) pc) with
@@ -207,10 +143,6 @@ abbrev sigma3_jalr (σ : MState) (pc : BitVec 64) (tgt : BitVec 64)
     regs := (({(afterNextPC (afterPrelude σ) pc) with
       regs := (afterNextPC (afterPrelude σ) pc).regs.insert Register.nextPC tgt} : MState)).regs.insert rd_reg link}
 
-/-- Read-back of `R` distinct from `rd_reg` and `nextPC` through `sigma3_jalr`'s
-two-insert chain: equals reading `R` on `σ` (for `minstret_increment` and
-`nextPC ≠ R`), delegating to the `afterNextPC` frame lemma. (Identical body to
-`get?_sigma3_jal_pinned` — the target value is irrelevant to the read-back.) -/
 theorem get?_sigma3_jalr_pinned (σ : MState) (pc : BitVec 64) (tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg) (R : Register)
     (hrd : (rd_reg == R) = false)
@@ -225,11 +157,6 @@ theorem get?_sigma3_jalr_pinned (σ : MState) (pc : BitVec 64) (tgt : BitVec 64)
   simp only [hnpc, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_afterNextPC σ pc R hnpc hmi
 
-/-- **`try_step` on a symbolic JALR word** (`rd ≠ x0`). Mirrors `try_step_jal`;
-`hrs1` supplies the `rX_bits rs1` read (JALR's extra source), `htgt` the alignment
-side condition on the bit-0-cleared target, and `hwr` the `rd := link` write. The
-control-plane pins (`hpriv`/`hsec`) come from `GoodState`; the target is
-`BitVec.update (vrs1 + sext imm) 0 0#1`. -/
 theorem try_step_jalr
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 rd : regidx) (rd_reg : Register)
@@ -334,25 +261,10 @@ theorem try_step_jalr
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-! ## `x0` pseudo forms (`j = jal x0`, `jr`/`ret = jalr x0`) -----------------
-
-The `rd = x0` execute lemmas (`execute_jal_x0_char` / `execute_jalr_x0_char`)
-conclude a **single** `nextPC := target` insert (the `wX_bits x0` write is a
-`wX_bits_zero` no-op) — a DIFFERENT `σ₃` shape than the two-insert `sigma3_jal` /
-`sigma3_jalr` (which carry the extra `rd_reg := link` write). So we cover them
-with their own single-insert `σ₃` (`sigma3_jump_x0`, shared by both x0 forms —
-only the target differs) and dedicated `try_step` lemmas. -/
-
-/-- `σ₃` after `execute (JAL/JALR x0)` in the skeleton: `afterNextPC (afterPrelude
-σ) pc` with `nextPC := tgt` overwritten. No `rd` write (the `x0` write is a
-no-op). Shared by `j` (tgt = pc + sext imm) and `jr`/`ret` (tgt = bit-0-cleared
-rs1+sext imm). -/
 abbrev sigma3_jump_x0 (σ : MState) (pc : BitVec 64) (tgt : BitVec 64) : MState :=
   {(afterNextPC (afterPrelude σ) pc) with
     regs := (afterNextPC (afterPrelude σ) pc).regs.insert Register.nextPC tgt}
 
-/-- Read-back of `R ∉ {nextPC}` through `sigma3_jump_x0`'s single insert equals
-reading `R` on `σ` (given `nextPC ≠ R` and `minstret_increment ≠ R`). -/
 theorem get?_sigma3_jump_x0_pinned (σ : MState) (pc : BitVec 64) (tgt : BitVec 64)
     (R : Register)
     (hnpc : (Register.nextPC == R) = false)
@@ -363,9 +275,6 @@ theorem get?_sigma3_jump_x0_pinned (σ : MState) (pc : BitVec 64) (tgt : BitVec 
   simp only [hnpc, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_afterNextPC σ pc R hnpc hmi
 
-/-- **`try_step` on a symbolic `j` word** (`jal x0`). As `try_step_jal` but the
-`rd = x0` write is elided (via `execute_jal_x0_char`), so `σ₃` is the single
-`nextPC := pc + sext imm` insert `sigma3_jump_x0`. -/
 theorem try_step_j
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21)
@@ -449,9 +358,6 @@ theorem try_step_j
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-- **`try_step` on a symbolic `jr`/`ret` word** (`jalr x0`). As `try_step_jalr`
-but the `rd = x0` write is elided (via `execute_jalr_x0_char`), so `σ₃` is the
-single `nextPC := target` insert `sigma3_jump_x0`. -/
 theorem try_step_jr
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 : regidx)
@@ -538,32 +444,20 @@ theorem try_step_jr
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-! ## `sigmaPost` states and their `GoodState` / `htif_done` read-backs
-
-Four final-state (`σ₅`) shapes, one per jump form. The `_jal` / `_jalr` shapes
-carry the `rd := link` write; the `_j` / `_jr` (x0) shapes do not. Each is the
-skeleton write-chain `sigma3_… → PC := target → minstret := v+1`. `GoodState` is
-one `goodstate_frame` line; `htif_done` reads back `false` through the chain. -/
-
-/-- JAL (rd≠x0) final state. -/
 abbrev sigmaPost_jal (σ : MState) (pc vminstret : BitVec 64) (imm : BitVec 21)
     (rd_reg : Register) (link : RegisterType rd_reg) : MState :=
   {(({(sigma3_jal σ pc imm rd_reg link) with regs := (sigma3_jal σ pc imm rd_reg link).regs.insert Register.PC (pc + sign_extend (m := 64) imm)}) : MState) with
     regs := (({(sigma3_jal σ pc imm rd_reg link) with regs := (sigma3_jal σ pc imm rd_reg link).regs.insert Register.PC (pc + sign_extend (m := 64) imm)}) : MState).regs.insert Register.minstret (BitVec.addInt vminstret 1)}
 
-/-- JALR (rd≠x0) final state. -/
 abbrev sigmaPost_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg) : MState :=
   {(({(sigma3_jalr σ pc tgt rd_reg link) with regs := (sigma3_jalr σ pc tgt rd_reg link).regs.insert Register.PC tgt}) : MState) with
     regs := (({(sigma3_jalr σ pc tgt rd_reg link) with regs := (sigma3_jalr σ pc tgt rd_reg link).regs.insert Register.PC tgt}) : MState).regs.insert Register.minstret (BitVec.addInt vminstret 1)}
 
-/-- `j` / `jr` (x0) final state (single-insert `σ₃`). -/
 abbrev sigmaPost_jump_x0 (σ : MState) (pc vminstret tgt : BitVec 64) : MState :=
   {(({(sigma3_jump_x0 σ pc tgt) with regs := (sigma3_jump_x0 σ pc tgt).regs.insert Register.PC tgt}) : MState) with
     regs := (({(sigma3_jump_x0 σ pc tgt) with regs := (sigma3_jump_x0 σ pc tgt).regs.insert Register.PC tgt}) : MState).regs.insert Register.minstret (BitVec.addInt vminstret 1)}
 
-/-- Read-back of `R` outside the JAL write-set `{minstret, PC, rd_reg, nextPC,
-minstret_increment}` through the JAL write chain equals reading from `σ`. -/
 theorem get?_sigmaPost_jal (σ : MState) (pc vminstret : BitVec 64) (imm : BitVec 21)
     (rd_reg : Register) (link : RegisterType rd_reg) (R : Register)
     (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
@@ -577,7 +471,6 @@ theorem get?_sigmaPost_jal (σ : MState) (pc vminstret : BitVec 64) (imm : BitVe
   simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_sigma3_jal_pinned σ pc imm rd_reg link R h3 h4 h5
 
-/-- Read-back of `R` outside the JALR write-set through the JALR write chain. -/
 theorem get?_sigmaPost_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg) (R : Register)
     (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
@@ -591,8 +484,6 @@ theorem get?_sigmaPost_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
   simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_sigma3_jalr_pinned σ pc tgt rd_reg link R h3 h4 h5
 
-/-- Read-back of `R` outside the x0 write-set `{minstret, PC, nextPC,
-minstret_increment}` through the x0 write chain. -/
 theorem get?_sigmaPost_jump_x0 (σ : MState) (pc vminstret tgt : BitVec 64) (R : Register)
     (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
     (h4 : (Register.nextPC == R) = false) (h5 : (Register.minstret_increment == R) = false) :
@@ -604,19 +495,14 @@ theorem get?_sigmaPost_jump_x0 (σ : MState) (pc vminstret tgt : BitVec 64) (R :
   simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_sigma3_jump_x0_pinned σ pc tgt R h4 h5
 
-/-- `GoodState` preserved by the JAL step (write-set disjoint from every pinned
-field, given `rd_reg` non-pinned). -/
 theorem goodstate_sigmaPost_jal (σ : MState) (pc vminstret : BitVec 64) (imm : BitVec 21)
     (rd_reg : Register) (hrd : NonPinned rd_reg) (link : RegisterType rd_reg)
     (hG : GoodState σ) : GoodState (sigmaPost_jal σ pc vminstret imm rd_reg link) :=
-  -- chain (innermost→outermost): minstret_increment, nextPC, nextPC, rd_reg, PC, minstret.
-  -- `rd_reg` is a variable, so `goodstate_frame`'s `by decide` cannot discharge it;
-  -- supply `hrd` explicitly for that insert.
+
   ((((((hG.insert_nonpinned (by decide) _).insert_nonpinned (by decide) _).insert_nonpinned
     (by decide) _).insert_nonpinned (r := rd_reg) hrd link).insert_nonpinned
     (by decide) _).insert_nonpinned (by decide) _)
 
-/-- `GoodState` preserved by the JALR step. -/
 theorem goodstate_sigmaPost_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (hrd : NonPinned rd_reg) (link : RegisterType rd_reg)
     (hG : GoodState σ) : GoodState (sigmaPost_jalr σ pc vminstret tgt rd_reg link) :=
@@ -624,12 +510,10 @@ theorem goodstate_sigmaPost_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
     (by decide) _).insert_nonpinned (r := rd_reg) hrd link).insert_nonpinned
     (by decide) _).insert_nonpinned (by decide) _)
 
-/-- `GoodState` preserved by the x0 (`j`/`jr`) step. -/
 theorem goodstate_sigmaPost_jump_x0 (σ : MState) (pc vminstret tgt : BitVec 64)
     (hG : GoodState σ) : GoodState (sigmaPost_jump_x0 σ pc vminstret tgt) := by
   goodstate_frame hG
 
-/-- `htif_done` reads back `false` on the JAL final state. -/
 theorem htif_done_sigmaPost_jal (σ : MState) (pc vminstret : BitVec 64) (imm : BitVec 21)
     (rd_reg : Register) (hrd : NonPinned rd_reg) (link : RegisterType rd_reg)
     (hG : GoodState σ) : (sigmaPost_jal σ pc vminstret imm rd_reg link).regs.get? Register.htif_done = some false := by
@@ -637,7 +521,6 @@ theorem htif_done_sigmaPost_jal (σ : MState) (pc vminstret : BitVec 64) (imm : 
     (pin_of_isNonPinned hrd (by decide)) (by decide) (by decide)]
   exact hG.htif_done
 
-/-- `htif_done` reads back `false` on the JALR final state. -/
 theorem htif_done_sigmaPost_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (hrd : NonPinned rd_reg) (link : RegisterType rd_reg)
     (hG : GoodState σ) : (sigmaPost_jalr σ pc vminstret tgt rd_reg link).regs.get? Register.htif_done = some false := by
@@ -645,16 +528,11 @@ theorem htif_done_sigmaPost_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
     (pin_of_isNonPinned hrd (by decide)) (by decide) (by decide)]
   exact hG.htif_done
 
-/-- `htif_done` reads back `false` on the x0 (`j`/`jr`) final state. -/
 theorem htif_done_sigmaPost_jump_x0 (σ : MState) (pc vminstret tgt : BitVec 64)
     (hG : GoodState σ) : (sigmaPost_jump_x0 σ pc vminstret tgt).regs.get? Register.htif_done = some false := by
   rw [get?_sigmaPost_jump_x0 σ pc vminstret tgt _ (by decide) (by decide) (by decide) (by decide)]
   exact hG.htif_done
 
-/-! ## `stepOnce` (no clock tick) -------------------------------------------- -/
-
-/-- `stepOnce i u` on a JAL (`i+1 ≠ 2`): `try_step` (⇒ `false`, branch target
-written to PC), then continues with `(.inr (i+1, u+1))`. -/
 theorem stepOnce_jal_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (rd : regidx) (rd_reg : Register)
@@ -698,7 +576,6 @@ theorem stepOnce_jal_notick
     exact htick
   simp only [htick', Bool.false_eq_true, if_false, EStateM.pure]
 
-/-- `stepOnce i u` on a JALR (`i+1 ≠ 2`). -/
 theorem stepOnce_jalr_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 rd : regidx) (rd_reg : Register)
@@ -745,7 +622,6 @@ theorem stepOnce_jalr_notick
     exact htick
   simp only [htick', Bool.false_eq_true, if_false, EStateM.pure]
 
-/-- `stepOnce i u` on a `j` (`jal x0`, `i+1 ≠ 2`). -/
 theorem stepOnce_j_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (b0 b1 b2 b3 : BitVec 8)
@@ -778,7 +654,6 @@ theorem stepOnce_j_notick
     exact htick
   simp only [htick', Bool.false_eq_true, if_false, EStateM.pure]
 
-/-- `stepOnce i u` on a `jr`/`ret` (`jalr x0`, `i+1 ≠ 2`). -/
 theorem stepOnce_jr_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 : regidx) (b0 b1 b2 b3 : BitVec 8)
@@ -813,13 +688,6 @@ theorem stepOnce_jr_notick
     exact htick
   simp only [htick', Bool.false_eq_true, if_false, EStateM.pure]
 
-/-! ## Tick states and `stepOnce` (with clock tick)
-
-On the `i+1 = 2` boundary the model splices `tick_clock` (`Tick.lean`) over the
-`sigmaPost` state, writing `mcycle`, `mtime`, `mip`. Built explicitly (not peeled
-from an abbrev) per the record-update let-bomb gotcha. -/
-
-/-- JAL tick final state: `sigmaPost_jal` + `tick_clock` writes. -/
 noncomputable abbrev sigmaTick_jal
     (σ : MState) (pc vminstret : BitVec 64) (imm : BitVec 21)
     (rd_reg : Register) (link : RegisterType rd_reg)
@@ -827,7 +695,6 @@ noncomputable abbrev sigmaTick_jal
   {(sigmaPost_jal σ pc vminstret imm rd_reg link) with
     regs := (((((sigmaPost_jal σ pc vminstret imm rd_reg link).regs.insert Register.mcycle (BitVec.addInt vmcycle 1)).insert Register.mtime (BitVec.addInt vmtime 1)).insert Register.mip (Sail.BitVec.updateSubrange vmip 7 7 (bool_to_bit (zopz0zIzJ_u vmtimecmp (BitVec.addInt vmtime 1))))))}
 
-/-- JALR tick final state. -/
 noncomputable abbrev sigmaTick_jalr
     (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg)
@@ -835,14 +702,12 @@ noncomputable abbrev sigmaTick_jalr
   {(sigmaPost_jalr σ pc vminstret tgt rd_reg link) with
     regs := (((((sigmaPost_jalr σ pc vminstret tgt rd_reg link).regs.insert Register.mcycle (BitVec.addInt vmcycle 1)).insert Register.mtime (BitVec.addInt vmtime 1)).insert Register.mip (Sail.BitVec.updateSubrange vmip 7 7 (bool_to_bit (zopz0zIzJ_u vmtimecmp (BitVec.addInt vmtime 1))))))}
 
-/-- `j`/`jr` (x0) tick final state. -/
 noncomputable abbrev sigmaTick_jump_x0
     (σ : MState) (pc vminstret tgt : BitVec 64)
     (vmip vmtime vmtimecmp vmcycle : BitVec 64) : MState :=
   {(sigmaPost_jump_x0 σ pc vminstret tgt) with
     regs := (((((sigmaPost_jump_x0 σ pc vminstret tgt).regs.insert Register.mcycle (BitVec.addInt vmcycle 1)).insert Register.mtime (BitVec.addInt vmtime 1)).insert Register.mip (Sail.BitVec.updateSubrange vmip 7 7 (bool_to_bit (zopz0zIzJ_u vmtimecmp (BitVec.addInt vmtime 1))))))}
 
-/-- `stepOnce i u` on a JAL when `i+1 = 2` (clock tick). -/
 theorem stepOnce_jal_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (rd : regidx) (rd_reg : Register)
@@ -899,7 +764,6 @@ theorem stepOnce_jal_tick
   rw [htc]
   rfl
 
-/-- `stepOnce i u` on a JALR when `i+1 = 2` (clock tick). -/
 theorem stepOnce_jalr_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 rd : regidx) (rd_reg : Register)
@@ -958,7 +822,6 @@ theorem stepOnce_jalr_tick
   rw [htc]
   rfl
 
-/-- `stepOnce i u` on a `j` (`jal x0`) when `i+1 = 2` (clock tick). -/
 theorem stepOnce_j_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (b0 b1 b2 b3 : BitVec 8)
@@ -1003,7 +866,6 @@ theorem stepOnce_j_tick
   rw [htc]
   rfl
 
-/-- `stepOnce i u` on a `jr`/`ret` (`jalr x0`) when `i+1 = 2` (clock tick). -/
 theorem stepOnce_jr_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 : regidx) (b0 b1 b2 b3 : BitVec 8)
@@ -1050,10 +912,6 @@ theorem stepOnce_jr_tick
   rw [htc]
   rfl
 
-/-! ## `Machine.Step` wrappers ------------------------------------------------ -/
-
-/-- **`step_jal` (no clock tick).** One architectural step on a JAL (`rd ≠ x0`),
-wrapped as `Vsa.Machine.Step`, with `GoodState` preserved. -/
 theorem step_jal_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (rd : regidx) (rd_reg : Register)
@@ -1087,7 +945,6 @@ theorem step_jal_notick
       hrd_npc hrd_mi hrd_ms hrd_hart hrd hwr htick),
    goodstate_sigmaPost_jal σ pc vminstret imm rd_reg hrd link hG⟩
 
-/-- **`step_jalr` (no clock tick).** -/
 theorem step_jalr_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 rd : regidx) (rd_reg : Register)
@@ -1124,7 +981,6 @@ theorem step_jalr_notick
       hrd_npc hrd_mi hrd_ms hrd_hart hrd hwr htick),
    goodstate_sigmaPost_jalr σ pc vminstret (BitVec.update (vrs1 + sign_extend (m := 64) imm) 0 0#1) rd_reg hrd link hG⟩
 
-/-- **`step_j` (`jal x0`, no clock tick).** -/
 theorem step_j_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (b0 b1 b2 b3 : BitVec 8)
@@ -1147,7 +1003,6 @@ theorem step_j_notick
       hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt htick),
    goodstate_sigmaPost_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) imm) hG⟩
 
-/-- **`step_jr` / `ret` (`jalr x0`, no clock tick).** -/
 theorem step_jr_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 : regidx) (b0 b1 b2 b3 : BitVec 8)
@@ -1172,9 +1027,6 @@ theorem step_jr_notick
       hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec hrs1 htgt htick),
    goodstate_sigmaPost_jump_x0 σ pc vminstret (BitVec.update (vrs1 + sign_extend (m := 64) imm) 0 0#1) hG⟩
 
-/-- **`step_jal` (with clock tick).** As `step_jal_notick` on the `i+1 = 2`
-boundary: tick counter resets to `0`, `σ''` carries the `tick_clock` write chain.
-`GoodState` preserved (tick touches only `mcycle`/`mtime`/`mip`). -/
 theorem step_jal_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (rd : regidx) (rd_reg : Register)
@@ -1217,7 +1069,6 @@ theorem step_jal_tick
   exact ((hGp.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
     (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
 
-/-- **`step_jalr` (with clock tick).** -/
 theorem step_jalr_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 rd : regidx) (rd_reg : Register)
@@ -1262,7 +1113,6 @@ theorem step_jalr_tick
   exact ((hGp.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
     (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
 
-/-- **`step_j` (`jal x0`, with clock tick).** -/
 theorem step_j_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 21) (b0 b1 b2 b3 : BitVec 8)
@@ -1293,7 +1143,6 @@ theorem step_j_tick
   exact ((hGp.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
     (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
 
-/-- **`step_jr` / `ret` (`jalr x0`, with clock tick).** -/
 theorem step_jr_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 : regidx) (b0 b1 b2 b3 : BitVec 8)

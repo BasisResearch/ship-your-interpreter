@@ -1,13 +1,6 @@
 import Vsa.Elf
 import Vsa.Sim.InitValues
 
-/-! Decode table supplement for the svfprintf flush-return path
-(hand-written on the `gen_decode_table.py` template, 2026-08-25): three
-`__ascii_mbtowc` words that were outside the original reachable-word census
-(`04060263` `beqz a2,+0x44`, `00f5a023` `sw a5,0(a1)`, `00064503`
-`lbu a0,0(a2)`).  Registered in `scripts/decode_index.tsv` as
-`Vsa.Sim.DecodeTable.RetSupp`. -/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 

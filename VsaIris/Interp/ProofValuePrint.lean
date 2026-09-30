@@ -3,15 +3,6 @@ import VsaIris.Vsa.NewlibOut
 import VsaIris.Vsa.Stdout.StrOut
 import VsaIris.Vsa.Fprintf.Out
 
-/-!
-# `value_print` (lane H2)
-
-The kind table at `0x80019f10` selects the arm; every arm tail-calls newlib
-(`fwrite`, `fputs`, `fprintf` on `stdout`, `IrisHoles.out`), so the run ends
-at the newlib entry and the callee returns to `value_print`'s caller
-(`ms_tailNewlib`). The console grows by `Value.display`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -24,9 +15,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The frame of `value_print`'s run: the value's meaning and display
-resources, the image, newlib's data, the console, the stack, the code, and
-the return continuation. -/
 def Fvp (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (p s r : BitVec 64) (v : Value) (st : Store) (o : String) (rv : Nat → BitVec 64) (Ma : Mem)
     (E : IProp GF) : IProp GF :=
@@ -37,7 +25,6 @@ def Fvp (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp G
         (valAt N p.toNat v ∗ stdioW ∗ consoleOwn (o ++ v.display st) ∗ stackAt s printNeed)) -∗
       Wp.W Φ))
 
-/-- **Closing a `value_print` run at a newlib tail call.** -/
 theorem vp_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {v : Value} {st : Store} {o : String}
     {rv R : Nat → BitVec 64} {M Ma Dt : Mem} {DA : List Nat} {entry : BitVec 64}
@@ -88,7 +75,6 @@ theorem vp_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     iframe Hst
     ipureintro; exact hsg
 
-/-- The pure context of a `value_print` run. -/
 structure VpCtx (live : Nat → Prop) (p s r : BitVec 64) (rv : Nat → BitVec 64) (M Ma : Mem) : Prop where
   hlive : ∀ q ∈ interpText, live q.1
   hcl : CodeLive live
@@ -100,7 +86,6 @@ structure VpCtx (live : Nat → Prop) (p s r : BitVec 64) (rv : Nat → BitVec 6
   hsg : StackGeom s printNeed
   hMa : ∀ x, InExt (p.toNat, 24) x → imgM M x = imgM Ma x
 
-/-- The goal of a `value_print` run. -/
 abbrev VpGoal (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (p s r : BitVec 64) (v : Value) (st : Store) (o : String) (rv : Nat → BitVec 64) (M Ma : Mem) :
     Prop :=
@@ -108,7 +93,7 @@ abbrev VpGoal (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → I
     (RunK Wp Φ (Fvp Wp Φ N p s r v st o rv Ma iprop(emp)) (InExt (p.toNat, 24))) valuePrintPC (upd rv 1 r) M
 
 omit I in
-/-- An `outSpec` precondition from H5's calling convention. -/
+
 theorem outSpec_P {vs : List (BitVec 64)} {Xr : IProp GF} {o : String} {s : BitVec 64} {need : Nat}
     {cs : Nat → BitVec 64} (r : BitVec 64) (hr : r.toNat % 4 = 0) :
     iprop(argsAt vs ∗ (Xr ∗ stdioW ∗ consoleOwn o) ∗ callFrame s need Newlib.calleeSaved cs) ⊢
@@ -131,7 +116,6 @@ theorem outSpec_Q {o frag : String} {s : BitVec 64} {need : Nat} {cs : Nat → B
 
 theorem str_null : "null".toList = ['n', 'u', 'l', 'l'] := by decide
 
-/-- `null`: `fwrite("null", 1, 4, stdout)`. -/
 theorem vp_null (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {st : Store} {o : String} {rv : Nat → BitVec 64} {M Ma : Mem}
     (H : OutHoles) (c : VpCtx live p s r rv M Ma)
@@ -163,7 +147,6 @@ theorem vp_null (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
 theorem str_true : "true".toList = ['t', 'r', 'u', 'e'] := by decide
 theorem str_false : "false".toList = ['f', 'a', 'l', 's', 'e'] := by decide
 
-/-- A payload word of the value, read through the run's memory. -/
 theorem VpCtx.word {p s r : BitVec 64} {rv : Nat → BitVec 64} {M Ma : Mem}
     (c : VpCtx live p s r rv M Ma) (o : Nat) (ho : o ≤ 16) :
     imgW (imgM M) (p + BitVec.ofNat 64 o).toNat = imgW (imgM Ma) (p.toNat + o) := by
@@ -171,7 +154,6 @@ theorem VpCtx.word {p s r : BitVec 64} {rv : Nat → BitVec 64} {M Ma : Mem}
   rw [show (p + BitVec.ofNat 64 o).toNat = p.toNat + o by rw [BitVec.toNat_add]; simp; omega]
   exact imgW_agree (fun i hi => c.hMa _ (by simp [InExt]; omega))
 
-/-- `bool`: `fputs(b ? "true" : "false", stdout)`. -/
 theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {st : Store} {o : String} {rv : Nat → BitVec 64} {M Ma : Mem}
     (H : OutHoles) (c : VpCtx live p s r rv M Ma) {b : Bool}
@@ -219,7 +201,6 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
       iapply strAt_rodata (by rw [str_true]; decide) (by unfold CStrImg; rw [str_true]; decide)
         (by rw [str_true]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩) $$ Hi
 
-/-- `int`: `fprintf(stdout, "%lld", n)`. -/
 theorem vp_int (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {st : Store} {o : String} {rv : Nat → BitVec 64} {M Ma : Mem}
     (H : OutHoles) (c : VpCtx live p s r rv M Ma) {n : Int}
@@ -251,7 +232,6 @@ theorem vp_int (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
     unfold fprintfOut
     ileft; ipureintro; exact ⟨rfl, rfl⟩
 
-/-- `str`: `fputs(s, stdout)`. -/
 theorem vp_str (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {st : Store} {o : String} {rv : Nat → BitVec 64} {M Ma : Mem}
     (H : OutHoles) (c : VpCtx live p s r rv M Ma) {x : String}
@@ -278,7 +258,6 @@ theorem vp_str (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
     iintro ⟨#Hv, -, -, -⟩
     iapply valImg_str $$ Hv
 
-/-- `native`: `fprintf(stdout, "<native fn %s>", name)`. -/
 theorem vp_native (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {st : Store} {o : String} {rv : Nat → BitVec 64} {M Ma : Mem}
     (H : OutHoles) (c : VpCtx live p s r rv M Ma) {f : NativeFn}
@@ -318,11 +297,8 @@ theorem vp_native (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
 
 theorem str_fn : "<fn>".toList = ['<', 'f', 'n', '>'] := by decide
 
-/-- The closure arm's data view: the closure object's first word, the
-`EX_FN` node's name field. -/
 abbrev clodA (cp q : Nat) : List Nat := accAddrs cp 8 ++ accAddrs (q + 8) 8
 
-/-- The closure arm's shared facts. -/
 structure CloFacts (M Ma Dt : Mem) (p : BitVec 64) (cp q nm : Nat) : Prop where
   hk : ldv .lw M p.toNat = 4#64
   hku : ldv .lwu M p.toNat = 4#64
@@ -334,7 +310,6 @@ structure CloFacts (M Ma Dt : Mem) (p : BitVec 64) (cp q nm : Nat) : Prop where
   hq7 : ReadOK (q + 15)
   hnm : ldv .ld Dt (q + 8) = BitVec.ofNat 64 nm
 
-/-- An anonymous closure: `fwrite("<fn>", 1, 4, stdout)`. -/
 theorem vp_clo_anon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {st : Store} {o : String} {rv : Nat → BitVec 64} {M Ma : Mem}
     (H : OutHoles) (c : VpCtx live p s r rv M Ma) {ca : Nat} {Dt : Mem} {cp q : Nat}
@@ -374,7 +349,6 @@ theorem vp_clo_anon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
     iapply strAt_rodata (by rw [str_fn]; decide) (by unfold CStrImg; rw [str_fn]; decide)
         (by rw [str_fn]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩) $$ Hi
 
-/-- A named closure: `fprintf(stdout, "<fn %s>", name)`. -/
 theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {st : Store} {o : String} {rv : Nat → BitVec 64} {M Ma : Mem}
     (H : OutHoles) (c : VpCtx live p s r rv M Ma) {ca : Nat} {Dt : Mem} {cp q nm : Nat}
@@ -423,7 +397,7 @@ theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     iapply hE $$ HE
 
 omit I in
-/-- A read-only image and a read-only view agree where both own a byte. -/
+
 theorem roImg_roOn_agree {S P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem} :
     roImg (GF := GF) S img ∗ roOn P m ⊢ ⌜∀ a b, S a → P a → m[a]? = some b → img a = b⌝ := by
   iintro ⟨#H1, #H2⟩
@@ -435,8 +409,7 @@ theorem roImg_roOn_agree {S P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem}
   iframe Ha Hb
 
 omit I in
-/-- **The closure arm's data view** from the closure object and the `EX_FN`
-node's view: a memory `Dt` agreeing with each on its bytes. -/
+
 theorem roOwn_clod {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {cp q : Nat}
     (hP : ∀ k, q + 8 ≤ k → k < q + 16 → P k ∧ (m[k]?).isSome) :
     codeRes (GF := GF) ∗ roImg (InExt (cp, 16)) img ∗ roOn P m ⊢
@@ -483,12 +456,10 @@ theorem roOwn_clod {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {cp q :
         iapply H $$ %k %(imgM Dt k) %(hP k h1 h2).1 %(hn k h1 h2)) $$ H2
   · ipureintro; exact ⟨hc, hn⟩
 
-/-- An unsigned word load of a slot's kind. -/
 theorem ldv_lwu_kind {Mt : Mem} {a k : Nat} (h : (imgW (imgM Mt) a).toNat % 2 ^ 32 = k) :
     ldv .lwu Mt a = BitVec.ofNat 64 k :=
   ldvf_lwu_imgLE (by rw [← imgW_lo32]; exact h)
 
-/-- **The run of `value_print`** for every value but a closure. -/
 theorem vp_run (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {v : Value} {st : Store} {o : String}
     {rv : Nat → BitVec 64} {Ma : Mem} (H : OutHoles) (c : VpCtx live p s r rv Ma Ma)
@@ -510,7 +481,6 @@ theorem vp_run (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   | closure ca => exact absurd rfl (hnc ca)
   | native f => exact vp_native Wp H c hk hku
 
-/-- The name field of an `EX_FN` node. -/
 theorem fnName_facts {m : Mem} {P : Nat → Prop} {q : Nat} {name : Option String} {ps : List String}
     {ss : List Stmt} (h : ExprReprWithin m P q (.fn name ps ss)) :
     ∃ w, read64 m (q + 8) = some w ∧ Covers P (q + 8) 8 ∧
@@ -519,20 +489,17 @@ theorem fnName_facts {m : Mem} {P : Nat → Prop} {q : Nat} {name : Option Strin
   | fnNamed _ _ hr hc hne hs => exact ⟨_, hr, hc, .inr ⟨_, rfl, hne, hs⟩⟩
   | fnAnon _ _ hr hc => exact ⟨_, hr, hc, .inl ⟨rfl, rfl⟩⟩
 
-/-- `read64`'s value is a 64-bit word. -/
 theorem read64_lt {m : Mem} {a w : Nat} (h : read64 m a = some w) : w < 2 ^ 64 := by
   have := readLE_memImg h
   have := imgLE_lt (memImg m) a 8
   omega
 
-/-- A closure value's payload is its closure's address. -/
 theorem valImg_clos {N : NativeAddrs} {f : Nat → BitVec 8} {a ca : Nat} :
     valImg (GF := GF) N f a (.closure ca) ⊢ closAt ca (imgW f (a + 8)).toNat := by
   unfold valImg valOf
   iintro ⟨-, #H⟩
   iexact H
 
-/-- A closure's display resources, opened. -/
 theorem dispRes_clos {st : Store} {ca : Nat} :
     dispRes (GF := GF) st (.closure ca) ⊢ ∃ (cd : ClosureData) (p q : Nat) (img : Nat → BitVec 8)
       (P : Nat → Prop) (m : Mem), ⌜st.closures[ca]? = some cd ∧ imgLE img p 8 = q ∧
@@ -541,7 +508,6 @@ theorem dispRes_clos {st : Store} {ca : Nat} :
       closAt ca p ∗ roImg (InExt (p, 16)) img ∗ roOn P m := by
   unfold dispRes; exact .rfl
 
-/-- The continuation `value_print`'s frame hands its caller. -/
 abbrev VpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (p s r : BitVec 64) (v : Value) (st : Store) (o : String) (rv : Nat → BitVec 64) : IProp GF :=
   iprop(PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
@@ -549,8 +515,6 @@ abbrev VpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
       (valAt N p.toNat v ∗ stdioW ∗ consoleOwn (o ++ v.display st) ∗ stackAt s printNeed)) -∗
     Wp.W Φ)
 
-/-- **`value_print` on a closure**: the data view from `dispRes`, then the
-named or anonymous arm. -/
 theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {p s r : BitVec 64} {ca : Nat} {st : Store} {o : String}
     {rv : Nat → BitVec 64} {Ma : Mem} (H : OutHoles) (c : VpCtx live p s r rv Ma Ma)
@@ -615,7 +579,6 @@ theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     intro F'
     exact vp_clo_named Wp H c f hnz (read64_lt hrw) .rfl (by rw [hdisp, hnx])
 
-/-- **`value_print`**, for either WP, given newlib's stdout calls. -/
 theorem valuePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live) (H : OutHoles)
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs) (p s : BitVec 64) (v : Value)
     (st : Store) (o : String) : ⊢ valuePrintSpec (vsaModel live) N Wp p s v st o := by

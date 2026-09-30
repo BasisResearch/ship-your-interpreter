@@ -1,16 +1,5 @@
 import VsaIris.Vsa.Fprintf.LldConv
 
-/-!
-# `%s` in `_vfprintf_r` (lane N5, shared with N3)
-
-From the `%` at `X` of a `%s`: the conversion parse (`s` through the jump
-table), the argument `str` loaded from `ap` (non-null), its length through
-`strlen` (the hook `hstr`: H3's run, `strlen_sw`), the string's iov appended
-after the pending ones, the count, and on to `__sprint_r` at `0x8000b8c4`
-(`s_stage`). The string bytes `bs` are the caller's (`strlen`'s result is
-`bs.length`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -18,14 +7,12 @@ open scoped VsaIris.Sym.Stdout
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
-/-- The format bytes and jump-table word `%s` reads (data view). -/
 structure SFmt (Dt : Mem) (DA : List Nat) (X : Nat) : Prop where
   fmtDA : Cover (· ∈ DA) (X + 1) (X + 2)
   tabDA : Cover (· ∈ DA) 0x8001a288 0x8001a3f4
   s : ldv .lbu Dt (X + 1) = 0x73#64
   tabS : ldv .lw Dt 0x8001a3d4 = 18446744073709490340#64
 
-/-- A small count stored with `sw` and loaded with `lw`. -/
 theorem lw_ofNat {k : Nat} (h : k < 2 ^ 31) :
     LeanRV64DExecutable.Functions.sign_extend (m := 64) (BitVec.ofNat 32 ((BitVec.ofNat 64 k).toNat % 2 ^ 32)) =
       BitVec.ofNat 64 k := by
@@ -39,19 +26,12 @@ theorem piecesLen_append (a b : List (Nat × List (BitVec 8))) :
     piecesLen (a ++ b) = piecesLen a + piecesLen b := by
   simp [piecesLen]
 
-theorem piecesBytes_append (a b : List (Nat × List (BitVec 8))) :
-    piecesBytes (a ++ b) = piecesBytes a ++ piecesBytes b := by
-  simp [piecesBytes]
-
-/-- The bytes `s_stage` writes: `ap`, the count, the spill slots, the sign
-byte, the `uio`'s count and residual, the new iov. -/
 def SReg (sp n : Nat) (a : Nat) : Prop :=
   (sp + 16 ≤ a ∧ a < sp + 56) ∨ (sp + 104 ≤ a ∧ a < sp + 112) ∨ a = sp + 167 ∨
     (sp + 232 ≤ a ∧ a < sp + 248) ∨ (sp + 352 + 16 * n ≤ a ∧ a < sp + 368 + 16 * n)
 
 set_option hygiene false in
-/-- The post of `s_stage` at `0x8000b8c4`, from the flat register facts and
-the run's store chain. -/
+
 local macro "s_close" : tactic => `(tactic| (
   refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ ?_ ?_ ?_
   · rsimp; exact f2.trans h2
@@ -186,7 +166,6 @@ local macro "s_close" : tactic => `(tactic| (
 #ix_piece sStage_6c from sStage_6b by
   s_close
 
-/-! **`s_stage`**: `%s` from the `%` to `__sprint_r` at `0x8000b8c4`, the string's iov appended. -/
 #ix_tree s_stage := sStage_1 [sStage_2 [sStage_3 [sStage_4 [sStage_5 [sStage_5b [sStage_5c]],
   sStage_6 [sStage_6b [sStage_6c]]]]]]
 

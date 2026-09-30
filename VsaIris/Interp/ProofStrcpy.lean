@@ -3,14 +3,6 @@ import VsaIris.Interp.StrIris
 import VsaIris.Interp.HelperRun
 import VsaIris.Interp.SpecStringify
 
-/-!
-# `strcpy`'s register permutation (lane A)
-
-The `strcpy` specs (`strcpySpec`, `strcpyHeapSpec`) are proved in
-`ProofStrcpyH.lean`; their destinations lie above the HTIF words
-(`htifLo + 16 ≤ dst`), where VSA's store facts hold.
--/
-
 namespace VsaIris.Interp.StrLeaf
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode

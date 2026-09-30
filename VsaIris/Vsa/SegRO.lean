@@ -1,15 +1,5 @@
 import VsaIris.Vsa.AluStep
 
-/-!
-# Segments reading read-only registers
-
-`wp_segW` owns every register of its pin list `L` exclusively. A segment
-that reads a register the caller holds only persistently — `gp`, at every
-`ld a5,1120(gp)` (`_impure_ptr`) — splits its pins: `Lw`, owned and written,
-and `Lr`, read at any fraction and never written. `seg_runFactR` is
-`seg_runFact` with that split; `wp_segRW` its rule.
--/
-
 namespace VsaIris.Inst
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -17,7 +7,6 @@ open LeanRV64DExecutable
 open Vsa.Machine (Config Step Steps StepsN MState output)
 open Vsa.Sim
 
-/-- Written registers of a split segment: the PC and every written pin. -/
 def segRWw (bs : List BBlock) (Lw Lr : GRegs) (lds : List (List (BitVec 8))) (pc0 : BitVec 64) :
     List (Nat × BitVec 64 × BitVec 64) :=
   (VsaIris.PC, pc0, evalBlocksPC pc0 (SegEvalState.init (Lw ++ Lr) lds) bs) ::
@@ -137,7 +126,6 @@ section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The segment rule with read-only pins**, for either WP. -/
 theorem wp_segRW {Φ : Nat × String → IProp GF} (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (bs : List BBlock) (Lw Lr : GRegs)
     (lds : List (List (BitVec 8))) (pc0 : BitVec 64) (dq : DFrac)

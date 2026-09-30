@@ -1,14 +1,6 @@
 import VsaIris.Interp.HelperRun
 import VsaIris.Interp.SpecValue
 
-/-!
-# The value constructors (lane H2)
-
-`value_null`, `value_bool`, `value_int` (lane G's `valueIntSpec`) and
-`value_str`: each is one symbolic run of two or three stores and a `ret`
-(`helper_leaf`), over the result slot.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -20,7 +12,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- **`value_null`**, for either WP. -/
 theorem valueNull_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p : BitVec 64) : ⊢ valueNullSpec (vsaModel live) N Wp p := by
   unfold valueNullSpec
@@ -49,12 +40,9 @@ theorem valueNull_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
     ipureintro
     rw [imgW_lo32]; exact hg
 
-/-- The low word of a slot's first two words, through a later store of the
-other word (`sw`/`sd` order of the constructors). -/
 theorem imgW_lo32_of (mv : Nat → BitVec 8) (a k : Nat) (h : imgLE mv a 4 = k) :
     (imgW mv a).toNat % 2 ^ 32 = k := by rw [imgW_lo32, h]
 
-/-- **`value_bool`**, for either WP. -/
 theorem valueBool_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p b : BitVec 64) : ⊢ valueBoolSpec (vsaModel live) N Wp p b := by
   unfold valueBoolSpec
@@ -90,7 +78,6 @@ theorem valueBool_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
     refine ⟨imgW_lo32_of _ _ _ hg.1, ?_⟩
     rw [imgW_lo32_of _ _ _ hg.2]
 
-/-- **`value_int`** (lane G's `valueIntSpec`), for either WP. -/
 theorem valueInt_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p n : BitVec 64) : ⊢ valueIntSpec (vsaModel live) N Wp p n := by
   unfold valueIntSpec
@@ -125,7 +112,6 @@ theorem valueInt_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
       apply BitVec.eq_of_toNat_eq; rw [imgW_toNat, hg.2]
     rw [this]
 
-/-- **`value_str`**, for either WP. -/
 theorem valueStr_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p q : BitVec 64) (x : String) : ⊢ valueStrSpec (vsaModel live) N Wp p q x := by
   unfold valueStrSpec

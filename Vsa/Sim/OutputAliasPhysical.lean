@@ -1,10 +1,6 @@
 import Vsa.Sim.LayoutInstance
 import Std.Data.ExtDHashMap.Lemmas
 
-/- Explicit physical state for the finite alias witness. Memory is a parameter.
-   This constructs a state satisfying register predicates; it does not claim
-   that startup reaches this register map, or assume a GoodState witness. -/
-
 open LeanRV64DExecutable Sail ConcurrencyInterfaceV1
 open Vsa.Machine Vsa.MemRepr Vsa.RuntimeRepr Vsa.Alloc
 open Vsa.Sim Vsa.Sim.LayoutInstance
@@ -444,94 +440,10 @@ theorem physical_good (m : Mem) : GoodState (physicalState m) where
   nextPC := ⟨_, physicalRegs_nextPC⟩
   PC := ⟨_, physicalRegs_PC⟩
 
-/-- Every non-memory field needed by the fixed two-statement entry. -/
-structure PhysicalCarrier (c : Config) : Prop where
-  good : GoodState c.σ
-  tick : c.tick < 2
-  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpRunEntry)
-  interp_arg : c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 interpObject)
-  stmts_arg : c.σ.regs.get? Register.x11 = some (0x82000000#64)
-  count_arg : c.σ.regs.get? Register.x12 = some (2#64)
-  repl_arg : c.σ.regs.get? Register.x13 = some (0#64)
-  ra : c.σ.regs.get? Register.x1 = some (0x800045ec#64)
-  sp : c.σ.regs.get? Register.x2 = some (BitVec.ofNat 64 spEntry)
-  gp : c.σ.regs.get? Register.x3 = some (BitVec.ofNat 64 gpEntry)
-  htif_payload : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
-  s0 : ∃ v, c.σ.regs.get? Register.x8 = some v
-  s1 : c.σ.regs.get? Register.x9 = some (0#64)
-  s2 : c.σ.regs.get? Register.x18 = some (0#64)
-  s3 : c.σ.regs.get? Register.x19 = some (0#64)
-  s4 : c.σ.regs.get? Register.x20 = some (0#64)
-  s5 : c.σ.regs.get? Register.x21 = some (0#64)
-  s6 : c.σ.regs.get? Register.x22 = some (0#64)
-  s7 : c.σ.regs.get? Register.x23 = some (0#64)
-  s8 : c.σ.regs.get? Register.x24 = some (0#64)
-  s9 : c.σ.regs.get? Register.x25 = some (0#64)
-  s10 : c.σ.regs.get? Register.x26 = some (0#64)
-  s11 : c.σ.regs.get? Register.x27 = some (0#64)
-  tp : c.σ.regs.get? Register.x4 = some (0#64)
-  out : OutRepr c.σ Vsa.While.initSt
-  interp_geom : ObjGeom ((BitVec.ofNat 64 interpObject).toNat, 384) stackSL spEntry
-  setjmp_geom : WinRAM (BitVec.ofNat 64 interpObject + 16#64)
-  stack_ok : StackOK stackSL (BitVec.ofNat 64 spEntry) (176 + 1088)
-  stmts_align : (0x82000000 : Nat) % 8 = 0
-  stmts_ram : 0x80000000 ≤ (0x82000000 : Nat) ∧ 0x82000000 + 8 * 2 ≤ 0x100000000
-  stmts_win : tohostAddr + 16 ≤ (0x82000000 : Nat)
-  stmts_stack : 0x82000000 + 8 * 2 ≤ stackSL.lo ∨ spEntry ≤ 0x82000000
-
-theorem physical_carrier (m : Mem) : PhysicalCarrier (physicalConfig m) where
-  good := physical_good m
-  tick := by change (0 : Nat) < 2; decide
-  pc := physicalRegs_PC
-  interp_arg := physicalRegs_x10
-  stmts_arg := physicalRegs_x11
-  count_arg := physicalRegs_x12
-  repl_arg := physicalRegs_x13
-  ra := physicalRegs_x1
-  sp := physicalRegs_x2
-  gp := physicalRegs_x3
-  htif_payload := physicalRegs_htif_payload_writes
-  s0 := ⟨_, physicalRegs_x8⟩
-  s1 := physicalRegs_x9
-  s2 := physicalRegs_x18
-  s3 := physicalRegs_x19
-  s4 := physicalRegs_x20
-  s5 := physicalRegs_x21
-  s6 := physicalRegs_x22
-  s7 := physicalRegs_x23
-  s8 := physicalRegs_x24
-  s9 := physicalRegs_x25
-  s10 := physicalRegs_x26
-  s11 := physicalRegs_x27
-  tp := physicalRegs_x4
-  out := rfl
-  interp_geom := ⟨by decide, by unfold RSub; decide, by decide, by decide⟩
-  setjmp_geom := ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  stack_ok := by unfold StackOK; decide
-  stmts_align := by decide
-  stmts_ram := by decide
-  stmts_win := by decide
-  stmts_stack := by decide
-
-/-! ## The snapshot with `main`'s `s0`
-
-`main` sets `s0 = &_impure_ptr` (`0x80004590: addi s0,gp,1120`) before
-`jal interp_run`. The boundary states it (`InterpRunReadyFacts.s0_impure`);
-the historical alias witness keeps `physicalRegs` (`s0 = 0`). -/
-
-/-- `&_impure_ptr`, `main`'s `s0` at `interp_run`'s entry. -/
 def impureS0 : BitVec 64 := 0x8001b970#64
 
 def physicalRegsS0 : Std.ExtDHashMap Register RegisterType :=
   physicalRegs.insert Register.x8 impureS0
-
-theorem physicalRegsS0_x8 : physicalRegsS0.get? Register.x8 = some impureS0 :=
-  Std.ExtDHashMap.get?_insert_self
-
-theorem physicalRegsS0_get {r : Register} (h : (Register.x8 == r) = false) :
-    physicalRegsS0.get? r = physicalRegs.get? r := by
-  unfold physicalRegsS0
-  rw [Std.ExtDHashMap.get?_insert, dite_eq_right (by simp [h])]
 
 def physicalStateS0 (m : Mem) : MState :=
   ⟨physicalRegsS0, (), m, (), 0, #[]⟩
@@ -541,74 +453,11 @@ def physicalConfigS0 (m : Mem) : Config := ⟨physicalStateS0 m, 0, 0⟩
 @[simp] theorem physicalConfigS0_mem (m : Mem) :
     (physicalConfigS0 m).σ.mem = m := rfl
 
-/-- `GoodState` names no general register, so it survives a change of `s0`. -/
 theorem goodState_of_regs_s0 {σ σ' : MState} (g : GoodState σ)
     (hr : ∀ r : Register, (Register.x8 == r) = false → σ'.regs.get? r = σ.regs.get? r) :
     GoodState σ' := by
   obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
     _, _, _⟩ := g
   constructor <;> (rw [hr _ (by decide)]; assumption)
-
-/-- The carrier survives a change of `s0` alone. -/
-theorem PhysicalCarrier.of_regs_s0 {c c' : Config} (C : PhysicalCarrier c)
-    (hr : ∀ r : Register, (Register.x8 == r) = false → c'.σ.regs.get? r = c.σ.regs.get? r)
-    (h8 : ∃ v, c'.σ.regs.get? Register.x8 = some v) (htick : c'.tick = c.tick)
-    (hout : Vsa.Machine.output c'.σ = Vsa.Machine.output c.σ) : PhysicalCarrier c' where
-  good := goodState_of_regs_s0 C.good hr
-  tick := htick ▸ C.tick
-  pc := by rw [hr _ (by decide)]; exact C.pc
-  interp_arg := by rw [hr _ (by decide)]; exact C.interp_arg
-  stmts_arg := by rw [hr _ (by decide)]; exact C.stmts_arg
-  count_arg := by rw [hr _ (by decide)]; exact C.count_arg
-  repl_arg := by rw [hr _ (by decide)]; exact C.repl_arg
-  ra := by rw [hr _ (by decide)]; exact C.ra
-  sp := by rw [hr _ (by decide)]; exact C.sp
-  gp := by rw [hr _ (by decide)]; exact C.gp
-  htif_payload := by rw [hr _ (by decide)]; exact C.htif_payload
-  s0 := h8
-  s1 := by rw [hr _ (by decide)]; exact C.s1
-  s2 := by rw [hr _ (by decide)]; exact C.s2
-  s3 := by rw [hr _ (by decide)]; exact C.s3
-  s4 := by rw [hr _ (by decide)]; exact C.s4
-  s5 := by rw [hr _ (by decide)]; exact C.s5
-  s6 := by rw [hr _ (by decide)]; exact C.s6
-  s7 := by rw [hr _ (by decide)]; exact C.s7
-  s8 := by rw [hr _ (by decide)]; exact C.s8
-  s9 := by rw [hr _ (by decide)]; exact C.s9
-  s10 := by rw [hr _ (by decide)]; exact C.s10
-  s11 := by rw [hr _ (by decide)]; exact C.s11
-  tp := by rw [hr _ (by decide)]; exact C.tp
-  out := by unfold OutRepr; rw [hout]; exact C.out
-  interp_geom := C.interp_geom
-  setjmp_geom := C.setjmp_geom
-  stack_ok := C.stack_ok
-  stmts_align := C.stmts_align
-  stmts_ram := C.stmts_ram
-  stmts_win := C.stmts_win
-  stmts_stack := C.stmts_stack
-
-theorem physical_carrierS0 (m : Mem) : PhysicalCarrier (physicalConfigS0 m) := by
-  have e1 : (physicalConfigS0 m).σ.regs = physicalRegsS0 := rfl
-  have e2 : (physicalConfig m).σ.regs = physicalRegs := rfl
-  refine (physical_carrier m).of_regs_s0 (fun r h => ?_) ⟨impureS0, ?_⟩
-    (show (0 : Nat) = 0 from rfl) ?_
-  · rw [e1, e2]; exact physicalRegsS0_get h
-  · rw [e1]; exact physicalRegsS0_x8
-  · have o1 : (physicalConfigS0 m).σ.sailOutput = #[] := rfl
-    have o2 : (physicalConfig m).σ.sailOutput = #[] := rfl
-    unfold Vsa.Machine.output
-    rw [o1, o2]
-
-/-- Every general register is present in the snapshot. -/
-theorem physicalS0_gprs (m : Mem) :
-    ∀ n, 1 ≤ n → n ≤ 31 → (gprGet (physicalConfigS0 m).σ n).isSome := by
-  intro n h1 h31
-  have e : (physicalConfigS0 m).σ.regs = physicalRegsS0 := rfl
-  unfold gprGet
-  split <;> first
-    | omega
-    | (rw [e, physicalRegsS0_x8]; rfl)
-    | (rw [e, physicalRegsS0_get (by decide)]; simp)
-
 
 end Vsa.Sim.OutputAliasLoaded

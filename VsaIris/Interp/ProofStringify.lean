@@ -6,15 +6,6 @@ import VsaIris.Vsa.OomSites
 import VsaIris.Vsa.SnpHoles
 import VsaIris.Vsa.ErrnoOwn
 
-/-!
-# `stringify` (lane H2)
-
-One run per arm from the kind dispatch to the arm's first call (or, for the
-inline arms, to the shared `jal strlen`), then the shared tail: `strlen` of
-the buffer (`strlen_specOwnedW`), `malloc` (H1's `mallocRho_spec`), the
-out-of-memory block (H5's `wp_oomBlock`) or `memcpy`, the epilogue.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -22,7 +13,6 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib VsaIris.
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
-/-- A run's bytes: the 112-byte frame and the value's slot. -/
 abbrev sgF (s p : BitVec 64) (k : Nat) : Prop :=
   InExt (s.toNat - 112, 112) k ∨ InExt (p.toNat, 24) k
 
@@ -30,9 +20,6 @@ macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro b hb; simp only [mem_accAddrs_iff, sgF, VsaIris.InExt] at *; sx_addr))
 
-/-! ## The runs -/
-
-/- `null`: `"null"` stored inline, to `jal strlen`. -/
 #ix_seg sg_null {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s p r : BitVec 64}
@@ -47,7 +34,6 @@ macro_rules
     unfold stringifyPC
     ix_run1 hlive using [h10, h2, hsf, hk] at 0x80003048
 
-/- `bool`: the constant for `strcpy`, to `jal strcpy`. -/
 #ix_seg sg_bool {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s p r bw : BitVec 64}
@@ -65,7 +51,6 @@ macro_rules
     ix_run1 hlive using [h10, h2, hsf, hk, hp8, hb] at 0x8000300c
     all_goals (intro _; ix_run1 hlive using [h10, h2, hsf, hk, hp8, hb] at 0x8000300c)
 
-/- `int`: `snprintf(buf, 64, "%lld", i)`, to the `jal`. -/
 #ix_seg sg_int {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s p r iw : BitVec 64}
@@ -82,7 +67,6 @@ macro_rules
     unfold stringifyPC
     ix_run1 hlive using [h10, h2, hsf, hk, hp8, hi] at 0x800030d8
 
-/- A string: `strlen` of its payload, to the `jal`. -/
 #ix_seg sg_str {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s p r sw : BitVec 64}
@@ -99,7 +83,6 @@ macro_rules
     unfold stringifyPC
     ix_run1 hlive using [h10, h2, hsf, hk, hp8, hs] at 0x800030ec
 
-/- A native: `"<native fn>"` from `.rodata`, to `jal strlen`. -/
 #ix_seg sg_nat {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s p r : BitVec 64}
@@ -115,7 +98,6 @@ macro_rules
     unfold stringifyPC
     ix_run1 hlive using [h10, h2, hsf, hk] at 0x80003048
 
-/- After `strcpy`: to `jal strlen`. -/
 #ix_seg sg_back {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -128,7 +110,6 @@ macro_rules
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x80003048
 
-/- After `snprintf("%lld")`: to `jal strlen`. -/
 #ix_seg sg_backInt {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -141,7 +122,6 @@ macro_rules
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x80003048
 
-/- After `snprintf("<fn %s>")`: to `jal strlen`. -/
 #ix_seg sg_backFn {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -154,7 +134,6 @@ macro_rules
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x80003048
 
-/- After `strlen` of the buffer: `malloc(len + 1)`. -/
 #ix_seg sg_len {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -167,7 +146,6 @@ macro_rules
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x80003058
 
-/- `malloc` returned NULL: to the out-of-memory block. -/
 #ix_seg sg_oom {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -184,7 +162,6 @@ macro_rules
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
       | skip
 
-/- `malloc` returned a block: `memcpy(block, buf, len + 1)`. -/
 #ix_seg sg_copy {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -198,7 +175,6 @@ macro_rules
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x8000306c
 
-/- The epilogue after `memcpy`. -/
 #ix_seg sg_epi {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p r v8 v9 : BitVec 64}
@@ -213,7 +189,6 @@ macro_rules
   by
     ix_run1 hlive using [h2, hal, hra, hs0, hs1']
 
-/- After `strlen` of a string: `malloc(len + 1)`. -/
 #ix_seg sg_slen {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -226,7 +201,6 @@ macro_rules
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x800030f8
 
-/- `malloc` returned NULL (string arm): to the out-of-memory block. -/
 #ix_seg sg_soom {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -243,7 +217,6 @@ macro_rules
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
       | skip
 
-/- `malloc` returned a block (string arm): `memcpy`. -/
 #ix_seg sg_scopy {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64}
@@ -257,7 +230,6 @@ macro_rules
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h2, hsf] at 0x8000310c
 
-/- The epilogue after `memcpy` (string arm). -/
 #ix_seg sg_sepi {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s p r v8 v9 : BitVec 64}
@@ -272,8 +244,6 @@ macro_rules
   by
     ix_run1 hlive using [h2, hal, hra, hs0, hs1']
 
-
-/- A closure: the prologue and the kind dispatch, to its arm (`0x8000301c`). -/
 #ix_seg sg_cloH {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s p r : BitVec 64}
@@ -288,8 +258,6 @@ macro_rules
     unfold stringifyPC
     ix_run1 hlive using [h10, h2, hsf, hk] at 0x8000301c
 
-/- A closure, named: its object's `EX_FN` node's name field (the data view), to
-`jal snprintf`. -/
 #ix_seg sg_cloN {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M Dt : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64} {cp q nm : Nat}
@@ -312,7 +280,6 @@ macro_rules
     have eq8 : (BitVec.ofNat 64 q + 8#64).toNat = q + 8 := by rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h10, h2, hsf, hw8, ecp, hq, eq8, hnm, hnz] at 0x80003040
 
-/- A closure, anonymous: `"<fn>"` stored inline, to `jal strlen`. -/
 #ix_seg sg_cloA {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M Dt : Mem} {R : Nat → BitVec 64}
     {s p : BitVec 64} {cp q : Nat}
@@ -334,8 +301,6 @@ macro_rules
     have ecp : (BitVec.ofNat 64 cp).toNat = cp := by simp; omega
     have eq8 : (BitVec.ofNat 64 q + 8#64).toNat = q + 8 := by rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h10, h2, hsf, hw8, ecp, hq, eq8, hnm] at 0x80003048
-
-/-! ## Bytes a run's stores leave -/
 
 theorem imgM_sw (Mt : Mem) (a : Nat) (v : BitVec 64) (i : Nat) (hi : i < 4) :
     imgM (writeLog Mt [(a, 4, v)]) (a + i) = (swData v).extractLsb' (8 * i) 8 := by
@@ -361,7 +326,6 @@ theorem imgM_sd (Mt : Mem) (a : Nat) (v : BitVec 64) (i : Nat) (hi : i < 8) :
     | omega
     | simp
 
-/-- `"null"` as the `null` arm stores it: one word and a NUL. -/
 theorem cstr_null (Mt : Mem) (a : Nat) :
     CStrImg (imgM (writeLog (writeLog Mt [(a, 4, 1819047278#64)]) [(a + 4, 1, 0#64)])) a "null" := by
   refine ⟨fun i hi => ?_, ?_⟩
@@ -371,7 +335,6 @@ theorem cstr_null (Mt : Mem) (a : Nat) :
     all_goals first | omega | (revert hi hi'; decide)
   · rw [show a + "null".toList.length = a + 4 from rfl, imgM_sb]; decide
 
-/-- `"<native fn>"` as the native arm stores it: two `.rodata` words. -/
 theorem cstr_native (Mt : Mem) (a : Nat) :
     CStrImg (imgM (writeLog (writeLog Mt [(a, 8, 2334402177157656124#64)])
       [(a + 8, 4, 4091494#64)])) a "<native fn>" := by
@@ -389,8 +352,6 @@ theorem cstr_native (Mt : Mem) (a : Nat) :
       all_goals first | omega | (revert hi hi' h8; decide)
   · have := imgM_sw (writeLog Mt [(a, 8, 2334402177157656124#64)]) (a + 8) 4091494#64 3 (by omega)
     rw [show a + "<native fn>".toList.length = a + 8 + 3 from rfl, this]; decide
-
-/-! ## The length of a 64-bit integer's rendering -/
 
 theorem natDigits_len : ∀ (fuel n k : Nat), n < 10 ^ k → 1 ≤ k → (natDigits fuel n).length ≤ k
   | 0, _, _, _, _ => by simp [natDigits]
@@ -420,7 +381,6 @@ theorem natToString_toList' (n : Nat) : (natToString n).toList = natDigits (n + 
   | nil => intro s; simp
   | cons c t ih => intro s; rw [List.foldl_cons, ih, String.toList_push]; simp
 
-/-- A 64-bit integer renders in at most 20 characters. -/
 theorem intToString_len_le (i : Int) (h1 : -(2 ^ 63) ≤ i) (h2 : i < 2 ^ 63) :
     (intToString i).toList.length ≤ 20 := by
   cases i with
@@ -435,7 +395,6 @@ theorem intToString_len_le (i : Int) (h1 : -(2 ^ 63) ≤ i) (h2 : i < 2 ^ 63) :
     have := natDigits_len (m + 1 + 1) (m + 1) 19 (by omega) (by decide)
     simp; omega
 
-/-- `"<fn>"` as the anonymous-closure arm stores it: one word and a NUL. -/
 theorem cstr_fn (Mt : Mem) (a : Nat) :
     CStrImg (imgM (writeLog (writeLog Mt [(a, 4, 1047422524#64)]) [(a + 4, 1, 0#64)])) a "<fn>" := by
   refine ⟨fun i hi => ?_, ?_⟩
@@ -445,15 +404,11 @@ theorem cstr_fn (Mt : Mem) (a : Nat) :
     all_goals first | omega | (revert hi hi'; decide)
   · rw [show a + "<fn>".toList.length = a + 4 from rfl, imgM_sb]; decide
 
-/-! ## The Iris glue -/
-
 section Glue
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- `stringify`'s continuation pair (its `fnSpecAbort` post and abort), at
-the rendering `x`. -/
 abbrev SgK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (inp : Nat) (p s r : BitVec 64) (v : Value) (x : String) (ρ : Regime)
     (H : List (Nat × Nat)) (o : String) (rv : Nat → BitVec 64) : IProp GF :=
@@ -467,8 +422,6 @@ abbrev SgK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
     (iprop(⌜ρ = .uncounted⌝ ∗ abortRes N vsaLayoutP vsaRoomB inp s stringifyNeed ∗
       slot24 p.toNat) -∗ Wp.W Φ))
 
-/-- What a `stringify` run carries: the value's meaning at its image, the heap,
-newlib's data and the console, the stack below the frame, the continuation. -/
 def SgRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (inp : Nat) (p s r : BitVec 64) (v : Value) (x : String) (ρ : Regime)
     (H : List (Nat × Nat)) (c : Nat) (o : String) (rv : Nat → BitVec 64) (Mp : Mem) : IProp GF :=
@@ -477,7 +430,6 @@ def SgRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
     stackScratch (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
     SgK Wp Φ N inp p s r v x ρ H o rv)
 
-/-- The shared pure facts of a `stringify` run. -/
 structure SgCtx (live : Nat → Prop) (p s r : BitVec 64) (rv : Nat → BitVec 64) : Prop where
   hlive : ∀ q ∈ interpText, live q.1
   hcl : CodeLive live
@@ -492,7 +444,6 @@ structure SgCtx (live : Nat → Prop) (p s r : BitVec 64) (rv : Nat → BitVec 6
   hg : SlotGeom p
   hdsp : ∀ k, InExt (s.toNat - 112, 112) k → ¬ InExt (p.toNat, 24) k
 
-/-- The frame and the value's slot are apart, numerically. -/
 theorem SgCtx.sep {live : Nat → Prop} {p s r : BitVec 64} {rv : Nat → BitVec 64}
     (cx : SgCtx live p s r rv) : p.toNat + 24 ≤ s.toNat - 112 ∨ s.toNat ≤ p.toNat := by
   have hs1 := cx.hs1
@@ -506,8 +457,6 @@ theorem SgCtx.sep {live : Nat → Prop} {p s r : BitVec 64} {rv : Nat → BitVec
   · exact cx.hdsp (s.toNat - 112) (by simp only [InExt]; omega) (by simp only [InExt]; omega)
   · exact cx.hdsp p.toNat (by simp only [InExt]; omega) (by simp only [InExt]; omega)
 
-/-- At `jal strlen` (`0x80003048`): the rendering `x` in the buffer
-`sp + 16`, which `s1` and `a0` point at. -/
 structure SgT1 (s p r : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
   h10 : R 10 = s + 18446744073709551504#64 + 16#64
   h9 : R 9 = s + 18446744073709551504#64 + 16#64
@@ -520,7 +469,6 @@ structure SgT1 (s p r : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M Mp
   hbuf : CStrImg (imgM M) (s.toNat - 96) x
   hlen : x.toList.length ≤ 63
 
-/-- At `jal malloc` (`0x80003058`): `len + 1` in `a0` and at `sp + 8`. -/
 structure SgT2 (s p r : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
   h10 : R 10 = BitVec.ofNat 64 (x.toList.length + 1)
   h9 : R 9 = s + 18446744073709551504#64 + 16#64
@@ -534,7 +482,6 @@ structure SgT2 (s p r : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M Mp
   hbuf : CStrImg (imgM M) (s.toNat - 96) x
   hlen : x.toList.length ≤ 63
 
-/-- A C string image gives `strlen`'s byte facts. -/
 theorem strBytes_of_cstrImg {img : Nat → BitVec 8} {q : Nat} {x : String} (h : CStrImg img q x) :
     Strlen.StrBytes q x.toList.length img where
   nonzero k hk := by
@@ -545,13 +492,11 @@ theorem strBytes_of_cstrImg {img : Nat → BitVec 8} {q : Nat} {x : String} (h :
     simp at this; omega
   nul := h.2
 
-/-- A C string's image read through another image agreeing on it. -/
 theorem cstrImg_congr {img img' : Nat → BitVec 8} {q : Nat} {x : String} (h : CStrImg img q x)
     (he : ∀ i, i ≤ x.toList.length → img' (q + i) = img (q + i)) : CStrImg img' q x :=
   ⟨fun i hi => by rw [he i (by omega)]; exact h.1 i hi,
     by rw [he _ (Nat.le_refl _)]; exact h.2⟩
 
-/-- **`strlen` of the buffer**, then the run to `jal malloc`. -/
 theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -697,7 +642,7 @@ theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         exact hM1 _ (.inl (by simp only [InExt]; omega))
 
 omit I in
-/-- `stringify`'s frame out of the stack below `s`, and back. -/
+
 theorem sgFrame_join {s : BitVec 64} (hs : stringifyNeed ≤ s.toNat) :
     stackScratch (GF := GF) (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
         ownSet (InExt (s.toNat - 112, 112)) byteAny ⊢ stackScratch s stringifyNeed := by
@@ -724,8 +669,6 @@ theorem sgFrame_split {s : BitVec 64} (hs : stringifyNeed ≤ s.toNat) :
   unfold blockOwn at h
   exact h
 
-/-- The out-of-memory block from any register values (H5's `wp_oomBlock` at
-`oom80003140`): the abort branch takes the whole stack region. -/
 theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -769,8 +712,6 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold slot24 blockOwn
   iexact HP
 
-/-- **Out of memory**: from `malloc`'s NULL (either copy tail), the run to
-the out-of-memory block. -/
 theorem sg_oomPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -804,7 +745,6 @@ theorem sg_oomPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     dsimp only [F']
     exact sg_oomEnd Wp HN cx hρ (by ix_reg; exact h2)
 
-/-- After `malloc` returned the block `q`: the heap extended, the block owned. -/
 def SgRestB (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (inp : Nat) (p s r : BitVec 64) (v : Value) (x : String) (ρ : Regime)
     (H : List (Nat × Nat)) (o : String) (rv : Nat → BitVec 64) (Mp : Mem) (q : BitVec 64) :
@@ -815,7 +755,6 @@ def SgRestB (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPr
     stackScratch (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
     SgK Wp Φ N inp p s r v x ρ H o rv)
 
-/-- After `memcpy`: the block holds the buffer's bytes `img`. -/
 def SgRestC (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (N : NativeAddrs) (inp : Nat) (p s r : BitVec 64) (v : Value) (x : String) (ρ : Regime)
     (H : List (Nat × Nat)) (o : String) (rv : Nat → BitVec 64) (Mp : Mem) (q : BitVec 64)
@@ -826,7 +765,6 @@ def SgRestC (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPr
     stackScratch (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
     SgK Wp Φ N inp p s r v x ρ H o rv)
 
-/-- At `malloc`'s return (`0x8000305c`) with the block `q`. -/
 structure SgT3 (s p r : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : BitVec 64)
     (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
   h10 : R 10 = q
@@ -842,8 +780,6 @@ structure SgT3 (s p r : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : Bit
   hlen : x.toList.length ≤ 63
   hfresh : FreshBlock vsaLayoutP H q.toNat (x.toList.length + 1) ∧ q.toNat % 16 = 0
 
-/-- After `memcpy` (`0x80003070`): `s0` holds the block, the block holds `img`,
-a copy of the rendering. -/
 structure SgT4 (s p r : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : BitVec 64)
     (rv R : Nat → BitVec 64) (M Mp : Mem) (img : Nat → BitVec 8) : Prop where
   h8 : R 8 = q
@@ -856,13 +792,11 @@ structure SgT4 (s p r : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : Bit
   hcopy : CStrImg img q.toNat x
   hfresh : FreshBlock vsaLayoutP H q.toNat (x.toList.length + 1) ∧ q.toNat % 16 = 0
 
-/-- A C string's bytes, moved from `b` to `q`. -/
 theorem cstrImg_shift {img : Nat → BitVec 8} {b q : Nat} {x : String} (h : CStrImg img b x) :
     CStrImg (fun a => img (a - q + b)) q x :=
   ⟨fun i hi => by simp only [show q + i - q + b = b + i by omega]; exact h.1 i hi,
     by simp only [show q + x.toList.length - q + b = b + x.toList.length by omega]; exact h.2⟩
 
-/-- **`memcpy(q, buf, len + 1)`** from `malloc`'s return. -/
 theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1006,8 +940,6 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     · intro k hk
       rw [hM2 k (.inr hk)]; exact f.hslot k hk
 
-/-- The return: `ra`, `a0 = s0 = q`, `s0`/`s1` restored, `sp = s`; the
-continuation's post branch. -/
 theorem sg_ret {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1063,8 +995,6 @@ theorem sg_ret {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → 
     by unfold Vsa.Sim.LayoutInstance.stackSL stringifyNeed snprintfNeed; simp; omega,
     by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, cx.hs4⟩
 
-/-- **The epilogue and the return** after `memcpy`: the block holds the
-rendering, the value's slot and the stack come back. -/
 theorem sg_finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1099,8 +1029,6 @@ theorem sg_finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     dsimp only [F']
     exact sg_ret cx f
 
-/-- **`malloc(len + 1)`**, then the out-of-memory abort or the copy, the
-epilogue and the return (the buffer arms' shared tail from `jal malloc`). -/
 theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1155,8 +1083,6 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     unfold SgRestB
     iframe Hcode Himg Hv Hh Hb Hstd Hcon Hst Hk Hms
 
-/-- **The buffer arms' shared tail**, from `jal strlen` to the return or the
-out-of-memory abort. -/
 theorem sg_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1166,12 +1092,10 @@ theorem sg_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms 0x80003048#64 R (sgF s p) M ⊢ Wp.W Φ :=
   sg_strlen Wp cx f fun _ _ f2 => sg_malloc Wp A HN cx hmc hc f2
 
-/-- The frame words the prologue saved, through later stores into the frame. -/
 theorem sg_offs {s : BitVec 64} (hs : 112 ≤ s.toNat) :
     ∀ k, k < 112 → (s + 18446744073709551504#64 + BitVec.ofNat 64 k).toNat = s.toNat - 112 + k := by
   intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
 
-/-- **`null`**: `"null"` stored inline, then the shared tail. -/
 theorem sg_nullArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {st : Store} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1223,7 +1147,6 @@ theorem sg_nullArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
        simp (disch := omega) only [imgM_store_miss]
        exact hslot k (by simp only [InExt]; omega))
 
-/-- **A native**: `"<native fn>"` from `.rodata`, stored inline, then the shared tail. -/
 theorem sg_natArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {st : Store} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1275,8 +1198,6 @@ theorem sg_natArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
        simp (disch := omega) only [imgM_store_miss]
        exact hslot k (by simp only [InExt]; omega))
 
-/-- At a call's return into the buffer arms (`strcpy`, `snprintf`): the
-buffer is out of the run's bytes. -/
 structure SgTB (s p r : BitVec 64) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
   h9 : R 9 = s + 18446744073709551504#64 + 16#64
   h2 : R 2 = s + 18446744073709551504#64
@@ -1286,12 +1207,9 @@ structure SgTB (s p r : BitVec 64) (rv R : Nat → BitVec 64) (M Mp : Mem) : Pro
   ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
   hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
 
-/-- The run's bytes without the buffer `[sp + 16, sp + 80)`. -/
 abbrev sgFnb (s p : BitVec 64) (k : Nat) : Prop :=
   sgF s p k ∧ ¬ InExt (s.toNat - 96, 64) k
 
-/-- **The buffer filled by a call**: back in, the run to `jal strlen`, the
-shared tail. -/
 theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1364,8 +1282,6 @@ theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   · exact sg_backFn cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
       kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
 
-/-- **`strcpy(buf, src)`** of a read-only C string (the bool arm), then the
-buffer-filled continuation. -/
 theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1457,8 +1373,6 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold SgRest
   iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
 
-
-/-- **A bool**: `strcpy(buf, b ? "true" : "false")`, then the shared tail. -/
 theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1535,8 +1449,6 @@ theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
         (by ix_reg) (by ix_reg) (fB _ (by ix_reg) (by ix_reg) (fun y h1 h2 h9 h10 h11 h14 h15 => by
           simp [upd, h1, h2, h9, h10, h11, h14, h15]))
 
-/-- **An integer**: `snprintf(buf, 64, "%lld", i)` (`Sym.snprintfInt_out`),
-then the shared tail. -/
 theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1684,7 +1596,7 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
 
 omit G in
-/-- A C string's read window. -/
+
 theorem strAt_win [MachGS hlc GF] {q : Nat} {t : String} :
     strAt (GF := GF) q t ⊢ ⌜StrWin q t.toList.length⌝ := by
   unfold strAt
@@ -1692,15 +1604,13 @@ theorem strAt_win [MachGS hlc GF] {q : Nat} {t : String} :
   ipureintro; exact hw
 
 omit G in
-/-- A string value's meaning gives its payload's C string. -/
+
 theorem valImg_str_strAt [MachGS hlc GF] {N : NativeAddrs} {img : Nat → BitVec 8} {a : Nat}
     {t : String} : valImg (GF := GF) N img a (.str t) ⊢ strAt (imgW img (a + 8)).toNat t := by
   simp only [valOf]
   iintro ⟨-, #H⟩
   iexact H
 
-/-- The string arm at `jal malloc` (`0x800030f8`): `len + 1` in `a0` and `s1`,
-the string's pointer at `sp + 8`. -/
 structure SgS2 (s p r sw : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
   h10 : R 10 = BitVec.ofNat 64 (x.toList.length + 1)
   h9 : R 9 = BitVec.ofNat 64 (x.toList.length + 1)
@@ -1712,8 +1622,6 @@ structure SgS2 (s p r sw : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M
   sn : ldv .ld M (s + 18446744073709551504#64 + 8#64).toNat = sw
   hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
 
-/-- **A string**: its payload's `strlen` (H1's `strlenSpec`), the run to
-`jal malloc`. -/
 theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1845,7 +1753,6 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
        simp (disch := omega) only [imgM_store_miss]
        exact hslot k (by simp only [InExt]; omega))
 
-/-- The string arm at `malloc`'s return (`0x800030fc`) with the block `q`. -/
 structure SgS3 (s p r sw : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : BitVec 64)
     (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
   h10 : R 10 = q
@@ -1859,8 +1766,6 @@ structure SgS3 (s p r sw : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : 
   hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
   hfresh : FreshBlock vsaLayoutP H q.toNat (x.toList.length + 1) ∧ q.toNat % 16 = 0
 
-/-- **`memcpy(q, s, len + 1)`** from the string's read-only bytes (H1's
-`memcpySpec`), then the epilogue and the return. -/
 theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -1966,8 +1871,6 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   unfold SgRestC
   iframe Hcode Hv Hh Hd Hstd Hcon Hst Hk Hms
 
-/-- **`malloc(len + 1)`** in the string arm, then the out-of-memory abort or
-the copy. -/
 theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {x : String} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2021,7 +1924,6 @@ theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
     unfold SgRestB
     iframe Hcode Himg Hv Hh Hb Hstd Hcon Hst Hk Hms
 
-/-- **A string**: `strlen`, `malloc`, `memcpy` of the payload, the return. -/
 theorem sg_strArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2033,8 +1935,6 @@ theorem sg_strArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ :=
   sg_strHead Wp cx hsl hk hslot fun _ _ f2 => sg_strMalloc Wp A HN cx hmcr hc hlt f2
 
-/-- A closure's arm entry (`0x8000301c`): the prologue's frame words saved,
-the value's slot untouched. -/
 structure SgC0 (s p r : BitVec 64) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
   h10 : R 10 = p
   h2 : R 2 = s + 18446744073709551504#64
@@ -2044,7 +1944,6 @@ structure SgC0 (s p r : BitVec 64) (rv R : Nat → BitVec 64) (M Mp : Mem) : Pro
   ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
   hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
 
-/-- The closure object's and name field's facts the arm's loads need. -/
 structure SgClo (M Dt : Mem) (p : BitVec 64) (cp q nm : Nat) : Prop where
   hw8 : ldv .ld M (p + 8#64).toNat = BitVec.ofNat 64 cp
   hc0 : ReadOK cp
@@ -2056,7 +1955,6 @@ structure SgClo (M Dt : Mem) (p : BitVec 64) (cp q nm : Nat) : Prop where
   hcp : cp < 2 ^ 64
   hql : q + 8 < 2 ^ 64
 
-/-- **An anonymous closure**: `"<fn>"` stored inline, then the shared tail. -/
 theorem sg_cloAnon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2107,8 +2005,6 @@ theorem sg_cloAnon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     simp (disch := omega) only [imgM_store_miss]
     exact f0.hslot k (by simp only [InExt]; omega)
 
-/-- **A named closure**: `snprintf(buf, 64, "<fn %s>", name)`
-(`Sym.snprintfFn_out`), then the shared tail. -/
 theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2223,15 +2119,12 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   unfold SgRest
   iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
 
-/-- `strRender` of a closure: its name cut, or `"<fn>"`. -/
 theorem strRender_clos {st : Store} {ca : Nat} {cd : ClosureData} (hcd : st.closures[ca]? = some cd) :
     strRender st (.closure ca) = match cd.name with | some x => fnRender x | none => "<fn>" := by
   cases h : cd.name with
   | some x => simp [strRender, closName, hcd, h]
   | none => simp [strRender, closName, hcd, h, Value.catDisplay, Value.display]
 
-/-- **A closure**: the object's `EX_FN` node and its name field through a data
-view (`dispRes`, as `value_print`), then the named or anonymous path. -/
 theorem sg_cloArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2341,7 +2234,7 @@ theorem sg_cloArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iframe Hview Hx Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
 
 omit G in
-/-- A string value's length fits a word (its payload's `StrWin`). -/
+
 theorem valImg_strLen [MachGS hlc GF] {N : NativeAddrs} {img : Nat → BitVec 8} {a : Nat}
     {v : Value} : valImg (GF := GF) N img a v ⊢
       ⌜∀ t, v = .str t → t.toList.length + 1 < 2 ^ 64⌝ := by
@@ -2361,7 +2254,6 @@ theorem valImg_strLen [MachGS hlc GF] {N : NativeAddrs} {img : Nat → BitVec 8}
     intro t h
     cases h
 
-/-- The kind dispatch at `stringify`'s entry: each kind's arm. -/
 theorem sg_dispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {st : Store} {ρ : Regime}
     {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
@@ -2427,9 +2319,6 @@ theorem sg_dispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
     iapply sg_natArm (st := st) (f := f) Wp A HN cx hmc hc (by rw [hkind]; rfl) hslot
     iexact HR
 
-/-- **`stringify`**, for either WP: the rendering in a fresh heap block, or the
-out-of-memory abort. `hstk`: the stack region is live (H3's `strlen` over the
-stack buffer). -/
 theorem stringify_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
     (hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a)
     (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles)

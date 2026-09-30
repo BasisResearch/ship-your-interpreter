@@ -1,23 +1,11 @@
 import VsaIris.Vsa.Stdout.Swbuf
 
-/-!
-# `__sfvwrite_r` on `stdout` (lane N1)
-
-`__sfvwrite_r(reent, stdout, uio)` with one iov of `n > 0` bytes of
-persistent data (a C string): `stdout` is in write mode, has its buffer and is
-unbuffered, so it hands the whole iov (`n ≤ 0x7ffffc00`) to the writer
-(`__swrite`, `swrite_run`) in one call, which prints it and returns `n`; the
-residual count reaches `0` and it returns `0`. With `n = 0` it returns `0` at
-once.
--/
-
 namespace VsaIris.Sym
 
 open scoped VsaIris.Sym.Stdout
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-/-- The writer's chunk cap `0x7ffffc00` (`lui`/`xori`). -/
 theorem sfv_cap : (18446744071562067968#64 ^^^ 18446744073709550592#64) = 2147482624#64 := by decide
 
 #ix_seg sfv_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
@@ -43,7 +31,6 @@ theorem sfv_cap : (18446744071562067968#64 ^^^ 18446744073709550592#64) = 214748
   by nx_run hlive using [h1, h11, h12, h2, hres, hiov, hbuf, hlen, hF, hB, hwr, hck, sfv_cap, BitVec.reduceAnd,
     BitVec.reduceOr, BitVec.add_assoc] at 2147545044
 
-/-- `sext.w` of a small count. -/
 theorem sextw_ofNat {n : Nat} (h : n < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 n)) = BitVec.ofNat 64 n := by
   have hm : (BitVec.extractLsb 31 0 (BitVec.ofNat 64 n)).msb = false := by
@@ -83,8 +70,6 @@ theorem sextw_ofNat {n : Nat} (h : n < 2 ^ 31) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de8c#64 R Mt
   by nx_run hlive using [h1, h11, h12, h2, hres, BitVec.add_assoc]
 
-/-- The bytes `__sfvwrite_r` leaves alone: all but its frames (the `n`
-bytes below `sp`), `errno` and `stdout`'s flags. -/
 @[nx_mt] def sfvKeep (sp : BitVec 64) (n : Nat) (a : Nat) : Prop :=
   ¬ (sp.toNat - n ≤ a ∧ a < sp.toNat) ∧ ¬ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∧
     ¬ (0x8001bb30 ≤ a ∧ a < 0x8001bb32)
@@ -93,10 +78,6 @@ theorem MemKeep.mono {M M' : Mem} {P P' : Nat → Prop} (h : MemKeep M M' P) (hP
     MemKeep M M' P' :=
   ⟨fun a ha => h.keep a (hP a ha)⟩
 
-/-- **`__sfvwrite_r(reent, stdout, uio)`** with one iov of the bytes `bs`
-(persistent data at `buf`): prints them, returns `0`. The memory keeps
-`sfvKeep` off the residual count `uio_resid` (`u + 16`), and `stdout`'s flags
-are back. -/
 theorem sfvwrite_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp ra u : BitVec 64} {need : Nat}

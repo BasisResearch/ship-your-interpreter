@@ -3,18 +3,6 @@ import VsaIris.Interp.SpecErr
 import VsaIris.Vsa.OomSites
 import VsaIris.Vsa.ErrnoOwn
 
-/-!
-# Allocating helpers from an exec arm, partial mode (lane E5)
-
-In the uncounted regime `env_new` and `env_define` may run out of memory: their
-specs' abort branch parks at the helper's out-of-memory block (`oomAt`, H1),
-which H5's `wp_oomBlock` runs to `exit(1)`'s entry (`OomSites.oom80002a38`,
-`oom80002bd0`), ending in `abortRes` over the arm's lowered stack. The call
-steps: `ms_callRegsAbort` (`ms_callRegs` for a `fnSpecAbort`), `oom_regs` (the
-registers a parked helper and the arm hold, as `wp_oomBlock` takes them),
-`ms_callEnvNewP`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -27,9 +15,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 variable {live : Nat → Prop} {N : NativeAddrs}
 
 omit I in
-/-- **A call from a run to a function that may abort**, by the callee's
-register list: the return branch is `ms_callRegs`'s; on abort the run's other
-registers `K` and its owned bytes join the callee's abort resource. -/
+
 theorem ms_callRegsAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
@@ -68,13 +54,10 @@ theorem ms_callRegsAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × S
     iapply Hk $$ HA HK
     iapply ownSet_forget $$ HS
 
-/-- The registers a parked allocating helper holds (`env_new`'s and
-`env_define`'s `oomAt` list). -/
 abbrev envOomRegs : List Nat := VsaIris.ra :: 10 :: retClob ++ newSaved
 
 omit I in
-/-- **The registers at an out-of-memory block**: a parked helper's and the
-arm's `s7`-`s11`, as `wp_oomBlock` takes them. -/
+
 theorem oom_regs (R : Nat → BitVec 64) :
     clobbered (GF := GF) envOomRegs ∗ sepL [23, 24, 25, 26, 27] (fun x => x ↦ᵣ R x) ⊢
       ∃ (r : BitVec 64) (cs : Nat → BitVec 64), ra ↦ᵣ r ∗ clobbered Newlib.argRegs ∗
@@ -107,10 +90,6 @@ theorem oom_regs (R : Nat → BitVec 64) :
   · iapply clobbered_of_fn _ g $$ Ha
   · iapply clobbered_of_fn _ g $$ Ht
 
-/-- **`env_new(env)` from a run, uncounted regime** (partial mode): the
-return branch is `ms_callEnvNewW`'s; out of memory, the helper's block runs to
-`exit(1)`'s entry (`wp_oomBlock` at `oom80002a38`) over the arm's lowered stack
-`[R 2 - n, R 2)`, which the abort branch receives as `abortRes`. -/
 theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code envNewPC)
@@ -207,7 +186,7 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     · simp only [parentAt]; iframe Hfr; ipureintro; exact hne
     unfold heapStore; iexists H, B; iframe Hhr Hs; ipureintro; exact hB
   isplit
-  · -- the return branch
+  ·
     iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hh, #Hnew⟩ Hms
     ihave Hk := and_elim_l $$ Hk
     have hkeep : ∀ x ∈ fRegs, x ∉ (10 :: retClob) →
@@ -229,7 +208,7 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     iapply Hk $$ %(fun x => if x ∈ envNewL then f x else R x) %hkeep Hst [Hh Hc Hio Hi] Hnew Hms
     iapply (world_heapStore N inp _ _ d).2
     iframe Hh Hc Hio Hi
-  · -- out of memory
+  ·
     iintro ⟨-, HA⟩ HK HS
     unfold oomAt
     icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩
@@ -252,11 +231,6 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     iapply Hk
     iframe HA HS
 
-/-- **`env_define(R 10, R 11, R 12)` from a run, uncounted regime** (partial
-mode): the return branch is `ms_callEnvDefine`'s; out of memory (an array
-growth's `realloc` NULL), the helper's block runs to `exit(1)`'s entry
-(`wp_oomBlock` at `oom80002bd0`) over the arm's lowered stack; the value slot
-comes back with the abort. -/
 theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code envDefinePC)
@@ -351,7 +325,7 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     simp [h2, hk]
   iframe Hspec Hcode Hms Hgp Hcx Hst Hval Hh Hfr Hstr
   isplit
-  · -- the return branch
+  ·
     iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hval, Hh⟩ Hms
     ihave Hk := and_elim_l $$ Hk
     have hkeep : ∀ y ∈ fRegs, y ∉ (10 :: retClob) →
@@ -370,7 +344,7 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     iapply Hk $$ %(fun y => if y ∈ envDefineL then f y else R y) %hkeep Hst Hval [Hh Hc Hio Hi] Hms
     iapply (world_heapStore N inp _ _ d).2
     iframe Hh Hc Hio Hi
-  · -- out of memory
+  ·
     iintro ⟨-, HA, Hval⟩ HK HS
     unfold oomAt
     icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩

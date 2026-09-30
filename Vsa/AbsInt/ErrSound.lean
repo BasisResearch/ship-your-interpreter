@@ -1,20 +1,6 @@
 import Vsa.AbsInt.Program
 import Vsa.AbsInt.ErrK
 
-/-!
-# Soundness of the alarms
-
-If a statement run from a store in `γ(σ)` reaches a runtime error of kind
-`k` (`ExecErrK`), then `k` is among the alarms `aexec` raises from `σ`. So a
-kind absent from `alarms cfg p` cannot occur in any run of `p`
-(`kind_sound`), and a program without alarms has no runtime error at all
-(`no_error_of_no_alarms`).
-
-Every motive also records `k ≠ .abrupt`: a closure body cannot raise the
-top-level `abrupt` error, so an unanalysed call covers any kind it raises by
-`Kind.inCall`.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
@@ -28,14 +14,11 @@ theorem binFailKind_ne_abrupt (op : BinOp) (l r : Value) : binFailKind op l r �
   unfold binFailKind
   split <;> decide
 
-/-- A loop's alarms cover an error reached from `s₀`, both at every
-post-fixpoint and in every unrolling. -/
 structure LoopAl (cfg : Cfg) (F : AState A → LStep A) (k : Kind) (as : List Addr)
     (s₀ : Store) : Prop where
   fix : ∀ J, (∀ s, SGam as s (F J).next → SGam as s J) → SGam as s₀ J → k ∈ (F J).al
   unroll : ∀ n I, SGam as s₀ I → k ∈ (loopAbs cfg F n I).al
 
-/-- The error occurs in the current iteration. -/
 theorem LoopAl.here {cfg : Cfg} {F : AState A → LStep A} {k : Kind} {as : List Addr}
     {s₀ : Store} (h : ∀ I, SGam as s₀ I → k ∈ (F I).al) : LoopAl cfg F k as s₀ where
   fix J _ hJ := h J hJ
@@ -48,7 +31,6 @@ theorem LoopAl.here {cfg : Cfg} {F : AState A → LStep A} {k : Kind} {as : List
       · exact h I hI
       · exact Kind.mem_union.2 (Or.inl (h I hI))
 
-/-- The error occurs in a later iteration, entered from `s₀'`. -/
 theorem LoopAl.later {cfg : Cfg} {F : AState A → LStep A} {k : Kind} {as : List Addr}
     {s₀ s₀' : Store} (hc : ∀ I, SGam as s₀ I → SGam as s₀' (F I).next)
     (ih : LoopAl cfg F k as s₀') : LoopAl cfg F k as s₀ where
@@ -68,7 +50,6 @@ theorem LoopAl.later {cfg : Cfg} {F : AState A → LStep A} {k : Kind} {as : Lis
         · exact ih.fix I (fun _ hs => SGam.le hle hs) (SGam.le hle hn)
       · exact Kind.mem_union.2 (Or.inr (ih.unroll n _ (hc I hI)))
 
-/-- The loop part of the statement error motive. -/
 def WhileE (cfg : Cfg) (k : Kind) (as : List Addr) (s₀ : Store) : Stmt → Prop
   | .whileStmt c b => LoopAl cfg (whileF (A := A) cfg c b) k as s₀
   | _ => True
@@ -77,44 +58,36 @@ section Motives
 
 variable (A)
 
-/-- Expression error motive. -/
 def EEval (k : Kind) (st : St) (env : Addr) (e : Expr) : Prop :=
   k ≠ .abrupt ∧ ∀ (as : List Addr) (σ : AState A), as.head? = some env →
     SGam as st.store σ → k ∈ (aeval σ e).al
 
-/-- Argument-list error motive. -/
 def EArgs (k : Kind) (st : St) (env : Addr) (es : List Expr) : Prop :=
   k ≠ .abrupt ∧ ∀ (as : List Addr) (σ : AState A), as.head? = some env →
     SGam as st.store σ → k ∈ (aevalArgs σ es).2.2
 
-/-- Call error motive. -/
 def ECall (k : Kind) (fv : Value) (vs : List Value) : Prop :=
   k ≠ .abrupt ∧ ∀ (a : A) (avs : List A), Gam a fv → Pw Gam avs vs → k ∈ callAl a avs
 
-/-- Statement error motive. -/
 def EExec (cfg : Cfg) (k : Kind) (st : St) (env : Addr) (s : Stmt) : Prop :=
   k ≠ .abrupt ∧ ∀ (as : List Addr), as.head? = some env →
     (∀ σ : AState A, SGam as st.store σ → k ∈ (aexec cfg σ s).al) ∧
       WhileE (A := A) cfg k as st.store s
 
-/-- `for` loop error motive. -/
 def EFor (cfg : Cfg) (k : Kind) (st : St) (env : Addr) (cnd step : Option Expr)
     (b : Stmt) : Prop :=
   k ≠ .abrupt ∧ ∀ (as : List Addr), as.head? = some env →
     LoopAl cfg (forF (A := A) cfg cnd step b) k as st.store
 
-/-- Sequence error motive. -/
 def ESeq (cfg : Cfg) (k : Kind) (st : St) (env : Addr) (ss : List Stmt) : Prop :=
   k ≠ .abrupt ∧ ∀ (as : List Addr) (σ : AState A), as.head? = some env →
     SGam as st.store σ → k ∈ (aexecSeq cfg σ ss).al
 
 end Motives
 
-/-- Close a membership goal in a union of alarm lists. -/
 macro "mem_al" : tactic =>
   `(tactic| simp_all [Kind.mem_union, Kind.inCall])
 
-/-- `assert` on arguments where the first may be falsy raises an alarm. -/
 theorem assertOk_false_of_falsy {avs : List A} {vs : List Value} {v m : Value}
     (hvs : vs = [v] ∨ vs = [v, m]) (hf : v.truthy = false) (hp : Pw Gam avs vs) :
     assertOk avs = false := by
@@ -133,7 +106,6 @@ theorem assertOk_false_of_arity {avs : List A} {vs : List Value}
   | [_, _], [v, m], _ => exact absurd rfl (h2 v m)
   | _ :: _ :: _ :: _, _, _ => rfl
 
-/-- Calling a closure value: no native is identified. -/
 theorem callAl_closure {a : A} {avs : List A} {c : Addr} (ha : Gam a (.closure c)) :
     callAl a avs = Kind.inCall := by
   unfold callAl
@@ -142,7 +114,7 @@ theorem callAl_closure {a : A} {avs : List A} {c : Addr} (ha : Gam a (.closure c
   | some g => cases asNative_sound ha hn
 
 set_option hygiene false in
-/-- One application of an error recursor with the alarm motives. -/
+
 local macro "absint_err_rec" r:ident h:term : tactic => `(tactic| (
   refine $r
     (motive_1 := fun k st _ env e _ => EEval A k st env e)
@@ -446,26 +418,19 @@ local macro "absint_err_rec" r:ident h:term : tactic => `(tactic| (
     simp only [aexecSeq, SRes.seq]
     mem_al))
 
-/-- Alarm soundness for statement sequences. -/
 theorem seq_alarm_sound (cfg : Cfg) {k : Kind} {st : St} {d : Nat} {env : Addr}
     {ss : List Stmt} (h : ExecSeqErrK k st d env ss) : ESeq A cfg k st env ss := by
   absint_err_rec ExecSeqErrK.rec h
 
-/-! ## Programs -/
-
-/-- A run of `p` reaches a runtime error of kind `k`. -/
 def KindErr (k : Kind) (p : Program) : Prop :=
   ExecSeqErrK k initSt 0 0 p ∨ (k = .abrupt ∧ TopAbrupt p)
 
-/-- Every runtime error of a program has a kind. -/
 theorem bigStepErr_hasKind {p : Program} (h : BigStepErr p) : HasKind fun k => KindErr k p := by
   rcases h with h | h
   · obtain ⟨k, hk⟩ := Vsa.AbsInt.ExecSeqErr.hasKind h
     exact ⟨k, Or.inl hk⟩
   · exact ⟨.abrupt, Or.inr ⟨rfl, h⟩⟩
 
-/-- **Alarm soundness**: every kind of runtime error a run of `p` can reach is
-among the analysis's alarms. -/
 theorem alarms_sound (cfg : Cfg) {p : Program} {k : Kind} (h : KindErr k p) :
     k ∈ alarms (A := A) cfg p := by
   unfold alarms
@@ -484,13 +449,10 @@ theorem alarms_sound (cfg : Cfg) {p : Program} {k : Kind} (h : KindErr k p) :
     rw [hbot]
     simp
 
-/-- **"No runtime error of kind `k`"**: a kind the analysis does not report
-cannot occur in any run. -/
 theorem kind_sound (cfg : Cfg) {p : Program} {k : Kind}
     (hk : k ∉ alarms (A := A) cfg p) : ¬ KindErr k p :=
   fun h => hk (alarms_sound cfg h)
 
-/-- A program without alarms has no runtime error. -/
 theorem no_error_of_no_alarms (cfg : Cfg) {p : Program}
     (h : alarms (A := A) cfg p = []) : ¬ BigStepErr p := by
   intro herr

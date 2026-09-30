@@ -1,18 +1,6 @@
 import VsaIris.Interp.CallNativeOut
 import VsaIris.Interp.SpecErr
 
-/-!
-# The native path as two segment lemmas (lane E4)
-
-Every native call (`print`, `println`, `assert`) runs the same code around its
-`jalr a6`: `callNativeMarshal` (the kind dispatch `0x80003254` to the `jalr`
-at `0x800039f4`: the callee copied to `sp+120`, the line, the arguments
-marshalled, the argument array carved out of the frame as `valsAt`; end state
-`NatAt`) and `callNativeEpi` (after the native, `0x800039f8`: the array back
-into the frame, `s7` restored, the shared epilogue, the arm's exit
-continuation `CallExitK`). Both for either WP.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
@@ -20,10 +8,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr
 
-/-- The state at the native's `jalr a6` (`0x800039f4`): the arguments
-`(sret, in, argc, args, line)`, `a6` the native's entry, `s7` the line, the
-other callee-saved registers as at the dispatch, and the frame's saved words
-unchanged. -/
 structure NatAt (R1 : Nat → BitVec 64) (Mt1 Mt : Mem) (s sret inp entry line : BitVec 64)
     (argc : Nat) (R : Nat → BitVec 64) : Prop where
   a6 : R1 16 = entry
@@ -41,8 +25,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The error context (E2's `errCtx`: the binary's image, the `jmp_buf` with
-its aligned `ra` word) out of the world (persistent). -/
 theorem world_errCtx (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
     (st : St) (d : Nat) :
     world (GF := GF) N L Room inp ρ st d ⊢ world N L Room inp ρ st d ∗ errCtx inp := by
@@ -61,11 +43,9 @@ theorem world_errCtx (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : N
     ipureintro
     unfold jbWord; simpa using hjb
 
-/-- The frame without the argument array. -/
 abbrev natS (s : BitVec 64) (argc : Nat) : Nat → Prop :=
   fun k => InExt (s.toNat - 1088, 1088) k ∧ ¬ InExt (argsBase s, 24 * argc) k
 
-/-- **To the native's `jalr`**, for either WP. -/
 theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {inp : Nat} {vs : List Value} {nf : NativeFn}
     {entry : BitVec 64} {fe : Expr} {args : List Expr} {s aX sret ret w0 w1 w2 : BitVec 64}
@@ -139,10 +119,6 @@ theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP 
     · exact ldv_eqOn .ld (fun j hj => hmiss _ (by simp only [widthOfM] at hj; omega))
   iapply Hk $$ %R1 %Mt1 %vl %hnat Hms Hvals
 
-
-/-- **After the native** (`0x800039f8`), for either WP: the argument array
-back into the frame, `s7` restored, the shared epilogue; the continuation gets
-the callee-saved registers kept, the stack back, `PC`/`ra` at the return. -/
 theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {inp : Nat} {vs : List Value}
     {entry line : BitVec 64} {s aX sret ret w0 w1 w2 : BitVec 64}
@@ -214,8 +190,6 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   all_goals ix_reg
   all_goals exact hks _ (by decide)
 
-
-/-- The frame without the argument array and the values: the whole frame. -/
 theorem natS_join (N : NativeAddrs) {s : BitVec 64} {vs : List Value} {M : Mem}
     (hlen : vs.length ≤ 32) (hs : 1088 ≤ s.toNat) :
     ownSet (GF := GF) (natS s vs.length) (fun a => a ↦ₘ imgM M a) ∗ valsAt N (argsBase s) vs ⊢
@@ -234,9 +208,6 @@ theorem natS_join (N : NativeAddrs) {s : BitVec 64} {vs : List Value} {M : Mem}
     · exact .inr h'
     · exact .inl ⟨h, h'⟩⟩) $$ H
 
-/-- **`assert` from the kind dispatch**, for either WP and regime: the
-native's return (`AssertOk vs`, the result `null`) or its abort (`¬ AssertOk
-vs`, H5's core at the native's region, the arm's whole stack back). -/
 theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {ρ : Regime} {st2 : St} {d : Nat} {vs : List Value} {fe : Expr} {args : List Expr}
@@ -342,7 +313,7 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
   isplitl [Hst]
   · unfold stackAt; iframe Hst; ipureintro; exact (stackGeom_evalSP hsg hn hsf).narrow hna'
   isplit
-  · -- the native returned: `AssertOk vs`, the epilogue
+  ·
     iintro %R2 ⟨%hk2, %hok, Hnull, Hvals, Hw, ⟨Hst, -⟩⟩ Hms
     ihave Hst := stackScratch_widen (m := nativeAssertNeed) hms' hna' $$ [Hslack Hst]
     · iframe Hslack Hst
@@ -351,7 +322,7 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
     iintro %rv' %hkeep Hregs Hst Hpc Hra
     ihave Hk := and_elim_l $$ Hk
     iapply Hk $$ %rv' %hok %hkeep Hregs Hst Hnull Hw Hpc Hra
-  · -- it aborted: the arm's stack rebuilt around H5's core
+  ·
     iintro ⟨%hno, Hab, Hslot, Hvals⟩ HS
     unfold abortRes abortAt
     icases Hab with ⟨Hcore, Hst⟩

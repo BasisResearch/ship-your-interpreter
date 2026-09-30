@@ -34,7 +34,7 @@ int value_truthy(Value v) {
     case VAL_NULL: return 0;
     case VAL_BOOL: return v.as.b;
     case VAL_INT: return v.as.i != 0;
-    default: return 1; /* strings and functions are truthy */
+    default: return 1;
     }
 }
 

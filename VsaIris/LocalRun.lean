@@ -1,34 +1,8 @@
 import VsaIris.DlHeap
 
-/-!
-# Runs confined to an owned footprint
-
-`wp_local_step` (Step.lean) is the rule for one instruction whose footprint
-is a list of cells. A callee such as `malloc` runs hundreds of instructions
-over a *state-dependent* set of bytes (`heapFoot L H`). This module gives
-the multi-step rule over an owned register list and an owned byte set:
-
-* `LocalRun`: a first-order description of a run, by fuel. From EVERY state
-  whose owned cells hold the current values (and whose read-only cells hold
-  theirs), the machine takes a normal step that changes only owned cells, and
-  the run continues from the successor's values; or the run is done and the
-  owned values satisfy `Q`.
-* `wp_localRun`: owning the cells and handing the continuation the final
-  values proves the loop's total WP. Everything else the caller owns is
-  framed by the continuation wand.
-
-The per-step confinement is necessary, not a convenience: the state
-interpretation must agree with the machine at every step boundary, and a
-cell owned by the caller's frame cannot be updated in the ghost map. A
-Hoare triple that only frames the final state (VSA's `Triple`) does not give
-this; the first-order facts below are what a callee proof must supply.
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
-
-/-! ## Ghost-map footprints indexed by a function -/
 
 section GhostFn
 
@@ -104,14 +78,10 @@ theorem ghost_map_update_fn {α : Type} (γ : GName) (k : α → Nat) (v v' : α
 
 end GhostFn
 
-/-! ## Local runs -/
-
 section Run
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- Read-only cells a run depends on: persistent register and byte points-to
-(`gp`, the callee's code). -/
 def roOwn (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) : IProp GF :=
   iprop(sepL ro (fun p => p.1 ↦ᵣ□ p.2) ∗ sepL text (fun p => p.1 ↦ₘ□ p.2))
 
@@ -119,15 +89,10 @@ instance (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) :
     Persistent (roOwn (GF := GF) ro text) := by
   unfold roOwn; infer_instance
 
-/-- The read-only cells hold their values. -/
 def ROHolds (M : MachineModel) (σ : M.State) (ro : List (Nat × BitVec 64))
     (text : List (Nat × BitVec 8)) : Prop :=
   (∀ p ∈ ro, M.reg σ p.1 = p.2) ∧ (∀ p ∈ text, M.mem σ p.1 = p.2)
 
-/-- One segment of a local run from owned values `rv` (registers `rs`) and
-`mv` (bytes `S`): from every well-formed state holding them, the machine runs
-exactly `k + 1` steps to a well-formed state, changing only owned cells and
-printing nothing, and `P` holds of the successor's values. -/
 def SegFrom (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8))
     (rs : List Nat) (S : Nat → Prop) (k : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8)
     (P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : Prop :=
@@ -136,11 +101,6 @@ def SegFrom (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat 
     ∃ σ', ReachesN M (k + 1) σ σ' ∧ M.ok σ' ∧ (∀ key, key ∉ rs → M.reg σ' key = M.reg σ key) ∧
       (∀ a, ¬ S a → M.mem σ' a = M.mem σ a) ∧ M.out σ' = M.out σ ∧ P (M.reg σ') (M.mem σ')
 
-/-- A run of at most `n` segments from owned register values `rv` (on `rs`)
-and byte values `mv` (on `S`), each segment confined to the owned cells at its
-end (`SegFrom`), ending in owned values satisfying `Q`. A segment is what
-VSA's reflection produces (`segEval_sound`, `Inst.seg_runFact`); a loop is a
-chain of them. -/
 def LocalRun (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8))
     (rs : List Nat) (S : Nat → Prop) (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) :
     Nat → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop
@@ -150,20 +110,11 @@ def LocalRun (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat
 
 variable {M : MachineModel}
 
-/-- The continuation of a local run. -/
-abbrev runKont (M : MachineModel) (Φ : Nat × String → IProp GF) (rs : List Nat) (S : Nat → Prop)
-    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : IProp GF :=
-  iprop(∀ rv' mv', ⌜Q rv' mv'⌝ -∗ sepL rs (fun r => r ↦ᵣ rv' r) -∗
-    ownSet S (fun a => a ↦ₘ mv' a) -∗ mTWP M Φ)
-
-/-- The owned footprint of a local run, with the byte set's enumeration. -/
 abbrev runFoot (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) (rs : List Nat)
     (l : List Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : IProp GF :=
   iprop(sepL ro (fun p => p.1 ↦ᵣ□ p.2) ∗ sepL text (fun p => p.1 ↦ₘ□ p.2) ∗
     sepL rs (fun r => r ↦ᵣ rv r) ∗ sepL l (fun a => a ↦ₘ mv a))
 
-/-- Reading the footprint against the authorities: every state they agree
-with holds the read-only cells and the owned values. -/
 theorem runFoot_lookup (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) (rs l : List Nat)
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) :
@@ -197,8 +148,6 @@ theorem runFoot_lookup (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
   exact ⟨⟨fun p hp => hr _ _ (hro p hp), fun p hp => hm _ _ (htx p hp)⟩,
     fun r hr' => hr _ _ (hrs r hr'), fun a ha => hm _ _ (hl a ha)⟩
 
-/-- Committing a segment's effect: the owned cells take the values of `σf`,
-and the authorities move from agreeing with `σ0` to agreeing with `σf`. -/
 theorem runFoot_update {σ0 σf : M.State} (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) (rs l : List Nat)
     (S : Nat → Prop) (hmem : ∀ a, a ∈ l ↔ S a)
@@ -237,9 +186,6 @@ theorem runFoot_update {σ0 σf : M.State} (mr : NatMap (BitVec 64)) (mm : NatMa
     · rfl
     · rw [hmems key (fun hS => hnot key ((hmem key).2 hS) rfl)]; exact hm key v hk
 
-/-- A `SegFrom` segment is a lagged run over the footprint `runFoot`: the
-lookup and commit are `runFoot_lookup` and `runFoot_update`, and the console
-authority is kept (`LagFoot.ofRM`). -/
 theorem SegFrom.lagFoot {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs l : List Nat} {S : Nat → Prop} (hmem : ∀ a, a ∈ l ↔ S a) {K : Nat}
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
@@ -256,18 +202,11 @@ theorem SegFrom.lagFoot {ro : List (Nat × BitVec 64)} {text : List (Nat × BitV
     (fun mr mm _ _ hr hm h => runFoot_update (M := M) mr mm ro text rs l S hmem rv mv hr hm h.1 h.2.1)
     (fun _ _ h => h.2.2.1)
 
-/-- The continuation of a local run, for either WP. -/
 abbrev runKontW (Wp : MachWP (GF := GF) M) (Φ : Nat × String → IProp GF) (rs : List Nat)
     (S : Nat → Prop) (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : IProp GF :=
   iprop(∀ rv' mv', ⌜Q rv' mv'⌝ -∗ sepL rs (fun r => r ↦ᵣ rv' r) -∗
     ownSet S (fun a => a ↦ₘ mv' a) -∗ Wp.W Φ)
 
-/-- **Owned-footprint run rule** (the loop rule), for either WP. Owning the
-run's registers and bytes at their current values, with the read-only cells,
-and handing the continuation the final owned values, proves the run. The
-states inside each segment are never described (the ghost maps lag behind
-them). The run is bounded by fuel, so the rule needs no Löb and holds for
-both WPs (xv6iris `ProofMemset.v:1-9`, "bounded loop, not iLöb"). -/
 theorem wp_localRunW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF}
     {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)} {rs : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
@@ -301,23 +240,6 @@ theorem wp_localRunW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF
     iframe Hl
     ipureintro; exact ⟨hnd, hmem⟩
 
-/-- **Owned-footprint run rule** for the total WP. -/
-theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
-    {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
-    ∀ n rv mv, LocalRun M ro text rs S Q n rv mv →
-      roOwn (GF := GF) ro text ∗ sepL rs (fun r => r ↦ᵣ rv r) ∗ ownSet S (fun a => a ↦ₘ mv a) ∗
-        runKont M Φ rs S Q
-      ⊢ mTWP M Φ :=
-  wp_localRunW (twpW M)
-
-/-- **VSA segments are local-run segments.** A `RunFact` (the shape
-`Inst.seg_runFact` produces from `segEval_sound`) whose read-only registers
-and bytes are read-only or owned, whose written registers are owned at their
-current values (or read-only and left unchanged, like a pinned `gp`), and
-whose written bytes are owned bytes at their current values, is one `SegFrom`
-segment. The successor's owned values are the old ones overwritten by the
-write lists. -/
 theorem segFrom_of_runFact {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
@@ -368,7 +290,6 @@ theorem SegFrom.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 
   obtain ⟨σ', hre, hok', hregs, hmems, hout, hp⟩ := h σ hok hro hrs hS
   exact ⟨σ', hre, hok', hregs, hmems, hout, hP _ _ hp⟩
 
-/-- Local runs are monotone in their end condition. -/
 theorem LocalRun.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {Q Q' : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hQ : ∀ rv' mv', Q rv' mv' → Q' rv' mv') :

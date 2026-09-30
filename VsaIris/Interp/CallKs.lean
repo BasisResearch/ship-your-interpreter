@@ -1,14 +1,5 @@
 import VsaIris.Interp.EnvScan
 
-/-!
-# A `jal` from a span's register file, generically
-
-`wp_call_ks`: the registers `ra :: Ks` go to the callee, whose spec `P`/`Q`
-the caller adapts from/to `regsOf Ks` (`hpre`, `hpost`); every other register
-of the file comes back unchanged, `ra` at the return address. The
-per-callee wrappers (`strlen`, `memcpy`, `realloc`) are instances.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -18,7 +9,6 @@ section Call
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
 
-/-- **`jal` from a span**, for any callee spec. -/
 theorem wp_call_ks (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64} {P Q : BitVec 64 → IProp GF}
     (hexec : JalExec (vsaModel live) i code entry) (Ks : List Nat)

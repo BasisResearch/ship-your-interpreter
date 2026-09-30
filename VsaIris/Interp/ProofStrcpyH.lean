@@ -1,12 +1,5 @@
 import VsaIris.Interp.ProofStrHeap
 
-/-!
-# `strcpy` with the destination above the HTIF words (lane A)
-
-`strcpySpec`/`strcpyHeapSpec` require the destination at or above
-`htifLo + 16` (VSA's store facts need it, as for `memcpy`).
--/
-
 namespace VsaIris.Interp.StrLeaf
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -14,12 +7,10 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Inst.Strlen Vsa
 open VsaIris.VsaHeap VsaIris.Interp
 open Vsa.Sim Vsa.Sim.DlHeap Vsa.MemRepr
 
-
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`strcpy` meets `strcpySpec`**, for either WP. -/
 theorem strcpy_spec (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
     binImg (GF := GF) ⊢ VsaIris.Interp.strcpySpec (vsaModel live) Wp := by
@@ -79,10 +70,8 @@ theorem strcpy_spec (live : Nat → Prop) (hcl : CodeLive live)
   · rw [hcp i (by omega)]; exact hstr.1 i hi
   · rw [hcp _ (Nat.le_refl _)]; exact hstr.2
 
-
 variable [I : InterpGS GF]
 
-/-- **`strcpy` of an owned heap string meets `strcpyHeapSpec`**, for either WP. -/
 theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live))
     (d q : BitVec 64) (y : String) (ρ : Regime) (H : List (Nat × Nat)) :
@@ -187,10 +176,6 @@ theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   iframe HQ
   ipureintro; exact hstr
 
-
 end
 
 end VsaIris.Interp.StrLeaf
-
-#print axioms VsaIris.Interp.StrLeaf.strcpy_spec
-#print axioms VsaIris.Interp.StrLeaf.strcpy_heap_spec

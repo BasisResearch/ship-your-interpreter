@@ -1,28 +1,12 @@
 import VsaIris.Vsa.SnpHoles
 import VsaIris.Vsa.SnpFmt
 
-/-!
-# `snprintf` on any `%s`/`%d` format (lane N2)
-
-`snprintf_gen` is H5's `newlib.snprintf` statement, for a stack and a
-destination above newlib's data and a 4-aligned return address; the format's
-and every `%s` argument's bytes are RAM off the HTIF words (`CStrCov.win`,
-`ReadAddr`). The run reads the format and
-every `%s` argument (`readL`) through its data view: the read-only ones from
-`roImg Sro rd`, the owned ones promoted (`snpSpec_of_runO`). RAM bounds each
-string below `2^27` bytes, so the rendering stays below `2^31`
-(`fmtRen_length_le`), which `_svfprintf_r`'s 32-bit count needs.
--/
-
 namespace VsaIris.Sym
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib
 open VsaIris.Inst
 
-/-! ## Readable bytes -/
-
-/-- A run of readable bytes has a string routine's window. -/
 theorem readAddr_win {p len : Nat} (h : ∀ i, i ≤ len → ReadAddr (p + i)) :
     0x80000000 ≤ p ∧ p + len + 8 ≤ 0x88000000 ∧ (p + len + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ p) := by
   obtain ⟨h0, -, h0h⟩ := h 0 (Nat.zero_le _)
@@ -36,7 +20,6 @@ theorem readAddr_win {p len : Nat} (h : ∀ i, i ≤ len → ReadAddr (p + i)) :
       omega
   · exact .inr h0h
 
-/-- The `%s` argument `i`'s string, when there is one. -/
 noncomputable def strT (R : Nat → Prop) (rd : Nat → BitVec 8) (args : List (BitVec 64)) (i : Nat) :
     List (BitVec 8) :=
   open Classical in
@@ -48,8 +31,6 @@ theorem strT_spec {R : Nat → Prop} {rd : Nat → BitVec 8} {args : List (BitVe
   rw [dif_pos h]
   exact Classical.choose_spec h
 
-/-- The bytes a format's run reads besides `baseDA`: the format with its NUL,
-each `%s` argument's string with its NUL. -/
 noncomputable def readL (R : Nat → Prop) (rd : Nat → BitVec 8) (fmt : Nat) (bytes : List (BitVec 8))
     (convs : List Conv) (args : List (BitVec 64)) : List Nat :=
   accAddrs fmt (bytes.length + 1) ++ (List.range convs.length).flatMap fun i =>
@@ -72,7 +53,6 @@ theorem mem_readL {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : Nat} {bytes 
     · exact .inl ⟨h.1, by omega⟩
     · exact .inr ⟨i, hi, by rw [if_pos hc, mem_accAddrs_iff]; omega⟩
 
-/-- Every byte the run reads is readable. -/
 theorem readL_R {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {args : List (BitVec 64)}
     {bytes : List (BitVec 8)} {convs : List Conv} (FA : FmtArgsAt R rd fmt args bytes convs) {a : Nat}
     (ha : a ∈ readL R rd fmt.toNat bytes convs args) : R a := by
@@ -91,7 +71,6 @@ theorem readL_R {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {ar
     · exact (hs.bytes j hj).1
     · rw [show j = (strT R rd args i).length by omega]; exact hs.nul.1
 
-/-- Every byte the run reads has a string routine's window. -/
 theorem readL_addr {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {args : List (BitVec 64)}
     {bytes : List (BitVec 8)} {convs : List Conv} (FA : FmtArgsAt R rd fmt args bytes convs) {a : Nat}
     (ha : a ∈ readL R rd fmt.toNat bytes convs args) : ReadAddr a := by
@@ -106,21 +85,16 @@ theorem readL_addr {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} 
     obtain ⟨j, rfl⟩ : ∃ j, a = (args.getD i 0).toNat + j := ⟨a - (args.getD i 0).toNat, by omega⟩
     exact hs.win j (by omega)
 
-/-! ## The view -/
-
-/-- The view's image: the readable bytes on the read list, `.rodata` and
-`_impure_ptr` elsewhere. -/
 noncomputable def genImg (L : List Nat) (rd : Nat → BitVec 8) (a : Nat) : BitVec 8 :=
   if a ∈ L then rd a else snpImg a
 
 open Classical in
-/-- The read-only part of the view: the base and the read list, less the owned
-read bytes. -/
+
 noncomputable def genRO (L : List Nat) (Sown : Nat → Prop) : List Nat :=
   (baseDA ++ L).filter fun a => ¬ (a ∈ L ∧ Sown a)
 
 open Classical in
-/-- The owned read bytes. -/
+
 noncomputable def genOwn (L : List Nat) (Sown : Nat → Prop) : List Nat := L.filter fun a => Sown a
 
 theorem mem_genRO {L : List Nat} {Sown : Nat → Prop} {a : Nat} :
@@ -153,7 +127,6 @@ theorem genView_read {L : List Nat} {Sown : Nat → Prop} {rd : Nat → BitVec 8
   unfold genImg
   rw [if_pos h]
 
-
 theorem base_byte {a : Nat} (h : a ∈ baseDA) : impureW a ∨ rodataDom a := by
   simp only [baseDA, List.mem_append, mem_accAddrs_iff] at h
   unfold impureW rodataDom
@@ -170,7 +143,6 @@ section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- A list of read-only bytes of a byte function. -/
 theorem sepL_map_ro (P : IProp GF) [Persistent P] (f : Nat → BitVec 8) :
     ∀ l : List Nat, (∀ a ∈ l, P ⊢ a ↦ₘ□ f a) → P ⊢ sepL (l.map fun a => (a, f a)) (fun p => p.1 ↦ₘ□ p.2)
   | [], _ => by iintro _; simp only [List.map_nil, sepL_nil]; iempintro
@@ -181,7 +153,6 @@ theorem sepL_map_ro (P : IProp GF) [Persistent P] (f : Nat → BitVec 8) :
     · iapply hb a List.mem_cons_self $$ H
     · iapply sepL_map_ro P f l (fun b h => hb b (List.mem_cons_of_mem _ h)) $$ H
 
-/-- Read-only bytes agree with the image where the base holds them. -/
 theorem base_agree (Sro : Nat → Prop) (rd : Nat → BitVec 8) :
     iprop(roImg Sro rd ∗ binImg ∗ impureRO) ⊢@{IProp GF}
       ⌜∀ a, a ∈ baseDA → Sro a → rd a = snpImg a⌝ := by
@@ -195,7 +166,6 @@ theorem base_agree (Sro : Nat → Prop) (rd : Nat → BitVec 8) :
   · iframe Ha Hs
   ipureintro; exact e
 
-/-- One read-only byte of the view. -/
 theorem genView_byte (L : List Nat) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8)
     (hL : ∀ a ∈ L, Sro a ∨ Sown a) {a : Nat} (ha : a ∈ genRO L Sown) :
     iprop(roImg Sro rd ∗ binImg ∗ impureRO) ⊢@{IProp GF} a ↦ₘ□ genImg L rd a := by
@@ -212,9 +182,6 @@ theorem genView_byte (L : List Nat) (Sro Sown : Nat → Prop) (rd : Nat → BitV
     iapply snpImg_byte (base_byte (hm.resolve_right hl)) $$ [Hb Hi]
     iframe Hb Hi
 
-/-- **The readable input as the run's view**: the read-only part of the read
-list and the base as persistent bytes, the owned read bytes apart, and a wand
-giving the input back. -/
 theorem genData (L : List Nat) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8)
     (hL : ∀ a ∈ L, Sro a ∨ Sown a) :
     iprop(readable Sro Sown rd ∗ binImg ∗ impureRO) ⊢@{IProp GF}
@@ -261,8 +228,6 @@ theorem genData (L : List Nat) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8)
 
 end Own
 
-
-/-- A `%s` argument's string, as the run's view reads it. -/
 theorem genDStr {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {args : List (BitVec 64)}
     {bytes : List (BitVec 8)} {convs : List Conv} {Sown : Nat → Prop} (FA : FmtArgsAt R rd fmt args bytes convs)
     {i : Nat} (hi : i < convs.length) (hia : i < args.length) (hc : convs[i] = .str) :
@@ -289,11 +254,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`newlib.snprintf`**: `snprintf(dst, n, fmt, args…)` with a `%s`/`%d`
-format writes a NUL-terminated string into `dst[0, n)`, keeps the readable
-bytes and newlib's data, for a 4-aligned return address, a stack and a
-destination above newlib's data (the format's and `%s` strings' bytes are RAM
-off the HTIF words: `CStrCov.win`). -/
 theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s dst n fmt : BitVec 64) (args : List (BitVec 64)) (cs : Nat → BitVec 64)
     (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8) (hcl : CodeLive live) (hargs5 : args.length ≤ 5)
@@ -353,7 +313,7 @@ theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel liv
     rw [show 10 + (3 + i) = 13 + i by omega] at this
     rw [this]; simp only [List.cons_append, List.nil_append]
     simp only [show 3 + i = i + 1 + 1 + 1 by omega, List.getElem_cons_succ]
-  -- the format in the view
+
   have hfin : ∀ j, j ≤ bytes.length → fmt.toNat + j ∈ L := fun j hj =>
     mem_readL.2 (.inl ⟨by omega, by omega⟩)
   obtain ⟨hflo, hfhi, hfht⟩ := readAddr_win FA.fmt_str.win
@@ -389,7 +349,6 @@ theorem snprintf_gen (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel liv
     simp only [Newlib.calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hz
     omega
 
-/-- **`newlib.snprintf`, discharged** (`Newlib.SnprintfProved`). -/
 theorem snprintf_ok : SnprintfProved := by
   intro hlc GF _ live Wp s dst n fmt args cs Sro Sown rd hcl ha hn0 hn hfa hsp hbss hd1 hd2
   exact snprintf_gen live Wp s dst n fmt args cs Sro Sown rd hcl ha hn0 hn hfa hsp hbss hd1 hd2

@@ -1,35 +1,14 @@
 import VsaIris.Interp.StrSteps
 
-/-!
-# `strlen` as a symbolic run over a persistent string
-
-The whole of newlib's `strlen` (`0x80006cf0`) as one `SW` run
-(`StrCode.lean`, `StrRun.lean`) whose data view is the string's bytes
-`[P, P + len]` (`Strlen.strText`, persistent, read by total reads) and which
-owns no byte. The word loop's `ld` reads the word containing the NUL whole:
-its up to seven bytes past the NUL are nobody's (`sr_havoc`), and the run
-holds for every value they may hold. The zero-byte test only depends on the
-string's bytes (`StrlenMagic.detect_all_ones`, byte by byte), and every byte
-the tail tests lies at or before the NUL.
-
-H3's arithmetic (`Strlen.lean`: `tailAddr`, `armVal`, `snez_finalG`, …) is
-reused through `LCtx.old`, the H3 context at the trivial liveness: those
-lemmas read only the geometry and the string.
--/
-
 namespace VsaIris.Interp.StrLeaf
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Inst.Strlen
 open Vsa.Sim Vsa.MemRepr
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `strlen`'s end: back at `r` with the length in `a0`. -/
 def LenEnd (r : BitVec 64) (len : Nat) (rv : Nat → BitVec 64) (_ : Nat → BitVec 8) : Prop :=
   rv 32 = r ∧ rv 1 = r ∧ rv 10 = BitVec.ofNat 64 len
 
-/-- **The side conditions of a `strlen` run**: the read window's geometry
-(`[P, P + len + 8)`, RAM, off the HTIF words), the string's bytes, the
-return alignment, and the live code. -/
 structure LCtx (live : Nat → Prop) (P r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8) :
     Prop where
   regions : ReadRegions P len
@@ -37,7 +16,6 @@ structure LCtx (live : Nat → Prop) (P r : BitVec 64) (len : Nat) (bv : Nat →
   retAlign : r.toNat % 4 = 0
   code : ∀ p ∈ strCode, live p.1
 
-/-- `strlen`'s run over the string `[P, P + len]` at `bv`, owning `S`. -/
 abbrev LW (live : Nat → Prop) (P r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8)
     (S : Nat → Prop) : BitVec 64 → (Nat → BitVec 64) → Mem → Prop :=
   SW live (strText P.toNat len bv) S (LenEnd r len)
@@ -45,14 +23,9 @@ abbrev LW (live : Nat → Prop) (P r : BitVec 64) (len : Nat) (bv : Nat → BitV
 variable {live : Nat → Prop} {P r : BitVec 64} {len : Nat} {bv : Nat → BitVec 8}
   {S : Nat → Prop} {R : Nat → BitVec 64}
 
-/-- H3's context at the trivial liveness (its arithmetic reads only the
-geometry and the string). -/
 def LCtx.old (c : LCtx live P r len bv) : Ctx (fun _ => True) P r len bv :=
   ⟨c.regions, c.str, c.retAlign, fun _ _ => trivial⟩
 
-/-! ## Values -/
-
-/-- A byte function agreeing with the data view reads the string. -/
 theorem agree_at {p n : Nat} {f : Nat → BitVec 8} (hf : ∀ q ∈ strText p n bv, f q.1 = q.2)
     {k : Nat} (hk : k ≤ n) : f (p + k) = bv (p + k) :=
   hf _ (mem_strText p n k bv hk)
@@ -65,14 +38,12 @@ theorem zext_eq_zero (b : BitVec 8) : zero_extend (m := 64) b = 0#64 ↔ b = 0#8
   rw [Bool.eq_iff_iff, beq_iff_eq, beq_iff_eq] at this
   exact this
 
-/-- The byte at offset `k ≤ len` is NUL exactly at the terminator. -/
 theorem byte_zero_iff (c : LCtx live P r len bv) {k : Nat} (hk : k ≤ len) :
     bv (P.toNat + k) = 0#8 ↔ k = len := by
   have hb := byteBeq c.old k hk
   rw [Bool.eq_iff_iff, beq_iff_eq, decide_eq_true_eq] at hb
   exact hb
 
-/-- Byte `k` of a doubleword load. -/
 theorem ldvf_ld_byte (f : Nat → BitVec 8) (a k : Nat) (hk : k < 8) :
     (ldvf .ld f a).extractLsb' (8 * k) 8 = f (a + k) := by
   have e : ldvf .ld f a = sign_extend (m := 64) (f (a + 7) ++ f (a + 6) ++ f (a + 5) ++
@@ -87,9 +58,6 @@ theorem ldvf_ld_byte (f : Nat → BitVec 8) (a k : Nat) (hk : k < 8) :
     repeat' first | rw [if_pos (by omega)] | rw [if_neg (by omega)]
     congr 1 <;> omega
 
-/-- **The zero-byte test of a word**, from the string's bytes alone: the
-word at `P + t` (`t ≤ len`) has no zero byte exactly when it lies before the
-NUL, whatever its bytes past the NUL hold. -/
 theorem word_test (c : LCtx live P r len bv) {f : Nat → BitVec 8}
     (hf : ∀ q ∈ strText P.toNat len bv, f q.1 = q.2) {t : Nat} (ht : t ≤ len) :
     strlenWordVal (ldvf .ld f (P.toNat + t)) = BitVec.allOnes 64 ↔ t + 8 ≤ len := by
@@ -109,15 +77,11 @@ theorem word_test (c : LCtx live P r len bv) {f : Nat → BitVec 8}
     have := (byte_zero_iff c (show t + k ≤ len by omega)).1 h0
     omega
 
-/-! ## The end -/
-
 theorem lenEnd (hR1 : R 1 = r) (h10 : R 10 = BitVec.ofNat 64 len) {Mt : Mem} :
     LW live P r len bv S r R Mt :=
   sr_done fun _ _ hm => ⟨hm.pc, by rw [hm.regs 1 (by decide) (by decide), hR1],
     by rw [hm.regs 10 (by decide) (by decide), h10]⟩
 
-
-/-- A load inside the read window is `LdOK`. -/
 theorem ldok (c : LCtx live P r len bv) {k w : Nat} (h : k + w ≤ len + 8) :
     LdOK (P.toNat + k) w := by
   have := c.regions.lo; have := c.regions.hi; have h3 := c.regions.htif
@@ -125,8 +89,6 @@ theorem ldok (c : LCtx live P r len bv) {k w : Nat} (h : k + w ≤ len + 8) :
   rcases h3 with h3 | h3
   · left; omega
   · right; omega
-
-/-! ## The seven return arms (`addi a0,a3,-(8-k); ret`) -/
 
 theorem armAlign (c : LCtx live P r len bv) {R : Nat → BitVec 64} (hra : R 1 = r) (v : BitVec 64) :
     (upd R 10 v 1).toNat % 4 = 0 := by
@@ -143,10 +105,6 @@ theorem armEnd {R : Nat → BitVec 64} {Mt : Mem} {t k : Nat} (imm : BitVec 12)
   exact lenEnd (by rw [upd_other _ _ (by decide)]; exact hra)
     (by rw [upd_same, h13]; exact armVal t len k imm hk hlen himm)
 
-/-! ## The byte tail `0x80006d2c … 0x80006d70` -/
-
-/-- In the byte tail, `k` bytes of the last word tested: `a3 = t + 8`,
-`a4 = P + (t + 8)`, and the NUL lies in `[t + k, t + 8)`. -/
 structure TK (P r : BitVec 64) (len t k : Nat) (R : Nat → BitVec 64) : Prop where
   ra : R 1 = r
   a3 : R 13 = BitVec.ofNat 64 (t + 8)
@@ -159,7 +117,6 @@ theorem TK.upd15 {t k : Nat} {R : Nat → BitVec 64} (h : TK P r len t k R) (v :
   ⟨by rw [upd_other _ _ (by decide)]; exact h.ra, by rw [upd_other _ _ (by decide)]; exact h.a3,
    by rw [upd_other _ _ (by decide)]; exact h.a4, hk, h.hi⟩
 
-/-- A tail test's address. -/
 theorem tailAddrOf (c : LCtx live P r len bv) {t k : Nat} {R : Nat → BitVec 64}
     (ha4 : R 14 = P + BitVec.ofNat 64 (t + 8)) (hlo : t + k ≤ len) (imm : BitVec 12)
     (himm : (sign_extend (m := 64) imm : BitVec 64) = -(BitVec.ofNat 64 (8 - k))) (hk : k ≤ 8) :
@@ -172,7 +129,6 @@ theorem tailOK (c : LCtx live P r len bv) {t k : Nat} {R : Nat → BitVec 64}
     LdOK ((R 14) + sign_extend (m := 64) imm).toNat 1 := by
   rw [tailAddrOf c ha4 hlo imm himm hk]; exact ldok c (by omega)
 
-/-- The tested byte, read through any image agreeing with the string. -/
 theorem tailZero (c : LCtx live P r len bv) {t k : Nat} {R : Nat → BitVec 64}
     (ha4 : R 14 = P + BitVec.ofNat 64 (t + 8)) (hlo : t + k ≤ len)
     {f : Nat → BitVec 8} (hf : ∀ q ∈ strText P.toNat len bv, f q.1 = q.2)
@@ -299,8 +255,6 @@ theorem tail1 (c : LCtx live P r len bv) {t : Nat} {R : Nat → BitVec 64} {Mt :
     have hne : t + 1 ≠ len := fun e => hnz (hb.2 e)
     exact tail2 c (h.upd15 _ (by omega))
 
-/-- At the tail entry `0x80006d2c`: `a0 = P`, `a4 = P + (t + 8)`, the NUL in
-`[t, t + 8)`. -/
 structure TailAt (P r : BitVec 64) (len t : Nat) (R : Nat → BitVec 64) : Prop where
   ra : R 1 = r
   a0 : R 10 = P
@@ -334,9 +288,6 @@ theorem tail0 (c : LCtx live P r len bv) {t : Nat} {R : Nat → BitVec 64} {Mt :
     have h := hT (ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xff8#12)).toNat)
     exact tail1 c ⟨h.ra, h.a3, h.a4, by omega, h.hi⟩
 
-/-! ## The word scan `0x80006d10 … 0x80006d28` -/
-
-/-- At the word-loop head `0x80006d10`, `t` bytes scanned. -/
 structure WordAt (P r : BitVec 64) (len t : Nat) (R : Nat → BitVec 64) : Prop where
   ra : R 1 = r
   a0 : R 10 = P
@@ -350,7 +301,6 @@ theorem a4_plus8 (x : BitVec 64) (t : Nat) :
   have := a4_incrG x t 0
   simpa using this
 
-/-- **The word scan.** `n` bounds the words left before the NUL. -/
 theorem wordRun (c : LCtx live P r len bv) :
     ∀ (n t : Nat) (R : Nat → BitVec 64) (Mt : Mem), len < t + 8 * n + 8 → WordAt P r len t R →
       LW live P r len bv S 0x80006d10#64 R Mt := by
@@ -392,9 +342,6 @@ theorem wordRun (c : LCtx live P r len bv) :
     · simp (disch := decide) only [upd_same, upd_other]; rw [h.a4]; exact a4_plus8 P t
     · exact Classical.byContradiction fun hc => hne (htest.2 (by omega))
 
-/-! ## The magic setup, the byte peel, and the entry -/
-
-/-- At the magic setup `0x80006cfc`, `t` bytes scanned. -/
 structure AlignAt (P r : BitVec 64) (len t : Nat) (R : Nat → BitVec 64) : Prop where
   ra : R 1 = r
   a0 : R 10 = P
@@ -412,7 +359,6 @@ theorem alignRun (c : LCtx live P r len bv) {t : Nat} {R : Nat → BitVec 64} {M
   · exact magic_build
   · exact h.a4
 
-/-- At the byte-peel head `0x80006d78`, `m` bytes peeled. -/
 structure PeelAt (P r : BitVec 64) (len m : Nat) (R : Nat → BitVec 64) : Prop where
   ra : R 1 = r
   a0 : R 10 = P
@@ -445,7 +391,7 @@ theorem peelRun (c : LCtx live P r len bv) :
       | (simp (disch := decide) only [upd_same, upd_other] at hz0
          rw [ldvf_lbu, ha, Ne, zext_eq_zero, hz, Classical.not_not] at hz0)
   · exact absurd (by omega : m = len) hnz
-  · -- the NUL: `sub a4,a4,a0; addi a0,a4,-1; ret`
+  ·
     refine sl_80006d88 c.code (sl_80006d8c c.code (sl_80006d90 c.code ?_ ?_))
     · simp (disch := decide) only [upd_same, upd_other]; rw [h.ra]; exact c.retAlign
     · have e1 : ∀ v1 v2 v3 v4 v5, upd (upd (upd (upd (upd R 15 v1) 14 v2) 13 v3) 14 v4) 10 v5 1 = r := by
@@ -458,7 +404,7 @@ theorem peelRun (c : LCtx live P r len bv) :
           apply BitVec.eq_of_toNat_eq; decide,
         BitVec.add_neg_eq_sub, ofNat_sub (m + 1) 1 (by omega), hz0]
       rfl
-  · -- a character: the alignment test
+  ·
     have hml : m + 1 ≤ len := by omega
     refine sl_80006d74 c.code (fun hal => ?_) (fun hnal => ?_)
     · refine alignRun c ⟨?_, ?_, ?_, hml⟩
@@ -473,7 +419,7 @@ theorem peelRun (c : LCtx live P r len bv) :
       · exact h.ra
       · exact h.a0
       · exact h14
-  · -- the NUL
+  ·
     refine sl_80006d88 c.code (sl_80006d8c c.code (sl_80006d90 c.code ?_ ?_))
     · simp (disch := decide) only [upd_same, upd_other]; rw [h.ra]; exact c.retAlign
     · have e1 : ∀ v1 v2 v3 v4 v5, upd (upd (upd (upd (upd R 15 v1) 14 v2) 13 v3) 14 v4) 10 v5 1 = r := by
@@ -487,7 +433,6 @@ theorem peelRun (c : LCtx live P r len bv) :
         BitVec.add_neg_eq_sub, ofNat_sub (m + 1) 1 (by omega), hz0]
       rfl
 
-/-- **`strlen` from its entry**, over a persistent string. -/
 theorem strlenRunL (c : LCtx live P r len bv) {R : Nat → BitVec 64} {Mt : Mem}
     (h1 : R 1 = r) (h10 : R 10 = P) : LW live P r len bv S 0x80006cf0#64 R Mt := by
   refine sl_80006cf0 c.code (sl_80006cf4 c.code (sl_80006cf8 c.code (fun hnz => ?_) (fun hz => ?_)))

@@ -1,22 +1,4 @@
 import VsaIris.Vsa.MainErr
-import Vsa.Sim.ExitPathSpans
-
-/-!
-# The `longjmp` landing: `interp_run` returns 1, `main` exits 70 (H5)
-
-`longjmp(in->on_error, 1)` lands at `interp_run`'s `setjmp` return
-(`0x80004428`) with `a0 = 1`, `sp` = `interp_run`'s frame and the callee-saved
-registers of `interp_run`'s entry. The landing takes the `bnez`, stores
-`in->call_depth = 0`, restores `interp_run`'s spills, returns 1 to `main`,
-and `wp_mainErrTail` finishes with `exit(70)`. The chain is VSA's
-`interpContChain` (`Vsa/Sim/ExitPathSpans.lean`):
-
-```
-80004428: bnez a0,80004508
-80004508: ld a5,0(sp); li s5,1; sw zero,8(a5)
-80004514: ld ra,168(sp); ld s0..s4,s6; mv a0,s5; ld s5,120(sp); addi sp,sp,176; ret
-```
--/
 
 namespace VsaIris.Newlib.Landing
 
@@ -24,8 +6,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites VsaIris.Newlib.Exit
   VsaIris.Newlib.MainErr
-
-/-! ## Segments: the `bnez` and `interp_run`'s `in`; the `call_depth` store; the epilogue -/
 
 #derive_case land1Seg chain
   [] terminator ⟨0x80004428#64, 0x0e051063#32, 0x63#8, 0x10#8, 0x05#8, 0x0e#8,
@@ -48,13 +28,11 @@ open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites VsaI
    (0x80004538#64, 0x0b010113#32)] terminator ⟨0x8000453c#64, 0x00008067#32, 0x67#8, 0x80#8,
       0x00#8, 0x00#8, .jr, 1, 0, 0#13, 0#21, 0x000#12⟩
 
-/-- `interp_run`'s 176-byte frame in RAM above the HTIF words. -/
 structure FrameI (sI : BitVec 64) : Prop where
   lo : Vsa.Sim.tohostAddr + 16 ≤ sI.toNat
   hi : sI.toNat + 176 ≤ 0x88000000
   align : sI.toNat % 16 = 0
 
-/-- An `ld` of `interp_run`'s spill at `off`. -/
 theorem frameLd {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
     {imgI : Nat → BitVec 8} {sI : BitVec 64} (off : Nat) (hk : a.kind = .ld)
     (hea : eaddrM a L = sI + sign_extend (m := 64) (BitVec.ofNat 12 off))
@@ -181,14 +159,10 @@ theorem land3_fin (sI rv s0v s1v s2v s3v s4v s6v a0v : BitVec 64) {imgI : Nat �
   · show 1#64 + sign_extend (m := 64) (0x000#12) = _; decide
   · show bytesVal .ld (imgWord imgI (sI.toNat + 120)) = _; rw [bytesVal_imgWord]
 
-/-! ## The rule -/
-
 section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The callee-saved registers `interp_run` restores, at their restored
-values, and `s7`–`s11` from the landing. -/
 def landSaved (sI : BitVec 64) (imgI : Nat → BitVec 8) (cs : Nat → BitVec 64) (r : Nat) :
     BitVec 64 :=
   if r = 9 then imgW imgI (sI.toNat + 152) else
@@ -198,12 +172,6 @@ def landSaved (sI : BitVec 64) (imgI : Nat → BitVec 8) (cs : Nat → BitVec 64
   if r = 21 then imgW imgI (sI.toNat + 120) else
   if r = 22 then imgW imgI (sI.toNat + 112) else cs r
 
-/-- **`interp_run` returns 1, then `main` exits 70**, for either WP: at
-`interp_run`'s shared epilogue (`0x80004514`) with `s5 = 1`, `sp` at
-`interp_run`'s frame `sM - 176` (holding `main`'s link and `main`'s `s0`),
-`main`'s saved pair, `err_msg` holding a C string, the stack below and
-newlib's data: the run halts with code 70. The `longjmp` landing and the
-top-level `ret`/`break`/`continue` statuses both end here. -/
 theorem wp_interpRet1 (H : NewlibHoles)
     (live : Nat → Prop) (hlive : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (sM rv a0v : BitVec 64) (cs : Nat → BitVec 64) (o : String)
@@ -234,7 +202,7 @@ theorem wp_interpRet1 (H : NewlibHoles)
     Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg interpLandCode_text $$ Himg
   ihave HI := (ownImg_range _ _ _).1 $$ HI
-  -- `interp_run`'s epilogue and `ret` to `main`
+
   iapply wp_segW live Wp land3Seg (l3L (sM - 176#64) rv s0v s1v s2v s3v s4v s6v a0v)
     (l3Lds (sM - 176#64) imgI) 0x80004514#64
     (codeFoot interpLandCodeBase interpLandCode ++ imgFoot (sM - 176#64).toNat 176 imgI) [] 10
@@ -263,7 +231,7 @@ theorem wp_interpRet1 (H : NewlibHoles)
   iintro Hpc ⟨Hsp, Hra, Hs0, Hs1, Hs2, Hs3, Hs4, Hs6, Ha0, Hs5, -⟩ - HMR
   ihave ⟨-, HI⟩ := (sepL_append _ _ _).1 $$ HMR
   ihave HI := (ownImg_range _ _ _).2 $$ HI
-  -- `main`'s error line and `exit(70)`
+
   have hsp : (sM - 176#64) + sign_extend (m := 64) (0x0b0#12) = sM := by
     rw [show (sign_extend (m := 64) (0x0b0#12) : BitVec 64) = 176#64 by decide,
       BitVec.sub_add_cancel]
@@ -286,12 +254,6 @@ theorem wp_interpRet1 (H : NewlibHoles)
   simp only [↓reduceIte, Nat.reduceEqDiff]
   iframe Hs1 Hs2 Hs3 Hs4 Hs5 Hs6 H23 H24 H25 H26 H27
 
-
-/-- **The landing, then `exit(70)`**, for either WP. At `interp_run`'s
-`setjmp` return with a nonzero `a0` and `sp` at `interp_run`'s frame
-`sM - 176` (holding `in = sM + 272`, `main`'s link and `main`'s `s0`),
-`in->call_depth`'s bytes, `main`'s saved pair, `err_msg` holding a C string,
-the stack below and newlib's data: the run halts with code 70. -/
 theorem wp_landing (H : NewlibHoles)
     (live : Nat → Prop) (hlive : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (sM v rv : BitVec 64) (cs : Nat → BitVec 64) (o : String)
@@ -324,7 +286,7 @@ theorem wp_landing (H : NewlibHoles)
   ihave #Hcode := instrAt_of_binImg interpLandCode_text $$ Himg
   ihave ⟨⟨%a5v, Ha5⟩, Hargs⟩ := clobbered_take (r := 15) (by decide) $$ Hargs
   ihave HI := (ownImg_range _ _ _).1 $$ HI
-  -- the `bnez` and `ld a5,0(sp); li s5,1`
+
   iapply wp_segW live Wp land1Seg (l1L v (sM - 176#64) a5v s5v) [imgWord imgI (sM - 176#64).toNat]
     0x80004428#64 (codeFoot interpLandCodeBase interpLandCode ++ imgFoot (sM - 176#64).toNat 176 imgI)
     [] 2 (by decide)
@@ -349,7 +311,7 @@ theorem wp_landing (H : NewlibHoles)
     iexact HI
   iintro Hpc ⟨Ha0, Hsp, Ha5, Hs5, -⟩ - HMR
   ihave ⟨-, HI⟩ := (sepL_append _ _ _).1 $$ HMR
-  -- `sw zero,8(a5)`: `in->call_depth = 0`
+
   have hinpN : (sM + 272#64).toNat = sM.toNat + 272 := by
     rw [BitVec.toNat_add]; simp; omega
   have hin8 : (sM + 272#64 + sign_extend (m := 64) (0x008#12)).toNat = sM.toNat + 280 := by
@@ -379,7 +341,7 @@ theorem wp_landing (H : NewlibHoles)
   rw [← instrAt_eq]
   iframe Hpc Ha5 Hcd Hcode
   iintro Hpc ⟨Ha5, -⟩ - -
-  -- `interp_run`'s epilogue, `main`'s error line, `exit(70)`
+
   ihave HI := (ownImg_range _ _ _).2 $$ HI
   ihave Hargs := clobbered_put (r := 15) (rs := List.drop 1 argRegs) (by decide) $$ [Ha5 Hargs]
   · iframe Hargs; iexists _; iexact Ha5

@@ -1,22 +1,10 @@
 import VsaIris.Vsa.SnpSnprintf
 import VsaIris.Vsa.Newlib
 
-/-!
-# `_svfprintf_r` on any `%s`/`%d` format (lane N2)
-
-`fmtRen g bytes args` is what `_svfprintf_r` prints for the format `bytes`
-(`Newlib.parseFmt`: literal bytes, `%s`, `%d`) over the view image `g` and the
-`va_list` words `args`: a `%s` argument's C string (`cstrOf`), a `%d`
-argument's low word as a signed decimal. `svf_fmt` runs the loop from any
-loop head to `_svfprintf_r`'s return by induction on the format, one
-`svf_iterS`/`svf_iterD` per conversion and `svf_iterEnd` at the NUL.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Newlib
 
-/-- A `ld`'s low word, sign-extended, is the `lw` at the same address. -/
 theorem lw_of_ld (M : Mem) (a : Nat) : ldv .lw M a = sx32 (ldv .ld M a) := by
   have h8 := toNat_append8 (imgM M) a
   have h4 := toNat_append4 (imgM M) a
@@ -33,9 +21,6 @@ theorem lw_of_ld (M : Mem) (a : Nat) : ldv .lw M a = sx32 (ldv .ld M a) := by
   simp only [show (256 : Nat) ^ 4 = 2 ^ 32 by decide] at hl4 ⊢
   omega
 
-/-! ## The rendering -/
-
-/-- The C string at `a` in `g`, within `fuel` bytes. -/
 def cstrOf (g : Nat → BitVec 8) (a : Nat) : Nat → List (BitVec 8)
   | 0 => []
   | f + 1 => if g a = 0#8 then [] else g a :: cstrOf g (a + 1) f
@@ -55,8 +40,6 @@ theorem cstrOf_eq (g : Nat → BitVec 8) : ∀ (len a f : Nat), (∀ i, i < len 
     congr 1; omega
   | _, _, 0, _, _, hf => absurd hf (by omega)
 
-/-- `_svfprintf_r`'s output for a `%s`/`%d` format over the view image `g`
-and the argument words. -/
 def fmtRen (g : Nat → BitVec 8) : List (BitVec 8) → List (BitVec 64) → List (BitVec 8)
   | [], _ => []
   | b :: rest, args =>
@@ -100,7 +83,6 @@ theorem parseFmt_lit : ∀ (lit x : List (BitVec 8)), (∀ b ∈ lit, b ≠ 0x25
     rw [List.cons_append, e]
     exact parseFmt_lit l x fun c hc => h c (List.mem_cons_of_mem _ hc)
 
-/-- A format is a literal run, or a literal run then `'%'`. -/
 theorem fmt_split : ∀ (bs : List (BitVec 8)), (∀ b ∈ bs, b ≠ 0x25#8) ∨
     ∃ lit x, bs = lit ++ 0x25#8 :: x ∧ ∀ b ∈ lit, b ≠ 0x25#8
   | [] => .inl (by simp)
@@ -117,9 +99,6 @@ theorem fmt_split : ∀ (bs : List (BitVec 8)), (∀ b ∈ bs, b ≠ 0x25#8) ∨
         · exact hb
         · exact hl c hc
 
-/-! ## The loop's inputs -/
-
-/-- The format's remaining bytes `bs` at `q` in the view, then the NUL. -/
 structure FmtAt (Dt : Mem) (DA : List Nat) (q : Nat) (bs : List (BitVec 8)) : Prop where
   bytes : ∀ i (h : i < bs.length), imgM Dt (q + i) = bs[i] ∧ bs[i] ≠ 0#8
   nul : imgM Dt (q + bs.length) = 0#8
@@ -142,7 +121,6 @@ theorem FmtGeom.mono {DA : List Nat} {q k k' : Nat} (G : FmtGeom DA q k) (h : k'
     FmtGeom DA q k' :=
   ⟨fun b h1 h2 => G.dom b h1 (by omega), G.lo, by have := G.hi; omega, by have := G.htif; omega⟩
 
-/-- A literal run's bytes are its pieces. -/
 theorem FmtAt.lit {Dt : Mem} {DA : List Nat} {q : Nat} {lit x : List (BitVec 8)}
     (F : FmtAt Dt DA q (lit ++ x)) (hl : ∀ b ∈ lit, b ≠ 0x25#8) :
     pieceBytes (imgM Dt) q lit.length = lit ∧
@@ -156,7 +134,6 @@ theorem FmtAt.lit {Dt : Mem} {DA : List Nat} {q : Nat} {lit x : List (BitVec 8)}
   · rw [(hb i hi).1]
     exact ⟨(hb i hi).2, hl _ (List.getElem_mem hi)⟩
 
-/-- The `va_list`'s words from `ap`. -/
 def ArgsAt (Mt0 : Mem) (ap : Nat) (args : List (BitVec 64)) : Prop :=
   ∀ i (h : i < args.length), ldv .ld Mt0 (BitVec.ofNat 64 (ap + 8 * i)).toNat = args[i]
 
@@ -165,7 +142,6 @@ theorem ArgsAt.tail {Mt0 : Mem} {ap : Nat} {a : BitVec 64} {args : List (BitVec 
   have := h (i + 1) (by simp; omega)
   simpa [show ap + 8 * (i + 1) = ap + 8 + 8 * i by omega] using this
 
-/-- Every `%s` argument is a C string of the view. -/
 def StrArgs (Dt : Mem) (DA : List Nat) (cs : List Conv) (args : List (BitVec 64)) : Prop :=
   ∀ i (h : i < cs.length) (h' : i < args.length), cs[i] = .str → ∃ len, DStr Dt DA (args[i]).toNat len
 
@@ -173,11 +149,6 @@ theorem StrArgs.tail {Dt : Mem} {DA : List Nat} {c : Conv} {cs : List Conv} {a :
     {args : List (BitVec 64)} (h : StrArgs Dt DA (c :: cs) (a :: args)) : StrArgs Dt DA cs args :=
   fun i h1 h2 hc => h (i + 1) (by simp; omega) (by simp; omega) (by simpa using hc)
 
-/-! ## The loop -/
-
-/-- **`_svfprintf_r`'s loop on a `%s`/`%d` format** (`0x80007720` → the
-return): the remaining format `bs` at `q`, the remaining `va_list` words at
-`ap`, the stream `tot` printed so far. -/
 theorem svf_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
@@ -204,7 +175,7 @@ theorem svf_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   | succ m IH =>
     intro bs q ap args cs tot R Mt hm F hp hcs HA hap1 hap2 HS hlen A hret
     rcases fmt_split bs with hl | ⟨lit, x, rfl, hl⟩
-    · -- no conversion left: the literal run and the NUL
+    ·
       have hr := fmtRen_lit_all (imgM Dt) args bs hl
       obtain ⟨hpb, hb⟩ := (show FmtAt Dt DA q (bs ++ []) by simpa using F).lit hl
       rw [hr] at hlen hret
@@ -267,9 +238,6 @@ theorem svf_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
           (by simp at hlen ⊢; omega) (by simpa [Nat.add_assoc] using A') ?_
         simpa [List.append_assoc] using hret
 
-
-/-- **A `%s`/`%d` format's whole loop**: from the loop head with nothing
-printed to `_svfprintf_r`'s return with the rendering `fmtRen`. -/
 theorem loop_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (R0 : Nat → BitVec 64) (Mt0 : Mem) (SG : SnpGeom s dst n) (DO : DataOff Dt DA s dst n)
@@ -284,8 +252,6 @@ theorem loop_fmt {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   exact svf_fmt hlive SG DO hmb hmx hal bs.length bs p ap args cs [] R Mt (Nat.le_refl _) F hp hcs HA
     hap1 hap2 HS (by simpa using hlen) (by simpa using A) (by simpa using hret)
 
-/-- The rendering is at most the format plus `B` per conversion, for `%s`
-strings of at most `B` bytes. -/
 theorem fmtRen_length_le (g : Nat → BitVec 8) (B : Nat) (hB : 20 ≤ B) :
     ∀ (m : Nat) (bs : List (BitVec 8)) (cs : List Conv) (args : List (BitVec 64)), bs.length ≤ m →
       parseFmt bs = some cs → cs.length ≤ args.length →

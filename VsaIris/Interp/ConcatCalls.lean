@@ -4,19 +4,6 @@ import VsaIris.Interp.CallFree
 import VsaIris.Interp.BinEq
 import VsaIris.Vsa.OomSites
 
-/-!
-# The concatenation arm's calls from a run (lane E2)
-
-* `ms_callHelperA`: `ms_callHelper` for a helper that may abort
-  (`helperSpecA`); both continuations come from one context (`∧`), the abort
-  one receives the run's owned bytes.
-* `abortAt_of_stringify`: `stringify`'s abort below an `eval_expr` arm
-  (`abortAt_of_evalCallee` with the value's slot back in the frame).
-* `ms_evalOom`: the out-of-memory block at `0x80003e28` from an `eval_expr`
-  run (`Oom.wp_oomBlock`), the arm's abort.
-* `ms_callMemcpyOwned`: `memcpy` from an owned source (`memcpySpecOwned`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -29,7 +16,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 variable {live : Nat → Prop}
 
 omit I in
-/-- **A helper that may abort, from a run** (`jal entry` at `i`). -/
+
 theorem ms_callHelperA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
@@ -65,8 +52,6 @@ theorem ms_callHelperA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ HA HS
 
-/-- **`stringify`'s abort below an `eval_expr` arm**: its stack, the value's
-slot (back in the frame) and the slack below rebuild the arm's stack. -/
 theorem abortAt_of_stringify {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {Core : IProp GF} (hC : CoreOK N L Room inp Core) {s : BitVec 64} {n : Nat}
     (hsg : StackGeom s n) (hn : 1088 + stringifyNeed ≤ n) {p : BitVec 64}
@@ -87,8 +72,6 @@ theorem abortAt_of_stringify {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} 
   rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]
   iframe HA Hslack HS
 
-/-- **Out of memory in an `eval_expr` arm** (`0x80003e28`, `sp = s - 1088`):
-the block's `fwrite` and `exit(1)` (`Oom.wp_oomBlock`), the arm's abort. -/
 theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N L Room inp live Core) {s : BitVec 64} {n : Nat} (hsg : StackGeom s n)
@@ -125,8 +108,6 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave Hcore := hE.core s n (by omega) (by omega) hsg.top $$ Hcore
   iframe Hcore Hst
 
-/-- **`memcpy(R 10, R 11, n)` from an owned source**, from a run: the
-destination holds the source's bytes, the source is handed back. -/
 theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code memcpyPC)
@@ -200,8 +181,6 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
       ite_true]; exact hg10
   iapply Hk $$ %_ %hkeep %h10 Hd HB Hms
 
-
-/-- `ms_callMemcpyOwnedR` at named arguments, the register facts a pure premise. -/
 theorem ms_callMemcpyOwned (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code memcpyPC)
@@ -222,7 +201,6 @@ theorem ms_callMemcpyOwned (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat ×
   subst h10 h11
   iapply ms_callMemcpyOwnedR Wp hmc hexec hcode hal h12 hd hh hs $$ H
 
-/-- `ms_callMalloc` at a named request, the register facts a pure premise. -/
 theorem ms_callMallocN (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code mallocEntryBV)
@@ -240,7 +218,6 @@ theorem ms_callMallocN (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel l
   subst hn h2
   iapply ms_callMalloc A Wp hexec hcode hi4 ρ H c hc hsp $$ H
 
-/-- `ms_callFree` at a named block, the register facts a pure premise. -/
 theorem ms_callFreeN (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code freeEntryBV)

@@ -1,12 +1,5 @@
 import VsaIris.Vsa.StrcmpRunBase
 
-/-!
-# `strcmp` as one bounded run
-
-The byte loop, the lane compare, the NUL-word exits and the aligned word loop,
-each a lemma over `CRun` (`StrcmpRunBase.lean`), composed into `strcmpRun`.
--/
-
 namespace VsaIris.Inst.Strcmp
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
@@ -16,8 +9,6 @@ open VsaIris.Inst.Strlen (codeText)
 section Run
 
 variable {live : Nat → Prop} {p q r : BitVec 64} {cx cy : List Char} {ix iy : Nat → BitVec 8}
-
-/-! ## Byte facts -/
 
 theorem SBytes.lt128 {img : Nat → BitVec 8} {a : Nat} {cs : List Char} (h : SBytes img a cs)
     {k : Nat} (hk : k ≤ cs.length) : byteVal cs k < 128 := by
@@ -50,8 +41,6 @@ theorem SWin.ld {a len : Nat} (h : SWin a len) {k w : Nat} (hk : k + w ≤ len +
   · left; omega
   · right; omega
 
-theorem zext_toNat8 (b : BitVec 8) : (zero_extend (m := 64) b).toNat = b.toNat := zext_toNat b
-
 theorem zext_eq_iff (a b : BitVec 8) :
     zero_extend (m := 64) a = zero_extend (m := 64) b ↔ a.toNat = b.toNat := by
   constructor
@@ -60,8 +49,6 @@ theorem zext_eq_iff (a b : BitVec 8) :
 
 theorem strcmpSign_self (v : BitVec 64) : strcmpSign (v - v) = 0 := by
   simp [strcmpSign]
-
-/-! ## The return `sub a0,a2,a3; ret` (`0x80006f9c`) -/
 
 theorem ret_f9c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006f9c#64) (hra : rv 1 = r)
@@ -81,9 +68,6 @@ theorem ret_f9c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     · rw [hfin 1 (by decide)]; exact hra
     · rw [hfin 10 (by decide)]; exact hs
 
-/-! ## The byte loop (`0x80006f84 … 0x80006fa0`) -/
-
-/-- One iteration of the byte loop: return, or the head at `k + 1`. -/
 theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitVec 64}
     (h : ByteSt p q r cx cy k rv) (m : Nat)
     (hk : ∀ rv', ByteSt p q r cx cy (k + 1) rv' → CRun live (TT p q cx cy ix iy) r cx cy m rv') :
@@ -96,7 +80,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
     rw [h.a1]; exact ctx.wy.ptr q rfl (by omega)
   have hlx := ctx.wx.ld (k := k) (w := 1) (by omega)
   have hly := ctx.wy.ld (k := k) (w := 1) (by omega)
-  -- the two bytes, as the machine holds them
+
   have hbx : ∀ vals : Nat → BitVec 8, (∀ t ∈ TT p q cx cy ix iy, vals t.1 = t.2) →
       (vals (p.toNat + k)).toNat = byteVal cx k := fun vals hv => by
     rw [valsX hv k hkx]; exact ctx.bx.byte k hkx
@@ -108,7 +92,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
       (m[p.toNat + k]?).getD 0 = vals (p.toNat + k) ∧ (m[q.toNat + k]?).getD 0 = vals (q.toNat + k) :=
     fun _ _ hpk => ⟨hpk _ (by simp), hpk _ (by simp)⟩
   by_cases hne : byteVal cx k = byteVal cy k
-  · -- equal bytes: `bne a2,a3` falls through to `bnez a2`
+  ·
     refine cmpStep (m + 2) ctx.codeL codeT strcmpX6f84FSeg [p.toNat + k, q.toNat + k]
       (fun vals => [[vals (p.toNat + k)], [vals (q.toNat + k)]]) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
@@ -134,7 +118,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
       have hy := hby vals hv
       have hpc1' : rv1 VsaIris.PC = 0x80006f98#64 := hpc1
       by_cases hz : byteVal cx k = 0
-      · -- both NUL: `bnez a2` falls through to the return, `a0 = 0`
+      ·
         refine CRun.mono (by omega : 2 ≤ m + 2) ?_
         refine cmpStep 1 ctx.codeL codeT strcmpX6f98FSeg [] (fun _ => []) _ _ rfl (by decide)
           (by decide) (fun _ => rfl) hpc1' ?_ ?_
@@ -153,7 +137,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
           rw [e12, e13, hzq]
           rw [strcmpSign_self, strcmpSpecSign_eq cx cy k h.pre
             ((ctx.bx.zero_iff hkx).1 hz).symm ((ctx.by_.zero_iff hky).1 (hne ▸ hz)).symm]
-      · -- a nonzero equal byte: the head at `k + 1`
+      ·
         refine cmpStep (m + 1) ctx.codeL codeT strcmpX6f98TSeg [] (fun _ => []) _ _ rfl (by decide)
           (by decide) (fun _ => rfl) hpc1' ?_ ?_
         · intro vals' _ m' hl _
@@ -173,7 +157,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
             · exact h.pre i hik
             · have : i = k := by omega
               subst this; exact ⟨hne, hz⟩
-  · -- differing bytes: `bne a2,a3` to the return
+  ·
     refine CRun.mono (by omega : 2 ≤ m + 3) ?_
     refine cmpStep 1 ctx.codeL codeT strcmpX6f84TSeg [p.toNat + k, q.toNat + k]
       (fun vals => [[vals (p.toNat + k)], [vals (q.toNat + k)]]) _ _ rfl (by decide)
@@ -215,18 +199,8 @@ theorem byteLoop (ctx : Ctx live p q r cx cy ix iy) :
     have := byteStep ctx h (3 * n + 3) fun rv' h' => ih (k + 1) rv' (by omega) h'
     exact CRun.mono (by omega) this
 
-/-! ## The lane compare (`0x80006f20 … 0x80006f80`)
-
-The words `A` (of `x`) and `B` (of `y`) differ; `d` is their first differing
-byte, and its sign decides the result (`LaneDiff`). The three `slli` probes
-find the 16-bit lane holding `d`; `srli 0x30` extracts it, and either the
-low bytes differ (`zext.b` both, subtract) or the lane difference is `256`
-times the high bytes' difference. -/
-
-/-- Byte `i` of a word. -/
 abbrev wb (w : BitVec 64) (i : Nat) : BitVec 8 := w.extractLsb' (8 * i) 8
 
-/-- The words' first differing byte `d`, below 128 on both sides, has sign `sg`. -/
 structure LaneDiff (A B : BitVec 64) (sg : Int) (d : Nat) : Prop where
   lt : d < 8
   pre : ∀ i, i < d → wb A i = wb B i
@@ -252,13 +226,11 @@ theorem zext_ne_zero (b : BitVec 8) : zero_extend (m := 64) b ≠ 0#64 ↔ b ≠
     rw [zext_toNat] at this
     exact BitVec.eq_of_toNat_eq this
 
-/-- The `zext.b` guard of a lane difference: nonzero iff the low bytes differ. -/
 theorem lane_guard (X Y : BitVec 64) (hX : X.toNat < 2 ^ 16) (hY : Y.toNat < 2 ^ 16) :
     ((X - Y) &&& sign_extend (m := 64) (0x0ff#12)) ≠ 0#64 ↔
       X.extractLsb' 0 8 ≠ Y.extractLsb' 0 8 := by
   rw [andi_ff_eq_zext_byte, zext_ne_zero, ne_eq, ne_eq, block_diff_lo_zero X Y hX hY]
 
-/-- The first difference in the lane's low byte: `zext.b` both and subtract. -/
 theorem lane_sign_lo {A B : BitVec 64} {sg : Int} {s : Nat} (hs : s ≤ 6)
     (h : LaneDiff A B sg (6 - s)) :
     strcmpSign (zero_extend (m := 64) (((A <<< (8 * s)) >>> (48 : Nat)).extractLsb' 0 8) -
@@ -266,7 +238,6 @@ theorem lane_sign_lo {A B : BitVec 64} {sg : Int} {s : Nat} (hs : s ≤ 6)
   rw [shl_shr48_lo A s hs, shl_shr48_lo B s hs, strcmpSign_sub _ _ h.ha h.hb]
   exact h.sign
 
-/-- The first difference in the lane's high byte: the lane difference. -/
 theorem lane_sign_hi {A B : BitVec 64} {sg : Int} {s : Nat} (hs : s ≤ 6)
     (h : LaneDiff A B sg (7 - s)) :
     strcmpSign (((A <<< (8 * s)) >>> (48 : Nat)) - ((B <<< (8 * s)) >>> (48 : Nat))) = sg := by
@@ -298,7 +269,6 @@ theorem lane_guard_iff {A B : BitVec 64} {sg : Int} {s d : Nat} (hs : s ≤ 6)
     · omega
   · intro e; subst e; exact h.ne
 
-/-- A bare `ret` with the result already in `a0` (`0x80006f58`). -/
 theorem ret_f58 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006f58#64) (hra : rv 1 = r)
     (hs : strcmpSign (rv 10) = strcmpSpecSign cx cy) :
@@ -317,7 +287,6 @@ theorem ret_f58 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     · rw [hfin 1 (by decide)]; exact hra
     · rw [hfin 10 (by decide)]; exact hs
 
-/-- A bare `ret` with the result already in `a0` (`0x80006f70`). -/
 theorem ret_f70 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006f70#64) (hra : rv 1 = r)
     (hs : strcmpSign (rv 10) = strcmpSpecSign cx cy) :
@@ -336,7 +305,6 @@ theorem ret_f70 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     · rw [hfin 1 (by decide)]; exact hra
     · rw [hfin 10 (by decide)]; exact hs
 
-/-- `zext.b a4; zext.b a5; sub a0,a4,a5; ret` (`0x80006f74`). -/
 theorem ret_f74 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006f74#64) (hra : rv 1 = r)
     (hs : strcmpSign (zero_extend (m := 64) ((rv 14).extractLsb' 0 8) -
@@ -359,8 +327,6 @@ theorem ret_f74 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
         (rv 15 &&& sign_extend (m := 64) (0x0ff#12))) = _
       rw [andi_ff_eq_zext_byte, andi_ff_eq_zext_byte]; exact hs
 
-/-- The lane at `0x80006f5c`: `a4 = A <<< 8s`, `a5 = B <<< 8s`, the first
-difference in bytes `6-s` or `7-s`. -/
 theorem laneF5c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B : BitVec 64}
     {d s : Nat} (hs : s ≤ 6) (hpc : rv VsaIris.PC = 0x80006f5c#64) (hra : rv 1 = r)
     (h14 : rv 14 = A <<< (8 * s)) (h15 : rv 15 = B <<< (8 * s))
@@ -408,7 +374,6 @@ theorem laneF5c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
       rw [e14, e15]
       exact lane_sign_hi hs (show 7 - s = d by omega ▸ hd)
 
-/-- The last lane at `0x80006f44`: bytes 6 and 7, read from `a2`/`a3`. -/
 theorem laneF44 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B : BitVec 64}
     {d : Nat} (hpc : rv VsaIris.PC = 0x80006f44#64) (hra : rv 1 = r)
     (h12 : rv 12 = A) (h13 : rv 13 = B)
@@ -458,7 +423,6 @@ theorem laneF44 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
       rw [e14, e15]
       exact lane_sign_hi (by omega) (show 7 - 0 = d by have := hd.lt; omega ▸ hd)
 
-/-- The third probe (`slli 0x10`, `0x80006f38`): bytes `0 … 5`. -/
 theorem laneF38 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B : BitVec 64}
     {d : Nat} (hpc : rv VsaIris.PC = 0x80006f38#64) (hra : rv 1 = r)
     (h12 : rv 12 = A) (h13 : rv 13 = B)
@@ -493,7 +457,6 @@ theorem laneF38 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
       exact laneF44 ctx hpc' ((hfin 1 (by decide)).trans hra)
         ((hfin 12 (by decide)).trans h12) ((hfin 13 (by decide)).trans h13) hd (by omega)
 
-/-- The second probe (`slli 0x20`, `0x80006f2c`): bytes `0 … 3`. -/
 theorem laneF2c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B : BitVec 64}
     {d : Nat} (hpc : rv VsaIris.PC = 0x80006f2c#64) (hra : rv 1 = r)
     (h12 : rv 12 = A) (h13 : rv 13 = B)
@@ -528,7 +491,6 @@ theorem laneF2c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
       exact laneF38 ctx hpc' ((hfin 1 (by decide)).trans hra)
         ((hfin 12 (by decide)).trans h12) ((hfin 13 (by decide)).trans h13) hd (by omega)
 
-/-- **The lane compare** from `0x80006f20` (`slli 0x30`: bytes `0, 1`). -/
 theorem laneRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B : BitVec 64}
     {d : Nat} (hpc : rv VsaIris.PC = 0x80006f20#64) (hra : rv 1 = r)
     (h12 : rv 12 = A) (h13 : rv 13 = B)
@@ -565,19 +527,11 @@ theorem laneRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
 
 end Run
 
-/-! ## A loaded pair of words
-
-The word loop loads `A` from `x` and `B` from `y` at offset `w`. Bytes at or
-before each NUL are the strings' (`WordPair`); the bytes past a NUL are
-whatever the machine holds. Every fact below depends only on the former. -/
-
-/-- The words at offset `w` of the two strings, after a byte-equal prefix. -/
 structure WordPair (cx cy : List Char) (w : Nat) (A B : BitVec 64) : Prop where
   pre : BytePrefix cx cy w
   a : ∀ k, k < 8 → w + k ≤ cx.length → (wb A k).toNat = byteVal cx (w + k)
   b : ∀ k, k < 8 → w + k ≤ cy.length → (wb B k).toNat = byteVal cy (w + k)
 
-/-- The least index below `n` satisfying a decidable predicate. -/
 theorem exists_first (P : Nat → Prop) [DecidablePred P] :
     ∀ n, (∃ k, k < n ∧ P k) → ∃ d, d < n ∧ P d ∧ ∀ i, i < d → ¬ P i
   | 0, ⟨_, hk, _⟩ => absurd hk (Nat.not_lt_zero _)
@@ -599,7 +553,6 @@ section Word
 
 variable {ix iy : Nat → BitVec 8} {a b : Nat} {cx cy : List Char} {w : Nat} {A B : BitVec 64}
 
-/-- The word of `x` has a NUL byte exactly when `x` ends inside it. -/
 theorem WordPair.nz_iff (hx : SBytes ix a cx) (h : WordPair cx cy w A B) (hw : w ≤ cx.length) :
     (∀ k, k < 8 → wb A k ≠ 0) ↔ w + 8 ≤ cx.length := by
   constructor
@@ -616,7 +569,6 @@ theorem WordPair.nz_iff (hx : SBytes ix a cx) (h : WordPair cx cy w A B) (hw : w
     have := (hx.ascii (w + k) (by omega)).1
     simp_all
 
-/-- In a NUL-free word, `y` cannot end before a byte where the words agree. -/
 theorem WordPair.y_long (hx : SBytes ix a cx) (h : WordPair cx cy w A B)
     (hw8 : w + 8 ≤ cx.length) {n : Nat} (hn : n ≤ 8)
     (hag : ∀ i, i < n → wb A i = wb B i) : w + n ≤ cy.length := by
@@ -630,7 +582,6 @@ theorem WordPair.y_long (hx : SBytes ix a cx) (h : WordPair cx cy w A B)
     omega
   · exact h1
 
-/-- The prefix extends over bytes where the words agree, below both NULs. -/
 theorem WordPair.extend (hx : SBytes ix a cx) (h : WordPair cx cy w A B) {n : Nat} (hn : n ≤ 8)
     (hnx : w + n ≤ cx.length) (hny : w + n ≤ cy.length)
     (hag : ∀ i, i < n → wb A i = wb B i) (hlt : ∀ i, i < n → w + i < cx.length) :
@@ -644,14 +595,12 @@ theorem WordPair.extend (hx : SBytes ix a cx) (h : WordPair cx cy w A B) {n : Na
     have := (hx.ascii i (hlt (i - w) (by omega) |> fun h' => by omega)).1
     exact ⟨e, by omega⟩
 
-/-- Equal NUL-free words: the prefix grows by a word. -/
 theorem WordPair.eq_next (hx : SBytes ix a cx) (h : WordPair cx cy w A B)
     (hw8 : w + 8 ≤ cx.length) (heq : A = B) : BytePrefix cx cy (w + 8) := by
   have hag : ∀ i, i < 8 → wb A i = wb B i := fun i _ => by rw [heq]
   exact h.extend hx (by omega) hw8 (h.y_long hx hw8 (by omega) hag) hag
     (fun i hi => by omega)
 
-/-- Differing NUL-free words: the first differing byte decides the sign. -/
 theorem WordPair.lane (hx : SBytes ix a cx) (hy : SBytes iy b cy) (h : WordPair cx cy w A B)
     (hw8 : w + 8 ≤ cx.length) (hne : A ≠ B) :
     ∃ d, LaneDiff A B (strcmpSpecSign cx cy) d := by
@@ -670,7 +619,6 @@ theorem WordPair.lane (hx : SBytes ix a cx) (hy : SBytes iy b cy) (h : WordPair 
   · rw [eb]; exact hy.lt128 hdy
   · rw [ea, eb, strcmpSpecSign_at cx cy (w + d) hpre hbne]
 
-/-- Equal words, `x`'s holding its NUL: the strings are equal. -/
 theorem WordPair.nul_eq (hx : SBytes ix a cx) (hy : SBytes iy b cy) (h : WordPair cx cy w A B)
     (hw : w ≤ cx.length) (hlt : cx.length < w + 8) (heq : A = B) :
     strcmpSpecSign cx cy = 0 := by
@@ -698,25 +646,18 @@ theorem WordPair.nul_eq (hx : SBytes ix a cx) (hy : SBytes iy b cy) (h : WordPai
 
 end Word
 
-
 section Loop
 
 variable {live : Nat → Prop} {p q r : BitVec 64} {cx cy : List Char} {ix iy : Nat → BitVec 8}
 
-/-! ## The word loop (`0x80006eb8 … 0x80006f1c`) -/
-
-/-- The doubleword a `ld` reads at `a`. -/
 abbrev wordAt (vals : Nat → BitVec 8) (a : Nat) : BitVec 64 := bytesVal .ld (bytesAt vals a 8)
 
-/-- The load data of a word-loop group at offset `w`. -/
 abbrev ldsW (p q : BitVec 64) (w : Nat) (vals : Nat → BitVec 8) : List (List (BitVec 8)) :=
   [bytesAt vals (p.toNat + w) 8, bytesAt vals (q.toNat + w) 8]
 
-/-- The bytes a word-loop group reads. -/
 abbrev peekW (p q : BitVec 64) (w : Nat) : List Nat :=
   (List.range 8).map (p.toNat + w + ·) ++ (List.range 8).map (q.toNat + w + ·)
 
-/-- At a word-loop group (`w = 24j + 8g`), before its loads. -/
 structure WSt (p q r : BitVec 64) (cx cy : List Char) (j w : Nat) (pc : BitVec 64)
     (rv : Nat → BitVec 64) : Prop where
   pc : rv VsaIris.PC = pc
@@ -728,7 +669,6 @@ structure WSt (p q r : BitVec 64) (cx cy : List Char) (j w : Nat) (pc : BitVec 6
   pre : BytePrefix cx cy w
   le : w ≤ cx.length
 
-/-- After a group's loads: `a2 = A`, `a3 = B`. -/
 structure LSt (p q r : BitVec 64) (cx cy : List Char) (j w : Nat) (pc : BitVec 64)
     (A B : BitVec 64) (rv : Nat → BitVec 64) : Prop where
   pc : rv VsaIris.PC = pc
@@ -753,7 +693,6 @@ theorem mkPair (ctx : Ctx live p q r cx cy ix iy) {vals : Nat → BitVec 8}
     rw [ldWord_byte _ _ _ hk, Nat.add_assoc, valsY hv _ hky]
     exact ctx.by_.byte _ hky
 
-/-- The group's `bne t0,t2`: taken exactly when `x` ends inside the word. -/
 theorem grp_guard (ctx : Ctx live p q r cx cy ix iy) {w : Nat} {A B a5 t2 : BitVec 64}
     (hp : WordPair cx cy w A B) (hw : w ≤ cx.length) (h5 : a5 = magic7f) (h7 : t2 = -1#64) :
     ((((A &&& a5) + a5) ||| (A ||| a5)) != t2) = decide (cx.length < w + 8) := by
@@ -763,19 +702,6 @@ theorem grp_guard (ctx : Ctx live p q r cx cy ix iy) {w : Nat} {A B a5 t2 : BitV
   by_cases h : cx.length < w + 8
   · rw [decide_eq_true h, bne_iff_ne, ne_eq, this]; omega
   · rw [decide_eq_false h, bne_eq_false_iff_eq, this]; omega
-
-/-- The `ld` address of a group. -/
-theorem grp_addr (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} (hw : w ≤ cx.length)
-    (imm : BitVec 12)
-    (himm : (p + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm = p + BitVec.ofNat 64 w) :
-    ((p + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm).toNat = p.toNat + w := by
-  rw [himm]; exact ctx.wx.ptr p rfl (by omega)
-
-theorem grp_addrY (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} (hw : w ≤ cy.length)
-    (imm : BitVec 12)
-    (himm : (q + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm = q + BitVec.ofNat 64 w) :
-    ((q + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm).toNat = q.toNat + w := by
-  rw [himm]; exact ctx.wy.ptr q rfl (by omega)
 
 theorem peekW_x {p q : BitVec 64} {w : Nat} {m : Std.ExtHashMap Nat (BitVec 8)}
     {vals : Nat → BitVec 8} (h : ∀ a ∈ peekW p q w, (m[a]?).getD 0 = vals a) :
@@ -787,8 +713,6 @@ theorem peekW_y {p q : BitVec 64} {w : Nat} {m : Std.ExtHashMap Nat (BitVec 8)}
     ∀ k, k < 8 → (m[q.toNat + w + k]?).getD 0 = vals (q.toNat + w + k) :=
   fun k hk => h _ (List.mem_append_right _ (List.mem_map.2 ⟨k, List.mem_range.2 hk, rfl⟩))
 
-/-- **A word-loop group's loads**, for the segment pair `segT` (`x` ends in the
-word) and `segF`. The two segments' reflected facts are the instance's. -/
 theorem groupLoad (ctx : Ctx live p q r cx cy ix iy) {j w M : Nat} {pc0 pcT pcF : BitVec 64}
     {rv : Nat → BitVec 64} (h : WSt p q r cx cy j w pc0 rv)
     (segT segF : List BBlock) (nT nF : Nat)
@@ -844,13 +768,6 @@ theorem groupLoad (ctx : Ctx live p q r cx cy ix iy) {j w M : Nat} {pc0 pcT pcF 
     exact hCont _ _ rv' (mk segF pcF vals hv (hkF vals) (h12F vals) (h13F vals) rv'
       (hpc.trans (hpcF vals)) hfin) (by omega)
 
-/-! ## The NUL-word exits (`0x80006fa4 … 0x80006fc8`)
-
-`x`'s word holds its NUL. The pointers advance to the word, and `bne a2,a3`
-re-tests the words: equal words mean equal strings (`li a0,0; ret`); different
-words run the byte loop from the word. -/
-
-/-- `li a0,0; ret` (`0x80006fb0`). -/
 theorem ret_fb0 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006fb0#64) (hra : rv 1 = r) (hs : strcmpSpecSign cx cy = 0) :
     CRun live (TT p q cx cy ix iy) r cx cy 1 rv := by
@@ -869,7 +786,6 @@ theorem ret_fb0 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     · rw [hfin 10 (by decide), hs, show finReg strcmpX6fb0Seg (cmpL rv) [] 10 = 0#64 from rfl]
       rfl
 
-/-- `li a0,0; ret` (`0x80006fc4`). -/
 theorem ret_fc4 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006fc4#64) (hra : rv 1 = r) (hs : strcmpSpecSign cx cy = 0) :
     CRun live (TT p q cx cy ix iy) r cx cy 1 rv := by
@@ -888,7 +804,6 @@ theorem ret_fc4 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     · rw [hfin 10 (by decide), hs, show finReg strcmpX6fc4Seg (cmpL rv) [] 10 = 0#64 from rfl]
       rfl
 
-/-- At a NUL-word re-test: the pointers at the word `w`, the words in `a2`/`a3`. -/
 structure NSt (p q r : BitVec 64) (cx cy : List Char) (w : Nat) (A B : BitVec 64)
     (rv : Nat → BitVec 64) : Prop where
   ra : rv 1 = r
@@ -900,7 +815,6 @@ structure NSt (p q r : BitVec 64) (cx cy : List Char) (w : Nat) (A B : BitVec 64
   le : w ≤ cx.length
   lt : cx.length < w + 8
 
-/-- The re-test at `0x80006fac`. -/
 theorem nulFac (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {w : Nat}
     {A B : BitVec 64} (hpc : rv VsaIris.PC = 0x80006fac#64) (h : NSt p q r cx cy w A B rv) :
     CRun live (TT p q cx cy ix iy) r cx cy (3 * (cx.length - w) + 4) rv := by
@@ -925,7 +839,6 @@ theorem nulFac (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {w : 
       exact byteLoop ctx _ w rv' rfl ⟨hpc', (hfin 1 (by decide)).trans h.ra,
         (hfin 10 (by decide)).trans h.a0, (hfin 11 (by decide)).trans h.a1, h.pair.pre⟩
 
-/-- Group 1's exit (`0x80006fa4`): advance by 8, then the re-test. -/
 theorem nulFa4 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {j : Nat}
     {A B : BitVec 64} (h : LSt p q r cx cy j (24 * j + 8) 0x80006fa4#64 A B rv)
     (hlt : cx.length < 24 * j + 8 + 8) :
@@ -940,7 +853,6 @@ theorem nulFa4 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {j : 
     · rw [hfin 10 (by decide)]; show rv 10 + sign_extend (m := 64) (0x008#12) = _; rw [h.a0, word_off8]
     · rw [hfin 11 (by decide)]; show rv 11 + sign_extend (m := 64) (0x008#12) = _; rw [h.a1, word_off8]
 
-/-- Group 2's exit (`0x80006fb8`): advance by 16 and re-test. -/
 theorem nulFb8 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {j : Nat}
     {A B : BitVec 64} (h : LSt p q r cx cy j (24 * j + 16) 0x80006fb8#64 A B rv)
     (hlt : cx.length < 24 * j + 16 + 8) :
@@ -970,7 +882,6 @@ theorem nulFb8 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {j : 
       exact byteLoop ctx _ _ rv' rfl ⟨hpc', (hfin 1 (by decide)).trans h.ra,
         (hfin 10 (by decide)).trans e10, (hfin 11 (by decide)).trans e11, h.pair.pre⟩
 
-/-- A group's two `ld`s and its `bne t0,t2`, closed from the loaded pair. -/
 theorem grp_ld_facts (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {pc0 : BitVec 64}
     {rv : Nat → BitVec 64} (h : WSt p q r cx cy j w pc0 rv) :
     (0x80000000 ≤ p.toNat + w ∧ p.toNat + w + 8 ≤ 0x100000000 ∧
@@ -980,8 +891,6 @@ theorem grp_ld_facts (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {pc0 : BitVe
   ⟨ctx.wx.ld (by have := h.le; omega),
    ctx.wy.ld (by have := h.le; have := prefix_le_lenb h.pre; omega)⟩
 
-/-- Words differ after a `bne a2,a3` (`0x80006ed4`): the lane compare; or the
-next group at `0x80006ed8`. -/
 theorem cmpEd4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
     {rv : Nat → BitVec 64} (h : LSt p q r cx cy j w 0x80006ed4#64 A B rv)
     (hw8 : w + 8 ≤ cx.length) (M : Nat) (h6 : 6 ≤ M)
@@ -1010,7 +919,6 @@ theorem cmpEd4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
       exact (laneRun ctx hpc' ((hfin 1 (by decide)).trans h.ra) ((hfin 12 (by decide)).trans h.a2)
         ((hfin 13 (by decide)).trans h.a3) hd).mono h6
 
-/-- The same at `0x80006ef4`, to the group at `0x80006ef8`. -/
 theorem cmpEf4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
     {rv : Nat → BitVec 64} (h : LSt p q r cx cy j w 0x80006ef4#64 A B rv)
     (hw8 : w + 8 ≤ cx.length) (M : Nat) (h6 : 6 ≤ M)
@@ -1039,8 +947,6 @@ theorem cmpEf4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
       exact (laneRun ctx hpc' ((hfin 1 (by decide)).trans h.ra) ((hfin 12 (by decide)).trans h.a2)
         ((hfin 13 (by decide)).trans h.a3) hd).mono h6
 
-/-- The back edge (`0x80006f14`: advance by 24, `beq a2,a3`): the next
-iteration's group 0, or the lane compare. -/
 theorem cmpF14 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {A B : BitVec 64}
     {rv : Nat → BitVec 64} (h : LSt p q r cx cy j (24 * j + 16) 0x80006f14#64 A B rv)
     (hw8 : 24 * j + 16 + 8 ≤ cx.length) (M : Nat) (h6 : 6 ≤ M)
@@ -1074,10 +980,8 @@ theorem cmpF14 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {A B : BitVec 64}
       exact (laneRun ctx hpc' ((hfin 1 (by decide)).trans h.ra) ((hfin 12 (by decide)).trans h.a2)
         ((hfin 13 (by decide)).trans h.a3) hd).mono h6
 
-/-- The fuel of the word loop at offset `w`. -/
 abbrev fuelW (cx : List Char) (w : Nat) : Nat := 3 * (cx.length - w) + 8
 
-/-- **Group 0** (`0x80006eb8`, offset `24j`). -/
 theorem group0 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec 64}
     (h : WSt p q r cx cy j (24 * j) 0x80006eb8#64 rv)
     (hk : ∀ rv', WSt p q r cx cy j (24 * j + 8) 0x80006ed8#64 rv' →
@@ -1119,7 +1023,6 @@ theorem group0 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec
       (by omega)
     exact (hk rv'' h'').mono (by unfold fuelW; omega)
 
-/-- **Group 1** (`0x80006ed8`, offset `24j + 8`). -/
 theorem group1 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec 64}
     (h : WSt p q r cx cy j (24 * j + 8) 0x80006ed8#64 rv)
     (hk : ∀ rv', WSt p q r cx cy j (24 * j + 8 + 8) 0x80006ef8#64 rv' →
@@ -1160,7 +1063,6 @@ theorem group1 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec
       fun rv'' h'' => ?_).mono (by omega)
     exact (hk rv'' h'').mono (by unfold fuelW; omega)
 
-/-- **Group 2** (`0x80006ef8`, offset `24j + 16`). -/
 theorem group2 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec 64}
     (h : WSt p q r cx cy j (24 * j + 16) 0x80006ef8#64 rv)
     (hk : ∀ rv', WSt p q r cx cy (j + 1) (24 * (j + 1)) 0x80006eb8#64 rv' →
@@ -1201,7 +1103,6 @@ theorem group2 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec
       fun rv'' h'' => ?_).mono (by omega)
     exact (hk rv'' h'').mono (by unfold fuelW; omega)
 
-/-- **The word loop** from iteration `j`'s group 0. -/
 theorem wordLoop (ctx : Ctx live p q r cx cy ix iy) :
     ∀ (n j : Nat) (rv : Nat → BitVec 64), cx.length - 24 * j ≤ n →
       WSt p q r cx cy j (24 * j) 0x80006eb8#64 rv →
@@ -1212,8 +1113,6 @@ theorem wordLoop (ctx : Ctx live p q r cx cy ix iy) :
     intro j rv hn h
     refine group0 ctx h fun rv1 h1 => group1 ctx h1 fun rv2 h2 => group2 ctx h2 fun rv3 h3 => ?_
     exact ih (cx.length - 24 * (j + 1)) (by have := h2.le; omega) (j + 1) rv3 (Nat.le_refl _) h3
-
-/-! ## Entry (`0x80006ea0 … 0x80006eb4`) and the whole function -/
 
 theorem mask_word : bytesVal .ld (List.replicate 8 0x7f#8) = magic7f := by decide
 
@@ -1230,7 +1129,6 @@ theorem valsMask {vals : Nat → BitVec 8} (hv : ∀ t ∈ TT p q cx cy ix iy, v
     hm 5 (by omega), hm 6 (by omega), hm 7 (by omega)]
   rfl
 
-/-- The aligned entry's mask load (`0x80006eb0`): group 0 of iteration 0. -/
 theorem entryMask (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006eb0#64) (hra : rv 1 = r) (h10 : rv 10 = p) (h11 : rv 11 = q)
     (h7 : rv 7 = -1#64) :
@@ -1257,8 +1155,6 @@ theorem entryMask (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     · rw [hfin 11 (by decide)]; show rv 11 = _; rw [h11]; simp
     · rw [hfin 7 (by decide)]; exact h7
 
-/-- **`strcmp` as one run**: from the entry with `a0 = p`, `a1 = q` and `ra = r`,
-it returns to `r` with the sign of the byte-lexicographic comparison in `a0`. -/
 theorem strcmpRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (hpc : rv VsaIris.PC = 0x80006ea0#64) (hra : rv 1 = r) (h10 : rv 10 = p) (h11 : rv 11 = q) :
     CRun live (TT p q cx cy ix iy) r cx cy (3 * cx.length + 11) rv := by
@@ -1290,5 +1186,3 @@ theorem strcmpRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
 end Loop
 
 end VsaIris.Inst.Strcmp
-
-#print axioms VsaIris.Inst.Strcmp.strcmpRun

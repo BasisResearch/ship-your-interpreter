@@ -1,18 +1,6 @@
 import VsaIris.Vsa.Stdout.Fwrite
 import VsaIris.Vsa.Stdout.Strlen
 
-/-!
-# `fputs(str, stdout)` as a symbolic run (lane N1)
-
-From the boundary state (`ConsoleMt`): `fputs` calls `_fputs_r`, which
-measures the string (`strlen`, spliced by `swpo_strlen`), builds a one-iov
-`uio` on its frame, takes the (no-op) lock and calls `__sfvwrite_r`
-(`sfvwrite_run`), which prints the bytes; it releases the lock and returns
-`0`. At `_flags = 0x000a` its `ORIENT` block runs first; `fputs_run` takes
-either orientation, one chain each (`fputs_chain`, `fputsU_chain`) over
-shared piece scripts.
--/
-
 namespace VsaIris.Sym
 
 open scoped VsaIris.Sym.Stdout
@@ -20,7 +8,7 @@ open scoped VsaIris.Sym.Stdout
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Inst
 
 set_option hygiene false in
-/-- `fputs` from its entry to `strlen`, at `_flags = fl`. -/
+
 macro "#fputs_seg " n:ident fl:term : command => `(
   #ix_seg $n {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DAs : List Nat}
       {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
@@ -43,18 +31,17 @@ macro "#fputs_seg " n:ident fl:term : command => `(
     by nx_run hlive using [h1, h10, h11, h2, hImp, BitVec.add_assoc] at 2147511536)
 
 set_option hygiene false in
-/-- `strlen` spliced (`swpo_strlen`). -/
+
 macro "fputs_B_tac" : tactic => `(tactic| (
     refine swpo_strlen c (by simp [upd_apply]) (by simp [upd_apply]) hD (fun v11 v12 v13 v14 v15 v16 => ?_)))
 
 set_option hygiene false in
-/-- `_fputs_r` to `jal __sfvwrite_r`: the lock and `ORIENT` (from `0x000a`, the
-block `0x80006418`–`0x80006430` stores `_flags2 = 0` and `_flags = 0x200a`). -/
+
 macro "fputs_C_tac" : tactic => `(tactic| (
     nx_run hlive using [h1, BitVec.add_assoc] at 2147540620))
 
 set_option hygiene false in
-/-- `_fputs_r`'s call of `__sfvwrite_r` (`sfvwrite_run`). -/
+
 macro "fputs_D_tac" : tactic => `(tactic| (
     refine sfvwrite_run (sp := s + 18446744073709551536#64) (ra := 0x8000644c#64)
       (u := s + 18446744073709551560#64) (v := s + 18446744073709551544#64) (buf := P.toNat) (bs := bs)
@@ -65,7 +52,7 @@ macro "fputs_D_tac" : tactic => `(tactic| (
     all_goals try ((try nx_norm); (try simp only [BitVec.add_assoc, BitVec.reduceAdd]); nx_mem; (try nx_console); (try nx_norm); (try simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq]); done)))
 
 set_option hygiene false in
-/-- `_fputs_r` from `__sfvwrite_r`'s return. -/
+
 macro "fputs_E_tac" : tactic => `(tactic| (
     nx_ret hR
     nx_run hlive using [rk1, rk2, rk8, rk9, rk10, h1, hFu, BitVec.add_assoc]))
@@ -84,7 +71,6 @@ macro "fputs_E_tac" : tactic => `(tactic| (
 #ix_piece fputsU_E from fputsU_D by fputs_E_tac
 #nx_chain fputsU_chain := [fputsU_A, fputsU_B, fputsU_C, fputsU_D, fputsU_E]
 
-/-- `fputs`'s keep set inside `__sfvwrite_r`'s (its `uio` at `s - 56`). -/
 theorem dataKeep_sfv_fputs {s : BitVec 64} {a : Nat} (hs : 512 ≤ s.toNat) (h : dataKeep s 512 a) :
     sfvKeep (s + 18446744073709551536#64) 256 a ∧
       ¬ ((s + 18446744073709551560#64).toNat + 16 ≤ a ∧ a < (s + 18446744073709551560#64).toNat + 24) := by
@@ -92,7 +78,7 @@ theorem dataKeep_sfv_fputs {s : BitVec 64} {a : Nat} (hs : 512 ≤ s.toNat) (h :
   nx_addr
 
 set_option hygiene false in
-/-- `fputs_run` at one orientation (`_flags = fl`), from its chain. -/
+
 macro "#fputs_run_at " n:ident ch:ident fl:term : command => `(
   theorem $n {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DAs : List Nat}
       {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
@@ -122,9 +108,6 @@ macro "#fputs_run_at " n:ident ch:ident fl:term : command => `(
 #fputs_run_at fputsU_run fputsU_chain 0x000a#64
 #fputs_run_at fputsO_run fputs_chain 0x200a#64
 
-/-- **`fputs(str, stdout)`** of a C string (persistent data after
-`_impure_ptr`) from the boundary state: prints it, returns `0`; the memory
-keeps `dataKeep s 512` and `stdout`'s flags are back. -/
 theorem fputs_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DAs : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s ra P : BitVec 64} {need : Nat} {bs : List (BitVec 8)}

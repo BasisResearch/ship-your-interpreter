@@ -1,34 +1,15 @@
 import VsaIris.Vsa.FreePro
 
-/-!
-# `_free_r`'s bin insertion
-
-Every path that ends with the released chunk in a bin reaches `0x800073e8`
-with the chunk `X` of size `S` in `a4`/`a5`, in use in a virtual heap `M2`
-(the heap as if the chunk and its coalesced neighbours were one in-use chunk),
-and the actual memory agreeing with `M2` except on the chunk's footer and the
-next header, which the machine has already written (`FBin`). The insertion
-links `X` in at the head of its small bin, or at its sorted place in its large
-bin, and `PHeapAt.release` gives the heap.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The end of a free run's heap work: the heap without the block, its top
-no higher, the footprint present, and every byte outside the write window at
-its entry value. -/
 structure FDone (C : MCtx) (Mt : Mem) : Prop where
   heap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins ∧ top ≤ C.top0
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
-/-- The heap facts of an insertion state: the virtual heap `M2` with `X` an
-in-use chunk of size `S` holding no block, between in-use neighbours and below
-a top no higher than at entry; `Mt` agrees with `M2` but on `X`'s footer
-(written, `S`) and the next header (`PREV_INUSE` cleared). -/
 structure FBinCore (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : List Chunk)
     (bins : Nat → List Nat) : Prop where
   heap : PHeapAt M2 C.H top brkv (cs₁ ++ ⟨X, S, true⟩ :: cs₂) bins
@@ -42,24 +23,18 @@ structure FBinCore (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : 
   nx : ∀ hd, read64 M2 (X + S + 8) = some hd → ∃ hd', read64 Mt (X + S + 8) = some hd' ∧
     chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2 ∧ prevInuse hd' = false
 
-/-- The state before the bin insertion: the heap facts, with the actual
-memory's footprint present, off the stack, and at its entry value outside the
-write window. -/
 structure FBin (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : List Chunk)
     (bins : Nat → List Nat) : Prop extends FBinCore C Mt M2 X S top brkv cs₁ cs₂ bins where
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
-/-- A footprint doubleword away from the chunk's footer and next header reads
-as in the virtual heap. -/
 theorem FBin.read {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
     {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {w : Nat}
     (hf : ∀ k, k < 8 → vsaFoot C.H (w + k)) (hw : w + 8 ≤ X + S ∨ X + S + 16 ≤ w) :
     read64 Mt w = read64 M2 w :=
   read64_keep fun k hk => B.agree _ (hf k hk) (by omega)
 
-/-- A footprint range lies wholly below or above the stack window. -/
 theorem FBin.off_stack {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
     {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
     (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) :
@@ -69,7 +44,6 @@ theorem FBin.off_stack {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs�
     split <;> omega
   exact B.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
 
-/-- An in-use chunk holding no block: its interior is footprint. -/
 theorem foot_of_chunk {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) {X S : Nat}
     (hX : (⟨X, S, true⟩ : Chunk) ∈ chunks) (hno : ∀ e ∈ H, e.1 ≠ X + 16) {a : Nat}
@@ -87,20 +61,14 @@ theorem foot_of_chunk {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks
   · simp only at h3; omega
   · simp only at h3; omega
 
-/-- The chunk's interior is footprint of the heap without the block. -/
 theorem FBin.foot_chunk {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
     {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
     (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot C.H a :=
   foot_of_chunk B.heap (by simp) B.hno h1 h2
 
-/-- A read through a store to another doubleword. -/
 theorem read64_miss' {Mt : Mem} {a b : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + 8 ≤ a) :
     read64 (writeLog Mt [(b, 8, v)]) a = read64 Mt a := read64_store_miss Mt v h
 
-/-- **The heap after an insertion**, in any store order: the final memory
-`Mf` has `X` linked between `pred` and `succ` of bin `j`, the bitmap `bb'`,
-and otherwise the memory before the insertion (`hag`), in particular `X`'s
-footer and the next header (`hkeep`). -/
 theorem fb_release {C : MCtx} {Mt M2 Mf : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
     {bins : Nat → List Nat} (B : FBinCore C Mt M2 X S top brkv cs₁ cs₂ bins)
     {j pred succ bb' : Nat} {pre' post' : List Nat}
@@ -133,9 +101,6 @@ theorem fb_release {C : MCtx} {Mt M2 Mf : Mem} {X S top brkv : Nat} {cs₁ cs₂
     hV1 hV2 hP hSb eF eN hbbr hbblt hbbset hbbkeep hag'
   exact ⟨⟨_, _, _, _, HP, B.top_le⟩, hpres, hframe⟩
 
-/-- **The heap after a small-bin insertion.** The machine's five stores (`X`'s
-links, `binblocks` with bin `j`'s block bit, bin `j`'s `fd`, and the old first
-member's `bk`) link `X` at the head of bin `j = S / 8`. -/
 theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
     {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins)
     (hS : S ≤ 511) {j first bb : Nat} (hj : j = S / 8)
@@ -183,7 +148,7 @@ theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂
   unfold binAt avAddr at hgj ⊢
   unfold binblocksAddr avAddr
   unfold heapStart binAt avAddr at hoLoc
-  -- the final memory's reads
+
   generalize hMf : writeLog (writeLog (writeLog (writeLog (writeLog Mt
       [(X + 16, 8, w0)]) [(X + 24, 8, w1)]) [(0x8001ad10 + 8, 8, w2)])
       [(0x8001ad10 + 16 * j + 16, 8, w3)]) [(first + 24, 8, w3)] = Mf
@@ -237,8 +202,6 @@ theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂
         have := BB.node_foot (x := first) (by omega) hjn hofm (24 + k) (by omega) (by omega)
         rwa [show first + (24 + k) = first + 24 + k by omega] at this)
 
-/-- **The small-bin insertion** (`0x800073f0`): `X` of `S ≤ 511` bytes goes to
-the head of bin `S / 8`, whose block bit is set; then the epilogue. -/
 theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat}
     (F : FFrame C R Mt) (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) (hS : S ≤ 511)
@@ -322,7 +285,7 @@ theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     · exact .inl h
     · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; exact .inr ⟨this.1, by omega⟩
   have hvf : ∀ k, k < 16 → vsaFoot C.H (X + 16 + k) := fun k hk => B.foot_chunk (by omega) (by omega)
-  -- `sd a1,16(a4); sd a2,24(a4)`: `X`'s links
+
   refine st_80007420 O.live ?_ ?_ ?_
   · sx_norm; rw [BitVec.toNat_add, h14]; unfold StOK Vsa.Sim.tohostAddr; simp; omega
   · sx_norm; rw [BitVec.toNat_add, h14]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
@@ -336,10 +299,10 @@ theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     exact O.foot (fun k hk => by have := hvf (8 + k) (by omega); rwa [show X + 16 + (8 + k) = X + 24 + k by omega] at this)
   sx_norm
   rw [show (R 14 + 24#64).toNat = X + 24 by rw [BitVec.toNat_add, h14]; simp; omega, hA2]
-  -- `sd a5,8(a7)`: the bitmap
+
   refine st_80007428 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
   sx_norm
-  -- `sd a4,0(a3); sd a4,24(a1)`: bin `j`'s `fd` and the old first member's `bk`
+
   refine st_8000742c O.live ?_ ?_ ?_
   · sx_norm; rw [hA3]; unfold StOK Vsa.Sim.tohostAddr; unfold binAt avAddr at hgj ⊢; omega
   · sx_norm; rw [hA3]; exact O.toWOK.bin_link hjn (.inl rfl)
@@ -385,10 +348,6 @@ namespace VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **The large-bin link and return** (`0x800074e4`): `X` goes in between
-`pred` (`a1`) and `succ` (`a3`) of bin `j`; the epilogue's loads come
-between `X`'s links and its neighbours'. `Mb` is the memory before the links,
-which differs from `Mt` at most on `binblocks`. -/
 theorem fl_link {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mb M2 : Mem}
     {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat}
     {j pred succ bb' : Nat} {pre' post' : List Nat}
@@ -418,7 +377,7 @@ theorem fl_link {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mb M2 : Mem}
   have hbrk := HH.brk_le; have htle := HH.top_le
   unfold heapEnd at hbrk
   have hgj := binAt_geo j hj
-  -- the insertion point's nodes
+
   have hpm : pred = binAt j ∨ pred ∈ bins j := by
     have := List.mem_of_getLast? hpred
     rcases List.mem_cons.mp this with h1 | h1
@@ -457,7 +416,7 @@ theorem fl_link {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mb M2 : Mem}
     rw [hs2, BitVec.toNat_add]
     simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     omega
-  -- where the stores go
+
   have hEx24 : (R 14 + sign_extend (m := 64) (0x018#12)).toNat = X + 24 := by
     sx_norm; rw [BitVec.toNat_add, h14]; simp; omega
   have hEx16 : (R 14 + sign_extend (m := 64) (0x010#12)).toNat = X + 16 := by

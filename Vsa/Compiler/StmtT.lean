@@ -1,19 +1,9 @@
 import Vsa.Compiler.StmtShape
 
-/-!
-# Forward simulation of statements
-
-For every execution of a supported statement (list), its code runs from a
-related state to the exit of the execution's completion status, re-establishing
-the store relation. One lemma per derivation rule; `stmtT`/`seqT` recurse over
-the derivation.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- Forward simulation of one statement execution. -/
 def TSpec (code : List Ins) (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : St) (t : Status) :
     Prop :=
   ∀ (C : Ctx) (loop : Bool) (pos : Nat) (A : AM), At code C pos → SupS C.Γ.names loop s →
@@ -23,7 +13,6 @@ def TSpec (code : List Ins) (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : S
       SR C.Γ env st' B ∧ SameParents st.store st'.store ∧ (∀ v, t ≠ .ret v) ∧
       (loop = false → t = .normal)
 
-/-- Forward simulation of one statement-list execution. -/
 def SeqSpec (code : List Ins) (st : St) (d : Nat) (env : Addr) (ss : List Stmt) (st' : St)
     (t : Status) : Prop :=
   ∀ (C : Ctx) (loop : Bool) (pos : Nat) (A : AM) (f : List (String × Nat)) (g : Scope),
@@ -104,7 +93,6 @@ theorem tBlock {st : St} {d : Nat} {env : Addr} {ss : List Stmt} {store' : Store
 theorem At.mono {C : Ctx} {pos pos' : Nat} (h : At code C pos) (hle : pos ≤ pos') (hp : PosOK pos') :
     At code C pos' := ⟨h.lay, h.ne, h.nd, h.lt, h.nat, Nat.le_trans h.nextle hle, hp⟩
 
-/-- The truthy branch of an `if`/`while` condition, from its derivation. -/
 theorem condT {C : Ctx} {pos L : Nat} {c : Expr} {st st1 : St} {d : Nat} {env : Addr} {v : Value}
     {A : AM} (hAt : At code C pos) (hc : CondE C.Γ.names c)
     (hseg : Seg code pos (cexpr C.Γ 0 pos c ++ [.br .ne a0 0 (bSkip 1),
@@ -240,7 +228,7 @@ theorem tWhile {st st1 st' : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt} {v
   · refine ⟨B2, r1.trans r2, ?_, hsr2, hsp1.trans hsp2, by simp, fun _ => rfl⟩
     rw [hpc2]; simp only [exitPos]; rw [hend]
   · exact absurd rfl (hret2 rv)
-  · -- back to the loop head
+  ·
     have hback : Reaches code B2 fun B3 => B3.pc = pcOf pos ∧ B3.mem = B2.mem ∧ B3.out = B2.out := by
       rcases htb with rfl | rfl
       · simp only [exitPos] at hpc2

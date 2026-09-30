@@ -1,20 +1,10 @@
 import VsaIris.Vsa.ReallocMal
 
-/-!
-# `_realloc_r` into a free successor
-
-A free chunk after the old one, together big enough, is unlinked from its
-bin (`0x80005400`) and absorbed (`PHeapAt.unlink`, then `PHeapAt.absorb`);
-the tail records the merged size and marks the next header.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- A free chunk's place in its bin: bin `i` is `pre ++ v :: post`, between
-`pred` and `succ`, with its links. -/
 structure FreeBinAt (m : Mem) (bins : Nat → List Nat) (v i : Nat) (pre post : List Nat)
     (pred succ : Nat) : Prop where
   i0 : 0 < i
@@ -53,20 +43,15 @@ theorem FreeBinAt.succ_node {m : Mem} {bins : Nat → List Nat} {v i : Nat} {pre
   · exact .inr (by rw [F.bin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
   · exact .inl (List.mem_singleton.mp h1)
 
-/-- `reflag` at the end of one chunk keeps every chunk that ends elsewhere. -/
 theorem map_reflag_other {q : Nat} {b : Bool} {cs : List Chunk} (h : ∀ c ∈ cs, c.addr + c.size ≠ q) :
     cs.map (reflag q b) = cs := by
   conv => rhs; rw [← List.map_id cs]
   refine List.map_congr_left fun c hc => ?_
   unfold reflag; rw [if_neg (h c hc)]; rfl
 
-/-- A bin member's unlink: `succ->bk = pred`, `pred->fd = succ`. -/
 abbrev unlinkM (m : Mem) (pred succ : Nat) : Mem :=
   writeLog (writeLog m [(succ + 24, 8, BitVec.ofNat 64 pred)]) [(pred + 16, 8, BitVec.ofNat 64 succ)]
 
-/-- The old chunk `X` with the free successor absorbed: the machine memory
-after the unlink `unlinkM Mt pred succ`, and a virtual memory `V` holding the
-heap with `X` of `S + ns` bytes, equal off `X`'s header and the next one. -/
 structure NAbs (C : MCtx) (B : RB) (Mt V : Mem) (brkv : Nat) (cs₁ cs₃ : List Chunk)
     (bins : Nat → List Nat) (X S ns hdr0 hNN pred succ : Nat) : Prop where
   heap : PHeapAt V ((B.p, B.nOld) :: C.H) C.top0 brkv (cs₁ ++ ⟨X, S + ns, true⟩ :: cs₃) bins
@@ -80,8 +65,6 @@ structure NAbs (C : MCtx) (B : RB) (Mt V : Mem) (brkv : Nat) (cs₁ cs₃ : List
   data : ∀ k, k < B.nOld → (unlinkM Mt pred succ)[B.p + k]? = some (B.old (B.p + k))
   frame : ∀ R', RFrame C R' Mt → RFrame C R' (unlinkM Mt pred succ)
 
-/-- **Absorbing a free successor**: unlink `N` (`PHeapAt.unlink`, marking the
-header after it) and let `X` absorb it (`PHeapAt.absorb`). -/
 theorem next_absorb {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ cs₃ : List Chunk}
@@ -134,7 +117,7 @@ theorem next_absorb {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   have hM2o : ∀ a, ¬ (succ + 24 ≤ a ∧ a < succ + 32) → ¬ (pred + 16 ≤ a ∧ a < pred + 24) →
       M2[a]? = Mt[a]? := fun a h1 h2 => by
     rw [← hM2, unlinkM, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
-  -- the headers of `X` and after `N`
+
   have hXr := D.hdr; have hXs := D.hsz; have hXl := D.hlow
   have hw2 := HH.walk
   rw [hsp] at hw2
@@ -149,7 +132,7 @@ theorem next_absorb {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
       obtain ⟨hd0, hd0r, _, hd0l⟩ := walk_header HH.walk d hdm
       simp only at h2; rw [h2, hNNr] at hd0r; cases hd0r; exact hd0l
   have hNNlt := Vsa.Sim.read64_lt _ _ _ hNNr
-  -- the unlinked heap, with the header after `N` marked
+
   have hvN : (BitVec.ofNat 64 (hNN + 1)).toNat = hNN + 1 := by rw [BitVec.toNat_ofNat]; omega
   generalize hW1 : writeLog M2 [(X + S + ns + 8, 8, BitVec.ofNat 64 (hNN + 1))] = W1
   have hW1o : ∀ a, ¬ (X + S + ns + 8 ≤ a ∧ a < X + S + ns + 16) → W1[a]? = M2[a]? := fun a h => by
@@ -189,7 +172,7 @@ theorem next_absorb {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
       map_reflag_other (fun c hc => by have := hWcb c hc; simp only at this; omega)]
     simp only [reflag, ite_self, ite_true]
   rw [hmap] at H1
-  -- `X` absorbs `N`
+
   have hXlt := Vsa.Sim.read64_lt _ _ _ hXr
   have hv : (BitVec.ofNat 64 (S + ns + hdr0 % 2)).toNat = S + ns + hdr0 % 2 := by
     rw [BitVec.toNat_ofNat]; omega
@@ -244,9 +227,6 @@ theorem next_absorb {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     have a3 := hfoot _ (fP 0 (by omega)); have a4 := hfoot _ (fP 7 (by omega))
     exact (F.store (a := succ + 24) (w := 8) (by omega)).store (a := pred + 16) (w := 8) (by omega)
 
-/-- **Into a free successor** (`0x80005400`): the chunk `N` after `X` is free
-and `S + ns` holds the request; unlink `N` and go to the tail with `X` of
-size `S + ns`. -/
 theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) (hN : (⟨X + S, ns, false⟩ : Chunk) ∈ chunks)
@@ -262,7 +242,7 @@ theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := HB.top_room
   simp only at hXb hNb hx16 hS16 hns16
   unfold heapStart heapEnd at *
-  -- the chunk list around `X` and `N`
+
   obtain ⟨cs₁, cs₂, hsp⟩ := List.append_of_mem hXm
   have hw := HH.walk
   rw [hsp] at hw
@@ -273,7 +253,7 @@ theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     · have hdm : d ∈ chunks := by rw [hsp, h1]; simp
       have := HH.chunk_eq hdm hN (by simp only at h2 ⊢; omega)
       exact ⟨cs₃, by rw [h1, this]⟩
-  -- `N`'s bin links and the header after it
+
   obtain ⟨i, pre, post, pred, succ, FB⟩ := free_bin_at Hp.heap hN rfl
   simp only at FB
   have hpn := FB.pred_node; have hsn := FB.succ_node

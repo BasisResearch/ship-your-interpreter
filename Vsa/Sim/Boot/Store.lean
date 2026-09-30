@@ -1,38 +1,19 @@
 import Vsa.Sim.Boot.View
 import Vsa.RuntimeRepr
 
-/-!
-# Checkers for strings, values and the initial store
-
-A *partial* view `v` of a memory `m` (`PartialView m v`) agrees with `m`
-wherever `v` returns a byte. The checkers here only succeed on bytes `v`
-returns, so a check over a view that masks a region out (`maskView`) also
-proves the fact for every memory agreeing with `m` outside that region: the
-same check gives `StoreRepr` at the entry and `store_survives` through
-`interp_run`'s prologue footprint.
-
-* `cstrv`: a NUL-terminated ASCII string (`CStr`, `CString`).
-* `valueCheck`: a non-closure `Value` (`ValueRepr`).
-* `frameCheck`: an `Env` with no parent (`FrameRepr`).
-* `storeRepr_initSt`: the initial store from its one frame.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While
 
-/-- `v` agrees with `m` wherever it returns a byte. -/
 def PartialView (m : Mem) (v : Nat → Option (BitVec 8)) : Prop :=
   ∀ k b, v k = some b → m[k]? = some b
 
 theorem ViewOf.partial {m : Mem} {v : Nat → Option (BitVec 8)} (h : ViewOf m v) :
     PartialView m v := fun k b hk => (h k).trans hk
 
-/-- `v` with the bytes satisfying `out` removed. -/
 def maskView (out : Nat → Bool) (v : Nat → Option (BitVec 8)) (k : Nat) : Option (BitVec 8) :=
   if out k then none else v k
 
-/-- A mask of a view is a partial view of every memory agreeing outside the mask. -/
 theorem maskView_partial {m m' : Mem} {v : Nat → Option (BitVec 8)} {out : Nat → Bool}
     (h : PartialView m v) (hag : ∀ k, out k = false → m[k]? = m'[k]?) :
     PartialView m' (maskView out v) := by
@@ -85,7 +66,6 @@ theorem PartialView.rodata {m : Mem} {script : Nat} {t : RunTree}
     Code.FixedRodataLoaded m :=
   fun _ hlo hoff => h.get (bootView_rodata ha hlo hoff)
 
-/-- Decide one read fact through a partial view `h`. -/
 macro "boot_readp " h:term : tactic =>
   `(tactic| first
     | (apply PartialView.readPresent $h; decide +kernel)
@@ -93,13 +73,9 @@ macro "boot_readp " h:term : tactic =>
     | (apply PartialView.readLE $h; decide +kernel)
     | (apply PartialView.get $h; decide +kernel))
 
-/-- Split a structure of read facts and decide each through the partial view `h`. -/
 macro "boot_factsp " h:term : tactic =>
   `(tactic| repeat' (first | apply And.intro | boot_readp $h | constructor))
 
-/-! ## Strings -/
-
-/-- The NUL-terminated ASCII string at `a`, within `fuel` bytes. -/
 def cstrv (v : Nat → Option (BitVec 8)) (a : Nat) : Nat → Option (List Char)
   | 0 => none
   | fuel + 1 =>
@@ -138,7 +114,6 @@ theorem cstrv_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView m
             exact .cons (h a b hb) h0 h128 (ih hr)
         · rw [if_neg h128] at hc; cases hc
 
-/-- String check: the string at `a` is `s` (fuel 4096 covers every script string). -/
 def cstrIs (v : Nat → Option (BitVec 8)) (a : Nat) (s : String) : Bool :=
   (cstrv v a 4096).map String.ofList == some s
 
@@ -152,10 +127,6 @@ theorem cstrIs_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialView 
     simp only [Option.map_some, beq_iff_eq, Option.some.injEq] at hc
     exact ⟨cs, cstrv_sound h hr, hc.symm⟩
 
-/-! ## Values -/
-
-/-- A non-closure value at `a` (closures need the closure map; the initial
-store has none). -/
 def valueCheck (v : Nat → Option (BitVec 8)) (N : NativeAddrs) (a : Nat) : Value → Bool
   | .null => readLEv v a 4 == some 0
   | .bool b => readLEv v a 4 == some 1 && readLEv v (a + 8) 4 == some (cond b 1 0)
@@ -211,9 +182,6 @@ theorem valueCheck_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialV
       rw [hr] at h2
       exact ⟨p, h.readLE hr, cstrIs_sound h h2⟩
 
-/-! ## Frames -/
-
-/-- Bindings `i … ` of a frame: name pointers from `pn`, values from `pv`. -/
 def bindingsCheck (v : Nat → Option (BitVec 8)) (N : NativeAddrs) (pn pv : Nat) :
     Nat → List (String × Value) → Bool
   | _, [] => true
@@ -249,7 +217,6 @@ theorem bindingsCheck_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : Parti
       have := ih hr j (by simp at hj; omega)
       simpa [Nat.add_assoc, Nat.add_comm 1 j] using this
 
-/-- A parentless `Env` at `e` holding `f`'s bindings. -/
 def frameCheck (v : Nat → Option (BitVec 8)) (N : NativeAddrs) (e : Nat) (f : Vsa.While.Frame) : Bool :=
   f.parent.isNone &&
   readLEv v e 4 == some f.vars.length &&
@@ -284,12 +251,8 @@ theorem frameCheck_sound {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialV
         refine ⟨pn, pv, h.readLE hn, h.readLE hv, fun i hi => ?_⟩
         simpa using bindingsCheck_sound h φc harr i hi
 
-/-! ## The initial store -/
-
-/-- The global frame `interp_init` builds. -/
 def initFrame : Vsa.While.Frame := initSt.store.frames[0]
 
-/-- The initial store is its one frame, placed in the arena. -/
 theorem storeRepr_initSt {m : Mem} {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat}
     (hf : FrameRepr m N φf φc (φf 0) initFrame)
     (ha : A.contains (φf 0) 32 ∧ φf 0 % 8 = 0) : StoreRepr m N A φf φc initSt.store where

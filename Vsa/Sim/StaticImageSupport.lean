@@ -5,10 +5,8 @@ import Vsa.Alloc
 namespace Vsa.Sim
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.Alloc Vsa.Sim.Code
 
-/-- The immutable text and rodata interval of the fixed interpreter. -/
 def StaticImageByte (k : Nat) : Prop := 0x80000000 ≤ k ∧ k < 0x8001acf0
 
-/-- Exact static bytes protected from recursive stack and allocator writes. -/
 structure StaticImageSupport (m : Mem) (SL : StackLayout) (A : Arena) : Prop where
   text : FixedTextLoaded m
   rodata : FixedRodataLoaded m
@@ -42,15 +40,4 @@ theorem StaticImageSupport.outsideStack {m : Mem} {SL : StackLayout} {A : Arena}
   intro hs
   rcases h.stack with hd | hd <;> obtain ⟨_, _⟩ := hk <;> omega
 
-theorem StaticImageSupport.outsideArena {m : Mem} {SL : StackLayout} {A : Arena}
-    (h : StaticImageSupport m SL A) {k : Nat} (hk : StaticImageByte k) :
-    ¬ (A.lo ≤ k ∧ k < A.hi) := by
-  intro ha
-  rcases h.arena with hd | hd <;> obtain ⟨_, _⟩ := hk <;> omega
-
-#print axioms StaticImageSupport.transport
-#print axioms StaticImageSupport.stack_disjoint
-#print axioms StaticImageSupport.arena_disjoint
-#print axioms StaticImageSupport.outsideStack
-#print axioms StaticImageSupport.outsideArena
 end Vsa.Sim

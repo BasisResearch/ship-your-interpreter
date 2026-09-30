@@ -2,30 +2,18 @@ import Vsa.AbsInt.Domains.Product
 import Vsa.AbsInt.Domains.Kinds
 import Vsa.AbsInt.Domains.Sign
 
-/-!
-# Interval projections
-
-`ToItv A` projects an abstract value to an interval covering its integer
-values; the projection is `top` when the value may be a non-integer.
-`ToItvLaw` is its soundness. The cost analysis (`Vsa/AbsInt/Cost.lean`)
-reads loop bounds through it.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
-/-- An interval covering every value of an abstract value. -/
 class ToItv (A : Type) where
   toItv : A → Itv
 
-/-- Soundness of `ToItv`. -/
 class ToItvLaw (A : Type) [AbsDom A] [ToItv A] : Prop where
   sound : ∀ {a : A} {v : Value}, Gam a v → Itv.Gam (ToItv.toItv a) v
 
 namespace Itv
 
-/-- Intersection of intervals. -/
 def meet : Itv → Itv → Itv
   | bot, _ => bot
   | _, bot => bot

@@ -2,40 +2,13 @@ import VsaIris.Interp.SpecLoop
 import VsaIris.Interp.CallJalr
 import VsaIris.Interp.LoopArgs
 
-/-!
-# `eval_expr`'s call arm: the shared layer (lane E4)
-
-`interp.c:248-256` (`EX_CALL`, `call_value` inlined), `eval_expr`
-`0x800031b0`..`0x80003404`:
-
-```
-800031b0  ld a2,8(a2); addi a0,sp,96; sd a3,0(sp)
-800031bc  jal eval_expr                     -- the callee, into sp+96
-800031c0  lw a5,24(s0); li a4,32
-800031c8  blt a4,a5,80003fb0                -- too many arguments (runtime_error)
-800031cc  sd s7,1016(sp); ld a3,0(sp); li a6,0
-800031d8  blez a5,80003254                  -- no arguments
-800031dc  … the argument loop (E6: evalArgsT_body) … 80003250
-80003254  copy the callee to sp+120; lw a1,4(s0) (line); kind dispatch:
-          5 (native) → 800039e0, 4 (closure) → 80003288, else → 80003da4
-800039e0  marshal a0..a4; 800039f4 jalr a6 (the native); ld s7; j epilogue
-```
-
-This file: the node's facts (`CallNode`, from the representation), the
-symbolic runs every call row shares, and the stack arithmetic.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The bytes of a call node its runs read: the tag, the callee and argument
-pointers and the count (not the line field at `+4`). -/
 abbrev callView (a : Nat) : List Nat := accAddrs a 4 ++ accAddrs (a + 8) 20
 
-/-- What a call node gives the runs: its word reads at the node's register
-value, its view and its placement. -/
 structure CallNode (m : Mem) (P : Nat → Prop) (aX aF : BitVec 64) (argc : Nat) : Prop where
   kind : ldv .lw m aX.toNat = 9#64
   kindu : ldv .lwu m aX.toNat = 9#64
@@ -47,7 +20,6 @@ structure CallNode (m : Mem) (P : Nat → Prop) (aX aF : BitVec 64) (argc : Nat)
   off : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat
   view : ∀ a ∈ callView aX.toNat, P a ∧ (m[a]?).isSome
 
-/-- A call node's facts, from its representation over a geometric view. -/
 theorem callNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr} {args : List Expr}
     (h : ExprReprWithin m P aX.toNat (.call f args)) (hg : ∀ k, P k → ReadOK k) :
     ∃ aF : Nat, CallNode m P aX (BitVec.ofNat 64 aF) args.length ∧
@@ -88,10 +60,6 @@ theorem callNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr
           · obtain ⟨j, rfl⟩ : ∃ j, a = aX.toNat + 24 + j := ⟨a - (aX.toNat + 24), by omega⟩
             exact ⟨cargc j (by omega), isSome_of_readLE hargc (by omega)⟩
 
-/-! ## The shared runs -/
-
--- Run 1: prologue, kind dispatch, stage the callee (`a2 = e->callee`,
--- `a0 = sp+96`, `a3` spilled at `sp+0`).
 #ix_seg Call_run1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s aE inp sret aF : BitVec 64}
@@ -105,9 +73,6 @@ theorem callNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003164#64 R Mt
   by ix_run hlive using [h10, h11, h12, h13, h2, hk9, hk9u, hcallee, hsf] at 0x800031bc
 
--- Run 2: the argument count test (`argc > 32` leaves for the error at
--- `0x80003fb0`), spill `s7`, reload `a3 = env`, `a6 = 0`; `blez` to the
--- dispatch (no arguments) or the loop head.
 #ix_seg Call_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s aE : BitVec 64} {argc : Nat}

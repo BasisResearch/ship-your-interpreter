@@ -1,13 +1,5 @@
 import Vsa.Compiler.SimLeaf
 
-/-!
-# Composing simulations
-
-Sequencing an expression's simulation with what follows (`ESpec.bind`),
-and the bookkeeping that carries values, stack contents and heap bounds
-across it.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -50,7 +42,6 @@ theorem VRepr.grow {H H' : CloMap} {m m' : Mem} {h h' : Nat} {v : Value} {t p : 
     | exact ⟨hv.1, hv.2.mono hag hh⟩
     | exact ⟨hv.1, getElem?_of_prefix hH hv.2⟩
 
-/-- A value in temporary `j` of the stack frame at `sp`. -/
 def InTmp (H : CloMap) (m : Mem) (h sp j : Nat) (v : Value) : Prop :=
   VRepr H m h v (rdW m (sp + 16 + 16 * j)) (rdW m (sp + 16 + 16 * j + 8))
 
@@ -67,7 +58,6 @@ theorem Seg.cast {code : List Ins} {pos pos' : Nat} {is : List Ins} (h : Seg cod
 theorem reaches_pc {code : List Ins} {q q' : Nat} {L : GRegs} {m : Mem} {o : Array String} {P : AM → Prop}
     (e : q = q') (h : Reaches code ⟨pcOf q', L, m, o⟩ P) : Reaches code ⟨pcOf q, L, m, o⟩ P := e ▸ h
 
-/-- Sequencing: run an expression, then continue from its end. -/
 theorem ESpec.bind {code : List Ins} {T : List String} {st : St} {d : Nat} {env : Addr} {e : Expr}
     {st1 : St} {v1 : Value} {n1 : Nat} (hE : ESpec code T st d env e st1 v1 n1) {V : View}
     {Γ : List (List String)} {sp fs k pos : Nat} {A : AM} (hm : MS code T V st d env Γ sp fs A)

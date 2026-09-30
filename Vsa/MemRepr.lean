@@ -1,34 +1,12 @@
 import Vsa.Machine
 import Vsa.While.Ast
 
-/-!
-# Inductive representation of WHILE programs in RISC-V memory
-
-`ExprRepr`/`StmtRepr` characterize, as inductive relations, when an address
-in the machine's memory holds the C struct representation (`c/src/ast.h`,
-LP64 ABI, little-endian) of a deep-embedded WHILE expression/statement:
-
-```c
-struct Expr { ExprKind kind; int line; union {...} as; };   // kind@0 line@4 union@8
-struct Stmt { StmtKind kind; int line; union {...} as; };
-```
-
-Pointers are 8 bytes little-endian; `int` 4 bytes; `long long` 8 bytes
-two's-complement. Operator fields store `TokType` codes (`c/src/lexer.h`).
-A program is represented by a NULL-free array of `Stmt*` (as produced by
-`parse_program`). These relations are the interface between "a WHILE
-program" (syntax) and "the machine about to interpret it" (a memory
-image) in the ∀-program refinement statement.
--/
-
 namespace Vsa.MemRepr
 
 open Vsa.While
 
-/-- Machine memory: byte-addressed, as in the Sail model. -/
 abbrev Mem := Std.ExtHashMap Nat (BitVec 8)
 
-/-- Little-endian read of `n` bytes as a natural number. -/
 def readLE (m : Mem) (a : Nat) : Nat → Option Nat
   | 0 => some 0
   | k + 1 => do
@@ -36,17 +14,13 @@ def readLE (m : Mem) (a : Nat) : Nat → Option Nat
     let rest ← readLE m (a + 1) k
     pure (b.toNat + 256 * rest)
 
-/-- 4-byte little-endian read (C `int`, enum tags). -/
 def read32 (m : Mem) (a : Nat) : Option Nat := readLE m a 4
 
-/-- 8-byte little-endian read (pointers, `long long`). -/
 def read64 (m : Mem) (a : Nat) : Option Nat := readLE m a 8
 
-/-- C `long long` read: 64-bit two's complement. -/
 def readI64 (m : Mem) (a : Nat) : Option Int :=
   (read64 m a).map fun n => (BitVec.ofNat 64 n).toInt
 
-/-- A NUL-terminated ASCII string at address `a` (C `char *`). -/
 inductive CStr (m : Mem) : Nat → List Char → Prop where
   | nil {a : Nat} : m[a]? = some 0 → CStr m a []
   | cons {a : Nat} {b : BitVec 8} {cs : List Char} :
@@ -54,11 +28,9 @@ inductive CStr (m : Mem) : Nat → List Char → Prop where
     CStr m (a + 1) cs →
     CStr m a (Char.ofNat b.toNat :: cs)
 
-/-- String-valued wrapper for `CStr`. -/
 def CString (m : Mem) (a : Nat) (s : String) : Prop :=
   ∃ cs, CStr m a cs ∧ s = String.ofList cs
 
-/-- `TokType` codes stored in binary-operator AST nodes (`lexer.h`). -/
 def binOpTok : BinOp → Nat
   | .add => 11 | .sub => 12 | .mul => 13 | .div => 14 | .mod => 15
   | .ne => 17 | .eq => 19 | .lt => 20 | .le => 21 | .gt => 22 | .ge => 23
@@ -71,8 +43,6 @@ def unOpTok : UnOp → Nat
 
 mutual
 
-/-- `Expr` struct at address `a` represents the deep-embedded expression.
-Constructor per `ExprKind` (`EX_INT = 0 … EX_FN = 10`). -/
 inductive ExprRepr (m : Mem) : Nat → Expr → Prop where
   | int {a : Nat} {n : Int} :
     read32 m a = some 0 → readI64 m (a + 8) = some n →
@@ -119,8 +89,7 @@ inductive ExprRepr (m : Mem) : Nat → Expr → Prop where
     read64 m (a + 8) = some f → ExprRepr m f ef →
     read64 m (a + 16) = some args →
     read32 m (a + 24) = some argc →
-    -- `argc` is a C `int`.  The evaluator loads it with `lw` and compares it
-    -- with signed `blt`, so represented call nodes exclude negative i32 words.
+
     argc < 2 ^ 31 →
     ExprArrayRepr m args argc es →
     ExprRepr m a (.call ef es)
@@ -142,7 +111,6 @@ inductive ExprRepr (m : Mem) : Nat → Expr → Prop where
     read64 m (a + 32) = some body → StmtRepr m body (.block ss) →
     ExprRepr m a (.fn none ps ss)
 
-/-- `Expr **` array of `n` expression pointers. -/
 inductive ExprArrayRepr (m : Mem) : Nat → Nat → List Expr → Prop where
   | nil {a : Nat} : ExprArrayRepr m a 0 []
   | cons {a p n : Nat} {e : Expr} {es : List Expr} :
@@ -150,7 +118,6 @@ inductive ExprArrayRepr (m : Mem) : Nat → Nat → List Expr → Prop where
     ExprArrayRepr m (a + 8) n es →
     ExprArrayRepr m a (n + 1) (e :: es)
 
-/-- `char **` array of `n` parameter names. -/
 inductive ParamsRepr (m : Mem) : Nat → Nat → List String → Prop where
   | nil {a : Nat} : ParamsRepr m a 0 []
   | cons {a p n : Nat} {x : String} {xs : List String} :
@@ -158,7 +125,6 @@ inductive ParamsRepr (m : Mem) : Nat → Nat → List String → Prop where
     ParamsRepr m (a + 8) n xs →
     ParamsRepr m a (n + 1) (x :: xs)
 
-/-- `Stmt` struct at address `a` (`ST_EXPR = 0 … ST_CONTINUE = 8`). -/
 inductive StmtRepr (m : Mem) : Nat → Stmt → Prop where
   | expr {a p : Nat} {e : Expr} :
     read32 m a = some 0 → read64 m (a + 8) = some p → ExprRepr m p e →
@@ -214,22 +180,18 @@ inductive StmtRepr (m : Mem) : Nat → Stmt → Prop where
   | brk {a : Nat} : read32 m a = some 7 → StmtRepr m a .brk
   | cont {a : Nat} : read32 m a = some 8 → StmtRepr m a .cont
 
-/-- An optional statement pointer field (NULL ↔ `none`). -/
 inductive OptStmtRepr (m : Mem) : Nat → Option Stmt → Prop where
   | none {a : Nat} : read64 m a = some 0 → OptStmtRepr m a none
   | some {a p : Nat} {s : Stmt} :
     read64 m a = some p → p ≠ 0 → StmtRepr m p s →
     OptStmtRepr m a (some s)
 
-/-- An optional expression pointer field (NULL ↔ `none`). -/
 inductive OptExprRepr (m : Mem) : Nat → Option Expr → Prop where
   | none {a : Nat} : read64 m a = some 0 → OptExprRepr m a none
   | some {a p : Nat} {e : Expr} :
     read64 m a = some p → p ≠ 0 → ExprRepr m p e →
     OptExprRepr m a (some e)
 
-/-- `Stmt **` array of `n` statement pointers (the shape `parse_program`
-returns and `interp_run` consumes). -/
 inductive StmtArrayRepr (m : Mem) : Nat → Nat → List Stmt → Prop where
   | nil {a : Nat} : StmtArrayRepr m a 0 []
   | cons {a p n : Nat} {s : Stmt} {ss : List Stmt} :
@@ -239,31 +201,6 @@ inductive StmtArrayRepr (m : Mem) : Nat → Nat → List Stmt → Prop where
 
 end
 
-/-- The explicit array count is the represented list length.  In particular,
-the signed-count premise on `ExprRepr.call` is also a bound on its semantic
-argument list. -/
-theorem ExprArrayRepr.index_eq_length {m : Mem} {a n : Nat} {es : List Expr}
-    (h : ExprArrayRepr m a n es) : n = es.length := by
-  induction es generalizing a n with
-  | nil => cases h; rfl
-  | cons e es ih =>
-    cases h with
-    | cons hp he ht =>
-      simpa [Nat.succ_eq_add_one] using congrArg Nat.succ (ih ht)
-
-/-- The call node's stored C `int` count is the semantic list length and is
-nonnegative under signed `lw` interpretation. -/
-theorem ExprRepr.call_count {m : Mem} {a : Nat} {f : Expr} {args : List Expr}
-    (h : ExprRepr m a (.call f args)) :
-    read32 m (a + 24) = some args.length ∧ args.length < 2 ^ 31 := by
-  cases h with
-  | call hk hf hef hargs hargc hargcSigned harr =>
-    have hlen := ExprArrayRepr.index_eq_length harr
-    rw [hlen] at hargc hargcSigned
-    exact ⟨hargc, hargcSigned⟩
-
-/-- **A WHILE program represented in machine memory**: an array of `n`
-statement pointers at `a`, exactly the arguments `interp_run` receives. -/
 def ProgramRepr (m : Mem) (a n : Nat) (p : Program) : Prop :=
   StmtArrayRepr m a n p ∧ n = p.length
 

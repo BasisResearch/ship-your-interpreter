@@ -1,12 +1,5 @@
 import Vsa.Compiler.SimExit
 
-/-!
-# Declarations
-
-`storeSlot`: a declaration writes its value into the slot of its name in the
-current frame, matching `Store.define`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While

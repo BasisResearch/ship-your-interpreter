@@ -1,13 +1,5 @@
 import VsaIris.Interp.CallCloExit
 
-/-!
-# The closure call, total mode (lane E4)
-
-`cloDefineStepT`: the parameter loop's `env_define` (`CloDefineStep`) in the
-counted regime: `ms_callEnvDefine`, the world's credits the remaining
-`bindParamsCost` plus the body's.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
@@ -19,15 +11,12 @@ section Total
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-
-/-- The closures' body bound, from the store's pure part. -/
 theorem storeRepr_bodies (N : NativeAddrs) (st : Store) (B : List (Nat × Nat)) :
     storeRepr (GF := GF) N st B ⊢ ⌜StoreBodiesBound st perCallBudget⌝ := by
   unfold storeRepr
   iintro ⟨%mf, %mc, %Bs, -, -, %hp, -, -⟩
   ipureintro; exact hp.bodies
 
-/-- The stack below `eval_expr`'s frame, as the closure loop states it. -/
 theorem StackGeom.lowerE {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 1088 ≤ n)
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088) :
     StackGeom (s + 18446744073709550528#64) (n - 1088) := by
@@ -36,18 +25,15 @@ theorem StackGeom.lowerE {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 108
   refine ⟨by rw [hsf]; omega, ?_, ?_, ?_, ?_⟩ <;> rw [hsf] <;>
     (try simp only [Vsa.Sim.LayoutInstance.stackSL]) <;> omega
 
-/-- A helper's `sp` below `eval_expr`'s frame. -/
 theorem envSp_eval {s : BitVec 64} (hfg : EvalFrameG s) {need : Nat} (h : need ≤ 4096) :
     EnvSp (s + 18446744073709550528#64) need := by
   have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
   refine ⟨?_, ?_, ?_⟩ <;> rw [hsf] <;> (try unfold htifLo) <;> omega
 
-/-- An empty body's derivation. -/
 theorem execSeqCost_nil_inv {st st' : St} {d inner : Nat} {status : Status} {n : Nat}
     (h : ExecSeqCost st d inner [] st' status n) : st' = st ∧ status = .normal ∧ n = 0 := by
   cases h; exact ⟨rfl, rfl, rfl⟩
 
-/-- `CloAt` across G's loop: its kept registers and the spills' invariant. -/
 theorem CloAt.of_keep {R R' : Nat → BitVec 64} {Mt Mt' : Mem} {s inp sret ret : BitVec 64}
     {rv : Nat → BitVec 64} (h : CloAt R Mt s inp sret ret rv) (hk : KeepRegs closureKeep R R')
     (hsv : CloSpills Mt' s ret rv) : CloAt R' Mt' s inp sret ret rv :=
@@ -55,15 +41,11 @@ theorem CloAt.of_keep {R R' : Nat → BitVec 64} {Mt Mt' : Mem} {s inp sret ret 
     fun x hx => (hk x ((by decide : ∀ y ∈ [20, 22, 24, 25, 26, 27], y ∈ closureKeep) x hx)).trans
       (h.keep x hx), hsv⟩
 
-/-- The parameter loop's resources, counted: the frame's binding and the world
-at the body's depth, with credits for the remaining definitions and the body. -/
 def cloWT (N : NativeAddrs) (inp k nb d : Nat) (out : String) (fa : Nat) (fr : BitVec 64)
     (st : Store) (rest : List (String × Value)) : IProp GF :=
   iprop(□ frameAt fa fr.toNat ∗
     world N vsaLayoutP vsaRoomB inp (.counted (k + bindParamsCost st fa rest + nb)) ⟨st, out⟩ (d + 1))
 
-/-- **`env_define` of one parameter, counted** (`jal env_define` at
-`0x80003310`). -/
 theorem cloDefineStepT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp k nb d : Nat} {out : String} {s fr : BitVec 64} {fa n : Nat}
     (hed : ⊢ envDefineSpec (GF := GF) (twpW (vsaModel live)) N)
@@ -100,11 +82,6 @@ theorem cloDefineStepT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
   iapply (world_heapStore N inp _ ⟨st.define fa x v, out⟩ (d + 1)).2
   iframe Hh Hc Hio Hi Hb
 
-/-- **The closure call after its head, total mode**: from the `jal env_new`
-(`CloHd`, the depth word bumped in the run's bytes) with the world's closer
-at the depth word: the world back at `d + 1`, the fresh frame
-(`ms_callEnvNewW`), the parameters (`cloBind`), the body (`cloBodyEntry`,
-G's `closureSeqT_body`), the exits (`cloExitN`, `cloExitR`). -/
 theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {st2 st' : St} {d k nb : Nat} {cd : ClosureData}
     {vs : List Value} {store' : Store} {frame : Addr} {status : Status} {v : Value}
@@ -151,13 +128,13 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     k + bindParamsCost store' frame (cd.params.zip vs) + nb + envBytes by omega]
   unfold CallExitK
   iintro ⟨#Hcode, #Hro, #Hfe, #Hav, Hms, Hst, Hcl, Hsr, Hk⟩
-  -- the depth word back to the world, at `d + 1`
+
   ihave Hms := ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp + 8, 4) b)
     (fun k => by simp only [cloS]; rw [hinpN]) $$ Hms
   ihave ⟨Hms, Hd⟩ := ms_split (S := InExt (s.toNat - 1088, 1088)) (T := InExt (inp + 8, 4))
     (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ Hms
   ihave Hw := Hcl $$ %(d + 1) %(imgM Mt1) Hd %⟨by have := hhd.depth; rwa [hinpN] at this, by omega⟩
-  -- `env_new(cl->env)`
+
   have h2 : R1 2 = s + 18446744073709550528#64 := hhd.sp
   have hspN : EnvSp (R1 2) envNewNeed := by rw [h2]; exact envSp_eval hfg (by decide)
   have hnN : envNewNeed ≤ n - 1088 := by
@@ -176,7 +153,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   ihave Hst := stackScratch_widen (s := R1 2) (by rw [h2]; exact hle) hnN $$ [Hsl Hst]
   · iframe Hsl Hst
   rw [hst', hsz, h2]
-  -- the parameters
+
   have hkp : ∀ y ∈ fRegs, y ∉ 10 :: retClob →
       upd R2 1 (BitVec.ofNat 64 (0x800032bc + 4)) y = R1 y := fun y hy hc => by
     have : y ≠ 1 := fun h => by subst h; simp at hy
@@ -208,7 +185,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   unfold cloWT
   simp only [bindParamsCost, Nat.add_zero]
   icases HW with ⟨#Hnew2, Hw⟩
-  -- the body
+
   have hfold : (cd.params.zip vs).foldl (fun t p => t.define frame p.1 p.2) store' =
       (cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store' := rfl
   rw [hfold]
@@ -224,7 +201,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   isplitl [Hw Hst Hsr Hk]
   · iframe Hw Hst Hsr Hk
   isplit
-  · -- a nonempty body: G's loop, then its exits
+  ·
     iintro %R4 %Mt4 %arr %count %⟨hne, hbn, hch, hat⟩ HF Hms Hslot
     have hall : ∀ x ∈ cd.body, execNeed x (d + 1) ≤ n - 1088 ∧ x.bodiesBound perCallBudget = true :=
       fun x hx => ⟨by have := hnb x hx; omega, Stmt.bodiesBound_of_mem hbb.2 hx⟩
@@ -257,7 +234,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       iapply cloExitR hlive (twpW _) hfg hsg (by have := hn1; omega) hal hsp hinpG hinpL hinpA hslg hat5 h10
       iframe Hcode Hms Hret Hsr Hw Hst
       iexact Hk
-  · -- an empty body: the normal end at once
+  ·
     iintro %R4 %Mt4 %⟨hb0, hat⟩ HF Hms Hslot
     obtain ⟨rfl, rfl, rfl⟩ := execSeqCost_nil_inv (hb0 ▸ Dseq)
     rcases hst with ⟨-, rfl⟩ | hr
@@ -268,8 +245,6 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       iexact Hk
     · cases hr
 
-
-/-- A run's owned bytes are disjoint from any other owned bytes. -/
 theorem ms_disj {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {Mt : Mem}
     {g : Nat → BitVec 8} :
     ms (GF := GF) pc R S Mt ∗ ownSet T (fun a => a ↦ₘ g a) ⊢
@@ -281,10 +256,6 @@ theorem ms_disj {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
   iframe Hpc Hra Hregs HS HT
   ipureintro; exact hd
 
-/-- **The closure call from the kind dispatch, total mode** (`0x80003254` on
-a closure value): the closure's resources (`CloSupply`), the store's body
-bound, the depth word out of the world, `callCloHead` (the derivation refutes
-the arity and depth errors), then `cloCallT`. -/
 theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {st2 st' : St} {d k nb : Nat} {ca : Addr} {cd : ClosureData}
     {vs : List Value} {store' : Store} {frame : Addr} {status : Status} {v : Value}
@@ -326,7 +297,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hfg : EvalFrameG s := ⟨hsf, by omega, hs2, hs3⟩
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hinpL
   iintro ⟨#Hcode, #Hast, #Hv, #Hav, Hms, Hst, Hw, Hsr, Hk⟩
-  -- the closure's resources and the body bound
+
   unfold valOf
   icases Hv with ⟨%⟨hk4, hw1⟩, #Hca⟩
   ihave ⟨%B, Hs, Hcw⟩ := world_store N vsaLayoutP vsaRoomB inp _ st2 d $$ Hw
@@ -339,7 +310,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hcd : cd' = cd := by have := hcf.lookup; rw [hcl] at this; exact (Option.some.inj this).symm
   subst hcd
   obtain ⟨hbb1, hbb2⟩ := hbod ca cd' hcl
-  -- the depth word
+
   have hwd := world_depth (GF := GF) N vsaLayoutP vsaRoomB inp
     (.counted (k + (envBytes + bindParamsCost store' frame (cd'.params.zip vs) + nb))) st2 d
   rw [show inp + interpDepthOff = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]; rfl] at hwd
@@ -350,7 +321,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)
       (by simp only [InExt]; rw [hinpN]; omega)
-  -- the `EX_FN` node
+
   have hqlt : q < 2 ^ 64 := by rw [← hcf.fn]; have := imgLE_lt img w1.toNat 8; omega
   have hqt : (BitVec.ofNat 64 q).toNat = q := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]
   have helt : e < 2 ^ 64 := by rw [← hcf.env]; have := imgLE_lt img (w1.toNat + 8) 8; omega
@@ -360,7 +331,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   obtain ⟨prm, bod, nam, hfn, hprl, hbdl, -, hps, hbody, -⟩ := fnNode_of hrepq hcf.geo
   have hprt : (BitVec.ofNat 64 prm).toNat = prm := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hprl]
   have hbdt : (BitVec.ofNat 64 bod).toNat = bod := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbdl]
-  -- the head
+
   iapply callCloHead hlive (twpW _) hcall hargc hk4 hcf hinpG (by rw [hinpN]; exact hinpA) hdv hdle hfg
   iframe Hcode Hast Himg Hro Hms Hd
   unfold CloHeadK

@@ -1,23 +1,11 @@
 import VsaIris.Vsa.Stdout.Swbuf
 
-/-!
-# `fputc(c, stdout)` as a symbolic run (lane N1)
-
-From the boundary state (`ConsoleMt`): `fputc` takes the (no-op) lock,
-calls `_putc_r`, which takes it again, finds `_w` exhausted and calls
-`__swbuf_r` (`swbuf_run'`), which prints `c`; both release and return `c`.
-The run is the same at either orientation (`ConsoleMt (consoleFlagsV o)`):
-`__swbuf_r` orients an unoriented `stdout`.
--/
-
 namespace VsaIris.Sym
 
 open scoped VsaIris.Sym.Stdout
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-/-- The lock tests' `_flags & __SSTR` (`andi …,512`) is clear at either
-orientation. -/
 theorem consoleFlagsV_and512 (o : Bool) : consoleFlagsV o &&& 512#64 = 0#64 := by
   cases o <;> decide
 
@@ -48,8 +36,6 @@ theorem consoleFlagsV_and512 (o : Bool) : consoleFlagsV o &&& 512#64 = 0#64 := b
 
 #nx_chain fputc_chain := [fputc_A, fputc_A2, fputc_B, fputc_C]
 
-/-- **`fputc(c, stdout)`** from the boundary state: prints `c`, returns it;
-the memory keeps `outKeep s 512` and ends with `stdout` idle (`OutDone`). -/
 theorem fputc_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s ra : BitVec 64} {need : Nat} {c : BitVec 8}

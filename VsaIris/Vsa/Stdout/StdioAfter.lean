@@ -1,20 +1,10 @@
 import VsaIris.Vsa.StdioRead
 import Vsa.Sim.ExitRuntimeDataTransport
 
-/-!
-# `StdioOK` after a stdout write (lane N1)
-
-A flushed stdout write leaves newlib's data as it found it, except `stdout`'s
-`_p`, `_w` and `_flags` (rewritten with their idle values) and its one-byte
-buffer (the last character). `StdioOK.written`: an image that agrees with a
-`StdioOK` image off those bytes and holds the idle values there is `StdioOK`.
--/
-
 namespace VsaIris.Stdio
 
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp
 
-/-- The bytes a stdout write changes in newlib's data. -/
 def outW (a : Nat) : Prop :=
   (0x8001bb20 ≤ a ∧ a < 0x8001bb28) ∨ (0x8001bb2c ≤ a ∧ a < 0x8001bb32) ∨ a = 0x8001bb97
 
@@ -28,7 +18,6 @@ theorem readLE_of_img {m : Mem} {f : Nat → BitVec 8} :
       have := h (i + 1) (by omega); rwa [show a + (i + 1) = a + 1 + i by omega] at this
     simp [readLE, h0, ih, imgLE]
 
-/-- A region inside newlib's data and off the written bytes. -/
 def RegionOK (r : Nat × Nat) : Prop :=
   (0x8001b520 ≤ r.1 ∧ r.1 + r.2 ≤ 0x8001b538 ∨ 0x8001b53c ≤ r.1 ∧ r.1 + r.2 ≤ 0x8001b960 ∨
     0x8001b970 ≤ r.1 ∧ r.1 + r.2 ≤ 0x8001b990 ∨ 0x8001b9b0 ≤ r.1 ∧ r.1 + r.2 ≤ 0x8001ba08 ∨
@@ -47,7 +36,6 @@ theorem exitExtra_off {a : Nat} (h : ExitRuntimeExtraFoot a) : stdioFoot a ∧ �
   unfold stdioFoot InRange outW
   omega
 
-/-- **`StdioOKAt` after a flushed stdout write.** -/
 theorem StdioOKAt.written {o : Bool} {img img' : Nat → BitVec 8} (h : StdioOKAt o img)
     (hkeep : ∀ a, stdioFoot a → ¬ outW a → img' a = img a)
     (hp : imgLE img' 0x8001bb20 8 = 0x8001bb97) (hw : imgLE img' 0x8001bb2c 4 = 0)
@@ -103,8 +91,6 @@ theorem StdioOKAt.written {o : Bool} {img img' : Nat → BitVec 8} (h : StdioOKA
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hst.base
   · exact (ag 8 _ (F _ _ (by decide))).symm.trans hst.writer
 
-/-- **`StdioOK` after a flushed stdout write**, from either orientation: the
-write leaves `stdout` oriented. -/
 theorem StdioOK.written {img img' : Nat → BitVec 8} (h : StdioOK img)
     (hkeep : ∀ a, stdioFoot a → ¬ outW a → img' a = img a)
     (hp : imgLE img' 0x8001bb20 8 = 0x8001bb97) (hw : imgLE img' 0x8001bb2c 4 = 0)

@@ -1,44 +1,18 @@
 import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Interp.Arm
 
-/-!
-# `memmove` in a stdout run (lane N5)
-
-`__sfvwrite_r` copies each output piece into `__sbprintf`'s stack buffer with
-`memmove(d, src, len)`: the format's literal runs and the `%s` argument
-(data-view bytes), the digit and sign buffers (owned stack bytes). The
-destination lies above every source (the buffer is in `__sbprintf`'s frame,
-the digits in the inner `_vfprintf_r`'s, below it), so only the forward
-paths run: the byte loop (`len ≤ 31` or a misaligned pair), and the 32-byte,
-8-byte and byte loops for aligned pairs.
-
-The source bytes are read through `swp_havocP` (`itP_<pc>`): `ReadB` says a
-byte reads `b` in every image consistent with the data view and the owned
-bytes, so one lemma covers both kinds. The invariant `Copied` (bytes copied so
-far, everything else as at the entry) is N2's (`SnpMove.lean`, over N2's
-`snprintf` table), here over the shared stdio table.
-
-`Cover P lo hi` (a range all of whose bytes satisfy `P`: owned, or in the
-data view) is the run's coverage fact; `nf_cover` closes a byte-set side
-condition from one.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.MallocFast VsaIris.Interp
 open scoped VsaIris.Sym.Stdout
 
-/-! ## Coverage facts -/
-
-/-- Every byte of `[lo, hi)` satisfies `P`. -/
 def Cover (P : Nat → Prop) (lo hi : Nat) : Prop := ∀ b, lo ≤ b → b < hi → P b
 
 theorem Cover.mem {P : Nat → Prop} {lo hi b : Nat} (h : Cover P lo hi) (h1 : lo ≤ b) (h2 : b < hi) :
     P b := h b h1 h2
 
 open Lean Elab Tactic Meta in
-/-- Close `P b` (the body of a byte-set side condition, `lo ≤ b < hi` in
-context) from some `Cover P lo' hi'` hypothesis and `omega`. -/
+
 elab "nf_cover" : tactic => do
   let g ← getMainGoal
   let lctx ← g.withContext getLCtx
@@ -56,20 +30,14 @@ elab "nf_cover" : tactic => do
     catch _ => saved.restore
   throwError "nf_cover: no Cover fact covers the access"
 
-/-- An access-range hypothesis as `Nat` arithmetic modulo `2^64` (`omega`
-reads it). -/
 macro "fp_hb " h:ident : tactic => `(tactic| simp only [mem_accAddrs_iff,
   LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
   BitVec.add_zero, BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.reduceToNat, Nat.reducePow] at $h:ident)
 
-/-- Byte-set side conditions (`∀ b ∈ accAddrs a w, P b`) from a `Cover` fact. -/
 scoped macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro b hb; fp_hb hb; nf_cover))
 
-/-! ## Reads and copies -/
-
-/-- `a` reads `b`: a data-view byte, or an owned byte at the tracking memory. -/
 def ReadB (Dt : Mem) (DA : List Nat) (S : Nat → Prop) (Mt : Mem) (a : Nat) (b : BitVec 8) : Prop :=
   (a ∈ DA ∧ imgM Dt a = b) ∨ (S a ∧ imgM Mt a = b)
 
@@ -86,7 +54,6 @@ theorem ReadB.transport {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt Mt' : 
   · exact .inl h
   · exact .inr ⟨h1, hM.trans h2⟩
 
-/-- The window `[lo, hi)` reads the image `g`. -/
 def ReadWin (Dt : Mem) (DA : List Nat) (S : Nat → Prop) (Mt : Mem) (lo hi : Nat)
     (g : Nat → BitVec 8) : Prop :=
   ∀ a, lo ≤ a → a < hi → ReadB Dt DA S Mt a (g a)
@@ -96,8 +63,6 @@ theorem ReadWin.transport {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt Mt' 
     (hM : ∀ a, lo ≤ a → a < hi → imgM Mt' a = imgM Mt a) : ReadWin Dt DA S Mt' lo hi g :=
   fun a h1 h2 => (h a h1 h2).transport (hM a h1 h2)
 
-/-- **A load inside a readable window** reads the window's image, whatever
-consistent image the run's state has. -/
 theorem ldvf_readWin {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {lo hi : Nat}
     {g : Nat → BitVec 8} (h : ReadWin Dt DA S Mt lo hi g) {f : Nat → BitVec 8}
     (hD : ∀ p ∈ dataOf Dt DA, f p.1 = p.2) (hS : ∀ a, S a → f a = imgM Mt a) (k : MKind)
@@ -108,14 +73,6 @@ theorem ldvf_readWin {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {l
   have := List.mem_range.mp hj
   exact (h (a + j) (by omega) (by omega)).img hD hS
 
-/-- A partly known load (`itP_<pc>`'s continuation) inside a readable
-window `h`: the value is the window's, after moving the window across the
-run's stores (all outside it). -/
-macro "fp_ld " h:term : tactic =>
-  `(tactic| (rintro ⟨f, hfD, hfS, hv⟩; subst hv; rw [ldvf_readWin (ReadWin.transport $h (fun a h1 h2 => by
-      first | rfl | (simp (disch := nx_addr) only [imgM_store_miss]))) hfD hfS _ (by nx_addr) (by simp only [widthOfM]; nx_addr)]; clear hfD hfS f))
-
-/-- A byte load's value from any consistent image. -/
 theorem ldvf_lbu_readB {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {a : Nat}
     {b : BitVec 8} (h : ReadB Dt DA S Mt a b) {f : Nat → BitVec 8}
     (hD : ∀ p ∈ dataOf Dt DA, f p.1 = p.2) (hS : ∀ a, S a → f a = imgM Mt a) :
@@ -125,7 +82,6 @@ theorem ldvf_lbu_readB {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} 
   rw [h.img hD hS]
   rfl
 
-/-- A byte store of a zero-extended byte reads back the byte. -/
 theorem sbData_zext (b : BitVec 8) : sbData (BitVec.zeroExtend 64 b) = b := by
   apply BitVec.eq_of_toNat_eq
   simp only [sbData, Sail.BitVec.extractLsb]
@@ -149,7 +105,6 @@ theorem imgLE_shift {f g : Nat → BitVec 8} :
         have := h (i + 1) (by omega); rwa [show a + (i + 1) = a + 1 + i by omega,
           show b + (i + 1) = b + 1 + i by omega] at this)]
 
-/-- A doubleword store of a loaded word reads back the loaded bytes. -/
 theorem imgM_sd_ldvf (Mt : Mem) (A B j : Nat) (g : Nat → BitVec 8) (hj : j < 8) :
     imgM (writeLog Mt [(A, 8, ldvf .ld g B)]) (A + j) = g (B + j) := by
   have e : ldvf .ld g B = imgW (fun x => g (x - A + B)) A := by
@@ -161,8 +116,6 @@ theorem imgM_sd_ldvf (Mt : Mem) (A B j : Nat) (g : Nat → BitVec 8) (hj : j < 8
   rw [e, imgM_store_img hj]
   show g (A + j - A + B) = g (B + j); congr 1; omega
 
-/-- The first `c` bytes of a copy of `g`'s bytes from `src` to `d` are in
-place in `Mt`, and every byte outside `[d, d + c)` is as in `Mt0`. -/
 structure Copied (Mt Mt0 : Mem) (d src c : Nat) (g : Nat → BitVec 8) : Prop where
   done : ∀ i, i < c → imgM Mt (d + i) = g (src + i)
   rest : ∀ a, a < d ∨ d + c ≤ a → imgM Mt a = imgM Mt0 a
@@ -189,8 +142,6 @@ theorem Copied.sb {Mt Mt0 : Mem} {d src c : Nat} {g : Nat → BitVec 8} (h : Cop
     · rw [imgM_store_miss _ _ (by omega)]; exact h.done i (by omega)
   rest a ha := by rw [imgM_store_miss _ _ (by omega)]; exact h.rest a (by omega)
 
-/-! ## Arithmetic -/
-
 theorem ofNat_add_one {x : Nat} (h : x + 1 < 2 ^ 64) :
     BitVec.ofNat 64 x + 1#64 = BitVec.ofNat 64 (x + 1) := by
   apply BitVec.eq_of_toNat_eq
@@ -208,10 +159,6 @@ theorem ofNat_sub_ofNat (x y : Nat) (hy : y < 2 ^ 64) :
   apply BitVec.eq_of_toNat_eq
   simp only [BitVec.toNat_sub, BitVec.toNat_ofNat]; omega
 
-/-! ## The loops -/
-
-/-- The geometry of a `memmove(d, src, len)`: the destination owned and
-above the HTIF words, the source in RAM off them, the two disjoint. -/
 structure MoveGeom (S : Nat → Prop) (d src len : Nat) : Prop where
   d_lo : 0x8001ad10 ≤ d
   d_hi : d + len ≤ 0x100000000
@@ -221,7 +168,6 @@ structure MoveGeom (S : Nat → Prop) (d src len : Nat) : Prop where
   s_htif : src + len ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ src
   disj : src + len ≤ d ∨ d + len ≤ src
 
-/-- Registers `memmove` changes: `a1`–`a7`, `t1`, `t3`. -/
 abbrev MMFrame (R R0 : Nat → BitVec 64) : Prop :=
   ∀ z, z ≠ 11 → z ≠ 12 → z ≠ 13 → z ≠ 14 → z ≠ 15 → z ≠ 16 → z ≠ 17 → z ≠ 6 → z ≠ 28 →
     R z = R0 z
@@ -234,25 +180,20 @@ theorem MMFrame.trans' {R R' R'' : Nat → BitVec 64} (h : MMFrame R' R) (h' : M
 
 theorem MMFrame.refl (R : Nat → BitVec 64) : MMFrame R R := fun _ _ _ _ _ _ _ _ _ _ => rfl
 
-/-- Registers a loop keeps: all but `a`, `b`, `c`. -/
 def Keep3 (R' R : Nat → BitVec 64) (a b c : Nat) : Prop := ∀ z, z ≠ a → z ≠ b → z ≠ c → R' z = R z
 
 theorem Keep3.trans {R R' R'' : Nat → BitVec 64} {a b c : Nat} (h : Keep3 R' R a b c)
     (h' : Keep3 R'' R' a b c) : Keep3 R'' R a b c := fun z x y w => (h' z x y w).trans (h z x y w)
 
-/-- `Keep3` of one register update outside the frame. -/
 macro "k3_frame" : tactic =>
   `(tactic| (intro z ha hb hc; simp only [upd_apply, ha, hb, hc, ite_false]))
 
-/-- `MMFrame` of one register update outside the frame. -/
 macro "mm_frame" : tactic =>
   `(tactic| (intro z h11 h12 h13 h14 h15 h16 h17 h6 h28; simp only [upd_apply, h11, h12, h13, h14, h15, h16, h17, h6, h28, ite_false]))
 
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
   {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **`memmove`'s byte loop** (`0x80006a0c`): `k` bytes left, `j` done. At the
-`ret` the destination holds the window's bytes, nothing else changed. -/
 theorem mm_byteLoop (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Nat → BitVec 8)
     (R0 : Nat → BitVec 64) (Mt0 : Mem) (G : MoveGeom S d src len)
     (hw : ReadWin Dt DA S Mt0 src (src + len) g) (hal : (R0 1).toNat % 4 = 0)
@@ -317,7 +258,6 @@ theorem mm_byteLoop (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g
         · refine hkp.trans' ?_; mm_frame
         · rw [← hlen]; exact hcp.sb rfl
 
-/-- An effective address below a register: `x + sext imm = x - k`. -/
 theorem ea_sub {x k : Nat} {imm : BitVec 12}
     (himm : LeanRV64DExecutable.Functions.sign_extend (m := 64) imm = BitVec.ofNat 64 (2 ^ 64 - k))
     (hk : k ≤ x) (hk0 : 0 < k) (hx : x < 2 ^ 64) :
@@ -335,8 +275,6 @@ theorem ofNat_add_sx {x k : Nat} {imm : BitVec 12}
     BitVec.ofNat 64 x + LeanRV64DExecutable.Functions.sign_extend (m := 64) imm = BitVec.ofNat 64 (x + k) := by
   rw [himm, ofNat_add_ofNat]
 
-/-- A word load of the copy's source, then its store to the destination: the
-window moves across the store (outside it), the copy grows by eight bytes. -/
 theorem Copied.sd_win {Mt Mt0 : Mem} {d src c len : Nat} {g : Nat → BitVec 8}
     (h : Copied Mt Mt0 d src c g) (hw : ReadWin Dt DA S Mt src (src + len) g)
     (hdisj : src + len ≤ d ∨ d + len ≤ src) (hc : c + 8 ≤ len) :
@@ -344,8 +282,6 @@ theorem Copied.sd_win {Mt Mt0 : Mem} {d src c len : Nat} {g : Nat → BitVec 8}
       ReadWin Dt DA S (writeLog Mt [(d + c, 8, ldvf .ld g (src + c))]) src (src + len) g :=
   ⟨h.sd rfl rfl, hw.transport fun a h1 h2 => imgM_store_miss _ _ (by omega)⟩
 
-/-- **One iteration of `memmove`'s 32-byte loop** (`0x80006a48`): four
-doubleword copies, then the back edge or the fall-through at `0x80006a74`. -/
 theorem mm32_step (hlive : ∀ p ∈ stdioText, live p.1) (d src len L c : Nat)
     (g : Nat → BitVec 8) (R : Nat → BitVec 64) (Mt Mt0 : Mem) (G : MoveGeom S d src len)
     (hd8 : d % 8 = 0) (hL : L ≤ len) (hc : c + 32 ≤ L) (hc8 : c % 8 = 0)
@@ -369,7 +305,7 @@ theorem mm32_step (hlive : ∀ p ∈ stdioText, live p.1) (d src len L c : Nat)
   have m8 : LeanRV64DExecutable.Functions.sign_extend (m := 64) (0xff8#12) = BitVec.ofNat 64 (2 ^ 64 - 8) := by decide
   have eS : ∀ x k, x + k < 2 ^ 64 → (BitVec.ofNat 64 x + BitVec.ofNat 64 k) = BitVec.ofNat 64 (x + k) :=
     fun x k _ => ofNat_add_ofNat x k
-  -- the four source loads and destination stores, as `Nat` addresses
+
   have a0 : (BitVec.ofNat 64 (src + c) + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12)).toNat
       = src + c := by rw [ea_add s0 (by omega), Nat.add_zero]
   have eB : BitVec.ofNat 64 (src + c) + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x020#12) =
@@ -454,8 +390,6 @@ theorem mm32_step (hlive : ∀ p ∈ stdioText, live p.1) (d src len L c : Nat)
       | (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [← Nat.add_assoc]; done)
       | k3_frame
 
-/-- **`memmove`'s 32-byte loop** (`0x80006a48`), `m` blocks left: it copies
-`[c, L)` and falls through at `0x80006a74`. -/
 theorem mm_loop32 (hlive : ∀ p ∈ stdioText, live p.1) (d src len L : Nat) (g : Nat → BitVec 8)
     (R0 : Nat → BitVec 64) (Mt0 : Mem) (G : MoveGeom S d src len) (hd8 : d % 8 = 0) (hL : L ≤ len)
     (hk : ∀ R' Mt', Keep3 R' R0 11 13 14 → R' 11 = BitVec.ofNat 64 (src + L) →
@@ -480,9 +414,6 @@ theorem mm_loop32 (hlive : ∀ p ∈ stdioText, live p.1) (d src len L : Nat) (g
       rw [heq] at h11' h14' hcp'
       exact hk R' Mt' (hkp.trans hkp') h11' h14' hcp'
 
-/-- **`memmove`'s byte tail** (`0x800069fc`): `k` bytes left after `c`
-copied, `a5 = d + c`, `a1 = src + c`, `a2 = k`. At the `ret` the copy is
-complete. -/
 theorem mm_tail (hlive : ∀ p ∈ stdioText, live p.1) (d src len c k : Nat) (g : Nat → BitVec 8)
     (R R0 : Nat → BitVec 64) (Mt Mt0 : Mem) (G : MoveGeom S d src len) (hck : c + k = len)
     (hw : ReadWin Dt DA S Mt0 src (src + len) g) (hcp : Copied Mt Mt0 d src c g)
@@ -519,8 +450,6 @@ theorem mm_tail (hlive : ∀ p ∈ stdioText, live p.1) (d src len c k : Nat) (g
         BitVec.add_zero, ofNat_add_ofNat, ← hck, Nat.add_assoc]
     · refine hkp.trans' ?_; mm_frame
 
-/-- **`memmove`'s 8-byte loop** (`0x80006aac`), `m` words left: `a6 = d - src`,
-the loop ends when `a1` reaches `src + E`. -/
 theorem mm_loop8 (hlive : ∀ p ∈ stdioText, live p.1) (d src len E : Nat) (g : Nat → BitVec 8)
     (R0 : Nat → BitVec 64) (Mt0 : Mem) (G : MoveGeom S d src len) (hd8 : d % 8 = 0) (hE : E ≤ len)
     (hk : ∀ R' Mt', Keep3 R' R0 6 11 17 → R' 11 = BitVec.ofNat 64 (src + E) → Copied Mt' Mt0 d src E g →
@@ -571,8 +500,6 @@ theorem mm_loop8 (hlive : ∀ p ∈ stdioText, live p.1) (d src len E : Nat) (g 
       refine hk _ _ (hkp.trans (by k3_frame)) ?_ (hE8 ▸ hcp1)
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h11, ofNat_add_sx s8]
       rw [Nat.add_assoc, hE8]
-
-/-! ## Mask arithmetic -/
 
 section Masks
 
@@ -629,7 +556,6 @@ theorem or_and7_zero {a b : Nat} (ha : a < 2 ^ 64) (hb : b < 2 ^ 64) :
     apply BitVec.eq_of_toNat_eq
     rw [e, h1, h2]; rfl
 
-/-- `(r - 8) & ~7` for `8 ≤ r < 32`. -/
 theorem sub8_mask (r : Nat) (h2 : r < 32) (h1 : 8 ≤ r) :
     (BitVec.ofNat 64 r + sign_extend (m := 64) (0xff8#12)) &&& sign_extend (m := 64) (0xff8#12) =
       BitVec.ofNat 64 ((r - 8) / 8 * 8) := by
@@ -637,20 +563,15 @@ theorem sub8_mask (r : Nat) (h2 : r < 32) (h1 : 8 ≤ r) :
 
 end Masks
 
-/-! ## The whole call -/
-
 section Run
 
 open Sail LeanRV64DExecutable.Functions
 
-/-- Register lookups through an `upd` chain. -/
 syntax "rsimp" (Lean.Parser.Tactic.location)? : tactic
 scoped macro_rules
   | `(tactic| rsimp $[$loc]?) =>
     `(tactic| simp (config := {failIfUnchanged := false}) only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] $[$loc]?)
 
-/-- After the 32-byte loop (`0x80006a74`): the 8-byte loop when a word is
-left, then the byte tail. -/
 theorem mm_after32 (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Nat → BitVec 8)
     (R R0 : Nat → BitVec 64) (Mt Mt0 : Mem) (G : MoveGeom S d src len) (hd8 : d % 8 = 0)
     (hs8 : src % 8 = 0) (h32 : 32 ≤ len) (hw : ReadWin Dt DA S Mt0 src (src + len) g)
@@ -678,7 +599,7 @@ theorem mm_after32 (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g 
     (it_80006a94 hlive (fun hb => ?_) (fun hb => ?_)))))))))
   all_goals rsimp at hb
   all_goals simp only [h12, mask_ofNat (n := len) (by omega) (by omega) e24, and24 _ hr] at hb
-  · -- no word left: the byte tail from `len / 32 * 32`
+  ·
     have hw0 : len % 32 / 8 * 8 = 0 := by
       have := congrArg BitVec.toNat hb; simp only [BitVec.toNat_ofNat] at this; omega
     refine it_80006ae4 hlive (it_80006ae8 hlive ?_)
@@ -691,7 +612,7 @@ theorem mm_after32 (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g 
       rw [h15, sll5_ofNat (by omega), h17, ofNat_add_ofNat, ofNat_add_sx e32,
         show (len / 32 - 1) * 32 + src + 32 = src + len / 32 * 32 by omega]
     · refine hkp.trans' ?_; mm_frame
-  · -- the 8-byte loop over `[L, E)`, then the byte tail
+  ·
     have hw8 : 8 ≤ len % 32 := by
       apply Classical.byContradiction; intro hlt
       exact hb (by rw [show len % 32 / 8 * 8 = 0 by omega])
@@ -735,8 +656,6 @@ theorem mm_after32 (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g 
       congr 1; omega
     · rsimp; rw [h10, h17, ofNat_sub_ofNat _ _ (by omega)]
 
-/-- The forward copy (`0x800069f0`): the byte loop for `len ≤ 31` or a
-misaligned pair, otherwise the 32-byte, 8-byte and byte loops. -/
 theorem mm_fwd (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Nat → BitVec 8)
     (R R0 : Nat → BitVec 64) (Mt : Mem) (G : MoveGeom S d src len)
     (hw : ReadWin Dt DA S Mt src (src + len) g)
@@ -755,13 +674,13 @@ theorem mm_fwd (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Na
     h12] at hc
   all_goals simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod,
     Nat.mod_eq_of_lt (show len < 2 ^ 64 by omega)] at hc
-  · -- `len > 31`
+  ·
     refine it_80006a24 hlive (it_80006a28 hlive (it_80006a2c hlive (it_80006a30 hlive
       (fun hb => ?_) (fun hb => ?_))))
     all_goals rsimp at hb
     all_goals rw [h10, h11, Ne, or_and7_zero (by omega) (by omega)] at hb
     all_goals try have hb := Classical.not_not.mp hb
-    · -- misaligned: the byte loop from the start
+    ·
       refine it_80006ad4 hlive (it_80006ad8 hlive (it_80006adc hlive (it_80006a04 hlive
         (it_80006a08 hlive ?_))))
       refine mm_byteLoop hlive d src len g R0 Mt G hw hal hk len 0 _ Mt (by omega) (by omega)
@@ -772,7 +691,7 @@ theorem mm_fwd (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Na
         rw [h10, h12, BitVec.add_assoc (BitVec.ofNat 64 len), e1, BitVec.add_zero, e0, ofNat_add_ofNat, ofNat_add_ofNat,
           Nat.add_zero]
       · refine hkp.trans' ?_; mm_frame
-    · -- aligned: the 32-byte loop over `[0, len / 32 * 32)`
+    ·
       have hd8 : d % 8 = 0 := hb.1
       refine it_80006a34 hlive (it_80006a38 hlive (it_80006a3c hlive (it_80006a40 hlive
         (it_80006a44 hlive ?_))))
@@ -796,7 +715,7 @@ theorem mm_fwd (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Na
       · rsimp; rw [h11, Nat.add_zero]
       · rsimp; rw [h10, ofNat_add_sx e0, Nat.add_zero]
       · rsimp; rw [h12, srl5_ofNat (by omega), sll5_ofNat (by omega), h10, ofNat_add_ofNat]
-  · -- `len ≤ 31`: the byte tail from the start
+  ·
     refine it_800069f8 hlive ?_
     refine mm_tail hlive d src len 0 len g _ R0 Mt Mt G (by omega) hw (Copied.zero Mt d src g)
       ?_ ?_ ?_ ?_ hal hk
@@ -805,8 +724,6 @@ theorem mm_fwd (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Na
     · rsimp; rw [h11]; rfl
     · refine hkp.trans' ?_; mm_frame
 
-/-- **`memmove(d, src, len)`** with disjoint ranges: the destination holds
-the window's bytes, nothing else changed, `a0 = d`, back at `ra`. -/
 theorem memmove_run (hlive : ∀ p ∈ stdioText, live p.1) (d src len : Nat) (g : Nat → BitVec 8)
     (R : Nat → BitVec 64) (Mt : Mem) (G : MoveGeom S d src len)
     (hw : ReadWin Dt DA S Mt src (src + len) g)

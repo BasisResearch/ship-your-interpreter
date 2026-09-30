@@ -1,13 +1,5 @@
 import Vsa.Compiler.StmtCases
 
-/-!
-# Shapes of compiled compound statements
-
-The code of `if`, `while` and blocks as explicit concatenations, and the
-control fragments both simulation directions share: running a condition and
-its branch, and the scope a statement list leaves.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
@@ -58,7 +50,6 @@ theorem cseq_tail : ∀ (ss : List Stmt) (C : Ctx) (pos : Nat) (f : List (String
     · rw [cseq_other C pos s ss (fun x e he => hd ⟨x, e, he⟩)]
       exact cseq_tail ss _ _ f g h
 
-/-- A block's context: a new empty innermost frame. -/
 theorem At.block {code : List Ins} {C : Ctx} {pos : Nat} (h : At code C pos) :
     At code ⟨[] :: C.Γ, C.next, C.brk, C.cont⟩ pos := by
   refine ⟨h.lay, by simp, ?_, ?_, ?_, h.nextle, h.posok⟩
@@ -72,8 +63,6 @@ theorem At.block {code : List Ins} {C : Ctx} {pos : Nat} (h : At code C pos) :
 section
 variable {code : List Ins}
 
-/-- Evaluate a condition and branch on it: fall through when truthy, else jump to `L`.
-Either the condition errors (and has no evaluation), or it evaluates. -/
 theorem sim_cond {C : Ctx} {pos L : Nat} {c : Expr} {st : St} {d : Nat} {env : Addr} {A : AM}
     (hAt : At code C pos) (hc : CondE C.Γ.names c)
     (hseg : Seg code pos (cexpr C.Γ 0 pos c ++ [.br .ne a0 0 (bSkip 1),

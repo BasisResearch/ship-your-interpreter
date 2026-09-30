@@ -1,27 +1,6 @@
 import VsaIris.Interp.CallNativeSeg
 import VsaIris.Interp.CallPrefixP
 
-/-!
-# The closure call: its resources (lane E4)
-
-`interp.c:180-208` (`call_value`'s closure path, inlined in `eval_expr`):
-read the closure object (`fn_expr`, `env`), the `EX_FN` node (`paramc`,
-`params`, `body`), bump `in->call_depth`, `env_new(cl->env)`, bind the
-parameters (`env_define`), run the body (G's closure loop), drop the depth,
-and return `null` or the returned value.
-
-This file: what the path reads besides the frame.
-
-* `CloRes s ca p` (persistent): the closure `ca` at `p`: its store entry
-  `cd`, its 16 bytes read-only with their read geometry, the `EX_FN` node's
-  view (`ExprReprWithin`, `ReadOK`, `SharedWin`), and its environment's
-  binding. `CloSupply N`: every closure the store owns has it; proved for
-  every `N` from `storeRepr` (`cloSupply`, since `closOwn` carries the
-  geometry). It subsumes `DispSupply` (`dispSupply_of_cloSupply`, `dispSupply`).
-* `roOwn_roImg`: a data view of a read-only image (the closure object).
-* `world_depth`: the depth word out of the world, and back.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
@@ -33,7 +12,6 @@ section Defs
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The pure facts of a closure's resources. -/
 structure CloFactsE (s : Store) (ca p : Nat) (cd : ClosureData) (q e : Nat) (img : Nat → BitVec 8)
     (P : Nat → Prop) (m : Mem) : Prop where
   lookup : s.closures[ca]? = some cd
@@ -44,8 +22,6 @@ structure CloFactsE (s : Store) (ca p : Nat) (cd : ClosureData) (q e : Nat) (img
   geo : ∀ k, P k → ReadOK k
   win : SharedWin P
 
-/-- **A closure's resources** (persistent): the object's bytes, the `EX_FN`
-node's view, the environment's binding. -/
 def CloRes (s : Store) (ca p : Nat) : IProp GF :=
   iprop(∃ (cd : ClosureData) (q e : Nat) (img : Nat → BitVec 8) (P : Nat → Prop) (m : Mem),
     ⌜CloFactsE s ca p cd q e img P m⌝ ∗ roImg (InExt (p, 16)) img ∗ roOn P m ∗ frameAt cd.env e)
@@ -53,11 +29,6 @@ def CloRes (s : Store) (ca p : Nat) : IProp GF :=
 instance (s : Store) (ca p : Nat) : Persistent (CloRes (GF := GF) s ca p) := by
   unfold CloRes; infer_instance
 
-/-- **The closures' read geometry, from the store**: every closure the store
-owns has its resources. Proved for every `N` (`cloSupply`): `closOwn` carries
-the object's `ReadOK` geometry (`ClosObj`) and the node's `astEG`, established
-by the `EX_FN` arm (`storeRepr_allocClosure`). Kept as a named statement so the
-case lemmas' signatures are unchanged. -/
 def CloSupply (N : NativeAddrs) : Prop :=
   ∀ (s : Store) (B : List (Nat × Nat)) (ca p : Nat),
     storeRepr (GF := GF) N s B ∗ closAt ca p ⊢ storeRepr N s B ∗ CloRes s ca p
@@ -77,9 +48,6 @@ theorem dispSupply_of_cloSupply {N : NativeAddrs} (h : CloSupply (GF := GF) N) :
   ipureintro
   exact ⟨hf.lookup, hf.fn, hf.objOK, hf.repr, hf.geo, hf.win⟩
 
-/-- **`CloSupply`, from the store**: the closure's entry by the address map,
-its `closOwn` out of `closuresOwn` (persistent), the address by agreement of
-the two fragments, and `SharedWin` from the node's `ReadOK` geometry (`ReadOK.win`). -/
 theorem cloSupply {N : NativeAddrs} : CloSupply (GF := GF) N := by
   intro s B ca p
   iintro ⟨Hs, #Hat⟩
@@ -109,18 +77,12 @@ theorem cloSupply {N : NativeAddrs} : CloSupply (GF := GF) N := by
   exact ⟨hcd, hobj.fn, hobj.env, hobj.objOK, hrepr, hgeo,
     fun k hk => ⟨(hgeo k hk).lo, (hgeo k hk).win.1, (hgeo k hk).win.2⟩⟩
 
-/-- `DispSupply`, from the store (`cloSupply`). -/
-theorem dispSupply {N : NativeAddrs} : DispSupply (GF := GF) N :=
-  dispSupply_of_cloSupply cloSupply
-
 end Defs
 
 section Views
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **A data view of a read-only image** (the closure object): a memory
-agreeing with the image on the range. -/
 theorem roOwn_roImg {img : Nat → BitVec 8} {p n : Nat} :
     codeRes (GF := GF) ∗ roImg (InExt (p, n)) img ⊢
       ∃ Dt : Mem, roOwn roR (interpText ++ dataOf Dt (accAddrs p n)) ∗
@@ -152,8 +114,6 @@ section World
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- **The depth word out of the world** (with its bound), and back at any
-depth within the bound. -/
 theorem world_depth (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
     (st : St) (d : Nat) :
     world (GF := GF) N L Room inp ρ st d ⊢
@@ -192,9 +152,6 @@ namespace VsaIris.Interp
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-! ## The `EX_FN` node -/
-
-/-- A signed word load equal to a small value pins the stored word. -/
 theorem ldvf_lw_eq_small {f : Nat → BitVec 8} {a k j : Nat} (h : imgLE f a 4 = k) (hj : j < 2 ^ 31)
     (he : ldvf .lw f a = BitVec.ofNat 64 j) : k = j := by
   by_cases hk : k < 2 ^ 31
@@ -223,18 +180,14 @@ theorem paramsRepr_length {m : Mem} {P : Nat → Prop} :
   | _, _, _, .nil => rfl
   | _, _, _, .cons _ _ _ hrest => by simp [paramsRepr_length hrest]
 
-/-- `addiw`'s sign-extended word of a small value. -/
 theorem sext32_toNat_small {a : Nat} (h : a < 2 ^ 31) :
     (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a))).toNat = a := by
   have hi := VsaIris.Interp.sext32_ofNat_toInt h
   rw [BitVec.toInt_eq_toNat_cond] at hi
   split at hi <;> omega
 
-/-- The bytes of an `EX_FN` node the call reads: the name, parameter array
-and count words, and the body pointer (not the tag). -/
 abbrev fnView (q : Nat) : List Nat := accAddrs (q + 8) 20 ++ accAddrs (q + 32) 8
 
-/-- What an `EX_FN` node gives the call's runs. -/
 structure FnNode (m : Mem) (P : Nat → Prop) (q : BitVec 64) (paramc : Nat) (prm bod nam : BitVec 64) :
     Prop where
   pcr : imgLE (imgM m) (q + 24#64).toNat 4 = paramc
@@ -252,7 +205,6 @@ theorem readLE_imgM {m : Mem} {a n v : Nat} (h : readLE m a n = some v) : imgLE 
     rw [hb]; simp [imgM, hb])
   rw [this] at h; cases h; rfl
 
-/-- An `EX_FN` node's facts, from its representation over a geometric view. -/
 theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option String}
     {ps : List String} {ss : List Stmt}
     (h : ExprReprWithin m P q.toNat (.fn name ps ss)) (hg : ∀ k, P k → ReadOK k) :
@@ -310,8 +262,6 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     obtain ⟨f, h1, h2, h3, h4⟩ := core 0 prm pc bod hk ck hn cn hp cp hc cc hps hb cb hbody
     exact ⟨prm, bod, 0, f, h1, h2, h3, h4, hbody, .inl ⟨rfl, rfl⟩⟩
 
--- Run K1a: the kind tests (`4`: a closure), the callee copied to `sp+120`,
--- the line; stop before the closure object's load.
 #ix_seg CallK_runA {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s w0 w1 w2 : BitVec 64}
@@ -327,7 +277,6 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
   by ix_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x80003288
 
--- Run K1b: `fn_expr` from the closure object; `s5` spilled, `s5 = fn_expr`.
 #ix_seg CallK_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
     {s cp q : BitVec 64}
@@ -340,10 +289,6 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     IW live Dt (accAddrs cp.toNat 16) (InExt (s.toNat - 1088, 1088)) Q 0x80003288#64 R Mt
   by ix_run hlive using [h13, h2, hq, hsf] at 0x80003294
 
--- Run K1c: `paramc` from the `EX_FN` node, the arity test (`bne`: the
--- arity error at `0x80003d60`), `++in->call_depth` (the depth word owned
--- beside the frame), `s3` spilled, the depth test (`blt`: the depth error at
--- `0x80003ca4`).
 #ix_seg CallK_runC {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
     {s q inp pv : BitVec 64} {dep : Nat}
@@ -360,7 +305,6 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
       (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q 0x80003294#64 R Mt
   by ix_run hlive using [h14, h18, h2, hpc, hdep, hsf] at 0x80003d60 0x80003ca4 0x800032b4
 
--- Run K1d: `cl->env` from the closure object, `argc` spilled at `sp+0`.
 #ix_seg CallK_runD {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
     {s cp e inp : BitVec 64}
@@ -383,15 +327,9 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr
 
-/-- The frame and the depth word (`in->call_depth`), the closure head's owned
-bytes. -/
 abbrev cloS (s inp : BitVec 64) : Nat → Prop :=
   fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b
 
-/-- The state at a closure call's `jal env_new` (`0x800032bc`): `a0` the
-closure's environment, `s5` the `EX_FN` node, `s7` the line, the spills
-(`s3`, `s5`, `s7`, the prologue's), `argc` at `sp+0`, the depth word bumped,
-the argument array unchanged since the dispatch (`Mt`). -/
 structure CloHd (R1 : Nat → BitVec 64) (Mt1 Mt : Mem) (s aX sret inp ret e q line : BitVec 64)
     (rv : Nat → BitVec 64) (argc dep : Nat) : Prop where
   a0 : R1 10 = e
@@ -410,8 +348,6 @@ structure CloHd (R1 : Nat → BitVec 64) (Mt1 Mt : Mem) (s aX sret inp ret e q l
   depth : imgLE (imgM Mt1) (inp.toNat + 8) 4 = dep + 1
   args : ∀ a, InExt (argsBase s, 24 * argc) a → imgM Mt1 a = imgM Mt a
 
-/-- The state at the arity error (`0x80003d60`): the count and `paramc`
-differ; `s5` the node, `s7` the line, the depth word unchanged. -/
 structure CloAr (R1 : Nat → BitVec 64) (Mt1 Mt : Mem) (s aX sret inp ret q line : BitVec 64)
     (rv : Nat → BitVec 64) (argc dep : Nat) : Prop where
   sp : R1 2 = s + 18446744073709550528#64
@@ -428,8 +364,6 @@ structure CloAr (R1 : Nat → BitVec 64) (Mt1 Mt : Mem) (s aX sret inp ret q lin
   depth : imgLE (imgM Mt1) (inp.toNat + 8) 4 = dep
   args : ∀ a, InExt (argsBase s, 24 * argc) a → imgM Mt1 a = imgM Mt a
 
-/-- The state at the depth error (`0x80003ca4`): the depth word bumped past
-the maximum; `a1`/`s7` the line. -/
 structure CloDp (R1 : Nat → BitVec 64) (Mt1 : Mem) (s aX sret inp ret line : BitVec 64)
     (rv : Nat → BitVec 64) (dep : Nat) : Prop where
   sp : R1 2 = s + 18446744073709550528#64
@@ -450,7 +384,6 @@ section Exits
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 variable (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
 
-/-- The closure head's three exits, an additive triple. -/
 def CloHeadK (cd : ClosureData) (Mt : Mem) (s aX sret inp ret e q : BitVec 64)
     (rv : Nat → BitVec 64) (argc dep : Nat) : IProp GF :=
   iprop((∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (line : BitVec 64),

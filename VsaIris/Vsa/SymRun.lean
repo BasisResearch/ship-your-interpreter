@@ -2,28 +2,6 @@ import VsaIris.Vsa.RunBase
 import VsaIris.Vsa.Tools
 import Vsa.Sim.InterpSpillReads
 
-/-!
-# Symbolic execution over local runs
-
-`SWP pc R Mt` is the weakest precondition of a `LocalRun` at a symbolic
-state:
-
-* the program counter `pc`;
-* a register file `R`, read on the owned registers other than `PC`;
-* a tracking memory `Mt`, whose total read is the owned bytes' image.
-
-Every concrete state matching it runs to `Q` within one fuel bound. A reflected
-segment (`segEval_sound` through `seg_runFact`) is one step of `SWP` (`swp_seg`).
-The generated per-instruction lemmas (`AllocSteps.lean`, from
-`scripts/gen_alloc_steps.py`) are its instances. Their continuations are the
-successor's symbolic state, so a path through a function is a chain of
-lemma applications, and a loop is an induction whose motive is `SWP`.
-
-The fuel bound sits outside the state quantifier: `SegFrom`'s continuation
-fixes it before the successor state is known. Branches join two bounds by
-`LocalRun.fuel_mono`.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
@@ -31,11 +9,9 @@ open Vsa.Machine (Config)
 open Iris
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The listed code bytes are present in a memory. -/
 def TextLoaded (text : List (Nat × BitVec 8)) (m : Mem) : Prop :=
   ∀ p ∈ text, m[p.1]? = some p.2
 
-/-- Code bytes as read-only footprint cells. -/
 abbrev textMRof (text : List (Nat × BitVec 8)) : List (Nat × DFrac × BitVec 8) :=
   text.map fun p => (p.1, DFrac.discard, p.2)
 
@@ -56,7 +32,6 @@ section Fuel
 variable {M : MachineModel} {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
   {rs : List Nat} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- More fuel never hurts. -/
 theorem LocalRun.fuel_succ : ∀ {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8},
     LocalRun M ro text rs S Q n rv mv → LocalRun M ro text rs S Q (n + 1) rv mv
   | 0, _, _, h => .inl h
@@ -83,7 +58,6 @@ theorem mem_keysG_iff (r : Nat) : ∀ L : GRegs, r ∈ keysG L ↔ ∃ v, (r, v)
       · exact .inl rfl
       · exact .inr ⟨v, hv⟩
 
-/-- A register file updated at one register. -/
 def upd (R : Nat → BitVec 64) (k : Nat) (v : BitVec 64) (r : Nat) : BitVec 64 :=
   if r = k then v else R r
 
@@ -94,7 +68,6 @@ theorem upd_other (R : Nat → BitVec 64) {k r : Nat} (v : BitVec 64) (h : r ≠
     upd R k v r = R r := by
   simp [upd, h]
 
-/-- Updating a register to the value it holds changes nothing. -/
 theorem upd_self_eq {R : Nat → BitVec 64} {k : Nat} {v : BitVec 64} (h : R k = v) : upd R k v = R := by
   funext r
   unfold upd
@@ -102,8 +75,6 @@ theorem upd_self_eq {R : Nat → BitVec 64} {k : Nat} {v : BitVec 64} (h : R k =
   · subst hr; rw [if_pos rfl, h]
   · rw [if_neg hr]
 
-/-- The pins of a register list read off a register file; `gp` reads its
-fixed value. -/
 def pinsOf (ks : List Nat) (R : Nat → BitVec 64) : GRegs :=
   ks.map fun k => (k, if k = gp then gpV else R k)
 
@@ -111,25 +82,17 @@ theorem keysG_pinsOf (R : Nat → BitVec 64) : ∀ ks : List Nat, keysG (pinsOf 
   | [] => rfl
   | k :: ks => by simp only [pinsOf, List.map_cons, keysG]; rw [← pinsOf, keysG_pinsOf R ks]
 
-
-/-! ## Values the step table names -/
-
-/-- `n` bytes of an image from `a`, in address order (a load's byte list). -/
 def bytesAt (f : Nat → BitVec 8) (a n : Nat) : List (BitVec 8) :=
   (List.range n).map fun j => f (a + j)
 
-/-- The value a load of kind `k` reads from the tracking memory at `a`. -/
 abbrev ldv (k : MKind) (Mt : Mem) (a : Nat) : BitVec 64 :=
   bytesVal k (bytesAt (imgM Mt) a (widthOfM k))
 
-/-- A 32-bit result, sign-extended (the `*w` instructions). -/
 abbrev sx32 (v : BitVec 64) : BitVec 64 := BitVec.signExtend 64 (v.truncate 32)
 
-/-- `slti`'s and `slt`'s result (the Sail form). -/
 abbrev sltiV (a b : BitVec 64) : BitVec 64 := zero_extend (m := 64) (bool_to_bit (zopz0zI_s a b))
 abbrev sltV (a b : BitVec 64) : BitVec 64 := zero_extend (m := 64) (bool_to_bit (zopz0zI_s a b))
 
-/-- The owned byte addresses of an access of width `w` at `a`. -/
 def accAddrs (a w : Nat) : List Nat := (List.range w).map (a + ·)
 
 theorem mem_accAddrs {a w j : Nat} (hj : j < w) : a + j ∈ accAddrs a w :=
@@ -140,7 +103,6 @@ theorem of_mem_accAddrs {a w b : Nat} (h : b ∈ accAddrs a w) : a ≤ b ∧ b <
   have := List.mem_range.mp hj
   omega
 
-/-- Bytes outside an access are outside its one-entry log. -/
 theorem outL_single {a w b : Nat} (v : BitVec 64) (h : b ∉ accAddrs a w) : OutL [(a, w, v)] b := by
   refine ⟨?_, trivial⟩
   refine Classical.byContradiction fun hc => h ?_
@@ -183,22 +145,14 @@ theorem lpins2_img {m : Mem} {Mt : Mem} {a : Nat}
     exact ⟨by simpa using h0, (h _ (mem_accAddrs (j := 1) (by omega))).trans
       (bytesAt_getD (imgM Mt) a (n := 2) (by omega)).symm⟩
 
-
-/-- A load's address side conditions (`MemFacts`' first conjunct): RAM, off
-the HTIF words. -/
 abbrev LdOK (ea w : Nat) : Prop :=
   0x80000000 ≤ ea ∧ ea + w ≤ 0x100000000 ∧ (ea + w ≤ tohostAddr ∨ tohostAddr + 8 ≤ ea)
 
-/-- An aligned store's address side conditions (`sd`, `sw`, `sh`). -/
 abbrev StOK (ea w : Nat) : Prop :=
   0x80000000 ≤ ea ∧ ea + w ≤ 0x100000000 ∧ tohostAddr + 16 ≤ ea ∧ ea % w = 0
 
-/-- A byte store's address side conditions (`sb`). -/
 abbrev StOKb (ea : Nat) : Prop :=
   0x80000000 ≤ ea ∧ ea + 1 ≤ 0x100000000 ∧ tohostAddr + 16 ≤ ea
-
-
-/-! ## The tracking memory -/
 
 theorem read64_bytes_present {m : Mem} {a v : Nat} (h : read64 m a = some v) :
     ∀ k, k < 8 → m[a + k]? = some (imgM m (a + k)) := by
@@ -211,12 +165,10 @@ theorem read64_bytes_present {m : Mem} {a v : Nat} (h : read64 m a = some v) :
     | (rw [h1]; rfl) | (rw [h2]; rfl) | (rw [h3]; rfl) | (rw [h4]; rfl) | (rw [h5]; rfl)
     | (rw [h6]; rfl) | (rw [h7]; rfl) | omega
 
-/-- A doubleword load reads what `read64` reads. -/
 theorem ldv_ld {Mt : Mem} {a : Nat} {v : BitVec 64} (h : read64 Mt a = some v.toNat) :
     ldv .ld Mt a = v :=
   wordOf_value (f := imgM Mt) (read64_bytes_present h) h
 
-/-- A load's bytes are untouched by a disjoint store. -/
 theorem ldv_store_miss (k : MKind) (Mt : Mem) {a b w : Nat} (v : BitVec 64)
     (h : a + widthOfM k ≤ b ∨ b + w ≤ a) :
     ldv k (writeLog Mt [(b, w, v)]) a = ldv k Mt a := by
@@ -227,7 +179,6 @@ theorem ldv_store_miss (k : MKind) (Mt : Mem) {a b w : Nat} (v : BitVec 64)
   unfold imgM
   rw [writeLog_out _ _ _ (by simp only [OutL]; exact ⟨by omega, trivial⟩)]
 
-/-- A doubleword load reads a doubleword just stored at its address. -/
 theorem ldv_store_hit (Mt : Mem) (a : Nat) (v : BitVec 64) :
     ldv .ld (writeLog Mt [(a, 8, v)]) a = v :=
   ldv_ld (read64_of_writeLog_at Mt [(a, 8, v)] 0 a v rfl trivial)
@@ -236,23 +187,18 @@ theorem read64_logOut {m : Mem} {w : List WEntry} {a : Nat}
     (h : ∀ k, k < 8 → OutL w (a + k)) : read64 (writeLog m w) a = read64 m a :=
   (read64_agreeP (P := OutL w) (fun k hk => (writeLog_out m w k hk).symm) h).symm
 
-/-- `read64` through a disjoint store. -/
 theorem read64_store_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 8 ≤ b ∨ b + w ≤ a) :
     read64 (writeLog Mt [(b, w, v)]) a = read64 Mt a :=
   read64_logOut fun k hk => by simp only [OutL]; exact ⟨by omega, trivial⟩
 
-/-- `read64` of a doubleword just stored. -/
 theorem read64_store_hit (Mt : Mem) (a : Nat) (v : BitVec 64) :
     read64 (writeLog Mt [(a, 8, v)]) a = some v.toNat :=
   read64_of_writeLog_at Mt [(a, 8, v)] 0 a v rfl trivial
 
-/-- The image through a store, off its bytes. -/
 theorem imgM_store_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a < b ∨ b + w ≤ a) :
     imgM (writeLog Mt [(b, w, v)]) a = imgM Mt a := by
   unfold imgM
   rw [writeLog_out _ _ _ (by simp only [OutL]; exact ⟨h, trivial⟩)]
-
-/-! ## Branch guards -/
 
 theorem guard_beq (a b : BitVec 64) : guardB .BEQ a b = true ↔ a = b := by
   simp [guardB]
@@ -281,50 +227,34 @@ section SWP
 variable (live : Nat → Prop) (text : List (Nat × BitVec 8)) (rs : List Nat) (S : Nat → Prop)
   (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop)
 
-/-- The states a symbolic state stands for. -/
 structure Matches (pc : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem)
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop where
   pc : rv VsaIris.PC = pc
   regs : ∀ r ∈ rs, r ≠ VsaIris.PC → rv r = R r
   img : ∀ a, S a → mv a = imgM Mt a
 
-/-- **The weakest precondition at a symbolic state**: one fuel bound under which
-every matching state runs to `Q`. -/
 def SWP (pc : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) : Prop :=
   ∃ n, ∀ rv mv, Matches rs S pc R Mt rv mv →
     LocalRun (vsaModel live) roR text rs S Q n rv mv
 
 variable {live text rs S Q}
 
-/-- The run is done: every matching state satisfies `Q`. -/
 theorem swp_done {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (h : ∀ rv mv, Matches rs S pc R Mt rv mv → Q rv mv) : SWP live text rs S Q pc R Mt :=
   ⟨0, h⟩
 
-/-- Only the owned registers other than `PC` matter. -/
 theorem swp_congr {pc : BitVec 64} {R R' : Nat → BitVec 64} {Mt : Mem}
     (hR : ∀ r ∈ rs, r ≠ VsaIris.PC → R' r = R r) (h : SWP live text rs S Q pc R' Mt) :
     SWP live text rs S Q pc R Mt := by
   obtain ⟨n, hn⟩ := h
   exact ⟨n, fun rv mv hm => hn rv mv ⟨hm.pc, fun r hr hne => (hm.regs r hr hne).trans (hR r hr hne).symm, hm.img⟩⟩
 
-/-- Only the owned bytes of the tracking memory matter. -/
 theorem swp_congr_mem {pc : BitVec 64} {R : Nat → BitVec 64} {Mt Mt' : Mem}
     (hM : ∀ a, S a → imgM Mt' a = imgM Mt a) (h : SWP live text rs S Q pc R Mt') :
     SWP live text rs S Q pc R Mt := by
   obtain ⟨n, hn⟩ := h
   exact ⟨n, fun rv mv hm => hn rv mv ⟨hm.pc, hm.regs, fun a ha => (hm.img a ha).trans (hM a ha).symm⟩⟩
 
-/-- A case split on a pure fact. -/
-theorem swp_cases {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} (P : Prop)
-    (h1 : P → SWP live text rs S Q pc R Mt) (h2 : ¬ P → SWP live text rs S Q pc R Mt) :
-    SWP live text rs S Q pc R Mt := by
-  by_cases h : P
-  · exact h1 h
-  · exact h2 h
-
-/-- One reflected segment over an arbitrary pin list `L` (the core of
-`swp_seg`). -/
 theorem swp_segL {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (LD W : List Nat) (k : Nat)
@@ -406,11 +336,6 @@ theorem swp_segL {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         unfold imgM
         rw [writeLog_out _ _ _ (hcover a hw)]
 
-
-/-- **One reflected segment.** `seg_step` over an arbitrary code list: the
-pins are the registers `ks` read off `R` (`gp` at its fixed value), the loaded
-(`LD`) and written (`W`) owned bytes are read off the tracking memory, and the
-successor state is computed from the segment. -/
 theorem swp_seg {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (ks : List Nat) (lds : List (List (BitVec 8)))
     (LD W : List Nat) (k : Nat)
@@ -439,9 +364,6 @@ theorem swp_seg {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     · exact absurd h hg
     · exact .inl ⟨h1, h2, by simp [hg]⟩
 
-
-/-- **One `jal`** (a call): the link register takes the return address and
-the run continues at the target. -/
 theorem swp_jal {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (i : Nat) (code : List (BitVec 8)) (tgt : BitVec 64)
     (hexec : JalExec (vsaModel live) i code tgt)
@@ -477,11 +399,6 @@ theorem swp_jal {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         · exact fun e => hr1 e.symm
     · rw [h4 a ha (fun p hp => by cases hp), hm.img a ha]
 
-
-/-- **One reflected segment, successor named.** `swp_seg` with the successor
-state given: each pinned register's final value (`finReg` on the left, the
-orientation the kernel checks fast), the unpinned owned registers unchanged,
-the end PC and the memory after the log. -/
 theorem swp_step {pc0 pc1 : BitVec 64} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (bs : List BBlock) (ks : List Nat) (lds : List (List (BitVec 8)))
     (LD W : List Nat) (k : Nat)

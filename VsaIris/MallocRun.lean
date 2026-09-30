@@ -1,33 +1,10 @@
 import VsaIris.LocalRun
 
-/-!
-# `DlMallocImpl` from first-order runs
-
-`DlMallocImpl` is an Iris statement. This module reduces it to two
-first-order facts about the machine's steps, `MallocLocalRun` and
-`FreeLocalRun`, stated with `LocalRun`: from any state whose owned cells hold
-given values, the allocator's code runs, each step touching only
-
-* the registers `PC`, `ra`, `a0`, `sp`, the clobbered list and the
-  callee-saved registers it restores, and
-* its stack scratch window and `heapFoot L H` (for `free`, also the freed
-  block),
-
-and returns with the ABI frame restored and the heap shape advanced.
-`dlMallocImpl_of_localRuns` proves `DlMallocImpl` from them. These two facts
-are the remaining allocator assumption: the instruction-level proof of
-`_malloc_r`/`_free_r`. Unlike `MallocContract`, the footprint is relative to
-the live extents, and `VsaHeap.Control.live_relative_frame_admits_both`
-checks it against the eb73d8c control heap.
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 
 open Classical
-
-/-! ## Owned byte sets and register lists at a valuation -/
 
 section Own
 
@@ -47,7 +24,6 @@ theorem sepL_map {α β : Type} (l : List α) (g : α → β) (Φ : β → IProp
   | nil => rfl
   | cons x xs ih => simp only [List.map_cons, sepL_cons, ih]
 
-/-- Existentially valued cells of a duplicate-free list have one valuation. -/
 theorem sepL_exists_fn {α β : Type} [Inhabited β] (P : α → β → IProp GF) :
     ∀ l : List α, l.Nodup →
       sepL l (fun x => iprop(∃ v, P x v)) ⊢ ∃ f : α → β, sepL l (fun x => P x (f x))
@@ -80,7 +56,6 @@ theorem ownSet_congr {S : Nat → Prop} {Φ Ψ : Nat → IProp GF} (h : ∀ a, S
   rw [sepL_congr (l := l) (Φ := Ψ) (Ψ := Φ) (fun a ha => (h a ((hmem a).1 ha)).symm)]
   iexact Hl
 
-/-- Bytes owned at unknown values have one valuation. -/
 theorem ownSet_fn (S : Nat → Prop) :
     ownSet (GF := GF) S byteAny ⊢ ∃ f : Nat → BitVec 8, ownSet S (fun a => a ↦ₘ f a) := by
   unfold ownSet
@@ -113,8 +88,6 @@ theorem sepL_off (T : Nat → Prop) (f : Nat → BitVec 8) :
     · exact h.1
     · exact h.2 y hy
 
-/-- Bytes owned at values are off any set owned at unknown values (ghost
-exclusivity). -/
 theorem ownSet_off (S T : Nat → Prop) (f : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗ ownSet T byteAny ⊢ ⌜∀ a, S a → ¬ T a⌝ := by
   iintro ⟨HS, HT⟩
@@ -126,7 +99,6 @@ theorem ownSet_off (S T : Nat → Prop) (f : Nat → BitVec 8) :
   ipureintro
   exact fun a ha => h a ((hmem a).2 ha)
 
-/-- Two owned byte sets are disjoint (ghost exclusivity). -/
 theorem ownSet_disj (S T : Nat → Prop) (f g : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗ ownSet T (fun a => a ↦ₘ g a) ⊢
       ⌜∀ a, S a → ¬ T a⌝ := by
@@ -135,11 +107,9 @@ theorem ownSet_disj (S T : Nat → Prop) (f g : Nat → BitVec 8) :
   iapply ownSet_off S T f
   iframe HS HT
 
-/-- Derive a pure fact from resources and keep them. -/
 theorem keep_pure {P : IProp GF} {φ : Prop} (h : P ⊢ ⌜φ⌝) : P ⊢ P ∗ ⌜φ⌝ :=
   (and_intro .rfl h).trans persistent_and_sep_mp
 
-/-- The value a register takes in a (key, value) list. -/
 def pairVal (saved : List (Nat × BitVec 64)) (k : Nat) : BitVec 64 :=
   (saved.lookup k).getD 0
 
@@ -183,27 +153,19 @@ theorem clobbered_of_fn (clob : List Nat) (f : Nat → BitVec 64) :
 
 end Own
 
-/-! ## The first-order runs -/
-
-/-- Registers a malloc or free call owns during the run. -/
 def allocRegs (clob savedRegs : List Nat) : List Nat := PC :: ra :: a0 :: sp :: (clob ++ savedRegs)
 
-/-- The stack scratch window below `sp`. -/
 def stackWin (s : BitVec 64) (headroom : Nat) (a : Nat) : Prop :=
   InExt (s.toNat - headroom, headroom) a
 
-/-- Bytes a malloc call owns: its stack scratch and the heap footprint. -/
 def mallocBytes (L : DlLayout) (H : List (Nat × Nat)) (s : BitVec 64) (headroom : Nat)
     (a : Nat) : Prop :=
   stackWin s headroom a ∨ heapFoot L H a
 
-/-- Bytes a free call owns: its stack scratch, the heap footprint, and the
-freed block. -/
 def freeBytes (L : DlLayout) (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64)
     (headroom : Nat) (a : Nat) : Prop :=
   stackWin s headroom a ∨ (heapFoot L ((q.toNat, n) :: H) a ∨ InExt (q.toNat, n) a)
 
-/-- The ABI frame at the return. -/
 structure RetFrame (rv' : Nat → BitVec 64) (r s : BitVec 64) (saved : List (Nat × BitVec 64)) :
     Prop where
   pc : rv' PC = r
@@ -211,8 +173,6 @@ structure RetFrame (rv' : Nat → BitVec 64) (r s : BitVec 64) (saved : List (Na
   sp : rv' sp = s
   saved : ∀ p ∈ saved, rv' p.1 = p.2
 
-/-- What a malloc run ends in: the frame restored, and null with the heap
-unchanged in shape, or a fresh aligned block with the extended live list. -/
 structure MallocEnd (L : DlLayout) (H : List (Nat × Nat)) (n r s : BitVec 64)
     (saved : List (Nat × BitVec 64)) (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
   frame : RetFrame rv' r s saved
@@ -220,13 +180,11 @@ structure MallocEnd (L : DlLayout) (H : List (Nat × Nat)) (n r s : BitVec 64)
     (FreshBlock L H (rv' a0).toNat n.toNat ∧ (rv' a0).toNat % 16 = 0 ∧
       L.Shape mv' (((rv' a0).toNat, n.toNat) :: H))
 
-/-- What a free run ends in: the frame restored and the block popped. -/
 structure FreeEnd (L : DlLayout) (H : List (Nat × Nat)) (r s : BitVec 64)
     (saved : List (Nat × BitVec 64)) (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
   frame : RetFrame rv' r s saved
   shape : L.Shape mv' H
 
-/-- The register values at a call entry. -/
 structure EntryRegs (rv : Nat → BitVec 64) (entry r arg s : BitVec 64)
     (saved : List (Nat × BitVec 64)) : Prop where
   pc : rv PC = entry
@@ -235,9 +193,6 @@ structure EntryRegs (rv : Nat → BitVec 64) (entry r arg s : BitVec 64)
   sp : rv sp = s
   saved : ∀ p ∈ saved, rv p.1 = p.2
 
-/-- **`_malloc_r`'s run, first-order.** From any owned entry values with the
-heap in shape, the code (`text`, with `gp`) runs to the return, every step
-confined to `allocRegs` and `mallocBytes`. -/
 def MallocLocalRun (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
   ∀ (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
@@ -247,7 +202,6 @@ def MallocLocalRun (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop)
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (mallocBytes L H s headroom)
       (MallocEnd L H n r s saved) fuel rv mv
 
-/-- **`_free_r`'s run, first-order.** -/
 def FreeLocalRun (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
   ∀ (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s r : BitVec 64)
@@ -258,19 +212,14 @@ def FreeLocalRun (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop) (
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H q n s headroom)
       (FreeEnd L H r s saved) fuel rv mv
 
-/-- The heap shape reads only the footprint (`VsaHeap.BlockHeapAt.transport`
-for `vsaLayout`). -/
 def ShapeLocal (L : DlLayout) : Prop :=
   ∀ (H : List (Nat × Nat)) (img img' : Nat → BitVec 8),
     (∀ a, heapFoot L H a → img a = img' a) → L.Shape img H → L.Shape img' H
-
-/-! ## Building the specs -/
 
 section Build
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- The register valuation at a call entry. -/
 def entryVal (entry r arg s : BitVec 64) (clob : List Nat) (cv : Nat → BitVec 64)
     (saved : List (Nat × BitVec 64)) (k : Nat) : BitVec 64 :=
   if k = PC then entry else if k = ra then r else if k = a0 then arg else if k = sp then s
@@ -293,7 +242,6 @@ theorem pairVal_of_mem : ∀ (saved : List (Nat × BitVec 64)), (saved.map Prod.
       simp only [pairVal, List.lookup, hne] at this ⊢
       exact this
 
-/-- The distinctness facts of the owned register list. -/
 structure RegsDistinct (clob savedRegs : List Nat) : Prop where
   clob_nd : clob.Nodup
   saved_nd : savedRegs.Nodup
@@ -369,12 +317,9 @@ theorem entryRegs_entryVal {entry r arg s : BitVec 64} {clob : List Nat} {cv : N
     simp only [entryVal, h1, h2, h3, h4, h5, ite_false]
     exact pairVal_of_mem saved hd.saved_nd p hp
 
-/-- A combined valuation: `f` on `S`, `g` elsewhere. -/
 noncomputable def glue (S : Nat → Prop) (f g : Nat → BitVec 8) (a : Nat) : BitVec 8 :=
   if S a then f a else g a
 
-/-- Join a stack window and a heap footprint, owned at separate valuations,
-into one owned set at the glued valuation. -/
 theorem ownSet_glue (S T : Nat → Prop) (f g : Nat → BitVec 8) (hdisj : ∀ a, S a → ¬ T a) :
     ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗ ownSet T (fun a => a ↦ₘ g a) ⊢
       ownSet (fun a => S a ∨ T a) (fun a => a ↦ₘ glue S f g a) := by
@@ -388,7 +333,6 @@ theorem ownSet_glue (S T : Nat → Prop) (f g : Nat → BitVec 8) (hdisj : ∀ a
   iapply ownSet_join S T _ hdisj
   iframe HS HT
 
-/-- Split an owned union back into its disjoint parts. -/
 theorem ownSet_unglue (S T : Nat → Prop) (Φ : Nat → IProp GF) (hdisj : ∀ a, S a → ¬ T a) :
     ownSet (fun a => S a ∨ T a) Φ ⊢ ownSet S Φ ∗ ownSet T Φ := by
   iintro H
@@ -413,13 +357,6 @@ theorem isHeap_fold (L : DlLayout) (H : List (Nat × Nat)) :
     iprop(∃ img : Nat → BitVec 8, ⌜L.Shape img H⌝ ∗
       ownSet (heapFoot L H) (fun a => a ↦ₘ img a)) ⊢@{IProp GF} isHeap L H := .rfl
 
-/-- **One allocator call from its local run.** The generic core of every
-allocator spec below: the caller hands over the argument, the frame
-registers, the clobbered registers at values satisfying `Args` (further
-arguments, such as `realloc`'s size in `a1`), the stack scratch and a byte set
-`F` at an image satisfying `P`; the callee's local run over `allocRegs` and
-`stackWin ∪ F` ends with the ABI frame restored and `E`; `post` turns the
-final bytes of `F` into the callee's result resource. -/
 theorem allocCallArgs_of_localRun (Wp : MachWP (GF := GF) M) {entry gpv r arg s : BitVec 64} {clob : List Nat}
     {saved : List (Nat × BitVec 64)} {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hd : RegsDistinct clob (saved.map Prod.fst))
@@ -487,8 +424,6 @@ theorem allocCallArgs_of_localRun (Wp : MachWP (GF := GF) M) {entry gpv r arg s 
   iexists rv' a0
   iframe Ha0 Hsp Hclob Hsv Hstk Hpost
 
-
-/-- `allocCallArgs_of_localRun` with no further argument. -/
 theorem allocCall_of_localRun (Wp : MachWP (GF := GF) M) {entry gpv r arg s : BitVec 64} {clob : List Nat}
     {saved : List (Nat × BitVec 64)} {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hd : RegsDistinct clob (saved.map Prod.fst))
@@ -517,7 +452,6 @@ theorem allocCall_of_localRun (Wp : MachWP (GF := GF) M) {entry gpv r arg s : Bi
   iexists cv
   iframe Hclob
 
-/-- **`mallocSpec` from `_malloc_r`'s local run.** -/
 theorem mallocSpec_of_localRun (Wp : MachWP (GF := GF) M) {L : DlLayout} {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64}
     {clob savedRegs : List Nat} {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hrun : MallocLocalRun M L SpOK entry gpv clob savedRegs headroom text) (hloc : ShapeLocal L)
@@ -577,7 +511,6 @@ theorem heapFoot_sub_return (L : DlLayout) (H : List (Nat × Nat)) (q n a : Nat)
       · exact hb
       · exact h3 e he
 
-/-- **`freeSpec` from `_free_r`'s local run.** -/
 theorem freeSpec_of_localRun (Wp : MachWP (GF := GF) M) {L : DlLayout} {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64}
     {clob savedRegs : List Nat} {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hrun : FreeLocalRun M L SpOK entry gpv clob savedRegs headroom text) (hloc : ShapeLocal L)
@@ -627,10 +560,6 @@ theorem freeSpec_of_localRun (Wp : MachWP (GF := GF) M) {L : DlLayout} {SpOK : B
     · iexists p; iexact Ha0
     iframe Hclob Hsv Hstk Hh
 
-/-- **`DlMallocImpl` from the allocator's two local runs.** The remaining
-allocator assumption is exactly `MallocLocalRun` and `FreeLocalRun`: the
-instruction-level behaviour of `_malloc_r` and `_free_r`, framed by the live
-extents. -/
 theorem dlMallocImpl_of_localRuns {M : MachineModel} {L : DlLayout} {SpOK : BitVec 64 → Prop}
     {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
@@ -641,25 +570,12 @@ theorem dlMallocImpl_of_localRuns {M : MachineModel} {L : DlLayout} {SpOK : BitV
   malloc Wp H n s saved hsv := mallocSpec_of_localRun Wp hm hloc hnd H n s saved hsv
   free Wp H q n s saved hsv := freeSpec_of_localRun Wp hf hloc hnd H q n s saved hsv
 
-/-! ## Allocation under capacity
-
-`mallocSpec` allows NULL, but VSA's consumers need success: the interpreter's
-allocations are bounded by the program's modeled cost (`InitialAllocatorAt.capacity`,
-`AllocationReserve`). `isHeapRoom L Room H k` is the heap with room for `k`
-more requests (MachCSL's `kalloc_avail`, kept as a pure predicate on the
-allocator's own image), and `mallocRoomSpec` spends one credit for a
-guaranteed fresh block. -/
-
-/-- A capacity predicate on the allocator's image and live blocks. -/
 abbrev RoomPred := (Nat → BitVec 8) → List (Nat × Nat) → Nat → Prop
 
-/-- The capacity predicate reads only the allocator's footprint. -/
 def RoomLocal (L : DlLayout) (Room : RoomPred) : Prop :=
   ∀ (H : List (Nat × Nat)) (img img' : Nat → BitVec 8) (k : Nat),
     (∀ a, heapFoot L H a → img a = img' a) → Room img H k → Room img' H k
 
-/-- What a malloc run under capacity ends in: the frame restored, a fresh
-aligned block, and the heap in shape with one credit spent. -/
 structure MallocRoomEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat))
     (n r s : BitVec 64) (saved : List (Nat × BitVec 64)) (k : Nat)
     (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
@@ -669,119 +585,10 @@ structure MallocRoomEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat))
   shape : L.Shape mv' (((rv' a0).toNat, n.toNat) :: H)
   room : Room mv' (((rv' a0).toNat, n.toNat) :: H) k
 
-/-- **`_malloc_r`'s run under capacity, first-order.** A request within
-`maxReq` from a heap with a credit left returns a fresh block. -/
-def MallocRoomRun (M : MachineModel) (L : DlLayout) (Room : RoomPred) (maxReq : Nat)
-    (SpOK : BitVec 64 → Prop)
-    (entry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
-    (text : List (Nat × BitVec 8)) : Prop :=
-  ∀ (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
-    (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k : Nat),
-    saved.map Prod.fst = savedRegs → n.toNat ≤ maxReq → SpOK s → r.toNat % 4 = 0 →
-    EntryRegs rv entry r n s saved →
-    L.Shape mv H → Room mv H (k + 1) → (∀ a, stackWin s headroom a → ¬ heapFoot L H a) →
-    ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (mallocBytes L H s headroom)
-      (MallocRoomEnd L Room H n r s saved k) fuel rv mv
-
-/-- The heap with room for `k` more requests. -/
 def isHeapRoom (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat)) (k : Nat) : IProp GF :=
   iprop(∃ img : Nat → BitVec 8, ⌜L.Shape img H ∧ Room img H k⌝ ∗
     ownSet (heapFoot L H) (fun a => a ↦ₘ img a))
 
-theorem isHeapRoom_forget (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat)) (k : Nat) :
-    isHeapRoom (GF := GF) L Room H k ⊢ isHeap L H := by
-  unfold isHeapRoom isHeap
-  iintro ⟨%img, %⟨hs, _⟩, HF⟩
-  iexists img
-  iframe HF
-  ipureintro; exact hs
-
-/-- `mallocSpec` under capacity: one credit buys a fresh block. `SpOK` is the
-caller's stack-pointer discipline (RAM, alignment, headroom), a pure fact the
-caller supplies. The return address is 4-aligned: `ret` (`jalr x0, 0(ra)`)
-clears bit 0, so no allocator returns to an odd `r`. -/
-def mallocRoomSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred) (SpOK : BitVec 64 → Prop)
-    (entry gpv : BitVec 64)
-    (clob : List Nat) (saved : List (Nat × BitVec 64)) (headroom : Nat)
-    (H : List (Nat × Nat)) (n s : BitVec 64) (k : Nat) : IProp GF :=
-  fnSpecW Wp entry
-    (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
-      stackScratch s headroom ∗ isHeapRoom L Room H (k + 1)))
-    (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
-      stackScratch s headroom ∗
-      (⌜FreshBlock L H p.toNat n.toNat ∧ p.toNat % 16 = 0⌝ ∗
-        isHeapRoom L Room ((p.toNat, n.toNat) :: H) k ∗ blockOwn p.toNat n.toNat)))
-
-/-- **`mallocRoomSpec` from the capacity run.** -/
-theorem mallocRoomSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room : RoomPred} {maxReq : Nat}
-    {SpOK : BitVec 64 → Prop}
-    {entry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
-    {text : List (Nat × BitVec 8)}
-    (hrun : MallocRoomRun M L Room maxReq SpOK entry gpv clob savedRegs headroom text)
-    (hloc : ShapeLocal L) (hroom : RoomLocal L Room) (hnd : (allocRegs clob savedRegs).Nodup)
-    (H : List (Nat × Nat)) (n s : BitVec 64) (k : Nat) (saved : List (Nat × BitVec 64))
-    (hsv : saved.map Prod.fst = savedRegs) (hn : n.toNat ≤ maxReq) :
-    textOwn (GF := GF) text ⊢
-      mallocRoomSpec Wp L Room SpOK entry gpv clob saved headroom H n s k := by
-  subst hsv
-  have hd := RegsDistinct.of_nodup hnd
-  unfold mallocRoomSpec fnSpecW isHeapRoom
-  iintro #Htext
-  imodintro
-  iintro %r %Φ Hpc Hra ⟨%⟨hspok, hral⟩, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
-  iapply allocCall_of_localRun Wp hd (heapFoot L H) (fun img => L.Shape img H ∧ Room img H (k + 1))
-    (fun img img' h hs => ⟨hloc H img img' h hs.1, hroom H img img' _ h hs.2⟩)
-    (fun rv' mv' => FreshBlock L H (rv' a0).toNat n.toNat ∧ (rv' a0).toNat % 16 = 0 ∧
-      L.Shape mv' (((rv' a0).toNat, n.toNat) :: H) ∧
-      Room mv' (((rv' a0).toNat, n.toNat) :: H) k)
-    (fun p => iprop(⌜FreshBlock L H p.toNat n.toNat ∧ p.toNat % 16 = 0⌝ ∗
-      (∃ img : Nat → BitVec 8, ⌜L.Shape img ((p.toNat, n.toNat) :: H) ∧
-        Room img ((p.toNat, n.toNat) :: H) k⌝ ∗
-        ownSet (heapFoot L ((p.toNat, n.toNat) :: H)) (fun a => a ↦ₘ img a)) ∗
-      blockOwn p.toNat n.toNat)) ?_
-    (fun rv mv he hs hdj => (hrun H n s r saved rv mv k rfl hn hspok hral he hs.1 hs.2 hdj).imp fun _ h =>
-      LocalRun.mono (fun _ _ he => ⟨he.frame, he.fresh, he.align, he.shape, he.room⟩) _ _ _ h)
-  · intro rv' mv' ⟨hf, hal, hsh, hrm⟩
-    unfold blockOwn
-    iintro HF
-    ihave ⟨HF, Hblk⟩ := heapFoot_carve_gen L H _ _ hf _ $$ HF
-    ihave Hblk := ownSet_forget _ mv' $$ Hblk
-    isplitr
-    · ipureintro; exact ⟨hf, hal⟩
-    iframe Hblk
-    iexists mv'
-    iframe HF
-    ipureintro; exact ⟨hsh, hrm⟩
-  · iframe Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap
-    iintro Hpc Hra HQ
-    iapply Hk $$ Hpc Hra HQ
-
-/-- **The allocator under capacity, as a module parameter**: malloc with a
-credit left always returns a fresh block. -/
-structure DlMallocRoomImpl (M : MachineModel) (L : DlLayout) (Room : RoomPred) (maxReq : Nat)
-    (SpOK : BitVec 64 → Prop) (mallocEntry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
-    (text : List (Nat × BitVec 8)) : Prop where
-  malloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (Wp : MachWP (GF := GF) M) H n s k
-    (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs → n.toNat ≤ maxReq →
-    textOwn (GF := GF) text ⊢ mallocRoomSpec Wp L Room SpOK mallocEntry gpv clob saved headroom H n s k
-
-theorem dlMallocRoomImpl_of_run {M : MachineModel} {L : DlLayout} {Room : RoomPred}
-    {maxReq : Nat} {SpOK : BitVec 64 → Prop} {mallocEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
-    {text : List (Nat × BitVec 8)}
-    (hrun : MallocRoomRun M L Room maxReq SpOK mallocEntry gpv clob savedRegs headroom text)
-    (hloc : ShapeLocal L) (hroom : RoomLocal L Room) (hnd : (allocRegs clob savedRegs).Nodup) :
-    DlMallocRoomImpl M L Room maxReq SpOK mallocEntry gpv clob savedRegs headroom text where
-  malloc Wp H n s k saved hsv hn := mallocRoomSpec_of_run Wp hrun hloc hroom hnd H n s k saved hsv hn
-
-
-/-! ## Freeing under capacity
-
-`freeRoomSpec` is `freeSpec` for a heap in a restricted shape `FreeOK` (for
-the binary: the block is the chunk below the top chunk), returning the heap
-with its credits. -/
-
-/-- What a free run under capacity ends in: the frame restored, the block
-popped, the heap in shape with its credits. -/
 structure FreeRoomEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat))
     (r s : BitVec 64) (saved : List (Nat × BitVec 64)) (k : Nat)
     (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
@@ -789,8 +596,6 @@ structure FreeRoomEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat))
   shape : L.Shape mv' H
   room : Room mv' H k
 
-/-- **`_free_r`'s run under capacity, first-order.** A block whose heap is in
-the shape `FreeOK` is freed, keeping `k` credits. -/
 def FreeRoomRun (M : MachineModel) (L : DlLayout) (Room FreeOK : RoomPred)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
     (text : List (Nat × BitVec 8)) : Prop :=
@@ -802,7 +607,6 @@ def FreeRoomRun (M : MachineModel) (L : DlLayout) (Room FreeOK : RoomPred)
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H q n s headroom)
       (FreeRoomEnd L Room H r s saved k) fuel rv mv
 
-/-- `freeSpec` under capacity: the block goes back, the credits stay. -/
 def freeRoomSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room FreeOK : RoomPred)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat)
@@ -814,7 +618,6 @@ def freeRoomSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room FreeOK : RoomPr
     (fun _ => iprop(sp ↦ᵣ s ∗ (∃ v, a0 ↦ᵣ v) ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeapRoom L Room H k))
 
-/-- **`freeRoomSpec` from the capacity run.** -/
 theorem freeRoomSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room FreeOK : RoomPred} {SpOK : BitVec 64 → Prop}
     {entry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
@@ -868,7 +671,6 @@ theorem freeRoomSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room Free
     · iexists p; iexact Ha0
     iframe Hclob Hsv Hstk Hh
 
-/-- **Freeing under capacity, as a module parameter.** -/
 structure DlFreeRoomImpl (M : MachineModel) (L : DlLayout) (Room FreeOK : RoomPred)
     (SpOK : BitVec 64 → Prop) (freeEntry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
     (text : List (Nat × BitVec 8)) : Prop where
@@ -884,30 +686,16 @@ theorem dlFreeRoomImpl_of_run {M : MachineModel} {L : DlLayout} {Room FreeOK : R
     DlFreeRoomImpl M L Room FreeOK SpOK freeEntry gpv clob savedRegs headroom text where
   free Wp H q n s k saved hsv := freeRoomSpec_of_run Wp hrun hloc hfree hnd H q n s k saved hsv
 
-
-/-! ## Reallocation
-
-`realloc(p, nNew)` for a live block `(p, nOld)` with `nOld < nNew` (VSA's
-`ReallocOps.grow`). It returns NULL with everything unchanged, or a fresh
-block holding the old contents. The size travels in `a1`, a clobbered
-register (`allocCallArgs_of_localRun`). -/
-
-/-- The second argument register. -/
 def a1 : Nat := 11
 
-/-- A block owned at the contents `v`. -/
 def blockOwnAt (p n : Nat) (v : Nat → BitVec 8) : IProp GF := ownSet (InExt (p, n)) (fun a => a ↦ₘ v a)
 
-/-- The new contents' first `nOld` bytes are the old block's. -/
 def Copies (old new : Nat → BitVec 8) (p p' nOld : Nat) : Prop :=
   ∀ k, k < nOld → new (p' + k) = old (p + k)
 
-/-- The clobbered registers, with register `k` holding `v`. -/
 def clobberedArg (clob : List Nat) (k : Nat) (v : BitVec 64) : IProp GF :=
   iprop(∃ cv : Nat → BitVec 64, ⌜cv k = v⌝ ∗ sepL clob (fun r => r ↦ᵣ cv r))
 
-/-- What a realloc run ends in: the frame restored, and NULL with the block
-and heap unchanged, or a fresh aligned block holding the old contents. -/
 structure ReallocEnd (L : DlLayout) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat)
     (old : Nat → BitVec 8) (r s : BitVec 64) (saved : List (Nat × BitVec 64))
     (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
@@ -916,7 +704,6 @@ structure ReallocEnd (L : DlLayout) (H : List (Nat × Nat)) (p : BitVec 64) (nOl
     (FreshBlock L H (rv' a0).toNat nNew ∧ (rv' a0).toNat % 16 = 0 ∧
       L.Shape mv' (((rv' a0).toNat, nNew) :: H) ∧ Copies old mv' p.toNat (rv' a0).toNat nOld)
 
-/-- **`_realloc_r`'s grow run, first-order.** -/
 def ReallocLocalRun (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
   ∀ (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat) (s r : BitVec 64)
@@ -929,14 +716,12 @@ def ReallocLocalRun (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H p nOld s headroom)
       (ReallocEnd L H p nOld nNew old r s saved) fuel rv mv
 
-/-- `realloc`'s result resource. -/
 def reallocPost (L : DlLayout) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat)
     (old : Nat → BitVec 8) (p' : BitVec 64) : IProp GF :=
   iprop((⌜p' = 0⌝ ∗ isHeap L ((p.toNat, nOld) :: H) ∗ blockOwnAt p.toNat nOld old) ∨
     (⌜FreshBlock L H p'.toNat nNew ∧ p'.toNat % 16 = 0⌝ ∗ isHeap L ((p'.toNat, nNew) :: H) ∗
       ∃ v : Nat → BitVec 8, ⌜Copies old v p.toNat p'.toNat nOld⌝ ∗ blockOwnAt p'.toNat nNew v))
 
-/-- **`realloc`'s spec**: grow a live block to `nNew` bytes. -/
 def reallocSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64)
     (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat) (H : List (Nat × Nat)) (p : BitVec 64)
@@ -948,8 +733,6 @@ def reallocSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (SpOK : BitVec 64 → 
     (fun _ => iprop(∃ p', a0 ↦ᵣ p' ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ reallocPost L H p nOld nNew old p'))
 
-/-- **`reallocSpec` from `_realloc_r`'s local run**, the third instance of
-`allocCallArgs_of_localRun`. -/
 theorem reallocSpec_of_localRun (Wp : MachWP (GF := GF) M) {L : DlLayout} {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64}
     {clob savedRegs : List Nat} {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hrun : ReallocLocalRun M L SpOK entry gpv clob savedRegs headroom text) (hloc : ShapeLocal L)
@@ -1035,7 +818,6 @@ theorem reallocSpec_of_localRun (Wp : MachWP (GF := GF) M) {L : DlLayout} {SpOK 
     iintro Hpc Hra HQ
     iapply Hk $$ Hpc Hra HQ
 
-/-- **Reallocation as a module parameter.** -/
 structure DlReallocImpl (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop)
     (reallocEntry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop where

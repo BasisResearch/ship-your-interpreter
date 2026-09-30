@@ -1,21 +1,10 @@
 import VsaIris.Vsa.ReallocNext
 
-/-!
-# `_realloc_r` into the top
-
-A chunk just below the top that, with the top, holds the request and
-`MINSIZE` more grows into the top in place (`0x80005740`,
-`PHeapAt.growTop`): the top moves up past the request's chunk, and the
-block is returned unmoved.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **Grow into the top** (`0x80005740`): `X` ends at the top and `S` plus the
-top's size is at least `nb + 32`. -/
 theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) (hXt : X + S = C.top0)
@@ -36,7 +25,7 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
   subst hbt
   have hlt := D.lt
   have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
-  -- `X` is the last chunk
+
   obtain ⟨cs₁, cs₂, hsp⟩ := List.append_of_mem hXm
   have hw := HH.walk
   rw [hsp] at hw
@@ -49,7 +38,7 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
       have := HH.walk.chunk_bounds d hdm
       simp only at h2; omega
   subst hc2
-  -- the top chunk's bytes are footprint
+
   have htf : ∀ a, C.top0 + 8 ≤ a → a < (C.top0 + ts) → vsaFoot C.H a := fun a h1 h2 => by
     refine .inr ⟨by show heapStart ≤ a; unfold heapStart; omega, by show a < heapEnd; unfold heapEnd; omega,
       fun e he hin => ?_⟩
@@ -114,7 +103,7 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eX]; exact O.foot hfX) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   rw [eX]
-  -- the grown heap
+
   have hv1 : (R 16 - R 15 ||| sign_extend (m := 64) (0x001#12)).toNat = S + ts - nb + 1 := by
     rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = 1#64 from rfl, or1_toNat', hsz']; omega
   have hv2 : (BitVec.ofNat 64 hdr0 &&& sign_extend (m := 64) (0x001#12) ||| R 15).toNat = nb + hdr0 % 2 := by

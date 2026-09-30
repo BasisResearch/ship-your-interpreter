@@ -1,34 +1,9 @@
 import Vsa.Densify.Resp
 
-/-!
-# The `resp_auto` tactic
-
-Discharges `Resp (f args)` / `RespE (f args)` for a model function whose body
-has been unfolded. `resp_step` looks at the head symbol of the computation and
-applies the one matching rule: bind, pure, lift, throw, early-return blocks,
-fuel and `for` loops, `if` (syntactically, keeping the condition as a
-hypothesis), `match` (reduced on a constructor, `split` otherwise), `do` join
-points (`have jp := fun r => k r; body`: `k` is proved ONCE and the body gets
-the hypothesis `∀ r, Resp (jp r)`, never inlined: inlining is exponential in
-the nesting depth), pure `have`/`let`s (inlined), the literal-pattern casts,
-compiled case splits, and calls to already-proved functions (their lemmas
-resolved by name: `Gen`, `RecMutual`, `RecPt`, `PS`, or the explicit list;
-induction hypotheses by `assumption`/`apply`). `resp_auto` is a flat,
-bounded loop of `resp_step` over every open goal, setting a goal aside after
-its first failure.
-
-Nothing here traverses a term: the 330-alternative CSR tables (and every
-literal-pattern matcher) are unfolded head-only (`delta?` + beta) and their
-`dite` chains split by a syntactic step that builds the proof term directly,
-so no elaboration limit is raised.
--/
-
 namespace Vsa.Densify
 
 open Lean Meta Elab Tactic
 
-/-- The computation under `Resp`/`RespE` in the goal, with the goal's head and
-arguments (the computation is the last argument). -/
 def respGoal (goal : MVarId) : MetaM (Expr × Array Expr × Expr) := do
   let t ← goal.getType
   let t ← if t.hasMVar then instantiateMVars t else pure t
@@ -39,9 +14,6 @@ def respGoal (goal : MVarId) : MetaM (Expr × Array Expr × Expr) := do
     throwError "not a Resp/RespE goal"
   return (fn, args, args.back!)
 
-/-- A matcher whose alternatives are selected by decidable equality only (string,
-bit-vector or numeral literals): its expansion is a `dite` chain with no
-`casesOn`/`rec`. -/
 def isLiteralMatcher (env : Environment) (c : Name) : Bool :=
   let isCases (n : Name) : Bool :=
     match n with
@@ -51,10 +23,6 @@ def isLiteralMatcher (env : Environment) (c : Name) : Bool :=
   | some ci => !(((ci.value?.map (·.getUsedConstants)).getD #[]).any isCases)
   | none => false
 
-/-- Delta-reduce the head of the computation when it is a matcher on string or
-bit-vector literals (the CSR name and number tables, hundreds of alternatives):
-`split` and `dsimp` overflow on them, and so does any traversal of the
-expanded `dite` chain, so only the head is unfolded (`delta?`) and beta-reduced. -/
 def deltaHeadMatcher (goal : MVarId) : MetaM MVarId := goal.withContext do
   let (fn, args, x) ← respGoal goal
   let env ← getEnv
@@ -66,9 +34,6 @@ def deltaHeadMatcher (goal : MVarId) : MetaM MVarId := goal.withContext do
   let some x' ← delta? x (fun n => n == c) | throwError "delta_head_matcher: delta failed"
   goal.replaceTargetDefEq (mkAppN fn (args.set! (args.size - 1) x'.headBeta))
 
-/-- `Resp (dite c t e)` / `Resp (ite c t e)` (and `RespE`) by `Resp.dite` /
-`Resp.ite_h`, building the proof term and the two goals syntactically (bound
-variable, no abstraction, no `simp`): nothing traverses the `else` chain. -/
 def respDiteHead (goal : MVarId) : MetaM (List MVarId) := goal.withContext do
   let (fn, args, x) ← respGoal goal
   let isD := x.isAppOfArity ``dite 5
@@ -86,8 +51,6 @@ def respDiteHead (goal : MVarId) : MetaM (List MVarId) := goal.withContext do
   goal.assign (mkAppN (mkConst lem) (args.pop ++ #[c, inst, tt, ee, g1, g2]))
   return [g1.mvarId!, g2.mvarId!]
 
-/-- One shallow reduction at the head of the computation: a `have`/`let` join
-point is inlined, a beta-redex is reduced. Never traverses the term. -/
 def headZeta (goal : MVarId) : MetaM MVarId := goal.withContext do
   let (fn, args, x) ← respGoal goal
   let x' ← (do
@@ -99,15 +62,6 @@ def headZeta (goal : MVarId) : MetaM MVarId := goal.withContext do
     throwError "head_zeta: nothing to reduce")
   goal.replaceTargetDefEq (mkAppN fn (args.set! (args.size - 1) x'))
 
-elab "delta_head_matcher" : tactic => do
-  let g ← deltaHeadMatcher (← getMainGoal); replaceMainGoal [g]
-elab "resp_dite_head" : tactic => do
-  let gs ← respDiteHead (← getMainGoal); replaceMainGoal gs
-elab "head_zeta" : tactic => do
-  let g ← headZeta (← getMainGoal); replaceMainGoal [g]
-
-/-- The lemma proving `Resp (f …)` for a model or lean-sail function, by the
-generator's naming convention (`scripts/gen_resp.py`). -/
 def lemmaFor (env : Environment) (c : Name) : Option Name :=
   let s := c.toString
   let strip (pre : String) (s : String) : String := if s.startsWith pre then (s.drop pre.length).toString else s
@@ -117,8 +71,7 @@ def lemmaFor (env : Environment) (c : Name) : Option Name :=
     `Vsa.Densify.RecPt ++ base.toName, `Vsa.Densify.PS ++ base.toName]
   cands.find? env.contains
 
-/-- Rules keyed by the head constant of the computation. -/
-def headRules : List (Name × Name × Name) :=   -- head, lemma for Resp, lemma for RespE
+def headRules : List (Name × Name × Name) :=
   [(``Bind.bind, ``Resp.bind, ``RespE.bind),
    (``Pure.pure, ``Resp.pure, ``RespE.pure),
    (``Eq.ndrec_symm, ``Resp.ndrec_symm, ``RespE.ndrec_symm),
@@ -132,14 +85,11 @@ def headRules : List (Name × Name × Name) :=   -- head, lemma for Resp, lemma 
    (``SeqRight.seqRight, ``Resp.seqRight, ``Resp.seqRight),
    (``Sail.ConcurrencyInterfaceV1.PreSail.sailTryCatch, ``PS.sailTryCatch_resp, ``PS.sailTryCatch_resp)]
 
-/-- `with_reducible apply n`, without going through syntax. -/
 def applyLemma (n : Name) : TacticM Unit := do
   let goal ← getMainGoal
   let gs ← withReducible (goal.apply (← mkConstWithFreshMVarLevels n))
   replaceMainGoal gs
 
-/-- Is `x` a `let`-bound monadic function of at most two arguments (a `do`
-join point)? Its arity, if so. -/
 def joinPointArity (x : Expr) : MetaM (Option Nat) := do
   unless x.isLet do return none
   let (n, mon) ← forallTelescope (← inferType x.letValue!) fun xs b => do
@@ -149,7 +99,6 @@ def joinPointArity (x : Expr) : MetaM (Option Nat) := do
       h == ``EStateM || h == ``ExceptT)
   return if mon && n ≤ 2 then some n else none
 
-/-- One step of `resp_auto` on the main goal. -/
 def respStep (extra : Array Name) : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let t ← goal.getType
@@ -158,12 +107,11 @@ def respStep (extra : Array Name) : TacticM Unit := withMainContext do
     let (_, g) ← goal.intro1P
     replaceMainGoal [g]; return
   unless t.getAppFn.isConstOf ``Vsa.Densify.Resp || t.getAppFn.isConstOf ``Vsa.Densify.RespE do
-    -- a side goal of a cast rule (`a = "misa"`): it is a hypothesis
+
     evalTactic (← `(tactic| with_reducible assumption)); return
   let (fn, _, x) ← respGoal goal
   let isE := fn.isConstOf ``Vsa.Densify.RespE
-  -- a monadic join point (`have jp := fun r => k r; body`, a non-dependent `let`):
-  -- restate it as `letFun` and prove it once
+
   if let some n ← joinPointArity x then
     let v := x.letValue!
     let vty ← inferType v
@@ -177,8 +125,7 @@ def respStep (extra : Array Name) : TacticM Unit := withMainContext do
       | 0, false => ``Resp.letFun0 | 1, false => ``Resp.letFun1 | _, false => ``Resp.letFun2
       | 0, true => ``RespE.letFun0 | 1, true => ``RespE.letFun1 | _, true => ``RespE.letFun2
     applyLemma lem; return
-  -- pure join points, values, beta-redexes (all the consecutive ones at once, stopping
-  -- at a monadic join point)
+
   if x.isLet || x.isAppOfArity ``letFun 4 || x.isHeadBetaTarget then
     let mut g ← headZeta goal
     for _ in [0:64] do
@@ -200,7 +147,7 @@ def respStep (extra : Array Name) : TacticM Unit := withMainContext do
     if let some mi := Match.Extension.getMatcherInfo? env c then
       if mi.numAlts ≥ 4 && isLiteralMatcher env c then
         replaceMainGoal [← deltaHeadMatcher goal]; return
-      -- constructor discriminants reduce (no `whnf` on symbolic ones); otherwise split
+
       let xargs := x.getAppArgs
       let discrs := (List.range mi.numDiscrs).map fun i => xargs[mi.numParams + 1 + i]!
       if ← discrs.allM (fun d => (Meta.isConstructorApp d : MetaM Bool)) then
@@ -209,8 +156,7 @@ def respStep (extra : Array Name) : TacticM Unit := withMainContext do
           replaceMainGoal [← goal.replaceTargetDefEq (mkAppN fn (args.set! (args.size - 1) x'))]
           return
       evalTactic (← `(tactic| split)); return
-    -- a compiled case split (`casesOn`, `_sparseCasesOn_n`): on a constructor, unfold and
-    -- iota-reduce; on a variable, case on it
+
     if (match c with | .str _ s => s == "casesOn" || s.startsWith "_sparseCasesOn" | _ => false) then
       let (fn, args, _) ← respGoal goal
       if let some x' ← delta? x (fun n => n == c) then
@@ -227,9 +173,9 @@ def respStep (extra : Array Name) : TacticM Unit := withMainContext do
   | none => pure ()
   for l in extra do
     try evalTactic (← `(tactic| with_reducible apply $(mkIdent l))); return catch _ => pure ()
-  -- an excluded constructor of a case split (`h : C = C → False`)
+
   try evalTactic (← `(tactic| exact absurd rfl ‹_›)); return catch _ => pure ()
-  -- an impossible arm of a split (`heq : C₁ = C₂`, distinct constructors)
+
   for d in ← getLCtx do
     if d.isImplementationDetail then continue
     if let some (_, a, b) := d.type.eq? then
@@ -237,7 +183,7 @@ def respStep (extra : Array Name) : TacticM Unit := withMainContext do
         if let some cb ← (Meta.isConstructorApp? b : MetaM _) then
           if ca.name != cb.name then
             evalTactic (← `(tactic| contradiction)); return
-  -- an induction hypothesis, possibly universally quantified
+
   if ← withReducible goal.assumptionCore then replaceMainGoal []; return
   for d in ← getLCtx do
     if d.isImplementationDetail then continue
@@ -260,9 +206,6 @@ elab_rules : tactic
   | `(tactic| resp_step) => respStep #[]
   | `(tactic| resp_step [$ls,*]) => respStep (ls.getElems.map (·.getId.eraseMacroScopes))
 
-/-- A flat, bounded loop: every round applies one `resp_step` to every open
-goal. A goal on which the step fails is set aside (a step is a function of the
-goal, so retrying cannot help); it is reported at the end. -/
 elab_rules : tactic
   | `(tactic| resp_auto) => do evalTactic (← `(tactic| resp_auto []))
   | `(tactic| resp_auto [$ls,*]) => do

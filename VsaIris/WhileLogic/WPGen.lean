@@ -1,27 +1,10 @@
 import Iris.ProofMode
 import VsaIris.WhileLogic.Res
 
-/-!
-# The generic big-step weakest precondition
-
-`wpR lo R Φ` is the total-correctness weakest precondition of a big-step
-relation `R : St → St → α → Prop` (pre-state, post-state, result) in the
-iris-lean BI `vProp = UPred Res`. It holds of a resource `x` when, for every
-well-formed state `σ` with at least `lo` frames and every frame resource `rf`
-with `abs σ = x • rf`, there is a derivation `R σ σ' a` to a well-formed,
-frame-extending `σ'` and a resource `r'` with `abs σ' = r' • rf` satisfying
-`Φ a`. Quantifying over `rf` makes every `wpR` frame-preserving; this is the
-frame rule `wpR_frame`.
-
-All language weakest preconditions (`WP.lean`) are instances of `wpR`, and
-every proof rule is an instance of the generic lemmas below.
--/
-
 namespace Vsa.While.Logic
 
 open Iris OFE CMRA BI Vsa.While
 
-/-- Total-correctness weakest precondition of a big-step relation. -/
 def wpR {α : Type} (lo : Nat) (R : St → St → α → Prop) (Φ : α → vProp) : vProp where
   holds n x := ∀ (σ : St) (rf : Res), σ.store.WF → lo ≤ σ.store.frames.size →
     abs σ = x.val • rf →
@@ -61,14 +44,12 @@ theorem wpR_mono {Φ Ψ : α → vProp} (h : ∀ a, Φ a ⊢ Ψ a) : wpR lo R Φ
   obtain ⟨σ', a, r', hR, hwf', hsz, hrep', hΦ⟩ := H σ rf hwf hlo hrep
   exact ⟨σ', a, r', hR, hwf', hsz, hrep', h a n _ hΦ⟩
 
-/-- Relation inclusion (and a weaker frame-count precondition). -/
 theorem wpR_weaken {lo' : Nat} {R' : St → St → α → Prop} {Φ : α → vProp}
     (hlo : lo ≤ lo') (h : ∀ σ σ' a, R σ σ' a → R' σ σ' a) : wpR lo R Φ ⊢ wpR lo' R' Φ := by
   intro n x H σ rf hwf hlo' hrep
   obtain ⟨σ', a, r', hR, hwf', hsz, hrep', hΦ⟩ := H σ rf hwf (Nat.le_trans hlo hlo') hrep
   exact ⟨σ', a, r', h _ _ _ hR, hwf', hsz, hrep', hΦ⟩
 
-/-- **Frame rule** (generic form). -/
 theorem wpR_frame {P : vProp} {Φ : α → vProp} :
     iprop(P ∗ wpR lo R Φ) ⊢ wpR lo R (fun a => iprop(P ∗ Φ a)) := by
   intro n x H σ rf hwf hlo hrep
@@ -79,12 +60,10 @@ theorem wpR_frame {P : vProp} {Φ : α → vProp} :
   refine ⟨σ', a, x1 • r', hR, hwf', hsz, hrep'', ?_⟩
   exact sep_holds.mpr ⟨x1, r', rfl, hP, hΦ⟩
 
-/-- A relation that holds reflexively at result `a` returns immediately. -/
 theorem wpR_ret {Φ : α → vProp} {a : α} (hR : ∀ σ, R σ σ a) : Φ a ⊢ wpR lo R Φ := by
   intro n x H σ rf hwf _ hrep
   exact ⟨σ, a, x.val, hR σ, hwf, Nat.le_refl _, hrep, H⟩
 
-/-- Sequential composition of relations. -/
 theorem wpR_bind {R2 : α → St → St → β → Prop} {R' : St → St → β → Prop} {lo' : Nat}
     {Φ : β → vProp} (hlo : lo' ≤ lo)
     (h : ∀ σ σ' σ'' a b, R σ σ' a → R2 a σ' σ'' b → R' σ σ'' b) :
@@ -95,7 +74,6 @@ theorem wpR_bind {R2 : α → St → St → β → Prop} {R' : St → St → β 
     hK σ' rf hwf' (by omega) hrep'
   exact ⟨σ'', b, r'', h _ _ _ _ _ hR hR2, hwf'', Nat.le_trans hsz hsz', hrep'', hΦ⟩
 
-/-- Sequential composition with a continuation that entails a `wpR`. -/
 theorem wpR_bind' {R2 : α → St → St → β → Prop} {R' : St → St → β → Prop} {lo' : Nat}
     {K : α → vProp} {Φ : β → vProp} (hlo : lo' ≤ lo)
     (hK : ∀ a, K a ⊢ wpR lo' (R2 a) Φ)
@@ -103,9 +81,6 @@ theorem wpR_bind' {R2 : α → St → St → β → Prop} {R' : St → St → β
     wpR lo R K ⊢ wpR lo R' Φ :=
   (wpR_mono hK).trans (wpR_bind hlo h)
 
-/-- A primitive step owning `m`: from any state `abs σ = m • w` the step
-reaches `abs σ' = m' • w` with `Q a` true of `m'`. The rest of the resource
-(`Rest`) is framed around the step. -/
 theorem wpR_prim {m : Res} {Q : α → vProp} {Rest : vProp} {Φ : α → vProp}
     (hstep : ∀ σ w, σ.store.WF → lo ≤ σ.store.frames.size → abs σ = m • w →
       ∃ σ' a m', R σ σ' a ∧ σ'.store.WF ∧ σ.store.frames.size ≤ σ'.store.frames.size ∧
@@ -125,8 +100,6 @@ theorem wpR_prim {m : Res} {Q : α → vProp} {Rest : vProp} {Φ : α → vProp}
   exact (Q a).mono (hQ n (validN_op_left (validN_op_left (validN_of_rep hrep''))))
     (incN_op_left n m' z) (Nat.le_refl n)
 
-/-- A primitive observation that reads the owned `m` without changing the
-state. -/
 theorem wpR_read {m : Res} {Φ : α → vProp} {a : α}
     (hread : ∀ σ w, σ.store.WF → lo ≤ σ.store.frames.size → abs σ = m • w → R σ σ a) :
     iprop(UPred.ownM m ∧ Φ a) ⊢ wpR lo R Φ := by
@@ -136,14 +109,12 @@ theorem wpR_read {m : Res} {Φ : α → vProp} {a : α}
   have : abs σ = m • (z • rf) := by rw [hrep, hz, assoc']
   exact ⟨σ, a, x.val, hread σ _ hwf hlo this, hwf, Nat.le_refl _, hrep, hΦ⟩
 
-/-- Post-composing the result with `f`. -/
 theorem wpR_map {f : α → β} {Φ : β → vProp} :
     wpR lo R (fun a => Φ (f a)) ⊢ wpR lo (fun σ σ' b => ∃ a, R σ σ' a ∧ b = f a) Φ := by
   intro n x H σ rf hwf hlo hrep
   obtain ⟨σ', a, r', hR, hwf', hsz, hrep', hΦ⟩ := H σ rf hwf hlo hrep
   exact ⟨σ', f a, r', ⟨a, hR, rfl⟩, hwf', hsz, hrep', hΦ⟩
 
-/-- `False` entails every `wpR`. -/
 theorem wpR_false {Φ : α → vProp} : (iprop(False) : vProp) ⊢ wpR lo R Φ :=
   fun _ _ h => h.elim
 

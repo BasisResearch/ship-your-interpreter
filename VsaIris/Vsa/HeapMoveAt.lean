@@ -1,31 +1,14 @@
-import VsaIris.Vsa.HeapMove
-
-/-!
-# Moving a free chunk into a bin at any position
-
-`PHeapAt.moveBin` links the moved chunk in at the head of its new bin. A large
-bin is kept sorted by size, so `_malloc_r` re-binning a large last remainder
-(`0x80004c70`) links it in before the first member no larger than it, walking
-the bin to find that point. `PHeapAt.moveBinAt` is the move at any insertion
-point: between `pred` (the header or a member) and its successor `succ`. The
-words written are bin `i`'s links, the chunk's links, `pred`'s `fd`, `succ`'s
-`bk` and the bitmap.
--/
+import VsaIris.Vsa.HeapTake
 
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast
 
-/-- The seven words a move to an insertion point writes. -/
 def MoveAtW (i v pred succ : Nat) (a : Nat) : Prop :=
   (binAt i + 16 ≤ a ∧ a < binAt i + 32) ∨ (v + 16 ≤ a ∧ a < v + 32) ∨
     (pred + 16 ≤ a ∧ a < pred + 24) ∨ (succ + 24 ≤ a ∧ a < succ + 32) ∨
     (binblocksAddr ≤ a ∧ a < binblocksAddr + 8)
 
-/-- **Move a free chunk into a bin at an insertion point.** Emptying bin `i`
-of its single member `v` and linking `v` in between `pred` and `succ` of bin
-`j`, with `j`'s block bit set in `binblocks`, gives the page-aligned heap at
-the moved bins. -/
 theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {i j v sz pred succ bb' : Nat} {pre' post' : List Nat}
@@ -51,13 +34,13 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   obtain ⟨hal, htop16⟩ := HH.aligned
   have hgi := binAt_geo i hi
   have hgj := binAt_geo j hj
-  -- the victim
+
   have hvmem : v ∈ bins i := by rw [hbin]; exact List.mem_cons_self
   have hv16 : v % 16 = 0 := hal _ hfree
   have hvb := hcb _ hfree
   simp only at hv16 hvb
   have hvlo : heapStart ≤ v := hvb.1
-  -- the insertion point's nodes
+
   have hpm : pred = binAt j ∨ pred ∈ bins j := by
     have := List.mem_of_getLast? hpred
     rcases List.mem_cons.mp this with h1 | h1
@@ -70,18 +53,18 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact .inl (List.mem_singleton.mp h1)
   obtain ⟨hp16, hpnode⟩ := HH.node hj0 hj hpm
   obtain ⟨hs16, hsnode⟩ := HH.node hj0 hj hsm
-  -- the bins as rings
+
   have hringJ := (binList_iff_ring.1 (HH.bins_list j hj0 hj)).1
   have hneJ := (binList_iff_ring.1 (HH.bins_list j hj0 hj)).2
   have hvJ : v ∉ bins j := fun hc => hji (HH.bin_unique hj0 hj hi0 hi hc hvmem)
-  -- node geometry
+
   have hnodeGeo : ∀ k, 0 < k → k < numBins → ∀ x ∈ bins k,
       x % 16 = 0 ∧ heapStart ≤ x ∧ (∀ o, 16 ≤ o → o < 32 → vsaFoot H (x + o)) := by
     intro k hk0 hk x hx
     obtain ⟨c, hc, hca, hf⟩ := HH.member hk0 hk hx
     subst hca
     exact ⟨hal c hc, (hcb c hc).1, B.node_foot hk0 hk (.inr hx)⟩
-  -- a node of bin `j` lies in the arena or is bin `j`'s header
+
   have hjloc : ∀ x, (x = binAt j ∨ x ∈ bins j) → x = binAt j ∨ heapStart ≤ x := by
     rintro x (h1 | h1)
     · exact .inl h1
@@ -104,7 +87,7 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     rcases hsloc with rfl | h1
     · intro he; exact hji (by unfold binAt avAddr at he; omega)
     · unfold heapStart at h1; omega
-  -- the words the move keeps
+
   have K : ∀ a, (∀ k, k < 8 → vsaFoot H (a + k)) → a % 8 = 0 →
       a ≠ binAt i + 16 → a ≠ binAt i + 24 → a ≠ v + 16 → a ≠ v + 24 →
       a ≠ pred + 16 → a ≠ succ + 24 → a ≠ binblocksAddr →
@@ -114,14 +97,14 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     unfold binblocksAddr avAddr at h7
     unfold MoveAtW binblocksAddr avAddr
     omega
-  -- globals below the arena
+
   have Kglob : ∀ a, (∀ k, k < 8 → allocGlobal (a + k)) → a % 8 = 0 → a + 8 ≤ heapStart →
       a ≠ binAt i + 16 → a ≠ binAt i + 24 → a ≠ pred + 16 → a ≠ succ + 24 →
       a ≠ binblocksAddr → read64 m' a = read64 m a := by
     intro a hg ha hs h1 h2 h5 h6 h7
     unfold heapStart at hs hvlo
     exact K a (fun k hk => .inl (hg k hk)) ha h1 h2 (by omega) (by omega) h5 h6 h7
-  -- a boundary (a chunk's address or the top) keeps its header
+
   have Khdr : ∀ q, (q = top ∨ ∃ c ∈ chunks, c.addr = q) →
       read64 m' (q + 8) = read64 m (q + 8) := by
     intro q hq
@@ -141,7 +124,7 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     unfold heapStart at hqlo hvlo
     exact K _ (foot_header B hq) (by omega) (by omega) (by omega) (by omega) (by omega)
       (by omega) (by omega) (by unfold binblocksAddr avAddr; omega)
-  -- a node's `fd` and `bk`, away from the link words the move writes
+
   have Kfd : ∀ x, x % 16 = 0 → (∀ k, 16 ≤ k → k < 32 → vsaFoot H (x + k)) →
       x ≠ v → x ≠ binAt i → x ≠ pred → fdOf m' x = fdOf m x := by
     intro x hx16 hxf h1 h2 h3
@@ -159,7 +142,7 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
         rwa [show x + (24 + k) = x + 24 + k by omega] at this)
       (by omega) (by omega) (by omega)
       (by omega) (by omega) (by omega) (by omega) (by unfold binblocksAddr avAddr; omega)
-  -- a free chunk's footer
+
   have Kfoot : ∀ c ∈ chunks, c.inuse = false →
       read64 m' (c.addr + c.size) = read64 m (c.addr + c.size) := by
     intro c hc hf
@@ -175,14 +158,14 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     unfold heapStart at hcb1 hvlo
     exact K _ (foot_free B hc hf).2 (by omega) (by omega) (by omega) (by omega) (by omega)
       (by omega) (by omega) (by unfold binblocksAddr avAddr; omega)
-  -- the moved bins, by index
+
   have hbinsJ : updBins (updBins bins i []) j (pre' ++ v :: post') j = pre' ++ v :: post' :=
     updBins_same _ _ _
   have hbinsI : updBins (updBins bins i []) j (pre' ++ v :: post') i = [] := by
     rw [updBins_other _ _ (Ne.symm hji), updBins_same]
   have hbinsK : ∀ k, k ≠ i → k ≠ j → updBins (updBins bins i []) j (pre' ++ v :: post') k = bins k :=
     fun k h1 h2 => by rw [updBins_other _ _ h2, updBins_other _ _ h1]
-  -- bin `j`'s old ring, split at the insertion point
+
   obtain ⟨ys, hys⟩ := List.getLast?_eq_some_iff.1 hpred
   obtain ⟨zs, hzs⟩ := List.head?_eq_some_iff.1 hsucc
   have hnd := HH.bins_nodup j
@@ -267,7 +250,7 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       rcases List.mem_cons.mp this with h1 | h1
       · exact hane (hap.trans h1)
       · exact hdisj pred h1 a hapost hap.symm
-  -- nodes of other bins are none of the written nodes
+
   have hoNe : ∀ k, 0 < k → k < numBins → k ≠ j → ∀ x ∈ bins k, x ≠ pred ∧ x ≠ succ := by
     intro k hk0 hk hkj x hx
     have hne : ∀ y, (y = binAt j ∨ y ∈ bins j) → x ≠ y := by
@@ -319,7 +302,7 @@ theorem PHeapAt.moveBinAt {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
           exact ⟨(Kbk x hx16 (by unfold avAddr; unfold heapStart at hxlo; omega) hxf hxv hxi
               (hoNe k hk0 hk hkj x hx).2).symm,
             (Kfd x hx16 hxf hxv hxi (hoNe k hk0 hk hkj x hx).1).symm⟩
-  -- globals above the bin array, and `av->top`
+
   have hnloc : ∀ y, (y = binAt j ∨ heapStart ≤ y) → y + 32 ≤ 0x8001b520 ∨ heapStart ≤ y := by
     rintro y (rfl | h1)
     · exact .inl (by omega)

@@ -2,14 +2,6 @@ import VsaIris.Interp.HelperRun
 import VsaIris.Interp.SpecErr
 import VsaIris.Interp.BinArm
 
-/-!
-# `value_kind_name` (lane E2)
-
-One symbolic run over the value's slot (read only): the kind word indexes
-`CSWTCH.18` (`0x80019f28`), a `.rodata` table of name pointers. The model is
-H2's `value_truthy` (`ProofValueTruthy.lean`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -21,7 +13,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The run of `value_kind_name`, per kind. -/
 theorem valueKindName_run (hlive : ∀ p ∈ interpText, live p.1) (p r : BitVec 64)
     (rv : Nat → BitVec 64) (Mt : Mem) (v : Value) (hg : SlotGeom p) (h10 : rv 10 = p)
     (hv : (imgW (imgM Mt) p.toNat).toNat % 2 ^ 32 = valTag v) (hal : r.toNat % 4 = 0) :
@@ -38,7 +29,6 @@ theorem valueKindName_run (hlive : ∀ p ∈ interpText, live p.1) (p r : BitVec
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rfl
 
-/-- **`value_kind_name`**, for either WP. -/
 theorem valueKindName_spec (hlive : ∀ p ∈ interpText, live p.1)
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs) (p : BitVec 64) (Mt : Mem)
     (v : Value) : ⊢ valueKindNameSpec (vsaModel live) Wp p Mt v := by

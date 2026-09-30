@@ -3,36 +3,10 @@ import VsaIris.Vsa.MallocRunAll
 import VsaIris.Vsa.FreeRunAll
 import VsaIris.Vsa.ReallocRunAll
 
-/-!
-# The allocator's runs at the binary
-
-The Iris route's allocator obligations are the first-order runs of the
-binary's `malloc`, `free` and `realloc`, in both regimes (INTERP_DESIGN §3),
-over
-
-* the page-aligned heap shape `vsaLayoutP` and, counted, the capacity
-  `vsaRoomB` with the charge `vsaChg` (`Vsa/HeapRoom.lean`);
-* the allocator's code `allocText` (`AllocCode.lean`), for any `live` set
-  holding it;
-* the caller's stack discipline `SpOKA` with `allocHeadroom` bytes of
-  scratch;
-* the owned registers `allocRegs vsaClob vsaSaved`.
-
-All six runs are proved (`mallocChgRun_proved`, `mallocLocalRun_proved`,
-`MallocRunAll.lean`; `freeChgRun_proved`, `freeLocalRun_proved`,
-`FreeRunAll.lean`; `reallocChgRun_proved`, `reallocLocalRun_proved`,
-`ReallocRunAll.lean`), so `IrisHoles` no longer carries them.
-`allocSpecs` turns the runs into the Iris specs
-that callers use, for every `MachWP` (`twpW` for `term_sim`, `wpW` for
-`stuck_sim`): the runs are first-order, so the specs are WP-agnostic.
--/
-
 namespace VsaIris.VsaHeap
 
 open VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 
-/-- The allocator's Iris specs from its runs: both regimes of `malloc`,
-`free` and `realloc`, at the binary. -/
 structure AllocSpecs (live : Nat → Prop) : Prop where
   counted : DlMallocChgImpl (vsaModel live) vsaLayoutP vsaRoomB vsaChg SpOKA mallocEntryBV gpV
     vsaClob vsaSaved allocHeadroom allocText

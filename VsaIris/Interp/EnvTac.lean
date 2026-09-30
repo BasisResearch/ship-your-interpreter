@@ -1,22 +1,10 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Interp.EnvSteps
 import VsaIris.Interp.Repr
-
-/-!
-# `sx_side` for `env_*` spans
-
-An `env_*` span owns a concrete byte set: a union of intervals (the stack
-frame, a value slot, a frame's blocks), written as a `fun a => …` of
-interval tests. A store or load's `hS`/`hLDS` obligation
-(`∀ b ∈ accAddrs ea w, S b`) is then interval arithmetic: the rules below
-unfold the access window, `InExt` and R's HTIF bound `htifLo`, and hand the
-goal to `sx_addr`.
--/
+import VsaIris.Interp.EnvSteps.Part00
+import VsaIris.Interp.EnvSteps.Part01
 
 namespace VsaIris.Interp
 
-/-- A frame's blocks as intervals (`BlocksCover G.blocks`, `frameS_iff`): the
-struct block, and the two array blocks while `cap ≠ 0`. -/
 def frameS (G : FrameGeom) (a : Nat) : Prop :=
   InExt G.sblk a ∨ (G.cap ≠ 0 ∧ (InExt G.nblk a ∨ InExt G.vblk a))
 

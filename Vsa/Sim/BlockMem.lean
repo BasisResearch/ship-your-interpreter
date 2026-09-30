@@ -4,120 +4,6 @@ import Vsa.Sim.ObsAvoid
 import Vsa.Sim.ExecLoadTotal
 import Vsa.Sim.RamReadValue
 
-/-!
-# `BlockMem` — proof-by-reflection block lemma for straight-line ALU + LOAD + STORE runs
-
-Generalizes `BlockPilot`'s `block_alu_sound` (ADDI/ADD only) to the memory
-classes: value loads (`lw`/`ld`/`lbu`) and stores (`sw`/`sd`/`sb`).  One lemma,
-`block_mem_sound`, consumes a concrete `List MInstr` and produces the whole
-`Steps` chain with a *computed* register outcome (`runGM`) **and** a computed
-memory outcome: the final memory is the `writeMap` fold (`writeLog`) of a
-computed write log (`wlogM : List (addr × width × value)`, symbolic addresses
-as base-pin + concrete offset, symbolic data).
-
-## Measured verdict (acceptance test: the mixed 7-instruction `__ssputs_r`
-prologue `0x8001438c–0x800143a4` — `addi/sd/lw/sd/sd/mv/mv`, real byte pins +
-DecodeTable lemmas, ONE `block_mem_sound` application (`BlockMemDemo.lean`) vs
-the same 7 steps via `site_1438c_sp …` per-site ceremony in the
-`SnprintfSpec19.tr_ssputs_head` style (`/tmp/bm_ceremony.lean`); *identical*
-hypotheses and conclusions: `Steps (u+7)`, tick, `GoodState`, the three nested
-`writeMap8` images, HTIF output, `PC = 0x800143a8`, the four written registers
-incl. the `lw` value, minstret, and an `x10` frame)
-
-* `lean --profile` proof work (elaboration + tactic execution + kernel):
-  reflection **≈ 250 ms** (49 + 181 + 20) vs ceremony **≈ 990 ms**
-  (52 + 852 + 86) — **≈ 4× less** at 7 instructions.  The pilot measured 1.7×
-  at 3 ALU instructions; the gap grows with block length and pin count as
-  predicted — ceremony is O(instrs × tracked-registers) plus per-store
-  mem-image/`…Loaded` bookkeeping, reflection O(instrs).
-* wall-clock `lean` on the use site (5 runs): reflection **1.22–1.35 s** vs
-  ceremony **2.32–2.59 s** — both import-dominated (0.65 s vs 2.0–2.4 s of
-  olean loading; the ceremony additionally pulls the `SnprintfSpec19` closure
-  for the `…Loaded`-under-store lemmas that reflection does not need).
-* line count (identical theorem statement, ≈ 105 shared hypothesis/conclusion
-  lines): reflection proof body **30** lines + **9** block-data lines
-  (`ssputsProlog`) vs ceremony proof body **192** lines (≈ 27 per instruction
-  at 6–7 tracked registers: `obs_*` transports + per-store `mem_afterNextPC`
-  image chains + `…Loaded` re-establishment).  Marginal cost per added
-  instruction: reflection = 1 data line + 1–3 `ProgFactsM` entries, and 0 new
-  lines per extra *tracked register*; ceremony ≈ 1 line per (instruction ×
-  register) + ≈ 6 lines per store.
-* one-time cost: this file (≈ 1060 lines, of which ≈ 40 are the scripted
-  `obs_gpr_store` battery) compiles in ≈ 1.8 s.
-
-**Verdict: WIN, and it grows with the memory classes.**  The pilot's "modest
-win now, structural win at scale" sharpens at 7 mixed instructions to a 4×
-proof-work and 6.4× proof-body reduction; stores are where the ceremony hurts
-most (mem-image chains, `…Loaded` transport, per-register store transports) and
-exactly where the block lemma's computed write log + internal code-pin
-survival pay off.
-
-## Design deltas over `BlockPilot`
-
-* `MInstr`/`MKind` — the pilot's `AInstr` grown by six memory kinds.  Structure
-  stays fully concrete (kinds enumerate the width/sign variants), so the VC
-  `BlockOKM` stays decidable; *nothing symbolic ever enters the instruction
-  list* (the `decide`-rejects-fvars gotcha).
-* **Load data is supplied positionally**: `lds : List (List (BitVec 8))`, one
-  byte-list per load in program order.  The loaded value enters the computed
-  register outcome as `sign_extend`/`zero_extend` of the LE byte append
-  (`bytesVal`), phrased over `bs.getD j 0#8` so no length side condition is
-  needed anywhere: for a literal byte list the `getD`s reduce to the bare
-  symbolic bytes.
-* **Per-element `ProgFactsM` gains the data-dependent side conditions**
-  (`MemFacts`): RAM bounds / HTIF-window / alignment at the *symbolic*
-  effective address `eaddrM = srcVal rs1 + sext imm`, plus (for loads) the
-  byte-definedness pins — stated on the **threaded memory** at that point in
-  the block, so loads can read back earlier stores of the same block.  These
-  are `Prop`-side hypotheses (they mention symbolic values), *not* `BlockOKM`.
-* **The memory thread**: `ProgFactsM` recurses with `stepMemM`, the same
-  `applyW` update that `wlogM`/`writeLog` use in the conclusion, so the load
-  pins and the final-memory statement share one definition of the evolving map.
-* **Code pins survive stores for free**: `BytePinsM` stay on the *entry*
-  memory; the induction carries `∀ j < tohostAddr, m[j]? = m0[j]?`, re-proved
-  after each store from its `tohostAddr + 16 ≤ addr` window fact (code lives
-  below `tohostAddr`, stores land above the window — `*_low_miss`).
-* Per-class step consumption: loads go through `stepObs_alu` (a load is a
-  register write; memory unchanged) with `exec_lw`/`exec_ld`/`exec_lbu_bm`
-  characterizations; stores through `stepObs_store` + `exec_sw`/`exec_sd_val`/
-  `exec_sb_bm`.  `exec_lbu_bm`/`exec_sb_bm` are the generic width-1 characterizations
-  (the `MemcpySites` per-site `exec_c48`/`exec_c54` shapes, made generic).
-* One new 33-branch dispatch battery (`obs_gpr_store`): every GPR pin survives
-  a store step.  Everything else (`gprReg`/`gprGet`/`gprRT`/`rX_src`/`wX_gpr`/
-  `obs_gpr_rd`/`obs_gpr_other`/`gholds_eraseG`/`srcVal`/`SrcOK`…) is reused
-  from `BlockPilot` unchanged.
-
-**Obstructions hit** (the pilot's four all reappear unchanged; new ones):
-(5) load data cannot live in `MInstr` — `decide` rejects fvars, so a symbolic
-byte in the list would kill the `show BlockOKM … by decide` close; solved by
-the positional `lds` + `getD` phrasing.  (6) at the use site the caller
-supplies `ProgFactsM` components whose *expected* types are `srcVal`/`eaddrM`
-applications over the computed pin list — the anonymous-constructor bundle
-elaborates because `lookupG`/`stepGM`/`stepMemM` all whnf-reduce on concrete
-keys (symbolic values are never inspected); hypotheses must be phrased with
-the *computed* base value (e.g. `v2 + sext 0xfc0 + sext 0x028` for a store
-whose base register was written earlier in the block).  (7) the load-pin
-obligations land on `writeMap`-image memories when a store precedes the load —
-this matches what the per-site ceremony demands at the same point, so nothing
-is lost, but callers reading loads *disjoint* from the block's stores must
-discharge the image pins from entry pins via `insert`-miss rewrites
-(`getElem?_insert_outside`-style), exactly as ceremony compositions do today.
-
-## What branch-terminator support (the remaining class) would need
-
-A taken branch/jump ends the block, so `block_*_sound` becomes a *basic-block*
-lemma: `List MInstr` (straight-line body, this file) + an optional terminator
-consumed by `stepObs_branch_taken`/`stepObs_branch_nottaken`/`stepObs_j`/
-`stepObs_jr` at the end.  Concretely: (1) a `Term` sum type (branch kind + the
-two source indices + the 13/21-bit immediate, or jump target); (2) the branch
-*condition* (e.g. `zopz0zKzJ_u v13 v9 = false`) is data-dependent, so it joins
-`ProgFactsM` as one more per-terminator hypothesis, exactly like the store
-window facts; (3) `endPCM` returns the branch target instead of fall-through
-in the taken case; (4) the register/memory outcome is unchanged (branches
-write nothing) — so no new batteries are needed, only a last non-inductive
-step case after the list induction.  The list-induction skeleton is untouched.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
@@ -127,139 +13,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## Generic width-1 execute characterizations (`lbu` / `sb`)
-
-The width-4/8 generics (`exec_lw`/`exec_ld`/`exec_sw`/`exec_sd_val`) live in
-`ValueSites`; width 1 only existed as the per-site `exec_c48`/`exec_c54`
-(`MemcpySites`).  These are those shapes with generic registers/immediate. -/
-
-/-- Generic unsigned 1-byte load `lbu rd,off(rs1)` at `afterNextPC …`: reads the
-byte at `vbase + sext off` and writes `zero_extend b0` to `rd`.  No alignment
-side condition at width 1. -/
-theorem exec_lbu_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
-    (σ' : MState) (vbase : BitVec 64) (b0 : BitVec 8)
-    (hG : GoodState σ)
-    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
-      = .ok vbase (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits rd (zero_extend (m := 64) (b0 : BitVec (8 * 1)))).run
-        (afterNextPC (afterPrelude σ) pc) = .ok () σ')
-    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 1 ≤ 0x100000000)
-    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 1 ≤ tohostAddr
-      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0) :
-    (execute (instruction.LOAD (off, rs1, rd, true, 1))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS σ' := by
-  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
-  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
-  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
-  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
-  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
-  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
-  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
-  have hread := vmem_read_data_one (afterNextPC (afterPrelude σ) pc) rs1
-    (sign_extend (m := 64) off) vbase b0 initMstatus initPmpaddr
-    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif
-    (by rw [mem_afterNextPC]; exact h0)
-  exact execute_load_unsigned_char off rs1 rd 1 (b0 : BitVec (8 * 1))
-    (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
-
-theorem exec_lh_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
-    (σ' : MState) (vbase : BitVec 64) (b0 b1 : BitVec 8)
-    (hG : GoodState σ)
-    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
-      = .ok vbase (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits rd (sign_extend (m := 64) (b1.append b0 : BitVec (8 * 2)))).run
-        (afterNextPC (afterPrelude σ) pc) = .ok () σ')
-    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ 0x100000000)
-    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ tohostAddr
-      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (halign : (vbase + sign_extend (m := 64) off).toNat % 2 = 0)
-    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0)
-    (h1 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 1]? = some b1) :
-    (execute (instruction.LOAD (off, rs1, rd, false, 2))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS σ' := by
-  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
-  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
-  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
-  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
-  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
-  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
-  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
-  have hread := vmem_read_data_two (afterNextPC (afterPrelude σ) pc) rs1
-    (sign_extend (m := 64) off) vbase b0 b1 initMstatus initPmpaddr
-    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif halign
-    (by rw [mem_afterNextPC]; exact h0) (by rw [mem_afterNextPC]; exact h1)
-  exact execute_load_signed_char off rs1 rd 2 (b1.append b0 : BitVec (8 * 2))
-    (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
-
-theorem exec_lhu_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
-    (σ' : MState) (vbase : BitVec 64) (b0 b1 : BitVec 8)
-    (hG : GoodState σ)
-    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
-      = .ok vbase (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits rd (zero_extend (m := 64) (b1.append b0 : BitVec (8 * 2)))).run
-        (afterNextPC (afterPrelude σ) pc) = .ok () σ')
-    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ 0x100000000)
-    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ tohostAddr
-      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (halign : (vbase + sign_extend (m := 64) off).toNat % 2 = 0)
-    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0)
-    (h1 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 1]? = some b1) :
-    (execute (instruction.LOAD (off, rs1, rd, true, 2))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS σ' := by
-  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
-  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
-  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
-  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
-  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
-  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
-  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
-  have hread := vmem_read_data_two (afterNextPC (afterPrelude σ) pc) rs1
-    (sign_extend (m := 64) off) vbase b0 b1 initMstatus initPmpaddr
-    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif halign
-    (by rw [mem_afterNextPC]; exact h0) (by rw [mem_afterNextPC]; exact h1)
-  exact execute_load_unsigned_char off rs1 rd 2 (b1.append b0 : BitVec (8 * 2))
-    (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
-
-/-- Generic width-1 `sb rs2,off(rs1)` execute characterization: stores the low
-byte of `rs2` at `vbase + sext off`; post memory is the single insert.  No
-alignment side condition at width 1. -/
 theorem exec_sb_bm (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regidx)
     (vbase vdata : BitVec 64) (hG : GoodState σ)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
@@ -313,14 +66,9 @@ theorem exec_sb_bm (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : r
   simp only [execute]
   exact hchar
 
-/-- Width-2 store-data slice (the `sh` image data): the low half-word of `rs2`. -/
 abbrev shData (vdata : BitVec 64) : BitVec (8 * 2) :=
   Sail.BitVec.extractLsb vdata 15 0
 
-/-- Generic width-2 `sh rs2,off(rs1)` execute characterization: stores the low
-half-word of `rs2` at `vbase + sext off`; post memory is the two-insert image
-(the unfolding of `PinW`'s `writeMap2`, which is not in this file's import
-closure).  Requires 2-byte alignment. -/
 theorem exec_sh_bm (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regidx)
     (vbase vdata : BitVec 64) (hG : GoodState σ)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
@@ -378,13 +126,8 @@ theorem exec_sh_bm (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : r
   simp only [execute]
   exact hchar
 
-/-! ## The write log and its fold -/
-
-/-- One store: effective address (as `Nat`), width (1/2/4/8), full data value. -/
 abbrev WEntry := Nat × Nat × BitVec 64
 
-/-- Apply one write-log entry: the per-width store image (`writeMap4`/`writeMap8`
-of `ValueSites`, single `insert` for `sb`). -/
 def applyW (m : Std.ExtHashMap Nat (BitVec 8)) : WEntry → Std.ExtHashMap Nat (BitVec 8)
   | (a, 1, d) => m.insert a (sbData d)
   | (a, 2, d) => (m.insert a ((shData d).extractLsb' 0 8)).insert (a + 1) ((shData d).extractLsb' 8 8)
@@ -392,12 +135,9 @@ def applyW (m : Std.ExtHashMap Nat (BitVec 8)) : WEntry → Std.ExtHashMap Nat (
   | (a, 8, d) => writeMap8 m a (sdData_val d)
   | (_, _, _) => m
 
-/-- Fold a write log over a memory (left-to-right = program order). -/
 def writeLog (m : Std.ExtHashMap Nat (BitVec 8)) (log : List WEntry) :
     Std.ExtHashMap Nat (BitVec 8) :=
   log.foldl applyW m
-
-/-! ## Low-address misses: stores above the HTIF window never touch code -/
 
 theorem insert_low_miss (m : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) (v : BitVec 8)
     (j : Nat) (hj : j < k) : (m.insert k v)[j]? = m[j]? := by
@@ -430,11 +170,6 @@ theorem writeMap8_low_miss (m : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) (d : Bi
       Std.ExtHashMap.getElem?_insert, if_neg (by simp only [beq_iff_eq]; omega),
       Std.ExtHashMap.getElem?_insert, if_neg (by simp only [beq_iff_eq]; omega)]
 
-/-! ## Store-step GPR pin transport (the one new dispatch battery) -/
-
-/-- Transport a `gprGet` pin (any GPR `1..31`) through a STORE step: the STORE
-register write-set is `{PC, minstret, nextPC, minstret_increment}` + tick noise,
-so every GPR pin survives.  33-branch dispatch (the `obs_gpr_other` of stores). -/
 theorem obs_gpr_store {σ' σ : MState} {pc vm : BitVec 64}
     {m' : Std.ExtHashMap Nat (BitVec 8)}
     (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m')) :
@@ -474,7 +209,6 @@ theorem obs_gpr_store {σ' σ : MState} {pc vm : BitVec 64}
   | 31, _, _, w, h => obs_store_other' hobs Register.x31 (by decide) h
   | _+32, _, h, _, _ => absurd h (by omega)
 
-/-- All pins survive a STORE step (list form of `obs_gpr_store`). -/
 theorem gholds_store {σ' σ : MState} {pc vm : BitVec 64}
     {m' : Std.ExtHashMap Nat (BitVec 8)}
     (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m')) :
@@ -489,9 +223,6 @@ theorem gholds_store {σ' σ : MState} {pc vm : BitVec 64}
     exact ⟨obs_gpr_store hobs n hn.1 hn.2 w hL.1,
       ih (fun k hk => hK k (List.mem_cons_of_mem _ hk)) hL.2⟩
 
-/-! ## Shared post-step bookkeeping (factored out of the pilot's per-branch copies) -/
-
-/-- Keys of a register-writing step stay in `1..31`. -/
 theorem keysOK_cons_erase {n : Nat} (hn1 : 1 ≤ n) (hn31 : n ≤ 31) (L : GRegs)
     (hkeys : KeysOK (keysG L)) : KeysOK (n :: keysG (eraseG n L)) := by
   intro k hk
@@ -499,7 +230,6 @@ theorem keysOK_cons_erase {n : Nat} (hn1 : 1 ≤ n) (hn31 : n ≤ 31) (L : GRegs
   | head => exact ⟨hn1, hn31⟩
   | tail _ h => exact hkeys k (mem_of_mem_keysG_eraseG L h)
 
-/-- The domain extended by the written register stays inside the new keys. -/
 theorem dom_cons_erase {n : Nat} {dom : List Nat} {L : GRegs}
     (hdom : ∀ k ∈ dom, k ∈ keysG L) :
     ∀ k ∈ (n :: dom), k ∈ n :: keysG (eraseG n L) := by
@@ -511,7 +241,6 @@ theorem dom_cons_erase {n : Nat} {dom : List Nat} {L : GRegs}
     | isTrue e => rw [e]; exact List.mem_cons_self ..
     | isFalse ne => exact List.mem_cons_of_mem _ (mem_keysG_eraseG ne L (hdom k h))
 
-/-- One-step register frame through an ALU/load step (noise + the written GPR). -/
 theorem frame_step_alu {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg n) (gprRT n v)))
     (R : Register) (hn : ∀ rr ∈ noiseRegs, (rr == R) = false)
@@ -523,7 +252,6 @@ theorem frame_step_alu {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitV
       (hn Register.minstret (by decide)) (hn Register.PC (by decide))
       hrd (hn Register.nextPC (by decide)) (hn Register.minstret_increment (by decide)))
 
-/-- One-step register frame through a STORE step (noise only). -/
 theorem frame_step_store {σ' σ : MState} {pc vm : BitVec 64}
     {m' : Std.ExtHashMap Nat (BitVec 8)}
     (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m'))
@@ -535,17 +263,6 @@ theorem frame_step_store {σ' σ : MState} {pc vm : BitVec 64}
       (hn Register.minstret (by decide)) (hn Register.PC (by decide))
       (hn Register.nextPC (by decide)) (hn Register.minstret_increment (by decide)))
 
-/-! ## The program description -/
-
-/-- Instruction kind: the pilot's ALU classes + signed loads (`lw`/`ld`),
-unsigned byte load (`lbu`), and stores (`sw`/`sd`/`sb`).  Width/signedness is
-enumerated so all structure stays concrete/decidable.
-
-Extended (the comparison-arm kinds): `addiw`/`slli`/`srli`/`slti`/`slt`/
-`subw`/`auipc` — all pure first-order GPR computations backed by the
-`ExecuteAlu` characterizations (`execute_addiw_char`, `execute_shiftiop_slli_char`,
-`execute_shiftiop_srli_char`, `execute_itype_slti_char`, `execute_rtype_slt_char`,
-`execute_rtypew_subw_char`, `execute_utype_auipc_char`). -/
 inductive MKind where
   | addi : MKind
   | add  : MKind
@@ -586,10 +303,6 @@ inductive MKind where
   | sraiw : MKind
 deriving DecidableEq
 
-/-- One straight-line instruction, fully concrete (the pilot's `AInstr` with
-memory kinds).  `rd` is the destination for ALU/loads (ignored for stores);
-`rs1` is ALU src1 / the load-store *base*; `rs2` is ALU src2 / the store *data*
-(ignored otherwise); `imm` is the ITYPE immediate / load-store offset. -/
 structure MInstr where
   pc   : BitVec 64
   word : BitVec 32
@@ -603,26 +316,15 @@ structure MInstr where
   rs2  : Nat
   imm  : BitVec 12
 
-/-- Shift amount of `slli`/`srli`: the 6-bit shamt lives in the low 6 bits of
-the I-type immediate field (word bits 25..20).  The `extractLsb … 5 0`
-wrapping (the shape the `ExecuteAlu` characterizations expect) is applied at
-the `wvalM`/use sites. -/
 def shamtOf (a : MInstr) : BitVec 6 :=
   a.imm.extractLsb' 0 6
 
-/-- The 20-bit upper immediate of `auipc` (word bits 31..12). -/
 def imm20Of (a : MInstr) : BitVec 20 :=
   a.word.extractLsb' 12 20
 
-/-- Shift amount of `slliw` (and the other SHIFTIWOP word-shifts): a **5-bit**
-shamt in word bits 24..20 (`BitVec 5` — one bit narrower than `slli`'s 6-bit
-`shamtOf`, since a 32-bit shift only ranges over 0..31).  Read off the raw
-`word` (not `imm`) so it matches the DecodeTable's `SHIFTIWOP (shamt5, …)`
-output exactly. -/
 def shamt5Of (a : MInstr) : BitVec 5 :=
   a.word.extractLsb' 20 5
 
-/-- The decoded AST the DecodeTable lemma for `a.word` must produce. -/
 def astOfM (a : MInstr) : instruction :=
   match a.kind with
   | .addi => instruction.ITYPE (a.imm, gprIdx a.rs1, gprIdx a.rd, iop.ADDI)
@@ -663,11 +365,9 @@ def astOfM (a : MInstr) : instruction :=
   | .srliw => instruction.SHIFTIWOP (shamt5Of a, gprIdx a.rs1, gprIdx a.rd, sopw.SRLIW)
   | .sraiw => instruction.SHIFTIWOP (shamt5Of a, gprIdx a.rs1, gprIdx a.rd, sopw.SRAIW)
 
-/-- Effective address of a load/store: base pin + concrete offset. -/
 def eaddrM (a : MInstr) (L : GRegs) : BitVec 64 :=
   srcVal a.rs1 L + sign_extend (m := 64) a.imm
 
-/-- Access width of a memory kind (`0` for ALU). -/
 def widthOfM : MKind → Nat
   | .lw | .lwu | .sw => 4
   | .ld | .sd => 8
@@ -675,9 +375,6 @@ def widthOfM : MKind → Nat
   | .lh | .lhu | .sh => 2
   | _ => 0
 
-/-- The value a load writes, from its supplied byte list (LE).  Phrased over
-`bs.getD j 0#8` so a literal byte list reduces to the bare symbolic bytes and
-no length side condition is needed. -/
 def bytesVal (k : MKind) (bs : List (BitVec 8)) : BitVec 64 :=
   match k with
   | .lw => sign_extend (m := 64)
@@ -695,7 +392,6 @@ def bytesVal (k : MKind) (bs : List (BitVec 8)) : BitVec 64 :=
   | .lhu => zero_extend (m := 64) ((((bs.getD 1 0#8).append (bs.getD 0 0#8))) : BitVec (8 * 2))
   | _ => 0#64
 
-/-- The value written to `rd` (ALU result or loaded value); unused for stores. -/
 def wvalM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : BitVec 64 :=
   match a.kind with
   | .addi => srcVal a.rs1 L + sign_extend (m := 64) a.imm
@@ -742,35 +438,29 @@ def wvalM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : BitVec 64 :=
       (shift_bits_right_arith (Sail.BitVec.extractLsb (srcVal a.rs1 L) 31 0) (shamt5Of a))
   | k => bytesVal k bs
 
-/-- Pin-list effect of one instruction (stores write no register). -/
 def stepGM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : GRegs :=
   match a.kind with
   | .sw | .sd | .sb | .sh => L
   | _ => (a.rd, wvalM a L bs) :: eraseG a.rd L
 
-/-- Load-data consumption: loads pop one byte-list, everything else none. -/
 def stepLdsM (k : MKind) (lds : List (List (BitVec 8))) : List (List (BitVec 8)) :=
   match k with
   | .lw | .lwu | .ld | .lbu | .lh | .lhu => lds.tail
   | _ => lds
 
-/-- The write-log entry of a store. -/
 def wentryM (a : MInstr) (L : GRegs) : WEntry :=
   ((eaddrM a L).toNat, widthOfM a.kind, srcVal a.rs2 L)
 
-/-- Memory effect of one instruction. -/
 def stepMemM (m : Std.ExtHashMap Nat (BitVec 8)) (a : MInstr) (L : GRegs) :
     Std.ExtHashMap Nat (BitVec 8) :=
   match a.kind with
   | .sw | .sd | .sb | .sh => applyW m (wentryM a L)
   | _ => m
 
-/-- Pin-list effect of the whole block: the computed register outcome. -/
 def runGM : List MInstr → GRegs → List (List (BitVec 8)) → GRegs
   | [], L, _ => L
   | a :: r, L, lds => runGM r (stepGM a L (lds.headD [])) (stepLdsM a.kind lds)
 
-/-- The computed write log of the whole block (program order). -/
 def wlogM : List MInstr → GRegs → List (List (BitVec 8)) → List WEntry
   | [], _, _ => []
   | a :: r, L, lds =>
@@ -778,7 +468,6 @@ def wlogM : List MInstr → GRegs → List (List (BitVec 8)) → List WEntry
     | .sw | .sd | .sb | .sh => wentryM a L :: wlogM r L lds
     | _ => wlogM r (stepGM a L (lds.headD [])) (stepLdsM a.kind lds)
 
-/-- Registers written by the block (`rd`s of ALU/load elements). -/
 def wrRegsM : List MInstr → List Nat
   | [] => []
   | a :: r =>
@@ -786,22 +475,14 @@ def wrRegsM : List MInstr → List Nat
     | .sw | .sd | .sb | .sh => wrRegsM r
     | _ => a.rd :: wrRegsM r
 
-/-- Fall-through end PC of the block. -/
 def endPCM (pc0 : BitVec 64) : List MInstr → BitVec 64
   | [] => pc0
   | a :: r => endPCM (BitVec.addInt a.pc 4) r
 
-/-! ## Per-element obligations (`ProgFactsM`) -/
-
-/-- The four little-endian code-byte pins, on the block-entry memory `m0`
-(code lives below `tohostAddr`, all stores land above the HTIF window, so entry
-pins serve every step — re-established internally via the low-agreement
-invariant). -/
 def BytePinsM (m : Std.ExtHashMap Nat (BitVec 8)) (a : MInstr) : Prop :=
   m[a.pc.toNat]? = some a.b0 ∧ m[a.pc.toNat + 1]? = some a.b1 ∧
   m[a.pc.toNat + 2]? = some a.b2 ∧ m[a.pc.toNat + 3]? = some a.b3
 
-/-- σ-generic decode fact — the DecodeTable lemma shape, inhabited directly. -/
 def DecodeFactM (a : MInstr) : Prop :=
   ∀ s : SequentialState RegisterType trivialChoiceSource,
     s.regs.get? Register.misa = some ((Vsa.Sim.initMisa) : RegisterType Register.misa) →
@@ -810,19 +491,6 @@ def DecodeFactM (a : MInstr) : Prop :=
     s.regs.get? Register.mseccfg = some ((0#64) : RegisterType Register.mseccfg) →
     (ext_decode a.word).run s = .ok (astOfM a) s
 
-/-- Load byte pins at widths 4/8 (width 1 is the single pin inline).
-
-**WAVE 48k — TOTAL READS, not presence.**  The Sail model reads memory totally
-(`readByte a = (m.get? a).getD 0`), so a load NEVER needs a byte to be in the
-map; it needs the byte the total read returns.  These pins therefore say
-"the total read at `ea + k` is `bs[k]`", which is exactly what
-`bytesVal`/`runGM` consume and is STRICTLY WEAKER than the old
-`m[ea+k]? = some bs[k]`: a supplier that knows the byte (an earlier store,
-`ValueRepr`, a code pin) still discharges it in one rewrite
-(`lpins4_of_present`), while a supplier reading the callee's own unwritten
-frame discharges it by `rfl` at `bs[k] = 0`.  Keeping `bs`/`lds` as the value
-name is deliberate: the reflected execution stays tied to memory through these
-equations, which is what the presence hypotheses used to (over-)provide. -/
 def LPins4 (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) (bs : List (BitVec 8)) : Prop :=
   (m[ea]?).getD 0 = bs.getD 0 0#8 ∧ (m[ea + 1]?).getD 0 = bs.getD 1 0#8 ∧
   (m[ea + 2]?).getD 0 = bs.getD 2 0#8 ∧ (m[ea + 3]?).getD 0 = bs.getD 3 0#8
@@ -833,33 +501,8 @@ def LPins8 (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) (bs : List (BitVec 8))
   (m[ea + 4]?).getD 0 = bs.getD 4 0#8 ∧ (m[ea + 5]?).getD 0 = bs.getD 5 0#8 ∧
   (m[ea + 6]?).getD 0 = bs.getD 6 0#8 ∧ (m[ea + 7]?).getD 0 = bs.getD 7 0#8
 
-/-- A byte a supplier KNOWS (from a store, a `ValueRepr`, a code pin) discharges
-its total-read pin in one rewrite.  This is the migration path for every
-pre-48k supplier: `⟨h0, h1, h2, h3⟩` becomes `lpins4_of_present h0 h1 h2 h3`. -/
 theorem lpin_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {a : Nat} {b : BitVec 8}
     (h : m[a]? = some b) : (m[a]?).getD 0 = b := by rw [h]; rfl
-
-theorem lpins4_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
-    (h0 : m[ea]? = some (bs.getD 0 0#8)) (h1 : m[ea + 1]? = some (bs.getD 1 0#8))
-    (h2 : m[ea + 2]? = some (bs.getD 2 0#8)) (h3 : m[ea + 3]? = some (bs.getD 3 0#8)) :
-    LPins4 m ea bs :=
-  ⟨lpin_of_present h0, lpin_of_present h1, lpin_of_present h2, lpin_of_present h3⟩
-
-theorem lpins8_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
-    (h0 : m[ea]? = some (bs.getD 0 0#8)) (h1 : m[ea + 1]? = some (bs.getD 1 0#8))
-    (h2 : m[ea + 2]? = some (bs.getD 2 0#8)) (h3 : m[ea + 3]? = some (bs.getD 3 0#8))
-    (h4 : m[ea + 4]? = some (bs.getD 4 0#8)) (h5 : m[ea + 5]? = some (bs.getD 5 0#8))
-    (h6 : m[ea + 6]? = some (bs.getD 6 0#8)) (h7 : m[ea + 7]? = some (bs.getD 7 0#8)) :
-    LPins8 m ea bs :=
-  ⟨lpin_of_present h0, lpin_of_present h1, lpin_of_present h2, lpin_of_present h3,
-   lpin_of_present h4, lpin_of_present h5, lpin_of_present h6, lpin_of_present h7⟩
-
-
-/-! ### Total-read bridges — `bytesT* = ` the pinned byte append
-
-`exec_*_totv` states its loaded value as the model's total read; `runGM` names it
-`bytesVal … lds`.  These are the one-line reconciliations, and they are the ONLY
-place the two descriptions meet. -/
 
 theorem bytesT1_of_pin {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {b : BitVec 8}
     (h : (m[ea]?).getD 0 = b) : (bytesT1 m ea : BitVec (8 * 1)) = b := h
@@ -885,10 +528,6 @@ theorem bytesT8_of_lpins8 {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : L
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩ := h
   simp only [bytesT8, h0, h1, h2, h3, h4, h5, h6, h7]
 
-/-- The data-dependent side conditions of one element: RAM bounds / HTIF window
-/ store alignment at the *symbolic* effective address, plus (loads) the byte pins on
-the threaded memory `m`.  These live here — not in `BlockOKM` — because they
-mention symbolic values. -/
 def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 8))
     (a : MInstr) : Prop :=
   match a.kind with
@@ -934,8 +573,6 @@ def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 
     0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 2 ≤ 0x100000000 ∧
     tohostAddr + 16 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat % 2 = 0
 
-/-- The non-computable per-element obligations, with the register-pin,
-load-data, and memory threads advancing in lockstep with `runGM`/`wlogM`. -/
 def ProgFactsM (mc : Std.ExtHashMap Nat (BitVec 8)) :
     Std.ExtHashMap Nat (BitVec 8) → GRegs → List (List (BitVec 8)) → List MInstr → Prop
   | _, _, _, [] => True
@@ -943,9 +580,6 @@ def ProgFactsM (mc : Std.ExtHashMap Nat (BitVec 8)) :
     BytePinsM mc a ∧ DecodeFactM a ∧ MemFacts m L (lds.headD []) a ∧
     ProgFactsM mc (stepMemM m a L) (stepGM a L (lds.headD [])) (stepLdsM a.kind lds) r
 
-/-! ## The computable VC (`BlockOKM`) -/
-
-/-- Per-kind register-index obligations (all decidable, no symbolic values). -/
 def KindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) : Prop :=
   match k with
   | .addi => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
@@ -1011,9 +645,6 @@ instance instDecKindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) :
   | .srliw => inferInstanceAs (Decidable (_ ∧ _))
   | .sraiw => inferInstanceAs (Decidable (_ ∧ _))
 
-/-- The computable per-instruction VC (structure only — symbolic pin/load/store
-*values* are never inspected; the symbolic-address side conditions live in
-`MemFacts`). -/
 abbrev InstrOKM (pc0 : BitVec 64) (dom : List Nat) (a : MInstr) : Prop :=
   a.pc.toNat = pc0.toNat ∧
   (((a.b3.append a.b2).append a.b1).append a.b0).toNat = a.word.toNat ∧
@@ -1024,14 +655,11 @@ abbrev InstrOKM (pc0 : BitVec 64) (dom : List Nat) (a : MInstr) : Prop :=
   a.pc.toNat % 4 = 0 ∧
   KindOK dom a.kind a.rd a.rs1 a.rs2
 
-/-- Domain threading: stores add nothing, ALU/loads add `rd`. -/
 def domStepM (a : MInstr) (dom : List Nat) : List Nat :=
   match a.kind with
   | .sw | .sd | .sb | .sh => dom
   | _ => a.rd :: dom
 
-/-- The block VC: per-instruction VCs with PC contiguity and source-domain
-threading. -/
 def BlockOKM (pc0 : BitVec 64) (dom : List Nat) : List MInstr → Prop
   | [] => True
   | a :: r => InstrOKM pc0 dom a ∧ BlockOKM (BitVec.addInt a.pc 4) (domStepM a dom) r
@@ -1044,13 +672,6 @@ instance instDecBlockOKM (pc0 : BitVec 64) (dom : List Nat) :
       instDecBlockOKM _ _ r
     inferInstanceAs (Decidable (_ ∧ _))
 
-/-! ## The block lemma -/
-
-/-- Generalized form: `dom` under-approximates the pinned keys; `mc` is the
-code memory (entry memory of the enclosing straight-line run), `m` the current
-threaded memory with `∀ j < tohostAddr, m[j]? = mc[j]?`.  Proved by one list
-induction; each step goes through `stepObs_alu` (ALU + loads) or
-`stepObs_store` (stores). -/
 theorem block_mem_run (is : List MInstr) :
     ∀ (σ : MState) (i u : Nat) (pc0 vm : BitVec 64) (L : GRegs)
       (lds : List (List (BitVec 8)))
@@ -3070,36 +2691,5 @@ theorem block_mem_run (is : List MInstr) :
       · intro R hn hrds
         exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
           (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
-
-/-- **The block lemma.** A concrete list of straight-line ALU/load/store
-instructions, with per-element byte pins + decode facts + data-dependent
-address side conditions and load-data pins (`ProgFactsM`) and a decidable
-structural VC (`BlockOKM`, one `by decide`), turns an entry state with pinned
-PC / minstret / source registers into the full `Steps` chain with: tick
-invariant, `GoodState`, HTIF output unchanged, the fall-through PC, the
-*computed* register outcome `runGM is L lds`, the *computed* memory outcome
-`writeLog σ.mem (wlogM is L lds)`, and the register frame outside
-`noiseRegs ∪ wrRegsM is`. -/
-theorem block_mem_sound (is : List MInstr) (σ : MState) (i u : Nat)
-    (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : ProgFactsM σ.mem σ.mem L lds is)
-    (hwf : BlockOKM pc0 (keysG L) is)
-    (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + is.length⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = writeLog σ.mem (wlogM is L lds) ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC = some (endPCM pc0 is) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' (runGM is L lds) ∧
-      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-        (∀ n ∈ wrRegsM is, (gprReg n == R) = false) →
-        σ'.regs.get? R = σ.regs.get? R) :=
-  block_mem_run is σ i u pc0 vm L lds σ.mem σ.mem (keysG L)
-    hG hpc hmi rfl (fun _ _ => rfl) hL hkeys (fun _ h => h) hfacts hwf hi
 
 end Vsa.Sim

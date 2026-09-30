@@ -1,20 +1,9 @@
 import Vsa.AbsInt.Domain
 
-/-!
-# The sign domain
-
-A set of integer signs (`neg`, `zero`, `pos`) plus a flag for non-integer
-values. Arithmetic is 64-bit wrapped, so a sum or product of nonzero
-operands may take any sign; the domain tracks the cases that survive
-wrapping (zero operands). It decides truthiness of integers and excludes
-division by zero when the divisor cannot be zero.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While
 
-/-- Sets of signs, plus non-integer values. -/
 structure Sign where
   neg : Bool := false
   zero : Bool := false
@@ -24,7 +13,6 @@ structure Sign where
 
 namespace Sign
 
-/-- The sign of `n` is in `a`. -/
 def hasInt (a : Sign) (n : Int) : Bool :=
   if n < 0 then a.neg else if n = 0 then a.zero else a.pos
 
@@ -48,7 +36,6 @@ def of : Value → Sign
 
 def ints (a : Sign) : Bool := a.neg || a.zero || a.pos
 
-/-- Every integer of `a` is zero. -/
 def zeroOnly (a : Sign) : Bool := !a.neg && !a.pos
 
 theorem eq_zero {a : Sign} {n : Int} (hz : zeroOnly a = true) (h : hasInt a n = true) :
@@ -66,7 +53,6 @@ theorem ints_of {a : Sign} {n : Int} (h : hasInt a n = true) : ints a = true := 
   unfold ints
   split at h <;> (try split at h) <;> simp_all
 
-/-- The integer part of an arithmetic result. -/
 def arith (ok zero : Bool) : Sign :=
   if ok then (if zero then zeroS else allInt) else {}
 

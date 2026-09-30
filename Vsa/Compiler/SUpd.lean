@@ -1,14 +1,5 @@
 import Vsa.Compiler.SRel
 
-/-!
-# Updates of the store relation
-
-Memory writes outside the frame objects and below-`h` objects keep the store
-relation (`StoreRel.transport`); a slot write that binds a name in one frame
-matches `Store.define` and `Store.set` (`StoreRel.write_slot`); a fresh frame
-of unbound slots matches `Store.allocFrame` (`StoreRel.alloc_frame`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -45,7 +36,6 @@ theorem lookupVar_none_of_not_mem {fr : Frame} {x : String} {H : CloMap} {m : Me
   | none => rfl
   | some v => exact absurd (hf.names x (by simp [hl])) hx
 
-
 theorem FrameAt.transport {H : CloMap} {m m' : Mem} {h h' f : Nat} {L : List String} {par : Nat}
     {fr : Frame} (hf : FrameAt H m h f L par fr) (hag : Agree m m' f (f + frSize L)) (hal : f % 8 = 0)
     (ho : ObjAgree m m' h) (hh : h ≤ h') : FrameAt H m' h' f L par fr where
@@ -78,8 +68,6 @@ theorem CloOK.transport {H : CloMap} {s : Store} {m m' : Mem} {h h' : Nat} (hc :
     obtain ⟨d, c, ho⟩ := hc.obj a cd p ha hp
     exact ⟨d, c, ho.transport hag hh⟩
 
-/-- Memory that keeps the frame objects below `hF` and the objects below `h`
-keeps the store relation, with the object heap grown to `h'`. -/
 theorem StoreRel.transport {F : FrMap} {H : CloMap} {s : Store} {m m' : Mem} {hF h h' : Nat}
     (hs : StoreRel F H s m hF h) (hag : Agree m m' frameBase hF) (ho : ObjAgree m m' h) (hh : h ≤ h') :
     StoreRel F H s m' hF h' where
@@ -96,9 +84,6 @@ theorem StoreRel.transport {F : FrMap} {H : CloMap} {s : Store} {m m' : Mem} {hF
   top := hs.top
   lo := hs.lo
 
-/-! ## Frame updates -/
-
-/-- The frames of `s'` are those of `s` with the same parents. -/
 def SameShape (s s' : Store) : Prop :=
   s'.frames.size = s.frames.size ∧
     ∀ (b : Nat) (fr : Frame), s.frames[b]? = some fr → ∃ fr', s'.frames[b]? = some fr' ∧ fr'.parent = fr.parent
@@ -119,12 +104,10 @@ theorem ParentsLt.transport {s s' : Store} (hp : ParentsLt s) (hss : SameShape s
   obtain ⟨fr, h1, h2⟩ := hback a fr' ha
   exact hp a fr b h1 (by rw [← h2, hb])
 
-/-- A frame update that binds `x` to `v` and keeps the parent. -/
 structure Binds (fr fr' : Frame) (x : String) (v : Value) : Prop where
   parent : fr'.parent = fr.parent
   look : ∀ y, lookupVar fr' y = if y = x then some v else lookupVar fr y
 
-/-- Rebinding `x` to `v` in a binding list. -/
 def rebind (x : String) (v : Value) (p : String × Value) : String × Value := if p.1 == x then (x, v) else p
 
 theorem find?_rebind {l : List (String × Value)} {x y : String} {v : Value} :
@@ -185,8 +168,6 @@ theorem rdW_two {m : Mem} {a b : Nat} {t p : BitVec 64} (ha : a % 8 = 0) (hb : b
 theorem Binds.parAddr_eq {F : FrMap} {fr fr' : Frame} {x : String} {v : Value} (hb : Binds fr fr' x v) :
     parAddr F fr' = parAddr F fr := by unfold Vsa.Compiler.parAddr; rw [hb.parent]
 
-/-- **Slot write.** Writing the representation of `v` into slot `i` of frame `c`,
-whose layout gives `x` slot `i`, matches a frame update binding `x` to `v`. -/
 theorem StoreRel.write_slot {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat}
     (hs : StoreRel F H s m hF h) {c : Nat} {fr : Frame} {fc : Nat} {Lc : List String} {x : String}
     {i : Nat} {v : Value} {t p : BitVec 64} (hc : s.frames[c]? = some fr) (hFc : F[c]? = some (fc, Lc))
@@ -276,8 +257,6 @@ theorem StoreRel.write_slot {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h
       · next e => subst e; rw [hc] at hfb; cases hfb; exact ⟨fr, hc, hg.parent⟩
       · exact ⟨frb, hfb, rfl⟩)
 
-/-! ## Assignment through the chain -/
-
 theorem any_iff_lookup {fr : Frame} {x : String} :
     fr.vars.any (·.1 == x) = (lookupVar fr x).isSome := by
   unfold lookupVar
@@ -290,7 +269,6 @@ theorem any_iff_lookup {fr : Frame} {x : String} :
     simp only [Option.map_some, Option.isSome_some, List.any_eq_true]
     exact ⟨q, List.mem_of_find?_eq_some h, by simpa using List.find?_some h⟩
 
-/-- The frame update of an assignment to `x`. -/
 def setFrame (x : String) (v : Value) (f : Frame) : Frame := { f with vars := f.vars.map (rebind x v) }
 
 theorem set_step {s : Store} {g : Nat} {a : Addr} {x : String} {v : Value} {fr : Frame}
@@ -323,13 +301,11 @@ theorem set_gas {s : Store} (hp : ParentsLt s) (x : String) (v : Value) :
         simp only
         rw [ih b hba g' (by omega), ih b hba a hba]
 
-/-- Memory outside the frame objects below `hF` is unchanged. -/
 def OutFrames (m m' : Mem) (hF : Nat) : Prop :=
   ∀ b, b % 8 = 0 → b + 8 ≤ frameBase ∨ hF ≤ b → rdW m' b = rdW m b
 
 theorem OutFrames.refl (m : Mem) (hF : Nat) : OutFrames m m hF := fun _ _ _ => rfl
 
-/-- The outcome of an assignment that found its frame. -/
 structure SetPost (F : FrMap) (H : CloMap) (s : Store) (m : Mem) (hF h : Nat) (s' : Store) (m' : Mem) :
     Prop where
   rel : StoreRel F H s' m' hF h
@@ -358,9 +334,6 @@ theorem setPost_of_slot {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : N
     unfold frSize at h2
     rw [rdW_two (by omega) hb, if_neg (by omega), if_neg (by omega)]
 
-/-! ## Growth -/
-
-/-- `F'`/`s'` extend `F`/`s`: every frame stays with its parent, and its object stays. -/
 structure Grows (F : FrMap) (s : Store) (F' : FrMap) (s' : Store) : Prop where
   frames : ∀ (b : Nat) (fr : Frame), s.frames[b]? = some fr →
     ∃ fr', s'.frames[b]? = some fr' ∧ fr'.parent = fr.parent
@@ -393,7 +366,6 @@ theorem getElem?_push_lt {α : Type} {xs : Array α} {x : α} {b : Nat} (h : b <
 theorem getElem?_append_lt {α : Type} {xs : List α} {x : α} {b : Nat} (h : b < xs.length) :
     (xs ++ [x])[b]? = xs[b]? := List.getElem?_append_left h
 
-/-- The machine address of a frame's parent, given the parent's address. -/
 def parOf (F : FrMap) : Option Addr → Nat
   | some b => (F[b]?.map Prod.fst).getD 0
   | none => 0
@@ -401,8 +373,6 @@ def parOf (F : FrMap) : Option Addr → Nat
 theorem parAddr_eq_parOf (F : FrMap) (fr : Frame) : parAddr F fr = parOf F fr.parent := by
   unfold parAddr parOf; cases fr.parent <;> rfl
 
-/-- **Frame allocation.** A fresh frame of unbound slots with layout `L` at `hF`,
-whose first word is its parent's address, matches `Store.allocFrame`. -/
 theorem StoreRel.alloc_frame {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat}
     (hs : StoreRel F H s m hF h) {L : List String} {par : Option Addr}
     (hpar : ∀ b, par = some b → b < s.frames.size) (hal : hF % 8 = 0) (hfb : frameBase ≤ hF)

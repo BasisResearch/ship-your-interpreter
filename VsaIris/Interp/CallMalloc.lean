@@ -1,15 +1,6 @@
 import VsaIris.Interp.CallRegs
 import VsaIris.Interp.HeapCall
 
-/-!
-# `malloc` from a run, in either regime (lane H2)
-
-`ms_callMalloc` is `ms_callRegs` against H1's `mallocRho_spec`: the run's
-`a0` (the request), `sp`, the allocator's clobbered and saved registers go to
-`malloc`; `sp` and the saved ones come back at their values, `a0` holds the
-result, whose outcome is `mallocRes` (NULL only uncounted).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -21,13 +12,8 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The registers a `malloc` call takes: `a0`, `sp`, the clobbered and the
-saved ones. -/
 abbrev mallocL : List Nat := 10 :: 2 :: (vsaClob ++ vsaSaved)
 
-/-- **`malloc(R 10)` from a run** (`jal malloc` at `i`), regime `ρ`, charged
-`c`: the run continues at `i + 4` with the callee-saved registers and `sp`
-kept, the result in `a0` and its outcome. -/
 theorem ms_callMalloc (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code mallocEntryBV)

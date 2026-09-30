@@ -1,20 +1,10 @@
 import VsaIris.Vsa.Fprintf.SfvLoop
 
-/-!
-# `__sprint_r` on `__sbprintf`'s stack `FILE` (lane N5)
-
-`_vfprintf_r` hands its collected pieces to `__sprint_r(reent, f, uio)`:
-with a nonzero residual it runs `__sfvwrite_r` (`sfvwrite_chain`), then
-clears the `uio`'s residual and piece count and returns `__sfvwrite_r`'s 0.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- The bytes a `__sprint_r(reent, f, uio)` call changes, `sp` its entry
-stack pointer. -/
 def SprintReg (f sp U : Nat) (a : Nat) : Prop :=
   SfvCallReg f (sp - 32) U a ∨ (sp - 32 ≤ a ∧ a < sp) ∨ (U + 8 ≤ a ∧ a < U + 12)
 
@@ -48,7 +38,7 @@ theorem sprint_run (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   nx_run hlive using [h2, h12, hres, BitVec.add_assoc] at 2147540620
   have hsp : (sp + 18446744073709551584#64).toNat = sp.toNat - 32 := by
     rw [toNat_add_neg (by omega) (by omega)]
-  -- `__sprint_r`'s two spills lie in `[sp - 32, sp)`
+
   have hFro : Frame (writeLog (writeLog Mt [((sp + 18446744073709551608#64).toNat, 8, R 1)])
       [((sp + 18446744073709551592#64).toNat, 8, U)]) Mt (fun a => sp.toNat - 32 ≤ a ∧ a < sp.toNat) := by
     frame_chain
@@ -81,7 +71,7 @@ theorem sprint_run (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     refine ⟨hr.transport fun i hi => hFro _ (fun h => hok i hi (.inr (.inl h))),
       ⟨h1, h2, h3, fun i hi hr => hok i hi (.inl (.inl (by rw [hsp] at hr; exact hr)))⟩, ?_⟩
     intro i hi hr; exact hok i hi (.inl (.inr (by rw [hsp] at hr; exact hr)))
-  · -- back from `__sfvwrite_r`
+  ·
     nx_ret hret
     have e8 : (sp + 18446744073709551592#64).toNat = sp.toNat - 24 := by rw [toNat_add_neg (by omega) (by omega)]
     have e24 : (sp + 18446744073709551608#64).toNat = sp.toNat - 8 := by rw [toNat_add_neg (by omega) (by omega)]

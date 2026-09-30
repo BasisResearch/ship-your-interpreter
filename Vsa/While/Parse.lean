@@ -1,19 +1,5 @@
 import Vsa.While.Ast
 
-/-!
-# A parser for WHILE source
-
-Reads `.wl` source into the deep embedding (`Program`), following the
-grammar of the C interpreter's parser (`c/src/lexer.c`, `c/src/parser.c`):
-the same tokens, precedence levels, `fn name(...)` declarations desugared to
-`var name = fn name(...)`, and string escapes. Integer literals saturate at
-the `long long` maximum as `strtoll` does.
-
-This parser is used by the `whilecheck` executable. It is not verified; the
-executable's `--selftest` compares it with the hand embeddings in
-`Vsa/While/Programs.lean`.
--/
-
 namespace Vsa.While.Parse
 
 open Vsa.While
@@ -47,7 +33,6 @@ def Tok.describe : Tok → String
 def err {α : Type} (line : Nat) (msg : String) : Except String α :=
   .error s!"parse error [line {line}]: {msg}"
 
-/-- Resolve string escapes. -/
 def unescape (line : Nat) : List Char → Except String (List Char)
   | [] => pure []
   | '\\' :: c :: cs => do
@@ -58,7 +43,6 @@ def unescape (line : Nat) : List Char → Except String (List Char)
     pure (d :: (← unescape line cs))
   | c :: cs => do pure (c :: (← unescape line cs))
 
-/-- The lexer. -/
 partial def lex (cs : List Char) (line : Nat) (acc : Array Token) : Except String (Array Token) :=
   match cs with
   | [] => pure (acc.push ⟨.eof, line⟩)
@@ -143,7 +127,6 @@ def expectIdent (what : String) : P String := do
 def matchSym (s : String) : P Bool := do
   if ← isSym s then advance; pure true else pure false
 
-/-- `strtoll` saturation. -/
 def intLit (n : Nat) : Int := if n < 2 ^ 63 then n else 2 ^ 63 - 1
 
 mutual
@@ -173,7 +156,6 @@ partial def logicAnd : P Expr := do
     e := .logical .and e (← binLevel 0)
   pure e
 
-/-- Binary precedence levels: equality, comparison, term, factor. -/
 partial def binLevel (lvl : Nat) : P Expr := do
   if lvl ≥ 4 then return ← unary
   let ops : List (String × BinOp) := match lvl with
@@ -237,7 +219,6 @@ partial def fnRest (name : Option String) : P Expr := do
   let body ← blockBody
   pure (.fn name params.toList body)
 
-/-- `{ declaration* }` -/
 partial def blockBody : P (List Stmt) := do
   expectSym "{" "'{'"
   let mut ss : Array Stmt := #[]
@@ -313,7 +294,6 @@ partial def program : P (List Stmt) := do
     ss := ss.push (← declaration)
   pure ss.toList
 
-/-- Parse WHILE source. -/
 def parse (src : String) : Except String Program := do
   let toks ← lex src.toList 1 #[]
   (program.run' 0).run toks

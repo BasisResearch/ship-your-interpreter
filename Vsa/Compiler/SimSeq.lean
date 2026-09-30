@@ -1,14 +1,9 @@
 import Vsa.Compiler.SimStmt1
 
-/-!
-# Forward simulation: statement lists
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- An abrupt completion does not depend on the end of the code. -/
 theorem StOut.fin {code : List Ins} {T : List String} {V' : View} {st' : St} {d : Nat} {env : Addr} {C : GCtx}
     {sp fs fin fin' : Nat} {B : AM} {t : Status} (h : StOut code T V' st' d env C sp fs fin B t)
     (ht : t ≠ .normal) : StOut code T V' st' d env C sp fs fin' B t := by
@@ -18,7 +13,6 @@ theorem StOut.fin {code : List Ins} {T : List String} {V' : View} {st' : St} {d 
   | cont => exact h
   | ret v => exact h
 
-/-- Sequencing statement posts: a normal completion, then the rest. -/
 theorem SPost.seq {code : List Ins} {T : List String} {V V1 V2 : View} {st st1 st2 : St} {d : Nat} {env : Addr}
     {C : GCtx} {sp fs fin1 fin2 : Nat} {A B B' C' : AM} {n1 n2 : Nat} {t : Status}
     (h1 : SPost code T V st d env C sp fs fin1 A n1 st1 .normal V1 B)

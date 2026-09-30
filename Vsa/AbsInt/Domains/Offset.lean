@@ -1,27 +1,13 @@
 import Vsa.AbsInt.Domains.Interval
 
-/-!
-# The offset domain: a lower bound relative to a symbolic base
-
-`OffV` pairs an interval with an optional lower bound `k` on `v - b` for a
-base integer `b`. The operations (`AbsOps OffV`) never mention `b`; only the
-concretisation does: `offDom b : AbsDom OffV` reads the same abstract values
-relative to `b`. One abstract run therefore proves a relational fact for
-every base, e.g. that a loop body increases a counter by at least one (the
-counter starts at offset `0` from its own value). Offsets survive `+`/`-` by
-a constant only when the interval rules out 64-bit wrapping.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
-/-- An interval with an optional lower bound on the offset from the base. -/
 abbrev OffV := Itv × Option Int
 
 namespace Off
 
-/-- `p` is a weaker offset bound than `o`. -/
 def offLe : Option Int → Option Int → Bool
   | _, none => true
   | none, some _ => false
@@ -35,13 +21,11 @@ def offWiden : Option Int → Option Int → Option Int
   | some x, some y => if x ≤ y then some x else none
   | _, _ => none
 
-/-- `n + c` stays in the 64-bit range for every `n` of `i`. -/
 def noWrap (i : Itv) (c : Int) : Bool :=
   match i with
   | .range (some lo) (some hi) => decide (-2^63 ≤ lo + c ∧ hi + c ≤ 2^63 - 1)
   | _ => false
 
-/-- Offset of `l op r`. -/
 def offBin (op : BinOp) (a b : OffV) : Option Int :=
   match op with
   | .add =>
@@ -76,7 +60,6 @@ instance offOps : AbsOps OffV where
 
 namespace Off
 
-/-- The offset bound holds of `v` relative to `b`. -/
 def OK (b : Int) : Option Int → Value → Prop
   | none, _ => True
   | some k, .int n => k ≤ n - b
@@ -216,8 +199,6 @@ theorem ok_bin {b : Int} {s : Store} {op : BinOp} {l r v : Value} {x y : OffV}
 
 end Off
 
-/-- The offset domain read relative to the base `b`. Not an instance: the
-base is chosen per use. -/
 def offDom (b : Int) : AbsDom OffV where
   toAbsOps := offOps
   Gam a v := Itv.Gam a.1 v ∧ Off.OK b a.2 v

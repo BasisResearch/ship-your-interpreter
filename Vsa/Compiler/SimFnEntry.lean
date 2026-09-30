@@ -1,14 +1,5 @@
 import Vsa.Compiler.SimParams
 
-/-!
-# Function entry
-
-From the closure's code address with the closure in `a2`, the arguments at
-`a3` and their count in `a4`: the arity and depth checks, the stack frame with
-the saved return address and frame, the fresh frame for the function's layout
-below the closure's frame, and the parameters.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While LeanRV64DExecutable.Functions
@@ -20,7 +11,6 @@ theorem sext_negN (n : Nat) (h1 : 0 < n) (h2 : n ≤ 2048) :
   simp [BitVec.toNat_ofInt]
   omega
 
-/-- The checks and the call of `newframe` at the start of a function. -/
 def fnHead (L : List String) (params : List String) (fs pos : Nat) : List Ins :=
   [mvi t0 params.length] ++ errUnlessEq a4 t0 (pos + 1) ++
     [mvi t0 1000, Br .lt depR t0 (pos + 4) (pos + 6), J (pos + 5) errPos,
@@ -38,22 +28,18 @@ theorem paramCopies_length (L : List String) : ∀ (j : Nat) (ps : List String),
   | _, [] => rfl
   | j, x :: xs => by simp [paramCopies, paramCopies_length L (j + 1) xs, paramCopy]; omega
 
-/-- Where the body of a function starts. -/
 def fnBody (params : List String) (q : Nat) : Nat := q + 14 + 8 * params.length + 1
 
 theorem fnPre_length (L : List String) (params : List String) (fs q : Nat) :
     q + (fnPre L params fs q).length = fnBody params q := by
   simp [fnPre_eq, fnHead_length, paramCopies_length, fnBody]; omega
 
-/-- The view after entering a function frame of layout `L`. -/
 def View.enter (V : View) (L : List String) : View :=
   { V with F := V.F ++ [(V.hF, L)], hF := V.hF + 8 + 16 * L.length }
 
-/-- The store at a function body's start. -/
 def entryStore (s : Store) (cd : ClosureData) (vs : List Value) : Store :=
   (cd.params.zip vs).foldl (fun t p => t.define s.frames.size p.1 p.2) (s.allocFrame (some cd.env)).1
 
-/-- The function body is entered. -/
 structure Entered (code : List Ins) (T : List String) (V : View) (st : St) (d : Nat) (cd : ClosureData)
     (Γc : List (List String)) (vs : List Value) (sp fs' q : Nat) (r e : BitVec 64) (A B : AM) : Prop where
   pc : B.pc = pcOf (fnBody cd.params q)
@@ -130,7 +116,6 @@ theorem View.fa_append {V : View} {a : Addr} {q : Nat × List String} (ha : a < 
     parOf (V.F ++ [q]) (some a) = V.fa a := by
   simp [View.fa, parOf, List.getElem?_append_left ha]
 
-/-- Closure code survives frame growth with the same closures. -/
 theorem CloCode.grow {code : List Ins} {T : List String} {V V' : View} {s s' : Store} {m m' : Mem}
     (hc : CloCode code T V s m) (hok : CloOK V.H s m V.h) (hag : ObjAgree m m' V.h) (hg : Grows V.F s V'.F s')
     (hH : V'.H = V.H) (hcl : s'.closures = s.closures)
@@ -231,7 +216,7 @@ theorem run_entry {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List S
   apply run_jumps hR.fits s6
   wp_simp [fnHead, errUnlessEq, k1, e1, k2, e2, k9, e9, k12, e12, k24, e24, hsub, BitVec.ofInt_natCast,
     sext_negN (frameSize cd.body) (by omega) (by omega), n1, n2, n3, t1, t2, o1, o2, l3, hrp]
-  -- the fresh frame
+
   have hq14 : PosOK (q + 14) := posOK_le hPb (by omega)
   have hlo := hm.rel.lo
   have htopF := hm.rel.top
@@ -293,7 +278,7 @@ theorem run_entry {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List S
   simp only [a4] at k14' e14'
   apply run_whole hR.fits (sMv.cast (pos' := q + 14 + 8 * cd.params.length) (by omega))
   wp_simp [k14', e14']
-  -- the invariant in the function's frame
+
   have hdd : (maxCallDepth - (d + 1)) * maxFS + maxFS = (maxCallDepth - d) * maxFS := by
     rw [← Nat.succ_mul]; congr 1; omega
   have hfr3 : (st.store.allocFrame (some cd.env)).1.frames[st.store.frames.size]? = some ⟨some cd.env, []⟩ := by

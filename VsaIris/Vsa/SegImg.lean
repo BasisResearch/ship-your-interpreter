@@ -5,31 +5,12 @@ import VsaIris.Interp.Bridge
 import VsaIris.MallocRun
 import Vsa.Sim.JmpSpec
 
-/-!
-# Segments over owned byte images
-
-H5's segments read and write bytes the Iris side owns as images
-(`ownImg S img`: a frame, `main`'s saved words, newlib's data). `wp_segW`
-takes its read footprint as a list and each `ld` as a byte list with a
-`MemFacts` fact. This module converts once:
-
-* `ownImg_range`: an owned `n`-byte extent as the segment footprint list
-  (`imgFoot`), and back;
-* `imgWord img a`: the loaded bytes of an `ld` at `a`, with
-  `bytesVal_imgWord` (the loaded value is `imgW img a`) and `ldFact`
-  (the `MemFacts` of the load from the footprint's agreement);
-* `imgFootD`: a read-only extent (discarded fractions) as a footprint list.
--/
-
 namespace VsaIris.Inst
 
 open Iris Iris.BI Iris.Std Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Interp
 
-/-! ## Loaded words -/
-
-/-- The 8 bytes an `ld` at `a` reads from `img`. -/
 def imgWord (img : Nat → BitVec 8) (a : Nat) : List (BitVec 8) :=
   [img a, img (a + 1), img (a + 2), img (a + 3), img (a + 4), img (a + 5), img (a + 6),
     img (a + 7)]
@@ -40,7 +21,6 @@ theorem toNat_append8 {m : Nat} (x : BitVec m) (y : BitVec 8) :
   rw [BitVec.toNat_append, ← Nat.shiftLeft_add_eq_or_of_lt y.isLt, Nat.shiftLeft_eq]
   omega
 
-/-- An `ld` of `imgWord img a` loads the little-endian word `imgW img a`. -/
 theorem bytesVal_imgWord (img : Nat → BitVec 8) (a : Nat) :
     bytesVal .ld (imgWord img a) = imgW img a := by
   apply BitVec.eq_of_toNat_eq
@@ -49,8 +29,6 @@ theorem bytesVal_imgWord (img : Nat → BitVec 8) (a : Nat) :
   simp only [imgLE, toNat_append8, Nat.add_assoc, Nat.reduceAdd]
   omega
 
-/-- An `ld` at `ea` in RAM, off the HTIF words, where the memory agrees with
-`img`: its `MemFacts` with the loaded bytes `imgWord img ea`. -/
 theorem ldFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
     {img : Nat → BitVec 8} {ea : Nat} (hk : a.kind = .ld) (hea : (eaddrM a L).toNat = ea)
     (hlo : 0x80000000 ≤ ea) (hhi : ea + 8 ≤ 0x100000000)
@@ -67,28 +45,6 @@ theorem ldFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
     hpin 3 (by omega), hpin 4 (by omega), hpin 5 (by omega), hpin 6 (by omega),
     hpin 7 (by omega)⟩
 
-/-- The 4 bytes an `lw` at `a` reads from `img`. -/
-def imgWord4 (img : Nat → BitVec 8) (a : Nat) : List (BitVec 8) :=
-  [img a, img (a + 1), img (a + 2), img (a + 3)]
-
-/-- An `lw` at `ea` in RAM, off the HTIF words, where the memory agrees with
-`img`: its `MemFacts` with the loaded bytes `imgWord4 img ea`. -/
-theorem lwFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
-    {img : Nat → BitVec 8} {ea : Nat} (hk : a.kind = .lw) (hea : (eaddrM a L).toNat = ea)
-    (hlo : 0x80000000 ≤ ea) (hhi : ea + 4 ≤ 0x100000000)
-    (hwin : ea + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ ea)
-    (hpin : ∀ k, k < 4 → (m[ea + k]?).getD 0 = img (ea + k)) :
-    MemFacts m L (imgWord4 img ea) a := by
-  unfold MemFacts
-  rw [hk]
-  simp only
-  rw [hea]
-  refine ⟨⟨hlo, hhi, hwin⟩, ?_⟩
-  simp only [LPins4, imgWord4, List.getD_cons_zero, List.getD_cons_succ]
-  exact ⟨by simpa using hpin 0 (by omega), hpin 1 (by omega), hpin 2 (by omega),
-    hpin 3 (by omega)⟩
-
-/-- A `sw` at `ea`: its `MemFacts`. -/
 theorem swFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {bs : List (BitVec 8)}
     {ea : Nat} (hk : a.kind = .sw) (hea : (eaddrM a L).toNat = ea)
     (hlo : 0x80000000 ≤ ea) (hhi : ea + 4 ≤ 0x100000000) (hwin : tohostAddr + 16 ≤ ea)
@@ -99,7 +55,6 @@ theorem swFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {bs 
   rw [hea]
   exact ⟨hlo, hhi, hwin, hal⟩
 
-/-- A `sd` at `ea`: its `MemFacts`. -/
 theorem sdFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {bs : List (BitVec 8)}
     {ea : Nat} (hk : a.kind = .sd) (hea : (eaddrM a L).toNat = ea)
     (hlo : 0x80000000 ≤ ea) (hhi : ea + 8 ≤ 0x100000000) (hwin : tohostAddr + 16 ≤ ea)
@@ -110,7 +65,6 @@ theorem sdFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {bs 
   rw [hea]
   exact ⟨hlo, hhi, hwin, hal⟩
 
-/-- `base + sext imm` for a nonnegative 12-bit offset that does not wrap. -/
 theorem addr_off (base : BitVec 64) (imm : BitVec 12) (off : Nat)
     (himm : (sign_extend (m := 64) imm : BitVec 64).toNat = off)
     (h : base.toNat + off < 2 ^ 64) :
@@ -118,18 +72,12 @@ theorem addr_off (base : BitVec 64) (imm : BitVec 12) (off : Nat)
   rw [BitVec.toNat_add, himm]
   exact Nat.mod_eq_of_lt h
 
-/-! ## Owned extents as segment footprints -/
-
-/-- The read footprint of an owned `n`-byte extent at the image `img`. -/
 def imgFoot (a n : Nat) (img : Nat → BitVec 8) : List (Nat × DFrac × BitVec 8) :=
   (List.range' a n).map (fun k => (k, DFrac.own 1, img k))
 
-/-- The read footprint of a read-only `n`-byte extent at the image `img`
-(discarded fractions: `_impure_ptr`). -/
 def imgFootD (a n : Nat) (img : Nat → BitVec 8) : List (Nat × DFrac × BitVec 8) :=
   (List.range' a n).map (fun k => (k, DFrac.discard, img k))
 
-/-- The written-byte list of an owned `n`-byte extent at `img`. -/
 def imgW8 (a n : Nat) (img : Nat → BitVec 8) : List (Nat × BitVec 8) :=
   (List.range' a n).map (fun k => (k, img k))
 
@@ -167,7 +115,6 @@ theorem ownImg_range_w (a n : Nat) (img : Nat → BitVec 8) :
     ihave H := sepL_to_ownSet _ (List.nodup_range' _ (by omega)) $$ H
     iapply ownSet_iff _ (fun k => (ownImg_inExt_iff a n k).symm) $$ H
 
-/-- Written bytes of an extent, at any values, give its block back. -/
 theorem blockOwn_of_W (W : List (Nat × BitVec 8)) (p n : Nat) (g : Nat → BitVec 8)
     (hW : W.map Prod.fst = List.range' p n) :
     sepL (GF := GF) W (fun q => q.1 ↦ₘ g q.1) ⊢ blockOwn p n := by
@@ -178,7 +125,6 @@ theorem blockOwn_of_W (W : List (Nat × BitVec 8)) (p n : Nat) (g : Nat → BitV
   ihave H := ownSet_iff _ (fun k => (ownImg_inExt_iff p n k).symm) $$ H
   iapply Interp.blockOwn_of_ownImg p n g $$ H
 
-/-- A footprint agreement on an owned extent reads every byte of it. -/
 theorem imgFoot_pin {live : Nat → Prop} {c : Vsa.Machine.Config} {MR : List (Nat × DFrac × BitVec 8)}
     {a n : Nat} {img : Nat → BitVec 8}
     (hMR : ∀ p ∈ MR, (vsaModel live).mem c p.1 = p.2.2) (hsub : ∀ p ∈ imgFoot a n img, p ∈ MR) :
@@ -188,7 +134,6 @@ theorem imgFoot_pin {live : Nat → Prop} {c : Vsa.Machine.Config} {MR : List (N
     rw [List.mem_range']; exact ⟨k - a, by omega, by omega⟩, rfl⟩))
   exact this
 
-/-- A footprint agreement on a read-only extent reads every byte of it. -/
 theorem imgFootD_pin {live : Nat → Prop} {c : Vsa.Machine.Config}
     {MR : List (Nat × DFrac × BitVec 8)} {a n : Nat} {img : Nat → BitVec 8}
     (hMR : ∀ p ∈ MR, (vsaModel live).mem c p.1 = p.2.2) (hsub : ∀ p ∈ imgFootD a n img, p ∈ MR) :

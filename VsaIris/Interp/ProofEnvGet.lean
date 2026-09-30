@@ -1,26 +1,12 @@
 import VsaIris.Interp.EnvScan
 import VsaIris.Interp.EnvGetHit
 
-/-!
-# `env_get`, proved (INTERP_DESIGN.md §9 H1)
-
-`envGet_spec : textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ⊢ envGetSpec Wp N`,
-for every `MachWP`.
-
-`env_get` is the scan code (`EnvScan.lean`) at `getSite` — its spans are
-`EnvGetSpans.lean` — with the hit arm `get_hit` (copy `vals[i]` out, return 1,
-`EnvGetHit.lean`). The machine's answer is `Store.get?`'s: the chain's path
-keeps the lookup (`ChainFrom.look`), a frame's scan finds the first binding
-named `x` (`look_hit`), and the root misses (`look_root`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 
-/-- `env_get`'s address of the scan code. -/
 def getSite (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanSite live where
   entry := 0x80002c10#64
   head := 0x80002c40#64
@@ -50,7 +36,6 @@ section Main
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- **`env_get`** (`env.c:43`), for every `MachWP`. -/
 theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ envText, live p.1)
     (N : NativeAddrs) :
     textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ⊢ envGetSpec Wp N := by
@@ -83,7 +68,7 @@ theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   isplitl [Hstk]
   · unfold stackScratch blockOwn; iexact Hstk
   isplit
-  · -- the chain missed: return 0, `out` untouched
+  ·
     unfold scanMissK
     iintro %R' %Mt' %fa'' %f'' %⟨hret, hpath, hf, hmiss, hroot, -⟩ Hpc HR HB Hst
     have hnone : st.get? fa x = none := (hget fa'' hpath).trans (look_root hf hmiss hroot)
@@ -99,7 +84,7 @@ theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     isplitr
     · ipureintro; rfl
     · unfold slot24 blockOwn; iapply ownSet_forget $$ Hout
-  · -- a hit in frame `fa'`: copy the value out, return 1
+  ·
     unfold scanHitK
     iintro %fa' %f %Gm %img %j %v %R %Mt %B₁ %B₂
       %⟨hpath, hf, hj, hne, hF, h8, hB, hinv', hlay, hdisj⟩ Hpc HR HS #Hb #Hp #HGe Hclose
@@ -161,5 +146,3 @@ theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
 end Main
 
 end VsaIris.Interp
-
-#print axioms VsaIris.Interp.envGet_spec

@@ -1,15 +1,5 @@
 import Vsa.Compiler.Gen
 
-/-!
-# Runs of the abstract machine
-
-`Star code A B`: `A` reaches `B` in zero or more steps; `StarN` counts them.
-`Seg code pos seg` says `seg` sits in `code` at instruction index `pos`;
-`pcOf k` is the address of instruction `k`. The lemmas here compute single
-instructions and fixed sequences (`li`, the libgcc call sequence) at the
-abstract level.
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa.Sim
@@ -40,7 +30,6 @@ theorem Star.step {code : List Ins} {A B C : AM} (h : astep code A = some (.run 
 theorem Star.single {code : List Ins} {A B : AM} (h : astep code A = some (.run B)) :
     Star code A B := Star.step h (Star.refl _ _)
 
-/-- `A` runs to some state satisfying `P`. -/
 abbrev Reaches (code : List Ins) (A : AM) (P : AM → Prop) : Prop := ∃ B, Star code A B ∧ P B
 
 theorem ex_step {code : List Ins} {A S : AM} {Q : AM → Prop} (e : astep code A = some (.run S))
@@ -57,16 +46,12 @@ theorem ex_bind {code : List Ins} {A : AM} {P Q : AM → Prop} (h : Reaches code
   obtain ⟨C, s', hq⟩ := k B hp
   exact ⟨C, s.trans s', hq⟩
 
-/-- `A` runs for `n` steps without halting. -/
 abbrev Runs (code : List Ins) (n : Nat) (A : AM) : Prop := ∃ B, StarN code n A B
 
-/-- The code fits below `tohost`. -/
 def Fits (code : List Ins) : Prop := codeBase + 4 * code.length ≤ tohostAddr
 
-/-- The address of instruction `k`. -/
 def pcOf (k : Nat) : BitVec 64 := BitVec.ofNat 64 (codeBase + 4 * k)
 
-/-- `seg` is placed at instruction index `pos`. -/
 def Seg (code : List Ins) (pos : Nat) (seg : List Ins) : Prop :=
   ∀ j, j < seg.length → code[pos + j]? = seg[j]?
 
@@ -121,9 +106,6 @@ theorem astep_pcOf {code : List Ins} (hfit : Fits code) {k : Nat} {i : Ins}
     astep code A = exec i A := by
   unfold astep; rw [hpc, fetch_pcOf hfit hk]
 
-/-! ## PC arithmetic -/
-
-/-- Instruction indices of fitting code are small. -/
 abbrev PosOK (k : Nat) : Prop := codeBase + 4 * k ≤ tohostAddr
 
 theorem pcOf_succ (k : Nat) : BitVec.addInt (pcOf k) 4 = pcOf (k + 1) := by
@@ -169,13 +151,9 @@ theorem pcOf_jump (src dst : Nat) (hs : PosOK src) (hd : PosOK dst) :
   rw [evenJ_self _ he, add_sext, pcOf_toNat (by omega), pcOf_eq_ofInt, hj]
   congr 1; push_cast; omega
 
-/-! ## Register file -/
-
-/-- Register `n` holds `v` (`x0` holds `0`). -/
 def Has (L : GRegs) (n : Nat) (v : BitVec 64) : Prop :=
   n ≤ 31 ∧ ((n = 0 ∧ v = 0) ∨ (n ≠ 0 ∧ lookupG n L = some v))
 
-/-- Write register `rd`. -/
 def gset (L : GRegs) (rd : Nat) (v : BitVec 64) : GRegs := (rd, v) :: eraseG rd L
 
 theorem lookupG_eraseG (n k : Nat) (L : GRegs) :
@@ -222,12 +200,9 @@ theorem Has.set_other {L : GRegs} {n rd : Nat} {v w : BitVec 64} (h : Has L n v)
   · exact Has.zero _
   · exact ⟨hn, .inr ⟨hne0, by rw [lookupG_set, if_neg hne, hl]⟩⟩
 
-/-! ## Single instructions -/
-
 section
 variable {code : List Ins} {k : Nat} {A : AM}
 
-/-- Register-register/immediate ALU instructions. -/
 def Ins.IsAlu : Ins → Prop
   | .addi .. | .ori .. | .slli .. | .add .. | .sub .. => True
   | _ => False
@@ -296,14 +271,11 @@ theorem step_sub (hfit : Fits code) {rd r1 r2 : Nat} {v w : BitVec 64}
   simp only [Ins.toM, stepGM, wvalM]
   simp [h12, h22, hA, pcOf_succ, gset]
 
-/-- The doubleword a load reads at `a`. -/
 def rdW (m : Mem) (a : Nat) : BitVec 64 := bytesVal .ld (rd8 m a)
 
-/-- Load-address window: RAM, outside the HTIF words. -/
 def LdOK (a : Nat) : Prop :=
   0x80000000 ≤ a ∧ a + 8 ≤ 0x100000000 ∧ (a + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a)
 
-/-- Store-address window: aligned RAM above the HTIF words. -/
 def StOK (a : Nat) : Prop :=
   0x80000000 ≤ a ∧ a + 8 ≤ 0x100000000 ∧ tohostAddr + 16 ≤ a ∧ a % 8 = 0
 

@@ -1,25 +1,11 @@
 import VsaIris.Vsa.Stderr.FwriteRun
 import VsaIris.Vsa.Fprintf.Tac
 
-/-!
-# `__sprint_r` on `stderr` with one piece (lane N3)
-
-`_vfprintf_r` flushes after each conversion and at the end
-(`0x8000b8d0`, `0x8000cf9c`): `__sprint_r(reent, stderr, uio)` with the
-`uio`'s one nonempty `iov` (`"%s\n"`: the string, then the newline) on the
-set-up unbuffered `stderr`. `__sfvwrite_r`'s unbuffered path hands the piece
-whole to `__swrite` (`swriteErr_run`); the residual reaches 0, `__sprint_r`
-clears the `uio` and returns 0.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- The memory after the flush: changed only in the call's stack window, the
-`uio`'s count and residual, the flags halfword (rewritten, still `0x201a`) and
-`errno`; the `uio` is cleared. -/
 structure SprintPost (Mt Mt' : Mem) (sp : BitVec 64) : Prop where
   frame : ∀ a, ¬ (sp.toNat - 256 ≤ a ∧ a < sp.toNat) → ¬ (sp.toNat + 232 ≤ a ∧ a < sp.toNat + 248) →
     ¬ (0x8001bbe8 ≤ a ∧ a < 0x8001bbea) → ¬ Stdio.errnoFoot a → imgM Mt' a = imgM Mt a
@@ -29,13 +15,13 @@ structure SprintPost (Mt Mt' : Mem) (sp : BitVec 64) : Prop where
   res : ldv .ld Mt' (sp + 240#64).toNat = 0#64
 
 set_option hygiene false in
-/-- One piece of the flush run. -/
+
 macro "sprint_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, hres, hiov,
   hp, hk0, hk0z, ne_eq, not_false_eq_true, hfl, hbase, hwr, hck, BitVec.add_assoc, BitVec.zero_add, BitVec.reduceXOr]
   at 0x8000efd4))
 
 set_option hygiene false in
-/-- One piece of the flush run after a write returned. -/
+
 macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
   rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, h10, h11, h12, hres, hiov,
   hp, hk0, hk0z, ne_eq, not_false_eq_true, hfl, hbase, hwr, hck, BitVec.add_assoc,
@@ -126,7 +112,6 @@ macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
     simp (disch := nx_fdisch) only [imgM_store_miss, imgM_fillR_out]
   all_goals (nx_mem; try decide)
 
-/-! **`sprintErr_run`**: `__sprint_r(reent, stderr, uio)`, one nonempty piece `bs`. -/
 #ix_chain sprintErr_run := [sprintErr_01, sprintErr_02, sprintErr_03, sprintErr_04, sprintErr_05,
   sprintErr_06, sprintErr_07, sprintErr_09, sprintErr_10, sprintErr_11]
 

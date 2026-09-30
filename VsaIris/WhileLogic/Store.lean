@@ -1,20 +1,7 @@
 import Vsa.While.Semantics
 
-/-!
-# Store facts for the WHILE program logic
-
-Frame-level views of the store operations of `Vsa/While/Semantics.lean` and
-the store well-formedness invariant `Store.WF` (every parent pointer points to
-an earlier frame, every closure environment is an allocated frame). `WF`
-bounds every parent-chain walk by the starting address, so the chain-walk gas
-of `Store.get?`/`Store.set?` is irrelevant once it exceeds that address
-(`lookup_gas`, `set_gas`). This is what lets the program logic decompose a
-variable access into "found in this frame" and "defer to the parent frame".
--/
-
 namespace Vsa.While
 
-/-- `env_define` on one frame's binding list. -/
 def Frame.defVar (F : Frame) (x : String) (v : Value) : Frame :=
   { F with vars :=
       if F.vars.any (·.1 == x) then
@@ -22,19 +9,15 @@ def Frame.defVar (F : Frame) (x : String) (v : Value) : Frame :=
       else
         F.vars ++ [(x, v)] }
 
-/-- `env_set` on the frame that binds `x`. -/
 def Frame.setVar (F : Frame) (x : String) (v : Value) : Frame :=
   { F with vars := F.vars.map fun p => if p.1 == x then (x, v) else p }
 
-/-- The binding of `x` in this frame alone. -/
 def Frame.find (F : Frame) (x : String) : Option Value :=
   (F.vars.find? (·.1 == x)).map (·.2)
 
 theorem Store.define_eq (s : Store) (a : Nat) (x : String) (v : Value) :
     s.define a x v = { s with frames := s.frames.modify a (·.defVar x v) } := rfl
 
-/-- Store well-formedness: parents precede children, closure environments
-are allocated. Holds of `initSt` and is preserved by every rule. -/
 structure Store.WF (s : Store) : Prop where
   parent_lt : ∀ (a : Nat) (F : Frame) (p : Nat),
     s.frames[a]? = some F → F.parent = some p → p < a
@@ -79,7 +62,6 @@ theorem lt_size_of_getElem? {s : Store} {a : Nat} {F : Frame}
     (h : s.frames[a]? = some F) : a < s.frames.size := by
   rcases Array.getElem?_eq_some_iff.mp h with ⟨ha, _⟩; exact ha
 
-/-- Parent-chain walks under `WF` need at most `a + 1` gas. -/
 theorem lookup_gas {s : Store} (hs : s.WF) :
     ∀ (g g' : Nat) (a : Nat) (x : String), a < g → a < g' →
       s.lookup g a x = s.lookup g' a x := by
@@ -136,14 +118,12 @@ theorem size_pos {s : Store} {a : Nat} {F : Frame} (hF : s.frames[a]? = some F) 
   ⟨s.frames.size - 1, by have := lt_size_of_getElem? hF; omega, by
     have := lt_size_of_getElem? hF; omega⟩
 
-/-- Lookup succeeds in the current frame. -/
 theorem get?_here {s : Store} {a : Nat} {F : Frame} {x : String} {v : Value}
     (hF : s.frames[a]? = some F) (hx : F.find x = some v) : s.get? a x = some v := by
   obtain ⟨k, hk, _⟩ := size_pos hF
   unfold Store.get?; rw [hk, lookup_succ, hF]
   simp [hx]
 
-/-- Lookup misses the current frame and defers to its parent. -/
 theorem get?_parent {s : Store} (hs : s.WF) {a p : Nat} {F : Frame} {x : String}
     (hF : s.frames[a]? = some F) (hx : F.find x = none) (hp : F.parent = some p) :
     s.get? a x = s.get? p x := by
@@ -167,7 +147,6 @@ theorem any_false_of_find {F : Frame} {x : String} (h : F.find x = none) :
   unfold Frame.find at h
   exact find?_eq_none_iff_any.mp (by cases hf : F.vars.find? (·.1 == x) <;> simp_all)
 
-/-- Assignment to a variable bound in the current frame. -/
 theorem set?_here {s : Store} {a : Nat} {F : Frame} {x : String} {v0 v : Value}
     (hF : s.frames[a]? = some F) (hx : F.find x = some v0) :
     s.set? a x v = some { s with frames := s.frames.modify a (·.setVar x v) } := by
@@ -176,8 +155,6 @@ theorem set?_here {s : Store} {a : Nat} {F : Frame} {x : String} {v0 v : Value}
   simp only [Option.bind_some, any_of_find hx, ite_true]
   rfl
 
-/-- Assignment to a variable not bound in the current frame defers to the
-parent. -/
 theorem set?_parent {s : Store} (hs : s.WF) {a p : Nat} {F : Frame} {x : String}
     {v : Value} (hF : s.frames[a]? = some F) (hx : F.find x = none)
     (hp : F.parent = some p) : s.set? a x v = s.set? p x v := by
@@ -188,9 +165,6 @@ theorem set?_parent {s : Store} (hs : s.WF) {a p : Nat} {F : Frame} {x : String}
   simp only [Bool.false_eq_true, ite_false]
   exact set_gas hs k (k + 1) p x v (by omega) (by omega)
 
-/-! ## Preservation of `WF` -/
-
-/-- Rewriting one frame's bindings (define/set) keeps `WF`. -/
 theorem WF.modify {s : Store} (hs : s.WF) (a : Nat) (f : Frame → Frame)
     (hf : ∀ F, (f F).parent = F.parent) :
     ({ s with frames := s.frames.modify a f } : Store).WF where
@@ -230,9 +204,6 @@ theorem WF.define {s : Store} (hs : s.WF) (a : Nat) (x : String) (v : Value) :
     (s.define a x v).WF := by
   rw [define_eq]; exact hs.modify a _ (fun _ => rfl)
 
-
-/-! ## Frame-level effect of `define` -/
-
 theorem frames_define (s : Store) (a b : Nat) (x : String) (v : Value) :
     (s.define a x v).frames[b]? =
       if a = b then (s.frames[b]?).map (·.defVar x v) else s.frames[b]? := by
@@ -247,14 +218,11 @@ theorem closures_define (s : Store) (a : Nat) (x : String) (v : Value) :
 
 end Store
 
-/-- Binding a parameter list into one frame (the frame-level view of the
-argument-binding fold of `Call.closure`). -/
 def Frame.bindAll (F : Frame) (l : List (String × Value)) : Frame :=
   l.foldl (fun F (x, v) => F.defVar x v) F
 
 namespace Store
 
-/-- The argument-binding fold of `Call.closure` rewrites exactly frame `a`. -/
 theorem foldl_define (a : Nat) (l : List (String × Value)) : ∀ (s : Store),
     (∀ b, (l.foldl (fun s (x, v) => s.define a x v) s).frames[b]? =
       if a = b then (s.frames[b]?).map (·.bindAll l) else s.frames[b]?) ∧

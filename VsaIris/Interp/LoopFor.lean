@@ -1,36 +1,10 @@
 import VsaIris.Interp.LoopWhile
 
-/-!
-# The `for` loop (lane E6), both modes
-
-INTERP_DESIGN.md §4.3; statements in `SpecLoop.lean` (`execInitT_body`,
-`forLoopT_body`, `forCondT_body`, `execStepT_body`, `forLoopP_body`,
-`execInitP_body`). `exec_stmt`'s `for` arm after `env_new`:
-
-```
-8000423c ld a1,8(s0); mv s3,a0; beqz a1 → 8000426c     init (ExecInit)
-80004248 … jal exec_stmt (80004254); j 8000426c
-8000426c ld a2,16(s0); beqz a2 → 800042a8              condition (ForCond)
-80004274 … jal eval_expr (80004280, slot sp+104)
-80004284 copy to sp+16; jal value_truthy (800042a0); beqz a0 → 80004090
-800042a8 ld a1,32(s0); … jal exec_stmt (800042b8)       body
-800042bc bne a0,1 → 8000425c; li a0,0; j 8000409c       break
-8000425c beq a0,3 → 80004150                           return
-80004264 ld a2,24(s0); bnez a2 → 800042dc              step (ExecStep)
-800042dc … jal eval_expr (800042e8, slot sp+16); j 8000426c
-```
-
-The runs' glue is WP-generic (`forStage*`, `forCopy`, `forRoute`, …); the
-two modes differ only in the calls.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The bytes of a `for` node a run reads: the init, condition, step and body
-pointers. -/
 abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
 
 #ix_seg ForLoop_runInit {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -104,17 +78,14 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     IW live m [] (execS s) Q 0x800042ec#64 R Mt
   by ix_run hlive at 0x8000426c
 
-/-- An optional statement field's pointer: `0` for `none`. -/
 def OptS (m : Mem) (P : Nat → Prop) (p : Nat) : Option Stmt → Prop
   | none => p = 0
   | some s => p ≠ 0 ∧ StmtReprWithin m P p s
 
-/-- An optional expression field's pointer: `0` for `none`. -/
 def OptE (m : Mem) (P : Nat → Prop) (p : Nat) : Option Expr → Prop
   | none => p = 0
   | some e => p ≠ 0 ∧ ExprReprWithin m P p e
 
-/-- What a `for` node gives the runs: its four pointers, placement and view. -/
 structure ForNode (m : Mem) (P : Nat → Prop) (aS pI pC pE pB : BitVec 64) : Prop where
   init : ldv .ld m (aS + 8#64).toNat = pI
   cond : ldv .ld m (aS + 16#64).toNat = pC
@@ -139,7 +110,6 @@ theorem readLE_of_optE {m : Mem} {P : Nat → Prop} {a : Nat} {o : Option Expr}
   | none h c => exact ⟨0, h, c, rfl⟩
   | some h c hp he => exact ⟨_, h, c, hp, he⟩
 
-/-- A `for` node's facts, from its representation over a geometric view. -/
 theorem forNode_of_repr {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {init : Option Stmt}
     {cnd step : Option Expr} {b : Stmt}
     (h : StmtReprWithin m P aS.toNat (.forStmt init cnd step b)) (hg : ∀ k, P k → ReadOK k) :
@@ -186,14 +156,10 @@ theorem forNode_of_repr {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {init : Op
 theorem ofNat_ne_zero {p : Nat} (h : p < 2 ^ 64) (hp : p ≠ 0) : BitVec.ofNat 64 p ≠ 0#64 :=
   fun e => hp (by have := congrArg BitVec.toNat e; rwa [ofNat_toNat_lt h] at this)
 
-/-- Where the `for` loop goes after its body returned `status`: out on
-`break` (`a0 = 0`) or a returned value, to the step otherwise. -/
 def forNext : Status → BitVec 64
   | .brk => 0x8000409c#64
   | .ret _ => 0x80004150#64
   | _ => 0x80004264#64
-
-/-! ## The runs' glue, for either WP -/
 
 section Glue
 
@@ -202,7 +168,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 variable {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
 
 omit I in
-/-- **Init, absent**: `beqz a1` straight to the loop head, the scope in `s3`. -/
+
 theorem forInitNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {cnd step : Option Expr} {b : Stmt}
     {aS aOuter aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -231,8 +197,7 @@ theorem forInitNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   iapply Hk $$ %_ %⟨by keep_upd, by ix_reg; exact hh.a0⟩ Hms
 
 omit I in
-/-- **Init, present**: stage the init's `jal exec_stmt` (`0x80004254`) in the
-loop scope, the scope in `s3`. -/
+
 theorem forInitStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {i : Stmt} {cnd step : Option Expr} {b : Stmt}
     {aS aOuter aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -267,8 +232,7 @@ theorem forInitStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   imodintro; rw [ofNat_toNat_lt hpi]; iapply astSG_of_view hri hgeo $$ Hro
 
 omit I in
-/-- **A jump to the loop head** from a call's return (`j 8000426c` after the
-init and after the step). -/
+
 theorem forJoin (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {j : Nat} (hj : j = 0x80004254 ∨ j = 0x800042e8)
     {s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} :
@@ -288,7 +252,7 @@ theorem forJoin (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ inte
     apply swp_closeF; unfold F'; iintro ⟨Hk, Hms⟩; iapply Hk $$ Hms
 
 omit I in
-/-- **Condition, absent**: `beqz a2` to the body's staging `0x800042a8`. -/
+
 theorem forCondNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {init : Option Stmt} {step : Option Expr} {b : Stmt}
     {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -318,8 +282,7 @@ theorem forCondNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   iapply Hk $$ %_ %(by keep_upd) Hms
 
 omit I in
-/-- **Condition, present**: stage its `jal eval_expr` (`0x80004280`, slot
-`sp+104`). -/
+
 theorem forCondStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {init : Option Stmt} {c : Expr} {step : Option Expr} {b : Stmt}
     {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -353,9 +316,6 @@ theorem forCondStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
     by ix_reg; exact hh.s3, by ix_reg; exact hh.sp⟩, by keep_upd⟩ [] Hms
   imodintro; rw [ofNat_toNat_lt hpc]; iapply astEG_of_view hrc hgeo $$ Hro
 
-/-- **The condition's copy and `value_truthy`**: from the condition's return
-(its words in `sp+104`, meaning `v`), the copy to `sp+16` and the helper;
-the truthiness bit in `a0` at `0x800042a4`. -/
 theorem forCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N Wp p v)
     {Φ : Nat × String → IProp GF} {v : Value} {w0 w1 w2 : BitVec 64} {s : BitVec 64}
@@ -412,8 +372,7 @@ theorem forCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ inte
       (Untouched.store hfg (o := 32) (by omega) (by omega) _ _)
 
 omit I in
-/-- **The condition's branch**: false leaves normally (`a0 = 0`), true goes
-to the body's staging. -/
+
 theorem forBranch (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} :
     ms 0x800042a4#64 R (execS s) Mt ∗ codeRes ∗
@@ -449,8 +408,7 @@ theorem forBranch (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
     iapply Hk $$ %h10 Hms
 
 omit I in
-/-- **The body's staging**: its `jal exec_stmt` (`0x800042b8`) in the loop
-scope with the arm's own `ret` slot. -/
+
 theorem forStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {init : Option Stmt} {cnd step : Option Expr} {b : Stmt}
     {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -483,8 +441,7 @@ theorem forStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   imodintro; rw [ofNat_toNat_lt hpb]; iapply astSG_of_view hrb hgeo $$ Hro
 
 omit I in
-/-- **The status routing** (`bne a0,1`, `beq a0,3`) after the body returned
-`status` in `a0`. -/
+
 theorem forRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {status : Status} {s : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (h10 : R 10 = statusCode status) :
@@ -537,7 +494,7 @@ theorem forRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ int
     | _ => exfalso; rw [h10] at h1; simp [statusCode] at h1
 
 omit I in
-/-- **Step, absent**: `bnez a2` falls through to the loop head. -/
+
 theorem forStepNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {init : Option Stmt} {cnd : Option Expr} {b : Stmt}
     {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -567,8 +524,7 @@ theorem forStepNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   iapply Hk $$ %_ %(by keep_upd) Hms
 
 omit I in
-/-- **Step, present**: stage its `jal eval_expr` (`0x800042e8`, slot
-`sp+16`). -/
+
 theorem forStepStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {init : Option Stmt} {cnd : Option Expr} {e : Expr} {b : Stmt}
     {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -604,17 +560,12 @@ theorem forStepStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
 
 end Glue
 
-/-! ## Total mode -/
-
 section Total
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- **The condition's evaluation, total mode**: from the loop head with a
-present condition, its derivation `Dc`, the copy and `value_truthy`; the
-truthiness bit in `a0` at the branch `0x800042a4`. -/
 theorem forCondEvalT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {st : St} {d env : Nat} {init : Option Stmt} {c : Expr} {step : Option Expr} {b : Stmt}
     {st' : St} {v : Value} {nc k : Nat}
@@ -654,7 +605,6 @@ theorem forCondEvalT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iapply Hk $$ %R3 %Mt3 %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3,
     h30, hut⟩ Hms Hst Hw
 
-/-- `ForCond.none`: no condition. -/
 theorem forCondT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d env : Nat) :
     forCondT_body (GF := GF) live N L Room inp st d env none st 0 := by
   intro Φ k init step b aS aEnv aRet s R Mt m' hh _ _ _
@@ -664,7 +614,6 @@ theorem forCondT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d env 
   iintro %R' %hk Hms
   iapply Hk $$ %R' %Mt %⟨hk, Untouched.refl _ _ _⟩ Hms Hst Hw
 
-/-- `ForCond.some`: the condition holds. -/
 theorem forCondT_some (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {c : Expr} {st' : St} {v : Value} {nc : Nat}
     (Dc : EvalECost st d env c st' v nc) (hv : v.truthy = true)
@@ -685,7 +634,6 @@ theorem forCondT_some (hlive : ∀ p ∈ interpText, live p.1)
   · iintro %_ Hms
     iapply Hk $$ %R1 %Mt1 %⟨hk1, hut⟩ Hms Hst Hw
 
-/-- `ExecStep.none`: no step. -/
 theorem execStepT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d env : Nat) :
     execStepT_body (GF := GF) live N L Room inp st d env none st 0 := by
   intro Φ k init cnd b aS aEnv aRet s R Mt m' hh _ _ _
@@ -695,7 +643,6 @@ theorem execStepT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d env
   iintro %R' %hk Hms
   iapply Hk $$ %R' %Mt %⟨hk, Untouched.refl _ _ _⟩ Hms Hst Hw
 
-/-- `ExecStep.some`: the step expression, its value discarded. -/
 theorem execStepT_some (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {e : Expr} {st' : St} {v : Value} {n : Nat}
     (De : EvalECost st d env e st' v n)
@@ -722,7 +669,6 @@ theorem execStepT_some (hlive : ∀ p ∈ interpText, live p.1)
   iapply Hk $$ %_ %_ %⟨KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _),
     Untouched.slotWrite hs16 (Nat.le_refl _) (by omega) Mt w0 w1 w2⟩ Hms Hst Hw
 
-/-- `ExecInit.none`: no init statement. -/
 theorem execInitT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d outer : Nat) :
     execInitT_body (GF := GF) live N L Room inp st d outer none st 0 := by
   intro Φ k cnd step b aS aOuter aRet s R Mt m' hh _ _ _ _
@@ -732,7 +678,6 @@ theorem execInitT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d out
   iintro %R' %hk Hms
   iapply Hk $$ %R' %hk Hms Hst Hslot Hw
 
-/-- `ExecInit.some`: the init statement, its status discarded. -/
 theorem execInitT_some (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d outer : Nat} {i : Stmt} {st' : St} {status : Status} {n : Nat}
     (Di : ExecSCost st d outer i st' status n)
@@ -761,8 +706,6 @@ theorem execInitT_some (hlive : ∀ p ∈ interpText, live p.1)
   iapply Hk $$ %_ %⟨KeepRegs.trans hk1 (KeepRegs.sub hk2c (by decide)),
     (hk2c 19 (by decide)).trans h19⟩ Hms Hst Hslot Hw
 
-/-- **The body, total mode**: from the body's staging `0x800042a8`, the body
-through `exec_stmt` (its derivation `Db`) and the status routing. -/
 theorem forBodyT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {st : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr} {b : Stmt} {st' : St}
     {status : Status} {nb k : Nat}
@@ -799,7 +742,6 @@ theorem forBodyT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   iapply Hk $$ %R3 %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3,
     h30⟩ Hms Hst Hret Hw
 
-/-- `ForLoop.condFalse`: the condition is false; the loop leaves normally. -/
 theorem forLoopT_condFalse (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {c : Expr} {step : Option Expr} {b : Stmt} {st' : St} {v : Value}
     {nc : Nat} (Dc : EvalECost st d env c st' v nc) (hv : v.truthy = false)
@@ -821,7 +763,6 @@ theorem forLoopT_condFalse (hlive : ∀ p ∈ interpText, live p.1)
     iapply Hk $$ %_ %Mt1 %⟨hk1.calleeSaved_upd (by decide) _, by ix_reg; rfl, hut⟩ Hms Hst Hslot Hw
   · iintro %h Hms; exfalso; exact h (by simpa using h10)
 
-/-- `ForLoop.bodyBreak`: the body breaks; the loop leaves normally. -/
 theorem forLoopT_bodyBreak (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {cnd step : Option Expr} {b : Stmt} {st' st'' : St} {nc nb : Nat}
     (hcond : forCondT_body (GF := GF) live N L Room inp st d env cnd st' nc)
@@ -841,8 +782,6 @@ theorem forLoopT_bodyBreak (hlive : ∀ p ∈ interpText, live p.1)
   simp only [forNext, whileA0, statusRet_brk]
   iapply Hk $$ %R2 %Mt1 %⟨KeepRegs.trans hk1 hk2, h20, hut⟩ Hms Hst Hret Hw
 
-/-- `ForLoop.bodyRet`: the body returns a value; the loop leaves through the
-`ret` epilogue. -/
 theorem forLoopT_bodyRet (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {cnd step : Option Expr} {b : Stmt} {st' st'' : St} {rv : Value}
     {nc nb : Nat}
@@ -863,8 +802,6 @@ theorem forLoopT_bodyRet (hlive : ∀ p ∈ interpText, live p.1)
   simp only [forNext, whileA0]
   iapply Hk $$ %R2 %Mt1 %⟨KeepRegs.trans hk1 hk2, h20, hut⟩ Hms Hst Hret Hw
 
-/-- `ForLoop.loop`: the body completes normally or continues, the step runs,
-and the loop runs again from the head (the motive of the recursive premise). -/
 theorem forLoopT_loop (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {cnd step : Option Expr} {b : Stmt} {st₁ st₂ st₃ st₄ : St}
     {status status' : Status} {nc nb ns nr : Nat}
@@ -898,16 +835,12 @@ theorem forLoopT_loop (hlive : ∀ p ∈ interpText, live p.1)
 
 end Total
 
-/-! ## Partial mode -/
-
 section Partial
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- **The condition's evaluation, partial mode** (`forCondEvalT` through the
-Löb hypothesis). -/
 theorem forCondEvalP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
     {Core K : IProp GF} {st : St} {d env : Nat} {init : Option Stmt} {c : Expr}
@@ -952,8 +885,6 @@ theorem forCondEvalP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30, hut⟩
     Hms Hst Hw HK
 
-/-- **The body, partial mode** (`forBodyT` through the Löb hypothesis); the
-body's `jal` also strips the later of `X`. -/
 theorem forBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {Core K X : IProp GF} {st : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr}
     {b : Stmt} {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {m' : Nat}
@@ -993,8 +924,6 @@ theorem forBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30⟩
     Hms Hst Hret Hw HX HK
 
-/-- **The step, partial mode**: from `0x80004264` to the loop head with the
-`ExecStep` derivation (the step's value discarded). -/
 theorem forStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {Core K : IProp GF} {st : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr}
     {b : Stmt} {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {m' : Nat}
@@ -1042,7 +971,6 @@ theorem forStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       %⟨KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _),
         Untouched.slotWrite hs16 (Nat.le_refl _) (by omega) Mt w0 w1 w2⟩ Hms Hst Hw HK
 
-/-- `forLoopP_body` as one Iris proposition: the statement Löb is taken over. -/
 abbrev forLoopPI (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : Stmt) :
     IProp GF :=
   iprop(∀ (Φ : Nat × String → IProp GF) (st : St) (init : Option Stmt) (aS aEnv aRet s : BitVec 64)
@@ -1064,8 +992,6 @@ abbrev forLoopPI (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : S
           ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ))) -∗
     (wpW (vsaModel live)).W Φ)
 
-/-- The loop's exit pair at a head state, as a proposition (what each branch
-of an iteration hands on). -/
 abbrev forExitK (Core : IProp GF) (Φ : Nat × String → IProp GF) (st : St) (d env : Nat)
     (cnd step : Option Expr) (b : Stmt) (aRet s : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem)
     (m' : Nat) : IProp GF :=
@@ -1102,9 +1028,6 @@ theorem forExitK_abort {Core : IProp GF} {Φ : Nat × String → IProp GF} {st :
           ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ :=
   and_elim_r
 
-/-- **One iteration from the body's staging** (partial mode): the body, then
-out, or the step and the next iteration through `X` (the Löb hypothesis,
-whose later the body's `jal` pays). -/
 theorem forFromBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {Core : IProp GF} {st st1 : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr}
     {b : Stmt} {aS aEnv aRet s : BitVec 64} {R R1 : Nat → BitVec 64} {Mt Mt1 : Mem} {m' : Nat}
@@ -1182,8 +1105,6 @@ theorem forFromBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
           (hut1.trans hut3).trans hut4⟩ Hms Hst Hret Hw
     · iapply forExitK_abort $$ HK
 
-/-- **The `for` loop, partial mode, by Löb**: one iteration from the head
-(the condition: out or on to the body), the rest through `forFromBodyP`. -/
 theorem forLoopPI_loeb (hlive : ∀ p ∈ interpText, live p.1)
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
     (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : Stmt) :
@@ -1237,7 +1158,6 @@ theorem forLoopPI_loeb (hlive : ∀ p ∈ interpText, live p.1)
         iframe Hms Hcode Hast Hfr Hst Hslot Hw HE HS Hlob
         iexact HK
 
-/-- **The `for` loop, partial mode** (`forLoopP_body`), for every loop. -/
 theorem forLoopP_all (hlive : ∀ p ∈ interpText, live p.1)
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
     (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : Stmt) :
@@ -1248,7 +1168,6 @@ theorem forLoopP_all (hlive : ∀ p ∈ interpText, live p.1)
   ihave H := H
   iapply H $$ %Φ %st %init %aS %aEnv %aRet %s %R %Mt %m' %⟨hh, hfg, hsg, hfits, hslg⟩ Hpre
 
-/-- **The `for` init, partial mode** (`execInitP_body`), for every init. -/
 theorem execInitP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF) (d outer : Nat) :
     ∀ init, execInitP_body (GF := GF) live N L Room inp Core d outer init := by
   intro init Φ st cnd step b aS aOuter aRet s R Mt m' hh _ hsg hfits hslg

@@ -5,7 +5,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- `within_mmio_readable a w = false` for a RAM window. -/
 theorem within_mmio_readable_ram_false_width
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) (w : Nat)
     (hbase : σ.regs.get? Register.htif_tohost_base
@@ -41,8 +40,6 @@ theorem within_mmio_readable_ram_false_width
   intro hbad
   omega
 
-
-/-- Concrete RAM checks for a scalar access accepted without splitting. -/
 theorem RamReadChecks.of_scalar
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) (w : Nat)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
@@ -60,7 +57,6 @@ theorem RamReadChecks.of_scalar
     vpmpaddr hcfg haddr
   mmio := within_mmio_readable_ram_false_width σ a w hbase hlo hhi hhtif
 
-/-- Standard machine-state invariants discharge the register checks. -/
 theorem RamReadChecks.of_good {σ : Vsa.Machine.MState} (h : GoodState σ)
     (a : BitVec 64) (w : Nat)
     (hlo : 0x80000000 ≤ a.toNat) (hhi : a.toNat + w ≤ 0x100000000)
@@ -69,29 +65,4 @@ theorem RamReadChecks.of_good {σ : Vsa.Machine.MState} (h : GoodState σ)
   RamReadChecks.of_scalar σ a w initPmpaddr h.pma_regions h.pmpcfg_n
     h.pmpaddr_n h.htif_tohost_base hlo hhi hhtif hw hsingle
 
-/-- Four-byte scalar read using total memory bytes and the actual access checks. -/
-theorem RamReadChecks.readFour
-    {σ : SequentialState RegisterType trivialChoiceSource} {a : BitVec 64}
-    (h : RamReadChecks σ a 4) :
-    (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
-      page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
-      4 false false false false).run σ = .ok (.Ok (ldBytesT4 σ a, ())) σ :=
-  checked_mem_read_single_of_ram σ a 4 _ (by decide) h (read_ram_four_total σ a)
-
-/-- Eight-byte scalar read using total memory bytes and the actual access checks. -/
-theorem RamReadChecks.readEight
-    {σ : SequentialState RegisterType trivialChoiceSource} {a : BitVec 64}
-    (h : RamReadChecks σ a 8) :
-    (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
-      page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
-      8 false false false false).run σ = .ok (.Ok (ldBytesT σ a, ())) σ :=
-  checked_mem_read_single_of_ram σ a 8 _ (by decide) h (read_ram_eight_total σ a)
-
-#print axioms RamReadChecks.readFour
-#print axioms RamReadChecks.readEight
-
-#print axioms RamReadChecks.of_scalar
-#print axioms RamReadChecks.of_good
-
-#print axioms within_mmio_readable_ram_false_width
 end Vsa.Sim

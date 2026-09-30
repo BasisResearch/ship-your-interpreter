@@ -1,13 +1,5 @@
 import Vsa.Compiler.StuckAll
 
-/-!
-# The static string table
-
-`run_strTab`: the setup's string code writes every string of the table `T` as
-a word-per-character object at `objBase + strOff T i`, leaving every other word
-outside the table unchanged.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -49,7 +41,6 @@ section
 variable {code : List Ins} (hfit : Fits code)
 include hfit
 
-/-- The character stores of a string object at `a`, from character `j` on. -/
 theorem run_chars {a : Nat} (ha : a % 8 = 0) (hlo : tohostAddr + 16 ≤ a) :
     ∀ (cs : List Char) (j q : Nat) (L : GRegs) (m : Mem) (o : Array String),
     (∀ c ∈ cs, c.toNat < 256) → a + 8 * (j + 1 + cs.length) ≤ 2 ^ 32 →
@@ -100,7 +91,6 @@ theorem run_chars {a : Nat} (ha : a % 8 = 0) (hlo : tohostAddr + 16 ≤ a) :
     · intro b hb8 hbr
       rw [hfr b hb8 (by omega), rdW_upd (by omega) hb8, if_neg (by omega)]
 
-/-- One string object. -/
 theorem run_strObj {s : String} {a q : Nat} (ha : a % 8 = 0) (hlo : tohostAddr + 16 ≤ a)
     (hhi : a + 8 + 8 * s.length ≤ 2 ^ 32) (hs : Latin1 s) (hseg : Seg code q (strObjCode s a))
     (hP : PosOK (q + (strObjCode s a).length)) {L : GRegs} {m : Mem} {o : Array String} :
@@ -138,7 +128,6 @@ theorem run_strObj {s : String} {a q : Nat} (ha : a % 8 = 0) (hlo : tohostAddr +
   · intro b hb8 hbr
     rw [hfr b hb8 (by rw [String.length_toList]; omega), rdW_upd ha hb8, if_neg (by omega)]
 
-/-- The string table: the objects of `T`, in order, from `objBase`. -/
 theorem run_strTab (T : List String) (hL : ∀ s ∈ T, Latin1 s) (hT : objBase + strOff T T.length ≤ objEnd) :
     ∀ n, n ≤ T.length → ∀ (q : Nat) (L : GRegs) (m : Mem) (o : Array String),
       Seg code q ((List.range n).flatMap fun i => strObjCode (T.getD i "") (objBase + strOff T i)) →

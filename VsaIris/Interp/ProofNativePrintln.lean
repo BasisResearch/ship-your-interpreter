@@ -1,14 +1,5 @@
 import VsaIris.Interp.ProofNativePrint
 
-/-!
-# `native_println` (lane H2)
-
-`native_println(sret, in, argc, args, line)` calls `native_print` with its
-own frame's 24-byte slot as the result, prints `'\n'` with `fputc`, and
-returns `null` (`value_null`) in the caller's slot. Four runs, three calls:
-`native_print` by `nativePrint_spec`, `fputc` by `IrisHoles.out`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -16,20 +7,14 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib VsaIris.
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
-/-- The bytes `native_println`'s runs own: its frame above the slot (the two
-saved words and a pad word). -/
 abbrev nplF (s : BitVec 64) (k : Nat) : Prop := InExt (s.toNat - 24, 24) k
 
-/-- And `_impure_data._stdout`. -/
 abbrev nplS (s : BitVec 64) (k : Nat) : Prop := nplF s k ∨ ioW k
 
 macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro b hb; simp only [mem_accAddrs_iff, nplS, nplF, ioW, VsaIris.InExt] at *; sx_addr))
 
-/-! ## The runs -/
-
-/- The prologue: to `jal native_print`. -/
 #ix_seg npl_pro {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s r : BitVec 64} (h2 : rv 2 = s)
@@ -41,7 +26,6 @@ macro_rules
     unfold nativePrintlnPC
     ix_run1 hlive using [h2, hsf] at 0x80002f90
 
-/- After `native_print`: `stdout`, to `jal fputc`. -/
 #ix_seg npl_mid {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64}
@@ -51,7 +35,6 @@ macro_rules
   by
     ix_run1 hlive using [hio1, hio2] at 0x80002fa0
 
-/- After `fputc`: to `jal value_null`. -/
 #ix_seg npl_null {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
@@ -59,7 +42,6 @@ macro_rules
   by
     ix_run1 hlive at 0x80002fa8
 
-/- The epilogue, after `value_null`. -/
 #ix_seg npl_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s r v8 : BitVec 64}
@@ -72,16 +54,13 @@ macro_rules
   by
     ix_run1 hlive using [h2, hra, hs0, hal]
 
-/-! ## The Iris glue -/
-
 section Glue
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
 omit I in
-/-- `native_println`'s frame out of the stack below `s`: `native_print`'s
-stack, its result slot, the rest. -/
+
 theorem nplFrame_split {s : BitVec 64} (hs : 48 + nativePrintNeed ≤ s.toNat) :
     stackScratch (GF := GF) s nativePrintlnNeed ⊢
       stackScratch (s + 18446744073709551568#64) nativePrintNeed ∗
@@ -102,7 +81,7 @@ theorem nplFrame_split {s : BitVec 64} (hs : 48 + nativePrintNeed ≤ s.toNat) :
   iexact H2
 
 omit I in
-/-- And back. -/
+
 theorem nplFrame_join {s : BitVec 64} (hs : 48 + nativePrintNeed ≤ s.toNat) :
     stackScratch (GF := GF) (s + 18446744073709551568#64) nativePrintNeed ∗
         slot24 (s + 18446744073709551568#64).toNat ∗ ownSet (InExt (s.toNat - 24, 24)) byteAny ⊢
@@ -123,7 +102,6 @@ theorem nplFrame_join {s : BitVec 64} (hs : 48 + nativePrintNeed ≤ s.toNat) :
   unfold blockOwn
   iexact H2
 
-/-- `native_println`'s return continuation (its `helperSpec` post). -/
 abbrev NplK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64) :
     IProp GF :=
@@ -132,7 +110,6 @@ abbrev NplK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPr
       (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
         consoleOwn (o ++ printArgs st vs ++ "\n") ∗ stackAt s nativePrintlnNeed)) -∗ Wp.W Φ)
 
-/-- What `native_println` carries across its calls. -/
 def FnplR (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64) :
     IProp GF :=
@@ -140,7 +117,6 @@ def FnplR (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp
     valsAt N args.toNat vs ∗ stackScratch (s + 18446744073709551568#64) nativePrintNeed ∗
     NplK Wp Φ N sret args s r vs st o rv)
 
-/-- The shared pure facts of a `native_println` run. -/
 structure NplCtx (live : Nat → Prop) (sret s r : BitVec 64) (rv : Nat → BitVec 64) : Prop where
   hlive : ∀ p ∈ interpText, live p.1
   hal : r.toNat % 4 = 0
@@ -152,8 +128,6 @@ structure NplCtx (live : Nat → Prop) (sret s r : BitVec 64) (rv : Nat → BitV
   hs4 : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame
   hg : SlotGeom sret
 
-/-- **After `native_print`**: `fputc('\n')`, `value_null`, the epilogue, the
-return. -/
 theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {vs : List Value} {st : Store} {o : String}
     {rv : Nat → BitVec 64} (c : NplCtx live sret s r rv) (hcl : CodeLive live) (H : OutHoles)
@@ -173,7 +147,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     unfold codeRes; simp [dataOf]
   have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
     rw [BitVec.toNat_add]; simp; omega
-  -- `stdout`, to `jal fputc`
+
   ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
   · iframe Hms Hstd
   have hio1 := ldv_impMem
@@ -199,7 +173,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave ⟨Hms, Hstd⟩ := ms_ioClose hok hd $$ [Hms Hio]
   · iframe Hms Hio
     ipureintro; exact hio
-  -- `fputc('\n', stdout)`
+
   have hsg : StackGeom (s + 18446744073709551568#64) nativePrintNeed :=
     ⟨by rw [e48]; unfold nativePrintNeed printNeed fprintfNeed; omega,
       by rw [e48]; unfold Vsa.Sim.LayoutInstance.stackSL nativePrintNeed printNeed fprintfNeed; simp; omega,
@@ -225,7 +199,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro %R4 %hk4 Hstd Hcon Hms Hst
   rw [show toString (Char.ofNat (10#8 : BitVec 8).toNat) = "\n" by decide]
   have k4 := fun x (hx : x ∈ fRegs) (hc : x ∉ callerSaved) => hk4 x hx hc
-  -- to `jal value_null`
+
   iapply wp_swpF Wp (S := nplF s) (R := upd R4 1 (BitVec.ofNat 64 (0x80002fa0 + 4))) (Mt := M1)
     (pc := 0x80002fa4#64) (F := iprop(codeRes ∗ stdioW ∗ consoleOwn (o ++ printArgs st vs ++ "\n") ∗
       FnplR Wp Φ N sret args s r vs st o rv))
@@ -237,7 +211,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   dsimp only [F']
   unfold FnplR
   iintro ⟨⟨#Hcode, Hstd, Hcon, Hsl, Hnull, Hvs, Hst, Hk⟩, Hms⟩
-  -- `value_null(sret)`
+
   ihave #Hvn := valueNull_spec c.hlive Wp N sret
   unfold valueNullSpec
   iapply ms_callHelper Wp (i := 0x80002fa8)
@@ -256,7 +230,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro %R5 %hk5 Hnull2 Hms
   have k5 : ∀ x ∈ fRegs, R5 x = upd (upd R4 1 (BitVec.ofNat 64 (0x80002fa0 + 4))) 10
       (upd R4 1 (BitVec.ofNat 64 (0x80002fa0 + 4)) 8) x := fun x hx => hk5 x hx (by simp)
-  -- the epilogue
+
   iapply wp_swpF Wp (S := nplF s) (pc := 0x80002fac#64) (R := upd R5 1 (BitVec.ofNat 64 (0x80002fa8 + 4)))
     (Mt := M1)
     (F := iprop(codeRes ∗ valAt N (s + 18446744073709551568#64).toNat .null ∗ valAt N sret.toNat .null ∗
@@ -317,7 +291,6 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
          unfold nativePrintlnNeed nativePrintNeed printNeed fprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, c.hs4⟩
 
-/-- `native_print`'s stack and result slot, from `native_println`'s stack. -/
 theorem npl_geom {s : BitVec 64} (h : StackGeom s nativePrintlnNeed) :
     StackGeom (s + 18446744073709551568#64) nativePrintNeed ∧ SlotGeom (s + 18446744073709551568#64) := by
   have hs1 := h.le; have hs2 := h.lo; have hs3 := h.hi; have hs4 := h.al
@@ -338,7 +311,6 @@ theorem npl_geom {s : BitVec 64} (h : StackGeom s nativePrintlnNeed) :
   rw [← e48] at a1 a2 a3 a4 a5 a6 a7 a8
   exact ⟨⟨a1, a2, a3, a4, a8⟩, ⟨a5, a6, a7⟩⟩
 
-/-- **`native_println`**, given `IrisHoles.out`, for either WP. -/
 theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
     (H : OutHoles) (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs)
     (sret args s : BitVec 64) (vs : List Value) (st : Store) (o : String) :
@@ -360,7 +332,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
     (by unfold nativePrintNeed printNeed fprintfNeed; omega) $$ Hst
   ihave ⟨%M, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
   · iframe Hpc Hra Hregs HF
-  -- the prologue
+
   iapply wp_swpF Wp (S := nplF s) (R := upd rv 1 r) (Mt := M) (pc := nativePrintlnPC)
     (F := iprop(codeRes ∗ dispResL st vs ∗ binImg ∗ slot24 sret.toNat ∗ slot24 (s + 18446744073709551568#64).toNat ∗
       valsAt N args.toNat vs ∗ stdioW ∗ consoleOwn o ∗
@@ -372,7 +344,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
   intros; apply swp_closeF
   dsimp only [F']
   iintro ⟨⟨#Hcode, #Hd, #Himg, Hsl, Hslot, Hvs, Hstd, Hcon, Hst, Hk⟩, Hms⟩
-  -- `native_print(sp, …)`
+
   obtain ⟨hsg', hgs⟩ := npl_geom hsg
   ihave #Hnp := nativePrint_spec hlive hcl H Wp N (s + 18446744073709551568#64) args
     (s + 18446744073709551568#64) vs st o

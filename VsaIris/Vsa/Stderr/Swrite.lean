@@ -1,23 +1,13 @@
 import VsaIris.Vsa.Stdout.Swrite
 import VsaIris.Vsa.Stderr.Mt
 
-/-!
-# `__swrite → _write_r → _write` on `stderr` (lane N3)
-
-Lane N1's `swrite_run` for `stderr` (`0x8001bbd8`): after the first write set
-it up its flags are `__SORD | __SRW | __SWR | __SNBF` (`0x201a`); `__swrite`
-rewrites them without `__SOFF` (unchanged) and passes descriptor 2, which
-`_write` ignores. The console grows by the bytes, `a0 = n`.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
 namespace Stdout
-/-- `sx_side` for `outS` with the byte hypothesis normalized first (`nx_hb`),
-scoped like N1's stdout rules. -/
+
 scoped macro_rules
   | `(tactic| sx_side) => `(tactic| (
       intro b hb
@@ -28,8 +18,6 @@ scoped macro_rules
       omega))
 end Stdout
 
-/-- The memory after `__swrite(stderr, buf, n)` returns: `__swrite`'s `ra`
-slot, the flags, `_write_r`'s `s0`/`ra` slots, `errno`. -/
 abbrev swriteErrMt (Mt : Mem) (sp ra s0 : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551608#64).toNat, 8, ra)]) [(2147597288, 2, 8218#64)])
@@ -39,8 +27,6 @@ abbrev swriteErrMt (Mt : Mem) (sp ra s0 : BitVec 64) : Mem :=
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **`__swrite(reent, stderr, buf, n)`** prints `bs` (`n = |bs|` bytes at
-`buf`) and returns `n`. -/
 theorem swriteErr_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp ra s0 : BitVec 64} {need : Nat} {buf : Nat} {bs : List (BitVec 8)}
     (hs1 : s.toNat - need + 64 ≤ sp.toNat) (hs2 : sp.toNat ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)

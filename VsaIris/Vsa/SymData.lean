@@ -1,26 +1,5 @@
 import VsaIris.Vsa.SymRun
 
-/-!
-# Symbolic runs that read persistent data
-
-`SWP` (`SymRun.lean`) reads two kinds of bytes: the code `text`, which must be
-`live` (a fetch needs the byte PRESENT, `BytePinsM`), and the owned bytes `S`.
-The interpreter's runs also read immutable data that is neither: AST nodes,
-C strings and closure objects are persistent `↦ₘ□` (INTERP_DESIGN.md §3), and
-a load only needs the byte's total read (`LPins*`, the model's `getD 0`).
-
-So the read-only list of an interpreter run is `T ++ D`: the code `T` (live)
-and the data `D` (persistent, no liveness). `swp_segD`/`swp_stepD` are
-`swp_segL`/`swp_step` with that split; every other `SWP` lemma applies
-unchanged, because `SWP` itself does not care where its `text` comes from.
-
-`swp_havoc` is a load whose bytes the run does NOT own: the successor's
-register holds whatever the byte reads, and the continuation must hold for
-every value. `eval_expr` reads an AST node's line field this way
-(`0x80003524 lw s0,4(s0)`); `ExprReprWithin`'s read set does not cover it, and
-nothing on the path consumes the value.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
@@ -28,11 +7,9 @@ open Vsa.Machine (Config)
 open Iris
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The listed data bytes read as given (total reads, no presence). -/
 def DataReads (D : List (Nat × BitVec 8)) (m : Mem) : Prop :=
   ∀ p ∈ D, (m[p.1]?).getD 0 = p.2
 
-/-- A data view as a read-only list: the addresses `DA` of a memory `Dt`. -/
 abbrev dataOf (Dt : Mem) (DA : List Nat) : List (Nat × BitVec 8) :=
   DA.map fun a => (a, imgM Dt a)
 
@@ -40,27 +17,6 @@ theorem dataReads_view {Dt m : Mem} {DA : List Nat} (h : DataReads (dataOf Dt DA
     ∀ a ∈ DA, (m[a]?).getD 0 = imgM Dt a := fun a ha =>
   h (a, imgM Dt a) (List.mem_map_of_mem (f := fun a => (a, imgM Dt a)) ha)
 
-theorem lpins8_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 8, b ∈ DA) : LPins8 m a (bytesAt (imgM Dt) a 8) :=
-  lpins8_img fun b hb => dataReads_view hD b (h b hb)
-
-theorem lpins4_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 4, b ∈ DA) : LPins4 m a (bytesAt (imgM Dt) a 4) :=
-  lpins4_img fun b hb => dataReads_view hD b (h b hb)
-
-theorem lpins2_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 2, b ∈ DA) :
-    (m[a]?).getD 0 = (bytesAt (imgM Dt) a 2).getD 0 0#8 ∧
-      (m[a + 1]?).getD 0 = (bytesAt (imgM Dt) a 2).getD 1 0#8 :=
-  lpins2_img fun b hb => dataReads_view hD b (h b hb)
-
-theorem lpins1_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 1, b ∈ DA) :
-    (m[a]?).getD 0 = (bytesAt (imgM Dt) a 1).getD 0 0#8 :=
-  lpins1_img fun b hb => dataReads_view hD b (h b hb)
-
-/-- The value a load of kind `k` reads from a byte function at `a`
-(`ldv` is this at `imgM Mt`). -/
 abbrev ldvf (k : MKind) (f : Nat → BitVec 8) (a : Nat) : BitVec 64 :=
   bytesVal k (bytesAt f a (widthOfM k))
 
@@ -75,14 +31,6 @@ theorem lpins4_fn {m : Mem} {f : Nat → BitVec 8} {a : Nat}
   have g := fun j (hj : j < 4) => (h _ (mem_accAddrs hj)).trans (bytesAt_getD f a hj).symm
   exact ⟨by simpa using g 0 (by omega), g 1 (by omega), g 2 (by omega), g 3 (by omega)⟩
 
-theorem lpins2_fn {m : Mem} {f : Nat → BitVec 8} {a : Nat}
-    (h : ∀ b ∈ accAddrs a 2, (m[b]?).getD 0 = f b) :
-    (m[a]?).getD 0 = (bytesAt f a 2).getD 0 0#8 ∧
-      (m[a + 1]?).getD 0 = (bytesAt f a 2).getD 1 0#8 := by
-  have h0 := (h _ (mem_accAddrs (j := 0) (by omega))).trans (bytesAt_getD f a (n := 2) (by omega)).symm
-  exact ⟨by simpa using h0,
-    (h _ (mem_accAddrs (j := 1) (by omega))).trans (bytesAt_getD f a (n := 2) (by omega)).symm⟩
-
 theorem lpins1_fn {m : Mem} {f : Nat → BitVec 8} {a : Nat}
     (h : ∀ b ∈ accAddrs a 1, (m[b]?).getD 0 = f b) :
     (m[a]?).getD 0 = (bytesAt f a 1).getD 0 0#8 := by
@@ -94,7 +42,6 @@ section SWPD
 variable {live : Nat → Prop} {T D : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
   {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- `swp_segL` over a read-only list split into live code `T` and data `D`. -/
 theorem swp_segLD {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (LD W : List Nat) (k : Nat)
@@ -189,8 +136,6 @@ theorem swp_segLD {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         unfold imgM
         rw [writeLog_out _ _ _ (hcover a hw)]
 
-/-- **One reflected segment over code and data** (`swp_step` with the split
-read-only list). -/
 theorem swp_stepD {pc0 pc1 : BitVec 64} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (bs : List BBlock) (ks : List Nat) (lds : List (List (BitVec 8)))
     (LD W : List Nat) (k : Nat)
@@ -230,8 +175,6 @@ theorem swp_stepD {pc0 pc1 : BitVec 64} {R R' : Nat → BitVec 64} {Mt Mt' : Mem
     · rw [ite_eq_right_iff.2 (fun h => absurd h hk')]
       exact hRo r hr hne hk'
 
-/-- A fuel bound uniform over every 64-bit value, from one bound per value
-(a finite supremum; the bounds are monotone). -/
 theorem fuel_unif {P : Nat → BitVec 64 → Prop} (hmono : ∀ n n' v, n ≤ n' → P n v → P n' v)
     (h : ∀ v, ∃ n, P n v) : ∃ n, ∀ v, P n v := by
   have key : ∀ k, ∃ n, ∀ v : BitVec 64, v.toNat < k → P n v := by
@@ -251,11 +194,6 @@ theorem fuel_unif {P : Nat → BitVec 64 → Prop} (hmono : ∀ n n' v, n ≤ n'
   obtain ⟨n, hn⟩ := key (2 ^ 64)
   exact ⟨n, fun v => hn v v.isLt⟩
 
-/-- **A load from bytes the run does not own** (`swp_havoc`). The segment
-writes no memory and changes the owned registers `ks` as the reflection
-says; the destination `rd` receives whatever the bytes `A` hold in the
-actual state, so the continuation must hold for every value. The loaded
-byte lists are a function `ldsOf` of the memory's reads on `A`. -/
 theorem swp_havocD {pc0 pc1 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (ks : List Nat) (rd : Nat) (A : List Nat)
     (ldsOf : (Nat → BitVec 8) → List (List (BitVec 8))) (k : Nat)

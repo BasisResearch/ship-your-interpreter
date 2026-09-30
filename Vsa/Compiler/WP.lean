@@ -1,44 +1,24 @@
 import Vsa.Compiler.Frag
 
-/-!
-# A verification-condition generator for abstract-machine code
-
-`WP code P pos is K L m o` is the weakest precondition of running the
-instruction list `is`, placed at index `pos` of `code`, from registers `L`,
-memory `m`, and console `o`: straight-line instructions update the state,
-a branch either continues or must reach `P` from its target, a jump must reach
-`P` from its target, and falling off the end hands the state to `K`.
-`WP_sound` turns it into a run. `simp only [WP]` computes it symbolically; the
-side conditions it leaves (register availability, address windows, the branch
-guards) are the whole proof obligation of a straight-line fragment.
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa.Sim
 
-/-- Target index of a branch at `pos` with byte offset `off`. -/
 def brT (pos : Nat) (off : BitVec 13) : Nat := ((pos : Int) + off.toInt / 4).toNat
 
-/-- Target index of a jump at `pos` with byte offset `off`. -/
 def jT (pos : Nat) (off : BitVec 21) : Nat := ((pos : Int) + off.toInt / 4).toNat
 
-/-- The branch offset reaches instruction `t` from `pos` inside the code window. -/
 def BrOK (pos : Nat) (off : BitVec 13) : Prop :=
   off.toInt % 4 = 0 ∧ 0 ≤ (pos : Int) + off.toInt / 4 ∧ PosOK (brT pos off)
 
-/-- The jump offset reaches instruction `t` from `pos` inside the code window. -/
 def JOK (pos : Nat) (off : BitVec 21) : Prop :=
   off.toInt % 4 = 0 ∧ 0 ≤ (pos : Int) + off.toInt / 4 ∧ PosOK (jT pos off)
 
-/-- Absolute target address of a `jal` at `pos` with byte offset `off`. -/
 def libAddr (pos : Nat) (off : BitVec 21) : Nat := (((codeBase + 4 * pos : Nat) : Int) + off.toInt).toNat
 
-/-- The `jal` at `pos` calls one of libgcc's routines. -/
 def isLib (pos : Nat) (off : BitVec 21) : Bool :=
   off.toNat % 2 == 0 && (libAddr pos off == mulPC || libAddr pos off == divPC || libAddr pos off == modPC)
 
-/-- Weakest precondition of an instruction list (see the module doc). -/
 def WP (code : List Ins) (P : AM → Prop) (pos : Nat) :
     List Ins → (GRegs → Mem → Array String → Prop) → GRegs → Mem → Array String → Prop
   | [], K, L, m, o => K L m o
@@ -85,11 +65,6 @@ section WPEq
 variable {code : List Ins} {P : AM → Prop} {pos : Nat} {is : List Ins}
   {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
 
-/-! Equations of `WP`, one per instruction form. `wp_simp` rewrites with these
-instead of unfolding `WP`. The equations are proved propositionally, so simp
-uses them as rewrites rather than definitional unfoldings, and the kernel never
-reduces `WP` (and with it jump offsets) on symbolic positions. -/
-
 theorem WP_nil : WP code P pos [] K L m o = K L m o := by rw [WP]
 theorem WP_addi {rd rs imm} : WP code P pos (.addi rd rs imm :: is) K L m o =
     ((1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs (keysG L) ∧
@@ -133,8 +108,6 @@ theorem WP_jalr {rs} : WP code P pos (.jalr rs :: is) K L m o =
     (SrcOK rs (keysG L) ∧ (srcVal rs L).toNat % 4 = 0 ∧ Reaches code ⟨srcVal rs L, L, m, o⟩ P) := by rw [WP]
 
 end WPEq
-
-/-! ## Registers as sources -/
 
 theorem mem_keysG_lookup {n : Nat} : ∀ {L : GRegs}, n ∈ keysG L → ∃ v, lookupG n L = some v
   | [], h => by simp [keysG] at h
@@ -193,8 +166,6 @@ theorem srcVal_of_has {L : GRegs} {n : Nat} {v : BitVec 64} (h : Has L n v) : sr
 
 theorem srcOK_of_has {L : GRegs} {n : Nat} {v : BitVec 64} (h : Has L n v) : SrcOK n (keysG L) :=
   h.src.1
-
-/-! ## Soundness -/
 
 theorem lt_of_seg_head {code : List Ins} {pos : Nat} {i : Ins} (h : code[pos]? = some i) :
     pos < code.length := by
@@ -298,7 +269,6 @@ theorem lib_aligned {pos : Nat} {off : BitVec 21} (h : isLib pos off = true) :
   have := lib_mem h
   omega
 
-/-- **Soundness of the VCG.** -/
 theorem WP_sound {code : List Ins} {P : AM → Prop} (hfit : Fits code) :
     ∀ (is : List Ins) (pos : Nat) (K : GRegs → Mem → Array String → Prop) (L : GRegs) (m : Mem)
       (o : Array String), Seg code pos is →
@@ -411,7 +381,6 @@ theorem WP_sound {code : List Ins} {P : AM → Prop} (hfit : Fits code) :
       obtain ⟨hs, hal, hw⟩ := h
       exact ex_step (step_jalr hfit hk rfl (has_of_src hs) hal) hw
 
-/-- `WP` of a concatenation. -/
 theorem WP_append (code : List Ins) (P : AM → Prop) :
     ∀ (s t : List Ins) (pos : Nat) (K : GRegs → Mem → Array String → Prop) (L : GRegs) (m : Mem)
       (o : Array String),
@@ -423,7 +392,6 @@ theorem WP_append (code : List Ins) (P : AM → Prop) :
     rw [e]
     cases i <;> simp only [List.cons_append, WP, ih]
 
-/-- Monotonicity of `WP` in the continuation. -/
 theorem WP_mono {code : List Ins} {P : AM → Prop} :
     ∀ (is : List Ins) (pos : Nat) (K K' : GRegs → Mem → Array String → Prop) (L : GRegs) (m : Mem)
       (o : Array String), (∀ L m o, K L m o → K' L m o) →
@@ -471,8 +439,6 @@ theorem WP_mono {code : List Ins} {P : AM → Prop} :
         · next h1 => rw [if_neg h1] at h; exact h
     | jalr => exact h
 
-/-! ## Constants -/
-
 theorem li_value (n : BitVec 64) :
     (((((((sign_extend (chunk n 0) : BitVec 64)) <<< 11 ||| sign_extend (chunk n 1)) <<< 11 |||
       sign_extend (chunk n 2)) <<< 11 ||| sign_extend (chunk n 3)) <<< 11 ||| sign_extend (chunk n 4)) <<< 11 |||
@@ -498,7 +464,6 @@ theorem li_value (n : BitVec 64) :
   rw [show BitVec.ofNat 12 (n.toNat / 2 ^ 0 % 2048) = chunk n 5 from rfl] at h5
   apply BitVec.eq_of_toNat_eq; rw [h5]; simp
 
-/-- `li rd n` loads `n`. -/
 theorem WP_li {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : BitVec 64}
     {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
     (hrd : 1 ≤ rd ∧ rd ≤ 31) (hK : K (gset L rd n) m o) :
@@ -513,14 +478,12 @@ theorem WP_li {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : BitVec 64}
   · next hs =>
     simp [WP, List.range, List.range.loop, h0, hrd, gset_gset, SrcOK, li_value, hK]
 
-/-- `li rd n` followed by `is`. -/
 theorem WP_li_append {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : BitVec 64} {is : List Ins}
     {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
     (hrd : 1 ≤ rd ∧ rd ≤ 31) (h : WP code P (pos + (li rd n).length) is K (gset L rd n) m o) :
     WP code P pos (li rd n ++ is) K L m o := by
   rw [WP_append]; exact WP_li hrd h
 
-/-- `li rd n` followed by `is`, as an equivalence. -/
 theorem WP_li_iff {code : List Ins} {P : AM → Prop} {pos rd : Nat} {n : BitVec 64} {is : List Ins}
     {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
     (hrd : 1 ≤ rd ∧ rd ≤ 31) :
@@ -574,7 +537,6 @@ theorem libc_off_facts {pos tgt : Nat} (ht : tgt = mulPC ∨ tgt = divPC ∨ tgt
   simp only [isLib, hl, he, beq_self_eq_true, Bool.true_and, Bool.or_eq_true, beq_iff_eq]
   omega
 
-/-- A libgcc call sequence followed by `is`. -/
 theorem WP_libc_iff {code : List Ins} {P : AM → Prop} {pos tgt : Nat} {is : List Ins}
     {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
     (ht : tgt = mulPC ∨ tgt = divPC ∨ tgt = modPC) (hp : PosOK (pos + 2)) :
@@ -605,9 +567,6 @@ theorem isLib_of_JOK {pos : Nat} {off : BitVec 21} (h : JOK pos off) : isLib pos
   right
   refine ⟨⟨?_, ?_⟩, ?_⟩ <;> omega
 
-/-! ## Branch offsets -/
-
-/-- Byte offset of a branch from instruction `src` to instruction `dst`. -/
 def bOff (src dst : Nat) : BitVec 13 := BitVec.ofInt 13 (4 * ((dst : Int) - src))
 
 theorem bOff_ok {src dst : Nat} (hd : PosOK dst) (h1 : src ≤ dst + 1000) (h2 : dst ≤ src + 1000) :
@@ -672,8 +631,6 @@ theorem isLib_jOff_gen {s s' d : Nat} (he : s' = s) (hs : PosOK s) (hd : PosOK d
 
 theorem sext_ofInt12 (k : Int) (h : -2048 ≤ k ∧ k < 2048) :
     (sign_extend (BitVec.ofInt 12 k) : BitVec 64) = BitVec.ofInt 64 k := sext12_ofInt k h.1 h.2
-
-/-! ## Branch guards -/
 
 @[simp] theorem guard_eq (v w : BitVec 64) : guardB BrOp.eq.bop v w = decide (v = w) := by
   simp only [guardB, BrOp.bop]; by_cases h : v = w <;> simp [h]

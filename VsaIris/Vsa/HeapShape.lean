@@ -2,40 +2,12 @@ import Vsa.Sim.DlHeap
 import Vsa.Sim.ReprSurvival
 import VsaIris.DlHeap
 
-/-!
-# `isHeap`'s heap shape is VSA's `DlHeap.HeapAt`
-
-`VsaIris.DlLayout` leaves the allocator's globals, arena and heap shape
-abstract. This module instantiates them for the fixed binary:
-
-* `allocGlobal`: every byte outside the arena that `_malloc_r`, `_free_r`,
-  `_realloc_r`, `_sbrk_r` and `_sbrk` read or write (symbol table of
-  `c/while-riscv-htif.elf`; the lock hooks are `ret`);
-* the arena `[_end, __heap_end)` (`DlHeap.heapStart`/`heapEnd`);
-* `Shape`: `DlHeap.HeapAt` read off the owned byte image, with every live
-  extent an exact chunk payload (`BlockHeapAt`).
-
-The main result is `BlockHeapAt.transport`: `HeapAt` depends only on the bytes
-of `vsaFoot H`, the allocator globals plus the arena bytes outside the live
-extents `H`. So `isHeap vsaLayout H`, which owns exactly `vsaFoot H`, owns
-everything `HeapAt` constrains, and its frame is relative to the live extents:
-the correction `PROOF_CLOSURE_PLAN.md` §2 records for `MallocContract`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap
 
-/-- `lo ≤ a < hi`. -/
 def InRange (lo hi a : Nat) : Prop := lo ≤ a ∧ a < hi
 
-/-- The allocator's globals outside the arena:
-`__malloc_av_` (all 258 words, `[0x8001ad10, 0x8001b520)`), the `_errno`
-word of `_impure_data` (`_malloc_r`'s ENOMEM store through the reent
-pointer), `__malloc_sbrk_base` and `__malloc_trim_threshold`, `brk.0`,
-`__malloc_max_total_mem`, `__malloc_max_sbrked_mem`, `__malloc_top_pad`,
-`errno` (`_sbrk_r` clears it on every call) and
-`__malloc_current_mallinfo`. -/
 def allocGlobal (a : Nat) : Prop :=
   InRange 0x8001ad10 0x8001b520 a ∨ InRange 0x8001b538 0x8001b53c a ∨
   InRange 0x8001b960 0x8001b970 a ∨ InRange 0x8001b990 0x8001b9b0 a ∨
@@ -47,17 +19,9 @@ theorem allocGlobal_off_arena (a : Nat) (h : allocGlobal a) :
   unfold heapStart
   omega
 
-/-- The allocator's footprint at live extents `H`: its globals and every arena
-byte outside the live extents. This is `VsaIris.heapFoot vsaLayout H`
-(`heapFoot_vsaLayout`). -/
 def vsaFoot (H : List (Nat × Nat)) (a : Nat) : Prop :=
   allocGlobal a ∨ (heapStart ≤ a ∧ a < heapEnd ∧ ∀ e ∈ H, ¬ InExt e a)
 
-/-- The heap shape with live blocks `H`: `HeapAt` where every live extent is
-an exact in-use chunk payload (dlmalloc's `free`/`realloc` need exactly this
-of their argument, so every block the Iris specs hand out is one), plus room
-for the top chunk's header below the break (dlmalloc keeps `top` at least
-`MINSIZE`). -/
 structure BlockHeapAt (m : Mem) (H : List (Nat × Nat)) (top brkv : Nat)
     (chunks : List Chunk) (bins : Nat → List Nat) : Prop where
   heap : HeapAt m H (fun e => e ∈ H) top brkv chunks bins
@@ -66,16 +30,12 @@ structure BlockHeapAt (m : Mem) (H : List (Nat × Nat)) (top brkv : Nat)
 def BlockHeap (m : Mem) (H : List (Nat × Nat)) : Prop :=
   ∃ top brkv chunks bins, BlockHeapAt m H top brkv chunks bins
 
-/-! ## Chunk-walk geometry -/
-
-/-- The walk starts at a chunk or is empty at the top. -/
 theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.head_or_top {m : Mem} {p top : Nat} {cs : List Chunk}
     (h : ChunkWalk m p top cs) : p = top ∨ ∃ c ∈ cs, c.addr = p := by
   cases h with
   | top => exact .inl rfl
   | chunk => exact .inr ⟨_, List.mem_cons_self, rfl⟩
 
-/-- Every chunk lies in `[p, top)` and has at least the minimum size. -/
 theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.chunk_bounds {m : Mem} {p top : Nat} {cs : List Chunk}
     (h : ChunkWalk m p top cs) : ∀ c ∈ cs, p ≤ c.addr ∧ c.addr + c.size ≤ top ∧ 32 ≤ c.size := by
   induction h with
@@ -88,7 +48,6 @@ theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.chunk_bounds {m : Mem} {p top : Nat} {cs
     · have := ih c hc
       omega
 
-/-- Two chunks of one walk are the same chunk or do not overlap. -/
 theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.chunk_sep {m : Mem} {p top : Nat} {cs : List Chunk}
     (h : ChunkWalk m p top cs) : ∀ c ∈ cs, ∀ c' ∈ cs,
       c = c' ∨ c.addr + c.size ≤ c'.addr ∨ c'.addr + c'.size ≤ c.addr := by
@@ -103,7 +62,6 @@ theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.chunk_sep {m : Mem} {p top : Nat} {cs : 
     · exact .inr (.inr (hb c hc).1)
     · exact ih c hc c' hc'
 
-/-- Transport of the walk: it reads only the chunk headers and the top header. -/
 theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.transport_headers {m m' : Mem} {p top : Nat} {cs : List Chunk}
     (h : ChunkWalk m p top cs)
     (hd : ∀ q, (q = top ∨ ∃ c ∈ cs, c.addr = q) → read64 m (q + 8) = read64 m' (q + 8)) :
@@ -121,8 +79,6 @@ theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.transport_headers {m m' : Mem} {p top : 
     · exact .inl hq
     · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hca⟩
 
-/-- Transport of a bin list: it reads the head's `bk` word and each member's
-`fd`/`bk` words. -/
 theorem _root_.Vsa.Sim.DlHeap.BinChain.transport_links {m m' : Mem} {b q prev : Nat} {qs : List Nat}
     (h : BinChain m b q prev qs)
     (hb : read64 m (b + 24) = read64 m' (b + 24))
@@ -136,15 +92,11 @@ theorem _root_.Vsa.Sim.DlHeap.BinChain.transport_links {m m' : Mem} {b q prev : 
     exact .link hne (hx.1 ▸ hp) (hx.2 ▸ hn)
       (ih fun x hx' => hq x (List.mem_cons_of_mem _ hx'))
 
-/-! ## Every byte `HeapAt` reads is in `vsaFoot` -/
-
 section Reads
 
 variable {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
   {bins : Nat → List Nat}
 
-/-- An arena byte outside every in-use chunk's usable payload is in the
-footprint, because every live extent lies in such a payload. -/
 theorem foot_of_arena (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {a : Nat}
     (hlo : heapStart ≤ a) (hhi : a < heapEnd)
     (hout : ∀ c ∈ chunks, c.inuse = true → ¬ (c.addr + 16 ≤ a ∧ a < c.addr + c.size + 8)) :
@@ -154,7 +106,6 @@ theorem foot_of_arena (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {
   unfold InExt at hin
   exact hout c hc hu ⟨by omega, by omega⟩
 
-/-- The header word of any chunk, or of the top chunk, is in the footprint. -/
 theorem foot_header (h : BlockHeapAt m H top brkv chunks bins) {q : Nat}
     (hq : q = top ∨ ∃ c ∈ chunks, c.addr = q) : ∀ k, k < 8 → vsaFoot H (q + 8 + k) := by
   intro k hk
@@ -177,7 +128,6 @@ theorem foot_header (h : BlockHeapAt m H top brkv chunks bins) {q : Nat}
       have := hb c' hc'
       rcases hs c hc c' hc' with rfl | hsep | hsep <;> omega
 
-/-- The `fd`/`bk` words and the footer of a free chunk are in the footprint. -/
 theorem foot_free (h : BlockHeapAt m H top brkv chunks bins) {c' : Chunk}
     (hc' : c' ∈ chunks) (hfree : c'.inuse = false) :
     (∀ k, k < 16 → vsaFoot H (c'.addr + 16 + k)) ∧
@@ -201,14 +151,9 @@ theorem foot_free (h : BlockHeapAt m H top brkv chunks bins) {c' : Chunk}
 
 end Reads
 
-/-! ## Locality -/
-
-/-- The footprint bytes `HeapAt` reads: all of `vsaFoot` except the `_errno`
-word and `0x8001ba08`, which only `_sbrk_r` and `malloc`'s error path write. -/
 def vsaRead (H : List (Nat × Nat)) (a : Nat) : Prop :=
   vsaFoot H a ∧ ¬ InRange 0x8001b538 0x8001b53c a ∧ ¬ InRange 0x8001ba08 0x8001ba0c a
 
-/-- A footprint doubleword away from the two unread words is read. -/
 def NotErr (a : Nat) : Prop :=
   a + 8 ≤ 0x8001b538 ∨ (0x8001b53c ≤ a ∧ a + 8 ≤ 0x8001ba08) ∨ 0x8001ba0c ≤ a
 
@@ -222,9 +167,6 @@ private theorem global_read {H : List (Nat × Nat)} {a : Nat}
     (hg : ∀ k, k < 8 → allocGlobal (a + k)) : ∀ k, k < 8 → vsaFoot H (a + k) :=
   fun k hk => .inl (hg k hk)
 
-/-- **`HeapAt` reads only `vsaRead`.** Two memories that agree on it satisfy
-the same block-heap shape. Every other byte, in particular every byte of a
-live extent and the `_errno` word, is unconstrained by the allocator. -/
 theorem BlockHeapAt.transport_read {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (h : BlockHeapAt m H top brkv chunks bins) (hag : AgreeP (vsaRead H) m m') :
@@ -331,21 +273,6 @@ theorem BlockHeapAt.transport_read {m m' : Mem} {H : List (Nat × Nat)} {top brk
       live := hH.live
       exact := hH.exact }
 
-/-- **`HeapAt` reads only the allocator's footprint.** Two memories that agree
-on `vsaFoot H` satisfy the same block-heap shape. -/
-theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
-    {chunks : List Chunk} {bins : Nat → List Nat}
-    (h : BlockHeapAt m H top brkv chunks bins) (hag : AgreeP (vsaFoot H) m m') :
-    BlockHeapAt m' H top brkv chunks bins :=
-  h.transport_read fun a ha => hag a ha.1
-
-theorem BlockHeap.transport {m m' : Mem} {H : List (Nat × Nat)} (h : BlockHeap m H)
-    (hag : AgreeP (vsaFoot H) m m') : BlockHeap m' H := by
-  obtain ⟨top, brkv, chunks, bins, h⟩ := h
-  exact ⟨top, brkv, chunks, bins, h.transport hag⟩
-
-/-- Every byte of a live block is an arena byte: the arena is partitioned into
-the live blocks and the allocator's arena bytes. -/
 theorem BlockHeapAt.block_arena {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
     {e : Nat × Nat} (he : e ∈ H) {a : Nat} (ha : InExt e a) :
@@ -357,28 +284,12 @@ theorem BlockHeapAt.block_arena {m : Mem} {H : List (Nat × Nat)} {top brkv : Na
   unfold InExt at ha
   omega
 
-/-- The footprint and the live blocks split the allocator's region exactly. -/
-theorem vsaFoot_iff {H : List (Nat × Nat)} {a : Nat} (harena : heapStart ≤ a ∧ a < heapEnd) :
-    vsaFoot H a ↔ ∀ e ∈ H, ¬ InExt e a := by
-  constructor
-  · rintro (hg | ⟨_, _, h⟩)
-    · rcases allocGlobal_off_arena a hg with h | h <;> omega
-    · exact h
-  · intro h; exact .inr ⟨harena.1, harena.2, h⟩
-
-/-! ## The layout -/
-
-/-- Memory `m` holds the image `img` on `S`. -/
 def ImgOn (S : Nat → Prop) (img : Nat → BitVec 8) (m : Mem) : Prop :=
   ∀ a, S a → m[a]? = some (img a)
 
-/-- The heap shape of the owned image: some memory holding `img` on the
-footprint has the block-heap shape. By `BlockHeapAt.transport`, that is the
-same as EVERY such memory having it (`imgShape_iff`). -/
 def imgShape (img : Nat → BitVec 8) (H : List (Nat × Nat)) : Prop :=
   ∃ m, ImgOn (vsaFoot H) img m ∧ BlockHeap m H
 
-/-- **The fixed binary's dlmalloc layout.** -/
 def vsaLayout : DlLayout where
   global := allocGlobal
   lo := heapStart
@@ -386,32 +297,6 @@ def vsaLayout : DlLayout where
   global_off_arena := allocGlobal_off_arena
   Shape := imgShape
 
-theorem heapFoot_vsaLayout (H : List (Nat × Nat)) : heapFoot vsaLayout H = vsaFoot H := rfl
-
-/-- The owned image has the heap shape exactly when the actual memory does. -/
-theorem imgShape_iff {img : Nat → BitVec 8} {H : List (Nat × Nat)} {m : Mem}
-    (hm : ImgOn (vsaFoot H) img m) : vsaLayout.Shape img H ↔ BlockHeap m H := by
-  constructor
-  · rintro ⟨m0, hm0, hs⟩
-    exact hs.transport fun a ha => (hm0 a ha).trans (hm a ha).symm
-  · exact fun hs => ⟨m, hm, hs⟩
-
-/-- `MemAgree` against a total byte read (`readByte = getD 0`) gives `ImgOn`
-where the bytes are present. -/
-theorem imgOn_of_getD {S : Nat → Prop} {img : Nat → BitVec 8} {m : Mem}
-    (hpres : ∀ a, S a → (m[a]?).isSome) (hval : ∀ a, S a → (m[a]?).getD 0 = img a) :
-    ImgOn S img m := by
-  intro a ha
-  have hp := hpres a ha
-  have hv := hval a ha
-  cases hma : m[a]? with
-  | none => rw [hma] at hp; cases hp
-  | some b => rw [hma] at hv; simp at hv; rw [hv]
-
-/-! ## From VSA's boundary heap to the block view -/
-
-/-- The usable payload of every in-use chunk, as dlmalloc hands it out
-(`malloc_usable_size = size - 8`). -/
 def inuseBlocks (chunks : List Chunk) : List (Nat × Nat) :=
   chunks.filterMap fun c => if c.inuse then some (c.addr + 16, c.size - 8) else none
 
@@ -428,10 +313,6 @@ theorem mem_inuseBlocks {chunks : List Chunk} {e : Nat × Nat} :
   · rintro ⟨c, hc, hu, rfl⟩
     exact ⟨c, hc, by simp [hu]⟩
 
-/-- **VSA's heap shape in block form.** Any `HeapAt` (VSA's boundary allocator,
-whose ledger extents may be sub-ranges of a chunk) gives the block-heap shape
-whose live blocks are the in-use chunk payloads, and every VSA extent lies in
-one of those blocks. So the caller owns at least every VSA ledger extent. -/
 theorem blockHeapAt_of_heapAt {m : Mem} {exts : List (Nat × Nat)}
     {reallocs : Nat × Nat → Prop} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : HeapAt m exts reallocs top brkv chunks bins)
@@ -457,15 +338,5 @@ theorem blockHeapAt_of_heapAt {m : Mem} {exts : List (Nat × Nat)}
     unfold InExt at ha ⊢
     simp only at ha ⊢
     omega
-
-/-- VSA's initial allocator (`DlHeap.InitialAllocatorAt`, supplied at the
-boundary by `InitialOwned.allocator`) gives the Iris heap shape at the initial
-memory, with the in-use chunk payloads as the initial live blocks. -/
-theorem blockHeap_of_initial {m : Mem} {exts : List (Nat × Nat)}
-    {reallocs : Nat × Nat → Prop} {stmts count top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat}
-    (h : InitialAllocatorAt m exts reallocs stmts count top brkv chunks bins)
-    (hroom : top + 16 ≤ brkv) : BlockHeap m (inuseBlocks chunks) :=
-  ⟨top, brkv, chunks, bins, (blockHeapAt_of_heapAt h.heap hroom).1⟩
 
 end VsaIris.VsaHeap

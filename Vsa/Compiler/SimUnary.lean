@@ -1,16 +1,11 @@
 import Vsa.Compiler.SimComp
 
-/-!
-# Forward simulation: unary operators
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
 theorem posOK_le {a b : Nat} (h : PosOK b) (hab : a ≤ b) : PosOK a := by unfold PosOK at *; omega
 
-/-- Replace the value of an expression post by one computed with scratch registers. -/
 theorem EPost.regs {code : List Ins} {T : List String} {V : View} {st : St} {d : Nat} {env : Addr}
     {Γ : List (List String)} {sp fs k : Nat} {A : AM} {n : Nat} {st' : St} {v : Value} {V' : View}
     {B : AM} (hp : EPost code T V st d env Γ sp fs k A n st' v V' B) {pc : BitVec 64} {L' : GRegs}

@@ -1,14 +1,5 @@
 import VsaIris.Vsa.Fprintf.SConv
 
-/-!
-# `%s` of an empty string with nothing pending (lane N3)
-
-N5's `s_stage` for `bs = []` and no pending pieces: the residual stays 0, so
-`_vfprintf_r` skips `__sprint_r` (`0x8000ab9c` falls through to `0x8000aba0`,
-where a successful flush also lands) and goes back to the loop head
-`0x8000a9b0` having printed nothing (`s_empty`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -82,7 +73,6 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
   · repeat (refine Frame.snoc ?_ ?_)
     all_goals first | exact Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit, BitVec.toNat_ofNat] at h1 h2; unfold SReg; omega)
 
-/-! **`s_empty`**: `%s` of `""` with nothing pending, from the `%` back to the loop head. -/
 #ix_chain s_empty := [sEmpty_1, sEmpty_2, sEmpty_3, sEmpty_4, sEmpty_5, sEmpty_6]
 
 end VsaIris.Sym.Fp

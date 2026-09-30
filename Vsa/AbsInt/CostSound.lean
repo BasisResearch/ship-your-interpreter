@@ -3,35 +3,11 @@ import Vsa.AbsInt.NoDup
 import Vsa.AbsInt.Program
 import Vsa.While.CostExists
 
-/-!
-# Soundness of the allocation-cost analysis
-
-`progCost_sound`: if `progCost cfg p = some n`, every successful run of `p`
-has a cost derivation of cost at most `n` (`BigStepBudget p out n`).
-
-The proof is one application of the cost relations' mutual recursor. Each
-motive bounds a derivation's cost by the analysis's bound from every
-abstract state describing its initial store; state tracking reuses the
-`BigStep` soundness of `aeval`/`aexec` (`eval_sound`, `exec_sound`, …) on
-the erased derivations, and `FramesNoDup` bounds binding counts.
-
-A loop derivation is read as a `LoopRun`: a sequence of iterations, each
-bounded by the iteration cost at every head state, each moving to a store
-described by the abstract successor state, and the last one leaving the
-loop. `LoopRun.unroll` accounts for `loopCost`'s unrolled iterations and
-`LoopRun.rank` for its post-fixpoint: when the iteration bound is known,
-the counter `x` of a condition `x < e` / `x <= e` rises by at least the
-offset the lifted analysis (`liftDom`) computes, so the loop body runs at
-most `h + k - l` times.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
 set_option linter.unusedSectionVars false
-
-/-! ## Bound arithmetic -/
 
 theorem cle_add {a b : Nat} {x y : CB} (ha : CLe a x) (hb : CLe b y) :
     CLe (a + b) (cadd x y) := by
@@ -48,8 +24,6 @@ theorem cle_max_r {a : Nat} {y : CB} (x : CB) (ha : CLe a y) : CLe a (cmax x y) 
 
 theorem cle_zero (x : CB) (h : x = some 0) : CLe 0 x := by
   subst h; exact Nat.le_refl 0
-
-/-! ## Binding growth -/
 
 theorem le_foldl_max (f : Nat → Nat) :
     ∀ (l : List Nat) (init : Nat), init ≤ l.foldl (fun m c => max m (f c)) init
@@ -75,7 +49,6 @@ theorem any_of_vfind_isSome {vars : List (String × Value)} {x : String}
   · rw [vfind_none_of_not_any hany] at h; cases h
   · rfl
 
-/-- Soundness of `defineBound`. -/
 theorem defineBound_sound {as : List Addr} {env : Addr} {s : Store} {σ : AState A}
     {x : String} (hd : as.head? = some env) (h : SGam as s σ) (hnd : FramesNoDup s) :
     CLe (defineCost s env x) (defineBound σ x) := by
@@ -120,8 +93,6 @@ theorem defineBound_sound {as : List Addr} {env : Addr} {s : Store} {σ : AState
               simp only [defineBound, hgx, defineCost, hfr, hany, ↓reduceIte, CLe]
               exact Nat.le_refl 0
 
-/-! ## Operators and calls -/
-
 theorem noStr_sound {a : A} {v : Value} (hn : noStr a = true) (h : Gam a v) (t : String) :
     v ≠ .str t := by
   rintro rfl
@@ -150,9 +121,6 @@ theorem binCost_sound {s : Store} {op : BinOp} {l r : Value} {a b : A}
     · simp only [hn, Bool.false_eq_true, ↓reduceIte]; trivial
   all_goals exact Nat.zero_le _
 
-/-! ## The offset lift -/
-
-/-- The lifted domain read relative to the base `b`. -/
 @[reducible] def liftDom (b : Int) : AbsDom (A × OffV) :=
   @prodDom A OffV _ (offDom b) (@Reduce.none A OffV _ (offDom b))
 
@@ -188,7 +156,6 @@ theorem Chain.lift {b : Int} {s : Store} :
   | [], _ :: _, h => h.elim
   | _ :: _, [], h => h.elim
 
-/-- Pinning the counter at offset `0` from its own value is sound. -/
 theorem SGam.lift_at {as : List Addr} {env : Addr} {s : Store} {J : AState A}
     {x : String} {n : Int} (hd : as.head? = some env) (h : SGam as s J)
     (hx : s.get? env x = some (.int n)) :
@@ -202,7 +169,6 @@ theorem SGam.lift_at {as : List Addr} {env : Addr} {s : Store} {J : AState A}
   | top => trivial
   | sc l => exact Chain.lift h
 
-/-- A counter read in a lifted state with offset `o` has risen by `o`. -/
 theorem offset_rise {as : List Addr} {env : Addr} {s : Store} {x : String} {n : Int}
     {σ : AState (A × OffV)} (hd : as.head? = some env)
     (h : @SGam (A × OffV) (liftDom n) as s σ) {o : Int} (ho : offOf σ x = some o) :
@@ -216,17 +182,11 @@ theorem offset_rise {as : List Addr} {env : Addr} {s : Store} {x : String} {n : 
   | int n' => exact ⟨n', rfl, by simp only [Off.OK] at hok; omega⟩
   | _ => exact hok.elim
 
-/-! ## Loop runs -/
-
-/-- A loop derivation as a sequence of iterations: `P s s' n` is one
-continuing iteration, `Q s n` the last one. -/
 inductive LoopRun (P : Store → Store → Nat → Prop) (Q : Store → Nat → Prop) :
     Store → Nat → Prop
   | fin {s : Store} {n : Nat} : Q s n → LoopRun P Q s n
   | step {s s' : Store} {n m : Nat} : P s s' n → LoopRun P Q s' m → LoopRun P Q s (n + m)
 
-/-- Counter facts of one continuing iteration from `s` to `s'`, for a head
-state `I` and the loop's counted condition `cnt`. -/
 def CountStep (cnt : Option (String × Expr × Nat))
     (nextL : AState (A × OffV) → AState (A × OffV)) (env : Addr) (I : AState A)
     (s s' : Store) : Prop :=
@@ -235,17 +195,14 @@ def CountStep (cnt : Option (String × Expr × Nat))
       ∀ o, offOf (nextL (liftAt I x)) x = some o →
         ∀ v, s'.get? env x = some v → ∃ n', v = .int n' ∧ n + o ≤ n'
 
-/-- One continuing iteration: bounded by `itc`, landing in the successor. -/
 def IterStep (F : AState A → LStep A) (itc : AState A → CB)
     (cnt : Option (String × Expr × Nat)) (nextL : AState (A × OffV) → AState (A × OffV))
     (as : List Addr) (env : Addr) (s s' : Store) (n : Nat) : Prop :=
   ∀ I, SGam as s I → CLe n (itc I) ∧ SGam as s' (F I).next ∧ CountStep cnt nextL env I s s'
 
-/-- The last iteration: bounded by `itc`. -/
 def IterFin (itc : AState A → CB) (as : List Addr) (s : Store) (n : Nat) : Prop :=
   ∀ I, SGam as s I → CLe n (itc I)
 
-/-- A loop run with the analysis's iteration data. -/
 abbrev LRun (F : AState A → LStep A) (itc : AState A → CB)
     (cnt : Option (String × Expr × Nat)) (nextL : AState (A × OffV) → AState (A × OffV))
     (as : List Addr) (env : Addr) : Store → Nat → Prop :=
@@ -274,7 +231,6 @@ variable {F : AState A → LStep A} {itc : AState A → CB}
   {cnt : Option (String × Expr × Nat)} {nextL : AState (A × OffV) → AState (A × OffV)}
   {as : List Addr} {env : Addr}
 
-/-- The post-fixpoint charge covers every run from a state in `γ(J)`. -/
 theorem LRun.rank {J : AState A} (hJ : ∀ s, SGam as s (F J).next → SGam as s J)
     {bnd : Option Nat}
     (hb : ∀ K, bnd = some K → ∃ x e k l hh o, cnt = some (x, e, k) ∧ loOf J x = some l ∧
@@ -286,7 +242,7 @@ theorem LRun.rank {J : AState A} (hJ : ∀ s, SGam as s (F J).next → SGam as s
   cases hc : itc J with
   | none => trivial
   | some C =>
-    -- every iteration costs at most `C`
+
     have hz : C = 0 → N = 0 := by
       intro hC
       subst hC
@@ -345,7 +301,6 @@ theorem LRun.rank {J : AState A} (hJ : ∀ s, SGam as s (F J).next → SGam as s
           have := Nat.mul_le_mul_right (C + 1) hT
           omega
 
-/-- `loopCost` covers every run from a state in `γ(I)`. -/
 theorem LRun.unroll {cfg : Cfg} {rank : AState A → CB}
     (hrank : ∀ J s N, (∀ s, SGam as s (F J).next → SGam as s J) →
       LRun F itc cnt nextL as env s N → SGam as s J → CLe N (rank J)) :
@@ -372,8 +327,6 @@ theorem LRun.unroll {cfg : Cfg} {rank : AState A → CB}
           exact cle_add h1 (LRun.unroll hrank k _ _ _ hrest h2)
 
 end Rank
-
-/-! ## Iteration successors -/
 
 section Next
 
@@ -421,10 +374,6 @@ theorem forNext_sound (cfg : Cfg) {cnd step : Option Expr} {b : Stmt}
 
 end Next
 
-/-! ## Counted conditions -/
-
-/-- A true counted condition `x < e` / `x <= e` at a head state: the counter
-is an integer below the bound, above `loOf`, and the store is unchanged. -/
 theorem counted_true {c : Expr} {x : String} {e : Expr} {k : Nat}
     (hcnt : counted c = some (x, e, k)) {st st' : St} {d : Nat} {env : Addr} {v : Value}
     (hc : EvalE st d env c st' v) (ht : v.truthy = true) {as : List Addr} {I : AState A}
@@ -474,8 +423,6 @@ theorem counted_true {c : Expr} {x : String} {e : Expr} {k : Nat}
     · cases hhi
   · cases hhi
 
-/-! ## Equations of the mutual cost functions -/
-
 section Eqns
 
 variable (cfg : Cfg) (σ : AState A)
@@ -507,29 +454,23 @@ theorem forItCost_eq (cnd step : Option Expr) (b : Stmt) :
 
 end Eqns
 
-/-! ## The recursion -/
-
 section Motives
 
 variable (A)
 
-/-- The iteration cost of `while (c) b`. -/
 def itcW (cfg : Cfg) (c : Expr) (b : Stmt) (I : AState A) : CB :=
   cadd (ccost I c) (scost cfg (branch true c (aeval I c)) b)
 
-/-- The loop run of `while (c) b`. -/
 abbrev WRun (cfg : Cfg) (c : Expr) (b : Stmt) (as : List Addr) (env : Addr) :
     Store → Nat → Prop :=
   LRun (whileF cfg c b) (itcW A cfg c b) (counted c)
     (fun I => (whileF cfg c b I).next) as env
 
-/-- The loop run of `for (…; cnd; step) b`. -/
 abbrev FRun (cfg : Cfg) (cnd step : Option Expr) (b : Stmt) (as : List Addr)
     (env : Addr) : Store → Nat → Prop :=
   LRun (forF (A := A) cfg cnd step b) (forItCost (A := A) cfg cnd step b)
     (cnd.bind counted) (fun I => (forF cfg cnd step b I).next) as env
 
-/-- The loop part of the statement motive. -/
 def WhileRunM (cfg : Cfg) (as : List Addr) (env : Addr) (s : Store) (n : Nat) :
     Stmt → Prop
   | .whileStmt c b => WRun A cfg c b as env s n
@@ -600,15 +541,12 @@ theorem forCost_of_run {cfg : Cfg} {cnd step : Option Expr} {b : Stmt} {as : Lis
     obtain ⟨x, e, k, l, hh, o, h1, h2, h3, h4, h5, h6⟩ := iterBound_spec hK
     exact ⟨x, e, k, l, hh, o, by simp [h1], h2, h3, h4, h5, h6⟩
 
-/-- Unfold one `ccost` step on a reachable state. -/
 macro "unfold_ccost" h:term : tactic =>
   `(tactic| simp only [ccost, SGam.isBot_false $h, Bool.false_eq_true, ↓reduceIte])
 
-/-- Unfold one `scost` step on a reachable state. -/
 macro "unfold_scost" h:term : tactic =>
   `(tactic| simp only [scost, SGam.isBot_false $h, Bool.false_eq_true, ↓reduceIte])
 
-/-- The lifted successor of a `while` iteration raises the counter. -/
 theorem whileCount {cfg : Cfg} {c : Expr} {b : Stmt} {st st' st'' : St} {d : Nat}
     {env : Addr} {v : Value} {status : Status} {as : List Addr}
     (hd : as.head? = some env) (hc : EvalE st d env c st' v) (ht : v.truthy = true)
@@ -622,7 +560,6 @@ theorem whileCount {cfg : Cfg} {c : Expr} {b : Stmt} {st st' st'' : St} {d : Nat
     (@whileNext_sound (A × OffV) (liftDom n) cfg c b st st' st'' d env v status as hd hc ht
       hb hst _ (SGam.lift_at hd hI hg)) ho
 
-/-- The lifted successor of a `for` iteration raises the counter. -/
 theorem forCount {cfg : Cfg} {cnd step : Option Expr} {b : Stmt}
     {st st' st'' st''' : St} {d : Nat} {env : Addr} {status : Status} {as : List Addr}
     (hd : as.head? = some env) (hc : ForCond st d env cnd st')
@@ -644,7 +581,7 @@ theorem forCount {cfg : Cfg} {cnd step : Option Expr} {b : Stmt}
           status as hd (.some _ _ _ _ _ v hce hct) hb hst hs _ (SGam.lift_at hd hI hg)) ho
 
 set_option hygiene false in
-/-- One application of a cost recursor `r` to `h` with the bound motives. -/
+
 local macro "cost_rec" r:ident h:term : tactic => `(tactic| (
   refine $r
     (motive_1 := fun st _ env e _ _ n _ => CEval A st env e n)
@@ -907,14 +844,11 @@ local macro "cost_rec" r:ident h:term : tactic => `(tactic| (
     rw [seqcost_cons]
     exact cle_add_l _ ((ihs as hd hnd).1 σ hσ)))
 
-/-- Soundness of the cost bound for statement sequences. -/
 theorem seqcost_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {ss : List Stmt}
     {status : Status} {n : Nat} (h : ExecSeqCost st d env ss st' status n) :
     CSeq A cfg st env ss n := by
   cost_rec ExecSeqCost.rec h
 
-/-- **Soundness of the cost analysis.** A bound `progCost cfg p = some n`
-bounds the allocation cost of every successful run of `p`. -/
 theorem progCost_sound (cfg : Cfg) {p : Program} {n : Nat}
     (h : progCost (A := A) cfg p = some n) :
     ∀ out, BigStep p out → BigStepBudget p out n := by

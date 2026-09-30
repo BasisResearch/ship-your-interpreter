@@ -2,16 +2,6 @@ import VsaIris.Vsa.SnpMove
 import VsaIris.Interp.LoopArgs
 import Vsa.Sim.PinW
 
-/-!
-# `__ssputs_r` in a `snprintf` run
-
-`snprintf`'s `FILE` is a string sink on the stack (`_flags = __SWR|__SSTR`,
-no `__SMBF`/`__SOPT`), so `__ssputs_r(ptr, fp, src, len)` never reallocates:
-it copies `c = min(len, _w)` bytes to `_p` with `memmove` (`memmove_nw`),
-then advances `_p` by `c` and lowers `_w` by `c` (the C99 truncation of
-`snprintf`: once `_w` is zero every later piece copies nothing).
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
@@ -26,12 +16,6 @@ theorem subw_ofNat {w c : Nat} (hcw : c ≤ w) (hw : w < 2 ^ 31) :
     omega]
   exact VsaIris.Interp.sext32_ofNat_eq (by omega)
 
-/-- The callee-saved registers and `sp`. -/
-abbrev SKeep (R' R : Nat → BitVec 64) : Prop :=
-  ∀ z, (z = 2 ∨ z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z
-
-/-- **`__ssputs_r`'s return** (`0x800143c4`): `_w -= c`, `_p += c`, `a0 = 0`,
-`ra`/`s0`/`s1` reloaded from the frame at `sp`, `ret`. -/
 theorem ssp_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (sp fp p c w : Nat) (ra s0 s1 : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem)
@@ -69,7 +53,6 @@ theorem ssp_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   intro z h1 h2 h8 h9 h10 h14 h15 _
   simp only [upd_apply, h1, h2, h8, h9, h10, h14, h15, ite_false]
 
-/-- A load reads the same from two memories agreeing on its bytes. -/
 theorem ldv_agree {Mt Mt' : Mem} (k : MKind) {a : Nat}
     (h : ∀ i, i < widthOfM k → imgM Mt' (a + i) = imgM Mt (a + i)) : ldv k Mt' a = ldv k Mt a := by
   unfold ldv bytesAt
@@ -77,8 +60,6 @@ theorem ldv_agree {Mt Mt' : Mem} (k : MKind) {a : Nat}
   refine List.map_congr_left fun j hj => ?_
   exact h j (List.mem_range.mp hj)
 
-/-- **`__ssputs_r`'s copy** (`0x800143b8`): `memmove(_p, src, c)`, then the
-return. -/
 theorem ssp_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (sp fp p src c w : Nat) (g : Nat → BitVec 8) (ra s0 s1 : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem)
@@ -125,7 +106,6 @@ theorem ssp_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
       hF z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
     simp only [upd_apply, show z ≠ 11 by omega, show z ≠ 12 by omega, show z ≠ 1 by omega, ite_false]
 
-/-- A word load of a small word just stored. -/
 theorem ldv_lw_store4 (M : Mem) (a k : Nat) (hk : k < 2 ^ 31) :
     ldv .lw (writeLog M [(a, 4, BitVec.ofNat 64 k)]) a = BitVec.ofNat 64 k := by
   obtain ⟨h0, h1, h2, h3⟩ := pin4_of_writeLog M [] [] a (BitVec.ofNat 64 k) (by simp [OutLRange])
@@ -141,8 +121,6 @@ theorem ldv_lw_store4 (M : Mem) (a k : Nat) (hk : k < 2 ^ 31) :
   rw [e, pinw4_sext_reassemble]
   exact VsaIris.Interp.sext32_ofNat_eq hk
 
-/-- **`__ssputs_r` after its spills** (`0x800143a0`): the `len`/`_w` test,
-then the copy of `c = min len w` bytes and the return (`ssp_call`). -/
 theorem ssp_B {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (sp fp p src len w : Nat) (g : Nat → BitVec 8) (ra s0 s1 : BitVec 64) (R : Nat → BitVec 64)
@@ -188,9 +166,6 @@ theorem ssp_B {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : 
       | (rw [h9]; congr 1; omega)
       | (rw [VsaIris.Interp.sext32_ofNat_eq (by omega)]; congr 1; omega))
 
-/-- What `__ssputs_r` leaves: `c` bytes copied to `p`, `_p = p + c`,
-`_w = w - c`; nothing else changed outside its frame `[sp - 64, sp)` and the
-`FILE`'s first 16 bytes. -/
 structure PutsOut (Mt Mt' : Mem) (sp fp p src c w : Nat) (g : Nat → BitVec 8) : Prop where
   copied : ∀ i, i < c → imgM Mt' (p + i) = g (src + i)
   pw : ldv .ld Mt' fp = BitVec.ofNat 64 (p + c)
@@ -198,8 +173,6 @@ structure PutsOut (Mt Mt' : Mem) (sp fp p src c w : Nat) (g : Nat → BitVec 8) 
   rest : ∀ a, (a < p ∨ p + c ≤ a) → (a < fp ∨ fp + 16 ≤ a) → (a < sp - 64 ∨ sp ≤ a) →
     imgM Mt' a = imgM Mt a
 
-/-- **`__ssputs_r(ptr, fp, src, len)`** (`0x8001438c`) on `snprintf`'s string
-`FILE` (`_p = p`, `_w = w`, flags `0x208`): copies `min len w` bytes. -/
 theorem ssputs_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (sp fp p src len w : Nat) (g : Nat → BitVec 8) (R : Nat → BitVec 64) (Mt : Mem)
@@ -224,7 +197,7 @@ theorem ssputs_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   have hw' : ldv .lw Mt (BitVec.ofNat 64 (fp + 12)).toNat = BitVec.ofNat 64 w := by
     rw [toNat_ofNat_lt (by omega)]; exact hw
   snp_run hlive using [ofNat_add_ofNat, h2, h11, hw'] at 0x800143a0
-  -- the spills: `s1`, `s0`, `ra` at `sp - 24`, `sp - 16`, `sp - 8`
+
   have e40 : (BitVec.ofNat 64 (sp + 18446744073709551552 + 40)).toNat = sp - 64 + 40 := by
     simp only [BitVec.toNat_ofNat]; omega
   have e48 : (BitVec.ofNat 64 (sp + 18446744073709551552 + 48)).toNat = sp - 64 + 48 := by

@@ -1,16 +1,4 @@
 import VsaIris.Vsa.Console
-import Vsa.Sim.BridgeSeg
-import Vsa.Sim.DecodeTable
-
-/-!
-# A `jal ra, tgt` site as an exec fact
-
-One descriptor (the site's PC, bytes, decoded immediate and target) with a
-decided `Cert` gives the `JalExec` that `wp_jalW`/`wp_callW`/`wp_callAbort`
-consume, through VSA's `stepObs_jal` and `jalStep_of_obs`. Every call on the
-error and exit paths (H5) is an instance; `EnvNewPilot.jal_exec` is the same
-proof at one site.
--/
 
 namespace VsaIris.Inst
 
@@ -18,7 +6,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Step MState)
 open Vsa.Sim
 
-/-- A `jal ra, imm` at `pc`, as read off the disassembly. -/
 structure JalSite where
   pc : Nat
   b0 : BitVec 8
@@ -33,7 +20,6 @@ namespace JalSite
 
 abbrev code (S : JalSite) : List (BitVec 8) := [S.b0, S.b1, S.b2, S.b3]
 
-/-- The decided facts about a site. -/
 structure Cert (S : JalSite) : Prop where
   word : ((S.b3.append S.b2).append S.b1).append S.b0 = S.w
   notrvc : Sail.BitVec.extractLsb (((S.b3.append S.b2).append S.b1).append S.b0) 1 0 =
@@ -55,7 +41,6 @@ theorem pc_toNat {S : JalSite} (hS : S.Cert) : (BitVec.ofNat 64 S.pc).toNat = S.
   simp only [BitVec.toNat_ofNat]
   exact Nat.mod_eq_of_lt (by unfold tohostAddr at this; omega)
 
-/-- **The site's exec fact.** -/
 theorem exec {S : JalSite} (hS : S.Cert) (live : Nat → Prop)
     (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
     JalExec (vsaModel live) S.pc S.code S.tgt := by

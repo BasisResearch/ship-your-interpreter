@@ -1,28 +1,12 @@
 import Vsa.While.TypePreservation
 import Vsa.While.StmtDispatchClose
 
-/-!
-# Progress: well-typed programs reach no type error
-
-The error judgment of `Vsa/While/ErrorSem.lean` (`EvalErr` … `ExecSeqErr`)
-derives every runtime error of the interpreter. From a typed configuration,
-every error derivation is an `EvalErrN` … `ExecSeqErrN` derivation: its leaf is
-division or remainder by zero, a failed `assert`, or the call-depth cap
-(`progress`). Every other leaf of the error judgment contradicts typing.
-
-With the classical trichotomy (`trichotomy_unconditional`), a well-typed
-program terminates normally, reaches one of those three errors, or diverges
-(`type_soundness`).
--/
-
 namespace Vsa.While.Types
 
 open Vsa.While
 
 variable {Δ : TyEnv}
 
-/-- A well-typed operator application fails only by division or remainder by
-zero. -/
 theorem binOp_none {s : Store} {op : BinOp} {lv rv : Value} {tl tr t : Ty}
     (hl : ValTy Δ s lv tl) (hr : ValTy Δ s rv tr) (hbt : BinTy op tl tr t)
     (hop : binOpSem s op lv rv = none) : (op = .div ∨ op = .mod) ∧ rv = .int 0 := by
@@ -74,7 +58,6 @@ abbrev ProgSeq (st : St) (d : Nat) (env : Addr) (ss : List Stmt) : Prop :=
 
 end Motives
 
-/-- Progress for each of the six error relations. -/
 structure Progress (Δ : TyEnv) : Prop where
   evalE : ∀ st d env e, EvalErr st d env e → ProgE Δ st d env e
   evalArgs : ∀ st d env es, EvalArgsErr st d env es → ProgArgs Δ st d env es
@@ -84,8 +67,6 @@ structure Progress (Δ : TyEnv) : Prop where
     ProgLoop Δ st d env cnd step b
   execSeq : ∀ st d env ss, ExecSeqErr st d env ss → ProgSeq Δ st d env ss
 
-/-- **Progress.** From a typed configuration, every runtime error is division
-or remainder by zero, a failed `assert`, or the call-depth cap. -/
 theorem progress (Δ : TyEnv) : Progress Δ := by
   have P := preservation Δ
   refine ⟨
@@ -143,7 +124,7 @@ theorem progress (Δ : TyEnv) : Progress Δ := by
       ?c1 ?c2 ?c3 ?c4 ?c5 ?c6 ?c7 ?c8 ?c9 ?c10 ?c11 ?c12 ?c13 ?c14 ?c15 ?c16 ?c17 ?c18 ?c19 ?c20
       ?c21 ?c22 ?c23 ?c24 ?c25 ?c26 ?c27 ?c28 ?c29 ?c30 ?c31 ?c32 ?c33 ?c34 ?c35 ?c36 ?c37 ?c38
       ?c39 ?c40 ?c41 ?c42 ?c43 ?c44⟩
-  -- EvalErr
+
   case c1 =>
     intro _ _ _ x hnone S T _ _ hD hwt
     cases hwt with
@@ -233,7 +214,7 @@ theorem progress (Δ : TyEnv) : Progress Δ := by
       obtain ⟨hE₂, hS₂, hvs⟩ := P.evalArgs _ _ _ _ _ _ hargs _ _ hS₁ (hE₁.lt henv)
         (hD.ext hE₁) hwa
       exact .callC _ _ _ _ _ _ _ _ _ hf hle hargs (ih _ _ _ hS₂ (hvf.ext hE₂) hvs hct)
-  -- EvalArgsErr
+
   case c17 =>
     intro _ _ _ _ _ _ ih S ts hS henv hD hwt
     cases hwt with
@@ -244,7 +225,7 @@ theorem progress (Δ : TyEnv) : Progress Δ := by
     | cons _ _ _ _ _ hwe hwes =>
       obtain ⟨hE, hS₁, _⟩ := P.evalE _ _ _ _ _ _ he _ _ hS henv hD hwe
       exact .tail _ _ _ _ _ _ _ he (ih _ _ hS₁ (hE.lt henv) (hD.ext hE) hwes)
-  -- CallErr
+
   case c19 =>
     intro _ _ _ _ hnc hnn tf ts t _ hf _ hct
     cases hct <;> cases hf
@@ -293,7 +274,7 @@ theorem progress (Δ : TyEnv) : Progress Δ := by
       | cons _ _ _ _ _ hr =>
         cases hr with
         | cons _ _ _ _ _ hr => cases hr; exact absurd rfl (h2 _ _)
-  -- ExecErr
+
   case c27 =>
     intro _ _ _ _ _ ih S R L S' hS henv hD hwt
     cases hwt with
@@ -370,7 +351,7 @@ theorem progress (Δ : TyEnv) : Progress Δ := by
     intro _ _ _ _ _ ih S R L S' hS henv hD hwt
     cases hwt with
     | ret _ _ _ _ hwe => exact .ret _ _ _ _ (ih _ _ hS henv hD hwe)
-  -- ForLoopErr
+
   case c39 =>
     intro _ _ _ _ _ _ _ ih S R S₂ hS henv hD hwc _ _
     cases hwc with
@@ -398,7 +379,7 @@ theorem progress (Δ : TyEnv) : Progress Δ := by
     have hE₁₃ := hE₁₂.trans hE₃
     exact .loop _ _ _ _ _ _ _ _ _ _ hcond hb hstat hstep
       (ih _ _ _ hS₃ (hE₁₃.lt henv) (hD.ext hE₁₃) hwc hws hwb)
-  -- ExecSeqErr
+
   case c43 =>
     intro _ _ _ _ _ _ ih S R L S' hS henv hD hwt
     cases hwt with
@@ -410,8 +391,6 @@ theorem progress (Δ : TyEnv) : Progress Δ := by
       obtain ⟨hE, hS₁, hD₁, _⟩ := P.execS _ _ _ _ _ _ hs _ _ _ _ hS henv hD hws
       exact .tail _ _ _ _ _ _ hs (ih _ _ _ _ hS₁ (hE.lt henv) hD₁ hwss)
 
-/-- **Progress for programs.** A runtime error of a well-typed program is
-division or remainder by zero, a failed `assert`, or the call-depth cap. -/
 theorem wellTyped_err {p : Program} (hwt : WellTyped Δ p) (h : BigStepErr p) :
     ExecSeqErrN initSt 0 0 p := by
   rcases h with h | h
@@ -420,9 +399,6 @@ theorem wellTyped_err {p : Program} (hwt : WellTyped Δ p) (h : BigStepErr p) :
       initSt_defAll hws
   · exact absurd h (wellTyped_not_topAbrupt hwt)
 
-/-- **Type soundness.** A well-typed program terminates normally, reaches
-division or remainder by zero, a failed `assert` or the call-depth cap, or
-diverges. -/
 theorem type_soundness {p : Program} (hwt : WellTyped Δ p) :
     (∃ out, BigStep p out) ∨ ExecSeqErrN initSt 0 0 p ∨ BigStepDiverges p := by
   rcases trichotomy_unconditional p with h | h | h
@@ -430,8 +406,6 @@ theorem type_soundness {p : Program} (hwt : WellTyped Δ p) :
   · exact .inr (.inl (wellTyped_err hwt h))
   · exact .inr (.inr h)
 
-/-- The non-type errors are runtime errors: `ExecSeqErrN` … are sub-judgments of
-the full error judgment. -/
 structure ErrNSound : Prop where
   evalE : ∀ st d env e, EvalErrN st d env e → EvalErr st d env e
   evalArgs : ∀ st d env es, EvalArgsErrN st d env es → EvalArgsErr st d env es
@@ -532,7 +506,6 @@ theorem errN_sound : ErrNSound := by
   case c34 => intro _ _ _ _ _ _ ih; exact .head _ _ _ _ _ ih
   case c35 => intro _ _ _ _ _ _ hs _ ih; exact .tail _ _ _ _ _ _ hs ih
 
-/-- A program reaching a non-type error has a runtime error. -/
 theorem bigStepErr_of_errN {p : Program} (h : ExecSeqErrN initSt 0 0 p) : BigStepErr p :=
   .inl (errN_sound.execSeq _ _ _ _ h)
 

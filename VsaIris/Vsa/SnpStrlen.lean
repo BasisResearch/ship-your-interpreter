@@ -3,21 +3,10 @@ import Vsa.Sim.StrlenMagic
 import Vsa.Sim.MemcpySpec2
 import Vsa.Sim.StrlenSpec
 
-/-!
-# `strlen` in a `snprintf` run
-
-`strlen(a)` (`0x80006cf0`) on a string whose bytes are readable (`ReadWin`:
-data or owned) up to its NUL: the byte peel to an 8-byte boundary, the word
-loop (a load past the NUL reads bytes of any owner, `ntP_80006d10`; VSA's
-zero-byte arithmetic `StrlenMagic.detect_all_ones` decides the exit) and the
-byte tail. Memory is unchanged; `a0`–`a5` are clobbered.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
 
-/-- Byte `k` of a loaded word. -/
 theorem ldvf_ld_byte (f : Nat → BitVec 8) (t k : Nat) (hk : k < 8) :
     (ldvf .ld f t).extractLsb' (8 * k) 8 = f (t + k) := by
   simp only [ldvf, bytesVal, widthOfM, sext64_self, bytesAt_getD f t (n := 8) (by decide : 0 < 8),
@@ -36,17 +25,10 @@ theorem ldvf_ld_byte (f : Nat → BitVec 8) (t k : Nat) (hk : k < 8) :
   | 6, _ => rfl
   | 7, _ => rfl
 
-theorem byte_ne_zero_iff (b : BitVec 8) : b ≠ 0 ↔ b.toNat ≠ 0 := by
-  constructor
-  · intro h h0; exact h (BitVec.eq_of_toNat_eq h0)
-  · intro h h0; exact h (by rw [h0]; rfl)
-
-/-- A word of nonzero bytes passes the loop test. -/
 theorem word_all_ones (f : Nat → BitVec 8) (t : Nat) (h : ∀ k, k < 8 → f (t + k) ≠ 0) :
     strlenWordVal (ldvf .ld f t) = BitVec.allOnes 64 :=
   (detect_all_ones _).mpr fun k hk => by rw [ldvf_ld_byte f t k hk]; exact h k hk
 
-/-- A word with a NUL fails it. -/
 theorem word_not_all_ones (f : Nat → BitVec 8) (t k : Nat) (hk : k < 8) (h : f (t + k) = 0) :
     strlenWordVal (ldvf .ld f t) ≠ BitVec.allOnes 64 := fun he =>
   (detect_all_ones _).mp he k hk (by rw [ldvf_ld_byte f t k hk]; exact h)
@@ -61,9 +43,6 @@ theorem lbu_g (g : Nat → BitVec 8) (x : Nat) : ldvf .lbu g x = BitVec.zeroExte
 theorem zext_eq_zero (b : BitVec 8) : BitVec.zeroExtend 64 b = 0#64 ↔ b = 0#8 := by
   constructor <;> intro h <;> bv_omega
 
-/-- A string readable up to its NUL: `len` nonzero bytes at `a`, then `0`, all
-readable (`ReadWin`); the word loop's last load may run 7 bytes past the NUL,
-so the geometry reserves them. -/
 structure StrRead (Dt : Mem) (DA : List Nat) (S : Nat → Prop) (Mt : Mem) (a len : Nat)
     (g : Nat → BitVec 8) : Prop where
   win : ReadWin Dt DA S Mt a (a + len + 1) g
@@ -73,7 +52,6 @@ structure StrRead (Dt : Mem) (DA : List Nat) (S : Nat → Prop) (Mt : Mem) (a le
   hi : a + len + 8 ≤ 0x100000000
   htif : a + len + 8 ≤ 0x8001ad00 ∨ 0x8001ad08 ≤ a
 
-/-- The registers `strlen` keeps: all but `a0`–`a5`. -/
 def SLKeep (R' R : Nat → BitVec 64) : Prop :=
   ∀ z, z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → z ≠ 14 → z ≠ 15 → R' z = R z
 
@@ -116,12 +94,9 @@ theorem snez_one {b : BitVec 8} (h : b ≠ 0#8) :
   refine this.trans ?_
   simp [h]
 
-/-- A branch on a tail byte whose value the context fixes. -/
 macro_rules
   | `(tactic| sx_side) => `(tactic| (intro hc; simp only [zext_eq_zero] at hc; contradiction))
 
-/-- **One arm of the byte tail** (`0x80006d2c`): the word at `t` holds the NUL
-at `t + K`; `strlen` returns `len`. -/
 macro "#sl_tail " nm:ident K:num : command => `(
 theorem $nm {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
@@ -182,8 +157,6 @@ theorem sl_tailK {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   · exact sl_tail6 hlive SR R0 hal hk t R htk hta h14 h10 hkp
   · exact sl_tail7 hlive SR R0 hal hk t R htk hta h14 h10 hkp
 
-/-- **The word loop** (`0x80006d10`) at the aligned `t`, the NUL within the
-next `m` words. -/
 theorem sl_words {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
@@ -236,7 +209,6 @@ theorem sl_words {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
         all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
         all_goals first | rfl | assumption
 
-/-- The word loop's setup (`0x80006cfc`: the mask `0x7f…7f` and `-1`). -/
 theorem sl_align {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
@@ -251,7 +223,6 @@ theorem sl_align {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals first | rfl | assumption
 
-/-- One pass of the byte peel (`0x80006d78`) at `a + j`. -/
 theorem sl_peel_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R0 : Nat → BitVec 64)
@@ -306,8 +277,6 @@ theorem sl_peel_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     all_goals first | rfl | assumption | (rw [Nat.add_assoc])
 
-/-- **`strlen(a)`** (`0x80006cf0`) in a `snprintf` run: returns `len` in
-`a0`, keeps every register outside `a0`–`a5` and memory. -/
 theorem strlen_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem} {a len : Nat}
     {g : Nat → BitVec 8} (SR : StrRead Dt DA S Mt a len g) (R : Nat → BitVec 64)

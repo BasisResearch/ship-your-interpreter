@@ -2,24 +2,6 @@ import VsaIris.Interp.ProofStrlen
 import VsaIris.Interp.ProofStrcpy
 import VsaIris.Interp.SpecConcat
 
-/-!
-# `strlen` and `strcpy` of a string the caller owns in a live heap block (lane A)
-
-`strlenHeapSpec`/`strcpyHeapSpec` (`SpecConcat.lean`): the string lies in a
-live heap block `(q, len + 1)` the caller owns (`strOwn`), and the caller
-lends `heapRes`. The word loops read up to seven bytes past the NUL, in the
-allocator's footprint (the chunk's tail or the next chunk's header).
-
-Those bytes are NOT lent out of `heapRes`: the runs load them with
-`sr_havoc` (`StrRun.lean`), which needs no ownership of them, only their RAM
-geometry. `heapRes` is used for exactly that geometry, read off its pure
-shape (`live_window`: `HeapAt.live` puts a live extent inside an in-use
-chunk's usable payload, the chunk walk ends at `top`, and `top + 16 ≤ brk ≤
-heapEnd`), and is handed back untouched. The string's owned bytes enter the
-run as its data view and are promoted back to owned bytes
-(`LocalRun.promote`, `StrlenOwned.lean`).
--/
-
 namespace VsaIris.Interp.StrLeaf
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -27,12 +9,6 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Inst.Strlen Vsa
 open VsaIris.VsaHeap
 open Vsa.Sim Vsa.Sim.DlHeap Vsa.MemRepr
 
-/-! ## The window of a live block -/
-
-/-- **A live block's eight-byte over-read window is in the arena.** A live
-extent lies in an in-use chunk's usable payload, which ends at most eight
-bytes into the next chunk; the walk ends at `top`, whose header takes 16
-bytes below the break. -/
 theorem live_window {img : Nat → BitVec 8} {H : List (Nat × Nat)} {q n : Nat}
     (hs : pShape img H) (hm : (q, n) ∈ H) : heapStart + 16 ≤ q ∧ q + n + 8 ≤ heapEnd := by
   obtain ⟨_, m, top, brkv, chunks, bins, _, hp⟩ := hs
@@ -47,7 +23,7 @@ theorem live_window {img : Nat → BitVec 8} {H : List (Nat × Nat)} {q n : Nat}
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
 omit I in
-/-- The heap resource's pure shape, the resource kept. -/
+
 theorem heapRes_shape (ρ : Regime) (H : List (Nat × Nat)) :
     heapRes (GF := GF) vsaLayoutP vsaRoomB ρ H ⊢
       heapRes vsaLayoutP vsaRoomB ρ H ∗ ⌜∃ img, pShape img H⌝ := by
@@ -65,7 +41,6 @@ theorem heapRes_shape (ρ : Regime) (H : List (Nat × Nat)) :
     · iexists img; iframe HF; ipureintro; exact hs
     · ipureintro; exact ⟨img, hs⟩
 
-/-- A heap string's read geometry. -/
 theorem regions_of_heap {img : Nat → BitVec 8} {H : List (Nat × Nat)} {q : BitVec 64} {x : String}
     (hs : pShape img H) (hh : HeapStr H q x) : ReadRegions q x.toList.length := by
   obtain ⟨h1, h2⟩ := live_window hs hh.live
@@ -88,8 +63,6 @@ theorem strText_iff (p n : Nat) (img : Nat → BitVec 8) (a : Nat) :
     simp only at h
     rw [show p + (a - p) = a by omega]
 
-/-! ## Registers of a helper spec -/
-
 abbrev fLeaf : List Nat := [10, 11, 12, 13, 14, 15, 16]
 abbrev fOther : List Nat :=
   [2, 5, 6, 7, 8, 9, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
@@ -102,8 +75,6 @@ theorem regFile_split (rv : Nat → BitVec 64) :
   unfold regFile
   exact (sepL_perm _ fRegs_perm).trans (sepL_append _ _ _)
 
-/-- The body's registers after a leaf run: the leaf's from the run, the
-others kept. -/
 def leafRv (rv rv' : Nat → BitVec 64) (k : Nat) : BitVec 64 :=
   if k ∈ fLeaf then rv' k else rv k
 
@@ -151,11 +122,6 @@ theorem strText_of_ext {p n : Nat} {img : Nat → BitVec 8} {a : Nat} (h : InExt
   rw [← e]
   exact hq'
 
-/-! ## `strlen` of an owned heap string -/
-
-/-- **`strlen` of a string the caller owns in a live heap block**, for
-either WP. The over-read bytes are loaded unowned (`sr_havoc`); `heapRes`
-supplies their geometry and is handed back untouched. -/
 theorem strlen_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (q : BitVec 64) (x : String) (ρ : Regime)
     (H : List (Nat × Nat)) :
@@ -218,6 +184,3 @@ theorem strlen_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   ipureintro; exact hstr
 
 end VsaIris.Interp.StrLeaf
-
-#print axioms VsaIris.Interp.StrLeaf.strlen_spec_env
-#print axioms VsaIris.Interp.StrLeaf.strlen_heap_spec

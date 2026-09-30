@@ -1,29 +1,12 @@
 import VsaIris.Interp.Abort
 import Vsa.Sim.EnvNewSpec
 
-/-!
-# `setjmp` (H5)
-
-`setjmp(jb)` (`0x80006ffc`) stores `ra`, `s0`–`s11` and `sp` into the first
-14 words of the `jmp_buf` and returns 0. Its spec returns the written image
-with those words named: what `interp_run`'s proof records (`TopLanding`) and
-`longjmp` reads back (`landingRegs`).
-
-```
-80006ffc: sd ra,0(a0); sd s0,8(a0); … sd s11,96(a0); sd sp,104(a0)
-80007034: li a0,0
-80007038: ret
-```
--/
-
 namespace VsaIris.Newlib.Setjmp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Newlib.Sites VsaIris.Newlib.Exit
   VsaIris.Newlib.MainErr
-
-/-! ## Reading back a log of 8-byte stores -/
 
 theorem read64_writeLog_out (m : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) :
     ∀ log : List WEntry, (∀ e ∈ log, e.2.1 = 8 ∧ (a + 8 ≤ e.1 ∨ e.1 + 8 ≤ a)) →
@@ -38,7 +21,6 @@ theorem read64_writeLog_out (m : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) :
     rw [read64_writeLog_out (applyW m (a', 8, d)) a log (fun e he => h e (.tail _ he))]
     exact read64_writeMap8_disjoint m a a' _ hd
 
-/-- A pairwise-disjoint log of 8-byte stores reads back each stored word. -/
 theorem read64_writeLog_sd (m : Std.ExtHashMap Nat (BitVec 8)) :
     ∀ log : List WEntry, (∀ e ∈ log, e.2.1 = 8) →
       log.Pairwise (fun e f => e.1 + 8 ≤ f.1 ∨ f.1 + 8 ≤ e.1) →
@@ -56,8 +38,6 @@ theorem read64_writeLog_sd (m : Std.ExtHashMap Nat (BitVec 8)) :
       show Vsa.MemRepr.read64 (writeMap8 m a (sdData_val v)) a = _
       rw [read64_writeMap8, sdData_toNat]
     · exact read64_writeLog_sd _ log (fun f hf => hw f (.tail _ hf)) hp.2 a v hin
-
-/-! ## The segment -/
 
 #derive_case setjmpSeg chain
   [(0x80006ffc#64, 0x00153023#32),
@@ -80,7 +60,6 @@ theorem read64_writeLog_sd (m : Std.ExtHashMap Nat (BitVec 8)) :
 abbrev sjL (jbp r s : BitVec 64) (cs : Nat → BitVec 64) : GRegs :=
   [(10, jbp), (1, r), (8, cs 8), (9, cs 9), (18, cs 18), (19, cs 19), (20, cs 20), (21, cs 21), (22, cs 22), (23, cs 23), (24, cs 24), (25, cs 25), (26, cs 26), (27, cs 27), (2, s)]
 
-/-- The `jmp_buf` at `jbp`: 8-aligned in RAM above the HTIF words. -/
 structure JbAt (jbp : BitVec 64) : Prop where
   lo : Vsa.Sim.tohostAddr + 16 ≤ jbp.toNat
   hi : jbp.toNat + 112 ≤ 0x100000000
@@ -161,11 +140,9 @@ theorem sj_fin10 (jbp r s : BitVec 64) (cs : Nat → BitVec 64) :
     finReg setjmpSeg (sjL jbp r s cs) [] 10 = 0#64 := by
   show 0#64 + sign_extend (m := 64) (0x000#12) = _; decide
 
-/-- The word `setjmp` stores in slot `k`. -/
 def sjVal (r s : BitVec 64) (cs : Nat → BitVec 64) (k : Nat) : BitVec 64 :=
   [r, cs 8, cs 9, cs 18, cs 19, cs 20, cs 21, cs 22, cs 23, cs 24, cs 25, cs 26, cs 27, s].getD k 0
 
-/-- The words `setjmp` leaves in the `jmp_buf`: `ra`, `s0`–`s11`, `sp`. -/
 structure SetjmpImg (jbp r s : BitVec 64) (cs : Nat → BitVec 64) (img : Nat → BitVec 8) :
     Prop where
   words : ∀ k, k < 14 → imgW img (jbp.toNat + 8 * k) = sjVal r s cs k
@@ -273,8 +250,6 @@ theorem sj_logN (jbp r s : BitVec 64) (cs : Nat → BitVec 64) (hg : JbAt jbp) :
     addr_off _ _ 104 (by decide) (by omega)
   rw [sj_log, e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13]
 
-/-! ## The rule -/
-
 section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -288,9 +263,6 @@ theorem sepL_calleeSaved_all (f : Nat → BitVec 64) :
   simp only [sepL_cons, sepL_nil]
   exact .rfl
 
-/-- **`setjmp(jb)`**, for either WP: it fills the first 14 words of the
-`jmp_buf` with `ra` (the return address), `s0`–`s11` and `sp`, and returns
-0. -/
 theorem setjmp_spec (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (jbp s : BitVec 64) (cs : Nat → BitVec 64)
     (img0 : Nat → BitVec 8) (hg : JbAt jbp) :

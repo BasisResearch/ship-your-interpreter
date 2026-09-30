@@ -1,32 +1,7 @@
-import Vsa.Sim.ChainFactsTac
-import Vsa.Sim.DeriveCaseRow
 import VsaIris.Vsa.MallocFastCode
 import VsaIris.Vsa.MallocFastLines
 import Vsa.Sim.ExecRetEpilogue
-import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.DlHeap
-
-/-!
-# `_malloc_r`'s top-split fast path, reflected
-
-The path for a request `24 ≤ n ≤ 487` from a heap with no free chunk and a
-clear `binblocks` bitmap, as `#derive_case` segments (chains generated from
-`experiments/disasm.txt`). Calls to the lock hooks are `jal` seams between
-segments.
-
-* `segWrap` (`malloc`): `mv a1,a0; ld a0,_impure_ptr; j _malloc_r`.
-* `segPro`: the frame, the size-class tests, `nb = (n + 23) & -16` saved at
-  `8(sp)`.
-* `segLock`/`segAcq`, `segUnlock`/`segRel`: the lock hooks and the retarget
-  `ret`s.
-* `segBins`: the size-class test, the bin index, both empty-bin checks, the
-  unsorted-bin and `binblocks` tests (index-dependent, proved per size class);
-* `segSplit`: the top size tests and the split stores (symbolic in the top).
-* `segEpi`: the return value `top + 16` and the epilogue.
-
-For each segment, `*_facts` discharges its `ChainFacts` from the path's code
-bytes (`PathLoaded`) and named hypotheses on its pins.
--/
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 
@@ -149,8 +124,6 @@ namespace VsaIris.MallocFast
 
 open Vsa.Sim
 
-/-! ## Memory-fact and comparison helpers -/
-
 theorem ea_of {L : GRegs} {a : MInstr} (base : BitVec 64) (off : Nat)
     (hsrc : srcVal a.rs1 L = base) (himm : (sign_extend (m := 64) a.imm : BitVec 64).toNat = off)
     (hno : base.toNat + off < 2 ^ 64) : (eaddrM a L).toNat = base.toNat + off := by
@@ -180,13 +153,11 @@ theorem uge_iff (a b : BitVec 64) : zopz0zKzJ_u a b = true ↔ b.toNat ≤ a.toN
 theorem uge_false_iff (a b : BitVec 64) : zopz0zKzJ_u a b = false ↔ a.toNat < b.toNat := by
   unfold zopz0zKzJ_u; simp [Sail.BitVec.toNatInt]
 
-/-- `x + imm` for a small non-negative immediate. -/
 theorem add_imm (x : BitVec 64) (imm : BitVec 12) (c : Nat)
     (hc : (sign_extend (m := 64) imm : BitVec 64).toNat = c) (hno : x.toNat + c < 2 ^ 64) :
     (x + sign_extend (m := 64) imm).toNat = x.toNat + c := by
   rw [BitVec.toNat_add, hc, Nat.mod_eq_of_lt hno]
 
-/-- `x + imm` for a negative immediate `-d`. -/
 theorem sub_imm (x : BitVec 64) (imm : BitVec 12) (d : Nat)
     (hc : (sign_extend (m := 64) imm : BitVec 64).toNat = 2 ^ 64 - d) (hd : d ≤ x.toNat) (hd0 : 0 < d) :
     (x + sign_extend (m := 64) imm).toNat = x.toNat - d := by
@@ -195,7 +166,6 @@ theorem sub_imm (x : BitVec 64) (imm : BitVec 12) (d : Nat)
   rw [show x.toNat + (2 ^ 64 - d) = (x.toNat - d) + 2 ^ 64 by omega, Nat.add_mod_right,
     Nat.mod_eq_of_lt (by omega)]
 
-/-- Masking with `allOnes <<< k` rounds down to a multiple of `2 ^ k`. -/
 theorem and_high_toNat (a : BitVec 64) (k : Nat) (hk : k < 64) :
     (a &&& (BitVec.allOnes 64 <<< k)).toNat = a.toNat / 2 ^ k * 2 ^ k := by
   have hshift : (a &&& (BitVec.allOnes 64 <<< k)) = (a >>> k) <<< k := by
@@ -217,18 +187,13 @@ theorem and_high_toNat (a : BitVec 64) (k : Nat) (hk : k < 64) :
   calc a.toNat / 2 ^ k * 2 ^ k ≤ a.toNat := Nat.div_mul_le_self _ _
     _ < 2 ^ 64 := a.isLt
 
-/-- Masking with `-16` rounds down to a multiple of 16. -/
 theorem and_m16_toNat (a : BitVec 64) :
     (a &&& sign_extend (m := 64) (0xff0#12)).toNat = a.toNat / 16 * 16 := by
   rw [show (sign_extend (m := 64) (0xff0#12) : BitVec 64) = BitVec.allOnes 64 <<< 4 by decide,
     and_high_toNat a 4 (by decide)]
 
-/-! ## `segWrap` -/
-
-/-- The `_impure_ptr` word. -/
 def impW : List (BitVec 8) := [0x38#8, 0xb5#8, 0x01#8, 0x80#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8]
 
-/-- `__global_pointer$`. -/
 abbrev gpV : BitVec 64 := 0x8001b510#64
 
 abbrev wrapL (n a1 : BitVec 64) : GRegs := [(10, n), (11, a1), (3, gpV)]
@@ -245,10 +210,6 @@ theorem wrap_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m) (n
     Option.getD_some]
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-! ## `segPro` -/
-
-/-- The caller's stack pointer: 96 bytes of frame above the HTIF window, in
-32-bit RAM, 16-aligned. -/
 structure SpGeom (s : BitVec 64) : Prop where
   lo : tohostAddr + 16 + 96 ≤ s.toNat
   hi : s.toNat ≤ 0x100000000
@@ -259,7 +220,6 @@ theorem sp96 {s : BitVec 64} (h : SpGeom s) :
   have := h.lo; unfold tohostAddr at this
   exact sub_imm s _ 96 (by decide) (by omega) (by decide)
 
-/-- `nb = (n + 23) & -16`. -/
 abbrev nbOf (n : BitVec 64) : BitVec 64 := n + sign_extend (m := 64) (0x017#12) &&& sign_extend (m := 64) (0xff0#12)
 
 theorem nbOf_toNat {n : BitVec 64} (hn : n.toNat ≤ 487) : (nbOf n).toNat = (n.toNat + 23) / 16 * 16 := by
@@ -301,8 +261,6 @@ theorem pro_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m)
     rw [hnb]; omega
   · exact stackStore hs 8 rfl rfl (by decide) (by decide) (by decide)
 
-/-! ## The lock hooks -/
-
 theorem lock_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m) (a0 : BitVec 64) :
     ChainFacts m m [(10, a0), (3, gpV)] [] segLock := by
   unfold segLock ChainFacts
@@ -327,9 +285,6 @@ theorem ret_facts_rel {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m)
   all_goals seg_norm
   rw [ret_tgt ra hra]; exact hra
 
-/-! ## Loads from the owned image -/
-
-/-- The 8 image bytes at `a`, as a load's byte list. -/
 def wordOf (f : Nat → BitVec 8) (a : Nat) : List (BitVec 8) :=
   [f a, f (a + 1), f (a + 2), f (a + 3), f (a + 4), f (a + 5), f (a + 6), f (a + 7)]
 
@@ -339,7 +294,6 @@ theorem lpins_of_img {m : Std.ExtHashMap Nat (BitVec 8)} {f : Nat → BitVec 8} 
   exact ⟨by simpa using h 0 (by omega), h 1 (by omega), h 2 (by omega), h 3 (by omega),
     h 4 (by omega), h 5 (by omega), h 6 (by omega), h 7 (by omega)⟩
 
-/-- A load's value from any memory holding the image where it reads. -/
 theorem wordOf_value {f : Nat → BitVec 8} {a : Nat} {m : Std.ExtHashMap Nat (BitVec 8)} {v : BitVec 64}
     (him : ∀ k, k < 8 → m[a + k]? = some (f (a + k))) (hr : Vsa.MemRepr.read64 m a = some v.toNat) :
     bytesVal .ld (wordOf f a) = v := by
@@ -351,7 +305,6 @@ theorem wordOf_value {f : Nat → BitVec 8} {a : Nat} {m : Std.ExtHashMap Nat (B
     rfl
   rwa [e] at this
 
-/-- A load from the stack frame `[sp, sp + 96)`. -/
 theorem frameLoad {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {f : Nat → BitVec 8}
     {sp : BitVec 64} (hsp : tohostAddr + 16 ≤ sp.toNat) (hsp' : sp.toNat + 96 ≤ 0x100000000)
     (off : Nat) (hk : a.kind = .ld) (hsrc : srcVal a.rs1 L = sp)
@@ -362,8 +315,6 @@ theorem frameLoad {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {
   refine ldFact hk _ (ea_of sp off hsrc himm (by omega)) (by omega) (by omega)
     (by unfold tohostAddr; omega) (lpins_of_img fun k hk => ?_)
   rw [Nat.add_assoc]; exact hpin (off + k) (by omega)
-
-/-! ## `segEpi` -/
 
 abbrev epiL (sp a5 a0 ra s0 : BitVec 64) : GRegs := [(2, sp), (15, a5), (10, a0), (1, ra), (8, s0)]
 
@@ -385,19 +336,14 @@ theorem epi_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m) {sp
       0 0#1).toNat % 4 = 0
     rw [hr, ret_tgt r hral]; exact hral
 
-/-! ## `segBins` -/
-
 abbrev binsL (sp a0 a1 a2 a3 a4 a5 a6 a7 t4 : BitVec 64) : GRegs :=
   [(2, sp), (10, a0), (11, a1), (12, a2), (13, a3), (14, a4), (15, a5), (16, a6), (17, a7), (29, t4)]
 
-/-- The loads of `segBins`: the saved `nb`, the two bins' `bk` words, the unsorted
-bin's `fd` word, and `binblocks`. -/
 abbrev binsLds (f : Nat → BitVec 8) (sp : BitVec 64) (nb : Nat) : List (List (BitVec 8)) :=
   [wordOf f (sp.toNat + 8), wordOf f (Vsa.Sim.DlHeap.binAt (nb / 8) + 24),
    wordOf f (Vsa.Sim.DlHeap.binAt (nb / 8 + 1) + 24), wordOf f (Vsa.Sim.DlHeap.binAt 1 + 16),
    wordOf f Vsa.Sim.DlHeap.binblocksAddr]
 
-/-- The chunk sizes of requests `24..487`. -/
 def sizeClasses : List Nat := (List.range 30).map (fun j => 32 + 16 * j)
 
 theorem mem_sizeClasses {nb : Nat} (h16 : nb % 16 = 0) (h1 : 32 ≤ nb) (h2 : nb ≤ 496) :
@@ -405,7 +351,6 @@ theorem mem_sizeClasses {nb : Nat} (h16 : nb % 16 = 0) (h1 : 32 ≤ nb) (h2 : nb
   unfold sizeClasses
   exact List.mem_map.2 ⟨(nb - 32) / 16, List.mem_range.2 (by omega), by omega⟩
 
-/-- The empty-bin facts `segBins` reads, over the image. -/
 structure BinsImg (f : Nat → BitVec 8) : Prop where
   bk : ∀ i, 0 < i → i < 128 → bytesVal .ld (wordOf f (Vsa.Sim.DlHeap.binAt i + 24)) =
     BitVec.ofNat 64 (Vsa.Sim.DlHeap.binAt i)
@@ -414,7 +359,7 @@ structure BinsImg (f : Nat → BitVec 8) : Prop where
   binblocks : bytesVal .ld (wordOf f Vsa.Sim.DlHeap.binblocksAddr) = 0#64
 
 set_option hygiene false in
-/-- `segBins`' leftovers for one concrete chunk size `c`. -/
+
 macro "bins_case " c:term : tactic => `(tactic| (
   unfold segBins ChainFacts
   chain_facts hcode with "VsaIris.MallocFast.path_at_"
@@ -692,7 +637,6 @@ theorem bins_facts_496 (hcode : PathLoaded m)
     ChainFacts m m (binsL sp a0 a1 a2 a3 a4 a5 a6 a7 t4) (binsLds f sp 496) segBins := by
   bins_case 496
 
-/-- `segBins` for every chunk size of the fast path, one class per theorem. -/
 theorem bins_facts (hcode : PathLoaded m)
     (hsp : tohostAddr + 16 ≤ sp.toNat) (hsp' : sp.toNat + 96 ≤ 0x100000000)
     (hpin : ∀ k, k < 96 → (m[sp.toNat + k]?).getD 0 = f (sp.toNat + k))
@@ -739,21 +683,16 @@ theorem bins_facts (hcode : PathLoaded m)
 
 end BinsCases
 
-/-! ## `segSplit` -/
-
-/-- Masking with `-4` clears the two low bits. -/
 theorem and_m4_toNat (a : BitVec 64) :
     (a &&& sign_extend (m := 64) (0xffc#12)).toNat = a.toNat / 4 * 4 := by
   rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = BitVec.allOnes 64 <<< 2 by decide,
     and_high_toNat a 2 (by decide)]
 
-/-- Masking with `-2` clears the low bit. -/
 theorem and_m2_toNat (a : BitVec 64) :
     (a &&& sign_extend (m := 64) (0xffe#12)).toNat = a.toNat / 2 * 2 := by
   rw [show (sign_extend (m := 64) (0xffe#12) : BitVec 64) = BitVec.allOnes 64 <<< 1 by decide,
     and_high_toNat a 1 (by decide)]
 
-/-- `slti x, 32` is false for a non-negative `x ≥ 32`. -/
 theorem slt32_false (x : BitVec 64) (h1 : 32 ≤ x.toNat) (h2 : x.toNat < 2 ^ 63) :
     zopz0zI_s x (sign_extend (m := 64) (32#12)) = false := by
   unfold zopz0zI_s
@@ -761,7 +700,6 @@ theorem slt32_false (x : BitVec 64) (h1 : 32 ≤ x.toNat) (h2 : x.toNat < 2 ^ 63
     show (sign_extend (m := 64) (32#12) : BitVec 64).toInt = 32 by decide]
   simp; omega
 
-/-- A store into the stack frame `[sp, sp + 96)`. -/
 theorem frameStore {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {bs : List (BitVec 8)}
     {sp : BitVec 64} (hsp : tohostAddr + 16 ≤ sp.toNat) (hsp' : sp.toNat + 96 ≤ 0x100000000)
     (hal : sp.toNat % 8 = 0) (off : Nat) (hk : a.kind = .sd) (hsrc : srcVal a.rs1 L = sp)
@@ -775,11 +713,9 @@ abbrev splitL (sp a0 s0 a2 a3 a5 t1 : BitVec 64) (nb : Nat) : GRegs :=
   [(2, sp), (10, a0), (8, s0), (12, a2), (13, a3), (14, BitVec.ofNat 64 nb), (15, a5),
    (16, 0x8001ad10#64), (6, t1)]
 
-/-- The loads of `segSplit`: `av->top` and the top chunk's header. -/
 abbrev splitLds (f : Nat → BitVec 8) (top : Nat) : List (List (BitVec 8)) :=
   [wordOf f Vsa.Sim.DlHeap.topAddr, wordOf f (top + 8)]
 
-/-- The top chunk `segSplit` splits, named. -/
 structure SplitTop (f : Nat → BitVec 8) (top size nb : Nat) : Prop where
   top_ptr : bytesVal .ld (wordOf f Vsa.Sim.DlHeap.topAddr) = BitVec.ofNat 64 top
   header : bytesVal .ld (wordOf f (top + 8)) = BitVec.ofNat 64 (size + 1)

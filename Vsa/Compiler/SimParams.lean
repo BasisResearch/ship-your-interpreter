@@ -1,18 +1,9 @@
 import Vsa.Compiler.SimCallNat
 
-/-!
-# Parameter binding
-
-`run_params`: the parameter copies of a function entry write each argument into
-its parameter's slot of the fresh frame, matching the fold of `Store.define`
-that `Call.closure` performs.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- The frame update of `Store.define`. -/
 def defFrame (x : String) (v : Value) (f : Frame) : Frame :=
   { f with vars := (if f.vars.any (·.1 == x) then f.vars.map (rebind x v) else f.vars ++ [(x, v)]) }
 
@@ -42,7 +33,6 @@ theorem define_frame {s : Store} {c : Addr} {fr : Frame} (h : s.frames[c]? = som
     (s.define c x v).frames[c]? = some (defFrame x v fr) := by
   rw [define_eq]; simp only [Array.getElem?_modify, if_pos rfl, h]; rfl
 
-/-- The outcome of binding parameters. -/
 structure ParamPost (F : FrMap) (H : CloMap) (s : Store) (m : Mem) (hF h : Nat) (s' : Store) (m' : Mem) :
     Prop where
   rel : StoreRel F H s' m' hF h

@@ -1,9 +1,5 @@
 import Vsa.Compiler.SimIf
 
-/-!
-# Forward simulation: `while`
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -30,14 +26,11 @@ theorem CtxOK.loop {C : GCtx} (h : CtxOK C) {b c : Nat} (hb : PosOK b) (hc : Pos
     cases e'; exact ⟨Nat.le_refl _, hc⟩
   ret := h.ret
 
-/-- The start of a `while` statement's body. -/
 def wBody (T : List String) (C : GCtx) (pos : Nat) (c : Expr) : Nat := pos + (gexpr T C.Γ 0 pos c).length + 3
 
-/-- The exit of a `while` statement. -/
 def wExit (T : List String) (C : GCtx) (pos : Nat) (c : Expr) (b : Stmt) : Nat :=
   wBody T C pos c + (gstmt T (C.loop 0 0) (wBody T C pos c) b).length + 1
 
-/-- The pieces of a `while` statement's code. -/
 theorem while_segs {code : List Ins} {T : List String} {C : GCtx} {pos : Nat} {c : Expr} {b : Stmt}
     (hseg : Seg code pos (gstmt T C pos (.whileStmt c b))) :
     Seg code pos (gexpr T C.Γ 0 pos c ++ [Call (pos + (gexpr T C.Γ 0 pos c).length) trPos] ++
@@ -61,7 +54,6 @@ theorem while_segs {code : List Ins} {T : List String} {C : GCtx} {pos : Nat} {c
 section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
-
 
 theorem sWhileFalse {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt} {st1 : St} {v : Value} {nc : Nat}
     (hE : ESpec code T st d env c st1 v nc) (hfa : v.truthy = false) :
@@ -152,7 +144,7 @@ theorem sWhileLoop {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt} {st1 s
     (hctx.loop hPx hPpos) sb (by rw [hlb]; exact posOK_le hP (by omega)) (by omega)) ?_
   rintro B' (⟨h1, h2⟩ | ⟨V2, hp2⟩)
   · exact reach_here (.inl ⟨h1, Room.not_within h2 hp1.within (by omega)⟩)
-  -- back to the head
+
   have hback : Reaches code B' (fun B'' => SPost code T V1 st1 d env C sp fs pos B nb st2 .normal V2 B'') := by
     rcases hst with rfl | rfl
     · obtain ⟨hpc2, hm2⟩ := hp2.out

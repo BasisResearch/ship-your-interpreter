@@ -1,14 +1,9 @@
 import Vsa.Compiler.SimCond
 
-/-!
-# Forward simulation: `if`
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- The invariant does not depend on the program counter. -/
 theorem MS.setpc {code : List Ins} {T : List String} {V : View} {st : St} {d : Nat} {env : Addr}
     {Γ : List (List String)} {sp fs : Nat} {pc : BitVec 64} {L : GRegs} {m : Mem} {o : Array String}
     (h : MS code T V st d env Γ sp fs ⟨pc, L, m, o⟩) (pc' : BitVec 64) : MS code T V st d env Γ sp fs ⟨pc', L, m, o⟩ :=
@@ -23,7 +18,6 @@ section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
 
-/-- A statement ending in a jump to `fin'`: a normal completion jumps there. -/
 theorem SPost.jump {V : View} {st : St} {d : Nat} {env : Addr} {C : GCtx} {sp fs fin fin' : Nat} {A B : AM}
     {n : Nat} {st' : St} {t : Status} {V' : View}
     (hp : SPost code T V st d env C sp fs fin A n st' t V' B) (hseg : Seg code fin [J fin fin'])

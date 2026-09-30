@@ -1,19 +1,9 @@
 import Vsa.Compiler.Run
 
-/-!
-# Failure within a number of steps
-
-`Fail code n A`: from `A` the code reaches the error exit (a halt with code
-`70`) or runs for at least `n` steps. Failure is closed under run prefixes
-(`Fail.of_prefix`, `Fail.of_star`); a run between different code positions
-takes a step (`StarN.pos_of_pc`).
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa.Sim
 
-/-- The code fails within `n` steps: the error exit, or `n` steps of running. -/
 def Fail (code : List Ins) (n : Nat) (A : AM) : Prop :=
   Reaches code A (fun B => astep code B = some (.halt 70)) ∨ Runs code n A
 
@@ -27,7 +17,6 @@ theorem StarN.truncate {code : List Ins} : ∀ {m : Nat} {A B : AM}, StarN code 
       obtain ⟨B', h'⟩ := rest.truncate n (by omega)
       exact ⟨B', .step hs h'⟩
 
-/-- A run of `k` steps followed by failure within `n - k` steps fails within `n`. -/
 theorem Fail.of_prefix {code : List Ins} {n k : Nat} {A A' : AM} (hr : StarN code k A A')
     (hf : Fail code (n - k) A') : Fail code n A := by
   rcases hf with ⟨B, hB, hh⟩ | ⟨B, hB⟩
@@ -51,14 +40,12 @@ theorem pcOf_inj {a b : Nat} (ha : PosOK a) (hb : PosOK b) (h : pcOf a = pcOf b)
     pcOf_toNat (by have : tohostAddr = 0x8001ad00 := rfl; omega)] at this
   omega
 
-/-- A run between different code positions takes at least one step. -/
 theorem StarN.pos_of_pc {code : List Ins} {k : Nat} {A B : AM} (h : StarN code k A B)
     (hne : A.pc ≠ B.pc) : 1 ≤ k := by
   cases h with
   | refl => exact absurd rfl hne
   | step => omega
 
-/-- One jump to `q`. -/
 theorem step_jump {code : List Ins} (hfit : Fits code) {p q : Nat} {A : AM}
     (hk : code[p]? = some (.jal 0 (jOff p q))) (hA : A.pc = pcOf p) (hp : PosOK p) (hq : PosOK q) :
     astep code A = some (.run ⟨pcOf q, A.regs, A.mem, A.out⟩) := by

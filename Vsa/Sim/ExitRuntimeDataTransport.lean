@@ -1,22 +1,8 @@
 import Vsa.Sim.ExitRuntimeData
 
-/-!
-Transport initialized exit data through byte agreement on its exact footprint.
-The caller supplies agreement from the effects of a reached execution prefix.
-These lemmas require no code, execution, or semantic assumptions.
--/
-
 open Vsa.MemRepr
 
 namespace Vsa.Sim
-
-/-- All extra runtime fields lie below the concrete C stack. -/
-theorem exitRuntimeExtraFoot_below_stack {a : Nat} (h : ExitRuntimeExtraFoot a) :
-    a < 0x87800000 := by
-  obtain ⟨region, hregion, _, hhi⟩ := h
-  have hb : ∀ region ∈ exitRuntimeExtraRegions,
-      region.1 + region.2 ≤ 0x87800000 := by decide
-  exact Nat.lt_of_lt_of_le hhi (hb region hregion)
 
 private theorem readLE_exitRegion_agree
     {regions : List (Nat × Nat)} {m m' : Mem}
@@ -27,7 +13,6 @@ private theorem readLE_exitRegion_agree
     ⟨(address, width), hregion,
       Nat.le_add_right address k, Nat.add_lt_add_left hk address⟩)
 
-/-- An idle FILE record depends only on its explicitly listed read fields. -/
 theorem ExitIdleFile.transport {m m' : Mem} {file flags descriptor : Nat}
     (h : ExitIdleFile m file flags descriptor)
     (hag : AgreeP (ExitRegionFoot (exitIdleFileRegions file)) m m') :
@@ -55,9 +40,6 @@ theorem ExitIdleFile.transport {m m' : Mem} {file flags descriptor : Nat}
     lockMode := (hr (file + 176) 4 (by simp [exitIdleFileRegions])).symm.trans
       h.lockMode }
 
-/-- Preserve extra exit runtime data using agreement on precisely its own
-read bytes. The separately maintained ConsoleStream invariant is unaffected
-by this statement; no equality of its mutable output buffer is required. -/
 theorem ExitRuntimeData.transport {m m' : Mem}
     (h : ExitRuntimeData m) (hag : AgreeP ExitRuntimeExtraFoot m m') :
     ExitRuntimeData m' := by
@@ -99,8 +81,5 @@ theorem ExitRuntimeData.transport {m m' : Mem}
     stdoutLine :=
       (hr (consoleStdout + 120) 8 (by simp [exitRuntimeExtraRegions])).symm.trans
         h.stdoutLine }
-
-#print axioms ExitIdleFile.transport
-#print axioms ExitRuntimeData.transport
 
 end Vsa.Sim

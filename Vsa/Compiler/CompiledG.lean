@@ -2,17 +2,6 @@ import Vsa.Compiler.CorrectG
 import Vsa.While.Validation
 import Vsa.While.CostEval
 
-/-!
-# Test programs, compiled by the full compiler
-
-`functionsWl` (closures, captured state, returns), `forWl` (`for` loops with
-`continue`), `scopeWl` (blocks, shadowing, `assert`) and `stringsWl` (string
-concatenation, comparison and printing) are supported,
-fit below `tohost` and stay within the heap budget, so every machine
-configuration holding their compiled code prints their validated output and
-exits with `0` (`*_compiledG_halts`, from `compileG_correct`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable
@@ -23,7 +12,6 @@ private def v (x : String) : Expr := .var x
 private def pl (args : List Expr) : Stmt := .expr (.call (v "println") args)
 private def set (x : String) (e : Expr) : Stmt := .expr (.assign x e)
 
-/-- A program with a bounded evaluator cost stays within the heap budget. -/
 theorem budget_of_normalCost {p : Program} {f n0 : Nat}
     (h : (execSeqEval f initSt 0 0 p).normalCost? = some n0) (hn : n0 ≤ heapUnits) :
     ∀ out, BigStep p out → BigStepBudget p out heapUnits := by
@@ -31,8 +19,6 @@ theorem budget_of_normalCost {p : Program} {f n0 : Nat}
   obtain ⟨n, C⟩ := ExecSeqCost.exists D
   exact ⟨st', n, C, hout, by rw [execSeqCost_eq_of_normalCost h C]; exact hn⟩
 
-/-- A supported, fitting program within budget: every machine configuration
-holding its compiled code halts with its big-step output. -/
 theorem compiledG_halts {p : Program} {out : String} (hsup : SupportedG p)
     (hfit : 0x80004800 + 4 * (compileG p).length ≤ 0x8001ad00)
     (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (hb : BigStep p out) (c : Config)
@@ -49,18 +35,18 @@ theorem compiledG_halts {p : Program} {out : String} (hsup : SupportedG p)
   ((compileG_correct p hsup hfit hcap c hgood htick hpc hpw hout hcode hlib).1 out).mp hb
 
 theorem functionsWl_eq : Programs.functionsWl = [
-    -- fn make_adder(n) { return fn (x) { return x + n; }; }
+
     .varDecl "make_adder" (some (.fn (some "make_adder") ["n"] [
       .ret (some (.fn none ["x"] [.ret (some (.binary .add (v "x") (v "n")))]))])),
     .varDecl "add5" (some (.call (v "make_adder") [i 5])),
     pl [.call (v "add5") [i 10]],
-    -- fn apply_twice(f, x) { return f(f(x)); }
+
     .varDecl "apply_twice" (some (.fn (some "apply_twice") ["f", "x"] [
       .ret (some (.call (v "f") [.call (v "f") [v "x"]]))])),
     pl [.call (v "apply_twice") [v "add5", i 1]],
     pl [.call (v "apply_twice")
       [.fn none ["x"] [.ret (some (.binary .mul (v "x") (v "x")))], i 3]],
-    -- fn make_counter() { var count = 0; return fn () { ... }; }
+
     .varDecl "make_counter" (some (.fn (some "make_counter") [] [
       .varDecl "count" (some (i 0)),
       .ret (some (.fn none [] [
@@ -76,7 +62,7 @@ theorem functionsWl_eq : Programs.functionsWl = [
     pl [.binary .eq (v "f") (v "add5")],
     pl [v "make_adder"],
     pl [.fn none ["x"] [.ret (some (v "x"))]],
-    -- fn compose(f, g) { return fn (x) { return f(g(x)); }; }
+
     .varDecl "compose" (some (.fn (some "compose") ["f", "g"] [
       .ret (some (.fn none ["x"] [
         .ret (some (.call (v "f") [.call (v "g") [v "x"]]))]))])),
@@ -93,8 +79,6 @@ theorem functionsWl_supportedG : SupportedG Programs.functionsWl := by
 
 theorem functionsWl_fitsG : 0x80004800 + 4 * (compileG Programs.functionsWl).length ≤ 0x8001ad00 := by decide +kernel
 
-/-- **The compiled `functionsWl` prints its validated output and exits 0** on every
-machine configuration that holds its code (and libgcc's routines) at the entry. -/
 theorem functionsWl_compiledG_halts (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
@@ -111,7 +95,7 @@ theorem functionsWl_compiledG_halts (c : Config)
     hout hcode hlib
 
 theorem forWl_eq : Programs.forWl = [
-    -- fizzbuzz
+
     .forStmt (some (.varDecl "i" (some (i 1))))
       (some (.binary .le (v "i") (i 15)))
       (some (.assign "i" (.binary .add (v "i") (i 1))))
@@ -158,8 +142,6 @@ theorem forWl_supportedG : SupportedG Programs.forWl := by
 
 theorem forWl_fitsG : 0x80004800 + 4 * (compileG Programs.forWl).length ≤ 0x8001ad00 := by decide +kernel
 
-/-- **The compiled `forWl` prints its validated output and exits 0** on every
-machine configuration that holds its code (and libgcc's routines) at the entry. -/
 theorem forWl_compiledG_halts (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
@@ -208,8 +190,6 @@ theorem scopeWl_supportedG : SupportedG Programs.scopeWl := by
 
 theorem scopeWl_fitsG : 0x80004800 + 4 * (compileG Programs.scopeWl).length ≤ 0x8001ad00 := by decide +kernel
 
-/-- **The compiled `scopeWl` prints its validated output and exits 0** on every
-machine configuration that holds its code (and libgcc's routines) at the entry. -/
 theorem scopeWl_compiledG_halts (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)
@@ -245,8 +225,6 @@ theorem stringsWl_supportedG : SupportedG Programs.stringsWl := by
 
 theorem stringsWl_fitsG : 0x80004800 + 4 * (compileG Programs.stringsWl).length ≤ 0x8001ad00 := by decide +kernel
 
-/-- **The compiled `stringsWl` prints its validated output and exits 0** on every
-machine configuration that holds its code (and libgcc's routines) at the entry. -/
 theorem stringsWl_compiledG_halts (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)

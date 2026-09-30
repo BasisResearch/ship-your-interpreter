@@ -1,22 +1,6 @@
 import VsaIris.Interp.LeafArm
 import VsaIris.Interp.CallMalloc
 
-/-!
-# Result slots and `env_*` calls from an `eval_expr` run (lane E1)
-
-The `var`, `assign` and `fn` arms store their result into `sret`
-themselves (no helper writes it), so their runs own the result slot beside
-the frame: `ms_intro_sret` joins `slot24 sret` into the machine state's
-owned bytes, `ms_exit_sret`/`ms_exit_sretAny` split it off again, as a
-represented value or at any contents (an abort hands the slot back).
-`env_get` writes its `out` slot inside the frame: `ms_carveSlot` lends it,
-`ms_joinSlot`/`ms_unslot` take it back (found value or not).
-
-`ms_callEnv3` calls a helper whose spec is in `env_get`/`env_set`'s register
-form (arguments `a0`-`a2` at the run's values, `sp`, the argument
-registers clobbered, `s0`-`s6` saved, a result in `a0`), by `ms_callRegs`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -27,12 +11,8 @@ section Slots
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- An arm's owned bytes: its frame `[f, f + 1088)` and the result slot. -/
 abbrev frS (f a : Nat) : Nat → Prop := fun b => InExt (f, 1088) b ∨ InExt (a, 24) b
 
-/-- **Entering an arm that writes `sret`**: the frame bytes and the result
-slot become the machine state's owned bytes, at some tracking memory; they
-are disjoint. -/
 theorem ms_intro_sret {pc r : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} :
     PC ↦ᵣ pc ∗ ra ↦ᵣ r ∗ regFile R ∗ ownSet (InExt (f, 1088)) byteAny ∗ slot24 a ⊢@{IProp GF}
       ∃ Mt, ms pc (upd R 1 r) (frS f a) Mt ∗ ⌜∀ b, InExt (f, 1088) b → ¬ InExt (a, 24) b⌝ := by
@@ -51,7 +31,6 @@ theorem ms_intro_sret {pc r : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} :
   iframe Hpc Hra Hregs HS
   ipureintro; exact hd
 
-/-- Two ranges disjoint pointwise are disjoint as intervals. -/
 theorem inExt_disj {a n c k : Nat} (hn : 0 < n) (hk : 0 < k)
     (h : ∀ b, InExt (a, n) b → ¬ InExt (c, k) b) : a + n ≤ c ∨ c + k ≤ a := by
   apply Classical.byContradiction; intro hc
@@ -59,7 +38,7 @@ theorem inExt_disj {a n c k : Nat} (hn : 0 < n) (hk : 0 < k)
   exact h (max a c) (by simp only [InExt]; omega) (by simp only [InExt]; omega)
 
 omit I in
-/-- **Leaving it, the slot at any contents** (an abort hands the slot back). -/
+
 theorem ms_exit_sretAny {pc : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} {Mt : Mem}
     (hd : ∀ b, InExt (f, 1088) b → ¬ InExt (a, 24) b) :
     ms pc R (frS f a) Mt ⊢@{IProp GF}
@@ -71,8 +50,6 @@ theorem ms_exit_sretAny {pc : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} {Mt
   unfold slot24 blockOwn
   iapply ownSet_forget $$ HA
 
-/-- **Leaving it with the result**: the slot's bytes at the end memory
-represent `v`. -/
 theorem ms_exit_sret (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {f a : Nat}
     {Mt : Mem} {v : Value} (hd : ∀ b, InExt (f, 1088) b → ¬ InExt (a, 24) b) :
     ms pc R (frS f a) Mt ∗ valImg N (imgM Mt) a v ⊢@{IProp GF}
@@ -84,7 +61,6 @@ theorem ms_exit_sret (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} 
   iapply valAt_of_img N $$ [Hv HA]
   iframe Hv HA
 
-/-- Lend a 24-byte slot of the owned bytes (a callee's `out` argument). -/
 theorem ms_carveSlot {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {a : Nat}
     (h : ∀ b, InExt (a, 24) b → S b) :
     ms pc R S Mt ⊢@{IProp GF} ms pc R (fun b => S b ∧ ¬ InExt (a, 24) b) Mt ∗ slot24 a := by
@@ -93,8 +69,6 @@ theorem ms_carveSlot {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
   ihave ⟨HS, Hsl⟩ := ownSet_carve_slot h $$ HS
   iframe Hpc Hra Hregs HS Hsl
 
-/-- Take it back holding a represented value: the tracking memory gets the
-slot's three words, whose meaning is `valOf`. -/
 theorem ms_joinSlot (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
     {Mt : Mem} {a : Nat} {v : Value} (h : ∀ b, InExt (a, 24) b → S b) :
     ms pc R (fun b => S b ∧ ¬ InExt (a, 24) b) Mt ∗ valAt N a v ⊢@{IProp GF}
@@ -106,7 +80,6 @@ theorem ms_joinSlot (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {
   iexists w0, w1, w2
   iframe Hw Hpc Hra Hregs HS
 
-/-- Take it back at any contents. -/
 theorem ms_unslot {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {a : Nat}
     (h : ∀ b, InExt (a, 24) b → S b) :
     ms pc R (fun b => S b ∧ ¬ InExt (a, 24) b) Mt ∗ slot24 a ⊢@{IProp GF} ∃ Mt', ms pc R S Mt' := by
@@ -119,9 +92,6 @@ theorem ms_unslot {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
   iexists M
   iframe Hpc Hra Hregs HS
 
-/-- **Joining the result slot later** (an arm that calls a child first): the
-frame's machine state takes the slot in, at a tracking memory agreeing on the
-frame. -/
 theorem ms_join_sret {pc : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} {Mt : Mem} :
     ms pc R (InExt (f, 1088)) Mt ∗ slot24 a ⊢@{IProp GF}
       ∃ M', ms pc R (frS f a) M' ∗ ⌜(∀ b, InExt (f, 1088) b → imgM M' b = imgM Mt b) ∧
@@ -138,7 +108,6 @@ theorem ms_join_sret {pc : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} {Mt : 
 
 end Slots
 
-/-- A doubleword load through memories agreeing on its bytes. -/
 theorem ldv_ld_agree {M M' : Mem} {a : Nat} (h : ∀ i, i < 8 → imgM M' (a + i) = imgM M (a + i)) :
     ldv .ld M' a = ldv .ld M a := by
   show ldvf .ld (imgM M') a = ldvf .ld (imgM M) a
@@ -152,13 +121,8 @@ section Env
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 variable {live : Nat → Prop}
 
-/-- The registers an `env_get`/`env_set` call takes. -/
 abbrev env3L : List Nat := 10 :: 11 :: 12 :: 2 :: (argClob ++ getSaved)
 
-/-- **A call in `env_get`'s register form from a run** (`jal entry` at `i`):
-`a0`-`a2` and `sp` at the run's values, the argument registers clobbered,
-`s0`-`s6` saved, and `X`; the run continues at `i + 4` with the callee-saved
-registers and `sp` kept, the result in `a0`, and `Y` of it. -/
 theorem ms_callEnv3 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
@@ -249,8 +213,6 @@ theorem ms_callEnv3 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
 
 end Env
 
-/-! ## Loads through a child's result slot -/
-
 theorem slotWrite_ld0 (Mt : Mem) (a : Nat) (w0 w1 w2 : BitVec 64) :
     ldv .ld (slotWrite Mt a w0 w1 w2) a = w0 := by
   unfold slotWrite
@@ -271,7 +233,6 @@ theorem slotWrite_ld_miss (Mt : Mem) {a c : Nat} (w0 w1 w2 : BitVec 64) (h : c +
   unfold slotWrite
   rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega)]
 
-/-- A word's low half is its first four bytes (a `sw` into a value slot's tag). -/
 theorem imgW_low4 (img : Nat → BitVec 8) (a : Nat) :
     (imgW img a).toNat % 2 ^ 32 = imgLE img a 4 := by
   rw [imgW_toNat]

@@ -1,18 +1,6 @@
 import VsaIris.Interp.ErrArm
 import VsaIris.Interp.SpecEnv
 
-/-!
-# `value_equal` from an `eval_expr` run (lane E2)
-
-The `==`/`!=` arms (`0x800036e4`, `0x80003734`) copy both operands into two
-frame slots (`sp + 64`, `sp + 32`) and call `value_equal(&l, &r)` (H2's
-`valueEqualSpec`), which also reads the store (closures by address) and
-borrows 16 bytes of stack for `strcmp`. `ms_callValueEqual` is that call from
-a run: the two slots are carved out of the run's owned bytes as the values
-(their meaning is `valOf` of the stored words), the store comes out of the
-world (`world_store`), and all of it is handed back.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -24,7 +12,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The prologue's spills survive a memory that agrees on them. -/
 theorem EvalSaved.agree {M M' : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
     (h : EvalSaved M s ret v8 v9 v18 v19)
     (hag : ∀ k, s.toNat - 1088 + 1048 ≤ k → k < s.toNat - 1088 + 1088 → imgM M' k = imgM M k) :
@@ -35,8 +22,6 @@ theorem EvalSaved.agree {M M' : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
    (ldv_agree fun j hj => hag _ (by omega) (by omega)).trans h.s2,
    (ldv_agree fun j hj => hag _ (by omega) (by omega)).trans h.s3⟩
 
-/-- A value slot of a run's owned bytes, out as the value (its words are those
-`valOf` speaks of), with the rest of the run. -/
 theorem ms_carveWords (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
     {Mt : Mem} {p w0 w1 w2 : BitVec 64} {v : Value} (hS : ∀ k, InExt (p.toNat, 24) k → S k)
     (h0 : ldv .ld Mt p.toNat = w0) (h8 : ldv .ld Mt (p.toNat + 8) = w1)
@@ -51,9 +36,6 @@ theorem ms_carveWords (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64}
   iapply ms_carveVal N (a := p.toNat) (b := p.toNat) (img := imgM Mt) hS rfl rfl rfl $$ [Hms Hv]
   iframe Hms Hv
 
-/-- **`value_equal` from a run** (`jal` at `i`) on the two operand copies the
-run stored at `pa` and `pb` (disjoint slots of its owned bytes), with `sp = sp`
-and 16 bytes of stack below it. -/
 theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs}
     (hve : ⊢ ∀ pa pb s a b st B, valueEqualSpec (vsaModel live) N Wp pa pb s a b st B)

@@ -1,18 +1,9 @@
 import Vsa.Compiler.SimFor
 
-/-!
-# The forward simulation
-
-`sim_all`: every cost derivation of the nine relations is simulated by its code,
-by the mutual induction principle of the cost relations with the simulation
-statements as motives; each case is one of the per-rule lemmas.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- The forward simulation of each of the nine cost relations. -/
 structure Sims (code : List Ins) (T : List String) : Prop where
   e : ∀ {st d a e st' v n}, EvalECost st d a e st' v n → ESpec code T st d a e st' v n
   a : ∀ {st d a es st' vs n}, EvalArgsCost st d a es st' vs n → ASpec code T st d a es st' vs n

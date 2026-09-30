@@ -1,20 +1,9 @@
 import VsaIris.Vsa.HeapFree
 
-/-!
-# Heap edits for `_realloc_r`
-
-`_realloc_r` resizes in-use chunks in place. Besides the edits `free` uses
-(`PHeapAt.unlink`, `absorb`, `coalPrev`), it cuts an in-use chunk in two
-(`PHeapAt.cut`, the tail holding a zero-length block that `_free_r` then
-releases), grows the last chunk into the top (`PHeapAt.growTop`), and changes
-the length of a live block within its chunk (`PHeapAt.reblock`).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast VsaIris.Sym
 
-/-- Splitting a chunk into two in-use chunks keeps coalescing. -/
 theorem coal_cut {a b c : Chunk} (ha : a.inuse = true) (hb : b.inuse = true) :
     ∀ {cs₁ cs₂ : List Chunk}, Coal (cs₁ ++ c :: cs₂) → Coal (cs₁ ++ a :: b :: cs₂)
   | [], [], _ => by
@@ -32,25 +21,6 @@ theorem coal_cut {a b c : Chunk} (ha : a.inuse = true) (hb : b.inuse = true) :
     obtain ⟨hx, h'⟩ := coal_cons_cons.1 h
     exact coal_cons_cons.2 ⟨hx, coal_cut ha hb (cs₁ := y :: cs₁) h'⟩
 
-/-- A live extent sits at the payload start of an in-use chunk, and the chunk
-holding an address inside another chunk's range is that chunk. -/
-theorem exact_in {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (HH : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
-    {e : Nat × Nat} (he : e ∈ H) {X : Chunk} (hX : X ∈ chunks)
-    (h1 : X.addr + 16 ≤ e.1) (h2 : e.1 < X.addr + X.size) :
-    X.inuse = true ∧ X.addr + 16 = e.1 ∧ e.2 + 8 ≤ X.size := by
-  obtain ⟨c, hc, hu, hca, hcn⟩ := HH.exact e he he
-  have hcb := HH.walk.chunk_bounds c hc
-  have hXb := HH.walk.chunk_bounds X hX
-  rcases HH.walk.chunk_sep c hc X hX with rfl | h3 | h3
-  · exact ⟨hu, hca, hcn⟩
-  · omega
-  · omega
-
-/-- **Cut an in-use chunk in two.** The in-use chunk `x` of size `a + b`
-becomes the in-use chunks `x` (size `a`, its `PREV_INUSE` kept) and `x + a`
-(size `b`), which holds the zero-length block `(x + a + 16, 0)` for `free` to
-release. A live block at `x + 16` fits in the first part (`hfit`). -/
 theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {x a b : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨x, a + b, true⟩ :: cs₂) bins)
@@ -75,7 +45,7 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hx16 : x % 16 = 0 := hal _ hX
   simp only at hXb hx16
   unfold heapStart at hlo hXb
-  -- the walk around `x`
+
   obtain ⟨mid, W1, W2⟩ := HH.walk.append_inv
   have HX := walkHead W2
   have hmid : x = mid := HX.addr
@@ -86,7 +56,7 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hW3b : ∀ c ∈ cs₂, x + a + b ≤ c.addr ∧ c.addr + c.size ≤ top ∧ 32 ≤ c.size := by
     have := HX.rest.chunk_bounds; simpa [Nat.add_assoc] using this
   have hab16 : (a + b) % 16 = 0 := HX.al
-  -- words the cut does not write
+
   have keep : ∀ w, (∀ k, k < 8 → vsaFoot H (w + k)) → (w + 8 ≤ x + 8 ∨ x + 16 ≤ w) →
       (w + 8 ≤ x + a + 8 ∨ x + a + 16 ≤ w) → read64 m' w = read64 m w := by
     intro w hf h1 h2
@@ -96,7 +66,7 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     have := hg 0 (by omega); have := hg 7 (by omega)
     unfold allocGlobal InRange at *
     exact keep w (fun k hk => .inl (hg k hk)) (.inl (by omega)) (.inl (by omega))
-  -- the new walk
+
   have W3 : ChunkWalk m' (x + a + b) top cs₂ := by
     have R := HX.rest
     simp only at R
@@ -136,7 +106,7 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       (fun h1 hh1 => ⟨h', hhdr, hpi h1 hh1⟩) WX
     · have := hW1b c hc; exact .inl (by omega)
     · have := hW1b c hc; exact .inl (by omega)
-  -- the old and new chunk lists
+
   have hmemL : ∀ c, c ∈ cs₁ ++ ⟨x, a + b, true⟩ :: cs₂ ↔
       c ∈ cs₁ ∨ c = ⟨x, a + b, true⟩ ∨ c ∈ cs₂ := by
     intro c; simp only [List.mem_append, List.mem_cons]
@@ -162,7 +132,7 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · cases hf
     · cases hf
     · simp [h1]
-  -- links of bin nodes
+
   have Klink : ∀ j y, 0 < j → j < numBins → (y = binAt j ∨ y ∈ bins j) →
       fdOf m' y = fdOf m y ∧ bkOf m' y = bkOf m y := by
     intro j y hj0 hj hy
@@ -185,7 +155,7 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     fun w h1 h2 k hk => .inr (.inr (.inr (.inl ⟨by omega, by omega⟩)))
   have hXm : (⟨x, a, true⟩ : Chunk) ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ := by simp
   have hYm : (⟨x + a, b, true⟩ : Chunk) ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ := by simp
-  -- every live extent at the payload start of a chunk of the new list
+
   have hex : ∀ e ∈ H, ∃ c ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂,
       c.inuse = true ∧ c.addr + 16 = e.1 ∧ e.2 + 8 ≤ c.size := by
     intro e he
@@ -269,7 +239,6 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact ⟨_, hYm, rfl, rfl, by simp only; omega⟩
     · exact hex e he
 
-/-- Replacing a chunk by one with the same flag keeps coalescing. -/
 theorem coal_swap {c c' : Chunk} (hc : c'.inuse = c.inuse) :
     ∀ {cs₁ cs₂ : List Chunk}, Coal (cs₁ ++ c :: cs₂) → Coal (cs₁ ++ c' :: cs₂)
   | [], [], _ => by simpa using coal_single c'
@@ -286,7 +255,6 @@ theorem coal_swap {c c' : Chunk} (hc : c'.inuse = c.inuse) :
     obtain ⟨hx, h'⟩ := coal_cons_cons.1 h
     exact coal_cons_cons.2 ⟨hx, coal_swap hc (cs₁ := y :: cs₁) h'⟩
 
-/-- **A live block changes length within its chunk.** -/
 theorem PHeapAt.reblock {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {q n n' : Nat} (h : PHeapAt m ((q, n) :: H) top brkv chunks bins)
     {c : Chunk} (hc : c ∈ chunks) (hu : c.inuse = true) (hca : c.addr + 16 = q)
@@ -301,10 +269,6 @@ theorem PHeapAt.reblock {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chun
     · exact ⟨c, hc, hu, hca, hn⟩
     · exact HH.exact e (List.mem_cons_of_mem _ he) (List.mem_cons_of_mem _ he)
 
-/-- **The last chunk before the top resized** (`_realloc_r` into the top):
-the in-use chunk `x` just below the top takes `a'` bytes, the top starting
-right after it, its header, the top pointer and the new top header written in
-`m'`. The live extents in `x` fit the new size. -/
 theorem PHeapAt.setTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ : List Chunk} {bins : Nat → List Nat} {x a a' : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ [⟨x, a, true⟩]) bins)
@@ -485,9 +449,6 @@ theorem PHeapAt.setTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact ⟨_, hXm, rfl, h1, by
         simp only at h1 h2 ⊢; have := hfit e he (by omega) (by omega); omega⟩
 
-/-- **The last chunk grows into the top.** The in-use chunk `x` of size `a`
-just below the top takes `d` more bytes; the top moves up by `d` with its
-header rewritten, and still has room below the break. -/
 theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ : List Chunk} {bins : Nat → List Nat} {x a d : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ [⟨x, a, true⟩]) bins)
@@ -505,9 +466,6 @@ theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   exact h.setTop (a' := a + d) (by omega) (by omega) hroom hhdr hsz hlow hpi htp hth hag
     fun e _ _ h2 => by omega
 
-/-- **A live block is fresh among the others.** A block at the payload start
-of its in-use chunk, starting where no other live block does, lies in the
-arena and is disjoint from every other live extent. -/
 theorem PHeapAt.fresh_of_block {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {q n : Nat}
     (h : PHeapAt m ((q, n) :: H) top brkv chunks bins) (hst : Starts ((q, n) :: H)) :
@@ -535,7 +493,6 @@ theorem PHeapAt.fresh_of_block {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat
     · omega
     · omega
 
-/-- The bytes of a live block other than those listed are footprint. -/
 theorem PHeapAt.block_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {q n : Nat}
     (h : PHeapAt m ((q, n) :: H) top brkv chunks bins) (hst : Starts ((q, n) :: H)) :
@@ -547,7 +504,6 @@ theorem PHeapAt.block_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     by show _ < heapEnd; exact Nat.lt_of_lt_of_le (by omega) hhi,
     fun e he hin => hdj e he (q + k) ⟨by simp only; omega, by simp only; omega⟩ hin⟩
 
-/-- The heap shape depends only on which blocks are live. -/
 theorem PHeapAt.perm {m : Mem} {H H' : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) (hp : ∀ e, e ∈ H' ↔ e ∈ H) :
     PHeapAt m H' top brkv chunks bins := by
@@ -575,8 +531,6 @@ theorem Starts.swap {a b : Nat × Nat} {H : List (Nat × Nat)} (h : Starts (a ::
   obtain ⟨⟨h1, h2⟩, h3, h4⟩ := h
   exact ⟨⟨Ne.symm h1, h3⟩, h2, h4⟩
 
-/-- **A chunk's payload is footprint** where no live block starts at it: every
-other live extent lies in another chunk. -/
 theorem PHeapAt.payload_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {c : Chunk} (hc : c ∈ chunks) (hno : ∀ e ∈ H, e.1 ≠ c.addr + 16) :
@@ -596,7 +550,6 @@ theorem PHeapAt.payload_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   · omega
   · omega
 
-/-- **A new live block at an in-use chunk's payload.** -/
 theorem PHeapAt.addBlock {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) {q n : Nat}
     {c : Chunk} (hc : c ∈ chunks) (hu : c.inuse = true) (hca : c.addr + 16 = q)

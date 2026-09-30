@@ -1,17 +1,9 @@
 import Vsa.Compiler.SimCallE
 
-/-!
-# Forward simulation: printing arguments
-
-`run_printLoop`: the print loop displays the argument values in the
-temporaries, separated by spaces, exactly as `printArgs`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- Registers the print loop may change. -/
 def prClob : List Nat := t6 :: dpClob
 
 theorem DpFrame.refl (m : Mem) : DpFrame m m := fun _ _ _ _ => rfl
@@ -55,7 +47,6 @@ theorem InTmps.frame {H : CloMap} {m m' : Mem} {h sp t : Nat} {vs : List Value}
   rw [hag _ (by omega) (by omega) (by omega), hag _ (by omega) (by omega) (by omega)]
   exact this.mono ho (Nat.le_refl _)
 
-/-- Length of the print loop (independent of its position). -/
 def plLen (t n : Nat) : Nat := (printLoopG 0 t n).length
 
 theorem printLoopG_len : ∀ (p t n : Nat), (printLoopG p t n).length = plLen t n

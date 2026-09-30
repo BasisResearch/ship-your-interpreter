@@ -1,33 +1,10 @@
 import VsaIris.Vsa.MallocPro
 
-/-!
-# `_malloc_r`'s last-remainder check
-
-`0x800048ec` is the join every request that no exact bin served reaches: the
-small-bin miss (`j_small`), the large-bin scan's misses (`0x800048bc`,
-`0x800048d0`) and its exhausted walk (`0x800048e8`). The code reads bin 1's
-`fd` word — the last remainder — and dispatches:
-
-* bin 1 empty (`fd` is the header itself): the block search (`0x80004be8`);
-* the remainder is at least `nb + 32`: split it (`0x80004da0`);
-* otherwise bin 1 is cleared (`0x80004910`, `0x80004914`) and
-  * the remainder is within 31 bytes of `nb`: take it whole (`0x80004d78`),
-  * it is smaller than `nb`: put it back on its own bin (`0x8000491c`).
-
-Between the clearing stores and the re-binding the victim is free and on no
-bin, so `HeapAt` does not hold. `MDetach` names exactly what the code owns
-there: bin `i`'s link words point at the header, and the memory is the heap's
-everywhere else.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **The remainder's two signed comparisons.** `a3 := t1 - a4` with both
-operands well below `2 ^ 63`: `blt a2,a3` at `0x8000490c` (with `a2 = 31`)
-decides `nb + 32 ≤ sz`, and `bgez a3` at `0x80004918` decides `nb ≤ sz`. -/
 theorem lr_cmp {x y : BitVec 64} {sz nb : Nat} (hx : x.toNat = sz) (hy : y.toNat = nb)
     (hsz : sz < 2 ^ 62) (hnb : nb < 2 ^ 62) :
     ((31#64).toInt < (x - y).toInt ↔ nb + 32 ≤ sz) ∧
@@ -48,9 +25,6 @@ theorem lr_cmp {x y : BitVec 64} {sz nb : Nat} (hx : x.toNat = sz) (hy : y.toNat
     rw [hi, h31, h0]
     exact ⟨by constructor <;> intro hc <;> omega, by constructor <;> intro hc <;> omega⟩
 
-/-- The registers at the last-remainder victim: its address in `a5`, its chunk
-size in `t1`, the remainder `t1 - a4` in `a3`, the request in `a4`, and bin
-1's header in `t4`. -/
 structure LRVictim (nb sz v : Nat) (R : Nat → BitVec 64) : Prop where
   a5 : (R 15).toNat = v
   t1 : (R 6).toNat = sz
@@ -58,12 +32,6 @@ structure LRVictim (nb sz v : Nat) (R : Nat → BitVec 64) : Prop where
   a4 : (R 14).toNat = nb
   t4 : (R 29).toNat = binAt 1
 
-/-- **A detached victim.** Bin `i`'s only member `v` is unlinked: the header's
-`fd` and `bk` point at itself and the memory is the heap's `Mt` everywhere
-else. `_malloc_r` is in this state between clearing the last-remainder bin
-(`0x80004914`) and either taking the victim whole (`0x80004d78`) or putting it
-back on its own bin (`0x8000491c`). `HeapAt` does not hold there, so the facts
-the code owns are named instead of being read off a shape. -/
 structure MDetach (C : MCtx) (Mt Mt' : Mem) (bins : Nat → List Nat) (i v : Nat) : Prop where
   bin : bins i = [v]
   fd : fdOf Mt' (binAt i) = some (binAt i)
@@ -72,7 +40,6 @@ structure MDetach (C : MCtx) (Mt Mt' : Mem) (bins : Nat → List Nat) (i v : Nat
   pres : ∀ a, vsaFoot C.H a → (Mt'[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt'[a]? = C.Mt0[a]?
 
-/-- **`J_lr`** (`0x800048ec`): the last-remainder check. -/
 theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
@@ -100,7 +67,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hbinI := HH.bins_list 1 (by decide) (by unfold numBins; decide)
   have hring := (binList_iff_ring.1 hbinI).1
   have hnev := (binList_iff_ring.1 hbinI).2
-  -- the bin's `fd` word
+
   obtain ⟨first, hfd, hfirst⟩ :
       ∃ f, fdOf Mt (binAt 1) = some f ∧ ((bins 1 = [] ∧ f = binAt 1) ∨ bins 1 = [f]) := by
     obtain ⟨l, hl⟩ : ∃ l, bins 1 = l := ⟨_, rfl⟩
@@ -129,7 +96,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_ofNat]; unfold binAt avAddr; decide
   refine st_800048f8 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc ⊢
-  · -- bin 1 is empty
+  ·
     rw [ht4] at hc
     have hb : bins 1 = [] := by
       rcases hfirst with ⟨h1, _⟩ | h1
@@ -146,7 +113,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     · exact ha6
     · unfold binAt avAddr; rfl
     · exact h8
-  · -- the last remainder is bin 1's only member
+  ·
     rw [ht4] at hc
     have hb : bins 1 = [first] := by
       rcases hfirst with ⟨_, rfl⟩ | h1
@@ -163,7 +130,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     have hhlt := Vsa.Sim.read64_lt _ _ _ hhr
     have hhfoot := foot_header B (.inr ⟨_, hfree, rfl⟩)
     simp only at hhfoot
-    -- `ld t1,8(a5)`: the victim's header
+
     refine st_800048fc O.live ?_ ?_ ?_
     · sx_norm; unfold LdOK Vsa.Sim.tohostAddr; sx_addr
     · sx_norm; exact O.foot_at hhfoot _ (by sx_addr)
@@ -182,7 +149,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       hszv ha4 hsz62 hnb62
     refine st_8000490c O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc2 ⊢
-    · -- the remainder is at least `nb + 32`: split it
+    ·
       refine hsplit first sz hb hfree (hcmp.1.1 hc2) _
         (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_, ?_⟩ ?_ <;>
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -194,7 +161,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       · exact ha4
       · unfold binAt avAddr; rfl
       · exact h8
-    · -- bin 1 is cleared and the victim taken off it
+    ·
       have hlt32 : sz < nb + 32 := by
         have := hcmp.1
         omega
@@ -227,7 +194,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         · exact fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))
       refine st_80004918 O.live (fun hc3 => ?_) (fun hc3 => ?_) <;>
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc3
-      · -- the remainder is within 31 bytes of `nb`: take the victim whole
+      ·
         refine hexact first sz hfree (hcmp.2.1 hc3) hlt32 _ _
           (((F.of_regs ?_ ?_ ?_ ?_).store (by omega)).store (by omega)) hD
           ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
@@ -236,7 +203,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         · exact hszv
         · exact ha4
         · exact hwv
-      · -- the remainder is smaller than `nb`: put the victim back on its own bin
+      ·
         refine hrebin first sz hfree (by have := hcmp.2; omega) _ _
           (((F.of_regs ?_ ?_ ?_ ?_).store (by omega)).store (by omega)) hD
           ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_, ?_⟩ ?_ <;>
@@ -250,17 +217,12 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         · exact hwv
         · exact h8
 
-/-- A footprint doubleword off bin `i`'s link words reads the same after the
-detach. -/
 theorem MDetach.read {C : MCtx} {Mt Mt' : Mem} {bins : Nat → List Nat} {i v : Nat}
     (D : MDetach C Mt Mt' bins i v) {a : Nat} (hf : ∀ k, k < 8 → vsaFoot C.H (a + k))
     (hoff : a + 8 ≤ binAt i + 16 ∨ binAt i + 32 ≤ a) : read64 Mt' a = read64 Mt a :=
   read64_agreeP (P := fun b => vsaFoot C.H b ∧ ¬ (binAt i + 16 ≤ b ∧ b < binAt i + 32))
     (fun b hb => D.agree b hb.1 hb.2) (fun k hk => ⟨hf k hk, by omega⟩)
 
-/-- **The exact-fit last remainder** (`0x80004d78`): the victim is already off
-bin 1 (`MDetach`) and the remainder is below `MINSIZE`, so the whole chunk is
-returned. Set `PREV_INUSE` in the next header, unlock, and return `v + 16`. -/
 theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb sz v : Nat}
     (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb)
@@ -291,31 +253,31 @@ theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
   have hdr' : read64 Mt' (v + sz + 8) = some hd := (D.read hnx (by omega)).trans hdr
   have hES : ((R 2) + sign_extend (m := 64) (0x008#12)).toNat = C.s.toNat - 96 + 8 := by
     rw [hs2]; sx_addr
-  -- `add t1,a5,t1`: the next chunk
+
   refine st_80004d78 O.live ?_
   sx_norm
   have hEN : ((R 15) + (R 6) + 8#64).toNat = v + sz + 8 := by sx_addr
-  -- `ld a4,8(t1)`: its header
+
   refine st_80004d7c O.live ?_ ?_ ?_
   · sx_norm; rw [hEN]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEN]; exact O.foot_at hnx _ rfl
   sx_norm
   rw [ldv_at hdr' _ hEN]
   refine st_80004d80 O.live ?_
-  -- `sd a5,8(sp)`: spill the victim
+
   refine st_80004d84 O.live ?_ ?_ ?_
   · sx_norm; rw [hES]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hES]; exact O.stack (by unfold mHead; omega) (by omega)
   sx_norm
   rw [hES]
   refine st_80004d88 O.live ?_
-  -- `sd a4,8(t1)`: the next header, with `PREV_INUSE`
+
   refine st_80004d8c O.live ?_ ?_ ?_
   · sx_norm; rw [hEN]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEN]; exact O.foot_at hnx _ rfl
   sx_norm
   rw [hEN]
-  -- the next chunk is a chunk, not the top: `v` is free
+
   have hdeven : hd % 2 = 0 := by
     unfold prevInuse at hdpi
     simp only [beq_eq_false_iff_ne, ne_eq] at hdpi; omega
@@ -340,7 +302,7 @@ theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     rw [hoe, BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdlt]
     simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     omega
-  -- the heap after the take
+
   have hfd2 : fdOf (writeLog (writeLog Mt' [(C.s.toNat - 96 + 8, 8, R 15)])
       [(v + sz + 8, 8, BitVec.ofNat 64 hd ||| 1#64)]) (binAt 1) = some (binAt 1) := by
     show read64 _ (binAt 1 + 16) = _
@@ -392,9 +354,6 @@ theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   exact ha0
 
-/-- **The last-remainder check with its exact-fit return.** `lr_check` with
-`lr_take` closing the whole-chunk arm, so only the split (`0x80004da0`), the
-re-binding (`0x8000491c`) and the block search (`0x80004be8`) remain. -/
 theorem lr_last {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)

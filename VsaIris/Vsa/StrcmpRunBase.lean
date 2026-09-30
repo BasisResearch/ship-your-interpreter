@@ -2,30 +2,6 @@ import VsaIris.Vsa.StrlenOwned
 import VsaIris.Vsa.StrcmpSeg
 import Vsa.While.StringOrder
 
-/-!
-# `strcmp`: code, read cells, and the peeking segment step
-
-INTERP_DESIGN.md §9 (H3's `strcmp`). `strcmp` (`0x80006ea0 … 0x80006fcc`) is
-a leaf: no frame, no call, no store. The whole function is ONE `LocalRun`
-(`VsaIris/LocalRun.lean`) over the reflected blocks of `StrcmpSeg.lean`
-(`scripts/gen_fn.py`), the shape of `strlen` (`Strlen.lean`).
-
-## Loads of bytes nobody owns
-
-The aligned word loop loads whole doublewords of both strings, so it reads up
-to seven bytes past each NUL. `strAt` owns only the characters and the NUL;
-the window `StrWin` says the over-read bytes are RAM off the HTIF words, and
-nothing about their values. A `LocalRun` segment (`SegFrom`) quantifies over
-the machine state BEFORE it fixes its successor, so a segment may read a byte
-it does not own: `cmpStep` instantiates the reflected segment at the values
-the state actually holds (`vals := mem σ`) and hands the continuation those
-values together with their agreement with the persistent cells. The
-continuation is proved for EVERY such `vals`; branch outcomes that depend on
-unowned bytes (the NUL-word re-compare `bne a2,a3`) are case splits in the
-continuation. Loads are total reads (`MemFacts` is `getD`), so the unowned
-bytes need not be present, only in RAM (`StrWin`).
--/
-
 namespace VsaIris.Inst.Strcmp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -33,8 +9,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config)
 open Vsa.Sim Vsa.MemRepr
 open VsaIris.Inst.Strlen (codeText memFoot mem_memFoot memFoot_mem)
-
-/-! ## Code -/
 
 abbrev cmpBase : Nat := 0x80006ea0
 
@@ -73,7 +47,6 @@ def strcmpCodeE : List (BitVec 8) :=
    0x67#8, 0x80#8, 0x00#8, 0x00#8, 0x13#8, 0x05#8, 0x05#8, 0x01#8, 0x93#8, 0x85#8, 0x05#8, 0x01#8,
    0xe3#8, 0x12#8, 0xd6#8, 0xfc#8, 0x13#8, 0x05#8, 0x00#8, 0x00#8, 0x67#8, 0x80#8, 0x00#8, 0x00#8]
 
-/-- The 300 code bytes of `strcmp`, in five chunks. -/
 def strcmpCode : List (BitVec 8) :=
   strcmpCodeA ++ strcmpCodeB ++ strcmpCodeC ++ strcmpCodeD ++ strcmpCodeE
 
@@ -85,29 +58,20 @@ theorem strcmpLoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
   repeat' apply And.intro
   all_goals (apply h (_, _); decide)
 
-/-! ## The pin list and the run -/
-
-/-- The GPRs `strcmp` reads or writes: `ra t0 t1 t2 a0 … a5`. -/
 def cmpRegs : List Nat := [1, 5, 6, 7, 10, 11, 12, 13, 14, 15]
 
-/-- The run's owned registers. -/
 def cmpRs : List Nat := VsaIris.PC :: cmpRegs
 
-/-- The uniform pin list (`leafL cmpRegs`, spelled out for the kernel). -/
 def cmpL (rv : Nat → BitVec 64) : GRegs :=
   [(1, rv 1), (5, rv 5), (6, rv 6), (7, rv 7), (10, rv 10), (11, rv 11), (12, rv 12),
    (13, rv 13), (14, rv 14), (15, rv 15)]
 
 theorem cmpL_eq (rv : Nat → BitVec 64) : cmpL rv = leafL cmpRegs rv := rfl
 
-/-- **The end condition**: back at `r`, `ra = r`, and the result's sign is the
-byte-lexicographic sign of the two strings. -/
 def cmpQ (r : BitVec 64) (cx cy : List Char) (rv : Nat → BitVec 64) (_ : Nat → BitVec 8) :
     Prop :=
   rv VsaIris.PC = r ∧ rv 1 = r ∧ strcmpSign (rv 10) = strcmpSpecSign cx cy
 
-/-- The whole of `strcmp` from register values `rv`, at any byte valuation:
-it owns no bytes. -/
 def CRun (live : Nat → Prop) (T : List (Nat × BitVec 8)) (r : BitVec 64) (cx cy : List Char)
     (n : Nat) (rv : Nat → BitVec 64) : Prop :=
   ∀ mv, LocalRun (vsaModel live) [] T cmpRs (fun _ => False) (cmpQ r cx cy) n rv mv
@@ -123,10 +87,6 @@ theorem CRun.done {live T r cx cy} {n : Nat} {rv : Nat → BitVec 64}
   | zero => exact h
   | succ n => exact .inl h
 
-/-- **One reflected segment of `strcmp`, reading unowned bytes.** The segment
-reads the bytes `peek` at the values `vals` the machine holds; its load data
-`lds vals` is built from them. The continuation is proved for every `vals`
-agreeing with the persistent cells `T`. -/
 theorem cmpStep {live : Nat → Prop} {T : List (Nat × BitVec 8)} {r : BitVec 64}
     {cx cy : List Char} {rv : Nat → BitVec 64} (m : Nat)
     (hcodeL : ∀ q ∈ codeText cmpBase strcmpCode, live q.1)
@@ -182,35 +142,24 @@ theorem cmpStep {live : Nat → Prop} {T : List (Nat × BitVec 8)} {r : BitVec 6
     · exact hro.2 p h
     · obtain ⟨a, _, rfl⟩ := List.mem_map.mp h; rfl⟩ hr hm
 
-
-/-! ## Strings and the read cells -/
-
-/-- The bytes of a C string at `p`: the characters' codes, then the NUL, as
-`byteVal`s; the characters are nonzero ASCII. -/
 structure SBytes (img : Nat → BitVec 8) (p : Nat) (cs : List Char) : Prop where
   byte : ∀ k, k ≤ cs.length → (img (p + k)).toNat = byteVal cs k
   ascii : ∀ k, k < cs.length → 0 < byteVal cs k ∧ byteVal cs k < 128
 
-/-- The eight-byte over-read window of a `len`-character string at `p`: RAM,
-off the HTIF words (`StrWin`). -/
 structure SWin (p len : Nat) : Prop where
   lo : 0x80000000 ≤ p
   hi : p + len + 8 ≤ 0x100000000
   htif : p + len + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ p
 
-/-- The magic mask `strcmp` loads from `.rodata`. -/
 def maskText : List (Nat × BitVec 8) := (List.range 8).map fun k => (0x8001ac80 + k, 0x7f#8)
 
-/-- A string's persistent cells: `[p, p+len]`. -/
 def strT (p len : Nat) (img : Nat → BitVec 8) : List (Nat × BitVec 8) :=
   (List.range (len + 1)).map fun k => (p + k, img (p + k))
 
-/-- Every persistent cell of a `strcmp` run. -/
 def cmpText (p lx : Nat) (ix : Nat → BitVec 8) (q ly : Nat) (iy : Nat → BitVec 8) :
     List (Nat × BitVec 8) :=
   codeText cmpBase strcmpCode ++ maskText ++ strT p lx ix ++ strT q ly iy
 
-/-- **The side conditions of one `strcmp` run.** -/
 structure Ctx (live : Nat → Prop) (p q r : BitVec 64) (cx cy : List Char)
     (ix iy : Nat → BitVec 8) : Prop where
   codeL : ∀ t ∈ codeText cmpBase strcmpCode, live t.1
@@ -247,7 +196,6 @@ theorem valsY {vals : Nat → BitVec 8} (hv : ∀ t ∈ TT p q cx cy ix iy, vals
     exact List.mem_map_of_mem (f := fun k => (q.toNat + k, iy (q.toNat + k)))
       (List.mem_range.mpr (by omega)))
 
-/-- At the byte-loop head `0x80006f84`, iteration `k`. -/
 structure ByteSt (p q r : BitVec 64) (cx cy : List Char) (k : Nat) (rv : Nat → BitVec 64) :
     Prop where
   pc : rv VsaIris.PC = 0x80006f84#64
@@ -256,9 +204,6 @@ structure ByteSt (p q r : BitVec 64) (cx cy : List Char) (k : Nat) (rv : Nat →
   a1 : rv 11 = q + BitVec.ofNat 64 k
   pre : BytePrefix cx cy k
 
-/-! ## Load and guard facts -/
-
-/-- `n` bytes of `f` from `a`, in address order (a load's byte list). -/
 def bytesAt (f : Nat → BitVec 8) (a n : Nat) : List (BitVec 8) :=
   (List.range n).map fun j => f (a + j)
 
@@ -266,7 +211,6 @@ theorem bytesAt_getD (f : Nat → BitVec 8) (a : Nat) {n j : Nat} (h : j < n) :
     (bytesAt f a n).getD j 0#8 = f (a + j) := by
   simp [bytesAt, h]
 
-/-- A byte load's `MemFacts` from its address and the byte's total read. -/
 theorem lbuF {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {line : MInstr}
     {bs : List (BitVec 8)} (hkind : line.kind = .lbu) {ea : Nat}
     (haddr : (eaddrM line L).toNat = ea) (hlo : 0x80000000 ≤ ea) (hhi : ea + 1 ≤ 0x100000000)
@@ -278,8 +222,6 @@ theorem lbuF {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {line : MInstr}
   rw [haddr]
   exact ⟨⟨hlo, hhi, hh⟩, hb⟩
 
-/-- A doubleword load's `MemFacts` from its address and the eight bytes' total
-reads. -/
 theorem ldF {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {line : MInstr}
     (hkind : line.kind = .ld) {ea : Nat} (f : Nat → BitVec 8)
     (haddr : (eaddrM line L).toNat = ea) (hlo : 0x80000000 ≤ ea) (hhi : ea + 8 ≤ 0x100000000)
@@ -295,7 +237,6 @@ theorem ldF {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {line : MInstr}
   exact ⟨by simpa using g 0 (by omega), g 1 (by omega), g 2 (by omega), g 3 (by omega),
     g 4 (by omega), g 5 (by omega), g 6 (by omega), g 7 (by omega)⟩
 
-/-- Byte `k` of a loaded doubleword. -/
 theorem ldWord_byte (f : Nat → BitVec 8) (a k : Nat) (hk : k < 8) :
     (bytesVal .ld (bytesAt f a 8)).extractLsb' (8 * k) 8 = f (a + k) := by
   have hshow : bytesVal .ld (bytesAt f a 8) =

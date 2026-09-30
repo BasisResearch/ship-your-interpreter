@@ -1,15 +1,6 @@
 import VsaIris.Interp.ExecEnv
 import VsaIris.Interp.SeqLoop
 
-/-!
-# `exec_stmt`'s block arm: runs and node facts (lane E5)
-
-`0x8000418c`: `mv a0,s3; jal env_new` (`0x80004190`), then `lw a5,16(s0)` (the
-count), `mv s3,a0` (the new frame), `li a6,0`, `blez a5` to the shared exit
-(`0x80004090`: `li a0,0`) or on to the statement loop's head `0x800041a4`
-(lane G's `blockSeqT_body`/`blockSeqP_body`).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
@@ -44,7 +35,6 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (stmtView aS.toNat 20) (InExt (s.toNat - 176, 176)) Q 0x80004194#64 R Mt
   by ix_run hlive using [h8, hc] at 0x800041a4 0x80004090
 
-/-- Every byte of a represented statement array is read-covered and present. -/
 theorem stmtArray_cover {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {ss : List Vsa.While.Stmt}, StmtArrayReprWithin m P a n ss →
       ∀ j, j < 8 * n → P (a + j) ∧ (m[a + j]?).isSome
@@ -55,8 +45,6 @@ theorem stmtArray_cover {m : Mem} {P : Nat → Prop} :
     · have := stmtArray_cover hrest (j - 8) (by omega)
       rwa [show a + 8 + (j - 8) = a + j by omega] at this
 
-/-- A nonempty block node over a geometric view: G's `BlockNode` (the loop's
-node facts) and the count. -/
 theorem blockNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {ss : List Vsa.While.Stmt}
     (h : StmtReprWithin m P aS.toNat (.block ss)) (hg : ∀ k, P k → Interp.ReadOK k) :
     ∃ arr count, StmtNode m P aS 2 20 ∧

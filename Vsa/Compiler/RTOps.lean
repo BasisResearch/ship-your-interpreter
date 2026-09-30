@@ -1,28 +1,16 @@
 import Vsa.Compiler.VRepr
 
-/-!
-# The operator routines
-
-Each routine takes the left operand in `(a0, a1)` and the right one in `(a2, a3)`
-and either returns the representation of `binOpSem` of the represented values,
-or reaches the error exit exactly when `binOpSem` has no result (for `+`, also
-when the object heap is exhausted).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- `v` is an integer. -/
 def IsIntV (v : Value) : Prop := ∃ a, v = .int a
 
-/-- `v` is a string. -/
 def IsStrV (v : Value) : Prop := ∃ a, v = .str a
 
 @[simp] theorem isIntV_int (a : Int) : IsIntV (.int a) := ⟨a, rfl⟩
 @[simp] theorem isStrV_str (a : String) : IsStrV (.str a) := ⟨a, rfl⟩
 
-/-- Integer operators have no result on anything but two integers. -/
 theorem binOpSem_int_none {s : Store} {op : BinOp} {l r : Value}
     (hop : op = .sub ∨ op = .mul ∨ op = .div ∨ op = .mod)
     (h : ¬ (IsIntV l ∧ IsIntV r)) : binOpSem s op l r = none := by
@@ -61,19 +49,15 @@ theorem binOpSem_add_none {s : Store} {l r : Value} (h1 : ¬ (IsStrV l ∨ IsStr
     (h2 : ¬ (IsIntV l ∧ IsIntV r)) : binOpSem s .add l r = none := by
   cases l <;> cases r <;> simp_all [binOpSem]
 
-/-- Selector of an ordering comparison in `a4`. -/
 def selOf : BinOp → Nat
   | .lt => 0 | .le => 1 | .gt => 2 | .ge => 3 | _ => 0
 
-/-- The truth value an ordering comparison selects from a three-way result. -/
 def selRes (sel : Nat) (c : Int) : Bool :=
   if sel = 0 then decide (c < 0) else if sel = 1 then decide (c ≤ 0) else if sel = 2 then decide (0 < c)
   else decide (0 ≤ c)
 
-/-- Three-way comparison of integers. -/
 def sgnI (a b : Int) : Int := if a < b then -1 else if b < a then 1 else 0
 
-/-- The ordering comparisons. -/
 def IsOrd (op : BinOp) : Prop := op = .lt ∨ op = .le ∨ op = .gt ∨ op = .ge
 
 theorem binOpSem_ord_int {s : Store} {op : BinOp} (hop : IsOrd op) (a b : Int) :
@@ -100,7 +84,6 @@ section
 variable {code : List Ins} (hR : RTLoaded code)
 include hR
 
-/-- The operand registers hold `l` and `r`. -/
 structure Operands (H : CloMap) (m : Mem) (h : Nat) (L : GRegs) (l r : Value)
     (t1 p1 t2 p2 : BitVec 64) : Prop where
   h10 : Has L a0 t1
@@ -292,10 +275,8 @@ theorem run_mod {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
       · exact reach_here ⟨rfl, rfl, by rw [hn]⟩
       · next h1 h2 => simp_all
 
-/-- Registers the ordering comparison may change. -/
 def cmpClob : List Nat := [ra, t0, t1, t2, t3, t4, t5, a0, a1, s10]
 
-/-- The selection tail of the ordering comparison, from the three-way result in `a0`. -/
 theorem cmp_sel {L L0 : GRegs} {m : Mem} {o : Array String} {c : Int} {sel : Nat} {rr : BitVec 64}
     (hc : c = -1 ∨ c = 0 ∨ c = 1) (hsel : sel < 4) (h10 : Has L a0 (BitVec.ofInt 64 c))
     (h14 : Has L a4 (BitVec.ofNat 64 sel)) (h26 : Has L s10 rr) (hal : rr.toNat % 4 = 0)
@@ -306,7 +287,7 @@ theorem cmp_sel {L L0 : GRegs} {m : Mem} {o : Array String} {c : Int} {sel : Nat
   have k26 := has_mem h26 (by decide)
   have e10 := srcVal_of_has h10; have e14 := srcVal_of_has h14; have e26 := srcVal_of_has h26
   simp only [a0, a4, s10] at k10 k14 k26 e10 e14 e26
-  -- the two endings
+
   have hend : ∀ (L' : GRegs) (b : Bool), Keep cmpClob L0 L' → Has L' s10 rr →
       (Has L' a1 (if b then 1 else 0) → b = selRes sel c) → Has L' a1 (if b then 1 else 0) →
       Reaches code ⟨pcOf (cmpPos + 32), L', m, o⟩ (fun B => B.pc = rr ∧ B.mem = m ∧ B.out = o ∧
@@ -336,7 +317,7 @@ theorem cmp_sel {L L0 : GRegs} {m : Mem} {o : Array String} {c : Int} {sel : Nat
       Reaches code ⟨pcOf (cmpPos + 32), L', m, o⟩ (fun B => B.pc = rr ∧ B.mem = m ∧ B.out = o ∧
         Has B.regs a0 1 ∧ Has B.regs a1 (if selRes sel c then 1 else 0) ∧ Keep cmpClob L0 B.regs) :=
     fun L' hk' h26' h11' hs => hend L' false hk' h26' (fun _ => hs.symm) (by simpa using h11')
-  -- the dispatch on the selector
+
   apply run_seg hR.fits hR.cmp 16 (cmpPos + 16) rfl [mvi a1 0, mvi t1 0,
     Br .eq a4 t1 (cmpPos + 18) (cmpPos + 24), mvi t1 1, Br .eq a4 t1 (cmpPos + 20) (cmpPos + 26),
     mvi t1 2, Br .eq a4 t1 (cmpPos + 22) (cmpPos + 28), J (cmpPos + 23) (cmpPos + 30)] (by decide)
@@ -345,7 +326,7 @@ theorem cmp_sel {L L0 : GRegs} {m : Mem} {o : Array String} {c : Int} {sel : Nat
     scPos, cpPos, itPos, psPos, k10, k14, k26, e10, e14, e26]
   have hk1 : ∀ L', Keep cmpClob L0 L' → ∀ (r : Nat) (v : BitVec 64), r ∈ cmpClob →
       Keep cmpClob L0 (gset L' r v) := fun L' h r v hr => h.gset hr
-  -- one selection block: branch to done on `cond`, else to the true ending
+
   rcases (show sel = 0 ∨ sel = 1 ∨ sel = 2 ∨ sel = 3 by omega) with rfl | rfl | rfl | rfl
   · simp only [show BitVec.ofNat 64 0 = 0 from rfl, if_true]
     apply run_seg hR.fits hR.cmp 24 (cmpPos + 24) rfl
@@ -428,7 +409,6 @@ theorem cmp_sel {L L0 : GRegs} {m : Mem} {o : Array String} {c : Int} {sel : Nat
 theorem selOf_lt {op : BinOp} (hop : IsOrd op) : selOf op < 4 := by
   rcases hop with rfl | rfl | rfl | rfl <;> decide
 
-/-- **Ordering comparisons.** -/
 theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
     {op : BinOp} (hop : IsOrd op) {l r : Value} {t1 p1 t2 p2 rr : BitVec 64}
     (hops : Operands H m h L l r t1 p1 t2 p2) (h14 : Has L a4 (BitVec.ofNat 64 (selOf op)))
@@ -445,7 +425,7 @@ theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
   have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hra
   simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
   have hsel := selOf_lt hR hop
-  -- the finish from the three-way result
+
   have hfin : ∀ (c : Int) (v : Value) L', (c = -1 ∨ c = 0 ∨ c = 1) → Has L' a0 (BitVec.ofInt 64 c) →
       Has L' a4 (BitVec.ofNat 64 (selOf op)) → Has L' s10 rr → Keep cmpClob L L' →
       binOpSem s op l r = some v → v = .bool (selRes (selOf op) c) →
@@ -465,7 +445,7 @@ theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
         | none => B.pc = pcOf errPos) := fun hn L' => reach_here ⟨rfl, rfl, by rw [hn]⟩
   have hrest : ∀ L' : GRegs, Keep cmpClob L L' → Has L' a4 (BitVec.ofNat 64 (selOf op)) → True :=
     fun _ _ _ => trivial
-  -- the entry block, for integers and the dispatch to strings
+
   apply run_seg hR.fits hR.cmp 0 cmpPos (by simp) [mv s10 ra,
     mvi t0 2, Br .ne a0 t0 (cmpPos + 2) (cmpPos + 12), Br .ne a2 t0 (cmpPos + 3) errPos,
     Br .lt a1 a3 (cmpPos + 4) (cmpPos + 8), Br .lt a3 a1 (cmpPos + 5) (cmpPos + 10),
@@ -552,10 +532,8 @@ theorem run_cmp {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
       rw [if_pos ht2]
       exact hnone (binOpSem_ord_none hop hint hs2) _
 
-/-- Registers `==` may change. -/
 def eqClob : List Nat := [ra, t0, t1, t2, t3, t4, t5, a0, a1, s10]
 
-/-- **Equality.** -/
 theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
     {l r : Value} {t1 p1 t2 p2 rr : BitVec 64} (hops : Operands H m h L l r t1 p1 t2 p2)
     (hinj : CloInj H) (hra : Has L ra rr) (hal : rr.toNat % 4 = 0) :
@@ -568,7 +546,7 @@ theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
   have e10 := srcVal_of_has h10; have e11 := srcVal_of_has h11; have e12 := srcVal_of_has h12
   have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hra
   simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
-  -- the endings
+
   have hdone : ∀ (L' : GRegs) (b : Bool), b = l.equal r → Keep eqClob L L' → Has L' s10 rr →
       Has L' a1 (if b then 1 else 0) →
       Reaches code ⟨pcOf (eqPos + 10), L', m, o⟩ (fun B => B.pc = rr ∧ B.out = o ∧ B.mem = m ∧
@@ -610,7 +588,7 @@ theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
   wp_simp [eqPos, cmpPos, modPos, divPos, mulPos, subPos, addPos, ccPos, csPos, dpPos, nfPos, trPos,
     scPos, cpPos, itPos, psPos, k10, k11, k12, k13, k1, e10, e11, e12, e13, e1]
   split
-  · -- different tags
+  ·
     next hne =>
     have he : l.equal r = false := by
       cases hq : l.equal r
@@ -620,7 +598,7 @@ theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
   · next heq =>
     have heq' : t1 = t2 := by simpa using heq
     split
-    · -- strings
+    ·
       next h3 =>
       obtain ⟨a, rfl⟩ := vl.tag_str h3
       obtain ⟨b, rfl⟩ := vr.tag_str (heq' ▸ h3)
@@ -666,7 +644,7 @@ theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
         have hz' : cmpL a.toList b.toList ≠ 0 := fun e => hz (hz0.mpr e)
         simp only [Value.equal, beq_eq_false_iff_ne, ne_eq]
         intro hab; subst hab; exact hz' (c2.mpr rfl)
-    · -- same tag, not a string: compare payloads
+    ·
       next h3 =>
       have hpe := payload_eq_iff hinj vl (heq' ▸ vr) h3
       split
@@ -678,13 +656,9 @@ theorem run_eq {H : CloMap} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
         exact hfalse _ he (by reg_simp; exact Keep.refl _ _) (by reg_simp)
       · next hp => exact hpe.mp (by simpa using hp)
 
-
-/-- Registers `+` may change. -/
 def addClob : List Nat :=
   [ra, t0, t1, t2, t3, t4, t5, t6, a0, a1, a2, a3, a4, a5, a6, a7, s2, s4, s5, s6, s9, s10, s11, hpO]
 
-/-- `+` returned `v`: the object heap grew from `h` to `h'` and memory changed only
-there and in the digit buffer. -/
 structure AddRet (H : CloMap) (m m' : Mem) (h h' : Nat) (L L' : GRegs) (v : Value) : Prop where
   hp : Has L' hpO (BitVec.ofNat 64 h')
   grow : h ≤ h'
@@ -695,11 +669,9 @@ structure AddRet (H : CloMap) (m m' : Mem) (h h' : Nat) (L L' : GRegs) (v : Valu
   val : InA H m' h' L' v
   keep : Keep addClob L L'
 
-/-- The heap need of a concatenation. -/
 def catNeed (s : Store) (l r : Value) : Nat :=
   344 + 8 * ((l.catDisplay s).length + (r.catDisplay s).length)
 
-/-- The heap need of `+`: a concatenation's, or none. -/
 def addNeed (s : Store) (l r : Value) : Nat :=
   match l, r with
   | .str _, _ => catNeed s l r
@@ -723,7 +695,6 @@ theorem add_ret {L' : GRegs} {m : Mem} {o : Array String} {rr : BitVec 64}
   wp_simp [k26, e26]
   exact ⟨hal, reach_here ⟨rfl, rfl, rfl, rfl⟩⟩
 
-/-- The concatenation path of `+`, from `addPos + 9`. -/
 theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o : Array String}
     {l r : Value} {t1 p1 t2 p2 rr : BitVec 64} (hops : Operands H m h L l r t1 p1 t2 p2)
     (h8 : Has L hpO (BitVec.ofNat 64 h)) (h26 : Has L s10 rr) (hal : rr.toNat % 4 = 0)
@@ -746,7 +717,7 @@ theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o :
   apply run_seg hR.fits hR.add 9 (addPos + 9) rfl [mv t5 a2, mv t6 a3, Call (addPos + 11) csPos]
     (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
   wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k12, k13, e12, e13]
-  -- the left rendering
+
   refine ex_bind (run_cs hR (by reg_simp; exact h10) (by reg_simp; exact h11)
     (Has.set_self _ _ (by decide) (by decide)) (by reg_simp; exact h8)
     (pcOf_aligned (posOK_lt (by decide))) hh hfx hfb hxs) ?_
@@ -769,7 +740,7 @@ theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o :
     Call (addPos + 15) csPos] (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
   wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, e11, k30, e30,
     k31, e31]
-  -- the right rendering
+
   refine ex_bind (run_cs hR (by reg_simp) (by reg_simp)
     (Has.set_self _ _ (by decide) (by decide)) (by reg_simp; exact g8)
     (pcOf_aligned (posOK_lt (by decide))) ⟨by omega, groom1, gal1⟩ (hfx.mono hag1 hfb) (by omega)
@@ -790,7 +761,7 @@ theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o :
   apply run_seg hR.fits hR.add 16 (addPos + 16) rfl [mv a3 a1, mv a1 s2, Call (addPos + 18) ccPos]
     (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
   wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11', e11', k18, e18]
-  -- the concatenation
+
   refine ex_bind (run_cc hR (by reg_simp) (by reg_simp) (Has.set_self _ _ (by decide) (by decide))
     (by reg_simp; exact g8') (pcOf_aligned (posOK_lt (by decide))) ⟨by omega, groom2, gal2⟩
     (gs1.mono hag2 gr2) gs2) ?_
@@ -821,7 +792,6 @@ theorem add_cat {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L L0 : GRegs} {o :
       (Keep.trans (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk2.mono (by decide)))
         (Keep.trans (by reg_simp; exact Keep.refl _ _) (gk3.mono (by decide)))))
 
-/-- **Addition and concatenation.** -/
 theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}
     {l r : Value} {t1 p1 t2 p2 rr : BitVec 64} (hops : Operands H m h L l r t1 p1 t2 p2)
     (h8 : Has L hpO (BitVec.ofNat 64 h)) (hra : Has L ra rr) (hal : rr.toNat % 4 = 0)
@@ -847,7 +817,7 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
   wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k10, k11, k12, k13, k1,
     e10, e11, e12, e13, e1]
-  -- the concatenation path
+
   have hcat : (IsStrV l ∨ IsStrV r) → ∀ L', Keep addClob L L' →
       Has L' a0 t1 → Has L' a1 p1 → Has L' a2 t2 → Has L' a3 p2 → Has L' hpO (BitVec.ofNat 64 h) →
       Has L' s10 rr →

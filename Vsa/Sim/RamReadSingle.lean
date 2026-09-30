@@ -4,7 +4,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- Successful access checks for one concrete scalar RAM read. -/
 structure RamReadChecks (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) : Prop where
   pma : (pmaCheck (physaddr.Physaddr a) w (MemoryAccessType.Load mem_payload.Data)
@@ -14,7 +13,6 @@ structure RamReadChecks (σ : SequentialState RegisterType trivialChoiceSource)
     Privilege.Machine).run σ = .ok none σ
   mmio : (within_mmio_readable (physaddr.Physaddr a) w).run σ = .ok false σ
 
-/-- A single RAM access returns its leaf value without changing machine state. -/
 theorem checked_mem_read_single_of_ram
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) (v : BitVec (8 * w))
@@ -63,6 +61,4 @@ theorem checked_mem_read_single_of_ram
   simp [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Functions.zeros,
     show 8 * w - 1 + 1 = 8 * w from by omega, Int.toNat_mul]
 
-
-#print axioms checked_mem_read_single_of_ram
 end Vsa.Sim

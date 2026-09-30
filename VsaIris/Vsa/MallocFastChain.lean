@@ -1,22 +1,5 @@
 import VsaIris.Vsa.MallocFastRun
 
-/-!
-# `_malloc_r`'s fast path as a local run
-
-The top-split fast path for requests `24 ≤ n ≤ 487`, from a heap with no free
-chunk and a clear `binblocks` bitmap, run from its entry to its return as a
-`LocalRun` over the allocator's owned registers and bytes. The eleven pieces
-(wrapper, prologue, `jal` to the lock, lock hook, retarget `ret`, bin checks,
-split, `jal` to the unlock, unlock hook, `ret`, epilogue) are chained through
-`seg_step`/`jal_step`, one stage lemma each (`st10` … `st0`).
-
-The owned image is tracked as the total read of a memory: the heap witness
-`m1` with the stack window inserted (`Mt0`), advanced by the prologue's stack
-stores (`MtP`) and the split's stores (`MtS`). At the return the heap part of
-`MtS` is `splitMem m1 …` (`FastAt.split`), which gives the post shape and
-room.
--/
-
 namespace VsaIris.MallocFast
 
 open Vsa.Sim Vsa.MemRepr Vsa.Sim.DlHeap VsaIris.Inst VsaIris.VsaHeap
@@ -24,9 +7,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config)
 open Iris
 
-/-! ## Memories and words -/
-
-/-- `m` with the bytes of `[lo, lo + len)` set to the image `f`. -/
 def stackBase (m : Mem) (lo len : Nat) (f : Nat → BitVec 8) : Mem :=
   (List.range len).foldl (fun m k => m.insert (lo + k) (f (lo + k))) m
 
@@ -45,7 +25,6 @@ theorem stackBase_get (m : Mem) (lo len : Nat) (f : Nat → BitVec 8) (a : Nat) 
       · rw [ite_eq_left h2, ite_eq_left ⟨h2.1, by omega⟩]
       · rw [ite_eq_right h2, ite_eq_right (by omega)]
 
-/-- `x ||| 1 = x + 1` for an even `x`. -/
 theorem or_one_even (x : BitVec 64) (h : x.toNat % 2 = 0) :
     x ||| sign_extend (m := 64) (0x001#12) = x + 1#64 := by
   rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = 1#64 by decide]
@@ -55,7 +34,6 @@ theorem or_one_even (x : BitVec 64) (h : x.toNat % 2 = 0) :
     Nat.and_two_pow_sub_one_eq_mod]
   simpa using h
 
-/-- A loaded word, read back from a tracking memory that carries the image. -/
 theorem word_val {Mt : Mem} {f : Nat → BitVec 8} {a : Nat} {v : BitVec 64}
     (himg : ∀ k, k < 8 → f (a + k) = imgM Mt (a + k)) (hr : read64 Mt a = some v.toNat) :
     bytesVal .ld (wordOf f a) = v := by
@@ -74,30 +52,20 @@ theorem word_val {Mt : Mem} {f : Nat → BitVec 8} {a : Nat} {v : BitVec 64}
   | none => rw [hm] at this; cases this
   | some b => rfl
 
-/-- A `Pointwise` memory transformer respects byte agreement. -/
 theorem pointwise_congr {f : Mem → Mem} (hf : Pointwise f) {m m' : Mem} {a : Nat}
     (h : m[a]? = m'[a]?) : (f m)[a]? = (f m')[a]? := by
   rcases hf a with h1 | ⟨v, h1⟩
   · rw [h1, h1, h]
   · rw [h1, h1]
 
-/-! ## The run's context -/
-
-/-- The fast path's capacity predicate: the fast heap shape with `k` credits. -/
 def vsaRoomFast (maxReq : Nat) : RoomPred := fun img H k =>
   ∃ m top brkv chunks bins, ImgOn (vsaFoot H) img m ∧ FastAt m H maxReq k top brkv chunks bins
 
-theorem roomLocal_fast (maxReq : Nat) : RoomLocal vsaLayout (vsaRoomFast maxReq) := by
-  rintro H img img' k h ⟨m, top, brkv, chunks, bins, hm, hf⟩
-  exact ⟨m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hf⟩
-
-/-- The caller's stack discipline on the fast path. -/
 structure SpOKFast (headroom : Nat) (s : BitVec 64) : Prop where
   geom : SpGeom s
   head : 96 ≤ headroom
   room : headroom ≤ s.toNat
 
-/-- Everything fixed across one fast-path run. -/
 structure FastIn (live : Nat → Prop) (maxReq headroom : Nat) (H : List (Nat × Nat))
     (n s r : BitVec 64) (saved : List (Nat × BitVec 64)) (rv0 : Nat → BitVec 64)
     (mv0 : Nat → BitVec 8) (k : Nat) (m1 : Mem) (top brkv : Nat) (chunks : List Chunk)
@@ -113,32 +81,25 @@ structure FastIn (live : Nat → Prop) (maxReq headroom : Nat) (H : List (Nat ×
   img : ImgOn (vsaFoot H) mv0 m1
   disj : ∀ a, stackWin s headroom a → ¬ heapFoot vsaLayout H a
 
-/-- The chunk size of the request. -/
 abbrev nbN (n : BitVec 64) : Nat := max 32 ((n.toNat + 23) / 16 * 16)
 
-/-- The allocator's stack pointer. -/
 abbrev spN (s : BitVec 64) : BitVec 64 := s + sign_extend (m := 64) (0xfa0#12)
 
-/-- The tracking memory at entry. -/
 abbrev Mt0 (m1 : Mem) (s : BitVec 64) (headroom : Nat) (mv0 : Nat → BitVec 8) : Mem :=
   stackBase m1 (s.toNat - headroom) headroom mv0
 
-/-- The prologue's stack stores. -/
 abbrev proLogN (s s0v r n : BitVec 64) : List WEntry :=
   [(s.toNat - 96 + 80, 8, s0v), (s.toNat - 96 + 88, 8, r), (s.toNat - 96 + 8, 8, nbOf n)]
 
-/-- The split's stores (heap, the saved top on the stack, heap, heap). -/
 abbrev splitLogN (s : BitVec 64) (top nb brkv : Nat) : List WEntry :=
   [(top + 8, 8, BitVec.ofNat 64 (nb + 1)), (s.toNat - 96 + 8, 8, BitVec.ofNat 64 top),
    (topAddr, 8, BitVec.ofNat 64 (top + nb)), (top + nb + 8, 8, BitVec.ofNat 64 (brkv - top - nb + 1))]
 
-/-- The saved registers the fast path never touches. -/
 structure KeepS (rv rv0 : Nat → BitVec 64) : Prop where
   s1 : rv 9 = rv0 9
   s2 : rv 18 = rv0 18
   s3 : rv 19 = rv0 19
 
-/-- The frame bytes `[sp, sp + 96)` as loaded owned bytes. -/
 abbrev frameLD (f : Nat → BitVec 8) (sp : BitVec 64) : List (Nat × DFrac × BitVec 8) :=
   (List.range 96).map fun k => (sp.toNat + k, DFrac.own 1, f (sp.toNat + k))
 
@@ -157,20 +118,17 @@ variable {live : Nat → Prop} {maxReq headroom : Nat} {H : List (Nat × Nat)} {
 theorem FastIn.sp96 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins) :
     (spN s).toNat = s.toNat - 96 := VsaIris.MallocFast.sp96 C.sp.geom
 
-/-- Frame bytes are owned (in the stack window). -/
 theorem FastIn.frame_owned (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {j : Nat} (hj : j < 96) : mallocBytes vsaLayout H s headroom (s.toNat - 96 + j) := by
   have := C.sp.head; have := C.sp.room
   exact .inl ⟨by simp only; omega, by simp only; omega⟩
 
-/-- A stack byte is not a heap byte. -/
 theorem FastIn.stack_not_heap (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {j a : Nat} (hj : j < 96) (ha : heapFoot vsaLayout H a) : s.toNat - 96 + j ≠ a := by
   rintro rfl
   have := C.sp.head; have := C.sp.room
   exact C.disj _ ⟨by simp only; omega, by simp only; omega⟩ ha
 
-/-- Two 8-byte words with no common byte are disjoint intervals. -/
 theorem disj8 {a b : Nat} (h : ∀ i, i < 8 → ∀ j, j < 8 → a + i ≠ b + j) :
     a + 8 ≤ b ∨ b + 8 ≤ a := by
   refine Classical.byContradiction fun hc => ?_
@@ -178,7 +136,6 @@ theorem disj8 {a b : Nat} (h : ∀ i, i < 8 → ∀ j, j < 8 → a + i ≠ b + j
   have h2 : max a b - b < 8 := by omega
   exact h _ h1 _ h2 (by omega)
 
-/-- The split's heap words are allocator footprint. -/
 theorem FastIn.split_foot (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {i : Nat} (hi : i < 8) :
     heapFoot vsaLayout H (top + 8 + i) ∧ heapFoot vsaLayout H (topAddr + i) ∧
@@ -200,7 +157,6 @@ theorem FastIn.split_foot (C : FastIn live maxReq headroom H n s r saved rv0 mv0
   unfold InExt at hin
   omega
 
-/-- The request, the chunk size and the top chunk, named. -/
 structure FastGeo (n : BitVec 64) (maxReq top brkv : Nat) : Prop where
   nb16 : nbN n % 16 = 0
   nb32 : 32 ≤ nbN n
@@ -229,23 +185,19 @@ theorem FastIn.geo (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 t
     by simp only [nbN]; omega, by omega, hH.walk.le, hH.brk_le, rr.top_aligned,
     hH.top_size, hH.top_le⟩
 
-/-- The tracking memory after the prologue. -/
 abbrev MtP (m1 : Mem) (s : BitVec 64) (headroom : Nat) (mv0 : Nat → BitVec 8) (pl : List WEntry) :
     Mem :=
   writeLog (Mt0 m1 s headroom mv0) pl
 
-/-- The tracking memory after the split. -/
 abbrev MtS (m1 : Mem) (s : BitVec 64) (headroom : Nat) (mv0 : Nat → BitVec 8) (pl : List WEntry)
     (n : BitVec 64) (top brkv : Nat) : Mem :=
   writeLog (MtP m1 s headroom mv0 pl) (splitLogN s top (nbN n) brkv)
 
-/-- A prologue's stack stores: inside the frame, saving `s0` at 80 and `ra` at 88. -/
 structure ProLog (s s0v r : BitVec 64) (pl : List WEntry) : Prop where
   off : ∀ a, (∀ j, j < 96 → s.toNat - 96 + j ≠ a) → OutL pl a
   s0 : ∀ M, read64 (writeLog M pl) (s.toNat - 96 + 80) = some s0v.toNat
   ra : ∀ M, read64 (writeLog M pl) (s.toNat - 96 + 88) = some r.toNat
 
-/-- The larger requests' prologue saves `s0`, `ra` and `nb`. -/
 theorem proLog_A {s : BitVec 64} (hs : SpGeom s) (s0v r n : BitVec 64) :
     ProLog s s0v r (proLogN s s0v r n) := by
   have := hs.lo; unfold tohostAddr at this
@@ -276,7 +228,6 @@ theorem FastIn.mtP_read (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k
     read64 (MtP m1 s headroom mv0 pl) a = read64 m1 a :=
   (read64_agreeP (P := fun b => heapFoot vsaLayout H b) (fun b hb => (C.mtP_heap P hb).symm) ha).symm
 
-/-- The saved words of the frame, read back after the split. -/
 theorem FastIn.mtS_reads (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {pl : List WEntry} (P : ProLog s (rv0 8) r pl) :
     read64 (MtS m1 s headroom mv0 pl n top brkv) (s.toNat - 96 + 80) = some (rv0 8).toNat ∧
@@ -321,7 +272,6 @@ theorem FastIn.mtS_reads (C : FastIn live maxReq headroom H n s r saved rv0 mv0 
         omega)
   rw [this, ofNat_toNat_lt (by have h1 := G.top_hi; have h2 := G.top_le; unfold heapEnd at h1; omega)]
 
-/-- Dropping a log entry that does not write `a`. -/
 theorem drop_mid {X Y : Mem} {e1 eS : WEntry} {rest : List WEntry} {a : Nat}
     (hw : eS.2.1 = 8) (hS : a < eS.1 ∨ eS.1 + 8 ≤ a) (h : X[a]? = Y[a]?) :
     (writeLog X (e1 :: eS :: rest))[a]? = (writeLog Y (e1 :: rest))[a]? := by
@@ -330,7 +280,6 @@ theorem drop_mid {X Y : Mem} {e1 eS : WEntry} {rest : List WEntry} {a : Nat}
   rw [applyW_getElem_disjoint _ _ _ (by rw [hw]; decide) (by rw [hw]; exact hS)]
   exact pointwise_congr (pointwise_applyW e1) h
 
-/-- On the heap, the tracking memory after the split is the split heap. -/
 theorem FastIn.post_heap (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {pl : List WEntry} (P : ProLog s (rv0 8) r pl) {a : Nat} (ha : heapFoot vsaLayout H a) :
     (MtS m1 s headroom mv0 pl n top brkv)[a]? = (splitMem m1 top (nbN n) brkv)[a]? := by
@@ -343,23 +292,17 @@ theorem FastIn.post_heap (C : FastIn live maxReq headroom H n s r saved rv0 mv0 
     refine Classical.byContradiction fun hc => ?_
     exact hs (a - (s.toNat - 96)) (by omega) (by omega)) hP
 
-/-- The split heap is present on the allocator's footprint. -/
 theorem FastIn.post_present (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {a : Nat} (ha : heapFoot vsaLayout H a) : ((splitMem m1 top (nbN n) brkv)[a]?).isSome :=
   writeLog_present _ _ _ (by rw [C.img a ha]; rfl)
 
-/-! ## Stages -/
-
 theorem writeLog_nil' (m : Mem) : writeLog m [] = m := rfl
 
-/-- A register outside a pin list. -/
 theorem not_pin {L : GRegs} {q : Nat} (h : q ∉ L.map Prod.fst) : ∀ p ∈ L, p.1 ≠ q :=
   fun p hp e => h (e ▸ List.mem_map_of_mem hp)
 
-/-- The owned registers and bytes of a malloc run. -/
 abbrev mRegs : List Nat := allocRegs vsaClob vsaSaved
 
-/-- Stage 10: back from `__malloc_unlock`, at the epilogue. -/
 structure St10 (s : BitVec 64) (rv0 : Nat → BitVec 64) (Mt : Mem) (S : Nat → Prop)
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop where
   pc : rv VsaIris.PC = 0x80004c14#64
@@ -433,7 +376,7 @@ theorem st10 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brk
       · exact (hU 9 (by decide) (by decide) (not_pin (by simp))).trans h.keep.s1
       · exact (hU 18 (by decide) (by decide) (not_pin (by simp))).trans h.keep.s2
       · exact (hU 19 (by decide) (by decide) (not_pin (by simp))).trans h.keep.s3
-    -- the post image, on the heap
+
     have hsplit := C.fast.split (n := n.toNat) G.nb16 G.nb32 G.nbP G.n8
     have himg' : ImgOn (vsaFoot ((top + 16, n.toNat) :: H)) mv' (splitMem m1 top (nbN n) brkv) := by
       intro a ha
@@ -462,7 +405,7 @@ theorem st10 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brk
         | (rw [h9, hkeep 9 (by decide), ← h9]; exact this)
         | (rw [h18, hkeep 18 (by decide), ← h18]; exact this)
         | (rw [h19, hkeep 19 (by decide), ← h19]; exact this)
-    · -- the block is fresh
+    ·
       have hH := C.fast.heap.heap
       obtain ⟨bytes, rr, hb⟩ := C.fast.reserve_top (Nat.succ_pos k)
       refine ⟨by omega, by show heapStart ≤ _; have := G.top_lo; omega,
@@ -477,8 +420,6 @@ theorem st10 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brk
     · exact ⟨_, himg', _, _, _, _, hsplit.heap⟩
     · exact ⟨_, _, _, _, _, himg', hsplit⟩
 
-/-- A stage inside an allocator call: the PC, the stack pointer `spv`, the kept
-registers, and the tracked image. -/
 structure StPost (spv : BitVec 64) (rv0 : Nat → BitVec 64) (Mt : Mem) (S : Nat → Prop)
     (pc : BitVec 64) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop where
   pc : rv VsaIris.PC = pc
@@ -491,8 +432,6 @@ theorem KeepS.step {rv rv' rv0 : Nat → BitVec 64} (h : KeepS rv rv0)
   ⟨(hU 9 (.inl rfl)).trans h.s1, (hU 18 (.inr (.inl rfl))).trans h.s2,
     (hU 19 (.inr (.inr rfl))).trans h.s3⟩
 
-/-- The unlock hook and its retarget `ret`, back to `ret`: every register but
-`a0` and the PC is kept. -/
 theorem unlock_hook {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S : Nat → Prop} {Mt : Mem}
     {N : Nat} (htext : ∀ p ∈ pathText, live p.1) {ret : BitVec 64} (hret : ret.toNat % 4 = 0)
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
@@ -542,7 +481,6 @@ theorem unlock_hook {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S
         · exact fun e => h10 e.symm
         · rintro rfl; revert hq; decide)]
 
-/-- Stage 8: at the unlock hook. -/
 theorem st8 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     (P : ProLog s (rv0 8) r pl)
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
@@ -556,7 +494,6 @@ theorem st8 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
         (by rcases hq with rfl | rfl | rfl <;> decide) (by rcases hq with rfl | rfl | rfl <;> decide),
       hI⟩) h.pc hra h.img
 
-/-- Stage 7: at the `jal __malloc_unlock`. -/
 theorem st7 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     (P : ProLog s (rv0 8) r pl)
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
@@ -582,7 +519,6 @@ theorem st7 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
         (by rcases hq with rfl | rfl | rfl <;> decide) (by rcases hq with rfl | rfl | rfl <;> decide),
       hI⟩ (by rw [show (1 : Nat) = VsaIris.ra from rfl, hra])
 
-/-- The `av` region as loaded owned bytes. -/
 abbrev avLD (f : Nat → BitVec 8) : List (Nat × DFrac × BitVec 8) :=
   (List.range 2064).map fun k => (0x8001ad10 + k, DFrac.own 1, f (0x8001ad10 + k))
 
@@ -595,7 +531,6 @@ theorem avLD_pin {f : Nat → BitVec 8} {m : Mem} {L : List (Nat × DFrac × Bit
       (f := fun k => (0x8001ad10 + k, DFrac.own 1, f (0x8001ad10 + k))) (List.mem_range.2 (by omega))))
   rwa [show 0x8001ad10 + (a - 0x8001ad10) = a by omega] at this
 
-/-- An 8-byte word as written owned bytes at their current values. -/
 abbrev wordW (f : Nat → BitVec 8) (a : Nat) : List (Nat × BitVec 8) :=
   (List.range 8).map fun k => (a + k, f (a + k))
 
@@ -606,7 +541,6 @@ theorem mem_wordW {f : Nat → BitVec 8} {a b : Nat} (h1 : a ≤ b) (h2 : b < a 
     have e : a + (b - a) = b := by omega
     rw [e], rfl⟩
 
-/-- The split's reflected write log, in clean form. -/
 theorem split_log_eq {s a0 s0 a2 a3 a5 t1 : BitVec 64} {f : Nat → BitVec 8} {nb top brkv : Nat}
     (hs : SpGeom s) (ht : SplitTop f top (brkv - top) nb) :
     (segOut segSplit (splitL (spN s) a0 s0 a2 a3 a5 t1 nb) (splitLds f top)).log =
@@ -654,11 +588,9 @@ theorem split_log_eq {s a0 s0 a2 a3 a5 t1 : BitVec 64} {f : Nat → BitVec 8} {n
     simp only [BitVec.toNat_ofNat]
   rw [e1, v1, e2, e3, e4, v4, v3]
 
-/-- The top chunk's header word as loaded owned bytes. -/
 abbrev hdrLD (f : Nat → BitVec 8) (top : Nat) : List (Nat × DFrac × BitVec 8) :=
   (List.range 8).map fun k => (top + 8 + k, DFrac.own 1, f (top + 8 + k))
 
-/-- Stage 6: the index-free part of the path, at the top-size tests. -/
 structure St6 (s : BitVec 64) (rv0 : Nat → BitVec 64) (Mt : Mem) (S : Nat → Prop) (nb : Nat)
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop where
   pc : rv VsaIris.PC = 0x80004a2c#64
@@ -784,7 +716,6 @@ theorem bins_sp (sp a0 a1 a2 a3 a4 a5 a6 a7 t4 : BitVec 64) (f : Nat → BitVec 
   simp only [finReg, segOut, segBins, evalBlocks_regs, runChain, SegEvalState.init]
   seg_norm
 
-/-- The empty-bin words the bin checks read, from the image after any prologue. -/
 theorem FastIn.binsImg (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {s0v : BitVec 64} (P : ProLog s s0v r pl) {mv : Nat → BitVec 8}
     (himg : ∀ a, mallocBytes vsaLayout H s headroom a → mv a = imgM (MtP m1 s headroom mv0 pl) a) :
@@ -802,7 +733,6 @@ theorem FastIn.binsImg (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k 
       fd1 := gword _ _ (by decide) (by decide) (by decide) (R.bin_fd 1 (by decide) (by decide))
       binblocks := gword _ _ (by decide) (by decide) (by decide) R.binblocks }
 
-/-- Stage 5: back from the lock hook, at the bin checks (requests 24..`maxReq`). -/
 theorem st5 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     (hA : 24 ≤ n.toNat) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     (h : StPost (spN s) rv0 (MtP m1 s headroom mv0 (proLogN s (rv0 8) r n)) (mallocBytes vsaLayout H s headroom)
@@ -858,7 +788,6 @@ theorem st5 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
     · rw [hI a ha, show (segOut segBins (binsL (spN s) (rv 10) (rv 11) (rv 12) (rv 13) (rv 14) (rv 15)
         (rv 16) (rv 17) (rv 29)) (binsLds mv (spN s) (nbN n))).log = [] from rfl, writeLog_nil']
 
-/-- The lock hook and its retarget `ret`, back to `ret`. -/
 theorem lock_hook {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S : Nat → Prop} {Mt : Mem}
     {N : Nat} (htext : ∀ p ∈ pathText, live p.1) {ret : BitVec 64} (hret : ret.toNat % 4 = 0)
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
@@ -902,7 +831,6 @@ theorem lock_hook {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S :
     rw [hra1, ret_tgt _ hret]
   · rw [hU 2 (by decide) (by decide) (not_pin (by simp)), keep 2 (by simp)]; exact h.sp
 
-/-- A `jal __malloc_lock` site, the hook, and its return. -/
 theorem lock_call {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S : Nat → Prop} {Mt : Mem}
     {N : Nat} (htext : ∀ p ∈ pathText, live p.1) (i : Nat) (code : List (BitVec 8))
     (hexec : JalExec (vsaModel live) i code 0x80005068#64)
@@ -920,7 +848,6 @@ theorem lock_call {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S :
         (by rcases hq with rfl | rfl | rfl <;> decide) (by rcases hq with rfl | rfl | rfl <;> decide),
       hI⟩ hra
 
-/-- The code bytes of a `jal` site, from its generated membership facts. -/
 theorem jal_code {i : Nat} {b0 b1 b2 b3 : BitVec 8}
     (h : (i, b0) ∈ pathText ∧ (i + 1, b1) ∈ pathText ∧ (i + 2, b2) ∈ pathText ∧ (i + 3, b3) ∈ pathText) :
     ∀ p ∈ codeFoot i [b0, b1, b2, b3], (p.1, p.2.2) ∈ pathText := by
@@ -933,7 +860,6 @@ theorem jal_code {i : Nat} {b0 b1 b2 b3 : BitVec 8}
   · exact h2
   · exact h3
 
-/-- Stage 2: at the `jal __malloc_lock` of requests 24..`maxReq`. -/
 theorem st2 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     (hA : 24 ≤ n.toNat) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     (h : StPost (spN s) rv0 (MtP m1 s headroom mv0 (proLogN s (rv0 8) r n)) (mallocBytes vsaLayout H s headroom)
@@ -944,7 +870,6 @@ theorem st2 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
     (jal_code jal_bytes_80004874 p hp)) (jal_code jal_bytes_80004874) (by decide)
     (fun _ _ h' => st5 C hA h') h
 
-/-- The prologue's reflected write log, in clean form. -/
 theorem pro_log {s s0 r n a0 a4 a5 : BitVec 64} (hs : SpGeom s) :
     (segOut segPro (proL s s0 r n a0 a4 a5) []).log = proLogN s s0 r n := by
   have h96 := sp96 hs
@@ -963,7 +888,6 @@ theorem pro_sp (s s0 r n a0 a4 a5 : BitVec 64) :
   simp only [finReg, segOut, segPro, evalBlocks_regs, runChain, SegEvalState.init]
   seg_norm
 
-/-- Stage 1: in `_malloc_r`, at the prologue. -/
 structure St1 (s r n : BitVec 64) (rv0 : Nat → BitVec 64) (Mt : Mem) (S : Nat → Prop)
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop where
   pc : rv VsaIris.PC = 0x800047a8#64
@@ -1031,7 +955,6 @@ theorem wrap_a1 (n a1 : BitVec 64) : finReg segWrap (wrapL n a1) [impW] 11 = n :
   seg_norm
   rw [show (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 by decide, BitVec.add_zero]
 
-/-- Stage 0: at `malloc`, the entry. -/
 theorem st0 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     {mv : Nat → BitVec 8}
     (k1 : ∀ {rv mv}, St1 s r n rv0 (Mt0 m1 s headroom mv0) (mallocBytes vsaLayout H s headroom) rv mv →

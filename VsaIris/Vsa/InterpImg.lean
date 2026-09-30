@@ -1,15 +1,6 @@
 import VsaIris.Vsa.BinDom
 import VsaIris.Interp.Code
 
-/-!
-# `interpText` is a slice of the fixed image
-
-Every byte of the interpreter's code and jump tables is the fixed binary's
-`.text` or `.rodata` byte at its address (one kernel `decide`). Consumers:
-`binImg_textOwn` (the boundary's code resource) and the stdout runs' data
-views (`Fprintf/Out.lean`).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris.Sym VsaIris.Newlib

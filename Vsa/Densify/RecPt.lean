@@ -1,13 +1,5 @@
 import Vsa.Densify.GenB
 
-/-!
-# `Resp` for the page-table walk
-
-`pt_walk` (`Vmem.lean`) recurses on the level; `pt_walk.induct` supplies the
-induction hypothesis for the recursive call, and the body is one unfolding
-plus `resp_auto`.
--/
-
 namespace Vsa.Densify.RecPt
 
 open Sail ConcurrencyInterfaceV1 LeanRV64DExecutable LeanRV64DExecutable.Functions

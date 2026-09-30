@@ -1,14 +1,5 @@
 import Vsa.Compiler.StuckCall
 
-/-!
-# Failure of statements
-
-A statement (list) without an execution fails at its first part without an
-execution. Loops go around with less fuel: a `while` iteration passes its
-condition code, a `for` iteration its back jump, so each takes at least one
-step before the loop is failed again (`IHn`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -194,7 +185,6 @@ theorem fWhile {c : Expr} {b : Stmt} (ihc : ∀ st, EStuck code T n st d env c)
   exact Fail.of_prefix (hk1.trans (hk2.trans hk3))
     (IHn _ (by omega) st2 V2 C sp fs pos B3 hm3 hpc3 hwf' hctx hseg' hP' htmp' hne2)
 
-/-- A `for` loop without an execution fails from its condition. -/
 theorem fFL {cnd step : Option Expr} {b : Stmt} (ihc : ∀ c, cnd = some c → ∀ st, EStuck code T n st d env c)
     (ihb : ∀ st, SStuck code T n st d env b) (ihs : ∀ e, step = some e → ∀ st, EStuck code T n st d env e)
     (IHn : ∀ m < n, ∀ st, FLStuck code T m st d env cnd step b) : FLStuck code T n st d env cnd step b := by

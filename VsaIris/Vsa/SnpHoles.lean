@@ -1,31 +1,17 @@
 import VsaIris.Vsa.SnpIris
 
-/-!
-# The `snprintf` holes (lane N2)
-
-`out.snprintfInt`: `snprintf(buf, 64, "%lld", i)` (`snprintfInt_out`), from
-`snprintf_nw` with the format's loop `loop_lld`, through `snpSpec_of_run`.
-The data view is `.rodata` (the format, `"."`, the conversion table) and
-`_impure_ptr`.
--/
-
 namespace VsaIris.Sym
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib
 open VsaIris.Inst Vsa.While
 
-/-! ## Geometry from ownership -/
-
-/-- The stack and the destination are apart: both are owned. -/
 theorem SnpDisj.sep {s dst n : Nat} (D : SnpDisj s dst n) (hs : 1024 ≤ s) (hn : 0 < n) :
     dst + n ≤ s - 1024 ∨ s ≤ dst := by
   if h : dst + n ≤ s - 1024 ∨ s ≤ dst then exact h
   else exact (D.stack_dst (max dst (s - 1024)) (by unfold InExt; simp only; omega)
     (by unfold InExt; simp only; omega)).elim
 
-/-- A data view off the owned bytes, in RAM off the HTIF words, holding the
-conversion table. -/
 theorem dataOff_of {Dt : Mem} {DA : List Nat} {s dst n : Nat}
     (hram : ∀ a ∈ DA, 0x80000000 ≤ a ∧ a + 8 ≤ 0x100000000)
     (hhtif : ∀ a ∈ DA, a + 8 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ a)
@@ -40,9 +26,6 @@ theorem dataOff_of {Dt : Mem} {DA : List Nat} {s dst n : Nat}
     omega
   tab := tab
 
-/-! ## `out.snprintfInt` -/
-
-/-- `"%lld"` besides the base view. -/
 def intDA : List Nat := accAddrs 0x800192c0 5 ++ baseDA
 
 theorem mem_intDA {a : Nat} (h : a ∈ intDA) :
@@ -67,9 +50,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`out.snprintfInt`**: `snprintf(buf, 64, "%lld", i)` leaves `intToString i`
-and a NUL in `buf` (at most 20 characters, never cut), for a stack and a
-buffer above newlib's data. -/
 theorem snprintfInt_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s buf i : BitVec 64) (cs : Nat → BitVec 64) (hcl : CodeLive live)
     (hsp : SpIn s snprintfNeed) (hbss : 0x8001c168 ≤ s.toNat - snprintfNeed)
@@ -138,12 +118,9 @@ theorem snprintfInt_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel 
 
 end Spec
 
-/-! ## `out.snprintfFn` -/
-
 theorem strBytes_append (x y : String) : strBytes (x ++ y) = strBytes x ++ strBytes y := by
   simp [strBytes, String.toList_append]
 
-/-- A C string in an image from a rendering's bytes cut at `k`, and a NUL. -/
 theorem cstrImg_cut {img : Nat → BitVec 8} {p k : Nat} {y : String}
     (hA : ∀ c ∈ y.toList, 0 < c.toNat ∧ c.toNat < 128)
     (hb : ∀ i, i < min (strBytes y).length k → img (p + i) = (strBytes y).getD i 0)
@@ -161,14 +138,12 @@ section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- Two read-only bytes at one address agree. -/
 theorem snpRO_agree (a : Nat) (b b' : BitVec 8) :
     (a ↦ₘ□ b) ∗ (a ↦ₘ□ b') ⊢@{IProp GF} ⌜b = b'⌝ := by
   unfold memPointsTo; exact ghost_map_elem_agree _ _ _ _ _ _
 
 end Own
 
-/-- `"<fn %s>"` besides the base view. -/
 def fnFixDA : List Nat := accAddrs 0x800192c8 8 ++ baseDA
 
 theorem mem_fnFixDA {a : Nat} (h : a ∈ fnFixDA) :
@@ -182,7 +157,6 @@ theorem fnFix_byte {a : Nat} (h : a ∈ fnFixDA) : impureW a ∨ rodataDom a := 
   unfold impureW rodataDom
   omega
 
-/-- The `"<fn %s>"` view: the name's bytes, then the fixed bytes. -/
 def fnDA (p len : Nat) : List Nat := fnFixDA ++ accAddrs p (len + 1)
 
 instance (e : Nat × Nat) (a : Nat) : Decidable (InExt e a) := by unfold InExt; infer_instance
@@ -190,7 +164,6 @@ instance (e : Nat × Nat) (a : Nat) : Decidable (InExt e a) := by unfold InExt; 
 def fnImg (p len : Nat) (nimg : Nat → BitVec 8) (a : Nat) : BitVec 8 :=
   if InExt (p, len + 1) a then nimg a else snpImg a
 
-/-- The name's C string, agreeing with the fixed bytes where they overlap. -/
 structure FnName (p : Nat) (x : String) (nimg : Nat → BitVec 8) : Prop where
   cstr : CStrImg nimg p x
   win : StrWin p x.toList.length
@@ -227,7 +200,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The name's bytes agree with the image's where they overlap. -/
 theorem fnName_agree (p l : Nat) (nimg : Nat → BitVec 8) :
     iprop(roImg (InExt (p, l)) nimg ∗ binImg ∗ impureRO) ⊢@{IProp GF}
       ⌜∀ a, InExt (p, l) a → a ∈ fnFixDA → nimg a = snpImg a⌝ := by
@@ -241,7 +213,6 @@ theorem fnName_agree (p l : Nat) (nimg : Nat → BitVec 8) :
   · iframe Ha Hs
   ipureintro; exact e
 
-/-- One byte of the `"<fn %s>"` view, read-only. -/
 theorem fnView_byte (p len : Nat) (nimg : Nat → BitVec 8) {a : Nat} (ha : a ∈ fnDA p len) :
     iprop(roImg (InExt (p, len + 1)) nimg ∗ binImg ∗ impureRO) ⊢@{IProp GF}
       a ↦ₘ□ fnImg p len nimg a := by
@@ -260,9 +231,6 @@ theorem fnView_byte (p len : Nat) (nimg : Nat → BitVec 8) {a : Nat} (ha : a �
     iapply snpImg_byte (fnFix_byte hf) $$ [Hb Hi]
     iframe Hb Hi
 
-/-- **`out.snprintfFn`**: `snprintf(buf, 64, "<fn %s>", name)` leaves
-`fnRender x` (`"<fn " ++ x ++ ">"` cut to 63 characters) and a NUL in `buf`,
-for a stack and a buffer above newlib's data. -/
 theorem snprintfFn_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s buf name : BitVec 64) (x : String) (cs : Nat → BitVec 64) (hcl : CodeLive live)
     (hsp : SpIn s snprintfNeed) (hbss : 0x8001c168 ≤ s.toNat - snprintfNeed)

@@ -1,30 +1,11 @@
 import Vsa.Sim.Boot.Heap
 import Vsa.Sim.LayoutInstance
 
-/-!
-# The initial ownership from a boot trace
-
-At `interp_run`'s entry the store is `interp_init`'s global frame: an `Env`
-at `env`, names and values arrays of capacity `cap` at `pn`/`pv`, three heap
-copies of the native names (the binding keys) and three native values whose
-names are `.rodata` literals. `BootOwn` records those addresses and the live
-payload extents holding the represented AST; the allocation ledger inserts
-the six runtime roles over the AST extents (`Ledger.insert`, as the control
-does), and the shared bytes are the keys, the native names and the AST
-extents (`BootOwn.sharedRanges`).
-
-Every side condition is a named, decidable field of `OwnOk` (ranges and
-extents) or `FrameOk` (reads through a byte view); the generated witnesses
-discharge each with one `decide +kernel`.
--/
-
--- discipline: allow(R7-conj-tower-def) the existentials restate landed shapes (`FrameArraysOwned.keys`, `ValueOwned`, `BootFrameChunks.live`) at `show`/field sites; every new record here is a named-field structure
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc Vsa.Sim.RuntimeOwnership
 open Vsa.Sim.LayoutInstance
 
-/-- The global frame and the shared bytes at the entry. -/
 structure BootOwn where
   env : Nat
   cap : Nat
@@ -36,17 +17,15 @@ structure BootOwn where
   name0 : Nat
   name1 : Nat
   name2 : Nat
-  /-- Live payload extents holding the represented AST and its strings. -/
+
   ast : List Extent
 
-/-- The heap arena `[_end, __heap_end)`. -/
 def bootArena : Arena := ⟨DlHeap.heapStart, DlHeap.heapEnd⟩
 
 namespace BootOwn
 
 variable (B : BootOwn)
 
-/-- The allocations: the frame's record and arrays, then the three key copies. -/
 def alloc : Allocations :=
   let a0 : Allocations := fun _ => none
   let a1 := Allocations.insert a0 (.frame 0) B.env 32
@@ -56,26 +35,22 @@ def alloc : Allocations :=
   let a5 := Allocations.insert a4 (.binding 0 1) B.key1 8
   Allocations.insert a5 (.binding 0 2) B.key2 7
 
-/-- The live extents, in insertion order reversed, over the AST extents. -/
 def exts : List Extent :=
   (B.key2, 7) :: (B.key1, 8) :: (B.key0, 6) :: (B.pv, 24 * B.cap) :: (B.pn, 8 * B.cap) ::
     (B.env, 32) :: B.ast
 
-/-- The shared (immutable) byte ranges: keys, native names, AST extents. -/
 def sharedRanges : List Extent :=
   (B.key0, 6) :: (B.key1, 8) :: (B.key2, 7) :: (B.name0, 6) :: (B.name1, 8) :: (B.name2, 7) ::
     B.ast
 
 def shared (k : Nat) : Prop := ∃ r ∈ B.sharedRanges, ExtentByte r k
 
-/-- `shared`, as a `Bool`. -/
 def sharedB (k : Nat) : Bool := B.sharedRanges.any fun r => decide (r.1 ≤ k ∧ k < r.1 + r.2)
 
 theorem shared_of_sharedB {k : Nat} (h : B.sharedB k = true) : B.shared k := by
   obtain ⟨r, hr, hk⟩ := List.any_eq_true.mp h
   exact ⟨r, hr, (of_decide_eq_true hk : r.1 ≤ k ∧ k < r.1 + r.2)⟩
 
-/-- The three mutable extents. -/
 def mutableExts : List Extent := [(B.env, 32), (B.pn, 8 * B.cap), (B.pv, 24 * B.cap)]
 
 end BootOwn
@@ -85,36 +60,32 @@ instance (a b : Extent) : Decidable (ExtDisjoint a b) :=
 
 namespace BootOwn
 
-/-- The role extents in insertion order. -/
 def roleExts (B : BootOwn) : List Extent :=
   [(B.env, 32), (B.pn, 8 * B.cap), (B.pv, 24 * B.cap), (B.key0, 6), (B.key1, 8), (B.key2, 7)]
 
 end BootOwn
 
-/-- Range facts of a boot record, each decided per trace. -/
 structure OwnOk (B : BootOwn) : Prop where
-  /-- The AST extents are positive and in the arena. -/
+
   astArena : ∀ e ∈ B.ast, 0 < e.2 ∧ bootArena.lo ≤ e.1 ∧ e.1 + e.2 ≤ bootArena.hi
   astDisjoint : B.ast.Pairwise ExtDisjoint
-  /-- The role extents are positive and in the arena. -/
+
   rolesArena : ∀ e ∈ B.roleExts, 0 < e.2 ∧ bootArena.lo ≤ e.1 ∧ e.1 + e.2 ≤ bootArena.hi
-  /-- The `Env` record is 8-aligned. -/
+
   envAligned : B.env % 8 = 0
-  /-- The live extents are pairwise disjoint. -/
+
   extsDisjoint : B.exts.Pairwise ExtDisjoint
-  /-- Shared ranges: RAM below `2^32`, off the ELF's writable data and the stack. -/
+
   sharedRam : ∀ r ∈ B.sharedRanges,
     0x80000000 ≤ r.1 ∧ r.1 + r.2 ≤ 0x100000000 ∧
       (r.1 + r.2 ≤ 0x8001ad00 ∨ 0x8001c168 ≤ r.1) ∧
       (r.1 + r.2 ≤ 0x87800000 ∨ 0x88000000 ≤ r.1)
-  /-- Shared ranges leave the word loop's 8-byte slack below the RAM top
-  (`0x88000000`, lane N2) and keep every byte's 8-byte read window off the 16
-  HTIF bytes (`SharedReadWin`). -/
+
   sharedWin : ∀ r ∈ B.sharedRanges, r.1 + r.2 + 7 ≤ 0x88000000 ∧
     (r.1 + r.2 + 7 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ r.1)
-  /-- Shared ranges avoid the mutable extents. -/
+
   sharedImmutable : ∀ r ∈ B.sharedRanges, ∀ e ∈ B.mutableExts, ExtDisjoint r e
-  /-- Shared ranges in the arena are live extents; the rest lie outside it. -/
+
   sharedLive : ∀ r ∈ B.sharedRanges,
     (r.1 + r.2 ≤ bootArena.lo ∨ bootArena.hi ≤ r.1) ∨ r ∈ B.exts
 
@@ -148,7 +119,7 @@ theorem ledger : Ledger bootArena B.exts B.alloc := by
     (hr (B.key2, 7) (by simp [BootOwn.roleExts])).2 d2
 
 omit h in
-/-- The mutable allocations are the frame's record and arrays. -/
+
 theorem mutable_mem {role : Role} {p n : Nat} (hm : role.mutable)
     (ha : Allocated B.alloc role p n) : (p, n) ∈ B.mutableExts := by
   unfold Allocated BootOwn.alloc Allocations.insert at ha
@@ -181,7 +152,6 @@ theorem immutable :
     unfold ExtDisjoint at hd
     omega
 
-/-- The shared bytes' read window (REVIEW.md P7). -/
 theorem readWin : SharedReadWin B.shared stackSL := by
   have e : tohostAddr = 0x8001ad00 := rfl
   have hlo : stackSL.lo = 0x87800000 := rfl
@@ -200,8 +170,6 @@ theorem reserved : Reserved bootArena B.exts B.shared := by
   · exact ⟨r, hin, hk⟩
 
 end OwnOk
-
-/-! ## The global frame's reads -/
 
 theorem readLEv_lt' {v : Nat → Option (BitVec 8)} :
     ∀ {n a x}, readLEv v a n = some x → x < 256 ^ n := by
@@ -229,7 +197,6 @@ theorem readLEv_lt {v : Nat → Option (BitVec 8)} {a x : Nat} (h : readLEv v a 
     x < 2 ^ 64 := by
   have := readLEv_lt' h; simpa using this
 
-/-- The global frame's reads through a view, each decided per trace. -/
 structure FrameOk (v : Nat → Option (BitVec 8)) (B : BootOwn) : Prop where
   cap : readLEv v (B.env + 4) 4 = some B.cap
   names : readLEv v (B.env + 8) 8 = some B.pn
@@ -248,7 +215,7 @@ structure FrameOk (v : Nat → Option (BitVec 8)) (B : BootOwn) : Prop where
   nameStr0 : cstrIs v B.name0 "print" = true
   nameStr1 : cstrIs v B.name1 "println" = true
   nameStr2 : cstrIs v B.name2 "assert" = true
-  /-- The three value slots' words are present. -/
+
   words : ((List.range 3).all fun i => (readLEv v (B.pv + 24 * i) 8).isSome &&
     (readLEv v (B.pv + 24 * i + 8) 8).isSome && (readLEv v (B.pv + 24 * i + 16) 8).isSome) = true
 
@@ -370,22 +337,14 @@ theorem arraysReady : StoreArraysReady m φf initSt.store where
 
 end FrameOk
 
-/-! ## The initial ownership -/
-
-/-- The frame arrays are the only realloc extents. -/
 theorem BootOwn.realloc_mem (B : BootOwn) {e : Extent} (h : ReallocExtent B.alloc e) :
     e ∈ [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] := by
   obtain ⟨fa, h | h⟩ := h <;>
   · unfold Allocated BootOwn.alloc Allocations.insert at h
     by_cases hf : fa = 0 <;> simp_all
 
-/-- The ownership data of a boot record. -/
 def BootOwn.data (B : BootOwn) : InitialOwnershipData := ⟨B.exts, B.alloc, B.shared⟩
 
-/-- **The initial ownership at a boot trace's entry**, from the decided range
-and read facts, the heap check, and the two program-dependent facts: the
-represented program's reads lie in the shared bytes, and its terminating
-derivations fit the heap. -/
 theorem initialOwned_of {m : Mem} {v : Nat → Option (BitVec 8)} {B : BootOwn}
     (hv : PartialView m v) (ho : OwnOk B) (hf : FrameOk v B)
     {φf φc : Addr → Nat} (hφ : φf 0 = B.env) {stmts count top brkv : Nat}
@@ -406,24 +365,20 @@ theorem initialOwned_of {m : Mem} {v : Nat → Option (BitVec 8)} {B : BootOwn}
     heapAt_of_check hv hh (fun e _ hr => B.realloc_mem hr), hcap⟩
   arenaHeap := ⟨rfl, rfl⟩
 
-/-! ## The boundary heap facts -/
-
-/-- The global frame's three blocks, from a boot record and the chunk walk. -/
 def BootOwn.frame (B : BootOwn) (sblk nblk vblk : Nat × Nat) : BootFrame :=
   ⟨B.cap, B.pn, B.pv, sblk, nblk, vblk⟩
 
-/-- The decided facts behind `BootHeapFacts` (all but the shared bytes' geometry). -/
 structure HeapFactsOk (v : Nat → Option (BitVec 8)) (B : BootOwn) (top brkv : Nat)
     (chunks : List DlHeap.Chunk) (sblk nblk vblk : Nat × Nat) : Prop where
   top_room : top + 16 ≤ brkv
   brk_page : brkv % 4096 = 0
   binblocks : (readLEv v DlHeap.binblocksAddr 8).any (fun bb => decide (bb < 2 ^ 32)) = true
   stderr : readLEv v impureStderrAddr 8 = some exitStderr
-  /-- The C locale's data (`LocaleData`, lane N2). -/
+
   locMbtowc : readLEv v localeMbtowcAddr 8 = some asciiMbtowc
   locMbMax : readLEv v localeMbMaxAddr 1 = some 1
   locDecPoint : readLEv v localeDecPointAddr 8 = some decPointStr
-  /-- `stderr`'s `_bf._base` and `_write` (`StderrStream`, lane N3). -/
+
   errBase : readLEv v (exitStderr + 24) 8 = some 0
   errWriter : readLEv v (exitStderr + 64) 8 = some consoleSwrite
   record : sblk.1 ≤ B.env ∧ B.env + 32 ≤ sblk.1 + sblk.2

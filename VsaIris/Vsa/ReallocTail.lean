@@ -1,24 +1,10 @@
 import VsaIris.Vsa.ReallocCall
 
-/-!
-# `_realloc_r`'s tail
-
-Every in-place path joins at `0x80005414` with the chunk `X` (at least the
-request's chunk `nb`) holding the result `X + 16`: `RT` is that state over a
-virtual heap `V` in which `X` is already in use with its final size and the
-header after it marks it in use; the machine memory still has the old words
-there. With a remainder of at least `MINSIZE` the chunk is cut
-(`PHeapAt.cut`) and the remainder released by a nested `_free_r`
-(`rcall_free`); then `rtail_fin` unlocks and returns `X + 16`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **The return with the block in `s0`** (`0x80005440`): unlock, `a3 := s0`,
-the epilogue, and the fresh-block continuation. -/
 theorem rtail_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {p top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (F : RFrame C R Mt) (hs0 : (R 8).toNat = p) (hp16 : p % 16 = 0)
@@ -39,7 +25,6 @@ theorem rtail_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   · exact hheap
   · exact hdata
 
-/-- `n ||| 1` sets the low bit. -/
 theorem nat_or1 (n : Nat) : n ||| 1 = n / 2 * 2 + 1 := by
   have h1 : (n ||| 1) / 2 = n / 2 := by
     have := Nat.or_div_two_pow (a := n) (b := 1) (n := 1); simpa using this
@@ -54,7 +39,6 @@ theorem and1_toNat (x : BitVec 64) : (x &&& 1#64).toNat = x.toNat % 2 := by
   rw [BitVec.toNat_and, show (1#64 : BitVec 64).toNat = 2 ^ 1 - 1 from rfl,
     Nat.and_two_pow_sub_one_eq_mod]
 
-/-- An even word with a low bit or-ed in. -/
 theorem or_bit_toNat {x y : BitVec 64} (hx : x.toNat % 2 = 0) (hy : y.toNat < 2) :
     (x ||| y).toNat = x.toNat + y.toNat := by
   rcases Nat.lt_succ_iff_lt_or_eq.1 hy with h | h
@@ -64,11 +48,6 @@ theorem or_bit_toNat {x y : BitVec 64} (hx : x.toNat % 2 = 0) (hy : y.toNat < 2)
     subst this
     rw [or1_toNat', h]; omega
 
-/-- The state at `_realloc_r`'s tail (`0x80005414`): the chunk `X` of size
-`S ≥ nb` holding the new block `X + 16` in the virtual heap `V`, whose header
-`V` already records as `S` with the machine's `PREV_INUSE`, and whose
-successor's header `V` already marks in use; the machine memory agrees with
-`V` elsewhere on the footprint, and holds the old contents at `X + 16`. -/
 structure RT (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt V : Mem) (X S nb top brkv : Nat)
     (cs₁ cs₂ : List Chunk) (bins : Nat → List Nat) : Prop where
   frame : RFrame C R Mt
@@ -92,9 +71,6 @@ structure RT (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt V : Mem) (X S nb to
   a4 : (R 14).toNat = S
   a5 : (R 15).toNat = nb
 
-/-- **`_realloc_r`'s tail** (`0x80005414`): record the chunk's size (cut off
-a remainder of at least `MINSIZE` and release it), mark it in use in the
-next header, unlock, and return `X + 16`. -/
 theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt V : Mem}
     {X S nb top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat}
     (T : RT C B R Mt V X S nb top brkv cs₁ cs₂ bins) :
@@ -140,7 +116,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   refine st_80005428 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hrem] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x01f#12) : BitVec 64).toNat = 31 from rfl] at hc
-  · -- a remainder: cut it off and free it
+  ·
     have hE8' : (R 12 + 8#64).toNat = X + 8 := by rw [BitVec.toNat_add, ha2]; simp; omega
     have hEn' : (R 12 + R 14 + 8#64).toNat = X + S + 8 := by
       rw [BitVec.toNat_add, BitVec.toNat_add, ha2, ha4]; simp; omega
@@ -203,7 +179,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
         ¬ (X + S + 8 ≤ a ∧ a < X + S + 16) → M3[a]? = Mt[a]? := by
       intro a h1 h2 h3
       rw [← hM3, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
-    -- the cut heap
+
     have hSd : S = nb + (S - nb) := by omega
     have HV := T.heap
     rw [hSd] at HV
@@ -230,7 +206,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
           obtain ⟨ha1, ha2', ha3⟩ := ha
           rw [hout a ha2' ha3 (by omega)]
           exact T.agree a ha1 ha2' (by omega))
-    -- the remainder's zero-length block starts where no live block does
+
     have hst' : Starts ((X + nb + 16, 0) :: (X + 16, C.n.toNat) :: C.H) := by
       refine hst.cons fun e he heq => ?_
       rcases List.mem_cons.mp he with rfl | he
@@ -255,11 +231,11 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     · exact hsp
     · exact T.s1
     · exact hEq
-    -- back from `_free_r`: unlock and return `X + 16`
+
     obtain ⟨top', brkv', chunks', bins', H', htop'⟩ := hheap
     have hs64 := sp64_toNat O.spA
     have hlo' := O.spA.lo; unfold allocHeadroom Vsa.Sim.tohostAddr at hlo'
-    -- bytes off the callee's window keep their values
+
     have hkeep : ∀ a, (C.s.toNat - 64 ≤ a ∧ a < C.s.toNat) ∨ (¬ vsaFoot ((X + 16, C.n.toNat) :: C.H) a ∧
         vsaFoot C.H a) → Mt'[a]? = M3[a]? := by
       intro a ha
@@ -297,7 +273,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     · have hk' : k < C.n.toNat := Nat.lt_of_lt_of_le hk T.old_le
       rw [hkeep _ (.inr (hblk k hk')), hout _ (by omega) (by omega) (by omega)]
       exact T.data k hk
-  -- no remainder: `X` keeps its size
+
   have hE8' : (R 12 + 8#64).toNat = X + 8 := by rw [BitVec.toNat_add, ha2]; simp; omega
   have hEn' : (R 12 + R 14 + 8#64).toNat = X + S + 8 := by
     rw [BitVec.toNat_add, BitVec.toNat_add, ha2, ha4]; simp; omega

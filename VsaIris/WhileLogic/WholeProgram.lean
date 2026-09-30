@@ -1,57 +1,19 @@
 import VsaIris.WhileLogic.Example
 
-/-!
-# Worked example: all of `tests/while.wl`
-
-`whileWl = firstLoop ++ rest` (`whileWl_eq`). The first loop is
-`Example.firstLoop_then`. `rest` has two more loops:
-
-```
-var n = 0; var total = 0;
-while (true) {
-    n = n + 1;
-    if (n > 100) { break; }
-    if (n % 2 == 0) { continue; }
-    total = total + n;
-}
-println(total);
-var acc = 0; var a = 1;
-while (a <= 3) {
-    var b = 1;
-    while (b <= 3) { acc = acc + a * b; b = b + 1; }
-    a = a + 1;
-}
-println(acc);
-```
-
-The second loop's invariant `Inv2 k` (variant `k = 100 - m`) binds
-`n = m` and `total = oddSum m`; its exit is the `break`, and its `continue`
-re-establishes the invariant directly. The third loop nests a loop inside a
-block that declares `b`: the inner invariant owns the block's frame and the
-global frame, and the inner body resolves `acc` and `a` through two parent
-links. `whileWl_spec` proves that the script prints exactly
-`55\n2500\n36\n`.
--/
-
 namespace Vsa.While.Logic.Whole
 
 open Iris BI Vsa.While Vsa.While.Logic Vsa.While.Programs Vsa.While.Logic.Example
 
-/-- Everything after the first loop. -/
 def rest : Program := whileWl.drop 4
 
 theorem whileWl_eq : whileWl = firstLoop ++ rest := (List.take_append_drop 4 whileWl).symm
 
-/-! ## The second loop -/
-
-/-- `1 + 3 + 5 + …` up to `m`. -/
 def oddSum : Nat → Nat
   | 0 => 0
   | m + 1 => oddSum m + (if (m + 1) % 2 = 1 then m + 1 else 0)
 
 theorem oddSum_le : ∀ m, m ≤ 100 → oddSum m ≤ 2500 := by decide
 
-/-- The global frame during the second loop. -/
 def G2 (vn vt : Value) : Frame :=
   ⟨none, natives ++ [("i", .int (10 : Nat)), ("sum", .int (sumTo 10)), ("n", vn), ("total", vt)]⟩
 
@@ -60,7 +22,6 @@ theorem G2_set_total (a b c : Value) : (G2 a b).setVar "total" c = G2 a c := rfl
 
 abbrev out2 : String := "55\n"
 
-/-- State after `m` iterations; variant `k = 100 - m`. -/
 def Inv2 (k : Nat) : vProp :=
   iprop(∃ m : Nat, ⌜m ≤ 100 ∧ k = 100 - m⌝ ∗
     (0 ↦f G2 (.int m) (.int (oddSum m)) ∗ outIs out2))
@@ -82,7 +43,7 @@ theorem body2_spec (Φ : Status → vProp) (m : Nat) (hm : m ≤ 100) (P : vProp
   iintro ⟨H0, Ho⟩
   iapply wp_block
   iintro %a Ha
-  -- n = n + 1
+
   iapply wp_seq_cons
   iapply wp_expr
   iapply wp_assign
@@ -106,7 +67,7 @@ theorem body2_spec (Φ : Status → vProp) (m : Nat) (hm : m ≤ 100) (P : vProp
   have hv : wrap64 ((m : Int) + 1) = ((m + 1 : Nat) : Int) := by
     rw [show ((m : Int) + 1) = ((m + 1 : Nat) : Int) by omega]; exact wrap64_nat (by omega)
   simp only [seqK, G2_set_n, hv]
-  -- if (n > 100) { break; }
+
   iapply wp_seq_cons
   iapply wp_if
   iapply wp_binary
@@ -122,7 +83,7 @@ theorem body2_spec (Φ : Status → vProp) (m : Nat) (hm : m ≤ 100) (P : vProp
   rcases Nat.lt_or_ge m 100 with hlt | hge
   · have hd : decide (((m + 1 : Nat) : Int) > 100) = false := by simp; omega
     simp only [Value.truthy, hd, Bool.cond_false, seqK]
-    -- if (n % 2 == 0) { continue; }
+
     iapply wp_seq_cons
     iapply wp_if
     iapply wp_binary
@@ -143,7 +104,7 @@ theorem body2_spec (Φ : Status → vProp) (m : Nat) (hm : m ≤ 100) (P : vProp
         show (((m + 1 : Nat) : Int) % 2) = (((m + 1) % 2 : Nat) : Int) by omega]
       exact wrap64_nat (by omega)
     rcases Nat.mod_two_eq_zero_or_one (m + 1) with hev | hod
-    · -- even: continue
+    ·
       have hb : (wrap64 ((((m + 1 : Nat) : Int)).tmod 2) == 0) = true := by
         rw [hmod, hev]; rfl
       simp only [Value.truthy, hb, Bool.cond_true]
@@ -158,7 +119,7 @@ theorem body2_spec (Φ : Status → vProp) (m : Nat) (hm : m ≤ 100) (P : vProp
       isplitl [H0]
       · iexact H0
       · iexact Ho
-    · -- odd: total = total + n
+    ·
       have hb : (wrap64 ((((m + 1 : Nat) : Int)).tmod 2) == 0) = false := by
         rw [hmod, hod]; rfl
       simp only [Value.truthy, hb, Bool.cond_false, seqK]
@@ -203,7 +164,7 @@ theorem body2_spec (Φ : Status → vProp) (m : Nat) (hm : m ≤ 100) (P : vProp
       isplitl [H0]
       · iexact H0
       · iexact Ho
-  · -- n = 101: break
+  ·
     have hm100 : m = 100 := by omega
     subst hm100
     have hd : decide (((100 + 1 : Nat) : Int) > 100) = true := by decide
@@ -246,8 +207,6 @@ theorem loop2_step (Φ : Status → vProp)
   · iexact H0
   · iexact Ho
 
-/-! ## `println(x)` of an integer variable of the global frame -/
-
 theorem printArgs₀_int (n : Int) : printArgs₀ [.int n] = intToString n := rfl
 
 theorem println_var_spec (F : Frame) (x : String) (n : Int) (o : String)
@@ -281,9 +240,6 @@ theorem println_var_spec (F : Frame) (x : String) (n : Int) (o : String)
   · iexact H0
   · iexact Ho
 
-/-! ## The third loop (nested) -/
-
-/-- The global frame during the third loop. -/
 def G3 (vacc va : Value) : Frame :=
   ⟨none, natives ++ [("i", .int (10 : Nat)), ("sum", .int (sumTo 10)),
     ("n", .int (100 + 1 : Nat)), ("total", .int (oddSum 100)), ("acc", vacc), ("a", va)]⟩
@@ -291,14 +247,12 @@ def G3 (vacc va : Value) : Frame :=
 theorem G3_set_acc (a b c : Value) : (G3 a b).setVar "acc" c = G3 c b := rfl
 theorem G3_set_a (a b c : Value) : (G3 a b).setVar "a" c = G3 a c := rfl
 
-/-- The outer body's frame, which declares `b`. -/
 def B (vb : Value) : Frame := ⟨some 0, [("b", vb)]⟩
 
 theorem B_set_b (a c : Value) : (B a).setVar "b" c = B c := rfl
 
 def tri (n : Nat) : Nat := n * (n + 1) / 2
 
-/-- `acc` before row `a`, column `b`. -/
 def accOf (a b : Nat) : Nat := 6 * tri (a - 1) + a * tri (b - 1)
 
 theorem acc_step : ∀ a, a ≤ 3 → ∀ b, b ≤ 3 → accOf a b + a * b = accOf a (b + 1) := by decide
@@ -320,8 +274,6 @@ def body3 : Stmt := .block [
 
 def cond3 : Expr := .binary .le (.var "a") (.int 3)
 
-/-- Inner-loop state in the outer body's frame `f`, row `a`, after column
-`b - 1`; variant `k = 4 - b`. -/
 def Inv3i (f a k : Nat) : vProp :=
   iprop(∃ b : Nat, ⌜1 ≤ b ∧ b ≤ 4 ∧ k = 4 - b⌝ ∗
     (f ↦f B (.int b) ∗ (0 ↦f G3 (.int (accOf a b)) (.int a) ∗ outIs out3)))
@@ -335,7 +287,7 @@ theorem inner_body_spec (f a b : Nat) (ha : a ≤ 3) (hb : b ≤ 3) (Φ : Status
   iintro ⟨Hf, H0, Ho⟩
   iapply wp_block
   iintro %g Hg
-  -- acc = acc + a * b
+
   iapply wp_seq_cons
   iapply wp_expr
   iapply wp_assign
@@ -392,7 +344,7 @@ theorem inner_body_spec (f a b : Nat) (ha : a ≤ 3) (hb : b ≤ 3) (Φ : Status
     exact wrap64_nat (by
       rw [acc_step a ha b hb]; have := acc_le a (by omega) (b + 1) (by omega); omega)
   simp only [seqK, G3_set_acc, hv2]
-  -- b = b + 1
+
   iapply wp_seq_cons
   iapply wp_expr
   iapply wp_assign
@@ -483,7 +435,7 @@ theorem outer_body_spec (a : Nat) (ha : a ≤ 3) (Φ : Status → vProp) (P : vP
   iintro ⟨H0, Ho⟩
   iapply wp_block
   iintro %f Hf
-  -- var b = 1;
+
   iapply wp_seq_cons
   iapply wp_varInit
   iapply wp_int
@@ -494,11 +446,11 @@ theorem outer_body_spec (a : Nat) (ha : a ≤ 3) (Φ : Status → vProp) (P : vP
   have hB : (Frame.defVar ⟨some 0, []⟩ "b" (.int 1)) = B (.int (1 : Nat)) := rfl
   rw [hB]
   simp only [seqK]
-  -- the inner loop
+
   iapply wp_seq_cons
   iapply (wp_while (I := Inv3i f a) cond3inner body3inner
     (inner_step f a ha _ (by
-      -- a = a + 1
+
       iintro ⟨Hf, H0, Ho⟩
       simp only [seqK]
       iapply wp_seq_cons
@@ -540,7 +492,6 @@ theorem outer_body_spec (a : Nat) (ha : a ≤ 3) (Φ : Status → vProp) (P : vP
   · iexact H0
   · iexact Ho
 
-/-- Outer-loop state before row `a`; variant `k = 4 - a`. -/
 def Inv3 (k : Nat) : vProp :=
   iprop(∃ a : Nat, ⌜1 ≤ a ∧ a ≤ 4 ∧ k = 4 - a⌝ ∗
     (0 ↦f G3 (.int (accOf a 1)) (.int a) ∗ outIs out3))
@@ -590,8 +541,6 @@ theorem outer_step (Φ : Status → vProp)
     · iexact H0
     · iexact Ho
 
-/-! ## The whole script -/
-
 theorem rest_eq : rest = [
     .varDecl "n" (some (.int 0)),
     .varDecl "total" (some (.int 0)),
@@ -602,10 +551,8 @@ theorem rest_eq : rest = [
     .whileStmt cond3 body3,
     .expr (.call (.var "println") [.var "acc"])] := rfl
 
-/-- The output of `tests/while.wl`. -/
 abbrev whileOut : String := "55\n2500\n36\n"
 
-/-- The final `println(acc)`. -/
 theorem after3_spec :
     iprop(0 ↦f G3 (.int (accOf 4 1)) (.int (4 : Nat)) ∗ outIs out3) ⊢
       wpSeq 0 0 [.expr (.call (.var "println") [.var "acc"])] (PostOut (· = whileOut)) := by
@@ -623,7 +570,6 @@ theorem after3_spec :
     · ipureintro; rfl
     · iexact Ho
 
-/-- `println(total)` and the third loop. -/
 theorem after2_spec :
     iprop(0 ↦f G2 (.int (100 + 1 : Nat)) (.int (oddSum 100)) ∗ outIs out2) ⊢
       wpSeq 0 0 [
@@ -677,7 +623,7 @@ theorem rest_spec :
       wpSeq 0 0 rest (PostOut (· = whileOut)) := by
   rw [rest_eq]
   iintro ⟨H0, Ho⟩
-  -- var n = 0; var total = 0;
+
   iapply wp_seq_cons
   iapply wp_varInit
   iapply wp_int
@@ -697,7 +643,7 @@ theorem rest_spec :
   have hG2 : ((G (.int (10 : Nat)) (.int (sumTo 10))).defVar "n" (.int 0)).defVar "total"
       (.int 0) = G2 (.int (0 : Nat)) (.int (oddSum 0)) := rfl
   rw [hG2]
-  -- the second loop
+
   iapply wp_seq_cons
   iapply (wp_while (I := Inv2) (.bool true) body2 (loop2_step _ (by
     iintro ⟨H0, Ho⟩
@@ -714,13 +660,10 @@ theorem rest_spec :
     · iexact H0
     · iexact Ho
 
-/-- **All of `tests/while.wl` prints `55\n2500\n36\n`.** -/
 theorem whileWl_spec : initOwn ⊢ wpSeq 0 0 whileWl (PostOut (· = whileOut)) := by
   rw [whileWl_eq]
   exact firstLoop_then rest _ rest_spec
 
-/-- Big-step consequence, proved through the logic (compare
-`Validation.whileWl_valid`, which constructs the derivation directly). -/
 theorem whileWl_bigStep : BigStep whileWl whileOut := by
   obtain ⟨out, h, rfl⟩ := adequacy_bigStep whileWl_spec
   exact h

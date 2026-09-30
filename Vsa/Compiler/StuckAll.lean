@@ -1,15 +1,5 @@
 import Vsa.Compiler.StuckStmt
 
-/-!
-# The failure direction
-
-`stuck_all`: at every fuel `n`, every expression, argument list, call,
-statement, statement list and `for` loop without an execution fails within `n`
-steps. Strong induction on `n`; at each `n`, structural recursion on the syntax
-(`noE`/`noA`/`noS`/`noQ`), with calls, loop iterations and closure bodies
-taking the fuel induction hypothesis after at least one step.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -28,7 +18,6 @@ theorem SStuck.of_has {n : Nat} {st : St} {d : Nat} {env : Addr} {s : Stmt} (h :
     SStuck code T n st d env s :=
   fun _ _ _ _ _ _ _ _ _ _ _ _ _ hne => absurd h hne
 
-/-- Calls fail at fuel `n` given failure of closure bodies with less fuel. -/
 theorem noC {n : Nat} (IHn : ∀ m < n, StuckAt code T m) (st : St) (d : Nat) (fv : Value) (vs : List Value) :
     CStuck code T n st d fv vs := by
   cases fv with
@@ -104,7 +93,6 @@ theorem noQ (n : Nat) (IHn : ∀ m < n, StuckAt code T m) :
 
 end
 
-/-- **The failure direction**, at every fuel. -/
 theorem stuck_all : ∀ n, StuckAt code T n := by
   intro n
   induction n using Nat.strongRecOn with

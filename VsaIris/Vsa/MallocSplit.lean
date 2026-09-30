@@ -1,25 +1,11 @@
 import VsaIris.Vsa.MallocExtend
 import VsaIris.Vsa.HeapCarve
 
-/-!
-# `_malloc_r`'s splits of a free chunk
-
-A free chunk at least `nb + MINSIZE` large is split: its first `nb` bytes are
-returned and the rest becomes the last remainder, the only member of bin 1.
-
-* `lr_split` (`0x80004da0`): the last remainder itself, already bin 1's only
-  member, is split.
-
-The heap edit is `PHeapAt.splitFree` (`HeapCarve.lean`).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- Every byte of a free chunk from its header to the next chunk's header is
-allocator footprint. -/
 theorem foot_free_span {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (B : BlockHeapAt m H top brkv chunks bins) {c : Chunk}
     (hc : c ∈ chunks) (hf : c.inuse = false) :
@@ -46,10 +32,6 @@ theorem foot_free_span {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunk
   · omega
   · omega
 
-/-- **What a split of the last remainder owes the caller.** The machine's
-eight stores (`v`'s header, bin 1's links, the remainder's links, header and
-footer, and the spill of `v`), with the stored words named by their values,
-leave the heap with the block `(v + 16, n)` live. -/
 theorem lr_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb v sz : Nat} (hsp : MSp C.s) (Hp : MHeap C Mt brkv chunks bins)
     (hnb : NbOK C.n nb)
@@ -129,9 +111,6 @@ theorem lr_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
           (frame_store (fun b h1 h2 => hwb b (by omega) (by omega))
             (frame_store (hw _ _ (by omega) (by omega)) Hp.frame)))))))
 
-/-- **Split the last remainder** (`0x80004da0`): bin 1's only member `v`, of
-size `sz ≥ nb + MINSIZE`, gives its first `nb` bytes to the request and its
-rest becomes the new last remainder. -/
 theorem lr_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (G : LRRegs nb idx R)
@@ -159,13 +138,13 @@ theorem lr_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hFV := foot_free_span B hfree rfl
   simp only at hFV
   have hrem : (R 13).toNat = sz - nb := by rw [ha3, BitVec.toNat_sub, ht1, ha4]; omega
-  -- `ori a2,a4,1; sd a2,8(a5)`: `v`'s header
+
   refine st_80004da0 O.live ?_
   refine st_80004da4 O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  -- `add a4,a5,a4; sd a4,40(a6); sd a4,32(a6)`: bin 1's links
+
   refine st_80004da8 O.live ?_
   refine st_80004dac O.live ?_ ?_ ?_
   · sx_norm; rw [ha6]; decide
@@ -175,7 +154,7 @@ theorem lr_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   · sx_norm; rw [ha6]; decide
   · sx_norm; rw [ha6]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inl (by rw [hb1]; decide))
   sx_norm
-  -- `ori a2,a3,1; add t1,a5,t1; sd t4,24(a4); sd t4,16(a4); sd a2,8(a4)`: the remainder
+
   refine st_80004db4 O.live ?_
   refine st_80004db8 O.live ?_
   refine st_80004dbc O.live ?_ ?_ ?_
@@ -190,7 +169,7 @@ theorem lr_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  -- `mv a0,s0; sd a3,0(t1)`: the remainder's footer
+
   refine st_80004dc8 O.live ?_
   refine st_80004dcc O.live ?_ ?_ ?_
   · sx_norm; sx_addr

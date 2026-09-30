@@ -2,35 +2,16 @@ import VsaIris.Vsa.FreeRunAll
 import VsaIris.Vsa.AllocSltu
 import VsaIris.Vsa.HeapRealloc
 
-/-!
-# The context of a `_realloc_r` run
-
-A `_realloc_r(reent, p, n)` run is stated over an allocator context `MCtx`
-whose live blocks `H` are the others, its request `n` the new length, and the
-old block `RB` (address, length and contents) apart. The obligations `ROK`
-are the shared `WOK` and two continuations: a return with a fresh block
-holding the old contents (`RRet`), or NULL with the old block kept (`RNull`).
-The old block's bytes lie in the footprint of `H`, so the write window covers
-them.
-
-`RFrame` is `_realloc_r`'s 64-byte frame (`s0`, `s1` and `ra` saved) and
-`RHeap` the heap between joins: in shape with the old block live, and its
-contents in place.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The old block of a realloc: its address, length and contents. -/
 structure RB where
   p : Nat
   nOld : Nat
   old : Nat → BitVec 8
 
-/-- A return with a fresh block: the heap extended by it with the top grown by
-at most its chunk, the footprint present, and the old contents at its start. -/
 structure RRet (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   regs : MRegs C R
   fresh : FreshAt C.H (R 10).toNat C.n.toNat
@@ -41,8 +22,6 @@ structure RRet (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) : Prop whe
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   data : ∀ k, k < B.nOld → Mt[(R 10).toNat + k]? = some (B.old (B.p + k))
 
-/-- A NULL return: the heap in shape with the old block live and its contents
-in place, and the reason, the arena cannot hold the request. -/
 structure RNull (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   regs : MRegs C R
   a0 : R 10 = 0
@@ -51,9 +30,6 @@ structure RNull (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) : Prop wh
   data : ∀ k, k < B.nOld → Mt[B.p + k]? = some (B.old (B.p + k))
   starved : Starved C.top0 C.n.toNat
 
-/-- The obligations of a `_realloc_r` call context. Its nested `_malloc_r` and
-`_free_r` calls run 64 bytes down, so the caller's whole scratch window is
-owned (`spA`, `deep`). -/
 structure ROK (C : MCtx) (B : RB) : Prop extends WOK C where
   spA : SpOKA C.s
   deep : ∀ a, C.s.toNat - allocHeadroom ≤ a → a < C.s.toNat → C.S a
@@ -66,16 +42,12 @@ theorem ROK.stack {C : MCtx} {B : RB} (O : ROK C B) {a w : Nat} (h1 : C.s.toNat 
 theorem ROK.foot {C : MCtx} {B : RB} (O : ROK C B) {a w : Nat}
     (h : ∀ k, k < w → vsaFoot C.H (a + k)) : ∀ b ∈ accAddrs a w, C.S b := O.toWOK.foot h
 
-/-- Frame bytes are owned: the `sx_side` rule for stack accesses in a realloc run. -/
 macro_rules
   | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.ROK.stack ‹VsaIris.VsaHeap.ROK _ _› ?_ ?_ <;> ((try unfold VsaIris.VsaHeap.mHead) ; sx_addr)))
 
-/-- Allocator globals are owned: the `sx_side` rule for literal global addresses in a realloc run. -/
 macro_rules
   | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.ROK.foot ‹VsaIris.VsaHeap.ROK _ _› (fun k hk => Or.inl ?_); unfold VsaIris.VsaHeap.allocGlobal VsaIris.VsaHeap.InRange; omega))
 
-/-- `_realloc_r`'s registers at its entry: the reentrancy structure in `a0`,
-the old block in `a1`, the request in `a2`. -/
 structure REntry (C : MCtx) (B : RB) (R : Nat → BitVec 64) : Prop where
   ra : R 1 = C.r
   sp : R 2 = C.s
@@ -87,8 +59,6 @@ structure REntry (C : MCtx) (B : RB) (R : Nat → BitVec 64) : Prop where
   s2 : R 18 = C.rv0 18
   s3 : R 19 = C.rv0 19
 
-/-- `_realloc_r`'s 64-byte frame: `sp` 64 bytes below the caller's, `s0`, `s1`
-and `ra` in their slots, `s2`, `s3` untouched. -/
 structure RFrame (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   sp : R 2 = C.s + 18446744073709551552#64
   s0 : read64 Mt (C.s.toNat - 64 + 48) = some (C.rv0 8).toNat
@@ -101,7 +71,6 @@ theorem RFrame.of_regs {C : MCtx} {R R' : Nat → BitVec 64} {Mt : Mem} (F : RFr
     (h2 : R' 2 = R 2) (h18 : R' 18 = R 18) (h19 : R' 19 = R 19) : RFrame C R' Mt :=
   ⟨h2.trans F.sp, F.s0, F.s1, F.ra, h18.trans F.s2, h19.trans F.s3⟩
 
-/-- The frame through a store that misses the saved words. -/
 theorem RFrame.store {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     {a w : Nat} {v : BitVec 64} (h : a + w ≤ C.s.toNat - 64 + 40 ∨ C.s.toNat - 64 + 64 ≤ a) :
     RFrame C R (writeLog Mt [(a, w, v)]) where
@@ -112,9 +81,6 @@ theorem RFrame.store {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C
   s2 := F.s2
   s3 := F.s3
 
-/-- The heap between joins, at the entry top: in shape with the old block
-live, the footprint present, off the stack, every byte outside the write
-window at its entry value, and the old contents in place. -/
 structure RHeap (C : MCtx) (B : RB) (Mt : Mem) (brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) : Prop where
   heap : PHeapAt Mt ((B.p, B.nOld) :: C.H) C.top0 brkv chunks bins
@@ -127,7 +93,6 @@ structure RHeap (C : MCtx) (B : RB) (Mt : Mem) (brkv : Nat) (chunks : List Chunk
   data : ∀ k, k < B.nOld → Mt[B.p + k]? = some (B.old (B.p + k))
   grow : B.nOld < C.n.toNat
 
-/-- The heap invariant through a store to the run's stack. -/
 theorem RHeap.store_stack {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (Hp : RHeap C B Mt brkv chunks bins) {a w : Nat} {v : BitVec 64}
     (h1 : C.s.toNat - mHead ≤ a) (h2 : a + w ≤ C.s.toNat) :
@@ -152,7 +117,6 @@ theorem RHeap.store_stack {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : 
       exact hd (by omega) (by omega) (Hp.blk k hk), trivial⟩
     rw [writeLog_out _ _ _ ho]; exact Hp.data k hk
 
-/-- The heap invariant through a store to `_errno`, which `HeapAt` never reads. -/
 theorem RHeap.store_errno {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (Hp : RHeap C B Mt brkv chunks bins) {v : BitVec 64} :
     RHeap C B (writeLog Mt [(0x8001b538, 4, v)]) brkv chunks bins where
@@ -177,11 +141,6 @@ theorem RHeap.store_errno {C : MCtx} {B : RB} {Mt : Mem} {brkv : Nat} {chunks : 
     have ho : OutL [(0x8001b538, 4, v)] (B.p + k) := ⟨by simp only; omega, trivial⟩
     rw [writeLog_out _ _ _ ho]; exact Hp.data k hk
 
-/-! ## The epilogue -/
-
-/-- **The epilogue** `ld ra,56(sp); ld s0,48(sp); ld s1,40(sp); mv a0,a3;
-addi sp,sp,64; ret` at either of its copies (the six step lemmas as
-arguments): the caller's registers restored and `a3` returned. -/
 theorem repi_core {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {pc1 pc2 pc3 pc4 pc5 pc6 : BitVec 64}
     (st1 : ∀ {R : Nat → BitVec 64} {Mt : Mem},
@@ -238,14 +197,12 @@ theorem repi_core {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   · exact F.s3
   · sx_norm
 
-/-- The epilogue returning `a3` (`0x8000544c`). -/
 theorem repi {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → R' 10 = R 13 → AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x8000544c#64 R Mt :=
   repi_core O (st_8000544c O.live) (st_80005450 O.live) (st_80005454 O.live) (st_80005458 O.live)
     (st_8000545c O.live) (st_80005460 O.live) F hfin
 
-/-- The epilogue's second copy (`0x800054c4`). -/
 theorem repi0 {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → R' 10 = R 13 → AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x800054c4#64 R Mt :=

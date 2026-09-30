@@ -7,28 +7,6 @@ import VsaIris.Adequacy
 import Vsa.Refinement
 import Vsa.Densify
 
-/-!
-# The end-to-end theorem on the Iris route (package A)
-
-INTERP_DESIGN.md §5.2-§5.4. From `Loaded interpRunLayout p c`:
-
-* `term_sim_iris`: a big-step behaviour `BigStep p out` gives a costed
-  derivation (`Boot.regime_of_bigStep`), the counted boundary world
-  (`world_of_boundary`), the total recursion (`interpSeqT_all`), `interp_run`'s
-  whole run (`interpRun_total_top`: `main` returns 0, `exit(0)` quiet), and
-  total adequacy (`vsa_adequacy_exit`): `Halts c out 0`.
-* `stuck_sim_iris`: the uncounted world, the Löb (`specsP_all`), the whole
-  run (`interpRun_partial_top`: a normal end hands a derivation, which the
-  hypothesis refutes; every other end exits nonzero), and partial adequacy
-  (`vsa_adequacyP_nonzero`).
-* `endToEnd_refinement_loaded`: `Vsa.Refine.refinement` (unchanged) of the two.
-* `endToEnd_refinement`: the same at the fill-with-zero `fillZero c` of the
-  configuration (P3, `Vsa/Densify.lean`): `Loaded` demands the stack present,
-  which the loader's sparse memory never is; the machine cannot tell an
-  absent byte from a present zero, so the hypothesis is checked on the dense
-  view and the conclusion holds of the real configuration.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -39,8 +17,6 @@ section
 
 variable {GF : BundledGFunctors} [G : MachGS .hasLC GF] [I : InterpGS GF]
 
-/-- The partial specs under the error context, as `interp_run`'s loop takes
-them. -/
 theorem execSpecsP_top {N : NativeAddrs} (S : StuckSupply (GF := GF) topLive N inpTop) :
     errCtx (GF := GF) inpTop ⊢
       execSpecsP (vsaModel topLive) N vsaLayoutP vsaRoomB inpTop (evalCore N vsaLayoutP vsaRoomB inpTop) := by
@@ -55,7 +31,6 @@ theorem execSpecsP_top {N : NativeAddrs} (S : StuckSupply (GF := GF) topLive N i
 
 end
 
-/-- Bind the boundary's ghost names. -/
 theorem boundary_bind {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) (ρ : Regime)
     (hρ : RegimeOK b.top ρ) {R Q : IProp MachGF} [MachGS .hasLC MachGF]
     (h : ∀ γf γc : GName, (letI : InterpGS MachGF := ⟨γf, γc⟩; bootRes b ρ) ∗ R ⊢ |==> Q) :
@@ -71,7 +46,6 @@ theorem wp_of_bupd {GF : BundledGFunctors} [MachGS .hasLC GF] {M : MachineModel}
     (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} : (|==> Wp.W Φ) ⊢ Wp.W Φ :=
   BIUpdateFUpdate.fupd_of_bupd.trans Wp.fupd
 
-/-- **`term_sim` on the Iris route.** -/
 theorem term_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     ∀ p c out, Vsa.Refine.Loaded interpRunLayout p c → BigStep p out →
       Vsa.Machine.Halts c out 0 := by
@@ -95,12 +69,6 @@ theorem term_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     (b.bytes_agree b.G topLive) (vsaOk_of_ready b.ready) (fun v => v = (0, st'.out)) hA
   cases heq; rw [hout] at hh; exact hh
 
-/-- **Partial correctness on the Iris route**: from a loaded configuration,
-the machine diverges, or halts with exit code `0` and the output of a
-big-step behaviour, or halts with an `AbortCode` (`70`: a runtime error or a
-top-level `return`/`break`/`continue`; `1`: out of memory). The uncounted
-world, the Löb (`specsP_all`), the whole run (`interpRun_partial_top`), and
-partial adequacy (`vsa_adequacyP`). -/
 theorem partial_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     ∀ p c, Vsa.Refine.Loaded interpRunLayout p c →
       Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧
@@ -127,8 +95,6 @@ theorem partial_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     (regAgree_regMap (M := vsaModel topLive) c topRegs) (b.bytes_agree b.G topLive)
     (vsaOk_of_ready b.ready) _ hA
 
-/-- **`stuck_sim` with the exit code pinned**: a loaded program with no
-big-step behaviour diverges on the machine or exits `70` or `1`. -/
 theorem stuck_codes_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     ∀ p c, Vsa.Refine.Loaded interpRunLayout p c → (¬ ∃ out, BigStep p out) →
       Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ AbortCode e := by
@@ -138,7 +104,6 @@ theorem stuck_codes_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
   · exact absurd ⟨out, hb⟩ hnb
   · exact .inr ⟨out, e, hh, hcode⟩
 
-/-- **`stuck_sim` on the Iris route.** -/
 theorem stuck_sim_of (Sp : Supplies) (H : Newlib.NewlibHoles) :
     ∀ p c, Vsa.Refine.Loaded interpRunLayout p c → (¬ ∃ out, BigStep p out) →
       Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ e ≠ 0 := by
@@ -151,16 +116,13 @@ end VsaIris.Interp
 
 namespace VsaIris.Interp
 
-/-- Every newlib call the interpreter makes, proved. -/
 theorem newlibHoles_proved : VsaIris.Newlib.NewlibHoles :=
   VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok
     VsaIris.Sym.snprintf_ok
 
-/-- **`InterpSim` at the concrete layout.** -/
 theorem interpSim_iris : Vsa.Refine.InterpSim Vsa.Sim.LayoutInstance.interpRunLayout :=
   ⟨term_sim_of supplies_of newlibHoles_proved, stuck_sim_of supplies_of newlibHoles_proved⟩
 
-/-- **Partial correctness at the concrete layout** (`partial_sim_of`). -/
 theorem partialSim_iris : ∀ p c, Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout p c →
     Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧
       (e = 0 ∧ Vsa.While.BigStep p out ∨ AbortCode e) :=
@@ -177,27 +139,12 @@ open Vsa.Sim.LayoutInstance (interpRunLayout)
 
 open Vsa.Densify (fillZero halts_fillZero diverges_fillZero)
 
-/-- The end-to-end theorem at a configuration that is literally `Loaded`
-(every field taken at `c` itself, including the present stack). -/
 theorem endToEnd_refinement_loaded :
     ∀ p c, Loaded interpRunLayout p c →
       (∀ out, BigStep p out ↔ Halts c out 0) ∧
       (Diverges c → ¬ ∃ out, BigStep p out) :=
   Vsa.Refine.refinement VsaIris.Interp.interpSim_iris
 
-/-- **THE END-TO-END THEOREM.** For every WHILE program loaded in the
-interpreter's memory — `Loaded interpRunLayout p (fillZero c)`, the loaded
-configuration with every absent RAM byte read as the zero it already is —
-the machine halts with exit code 0 and output `out` exactly when `out` is a
-big-step behaviour of the program, and a divergent machine run means the
-program has no behaviour. There are no assumptions: every newlib call the
-interpreter makes is proved (the former `IrisHoles` was emptied by lanes
-N1–N5 and removed, 2026-09-25). `fillZero` is the review's P3
-(`REVIEW.md` C3): the Sail model reads absent bytes as `0` and never inspects
-presence (`Vsa.Densify.stepOnce_resp`), so `Halts`/`Diverges` of `c` and of
-`fillZero c` coincide (`halts_fillZero`, `diverges_fillZero`), while `Loaded`'s
-presence fields (`stack_bytes`, `VsaOk.live`) hold of the dense view by
-construction. -/
 theorem endToEnd_refinement :
     ∀ p c, Loaded interpRunLayout p (fillZero c) →
       (∀ out, BigStep p out ↔ Halts c out 0) ∧

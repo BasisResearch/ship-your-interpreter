@@ -4,7 +4,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- Concrete policy and split result selecting a nonempty sequence of chunks. -/
 structure SplitReadPlan (σ : Vsa.Machine.MState) (a : BitVec 64)
     (w n d : Nat) (info : Phys_Mem_Access_Info) : Prop where
   count_pos : 0 < n
@@ -13,7 +12,6 @@ structure SplitReadPlan (σ : Vsa.Machine.MState) (a : BitVec 64)
   split : (split_misaligned (physaddr.Physaddr a) w info.granule_size_exp info.splittable).run σ =
     .ok ((n : Int), (d : Int)) σ
 
-/-- The actual checked read returns exactly the assembled chunk values. -/
 theorem checked_mem_read_of_split (σ : Vsa.Machine.MState) (a : BitVec 64)
     (w n d : Nat) (info : Phys_Mem_Access_Info) (values : Nat → BitVec (8 * d))
     (hp : SplitReadPlan σ a w n d info)
@@ -55,5 +53,4 @@ theorem checked_mem_read_of_split (σ : Vsa.Machine.MState) (a : BitVec 64)
   erw [hloop]
   simp [splitReadTrace, EStateM.pure, default_meta]
 
-#print axioms checked_mem_read_of_split
 end Vsa.Sim

@@ -5,10 +5,10 @@
 #include <string.h>
 
 #if defined(WHILE_BAREMETAL) && !defined(WHILE_HTIF)
-long semihost_call(long op, void *arg); /* semihost.c */
+long semihost_call(long op, void *arg);
 #endif
 #ifdef WHILE_HTIF
-extern const char _script_start[]; /* script.S; NUL-terminated */
+extern const char _script_start[];
 #endif
 
 static char *read_file(const char *path) {
@@ -59,8 +59,6 @@ static int run_file(const char *path) {
     return run_source(&in, src, 0);
 }
 
-/* Net bracket depth of a chunk of source, ignoring strings and comments.
- * Used by the REPL to decide whether to keep reading continuation lines. */
 static int bracket_depth(const char *s) {
     int depth = 0;
     while (*s) {
@@ -104,7 +102,7 @@ static int repl(void) {
         for (;;) {
             if (!fgets(line, sizeof line, stdin)) {
                 if (len == 0) { putchar('\n'); free(buf); return 0; }
-                break; /* run whatever we have */
+                break;
             }
             size_t ll = strlen(line);
             if (len + ll + 1 > cap) {
@@ -121,14 +119,12 @@ static int repl(void) {
         }
         if (buf[0] == '\0' || strspn(buf, " \t\r\n") == strlen(buf))
             continue;
-        run_source(&in, buf, 1); /* errors are printed; REPL continues */
+        run_source(&in, buf, 1);
     }
 }
 
 #if defined(WHILE_BAREMETAL) && !defined(WHILE_HTIF)
-/* Under qemu-system-riscv64 our crt0 passes argc==0. Fetch the command
- * line that was supplied via `-semihosting-config ...,arg=...` using the
- * SYS_GET_CMDLINE semihosting call and split it on spaces. */
+
 #define SYS_GET_CMDLINE 0x15
 static int fetch_cmdline(char ***argv_out) {
     static char cmdline[512];

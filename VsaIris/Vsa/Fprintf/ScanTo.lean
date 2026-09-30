@@ -2,16 +2,6 @@ import VsaIris.Vsa.Fprintf.Loop
 import VsaIris.Vsa.Fprintf.Sprint
 import VsaIris.Interp.ITacTree
 
-/-!
-# From the loop head to a conversion or the end (lane N5)
-
-From `VfpLoop` at `0x8000a9b0`, `_vfprintf_r` scans the literal run `bs` of
-the format (`vfp_scan`), reads its terminator through `mbtowc` (`vfp_mb`),
-and appends the run to the iov array when it is nonempty. At a `%` it goes
-on to the conversion at `0x8000a9fc` (`vfp_toPct`); at the NUL to the end at
-`0x8000aca8` (`vfp_toEnd`). `VfpPend` is the loop state with pending iovs.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -22,8 +12,6 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- `_vfprintf_r`'s loop state with the iovs `iovs` pending in the array at
-`sp + 352` (`s7` past them) and `cnt` bytes counted. -/
 structure VfpPend (R : Nat → BitVec 64) (Mt : Mem) (sp reent f : BitVec 64) (cnt : Nat)
     (iovs : List (Nat × List (BitVec 8))) : Prop where
   spR : R 2 = sp
@@ -40,17 +28,9 @@ structure VfpPend (R : Nat → BitVec 64) (Mt : Mem) (sp reent f : BitVec 64) (c
   resid : ldv .ld Mt (sp + 240#64).toNat = BitVec.ofNat 64 (piecesLen iovs)
   arr : IovAt Mt (sp.toNat + 352) iovs
 
-/-- The literal run's iov: none for an empty run. -/
 def litIov (P : Nat) (bs : List (BitVec 8)) : List (Nat × List (BitVec 8)) :=
   if bs = [] then [] else [(P, bs)]
 
-/-- `addw` of two small counts. -/
-theorem addw_ofNat {a b : Nat} (h : a + b < 2 ^ 31) :
-    BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a + BitVec.ofNat 64 b)) =
-      BitVec.ofNat 64 (a + b) := by
-  rw [ofNat_add_ofNat]; exact sextw_ofNat h
-
-/-- `addw` of two small counts (the halves extracted). -/
 theorem addw_ofNat' {a b : Nat} (h : a + b < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) + BitVec.extractLsb 31 0 (BitVec.ofNat 64 b)) =
       BitVec.ofNat 64 (a + b) := by
@@ -61,14 +41,10 @@ theorem addw_ofNat' {a b : Nat} (h : a + b < 2 ^ 31) :
     omega
   rw [e]; exact sextw_ofNat h
 
-/-- The bytes the scan to a terminator writes: `mbtowc`'s word, the count,
-the `uio`'s count and residual, the first iov. -/
 def ScanReg (sp : Nat) (a : Nat) : Prop :=
   MbReg sp a ∨ (sp + 16 ≤ a ∧ a < sp + 24) ∨ (sp + 232 ≤ a ∧ a < sp + 248) ∨
     (sp + 352 ≤ a ∧ a < sp + 368)
 
-/-- The state at the terminator of a literal run `bs` at `P`: the run
-pending, `s9` at the terminator, `s6` the `mbtowc` result. -/
 structure ScanPost (R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp reent f P : BitVec 64) (cnt : Nat)
     (bs : List (BitVec 8)) : Prop where
   pend : VfpPend R' Mt' sp reent f (cnt + bs.length) (litIov P.toNat bs)
@@ -77,15 +53,12 @@ structure ScanPost (R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp reent f P : BitVe
   loc : LocMb Mt'
   frame : Frame Mt' Mt (ScanReg sp.toNat)
 
-/-- Where the scan goes on: the end at the NUL, the conversion at `%`. -/
 def termPC (c : BitVec 8) : BitVec 64 := if c = 0#8 then 0x8000aca8#64 else 0x8000a9fc#64
 
-/-- `s6` after the scan: `mbtowc`'s result (0 at the NUL). -/
 def termFlag (c : BitVec 8) : BitVec 64 := if c = 0#8 then 0#64 else 1#64
 
 set_option hygiene false in
-/-- The part of `vfp_toTerm` after the terminator's `mbtowc`: the literal
-run's iov (none for an empty run) and the post. -/
+
 local macro "scan_tail" : tactic => `(tactic| (
       rcases hbsn : bs with _ | ⟨b0, bs'⟩
       · subst hbsn
@@ -165,8 +138,6 @@ local macro "scan_tail" : tactic => `(tactic| (
         · rsimp; exact r24
         · exact hloc.frame hfr2 (fun a h1 h2 h => by unfold ScanReg MbReg at h; omega) (fun h => by unfold ScanReg MbReg at h; omega)))
 
-/-! **A literal run and its terminator** from the loop head: the run's iov
-appended, on to the conversion (`%`) or the end (NUL). -/
 #ix_piece vfpToTerm_1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
@@ -247,7 +218,6 @@ appended, on to the conversion (`%`) or the end (NUL). -/
   simp only [hpc, hfl] at hk
   scan_tail
 
-/-! **`vfp_toTerm`**: a literal run and its terminator from the loop head. -/
 #ix_tree vfp_toTerm := vfpToTerm_1 [vfpToTerm_2, vfpToTerm_3]
 
 end VsaIris.Sym.Fp

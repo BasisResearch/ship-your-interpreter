@@ -1,31 +1,10 @@
-/-!
-# First-order unification
-
-Terms over variables `V` (program names and auxiliary variables), leaves and
-binary nodes. `unifyTop σ E` extends an idempotent substitution `σ` by a most
-general solution of the equations `E`:
-
-* `unifyTop_sound`: every assignment satisfying the result satisfies `σ` and
-  `E`;
-* `unifyTop_complete`: any assignment satisfying `σ` and `E` satisfies the
-  result, which exists;
-* `unifyTop_idem`, `unifyTop_vars`: the result is idempotent and mentions only
-  variables of `σ` and `E`;
-* `canon_sat`: an idempotent substitution has a ground solution `canon σ`.
-
-The worklist algorithm terminates by the lexicographic measure (unsolved
-variables, size of the worklist).
--/
-
 namespace Vsa.While.Unify
 
-/-- Variables: program names and auxiliary variables. -/
 inductive V where
   | name (x : String)
   | aux (n : Nat)
   deriving DecidableEq, Repr
 
-/-- Terms. -/
 inductive Tm where
   | var (v : V)
   | leaf (c : Nat)
@@ -44,13 +23,11 @@ def vars : Tm → List V
   | leaf _ => []
   | node _ a b => a.vars ++ b.vars
 
-/-- Apply an assignment. -/
 def bind (θ : V → Tm) : Tm → Tm
   | var v => θ v
   | leaf c => leaf c
   | node c a b => node c (a.bind θ) (b.bind θ)
 
-/-- Replace one variable. -/
 def sub1 (t : Tm) (v : V) (s : Tm) : Tm := t.bind fun w => if w = v then s else var w
 
 theorem size_pos (t : Tm) : 0 < t.size := by cases t <;> simp [size]
@@ -105,7 +82,6 @@ theorem mem_vars_sub1 {v w : V} {s t : Tm} (h : w ∈ (t.sub1 v s).vars) :
   · subst huv; simp at hw; exact .inr hw
   · simp [huv, vars] at hw; subst hw; exact .inl ⟨hu, huv⟩
 
-/-- The occurs check is sound: a variable strictly inside a term is smaller. -/
 theorem size_lt_of_occurs {θ : V → Tm} {v : V} {t : Tm} (hv : v ∈ t.vars) (ht : t ≠ var v) :
     (θ v).size < (t.bind θ).size := by
   induction t with
@@ -125,7 +101,6 @@ theorem size_lt_of_occurs {θ : V → Tm} {v : V} {t : Tm} (hv : v ∈ t.vars) (
 
 end Tm
 
-/-- Substitutions: bindings, first match wins. -/
 abbrev Subst := List (V × Tm)
 
 def find : Subst → V → Option Tm
@@ -136,21 +111,16 @@ def get (σ : Subst) (v : V) : Tm := (find σ v).getD (.var v)
 
 def dom (σ : Subst) : List V := σ.map (·.1)
 
-/-- Apply a substitution. -/
 def app (σ : Subst) (t : Tm) : Tm := t.bind (get σ)
 
-/-- An assignment satisfies a substitution. -/
 def Sat (θ : V → Tm) (σ : Subst) : Prop := ∀ p ∈ σ, θ p.1 = p.2.bind θ
 
-/-- An assignment satisfies equations. -/
 def SatE (θ : V → Tm) (E : List (Tm × Tm)) : Prop := ∀ e ∈ E, e.1.bind θ = e.2.bind θ
 
-/-- Distinct domain. -/
 def Distinct : Subst → Prop
   | [] => True
   | (v, _) :: σ => v ∉ dom σ ∧ Distinct σ
 
-/-- Idempotent: distinct domain, and no domain variable in any range term. -/
 structure Idem (σ : Subst) : Prop where
   distinct : Distinct σ
   range : ∀ p ∈ σ, ∀ w ∈ p.2.vars, w ∉ dom σ
@@ -169,7 +139,6 @@ def bindS (v : V) (t : Tm) (σ : Subst) : Subst :=
 def bindE (v : V) (t : Tm) (E : List (Tm × Tm)) : List (Tm × Tm) :=
   E.map fun e => (e.1.sub1 v t, e.2.sub1 v t)
 
-/-- Variables of `W` not yet solved. -/
 def cnt (W : List V) (σ : Subst) : Nat := (W.filter fun w => !(dom σ).contains w).length
 
 theorem dom_bindS (v : V) (t : Tm) (σ : Subst) : dom (bindS v t σ) = v :: dom σ := by
@@ -213,7 +182,6 @@ theorem cnt_bindS_lt {W : List V} {σ : Subst} {v : V} (t : Tm) (hv : v ∈ W)
   · simp
   · intro w _ h; simp at h ⊢; exact h.2
 
-/-- Worklist unification. -/
 def unifyW (W : List V) (σ : Subst) : List (Tm × Tm) → Option Subst
   | [] => some σ
   | (.leaf c, .leaf d) :: E => if c = d then unifyW W σ E else none
@@ -234,8 +202,6 @@ decreasing_by
     | (apply Prod.Lex.left; exact cnt_bindS_lt _ _h.1 _h.2)
     | (apply Prod.Lex.right; simp only [sizeE, Tm.size]; omega)
 
-/-! ## Unfolding -/
-
 theorem unifyW_var_left {W : List V} {σ : Subst} {v : V} {t : Tm} {E : List (Tm × Tm)}
     (ht : t ≠ .var v) :
     unifyW W σ ((.var v, t) :: E) =
@@ -253,8 +219,6 @@ theorem unifyW_var_right {W : List V} {σ : Subst} {v : V} {t : Tm} {E : List (T
   | var w => exact absurd rfl (ht w)
   | leaf c => rw [unifyW.eq_def]; simp [dite_eq_ite]
   | node c a b => rw [unifyW.eq_def]; simp [dite_eq_ite]
-
-/-! ## One binding -/
 
 theorem sat_bindS {θ : V → Tm} {v : V} {t : Tm} {σ : Subst} :
     Sat θ (bindS v t σ) ↔ θ v = t.bind θ ∧ Sat θ σ := by
@@ -300,8 +264,6 @@ theorem mem_varsE_bindE {w v : V} {t : Tm} {E : List (Tm × Tm)} (h : w ∈ vars
     · exact .inl ⟨List.mem_flatMap.mpr ⟨e, he, List.mem_append_right _ h⟩, hne⟩
     · exact .inr h
 
-/-! ## Soundness -/
-
 theorem unifyW_sound (W : List V) :
     ∀ σ E σ', unifyW W σ E = some σ' → ∀ θ, Sat θ σ' → Sat θ σ ∧ SatE θ E := by
   intro σ E
@@ -345,8 +307,6 @@ theorem unifyW_sound (W : List V) :
   | case12 σ t v E ht hv hW => intro σ' h; rw [unifyW_var_right ht] at h; simp [hv, hW] at h
   | case13 => intro σ' h; rw [unifyW.eq_def] at h; cases h
   | case14 => intro σ' h; rw [unifyW.eq_def] at h; cases h
-
-/-! ## Completeness -/
 
 theorem unifyW_complete (W : List V) (θ : V → Tm) :
     ∀ σ E, Sat θ σ → SatE θ E → (∀ w ∈ varsE E, w ∈ W ∧ w ∉ dom σ) →
@@ -423,8 +383,6 @@ theorem unifyW_complete (W : List V) (θ : V → Tm) :
   | case14 =>
     intro _ hE _
     have := (satE_cons.mp hE).1; simp [Tm.bind] at this
-
-/-! ## Idempotence and variables -/
 
 theorem dom_map_snd (f : V × Tm → Tm) (σ : Subst) :
     dom (σ.map fun p => (p.1, f p)) = dom σ := by
@@ -565,8 +523,6 @@ theorem unifyW_vars (W : List V) :
   | case13 => intro σ' h; rw [unifyW.eq_def] at h; cases h
   | case14 => intro σ' h; rw [unifyW.eq_def] at h; cases h
 
-/-! ## Lookup -/
-
 theorem find_mem : ∀ {σ : Subst} {v : V} {t : Tm}, find σ v = some t → (v, t) ∈ σ
   | [], _, _, h => by cases h
   | (w, u) :: σ, v, t, h => by
@@ -603,12 +559,9 @@ theorem get_bind {θ : V → Tm} {σ : Subst} (hs : Sat θ σ) (v : V) : (get σ
   | none => rfl
   | some t => exact (hs (v, t) (find_mem h)).symm
 
-/-! ## The unifier on a substitution -/
-
 def appE (σ : Subst) (E : List (Tm × Tm)) : List (Tm × Tm) :=
   E.map fun e => (app σ e.1, app σ e.2)
 
-/-- Extend `σ` by a most general solution of `E`. -/
 def unifyTop (σ : Subst) (E : List (Tm × Tm)) : Option Subst :=
   unifyW (varsE (appE σ E)) σ (appE σ E)
 
@@ -679,10 +632,6 @@ theorem unifyTop_vars {σ σ' : Subst} {E : List (Tm × Tm)} (h : unifyTop σ E 
     · exact .inr h
     · exact .inl (List.mem_flatMap.mpr ⟨p, hp, List.mem_cons_of_mem _ h⟩)
 
-/-! ## A ground solution -/
-
-/-- The solution of an idempotent substitution that sends free variables to
-`leaf 0`. -/
 def canon (σ : Subst) (v : V) : Tm := (get σ v).bind fun _ => .leaf 0
 
 theorem canon_sat {σ : Subst} (hσ : Idem σ) : Sat (canon σ) σ := by

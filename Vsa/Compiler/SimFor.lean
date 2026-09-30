@@ -1,14 +1,9 @@
 import Vsa.Compiler.SimForDefs
 
-/-!
-# Forward simulation: `for`
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- Temporaries of an optional statement or expression. -/
 def tOS : Option Stmt → Nat
   | some s => tS s
   | none => 0
@@ -38,7 +33,6 @@ theorem CtxOK.swallow {C : GCtx} (h : CtxOK C) {x : Nat} (hx : PosOK x) : CtxOK 
     have e' : some (x, C.blk) = some (p, dt) := e
     cases e'; exact ⟨Nat.le_refl _, hx⟩
 
-/-- Every completion of a swallowed initializer arrives at its target. -/
 theorem StOut.swallow {code : List Ins} {T : List String} {V' : View} {st' : St} {d : Nat} {env : Addr} {C : GCtx}
     {sp fs x : Nat} {B : AM} {t : Status} (h : StOut code T V' st' d env (C.swallow x) sp fs x B t) :
     B.pc = pcOf x ∧ MS code T V' st' d env C.Γ sp fs B := by
@@ -151,7 +145,6 @@ theorem flCondFalse {st : St} {d : Nat} {env : Addr} {c : Expr} {step : Option E
     simp only [Bool.false_eq_true, if_false] at hp
     exact .inr ⟨V1, hp⟩
 
-/-- The body of a `for` loop from the condition's post. -/
 theorem for_body {st st1 st2 : St} {d : Nat} {env : Addr} {cnd step : Option Expr} {b : Stmt} {t : Status}
     {nb : Nat} (hB : SSpec code T st1 d env b st2 t nb) {V V1 : View} {C : GCtx} {pos : Nat} {init : Option Stmt}
     {sp fs : Nat} {A B : AM} {nc : Nat} (hok : ForOK code T C pos init cnd step b fs)

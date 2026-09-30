@@ -1,38 +1,11 @@
 import VsaIris.Interp.NewlibCall
 
-/-!
-# The arm layer of the logical and unary arms (lane E3)
-
-INTERP_DESIGN.md §6, §8 (family "logical/unary"). What the `EX_LOGICAL`
-(tag 7) and `EX_UNARY` (tag 8) arms of `eval_expr` share beyond lane G's
-`Arm.lean`:
-
-* the node facts: `logNode_of_repr` (a `BinNode` at tag 7) and `UnNode`/
-  `unNode_of_repr` (one child at `+16`);
-* `EvalSaved3`: the prologue's spills these arms keep (`ra`, `s0`-`s2`; the
-  binary arm's `EvalSaved` adds `s3`, which these arms never spill), with its
-  transport through stores (`ix_saved3`) and through a helper that hands back
-  bytes agreeing outside a slot (`EvalSaved3.agree`);
-* `ms_callValRef` (and `ms_callTruthy`): a call to a helper taking a value by
-  reference (`value_truthy`, `value_kind_name`) on a value the run copied into
-  a frame slot. The slot is carved out of the run's bytes as `valAt` (its three
-  words are those of a represented value), handed to `valueTruthySpec`, and
-  joined back; the continuation gets the truthiness bit in `a0` and bytes that
-  agree with the old ones outside the slot.
-* the bit arithmetic of the `value_bool` calls (`boolBit_ne`, `seqzBit_ne`)
-  and of `neg` (`toInt_neg_wrap`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 
-/-! ## Nodes -/
-
-/-- A logical node's facts (tag 7, operator `logOpTok`), from its
-representation over a geometric view: the binary arm's `BinNode` shape. -/
 theorem logNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : LogOp} {l r : Expr}
     (h : ExprReprWithin m P aX.toNat (.logical op l r)) (hg : ∀ k, P k → ReadOK k) :
     ∃ aL aR : Nat, BinNode m P aX 7 (logOpTok op) (BitVec.ofNat 64 aL) (BitVec.ofNat 64 aR) ∧
@@ -73,12 +46,8 @@ theorem logNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : LogO
         · obtain ⟨j, rfl⟩ : ∃ j, a = aX.toNat + 24 + j := ⟨a - (aX.toNat + 24), by omega⟩
           exact ⟨cr j (by omega), isSome_of_readLE hr (by omega)⟩
 
-/-- The bytes of a one-child node a run reads: the tag, the operator word, the
-child pointer (not the line field at `+4`). -/
 abbrev unView (a : Nat) : List Nat := accAddrs a 4 ++ accAddrs (a + 8) 4 ++ accAddrs (a + 16) 8
 
-/-- What a unary node gives the runs: its word reads, its view, its
-placement. -/
 structure UnNode (m : Mem) (P : Nat → Prop) (aX : BitVec 64) (tok : Nat) (aC : BitVec 64) : Prop where
   kind : ldv .lw m aX.toNat = 8#64
   kindu : ldv .lwu m aX.toNat = 8#64
@@ -89,7 +58,6 @@ structure UnNode (m : Mem) (P : Nat → Prop) (aX : BitVec 64) (tok : Nat) (aC :
   off : aX.toNat + 24 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ aX.toNat
   view : ∀ a ∈ unView aX.toNat, P a ∧ (m[a]?).isSome
 
-/-- A unary node's facts, from its representation over a geometric view. -/
 theorem unNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : UnOp} {e : Expr}
     (h : ExprReprWithin m P aX.toNat (.unary op e)) (hg : ∀ k, P k → ReadOK k) :
     ∃ aC : Nat, UnNode m P aX (unOpTok op) (BitVec.ofNat 64 aC) ∧ ExprReprWithin m P aC e ∧
@@ -124,18 +92,12 @@ theorem unNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : UnOp}
       · obtain ⟨j, rfl⟩ : ∃ j, a = aX.toNat + 16 + j := ⟨a - (aX.toNat + 16), by omega⟩
         exact ⟨cc j (by omega), isSome_of_readLE hc (by omega)⟩
 
-/-! ## The spills these arms keep -/
-
-/-- **The prologue's spills of the one-child and short-circuit arms**: the
-return address and `s0`-`s2` at the top of the frame (`EvalSaved` without
-`s3`, which only the binary arm spills). -/
 structure EvalSaved3 (Mt : Mem) (s ret v8 v9 v18 : BitVec 64) : Prop where
   ra : ldv .ld Mt (s.toNat - 1088 + 1080) = ret
   s0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8
   s1 : ldv .ld Mt (s.toNat - 1088 + 1064) = v9
   s2 : ldv .ld Mt (s.toNat - 1088 + 1056) = v18
 
-/-- The spills survive a store below them. -/
 theorem EvalSaved3.store {Mt : Mem} {s ret v8 v9 v18 : BitVec 64}
     (h : EvalSaved3 Mt s ret v8 v9 v18) {a w : Nat} (v : BitVec 64)
     (ha : a + w ≤ s.toNat - 1088 + 1056) :
@@ -145,7 +107,6 @@ theorem EvalSaved3.store {Mt : Mem} {s ret v8 v9 v18 : BitVec 64}
    by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s1,
    by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s2⟩
 
-/-- A doubleword load reads its eight bytes only. -/
 theorem ldv_ld_congr {M M' : Mem} {a : Nat} (h : ∀ j, j < 8 → imgM M' (a + j) = imgM M (a + j)) :
     ldv .ld M' a = ldv .ld M a := by
   unfold ldv bytesAt
@@ -154,7 +115,6 @@ theorem ldv_ld_congr {M M' : Mem} {a : Nat} (h : ∀ j, j < 8 → imgM M' (a + j
   intro j hj
   exact h j (List.mem_range.1 hj)
 
-/-- The spills survive any change of the frame's bytes below them. -/
 theorem EvalSaved3.agree {Mt Mt' : Mem} {s ret v8 v9 v18 : BitVec 64}
     (h : EvalSaved3 Mt s ret v8 v9 v18)
     (hm : ∀ a, s.toNat - 1088 + 1056 ≤ a → a < s.toNat - 1088 + 1088 → imgM Mt' a = imgM Mt a) :
@@ -164,8 +124,6 @@ theorem EvalSaved3.agree {Mt Mt' : Mem} {s ret v8 v9 v18 : BitVec 64}
    by rw [ldv_ld_congr fun j hj => hm _ (by omega) (by omega)]; exact h.s1,
    by rw [ldv_ld_congr fun j hj => hm _ (by omega) (by omega)]; exact h.s2⟩
 
-/-- Carry `EvalSaved3` back through a memory's stores and calls' slot words
-to a memory it is known for (`hoff` normalizes the frame addresses). -/
 syntax "ix_saved3 " term " using " term : tactic
 macro_rules
   | `(tactic| ix_saved3 $h using $hoff) => `(tactic| (
@@ -173,12 +131,6 @@ macro_rules
       repeat refine EvalSaved3.store ?_ _ (by first | omega | (rw [($hoff:term)] <;> first | omega | decide));
       exact $h))
 
-/-- A load fact over a frame memory built by runs and child calls, at a frame
-address in plain-sum form (`hoff`, `evalSP_off`): the slot words of the calls
-(`slotWrite`) and the runs' stores all in the form `s.toNat - 1088 + c`, then
-forwarded with `sx_addr` deciding each address comparison. `ldv_store_hit` is
-left out: matching its repeated address against two such sums is a defeq check
-that unfolds `Nat.sub` and times out. -/
 syntax "ix_fwdF " term : tactic
 macro_rules
   | `(tactic| ix_fwdF $hoff) => `(tactic| (
@@ -188,15 +140,13 @@ macro_rules
       simp (disch := first | omega | sx_addr) only [ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss,
         ldv_lw_store8]))
 
-/-! ## `value_truthy` on a copy in the frame -/
-
 section Truthy
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
 omit I in
-/-- A run's state over an equivalent owned set. -/
+
 theorem ms_congrSet {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
     (h : ∀ k, S k ↔ T k) : ms (GF := GF) pc R S M ⊢ ms pc R T M := by
   unfold ms
@@ -204,13 +154,6 @@ theorem ms_congrSet {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop
   iframe Hpc Hra Hregs
   iapply ownSet_iff _ h $$ HS
 
-/-- **A call to a helper that takes a value by reference**, for either WP
-(`value_truthy`, `value_kind_name`: `helperSpec` with `Pre = valAt p v ∗
-⌜SlotGeom p⌝` and `Post rv' = valAt p v ∗ ⌜Res rv'⌝`). At the `jal` at `i`,
-`a0` points at a 24-byte slot of the run's bytes `S` whose three words carry
-`valOf N v`: the slot is lent to the helper as `valAt` and joined back after
-it. The continuation gets the registers the helper keeps, `Res`, and bytes
-agreeing with the old ones outside the slot. -/
 theorem ms_callValRef (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64} {clob : List Nat}
     {Res : (Nat → BitVec 64) → Prop}
@@ -262,8 +205,6 @@ theorem ms_callValRef (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   ihave Hms := ms_congrSet (fun k => (hsl k).symm) $$ Hms
   iapply Hk $$ %R' %M' %⟨hkeep, hres, fun k hk hn => hM1 k ⟨hk, hn⟩⟩ Hms
 
-/-- **A `value_truthy` call on a value in the run's own bytes** (`ms_callValRef`
-at `valueTruthySpec`): the continuation gets the truthiness bit in `a0`. -/
 theorem ms_callTruthy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code valueTruthyPC)
@@ -287,38 +228,27 @@ theorem ms_callTruthy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
 
 end Truthy
 
-/-! ## Register facts a run branches on -/
-
 theorem upd_eta {R : Nat → BitVec 64} {k : Nat} {v : BitVec 64} (h : R k = v) : upd R k v = R := by
   funext r; by_cases hr : r = k
   · subst hr; rw [upd_same, h]
   · rw [upd_other _ _ hr]
 
-/-- A run from a state whose register `k` is known to hold `v`, as a run from
-the state with `v` written in: the branches on `k` then read a literal, and
-`ix_run` prunes the one the fact refutes (a fact `R k = v` given as a
-`using` rewrite does not reach a branch condition over `R k`). -/
 theorem iw_regFact {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
     {Mt : Mem} {k : Nat} {v : BitVec 64} (h : R k = v) (hk : IW live Dt DA S Q pc (upd R k v) Mt) :
     IW live Dt DA S Q pc R Mt := by
   rwa [upd_eta h] at hk
 
-/-! ## Bits -/
-
-/-- `value_bool` of a truthiness bit. -/
 theorem boolBit_ne (t : Bool) : ((if t then 1#64 else 0#64) != 0#64) = t := by
   cases t <;> decide
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail in
-/-- `seqz`'s result (the Sail form a run computes). -/
+
 abbrev seqzV (x : BitVec 64) : BitVec 64 := zero_extend (m := 64) (bool_to_bit (zopz0zI_u x 1#64))
 
-/-- `value_bool` of `seqz` of a truthiness bit (`!`). -/
 theorem seqzBit_ne (t : Bool) : (seqzV (if t then 1#64 else 0#64) != 0#64) = !t := by
   cases t <;> decide
 
-/-- Machine negation of a 64-bit integer is the source's wrapping negation. -/
 theorem toInt_neg_wrap (x : BitVec 64) : (-x).toInt = wrap64 (-x.toInt) := by
   unfold wrap64; rw [BitVec.toInt_neg, BitVec.toInt_ofInt]
 

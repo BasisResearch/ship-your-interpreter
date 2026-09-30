@@ -1,22 +1,5 @@
 import VsaIris.Interp.EnvScanCore
 
-/-!
-# `env_get`'s scan spans, first-order
-
-Each call-free span of `env_get` (`0x80002c10`) common to `env_set` is one
-lemma, proved by `sx_run` over the generated step table. The Iris proof
-(`EnvScan.lean`) strings them together around the `strcmp` calls. **This
-file is the template of `EnvSetSpans.lean`** (`scripts/gen_env_set_spans.py`
-shifts every PC by `0xcc` and renames `get_` to `set_`).
-
-* `get_entry` `0x80002c10` → `0x80002c40` (the frame head), the prologue.
-* `get_head` `0x80002c40` → `0x80002cc4` (empty frame) | `0x80002c60`.
-* `get_load` `0x80002c60` → `0x80002c68` (`jal strcmp`).
-* `get_cmp` `0x80002c6c` → `0x80002c60` | `0x80002cc4` | `0x80002c70` (hit).
-* `get_parent` `0x80002cc4` → `0x80002c40` | `0x80002ca0` (`a0 = 0`).
-* `get_epi` `0x80002ca0` → return.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris.Sym VsaIris.MallocFast Vsa.MemRepr Vsa.Sim
@@ -88,7 +71,6 @@ theorem get_load {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out
   · simp
   · simp [upd_apply, h10, h11]
 
-/-- The shared epilogue `0x80002ca0`: restore `ra`, `s0-s5`, pop, return. -/
 theorem get_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out : Nat} {G : FrameGeom}
     {r : BitVec 64}
     {sv : Nat → BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -119,8 +101,6 @@ theorem get_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
     · exact hr21
     · exact hstk.s6
 
-/-- The compare's branch `0x80002c6c`: `bnez a0` to the next name, or on to
-the hit copy. -/
 theorem get_cmp {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem} (hi : i < n) (hn : n < 2 ^ 31)
     (h8 : R 8 = BitVec.ofNat 64 i) (h18 : R 18 = BitVec.ofNat 64 n) :
@@ -150,8 +130,6 @@ theorem get_cmp {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
   · intro hc
     exact hk _ _ _ ⟨rfl, .inr (.inr ⟨by simpa using hc, rfl, rfl⟩)⟩
 
-/-- The parent step `0x80002cc4`: `s4 := parent`; on to its head, or `a0 := 0`
-and the epilogue. -/
 theorem get_parent {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G n) (he : (R 20).toNat = G.e) :

@@ -3,7 +3,6 @@ import Vsa.Sim.RamReadBytes
 
 namespace Vsa.Sim
 
-/-- Each bit of a subrange update comes from the selected input or the old word. -/
 theorem getLsbD_updateSubrange' {w : Nat} (x : BitVec w) (lo len : Nat)
     (v : BitVec len) (k : Nat) (hk : k < w) :
     (Sail.BitVec.updateSubrange' x lo len v).getLsbD k =
@@ -20,7 +19,6 @@ theorem getLsbD_updateSubrange' {w : Nat} (x : BitVec w) (lo len : Nat)
       simp [hk, hlo, hkw, hlen, hkl, BitVec.getLsbD_of_ge v _ (by omega : len ≤ k - lo)]
   · simp [hk, hlo, show k < lo from by omega]
 
-/-- Normalize Sail's integer-indexed insertion to its selected bit interval. -/
 theorem getLsbD_splitReadInsert (n d i : Nat) (hd : 0 < d)
     (data : BitVec (8 * (n : Int) * (d : Int)).toNat) (v : BitVec (8 * d))
     (k : Nat) (hk : k < 8 * n * d) :
@@ -45,7 +43,6 @@ theorem getLsbD_splitReadInsert (n d i : Nat) (hd : 0 < d)
     simp [hinside, he, hk, hsmall]
   · simp [hinside, ← he, hk]
 
-/-- Reassembling consecutive slices reconstructs the complete word. -/
 theorem splitReadAccum_eq (n d : Nat) (hd : 0 < d)
     (full : BitVec (8 * (n : Int) * (d : Int)).toNat)
     (values : Nat → BitVec (8 * d))
@@ -75,7 +72,6 @@ theorem splitReadAccum_eq (n d : Nat) (hd : 0 < d)
   intro k hk
   exact hpref n (Nat.le_refl n) k hk
 
-/-- Total reads of consecutive chunks assemble to the complete total read. -/
 theorem splitReadAccum_bytesT (m : Std.ExtHashMap Nat (BitVec 8)) (a n d : Nat)
     (hd : 0 < d) (values : Nat → BitVec (8 * d))
     (hv : ∀ i, i < n → values i = bytesT m (a + i * d) d) :
@@ -99,8 +95,4 @@ theorem splitReadAccum_bytesT (m : Std.ExtHashMap Nat (BitVec 8)) (a n d : Nat)
   have hi : k < 8 * n * d := by simpa [Nat.mul_assoc] using hk
   simp [hk, hi]
 
-#print axioms splitReadAccum_bytesT
-#print axioms splitReadAccum_eq
-#print axioms getLsbD_updateSubrange'
-#print axioms getLsbD_splitReadInsert
 end Vsa.Sim
