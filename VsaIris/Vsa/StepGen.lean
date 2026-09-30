@@ -1055,10 +1055,16 @@ register_option step.landed : Bool := {
   descr := "drivers and `step%` use the step-table lemma at a `pc` when a table declares it \
     (false: every step is elaborated from the image, to measure that cost)" }
 
-/-- The table lemma `fam_<pc>`, when a table declares it. -/
+/-- The landed lemma `fam_<pc>`: one a step table declares (unless `step.landed` is off)
+    or a hand-written step of that name. -/
 def landed? (fam : String) (pc : Nat) : CoreM (Option Name) := do
   let nm := (`VsaIris.Sym).str s!"{fam}_{hxw 8 pc}"
-  return if step.landed.get (← getOptions) && (← getEnv).contains nm then some nm else none
+  let env ← getEnv
+  unless env.contains nm do return none
+  if step.landed.get (← getOptions) then return some nm
+  let inTable := (env.getModuleIdxFor? nm).any fun i =>
+    (`VsaIris.Vsa.StepTables).isPrefixOf env.header.moduleNames[i.toNat]!
+  return if inTable then none else some nm
 
 /-- The step lemma a driver applies for the family prefix `fam` (`it`, `itD`, …, `nt`,
     `st`) at `pc`: the table lemma when a table declares it, else the lemma elaborated
