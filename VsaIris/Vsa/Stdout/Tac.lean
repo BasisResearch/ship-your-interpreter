@@ -277,8 +277,8 @@ theorem retOK_of {R Rf : Nat → BitVec 64} {a0 : BitVec 64} (h10 : Rf 10 = a0)
 macro "ret_keep" : tactic => `(tactic| (
   intro x hx h32 h10 hc
   simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
-  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+  rcases hx with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h |
+    h | h | h | h | h | h | h | h | h <;> subst h <;>
     first
       | exact absurd rfl h32
       | exact absurd rfl h10
