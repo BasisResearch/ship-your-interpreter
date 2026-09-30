@@ -1,4 +1,5 @@
 import VsaIris.Interp.BinErr
+import VsaIris.Interp.SymInterp
 
 /-!
 The four comparison operators `<`, `<=`, `>`, `>=` as one descriptor `CmpOp`.
@@ -120,11 +121,11 @@ macro "cmp_int_pre" : tactic => `(tactic| (
   have hU : ldv .ld Mt (s + 18446744073709550528#64 + 152#64).toNat = u1 := mid.q1
   clear g hn mid
   simp only [CmpOp.op, binOpTok, CmpOp.vb, CmpOp.intBit] at hop hk ⊢
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003678))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003678))
 
 set_option hygiene false in
 macro "cmp_int_post " pc:num : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc
   have hoff := evalSP_off (s := s) hsf (by omega)
   refine hk _ _ ⟨⟨by ix_reg, fun x hx => ?_⟩, by ix_reg, by ix_reg; rw [hU], fun h => ?_⟩
   · simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
@@ -163,11 +164,11 @@ macro "cmp_str_pre" : tactic => `(tactic| (
   have hU : ldv .ld Mt (s + 18446744073709550528#64 + 152#64).toNat = u1 := mid.q1
   clear g hn mid
   simp only [CmpOp.op, binOpTok] at hop hk ⊢
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003628))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003628))
 
 set_option hygiene false in
 macro "cmp_str_post" : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003b18
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003b18
   have hoff := evalSP_off (s := s) hsf (by omega)
   refine hk _ _ ⟨⟨by ix_reg, fun x hx => ?_⟩, by ix_reg, by ix_reg, by ix_reg; rw [hU],
     fun h => ?_, by e2_fwd hoff⟩
@@ -191,7 +192,7 @@ macro "cmp_str4 " pc:num : tactic => `(tactic| (
   have h2' : R 2 = s + 18446744073709550528#64 := h2
   clear g h2
   simp only [CmpOp.op, binOpTok, CmpOp.vb, CmpOp.strBit] at hop hk ⊢
-  ix_run hlive using [h9, h2', hop, hsf] at $pc
+  sym_run hlive using [h9, h2', hop, hsf] at $pc
   have hoff := evalSP_off (s := s) hsf (by omega)
   refine hk _ _ ⟨⟨by ix_reg, fun x hx => ?_⟩, by ix_reg, by ix_reg, fun h => ?_⟩
   · simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx

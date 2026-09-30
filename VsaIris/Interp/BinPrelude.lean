@@ -1,5 +1,6 @@
 import VsaIris.Interp.ArmCore
 import VsaIris.Interp.Case.BinaryAddIntT
+import VsaIris.Interp.SymInterp
 
 /-!
 The shared `eval_expr` prelude of every binary operator: entry, spill, the left and right
@@ -150,7 +151,7 @@ macro "epi_run" : tactic => `(tactic| (
   have hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19 := by
     rw [hoff _ (by decide)]; exact hsv.s3
   clear g h2 hsv hoff
-  ix_run hlive using [h2', hRA, hS0, hS1, hS2, hS3, hsf, hal]
+  sym_run hlive using [h2', hRA, hS0, hS1, hS2, hS3, hsf, hal]
   refine hk _ _ ⟨by ix_reg, by ix_reg; exact evalSP_restore s, by ix_reg, by ix_reg, by ix_reg,
     by ix_reg, fun x hx => ?_⟩
   simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx

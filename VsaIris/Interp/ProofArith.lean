@@ -2,6 +2,7 @@ import VsaIris.Interp.HelperRun
 import VsaIris.Interp.BinArm
 import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.DivSpec3
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -37,7 +38,7 @@ theorem mul_loop {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
   intro n ih R hn hinv hkp
   have h1 : R 1 = r := (hkp 1 (by decide) (by decide) (by decide) (by decide)).trans hr
   apply (step% it 0x80004648) hlive
-  ix_run hlive at 0x80004648
+  sym_run hlive at 0x80004648
   all_goals first
     | (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [h1]; exact hal)
     | skip
@@ -120,7 +121,7 @@ theorem udiv_loop2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
     have h3z : R 13 >>> 1 = 0#64 := by
       apply BitVec.eq_of_toNat_eq; rw [shr1_toNat', hk3]; rfl
     refine (step% it 0x800046d8) hlive ?_ ?_
-    all_goals (intro hc; ix_run hlive at 0x800046d8)
+    all_goals (intro hc; sym_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hF.hal => rw [hR1]; exact hal
     case refine_2.hF.hal => rw [hR1]; exact hal
@@ -159,7 +160,7 @@ theorem udiv_loop2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
     have hK' : Vsa.Sim.DivK d (R 12 >>> 1) (R 13 >>> 1) j :=
       ⟨h2, h3, by rw [hpow] at hov; omega⟩
     refine (step% it 0x800046d8) hlive ?_ ?_
-    all_goals (intro hc; ix_run hlive at 0x800046d8)
+    all_goals (intro hc; sym_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hT hz =>
       refine ih _ ?_ ?_ ?_ ?_ ?_
@@ -213,7 +214,7 @@ theorem udiv_loop1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
   have hpk : 1 ≤ 2 ^ k := Nat.one_le_two_pow
   have ha2 : d.toNat ≤ (R 12).toNat := by rw [hk2]; exact Nat.le_mul_of_pos_right _ (by omega)
   refine (step% it 0x800046c4) hlive ?_ ?_
-  all_goals (intro hc; ix_run hlive at 0x800046c4 0x800046d8)
+  all_goals (intro hc; sym_run hlive at 0x800046c4 0x800046d8)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case refine_1 =>
     have htop := toNat_of_toInt_nonpos (by simpa using hc) (by omega)
@@ -275,7 +276,7 @@ theorem udiv_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     rcases Nat.eq_zero_or_pos d.toNat with h | h
     · exact absurd (BitVec.eq_of_toNat_eq (by simpa using h)) hd
     · exact h
-  ix_run hlive using [h11] at 0x800046c4 0x800046d8
+  sym_run hlive using [h11] at 0x800046c4 0x800046d8
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hF.hT hb =>
     refine udiv_loop2 hlive n d r R Mt hal hr hk 0 _ ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_
@@ -372,7 +373,7 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
       IW live Dt DA S Q r R' Mt) :
     IW live Dt DA S Q 0x800046a4#64 R Mt := by
   have hy0 : y.toInt ≠ 0 := fun h => hy (BitVec.eq_of_toInt_eq (by simpa using h))
-  ix_run hlive using [h10, h11] at 0x800046ac
+  sym_run hlive using [h10, h11] at 0x800046ac
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hT.hT hx hyp =>
     rw [h10] at hx; rw [h11] at hyp
@@ -385,7 +386,7 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     have h5 : R' 5 = r := by
       rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-    ix_run hlive at 0x0
+    sym_run hlive at 0x0
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     · rw [h5]; exact hal
     · rw [h5]; refine hk _ ?_ (fun z h1 h5' h10' h11' h12 h13 => ?_)
@@ -416,7 +417,7 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     have h5 : R' 5 = r := by
       rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-    ix_run hlive at 0x0
+    sym_run hlive at 0x0
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     · rw [h5]; exact hal
     · rw [h5]; refine hk _ ?_ (fun z h1 h5' h10' h11' h12 h13 => ?_)
@@ -440,7 +441,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
       IW live Dt DA S Q r R' Mt) :
     IW live Dt DA S Q 0x80004728#64 R Mt := by
   have hy0 : y.toInt ≠ 0 := fun h => hy (BitVec.eq_of_toInt_eq (by simpa using h))
-  ix_run hlive using [h10, h11] at 0x800046ac
+  sym_run hlive using [h10, h11] at 0x800046ac
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hT.hT hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
@@ -454,7 +455,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     have h5 : R' 5 = r := by
       rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-    ix_run hlive at 0x0
+    sym_run hlive at 0x0
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     · rw [h5]; exact hal
     · rw [h5]; refine hk _ ?_ (fun z h1 h5' h10' h11' h12 h13 => ?_)
@@ -475,7 +476,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     have h5 : R' 5 = r := by
       rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-    ix_run hlive at 0x0
+    sym_run hlive at 0x0
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     · rw [h5]; exact hal
     · rw [h5]; refine hk _ ?_ (fun z h1 h5' h10' h11' h12 h13 => ?_)
@@ -496,7 +497,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     have h5 : R' 5 = r := by
       rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-    ix_run hlive at 0x0
+    sym_run hlive at 0x0
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     · rw [h5]; exact hal
     · rw [h5]; refine hk _ ?_ (fun z h1 h5' h10' h11' h12 h13 => ?_)
@@ -517,7 +518,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     have h5 : R' 5 = r := by
       rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-    ix_run hlive at 0x0
+    sym_run hlive at 0x0
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     · rw [h5]; exact hal
     · rw [h5]; refine hk _ ?_ (fun z h1 h5' h10' h11' h12 h13 => ?_)

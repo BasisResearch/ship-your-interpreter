@@ -57,44 +57,61 @@ hpriv hsec` then gives `(ext_decode w).run σ = .ok i σ` for any concrete word
 `w`, where `i` is found by `rfl`. No per-word lemma is needed. A port whose
 reset `misa` differs changes `Vsa.Sim.initMisa`, and `decodeN` follows.
 
-## 3. Code pins from the image: `rangeText`, `CodeAt`
+## 3. Code pins from the image: `TextPiece`, `CodeAt`
 
-`VsaIris/Vsa/SymExec.lean` defines the following:
+- `CodeAt T img rT` (`VsaIris/Vsa/SymExec.lean`) states that every byte of the
+  ranges `rT` is pinned to the image function `img` by `TextLoaded T`.
+- `codeAt_of_pieces` proves it from the `TextPiece` footprints inside `T`
+  (`Vsa/Sim/TextImage.lean`, `VsaIris/Vsa/TextPieces.lean`), range by range,
+  with one `decide +kernel`.
 
-- `rangeText img rs` lists the bytes of the image function `img` over the
-  half-open ranges `rs`.
-- `CodeAt T img rT` states that every byte of `rT` is pinned by `TextLoaded T`.
-- `codeAt_of_eq : T = rangeText img rT → CodeAt T img rT`.
-
-Prove the equation once with `eqB_eq (by decide +kernel)`. The model is
-`interpText_eq`/`codeAt_interp` in `VsaIris/Interp/SymInterp.lean`, where
+The model is `codeAt_interp` in `VsaIris/Interp/SymInterp.lean`, where
 `binByte` combines `fixedTextByte`/`fixedRodataByte` from
-`Vsa/Sim/Code/FixedImageData.lean` and `interpRanges` lists the proved code
-ranges. A port supplies its own image function and ranges.
+`Vsa/Sim/Code/FixedImageData.lean` and `interpRanges` lists the code and
+constant-table ranges. A port supplies its own image function and pieces.
 
-## 4. Symbolic execution: `symRun_auto`, `obCheck`, `sym_run`
+## 4. Symbolic execution: `symRun_cont`, `obCheck`, `sym_run`
 
-- `symRun C n s` (`SymExec.lean`) executes a straight-line or branching run
-  as one closed computation over symbolic values `SE`, a symbolic store and a
-  residual obligation list. The configuration `Cfg` holds `img`, `rT`, the
-  tracked registers `rs`, the stop PCs, the data bases and the known constant
-  loads.
-- `symRun_swp`/`symRun_entry` turn the residual WP into `SWP` at the entry.
-  `symRun_auto` additionally prunes with the reflective checker
-  `obCheck Γ` (sound by `obCheck_sound` under `Geom.holds`). Its residual is
-  the continuations plus the obligations the checker could not decide.
-  `geom_auto [facts]` proves `Geom.holds`.
-- `sym_run [fuel] hlive using [facts] at pc…` (`VsaIris/Interp/SymInterp.lean`)
-  is the tactic surface for goals of the form `IW live Dt DA S Q pc R Mt`
-  (`= SWP live (interpText ++ dataOf Dt DA) iRegs S Q`). It builds `Geom`
-  from the run's own obligations (`geomOf`), closes decode facts and checked
-  obligations, and returns the `ix_run` leftovers. If the symbolic route
-  fails, it falls back to `ix_run`. `#ix_seg name binders : IW … by sym_run …`
-  states a piece.
+- `symRun C n s` (`SymExec.lean`) executes a run as one closed computation over
+  symbolic values `SE`, a symbolic store and a residual obligation list, from
+  any symbolic state `s`. The configuration `Cfg` holds the image and code
+  ranges, the tracked registers, the stop PCs and the per-program load kinds:
+  `dpcs` (loads that read the data view), `hv` (loads of bytes nobody owns:
+  the value is quantified, `Tree.hv`), `rawpcs` (owned loads kept unreduced,
+  `Tree.raw`), `kv`/`kvM` (known words of the data view and of the entry
+  memory) and `known` (entry registers with a literal value).
+- Obligations sit on the tree node where they arise (`Tree.br` carries those
+  since the last fork), so a prefix is discharged once. With `forkStop` the run
+  ends at a branch the operands do not decide; the consumer prunes a side or
+  continues it with another `symRun_cont`, so an infeasible side is never
+  executed.
+- `sltu`/`sltiu` are stepped by `aluStep_sltu`/`aluStep_sltiu`
+  (`SymObsStep.lean`), generic in the registers; `SE.ltu` is their value.
+- `symRun_swp` turns the residual WP into `SWP` at the state. `symRun_cont`
+  takes the run-independent premises as one `RunCtx` and prunes with the
+  reflective checker `obCheck Γ` (sound by `obCheck_sound` under
+  `Geom.holds`). `symRun_auto` is the entry form. `geom_auto [facts]` proves
+  `Geom.holds`.
+- `sym_run [fuel] hlive using [facts] at pc…` and `sym_run1`
+  (`VsaIris/Interp/SymInterp.lean`) are the tactic surface for goals
+  `IW live Dt DA S Q pc R Mt`. A run is cut into segments at the branches its
+  operands do not decide; each segment is one `symRun_cont`. The leftover
+  goals are in step-lemma form, the form the pieces' statements are written
+  against: a branch premise reads a written register from the fact-rewritten
+  register chain of its step, an undecided access check or jump alignment is
+  the side goal of that instruction's step lemma (`hea`, `hLDS`, `hLDD`,
+  `hS`, `hal`), and a branch side that takes no step keeps its premise
+  unnormalised. `sym_run1` stops at the first branch it cannot prune.
+  `SYM_TRACE=1` reports each run in a build.
+- The interpreter has no per-instruction step table. Its table value
+  `StepGen.interpTbl` supplies the load kinds (`variants`), the sites where a
+  step-by-step run would step (`interpHasStep`) and the call lemmas, which a
+  proof names as `step% jalx <pc>`.
 
-To port: copy `cfgI`, `binByte`, `interpRanges` and `iRegs` with your binary's
-image, code ranges and tracked registers. The executor and `symRun_auto` stay
-the same.
+To port: copy `cfgI`, `binByte`, `interpRanges`, `iRegs` and the load-kind
+lists (`interpDataPCs`, `interpHavocPCs`) with your binary's image, code
+ranges, tracked registers and table variants. The executor and
+`symRun_cont` stay the same.
 
 ## 5. Boot witnesses: `boot_witness`
 

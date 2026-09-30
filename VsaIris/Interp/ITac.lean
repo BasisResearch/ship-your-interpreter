@@ -1,7 +1,4 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Vsa.StepTables.Interp0
-import VsaIris.Vsa.StepTables.Interp1
-import VsaIris.Vsa.StepTables.Interp2
 
 namespace VsaIris.Sym
 
@@ -110,15 +107,14 @@ def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
   let cands ← ixCandidates pc pre
+  -- `IX_TRACE=1` lists the step lemmas a build still uses (one `IXPC <name>` line each)
+  let used (nm : Name) : TacticM Unit := do
+    if (← IO.getEnv "IX_TRACE").isSome then IO.eprintln s!"IXPC {nm}"
   for nm in cands do
-    if let some r ← ixApply norm h g nm true side then return some r
+    if let some r ← ixApply norm h g nm true side then used nm; return some r
   for nm in cands do
-    if let some r ← ixApply norm h g nm false side then return some r
+    if let some r ← ixApply norm h g nm false side then used nm; return some r
   return none
-
-syntax "ix_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
-
-syntax "ix_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
 def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
@@ -198,10 +194,6 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
           work := (t', fuel - 1) :: (f', fuel - 1) :: work
       | cs => stuck := stuck ++ cs
     setGoals (pending ++ stuck)
-
-elab_rules : tactic
-  | `(tactic| ix_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => ixRunCore true n h fs stops
-  | `(tactic| ix_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => ixRunCore false n h fs stops
 
 end VsaIris.Sym
 

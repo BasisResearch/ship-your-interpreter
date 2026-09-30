@@ -1,4 +1,5 @@
 import VsaIris.Interp.ProofNativePrint
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -24,7 +25,7 @@ macro_rules
     have hsf : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
       rw [BitVec.toNat_add]; simp; omega
     unfold nativePrintlnPC
-    ix_run1 hlive using [h2, hsf] at 0x80002f90
+    sym_run1 hlive using [h2, hsf] at 0x80002f90
 
 #ix_seg npl_mid {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -33,14 +34,14 @@ macro_rules
     (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
     IW live impMem (accAddrs 0x8001b970 8) (nplS s) Q 0x80002f94#64 R M
   by
-    ix_run1 hlive using [hio1, hio2] at 0x80002fa0
+    sym_run1 hlive using [hio1, hio2] at 0x80002fa0
 
 #ix_seg npl_null {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live ∅ [] (nplF s) Q 0x80002fa4#64 R M
   by
-    ix_run1 hlive at 0x80002fa8
+    sym_run1 hlive at 0x80002fa8
 
 #ix_seg npl_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -52,7 +53,7 @@ macro_rules
     (hs0 : ldv .ld M (s + 18446744073709551568#64 + 32#64).toNat = v8) :
     IW live ∅ [] (nplF s) Q 0x80002fac#64 R M
   by
-    ix_run1 hlive using [h2, hra, hs0, hal]
+    sym_run1 hlive using [h2, hra, hs0, hal]
 
 section Glue
 

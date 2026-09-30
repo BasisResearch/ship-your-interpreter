@@ -1,4 +1,5 @@
 import VsaIris.Interp.Case.AssignT
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -15,7 +16,7 @@ open Vsa.MemRepr Vsa.Sim
     (h8 : R 8 = aX) (h18 : R 18 = inp) (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m (leafView aX.toNat 16)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x800034b8#64 R Mt
-  by ix_run hlive using [h8, h18, h2, hsf] at 0x800034e4
+  by sym_run hlive using [h8, h18, h2, hsf] at 0x800034e4
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib

@@ -1,5 +1,6 @@
 import VsaIris.Interp.LogRuns
 import VsaIris.Interp.IntOpArm
+import VsaIris.Interp.SymInterp
 
 /-!
 Unary `-` and `!`: the shared entry to the operand call, the per-operator segments, the
@@ -37,7 +38,7 @@ theorem unEntry : UnEntryRun := by
   have h2 : upd rv 1 ret 2 = s := by ix_reg; exact hr.sp
   clear g hn
   unfold evalEntryPC
-  ix_run hlive using [h10, h11, h12, h13, h2, hK, hKu, hsf] at 0x800035e8
+  sym_run hlive using [h10, h11, h12, h13, h2, hK, hKu, hsf] at 0x800035e8
   have hoff := evalSP_off (s := s) hsf (by omega)
   refine hk _ _ ⟨⟨by ix_reg, by ix_reg, by ix_reg, by ix_reg, by ix_reg, fun x hx => ?_,
     ⟨?_, ?_, ?_, ?_⟩, by ix_fwd⟩,
@@ -71,7 +72,7 @@ theorem negRun : NegRun := by
   have hU' : ldv .ld Mt (s + 18446744073709550528#64 + 152#64).toNat = u1 := hU
   simp only [unOpTok] at hop
   clear g hn hK hU
-  ix_run hlive using [h8, h2, h9, hop, hK', hsf] at 0x800039d8
+  sym_run hlive using [h8, h2, h9, hop, hK', hsf] at 0x800039d8
   refine hk _ _ ?_
   refine ⟨?_, by ix_reg <;> exact h9, by ix_reg; rw [hU', BitVec.zero_sub]⟩
   have hoff := evalSP_off (s := s) hsf (by omega)
@@ -98,7 +99,7 @@ theorem notRun2 : NotRun2 := by
   have hop := hn.op
   simp only [unOpTok] at hop
   clear g hn
-  ix_run hlive using [h8, h2, hop, hsf] at 0x80003614
+  sym_run hlive using [h8, h2, hop, hsf] at 0x80003614
   have hoff := evalSP_off (s := s) hsf (by omega)
   simp only [hoff 144 (by decide), hoff 152 (by decide), hoff 160 (by decide)] at hw0 hw1 hw2
   refine hk _ _ ?_
@@ -124,7 +125,7 @@ theorem notRun3 : NotRun3 := by
   intro live hlive m DA aX s ret sret inp aF rv R Mt n g f Q hk
   frame3_facts
   clear g
-  ix_run hlive using [h2, hsf] at 0x80003620
+  sym_run hlive using [h2, hsf] at 0x80003620
   refine hk _ _ ?_
   refine ⟨?_, by ix_reg <;> exact h9, by ix_reg⟩
   frame3_close
@@ -151,7 +152,7 @@ theorem negErr : NegErrRun := by
   have hK' : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = kR := hK
   simp only [unOpTok] at hop
   clear g hn hK
-  ix_run hlive using [h8, h2, hop, hK', hsf] at 0x80003b7c
+  sym_run hlive using [h8, h2, hop, hK', hsf] at 0x80003b7c
   have hoff := evalSP_off (s := s) hsf (by omega)
   have hQ0' : ldv .ld Mt (s.toNat - 1088 + 144) = u0 := by rw [← hoff 144 (by decide)]; exact hQ0
   refine hk _ _ ⟨by ix_reg, by ix_reg, by ix_reg, by e2_fwd hoff <;> simp only [hQ0'],

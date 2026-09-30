@@ -72,7 +72,7 @@ theorem callNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr
     (hk9 : ldv .lw m aX.toNat = 9#64) (hk9u : ldv .lwu m aX.toNat = 9#64)
     (hcallee : ldv .ld m (aX + 8#64).toNat = aF) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003164#64 R Mt
-  by ix_run hlive using [h10, h11, h12, h13, h2, hk9, hk9u, hcallee, hsf] at 0x800031bc
+  by sym_run hlive using [h10, h11, h12, h13, h2, hk9, hk9u, hcallee, hsf] at 0x800031bc
 
 #ix_seg Call_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
