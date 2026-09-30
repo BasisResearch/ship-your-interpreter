@@ -274,6 +274,18 @@ structure Tbl where
   ro : String := ""
   /-- Code ranges without step lemmas (code-only leaves, printed stores). -/
   skip : List (Nat × Nat) := []
+  /-- The loads that offer the data-view (`D`), havoc (`H`) and partial-data (`P`) steps;
+      every other load offers the owned-byte step only, so a driver's strict pass does not
+      try the variants where no proof takes them. -/
+  variants : List (String × List Nat) := []
+
+/-- Whether family `kind` is offered at `pc` (the load variants only where listed). -/
+def Tbl.offers (t : Tbl) (kind : String) (pc : Nat) : Bool :=
+  if t.flavor != .str && (kind == "D" || kind == "H" || kind == "P") then
+    match t.variants.find? (·.1 == kind) with
+    | some (_, pcs) => pcs.contains pc
+    | none => false
+  else true
 
 def Tbl.hasD (t : Tbl) : Bool := t.flavor != .alloc && t.flavor != .str
 
@@ -754,6 +766,17 @@ def interpTbl : Tbl where
     0x80003094, 0x800029e8, 0x80003660]
   roImg := "interpROImg"
   ro := "interpRO"
+  variants := [("D", [0x8000292c, 0x80002930, 0x80002f0c, 0x80002f1c, 0x80002f94, 0x80003020, 0x80003024,
+      0x80003164, 0x8000318c, 0x800031b0, 0x800031c0, 0x800031dc, 0x800031f4, 0x80003288,
+      0x80003294, 0x800032b4, 0x800032e0, 0x8000330c, 0x8000332c, 0x80003334, 0x8000334c,
+      0x80003354, 0x80003364, 0x80003408, 0x80003414, 0x80003420, 0x80003434, 0x8000347c,
+      0x8000348c, 0x800034b8, 0x800034e8, 0x800034fc, 0x8000351c, 0x8000355c, 0x8000356c,
+      0x800035a0, 0x800035e0, 0x800035ec, 0x80003a00, 0x80003d60, 0x80003f80, 0x80004014,
+      0x8000401c, 0x8000403c, 0x80004074, 0x800040d8, 0x800040f0, 0x80004120, 0x80004170,
+      0x80004194, 0x800041a4, 0x800041b4, 0x800041d0, 0x800041e8, 0x8000422c, 0x8000423c,
+      0x80004264, 0x8000426c, 0x800042a8, 0x800042cc, 0x8000446c, 0x80004490]),
+    ("H", [0x80003260, 0x800034bc, 0x80003524, 0x800039c8, 0x80003f84, 0x80003fb0, 0x80004544,
+      0x80004568])]
 
 def stdioTbl : Tbl where
   key := "stdio"
@@ -768,6 +791,9 @@ def stdioTbl : Tbl where
   -- `strcpy` is a code-only leaf (run by its own symbolic run); `_write`'s putchar store
   -- is printed by `swp_putc`
   skip := [(0x80006dc4, 0x80006ea0), (0x8000005c, 0x80000060)]
+  variants := [("D", [0x8000004c, 0x80005264, 0x800061c8, 0x800062e0, 0x80006504, 0x8000a9fc, 0x8000aa3c,
+      0x8000b6a4, 0x8000c2c0, 0x8000f230, 0x80012274, 0x8001227c]),
+    ("P", [0x80006a0c, 0x80006a48, 0x80006a58, 0x80006a60, 0x80006a68, 0x80006aac])]
 
 def snpTbl : Tbl where
   key := "snp"
@@ -779,6 +805,10 @@ def snpTbl : Tbl where
   code := "snp_code"
   regs := "nRegs"
   gpv := gpV
+  variants := [("D", [0x80005c6c, 0x80007770, 0x800077b4, 0x80008534, 0x80009060, 0x80012274, 0x8001227c]),
+    ("P", [0x80006a0c, 0x80006a48, 0x80006a58, 0x80006a60, 0x80006a68, 0x80006aac, 0x80006d10,
+      0x80006d2c, 0x80006d38, 0x80006d40, 0x80006d48, 0x80006d50, 0x80006d58, 0x80006d60,
+      0x80006d78])]
 
 def allocTbl : Tbl where
   key := "alloc"
@@ -898,6 +928,7 @@ def stepLemma (t : Tbl) (kind : String) (pc : Nat) : MetaM (Option Name) := do
   if let some nm := (← stepCache.get)[key]? then
     if (← getEnv).contains nm then return some nm
   if t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2 then return none
+  unless t.offers kind pc do return none
   let some w ← wordAt? t.pieces pc | return none
   let L? : Option Lem :=
     if kind == "jalx" then
@@ -1005,6 +1036,7 @@ elab "#step_table " k:ident lo:num hi:num : command => do
     if t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2 then continue
     let some w ← liftTermElabM (wordAt? t.pieces pc) | continue
     for kind in t.kinds do
+      unless t.offers kind pc do continue
       let L? : Option Lem :=
         if kind == "jalx" then
           match classify t.flavor t.gpv pc w with

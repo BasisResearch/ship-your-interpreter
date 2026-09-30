@@ -104,7 +104,11 @@ The theorem is unconditional, and it is instantiated at the binary's real
 `interp_run` entry states.
 
 **The witnesses and the two native links.** `Loaded` is proved by the kernel
-at ten real entry states (`Vsa/Sim/Boot/Gen/<Prog>.lean`, generated data): the memory is the ELF loader's image plus the
+at ten real entry states. Each `Vsa/Sim/Boot/Gen/<Prog>.lean` holds the trace
+(script, packed store log, registers, step count) and the program, then one
+`boot_witness` line (`Vsa/Sim/Boot/WitnessCmd.lean`): it derives the byte runs,
+heap layout and ownership natively (`Derive.lean`) and has the kernel check
+every field of `Witness.Ok` (`Witness.lean`, checks in `FastCheck.lean`). The memory is the ELF loader's image plus the
 emulator's traced store log, the registers are the traced `x1 … x31`, and
 `Gen.<Prog>.loadedEntry_fill` states the witness at ANY configuration whose
 registers satisfy `EntryRegs` (`GoodState`, `PC`, `htif_payload_writes`, the

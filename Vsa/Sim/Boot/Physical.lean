@@ -167,12 +167,12 @@ theorem loaded_at {σ : Vsa.Machine.MState} {v : Nat → Option (BitVec 8)}
     {top brkv : Nat} {chunks : List DlHeap.Chunk} {L : List (List Nat)}
     (hh : heapCheck v B.exts [(B.pn, 8 * B.cap), (B.pv, 24 * B.cap)] top brkv chunks L = true)
     {sblk nblk vblk : Nat × Nat} (hH : HeapFactsOk v B top brkv chunks sblk nblk vblk)
-    {p0 : Program} {fuel cfuel : Nat}
-    (hdec : decodesTo v B.sharedB fuel stmts count p0 = true)
+    {p0 : Program} {fuel cfuel : Nat} {P : Nat → Bool} (hP : ∀ k, P k = true → B.shared k)
+    (hdec : decodesTo v P fuel stmts count p0 = true)
     (hcap : capOk cfuel p0 top = true) (hfit : programStackFits p0 = true) :
     Vsa.Refine.Loaded interpRunLayout p0 ⟨σ, tick, steps⟩ := by
   have hwithin : ProgramReprWithin σ.mem B.shared stmts count p0 :=
-    (decodesTo_sound hv hdec).mono (fun _ hk => B.shared_of_sharedB hk)
+    (decodesTo_sound hv hdec).mono (fun k hk => hP k hk)
   have huniq : ∀ p, ProgramRepr σ.mem stmts count p → p = p0 :=
     fun p hp => hp.unique hwithin.erase
   refine ⟨stmts, count, hwithin.erase, BitVec.ofNat 64 interpObject, bootNatives, bootArena,

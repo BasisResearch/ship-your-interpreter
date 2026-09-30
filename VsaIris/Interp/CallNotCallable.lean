@@ -1,6 +1,7 @@
 import VsaIris.Interp.CallNativeSeg
 import VsaIris.Interp.ErrArm
 import VsaIris.Interp.CallErr
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -27,7 +28,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {DA : List Nat} {S : Nat → Prop} :
     IW live m DA S Q 0x80003dd0#64 R Mt
-  by ix_run hlive at 0x80003de8
+  by sym_run hlive at 0x80003de8
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr

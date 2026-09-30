@@ -1,4 +1,5 @@
 import VsaIris.Interp.LoopKit
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -15,7 +16,7 @@ abbrev whileView (a : Nat) : List Nat := accAddrs (a + 8) 16
     (h8 : R 8 = aS) (h2 : R 2 = s + 18446744073709551440#64)
     (hc : ldv .ld m (aS + 8#64).toNat = pC) :
     IW live m (whileView aS.toNat) (execS s) Q 0x8000403c#64 R Mt
-  by ix_run hlive using [h8, h2, hc] at 0x8000404c
+  by sym_run hlive using [h8, h2, hc] at 0x8000404c
 
 #ix_seg WhileLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -24,7 +25,7 @@ abbrev whileView (a : Nat) : List Nat := accAddrs (a + 8) 16
     (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709551440#64) :
     IW live m [] (execS s) Q 0x80004050#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x8000406c
+  by sym_run hlive using [h2, hsf] at 0x8000406c
 
 #ix_seg WhileLoop_runC {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -33,13 +34,13 @@ abbrev whileView (a : Nat) : List Nat := accAddrs (a + 8) 16
     (hx3 : aS.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aS.toNat)
     (h8 : R 8 = aS) (hb : ldv .ld m (aS + 16#64).toNat = pB) :
     IW live m (whileView aS.toNat) (execS s) Q 0x80004070#64 R Mt
-  by ix_run hlive using [h8, hb] at 0x80004084 0x8000409c
+  by sym_run hlive using [h8, hb] at 0x80004084 0x8000409c
 
 #ix_seg WhileLoop_runD {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x80004088#64 R Mt
-  by ix_run hlive at 0x8000403c 0x8000409c 0x80004150
+  by sym_run hlive at 0x8000403c 0x8000409c 0x80004150
 
 structure WhileNode (m : Mem) (P : Nat → Prop) (aS pC pB : BitVec 64) : Prop where
   cond : ldv .ld m (aS + 8#64).toNat = pC

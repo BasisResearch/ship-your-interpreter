@@ -1,4 +1,5 @@
 import VsaIris.Interp.SeqLoop
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -35,7 +36,7 @@ abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) +
     (hin : ldv .ld Mt (s.toNat - 176) = BitVec.ofNat 64 inp)
     (hg : ldv .ld Dt inp = g) :
     IW live Dt (interpView arr.toNat count inp) (interpS s) Q 0x80004460#64 R Mt
-  by ix_run hlive using [h2, hin, hg, hsf, interpS,
+  by sym_run hlive using [h2, hin, hg, hsf, interpS,
     show (BitVec.ofNat 64 inp).toNat = inp from by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]]
     at 0x80004474
 

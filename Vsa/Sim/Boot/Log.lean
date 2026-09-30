@@ -60,10 +60,6 @@ def storeBytesOk (t : RunTree) (i a : Nat) : Nat → Bool
 def storeOk (L : PackedLog) (t : RunTree) (i : Nat) : Bool :=
   decide (L.len ≤ i) || storeBytesOk t i (L.raw i % 2 ^ 32) ((L.raw i >>> 32) % 16)
 
-def storesIn (L : PackedLog) (t : RunTree) (lo : Nat) : Nat → Bool
-  | 0 => true
-  | n + 1 => storeOk L t (lo + n) && storesIn L t lo n
-
 def runOk (L : PackedLog) (r : Run) : Nat → Bool
   | 0 => true
   | j + 1 =>
@@ -107,31 +103,6 @@ theorem storeOk_spec {L : PackedLog} {t : RunTree} {i : Nat} (hi : i < L.len)
   simp only [PackedLog.entry, unpackEntry] at hr
   have := storeBytesOk_spec h (j := x - L.raw i % 2 ^ 32) (by omega)
   rwa [show L.raw i % 2 ^ 32 + (x - L.raw i % 2 ^ 32) = x by omega] at this
-
-theorem storesIn_spec {L : PackedLog} {t : RunTree} {lo n : Nat} (h : storesIn L t lo n = true)
-    {i : Nat} (hlo : lo ≤ i) (hi : i < lo + n) : storeOk L t i = true := by
-  induction n with
-  | zero => omega
-  | succ n ih =>
-    simp only [storesIn, Bool.and_eq_true] at h
-    by_cases hin : i = lo + n
-    · subst hin; exact h.1
-    · exact ih h.2 (by omega)
-
-def chunks (lo size : Nat) : Nat → List (Nat × Nat)
-  | 0 => []
-  | k + 1 => (lo, size) :: chunks (lo + size) size k
-
-theorem chunks_cover {L : PackedLog} {t : RunTree} {lo size k : Nat}
-    (h : ∀ c ∈ chunks lo size k, storesIn L t c.1 c.2 = true) {i : Nat}
-    (hlo : lo ≤ i) (hi : i < lo + size * k) : storeOk L t i = true := by
-  induction k generalizing lo with
-  | zero => omega
-  | succ k ih =>
-    simp only [chunks, List.mem_cons, forall_eq_or_imp] at h
-    by_cases hc : i < lo + size
-    · exact storesIn_spec h.1 hlo hc
-    · exact ih h.2 (by omega) (by rw [Nat.mul_succ] at hi; omega)
 
 theorem runOk_spec {L : PackedLog} {r : Run} {n : Nat} (h : runOk L r n = true)
     {j : Nat} (hj : j < n) {k b : Nat} (hc : r.cell (r.base + j) = some (k, b)) :
