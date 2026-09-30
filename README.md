@@ -36,7 +36,7 @@ depend on.
 | `Vsa/While/Derive.lean` | `bigstep_derive`, a syntax-directed tactic that *constructs* derivation trees of the big-step relation for closed programs. Untrusted meta-code; the kernel checks the derivations |
 | `Vsa/While/Programs.lean`, `Vsa/While/Validation.lean` | the test scripts as deep embeddings, plus kernel-checked theorems `BigStep prog "<binary's output>"` that validate the semantics against I/O examples obtained by running the binary |
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
-| `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
+| `Vsa/Refinement.lean` | **the ∀-program refinement theorem**, WHILE's instance of the language-parametric layer `Vsa/Lang/` (`VsaIris/Lang/` for the Iris route) |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
 | `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
 
@@ -145,13 +145,15 @@ satisfies literally. `endToEnd_refinement_loaded` is the same
 theorem at a literally `Loaded` configuration.
 
 ```lean
-structure InterpSim (L : Layout) : Prop where
-  term_sim  : ∀ p c out, Loaded L p c → BigStep p out → Halts c out 0
-  stuck_sim : ∀ p c, Loaded L p c → (¬ ∃ out, BigStep p out) →
+abbrev InterpSim (L : Layout) : Prop := Vsa.Lang.OutSim BigStep (Loaded L)
+
+structure Vsa.Lang.OutSim (S : P → String → Prop) (Loaded : P → Config → Prop) : Prop where
+  term_sim  : ∀ p c out, Loaded p c → S p out → Halts c out 0
+  stuck_sim : ∀ p c, Loaded p c → (¬ ∃ out, S p out) →
               Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0
 ```
 
-Given forward simulation, `Refinement.lean` *derives* the backward direction
+Given forward simulation, `Vsa/Lang/Basic.lean` *derives* the backward direction
 (whatever the machine does was specified) and divergence preservation from
 machine determinism by classical case analysis. This is the composition
 CompCert uses to get behavioural equivalence out of a forward simulation over
@@ -160,6 +162,10 @@ a deterministic target. `InterpSim` stays an explicit hypothesis.
 The simulation lemmas in `Vsa/Sim/` relate compiled
 `eval_expr`/`exec_stmt`/`interp_run` code to the big-step rules by induction on
 derivations.
+
+## Porting
+
+[`docs/PORTING.md`](docs/PORTING.md) explains how another interpreter on this machine layer instantiates the toolkit.
 
 ## Building
 
