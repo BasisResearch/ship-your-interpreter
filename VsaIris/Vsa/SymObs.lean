@@ -22,40 +22,9 @@ theorem gpr_avoids_noiseO' : ∀ n, n < 32 → 1 ≤ n → ∀ rr ∈ noiseRegs,
 
 theorem gprGet_obs_rd {σ' σ : MState} {pc vm : BitVec 64} {v : BitVec 64} :
     ∀ rd, 1 ≤ rd → rd ≤ 31 →
-      ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg rd) (gprRT rd v)) → gprGet σ' rd = some v
-  | 1, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 2, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 3, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 4, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 5, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 6, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 7, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 8, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 9, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 10, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 11, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 12, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 13, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 14, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 15, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 16, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 17, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 18, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 19, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 20, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 21, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 22, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 23, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 24, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 25, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 26, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 27, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 28, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 29, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 30, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 31, _, _, h => obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 0, h, _, _ => absurd h (by decide)
-  | _ + 32, _, h, _ => absurd h (by omega)
+      ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg rd) (gprRT rd v)) → gprGet σ' rd = some v := by
+  intro rd h1 h31 h
+  gpr_cases rd => exact obs_alu_rd h (by decide) (by decide) (by decide) (by decide) (by decide)
 
 theorem aluStep_of_obs {live : Nat → Prop} {i : Nat} {RR : List (Nat × DFrac × BitVec 64)}
     {MR : List (Nat × DFrac × BitVec 8)} {rd : Nat} {val : BitVec 64}

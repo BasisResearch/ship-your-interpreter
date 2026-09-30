@@ -1,6 +1,9 @@
 import VsaIris.Vsa.Malloc
-import Vsa.Sim.AllocCapacity
-import Vsa.Sim.rows.CallClosureRow
+import Vsa.While.StackNeed
+import Vsa.Sim.TermEntry
+import Vsa.Sim.Code.Exec_stmt
+import Vsa.Sim.Code.Strcmp
+import Vsa.Sim.LayoutInstance
 import Vsa.Sim.rows.EnvDefineContractUpdate
 
 namespace VsaIris.VsaHeap

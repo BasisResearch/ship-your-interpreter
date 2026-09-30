@@ -1,5 +1,6 @@
 import Vsa.Sim.HtifLift
-import Vsa.Sim.ErrorSim
+import Vsa.Sim.JmpSpec
+import Vsa.Refinement
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -22,23 +23,27 @@ abbrev sigmaPutcharP (σ : MState) (pc : BitVec 64) (data : BitVec 64) (c : BitV
     sailOutput := (afterNextPC (afterPrelude σ) pc).sailOutput.push
       (toString (Char.ofNat c.toNat)) }
 
-theorem get?_sigmaPutcharP (σ : MState) (pc data : BitVec 64) (c : BitVec 8) (R : Register)
-    (h1 : (Register.htif_tohost == R) = false)
-    (h2 : (Register.htif_payload_writes == R) = false)
-    (h3 : (Register.htif_cmd_write == R) = false) :
-    (sigmaPutcharP σ pc data c).regs.get? R = (afterNextPC (afterPrelude σ) pc).regs.get? R := by
-  show ((((((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert
-              Register.htif_payload_writes (0#4 + BitVec.ofInt 4 1)).insert
-            Register.htif_tohost data).insert
-          Register.htif_cmd_write 0#1).insert
-        Register.htif_payload_writes 0#4).insert
-      Register.htif_tohost (zeros (n := 64))).get? R) = _
-  rw [Std.ExtDHashMap.get?_insert]; simp only [h1, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]; simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]; simp only [h3, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]; simp only [h1, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]; simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]; simp only [h3, dif_neg, reduceCtorEq, not_false_eq_true]
+/-- `htif_tohost` is pinned only up to existence: any write to it keeps `GoodState`. -/
+theorem GoodState.insert_htif_tohost {σ : MState} (hG : GoodState σ)
+    (v : RegisterType Register.htif_tohost) :
+    GoodState {σ with regs := σ.regs.insert Register.htif_tohost v} := by
+  have Q : ∀ {A : Register} {x : Option (RegisterType A)}, (Register.htif_tohost == A) = false →
+      σ.regs.get? A = x → (σ.regs.insert Register.htif_tohost v).get? A = x :=
+    fun hA hx => (get?_insert_pinned σ.regs _ v _ hA).trans hx
+  have E : ∀ {A : Register}, (Register.htif_tohost == A) = false →
+      (∃ w, σ.regs.get? A = some w) → ∃ w, (σ.regs.insert Register.htif_tohost v).get? A = some w :=
+    fun hA ⟨w, hw⟩ => ⟨w, Q hA hw⟩
+  exact ⟨Q (by decide) hG.cur_privilege, Q (by decide) hG.misa, Q (by decide) hG.mstatus,
+    Q (by decide) hG.mie, Q (by decide) hG.mseccfg, Q (by decide) hG.satp, Q (by decide) hG.mtvec,
+    Q (by decide) hG.mideleg, Q (by decide) hG.medeleg, Q (by decide) hG.hart_state,
+    Q (by decide) hG.htif_done, ⟨v, Std.ExtDHashMap.get?_insert_self⟩,
+    Q (by decide) hG.htif_tohost_base, Q (by decide) hG.elp, Q (by decide) hG.pmpcfg_n,
+    Q (by decide) hG.pmpaddr_n, Q (by decide) hG.pma_regions, Q (by decide) hG.menvcfg,
+    Q (by decide) hG.mcountinhibit, Q (by decide) hG.mcyclecfg, Q (by decide) hG.minstretcfg,
+    E (by decide) hG.mip, E (by decide) hG.sig_meip, E (by decide) hG.sig_seip,
+    E (by decide) hG.mtime, E (by decide) hG.mtimecmp, E (by decide) hG.minstret,
+    E (by decide) hG.minstret_increment, E (by decide) hG.mcycle, E (by decide) hG.nextPC,
+    E (by decide) hG.PC⟩
 
 theorem exec_sd_tohost_putchar
     (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regidx)
@@ -131,201 +136,40 @@ theorem get?_sigmaPutcharFinal (σ : MState) (pc npc vminstret data : BitVec 64)
     (hnpc : (Register.nextPC == R) = false)
     (hmi : (Register.minstret_increment == R) = false) :
     (sigmaPutcharFinal σ pc npc vminstret data c).regs.get? R = σ.regs.get? R := by
-  show (((sigmaPutcharP σ pc data c).regs.insert Register.PC npc).insert
-      Register.minstret (BitVec.addInt vminstret 1)).get? R = _
-  rw [Std.ExtDHashMap.get?_insert]; simp only [hms, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]; simp only [hpc, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [get?_sigmaPutcharP σ pc data c R hth hpw hcw]
-  exact get?_afterNextPC σ pc R hnpc hmi
-
-theorem htif_done_sigmaPutcharFinal (σ : MState) (pc npc vminstret data : BitVec 64) (c : BitVec 8)
-    (hG : GoodState σ) :
-    (sigmaPutcharFinal σ pc npc vminstret data c).regs.get? Register.htif_done = some false := by
-  rw [get?_sigmaPutcharFinal σ pc npc vminstret data c _ (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide)]
-  exact hG.htif_done
+  reg_reads [hms, hpc, hth, hpw, hcw, hnpc, hmi]
 
 theorem get?_PC_sigmaPutcharFinal (σ : MState) (pc npc vminstret data : BitVec 64) (c : BitVec 8) :
     (sigmaPutcharFinal σ pc npc vminstret data c).regs.get? Register.PC = some npc := by
-  show (((sigmaPutcharP σ pc data c).regs.insert Register.PC npc).insert
-      Register.minstret (BitVec.addInt vminstret 1)).get? Register.PC = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.minstret == Register.PC) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert_self]
+  reg_reads []
 
 theorem get?_minstret_sigmaPutcharFinal (σ : MState) (pc npc vminstret data : BitVec 64)
     (c : BitVec 8) :
     (sigmaPutcharFinal σ pc npc vminstret data c).regs.get? Register.minstret
       = some (BitVec.addInt vminstret 1) := by
-  show (((sigmaPutcharP σ pc data c).regs.insert Register.PC npc).insert
-      Register.minstret (BitVec.addInt vminstret 1)).get? Register.minstret = _
-  rw [Std.ExtDHashMap.get?_insert_self]
+  reg_reads []
 
 theorem get?_payload_writes_sigmaPutcharFinal (σ : MState)
     (pc npc vminstret data : BitVec 64) (c : BitVec 8) :
     (sigmaPutcharFinal σ pc npc vminstret data c).regs.get? Register.htif_payload_writes
       = some (0#4) := by
-  show (((sigmaPutcharP σ pc data c).regs.insert Register.PC npc).insert
-      Register.minstret (BitVec.addInt vminstret 1)).get? Register.htif_payload_writes = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.minstret == Register.htif_payload_writes) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.PC == Register.htif_payload_writes) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  show ((((((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert
-              Register.htif_payload_writes (0#4 + BitVec.ofInt 4 1)).insert
-            Register.htif_tohost data).insert
-          Register.htif_cmd_write 0#1).insert
-        Register.htif_payload_writes 0#4).insert
-      Register.htif_tohost (zeros (n := 64))).get? Register.htif_payload_writes) = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.htif_tohost == Register.htif_payload_writes) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert_self]
+  reg_reads []
 
 theorem get?_htif_tohost_sigmaPutcharFinal (σ : MState)
     (pc npc vminstret data : BitVec 64) (c : BitVec 8) :
     (sigmaPutcharFinal σ pc npc vminstret data c).regs.get? Register.htif_tohost
       = some (zeros (n := 64)) := by
-  show (((sigmaPutcharP σ pc data c).regs.insert Register.PC npc).insert
-      Register.minstret (BitVec.addInt vminstret 1)).get? Register.htif_tohost = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.minstret == Register.htif_tohost) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.PC == Register.htif_tohost) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  show ((((((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert
-              Register.htif_payload_writes (0#4 + BitVec.ofInt 4 1)).insert
-            Register.htif_tohost data).insert
-          Register.htif_cmd_write 0#1).insert
-        Register.htif_payload_writes 0#4).insert
-      Register.htif_tohost (zeros (n := 64))).get? Register.htif_tohost) = _
-  rw [Std.ExtDHashMap.get?_insert_self]
+  reg_reads []
 
 theorem goodstate_sigmaPutcharFinal (σ : MState) (pc npc vminstret data : BitVec 64)
     (c : BitVec 8) (hG : GoodState σ) :
-    GoodState (sigmaPutcharFinal σ pc npc vminstret data c) := by
-  have P := get?_sigmaPutcharFinal σ pc npc vminstret data c
-  constructor
-  case cur_privilege =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.cur_privilege
-  case misa =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.misa
-  case mstatus =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mstatus
-  case mie =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mie
-  case mseccfg =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mseccfg
-  case satp =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.satp
-  case mtvec =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mtvec
-  case mideleg =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mideleg
-  case medeleg =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.medeleg
-  case hart_state =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.hart_state
-  case htif_done =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.htif_done
-  case htif_tohost =>
-    exact ⟨_, get?_htif_tohost_sigmaPutcharFinal σ pc npc vminstret data c⟩
-  case htif_tohost_base =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.htif_tohost_base
-  case elp =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.elp
-  case pmpcfg_n =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.pmpcfg_n
-  case pmpaddr_n =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.pmpaddr_n
-  case pma_regions =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.pma_regions
-  case menvcfg =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.menvcfg
-  case mcountinhibit =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mcountinhibit
-  case mcyclecfg =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mcyclecfg
-  case minstretcfg =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.minstretcfg
-  case mip =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mip
-  case sig_meip =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.sig_meip
-  case sig_seip =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.sig_seip
-  case mtime =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mtime
-  case mtimecmp =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mtimecmp
-  case minstret =>
-    exact ⟨_, get?_minstret_sigmaPutcharFinal σ pc npc vminstret data c⟩
-  case minstret_increment =>
-    refine ⟨true, ?_⟩
-    show (((sigmaPutcharP σ pc data c).regs.insert Register.PC npc).insert
-        Register.minstret (BitVec.addInt vminstret 1)).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.minstret == Register.minstret_increment) = false from by decide,
-      dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.PC == Register.minstret_increment) = false from by decide,
-      dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [get?_sigmaPutcharP σ pc data c _ (by decide) (by decide) (by decide)]
-    show ((afterPrelude σ).regs.insert Register.nextPC
-        (BitVec.addInt pc 4)).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.nextPC == Register.minstret_increment) = false from by decide,
-      dif_neg, reduceCtorEq, not_false_eq_true]
-    show (σ.regs.insert Register.minstret_increment true).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert_self]
-  case mcycle =>
-    rw [P _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact hG.mcycle
-  case nextPC =>
-    refine ⟨BitVec.addInt pc 4, ?_⟩
-    show (((sigmaPutcharP σ pc data c).regs.insert Register.PC npc).insert
-        Register.minstret (BitVec.addInt vminstret 1)).get? Register.nextPC = _
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.minstret == Register.nextPC) = false from by decide,
-      dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.PC == Register.nextPC) = false from by decide,
-      dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [get?_sigmaPutcharP σ pc data c _ (by decide) (by decide) (by decide)]
-    show ((afterPrelude σ).regs.insert Register.nextPC
-        (BitVec.addInt pc 4)).get? Register.nextPC = _
-    rw [Std.ExtDHashMap.get?_insert_self]
-  case PC =>
-    exact ⟨npc, get?_PC_sigmaPutcharFinal σ pc npc vminstret data c⟩
+    GoodState (sigmaPutcharFinal σ pc npc vminstret data c) :=
+  (((((((((hG.insert_nonpinned (r := Register.minstret_increment) (by decide) true).insert_nonpinned
+      (r := Register.nextPC) (by decide) (BitVec.addInt pc 4)).insert_nonpinned
+      (r := Register.htif_cmd_write) (by decide) 1#1).insert_nonpinned
+      (r := Register.htif_payload_writes) (by decide) (0#4 + BitVec.ofInt 4 1)).insert_htif_tohost
+      data).insert_nonpinned (r := Register.htif_cmd_write) (by decide) 0#1).insert_nonpinned
+      (r := Register.htif_payload_writes) (by decide) 0#4).insert_htif_tohost
+      (zeros (n := 64))).of_regs_eq (σ' := sigmaPutcharP σ pc data c) (by rfl)).retirePost _ _
 
 theorem try_step_tohost_putchar
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -350,68 +194,10 @@ theorem try_step_tohost_putchar
     (hb0 : σ.mem[pc.toNat]? = some b0) (hb1 : σ.mem[pc.toNat + 1]? = some b1)
     (hb2 : σ.mem[pc.toNat + 2]? = some b2) (hb3 : σ.mem[pc.toNat + 3]? = some b3)
     (hlo : 0x80000000 ≤ pc.toNat) (hhi : pc.toNat + 4 ≤ tohostAddr) (halign : pc.toNat % 4 = 0) :
-    (try_step u true).run σ = .ok false (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c) := by
-  obtain ⟨vmip, hmip⟩ := hG.mip
-  obtain ⟨vmeip, hmeip⟩ := hG.sig_meip
-  obtain ⟨vseip, hseip⟩ := hG.sig_seip
-  have hdisp : (dispatchInterrupt Privilege.Machine).run (afterPrelude σ)
-      = .ok none (afterPrelude σ) :=
-    dispatch_none (afterPrelude σ) vmip vmeip vseip _ _
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mie)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hmip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hmeip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hseip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mideleg)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mstatus)
-  have hfetch : (fetch ()).run (afterPrelude σ)
-      = .ok (FetchResult.F_Base (((b3.append b2).append b1).append b0)) (afterPrelude σ) :=
-    fetch_F_Base (afterPrelude σ) pc b0 b1 b2 b3 _ _ _
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hpc)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mstatus)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pma_regions)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pmpcfg_n)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pmpaddr_n)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.htif_tohost_base)
-      hlo hhi halign
-      (by rw [mem_afterPrelude]; exact hb0) (by rw [mem_afterPrelude]; exact hb1)
-      (by rw [mem_afterPrelude]; exact hb2) (by rw [mem_afterPrelude]; exact hb3)
-      hnotrvc
-  have hdec' : (ext_decode (((b3.append b2).append b1).append b0)).run (afterPrelude σ)
-      = .ok (instruction.STORE (imm, rs2, rs1, 8)) (afterPrelude σ) := by
-    rw [hword]; exact hdec
-  have hlpad : (is_landing_pad_expected ()).run (afterPrelude σ) = .ok false (afterPrelude σ) :=
-    is_landing_pad_expected_false (afterPrelude σ)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.elp)
-  have hexec := exec_sd_tohost_putchar σ pc imm rs2 rs1 v1 vdata data c th
-    hG hrs1 hrs2 haddr hdataeq hpw hth hputc
-  have hhart₃ : (sigmaPutcharP σ pc data c).regs.get? Register.hart_state = some (HartState.HART_ACTIVE ()) := by
-    rw [get?_sigmaPutcharP σ pc data c _ (by decide) (by decide) (by decide),
-      get?_afterNextPC σ pc _ (by decide) (by decide)]
-    exact hG.hart_state
-  have hnextPC₃ : (sigmaPutcharP σ pc data c).regs.get? Register.nextPC = some (BitVec.addInt pc 4) := by
-    rw [get?_sigmaPutcharP σ pc data c _ (by decide) (by decide) (by decide)]
-    show ((afterPrelude σ).regs.insert Register.nextPC (BitVec.addInt pc 4)).get? Register.nextPC = _
-    rw [Std.ExtDHashMap.get?_insert_self]
-  have hinc₃ : (sigmaPutcharP σ pc data c).regs.get? Register.minstret_increment = some true := by
-    rw [get?_sigmaPutcharP σ pc data c _ (by decide) (by decide) (by decide)]
-    show ((afterPrelude σ).regs.insert Register.nextPC (BitVec.addInt pc 4)).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.nextPC == Register.minstret_increment) = false from by decide,
-      dif_neg, reduceCtorEq, not_false_eq_true]
-    show (σ.regs.insert Register.minstret_increment true).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert_self]
-  have hminstret₃ : (sigmaPutcharP σ pc data c).regs.get? Register.minstret = some vminstret := by
-    rw [get?_sigmaPutcharP σ pc data c _ (by decide) (by decide) (by decide),
-      get?_afterNextPC σ pc _ (by decide) (by decide)]
-    exact hminstret
-  exact try_step_execute_char σ u pc (BitVec.addInt pc 4)
-    (((b3.append b2).append b1).append b0) (instruction.STORE (imm, rs2, rs1, 8))
-    (sigmaPutcharP σ pc data c) vminstret
-    hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
-    hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
+    (try_step u true).run σ = .ok false (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c) :=
+  try_step_retire (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (exec_sd_tohost_putchar σ pc imm rs2 rs1 v1 vdata data c th hG hrs1 hrs2 haddr hdataeq hpw hth hputc)
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
 
 theorem stepOnce_tohost_putchar_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -438,51 +224,17 @@ theorem stepOnce_tohost_putchar_notick
     (hlo : 0x80000000 ≤ pc.toNat) (hhi : pc.toNat + 4 ≤ tohostAddr) (halign : pc.toNat % 4 = 0)
     (htick : i + 1 ≠ 2) :
     (stepOnce i u).run σ
-      = .ok (.inr (i + 1, u + 1)) (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c) := by
-  have hts := try_step_tohost_putchar σ u pc vminstret w imm rs2 rs1 v1 vdata data c th
-    b0 b1 b2 b3 hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
-    hb0 hb1 hb2 hb3 hlo hhi halign
-  simp only [EStateM.run] at hts
-  have hhtif := hG.htif_done
-  have hhtif' := htif_done_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG
-  unfold stepOnce
-  simp only [bind, Bind.bind, EStateM.bind, EStateM.run, pure, EStateM.pure,
-    PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get, hhtif,
-    Bool.false_eq_true, if_false]
-  rw [hts]
-  simp only [Bool.false_eq_true, if_false, EStateM.pure, EStateM.bind, EStateM.get, hhtif']
-  have htick' : (i + 1 == Int.toNat plat_insns_per_tick) = false := by
-    simp only [plat_insns_per_tick, show Int.toNat 2 = 2 from rfl, beq_eq_false_iff_ne]
-    exact htick
-  simp only [htick', Bool.false_eq_true, if_false, EStateM.pure]
+      = .ok (.inr (i + 1, u + 1)) (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c) :=
+  stepOnce_retire_notick (try_step_tohost_putchar σ u pc vminstret w imm rs2 rs1 v1 vdata data c th
+      b0 b1 b2 b3 hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
+      hb0 hb1 hb2 hb3 hlo hhi halign)
+    hG (goodstate_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG) htick
 
 noncomputable abbrev sigmaTick_putchar
     (σ : MState) (pc npc vminstret data : BitVec 64) (c : BitVec 8)
     (vmip vmtime vmtimecmp vmcycle : BitVec 64) : MState :=
   {(sigmaPutcharFinal σ pc npc vminstret data c) with
     regs := (((sigmaPutcharFinal σ pc npc vminstret data c).regs.insert Register.mcycle (BitVec.addInt vmcycle 1)).insert Register.mtime (BitVec.addInt vmtime 1)).insert Register.mip (Sail.BitVec.updateSubrange vmip 7 7 (bool_to_bit (zopz0zIzJ_u vmtimecmp (BitVec.addInt vmtime 1))))}
-
-theorem get?_sigmaTick_putchar (σ : MState) (pc npc vminstret data : BitVec 64) (c : BitVec 8)
-    (vmip vmtime vmtimecmp vmcycle : BitVec 64) (R : Register)
-    (hmc : (Register.mcycle == R) = false) (hmt : (Register.mtime == R) = false)
-    (hmi : (Register.mip == R) = false) :
-    (sigmaTick_putchar σ pc npc vminstret data c vmip vmtime vmtimecmp vmcycle).regs.get? R
-      = (sigmaPutcharFinal σ pc npc vminstret data c).regs.get? R := by
-  show (((((sigmaPutcharFinal σ pc npc vminstret data c).regs.insert Register.mcycle _).insert
-      Register.mtime _).insert Register.mip _)).get? R = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [hmi, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [hmt, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [hmc, dif_neg, reduceCtorEq, not_false_eq_true]
-
-theorem goodstate_sigmaTick_putchar (σ : MState) (pc npc vminstret data : BitVec 64)
-    (c : BitVec 8) (vmip vmtime vmtimecmp vmcycle : BitVec 64) (hG : GoodState σ) :
-    GoodState (sigmaTick_putchar σ pc npc vminstret data c vmip vmtime vmtimecmp vmcycle) := by
-  have hGp := goodstate_sigmaPutcharFinal σ pc npc vminstret data c hG
-  exact ((hGp.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
-    (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
 
 theorem stepOnce_tohost_putchar_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -515,55 +267,11 @@ theorem stepOnce_tohost_putchar_tick
     (htick : i + 1 = 2) :
     (stepOnce i u).run σ
       = .ok (.inr (0, u + 1))
-          (sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c vmip vmtime vmtimecmp vmcycle) := by
-  have hts := try_step_tohost_putchar σ u pc vminstret w imm rs2 rs1 v1 vdata data c th
-    b0 b1 b2 b3 hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
-    hb0 hb1 hb2 hb3 hlo hhi halign
-  simp only [EStateM.run] at hts
-  have hhtif := hG.htif_done
-  have hhtif' := htif_done_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG
-
-  have htc := tick_clock_char (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c)
-    vmip vmtime vmtimecmp vmcycle
-    (by rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-          (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-        exact hG.cur_privilege)
-    (by rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-          (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-        exact hG.mcountinhibit)
-    (by rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-          (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-        exact hG.mcyclecfg)
-    (by rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-          (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-        exact hG.menvcfg)
-    (by rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-          (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-        exact hG.misa)
-    hmip hmtime hmtimecmp hmcycle
-    (by obtain ⟨v, hv⟩ := hG.sig_meip
-        exact ⟨v, by
-          rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-            (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-          exact hv⟩)
-    (by obtain ⟨v, hv⟩ := hG.sig_seip
-        exact ⟨v, by
-          rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-            (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-          exact hv⟩)
-  simp only [EStateM.run] at htc
-  unfold stepOnce
-  simp only [bind, Bind.bind, EStateM.bind, EStateM.run, pure, EStateM.pure,
-    PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get, hhtif,
-    Bool.false_eq_true, if_false]
-  rw [hts]
-  simp only [Bool.false_eq_true, if_false, EStateM.pure, EStateM.bind, EStateM.get, hhtif']
-  have htick' : (i + 1 == Int.toNat plat_insns_per_tick) = true := by
-    simp only [plat_insns_per_tick, show Int.toNat 2 = 2 from rfl, beq_iff_eq]
-    exact htick
-  simp only [htick', if_true, EStateM.bind]
-  rw [htc]
-  rfl
+          (sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c vmip vmtime vmtimecmp vmcycle) :=
+  stepOnce_retire_tick (try_step_tohost_putchar σ u pc vminstret w imm rs2 rs1 v1 vdata data c th
+      b0 b1 b2 b3 hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
+      hb0 hb1 hb2 hb3 hlo hhi halign)
+    hG (goodstate_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG) hmip hmtime hmtimecmp hmcycle htick
 
 theorem step_tohost_putchar_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -592,11 +300,10 @@ theorem step_tohost_putchar_notick
     Vsa.Machine.Step ⟨σ, i, u⟩
       ⟨sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c, i + 1, u + 1⟩
     ∧ GoodState (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c) :=
-  ⟨Vsa.Machine.Step.mk
-    (stepOnce_tohost_putchar_notick σ i u pc vminstret w imm rs2 rs1 v1 vdata data c th
+  step_retire_notick (try_step_tohost_putchar σ u pc vminstret w imm rs2 rs1 v1 vdata data c th
       b0 b1 b2 b3 hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
-      hb0 hb1 hb2 hb3 hlo hhi halign htick),
-   goodstate_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG⟩
+      hb0 hb1 hb2 hb3 hlo hhi halign)
+    hG (goodstate_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG) htick
 
 theorem step_tohost_putchar_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -632,13 +339,10 @@ theorem step_tohost_putchar_tick
         0, u + 1⟩
     ∧ GoodState (sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c
         vmip vmtime vmtimecmp vmcycle) :=
-  ⟨Vsa.Machine.Step.mk
-    (stepOnce_tohost_putchar_tick σ i u pc vminstret w imm rs2 rs1 v1 vdata data c th
-      b0 b1 b2 b3 vmip vmtime vmtimecmp vmcycle hG hpc hminstret
-      hmip hmtime hmtimecmp hmcycle hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
-      hb0 hb1 hb2 hb3 hlo hhi halign htick),
-   goodstate_sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c
-     vmip vmtime vmtimecmp vmcycle hG⟩
+  step_retire_tick (try_step_tohost_putchar σ u pc vminstret w imm rs2 rs1 v1 vdata data c th
+      b0 b1 b2 b3 hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
+      hb0 hb1 hb2 hb3 hlo hhi halign)
+    hG (goodstate_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG) hmip hmtime hmtimecmp hmcycle htick
 
 theorem stepObs_tohost_putchar
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -681,64 +385,22 @@ theorem stepObs_tohost_putchar
         (Register.mip == R) = false → (Register.mtime == R) = false →
         (Register.mcycle == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
-  by_cases htick : i + 1 = 2
-  ·
-    obtain ⟨vmip, hmip0⟩ := hG.mip
-    obtain ⟨vmtime, hmtime0⟩ := hG.mtime
-    obtain ⟨vmtimecmp, hmtimecmp0⟩ := hG.mtimecmp
-    obtain ⟨vmcycle, hmcycle0⟩ := hG.mcycle
-    have hmip : (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c).regs.get? Register.mip = some vmip := by
-      rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-        (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-      exact hmip0
-    have hmtime : (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c).regs.get? Register.mtime = some vmtime := by
-      rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-        (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-      exact hmtime0
-    have hmtimecmp : (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c).regs.get? Register.mtimecmp = some vmtimecmp := by
-      rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-        (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-      exact hmtimecmp0
-    have hmcycle : (sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c).regs.get? Register.mcycle = some vmcycle := by
-      rw [get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c _ (by decide)
-        (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-      exact hmcycle0
-    obtain ⟨hstep, hG'⟩ := step_tohost_putchar_tick σ i u pc vminstret w imm rs2 rs1
-      v1 vdata data c th
-      b0 b1 b2 b3 vmip vmtime vmtimecmp vmcycle hG hpc hminstret
-      hmip hmtime hmtimecmp hmcycle hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
-      hb0 hb1 hb2 hb3 hlo hhi halign htick
-    refine ⟨_, 0, hstep, by decide, hG', rfl, rfl, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [get?_sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c
-        vmip vmtime vmtimecmp vmcycle Register.PC (by decide) (by decide) (by decide)]
-      exact get?_PC_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c
-    · exact ⟨BitVec.addInt vminstret 1, by
-        rw [get?_sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c
-          vmip vmtime vmtimecmp vmcycle Register.minstret (by decide) (by decide) (by decide)]
-        exact get?_minstret_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c⟩
-    · rw [get?_sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c
-        vmip vmtime vmtimecmp vmcycle Register.htif_payload_writes (by decide) (by decide) (by decide)]
-      exact get?_payload_writes_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c
-    · exact ⟨zeros (n := 64), by
-        rw [get?_sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c
-          vmip vmtime vmtimecmp vmcycle Register.htif_tohost (by decide) (by decide) (by decide)]
-        exact get?_htif_tohost_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c⟩
-    · intro R h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
-      rw [get?_sigmaTick_putchar σ pc (BitVec.addInt pc 4) vminstret data c
-        vmip vmtime vmtimecmp vmcycle R h10 h9 h8]
-      exact get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c R h2 h1 h7 h6 h5 h4 h3
-  · obtain ⟨hstep, hG'⟩ := step_tohost_putchar_notick σ i u pc vminstret w imm rs2 rs1
-      v1 vdata data c th
+  obtain ⟨σ', i', hstep, hi', hG', hmem, hR, hout⟩ := stepObs_retire (try_step_tohost_putchar σ u pc vminstret w imm rs2 rs1 v1 vdata data c th
       b0 b1 b2 b3 hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth hputc
-      hb0 hb1 hb2 hb3 hlo hhi halign htick
-    refine ⟨_, i + 1, hstep, by omega, hG', rfl, rfl,
-      get?_PC_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c,
-      ⟨BitVec.addInt vminstret 1,
-        get?_minstret_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c⟩,
-      get?_payload_writes_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c,
-      ⟨zeros (n := 64),
-        get?_htif_tohost_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c⟩, ?_⟩
-    intro R h1 h2 h3 h4 h5 h6 h7 _ _ _
-    exact get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c R h2 h1 h7 h6 h5 h4 h3
+      hb0 hb1 hb2 hb3 hlo hhi halign)
+    hG (goodstate_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c hG) hi
+  refine ⟨σ', i', hstep, hi', hG', hmem, hout, ?_, ⟨BitVec.addInt vminstret 1, ?_⟩, ?_,
+    ⟨zeros (n := 64), ?_⟩, ?_⟩
+  · exact (hR _ (by decide) (by decide) (by decide)).trans
+      (get?_PC_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c)
+  · exact (hR _ (by decide) (by decide) (by decide)).trans
+      (get?_minstret_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c)
+  · exact (hR _ (by decide) (by decide) (by decide)).trans
+      (get?_payload_writes_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c)
+  · exact (hR _ (by decide) (by decide) (by decide)).trans
+      (get?_htif_tohost_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c)
+  · intro R h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
+    exact (hR R h10 h9 h8).trans
+      (get?_sigmaPutcharFinal σ pc (BitVec.addInt pc 4) vminstret data c R h2 h1 h7 h6 h5 h4 h3)
 
 end Vsa.Sim

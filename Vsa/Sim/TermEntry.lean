@@ -1,5 +1,16 @@
-import Vsa.Sim.TermSimClose
-import Vsa.Sim.ErrorSim
+import Vsa.While.Cost
+import Vsa.Sim.Code.Eval_expr
+import Vsa.While.StackNeed
+import Vsa.Sim.StoreInvariant
+import Vsa.Sim.Code.Exec_stmt
+import Vsa.Sim.GeomFacts
+import Vsa.Sim.Code.Strcmp
+import Vsa.Sim.EnvGetSpec3
+import Vsa.Sim.BlockTerm
+import Vsa.Sim.ConsoleStream
+import Vsa.Sim.HeapOwnershipGeometry
+import Vsa.Refinement
+import Vsa.Sim.JmpSpec
 import Vsa.Sim.HtifLift
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
@@ -133,121 +144,18 @@ theorem try_step_tohost_G
     (hb0 : σ.mem[pc.toNat]? = some b0) (hb1 : σ.mem[pc.toNat + 1]? = some b1)
     (hb2 : σ.mem[pc.toNat + 2]? = some b2) (hb3 : σ.mem[pc.toNat + 3]? = some b3)
     (hlo : 0x80000000 ≤ pc.toNat) (hhi : pc.toNat + 4 ≤ tohostAddr) (halign : pc.toNat % 4 = 0) :
-    (try_step u true).run σ = .ok false (sigmaExitFinalG σ pc (BitVec.addInt pc 4) vminstret data e) := by
-  obtain ⟨vmip, hmip⟩ := hG.mip
-  obtain ⟨vmeip, hmeip⟩ := hG.sig_meip
-  obtain ⟨vseip, hseip⟩ := hG.sig_seip
-  have hdisp : (dispatchInterrupt Privilege.Machine).run (afterPrelude σ)
-      = .ok none (afterPrelude σ) :=
-    dispatch_none (afterPrelude σ) vmip vmeip vseip _ _
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mie)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hmip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hmeip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hseip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mideleg)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mstatus)
-  have hfetch : (fetch ()).run (afterPrelude σ)
-      = .ok (FetchResult.F_Base (((b3.append b2).append b1).append b0)) (afterPrelude σ) :=
-    fetch_F_Base (afterPrelude σ) pc b0 b1 b2 b3 _ _ _
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hpc)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mstatus)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pma_regions)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pmpcfg_n)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pmpaddr_n)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.htif_tohost_base)
-      hlo hhi halign
-      (by rw [mem_afterPrelude]; exact hb0) (by rw [mem_afterPrelude]; exact hb1)
-      (by rw [mem_afterPrelude]; exact hb2) (by rw [mem_afterPrelude]; exact hb3)
-      hnotrvc
-  have hdec' : (ext_decode (((b3.append b2).append b1).append b0)).run (afterPrelude σ)
-      = .ok (instruction.STORE (imm, rs2, rs1, 8)) (afterPrelude σ) := by
-    rw [hword]; exact hdec
-  have hlpad : (is_landing_pad_expected ()).run (afterPrelude σ) = .ok false (afterPrelude σ) :=
-    is_landing_pad_expected_false (afterPrelude σ)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.elp)
-  have hexec := exec_sd_tohost_G σ pc imm rs2 rs1 v1 vdata data e th
-    hG hrs1 hrs2 haddr hdataeq hpw hth hsmall hexit
-  have hframe : ∀ R : Register,
-      (Register.htif_exit_code == R) = false → (Register.htif_done == R) = false →
-      (Register.htif_tohost == R) = false → (Register.htif_payload_writes == R) = false →
-      (Register.htif_cmd_write == R) = false →
-      (sigmaExitG σ pc data e).regs.get? R = (afterNextPC (afterPrelude σ) pc).regs.get? R := by
-    intro R h1 h2 h3 h4 h5
-    show (((((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert
-                Register.htif_payload_writes (0#4 + BitVec.ofInt 4 1)).insert
-              Register.htif_tohost data).insert
-            Register.htif_done true).insert
-          Register.htif_exit_code e).get? R) = _
-    rw [Std.ExtDHashMap.get?_insert]; simp only [h1, dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [Std.ExtDHashMap.get?_insert]; simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [Std.ExtDHashMap.get?_insert]; simp only [h3, dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [Std.ExtDHashMap.get?_insert]; simp only [h4, dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [Std.ExtDHashMap.get?_insert]; simp only [h5, dif_neg, reduceCtorEq, not_false_eq_true]
-  have hhart₃ : (sigmaExitG σ pc data e).regs.get? Register.hart_state = some (HartState.HART_ACTIVE ()) := by
-    rw [hframe _ (by decide) (by decide) (by decide) (by decide) (by decide),
-      get?_afterNextPC σ pc _ (by decide) (by decide)]
-    exact hG.hart_state
-  have hnextPC₃ : (sigmaExitG σ pc data e).regs.get? Register.nextPC = some (BitVec.addInt pc 4) := by
-    rw [hframe _ (by decide) (by decide) (by decide) (by decide) (by decide)]
-    show ((afterPrelude σ).regs.insert Register.nextPC (BitVec.addInt pc 4)).get? Register.nextPC = _
-    rw [Std.ExtDHashMap.get?_insert_self]
-  have hinc₃ : (sigmaExitG σ pc data e).regs.get? Register.minstret_increment = some true := by
-    rw [hframe _ (by decide) (by decide) (by decide) (by decide) (by decide)]
-    show ((afterPrelude σ).regs.insert Register.nextPC (BitVec.addInt pc 4)).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.nextPC == Register.minstret_increment) = false from by decide,
-      dif_neg, reduceCtorEq, not_false_eq_true]
-    show (σ.regs.insert Register.minstret_increment true).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert_self]
-  have hminstret₃ : (sigmaExitG σ pc data e).regs.get? Register.minstret = some vminstret := by
-    rw [hframe _ (by decide) (by decide) (by decide) (by decide) (by decide),
-      get?_afterNextPC σ pc _ (by decide) (by decide)]
-    exact hminstret
-  exact try_step_execute_char σ u pc (BitVec.addInt pc 4)
-    (((b3.append b2).append b1).append b0) (instruction.STORE (imm, rs2, rs1, 8))
-    (sigmaExitG σ pc data e) vminstret
-    hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
-    hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
+    (try_step u true).run σ = .ok false (sigmaExitFinalG σ pc (BitVec.addInt pc 4) vminstret data e) :=
+  try_step_retire (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (exec_sd_tohost_G σ pc imm rs2 rs1 v1 vdata data e th hG hrs1 hrs2 haddr hdataeq hpw hth hsmall hexit)
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
 
 theorem htif_done_sigmaExitG_final (σ : MState) (pc npc vminstret data e : BitVec 64) :
     (sigmaExitFinalG σ pc npc vminstret data e).regs.get? Register.htif_done = some true := by
-  show (((((sigmaExitG σ pc data e).regs.insert Register.PC npc).insert
-      Register.minstret (BitVec.addInt vminstret 1)))).get? Register.htif_done = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.minstret == Register.htif_done) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.PC == Register.htif_done) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  show ((((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert
-          Register.htif_payload_writes (0#4 + BitVec.ofInt 4 1)).insert
-        Register.htif_tohost data).insert
-      Register.htif_done true).insert
-    Register.htif_exit_code e).get? Register.htif_done = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.htif_exit_code == Register.htif_done) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert_self]
+  reg_reads []
 
 theorem htif_exit_code_sigmaExitG_final (σ : MState) (pc npc vminstret data e : BitVec 64) :
     (sigmaExitFinalG σ pc npc vminstret data e).regs.get? Register.htif_exit_code = some e := by
-  show (((((sigmaExitG σ pc data e).regs.insert Register.PC npc).insert
-      Register.minstret (BitVec.addInt vminstret 1)))).get? Register.htif_exit_code = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.minstret == Register.htif_exit_code) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.PC == Register.htif_exit_code) = false from by decide,
-    dif_neg, reduceCtorEq, not_false_eq_true]
-  show ((((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert
-          Register.htif_payload_writes (0#4 + BitVec.ofInt 4 1)).insert
-        Register.htif_tohost data).insert
-      Register.htif_done true).insert
-    Register.htif_exit_code e).get? Register.htif_exit_code = _
-  rw [Std.ExtDHashMap.get?_insert_self]
+  reg_reads []
 
 theorem stepOnce_tohost_G
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
