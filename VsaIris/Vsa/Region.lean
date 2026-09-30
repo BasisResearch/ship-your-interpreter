@@ -23,7 +23,7 @@ The laws are proved once over regions:
 
 `rgn_side` extends `sx_side`, so the `sx_run` driver discharges ownership and
 access-range obligations from any region in the local context: the access is
-keyed once (`rgn_key`: address normalised to Nat arithmetic), regions are ranked
+keyed once (`rgnKey`: a bound key `A` with the address equation normalised to Nat arithmetic), regions are ranked
 by the atoms they share with the key, and each candidate is one linear check.
 `rgn_win` closes one `LogIn` key the same way; `log_in` closes a whole key list.
 `open_fields` exposes a minted structure's geometry to the arithmetic deciders.
@@ -115,6 +115,26 @@ theorem offStack_pt {s : BitVec 64} (hd : ∀ a, s.toNat - mHead ≤ a → a < s
     (ha : vsaFoot H a) : a < s.toNat - 256 ∨ s.toNat ≤ a := by
   have := (⟨fun k hk => by rwa [show k = 0 by omega]⟩ : Rgn (vsaFoot H) a 1).offStack hd (by decide)
   unfold mHead at this; omega
+
+/-- An access region: bytes owned under `S`, inside RAM and off the mailbox. It
+carries its own access-range facts, so it needs no heap context (copy sources and
+destinations, caller buffers). -/
+structure ARgn (S : Nat → Prop) (base ext : Nat) : Prop where
+  own : Rgn S base ext
+  lo : 0x8001ad10 ≤ base
+  hi : base + ext ≤ 0x100000000
+
+theorem ARgn.ldOK {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ b + e) : LdOK a w := by
+  have := r.lo; have := r.hi; unfold LdOK Vsa.Sim.tohostAddr; omega
+
+theorem ARgn.stOK {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ b + e ∧ a % w = 0) :
+    StOK a w := by
+  have := r.lo; have := r.hi; unfold StOK Vsa.Sim.tohostAddr; omega
+
+theorem ARgn.acc {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ b + e) :
+    ∀ x ∈ accAddrs a w, S x := fun x hx => by
+  have := of_mem_accAddrs hx
+  exact r.own.mem (by omega) (by omega)
 
 end Laws
 
@@ -279,6 +299,21 @@ theorem pres_log {C : MCtx} {Mt : Mem} (L : List WEntry)
 
 /-! ## Tactics -/
 
+/-- `BitVec.toNat_add` as a propositional rewrite. The core lemma is an `rfl` lemma,
+so `simp` would leave the kernel a definitional check that unfolds `Nat.mod` on
+the offset literal (2^64 steps for a negative offset); through this lemma the
+kernel only infers a type. -/
+theorem key_toNat_add (x y : BitVec 64) :
+    (x + y).toNat = (x.toNat + y.toNat) % 18446744073709551616 := (BitVec.toNat_add x y).trans rfl
+
+theorem key_toNat_ofNat (x : Nat) : (BitVec.ofNat 64 x).toNat = x % 18446744073709551616 :=
+  (BitVec.toNat_ofNat x 64).trans rfl
+
+/-- A negative literal offset: adding `c` modulo `2^64` subtracts `2^64 - c`. -/
+theorem key_sub (a c : Nat) (h : 18446744073709551616 - c ≤ a ∧ a < 18446744073709551616 ∧
+    c < 18446744073709551616) :
+    (a + c) % 18446744073709551616 = a - (18446744073709551616 - c) := by omega
+
 /-- Address arithmetic on the goal only: normalise register updates and `BitVec`
 additions, then `omega` over the facts in context (no hypothesis rewriting). -/
 macro "rgn_arith" : tactic =>
@@ -286,19 +321,34 @@ macro "rgn_arith" : tactic =>
     | omega
     | (simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
         LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.reduceToNat, Nat.reducePow] ; omega))
+        VsaIris.VsaHeap.key_toNat_add,
+        VsaIris.VsaHeap.key_toNat_ofNat, BitVec.reduceToNat, Nat.reducePow, Nat.reduceMod]
+       repeat (first
+         | (rw [Nat.mod_eq_of_lt]; rotate_left; omega)
+         | (rw [VsaIris.VsaHeap.key_sub]; rotate_left; omega)
+         | fail "no wrap-around to remove")
+       first | done | omega)
+    | fail "rgn_arith: address arithmetic failed")
 
-/-- Key an access (V5): replace the address term `a` by a fresh `A` with the
-defining equation normalised to Nat arithmetic (register updates, register
-additions, literal offsets, wrap-around removed when the bound is in context).
-Region candidates then compare `A` against region bases by linear arithmetic only. -/
-macro "rgn_key " a:term : tactic =>
-  `(tactic| (generalize hA : $a = A
+/-- Keying an access: the goal about the address `a` follows from the same goal
+about any `A` equal to it. The key `A` stays a bound variable of the argument, so
+the kernel never unfolds the address term while checking the arithmetic. -/
+theorem key_gen (a : Nat) (G : Nat → Prop) (h : ∀ A, a = A → G A) : G a := h a rfl
+
+/-- Normalise a freshly introduced key equation `hA : a = A` to Nat arithmetic
+(register updates, register additions, literal offsets of either sign,
+wrap-around removed when the bound is in context). -/
+macro "rgn_key_norm" : tactic =>
+  `(tactic| (intro A hA
              (try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
                LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend,
-               BitVec.reduceSignExtend, BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.reduceToNat,
-               Nat.reducePow] at hA)
-             (repeat rw [Nat.mod_eq_of_lt (by omega)] at hA)))
+               BitVec.reduceSignExtend, VsaIris.VsaHeap.key_toNat_add,
+        VsaIris.VsaHeap.key_toNat_ofNat, BitVec.reduceToNat,
+               Nat.reducePow, Nat.reduceMod] at hA)
+             (repeat (first
+               | (rw [Nat.mod_eq_of_lt] at hA; rotate_left; omega)
+               | (rw [VsaIris.VsaHeap.key_sub] at hA; rotate_left; omega)
+               | fail "no wrap-around to remove"))))
 
 /-- Normalise the goal only (register updates, immediates, loads through stores). -/
 macro "rgn_norm" : tactic =>
@@ -320,6 +370,7 @@ structure RgnHyp where
   name : Name
   base : Expr
   ext : Expr
+  acc : Bool := false
 
 /-- The regions and ownership contexts in the local context. -/
 def rgnScan (g : MVarId) : TacticM (Array Syntax.Term × Array RgnHyp) :=
@@ -330,7 +381,9 @@ def rgnScan (g : MVarId) : TacticM (Array Syntax.Term × Array RgnHyp) :=
       if d.isImplementationDetail then continue
       let ty ← whnfR (← instantiateMVars d.type)
       let fn := ty.getAppFn
-      if fn.isConstOf ``Rgn then rgns := rgns.push ⟨d.userName, ty.appFn!.appArg!, ty.appArg!⟩
+      if fn.isConstOf ``Rgn then rgns := rgns.push ⟨d.userName, ty.appFn!.appArg!, ty.appArg!, false⟩
+      else if fn.isConstOf ``ARgn then
+        rgns := rgns.push ⟨d.userName, ty.appFn!.appArg!, ty.appArg!, true⟩
       else if let .const n _ := fn then
         if n == ``WOK then oks := oks.push (mkIdent d.userName)
         else if (← getEnv).contains (n ++ `toWOK) then
@@ -354,27 +407,38 @@ def rgnAtoms (g : MVarId) (e : Expr) : MetaM (Array FVarId) := g.withContext do
     unless fty.isForall do out := out.push f
   return out
 
+/-- Key an access (V5): replace the address term `a` in the goal of `g` by a bound
+key `A` with `a = A`, through `key_gen`. -/
+def rgnKey (g : MVarId) (a : Expr) : MetaM MVarId := g.withContext do
+  let nat := mkConst ``Nat
+  let abst ← kabstract (← instantiateMVars (← g.getType)) a
+  let ty := mkForall `A .default nat
+    (mkForall `hA .default (mkApp3 (mkConst ``Eq [levelOne]) nat a (mkBVar 0))
+      (abst.liftLooseBVars 0 1))
+  let m ← mkFreshExprSyntheticOpaqueMVar ty
+  g.assign (mkApp3 (mkConst ``key_gen) a (mkLambda `A .default nat abst) m)
+  return m.mvarId!
+
 /-- Key the access `a` of goal `g`, rank the regions (the hinted one first, then
 by atoms shared with the key, symbolic extents before literal ones), and try each
 region's candidate tactics. Returns the region that closed the goal. -/
 def rgnTry (g : MVarId) (a : Expr) (rgns : Array RgnHyp) (hint : Option Name)
-    (mk : Syntax.Term → TacticM (Array (TSyntax `tactic))) (extra : Array (TSyntax `tactic)) :
+    (mk : RgnHyp → TacticM (Array (TSyntax `tactic))) (extra : Array (TSyntax `tactic)) :
     TacticM (Option Name) := do
   let ka ← rgnAtoms g a
-  let mut scored : Array (Int × Name) := #[]
+  let mut scored : Array (Int × RgnHyp) := #[]
   for r in rgns do
     let kb ← rgnAtoms g r.base
     let shared := (kb.filter ka.contains).size
     let sc : Int := (4 * shared : Int) - (2 * (kb.size - shared) : Nat) +
       (if r.ext.nat?.isNone then 1 else 0) + (if hint == some r.name then 1000 else 0)
-    scored := scored.push (sc, r.name)
+    scored := scored.push (sc, r)
   let ranked := scored.qsort (fun x y => x.1 > y.1)
   let mut cands : Array (Name × TSyntax `tactic) := extra.map (Name.anonymous, ·)
   for (_, r) in ranked do
-    for t in ← mk (mkIdent r) do cands := cands.push (r, t)
+    for t in ← mk r do cands := cands.push (r.name, t)
   let s0 ← saveState
-  let aStx ← g.withContext (Term.exprToSyntax a)
-  let [g'] ← evalTacticAt (← `(tactic| rgn_key $aStx)) g | s0.restore; return none
+  let [g'] ← evalTacticAt (← `(tactic| rgn_key_norm)) (← rgnKey g a) | s0.restore; return none
   for (r, t) in cands do
     let s ← saveState
     try
@@ -394,12 +458,16 @@ def rgnSide (g : MVarId) (hint : Option Name) : TacticM (Option Name) := do
   let some app := tgt.find? fun e =>
       e.isAppOfArity ``accAddrs 2 || e.isAppOfArity ``LdOK 2 || e.isAppOfArity ``StOK 2
     | return none
-  let mk : Syntax.Term → TacticM (Array (TSyntax `tactic)) := fun r => do
+  let mk : RgnHyp → TacticM (Array (TSyntax `tactic)) := fun h => do
+    let r := mkIdent h.name
     if app.isAppOf ``LdOK then
+      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.ldOK $r ?_; omega))]
       return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.ldOK $r ?_; omega))]
     else if app.isAppOf ``StOK then
+      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.stOK $r ?_; omega))]
       return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.stOK $r ?_; omega))]
     else
+      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.acc $r ?_; omega))]
       oks.mapM fun o => `(tactic| (refine VsaIris.VsaHeap.WOK.rgn $o $r ?_; omega))
   rgnTry g app.appFn!.appArg! rgns hint mk #[]
 
@@ -413,12 +481,12 @@ elab "rgn_side" : tactic => do
 
 macro_rules | `(tactic| sx_side) => `(tactic| rgn_side)
 
-/-- Step the `st_<pc>` table from the goal, closing each access obligation with
-`rgn_side` and leaving the context untouched. Stops at a listed pc, at a branch,
-or at an obligation no region closes (left as a goal); the final goal is
-normalised by `rgn_norm`. -/
-elab "rgn_run " h:term " at " stops:num+ : tactic => do
-  let stopPCs := stops.toList.map (·.getNat)
+/-- Step the `st_<pc>` table from `cur`, closing each access obligation with
+`rgnSide` and leaving the context untouched; after each step the register reads in
+the goal are resolved, so values stay terms over the entry registers. Stops at a listed pc, at a branch,
+or when no step lemma applies; obligations no region closes are returned as
+pending goals. -/
+def rgnStep (h : Syntax) (stopPCs : List Nat) : TacticM (List MVarId × List MVarId) := do
   let mut cur ← getMainGoal
   let mut pending : List MVarId := []
   repeat
@@ -436,10 +504,28 @@ elab "rgn_run " h:term " at " stops:num+ : tactic => do
         | some r => hint := some r
         | none => pending := pending ++ [g]
     match conts with
-    | [c] => cur := c
-    | cs => setGoals (pending ++ cs); return
-  let cur' ← evalTacticAt (← `(tactic| try rgn_norm)) cur
-  setGoals (pending ++ cur')
+    | [c] =>
+      -- keep the register file normal: every value is a term over the entry registers
+      match ← evalTacticAt (← `(tactic| try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff,
+          ite_true, ite_false])) c with
+      | [c'] => cur := c'
+      | cs => return (pending, cs)
+    | cs => return (pending, cs)
+  return (pending, [cur])
+
+/-- `rgn_run h at pc…`: step to a listed pc, then normalise the final goal with
+`rgn_norm`. -/
+elab "rgn_run " h:term " at " stops:num+ : tactic => do
+  let (pending, conts) ← rgnStep h (stops.toList.map (·.getNat))
+  match conts with
+  | [c] => setGoals (pending ++ (← evalTacticAt (← `(tactic| try rgn_norm)) c))
+  | cs => setGoals (pending ++ cs)
+
+/-- `rgn_step h at pc…`: as `rgn_run`, leaving the final goal as the step lemmas
+produce it (for paths with their own memory normal form). -/
+elab "rgn_step " h:term " at " stops:num+ : tactic => do
+  let (pending, conts) ← rgnStep h (stops.toList.map (·.getNat))
+  setGoals (pending ++ conts)
 
 /-- Close one `LogIn (MWin H s)` key `∀ b, a ≤ b → b < a + w → MWin H s b`: from a
 region in context, or the stack window. -/
@@ -452,8 +538,9 @@ elab "rgn_win" : tactic => do
   let a := le.appFn!.appArg!
   if a.hasLooseBVars then throwError "rgn_win: not a key goal"
   let stack ← `(tactic| (refine VsaIris.VsaHeap.win_stack' ?_; omega))
-  let mk : Syntax.Term → TacticM (Array (TSyntax `tactic)) := fun r => do
-    return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.win $r ?_; omega))]
+  let mk : RgnHyp → TacticM (Array (TSyntax `tactic)) := fun h => do
+    if h.acc then return #[]
+    return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.win $(mkIdent h.name) ?_; omega))]
   match ← rgnTry g a rgns none mk #[stack] with
   | some _ => setGoals []
   | none => throwError "rgn_win: no region contains the key"
