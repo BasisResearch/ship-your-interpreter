@@ -34,9 +34,9 @@ def rslot : LogOp → Nat
 end LogOp'
 
 /-- Ready for a child call with result slot at frame offset `o`. -/
-structure CallReady3 (rv R : Nat → BitVec 64) (Mt : Mem) (s ret sret aX inp aE : BitVec 64)
-    (o : Nat) (aC : BitVec 64) : Prop where
-  frame : Frame3 rv R Mt s ret sret aX inp aE
+structure CallReady3 (rv R : Nat → BitVec 64) (Mt : Mem) (s ret sret aX inp aF : BitVec 64)
+    (o : Nat) (aC aE : BitVec 64) : Prop where
+  frame : Frame3 rv R Mt s ret sret aX inp aF
   regs : EvalRegs R (evalSP s + BitVec.ofNat 64 o) inp aC aE (evalSP s)
 
 /-- Ready for `value_truthy` on the operand copied to frame offset `64`. -/
@@ -61,7 +61,7 @@ def LogEntryRun : Prop :=
     {Mt : Mem} {n : Nat} {op : LogOp},
     ArmGeo s ret sret n → EvalRegs rv sret inp aX aE s → BinNode m P aX 7 (logOpTok op) aL aR →
     MRun live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) evalEntryPC 0x80003568#64
-      (upd rv 1 ret) Mt (fun R' Mt' => CallReady3 rv R' Mt' s ret sret aX inp aE 120 aL)
+      (upd rv 1 ret) Mt (fun R' Mt' => CallReady3 rv R' Mt' s ret sret aX inp aE 120 aL aE)
 
 set_option hygiene false in
 macro "frame3_facts" : tactic => `(tactic| (
@@ -166,7 +166,7 @@ def LogOp'.Long (o : LogOp) : Prop :=
     Frame3 rv R Mt s ret sret aX inp aE → R 10 = (if !LogOp'.short o then 1#64 else 0#64) →
     MRun live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088))
       (BitVec.ofNat 64 ((LogOp'.tr o).i + 4)) (BitVec.ofNat 64 (LogOp'.rc o).i) R Mt
-      (fun R' Mt' => CallReady3 rv R' Mt' s ret sret aX inp aE (LogOp'.rslot o) aR)
+      (fun R' Mt' => CallReady3 rv R' Mt' s ret sret aX inp aE (LogOp'.rslot o) aR aE)
 
 set_option hygiene false in
 macro "log_long " pc:num : tactic => `(tactic| (

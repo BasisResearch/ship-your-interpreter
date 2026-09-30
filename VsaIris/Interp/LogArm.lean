@@ -75,8 +75,8 @@ theorem logShortTail (o : LogOp) (Wp : MachWP (GF := GF) (vsaModel live))
     ArmAt Wp Φ (entryF P m env aE s n sret Wd K) (BitVec.ofNat 64 ((LogOp'.tr o).i + 4)) R
       (InExt (s.toNat - 1088, 1088)) Mt :=
   ArmAt.run Wp hn.view (LogOp'.shortRun o hlive g f h10) fun _ _ p =>
-    ArmAt.boolFinish3 Wp (LogOp'.vbS o) hlive hvb (LogOp'.epiS o) hn.view g p.frame hsp p.a0 p.a1
-      hexit
+    ArmAt.boolFinish3 Wp (LogOp'.vbS o) hlive hvb (LogOp'.epiS o) hn.view g p.frame.epi hsp p.a0 p.a1
+      (boolBit_ne _) hexit
 
 theorem logAfterRight (o : LogOp) (Wp : MachWP (GF := GF) (vsaModel live))
     (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs}
@@ -100,13 +100,8 @@ theorem logAfterRight (o : LogOp) (Wp : MachWP (GF := GF) (vsaModel live))
     (BitVec.ofNat 64 ((jal_site% 0x800035cc : JalAt valueTruthyPC).i + 4))
   refine ArmAt.run Wp hn.view (logRun5 hlive g f5
     (by rw [upd_other _ _ (show (10 : Nat) ≠ 1 by decide)]; exact hb5)) fun _ _ p6 => ?_
-  exact ArmAt.boolFinish3 Wp (jal_site% 0x800035d8) hlive hvb epi3_800035dc hn.view g p6.frame hsp
-    p6.a0 p6.a1 hexit
-
-theorem valOf_dupK (N : NativeAddrs) {K : IProp GF} (v : Value) (w0 w1 w2 : BitVec 64) :
-    iprop(K ∗ □ valOf N v w0 w1 w2) ⊢ iprop(K ∗ □ valOf N v w0 w1 w2) ∗ □ valOf N v w0 w1 w2 := by
-  iintro ⟨HK, #Hv⟩
-  iframe HK Hv
+  exact ArmAt.boolFinish3 Wp (jal_site% 0x800035d8) hlive hvb epi3_800035dc hn.view g p6.frame.epi hsp
+    p6.a0 p6.a1 (boolBit_ne _) hexit
 
 theorem logShortT (o : LogOp) (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}

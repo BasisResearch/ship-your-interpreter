@@ -70,6 +70,26 @@ theorem Frame3.child {rv R R' : Nat → BitVec 64} {Mt : Mem} {s ret sret aX inp
     rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega)]
     exact f.ae
 
+/-- The part of `Frame3` the epilogue needs. -/
+structure EpiFrame3 (rv R : Nat → BitVec 64) (Mt : Mem) (s ret : BitVec 64) : Prop where
+  r2 : R 2 = evalSP s
+  s3 : R 19 = rv 19
+  hi : ∀ x ∈ hiSaved, R x = rv x
+  saved : EvalSaved3 Mt s ret (rv 8) (rv 9) (rv 18)
+
+theorem Frame3.epi {rv R : Nat → BitVec 64} {Mt : Mem} {s ret sret aX inp aE : BitVec 64}
+    (f : Frame3 rv R Mt s ret sret aX inp aE) : EpiFrame3 rv R Mt s ret :=
+  ⟨f.r2, f.s3, f.hi, f.saved⟩
+
+theorem EpiFrame3.helper {rv R R' : Nat → BitVec 64} {Mt : Mem} {s ret : BitVec 64}
+    {clob : List Nat} (f : EpiFrame3 rv R Mt s ret)
+    (hk : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) (hcl : ∀ x ∈ keep3, x ∉ clob) (v : BitVec 64) :
+    EpiFrame3 rv (upd R' 1 v) Mt s ret := by
+  have kk : ∀ x ∈ keep3, upd R' 1 v x = R x := fun x hx => by
+    rw [upd_other _ _ (keep3_ne1 x hx)]; exact hk x (keep3_fRegs x hx) (hcl x hx)
+  exact ⟨(kk 2 (by decide)).trans f.r2, (kk 19 (by decide)).trans f.s3,
+    fun x hx => (kk x (hi_keep3 x hx)).trans (f.hi x hx), f.saved⟩
+
 /-- Post of a 3-save epilogue. -/
 structure EpiPost3 (R R' : Nat → BitVec 64) (s ret v8 v9 v18 : BitVec 64) : Prop where
   ra : R' 1 = ret
@@ -130,26 +150,44 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
+theorem valOf_dupK (N : NativeAddrs) {K : IProp GF} (v : Value) (w0 w1 w2 : BitVec 64) :
+    iprop(K ∗ □ valOf N v w0 w1 w2) ⊢ iprop(K ∗ □ valOf N v w0 w1 w2) ∗ □ valOf N v w0 w1 w2 := by
+  iintro ⟨HK, #Hv⟩
+  iframe HK Hv
+
+/-- After a helper call from a 3-save frame: the epilogue and the caller's exit. -/
+theorem ArmAt.finish3 (Wp : MachWP (GF := GF) (vsaModel live)) {i : Nat}
+    (hlive : ∀ p ∈ interpText, live p.1) (hepi : EpiRun3 (BitVec.ofNat 64 (i + 4)))
+    {Φ : Nat × String → IProp GF} {N : NativeAddrs} {P : Nat → Prop} {m : Mem} {env : Nat}
+    {aE s ret sret : BitVec 64} {n : Nat} {rv R R' : Nat → BitVec 64} {Mt : Mem}
+    {Out Wd K : IProp GF} {DA : List Nat} {v : Value} {clob : List Nat}
+    (hv : ∀ a ∈ DA, P a ∧ (m[a]?).isSome = true)
+    (g : ArmGeo s ret sret n) (f : EpiFrame3 rv R Mt s ret) (hsp : rv 2 = s)
+    (hk : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) (hcl : ∀ x ∈ keep3, x ∉ clob)
+    (hOut : Out = valAt N sret.toNat v) (hexit : ExitK Wp Φ N s ret sret rv n v Wd K) :
+    ArmAt Wp Φ (evalArmF P m env aE (evalSP s) (n - 1088) Out Wd K)
+      (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4)))
+      (InExt (s.toNat - 1088, 1088)) Mt := by
+  subst hOut
+  have f' := f.helper hk hcl (BitVec.ofNat 64 (i + 4))
+  refine ArmAt.run Wp hv (hepi hlive g f'.r2 f'.saved) fun R5 _ p5 => ?_
+  exact ArmAt.finish Wp hexit g.sg.le g.need p5.ra (p5.keep f'.s3 (fun x hx => f'.hi x hx) hsp)
+
 /-- `value_bool` on a known bit, then a 3-save epilogue, then the caller's exit. -/
 theorem ArmAt.boolFinish3 (Wp : MachWP (GF := GF) (vsaModel live)) (J : JalAt valueBoolPC)
     (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs}
     (hvb : ⊢ ∀ p b, valueBoolSpec (vsaModel live) N Wp p b)
     (hepi : EpiRun3 (BitVec.ofNat 64 (J.i + 4))) {Φ : Nat × String → IProp GF}
-    {P : Nat → Prop} {m : Mem} {env : Nat} {aE s ret sret aX inp : BitVec 64} {n : Nat}
+    {P : Nat → Prop} {m : Mem} {env : Nat} {aE s ret sret : BitVec 64} {n : Nat}
     {rv R : Nat → BitVec 64} {Mt : Mem} {Wd K : IProp GF} {DA : List Nat} {c : Bool}
-    (hv : ∀ a ∈ DA, P a ∧ (m[a]?).isSome = true)
-    (g : ArmGeo s ret sret n) (f : Frame3 rv R Mt s ret sret aX inp aE) (hsp : rv 2 = s)
-    (h10 : R 10 = sret) (h11 : R 11 = (if c then 1#64 else 0#64))
+    {b : BitVec 64} (hv : ∀ a ∈ DA, P a ∧ (m[a]?).isSome = true)
+    (g : ArmGeo s ret sret n) (f : EpiFrame3 rv R Mt s ret) (hsp : rv 2 = s)
+    (h10 : R 10 = sret) (h11 : R 11 = b) (hb : (b != 0#64) = c)
     (hexit : ExitK Wp Φ N s ret sret rv n (.bool c) Wd K) :
     ArmAt Wp Φ (entryF P m env aE s n sret Wd K) (BitVec.ofNat 64 J.i) R
-      (InExt (s.toNat - 1088, 1088)) Mt := by
-  refine ArmAt.callBool Wp J hlive hvb h10 h11 g.slg fun R' hk => ?_
-  rw [boolBit_ne]
-  have f' := f.helper (Mt' := Mt) (o := 8) hk (by decide) (by decide) (by decide)
-    (fun _ _ _ _ => rfl) (BitVec.ofNat 64 (J.i + 4))
-  refine ArmAt.run Wp hv (hepi hlive g f'.r2 f'.saved) fun R5 _ p5 => ?_
-  exact ArmAt.finish Wp hexit g.sg.le g.need p5.ra
-    (p5.keep f'.s3 (fun x hx => f'.hi x hx) hsp)
+      (InExt (s.toNat - 1088, 1088)) Mt :=
+  ArmAt.callBool Wp J hlive hvb h10 h11 g.slg fun _ hk =>
+    ArmAt.finish3 Wp hlive hepi hv g f hsp hk (by decide) (by rw [hb]) hexit
 
 /-- `value_truthy` on the operand copy at frame offset `64`. -/
 theorem ArmAt.callTruthy (Wp : MachWP (GF := GF) (vsaModel live)) (J : JalAt valueTruthyPC)

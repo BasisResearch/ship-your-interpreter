@@ -1,4 +1,5 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.UnArm
 import VsaIris.Interp.LeafArms
 import VsaIris.Interp.LogArm
 import VsaIris.Interp.EqArm
@@ -7,8 +8,6 @@ import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
 import VsaIris.Interp.Case.BinaryConcatT
-import VsaIris.Interp.Case.UnaryNegT
-import VsaIris.Interp.Case.UnaryNotT
 import VsaIris.Interp.Case.CallClosureT
 import VsaIris.Interp.Case.CallPrintT
 import VsaIris.Interp.Case.CallPrintlnT
@@ -260,8 +259,8 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
   case andTrue =>
     intro st d env l r st' st'' lv rv nl nr Dl ht Dr ihl ihr
     exact logLongT .and ($S).hlive Dl ht Dr _ ihl ihr ($S).vtruthy ($S).vbool
-  case neg => intro st d env e st' n m De ih; exact caseT_UnaryNeg ($S).hlive De _ ih ($S).vint
-  case not => intro st d env e st' v m De ih; exact caseT_UnaryNot ($S).hlive De _ ih ($S).vtruthy ($S).vbool
+  case neg => intro st d env e st' n m De ih; exact negT ($S).hlive De _ ih ($S).vint
+  case not => intro st d env e st' v m De ih; exact notT ($S).hlive De _ ih ($S).vtruthy ($S).vbool
   case call =>
     intro st d env f args st1 st2 st3 fv vs v nf na nc Df hlen Da Dc ihf iha ihc
     exact ihc Df hlen Da ihf iha
