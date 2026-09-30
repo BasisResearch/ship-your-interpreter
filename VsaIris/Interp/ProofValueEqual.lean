@@ -55,13 +55,15 @@ theorem veq_clo_facts (N : NativeAddrs) {st : Store} {B : List (Nat × Nat)}
   generalize imgW fb (pb + 8) = wb
   by_cases hw : wa = wb
   · subst hw
-    ihave ⟨H, %h⟩ := storeRepr_clos_inj N (a := ca) (b := cb) (p := wa.toNat) $$ [$]
+    ihave ⟨H, %h⟩ := storeRepr_clos_inj N (a := ca) (b := cb) (p := wa.toNat) $$ [H Ha Hb]
+    · iframe H Ha Hb
     iframe H
     ipureintro; exact ⟨fun _ => h, fun _ => rfl⟩
   · iframe H
     by_cases hc : ca = cb
     · subst hc
-      ihave %h := closAt_agree ca wa.toNat wb.toNat $$ [$]
+      ihave %h := closAt_agree ca wa.toNat wb.toNat $$ [Ha Hb]
+      · iframe Ha Hb
       ipureintro; exact absurd (BitVec.eq_of_toNat_eq h) hw
     · ipureintro; exact ⟨fun h => absurd h hw, fun h => absurd h hc⟩
 
@@ -395,10 +397,13 @@ theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1
   · iframe Hbi Hxa Hxb
   iintro %R' %hk' %hres Hms
   iapply wp_swpF Wp (S := veqS pa pb s)
+    (F := Fveq Wp Φ N pa pb s r (.str x1) (.str x2) st B rv Ma Mb)
   rotate_left
   · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
       unfold codeRes; simp [dataOf]
-    rw [hro]; isplitl []; iexact Hcode; icombine Hwa Hwb Hst Hcmp Hbi Hcode Hk as HF; iframe HF Hms
+    rw [hro]
+    unfold Fveq
+    iframe Hcode Hwa Hwb Hst Hcmp Hbi Hk Hms
   intro F'
   have hk2 : R' 2 = R1 2 := hk' 2 (by decide) (by decide)
   exact veq_str_run2 Wp c (hk2.trans h2) hres
@@ -480,19 +485,25 @@ theorem valueEqual_spec (hlive : ∀ p ∈ interpText, live p.1)
   unfold stackScratch blockOwn
   ihave ⟨%fk, Hsk⟩ := ownSet_fn _ $$ Hsk
   ihave ⟨%Mk, Hsk, %hMk⟩ := ownSet_trackedAt _ fk $$ Hsk
-  ihave ⟨%M1, H1, %⟨h1a, h1b, hdab⟩⟩ := ownSet_join_tracked _ _ Ma Mb $$ [$]
-  ihave ⟨%M, HS, %⟨hM1, _, hdk⟩⟩ := ownSet_join_tracked _ _ M1 Mk $$ [$]
+  ihave ⟨%M1, H1, %⟨h1a, h1b, hdab⟩⟩ := ownSet_join_tracked _ _ Ma Mb $$ [HA HB]
+  · iframe HA HB
+  ihave ⟨%M, HS, %⟨hM1, _, hdk⟩⟩ := ownSet_join_tracked _ _ M1 Mk $$ [H1 Hsk]
+  · iframe H1 Hsk
   have hMa : ∀ x, InExt (pa.toNat, 24) x → imgM M x = imgM Ma x := fun x hx =>
     (hM1 x (.inl hx)).trans (h1a x hx)
   have hMb : ∀ x, InExt (pb.toNat, 24) x → imgM M x = imgM Mb x := fun x hx =>
     (hM1 x (.inr hx)).trans (h1b x hx)
-  ihave ⟨Hst, %hclo⟩ := veq_clo_facts N (imgM Ma) (imgM Mb) pa.toNat pb.toNat a b $$ [$]
+  ihave ⟨Hst, %hclo⟩ := veq_clo_facts N (imgM Ma) (imgM Mb) pa.toNat pb.toNat a b $$ [Hst Hwa Hwb]
+  · iframe Hst Hwa Hwb
   iapply wp_swpF Wp (S := veqS pa pb s) (R := upd rv 1 r) (Mt := M) (pc := valueEqualPC)
+    (F := Fveq Wp Φ N pa pb s r a b st B rv Ma Mb)
   rotate_left
   · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
       unfold codeRes; simp [dataOf]
-    rw [hro]; isplitl []; iexact Hcode; unfold ms; rw [regFile_upd_ra]; simp only [upd_same]
-    icombine Hwa Hwb Hst Hcmp Hbi Hcode Hk as HF; iframe HF Hpc Hra Hregs HS
+    rw [hro]
+    unfold ms Fveq
+    rw [regFile_upd_ra]; simp only [upd_same]
+    iframe Hcode Hwa Hwb Hst Hcmp Hbi Hk Hpc Hra Hregs HS
   intro F'
   exact veq_run Wp ⟨hlive, hal, h10, h11, h2, hga, hgb, hsg, hMa, hMb, hdab, hdk⟩ hpa hpb hclo hinj
 

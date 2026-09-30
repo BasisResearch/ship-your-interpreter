@@ -85,8 +85,10 @@ theorem regFile_after (rv rv' : Nat → BitVec 64) :
   refine .trans ?_ (regFile_split _).2
   simp only [sepL_cons, sepL_nil, leafRv, leafTemps, fOther, fLeaf, List.mem_cons,
     List.not_mem_nil, or_false, ↓reduceIte, Nat.reduceEqDiff, or_self, or_true]
-  iintro ⟨_, ⟨_, _, _, _, _, _, -⟩, ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, -⟩⟩
-  iframe ∗
+  iintro ⟨H10, ⟨H11, H12, H13, H14, H15, H16, -⟩, ⟨H2, H5, H6, H7, H8, H9, H17, H18, H19, H20, H21,
+    H22, H23, H24, H25, H26, H27, H28, H29, H30, H31, -⟩⟩
+  iframe H10 H11 H12 H13 H14 H15 H16 H2 H5 H6 H7 H8 H9 H17 H18 H19 H20 H21 H22 H23 H24 H25 H26
+    H27 H28 H29 H30 H31
 
 omit I in
 theorem fLeaf_split (rv : Nat → BitVec 64) :
