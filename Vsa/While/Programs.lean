@@ -101,6 +101,71 @@ def forWl : Program := [
     (.block [set "line" (.binary .add (v "line") (v "i"))]),
   pl [v "line"]]
 
+def functionsWl : Program := [
+
+  .varDecl "make_adder" (some (.fn (some "make_adder") ["n"] [
+    .ret (some (.fn none ["x"] [.ret (some (.binary .add (v "x") (v "n")))]))])),
+  .varDecl "add5" (some (.call (v "make_adder") [i 5])),
+  pl [.call (v "add5") [i 10]],
+
+  .varDecl "apply_twice" (some (.fn (some "apply_twice") ["f", "x"] [
+    .ret (some (.call (v "f") [.call (v "f") [v "x"]]))])),
+  pl [.call (v "apply_twice") [v "add5", i 1]],
+  pl [.call (v "apply_twice")
+    [.fn none ["x"] [.ret (some (.binary .mul (v "x") (v "x")))], i 3]],
+
+  .varDecl "make_counter" (some (.fn (some "make_counter") [] [
+    .varDecl "count" (some (i 0)),
+    .ret (some (.fn none [] [
+      set "count" (.binary .add (v "count") (i 1)),
+      .ret (some (v "count"))]))])),
+  .varDecl "c" (some (.call (v "make_counter") [])),
+  .expr (.call (v "c") []),
+  .expr (.call (v "c") []),
+  pl [.call (v "c") []],
+  .varDecl "c2" (some (.call (v "make_counter") [])),
+  pl [.call (v "c2") []],
+  .varDecl "f" (some (v "add5")),
+  pl [.binary .eq (v "f") (v "add5")],
+  pl [v "make_adder"],
+  pl [.fn none ["x"] [.ret (some (v "x"))]],
+
+  .varDecl "compose" (some (.fn (some "compose") ["f", "g"] [
+    .ret (some (.fn none ["x"] [
+      .ret (some (.call (v "f") [.call (v "g") [v "x"]]))]))])),
+  .varDecl "inc" (some (.fn none ["x"] [.ret (some (.binary .add (v "x") (i 1)))])),
+  .varDecl "dbl" (some (.fn none ["x"] [.ret (some (.binary .mul (v "x") (i 2)))])),
+  pl [.call (.call (v "compose") [v "inc", v "dbl"]) [i 10]]]
+
+def recursionWl : Program := [
+  .varDecl "fact" (some (.fn (some "fact") ["n"] [
+    .ifStmt (.binary .le (v "n") (i 1)) (.block [.ret (some (i 1))]) none,
+    .ret (some (.binary .mul (v "n") (.call (v "fact")
+      [.binary .sub (v "n") (i 1)])))])),
+  pl [.call (v "fact") [i 10]],
+  .varDecl "fib" (some (.fn (some "fib") ["n"] [
+    .ifStmt (.binary .lt (v "n") (i 2)) (.block [.ret (some (v "n"))]) none,
+    .ret (some (.binary .add
+      (.call (v "fib") [.binary .sub (v "n") (i 1)])
+      (.call (v "fib") [.binary .sub (v "n") (i 2)])))])),
+  pl [.call (v "fib") [i 20]],
+  .varDecl "is_even" (some (.fn (some "is_even") ["n"] [
+    .ifStmt (.binary .eq (v "n") (i 0)) (.block [.ret (some (.bool true))]) none,
+    .ret (some (.call (v "is_odd") [.binary .sub (v "n") (i 1)]))])),
+  .varDecl "is_odd" (some (.fn (some "is_odd") ["n"] [
+    .ifStmt (.binary .eq (v "n") (i 0)) (.block [.ret (some (.bool false))]) none,
+    .ret (some (.call (v "is_even") [.binary .sub (v "n") (i 1)]))])),
+  pl [.call (v "is_even") [i 10], .call (v "is_odd") [i 10]],
+  .varDecl "ack" (some (.fn (some "ack") ["m", "n"] [
+    .ifStmt (.binary .eq (v "m") (i 0))
+      (.block [.ret (some (.binary .add (v "n") (i 1)))]) none,
+    .ifStmt (.binary .eq (v "n") (i 0))
+      (.block [.ret (some (.call (v "ack") [.binary .sub (v "m") (i 1), i 1]))])
+      none,
+    .ret (some (.call (v "ack") [.binary .sub (v "m") (i 1),
+      .call (v "ack") [v "m", .binary .sub (v "n") (i 1)]]))])),
+  pl [.call (v "ack") [i 2, i 3]]]
+
 def scopeWl : Program := [
   .varDecl "x" (some (i 1)),
   .block [
@@ -135,5 +200,14 @@ def stringsWl : Program := [
   pl [.str "line1\nline2"],
   pl [.str "tab\there"],
   pl [.str "quote: \"hi\""]]
+
+def all : List (String × Program) := [
+  ("while", whileWl),
+  ("arithmetic", arithmeticWl),
+  ("for", forWl),
+  ("functions", functionsWl),
+  ("recursion", recursionWl),
+  ("scope", scopeWl),
+  ("strings", stringsWl)]
 
 end Vsa.While.Programs

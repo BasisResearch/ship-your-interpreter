@@ -1,9 +1,21 @@
 name = "Vsa"
-defaultTargets = ["VsaBoot"]
+defaultTargets = ["Vsa", "VsaIris", "VsaBoot", "vsa_run", "whilec", "whilecheck"]
 
 [[lean_lib]]
 name = "Vsa"
 leanOptions.backward.isDefEq.respectTransparency = false
+
+[[lean_exe]]
+name = "vsa_run"
+root = "VsaRun"
+
+[[lean_exe]]
+name = "whilec"
+root = "WhileC"
+
+[[lean_exe]]
+name = "whilecheck"
+root = "WhileCheck"
 
 [[lean_lib]]
 name = "VsaIris"

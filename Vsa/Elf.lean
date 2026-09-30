@@ -8,6 +8,17 @@ namespace Vsa
 open Sail in
 open LeanRV64DExecutable.Functions in
 
+def setupElf (elf : ELF64File) : SailM Unit := do
+  sail_model_init ()
+  initializeRegisters elf
+  init_model ""
+  cycle_count ()
+
+  writeReg PC (elf.file_header.e_entry : UInt64).toBitVec
+
+open Sail in
+open LeanRV64DExecutable.Functions in
+
 def stepOnce (i used : Nat) : SailM (Sum (Option Nat × Nat) (Nat × Nat)) := do
   if (← readReg htif_done) then
     pure (.inl (some (BitVec.toNat (← readReg htif_exit_code)), used))

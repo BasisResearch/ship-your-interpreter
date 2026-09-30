@@ -1,7 +1,7 @@
 # Ship your interpreter
 
 This Lean 4 project verifies `c/while-riscv-htif.elf`, a WHILE-language
-interpreter compiled to bare-metal RV64 with HTIF I/O. The proof relates an
+interpreter written in C and compiled to bare-metal RV64. The proof relates an
 inductive big-step semantics of WHILE to the binary's execution in the
 Sail-generated RISC-V model.
 
@@ -14,158 +14,87 @@ theorem endToEnd_refinement :
       (Diverges c → ¬ ∃ out, BigStep p out)
 ```
 
-- Statement: [`VsaIris/Interp/EndToEnd.lean`](VsaIris/Interp/EndToEnd.lean). No hypotheses: every allocator and newlib routine the binary calls is proved.
-- Axioms: `propext`, `Classical.choice`, `Quot.sound`.
-- `Loaded` witnesses from real boot traces of ten programs: [`Vsa/Sim/Boot/`](Vsa/Sim/Boot). The proof ELF: `proofElf_halts` ([`Vsa/Sim/Boot/EndToEnd.lean`](Vsa/Sim/Boot/EndToEnd.lean)).
-- Assumptions on the program: `capacity` (heap fits the arena), `stack_admissible` (recursion fits the stack).
-- Iris layer: [`VsaIris/`](VsaIris). Kernel-checked corollaries: [`Vsa/Sim/Boot/Audit.lean`](Vsa/Sim/Boot/Audit.lean).
+`BigStep` is in `Vsa/While/Semantics.lean`; `Halts` and `Diverges` are in
+`Vsa/Machine.lean`. Every theorem below depends only on Lean's standard axioms
+(`propext`, `Classical.choice`, `Quot.sound`).
 
-The repository contains only the modules the theorem and the boot witnesses
-depend on.
+This repository holds only what these theorems need. It has no comments, no
+scripts and no generators; generated Lean files are committed as they were
+produced.
+
+## What is proved
+
+| Theorem | File | Statement |
+| --- | --- | --- |
+| `endToEnd_refinement`, `endToEnd_refinement_loaded` | `VsaIris/Interp/EndToEnd.lean` | the binary halts cleanly with output `out` exactly when `BigStep p out`; if it diverges, the program has no derivation |
+| `endToEnd_trichotomy` | `VsaIris/Interp/EndToEndTrichotomy.lean` | every nonzero exit is `70` (runtime error) or `1` (out of memory); the binary exits nonzero or diverges exactly when the program errs or diverges |
+| `bigStep_not_err`, `bigStep_not_diverges`, `err_not_diverges` | `Vsa/While/Exclusive.lean` | the three source behaviours are mutually exclusive |
+| `proofElf_halts` and the other `*_halts` | `Vsa/Sim/Boot/EndToEnd.lean` | the ELF, run from its traced `interp_run` entry state, prints the expected output and exits 0 |
+| `Gen.<Prog>.loaded*` | `Vsa/Sim/Boot/Gen/` | `Loaded` holds at the traced entry states of ten programs |
+| `*_halts_entry`, the runtime-error programs | `Vsa/Sim/Boot/Audit.lean` | the same results at any configuration matching the traced entry registers |
+| `preservation`, `type_soundness` | `Vsa/While/TypePreservation.lean`, `TypeProgress.lean` | a well-typed program terminates, diverges, or fails by division by zero, a failed `assert` or the call-depth cap |
+| `typeCheck_iff`, `infer_sound`, `infer_complete`, `whileTyped_iff` | `Vsa/While/TypeCheck.lean`, `TypeInfer.lean` | the type checker decides `WellTyped`; inference finds a typing exactly when one exists |
+| `wellTyped_machine`, `whileTyped_machine` | `VsaIris/Interp/TypeSafety.lean` | type safety stated for the loaded binary |
+| `adequacy_bigStep`, `adequacy_machine` | `VsaIris/WhileLogic/` | a weakest-precondition proof of a WHILE program gives a `BigStep` derivation and a clean machine halt |
+| `analyze_sound`, `progCost_sound` | `Vsa/AbsInt/` | the abstract interpreter over-approximates every run; `progCost` bounds allocation cost |
+| `whileWl_machine` | `VsaIris/AbsInt/Machine.lean` | the analysis result for `while.wl`, stated for the loaded binary |
+| `wellTyped_trichotomy`, `noAlarm_machine`, `noAlarm_terminating`, `adequacy_exact` | `VsaIris/Interp/TrichotomyCorollaries.lean` | the type system, the analyser and the program logic combined with the trichotomy |
+| `compile_correct`, `compileG_correct`, `compileChecked_correct` | `Vsa/Compiler/Correct.lean`, `CorrectG.lean`, `Checked.lean` | the WHILE-to-RV64 compilers (a subset compiler, the full compiler, and the checked compiler with no heap premise) produce code with the same refinement property |
+| `loaded_of_checked`, `endToEnd_checked` | `Vsa/Sim/CheckedBoundary.lean`, `VsaIris/Interp/EndToEndChecked.lean` | `endToEnd_refinement` with the two program assumptions replaced by checkers |
+
+## What is assumed
+
+`Loaded interpRunLayout p (fillZero c)` is the only hypothesis of
+`endToEnd_refinement`. It says that configuration `c` is at the entry of
+`interp_run` with the ELF's code and data in memory, the C runtime and
+allocator in their initial state, and the AST of `p` laid out as the C structs
+of `c/src/ast.h`. It contains two assumptions about the program:
+
+- `capacity`: the heap has room for every terminating run of `p`;
+- `stack_admissible`: the statically computed stack need of `p` fits the stack.
+
+`fillZero c` fills absent RAM bytes with zero, which is how the Sail model
+reads them.
+
+The kernel checks `Loaded` at ten traced entry states. Two links between those
+witnesses and the ELF file are not checked by the kernel: that loading the ELF
+gives the witness's initial memory, and that the traced boot is the machine's.
+The scripts that checked them, and the generator that produced the witness
+files, are not in this repository.
 
 ## Layout
 
-| File | Content |
+| Path | Content |
 | --- | --- |
-| `c/` | the C interpreter (lexer → parser → AST → evaluator), its `Makefile`, linker script and startup code, and the cross-compiled RISC-V ELF under verification |
-| `riscv-lean/` | vendored Sail-generated RISC-V models (`Lean_RV64D`, executable variant), a Lean emulator, and `lean-sail` at rems-project@0794631 patched so unmapped addresses read as zero (zero-initialised RAM) |
-| `Vsa/Elf.lean` | one Sail RV64D step (`stepOnce`) |
-| `Vsa/Machine.lean` | **the ISA as an inductive transition relation** (the graph of one architectural step), the behaviours `Halts`/`Diverges`, and determinism plus behaviour-uniqueness lemmas |
-| `Vsa/While/Ast.lean` | deep embedding of WHILE, mirroring `c/src/ast.h` |
-| `Vsa/While/Semantics.lean` | **the inductive big-step semantics**. Store-based mutable environments shared by closures, C truncating division, string coercion, `break`/`continue`/`return` statuses, `print`/`println`/`assert`. Purely relational: nothing in the theory evaluates WHILE |
-| `Vsa/While/Derive.lean` | `bigstep_derive`, a syntax-directed tactic that *constructs* derivation trees of the big-step relation for closed programs. Untrusted meta-code; the kernel checks the derivations |
-| `Vsa/While/Programs.lean`, `Vsa/While/Validation.lean` | the test scripts as deep embeddings, plus kernel-checked theorems `BigStep prog "<binary's output>"` that validate the semantics against I/O examples obtained by running the binary |
-| `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
-| `Vsa/Refinement.lean` | **the ∀-program refinement theorem**, WHILE's instance of the language-parametric layer `Vsa/Lang/` (`VsaIris/Lang/` for the Iris route) |
-| `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
-| `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
+| `c/` | the C interpreter, its Makefile, linker script and `crt0`, the test programs `c/tests/*.wl`, and the verified ELF |
+| `riscv-lean/` | vendored Sail-generated RISC-V models, a Lean emulator and `lean-sail` |
+| `Vsa/Machine.lean` | the ISA as a transition relation; `Halts`, `Diverges` |
+| `Vsa/While/` | the WHILE AST, the big-step semantics, error and cost semantics, the type system, checker, inference and parser |
+| `Vsa/MemRepr.lean`, `Vsa/Refinement.lean` | the memory representation of ASTs; the refinement theorem from a forward simulation |
+| `Vsa/Sim/` | decoding, runtime representations, function contracts and the simulation; `Vsa/Sim/Boot/` holds the boot witnesses |
+| `Vsa/AbsInt/` | the abstract interpreter, its domains and the allocation-cost analysis |
+| `Vsa/Compiler/` | the verified compilers |
+| `VsaIris/` | the Iris-based machine logic and the interpreter proof; `VsaIris/WhileLogic/` is the source-level program logic |
+| `Vsa.lean`, `VsaIris.lean`, `VsaBoot.lean` | library roots importing the modules above |
+| `VsaRun.lean`, `WhileC.lean`, `WhileCheck.lean` | the executables |
 
-## The refinement statement
+## Proof structure
 
-```lean
-theorem refinement {L : Layout} (H : InterpSim L) :
-    ∀ p c, Loaded L p c →
-      (∀ out, BigStep p out ↔ Machine.Halts c out 0) ∧
-      (Machine.Diverges c → ¬ ∃ out, BigStep p out)
-```
+The machine-code proof is organised around a few abstractions, each proved once:
 
-`Loaded L p c` says configuration `c` sits at the interpreter phase with `p`'s
-memory representation, via the inductive `ProgramRepr`. `InterpSim` is the
-forward-simulation obligation. Every derivable behaviour is realised by the
-machine, and underivable programs never halt cleanly.
+| Abstraction | Where | Replaces |
+| --- | --- | --- |
+| `#simp_nf`, `decodeW` | `Vsa/Meta/SimpNF.lean`, `Vsa/Sim/DecodeNF.lean` | per-word decode lemmas: the Sail decoder is simplified once, and each decode fact is one `rfl` |
+| `TextPiece` | `Vsa/Sim/TextImage.lean` | per-address code-byte lemmas: code residency is a range of the ELF image |
+| `StepRules`, `StepGen.driverLemma?` | `VsaIris/Vsa/StepRules.lean`, `StepGen.lean` | per-address step lemmas: one rule per instruction class; a step lemma is built on demand from the image |
+| `SymExec`, `sym_run` | `VsaIris/Vsa/SymExec.lean`, `VsaIris/Interp/SymInterp.lean` | stepping in interpreter machine runs: a symbolic executor proved sound once |
+| `Region`, `HeapPermit`, `Win` | `VsaIris/Vsa/` | address, frame and heap-edit reasoning in allocator and newlib paths |
+| `boot_witness` | `Vsa/Sim/Boot/` | per-program boot data: derived data is computed, and the kernel checks every value |
+| descriptor and mode arms | `VsaIris/Interp/ArmCore.lean`, `ArmEval.lean` | total/partial twins and sibling operators among the big-step rules |
+| `Vsa/Lang`, `VsaIris/Lang` | | the refinement argument, shared by any interpreter proved on this machine |
 
-The theorem is instantiated at `L := Vsa.Sim.LayoutInstance.interpRunLayout`
-(`Vsa/Sim/LayoutInstance.lean`), whose `Loaded` is
-`∃ a n, ProgramRepr c.σ.mem a n p ∧ InterpRunReady c a n`. It is the
-theorem's whole hypothesis, so read it as the contract with the loaded
-binary. `InterpRunReadyFacts` requires, at `interp_run`'s entry:
-
-- **Machine state.** `pc = 0x800043ec`; the ABI arguments `a0 = &interp`
-  (`0x87fffe10`), `a1 = stmts`, `a2 = count`, `a3 = 0` (script mode);
-  `ra`, `sp = 0x87fffd00`, `gp`, `s0 = &_impure_ptr`; every general register
-  present; `GoodState` (machine mode, `misa`/`mstatus` at their reset
-  values, traps undelegated, HTIF idle); `main`'s saved return address.
-- **Image and runtime data.** The exact `.text` and `.rodata` bytes of
-  `c/while-riscv-htif.elf` (`FixedTextLoaded`, `FixedRodataLoaded`), the
-  static pins `snprintf`/`vfprintf` read, newlib's stdout `FILE`
-  (`ConsoleStream`: unbuffered, one-byte buffer, `__swrite`), the idle
-  `stdin`/`stderr` `FILE`s and empty `atexit` list (`ExitRuntimeData`),
-  `_impure_data._stderr`, and no console output yet (`OutRepr`).
-- **The interpreter object.** `Interp.globals` and `call_depth = 0`, the
-  object and its `jmp_buf` inside RAM above the HTIF words, and 8 MiB of
-  stack below `sp` with every stack byte present in the memory map.
-- **The AST.** `stmts` is an 8-aligned array of `count` `Stmt*` in RAM,
-  `ProgramRepr` holds for `p`, and the AST's bytes are immutable shared
-  bytes: outside the writable ELF sections, the stack, the global frame's
-  header and arrays, and every allocation the interpreter may write
-  (`InitialOwned`). Strings are ASCII (`CStr` requires bytes below 128).
-- **The initial store.** The global frame holds exactly `print`, `println`,
-  `assert` (`StoreRepr initSt.store` with their entry addresses), with
-  capacity 8, in three whole in-use dlmalloc chunks (`BootFrameChunks`).
-- **The allocator.** dlmalloc's heap `[_end, __heap_end)` in its canonical
-  shape (`DlHeap.HeapAt`: a chunk walk from `_end` to the top chunk, free
-  chunks on exactly one well-formed bin, page-aligned break, 32-bit
-  `binblocks`, the top chunk at least 16 bytes below the break).
-- **Two program-dependent assumptions**, both universally quantified over
-  the program the memory represents:
-  - `InitialAllocatorAt.capacity` — for every terminating derivation of
-    `p` with modeled allocation cost `n` (`Vsa/While/Cost.lean`),
-    `2 * n + 8256 ≤ __heap_end − top`: the heap has room for the run. A
-    terminating program that allocates more than the free heap is *not*
-    `Loaded`; the binary prints `out of memory` and exits 1, and the
-    theorem says nothing about it.
-  - `stack_admissible` — `ProgramStackFits p`: the statically computed
-    stack need of `p` (nesting depth of its statements and expressions,
-    the 1000-deep call budget, the evaluator frame, the helpers'
-    headroom, `interp_run`'s frame) fits below `sp`, and every function
-    body fits one call level.
-
-The theorem is unconditional, and it is instantiated at the binary's real
-`interp_run` entry states.
-
-**The witnesses and the two native links.** `Loaded` is proved by the kernel
-at ten real entry states. Each `Vsa/Sim/Boot/Gen/<Prog>.lean` holds the trace
-(script, packed store log, registers, step count) and the program, then one
-`boot_witness` line (`Vsa/Sim/Boot/WitnessCmd.lean`): it derives the byte runs,
-heap layout and ownership natively (`Derive.lean`) and has the kernel check
-every field of `Witness.Ok` (`Witness.lean`, checks in `FastCheck.lean`). The memory is the ELF loader's image plus the
-emulator's traced store log, the registers are the traced `x1 … x31`, and
-`Gen.<Prog>.loadedEntry_fill` states the witness at ANY configuration whose
-registers satisfy `EntryRegs` (`GoodState`, `PC`, `htif_payload_writes`, the
-traced GPRs; `Vsa/Sim/Boot/Entry.lean`), whose console is empty and whose
-memory the entry view is a partial view of. `Vsa/Sim/Boot/Audit.lean` derives
-the hypothesis-free capstones from them (`ReviewV2.proofElf_halts_entry`:
-that state prints `55 2500 36` and exits 0; `errDivzero_never_clean_entry`).
-Two facts connect the generated data to the binary and are checked
-**natively, not by the kernel** (the kernel never parses the 138 KB ELF and
-never runs the boot): (1) `ElfLoads` — the ELFSage parse of
-`c/while-riscv-htif.elf` loads exactly the generated image
-(`initializeMemory_eq` takes it as a premise); (2) the traced store log is the
-machine's — the emulator's `--trace-all` store operands, whose fold the kernel
-checks (`LogOk`). This repository does not contain the native replay that
-re-checks both links. These two links, and the emulator itself, are the trust
-base beside the Lean kernel and the Sail model.
-
-```lean
-theorem Vsa.Sim.EndToEnd.endToEnd_refinement :
-    ∀ p c, Loaded interpRunLayout p (fillZero c) →
-      (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out)
-```
-
-The final theorem `Vsa.Sim.EndToEnd.endToEnd_refinement`
-(`VsaIris/Interp/EndToEnd.lean`) is `refinement` at the concrete layout, stated
-at the fill-with-zero of the configuration: `Loaded interpRunLayout p
-(Vsa.Densify.fillZero c)`, where `fillZero c` inserts every absent RAM byte as
-`some 0`. The Sail model reads an absent byte as `0` and never inspects
-presence (`Vsa/Densify/`: `stepOnce_resp`, hence `halts_fillZero`,
-`diverges_fillZero`), so the conclusion is about the real configuration `c`
-while `Loaded`'s presence fields (the 8 MiB stack, adequacy's live set) are
-checked on the dense view, which is what the loader's sparse memory never
-satisfies literally. `endToEnd_refinement_loaded` is the same
-theorem at a literally `Loaded` configuration.
-
-```lean
-abbrev InterpSim (L : Layout) : Prop := Vsa.Lang.OutSim BigStep (Loaded L)
-
-structure Vsa.Lang.OutSim (S : P → String → Prop) (Loaded : P → Config → Prop) : Prop where
-  term_sim  : ∀ p c out, Loaded p c → S p out → Halts c out 0
-  stuck_sim : ∀ p c, Loaded p c → (¬ ∃ out, S p out) →
-              Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0
-```
-
-Given forward simulation, `Vsa/Lang/Basic.lean` *derives* the backward direction
-(whatever the machine does was specified) and divergence preservation from
-machine determinism by classical case analysis. This is the composition
-CompCert uses to get behavioural equivalence out of a forward simulation over
-a deterministic target. `InterpSim` stays an explicit hypothesis.
-
-The simulation lemmas in `Vsa/Sim/` relate compiled
-`eval_expr`/`exec_stmt`/`interp_run` code to the big-step rules by induction on
-derivations.
-
-## Porting
-
-[`docs/PORTING.md`](docs/PORTING.md) explains how another interpreter on this machine layer instantiates the toolkit.
+`abstractions/ROUND-*.md` records how each layer was chosen and measured.
+[`docs/PORTING.md`](docs/PORTING.md) explains how another interpreter on this machine layer uses them.
 
 ## Building
 
@@ -173,7 +102,25 @@ derivations.
 lake build
 ```
 
-The default target `VsaBoot` builds the theorem, the boot witnesses and the
-audit in `Vsa/Sim/Boot/Audit.lean`, which prints the axioms of each result.
-Dependencies in `riscv-lean/` are path dependencies. Use the Lean version in
-`lean-toolchain`.
+This uses the Lean version in `lean-toolchain` and builds the three libraries
+and the three executables. It is a long build.
+
+```sh
+.lake/build/bin/vsa_run                          # run the ELF on the executable Sail model
+.lake/build/bin/whilecheck c/tests/functions.wl  # type-check a WHILE program
+.lake/build/bin/whilecheck --selftest c/tests    # compare the parser with Vsa/While/Programs.lean
+.lake/build/bin/whilec prog.wl -o prog.elf       # compile a WHILE program to an RV64 ELF
+.lake/build/bin/whilec prog.wl --run             # compile, then run on the Sail model
+```
+
+The parsers and the ELF writer of `whilec` and `whilecheck` are not verified.
+
+To rebuild the interpreter ELF (needs a RISC-V cross compiler with newlib):
+
+```sh
+make -C c riscv-htif                             # embeds c/tests/while.wl
+make -C c riscv-htif HTIF_SCRIPT=tests/for.wl
+```
+
+The proofs are about the committed `c/while-riscv-htif.elf`; a rebuild with a
+different toolchain can produce different bytes.

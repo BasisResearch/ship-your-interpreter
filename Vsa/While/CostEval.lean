@@ -641,6 +641,12 @@ theorem execSeqCost_eq_of_eval {f : Nat} {st d env} {p : List Stmt} {r0 : SOut}
   rw [e1] at e0
   exact Res.done.inj e0
 
+theorem execSeqCost_n_eq_of_eval {f : Nat} {st d env} {p : List Stmt} {r0 : SOut}
+    {st' : St} {status : Status} {n : Nat}
+    (h : execSeqEval f st d env p = .done r0) (hd : ExecSeqCost st d env p st' status n) :
+    n = r0.n := by
+  rw [← execSeqCost_eq_of_eval h hd]
+
 theorem execSeqCost_none_of_stuck {f : Nat} {st d env} {p : List Stmt}
     (h : execSeqEval f st d env p = .stuck) (st' : St) (status : Status) (n : Nat) :
     ¬ ExecSeqCost st d env p st' status n := by
@@ -651,5 +657,27 @@ theorem execSeqCost_none_of_stuck {f : Nat} {st d env} {p : List Stmt}
   unfold execSeqEval at e0
   rw [e1] at e0
   cases e0
+
+def Res.normalCost? : Res SOut → Option Nat
+  | .done r => if r.status = .normal then some r.n else none
+  | _ => none
+
+theorem Res.eq_done_of_normalCost {r : Res SOut} {n0 : Nat} (h : r.normalCost? = some n0) :
+    ∃ st0, r = .done ⟨st0, .normal, n0⟩ := by
+  cases r with
+  | done r =>
+    obtain ⟨st0, status, n⟩ := r
+    simp only [Res.normalCost?] at h
+    by_cases hs : status = .normal
+    · subst hs; simp only [↓reduceIte, Option.some.injEq] at h; subst h; exact ⟨st0, rfl⟩
+    · simp only [hs, ↓reduceIte, reduceCtorEq] at h
+  | stuck => cases h
+  | fuel => cases h
+
+theorem execSeqCost_eq_of_normalCost {f : Nat} {st d env} {p : List Stmt} {n0 : Nat}
+    (h : (execSeqEval f st d env p).normalCost? = some n0) {st' : St} {n : Nat}
+    (hd : ExecSeqCost st d env p st' .normal n) : n = n0 := by
+  obtain ⟨st0, h0⟩ := Res.eq_done_of_normalCost h
+  exact execSeqCost_n_eq_of_eval h0 hd
 
 end Vsa.While
