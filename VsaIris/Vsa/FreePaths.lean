@@ -1,4 +1,5 @@
 import VsaIris.Vsa.FreeLarge
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
@@ -40,38 +41,21 @@ theorem free_nt {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n b
       AW C.live C.S C.Q 0x800073ac#64 R' Mt1) :
     AW C.live C.S C.Q 0x8000739c#64 R Mt := by
   have Hp := D.heap
-  have HH := Hp.heap.heap.heap
   have K := D.chunk
-  obtain ⟨hal, htop16⟩ := HH.aligned
-  obtain ⟨cs₁, cs₂, hsplit⟩ := List.append_of_mem K.mem
-  have hw := HH.walk
-  rw [hsplit] at hw
-  obtain ⟨_, hnext⟩ := walk_next_of hw
-  obtain ⟨d, cs₃, rfl, hda⟩ : ∃ d cs₃, cs₂ = d :: cs₃ ∧ d.addr = x + sz := by
-    rcases hnext with ⟨he, _⟩ | ⟨d, cs₃, h1, h2⟩
-    · exact absurd he hnt
-    · exact ⟨d, cs₃, h1, h2⟩
+  obtain ⟨cs₁, d, cs₃, hsplit, hda⟩ := Hp.heap.heap.next_chunk K.mem hnt
   have hdm : d ∈ chunks := by rw [hsplit]; simp
-  obtain ⟨hdh, hdhr, hdhs, _⟩ := walk_header HH.walk d hdm
-  rw [hda, K.next] at hdhr
+  have SX : ChunkSec Mt ((q, n) :: C.H) C.top0 brkv chunks x sz true := Hp.heap.heap.sec K.mem
+  have SD := Hp.heap.heap.sec hdm
+  sec_arith SX; sec_arith SD
+  obtain ⟨hdh, hdhr, hdhs, _⟩ := SD.hdr
+  obtain ⟨hnn, hnnr, hnnf⟩ := SD.nhdr
+  rw [hda] at hdhr hnnr
+  rw [K.next] at hdhr
   obtain rfl : nh = hdh := Option.some.inj hdhr
-  obtain ⟨hnn, hnnr, hnnf⟩ := (HH.headers hdm).2
-  rw [hda] at hnnr
-  have hdb := HH.walk.chunk_bounds d hdm
-  have hXb := HH.walk.chunk_bounds _ K.mem
-  have hbrk := HH.brk_le; have htle := HH.top_le
-  simp only at hXb
-  unfold heapStart heapEnd at *
-  have hx16 := hal _ K.mem
-  have hd16 := hal d hdm
-  simp only at hx16
-  rw [hda] at hd16 hdb
-  have hsz16 := (walk_sizes HH.walk _ K.mem).1
-  have hdsz16 := (walk_sizes HH.walk d hdm).1
-  simp only at hsz16
   have ha2 := D.a2; have ha3 := D.a3
-  have hnf := fun k hk => vsaFoot_of_cons (foot_header Hp.heap.heap (HH.end_bnd K.mem) k hk)
-  simp only at hnf
+  have hnf := fun k hk => vsaFoot_of_cons (SX.nfoot k hk)
+  have hnnF := fun k hk => vsaFoot_of_cons (SD.nfoot k hk)
+  rw [hda] at hnnF
   have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
   have hEn : (R 12 + sign_extend (m := 64) (0x008#12)).toNat = x + sz + 8 := by
     sx_norm; rw [BitVec.toNat_add, ha2]; simp; omega
@@ -82,8 +66,6 @@ theorem free_nt {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n b
   refine st_800073a0 O.live ?_
   have hEnn : (R 12 + R 13 + sign_extend (m := 64) (0x008#12)).toNat = x + sz + d.size + 8 := by
     sx_norm; rw [BitVec.toNat_add, BitVec.toNat_add, ha2, ha3, hdhs]; simp; omega
-  have hnnF := fun k hk => vsaFoot_of_cons (foot_header Hp.heap.heap (HH.end_bnd hdm) k hk)
-  rw [hda] at hnnF
   have hnnr' : read64 (writeLog Mt [(x + sz + 8, 8, R 13)]) (x + sz + d.size + 8) = some hnn := by
     rw [read64_store_miss _ _ (by omega)]; exact hnnr
   refine st_800073a4 O.live ?_ ?_ ?_
@@ -93,12 +75,7 @@ theorem free_nt {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n b
   rw [hEnn, ldv_at hnnr' _ rfl]
   refine st_800073a8 O.live ?_
   have hnnlt := Vsa.Sim.read64_lt _ _ _ hnnr
-  have hoN : x + sz + 8 + 8 ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ x + sz + 8 := by
-    refine Classical.byContradiction fun hc => ?_
-    have hk : (if x + sz + 8 ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - (x + sz + 8)) < 8 := by
-      split <;> omega
-    exact Hp.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hnf _ hk)
-  unfold mHead at hoN
+  have hoN := off_stack_of Hp.disj hnf
   have hst := Hp.starts
   unfold Starts at hst
   rw [List.map_cons, List.nodup_cons] at hst
@@ -158,14 +135,6 @@ theorem FNt.geo {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {
     fun a h1 h2 => foot_of_chunk N.heap hX N.hno h1 h2,
     foot_header N.heap.heap (.inr ⟨_, hX, rfl⟩),
     by rw [← N.daddr]; exact foot_header N.heap.heap (.inr ⟨_, hD, rfl⟩)⟩
-
-theorem off_stack_of {C : MCtx} {a : Nat}
-    (hd : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a)
-    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) : a + 8 ≤ C.s.toNat - 256 ∨ C.s.toNat ≤ a := by
-  refine Classical.byContradiction fun hc => ?_
-  have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
-    unfold mHead; split <;> omega
-  exact hd _ (by unfold mHead at *; split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
 
 theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat}
     {cs₁ cs₃ : List Chunk} {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
