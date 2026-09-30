@@ -582,7 +582,7 @@ theorem free_fwd {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mc Mv : Mem} {b
   rgn_run O.live at 0x8000745c
   rgn_ld [hfd']
   rgn_run O.live at 0x80007464
-  refine st_80007464 O.live (fun heq => ?_) (fun hne => ?_)
+  refine (step% st 0x80007464) O.live (fun heq => ?_) (fun hne => ?_)
   · have hs1 : succ = binAt 1 := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at heq
       have := congrArg BitVec.toNat heq
@@ -774,7 +774,7 @@ theorem free_b2 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {b
     have hrem := HH.remainder
     rw [P.bin] at hrem; simp at hrem
     exact ⟨List.length_eq_zero_iff.1 (by omega), List.length_eq_zero_iff.1 (by omega)⟩
-  refine st_800073c8 O.live (fun heq => ?_) (fun hne => ?_)
+  refine (step% st 0x800073c8) O.live (fun heq => ?_) (fun hne => ?_)
   · have hs1 : succP = binAt 1 := by
       have e1 := B.a1; have e0 := B.a0
       rw [heq] at e1; rw [e1] at e0; exact e0
@@ -1374,7 +1374,7 @@ theorem free_b2lr {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
   have oP := rP.offStack B.disj (by omega)
   have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo; unfold mHead at oP
   have ha4 := B.a4; have ha5 := B.a5; have ha2 := B.a2; have ha3 := B.a3
-  refine st_80007508 O.live (fun hnz => ?_) (fun hz => ?_)
+  refine (step% st 0x80007508) O.live (fun hnz => ?_) (fun hz => ?_)
   · have hdin : d.inuse = true := by
       have hh : hnn % 2 ≠ 0 := fun h0 => hnz (BitVec.eq_of_toNat_eq (by rw [B.a6, h0]; rfl))
       rw [← B.nnf]; unfold prevInuse; rw [show hnn % 2 = 1 by omega]; rfl

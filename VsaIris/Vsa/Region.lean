@@ -515,7 +515,7 @@ elab "rgn_side" : tactic => do
 
 macro_rules | `(tactic| sx_side) => `(tactic| rgn_side)
 
-/-- Step the `st_<pc>` table from `cur`, closing each access obligation with
+/-- Step the `st` family from `cur`, closing each access obligation with
 `rgnSide` and leaving the context untouched; after each step the register reads in
 the goal are resolved, so values stay terms over the entry registers. Stops at a listed pc, at a branch,
 or when no step lemma applies; obligations no region closes are returned as
