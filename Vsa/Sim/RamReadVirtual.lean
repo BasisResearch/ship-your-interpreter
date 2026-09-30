@@ -64,23 +64,11 @@ theorem translate_and_read_value_ram_scalar {σ : Vsa.Machine.MState} (hg : Good
     (hhtif : a.toNat + 2 ^ k ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat) :
     (translate_and_read_value (virtaddr.Virtaddr a) (2 ^ k)
       (MemoryAccessType.Load mem_payload.Data) false false false).run σ =
-      .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a), bytesT σ.mem a.toNat (2 ^ k))) σ := by
-  have hc := checked_mem_read_ram_scalar hg a k hk hlo hhi hhtif
-  have hmprv : _get_Mstatus_MPRV initMstatus = 0#1 := by decide
-  have he : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 := by omega
-  rcases he with rfl | rfl | rfl | rfl
-  · exact translate_and_read_value_data_one_of_mr σ a _ initMstatus
-      hg.cur_privilege hg.mstatus hmprv
-      (mem_read_data_one_of_cmr σ a _ initMstatus hg.cur_privilege hg.mstatus hmprv hc)
-  · exact translate_and_read_value_data_two_of_mr σ a _ initMstatus
-      hg.cur_privilege hg.mstatus hmprv
-      (mem_read_data_two_of_cmr σ a _ initMstatus hg.cur_privilege hg.mstatus hmprv hc)
-  · exact translate_and_read_value_data_four_of_mr σ a _ initMstatus
-      hg.cur_privilege hg.mstatus hmprv
-      (mem_read_data_four_of_cmr σ a _ initMstatus hg.cur_privilege hg.mstatus hmprv hc)
-  · exact translate_and_read_value_data_eight_of_mr σ a _ initMstatus
-      hg.cur_privilege hg.mstatus hmprv
-      (mem_read_data_eight_of_cmr σ a _ initMstatus hg.cur_privilege hg.mstatus hmprv hc)
+      .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a), bytesT σ.mem a.toNat (2 ^ k))) σ :=
+  translate_and_read_value_data_w_of_mr σ a (2 ^ k) _ initMstatus
+    hg.cur_privilege hg.mstatus (by decide)
+    (mem_read_data_w_of_cmr σ a (2 ^ k) _ initMstatus hg.cur_privilege hg.mstatus (by decide)
+      (checked_mem_read_ram_scalar hg a k hk hlo hhi hhtif))
 
 theorem vmem_read_addr_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (a : BitVec 64) (k : Nat) (hk : k ≤ 3)
