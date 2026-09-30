@@ -286,6 +286,24 @@ syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident (" at " num)? " b
       forallTelescope (← inferType hk) fun ys T => do
         ixAddPiece declName (xs.extract 0 nv ++ ys) T stx[6] true (xs.extract nv xs.size)
 
+/-- `#ix_branch name (h : H) … from prev by tac`: a piece that starts at `prev`'s leftover state
+under additional hypotheses. Two runs that agree up to `prev` share the pieces up to `prev`
+and each continue with its own `#ix_branch`. -/
+syntax (name := ixBranch) "#ix_branch " ident bracketedBinder+ " from " ident " by " tacticSeq : command
+
+@[command_elab ixBranch] def elabIxBranch : CommandElab := fun stx => do
+  let declName := (← getCurrNamespace) ++ stx[1].getId
+  let prev ← liftCoreM <| realizeGlobalConstNoOverload stx[4]
+  liftTermElabM do
+    let info ← getConstInfo prev
+    forallTelescope info.type fun xs _ => do
+      let nv ← pieceVars xs
+      let some hk := xs[nv]? | throwError "#ix_branch: {prev} has no leftover"
+      forallTelescope (← inferType hk) fun ys T => do
+        Term.elabBinders stx[2].getArgs fun zs => do
+          Term.synthesizeSyntheticMVarsNoPostponing
+          ixAddPiece declName (xs.extract 0 nv ++ ys ++ zs) T stx[6] true (xs.extract nv xs.size)
+
 syntax (name := ixChain) "#ix_chain " ident " := " "[" ident,+ "]" : command
 
 @[command_elab ixChain] def elabIxChain : CommandElab := fun stx => do

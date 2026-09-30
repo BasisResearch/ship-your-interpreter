@@ -1,8 +1,9 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Swrite
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
@@ -44,7 +45,7 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       BitVec.extractLsb 31 0 B) = BitVec.ofNat 64 bs.length)
  :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000eb70#64 R Mt
-  by nx_run hlive using [h10, h11, h2, h1, h8, h9, h18, h19, hF, hBl, hP, hwr, hck, BitVec.reduceAnd, BitVec.reduceOr,
+  by nx_win sp 128 0; nx_run hlive using [h10, h11, h2, h1, h8, h9, h18, h19, hF, hBl, hP, hwr, hck, BitVec.reduceAnd, BitVec.reduceOr,
     BitVec.add_assoc, hsw, hti, BitVec.toInt_zero] at 2147544308
 
 #ix_piece sflush_B from sflush_A by
@@ -59,7 +60,7 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     BitVec.setWidth_eq]; done)
   all_goals try nx_addr
   · intro i hi; have := hbd i hi; nx_addr
-  · repeat' (first | exact hsrc i hi | refine ByteSrc.store ?_ _ ?_)
+  · repeat' (first | refine ByteSrc.store ?_ _ ?_ | exact hsrc i hi)
     all_goals (have := hbd i hi; nx_addr)
   · nx_mem; exact hsfl
   · nx_mem; exact hsfd
@@ -96,7 +97,7 @@ theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     (hk : ∀ R', RetOK R R' 0#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
       (t ++ putcs bs) ra R' (sflushMt Mt sp f B ra s0 s1 s2 s3)) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000eb70#64 R Mt := by
-  refine sflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h8 h9 h18 h19 hfS hfa hn hn2 hB1 hb2 h10 h11 h2
+  nx_win sp 128 0; refine sflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h8 h9 h18 h19 hfS hfa hn hn2 hB1 hb2 h10 h11 h2
     hF hF8 hF3 hBl hB0 hP hwr hck hsfl hsfd hb3 hbd hsrc (toInt_ofNat_small (by omega))
     (subw_add_ofNat hn2) ?_
   intros

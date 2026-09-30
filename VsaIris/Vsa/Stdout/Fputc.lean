@@ -1,8 +1,9 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Swbuf
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
@@ -17,7 +18,7 @@ theorem consoleFlagsV_and512 (o : Bool) : consoleFlagsV o &&& 512#64 = 0#64 := b
     (h1 : R 1 = ra) (h10 : R 10 = BitVec.zeroExtend 64 c) (h11 : R 11 = 0x8001bb20#64) (h2 : R 2 = s)
     {o : Bool} (hc : ConsoleMt (consoleFlagsV o) Mt) :
     SWPO live (stdioText ++ dataOf impDt (accAddrs 0x8001b970 8)) iRegs (outS s need) Q t 0x800062e0#64 R Mt
-  by nx_run hlive using [h1, h10, h11, h2, consoleFlagsV_and512, BitVec.add_assoc] at 2147542692
+  by nx_win s 512 0; nx_run hlive using [h1, h10, h11, h2, consoleFlagsV_and512, BitVec.add_assoc] at 2147542692
 
 #ix_piece fputc_A2 from fputc_A by
   nx_run hlive using [h1, h10, h11, h2, consoleFlagsV_and512, BitVec.add_assoc] at 2147545288

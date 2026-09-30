@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.SConv
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -31,7 +32,7 @@ abbrev vfpSaved : List Nat := [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R'
         (writeLog Mt [((sp + 232#64).toNat, 4, 0#64)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000acbc#64 R Mt by
-  have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk => sp_lit (by omega)
+  nx_win sp 1024 592; have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk => sp_lit (by omega)
   have h1 : ldv .ld Mt (sp + 584#64).toNat = C 1 := by rw [eo 584 (by omega)]; exact hS.ra
   have h8 : ldv .ld Mt (sp + 576#64).toNat = C 8 := by rw [eo 576 (by omega)]; exact hS.s0
   have h20' : ldv .ld Mt (sp + 544#64).toNat = C 20 := by rw [eo 544 (by omega)]; exact hS.s4
@@ -90,7 +91,7 @@ theorem vfp_end0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R'
         (writeLog Mt [((sp + 232#64).toNat, 4, 0#64)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000aca8#64 R Mt := by
-  have h2 := hP.spR; have hre := hP.reent; have hfi := hP.file; have hres := hP.resid
+  nx_win sp 1024 592; have h2 := hP.spR; have hre := hP.reent; have hfi := hP.file; have hres := hP.resid
   rw [h0] at hres
   nx_run hlive using [h2, hre, hfi, hres] at 2147527868
   refine vfp_tail hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp ?_ ?_ hE hP.count hS hra hk0
@@ -118,7 +119,7 @@ theorem vfp_end0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (C 1) R'
         (writeLog M' [((sp + 232#64).toNat, 4, 0#64)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000aca8#64 R Mt by
-  have h2 := hP.spR; have hre := hP.reent; have hfi := hP.file; have hres := hP.resid
+  nx_win sp 1024 592; have h2 := hP.spR; have hre := hP.reent; have hfi := hP.file; have hres := hP.resid
   have hz1 : (BitVec.ofNat 64 (piecesLen iovs) = 0#64) = False := eq_false fun h => by
     have := congrArg BitVec.toNat h; simp at this; omega
   have hz2 : (BitVec.ofNat 64 (piecesLen iovs) ≠ 0#64) = True := eq_true fun h => by
@@ -162,7 +163,7 @@ theorem vfp_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (C 1) R'
         (writeLog M' [((sp + 232#64).toNat, 4, 0#64)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000aca8#64 R Mt := by
-  by_cases h0 : piecesLen iovs = 0
+  nx_win sp 1024 592; by_cases h0 : piecesLen iovs = 0
   · exact vfp_end0 hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp hP hE hS hra h0 (hk0 h0)
   · exact vfp_end1 hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp hP hE hS hra hpl h0 hSh hPR hk1
 

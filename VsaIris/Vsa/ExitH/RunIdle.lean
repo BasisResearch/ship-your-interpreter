@@ -3,7 +3,7 @@ import VsaIris.Vsa.ExitH.RunHead
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH VsaIris.Sym.Win
 
 /-! The exit path from the third stream on, stderr never written (flags `0x12`). -/
 

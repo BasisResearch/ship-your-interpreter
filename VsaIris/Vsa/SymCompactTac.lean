@@ -1,4 +1,4 @@
-import VsaIris.Vsa.Stdout.Tac
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.SymCompact
 
 namespace VsaIris.Sym
@@ -19,11 +19,33 @@ macro_rules
 
 macro_rules | `(tactic| nx_addr) => `(tactic| nx_fdisch)
 
+namespace Win
+
+/-- Under `open scoped Win`, the forget discharger tries the window keys first. -/
+scoped macro_rules | `(tactic| nx_fdisch) => `(tactic| win_key)
+
+end Win
+
 syntax "nx_forget " term:max term:max : tactic
 macro_rules
   | `(tactic| nx_forget $lo $n) =>
     `(tactic| (apply swp_forget_region $lo $n <;> intro _ <;>
-      (try simp (disch := nx_fdisch) only [fillR_writeLog_in, fillR_writeLog_out])))
+      (try simp (disch := nx_fdisch) only [fillR_writeLog_out, fillR_writeLog_in]) <;>
+      (try simp (disch := nx_fdisch) only [fillR_fillR_ge, fillR_fillR_le])))
+
+open Lean Elab Tactic Meta in
+/-- `nx_forget_sp lo`: forget the dead stack `[lo, sp)` below the current stack pointer. -/
+elab "nx_forget_sp " lo:term:max : tactic => do
+  let g ← getMainGoal
+  let ty ← g.withContext (do whnfR (← instantiateMVars (← g.getType)))
+  unless ty.getAppFn.isConstOf ``SWP do throwError "nx_forget_sp: not an SWP goal"
+  let R := ty.getAppArgs[6]!
+  let (base, ups) ← g.withContext (updList R #[])
+  let spv := match ups.find? (·.1 == 2) with
+    | some (_, v) => v
+    | none => mkApp base (mkNatLit 2)
+  let spStx ← g.withContext (Term.exprToSyntax spv)
+  evalTactic (← `(tactic| nx_forget $lo (($spStx).toNat - $lo)))
 
 syntax "nx_forget_reg " num+ : tactic
 macro_rules
@@ -32,47 +54,6 @@ macro_rules
     for k in ks do
       t ← `(tactic| ($t; apply swp_forget_reg $k; intro _))
     return t
-
-section CompactR
-
-open Lean Elab Tactic Meta
-
-partial def updChain (e : Expr) (seen : List Nat) (acc : Array (Expr × Expr)) :
-    MetaM (Expr × Array (Expr × Expr)) := do
-  let e := e.consumeMData
-  if e.isAppOfArity ``upd 3 then
-    let args := e.getAppArgs
-    let k := args[1]!
-    let kn? ← match k.nat? with
-      | some n => pure (some n)
-      | none => (evalNat k).run
-    let some kn := kn? | return (e, acc)
-    if seen.contains kn then updChain args[0]! seen acc
-    else updChain args[0]! (kn :: seen) (acc.push (k, args[2]!))
-  else return (e, acc)
-
-macro "nx_regEq" : tactic => `(tactic| (
-  intro r hr _
-  simp only [iRegs, List.mem_cons, List.not_mem_nil, or_false] at hr
-  rcases hr with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h |
-    h | h | h | h | h | h | h | h | h <;> subst h <;>
-    simp only [upd, Nat.reduceEqDiff, ite_true, ite_false, reduceIte]))
-
-elab "nx_compactR" : tactic => do
-  let g ← getMainGoal
-  let ty ← g.withContext (do whnfR (← instantiateMVars (← g.getType)))
-  unless ty.getAppFn.isConstOf ``SWP do throwError "nx_compactR: not an SWP goal"
-  let args := ty.getAppArgs
-  let R := args[6]!
-  let (base, ups) ← g.withContext (updChain R [] #[])
-  let mut R' := base
-  for (k, v) in ups.reverse do
-    R' := mkAppN (mkConst ``upd) #[R', k, v]
-  let R'stx ← g.withContext (Term.exprToSyntax R')
-  evalTactic (← `(tactic| refine swp_congr (R' := $R'stx) ?_ ?_))
-  evalTactic (← `(tactic| nx_regEq))
-
-end CompactR
 
 macro_rules
   | `(tactic| nx_mem) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,

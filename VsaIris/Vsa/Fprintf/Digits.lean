@@ -1,3 +1,4 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Scan
 import VsaIris.Vsa.Fprintf.Arith
 import Vsa.Sim.SnprintfSpec
@@ -5,7 +6,7 @@ import Vsa.Sim.SnprintfSpec
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio Vsa.While
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -83,7 +84,7 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
         (∀ i (h : i < (digBytes n).length), imgM Mt' (D - (digBytes n).length + i) = (digBytes n)[i]) →
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000cab8#64 R' Mt') →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000ca80#64 R Mt := by
-  intro n
+  nx_win sp 1024 592; intro n
   induction n using Nat.strongRecOn with
   | ind n ih =>
   intro D R Mt hn hD1 hD2 h2 h20 h22 h27 hk

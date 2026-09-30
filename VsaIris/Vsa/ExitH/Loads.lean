@@ -1,4 +1,5 @@
 import VsaIris.Vsa.ExitH.Facts
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Console
 import VsaIris.Vsa.StdioErr
 
@@ -6,16 +7,6 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
-
-theorem stdioFoot_rng (a n : Nat)
-    (h : (decide (0x8001b520 ≤ a ∧ a + n ≤ 0x8001b538) || decide (0x8001b53c ≤ a ∧ a + n ≤ 0x8001b960) ||
-      decide (0x8001b978 ≤ a ∧ a + n ≤ 0x8001b990) || decide (0x8001b9b0 ≤ a ∧ a + n ≤ 0x8001ba08) ||
-      decide (0x8001ba0c ≤ a ∧ a + n ≤ 0x8001ba18) || decide (0x8001ba68 ≤ a ∧ a + n ≤ 0x8001c168)) = true) :
-    ∀ i, i < n → stdioFoot (a + i) ∧ ¬ impureW (a + i) := by
-  intro i hi
-  simp only [Bool.or_eq_true, decide_eq_true_eq] at h
-  unfold stdioFoot InRange impureW
-  omega
 
 structure CloseMt (fl : BitVec 64) (Mt : Mem) : Prop where
   atexit : ldv .ld Mt 0x8001b9f8 = 0x0#64

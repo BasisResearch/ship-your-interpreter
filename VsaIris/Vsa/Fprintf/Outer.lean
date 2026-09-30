@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Sbprintf
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -75,7 +76,7 @@ theorem swp_flagsGen {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs :
       Frame M' Mt (OuterReg sp.toNat) → ldv .lh M' 0x8001bb30 = 0x200a#64 →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt by
-  have hsp : (sp + 592#64).toNat = sp.toNat + 592 := sp_lit (by omega)
+  nx_win sp 3312 592; have hsp : (sp + 592#64).toNat = sp.toNat + 592 := sp_lit (by omega)
   have hsp' : R 2 - 592#64 = sp := by rw [h2, BitVec.add_sub_cancel]
   refine vfpEntry_run hlive t Mt R s need (by rw [h2, hsp]; omega) (by rw [h2, hsp]; omega) hs3 hs4
     (by rw [h2, hsp]; omega) (R 1) _ _ _ _ rfl h10 h11 h12 h13 hdec hdA hdv fun R1 Mt1 E => ?_

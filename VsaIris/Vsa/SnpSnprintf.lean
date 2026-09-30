@@ -3,6 +3,7 @@ import VsaIris.Vsa.SnpSvfLoop
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
+open scoped VsaIris.Sym.Win
 
 def SvfLoopRun (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
@@ -33,6 +34,7 @@ theorem snp_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
       SnpW live Dt DA (snpS s dst n) Q ra R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80005cbc#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have hn := SG.n_hi
@@ -105,6 +107,7 @@ theorem snp_pro {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     (hk : ∀ R' Mt', SnpAtSvf s dst n R Mt R' Mt' → SnpW live Dt DA (snpS s dst n) Q 0x80007654#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have hn := SG.n_hi
@@ -161,6 +164,7 @@ theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
       SnpOut Mt Mt' s dst n total → SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80005c44#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   refine snp_pro hlive R Mt SG h2 h10 h11 hIm fun R1 Mt1 SA => ?_
   have hdp1 : ldv .ld Mt1 0x8001b898 = 0x80019770#64 :=

@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.InnerLld
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -56,7 +57,7 @@ theorem vfpInnerS (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
       R' 10 = BitVec.ofNat 64 (lit.length + bs.length + 1) → (∀ x ∈ vfpSaved, R' x = R x) → SbFile M' f pend' → LocMb M' → Frame M' Mt (InnerReg f.toNat sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
-  refine vfp_begin hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa h2 h10 h11 h12 hdec hdA hdv hF fun R3 Mt3 B => ?_
+  nx_win sp 1024 592; refine vfp_begin hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa h2 h10 h11 h12 hdec hdA hdv hF fun R3 Mt3 B => ?_
   have hsp6 : sp.toNat + 600 < 2 ^ 64 := by omega
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk => sp_lit (by omega)
   have hloc3 : LocMb Mt3 := hL.frame B.frame (fun a h1 h2 h => by omega) (fun h => by omega)

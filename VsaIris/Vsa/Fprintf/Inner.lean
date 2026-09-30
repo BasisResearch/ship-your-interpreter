@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.End
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -19,7 +20,7 @@ theorem vfp_fileSb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Me
     (hk : ∀ R' : Nat → BitVec 64, (∀ x ∈ [2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27], R' x = R x) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a944#64 R' Mt) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a8d0#64 R Mt := by
-  have hB0 : f + 184#64 ≠ 0#64 := fun h => by
+  nx_win sp 1024 592; have hB0 : f + 184#64 ≠ 0#64 := fun h => by
     have := congrArg BitVec.toNat h; rw [toNat_add_lit (by omega)] at this; simp at this
   have hB0' : (f + 184#64 = 0#64) = False := eq_false hB0
   nf_go 3 [14] hlive using [h2, h8, h20, hF.flags, hF.flagsU, hF.flags2, hF.base, hF.sinit, hB0', BitVec.add_assoc]

@@ -1,3 +1,4 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stderr.SprintErr
 import VsaIris.Vsa.Fprintf.Print
 import VsaIris.Vsa.Fprintf.End
@@ -5,7 +6,7 @@ import VsaIris.Vsa.Fprintf.End
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 #ix_piece sprintErr0_01 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -21,7 +22,7 @@ open scoped VsaIris.Sym.Stdout
       (outS s need) Q t ra R' Mt') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000e8cc#64 R Mt by
-  nx_run hlive using [h1, h2, h12, hres, BitVec.add_assoc, BitVec.reduceAdd]
+  nx_win sp 256 0; nx_run hlive using [h1, h2, h12, hres, BitVec.add_assoc, BitVec.reduceAdd]
   refine hfin _ _ (retOK_of ?_ ?_) ⟨fun a ha1 ha2 ha3 ha4 => ?_, ?_, ?_, ?_, ?_⟩
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · ret_keep
@@ -56,7 +57,7 @@ theorem sprintErr_hook {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       (outS s need) Q (t ++ putcs out) ra R' M') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000e8cc#64 R Mt := by
-  by_cases hb : bs.length = 0
+  nx_win sp 256 592; by_cases hb : bs.length = 0
   · have e : bs = [] := List.eq_nil_of_length_eq_zero hb
     subst e
     refine sprintErr0_run hlive t Mt R s need _ sp hs1 hs2 hs3 hs4 hal hra h1 h2 h12

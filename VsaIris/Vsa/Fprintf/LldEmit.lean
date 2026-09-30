@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Print
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -48,7 +49,7 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
       (∀ x ∈ [24], R' x = R x) → Frame Mt' Mt (StageReg sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b8c4#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b444#64 R Mt by
-  have h2 := hP.spR; have h21 := hP.s5; have h23 := hP.s7
+  nx_win sp 1024 592; have h2 := hP.spR; have h21 := hP.s5; have h23 := hP.s7
   have hres := hP.resid; have hic := hP.iovcnt; have hc16 := hP.count
   simp only [List.length_nil, Nat.mul_zero, Nat.add_zero, piecesLen, List.map_nil, List.sum_nil] at h23 hres hic
   have e1 : BitVec.ofNat 64 ds.length + 1#64 = BitVec.ofNat 64 (ds.length + 1) := by

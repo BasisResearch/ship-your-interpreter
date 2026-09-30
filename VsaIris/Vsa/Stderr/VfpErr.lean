@@ -1,10 +1,11 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stderr.VfpEntry
 import VsaIris.Vsa.Stderr.SwsetupErr
 
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 abbrev vfpErrMt (Mt : Mem) (sp : BitVec 64) : Mem :=
   swsetupErrMt (writeLog (writeLog Mt [(0x8001bc88, 4, 0#64)]) [(0x8001bbe8, 2, 0x2012#64)]) sp
@@ -38,7 +39,7 @@ macro "vfperr_step" : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsi
       (outS s need) Q t 0x8000a944#64 R' (vfpErrMt Mt sp)) :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000a8d0#64 R Mt by
-  vfperr_step
+  nx_win sp 384 592; vfperr_step
 
 #ix_piece vfpErr_02 from vfpErr_01 by
   refine swsetupErr_run (hlive := hlive) (t := t) (s := s) (need := need) (hs3 := hs3) (hs4 := hs4)

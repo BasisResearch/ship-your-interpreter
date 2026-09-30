@@ -1,3 +1,4 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Loop
 import VsaIris.Vsa.Fprintf.Sprint
 import VsaIris.Interp.ITacTree
@@ -5,7 +6,7 @@ import VsaIris.Interp.ITacTree
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -150,7 +151,7 @@ local macro "scan_tail" : tactic => `(tactic| (
     (hk : ∀ R' Mt', ScanPost R' Mt Mt' sp reent f P cnt bs → R' 22 = termFlag c →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (termPC c) R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b0#64 R Mt by
-  have h2 := hL.spR; have h24 := hL.fmt
+  nx_win sp 1024 592; have h2 := hL.spR; have h24 := hL.fmt
   nx_run hlive using [h2, h24] at 2147527096
   have hFb : FmtAt Dt DA P.toNat bs := ⟨hF.lo, by have := hF.hi; simp at this; omega,
     fun i hi => hF.mem i (by simp; omega), fun i hi => by

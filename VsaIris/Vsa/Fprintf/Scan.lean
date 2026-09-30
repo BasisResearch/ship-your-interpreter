@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Sfv
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -76,7 +77,7 @@ theorem vfp_mb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9d8#64 R'
         (writeLog Mt [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 b)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b8#64 R Mt := by
-  have hmx := hL.curMax; have hmb := hL.mbtowc
+  nx_win sp 1024 592; have hmx := hL.curMax; have hmb := hL.mbtowc
   have e0 : P + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12) = P := by
     simp [LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend]
   have hea : LdOK P.toNat 1 := by unfold LdOK tohostAddr; omega
@@ -124,7 +125,7 @@ theorem vfp_lit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} 
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b8#64 R'
         (writeLog Mt [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 b)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b8#64 R Mt := by
-  refine vfp_mb hlive hs1 hs2 hs3 hs4 hal h2 h9 h25 hP1 hP2 hPD hfb hL fun R1 _ h10 hk1 => ?_
+  nx_win sp 1024 592; refine vfp_mb hlive hs1 hs2 hs3 hs4 hal h2 h9 h25 hP1 hP2 hPD hfb hL fun R1 _ h10 hk1 => ?_
   have e10 := h10 hb0
   have k2 : R1 2 = sp := (hk1 2 (by decide)).trans h2
   have k19 : R1 19 = 37#64 := (hk1 19 (by decide)).trans h19

@@ -1,10 +1,11 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Swrite
 import VsaIris.Vsa.Stderr.Mt
 
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 namespace Stdout
 
@@ -42,7 +43,7 @@ theorem swriteErr_run (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt :
     (hk : ∀ R', RetOK R R' (BitVec.ofNat 64 bs.length) → SWPO live (stdioText ++ dataOf Dt DA) iRegs
       (outS s need) Q (t ++ putcs bs) ra R' (swriteErrMt Mt sp ra s0)) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000efd4#64 R Mt := by
-  nx_run hlive using [h11, h2, h1, h8, hfl, hfd, BitVec.reduceAnd, BitVec.reduceOr, BitVec.add_assoc] at 2147483708
+  nx_win sp 64 0; nx_run hlive using [h11, h2, h1, h8, hfl, hfd, BitVec.reduceAnd, BitVec.reduceOr, BitVec.add_assoc] at 2147483708
   refine write_run' hlive buf bs hb1 hb2 hb3 (fun i hi => ?_) _ t (by simp [upd_apply, h12])
     (by simp [upd_apply, h13]) (by simp [upd_apply, hra] <;> decide) (fun v11 v13 v14 v15 v16 => ?_)
   · refine ((((hsrc i hi).store _ ?_).store _ ?_).store _ ?_).store _ ?_ |>.store _ ?_
