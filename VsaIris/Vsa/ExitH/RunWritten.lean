@@ -19,15 +19,13 @@ open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
 
 #ix_piece exitWritten_06 from exitWritten_05 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_07 from exitWritten_06 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_07 from exitWritten_06 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_08 from exitWritten_07 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_08 from exitWritten_07 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_09 from exitWritten_08 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_end from exitWritten_08 by xh_end
 
-#ix_piece exitWritten_end from exitWritten_09 by xh_end
-
-#ix_chain exitWrittenTail_chain := [exitWritten_01, exitWritten_02, exitWritten_03, exitWritten_04, exitWritten_05, exitWritten_06, exitWritten_07, exitWritten_08, exitWritten_09, exitWritten_end]
+#ix_chain exitWrittenTail_chain := [exitWritten_01, exitWritten_02, exitWritten_03, exitWritten_04, exitWritten_05, exitWritten_06, exitWritten_07, exitWritten_08, exitWritten_end]
 
 theorem exitWritten_chain {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
