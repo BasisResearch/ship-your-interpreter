@@ -47,6 +47,24 @@ structure CloseMt (fl : BitVec 64) (Mt : Mem) : Prop where
   out_lock : ldv .ld Mt 0x8001bbc0 = 0x0#64
   out_mode : ldv .lw Mt 0x8001bbd0 = 0x0#64
 
+/-- What the exit path tests of the console stream's flags word: the word is a live stream
+(`≠ 0`, `> 1`), write mode (`0x8`), unbuffered (`& 3 = 2`), no lock bypass (`0x200`), no malloc'd
+buffer (`0x80`). Bit 13 (orientation) is not tested, so one run serves both flag values. -/
+structure ConFlags (fl : BitVec 64) : Prop where
+  ne0 : fl ≠ 0#64
+  gt1 : ¬ fl.toNat ≤ 1
+  b200 : fl &&& 0x200#64 = 0#64
+  b8 : fl &&& 8#64 = 8#64
+  b3 : fl &&& 3#64 = 2#64
+  b80 : fl &&& 0x80#64 = 0#64
+
+theorem conFlags_of (o : Bool) : ConFlags (consoleFlagsV o) := by
+  cases o
+  · exact ⟨by decide, by simp only [consoleFlagsV, Bool.false_eq_true, ite_false, BitVec.reduceToNat]; decide,
+      by decide, by decide, by decide, by decide⟩
+  · exact ⟨by decide, by simp only [consoleFlagsV, ite_true, BitVec.reduceToNat]; decide,
+      by decide, by decide, by decide, by decide⟩
+
 structure ErrIdleMt (Mt : Mem) : Prop where
   flagsU : ldv .lhu Mt 0x8001bbe8 = 0x12#64
   flags : ldv .lh Mt 0x8001bbe8 = 0x12#64
