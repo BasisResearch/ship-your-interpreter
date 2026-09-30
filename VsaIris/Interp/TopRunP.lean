@@ -269,8 +269,37 @@ theorem topLanding_of {Mt : Mem} {jb imgT f : Nat → BitVec 8} (hf : TopFrameP 
       hf.s0]
   raT := hT
 
+def AbortCode (e : Nat) : Prop := e = 70 ∨ e = 1
+
+theorem AbortCode.ne_zero {e : Nat} (h : AbortCode e) : e ≠ 0 := by
+  rcases h with rfl | rfl <;> decide
+
+theorem wp_abortCodes (N : Vsa.RuntimeRepr.NativeAddrs) (L : DlLayout) (Room : RoomPred)
+    (inp : Nat) (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
+    (live : Nat → Prop) (hlive : CodeLive live)
+    (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    (hΦ : ∀ e o, AbortCode e → ⊢ Φ (e, o)) (sM : BitVec 64) (n : Nat)
+    (hn : fprintfNeed - 176 ≤ n) (hns : n ≤ (sM - 176#64).toNat)
+    (jb0 imgI imgT : Nat → BitVec 8) (hT : TopLanding inp sM jb0 imgI imgT) :
+    abortRes N L Room inp (sM - 176#64) n ∗ jmpRO inp jb0 ∗
+      ownImg (InExt ((sM - 176#64).toNat, 176)) imgI ∗ ownImg (InExt (sM.toNat + 752, 16)) imgT ∗
+      gp ↦ᵣ□ Newlib.gpV ∗ binImg
+    ⊢ Wp.W Φ := by
+  unfold abortRes
+  iintro ⟨HA, #Hjb0, HI, HT, #Hgp, #Himg⟩
+  ihave ⟨HC, Hscr⟩ := abortAt_elim _ _ _ $$ HA
+  unfold abortCore
+  icases HC with (Hl | Ho)
+  · ihave ⟨-, Hscr⟩ := stackScratch_narrow hns hn $$ Hscr
+    iapply wp_abortLanding N L Room inp H hEL live hlive Wp (fun o => hΦ 70 o (Or.inl rfl)) sM jb0
+      imgI imgT hT
+    iframe Hl Hscr Hjb0 HI HT Hgp Himg
+  · iapply wp_abortOom H live hlive Wp (fun o => hΦ 1 o (Or.inr rfl)) (sM - 176#64) n
+    iframe Ho Hscr Hgp Himg
+
+
 theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
-    {Φ : Nat × String → IProp GF} (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) {Core : IProp GF}
+    {Φ : Nat × String → IProp GF} (hΦe : ∀ e o, AbortCode e → ⊢ Φ (e, o)) {Core : IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
     (hcore : Core ⊢ abortCore N L Room inpTop sFr (sFr.toNat - stackSL.lo))
     {Mt : Mem} {jb imgT : Nat → BitVec 8} (hf : TopFrameP Mt) (hjb : JbTop jb sFr)
@@ -297,7 +326,7 @@ theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := 
       show (sTop - 176#64).toNat = sTop.toNat - 176 from by decide]
     omega) $$ HI
   rw [sFr_eq] at *
-  iapply wp_abort N L Room inpTop H hEL live hcl Wp hΦe sTop (sTop.toNat - 176 - stackSL.lo) (by decide)
+  iapply wp_abortCodes N L Room inpTop H hEL live hcl Wp hΦe sTop (sTop.toNat - 176 - stackSL.lo) (by decide)
     (by decide) jb (glue (interpS sTop) (imgM Mt) f) imgT (topLanding_of hf hjb hT)
   unfold abortRes
   rw [show (sTop - 176#64).toNat - stackSL.lo = sTop.toNat - 176 - stackSL.lo from by decide] at *
@@ -348,7 +377,7 @@ theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live 
     (hspecs : errCtx (GF := GF) inpTop ⊢
       execSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inpTop (evalCore N vsaLayoutP vsaRoomB inpTop))
     (hΦ0 : ∀ st', ExecSeq initSt 0 0 p st' .normal → ⊢ Φ (0, st'.out))
-    (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) :
+    (hΦe : ∀ e o, AbortCode e → ⊢ Φ (e, o)) :
     topPre (GF := GF) N .uncounted m P g R0 ⊢ (wpW (GF := GF) (vsaModel live)).W Φ := by
   have hloop := interpSeqP_all (GF := GF) hlive (N := N)
     (by iintro %q; iapply valueNull_spec hlive (wpW (GF := GF) (vsaModel live)) N q)
@@ -393,19 +422,19 @@ theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live 
         simp only [statusRet]
         ihave Hret := valAt_slot $$ Hret
         iapply wp_topAbrupt H hcl ErrnoOwn.errnoLend_vsa (wpW (GF := GF) (vsaModel live)) topRet_ok (topRet_runs hlive)
-          (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
+          (fun o => hΦe 70 o (Or.inl rfl)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
       | brk =>
         rw [interpExit_brk]
         simp only [statusRet]
         iapply wp_topAbrupt H hcl ErrnoOwn.errnoLend_vsa (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
-          (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
+          (fun o => hΦe 70 o (Or.inl rfl)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
       | cont =>
         rw [interpExit_cont]
         simp only [statusRet]
         iapply wp_topAbrupt H hcl ErrnoOwn.errnoLend_vsa (wpW (GF := GF) (vsaModel live)) topBrk_ok (topBrk_runs hlive)
-          (fun o => hΦe 70 o (by decide)) h2 (hs1 (by simp)) hfp hT
+          (fun o => hΦe 70 o (Or.inl rfl)) h2 (hs1 (by simp)) hfp hT
         iframe Hcode Hms Hret Hst Hw HT
     ·
       iintro ⟨HA, Hslot, HS⟩
@@ -420,7 +449,7 @@ theorem interpRun_partial_boot (H : NewlibHoles) (hlive : ∀ p ∈ interpText, 
     (hspecs : errCtx (GF := GF) inpTop ⊢
       execSpecsP (vsaModel live) b.N vsaLayoutP vsaRoomB inpTop (evalCore b.N vsaLayoutP vsaRoomB inpTop))
     (hΦ0 : ∀ st', ExecSeq initSt 0 0 p st' .normal → ⊢ Φ (0, st'.out))
-    (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) :
+    (hΦe : ∀ e o, AbortCode e → ⊢ Φ (e, o)) :
     bootRes b .uncounted ∗ PC ↦ᵣ 0x800043ec#64 ∗ ra ↦ᵣ 0x800045ec#64 ∗ regFile R0 ∗ codeRes ⊢
       (wpW (GF := GF) (vsaModel live)).W Φ :=
   (topPre_of_bootRes b _ R0).trans
