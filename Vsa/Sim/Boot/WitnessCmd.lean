@@ -1,5 +1,4 @@
-import Vsa.Sim.Boot.Derive
-import Lean
+import Vsa.Sim.Boot.ImageView
 
 /-!
 # `boot_witness`
@@ -17,42 +16,6 @@ namespace Vsa.Sim.Boot.Derive
 
 open Lean Elab Command Meta
 open Vsa.Sim.DlHeap
-
-instance : ToExpr Run where
-  toExpr r := mkApp3 (mkConst ``Run.mk) (toExpr r.base) (toExpr r.len) (toExpr r.cells)
-  toTypeExpr := mkConst ``Run
-
-def runTreeExpr : RunTree → Expr
-  | .leaf r => mkApp (mkConst ``RunTree.leaf) (toExpr r)
-  | .node p l r => mkApp3 (mkConst ``RunTree.node) (toExpr p) (runTreeExpr l) (runTreeExpr r)
-
-instance : ToExpr RunTree where
-  toExpr := runTreeExpr
-  toTypeExpr := mkConst ``RunTree
-
-instance : ToExpr Chunk where
-  toExpr c := mkApp3 (mkConst ``Chunk.mk) (toExpr c.addr) (toExpr c.size) (toExpr c.inuse)
-  toTypeExpr := mkConst ``Chunk
-
-instance : ToExpr BootOwn where
-  toExpr o := mkAppN (mkConst ``BootOwn.mk)
-    #[toExpr o.env, toExpr o.cap, toExpr o.pn, toExpr o.pv, toExpr o.key0, toExpr o.key1,
-      toExpr o.key2, toExpr o.name0, toExpr o.name1, toExpr o.name2, toExpr o.ast]
-  toTypeExpr := mkConst ``BootOwn
-
-def rangeTreeExpr : RangeTree → Expr
-  | .leaf lo n => mkApp2 (mkConst ``RangeTree.leaf) (toExpr lo) (toExpr n)
-  | .node p l r => mkApp3 (mkConst ``RangeTree.node) (toExpr p) (rangeTreeExpr l) (rangeTreeExpr r)
-
-instance : ToExpr RangeTree where
-  toExpr := rangeTreeExpr
-  toTypeExpr := mkConst ``RangeTree
-
-def addLiteralDef {α : Type} [ToExpr α] (n : Name) (a : α) : CommandElabM Unit := liftCoreM do
-  let value := toExpr a
-  addDecl <| .defnDecl
-    { name := n, levelParams := [], type := ToExpr.toTypeExpr α, value
-      hints := .regular (getMaxHeight (← getEnv) value + 1), safety := .safe }
 
 def evalData (ns : Name) : CommandElabM (Data × Nat) := liftTermElabM do
   let regs := mkConst (ns ++ `regs)
@@ -108,25 +71,32 @@ set_option hygiene false in
   elabCommand (← `(theorem logOk : LogOk log runs :=
     logOk_of_pages (n := $bl) $parts runs_wf (by decide) runs_ok))
   elabCommand (← `(theorem aboveOk : runs.above 0x8001acf0 = true := by decide +kernel))
-  elabCommand (← `(theorem memRefOk : memRefCheck (bootView script runs) = true := by decide +kernel))
+  elabCommand (← `(theorem memRefOk : memRefCheck (bootView script runs) = true := by
+    rw [← fastView_eq]; decide +kernel))
   elabCommand (← `(theorem globalsOk :
-    readLEv (bootView script runs) Vsa.Sim.LayoutInstance.interpObject 8 = some own.env := by decide +kernel))
+    readLEv (bootView script runs) Vsa.Sim.LayoutInstance.interpObject 8 = some own.env := by
+    rw [← fastView_eq]; decide +kernel))
   elabCommand (← `(theorem ownFast : OwnFast own := by constructor <;> decide +kernel))
   elabCommand (← `(theorem ownOk : OwnOk own := ownFast.ownOk))
-  elabCommand (← `(theorem frameOk : FrameOk (bootView script runs) own := by constructor <;> decide +kernel))
+  elabCommand (← `(theorem frameOk : FrameOk (bootView script runs) own := by
+    rw [← fastView_eq]; constructor <;> decide +kernel))
   elabCommand (← `(theorem bootRegs : BootRegs regs stmts count := by
     constructor <;> decide +kernel))
   elabCommand (← `(theorem storeOk : frameCheck (maskView prologueMask (bootView script runs)) bootNatives
-    own.env initFrame = true := by decide +kernel))
+    own.env initFrame = true := by
+    rw [← fastView_eq]; decide +kernel))
   elabCommand (← `(theorem heapFactsOk : HeapFactsOk (bootView script runs) own top brkv chunks
-    (own.env, 0x28) (own.pn, 0x48) (own.pv, 0xc8) := by constructor <;> decide +kernel))
+    (own.env, 0x28) (own.pn, 0x48) (own.pv, 0xc8) := by
+    rw [← fastView_eq]; constructor <;> decide +kernel))
   elabCommand (← `(theorem heapOk : heapCheck (bootView script runs) own.exts
     [(own.pn, 8 * own.cap), (own.pv, 24 * own.cap)] top brkv chunks bins =
-      true := by decide +kernel))
+      true := by
+    rw [← fastView_eq]; decide +kernel))
   elabCommand (← `(theorem sharedOk :
     sharedT.ranges.all (fun r => own.sharedRanges.contains r) = true := by decide +kernel))
   elabCommand (← `(theorem progOk :
-    decodesTo (bootView script runs) sharedT.mem 100000 stmts count prog = true := by decide +kernel))
+    decodesTo (bootView script runs) sharedT.mem 100000 stmts count prog = true := by
+    rw [← fastView_eq]; decide +kernel))
   elabCommand (← `(theorem capacityOk : capOk 1000 prog top = true := by decide +kernel))
   elabCommand (← `(theorem fitsOk : Vsa.Sim.LayoutInstance.programStackFits prog = true := by
     decide +kernel))
