@@ -6,6 +6,7 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
 
-#step_table stdio 0x8000cc7c 0x8000d5e0
+#step_table stdio
+  0x8000ce8c 0x8000ce94  0x8000cf9c 0x8000cff8
 
 end VsaIris.Sym
