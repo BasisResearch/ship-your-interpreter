@@ -21,7 +21,7 @@ import VsaIris.Interp.Case.ExecIfFalseT
 import VsaIris.Interp.Case.ExecIfNoneT
 import VsaIris.Interp.Case.ExecWhileT
 import VsaIris.Interp.Case.ExecForT
-import VsaIris.Interp.Case.ExecRetT
+import VsaIris.Interp.ExecRet
 import VsaIris.Interp.ExecRetNull
 import VsaIris.Interp.ExecJump
 import VsaIris.Interp.LoopWhile
@@ -329,7 +329,7 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     exact ⟨caseT_ExecFor ($S).hlive halloc Di Dl ihi ihl ($S).envNew, fun _ _ h => by cases h⟩
   case ret =>
     intro st d env e st' v n De ihe
-    exact ⟨caseT_ExecRet ($S).hlive De ihe, fun _ _ h => by cases h⟩
+    exact ⟨retT ($S).hlive De ihe, fun _ _ h => by cases h⟩
   case retNull =>
     intro st d env
     exact ⟨retNullT ($S).hlive ($S).vnull, fun _ _ h => by cases h⟩
