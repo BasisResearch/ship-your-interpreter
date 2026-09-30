@@ -508,87 +508,45 @@ theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
     (M : RMal C B R Mt X S nb p' top brkv chunks bins) (hp' : p' = X + S + 16)
     (h12 : (R 12).toNat = X) (h14 : (R 14).toNat = S) (h15 : (R 15).toNat = nb) :
     AW C.live C.S C.Q 0x800055b0#64 R Mt := by
-  have HH := M.heap.heap.heap
-  have hXm := M.keepX
-  have hXb := HH.walk.chunk_bounds _ hXm
-  have hS16 := (walk_sizes HH.walk _ hXm).1
-  have hx16 := HH.aligned.1 _ hXm
-  simp only at hXb hS16 hx16
-
-  obtain ⟨cN, hcN, huN, hcNa, hcNn⟩ := HH.exact _ List.mem_cons_self List.mem_cons_self
-  simp only at hcNa hcNn
+  have HB := M.heap.heap
+  obtain ⟨cN, hcN, huN, hcNa, hcNn⟩ := HB.heap.exact _ List.mem_cons_self List.mem_cons_self
   obtain ⟨Na, ns, Ni⟩ := cN
   simp only at huN hcNa hcNn
   subst huN
-  have hNa : Na = X + S := by omega
-  subst hNa
-  have hNb := HH.walk.chunk_bounds _ hcN
-  have hns16 := (walk_sizes HH.walk _ hcN).1
-  simp only at hNb hns16
-  obtain ⟨cs₁, cs₂, hsp⟩ := List.append_of_mem hXm
-  have hw := HH.walk
-  rw [hsp] at hw
-  obtain ⟨_, hnext⟩ := walk_next_of hw
-  obtain ⟨cs₃, rfl⟩ : ∃ cs₃, cs₂ = ⟨X + S, ns, true⟩ :: cs₃ := by
-    rcases hnext with ⟨he, _⟩ | ⟨d, cs₃, h1, h2⟩
-    · exfalso; simp only at he; have := HH.walk.chunk_bounds _ hcN; simp only at this; omega
-    · have hdm : d ∈ chunks := by rw [hsp, h1]; simp
-      have := HH.chunk_eq hdm hcN (by simp only at h2 ⊢; omega)
-      exact ⟨cs₃, by rw [h1, this]⟩
-  have hbrk := HH.brk_le; have htle := HH.top_le
-  unfold heapStart heapEnd at *
-  obtain ⟨hX, hXr, hXs, hXl⟩ := walk_header HH.walk _ hXm
-  obtain ⟨hN, hNr, hNs, hNl⟩ := walk_header HH.walk _ hcN
-  simp only at hXr hXs hNr hNs
-  have hNlt := Vsa.Sim.read64_lt _ _ _ hNr
-  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
-  have hNf : ∀ k, k < 8 → vsaFoot C.H (X + S + 8 + k) := fun k hk =>
-    vsaFoot_cons_sub _ (vsaFoot_cons_sub _ (foot_header M.heap.heap (.inr ⟨_, hcN, rfl⟩) k hk))
-  have eN : (R 10 + sign_extend (m := 64) (0xff8#12)).toNat = X + S + 8 := by
-    rw [show (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) from rfl,
-      addr_sub M.a0 8 (by omega) (by omega)]; omega
-  refine (step% st 0x800055b0) O.live (by rw [eN]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by rw [eN]; exact O.foot hNf) ?_
-  rw [eN, ldv_at hNr _ rfl]
-  refine (step% st 0x800055b4) O.live ?_
-  refine (step% st 0x800055b8) O.live ?_
-  refine (step% st 0x800055bc) O.live ?_
-  have hns : (BitVec.ofNat 64 hN &&& sign_extend (m := 64) (0xffc#12)).toNat = ns := by
-    rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
-      toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hNlt, ← hNs]; rfl
-
+  obtain rfl : Na = X + S := by omega
+  obtain ⟨cs₁, cs₃, hsp⟩ := HB.next_eq M.keepX hcN rfl
+  have Xk := HB.chunkK M.keepX; have Nk := (HB.chunkK hcN).lower.lower
+  open_fields Xk; open_fields Nk
+  obtain ⟨hX, hXr, hXs, hXl⟩ := Xk_hdrv; obtain ⟨hN, hNr, hNs, hNl⟩ := Nk_hdrv
+  obtain ⟨hn, hnr, hnp⟩ := Nk_nhdrv
+  have hNlt := Vsa.Sim.read64_lt _ _ _ hNr; have ha0 := M.a0
+  rgn_run O.live at 0x80005414
+  rgn_ld [hNr]
+  have hns : (BitVec.ofNat 64 hN &&& 18446744073709551612#64).toNat = ns := by
+    rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hNlt, ← hNs]; rfl
   have hv : (BitVec.ofNat 64 (S + ns + hX % 2)).toNat = S + ns + hX % 2 := by
     rw [BitVec.toNat_ofNat]; omega
-  generalize hV : writeLog Mt [(X + 8, 8, BitVec.ofNat 64 (S + ns + hX % 2))] = V
-  have hVo : ∀ w, ¬ (X + 8 ≤ w ∧ w < X + 16) → V[w]? = Mt[w]? := fun w hw => by
-    have ho : OutL [(X + 8, 8, BitVec.ofNat 64 (S + ns + hX % 2))] w := ⟨by simp only; omega, trivial⟩
-    rw [← hV, writeLog_out _ _ _ ho]
   have H0 := M.heap
   rw [hsp] at H0
-  have Ha := H0.drop.absorb (m' := V) (x := X) (a := S) (b := ns) (h' := S + ns + hX % 2)
-    (fun e he heq => M.fresh.start e he (by rw [heq, hp']))
-    (by rw [← hV, read64_store_hit, hv]) (by unfold chunkSize; omega) (by omega)
+  have Ha := H0.drop.absorb_permit (x := X) (a := S) (b := ns) (h' := S + ns + hX % 2)
+    (m' := writeLog Mt [(X + 8, 8, BitVec.ofNat 64 (S + ns + hX % 2))])
+    (fun e he heq => M.fresh.start e he (by rw [heq, hp'])) (by unfold chunkSize; omega) (by omega)
     (fun h0 hr => by
       rw [hXr] at hr; cases hr; unfold prevInuse; rw [show (S + ns + hX % 2) % 2 = hX % 2 by omega])
-    (fun w _ hw _ => hVo w hw)
+    (Realises.of_log (by wl_win; exact .inl (.inl ⟨by omega, by omega⟩)) (by rd_log [hv]) trivial)
   have Hr := Ha.reblock (c := ⟨X, S + ns, true⟩) (by simp) rfl M.addr (n' := C.n.toNat)
     (by simp only; omega)
   rw [← M.addr] at Hr
-
-  have hw2 := HH.walk
-  rw [hsp] at hw2
-  obtain ⟨⟨hn, hnr, hnp⟩, _⟩ := walk_next_of (cs₁ := cs₁ ++ [⟨X, S, true⟩]) (by simpa using hw2)
-  simp only at hnr hnp
   have hnodd : hn % 2 = 1 := by unfold prevInuse at hnp; simpa using hnp
   have hnb := M.nbok.eq
-  refine realloc_tail O (V := V) (X := X) (S := S + ns) (nb := nb) (cs₁ := cs₁) (cs₂ := cs₃)
+  refine realloc_tail O (X := X) (S := S + ns) (nb := nb) (cs₁ := cs₁) (cs₂ := cs₃)
     ⟨M.frame.of_regs ?_ ?_ ?_, Hr, by rw [M.addr]; exact M.starts, M.top_le, M.nbok,
-      by rw [hnb]; unfold physSize; omega, ⟨hX, hXr, by rw [← hV, read64_store_hit, hv]⟩,
+      by rw [hnb]; unfold physSize; omega, ⟨hX, hXr, by simp (disch := omega) only [read64_hit_eq]; rw [hv]⟩,
       ⟨hn, by rw [show X + (S + ns) + 8 = X + S + ns + 8 by omega]; exact hnr, by
-        rw [show hn / 2 * 2 + 1 = hn by omega, ← hV, rd_miss (by omega),
+        rw [show hn / 2 * 2 + 1 = hn by omega, rd_miss (by omega),
           show X + (S + ns) + 8 = X + S + ns + 8 by omega]; exact hnr⟩,
-      fun w _ hw _ => (hVo w hw).symm, M.pres, M.disj, M.disjD, by rw [M.addr]; exact M.data,
-      by have := M.grow; omega, ?_, ?_, ?_, ?_, ?_⟩ <;>
+      fun w _ hw _ => (writeLog_out _ [_] _ ⟨by simp only; omega, trivial⟩).symm, M.pres, M.disj,
+      M.disjD, by rw [M.addr]; exact M.data, by have := M.grow; omega, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · rw [M.s0]
   · exact M.s1
