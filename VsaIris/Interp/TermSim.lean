@@ -22,7 +22,7 @@ import VsaIris.Interp.Case.ExecIfNoneT
 import VsaIris.Interp.Case.ExecWhileT
 import VsaIris.Interp.Case.ExecForT
 import VsaIris.Interp.Case.ExecRetT
-import VsaIris.Interp.Case.ExecRetNullT
+import VsaIris.Interp.ExecRetNull
 import VsaIris.Interp.ExecJump
 import VsaIris.Interp.LoopWhile
 import VsaIris.Interp.LoopFor
@@ -332,7 +332,7 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     exact ⟨caseT_ExecRet ($S).hlive De ihe, fun _ _ h => by cases h⟩
   case retNull =>
     intro st d env
-    exact ⟨caseT_ExecRetNull ($S).hlive ($S).vnull, fun _ _ h => by cases h⟩
+    exact ⟨retNullT ($S).hlive ($S).vnull, fun _ _ h => by cases h⟩
   case brk => intro st d env; exact ⟨jumpT .brk ($S).hlive (.brk st d env), fun _ _ h => by cases h⟩
   case cont => intro st d env; exact ⟨jumpT .cont ($S).hlive (.cont st d env), fun _ _ h => by cases h⟩
   case initNone => intro st d env; exact execInitT_none ($S).hlive st d env

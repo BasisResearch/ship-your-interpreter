@@ -18,7 +18,7 @@ import VsaIris.Interp.Case.ExecForP
 import VsaIris.Interp.Case.ExecRetP
 import VsaIris.Interp.ExecJump
 import VsaIris.Interp.Case.ExecIfP
-import VsaIris.Interp.Case.ExecRetNullP
+import VsaIris.Interp.ExecRetNull
 import VsaIris.Interp.CallCloP
 import VsaIris.Interp.LoopWhile
 import VsaIris.Interp.LoopFor
@@ -188,7 +188,7 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   | ret eo =>
     cases eo with
     | some e => iapply caseP_ExecRet S.hlive $$ HE
-    | none => iapply caseP_ExecRetNull S.hlive S.vnull
+    | none => iapply retNullP S.hlive S.vnull
   | brk => iapply jumpP .brk S.hlive (ExecS.brk _ _ _)
   | cont => iapply jumpP .cont S.hlive (ExecS.cont _ _ _)
 

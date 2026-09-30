@@ -1,5 +1,5 @@
 import VsaIris.Interp.ArmCore
-import VsaIris.Interp.ExecArm
+import VsaIris.Interp.ExecDispOf
 
 /-!
 `break` and `continue`: one reflected segment each and one Wp-generic core; the total and
@@ -12,43 +12,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
-section
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-variable {live : Nat → Prop}
-
-/-- A total statement spec whose arm is proved for every regime and continuation. -/
-theorem execDispT_of {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {st : St} {d env : Nat} {sm : Stmt} {status : Status} (D : ExecSCost st d env sm st status 0)
-    (core : ∀ (Φ : Nat × String → IProp GF) (ρ : Regime) (aS aE aRet s : BitVec 64)
-      (R : Nat → BitVec 64) (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) (Wp : MachWP (vsaModel live)),
-      execDispPre N L Room inp ρ st d env sm aS aE aRet s R Mt ret v8 v9 v18 v19 ∗
-        execDispK (vsaModel live) N L Room inp Wp Φ ρ st d sm status aRet s R ret v8 v9 v18 v19 ⊢
-        Wp.W Φ) :
-    ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env sm st status 0 D := by
-  unfold execDispT_body
-  iintro !> %Φ %k %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
-  iapply core Φ (.counted k) aS aE aRet s R Mt ret v8 v9 v18 v19 (twpW _)
-  iframe Hpre HK
-
-/-- A partial statement spec for a deterministic arm proved for every regime and continuation. -/
-theorem execDispP_of {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {Core : IProp GF} {st : St} {d env : Nat} {sm : Stmt} {status : Status}
-    (hE : ExecS st d env sm st status)
-    (core : ∀ (Φ : Nat × String → IProp GF) (ρ : Regime) (aS aE aRet s : BitVec 64)
-      (R : Nat → BitVec 64) (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) (Wp : MachWP (vsaModel live)),
-      execDispPre N L Room inp ρ st d env sm aS aE aRet s R Mt ret v8 v9 v18 v19 ∗
-        execDispK (vsaModel live) N L Room inp Wp Φ ρ st d sm status aRet s R ret v8 v9 v18 v19 ⊢
-        Wp.W Φ) :
-    ⊢ execDispP_body (GF := GF) (vsaModel live) N L Room inp Core st d env sm := by
-  unfold execDispP_body
-  iintro !> %Φ %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
-  ihave HK := and_elim_l $$ HK
-  ihave HK := HK $$ %st %status %hE
-  iapply core Φ .uncounted aS aE aRet s R Mt ret v8 v9 v18 v19 (wpW _)
-  iframe Hpre HK
-
-end
 
 /-- The reflected `break`/`continue` arm (statement kind `tag`) to the return. -/
 def JumpRun (tag : Nat) (status : Status) : Prop :=
@@ -147,10 +110,10 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-theorem jumpCore (j : JumpK) (hlive : ∀ p ∈ interpText, live p.1)
+theorem jumpCore (j : JumpK) (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (vsaModel live))
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {st : St} {d env : Nat}
     (Φ : Nat × String → IProp GF) (ρ : Regime) (aS aE aRet s : BitVec 64) (R : Nat → BitVec 64)
-    (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) (Wp : MachWP (vsaModel live)) :
+    (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) :
     execDispPre N L Room inp ρ st d env j.stmt aS aE aRet s R Mt ret v8 v9 v18 v19 ∗
       execDispK (vsaModel live) N L Room inp Wp Φ ρ st d j.stmt j.status aRet s R ret v8 v9 v18 v19 ⊢
       Wp.W Φ := by
@@ -183,13 +146,13 @@ theorem jumpCore (j : JumpK) (hlive : ∀ p ∈ interpText, live p.1)
 theorem jumpT (j : JumpK) (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : DlLayout}
     {Room : RoomPred} {inp : Nat} {st : St} {d env : Nat} (D : ExecSCost st d env j.stmt st j.status 0) :
     ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env j.stmt st j.status 0 D :=
-  execDispT_of (GF := GF) D (jumpCore j hlive)
+  execDispT_of (GF := GF) D (jumpCore j hlive (twpW _))
 
 theorem jumpP (j : JumpK) (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : DlLayout}
     {Room : RoomPred} {inp : Nat} {Core : IProp GF} {st : St} {d env : Nat}
     (hE : ExecS st d env j.stmt st j.status) :
     ⊢ execDispP_body (GF := GF) (vsaModel live) N L Room inp Core st d env j.stmt :=
-  execDispP_of (GF := GF) hE (jumpCore j hlive)
+  execDispP_of (GF := GF) hE (jumpCore j hlive (wpW _))
 
 end
 

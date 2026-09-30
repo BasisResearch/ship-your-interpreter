@@ -1,4 +1,4 @@
-import VsaIris.Interp.ExecArm
+import VsaIris.Interp.ExecDispOf
 
 namespace VsaIris.Interp
 
@@ -29,17 +29,23 @@ open Vsa.MemRepr Vsa.Sim
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
-theorem caseT_ExecRetNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {st : St} {d env : Nat}
-    (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) p) :
-    ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env (.ret none) st (.ret .null) 0
-        (.retNull st d env) := by
-  unfold execDispT_body
-  iintro !> %Φ %k %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+section
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop}
+
+/-- `ret;` for every regime: the `value_null` bridge into the return slot, then the retslot
+copy and the status-3 epilogue. -/
+theorem retNullCore (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (vsaModel live))
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {st : St} {d env : Nat}
+    (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N Wp p)
+    (Φ : Nat × String → IProp GF) (ρ : Regime) (aS aE aRet s : BitVec 64) (R : Nat → BitVec 64)
+    (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) :
+    execDispPre N L Room inp ρ st d env (.ret none) aS aE aRet s R Mt ret v8 v9 v18 v19 ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st d (.ret none) (.ret .null) aRet s R ret
+        v8 v9 v18 v19 ⊢ Wp.W Φ := by
   unfold execDispPre
-  icases Hpre with ⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩
+  iintro ⟨⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩, HK⟩
   unfold astSG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨hn, hc⟩ := retNullNode_of hrepr hgeo
@@ -49,13 +55,12 @@ theorem caseT_ExecRetNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   have hslg : SlotGeom (execSP s + 16#64) := by
     have := hfg.lo; have := hfg.hi; have := hfg.al
     refine ⟨?_, ?_, ?_⟩ <;> rw [g1] <;> (try unfold Vsa.Sim.tohostAddr) <;> omega
-  simp only [Nat.add_zero]
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗
+  iapply wp_swpF Wp (F := iprop(codeRes ∗
       stackScratch (execSP s) (execNeed (.ret none) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp (.counted k) st d ∗
-      execDispK (vsaModel live) N L Room inp (twpW (vsaModel live)) Φ (.counted k) st d
+      world N L Room inp ρ st d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st d
         (.ret none) (.ret .null) aRet s R ret v8 v9 v18 v19))
   rotate_left
   · iframe Hdv Hms Hcode Hst Hslot Hw; iexact HK
@@ -71,7 +76,7 @@ theorem caseT_ExecRetNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
 
   ihave Hvn := hvn $$ %(execSP s + 16#64)
   unfold valueNullSpec
-  iapply ms_callHelperSlot (twpW _) (i := 0x800042f4)
+  iapply ms_callHelperSlot Wp (i := 0x800042f4)
     (jalx_800042f4 live (fun p hp => hlive _ (interp_code_800042f4 p hp)))
     interp_code_800042f4 (by decide) (a := execSP s + 16#64) (R := R0) (Mt := Mt1)
     (S := InExt (s.toNat - 176, 176)) (v := .null)
@@ -88,10 +93,10 @@ theorem caseT_ExecRetNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   have hsv1 : ExecSaved (slotWrite Mt1 (execSP s + 16#64).toNat w0 w1 w2) s ret v8 v9 v18 v19 := by
     have := hfg.lo; rw [hMt1]; ix_esaved hf.saved using hoff
 
-  iapply wp_swpF (twpW _) (text := interpText ++ dataOf ∅ [])
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
     (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.ret none) d - 176) ∗ slot24 aRet.toNat ∗
-      □ valOf N .null w0 w1 w2 ∗ world N L Room inp (.counted k) st d ∗
-      execDispK (vsaModel live) N L Room inp (twpW (vsaModel live)) Φ (.counted k) st d
+      □ valOf N .null w0 w1 w2 ∗ world N L Room inp ρ st d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st d
         (.ret none) (.ret .null) aRet s R ret v8 v9 v18 v19))
   rotate_left
   · iframe Hcode Hms Hst Hslot Hv1 Hw HK
@@ -101,8 +106,8 @@ theorem caseT_ExecRetNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   intros
   apply swp_closeRM
   intro R2 Mt2 hR2 hMt2
-  have hcopy := wp_execRetCopy (N := N) (L := L) (Room := Room) (inp := inp) hlive (twpW _)
-    (Φ := Φ) (ρ := .counted k) (st' := st) (d := d) (sm := .ret none) (v := .null) (aRet := aRet)
+  have hcopy := wp_execRetCopy (N := N) (L := L) (Room := Room) (inp := inp) hlive Wp
+    (Φ := Φ) (ρ := ρ) (st' := st) (d := d) (sm := .ret none) (v := .null) (aRet := aRet)
     (s := s) (ret := ret) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) (w0 := w0) (w1 := w1)
     (w2 := w2) (R0 := R) (R := R2) (Mt := Mt2) hf.stack hf.slot hf.ral
     (by subst hR2 hR0; ix_reg; rw [keep_helper hkeep1 (by decide) (by decide)]; ix_reg; exact hf.regs.sp)
@@ -115,5 +120,20 @@ theorem caseT_ExecRetNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   iintro ⟨⟨#Hcode, Hst, Hslot, #Hv1, Hw, HK⟩, Hms⟩
   iapply hcopy
   iframe Hcode Hms Hslot Hv1 Hst Hw HK
+
+theorem retNullT (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : DlLayout}
+    {Room : RoomPred} {inp : Nat} {st : St} {d env : Nat}
+    (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) p) :
+    ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env (.ret none) st (.ret .null) 0
+        (.retNull st d env) :=
+  execDispT_of (GF := GF) _ (retNullCore hlive (twpW _) hvn)
+
+theorem retNullP (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : DlLayout}
+    {Room : RoomPred} {inp : Nat} {Core : IProp GF} {st : St} {d env : Nat}
+    (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p) :
+    ⊢ execDispP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.ret none) :=
+  execDispP_of (GF := GF) (ExecS.retNull st d env) (retNullCore hlive (wpW _) hvn)
+
+end
 
 end VsaIris.Interp
