@@ -123,6 +123,39 @@ theorem binMid_of_left {n : Nat} {s sret inp aE ret aX w0 w1 w2 u0 u1 u2 aR kL :
     tl := b.tl
     tr := htr }
 
+/-- A reflected `eval_expr` epilogue from `pc` to the return address. -/
+def EpiRun (pc : BitVec 64) : Prop :=
+  ∀ {live : Nat → Prop}, (∀ p ∈ interpText, live p.1) →
+  ∀ {m : Mem} {DA : List Nat} {s ret sret : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {n : Nat}
+    {v8 v9 v18 v19 : BitVec 64},
+    ArmGeo s ret sret n → R 2 = evalSP s → EvalSaved Mt s ret v8 v9 v18 v19 →
+    MRun live m DA (InExt (s.toNat - 1088, 1088)) pc ret R Mt
+      (fun R' _ => EpiPost R R' s ret v8 v9 v18 v19)
+
+set_option hygiene false in
+macro "epi_run" : tactic => `(tactic| (
+  intro live hlive m DA s ret sret R Mt n v8 v9 v18 v19 g h2 hsv Q hk
+  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := g.sf
+  have hs := g.lo; have hs2 := g.hi; have hs3 := g.al; have hal := g.ral
+  have h2' : R 2 = s + 18446744073709550528#64 := h2
+  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret := by
+    rw [hoff _ (by decide)]; exact hsv.ra
+  have hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8 := by
+    rw [hoff _ (by decide)]; exact hsv.s0
+  have hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9 := by
+    rw [hoff _ (by decide)]; exact hsv.s1
+  have hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18 := by
+    rw [hoff _ (by decide)]; exact hsv.s2
+  have hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19 := by
+    rw [hoff _ (by decide)]; exact hsv.s3
+  clear g h2 hsv hoff
+  ix_run hlive using [h2', hRA, hS0, hS1, hS2, hS3, hsf, hal]
+  refine hk _ _ ⟨by ix_reg, by ix_reg; exact evalSP_restore s, by ix_reg, by ix_reg, by ix_reg,
+    by ix_reg, fun x hx => ?_⟩
+  simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg))
+
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -144,6 +177,34 @@ def BinTail (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPr
     (lv rv' : Value) (w0 w1 w2 u0 u1 u2 : BitVec 64) : Prop :=
   (□ valOf N lv w0 w1 w2 ∗ □ valOf N rv' u0 u1 u2) ∗ F ∗
     ms 0x8000351c#64 R (InExt (s.toNat - 1088, 1088)) Mt ⊢ Wp.W Φ
+
+theorem BinTail.ints {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {F : IProp GF} {R : Nat → BitVec 64} {s : BitVec 64} {Mt : Mem} {a b : Int}
+    {w0 w1 w2 u0 u1 u2 : BitVec 64}
+    (h : w1.toInt = a → u1.toInt = b →
+      ArmAt Wp Φ F 0x8000351c#64 R (InExt (s.toNat - 1088, 1088)) Mt) :
+    BinTail Wp Φ N F R s Mt (.int a) (.int b) w0 w1 w2 u0 u1 u2 := by
+  unfold BinTail valOf
+  iintro ⟨⟨%⟨_, h1⟩, %⟨_, h2⟩⟩, HF, Hms⟩
+  iapply (h h1 h2)
+  iframe HF Hms
+
+theorem BinTail.strs {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {P : Nat → Prop} {m : Mem} {env : Nat} {aE s' : BitVec 64} {n' : Nat}
+    {Out Wd K : IProp GF} {R : Nat → BitVec 64} {s : BitVec 64} {Mt : Mem} {x y : String}
+    {w0 w1 w2 u0 u1 u2 : BitVec 64}
+    (h : ArmAt Wp Φ (evalArmF P m env aE s' n' Out Wd
+      iprop(K ∗ □ (strAt w1.toNat x ∗ strAt u1.toNat y))) 0x8000351c#64 R
+      (InExt (s.toNat - 1088, 1088)) Mt) :
+    BinTail Wp Φ N (evalArmF P m env aE s' n' Out Wd K) R s Mt (.str x) (.str y) w0 w1 w2 u0 u1 u2 := by
+  unfold BinTail valOf
+  iintro ⟨⟨⟨-, #Hx⟩, ⟨-, #Hy⟩⟩, HF, Hms⟩
+  iapply h
+  iframe Hms
+  unfold evalArmF
+  icases HF with ⟨#Hc, #Hr, #Hf, Hs, Ho, Hw, HK⟩
+  iframe Hc Hr Hf Hs Ho Hw HK
+  iframe Hx Hy
 
 theorem ExitK.frame {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {s ret sret : BitVec 64} {rv : Nat → BitVec 64} {n : Nat} {v : Value}

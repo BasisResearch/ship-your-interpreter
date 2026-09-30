@@ -41,43 +41,10 @@ theorem CmpOp.errR2 : ∀ o : CmpOp, BinErrRun o.op 0x80003e7c#64 opnSlot o.opn 
 theorem CmpOp.epi : ∀ o : CmpOp, EpiRun (BitVec.ofNat 64 (o.vb.i + 4))
   | lt => epi_800036cc | le => epi_80003b04 | gt => epi_80003af0 | ge => epi_800036cc
 
-theorem HiKeep.helperRA {clob : List Nat} {R R' : Nat → BitVec 64}
-    (h : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) (h2 : 2 ∉ clob) (hc : ∀ x ∈ hiSaved, x ∉ clob)
-    (v : BitVec 64) : HiKeep R (Sym.upd R' 1 v) :=
-  (HiKeep.of_helper h h2 hc).upd (x := 1) v (by decide) (by decide)
-
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
-
-theorem BinTail.ints {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
-    {N : NativeAddrs} {F : IProp GF} {R : Nat → BitVec 64} {s : BitVec 64} {Mt : Mem} {a b : Int}
-    {w0 w1 w2 u0 u1 u2 : BitVec 64}
-    (h : w1.toInt = a → u1.toInt = b →
-      ArmAt Wp Φ F 0x8000351c#64 R (InExt (s.toNat - 1088, 1088)) Mt) :
-    BinTail Wp Φ N F R s Mt (.int a) (.int b) w0 w1 w2 u0 u1 u2 := by
-  unfold BinTail valOf
-  iintro ⟨⟨%⟨_, h1⟩, %⟨_, h2⟩⟩, HF, Hms⟩
-  iapply (h h1 h2)
-  iframe HF Hms
-
-theorem BinTail.strs {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
-    {N : NativeAddrs} {P : Nat → Prop} {m : Mem} {env : Nat} {aE s' : BitVec 64} {n' : Nat}
-    {Out Wd K : IProp GF} {R : Nat → BitVec 64} {s : BitVec 64} {Mt : Mem} {x y : String}
-    {w0 w1 w2 u0 u1 u2 : BitVec 64}
-    (h : ArmAt Wp Φ (evalArmF P m env aE s' n' Out Wd
-      iprop(K ∗ □ (strAt w1.toNat x ∗ strAt u1.toNat y))) 0x8000351c#64 R
-      (InExt (s.toNat - 1088, 1088)) Mt) :
-    BinTail Wp Φ N (evalArmF P m env aE s' n' Out Wd K) R s Mt (.str x) (.str y) w0 w1 w2 u0 u1 u2 := by
-  unfold BinTail valOf
-  iintro ⟨⟨⟨-, #Hx⟩, ⟨-, #Hy⟩⟩, HF, Hms⟩
-  iapply h
-  iframe Hms
-  unfold evalArmF
-  icases HF with ⟨#Hc, #Hr, #Hf, Hs, Ho, Hw, HK⟩
-  iframe Hc Hr Hf Hs Ho Hw HK
-  iframe Hx Hy
 
 theorem cmpIntTail (o : CmpOp) (Wp : MachWP (GF := GF) (vsaModel live))
     (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs}

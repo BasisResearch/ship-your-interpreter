@@ -198,39 +198,6 @@ macro "cmp_str4 " pc:num : tactic => `(tactic| (
     rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg
   · ix_saved h using hoff))
 
-/-- A reflected `eval_expr` epilogue from `pc` to the return address. -/
-def EpiRun (pc : BitVec 64) : Prop :=
-  ∀ {live : Nat → Prop}, (∀ p ∈ interpText, live p.1) →
-  ∀ {m : Mem} {DA : List Nat} {s ret sret : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {n : Nat}
-    {v8 v9 v18 v19 : BitVec 64},
-    ArmGeo s ret sret n → R 2 = evalSP s → EvalSaved Mt s ret v8 v9 v18 v19 →
-    MRun live m DA (InExt (s.toNat - 1088, 1088)) pc ret R Mt
-      (fun R' _ => EpiPost R R' s ret v8 v9 v18 v19)
-
-set_option hygiene false in
-macro "epi_run" : tactic => `(tactic| (
-  intro live hlive m DA s ret sret R Mt n v8 v9 v18 v19 g h2 hsv Q hk
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := g.sf
-  have hs := g.lo; have hs2 := g.hi; have hs3 := g.al; have hal := g.ral
-  have h2' : R 2 = s + 18446744073709550528#64 := h2
-  have hoff := evalSP_off (s := s) hsf (by omega)
-  have hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret := by
-    rw [hoff _ (by decide)]; exact hsv.ra
-  have hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8 := by
-    rw [hoff _ (by decide)]; exact hsv.s0
-  have hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9 := by
-    rw [hoff _ (by decide)]; exact hsv.s1
-  have hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18 := by
-    rw [hoff _ (by decide)]; exact hsv.s2
-  have hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19 := by
-    rw [hoff _ (by decide)]; exact hsv.s3
-  clear g h2 hsv hoff
-  ix_run hlive using [h2', hRA, hS0, hS1, hS2, hS3, hsf, hal]
-  refine hk _ _ ⟨by ix_reg, by ix_reg; exact evalSP_restore s, by ix_reg, by ix_reg, by ix_reg,
-    by ix_reg, fun x hx => ?_⟩
-  simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
-  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg))
-
 theorem epi_800036cc : EpiRun 0x800036cc#64 := by epi_run
 theorem epi_80003b04 : EpiRun 0x80003b04#64 := by epi_run
 theorem epi_80003af0 : EpiRun 0x80003af0#64 := by epi_run

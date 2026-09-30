@@ -1,6 +1,6 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.AssignP
-import VsaIris.Interp.Case.BinaryDivP
 import VsaIris.Interp.Case.BinaryAddP
 import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
@@ -13,18 +13,15 @@ import VsaIris.Interp.Case.UnaryNegTypeP
 import VsaIris.Interp.Case.ExecVarInitP
 import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
-import VsaIris.Interp.Case.BinarySubP
 import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.ExecForP
 import VsaIris.Interp.Case.BinaryEqP
 import VsaIris.Interp.Case.UnaryNotP
-import VsaIris.Interp.Case.BinaryMulP
 import VsaIris.Interp.Case.LogicalAndFalseP
 import VsaIris.Interp.Case.ExecRetP
 import VsaIris.Interp.Case.LogicalOrTrueP
 import VsaIris.Interp.Case.ExecBrkP
 import VsaIris.Interp.Case.ExecContP
-import VsaIris.Interp.Case.BinaryModP
 import VsaIris.Interp.Case.ExecIfP
 import VsaIris.Interp.Case.ExecRetNullP
 import VsaIris.Interp.Case.LeafNullP
@@ -144,10 +141,22 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
       iapply caseP_BinaryAdd S.hlive hE S.vint rfl rfl S.alloc S.stringifyP S.strlenHeap S.memcpyOwned
         S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply) S.vkind
       iframe HE Hctx
-    | sub => iapply caseP_BinarySub S.hlive hE S.vint S.vkind; iframe HE Hctx
-    | mul => iapply caseP_BinaryMul S.hlive hE S.vint S.vkind; iframe HE Hctx
-    | div => iapply caseP_BinaryDiv S.hlive hE S.vint S.vkind; iframe HE Hctx
-    | mod => iapply caseP_BinaryMod S.hlive hE S.vint S.vkind; iframe HE Hctx
+    | sub =>
+      iapply intOpP .sub .sub (op := .sub) rfl (IntOpDesc.sem_triv fun _ _ _ => rfl)
+        (IntOpDesc.noZ fun _ _ => trivial) S.hlive hE S.vint S.vkind
+      iframe HE Hctx
+    | mul =>
+      iapply intOpP .mul .mul (op := .mul) rfl (IntOpDesc.sem_triv fun _ _ _ => rfl)
+        (IntOpDesc.noZ fun _ _ => trivial) S.hlive hE S.vint S.vkind
+      iframe HE Hctx
+    | div =>
+      iapply intOpP .div .div (op := .div) rfl IntOpDesc.div_sem IntOpDesc.div_Z
+        S.hlive hE S.vint S.vkind
+      iframe HE Hctx
+    | mod =>
+      iapply intOpP .mod .mod (op := .mod) rfl IntOpDesc.mod_sem IntOpDesc.mod_Z
+        S.hlive hE S.vint S.vkind
+      iframe HE Hctx
     | eq => iapply caseP_BinaryEq S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
     | ne => iapply caseP_BinaryNe S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
     | lt => iapply cmpP .lt (op := .lt) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx

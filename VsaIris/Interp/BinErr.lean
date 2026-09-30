@@ -217,7 +217,7 @@ macro "bin_err_post " pc:num : tactic => `(tactic| (
   have hL0' : ldv .ld Mt (s.toNat - 1088 + 120) = w0 := by rw [← hoff 120 (by decide)]; exact hL0
   have hQ0' : ldv .ld Mt (s.toNat - 1088 + 144) = u0 := by rw [← hoff 144 (by decide)]; exact hQ0
   refine hk _ _ ⟨by ix_reg, by ix_reg, by ix_reg, by e2_fwd hoff <;> simp only [hL0', hQ0'],
-    by simp only [opnSlot, opnConst]; first | rfl | (e2_fwd hoff <;> rfl)⟩))
+    by simp only [opnSlot, opnConst] <;> first | rfl | (e2_fwd hoff <;> rfl)⟩))
 
 section
 
@@ -261,6 +261,66 @@ theorem binErrArm {op : BinOp} {src : BitVec 64 → Mem → BitVec 64 → Prop} 
       (v := if left then lv else rv') p.a0 (p.s2.trans mid.r18) (p.sp.trans mid.r2) p.slot
       (by cases left <;> simp only [ite_true, ite_false, Bool.false_eq_true] <;>
         first | exact mid.tl | exact mid.tr) p.opn hab)
+
+end
+
+/-- State at an `rt_err` call reporting a fixed message `fmt` (no operands). -/
+structure PlainErrPost (R R' : Nat → BitVec 64) (fmt : BitVec 64) : Prop where
+  a0 : R' 10 = R 18
+  a2 : R' 12 = fmt
+  a3 : R' 13 = 0#64
+  a4 : R' 14 = 0#64
+  sp : R' 2 = R 2
+
+/-- The division-by-zero path of `op`, from the dispatch to its `rt_err` call at `rt`. -/
+def ZeroRun (op : BinOp) (rt fmt : BitVec 64) : Prop :=
+  ∀ {live : Nat → Prop}, (∀ p ∈ interpText, live p.1) →
+  ∀ {m : Mem} {P : Nat → Prop} {aX s ret sret inp : BitVec 64} {rv R : Nat → BitVec 64} {Mt : Mem}
+    {a b : Int} {w0 w1 w2 u0 u1 u2 : BitVec 64} {n : Nat},
+    ArmGeo s ret sret n → BinOpNode m P aX (binOpTok op) →
+    BinMid s sret inp rv R Mt ret aX (.int a) (.int b) w0 w1 w2 u0 u1 u2 → u1 = 0#64 →
+    MRun live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) 0x8000351c#64 rt R Mt
+      (fun R' _ => PlainErrPost R R' fmt)
+
+section
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop}
+
+/-- A fixed-message runtime error arm (division by zero). -/
+theorem binZeroArm {op : BinOp} {fmt : BitVec 64} (RT : JalAt RtErr.rtErrEntry)
+    (hz : ZeroRun op (BitVec.ofNat 64 RT.i) fmt)
+    (hfmt : FmtArgsOK (fun a => rodataDom a ∨ False) rodataByte fmt [0#64, 0#64])
+    (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
+    (hE : ErrEnv N L Room inp live Core)
+    {Φ : Nat × String → IProp GF} {P : Nat → Prop} {m : Mem} {env : Nat}
+    {aE s ret sret aX : BitVec 64} {d : Nat} {l r : Expr} {rv R : Nat → BitVec 64} {Mt : Mem}
+    {ρ : Regime} {st : St} {a : Int} {w0 w1 w2 u0 u1 u2 : BitVec 64} {K : IProp GF}
+    (g : ArmGeo s ret sret (evalNeed (.binary op l r) d)) (hn : BinOpNode m P aX (binOpTok op))
+    (mid : BinMid s sret (BitVec.ofNat 64 inp) rv R Mt ret aX (.int a) (.int 0) w0 w1 w2 u0 u1 u2)
+    (hab : AbortK Wp Φ inp Core s sret (evalNeed (.binary op l r) d) K) :
+    BinTail Wp Φ N (binArmF N P m env aE s (evalNeed (.binary op l r) d) sret
+      (world N L Room inp ρ st d) K) R s Mt (.int a) (.int 0) w0 w1 w2 u0 u1 u2 := by
+  unfold AbortK at hab
+  refine BinTail.ints fun _ h2 => ?_
+  have hu : u1 = 0#64 := BitVec.eq_of_toInt_eq (by rw [h2]; rfl)
+  refine ArmAt.run Wp hn.view (hz hlive g hn mid hu) fun R' _ p => ?_
+  have hR : RtErrEvalAt R' inp (R' 11) fmt 0#64 0#64 s :=
+    ⟨p.a0.trans mid.r18, rfl, p.a2, p.a3, p.a4, p.sp.trans mid.r2⟩
+  unfold ArmAt evalArmF
+  iintro ⟨⟨#Hcode, -, -, Hst, Hslot, Hw, HK⟩, Hms⟩
+  ihave ⟨#HE, Hab⟩ := hab $$ HK
+  ihave #Himg := errCtx_img inp $$ HE
+  ihave #Hrd := readable_rodata $$ Himg
+  iapply ms_rtErrEval Wp hE (RT.exec live hlive) RT.mem (Sro := rodataDom) (rd := rodataByte)
+    hfmt g.sg (evalNeed_binary_rtErr _ _ _ _)
+  iframe Hcode HE Hrd Hms Hst Hw
+  isplitl []
+  · ipureintro; exact hR
+  iintro HA
+  iapply Hab
+  iframe HA Hslot
 
 end
 

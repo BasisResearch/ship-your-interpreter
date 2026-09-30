@@ -66,6 +66,11 @@ theorem HiKeep.upd {R R' : Nat → BitVec 64} (h : HiKeep R R') {x : Nat} (v : B
   ⟨by rw [upd_other _ _ (Ne.symm hx)]; exact h.sp, fun y hy => by
     rw [upd_other _ _ (fun e => hx' (by subst e; exact hy))]; exact h.hi y hy⟩
 
+theorem HiKeep.helperRA {clob : List Nat} {R R' : Nat → BitVec 64}
+    (h : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) (h2 : 2 ∉ clob) (hc : ∀ x ∈ hiSaved, x ∉ clob)
+    (v : BitVec 64) : HiKeep R (Sym.upd R' 1 v) :=
+  (HiKeep.of_helper h h2 hc).upd (x := 1) v (by decide) (by decide)
+
 /-- Post of a function epilogue: the saved registers are restored and `s4`–`s11` kept. -/
 structure EpiPost (R R' : Nat → BitVec 64) (s ret v8 v9 v18 v19 : BitVec 64) : Prop where
   ra : R' 1 = ret
@@ -206,6 +211,25 @@ theorem ArmAt.callBool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝))
     (by iintro; ihave H := hvb $$ %sret %b; unfold valueBoolSpec; iexact H) (pins := fun rv => rv 10 = sret ∧ rv 11 = b) ⟨h10, h11⟩
     (by iintro ⟨Ho, Hw, HK⟩; iframe Ho Hw HK; ipureintro; exact hslg) (fun _ => .rfl) hk
+
+/-- `value_int` from an arm frame whose output is the empty result slot. -/
+theorem ArmAt.callInt (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} (J : JalAt 0x8000280c#64) (hlive : ∀ p ∈ interpText, live p.1)
+    (hvi : ⊢ ∀ p n, valueIntSpec (vsaModel live) N Wp p n)
+    {P : Nat → Prop} {m : Mem} {env : Nat} {aE s' : BitVec 64} {n' : Nat} {Wd K : IProp GF}
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {sret : BitVec 64} {res : Int}
+    (h10 : R 10 = sret) (h11 : (R 11).toInt = res) (hslg : SlotGeom sret)
+    (hk : ∀ R', (∀ x ∈ fRegs, x ∉ [15] → R' x = R x) →
+      ArmAt Wp Φ (evalArmF P m env aE s' n' (valAt N sret.toNat (.int res)) Wd K)
+        (BitVec.ofNat 64 (J.i + 4)) (upd R' 1 (BitVec.ofNat 64 (J.i + 4))) S Mt) :
+    ArmAt Wp Φ (evalArmF P m env aE s' n' (slot24 sret.toNat) Wd K) (BitVec.ofNat 64 J.i) R S Mt :=
+  ArmAt.callHelper Wp J hlive (Out' := fun _ => valAt N sret.toNat (.int res))
+    (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝))
+    (Post := fun _ => valAt N sret.toNat (.int (R 11).toInt))
+    (by iintro; ihave H := hvi $$ %sret %(R 11); unfold valueIntSpec; iexact H)
+    (pins := fun rv => rv 10 = sret ∧ rv 11 = R 11) ⟨h10, rfl⟩
+    (by iintro ⟨Ho, Hw, HK⟩; iframe Ho Hw HK; ipureintro; exact hslg)
+    (fun _ => h11 ▸ .rfl) hk
 
 /-- What the arm's caller continuation `K` accepts at the return. -/
 def ExitK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)

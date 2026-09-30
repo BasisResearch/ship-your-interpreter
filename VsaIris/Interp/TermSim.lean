@@ -1,4 +1,5 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafIntT
 import VsaIris.Interp.Case.LeafStrT
@@ -6,11 +7,6 @@ import VsaIris.Interp.Case.LeafBoolT
 import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
-import VsaIris.Interp.Case.BinaryAddIntT
-import VsaIris.Interp.Case.BinarySubIntT
-import VsaIris.Interp.Case.BinaryMulIntT
-import VsaIris.Interp.Case.BinaryDivIntT
-import VsaIris.Interp.Case.BinaryModIntT
 import VsaIris.Interp.Case.BinaryConcatT
 import VsaIris.Interp.Case.BinaryEqT
 import VsaIris.Interp.Case.BinaryNeT
@@ -119,15 +115,15 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     · cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem <;>
         simp [valTag] at hs
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryAddInt S.hlive Dl Dr _ hl hr S.vint
+      exact intOpT .add S.hlive Dl Dr _ trivial hl hr S.vint
   | sub =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinarySubInt S.hlive Dl Dr _ hl hr S.vint
+    exact intOpT .sub S.hlive Dl Dr _ trivial hl hr S.vint
   | mul =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinaryMulInt S.hlive Dl Dr _ hl hr S.vint
+    exact intOpT .mul S.hlive Dl Dr _ trivial hl hr S.vint
   | div =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     rename_i a b
@@ -135,7 +131,7 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     · simp [hb] at hsem
     · simp only [hb, beq_iff_eq, ite_false] at hsem
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryDivInt S.hlive Dl Dr _ hb hl hr S.vint
+      exact intOpT .div S.hlive Dl Dr _ hb hl hr S.vint
   | mod =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     rename_i a b
@@ -143,7 +139,7 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     · simp [hb] at hsem
     · simp only [hb, beq_iff_eq, ite_false] at hsem
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryModInt S.hlive Dl Dr _ hb hl hr S.vint
+      exact intOpT .mod S.hlive Dl Dr _ hb hl hr S.vint
   | lt =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
