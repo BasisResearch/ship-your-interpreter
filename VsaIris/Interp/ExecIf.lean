@@ -1,4 +1,5 @@
 import VsaIris.Interp.ExecArm
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -27,7 +28,7 @@ open Vsa.MemRepr Vsa.Sim
     (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709551440#64) :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x800041fc#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80004218
+  by sym_run hlive using [h2, hsf] at 0x80004218
 
 #ix_seg IfArm_runT {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -37,7 +38,7 @@ open Vsa.MemRepr Vsa.Sim
     (h8 : R 8 = aS) (h10 : R 10 = 1#64) (ht : ldv .ld m (aS + 16#64).toNat = aT) :
     IW live m (stmtView aS.toNat 32) (InExt (s.toNat - 176, 176)) Q 0x8000421c#64 R Mt
   by rw [← upd_eq_self h10]
-     ix_run hlive using [h8, ht] at 0x80004014
+     sym_run hlive using [h8, ht] at 0x80004014
 
 #ix_seg IfArm_runF {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -48,7 +49,7 @@ open Vsa.MemRepr Vsa.Sim
     (he0 : aE ≠ 0#64) :
     IW live m (stmtView aS.toNat 32) (InExt (s.toNat - 176, 176)) Q 0x8000421c#64 R Mt
   by rw [← upd_eq_self h10]
-     ix_run hlive using [h8, he, he0] at 0x80004014 0x8000409c
+     sym_run hlive using [h8, he, he0] at 0x80004014 0x8000409c
 
 #ix_seg IfArm_runN {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}

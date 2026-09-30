@@ -150,8 +150,35 @@ def headConsts (e : Expr) : Array Name :=
     if n == ``accAddrs || n == ``HAppend.hAppend || n == ``List.nil then #[] else #[n]
   | _ => #[]
 
-def symLeaf (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (go gk : MVarId) :
-    TacticM (List MVarId × List MVarId) := do
+def contNorm (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (gk : MVarId) :
+    TacticM MVarId := do
+  let [gk] ← evalTacticAt (← `(tactic| (try simp only [regsDen, memDen, SE.den, aluVal]))) gk
+    | throwError "sym_run: continuation"
+  let kty ← whnfR (← instantiateMVars (← gk.getType))
+  let a := kty.getAppArgs
+  unless kty.getAppFn.isConstOf ``SWP && a.size == 8 do throwError "sym_run: not SWP"
+  let gk ← gk.replaceTargetDefEq (withState ty0 a[5]! a[6]! a[7]!)
+  let gk ← do
+    let mut gk := gk
+    for f in l0facts do
+      let saved ← saveState
+      try
+        match ← evalTacticAt (← `(tactic| rw [upd_self_eq $f])) gk with
+        | [g'] => gk := g'
+        | _ => saved.restore
+      catch _ => saved.restore
+    pure gk
+  let gk ← do
+    let saved ← saveState
+    try
+      match ← evalTacticAt norm gk with
+      | [g'] => pure g'
+      | _ => saved.restore; pure gk
+    catch _ => saved.restore; pure gk
+  return gk
+
+def symLeaf (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (go gk : MVarId)
+    (withCont : Bool := true) : TacticM (List MVarId × List MVarId) := do
   -- obligations
   let mut pend : List MVarId := []
   let mut cur := go
@@ -192,31 +219,7 @@ def symLeaf (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (go gk : MVarId)
           catch _ => saved.restore; pure ho'
         pend := pend ++ [ho']
     cur := hr
-  -- continuation
-  let [gk] ← evalTacticAt (← `(tactic| (try simp only [regsDen, memDen, SE.den, aluVal]))) gk
-    | throwError "sym_run: continuation"
-  let kty ← whnfR (← instantiateMVars (← gk.getType))
-  let a := kty.getAppArgs
-  unless kty.getAppFn.isConstOf ``SWP && a.size == 8 do throwError "sym_run: not SWP"
-  let gk ← gk.replaceTargetDefEq (withState ty0 a[5]! a[6]! a[7]!)
-  let gk ← do
-    let mut gk := gk
-    for f in l0facts do
-      let saved ← saveState
-      try
-        match ← evalTacticAt (← `(tactic| rw [upd_self_eq $f])) gk with
-        | [g'] => gk := g'
-        | _ => saved.restore
-      catch _ => saved.restore
-    pure gk
-  let gk ← do
-    let saved ← saveState
-    try
-      match ← evalTacticAt norm gk with
-      | [g'] => pure g'
-      | _ => saved.restore; pure gk
-    catch _ => saved.restore; pure gk
-  return (pend, [gk])
+  if withCont then return (pend, [← contNorm ty0 norm l0facts gk]) else return (pend, [])
 
 /-- A branch that `ix_run1` would leave unexplored: both premises are returned with the
 landed step-lemma premise (`P (R' r₁) (R' r₂) → …`) over the pre-branch register chain. -/
@@ -248,8 +251,47 @@ def branchStuck (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (g : MVarId)
   gk'.assign (mkApp G pf)
   return G.mvarId!
 
-partial def symWalk (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (explore : Bool)
-    (g : MVarId) : TacticM (Except (List Nat) (List MVarId × List MVarId)) := do
+/-- A branch side that reaches a stop point with no further step: as in `ix_run`, the branch
+premise stays in the step-lemma form over the pre-branch register chain and only the
+continuation is normalised. -/
+def zeroStepChild (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (facts : Array Term)
+    (cg : MVarId) (op : bop) (r1 r2 : Nat) (taken : Bool) : TacticM (List MVarId × MVarId) := do
+  let outer ← cg.getDecl
+  let [cg1] ← evalTacticAt (← `(tactic| intro hc)) cg | throwError "sym_run: intro"
+  cg1.withContext do
+  let hg := (← getLCtx).lastDecl.get!.toExpr
+  let [go, gk] ← cg1.apply (mkConst ``Tree.WP_leaf) | throwError "sym_run: leaf"
+  let (pend, []) ← symLeaf ty0 norm l0facts go gk (withCont := false) | throwError "sym_run: leaf"
+  -- normalise the continuation in the outer context (without the branch premise)
+  let m ← mkFreshExprMVarAt outer.lctx outer.localInstances (← instantiateMVars (← gk.getType))
+  let m' ← contNorm ty0 norm l0facts m.mvarId!
+  let N ← instantiateMVars (← m'.getType)
+  let w ← whnfR N
+  let R' := w.getAppArgs[6]!
+  let opnd (r : Nat) : Expr := if r = 0 then toExpr (0 : BitVec 64) else mkApp R' (mkNatLit r)
+  let lem := match op, taken with
+    | .BEQ, true => ``guard_beq | .BNE, true => ``guard_bne | .BLT, true => ``guard_blt
+    | .BGE, true => ``guard_bge | .BLTU, true => ``guard_bltu | .BGEU, true => ``guard_bgeu
+    | .BEQ, false => ``gF_beq | .BNE, false => ``gF_bne | .BLT, false => ``gF_blt
+    | .BGE, false => ``gF_bge | .BLTU, false => ``gF_bltu | .BGEU, false => ``gF_bgeu
+  let li := mkApp2 (mkConst lem) (opnd r1) (opnd r2)
+  let some (_, P) := (← inferType li).iff? | throwError "sym_run: guard"
+  let G ← mkFreshExprMVarAt outer.lctx outer.localInstances (← mkArrow P N)
+  let H ← withLocalDeclD `x N fun x => do
+    m'.assign x
+    mkLambdaFVars #[x] (← instantiateMVars m)
+  let pfG ← mkFreshExprMVar P
+  let mut lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
+  for f in facts do lems := lems.push (← `(Lean.Parser.Tactic.simpLemma| $f:term))
+  let hgId := mkIdent (← hg.fvarId!.getUserName)
+  let [] ← evalTacticAt (← `(tactic| simpa only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
+      BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceToNat, Nat.reduceAdd, not_true_eq_false,
+      $lems,*] using $hgId)) pfG.mvarId! | throwError "sym_run: branch premise"
+  gk.assign (mkApp H (mkApp G pfG))
+  return (pend, G.mvarId!)
+
+partial def symWalk (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (facts : Array Term)
+    (explore : Bool) (g : MVarId) : TacticM (Except (List Nat) (List MVarId × List MVarId)) := do
   let tgt ← instantiateMVars (← g.getType)
   let tr := tgt.getAppArgs.back!
   if tr.isAppOf ``Tree.leaf then
@@ -271,15 +313,41 @@ partial def symWalk (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (explore
       pure g
     let gt' ← prem gt
     let gf' ← prem gf
+    let some ⟨_, bpc⟩ ← getBitVecValue? args[0]! | throwError "sym_run: pc"
+    let some (bop', br1, br2, bi13) := decB (wordAt binByte bpc.toNat) | throwError "sym_run: decode"
+    let tpc := (bpc + bi13.signExtend 64).toNat
+    let fpc := bpc.toNat + 4
+    let zeroAt (child : Expr) (succ : Nat) : MetaM Bool := do
+      unless child.isAppOf ``Tree.leaf do return false
+      let st := child.appArg!
+      unless st.isAppOf ``SS.mk do return false
+      match ← getBitVecValue? st.getAppArgs[0]! with
+      | some ⟨_, v⟩ => return v.toNat == succ
+      | none => return false
+    let side (g : MVarId) (child : Expr) (succ : Nat) (taken : Bool) :
+        TacticM (Except (List Nat) (List MVarId × List MVarId)) := do
+      if ← zeroAt child succ then
+        let (p, st) ← zeroStepChild ty0 norm l0facts facts g bop' br1 br2 taken
+        return .ok (p, [st])
+      else
+        -- the branch premise in the form `ix_run` reaches after one normalisation step
+        let g ← do
+          let saved ← saveState
+          try
+            match ← evalTacticAt norm g with
+            | [g'] => pure g'
+            | _ => saved.restore; pure g
+          catch _ => saved.restore; pure g
+        symWalk ty0 norm l0facts facts explore (← introHc g)
     if ← ixTryPrune norm gt' then
-      symWalk ty0 norm l0facts explore (← introHc gf')
+      side gf' args[5]! fpc false
     else if ← ixTryPrune norm gf' then
-      symWalk ty0 norm l0facts explore (← introHc gt')
+      side gt' args[4]! tpc true
     else if explore then
-      match ← symWalk ty0 norm l0facts explore (← introHc gt') with
+      match ← side gt' args[4]! tpc true with
       | .error c => return .error c
       | .ok (p1, s1) =>
-        match ← symWalk ty0 norm l0facts explore (← introHc gf') with
+        match ← side gf' args[5]! fpc false with
         | .error c => return .error c
         | .ok (p2, s2) => return .ok (p1 ++ p2, s1 ++ s2)
     else
@@ -449,7 +517,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
   dbg "geom"
   let [gw] ← evalTacticAt (← `(tactic| sym_eval)) gw | throwError "sym_run: eval"
   dbg "eval"
-  match ← symWalk ty0 norm L0facts explore gw with
+  match ← symWalk ty0 norm L0facts facts explore gw with
   | .error cuts => return some cuts
   | .ok (pend, stuck) =>
     replaceMainGoal (pend ++ stuck)

@@ -1,4 +1,5 @@
 import VsaIris.Interp.LoopWhile
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -14,13 +15,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (hx3 : aS.toNat + 40 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aS.toNat)
     (h8 : R 8 = aS) (hi : ldv .ld m (aS + 8#64).toNat = pI) :
     IW live m (forView aS.toNat) (execS s) Q 0x8000423c#64 R Mt
-  by ix_run hlive using [h8, hi] at 0x80004254 0x8000426c
+  by sym_run hlive using [h8, hi] at 0x80004254 0x8000426c
 
 #ix_seg ForLoop_runInitJoin {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x80004258#64 R Mt
-  by ix_run hlive at 0x8000426c
+  by sym_run hlive at 0x8000426c
 
 #ix_seg ForLoop_runHead {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -30,7 +31,7 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (h8 : R 8 = aS) (h2 : R 2 = s + 18446744073709551440#64)
     (hc : ldv .ld m (aS + 16#64).toNat = pC) :
     IW live m (forView aS.toNat) (execS s) Q 0x8000426c#64 R Mt
-  by ix_run hlive using [h8, h2, hc] at 0x80004280 0x800042a8
+  by sym_run hlive using [h8, h2, hc] at 0x80004280 0x800042a8
 
 #ix_seg ForLoop_runCopy {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -39,13 +40,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709551440#64) :
     IW live m [] (execS s) Q 0x80004284#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x800042a0
+  by sym_run hlive using [h2, hsf] at 0x800042a0
 
 #ix_seg ForLoop_runBranch {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x800042a4#64 R Mt
-  by ix_run hlive at 0x800042a8 0x8000409c
+  by sym_run hlive at 0x800042a8 0x8000409c
 
 #ix_seg ForLoop_runBody {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -54,13 +55,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (hx3 : aS.toNat + 40 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aS.toNat)
     (h8 : R 8 = aS) (hb : ldv .ld m (aS + 32#64).toNat = pB) :
     IW live m (forView aS.toNat) (execS s) Q 0x800042a8#64 R Mt
-  by ix_run hlive using [h8, hb] at 0x800042b8
+  by sym_run hlive using [h8, hb] at 0x800042b8
 
 #ix_seg ForLoop_runRoute {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x800042bc#64 R Mt
-  by ix_run hlive at 0x8000409c 0x80004150 0x80004264
+  by sym_run hlive at 0x8000409c 0x80004150 0x80004264
 
 #ix_seg ForLoop_runStep {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -70,13 +71,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (h8 : R 8 = aS) (h2 : R 2 = s + 18446744073709551440#64)
     (he : ldv .ld m (aS + 24#64).toNat = pE) :
     IW live m (forView aS.toNat) (execS s) Q 0x80004264#64 R Mt
-  by ix_run hlive using [h8, h2, he] at 0x800042e8 0x8000426c
+  by sym_run hlive using [h8, h2, he] at 0x800042e8 0x8000426c
 
 #ix_seg ForLoop_runStepJoin {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x800042ec#64 R Mt
-  by ix_run hlive at 0x8000426c
+  by sym_run hlive at 0x8000426c
 
 def OptS (m : Mem) (P : Nat → Prop) (p : Nat) : Option Stmt → Prop
   | none => p = 0

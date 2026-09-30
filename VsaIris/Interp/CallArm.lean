@@ -1,6 +1,7 @@
 import VsaIris.Interp.SpecLoop
 import VsaIris.Interp.CallJalr
 import VsaIris.Interp.LoopArgs
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -84,6 +85,6 @@ theorem callNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr
     (hcnt : ldv .lw m (aX + 24#64).toNat = BitVec.ofNat 64 argc)
     (hA : ldv .ld Mt (s.toNat - 1088) = aE) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800031c0#64 R Mt
-  by ix_run hlive using [h8, h2, hcnt, hA, hsf] at 0x800031dc 0x80003254 0x80003fb0
+  by sym_run hlive using [h8, h2, hcnt, hA, hsf] at 0x800031dc 0x80003254 0x80003fb0
 
 end VsaIris.Interp
