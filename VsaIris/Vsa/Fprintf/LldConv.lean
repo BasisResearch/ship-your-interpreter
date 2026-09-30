@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.LldEmit
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -104,7 +105,7 @@ theorem vfp_lld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ inte
       SbFile M' f pend' → Frame M' Mt (LldReg f.toNat sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000a9b0#64 R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9fc#64 R Mt := by
-  refine lld_head hlive hs1 hs2 hs3 hs4 hal hap1 hap2 hapa hP.spR h25 hFm hap hv fun R1 Mt1 H1 => ?_
+  nx_win sp 1024 592; refine lld_head hlive hs1 hs2 hs3 hs4 hal hap1 hap2 hapa hP.spR h25 hFm hap hv fun R1 Mt1 H1 => ?_
   have k12 : R1 2 = sp := (H1.keep 2 (by decide)).trans hP.spR
   refine lld_mag hlive hlive' hsub hs1 hs2 hs3 hs4 hal k12 H1.mag H1.prec H1.t3 H1.t4 fun R2 Mt2 H2 => ?_
   have hm1 := H1.mem; subst hm1

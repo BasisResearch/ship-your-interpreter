@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Sfv
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 def LoopReg (f fp U : Nat) (a : Nat) : Prop := SfvReg f fp a ∨ (U + 16 ≤ a ∧ a < U + 24)
 
@@ -346,7 +347,7 @@ def SfvCallReg (f sp U : Nat) (a : Nat) : Prop := LoopReg f (sp - 96) U a ∨ (s
       Frame M' Mt (SfvCallReg f.toNat sp.toNat U.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de8c#64 R Mt   by
-    have hfl := hF.flags; have hBl := hF.base; have hp := hF.p
+    nx_win sp 352 0; have hfl := hF.flags; have hBl := hF.base; have hp := hF.p
     have htotd : BitVec.ofNat 64 (piecesLen iovs) ≠ 0#64 := fun e => by
       have := congrArg BitVec.toNat e; simp only [BitVec.toNat_ofNat] at this; omega
     have hB0 : f + 184#64 ≠ 0#64 := fun e => by

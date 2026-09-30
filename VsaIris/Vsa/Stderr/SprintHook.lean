@@ -57,7 +57,7 @@ theorem sprintErr_hook {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       (outS s need) Q (t ++ putcs out) ra R' M') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000e8cc#64 R Mt := by
-  by_cases hb : bs.length = 0
+  nx_win sp 256 592; by_cases hb : bs.length = 0
   · have e : bs = [] := List.eq_nil_of_length_eq_zero hb
     subst e
     refine sprintErr0_run hlive t Mt R s need _ sp hs1 hs2 hs3 hs4 hal hra h1 h2 h12

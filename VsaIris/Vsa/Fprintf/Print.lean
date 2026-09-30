@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.ScanTo
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -43,7 +44,7 @@ theorem vfp_printH (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000a9b0#64 R'
         (writeLog M' [((sp + 232#64).toNat, 4, 0#64)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b8c4#64 R Mt := by
-  have h2 := hP.spR
+  nx_win sp 1024 592; have h2 := hP.spR
   have hre := hP.reent; have hfi := hP.file
   nx_run hlive using [h2, hre, hfi] at 2147543244
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk =>
@@ -91,7 +92,7 @@ theorem sbSprint_hook (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p �
       (∀ R' M' out, RetOK R0 R' 0#64 → (∃ pend', SbOut Mt M' sp f pend0 pend' iovs out) →
         SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) ra R' M') →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e8cc#64 R0 Mt := by
-  intro R0 h2' h10 h11 h12 h1 kont
+  nx_win sp 1024 592; intro R0 h2' h10 h11 h12 h1 kont
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk =>
     sp_lit (by omega)
   have hbase : ldv .ld Mt (sp + 224#64).toNat = BitVec.ofNat 64 (sp.toNat + 352) := by
@@ -147,7 +148,7 @@ theorem vfp_print (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ in
       VfpLoop R' M' sp 0x8001b538#64 f P cnt → SbFile M' f pend' → Frame M' Mt (PrintReg f.toNat sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000a9b0#64 R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b8c4#64 R Mt := by
-  have hsp : 0x80100000 ≤ sp.toNat := by omega
+  nx_win sp 1024 592; have hsp : 0x80100000 ≤ sp.toNat := by omega
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk =>
     sp_lit (by omega)
   refine vfp_printH (Post := fun out M' => ∃ pend', SbOut Mt M' sp f pend0 pend' iovs out)

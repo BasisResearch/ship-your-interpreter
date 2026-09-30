@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.LldConv
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -95,7 +96,7 @@ local macro "s_close" : tactic => `(tactic| (
       Frame Mt' Mt (SReg sp.toNat iovs.length) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b8c4#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9fc#64 R Mt by
-  have h2 := hP.spR
+  nx_win sp 1024 592; have h2 := hP.spR
   have hDA := hF.fmtDA; have hDT := hF.tabDA; have hf1 := hF.s; have hts := hF.tabS
   have eX : (X + 1#64).toNat = X.toNat + 1 := toNat_add_lit (by omega)
   have hs0' : (str = 0#64) = False := eq_false hs0

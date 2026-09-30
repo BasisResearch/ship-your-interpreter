@@ -140,7 +140,7 @@ theorem swbuf_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) 
     (hk : ∀ R', RetOK R R' (BitVec.zeroExtend 64 c &&& 255#64) → SWPO live (stdioText ++ dataOf Dt DA)
       iRegs (outS s need) Q (t ++ putcs [c]) ra R' (swbufMt Mt sp ra (R 8) (R 9) (R 18) (R 19) c)) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000f0c8#64 R Mt := by
-  refine swbuf_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h12 h2 hsinit hlbf hF hB hlm hP hbs hlock
+  nx_win sp 320 0; refine swbuf_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h12 h2 hsinit hlbf hF hB hlm hP hbs hlock
     hwr hck hsfd ?_
   intros
   simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
@@ -185,7 +185,7 @@ theorem swbuf_run' {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     (hk : ∀ R' M', RetOK R R' (BitVec.zeroExtend 64 c &&& 255#64) → MemKeep Mt M' (outKeep sp 256) →
       OutDone M' c → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs [c]) ra R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000f0c8#64 R Mt := by
-  cases o
+  nx_win sp 320 0; cases o
   · refine swbufU_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h12 h2 hsinit hlbf hF hB hlm hP hbs
       hlock hwr hck hsfd ?_
     intros

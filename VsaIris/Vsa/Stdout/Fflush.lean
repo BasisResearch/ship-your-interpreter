@@ -82,7 +82,7 @@ theorem fflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     (hk : ∀ R', RetOK R R' 0#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
       (t ++ putcs bs) ra R' (fflushMt Mt sp B ra (R 8) (R 9) (R 18) (R 19))) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000edcc#64 R Mt := by
-  refine fflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h2 hn hn2 hB1 hb2 hsinit hF hlm hlock
+  nx_win sp 256 0; refine fflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h10 h11 h2 hn hn2 hB1 hb2 hsinit hF hlm hlock
     hBl hB0 hP hwr hck hsfd hb3 hbd hsrc ?_
   intros
   simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢

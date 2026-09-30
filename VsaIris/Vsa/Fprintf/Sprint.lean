@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.SfvLoop
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 def SprintReg (f sp U : Nat) (a : Nat) : Prop :=
   SfvCallReg f (sp - 32) U a ∨ (sp - 32 ≤ a ∧ a < sp) ∨ (U + 8 ≤ a ∧ a < U + 12)
@@ -33,7 +34,7 @@ theorem sprint_run (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
       Frame M' Mt (SprintReg f.toNat sp.toNat U.toNat) → ldv .ld M' (U + 16#64).toNat = 0#64 →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e8cc#64 R Mt := by
-  have htotd : BitVec.ofNat 64 (piecesLen iovs) ≠ 0#64 := fun e => by
+  nx_win sp 384 0; have htotd : BitVec.ofNat 64 (piecesLen iovs) ≠ 0#64 := fun e => by
     have := congrArg BitVec.toNat e; simp only [BitVec.toNat_ofNat] at this; omega
   nx_run hlive using [h2, h12, hres, BitVec.add_assoc] at 2147540620
   have hsp : (sp + 18446744073709551584#64).toNat = sp.toNat - 32 := by

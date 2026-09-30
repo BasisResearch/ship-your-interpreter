@@ -357,9 +357,13 @@ elab "win_acc" : tactic => withMainContext do
 /-- `nx_win sp n m`: put the window of the `n` bytes below and `m` bytes above `sp` in the
 context as `hw_<sp>`, from the run's stack hypotheses (`omega`). The footprint is read off the goal. -/
 elab "nx_win " sp:term:max n:term:max m:term:max : tactic => withMainContext do
-  let ty ← whnfR (← instantiateMVars (← getMainTarget))
-  unless ty.getAppFn.isConstOf ``SWP do throwError "nx_win: not an SWP goal"
-  let S ← Term.exprToSyntax ty.getAppArgs[3]!
+  let Se ← forallTelescope (← instantiateMVars (← getMainTarget)) fun xs b => do
+    let ty ← whnfR b
+    unless ty.getAppFn.isConstOf ``SWP do throwError "nx_win: not an SWP goal"
+    let S := ty.getAppArgs[3]!
+    if xs.any fun x => S.containsFVar x.fvarId! then throwError "nx_win: the footprint is bound"
+    pure S
+  let S ← Term.exprToSyntax Se
   let hw := mkIdent (if sp.raw.isIdent then Name.mkSimple s!"hw_{sp.raw.getId}" else `hw)
   evalTactic (← `(tactic| have $hw : StackWin $S $sp $n $m := StackWin.of_outS (by omega)))
 

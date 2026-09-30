@@ -1,3 +1,4 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stderr.Swrite
 import VsaIris.Vsa.Stderr.Mem
 import VsaIris.Vsa.SymCompactTac
@@ -5,7 +6,7 @@ import VsaIris.Vsa.SymCompactTac
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 abbrev swsetupErrMt (Mt : Mem) (sp ra : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog Mt
@@ -35,7 +36,7 @@ macro "swsetup_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h1
         (swsetupErrMt Mt sp ra)) :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000f230#64 R Mt by
-  swsetup_step
+  nx_win sp 384 0; swsetup_step
 
 #ix_piece swsetupErr_02 from swsetupErr_01 by
   swsetup_step

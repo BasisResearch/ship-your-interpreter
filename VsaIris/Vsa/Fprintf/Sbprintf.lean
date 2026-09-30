@@ -145,7 +145,7 @@ local macro "sb_finish" : tactic => `(tactic| (
       Frame M' Mt (SbpReg sp.toNat) → ldv .lh M' 0x8001bb30 = 0x200a#64 →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dda8#64 R Mt by
-  have e : sp + 1264#64 + 18446744073709550352#64 = sp := by rw [BitVec.add_assoc]; simp
+  nx_win sp 2048 1264; have e : sp + 1264#64 + 18446744073709550352#64 = sp := by rw [BitVec.add_assoc]; simp
   have hfl := hSo.flagsU; have hf2 := hSo.flags2; have hfd := hSo.fdU; have hck := hSo.cookie
   have hwr := hSo.writer
   nf_go 3 [14] hlive using [h2, h10, h11, h12, h13, hfl, hf2, hfd, hck, hwr, e, BitVec.add_assoc] at 2147526788

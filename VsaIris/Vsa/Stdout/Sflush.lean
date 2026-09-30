@@ -97,7 +97,7 @@ theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     (hk : ∀ R', RetOK R R' 0#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
       (t ++ putcs bs) ra R' (sflushMt Mt sp f B ra s0 s1 s2 s3)) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000eb70#64 R Mt := by
-  refine sflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h8 h9 h18 h19 hfS hfa hn hn2 hB1 hb2 h10 h11 h2
+  nx_win sp 128 0; refine sflush_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h8 h9 h18 h19 hfS hfa hn hn2 hB1 hb2 h10 h11 h2
     hF hF8 hF3 hBl hB0 hP hwr hck hsfl hsfd hb3 hbd hsrc (toInt_ofNat_small (by omega))
     (subw_add_ofNat hn2) ?_
   intros

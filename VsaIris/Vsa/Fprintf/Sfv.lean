@@ -1,10 +1,11 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.SbFile
 import VsaIris.Vsa.Fprintf.Arith
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 abbrev sfvKeep : List Nat := [2, 8, 20, 21, 23, 24, 25, 26, 27]
 
@@ -195,7 +196,7 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
       (∀ x ∈ sfvKeep, R' x = Rh x) → SbFile M' f pend' → Frame M' Mt0 (SfvReg f.toNat fp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000e258#64 R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e294#64 R Mt := by
-  obtain ⟨h8, h20, h21, h24, h2⟩ := (⟨hkeep 8 (by decide) |>.trans hRh.file, hkeep 20 (by decide) |>.trans hRh.uio,
+  nx_win fp 256 0; obtain ⟨h8, h20, h21, h24, h2⟩ := (⟨hkeep 8 (by decide) |>.trans hRh.file, hkeep 20 (by decide) |>.trans hRh.uio,
     hkeep 21 (by decide) |>.trans hRh.reent, hkeep 24 (by decide) |>.trans hRh.imax,
     hkeep 2 (by decide) |>.trans hRh.sp⟩ : R 8 = f ∧ R 20 = U ∧ R 21 = 0x8001b538#64 ∧ R 24 = 0x7fffffff#64 ∧ R 2 = fp)
   have hk1024 := hF0.len
@@ -301,7 +302,7 @@ theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
         (t ++ putcs (copyBytes g src (L - L % 1024))) 0x8000e258#64 R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dfc0#64 R Mt := by
-  obtain ⟨h8, h20, h21, h24, h2⟩ := hR.k2 hRh
+  nx_win fp 256 0; obtain ⟨h8, h20, h21, h24, h2⟩ := hR.k2 hRh
   have h19 := hR.len; have h22 := hR.src; have h15 := hR.p; have h13 := hR.flags; have h9 := hR.nxt
   have hw' := hF.w; have hBl := hF.base; have hsz := hF.size; have hwr := hF.writer; have hck := hF.cookie
   simp only [List.length_nil] at hw'

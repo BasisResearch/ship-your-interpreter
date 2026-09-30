@@ -104,7 +104,7 @@ theorem sfvwrite_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.
       ldv .lh M' 0x8001bb30 = 0x200a#64 → ldv .lhu M' 0x8001bb30 = 0x200a#64 →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bs) ra R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de8c#64 R Mt := by
-  by_cases hn0 : bs.length = 0
+  nx_win sp 320 0; by_cases hn0 : bs.length = 0
   · obtain rfl : bs = [] := List.eq_nil_of_length_eq_zero hn0
     simp only [putcs_nil, String.append_empty] at hk
     refine sfv_Z hlive hs1 hs2 hs3 hs4 hal hra hu1 hu2 hu8 h1 h11 h12 h2 (by rw [hres]; rfl) ?_
