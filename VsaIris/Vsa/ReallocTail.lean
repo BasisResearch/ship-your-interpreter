@@ -14,7 +14,7 @@ theorem rtail_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
     (hdata : ∀ k, k < B.nOld → Mt[p + k]? = some (B.old (B.p + k))) :
     AW C.live C.S C.Q 0x80005440#64 R Mt := by
   sx_run [12] O.live at 0x80005448
-  refine st_80005448 O.live ?_
+  refine (step% st 0x80005448) O.live ?_
   refine repi O (F.of_regs ?_ ?_ ?_) fun R' hR h10 => O.ok R' Mt ?_ <;>
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   have hp : (R' 10).toNat = p := by
@@ -101,19 +101,19 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   have ha2 := T.a2; have ha4 := T.a4; have ha5 := T.a5
   have hE8 : (R 12 + sign_extend (m := 64) (0x008#12)).toNat = X + 8 := by
     sx_norm; rw [BitVec.toNat_add, ha2]; simp; omega
-  refine st_80005414 O.live (by rw [hE8]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+  refine (step% st 0x80005414) O.live (by rw [hE8]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [hE8]; exact O.foot hhf) ?_
   rw [hE8, ldv_at hMr _ rfl]
-  refine st_80005418 O.live ?_
-  refine st_8000541c O.live ?_
-  refine st_80005420 O.live ?_
-  refine st_80005424 O.live ?_
+  refine (step% st 0x80005418) O.live ?_
+  refine (step% st 0x8000541c) O.live ?_
+  refine (step% st 0x80005420) O.live ?_
+  refine (step% st 0x80005424) O.live ?_
   have hrem : (R 14 - R 15).toNat = S - nb := by rw [BitVec.toNat_sub, ha4, ha5]; omega
   have hb : (BitVec.ofNat 64 hM &&& 1#64).toNat = hM % 2 := by
     rw [and1_toNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hMlt]
   have hEn : (R 12 + R 14 + sign_extend (m := 64) (0x008#12)).toNat = X + S + 8 := by
     sx_norm; rw [BitVec.toNat_add, BitVec.toNat_add, ha2, ha4]; simp; omega
-  refine st_80005428 O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80005428) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hrem] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x01f#12) : BitVec 64).toNat = 31 from rfl] at hc
   ·
@@ -144,32 +144,32 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
         · simp only at h3; omega⟩
     have hoR := off_stack_of T.disj hrf
     sx_norm
-    refine st_80005488 O.live ?_
-    refine st_8000548c O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
+    refine (step% st 0x80005488) O.live ?_
+    refine (step% st 0x8000548c) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
     · rw [hE8']; unfold StOK Vsa.Sim.tohostAddr; omega
     · rw [hE8']; exact O.foot hhf
     rw [hE8']
-    refine st_80005490 O.live ?_
-    refine st_80005494 O.live ?_
-    refine st_80005498 O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
+    refine (step% st 0x80005490) O.live ?_
+    refine (step% st 0x80005494) O.live ?_
+    refine (step% st 0x80005498) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
     · rw [hEr']; unfold StOK Vsa.Sim.tohostAddr; omega
     · rw [hEr']; exact O.foot hrf
     rw [hEr']
     have hnr2 : read64 (writeLog (writeLog Mt [(X + 8, 8, R 15 ||| BitVec.ofNat 64 hM &&& 1#64)])
         [(X + nb + 8, 8, R 14 - R 15 ||| 1#64)]) (X + S + 8) = some hn := by
       rw [rd_miss (by omega), rd_miss (by omega)]; exact hnr
-    refine st_8000549c O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
+    refine (step% st 0x8000549c) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
     · rw [hEn']; unfold LdOK Vsa.Sim.tohostAddr; omega
     · rw [hEn']; exact O.foot hnf
     rw [hEn', ldv_at hnr2 _ rfl]
-    refine st_800054a0 O.live ?_
-    refine st_800054a4 O.live ?_
-    refine st_800054a8 O.live ?_
-    refine st_800054ac O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
+    refine (step% st 0x800054a0) O.live ?_
+    refine (step% st 0x800054a4) O.live ?_
+    refine (step% st 0x800054a8) O.live ?_
+    refine (step% st 0x800054ac) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
     · rw [hEn']; unfold StOK Vsa.Sim.tohostAddr; omega
     · rw [hEn']; exact O.foot hnf
     rw [hEn']
-    refine st_800054b0 O.live ?_
+    refine (step% st 0x800054b0) O.live ?_
     simp only [VsaIris.ra]
     have hv2 : (BitVec.ofNat 64 hn ||| 1#64).toNat = hn / 2 * 2 + 1 := by
       rw [or1_toNat', BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnlt]
@@ -258,7 +258,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
         · exact h3 _ List.mem_cons_self ⟨by simp only; omega, by simp only; omega⟩,
        T.heap.block_foot T.starts k hk⟩
     have htl := T.top_le
-    refine st_800054b4 O.live (rtail_fin O ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ (by omega) H'
+    refine (step% st 0x800054b4) O.live (rtail_fin O ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ (by omega) H'
       T.starts (by omega) (fun a ha => ?_) (fun k hk => ?_))
     · rw [h2]; exact hsp
     · rw [hslot _ (by omega) (by omega)]; exact F3.s0
@@ -280,19 +280,19 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   have hv1 : (R 14 ||| BitVec.ofNat 64 hM &&& 1#64).toNat = S + hM % 2 := by
     rw [or_bit_toNat (by rw [ha4]; omega) (by rw [hb]; omega), ha4, hb]
   sx_norm
-  refine st_8000542c O.live ?_
-  refine st_80005430 O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
+  refine (step% st 0x8000542c) O.live ?_
+  refine (step% st 0x80005430) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
   · rw [hE8']; unfold StOK Vsa.Sim.tohostAddr; omega
   · rw [hE8']; exact O.foot hhf
   rw [hE8']
   have hnr1 : read64 (writeLog Mt [(X + 8, 8, R 14 ||| BitVec.ofNat 64 hM &&& 1#64)]) (X + S + 8) =
       some hn := by rw [rd_miss (by omega)]; exact hnr
-  refine st_80005434 O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
+  refine (step% st 0x80005434) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
   · rw [hEn']; unfold LdOK Vsa.Sim.tohostAddr; omega
   · rw [hEn']; exact O.foot hnf
   rw [hEn', ldv_at hnr1 _ rfl]
-  refine st_80005438 O.live ?_
-  refine st_8000543c O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
+  refine (step% st 0x80005438) O.live ?_
+  refine (step% st 0x8000543c) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> (try sx_norm)
   · rw [hEn']; unfold StOK Vsa.Sim.tohostAddr; omega
   · rw [hEn']; exact O.foot hnf
   rw [hEn']

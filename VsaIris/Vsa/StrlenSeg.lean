@@ -74,9 +74,7 @@ theorem strlenLoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
   have h' : ∀ a b, (a, b) ∈ codeText codeBase strlenCode → m[a]? = some b := by
     intro a b hab
     exact h (a, DFrac.discard, b) (List.mem_map_of_mem (f := fun q => (q.1, DFrac.discard, q.2)) hab)
-  unfold Code.StrlenLoaded Code.strlenChunk0 Code.strlenChunk1 Code.strlenChunk2 Code.strlenChunk3
-  repeat' apply And.intro
-  all_goals (apply h'; decide)
+  exact Vsa.Sim.TextIn.of_list (fun p hp => h' p.1 p.2 hp) (by decide +kernel)
 
 def strText (p len : Nat) (bv : Nat → BitVec 8) : List (Nat × BitVec 8) :=
   (List.range (len + 1)).map (fun k => (p + k, bv (p + k)))

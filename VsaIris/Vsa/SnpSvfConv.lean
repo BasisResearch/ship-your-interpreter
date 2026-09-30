@@ -14,12 +14,13 @@ structure TabAt (Dt : Mem) (DA : List Nat) : Prop where
 
 theorem TabAt.lw {Dt : Mem} {DA : List Nat} (h : TabAt Dt DA) {a : Nat} (h1 : 0x8001a0fc ≤ a)
     (h2 : a + 4 ≤ 0x8001a268) : ldv .lw Dt a = ldvf .lw snpROImg a := by
-  unfold ldv ldvf bytesAt
-  congr 1
-  refine List.map_congr_left fun j hj => ?_
-  have := List.mem_range.mp hj
-  simp only [widthOfM] at this
-  exact h.img _ (by omega) (by omega)
+  have e : bytesAt (imgM Dt) a (widthOfM .lw) = bytesAt snpROImg a (widthOfM .lw) :=
+    List.map_congr_left fun j hj => by
+      have := List.mem_range.mp hj
+      simp only [widthOfM] at this
+      exact h.img _ (by omega) (by omega)
+  show bytesVal .lw (bytesAt (imgM Dt) a (widthOfM .lw)) = bytesVal .lw (bytesAt snpROImg a (widthOfM .lw))
+  rw [e]
 
 theorem svf_disp {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S : Nat → Prop} (x c : Nat) (tgt : BitVec 64)
@@ -31,9 +32,9 @@ theorem svf_disp {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
       (∀ z, z ≠ 14 → z ≠ 15 → z ≠ 24 → z ≠ 25 → R' z = R z) → SnpW live Dt DA S Q tgt R' Mt) :
     SnpW live Dt DA S Q 0x80007798#64 R Mt := by
   have hTd := hT.dom
-  have ts := (hT.lw (a := 0x8001a248) (by decide) (by decide)).trans snpRO_lw_8001a248
-  have td := (hT.lw (a := 0x8001a20c) (by decide) (by decide)).trans snpRO_lw_8001a20c
-  have tl := (hT.lw (a := 0x8001a22c) (by decide) (by decide)).trans snpRO_lw_8001a22c
+  have ts := (hT.lw (a := 0x8001a248) (by decide) (by decide)).trans (show ldvf .lw snpROImg 0x8001a248 = 0xfffffffffffede50#64 by simp only [imgLoad])
+  have td := (hT.lw (a := 0x8001a20c) (by decide) (by decide)).trans (show ldvf .lw snpROImg 0x8001a20c = 0xfffffffffffedf0c#64 by simp only [imgLoad])
+  have tl := (hT.lw (a := 0x8001a22c) (by decide) (by decide)).trans (show ldvf .lw snpROImg 0x8001a22c = 0xfffffffffffee438#64 by simp only [imgLoad])
   rcases hc with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
   all_goals snp_runF hlive using [ofNat_add_ofNat, h22, h24, h25, h26, sext_zero, BitVec.add_zero,
     BitVec.reduceToNat, ts, td, tl] at 0x80007f4c 0x80008008 0x80008534 0x800077f8

@@ -534,7 +534,7 @@ theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (by rw [eP]; exact strBytes_of_cstrImg f.hbuf) hlv $$ Himg
   rw [eP]
   iapply (ms_callRegs Wp (i := 0x80003048)
-    (jalx_80003048 live (fun q hq => cx.hlive _ (interp_code_80003048 q hq))) interp_code_80003048
+    ((step% jalx 0x80003048) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (L := [10, 11, 12, 13, 14, 15])
     (K := [2, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31])
     (by decide)
@@ -851,7 +851,7 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold memcpyPC
   rw [eB]
   iapply (ms_callRegs Wp (i := 0x8000306c)
-    (jalx_8000306c live (fun q hq => cx.hlive _ (interp_code_8000306c q hq))) interp_code_8000306c
+    ((step% jalx 0x8000306c) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
@@ -1051,7 +1051,7 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hm $$ Hst
   rw [← f.h2]
   iapply (ms_callMalloc A Wp (i := 0x80003058)
-    (jalx_80003058 live (fun q hq => cx.hlive _ (interp_code_80003058 q hq))) interp_code_80003058
+    ((step% jalx 0x80003058) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (by decide) ρ H c (R := R) (by rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; exact hc)
     ⟨by rw [f.h2, e112]; unfold Vsa.Sim.tohostAddr allocHeadroom; omega,
       by rw [f.h2, e112]; omega, by rw [f.h2, e112]; omega⟩)
@@ -1316,7 +1316,7 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave #Hscs := Hsc0 $$ %(s + 18446744073709551504#64 + 16#64) %src %x %64
   rw [eB]
   iapply (ms_callRegs Wp (i := 0x8000300c)
-    (jalx_8000300c live (fun q hq => cx.hlive _ (interp_code_8000300c q hq))) interp_code_8000300c
+    ((step% jalx 0x8000300c) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
@@ -1523,7 +1523,7 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold snprintfIntSpec
   rw [eB]
   iapply (ms_callNewlibA Wp (i := 0x800030d8)
-    (jalx_800030d8 live (fun q hq => cx.hlive _ (interp_code_800030d8 q hq))) interp_code_800030d8
+    ((step% jalx 0x800030d8) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (vs := [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c0#64, iw])
     (P := fun ra0 => iprop(⌜ra0.toNat % 4 = 0⌝ ∗ argsAt [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c0#64, iw] ∗
       blockOwn (s.toNat - 96) 64 ∗ stdioOwn ∗
@@ -1676,7 +1676,7 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hsls := Hsl0 $$ %(imgW (imgM Mp) (p.toNat + 8)) %t
   unfold strlenPC
   iapply (ms_callRegs Wp (i := 0x800030ec)
-    (jalx_800030ec live (fun q hq => cx.hlive _ (interp_code_800030ec q hq))) interp_code_800030ec
+    ((step% jalx 0x800030ec) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
@@ -1805,7 +1805,7 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hmcs := Hmc0 $$ %q %(imgW (imgM Mp) (p.toNat + 8)) %(t.toList.length + 1) %img
   unfold memcpyPC
   iapply (ms_callRegs Wp (i := 0x8000310c)
-    (jalx_8000310c live (fun q hq => cx.hlive _ (interp_code_8000310c q hq))) interp_code_8000310c
+    ((step% jalx 0x8000310c) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
     (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
     (by decide)
@@ -1893,7 +1893,7 @@ theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hm $$ Hst
   rw [← f.h2]
   iapply (ms_callMalloc A Wp (i := 0x800030f8)
-    (jalx_800030f8 live (fun q hq => cx.hlive _ (interp_code_800030f8 q hq))) interp_code_800030f8
+    ((step% jalx 0x800030f8) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (by decide) ρ H c (R := R) (by rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hlt]; exact hc)
     ⟨by rw [f.h2, e112]; unfold Vsa.Sim.tohostAddr allocHeadroom; omega,
       by rw [f.h2, e112]; omega, by rw [f.h2, e112]; omega⟩)
@@ -2062,7 +2062,7 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   unfold snprintfFnSpec
   rw [eB]
   iapply (ms_callNewlibA Wp (i := 0x80003040)
-    (jalx_80003040 live (fun q hq => cx.hlive _ (interp_code_80003040 q hq))) interp_code_80003040
+    ((step% jalx 0x80003040) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (vs := [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c8#64, BitVec.ofNat 64 nm])
     (P := fun ra0 => iprop(⌜ra0.toNat % 4 = 0⌝ ∗ argsAt [s + 18446744073709551504#64 + 16#64, 64#64, 0x800192c8#64,
         BitVec.ofNat 64 nm] ∗ blockOwn (s.toNat - 96) 64 ∗ strAt (BitVec.ofNat 64 nm).toNat x ∗

@@ -21,11 +21,25 @@ theorem of_textOrImpureAll {l : List (Nat × BitVec 8)} (h : textOrImpureAll l =
   unfold textOrImpureAll at h
   exact of_decide_eq_true (List.all_eq_true.mp h p hp)
 
-theorem envText_ok : ∀ p ∈ envText, TextOrImpure p :=
-  of_textOrImpureAll (by decide +kernel)
+theorem impurePtrPiece_ok {a : Nat} (ha : Vsa.Sim.inRangesB impurePtrPiece.ranges a = true) :
+    impureW a ∧ impureByte a = impurePtrPiece.img a := by
+  obtain ⟨h1, h2⟩ := Vsa.Sim.inRangesB_within (lo := 0x8001b970) (hi := 0x8001b978) (by decide) ha
+  obtain ⟨k, hk, rfl⟩ : ∃ k, k < 8 ∧ a = 0x8001b970 + k := ⟨a - 0x8001b970, by omega, by omega⟩
+  exact ⟨⟨h1, h2⟩, (by decide : ∀ k, k < 8 →
+    impureByte (0x8001b970 + k) = impurePtrPiece.img (0x8001b970 + k)) k hk⟩
 
-theorem allocText_ok : ∀ p ∈ allocText, TextOrImpure p :=
-  of_textOrImpureAll (by decide +kernel)
+/-- A text of fixed-image code ranges and the `_impure_ptr` word. -/
+theorem textOrImpure_pieces {rs : List (Nat × Nat)} (hw : Vsa.Sim.rangesWithinB rs 0x80000000 0x80018be0 = true) :
+    ∀ p ∈ Vsa.Sim.piecesText [⟨textByte, rs⟩, impurePtrPiece], TextOrImpure p := by
+  refine Vsa.Sim.forall_piecesText (P := fun a b => TextOrImpure (a, b)) ?_
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false]
+  rintro q (rfl | rfl) a ha
+  · exact .inl ⟨Vsa.Sim.inRangesB_within hw ha, rfl⟩
+  · exact .inr (impurePtrPiece_ok ha)
+
+theorem envText_ok : ∀ p ∈ envText, TextOrImpure p := textOrImpure_pieces (by decide)
+
+theorem allocText_ok : ∀ p ∈ allocText, TextOrImpure p := textOrImpure_pieces (by decide)
 
 section
 

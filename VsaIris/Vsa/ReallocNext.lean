@@ -295,15 +295,15 @@ theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     have := hsf (24 + k) (by omega) (by omega); rwa [show succ + (24 + k) = succ + 24 + k by omega] at this)
   have fP : ∀ k, k < 8 → vsaFoot C.H (pred + 16 + k) := fun k hk => vsaFoot_cons_sub _ (by
     have := hpf (16 + k) (by omega) (by omega); rwa [show pred + (16 + k) = pred + 16 + k by omega] at this)
-  refine st_80005400 O.live (by rw [eB]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+  refine (step% st 0x80005400) O.live (by rw [eB]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [eB]; exact O.foot fB) ?_
   rw [eB, ldv_at hbk _ rfl]
-  refine st_80005404 O.live
+  refine (step% st 0x80005404) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; exact O.foot fF) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [eF, ldv_at hfd _ rfl]
-  refine st_80005408 O.live ?_
+  refine (step% st 0x80005408) O.live ?_
   have hvP : (BitVec.ofNat 64 pred).toNat = pred := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl]
   have hvS : (BitVec.ofNat 64 succ).toNat = succ := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl]
   have eS : (BitVec.ofNat 64 succ + sign_extend (m := 64) (0x018#12)).toNat = succ + 24 := by
@@ -312,13 +312,13 @@ theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     rw [n16, addr_add hvP 16 (by omega)]
   have oS := off_stack_of D.heap.disj fS
   have oP := off_stack_of D.heap.disj fP
-  refine st_8000540c O.live
+  refine (step% st 0x8000540c) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]
         unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]; exact O.foot fS) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   rw [eS]
-  refine st_80005410 O.live
+  refine (step% st 0x80005410) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]
         unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]; exact O.foot fP) ?_

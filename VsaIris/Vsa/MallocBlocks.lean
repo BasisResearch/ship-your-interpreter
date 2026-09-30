@@ -299,25 +299,25 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
   have hoP := hns (pred + 16) (by have := N.predFoot 16 (by omega) (by omega); simpa using this)
   simp only [Nat.add_zero] at hoN
 
-  refine st_800049e8 O.live ?_
+  refine (step% st 0x800049e8) O.live ?_
   sx_norm
   have hEn : (R 15 + R 12 + 8#64).toNat = x + sz + 8 := by sx_addr
-  refine st_800049ec O.live ?_ ?_ ?_
+  refine (step% st 0x800049ec) O.live ?_ ?_ ?_
   · sx_norm; rw [hEn]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEn]; exact O.foot_at hnxf _ rfl
   sx_norm
   rw [ldv_at hdr _ hEn]
 
   have hEf : (R 15 + 16#64).toNat = x + 16 := by sx_addr
-  refine st_800049f0 O.live ?_ ?_ ?_
+  refine (step% st 0x800049f0) O.live ?_ ?_ ?_
   · sx_norm; rw [hEf]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEf]; exact O.foot (fun k hk => hvf _ (by omega) (by omega))
   sx_norm
   rw [ldv_at hfd _ hEf]
-  refine st_800049f4 O.live ?_
-  refine st_800049f8 O.live ?_
+  refine (step% st 0x800049f4) O.live ?_
+  refine (step% st 0x800049f8) O.live ?_
 
-  refine st_800049fc O.live ?_ ?_ ?_
+  refine (step% st 0x800049fc) O.live ?_ ?_ ?_
   · sx_norm; rw [hEn]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEn]; exact O.foot_at hnxf _ rfl
   sx_norm
@@ -325,7 +325,7 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
 
   have hEs : (BitVec.ofNat 64 succ + 24#64).toNat = succ + 24 := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsuccl]; simp; omega
-  refine st_80004a00 O.live ?_ ?_ ?_
+  refine (step% st 0x80004a00) O.live ?_ ?_ ?_
   · sx_norm; rw [hEs]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEs]; exact O.foot (fun k hk => by
       have := N.succFoot (24 + k) (by omega) (by omega)
@@ -333,7 +333,7 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
   sx_norm
   rw [hEs]
   have hEp : (R 13 + 16#64).toNat = pred + 16 := by sx_addr
-  refine st_80004a04 O.live ?_ ?_ ?_
+  refine (step% st 0x80004a04) O.live ?_ ?_ ?_
   · sx_norm; rw [hEp]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEp]; exact O.foot (fun k hk => by
       have := N.predFoot (16 + k) (by omega) (by omega)
@@ -390,23 +390,23 @@ theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brk
   have hFV := foot_free_span B hfree rfl
   simp only at hFV
 
-  refine st_80004d34 O.live ?_
-  refine st_80004d38 O.live ?_
-  refine st_80004d3c O.live ?_ ?_ ?_
+  refine (step% st 0x80004d34) O.live ?_
+  refine (step% st 0x80004d38) O.live ?_
+  refine (step% st 0x80004d3c) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  refine st_80004d40 O.live ?_ ?_ ?_
+  refine (step% st 0x80004d40) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  refine st_80004d44 O.live ?_ ?_ ?_
+  refine (step% st 0x80004d44) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
 
-  refine st_80004d48 O.live ?_
-  refine st_80004d4c O.live ?_ ?_ ?_
+  refine (step% st 0x80004d48) O.live ?_
+  refine (step% st 0x80004d4c) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
@@ -473,39 +473,39 @@ theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
   simp only at hFV
 
   have hEf : ((R 15) + sign_extend (m := 64) (0x010#12)).toNat = x + 16 := by sx_addr
-  refine st_80004d14 O.live ?_ ?_ ?_
+  refine (step% st 0x80004d14) O.live ?_ ?_ ?_
   · rw [hEf]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · rw [hEf]; exact O.foot (fun k hk => hFV _ (by omega) (by omega))
   rw [ldv_at hfd _ hEf]
 
-  refine st_80004d18 O.live ?_
-  refine st_80004d1c O.live ?_ ?_ ?_
+  refine (step% st 0x80004d18) O.live ?_
+  refine (step% st 0x80004d1c) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
 
   have hEs : (BitVec.ofNat 64 succ + 24#64).toNat = succ + 24 := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsuccl]; simp; omega
-  refine st_80004d20 O.live ?_ ?_ ?_
+  refine (step% st 0x80004d20) O.live ?_ ?_ ?_
   · sx_norm; rw [hEs]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEs]; exact O.foot (fun k hk => by
       have := N.succFoot (24 + k) (by omega) (by omega)
       rwa [show succ + (24 + k) = succ + 24 + k by omega] at this)
   sx_norm
   have hEp : (R 13 + 16#64).toNat = pred + 16 := by sx_addr
-  refine st_80004d24 O.live ?_ ?_ ?_
+  refine (step% st 0x80004d24) O.live ?_ ?_ ?_
   · sx_norm; rw [hEp]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEp]; exact O.foot (fun k hk => by
       have := N.predFoot (16 + k) (by omega) (by omega)
       rwa [show pred + (16 + k) = pred + 16 + k by omega] at this)
   sx_norm
 
-  refine st_80004d28 O.live ?_
-  refine st_80004d2c O.live ?_ ?_ ?_
+  refine (step% st 0x80004d28) O.live ?_
+  refine (step% st 0x80004d2c) O.live ?_ ?_ ?_
   · sx_norm; rw [ha6]; decide
   · sx_norm; rw [ha6]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inr (by rw [hb1]; decide))
   sx_norm
-  refine st_80004d30 O.live ?_ ?_ ?_
+  refine (step% st 0x80004d30) O.live ?_ ?_ ?_
   · sx_norm; rw [ha6]; decide
   · sx_norm; rw [ha6]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inl (by rw [hb1]; decide))
   sx_norm
@@ -574,7 +574,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
     intro post R hmem hsm hkp h13
     simp only [List.reverse_nil, List.nil_append] at hmem
     simp only [List.head?_nil, Option.getD_none] at h13
-    refine st_800049c8 O.live (fun _ => hex R (hmem ▸ hsm) hkp h13) (fun hne => absurd ?_ hne)
+    refine (step% st 0x800049c8) O.live (fun _ => hex R (hmem ▸ hsm) hkp h13) (fun hne => absurd ?_ hne)
     apply BitVec.eq_of_toNat_eq
     rw [hkp 6 (by decide) (by decide) (by decide) (by decide), h6, h13]
   | cons y rpre ih =>
@@ -615,28 +615,28 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
     have h14 := (W.keep hkp).a4
     have h6' : (R 6).toNat = binAt k := by rw [hkp 6 (by decide) (by decide) (by decide) (by decide)]; exact h6
     have h28' : (R 28).toNat = 31 := by rw [hkp 28 (by decide) (by decide) (by decide) (by decide)]; exact h28
-    refine st_800049c8 O.live (fun he => absurd he ?_) (fun _ => ?_)
+    refine (step% st 0x800049c8) O.live (fun he => absurd he ?_) (fun _ => ?_)
     · intro he; apply hyne
       have := congrArg BitVec.toNat he; rw [h6', h13] at this; exact this.symm
     have hEh : ((R 13) + sign_extend (m := 64) (0x008#12)).toNat = cya + 8 := by sx_addr
-    refine st_800049cc O.live ?_ ?_ ?_
+    refine (step% st 0x800049cc) O.live ?_ ?_ ?_
     · rw [hEh]; unfold LdOK Vsa.Sim.tohostAddr; omega
     · rw [hEh]; exact O.foot (fun k hk => by
         have := hfoot (8 + k) (by omega) (by omega)
         rwa [show cya + (8 + k) = cya + 8 + k by omega] at this)
     rw [ldv_at hr _ hEh]
-    refine st_800049d0 O.live ?_
+    refine (step% st 0x800049d0) O.live ?_
     sx_norm
     have hEb : (R 13 + 24#64).toNat = cya + 24 := by sx_addr
-    refine st_800049d4 O.live ?_ ?_ ?_
+    refine (step% st 0x800049d4) O.live ?_ ?_ ?_
     · sx_norm; rw [hEb]; unfold LdOK Vsa.Sim.tohostAddr; omega
     · sx_norm; rw [hEb]; exact O.foot (fun k hk => by
         have := hfoot (24 + k) (by omega) (by omega)
         rwa [show cya + (24 + k) = cya + 24 + k by omega] at this)
     sx_norm
     rw [hEb, ldv_at hbk _ rfl]
-    refine st_800049d8 O.live ?_
-    refine st_800049dc O.live ?_
+    refine (step% st 0x800049d8) O.live ?_
+    refine (step% st 0x800049dc) O.live ?_
     sx_norm
     have hszv : (BitVec.ofNat 64 h &&& 18446744073709551612#64).toNat = sz := by
       rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hhlt, ← hs]; rfl
@@ -664,7 +664,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
         ((BitVec.ofNat 64 h &&& 18446744073709551612#64) - R 14) 12).toNat = sz := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       exact ⟨h13, by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt], hszv⟩
-    refine st_800049e0 O.live (fun hgt => ?_) (fun hle => ?_)
+    refine (step% st 0x800049e0) O.live (fun hgt => ?_) (fun hle => ?_)
     ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hgt
       rw [← h31'] at hgt
@@ -672,7 +672,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
       exact bw_split O (W.keep hkp') hk1 hk hmem hcy hbig hpred hvals.1 hvals.2.1 hvals.2.2
         (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_sub, hszv, h14]; omega)
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hle
-      refine st_800049e4 O.live (fun hneg => ?_) (fun hnn => ?_)
+      refine (step% st 0x800049e4) O.live (fun hneg => ?_) (fun hnn => ?_)
       ·
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hneg
         have hsm' : sz < nb := by

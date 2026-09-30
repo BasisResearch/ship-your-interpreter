@@ -54,10 +54,7 @@ theorem strcpyLoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
     intro a b hab
     exact h (a, Iris.DFrac.discard, b)
       (List.mem_map_of_mem (f := fun q => (q.1, Iris.DFrac.discard, q.2)) hab)
-  unfold Code.StrcpyLoaded Code.strcpyChunk0 Code.strcpyChunk1 Code.strcpyChunk2
-    Code.strcpyChunk3
-  repeat' apply And.intro
-  all_goals (apply h'; decide)
+  exact Vsa.Sim.TextIn.of_list (fun p hp => h' p.1 p.2 hp) (by decide +kernel)
 
 theorem strlenLoaded_of_str {m : Mem} (h : TextLoaded strCode m) : Code.StrlenLoaded m :=
   strlenLoaded_of_code fun q hq => by

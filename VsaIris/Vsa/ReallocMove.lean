@@ -137,15 +137,15 @@ theorem mm_l32_rest {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
   have n24 : (sign_extend (m := 64) (0xfe8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 24) := rfl
   have n16 : (sign_extend (m := 64) (0xff0#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 16) := rfl
   have n8 : (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) := rfl
-  refine mm_pair A (st_80006a58 hlive) (st_80006a5c hlive)
+  refine mm_pair A ((step% st 0x80006a58) hlive) ((step% st 0x80006a5c) hlive)
     (by rw [n24]; exact eL 24 1 (by omega) (by omega) (by omega))
     (by rw [n24]; exact eS 24 1 (by omega) (by omega) (by omega)) (by omega) ?_
   have hK1 := hK.upd (ldv .ld (copyW M0 d s (4 * i + 1)) (s + 8 * (4 * i + 1))) (k := 13) (by decide)
-  refine mm_pair A (st_80006a60 hlive) (st_80006a64 hlive)
+  refine mm_pair A ((step% st 0x80006a60) hlive) ((step% st 0x80006a64) hlive)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16]; exact eL 16 2 (by omega) (by omega) (by omega))
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16]; exact eS 16 2 (by omega) (by omega) (by omega))
     (by omega) ?_
-  refine mm_pair A (st_80006a68 hlive) (st_80006a6c hlive)
+  refine mm_pair A ((step% st 0x80006a68) hlive) ((step% st 0x80006a6c) hlive)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8]; exact eL 8 3 (by omega) (by omega) (by omega))
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8]; exact eS 8 3 (by omega) (by omega) (by omega))
     (by omega) ?_
@@ -153,7 +153,7 @@ theorem mm_l32_rest {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
   have hK3 := ((hK.upd (k := 13) (ldv .ld (copyW M0 d s (4 * i + 1)) (s + 8 * (4 * i + 1))) (by decide)).upd
     (k := 13) (ldv .ld (copyW M0 d s (4 * i + 2)) (s + 8 * (4 * i + 2))) (by decide)).upd
     (k := 13) (ldv .ld (copyW M0 d s (4 * i + 3)) (s + 8 * (4 * i + 3))) (by decide)
-  refine st_80006a70 hlive (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80006a70) hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc
   · have hlt : i + 1 < n / 32 := by
       have : i + 1 ≠ n / 32 := fun he => hc (BitVec.eq_of_toNat_eq (by rw [h14, h16, ← he]; omega))
@@ -202,10 +202,10 @@ theorem mm_l32 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ 
     have e0 : (R 11 + sign_extend (m := 64) (0x000#12)).toNat = s + 8 * (4 * i) := by
       rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl,
         addr_add h11 0 (by omega)]; omega
-    refine st_80006a48 hlive (by rw [e0]; exact hl1) (by rw [e0]; exact hl2) ?_
+    refine (step% st 0x80006a48) hlive (by rw [e0]; exact hl1) (by rw [e0]; exact hl2) ?_
     rw [e0]
-    refine st_80006a4c hlive ?_
-    refine st_80006a50 hlive ?_
+    refine (step% st 0x80006a4c) hlive ?_
+    refine (step% st 0x80006a50) hlive ?_
     have h11' : ((upd (upd (upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11
         ((upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11 +
           sign_extend (m := 64) (0x020#12))) 14
@@ -228,7 +228,7 @@ theorem mm_l32 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ 
       rw [n32, show (sign_extend (m := 64) (0xfe0#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 32) from rfl,
         addr_sub (addr_add h14 32 (by omega)) 32 (by omega) (by omega)]
       omega
-    refine st_80006a54 hlive (by rw [e1]; exact hs1) (by rw [e1]; exact hs2) ?_
+    refine (step% st 0x80006a54) hlive (by rw [e1]; exact hs1) (by rw [e1]; exact hs2) ?_
     rw [e1]
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [← copyW_succ]
@@ -263,10 +263,10 @@ theorem mm_l8 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ a
     have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
     have eL : (R 11 + sign_extend (m := 64) (0x000#12)).toNat = s + 8 * (c / 8 + j) := by
       rw [n0, addr_add h11 0 (by omega)]; omega
-    refine st_80006aac hlive (by rw [eL]; exact hl1) (by rw [eL]; exact hl2) ?_
+    refine (step% st 0x80006aac) hlive (by rw [eL]; exact hl1) (by rw [eL]; exact hl2) ?_
     rw [eL]
-    refine st_80006ab0 hlive ?_
-    refine st_80006ab4 hlive ?_
+    refine (step% st 0x80006ab0) hlive ?_
+    refine (step% st 0x80006ab4) hlive ?_
     have eS : ((upd (upd (upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 17
         ((upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 11 +
           (upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 16)) 11
@@ -279,13 +279,13 @@ theorem mm_l8 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ a
       have h17 : (BitVec.ofNat 64 s).toNat = s := by rw [BitVec.toNat_ofNat]; omega
       rw [n0, h16, addr_add (add_sub_toNat h11 h10 h17 (by omega) (by omega)) 0 (by omega)]
       omega
-    refine st_80006ab8 hlive (by rw [eS]; exact hs1) (by rw [eS]; exact hs2) ?_
+    refine (step% st 0x80006ab8) hlive (by rw [eS]; exact hs1) (by rw [eS]; exact hs2) ?_
     rw [eS]
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [← copyW_succ]
     have g11 : (R 11 + sign_extend (m := 64) (0x008#12)).toNat = s + c + 8 * (j + 1) := by
       rw [n8, addr_add h11 8 (by omega)]; omega
-    refine st_80006abc hlive (fun hc => ?_) (fun hc => ?_) <;>
+    refine (step% st 0x80006abc) hlive (fun hc => ?_) (fun hc => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
     · have hlt : j + 1 < w := by
         have : j + 1 ≠ w := fun he => hc (BitVec.eq_of_toNat_eq (by rw [g11, h14, ← he]))
@@ -352,9 +352,9 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
       AW live S Q 0x800069fc#64 R' M := by
     intro R' M hK' h0' hM
     subst hM
-    refine st_800069fc hlive ?_
-    refine st_80006a00 hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
-    · refine st_80006ae0 hlive (by rw [upd_other _ _ (by decide), hK'.ra]; exact hra) ?_
+    refine (step% st 0x800069fc) hlive ?_
+    refine (step% st 0x80006a00) hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
+    · refine (step% st 0x80006ae0) hlive (by rw [upd_other _ _ (by decide), hK'.ra]; exact hra) ?_
       rw [upd_other _ _ (by decide), hK'.ra]
       exact hk _ (by mm_keep hK')
     · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h0'
@@ -370,12 +370,12 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
   have e31 : (R 12 &&& 31#64).toNat = n % 32 := by
     rw [show (31#64 : BitVec 64) = BitVec.ofNat 64 (2 ^ 5 - 1) from rfl, andm_toNat _ _ (by decide),
       h12, Nat.and_two_pow_sub_one_eq_mod]
-  refine st_80006a94 hlive (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80006a94) hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     have h32 : n % 32 = 0 := by rw [← e24, hc]; rfl
-    refine st_80006ae4 hlive ?_
-    refine st_80006ae8 hlive ?_
+    refine (step% st 0x80006ae4) hlive ?_
+    refine (step% st 0x80006ae8) hlive ?_
     refine hret _ _ (by mm_keep hK) ?_ ?_
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm
       apply BitVec.eq_of_toNat_eq; rw [e31, h32]; rfl
@@ -426,8 +426,8 @@ theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
     have k11 : (R' 11).toNat = s := by rw [g11, h11]
     have k12 : (R' 12).toNat = n := by rw [g12, h12]
     clear g10 g11 g12
-    refine st_800069f0 hlive ?_
-    refine st_800069f4 hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
+    refine (step% st 0x800069f0) hlive ?_
+    refine (step% st 0x800069f4) hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
     rotate_left
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [k12]
       show 31 < n; omega
@@ -436,7 +436,7 @@ theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
       apply BitVec.eq_of_toNat_eq
       rw [show (7#64 : BitVec 64) = BitVec.ofNat 64 (2 ^ 3 - 1) from rfl, andm_toNat _ _ (by decide),
         Nat.and_two_pow_sub_one_eq_mod, BitVec.toNat_or, k10, k11, or8 d s hd8 hs8]; rfl
-    refine st_80006a30 hlive (fun hc => absurd ?_ hc) (fun _ => ?_)
+    refine (step% st 0x80006a30) hlive (fun hc => absurd ?_ hc) (fun _ => ?_)
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hal
     sx_run [5] hlive at 0x80006a48
     have hq1 : 1 ≤ n / 32 := by omega
@@ -454,10 +454,10 @@ theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
     · rw [BitVec.toNat_add, e15]; simp; omega
     · rw [BitVec.toNat_add, k10, e16, Nat.mod_eq_of_lt (by omega)]
     · exact k11
-  refine st_800069c4 hlive (fun _ => hfwd R (MMKeep.refl R) rfl rfl rfl) (fun hc => ?_)
+  refine (step% st 0x800069c4) hlive (fun _ => hfwd R (MMKeep.refl R) rfl rfl rfl) (fun hc => ?_)
   rw [h10, h11] at hc
-  refine st_800069c8 hlive ?_
-  refine st_800069cc hlive (fun _ => hfwd _ (by mm_keep (MMKeep.refl R)) ?_ ?_ ?_) (fun hc' => ?_) <;>
+  refine (step% st 0x800069c8) hlive ?_
+  refine (step% st 0x800069cc) hlive (fun _ => hfwd _ (by mm_keep (MMKeep.refl R)) ?_ ?_ ?_) (fun hc' => ?_) <;>
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · exfalso
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc'

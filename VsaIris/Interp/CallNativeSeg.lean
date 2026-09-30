@@ -278,8 +278,8 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
     · rw [hbase]; simp only [argsBase]; unfold tohostAddr; omega
     · rw [hbase]; simp only [argsBase]; omega
   iapply ms_callAbortR Wp (i := 0x800039f4)
-    (jalrx_800039f4 live (fun p hp => hlive _ (interp_code_800039f4 p hp)) nativeAssertPC (by decide))
-    interp_code_800039f4 (R := R1) (S := natS s vs.length) (Mt := Mt1) hnat.a6
+    (jalrx_800039f4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)) nativeAssertPC (by decide))
+    (interp_code (by decide)) (R := R1) (S := natS s vs.length) (Mt := Mt1) hnat.a6
     (P := fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ regFile R1 ∗
         ⌜R1 10 = sret ∧ R1 11 = BitVec.ofNat 64 inp ∧ R1 12 = BitVec.ofNat 64 vs.length ∧
           R1 13 = s + 18446744073709550528#64 + 240#64 ∧ R1 14 = line ∧

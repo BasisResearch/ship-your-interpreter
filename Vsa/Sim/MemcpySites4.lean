@@ -5,7 +5,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
-open Vsa.Sim.Code (MemcpyLoaded memcpy_at_80006bc8 memcpy_at_80006bcc memcpy_at_80006bd0 memcpy_at_80006bd4 memcpy_at_80006bd8 memcpy_at_80006bdc memcpy_at_80006be0 memcpy_at_80006be4 memcpy_at_80006be8 memcpy_at_80006bec memcpy_at_80006bf0 memcpy_at_80006bf4 memcpy_at_80006bf8 memcpy_at_80006c3c)
+open Vsa.Sim.Code (MemcpyLoaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
@@ -41,7 +41,7 @@ theorem site_80006bd8
         (sigmaPost_alu σ pc vminstret Register.x12
           (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v12 (sign_extend (m := 64) (0x008#12)))))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := memcpy_at_80006bd8 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80006bd8 0x80006bd9 0x80006bda 0x80006bdb (b0 := (0x13 : BitVec 8)) (b1 := (0x36 : BitVec 8)) (b2 := (0x86 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80006bd8#64) vminstret (0x00863613#32)
     (instruction.ITYPE (0x008#12, regidx.Regidx 0x0c#5, regidx.Regidx 0x0c#5, iop.SLTIU))
     Register.x12 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v12 (sign_extend (m := 64) (0x008#12)))))

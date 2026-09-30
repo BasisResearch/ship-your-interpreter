@@ -8,15 +8,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
-theorem stdioText_all :
-    stdioText.all (fun p => decide (textDom p.1) && textByte p.1 == p.2) = true := by
-  decide +kernel
-
-theorem stdioText_code : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2 := by
-  intro p hp
-  have h := List.all_eq_true.1 stdioText_all p hp
-  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-  exact h
+theorem stdioText_code : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2 :=
+  VsaIris.Sym.stdioText_img_mem
 
 theorem stdioText_live {live : Nat → Prop} (hcl : CodeLive live) : ∀ p ∈ stdioText, live p.1 :=
   fun p hp => hcl _ (stdioText_code p hp).1

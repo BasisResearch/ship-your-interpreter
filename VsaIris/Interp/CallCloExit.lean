@@ -114,7 +114,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   ihave Hvn := hvn $$ %sret
   unfold valueNullSpec
   iapply ms_callHelper Wp (i := 0x80003964)
-    (jalx_80003964 live (fun p hp => hlive _ (interp_code_80003964 p hp))) interp_code_80003964
+    ((step% jalx 0x80003964) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝))
   iframe Hvn Hcode Hms
   isplitl []

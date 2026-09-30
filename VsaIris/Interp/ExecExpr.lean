@@ -68,8 +68,8 @@ theorem exprCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L :
   unfold F'
   iintro ⟨⟨#Hyp, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
 
-  iapply hcall 0x80004180 _ (jalx_80004180 live (fun p hp => hlive _ (interp_code_80004180 p hp)))
-    interp_code_80004180 (by decide) (slot := execSP s + 16#64) (aC := BitVec.ofNat 64 p)
+  iapply hcall 0x80004180 _ (jalx_80004180 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (slot := execSP s + 16#64) (aC := BitVec.ofNat 64 p)
     (aE := aE) (sF := execSP s) (f := 176) (m := execNeed (.expr e) d - 176)
     (execSP_eq s).symm g.child g.fits g.below (by omega) hf.stack.le g.slotGeom hbb
   iframe Hyp Hcode Hfb Hms Hst Hw Hslot HK

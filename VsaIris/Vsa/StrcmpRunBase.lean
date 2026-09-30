@@ -53,10 +53,7 @@ def strcmpCode : List (BitVec 8) :=
 theorem strcmpLoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
     (h : ∀ q ∈ codeText cmpBase strcmpCode, m[q.1]? = some q.2) :
     Code.StrcmpLoaded m := by
-  unfold Code.StrcmpLoaded Code.strcmpChunk0 Code.strcmpChunk1 Code.strcmpChunk2
-    Code.strcmpChunk3 Code.strcmpChunk4
-  repeat' apply And.intro
-  all_goals (apply h (_, _); decide)
+  exact Vsa.Sim.TextIn.of_list (fun p hp => h p hp) (by decide +kernel)
 
 def cmpRegs : List Nat := [1, 5, 6, 7, 10, 11, 12, 13, 14, 15]
 

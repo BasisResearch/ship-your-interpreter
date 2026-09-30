@@ -76,34 +76,34 @@ theorem top_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hnsT := hns (C.top0 + 8) (hfootTop _ (by omega) (by omega))
   have hnsR := hns (C.top0 + nb + 8) (hfootTop _ (by omega) (by omega))
 
-  refine st_80004bf0 O.live ?_
-  refine st_80004bf4 O.live ?_ ?_ ?_
+  refine (step% st 0x80004bf0) O.live ?_
+  refine (step% st 0x80004bf4) O.live ?_ ?_ ?_
   · sx_norm; rw [hEh]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEh]
     exact O.foot (fun k hk => hfootTop _ (by omega) (by omega))
   sx_norm
   rw [hEh]
 
-  refine st_80004bf8 O.live ?_
+  refine (step% st 0x80004bf8) O.live ?_
   sx_norm
   have hEs : ((R 2) + 8#64).toNat = C.s.toNat - 96 + 8 := by rw [hs2]; sx_addr
-  refine st_80004bfc O.live ?_ ?_ ?_
+  refine (step% st 0x80004bfc) O.live ?_ ?_ ?_
   · sx_norm; rw [hEs]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEs]; exact O.stack (by unfold mHead; omega) (by omega)
   sx_norm
   rw [hEs]
 
-  refine st_80004c00 O.live ?_
-  refine st_80004c04 O.live ?_ ?_ ?_
+  refine (step% st 0x80004c00) O.live ?_
+  refine (step% st 0x80004c04) O.live ?_ ?_ ?_
   · sx_norm; rw [hEtop]; unfold StOK Vsa.Sim.tohostAddr topAddr avAddr; omega
   · sx_norm; rw [hEtop]
     exact O.glob (by unfold topAddr avAddr; omega) (by unfold topAddr avAddr; omega)
   sx_norm
   rw [hEtop]
-  refine st_80004c08 O.live ?_
+  refine (step% st 0x80004c08) O.live ?_
   sx_norm
   have hEr : ((R 15) + (R 14) + 8#64).toNat = C.top0 + nb + 8 := by sx_addr
-  refine st_80004c0c O.live ?_ ?_ ?_
+  refine (step% st 0x80004c0c) O.live ?_ ?_ ?_
   · sx_norm; rw [hEr]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEr]
     exact O.foot (fun k hk => hfootTop _ (by omega) (by omega))
@@ -187,26 +187,26 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hEtop : ((R 16) + sign_extend (m := 64) (0x010#12)).toNat = topAddr := by
     rw [ha6]; unfold topAddr avAddr; rfl
 
-  refine st_80004a2c O.live ?_ ?_ ?_
+  refine (step% st 0x80004a2c) O.live ?_ ?_ ?_
   · rw [hEtop]; unfold LdOK Vsa.Sim.tohostAddr topAddr avAddr; omega
   · rw [hEtop]; exact O.glob (by unfold topAddr avAddr; omega) (by unfold topAddr avAddr; omega)
   rw [ldv_at htptr _ hEtop]
 
   have hEh : ((BitVec.ofNat 64 C.top0) + sign_extend (m := 64) (0x008#12)).toNat =
       C.top0 + 8 := by sx_addr
-  refine st_80004a30 O.live ?_ ?_ ?_
+  refine (step% st 0x80004a30) O.live ?_ ?_ ?_
   · sx_norm; rw [hEh]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEh]; exact O.foot_at (foot_header B (.inl rfl)) _ rfl
   sx_norm
   rw [ldv_at hthdr _ hEh]
-  refine st_80004a34 O.live ?_
-  refine st_80004a38 O.live ?_
+  refine (step% st 0x80004a34) O.live ?_
+  refine (step% st 0x80004a38) O.live ?_
   sx_norm
   have htsizev : ((BitVec.ofNat 64 (brkv - C.top0 + 1)) &&& 18446744073709551612#64).toNat =
       brkv - C.top0 := by
     rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
     omega
-  refine st_80004a3c O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80004a3c) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     rw [htsizev, ha4] at hc
@@ -223,9 +223,9 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     have hsub : ((BitVec.ofNat 64 (brkv - C.top0 + 1) &&& 18446744073709551612#64) - R 14).toInt
         = ((brkv - C.top0 - nb : Nat) : Int) := sub_toInt htsizev ha4 (by omega) (by omega)
     have h32 : ((32#64 : BitVec 64)).toInt = (32 : Int) := by decide
-    refine st_80004a40 O.live ?_
+    refine (step% st 0x80004a40) O.live ?_
     sx_norm
-    refine st_80004a44 O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
+    refine (step% st 0x80004a44) O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, sltiV_eq_zero, Decidable.not_not,
         hsub, h32] at hc2
     ·
@@ -293,13 +293,13 @@ theorem bb_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     AW C.live C.S C.Q 0x80004968#64 R Mt := by
   have ha4 := G.a4; have ha7 := G.a7; have ha6 := G.a6
   unfold numBins at hidx
-  refine st_80004968 O.live ?_
-  refine st_8000496c O.live ?_
-  refine st_80004970 O.live ?_
+  refine (step% st 0x80004968) O.live ?_
+  refine (step% st 0x8000496c) O.live ?_
+  refine (step% st 0x80004970) O.live ?_
   sx_norm
   have ha5 := sraiw2_toNat ha7 (by omega)
   have ha0 := shl_one ha5 (by omega)
-  refine st_80004974 O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80004974) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     exact htop _ (F.of_regs rfl rfl rfl rfl) ⟨ha4, ha7, ha6⟩ h8
@@ -324,12 +324,12 @@ theorem bb_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     Option.isSome_iff_exists.1 HH.binblocks_present
   have hEbb : ((R 16) + sign_extend (m := 64) (0x008#12)).toNat = binblocksAddr := by
     rw [ha6]; unfold binblocksAddr avAddr; rfl
-  refine st_80004be8 O.live ?_ ?_ ?_
+  refine (step% st 0x80004be8) O.live ?_ ?_ ?_
   · rw [hEbb]; unfold LdOK Vsa.Sim.tohostAddr binblocksAddr avAddr; omega
   · rw [hEbb]
     exact O.glob (by unfold binblocksAddr avAddr; omega) (by unfold binblocksAddr avAddr; omega)
   rw [ldv_at hbb _ hEbb]
-  refine st_80004bec O.live ?_
+  refine (step% st 0x80004bec) O.live ?_
   refine bb_entry O (F.upd (by decide)) Hp ⟨?_, ?_, ?_⟩ ?_ hidx hbb ?_ ?_ htop (hblocks bb hbb) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · exact ha4

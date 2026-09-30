@@ -46,17 +46,17 @@ theorem mal_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p �
   have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
   obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * j) (by omega) (by omega)
   obtain ⟨s1, s2⟩ := A.st (a := d + 8 * j) (by omega) (by omega) (by omega)
-  refine cp_pair (rT := 12) (rS := 14) (rD := 15) (by decide) (st_800053a8 hlive) (st_800053ac hlive)
+  refine cp_pair (rT := 12) (rS := 14) (rD := 15) (by decide) ((step% st 0x800053a8) hlive) ((step% st 0x800053ac) hlive)
     (by rw [n0, addr_add h14 0 (by omega)]; omega) (by rw [n0, addr_add h15 0 (by omega)]; omega)
     l1 l2 s1 s2 ?_
   obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * (j + 1)) (by omega) (by omega)
   obtain ⟨s1, s2⟩ := A.st (a := d + 8 * (j + 1)) (by omega) (by omega) (by omega)
-  refine cp_pair (rT := 12) (rS := 14) (rD := 15) (by decide) (st_800053b0 hlive) (st_800053b4 hlive)
+  refine cp_pair (rT := 12) (rS := 14) (rD := 15) (by decide) ((step% st 0x800053b0) hlive) ((step% st 0x800053b4) hlive)
     (by rw [upd_other _ _ (by decide), n8, addr_add h14 8 (by omega)]; omega)
     (by rw [upd_other _ _ (by decide), n8, addr_add h15 8 (by omega)]; omega) l1 l2 s1 s2 ?_
   obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * (j + 2)) (by omega) (by omega)
   obtain ⟨s1, s2⟩ := A.st (a := d + 8 * (j + 2)) (by omega) (by omega) (by omega)
-  refine cp_pair (rT := 14) (rS := 14) (rD := 15) (by decide) (st_800053b8 hlive) (st_800053bc hlive)
+  refine cp_pair (rT := 14) (rS := 14) (rD := 15) (by decide) ((step% st 0x800053b8) hlive) ((step% st 0x800053bc) hlive)
     (by rw [upd_other _ _ (by decide), upd_other _ _ (by decide), n16, addr_add h14 16 (by omega)]; omega)
     (by rw [upd_other _ _ (by decide), upd_other _ _ (by decide), n16, addr_add h15 16 (by omega)]; omega)
     l1 l2 s1 s2 ?_
@@ -138,8 +138,8 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
     exact cp_pair (rT := rT) (rS := 8) (rD := 10) (Ne.symm t10) stL stS
       (by rw [K.s0, hoff, addr_add h8 _ (by omega)]) (by rw [K.a0, hoff, addr_add h10 _ (by omega)])
       l1 l2 s1 s2 (k _)
-  refine st_80005398 hlive ?_
-  refine st_8000539c hlive (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80005398) hlive ?_
+  refine (step% st 0x8000539c) hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x027#12) : BitVec 64).toNat = 39 from rfl] at hc
   ·
@@ -149,15 +149,15 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
     have e0 : ((upd R 14 (0#64 + sign_extend (m := 64) (0x027#12))) 8 +
         sign_extend (m := 64) (0x000#12)).toNat = s + 8 * 0 := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n0, addr_add h8 0 (by omega)]
-    refine st_800055c0 hlive (by rw [e0]; exact l1) (by rw [e0]; exact l2) ?_
+    refine (step% st 0x800055c0) hlive (by rw [e0]; exact l1) (by rw [e0]; exact l2) ?_
     rw [e0]
-    refine st_800055c4 hlive ?_
+    refine (step% st 0x800055c4) hlive ?_
     have f0 : ((upd (upd (upd R 14 (0#64 + sign_extend (m := 64) (0x027#12))) 11
         (ldv .ld (copyW M0 d s 0) (s + 8 * 0))) 14
         (0#64 + sign_extend (m := 64) (0x037#12))) 10 + sign_extend (m := 64) (0x000#12)).toNat =
         d + 8 * 0 := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n0, addr_add h10 0 (by omega)]
-    refine st_800055c8 hlive (by rw [f0]; exact s1) (by rw [f0]; exact s2) ?_
+    refine (step% st 0x800055c8) hlive (by rw [f0]; exact s1) (by rw [f0]; exact s2) ?_
     rw [f0]
     have hv : (upd (upd (upd R 14 (0#64 + sign_extend (m := 64) (0x027#12))) 11
         (ldv .ld (copyW M0 d s 0) (s + 8 * 0))) 14 (0#64 + sign_extend (m := 64) (0x037#12))) 11 =
@@ -166,23 +166,23 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
     refine aw_forget (fun R1 => CPKeep R R1 ∧ (R1 14).toNat = 55) ⟨by cp_keep K0, rfl⟩ fun R1 ⟨K1, g14⟩ => ?_
 
     refine pair 1 11 R1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (by decide) (by decide) n8 (by omega) (st_800055cc hlive) (st_800055d0 hlive) K1 fun v => ?_
+      (by decide) (by decide) n8 (by omega) ((step% st 0x800055cc) hlive) ((step% st 0x800055d0) hlive) K1 fun v => ?_
     have K2 := K1.upd v (k := 11) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide)
-    refine st_800055d4 hlive (fun hc' => ?_) (fun hc' => ?_) <;>
+    refine (step% st 0x800055d4) hlive (fun hc' => ?_) (fun hc' => ?_) <;>
       rw [upd_other _ _ (by decide), upd_other _ _ (by decide), g14, K1.a2, h12] at hc'
     ·
       refine pair 2 14 _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-        (by decide) (by decide) (by decide) n16 (by omega) (st_800056f0 hlive) (st_800056f4 hlive) K2
+        (by decide) (by decide) (by decide) n16 (by omega) ((step% st 0x800056f0) hlive) ((step% st 0x800056f4) hlive) K2
         fun v2 => ?_
       have K3 := K2.upd v2 (k := 14) (by decide) (by decide) (by decide) (by decide) (by decide)
         (by decide) (by decide) (by decide) (by decide)
       refine pair 3 14 _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-        (by decide) (by decide) (by decide) n24 (by omega) (st_800056f8 hlive) (st_800056fc hlive) K3
+        (by decide) (by decide) (by decide) n24 (by omega) ((step% st 0x800056f8) hlive) ((step% st 0x800056fc) hlive) K3
         fun v3 => ?_
       have K4 := K3.upd v3 (k := 14) (by decide) (by decide) (by decide) (by decide) (by decide)
         (by decide) (by decide) (by decide) (by decide)
-      refine st_80005700 hlive (fun hc'' => ?_) (fun hc'' => ?_)
+      refine (step% st 0x80005700) hlive (fun hc'' => ?_) (fun hc'' => ?_)
       ·
         have hL72 : L = 72 := by
           have := congrArg BitVec.toNat hc''; rw [K4.a2, K4.a5, h12, h15] at this; exact this
@@ -191,10 +191,10 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
         have e4 : ((upd (upd R1 11 v) 14 v2) 14 |> fun _ => (upd (upd (upd R1 11 v) 14 v2) 14 v3) 8 +
             sign_extend (m := 64) (0x020#12)).toNat = s + 8 * 4 := by
           simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K1.s0, n32, addr_add h8 32 (by omega)]
-        refine st_800057d8 hlive (by rw [e4]; exact l1) (by rw [e4]; exact l2) ?_
+        refine (step% st 0x800057d8) hlive (by rw [e4]; exact l1) (by rw [e4]; exact l2) ?_
         rw [e4]
-        refine st_800057dc hlive ?_
-        refine st_800057e0 hlive ?_
+        refine (step% st 0x800057dc) hlive ?_
+        refine (step% st 0x800057e0) hlive ?_
         have f4 : ((upd (upd (upd (upd (upd (upd R1 11 v) 14 v2) 14 v3) 12
             (ldv .ld (copyW M0 d s 4) (s + 8 * 4))) 14
             ((upd (upd (upd (upd R1 11 v) 14 v2) 14 v3) 12 (ldv .ld (copyW M0 d s 4) (s + 8 * 4))) 8 +
@@ -204,17 +204,17 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
                 sign_extend (m := 64) (0x030#12))) 10 + sign_extend (m := 64) (0x030#12))) 10 +
             sign_extend (m := 64) (0x020#12)).toNat = d + 8 * 4 := by
           simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K1.a0, n32, addr_add h10 32 (by omega)]
-        refine st_800057e4 hlive (by rw [f4]; exact s1) (by rw [f4]; exact s2) ?_
+        refine (step% st 0x800057e4) hlive (by rw [f4]; exact s1) (by rw [f4]; exact s2) ?_
         rw [f4]
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
         rw [← copyW_succ]
         obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 5) (by omega) (by omega)
         obtain ⟨s1, s2⟩ := A.st (a := d + 8 * 5) (by omega) (by omega) (by omega)
-        refine cp_pair (rT := 12) (rS := 8) (rD := 10) (by decide) (st_800057e8 hlive)
-          (st_800057ec hlive) ?_ ?_ l1 l2 s1 s2 ?_
+        refine cp_pair (rT := 12) (rS := 8) (rD := 10) (by decide) ((step% st 0x800057e8) hlive)
+          ((step% st 0x800057ec) hlive) ?_ ?_ l1 l2 s1 s2 ?_
         · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K1.s0, n40, addr_add h8 40 (by omega)]
         · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K1.a0, n40, addr_add h10 40 (by omega)]
-        refine st_800057f0 hlive ?_
+        refine (step% st 0x800057f0) hlive ?_
         refine tail 6 _ (by omega) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
           simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
         · rw [K1.s0, n48, addr_add h8 48 (by omega)]
@@ -229,9 +229,9 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
         have hL56 : L = 56 := by
           have : L ≠ 72 := fun h => hc'' (BitVec.eq_of_toNat_eq (by rw [K4.a2, K4.a5, h12, h15, h]))
           omega
-        refine st_80005704 hlive ?_
-        refine st_80005708 hlive ?_
-        refine st_8000570c hlive ?_
+        refine (step% st 0x80005704) hlive ?_
+        refine (step% st 0x80005708) hlive ?_
+        refine (step% st 0x8000570c) hlive ?_
         refine tail 4 _ (by omega) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
           simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
         · rw [K1.s0, n32, addr_add h8 32 (by omega)]
@@ -243,9 +243,9 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
         · exact K1.s2
         · exact K1.s3
     ·
-      refine st_800055d8 hlive ?_
-      refine st_800055dc hlive ?_
-      refine st_800055e0 hlive ?_
+      refine (step% st 0x800055d8) hlive ?_
+      refine (step% st 0x800055dc) hlive ?_
+      refine (step% st 0x800055e0) hlive ?_
       refine tail 2 _ (by omega) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · rw [K1.s0, n16, addr_add h8 16 (by omega)]
@@ -258,8 +258,8 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
       · exact K1.s3
   ·
     have hL24 : L = 24 := by omega
-    refine st_800053a0 hlive ?_
-    refine st_800053a4 hlive ?_
+    refine (step% st 0x800053a0) hlive ?_
+    refine (step% st 0x800053a4) hlive ?_
     refine tail 0 _ (by omega) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [n0, addr_add h8 0 (by omega)]
@@ -284,23 +284,23 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
   have hL : ((R 14) + sign_extend (m := 64) (0xff8#12)).toNat = S - 8 := by
     rw [show (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) from rfl,
       addr_sub h14 8 (by omega) (by omega)]
-  refine st_8000538c O.live ?_
-  refine st_80005390 O.live ?_
-  refine st_80005394 O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x8000538c) O.live ?_
+  refine (step% st 0x80005390) O.live ?_
+  refine (step% st 0x80005394) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hL] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x048#12) : BitVec 64).toNat = 72 from rfl] at hc
   ·
-    refine st_80005658 O.live ?_
+    refine (step% st 0x80005658) O.live ?_
     have eS : (R 2 + sign_extend (m := 64) (0x000#12)).toNat = C.s.toNat - 64 := by
       rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl, hsp,
         addr_add hs64 0 (by omega)]; omega
-    refine st_8000565c O.live
+    refine (step% st 0x8000565c) O.live
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS]; unfold StOK Vsa.Sim.tohostAddr; omega)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS]
           exact O.stack (by unfold mHead; omega) (by omega)) ?_
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [eS]
-    refine st_80005660 O.live ?_
+    refine (step% st 0x80005660) O.live ?_
     simp only [VsaIris.ra]
     have AM : MMArgs C.S d s (S - 8) := { A with n32 := by omega }
     refine memmove_fwd AM O.live ?_ ?_ ?_ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide)
@@ -317,10 +317,10 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
         read64_store_hit]
     have e2 : (R' 2 + sign_extend (m := 64) (0x000#12)).toNat = C.s.toNat - 64 := by
       rw [hK.sp]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact eS
-    refine st_80005664 O.live (by rw [e2]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+    refine (step% st 0x80005664) O.live (by rw [e2]; unfold LdOK Vsa.Sim.tohostAddr; omega)
       (by rw [e2]; exact O.stack (by unfold mHead; omega) (by omega)) ?_
     rw [e2, ldv_ld (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R 10).isLt]; exact hslot)]
-    refine st_80005668 O.live ?_
+    refine (step% st 0x80005668) O.live ?_
     refine hk _ _ ?_ ?_ ?_ ?_ ?_ ?_ fun a ha => copyW_agree (fun a ha => ?_) (by omega) a ha <;>
       try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [hK.sp]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
@@ -347,8 +347,8 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
 theorem repi3 {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → R' 10 = R 13 → AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x800053dc#64 R Mt :=
-  repi_core O (st_800053dc O.live) (st_800053e0 O.live) (st_800053e4 O.live) (st_800053e8 O.live)
-    (st_800053ec O.live) (st_800053f0 O.live) F hfin
+  repi_core O ((step% st 0x800053dc) O.live) ((step% st 0x800053e0) O.live) ((step% st 0x800053e4) O.live) ((step% st 0x800053e8) O.live)
+    ((step% st 0x800053ec) O.live) ((step% st 0x800053f0) O.live) F hfin
 
 theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc : Mem}
     {p' top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
@@ -386,9 +386,9 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
       change p' + C.n.toNat ≤ heapEnd at hhi'
       unfold heapStart heapEnd at *; omega
     · exact h3 _ List.mem_cons_self ⟨by simp only; omega, by simp only; omega⟩
-  refine st_800053c0 O.live ?_
-  refine st_800053c4 O.live ?_
-  refine st_800053c8 O.live
+  refine (step% st 0x800053c0) O.live ?_
+  refine (step% st 0x800053c4) O.live ?_
+  refine (step% st 0x800053c8) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS]; unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
@@ -403,7 +403,7 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
   have H2 : PHeapAt M2 ((B.p, B.nOld) :: (p', C.n.toNat) :: C.H) top brkv chunks bins :=
     (hheap.perm mem_swap).transport_read fun a ha => (hM2o a (hfoot a (vsaFoot_cons_sub a
       (vsaFoot_cons_sub a (vsaFoot_perm mem_swap ha.1))))).symm
-  refine st_800053cc O.live ?_
+  refine (step% st 0x800053cc) O.live ?_
   simp only [VsaIris.ra]
   refine rcall_free O (link := 0x800053d0#64) (by decide) (fun a ha => vsaFoot_cons_sub a ha) ?_ ?_ ?_ ?_
     H2 hst.swap (fun a ha => by rw [← hM2]; exact writeLog_present _ _ _ (hpres a (vsaFoot_cons_sub a ha)))
@@ -437,7 +437,7 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
     exact eS
   have hsl : read64 Mt' (C.s.toNat - 64) = some (R 13).toNat := by
     rw [hslot _ (by omega) (by omega), ← hM2, read64_store_hit]
-  refine st_800053d8 O.live (by rw [e2]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+  refine (step% st 0x800053d8) O.live (by rw [e2]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [e2]; exact O.stack (by unfold mHead; omega) (by omega)) ?_
   rw [e2, ldv_ld (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R 13).isLt]; exact hsl)]
   have F' : RFrame C R' Mt' := by
@@ -547,12 +547,12 @@ theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   have eN : (R 10 + sign_extend (m := 64) (0xff8#12)).toNat = X + S + 8 := by
     rw [show (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) from rfl,
       addr_sub M.a0 8 (by omega) (by omega)]; omega
-  refine st_800055b0 O.live (by rw [eN]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+  refine (step% st 0x800055b0) O.live (by rw [eN]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [eN]; exact O.foot hNf) ?_
   rw [eN, ldv_at hNr _ rfl]
-  refine st_800055b4 O.live ?_
-  refine st_800055b8 O.live ?_
-  refine st_800055bc O.live ?_
+  refine (step% st 0x800055b4) O.live ?_
+  refine (step% st 0x800055b8) O.live ?_
+  refine (step% st 0x800055bc) O.live ?_
   have hns : (BitVec.ofNat 64 hN &&& sign_extend (m := 64) (0xffc#12)).toNat = ns := by
     rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
       toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hNlt, ← hNs]; rfl
@@ -612,20 +612,20 @@ theorem mal_null {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
   have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
   have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
   have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
-  refine st_80005364 O.live (by rw [n0, e 0 (by omega)]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+  refine (step% st 0x80005364) O.live (by rw [n0, e 0 (by omega)]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [n0, e 0 (by omega)]; exact O.stack (by unfold mHead; omega) (by omega)) ?_
-  refine st_80005368 O.live
+  refine (step% st 0x80005368) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
         unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
-  refine st_8000536c O.live
+  refine (step% st 0x8000536c) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
         unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
-  refine st_80005370 O.live ?_
-  refine st_80005374 O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
+  refine (step% st 0x80005370) O.live ?_
+  refine (step% st 0x80005374) O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
   · sx_run [12] O.live at 0x800054c4
     refine repi0 O (F.of_regs ?_ ?_ ?_) fun R' hR h13 => O.null R' Mt ⟨hR, ?_, hheap, hpres, hdata, hst⟩ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *
@@ -662,25 +662,25 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
   have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
   have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
   have hnblt : nb < 2 ^ 64 := by have := M.nb31; omega
-  refine st_80005364 O.live (by rw [n0, e 0 (by omega)]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+  refine (step% st 0x80005364) O.live (by rw [n0, e 0 (by omega)]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [n0, e 0 (by omega)]; exact O.stack (by unfold mHead; omega) (by omega)) ?_
   rw [n0, e 0 (by omega), show C.s.toNat - 64 + 0 = C.s.toNat - 64 by omega, ldv_at M.spNb _ rfl]
-  refine st_80005368 O.live
+  refine (step% st 0x80005368) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
         unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [n8, e 8 (by omega), ldv_at M.spX _ rfl]
-  refine st_8000536c O.live
+  refine (step% st 0x8000536c) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
         unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [n16, e 16 (by omega), ldv_at M.spS _ rfl]
-  refine st_80005370 O.live ?_
-  refine st_80005374 O.live (fun hc => absurd hc ?_) (fun _ => ?_)
+  refine (step% st 0x80005370) O.live ?_
+  refine (step% st 0x80005374) O.live (fun hc => absurd hc ?_) (fun _ => ?_)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]
     intro h0; have := congrArg BitVec.toNat h0; rw [M.a0] at this; simp at this; omega
 
@@ -689,14 +689,14 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
   have eX : (R 8 + sign_extend (m := 64) (0xff8#12)).toNat = X + 8 := by
     rw [show (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) from rfl,
       addr_sub M.s0 8 (by omega) (by omega)]; omega
-  refine st_80005378 O.live
+  refine (step% st 0x80005378) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eX]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eX]; exact O.foot hXf) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [eX, ldv_at hXr _ rfl]
-  refine st_8000537c O.live ?_
-  refine st_80005380 O.live ?_
-  refine st_80005384 O.live ?_
+  refine (step% st 0x8000537c) O.live ?_
+  refine (step% st 0x80005380) O.live ?_
+  refine (step% st 0x80005384) O.live ?_
   have hS' : (BitVec.ofNat 64 hX &&& sign_extend (m := 64) (0xffe#12)).toNat = S := by
     rw [show (sign_extend (m := 64) (0xffe#12) : BitVec 64) = 18446744073709551614#64 from rfl,
       toNat_and_m2, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hXlt]
@@ -705,7 +705,7 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
   have hN : (R 10 + sign_extend (m := 64) (0xff0#12)).toNat = p' - 16 := by
     rw [show (sign_extend (m := 64) (0xff0#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 16) from rfl,
       addr_sub M.a0 16 (by omega) (by omega)]
-  refine st_80005388 O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80005388) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     have hm : X + S = p' - 16 := by
@@ -844,25 +844,25 @@ theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
   have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
   have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
-  refine st_80005350 O.live ?_
-  refine st_80005354 O.live
+  refine (step% st 0x80005350) O.live ?_
+  refine (step% st 0x80005354) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
         unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16, e 16 (by omega)]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
-  refine st_80005358 O.live
+  refine (step% st 0x80005358) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
         unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8, e 8 (by omega)]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
-  refine st_8000535c O.live
+  refine (step% st 0x8000535c) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n0, e 0 (by omega)]
         unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n0, e 0 (by omega)]
         exact O.stack (by unfold mHead; omega) (by omega)) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [n16, e 16 (by omega), n8, e 8 (by omega), n0, e 0 (by omega)]
-  refine st_80005360 O.live ?_
+  refine (step% st 0x80005360) O.live ?_
   simp only [VsaIris.ra]
   have Hp := ((D.heap.store_stack (a := C.s.toNat - 64 + 16) (w := 8) (v := R 14) (by unfold mHead; omega)
     (by omega)).store_stack (a := C.s.toNat - 64 + 8) (w := 8) (v := R 12) (by unfold mHead; omega)

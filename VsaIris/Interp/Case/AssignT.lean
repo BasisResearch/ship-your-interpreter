@@ -132,8 +132,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave Hc := he
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003488)
-    (jalx_80003488 live (fun p hp => hlive _ (interp_code_80003488 p hp)))
-    interp_code_80003488 (by decide) De (k := k) (slot := s + 18446744073709550528#64 + 240#64)
+    ((step% jalx 0x80003488) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) De (k := k) (slot := s + 18446744073709550528#64 + 240#64)
     (aC := BitVec.ofNat 64 qc) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.assign x e) d - 1088)
     gC.child gC.fits gC.below gC.slotGeom hbe
@@ -217,8 +217,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     %(getSaved.map fun j => (j, R2 j)) %(by simp [getSaved])
   ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
   iapply ms_callEnv3 (twpW _) (i := 0x800034b0) (entry := envSetPC) (R := R2)
-    (jalx_800034b0 live (fun p hp => hlive _ (interp_code_800034b0 p hp)))
-    interp_code_800034b0 (by decide)
+    ((step% jalx 0x800034b0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
     (φ := EnvSp (R2 2) envGetNeed ∧ SlotWin (R2 12).toNat)
     ⟨⟨(by rw [e2, hsf]; unfold htifLo envGetNeed; unfold Vsa.Sim.tohostAddr at *; omega),
        (by rw [e2, hsf]; omega), (by rw [e2, hsf]; omega)⟩,
@@ -274,7 +274,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     · iexact Hbw
   intro F'
 
-  refine it_800034b4 hlive (fun hnz => ?_) (fun hc => absurd (by
+  refine (step% it 0x800034b4) hlive (fun hnz => ?_) (fun hc => absurd (by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hres]; decide) hc)
   refine AssignT_run3 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)
     (v18 := rv 18) (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hal hq1 hq2 hq3

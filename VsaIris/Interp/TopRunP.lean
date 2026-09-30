@@ -75,7 +75,7 @@ theorem topRet_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topR
       simp only [upd_apply, h1, h2, h3, h4, h5, ite_false]))
   tail h2 hra k := TopTlRet_run hlive h2 hra (k _ (by ix_reg) (by ix_reg) (by ix_reg; decide)
     (by ix_reg))
-  code := interp_code_80004558
+  code := (interp_code (by decide))
 
 theorem topBrk_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topBrk where
   stage h2 hin hl k := TopAbrBrk_run hlive h2 hin hl (fun v => k _ (by ix_reg; exact h2) (by ix_reg)
@@ -84,7 +84,7 @@ theorem topBrk_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topB
       simp only [upd_apply, h1, h2, h3, h4, h5, ite_false]))
   tail h2 hra k := TopTlBrk_run hlive h2 hra (k _ (by ix_reg) (by ix_reg) (by ix_reg; decide)
     (by ix_reg))
-  code := interp_code_8000457c
+  code := (interp_code (by decide))
 
 theorem ldOK_of_readOK {q : BitVec 64} (h : ReadOK q.toNat) : LdOK (q + 4#64).toNat 4 := by
   have h1 := h.lo; have h2 := h.win.1; have h3 := h.win.2

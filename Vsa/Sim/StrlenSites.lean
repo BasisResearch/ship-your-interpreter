@@ -54,7 +54,7 @@ theorem site_80006d64
         (sigmaPost_alu σ pc vminstret Register.x10
           (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15)))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.strlen_at_80006d64 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80006d64 0x80006d65 0x80006d66 0x80006d67 (b0 := (0x33 : BitVec 8)) (b1 := (0x35 : BitVec 8)) (b2 := (0xf0 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80006d64#64) vminstret (0x00f03533#32)
     (instruction.RTYPE (regidx.Regidx 0x0f#5, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, rop.SLTU))
     Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15)))

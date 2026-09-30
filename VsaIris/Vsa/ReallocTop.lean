@@ -58,18 +58,18 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
   have oT := off_stack_of Hp.disj hgT
   have oN := off_stack_of Hp.disj hfN
   have oX := off_stack_of Hp.disj hfX
-  refine st_80005740 O.live ?_
-  refine st_80005744 O.live ?_
-  refine st_80005748 O.live ?_
+  refine (step% st 0x80005740) O.live ?_
+  refine (step% st 0x80005744) O.live ?_
+  refine (step% st 0x80005748) O.live ?_
   have eT : ((0x80005748#64) + (sign_extend (m := 64) ((0x00015#20) +++ (0x000#12))) +
       sign_extend (m := 64) (0x5d8#12)).toNat = 0x8001ad20 := by decide
-  refine st_8000574c O.live
+  refine (step% st 0x8000574c) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eT]
         unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eT]; exact O.foot hgT) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   rw [eT]
-  refine st_80005750 O.live ?_
+  refine (step% st 0x80005750) O.live ?_
   have eN : (R 12 + R 15 + sign_extend (m := 64) (0x008#12)).toNat = X + nb + 8 := by
     rw [BitVec.toNat_add, hT]; simp; omega
   have sN : StOK (X + nb + 8) 8 := by
@@ -78,7 +78,7 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
       (Nat.dvd_trans (by decide : 8 ∣ 16) (Nat.dvd_of_mod_eq_zero hnbv.2))) (Nat.dvd_refl 8))
     unfold StOK Vsa.Sim.tohostAddr
     exact ⟨by omega, by omega, by omega, h1⟩
-  refine st_80005754 O.live
+  refine (step% st 0x80005754) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eN]; exact sN)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eN]; exact O.foot hfN) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -89,15 +89,15 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
   have hXr2 : read64 (writeLog (writeLog Mt [(0x8001ad20, 8, R 12 + R 15)])
       [(X + nb + 8, 8, R 16 - R 15 ||| sign_extend (m := 64) (0x001#12))]) (X + 8) = some hdr0 := by
     rw [rd_miss (by omega), rd_miss (by omega)]; exact hXr
-  refine st_80005758 O.live
+  refine (step% st 0x80005758) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eX]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eX]; exact O.foot hfX) ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [eX, ldv_at hXr2 _ rfl]
-  refine st_8000575c O.live ?_
-  refine st_80005760 O.live ?_
-  refine st_80005764 O.live ?_
-  refine st_80005768 O.live
+  refine (step% st 0x8000575c) O.live ?_
+  refine (step% st 0x80005760) O.live ?_
+  refine (step% st 0x80005764) O.live ?_
+  refine (step% st 0x80005768) O.live
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eX]
         unfold StOK Vsa.Sim.tohostAddr; omega)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eX]; exact O.foot hfX) ?_
@@ -147,8 +147,8 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
     exact ((D.frame.store (a := 0x8001ad20) (w := 8) (by omega)).store (a := X + nb + 8) (w := 8)
       (by omega)).store (a := X + 8) (w := 8) (by omega)
   sx_run [12] O.live at 0x80005770
-  refine st_80005770 O.live ?_
-  refine st_80005774 O.live ?_
+  refine (step% st 0x80005770) O.live ?_
+  refine (step% st 0x80005774) O.live ?_
   refine repi O (F3.of_regs ?_ ?_ ?_) fun R' hR h10 => O.ok R' M3 ?_ <;>
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   have hp : (R' 10).toNat = X + 16 := by

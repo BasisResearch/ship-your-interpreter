@@ -48,7 +48,7 @@ theorem site_80007074_jmp
         (sigmaPost_alu σ pc vminstret Register.x10
           (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12)))))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := longjmp_at_80007074 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80007074 0x80007075 0x80007076 0x80007077 (b0 := (0x13 : BitVec 8)) (b1 := (0xb5 : BitVec 8)) (b2 := (0x15 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80007074#64) vminstret (0x0015b513#32)
     (instruction.ITYPE (0x001#12, regidx.Regidx 0x0b#5, regidx.Regidx 0x0a#5, iop.SLTIU))
     Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12)))))

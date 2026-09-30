@@ -139,8 +139,8 @@ theorem varInitCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {
   unfold F'
   iintro ⟨⟨#Hc, #Ht, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
 
-  iapply hcall 0x800040ec _ (jalx_800040ec live (fun p hp => hlive _ (interp_code_800040ec p hp)))
-    interp_code_800040ec (by decide) (slot := execSP s + 104#64) (aC := BitVec.ofNat 64 pi)
+  iapply hcall 0x800040ec _ (jalx_800040ec live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (slot := execSP s + 104#64) (aC := BitVec.ofNat 64 pi)
     (aE := aE) (sF := execSP s) (f := 176) (m := execNeed (.varDecl x (some e)) d - 176)
     (execSP_eq s).symm g.child g.fits g.below (by omega) hf.stack.le g.slotGeom hbb
   iframe Hc Hcode Hfb Hms Hst Hw Hslot HK
@@ -214,8 +214,8 @@ theorem varNullCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {
   ihave Hvn := hvn $$ %(execSP s + 104#64)
   unfold valueNullSpec
   iapply ms_callHelperSlot Wp (i := 0x80004300)
-    (jalx_80004300 live (fun p hp => hlive _ (interp_code_80004300 p hp)))
-    interp_code_80004300 (by decide) (a := execSP s + 104#64) (R := R0) (Mt := Mt1)
+    (jalx_80004300 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (a := execSP s + 104#64) (R := R0) (Mt := Mt1)
     (S := InExt (s.toNat - 176, 176)) (v := .null)
     (fun b hb => by simp only [VsaIris.InExt] at hb ⊢; rw [g1] at hb; omega) hslg
   iframe Hvn Hcode Hms

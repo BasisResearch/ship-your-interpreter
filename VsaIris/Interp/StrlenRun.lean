@@ -1,4 +1,4 @@
-import VsaIris.Interp.StrSteps
+import VsaIris.Vsa.StepTables.Str0
 
 namespace VsaIris.Interp.StrLeaf
 
