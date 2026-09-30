@@ -1,8 +1,9 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Sflush
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
@@ -27,7 +28,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
       (B.toNat + i < 0x8001ba08 ∨ 0x8001ba0c ≤ B.toNat + i))
     (hsrc : ∀ i (h : i < bs.length), ByteSrc (outS s need) Mt Dt DA (B.toNat + i) bs[i]) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000edcc#64 R Mt
-  by nx_run hlive using [h1, h10, h11, h2, hsinit, hF, hlm, hlock, BitVec.reduceAnd, BitVec.reduceOr,
+  by nx_win sp 256 0; nx_run hlive using [h1, h10, h11, h2, hsinit, hF, hlm, hlock, BitVec.reduceAnd, BitVec.reduceOr,
     BitVec.add_assoc] at 2147543920
 
 #ix_piece fflush_B from fflush_A by

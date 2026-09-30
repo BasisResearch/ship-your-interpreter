@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.InnerS
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -68,7 +69,7 @@ theorem sbprintf_tail {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       R' 8 = C 8 → R' 9 = C 9 → R' 18 = C 18 → (∀ x ∈ [19, 20, 21, 22, 23, 24, 25, 26, 27], R' x = R x) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R' M) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de80#64 R M := by
-  nx_run hlive using [h2, h10, h9, hfl, hs_ra, hs_s0, hs_s1, hs_s2, BitVec.add_assoc]
+  nx_win sp 2048 0; nx_run hlive using [h2, h10, h9, hfl, hs_ra, hs_s0, hs_s1, hs_s2, BitVec.add_assoc]
   refine hk _ (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) fun x hx => ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp

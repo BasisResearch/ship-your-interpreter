@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Fwrite
 import VsaIris.Vsa.Stdout.Strlen
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Inst
 
@@ -28,7 +29,7 @@ macro "#fputs_seg " n:ident fl:term : command => `(
         imgM Dt (P.toNat + i) = bs[i]) :
       SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DAs)) iRegs (outS s need) Q t
         0x80006500#64 R Mt
-    by nx_run hlive using [h1, h10, h11, h2, hImp, BitVec.add_assoc] at 2147511536)
+    by nx_win s 512 0; nx_run hlive using [h1, h10, h11, h2, hImp, BitVec.add_assoc] at 2147511536)
 
 set_option hygiene false in
 

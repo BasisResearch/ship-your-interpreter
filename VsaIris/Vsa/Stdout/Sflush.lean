@@ -1,8 +1,9 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Swrite
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
@@ -44,7 +45,7 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       BitVec.extractLsb 31 0 B) = BitVec.ofNat 64 bs.length)
  :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000eb70#64 R Mt
-  by nx_run hlive using [h10, h11, h2, h1, h8, h9, h18, h19, hF, hBl, hP, hwr, hck, BitVec.reduceAnd, BitVec.reduceOr,
+  by nx_win sp 128 0; nx_run hlive using [h10, h11, h2, h1, h8, h9, h18, h19, hF, hBl, hP, hwr, hck, BitVec.reduceAnd, BitVec.reduceOr,
     BitVec.add_assoc, hsw, hti, BitVec.toInt_zero] at 2147544308
 
 #ix_piece sflush_B from sflush_A by

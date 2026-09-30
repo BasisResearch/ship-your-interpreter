@@ -1,8 +1,9 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Swbuf
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
@@ -28,7 +29,7 @@ theorem sfv_cap : (18446744071562067968#64 ^^^ 18446744073709550592#64) = 214748
     (hbo : ∀ i, i < bs.length → ¬ outS s need (buf + i))
     (hsrc : ∀ i (h : i < bs.length), buf + i ∈ DA ∧ imgM Dt (buf + i) = bs[i]) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de8c#64 R Mt
-  by nx_run hlive using [h1, h11, h12, h2, hres, hiov, hbuf, hlen, hF, hB, hwr, hck, sfv_cap, BitVec.reduceAnd,
+  by nx_win sp 320 0; nx_run hlive using [h1, h11, h12, h2, hres, hiov, hbuf, hlen, hF, hB, hwr, hck, sfv_cap, BitVec.reduceAnd,
     BitVec.reduceOr, BitVec.add_assoc] at 2147545044
 
 theorem sextw_ofNat {n : Nat} (h : n < 2 ^ 31) :
@@ -68,7 +69,7 @@ theorem sextw_ofNat {n : Nat} (h : n < 2 ^ 31) :
     (h1 : R 1 = ra) (h11 : R 11 = 0x8001bb20#64) (h12 : R 12 = u) (h2 : R 2 = sp)
     (hres : ldv .ld Mt (u + 16#64).toNat = 0#64) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de8c#64 R Mt
-  by nx_run hlive using [h1, h11, h12, h2, hres, BitVec.add_assoc]
+  by nx_win sp 320 0; nx_run hlive using [h1, h11, h12, h2, hres, BitVec.add_assoc]
 
 @[nx_mt] def sfvKeep (sp : BitVec 64) (n : Nat) (a : Nat) : Prop :=
   ¬ (sp.toNat - n ≤ a ∧ a < sp.toNat) ∧ ¬ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∧

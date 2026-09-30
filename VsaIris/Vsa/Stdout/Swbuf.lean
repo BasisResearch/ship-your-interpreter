@@ -1,8 +1,9 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Fflush
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
@@ -65,7 +66,7 @@ macro "#swbuf_seg " n:ident fl:term : command => `(
       (hwr : ldv .ld Mt 0x8001bb60 = 0x8000efd4#64) (hck : ldv .ld Mt 0x8001bb50 = 0x8001bb20#64)
       (hsfd : ldv .lh Mt 0x8001bb32 = 1#64) :
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000f0c8#64 R Mt
-    by nx_run hlive using [h1, h10, h11, h12, h2, hsinit, hlbf, hF, hB, hlm, hP, hbs, BitVec.reduceAnd,
+    by nx_win sp 320 0; nx_run hlive using [h1, h10, h11, h12, h2, hsinit, hlbf, hF, hB, hlm, hP, hbs, BitVec.reduceAnd,
       BitVec.reduceOr, BitVec.add_assoc] at 2147544524)
 
 #swbuf_seg swbuf_A 0x200a#64
