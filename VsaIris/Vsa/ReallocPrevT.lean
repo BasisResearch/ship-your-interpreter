@@ -14,26 +14,10 @@ theorem pvT_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p �
     (hj : 8 * j + 24 ≤ L) (K : PVKeep R0 R)
     (hk : ∀ R', PVKeep R0 R' → AW live S Q 0x80005574#64 R' (copyW M0 d s (j + 3))) :
     AW live S Q 0x8000555c#64 R (copyW M0 d s j) := by
+  have rs : ARgn S s L := ⟨⟨A.sS⟩, A.slo, A.shi⟩; have rd : ARgn S d L := ⟨⟨A.dS⟩, A.dlo, A.dhi⟩
   have hd8 := A.d8; have hs8 := A.s8; have hshi := A.shi; have hdhi := A.dhi
-  have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
-  have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
-  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
-  obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * j) (by omega) (by omega)
-  obtain ⟨s1, s2⟩ := A.st (a := d + 8 * j) (by omega) (by omega) (by omega)
-  refine cp_pair (rT := 12) (rS := 8) (rD := 14) (by decide) ((step% st 0x8000555c) hlive) ((step% st 0x80005560) hlive)
-    (by rw [n0, addr_add h8 0 (by omega)]; omega) (by rw [n0, addr_add h14 0 (by omega)]; omega)
-    l1 l2 s1 s2 ?_
-  obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * (j + 1)) (by omega) (by omega)
-  obtain ⟨s1, s2⟩ := A.st (a := d + 8 * (j + 1)) (by omega) (by omega) (by omega)
-  refine cp_pair (rT := 12) (rS := 8) (rD := 14) (by decide) ((step% st 0x80005564) hlive) ((step% st 0x80005568) hlive)
-    (by rw [upd_other _ _ (by decide), n8, addr_add h8 8 (by omega)]; omega)
-    (by rw [upd_other _ _ (by decide), n8, addr_add h14 8 (by omega)]; omega) l1 l2 s1 s2 ?_
-  obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * (j + 2)) (by omega) (by omega)
-  obtain ⟨s1, s2⟩ := A.st (a := d + 8 * (j + 2)) (by omega) (by omega) (by omega)
-  refine cp_pair (rT := 12) (rS := 8) (rD := 14) (by decide) ((step% st 0x8000556c) hlive) ((step% st 0x80005570) hlive)
-    (by rw [upd_other _ _ (by decide), upd_other _ _ (by decide), n16, addr_add h8 16 (by omega)]; omega)
-    (by rw [upd_other _ _ (by decide), upd_other _ _ (by decide), n16, addr_add h14 16 (by omega)]; omega)
-    l1 l2 s1 s2 ?_
+  rgn_step hlive at 0x80005574
+  cp_norm
   exact hk _ (by pv_keep K)
 
 theorem pvT_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ p ∈ allocText, live p.1)
@@ -42,172 +26,35 @@ theorem pvT_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
     (h12 : (R 12).toNat = L)
     (hk : ∀ R', PVKeep R R' → AW live S Q 0x80005574#64 R' (copyW M0 d s (L / 8))) :
     AW live S Q 0x80005530#64 R (copyW M0 d s 0) := by
+  have rs : ARgn S s L := ⟨⟨A.sS⟩, A.slo, A.shi⟩; have rd : ARgn S d L := ⟨⟨A.dS⟩, A.dlo, A.dhi⟩
   have hd8 := A.d8; have hs8 := A.s8; have hshi := A.shi; have hdhi := A.dhi
-  have e : ∀ (x : BitVec 64) (a c : Nat), x.toNat = a → a + c < 2 ^ 64 →
-      (x + BitVec.ofNat 64 c).toNat = a + c := fun x a c hx hc => addr_add hx c hc
-  have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
-  have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
-  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
-  have n24 : (sign_extend (m := 64) (0x018#12) : BitVec 64) = BitVec.ofNat 64 24 := rfl
-  have n32 : (sign_extend (m := 64) (0x020#12) : BitVec 64) = BitVec.ofNat 64 32 := rfl
-  have n40 : (sign_extend (m := 64) (0x028#12) : BitVec 64) = BitVec.ofNat 64 40 := rfl
-  have n48 : (sign_extend (m := 64) (0x030#12) : BitVec 64) = BitVec.ofNat 64 48 := rfl
-  have n56 : (sign_extend (m := 64) (0x038#12) : BitVec 64) = BitVec.ofNat 64 56 := rfl
-  have n64 : (sign_extend (m := 64) (0x040#12) : BitVec 64) = BitVec.ofNat 64 64 := rfl
-  have nm8 : (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) := rfl
-
   have tail : ∀ j (R' : Nat → BitVec 64), j + 3 = L / 8 → (R' 8).toNat = s + 8 * j →
       (R' 14).toNat = d + 8 * j → PVKeep R R' → AW live S Q 0x8000555c#64 R' (copyW M0 d s j) :=
     fun j R' hj g8 g14 K => pvT_tail3 A hlive g8 g14 (by omega) K fun R'' K' => by rw [hj]; exact hk R'' K'
-
-  have pair : ∀ (j : Nat) {pcL pcS pcN : BitVec 64} {offL offS : BitVec 12} (rT : Nat)
-      (R1 : Nat → BitVec 64), rT ≠ 2 → rT ≠ 6 → rT ≠ 8 → rT ≠ 9 → rT ≠ 13 → rT ≠ 15 → rT ≠ 16 →
-      rT ≠ 17 → rT ≠ 18 → rT ≠ 19 →
-      (sign_extend (m := 64) offL : BitVec 64) = BitVec.ofNat 64 (8 * j) →
-      (sign_extend (m := 64) offS : BitVec 64) = BitVec.ofNat 64 (16 + 8 * j) → 8 * j + 8 ≤ L →
-      (∀ {R : Nat → BitVec 64} {Mt : Mem},
-        LdOK ((R 8) + sign_extend (m := 64) offL).toNat 8 →
-        (∀ b ∈ accAddrs ((R 8) + sign_extend (m := 64) offL).toNat 8, S b) →
-        AW live S Q pcS (upd R rT (ldv .ld Mt ((R 8) + sign_extend (m := 64) offL).toNat)) Mt →
-        AW live S Q pcL R Mt) →
-      (∀ {R : Nat → BitVec 64} {Mt : Mem},
-        StOK ((R 6) + sign_extend (m := 64) offS).toNat 8 →
-        (∀ b ∈ accAddrs ((R 6) + sign_extend (m := 64) offS).toNat 8, S b) →
-        AW live S Q pcN R (writeLog Mt [(((R 6) + sign_extend (m := 64) offS).toNat, 8, (R rT))]) →
-        AW live S Q pcS R Mt) →
-      PVKeep R R1 → (R1 8).toNat = s →
-      (∀ v, AW live S Q pcN (upd R1 rT v) (copyW M0 d s (j + 1))) →
-      AW live S Q pcL R1 (copyW M0 d s j) := by
-    intro j pcL pcS pcN offL offS rT R1 t2 t6 t8 t9 t13 t15 t16 t17 t18 t19 hL hS hj stL stS K g8 k
-    obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * j) (by omega) (by omega)
-    obtain ⟨s1, s2⟩ := A.st (a := d + 8 * j) (by omega) (by omega) (by omega)
-    exact cp_pair (rT := rT) (rS := 8) (rD := 6) (Ne.symm t6) stL stS
-      (by rw [hL, e _ _ _ g8 (by omega)]) (by rw [K.t1, hS, e _ _ _ h6 (by omega)]; omega)
-      l1 l2 s1 s2 (k _)
-  refine (step% st 0x80005530) hlive ?_
-  refine (step% st 0x80005534) hlive ?_
+  rgn_step hlive at 0x80005538
   refine (step% st 0x80005538) hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x027#12) : BitVec 64).toNat = 39 from rfl] at hc
-  ·
-    refine tail 0 _ (by omega) ?_ ?_ (by pv_keep (PVKeep.refl R)) <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · rw [h8]; rfl
-    · rw [n0, e _ _ _ h13 (by omega)]
-
-  refine aw_forget (fun R0 => PVKeep R R0 ∧ (R0 8).toNat = s ∧ (R0 12).toNat = L)
-    ⟨by pv_keep (PVKeep.refl R), by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h8,
-      by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12⟩ fun R0 ⟨K0, g8, g12⟩ => ?_
-  obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 0) (by omega) (by omega)
-  obtain ⟨s1, s2⟩ := A.st (a := d + 8 * 0) (by omega) (by omega) (by omega)
-  have e0 : (R0 8 + sign_extend (m := 64) (0x000#12)).toNat = s + 8 * 0 := by rw [n0, e _ _ _ g8 (by omega)]
-  refine (step% st 0x8000553c) hlive (by rw [e0]; exact l1) (by rw [e0]; exact l2) ?_
-  rw [e0]
-  refine (step% st 0x80005540) hlive ?_
-  have f0 : ((upd (upd R0 11 (ldv .ld (copyW M0 d s 0) (s + 8 * 0))) 14
-      (0#64 + sign_extend (m := 64) (0x037#12))) 6 + sign_extend (m := 64) (0x010#12)).toNat =
-      d + 8 * 0 := by
-    simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K0.t1, n16, e _ _ _ h6 (by omega)]; omega
-  refine (step% st 0x80005544) hlive (by rw [f0]; exact s1) (by rw [f0]; exact s2) ?_
-  rw [f0]
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [← copyW_succ]
-  refine aw_forget (fun R1 => PVKeep R R1 ∧ (R1 8).toNat = s ∧ (R1 14).toNat = 55 ∧ (R1 12).toNat = L)
-      ⟨by pv_keep K0, by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact g8,
-        by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; rfl,
-        by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact g12⟩
-    fun R1 ⟨K1, g8, g14, g12⟩ => ?_
-
-  refine pair 1 (offL := 0x008#12) (offS := 0x018#12) 11 R1 (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) n8 n24 (by omega)
-    ((step% st 0x80005548) hlive) ((step% st 0x8000554c) hlive) K1 g8 fun v => ?_
+  · exact tail 0 _ (by omega) (by rgn_arith) (by rgn_arith) (by pv_keep (PVKeep.refl R))
+  rgn_step hlive at 0x80005550
+  cp_norm
   refine (step% st 0x80005550) hlive (fun hc' => ?_) (fun hc' => ?_) <;>
-    rw [upd_other _ _ (by decide), upd_other _ _ (by decide), g14, g12] at hc'
-  ·
-    have K2 := K1.upd v (k := 11) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (by decide) (by decide) (by decide)
-    obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 2) (by omega) (by omega)
-    obtain ⟨s1, s2⟩ := A.st (a := d + 8 * 2) (by omega) (by omega) (by omega)
-    have e2 : (upd R1 11 v 8 + sign_extend (m := 64) (0x010#12)).toNat = s + 8 * 2 := by
-      rw [upd_other _ _ (by decide), n16, e _ _ _ g8 (by omega)]
-    refine (step% st 0x80005864) hlive (by rw [e2]; exact l1) (by rw [e2]; exact l2) ?_
-    rw [e2]
-    refine (step% st 0x80005868) hlive ?_
-    have f2 : ((upd (upd (upd R1 11 v) 11 (ldv .ld (copyW M0 d s 2) (s + 8 * 2))) 14
-        (0#64 + sign_extend (m := 64) (0x048#12))) 6 + sign_extend (m := 64) (0x020#12)).toNat =
-        d + 8 * 2 := by
-      simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K1.t1, n32, e _ _ _ h6 (by omega)]; omega
-    refine (step% st 0x8000586c) hlive (by rw [f2]; exact s1) (by rw [f2]; exact s2) ?_
-    rw [f2]
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [← copyW_succ]
-    refine aw_forget (fun R3 => PVKeep R R3 ∧ (R3 8).toNat = s ∧ (R3 14).toNat = 72 ∧ (R3 12).toNat = L)
-        ⟨by pv_keep K2, by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact g8,
-          by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; rfl,
-          by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact g12⟩
-      fun R3 ⟨K3, g8', g14', g12'⟩ => ?_
-    refine pair 3 (offL := 0x018#12) (offS := 0x028#12) 11 R3 (by decide) (by decide) (by decide)
-      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) n24 n40 (by omega)
-      ((step% st 0x80005870) hlive) ((step% st 0x80005874) hlive) K3 g8' fun v3 => ?_
-    refine (step% st 0x80005878) hlive (fun hc'' => ?_) (fun hc'' => ?_)
-    ·
-      have hL72 : L = 72 := by
-        have := congrArg BitVec.toNat hc''
-        simp only [upd_apply, Nat.reduceEqDiff, ite_false] at this; rw [g12', g14'] at this; exact this
-      refine aw_forget (fun R2 => PVKeep R R2 ∧ (R2 8).toNat = s)
-        ⟨by pv_keep K3, by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact g8'⟩
-        fun R2 ⟨K4, h8'⟩ => ?_
-      obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 4) (by omega) (by omega)
-      obtain ⟨s1, s2⟩ := A.st (a := d + 8 * 4) (by omega) (by omega) (by omega)
-      have e4 : (R2 8 + sign_extend (m := 64) (0x020#12)).toNat = s + 8 * 4 := by
-        rw [n32, e _ _ _ h8' (by omega)]
-      refine (step% st 0x800058a4) hlive (by rw [e4]; exact l1) (by rw [e4]; exact l2) ?_
-      rw [e4]
-      refine (step% st 0x800058a8) hlive ?_
-      refine (step% st 0x800058ac) hlive ?_
-      have f4 : ((upd (upd (upd R2 12 (ldv .ld (copyW M0 d s 4) (s + 8 * 4))) 14
-          ((upd R2 12 (ldv .ld (copyW M0 d s 4) (s + 8 * 4))) 6 + sign_extend (m := 64) (0x040#12))) 8
-          ((upd (upd R2 12 (ldv .ld (copyW M0 d s 4) (s + 8 * 4))) 14
-            ((upd R2 12 (ldv .ld (copyW M0 d s 4) (s + 8 * 4))) 6 + sign_extend (m := 64) (0x040#12))) 8 +
-            sign_extend (m := 64) (0x030#12))) 6 + sign_extend (m := 64) (0x030#12)).toNat = d + 8 * 4 := by
-        simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K4.t1, n48, e _ _ _ h6 (by omega)]; omega
-      refine (step% st 0x800058b0) hlive (by rw [f4]; exact s1) (by rw [f4]; exact s2) ?_
-      rw [f4]
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      rw [← copyW_succ]
-      obtain ⟨l1, l2⟩ := A.ld (a := s + 8 * 5) (by omega) (by omega)
-      obtain ⟨s1, s2⟩ := A.st (a := d + 8 * 5) (by omega) (by omega) (by omega)
-      have g8' : (R2 8 + sign_extend (m := 64) (0x030#12)).toNat = s + 48 := by
-        rw [n48, e _ _ _ h8' (by omega)]
-      refine cp_pair (rT := 12) (rS := 8) (rD := 6) (by decide) ((step% st 0x800058b4) hlive) ((step% st 0x800058b8) hlive)
-        ?_ ?_ l1 l2 s1 s2 ?_
-      · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-        rw [nm8, addr_sub g8' 8 (by omega) (by omega)]; omega
-      · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [K4.t1, n56, e _ _ _ h6 (by omega)]; omega
-      refine (step% st 0x800058bc) hlive ?_
-      refine tail 6 _ (by omega) ?_ ?_ (by pv_keep K4) <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [g8']
-      · rw [K4.t1, n64, e _ _ _ h6 (by omega)]; omega
-    ·
-      have hL56 : L = 56 := by
-        have : L ≠ 72 := fun h => hc'' (BitVec.eq_of_toNat_eq (by
-          simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [g12', g14', h]))
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12, BitVec.reduceToNat] at hc'
+  · rgn_step hlive at 0x80005878
+    cp_norm
+    refine (step% st 0x80005878) hlive (fun hc'' => ?_) (fun hc'' => ?_) <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc''
+    · have hL72 : L = 72 := by rw [← h12, hc'']; rfl
+      rgn_step hlive at 0x8000555c
+      cp_norm
+      exact tail _ _ (by omega) (by rgn_arith) (by rgn_arith) (by pv_keep (PVKeep.refl R))
+    · have hL56 : L = 56 := by
+        have : L ≠ 72 := fun h => hc'' (BitVec.eq_of_toNat_eq (by rw [h12, h]; rfl))
         omega
-      refine (step% st 0x8000587c) hlive ?_
-      refine (step% st 0x80005880) hlive ?_
-      refine (step% st 0x80005884) hlive ?_
-      refine tail 4 _ (by omega) ?_ ?_ (by pv_keep K3) <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [n32, e _ _ _ g8' (by omega)]
-      · rw [K3.t1, n48, e _ _ _ h6 (by omega)]; omega
-  ·
-    refine (step% st 0x80005554) hlive ?_
-    refine (step% st 0x80005558) hlive ?_
-    refine tail 2 _ (by omega) ?_ ?_ (by pv_keep K1) <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · rw [n16, e _ _ _ g8 (by omega)]
-    · rw [K1.t1, n32, e _ _ _ h6 (by omega)]; omega
+      rgn_step hlive at 0x8000555c
+      exact tail _ _ (by omega) (by rgn_arith) (by rgn_arith) (by pv_keep (PVKeep.refl R))
+  · rgn_step hlive at 0x8000555c
+    exact tail _ _ (by omega) (by rgn_arith) (by rgn_arith) (by pv_keep (PVKeep.refl R))
 
 end Copy
 
@@ -221,98 +68,36 @@ theorem pvT_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : M
       (R' 13).toNat = (R 13).toNat → (R' 6).toNat = (R 6).toNat → (R' 15).toNat = (R 15).toNat →
       (R' 16).toNat = (R 16).toNat → R' 9 = R 9 → AW C.live C.S C.Q 0x80005574#64 R' Mc) :
     AW C.live C.S C.Q 0x80005818#64 R M1 := by
-  have hs64 := sp64_toNat O.spA
+  have hs2 : (R 2).toNat = C.s.toNat - 64 := by rw [F.sp]; exact sp64_toNat O.spA
   have hlo := O.spA.lo; have hhi := O.spA.hi; have hal := O.spA.align
   unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
-  have hn := A.n32; have hn8 := A.n8
-  have e : ∀ c, c < 32 → (R 2 + BitVec.ofNat 64 c).toNat = C.s.toNat - 64 + c := fun c hc => by
-    rw [F.sp, addr_add hs64 c (by omega)]
-  have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
-  have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
-  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
-  have n24 : (sign_extend (m := 64) (0x018#12) : BitVec 64) = BitVec.ofNat 64 24 := rfl
-  have st : ∀ c, c ≤ 24 → c % 8 = 0 → StOK (C.s.toNat - 64 + c) 8 ∧ ∀ b ∈ accAddrs (C.s.toNat - 64 + c) 8, C.S b :=
-    fun c hc hc8 => ⟨by unfold StOK Vsa.Sim.tohostAddr; omega, O.stack (by unfold mHead; omega) (by omega)⟩
-  have ld : ∀ c, c ≤ 24 → c % 8 = 0 → LdOK (C.s.toNat - 64 + c) 8 ∧ ∀ b ∈ accAddrs (C.s.toNat - 64 + c) 8, C.S b :=
-    fun c hc hc8 => ⟨by unfold LdOK Vsa.Sim.tohostAddr; omega, O.stack (by unfold mHead; omega) (by omega)⟩
-  refine (step% st 0x80005818) O.live ((step% st 0x8000581c) O.live ?_)
+  have hn := A.n32; have hn8 := A.n8; have sr := O.stackRgn
+  have cpo : ∀ (W : Mem) a, C.s.toNat - 64 ≤ a → a < C.s.toNat → (copyW W d s (n / 8))[a]? = W[a]? :=
+    fun _ a h1 h2 => copyW_out (by omega)
+  have ldc : ∀ (W : Mem) a, C.s.toNat - 64 ≤ a → a + 8 ≤ C.s.toNat →
+      ldv .ld (copyW W d s (n / 8)) a = ldv .ld W a :=
+    fun W a h1 h2 => ldv_congr fun k hk => cpo W _ (by omega) (by omega)
+  rgn_step O.live at 0x800069c4
+  rw [show (R 2 + sign_extend (m := 64) (0x018#12)).toNat = C.s.toNat - 64 + 24 by rgn_arith,
+    show (R 2 + sign_extend (m := 64) (0x010#12)).toNat = C.s.toNat - 64 + 16 by rgn_arith,
+    show (R 2 + sign_extend (m := 64) (0x008#12)).toNat = C.s.toNat - 64 + 8 by rgn_arith,
+    show (R 2 + sign_extend (m := 64) (0x000#12)).toNat = C.s.toNat - 64 + 0 by rgn_arith]
+  refine memmove_fwd A O.live (by rgn_arith) (by rgn_arith) (by rgn_arith)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide) fun R' hK => ?_
+  have hs2' : (R' 2).toNat = C.s.toNat - 64 := by rw [hK.sp]; rgn_arith
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  refine (step% st 0x80005820) O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n24]; rw [e 24 (by omega)]; exact (st 24 (by omega) (by omega)).1)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n24]; rw [e 24 (by omega)]; exact (st 24 (by omega) (by omega)).2) ?_
-  refine (step% st 0x80005824) O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e 16 (by omega)]; exact (st 16 (by omega) (by omega)).1)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e 16 (by omega)]; exact (st 16 (by omega) (by omega)).2) ?_
-  refine (step% st 0x80005828) O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e 8 (by omega)]; exact (st 8 (by omega) (by omega)).1)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e 8 (by omega)]; exact (st 8 (by omega) (by omega)).2) ?_
-  refine (step% st 0x8000582c) O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n0]; rw [e 0 (by omega)]; exact (st 0 (by omega) (by omega)).1)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n0]; rw [e 0 (by omega)]; exact (st 0 (by omega) (by omega)).2) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, n24, n16, n8, n0]
-  rw [e 24 (by omega), e 16 (by omega), e 8 (by omega), e 0 (by omega)]
-  refine (step% st 0x80005830) O.live ?_
-  simp only [VsaIris.ra]
-  generalize hW : writeLog (writeLog (writeLog (writeLog M1 [(C.s.toNat - 64 + 24, 8, R 6)])
-    [(C.s.toNat - 64 + 16, 8, R 15)]) [(C.s.toNat - 64 + 8, 8, R 16)]) [(C.s.toNat - 64 + 0, 8, R 13)] = W
-  have hWo : ∀ a, (a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) → W[a]? = M1[a]? := fun a ha => by
-    rw [← hW, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
-      simp only [OutL, and_true] <;> omega
-  refine memmove_fwd A O.live ?_ ?_ ?_ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide)
-    fun R' hK => ?_ <;> try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [BitVec.add_zero]; exact h13
-  · rw [BitVec.add_zero]; exact h8
-  · exact h12
-  rw [show (BitVec.ofNat 64 (2147506224 + 4) : BitVec 64) = 0x80005834#64 from rfl]
-  have hR2 : R' 2 = R 2 := by rw [hK.sp]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  have e' : ∀ c, c < 32 → (R' 2 + BitVec.ofNat 64 c).toNat = C.s.toNat - 64 + c := fun c hc => by
-    rw [hR2]; exact e c hc
-  have hcpO : ∀ a, C.s.toNat - 64 ≤ a → a < C.s.toNat →
-      (copyW W d s (n / 8))[a]? = W[a]? := fun a h1 h2 => copyW_out (by omega)
-  have rd : ∀ c (v : BitVec 64), c ≤ 24 → W = writeLog (writeLog (writeLog (writeLog M1
-        [(C.s.toNat - 64 + 24, 8, R 6)]) [(C.s.toNat - 64 + 16, 8, R 15)])
-        [(C.s.toNat - 64 + 8, 8, R 16)]) [(C.s.toNat - 64 + 0, 8, R 13)] →
-      read64 W (C.s.toNat - 64 + c) = some v.toNat →
-      ldv .ld (copyW W d s (n / 8)) (C.s.toNat - 64 + c) = v := fun c v hc _ hr =>
-    ldv_ld (by rw [read64_keep (m := W) fun k hk => hcpO _ (by omega) (by omega)]; exact hr)
-  have r24 : read64 W (C.s.toNat - 64 + 24) = some (R 6).toNat := by
-    rw [← hW, rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit]
-  have r16 : read64 W (C.s.toNat - 64 + 16) = some (R 15).toNat := by
-    rw [← hW, rd_miss (by omega), rd_miss (by omega), read64_store_hit]
-  have r8 : read64 W (C.s.toNat - 64 + 8) = some (R 16).toNat := by
-    rw [← hW, rd_miss (by omega), read64_store_hit]
-  have r0 : read64 W (C.s.toNat - 64 + 0) = some (R 13).toNat := by
-    rw [← hW, read64_store_hit]
-  refine (step% st 0x80005834) O.live (by rw [n24, e' 24 (by omega)]; exact (ld 24 (by omega) (by omega)).1)
-    (by rw [n24, e' 24 (by omega)]; exact (ld 24 (by omega) (by omega)).2) ?_
-  rw [n24, e' 24 (by omega), rd 24 _ (by omega) hW.symm r24]
-  refine (step% st 0x80005838) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e' 16 (by omega)]
-        exact (ld 16 (by omega) (by omega)).1)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e' 16 (by omega)]
-        exact (ld 16 (by omega) (by omega)).2) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]
-  rw [e' 16 (by omega), rd 16 _ (by omega) hW.symm r16]
-  refine (step% st 0x8000583c) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e' 8 (by omega)]
-        exact (ld 8 (by omega) (by omega)).1)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e' 8 (by omega)]
-        exact (ld 8 (by omega) (by omega)).2) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]
-  rw [e' 8 (by omega), rd 8 _ (by omega) hW.symm r8]
-  refine (step% st 0x80005840) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n0]; rw [e' 0 (by omega)]
-        exact (ld 0 (by omega) (by omega)).1)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n0]; rw [e' 0 (by omega)]
-        exact (ld 0 (by omega) (by omega)).2) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false, n0]
-  rw [e' 0 (by omega), rd 0 _ (by omega) hW.symm r0]
-  refine (step% st 0x80005844) O.live ?_
-  refine hk _ _ ((F.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_) (fun a ha => ?_) ?_ ?_ ?_ ?_ ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hR2
-  · rw [hK.s2]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  · rw [hK.s3]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  · rw [hcpO a (by omega) (by omega), hWo a (by omega)]
-  · exact copyW_agreeOn (Pr := fun a => a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) hWo
-      (fun i hi => by omega) a ha
-  · rw [hK.s1]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  rgn_step O.live at 0x80005574
+  rw [show (R' 2 + sign_extend (m := 64) (0x018#12)).toNat = C.s.toNat - 64 + 24 by rgn_arith,
+    show (R' 2 + sign_extend (m := 64) (0x010#12)).toNat = C.s.toNat - 64 + 16 by rgn_arith,
+    show (R' 2 + sign_extend (m := 64) (0x008#12)).toNat = C.s.toNat - 64 + 8 by rgn_arith,
+    show (R' 2 + sign_extend (m := 64) (0x000#12)).toNat = C.s.toNat - 64 + 0 by rgn_arith]
+  simp (disch := omega) only [ldc, ldv_store_hit, ldv_ld_miss]
+  refine hk _ _ ((F.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_)
+    (copyW_agreeOn (Pr := fun a => a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) (fun a ha => ?_)
+      fun i hi => by omega) ?_ ?_ ?_ ?_ ?_ <;>
+    try simp only [hK.sp, hK.s1, hK.s2, hK.s3, upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  all_goals (try rw [cpo _ a (by omega) (by omega)])
+  all_goals rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
 
 theorem pv_agree_self {C : MCtx} {Mt : Mem} {P ps S hdr0 predP succP : Nat}
     (G : PvGeo C P ps S predP succP) (hdr : read64 Mt (P + ps + 8) = some hdr0)
@@ -323,23 +108,16 @@ theorem pv_agree_self {C : MCtx} {Mt : Mem} {P ps S hdr0 predP succP : Nat}
   have hp16 := G.p16; have hplo := G.plo; have hps16 := G.psz16; have hps32 := G.psz32
   have hpp16 := G.pp16; have hsp16 := G.sp16; have hpplo := G.pplo; have hsplo := G.splo
   have sP := G.sP; have sX := G.sX; have pP := G.pP; have pX := G.pX
-  have hdlt := Vsa.Sim.read64_lt _ _ _ hdr
+  have e1 := Nat.mod_eq_of_lt (h1 ▸ v1.isLt); have e2 := Nat.mod_eq_of_lt (h2 ▸ v2.isLt)
+  have e3 := Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hdr)
   intro w0 h1'
   refine agree_of_words (P := fun x => ¬ (P + 8 ≤ x ∧ x < P + 16))
     [succP + 24, predP + 16, P + ps + 8] (fun w' hw' => ?_) (fun x hx hout => ?_) w0 h1'
   · simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
     rcases hw' with rfl | rfl | rfl
-    · refine ⟨predP, ?_, ?_⟩
-      · rw [rd_miss (by omega), read64_store_hit, h1]
-      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit,
-          BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-    · refine ⟨succP, ?_, ?_⟩
-      · rw [read64_store_hit, h2]
-      · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
-          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-    · refine ⟨hdr0, ?_, ?_⟩
-      · rw [rd_miss (by omega), rd_miss (by omega)]; exact hdr
-      · rw [read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdlt]
+    · exact ⟨predP, by rd_log [h1], by rd_log [BitVec.toNat_ofNat, e1]⟩
+    · exact ⟨succP, by rd_log [h2], by rd_log [BitVec.toNat_ofNat, e2]⟩
+    · exact ⟨hdr0, by rd_log [hdr], by rd_log [BitVec.toNat_ofNat, e3]⟩
   · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq] at hout
     rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out,
       writeLog_out] <;> simp only [OutL, and_true] <;> omega
@@ -560,25 +338,9 @@ theorem pvT_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : 
   unfold heapEnd at hbrk
   have hlo := O.spA.lo; have hhi := O.spA.hi; have hal := O.spA.align
   unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
-  have hs64 := sp64_toNat O.spA
-  have hdisj := Hp.disjD
-  unfold allocHeadroom at hdisj
-  have hstk : ∀ a, vsaFoot C.H a → a < C.s.toNat - 512 ∨ C.s.toNat ≤ a := fun a ha =>
-    Classical.byContradiction fun hc => hdisj a (by omega) (by omega) ha
-
-  obtain ⟨hP, hPr⟩ : ∃ hP, read64 Mt (P + 8) = some hP := by
-    obtain ⟨hh, hhr, _, _⟩ := walk_header HH.walk ⟨P, ps, false⟩ (by simp)
-    exact ⟨hh, hhr⟩
-  have hPodd := PV.prev hP hPr
-  have hPlt := Vsa.Sim.read64_lt _ _ _ hPr
-  have hPc : read64 Mc (P + 8) = some hP := by
-    rw [read64_keep (m := Mt) fun k hk => ?_]
-    · exact hPr
-    have := hstk _ (hspan (P + 8 + k) (by omega) (by omega))
-    rw [hMc _ (by omega), copyW_out (by omega), writeLog_out, writeLog_out] <;>
-      simp only [OutL, and_true] <;> omega
-
-  have hfN : ∀ k, k < 8 → vsaFoot C.H (P + nb + 8 + k) := fun k hk => by
+  have hs2 : (R' 2).toNat = C.s.toNat - 64 := by rw [F.sp]; exact sp64_toNat O.spA
+  have rX : Rgn (vsaFoot C.H) (P + 8) (ps + S) := ⟨fun k hk => hspan _ (by omega) (by omega)⟩
+  have rN : Rgn (vsaFoot C.H) (P + nb + 8) 8 := ⟨fun k hk => by
     refine .inr ⟨by show heapStart ≤ _; unfold heapStart; omega,
       by show _ < heapEnd; unfold heapEnd; omega, fun e he hin => ?_⟩
     obtain ⟨c, hc, hu, hca, hcn⟩ := HH.exact e (List.mem_cons_of_mem _ he) (List.mem_cons_of_mem _ he)
@@ -592,95 +354,37 @@ theorem pvT_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : 
       · cases hu
       · simp only at h2; omega
       · simp only at h1 h2; omega
-    · simp only at h1 hcb; omega
-  have hgT : ∀ k, k < 8 → vsaFoot C.H (0x8001ad20 + k) := fun k hk => .inl (by unfold allocGlobal InRange; omega)
-  have hfP : ∀ k, k < 8 → vsaFoot C.H (P + 8 + k) := fun k hk => hspan _ (by omega) (by omega)
-  have oT := off_stack_of Hp.disj hgT
-  have oN := off_stack_of Hp.disj hfN
-  have oP := off_stack_of Hp.disj hfP
-  have hT : (R' 6 + R' 15).toNat = P + nb := by rw [BitVec.toNat_add, h6, h15]; omega
-  have hsz' : (R' 16 - R' 15).toNat = ps + S + (brkv - C.top0) - nb := by
-    rw [BitVec.toNat_sub, h16, h15]; omega
-  refine (step% st 0x80005574) O.live ((step% st 0x80005578) O.live ((step% st 0x8000557c) O.live ?_))
-  have eT : ((0x8000557c#64) + (sign_extend (m := 64) ((0x00015#20) +++ (0x000#12))) +
-      sign_extend (m := 64) (0x7a4#12)).toNat = 0x8001ad20 := by decide
-  refine (step% st 0x80005580) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eT]
-        unfold StOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eT]; exact O.foot hgT) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eT]
-  refine (step% st 0x80005584) O.live ?_
-  have eN : (R' 6 + R' 15 + sign_extend (m := 64) (0x008#12)).toNat = P + nb + 8 := by
-    rw [BitVec.toNat_add, hT]; simp; omega
-  have sN : StOK (P + nb + 8) 8 := by
-    have h1 : (P + nb + 8) % 8 = 0 := by omega
-    unfold StOK Vsa.Sim.tohostAddr
-    exact ⟨by omega, by omega, by omega, h1⟩
-  refine (step% st 0x80005588) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eN]; exact sN)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eN]; exact O.foot hfN) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eN]
-  have eP8 : (R' 6 + sign_extend (m := 64) (0x008#12)).toNat = P + 8 := by
-    rw [show (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 from rfl,
-      addr_add h6 8 (by omega)]
-  have hPc2 : read64 (writeLog (writeLog Mc [(0x8001ad20, 8, R' 6 + R' 15)])
-      [(P + nb + 8, 8, R' 16 - R' 15 ||| sign_extend (m := 64) (0x001#12))]) (P + 8) = some hP := by
-    rw [rd_miss (by omega), rd_miss (by omega)]; exact hPc
-  refine (step% st 0x8000558c) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eP8]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eP8]; exact O.foot hfP) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  rw [eP8, ldv_at hPc2 _ rfl]
-  refine (step% st 0x80005590) O.live ?_
-  have eS : (R' 2 + sign_extend (m := 64) (0x000#12)).toNat = C.s.toNat - 64 := by
-    rw [F.sp, show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl,
-      addr_add hs64 0 (by omega)]; omega
-  refine (step% st 0x80005594) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS]; unfold StOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS]
-        exact O.stack (by unfold mHead; omega) (by omega)) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eS]
-  refine (step% st 0x80005598) O.live ((step% st 0x8000559c) O.live ?_)
-  refine (step% st 0x800055a0) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eP8]; unfold StOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eP8]; exact O.foot hfP) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eP8]
-  sx_run [12] O.live at 0x800055a8
-
+    · simp only at h1 hcb; omega⟩
+  have rG := globRgn C.H; have sr := O.stackRgn
+  have oX := rX.offStack Hp.disj (by omega); have oN := rN.offStack Hp.disj (by omega)
+  have oG := rG.offStack Hp.disj (by omega); unfold mHead at oX oN oG
+  obtain ⟨hP, hPr⟩ : ∃ hP, read64 Mt (P + 8) = some hP := by
+    obtain ⟨hh, hhr, _, _⟩ := walk_header HH.walk ⟨P, ps, false⟩ (by simp)
+    exact ⟨hh, hhr⟩
+  have hPodd := PV.prev hP hPr
+  have hPlt := Vsa.Sim.read64_lt _ _ _ hPr
+  have hPc : read64 Mc (P + 8) = some hP := by
+    rw [read64_keep (m := Mt) fun k hk => ?_]
+    · exact hPr
+    rw [hMc _ (by omega), copyW_out (by omega), writeLog_out, writeLog_out] <;>
+      simp only [OutL, and_true] <;> omega
+  rgn_step O.live at 0x80005580
+  simp only [BitVec.reduceAppend, sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend, BitVec.reduceAdd]
+  rgn_step O.live at 0x80005590
+  rgn_ld [hPc]
+  rgn_run O.live at 0x8000544c
+  rw [show (2147593504#64).toNat = 0x8001ad20 from rfl, hs2,
+    show (R' 6 + R' 15 + 8#64).toNat = P + nb + 8 by rgn_arith, show (R' 6 + 8#64).toNat = P + 8 by rgn_arith]
   have hvH : (R' 16 - R' 15 ||| 1#64).toNat = ps + S + (brkv - C.top0) - nb + 1 := by
     have ht16 := HH.aligned.2; have hbp := H0.brk_page
-    rw [or1_toNat', hsz']; omega
+    rw [or1_toNat', BitVec.toNat_sub, h16, h15]; omega
   have hvP : (BitVec.ofNat 64 hP &&& 1#64 ||| R' 15).toNat = nb + 1 := by
     rw [BitVec.toNat_or, and1_toNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hPlt, hPodd, h15,
       Nat.or_comm, nat_or1]; omega
-  have Rt := pvT_heap O D hsp PV hXt hroom hMc (vS := R' 13) hT hvH hvP
-  generalize hMf : writeLog (writeLog (writeLog (writeLog Mc [(2147593504, 8, R' 6 + R' 15)])
-    [(P + nb + 8, 8, R' 16 - R' 15 ||| 1#64)]) [(C.s.toNat - 64, 8, R' 13)])
-    [(P + 8, 8, BitVec.ofNat 64 hP &&& 1#64 ||| R' 15)] = Mf at Rt ⊢
-  have hsl : read64 Mf (C.s.toNat - 64) = some (R' 13).toNat := by
-    rw [← hMf, rd_miss (by omega), read64_store_hit]
-  have F4 : RFrame C R' Mf := by
-    rw [← hMf]
-    exact (((F.store (a := 2147593504) (w := 8) (by omega)).store (a := P + nb + 8) (w := 8)
-      (by omega)).store (a := C.s.toNat - 64) (w := 8) (by omega)).store (a := P + 8) (w := 8) (by omega)
-  have eS2 : (R' 2 + sign_extend (m := 64) (0#12)).toNat = C.s.toNat - 64 := by
-    rw [show (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 from rfl, BitVec.add_zero, F.sp, hs64]
-  refine (step% st 0x800055a8) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS2]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eS2]
-        exact O.stack (by unfold mHead; omega) (by omega)) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  rw [eS2, ldv_ld (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R' 13).isLt]; exact hsl)]
-  refine (step% st 0x800055ac) O.live ?_
-  refine repi O (F4.of_regs ?_ ?_ ?_) fun R'' hR h10 => O.ok R'' Mf ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  have hp : (R'' 10).toNat = P + 16 := by
-    rw [h10]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R' 13).isLt, h13]
+  have Rt := pvT_heap O D hsp PV hXt hroom hMc (vT := R' 6 + R' 15) (vS := R' 13) (by rgn_arith) hvH hvP
+  refine repi O (((((F.store (by omega)).store (by omega)).store (by omega)).store (by omega)).of_regs
+    rfl rfl rfl) fun R'' hR h10 => O.ok R'' _ ?_
+  have hp : (R'' 10).toNat = P + 16 := by rw [h10]; exact h13
   refine ⟨hR, ?_, ?_, ⟨P + nb, brkv, cs₀ ++ [⟨P, nb, true⟩], updBins bins i (pre ++ post), ?_, Rt.top_le⟩, Rt.pres,
     fun k hk => ?_⟩ <;> try rw [hp]
   · exact Rt.heap.fresh_of_block Rt.starts
@@ -705,123 +409,43 @@ theorem realloc_pvT {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   have hpend : X = P + ps := PV.pend.symm
   have hspan := pv_span D (rest := []) hsp hpend
   subst hpend
-  have hp16 := G.p16; have hplo := G.plo; have hps16 := G.psz16; have hps32 := G.psz32
-  have hs16 := G.sz16; have hs32 := G.sz32
+  open_fields G
   have hxend : P + ps + S ≤ C.top0 := G.xend; have htop : C.top0 + 16 ≤ 0x87800000 := G.top
-  have hpp16 := G.pp16; have hsp16 := G.sp16; have hpplo := G.pplo; have hsplo := G.splo
   have hpphi : predP + 32 ≤ C.top0 := G.pphi; have hsphi : succP + 32 ≤ C.top0 := G.sphi
-  have hlo := O.spA.lo; have hhi := O.spA.hi
+  have hlo := O.spA.lo; have hhi := O.spA.hi; have h14 := D.a4
   unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
-  have hdisj := Hp.disjD
-  unfold allocHeadroom at hdisj
-
-  have hPf := (foot_free H0.heap (c' := ⟨P, ps, false⟩) (by simp) rfl).1
-  simp only at hPf
-  have fB : ∀ k, k < 8 → vsaFoot C.H (P + 24 + k) := fun k hk => vsaFoot_cons_sub _ (by
-    have := hPf (8 + k) (by omega); rwa [show P + 16 + (8 + k) = P + 24 + k by omega] at this)
-  have fF : ∀ k, k < 8 → vsaFoot C.H (P + 16 + k) := fun k hk => vsaFoot_cons_sub _ (hPf k (by omega))
-  have fS : ∀ k, k < 8 → vsaFoot C.H (succP + 24 + k) := fun k hk => vsaFoot_cons_sub _ (by
-    have := G.spfoot (24 + k) (by omega) (by omega)
-    rwa [show succP + (24 + k) = succP + 24 + k by omega] at this)
-  have fP : ∀ k, k < 8 → vsaFoot C.H (predP + 16 + k) := fun k hk => vsaFoot_cons_sub _ (by
-    have := G.ppfoot (16 + k) (by omega) (by omega)
-    rwa [show predP + (16 + k) = predP + 16 + k by omega] at this)
-  have hpl := Vsa.Sim.read64_lt _ _ _ PV.bk
-  have hsl := Vsa.Sim.read64_lt _ _ _ PV.fd
-  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
-  have n24 : (sign_extend (m := 64) (0x018#12) : BitVec 64) = BitVec.ofNat 64 24 := rfl
-  have eB : (R 6 + sign_extend (m := 64) (0x018#12)).toNat = P + 24 := by rw [n24, addr_add h6 24 (by omega)]
-  have eF : (R 6 + sign_extend (m := 64) (0x010#12)).toNat = P + 16 := by rw [n16, addr_add h6 16 (by omega)]
-  refine (step% st 0x80005510) O.live (by rw [eB]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by rw [eB]; exact O.foot fB) ?_
-  rw [eB, ldv_at PV.bk _ rfl]
-  refine (step% st 0x80005514) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; exact O.foot fF) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  rw [eF, ldv_at PV.fd _ rfl]
-  refine (step% st 0x80005518) O.live ((step% st 0x8000551c) O.live ?_)
-  have hvP : (BitVec.ofNat 64 predP).toNat = predP := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl]
-  have hvS : (BitVec.ofNat 64 succP).toNat = succP := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl]
-  have eS : (BitVec.ofNat 64 succP + sign_extend (m := 64) (0x018#12)).toNat = succP + 24 := by
-    rw [n24, addr_add hvS 24 (by omega)]
-  have eP : (BitVec.ofNat 64 predP + sign_extend (m := 64) (0x010#12)).toNat = predP + 16 := by
-    rw [n16, addr_add hvP 16 (by omega)]
-  refine (step% st 0x80005520) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]
-        unfold StOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]; exact O.foot fS) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eS]
-  refine (step% st 0x80005524) O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]
-        unfold StOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]; exact O.foot fP) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eP]
-  have eL : (R 14 + sign_extend (m := 64) (0xff8#12)).toNat = S - 8 := by
-    rw [show (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) from rfl,
-      addr_sub D.a4 8 (by omega) (by omega)]
+  have rX : Rgn (vsaFoot C.H) (P + 8) (ps + S) := ⟨fun k hk => hspan _ (by omega) (by omega)⟩
+  have rS : Rgn (vsaFoot C.H) (succP + 16) 16 := Rgn.lower (x := (B.p, B.nOld))
+    ⟨fun k hk => by rw [Nat.add_assoc]; exact G.spfoot _ (by omega) (by omega)⟩
+  have rP : Rgn (vsaFoot C.H) (predP + 16) 16 := Rgn.lower (x := (B.p, B.nOld))
+    ⟨fun k hk => by rw [Nat.add_assoc]; exact G.ppfoot _ (by omega) (by omega)⟩
+  have oX := rX.offStack Hp.disj (by omega); have oS := rS.offStack Hp.disj (by omega)
+  have oP := rP.offStack Hp.disj (by omega); unfold mHead at oX oS oP
+  rgn_step O.live at 0x80005520
+  rgn_ld [PV.bk, PV.fd]
+  rgn_step O.live at 0x8000552c
+  rw [show (BitVec.ofNat 64 succP + sign_extend (m := 64) (0x018#12)).toNat = succP + 24 by rgn_arith,
+    show (BitVec.ofNat 64 predP + sign_extend (m := 64) (0x010#12)).toNat = predP + 16 by rgn_arith]
+  have eL : (R 14 + sign_extend (m := 64) (0xff8#12)).toNat = S - 8 := by rgn_arith
+  have eF : (R 6 + sign_extend (m := 64) (0x010#12)).toNat = P + 16 := by rgn_arith
   have e72 : (0#64 + sign_extend (m := 64) (0x048#12)).toNat = 72 := rfl
-
-  have oS := off_stack_of Hp.disj fS
-  have oP := off_stack_of Hp.disj fP
   have F1 : RFrame C R (writeLog (writeLog Mt [(succP + 24, 8, BitVec.ofNat 64 predP)])
       [(predP + 16, 8, BitVec.ofNat 64 succP)]) :=
     (D.frame.store (by omega)).store (by omega)
-  have hstk : ∀ a, vsaFoot C.H a → a < C.s.toNat - 512 ∨ C.s.toNat ≤ a := fun a ha =>
-    Classical.byContradiction fun hc => hdisj a (by omega) (by omega) ha
-  have hdst : P + 16 + (S - 8) ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ P + 16 := by
-    rcases hstk _ (hspan (P + 16) (by omega) (by omega)) with h | h
-    · rcases hstk _ (hspan (P + 16 + (S - 9)) (by omega) (by omega)) with h' | h'
-      · exact .inl (by omega)
-      · exfalso
-        have := hstk (C.s.toNat - 64) (hspan _ (by omega) (by omega)); omega
-    · exact .inr h
-  have hsrc : P + ps + 16 + (S - 8) ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ P + ps + 16 := by
-    rcases hdst with h | h
-    · rcases hstk _ (hspan (P + ps + 16 + (S - 9)) (by omega) (by omega)) with h' | h'
-      · exact .inl (by omega)
-      · exfalso
-        have := hstk (C.s.toNat - 64) (hspan _ (by omega) (by omega)); omega
-    · exact .inr (by omega)
   have A : CPArgs C.S (P + 16) (P + ps + 16) (S - 8) :=
     { n8 := by omega, d8 := by omega, s8 := by omega, ov := .inl (by omega),
       dlo := by unfold Vsa.Sim.tohostAddr; omega, dhi := by omega,
       slo := by unfold Vsa.Sim.tohostAddr; omega, shi := by omega,
       sS := fun k hk => O.own _ (.inl (hspan _ (by omega) (by omega))),
       dS := fun k hk => O.own _ (.inl (hspan _ (by omega) (by omega))) }
-  have z : (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 := rfl
-  have h13' : (R 6 + sign_extend (m := 64) (0x010#12)).toNat = P + 16 := eF
-  refine (step% st 0x80005528) O.live ((step% st 0x8000552c) O.live (fun hc => ?_) (fun hc => ?_)) <;>
+  refine (step% st 0x8000552c) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, eL, e72] at hc ⊢
-  ·
-    refine pvT_mm O { A with n32 := by omega } (F1.of_regs ?_ ?_ ?_) hdst hsrc ?_ ?_ ?_
-      (fun R' Mc F' hMc g13 g6 g15 g16 g9 => pvT_fin O D hsp PV hXt hroom F' hMc ?_ ?_ ?_ ?_) <;>
-      (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    · exact eF
-    · exact D.s0
-    · exact eL
-    · rw [g6]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h6
-    · rw [g15]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact D.a5
-    · rw [g16]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h16
-    · rw [g13]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact eF
-  ·
-    have hLs : S - 8 = 24 ∨ S - 8 = 40 ∨ S - 8 = 56 ∨ S - 8 = 72 := by omega
-    refine pvT_inline A O.live hLs rfl ?_ ?_ ?_ ?_ fun R' K => pvT_fin O D hsp PV hXt hroom
-      ((F1.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_) (fun a _ => rfl) ?_ ?_ ?_ ?_ <;>
-      (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    · exact D.s0
-    · exact h6
-    · exact eF
-    · exact eL
-    · rw [K.sp]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · rw [K.s2]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · rw [K.s3]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact copyW_out (by omega)
-    · rw [K.t1]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h6
-    · rw [K.a5]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact D.a5
-    · rw [K.a6]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h16
-    · rw [K.a3]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact eF
+  · exact pvT_mm O { A with n32 := by omega } (F1.of_regs rfl rfl rfl) (by omega) (by omega) eF D.s0 eL
+      fun R' Mc F' hMc g13 g6 g15 g16 g9 => pvT_fin O D hsp PV hXt hroom F' hMc (g6.trans h6)
+        (g15.trans D.a5) (g16.trans h16) (g13.trans eF)
+  · exact pvT_inline A O.live (by omega) rfl D.s0 h6 eF eL fun R' K => pvT_fin O D hsp PV hXt hroom
+      ((F1.of_regs K.sp K.s2 K.s3).agree fun a h1 h2 => copyW_out (by omega)) (fun a _ => rfl)
+      ((congrArg _ K.t1).trans h6) ((congrArg _ K.a5).trans D.a5) ((congrArg _ K.a6).trans h16)
+      ((congrArg _ K.a3).trans eF)
 
 end VsaIris.VsaHeap
