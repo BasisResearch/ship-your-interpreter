@@ -12,7 +12,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-abbrev gprIdx (n : Nat) : regidx := regidx.Regidx (BitVec.ofNat 5 n)
 
 abbrev GRegs := List (Nat × BitVec 64)
 
@@ -30,110 +29,8 @@ def eraseG (n : Nat) : GRegs → GRegs
 
 abbrev KeysOK (d : List Nat) : Prop := ∀ n ∈ d, 1 ≤ n ∧ n ≤ 31
 
-def gprReg : Nat → Register
-  | 1 => Register.x1
-  | 2 => Register.x2
-  | 3 => Register.x3
-  | 4 => Register.x4
-  | 5 => Register.x5
-  | 6 => Register.x6
-  | 7 => Register.x7
-  | 8 => Register.x8
-  | 9 => Register.x9
-  | 10 => Register.x10
-  | 11 => Register.x11
-  | 12 => Register.x12
-  | 13 => Register.x13
-  | 14 => Register.x14
-  | 15 => Register.x15
-  | 16 => Register.x16
-  | 17 => Register.x17
-  | 18 => Register.x18
-  | 19 => Register.x19
-  | 20 => Register.x20
-  | 21 => Register.x21
-  | 22 => Register.x22
-  | 23 => Register.x23
-  | 24 => Register.x24
-  | 25 => Register.x25
-  | 26 => Register.x26
-  | 27 => Register.x27
-  | 28 => Register.x28
-  | 29 => Register.x29
-  | 30 => Register.x30
-  | 31 => Register.x31
-  | 0 => Register.x1
-  | _+32 => Register.x1
 
-def gprGet (σ : MState) : Nat → Option (BitVec 64)
-  | 1 => σ.regs.get? Register.x1
-  | 2 => σ.regs.get? Register.x2
-  | 3 => σ.regs.get? Register.x3
-  | 4 => σ.regs.get? Register.x4
-  | 5 => σ.regs.get? Register.x5
-  | 6 => σ.regs.get? Register.x6
-  | 7 => σ.regs.get? Register.x7
-  | 8 => σ.regs.get? Register.x8
-  | 9 => σ.regs.get? Register.x9
-  | 10 => σ.regs.get? Register.x10
-  | 11 => σ.regs.get? Register.x11
-  | 12 => σ.regs.get? Register.x12
-  | 13 => σ.regs.get? Register.x13
-  | 14 => σ.regs.get? Register.x14
-  | 15 => σ.regs.get? Register.x15
-  | 16 => σ.regs.get? Register.x16
-  | 17 => σ.regs.get? Register.x17
-  | 18 => σ.regs.get? Register.x18
-  | 19 => σ.regs.get? Register.x19
-  | 20 => σ.regs.get? Register.x20
-  | 21 => σ.regs.get? Register.x21
-  | 22 => σ.regs.get? Register.x22
-  | 23 => σ.regs.get? Register.x23
-  | 24 => σ.regs.get? Register.x24
-  | 25 => σ.regs.get? Register.x25
-  | 26 => σ.regs.get? Register.x26
-  | 27 => σ.regs.get? Register.x27
-  | 28 => σ.regs.get? Register.x28
-  | 29 => σ.regs.get? Register.x29
-  | 30 => σ.regs.get? Register.x30
-  | 31 => σ.regs.get? Register.x31
-  | 0 => none
-  | _+32 => none
 
-def gprRT : (n : Nat) → BitVec 64 → RegisterType (gprReg n)
-  | 1, v => v
-  | 2, v => v
-  | 3, v => v
-  | 4, v => v
-  | 5, v => v
-  | 6, v => v
-  | 7, v => v
-  | 8, v => v
-  | 9, v => v
-  | 10, v => v
-  | 11, v => v
-  | 12, v => v
-  | 13, v => v
-  | 14, v => v
-  | 15, v => v
-  | 16, v => v
-  | 17, v => v
-  | 18, v => v
-  | 19, v => v
-  | 20, v => v
-  | 21, v => v
-  | 22, v => v
-  | 23, v => v
-  | 24, v => v
-  | 25, v => v
-  | 26, v => v
-  | 27, v => v
-  | 28, v => v
-  | 29, v => v
-  | 30, v => v
-  | 31, v => v
-  | 0, v => v
-  | _+32, v => v
 
 def GHolds (σ : MState) : GRegs → Prop
   | [] => True
@@ -237,40 +134,9 @@ theorem wX_gpr (s : MState) (d : BitVec 64) :
 theorem obs_gpr_rd {σ' σ : MState} {pc vm : BitVec 64} :
     ∀ (n : Nat), 1 ≤ n → n ≤ 31 → ∀ (v : BitVec 64),
     ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg n) (gprRT n v)) →
-    gprGet σ' n = some v
-  | 0, h, _, _, _ => absurd h (by omega)
-  | 1, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 2, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 3, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 4, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 5, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 6, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 7, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 8, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 9, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 10, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 11, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 12, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 13, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 14, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 15, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 16, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 17, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 18, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 19, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 20, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 21, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 22, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 23, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 24, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 25, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 26, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 27, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 28, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 29, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 30, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | 31, _, _, v, hobs => obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  | _+32, _, h, _, _ => absurd h (by omega)
+    gprGet σ' n = some v := by
+  intro n h1 h31 v hobs
+  gpr_cases n => exact obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
 
 theorem obs_gpr_other {σ' σ : MState} {pc vm : BitVec 64} {n : Nat} {v : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg n) (gprRT n v))) :
