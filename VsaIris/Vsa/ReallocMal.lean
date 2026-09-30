@@ -44,7 +44,7 @@ theorem mal_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p �
   have rs : ARgn S s L := ⟨⟨A.sS⟩, A.slo, A.shi⟩; have rd : ARgn S d L := ⟨⟨A.dS⟩, A.dlo, A.dhi⟩
   have hd8 := A.d8; have hs8 := A.s8; have hshi := A.shi; have hdhi := A.dhi
   rgn_step hlive at 0x800053c0
-  cp_norm'
+  cp_norm
   exact hk _ fun x h12 h14 => by simp only [upd_apply, h12, h14, ite_false]
 
 theorem aw_forget {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
@@ -99,16 +99,16 @@ theorem mal_inline {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p 
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x027#12) : BitVec 64).toNat = 39 from rfl] at hc
   · rgn_step hlive at 0x800055d4
-    cp_norm'
+    cp_norm
     refine (step% st 0x800055d4) hlive (fun hc' => ?_) (fun hc' => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12, BitVec.reduceToNat] at hc'
     · rgn_step hlive at 0x80005700
-      cp_norm'
+      cp_norm
       refine (step% st 0x80005700) hlive (fun hc'' => ?_) (fun hc'' => ?_) <;>
         simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc''
       · have hL72 : L = 72 := by rw [← h12, hc'', h15]
         rgn_step hlive at 0x800053a8
-        cp_norm'
+        cp_norm
         exact tail _ _ (by omega) (by rgn_arith) (by rgn_arith) (by simp [upd_apply])
       · have hL56 : L = 56 := by
           have : L ≠ 72 := fun h => hc'' (BitVec.eq_of_toNat_eq (by rw [h12, h15, h]))

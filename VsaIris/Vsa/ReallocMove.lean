@@ -6,14 +6,14 @@ namespace VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-theorem copyW_fold' (m : Mem) (d s j : Nat) {a a' : Nat} (ha : a = d + 8 * j) (ha' : a' = s + 8 * j) :
+theorem copyW_fold (m : Mem) (d s j : Nat) {a a' : Nat} (ha : a = d + 8 * j) (ha' : a' = s + 8 * j) :
     writeLog (copyW m d s j) [(a, 8, ldv .ld (copyW m d s j) a')] = copyW m d s (j + 1) := by
   subst ha ha'; rfl
 
 /-- Normalise a copy path's goal: register reads, immediates, and completed word copies. -/
-macro "cp_norm'" : tactic =>
+macro "cp_norm" : tactic =>
   `(tactic| simp (disch := rgn_arith) only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
-      sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend, BitVec.reduceAdd, copyW_fold'])
+      sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend, BitVec.reduceAdd, copyW_fold])
 
 structure CPArgs (S : Nat → Prop) (d s n : Nat) : Prop where
   n8 : n % 8 = 0
@@ -177,7 +177,7 @@ theorem mm_l32 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ 
     have hr : n / 32 - (i + 1) = k := by omega
     clear hki
     rgn_step hlive at 0x80006a58
-    cp_norm'
+    cp_norm
     exact mm_l32_rest A hlive (R0 := R0) i hi _ (by mm_keep hK) h10 (by rgn_arith) h12 (by rgn_arith)
       h15 h16 h17
       (fun R' hlt hK' g10 g11 g12 g14 g15 g16 g17 =>
@@ -200,7 +200,7 @@ theorem mm_l8 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ a
       rw [← key_toNat_add, h16, add_sub_toNat h11 h10 h17 (by omega) (by omega)]; omega
     have ej : 8 * (c / 8 + j) = c + 8 * j := by omega
     rgn_step hlive at 0x80006abc
-    cp_norm'
+    cp_norm
     have g11 : (R 11 + 8#64).toNat = s + c + 8 * (j + 1) := by rgn_arith
     refine (step% st 0x80006abc) hlive (fun hc => ?_) (fun hc => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc

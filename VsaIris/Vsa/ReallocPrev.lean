@@ -5,15 +5,6 @@ namespace VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-theorem copyW_fold (m : Mem) (d s j : Nat) {a a' : Nat} (ha : a = d + 8 * j) (ha' : a' = s + 8 * j) :
-    writeLog (copyW m d s j) [(a, 8, ldv .ld (copyW m d s j) a')] = copyW m d s (j + 1) := by
-  subst ha ha'; rfl
-
-/-- Normalise a copy path's goal: register reads, immediates, and completed word copies. -/
-macro "cp_norm" : tactic =>
-  `(tactic| simp (disch := rgn_arith) only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
-      sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend, BitVec.reduceAdd, copyW_fold])
-
 section Copy
 
 variable {live : Nat → Prop} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
