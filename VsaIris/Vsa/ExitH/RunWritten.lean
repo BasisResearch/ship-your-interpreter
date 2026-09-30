@@ -7,17 +7,17 @@ open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
 
 /-! The exit path from the third stream on, stderr written (flags `0x201a`). -/
 
-#ix_branch exitWritten_01 (hE : ErrWrittenMt Mt) from exitHead_15 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_branch exitWritten_01 (hE : ErrWrittenMt Mt) from exitHead_15 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_02 from exitWritten_01 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_02 from exitWritten_01 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_03 from exitWritten_02 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_03 from exitWritten_02 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_04 from exitWritten_03 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_04 from exitWritten_03 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_05 from exitWritten_04 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_05 from exitWritten_04 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_06 from exitWritten_05 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_06 from exitWritten_05 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
 #ix_piece exitWritten_07 from exitWritten_06 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
@@ -25,21 +25,9 @@ open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
 
 #ix_piece exitWritten_09 from exitWritten_08 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitWritten_10 from exitWritten_09 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+#ix_piece exitWritten_end from exitWritten_09 by xh_end
 
-#ix_piece exitWritten_11 from exitWritten_10 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
-
-#ix_piece exitWritten_12 from exitWritten_11 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
-
-#ix_piece exitWritten_13 from exitWritten_12 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
-
-#ix_piece exitWritten_14 from exitWritten_13 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
-
-#ix_piece exitWritten_15 from exitWritten_14 by xh_step 10 using [hE.flagsU, hE.flags, hE.fd, hE.base, hE.p, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
-
-#ix_piece exitWritten_end from exitWritten_15 by xh_end
-
-#ix_chain exitWrittenTail_chain := [exitWritten_01, exitWritten_02, exitWritten_03, exitWritten_04, exitWritten_05, exitWritten_06, exitWritten_07, exitWritten_08, exitWritten_09, exitWritten_10, exitWritten_11, exitWritten_12, exitWritten_13, exitWritten_14, exitWritten_15, exitWritten_end]
+#ix_chain exitWrittenTail_chain := [exitWritten_01, exitWritten_02, exitWritten_03, exitWritten_04, exitWritten_05, exitWritten_06, exitWritten_07, exitWritten_08, exitWritten_09, exitWritten_end]
 
 theorem exitWritten_chain {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
