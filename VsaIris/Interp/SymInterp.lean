@@ -8,10 +8,18 @@ import VsaIris.Interp.ITac
 * `geomOf`: the `Geom` a run needs, read off its own obligations (per atom: the offset span,
   the store alignment, the `S`/`DA` cover ranges and the HTIF gap). `geom_auto` then proves it
   from the piece's hypotheses, so no piece writes a `Geom` by hand.
-* `sym_run`: the `ix_run` surface (`sym_run [n] hlive using [facts] at pcs`). It runs the
-  executor once, closes the checked obligations and the decode facts, prunes branches and
-  normalises continuations exactly as `ix_run` does, and hands back the same leftover goals.
-  Any failure falls back to `ix_run`.
+* `sym_run [n] hlive using [facts] at pcs` runs the executor from the goal's state to the stop
+  points, one segment per undecided branch, closes the checked obligations and the decode
+  facts, prunes infeasible branch sides and normalises the continuations. `sym_run1` stops at
+  the first branch it cannot prune.
+
+The leftover goals are in *step-lemma form*, the form a run that applies the step table's
+lemma of each instruction and normalises after every step would leave; the pieces' statements
+are written against it. A branch premise reads a written register from the fact-rewritten
+register chain of its step; an undecided access check or jump alignment is the side goal of
+that instruction's step lemma (`hea`, `hLDS`, `hLDD`, `hS`, `hal`); a branch side that takes
+no further step keeps its premise unnormalised; case tags are `hk` per load, store and
+indirect jump and `hT`/`hF` per branch.
 -/
 
 namespace VsaIris.SymExec.Interp
@@ -52,8 +60,8 @@ elab "#pc_list " n:ident " := " e:term : command => do
 -- The interpreter's loads that read the data view (the AST and the input).
 #pc_list interpDataPCs := (StepGen.interpTbl.variants.lookup "D").getD []
 
-/-- Whether the interpreter's step table has a lemma at `pc` (the landed runs step exactly
-there): an instruction of the table's code, outside its skipped ranges, that one of its
+/-- Whether the interpreter's step table has a lemma at `pc` (a step-by-step run steps
+exactly there): an instruction of the table's code, outside its skipped ranges, that one of its
 step families (not the call family) covers. -/
 def interpHasStep (pc : Nat) : Lean.MetaM Bool := do
   let t := StepGen.interpTbl
@@ -176,7 +184,7 @@ def ownedReadAtoms (obs : List SOb) : List SE :=
     | .ld e _ => if (base e).1 = .c 0 then none else some (base e).1
     | _ => none
 
-/-! ## Branch premises in the landed step-lemma form -/
+/-! ## Branch premises in step-lemma form -/
 
 theorem gF_beq (a b : BitVec 64) : guardB .BEQ a b = false ↔ ¬ (a = b) := guard_false (guard_beq a b)
 theorem gF_bne (a b : BitVec 64) : guardB .BNE a b = false ↔ ¬ (a ≠ b) := guard_false (guard_bne a b)
@@ -197,8 +205,8 @@ open Lean Meta Elab Tactic
 macro "sym_den" : tactic => `(tactic| simp (disch := decide) only [regsDen, memDen, SE.den, aluVal,
   Env.withH, hset_self, hset_ne, shamtOf, shamt5Of, imm20Of, BitVec.reduceExtractLsb'])
 
-/-- `sx_norm` on the branch premise just introduced, while it is the last hypothesis (the landed
-runs normalise it at the next step, before any later premise exists). -/
+/-- `sx_norm` on the branch premise just introduced, while it is the last hypothesis (a
+step-by-step run normalises it at the next step, before any later premise exists). -/
 macro "sym_hnorm " h:ident : tactic =>
   `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
         LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
@@ -220,7 +228,7 @@ theorem geom_cons {ρ : Env} {S : Nat → Prop} {DA : List Nat} {f : AFact} {Γ 
     (h1 : Geom.holds ρ S DA [f]) (h2 : Geom.holds ρ S DA Γ) : Geom.holds ρ S DA (f :: Γ) :=
   fun g hg => (List.mem_cons.1 hg).elim (fun e => h1 g (e ▸ List.mem_singleton.2 rfl)) (h2 g)
 
-register_option sym_run.trace : Bool := { defValue := false, descr := "report sym_run fallbacks" }
+register_option sym_run.trace : Bool := { defValue := false, descr := "report each sym_run and its stages" }
 
 register_option sym_run.maxSegs : Nat :=
   { defValue := 0, descr := "debugging: stop after this many segments (0 = no limit)" }
@@ -232,7 +240,7 @@ def mkindOf? (n : Name) : Option MKind :=
   else if n == ``MKind.ld then some .ld else if n == ``MKind.lbu then some .lbu
   else if n == ``MKind.lh then some .lh else if n == ``MKind.lhu then some .lhu else none
 
-/-- Replace the last three arguments (pc, registers, memory) of the landed goal head. -/
+/-- Replace the last three arguments (pc, registers, memory) of the goal head. -/
 def withState (ty0 pc R M : Expr) : Expr :=
   let args := ty0.getAppArgs
   mkAppN ty0.getAppFn (args.extract 0 (args.size - 3) ++ #[pc, R, M])
@@ -262,7 +270,7 @@ def contNorm (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (gk : MVarId) :
       catch _ => saved.restore
     pure gk
   let gk ← do
-    -- the landed runs normalise after every step, so a value is normalised again whenever a
+    -- a step-by-step run normalises after every step, so a value is normalised again whenever a
     -- later step rewrites inside it: iterate to the fixed point
     let mut gk := gk
     for _ in [0:4] do
@@ -278,7 +286,7 @@ def contNorm (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (gk : MVarId) :
     pure gk
   return gk
 
-/-- What the obligation walk needs from the run: the landed goal head, the normaliser, the facts
+/-- What the obligation walk needs from the run: the goal head, the normaliser, the facts
 and the register list of a leaf below the node (every earlier register list is a suffix). -/
 structure ObCtx where
   ty0 : Expr
@@ -298,7 +306,7 @@ def Tree.anyRegs : Tree → List (Nat × SE)
   | .hv _ t => Tree.anyRegs t
   | .raw _ _ _ _ t => Tree.anyRegs t
 
-/-- An undecided load/store check, handed back as the side goals the landed step lemma at that
+/-- An undecided load/store check, handed back as the side goals the step lemma at that
 pc leaves: `LdOK`/`StOK` of `(R' rs1 + sign_extend imm).toNat` over the register chain `R'` of
 that step, then the cover. Each part that the side tactic proves is closed. -/
 def pendingMem (cx : ObCtx) (ρ S DA : Expr) (ho : MVarId) (o : SOb) (pc : BitVec 64)
@@ -317,7 +325,7 @@ def pendingMem (cx : ObCtx) (ρ S DA : Expr) (ho : MVarId) (o : SOb) (pc : BitVe
   let imm := Syntax.mkNumLit (toString a.imm.toNat)
   let wd := Syntax.mkNumLit (toString (widthOfM a.kind))
   let ea ← `((($Rs $rs1) + LeanRV64DExecutable.Functions.sign_extend (m := 64) (BitVec.ofNat 12 $imm)).toNat)
-  -- the side goals carry the premise names of the landed step lemma
+  -- the side goals carry the premise names of the step lemma
   let tys : List (Name × Term) ← match o with
     | .ld _ _ => pure [(`hea, ← `(LdOK $ea $wd)), (`hLDS, ← `(∀ b ∈ accAddrs $ea $wd, $Ss b))]
     | .ldD _ _ => pure [(`hea, ← `(LdOK $ea $wd)), (`hLDD, ← `(∀ b ∈ accAddrs $ea $wd, b ∈ $DAs))]
@@ -350,10 +358,10 @@ def pendingMem (cx : ObCtx) (ρ S DA : Expr) (ho : MVarId) (o : SOb) (pc : BitVe
     unless gs.isEmpty do
       if (← getOptions).getBool `sym_run.trace false then
         for g in gs do IO.eprintln s!"sym_run pending mismatch: {← ppGoal g}"
-      throwError "sym_run: pending check does not match the landed side goal"
+      throwError "sym_run: pending check does not match the side goal of the step lemma"
   return pend
 
-/-- The alignment premise of an indirect jump, as the landed step lemma states it:
+/-- The alignment premise of an indirect jump, as the step lemma states it:
 `(R' r).toNat % 4 = 0` over the register chain of that step. Closed when the side tactic proves
 it, else returned pending. -/
 def pendingAl4 (cx : ObCtx) (ρ : Expr) (ho : MVarId) (pc : BitVec 64) (r n : Nat) (tag : Name) :
@@ -380,10 +388,10 @@ def pendingAl4 (cx : ObCtx) (ρ : Expr) (ho : MVarId) (pc : BitVec 64) (r n : Na
   unless gs.isEmpty do
     if (← getOptions).getBool `sym_run.trace false then
       for g in gs do IO.eprintln s!"sym_run pending mismatch: {← ppGoal g}"
-    throwError "sym_run: alignment does not match the landed side goal"
+    throwError "sym_run: alignment does not match the side goal of the step lemma"
   return pend
 
-/-- Discharge an `ObsOK` list, oldest obligation first (the order the landed run meets them).
+/-- Discharge an `ObsOK` list, oldest obligation first (the order a step-by-step run meets them).
 `nw` counts the register writes before the node; an undecided check is returned pending. -/
 def symObs (cx : ObCtx) (obs : List SOb) (nw : Nat) (tag : Name) (go : MVarId) :
     TacticM (List MVarId × Nat × Name × Nat) := do
@@ -401,7 +409,7 @@ def symObs (cx : ObCtx) (obs : List SOb) (nw : Nat) (tag : Name) (go : MVarId) :
   let [] ← cur.apply (mkConst ``ObsOK_nil) | throwError "sym_run: obs"
   let mut pend : List MVarId := []
   let mut nw := nw
-  -- the goal tag the landed run would have here: a step whose lemma has side premises (a load,
+  -- the goal tag of the step-lemma form here: a step whose lemma has side premises (a load,
   -- a store, an indirect jump) adds `hk`; a fork adds `hT`/`hF` (in `symWalk`)
   let mut tag := tag
   let mut tagAt := tag
@@ -444,11 +452,11 @@ def symObs (cx : ObCtx) (obs : List SOb) (nw : Nat) (tag : Name) (go : MVarId) :
         saved.restore
         match o, at? with
         | .al4 _, _ =>
-          -- the alignment premise of the landed `jr` lemma, pending when its side tactic fails
+          -- the alignment premise of the `jr` step lemma, pending when its side tactic fails
           let some (pc, r, n) := jr? | throwError "sym_run: alignment"
           pend := pend ++ (← pendingAl4 cx ρ ho pc r n tagAt)
         | .disj .., some (pc, _, _) =>
-          -- the landed normaliser cannot pass this store either: read the load unreduced
+          -- the normaliser cannot pass this store either: read the load unreduced
           throwError "sym_run: rawpc {pc.toNat}"
         | _, none =>
           if trace then IO.eprintln s!"sym_run undecided: {← ppGoal ho}"
@@ -470,9 +478,8 @@ def symLeaf (cx : ObCtx) (obs : List SOb) (nw : Nat) (tag : Name) (go gk : MVarI
     return (pend, [gk], tag)
   else return (pend, [], tag)
 
-/-- A branch side that reaches a stop point with no further step (or a branch `ix_run1` leaves
-unexplored): as in `ix_run`, the branch premise stays in the step-lemma form over the pre-branch
-register chain and only the continuation is normalised. -/
+/-- A branch side that reaches a stop point with no further step (or a branch `sym_run1` leaves
+unexplored): the branch premise stays in the step-lemma form over the pre-branch register chain and only the continuation is normalised. -/
 def zeroStepChild (cx : ObCtx) (child : SS) (nw : Nat) (tag : Name)
     (cg : MVarId) (op : bop) (r1 r2 : Nat) (taken : Bool) (introHc : Bool := true) :
     TacticM (List MVarId × MVarId) := do
@@ -510,7 +517,7 @@ def zeroStepChild (cx : ObCtx) (child : SS) (nw : Nat) (tag : Name)
       BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceToNat, Nat.reduceAdd, not_true_eq_false,
       $lems,*] using $hgId)) pfG.mvarId! | throwError "sym_run: branch premise"
   gk.assign (mkApp H (mkApp G pfG))
-  -- `ix_run` introduces the premise of the side it follows; `ix_run1` leaves both sides of a
+  -- `sym_run` introduces the premise of the side it follows; `sym_run1` leaves both sides of a
   -- branch it stops at as implications
   if introHc then
     let [G'] ← evalTacticAt (← `(tactic| intro hc)) G.mvarId! | throwError "sym_run: intro"
@@ -548,7 +555,7 @@ partial def runSeg (sc : SegCtx) (cx0 : ObCtx) (s : SS) (ρE : Expr) (used nw : 
   let fuel := sc.fuel - used
   let run := mkApp3 (mkConst ``symRun) sc.C (mkNatLit fuel) (toExpr s)
   let tree ← unsafe evalExpr Tree (mkConst ``Tree) run
-  -- a straight line ends at a stop point, at a fork, out of fuel, or where no landed step
+  -- a straight line ends at a stop point, at a fork, out of fuel, or where no step
   -- lemma applies
   if let some e := Tree.endLeaf? tree then
     let p := e.pc.toNat
@@ -632,7 +639,7 @@ partial def symWalk (sc : SegCtx) (cx0 : ObCtx) (t : Tree) (used nw : Nat) (tag 
         hset_self, hset_ne, shamtOf, shamt5Of, imm20Of, BitVec.reduceExtractLsb', guard_beq, guard_bne,
         guard_blt, guard_bge, guard_bltu, guard_bgeu, gF_beq, gF_bne, gF_blt, gF_bge, gF_bltu,
         gF_bgeu])) g | throwError "sym_run: guard"
-      -- the landed runs read a written register from the fact-rewritten chain and normalise the
+      -- step-lemma form: the premise reads a written register from the fact-rewritten chain and normalise the
       -- premise at the next step: introduce, normalise, rewrite with the facts, revert
       let mut fl : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
       for f in facts do
@@ -692,7 +699,7 @@ partial def symWalk (sc : SegCtx) (cx0 : ObCtx) (t : Tree) (used nw : Nat) (tag 
           let [go, gk] ← g.apply (mkConst ``Tree.WP_leaf) | throwError "sym_run: leaf"
           let [] ← go.apply (mkConst ``ObsOK_nil) | throwError "sym_run: obs"
           return ← runSeg sc cx0 cs ρE used nw (tagOf taken) gk
-      -- as in `ix_run`, the premise is introduced as the step leaves it; later normalisation
+      -- step-lemma form: the premise is introduced as the step leaves it; later normalisation
       -- (`at *`) rewrites it, the goal-only fact rewriting does not
       let g ← hnormHc (← introHc g)
       symWalk sc cx0 child used nw (tagOf taken) g
@@ -708,7 +715,7 @@ partial def symWalk (sc : SegCtx) (cx0 : ObCtx) (t : Tree) (used nw : Nat) (tag 
           let (p2, s2) ← side gf' ff false
           pure (p1 ++ p2, s1 ++ s2)
         else
-          -- `ix_run1` stops at this branch: both premises go back in the step-lemma form
+          -- `sym_run1` stops at this branch: both premises go back in the step-lemma form
           match tt, ff with
           | .leaf ts, .leaf fs =>
             let (p1, st) ← zeroStepChild cx ts nw (tagOf true) gt' bop' br1 br2 true
@@ -721,7 +728,7 @@ partial def symWalk (sc : SegCtx) (cx0 : ObCtx) (t : Tree) (used nw : Nat) (tag 
 
 end
 
-/-- The hypothesis part of the landed normaliser: `sx_norm`, `ix_tab` and `ix_mem` rewrite
+/-- The hypothesis part of the normaliser: `sx_norm`, `ix_tab` and `ix_mem` rewrite
 `at *`, so after the first step every hypothesis in scope (a branch premise introduced by an
 earlier run, say) is in normal form. The goal itself is left alone. -/
 def normHyps (g : MVarId) : TacticM MVarId := do
@@ -768,7 +775,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
   let a := w.getAppArgs
   unless w.getAppFn.isConstOf ``SWP && a.size == 8 do throwError "sym_run: goal is not SWP"
   let some ⟨_, pcv⟩ ← getBitVecValue? a[5]! | throwError "sym_run: pc"
-  -- a run that starts at a stop point takes no step and, as in `ix_run`, normalises nothing
+  -- a run that starts at a stop point takes no step and normalises nothing
   if stops.contains pcv.toNat then
     replaceMainGoal [g]
     return
@@ -946,43 +953,31 @@ def symRunTac (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
   let fuel := (n.map (·.getNat)).getD 400
   let facts : Array Term := match fs with | some fs => fs.getElems | none => #[]
   let stopPCs : List Nat := match stops with | some ss => ss.toList.map (·.getNat) | none => []
-  -- `SYM_FORCE_IX=1`: the landed run, for comparing a module's statements and cost
-  if (← IO.getEnv "SYM_FORCE_IX").isSome then
-    ixRunCore explore n h fs stops
-    return
-  let saved ← saveState
   -- `set_option sym_run.trace true`, or `SYM_TRACE=1` for a whole build
   let trace := (← getOptions).getBool `sym_run.trace false || (← IO.getEnv "SYM_TRACE").isSome
-  tryCatchRuntimeEx
-    (do
-      let mut raws : List Nat := []
-      let mut fin := false
-      let mut rounds := 0
-      while !fin do
-        rounds := rounds + 1
-        if rounds > 12 then throwError "sym_run: too many rounds"
-        let s1 ← saveState
-        let r ← try
-            symRunCore explore fuel h facts stopPCs raws
-            pure none
-          catch e =>
-            -- a load whose forwarding is undecided is rerun unreduced
-            let msg ← e.toMessageData.toString
-            match (msg.splitOn "sym_run: rawpc ")[1]? with
-            | some t =>
-              match t.trimAscii.toString.toNat? with
-              | some pc => if raws.contains pc then throw e else pure (some pc)
-              | none => throw e
-            | none => throw e
-        match r with
-        | none => fin := true
-        | some pc => s1.restore; raws := raws ++ [pc]
-      if trace then logInfo m!"sym_run: symbolic @{← refLine}")
-    (fun e => do
-      let msg ← e.toMessageData.toString
-      saved.restore
-      if trace then logInfo m!"sym_run fallback @{← refLine}: {msg}"
-      ixRunCore explore n h fs stops)
+  let mut raws : List Nat := []
+  let mut fin := false
+  let mut rounds := 0
+  while !fin do
+    rounds := rounds + 1
+    if rounds > 12 then throwError "sym_run: too many rounds"
+    let s1 ← saveState
+    let r ← try
+        symRunCore explore fuel h facts stopPCs raws
+        pure none
+      catch e =>
+        -- a load whose forwarding is undecided is rerun unreduced
+        let msg ← e.toMessageData.toString
+        match (msg.splitOn "sym_run: rawpc ")[1]? with
+        | some t =>
+          match t.trimAscii.toString.toNat? with
+          | some pc => if raws.contains pc then throw e else pure (some pc)
+          | none => throw e
+        | none => throw e
+    match r with
+    | none => fin := true
+    | some pc => s1.restore; raws := raws ++ [pc]
+  if trace then logInfo m!"sym_run: symbolic @{← refLine}"
 
 syntax "sym_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 

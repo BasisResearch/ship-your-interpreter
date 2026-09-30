@@ -86,18 +86,23 @@ constant-table ranges. A port supplies its own image function and pieces.
   `Geom.holds`.
 - `sym_run [fuel] hlive using [facts] at pc…` and `sym_run1`
   (`VsaIris/Interp/SymInterp.lean`) are the tactic surface for goals
-  `IW live Dt DA S Q pc R Mt`. They return the leftovers of `ix_run`/`ix_run1`
-  in the same form, order, context and case tags: branch premises are read
-  from the fact-rewritten register chain, an undecided access check or jump
-  alignment comes back as the side goal of the landed step lemma (`hea`,
-  `hLDS`, `hLDD`, `hS`, `hal`), and a branch side that takes no step keeps its
-  premise in step-lemma form. If the symbolic route fails, the tactic falls
-  back to `ix_run`. `SYM_TRACE=1` reports `symbolic`/`fallback` per use in a
-  build; `IX_TRACE=1` lists the step lemmas `ix_run` still applies.
+  `IW live Dt DA S Q pc R Mt`. A run is cut into segments at the branches its
+  operands do not decide; each segment is one `symRun_cont`. The leftover
+  goals are in step-lemma form, the form the pieces' statements are written
+  against: a branch premise reads a written register from the fact-rewritten
+  register chain of its step, an undecided access check or jump alignment is
+  the side goal of that instruction's step lemma (`hea`, `hLDS`, `hLDD`,
+  `hS`, `hal`), and a branch side that takes no step keeps its premise
+  unnormalised. `sym_run1` stops at the first branch it cannot prune.
+  `SYM_TRACE=1` reports each run in a build.
+- The interpreter has no per-instruction step table. Its table value
+  `StepGen.interpTbl` supplies the load kinds (`variants`), the sites where a
+  step-by-step run would step (`interpHasStep`) and the call lemmas, which a
+  proof names as `step% jalx <pc>`.
 
 To port: copy `cfgI`, `binByte`, `interpRanges`, `iRegs` and the load-kind
 lists (`interpDataPCs`, `interpHavocPCs`) with your binary's image, code
-ranges, tracked registers and step-table variants. The executor and
+ranges, tracked registers and table variants. The executor and
 `symRun_cont` stay the same.
 
 ## 5. Boot witnesses: `boot_witness`

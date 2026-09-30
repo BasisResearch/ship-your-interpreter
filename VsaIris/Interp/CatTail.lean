@@ -304,7 +304,7 @@ end
     %st2.store %(stringifyCost st2.store rv' + catBufCost st2.store lv rv') %H
     %(stringifyCost st2.store lv) %st2.out
   iapply ms_callHelperA Wp (i := 0x80003a40)
-    (jalx_80003a40 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a40) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hs1 Hcode Hms
   isplitl []
@@ -388,7 +388,7 @@ end
     %(((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
     %(stringifyCost st2.store rv') %st2.out
   iapply ms_callHelperA Wp (i := 0x80003a68)
-    (jalx_80003a68 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a68) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hs2 Hcode Hms
   isplitl []
@@ -443,7 +443,7 @@ end
   ihave Hsl1 := hsl $$ %(R4 10) %(strRender st2.store lv) %(ρ.plus (catBufCost st2.store lv rv')) %(((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
   iapply ms_callHelper Wp (i := 0x80003a78) (entry := strlenPC)
-    (jalx_80003a78 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a78) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   unfold strlenHeapSpec
   iframe Hsl1 Hcode Hms
@@ -477,7 +477,7 @@ end
   ihave Hsl2 := hsl $$ %(R6 10) %(strRender st2.store rv') %(ρ.plus (catBufCost st2.store lv rv')) %(((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
   iapply ms_callHelper Wp (i := 0x80003a84) (entry := strlenPC)
-    (jalx_80003a84 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a84) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   unfold strlenHeapSpec
   iframe Hsl2 Hcode Hms
@@ -519,7 +519,7 @@ end
     (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
   iapply ms_callMallocN A Wp (i := 0x80003a90)
-    (jalx_80003a90 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003a90) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H) ((strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) (catBufCost st2.store lv rv')
     (catBufChg st2.store lv rv')
@@ -607,7 +607,7 @@ end
     (by omega) rfl (by omega) $$ Hblk
   ihave ⟨%img1, %hc1, Hx1, Hx0⟩ := strOwn_cut (R4 10).toNat (strRender st2.store lv) $$ Hx
   iapply ms_callMemcpyOwned Wp hmc (i := 0x80003aa8)
-    (jalx_80003aa8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003aa8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (dst := (R12 10)) (src := (R4 10)) (n := (strRender st2.store lv).toList.length) (img := img1)
     ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩ (by unfold htifLo; omega)
     ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩
@@ -655,7 +655,7 @@ end
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H))
   unfold strcpyHeapSpec
   iapply ms_callHelper Wp (i := 0x80003ab4) (entry := strcpyPC)
-    (jalx_80003ab4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003ab4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hsc1 Hcode Hms
   isplitl []
@@ -710,7 +710,7 @@ end
     (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
   iapply ms_callFreeN A Wp (i := 0x80003abc)
-    (jalx_80003abc live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003abc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) :: H) (R4 10) ((strRender st2.store lv).toList.length + 1)
   iframe Hat Hcode Hms Hst Hq1 Hh
   isplitl []
@@ -757,7 +757,7 @@ end
     (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
   iapply ms_callFreeN A Wp (i := 0x80003ac4)
-    (jalx_80003ac4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003ac4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: H) (R6 10) ((strRender st2.store rv').toList.length + 1)
   iframe Hat Hcode Hms Hst Hq2 Hh
   isplitl []
@@ -804,7 +804,7 @@ end
   ihave Hvs := hvs $$ %sret %(R12 10) %((strRender st2.store lv) ++ (strRender st2.store rv'))
   unfold valueStrSpec
   iapply ms_callHelper Wp (i := 0x80003ad0)
-    (jalx_80003ad0 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003ad0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvs Hcode Hms
   isplitl []
