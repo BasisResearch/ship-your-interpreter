@@ -1,4 +1,5 @@
 import Vsa.Sim.Fetch
+import Vsa.Sim.MemWidth
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -94,105 +95,6 @@ theorem within_mmio_readable_ram_false_one
     (within_mmio_readable (physaddr.Physaddr a) 1).run σ = .ok false σ :=
   within_mmio_readable_ram_false_w σ a 1 hbase (by decide) (by decide) hlo hhiram hhtif
 
-theorem effectivePrivilege_data
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (m : BitVec 64) (p : Privilege)
-    (hmprv : _get_Mstatus_MPRV m = 0#1) :
-    (effectivePrivilege (MemoryAccessType.Load mem_payload.Data) m p).run σ
-      = .ok p σ := by
-  simp only [effectivePrivilege, bne]
-  have hc : (MemoryAccessType.Load mem_payload.Data ==
-      (MemoryAccessType.InstructionFetch () : MemoryAccessType mem_payload)) = false := by
-    decide
-  simp only [hc, Bool.not_false, hmprv, Bool.true_and]
-  have hz : (0#1 == 1#1) = false := by decide
-  simp [simp_sail, EStateM.run, pure, EStateM.pure, hz]
-
-open MemoryRegionType AtomicSupport Reservability misaligned_exception in
-
-theorem pmaCheck_ram_read
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (w : Nat)
-    (htb : (to_bits (l := 64) w : BitVec 64) = BitVec.ofNat 64 w)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhi : a.toNat + w ≤ 0x100000000)
-    (halign : Int.tmod (BitVec.toNatInt a) w = 0) :
-    (pmaCheck (physaddr.Physaddr a) w (MemoryAccessType.Load mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false).run σ
-      = .ok (.Ok { splittable := Splittability.CannotSplit, granule_size_exp := 0 }) σ := by
-  have hmatch : matching_pma_region_bits_range initPmaRegions
-      (zero_extend (bits_of_physaddr (physaddr.Physaddr a))) (to_bits w)
-      = some ({ base := 0x80000000#64
-                size := 0x80000000#64
-                attributes := { mem_type := MainMemory
-                                cacheable := true
-                                coherent := true
-                                executable := true
-                                readable := true
-                                writable := true
-                                read_idempotent := true
-                                write_idempotent := true
-                                misaligned_exceptions := { load_store := none
-                                                           vector := none
-                                                           amo := AccessFault }
-                                atomic_support := AMOCASQ
-                                reservability := RsrvEventual
-                                supports_cbo_zero := true
-                                supports_pte_read := true
-                                supports_pte_write := true
-                                misaligned_atomicity_granule_size_exp := 4
-                                vector_misaligned_atomicity_granule_size_exp := 4 }
-                include_in_device_tree := true } : PMA_Region) := by
-    have hz : (zero_extend (bits_of_physaddr (physaddr.Physaddr a)) : BitVec 64) = a :=
-      BitVec.setWidth_eq a
-    rw [hz, htb]
-    simp only [initPmaRegions, matching_pma_region_bits_range, range_subset,
-      zopz0zIzJ_u, BitVec.toNatInt]
-    rw [if_neg, if_neg, if_pos]
-    · simp only [Bool.and_eq_true, decide_eq_true_eq]
-      refine ⟨?_, ?_, ?_⟩ <;> · apply Int.ofNat_le.mpr; bv_omega
-    · simp only [Bool.and_eq_true, decide_eq_true_eq]
-      rintro ⟨h1, _⟩; have := Int.ofNat_le.mp h1; bv_omega
-    · simp only [Bool.and_eq_true, decide_eq_true_eq]
-      rintro ⟨h1, _⟩; have := Int.ofNat_le.mp h1; bv_omega
-  unfold pmaCheck
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind,
-    Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hpma]
-  simp only [pure, EStateM.pure, matching_pma_region, hmatch, override_PMA,
-    Functions.not, mag_pma_check, is_mag_applicable_access, is_aligned_paddr,
-    LeanRV64DExecutable.assert, PreSail.assert, BitVec.toNatInt,
-    ExceptT.pure, ExceptT.bindCont, ExceptT.mk,
-    EStateM.map, EStateM.bind, bind, Bind.bind,
-    Bool.not_true, Bool.not_false, Bool.false_eq_true, if_true,
-    if_false]
-  rw [if_pos]
-  · rfl
-  · simp only [Bool.or_eq_true, beq_iff_eq]
-    exact Or.inl (by exact_mod_cast halign)
-
-theorem split_misaligned_aligned_w
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (w : Nat) (e : Nat) (s : Splittability)
-    (ha : Int.tmod (BitVec.toNatInt a) w = 0) :
-    (split_misaligned (physaddr.Physaddr a) w e s).run σ
-      = .ok (1, (w : Int)) σ := by
-  simp only [split_misaligned]
-  split
-  · simp [simp_sail, EStateM.run, pure, EStateM.pure]
-  · rename_i hneg
-    exfalso
-    apply hneg
-    simp only [Bool.or_eq_true, beq_iff_eq]
-    refine Or.inr (Or.inl ?_)
-    exact_mod_cast ha
 
 theorem checked_mem_read_data_w_of_ram
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -216,17 +118,8 @@ theorem checked_mem_read_data_w_of_ram
         page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
         w false false false false).run σ
       = .ok (.Ok (v, ())) σ := by
-  have htmod : Int.tmod (BitVec.toNatInt a) w = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat w)) = Int.ofNat (a.toNat % w) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (w : Int) = Int.ofNat w from rfl, this, halign]; rfl
-  have htb : (to_bits (l := 64) w : BitVec 64) = BitVec.ofNat 64 w := by
-    apply BitVec.eq_of_toNat_eq
-    simp only [to_bits, get_slice_int, BitVec.extractLsb', Nat.zero_add,
-      BitVec.toNat_ofInt, Nat.shiftRight_zero, BitVec.toNat_ofNat]
-    omega
-  have hpmaC := pmaCheck_ram_read σ a w htb hpma hlo hhiram htmod
+  have htmod := tmod_toNatInt_of_mod a w halign
+  have hpmaC := pmaCheck_ram σ a w _ (Or.inl rfl) hpma hlo hhiram htmod
   have hpmp := pmp_allows σ (physaddr.Physaddr a) w
     (MemoryAccessType.Load mem_payload.Data) vpmpaddr hcfg haddr
   have hmmio := within_mmio_readable_ram_false_w σ a w hbase hwpos hwle hlo hhiram hhtif
@@ -384,7 +277,8 @@ theorem mem_read_data_w_of_cmr
     (mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) w false false false).run σ
       = .ok (.Ok v) σ := by
-  have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Load mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   simp only [EStateM.run] at hcmr hep
   unfold mem_read mem_read_priv mem_read_priv_meta
   simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,

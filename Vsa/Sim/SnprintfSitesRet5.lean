@@ -15,22 +15,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-theorem get?_sigmaTick_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
-    (rd_reg : Register) (link : RegisterType rd_reg)
-    (vmip vmtime vmtimecmp vmcycle : BitVec 64) (R : Register)
-    (hmc : (Register.mcycle == R) = false) (hmt : (Register.mtime == R) = false)
-    (hmi : (Register.mip == R) = false) :
-    (sigmaTick_jalr σ pc vminstret tgt rd_reg link vmip vmtime vmtimecmp vmcycle).regs.get? R
-      = (sigmaPost_jalr σ pc vminstret tgt rd_reg link).regs.get? R := by
-  show (((((sigmaPost_jalr σ pc vminstret tgt rd_reg link).regs.insert Register.mcycle _).insert
-      Register.mtime _).insert Register.mip _)).get? R = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [hmi, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [hmt, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [hmc, dif_neg, reduceCtorEq, not_false_eq_true]
-
 theorem stepObs_jalr
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 rd : regidx) (rd_reg : Register)
@@ -63,27 +47,13 @@ theorem stepObs_jalr
       σ'.mem = σ.mem ∧
       ReadsLikePost σ'
         (sigmaPost_jalr σ pc vminstret (BitVec.update (vrs1 + sign_extend (m := 64) imm) 0 0#1)
-          rd_reg link) := by
-  by_cases htick : i + 1 = 2
-  · have hGp := goodstate_sigmaPost_jalr σ pc vminstret
-      (BitVec.update (vrs1 + sign_extend (m := 64) imm) 0 0#1) rd_reg hrd link hG
-    obtain ⟨vmip, hmip⟩ := hGp.mip
-    obtain ⟨vmtime, hmtime⟩ := hGp.mtime
-    obtain ⟨vmtimecmp, hmtimecmp⟩ := hGp.mtimecmp
-    obtain ⟨vmcycle, hmcycle⟩ := hGp.mcycle
-    obtain ⟨hstep, hGt⟩ := step_jalr_tick σ i u pc vminstret vrs1 w imm rs1 rd rd_reg link
-      b0 b1 b2 b3 vmip vmtime vmtimecmp vmcycle
-      hG hpc hminstret hmip hmtime hmtimecmp hmcycle
-      hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec hrs1 htgt
-      hrd_npc hrd_mi hrd_ms hrd_hart hrd hwr htick
-    refine ⟨_, 0, hstep, by decide, hGt, rfl, ?_, rfl⟩
-    intro R hmc hmt hmi
-    exact get?_sigmaTick_jalr σ pc vminstret _ rd_reg link vmip vmtime vmtimecmp vmcycle
-      R hmc hmt hmi
-  · obtain ⟨hstep, hGt⟩ := step_jalr_notick σ i u pc vminstret vrs1 w imm rs1 rd rd_reg link
-      b0 b1 b2 b3 hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec hrs1 htgt
-      hrd_npc hrd_mi hrd_ms hrd_hart hrd hwr htick
-    exact ⟨_, i + 1, hstep, by omega, hGt, rfl, ReadsLikePost.rfl _⟩
+          rd_reg link) :=
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (execute_jalr_char imm rs1 rd _ vrs1 _ _ (by reg_reads [hG.misa]) (by reg_reads [hG.cur_privilege])
+      (by reg_reads [hG.mseccfg]) (by reg_reads []) hrs1 htgt hwr)
+    ⟨by reg_reads [hrd_hart, hG.hart_state], by reg_reads [hrd_npc], by reg_reads [hrd_mi],
+     by reg_reads [hrd_ms, hminstret]⟩
+    (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (r := rd_reg) hrd link) hi
 
 theorem post_jalr_pc (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg) :

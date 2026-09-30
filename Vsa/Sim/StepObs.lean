@@ -38,6 +38,17 @@ theorem stepObs_retire {σ s : MState} {i u : Nat}
   · obtain ⟨hstep, hGt⟩ := step_retire_notick hts hG hGs htick
     exact ⟨_, i + 1, hstep, by omega, hGt, rfl, ReadsLikePost.rfl _⟩
 
+/-- **Commit (observational step from the fetched word).** Any retiring instruction: the
+fetched word, its `execute` fact, the four retire reads and the pins of the post-execute state. -/
+theorem stepObs_exec {σ σ3 : MState} {i u : Nat} {pc : BitVec 64} (npc vm : BitVec 64)
+    {ast : instruction} (F : Fetched σ pc ast)
+    (hexec : (execute ast).run (afterNextPC (afterPrelude σ) pc) = .ok RETIRE_SUCCESS σ3)
+    (R : RetireReads σ3 npc vm) (hG3 : GoodState σ3) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ3.mem ∧ ReadsLikePost σ' (retirePost σ3 npc vm) :=
+  stepObs_retire (try_step_retire F hexec R) F.good (hG3.retirePost npc vm) hi
+
 theorem ReadsLikePost.out {σ' spost : MState} (h : ReadsLikePost σ' spost) :
     σ'.sailOutput = spost.sailOutput := h.2
 

@@ -32,7 +32,7 @@ theorem exec_slli_a5_ee (σ : MState) (pc : BitVec 64) (v15 : BitVec 64)
   exact execute_shiftiop_slli_char (0x02#6) (regidx.Regidx 0x0f#5) (regidx.Regidx 0x0f#5) v15
     (afterNextPC (afterPrelude σ) pc)
     (sigma3_alu σ pc Register.x15 (shift_bits_left v15 (Sail.BitVec.extractLsb (0x02#6) 5 0)))
-    (rX_bits_x15 _ v15 h₂)
-    (wX_bits_x15 _ (shift_bits_left v15 (Sail.BitVec.extractLsb (0x02#6) 5 0)))
+    (rX_bits_gpr _ 15 (by decide) (by decide) v15 h₂)
+    (wX_bits_gpr _ (shift_bits_left v15 (Sail.BitVec.extractLsb (0x02#6) 5 0)) 15 (by decide) (by decide))
 
 end Vsa.Sim

@@ -60,10 +60,10 @@ theorem site_80002c60_eg2
         (sign_extend (m := 64)
           ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
             : BitVec (8 * 8))))
-      vbase b0 b1 b2 b3 b4 b5 b6 b7 hG (rX_bits_x9 _ vbase hbase₂)
-      (wX_bits_x10 _ (sign_extend (m := 64)
+      vbase b0 b1 b2 b3 b4 b5 b6 b7 hG (rX_bits_gpr _ 9 (by decide) (by decide) vbase hbase₂)
+      (wX_bits_gpr _ (sign_extend (m := 64)
         ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
-          : BitVec (8 * 8))))
+          : BitVec (8 * 8))) 10 (by decide) (by decide))
       hlo hhiram hhtif halign d0 d1 d2 d3 d4 d5 d6 d7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi

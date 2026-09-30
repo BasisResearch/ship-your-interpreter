@@ -34,8 +34,7 @@ theorem checked_mem_write_tohost_8
       Int.tmod (BitVec.toNatInt (BitVec.ofNat 64 tohostAddr)) 8 = 0 := by
     simp only [BitVec.toNatInt, tohostAddr]
     decide
-  have hpmaC := pmaCheck_ram_write σ (BitVec.ofNat 64 tohostAddr) 8
-    (BitVec.ofNat 64 8) hpma (by decide) (by decide) (by decide)
+  have hpmaC := pmaCheck_ram σ (BitVec.ofNat 64 tohostAddr) 8 _ (Or.inr rfl) hpma
     (by simp only [tohostAddr]; decide)
     (by simp only [tohostAddr]; decide) htmod
   have hpmp := pmp_allows σ
@@ -129,7 +128,8 @@ theorem mem_write_value_tohost_8
       .ok (.Ok true) σ' := by
   have hcmw := checked_mem_write_tohost_8 σ σ' data vpmpaddr hpma hcfg haddr
     hbase hstore
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Store mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   simp only [EStateM.run] at hcmw hep
   unfold mem_write_value mem_write_value_meta mem_write_value_priv_meta
   simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,

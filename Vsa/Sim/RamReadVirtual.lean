@@ -26,7 +26,8 @@ theorem vmem_read_addr_of_pageSplit
         (MemoryAccessType.Load mem_payload.Data) false false false).run σ
       = .ok (.Ok v) σ := by
   have hmis : plat_misaligned_exception (MemoryAccessType.Load mem_payload.Data) false = none := rfl
-  have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Load mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   have htm := translationMode_machine σ
   simp only [EStateM.run] at hsplit hep htm htrv
   unfold vmem_read_addr

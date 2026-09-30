@@ -45,7 +45,8 @@ theorem transform_effective_address_data
     (transform_effective_address (virtaddr.Virtaddr a)
         (MemoryAccessType.Load mem_payload.Data)).run σ
       = .ok (virtaddr.Virtaddr a) σ := by
-  have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Load mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   have hpm := get_pmlen_data_machine σ vmstatus hmstatus hmseccfg
   simp only [EStateM.run] at hep hpm
   unfold transform_effective_address
@@ -178,7 +179,8 @@ theorem vmem_read_addr_data_w
         (MemoryAccessType.Load mem_payload.Data) false false false).run σ
       = .ok (.Ok v) σ := by
   have hsplit := split_on_page_boundary_data_w σ a w hwpos hwle hpage
-  have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Load mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   have htm := translationMode_machine σ
   simp only [EStateM.run] at hsplit hep htm htrv
   unfold vmem_read_addr
