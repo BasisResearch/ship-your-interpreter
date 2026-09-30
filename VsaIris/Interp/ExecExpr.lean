@@ -1,4 +1,4 @@
-import VsaIris.Interp.ExecArm
+import VsaIris.Interp.ExecChild
 
 namespace VsaIris.Interp
 
@@ -29,18 +29,17 @@ open Vsa.MemRepr Vsa.Sim
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
-theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {st : St} {d env : Nat} {e : Expr} {st' : St} {v : Value} {n : Nat}
-    (D : EvalECost st d env e st' v n)
-    (he : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env e st' v n D) :
-    ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env (.expr e) st' (.normal) n
-        (.expr st d env e st' v n D) := by
-  unfold execDispT_body
-  iintro !> %Φ %k %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+section
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop}
+
+theorem exprCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : DlLayout}
+    {Room : RoomPred} {inp : Nat} {st : St} {d env : Nat} {e : Expr} :
+    ExecChildCore (GF := GF) (live := live) N L Room inp st d env (.expr e) e (fun _ => .normal) := by
+  intro Wp Φ Hyp ρin ρout Kin aS aE aRet s R Mt ret v8 v9 v18 v19 hcall
   unfold execDispPre
-  icases Hpre with ⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩
+  iintro ⟨#Hyp, ⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩, HK⟩
   unfold astSG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨p, hn⟩ := exprNode_of hrepr hgeo
@@ -52,13 +51,12 @@ theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
   have hbb : e.bodiesBound perCallBudget = true := hf.bodies
   ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
   · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
+  iapply wp_swpF Wp (F := iprop(□ Hyp ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.expr e) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp (.counted (k + n)) st d ∗
-      execDispK (vsaModel live) N L Room inp (twpW (vsaModel live)) Φ (.counted k) st' d
-        (.expr e) (.normal) aRet s R ret v8 v9 v18 v19))
+      world N L Room inp ρin st d ∗
+      Kin))
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact HK
+  · iframe Hdv Hms Hyp Hcode Hro Hfb Hst Hslot Hw HK
   intro F'
   unfold execDispPC
   refine ExecExpr_run1 (aC := BitVec.ofNat 64 p) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.node.lo
@@ -68,15 +66,13 @@ theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
   apply swp_closeRM
   intro R0 Mt1 hR0 hMt1
   unfold F'
-  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
+  iintro ⟨⟨#Hyp, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
 
-  ihave He := he
-  iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004180)
-    (jalx_80004180 live (fun p hp => hlive _ (interp_code_80004180 p hp)))
-    interp_code_80004180 (by decide) D (k := k) (slot := execSP s + 16#64)
-    (aC := BitVec.ofNat 64 p) (aE := aE) (s := execSP s)
-    (m := execNeed (.expr e) d - 176) g.child g.fits g.below g.slotGeom hbb
-  iframe He Hcode Hfb Hms Hst Hw
+  iapply hcall 0x80004180 _ (jalx_80004180 live (fun p hp => hlive _ (interp_code_80004180 p hp)))
+    interp_code_80004180 (by decide) (slot := execSP s + 16#64) (aC := BitVec.ofNat 64 p)
+    (aE := aE) (sF := execSP s) (f := 176) (m := execNeed (.expr e) d - 176)
+    (execSP_eq s).symm g.child g.fits g.below (by omega) hf.stack.le g.slotGeom hbb
+  iframe Hyp Hcode Hfb Hms Hst Hw Hslot HK
   isplitl []
   · ipureintro
     subst hR0
@@ -85,7 +81,7 @@ theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     simp only [VsaIris.InExt] at hb g1 ⊢; omega
   isplitl []
   · imodintro; rw [hn.toNat]; iapply astEG_of_view hn.child hn.node.geo $$ Hro
-  iintro %R1 %w0 %w1 %w2 %hkeep1 #Hv1 Hms Hst Hw
+  iintro %R1 %w0 %w1 %w2 %st' %v %hkeep1 #Hv1 Hms Hst Hw Hslot HK
   have hk1 : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R1 1 (BitVec.ofNat 64 (0x80004180 + 4))) := by
     subst hR0
     intro x hx
@@ -94,10 +90,10 @@ theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
   have hsv1 : ExecSaved (slotWrite Mt1 (execSP s + 16#64).toNat w0 w1 w2) s ret v8 v9 v18 v19 := by
     have := hfg.lo; rw [hMt1]; ix_esaved hf.saved using hoff
 
-  iapply wp_swpF (twpW _) (text := interpText ++ dataOf ∅ [])
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
     (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.expr e) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp (.counted k) st' d ∗
-      execDispK (vsaModel live) N L Room inp (twpW (vsaModel live)) Φ (.counted k) st' d
+      world N L Room inp ρout st' d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρout st' d
         (.expr e) (.normal) aRet s R ret v8 v9 v18 v19))
   rotate_left
   · iframe Hcode Hms Hst Hslot Hw HK
@@ -107,8 +103,8 @@ theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
   intros
   apply swp_closeRM
   intro R2 Mt2 hR2 hMt2
-  have hepi := wp_execEpi (N := N) (L := L) (Room := Room) (inp := inp) hlive (twpW _)
-    (Φ := Φ) (ρ := .counted k) (st' := st') (d := d) (sm := .expr e) (status := .normal)
+  have hepi := wp_execEpi (N := N) (L := L) (Room := Room) (inp := inp) hlive Wp
+    (Φ := Φ) (ρ := ρout) (st' := st') (d := d) (sm := .expr e) (status := .normal)
     (aRet := aRet) (s := s) (ret := ret) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) (R0 := R)
     (R := R2) (Mt := Mt2) hf.stack hf.ral
     (by subst hR2 hR0; ix_reg; rw [keep_reg hkeep1 (by decide)]; ix_reg; exact hf.regs.sp)
@@ -120,5 +116,23 @@ theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
   iintro ⟨⟨#Hcode, Hst, Hslot, Hw, HK⟩, Hms⟩
   iapply hepi
   iframe Hcode Hms Hst Hslot Hw HK
+
+
+theorem exprT (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : DlLayout}
+    {Room : RoomPred} {inp : Nat} {st : St} {d env : Nat} {e : Expr} {st' : St} {v : Value}
+    {n : Nat} (D : EvalECost st d env e st' v n)
+    (he : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env e st' v n D) :
+    ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env (.expr e) st' .normal n
+        (.expr st d env e st' v n D) :=
+  execChildT_of (stat := fun _ => .normal) _ D he (exprCore hlive)
+
+theorem exprP (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L : DlLayout}
+    {Room : RoomPred} {inp : Nat} {Core : IProp GF} {st : St} {d env : Nat} {e : Expr} :
+    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
+      execDispP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.expr e) :=
+  execChildP_of (stat := fun _ => .normal) (fun st' v h => ExecS.expr st d env e st' v h)
+    (exprCore hlive)
+
+end
 
 end VsaIris.Interp

@@ -76,11 +76,12 @@ theorem binPreludeT_R (hlive : ∀ p ∈ interpText, live p.1)
   exact (tail _ _ u0 u1 u2
     (binMid_of_left g b (by ix_keep [hkeep2]; exact b.r9) (by ix_keep [hkeep2]) hkeep2 htr)).arm
 
-theorem binPreludeT (hlive : ∀ p ∈ interpText, live p.1)
+/-- The total binary prelude for an operator whose own cost is `c`. -/
+theorem binPreludeTc {c : Nat} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {st st1 st2 : St} {d env : Nat} {op : BinOp} {l r : Expr} {lv rv' v : Value} {nl nr : Nat}
     (Dl : EvalECost st d env l st1 lv nl) (Dr : EvalECost st1 d env r st2 rv' nr)
-    (D : EvalECost st d env (.binary op l r) st2 v (nl + nr))
+    (D : EvalECost st d env (.binary op l r) st2 v (nl + nr + c))
     (hl : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env l st1 lv nl Dl)
     (hr : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st1 d env r st2 rv' nr Dr)
     (tail : ∀ (k : Nat) (Φ : Nat × String → IProp GF) (sret aE aX s ret : BitVec 64)
@@ -92,9 +93,9 @@ theorem binPreludeT (hlive : ∀ p ∈ interpText, live p.1)
         (world N L Room inp (.counted k) st2 d) K →
       BinTail (twpW (vsaModel live)) Φ N
         (binArmF N P m env aE s (evalNeed (.binary op l r) d) sret
-          (world N L Room inp (.counted k) st2 d) K) R s Mt lv rv' w0 w1 w2 u0 u1 u2) :
+          (world N L Room inp (.counted (k + c)) st2 d) K) R s Mt lv rv' w0 w1 w2 u0 u1 u2) :
     ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary op l r) st2 v
-        (nl + nr) D :=
+        (nl + nr + c) D :=
   evalEntryT hlive D fun k Φ sret aE aX s ret rv P m Mt0 ent => by
     obtain ⟨aL, aR, hn, hrl, hR, haL⟩ := binNode_entry ent.repr ent.ok
     have g := ent.geo
@@ -108,7 +109,7 @@ theorem binPreludeT (hlive : ∀ p ∈ interpText, live p.1)
       simp only [Expr.bodiesBound, Bool.and_eq_true] at hbb; exact hbb.1
     have hbr : r.bodiesBound perCallBudget = true := by
       simp only [Expr.bodiesBound, Bool.and_eq_true] at hbb; exact hbb.2
-    rw [show k + (nl + nr) = k + nr + nl by omega]
+    rw [show k + (nl + nr + c) = k + c + nr + nl by omega]
     refine ArmAt.seg (twpW _) hn.view ?_
     unfold evalEntryPC
     refine BinaryAddIntT_run1 hlive g.sf g.lo g.hi g.al hn.lo hn.hi hn.off
@@ -144,9 +145,30 @@ theorem binPreludeT (hlive : ∀ p ∈ interpText, live p.1)
       l1 := by ix_fwd
       l2 := by ix_fwd
       tl := htl }
-    exact binPreludeT_R hlive Dr hr g node hR hbr bl
+    exact binPreludeT_R (k := k + c) hlive Dr hr g node hR hbr bl
       (fun R' Mt' u0 u1 u2 hm => tail k Φ sret aE aX s ret rv R' P m Mt' w0 w1 w2 u0 u1 u2 _ g node
         hm evalKT_exit)
+
+theorem binPreludeT (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+    {st st1 st2 : St} {d env : Nat} {op : BinOp} {l r : Expr} {lv rv' v : Value} {nl nr : Nat}
+    (Dl : EvalECost st d env l st1 lv nl) (Dr : EvalECost st1 d env r st2 rv' nr)
+    (D : EvalECost st d env (.binary op l r) st2 v (nl + nr))
+    (hl : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env l st1 lv nl Dl)
+    (hr : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st1 d env r st2 rv' nr Dr)
+    (tail : ∀ (k : Nat) (Φ : Nat × String → IProp GF) (sret aE aX s ret : BitVec 64)
+      (rv R : Nat → BitVec 64) (P : Nat → Prop) (m Mt : Mem) (w0 w1 w2 u0 u1 u2 : BitVec 64)
+      (K : IProp GF),
+      ArmGeo s ret sret (evalNeed (.binary op l r) d) → BinOpNode m P aX (binOpTok op) →
+      BinMid s sret (BitVec.ofNat 64 inp) rv R Mt ret aX lv rv' w0 w1 w2 u0 u1 u2 →
+      ExitK (twpW (vsaModel live)) Φ N s ret sret rv (evalNeed (.binary op l r) d) v
+        (world N L Room inp (.counted k) st2 d) K →
+      BinTail (twpW (vsaModel live)) Φ N
+        (binArmF N P m env aE s (evalNeed (.binary op l r) d) sret
+          (world N L Room inp (.counted k) st2 d) K) R s Mt lv rv' w0 w1 w2 u0 u1 u2) :
+    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary op l r) st2 v
+        (nl + nr) D :=
+  binPreludeTc (c := 0) hlive Dl Dr D hl hr tail
 
 end
 

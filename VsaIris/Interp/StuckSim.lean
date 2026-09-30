@@ -5,17 +5,16 @@ import VsaIris.Interp.LogArm
 import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.AssignP
-import VsaIris.Interp.Case.BinaryAddP
+import VsaIris.Interp.AddArm
 import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
-import VsaIris.Interp.Case.ExecVarNullP
+import VsaIris.Interp.ExecVarDecl
 import VsaIris.Interp.Case.FnLitP
-import VsaIris.Interp.Case.ExecExprP
-import VsaIris.Interp.Case.ExecVarInitP
+import VsaIris.Interp.ExecExpr
 import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
 import VsaIris.Interp.Case.ExecForP
-import VsaIris.Interp.Case.ExecRetP
+import VsaIris.Interp.ExecRet
 import VsaIris.Interp.ExecJump
 import VsaIris.Interp.Case.ExecIfP
 import VsaIris.Interp.ExecRetNull
@@ -131,7 +130,7 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   | binary op l r =>
     cases op with
     | add =>
-      iapply caseP_BinaryAdd S.hlive hE S.vint rfl rfl S.alloc S.stringifyP S.strlenHeap S.memcpyOwned
+      iapply addP S.hlive hE S.vint rfl rfl S.alloc S.stringifyP S.strlenHeap S.memcpyOwned
         S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply) S.vkind
       iframe HE Hctx
     | sub =>
@@ -172,11 +171,11 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   iintro ⟨#Hctx, #HE, #HX⟩
   have hE := S.errEnv
   cases sm with
-  | expr e => iapply caseP_ExecExpr S.hlive $$ HE
+  | expr e => iapply exprP S.hlive $$ HE
   | varDecl x eo =>
     cases eo with
-    | some e => iapply caseP_ExecVarInit S.hlive hE.newlib hE.code hE.core S.envDefine; iframe Hctx HE
-    | none => iapply caseP_ExecVarNull S.hlive hE.newlib hE.code hE.core S.vnull S.envDefine $$ Hctx
+    | some e => iapply varInitP S.hlive hE.newlib hE.code hE.core S.envDefine; iframe Hctx HE
+    | none => iapply varNullP S.hlive hE.newlib hE.code hE.core S.vnull S.envDefine $$ Hctx
   | block ss => iapply caseP_ExecBlock S.hlive hE.newlib hE.code hE.core S.envNew; iframe Hctx HX
   | ifStmt c t eo => iapply caseP_ExecIf S.hlive S.vtruthy; iframe HE HX
   | whileStmt c b =>
@@ -187,7 +186,7 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     iframe Hctx HE HX
   | ret eo =>
     cases eo with
-    | some e => iapply caseP_ExecRet S.hlive $$ HE
+    | some e => iapply retP S.hlive $$ HE
     | none => iapply retNullP S.hlive S.vnull
   | brk => iapply jumpP .brk S.hlive (ExecS.brk _ _ _)
   | cont => iapply jumpP .cont S.hlive (ExecS.cont _ _ _)

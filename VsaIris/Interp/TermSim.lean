@@ -7,21 +7,20 @@ import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
-import VsaIris.Interp.Case.BinaryConcatT
+import VsaIris.Interp.AddArm
 import VsaIris.Interp.Case.CallClosureT
 import VsaIris.Interp.Case.CallPrintT
 import VsaIris.Interp.Case.CallPrintlnT
 import VsaIris.Interp.Case.CallAssertT
-import VsaIris.Interp.Case.ExecExprT
-import VsaIris.Interp.Case.ExecVarInitT
-import VsaIris.Interp.Case.ExecVarNullT
+import VsaIris.Interp.ExecExpr
+import VsaIris.Interp.ExecVarDecl
 import VsaIris.Interp.Case.ExecBlockT
 import VsaIris.Interp.Case.ExecIfTrueT
 import VsaIris.Interp.Case.ExecIfFalseT
 import VsaIris.Interp.Case.ExecIfNoneT
 import VsaIris.Interp.Case.ExecWhileT
 import VsaIris.Interp.Case.ExecForT
-import VsaIris.Interp.Case.ExecRetT
+import VsaIris.Interp.ExecRet
 import VsaIris.Interp.ExecRetNull
 import VsaIris.Interp.ExecJump
 import VsaIris.Interp.LoopWhile
@@ -101,7 +100,7 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     by_cases hs : valTag lv = 3 ∨ valTag rv = 3
     · have e := (binOpSem_add_str st2.store hs).symm.trans hsem
       obtain rfl := Option.some.inj e
-      exact caseT_BinaryConcat S.hlive Dl Dr _ hl hr rfl rfl hs S.alloc S.stringifyT S.strlenHeap
+      exact concatT S.hlive Dl Dr _ hl hr rfl rfl hs S.alloc S.stringifyT S.strlenHeap
         S.memcpyOwned S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply)
     · cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem <;>
         simp [valTag] at hs
@@ -288,13 +287,13 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
       ($S).nAssert
   case expr =>
     intro st d env e st' v n De ihe
-    exact ⟨caseT_ExecExpr ($S).hlive De ihe, fun _ _ h => by cases h⟩
+    exact ⟨exprT ($S).hlive De ihe, fun _ _ h => by cases h⟩
   case varInit =>
     intro st d env x e st' v n De ihe
-    exact ⟨caseT_ExecVarInit ($S).hlive De ihe ($S).envDefine, fun _ _ h => by cases h⟩
+    exact ⟨varInitT ($S).hlive De ihe ($S).envDefine, fun _ _ h => by cases h⟩
   case varNull =>
     intro st d env x
-    exact ⟨caseT_ExecVarNull ($S).hlive ($S).vnull ($S).envDefine, fun _ _ h => by cases h⟩
+    exact ⟨varNullT ($S).hlive ($S).vnull ($S).envDefine, fun _ _ h => by cases h⟩
   case block =>
     intro st d env ss store' inner st' status n halloc Dseq ihseq
     exact ⟨caseT_ExecBlock ($S).hlive halloc Dseq ihseq.1 ($S).envNew, fun _ _ h => by cases h⟩
@@ -329,7 +328,7 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     exact ⟨caseT_ExecFor ($S).hlive halloc Di Dl ihi ihl ($S).envNew, fun _ _ h => by cases h⟩
   case ret =>
     intro st d env e st' v n De ihe
-    exact ⟨caseT_ExecRet ($S).hlive De ihe, fun _ _ h => by cases h⟩
+    exact ⟨retT ($S).hlive De ihe, fun _ _ h => by cases h⟩
   case retNull =>
     intro st d env
     exact ⟨retNullT ($S).hlive ($S).vnull, fun _ _ h => by cases h⟩
