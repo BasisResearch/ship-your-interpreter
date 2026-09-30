@@ -1,4 +1,5 @@
 import VsaIris.Vsa.MallocCtx
+import VsaIris.Vsa.RegionCore
 
 /-!
 # Region-keyed memory for allocator path proofs (candidate KT)
@@ -33,27 +34,9 @@ namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 
-/-- `ext` consecutive bytes from `base`, each satisfying `P`. -/
-structure Rgn (P : Nat → Prop) (base ext : Nat) : Prop where
-  byte : ∀ k, k < ext → P (base + k)
-
 namespace Rgn
 
 variable {P P' : Nat → Prop} {b e : Nat}
-
-theorem mem (r : Rgn P b e) {a : Nat} (h1 : b ≤ a) (h2 : a < b + e) : P a := by
-  have := r.byte (a - b) (by omega)
-  rwa [show b + (a - b) = a by omega] at this
-
-theorem sub (r : Rgn P b e) {b' e' : Nat} (h1 : b ≤ b') (h2 : b' + e' ≤ b + e) : Rgn P b' e' :=
-  ⟨fun k hk => r.mem (by omega) (by omega)⟩
-
-theorem mono (r : Rgn P b e) (h : ∀ a, P a → P' a) : Rgn P' b e :=
-  ⟨fun k hk => h _ (r.byte k hk)⟩
-
-theorem word (r : Rgn P b e) {a w : Nat} (h1 : b ≤ a) (h2 : a + w ≤ b + e) :
-    ∀ k, k < w → P (a + k) :=
-  (r.sub h1 h2).byte
 
 theorem lower {H : List (Nat × Nat)} {x : Nat × Nat} (r : Rgn (vsaFoot (x :: H)) b e) :
     Rgn (vsaFoot H) b e :=
@@ -115,26 +98,6 @@ theorem offStack_pt {s : BitVec 64} (hd : ∀ a, s.toNat - mHead ≤ a → a < s
     (ha : vsaFoot H a) : a < s.toNat - 256 ∨ s.toNat ≤ a := by
   have := (⟨fun k hk => by rwa [show k = 0 by omega]⟩ : Rgn (vsaFoot H) a 1).offStack hd (by decide)
   unfold mHead at this; omega
-
-/-- An access region: bytes owned under `S`, inside RAM and off the mailbox. It
-carries its own access-range facts, so it needs no heap context (copy sources and
-destinations, caller buffers). -/
-structure ARgn (S : Nat → Prop) (base ext : Nat) : Prop where
-  own : Rgn S base ext
-  lo : 0x8001ad10 ≤ base
-  hi : base + ext ≤ 0x100000000
-
-theorem ARgn.ldOK {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ b + e) : LdOK a w := by
-  have := r.lo; have := r.hi; unfold LdOK Vsa.Sim.tohostAddr; omega
-
-theorem ARgn.stOK {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ b + e ∧ a % w = 0) :
-    StOK a w := by
-  have := r.lo; have := r.hi; unfold StOK Vsa.Sim.tohostAddr; omega
-
-theorem ARgn.acc {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ b + e) :
-    ∀ x ∈ accAddrs a w, S x := fun x hx => by
-  have := of_mem_accAddrs hx
-  exact r.own.mem (by omega) (by omega)
 
 end Laws
 

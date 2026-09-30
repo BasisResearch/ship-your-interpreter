@@ -6,7 +6,7 @@ import VsaIris.Vsa.Stderr.ErrOK
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 structure FwritePost (Mt Mt' : Mem) (s : BitVec 64) : Prop where
   frame : ∀ a, ¬ (s.toNat - 768 ≤ a ∧ a < s.toNat) → ¬ Stdio.errWritten a → ¬ Stdio.errnoFoot a →
@@ -52,6 +52,7 @@ macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
     (hk : ∀ R' Mt', RetOK R R' n → FwritePost Mt Mt' s →
       SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s 768) Q (t ++ putcs bs) ra R' Mt') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s 768) Q t 0x80005260#64 R Mt by
+  have hw : StackWin (outS s 768) s 768 := .of_top hs3 (by omega) hal
   nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
   BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000f230

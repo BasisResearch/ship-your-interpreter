@@ -3,7 +3,7 @@ import VsaIris.Vsa.ExitH.Tac
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH VsaIris.Sym.Win
 
 /-! The exit path up to the third stream: `exit` → `__call_exitprocs` → `stdio_exit_handler` →
 `_fwalk_sglue(_fclose_r)` over stdin and the console stream. 300 instructions, proved once for
