@@ -167,6 +167,20 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
    Positional navigation is fragile (reorders shift every index), slow to
    elaborate, and burns your turns — gate rules R6/R7 enforce this.
 
+## Abstraction-discovery gate
+
+Rule R16 (`GATE:` in `scripts/discipline_rules.tsv`, `scripts/abstraction_gate.py`)
+fails stage a4 when one obligation cluster reaches 8 hand-written proof units
+without its per-case cost falling by a third between the first and last quarter
+of its history. When it fires, or a proof stalls, the only allowed next task is a
+round of `/abstraction-discovery` (`~/.claude/skills/abstraction-discovery/SKILL.md`):
+census, laws, blind ontologist fan-out, retrieval by law, variation, pilot
+bake-off, adoption. Record it in `abstractions/ROUND-<n>.md`. Clusters stalled at
+installation are listed in `scripts/abstraction_gate_baseline.tsv` and fail only
+when they grow; add a cluster there only with a note citing the round that
+decided it. `python3 scripts/abstraction_gate.py --report` lists every cluster;
+`scripts/generated_paths.txt` names generated files the gate ignores.
+
 ## Extending the discipline
 
 - New enforced rule: append a TSV line to `scripts/discipline_rules.tsv`

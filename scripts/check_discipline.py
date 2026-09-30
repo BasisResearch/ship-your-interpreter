@@ -9,6 +9,8 @@ NEW files are strict. A specific line can be exempted with:
 
 on the same line or the line directly above. COUNT>N:<needle> patterns fire when
 a file contains more than N occurrences of <needle> (whole-file rules).
+GATE:min=N,shrink=F patterns run the abstraction-discovery gate
+(scripts/abstraction_gate.py) over the `;`-separated scope globs.
 
 Exit 1 on any violation. Extensible: add rules to the TSV, no code changes.
 """
@@ -52,10 +54,22 @@ def allowed(rid, lines, idx):
     return False
 
 
+def run_gate(scope, pat, msg):
+    import abstraction_gate
+    opts = dict(kv.split("=") for kv in pat[len("GATE:"):].split(",") if kv)
+    found, _ = abstraction_gate.check(ROOT, scope, int(opts.get("min", 8)),
+                                      float(opts.get("shrink", 2 / 3)))
+    return [f"[gate] {v} — {msg}" for v in found]
+
+
 def main():
     rules = load_rules()
     grandfather = load_grandfather()
     violations = []
+    for rid, scope, pat, msg in rules:
+        if pat.startswith("GATE:"):
+            violations += [f"[{rid}] {v}" for v in run_gate(scope, pat, msg)]
+    rules = [r for r in rules if not r[2].startswith("GATE:")]
     for f in sorted((ROOT / "Vsa").rglob("*.lean")):
         rel = str(f.relative_to(ROOT))
         if rel in grandfather:
@@ -88,4 +102,5 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     sys.exit(main())

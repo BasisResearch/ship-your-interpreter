@@ -1,0 +1,74 @@
+# Obligation clusters stalled when the abstraction gate was installed (2026-09-30).
+# cluster<TAB>size<TAB>note. A listed cluster fails only when it grows past its size.
+Assign	9	known at gate install; decide in a round
+Binary Add cat	11	known at gate install; decide in a round
+Binary Concat run	12	known at gate install; decide in a round
+Binary Ge	14	known at gate install; decide in a round
+Binary Ge run	12	known at gate install; decide in a round
+Binary Gt	14	known at gate install; decide in a round
+Binary Gt run	12	known at gate install; decide in a round
+Binary Le	14	known at gate install; decide in a round
+Binary Le run	12	known at gate install; decide in a round
+Binary Lt	14	known at gate install; decide in a round
+Binary Lt run	12	known at gate install; decide in a round
+Binary Sub Int	8	known at gate install; decide in a round
+Call run	10	known at gate install; decide in a round
+addi	8	known at gate install; decide in a round
+app Line	18	known at gate install; decide in a round
+bins facts	32	known at gate install; decide in a round
+bits	66	known at gate install; decide in a round
+epi Kind	8	known at gate install; decide in a round
+epi Line	9	known at gate install; decide in a round
+facts	471	known at gate install; decide in a round
+frame On of pointwise	9	known at gate install; decide in a round
+get Elem write Map	12	known at gate install; decide in a round
+gpr Get	10	known at gate install; decide in a round
+ground Slot	11	known at gate install; decide in a round
+ground Stmt Slot	9	known at gate install; decide in a round
+hex bits forwards resp	10	known at gate install; decide in a round
+image Statics hdb	8	known at gate install; decide in a round
+image Statics hdp	8	known at gate install; decide in a round
+image Statics hfn	8	known at gate install; decide in a round
+image Statics himp	8	known at gate install; decide in a round
+line	112	known at gate install; decide in a round
+lj fin	16	known at gate install; decide in a round
+off ed	8	known at gate install; decide in a round
+physical Regs	32	known at gate install; decide in a round
+pins drop	10	known at gate install; decide in a round
+pins drop pro	17	known at gate install; decide in a round
+pinw survives write Map	16	known at gate install; decide in a round
+pointwise of frame On	9	known at gate install; decide in a round
+pro Line	13	known at gate install; decide in a round
+run	515	known at gate install; decide in a round
+run Group	19	known at gate install; decide in a round
+sext	17	known at gate install; decide in a round
+sext off	8	known at gate install; decide in a round
+sfv Arm	12	known at gate install; decide in a round
+sfv facts	14	known at gate install; decide in a round
+sfv log nil	10	known at gate install; decide in a round
+sfvwrite Chunk of agree lo	20	known at gate install; decide in a round
+sfvwrite Row	13	known at gate install; decide in a round
+shared agree	8	known at gate install; decide in a round
+site	45	known at gate install; decide in a round
+site ed	17	known at gate install; decide in a round
+site ee	11	known at gate install; decide in a round
+site fs	12	known at gate install; decide in a round
+site nottaken	9	known at gate install; decide in a round
+site pm	16	known at gate install; decide in a round
+site pr	70	known at gate install; decide in a round
+site pv	18	known at gate install; decide in a round
+site rt	43	known at gate install; decide in a round
+site tot	17	known at gate install; decide in a round
+site totb	68	known at gate install; decide in a round
+site var	17	known at gate install; decide in a round
+site wp	42	known at gate install; decide in a round
+spill Prog	13	known at gate install; decide in a round
+sprint Err	11	known at gate install; decide in a round
+svf Pro	8	known at gate install; decide in a round
+sx	9	known at gate install; decide in a round
+tdec exit	12	known at gate install; decide in a round
+tdec next	10	known at gate install; decide in a round
+tr	10	known at gate install; decide in a round
+upd Line	11	known at gate install; decide in a round
+utr	13	known at gate install; decide in a round
+write Row	11	known at gate install; decide in a round
