@@ -10,6 +10,10 @@ theorem ExitSp.win {s : BitVec 64} (hs : ExitSp s) : StackWin (exitS s) s 256 0 
   ⟨⟨⟨fun k hk => .inr (.inr (by have := hs.lo; omega))⟩, by have := hs.lo; omega,
     by have := hs.hi; omega⟩, by have := hs.align; omega, hs.place⟩
 
+macro_rules
+  | `(tactic| win_static_own) =>
+    `(tactic| (win_foot exitS; first | exact outS_static (by decide) | exact outS_errno (by decide)))
+
 /-- Facts every piece of the exit run normalises with: the entry registers, the FILE fields of
 `CloseMt`, the tested bits of the console flags word (`ConFlags`), and the literal folders. -/
 def xhFacts : Array Lean.Name := #[`h2, `h8, `h11, `hC.atexit, `hC.handler, `hC.glueNext, `hC.glueCount,

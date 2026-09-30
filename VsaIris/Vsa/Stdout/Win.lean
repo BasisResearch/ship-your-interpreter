@@ -4,26 +4,29 @@ import VsaIris.Vsa.SymExec
 import VsaIris.Vsa.RegionCore
 
 /-!
-# Stack windows: address keys for the newlib runs
+# Windows: address keys for the newlib runs
 
-Every address of a newlib run is a static literal, `sp + c` with a literal `c`, or `sp`. A
-`StackWin S sp n m` is the access region (`ARgn`, `RegionCore.lean`) of the `n` bytes below and
-the `m` bytes above `sp`, aligned, and placed off the static data window
-`[0x8001b520, 0x8001c168)`. Over it, each address side condition is one `decide` on the literals:
+Every address of a newlib run is a static literal or a literal offset from the top `T` of a
+stack frame. A `Win S T n m` is the access region (`ARgn`, `RegionCore.lean`) of the `n` bytes
+below and the `m` bytes above `T`, aligned, and placed off the static data window
+`[0x8001b520, 0x8001c168)`. The key of an address `A` in a window is its position
+`A + d = T + u` with literal `d`, `u`; over keys each address side condition is one `decide`:
 
-* the key check `StackWin.key` / `.key0` puts an access inside the region; access permitted and
-  owned are then the region laws `ARgn.ldOK`/`.stOK`/`.acc` (`StackWin.ldOK`, `.stOK`, `.stOKb`,
-  `.own` and their offset-0 forms);
-* two accesses in one window: `SymExec.sepC_sound`, `sep0L`, `sep0R`; in two windows whose
-  separation is in the context: `.sepW`, `.sepW'`; stack against static:
-  `.static_stack`, `.stack_static`, `.static_base`, `.base_static`; two literals: `decide`;
-* membership of the forgotten stack `[sp - n, sp + c)`: `.static_out`, `.stack_out`,
+* access permitted and owned: `Win.ldOK`, `.stOK`, `.stOKb`, `.own` (the region laws
+  `ARgn.ldOK`/`.stOK`/`.acc` through `Win.mem`), `.lt64`;
+* two accesses in one window: `Win.sep`; in two windows whose separation is in the context:
+  `.sepW`, `.sepW'`; window against static: `.static_win`, `.win_static`; two literals: `decide`;
+* membership of the forgotten stack `[sp - n, sp + c)`: `StackWin.static_out`, `.stack_out`,
   `.stack_in`; of the whole lower window: `.static_outN`, `.stack_inN`.
 
+Positions are produced per address form: `StackWin.posN`/`.posP` for `(sp + c).toNat` with a
+`BitVec` stack pointer (`StackWin S sp n m = Win S sp.toNat n m`), `pos0` for the top itself,
+`Win.posK`/`.posK0`/`.posKT`/`.posKT0` for `s - K + k` with a `Nat` stack pointer.
+
 `win_key` and `win_side` read the shape of the goal and apply the matching lemma.
-`open scoped VsaIris.Sym.Win` makes `nx_addr`, `nx_fdisch` and `sx_side` try them first and keeps
-the register file of an `nx_run` compact (`nx_tidy`); the arithmetic dischargers remain the
-fallback. A run puts its window in the context once: `nx_win sp n m` (from the usual
+`open scoped VsaIris.Sym.Win` makes `nx_addr`, `nx_fdisch`, `sx_addr` and `sx_side` try them
+first and keeps the register file of an `nx_run` compact (`nx_tidy`); the arithmetic dischargers
+remain the fallback. A run puts its window in the context once: `nx_win sp n m` (from the usual
 `hs1 … hal` hypotheses by `omega`), or `StackWin.of_out` / `.of_top`.
 -/
 
@@ -31,106 +34,128 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.VsaHeap
 
-/-- The `n` bytes below and `m` bytes above `sp`: owned under `S`, inside RAM and off the
-mailbox, `sp` 8-aligned, and off the static data window. -/
-structure StackWin (S : Nat → Prop) (sp : BitVec 64) (n m : Nat) : Prop where
-  rgn : ARgn S (sp.toNat - n) (n + m)
-  align : sp.toNat % 8 = 0
-  place : sp.toNat + m ≤ 0x8001b520 ∨ 0x8001c168 + n ≤ sp.toNat
+/-- The `n` bytes below and `m` bytes above `T`: owned under `S`, inside RAM and off the
+mailbox, `T` 8-aligned, and off the static data window. -/
+structure Win (S : Nat → Prop) (T n m : Nat) : Prop where
+  rgn : ARgn S (T - n) (n + m)
+  align : T % 8 = 0
+  place : T + m ≤ 0x8001b520 ∨ 0x8001c168 + n ≤ T
 
-/-- The key check on a literal offset: `c` is `-k` with the access inside the `n` bytes below, or
-non-negative with the access inside the `m` bytes above. -/
-def inWin (n m : Nat) (c : BitVec 64) (w : Nat) : Bool :=
-  decide (w ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 64 - c.toNat ≤ n) || decide (c.toNat + w ≤ m)
+/-- A window below (and above) a `BitVec` stack pointer. -/
+abbrev StackWin (S : Nat → Prop) (sp : BitVec 64) (n m : Nat) : Prop := Win S sp.toNat n m
 
-namespace StackWin
+namespace Win
 
-variable {S : Nat → Prop} {sp c c2 : BitVec 64} {n m a w w1 w2 : Nat}
+variable {S S' : Nat → Prop} {T T' n m n' m' A B d u d' u' a w w1 w2 : Nat}
 
-theorem key (hw : StackWin S sp n m) (h : inWin n m c w = true) :
-    sp.toNat - n ≤ (sp + c).toNat ∧ (sp + c).toNat + w ≤ sp.toNat - n + (n + m) := by
-  have h1 := hw.rgn.lo; have h2 := hw.rgn.hi; have := sp.isLt; have := c.isLt
-  simp only [inWin, Bool.or_eq_true, decide_eq_true_eq] at h
-  rw [BitVec.toNat_add]
-  rcases h with h | h <;> omega
+/-- The key check: an address at position `A + d = T + u` with width `w` is in the window. -/
+theorem mem (hw : Win S T n m) (p : A + d = T + u) (h : d ≤ n + u ∧ u + w ≤ m + d) :
+    T - n ≤ A ∧ A + w ≤ T - n + (n + m) := by
+  have := hw.rgn.lo; omega
 
-theorem key0 (hw : StackWin S sp n m) (h : w ≤ m) :
-    sp.toNat - n ≤ sp.toNat ∧ sp.toNat + w ≤ sp.toNat - n + (n + m) := by
-  have h1 := hw.rgn.lo; omega
+theorem ldOK (hw : Win S T n m) (p : A + d = T + u) (h : d ≤ n + u ∧ u + w ≤ m + d) : LdOK A w :=
+  hw.rgn.ldOK (hw.mem p h)
 
-theorem al (hw : StackWin S sp n m) (h : (w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8) ∧ c.toNat % w = 0) :
-    (sp + c).toNat % w = 0 := by
+theorem stOK (hw : Win S T n m) (p : A + d = T + u)
+    (h : (d ≤ n + u ∧ u + w ≤ m + d) ∧ (w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8) ∧ d % w = 0 ∧ u % w = 0) :
+    StOK A w := by
+  obtain ⟨h1, hw', h2, h3⟩ := h
+  have k := hw.mem p h1
+  refine hw.rgn.stOK ⟨k.1, k.2, ?_⟩
   have := hw.align
-  rw [BitVec.toNat_add]
-  obtain ⟨h1, h2⟩ := h
-  rcases h1 with rfl | rfl | rfl | rfl <;> omega
+  rcases hw' with rfl | rfl | rfl | rfl <;> omega
 
-theorem al0 (hw : StackWin S sp n m) (h : w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8) : sp.toNat % w = 0 := by
-  have := hw.align
-  rcases h with rfl | rfl | rfl | rfl <;> omega
-
-theorem ldOK (hw : StackWin S sp n m) (h : inWin n m c w = true) : LdOK (sp + c).toNat w :=
-  hw.rgn.ldOK (hw.key h)
-
-theorem ldOK0 (hw : StackWin S sp n m) (h : w ≤ m) : LdOK sp.toNat w :=
-  hw.rgn.ldOK (hw.key0 h)
-
-theorem stOK (hw : StackWin S sp n m)
-    (h : inWin n m c w = true ∧ (w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8) ∧ c.toNat % w = 0) :
-    StOK (sp + c).toNat w :=
-  have k := hw.key h.1
-  hw.rgn.stOK ⟨k.1, k.2, hw.al h.2⟩
-
-theorem stOK0 (hw : StackWin S sp n m) (h : w ≤ m ∧ (w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8)) :
-    StOK sp.toNat w :=
-  have k := hw.key0 h.1
-  hw.rgn.stOK ⟨k.1, k.2, hw.al0 h.2⟩
-
-theorem stOKb (hw : StackWin S sp n m) (h : inWin n m c 1 = true) : StOKb (sp + c).toNat := by
-  have k := hw.key h
+theorem stOKb (hw : Win S T n m) (p : A + d = T + u) (h : d ≤ n + u ∧ u + 1 ≤ m + d) :
+    StOKb A := by
+  have k := hw.mem p h
   have := hw.rgn.lo; have := hw.rgn.hi
   unfold StOKb tohostAddr; omega
 
-theorem stOKb0 (hw : StackWin S sp n m) (h : 1 ≤ m) : StOKb sp.toNat := by
-  have k := hw.key0 h
-  have := hw.rgn.lo; have := hw.rgn.hi
-  unfold StOKb tohostAddr; omega
+theorem own (hw : Win S T n m) (p : A + d = T + u) (h : d ≤ n + u ∧ u + w ≤ m + d) :
+    ∀ b, b ∈ accAddrs A w → S b :=
+  hw.rgn.acc (hw.mem p h)
 
-theorem own (hw : StackWin S sp n m) (h : inWin n m c w = true) :
-    ∀ b, b ∈ accAddrs (sp + c).toNat w → S b :=
-  hw.rgn.acc (hw.key h)
+theorem lt64 (hw : Win S T n m) (p : A + d = T + u) (h : d ≤ n + u ∧ u + 0 ≤ m + d) :
+    A < 2 ^ 64 := by
+  have k := hw.mem p h
+  have := hw.rgn.hi; omega
 
-theorem own0 (hw : StackWin S sp n m) (h : w ≤ m) : ∀ b, b ∈ accAddrs sp.toNat w → S b :=
-  hw.rgn.acc (hw.key0 h)
+/-- Two accesses in one window. -/
+theorem sep (p : A + d = T + u) (q : B + d' = T + u')
+    (h : u + w1 + d' ≤ u' + d ∨ u' + w2 + d ≤ u + d') : A + w1 ≤ B ∨ B + w2 ≤ A := by
+  omega
 
-/-- An access inside the window is off a static access. -/
-theorem off_static (hw : StackWin S sp n m) {A : Nat}
-    (k : sp.toNat - n ≤ A ∧ A + w2 ≤ sp.toNat - n + (n + m))
-    (h : 0x8001b520 ≤ a ∧ a + w1 ≤ 0x8001c168) : a + w1 ≤ A ∨ A + w2 ≤ a := by
+/-- A static access against an access in the window. -/
+theorem static_win (hw : Win S T n m) (p : A + d = T + u)
+    (h : (0x8001b520 ≤ a ∧ a + w1 ≤ 0x8001c168) ∧ d ≤ n + u ∧ u + w2 ≤ m + d) :
+    a + w1 ≤ A ∨ A + w2 ≤ a := by
+  have k := hw.mem p h.2
   have := hw.place; have := hw.rgn.lo
   omega
 
-/-- Static access against a stack access. -/
-theorem static_stack (hw : StackWin S sp n m)
-    (h : (0x8001b520 ≤ a ∧ a + w1 ≤ 0x8001c168) ∧ inWin n m c w2 = true) :
-    a + w1 ≤ (sp + c).toNat ∨ (sp + c).toNat + w2 ≤ a :=
-  hw.off_static (hw.key h.2) h.1
+/-- An access in the window against a static access. -/
+theorem win_static (hw : Win S T n m) (p : A + d = T + u)
+    (h : (0x8001b520 ≤ a ∧ a + w2 ≤ 0x8001c168) ∧ d ≤ n + u ∧ u + w1 ≤ m + d) :
+    A + w1 ≤ a ∨ a + w2 ≤ A :=
+  (hw.static_win p h).symm
 
-/-- Stack access against a static access. -/
-theorem stack_static (hw : StackWin S sp n m)
-    (h : (0x8001b520 ≤ a ∧ a + w2 ≤ 0x8001c168) ∧ inWin n m c w1 = true) :
-    (sp + c).toNat + w1 ≤ a ∨ a + w2 ≤ (sp + c).toNat :=
-  (hw.off_static (hw.key h.2) h.1).symm
+/-- Accesses in two windows, the first window below the second. -/
+theorem sepW (h1 : Win S T n m) (h2 : Win S' T' n' m') (hd : T + m ≤ T' - n')
+    (p : A + d = T + u) (q : B + d' = T' + u')
+    (h : (d ≤ n + u ∧ u + w1 ≤ m + d) ∧ d' ≤ n' + u' ∧ u' + w2 ≤ m' + d') :
+    A + w1 ≤ B ∨ B + w2 ≤ A := by
+  have ka := h1.mem p h.1; have kb := h2.mem q h.2
+  have := h1.rgn.lo
+  exact .inl (by omega)
 
-theorem static_base (hw : StackWin S sp n m)
-    (h : (0x8001b520 ≤ a ∧ a + w1 ≤ 0x8001c168) ∧ w2 ≤ m) :
-    a + w1 ≤ sp.toNat ∨ sp.toNat + w2 ≤ a :=
-  hw.off_static (hw.key0 h.2) h.1
+/-- Accesses in two windows, the second window below the first. -/
+theorem sepW' (h1 : Win S T n m) (h2 : Win S' T' n' m') (hd : T' + m' ≤ T - n)
+    (p : A + d = T + u) (q : B + d' = T' + u')
+    (h : (d ≤ n + u ∧ u + w1 ≤ m + d) ∧ d' ≤ n' + u' ∧ u' + w2 ≤ m' + d') :
+    A + w1 ≤ B ∨ B + w2 ≤ A := by
+  have ka := h1.mem p h.1; have kb := h2.mem q h.2
+  have := h2.rgn.lo
+  exact .inr (by omega)
 
-theorem base_static (hw : StackWin S sp n m)
-    (h : (0x8001b520 ≤ a ∧ a + w2 ≤ 0x8001c168) ∧ w1 ≤ m) :
-    sp.toNat + w1 ≤ a ∨ a + w2 ≤ sp.toNat :=
-  (hw.off_static (hw.key0 h.2) h.1).symm
+/-! Positions with a `Nat` top: `s - K + k`. -/
+
+variable {s K k : Nat}
+
+theorem posK (hw : Win S s n m) (h : K ≤ n) : s - K + k + K = s + k := by
+  have := hw.rgn.lo; omega
+
+theorem posK0 (hw : Win S s n m) (h : K ≤ n) : s - K + K = s + 0 := by
+  have := hw.rgn.lo; omega
+
+theorem posKT (hw : Win S s n m) (h : K ≤ n ∧ k ≤ K + m) :
+    (BitVec.ofNat 64 (s - K + k)).toNat + K = s + k := by
+  have := hw.rgn.lo; have := hw.rgn.hi
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; omega
+
+theorem posKT0 (hw : Win S s n m) (h : K ≤ n) : (BitVec.ofNat 64 (s - K)).toNat + K = s + 0 := by
+  have := hw.rgn.lo; have := hw.rgn.hi
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; omega
+
+end Win
+
+/-- The position of the top itself. -/
+theorem pos0 (T : Nat) : T + 0 = T + 0 := rfl
+
+namespace StackWin
+
+variable {S : Nat → Prop} {sp c c2 : BitVec 64} {n m a w : Nat}
+
+/-- The position of `sp + c` for a negative literal `c`. -/
+theorem posN (hw : StackWin S sp n m) (h : 2 ^ 64 - c.toNat ≤ n) :
+    (sp + c).toNat + (2 ^ 64 - c.toNat) = sp.toNat + 0 := by
+  have := hw.rgn.lo; have := sp.isLt; have := c.isLt
+  rw [BitVec.toNat_add]; omega
+
+/-- The position of `sp + c` for a non-negative literal `c`. -/
+theorem posP (hw : StackWin S sp n m) (h : c.toNat ≤ m) :
+    (sp + c).toNat + 0 = sp.toNat + c.toNat := by
+  have := hw.rgn.lo; have := hw.rgn.hi; have := sp.isLt
+  rw [BitVec.toNat_add]; omega
 
 /-- A static access is outside the forgotten stack `[sp - n, sp + c)`. -/
 theorem static_out (hw : StackWin S sp n m)
@@ -165,35 +190,7 @@ theorem stack_inN (hw : StackWin S sp n m) (h : w ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 6
   have h1 := hw.rgn.lo; have := sp.isLt; have := c.isLt
   rw [BitVec.toNat_add]; omega
 
-/-- Accesses in two windows, the first window below the second. -/
-theorem sepW {S' : Nat → Prop} {x y : BitVec 64} {n1 m1 n2 m2 A B : Nat}
-    (h1 : StackWin S x n1 m1) (_h2 : StackWin S' y n2 m2) (hd : x.toNat + m1 ≤ y.toNat - n2)
-    (ka : x.toNat - n1 ≤ A ∧ A + w1 ≤ x.toNat - n1 + (n1 + m1))
-    (kb : y.toNat - n2 ≤ B ∧ B + w2 ≤ y.toNat - n2 + (n2 + m2)) : A + w1 ≤ B ∨ B + w2 ≤ A := by
-  have := h1.rgn.lo
-  exact .inl (by omega)
-
-/-- Accesses in two windows, the second window below the first. -/
-theorem sepW' {S' : Nat → Prop} {x y : BitVec 64} {n1 m1 n2 m2 A B : Nat}
-    (_h1 : StackWin S x n1 m1) (h2 : StackWin S' y n2 m2) (hd : y.toNat + m2 ≤ x.toNat - n1)
-    (ka : x.toNat - n1 ≤ A ∧ A + w1 ≤ x.toNat - n1 + (n1 + m1))
-    (kb : y.toNat - n2 ≤ B ∧ B + w2 ≤ y.toNat - n2 + (n2 + m2)) : A + w1 ≤ B ∨ B + w2 ≤ A := by
-  have := h2.rgn.lo
-  exact .inr (by omega)
-
 end StackWin
-
-/-- `sp` against `sp + c`. -/
-theorem sep0L {sp c : BitVec 64} {w1 w2 : Nat} (h : VsaIris.SymExec.sepC 0#64 w1 c w2 = true) :
-    sp.toNat + w1 ≤ (sp + c).toNat ∨ (sp + c).toNat + w2 ≤ sp.toNat := by
-  have := VsaIris.SymExec.sepC_sound (b := sp) h
-  rwa [BitVec.add_zero] at this
-
-/-- `sp + c` against `sp`. -/
-theorem sep0R {sp c : BitVec 64} {w1 w2 : Nat} (h : VsaIris.SymExec.sepC c w1 0#64 w2 = true) :
-    (sp + c).toNat + w1 ≤ sp.toNat ∨ sp.toNat + w2 ≤ (sp + c).toNat := by
-  have := VsaIris.SymExec.sepC_sound (b := sp) h
-  rwa [BitVec.add_zero] at this
 
 /-! ### The footprint `outS` -/
 
@@ -215,7 +212,7 @@ theorem StackWin.of_top {s : BitVec 64} {need : Nat} (hs3 : s.toNat ≤ 0x880000
 theorem StackWin.of_outS {s sp : BitVec 64} {need n m : Nat}
     (h : s.toNat - need + n ≤ sp.toNat ∧ sp.toNat + m ≤ s.toNat ∧ s.toNat ≤ 0x88000000 ∧
       0x8001c168 ≤ s.toNat - need ∧ sp.toNat % 8 = 0) : StackWin (outS s need) sp n m :=
-  ⟨⟨⟨fun k hk => .inr (.inr (by omega))⟩, by omega, by omega⟩, h.2.2.2.2, .inr (by omega)⟩
+  ⟨⟨⟨fun k hk => .inr (.inr (by omega))⟩, by omega, by omega⟩, by omega, .inr (by omega)⟩
 
 theorem stdioFoot_rng (a n : Nat)
     (h : (decide (0x8001b520 ≤ a ∧ a + n ≤ 0x8001b538) || decide (0x8001b53c ≤ a ∧ a + n ≤ 0x8001b960) ||
@@ -252,25 +249,49 @@ section Dispatch
 
 open Lean Elab Tactic Meta
 
-/-- The key of an address term. -/
+def isNatLit (e : Expr) : Bool := e.nat?.isSome || e.rawNatLit?.isSome
+
+/-- The key of an address term: a literal, or the top of its window with the syntax of its
+position proof. -/
 inductive AKey where
   | lit
-  | off (x : Expr)
-  | base (x : Expr)
+  | pos (top : Expr) (prf : Term)
 
-def akey? (e : Expr) : MetaM (Option AKey) := do
+/-- `s - K + k` / `s - K` with literal `K`, `k`: the top `s`. -/
+def natOff? (e : Expr) : Option (Expr × Bool) :=
   let e := e.consumeMData
-  if e.nat?.isSome || e.rawNatLit?.isSome then return some .lit
+  if e.isAppOfArity ``HAdd.hAdd 6 && isNatLit e.appArg! then
+    let l := e.appFn!.appArg!.consumeMData
+    if l.isAppOfArity ``HSub.hSub 6 && isNatLit l.appArg! && l.appFn!.appArg!.isFVar then
+      some (l.appFn!.appArg!, true)
+    else none
+  else if e.isAppOfArity ``HSub.hSub 6 && isNatLit e.appArg! && e.appFn!.appArg!.isFVar then
+    some (e.appFn!.appArg!, false)
+  else none
+
+def akey? (e : Expr) : TacticM (Option AKey) := do
+  let e := e.consumeMData
+  if isNatLit e then return some .lit
   if e.isAppOfArity ``BitVec.toNat 2 then
     let x := e.appArg!.consumeMData
+    if x.isAppOfArity ``BitVec.ofNat 2 then
+      match natOff? x.appArg! with
+      | some (s, true) => return some (.pos s (← `(Win.posKT (by with_reducible assumption) (by decide))))
+      | some (s, false) => return some (.pos s (← `(Win.posKT0 (by with_reducible assumption) (by decide))))
+      | none => return none
     if x.isAppOfArity ``HAdd.hAdd 6 then
       -- `b + c` with a literal `c`; an unfolded `b + c + c'` has no key (fold it first)
       let b := x.appFn!.appArg!.consumeMData
       if b.isAppOfArity ``HAdd.hAdd 6 then return none
-      if (← getBitVecValue? x.appArg!).isSome then return some (.off b)
-      return none
-    return some (.base x)
-  return none
+      let some ⟨_, v⟩ ← getBitVecValue? x.appArg! | return none
+      if v.toNat ≥ 2 ^ 63 then
+        return some (.pos b (← `(StackWin.posN (by with_reducible assumption) (by decide))))
+      else return some (.pos b (← `(StackWin.posP (by with_reducible assumption) (by decide))))
+    return some (.pos x (← `(pos0 _)))
+  match natOff? e with
+  | some (s, true) => return some (.pos s (← `(Win.posK (by with_reducible assumption) (by decide))))
+  | some (s, false) => return some (.pos s (← `(Win.posK0 (by with_reducible assumption) (by decide))))
+  | none => return none
 
 /-- `A + w ≤ B`: the pair `(A, B)`. -/
 def leAdd? (e : Expr) : Option (Expr × Expr) := do
@@ -282,86 +303,76 @@ def leAdd? (e : Expr) : Option (Expr × Expr) := do
 /-- `x.toNat - n` with a literal `n`: the start of a forgotten stack region. -/
 def isWinLo (e : Expr) : Bool :=
   e.isAppOfArity ``HSub.hSub 6 && e.appFn!.appArg!.isAppOfArity ``BitVec.toNat 2 &&
-    (e.appArg!.nat?.isSome || e.appArg!.rawNatLit?.isSome)
+    isNatLit e.appArg!
 
 /-- `LO + N ≤ A` or `A + w ≤ LO + N`: is the extent `N` a literal? -/
 def extLit (loN : Expr) : Option Bool := do
   guard (loN.isAppOfArity ``HAdd.hAdd 6)
-  let N := loN.appArg!
-  some (N.nat?.isSome || N.rawNatLit?.isSome)
-
-/-- Two accesses in two windows whose separation is in the context (`nx_win` puts it there). -/
-def twoWin (ka kb : Term) : TacticM (TSyntax `tactic) :=
-  `(tactic| first
-    | exact StackWin.sepW (by assumption) (by assumption) (by assumption) $ka $kb
-    | exact StackWin.sepW' (by assumption) (by assumption) (by assumption) $ka $kb)
+  some (isNatLit loN.appArg!)
 
 /-- Address side conditions by the keys of the addresses: disjointness of two accesses
 (`A + w₁ ≤ B ∨ B + w₂ ≤ A`), outside a forgotten stack region (`A + w ≤ LO ∨ LO + N ≤ A`),
-inside one (`LO ≤ A ∧ A + w ≤ LO + N`). The goal's shape selects the lemma; nothing is tried
-blind. -/
+inside one (`LO ≤ A ∧ A + w ≤ LO + N`), below `2 ^ 64`. The goal's shape selects the lemma;
+nothing is tried blind. -/
 elab "win_key0" : tactic => withMainContext do
   let t := (← instantiateMVars (← getMainTarget)).consumeMData
   let tac ← if let some (p, q) := t.app2? ``Or then do
       let some (A, B) := leAdd? p | throwError "win_key: shape"
-      let some ka ← akey? A | throwError "win_key: key"
       if isWinLo B then
         unless q.isAppOfArity ``LE.le 4 do throwError "win_key: shape"
-        match extLit q.appFn!.appArg!, ka with
-        | some true, .lit => `(tactic| exact StackWin.static_outN (by assumption) (by decide))
-        | some false, .lit => `(tactic| exact StackWin.static_out (by assumption) (by decide))
-        | some false, .off _ => `(tactic| exact StackWin.stack_out (by assumption) (by decide))
+        let some ka ← akey? A | throwError "win_key: key"
+        let aLit := match ka with | .lit => true | _ => false
+        match extLit q.appFn!.appArg!, aLit with
+        | some true, true => `(tactic| exact StackWin.static_outN (by with_reducible assumption) (by decide))
+        | some false, true => `(tactic| exact StackWin.static_out (by with_reducible assumption) (by decide))
+        | some false, false => `(tactic| exact StackWin.stack_out (by with_reducible assumption) (by decide))
         | _, _ => throwError "win_key: key"
       else
+        let some ka ← akey? A | throwError "win_key: key"
         let some kb ← akey? B | throwError "win_key: key"
-        let kOff ← `(StackWin.key (by assumption) (by decide))
-        let kBase ← `(StackWin.key0 (by assumption) (by decide))
         match ka, kb with
         | .lit, .lit => `(tactic| decide)
-        | .off x, .off y =>
-          if x == y then `(tactic| exact VsaIris.SymExec.sepC_sound (by decide)) else twoWin kOff kOff
-        | .base x, .off y =>
-          if x == y then `(tactic| exact sep0L (by decide)) else twoWin kBase kOff
-        | .off x, .base y =>
-          if x == y then `(tactic| exact sep0R (by decide)) else twoWin kOff kBase
-        | .base x, .base y =>
-          if x == y then throwError "win_key: same address" else twoWin kBase kBase
-        | .lit, .off _ => `(tactic| exact StackWin.static_stack (by assumption) (by decide))
-        | .off _, .lit => `(tactic| exact StackWin.stack_static (by assumption) (by decide))
-        | .lit, .base _ => `(tactic| exact StackWin.static_base (by assumption) (by decide))
-        | .base _, .lit => `(tactic| exact StackWin.base_static (by assumption) (by decide))
+        | .pos x pa, .pos y pb =>
+          if x == y then `(tactic| exact Win.sep $pa $pb (by decide))
+          else `(tactic| first
+            | exact Win.sepW (by with_reducible assumption) (by with_reducible assumption) (by with_reducible assumption) $pa $pb (by decide)
+            | exact Win.sepW' (by with_reducible assumption) (by with_reducible assumption) (by with_reducible assumption) $pa $pb (by decide))
+        | .lit, .pos _ pb => `(tactic| exact Win.static_win (by with_reducible assumption) $pb (by decide))
+        | .pos _ pa, .lit => `(tactic| exact Win.win_static (by with_reducible assumption) $pa (by decide))
     else if let some (p, q) := t.app2? ``And then do
       -- `LO ≤ A ∧ A + w ≤ LO + N`
       unless p.isAppOfArity ``LE.le 4 && isWinLo p.appFn!.appArg! do throwError "win_key: shape"
-      let some (.off _) ← akey? p.appArg! | throwError "win_key: key"
       unless q.isAppOfArity ``LE.le 4 do throwError "win_key: shape"
+      let some (.pos _ _) ← akey? p.appArg! | throwError "win_key: key"
       match extLit q.appArg! with
-      | some true => `(tactic| exact StackWin.stack_inN (by assumption) (by decide))
-      | some false => `(tactic| exact StackWin.stack_in (by assumption) (by decide))
+      | some true => `(tactic| exact StackWin.stack_inN (by with_reducible assumption) (by decide))
+      | some false => `(tactic| exact StackWin.stack_in (by with_reducible assumption) (by decide))
       | none => throwError "win_key: shape"
+    else if t.isAppOfArity ``LT.lt 4 then do
+      -- `A < 2 ^ 64`
+      let some (.pos _ pa) ← akey? t.appFn!.appArg! | throwError "win_key: key"
+      `(tactic| exact Win.lt64 (by with_reducible assumption) $pa (by decide))
     else throwError "win_key: shape"
   evalTactic tac
 
-/-- Access permitted / access owned, by the key of the address. -/
-elab "win_acc" : tactic => withMainContext do
+/-- Access permitted / access owned, by the key of the address. `stat` closes the ownership of a
+static access in the footprint at hand. -/
+def winAcc (stat : TSyntax `tactic) : TacticM Unit := withMainContext do
   let t := (← instantiateMVars (← getMainTarget)).consumeMData
   let tac ← if t.isAppOfArity ``LdOK 2 then do
       match ← akey? t.appFn!.appArg! with
       | some .lit => `(tactic| decide)
-      | some (.off _) => `(tactic| exact StackWin.ldOK (by assumption) (by decide))
-      | some (.base _) => `(tactic| exact StackWin.ldOK0 (by assumption) (by decide))
+      | some (.pos _ pa) => `(tactic| exact Win.ldOK (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isAppOfArity ``StOK 2 then do
       match ← akey? t.appFn!.appArg! with
       | some .lit => `(tactic| decide)
-      | some (.off _) => `(tactic| exact StackWin.stOK (by assumption) (by decide))
-      | some (.base _) => `(tactic| exact StackWin.stOK0 (by assumption) (by decide))
+      | some (.pos _ pa) => `(tactic| exact Win.stOK (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isAppOfArity ``StOKb 1 then do
       match ← akey? t.appArg! with
       | some .lit => `(tactic| decide)
-      | some (.off _) => `(tactic| exact StackWin.stOKb (by assumption) (by decide))
-      | some (.base _) => `(tactic| exact StackWin.stOKb0 (by assumption) (by decide))
+      | some (.pos _ pa) => `(tactic| exact Win.stOKb (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isForall then do
       -- `∀ b, b ∈ accAddrs A w → S b`
@@ -370,33 +381,41 @@ elab "win_acc" : tactic => withMainContext do
       let mem := d.bindingDomain!
       let some acc := mem.getAppArgs.find? (·.isAppOfArity ``accAddrs 2) | throwError "win_acc: shape"
       match ← akey? acc.appFn!.appArg! with
-      | some .lit => `(tactic| first | exact outS_static (by decide) | exact outS_errno (by decide))
-      | some (.off _) => `(tactic| exact StackWin.own (by assumption) (by decide))
-      | some (.base _) => `(tactic| exact StackWin.own0 (by assumption) (by decide))
+      | some .lit => pure stat
+      | some (.pos _ pa) => `(tactic| exact Win.own (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else throwError "win_acc: shape"
   evalTactic tac
 
-/-- `nx_win sp n m`: put the window of the `n` bytes below and `m` bytes above `sp` in the
-context as `hw_<sp>`, from the run's stack hypotheses (`omega`). The footprint is read off the goal. -/
-elab "nx_win " sp:term:max n:term:max m:term:max : tactic => withMainContext do
-  let Se ← forallTelescope (← instantiateMVars (← getMainTarget)) fun xs b => do
-    let ty ← whnfR b
-    unless ty.getAppFn.isConstOf ``SWP do throwError "nx_win: not an SWP goal"
-    let S := ty.getAppArgs[3]!
-    if xs.any fun x => S.containsFVar x.fvarId! then throwError "nx_win: the footprint is bound"
-    pure S
-  let S ← Term.exprToSyntax Se
-  let tag := if sp.raw.isIdent then s!"{sp.raw.getId}" else "0"
-  -- the windows already in the context
-  let others ← (← getLCtx).foldlM (init := #[]) fun acc d => do
-    let t ← instantiateMVars d.type
-    if !d.isImplementationDetail && t.isAppOfArity ``StackWin 4 then
+/-- `win_foot f`: the goal is `∀ b, b ∈ accAddrs a w → f … b`. Guards a footprint's static
+ownership lemma, so no lemma is unified against another footprint. -/
+elab "win_foot " f:ident : tactic => withMainContext do
+  let t := (← instantiateMVars (← getMainTarget)).consumeMData
+  unless t.isForall && t.bindingBody!.isForall do throwError "win_foot: shape"
+  let c ← realizeGlobalConstNoOverload f
+  unless t.bindingBody!.bindingBody!.getAppFn.isConstOf c do throwError "win_foot: another footprint"
+
+/-- Ownership of a static access, per footprint. -/
+syntax "win_static_own" : tactic
+macro_rules
+  | `(tactic| win_static_own) =>
+    `(tactic| (win_foot outS; first | exact outS_static (by decide) | exact outS_errno (by decide)))
+
+elab "win_acc" : tactic => do winAcc (← `(tactic| win_static_own))
+
+/-- The windows of the context: `(T, n, m)`. -/
+def ctxWins : TacticM (Array (Expr × Expr × Expr)) := withMainContext do
+  (← getLCtx).foldlM (init := #[]) fun acc d => do
+    if d.isImplementationDetail then return acc
+    let t ← whnfR (← instantiateMVars d.type)
+    if t.isAppOfArity ``Win 4 then
       return acc.push (t.getAppArgs[1]!, t.getAppArgs[2]!, t.getAppArgs[3]!)
     else return acc
-  let hw := mkIdent (Name.mkSimple s!"hw_{tag}")
-  evalTactic (← `(tactic| have $hw : StackWin $S $sp $n $m := StackWin.of_outS (by omega)))
-  -- the separation of the new window from each of them, in the order that holds
+
+/-- Put the separation of the window `(T, n, m)` from each window of `others` in the context, in
+the order that holds. -/
+def winSeps (tag : String) (T n m : Term) (others : Array (Expr × Expr × Expr)) :
+    TacticM Unit := do
   let mut i := 0
   for (b', n', m') in others do
     i := i + 1
@@ -405,9 +424,30 @@ elab "nx_win " sp:term:max n:term:max m:term:max : tactic => withMainContext do
     let n' ← withMainContext (Term.exprToSyntax n')
     let m' ← withMainContext (Term.exprToSyntax m')
     evalTactic (← `(tactic| first
-      | have $hs : ($b').toNat + $m' ≤ ($sp).toNat - $n := by omega
-      | have $hs : ($sp).toNat + $m ≤ ($b').toNat - $n' := by omega
+      | have $hs : $b' + $m' ≤ $T - $n := by omega
+      | have $hs : $T + $m ≤ $b' - $n' := by omega
       | skip))
+
+/-- The footprint of the `SWP` under the binders of the goal. -/
+def goalFoot : TacticM Term := withMainContext do
+  let Se ← forallTelescope (← instantiateMVars (← getMainTarget)) fun xs b => do
+    let ty ← whnfR b
+    unless ty.getAppFn.isConstOf ``SWP do throwError "nx_win: not an SWP goal"
+    let S := ty.getAppArgs[3]!
+    if xs.any fun x => S.containsFVar x.fvarId! then throwError "nx_win: the footprint is bound"
+    pure S
+  Term.exprToSyntax Se
+
+/-- `nx_win sp n m`: put the window of the `n` bytes below and `m` bytes above `sp` in the
+context as `hw_<sp>`, from the run's stack hypotheses (`omega`), with its separation from the
+windows already there. The footprint is read off the goal. -/
+elab "nx_win " sp:term:max n:term:max m:term:max : tactic => do
+  let S ← goalFoot
+  let tag := if sp.raw.isIdent then s!"{sp.raw.getId}" else "0"
+  let others ← ctxWins
+  let hw := mkIdent (Name.mkSimple s!"hw_{tag}")
+  evalTactic (← `(tactic| have $hw : StackWin $S $sp $n $m := StackWin.of_outS (by omega)))
+  winSeps tag (← `(($sp).toNat)) n m others
 
 end Dispatch
 
@@ -425,6 +465,8 @@ macro "win_side" : tactic => `(tactic| first
 namespace Win
 
 scoped macro_rules | `(tactic| nx_addr) => `(tactic| win_key)
+
+scoped macro_rules | `(tactic| sx_addr) => `(tactic| win_key)
 
 scoped macro_rules | `(tactic| sx_side) => `(tactic| win_side)
 

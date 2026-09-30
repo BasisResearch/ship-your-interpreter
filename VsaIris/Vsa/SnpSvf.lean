@@ -5,6 +5,7 @@ import VsaIris.Vsa.SnpArith
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
+open scoped VsaIris.Sym.Win
 
 structure DotAt (Dt : Mem) (DA : List Nat) : Prop where
   dom : InDA DA 0x80019770 0x80019772
@@ -60,7 +61,7 @@ theorem ldv_lbu_sb0 (Mt : Mem) (a : Nat) : ldv .lbu (writeLog Mt [(a, 1, 0#64)])
   simpa using this
 
 macro "svf_mem" : tactic =>
-  `(tactic| (simp (disch := (first | omega | (simp only [widthOfM]; omega))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4, ldv_lbu_sb0]))
+  `(tactic| (simp (disch := (first | win_key | omega | (simp only [widthOfM]; omega))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4, ldv_lbu_sb0]))
 
 structure SvfPro (s : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (R : Nat → BitVec 64) (Mt : Mem) :
     Prop where
@@ -88,6 +89,7 @@ structure SvfPro (s : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (R : Nat → Bit
     (eS : BitVec.ofNat 64 (s - 272 + 18446744073709551024) = BitVec.ofNat 64 (s - 864))
     (hK : ∀ R' Mt', SvfPro s R Mt R' Mt' → SnpW live Dt DA (snpS s dst n) Q 0x800076a4#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80007654#64 R Mt by
+  snp_win s 1024
   snp_run [17] hlive using [ofNat_add_ofNat, h2, h11, hdp, eS]
 
 #ix_piece svfPro_p2 from svfPro_p1 by
@@ -191,6 +193,7 @@ structure SvfAt (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat
       SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x800076a4#64 R Mt by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have h2 := SP.r2
@@ -250,6 +253,7 @@ theorem svf_entry {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
       SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80007654#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hfl : ldv .lhu Mt (BitVec.ofNat 64 (s - 264 + 16)).toNat = 0x208#64 := by
     rw [toNat_ofNat_lt (by omega)]
@@ -274,6 +278,7 @@ theorem SvfCore.update {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p a
     (ha : ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + 24)).toNat = BitVec.ofNat 64 ap') :
     SvfCore s dst n R0 Mt0 p' ap' rt' total R' Mt' := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hdsep := SG.d_sep
   have ag : ∀ (k : MKind) (off : Nat), ((8 ≤ off ∧ off + widthOfM k ≤ 16) ∨
@@ -310,6 +315,7 @@ theorem SvfCore.scratch {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p 
     (hM : ∀ a, (a < s - 864 + 168 ∨ s - 864 + 224 ≤ a) → imgM Mt' a = imgM Mt a) :
     SvfCore s dst n R0 Mt0 p ap rt total R' Mt' := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have ag : ∀ (off : Nat), off + 8 ≤ 168 →
       ldv .ld Mt' (BitVec.ofNat 64 (s - 864 + off)).toNat = ldv .ld Mt (BitVec.ofNat 64 (s - 864 + off)).toNat :=
@@ -328,6 +334,7 @@ theorem SvfAt.scratch {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap
     (h23 : R' 23 = R 23) (hM : ∀ a, (a < s - 864 + 168 ∨ s - 864 + 224 ≤ a) → imgM Mt' a = imgM Mt a) :
     SvfAt s dst n R0 Mt0 p ap rt total R' Mt' := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   refine ⟨A.core.scratch SG hR hM, h23.trans A.r23, ?_, ?_⟩
   · rw [toNat_ofNat_lt (by omega)]
@@ -382,6 +389,7 @@ theorem svf_mbtowc {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
       SnpW live Dt DA (snpS s dst n) Q 0x80007744#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80007724#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have hd1 := SG.d_lo
@@ -418,6 +426,7 @@ theorem svf_scan_br {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
       R' 22 = BitVec.ofNat 64 (q + 1) → SnpW live Dt DA (snpS s dst n) Q 0x80007724#64 R' Mt) :
     SnpW live Dt DA (snpS s dst n) Q 0x80007744#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have h2 := S.svf.core.r2
   have h19 := S.svf.core.r19
@@ -565,6 +574,7 @@ theorem SvfSt.ofLit {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt
         [((BitVec.ofNat 64 (s - 864 + 232)).toNat, 4, 1#64)])
         [((BitVec.ofNat 64 (s - 864 + 16)).toNat, 8, BitVec.ofNat 64 (c + len))]) := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hl := hsrc.small
   refine ⟨A.core.update SG hR (fun a ha => ?_) ?_ ?_ ?_, ?_, ?_, ?_, ?_, ?_, by simp, ?_⟩
@@ -603,6 +613,7 @@ theorem svf_litBody {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
       [(p, len)] R' Mt' → R' 22 = R 22 → SnpW live Dt DA (snpS s dst n) Q 0x800079b0#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80007970#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have h2 := A.core.r2
@@ -652,6 +663,7 @@ theorem svf_lit0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     (he : p = q) (hk : SvfConvK live Dt DA Q s dst n R0 Mt0 p ap c q total pc1) :
     SnpW live Dt DA (snpS s dst n) Q pc0 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have h2 := A.core.r2
   have hf := A.core.fmt
@@ -677,6 +689,7 @@ theorem svf_lit1P {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (hlt : p < q) (hk : SvfConvK live Dt DA Q s dst n R0 Mt0 p ap c q total 0x8000776c#64) :
     SnpW live Dt DA (snpS s dst n) Q 0x8000775c#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have h2 := A.core.r2
   have hf := A.core.fmt
@@ -703,6 +716,7 @@ theorem svf_lit1Z {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     (hlt : p < q) (hk : SvfConvK live Dt DA Q s dst n R0 Mt0 p ap c q total 0x800079b0#64) :
     SnpW live Dt DA (snpS s dst n) Q 0x80007960#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have h2 := A.core.r2
   have hf := A.core.fmt
@@ -757,6 +771,7 @@ theorem SvfSt.push {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0
     (hcnt : ldv .lw Mt' (BitVec.ofNat 64 (s - 864 + 232)).toNat = BitVec.ofNat 64 (L.length + 1)) :
     SvfSt DA s dst n R0 Mt0 p ap rt total (L ++ [(b, l)]) R' Mt' := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hL3 := St.len
   have ag : ∀ (k : MKind) (off : Nat), off + widthOfM k ≤ 592 →
@@ -868,6 +883,7 @@ theorem svf_printSign0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.
     (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 0 R Mt) :
     SnpW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have h2 := St.core.r2
   have h23 := St.r23
@@ -922,6 +938,7 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
     (hk : PrintMidK live Dt DA Q s dst n R0 Mt0 p ap rt total L 45 R Mt) :
     SnpW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have h2 := St.core.r2
   have h23 := St.r23
@@ -986,6 +1003,7 @@ theorem SvfSt.setRet {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {M
     SvfSt DA s dst n R0 Mt0 p ap rt' total L R'
       (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 16)).toNat, 8, rt')]) := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hM : ∀ a, (a < s - 864 + 16 ∨ s - 864 + 24 ≤ a) →
       imgM (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 16)).toNat, 8, rt')]) a = imgM Mt a :=
@@ -1012,6 +1030,7 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total L Mk) :
     SnpW live Dt DA (snpS s dst n) Q 0x800078ec#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have h2 := St.core.r2
@@ -1053,6 +1072,7 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     (hk : PrintEndK live Dt DA Q s dst n R0 Mt0 p ap (c + rs) total (L ++ [(cp, size)]) Mt) :
     SnpW live Dt DA (snpS s dst n) Q 0x800078bc#64 R Mt by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have h2 := St.core.r2
@@ -1090,6 +1110,7 @@ theorem svf_back {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
       SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80007918#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have h2 := C.r2
@@ -1112,6 +1133,7 @@ theorem SvfCore.flushed {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p 
     (hM : ∀ a, ¬ PrintFrame s dst n a → imgM Mt' a = imgM Mt a) (hB : BufAt Mt' s dst n total') :
     SvfCore s dst n R0 Mt0 p ap rt total' R' Mt' := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hdsep := SG.d_sep
   have ag : ∀ (off : Nat), (off + 8 ≤ 224 ∨ 248 ≤ off) → off + 8 ≤ 592 →
@@ -1159,6 +1181,7 @@ theorem svf_flush {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
       SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x80007914#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have h2 := St.core.r2
@@ -1243,6 +1266,7 @@ theorem svf_print {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
       SnpW live Dt DA (snpS s dst n) Q 0x80007720#64 R' Mt') :
     SnpW live Dt DA (snpS s dst n) Q 0x8000782c#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hsum := PI.sumB
   refine svf_printSign hlive R Mt SG PI.st PI.len PI.r132 PI.r28 size sg PI.sg01 PI.r16 PI.r22
     (by have := PI.cB; omega) (by omega) PI.r20 PI.sign PI.m32 ?_
@@ -1280,6 +1304,7 @@ theorem svf_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     (hk : SvfRetK live Dt DA Q s dst n R0 Mt0 rt total) :
     SnpW live Dt DA (snpS s dst n) Q 0x800079c8#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have h2 : R 2 = BitVec.ofNat 64 (s - 864) := h2c.trans C.r2
   have sv := C.saved
@@ -1307,6 +1332,7 @@ theorem svf_end {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     (hk : SvfRetK live Dt DA Q s dst n R0 Mt0 rt (total ++ catPieces (gOf s Dt Mt) L)) :
     SnpW live Dt DA (snpS s dst n) Q 0x800079b0#64 R Mt := by
   have hs1 := SG.s_lo
+  have hw_s := SG.win
   have hs2 := SG.s_hi
   have hsa := SG.s_al
   have h2 := St.core.r2
