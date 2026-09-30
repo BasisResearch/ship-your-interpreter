@@ -146,18 +146,37 @@ theorem within_mmio_writable_ram_false
   refine ⟨fun _ => by push_cast; omega, fun _ => by push_cast; omega,
     fun hcontra => by omega⟩
 
+/-- Little-endian byte codec: the `w` bytes of `v` inserted at `addr, …, addr + w - 1`. -/
+def memWriteLE (m : Std.ExtHashMap Nat (BitVec 8)) (addr w : Nat) (v : BitVec (8 * w)) :
+    Std.ExtHashMap Nat (BitVec 8) :=
+  (List.ofFn fun i : Fin w => (addr + i.val, v.extractLsb' (8 * i.val) 8)).foldl
+    (fun m p => m.insert p.1 p.2) m
+
+theorem forM_writeByte_run {ue : Type} (l : List (Nat × BitVec 8))
+    (σ : SequentialState RegisterType trivialChoiceSource) :
+    (List.forM l (fun x => (PreSail.writeByte x.fst x.snd :
+        PreSailM RegisterType trivialChoiceSource ue PUnit))) σ
+      = .ok () { σ with mem := l.foldl (fun m p => m.insert p.1 p.2) σ.mem } := by
+  induction l generalizing σ with
+  | nil => rfl
+  | cons p l ih => exact ih _
+
+theorem write_ram_w
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (w : Nat) (v : BitVec (8 * w)) :
+    (Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) w v ()).run σ
+      = .ok true { σ with mem := memWriteLE σ.mem a.toNat w v } := by
+  simp only [Functions.write_ram, PreSail.sail_mem_write, PreSail.writeBytes, memWriteLE,
+    bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
+  rw [forM_writeByte_run]; rfl
+
 theorem write_ram_1
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (v : BitVec (8 * 1)) :
     (Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) 1 v ()).run σ
       = .ok true
           { σ with mem := σ.mem.insert a.toNat v } := by
-  simp only [Functions.write_ram, PreSail.sail_mem_write, PreSail.writeBytes,
-    PreSail.writeByte, List.ofFn, Fin.foldr_succ, Fin.foldr_zero, List.forM_cons,
-    List.forM_nil, __WriteRAM_Meta, Fin.val_succ, Fin.val_zero]
-  simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
-    modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
-    get, getThe, MonadStateOf.get, EStateM.get]
+  rw [write_ram_w]; simp [memWriteLE]
 
 theorem write_ram_2
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -165,13 +184,8 @@ theorem write_ram_2
     (Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) 2 v ()).run σ
       = .ok true
           { σ with mem := ((σ.mem.insert a.toNat (v.extractLsb' 0 8)).insert
-              (a.toNat + 1) (v.extractLsb' 8 8)) } := by
-  simp only [Functions.write_ram, PreSail.sail_mem_write, PreSail.writeBytes,
-    PreSail.writeByte, List.ofFn, Fin.foldr_succ, Fin.foldr_zero, List.forM_cons,
-    List.forM_nil, __WriteRAM_Meta, Fin.val_succ, Fin.val_zero]
-  simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
-    modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
-    get, getThe, MonadStateOf.get, EStateM.get]
+              (a.toNat + 1) (v.extractLsb' 8 8)) } :=
+  write_ram_w σ a 2 v
 
 theorem write_ram_4
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -181,13 +195,8 @@ theorem write_ram_4
           { σ with mem := ((((σ.mem.insert a.toNat (v.extractLsb' 0 8)).insert
               (a.toNat + 1) (v.extractLsb' 8 8)).insert
               (a.toNat + 2) (v.extractLsb' 16 8)).insert
-              (a.toNat + 3) (v.extractLsb' 24 8)) } := by
-  simp only [Functions.write_ram, PreSail.sail_mem_write, PreSail.writeBytes,
-    PreSail.writeByte, List.ofFn, Fin.foldr_succ, Fin.foldr_zero, List.forM_cons,
-    List.forM_nil, __WriteRAM_Meta, Fin.val_succ, Fin.val_zero]
-  simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
-    modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
-    get, getThe, MonadStateOf.get, EStateM.get]
+              (a.toNat + 3) (v.extractLsb' 24 8)) } :=
+  write_ram_w σ a 4 v
 
 theorem write_ram_8
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -201,19 +210,89 @@ theorem write_ram_8
               (a.toNat + 4) (v.extractLsb' 32 8)).insert
               (a.toNat + 5) (v.extractLsb' 40 8)).insert
               (a.toNat + 6) (v.extractLsb' 48 8)).insert
-              (a.toNat + 7) (v.extractLsb' 56 8)) } := by
-  simp only [Functions.write_ram, PreSail.sail_mem_write, PreSail.writeBytes,
-    PreSail.writeByte, List.ofFn, Fin.foldr_succ, Fin.foldr_zero, List.forM_cons,
-    List.forM_nil, __WriteRAM_Meta, Fin.val_succ, Fin.val_zero]
-  simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
-    modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
-    get, getThe, MonadStateOf.get, EStateM.get]
+              (a.toNat + 7) (v.extractLsb' 56 8)) } :=
+  write_ram_w σ a 8 v
 
 theorem ofInt_zero_gen' (n : Nat) : (BitVec.ofInt n 0) = 0#n := by
   apply BitVec.eq_of_toNat_eq; simp
 
 theorem addInt_zero_pa' (a : physaddrbits) : BitVec.addInt a (0 : Int) = a := by
   simp only [BitVec.addInt, ofInt_zero_gen', BitVec.add_zero]
+
+theorem tmod_toNatInt_of_mod (a : BitVec 64) (w : Nat) (h : a.toNat % w = 0) :
+    Int.tmod (BitVec.toNatInt a) w = 0 := by
+  simp only [BitVec.toNatInt]
+  have : ((Int.ofNat a.toNat).tmod (Int.ofNat w)) = Int.ofNat (a.toNat % w) :=
+    (Int.ofNat_tmod _ _).symm
+  rw [show (w : Int) = Int.ofNat w from rfl, this, h]; rfl
+
+theorem setWidth_extractLsb_full (w : Nat) (hw : 0 < w) (data : BitVec (8 * w))
+    (hi lo : Nat) (hhi : hi = 8 * w - 1) (hlo : lo = 0) :
+    BitVec.setWidth (8 * w) (Sail.BitVec.extractLsb data hi lo) = data := by
+  subst hhi hlo
+  apply BitVec.eq_of_toNat_eq
+  have hlt := data.isLt
+  have he : 8 * w - 1 - 0 + 1 = 8 * w := by omega
+  simp only [Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
+    BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat, he]
+  rw [Nat.mod_eq_of_lt hlt, Nat.mod_eq_of_lt hlt]
+
+theorem checked_mem_write_w
+    (σ σ' : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (w : Nat) (data : BitVec (8 * w))
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hwpos : 0 < w) (hwle : w ≤ 8)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + w ≤ 0x100000000)
+    (hhiwin : tohostAddr + 16 ≤ a.toNat)
+    (halign : a.toNat % w = 0)
+    (hram : (Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) w data ()).run σ
+      = .ok true σ') :
+    (checked_mem_write (physaddr.Physaddr a) w data
+        (MemoryAccessType.Store mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
+      = .ok (.Ok true) σ' := by
+  have htmod := tmod_toNatInt_of_mod a w halign
+  have hpmaC := pmaCheck_ram_write σ a w _ hpma hwpos hwle rfl hlo hhiram htmod
+  have hpmp := pmp_allows σ (physaddr.Physaddr a) w
+    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
+  have hmmio := within_mmio_writable_ram_false σ a w hbase hwle hlo hhiwin
+  have hsplit := split_misaligned_aligned_w σ a w 0 Splittability.CannotSplit htmod
+  simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
+  unfold checked_mem_write
+  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
+    sys_misaligned_order_decreasing, bits_of_physaddr,
+    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
+    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
+    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
+    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
+    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
+    EStateM.run, EStateM.bind, pure]
+  rw [hpmaC]
+  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
+  rw [hsplit]
+  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
+  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
+    show ((1 : Int) - 1) = 0 from by decide,
+    show Int.toNat 1 = 1 from rfl, Int.toNat_natCast,
+    show Int.toNat 0 = 0 from rfl]
+  rw [untilFuelM]
+  simp only [untilFuelM.go]
+  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
+    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
+    LeanRV64DExecutable.assert, PreSail.assert, if_true,
+    show (↑(0 : Nat) * ((w : Nat) : Int)) = (0 : Int) from by simp, addInt_zero_pa',
+    hpmp, hmmio, Bool.false_eq_true, if_false]
+  rw [setWidth_extractLsb_full w hwpos data _ _ (by omega) (by omega), hram]
+  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
+    beq_self_eq_true, if_true]
 
 theorem checked_mem_write_8
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -241,72 +320,9 @@ theorem checked_mem_write_8
               (a.toNat + 4) (data.extractLsb' 32 8)).insert
               (a.toNat + 5) (data.extractLsb' 40 8)).insert
               (a.toNat + 6) (data.extractLsb' 48 8)).insert
-              (a.toNat + 7) (data.extractLsb' 56 8)) } := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 8 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 8)) = Int.ofNat (a.toNat % 8) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (8 : Int) = Int.ofNat 8 from rfl, this, halign]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 8 (BitVec.ofNat 64 8) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 8
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hmmio := within_mmio_writable_ram_false σ a 8 hbase (by decide) hlo hhiwin
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 8 0 Splittability.CannotSplit).run σ
-      = .ok (1, 8) σ := split_misaligned_aligned_w σ a 8 0 Splittability.CannotSplit htmod
-  have hwval : (BitVec.setWidth (8 * Int.toNat 8)
-      (Sail.BitVec.extractLsb data (8 * (((0:Nat):Int) + 1) * 8 - 1).toNat
-        (8 * ((0:Nat):Int) * 8).toNat)) = data := by
-    have hhi : (8 * (((0:Nat):Int) + 1) * 8 - 1).toNat = 63 := by decide
-    have hlo : (8 * ((0:Nat):Int) * 8).toNat = 0 := by decide
-    have hw : (8 * Int.toNat 8) = 64 := by decide
-    have hlt : data.toNat < 2 ^ 64 := by have h := data.isLt; simpa using h
-    apply BitVec.eq_of_toNat_eq
-    simp only [hhi, hlo, hw, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceAdd]
-    rw [Nat.mod_eq_of_lt hlt]
-    exact Nat.mod_eq_of_lt hlt
-  have hram := write_ram_8 σ a data
-  simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
-  unfold checked_mem_write
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl, show Int.toNat 8 = 8 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (8 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, hmmio, Bool.false_eq_true, if_false]
-  rw [hwval]
-  have hram' : Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) (Int.toNat 8) data () σ
-      = EStateM.Result.ok true
-          { σ with mem := ((((((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)).insert
-              (a.toNat + 4) (data.extractLsb' 32 8)).insert
-              (a.toNat + 5) (data.extractLsb' 40 8)).insert
-              (a.toNat + 6) (data.extractLsb' 48 8)).insert
-              (a.toNat + 7) (data.extractLsb' 56 8)) } := hram
-  rw [hram']
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
-    beq_self_eq_true, if_true]
+              (a.toNat + 7) (data.extractLsb' 56 8)) } :=
+  checked_mem_write_w σ _ a 8 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
+    hlo hhiram hhiwin halign (write_ram_8 σ a data)
 
 theorem checked_mem_write_4
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -330,68 +346,9 @@ theorem checked_mem_write_4
           { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
               (a.toNat + 1) (data.extractLsb' 8 8)).insert
               (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)) } := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 4 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 4)) = Int.ofNat (a.toNat % 4) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (4 : Int) = Int.ofNat 4 from rfl, this, halign]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 4 (BitVec.ofNat 64 4) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 4
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hmmio := within_mmio_writable_ram_false σ a 4 hbase (by decide) hlo hhiwin
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 4 0 Splittability.CannotSplit).run σ
-      = .ok (1, 4) σ := split_misaligned_aligned_w σ a 4 0 Splittability.CannotSplit htmod
-  have hwval : (BitVec.setWidth (8 * Int.toNat 4)
-      (Sail.BitVec.extractLsb data (8 * (((0:Nat):Int) + 1) * 4 - 1).toNat
-        (8 * ((0:Nat):Int) * 4).toNat)) = data := by
-    have hhi : (8 * (((0:Nat):Int) + 1) * 4 - 1).toNat = 31 := by decide
-    have hlo : (8 * ((0:Nat):Int) * 4).toNat = 0 := by decide
-    have hw : (8 * Int.toNat 4) = 32 := by decide
-    have hlt : data.toNat < 2 ^ 32 := by have h := data.isLt; simpa using h
-    apply BitVec.eq_of_toNat_eq
-    simp only [hhi, hlo, hw, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceAdd]
-    rw [Nat.mod_eq_of_lt hlt]
-    exact Nat.mod_eq_of_lt hlt
-  have hram := write_ram_4 σ a data
-  simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
-  unfold checked_mem_write
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl, show Int.toNat 4 = 4 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (4 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, hmmio, Bool.false_eq_true, if_false]
-  rw [hwval]
-  have hram' : Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) (Int.toNat 4) data () σ
-      = EStateM.Result.ok true
-          { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)) } := hram
-  rw [hram']
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
-    beq_self_eq_true, if_true]
+              (a.toNat + 3) (data.extractLsb' 24 8)) } :=
+  checked_mem_write_w σ _ a 4 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
+    hlo hhiram hhiwin halign (write_ram_4 σ a data)
 
 theorem checked_mem_write_2
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -413,66 +370,9 @@ theorem checked_mem_write_2
         page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
       = .ok (.Ok true)
           { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)) } := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 2 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 2)) = Int.ofNat (a.toNat % 2) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (2 : Int) = Int.ofNat 2 from rfl, this, halign]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 2 (BitVec.ofNat 64 2) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 2
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hmmio := within_mmio_writable_ram_false σ a 2 hbase (by decide) hlo hhiwin
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 2 0 Splittability.CannotSplit).run σ
-      = .ok (1, 2) σ := split_misaligned_aligned_w σ a 2 0 Splittability.CannotSplit htmod
-  have hwval : (BitVec.setWidth (8 * Int.toNat 2)
-      (Sail.BitVec.extractLsb data (8 * (((0:Nat):Int) + 1) * 2 - 1).toNat
-        (8 * ((0:Nat):Int) * 2).toNat)) = data := by
-    have hhi : (8 * (((0:Nat):Int) + 1) * 2 - 1).toNat = 15 := by decide
-    have hlo : (8 * ((0:Nat):Int) * 2).toNat = 0 := by decide
-    have hw : (8 * Int.toNat 2) = 16 := by decide
-    have hlt : data.toNat < 2 ^ 16 := by have h := data.isLt; simpa using h
-    apply BitVec.eq_of_toNat_eq
-    simp only [hhi, hlo, hw, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceAdd]
-    rw [Nat.mod_eq_of_lt hlt]
-    exact Nat.mod_eq_of_lt hlt
-  have hram := write_ram_2 σ a data
-  simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
-  unfold checked_mem_write
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl, show Int.toNat 2 = 2 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (2 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, hmmio, Bool.false_eq_true, if_false]
-  rw [hwval]
-  have hram' : Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) (Int.toNat 2) data () σ
-      = EStateM.Result.ok true
-          { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)) } := hram
-  rw [hram']
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
-    beq_self_eq_true, if_true]
+              (a.toNat + 1) (data.extractLsb' 8 8)) } :=
+  checked_mem_write_w σ _ a 2 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
+    hlo hhiram hhiwin halign (write_ram_2 σ a data)
 
 theorem checked_mem_write_1
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -492,65 +392,48 @@ theorem checked_mem_write_1
         (MemoryAccessType.Store mem_payload.Data)
         page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
       = .ok (.Ok true)
-          { σ with mem := σ.mem.insert a.toNat data } := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 1 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 1)) = Int.ofNat (a.toNat % 1) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (1 : Int) = Int.ofNat 1 from rfl, this, Nat.mod_one]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 1 (BitVec.ofNat 64 1) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 1
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hmmio := within_mmio_writable_ram_false σ a 1 hbase (by decide) hlo hhiwin
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 1 0 Splittability.CannotSplit).run σ
-      = .ok (1, 1) σ := split_misaligned_aligned_w σ a 1 0 Splittability.CannotSplit htmod
-  have hwval : (BitVec.setWidth (8 * Int.toNat 1)
-      (Sail.BitVec.extractLsb data (8 * (((0:Nat):Int) + 1) * 1 - 1).toNat
-        (8 * ((0:Nat):Int) * 1).toNat)) = data := by
-    have hhi : (8 * (((0:Nat):Int) + 1) * 1 - 1).toNat = 7 := by decide
-    have hlo : (8 * ((0:Nat):Int) * 1).toNat = 0 := by decide
-    have hw : (8 * Int.toNat 1) = 8 := by decide
-    have hlt : data.toNat < 2 ^ 8 := by have h := data.isLt; simpa using h
-    apply BitVec.eq_of_toNat_eq
-    simp only [hhi, hlo, hw, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceAdd]
-    rw [Nat.mod_eq_of_lt hlt]
-    exact Nat.mod_eq_of_lt hlt
-  have hram := write_ram_1 σ a data
-  simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
-  unfold checked_mem_write
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (1 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, hmmio, Bool.false_eq_true, if_false]
-  rw [hwval]
-  have hram' : Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) (Int.toNat 1) data () σ
-      = EStateM.Result.ok true
-          { σ with mem := σ.mem.insert a.toNat data } := hram
-  rw [hram']
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
-    beq_self_eq_true, if_true]
+          { σ with mem := σ.mem.insert a.toNat data } :=
+  checked_mem_write_w σ _ a 1 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
+    hlo hhiram hhiwin (Nat.mod_one _) (write_ram_1 σ a data)
+
+theorem mem_write_value_w
+    (σ σ' : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (w : Nat) (data : BitVec (8 * w))
+    (vmstatus : RegisterType Register.mstatus)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hwpos : 0 < w) (hwle : w ≤ 8)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + w ≤ 0x100000000)
+    (hhiwin : tohostAddr + 16 ≤ a.toNat)
+    (halign : a.toNat % w = 0)
+    (hram : (Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) w data ()).run σ
+      = .ok true σ') :
+    (mem_write_value (physaddr.Physaddr a) w data
+        (MemoryAccessType.Store mem_payload.Data)
+        page_based_mem_type.PBMT_PMA false false false).run σ
+      = .ok (.Ok true) σ' := by
+  have hcmw := checked_mem_write_w σ σ' a w data vpmpaddr hwpos hwle hpma hcfg haddr hbase
+    hlo hhiram hhiwin halign hram
+  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
+  simp only [EStateM.run] at hcmw hep
+  unfold mem_write_value mem_write_value_meta mem_write_value_priv_meta
+  simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
+    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
+  rw [hep]
+  simp only [default_meta]
+  rw [hcmw]
 
 theorem mem_write_value_8
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -583,18 +466,9 @@ theorem mem_write_value_8
               (a.toNat + 4) (data.extractLsb' 32 8)).insert
               (a.toNat + 5) (data.extractLsb' 40 8)).insert
               (a.toNat + 6) (data.extractLsb' 48 8)).insert
-              (a.toNat + 7) (data.extractLsb' 56 8)) } := by
-  have hcmw := checked_mem_write_8 σ a data vpmpaddr hpma hcfg haddr hbase hlo hhiram
-    hhiwin halign
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  simp only [EStateM.run] at hcmw hep
-  unfold mem_write_value mem_write_value_meta mem_write_value_priv_meta
-  simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [EStateM.bind, default_meta]
-  rw [hcmw]
+              (a.toNat + 7) (data.extractLsb' 56 8)) } :=
+  mem_write_value_w σ _ a 8 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
+    hpma hcfg haddr hbase hlo hhiram hhiwin halign (write_ram_8 σ a data)
 
 theorem mem_write_value_4
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -623,18 +497,9 @@ theorem mem_write_value_4
           { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
               (a.toNat + 1) (data.extractLsb' 8 8)).insert
               (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)) } := by
-  have hcmw := checked_mem_write_4 σ a data vpmpaddr hpma hcfg haddr hbase hlo hhiram
-    hhiwin halign
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  simp only [EStateM.run] at hcmw hep
-  unfold mem_write_value mem_write_value_meta mem_write_value_priv_meta
-  simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [default_meta]
-  rw [hcmw]
+              (a.toNat + 3) (data.extractLsb' 24 8)) } :=
+  mem_write_value_w σ _ a 4 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
+    hpma hcfg haddr hbase hlo hhiram hhiwin halign (write_ram_4 σ a data)
 
 theorem mem_write_value_2
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -661,18 +526,9 @@ theorem mem_write_value_2
         page_based_mem_type.PBMT_PMA false false false).run σ
       = .ok (.Ok true)
           { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)) } := by
-  have hcmw := checked_mem_write_2 σ a data vpmpaddr hpma hcfg haddr hbase hlo hhiram
-    hhiwin halign
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  simp only [EStateM.run] at hcmw hep
-  unfold mem_write_value mem_write_value_meta mem_write_value_priv_meta
-  simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [default_meta]
-  rw [hcmw]
+              (a.toNat + 1) (data.extractLsb' 8 8)) } :=
+  mem_write_value_w σ _ a 2 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
+    hpma hcfg haddr hbase hlo hhiram hhiwin halign (write_ram_2 σ a data)
 
 theorem mem_write_value_1
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -696,17 +552,69 @@ theorem mem_write_value_1
     (mem_write_value (physaddr.Physaddr a) 1 data
         (MemoryAccessType.Store mem_payload.Data)
         page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok true) { σ with mem := σ.mem.insert a.toNat data } := by
-  have hcmw := checked_mem_write_1 σ a data vpmpaddr hpma hcfg haddr hbase hlo hhiram hhiwin
+      = .ok (.Ok true) { σ with mem := σ.mem.insert a.toNat data } :=
+  mem_write_value_w σ _ a 1 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
+    hpma hcfg haddr hbase hlo hhiram hhiwin (Nat.mod_one _) (write_ram_1 σ a data)
+
+theorem mem_write_ea_w
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (w : Nat)
+    (vmstatus : RegisterType Register.mstatus)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hwpos : 0 < w) (hwle : w ≤ 8)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + w ≤ 0x100000000)
+    (halign : a.toNat % w = 0) :
+    (mem_write_ea (physaddr.Physaddr a) w (MemoryAccessType.Store mem_payload.Data)
+        page_based_mem_type.PBMT_PMA false false false).run σ
+      = .ok (.Ok ()) σ := by
+  have htmod := tmod_toNatInt_of_mod a w halign
+  have hpmaC := pmaCheck_ram_write σ a w _ hpma hwpos hwle rfl hlo hhiram htmod
+  have hpmp := pmp_allows σ (physaddr.Physaddr a) w
+    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
   have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  simp only [EStateM.run] at hcmw hep
-  unfold mem_write_value mem_write_value_meta mem_write_value_priv_meta
-  simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+  have hsplit := split_misaligned_aligned_w σ a w 0 Splittability.CannotSplit htmod
+  simp only [EStateM.run] at hpmaC hpmp hep hsplit
+  unfold mem_write_ea
+  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
+    sys_misaligned_order_decreasing, bits_of_physaddr, write_ram_ea,
+    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
+    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
+    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
+    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
+    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
+    EStateM.run, EStateM.bind, pure, LeanRV64DExecutable.readReg,
+    Sail.ConcurrencyInterfaceV1.PreSail.readReg,
+    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
+  simp only [EStateM.pure, EStateM.map, EStateM.bind, ExceptT.bindCont,
     LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
     get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
   rw [hep]
-  simp only [default_meta]
-  rw [hcmw]
+  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
+  rw [hpmaC]
+  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
+  rw [hsplit]
+  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
+  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
+    show ((1 : Int) - 1) = 0 from by decide,
+    show Int.toNat 1 = 1 from rfl, Int.toNat_natCast,
+    show Int.toNat 0 = 0 from rfl]
+  rw [untilFuelM]
+  simp only [untilFuelM.go]
+  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
+    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
+    LeanRV64DExecutable.assert, PreSail.assert, if_true,
+    show (↑(0 : Nat) * ((w : Nat) : Int)) = (0 : Int) from by simp, addInt_zero_pa',
+    hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
 
 theorem mem_write_ea_8
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -727,51 +635,9 @@ theorem mem_write_ea_8
     (halign : a.toNat % 8 = 0) :
     (mem_write_ea (physaddr.Physaddr a) 8 (MemoryAccessType.Store mem_payload.Data)
         page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok ()) σ := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 8 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 8)) = Int.ofNat (a.toNat % 8) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (8 : Int) = Int.ofNat 8 from rfl, this, halign]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 8 (BitVec.ofNat 64 8) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 8
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 8 0 Splittability.CannotSplit).run σ
-      = .ok (1, 8) σ := split_misaligned_aligned_w σ a 8 0 Splittability.CannotSplit htmod
-  simp only [EStateM.run] at hpmaC hpmp hep hsplit
-  unfold mem_write_ea
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr, write_ram_ea,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure, LeanRV64DExecutable.readReg,
-    Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  simp only [EStateM.pure, EStateM.map, EStateM.bind, ExceptT.bindCont,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl, show Int.toNat 8 = 8 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (8 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
+      = .ok (.Ok ()) σ :=
+  mem_write_ea_w σ a 8 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
+    haddr hlo hhiram halign
 
 theorem mem_write_ea_4
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -792,51 +658,9 @@ theorem mem_write_ea_4
     (halign : a.toNat % 4 = 0) :
     (mem_write_ea (physaddr.Physaddr a) 4 (MemoryAccessType.Store mem_payload.Data)
         page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok ()) σ := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 4 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 4)) = Int.ofNat (a.toNat % 4) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (4 : Int) = Int.ofNat 4 from rfl, this, halign]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 4 (BitVec.ofNat 64 4) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 4
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 4 0 Splittability.CannotSplit).run σ
-      = .ok (1, 4) σ := split_misaligned_aligned_w σ a 4 0 Splittability.CannotSplit htmod
-  simp only [EStateM.run] at hpmaC hpmp hep hsplit
-  unfold mem_write_ea
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr, write_ram_ea,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure, LeanRV64DExecutable.readReg,
-    Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  simp only [EStateM.pure, EStateM.map, EStateM.bind, ExceptT.bindCont,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl, show Int.toNat 4 = 4 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (4 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
+      = .ok (.Ok ()) σ :=
+  mem_write_ea_w σ a 4 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
+    haddr hlo hhiram halign
 
 theorem mem_write_ea_2
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -857,51 +681,9 @@ theorem mem_write_ea_2
     (halign : a.toNat % 2 = 0) :
     (mem_write_ea (physaddr.Physaddr a) 2 (MemoryAccessType.Store mem_payload.Data)
         page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok ()) σ := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 2 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 2)) = Int.ofNat (a.toNat % 2) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (2 : Int) = Int.ofNat 2 from rfl, this, halign]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 2 (BitVec.ofNat 64 2) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 2
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 2 0 Splittability.CannotSplit).run σ
-      = .ok (1, 2) σ := split_misaligned_aligned_w σ a 2 0 Splittability.CannotSplit htmod
-  simp only [EStateM.run] at hpmaC hpmp hep hsplit
-  unfold mem_write_ea
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr, write_ram_ea,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure, LeanRV64DExecutable.readReg,
-    Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  simp only [EStateM.pure, EStateM.map, EStateM.bind, ExceptT.bindCont,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl, show Int.toNat 2 = 2 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (2 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
+      = .ok (.Ok ()) σ :=
+  mem_write_ea_w σ a 2 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
+    haddr hlo hhiram halign
 
 theorem mem_write_ea_1
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -921,51 +703,9 @@ theorem mem_write_ea_1
     (hhiram : a.toNat + 1 ≤ 0x100000000) :
     (mem_write_ea (physaddr.Physaddr a) 1 (MemoryAccessType.Store mem_payload.Data)
         page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok ()) σ := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 1 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 1)) = Int.ofNat (a.toNat % 1) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (1 : Int) = Int.ofNat 1 from rfl, this, Nat.mod_one]; rfl
-  have hpmaC := pmaCheck_ram_write σ a 1 (BitVec.ofNat 64 1) hpma (by decide) (by decide)
-    (by decide) hlo hhiram htmod
-  have hpmp := pmp_allows σ (physaddr.Physaddr a) 1
-    (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  have hsplit : (split_misaligned (physaddr.Physaddr a) 1 0 Splittability.CannotSplit).run σ
-      = .ok (1, 1) σ := split_misaligned_aligned_w σ a 1 0 Splittability.CannotSplit htmod
-  simp only [EStateM.run] at hpmaC hpmp hep hsplit
-  unfold mem_write_ea
-  simp only [check_pma_with_pmp_priority, write_kind_of_flags, misaligned_order,
-    sys_misaligned_order_decreasing, bits_of_physaddr, write_ram_ea,
-    LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure, LeanRV64DExecutable.readReg,
-    Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  simp only [EStateM.pure, EStateM.map, EStateM.bind, ExceptT.bindCont,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hpmaC]
-  simp only [EStateM.pure, ExceptT.bindCont, EStateM.map, EStateM.bind]
-  rw [hsplit]
-  simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, EStateM.map]
-  simp only [Int.reduceNeg, Bool.false_eq_true, if_false,
-    show ((1 : Int) - 1) = 0 from by decide,
-    show Int.toNat 1 = 1 from rfl,
-    show Int.toNat 0 = 0 from rfl]
-  rw [untilFuelM]
-  simp only [untilFuelM.go]
-  simp only [ExceptT.bind, ExceptT.bindCont, ExceptT.mk, ExceptT.pure,
-    EStateM.map, EStateM.bind, EStateM.pure, bind, pure, Pure.pure,
-    LeanRV64DExecutable.assert, PreSail.assert, if_true,
-    show (↑(0 : Nat) * (1 : Int)) = (0 : Int) from by decide, addInt_zero_pa',
-    hpmp, Bool.false_eq_true, if_false, beq_self_eq_true]
+      = .ok (.Ok ()) σ :=
+  mem_write_ea_w σ a 1 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
+    haddr hlo hhiram (Nat.mod_one _)
 
 theorem translateAddr_machine_store
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -1078,374 +818,6 @@ theorem and_page_mask_shift (a : BitVec 64) :
   · simp [h]
   · have hi : 12 + (i - 12) = i := by omega
     rw [hi, BitVec.getLsbD_eq_getElem (by omega)]; simp [h, Bool.and_comm]
-
-theorem split_on_page_boundary_store_8
-    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
-    (halign : a.toNat % 8 = 0) :
-    (split_on_page_boundary a 8).run σ = .ok (((8 : Nat) : Int), 0) σ := by
-  have hmask : (Sail.BitVec.updateSubrange ((ones (n := 64)) : BitVec 64)
-      (Functions.pagesize_bits -i 1) 0 (zeros (n := ((12 -i 1) -i (0 -i 1))))) = 0xFFFFFFFFFFFFF000#64 := by
-    apply BitVec.eq_of_toNat_eq; decide
-  simp only [split_on_page_boundary, Sail.BitVec.length, hmask]
-  have hai : BitVec.addInt a ((8 : Nat) : Int) = a + 8#64 := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.addInt]; rfl
-  have hsi : BitVec.subInt (a + 8#64) 1 = a + 7#64 := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.subInt]
-    have h64 : a.toNat < 2 ^ 64 := a.isLt
-    bv_omega
-  have hintra : ((a &&& 0xFFFFFFFFFFFFF000#64)
-      == (BitVec.subInt (BitVec.addInt a ((8 : Nat) : Int)) 1 &&& 0xFFFFFFFFFFFFF000#64)) = true := by
-    rw [hai, hsi, and_page_mask_shift, and_page_mask_shift]
-    simp only [beq_iff_eq]
-    apply BitVec.eq_of_toNat_eq
-    rw [BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight, BitVec.toNat_shiftLeft,
-      BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow, Nat.shiftRight_eq_div_pow]
-    have h64 : a.toNat < 2^64 := a.isLt
-    have hadd : (a + 7#64).toNat = a.toNat + 7 := by rw [BitVec.toNat_add]; simp; omega
-    rw [hadd]; simp; omega
-  simp only [hintra, if_true, bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
-
-theorem split_on_page_boundary_store_4
-    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
-    (halign : a.toNat % 4 = 0) :
-    (split_on_page_boundary a 4).run σ = .ok (((4 : Nat) : Int), 0) σ := by
-  have hmask : (Sail.BitVec.updateSubrange ((ones (n := 64)) : BitVec 64)
-      (Functions.pagesize_bits -i 1) 0 (zeros (n := ((12 -i 1) -i (0 -i 1))))) = 0xFFFFFFFFFFFFF000#64 := by
-    apply BitVec.eq_of_toNat_eq; decide
-  simp only [split_on_page_boundary, Sail.BitVec.length, hmask]
-  have hai : BitVec.addInt a ((4 : Nat) : Int) = a + 4#64 := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.addInt]; rfl
-  have hsi : BitVec.subInt (a + 4#64) 1 = a + 3#64 := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.subInt]
-    have h64 : a.toNat < 2 ^ 64 := a.isLt
-    bv_omega
-  have hintra : ((a &&& 0xFFFFFFFFFFFFF000#64)
-      == (BitVec.subInt (BitVec.addInt a ((4 : Nat) : Int)) 1 &&& 0xFFFFFFFFFFFFF000#64)) = true := by
-    rw [hai, hsi, and_page_mask_shift, and_page_mask_shift]
-    simp only [beq_iff_eq]
-    apply BitVec.eq_of_toNat_eq
-    rw [BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight, BitVec.toNat_shiftLeft,
-      BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow, Nat.shiftRight_eq_div_pow]
-    have h64 : a.toNat < 2^64 := a.isLt
-    have hadd : (a + 3#64).toNat = a.toNat + 3 := by rw [BitVec.toNat_add]; simp; omega
-    rw [hadd]; simp; omega
-  simp only [hintra, if_true, bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
-
-theorem split_on_page_boundary_store_2
-    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
-    (halign : a.toNat % 2 = 0) :
-    (split_on_page_boundary a 2).run σ = .ok (((2 : Nat) : Int), 0) σ := by
-  have hmask : (Sail.BitVec.updateSubrange ((ones (n := 64)) : BitVec 64)
-      (Functions.pagesize_bits -i 1) 0 (zeros (n := ((12 -i 1) -i (0 -i 1))))) = 0xFFFFFFFFFFFFF000#64 := by
-    apply BitVec.eq_of_toNat_eq; decide
-  simp only [split_on_page_boundary, Sail.BitVec.length, hmask]
-  have hai : BitVec.addInt a ((2 : Nat) : Int) = a + 2#64 := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.addInt]; rfl
-  have hsi : BitVec.subInt (a + 2#64) 1 = a + 1#64 := by
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.subInt]
-    have h64 : a.toNat < 2 ^ 64 := a.isLt
-    bv_omega
-  have hintra : ((a &&& 0xFFFFFFFFFFFFF000#64)
-      == (BitVec.subInt (BitVec.addInt a ((2 : Nat) : Int)) 1 &&& 0xFFFFFFFFFFFFF000#64)) = true := by
-    rw [hai, hsi, and_page_mask_shift, and_page_mask_shift]
-    simp only [beq_iff_eq]
-    apply BitVec.eq_of_toNat_eq
-    rw [BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight, BitVec.toNat_shiftLeft,
-      BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow, Nat.shiftRight_eq_div_pow]
-    have h64 : a.toNat < 2^64 := a.isLt
-    have hadd : (a + 1#64).toNat = a.toNat + 1 := by rw [BitVec.toNat_add]; simp; omega
-    rw [hadd]; simp; omega
-  simp only [hintra, if_true, bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
-
-theorem vmem_write_addr_8
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 8))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 8 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 8 = 0) :
-    (vmem_write_addr (virtaddr.Virtaddr a) 8 data
-        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)).insert
-              (a.toNat + 4) (data.extractLsb' 32 8)).insert
-              (a.toNat + 5) (data.extractLsb' 40 8)).insert
-              (a.toNat + 6) (data.extractLsb' 48 8)).insert
-              (a.toNat + 7) (data.extractLsb' 56 8)) } := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 8 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 8)) = Int.ofNat (a.toNat % 8) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (8 : Int) = Int.ofNat 8 from rfl, this, halign]; rfl
-  have hsplit := split_on_page_boundary_store_8 σ a halign
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  have htm := translationMode_machine σ
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hea := mem_write_ea_8 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram halign
-  have hmwv := mem_write_value_8 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin halign
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  simp only [EStateM.run] at hsplit hep htm htr hea hmwv
-  unfold vmem_write_addr
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure, EStateM.pure,
-    is_aligned_vaddr, bits_of_virtaddr, sys_misaligned_order_decreasing,
-    is_store_conditional, Functions.not,
-    show (!((BitVec.toNatInt a).tmod ((8:Nat):Int) == 0)) = false from by
-      rw [show ((8:Nat):Int) = (8:Int) from rfl, htmod]; rfl,
-    Bool.not_true, Bool.false_and, Bool.and_false, if_false, if_true,
-    Bool.false_eq_true]
-  rw [hsplit]
-  simp only [bind, Bind.bind, pure, Pure.pure, EStateM.bind, EStateM.pure, ExceptT.bindCont,
-    EStateM.map, LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [bind, Bind.bind, EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map]
-  rw [htm]
-  simp only [bne, bind, Bind.bind, EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map,
-    show (SATPMode.Bare != SATPMode.Bare) = false from by decide,
-    Bool.false_and, Bool.and_false, if_false, Bool.false_eq_true]
-  rw [htr]
-  simp only [EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map, hze,
-    LeanRV64DExecutable.assert, PreSail.assert,
-    show ((false : Bool) == false) = true from by decide, if_true,
-    Bool.and_false, Bool.false_and, if_false, Bool.false_eq_true]
-  simp only [bind, Bind.bind, pure, Pure.pure, EStateM.bind, EStateM.pure, ExceptT.bindCont,
-    EStateM.map, ite_self, show ((8:Nat):Int).toNat = 8 from by decide,
-    show (!(SATPMode.Bare == SATPMode.Bare) && (0 : Int) >b 0) = false from by decide]
-  rw [hea]
-  simp only [EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map]
-  rw [show (if (!(SATPMode.Bare == SATPMode.Bare) && (0 : Int) >b 0) = true
-      then ((8:Nat):Int) else ((8:Nat):Int)) = ((8:Nat):Int) from ite_self _]
-  simp only [Int.toNat_natCast]
-  have hwval : (BitVec.setWidth (8 * 8)
-      (Sail.BitVec.extractLsb data (8 * ((8:Nat):Int) - 1).toNat 0)) = data := by
-    have hidx : (8 * ((8:Nat):Int) - 1).toNat = 63 := by decide
-    apply BitVec.eq_of_toNat_eq
-    simp only [hidx, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceMul]
-    have hlt : data.toNat < 2 ^ 64 := by have h := data.isLt; simpa using h
-    rw [Nat.mod_eq_of_lt hlt]
-    exact Nat.mod_eq_of_lt hlt
-  rw [hwval, hmwv]
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, EStateM.pure, pure, Pure.pure,
-    Bool.true_and, Bool.and_true]
-  rfl
-
-theorem vmem_write_addr_4
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 4))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 4 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 4 = 0) :
-    (vmem_write_addr (virtaddr.Virtaddr a) 4 data
-        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert (a.toNat + 1) (data.extractLsb' 8 8)).insert (a.toNat + 2) (data.extractLsb' 16 8)).insert (a.toNat + 3) (data.extractLsb' 24 8)) } := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 4 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 4)) = Int.ofNat (a.toNat % 4) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (4 : Int) = Int.ofNat 4 from rfl, this, halign]; rfl
-  have hsplit := split_on_page_boundary_store_4 σ a halign
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  have htm := translationMode_machine σ
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hea := mem_write_ea_4 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram halign
-  have hmwv := mem_write_value_4 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin halign
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  simp only [EStateM.run] at hsplit hep htm htr hea hmwv
-  unfold vmem_write_addr
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure, EStateM.pure,
-    is_aligned_vaddr, bits_of_virtaddr, sys_misaligned_order_decreasing,
-    is_store_conditional, Functions.not,
-    show (!((BitVec.toNatInt a).tmod ((4:Nat):Int) == 0)) = false from by
-      rw [show ((4:Nat):Int) = (4:Int) from rfl, htmod]; rfl,
-    Bool.not_true, Bool.false_and, Bool.and_false, if_false, if_true,
-    Bool.false_eq_true]
-  rw [hsplit]
-  simp only [bind, Bind.bind, pure, Pure.pure, EStateM.bind, EStateM.pure, ExceptT.bindCont,
-    EStateM.map, LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [bind, Bind.bind, EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map]
-  rw [htm]
-  simp only [bne, bind, Bind.bind, EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map,
-    show (SATPMode.Bare != SATPMode.Bare) = false from by decide,
-    Bool.false_and, Bool.and_false, if_false, Bool.false_eq_true]
-  rw [htr]
-  simp only [EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map, hze,
-    LeanRV64DExecutable.assert, PreSail.assert,
-    show ((false : Bool) == false) = true from by decide, if_true,
-    Bool.and_false, Bool.false_and, if_false, Bool.false_eq_true]
-  simp only [bind, Bind.bind, pure, Pure.pure, EStateM.bind, EStateM.pure, ExceptT.bindCont,
-    EStateM.map, ite_self, show ((4:Nat):Int).toNat = 4 from by decide,
-    show (!(SATPMode.Bare == SATPMode.Bare) && (0 : Int) >b 0) = false from by decide]
-  rw [hea]
-  simp only [EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map]
-  rw [show (if (!(SATPMode.Bare == SATPMode.Bare) && (0 : Int) >b 0) = true
-      then ((4:Nat):Int) else ((4:Nat):Int)) = ((4:Nat):Int) from ite_self _]
-  simp only [Int.toNat_natCast]
-  have hwval : (BitVec.setWidth (8 * 4)
-      (Sail.BitVec.extractLsb data (8 * ((4:Nat):Int) - 1).toNat 0)) = data := by
-    have hidx : (8 * ((4:Nat):Int) - 1).toNat = 31 := by decide
-    apply BitVec.eq_of_toNat_eq
-    simp only [hidx, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceMul]
-    have hlt : data.toNat < 2 ^ 32 := by have h := data.isLt; simpa using h
-    omega
-  rw [hwval, hmwv]
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, EStateM.pure, pure, Pure.pure,
-    Bool.true_and, Bool.and_true]
-  rfl
-
-theorem vmem_write_addr_2
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 2))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 2 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 2 = 0) :
-    (vmem_write_addr (virtaddr.Virtaddr a) 2 data
-        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert (a.toNat + 1) (data.extractLsb' 8 8)) } := by
-  have htmod : Int.tmod (BitVec.toNatInt a) 2 = 0 := by
-    simp only [BitVec.toNatInt]
-    have : ((Int.ofNat a.toNat).tmod (Int.ofNat 2)) = Int.ofNat (a.toNat % 2) :=
-      (Int.ofNat_tmod _ _).symm
-    rw [show (2 : Int) = Int.ofNat 2 from rfl, this, halign]; rfl
-  have hsplit := split_on_page_boundary_store_2 σ a halign
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
-  have htm := translationMode_machine σ
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hea := mem_write_ea_2 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram halign
-  have hmwv := mem_write_value_2 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin halign
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  simp only [EStateM.run] at hsplit hep htm htr hea hmwv
-  unfold vmem_write_addr
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, pure, EStateM.pure,
-    is_aligned_vaddr, bits_of_virtaddr, sys_misaligned_order_decreasing,
-    is_store_conditional, Functions.not,
-    show (!((BitVec.toNatInt a).tmod ((2:Nat):Int) == 0)) = false from by
-      rw [show ((2:Nat):Int) = (2:Int) from rfl, htmod]; rfl,
-    Bool.not_true, Bool.false_and, Bool.and_false, if_false, if_true,
-    Bool.false_eq_true]
-  rw [hsplit]
-  simp only [bind, Bind.bind, pure, Pure.pure, EStateM.bind, EStateM.pure, ExceptT.bindCont,
-    EStateM.map, LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [bind, Bind.bind, EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map]
-  rw [htm]
-  simp only [bne, bind, Bind.bind, EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map,
-    show (SATPMode.Bare != SATPMode.Bare) = false from by decide,
-    Bool.false_and, Bool.and_false, if_false, Bool.false_eq_true]
-  rw [htr]
-  simp only [EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map, hze,
-    LeanRV64DExecutable.assert, PreSail.assert,
-    show ((false : Bool) == false) = true from by decide, if_true,
-    Bool.and_false, Bool.false_and, if_false, Bool.false_eq_true]
-  simp only [bind, Bind.bind, pure, Pure.pure, EStateM.bind, EStateM.pure, ExceptT.bindCont,
-    EStateM.map, ite_self, show ((2:Nat):Int).toNat = 2 from by decide,
-    show (!(SATPMode.Bare == SATPMode.Bare) && (0 : Int) >b 0) = false from by decide]
-  rw [hea]
-  simp only [EStateM.bind, EStateM.pure, ExceptT.bindCont, EStateM.map]
-  rw [show (if (!(SATPMode.Bare == SATPMode.Bare) && (0 : Int) >b 0) = true
-      then ((2:Nat):Int) else ((2:Nat):Int)) = ((2:Nat):Int) from ite_self _]
-  simp only [Int.toNat_natCast]
-  have hwval : (BitVec.setWidth (8 * 2)
-      (Sail.BitVec.extractLsb data (8 * ((2:Nat):Int) - 1).toNat 0)) = data := by
-    have hidx : (8 * ((2:Nat):Int) - 1).toNat = 15 := by decide
-    apply BitVec.eq_of_toNat_eq
-    simp only [hidx, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceMul]
-    have hlt : data.toNat < 2 ^ 16 := by have h := data.isLt; simpa using h
-    omega
-  rw [hwval, hmwv]
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, ExceptT.pure, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, EStateM.pure, pure, Pure.pure,
-    Bool.true_and, Bool.and_true]
-  rfl
 
 theorem and_page_mask_toNat_store (a : BitVec 64) :
     (a &&& 0xFFFFFFFFFFFFF000#64).toNat = a.toNat / 4096 * 4096 := by
@@ -1565,6 +937,147 @@ theorem vmem_write_addr_w
     Bool.true_and, Bool.and_true]
   rfl
 
+theorem vmem_write_addr_ram_w
+    (σ σ' : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (w : Nat) (data : BitVec (8 * w))
+    (vmstatus : RegisterType Register.mstatus)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hwpos : 0 < w) (hwle : w ≤ 8)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + w ≤ 0x100000000)
+    (hhiwin : tohostAddr + 16 ≤ a.toNat)
+    (halign : a.toNat % w = 0)
+    (hpage : (a.toNat + (w - 1)) / 4096 = a.toNat / 4096)
+    (hram : (Functions.write_ram write_kind.Write_plain (physaddr.Physaddr a) w data ()).run σ
+      = .ok true σ') :
+    (vmem_write_addr (virtaddr.Virtaddr a) w data
+        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
+      = .ok (.Ok true) σ' :=
+  vmem_write_addr_w σ σ' a w data vmstatus hwpos hwle halign hpage hmstatus hpriv hmprv
+    (translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv)
+    (mem_write_ea_w σ a w vmstatus vpmpaddr hwpos hwle hpriv hmstatus hmprv hpma hcfg haddr
+      hlo hhiram halign)
+    (mem_write_value_w σ σ' a w data vmstatus vpmpaddr hwpos hwle hpriv hmstatus hmprv hpma
+      hcfg haddr hbase hlo hhiram hhiwin halign hram)
+    (setWidth_extractLsb_full w hwpos data _ _ (by omega) rfl)
+
+theorem split_on_page_boundary_store_8
+    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
+    (halign : a.toNat % 8 = 0) :
+    (split_on_page_boundary a 8).run σ = .ok (((8 : Nat) : Int), 0) σ :=
+  split_on_page_boundary_store_w σ a 8 (by decide) (by decide) (by omega)
+
+theorem split_on_page_boundary_store_4
+    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
+    (halign : a.toNat % 4 = 0) :
+    (split_on_page_boundary a 4).run σ = .ok (((4 : Nat) : Int), 0) σ :=
+  split_on_page_boundary_store_w σ a 4 (by decide) (by decide) (by omega)
+
+theorem split_on_page_boundary_store_2
+    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
+    (halign : a.toNat % 2 = 0) :
+    (split_on_page_boundary a 2).run σ = .ok (((2 : Nat) : Int), 0) σ :=
+  split_on_page_boundary_store_w σ a 2 (by decide) (by decide) (by omega)
+
+theorem vmem_write_addr_8
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (data : BitVec (8 * 8))
+    (vmstatus : RegisterType Register.mstatus)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + 8 ≤ 0x100000000)
+    (hhiwin : tohostAddr + 16 ≤ a.toNat)
+    (halign : a.toNat % 8 = 0) :
+    (vmem_write_addr (virtaddr.Virtaddr a) 8 data
+        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
+      = .ok (.Ok true)
+          { σ with mem := ((((((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
+              (a.toNat + 1) (data.extractLsb' 8 8)).insert
+              (a.toNat + 2) (data.extractLsb' 16 8)).insert
+              (a.toNat + 3) (data.extractLsb' 24 8)).insert
+              (a.toNat + 4) (data.extractLsb' 32 8)).insert
+              (a.toNat + 5) (data.extractLsb' 40 8)).insert
+              (a.toNat + 6) (data.extractLsb' 48 8)).insert
+              (a.toNat + 7) (data.extractLsb' 56 8)) } :=
+  vmem_write_addr_ram_w σ _ a 8 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus
+    hmprv hpma hcfg haddr hbase hlo hhiram hhiwin halign (by omega) (write_ram_8 σ a data)
+
+theorem vmem_write_addr_4
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (data : BitVec (8 * 4))
+    (vmstatus : RegisterType Register.mstatus)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + 4 ≤ 0x100000000)
+    (hhiwin : tohostAddr + 16 ≤ a.toNat)
+    (halign : a.toNat % 4 = 0) :
+    (vmem_write_addr (virtaddr.Virtaddr a) 4 data
+        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
+      = .ok (.Ok true)
+          { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert (a.toNat + 1) (data.extractLsb' 8 8)).insert (a.toNat + 2) (data.extractLsb' 16 8)).insert (a.toNat + 3) (data.extractLsb' 24 8)) } :=
+  vmem_write_addr_ram_w σ _ a 4 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus
+    hmprv hpma hcfg haddr hbase hlo hhiram hhiwin halign (by omega) (write_ram_4 σ a data)
+
+theorem vmem_write_addr_2
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (data : BitVec (8 * 2))
+    (vmstatus : RegisterType Register.mstatus)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + 2 ≤ 0x100000000)
+    (hhiwin : tohostAddr + 16 ≤ a.toNat)
+    (halign : a.toNat % 2 = 0) :
+    (vmem_write_addr (virtaddr.Virtaddr a) 2 data
+        (MemoryAccessType.Store mem_payload.Data) false false false).run σ
+      = .ok (.Ok true)
+          { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert (a.toNat + 1) (data.extractLsb' 8 8)) } :=
+  vmem_write_addr_ram_w σ _ a 2 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus
+    hmprv hpma hcfg haddr hbase hlo hhiram hhiwin halign (by omega) (write_ram_2 σ a data)
+
 theorem vmem_write_addr_1
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (data : BitVec (8 * 1))
@@ -1587,23 +1100,8 @@ theorem vmem_write_addr_1
     (vmem_write_addr (virtaddr.Virtaddr a) 1 data
         (MemoryAccessType.Store mem_payload.Data) false false false).run σ
       = .ok (.Ok true)
-          { σ with mem := σ.mem.insert a.toNat data } := by
-  have halign : a.toNat % 1 = 0 := Nat.mod_one _
-  have htr := translateAddr_machine_store σ a vmstatus hpriv hmstatus hmprv
-  have hea := mem_write_ea_1 σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr
-    hlo hhiram
-  have hmwv := mem_write_value_1 σ a data vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
-    haddr hbase hlo hhiram hhiwin
-  have hwval : (BitVec.setWidth (8 * 1)
-      (Sail.BitVec.extractLsb data (8 * ((1:Nat):Int) - 1).toNat 0)) = data := by
-    have hidx : (8 * ((1:Nat):Int) - 1).toNat = 7 := by decide
-    apply BitVec.eq_of_toNat_eq
-    simp only [hidx, Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      BitVec.toNat_setWidth, Nat.shiftRight_zero, BitVec.toNat_ofNat,
-      Nat.reduceSub, Nat.reduceMul]
-    have hlt : data.toNat < 2 ^ 8 := by have h := data.isLt; simpa using h
-    omega
-  exact vmem_write_addr_w σ _ a 1 data vmstatus (by decide) (by decide) halign
-    (by omega) hmstatus hpriv hmprv htr hea hmwv hwval
+          { σ with mem := σ.mem.insert a.toNat data } :=
+  vmem_write_addr_ram_w σ _ a 1 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus
+    hmprv hpma hcfg haddr hbase hlo hhiram hhiwin (Nat.mod_one _) (by omega) (write_ram_1 σ a data)
 
 end Vsa.Sim

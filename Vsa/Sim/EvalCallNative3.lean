@@ -1,6 +1,10 @@
 import Vsa.Sim.SnprintfSitesRet5
-import Vsa.Sim.DecodeNF
-import Vsa.Sim.EvalCallNative
+import Vsa.Sim.EnvGetSpec3
+import Vsa.Sim.Code.Eval_expr
+import Vsa.While.StackNeed
+import Vsa.Sim.StoreInvariant
+import Vsa.Sim.ConsoleStream
+import Vsa.Sim.HeapOwnershipGeometry
 import Vsa.Sim.EvalNotSim
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
