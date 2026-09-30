@@ -1,12 +1,12 @@
+import Vsa.Sim.DivSites3
 import Vsa.Sim.ObsAvoid
-import Vsa.Sim.DecodeNF
-import Vsa.Sim.DivLoops
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic
+open Vsa.Sim.Code (__hidden___udivdi3Loaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
@@ -34,6 +34,54 @@ theorem natAbs_of_top (x : BitVec 64) (h : 2^63 ≤ x.toNat) :
 theorem natAbs_of_notop (x : BitVec 64) (h : x.toNat < 2^63) :
     x.toInt.natAbs = x.toNat := by
   rw [toInt_of_notop x h]; simp
+
+theorem bltz_true' (x : BitVec 64) (h : zopz0zI_s x (0#64) = true) : 2^63 ≤ x.toNat := by
+  unfold zopz0zI_s at h; simp only [BitVec.toInt_zero] at h
+  have hlt : x.toInt < 0 := by have := of_decide_eq_true h; simpa using this
+  rw [BitVec.toInt_eq_toNat_cond] at hlt
+  by_cases hb : 2 * x.toNat < 2^64
+  · rw [if_pos hb] at hlt; omega
+  · omega
+
+theorem bltz_false' (x : BitVec 64) (h : zopz0zI_s x (0#64) = false) : x.toNat < 2^63 := by
+  unfold zopz0zI_s at h; simp only [BitVec.toInt_zero] at h
+  have hge : 0 ≤ x.toInt := by
+    have := of_decide_eq_false h; simp only [Int.not_lt] at this; exact this
+  rw [BitVec.toInt_eq_toNat_cond] at hge
+  by_cases hb : 2 * x.toNat < 2^64
+  · omega
+  · rw [if_neg hb] at hge; have := x.isLt; omega
+
+theorem bgez_true' (x : BitVec 64) (h : zopz0zKzJ_s x (0#64) = true) : x.toNat < 2^63 := by
+  unfold zopz0zKzJ_s at h; simp only [BitVec.toInt_zero] at h
+  have hge : 0 ≤ x.toInt := by have := of_decide_eq_true h; simpa using this
+  rw [BitVec.toInt_eq_toNat_cond] at hge
+  by_cases hb : 2 * x.toNat < 2^64
+  · omega
+  · rw [if_neg hb] at hge; have := x.isLt; omega
+
+theorem bgez_false' (x : BitVec 64) (h : zopz0zKzJ_s x (0#64) = false) : 2^63 ≤ x.toNat := by
+  unfold zopz0zKzJ_s at h; simp only [BitVec.toInt_zero] at h
+  have hlt : x.toInt < 0 := by
+    have := of_decide_eq_false h; simp only [Int.not_le] at this; exact this
+  rw [BitVec.toInt_eq_toNat_cond] at hlt
+  by_cases hb : 2 * x.toNat < 2^64
+  · rw [if_pos hb] at hlt; omega
+  · omega
+
+theorem bltz_cases' (x : BitVec 64) : zopz0zI_s x (0#64) = true ∨ zopz0zI_s x (0#64) = false :=
+  Bool.eq_false_or_eq_true _
+theorem bgez_cases' (x : BitVec 64) : zopz0zKzJ_s x (0#64) = true ∨ zopz0zKzJ_s x (0#64) = false :=
+  Bool.eq_false_or_eq_true _
+
+theorem bgtz_true' (x : BitVec 64) (h : zopz0zI_s (0#64) x = true) : 0 < x.toInt := by
+  unfold zopz0zI_s at h; simp only [BitVec.toInt_zero] at h
+  have := of_decide_eq_true h; simpa using this
+theorem bgtz_false' (x : BitVec 64) (h : zopz0zI_s (0#64) x = false) : x.toInt ≤ 0 := by
+  unfold zopz0zI_s at h; simp only [BitVec.toInt_zero] at h
+  have := of_decide_eq_false h; simp only [Int.not_lt] at this; exact this
+theorem bgtz_cases' (x : BitVec 64) : zopz0zI_s (0#64) x = true ∨ zopz0zI_s (0#64) x = false :=
+  Bool.eq_false_or_eq_true _
 
 theorem tmod_nonpos_of_nonpos (a b : Int) (h : a ≤ 0) : a.tmod b ≤ 0 := by
   have := Int.tmod_nonneg (a := -a) b (by omega)
@@ -105,6 +153,40 @@ theorem tdiv_of_natAbs_sign (a b q : Int) (hb : b ≠ 0)
           have := Int.tdiv_nonneg (a := -a) (b := -b) (by omega) (by omega)
           rwa [Int.neg_tdiv_neg] at this
         omega
+
+theorem core_call_tail_f
+    (A B r q : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cent : Config)
+    (hG : GoodState cent.σ)
+    (hcl : __hidden___udivdi3Loaded cent.σ.mem) (hmem : cent.σ.mem = m0)
+    (hout : cent.σ.sailOutput = o)
+    (hpc : cent.σ.regs.get? Register.PC = some (0x800046ac#64))
+    (hx10 : cent.σ.regs.get? Register.x10 = some A)
+    (hx11 : cent.σ.regs.get? Register.x11 = some B)
+    (hx1 : cent.σ.regs.get? Register.x1 = some q)
+    (hx12 : ∃ v, cent.σ.regs.get? Register.x12 = some v)
+    (hx13 : ∃ v, cent.σ.regs.get? Register.x13 = some v)
+    (hmi : ∃ v, cent.σ.regs.get? Register.minstret = some v)
+    (htick : cent.tick < 2) (hBpos : 0 < B.toNat) (halign : q.toNat % 4 = 0) :
+    ∃ c3 : Config, Steps cent c3 ∧ GoodState c3.σ ∧ c3.σ.mem = m0 ∧
+      c3.σ.sailOutput = o ∧
+      c3.σ.regs.get? Register.PC = some q ∧
+      c3.σ.regs.get? Register.x10 = some (A / B) ∧
+      c3.σ.regs.get? Register.x11 = some (A % B) ∧
+      c3.σ.regs.get? Register.x1 = some q ∧ c3.tick < 2 ∧
+      (∀ R : Register, NotWritten R → c3.σ.regs.get? R = cent.σ.regs.get? R) ∧
+      (∃ v, c3.σ.regs.get? Register.minstret = some v) := by
+  obtain ⟨v12, h12⟩ := hx12
+  obtain ⟨v13, h13⟩ := hx13
+  have hcorepre : udivdi3_pre (fun R => cent.σ.regs.get? R) A B q m0 o cent := by
+    refine ⟨⟨v12, v13, ?_⟩, hBpos, halign⟩
+    exact {
+      good := hG, loaded := hcl, mem := hmem, sailOut := hout, pc := hpc,
+      a0 := hx10, a1 := hx11, a2 := h12, a3 := h13, ra := hx1, minstret := hmi,
+      tick := htick, hframe := fun R _ => rfl }
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
+    udivdi3_spec (fun R => cent.σ.regs.get? R) A B q m0 o cent hcorepre
+  obtain ⟨vmi3, hmi3⟩ := hG3.minstret
+  exact ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, hra3, htick3, hframe3, ⟨vmi3, hmi3⟩⟩
 
 theorem natAbs_le (x : BitVec 64) : x.toInt.natAbs ≤ 2^63 := by
   by_cases h : x.toNat < 2^63
@@ -236,5 +318,1119 @@ theorem res_div_mixed (n d A B : BitVec 64)
     · rw [natAbs_of_top _ hresTop, hres, hmag]; omega
     · intro h; exact absurd h hdiff
     · intro _; rw [hresInt, hres]; omega
+
+private theorem addi0 (v : BitVec 64) : v + sign_extend (m := 64) (0x000#12) = v := by
+  rw [sext_zero]; exact BitVec.add_zero v
+
+abbrev NotWrittenD (R : Register) : Prop :=
+  NotWritten R ∧ (Register.x1 == R) = false ∧ (Register.x5 == R) = false
+
+theorem NotWrittenD.nw {R : Register} (h : NotWrittenD R) : NotWritten R := h.1
+
+theorem frame_jal {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec 21}
+    {rd_reg : Register} {link : RegisterType rd_reg}
+    (hobs : ReadsLikePost σ' (sigmaPost_jal σ pc vm imm rd_reg link)) (R : Register)
+    (hrd : (rd_reg == R) = false) (hR : NotWritten R) :
+    σ'.regs.get? R = σ.regs.get? R := by
+  obtain ⟨_, _, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := hR
+  rw [hobs.1 R hmc hmt hmip]
+  exact get?_sigmaPost_jal σ pc vm imm rd_reg link R hmi hpc hrd hnpc hmii
+
+def moddi3_pre (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ Vsa.Sim.Code.__moddi3Loaded c.σ.mem ∧ __hidden___udivdi3Loaded c.σ.mem ∧
+  c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some (0x80004728#64) ∧
+  c.σ.regs.get? Register.x10 = some n ∧ c.σ.regs.get? Register.x11 = some d ∧
+  c.σ.regs.get? Register.x1 = some r ∧ (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
+  (∃ v, c.σ.regs.get? Register.x12 = some v) ∧ (∃ v, c.σ.regs.get? Register.x13 = some v) ∧
+  c.tick < 2 ∧ d.toInt ≠ 0 ∧ r.toNat % 4 = 0 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R)
+
+def moddi3_post (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some r ∧
+  c.tick < 2 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R) ∧
+  ∃ res, c.σ.regs.get? Register.x10 = some res ∧ res.toInt = n.toInt.tmod d.toInt
+
+theorem moddi3_tail
+    (g : (R : Register) → Option (RegisterType R))
+    (n d A B r q : BitVec 64) (negate : Bool) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cA : Config)
+    (hG : GoodState cA.σ) (hwl : Vsa.Sim.Code.__moddi3Loaded cA.σ.mem)
+    (hcl : __hidden___udivdi3Loaded cA.σ.mem) (hmem : cA.σ.mem = m0)
+    (hout : cA.σ.sailOutput = o)
+    (hpc : cA.σ.regs.get? Register.PC = some (0x800046ac#64))
+    (hx10 : cA.σ.regs.get? Register.x10 = some A)
+    (hx11 : cA.σ.regs.get? Register.x11 = some B)
+    (hx1 : cA.σ.regs.get? Register.x1 = some q)
+    (hx5 : cA.σ.regs.get? Register.x5 = some r)
+    (hx12 : ∃ v, cA.σ.regs.get? Register.x12 = some v)
+    (hx13 : ∃ v, cA.σ.regs.get? Register.x13 = some v)
+    (hmi : ∃ v, cA.σ.regs.get? Register.minstret = some v)
+    (htick : cA.tick < 2) (hBpos : 0 < B.toNat) (halign : r.toNat % 4 = 0)
+    (hqval : q = (if negate then 0x80004750#64 else 0x80004738#64))
+    (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
+    (hd0 : d.toInt ≠ 0)
+    (hsign : if negate then n.toInt < 0 else 0 ≤ n.toInt)
+    (hframe0 : ∀ R : Register, NotWrittenD R → cA.σ.regs.get? R = g R) :
+    ∃ c' : Config, Steps cA c' ∧ moddi3_post g n d r m0 o c' := by
+
+  have hqalign : q.toNat % 4 = 0 := by subst hqval; cases negate <;> (simp only [Bool.false_eq_true, if_false, if_true]; decide)
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, hra3, htick3, hframe3, hmi3⟩ :=
+    core_call_tail_f A B r q m0 o cA hG hcl hmem hout hpc hx10 hx11 hx1 hx12 hx13 hmi htick hBpos hqalign
+  have hwl3 : Vsa.Sim.Code.__moddi3Loaded c3.σ.mem := hmem3 ▸ hmem ▸ hwl
+
+  have hx5_3 : c3.σ.regs.get? Register.x5 = some r := by rw [hframe3 Register.x5 (by decide)]; exact hx5
+  obtain ⟨vmi3, hmi3v⟩ := hmi3
+  cases negate with
+  | false =>
+
+    subst hqval
+    simp only [Bool.false_eq_true, if_false] at *
+
+    obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+      site3_80004738 c3.σ c3.tick c3.steps (0x80004738#64) vmi3 (A % B) hG3 hpc3 hmi3v hrem3 hwl3 rfl htick3
+    have hstep4 : Step c3 ⟨σ4, i4, c3.steps + 1⟩ := by cases c3; exact hs4
+    have hpc4 : σ4.regs.get? Register.PC = some (0x8000473c#64) := by
+      have := obs_alu_pc hobs4
+      rwa [show BitVec.addInt (0x80004738#64 : BitVec 64) 4 = (0x8000473c#64 : BitVec 64) from by
+        apply BitVec.eq_of_toNat_eq; decide] at this
+    have hx10_4 : σ4.regs.get? Register.x10 = some (A % B) := by
+      have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+      rwa [addi0 (A % B)] at this
+    have hx5_4 : σ4.regs.get? Register.x5 = some r :=
+      obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
+    obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
+    have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
+    have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+    have hout4 : σ4.sailOutput = o := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
+
+    have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
+      rw [ret_tgt r halign]; exact halign
+    obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+      site3_8000473c σ4 i4 (c3.steps + 1) (0x8000473c#64) vmi4 r hG4 hpc4 hmi4 hx5_4 hwl4 rfl htgt hi4
+    have hstep5 : Step ⟨σ4, i4, c3.steps + 1⟩ ⟨σ5, i5, c3.steps + 1 + 1⟩ := hs5
+    refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, ?_, hi5, ?_, A % B, ?_, ?_⟩
+    · exact hs3.trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans (.refl _)))
+    · rw [hmem5]; exact hmemq4
+    · rw [hobs5.out, hout4]
+    · rw [obs_jr_pc hobs5, ret_tgt r halign]
+    ·
+      intro R hR
+      rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw, hframe3 R hR.nw]
+      exact hframe0 R hR
+    · exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
+    · exact res_pos n d A B hA hB hsign hd0
+  | true =>
+
+    subst hqval
+    simp only [if_true] at *
+
+    obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+      site3_80004750 c3.σ c3.tick c3.steps (0x80004750#64) vmi3 (A % B) hG3 hpc3 hmi3v hrem3 hwl3 rfl htick3
+    have hstep4 : Step c3 ⟨σ4, i4, c3.steps + 1⟩ := by cases c3; exact hs4
+    have hpc4 : σ4.regs.get? Register.PC = some (0x80004754#64) := by
+      have := obs_alu_pc hobs4
+      rwa [show BitVec.addInt (0x80004750#64 : BitVec 64) 4 = (0x80004754#64 : BitVec 64) from by
+        apply BitVec.eq_of_toNat_eq; decide] at this
+    have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - (A % B)) :=
+      obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+    have hx5_4 : σ4.regs.get? Register.x5 = some r :=
+      obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
+    obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
+    have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
+    have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+    have hout4 : σ4.sailOutput = o := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
+    have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
+      rw [ret_tgt r halign]; exact halign
+    obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+      site3_80004754 σ4 i4 (c3.steps + 1) (0x80004754#64) vmi4 r hG4 hpc4 hmi4 hx5_4 hwl4 rfl htgt hi4
+    have hstep5 : Step ⟨σ4, i4, c3.steps + 1⟩ ⟨σ5, i5, c3.steps + 1 + 1⟩ := hs5
+    refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, ?_, hi5, ?_, (0#64) - (A % B), ?_, ?_⟩
+    · exact hs3.trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans (.refl _)))
+    · rw [hmem5]; exact hmemq4
+    · rw [hobs5.out, hout4]
+    · rw [obs_jr_pc hobs5, ret_tgt r halign]
+    · intro R hR
+      rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw, hframe3 R hR.nw]
+      exact hframe0 R hR
+    · exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
+    · exact res_neg n d A B hA hB hsign hd0
+
+theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
+    Triple (moddi3_pre g n d r m0 o) (moddi3_post g n d r m0 o) := by
+  intro c hc
+  obtain ⟨hG, hwl, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vmi, hmi⟩,
+    ⟨v12, h12⟩, ⟨v13, h13⟩, htick, hd0, halign, hframeE⟩ := hc
+
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+    site3_80004728 c.σ c.tick c.steps (0x80004728#64) vmi r hG hpc hmi hr (hmem ▸ hwl) rfl htick
+  have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
+  have hpc1 : σ1.regs.get? Register.PC = some (0x8000472c#64) := obs_alu_pc hobs1
+  have hx5_1 : σ1.regs.get? Register.x5 = some r := by
+    have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [addi0 r] at this
+  have hx10_1 : σ1.regs.get? Register.x10 = some n :=
+    obs_alu_other' hobs1 Register.x10 (by decide) hn
+  have hx11_1 : σ1.regs.get? Register.x11 = some d :=
+    obs_alu_other' hobs1 Register.x11 (by decide) hd
+  have hx1_1 : σ1.regs.get? Register.x1 = some r :=
+    obs_alu_other' hobs1 Register.x1 (by decide) hr
+  have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
+    obs_alu_other' hobs1 Register.x12 (by decide) h12
+  have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
+    obs_alu_other' hobs1 Register.x13 (by decide) h13
+  obtain ⟨vmi1, hmi1v⟩ := obs_alu_minstret hobs1
+  have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
+  have hwl1 : Vsa.Sim.Code.__moddi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hwl
+  have hcl1 : __hidden___udivdi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hcl
+
+  rcases bltz_cases' d with hdlt | hdge
+  ·
+    have hdtop : 2^63 ≤ d.toNat := bltz_true' d hdlt
+
+    obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+      site3_8000472c_taken σ1 i1 (c.steps + 1) (0x8000472c#64) vmi1 d hG1 hpc1 hmi1v hx11_1 hwl1 rfl hdlt hi1
+    have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2
+    have hpc2 : σ2.regs.get? Register.PC = some (0x80004740#64) := by
+      rw [obs_btaken_pc hobs2, show (0x8000472c#64 : BitVec 64) + sign_extend (m := 64) (0x0014#13)
+        = (0x80004740#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
+    have hx10_2 : σ2.regs.get? Register.x10 = some n :=
+      obs_btaken_other' hobs2 Register.x10 (by decide) hx10_1
+    have hx11_2 : σ2.regs.get? Register.x11 = some d :=
+      obs_btaken_other' hobs2 Register.x11 (by decide) hx11_1
+    have hx1_2 : σ2.regs.get? Register.x1 = some r :=
+      obs_btaken_other' hobs2 Register.x1 (by decide) hx1_1
+    have hx5_2 : σ2.regs.get? Register.x5 = some r :=
+      obs_btaken_other' hobs2 Register.x5 (by decide) hx5_1
+    have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
+      obs_btaken_other' hobs2 Register.x12 (by decide) hx12_1
+    have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
+      obs_btaken_other' hobs2 Register.x13 (by decide) hx13_1
+    obtain ⟨vmi2, hmi2v⟩ := obs_btaken_minstret hobs2
+    have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
+    have hwl2 : Vsa.Sim.Code.__moddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hwl
+    have hcl2 : __hidden___udivdi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hcl
+
+    obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+      site3_80004740 σ2 i2 (c.steps + 1 + 1) (0x80004740#64) vmi2 d hG2 hpc2 hmi2v hx11_2 hwl2 rfl hi2
+    have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3
+    have hpc3 : σ3.regs.get? Register.PC = some (0x80004744#64) := by
+      have := obs_alu_pc hobs3
+      rwa [show BitVec.addInt (0x80004740#64 : BitVec 64) 4 = (0x80004744#64 : BitVec 64) from by
+        apply BitVec.eq_of_toNat_eq; decide] at this
+    have hx11_3 : σ3.regs.get? Register.x11 = some ((0#64) - d) :=
+      obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
+    have hx10_3 : σ3.regs.get? Register.x10 = some n :=
+      obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
+    have hx1_3 : σ3.regs.get? Register.x1 = some r :=
+      obs_alu_other' hobs3 Register.x1 (by decide) hx1_2
+    have hx5_3 : σ3.regs.get? Register.x5 = some r :=
+      obs_alu_other' hobs3 Register.x5 (by decide) hx5_2
+    have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
+      obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
+    have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
+      obs_alu_other' hobs3 Register.x13 (by decide) hx13_2
+    obtain ⟨vmi3, hmi3v⟩ := obs_alu_minstret hobs3
+    have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
+    have hwl3 : Vsa.Sim.Code.__moddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hwl
+    have hcl3 : __hidden___udivdi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hcl
+
+    have hBmag : ((0#64) - d).toNat = d.toInt.natAbs := mag_neg_top d hdtop
+    have hBpos : 0 < ((0#64) - d).toNat := by
+      rw [hBmag]; have := natAbs_of_top d hdtop; have := d.isLt; omega
+
+    rcases bgez_cases' n with hnge | hnlt
+    ·
+      have hntop : n.toNat < 2^63 := bgez_true' n hnge
+      obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+        site3_80004744_taken σ3 i3 (c.steps + 1 + 1 + 1) (0x80004744#64) vmi3 n hG3 hpc3 hmi3v hx10_3 hwl3 rfl hnge hi3
+      have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4
+      have hpc4 : σ4.regs.get? Register.PC = some (0x80004734#64) := by
+        rw [obs_btaken_pc hobs4, show (0x80004744#64 : BitVec 64) + sign_extend (m := 64) (0x1ff0#13)
+          = (0x80004734#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
+      have hx10_4 : σ4.regs.get? Register.x10 = some n :=
+        obs_btaken_other' hobs4 Register.x10 (by decide) hx10_3
+      have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_btaken_other' hobs4 Register.x11 (by decide) hx11_3
+      have hx1_4 : σ4.regs.get? Register.x1 = some r :=
+        obs_btaken_other' hobs4 Register.x1 (by decide) hx1_3
+      have hx5_4 : σ4.regs.get? Register.x5 = some r :=
+        obs_btaken_other' hobs4 Register.x5 (by decide) hx5_3
+      have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
+        obs_btaken_other' hobs4 Register.x12 (by decide) hx12_3
+      have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
+        obs_btaken_other' hobs4 Register.x13 (by decide) hx13_3
+      obtain ⟨vmi4, hmi4v⟩ := obs_btaken_minstret hobs4
+      have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
+      have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+      have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
+
+      obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+        site3_80004734 σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x80004734#64) vmi4 hG4 hpc4 hmi4v hwl4 rfl hi4
+      have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5
+      have hpc5 : σ5.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_jal_pc hobs5
+        rwa [show (0x80004734#64 : BitVec 64) + sign_extend (m := 64) (0x1fff78#21)
+            = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx1_5 : σ5.regs.get? Register.x1 = some (0x80004738#64) := by
+        have := obs_jal_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [show BitVec.addInt (0x80004734#64 : BitVec 64) 4 = (0x80004738#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_5 : σ5.regs.get? Register.x10 = some n :=
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
+      have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
+      have hx5_5 : σ5.regs.get? Register.x5 = some r :=
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
+      have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
+      have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
+      have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
+      have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
+      have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
+      have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_branch_taken,
+          hobs3.out, sailOutput_sigmaPost_alu, hobs2.out, sailOutput_sigmaPost_branch_taken,
+          hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_btaken hobs4 R hR.nw,
+          frame_alu hobs3 R hR.nw.x11 hR.nw, frame_btaken hobs2 R hR.nw,
+          frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        moddi3_tail g n d n ((0#64) - d) r (0x80004738#64) false m0 o ⟨σ5, i5, _⟩
+          hG5 hwl5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign rfl
+          (mag_notop n hntop) hBmag hd0 (by rw [toInt_of_notop n hntop]; exact Int.natCast_nonneg _ : 0 ≤ n.toInt) hframe5
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
+        ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
+    ·
+      have hntop : 2^63 ≤ n.toNat := bgez_false' n hnlt
+      have hnneg : n.toInt < 0 := by rw [toInt_of_top n hntop]; have := n.isLt; omega
+      obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+        site3_80004744_nottaken σ3 i3 (c.steps + 1 + 1 + 1) (0x80004744#64) vmi3 n hG3 hpc3 hmi3v hx10_3 hwl3 rfl hnlt hi3
+      have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4
+      have hpc4 : σ4.regs.get? Register.PC = some (0x80004748#64) := by
+        have := obs_bnottaken_pc hobs4
+        rwa [show BitVec.addInt (0x80004744#64 : BitVec 64) 4 = (0x80004748#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_4 : σ4.regs.get? Register.x10 = some n :=
+        obs_bnottaken_other' hobs4 Register.x10 (by decide) hx10_3
+      have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_bnottaken_other' hobs4 Register.x11 (by decide) hx11_3
+      have hx1_4 : σ4.regs.get? Register.x1 = some r :=
+        obs_bnottaken_other' hobs4 Register.x1 (by decide) hx1_3
+      have hx5_4 : σ4.regs.get? Register.x5 = some r :=
+        obs_bnottaken_other' hobs4 Register.x5 (by decide) hx5_3
+      have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
+        obs_bnottaken_other' hobs4 Register.x12 (by decide) hx12_3
+      have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
+        obs_bnottaken_other' hobs4 Register.x13 (by decide) hx13_3
+      obtain ⟨vmi4, hmi4v⟩ := obs_bnottaken_minstret hobs4
+      have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
+      have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+      have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
+
+      obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+        site3_80004748 σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x80004748#64) vmi4 n hG4 hpc4 hmi4v hx10_4 hwl4 rfl hi4
+      have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5
+      have hpc5 : σ5.regs.get? Register.PC = some (0x8000474c#64) := by
+        have := obs_alu_pc hobs5
+        rwa [show BitVec.addInt (0x80004748#64 : BitVec 64) 4 = (0x8000474c#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_alu_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+      have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_alu_other' hobs5 Register.x11 (by decide) hx11_4
+      have hx1_5 : σ5.regs.get? Register.x1 = some r :=
+        obs_alu_other' hobs5 Register.x1 (by decide) hx1_4
+      have hx5_5 : σ5.regs.get? Register.x5 = some r :=
+        obs_alu_other' hobs5 Register.x5 (by decide) hx5_4
+      have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
+        obs_alu_other' hobs5 Register.x12 (by decide) hx12_4
+      have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
+        obs_alu_other' hobs5 Register.x13 (by decide) hx13_4
+      obtain ⟨vmi5, hmi5v⟩ := obs_alu_minstret hobs5
+      have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
+      have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
+      have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+
+      obtain ⟨σ6, i6, hs6, hi6, hG6, hmem6, hobs6⟩ :=
+        site3_8000474c σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x8000474c#64) vmi5 hG5 hpc5 hmi5v hwl5 rfl hi5
+      have hstep6 : Step ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ ⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs6
+      have hpc6 : σ6.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_jal_pc hobs6
+        rwa [show (0x8000474c#64 : BitVec 64) + sign_extend (m := 64) (0x1fff60#21)
+            = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx1_6 : σ6.regs.get? Register.x1 = some (0x80004750#64) := by
+        have := obs_jal_rd hobs6 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [show BitVec.addInt (0x8000474c#64 : BitVec 64) 4 = (0x80004750#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_6 : σ6.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_jal_other' hobs6 Register.x10 (by decide) hx10_5
+      have hx11_6 : σ6.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_jal_other' hobs6 Register.x11 (by decide) hx11_5
+      have hx5_6 : σ6.regs.get? Register.x5 = some r :=
+        obs_jal_other' hobs6 Register.x5 (by decide) hx5_5
+      have hx12_6 : σ6.regs.get? Register.x12 = some v12 :=
+        obs_jal_other' hobs6 Register.x12 (by decide) hx12_5
+      have hx13_6 : σ6.regs.get? Register.x13 = some v13 :=
+        obs_jal_other' hobs6 Register.x13 (by decide) hx13_5
+      have hmi6 : ∃ v, σ6.regs.get? Register.minstret = some v := obs_jal_minstret hobs6
+      have hmemq6 : σ6.mem = m0 := by rw [hmem6]; exact hmemq5
+      have hwl6 : Vsa.Sim.Code.__moddi3Loaded σ6.mem := hmemq6 ▸ hmem ▸ hwl
+      have hcl6 : __hidden___udivdi3Loaded σ6.mem := hmemq6 ▸ hmem ▸ hcl
+      have hAmag : ((0#64) - n).toNat = n.toInt.natAbs := mag_neg_top n hntop
+      have hout6 : σ6.sailOutput = o := by
+        rw [hobs6.out, sailOutput_sigmaPost_jal, hobs5.out, sailOutput_sigmaPost_alu,
+          hobs4.out, sailOutput_sigmaPost_branch_nottaken, hobs3.out, sailOutput_sigmaPost_alu,
+          hobs2.out, sailOutput_sigmaPost_branch_taken, hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe6 : ∀ R : Register, NotWrittenD R → σ6.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs6 R hR.2.1 hR.nw, frame_alu hobs5 R hR.nw.x10 hR.nw,
+          frame_bnottaken hobs4 R hR.nw, frame_alu hobs3 R hR.nw.x11 hR.nw,
+          frame_btaken hobs2 R hR.nw, frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        moddi3_tail g n d ((0#64) - n) ((0#64) - d) r (0x80004750#64) true m0 o ⟨σ6, i6, _⟩
+          hG6 hwl6 hcl6 hmemq6 hout6 hpc6 hx10_6 hx11_6 hx1_6 hx5_6 ⟨v12, hx12_6⟩ ⟨v13, hx13_6⟩ hmi6 hi6 hBpos halign rfl
+          hAmag hBmag hd0 hnneg hframe6
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
+        ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans hsf)))))
+  ·
+    have hdtop : d.toNat < 2^63 := bltz_false' d hdge
+    have hBmag : d.toNat = d.toInt.natAbs := mag_notop d hdtop
+    have hdInt : 0 ≤ d.toInt := by rw [toInt_of_notop d hdtop]; exact Int.natCast_nonneg _
+    have hBpos : 0 < d.toNat := by
+      rcases Nat.eq_zero_or_pos d.toNat with h0 | h0
+      · exfalso; apply hd0; rw [toInt_of_notop d hdtop, h0]; simp
+      · exact h0
+    obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+      site3_8000472c_nottaken σ1 i1 (c.steps + 1) (0x8000472c#64) vmi1 d hG1 hpc1 hmi1v hx11_1 hwl1 rfl hdge hi1
+    have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2
+    have hpc2 : σ2.regs.get? Register.PC = some (0x80004730#64) := by
+      have := obs_bnottaken_pc hobs2
+      rwa [show BitVec.addInt (0x8000472c#64 : BitVec 64) 4 = (0x80004730#64 : BitVec 64) from by
+        apply BitVec.eq_of_toNat_eq; decide] at this
+    have hx10_2 : σ2.regs.get? Register.x10 = some n :=
+      obs_bnottaken_other' hobs2 Register.x10 (by decide) hx10_1
+    have hx11_2 : σ2.regs.get? Register.x11 = some d :=
+      obs_bnottaken_other' hobs2 Register.x11 (by decide) hx11_1
+    have hx1_2 : σ2.regs.get? Register.x1 = some r :=
+      obs_bnottaken_other' hobs2 Register.x1 (by decide) hx1_1
+    have hx5_2 : σ2.regs.get? Register.x5 = some r :=
+      obs_bnottaken_other' hobs2 Register.x5 (by decide) hx5_1
+    have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
+      obs_bnottaken_other' hobs2 Register.x12 (by decide) hx12_1
+    have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
+      obs_bnottaken_other' hobs2 Register.x13 (by decide) hx13_1
+    obtain ⟨vmi2, hmi2v⟩ := obs_bnottaken_minstret hobs2
+    have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
+    have hwl2 : Vsa.Sim.Code.__moddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hwl
+    have hcl2 : __hidden___udivdi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hcl
+    rcases bltz_cases' n with hnlt | hnge
+    ·
+      have hntop : 2^63 ≤ n.toNat := bltz_true' n hnlt
+      have hnneg : n.toInt < 0 := by rw [toInt_of_top n hntop]; have := n.isLt; omega
+      obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+        site3_80004730_taken σ2 i2 (c.steps + 1 + 1) (0x80004730#64) vmi2 n hG2 hpc2 hmi2v hx10_2 hwl2 rfl hnlt hi2
+      have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3
+      have hpc3 : σ3.regs.get? Register.PC = some (0x80004748#64) := by
+        rw [obs_btaken_pc hobs3, show (0x80004730#64 : BitVec 64) + sign_extend (m := 64) (0x0018#13)
+          = (0x80004748#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
+      have hx10_3 : σ3.regs.get? Register.x10 = some n :=
+        obs_btaken_other' hobs3 Register.x10 (by decide) hx10_2
+      have hx11_3 : σ3.regs.get? Register.x11 = some d :=
+        obs_btaken_other' hobs3 Register.x11 (by decide) hx11_2
+      have hx1_3 : σ3.regs.get? Register.x1 = some r :=
+        obs_btaken_other' hobs3 Register.x1 (by decide) hx1_2
+      have hx5_3 : σ3.regs.get? Register.x5 = some r :=
+        obs_btaken_other' hobs3 Register.x5 (by decide) hx5_2
+      have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
+        obs_btaken_other' hobs3 Register.x12 (by decide) hx12_2
+      have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
+        obs_btaken_other' hobs3 Register.x13 (by decide) hx13_2
+      obtain ⟨vmi3, hmi3v⟩ := obs_btaken_minstret hobs3
+      have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
+      have hwl3 : Vsa.Sim.Code.__moddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hwl
+      have hcl3 : __hidden___udivdi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hcl
+
+      obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+        site3_80004748 σ3 i3 (c.steps + 1 + 1 + 1) (0x80004748#64) vmi3 n hG3 hpc3 hmi3v hx10_3 hwl3 rfl hi3
+      have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4
+      have hpc4 : σ4.regs.get? Register.PC = some (0x8000474c#64) := by
+        have := obs_alu_pc hobs4
+        rwa [show BitVec.addInt (0x80004748#64 : BitVec 64) 4 = (0x8000474c#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+      have hx11_4 : σ4.regs.get? Register.x11 = some d :=
+        obs_alu_other' hobs4 Register.x11 (by decide) hx11_3
+      have hx1_4 : σ4.regs.get? Register.x1 = some r :=
+        obs_alu_other' hobs4 Register.x1 (by decide) hx1_3
+      have hx5_4 : σ4.regs.get? Register.x5 = some r :=
+        obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
+      have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
+      have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
+      obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
+      have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
+      have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+      have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
+      obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+        site3_8000474c σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x8000474c#64) vmi4 hG4 hpc4 hmi4v hwl4 rfl hi4
+      have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5
+      have hpc5 : σ5.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_jal_pc hobs5
+        rwa [show (0x8000474c#64 : BitVec 64) + sign_extend (m := 64) (0x1fff60#21)
+            = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx1_5 : σ5.regs.get? Register.x1 = some (0x80004750#64) := by
+        have := obs_jal_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [show BitVec.addInt (0x8000474c#64 : BitVec 64) 4 = (0x80004750#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
+      have hx11_5 : σ5.regs.get? Register.x11 = some d :=
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
+      have hx5_5 : σ5.regs.get? Register.x5 = some r :=
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
+      have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
+      have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
+      have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
+      have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
+      have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
+      have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+      have hAmag : ((0#64) - n).toNat = n.toInt.natAbs := mag_neg_top n hntop
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_branch_taken, hobs2.out, sailOutput_sigmaPost_branch_nottaken,
+          hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw,
+          frame_btaken hobs3 R hR.nw, frame_bnottaken hobs2 R hR.nw,
+          frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        moddi3_tail g n d ((0#64) - n) d r (0x80004750#64) true m0 o ⟨σ5, i5, _⟩
+          hG5 hwl5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign rfl
+          hAmag hBmag hd0 hnneg hframe5
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
+        ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
+    ·
+      have hntop : n.toNat < 2^63 := bltz_false' n hnge
+      obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+        site3_80004730_nottaken σ2 i2 (c.steps + 1 + 1) (0x80004730#64) vmi2 n hG2 hpc2 hmi2v hx10_2 hwl2 rfl hnge hi2
+      have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3
+      have hpc3 : σ3.regs.get? Register.PC = some (0x80004734#64) := by
+        have := obs_bnottaken_pc hobs3
+        rwa [show BitVec.addInt (0x80004730#64 : BitVec 64) 4 = (0x80004734#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_3 : σ3.regs.get? Register.x10 = some n :=
+        obs_bnottaken_other' hobs3 Register.x10 (by decide) hx10_2
+      have hx11_3 : σ3.regs.get? Register.x11 = some d :=
+        obs_bnottaken_other' hobs3 Register.x11 (by decide) hx11_2
+      have hx1_3 : σ3.regs.get? Register.x1 = some r :=
+        obs_bnottaken_other' hobs3 Register.x1 (by decide) hx1_2
+      have hx5_3 : σ3.regs.get? Register.x5 = some r :=
+        obs_bnottaken_other' hobs3 Register.x5 (by decide) hx5_2
+      have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
+        obs_bnottaken_other' hobs3 Register.x12 (by decide) hx12_2
+      have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
+        obs_bnottaken_other' hobs3 Register.x13 (by decide) hx13_2
+      obtain ⟨vmi3, hmi3v⟩ := obs_bnottaken_minstret hobs3
+      have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
+      have hwl3 : Vsa.Sim.Code.__moddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hwl
+      have hcl3 : __hidden___udivdi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hcl
+      obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+        site3_80004734 σ3 i3 (c.steps + 1 + 1 + 1) (0x80004734#64) vmi3 hG3 hpc3 hmi3v hwl3 rfl hi3
+      have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4
+      have hpc4 : σ4.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_jal_pc hobs4
+        rwa [show (0x80004734#64 : BitVec 64) + sign_extend (m := 64) (0x1fff78#21)
+            = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx1_4 : σ4.regs.get? Register.x1 = some (0x80004738#64) := by
+        have := obs_jal_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [show BitVec.addInt (0x80004734#64 : BitVec 64) 4 = (0x80004738#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_4 : σ4.regs.get? Register.x10 = some n :=
+        obs_jal_other' hobs4 Register.x10 (by decide) hx10_3
+      have hx11_4 : σ4.regs.get? Register.x11 = some d :=
+        obs_jal_other' hobs4 Register.x11 (by decide) hx11_3
+      have hx5_4 : σ4.regs.get? Register.x5 = some r :=
+        obs_jal_other' hobs4 Register.x5 (by decide) hx5_3
+      have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
+        obs_jal_other' hobs4 Register.x12 (by decide) hx12_3
+      have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
+        obs_jal_other' hobs4 Register.x13 (by decide) hx13_3
+      have hmi4 : ∃ v, σ4.regs.get? Register.minstret = some v := obs_jal_minstret hobs4
+      have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
+      have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+      have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
+      have hnge' : 0 ≤ n.toInt := by rw [toInt_of_notop n hntop]; exact Int.natCast_nonneg _
+      have hout4 : σ4.sailOutput = o := by
+        rw [hobs4.out, sailOutput_sigmaPost_jal, hobs3.out, sailOutput_sigmaPost_branch_nottaken,
+          hobs2.out, sailOutput_sigmaPost_branch_nottaken, hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe4 : ∀ R : Register, NotWrittenD R → σ4.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs4 R hR.2.1 hR.nw, frame_bnottaken hobs3 R hR.nw,
+          frame_bnottaken hobs2 R hR.nw, frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        moddi3_tail g n d n d r (0x80004738#64) false m0 o ⟨σ4, i4, _⟩
+          hG4 hwl4 hcl4 hmemq4 hout4 hpc4 hx10_4 hx11_4 hx1_4 hx5_4 ⟨v12, hx12_4⟩ ⟨v13, hx13_4⟩ hmi4 hi4 hBpos halign rfl
+          (mag_notop n hntop) hBmag hd0 hnge' hframe4
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
+        ((Steps.single hstep4).trans hsf)))
+
+def divdi3_pre (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ Vsa.Sim.Code.__divdi3Loaded c.σ.mem ∧ Vsa.Sim.Code.__umoddi3Loaded c.σ.mem ∧
+  __hidden___udivdi3Loaded c.σ.mem ∧
+  c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some (0x800046a4#64) ∧
+  c.σ.regs.get? Register.x10 = some n ∧ c.σ.regs.get? Register.x11 = some d ∧
+  c.σ.regs.get? Register.x1 = some r ∧ (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
+  (∃ v, c.σ.regs.get? Register.x12 = some v) ∧ (∃ v, c.σ.regs.get? Register.x13 = some v) ∧
+  c.tick < 2 ∧ d.toInt ≠ 0 ∧ ¬(n.toInt = -2^63 ∧ d.toInt = -1) ∧ r.toNat % 4 = 0 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R)
+
+def divdi3_post (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some r ∧
+  c.tick < 2 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R) ∧
+  ∃ res, c.σ.regs.get? Register.x10 = some res ∧ res.toInt = n.toInt.tdiv d.toInt
+
+theorem divdi3_mixed_tail
+    (g : (R : Register) → Option (RegisterType R))
+    (n d A B r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cA : Config)
+    (hG : GoodState cA.σ) (hwl : Vsa.Sim.Code.__umoddi3Loaded cA.σ.mem)
+    (hcl : __hidden___udivdi3Loaded cA.σ.mem) (hmem : cA.σ.mem = m0)
+    (hout : cA.σ.sailOutput = o)
+    (hpc : cA.σ.regs.get? Register.PC = some (0x800046ac#64))
+    (hx10 : cA.σ.regs.get? Register.x10 = some A)
+    (hx11 : cA.σ.regs.get? Register.x11 = some B)
+    (hx1 : cA.σ.regs.get? Register.x1 = some (0x80004720#64))
+    (hx5 : cA.σ.regs.get? Register.x5 = some r)
+    (hx12 : ∃ v, cA.σ.regs.get? Register.x12 = some v)
+    (hx13 : ∃ v, cA.σ.regs.get? Register.x13 = some v)
+    (hmi : ∃ v, cA.σ.regs.get? Register.minstret = some v)
+    (htick : cA.tick < 2) (hBpos : 0 < B.toNat) (halign : r.toNat % 4 = 0)
+    (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
+    (hd0 : d.toInt ≠ 0) (hdiff : ¬(0 ≤ n.toInt ↔ 0 ≤ d.toInt))
+    (hframe0 : ∀ R : Register, NotWrittenD R → cA.σ.regs.get? R = g R) :
+    ∃ c' : Config, Steps cA c' ∧ divdi3_post g n d r m0 o c' := by
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, _hra3, htick3, hframe3, hmi3⟩ :=
+    core_call_tail_f A B r (0x80004720#64) m0 o cA hG hcl hmem hout hpc hx10 hx11 hx1 hx12 hx13 hmi htick hBpos (by decide)
+  have hwl3 : Vsa.Sim.Code.__umoddi3Loaded c3.σ.mem := hmem3 ▸ hmem ▸ hwl
+  obtain ⟨vmi3, hmi3v⟩ := hmi3
+
+  obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+    site3_80004720 c3.σ c3.tick c3.steps (0x80004720#64) vmi3 (A / B) hG3 hpc3 hmi3v hq3 hwl3 rfl htick3
+  have hstep4 : Step c3 ⟨σ4, i4, c3.steps + 1⟩ := by cases c3; exact hs4
+  have hpc4 : σ4.regs.get? Register.PC = some (0x80004724#64) := by
+    have := obs_alu_pc hobs4
+    rwa [show BitVec.addInt (0x80004720#64 : BitVec 64) 4 = (0x80004724#64 : BitVec 64) from by
+      apply BitVec.eq_of_toNat_eq; decide] at this
+  have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - (A / B)) :=
+    obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
+  have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
+  have hwl4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+
+  have hx5_4 : σ4.regs.get? Register.x5 = some r := by
+    have := hframe3 Register.x5 (by decide)
+    rw [frame_alu hobs4 Register.x5 (by decide) (by decide), this]; exact hx5
+  have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
+    rw [ret_tgt r halign]; exact halign
+  obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+    site3_80004724 σ4 i4 (c3.steps + 1) (0x80004724#64) vmi4 r hG4 hpc4 hmi4 hx5_4 hwl4 rfl htgt hi4
+  have hstep5 : Step ⟨σ4, i4, c3.steps + 1⟩ ⟨σ5, i5, c3.steps + 1 + 1⟩ := hs5
+  refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, ?_, hi5, ?_, (0#64) - (A / B), ?_, ?_⟩
+  · exact hs3.trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans (.refl _)))
+  · rw [hmem5]; exact hmemq4
+  ·
+    rw [hobs5.out, hobs4.out, sailOutput_sigmaPost_alu, hout3]
+  · rw [obs_jr_pc hobs5, ret_tgt r halign]
+  ·
+    intro R hR
+    rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R (by
+        have := hR.nw.x10; exact this) hR.nw, hframe3 R hR.nw]
+    exact hframe0 R hR
+  · exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
+  · exact res_div_mixed n d A B hA hB hdiff hd0
+
+theorem divdi3_same_tail
+    (g : (R : Register) → Option (RegisterType R))
+    (n d A B r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cA : Config)
+    (hG : GoodState cA.σ)
+    (hcl : __hidden___udivdi3Loaded cA.σ.mem) (hmem : cA.σ.mem = m0)
+    (hout : cA.σ.sailOutput = o)
+    (hpc : cA.σ.regs.get? Register.PC = some (0x800046ac#64))
+    (hx10 : cA.σ.regs.get? Register.x10 = some A)
+    (hx11 : cA.σ.regs.get? Register.x11 = some B)
+    (hx1 : cA.σ.regs.get? Register.x1 = some r)
+    (hx12 : ∃ v, cA.σ.regs.get? Register.x12 = some v)
+    (hx13 : ∃ v, cA.σ.regs.get? Register.x13 = some v)
+    (hmi : ∃ v, cA.σ.regs.get? Register.minstret = some v)
+    (htick : cA.tick < 2) (hBpos : 0 < B.toNat) (halign : r.toNat % 4 = 0)
+    (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
+    (hd0 : d.toInt ≠ 0) (hsame : 0 ≤ n.toInt ↔ 0 ≤ d.toInt)
+    (hnov : (A / B).toNat < 2^63)
+    (hframe0 : ∀ R : Register, NotWrittenD R → cA.σ.regs.get? R = g R) :
+    ∃ c' : Config, Steps cA c' ∧ divdi3_post g n d r m0 o c' := by
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, _hrem3, _hra3, htick3, hframe3, _hmi3⟩ :=
+    core_call_tail_f A B r r m0 o cA hG hcl hmem hout hpc hx10 hx11 hx1 hx12 hx13 hmi htick hBpos halign
+  refine ⟨c3, hs3, hG3, hmem3, hout3, hpc3, htick3, ?_, A / B, hq3,
+    res_div_same n d A B hA hB hsame hd0 hnov⟩
+
+  intro R hR
+  rw [hframe3 R hR.nw]; exact hframe0 R hR
+
+theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
+    Triple (divdi3_pre g n d r m0 o) (divdi3_post g n d r m0 o) := by
+  intro c hc
+  obtain ⟨hG, hdl, hul, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vmi, hmi⟩,
+    ⟨v12, h12⟩, ⟨v13, h13⟩, htick, hd0, hexcl, halign, hframeE⟩ := hc
+
+  have hdcases := bltz_cases' d
+
+  rcases bltz_cases' n with hnlt | hnge
+  ·
+    have hntop : 2^63 ≤ n.toNat := bltz_true' n hnlt
+    have hnneg : n.toInt < 0 := by rw [toInt_of_top n hntop]; have := n.isLt; omega
+    have hAmag : ((0#64) - n).toNat = n.toInt.natAbs := mag_neg_top n hntop
+    obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+      site2_800046a4_taken c.σ c.tick c.steps (0x800046a4#64) vmi n hG hpc hmi hn (hmem ▸ hdl) rfl hnlt htick
+    have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
+    have hpc1 : σ1.regs.get? Register.PC = some (0x80004704#64) := by
+      rw [obs_btaken_pc hobs1, show (0x800046a4#64 : BitVec 64) + sign_extend (m := 64) (0x0060#13)
+        = (0x80004704#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
+    have hx10_1 : σ1.regs.get? Register.x10 = some n :=
+      obs_btaken_other' hobs1 Register.x10 (by decide) hn
+    have hx11_1 : σ1.regs.get? Register.x11 = some d :=
+      obs_btaken_other' hobs1 Register.x11 (by decide) hd
+    have hx1_1 : σ1.regs.get? Register.x1 = some r :=
+      obs_btaken_other' hobs1 Register.x1 (by decide) hr
+    have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
+      obs_btaken_other' hobs1 Register.x12 (by decide) h12
+    have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
+      obs_btaken_other' hobs1 Register.x13 (by decide) h13
+    obtain ⟨vmi1, hmi1v⟩ := obs_btaken_minstret hobs1
+    have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
+    have hul1 : Vsa.Sim.Code.__umoddi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hul
+    have hcl1 : __hidden___udivdi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hcl
+
+    obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+      site3_80004704 σ1 i1 (c.steps + 1) (0x80004704#64) vmi1 n hG1 hpc1 hmi1v hx10_1 hul1 rfl hi1
+    have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2
+    have hpc2 : σ2.regs.get? Register.PC = some (0x80004708#64) := by
+      have := obs_alu_pc hobs2
+      rwa [show BitVec.addInt (0x80004704#64 : BitVec 64) 4 = (0x80004708#64 : BitVec 64) from by
+        apply BitVec.eq_of_toNat_eq; decide] at this
+    have hx10_2 : σ2.regs.get? Register.x10 = some ((0#64) - n) :=
+      obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+    have hx11_2 : σ2.regs.get? Register.x11 = some d :=
+      obs_alu_other' hobs2 Register.x11 (by decide) hx11_1
+    have hx1_2 : σ2.regs.get? Register.x1 = some r :=
+      obs_alu_other' hobs2 Register.x1 (by decide) hx1_1
+    have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
+      obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
+    have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
+      obs_alu_other' hobs2 Register.x13 (by decide) hx13_1
+    obtain ⟨vmi2, hmi2v⟩ := obs_alu_minstret hobs2
+    have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
+    have hul2 : Vsa.Sim.Code.__umoddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hul
+    have hcl2 : __hidden___udivdi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hcl
+
+    rcases bgtz_cases' d with hdgt | hdle
+    ·
+      have hdpos : 0 < d.toInt := bgtz_true' d hdgt
+      have hdInt0 : 0 ≤ d.toInt := Int.le_of_lt hdpos
+      have hdtop : d.toNat < 2^63 := by
+        by_cases hc' : d.toNat < 2^63
+        · exact hc'
+        · rw [toInt_of_top d (by omega)] at hdpos; have := d.isLt; omega
+      have hBmag : d.toNat = d.toInt.natAbs := mag_notop d hdtop
+      have hBpos : 0 < d.toNat := by rw [hBmag]; have : d.toInt.natAbs ≠ 0 := fun h => hd0 (Int.natAbs_eq_zero.mp h); omega
+      have hdiff : ¬(0 ≤ n.toInt ↔ 0 ≤ d.toInt) := fun hi => absurd (hi.mpr hdInt0) (by omega)
+      obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+        site3_80004708_taken σ2 i2 (c.steps + 1 + 1) (0x80004708#64) vmi2 d hG2 hpc2 hmi2v hx11_2 hul2 rfl hdgt hi2
+      have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3
+      have hpc3 : σ3.regs.get? Register.PC = some (0x80004718#64) := by
+        rw [obs_btaken_pc hobs3, show (0x80004708#64 : BitVec 64) + sign_extend (m := 64) (0x0010#13)
+          = (0x80004718#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
+      have hx10_3 : σ3.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_btaken_other' hobs3 Register.x10 (by decide) hx10_2
+      have hx11_3 : σ3.regs.get? Register.x11 = some d :=
+        obs_btaken_other' hobs3 Register.x11 (by decide) hx11_2
+      have hx1_3 : σ3.regs.get? Register.x1 = some r :=
+        obs_btaken_other' hobs3 Register.x1 (by decide) hx1_2
+      have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
+        obs_btaken_other' hobs3 Register.x12 (by decide) hx12_2
+      have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
+        obs_btaken_other' hobs3 Register.x13 (by decide) hx13_2
+      obtain ⟨vmi3, hmi3v⟩ := obs_btaken_minstret hobs3
+      have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
+      have hul3 : Vsa.Sim.Code.__umoddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hul
+      have hcl3 : __hidden___udivdi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hcl
+
+      obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+        site3_80004718 σ3 i3 (c.steps + 1 + 1 + 1) (0x80004718#64) vmi3 r hG3 hpc3 hmi3v hx1_3 hul3 rfl hi3
+      have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4
+      have hpc4 : σ4.regs.get? Register.PC = some (0x8000471c#64) := by
+        have := obs_alu_pc hobs4
+        rwa [show BitVec.addInt (0x80004718#64 : BitVec 64) 4 = (0x8000471c#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx5_4 : σ4.regs.get? Register.x5 = some r := by
+        have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [addi0 r] at this
+      have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
+      have hx11_4 : σ4.regs.get? Register.x11 = some d :=
+        obs_alu_other' hobs4 Register.x11 (by decide) hx11_3
+      have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
+      have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
+      obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
+      have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
+      have hul4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hul
+      have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
+
+      obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+        site3_8000471c σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x8000471c#64) vmi4 hG4 hpc4 hmi4v hul4 rfl hi4
+      have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5
+      have hpc5 : σ5.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_jal_pc hobs5
+        rwa [show (0x8000471c#64 : BitVec 64) + sign_extend (m := 64) (0x1fff90#21)
+            = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx1_5 : σ5.regs.get? Register.x1 = some (0x80004720#64) := by
+        have := obs_jal_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [show BitVec.addInt (0x8000471c#64 : BitVec 64) 4 = (0x80004720#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
+      have hx11_5 : σ5.regs.get? Register.x11 = some d :=
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
+      have hx5_5 : σ5.regs.get? Register.x5 = some r :=
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
+      have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
+      have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
+      have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
+      have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
+      have hul5 : Vsa.Sim.Code.__umoddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hul
+      have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_branch_taken, hobs2.out, sailOutput_sigmaPost_alu,
+          hobs1.out, sailOutput_sigmaPost_branch_taken]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_alu hobs4 R hR.2.2 hR.nw,
+          frame_btaken hobs3 R hR.nw, frame_alu hobs2 R hR.nw.x10 hR.nw,
+          frame_btaken hobs1 R hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        divdi3_mixed_tail g n d ((0#64) - n) d r m0 o ⟨σ5, i5, _⟩
+          hG5 hul5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign
+          hAmag hBmag hd0 hdiff hframe5
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
+        ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
+    ·
+      have hdle' : d.toInt ≤ 0 := bgtz_false' d hdle
+      have hdneg : d.toInt < 0 := by
+        rcases Int.lt_trichotomy d.toInt 0 with h | h | h
+        · exact h
+        · exact absurd h hd0
+        · omega
+      have hdtop : 2^63 ≤ d.toNat := by
+        by_cases hc' : d.toNat < 2^63
+        · rw [toInt_of_notop d hc'] at hdneg; have := d.isLt; omega
+        · omega
+      have hBmag : ((0#64) - d).toNat = d.toInt.natAbs := mag_neg_top d hdtop
+      have hBpos : 0 < ((0#64) - d).toNat := by
+        rw [hBmag]; have : d.toInt.natAbs ≠ 0 := fun h => hd0 (Int.natAbs_eq_zero.mp h); omega
+      have hsame : (0 ≤ n.toInt ↔ 0 ≤ d.toInt) := ⟨fun h => absurd h (by omega), fun h => absurd h (by omega)⟩
+      have hnov : (((0#64) - n) / ((0#64) - d)).toNat < 2^63 :=
+        udiv_lt_of_not_overflow n d ((0#64) - n) ((0#64) - d) hAmag hBmag hsame hd0 hexcl
+      obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+        site3_80004708_nottaken σ2 i2 (c.steps + 1 + 1) (0x80004708#64) vmi2 d hG2 hpc2 hmi2v hx11_2 hul2 rfl hdle hi2
+      have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3
+      have hpc3 : σ3.regs.get? Register.PC = some (0x8000470c#64) := by
+        have := obs_bnottaken_pc hobs3
+        rwa [show BitVec.addInt (0x80004708#64 : BitVec 64) 4 = (0x8000470c#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_3 : σ3.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_bnottaken_other' hobs3 Register.x10 (by decide) hx10_2
+      have hx11_3 : σ3.regs.get? Register.x11 = some d :=
+        obs_bnottaken_other' hobs3 Register.x11 (by decide) hx11_2
+      have hx1_3 : σ3.regs.get? Register.x1 = some r :=
+        obs_bnottaken_other' hobs3 Register.x1 (by decide) hx1_2
+      have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
+        obs_bnottaken_other' hobs3 Register.x12 (by decide) hx12_2
+      have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
+        obs_bnottaken_other' hobs3 Register.x13 (by decide) hx13_2
+      obtain ⟨vmi3, hmi3v⟩ := obs_bnottaken_minstret hobs3
+      have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
+      have hul3 : Vsa.Sim.Code.__umoddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hul
+      have hcl3 : __hidden___udivdi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hcl
+
+      obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+        site3_8000470c σ3 i3 (c.steps + 1 + 1 + 1) (0x8000470c#64) vmi3 d hG3 hpc3 hmi3v hx11_3 hul3 rfl hi3
+      have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4
+      have hpc4 : σ4.regs.get? Register.PC = some (0x80004710#64) := by
+        have := obs_alu_pc hobs4
+        rwa [show BitVec.addInt (0x8000470c#64 : BitVec 64) 4 = (0x80004710#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+      have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
+      have hx1_4 : σ4.regs.get? Register.x1 = some r :=
+        obs_alu_other' hobs4 Register.x1 (by decide) hx1_3
+      have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
+      have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
+      obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
+      have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
+      have hul4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hul
+      have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
+
+      obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+        site2_80004710 σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x80004710#64) vmi4 hG4 hpc4 hmi4v hul4 rfl hi4
+      have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5
+      have hpc5 : σ5.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_jr_pc hobs5
+        rwa [show ((0x80004710#64 : BitVec 64) + sign_extend (m := 64) (0x1fff9c#21))
+            = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
+        obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
+      have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_jr_other' hobs5 Register.x11 (by decide) hx11_4
+      have hx1_5 : σ5.regs.get? Register.x1 = some r :=
+        obs_jr_other' hobs5 Register.x1 (by decide) hx1_4
+      have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
+        obs_jr_other' hobs5 Register.x12 (by decide) hx12_4
+      have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
+        obs_jr_other' hobs5 Register.x13 (by decide) hx13_4
+      obtain ⟨vmi5, hmi5v⟩ := obs_jr_minstret hobs5
+      have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
+      have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jump_x0, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_branch_nottaken, hobs2.out, sailOutput_sigmaPost_alu,
+          hobs1.out, sailOutput_sigmaPost_branch_taken]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x11 hR.nw,
+          frame_bnottaken hobs3 R hR.nw, frame_alu hobs2 R hR.nw.x10 hR.nw,
+          frame_btaken hobs1 R hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        divdi3_same_tail g n d ((0#64) - n) ((0#64) - d) r m0 o ⟨σ5, i5, _⟩
+          hG5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ ⟨vmi5, hmi5v⟩ hi5 hBpos halign
+          hAmag hBmag hd0 hsame hnov hframe5
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
+        ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
+  ·
+    have hntop : n.toNat < 2^63 := bltz_false' n hnge
+    have hnInt : 0 ≤ n.toInt := by rw [toInt_of_notop n hntop]; exact Int.natCast_nonneg _
+    have hAmag : n.toNat = n.toInt.natAbs := mag_notop n hntop
+    obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+      site2_800046a4_nottaken c.σ c.tick c.steps (0x800046a4#64) vmi n hG hpc hmi hn (hmem ▸ hdl) rfl hnge htick
+    have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
+    have hpc1 : σ1.regs.get? Register.PC = some (0x800046a8#64) := by
+      have := obs_bnottaken_pc hobs1
+      rwa [show BitVec.addInt (0x800046a4#64 : BitVec 64) 4 = (0x800046a8#64 : BitVec 64) from by
+        apply BitVec.eq_of_toNat_eq; decide] at this
+    have hx10_1 : σ1.regs.get? Register.x10 = some n :=
+      obs_bnottaken_other' hobs1 Register.x10 (by decide) hn
+    have hx11_1 : σ1.regs.get? Register.x11 = some d :=
+      obs_bnottaken_other' hobs1 Register.x11 (by decide) hd
+    have hx1_1 : σ1.regs.get? Register.x1 = some r :=
+      obs_bnottaken_other' hobs1 Register.x1 (by decide) hr
+    have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
+      obs_bnottaken_other' hobs1 Register.x12 (by decide) h12
+    have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
+      obs_bnottaken_other' hobs1 Register.x13 (by decide) h13
+    obtain ⟨vmi1, hmi1v⟩ := obs_bnottaken_minstret hobs1
+    have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
+    have hdl1 : Vsa.Sim.Code.__divdi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hdl
+    have hul1 : Vsa.Sim.Code.__umoddi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hul
+    have hcl1 : __hidden___udivdi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hcl
+
+    rcases bltz_cases' d with hdlt | hdge
+    ·
+      have hdtop : 2^63 ≤ d.toNat := bltz_true' d hdlt
+      have hdneg : d.toInt < 0 := by rw [toInt_of_top d hdtop]; have := d.isLt; omega
+      have hBmag : ((0#64) - d).toNat = d.toInt.natAbs := mag_neg_top d hdtop
+      have hBpos : 0 < ((0#64) - d).toNat := by
+        rw [hBmag]; have : d.toInt.natAbs ≠ 0 := fun h => hd0 (Int.natAbs_eq_zero.mp h); omega
+      have hdiff : ¬(0 ≤ n.toInt ↔ 0 ≤ d.toInt) := fun hi => absurd (hi.mp hnInt) (by omega)
+      obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+        site3_800046a8_taken σ1 i1 (c.steps + 1) (0x800046a8#64) vmi1 d hG1 hpc1 hmi1v hx11_1 hdl1 rfl hdlt hi1
+      have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2
+      have hpc2 : σ2.regs.get? Register.PC = some (0x80004714#64) := by
+        rw [obs_btaken_pc hobs2, show (0x800046a8#64 : BitVec 64) + sign_extend (m := 64) (0x006c#13)
+          = (0x80004714#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
+      have hx10_2 : σ2.regs.get? Register.x10 = some n :=
+        obs_btaken_other' hobs2 Register.x10 (by decide) hx10_1
+      have hx11_2 : σ2.regs.get? Register.x11 = some d :=
+        obs_btaken_other' hobs2 Register.x11 (by decide) hx11_1
+      have hx1_2 : σ2.regs.get? Register.x1 = some r :=
+        obs_btaken_other' hobs2 Register.x1 (by decide) hx1_1
+      have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
+        obs_btaken_other' hobs2 Register.x12 (by decide) hx12_1
+      have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
+        obs_btaken_other' hobs2 Register.x13 (by decide) hx13_1
+      obtain ⟨vmi2, hmi2v⟩ := obs_btaken_minstret hobs2
+      have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
+      have hul2 : Vsa.Sim.Code.__umoddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hul
+      have hcl2 : __hidden___udivdi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hcl
+
+      obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+        site3_80004714 σ2 i2 (c.steps + 1 + 1) (0x80004714#64) vmi2 d hG2 hpc2 hmi2v hx11_2 hul2 rfl hi2
+      have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3
+      have hpc3 : σ3.regs.get? Register.PC = some (0x80004718#64) := by
+        have := obs_alu_pc hobs3
+        rwa [show BitVec.addInt (0x80004714#64 : BitVec 64) 4 = (0x80004718#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx11_3 : σ3.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
+      have hx10_3 : σ3.regs.get? Register.x10 = some n :=
+        obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
+      have hx1_3 : σ3.regs.get? Register.x1 = some r :=
+        obs_alu_other' hobs3 Register.x1 (by decide) hx1_2
+      have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
+        obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
+      have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
+        obs_alu_other' hobs3 Register.x13 (by decide) hx13_2
+      obtain ⟨vmi3, hmi3v⟩ := obs_alu_minstret hobs3
+      have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
+      have hul3 : Vsa.Sim.Code.__umoddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hul
+      have hcl3 : __hidden___udivdi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hcl
+
+      obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+        site3_80004718 σ3 i3 (c.steps + 1 + 1 + 1) (0x80004718#64) vmi3 r hG3 hpc3 hmi3v hx1_3 hul3 rfl hi3
+      have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4
+      have hpc4 : σ4.regs.get? Register.PC = some (0x8000471c#64) := by
+        have := obs_alu_pc hobs4
+        rwa [show BitVec.addInt (0x80004718#64 : BitVec 64) 4 = (0x8000471c#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx5_4 : σ4.regs.get? Register.x5 = some r := by
+        have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [addi0 r] at this
+      have hx10_4 : σ4.regs.get? Register.x10 = some n :=
+        obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
+      have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_alu_other' hobs4 Register.x11 (by decide) hx11_3
+      have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
+      have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
+      obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
+      have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
+      have hul4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hul
+      have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
+
+      obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+        site3_8000471c σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x8000471c#64) vmi4 hG4 hpc4 hmi4v hul4 rfl hi4
+      have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5
+      have hpc5 : σ5.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_jal_pc hobs5
+        rwa [show (0x8000471c#64 : BitVec 64) + sign_extend (m := 64) (0x1fff90#21)
+            = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx1_5 : σ5.regs.get? Register.x1 = some (0x80004720#64) := by
+        have := obs_jal_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+        rwa [show BitVec.addInt (0x8000471c#64 : BitVec 64) 4 = (0x80004720#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_5 : σ5.regs.get? Register.x10 = some n :=
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
+      have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
+      have hx5_5 : σ5.regs.get? Register.x5 = some r :=
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
+      have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
+      have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
+      have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
+      have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
+      have hul5 : Vsa.Sim.Code.__umoddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hul
+      have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_alu, hobs2.out, sailOutput_sigmaPost_branch_taken,
+          hobs1.out, sailOutput_sigmaPost_branch_nottaken]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_alu hobs4 R hR.2.2 hR.nw,
+          frame_alu hobs3 R hR.nw.x11 hR.nw, frame_btaken hobs2 R hR.nw,
+          frame_bnottaken hobs1 R hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        divdi3_mixed_tail g n d n ((0#64) - d) r m0 o ⟨σ5, i5, _⟩
+          hG5 hul5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign
+          hAmag hBmag hd0 hdiff hframe5
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
+        ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
+    ·
+      have hdtop : d.toNat < 2^63 := bltz_false' d hdge
+      have hdInt : 0 ≤ d.toInt := by rw [toInt_of_notop d hdtop]; exact Int.natCast_nonneg _
+      have hBmag : d.toNat = d.toInt.natAbs := mag_notop d hdtop
+      have hBpos : 0 < d.toNat := by rw [hBmag]; have : d.toInt.natAbs ≠ 0 := fun h => hd0 (Int.natAbs_eq_zero.mp h); omega
+      have hsame : (0 ≤ n.toInt ↔ 0 ≤ d.toInt) := ⟨fun _ => hdInt, fun _ => hnInt⟩
+      have hnov : (n / d).toNat < 2^63 :=
+        udiv_lt_of_not_overflow n d n d hAmag hBmag hsame hd0 hexcl
+      obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+        site3_800046a8_nottaken σ1 i1 (c.steps + 1) (0x800046a8#64) vmi1 d hG1 hpc1 hmi1v hx11_1 hdl1 rfl hdge hi1
+      have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2
+      have hpc2 : σ2.regs.get? Register.PC = some (0x800046ac#64) := by
+        have := obs_bnottaken_pc hobs2
+        rwa [show BitVec.addInt (0x800046a8#64 : BitVec 64) 4 = (0x800046ac#64 : BitVec 64) from by
+          apply BitVec.eq_of_toNat_eq; decide] at this
+      have hx10_2 : σ2.regs.get? Register.x10 = some n :=
+        obs_bnottaken_other' hobs2 Register.x10 (by decide) hx10_1
+      have hx11_2 : σ2.regs.get? Register.x11 = some d :=
+        obs_bnottaken_other' hobs2 Register.x11 (by decide) hx11_1
+      have hx1_2 : σ2.regs.get? Register.x1 = some r :=
+        obs_bnottaken_other' hobs2 Register.x1 (by decide) hx1_1
+      have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
+        obs_bnottaken_other' hobs2 Register.x12 (by decide) hx12_1
+      have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
+        obs_bnottaken_other' hobs2 Register.x13 (by decide) hx13_1
+      obtain ⟨vmi2, hmi2v⟩ := obs_bnottaken_minstret hobs2
+      have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
+      have hcl2 : __hidden___udivdi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hcl
+
+      have hout2 : σ2.sailOutput = o := by
+        rw [hobs2.out, sailOutput_sigmaPost_branch_nottaken,
+          hobs1.out, sailOutput_sigmaPost_branch_nottaken]; exact hout
+      have hframe2 : ∀ R : Register, NotWrittenD R → σ2.regs.get? R = g R := by
+        intro R hR
+        rw [frame_bnottaken hobs2 R hR.nw, frame_bnottaken hobs1 R hR.nw]
+        exact hframeE R hR
+      obtain ⟨cf, hsf, hpostf⟩ :=
+        divdi3_same_tail g n d n d r m0 o ⟨σ2, i2, _⟩
+          hG2 hcl2 hmemq2 hout2 hpc2 hx10_2 hx11_2 hx1_2 ⟨v12, hx12_2⟩ ⟨v13, hx13_2⟩ ⟨vmi2, hmi2v⟩ hi2 hBpos halign
+          hAmag hBmag hd0 hsame hnov hframe2
+      refine ⟨cf, ?_, hpostf⟩
+      exact (Steps.single hstep1).trans ((Steps.single hstep2).trans hsf)
 
 end Vsa.Sim
