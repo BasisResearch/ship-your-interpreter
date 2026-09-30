@@ -78,12 +78,13 @@ theorem Realises.seq_agree {H : List (Nat × Nat)} {m m1 m2 : Mem} {p q : Permit
     ∀ a, vsaFoot H a → ¬ (p.win a ∨ q.win a) → m2[a]? = m[a]? :=
   fun a ha hw => (h2.agree a ha fun h => hw (.inr h)).trans (h1.agree a ha fun h => hw (.inl h))
 
-/-- Discharge the reads and kept words of a permit over a concrete store log. -/
+/-- Discharge the reads and kept words of a permit over a concrete store log; also closes a
+single `read64 (writeLog …) a = some v` goal of an edit that has no permit. -/
 syntax "rd_log" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| rd_log) => `(tactic| rd_log [])
   | `(tactic| rd_log [$hs,*]) =>
-    `(tactic| (simp only [ReadsOK, KeepsOK, and_true]
+    `(tactic| (try simp only [ReadsOK, KeepsOK, and_true]
                repeat' refine And.intro ?_ ?_
                all_goals (simp (disch := omega) only [read64_hit_eq, read64_miss]
                           try simp only [$hs,*])))

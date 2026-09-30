@@ -136,6 +136,11 @@ theorem ARgn.acc {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ 
   have := of_mem_accAddrs hx
   exact r.own.mem (by omega) (by omega)
 
+/-- The allocator's stack window, as an access region. -/
+theorem WOK.stackRgn {C : MCtx} (O : WOK C) : ARgn C.S (C.s.toNat - 256) 256 := by
+  have := O.sp.lo; have := O.sp.hi; unfold mHead Vsa.Sim.tohostAddr at *
+  exact ⟨⟨fun k hk => O.own _ (.inr ⟨by unfold mHead; omega, by omega⟩)⟩, by omega, by omega⟩
+
 end Laws
 
 /-! ## The static table (V1): minted once against the fixed layout. -/
@@ -502,12 +507,21 @@ def rgnStep (h : Syntax) (stopPCs : List Nat) : TacticM (List MVarId × List MVa
       else
         match ← rgnSide g hint with
         | some r => hint := some r
-        | none => pending := pending ++ [g]
+        | none =>
+          -- a control-transfer side condition (link-register alignment): literal arithmetic
+          let s ← saveState
+          try
+            let gs' ← evalTacticAt (← `(tactic| (simp only [VsaIris.Sym.upd_apply, VsaIris.ra,
+              Nat.reduceEqDiff, ite_true, ite_false, Nat.reduceAdd, BitVec.reduceOfNat,
+              BitVec.reduceToNat, Nat.reduceMod])) ) g
+            unless gs'.isEmpty do s.restore; pending := pending ++ [g]
+          catch _ => s.restore; pending := pending ++ [g]
     match conts with
     | [c] =>
-      -- keep the register file normal: every value is a term over the entry registers
-      match ← evalTacticAt (← `(tactic| try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff,
-          ite_true, ite_false])) c with
+      -- keep the register file normal: every value is a term over the entry registers, and
+      -- the pc after a call or return is a literal
+      match ← evalTacticAt (← `(tactic| try simp only [VsaIris.Sym.upd_apply, VsaIris.ra,
+          Nat.reduceEqDiff, ite_true, ite_false, Nat.reduceAdd, BitVec.reduceOfNat])) c with
       | [c'] => cur := c'
       | cs => return (pending, cs)
     | cs => return (pending, cs)

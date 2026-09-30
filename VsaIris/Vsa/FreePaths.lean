@@ -119,38 +119,24 @@ theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
     (hdin : d.inuse = true) :
     AW C.live C.S C.Q 0x80007484#64 R Mt1 := by
   have G := N.geo
-  have hx16 := G.x16; have hxlo := G.xlo; have hs16 := G.sz16; have hs32 := G.sz32
-  have hdend := G.dend; have htop := G.top; have hds32 := G.dsz32
-  unfold heapEnd at htop
+  open_fields G
+  have rX : Rgn (vsaFoot C.H) (x + 8) sz := ⟨fun k hk => G.xfoot _ (by omega) (by omega)⟩
+  have oX := rX.offStack N.disj (by omega); unfold mHead at oX
+  unfold heapEnd at G_top
   have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
   obtain ⟨hd0, hd0r, hd0s, _⟩ := G.dhdr
   have ha1 := N.a1; have ha2 := N.a2; have ha0 := N.a0
   have hdrlt := Vsa.Sim.read64_lt _ _ _ N.hdr
+  rgn_run O.live at 0x80007490
+  rw [show (R 11 + 18446744073709551608#64).toNat = x + 8 by rgn_arith, ha2]
   have hor : (hdr0 ||| 1) = hdr0 := by
     have h1 : (hdr0 ||| 1) / 2 = hdr0 / 2 := by
       have := Nat.or_div_two_pow (a := hdr0) (b := 1) (n := 1); simpa using this
     have h2 : (hdr0 ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
     have := Nat.div_add_mod (hdr0 ||| 1) 2; have := Nat.div_add_mod hdr0 2
     omega
-  refine (step% st 0x80007484) O.live ?_
-  have hE8 : (R 11 + sign_extend (m := 64) (0xff8#12)).toNat = x + 8 := by
-    sx_norm; rw [BitVec.toNat_add, ha1]; simp; omega
-  have hEn : (R 12 + sign_extend (m := 64) (0x000#12)).toNat = x + sz := by
-    sx_norm; rw [ha2]
-  have hof := off_stack_of N.disj G.hfoot
-  have hoF := off_stack_of (a := x + sz) N.disj (fun k hk => G.xfoot _ (by omega) (by omega))
-  refine (step% st 0x80007488) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  · rw [hE8]; unfold StOK Vsa.Sim.tohostAddr; omega
-  · rw [hE8]; exact O.foot G.hfoot
-  rw [hE8]
-  refine (step% st 0x8000748c) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [hEn]; unfold StOK Vsa.Sim.tohostAddr; omega
-  · rw [hEn]; exact O.foot (fun k hk => G.xfoot _ (by omega) (by omega))
-  rw [hEn]
-  have hval : (R 10 ||| sign_extend (m := 64) (0x001#12)).toNat = hdr0 := by
-    sx_norm; rw [BitVec.toNat_or, ha0]; simpa using hor
-  generalize hMp : writeLog (writeLog Mt1 [(x + 8, 8, R 10 ||| sign_extend (m := 64) (0x001#12))])
-    [(x + sz, 8, R 15)] = Mp
+  have hval : (R 10 ||| 1#64).toNat = hdr0 := by rw [BitVec.toNat_or, ha0]; simpa using hor
+  generalize hMp : writeLog (writeLog Mt1 [(x + 8, 8, R 10 ||| 1#64)]) [(x + sz, 8, R 15)] = Mp
   have hM1 := N.mem
   have B : FBin C Mp Mt x sz C.top0 brkv cs₁ (d :: cs₃) bins := by
     refine ⟨⟨N.heap, Nat.le_refl _, N.hno, fun h0 hh0 => ?_, fun d' hd' => ?_, by omega,
@@ -168,22 +154,17 @@ theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
         rw [← hMp, hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
     · rw [← hMp, read64_store_hit, N.a5]
     · rw [hd0r] at hr; cases hr
-      have hds16 := G.dsz16
       refine ⟨d.size, ?_, by unfold chunkSize at hd0s ⊢; omega, by omega,
         by unfold prevInuse; simp; omega⟩
       rw [← hMp, rd_miss (by omega), rd_miss (by omega), hM1, read64_store_hit, N.wv]
-    · intro a ha
-      rw [← hMp]; exact writeLog_present _ _ _ (writeLog_present _ _ _ (N.pres a ha))
-    · rw [← hMp]
-      exact frame_store (fun b h1 h2 => .inl (G.xfoot b (by omega) (by omega)))
-        (frame_store (win_foot G.hfoot) N.frameM)
-  have F : FFrame C (upd R 10 (R 10 ||| sign_extend (m := 64) (0x001#12))) Mp := by
-    rw [← hMp]
-    exact ((N.frame.store (a := x + 8) (w := 8) (by omega)).store (a := x + sz) (w := 8)
-      (by omega)).of_regs (upd_other _ _ (by decide)) (upd_other _ _ (by decide))
-      (upd_other _ _ (by decide)) (upd_other _ _ (by decide))
-  exact free_bin2 O F B (by rw [upd_other _ _ (by decide)]; exact N.a7)
-    (by rw [upd_other _ _ (by decide)]; exact N.a4) (by rw [upd_other _ _ (by decide)]; exact N.a5)
+    · rw [← hMp]; exact pres_log _ (pres_log _ N.pres)
+    · rw [← hMp, writeLog_nest]; exact frame_log (L := [_, _]) (by log_in) N.frameM
+  refine free_bin2 O (hMp ▸ ((N.frame.store (a := x + 8) (w := 8) (by omega)).store (a := x + sz)
+    (w := 8) (by omega)).of_regs ?_ ?_ ?_ ?_) B ?_ ?_ ?_ <;>
+    (try simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+  · exact N.a7
+  · exact N.a4
+  · exact N.a5
 
 structure FFwdMem (C : MCtx) (Mc Mv : Mem) (brkv : Nat) (cs cs' : List Chunk)
     (bins : Nat → List Nat) (Y a b : Nat) : Prop where
