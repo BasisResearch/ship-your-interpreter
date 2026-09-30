@@ -141,40 +141,9 @@ theorem obs_gpr_frame_bt {σ' σ : MState}
     (h : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
       σ'.regs.get? R = σ.regs.get? R) :
     ∀ (n : Nat), 1 ≤ n → n ≤ 31 →
-    ∀ (w : BitVec 64), gprGet σ n = some w → gprGet σ' n = some w
-  | 0, h1, _, _, _ => absurd h1 (by omega)
-  | 1, _, _, w, hw => (h Register.x1 (by decide)).trans hw
-  | 2, _, _, w, hw => (h Register.x2 (by decide)).trans hw
-  | 3, _, _, w, hw => (h Register.x3 (by decide)).trans hw
-  | 4, _, _, w, hw => (h Register.x4 (by decide)).trans hw
-  | 5, _, _, w, hw => (h Register.x5 (by decide)).trans hw
-  | 6, _, _, w, hw => (h Register.x6 (by decide)).trans hw
-  | 7, _, _, w, hw => (h Register.x7 (by decide)).trans hw
-  | 8, _, _, w, hw => (h Register.x8 (by decide)).trans hw
-  | 9, _, _, w, hw => (h Register.x9 (by decide)).trans hw
-  | 10, _, _, w, hw => (h Register.x10 (by decide)).trans hw
-  | 11, _, _, w, hw => (h Register.x11 (by decide)).trans hw
-  | 12, _, _, w, hw => (h Register.x12 (by decide)).trans hw
-  | 13, _, _, w, hw => (h Register.x13 (by decide)).trans hw
-  | 14, _, _, w, hw => (h Register.x14 (by decide)).trans hw
-  | 15, _, _, w, hw => (h Register.x15 (by decide)).trans hw
-  | 16, _, _, w, hw => (h Register.x16 (by decide)).trans hw
-  | 17, _, _, w, hw => (h Register.x17 (by decide)).trans hw
-  | 18, _, _, w, hw => (h Register.x18 (by decide)).trans hw
-  | 19, _, _, w, hw => (h Register.x19 (by decide)).trans hw
-  | 20, _, _, w, hw => (h Register.x20 (by decide)).trans hw
-  | 21, _, _, w, hw => (h Register.x21 (by decide)).trans hw
-  | 22, _, _, w, hw => (h Register.x22 (by decide)).trans hw
-  | 23, _, _, w, hw => (h Register.x23 (by decide)).trans hw
-  | 24, _, _, w, hw => (h Register.x24 (by decide)).trans hw
-  | 25, _, _, w, hw => (h Register.x25 (by decide)).trans hw
-  | 26, _, _, w, hw => (h Register.x26 (by decide)).trans hw
-  | 27, _, _, w, hw => (h Register.x27 (by decide)).trans hw
-  | 28, _, _, w, hw => (h Register.x28 (by decide)).trans hw
-  | 29, _, _, w, hw => (h Register.x29 (by decide)).trans hw
-  | 30, _, _, w, hw => (h Register.x30 (by decide)).trans hw
-  | 31, _, _, w, hw => (h Register.x31 (by decide)).trans hw
-  | _+32, _, h31, _, _ => absurd h31 (by omega)
+    ∀ (w : BitVec 64), gprGet σ n = some w → gprGet σ' n = some w := by
+  intro n h1 h31 w hw
+  gpr_cases n => refine (h _ ?_).trans hw; decide
 
 theorem gholds_frame_bt {σ' σ : MState}
     (h : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
