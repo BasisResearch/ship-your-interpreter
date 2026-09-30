@@ -1,32 +1,13 @@
-import VsaIris.Interp.Case.LeafNullT
-import VsaIris.Interp.Case.LeafIntT
-import VsaIris.Interp.Case.LeafStrT
-import VsaIris.Interp.Case.LeafBoolT
+import VsaIris.Interp.CmpArm
+import VsaIris.Interp.UnArm
+import VsaIris.Interp.LeafArms
+import VsaIris.Interp.LogArm
+import VsaIris.Interp.EqArm
+import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
-import VsaIris.Interp.Case.BinaryAddIntT
-import VsaIris.Interp.Case.BinarySubIntT
-import VsaIris.Interp.Case.BinaryMulIntT
-import VsaIris.Interp.Case.BinaryDivIntT
-import VsaIris.Interp.Case.BinaryModIntT
 import VsaIris.Interp.Case.BinaryConcatT
-import VsaIris.Interp.Case.BinaryEqT
-import VsaIris.Interp.Case.BinaryNeT
-import VsaIris.Interp.Case.BinaryLtIntT
-import VsaIris.Interp.Case.BinaryLeIntT
-import VsaIris.Interp.Case.BinaryGtIntT
-import VsaIris.Interp.Case.BinaryGeIntT
-import VsaIris.Interp.Case.BinaryLtStrT
-import VsaIris.Interp.Case.BinaryLeStrT
-import VsaIris.Interp.Case.BinaryGtStrT
-import VsaIris.Interp.Case.BinaryGeStrT
-import VsaIris.Interp.Case.LogicalAndFalseT
-import VsaIris.Interp.Case.LogicalAndTrueT
-import VsaIris.Interp.Case.LogicalOrFalseT
-import VsaIris.Interp.Case.LogicalOrTrueT
-import VsaIris.Interp.Case.UnaryNegT
-import VsaIris.Interp.Case.UnaryNotT
 import VsaIris.Interp.Case.CallClosureT
 import VsaIris.Interp.Case.CallPrintT
 import VsaIris.Interp.Case.CallPrintlnT
@@ -41,9 +22,8 @@ import VsaIris.Interp.Case.ExecIfNoneT
 import VsaIris.Interp.Case.ExecWhileT
 import VsaIris.Interp.Case.ExecForT
 import VsaIris.Interp.Case.ExecRetT
-import VsaIris.Interp.Case.ExecRetNullT
-import VsaIris.Interp.Case.ExecBrkT
-import VsaIris.Interp.Case.ExecContT
+import VsaIris.Interp.ExecRetNull
+import VsaIris.Interp.ExecJump
 import VsaIris.Interp.LoopWhile
 import VsaIris.Interp.LoopFor
 import VsaIris.Interp.LoopArgs
@@ -113,10 +93,10 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   cases op with
   | eq =>
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinaryEq S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
+    exact eqT .eq S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
   | ne =>
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinaryNe S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
+    exact eqT .ne S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
   | add =>
     by_cases hs : valTag lv = 3 ∨ valTag rv = 3
     · have e := (binOpSem_add_str st2.store hs).symm.trans hsem
@@ -126,15 +106,15 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     · cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem <;>
         simp [valTag] at hs
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryAddInt S.hlive Dl Dr _ hl hr S.vint
+      exact intOpT .add S.hlive Dl Dr _ trivial hl hr S.vint
   | sub =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinarySubInt S.hlive Dl Dr _ hl hr S.vint
+    exact intOpT .sub S.hlive Dl Dr _ trivial hl hr S.vint
   | mul =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinaryMulInt S.hlive Dl Dr _ hl hr S.vint
+    exact intOpT .mul S.hlive Dl Dr _ trivial hl hr S.vint
   | div =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     rename_i a b
@@ -142,7 +122,7 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     · simp [hb] at hsem
     · simp only [hb, beq_iff_eq, ite_false] at hsem
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryDivInt S.hlive Dl Dr _ hb hl hr S.vint
+      exact intOpT .div S.hlive Dl Dr _ hb hl hr S.vint
   | mod =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     rename_i a b
@@ -150,39 +130,39 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     · simp [hb] at hsem
     · simp only [hb, beq_iff_eq, ite_false] at hsem
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryModInt S.hlive Dl Dr _ hb hl hr S.vint
+      exact intOpT .mod S.hlive Dl Dr _ hb hl hr S.vint
   | lt =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLtInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .lt S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLtStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .lt S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
   | le =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLeInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .le S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLeStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .le S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
   | gt =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGtInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .gt S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGtStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .gt S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
   | ge =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGeInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .ge S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGeStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .ge S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
 
 theorem hroomPrint (f : Expr) (args : List Expr) (d : Nat) :
     nativePrintNeed + 1088 ≤ evalNeed (.call f args) d := by
@@ -257,10 +237,10 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     ?whileLoop ?forStart ?ret ?retNull ?brk ?cont
     ?initNone ?initSome ?condFalse ?bodyBreak ?bodyRet ?loop ?condNone ?condSome ?stepNone ?stepSome
     ?seqNil ?seqCons ?seqAbrupt $h
-  case int => intro st d env n; exact caseT_LeafInt ($S).hlive _ ($S).vint
-  case str => intro st d env x; exact caseT_LeafStr ($S).hlive _ ($S).vstr
-  case bool => intro st d env b; exact caseT_LeafBool ($S).hlive _ ($S).vbool
-  case null => intro st d env; exact caseT_LeafNull ($S).hlive _ ($S).vnull
+  case int => intro st d env n; exact leafIntT ($S).hlive _ ($S).vint
+  case str => intro st d env x; exact leafStrT ($S).hlive _ ($S).vstr
+  case bool => intro st d env b; exact leafBoolT ($S).hlive _ ($S).vbool
+  case null => intro st d env; exact leafNullT ($S).hlive _ ($S).vnull
   case var => intro st d env x v _; exact caseT_Var ($S).hlive _ ($S).envGet
   case assign =>
     intro st d env x e st' v store'' n De hset ihe; exact caseT_Assign ($S).hlive De hset _ ihe ($S).envSet
@@ -268,18 +248,18 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     intro st d env op l r st' st'' lv rv v nl nr Dl Dr hsem ihl ihr; exact binaryT $S Dl Dr hsem ihl ihr
   case orTrue =>
     intro st d env l r st' lv n Dl ht ihl
-    exact caseT_LogicalOrTrue ($S).hlive Dl ht _ ihl ($S).vtruthy ($S).vbool
+    exact logShortT .or ($S).hlive Dl ht _ ihl ($S).vtruthy ($S).vbool
   case orFalse =>
     intro st d env l r st' st'' lv rv nl nr Dl hf Dr ihl ihr
-    exact caseT_LogicalOrFalse ($S).hlive Dl hf Dr _ ihl ihr ($S).vtruthy ($S).vbool
+    exact logLongT .or ($S).hlive Dl hf Dr _ ihl ihr ($S).vtruthy ($S).vbool
   case andFalse =>
     intro st d env l r st' lv n Dl hf ihl
-    exact caseT_LogicalAndFalse ($S).hlive Dl hf _ ihl ($S).vtruthy ($S).vbool
+    exact logShortT .and ($S).hlive Dl hf _ ihl ($S).vtruthy ($S).vbool
   case andTrue =>
     intro st d env l r st' st'' lv rv nl nr Dl ht Dr ihl ihr
-    exact caseT_LogicalAndTrue ($S).hlive Dl ht Dr _ ihl ihr ($S).vtruthy ($S).vbool
-  case neg => intro st d env e st' n m De ih; exact caseT_UnaryNeg ($S).hlive De _ ih ($S).vint
-  case not => intro st d env e st' v m De ih; exact caseT_UnaryNot ($S).hlive De _ ih ($S).vtruthy ($S).vbool
+    exact logLongT .and ($S).hlive Dl ht Dr _ ihl ihr ($S).vtruthy ($S).vbool
+  case neg => intro st d env e st' n m De ih; exact negT ($S).hlive De _ ih ($S).vint
+  case not => intro st d env e st' v m De ih; exact notT ($S).hlive De _ ih ($S).vtruthy ($S).vbool
   case call =>
     intro st d env f args st1 st2 st3 fv vs v nf na nc Df hlen Da Dc ihf iha ihc
     exact ihc Df hlen Da ihf iha
@@ -352,9 +332,9 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     exact ⟨caseT_ExecRet ($S).hlive De ihe, fun _ _ h => by cases h⟩
   case retNull =>
     intro st d env
-    exact ⟨caseT_ExecRetNull ($S).hlive ($S).vnull, fun _ _ h => by cases h⟩
-  case brk => intro st d env; exact ⟨caseT_ExecBrk ($S).hlive, fun _ _ h => by cases h⟩
-  case cont => intro st d env; exact ⟨caseT_ExecCont ($S).hlive, fun _ _ h => by cases h⟩
+    exact ⟨retNullT ($S).hlive ($S).vnull, fun _ _ h => by cases h⟩
+  case brk => intro st d env; exact ⟨jumpT .brk ($S).hlive (.brk st d env), fun _ _ h => by cases h⟩
+  case cont => intro st d env; exact ⟨jumpT .cont ($S).hlive (.cont st d env), fun _ _ h => by cases h⟩
   case initNone => intro st d env; exact execInitT_none ($S).hlive st d env
   case initSome =>
     intro st d env s st' status n Ds ihs; exact execInitT_some ($S).hlive Ds (execSpec_of ($S).hlive ihs.1)

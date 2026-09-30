@@ -1,37 +1,24 @@
+import VsaIris.Interp.CmpArm
+import VsaIris.Interp.UnArm
+import VsaIris.Interp.LeafArms
+import VsaIris.Interp.LogArm
+import VsaIris.Interp.EqArm
+import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.AssignP
-import VsaIris.Interp.Case.BinaryDivP
 import VsaIris.Interp.Case.BinaryAddP
 import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
-import VsaIris.Interp.Case.LeafBoolP
 import VsaIris.Interp.Case.ExecVarNullP
-import VsaIris.Interp.Case.BinaryGtP
-import VsaIris.Interp.Case.BinaryNeP
 import VsaIris.Interp.Case.FnLitP
 import VsaIris.Interp.Case.ExecExprP
-import VsaIris.Interp.Case.BinaryLeP
-import VsaIris.Interp.Case.UnaryNegTypeP
 import VsaIris.Interp.Case.ExecVarInitP
 import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
-import VsaIris.Interp.Case.BinarySubP
-import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.ExecForP
-import VsaIris.Interp.Case.BinaryEqP
-import VsaIris.Interp.Case.UnaryNotP
-import VsaIris.Interp.Case.BinaryMulP
-import VsaIris.Interp.Case.LogicalAndFalseP
 import VsaIris.Interp.Case.ExecRetP
-import VsaIris.Interp.Case.LogicalOrTrueP
-import VsaIris.Interp.Case.ExecBrkP
-import VsaIris.Interp.Case.ExecContP
-import VsaIris.Interp.Case.BinaryModP
+import VsaIris.Interp.ExecJump
 import VsaIris.Interp.Case.ExecIfP
-import VsaIris.Interp.Case.BinaryLtP
-import VsaIris.Interp.Case.ExecRetNullP
-import VsaIris.Interp.Case.LeafNullP
-import VsaIris.Interp.Case.LeafIntP
-import VsaIris.Interp.Case.BinaryGeP
+import VsaIris.Interp.ExecRetNull
 import VsaIris.Interp.CallCloP
 import VsaIris.Interp.LoopWhile
 import VsaIris.Interp.LoopFor
@@ -118,10 +105,10 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   have hE := S.errEnv
   ihave #HL := leafErrCtx_of_errCtx hE.inpGeom hE.inpLt $$ Hctx
   cases e with
-  | int n => iapply caseP_LeafInt S.hlive S.vint $$ HE
-  | str x => iapply caseP_LeafStr S.hlive S.vstr $$ HE
-  | bool b => iapply caseP_LeafBool S.hlive S.vbool $$ HE
-  | null => iapply caseP_LeafNull S.hlive S.vnull $$ HE
+  | int n => iapply leafIntP S.hlive S.vint; iframe HE Hctx
+  | str x => iapply leafStrP S.hlive S.vstr; iframe HE Hctx
+  | bool b => iapply leafBoolP S.hlive S.vbool; iframe HE Hctx
+  | null => iapply leafNullP S.hlive S.vnull; iframe HE Hctx
   | var x =>
     iapply caseP_Var S.hlive hE.newlib hE.code (errRoom _ _) S.envGet
     iframe HL HE
@@ -134,29 +121,41 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   | unary op e =>
     cases op with
     | neg =>
-      iapply caseP_UnaryNeg S.hlive S.vint S.vkind hE
+      iapply negP S.hlive S.vint S.vkind hE
       iframe HE Hctx
-    | not => iapply caseP_UnaryNot S.hlive S.vtruthy S.vbool $$ HE
+    | not => iapply notP S.hlive S.vtruthy S.vbool; iframe HE Hctx
   | logical op l r =>
     cases op with
-    | and => iapply caseP_LogicalAnd S.hlive S.vtruthy S.vbool $$ HE
-    | or => iapply caseP_LogicalOr S.hlive S.vtruthy S.vbool $$ HE
+    | and => iapply logP .and S.hlive S.vtruthy S.vbool; iframe HE Hctx
+    | or => iapply logP .or S.hlive S.vtruthy S.vbool; iframe HE Hctx
   | binary op l r =>
     cases op with
     | add =>
       iapply caseP_BinaryAdd S.hlive hE S.vint rfl rfl S.alloc S.stringifyP S.strlenHeap S.memcpyOwned
         S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply) S.vkind
       iframe HE Hctx
-    | sub => iapply caseP_BinarySub S.hlive hE S.vint S.vkind; iframe HE Hctx
-    | mul => iapply caseP_BinaryMul S.hlive hE S.vint S.vkind; iframe HE Hctx
-    | div => iapply caseP_BinaryDiv S.hlive hE S.vint S.vkind; iframe HE Hctx
-    | mod => iapply caseP_BinaryMod S.hlive hE S.vint S.vkind; iframe HE Hctx
-    | eq => iapply caseP_BinaryEq S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
-    | ne => iapply caseP_BinaryNe S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
-    | lt => iapply caseP_BinaryLt S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
-    | le => iapply caseP_BinaryLe S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
-    | gt => iapply caseP_BinaryGt S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
-    | ge => iapply caseP_BinaryGe S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | sub =>
+      iapply intOpP .sub .sub (op := .sub) rfl (IntOpDesc.sem_triv fun _ _ _ => rfl)
+        (IntOpDesc.noZ fun _ _ => trivial) S.hlive hE S.vint S.vkind
+      iframe HE Hctx
+    | mul =>
+      iapply intOpP .mul .mul (op := .mul) rfl (IntOpDesc.sem_triv fun _ _ _ => rfl)
+        (IntOpDesc.noZ fun _ _ => trivial) S.hlive hE S.vint S.vkind
+      iframe HE Hctx
+    | div =>
+      iapply intOpP .div .div (op := .div) rfl IntOpDesc.div_sem IntOpDesc.div_Z
+        S.hlive hE S.vint S.vkind
+      iframe HE Hctx
+    | mod =>
+      iapply intOpP .mod .mod (op := .mod) rfl IntOpDesc.mod_sem IntOpDesc.mod_Z
+        S.hlive hE S.vint S.vkind
+      iframe HE Hctx
+    | eq => iapply eqP .eq (op := .eq) rfl S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
+    | ne => iapply eqP .ne (op := .ne) rfl S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
+    | lt => iapply cmpP .lt (op := .lt) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | le => iapply cmpP .le (op := .le) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | gt => iapply cmpP .gt (op := .gt) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | ge => iapply cmpP .ge (op := .ge) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
   | call f args =>
     iapply caseP_CallArm S.hlive hE S.nativeEntries (dispSupply_of_cloSupply S.cloSupply)
       ErrnoOwn.errnoLend_vsa
@@ -189,9 +188,9 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   | ret eo =>
     cases eo with
     | some e => iapply caseP_ExecRet S.hlive $$ HE
-    | none => iapply caseP_ExecRetNull S.hlive S.vnull
-  | brk => iapply caseP_ExecBrk S.hlive
-  | cont => iapply caseP_ExecCont S.hlive
+    | none => iapply retNullP S.hlive S.vnull
+  | brk => iapply jumpP .brk S.hlive (ExecS.brk _ _ _)
+  | cont => iapply jumpP .cont S.hlive (ExecS.cont _ _ _)
 
 theorem specsP_all {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     (S : StuckSupply (GF := GF) live N inp) :
