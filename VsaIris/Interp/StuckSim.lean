@@ -5,7 +5,7 @@ import VsaIris.Interp.LogArm
 import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.AssignP
-import VsaIris.Interp.Case.BinaryAddP
+import VsaIris.Interp.AddArm
 import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.ExecVarDecl
@@ -130,7 +130,7 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   | binary op l r =>
     cases op with
     | add =>
-      iapply caseP_BinaryAdd S.hlive hE S.vint rfl rfl S.alloc S.stringifyP S.strlenHeap S.memcpyOwned
+      iapply addP S.hlive hE S.vint rfl rfl S.alloc S.stringifyP S.strlenHeap S.memcpyOwned
         S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply) S.vkind
       iframe HE Hctx
     | sub =>

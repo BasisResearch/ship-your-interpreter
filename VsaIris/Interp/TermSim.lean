@@ -7,7 +7,7 @@ import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
-import VsaIris.Interp.Case.BinaryConcatT
+import VsaIris.Interp.AddArm
 import VsaIris.Interp.Case.CallClosureT
 import VsaIris.Interp.Case.CallPrintT
 import VsaIris.Interp.Case.CallPrintlnT
@@ -100,7 +100,7 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     by_cases hs : valTag lv = 3 ∨ valTag rv = 3
     · have e := (binOpSem_add_str st2.store hs).symm.trans hsem
       obtain rfl := Option.some.inj e
-      exact caseT_BinaryConcat S.hlive Dl Dr _ hl hr rfl rfl hs S.alloc S.stringifyT S.strlenHeap
+      exact concatT S.hlive Dl Dr _ hl hr rfl rfl hs S.alloc S.stringifyT S.strlenHeap
         S.memcpyOwned S.strcpyHeap S.vstr (dispSupply_of_cloSupply S.cloSupply)
     · cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem <;>
         simp [valTag] at hs
