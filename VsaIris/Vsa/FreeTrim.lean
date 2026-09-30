@@ -79,49 +79,27 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
     AW C.live C.S C.Q 0x8000722c#64 R Mt := by
   have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
   unfold mHead Vsa.Sim.tohostAddr at hlo
-  have hs2 := T.frame.sp
-  have hs2n : (R 2).toNat = C.s.toNat - 32 := by
-    rw [hs2, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  sx_run [30] O.live at 0x80007258
-  rw [show (R 2 + 18446744073709551568#64 + 32#64).toNat = C.s.toNat - 80 + 32 by sx_addr,
-    show (R 2 + 18446744073709551568#64 + 24#64).toNat = C.s.toNat - 80 + 24 by sx_addr,
-    show (R 2 + 18446744073709551568#64 + 16#64).toNat = C.s.toNat - 80 + 16 by sx_addr,
-    show (R 2 + 18446744073709551568#64 + 8#64).toNat = C.s.toNat - 80 + 8 by sx_addr,
-    show (R 2 + 18446744073709551568#64 + 40#64).toNat = C.s.toNat - 80 + 40 by sx_addr]
-  have hd := T.disj
-  have Hp1 := ((((T.heap.store_stack hd (a := C.s.toNat - 80 + 32) (w := 8) (v := R 8) (by unfold mHead; omega)
-    (by omega)).store_stack hd (a := C.s.toNat - 80 + 24) (w := 8) (v := R 9) (by unfold mHead; omega)
-    (by omega)).store_stack hd (a := C.s.toNat - 80 + 16) (w := 8) (v := R 18) (by unfold mHead; omega)
-    (by omega)).store_stack hd (a := C.s.toNat - 80 + 8) (w := 8) (v := R 19) (by unfold mHead; omega)
-    (by omega)).store_stack hd (a := C.s.toNat - 80 + 40) (w := 8) (v := R 1) (by unfold mHead; omega)
-    (by omega)
-  generalize hM1 : writeLog (writeLog (writeLog (writeLog (writeLog Mt
-    [(C.s.toNat - 80 + 32, 8, R 8)]) [(C.s.toNat - 80 + 24, 8, R 9)]) [(C.s.toNat - 80 + 16, 8, R 18)])
-    [(C.s.toNat - 80 + 8, 8, R 19)]) [(C.s.toNat - 80 + 40, 8, R 1)] = M1 at Hp1 ⊢
-  have HH := Hp1.heap.heap
+  have hs2n : (R 2).toNat = C.s.toNat - 32 := by rw [T.frame.sp]; sx_addr
+  have HH := T.heap.heap.heap
   have htp := HH.top_ptr; have hth := HH.top_header
   have htle := HH.top_le; have hbrk := HH.brk_le; have htsz := HH.top_size
-  have hroom := Hp1.heap.top_room
-  unfold heapEnd at hbrk
-  have hlo' := HH.walk.le; unfold heapStart at hlo'
-  sx_run [1] O.live at 0x8000725c
-  rw [ldv_at htp 2147593504 (by unfold topAddr avAddr; rfl)]
-  refine (step% st 0x8000725c) O.live ?_
-  have hYlt : Y < 2 ^ 64 := by omega
-  have hEY : (BitVec.ofNat 64 Y + sign_extend (m := 64) (0x008#12)).toNat = Y + 8 := by
-    sx_norm; rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hYlt]; simp; omega
-  have hYf := fun k hk => foot_header Hp1.heap (.inl rfl) k hk
-  refine (step% st 0x80007260) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [hEY]; unfold LdOK Vsa.Sim.tohostAddr; omega
-  · rw [hEY]; exact O.foot hYf
-  rw [hEY, ldv_at hth _ rfl]
-  refine (step% st 0x80007264) O.live ?_
-  refine (step% st 0x80007268) O.live ?_
-  refine (step% st 0x8000726c) O.live ?_
-  refine (step% st 0x80007270) O.live ?_
-  refine (step% st 0x80007274) O.live ?_
-  refine (step% st 0x80007278) O.live ?_
-  refine (step% st 0x8000727c) O.live ?_
+  have hroom := T.heap.heap.top_room; have hlo' := HH.walk.le
+  unfold heapEnd at hbrk; unfold heapStart at hlo'; unfold topAddr avAddr at htp
+  have rS := O.stackRgn; have rG := globRgn C.H
+  have rT : Rgn (vsaFoot C.H) (Y + 8) 8 := ⟨foot_header T.heap.heap (.inl rfl)⟩
+  have oT := rT.offStack T.disj (by decide); unfold mHead at oT
+  rgn_run O.live at 0x80007258
+  simp only [BitVec.reduceAppend, BitVec.reduceSignExtend, BitVec.reduceAdd]
+  rgn_run O.live at 0x8000725c
+  rgn_ld [htp]
+  rgn_run O.live at 0x80007264
+  rgn_ld [hth]
+  rgn_run O.live at 0x80007280
+  rw [show (R 2 + 18446744073709551568#64 + 32#64).toNat = C.s.toNat - 80 + 32 by rgn_arith,
+    show (R 2 + 18446744073709551568#64 + 24#64).toNat = C.s.toNat - 80 + 24 by rgn_arith,
+    show (R 2 + 18446744073709551568#64 + 16#64).toNat = C.s.toNat - 80 + 16 by rgn_arith,
+    show (R 2 + 18446744073709551568#64 + 8#64).toNat = C.s.toNat - 80 + 8 by rgn_arith,
+    show (R 2 + 18446744073709551568#64 + 40#64).toNat = C.s.toNat - 80 + 40 by rgn_arith]
   sx_norm
   have hts : (BitVec.ofNat 64 (brkv - Y + 1) &&& 18446744073709551612#64).toNat = brkv - Y := by
     rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; omega
@@ -129,50 +107,37 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
       = brkv - Y + 4063 := by
     rw [BitVec.toNat_sub, BitVec.toNat_add, BitVec.toNat_add, hts, T.a1]
     simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-
   have F := T.frame
-  have hS : ∀ R' : Nat → BitVec 64, R' 2 = R 2 + 18446744073709551568#64 → R' 18 = R 10 →
-      R' 19 = 2147593488#64 → (R' 9).toNat = brkv - Y → TrimSt C R' M1 Y brkv chunks bins := by
-    intro R' h2 h18 h19 h9
-    rw [← hM1] at Hp1 ⊢
-    refine ⟨Hp1, T.top_le, fun a ha => ?_, hd, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, h9⟩
-    · exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
-        (writeLog_present _ _ _ (writeLog_present _ _ _ (T.pres a ha)))))
-    · exact frame_store (win_stack (by unfold mHead; omega) (by omega))
-        (frame_store (win_stack (by unfold mHead; omega) (by omega))
-          (frame_store (win_stack (by unfold mHead; omega) (by omega))
-            (frame_store (win_stack (by unfold mHead; omega) (by omega))
-              (frame_store (win_stack (by unfold mHead; omega) (by omega)) T.frameM))))
-    · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
-        rd_miss (by omega)]; exact F.s0
-    · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
-        rd_miss (by omega)]; exact F.ra
-    · rw [read64_store_hit, T.ra]; rfl
-    · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
-        read64_store_hit, T.s0]
-    · rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit, F.s1]
-    · rw [rd_miss (by omega), rd_miss (by omega), read64_store_hit, F.s2]
-    · rw [rd_miss (by omega), read64_store_hit, F.s3]
-    · rw [h2, hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
-      simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-    · rw [h18, T.a0]
-    · rw [h19]
-  refine (step% st 0x80007280) O.live (fun hlt => ?_) (fun hge => ?_)
-  ·
-    exact hno _ _ (hS _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hts))
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hge
-    have hyes2 : 4096 ≤ trimExtra (brkv - Y) := by
-      have := mt (trimE hx (by omega)).2 hge; omega
-    have hE := trimE_word hx (by omega)
-    rw [if_neg (by unfold trimExtra at hyes2; omega)] at hE
-    exact hyes _ _ (hS _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hts))
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hE) hyes2
+  generalize hR' : upd _ _ _ = R'
+  generalize hM1 : writeLog _ _ = M1
+  have hS : TrimSt C R' M1 Y brkv chunks bins := by
+    subst hM1
+    refine ⟨T.heap.transport_read fun x hx => ?_, T.top_le, pres_log _ (pres_log _ (pres_log _
+      (pres_log _ (pres_log _ T.pres)))), T.disj, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · have := offStack_pt T.disj hx.1
+      simp only [writeLog_nest, List.cons_append, List.nil_append]
+      rw [writeLog_out]; simp only [OutL, and_true]; omega
+    · simp only [writeLog_nest, List.cons_append, List.nil_append]
+      exact frame_log (by log_in) T.frameM
+    · rd_log [F.s0]
+    · rd_log [F.ra]
+    · rd_log [T.ra]; rfl
+    · rd_log [T.s0]
+    · rd_log [F.s1]
+    · rd_log [F.s2]
+    · rd_log [F.s3]
+    all_goals (subst hR'; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+    · rw [F.sp, BitVec.add_assoc]; rfl
+    · exact T.a0
+    · exact hts
+  refine (step% st 0x80007280) O.live (fun _ => hno _ _ hS) (fun hge => ?_)
+  subst hR'
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hge
+  have hyes2 : 4096 ≤ trimExtra (brkv - Y) := by
+    have := mt (trimE hx (by omega)).2 hge; omega
+  have hE := trimE_word hx (by omega)
+  rw [if_neg (by unfold trimExtra at hyes2; omega)] at hE
+  exact hyes _ _ hS (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hE) hyes2
 
 theorem trim_ret {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
@@ -180,23 +145,14 @@ theorem trim_ret {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
     AW C.live C.S C.Q 0x8000729c#64 R M := by
   have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
   unfold mHead Vsa.Sim.tohostAddr at hlo
-  have hs2 := S.sp
-  have hs2n : (R 2).toNat = C.s.toNat - 80 := by
-    rw [hs2, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  have l40 := ldv_at S.sra (R 2 + sign_extend (m := 64) (0x028#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l32 := ldv_at S.ss0 (R 2 + sign_extend (m := 64) (0x020#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l24 := ldv_at S.ss1 (R 2 + sign_extend (m := 64) (0x018#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l16 := ldv_at S.ss2 (R 2 + sign_extend (m := 64) (0x010#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l8 := ldv_at S.ss3 (R 2 + sign_extend (m := 64) (0x008#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq] at l40 l32 l24 l16 l8
-  sx_run [12] O.live at 0x800072a4
-  sx_run [12] O.live
-  all_goals simp only [l40, l32, l24, l16, l8]
-  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide))
+  have hs2n : (R 2).toNat = C.s.toNat - 80 := by rw [S.sp]; sx_addr
+  have rS := O.stackRgn
+  rgn_run O.live at 0x80007578
+  all_goals rgn_ld [S.sra, S.ss0, S.ss1, S.ss2, S.ss3]
+  · decide
   refine hk _ M ⟨?_, S.fs0, S.fra, ?_, ?_, ?_⟩ ?_ ⟨⟨_, _, _, _, S.heap, S.top_le⟩, S.pres, S.frameM⟩ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
-  simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.ofNat_toNat, BitVec.setWidth_eq]
+  rw [S.sp, BitVec.add_assoc]; rfl
 
 theorem TrimSt.sbrk {C : MCtx} {R R' : Nat → BitVec 64} {M M' : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
@@ -291,44 +247,29 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
   have hbrkle := HH.brk_le; have htle := HH.top_le; have hY := HH.walk.le
   unfold heapEnd at hbrkle; unfold heapStart at hY
-  have hs2 : (R 2).toNat = C.s.toNat - 80 := by
-    rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  refine (step% st 0x80007284) O.live ?_
-  refine (step% st 0x80007288) O.live ?_
-  refine (step% st 0x8000728c) O.live ?_
-  simp only [VsaIris.ra]
-  have Sc := S.upd (R' := upd (upd (upd R 11 (0#64 + sign_extend (m := 64) (0x000#12))) 10
-      (R 18 + sign_extend (m := 64) (0x000#12))) 1 (BitVec.ofNat 64 (0x8000728c + 4)))
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-  refine sbrk_r_gen O.live (Sc.sbrkPre O (nbrk := brkv) rfl
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm
-        rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)])) (fun hle R' M' P h10 => ?_)
-    (fun hlt => absurd hlt (by unfold heapEnd; omega))
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true]
+  have hs2 : (R 2).toNat = C.s.toNat - 80 := by rw [S.sp]; sx_addr
+  rgn_run O.live at 0x8000696c
+  generalize hRc : upd _ _ _ = Rc
+  have Sc := S.upd (R' := Rc) (hRc ▸ rfl) (hRc ▸ rfl) (hRc ▸ rfl) (hRc ▸ rfl)
+  have hal : (Rc 1).toNat % 4 = 0 := by subst hRc; simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide
+  refine sbrk_r_gen O.live (Sc.sbrkPre O (nbrk := brkv) (hRc ▸ rfl) hal (by subst hRc; rgn_arith))
+    (fun hle R' M' P h10 => ?_) (fun hlt => absurd hlt (by unfold heapEnd; omega))
   have hr := P.regs
-  have hs2c : ((upd (upd (upd R 11 (0#64 + sign_extend (m := 64) (0x000#12))) 10
-      (R 18 + sign_extend (m := 64) (0x000#12))) 1 (BitVec.ofNat 64 (0x8000728c + 4))) 2).toNat =
-      C.s.toNat - 80 := by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hs2
-  have S' := Sc.sbrk hs2c (by omega) P (hr 2 (by decide) (by decide) (by decide))
+  have S' := Sc.sbrk (hRc ▸ hs2) (by omega) P (hr 2 (by decide) (by decide) (by decide))
     (hr 18 (by decide) (by decide) (by decide)) (hr 19 (by decide) (by decide) (by decide))
     (hr 9 (by decide) (by decide) (by decide))
-  have h8 : R' 8 = R 8 := by
-    rw [hr 8 (by decide) (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  have H' := S'.heap.heap.heap
-  have htp := H'.top_ptr
-  have h19 := S'.s3
-  rw [← upd_self_eq h19]
-  refine (step% st 0x80007290) O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
-  sx_norm
-  simp (disch := decide) only [ldv_at htp]
-  refine (step% st 0x80007294) O.live ?_
+  have h8 : R' 8 = R 8 := (hr 8 (by decide) (by decide) (by decide)).trans (hRc ▸ rfl)
+  have htp := S'.heap.heap.heap.top_ptr; unfold topAddr avAddr at htp
+  have h19 : (R' 19).toNat = 2147593488 := by rw [S'.s3]; rfl
+  have rG := globRgn C.H
+  subst hRc; simp only [upd_apply, Nat.reduceEqDiff, ite_true]
+  rgn_run O.live at 0x80007298
+  rgn_ld [htp]
   have hsum : (BitVec.ofNat 64 Y + R' 9).toNat = brkv := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, S'.s1, Nat.mod_eq_of_lt (by omega)]; omega
   refine (step% st 0x80007298) O.live (fun _ => ?_) (fun hne => absurd ?_ hne)
-  · refine hk _ _ (S'.upd ?_ ?_ ?_ ?_) ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    all_goals first | exact h19.symm | (rw [h8]; exact hE)
+  · refine hk _ _ (S'.upd ?_ ?_ ?_ ?_) ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+    rw [h8]; exact hE
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [h10]; apply BitVec.eq_of_toNat_eq; rw [hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
 
@@ -352,34 +293,25 @@ theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have hbrkle := HH.brk_le; have htle := HH.top_le; have hY := HH.walk.le
   unfold heapEnd at hbrkle; unfold heapStart at hY
   have hle := trimExtra_le (ts := brkv - Y) (by have := HH.top_size; omega) hE4
-  have hs2 : (R 2).toNat = C.s.toNat - 80 := by
-    rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  refine (step% st 0x800072c4) O.live ?_
-  refine (step% st 0x800072c8) O.live ?_
-  refine (step% st 0x800072cc) O.live ?_
-  simp only [VsaIris.ra]
-  have Sc := S.upd (R' := upd (upd (upd R 11 (0#64 - R 8)) 10 (R 18 + sign_extend (m := 64) (0x000#12))) 1
-      (BitVec.ofNat 64 (0x800072cc + 4)))
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-  have hsum : (BitVec.ofNat 64 brkv + (upd (upd (upd R 11 (0#64 - R 8)) 10 (R 18 + sign_extend (m := 64) (0x000#12)))
-      1 (BitVec.ofNat 64 (0x800072cc + 4))) 11).toNat = brkv - trimExtra (brkv - Y) := by
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  have hs2 : (R 2).toNat = C.s.toNat - 80 := by rw [S.sp]; sx_addr
+  rgn_run O.live at 0x8000696c
+  generalize hRc : upd _ _ _ = Rc
+  have Sc := S.upd (R' := Rc) (hRc ▸ rfl) (hRc ▸ rfl) (hRc ▸ rfl) (hRc ▸ rfl)
+  have hsum : (BitVec.ofNat 64 brkv + Rc 11).toNat = brkv - trimExtra (brkv - Y) := by
+    subst hRc; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ofNat, hE]
     simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     omega
-  refine sbrk_r_gen O.live (Sc.sbrkPre O rfl (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide) hsum)
+  have hal : (Rc 1).toNat % 4 = 0 := by subst hRc; simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide
+  refine sbrk_r_gen O.live (Sc.sbrkPre O (hRc ▸ rfl) hal hsum)
     (fun _ R' M' P h10 => ?_) (fun hlt => absurd hlt (by unfold heapEnd; omega))
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true]
   have hr := P.regs
-  have hs2c : ((upd (upd (upd R 11 (0#64 - R 8)) 10 (R 18 + sign_extend (m := 64) (0x000#12))) 1
-      (BitVec.ofNat 64 (0x800072cc + 4))) 2).toNat = C.s.toNat - 80 := by
-    simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hs2
+  have h1 : Rc 1 = 0x800072d0#64 := hRc ▸ rfl
+  rw [h1]
   refine hk R' M' ⟨Sc.upd (hr 2 (by decide) (by decide) (by decide)) (hr 18 (by decide) (by decide) (by decide))
     (hr 19 (by decide) (by decide) (by decide)) (hr 9 (by decide) (by decide) (by decide)),
-    ?_, hE4, P.brk, fun a ha => P.agree a (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hs2]; exact ha),
-    P.pres, h10⟩
-  rw [hr 8 (by decide) (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hE
+    by rw [hr 8 (by decide) (by decide) (by decide), ← hRc]; exact hE, hE4, P.brk,
+    fun a ha => P.agree a (by rw [show (Rc 2).toNat = C.s.toNat - 80 from hRc ▸ hs2]; exact ha), P.pres, h10⟩
 
 structure TrimOut (C : MCtx) (R : Nat → BitVec 64) (M : Mem) : Prop where
   done : FDone C M
@@ -398,23 +330,14 @@ theorem trim_out {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} (S : T
     AW C.live C.S C.Q 0x800072f8#64 R M := by
   have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
   unfold mHead Vsa.Sim.tohostAddr at hlo
-  have hs2 := S.sp
-  have hs2n : (R 2).toNat = C.s.toNat - 80 := by
-    rw [hs2, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  have l40 := ldv_at S.sra (R 2 + sign_extend (m := 64) (0x028#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l32 := ldv_at S.ss0 (R 2 + sign_extend (m := 64) (0x020#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l24 := ldv_at S.ss1 (R 2 + sign_extend (m := 64) (0x018#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l16 := ldv_at S.ss2 (R 2 + sign_extend (m := 64) (0x010#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  have l8 := ldv_at S.ss3 (R 2 + sign_extend (m := 64) (0x008#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
-  simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq] at l40 l32 l24 l16 l8
-  sx_run [12] O.live at 0x800072fc
-  sx_run [12] O.live
-  all_goals simp only [l40, l32, l24, l16, l8]
-  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide))
+  have hs2n : (R 2).toNat = C.s.toNat - 80 := by rw [S.sp]; sx_addr
+  have rS := O.stackRgn
+  rgn_run O.live at 0x80007578
+  all_goals rgn_ld [S.sra, S.ss0, S.ss1, S.ss2, S.ss3]
+  · decide
   refine hk _ M ⟨?_, S.fs0, S.fra, ?_, ?_, ?_⟩ ?_ S.done <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
-  simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.ofNat_toNat, BitVec.setWidth_eq]
+  rw [S.sp, BitVec.add_assoc]; rfl
 
 theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (T : TrimMid C R M M' Y brkv chunks bins)
@@ -430,8 +353,6 @@ theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y 
   have hle := trimExtra_le (ts := brkv - Y) (by omega) T.e4
   have hpage := S.heap.brk_page
   have hEp : trimExtra (brkv - Y) % 4096 = 0 := by unfold trimExtra; omega
-  have hs2n : (R 2).toNat = C.s.toNat - 80 := by
-    rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
 
   have hkeep : ∀ a, vsaFoot C.H a → ¬ (brkAddr ≤ a ∧ a < brkAddr + 8) → ¬ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) →
       ¬ (0x8001b538 ≤ a ∧ a < 0x8001b53c) → M'[a]? = M[a]? := by
@@ -468,40 +389,27 @@ theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y 
     sx_norm
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)] at this
     omega
-  have h19 := S.s3
-  rw [← upd_self_eq h19]
-  unfold topAddr avAddr at htpM
-  unfold mallinfoAddr at hmiM
-  refine (step% st 0x800072d8) O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
-  sx_norm
-  simp (disch := decide) only [ldv_at htpM]
-  refine (step% st 0x800072dc) O.live (by sx_norm; sx_side) ?_
-  simp (disch := sx_addr) only [ldv_at hmiM]
-  refine (step% st 0x800072e0) O.live ?_
-  refine (step% st 0x800072e4) O.live ?_
-  have hhd := foot_header S.heap.heap (.inl rfl)
-  have hoffH := off_stack_of S.disj hhd
-  refine (step% st 0x800072e8) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot_at hhd _ (by sx_addr)
-  sx_norm
-  refine (step% st 0x800072ec) O.live ?_
-  refine (step% st 0x800072f0) O.live ?_
-  refine (step% st 0x800072f4) O.live ?_ ?_
-  · sx_norm; exact O.foot (a := 0x8001ba18) (w := 8)
-      (fun k hk => .inl (by unfold allocGlobal InRange; omega))
-  sx_norm
+  have h19 : (R 19).toNat = 2147593488 := by rw [S.s3]; rfl
+  unfold topAddr avAddr at htpM; unfold mallinfoAddr at hmiM
+  have rG := globRgn C.H
+  have rM : Rgn (vsaFoot C.H) 0x8001ba18 8 := ⟨fun k hk => .inl (by unfold allocGlobal InRange; omega)⟩
+  have rT : Rgn (vsaFoot C.H) (Y + 8) 8 := ⟨foot_header S.heap.heap (.inl rfl)⟩
+  rgn_run O.live at 0x800072dc
+  rgn_ld [htpM]
+  rgn_run O.live at 0x800072e0
+  rgn_ld [hmiM]
+  rgn_run O.live at 0x800072f8
   have hE := T.e
   have hv9 : (R 9 - R 8).toNat = brkv - trimExtra (brkv - Y) - Y := by
     rw [BitVec.toNat_sub, S.s1, hE]; omega
   have hv : (R 9 - R 8 ||| 1#64).toNat = brkv - trimExtra (brkv - Y) - Y + 1 :=
     or1_toNat hv9 (by unfold trimExtra; omega)
-  have hY8 : (BitVec.ofNat 64 Y + 8#64).toNat = Y + 8 := by sx_addr
-  rw [hY8]
+  rw [show (BitVec.ofNat 64 Y + 8#64).toNat = Y + 8 by rgn_arith,
+    show (2147596824#64).toNat = 2147596824 from rfl]
   generalize hM2d : writeLog (writeLog M' [(Y + 8, 8, R 9 - R 8 ||| 1#64)])
     [(2147596824, 8, BitVec.ofNat 64 mi - R 8)] = M2
   obtain ⟨g1, g2⟩ := glob_off_of S.disj
-  unfold mHead at g1 g2
+  have oT := rT.offStack S.disj (by decide); unfold mHead at g1 g2 oT
   have hM2 : ∀ a, ¬ (Y + 8 ≤ a ∧ a < Y + 16) → ¬ (0x8001ba18 ≤ a ∧ a < 0x8001ba20) → M2[a]? = M'[a]? := by
     intro a h1 h2
     rw [← hM2d, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
@@ -530,22 +438,15 @@ theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y 
     · rw [← hM2d]; unfold mallinfoAddr; rw [read64_store_hit]; rfl
     · rw [read64_keep fun k hk => hM2 _ (by unfold maxSbrkedAddr; omega) (by unfold maxSbrkedAddr; omega)]
       exact hmsM
-  refine trim_out O ⟨⟨⟨_, _, _, _, Hp', S.top_le⟩, fun a ha => ?_, fun a ha => ?_⟩,
+  refine trim_out O ⟨⟨⟨_, _, _, _, Hp', S.top_le⟩,
+    hM2d ▸ pres_log _ (pres_log _ fun a ha => T.pres a (S.pres a ha)), ?_⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ hk
-  · rw [← hM2d]; exact writeLog_present _ _ _ (writeLog_present _ _ _ (T.pres a (S.pres a ha)))
-  · have hnf : ¬ vsaFoot C.H a := fun h => ha (.inl h)
-    have hng : ¬ allocGlobal a := fun h => hnf (.inl h)
-    rw [hM2 a (fun h => hnf (hhd (a - (Y + 8)) (by omega) |> fun h' => by
-        rwa [show Y + 8 + (a - (Y + 8)) = a by omega] at h'))
-      (fun h => hng (by unfold allocGlobal InRange; omega))]
-    rw [T.agree a fun hw => ?_]
-    · exact S.frameM a ha
-    unfold SbrkW brkAddr at hw
-    rcases hw with hw | hw | hw | hw
-    · exact ha (.inr ⟨by unfold mHead; omega, by omega⟩)
-    · exact hng (by unfold allocGlobal InRange; omega)
-    · exact hng (by unfold allocGlobal InRange; omega)
-    · exact hng (by unfold allocGlobal InRange; omega)
+  · rw [← hM2d, writeLog_nest]
+    refine frame_log (L := [_, _]) (by log_in) fun b hb => ?_
+    rw [T.agree b fun hw => hb ?_]; · exact S.frameM b hb
+    unfold SbrkW brkAddr at hw; rcases hw with hw | hw | hw | hw
+    · exact .inr ⟨by unfold mHead; omega, by omega⟩
+    all_goals exact .inl (.inl (by unfold allocGlobal InRange; omega))
   all_goals first
     | (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; first | exact S.sp | exact S.s2)
     | (rw [rslot _ (by omega) (by omega)]; exact S.fs0)
