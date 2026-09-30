@@ -1,4 +1,5 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.BinaryAddP
@@ -6,7 +7,6 @@ import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.Case.LeafBoolP
 import VsaIris.Interp.Case.ExecVarNullP
-import VsaIris.Interp.Case.BinaryNeP
 import VsaIris.Interp.Case.FnLitP
 import VsaIris.Interp.Case.ExecExprP
 import VsaIris.Interp.Case.UnaryNegTypeP
@@ -15,7 +15,6 @@ import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
 import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.ExecForP
-import VsaIris.Interp.Case.BinaryEqP
 import VsaIris.Interp.Case.UnaryNotP
 import VsaIris.Interp.Case.LogicalAndFalseP
 import VsaIris.Interp.Case.ExecRetP
@@ -157,8 +156,8 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
       iapply intOpP .mod .mod (op := .mod) rfl IntOpDesc.mod_sem IntOpDesc.mod_Z
         S.hlive hE S.vint S.vkind
       iframe HE Hctx
-    | eq => iapply caseP_BinaryEq S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
-    | ne => iapply caseP_BinaryNe S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
+    | eq => iapply eqP .eq (op := .eq) rfl S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
+    | ne => iapply eqP .ne (op := .ne) rfl S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
     | lt => iapply cmpP .lt (op := .lt) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
     | le => iapply cmpP .le (op := .le) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
     | gt => iapply cmpP .gt (op := .gt) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx

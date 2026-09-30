@@ -1,4 +1,5 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafIntT
@@ -8,8 +9,6 @@ import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
 import VsaIris.Interp.Case.BinaryConcatT
-import VsaIris.Interp.Case.BinaryEqT
-import VsaIris.Interp.Case.BinaryNeT
 import VsaIris.Interp.Case.LogicalAndFalseT
 import VsaIris.Interp.Case.LogicalAndTrueT
 import VsaIris.Interp.Case.LogicalOrFalseT
@@ -102,10 +101,10 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   cases op with
   | eq =>
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinaryEq S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
+    exact eqT .eq S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
   | ne =>
     obtain rfl := Option.some.inj hsem
-    exact caseT_BinaryNe S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
+    exact eqT .ne S.hlive Dl Dr _ hl hr S.vequal S.strcmpV S.vbool S.nativeInj
   | add =>
     by_cases hs : valTag lv = 3 ∨ valTag rv = 3
     · have e := (binOpSem_add_str st2.store hs).symm.trans hsem
