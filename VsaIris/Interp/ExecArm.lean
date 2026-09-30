@@ -2,6 +2,7 @@ import VsaIris.Interp.ExecDisp
 import VsaIris.Interp.NewlibCall
 import VsaIris.Interp.SymLater
 import VsaIris.Interp.SpecValue
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -448,7 +449,7 @@ macro_rules
     (hS2 : ldv .ld Mt (s + 18446744073709551440#64 + 144#64).toNat = v18)
     (hS3 : ldv .ld Mt (s + 18446744073709551440#64 + 136#64).toNat = v19) :
     IW live m DA (InExt (s.toNat - 176, 176)) Q 0x8000409c#64 R Mt
-  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
+  by sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
 
 #ix_seg ExecRetCopy_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -465,7 +466,7 @@ macro_rules
     (hS2 : ldv .ld Mt (s + 18446744073709551440#64 + 144#64).toNat = v18)
     (hS3 : ldv .ld Mt (s + 18446744073709551440#64 + 136#64).toNat = v19) :
     IW live m DA (fun a => InExt (s.toNat - 176, 176) a ∨ InExt (aRet.toNat, 24) a) Q 0x80004138#64 R Mt
-  by ix_run hlive using [h2, h18, hRA, hS0, hS1, hS2, hS3, hsf, hal]
+  by sym_run hlive using [h2, h18, hRA, hS0, hS1, hS2, hS3, hsf, hal]
 
 #ix_seg ExecEpiRet_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -480,7 +481,7 @@ macro_rules
     (hS2 : ldv .ld Mt (s + 18446744073709551440#64 + 144#64).toNat = v18)
     (hS3 : ldv .ld Mt (s + 18446744073709551440#64 + 136#64).toNat = v19) :
     IW live m DA (InExt (s.toNat - 176, 176)) Q 0x80004150#64 R Mt
-  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
+  by sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
 
 section Exits
 

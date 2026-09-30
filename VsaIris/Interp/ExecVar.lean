@@ -1,6 +1,7 @@
 import VsaIris.Interp.ExecEnv
 import VsaIris.Interp.LeafArm
 import VsaIris.Interp.ExecOom
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -72,7 +73,7 @@ theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004304#64 R Mt
-  by ix_run hlive at 0x800040f0
+  by sym_run hlive at 0x800040f0
 
 #ix_seg VarArm_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -84,13 +85,13 @@ theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     (h8 : R 8 = aS) (h2 : R 2 = s + 18446744073709551440#64)
     (hn : ldv .ld m (aS + 8#64).toNat = pn) :
     IW live m (stmtView aS.toNat 24) (InExt (s.toNat - 176, 176)) Q 0x800040f0#64 R Mt
-  by ix_run hlive using [h8, h2, hn, hsf] at 0x80004114
+  by sym_run hlive using [h8, h2, hn, hsf] at 0x80004114
 
 #ix_seg VarArm_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004118#64 R Mt
-  by ix_run hlive at 0x8000409c
+  by sym_run hlive at 0x8000409c
 
 section Tail
 

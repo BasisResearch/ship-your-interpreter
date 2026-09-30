@@ -7,6 +7,7 @@ import VsaIris.Interp.NewlibCall
 import VsaIris.Interp.LeafCalls
 import VsaIris.Vsa.MainOk
 import VsaIris.Interp.ExecDisp
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -20,7 +21,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s) :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x800043ec#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80004424
+  by sym_run hlive using [h2, hsf] at 0x80004424
 
 #ix_seg TopHead_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -41,7 +42,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (h2 : R 2 = s + 18446744073709551440#64)
     (hRA : ldv .ld Mt (s + 18446744073709551440#64 + 168#64).toNat = 0x800045ec#64) :
     IW live m [] (interpS s) Q 0x80004514#64 R Mt
-  by ix_run hlive using [h2, hRA, hsf, interpS]
+  by sym_run hlive using [h2, hRA, hsf, interpS]
 
 section Setjmp
 
