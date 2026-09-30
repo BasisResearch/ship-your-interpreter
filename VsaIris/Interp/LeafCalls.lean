@@ -13,22 +13,6 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 
 abbrev frS (f a : Nat) : Nat → Prop := fun b => InExt (f, 1088) b ∨ InExt (a, 24) b
 
-theorem ms_intro_sret {pc r : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} :
-    PC ↦ᵣ pc ∗ ra ↦ᵣ r ∗ regFile R ∗ ownSet (InExt (f, 1088)) byteAny ∗ slot24 a ⊢@{IProp GF}
-      ∃ Mt, ms pc (upd R 1 r) (frS f a) Mt ∗ ⌜∀ b, InExt (f, 1088) b → ¬ InExt (a, 24) b⌝ := by
-  unfold slot24 blockOwn
-  iintro ⟨Hpc, Hra, Hregs, HF, HA⟩
-  ihave ⟨%g1, HF⟩ := ownSet_fn _ $$ HF
-  ihave ⟨%M1, HF⟩ := ownSet_mem _ g1 $$ HF
-  ihave ⟨%g2, HA⟩ := ownSet_fn _ $$ HA
-  ihave ⟨%M2, HA⟩ := ownSet_mem _ g2 $$ HA
-  ihave ⟨%M, HS, %⟨-, -, hd⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [$]
-  iexists M
-  unfold ms
-  rw [regFile_upd_ra]
-  simp only [upd_same]
-  iframe Hpc Hra Hregs HS %hd
-
 theorem inExt_disj {a n c k : Nat} (hn : 0 < n) (hk : 0 < k)
     (h : ∀ b, InExt (a, n) b → ¬ InExt (c, k) b) : a + n ≤ c ∨ c + k ≤ a := by
   apply Classical.byContradiction; intro hc

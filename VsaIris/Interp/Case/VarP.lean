@@ -16,7 +16,7 @@ theorem caseP_Var {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I :
         (.var x) := by
   unfold leafErrCtx
   iintro ⟨⟨#Hb, %jb, #Hj, %hok⟩, #IH⟩
-  iapply evalEntryP hlive fun _ _ _ _ _ _ _ _ _ _ ent => varTail (wpW _) hlive hget ent
+  iapply evalEntryP hlive fun _ _ _ _ _ _ _ _ _ _ ent => varArmTail (wpW _) hlive hget ent
     (fun v h => evalKP_exit _ (EvalE.var st d env x v h))
     (fun _ => ⟨HN, hcl, hroom, ⟨jb, hok⟩, evalKP_abort _ (by iintro ⟨-, #H⟩; iexact H)⟩)
   iframe IH; unfold errCtx; iframe Hb; iexists jb; iframe Hj; ipureintro; exact hok.ra

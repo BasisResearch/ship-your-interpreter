@@ -79,7 +79,7 @@ end
 
 /- The var arm from its entry, for any `Wp`: `env_get`, then the result copy and the exit, or
 the runtime error when the name is unbound. -/
-#ix_piece varTail_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+#ix_piece varArmTail_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {ρ : Regime} {st : St}
     {d env : Nat} {x : String} (hget : ⊢ envGetSpec (GF := GF) Wp N)
@@ -172,7 +172,7 @@ the runtime error when the name is unbound. -/
   ihave Hw := Hwk $$ Hs
   unfold getOut
 
-#ix_piece varTail_p2 from varTail_p1 by
+#ix_piece varArmTail_p2 from varArmTail_p1 by
   rcases hgv : st.store.get? env x with _ | v
   ·
     icases Hget with ⟨%hres, Hout⟩
@@ -209,7 +209,7 @@ the runtime error when the name is unbound. -/
        by subst hR3; ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2⟩
     iframe HL Hcode Hx Hms Hst Hw Hk
 
-#ix_piece varTail_p3 from varTail_p2 by
+#ix_piece varArmTail_p3 from varArmTail_p2 by
   icases Hget with ⟨%hres, Hval⟩
   ihave ⟨%w0, %w1, %w2, #Hv, Hms⟩ := ms_joinSlot N hslot $$ [$]
   ihave #Hdv := roOwn_data hn.view $$ [$]
@@ -239,7 +239,7 @@ the runtime error when the name is unbound. -/
   unfold F'
   iintro ⟨⟨#Hcode, Hst, Hw, #Hv, Hk⟩, Hms⟩
 
-#ix_piece varTail_p4 from varTail_p3 by
+#ix_piece varArmTail_p4 from varArmTail_p3 by
   have eW0 : imgW (imgM Mt3) sret.toNat = w0 := by
     rw [← ldv_ld_imgW]; subst hMt3; ix_fwd
   have eW1 : imgW (imgM Mt3) (sret.toNat + 8) = w1 := by
@@ -262,7 +262,7 @@ the runtime error when the name is unbound. -/
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep2, hk1]
 
-#ix_chain varTail := [varTail_p1, varTail_p2, varTail_p3, varTail_p4]
+#ix_chain varArmTail := [varArmTail_p1, varArmTail_p2, varArmTail_p3, varArmTail_p4]
 
 theorem caseT_Var {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -272,7 +272,7 @@ theorem caseT_Var {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I :
     (hget : ⊢ envGetSpec (GF := GF) (twpW (vsaModel live)) N) :
     ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.var x) st v 0 D := by
   have hgv : st.store.get? env x = some v := by cases D; assumption
-  exact evalEntryT hlive D fun _ _ _ _ _ _ _ _ _ _ _ ent => varTail (twpW _) hlive hget ent
+  exact evalEntryT hlive D fun _ _ _ _ _ _ _ _ _ _ _ ent => varArmTail (twpW _) hlive hget ent
     (fun _ h => by rw [hgv] at h; cases h; exact evalKT_exit) (fun h => by simp [hgv] at h)
 
 end VsaIris.Interp
