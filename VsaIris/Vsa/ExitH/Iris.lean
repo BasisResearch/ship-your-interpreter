@@ -1,7 +1,5 @@
 import VsaIris.Vsa.ExitH.RunIdle
 import VsaIris.Vsa.ExitH.RunWritten
-import VsaIris.Vsa.ExitH.RunIdleU
-import VsaIris.Vsa.ExitH.RunWrittenU
 import VsaIris.Vsa.Newlib
 
 namespace VsaIris.Newlib.ExitH
@@ -55,11 +53,9 @@ theorem exit_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {
       ⟨hm.pc, (hm.regs 2 (by decide) (by decide)).trans hend.sp,
         (hm.regs 8 (by decide) (by decide)).trans hend.s0,
         fun x hx => (hm.regs x (hin x hx).1 (hin x hx).2).trans ((hend.saved x hx).trans (hsv x hx))⟩
-  cases o <;> rcases hE with hE | hE
-  · exact exitIdleU_chain hlive hs h2 h8 h11 hC hE hk
-  · exact exitWrittenU_chain hlive hs h2 h8 h11 hC hE hk
-  · exact exitIdle_chain hlive hs h2 h8 h11 hC hE hk
-  · exact exitWritten_chain hlive hs h2 h8 h11 hC hE hk
+  rcases hE with hE | hE
+  · exact exitIdle_chain hlive hs h2 h8 h11 (conFlags_of o) hC hE hk
+  · exact exitWritten_chain hlive hs h2 h8 h11 (conFlags_of o) hC hE hk
 
 open Classical in
 
