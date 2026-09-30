@@ -6,9 +6,9 @@ namespace VsaIris.Sym
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.VsaHeap
 
 /-- The exit run's stack window: the 256 bytes below the entry stack pointer. -/
-theorem ExitSp.win {s : BitVec 64} (hs : ExitSp s) : StackWin (exitS s) s 256 :=
+theorem ExitSp.win {s : BitVec 64} (hs : ExitSp s) : StackWin (exitS s) s 256 0 :=
   ⟨⟨⟨fun k hk => .inr (.inr (by have := hs.lo; omega))⟩, by have := hs.lo; omega,
-    by have := hs.hi; omega⟩, hs.align, hs.place⟩
+    by have := hs.hi; omega⟩, by have := hs.align; omega, hs.place⟩
 
 /-- Facts every piece of the exit run normalises with: the entry registers, the FILE fields of
 `CloseMt`, the tested bits of the console flags word (`ConFlags`), and the literal folders. -/
