@@ -136,13 +136,9 @@ end Defs
   have hoff := evalSP_off (s := s) hsf (by omega)
   have hx1 := hnd.lo; have hx2 := hnd.hi; have hx3 := hnd.off
   ihave #Hdv := roOwn_data hnd.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(NatOutSpecs live N Wp entry need out ∗ codeRes ∗ roOn P m ∗
-      argVals N (imgM Mt) (argsBase s) 0 vs ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ world N L Room inp ρ st2 d ∗
-      slot24 sret.toNat ∗
-      CallExitK live N L Room inp Wp Φ rv s n sret .null ρ ⟨st2.store, out st2.store vs st2.out⟩ d ret))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hspec Hcode Hro Hav Hst Hw Hslot; iexact Hk
+  · icombine Hspec Hcode Hro Hav Hst Hw Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 hcall.s0
     hcall.sp ?_ ?_ ?_ ?_ ?_
@@ -224,11 +220,9 @@ end Defs
         imgM_store_miss _ _ (by rw [hoff 120 (by decide)]; omega)])]
   have hkR : ∀ x ∈ fRegs, x ∉ callerSaved → R2 x = R1 x := hkeep2
   ihave #Hdv := roOwn_data (DA := []) (fun a h => by simp at h) $$ [$]
-  iapply wp_swpF Wp (F := iprop(stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      valAt N sret.toNat .null ∗ world N L Room inp ρ ⟨st2.store, out st2.store vs st2.out⟩ d ∗
-      CallExitK live N L Room inp Wp Φ rv s n sret .null ρ ⟨st2.store, out st2.store vs st2.out⟩ d ret))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hst Hnull Hw Hk
+  · icombine Hst Hnull Hw Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   have h2' : upd R2 1 (BitVec.ofNat 64 (0x800039f4 + 4)) 2 = s + 18446744073709550528#64 := by
     ix_reg; rw [hkR 2 (by decide) (by decide)]; subst hR1; ix_reg; exact hcall.sp

@@ -74,12 +74,9 @@ theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP 
     rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   have hoff := evalSP_off (s := s) hsf (by omega)
   ihave #Hdv := roOwn_data hnd.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(argVals N (imgM Mt) (argsBase s) 0 vs ∗
-      (∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (line : BitVec 64),
-        ⌜NatAt R1 Mt1 Mt s sret (BitVec.ofNat 64 inp) entry line vs.length R⌝ -∗
-        ms 0x800039f4#64 R1 (natS s vs.length) Mt1 -∗ valsAt N (argsBase s) vs -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hav; iexact Hk
+  · icombine Hav Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hnd.lo hnd.hi hnd.off
     hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
@@ -160,12 +157,9 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
         y ∈ [8, 9, 18, 19, 20, 21, 22, 24, 25, 26, 27]) x hx),
       hcall.keep x ((by decide : ∀ y ∈ [19, 20, 21, 22, 24, 25, 26, 27],
         y ∈ [19, 20, 21, 22, 23, 24, 25, 26, 27]) x hx)]
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      (∀ rv' : Nat → BitVec 64, ⌜KeepRegs calleeSaved rv rv'⌝ -∗ regFile rv' -∗
-        stackScratch s n -∗ PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hms Hst; iexact Hk
+  · rw [hro]; icombine Hst Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CallN_run2 (m := ∅) (DA := []) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18)
     (v23 := rv 23) hlive hsf hs' hs2 hs3 hal h2' ?_ ?_ ?_ ?_ ?_ ?_

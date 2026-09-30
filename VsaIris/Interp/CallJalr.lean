@@ -255,9 +255,7 @@ theorem ms_callHelperR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave Hspec := Hspec $$ %R
   ihave ⟨H16, HK⟩ := (regFile_a6 R).1 $$ Hregs
   iapply wp_callRW Wp hexec (X := iprop(sepL fRegsNo16 (fun x => x ↦ᵣ R x) ∗ Pre))
-  iframe Hi Hspec Hpc Hra H16
-  isplitl [HK HPre]
-  · iframe HK HPre
+  iframe Hi Hspec Hpc Hra H16 HK HPre
   isplitl []
   · iintro H16 ⟨HK, HPre⟩
     ihave Hregs := (regFile_a6 R).2 $$ [$]
@@ -289,9 +287,7 @@ theorem ms_callAbortR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
   ihave ⟨H16, HK⟩ := (regFile_a6 R).1 $$ Hregs
   iapply wp_callAbortR Wp hexec (X := iprop(sepL fRegsNo16 (fun x => x ↦ᵣ R x) ∗ Pre))
-  iframe Hi Hspec Hpc Hra H16
-  isplitl [HK HPre]
-  · iframe HK HPre
+  iframe Hi Hspec Hpc Hra H16 HK HPre
   isplitl []
   · iintro H16 ⟨HK, HPre⟩
     ihave Hregs := (regFile_a6 R).2 $$ [$]

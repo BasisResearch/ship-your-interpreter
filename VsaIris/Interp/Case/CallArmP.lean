@@ -73,9 +73,7 @@ theorem caseP_CallArm {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
         (by show N.print = _; rw [hN.print]; rfl) (by decide) (by unfold maxArgs at hlen; omega)
         hsg (by omega) (by unfold nativePrintlnNeed at hroom; omega) hslg hal hd hregs.sp hcall hEL
       ihave #Hsp := hsp1
-      isplitl []
-      · iexact Hsp
-      iframe Hcode Hast Hv Hav Hms Hst Hw Hslot
+      iframe Hsp Hcode Hast Hv Hav Hms Hst Hw Hslot
       unfold CallExitK
       iintro %rv' %hkeep Hregs Hst Hval Hw Hpc Hra
       ihave Hk := and_elim_l $$ Hk
@@ -85,17 +83,14 @@ theorem caseP_CallArm {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
       · ipureintro; exact .call _ _ _ _ _ _ _ _ _ _ _ hEf hlen hEa (.print _ _ _)
       unfold evalPost
       iexists rv'
-      iframe Hregs Hst Hval Hw
-      ipureintro; exact hkeep
+      iframe ∗ %hkeep
     | println =>
       iapply callNativeOut hlive (wpW (vsaModel live)) (nf := .println) (entry := nativePrintlnPC)
         (out := fun st vs o => o ++ printArgs st vs ++ "\n") (need := nativePrintlnNeed)
         (by show N.println = _; rw [hN.println]; rfl) (by decide) (by unfold maxArgs at hlen; omega)
         hsg (by omega) hroom hslg hal hd hregs.sp hcall hEL
       ihave #Hsp := hsp2
-      isplitl []
-      · iexact Hsp
-      iframe Hcode Hast Hv Hav Hms Hst Hw Hslot
+      iframe Hsp Hcode Hast Hv Hav Hms Hst Hw Hslot
       unfold CallExitK
       iintro %rv' %hkeep Hregs Hst Hval Hw Hpc Hra
       ihave Hk := and_elim_l $$ Hk
@@ -105,8 +100,7 @@ theorem caseP_CallArm {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
       · ipureintro; exact .call _ _ _ _ _ _ _ _ _ _ _ hEf hlen hEa (.println _ _ _)
       unfold evalPost
       iexists rv'
-      iframe Hregs Hst Hval Hw
-      ipureintro; exact hkeep
+      iframe ∗ %hkeep
     | assert =>
       iapply callNativeAssert hlive (wpW (vsaModel live)) hna hN.assert hE.inpGeom hE.inpLt
         (by unfold maxArgs at hlen; omega) hsg
@@ -123,8 +117,7 @@ theorem caseP_CallArm {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
         · ipureintro; exact .call _ _ _ _ _ _ _ _ _ _ _ hEf hlen hEa (.assertOk _ _ _ v m hvm htr)
         unfold evalPost
         iexists rv'
-        iframe Hregs Hst Hval Hw
-        ipureintro; exact hkeep
+        iframe ∗ %hkeep
       · iintro %_ Hcore Hst Hslot
         have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
           have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s

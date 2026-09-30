@@ -72,15 +72,9 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
       (hMd _ (by simp [InExt]; omega))), hdv]
   have hdl : ldv .lw M3 (BitVec.ofNat 64 inp + 8#64).toNat = BitVec.ofNat 64 (d + 1) := by
     rw [hi8]; exact ldvf_lw_imgLE hdep3 (by unfold maxCallDepth at hdle; omega)
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ slot24 sret.toNat ∗
-      (∀ (d' : Nat) (img' : Nat → BitVec 8), ownImg (InExt (inp + 8, 4)) img' -∗
-          ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      (∀ rv' : Nat → BitVec 64, ⌜KeepRegs calleeSaved rv rv'⌝ -∗ regFile rv' -∗
-        stackScratch s n -∗ valAt N sret.toNat .null -∗ world N L Room inp ρ st d -∗
-        PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hsr Hcl Hst Hk
+  · rw [hro]; icombine Hcode Hsr Hcl Hst Hk as HF; isplitl []; iexact Hcode; iframe HF
     iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨
       InExt ((BitVec.ofNat 64 inp).toNat + 8, 4) b) (fun k => by rw [hinpN]) $$ Hms
   intro F'
@@ -113,11 +107,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   iapply ms_callHelper Wp (i := 0x80003964)
     ((step% jalx 0x80003964) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝))
-  iframe Hvn Hcode Hms
-  isplitl []
-  · ipureintro; exact h10
-  isplitl [Hsr]
-  · iframe Hsr; ipureintro; exact hslg
+  iframe Hvn Hcode Hms Hsr %h10 %hslg
   iintro %R5 %hk5 Hval Hms
 
   have hoff := evalSP_off' hfg
@@ -131,14 +121,9 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     fun x hx h1 => by simp only [upd_apply, h1, ite_false]; exact hk5 x hx (by simp)
   have h2' : upd R5 1 (BitVec.ofNat 64 (0x80003964 + 4)) 2 = s + 18446744073709550528#64 := by
     rw [hk5' 2 (by decide) (by decide), hR4]; ix_reg; exact hat.sp
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ valAt N sret.toNat .null ∗
-      world N L Room inp ρ st d ∗
-      (∀ rv' : Nat → BitVec 64, ⌜KeepRegs calleeSaved rv rv'⌝ -∗ regFile rv' -∗
-        stackScratch s n -∗ valAt N sret.toNat .null -∗ world N L Room inp ρ st d -∗
-        PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hms Hst Hval Hw; iexact Hk
+  · rw [hro]; icombine Hst Hval Hw Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloX_runE (m := ∅) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v19 := rv 19)
     (v21 := rv 21) (v23 := rv 23) hlive hsf hs hs2 hs3 hal h2' ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
@@ -193,8 +178,7 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   rw [show inp + interpDepthOff = inp + 8 from rfl] at hwd
   iintro ⟨#Hcode, Hms, Hv, Hsr, Hw, Hst, Hk⟩
 
-  ihave Hv := (show valAt (GF := GF) N (s + 18446744073709550528#64 + 144#64).toNat v ⊢
-    valAt N (s.toNat - 1088 + 144) v by rw [h144]) $$ Hv
+  ieval (rewrite [h144]) at Hv
   ihave ⟨%w0, %w1, %w2, #Hw3, Hms⟩ := ms_joinSlot N (S := InExt (s.toNat - 1088, 1088))
     (a := s.toNat - 1088 + 144) (fun b hb => by simp only [InExt] at hb ⊢; omega) $$ [$]
 
@@ -210,16 +194,9 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
       (hMd _ (by simp [InExt]; omega))), hdv]
   have hdl : ldv .lw M3 (BitVec.ofNat 64 inp + 8#64).toNat = BitVec.ofNat 64 (d + 1) := by
     rw [hi8]; exact ldvf_lw_imgLE hdep3 (by unfold maxCallDepth at hdle; omega)
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ □ valOf N v w0 w1 w2 ∗
-      slot24 sret.toNat ∗
-      (∀ (d' : Nat) (img' : Nat → BitVec 8), ownImg (InExt (inp + 8, 4)) img' -∗
-          ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      (∀ rv' : Nat → BitVec 64, ⌜KeepRegs calleeSaved rv rv'⌝ -∗ regFile rv' -∗
-        stackScratch s n -∗ valAt N sret.toNat v -∗ world N L Room inp ρ st d -∗
-        PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hw3 Hsr Hcl Hst Hk
+  · rw [hro]; icombine Hcode Hw3 Hsr Hcl Hst Hk as HF; isplitl []; iexact Hcode; iframe HF
     iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨
       InExt ((BitVec.ofNat 64 inp).toNat + 8, 4) b) (fun k => by rw [hinpN]) $$ Hms
   intro F'
@@ -270,13 +247,9 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     fun o ho => ldv_agree fun i hi => hfr _ (by simp only [InExt]; omega)
   have h2' : R4 2 = s + 18446744073709550528#64 := by rw [hR4]; ix_reg; exact hat.sp
   have h9' : R4 9 = sret := by rw [hR4]; ix_reg; exact hat.s1
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(□ valOf N v w0 w1 w2 ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ world N L Room inp ρ st d ∗
-      (∀ rv' : Nat → BitVec 64, ⌜KeepRegs calleeSaved rv rv'⌝ -∗ regFile rv' -∗
-        stackScratch s n -∗ valAt N sret.toNat v -∗ world N L Room inp ρ st d -∗
-        PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hms Hw3 Hst Hw; iexact Hk
+  · rw [hro]; icombine Hw3 Hst Hw Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloX_runC (m := ∅) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v19 := rv 19)
     (v21 := rv 21) (v23 := rv 23) hlive hsf hs hs2 hs3 hslg.al (by have := hslg.lo; omega) hslg.hi hr4

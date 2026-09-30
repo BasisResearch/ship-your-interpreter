@@ -44,15 +44,12 @@ theorem caseT_CallPrintln {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
     (out := fun st vs o => o ++ printArgs st vs ++ "\n") (need := nativePrintlnNeed)
     (by show N.println = _; rw [hN.println]; rfl) (by decide) (by unfold maxArgs at hlen; omega) hsg hneed
     hroom hslg hal hd hregs.sp hcall hEL
-  isplitl []
-  · iexact Hsp
-  iframe Hcode Hast Hv Hav Hms Hst Hw Hslot
+  iframe Hsp Hcode Hast Hv Hav Hms Hst Hw Hslot
   unfold CallExitK
   iintro %rv' %hkeep Hregs Hst Hval Hw Hpc Hra
   iapply Hk $$ Hpc Hra
   unfold evalPost
   iexists rv'
-  iframe Hregs Hst Hval Hw
-  ipureintro; exact hkeep
+  iframe ∗ %hkeep
 
 end VsaIris.Interp

@@ -54,7 +54,6 @@ theorem caseT_CallClosure {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   iapply Hk $$ Hpc Hra
   unfold evalPost
   iexists rv'
-  iframe Hregs Hst Hval Hw
-  ipureintro; exact hkeep
+  iframe ∗ %hkeep
 
 end VsaIris.Interp

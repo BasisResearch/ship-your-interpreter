@@ -201,13 +201,9 @@ end CloP
     rw [hR2 18 (by decide) (by decide)]; ix_reg; rw [hkeep1 18 (by decide)]; exact hA.s2
   have hs'' := hs'
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF (wpW _) (F := iprop(errCtx inp ∗ codeRes ∗
-      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
-      world N L Room inp .uncounted st1 d ∗ slot24 sret.toNat ∗
-      (Kret ∧ (iprop(abortAt Core s (evalNeed (.call f args) d) ∗ slot24 sret.toNat) -∗
-        (wpW (vsaModel live)).W Φ))))
+  iapply wp_swpF (wpW _)
   rotate_left
-  · iframe Hdv Hms HE Hcode Hst Hw Hslot; iexact Hk
+  · icombine HE Hcode Hst Hw Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine Call_runTM hlive hsf hs'' hs2 hs3 hn.lo hn.hi hn.off h8' h2' ?_
   intro vl

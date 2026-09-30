@@ -67,8 +67,7 @@ theorem cloSupply {N : NativeAddrs} : CloSupply (GF := GF) N := by
     ipureintro; exact hpure
   unfold closOwn CloRes astEG
   icases Ho with ⟨%p', %q, %e, %img, #Hat', %hobj, #Hro, ⟨%P, %m, %⟨hrepr, hgeo⟩, #HroP⟩, #Henv⟩
-  ihave %hpp := closAt_agree ca p p' $$ [Hat Hat']
-  · iframe Hat Hat'
+  ihave %hpp := closAt_agree ca p p' $$ [$]
   subst hpp
   iexists cd, q, e, img, P, m
   iframe Hro HroP Henv
@@ -138,9 +137,7 @@ theorem world_depth (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Na
       iframe Hd
       ipureintro; exact hd'
     · ipureintro; exact hdle'
-  · isplitr
-    · ipureintro; exact hB
-    · iexact Hb
+  · iframe Hb; ipureintro; exact hB
 
 end World
 

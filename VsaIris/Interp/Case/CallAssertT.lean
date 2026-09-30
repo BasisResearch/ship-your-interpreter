@@ -46,8 +46,7 @@ theorem caseT_CallAssert {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc G
     iapply Hk $$ Hpc Hra
     unfold evalPost
     iexists rv'
-    iframe Hregs Hst Hval Hw
-    ipureintro; exact hkeep
+    iframe ∗ %hkeep
   · iintro %hno
     exfalso; exact hno ⟨v, m, hvm, htr⟩
 

@@ -143,8 +143,7 @@ theorem dispResL_of_argVals (N : NativeAddrs) (hd : DispSupply (GF := GF) N) (s 
       | closure ca =>
         unfold valImg valOf
         iintro ⟨Hs, ⟨-, #Hc⟩⟩
-        iapply (hd s B ca _) $$ [Hs Hc]
-        iframe Hs Hc
+        iapply (hd s B ca _) $$ [$]
       | _ =>
         iintro ⟨Hs, -⟩
         iframe Hs

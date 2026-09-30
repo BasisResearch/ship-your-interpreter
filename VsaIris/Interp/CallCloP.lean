@@ -44,8 +44,7 @@ theorem cloAbort {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
     (by rw [hsf]; omega) (by rw [hsf]; have := hsg.top; omega) $$ HC
   iapply abortAt_intro
   iframe HC
-  iapply evalFrame_join hsg.le hn $$ [Hst HS]
-  iframe Hst HS
+  iapply evalFrame_join hsg.le hn $$ [$]
 
 def cloWP (N : NativeAddrs) (inp d : Nat) (out : String) (fa : Nat) (fr : BitVec 64) (Ab : IProp GF)
     (st : Store) (_rest : List (String × Value)) : IProp GF :=
@@ -93,8 +92,7 @@ theorem cloDefineStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
     · unfold slot24; iframe HS Hsl
     have hca := cloAbort (GF := GF) hcore hfg hsg (by omega)
     rw [show n + 1088 - 1088 = n by omega] at hca
-    iapply hca $$ [HA HS]
-    iframe HA HS
+    iapply hca $$ [$]
 
 theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
@@ -133,12 +131,9 @@ theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
       (hMd _ (by simp [InExt]; omega))), hdv]
   have hdl : ldv .lw M3 (BitVec.ofNat 64 inp + 8#64).toNat = BitVec.ofNat 64 (d + 1) := by
     rw [hi8]; exact ldvf_lw_imgLE hdep3 (by unfold maxCallDepth at hdle; omega)
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ errCtx inp ∗
-      (∀ (d' : Nat) (img' : Nat → BitVec 8), ownImg (InExt (inp + 8, 4)) img' -∗
-          ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ (abortAt Core s n -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode HE Hcl Hst Hab
+  · rw [hro]; icombine Hcode HE Hcl Hst Hab as HF; isplitl []; iexact Hcode; iframe HF
     iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨
       InExt ((BitVec.ofNat 64 inp).toNat + 8, 4) b) (fun k => by rw [hinpN]) $$ Hms
   intro F'
@@ -203,12 +198,9 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
   iintro ⟨#Hcode, #HE, Hms, Hcl, Hst, Hab⟩
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ errCtx inp ∗
-      (∀ (d' : Nat) (img' : Nat → BitVec 8), ownImg (InExt (inp + 8, 4)) img' -∗
-          ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ (abortAt Core s n -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode HE Hcl Hst Hab; iexact Hms
+  · rw [hro]; icombine Hcode HE Hcl Hst Hab as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloE_runD (m := ∅) hlive hsf hs hs2 hs3 hinpG.lo hinpG.hi (by rw [hinpN]; omega)
     (by rw [hinpN]; exact hinpA) hdp.s2 hdp.sp ?_
@@ -318,8 +310,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iapply Hk
     iframe Hsr
     rw [h2]
-    iapply cloAbort hE.core hfg hsg (by omega) $$ [HA HS]
-    iframe HA HS
+    iapply cloAbort hE.core hfg hsg (by omega) $$ [$]
   iintro %R2 %hk2 Hst Hw #Hnew Hms
   rw [h2]
   obtain ⟨store', frame, halloc⟩ : ∃ a b, st2.store.allocFrame (some cd.env) = (a, b) := ⟨_, _, rfl⟩
@@ -376,8 +367,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ slot24 sret.toNat ∗
       CloKP live N vsaLayoutP vsaRoomB inp Core Φ st2 d ca vs rv s n sret ret))
   iframe Hcode Hro Hms
-  isplitl [Hw Hst Hsr Hk]
-  · iframe Hw Hst Hsr Hk
+  iframe Hw Hst Hsr Hk
   have hn1088 : 1088 ≤ n := by omega
   isplit
   ·
@@ -448,8 +438,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       iframe HC
       ihave HS := hfs144 $$ [HS Hsl]
       · unfold slot24; rw [h144]; iframe HS Hsl
-      iapply evalFrame_join hsg.le hn1088 $$ [Hst HS]
-      iframe Hst HS
+      iapply evalFrame_join hsg.le hn1088 $$ [$]
   ·
     iintro %R4 %Mt4 %⟨hb0, hat⟩ HF Hms Hslot
     icases HF with ⟨Hw, Hst, Hsr, Hk⟩
@@ -557,14 +546,10 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   · unfold blockOwn; rw [hbuft]; iexact Hbuf
   iintro %R3 %hk3 ⟨Hcb, -, Hio⟩ Hms Hst
 
-  iapply wp_swpF (wpW _) (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ errCtx inp ∗
-      cstrBuf (s + 18446744073709550528#64 + 144#64).toNat 96 ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      world N vsaLayoutP vsaRoomB inp ρ st d ∗ (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)))
+  ihave Hw := (world_heapStore N inp ρ st d).2 $$ [$]
+  iapply wp_swpF (wpW _) (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro0]; iframe Hcode HE Hcb Hst Hab Hms
-    iapply (world_heapStore N inp ρ st d).2
-    iframe Hhs Hc Hio Hi Hb
+  · rw [hro0]; icombine Hcode HE Hcb Hst Hw Hab as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloE_runA2 (m := ∅) hlive ?_
   apply swp_closeRM
@@ -646,11 +631,9 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
   ihave #Hdv := roOwn_data (DA := accAddrs (q.toNat + 8) 8)
     (fun a ha => hfn.view a (by simp only [fnView, List.mem_append, mem_accAddrs_iff] at ha ⊢; omega))
     $$ [$]
-  iapply wp_swpF (wpW _) (F := iprop(codeRes ∗ errCtx inp ∗ roOn P m ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ world N vsaLayoutP vsaRoomB inp ρ st dep ∗
-      (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)))
+  iapply wp_swpF (wpW _)
   rotate_left
-  · iframe Hdv Hms Hcode HE Hro Hst Hw; iexact Hab
+  · icombine Hcode HE Hro Hst Hw Hab as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CloE_runA (nam := nam) hlive hsf hs hs2 hs3 hfn.lo (by have := hfn.hi; omega)
     (by have := hfn.off; omega) har.s5 har.sp hfn.nam ?_ ?_
@@ -736,6 +719,7 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hwd := world_depth (GF := GF) N vsaLayoutP vsaRoomB inp .uncounted st2 d
   rw [show inp + interpDepthOff = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]; rfl] at hwd
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
+  ieval (rewrite [hinpN]) at Hcl
   ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [$]
   have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
     refine Classical.byContradiction fun hc => ?_
@@ -761,21 +745,15 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
       (fun x hx => by have := execNeed_callBody (f := f) (args := args) hd hbb1 hx; unfold evalFrame at this; omega)
       hal hsp hinpA hslg hi3 hfn (by rw [hprt]; exact hps) (by rw [hbdt]; exact hbody) hcf.geo
       hcf.win hargc hhd
-    iframe IHs HE Hcode Hro Hav Hms Hst Hsr Hk
-    isplitl []
-    · rw [het]; iexact Hfe
-    rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
-    iexact Hcl
+    iframe IHs HE Hcode Hro Hav Hms Hst Hsr Hk Hcl
+    rw [het]; iexact Hfe
   isplit
   · iintro %R1 %Mt1 %line %⟨hne, har⟩ Hms
     iapply cloErrArity hlive hE (ρ := .uncounted) (st := st2) hfg hsg hrt hi3 hdle har hfn hcf.win (by
         rcases hname with ⟨h1, h2⟩ | ⟨x, h1, h2, h3⟩
         · exact .inl (by rw [h2])
         · exact .inr ⟨x, fun h => h2 (by rw [← hnmt, h]; rfl), by rw [hnmt]; exact h3⟩)
-    iframe Hcode HE Hro Hms Hst
-    isplitl [Hcl]
-    · rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
-      iexact Hcl
+    iframe Hcode HE Hro Hms Hst Hcl
     iintro HA
     unfold CloKP
     ihave Hk := and_elim_r $$ Hk
@@ -783,10 +761,7 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     iframe HA Hsr
   · iintro %R1 %Mt1 %line %⟨hgt, hdp⟩ Hms
     iapply cloErrDepth hlive (wpW _) hE hfg hsg hrt hinpA hi3 hdp
-    iframe Hcode HE Hms Hst
-    isplitl [Hcl]
-    · rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
-      iexact Hcl
+    iframe Hcode HE Hms Hst Hcl
     iintro HA
     unfold CloKP
     ihave Hk := and_elim_r $$ Hk
@@ -820,8 +795,7 @@ theorem callCloP_of (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {
     · ipureintro; exact .call st d env f args st1 st2 st' (.closure ca) vs v hf hlen ha hC
     unfold evalPost
     iexists rv'
-    iframe Hregs Hst Hval Hw
-    ipureintro; exact hkeep
+    iframe ∗ %hkeep
   · iintro Hab
     ihave Hk := and_elim_r $$ Hk
     iapply Hk
