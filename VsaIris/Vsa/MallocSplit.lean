@@ -1,37 +1,11 @@
 import VsaIris.Vsa.MallocExtend
 import VsaIris.Vsa.HeapCarve
-import VsaIris.Vsa.Region
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
-
-theorem foot_free_span {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (B : BlockHeapAt m H top brkv chunks bins) {c : Chunk}
-    (hc : c ∈ chunks) (hf : c.inuse = false) :
-    ∀ a, c.addr + 8 ≤ a → a < c.addr + c.size + 16 → vsaFoot H a := by
-  have hb := B.heap.walk.chunk_bounds
-  have hs := B.heap.walk.chunk_sep
-  have hroom := B.top_room
-  have hbrk := B.heap.brk_le
-  have hle := B.heap.walk.le
-  have hbc := hb c hc
-  intro a h1 h2
-  by_cases hh : a < c.addr + 16
-  · have := foot_header B (.inr ⟨c, hc, rfl⟩) (a - (c.addr + 8)) (by omega)
-    rwa [show c.addr + 8 + (a - (c.addr + 8)) = a by omega] at this
-  by_cases ht : c.addr + c.size + 8 ≤ a
-  · have := foot_header B (B.heap.end_bnd hc |>.elim .inl .inr) (a - (c.addr + c.size + 8))
-      (by omega)
-    rwa [show c.addr + c.size + 8 + (a - (c.addr + c.size + 8)) = a by omega] at this
-  refine foot_of_arena B.heap (by unfold heapStart at *; omega) (by omega) ?_
-  intro c' hc' hu hin
-  have := hb c' hc'
-  rcases hs c' hc' c hc with rfl | h3 | h3
-  · rw [hu] at hf; cases hf
-  · omega
-  · omega
 
 theorem lr_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb v sz : Nat} (hsp : MSp C.s) (Hp : MHeap C Mt brkv chunks bins)
@@ -43,7 +17,7 @@ theorem lr_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
       [(v + 8, 8, w1)]) [(binAt 1 + 24, 8, w2)]) [(binAt 1 + 16, 8, w2)])
       [(v + nb + 24, 8, w4)]) [(v + nb + 16, 8, w4)]) [(v + nb + 8, 8, w6)])
       [(v + sz, 8, w7)]) [(C.s.toNat - 96 + 8, 8, w8)]) v := by
-  have K := Hp.heap.chunkK hfree; have F := Hp.heap.freeSpan hfree rfl
+  have K := Hp.heap.heap.chunkK hfree; have F := Hp.heap.heap.freeSpan hfree rfl
   have Bn := binRgn C.H (j := 1) (by decide)
   open_fields K; simp only at F
   have hfo := F.offStack Hp.disj (by omega); have hbo := Bn.offStack Hp.disj (by decide)
@@ -51,19 +25,15 @@ theorem lr_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
   have hb1 : binAt 1 = 2147593504 := rfl
   simp only [mHead, Vsa.Sim.tohostAddr] at hfo hbo hslo
   obtain ⟨cs₁, cs₂, hsp⟩ := List.append_of_mem hfree
-  have Hp0 := Hp.heap
-  rw [hsp] at Hp0
   obtain ⟨hfr, hal16⟩ := PHeapAt.take_fresh Hp.heap hfree rfl (n := C.n.toNat) (by simp only; omega)
-  refine ⟨hfr, hal16, ⟨_, _, _, _, Hp0.splitFree (i := 1) (by decide) (by unfold numBins; decide)
-    (pre := []) (post := []) (by rw [hbin]; rfl) hnb16 hnb32 hle hnb.fits (by rw [updBins_same]; rfl)
-    rfl rfl (fun h => absurd rfl h) (fun h => absurd rfl h) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, by omega,
-    Hp.live.split hsp _ _⟩, ?_, ?_⟩
-  all_goals try (simp (disch := omega) only [read64_hit_eq, read64_miss, fdOf, bkOf, h1, h2, h4, h6, h7]; done)
-  · intro a ha hT hC
-    have := offStack_pt Hp.disj ha
-    unfold TakeW at hT; unfold CarveW at hC; simp only [List.getLast_singleton] at hT
-    simp only [writeLog_nest, List.cons_append, List.nil_append]
-    rw [writeLog_out]; simp only [OutL, and_true]; omega
+  refine ⟨hfr, hal16, ⟨_, _, _, _, (hsp ▸ Hp.heap).split_permit (i := 1) (by decide)
+    (by unfold numBins; decide) (pre := []) (post := []) (by rw [hbin]; rfl) hnb16 hnb32 hle
+    (n := C.n.toNat) hn8 (by rw [updBins_same]; rfl) rfl rfl (fun h => absurd rfl h)
+    (fun h => absurd rfl h)
+    (Realises.of_log (by wl_win <;> first
+        | exact .inl (.inr (by unfold CarveW; omega))
+        | exact .inr fun hf => by have := offStack_pt Hp.disj hf; omega)
+      (by rd_log [h1, h2, h4, h6, h7]) (by rd_log)), by omega, Hp.live.split hsp _ _⟩, ?_, ?_⟩
   all_goals simp only [writeLog_nest, List.cons_append, List.nil_append]
   · exact pres_log _ Hp.pres
   · exact frame_log (by log_in) Hp.frame

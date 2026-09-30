@@ -1,5 +1,5 @@
 import VsaIris.Vsa.FreeLarge
-import VsaIris.Vsa.Region
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
@@ -41,15 +41,15 @@ theorem free_nt {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n b
       AW C.live C.S C.Q 0x800073ac#64 R' Mt1) :
     AW C.live C.S C.Q 0x8000739c#64 R Mt := by
   have Hp := D.heap; have K := D.chunk
-  obtain ⟨cs₁, d, cs₃, hsplit, hda⟩ := Hp.heap.next K.mem hnt
+  obtain ⟨cs₁, d, cs₃, hsplit, hda⟩ := Hp.heap.heap.next K.mem hnt
   simp only at hda
   have hdm : d ∈ chunks := by rw [hsplit]; simp
-  have X := (Hp.heap.chunkK K.mem).lower; have Dk := (Hp.heap.chunkK hdm).lower
+  have X := (Hp.heap.heap.chunkK K.mem).lower; have Dk := (Hp.heap.heap.chunkK hdm).lower
   open_fields X; open_fields Dk
-  obtain ⟨hdh, hdhr, hdhs, _⟩ := walk_header Hp.heap.heap.heap.walk d hdm
+  obtain ⟨hdh, hdhr, hdhs, _⟩ := Dk.hdrv
   rw [hda, K.next] at hdhr
   obtain rfl : nh = hdh := Option.some.inj hdhr
-  obtain ⟨hnn, hnnr, hnnf⟩ := (Hp.heap.heap.heap.headers hdm).2
+  obtain ⟨hnn, hnnr, hnnf⟩ := Dk.nhdrv
   have hoN := X_nhdr.offStack Hp.disj (by decide)
   have ha2 := D.a2; have ha3 := D.a3
   unfold mHead at hoN
@@ -112,14 +112,6 @@ theorem FNt.geo {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {
     fun a h1 h2 => foot_of_chunk N.heap hX N.hno h1 h2,
     foot_header N.heap.heap (.inr ⟨_, hX, rfl⟩),
     by rw [← N.daddr]; exact foot_header N.heap.heap (.inr ⟨_, hD, rfl⟩)⟩
-
-theorem off_stack_of {C : MCtx} {a : Nat}
-    (hd : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a)
-    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) : a + 8 ≤ C.s.toNat - 256 ∨ C.s.toNat ≤ a := by
-  refine Classical.byContradiction fun hc => ?_
-  have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
-    unfold mHead; split <;> omega
-  exact hd _ (by unfold mHead at *; split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
 
 theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat}
     {cs₁ cs₃ : List Chunk} {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}

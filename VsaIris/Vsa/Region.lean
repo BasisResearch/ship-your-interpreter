@@ -7,8 +7,8 @@ Every address an allocator path touches is `region ⊕ offset`. A region is a
 base and an extent whose bytes all satisfy an ownership predicate; regions are
 minted once:
 
-* a heap chunk from the chunk walk of `PHeapAt` (`PHeapAt.chunkK`,
-  `PHeapAt.freeSpan`, `PHeapAt.next`),
+* a heap chunk from the chunk walk of `PHeapAt` (`BlockHeapAt.chunkK`,
+  `.freeSpan`, `.next`, `.nodeK`),
 * the program-lifetime static table (`globRgn`, `binRgn`),
 * the stack frame (`MWin`'s stack half, `win_stack`).
 
@@ -131,9 +131,11 @@ theorem binRgn (H : List (Nat × Nat)) {j : Nat} (hj : j < numBins) :
 
 /-! ## Chunk regions, minted from the chunk walk. -/
 
-/-- Geometry of one chunk of the walk: bounds, alignment and its two header
-regions (own header, next boundary header). -/
-structure ChunkK (H : List (Nat × Nat)) (top brkv : Nat) (c : Chunk) : Prop where
+/-- The local section of one chunk of the walk: bounds, alignment, its two header
+regions (own header, next boundary header), the two header reads and its walk
+successor. -/
+structure ChunkK (m : Mem) (H : List (Nat × Nat)) (top brkv : Nat) (chunks : List Chunk)
+    (c : Chunk) : Prop where
   lo : 0x8001c170 ≤ c.addr
   hi : c.addr + c.size ≤ top
   room : top + 16 ≤ brkv
@@ -144,29 +146,31 @@ structure ChunkK (H : List (Nat × Nat)) (top brkv : Nat) (c : Chunk) : Prop whe
   sz32 : 32 ≤ c.size
   hdr : Rgn (vsaFoot H) (c.addr + 8) 8
   nhdr : Rgn (vsaFoot H) (c.addr + c.size + 8) 8
+  hdrv : ∃ h, read64 m (c.addr + 8) = some h ∧ chunkSize h = c.size ∧ h % 4 < 2
+  nhdrv : ∃ hn, read64 m (c.addr + c.size + 8) = some hn ∧ prevInuse hn = c.inuse
+  next : c.addr + c.size = top ∨ ∃ d ∈ chunks, d.addr = c.addr + c.size
 
 variable {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
   {bins : Nat → List Nat}
 
-theorem PHeapAt.chunkK (h : PHeapAt m H top brkv chunks bins) {c : Chunk} (hc : c ∈ chunks) :
-    ChunkK H top brkv c := by
-  have B := h.heap
+theorem BlockHeapAt.chunkK (B : BlockHeapAt m H top brkv chunks bins) {c : Chunk}
+    (hc : c ∈ chunks) : ChunkK m H top brkv chunks c := by
   have HH := B.heap
   have hb := HH.walk.chunk_bounds c hc
   have hs := walk_sizes HH.walk c hc
   have hbrk := HH.brk_le
   unfold heapStart heapEnd at *
   exact ⟨hb.1, hb.2.1, B.top_room, hbrk, HH.aligned.1 c hc, HH.aligned.2, hs.1, hs.2,
-    ⟨foot_header B (.inr ⟨c, hc, rfl⟩)⟩, ⟨foot_header B (HH.end_bnd hc)⟩⟩
+    ⟨foot_header B (.inr ⟨c, hc, rfl⟩)⟩, ⟨foot_header B (HH.end_bnd hc)⟩, (HH.headers hc).1,
+    (HH.headers hc).2, HH.end_bnd hc⟩
 
-theorem ChunkK.lower {x : Nat × Nat} {c : Chunk} (K : ChunkK (x :: H) top brkv c) :
-    ChunkK H top brkv c :=
+theorem ChunkK.lower {x : Nat × Nat} {c : Chunk} (K : ChunkK m (x :: H) top brkv chunks c) :
+    ChunkK m H top brkv chunks c :=
   { K with hdr := K.hdr.lower, nhdr := K.nhdr.lower }
 
 /-- A free chunk owns its whole span, header to next header. -/
-theorem PHeapAt.freeSpan (h : PHeapAt m H top brkv chunks bins) {c : Chunk} (hc : c ∈ chunks)
-    (hf : c.inuse = false) : Rgn (vsaFoot H) (c.addr + 8) (c.size + 8) := by
-  have B := h.heap
+theorem BlockHeapAt.freeSpan (B : BlockHeapAt m H top brkv chunks bins) {c : Chunk}
+    (hc : c ∈ chunks) (hf : c.inuse = false) : Rgn (vsaFoot H) (c.addr + 8) (c.size + 8) := by
   have hb := B.heap.walk.chunk_bounds
   have hs := B.heap.walk.chunk_sep
   have hroom := B.top_room
@@ -187,42 +191,64 @@ theorem PHeapAt.freeSpan (h : PHeapAt m H top brkv chunks bins) {c : Chunk} (hc 
   · omega
   · omega
 
+theorem foot_free_span (B : BlockHeapAt m H top brkv chunks bins) {c : Chunk}
+    (hc : c ∈ chunks) (hf : c.inuse = false) :
+    ∀ a, c.addr + 8 ≤ a → a < c.addr + c.size + 16 → vsaFoot H a :=
+  fun _ h1 h2 => (B.freeSpan hc hf).mem h1 (by omega)
+
 /-- The neighbour region: a chunk that does not end at `top` is followed by a
 chunk starting at its end. -/
-theorem PHeapAt.next (h : PHeapAt m H top brkv chunks bins) {c : Chunk} (hc : c ∈ chunks)
+theorem BlockHeapAt.next (B : BlockHeapAt m H top brkv chunks bins) {c : Chunk} (hc : c ∈ chunks)
     (hne : c.addr + c.size ≠ top) :
     ∃ cs₁ d cs₃, chunks = cs₁ ++ c :: d :: cs₃ ∧ d.addr = c.addr + c.size := by
   obtain ⟨cs₁, cs₂, hsplit⟩ := List.append_of_mem hc
-  have hw := h.heap.heap.walk
+  have hw := B.heap.walk
   rw [hsplit] at hw
   rcases (walk_next_of hw).2 with ⟨he, _⟩ | ⟨d, cs₃, rfl, hd⟩
   · exact absurd he hne
   · exact ⟨cs₁, d, cs₃, hsplit, hd⟩
 
-theorem Rgn.range (r : Rgn (vsaFoot H) b e) (he : 0 < e) :
-    0x8001ad10 ≤ b ∧ b + e ≤ 0x87800000 := by
-  have l := vsaFoot_range (r.byte 0 he)
-  have u := vsaFoot_range (r.byte (e - 1) (by omega))
-  omega
+/-- The walk successor of `c` is the given chunk `d` at `c`'s end. -/
+theorem BlockHeapAt.next_eq (B : BlockHeapAt m H top brkv chunks bins) {c d : Chunk}
+    (hc : c ∈ chunks) (hd : d ∈ chunks) (hda : d.addr = c.addr + c.size) :
+    ∃ cs₁ cs₃, chunks = cs₁ ++ c :: d :: cs₃ := by
+  have hb := B.heap.walk.chunk_bounds d hd
+  obtain ⟨cs₁, d', cs₃, hsplit, hd'⟩ := B.next hc (by omega)
+  have hdm : d' ∈ chunks := by rw [hsplit]; simp
+  obtain rfl := B.heap.chunk_eq hdm hd (by omega)
+  exact ⟨cs₁, cs₃, hsplit⟩
 
-/-- A bin-ring node (a bin header or a binned free chunk): alignment, bounds and
-its `fd`/`bk` link region. -/
-structure NodeK (H : List (Nat × Nat)) (x : Nat) : Prop where
+/-- A bin-ring node (a bin header or a binned free chunk): alignment, bounds, its
+`fd`/`bk` link region, and separation of its link words from chunk boundaries. -/
+structure NodeK (H : List (Nat × Nat)) (top : Nat) (chunks : List Chunk) (x : Nat) : Prop where
   al : x % 16 = 0
-  lo : 0x8001ad00 ≤ x
-  hi : x + 32 ≤ 0x87800000
+  lo : 0x8001ad20 ≤ x
+  hi : x + 32 ≤ top
   links : Rgn (vsaFoot H) (x + 16) 16
+  bnd : ∀ b, (b = top ∨ ∃ c ∈ chunks, c.addr = b) → ∀ k, 0 < k → k < 32 → b ≠ x + k
 
-theorem PHeapAt.nodeK (h : PHeapAt m H top brkv chunks bins) {j x : Nat} (hj0 : 0 < j)
-    (hj : j < numBins) (hx : x = binAt j ∨ x ∈ bins j) : NodeK H x := by
-  have r : Rgn (vsaFoot H) (x + 16) 16 := ⟨fun k hk => by
-    have := h.heap.node_foot hj0 hj hx (16 + k) (by omega) (by omega)
-    rwa [← Nat.add_assoc] at this⟩
-  have := r.range (by decide)
-  exact ⟨(h.heap.heap.node hj0 hj hx).1, by omega, by omega, r⟩
+theorem BlockHeapAt.nodeK (B : BlockHeapAt m H top brkv chunks bins) {j x : Nat} (hj0 : 0 < j)
+    (hj : j < numBins) (hx : x = binAt j ∨ x ∈ bins j) : NodeK H top chunks x := by
+  have HH := B.heap
+  obtain ⟨hx16, hnode⟩ := HH.node hj0 hj hx
+  have hloc : 0x8001ad20 ≤ x ∧ x + 32 ≤ top := by
+    rcases hnode with rfl | ⟨cx, hcx, rfl, _, _⟩
+    · have := binAt_geo j hj; have := HH.walk.le
+      unfold binAt avAddr heapStart at *; omega
+    · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; omega
+  exact ⟨hx16, hloc.1, hloc.2, ⟨fun k hk => by
+    have := B.node_foot hj0 hj hx (16 + k) (by omega) (by omega)
+    rwa [← Nat.add_assoc] at this⟩, fun b hb k hk0 hk => HH.bnd_ne_node hj hnode hb k hk0 hk⟩
 
-theorem NodeK.lower {x : Nat × Nat} {z : Nat} (K : NodeK (x :: H) z) : NodeK H z :=
+theorem NodeK.lower {x : Nat × Nat} {z : Nat} (K : NodeK (x :: H) top chunks z) :
+    NodeK H top chunks z :=
   { K with links := K.links.lower }
+
+/-- An 8-byte heap word is off the allocator's stack frame. -/
+theorem off_stack_of {C : MCtx} {a : Nat}
+    (hd : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a)
+    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) : a + 8 ≤ C.s.toNat - 256 ∨ C.s.toNat ≤ a :=
+  (⟨hf⟩ : Rgn (vsaFoot C.H) a 8).offStack hd (by decide)
 
 /-! ## Store logs as key lists (T). -/
 
