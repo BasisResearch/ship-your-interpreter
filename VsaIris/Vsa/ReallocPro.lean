@@ -1,4 +1,5 @@
 import VsaIris.Vsa.ReallocCtx
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
@@ -16,21 +17,13 @@ theorem realloc_errno {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} 
     (F : RFrame C R Mt) (Hp : RHeap C B Mt brkv chunks bins) (h9 : R 9 = reentV)
     (hst : Starved C.top0 C.n.toNat) :
     AW C.live C.S C.Q 0x800054b8#64 R Mt := by
-  have hlo := O.sp.lo
-  unfold mHead Vsa.Sim.tohostAddr at hlo
-  obtain ⟨hoff, _⟩ := glob_off_of Hp.disj
-  unfold mHead at hoff
-  have he : ((R 9) + sign_extend (m := 64) (0x000#12)).toNat = 0x8001b538 := by
-    rw [h9]; decide
-  refine (step% st 0x800054b8) O.live ?_
-  refine (step% st 0x800054bc) O.live ?_ ?_ ?_
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; unfold StOK Vsa.Sim.tohostAddr; omega
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; exact O.foot errno_foot
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  rw [he]
-  refine (step% st 0x800054c0) O.live ?_
-  have Hp' := Hp.store_errno (v := upd R 15 ((0#64) + sign_extend (m := 64) (0x00c#12)) 15)
-  refine repi0 O (((F.store (a := 0x8001b538) (w := 4) (by omega)).of_regs ?_ ?_ ?_))
+  have E : Rgn (vsaFoot C.H) 0x8001b538 4 := ⟨errno_foot⟩
+  have h9n : (R 9).toNat = 0x8001b538 := by rw [h9]; rfl
+  have hoff := E.offStack Hp.disj (by omega); unfold mHead at hoff
+  rgn_run O.live at 0x800054c4
+  rw [h9n]
+  have Hp' := Hp.store_errno (v := 12#64)
+  refine repi0 O ((F.store (a := 0x8001b538) (w := 4) (by omega)).of_regs ?_ ?_ ?_)
     fun R' hR h10 => O.null _ _ ⟨hR, ?_, ⟨_, _, _, _, Hp'.heap⟩, Hp'.pres, Hp'.data, hst⟩ <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *
   rw [h10]; decide
@@ -54,44 +47,26 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
   have hp := E.a1
   refine (step% st 0x80005290) O.live (fun h => absurd (congrArg BitVec.toNat h) (by rw [hp]; simp; omega))
     (fun _ => ?_)
-  sx_run [40] O.live at 0x800052b4
-  rw [show (R 2 + 18446744073709551552#64 + 48#64).toNat = C.s.toNat - 64 + 48 by sx_addr,
-    show (R 2 + 18446744073709551552#64 + 40#64).toNat = C.s.toNat - 64 + 40 by sx_addr,
-    show (R 2 + 18446744073709551552#64 + 56#64).toNat = C.s.toNat - 64 + 56 by sx_addr,
-    show (R 2 + 18446744073709551552#64).toNat = C.s.toNat - 64 by sx_addr]
+  have Sk := O.toWOK.stackRgn
+  rgn_run O.live at 0x800052c0
+  rw [show (R 2 + 18446744073709551552#64 + 48#64).toNat = C.s.toNat - 64 + 48 by rgn_arith,
+    show (R 2 + 18446744073709551552#64 + 40#64).toNat = C.s.toNat - 64 + 40 by rgn_arith,
+    show (R 2 + 18446744073709551552#64 + 56#64).toNat = C.s.toNat - 64 + 56 by rgn_arith,
+    show (R 2 + 18446744073709551552#64).toNat = C.s.toNat - 64 by rgn_arith, E.a2]
   have Hp1 := (((Hp.store_stack (a := C.s.toNat - 64 + 48) (w := 8) (v := R 8) (by unfold mHead; omega)
     (by omega)).store_stack (a := C.s.toNat - 64 + 40) (w := 8) (v := R 9) (by unfold mHead; omega)
     (by omega)).store_stack (a := C.s.toNat - 64 + 56) (w := 8) (v := R 1) (by unfold mHead; omega)
-    (by omega)).store_stack (a := C.s.toNat - 64) (w := 8) (v := R 12) (by unfold mHead; omega)
+    (by omega)).store_stack (a := C.s.toNat - 64) (w := 8) (v := C.n) (by unfold mHead; omega)
     (by omega)
   generalize hM1 : writeLog (writeLog (writeLog (writeLog C.Mt0 [(C.s.toNat - 64 + 48, 8, R 8)])
-    [(C.s.toNat - 64 + 40, 8, R 9)]) [(C.s.toNat - 64 + 56, 8, R 1)]) [(C.s.toNat - 64, 8, R 12)] = M1
+    [(C.s.toNat - 64 + 40, 8, R 9)]) [(C.s.toNat - 64 + 56, 8, R 1)]) [(C.s.toNat - 64, 8, C.n)] = M1
     at Hp1 ⊢
-  have F1 : RFrame C (upd (upd (upd (upd (upd R 2 (R 2 + 18446744073709551552#64)) 8 (R 11)) 9 (R 10)) 1
-      2147504820#64) 10 2147596760#64) M1 := by
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [hs2]
-    · rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
-        read64_store_miss _ _ (by omega), read64_store_hit, E.s0]
-    · rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
-        read64_store_hit, E.s1]
-    · rw [← hM1, read64_store_miss _ _ (by omega), read64_store_hit, E.ra]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact E.s2
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact E.s3
-  have hsp0 : read64 M1 (C.s.toNat - 64) = some C.n.toNat := by
-    rw [← hM1, read64_store_hit, E.a2]
-  refine (step% st 0x800052b4) O.live (by sx_norm; rw [hs2]; sx_addr) (by sx_norm; rw [hs2]; sx_side) ?_
-  sx_norm
-  rw [show (R 2 + 18446744073709551552#64).toNat = C.s.toNat - 64 by sx_addr, ldv_ld hsp0]
-  try simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq]
+  have F2 : ∀ R' : Nat → BitVec 64, R' 2 = R 2 + 18446744073709551552#64 → R' 18 = R 18 →
+      R' 19 = R 19 → RFrame C R' M1 := fun R' h2 h18 h19 =>
+    ⟨by rw [h2, hs2], by rw [← hM1]; rd_log [E.s0], by rw [← hM1]; rd_log [E.s1],
+      by rw [← hM1]; rd_log [E.ra], h18.trans E.s2, h19.trans E.s3⟩
   have htop0 : heapStart ≤ C.top0 := Hp.heap.heap.heap.walk.le
   have hN : (C.n + 23#64).toNat = (C.n.toNat + 23) % 2 ^ 64 := by rw [BitVec.toNat_add]; rfl
-  have F2 := fun (R' : Nat → BitVec 64) (h2 : R' 2 = R 2 + 18446744073709551552#64)
-      (h18 : R' 18 = R 18) (h19 : R' 19 = R 19) =>
-    F1.of_regs (R' := R') (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h2)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h18)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h19)
-  sx_run [2] O.live at 0x800052c0
   refine (step% st 0x800052c0) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
