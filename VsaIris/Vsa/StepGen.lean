@@ -119,7 +119,7 @@ def fields (w : Nat) : Fields where
 
 /-- A source register as the segment reads it (`gp` is the constant `gpv`). -/
 def src (gpv r : Nat) : String :=
-  if r = 0 then "(0#64)" else if r = 3 then s!"({lit64 gpv})" else s!"(R {r})"
+  if r = 0 then "(0#64)" else if r = 3 ∧ gpv ≠ 0 then s!"({lit64 gpv})" else s!"(R {r})"
 
 /-- The base classifier (shared by every table). -/
 def classifyWord (gpv pc w : Nat) : Cls :=
@@ -221,11 +221,18 @@ inductive Flavor where
   | stdio
   | snp
   | alloc
+  /-- `memcpy` over its own run (`MW`: the source is a read-only image). -/
+  | memcpy
+  /-- the string leaves over `SR` (no `gp`, a string's bytes as data). -/
+  | str
   deriving BEq, Inhabited
 
 def classify (fl : Flavor) (gpv pc w : Nat) : Cls :=
-  if fl == .alloc then classifyWord gpv pc w else
+  if fl == .alloc || fl == .memcpy then classifyWord gpv pc w else
   let f := fields w
+  if fl == .str then
+    if f.op = 0x33 ∧ f.f3 = 3 ∧ f.f7 = 0 ∧ f.rd ≠ 0 then .obs true f.rd f.rs1 f.rs2 0
+    else classifyWord gpv pc w else
   let hi := w >>> 20
   if f.op = 0x33 ∧ f.f3 = 3 ∧ f.f7 = 0 ∧ f.rd ≠ 0 then .obs true f.rd f.rs1 f.rs2 0
   else if f.op = 0x13 ∧ f.f3 = 3 ∧ f.rd ≠ 0 then .obs false f.rd f.rs1 0 (hi % 4096)
@@ -268,7 +275,10 @@ structure Tbl where
   /-- Code ranges without step lemmas (code-only leaves, printed stores). -/
   skip : List (Nat × Nat) := []
 
-def Tbl.hasD (t : Tbl) : Bool := t.flavor != .alloc
+def Tbl.hasD (t : Tbl) : Bool := t.flavor != .alloc && t.flavor != .str
+
+/-- Allocator-shaped templates (no data view in the run, `gp` optional). -/
+def Tbl.allocLike (t : Tbl) : Bool := t.flavor == .alloc || t.flavor == .memcpy
 
 def dBinders : String :=
   "{live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}\n    " ++
@@ -323,6 +333,12 @@ def hR (ks : List Nat) : String :=
   "(by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; " ++
     s!"rcases hx with {alts} <;> first | rfl | exact absurd rfl hg)"
 
+/-- `hR` for a run with no read-only register. -/
+def hRs (ks : List Nat) : String :=
+  let alts := " | ".intercalate (ks.map fun _ => "rfl")
+  "(by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; " ++
+    s!"rcases hx with {alts} <;> rfl)"
+
 def hRo (ks : List Nat) (rd? : Option Nat := none) : String :=
   match rd? with
   | none => "(fun _ _ _ _ => rfl)"
@@ -333,22 +349,45 @@ def hgp (ks : List Nat) : String :=
 
 def nilCover : String := "(fun a _ => trivial)"
 
-/-- The `swp_stepD`/`swp_step` application for one segment. -/
+def hRt (ks : List Nat) : String := if t.flavor == .str then hRs ks else hR ks
+
+/-- The code-fetch hypothesis of the string leaves at `pc`. -/
+def strLoaded (pc : Nat) : String :=
+  if pc < 0x80006dc4 then "strlenLoaded_of_str" else "strcpyLoaded_of_str"
+
+/-- The segment step (`swp_stepD`, `swp_step`, `mw_step`, `sr_step`) for one segment. -/
 def step (seg : String) (ks : List Nat) (lds LD Wr cover tail hpc R Ro hk : String)
     (gp : Option String := none) : String :=
   let tl := if tail.isEmpty then "" else s!"; {tail}"
   let ld := if LD == "[]" then "(fun a h => by cases h)" else "hLDS"
   let wr := if Wr == "[]" then "(fun a h => by cases h)" else "hS"
-  let base := if t.hasD then "swp_stepD" else "swp_step"
-  let lam := if t.hasD then "fun m hm hD hLD" else "fun m hm hLD"
   let g := gp.getD (hgp ks)
-  s!"{base} {seg} {lst ks} {lds} {LD} {Wr} 0 rfl (by decide) (by decide) (by decide)\n" ++
-  s!"    {cover} hlive\n" ++
-  s!"    ({lam} => by unfold ChainFacts; chain_facts hm{tl})\n" ++
-  s!"    (by decide) (by decide) {g} (by decide) {ld}\n" ++
-  s!"    {wr} {hpc}\n" ++
-  s!"    {R}\n" ++
-  s!"    {Ro} rfl {hk}"
+  match t.flavor with
+  | .memcpy =>
+    s!"mw_step {seg} {lst ks} {lds} {LD} {Wr} 0 rfl (by decide) (by decide) (by decide)\n" ++
+    s!"    {cover} hlive\n" ++
+    s!"    (fun m hm hD hLD => by have hm := memcpyLoaded_of_text hm; unfold ChainFacts; chain_facts hm{tl})\n" ++
+    s!"    (by decide) {ld}\n" ++
+    s!"    {wr} {hpc}\n" ++
+    s!"    {R}\n" ++
+    s!"    {Ro} rfl {hk}"
+  | .str =>
+    s!"sr_step {seg} {lst ks} [] {Wr} 0 rfl (by decide) (by decide) (by decide)\n" ++
+    s!"    {cover} hlive\n" ++
+    s!"    (fun m hm => by unfold ChainFacts; chain_facts ({strLoaded pc} hm){tl})\n" ++
+    s!"    (by decide) {wr} {hpc}\n" ++
+    s!"    {R}\n" ++
+    s!"    {Ro} rfl {hk}"
+  | _ =>
+    let base := if t.hasD then "swp_stepD" else "swp_step"
+    let lam := if t.hasD then "fun m hm hD hLD" else "fun m hm hLD"
+    s!"{base} {seg} {lst ks} {lds} {LD} {Wr} 0 rfl (by decide) (by decide) (by decide)\n" ++
+    s!"    {cover} hlive\n" ++
+    s!"    ({lam} => by unfold ChainFacts; chain_facts hm{tl})\n" ++
+    s!"    (by decide) (by decide) {g} (by decide) {ld}\n" ++
+    s!"    {wr} {hpc}\n" ++
+    s!"    {R}\n" ++
+    s!"    {Ro} rfl {hk}"
 
 def eaOf (rs1 : Nat) (imm : Int) : String := s!"({src t.gpv rs1} + {sx12 imm}).toNat"
 
@@ -362,10 +401,12 @@ def condOf (op : String) (A B : String) : String × String :=
 
 /-- The code-footprint membership of the site at `pc` in the run's text (and in
     `text ++ data` for a run with a data view). -/
-def codeIn : String := s!"(({t.code} (by decide)) p hp)"
+def codeIn : String :=
+  if t.flavor == .str then s!"(str_code_{hxw 8 pc} p hp)" else s!"(({t.code} (by decide)) p hp)"
 
 def codeInT : String :=
-  if t.hasD then s!"(fun p hp => List.mem_append_left _ {codeIn t})" else s!"({t.code} (by decide))"
+  if t.flavor == .str then s!"(str_code_{hxw 8 pc})" else
+  if t.hasD then s!"(fun p hp => List.mem_append_left _ {codeIn t pc})" else s!"({t.code} (by decide))"
 
 /-- The four byte facts of a site, from the site's memory reads `hMR`. -/
 def hbLines (h : String) (ind : String) : String :=
@@ -438,6 +479,30 @@ def lemOf (kind : String) : Option Lem := Id.run do
     let ea := eaOf t rs1 imm
     let ks := ksOf [rs1, rd]
     let sfx := toString wd
+    if t.flavor == .memcpy then
+      if k != "" then return none
+      return some { binders := H ++ s!"\n    (hea : LdOK {ea} {wd})" ++
+                      s!"\n    (hin : ∀ b ∈ accAddrs {ea} {wd}, Xs ≤ b ∧ b < Xs + ns)" ++
+                      s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} (ldvf .{kn} img {ea}))"})"
+                    concl := run (pcL pc)
+                    proof := step t pc (single pc w) ks s!"[bytesAt img {ea} {wd}]" "[]" "[]" nilCover
+                      s!"exact ⟨hea, lpins{sfx}_fn (fun b hb => srcRead hD (hin b hb))⟩"
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
+    if t.flavor == .str then
+      if k != "H" then return none
+      let alts := " | ".intercalate (ks.map fun _ => "rfl")
+      return some { binders := H ++ s!"\n    (hea : LdOK {ea} {wd})" ++
+                      "\n    (hk : ∀ f : Nat → BitVec 8, (∀ p ∈ D, f p.1 = p.2) →" ++
+                      s!"\n      {runR (nxt pc) s!"(upd R {rd} (ldvf .{kn} f {ea}))"})"
+                    concl := run (pcL pc)
+                    proof := s!"sr_havoc {single pc w} {lst ks} {rd} (accAddrs {ea} {wd}) (fun f => [bytesAt f {ea} {wd}])\n" ++
+                      s!"    (fun f => ldvf .{kn} f {ea}) 0\n" ++
+                      "    (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))\n" ++
+                      "    rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive\n" ++
+                      s!"    (fun m hm => by unfold ChainFacts; chain_facts ({strLoaded pc} hm); exact ⟨hea, lpins{sfx}_img (fun b _ => rfl)⟩)\n" ++
+                      "    (by decide) (by decide) (fun _ => rfl)\n" ++
+                      s!"    (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with {alts} <;> first | rfl | exact absurd rfl hr)\n" ++
+                      "    (fun _ => rfl) hk" }
     if t.flavor == .alloc then
       if k != "" then return none
       let conc := rs1 = 3
@@ -446,17 +511,17 @@ def lemOf (kind : String) : Option Lem := Id.run do
           let bl := ", ".intercalate (ibytes.map fun b => s!"0x{hxw 2 b}#8")
           return some { binders := H ++ s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} (bytesVal .ld [{bl}]))"})"
                         concl := run (pcL pc)
-                        proof := step t (single pc w) ks s!"[[{bl}]]" "[]" "[]" nilCover
-                          s!"exact ⟨(show LdOK {ea} 8 by decide), {ilem} hm⟩" "rfl" (hR ks)
+                        proof := step t pc (single pc w) ks s!"[[{bl}]]" "[]" "[]" nilCover
+                          s!"exact ⟨(show LdOK {ea} 8 by decide), {ilem} hm⟩" "rfl" (hRt t ks)
                           (hRo ks (some rd)) "hk" }
       let okh := if conc then "" else s!"\n    (hea : LdOK {ea} {wd})"
       let okp := if conc then s!"(show LdOK {ea} {wd} by decide)" else "hea"
       return some { binders := H ++ okh ++ s!"\n    (hLDS : ∀ b ∈ accAddrs {ea} {wd}, S b)" ++
                       s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} (ldv .{kn} Mt {ea}))"})"
                     concl := run (pcL pc)
-                    proof := step t (single pc w) ks s!"[bytesAt (imgM Mt) {ea} {wd}]"
+                    proof := step t pc (single pc w) ks s!"[bytesAt (imgM Mt) {ea} {wd}]"
                       s!"(accAddrs {ea} {wd})" "[]" nilCover s!"exact ⟨{okp}, lpins{sfx}_img hLD⟩"
-                      "rfl" (hR ks) (hRo ks (some rd)) "hk" }
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
     let alts := " | ".intercalate (ks.map fun _ => "rfl")
     let havoc (lemma bodyHk : String) : Lem :=
       { binders := H ++ s!"\n    (hea : LdOK {ea} {wd})\n    (hk : {bodyHk})"
@@ -473,16 +538,16 @@ def lemOf (kind : String) : Option Lem := Id.run do
       return some { binders := H ++ s!"\n    (hea : LdOK {ea} {wd})\n    (hLDS : ∀ b ∈ accAddrs {ea} {wd}, S b)" ++
                       s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} (ldv .{kn} Mt {ea}))"})"
                     concl := run (pcL pc)
-                    proof := step t (single pc w) ks s!"[bytesAt (imgM Mt) {ea} {wd}]"
+                    proof := step t pc (single pc w) ks s!"[bytesAt (imgM Mt) {ea} {wd}]"
                       s!"(accAddrs {ea} {wd})" "[]" nilCover s!"exact ⟨hea, lpins{sfx}_img hLD⟩"
-                      "rfl" (hR ks) (hRo ks (some rd)) "hk" }
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
     if k == "D" then
       return some { binders := H ++ s!"\n    (hea : LdOK {ea} {wd})\n    (hLDD : ∀ b ∈ accAddrs {ea} {wd}, b ∈ DA)" ++
                       s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} (ldv .{kn} Dt {ea}))"})"
                     concl := run (pcL pc)
-                    proof := step t (single pc w) ks s!"[bytesAt (imgM Dt) {ea} {wd}]" "[]" "[]" nilCover
+                    proof := step t pc (single pc w) ks s!"[bytesAt (imgM Dt) {ea} {wd}]" "[]" "[]" nilCover
                       s!"exact ⟨hea, lpins{sfx}_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩"
-                      "rfl" (hR ks) (hRo ks (some rd)) "hk" }
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
     if k == "H" then
       return some (havoc "swp_havocD" s!"∀ v, {runR (nxt pc) s!"(upd R {rd} v)"}")
     if k == "P" ∧ t.flavor != .interp then
@@ -494,9 +559,9 @@ def lemOf (kind : String) : Option Lem := Id.run do
                       s!"\n    (hLDT : ∀ b ∈ accAddrs {ea} {wd}, (b, {t.roImg} b) ∈ {t.ro})" ++
                       s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} (ldvf .{kn} {t.roImg} {ea}))"})"
                     concl := run (pcL pc)
-                    proof := step t (single pc w) ks s!"[bytesAt {t.roImg} {ea} {wd}]" "[]" "[]" nilCover
+                    proof := step t pc (single pc w) ks s!"[bytesAt {t.roImg} {ea} {wd}]" "[]" "[]" nilCover
                       s!"exact ⟨hea, lpins{sfx}_fn (fun b hb => by rw [hm _ (List.mem_append_right _ (hLDT b hb))]; rfl)⟩"
-                      "rfl" (hR ks) (hRo ks (some rd)) "hk" }
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
     return none
   match c with
   | .unsupported => return none
@@ -505,7 +570,7 @@ def lemOf (kind : String) : Option Lem := Id.run do
     let ks := ksOf (srcs ++ [rd])
     return some { binders := H ++ s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} ({v}))"})"
                   concl := run (pcL pc)
-                  proof := step t (single pc w) ks "[]" "[]" "[]" nilCover "" "rfl" (hR ks) (hRo ks (some rd)) "hk" }
+                  proof := step t pc (single pc w) ks "[]" "[]" "[]" nilCover "" "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
   | .load rd rs1 imm kn wd => return ld kind rd rs1 imm kn wd
   | .store rs1 rs2 imm kn wd =>
     if kind != "" then return none
@@ -518,8 +583,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
     return some { binders := H ++ okh ++ s!"\n    (hS : ∀ b ∈ accAddrs {ea} {wd}, S b)" ++
                     s!"\n    (hk : {runM (nxt pc) s!"(writeLog Mt [({ea}, {wd}, {src t.gpv rs2})])"})"
                   concl := run (pcL pc)
-                  proof := step t (single pc w) ks "[]" "[]" s!"(accAddrs {ea} {wd})"
-                    "(fun a ha => outL_single _ ha)" s!"exact {okp}" "rfl" (hR ks) (hRo ks) "hk" }
+                  proof := step t pc (single pc w) ks "[]" "[]" s!"(accAddrs {ea} {wd})"
+                    "(fun a ha => outL_single _ ha)" s!"exact {okp}" "rfl" (hRt t ks) (hRo ks) "hk" }
   | .br op rs1 rs2 imm tgt =>
     if kind != "" then return none
     let (cond, gl) := condOf op (src t.gpv rs1) (src t.gpv rs2)
@@ -529,15 +594,15 @@ def lemOf (kind : String) : Option Lem := Id.run do
     return some { binders := H ++ s!"\n    (hT : {cond} → {run s!"0x{hx tgt}#64"}) (hF : ¬ ({cond}) → {run (nxt pc)})"
                   concl := run (pcL pc)
                   proof := s!"if hc : {cond} then\n    " ++
-                    step t segT ks "[]" "[]" "[]" nilCover s!"exact ({gl} _ _).2 hc" "rfl" (hR ks) (hRo ks) "(hT hc)" ++
+                    step t pc segT ks "[]" "[]" "[]" nilCover s!"exact ({gl} _ _).2 hc" "rfl" (hRt t ks) (hRo ks) "(hT hc)" ++
                     "\n  else\n    " ++
-                    step t segF ks "[]" "[]" "[]" nilCover s!"exact (guard_false ({gl} _ _)).2 hc" "rfl" (hR ks) (hRo ks) "(hF hc)" }
+                    step t pc segF ks "[]" "[]" "[]" nilCover s!"exact (guard_false ({gl} _ _)).2 hc" "rfl" (hRt t ks) (hRo ks) "(hF hc)" }
   | .j imm tgt =>
     if kind != "" then return none
     let gp := if t.flavor == .alloc then some "(fun h => nomatch h)" else none
     return some { binders := H ++ s!"\n    (hk : {run s!"0x{hx tgt}#64"})"
                   concl := run (pcL pc)
-                  proof := step t (tseg pc w ".j" 0 0 0 imm) [] "[]" "[]" "[]" nilCover "" "rfl"
+                  proof := step t pc (tseg pc w ".j" 0 0 0 imm) [] "[]" "[]" "[]" nilCover "" "rfl"
                     "(fun _ h => nomatch h)" (hRo []) "hk" gp }
   | .ret | .jr _ =>
     if kind != "" then return none
@@ -546,17 +611,17 @@ def lemOf (kind : String) : Option Lem := Id.run do
       | _ => 1
     return some { binders := H ++ s!"\n    (hal : (R {r}).toNat % 4 = 0) (hk : {run s!"(R {r})"})"
                   concl := run (pcL pc)
-                  proof := step t (tseg pc w ".jr" r 0 0 0) [r] "[]" "[]" "[]" nilCover
+                  proof := step t pc (tseg pc w ".jr" r 0 0 0) [r] "[]" "[]" "[]" nilCover
                     (s!"show (Sail.BitVec.update (R {r} + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; " ++
                       "rw [ret_tgt _ hal]; exact hal")
-                    "(ret_tgt _ hal)" (hR [r]) (hRo [r]) "hk" }
+                    "(ret_tgt _ hal)" (hRt t [r]) (hRo [r]) "hk" }
   | .jri r imm =>
     if kind != "" then return none
     let tgt := s!"(Sail.BitVec.update (R {r} + sign_extend (m := 64) (0x{hxw 3 imm}#12)) 0 0#1)"
     return some { binders := H ++ s!"\n    (hal : {tgt}.toNat % 4 = 0) (hk : {run tgt})"
                   concl := run (pcL pc)
-                  proof := step t (tseg pc w ".jr" r 0 0 0 (some imm)) [r] "[]" "[]" "[]" nilCover
-                    "exact hal" "rfl" (hR [r]) (hRo [r]) "hk" }
+                  proof := step t pc (tseg pc w ".jr" r 0 0 0 (some imm)) [r] "[]" "[]" "[]" nilCover
+                    "exact hal" "rfl" (hRt t [r]) (hRo [r]) "hk" }
   | .obs sltu rd rs1 rs2 imm =>
     if kind != "O" then return none
     let A := src t.gpv rs1
@@ -590,12 +655,12 @@ def lemOf (kind : String) : Option Lem := Id.run do
     return some
       { binders := H ++ s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} ({val}))"})"
         concl := run (pcL pc)
-        proof := s!"swp_alu 0x{hx pc} [{codeLits w}] {rd} {lst ks} ({val})\n" ++
+        proof := s!"{if t.flavor == .str then "sr_alu" else "swp_alu"} 0x{hx pc} [{codeLits w}] {rd} {lst ks} ({val})\n" ++
           "    (aluStep_of_obs (by decide) (by decide)\n" ++
           "      (fun q hq => by\n" ++
           "        obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hq\n" ++
           s!"        exact (show ∀ k ∈ {lst ks}, 1 ≤ k ∧ k ≤ 31 by decide) k hk)\n" ++
-          s!"      (fun p hp => hlive _ {codeIn t})\n" ++
+          s!"      (fun p hp => hlive _ {codeIn t pc})\n" ++
           "      (fun c hG hi hpc hRR hMR => by\n" ++
           "      obtain ⟨vm, hmi⟩ := hG.minstret\n" ++
           hbLines pc w "hMR" "      " ++ "\n" ++
@@ -610,8 +675,9 @@ def lemOf (kind : String) : Option Lem := Id.run do
           "          (by decide) (by decide) (by decide) (by decide) (by decide)\n" ++
           "          hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi\n" ++
           "      exact ⟨σ', i', vm, hs, hi', hG', hmem, hobs⟩))\n" ++
-          s!"    {codeInT t}\n" ++
-          "    (by decide) (by decide) (by decide) (by decide) rfl hk" }
+          s!"    {codeInT t pc}" ++
+          (if t.flavor == .str then " (by decide) (by decide) rfl hk" else
+            "\n    (by decide) (by decide) (by decide) (by decide) rfl hk") }
   | .jalr rs1 imm =>
     if kind != "" then return none
     let tgt := s!"(Sail.BitVec.update (R {rs1} + sign_extend (m := 64) (0x{hxw 3 imm}#12)) 0 0#1)"
@@ -623,7 +689,7 @@ def lemOf (kind : String) : Option Lem := Id.run do
           "      (fun q hq => by\n" ++
           "        obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hq\n" ++
           s!"        exact (show ∀ k ∈ [{rs1}], 1 ≤ k ∧ k ≤ 31 by decide) k hk)\n" ++
-          s!"      (fun p hp => hlive _ {codeIn t})\n" ++
+          s!"      (fun p hp => hlive _ {codeIn t pc})\n" ++
           "      (fun c hG hi hpc hRR hMR => by\n" ++
           "      obtain ⟨vm, hmi⟩ := hG.minstret\n" ++
           hbLines pc w "hMR" "      " ++ "\n" ++
@@ -640,7 +706,7 @@ def lemOf (kind : String) : Option Lem := Id.run do
           "      refine ⟨σ', i', vm, hs, hi', hG', hmem, ?_⟩\n" ++
           s!"      rwa [show BitVec.addInt (0x{hx pc}#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x{hx pc} + 4) from by\n" ++
           "        apply BitVec.eq_of_toNat_eq; decide] at hobs))\n" ++
-          s!"    {codeInT t}\n" ++
+          s!"    {codeInT t pc}\n" ++
           "    (by decide) (by decide) (by decide) rfl hk" }
   | .jalrn r =>
     if kind != "J" then return none
@@ -648,9 +714,9 @@ def lemOf (kind : String) : Option Lem := Id.run do
       { binders := H ++ s!"\n    (hal : (R {r}).toNat % 4 = 0)\n    (hk : {runR s!"(R {r})" s!"(upd R 1 (BitVec.ofNat 64 (0x{hx pc} + 4)))"})"
         concl := run (pcL pc)
         proof := s!"swp_nstep 0x{hx pc} _ _ 1 _ _\n" ++
-          s!"    (nstep_of_jalrObs (fun p hp => hlive _ {codeIn t}) ((step% jalrn 0x{hx pc}) (R {r}) hal)\n" ++
+          s!"    (nstep_of_jalrObs (fun p hp => hlive _ {codeIn t pc}) ((step% jalrn 0x{hx pc}) (R {r}) hal)\n" ++
           "      (by decide) (by decide))\n" ++
-          s!"    {codeInT t}\n" ++
+          s!"    {codeInT t pc}\n" ++
           "    (fun p hp => by\n" ++
           "      simp only [List.mem_cons, List.not_mem_nil, or_false] at hp\n" ++
           "      subst hp; exact ⟨by dsimp only; decide, by dsimp only; decide, rfl⟩)\n" ++
@@ -661,12 +727,12 @@ def lemOf (kind : String) : Option Lem := Id.run do
     if !follow then return none
     let ra := if t.flavor == .alloc then "VsaIris.ra" else "1"
     let jn := if t.flavor == .snp then "jalxn" else "jalx"
-    let jx := s!"((step% {jn} 0x{hx pc}) live fun p hp => hlive _ {codeIn t})"
+    let jx := s!"((step% {jn} 0x{hx pc}) live fun p hp => hlive _ {codeIn t pc})"
     return some
       { binders := H ++ s!"\n    (hk : {runR s!"0x{hx tgt}#64" s!"(upd R {ra} (BitVec.ofNat 64 (0x{hx pc} + 4)))"})"
         concl := run (pcL pc)
         proof := s!"swp_jal 0x{hx pc} [{codeLits w}] 0x{hx tgt}#64 {jx}\n" ++
-          s!"    {codeInT t} (by decide) (by decide) rfl hk" }
+          s!"    {codeInT t pc} (by decide) (by decide) rfl hk" }
 
 end Templates
 
@@ -737,7 +803,37 @@ def envTbl : Tbl where
   regs := "eRegs"
   gpv := gpV
 
-def tables : List Tbl := [interpTbl, stdioTbl, snpTbl, allocTbl, envTbl]
+/-- Word lookup for the string leaves (`strlen`, `strcpy`). -/
+def strPieces : List Vsa.Sim.TextPiece := [⟨VsaIris.Newlib.textByte, [(0x80006cf0, 0x80006ea0)]⟩]
+
+/-- Word lookup for `memcpy`. -/
+def memcpyPieces : List Vsa.Sim.TextPiece := [⟨VsaIris.Newlib.textByte, [(0x80006bc8, 0x80006cf0)]⟩]
+
+def strTbl : Tbl where
+  key := "str"
+  flavor := .str
+  pieces := ``strPieces
+  run := "SW live D S Q"
+  binders := "{live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat → Prop}\n    " ++
+    "{Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}"
+  text := "strCode"
+  code := ""
+  regs := "sRegs"
+  gpv := 0
+
+def memcpyTbl : Tbl where
+  key := "memcpy"
+  flavor := .memcpy
+  pieces := ``memcpyPieces
+  run := "MW live Xs ns img S Q"
+  binders := "{live : Nat → Prop} {Xs ns : Nat} {img : Nat → BitVec 8} {S : Nat → Prop}\n    " ++
+    "{Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}"
+  text := "mText"
+  code := ""
+  regs := "mRegs"
+  gpv := gpV
+
+def tables : List Tbl := [interpTbl, stdioTbl, snpTbl, allocTbl, envTbl, strTbl, memcpyTbl]
 
 /-- The table of a run whose text head constant is `c`. -/
 def tblOfText? (c : Name) : Option Tbl :=
@@ -872,6 +968,8 @@ def Tbl.kinds (t : Tbl) : List String :=
   | .stdio => ["jalx", "", "D", "H", "P", "O"]
   | .snp => ["jalx", "jalro", "", "D", "H", "O", "J", "C", "P"]
   | .alloc => ["jalx", ""]
+  | .memcpy => [""]
+  | .str => ["", "H", "O"]
 
 /-- The landed name of family `kind` at `pc` in table `t`. -/
 def famName (t : Tbl) (kind : String) (pc : Nat) : MetaM String := do
@@ -881,6 +979,8 @@ def famName (t : Tbl) (kind : String) (pc : Nat) : MetaM String := do
     else (match t.flavor with
       | .snp => "nt"
       | .alloc => "st"
+      | .memcpy => "mst"
+      | .str => "sl"
       | _ => "it") ++ kind
   -- a stdio lemma at a `pc` the interpreter's table also covers
   let sfx := if t.flavor == .stdio && (← wordAt? interpTbl.pieces pc).isSome then "S" else ""

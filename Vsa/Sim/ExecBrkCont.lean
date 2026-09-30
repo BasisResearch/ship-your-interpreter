@@ -62,36 +62,8 @@ theorem es_off136 (sp : BitVec 64) (hsp : 176 ≤ sp.toNat) :
 
 theorem loaded_exec_stmt_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : Nat)
     (d : BitVec (8 * 8)) (hdis : a8 + 8 ≤ 0x80003fe0 ∨ 0x80004308 ≤ a8)
-    (h : Exec_stmtLoaded mem) : Exec_stmtLoaded (writeMap8 mem a8 d) := by
-  obtain ⟨c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12⟩ := h
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simp only [exec_stmtChunk0] at c0 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-
-  · simp only [exec_stmtChunk1] at c1 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk2] at c2 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk3] at c3 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk4] at c4 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk5] at c5 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk6] at c6 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk7] at c7 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk8] at c8 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk9] at c9 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk10] at c10 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk11] at c11 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
-  · simp only [exec_stmtChunk12] at c12 ⊢; repeat' apply And.intro
-    all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
+    (h : Exec_stmtLoaded mem) : Exec_stmtLoaded (writeMap8 mem a8 d) :=
+  CodeLoaded.transport h fun a h1 h2 => getElem_writeMap8_disjoint _ _ _ _ (by omega)
 
 def ExecArmEntryK
     (g : (R : Register) → Option (RegisterType R))

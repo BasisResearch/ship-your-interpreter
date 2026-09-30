@@ -41,7 +41,7 @@ theorem site_80002c60_eg2
           ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
             : BitVec (8 * 8)))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := env_get_at_80002c60 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80002c60 0x80002c61 0x80002c62 0x80002c63 (b0 := (0x03 : BitVec 8)) (b1 := (0xb5 : BitVec 8)) (b2 := (0x04 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   have hbase₂ : (afterNextPC (afterPrelude σ) (0x80002c60#64)).regs.get? Register.x9 = some vbase := by
     rw [get?_afterNextPC σ (0x80002c60#64) _ (by decide) (by decide)]; exact hbase
   exact stepObs_alu σ i u (0x80002c60#64) vminstret (0x0004b503#32)

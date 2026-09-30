@@ -1,60 +1,8 @@
-import Vsa.Elf
-
-open Std (ExtHashMap)
+import Vsa.Sim.Code.FixedImage
 
 namespace Vsa.Sim.Code
 
-def value_truthyChunk0 (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
-  mem[(0x8000282c : Nat)]? = some (0x83 : BitVec 8) ∧
-  mem[(0x8000282d : Nat)]? = some (0x27 : BitVec 8) ∧
-  mem[(0x8000282e : Nat)]? = some (0x05 : BitVec 8) ∧
-  mem[(0x8000282f : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002830 : Nat)]? = some (0x13 : BitVec 8) ∧
-  mem[(0x80002831 : Nat)]? = some (0x07 : BitVec 8) ∧
-  mem[(0x80002832 : Nat)]? = some (0x10 : BitVec 8) ∧
-  mem[(0x80002833 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002834 : Nat)]? = some (0x63 : BitVec 8) ∧
-  mem[(0x80002835 : Nat)]? = some (0x80 : BitVec 8) ∧
-  mem[(0x80002836 : Nat)]? = some (0xe7 : BitVec 8) ∧
-  mem[(0x80002837 : Nat)]? = some (0x02 : BitVec 8) ∧
-  mem[(0x80002838 : Nat)]? = some (0x13 : BitVec 8) ∧
-  mem[(0x80002839 : Nat)]? = some (0x07 : BitVec 8) ∧
-  mem[(0x8000283a : Nat)]? = some (0x20 : BitVec 8) ∧
-  mem[(0x8000283b : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x8000283c : Nat)]? = some (0x63 : BitVec 8) ∧
-  mem[(0x8000283d : Nat)]? = some (0x86 : BitVec 8) ∧
-  mem[(0x8000283e : Nat)]? = some (0xe7 : BitVec 8) ∧
-  mem[(0x8000283f : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002840 : Nat)]? = some (0x33 : BitVec 8) ∧
-  mem[(0x80002841 : Nat)]? = some (0x35 : BitVec 8) ∧
-  mem[(0x80002842 : Nat)]? = some (0xf0 : BitVec 8) ∧
-  mem[(0x80002843 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002844 : Nat)]? = some (0x67 : BitVec 8) ∧
-  mem[(0x80002845 : Nat)]? = some (0x80 : BitVec 8) ∧
-  mem[(0x80002846 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002847 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002848 : Nat)]? = some (0x03 : BitVec 8) ∧
-  mem[(0x80002849 : Nat)]? = some (0x35 : BitVec 8) ∧
-  mem[(0x8000284a : Nat)]? = some (0x85 : BitVec 8) ∧
-  mem[(0x8000284b : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x8000284c : Nat)]? = some (0x33 : BitVec 8) ∧
-  mem[(0x8000284d : Nat)]? = some (0x35 : BitVec 8) ∧
-  mem[(0x8000284e : Nat)]? = some (0xa0 : BitVec 8) ∧
-  mem[(0x8000284f : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002850 : Nat)]? = some (0x67 : BitVec 8) ∧
-  mem[(0x80002851 : Nat)]? = some (0x80 : BitVec 8) ∧
-  mem[(0x80002852 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002853 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002854 : Nat)]? = some (0x03 : BitVec 8) ∧
-  mem[(0x80002855 : Nat)]? = some (0x25 : BitVec 8) ∧
-  mem[(0x80002856 : Nat)]? = some (0x85 : BitVec 8) ∧
-  mem[(0x80002857 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80002858 : Nat)]? = some (0x67 : BitVec 8) ∧
-  mem[(0x80002859 : Nat)]? = some (0x80 : BitVec 8) ∧
-  mem[(0x8000285a : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x8000285b : Nat)]? = some (0x00 : BitVec 8)
-
-def Value_truthyLoaded (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
-  value_truthyChunk0 mem
+/-- The code of `value_truthy` is present as in the fixed image. -/
+abbrev Value_truthyLoaded (mem : Std.ExtHashMap Nat (BitVec 8)) : Prop := CodeLoaded 0x8000282c 0x8000285c mem
 
 end Vsa.Sim.Code

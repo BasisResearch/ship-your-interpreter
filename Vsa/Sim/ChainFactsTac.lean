@@ -38,13 +38,16 @@ partial def cfTextCands (h T : Expr) : MetaM (Array Expr) := do
 /-- Candidates from the hypothesis term: its type is `TextLoaded T m`, `TextIn T m`, or the
     unfolded `∀ p ∈ T, m[p.1]? = some p.2`. -/
 def cfHypCands (h : Expr) : MetaM (Array Expr) := do
-  let ty ← instantiateMVars (← inferType h)
-  let ty ← whnfR ty
-  if ty.getAppNumArgs == 2 then
-    if let some c := ty.getAppFn.constName? then
-      if c == ``TextIn || c == `VsaIris.Sym.TextLoaded then
-        return ← cfTextCands h (ty.getArg! 0)
-  return #[]
+  let rec go (ty : Expr) (fuel : Nat) : MetaM (Array Expr) := do
+    let ty := (← whnfCore (← instantiateMVars ty)).consumeMData
+    if ty.getAppNumArgs == 2 then
+      if let some c := ty.getAppFn.constName? then
+        if c == ``TextIn || c == `VsaIris.Sym.TextLoaded then
+          return ← cfTextCands h (ty.getArg! 0)
+    match fuel, ← unfoldDefinition? ty with
+    | fuel + 1, some ty' => go ty' fuel
+    | _, _ => return #[]
+  go (← inferType h) 8
 
 private def cfBvLitNat? (e : Expr) : MetaM (Option Nat) := do
   match ← getBitVecValue? e with

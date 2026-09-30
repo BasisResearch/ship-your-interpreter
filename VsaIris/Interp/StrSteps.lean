@@ -146,7 +146,7 @@ theorem sl_80006cf0 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006cf0#64 R Mt :=
   sr_step stx_80006cf0 [10, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006cf0 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006cf0 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [10, 15])))) rfl hk
@@ -158,7 +158,7 @@ theorem sl_80006cf4 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006cf4#64 R Mt :=
   sr_step stx_80006cf4 [10, 14] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006cf4 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006cf4 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 14 ∈ [10, 14])))) rfl hk
@@ -172,14 +172,14 @@ theorem sl_80006cf8 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006cf8 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006cf8 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_bne _ _).2 hc)
+      (fun m hm => by unfold stxT_80006cf8 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_bne _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006cf8 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006cf8 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_bne _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006cf8 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_bne _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -191,7 +191,7 @@ theorem sl_80006cfc {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006cfc#64 R Mt :=
   sr_step stx_80006cfc [15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006cfc ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006cfc ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
@@ -203,7 +203,7 @@ theorem sl_80006d00 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d00#64 R Mt :=
   sr_step stx_80006d00 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d00 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d00 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
@@ -215,7 +215,7 @@ theorem sl_80006d04 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d04#64 R Mt :=
   sr_step stx_80006d04 [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d04 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d04 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 13 ∈ [13, 15])))) rfl hk
@@ -227,7 +227,7 @@ theorem sl_80006d08 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d08#64 R Mt :=
   sr_step stx_80006d08 [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d08 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d08 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 13 ∈ [13, 15])))) rfl hk
@@ -239,7 +239,7 @@ theorem sl_80006d0c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d0c#64 R Mt :=
   sr_step stx_80006d0c [11] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d0c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d0c ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 11 ∈ [11])))) rfl hk
@@ -255,7 +255,7 @@ theorem slH_80006d10 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .ld f ((R 14) + sign_extend (m := 64) (0x000#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d10 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins8_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d10 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins8_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -267,7 +267,7 @@ theorem sl_80006d14 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d14#64 R Mt :=
   sr_step stx_80006d14 [14] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d14 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d14 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 14 ∈ [14])))) rfl hk
@@ -279,7 +279,7 @@ theorem sl_80006d18 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d18#64 R Mt :=
   sr_step stx_80006d18 [12, 13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d18 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d18 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [12, 13, 15])))) rfl hk
@@ -291,7 +291,7 @@ theorem sl_80006d1c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d1c#64 R Mt :=
   sr_step stx_80006d1c [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d1c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d1c ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [13, 15])))) rfl hk
@@ -303,7 +303,7 @@ theorem sl_80006d20 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d20#64 R Mt :=
   sr_step stx_80006d20 [12, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d20 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d20 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [12, 15])))) rfl hk
@@ -315,7 +315,7 @@ theorem sl_80006d24 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d24#64 R Mt :=
   sr_step stx_80006d24 [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d24 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d24 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [13, 15])))) rfl hk
@@ -329,14 +329,14 @@ theorem sl_80006d28 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d28 [11, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d28 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d28 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d28 [11, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d28 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d28 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -352,7 +352,7 @@ theorem slH_80006d2c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xff8#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d2c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d2c ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -364,7 +364,7 @@ theorem sl_80006d30 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d30#64 R Mt :=
   sr_step stx_80006d30 [10, 13, 14] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d30 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d30 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 13 ∈ [10, 13, 14])))) rfl hk
@@ -378,14 +378,14 @@ theorem sl_80006d34 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d34 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d34 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d34 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d34 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d34 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d34 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -401,7 +401,7 @@ theorem slH_80006d38 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xff9#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d38 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d38 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -415,14 +415,14 @@ theorem sl_80006d3c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d3c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d3c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d3c ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d3c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d3c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d3c ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -438,7 +438,7 @@ theorem slH_80006d40 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xffa#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d40 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d40 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -452,14 +452,14 @@ theorem sl_80006d44 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d44 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d44 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d44 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d44 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d44 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d44 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -475,7 +475,7 @@ theorem slH_80006d48 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xffb#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d48 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d48 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -489,14 +489,14 @@ theorem sl_80006d4c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d4c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d4c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d4c ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d4c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d4c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d4c ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -512,7 +512,7 @@ theorem slH_80006d50 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xffc#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d50 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d50 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -526,14 +526,14 @@ theorem sl_80006d54 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d54 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d54 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d54 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d54 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d54 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d54 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -549,7 +549,7 @@ theorem slH_80006d58 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xffd#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d58 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d58 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -563,14 +563,14 @@ theorem sl_80006d5c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d5c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d5c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d5c ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d5c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d5c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d5c ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -586,7 +586,7 @@ theorem slH_80006d60 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0xffe#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d60 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d60 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -636,7 +636,7 @@ theorem sl_80006d68 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d68#64 R Mt :=
   sr_step stx_80006d68 [10, 13] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d68 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d68 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 13])))) rfl hk
@@ -648,7 +648,7 @@ theorem sl_80006d6c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d6c#64 R Mt :=
   sr_step stx_80006d6c [10] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d6c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d6c ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10])))) rfl hk
@@ -660,7 +660,7 @@ theorem sl_80006d70 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d70#64 R Mt :=
   sr_step stx_80006d70 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d70 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006d70 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -674,14 +674,14 @@ theorem sl_80006d74 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d74 [13] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d74 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d74 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d74 [13] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d74 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d74 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -697,7 +697,7 @@ theorem slH_80006d78 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 14) + sign_extend (m := 64) (0x000#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d78 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006d78 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -709,7 +709,7 @@ theorem sl_80006d7c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d7c#64 R Mt :=
   sr_step stx_80006d7c [14] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d7c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d7c ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 14 ∈ [14])))) rfl hk
@@ -721,7 +721,7 @@ theorem sl_80006d80 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d80#64 R Mt :=
   sr_step stx_80006d80 [13, 14] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d80 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d80 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 13 ∈ [13, 14])))) rfl hk
@@ -735,14 +735,14 @@ theorem sl_80006d84 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006d84 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006d84 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_bne _ _).2 hc)
+      (fun m hm => by unfold stxT_80006d84 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_bne _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006d84 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006d84 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; exact (guard_false (guard_bne _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006d84 ChainFacts; chain_facts (strlenLoaded_of_str hm); exact (guard_false (guard_bne _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -754,7 +754,7 @@ theorem sl_80006d88 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d88#64 R Mt :=
   sr_step stx_80006d88 [10, 14] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d88 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d88 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 14 ∈ [10, 14])))) rfl hk
@@ -766,7 +766,7 @@ theorem sl_80006d8c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d8c#64 R Mt :=
   sr_step stx_80006d8c [10, 14] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d8c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d8c ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 14])))) rfl hk
@@ -778,7 +778,7 @@ theorem sl_80006d90 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d90#64 R Mt :=
   sr_step stx_80006d90 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d90 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006d90 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -790,7 +790,7 @@ theorem sl_80006d94 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d94#64 R Mt :=
   sr_step stx_80006d94 [10, 13] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d94 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d94 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 13])))) rfl hk
@@ -802,7 +802,7 @@ theorem sl_80006d98 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d98#64 R Mt :=
   sr_step stx_80006d98 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d98 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006d98 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -814,7 +814,7 @@ theorem sl_80006d9c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006d9c#64 R Mt :=
   sr_step stx_80006d9c [10, 13] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006d9c ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006d9c ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 13])))) rfl hk
@@ -826,7 +826,7 @@ theorem sl_80006da0 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006da0#64 R Mt :=
   sr_step stx_80006da0 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006da0 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006da0 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -838,7 +838,7 @@ theorem sl_80006da4 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006da4#64 R Mt :=
   sr_step stx_80006da4 [10, 13] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006da4 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006da4 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 13])))) rfl hk
@@ -850,7 +850,7 @@ theorem sl_80006da8 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006da8#64 R Mt :=
   sr_step stx_80006da8 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006da8 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006da8 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -862,7 +862,7 @@ theorem sl_80006dac {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dac#64 R Mt :=
   sr_step stx_80006dac [10, 13] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dac ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006dac ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 13])))) rfl hk
@@ -874,7 +874,7 @@ theorem sl_80006db0 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006db0#64 R Mt :=
   sr_step stx_80006db0 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006db0 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006db0 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -886,7 +886,7 @@ theorem sl_80006db4 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006db4#64 R Mt :=
   sr_step stx_80006db4 [10, 13] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006db4 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006db4 ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 13])))) rfl hk
@@ -898,7 +898,7 @@ theorem sl_80006db8 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006db8#64 R Mt :=
   sr_step stx_80006db8 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006db8 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006db8 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -910,7 +910,7 @@ theorem sl_80006dbc {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dbc#64 R Mt :=
   sr_step stx_80006dbc [10, 13] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dbc ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_")
+    (fun m hm => by unfold stx_80006dbc ChainFacts; chain_facts (strlenLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 10 ∈ [10, 13])))) rfl hk
@@ -922,7 +922,7 @@ theorem sl_80006dc0 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dc0#64 R Mt :=
   sr_step stx_80006dc0 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dc0 ChainFacts; chain_facts (strlenLoaded_of_str hm) with "Vsa.Sim.Code.strlen_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006dc0 ChainFacts; chain_facts (strlenLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -934,7 +934,7 @@ theorem sl_80006dc4 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dc4#64 R Mt :=
   sr_step stx_80006dc4 [10, 11, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dc4 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006dc4 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [10, 11, 15])))) rfl hk
@@ -946,7 +946,7 @@ theorem sl_80006dc8 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dc8#64 R Mt :=
   sr_step stx_80006dc8 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dc8 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006dc8 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
@@ -960,14 +960,14 @@ theorem sl_80006dcc {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006dcc [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006dcc ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_bne _ _).2 hc)
+      (fun m hm => by unfold stxT_80006dcc ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_bne _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006dcc [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006dcc ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_bne _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006dcc ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_bne _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -979,7 +979,7 @@ theorem sl_80006dd0 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dd0#64 R Mt :=
   sr_step stx_80006dd0 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dd0 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006dd0 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
@@ -991,7 +991,7 @@ theorem sl_80006dd4 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dd4#64 R Mt :=
   sr_step stx_80006dd4 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dd4 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006dd4 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
@@ -1007,7 +1007,7 @@ theorem slH_80006dd8 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .ld f ((R 11) + sign_extend (m := 64) (0x000#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dd8 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins8_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006dd8 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins8_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1019,7 +1019,7 @@ theorem sl_80006ddc {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006ddc#64 R Mt :=
   sr_step stx_80006ddc [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006ddc ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006ddc ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 13 ∈ [13, 15])))) rfl hk
@@ -1031,7 +1031,7 @@ theorem sl_80006de0 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006de0#64 R Mt :=
   sr_step stx_80006de0 [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006de0 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006de0 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 13 ∈ [13, 15])))) rfl hk
@@ -1043,7 +1043,7 @@ theorem sl_80006de4 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006de4#64 R Mt :=
   sr_step stx_80006de4 [13, 14, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006de4 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006de4 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 16 ∈ [13, 14, 16])))) rfl hk
@@ -1055,7 +1055,7 @@ theorem sl_80006de8 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006de8#64 R Mt :=
   sr_step stx_80006de8 [13, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006de8 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006de8 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 16 ∈ [13, 16])))) rfl hk
@@ -1067,7 +1067,7 @@ theorem sl_80006dec {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006dec#64 R Mt :=
   sr_step stx_80006dec [14, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006dec ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006dec ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 16 ∈ [14, 16])))) rfl hk
@@ -1079,7 +1079,7 @@ theorem sl_80006df0 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006df0#64 R Mt :=
   sr_step stx_80006df0 [13, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006df0 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006df0 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 16 ∈ [13, 16])))) rfl hk
@@ -1091,7 +1091,7 @@ theorem sl_80006df4 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006df4#64 R Mt :=
   sr_step stx_80006df4 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006df4 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006df4 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
@@ -1103,7 +1103,7 @@ theorem sl_80006df8 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006df8#64 R Mt :=
   sr_step stx_80006df8 [10, 12] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006df8 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006df8 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 12 ∈ [10, 12])))) rfl hk
@@ -1117,14 +1117,14 @@ theorem sl_80006dfc {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006dfc [15, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006dfc ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_bne _ _).2 hc)
+      (fun m hm => by unfold stxT_80006dfc ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_bne _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006dfc [15, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006dfc ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_bne _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006dfc ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_bne _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1136,7 +1136,7 @@ theorem sl_80006e00 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e00#64 R Mt :=
   sr_step stx_80006e00 [11] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e00 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e00 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 11 ∈ [11])))) rfl hk
@@ -1150,7 +1150,7 @@ theorem sl_80006e04 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e04#64 R Mt :=
   sr_step stx_80006e04 [12, 14] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x000#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e04 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e04 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1166,7 +1166,7 @@ theorem slH_80006e08 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .ld f ((R 11) + sign_extend (m := 64) (0x000#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e08 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins8_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e08 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins8_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1178,7 +1178,7 @@ theorem sl_80006e0c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e0c#64 R Mt :=
   sr_step stx_80006e0c [12] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e0c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e0c ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 12 ∈ [12])))) rfl hk
@@ -1190,7 +1190,7 @@ theorem sl_80006e10 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e10#64 R Mt :=
   sr_step stx_80006e10 [13, 14, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e10 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e10 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [13, 14, 15])))) rfl hk
@@ -1202,7 +1202,7 @@ theorem sl_80006e14 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e14#64 R Mt :=
   sr_step stx_80006e14 [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e14 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e14 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [13, 15])))) rfl hk
@@ -1214,7 +1214,7 @@ theorem sl_80006e18 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e18#64 R Mt :=
   sr_step stx_80006e18 [14, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e18 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e18 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [14, 15])))) rfl hk
@@ -1226,7 +1226,7 @@ theorem sl_80006e1c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e1c#64 R Mt :=
   sr_step stx_80006e1c [13, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e1c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e1c ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [13, 15])))) rfl hk
@@ -1240,14 +1240,14 @@ theorem sl_80006e20 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e20 [15, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e20 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e20 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e20 [15, 16] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e20 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e20 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1263,7 +1263,7 @@ theorem slH_80006e24 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x000#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e24 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e24 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1279,7 +1279,7 @@ theorem slH_80006e28 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x001#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e28 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e28 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1295,7 +1295,7 @@ theorem slH_80006e2c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x002#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e2c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e2c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1309,7 +1309,7 @@ theorem sl_80006e30 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e30#64 R Mt :=
   sr_step stx_80006e30 [12, 15] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x000#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e30 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e30 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1323,14 +1323,14 @@ theorem sl_80006e34 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e34 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e34 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e34 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e34 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e34 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e34 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1344,7 +1344,7 @@ theorem sl_80006e38 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e38#64 R Mt :=
   sr_step stx_80006e38 [12, 14] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x001#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e38 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e38 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1358,14 +1358,14 @@ theorem sl_80006e3c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e3c [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e3c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e3c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e3c [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e3c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e3c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1381,7 +1381,7 @@ theorem slH_80006e40 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x003#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e40 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e40 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1395,7 +1395,7 @@ theorem sl_80006e44 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e44#64 R Mt :=
   sr_step stx_80006e44 [12, 13] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x002#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e44 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e44 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1409,14 +1409,14 @@ theorem sl_80006e48 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e48 [13] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e48 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e48 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e48 [13] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e48 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e48 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1432,7 +1432,7 @@ theorem slH_80006e4c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x004#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e4c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e4c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1446,7 +1446,7 @@ theorem sl_80006e50 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e50#64 R Mt :=
   sr_step stx_80006e50 [12, 15] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x003#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e50 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e50 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1460,14 +1460,14 @@ theorem sl_80006e54 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e54 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e54 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e54 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e54 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e54 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e54 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1483,7 +1483,7 @@ theorem slH_80006e58 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x005#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e58 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e58 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1497,7 +1497,7 @@ theorem sl_80006e5c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e5c#64 R Mt :=
   sr_step stx_80006e5c [12, 14] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x004#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e5c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e5c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1511,14 +1511,14 @@ theorem sl_80006e60 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e60 [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e60 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e60 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e60 [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e60 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e60 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1534,7 +1534,7 @@ theorem slH_80006e64 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x006#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e64 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e64 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1548,7 +1548,7 @@ theorem sl_80006e68 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e68#64 R Mt :=
   sr_step stx_80006e68 [12, 15] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x005#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e68 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e68 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1562,14 +1562,14 @@ theorem sl_80006e6c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e6c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e6c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e6c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_beq _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e6c [15] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e6c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e6c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1583,7 +1583,7 @@ theorem sl_80006e70 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e70#64 R Mt :=
   sr_step stx_80006e70 [12, 14] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x006#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e70 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e70 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1597,14 +1597,14 @@ theorem sl_80006e74 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e74 [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e74 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_bne _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e74 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_bne _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e74 [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e74 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_bne _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e74 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_bne _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1616,7 +1616,7 @@ theorem sl_80006e78 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e78#64 R Mt :=
   sr_step stx_80006e78 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e78 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006e78 ChainFacts; chain_facts (strcpyLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1628,7 +1628,7 @@ theorem sl_80006e7c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e7c#64 R Mt :=
   sr_step stx_80006e7c [10, 15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e7c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e7c ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [10, 15])))) rfl hk
@@ -1644,7 +1644,7 @@ theorem slH_80006e80 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat
     (fun f => ldvf .lbu f ((R 11) + sign_extend (m := 64) (0x000#12)).toNat) 0
     (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
     rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e80 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
+    (fun m hm => by unfold stx_80006e80 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact ⟨hea, lpins1_img (fun b _ => rfl)⟩)
     (by decide) (by decide) (fun _ => rfl)
     (fun _ x hx hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hr)
     (fun _ => rfl) hk
@@ -1656,7 +1656,7 @@ theorem sl_80006e84 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e84#64 R Mt :=
   sr_step stx_80006e84 [15] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e84 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e84 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 15 ∈ [15])))) rfl hk
@@ -1668,7 +1668,7 @@ theorem sl_80006e88 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e88#64 R Mt :=
   sr_step stx_80006e88 [11] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e88 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_")
+    (fun m hm => by unfold stx_80006e88 ChainFacts; chain_facts (strcpyLoaded_of_str hm))
     (by decide) (fun a h => by cases h) rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun x _ _ hx => upd_other _ _ (fun e => hx (e ▸ (by decide : 11 ∈ [11])))) rfl hk
@@ -1682,7 +1682,7 @@ theorem sl_80006e8c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e8c#64 R Mt :=
   sr_step stx_80006e8c [14, 15] [] (accAddrs ((R 15) + sign_extend (m := 64) (0xfff#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e8c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e8c ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1696,14 +1696,14 @@ theorem sl_80006e90 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
   · exact
     sr_step stxT_80006e90 [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxT_80006e90 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_bne _ _).2 hc)
+      (fun m hm => by unfold stxT_80006e90 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_bne _ _).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hT hc)
   · exact
     sr_step stxF_80006e90 [14] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm => by unfold stxF_80006e90 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact (guard_false (guard_bne _ _)).2 hc)
+      (fun m hm => by unfold stxF_80006e90 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact (guard_false (guard_bne _ _)).2 hc)
       (by decide) (fun a h => by cases h) rfl
       (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
       (fun _ _ _ _ => rfl) rfl (hF hc)
@@ -1715,7 +1715,7 @@ theorem sl_80006e94 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e94#64 R Mt :=
   sr_step stx_80006e94 [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e94 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006e94 ChainFacts; chain_facts (strcpyLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1729,7 +1729,7 @@ theorem sl_80006e98 {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e98#64 R Mt :=
   sr_step stx_80006e98 [12] [] (accAddrs ((R 12) + sign_extend (m := 64) (0x007#12)).toNat 1) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm => by unfold stx_80006e98 ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; exact hea)
+    (fun m hm => by unfold stx_80006e98 ChainFacts; chain_facts (strcpyLoaded_of_str hm); exact hea)
     (by decide) hS rfl
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk
@@ -1741,7 +1741,7 @@ theorem sl_80006e9c {live : Nat → Prop} {D : List (Nat × BitVec 8)} {S : Nat 
     SW live D S Q 0x80006e9c#64 R Mt :=
   sr_step stx_80006e9c [1] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm => by unfold stx_80006e9c ChainFacts; chain_facts (strcpyLoaded_of_str hm) with "Vsa.Sim.Code.strcpy_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm => by unfold stx_80006e9c ChainFacts; chain_facts (strcpyLoaded_of_str hm); show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> rfl)
     (fun _ _ _ _ => rfl) rfl hk

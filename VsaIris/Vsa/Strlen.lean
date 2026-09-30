@@ -258,7 +258,7 @@ theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
   refine strlenStep 2 strlenX6d60LoadSeg [[bv (P.toNat + (t + 6))]] 0x80006d60#64 0 rfl
     (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
   · intro σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     refine lbuFact ctx hread (t + 6) (by have := h.lo; omega) _ _ rfl ?_
     show ((rv 14 + sign_extend (m := 64) (0xffe#12)).toNat) = P.toNat + (t + 6)
     rw [h.a4]
@@ -278,7 +278,7 @@ theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
   refine strlenStep 0 strlenX6d68Seg [] 0x80006d68#64 2 rfl (by decide) (by decide) rfl
     ctx.codeLive hslack2 (by rw [hpc2]) ?_ ?_
   · intro σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     change (Sail.BitVec.update (rv2 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hfin2 1 (by simp [strlenRegs]) (by decide), h1ra, h.ra, ret_tgt r ctx.retAlign]
     exact ctx.retAlign
@@ -305,7 +305,7 @@ theorem tail5 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
     (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 5) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffd#12)).toNat) = P.toNat + (t + 5)
       rw [h.a4]
@@ -314,7 +314,7 @@ theorem tail5 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rw [zext_beqz, byteBeq ctx (t + 5) h.lo]
       simp [he]
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 5) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffd#12)).toNat) = P.toNat + (t + 5)
       rw [h.a4]
@@ -328,7 +328,7 @@ theorem tail5 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
       (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
     intro σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra', ret_tgt r ctx.retAlign]
     exact ctx.retAlign
@@ -348,7 +348,7 @@ theorem tail4 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
     (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 4) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffc#12)).toNat) = P.toNat + (t + 4)
       rw [h.a4]
@@ -357,7 +357,7 @@ theorem tail4 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rw [zext_beqz, byteBeq ctx (t + 4) h.lo]
       simp [he]
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 4) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffc#12)).toNat) = P.toNat + (t + 4)
       rw [h.a4]
@@ -371,7 +371,7 @@ theorem tail4 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
       (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
     intro σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra', ret_tgt r ctx.retAlign]
     exact ctx.retAlign
@@ -391,7 +391,7 @@ theorem tail3 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
     (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 3) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffb#12)).toNat) = P.toNat + (t + 3)
       rw [h.a4]
@@ -400,7 +400,7 @@ theorem tail3 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rw [zext_beqz, byteBeq ctx (t + 3) h.lo]
       simp [he]
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 3) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffb#12)).toNat) = P.toNat + (t + 3)
       rw [h.a4]
@@ -414,7 +414,7 @@ theorem tail3 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
       (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
     intro σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra', ret_tgt r ctx.retAlign]
     exact ctx.retAlign
@@ -434,7 +434,7 @@ theorem tail2 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
     (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 2) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffa#12)).toNat) = P.toNat + (t + 2)
       rw [h.a4]
@@ -443,7 +443,7 @@ theorem tail2 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rw [zext_beqz, byteBeq ctx (t + 2) h.lo]
       simp [he]
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 2) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xffa#12)).toNat) = P.toNat + (t + 2)
       rw [h.a4]
@@ -457,7 +457,7 @@ theorem tail2 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
       (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
     intro σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra', ret_tgt r ctx.retAlign]
     exact ctx.retAlign
@@ -477,7 +477,7 @@ theorem tail1 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
     (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 1) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xff9#12)).toNat) = P.toNat + (t + 1)
       rw [h.a4]
@@ -486,7 +486,7 @@ theorem tail1 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rw [zext_beqz, byteBeq ctx (t + 1) h.lo]
       simp [he]
   · intro he σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     · refine lbuFact ctx hread (t + 1) (by have := h.lo; omega) _ _ rfl ?_
       show ((rv 14 + sign_extend (m := 64) (0xff9#12)).toNat) = P.toNat + (t + 1)
       rw [h.a4]
@@ -500,7 +500,7 @@ theorem tail1 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
       (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
     intro σ hread
-    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    chain_facts hread.loaded
     change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra', ret_tgt r ctx.retAlign]
     exact ctx.retAlign
@@ -528,7 +528,7 @@ theorem tail0 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
   · refine strlenStep 8 strlenX6d2cTSeg [[bv (P.toNat + t)]] 0x80006d2c#64 2 rfl
       (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
     · intro σ hread
-      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      chain_facts hread.loaded
       · exact haddr σ hread
       · change ((zero_extend (m := 64) (bv (P.toNat + t))) == 0#64) = true
         rw [zext_beqz, byteBeq ctx t h.lo]
@@ -542,7 +542,7 @@ theorem tail0 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
       (0xff8#12) 1 rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack'
       (by rw [hpc']; rfl) hra' ?_ (by omega) (by omega) (by decide))
     · intro σ hread
-      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      chain_facts hread.loaded
       change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
       rw [hra', ret_tgt r ctx.retAlign]
       exact ctx.retAlign
@@ -552,7 +552,7 @@ theorem tail0 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
   · refine strlenStep 8 strlenX6d2cFSeg [[bv (P.toNat + t)]] 0x80006d2c#64 2 rfl
       (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
     · intro σ hread
-      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      chain_facts hread.loaded
       · exact haddr σ hread
       · change ((zero_extend (m := 64) (bv (P.toNat + t))) == 0#64) = false
         rw [zext_beqz, byteBeq ctx t h.lo]
@@ -655,7 +655,7 @@ theorem wordRun (ctx : Ctx live P r len bv) :
     refine strlenStep 9 strlenX6d10FSeg [wordBytesAt bv (P.toNat + t)] 0x80006d10#64 6 rfl
       (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
     · intro σ hread
-      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      chain_facts hread.loaded
       · refine ldFact ctx hread t h.tle _ _ rfl ?_
         show ((rv 14 + sign_extend (m := 64) (0x000#12)).toNat) = P.toNat + t
         rw [sext0_add, h.a4]
@@ -678,7 +678,7 @@ theorem wordRun (ctx : Ctx live P r len bv) :
     · refine strlenStep (n + 10) strlenX6d10TSeg [wordBytesAt bv (P.toNat + t)] 0x80006d10#64 6
         rfl (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
       · intro σ hread
-        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        chain_facts hread.loaded
         · refine ldFact ctx hread t h.tle _ _ rfl ?_
           show ((rv 14 + sign_extend (m := 64) (0x000#12)).toNat) = P.toNat + t
           rw [sext0_add, h.a4]
@@ -700,7 +700,7 @@ theorem wordRun (ctx : Ctx live P r len bv) :
     · refine strlenStep (n + 10) strlenX6d10FSeg [wordBytesAt bv (P.toNat + t)] 0x80006d10#64 6
         rfl (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
       · intro σ hread
-        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        chain_facts hread.loaded
         · refine ldFact ctx hread t h.tle _ _ rfl ?_
           show ((rv 14 + sign_extend (m := 64) (0x000#12)).toNat) = P.toNat + t
           rw [sext0_add, h.a4]
@@ -732,7 +732,7 @@ theorem alignRun (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     SRun live P.toNat len bv r (len + 11) rv mv := by
   refine strlenStep (len + 10) strlenX6cfcSeg [] 0x80006cfc#64 4 rfl (by decide) (by decide)
     rfl ctx.codeLive hslack h.pcv (fun σ hread => by
-      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_") ?_
+      chain_facts hread.loaded) ?_
   intro rv' mv' hpc' hfin hslack'
   refine wordRun ctx len t rv' mv' (by omega) hslack'
     ⟨by rw [hpc']; rfl, by rw [hfin 1 (by simp [strlenRegs])]; exact h.ra,
@@ -777,7 +777,7 @@ theorem peelRun (ctx : Ctx live P r len bv) :
       refine strlenStep (rv := rv) 1 strlenX6d78FSeg [[bv (P.toNat + m)]] 0x80006d78#64 3 rfl
         (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
       · intro σ hread
-        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        chain_facts hread.loaded
         · exact hload σ hread
         · change (!((zero_extend (m := 64) (bv (P.toNat + m))) == 0#64)) = false
           rw [zext_beqz, byteBeq ctx m h.mle]
@@ -793,7 +793,7 @@ theorem peelRun (ctx : Ctx live P r len bv) :
       refine strlenStep (rv := rv1) 0 strlenX6d88Seg [] 0x80006d88#64 2 rfl (by decide)
         (by decide) rfl ctx.codeLive hslack1 (by rw [hpc1]; rfl) ?_ ?_
       · intro σ hread
-        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        chain_facts hread.loaded
         change (Sail.BitVec.update (rv1 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
         rw [hra1, ret_tgt r ctx.retAlign]
         exact ctx.retAlign
@@ -817,7 +817,7 @@ theorem peelRun (ctx : Ctx live P r len bv) :
       refine strlenStep (rv := rv) (2 * n + len + 12) strlenX6d78TSeg [[bv (P.toNat + m)]]
         0x80006d78#64 3 rfl (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
       · intro σ hread
-        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        chain_facts hread.loaded
         · exact hload σ hread
         · change (!((zero_extend (m := 64) (bv (P.toNat + m))) == 0#64)) = true
           rw [zext_beqz, byteBeq ctx m h.mle]
@@ -840,7 +840,7 @@ theorem peelRun (ctx : Ctx live P r len bv) :
         refine strlenStep (rv := rv1) (len + 11) strlenX6d74TSeg [] 0x80006d74#64 0 rfl
           (by decide) (by decide) rfl ctx.codeLive hslack1 (by rw [hpc1]; rfl) ?_ ?_
         · intro σ hread
-          chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+          chain_facts hread.loaded
           change ((rv1 13) == 0#64) = true
           rw [ha31]
           exact beq_iff_eq.mpr (andi7_aligned _ (by rw [hptr1]; exact hal))
@@ -852,7 +852,7 @@ theorem peelRun (ctx : Ctx live P r len bv) :
       · refine strlenStep (rv := rv1) (2 * n + len + 11) strlenX6d74FSeg [] 0x80006d74#64 0 rfl
           (by decide) (by decide) rfl ctx.codeLive hslack1 (by rw [hpc1]; rfl) ?_ ?_
         · intro σ hread
-          chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+          chain_facts hread.loaded
           change ((rv1 13) == 0#64) = false
           rw [ha31]
           exact beq_eq_false_iff_ne.mpr (andi7_unaligned _ (by rw [hptr1]; exact hal))
@@ -884,7 +884,7 @@ theorem strlenRun (ctx : Ctx live P r len bv) {rv : Nat → BitVec 64} {mv : Nat
   · refine strlenStep (rv := rv) (len + 27) strlenX6cf0FSeg [] 0x80006cf0#64 2 rfl (by decide)
       (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
     · intro σ hread
-      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      chain_facts hread.loaded
       change (!((rv 10 &&& sign_extend (m := 64) (0x007#12)) == 0#64)) = false
       rw [h.a0, andi7_aligned P hal]
       rfl
@@ -898,7 +898,7 @@ theorem strlenRun (ctx : Ctx live P r len bv) {rv : Nat → BitVec 64} {mv : Nat
   · refine strlenStep (rv := rv) (len + 27) strlenX6cf0TSeg [] 0x80006cf0#64 2 rfl (by decide)
       (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
     · intro σ hread
-      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      chain_facts hread.loaded
       change (!((rv 10 &&& sign_extend (m := 64) (0x007#12)) == 0#64)) = true
       rw [h.a0]
       simpa using beq_eq_false_iff_ne.mpr (andi7_unaligned P hal)

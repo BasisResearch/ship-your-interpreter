@@ -57,7 +57,7 @@ theorem ret_f9c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   refine cmpStep 0 ctx.codeL codeT strcmpX6f9cSeg [] (fun _ => []) _ _ rfl (by decide)
     (by decide) (fun _ => rfl) hpc ?_ ?_
   · intro vals _ m hl _
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     change (Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra, ret_tgt r ctx.ret]; exact ctx.ret
   · intro vals _ rv' hpc' hfin
@@ -98,7 +98,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals hv m hl hpk
       obtain ⟨h1, h2⟩ := hmem vals m hpk
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       · refine lbuF rfl ?_ hlx.1 hlx.2.1 hlx.2.2 h1
         show (rv 10 + sign_extend (m := 64) (0x000#12)).toNat = _
         rw [sext0_add, hax]
@@ -123,7 +123,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
         refine cmpStep 1 ctx.codeL codeT strcmpX6f98FSeg [] (fun _ => []) _ _ rfl (by decide)
           (by decide) (fun _ => rfl) hpc1' ?_ ?_
         · intro vals' _ m' hl _
-          chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+          chain_facts hl
           change (rv1 12 != 0#64) = false
           rw [bne_eq_false_iff_eq, e12]
           apply BitVec.eq_of_toNat_eq
@@ -141,7 +141,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
         refine cmpStep (m + 1) ctx.codeL codeT strcmpX6f98TSeg [] (fun _ => []) _ _ rfl (by decide)
           (by decide) (fun _ => rfl) hpc1' ?_ ?_
         · intro vals' _ m' hl _
-          chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+          chain_facts hl
           change (rv1 12 != 0#64) = true
           rw [bne_iff_ne, ne_eq, e12]
           intro h0
@@ -164,7 +164,7 @@ theorem byteStep (ctx : Ctx live p q r cx cy ix iy) {k : Nat} {rv : Nat → BitV
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals hv m hl hpk
       obtain ⟨h1, h2⟩ := hmem vals m hpk
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       · refine lbuF rfl ?_ hlx.1 hlx.2.1 hlx.2.2 h1
         show (rv 10 + sign_extend (m := 64) (0x000#12)).toNat = _
         rw [sext0_add, hax]
@@ -276,7 +276,7 @@ theorem ret_f58 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   refine cmpStep 0 ctx.codeL codeT strcmpX6f58Seg [] (fun _ => []) _ _ rfl (by decide)
     (by decide) (fun _ => rfl) hpc ?_ ?_
   · intro vals _ m hl _
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     change (Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra, ret_tgt r ctx.ret]; exact ctx.ret
   · intro vals _ rv' hpc' hfin
@@ -294,7 +294,7 @@ theorem ret_f70 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   refine cmpStep 0 ctx.codeL codeT strcmpX6f70Seg [] (fun _ => []) _ _ rfl (by decide)
     (by decide) (fun _ => rfl) hpc ?_ ?_
   · intro vals _ m hl _
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     change (Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra, ret_tgt r ctx.ret]; exact ctx.ret
   · intro vals _ rv' hpc' hfin
@@ -313,7 +313,7 @@ theorem ret_f74 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   refine cmpStep 0 ctx.codeL codeT strcmpX6f74Seg [] (fun _ => []) _ _ rfl (by decide)
     (by decide) (fun _ => rfl) hpc ?_ ?_
   · intro vals _ m hl _
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     change (Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra, ret_tgt r ctx.ret]; exact ctx.ret
   · intro vals _ rv' hpc' hfin
@@ -342,7 +342,7 @@ theorem laneF5c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
     refine cmpStep 1 ctx.codeL codeT strcmpX6f5cTSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change ((((shift_bits_right (rv 14) (Sail.BitVec.extractLsb (0x30#6) 5 0)) -
         (shift_bits_right (rv 15) (Sail.BitVec.extractLsb (0x30#6) 5 0))) &&&
           sign_extend (m := 64) (0x0ff#12)) != 0#64) = true
@@ -360,7 +360,7 @@ theorem laneF5c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
     refine cmpStep 1 ctx.codeL codeT strcmpX6f5cFSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change ((((shift_bits_right (rv 14) (Sail.BitVec.extractLsb (0x30#6) 5 0)) -
         (shift_bits_right (rv 15) (Sail.BitVec.extractLsb (0x30#6) 5 0))) &&&
           sign_extend (m := 64) (0x0ff#12)) != 0#64) = false
@@ -391,7 +391,7 @@ theorem laneF44 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
     refine cmpStep 1 ctx.codeL codeT strcmpX6f44TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change ((((shift_bits_right (rv 12) (Sail.BitVec.extractLsb (0x30#6) 5 0)) -
         (shift_bits_right (rv 13) (Sail.BitVec.extractLsb (0x30#6) 5 0))) &&&
           sign_extend (m := 64) (0x0ff#12)) != 0#64) = true
@@ -409,7 +409,7 @@ theorem laneF44 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
     refine cmpStep 1 ctx.codeL codeT strcmpX6f44FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change ((((shift_bits_right (rv 12) (Sail.BitVec.extractLsb (0x30#6) 5 0)) -
         (shift_bits_right (rv 13) (Sail.BitVec.extractLsb (0x30#6) 5 0))) &&&
           sign_extend (m := 64) (0x0ff#12)) != 0#64) = false
@@ -438,7 +438,7 @@ theorem laneF38 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
     refine cmpStep 3 ctx.codeL codeT strcmpX6f38TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (shift_bits_left (rv 12) (Sail.BitVec.extractLsb (0x10#6) 5 0) !=
         shift_bits_left (rv 13) (Sail.BitVec.extractLsb (0x10#6) 5 0)) = true
       rw [e14, e15, bne_iff_ne]; exact fun he => by have := hg.1 he; omega
@@ -449,7 +449,7 @@ theorem laneF38 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
   · refine cmpStep 3 ctx.codeL codeT strcmpX6f38FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (shift_bits_left (rv 12) (Sail.BitVec.extractLsb (0x10#6) 5 0) !=
         shift_bits_left (rv 13) (Sail.BitVec.extractLsb (0x10#6) 5 0)) = false
       rw [e14, e15, bne_eq_false_iff_eq]; exact hg.2 (by omega)
@@ -472,7 +472,7 @@ theorem laneF2c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
     refine cmpStep 3 ctx.codeL codeT strcmpX6f2cTSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (shift_bits_left (rv 12) (Sail.BitVec.extractLsb (0x20#6) 5 0) !=
         shift_bits_left (rv 13) (Sail.BitVec.extractLsb (0x20#6) 5 0)) = true
       rw [e14, e15, bne_iff_ne]; exact fun he => by have := hg.1 he; omega
@@ -483,7 +483,7 @@ theorem laneF2c (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
   · refine cmpStep 4 ctx.codeL codeT strcmpX6f2cFSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (shift_bits_left (rv 12) (Sail.BitVec.extractLsb (0x20#6) 5 0) !=
         shift_bits_left (rv 13) (Sail.BitVec.extractLsb (0x20#6) 5 0)) = false
       rw [e14, e15, bne_eq_false_iff_eq]; exact hg.2 (by omega)
@@ -506,7 +506,7 @@ theorem laneRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
     refine cmpStep 3 ctx.codeL codeT strcmpX6f20TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (shift_bits_left (rv 12) (Sail.BitVec.extractLsb (0x30#6) 5 0) !=
         shift_bits_left (rv 13) (Sail.BitVec.extractLsb (0x30#6) 5 0)) = true
       rw [e14, e15, bne_iff_ne]; exact fun he => by have := hg.1 he; omega
@@ -517,7 +517,7 @@ theorem laneRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {A B
   · refine cmpStep 5 ctx.codeL codeT strcmpX6f20FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (shift_bits_left (rv 12) (Sail.BitVec.extractLsb (0x30#6) 5 0) !=
         shift_bits_left (rv 13) (Sail.BitVec.extractLsb (0x30#6) 5 0)) = false
       rw [e14, e15, bne_eq_false_iff_eq]; exact hg.2 (by omega)
@@ -774,7 +774,7 @@ theorem ret_fb0 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   refine cmpStep 0 ctx.codeL codeT strcmpX6fb0Seg [] (fun _ => []) _ _ rfl (by decide)
     (by decide) (fun _ => rfl) hpc ?_ ?_
   · intro vals _ m hl _
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     change (Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra, ret_tgt r ctx.ret]; exact ctx.ret
   · intro vals _ rv' hpc' hfin
@@ -792,7 +792,7 @@ theorem ret_fc4 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   refine cmpStep 0 ctx.codeL codeT strcmpX6fc4Seg [] (fun _ => []) _ _ rfl (by decide)
     (by decide) (fun _ => rfl) hpc ?_ ?_
   · intro vals _ m hl _
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     change (Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
     rw [hra, ret_tgt r ctx.ret]; exact ctx.ret
   · intro vals _ rv' hpc' hfin
@@ -823,7 +823,7 @@ theorem nulFac (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {w : 
     refine cmpStep 1 ctx.codeL codeT strcmpX6facFSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = false
       rw [h.a2, h.a3, he]; simp
     · intro vals _ rv' hpc' hfin
@@ -832,7 +832,7 @@ theorem nulFac (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {w : 
   · refine cmpStep _ ctx.codeL codeT strcmpX6facTSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = true
       rw [h.a2, h.a3, bne_iff_ne]; exact he
     · intro vals _ rv' hpc' hfin
@@ -846,7 +846,7 @@ theorem nulFa4 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {j : 
   refine cmpStep _ ctx.codeL codeT strcmpX6fa4Seg [] (fun _ => []) _ _ rfl (by decide)
     (by decide) (fun _ => rfl) h.pc ?_ ?_
   · intro vals _ m hl _
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
   · intro vals _ rv' hpc' hfin
     refine nulFac ctx hpc' ⟨(hfin 1 (by decide)).trans h.ra, ?_, ?_,
       (hfin 12 (by decide)).trans h.a2, (hfin 13 (by decide)).trans h.a3, h.pair, h.le, hlt⟩
@@ -866,7 +866,7 @@ theorem nulFb8 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {j : 
     refine cmpStep 1 ctx.codeL codeT strcmpX6fb8FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = false
       rw [h.a2, h.a3, he]; simp
     · intro vals _ rv' hpc' hfin
@@ -875,7 +875,7 @@ theorem nulFb8 (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64} {j : 
   · refine cmpStep _ ctx.codeL codeT strcmpX6fb8TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = true
       rw [h.a2, h.a3, bne_iff_ne]; exact he
     · intro vals _ rv' hpc' hfin
@@ -901,7 +901,7 @@ theorem cmpEd4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
   · refine cmpStep M ctx.codeL codeT strcmpX6ed4FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = false
       rw [h.a2, h.a3, he]; simp
     · intro vals _ rv' hpc' hfin
@@ -912,7 +912,7 @@ theorem cmpEd4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
     refine cmpStep M ctx.codeL codeT strcmpX6ed4TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = true
       rw [h.a2, h.a3, bne_iff_ne]; exact he
     · intro vals _ rv' hpc' hfin
@@ -929,7 +929,7 @@ theorem cmpEf4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
   · refine cmpStep M ctx.codeL codeT strcmpX6ef4FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = false
       rw [h.a2, h.a3, he]; simp
     · intro vals _ rv' hpc' hfin
@@ -940,7 +940,7 @@ theorem cmpEf4 (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} {A B : BitVec 64}
     refine cmpStep M ctx.codeL codeT strcmpX6ef4TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 != rv 13) = true
       rw [h.a2, h.a3, bne_iff_ne]; exact he
     · intro vals _ rv' hpc' hfin
@@ -957,7 +957,7 @@ theorem cmpF14 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {A B : BitVec 64}
   · refine cmpStep M ctx.codeL codeT strcmpX6f14TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 == rv 13) = true
       rw [h.a2, h.a3, he]; simp
     · intro vals _ rv' hpc' hfin
@@ -973,7 +973,7 @@ theorem cmpF14 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {A B : BitVec 64}
     refine cmpStep M ctx.codeL codeT strcmpX6f14FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) h.pc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (rv 12 == rv 13) = false
       rw [h.a2, h.a3]; simpa using he
     · intro vals _ rv' hpc' hfin
@@ -998,14 +998,14 @@ theorem group0 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec
     ?_ ?_ (fun _ => rfl) (fun _ => rfl) (fun _ k hk => ?_) (fun _ k hk => ?_)
     (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) ?_ ?_
   · intro vals hv hz m hl hpk
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     · exact ldF rfl vals ax hlx.1 hlx.2.1 hlx.2.2 (peekW_x hpk)
     · exact ldF rfl vals ay hly.1 hly.2.1 hly.2.2 (peekW_y hpk)
     · change ((((wordAt vals (p.toNat + 24 * j) &&& rv 15) + rv 15) |||
         (wordAt vals (p.toNat + 24 * j) ||| rv 15)) != rv 7) = true
       rw [grp_guard ctx (mkPair ctx hv h.pre) h.le h.a5 h.t2]; simpa using hz
   · intro vals hv hz m hl hpk
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     · exact ldF rfl vals ax hlx.1 hlx.2.1 hlx.2.2 (peekW_x hpk)
     · exact ldF rfl vals ay hly.1 hly.2.1 hly.2.2 (peekW_y hpk)
     · change ((((wordAt vals (p.toNat + 24 * j) &&& rv 15) + rv 15) |||
@@ -1039,14 +1039,14 @@ theorem group1 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec
     (fun _ => rfl) ?_ ?_ (fun _ => rfl) (fun _ => rfl) (fun _ k hk => ?_) (fun _ k hk => ?_)
     (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) ?_ ?_
   · intro vals hv hz m hl hpk
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     · exact ldF rfl vals ax hlx.1 hlx.2.1 hlx.2.2 (peekW_x hpk)
     · exact ldF rfl vals ay hly.1 hly.2.1 hly.2.2 (peekW_y hpk)
     · change ((((wordAt vals (p.toNat + (24 * j + 8)) &&& rv 15) + rv 15) |||
         (wordAt vals (p.toNat + (24 * j + 8)) ||| rv 15)) != rv 7) = true
       rw [grp_guard ctx (mkPair ctx hv h.pre) h.le h.a5 h.t2]; simpa using hz
   · intro vals hv hz m hl hpk
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     · exact ldF rfl vals ax hlx.1 hlx.2.1 hlx.2.2 (peekW_x hpk)
     · exact ldF rfl vals ay hly.1 hly.2.1 hly.2.2 (peekW_y hpk)
     · change ((((wordAt vals (p.toNat + (24 * j + 8)) &&& rv 15) + rv 15) |||
@@ -1079,14 +1079,14 @@ theorem group2 (ctx : Ctx live p q r cx cy ix iy) {j : Nat} {rv : Nat → BitVec
     (fun _ => rfl) ?_ ?_ (fun _ => rfl) (fun _ => rfl) (fun _ k hk => ?_) (fun _ k hk => ?_)
     (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) ?_ ?_
   · intro vals hv hz m hl hpk
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     · exact ldF rfl vals ax hlx.1 hlx.2.1 hlx.2.2 (peekW_x hpk)
     · exact ldF rfl vals ay hly.1 hly.2.1 hly.2.2 (peekW_y hpk)
     · change ((((wordAt vals (p.toNat + (24 * j + 16)) &&& rv 15) + rv 15) |||
         (wordAt vals (p.toNat + (24 * j + 16)) ||| rv 15)) != rv 7) = true
       rw [grp_guard ctx (mkPair ctx hv h.pre) h.le h.a5 h.t2]; simpa using hz
   · intro vals hv hz m hl hpk
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     · exact ldF rfl vals ax hlx.1 hlx.2.1 hlx.2.2 (peekW_x hpk)
     · exact ldF rfl vals ay hly.1 hly.2.1 hly.2.2 (peekW_y hpk)
     · change ((((wordAt vals (p.toNat + (24 * j + 16)) &&& rv 15) + rv 15) |||
@@ -1137,7 +1137,7 @@ theorem entryMask (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
     (fun vals => [bytesAt vals 0x8001ac80 8]) _ _ rfl (by decide) (by decide) (fun _ => rfl)
     hpc ?_ ?_
   · intro vals _ m hl hpk
-    chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+    chain_facts hl
     refine ldF rfl vals ?_ (by omega) (by omega) (Or.inl (by rw [show tohostAddr = 0x8001ad00 from rfl]; omega))
       (fun k hk => hpk _ (List.mem_map.2 ⟨k, List.mem_range.2 hk, rfl⟩))
     show ((0x80006eb0#64 + sign_extend (m := 64) ((0x00014#20) ++ 0x000#12)) +
@@ -1162,7 +1162,7 @@ theorem strcmpRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   · refine cmpStep _ ctx.codeL codeT strcmpX6ea0FSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (((rv 10 ||| rv 11) &&& sign_extend (m := 64) (0x007#12)) != 0#64) = false
       rw [hal]; rfl
     · intro vals _ rv' hpc' hfin
@@ -1174,7 +1174,7 @@ theorem strcmpRun (ctx : Ctx live p q r cx cy ix iy) {rv : Nat → BitVec 64}
   · refine cmpStep _ ctx.codeL codeT strcmpX6ea0TSeg [] (fun _ => []) _ _ rfl (by decide)
       (by decide) (fun _ => rfl) hpc ?_ ?_
     · intro vals _ m hl _
-      chain_facts hl with "Vsa.Sim.Code.strcmp_at_"
+      chain_facts hl
       change (((rv 10 ||| rv 11) &&& sign_extend (m := 64) (0x007#12)) != 0#64) = true
       rw [bne_iff_ne]; exact hal
     · intro vals _ rv' hpc' hfin

@@ -127,6 +127,35 @@ theorem TextIn.pin4 {ps : List TextPiece} (h : TextIn (piecesText ps) m) {a : Na
   ⟨h.pin (bytesHasB_get hb 0 (by simp)), h.pin (bytesHasB_get hb 1 (by simp)),
    h.pin (bytesHasB_get hb 2 (by simp)), h.pin (bytesHasB_get hb 3 (by simp))⟩
 
+/-- Four byte facts at literal addresses, from one Boolean check. -/
+theorem TextIn.pin4L {ps : List TextPiece} (h : TextIn (piecesText ps) m) (a0 a1 a2 a3 : Nat)
+    {b0 b1 b2 b3 : BitVec 8}
+    (hb : (piecesHasB ps a0 b0 && piecesHasB ps a1 b1 && piecesHasB ps a2 b2 &&
+      piecesHasB ps a3 b3) = true) :
+    m[a0]? = some b0 ∧ m[a1]? = some b1 ∧ m[a2]? = some b2 ∧ m[a3]? = some b3 := by
+  simp only [Bool.and_eq_true] at hb
+  exact ⟨h.pin hb.1.1.1, h.pin hb.1.1.2, h.pin hb.1.2, h.pin hb.2⟩
+
+/-- A footprint stays present where memory agrees on it. -/
+theorem TextIn.transport {T : List (Nat × BitVec 8)} {m' : ExtHashMap Nat (BitVec 8)}
+    (h : TextIn T m) (hag : ∀ p ∈ T, m'[p.1]? = m[p.1]?) : TextIn T m' :=
+  fun p hp => (hag p hp).trans (h p hp)
+
+/-- A piece footprint from any present list that contains it (checked by `decide`). -/
+theorem TextIn.of_list {ps : List TextPiece} {L : List (Nat × BitVec 8)} (hL : TextIn L m)
+    (hsub : (ps.all fun q => q.ranges.all fun r =>
+      (List.range (r.2 - r.1)).all fun k => L.contains (r.1 + k, q.img (r.1 + k))) = true) :
+    TextIn (piecesText ps) m := by
+  intro p hp
+  obtain ⟨q, hq, hr, he⟩ := mem_piecesText_iff.1 hp
+  obtain ⟨r, hrr, h1, h2⟩ := inRangesB_iff.1 hr
+  have h3 := List.all_eq_true.1 (List.all_eq_true.1 (List.all_eq_true.1 hsub q hq) r hrr)
+    (p.1 - r.1) (List.mem_range.2 (by omega))
+  rw [show r.1 + (p.1 - r.1) = p.1 by omega] at h3
+  have : (p.1, q.img p.1) ∈ L := by simpa using h3
+  rw [he]
+  exact hL _ this
+
 end Loaded
 
 /-- The little-endian bytes of the literal `v` at `[base, base + n)`; the byte function of

@@ -39,9 +39,7 @@ theorem exitLoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
     obtain ⟨q, hq, e⟩ := List.mem_map.mp hab
     cases e
     exact h _ (List.mem_map_of_mem (f := fun p => (exitCodeBase + p.2, Iris.DFrac.discard, p.1)) hq)
-  unfold Code.ExitLoaded Code.exitChunk0
-  repeat' apply And.intro
-  all_goals (apply h'; decide)
+  exact Vsa.Sim.TextIn.of_list (fun p hp => h' p.1 p.2 hp) (by decide +kernel)
 
 theorem exitELoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
     (h : ∀ p ∈ codeFoot exitCodeEBase exitCodeE, m[p.1]? = some p.2.2) : Code._exitLoaded m := by
@@ -51,9 +49,7 @@ theorem exitELoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
     obtain ⟨q, hq, e⟩ := List.mem_map.mp hab
     cases e
     exact h _ (List.mem_map_of_mem (f := fun p => (exitCodeEBase + p.2, Iris.DFrac.discard, p.1)) hq)
-  unfold Code._exitLoaded Code._exitChunk0
-  repeat' apply And.intro
-  all_goals (apply h'; decide)
+  exact Vsa.Sim.TextIn.of_list (fun p hp => h' p.1 p.2 hp) (by decide +kernel)
 
 structure Frame16 (s : BitVec 64) : Prop where
   lo : 0x80000000 ≤ (s - 16#64).toNat
@@ -65,7 +61,7 @@ theorem pro_facts {m : Std.ExtHashMap Nat (BitVec 8)} {s a1v s0v r e : BitVec 64
     (hcode : Code.ExitLoaded m) (hg : Frame16 s) :
     ChainFacts m m (proL s a1v s0v r e) [] exitProSeg := by
   unfold exitProSeg ChainFacts
-  chain_facts hcode with "Vsa.Sim.Code.exit_at_"
+  chain_facts hcode
   · exact EnvNew.storeFact (s - 16#64) 0 16 hg.lo hg.hi hg.win hg.align (by decide)
       (by rw [← sp_sub16]; rfl) (by decide) (by decide) (by decide)
   · exact EnvNew.storeFact (s - 16#64) 8 16 hg.lo hg.hi hg.win hg.align (by decide)
@@ -94,7 +90,7 @@ theorem pro_pc (s a1v s0v r e : BitVec 64) :
 theorem mv_facts {m : Std.ExtHashMap Nat (BitVec 8)} {a0v e : BitVec 64}
     (hcode : Code.ExitLoaded m) : ChainFacts m m (mvL a0v e) [] exitMvSeg := by
   unfold exitMvSeg ChainFacts
-  chain_facts hcode with "Vsa.Sim.Code.exit_at_"
+  chain_facts hcode
 
 theorem mv_fin (a0v e : BitVec 64) :
     finReg exitMvSeg (mvL a0v e) [] 10 = e ∧ finReg exitMvSeg (mvL a0v e) [] 8 = e :=
@@ -107,7 +103,7 @@ theorem mv_pc (a0v e : BitVec 64) :
 theorem e_facts {m : Std.ExtHashMap Nat (BitVec 8)} {e a4v a5v : BitVec 64}
     (hcode : Code._exitLoaded m) : ChainFacts m m (eL e a4v a5v) [] exitESeg := by
   unfold exitESeg ChainFacts
-  chain_facts hcode with "Vsa.Sim.Code._exit_at_"
+  chain_facts hcode
 
 theorem exitWord_of_shifts (e : BitVec 64) (he : e.toNat < 2 ^ 31) :
     shift_bits_right (shift_bits_left e (Sail.BitVec.extractLsb (0x020#6) 5 0))

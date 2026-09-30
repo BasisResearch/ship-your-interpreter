@@ -1,75 +1,8 @@
-import Vsa.Elf
-
-open Std (ExtHashMap)
+import Vsa.Sim.Code.FixedImage
 
 namespace Vsa.Sim.Code
 
-def _exitChunk0 (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
-  mem[(0x80000180 : Nat)]? = some (0x13 : BitVec 8) ∧
-  mem[(0x80000181 : Nat)]? = some (0x17 : BitVec 8) ∧
-  mem[(0x80000182 : Nat)]? = some (0x05 : BitVec 8) ∧
-  mem[(0x80000183 : Nat)]? = some (0x02 : BitVec 8) ∧
-  mem[(0x80000184 : Nat)]? = some (0x93 : BitVec 8) ∧
-  mem[(0x80000185 : Nat)]? = some (0x57 : BitVec 8) ∧
-  mem[(0x80000186 : Nat)]? = some (0xf7 : BitVec 8) ∧
-  mem[(0x80000187 : Nat)]? = some (0x01 : BitVec 8) ∧
-  mem[(0x80000188 : Nat)]? = some (0x93 : BitVec 8) ∧
-  mem[(0x80000189 : Nat)]? = some (0xe7 : BitVec 8) ∧
-  mem[(0x8000018a : Nat)]? = some (0x17 : BitVec 8) ∧
-  mem[(0x8000018b : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x8000018c : Nat)]? = some (0x17 : BitVec 8) ∧
-  mem[(0x8000018d : Nat)]? = some (0xb7 : BitVec 8) ∧
-  mem[(0x8000018e : Nat)]? = some (0x01 : BitVec 8) ∧
-  mem[(0x8000018f : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80000190 : Nat)]? = some (0x23 : BitVec 8) ∧
-  mem[(0x80000191 : Nat)]? = some (0x3a : BitVec 8) ∧
-  mem[(0x80000192 : Nat)]? = some (0xf7 : BitVec 8) ∧
-  mem[(0x80000193 : Nat)]? = some (0xb6 : BitVec 8) ∧
-  mem[(0x80000194 : Nat)]? = some (0x6f : BitVec 8) ∧
-  mem[(0x80000195 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80000196 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x80000197 : Nat)]? = some (0x00 : BitVec 8)
-
-def _exitLoaded (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
-  _exitChunk0 mem
-
-theorem _exit_chunk0 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : _exitLoaded mem) : _exitChunk0 mem := h
-
-theorem _exit_at_80000180 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : _exitLoaded mem) :
-      mem[(0x80000180 : Nat)]? = some (0x13 : BitVec 8) ∧
-      mem[(0x80000181 : Nat)]? = some (0x17 : BitVec 8) ∧
-      mem[(0x80000182 : Nat)]? = some (0x05 : BitVec 8) ∧
-      mem[(0x80000183 : Nat)]? = some (0x02 : BitVec 8) :=
-  have hc := _exit_chunk0 h
-  ⟨hc.1, hc.2.1, hc.2.2.1, hc.2.2.2.1⟩
-
-theorem _exit_at_80000184 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : _exitLoaded mem) :
-      mem[(0x80000184 : Nat)]? = some (0x93 : BitVec 8) ∧
-      mem[(0x80000185 : Nat)]? = some (0x57 : BitVec 8) ∧
-      mem[(0x80000186 : Nat)]? = some (0xf7 : BitVec 8) ∧
-      mem[(0x80000187 : Nat)]? = some (0x01 : BitVec 8) :=
-  have hc := _exit_chunk0 h
-  ⟨hc.2.2.2.2.1, hc.2.2.2.2.2.1, hc.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.1⟩
-
-theorem _exit_at_80000188 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : _exitLoaded mem) :
-      mem[(0x80000188 : Nat)]? = some (0x93 : BitVec 8) ∧
-      mem[(0x80000189 : Nat)]? = some (0xe7 : BitVec 8) ∧
-      mem[(0x8000018a : Nat)]? = some (0x17 : BitVec 8) ∧
-      mem[(0x8000018b : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := _exit_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.1⟩
-
-theorem _exit_at_8000018c {mem : ExtHashMap Nat (BitVec 8)}
-    (h : _exitLoaded mem) :
-      mem[(0x8000018c : Nat)]? = some (0x17 : BitVec 8) ∧
-      mem[(0x8000018d : Nat)]? = some (0xb7 : BitVec 8) ∧
-      mem[(0x8000018e : Nat)]? = some (0x01 : BitVec 8) ∧
-      mem[(0x8000018f : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := _exit_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
+/-- The code of `_exit` is present as in the fixed image. -/
+abbrev _exitLoaded (mem : Std.ExtHashMap Nat (BitVec 8)) : Prop := CodeLoaded 0x80000180 0x80000198 mem
 
 end Vsa.Sim.Code
