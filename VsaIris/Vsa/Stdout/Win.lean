@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.Tac
 import VsaIris.Vsa.SymCompact
 import VsaIris.Vsa.RegionCore
+import VsaIris.Vsa.Stdout.WinRefute
 
 /-!
 # Windows: address keys for the newlib runs
@@ -82,6 +83,10 @@ theorem lt64 (hw : Win S T n m) (p : A + d = T + u) (h : d ≤ n + u ∧ u + 0 �
 /-- Two accesses in one window. -/
 theorem sep (p : A + d = T + u) (q : B + d' = T + u')
     (h : u + w1 + d' ≤ u' + d ∨ u' + w2 + d ≤ u + d') : A + w1 ≤ B ∨ B + w2 ≤ A := by
+  omega
+
+/-- Two keys at one position. -/
+theorem pos_eq (p : A + d = T + u) (q : B + d' = T + u') (h : u + d' = u' + d) : A = B := by
   omega
 
 /-- A static access against an access in the window. -/
@@ -248,35 +253,43 @@ section Dispatch
 
 open Lean Elab Tactic Meta
 
-def isNatLit (e : Expr) : Bool := e.nat?.isSome || e.rawNatLit?.isSome
+def isNatLit (e : Expr) : Bool := e.consumeMData.nat?.isSome || e.consumeMData.rawNatLit?.isSome
 
 /-- The key of an address term: a literal, or the top of its window with the syntax of its
-position proof. -/
+position proof and its signed offset from the top. -/
 inductive AKey where
-  | lit
-  | pos (top : Expr) (prf : Term)
+  | lit (v : Nat)
+  | pos (top : Expr) (prf : Term) (off : Int)
 
-/-- `s - K + k` / `s - K` with literal `K`, `k`: the top `s`. -/
-def natOff? (e : Expr) : Option (Expr × Bool) :=
+def natLit? (e : Expr) : Option Nat :=
   let e := e.consumeMData
-  if e.isAppOfArity ``HAdd.hAdd 6 && isNatLit e.appArg! then
+  match e.nat? with
+  | some n => some n
+  | none => e.rawNatLit?
+
+/-- `s - K + k` / `s - K` with literal `K`, `k`: the top `s` and the offset. -/
+def natOff? (e : Expr) : Option (Expr × Int × Bool) := do
+  let e := e.consumeMData
+  if e.isAppOfArity ``HAdd.hAdd 6 then
+    let k ← natLit? e.appArg!
     let l := e.appFn!.appArg!.consumeMData
-    if l.isAppOfArity ``HSub.hSub 6 && isNatLit l.appArg! && l.appFn!.appArg!.isFVar then
-      some (l.appFn!.appArg!, true)
-    else none
-  else if e.isAppOfArity ``HSub.hSub 6 && isNatLit e.appArg! && e.appFn!.appArg!.isFVar then
-    some (e.appFn!.appArg!, false)
-  else none
+    guard (l.isAppOfArity ``HSub.hSub 6 && l.appFn!.appArg!.isFVar)
+    let K ← natLit? l.appArg!
+    some (l.appFn!.appArg!, (k : Int) - K, true)
+  else
+    guard (e.isAppOfArity ``HSub.hSub 6 && e.appFn!.appArg!.isFVar)
+    let K ← natLit? e.appArg!
+    some (e.appFn!.appArg!, - (K : Int), false)
 
 def akey? (e : Expr) : TacticM (Option AKey) := do
   let e := e.consumeMData
-  if isNatLit e then return some .lit
+  if let some v := natLit? e then return some (.lit v)
   if e.isAppOfArity ``BitVec.toNat 2 then
     let x := e.appArg!.consumeMData
     if x.isAppOfArity ``BitVec.ofNat 2 then
       match natOff? x.appArg! with
-      | some (s, true) => return some (.pos s (← `(Win.posKT (by with_reducible assumption) (by decide))))
-      | some (s, false) => return some (.pos s (← `(Win.posKT0 (by with_reducible assumption) (by decide))))
+      | some (s, o, true) => return some (.pos s (← `(Win.posKT (by with_reducible assumption) (by decide))) o)
+      | some (s, o, false) => return some (.pos s (← `(Win.posKT0 (by with_reducible assumption) (by decide))) o)
       | none => return none
     if x.isAppOfArity ``HAdd.hAdd 6 then
       -- `b + c` with a literal `c`; an unfolded `b + c + c'` has no key (fold it first)
@@ -284,13 +297,34 @@ def akey? (e : Expr) : TacticM (Option AKey) := do
       if b.isAppOfArity ``HAdd.hAdd 6 then return none
       let some ⟨_, v⟩ ← getBitVecValue? x.appArg! | return none
       if v.toNat ≥ 2 ^ 63 then
-        return some (.pos b (← `(StackWin.posN (by with_reducible assumption) (by decide))))
-      else return some (.pos b (← `(StackWin.posP (by with_reducible assumption) (by decide))))
-    return some (.pos x (← `(pos0 _)))
+        return some (.pos b (← `(StackWin.posN (by with_reducible assumption) (by decide)))
+          ((v.toNat : Int) - 2 ^ 64))
+      else return some (.pos b (← `(StackWin.posP (by with_reducible assumption) (by decide))) v.toNat)
+    return some (.pos x (← `(pos0 _)) 0)
   match natOff? e with
-  | some (s, true) => return some (.pos s (← `(Win.posK (by with_reducible assumption) (by decide))))
-  | some (s, false) => return some (.pos s (← `(Win.posK0 (by with_reducible assumption) (by decide))))
+  | some (s, o, true) => return some (.pos s (← `(Win.posK (by with_reducible assumption) (by decide))) o)
+  | some (s, o, false) => return some (.pos s (← `(Win.posK0 (by with_reducible assumption) (by decide))) o)
   | none => return none
+
+/-- The windows of the context: `(T, n, m)`. -/
+def ctxWins : TacticM (Array (Expr × Expr × Expr)) := withMainContext do
+  (← getLCtx).foldlM (init := #[]) fun acc d => do
+    if d.isImplementationDetail then return acc
+    let t ← whnfR (← instantiateMVars d.type)
+    if t.isAppOfArity ``Win 4 then
+      return acc.push (t.getAppArgs[1]!, t.getAppArgs[2]!, t.getAppArgs[3]!)
+    else return acc
+
+/-- The accesses `[o, o + w)` (offsets from `top`) lie in a window of the context with that top:
+their positions are then exact, and a literal comparison of them is a fact about the addresses. -/
+def inCtxWin (top : Expr) (accs : List (Int × Nat)) : TacticM Bool := do
+  for (T, n, m) in ← ctxWins do
+    let T := T.consumeMData
+    let same := T == top || (T.isAppOfArity ``BitVec.toNat 2 && T.appArg!.consumeMData == top)
+    if same then
+      if let (some n, some m) := (natLit? n, natLit? m) then
+        if accs.all fun (o, w) => - (n : Int) ≤ o && o + w ≤ m then return true
+  return false
 
 /-- `A + w ≤ B`: the pair `(A, B)`. -/
 def leAdd? (e : Expr) : Option (Expr × Expr) := do
@@ -311,16 +345,17 @@ def extLit (loN : Expr) : Option Bool := do
 
 /-- Address side conditions by the keys of the addresses: disjointness of two accesses
 (`A + w₁ ≤ B ∨ B + w₂ ≤ A`), outside a forgotten stack region (`A + w ≤ LO ∨ LO + N ≤ A`),
-inside one (`LO ≤ A ∧ A + w ≤ LO + N`), below `2 ^ 64`. The goal's shape selects the lemma;
-nothing is tried blind. -/
-elab "win_key0" : tactic => withMainContext do
+inside one (`LO ≤ A ∧ A + w ≤ LO + N`), below `2 ^ 64`, equal (`A = B`). The goal's shape
+selects the lemma; nothing is tried blind. When the keys show the condition false, the
+exception `winRefuted` is thrown. -/
+def winKeyCore : TacticM Unit := withMainContext do
   let t := (← instantiateMVars (← getMainTarget)).consumeMData
   let tac ← if let some (p, q) := t.app2? ``Or then do
       let some (A, B) := leAdd? p | throwError "win_key: shape"
       if isWinLo B then
         unless q.isAppOfArity ``LE.le 4 do throwError "win_key: shape"
         let some ka ← akey? A | throwError "win_key: key"
-        let aLit := match ka with | .lit => true | _ => false
+        let aLit := match ka with | .lit _ => true | _ => false
         match extLit q.appFn!.appArg!, aLit with
         | some true, true => `(tactic| exact StackWin.static_outN (by with_reducible assumption) (by decide))
         | some false, true => `(tactic| exact StackWin.static_out (by with_reducible assumption) (by decide))
@@ -329,30 +364,73 @@ elab "win_key0" : tactic => withMainContext do
       else
         let some ka ← akey? A | throwError "win_key: key"
         let some kb ← akey? B | throwError "win_key: key"
+        -- the widths, when literal
+        let w1 := natLit? p.appFn!.appArg!.appArg!
+        let w2 := if q.isAppOfArity ``LE.le 4 && q.appFn!.appArg!.isAppOfArity ``HAdd.hAdd 6 then
+          natLit? q.appFn!.appArg!.appArg! else none
         match ka, kb with
-        | .lit, .lit => `(tactic| decide)
-        | .pos x pa, .pos y pb =>
-          if x == y then `(tactic| exact Win.sep $pa $pb (by decide))
+        | .lit a, .lit b =>
+          if let (some w1, some w2) := (w1, w2) then
+            unless a + w1 ≤ b || b + w2 ≤ a do throwWinRefuted
+          `(tactic| decide)
+        | .pos x pa oa, .pos y pb ob =>
+          if x == y then
+            if let (some w1, some w2) := (w1, w2) then
+              unless oa + w1 ≤ ob || ob + w2 ≤ oa do
+                if ← inCtxWin x [(oa, w1), (ob, w2)] then throwWinRefuted
+            `(tactic| exact Win.sep $pa $pb (by decide))
           else `(tactic| first
-            | exact Win.sepW (by with_reducible assumption) (by with_reducible assumption) (by with_reducible assumption) $pa $pb (by decide)
-            | exact Win.sepW' (by with_reducible assumption) (by with_reducible assumption) (by with_reducible assumption) $pa $pb (by decide))
-        | .lit, .pos _ pb => `(tactic| exact Win.static_win (by with_reducible assumption) $pb (by decide))
-        | .pos _ pa, .lit => `(tactic| exact Win.win_static (by with_reducible assumption) $pa (by decide))
+            | exact Win.sepW (by with_reducible assumption) (by with_reducible assumption)
+                (by with_reducible assumption) $pa $pb (by decide)
+            | exact Win.sepW' (by with_reducible assumption) (by with_reducible assumption)
+                (by with_reducible assumption) $pa $pb (by decide))
+        | .lit _, .pos _ pb _ => `(tactic| exact Win.static_win (by with_reducible assumption) $pb (by decide))
+        | .pos _ pa _, .lit _ => `(tactic| exact Win.win_static (by with_reducible assumption) $pa (by decide))
     else if let some (p, q) := t.app2? ``And then do
       -- `LO ≤ A ∧ A + w ≤ LO + N`
       unless p.isAppOfArity ``LE.le 4 && isWinLo p.appFn!.appArg! do throwError "win_key: shape"
       unless q.isAppOfArity ``LE.le 4 do throwError "win_key: shape"
-      let some (.pos _ _) ← akey? p.appArg! | throwError "win_key: key"
+      let some (.pos _ _ _) ← akey? p.appArg! | throwError "win_key: key"
       match extLit q.appArg! with
       | some true => `(tactic| exact StackWin.stack_inN (by with_reducible assumption) (by decide))
       | some false => `(tactic| exact StackWin.stack_in (by with_reducible assumption) (by decide))
       | none => throwError "win_key: shape"
     else if t.isAppOfArity ``LT.lt 4 then do
       -- `A < 2 ^ 64`
-      let some (.pos _ pa) ← akey? t.appFn!.appArg! | throwError "win_key: key"
+      let some (.pos _ pa _) ← akey? t.appFn!.appArg! | throwError "win_key: key"
       `(tactic| exact Win.lt64 (by with_reducible assumption) $pa (by decide))
+    else if t.isAppOfArity ``Eq 3 then do
+      -- `A = B`
+      let A := t.appFn!.appArg!.consumeMData
+      let B := t.appArg!.consumeMData
+      if A == B then `(tactic| rfl)
+      else
+        let some ka ← akey? A | throwError "win_key: key"
+        let some kb ← akey? B | throwError "win_key: key"
+        match ka, kb with
+        | .lit a, .lit b => if a == b then `(tactic| rfl) else throwWinRefuted
+        | .pos x pa oa, .pos y pb ob =>
+          unless x == y do throwError "win_key: two bases"
+          if oa == ob then `(tactic| exact Win.pos_eq $pa $pb (by decide))
+          else if ← inCtxWin x [(oa, 0), (ob, 0)] then throwWinRefuted
+          else throwError "win_key: key"
+        | _, _ => throwError "win_key: key"
     else throwError "win_key: shape"
-  evalTactic tac
+  withoutRecover (evalTactic tac)
+
+elab "win_key0" : tactic => winKeyCore
+
+/-- Address disjointness, equality and forgotten-region membership by key; an offset left as
+`sp + c + c'` (a callee's frame under the caller's `sp + c`) is folded first. No arithmetic
+fallback; a condition the keys show false stops the alternatives behind it (`winRefuted`). -/
+elab "win_key" : tactic => do
+  let s ← saveState
+  try winKeyCore
+  catch e =>
+    if isWinRefuted e then throw e
+    s.restore
+    withoutRecover
+      (evalTactic (← `(tactic| (simp only [BitVec.add_assoc, BitVec.reduceAdd] at ⊢; win_key0))))
 
 /-- Access permitted / access owned, by the key of the address. `stat` closes the ownership of a
 static access in the footprint at hand. -/
@@ -360,18 +438,18 @@ def winAcc (stat : TSyntax `tactic) : TacticM Unit := withMainContext do
   let t := (← instantiateMVars (← getMainTarget)).consumeMData
   let tac ← if t.isAppOfArity ``LdOK 2 then do
       match ← akey? t.appFn!.appArg! with
-      | some .lit => `(tactic| decide)
-      | some (.pos _ pa) => `(tactic| exact Win.ldOK (by with_reducible assumption) $pa (by decide))
+      | some (.lit _) => `(tactic| decide)
+      | some (.pos _ pa _) => `(tactic| exact Win.ldOK (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isAppOfArity ``StOK 2 then do
       match ← akey? t.appFn!.appArg! with
-      | some .lit => `(tactic| decide)
-      | some (.pos _ pa) => `(tactic| exact Win.stOK (by with_reducible assumption) $pa (by decide))
+      | some (.lit _) => `(tactic| decide)
+      | some (.pos _ pa _) => `(tactic| exact Win.stOK (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isAppOfArity ``StOKb 1 then do
       match ← akey? t.appArg! with
-      | some .lit => `(tactic| decide)
-      | some (.pos _ pa) => `(tactic| exact Win.stOKb (by with_reducible assumption) $pa (by decide))
+      | some (.lit _) => `(tactic| decide)
+      | some (.pos _ pa _) => `(tactic| exact Win.stOKb (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else if t.isForall then do
       -- `∀ b, b ∈ accAddrs A w → S b`
@@ -380,11 +458,11 @@ def winAcc (stat : TSyntax `tactic) : TacticM Unit := withMainContext do
       let mem := d.bindingDomain!
       let some acc := mem.getAppArgs.find? (·.isAppOfArity ``accAddrs 2) | throwError "win_acc: shape"
       match ← akey? acc.appFn!.appArg! with
-      | some .lit => pure stat
-      | some (.pos _ pa) => `(tactic| exact Win.own (by with_reducible assumption) $pa (by decide))
+      | some (.lit _) => pure stat
+      | some (.pos _ pa _) => `(tactic| exact Win.own (by with_reducible assumption) $pa (by decide))
       | none => throwError "win_acc: key"
     else throwError "win_acc: shape"
-  evalTactic tac
+  withoutRecover (evalTactic tac)
 
 /-- `win_foot f`: the goal is `∀ b, b ∈ accAddrs a w → f … b`. Guards a footprint's static
 ownership lemma, so no lemma is unified against another footprint. -/
@@ -401,15 +479,6 @@ macro_rules
     `(tactic| (win_foot outS; first | exact outS_static (by decide) | exact outS_errno (by decide)))
 
 elab "win_acc" : tactic => do winAcc (← `(tactic| win_static_own))
-
-/-- The windows of the context: `(T, n, m)`. -/
-def ctxWins : TacticM (Array (Expr × Expr × Expr)) := withMainContext do
-  (← getLCtx).foldlM (init := #[]) fun acc d => do
-    if d.isImplementationDetail then return acc
-    let t ← whnfR (← instantiateMVars d.type)
-    if t.isAppOfArity ``Win 4 then
-      return acc.push (t.getAppArgs[1]!, t.getAppArgs[2]!, t.getAppArgs[3]!)
-    else return acc
 
 /-- Put the separation of the window `(T, n, m)` from each window of `others` in the context, in
 the order that holds. -/
@@ -449,12 +518,6 @@ elab "nx_win " sp:term:max n:term:max m:term:max : tactic => do
   winSeps tag (← `(($sp).toNat)) n m others
 
 end Dispatch
-
-/-- Address disjointness and forgotten-region membership by key; an offset left as `sp + c + c'`
-(a callee's frame under the caller's `sp + c`) is folded first. No arithmetic fallback. -/
-macro "win_key" : tactic => `(tactic| first
-  | win_key0
-  | (simp only [BitVec.add_assoc, BitVec.reduceAdd] at ⊢; win_key0))
 
 /-- Step side goals (access permitted, access owned) by key. No arithmetic fallback. -/
 macro "win_side" : tactic => `(tactic| first
