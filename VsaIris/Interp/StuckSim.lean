@@ -16,8 +16,7 @@ import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
 import VsaIris.Interp.Case.ExecForP
 import VsaIris.Interp.Case.ExecRetP
-import VsaIris.Interp.Case.ExecBrkP
-import VsaIris.Interp.Case.ExecContP
+import VsaIris.Interp.ExecJump
 import VsaIris.Interp.Case.ExecIfP
 import VsaIris.Interp.Case.ExecRetNullP
 import VsaIris.Interp.CallCloP
@@ -190,8 +189,8 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     cases eo with
     | some e => iapply caseP_ExecRet S.hlive $$ HE
     | none => iapply caseP_ExecRetNull S.hlive S.vnull
-  | brk => iapply caseP_ExecBrk S.hlive
-  | cont => iapply caseP_ExecCont S.hlive
+  | brk => iapply jumpP .brk S.hlive (ExecS.brk _ _ _)
+  | cont => iapply jumpP .cont S.hlive (ExecS.cont _ _ _)
 
 theorem specsP_all {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     (S : StuckSupply (GF := GF) live N inp) :
