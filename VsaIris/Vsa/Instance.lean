@@ -77,6 +77,17 @@ theorem stepsN_of_reachesN {live : Nat → Prop} {n : Nat} {c c' : (vsaModel liv
   | zero c => exact .zero c
   | succ s _ ih => exact .succ (vsaStep_next s) ih
 
+theorem vsa_adequacy_exit {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop)
+    (c : Config) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
+    (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
+    (hok : VsaOk live c) (φ : Nat × String → Prop)
+    (H : AdequacyHyp GF (vsaModel live) mr mm (output c.σ) φ) :
+    ∃ e out, Vsa.Machine.Halts c out e ∧ φ (e, out) := by
+  obtain ⟨e, out, ⟨cf, hre, hh⟩, hφ⟩ :=
+    mach_adequacy (GF := GF) (M := vsaModel live) c mr mm hr hm hok _ H
+  obtain ⟨σf, hhalt, hout⟩ := vsaStep_halt hh
+  exact ⟨e, out, ⟨cf, σf, steps_of_reaches hre, hhalt, hout⟩, hφ⟩
+
 theorem vsa_adequacyP {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop) (c : Config)
     (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
