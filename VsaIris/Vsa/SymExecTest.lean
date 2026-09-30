@@ -1,12 +1,9 @@
-import VsaIris.Vsa.SymExec
+import VsaIris.Interp.SymInterp
 import VsaIris.Interp.Case.BinaryAddIntT
 
 /-!
 # `symRun_swp` on the interpreter binary
 
-* `codeAt_interp`: the interpreter text footprint `interpText` is the fixed image over ten
-  address ranges (one kernel evaluation), so every code pin of an `IW` run is supplied by
-  `CodeAt` instead of per-pc `interp_at_*` lemmas.
 * `BinaryAddIntT_run4_sym`: the landed `#ix_seg` piece `BinaryAddIntT_run4`, same statement,
   re-proved with ONE symbolic run (`ld`, `j`, four `ld`, `mv`, `addi`, stop at the `jr`)
   followed by the landed `jr` step; its memory obligations are decided by `obCheck` from one
@@ -22,25 +19,7 @@ namespace VsaIris.SymExec.Test
 open VsaIris VsaIris.Sym VsaIris.Interp VsaIris.SymExec Vsa.Sim Vsa.MemRepr Vsa.Sim.Code
 open VsaIris.MallocFast
 
-/-- Byte function of the loaded binary (text, then read-only data). -/
-def binByte (a : Nat) : BitVec 8 :=
-  if a < 0x80018be0 then fixedTextByte (a - 0x80000000) else fixedRodataByte (a - 0x80018be0)
-
-/-- `interpText` as ranges of the binary image, in list order. -/
-def interpRanges : List (Nat × Nat) :=
-  [(0x800027ec, 0x800029fc), (0x80002df4, 0x80004308), (0x800043ec, 0x80004588),
-   (0x80004640, 0x80004664), (0x800046a4, 0x80004764), (0x80019f58, 0x80019fdc),
-   (0x80019ef8, 0x80019f28), (0x80019370, 0x8001937c), (0x80019f28, 0x80019f58),
-   (0x80019fe0, 0x80019ff8)]
-
-theorem interpText_eq : interpText = rangeText binByte interpRanges :=
-  eqB_eq (by decide +kernel)
-
-theorem codeAt_interp : CodeAt interpText binByte interpRanges := codeAt_of_eq interpText_eq
-
-/-- Executor configuration for `IW` runs. -/
-def cfgI (stops : List (BitVec 64)) (dbase : List SE := []) : Cfg :=
-  ⟨binByte, interpRanges, iRegs, stops, dbase⟩
+open VsaIris.SymExec.Interp
 
 /-- `BinaryAddIntT_run4`, re-proved by one symbolic run and the landed `jr` step. All memory
 obligations are decided by `obCheck` from one `Geom` fact about the stack pointer. -/
@@ -61,8 +40,8 @@ theorem BinaryAddIntT_run4_sym {live : Nat → Prop} (hlive : ∀ p ∈ interpTe
         (s + 18446744073709550528#64 + 1088#64)) Mt) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800038d8#64 R Mt := by
   refine symRun_auto (cfgI [0x80003404#64]) codeAt_interp hlive (by decide) (by decide)
-    [{ atom := .r 2, lo := 0x87800000, hi := 0x88000000 - 1088, al := 16, sc := [(0, 1088)], dc := [] }]
-    9 _ R Mt ?_ ?_
+    [{ atom := .r 2, lo := 0x87800000, hi := 0x88000000 - 1088, amod := 16, sc := [(0, 1088)], dc := [] }]
+    9 _ R Mt [] (fun _ h => nomatch h) (fun _ h => nomatch h) ?_ ?_
   · geom_auto [h2, hsf, InExt]
   sym_eval
   simp only [Tree.WP, ObsOK, SOb.den, List.mem_cons, List.not_mem_nil,
@@ -95,11 +74,11 @@ theorem BinaryAddIntT_run2_sym {live : Nat → Prop} (hlive : ∀ p ∈ interpTe
       (writeLog Mt [(s.toNat - 1088, 8, kL)])) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q (2147497212#64) R Mt := by
   refine symRun_auto (cfgI [0x80003518#64] [.r 8]) codeAt_interp hlive (by decide) (by decide)
-    [{ atom := .r 2, lo := 0x87800000, hi := 0x88000000 - 1088, al := 16, sc := [(0, 1088)],
+    [{ atom := .r 2, lo := 0x87800000, hi := 0x88000000 - 1088, amod := 16, sc := [(0, 1088)],
        dc := [] },
-     { atom := .r 8, lo := 0x80000000, hi := 0x100000000 - 32, al := 1, sc := [],
+     { atom := .r 8, lo := 0x80000000, hi := 0x100000000 - 32, amod := 1, sc := [],
        dc := [(0, 4), (8, 12), (16, 32)], gap := some (32, 16) }]
-    20 _ R Mt ?_ ?_
+    20 _ R Mt [] (fun _ h => nomatch h) (fun _ h => nomatch h) ?_ ?_
   · geom_auto [h2, h8, hsf, InExt, binView]
   sym_eval
   simp only [Tree.WP, ObsOK, SOb.den, List.mem_cons, List.not_mem_nil,
@@ -113,11 +92,13 @@ example : type_of% @BinaryAddIntT_run2_sym = type_of% @BinaryAddIntT_run2 := rfl
 
 def leafCount : Tree → Nat
   | .leaf _ => 1
-  | .br _ _ _ t f => leafCount t + leafCount f
+  | .br _ _ _ _ t f => leafCount t + leafCount f
+  | .jr _ _ => 1
 
 def obsCount : Tree → Nat
   | .leaf s => s.obs.length
-  | .br _ _ _ t f => obsCount t + obsCount f
+  | .br _ _ _ _ t f => obsCount t + obsCount f
+  | .jr s _ => s.obs.length
 
 /-- The loop body at `0x80003224`: 12 instructions with three stores, eight loads (forwarded or
 disjoint by obligation) and the back-edge `bne`, evaluated in the kernel. -/
@@ -129,7 +110,7 @@ theorem loop_tree :
 end VsaIris.SymExec.Test
 
 #print axioms VsaIris.SymExec.symRun_swp
-#print axioms VsaIris.SymExec.Test.codeAt_interp
+#print axioms VsaIris.SymExec.Interp.codeAt_interp
 #print axioms VsaIris.SymExec.Test.BinaryAddIntT_run4_sym
 #print axioms VsaIris.SymExec.Test.loop_tree
 #print axioms VsaIris.SymExec.Test.BinaryAddIntT_run2_sym

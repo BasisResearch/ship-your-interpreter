@@ -163,6 +163,20 @@ theorem finReg_line (a : MInstr) (ks : List Nat) (R : Nat → BitVec 64)
     · rw [if_neg hr, if_neg (Ne.symm hr), lookupG_eraseG_ne hr, lookupG_pinsOf hx, if_neg hg]; rfl
   · rw [stepGM_store hs, lookupG_pinsOf hx, if_neg hg]; simp
 
+theorem finReg_gp (a : MInstr) (ks : List Nat) (R : Nat → BitVec 64)
+    (lds : List (List (BitVec 8))) (hx : gp ∈ ks) (hw : ∀ x ∈ wrChain [⟨[a], none⟩], x ≠ gp) :
+    finReg [⟨[a], none⟩] (pinsOf ks R) lds gp = gpV := by
+  unfold finReg
+  show (lookupG gp (stepGM a (pinsOf ks R) (lds.headD []))).getD 0 = _
+  cases hs : isStoreK a.kind
+  · rw [stepGM_nonstore hs]
+    have hrd : a.rd ≠ gp := hw a.rd (by
+      show a.rd ∈ wrRegsM [a] ++ []
+      unfold wrRegsM; revert hs; cases a.kind <;> intro hs <;> first | (cases hs; done) | simp)
+    unfold lookupG
+    rw [if_neg hrd, lookupG_eraseG_ne hrd, lookupG_pinsOf hx, if_pos rfl]; rfl
+  · rw [stepGM_store hs, lookupG_pinsOf hx, if_pos rfl]; rfl
+
 theorem log_line (a : MInstr) (L : GRegs) (lds : List (List (BitVec 8))) :
     (segOut [⟨[a], none⟩] L lds).log =
       (if isStoreK a.kind then [wentryM a L] else []) := by
@@ -184,10 +198,11 @@ theorem swpx_line (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (hc : CodeAt
     (hlive : ∀ p ∈ T, live p.1)
     (hb : Pins4OK img rT a.pc.toNat a.b0 a.b1 a.b2 a.b3)
     (hdec : DecM a)
-    (hmf : ∀ m : Mem, DataReads D m → (∀ b ∈ LD, (m[b]?).getD 0 = imgM Mt b) →
+    (hmf : ∀ m : Mem, TextLoaded T m → DataReads D m → (∀ b ∈ LD, (m[b]?).getD 0 = imgM Mt b) →
       MemFacts m (pinsOf ks R) (lds.headD []) a)
     (hPC : VsaIris.PC ∈ rs)
-    (hks : ∀ x ∈ ks, x ∈ rs ∧ x ≠ VsaIris.PC) (hgpk : gp ∉ ks) (hgprs : gp ∉ rs)
+    (hks : ∀ x ∈ ks, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC))
+    (hgpw : ∀ x ∈ wrChain [⟨[a], none⟩], x ≠ gp) (hgprs : gp ∉ rs)
     (hLD : ∀ b ∈ LD, S b) (hW : ∀ b ∈ W, S b)
     (hRo : ∀ x ∈ rs, x ≠ VsaIris.PC → x ∉ ks → lineR a (pinsOf ks R) (lds.headD []) R x = R x)
     (hk : SWP live (T ++ D) rs S Q (BitVec.addInt a.pc 4)
@@ -196,9 +211,9 @@ theorem swpx_line (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (hc : CodeAt
     SWP live (T ++ D) rs S Q a.pc R Mt :=
   swp_stepD [⟨[a], none⟩] ks lds LD W 0 rfl hwf hkeys hwr
     (fun b hb' => by rw [log_line]; exact hcover b hb') hlive
-    (fun m hT hD hLD' => ⟨⟨⟨bytePinsM_of hc hT hb, decodeFactM_of hdec, hmf m hD hLD', trivial⟩,
+    (fun m hT hD hLD' => ⟨⟨⟨bytePinsM_of hc hT hb, decodeFactM_of hdec, hmf m hT hD hLD', trivial⟩,
       trivial, trivial⟩, trivial⟩)
-    hPC (fun x hx => .inr (hks x hx)) (fun h => absurd h hgpk) hgprs hLD hW rfl
+    hPC hks (fun h => finReg_gp _ ks R lds h hgpw) hgprs hLD hW rfl
     (fun x hx hg => finReg_line _ ks R lds x hx hg) hRo (by rw [log_line]) hk
 
 /-- A conditional branch, either outcome (`taken` decided by the guard). -/
@@ -211,13 +226,15 @@ theorem swpx_br (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (hc : CodeAt T
     (hdec : DecT t)
     (hg : guardB op (srcVal t.rs1 (pinsOf ks R)) (srcVal t.rs2 (pinsOf ks R)) = taken)
     (hPC : VsaIris.PC ∈ rs)
-    (hks : ∀ x ∈ ks, x ∈ rs ∧ x ≠ VsaIris.PC) (hgpk : gp ∉ ks) (hgprs : gp ∉ rs)
+    (hks : ∀ x ∈ ks, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC)) (hgprs : gp ∉ rs)
     (hk : SWP live (T ++ D) rs S Q (tgtPC0 t) R Mt) :
     SWP live (T ++ D) rs S Q t.pc R Mt := by
   refine swp_stepD [⟨[], some t⟩] ks [] [] [] 0 rfl hwf hkeys (fun x hx => by cases hx)
     (fun _ _ => trivial) hlive
     (fun m hT _ _ => ⟨⟨trivial, ⟨bytePinsT_of hc hT hb, decodeFactT_of hdec⟩, ?_⟩, trivial⟩)
-    hPC (fun x hx => .inr (hks x hx)) (fun h => absurd h hgpk) hgprs
+    hPC hks (fun h => by
+      show (lookupG gp (pinsOf ks R)).getD 0 = gpV
+      rw [lookupG_pinsOf h, if_pos rfl]; rfl) hgprs
     (fun _ h => by cases h) (fun _ h => by cases h) ?_ ?_ (fun _ _ _ _ => rfl) rfl hk
   · show TermFactsT (pinsOf ks R) t
     unfold TermFactsT; rw [ht]; exact hg
@@ -247,6 +264,35 @@ theorem swpx_j (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (hc : CodeAt T 
   · show tgtPCT t [] = tgtPC0 t
     unfold tgtPCT; rw [ht]
 
+/-- An indirect jump `jalr x0, 0(rs1)`: the continuation is at the (aligned) register value. -/
+theorem swpx_jr (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (hc : CodeAt T img rT)
+    (t : TInstr) (ht : t.kind = .jr) (hi : t.imm12 = 0) {R : Nat → BitVec 64} {Mt : Mem}
+    (ks : List Nat) (hwf : ChainOK t.pc ks [⟨[], some t⟩]) (hkeys : KeysOK ks)
+    (hlive : ∀ p ∈ T, live p.1)
+    (hb : Pins4OK img rT t.pc.toNat t.b0 t.b1 t.b2 t.b3)
+    (hdec : DecT t) (hPC : VsaIris.PC ∈ rs)
+    (hks : ∀ x ∈ ks, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC)) (hgprs : gp ∉ rs)
+    (hal : (srcVal t.rs1 (pinsOf ks R)).toNat % 4 = 0)
+    (hk : SWP live (T ++ D) rs S Q (srcVal t.rs1 (pinsOf ks R)) R Mt) :
+    SWP live (T ++ D) rs S Q t.pc R Mt := by
+  have htg : Sail.BitVec.update (srcVal t.rs1 (pinsOf ks R) + sign_extend (m := 64) t.imm12) 0 0#1
+      = srcVal t.rs1 (pinsOf ks R) := by rw [hi]; exact ret_tgt _ hal
+  refine swp_stepD [⟨[], some t⟩] ks [] [] [] 0 rfl hwf hkeys (fun x hx => by cases hx)
+    (fun _ _ => trivial) hlive
+    (fun m hT _ _ => ⟨⟨trivial, ⟨bytePinsT_of hc hT hb, decodeFactT_of hdec⟩, ?_⟩, trivial⟩)
+    hPC hks (fun h => by
+      show (lookupG gp (pinsOf ks R)).getD 0 = gpV
+      rw [lookupG_pinsOf h, if_pos rfl]; rfl) hgprs
+    (fun _ h => by cases h) (fun _ h => by cases h) ?_ ?_ (fun _ _ _ _ => rfl) rfl hk
+  · show TermFactsT (pinsOf ks R) t
+    unfold TermFactsT; rw [ht]; show (Sail.BitVec.update _ 0 0#1).toNat % 4 = 0
+    rw [htg]; exact hal
+  · show tgtPCT t (pinsOf ks R) = _
+    unfold tgtPCT; rw [ht]; exact htg
+  · intro x hx hgx
+    show (lookupG x (pinsOf ks R)).getD 0 = R x
+    rw [lookupG_pinsOf hx, if_neg hgx]; rfl
+
 end rules
 
 
@@ -264,6 +310,53 @@ inductive SE where
   | alu (i : MInstr) (x y : SE)
 deriving DecidableEq
 
+/-- `wvalM` of a register-only line, with the two source values given. -/
+def aluVal (a : MInstr) (X Y : BitVec 64) : BitVec 64 :=
+  match a.kind with
+  | .addi => X + sign_extend (m := 64) a.imm
+  | .add  => X + Y
+  | .sub  => X - Y
+  | .or   => X ||| Y
+  | .and  => X &&& Y
+  | .srl  => shift_bits_right (X) (Sail.BitVec.extractLsb (Y) 5 0)
+  | .xor  => X ^^^ Y
+  | .sll  => shift_bits_left (X) (Sail.BitVec.extractLsb (Y) 5 0)
+  | .addiw => sign_extend (m := 64)
+      (Sail.BitVec.extractLsb (X + sign_extend (m := 64) a.imm) 31 0)
+  | .slli => shift_bits_left (X) (Sail.BitVec.extractLsb (shamtOf a) 5 0)
+  | .srli => shift_bits_right (X) (Sail.BitVec.extractLsb (shamtOf a) 5 0)
+  | .srai => shift_bits_right_arith (X) (Sail.BitVec.extractLsb (shamtOf a) 5 0)
+  | .slti => zero_extend (m := 64)
+      (bool_to_bit (zopz0zI_s (X) (sign_extend (m := 64) a.imm)))
+  | .slt  => zero_extend (m := 64) (bool_to_bit (zopz0zI_s (X) (Y)))
+  | .subw => sign_extend (m := 64)
+      (Sail.BitVec.extractLsb (X) 31 0
+        - Sail.BitVec.extractLsb (Y) 31 0)
+  | .addw => sign_extend (m := 64)
+      (Sail.BitVec.extractLsb (X) 31 0
+        + Sail.BitVec.extractLsb (Y) 31 0)
+  | .sllw => sign_extend (m := 64)
+      (shift_bits_left (Sail.BitVec.extractLsb (X) 31 0)
+        (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (Y) 31 0) 4 0))
+  | .srlw => sign_extend (m := 64)
+      (shift_bits_right (Sail.BitVec.extractLsb (X) 31 0)
+        (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (Y) 31 0) 4 0))
+  | .sraw => sign_extend (m := 64)
+      (shift_bits_right_arith (Sail.BitVec.extractLsb (X) 31 0)
+        (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (Y) 31 0) 4 0))
+  | .auipc => a.pc + sign_extend (m := 64) (imm20Of a +++ (0x000#12))
+  | .lui => sign_extend (m := 64) (imm20Of a +++ (0x000#12))
+  | .xori => X ^^^ sign_extend (m := 64) a.imm
+  | .andi => X &&& sign_extend (m := 64) a.imm
+  | .ori => X ||| sign_extend (m := 64) a.imm
+  | .slliw => sign_extend (m := 64)
+      (shift_bits_left (Sail.BitVec.extractLsb (X) 31 0) (shamt5Of a))
+  | .srliw => sign_extend (m := 64)
+      (shift_bits_right (Sail.BitVec.extractLsb (X) 31 0) (shamt5Of a))
+  | .sraiw => sign_extend (m := 64)
+      (shift_bits_right_arith (Sail.BitVec.extractLsb (X) 31 0) (shamt5Of a))
+  | _ => 0#64
+
 /-- Entry registers and entry memory. -/
 structure Env where
   R0 : Nat → BitVec 64
@@ -277,13 +370,13 @@ def SE.den (ρ : Env) : SE → BitVec 64
   | .sub a b => a.den ρ - b.den ρ
   | .ld k a => ldv k ρ.M0 (a.den ρ).toNat
   | .ldD k a => ldv k ρ.D0 (a.den ρ).toNat
-  | .alu i x y => wvalM { i with rs1 := 1, rs2 := 2 } [(1, x.den ρ), (2, y.den ρ)] []
+  | .alu i x y => aluVal i (x.den ρ) (y.den ρ)
 
-/-- `(e + c1) + c2 ↦ e + (c1 + c2)` and constant folding. -/
+/-- `e + k`, built as the per-step normaliser (`sx_norm`) leaves it: literals fold, `+ 0`
+vanishes, nothing reassociates. -/
 def addC (e : SE) (k : BitVec 64) : SE :=
   match e with
   | .c v => .c (v + k)
-  | .add a (.c v) => if v + k = 0 then a else .add a (.c (v + k))
   | e => if k = 0 then e else .add e (.c k)
 
 theorem addC_den (ρ : Env) (e : SE) (k : BitVec 64) : (addC e k).den ρ = e.den ρ + k := by
@@ -291,41 +384,49 @@ theorem addC_den (ρ : Env) (e : SE) (k : BitVec 64) : (addC e k).den ρ = e.den
   split
   · rfl
   · split
-    · rename_i h; simp only [SE.den]; rw [BitVec.add_assoc, h]; simp
-    · simp only [SE.den]; rw [BitVec.add_assoc]
-  · split
     · rename_i h; subst h; simp
     · rfl
 
 def addS : SE → SE → SE
-  | a, .c k => addC a k
-  | .c k, b => addC b k
+  | .c x, .c y => .c (x + y)
+  | a, .c k => if k = 0 then a else .add a (.c k)
   | a, b => .add a b
 
 theorem addS_den (ρ : Env) (a b : SE) : (addS a b).den ρ = a.den ρ + b.den ρ := by
   unfold addS
   split
-  · exact addC_den ρ _ _
-  · rw [addC_den, BitVec.add_comm]; rfl
+  · rfl
+  · split
+    · rename_i h; subst h; simp [SE.den]
+    · rfl
   · rfl
 
-def subS : SE → SE → SE
-  | a, .c k => addC a (-k)
-  | a, b => .sub a b
+def subS (a b : SE) : SE := .sub a b
 
-theorem subS_den (ρ : Env) (a b : SE) : (subS a b).den ρ = a.den ρ - b.den ρ := by
-  unfold subS
-  split
-  · rw [addC_den, BitVec.sub_eq_add_neg]; rfl
-  · rfl
+theorem subS_den (ρ : Env) (a b : SE) : (subS a b).den ρ = a.den ρ - b.den ρ := rfl
 
+/-- Base atom and accumulated constant offset. -/
 def base : SE → SE × BitVec 64
-  | .add a (.c v) => (a, v)
+  | .add a (.c v) => ((base a).1, (base a).2 + v)
   | .c v => (.c 0, v)
   | e => (e, 0)
 
-theorem base_den (ρ : Env) (e : SE) : e.den ρ = (base e).1.den ρ + (base e).2 := by
-  unfold base; split <;> simp [SE.den]
+theorem base_den (ρ : Env) : ∀ e : SE, e.den ρ = (base e).1.den ρ + (base e).2
+  | .add a (.c v) => by
+    show a.den ρ + v = (base a).1.den ρ + ((base a).2 + v)
+    rw [base_den ρ a, BitVec.add_assoc]
+  | .c v => by simp [base, SE.den]
+  | .r _ => by simp [base]
+  | .add _ (.r _) => by simp [base]
+  | .add _ (.add _ _) => by simp [base]
+  | .add _ (.sub _ _) => by simp [base]
+  | .add _ (.ld _ _) => by simp [base]
+  | .add _ (.ldD _ _) => by simp [base]
+  | .add _ (.alu _ _ _) => by simp [base]
+  | .sub _ _ => by simp [base]
+  | .ld _ _ => by simp [base]
+  | .ldD _ _ => by simp [base]
+  | .alu _ _ _ => by simp [base]
 
 /-! ## Symbolic registers -/
 
@@ -333,13 +434,14 @@ def lookupS (r : Nat) : List (Nat × SE) → SE
   | [] => .r r
   | (k, e) :: L => if k = r then e else lookupS r L
 
-def rdS (L : List (Nat × SE)) (r : Nat) : SE := if r = 0 then .c 0 else lookupS r L
+def rdS (L : List (Nat × SE)) (r : Nat) : SE :=
+  if r = 0 then .c 0 else if r = gp then .c gpV else lookupS r L
 
 def regsDen (ρ : Env) : List (Nat × SE) → Nat → BitVec 64
   | [] => ρ.R0
   | (k, e) :: L => upd (regsDen ρ L) k (e.den ρ)
 
-def rdR (R : Nat → BitVec 64) (r : Nat) : BitVec 64 := if r = 0 then 0 else R r
+def rdR (R : Nat → BitVec 64) (r : Nat) : BitVec 64 := if r = 0 then 0 else if r = gp then gpV else R r
 
 theorem lookupS_den (ρ : Env) (r : Nat) :
     ∀ L : List (Nat × SE), (lookupS r L).den ρ = regsDen ρ L r
@@ -354,17 +456,19 @@ theorem rdS_den (ρ : Env) (L : List (Nat × SE)) (r : Nat) :
     (rdS L r).den ρ = rdR (regsDen ρ L) r := by
   unfold rdS rdR; by_cases h : r = 0
   · simp [h, SE.den]
-  · simp only [h, if_false]; exact lookupS_den ρ r L
+  · simp only [h, if_false]
+    by_cases hg : r = gp
+    · simp [hg, SE.den]
+    · simp only [hg, if_false]; exact lookupS_den ρ r L
 
-theorem srcVal_pins {ks : List Nat} {R : Nat → BitVec 64} {r : Nat} (h : r = 0 ∨ r ∈ ks)
-    (hg : gp ∉ ks) : srcVal r (pinsOf ks R) = rdR R r := by
+theorem srcVal_pins {ks : List Nat} {R : Nat → BitVec 64} {r : Nat} (h : r = 0 ∨ r ∈ ks) :
+    srcVal r (pinsOf ks R) = rdR R r := by
   cases r with
   | zero => rfl
   | succ n =>
     rcases h with h | h
     · cases h
-    · have hne : n + 1 ≠ gp := fun e => hg (e ▸ h)
-      simp only [srcVal, lookupG_pinsOf h, if_neg hne, rdR, Option.getD_some]
+    · simp only [srcVal, lookupG_pinsOf h, rdR, Option.getD_some]
       rfl
 
 /-! ## Symbolic memory and store forwarding -/
@@ -382,6 +486,7 @@ inductive SOb where
   | ldD (e : SE) (w : Nat)
   | st (e : SE) (w : Nat)
   | disj (a : SE) (wa : Nat) (b : SE) (wb : Nat)
+  | al4 (e : SE)
   | decM (pc : BitVec 64) (w : BitVec 32)
   | decT (t : TInstr)
 
@@ -390,6 +495,7 @@ def SOb.den (ρ : Env) (S : Nat → Prop) (DA : List Nat) : SOb → Prop
   | .ldD e w => LdOK (e.den ρ).toNat w ∧ ∀ b ∈ accAddrs (e.den ρ).toNat w, b ∈ DA
   | .st e w => StOK (e.den ρ).toNat w ∧ ∀ b ∈ accAddrs (e.den ρ).toNat w, S b
   | .disj a wa b wb => (a.den ρ).toNat + wa ≤ (b.den ρ).toNat ∨ (b.den ρ).toNat + wb ≤ (a.den ρ).toNat
+  | .al4 e => (e.den ρ).toNat % 4 = 0
   | .decM pc w => DecM (mkLine pc w)
   | .decT t => DecT t
 
@@ -412,7 +518,7 @@ theorem sepC_sound {b c1 c2 : BitVec 64} {w1 w2 : Nat} (h : sepC c1 w1 c2 w2 = t
 def symLoad (k : MKind) (a : SE) : SMem → Option (SE × List SOb)
   | [] => some (.ld k a, [])
   | (sa, sw, sv) :: t =>
-    if a = sa ∧ k = .ld ∧ sw = 8 then some (sv, [])
+    if base a = base sa ∧ k = .ld ∧ sw = 8 then some (sv, [])
     else if (base a).1 = (base sa).1 then
       (if sepC (base a).2 (widthOfM k) (base sa).2 sw then symLoad k a t else none)
     else (symLoad k a t).map fun p => (p.1, .disj a (widthOfM k) sa sw :: p.2)
@@ -423,9 +529,11 @@ theorem symLoad_sound (ρ : Env) (S : Nat → Prop) (DA : List Nat) (k : MKind) 
   | [], e, obs, h, _ => by cases h; rfl
   | (sa, sw, sv) :: t, e, obs, h, hob => by
     unfold symLoad at h
-    by_cases h1 : a = sa ∧ k = .ld ∧ sw = 8
+    by_cases h1 : base a = base sa ∧ k = .ld ∧ sw = 8
     · rw [if_pos h1] at h; cases h
-      obtain ⟨rfl, rfl, rfl⟩ := h1
+      obtain ⟨hb, rfl, rfl⟩ := h1
+      show sv.den ρ = ldv .ld (writeLog (memDen ρ t) [((sa.den ρ).toNat, 8, sv.den ρ)]) (a.den ρ).toNat
+      rw [base_den ρ a, hb, ← base_den ρ sa]
       exact (ldv_store_hit _ _ _).symm
     · rw [if_neg h1] at h
       by_cases h2 : (base a).1 = (base sa).1
@@ -492,12 +600,35 @@ abbrev sext12 (i : BitVec 12) : BitVec 64 := sign_extend (m := 64) i
 
 def eaS (a : MInstr) (L : List (Nat × SE)) : SE := addC (rdS L a.rs1) (sext12 a.imm)
 
+/-- Static configuration: code image, code ranges, tracked registers, stop points, the
+address bases whose loads read the data view (`dataOf Dt DA`) instead of owned memory, and known
+data-view words `(kind, address, value)`. -/
+structure Cfg where
+  img : Nat → BitVec 8
+  rT : List (Nat × Nat)
+  rs : List Nat
+  stops : List (BitVec 64)
+  dbase : List SE
+  kv : List (MKind × SE × BitVec 64) := []
+
+/-- A load at a constant address inside the code ranges reads the image. -/
+def imgOK (C : Cfg) (v : BitVec 64) (w : Nat) : Bool :=
+  decide (LdOK v.toNat w) && (List.range w).all fun j => decide (InRanges C.rT (v.toNat + j))
+
+def kvFind (kv : List (MKind × SE × BitVec 64)) (k : MKind) (a : SE) : Option (BitVec 64) :=
+  (kv.find? fun e => decide (e.1 = k ∧ e.2.1 = a)).map (·.2.2)
+
 /-- Symbolic effect of a supported body line: new registers, new store list, obligations. -/
-def symBody (isD : SE → Bool) (a : MInstr) (L : List (Nat × SE)) (M : SMem) :
+def symBody (C : Cfg) (a : MInstr) (L : List (Nat × SE)) (M : SMem) :
     Option (List (Nat × SE) × SMem × List SOb) :=
   if isLoadK a.kind then
-    if isD (base (eaS a L)).1 then
-      some ((a.rd, .ldD a.kind (eaS a L)) :: L, M, [.ldD (eaS a L) (widthOfM a.kind)])
+    if hI : (match eaS a L with | .c v => imgOK C v (widthOfM a.kind) | _ => false) = true then
+      match eaS a L with
+      | .c v => some ((a.rd, .c (bytesVal a.kind (bytesAt C.img v.toNat (widthOfM a.kind)))) :: L, M, [])
+      | _ => none
+    else if decide ((base (eaS a L)).1 ∈ C.dbase) then
+      some ((a.rd, (kvFind C.kv a.kind (eaS a L)).elim (.ldD a.kind (eaS a L)) .c) :: L, M,
+        [.ldD (eaS a L) (widthOfM a.kind)])
     else
     (symLoad a.kind (eaS a L) M).map fun p =>
       ((a.rd, p.1) :: L, M, .ld (eaS a L) (widthOfM a.kind) :: p.2)
@@ -508,7 +639,9 @@ def symBody (isD : SE → Bool) (a : MInstr) (L : List (Nat × SE)) (M : SMem) :
     | .addi => some ((a.rd, eaS a L) :: L, M, [])
     | .add => some ((a.rd, addS (rdS L a.rs1) (rdS L a.rs2)) :: L, M, [])
     | .sub => some ((a.rd, subS (rdS L a.rs1) (rdS L a.rs2)) :: L, M, [])
-    | _ => some ((a.rd, .alu a (rdS L a.rs1) (rdS L a.rs2)) :: L, M, [])
+    | _ => some ((a.rd, match rdS L a.rs1, rdS L a.rs2 with
+        | .c x, .c y => .c (aluVal a x y)
+        | x, y => .alu a x y) :: L, M, [])
 
 /-- The decidable per-line side conditions of `swpx_line`. -/
 structure LineOK (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (rs : List Nat) (a : MInstr) :
@@ -517,14 +650,15 @@ structure LineOK (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (rs : List Na
   keys : KeysOK (lineKs a)
   wr : ∀ x ∈ wrChain [⟨[a], none⟩], x ∈ lineKs a
   pins : Pins4OK img rT a.pc.toNat a.b0 a.b1 a.b2 a.b3
-  regs : ∀ x ∈ lineKs a, x ∈ rs ∧ x ≠ VsaIris.PC
-  nogp : gp ∉ lineKs a
+  regs : ∀ x ∈ lineKs a, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC)
+  nogp : ∀ x ∈ wrChain [⟨[a], none⟩], x ≠ gp
 
 def lineChk (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (rs : List Nat) (a : MInstr) : Bool :=
   decide (ChainOK a.pc (lineKs a) [⟨[a], none⟩]) && decide (KeysOK (lineKs a)) &&
   decide (∀ x ∈ wrChain [⟨[a], none⟩], x ∈ lineKs a) &&
   decide (Pins4OK img rT a.pc.toNat a.b0 a.b1 a.b2 a.b3) &&
-  decide (∀ x ∈ lineKs a, x ∈ rs ∧ x ≠ VsaIris.PC) && decide (gp ∉ lineKs a)
+  decide (∀ x ∈ lineKs a, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC)) &&
+  decide (∀ x ∈ wrChain [⟨[a], none⟩], x ≠ gp)
 
 theorem LineOK.of_chk {img : Nat → BitVec 8} {rT : List (Nat × Nat)} {rs : List Nat} {a : MInstr}
     (h : lineChk img rT rs a = true) : LineOK img rT rs a := by
@@ -533,10 +667,10 @@ theorem LineOK.of_chk {img : Nat → BitVec 8} {rT : List (Nat × Nat)} {rs : Li
   exact ⟨h1, h2, h3, h4, h5, h6⟩
 
 theorem eaddrM_eq (ρ : Env) {a : MInstr} {L : List (Nat × SE)} {ks : List Nat}
-    (h1 : a.rs1 = 0 ∨ a.rs1 ∈ ks) (hg : gp ∉ ks) :
+    (h1 : a.rs1 = 0 ∨ a.rs1 ∈ ks) :
     eaddrM a (pinsOf ks (regsDen ρ L)) = (eaS a L).den ρ := by
   unfold eaddrM eaS
-  rw [addC_den, rdS_den, srcVal_pins h1 hg]
+  rw [addC_den, rdS_den, srcVal_pins h1]
 
 theorem wvalM_load {a : MInstr} (h : isLoadK a.kind = true) (L : GRegs) (l0 : List (BitVec 8)) :
     wvalM a L l0 = bytesVal a.kind l0 := by
@@ -546,6 +680,27 @@ theorem wrChain_nonstore {a : MInstr} (h : isStoreK a.kind = false) :
     wrChain [⟨[a], none⟩] = [a.rd] := by
   show wrRegsM [a] ++ [] = _
   unfold wrRegsM; revert h; cases a.kind <;> intro h <;> first | rfl | cases h
+
+theorem lpins2_fn {m : Mem} {f : Nat → BitVec 8} {a : Nat}
+    (h : ∀ b ∈ accAddrs a 2, (m[b]?).getD 0 = f b) :
+    (m[a]?).getD 0 = (bytesAt f a 2).getD 0 0#8 ∧ (m[a + 1]?).getD 0 = (bytesAt f a 2).getD 1 0#8 := by
+  have h0 := (h _ (mem_accAddrs (j := 0) (by omega))).trans (bytesAt_getD f a (n := 2) (by omega)).symm
+  exact ⟨by simpa using h0, (h _ (mem_accAddrs (j := 1) (by omega))).trans
+    (bytesAt_getD f a (n := 2) (by omega)).symm⟩
+
+theorem memFacts_loadF {a : MInstr} (h : isLoadK a.kind = true) {m : Mem} {L : GRegs}
+    {f : Nat → BitVec 8}
+    (hea : LdOK (eaddrM a L).toNat (widthOfM a.kind))
+    (hp : ∀ b ∈ accAddrs (eaddrM a L).toNat (widthOfM a.kind), (m[b]?).getD 0 = f b) :
+    MemFacts m L ((bytesAt f (eaddrM a L).toNat (widthOfM a.kind) :: []).headD []) a := by
+  unfold MemFacts
+  revert h hea hp
+  cases a.kind <;> intro h hea hp <;> first
+    | exact And.intro hea (lpins4_fn hp)
+    | exact And.intro hea (lpins8_fn hp)
+    | exact And.intro hea (lpins1_fn hp)
+    | exact And.intro hea (lpins2_fn hp)
+    | cases h
 
 theorem memFacts_load {a : MInstr} (h : isLoadK a.kind = true) {m Mt : Mem} {L : GRegs}
     (hea : LdOK (eaddrM a L).toNat (widthOfM a.kind))
@@ -579,22 +734,23 @@ theorem lineR_nonstore {a : MInstr} (h : isStoreK a.kind = false) (L : GRegs) (l
   unfold lineR; rw [h]; rfl
 
 theorem wvalM_alu {a : MInstr} (h : isLoadK a.kind = false) (L : GRegs) (l0 : List (BitVec 8)) :
-    wvalM a L l0 = wvalM { a with rs1 := 1, rs2 := 2 } [(1, srcVal a.rs1 L), (2, srcVal a.rs2 L)] [] := by
+    wvalM a L l0 = aluVal a (srcVal a.rs1 L) (srcVal a.rs2 L) := by
   obtain ⟨pc, w, b0, b1, b2, b3, k, rd, rs1, rs2, imm⟩ := a
   cases k <;> first | rfl | cases h
 
 theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} {DA : List Nat}
     (hc : CodeAt T img rT) (hlive : ∀ p ∈ T, live p.1) (hPC : VsaIris.PC ∈ rs) (hgprs : gp ∉ rs)
-    (ρ : Env) (hD : ρ.D0 = Dt) (isD : SE → Bool)
+    (ρ : Env) (hD : ρ.D0 = Dt) (C : Cfg) (hCi : C.img = img) (hCr : C.rT = rT)
+    (hkv : ∀ e ∈ C.kv, ldv e.1 ρ.D0 (e.2.1.den ρ).toNat = e.2.2)
     (a : MInstr) (L L' : List (Nat × SE)) (M M' : SMem) (obs : List SOb)
-    (hs : symBody isD a L M = some (L', M', obs)) (hok : LineOK img rT rs a) (hdec : DecM a)
+    (hs : symBody C a L M = some (L', M', obs)) (hok : LineOK img rT rs a) (hdec : DecM a)
     (hob : ObsOK ρ S DA obs)
     (hk : SWP live (T ++ dataOf Dt DA) rs S Q (BitVec.addInt a.pc 4) (regsDen ρ L') (memDen ρ M')) :
     SWP live (T ++ dataOf Dt DA) rs S Q a.pc (regsDen ρ L) (memDen ρ M) := by
   subst hD
   have h1 := rs1_mem a
   have h2 := rs2_mem a
-  have hea := eaddrM_eq ρ (L := L) h1 hok.nogp
+  have hea := eaddrM_eq ρ (L := L) h1
   have hRo : ∀ l0, isStoreK a.kind = false → ∀ x ∈ rs, x ≠ VsaIris.PC → x ∉ lineKs a →
       lineR a (pinsOf (lineKs a) (regsDen ρ L)) l0 (regsDen ρ L) x = regsDen ρ L x := by
     intro l0 hst x _ _ hx
@@ -605,7 +761,31 @@ theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} 
   by_cases hl : isLoadK a.kind = true
   · rw [if_pos hl] at hs
     have hst := not_store_of_load hl
-    by_cases hdsp : isD (base (eaS a L)).1 = true
+    by_cases hI : (match eaS a L with | .c v => imgOK C v (widthOfM a.kind) | _ => false) = true
+    · -- load from the code image at a constant address
+      rw [dif_pos hI] at hs
+      obtain ⟨v, hE⟩ : ∃ v, eaS a L = .c v := by
+        revert hI; cases eaS a L <;> simp
+      rw [hE] at hs hI hea
+      simp only [Option.some.injEq, Prod.mk.injEq] at hs
+      obtain ⟨rfl, rfl, rfl⟩ := hs
+      · simp only [imgOK, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hI
+        have hv : (eaddrM a (pinsOf (lineKs a) (regsDen ρ L))).toNat = v.toNat := by
+          rw [hea]; rfl
+        refine swpx_line img rT hc a (lineKs a)
+          [bytesAt img (eaddrM a (pinsOf (lineKs a) (regsDen ρ L))).toNat (widthOfM a.kind)]
+          [] [] hok.wf hok.keys hok.wr (fun b _ => by rw [hst]; trivial) hlive hok.pins hdec
+          (fun m hT _ _ => memFacts_loadF hl (by rw [hv]; exact hI.1) (fun b hb => by
+            rw [hv] at hb
+            obtain ⟨h1, h2⟩ := of_mem_accAddrs hb
+            have hr := hI.2 (b - v.toNat) (List.mem_range.2 (by omega))
+            rw [show v.toNat + (b - v.toNat) = b by omega, hCr] at hr
+            rw [hc m hT b hr]; rfl))
+          hPC hok.regs hok.nogp hgprs (fun _ h => by cases h) (fun _ h => by cases h) (hRo _ hst) ?_
+        rw [lineR_nonstore hst, wvalM_load hl, hst, hv, ← hCi]
+        exact hk
+    rw [dif_neg hI] at hs
+    by_cases hdsp : decide ((base (eaS a L)).1 ∈ C.dbase) = true
     · -- load from the data view
       rw [if_pos hdsp] at hs; cases hs
       have hob0 := hob _ List.mem_cons_self
@@ -614,9 +794,23 @@ theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} 
       refine swpx_line img rT hc a (lineKs a)
         [bytesAt (imgM ρ.D0) (eaddrM a (pinsOf (lineKs a) (regsDen ρ L))).toNat (widthOfM a.kind)]
         [] [] hok.wf hok.keys hok.wr (fun b _ => by rw [hst]; trivial) hlive hok.pins hdec
-        (fun m hDm _ => memFacts_load hl hob0.1 (fun b hb => dataReads_view hDm b (hob0.2 b hb)))
+        (fun m _ hDm _ => memFacts_load hl hob0.1 (fun b hb => dataReads_view hDm b (hob0.2 b hb)))
         hPC hok.regs hok.nogp hgprs (fun _ h => by cases h) (fun _ h => by cases h) (hRo _ hst) ?_
       rw [lineR_nonstore hst, wvalM_load hl, hst, hea]
+      show SWP _ _ _ _ _ _ (upd _ _ (ldv a.kind ρ.D0 ((eaS a L).den ρ).toNat)) (writeLog (memDen ρ M) [])
+      have hval : ((kvFind C.kv a.kind (eaS a L)).elim (.ldD a.kind (eaS a L)) SE.c).den ρ =
+          ldv a.kind ρ.D0 ((eaS a L).den ρ).toNat := by
+        cases hf : kvFind C.kv a.kind (eaS a L) with
+        | none => rfl
+        | some v =>
+          unfold kvFind at hf
+          obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.1 hf
+          have hp := List.find?_some he
+          simp only [decide_eq_true_eq] at hp
+          have := hkv e (List.mem_of_find?_eq_some he)
+          rw [hp.1, hp.2] at this
+          exact this.symm
+      rw [← hval]
       exact hk
     · -- load from the owned memory, with store forwarding
       rw [if_neg hdsp] at hs
@@ -632,7 +826,7 @@ theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} 
             (widthOfM a.kind)]
           (accAddrs (eaddrM a (pinsOf (lineKs a) (regsDen ρ L))).toNat (widthOfM a.kind)) []
           hok.wf hok.keys hok.wr (fun b _ => by rw [hst]; trivial) hlive hok.pins hdec
-          (fun m _ hp => memFacts_load hl hob0.1 hp) hPC hok.regs hok.nogp hgprs hob0.2
+          (fun m _ _ hp => memFacts_load hl hob0.1 hp) hPC hok.regs hok.nogp hgprs hob0.2
           (fun _ h => by cases h) (hRo _ hst) ?_
         rw [lineR_nonstore hst, wvalM_load hl, hst]
         have hv := symLoad_sound ρ S DA a.kind (eaS a L) M p.1 p.2 hsl
@@ -652,11 +846,11 @@ theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} 
       rw [← hea] at hob0
       have hw : wentryM a (pinsOf (lineKs a) (regsDen ρ L)) =
           (((eaS a L).den ρ).toNat, widthOfM a.kind, (rdS L a.rs2).den ρ) := by
-        unfold wentryM; rw [hea, rdS_den, srcVal_pins h2 hok.nogp]
+        unfold wentryM; rw [hea, rdS_den, srcVal_pins h2]
       refine swpx_line img rT hc a (lineKs a) [] []
         (accAddrs (eaddrM a (pinsOf (lineKs a) (regsDen ρ L))).toNat (widthOfM a.kind))
         hok.wf hok.keys hok.wr ?_ hlive hok.pins hdec
-        (fun m _ _ => memFacts_store hsto hob0.1) hPC hok.regs hok.nogp hgprs
+        (fun m _ _ _ => memFacts_store hsto hob0.1) hPC hok.regs hok.nogp hgprs
         (fun _ h => by cases h) hob0.2 (fun _ _ _ _ => by unfold lineR; rw [hsto]; rfl) ?_
       · intro b hb
         rw [hsto]
@@ -677,7 +871,7 @@ theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} 
         refine swpx_line img rT hc a (lineKs a) [] [] [] hok.wf hok.keys hok.wr
           (fun b _ => by rw [hst]; trivial) hlive hok.pins hdec ?_ hPC hok.regs hok.nogp hgprs
           (fun _ h => by cases h) (fun _ h => by cases h) (hRo _ hst) ?_
-        · intro m _ _
+        · intro m _ _ _
           unfold MemFacts; revert hl' hst; cases a.kind <;> intro hl' hst <;>
             first | trivial | (cases hl'; done) | (cases hst; done)
         · rw [lineR_nonstore hst, hst]
@@ -685,13 +879,13 @@ theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} 
           rw [hv]; exact hk
       have hsrc : ∀ r, (r = 0 ∨ r ∈ lineKs a) →
           srcVal r (pinsOf (lineKs a) (regsDen ρ L)) = (rdS L r).den ρ := fun r hr => by
-        rw [rdS_den, srcVal_pins hr hok.nogp]
+        rw [rdS_den, srcVal_pins hr]
       split at hs
       · rename_i hk'
         cases hs
         refine hval _ rfl ?_
         unfold wvalM; rw [hk']
-        rw [← eaddrM_eq ρ h1 hok.nogp]; rfl
+        rw [← eaddrM_eq ρ h1]; rfl
       · rename_i hk'
         cases hs
         refine hval _ rfl ?_
@@ -705,7 +899,9 @@ theorem body_sound (img : Nat → BitVec 8) (rT : List (Nat × Nat)) {Dt : Mem} 
       · cases hs
         refine hval _ rfl ?_
         rw [wvalM_alu hl', hsrc _ h1, hsrc _ h2]
-        rfl
+        split
+        · rename_i x y hx hy; rw [hx, hy]; rfl
+        · rfl
 
 end body
 
@@ -745,20 +941,19 @@ structure BrOK (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (rs : List Nat)
   wff : ChainOK f.pc ks [⟨[], some f⟩]
   keys : KeysOK ks
   pins : Pins4OK img rT t.pc.toNat t.b0 t.b1 t.b2 t.b3
-  regs : ∀ x ∈ ks, x ∈ rs ∧ x ≠ VsaIris.PC
-  nogp : gp ∉ ks
+  regs : ∀ x ∈ ks, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC)
 
 def brChk (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (rs : List Nat) (t f : TInstr)
     (ks : List Nat) : Bool :=
   decide (ChainOK t.pc ks [⟨[], some t⟩]) && decide (ChainOK f.pc ks [⟨[], some f⟩]) &&
   decide (KeysOK ks) && decide (Pins4OK img rT t.pc.toNat t.b0 t.b1 t.b2 t.b3) &&
-  decide (∀ x ∈ ks, x ∈ rs ∧ x ≠ VsaIris.PC) && decide (gp ∉ ks)
+  decide (∀ x ∈ ks, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC))
 
 theorem BrOK.of_chk {img rT rs t f ks} (h : brChk img rT rs t f ks = true) :
     BrOK img rT rs t f ks := by
   simp only [brChk, Bool.and_eq_true, decide_eq_true_eq] at h
-  obtain ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩ := h
-  exact ⟨h1, h2, h3, h4, h5, h6⟩
+  obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ := h
+  exact ⟨h1, h2, h3, h4, h5⟩
 
 def jChk (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (t : TInstr) : Bool :=
   decide (ChainOK t.pc [] [⟨[], some t⟩]) && decide (Pins4OK img rT t.pc.toNat t.b0 t.b1 t.b2 t.b3)
@@ -773,21 +968,15 @@ structure SS where
 
 inductive Tree where
   | leaf (s : SS)
-  | br (op : bop) (a b : SE) (t f : Tree)
+  | br (pc : BitVec 64) (op : bop) (a b : SE) (t f : Tree)
+  | jr (s : SS) (tgt : SE)
 
 inductive StepR where
   | next (s : SS)
   | br (op : bop) (a b : SE) (t f : SS)
+  | jr (s : SS) (tgt : SE)
   | stop
 
-/-- Static configuration: code image, code ranges, tracked registers, stop points, and the
-address bases whose loads read the data view (`dataOf Dt DA`) instead of owned memory. -/
-structure Cfg where
-  img : Nat → BitVec 8
-  rT : List (Nat × Nat)
-  rs : List Nat
-  stops : List (BitVec 64)
-  dbase : List SE
 
 /-- A branch whose operands are both constants is decided during execution. -/
 def brNext (op : bop) (x y : SE) (t f : SS) : StepR :=
@@ -809,11 +998,54 @@ theorem brNext_br {op op' : bop} {x y a b : SE} {t f t' f' : SS}
   · cases h
   · cases h; exact ⟨rfl, rfl, rfl, rfl, rfl⟩
 
+/-- `jalr x0, 0(rs1)`. -/
+def decJR (w : BitVec 32) : Option Nat :=
+  if (w.extractLsb' 0 7).toNat = 0x67 ∧ (w.extractLsb' 7 5).toNat = 0 ∧
+      (w.extractLsb' 12 3).toNat = 0 ∧ (w.extractLsb' 20 12).toNat = 0 then
+    some (w.extractLsb' 15 5).toNat
+  else none
+
+def jrChk (img : Nat → BitVec 8) (rT : List (Nat × Nat)) (rs : List Nat) (t : TInstr)
+    (ks : List Nat) : Bool :=
+  decide (ChainOK t.pc ks [⟨[], some t⟩]) && decide (KeysOK ks) &&
+  decide (Pins4OK img rT t.pc.toNat t.b0 t.b1 t.b2 t.b3) &&
+  decide (∀ x ∈ ks, x = gp ∨ (x ∈ rs ∧ x ≠ VsaIris.PC))
+
+/-- An indirect jump: a constant target continues the run, a symbolic one ends it. -/
+def jrStep (C : Cfg) (s : SS) (w : BitVec 32) : StepR :=
+  match decJR w with
+  | some r1 =>
+    if jrChk C.img C.rT C.rs (mkT s.pc w .jr r1 0 0 0) (nzd [r1]) then
+      match rdS s.regs r1 with
+      | .c v => .next ⟨v, s.regs, s.mem, .al4 (.c v) :: .decT (mkT s.pc w .jr r1 0 0 0) :: s.obs⟩
+      | x => .jr ⟨s.pc, s.regs, s.mem, .al4 x :: .decT (mkT s.pc w .jr r1 0 0 0) :: s.obs⟩ x
+    else .stop
+  | none => .stop
+
+theorem jrStep_cases {C : Cfg} {s : SS} {w : BitVec 32} {r : StepR} (h : jrStep C s w = r) :
+    r = .stop ∨ ∃ r1, decJR w = some r1 ∧
+      jrChk C.img C.rT C.rs (mkT s.pc w .jr r1 0 0 0) (nzd [r1]) = true ∧
+      ((∃ v, rdS s.regs r1 = .c v ∧ r = .next ⟨v, s.regs, s.mem,
+          .al4 (.c v) :: .decT (mkT s.pc w .jr r1 0 0 0) :: s.obs⟩) ∨
+       r = .jr ⟨s.pc, s.regs, s.mem,
+          .al4 (rdS s.regs r1) :: .decT (mkT s.pc w .jr r1 0 0 0) :: s.obs⟩ (rdS s.regs r1)) := by
+  unfold jrStep at h
+  split at h
+  · rename_i r1 hd
+    split at h
+    · rename_i hc
+      refine .inr ⟨r1, hd, hc, ?_⟩
+      split at h
+      · rename_i v hv; exact .inl ⟨v, hv, h.symm⟩
+      · rename_i x hx; rw [← h]; exact .inr rfl
+    · exact .inl h.symm
+  · exact .inl h.symm
+
 def symStep (C : Cfg) (s : SS) : StepR :=
   let w := wordAt C.img s.pc.toNat
   if (decodeM w).isSome then
     let a := mkLine s.pc w
-    match symBody (fun b => decide (b ∈ C.dbase)) a s.regs s.mem with
+    match symBody C a s.regs s.mem with
     | some (L', M', o) =>
       if lineChk C.img C.rT C.rs a then
         .next ⟨BitVec.addInt s.pc 4, L', M', o ++ .decM s.pc w :: s.obs⟩
@@ -833,7 +1065,7 @@ def symStep (C : Cfg) (s : SS) : StepR :=
       | some i21 =>
         let t := mkT s.pc w .j 0 0 0 i21
         if jChk C.img C.rT t then .next ⟨tgtPC0 t, s.regs, s.mem, .decT t :: s.obs⟩ else .stop
-      | none => .stop
+      | none => jrStep C s w
 
 def symRun (C : Cfg) : Nat → SS → Tree
   | 0, s => .leaf s
@@ -841,15 +1073,17 @@ def symRun (C : Cfg) : Nat → SS → Tree
     if s.pc ∈ C.stops then .leaf s else
     match symStep C s with
     | .next s' => symRun C n s'
-    | .br op a b t f => .br op a b (symRun C n t) (symRun C n f)
+    | .br op a b t f => .br s.pc op a b (symRun C n t) (symRun C n f)
+    | .jr s' x => .jr s' x
     | .stop => .leaf s
 
 /-- The residual weakest precondition: each live leaf's obligations and continuation. -/
 def Tree.WP (ρ : Env) (S : Nat → Prop) (DA : List Nat)
     (K : BitVec 64 → (Nat → BitVec 64) → Mem → Prop) : Tree → Prop
   | .leaf s => ObsOK ρ S DA s.obs ∧ K s.pc (regsDen ρ s.regs) (memDen ρ s.mem)
-  | .br op a b t f => (guardB op (a.den ρ) (b.den ρ) = true → t.WP ρ S DA K) ∧
+  | .br _ op a b t f => (guardB op (a.den ρ) (b.den ρ) = true → t.WP ρ S DA K) ∧
       (guardB op (a.den ρ) (b.den ρ) = false → f.WP ρ S DA K)
+  | .jr s x => ObsOK ρ S DA s.obs ∧ K (x.den ρ) (regsDen ρ s.regs) (memDen ρ s.mem)
 
 /-! ## Soundness -/
 
@@ -873,7 +1107,10 @@ theorem symStep_obs (C : Cfg) (s : SS) {s' : SS} (h : symStep C s = .next s') :
       · split at h
         · cases h; simp [ho]
         · cases h
-      · cases h
+      · rcases jrStep_cases h with h | ⟨r1, -, -, ⟨v, -, h⟩ | h⟩
+        · cases h
+        · cases h; exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ ho)
+        · cases h
 
 theorem symStep_br_obs (C : Cfg) (s : SS) {op a b t f}
     (h : symStep C s = .br op a b t f) : (∀ o ∈ s.obs, o ∈ t.obs) ∧ (∀ o ∈ s.obs, o ∈ f.obs) := by
@@ -890,7 +1127,27 @@ theorem symStep_br_obs (C : Cfg) (s : SS) {op a b t f}
       · cases h
     · split at h
       · split at h <;> cases h
+      · rcases jrStep_cases h with h | ⟨r1, -, -, ⟨v, -, h⟩ | h⟩ <;> cases h
+
+theorem symStep_jr_obs (C : Cfg) (s : SS) {s' : SS} {x : SE}
+    (h : symStep C s = .jr s' x) : ∀ o ∈ s.obs, o ∈ s'.obs := by
+  intro o ho
+  unfold symStep at h
+  simp only at h
+  split at h
+  · split at h
+    · split at h <;> cases h
+    · cases h
+  · split at h
+    · split at h
+      · unfold brNext at h; split at h <;> cases h
       · cases h
+    · split at h
+      · split at h <;> cases h
+      · rcases jrStep_cases h with h | ⟨r1, -, -, ⟨v, -, h⟩ | h⟩
+        · cases h
+        · cases h
+        · cases h; exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ ho)
 
 theorem symRun_obs (C : Cfg) (ρ : Env) (S : Nat → Prop) (DA : List Nat) (K) :
     ∀ (n : Nat) (s : SS), (symRun C n s).WP ρ S DA K → ObsOK ρ S DA s.obs
@@ -906,6 +1163,10 @@ theorem symRun_obs (C : Cfg) (ρ : Env) (S : Nat → Prop) (DA : List Nat) (K) :
         rw [hst] at h
         intro o ho
         exact symRun_obs C ρ S DA K n s' h o (symStep_obs C s hst o ho)
+      | jr s' x =>
+        rw [hst] at h
+        intro o ho
+        exact h.1 o (symStep_jr_obs C s hst o ho)
       | br op a b t f =>
         rw [hst] at h
         obtain ⟨ht, hf⟩ := symStep_br_obs C s hst
@@ -938,18 +1199,36 @@ theorem br_sound (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T, live
   · rw [hg] at hk
     refine swpx_br C.img C.rT hc
       (mkT s.pc (wordAt C.img s.pc.toNat) (.br op false) r1 r2 i13 0) op false rfl
-      (nzd [r1, r2]) hok.wff hok.keys hlive hok.pins hdec ?_ hPC hok.regs hok.nogp hgprs hk
+      (nzd [r1, r2]) hok.wff hok.keys hlive hok.pins hdec ?_ hPC hok.regs hgprs hk
     show guardB op (srcVal r1 _) (srcVal r2 _) = false
-    rw [srcVal_pins h1 hok.nogp, srcVal_pins h2 hok.nogp, ← rdS_den, ← rdS_den]; exact hg
+    rw [srcVal_pins h1, srcVal_pins h2, ← rdS_den, ← rdS_den]; exact hg
   · rw [hg] at hk
     refine swpx_br C.img C.rT hc
       (mkT s.pc (wordAt C.img s.pc.toNat) (.br op true) r1 r2 i13 0) op true rfl
-      (nzd [r1, r2]) hok.wft hok.keys hlive hok.pins hdec ?_ hPC hok.regs hok.nogp hgprs hk
+      (nzd [r1, r2]) hok.wft hok.keys hlive hok.pins hdec ?_ hPC hok.regs hgprs hk
     show guardB op (srcVal r1 _) (srcVal r2 _) = true
-    rw [srcVal_pins h1 hok.nogp, srcVal_pins h2 hok.nogp, ← rdS_den, ← rdS_den]; exact hg
+    rw [srcVal_pins h1, srcVal_pins h2, ← rdS_den, ← rdS_den]; exact hg
+
+theorem jr_sound (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T, live p.1)
+    (hPC : VsaIris.PC ∈ C.rs) (hgprs : gp ∉ C.rs) (ρ : Env) (s : SS) (w : BitVec 32) (r1 : Nat)
+    (hchk : jrChk C.img C.rT C.rs (mkT s.pc w .jr r1 0 0 0) (nzd [r1]) = true)
+    (hdec : DecT (mkT s.pc w .jr r1 0 0 0))
+    (hal : ((rdS s.regs r1).den ρ).toNat % 4 = 0)
+    (hk : SWP live (T ++ dataOf Dt DA) C.rs S Q ((rdS s.regs r1).den ρ)
+      (regsDen ρ s.regs) (memDen ρ s.mem)) :
+    SWP live (T ++ dataOf Dt DA) C.rs S Q s.pc (regsDen ρ s.regs) (memDen ρ s.mem) := by
+  simp only [jrChk, Bool.and_eq_true, decide_eq_true_eq] at hchk
+  obtain ⟨⟨⟨hwf, hkeys⟩, hpins⟩, hregs⟩ := hchk
+  have h1 : r1 = 0 ∨ r1 ∈ nzd [r1] := mem_nzd (by simp)
+  have hsv : srcVal r1 (pinsOf (nzd [r1]) (regsDen ρ s.regs)) = (rdS s.regs r1).den ρ := by
+    rw [rdS_den, srcVal_pins h1]
+  exact swpx_jr C.img C.rT hc (mkT s.pc w .jr r1 0 0 0) rfl rfl (nzd [r1]) hwf hkeys hlive hpins
+    hdec hPC hregs hgprs (by show (srcVal r1 _).toNat % 4 = 0; rw [hsv]; exact hal)
+    (by show SWP _ _ _ _ _ (srcVal r1 _) _ _; rw [hsv]; exact hk)
 
 theorem symStep_sound (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T, live p.1)
-    (hPC : VsaIris.PC ∈ C.rs) (hgprs : gp ∉ C.rs) (ρ : Env) (hD : ρ.D0 = Dt) (s : SS) :
+    (hPC : VsaIris.PC ∈ C.rs) (hgprs : gp ∉ C.rs) (ρ : Env) (hD : ρ.D0 = Dt)
+    (hkv : ∀ e ∈ C.kv, ldv e.1 ρ.D0 (e.2.1.den ρ).toNat = e.2.2) (s : SS) :
     (∀ s', symStep C s = .next s' → ObsOK ρ S DA s'.obs →
       SWP live (T ++ dataOf Dt DA) C.rs S Q s'.pc (regsDen ρ s'.regs) (memDen ρ s'.mem) →
       SWP live (T ++ dataOf Dt DA) C.rs S Q s.pc (regsDen ρ s.regs) (memDen ρ s.mem)) ∧
@@ -958,8 +1237,11 @@ theorem symStep_sound (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T,
         SWP live (T ++ dataOf Dt DA) C.rs S Q t.pc (regsDen ρ t.regs) (memDen ρ t.mem)) →
       (guardB op (a.den ρ) (b.den ρ) = false → ObsOK ρ S DA f.obs ∧
         SWP live (T ++ dataOf Dt DA) C.rs S Q f.pc (regsDen ρ f.regs) (memDen ρ f.mem)) →
+      SWP live (T ++ dataOf Dt DA) C.rs S Q s.pc (regsDen ρ s.regs) (memDen ρ s.mem)) ∧
+    (∀ s' x, symStep C s = .jr s' x → ObsOK ρ S DA s'.obs →
+      SWP live (T ++ dataOf Dt DA) C.rs S Q (x.den ρ) (regsDen ρ s'.regs) (memDen ρ s'.mem) →
       SWP live (T ++ dataOf Dt DA) C.rs S Q s.pc (regsDen ρ s.regs) (memDen ρ s.mem)) := by
-  refine ⟨fun s' h hob hk => ?_, fun op a b t f h ht hf => ?_⟩
+  refine ⟨fun s' h hob hk => ?_, fun op a b t f h ht hf => ?_, fun s' x h hob hk => ?_⟩
   · unfold symStep at h
     simp only at h
     split at h
@@ -969,7 +1251,7 @@ theorem symStep_sound (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T,
         · rename_i hchk
           cases h
           have hp := (mkLine_fields s.pc (wordAt C.img s.pc.toNat)).1
-          have hb := body_sound (Q := Q) C.img C.rT hc hlive hPC hgprs ρ hD _ _ s.regs L' s.mem M' o
+          have hb := body_sound (Q := Q) C.img C.rT hc hlive hPC hgprs ρ hD C rfl rfl hkv _ s.regs L' s.mem M' o
             hsb (LineOK.of_chk hchk)
             (hob _ (List.mem_append_right _ List.mem_cons_self))
             (fun x hx => hob x (List.mem_append_left _ hx))
@@ -995,7 +1277,14 @@ theorem symStep_sound (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T,
             exact swpx_j C.img C.rT hc (mkT s.pc (wordAt C.img s.pc.toNat) .j 0 0 0 i21) rfl
               hchk.1 hlive hchk.2 (hob _ List.mem_cons_self) hPC hgprs hk
           · cases h
-        · cases h
+        · rcases jrStep_cases h with h | ⟨r1, -, hchk, ⟨v, hv, h⟩ | h⟩
+          · cases h
+          · cases h
+            refine jr_sound C hc hlive hPC hgprs ρ s _ r1 hchk (hob _ (List.mem_cons_of_mem _
+              List.mem_cons_self)) ?_ ?_
+            · rw [hv]; exact hob _ List.mem_cons_self
+            · rw [hv]; exact hk
+          · cases h
   · unfold symStep at h
     simp only at h
     split at h
@@ -1017,17 +1306,36 @@ theorem symStep_sound (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T,
         · cases h
       · split at h
         · split at h <;> cases h
+        · rcases jrStep_cases h with h | ⟨r1, -, -, ⟨v, -, h⟩ | h⟩ <;> cases h
+  · unfold symStep at h
+    simp only at h
+    split at h
+    · split at h
+      · split at h <;> cases h
+      · cases h
+    · split at h
+      · split at h
+        · unfold brNext at h; split at h <;> cases h
         · cases h
+      · split at h
+        · split at h <;> cases h
+        · rcases jrStep_cases h with h | ⟨r1, -, hchk, ⟨v, -, h⟩ | h⟩
+          · cases h
+          · cases h
+          · cases h
+            exact jr_sound C hc hlive hPC hgprs ρ s _ r1 hchk
+              (hob _ (List.mem_cons_of_mem _ List.mem_cons_self)) (hob _ List.mem_cons_self) hk
 
 /-- **Soundness of the executor against the real `SWP`.** -/
 theorem symRun_swp (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T, live p.1)
-    (hPC : VsaIris.PC ∈ C.rs) (hgprs : gp ∉ C.rs) (ρ : Env) (hD : ρ.D0 = Dt) :
+    (hPC : VsaIris.PC ∈ C.rs) (hgprs : gp ∉ C.rs) (ρ : Env) (hD : ρ.D0 = Dt)
+    (hkv : ∀ e ∈ C.kv, ldv e.1 ρ.D0 (e.2.1.den ρ).toNat = e.2.2) :
     ∀ (n : Nat) (s : SS),
       (symRun C n s).WP ρ S DA (fun pc R M => SWP live (T ++ dataOf Dt DA) C.rs S Q pc R M) →
       SWP live (T ++ dataOf Dt DA) C.rs S Q s.pc (regsDen ρ s.regs) (memDen ρ s.mem)
   | 0, s, h => h.2
   | n + 1, s, h => by
-    have hsnd := symStep_sound (S := S) (DA := DA) (Q := Q) C hc hlive hPC hgprs ρ hD s
+    have hsnd := symStep_sound (S := S) (DA := DA) (Q := Q) C hc hlive hPC hgprs ρ hD hkv s
     unfold symRun at h
     by_cases hs : s.pc ∈ C.stops
     · rw [if_pos hs] at h; exact h.2
@@ -1037,23 +1345,38 @@ theorem symRun_swp (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T, li
       | next s' =>
         rw [hst] at h
         exact hsnd.1 s' hst (symRun_obs C ρ S DA _ n s' h)
-          (symRun_swp C hc hlive hPC hgprs ρ hD n s' h)
+          (symRun_swp C hc hlive hPC hgprs ρ hD hkv n s' h)
+      | jr s' x =>
+        rw [hst] at h
+        exact hsnd.2.2 s' x hst h.1 h.2
       | br op a b t f =>
         rw [hst] at h
-        exact hsnd.2 op a b t f hst
+        exact hsnd.2.1 op a b t f hst
           (fun hg => ⟨symRun_obs C ρ S DA _ n t (h.1 hg),
-            symRun_swp C hc hlive hPC hgprs ρ hD n t (h.1 hg)⟩)
+            symRun_swp C hc hlive hPC hgprs ρ hD hkv n t (h.1 hg)⟩)
           (fun hg => ⟨symRun_obs C ρ S DA _ n f (h.2 hg),
-            symRun_swp C hc hlive hPC hgprs ρ hD n f (h.2 hg)⟩)
+            symRun_swp C hc hlive hPC hgprs ρ hD hkv n f (h.2 hg)⟩)
 
 /-- Entry form: the empty symbolic state denotes `R`/`Mt` exactly. -/
+theorem regsDen_of_known {ρ : Env} :
+    ∀ L : List (Nat × SE), (∀ p ∈ L, ρ.R0 p.1 = p.2.den ρ) → regsDen ρ L = ρ.R0
+  | [], _ => rfl
+  | (k, e) :: L, h => by
+    show upd (regsDen ρ L) k (e.den ρ) = ρ.R0
+    rw [regsDen_of_known L (fun p hp => h p (List.mem_cons_of_mem _ hp))]
+    exact upd_self_eq (h (k, e) List.mem_cons_self)
+
+/-- Entry form: the entry symbolic state (known register values `L0`) denotes `R`/`Mt`. -/
 theorem symRun_entry (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T, live p.1)
     (hPC : VsaIris.PC ∈ C.rs) (hgprs : gp ∉ C.rs) (n : Nat) (pc : BitVec 64)
-    (R : Nat → BitVec 64) (Mt : Mem)
-    (h : (symRun C n ⟨pc, [], [], []⟩).WP ⟨R, Mt, Dt⟩ S DA
+    (R : Nat → BitVec 64) (Mt : Mem) (L0 : List (Nat × SE))
+    (hL0 : ∀ p ∈ L0, R p.1 = p.2.den ⟨R, Mt, Dt⟩)
+    (hkv : ∀ e ∈ C.kv, ldv e.1 Dt (e.2.1.den ⟨R, Mt, Dt⟩).toNat = e.2.2)
+    (h : (symRun C n ⟨pc, L0, [], []⟩).WP ⟨R, Mt, Dt⟩ S DA
       (fun pc R M => SWP live (T ++ dataOf Dt DA) C.rs S Q pc R M)) :
-    SWP live (T ++ dataOf Dt DA) C.rs S Q pc R Mt :=
-  symRun_swp C hc hlive hPC hgprs ⟨R, Mt, Dt⟩ rfl n ⟨pc, [], [], []⟩ h
+    SWP live (T ++ dataOf Dt DA) C.rs S Q pc R Mt := by
+  have := symRun_swp C hc hlive hPC hgprs ⟨R, Mt, Dt⟩ rfl hkv n ⟨pc, L0, [], []⟩ h
+  rwa [regsDen_of_known L0 hL0] at this
 
 end run
 
@@ -1064,24 +1387,29 @@ value, an alignment modulus and the (atom-relative) ranges covered by `S` and by
 `DA`. `obCheck` decides an obligation from these facts with wrap-aware arithmetic; the run's
 obligations are then filtered by one kernel evaluation (`Tree.prune`). -/
 
-/-- Facts about one address atom `A = atom.den`: `lo ≤ A ≤ hi`, `A % al = 0`, every byte
+/-- Facts about one address atom `A = atom.den`: `lo ≤ A ≤ hi`, `A % amod = 0`, every byte
 `A + j` with `(l, h) ∈ sc`, `l ≤ j < h` satisfies `S` (resp. `∈ DA` for `dc`), and, when
 `gap = some (g₁, g₂)`, the object avoids the HTIF window: `A + g₁ ≤ tohost ∨ tohost + g₂ ≤ A`. -/
 structure AFact where
   atom : SE
   lo : Nat
   hi : Nat
-  al : Nat
+  amod : Nat
   sc : List (Nat × Nat)
   dc : List (Nat × Nat)
   gap : Option (Nat × Nat) := none
+  shift : BitVec 64 := 0#64
 
+/-- The facts are about `A = (atom + shift).toNat`; offsets are relative to that point. -/
 def AFact.holds (ρ : Env) (S : Nat → Prop) (DA : List Nat) (f : AFact) : Prop :=
-  f.lo ≤ (f.atom.den ρ).toNat ∧ (f.atom.den ρ).toNat ≤ f.hi ∧ (f.atom.den ρ).toNat % f.al = 0 ∧
-  (∀ r ∈ f.sc, ∀ b, (f.atom.den ρ).toNat + r.1 ≤ b → b < (f.atom.den ρ).toNat + r.2 → S b) ∧
-  (∀ r ∈ f.dc, ∀ b, (f.atom.den ρ).toNat + r.1 ≤ b → b < (f.atom.den ρ).toNat + r.2 → b ∈ DA) ∧
-  (∀ g, f.gap = some g → (f.atom.den ρ).toNat + g.1 ≤ tohostAddr ∨
-    tohostAddr + g.2 ≤ (f.atom.den ρ).toNat)
+  f.lo ≤ (f.atom.den ρ + f.shift).toNat ∧ (f.atom.den ρ + f.shift).toNat ≤ f.hi ∧
+  (f.atom.den ρ + f.shift).toNat % f.amod = 0 ∧
+  (∀ r ∈ f.sc, ∀ b, (f.atom.den ρ + f.shift).toNat + r.1 ≤ b →
+    b < (f.atom.den ρ + f.shift).toNat + r.2 → S b) ∧
+  (∀ r ∈ f.dc, ∀ b, (f.atom.den ρ + f.shift).toNat + r.1 ≤ b →
+    b < (f.atom.den ρ + f.shift).toNat + r.2 → b ∈ DA) ∧
+  (∀ g, f.gap = some g → (f.atom.den ρ + f.shift).toNat + g.1 ≤ tohostAddr ∨
+    tohostAddr + g.2 ≤ (f.atom.den ρ + f.shift).toNat)
 
 abbrev Geom := List AFact
 
@@ -1089,7 +1417,7 @@ def Geom.holds (ρ : Env) (S : Nat → Prop) (DA : List Nat) (Γ : Geom) : Prop 
   ∀ f ∈ Γ, f.holds ρ S DA
 
 /-- The constant base: `A = 0`. -/
-def constFact : AFact := ⟨.c 0, 0, 0, 0, [], [], none⟩
+def constFact : AFact := ⟨.c 0, 0, 0, 0, [], [], none, 0⟩
 
 def findF (Γ : Geom) (a : SE) : Option AFact :=
   if a = .c 0 then some constFact else Γ.find? (fun f => decide (f.atom = a))
@@ -1109,12 +1437,13 @@ theorem findF_sound {ρ : Env} {S : Nat → Prop} {DA : List Nat} {Γ : Geom} (h
 cannot wrap. -/
 def addrOf (Γ : Geom) (e : SE) : Option (AFact × Nat) :=
   match findF Γ (base e).1 with
-  | some f => if f.hi + (base e).2.toNat < 2 ^ 64 then some (f, (base e).2.toNat) else none
+  | some f => if f.hi + ((base e).2 - f.shift).toNat < 2 ^ 64 then
+      some (f, ((base e).2 - f.shift).toNat) else none
   | none => none
 
 theorem addrOf_sound {ρ : Env} {S : Nat → Prop} {DA : List Nat} {Γ : Geom} (hΓ : Γ.holds ρ S DA)
     {e : SE} {f : AFact} {o : Nat} (h : addrOf Γ e = some (f, o)) :
-    f.holds ρ S DA ∧ (e.den ρ).toNat = (f.atom.den ρ).toNat + o := by
+    f.holds ρ S DA ∧ (e.den ρ).toNat = (f.atom.den ρ + f.shift).toNat + o := by
   unfold addrOf at h
   split at h
   · rename_i f' hf
@@ -1123,7 +1452,9 @@ theorem addrOf_sound {ρ : Env} {S : Nat → Prop} {DA : List Nat} {Γ : Geom} (
       cases h
       obtain ⟨ha, hh⟩ := findF_sound hΓ hf
       refine ⟨hh, ?_⟩
-      rw [base_den ρ e, ← ha, BitVec.toNat_add]
+      have e1 : (base e).1.den ρ + (base e).2 = (f.atom.den ρ + f.shift) + ((base e).2 - f.shift) := by
+        rw [ha, BitVec.add_assoc, BitVec.add_comm f.shift, BitVec.sub_add_cancel]
+      rw [base_den ρ e, e1, BitVec.toNat_add]
       have := hh.2.1
       exact Nat.mod_eq_of_lt (by omega)
     · cases h
@@ -1151,13 +1482,16 @@ def obCheck (Γ : Geom) : SOb → Bool
     | some (f, o) => ldOKb (f.lo + o) (f.hi + o) w f.gap o && covB f.dc o w
     | none => false
   | .st e w => match addrOf Γ e with
-    | some (f, o) => stOKb (f.lo + o) (f.hi + o) w && decide (0 < w) && decide (f.al % w = 0) &&
+    | some (f, o) => stOKb (f.lo + o) (f.hi + o) w && decide (0 < w) && decide (f.amod % w = 0) &&
         decide (o % w = 0) && covB f.sc o w
     | none => false
   | .disj a wa b wb => match addrOf Γ a, addrOf Γ b with
     | some (f, o), some (g, p) =>
       decide (f.hi + o + wa ≤ g.lo + p) || decide (g.hi + p + wb ≤ f.lo + o)
     | _, _ => false
+  | .al4 e => match addrOf Γ e with
+    | some (f, o) => decide (f.amod % 4 = 0) && decide (o % 4 = 0)
+    | none => false
   | _ => false
 
 theorem covB_sound {rs : List (Nat × Nat)} {o w : Nat} {A : Nat} {P : Nat → Prop}
@@ -1221,7 +1555,7 @@ theorem obCheck_sound {ρ : Env} {S : Nat → Prop} {DA : List Nat} {Γ : Geom} 
       refine ⟨?_, ?_⟩
       · rw [hx]
         refine ⟨by omega, by omega, by omega, ?_⟩
-        have hwA : w ∣ (f.atom.den ρ).toNat :=
+        have hwA : w ∣ (f.atom.den ρ + f.shift).toNat :=
           Nat.dvd_trans (Nat.dvd_of_mod_eq_zero hal) (Nat.dvd_of_mod_eq_zero hA)
         exact Nat.mod_eq_zero_of_dvd (Nat.dvd_add hwA (Nat.dvd_of_mod_eq_zero hoff))
       · rw [hx]; exact covB_sound hs h4
@@ -1238,13 +1572,26 @@ theorem obCheck_sound {ρ : Env} {S : Nat → Prop} {DA : List Nat} {Γ : Geom} 
       have := hf.1; have := hf.2.1; have := hg.1; have := hg.2.1
       omega
     · cases h
+  | al4 e =>
+    simp only [obCheck] at h
+    split at h
+    · rename_i f off ha
+      obtain ⟨hf, hx⟩ := addrOf_sound hΓ ha
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+      show (e.den ρ).toNat % 4 = 0
+      rw [hx]
+      have h4A : 4 ∣ (f.atom.den ρ + f.shift).toNat :=
+        Nat.dvd_trans (Nat.dvd_of_mod_eq_zero h.1) (Nat.dvd_of_mod_eq_zero hf.2.2.1)
+      exact Nat.mod_eq_zero_of_dvd (Nat.dvd_add h4A (Nat.dvd_of_mod_eq_zero h.2))
+    · cases h
   | decM _ _ => cases h
   | decT _ => cases h
 
 /-- Drop every obligation the checker decides. -/
 def Tree.prune (Γ : Geom) : Tree → Tree
   | .leaf s => .leaf { s with obs := s.obs.filter fun o => !obCheck Γ o }
-  | .br op a b t f => .br op a b (t.prune Γ) (f.prune Γ)
+  | .br pc op a b t f => .br pc op a b (t.prune Γ) (f.prune Γ)
+  | .jr s x => .jr { s with obs := s.obs.filter fun o => !obCheck Γ o } x
 
 theorem Tree.WP_of_prune {ρ : Env} {S : Nat → Prop} {DA : List Nat} {Γ : Geom}
     (hΓ : Γ.holds ρ S DA) {K : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} :
@@ -1254,8 +1601,13 @@ theorem Tree.WP_of_prune {ρ : Env} {S : Nat → Prop} {DA : List Nat} {Γ : Geo
     cases hc : obCheck Γ o
     · exact h.1 o (List.mem_filter.2 ⟨ho, by simp [hc]⟩)
     · exact obCheck_sound hΓ o hc
-  | .br op a b t f, h => ⟨fun hg => Tree.WP_of_prune hΓ t (h.1 hg),
+  | .br _ op a b t f, h => ⟨fun hg => Tree.WP_of_prune hΓ t (h.1 hg),
       fun hg => Tree.WP_of_prune hΓ f (h.2 hg)⟩
+  | .jr s x, h => by
+    refine ⟨fun o ho => ?_, h.2⟩
+    cases hc : obCheck Γ o
+    · exact h.1 o (List.mem_filter.2 ⟨ho, by simp [hc]⟩)
+    · exact obCheck_sound hΓ o hc
 
 section auto
 variable {live : Nat → Prop} {T : List (Nat × BitVec 8)} {S : Nat → Prop} {Dt : Mem}
@@ -1265,11 +1617,14 @@ variable {live : Nat → Prop} {T : List (Nat × BitVec 8)} {S : Nat → Prop} {
 obligations `obCheck` could not decide. -/
 theorem symRun_auto (C : Cfg) (hc : CodeAt T C.img C.rT) (hlive : ∀ p ∈ T, live p.1)
     (hPC : VsaIris.PC ∈ C.rs) (hgprs : gp ∉ C.rs) (Γ : Geom) (n : Nat) (pc : BitVec 64)
-    (R : Nat → BitVec 64) (Mt : Mem) (hΓ : Γ.holds ⟨R, Mt, Dt⟩ S DA)
-    (h : ((symRun C n ⟨pc, [], [], []⟩).prune Γ).WP ⟨R, Mt, Dt⟩ S DA
+    (R : Nat → BitVec 64) (Mt : Mem) (L0 : List (Nat × SE))
+    (hL0 : ∀ p ∈ L0, R p.1 = p.2.den ⟨R, Mt, Dt⟩)
+    (hkv : ∀ e ∈ C.kv, ldv e.1 Dt (e.2.1.den ⟨R, Mt, Dt⟩).toNat = e.2.2)
+    (hΓ : Γ.holds ⟨R, Mt, Dt⟩ S DA)
+    (h : ((symRun C n ⟨pc, L0, [], []⟩).prune Γ).WP ⟨R, Mt, Dt⟩ S DA
       (fun pc R M => SWP live (T ++ dataOf Dt DA) C.rs S Q pc R M)) :
     SWP live (T ++ dataOf Dt DA) C.rs S Q pc R Mt :=
-  symRun_entry C hc hlive hPC hgprs n pc R Mt (Tree.WP_of_prune hΓ _ h)
+  symRun_entry C hc hlive hPC hgprs n pc R Mt L0 hL0 hkv (Tree.WP_of_prune hΓ _ h)
 
 end auto
 
@@ -1284,6 +1639,32 @@ deriving instance Lean.ToExpr for SE
 deriving instance Lean.ToExpr for SOb
 deriving instance Lean.ToExpr for SS
 deriving instance Lean.ToExpr for Tree
+deriving instance Lean.ToExpr for AFact
+
+theorem Tree.WP_leaf {ρ : Env} {S : Nat → Prop} {DA : List Nat}
+    {K : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} {s : SS} (h1 : ObsOK ρ S DA s.obs)
+    (h2 : K s.pc (regsDen ρ s.regs) (memDen ρ s.mem)) : (Tree.leaf s).WP ρ S DA K := ⟨h1, h2⟩
+
+theorem Tree.WP_br {ρ : Env} {S : Nat → Prop} {DA : List Nat}
+    {K : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} {pc : BitVec 64} {op : bop} {a b : SE}
+    {t f : Tree}
+    (h1 : guardB op (a.den ρ) (b.den ρ) = true → t.WP ρ S DA K)
+    (h2 : guardB op (a.den ρ) (b.den ρ) = false → f.WP ρ S DA K) :
+    (Tree.br pc op a b t f).WP ρ S DA K := ⟨h1, h2⟩
+
+theorem Tree.WP_jr {ρ : Env} {S : Nat → Prop} {DA : List Nat}
+    {K : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} {s : SS} {x : SE} (h1 : ObsOK ρ S DA s.obs)
+    (h2 : K (x.den ρ) (regsDen ρ s.regs) (memDen ρ s.mem)) : (Tree.jr s x).WP ρ S DA K := ⟨h1, h2⟩
+
+theorem ObsOK_nil {ρ : Env} {S : Nat → Prop} {DA : List Nat} : ObsOK ρ S DA [] :=
+  fun _ h => nomatch h
+
+theorem ObsOK_cons {ρ : Env} {S : Nat → Prop} {DA : List Nat} {o : SOb} {l : List SOb}
+    (h1 : o.den ρ S DA) (h2 : ObsOK ρ S DA l) : ObsOK ρ S DA (o :: l) := by
+  intro x hx
+  rcases List.mem_cons.1 hx with rfl | hx
+  · exact h1
+  · exact h2 x hx
 
 open Lean Meta Elab Tactic in
 /-- `sym_eval` replaces the (closed) `Tree.prune Γ (symRun C n s)` (or `symRun C n s`) in the goal by its value, computed by
@@ -1327,7 +1708,7 @@ rewrites the atoms with the given hypotheses and closes each arithmetic conjunct
 macro "geom_auto" " [" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
   simp only [Geom.holds, List.mem_cons, forall_eq_or_imp, List.not_mem_nil, false_implies,
     implies_true, and_true, AFact.holds, SE.den, reduceCtorEq, Option.some.injEq, forall_eq',
-    List.mem_append, mem_accAddrs_iff', Nat.mod_one, forall_const, $ts,*]
-  and_intros <;> (try intros) <;> first | exact True.intro | omega))
+    List.mem_append, mem_accAddrs_iff', Nat.mod_one, forall_const, BitVec.add_zero, $ts,*] <;>
+  (and_intros <;> (try intros) <;> first | exact True.intro | omega)))
 
 end VsaIris.SymExec
