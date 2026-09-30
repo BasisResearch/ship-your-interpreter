@@ -14,6 +14,8 @@ Bool-valued checks written for kernel evaluation (`Nat.blt`/`Nat.ble` and `cond`
 
 namespace Vsa.Sim.Boot
 
+open Vsa.Sim
+
 /-! ### Run trees -/
 
 def RunTree.findB : RunTree → Nat → Run
@@ -205,10 +207,183 @@ theorem PagesUpTo.spec {L : PackedLog} {t : RunTree} {lo hi : Nat} (hwf : t.wfB 
     · exact ih h.1 i hn
     · exact pagesOk_spec hwf h.2 i (by omega) (by rw [Nat.mul_succ] at hi; omega)
 
+
+/-! ### Run cells against their writers -/
+
+/-- The byte a packed store writes at `x`, in `Nat` arithmetic. -/
+def entryByteN (e x : Nat) : Option Nat :=
+  let a := e % 2 ^ 32
+  let w := (e >>> 32) % 16
+  bif (Nat.beq w 1 || Nat.beq w 2 || Nat.beq w 4 || Nat.beq w 8) && Nat.ble a x &&
+    Nat.blt x (a + w)
+  then some ((e >>> 36 >>> (8 * (x - a))) % 256) else none
+
+theorem shr_mod_byte (x n s : Nat) (h : s + 8 ≤ n) : (x % 2 ^ n) >>> s % 256 = x >>> s % 256 := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  simp only [Nat.testBit_mod_two_pow, Nat.testBit_shiftRight, show (256:Nat) = 2^8 from rfl]
+  by_cases hi : i < 8
+  · have : s + i < n := by omega
+    simp [hi, this]
+  · simp [hi]
+
+private theorem ex8 (d : BitVec 64) (s : Nat) :
+    (sdData_val d).extractLsb' s 8 = BitVec.ofNat 8 ((d.toNat >>> s) % 256) := by
+  apply BitVec.eq_of_toNat_eq
+  simp [sdData_val, Sail.BitVec.extractLsb, BitVec.extractLsb_toNat, Nat.mod_eq_of_lt d.isLt]
+
+private theorem ex4 (d : BitVec 64) (s : Nat) (hs : s + 8 ≤ 32) :
+    (swData d).extractLsb' s 8 = BitVec.ofNat 8 ((d.toNat >>> s) % 256) := by
+  apply BitVec.eq_of_toNat_eq
+  simp [swData, Sail.BitVec.extractLsb, BitVec.extractLsb_toNat]
+  exact shr_mod_byte _ 32 _ hs
+
+private theorem ex2 (d : BitVec 64) (s : Nat) (hs : s + 8 ≤ 16) :
+    (shData d).extractLsb' s 8 = BitVec.ofNat 8 ((d.toNat >>> s) % 256) := by
+  apply BitVec.eq_of_toNat_eq
+  simp [shData, Sail.BitVec.extractLsb, BitVec.extractLsb_toNat]
+  exact shr_mod_byte _ 16 _ hs
+
+private theorem ex1 (d : BitVec 64) : sbData d = BitVec.ofNat 8 ((d.toNat >>> 0) % 256) := by
+  apply BitVec.eq_of_toNat_eq
+  simp [sbData, Sail.BitVec.extractLsb, BitVec.extractLsb_toNat]
+
+private theorem mod64 (x s : Nat) (h : s + 8 ≤ 64) :
+    (x % 18446744073709551616) >>> s % 256 = x >>> s % 256 := shr_mod_byte x 64 s h
+
+set_option linter.unusedSimpArgs false in
+theorem writeEntryByte_unpack (e x : Nat) :
+    writeEntryByte (unpackEntry e) x = (entryByteN e x).map (BitVec.ofNat 8) := by
+  unfold unpackEntry entryByteN
+  generalize ha : e % 2 ^ 32 = a
+  generalize hw : (e >>> 32) % 16 = w
+  unfold writeEntryByte
+  split
+  · rename_i heq
+    simp only [Prod.mk.injEq] at heq
+    obtain ⟨rfl, rfl, rfl⟩ := heq
+    by_cases h : x = a
+    · subst h; simp [ex1, mod64]
+    · simp [h, Ne.symm h]; omega
+  · rename_i heq
+    simp only [Prod.mk.injEq] at heq
+    obtain ⟨rfl, rfl, rfl⟩ := heq
+    rcases (show x = a ∨ x = a + 1 ∨ (x ≠ a ∧ x ≠ a + 1) by omega) with rfl | rfl | ⟨h0, h1⟩
+    · simp [ex2, mod64]
+    · simp [ex2, mod64]
+    · simp [Ne.symm h0, Ne.symm h1]; omega
+  · rename_i heq
+    simp only [Prod.mk.injEq] at heq
+    obtain ⟨rfl, rfl, rfl⟩ := heq
+    rcases (show x = a ∨ x = a + 1 ∨ x = a + 2 ∨ x = a + 3 ∨
+      (x ≠ a ∧ x ≠ a + 1 ∧ x ≠ a + 2 ∧ x ≠ a + 3) by omega) with
+      rfl | rfl | rfl | rfl | ⟨h0, h1, h2, h3⟩
+    · simp [ex4, mod64]
+    · simp [ex4, mod64]
+    · simp [ex4, mod64]
+    · simp [ex4, mod64]
+    · simp [Ne.symm h0, Ne.symm h1, Ne.symm h2, Ne.symm h3]; omega
+  · rename_i heq
+    simp only [Prod.mk.injEq] at heq
+    obtain ⟨rfl, rfl, rfl⟩ := heq
+    rcases (show x = a ∨ x = a + 1 ∨ x = a + 2 ∨ x = a + 3 ∨ x = a + 4 ∨ x = a + 5 ∨
+      x = a + 6 ∨ x = a + 7 ∨ (x ≠ a ∧ x ≠ a + 1 ∧ x ≠ a + 2 ∧ x ≠ a + 3 ∧ x ≠ a + 4 ∧
+      x ≠ a + 5 ∧ x ≠ a + 6 ∧ x ≠ a + 7) by omega) with
+      rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩
+    all_goals first
+      | simp [ex8, mod64]; done
+      | simp [Ne.symm h0, Ne.symm h1, Ne.symm h2, Ne.symm h3, Ne.symm h4, Ne.symm h5,
+          Ne.symm h6, Ne.symm h7]; omega
+  · rename_i h1 h2 h4 h8
+    have n1 : w ≠ 1 := fun h => h1 _ _ (by rw [h])
+    have n2 : w ≠ 2 := fun h => h2 _ _ (by rw [h])
+    have n4 : w ≠ 4 := fun h => h4 _ _ (by rw [h])
+    have n8 : w ≠ 8 := fun h => h8 _ _ (by rw [h])
+    simp [n1, n2, n4, n8]
+
+
+/-- The cells `j, j + 1, …` of a run at `base` (`p` = the cells shifted past `j`), each checked
+against the store it names; `pr` caches the packed store `pk` of the previous cell. -/
+def cellsOk (L : PackedLog) (base : Nat) : Nat → Nat → Nat → Nat → Nat → Bool
+  | _, _, 0, _, _ => true
+  | p, j, n + 1, pk, pr =>
+    let c := p % 2 ^ 32
+    let k := c % 2 ^ 24
+    let raw := bif Nat.beq k pk then pr else L.raw k
+    (Nat.blt k L.len &&
+      (match entryByteN raw (base + j) with
+       | some v => Nat.beq v (c >>> 24)
+       | none => false)) &&
+    cellsOk L base (p >>> 32) (j + 1) n k raw
+
+def runOkF (L : PackedLog) (r : Run) : Bool := cellsOk L r.base r.cells 0 r.len (2 ^ 24) 0
+
+theorem cellsOk_spec {L : PackedLog} {base cells : Nat} : ∀ n j pk pr,
+    (pk = 2 ^ 24 ∨ pr = L.raw pk) →
+    cellsOk L base (cells >>> (32 * j)) j n pk pr = true →
+    ∀ j', j ≤ j' → j' < j + n →
+      (cells >>> (32 * j')) % 2 ^ 32 % 2 ^ 24 < L.len ∧
+      writeEntryByte (L.entry ((cells >>> (32 * j')) % 2 ^ 32 % 2 ^ 24)) (base + j') =
+        some (BitVec.ofNat 8 (((cells >>> (32 * j')) % 2 ^ 32) >>> 24)) := by
+  intro n
+  induction n with
+  | zero => intro j _ _ _ _ j' h1 h2; omega
+  | succ n ih =>
+    intro j pk pr hinv h j' h1 h2
+    simp only [cellsOk, Bool.and_eq_true, Nat.blt_eq] at h
+    have hraw : (bif Nat.beq ((cells >>> (32 * j)) % 2 ^ 32 % 2 ^ 24) pk then pr
+        else L.raw ((cells >>> (32 * j)) % 2 ^ 32 % 2 ^ 24)) =
+        L.raw ((cells >>> (32 * j)) % 2 ^ 32 % 2 ^ 24) := by
+      cases hb : Nat.beq ((cells >>> (32 * j)) % 2 ^ 32 % 2 ^ 24) pk with
+      | false => rfl
+      | true =>
+        have hk := Nat.eq_of_beq_eq_true hb
+        rcases hinv with hp | hp
+        · have : (cells >>> (32 * j)) % 2 ^ 32 % 2 ^ 24 < 2 ^ 24 := Nat.mod_lt _ (by decide)
+          omega
+        · rw [Bool.cond_true, hp, hk]
+    by_cases hjj : j' = j
+    · subst hjj
+      rw [hraw] at h
+      refine ⟨h.1.1, ?_⟩
+      have h12 := h.1.2
+      unfold PackedLog.entry
+      rw [writeEntryByte_unpack]
+      split at h12
+      · rename_i v hv
+        rw [hv, Nat.eq_of_beq_eq_true h12]
+        rfl
+      · cases h12
+    · have h2' := h.2
+      rw [← Nat.shiftRight_add, show 32 * j + 32 = 32 * (j + 1) by omega] at h2'
+      exact ih (j + 1) _ _ (Or.inr hraw) h2' j' (by omega) (by omega)
+
+theorem runOk_of_runOkF {L : PackedLog} {r : Run} (h : runOkF L r = true) :
+    runOk L r r.len = true := by
+  have hs := cellsOk_spec (L := L) (base := r.base) (cells := r.cells) r.len 0 (2 ^ 24) 0
+    (Or.inl rfl) (by simpa [runOkF] using h)
+  suffices ∀ n, n ≤ r.len → runOk L r n = true from this r.len (Nat.le_refl _)
+  intro n hn
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    simp only [runOk, Bool.and_eq_true]
+    refine ⟨?_, ih (by omega)⟩
+    have hc : r.cell (r.base + n) = some ((r.cells >>> (32 * n)) % 2 ^ 32 % 2 ^ 24,
+        ((r.cells >>> (32 * n)) % 2 ^ 32) >>> 24) := by
+      unfold Run.cell
+      have hin : r.base ≤ r.base + n ∧ r.base + n < r.base + r.len := ⟨by omega, by omega⟩
+      simp only [hin, and_self, ↓reduceIte, Nat.add_sub_cancel_left]
+    rw [hc]
+    obtain ⟨h1, h2⟩ := hs n (by omega) (by omega)
+    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq]
+    exact ⟨h1, h2⟩
+
 theorem logOk_of_pages {L : PackedLog} {t : RunTree} {n lo hi : Nat} (hs : PagesUpTo L t n)
     (hwf : t.wfB lo hi = true) (hlen : L.len ≤ 1024 * n)
-    (hr : ∀ r ∈ t.runs, runOk L r r.len = true) : LogOk L t :=
-  ⟨fun i hi => hs.spec hwf i (by omega), hr⟩
+    (hr : t.runs.all (runOkF L) = true) : LogOk L t :=
+  ⟨fun i hi => hs.spec hwf i (by omega),
+    fun r hr' => runOk_of_runOkF (List.all_eq_true.mp hr r hr')⟩
 
 /-! ### Range trees -/
 

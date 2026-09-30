@@ -104,15 +104,15 @@ set_option hygiene false in
     parts ← `(⟨$parts, $nm⟩)
   let bl := Syntax.mkNumLit (toString blocks)
   elabCommand (← `(theorem runs_wf : runs.wfB 0 (2 ^ 40) = true := by decide +kernel))
-  elabCommand (← `(theorem runs_ok : ∀ r ∈ runs.runs, runOk log r r.len = true := by
-    decide +kernel))
+  elabCommand (← `(theorem runs_ok : runs.runs.all (runOkF log) = true := by decide +kernel))
   elabCommand (← `(theorem logOk : LogOk log runs :=
     logOk_of_pages (n := $bl) $parts runs_wf (by decide) runs_ok))
   elabCommand (← `(theorem aboveOk : runs.above 0x8001acf0 = true := by decide +kernel))
   elabCommand (← `(theorem memRefOk : memRefCheck (bootView script runs) = true := by decide +kernel))
   elabCommand (← `(theorem globalsOk :
     readLEv (bootView script runs) Vsa.Sim.LayoutInstance.interpObject 8 = some own.env := by decide +kernel))
-  elabCommand (← `(theorem ownOk : OwnOk own := by constructor <;> decide +kernel))
+  elabCommand (← `(theorem ownFast : OwnFast own := by constructor <;> decide +kernel))
+  elabCommand (← `(theorem ownOk : OwnOk own := ownFast.ownOk))
   elabCommand (← `(theorem frameOk : FrameOk (bootView script runs) own := by constructor <;> decide +kernel))
   elabCommand (← `(theorem bootRegs : BootRegs regs stmts count := by
     constructor <;> decide +kernel))

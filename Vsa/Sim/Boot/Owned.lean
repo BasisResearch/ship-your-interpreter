@@ -171,6 +171,69 @@ theorem reserved : Reserved bootArena B.exts B.shared := by
 
 end OwnOk
 
+/-! ### A kernel-cheap route to `OwnOk`
+
+The AST extents come in address order, so their disjointness is a chain check, and every AST
+range is itself an allocation extent. `OwnFast` states the remaining checks, all linear. -/
+
+namespace BootOwn
+
+def roleList (B : BootOwn) : List Extent :=
+  [(B.key2, 7), (B.key1, 8), (B.key0, 6), (B.pv, 24 * B.cap), (B.pn, 8 * B.cap), (B.env, 32)]
+
+def sharedRoles (B : BootOwn) : List Extent :=
+  [(B.key0, 6), (B.key1, 8), (B.key2, 7), (B.name0, 6), (B.name1, 8), (B.name2, 7)]
+
+end BootOwn
+
+def chainB : List Extent → Bool
+  | a :: b :: l => Nat.ble (a.1 + a.2) b.1 && chainB (b :: l)
+  | _ => true
+
+theorem chainB_pairwise : ∀ {l : List Extent}, chainB l = true →
+    l.Pairwise (fun a b => a.1 + a.2 ≤ b.1)
+  | [], _ => List.Pairwise.nil
+  | [_], _ => List.pairwise_singleton _ _
+  | a :: b :: l, h => by
+    simp only [chainB, Bool.and_eq_true, Nat.ble_eq] at h
+    have ih := chainB_pairwise h.2
+    refine List.Pairwise.cons ?_ ih
+    intro c hc
+    rcases List.mem_cons.mp hc with rfl | hc
+    · exact h.1
+    · have := List.rel_of_pairwise_cons ih hc
+      omega
+
+structure OwnFast (B : BootOwn) : Prop where
+  astArena : ∀ e ∈ B.ast, 0 < e.2 ∧ bootArena.lo ≤ e.1 ∧ e.1 + e.2 ≤ bootArena.hi
+  astChain : chainB B.ast = true
+  rolesArena : ∀ e ∈ B.roleExts, 0 < e.2 ∧ bootArena.lo ≤ e.1 ∧ e.1 + e.2 ≤ bootArena.hi
+  envAligned : B.env % 8 = 0
+  rolesDisjoint : B.roleList.Pairwise ExtDisjoint
+  rolesAst : ∀ a ∈ B.roleList, ∀ b ∈ B.ast, ExtDisjoint a b
+  sharedRam : ∀ r ∈ B.sharedRanges,
+    0x80000000 ≤ r.1 ∧ r.1 + r.2 ≤ 0x100000000 ∧
+      (r.1 + r.2 ≤ 0x8001ad00 ∨ 0x8001c168 ≤ r.1) ∧
+      (r.1 + r.2 ≤ 0x87800000 ∨ 0x88000000 ≤ r.1)
+  sharedWin : ∀ r ∈ B.sharedRanges, r.1 + r.2 + 7 ≤ 0x88000000 ∧
+    (r.1 + r.2 + 7 ≤ 0x8001ad00 ∨ 0x8001ad10 ≤ r.1)
+  sharedImmutable : ∀ r ∈ B.sharedRanges, ∀ e ∈ B.mutableExts, ExtDisjoint r e
+  sharedLive : ∀ r ∈ B.sharedRoles,
+    (r.1 + r.2 ≤ bootArena.lo ∨ bootArena.hi ≤ r.1) ∨ r ∈ B.exts
+
+theorem OwnFast.ownOk {B : BootOwn} (h : OwnFast B) : OwnOk B := by
+  have hast : B.ast.Pairwise ExtDisjoint :=
+    (chainB_pairwise h.astChain).imp fun hab => Or.inl hab
+  refine ⟨h.astArena, hast, h.rolesArena, h.envAligned, ?_, h.sharedRam, h.sharedWin,
+    h.sharedImmutable, ?_⟩
+  · show (B.roleList ++ B.ast).Pairwise ExtDisjoint
+    exact List.pairwise_append.mpr ⟨h.rolesDisjoint, hast, h.rolesAst⟩
+  · intro r hr
+    have hr' : r ∈ B.sharedRoles ++ B.ast := hr
+    rcases List.mem_append.mp hr' with hr | hr
+    · exact h.sharedLive r hr
+    · exact Or.inr (List.mem_append_right B.roleList hr)
+
 theorem readLEv_lt' {v : Nat → Option (BitVec 8)} :
     ∀ {n a x}, readLEv v a n = some x → x < 256 ^ n := by
   intro n
