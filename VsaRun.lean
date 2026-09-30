@@ -1,9 +1,6 @@
 import Vsa.Elf
 import Vsa.ElfRun
 
-/-- Run the embedded ELF natively and report its observable behavior.
-Sanity harness for `Vsa.runWhileElf` — the same pure function used in
-theorem statements. -/
 def main (args : List String) : IO UInt32 := do
   let fuel := match args with
     | [n] => n.toNat!

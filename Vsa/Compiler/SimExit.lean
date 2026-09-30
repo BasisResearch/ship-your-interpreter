@@ -1,12 +1,5 @@
 import Vsa.Compiler.SimClosure
 
-/-!
-# Exits up the frame chain
-
-`break`, `continue` and `return` leave the frames entered since their target
-(`exitTo`): `ld s1, 0(s1)` once per frame, then the jump.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -61,8 +54,6 @@ theorem run_up {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (hs :
     refine ⟨by rw [g1]; congr 1 <;> omega, g2, g3, ?_, by rw [anc_succ_of hfr hpar]; exact g5⟩
     exact (Keep.gset (Keep.refl _ L) (by decide)).trans g4
 
-/-- **Exits.** The code of an exit to `t` reaches it with the invariant in the
-target's frame. -/
 theorem run_exitTo {T : List String} {V : View} {st : St} {d : Nat} {env : Addr} {C : GCtx} {sp fs pos : Nat}
     {A : AM} (hm : MS code T V st d env C.Γ sp fs A) (hA : A.pc = pcOf pos) (hC : CtxOK C)
     {t : Option (Nat × Nat)} (ht : ∀ p dt, t = some (p, dt) → dt ≤ C.blk ∧ PosOK p)

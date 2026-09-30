@@ -2,16 +2,6 @@ import VsaIris.Interp.ExecArm
 import VsaIris.Interp.CallRegs
 import VsaIris.Interp.SpecEnv
 
-/-!
-# `env_new` / `env_define` from an exec arm (lane E5)
-
-The block and `for` arms call `env_new(env)`, the `var` arms
-`env_define(env, name, &v)`. H1's specs (`SpecEnv.lean`) are stated over the
-callee's register list; `ms_callRegs` (H2) cuts the arm's register file. The
-counted regime cannot run out of memory, so the specs' abort branch is
-vacuous there (`fnSpecW_of_abort_false`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -26,7 +16,6 @@ variable {live : Nat → Prop} {N : NativeAddrs}
 instance {M : MachineModel} (Wp : MachWP (GF := GF) M) : Persistent (envDefineSpec Wp N) := by
   unfold envDefineSpec; infer_instance
 
-/-- A frame's `Env*` is never NULL (`FrameLayout.e_ne`). -/
 theorem storeRepr_frameAt_ne {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢ ⌜e ≠ 0⌝ := by
   iintro ⟨Hs, #He⟩
@@ -47,7 +36,7 @@ theorem storeRepr_frameAt_ne {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
   rw [heq]; exact hlay.e_ne
 
 omit I in
-/-- **A function spec whose abort cannot happen is an ordinary one.** -/
+
 theorem fnSpecW_of_abort_false {M : MachineModel} (Wp : MachWP (GF := GF) M) (entry : BitVec 64)
     (P Q : BitVec 64 → IProp GF) (A : IProp GF) (hA : A ⊢ False) :
     fnSpecAbort Wp entry P Q A ⊢ fnSpecW Wp entry P Q := by
@@ -62,14 +51,8 @@ theorem fnSpecW_of_abort_false {M : MachineModel} (Wp : MachWP (GF := GF) M) (en
     iexfalso
     iapply hA $$ HA
 
-/-- The registers an `env_new` call takes: `a0`, `sp`, the clobbered and the
-saved ones (`s0`-`s6`). -/
 abbrev envNewL : List Nat := 10 :: 2 :: (retClob ++ newSaved)
 
-/-- **`env_new(R 10)` from a run, counted regime** (`jal env_new` at `i`):
-the run continues at `i + 4` with every register but `a0` and the clobbered
-ones kept, the new frame's `Env*` in `a0` bound to the next frame address, the
-store extended (`Store.allocFrame`), `envBytes` credits spent. -/
 theorem ms_callEnvNew (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code envNewPC)
@@ -164,9 +147,6 @@ theorem ms_callEnvNew (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   rw [← e10] at *
   iapply Hk $$ %(fun x => if x ∈ envNewL then f x else R x) %hkeep Hst Hh Hfr Hms
 
-/-- **`env_new(env)` from a run on the whole world**, counted regime: the
-parent frame's binding in `a0`; the run continues with the world advanced to
-the allocated frame's store and the new frame bound at `a0`. -/
 theorem ms_callEnvNewW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code envNewPC)
@@ -202,14 +182,8 @@ theorem ms_callEnvNewW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   iapply (world_heapStore N inp _ _ d).2
   iframe Hh Hc Hio Hi
 
-/-- The registers an `env_define` call takes: its three arguments, `sp`, the
-clobbered and the saved ones (`s0`-`s6`). -/
 abbrev envDefineL : List Nat := 10 :: 11 :: 12 :: 2 :: (argClob ++ defineSaved)
 
-/-- **`env_define(R 10, R 11, R 12)` from a run, counted regime** (`jal
-env_define` at `i`): the value at `R 12` (by reference) is defined as `x` in
-frame `fa`, `defineCost` credits spent; the run continues with every register
-but `a0`-`a2` and the clobbered ones kept. -/
 theorem ms_callEnvDefine (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code envDefinePC)

@@ -1,26 +1,10 @@
 import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Interp.StrlenRun
 
-/-!
-# H3's `strlen` inside a stdout run (lane N5)
-
-`_vfprintf_r`'s `%s` measures its argument with `strlen` (`0x8000cfc8`). H3
-proved `strlen` over a string of any length (`StrlenRun.strlenRunL`), as a
-leaf run: its own read-only list (`strCode` and the string's bytes), its own
-registers (`sRegs`), no read-only register. `LocalRun.embed` runs a local
-run over fewer registers, read-only cells and owned bytes inside one over
-more: the extra registers and bytes stay as they were. `strlen_sw` is H3's
-run so embedded in a stdout run whose data view holds `strlen`'s code and
-the string.
--/
-
 namespace VsaIris
 
 variable {M : MachineModel}
 
-/-- **Embedding a local run** over fewer read-only cells, registers and
-owned bytes: the extra registers keep their base values `rvb`, the extra
-bytes their base values `mvb`. -/
 theorem LocalRun.embed {ro1 ro2 : List (Nat × BitVec 64)} {text1 text2 : List (Nat × BitVec 8)}
     {rs1 rs2 : List Nat} {S1 S2 : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hro : ∀ p ∈ ro1, p ∈ ro2) (ht : ∀ p ∈ text1, p ∈ text2) (hrs : ∀ r ∈ rs1, r ∈ rs2)
@@ -57,13 +41,8 @@ open VsaIris.Interp.StrLeaf
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String}
 
-/-- `strlen`'s registers are a stdout run's. -/
 theorem sRegs_sub : ∀ r ∈ sRegs, r ∈ iRegs := by decide
 
-/-- **`strlen(P)`** (`0x80006cf0`) inside a stdout run whose data view holds
-`strlen`'s code and the string `[P, P + len]`: back at `r = ra` with `len` in
-`a0`, `a1`–`a6` at some values, every other register and every owned byte as
-it was. -/
 theorem strlen_sw {P r : BitVec 64} {len : Nat} {bv : Nat → BitVec 8} (c : LCtx live P r len bv)
     (hsub : ∀ p ∈ strCode ++ strText P.toNat len bv, p ∈ stdioText ++ dataOf Dt DA)
     {R : Nat → BitVec 64} {Mt : Mem} (h1 : R 1 = r) (h10 : R 10 = P)

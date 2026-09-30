@@ -1,19 +1,6 @@
 import VsaIris.Interp.CallPrefix
 import VsaIris.Interp.CallNative
 
-/-!
-# The call arm's printing natives (lane E4)
-
-`callNativeOut`: from the kind dispatch `0x80003254` (`CallAt`, reached by
-the prefix) on a callee `.native f` whose entry is a printing native
-(`native_print`, `native_println`; `natOutSpec`), for either WP and either
-regime: marshal `f(sret, in, argc, args, line)` (run N1), the `jalr a6`
-(`ms_callHelperR`) against the native's spec with the argument array carved
-out of the frame (`ms_carveVals`), the console through the world
-(`world_out`), then the epilogue (run N2) into the arm's exit continuation.
-The store is unchanged and the console grows by the native's text.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
@@ -25,7 +12,6 @@ section Lemmas
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The arguments' meaning depends on their words only. -/
 theorem argVals_agree (N : NativeAddrs) {f g : Nat → BitVec 8} (base : Nat) :
     ∀ (vs : List Value) (i : Nat), (∀ a, InExt (base + 24 * i, 24 * vs.length) a → f a = g a) →
       argVals (GF := GF) N f base i vs ⊢ argVals N g base i vs
@@ -38,14 +24,11 @@ theorem argVals_agree (N : NativeAddrs) {f g : Nat → BitVec 8} (base : Nat) :
     iapply argVals_agree N base vs (i + 1)
       (fun a ha => h a (by simp only [InExt, List.length_cons] at ha ⊢; omega)) $$ Hvs
 
-/-- A signed word load of a word whose low half is a small kind. -/
 theorem ldv_lw_of_ld {Mt : Mem} {a : Nat} {w : BitVec 64} {k : Nat} (h : ldv .ld Mt a = w)
     (hk : w.toNat % 2 ^ 32 = k) (hk31 : k < 2 ^ 31) : ldv .lw Mt a = BitVec.ofNat 64 k := by
   rw [ldv_ld_imgW] at h
   exact ldv_lw_kind (by rw [h]; exact hk) hk31
 
-/-- `ms_callHelperR` at a printing native's spec (its pins, precondition
-and postcondition spelled out). -/
 theorem ms_callNatOut {live : Nat → Prop} (N : NativeAddrs) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalrExec (vsaModel live) i code 16 entry)
@@ -70,14 +53,12 @@ theorem ms_callNatOut {live : Nat → Prop} (N : NativeAddrs) (Wp : MachWP (GF :
   iframe Hsp Hcode Hms Hpre Hk
   ipureintro; exact hpins
 
-/-- The argument loop yields one value per argument. -/
 theorem evalArgsCost_length : ∀ {st d env es st' vs n},
     EvalArgsCost st d env es st' vs n → vs.length = es.length
   | _, _, _, _, _, _, _, .nil .. => rfl
   | _, _, _, _, _, _, _, .cons _ _ _ _ _ _ _ _ _ _ _ _ h => by
     simp [evalArgsCost_length h]
 
-/-- The partial argument loop yields one value per argument. -/
 theorem evalArgs_length : ∀ {st d env es st' vs},
     EvalArgs st d env es st' vs → vs.length = es.length
   | _, _, _, _, _, _, .nil .. => rfl
@@ -90,9 +71,6 @@ section Defs
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The call arm's exit continuation, for either WP: at the return address,
-with the callee-saved registers kept, the stack back, the result in the slot
-and the world advanced. -/
 def CallExitK (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
     (rv : Nat → BitVec 64) (s : BitVec 64) (n : Nat) (sret : BitVec 64) (v : Value) (ρ : Regime)
@@ -101,7 +79,6 @@ def CallExitK (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : Roo
     stackScratch s n -∗ valAt N sret.toNat v -∗ world N L Room inp ρ st' d -∗
     PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)
 
-/-- A printing native's spec at every argument (persistent). -/
 def NatOutSpecs (live : Nat → Prop) (N : NativeAddrs) (Wp : MachWP (GF := GF) (vsaModel live))
     (entry : BitVec 64) (need : Nat) (out : Store → List Value → String → String) : IProp GF :=
   iprop(□ ∀ (a b c : BitVec 64) (vs : List Value) (st : Store) (o : String),
@@ -112,7 +89,6 @@ instance (live : Nat → Prop) (N : NativeAddrs) (Wp : MachWP (GF := GF) (vsaMod
     Persistent (NatOutSpecs live N Wp entry need out) := by
   unfold NatOutSpecs; infer_instance
 
-/-- A printing native's spec at every argument, from its proof at each. -/
 theorem natOutSpecs_of {live : Nat → Prop} (N : NativeAddrs) (Wp : MachWP (GF := GF) (vsaModel live))
     {entry : BitVec 64} {need : Nat} {out : Store → List Value → String → String}
     (h : ∀ a b c vs st o, ⊢ natOutSpec (vsaModel live) N Wp entry need a b c vs st o (out st vs o)) :
@@ -182,7 +158,7 @@ end Defs
   iintro ⟨⟨#Hspec, #Hcode, #Hro, #Hav, Hst, Hw, Hslot, Hk⟩, Hms⟩
 
 #ix_piece callNativeOut_p2 from callNativeOut_p1 by
-  -- the argument array out of the frame, the world opened, the native
+
   have hbase : (s + 18446744073709550528#64 + 240#64).toNat = argsBase s := by
     rw [hoff 240 (by decide)]
   have hreg : ∀ a, InExt (argsBase s, 24 * vs.length) a → InExt (s.toNat - 1088, 1088) a := by
@@ -232,7 +208,7 @@ end Defs
   iintro %R2 %hkeep2 ⟨Hnull, Hvals, Hio, Hcon, Hst, %hsg2⟩ Hms
 
 #ix_piece callNativeOut_p3 from callNativeOut_p2 by
-  -- the world closed, the array back into the frame, the epilogue
+
   ihave Hw := Hclose $$ %(out st2.store vs st2.out) Hcon Hio Hstore
   rw [hbase]
   ihave ⟨%Mt3, Hms, %hag3⟩ := ms_uncarveVals N hreg $$ [Hms Hvals]

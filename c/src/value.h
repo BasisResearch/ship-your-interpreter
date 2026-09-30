@@ -25,14 +25,14 @@ struct Value {
 };
 
 struct Closure {
-    Expr *fn_expr;  /* EX_FN node: params + body (+ optional name) */
-    Env *env;       /* environment the function was created in */
+    Expr *fn_expr;
+    Env *env;
 };
 
 Value value_null(void);
 Value value_bool(int b);
 Value value_int(long long i);
-Value value_str(char *s);       /* takes ownership of s */
+Value value_str(char *s);
 
 int value_truthy(Value v);
 int value_equal(Value a, Value b);

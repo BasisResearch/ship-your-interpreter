@@ -22,41 +22,16 @@ import VsaIris.Vsa.ExitH.Iris
 import VsaIris.Vsa.Stderr.FprintfSpec
 import VsaIris.Vsa.SnpGen
 
-/-!
-# The helper specs as closed statements (lane A, F4)
-
-INTERP_DESIGN.md "STATEMENT CHANGE (lane A): helper specs carry their code
-context". Every helper spec the case lemmas take (`TermSupply`,
-`StuckSupply`) carries the persistent code context its proof runs from in its
-precondition: `codeX` (the binary's image and `_impure_ptr`) and `gp` for the
-`env_*` helpers, `binImg` for `strcmp`, `strlen`/`strcpy` of heap strings and
-`memcpy` of an owned source, and `stringify` already takes `binImg` and
-`stdioOwn`. So each spec is a closed statement: `*_closed` below proves it
-from the helper's proof, whose code-context premise it reads off the
-precondition (the generic `fnSpecW_close`/`fnSpecAbort_close`/
-`helperSpec_close`).
-
-`termSupply`/`stuckSupply` assemble the records from these and the boundary's
-facts. Premises on `live`: the interpreter's text (`interpText`), the binary's
-`.text` (`CodeLive`), `env.c`'s and the allocator's code lists (`envText`,
-`AllocLive`: both include `_impure_ptr`'s bytes) and the stack segment
-(`StackLive`: `stringify`'s `strlen` of its stack buffer, H3).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.VsaHeap VsaIris.MallocFast VsaIris.Sym VsaIris.Newlib VsaIris.Stdio
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
-/-! ## Closing a spec over a persistent context in its precondition -/
-
 section Close
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- **A spec proved under a persistent context `C` that its precondition
-carries is closed.** -/
 theorem fnSpecW_close (Wp : MachWP (GF := GF) M) {entry : BitVec 64} {C : IProp GF}
     [Persistent C] {P Q : BitVec 64 → IProp GF} (h : C ⊢ fnSpecW Wp entry P Q)
     (hP : ∀ r, P r ⊢ C ∗ P r) : ⊢ fnSpecW Wp entry P Q := by
@@ -67,7 +42,6 @@ theorem fnSpecW_close (Wp : MachWP (GF := GF) M) {entry : BitVec 64} {C : IProp 
   ihave #H := h $$ HC
   iapply H $$ %r %Φ Hpc Hra HP Hk
 
-/-- `fnSpecW_close` for a function that returns or aborts. -/
 theorem fnSpecAbort_close (Wp : MachWP (GF := GF) M) {entry : BitVec 64} {C : IProp GF}
     [Persistent C] {P Q : BitVec 64 → IProp GF} {A : IProp GF} (h : C ⊢ fnSpecAbort Wp entry P Q A)
     (hP : ∀ r, P r ⊢ C ∗ P r) : ⊢ fnSpecAbort Wp entry P Q A := by
@@ -78,7 +52,6 @@ theorem fnSpecAbort_close (Wp : MachWP (GF := GF) M) {entry : BitVec 64} {C : IP
   ihave #H := h $$ HC
   iapply H $$ %r %Φ Hpc Hra HP Hk
 
-/-- `fnSpecW_close` for a runtime helper in register-file form. -/
 theorem helperSpec_close (Wp : MachWP (GF := GF) M) {entry : BitVec 64} {clob : List Nat}
     {pins : (Nat → BitVec 64) → Prop} {Pre : IProp GF} {Post : (Nat → BitVec 64) → IProp GF}
     {C : IProp GF} [Persistent C] (h : C ⊢ helperSpec M Wp entry clob pins Pre Post)
@@ -94,8 +67,6 @@ theorem helperSpec_close (Wp : MachWP (GF := GF) M) {entry : BitVec 64} {clob : 
 
 end Close
 
-/-! ## The closed helper specs -/
-
 section Closed
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -103,8 +74,6 @@ variable {live : Nat → Prop}
 
 local notation "Mv" live => vsaModel live
 
-/-- The stack segment is live (`stringify`'s `strlen` reads its stack buffer
-through the run's read-only text, H3). -/
 abbrev StackLive (live : Nat → Prop) : Prop := ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a
 
 theorem strcmpV_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live)) :
@@ -116,7 +85,6 @@ theorem strcmpOrd_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live)
     ⊢ strcmpOrdSpec (GF := GF) (Mv live) Wp :=
   strcmp_spec_ord live hcl Wp
 
-/-- **`env_new`**, closed. -/
 theorem envNew_closed (henv : ∀ p ∈ envText, live p.1) (A : AllocSpecs live)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) : ⊢ envNewSpec (GF := GF) Wp N := by
   have h := envNew_spec Wp henv A N
@@ -135,7 +103,6 @@ theorem envNew_closed (henv : ∀ p ∈ envText, live p.1) (A : AllocSpecs live)
     iframe Hx Hg H10 Hsp Hrest
     ipureintro; exact hp
 
-/-- **`env_define`**, closed. -/
 theorem envDefine_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     (halloc : AllocLive live) (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) :
     ⊢ envDefineSpec (GF := GF) Wp N := by
@@ -159,7 +126,6 @@ theorem envDefine_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p
     iframe Hx Hg H10 H11 H12 Hsp Hrest
     ipureintro; exact hp
 
-/-- **`env_get`**, closed. -/
 theorem envGet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) : ⊢ envGetSpec (GF := GF) Wp N := by
   have h := envGet_spec Wp henv N
@@ -179,7 +145,6 @@ theorem envGet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     iframe Hx Hg H10 H11 H12 Hsp Hcl Hsv Hstk Hfa Hs Hout Hst
     ipureintro; exact hp
 
-/-- **`env_set`**, closed. -/
 theorem envSet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) : ⊢ envSetSpec (GF := GF) Wp N := by
   have h := envSet_spec Wp henv N
@@ -199,7 +164,6 @@ theorem envSet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     iframe Hx Hg H10 H11 H12 Hsp Hcl Hsv Hstk Hfa Hs Hval Hst
     ipureintro; exact hp
 
-/-- **`strlen` of an owned heap string**, closed. -/
 theorem strlenHeap_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live)) :
     ⊢ ∀ q x ρ H, strlenHeapSpec (GF := GF) (Mv live) Wp q x ρ H := by
   iintro %q %x %ρ %H
@@ -208,7 +172,6 @@ theorem strlenHeap_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live
   iintro ⟨#Hb, Hrest⟩
   iframe Hb Hrest
 
-/-- **`strcpy` of an owned heap string**, closed. -/
 theorem strcpyHeap_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live)) :
     ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (Mv live) Wp d q y ρ H := by
   iintro %d %q %y %ρ %H
@@ -218,7 +181,7 @@ theorem strcpyHeap_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live
   iframe Hb Hrest
 
 omit I in
-/-- **`memcpy` from an owned source**, closed. -/
+
 theorem memcpyOwned_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live)) :
     ⊢ memcpySpecOwned (GF := GF) (Mv live) Wp := by
   have h := memcpy_spec_owned live hcl Wp
@@ -234,7 +197,6 @@ theorem memcpyOwned_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv liv
     iframe Hb H10 H11 H12 Hcl Hd Hs
     ipureintro; exact hp
 
-/-- `stringify`'s own callee specs, from the image. -/
 theorem stringify_spec_img (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
     (hstk : StackLive live) (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) (inp : Nat) (p s : BitVec 64) (v : Value)
@@ -243,9 +205,6 @@ theorem stringify_spec_img (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
   stringify_spec hlive hcl hstk A HN Hout Wp (memcpyOwned_closed hcl Wp) (memcpy_spec_env live hcl Wp)
     (StrLeaf.strlen_spec_env live hcl Wp) (StrLeaf.strcpy_spec live hcl Wp) N inp p s v st ρ H c o
 
-/-- **`stringify` in the counted regime**, closed: its precondition carries
-`binImg` and `stdioOwn` (whose `_impure_ptr` gives the allocator's text), and
-the counted regime refutes its out-of-memory abort. -/
 theorem stringifyT_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
     (hstk : StackLive live) (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) :
@@ -284,7 +243,6 @@ theorem stringifyT_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
   · iintro ⟨%hρ, -⟩
     cases hρ
 
-/-- **`stringify` that may abort**, closed. -/
 theorem stringifyP_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
     (hstk : StackLive live) (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) (inp : Nat) :
@@ -327,8 +285,6 @@ theorem stringifyP_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
 
 end Closed
 
-/-! ## The records -/
-
 section Records
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -337,7 +293,6 @@ local notation "Mv" live => vsaModel live
 local notation "Lp" => vsaLayoutP
 local notation "Rp" => vsaRoomB
 
-/-- The premises on `live` the helper proofs share. -/
 structure SupplyLive (live : Nat → Prop) : Prop where
   interp : ∀ p ∈ interpText, live p.1
   code : CodeLive live
@@ -345,7 +300,6 @@ structure SupplyLive (live : Nat → Prop) : Prop where
   alloc : AllocLive live
   stack : StackLive live
 
-/-- **`term_sim`'s supply** from the helper proofs and the boundary's facts. -/
 theorem termSupply {live : Nat → Prop} (L : SupplyLive live) (HN : NewlibHoles) (Hout : OutHoles)
     {N : NativeAddrs} {inp : Nat} (hent : NativeEntries N) (hclo : CloSupply (GF := GF) N)
     (hgeo : RtErr.InpGeom (BitVec.ofNat 64 inp)) (hlt : inp < 2 ^ 64) (hal : inp % 8 = 0) :
@@ -380,7 +334,6 @@ theorem termSupply {live : Nat → Prop} (L : SupplyLive live) (HN : NewlibHoles
   memcpyOwned := memcpyOwned_closed L.code _
   strcpyHeap := strcpyHeap_closed L.code _
 
-/-- **`stuck_sim`'s supply** from the helper proofs and the boundary's facts. -/
 theorem stuckSupply {live : Nat → Prop} (L : SupplyLive live) (HN : NewlibHoles) (Hout : OutHoles)
     {N : NativeAddrs} {inp : Nat} (hE : ErrEnv (GF := GF) N Lp Rp inp live (evalCore N Lp Rp inp))
     (hent : NativeEntries N) (hclo : CloSupply (GF := GF) N) (hal : inp % 8 = 0) :
@@ -415,14 +368,11 @@ theorem stuckSupply {live : Nat → Prop} (L : SupplyLive live) (HN : NewlibHole
   memcpyOwned := memcpyOwned_closed L.code _
   strcpyHeap := strcpyHeap_closed L.code _
 
-/-! ## At the boundary's live set -/
-
 theorem textOrImpure_topLive {p : Nat × BitVec 8} (h : TextOrImpure p) : topLive p.1 := by
   rcases h with ⟨hd, -⟩ | ⟨hd, -⟩
   · unfold textDom at hd; exact .inl ⟨hd.1, by omega, by omega⟩
   · unfold impureW at hd; exact .inr (.inl hd)
 
-/-- `topLive` holds every code list the helpers run from. -/
 theorem supplyLive_top : SupplyLive topLive where
   interp := topLive_interp
   code := topLive_code
@@ -433,15 +383,13 @@ theorem supplyLive_top : SupplyLive topLive where
 end Records
 
 open Vsa.Sim.LayoutInstance in
-/-- The helper specs of the total and partial cases, for every Iris
-instance, from the holes. -/
+
 structure Supplies : Prop where
   term : ∀ {GF : BundledGFunctors} [G : MachGS .hasLC GF] [I : InterpGS GF] (N : NativeAddrs),
     NativeEntries N → TermSupply (GF := GF) topLive N inpTop
   stuck : ∀ {GF : BundledGFunctors} [G : MachGS .hasLC GF] [I : InterpGS GF] (N : NativeAddrs),
     NativeEntries N → StuckSupply (GF := GF) topLive N inpTop
 
-/-- **Every helper spec the recursions take, from the holes.** -/
 theorem supplies_of : Supplies where
   term N hent := termSupply supplyLive_top (VsaIris.Newlib.NewlibCore.full (VsaIris.Newlib.NewlibCoreAt.proved _) VsaIris.Newlib.fprintf_ok VsaIris.Sym.snprintf_ok) Newlib.OutHoles.proved hent cloSupply inpGeom_top inpLt_top
     inpAl_top
@@ -451,4 +399,3 @@ theorem supplies_of : Supplies where
     cloSupply inpAl_top
 
 end VsaIris.Interp
-

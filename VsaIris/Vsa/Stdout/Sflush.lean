@@ -1,23 +1,11 @@
 import VsaIris.Vsa.Stdout.Swrite
 
-/-!
-# `__sflush_r` on a write-mode `FILE` (lane N1)
-
-`__sflush_r(reent, f)` with `__SWR` set writes `f`'s buffered bytes
-`[_bf._base, _p)` through `f->_write` (`__swrite` on `stdout`'s cookie), resets
-`_p` to the base and `_w` to `0` (unbuffered) or `_bf._size`, and returns 0.
-Two `FILE`s reach it: `stdout` (one byte, from `__swbuf_r`) and
-`__sbprintf`'s stack `FILE` (the formatted string, from `_fflush_r`).
--/
-
 namespace VsaIris.Sym
 
 open scoped VsaIris.Sym.Stdout
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
-/-- The memory after `__sflush_r(reent, f)` returns: its five spills, `_p`
-reset to the base, `_w` to `0`, and `__swrite`'s effect (`swriteMt`). -/
 @[nx_mt] abbrev sflushMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   swriteMt (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551600#64).toNat, 8, s0)]) [((sp + 18446744073709551576#64).toNat, 8, s3)])
@@ -82,8 +70,6 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
 
 #nx_chain sflush_chain := [sflush_A, sflush_B, sflush_C, sflush_D]
 
-/-- **`__sflush_r(reent, stdout)`** with `stdout`'s one-byte buffer `bs` pending: prints it
-through `__swrite`, resets `_p`/`_w`, returns 0. -/
 theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f F B ra s0 s1 s2 s3 : BitVec 64} {need : Nat} {bs : List (BitVec 8)}

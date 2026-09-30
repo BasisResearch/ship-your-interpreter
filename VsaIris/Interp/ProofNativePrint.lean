@@ -3,15 +3,6 @@ import VsaIris.Interp.ProofValueCons
 import VsaIris.Vsa.StdioRead
 import VsaIris.Vsa.Stdout.OutSpec
 
-/-!
-# `native_print` and `native_println` (lane H2)
-
-`native_print(sret, in, argc, args, line)` copies each argument into its
-frame, prints it with `value_print`, prints `' '` between arguments with
-`fputc`, and returns `null` (`value_null`). The loop is a Lean induction over
-the arguments left, each iteration two runs and two calls.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -19,17 +10,12 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib VsaIris.
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 open LeanRV64DExecutable LeanRV64DExecutable.Functions
 
-/-- `_impure_data._stdout` holds `&__sf[1]`. -/
 theorem StdioOK.stdout {img : Nat → BitVec 8} (h : StdioOK img) :
     imgW img (consoleReent + 16) = BitVec.ofNat 64 consoleStdout :=
   let ⟨_, h⟩ := h; StdioOK.word h.facts.1.stdout (dataList_range (by decide) (by decide))
 
-/-- The word of newlib's data `native_print` owns while it reads it:
-`_impure_data._stdout`. It reads `_impure_ptr` through the read-only data
-view `impMem` (`Stdio.impureRO`). -/
 abbrev ioW (k : Nat) : Prop := InExt (0x8001b548, 8) k
 
-/-- `_impure_ptr` as a memory: the data view of the runs that load it. -/
 def impMem : Mem := fillMem impureByte (List.range' 0x8001b970 8)
 
 theorem imgM_impMem {k : Nat} (h : impureW k) : imgM impMem k = impureByte k := by
@@ -38,18 +24,14 @@ theorem imgM_impMem {k : Nat} (h : impureW k) : imgM impMem k = impureByte k := 
     by unfold impureW at h; omega⟩)]
   rfl
 
-/-- The loaded `_impure_ptr`. -/
 theorem ldv_impMem : ldv .ld impMem 0x8001b970 = 0x8001b538#64 := by
   rw [ldv_ld_imgW]; unfold imgW
   rw [imgLE_congr (img' := impureByte) (fun j hj => imgM_impMem (by unfold impureW; omega))]
   decide
 
-/-- The bytes `native_print` owns across its calls: its frame and the
-arguments. -/
 abbrev npF (s args : BitVec 64) (n : Nat) (k : Nat) : Prop :=
   InExt (s.toNat - 80, 80) k ∨ InExt (args.toNat, 24 * n) k
 
-/-- A run's bytes: those and `_impure_data._stdout`. -/
 abbrev npS (s args : BitVec 64) (n : Nat) (k : Nat) : Prop := npF s args n k ∨ ioW k
 
 macro_rules
@@ -60,7 +42,6 @@ section Vals
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The meanings of `n` consecutive values in an image, persistent. -/
 def valsImg (N : NativeAddrs) (f : Nat → BitVec 8) : Nat → List Value → IProp GF
   | _, [] => iprop(emp)
   | a, v :: vs => iprop(valImg N f a v ∗ valsImg N f (a + 24) vs)
@@ -106,7 +87,6 @@ theorem ownSet_inExt_nil (a : Nat) (Φ : Nat → IProp GF) : ⊢ ownSet (InExt (
   · ipureintro; exact ⟨List.nodup_nil, fun k => by simp [InExt]⟩
   · simp only [sepL_nil]; iempintro
 
-/-- **Values at one tracking memory**: their bytes and their meanings. -/
 theorem valsAt_tracked (N : NativeAddrs) :
     ∀ (vs : List Value) (a : Nat), valsAt (GF := GF) N a vs ⊢
       ∃ M : Mem, ownSet (InExt (a, 24 * vs.length)) (fun k => k ↦ₘ imgM M k) ∗
@@ -134,7 +114,6 @@ theorem valsAt_tracked (N : NativeAddrs) :
     rw [← e]
     iframe Hv Hvs'
 
-/-- And back. -/
 theorem valsAt_of_tracked (N : NativeAddrs) (M : Mem) :
     ∀ (vs : List Value) (a : Nat),
       ownSet (GF := GF) (InExt (a, 24 * vs.length)) (fun k => k ↦ₘ imgM M k) ∗
@@ -158,7 +137,6 @@ theorem valsAt_of_tracked (N : NativeAddrs) (M : Mem) :
       iapply ownSet_iff _ (fun k => ⟨fun hk => by simp only [InExt] at hk ⊢; omega,
         fun hk => ⟨by simp only [InExt] at hk ⊢; omega, by simp only [InExt] at hk ⊢; omega⟩⟩) $$ HB
 
-/-- One value's meaning out of the list's. -/
 theorem valsImg_get (N : NativeAddrs) (f : Nat → BitVec 8) :
     ∀ (vs : List Value) (a i : Nat) (h : i < vs.length),
       valsImg (GF := GF) N f a vs ⊢ valImg N f (a + 24 * i) vs[i]
@@ -173,13 +151,11 @@ theorem valsImg_get (N : NativeAddrs) (f : Nat → BitVec 8) :
     rw [show a + 24 * (i + 1) = a + 24 + 24 * i by omega, List.getElem_cons_succ]
     iapply this $$ H
 
-/-- `ioW` is inside newlib's exclusive data. -/
 theorem ioW_stdio {k : Nat} (h : ioW k) : stdioExcl k := by
   simp only [ioW, InExt] at h; unfold stdioExcl stdioFoot impureW InRange; omega
 
 omit I in
-/-- The code and `_impure_ptr` as the read-only bytes of a run with the data
-view `impMem`. -/
+
 theorem codeRes_imp :
     codeRes (GF := GF) ∗ impureRO ⊢ roOwn roR (interpText ++ dataOf impMem (accAddrs 0x8001b970 8)) := by
   unfold codeRes roOwn
@@ -196,12 +172,12 @@ theorem codeRes_imp :
     rw [mem_accAddrs_iff] at ha; unfold impureW; omega) $$ Hr
 
 omit I in
-/-- newlib's data outside `ioW`, with `_impure_ptr`, and `errno`. -/
+
 def ioRest (img : Nat → BitVec 8) : IProp GF :=
   iprop(ownSet (fun k => stdioExcl k ∧ ¬ ioW k) (fun k => k ↦ₘ img k) ∗ impureRO ∗ errnoOwn)
 
 omit I in
-/-- **Open the two words of newlib's data into a run's owned bytes.** -/
+
 theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M : Mem} :
     ms (GF := GF) pc R S M ∗ stdioW ⊢
       ∃ (img : Nat → BitVec 8) (M' : Mem), ⌜StdioOK img⌝ ∗
@@ -222,7 +198,7 @@ theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
   exact ⟨hok, h1, fun k hk => (h2 k hk).trans (hMi k hk), h3⟩
 
 omit I in
-/-- **Close them again**, unchanged by the run. -/
+
 theorem ms_ioClose {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M : Mem}
     {img : Nat → BitVec 8} (hok : StdioOK img) (hd : ∀ k, S k → ¬ ioW k) :
     ms (GF := GF) pc R (fun k => S k ∨ ioW k) M ∗ ioRest img ∗
@@ -239,9 +215,6 @@ theorem ms_ioClose {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {
 
 end Vals
 
-/-! ## The runs (`#ix_seg`: each run a lemma ending at its computed state) -/
-
-/- The prologue, one or more arguments: to the loop head. -/
 #ix_seg np_pro {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s args sret r : BitVec 64} {n : Nat}
@@ -262,7 +235,6 @@ end Vals
          simp only [upd_apply, Nat.reduceEqDiff, ite_false, h12, hnI, h0I] at hc; omega)
       | (intro _; ix_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f1c)
 
-/- The prologue, no arguments: to `jal value_null`. -/
 #ix_seg np_pro0 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s args sret r : BitVec 64} {n : Nat}
@@ -277,7 +249,6 @@ end Vals
     unfold nativePrintPC
     ix_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f64
 
-/- The loop body: copy argument `i`, `jal value_print`. -/
 #ix_seg np_body {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args : BitVec 64} {n i : Nat} {w0 w1 w2 : BitVec 64}
@@ -298,7 +269,6 @@ end Vals
       rw [BitVec.toNat_add]; simp; omega
     ix_run1 hlive using [h8, h9, h18, h2, hsf, ea, hw0, hw1, hw2, hio1, hio2] at 0x80002f44
 
-/- After `value_print`, more arguments: `jal fputc` with `' '`. -/
 #ix_seg np_more {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args : BitVec 64} {n i : Nat}
@@ -314,7 +284,6 @@ end Vals
       | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; exact hne)
       | (intro _; ix_run1 hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18)
 
-/- After the last `value_print`: restore `s0`-`s3`, `jal value_null`. -/
 #ix_seg np_last {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args : BitVec 64} {n : Nat} {v8 v9 v18 v19 : BitVec 64}
@@ -332,7 +301,6 @@ end Vals
       | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; done)
       | (intro _; ix_run1 hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64)
 
-/- The epilogue, after `value_null`. -/
 #ix_seg np_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s args r v20 : BitVec 64} {n : Nat}
@@ -345,10 +313,6 @@ end Vals
   by
     ix_run1 hlive using [h2, hra, hs4, hal]
 
-/-! ## What the loop prints -/
-
-/-- What `native_print` has printed at the head of iteration `i`: the first
-`i` arguments and, after the first, the separator. -/
 def npOut (st : Store) (vs : List Value) (i : Nat) : String :=
   if i = 0 then "" else printArgs st (vs.take i) ++ " "
 
@@ -385,8 +349,6 @@ theorem npOut_last (st : Store) (vs : List Value) (i : Nat) (h : i + 1 = vs.leng
     npOut st vs i ++ (vs[i]'(by omega)).display st = printArgs st vs := by
   rw [npOut_step st vs i (by omega), h, List.take_length]
 
-/-! ## Words through stores -/
-
 theorem imgW_store_hit (Mt : Mem) (a : Nat) (w : BitVec 64) :
     imgW (imgM (writeLog Mt [(a, 8, w)])) a = w := by
   unfold imgW; rw [imgLE_imgM_store]; simp
@@ -399,7 +361,6 @@ theorem ldv_agree {M M' : Mem} {a : Nat} (h : ∀ j, j < 8 → imgM M (a + j) = 
     ldv .ld M a = ldv .ld M' a := by
   rw [ldv_ld_imgW, ldv_ld_imgW, imgW_agree h]
 
-/-- `addiw s1,s1,1` on a small count. -/
 theorem sx32_succ (i : Nat) (h : i + 1 < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 i + 1#64)) = BitVec.ofNat 64 (i + 1) := by
   apply BitVec.eq_of_toNat_eq
@@ -411,14 +372,11 @@ theorem sx32_succ (i : Nat) (h : i + 1 < 2 ^ 31) :
   rw [BitVec.signExtend_eq_setWidth_of_msb_false hm, BitVec.toNat_setWidth, he]
   simp
 
-/-! ## The Iris glue -/
-
 section Glue
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- `native_print`'s return continuation (its `helperSpec` post). -/
 abbrev NpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64) :
     IProp GF :=
@@ -427,7 +385,6 @@ abbrev NpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
       (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
         consoleOwn (o ++ printArgs st vs) ∗ stackAt s nativePrintNeed)) -∗ Wp.W Φ)
 
-/-- The frame of the epilogue run. -/
 def FnpE (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64)
     (Margs : Mem) : IProp GF :=
@@ -435,7 +392,6 @@ def FnpE (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp 
     consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
     NpK Wp Φ N sret args s r vs st o rv)
 
-/-- The shared pure facts of a `native_print` run. -/
 structure NpCtx (live : Nat → Prop) (sret args s r : BitVec 64) (n : Nat) (rv : Nat → BitVec 64) :
     Prop where
   hlive : ∀ p ∈ interpText, live p.1
@@ -453,8 +409,6 @@ structure NpCtx (live : Nat → Prop) (sret args s r : BitVec 64) (n : Nat) (rv 
   hn : n < 2 ^ 31
   hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k
 
-/-- The pure state of the loop: `s0 = args + 24 i8`, `s1 = i9`, the other
-saved registers, the frame's saved words, the arguments' bytes. -/
 structure NpFacts (sret args s r : BitVec 64) (n i8 i9 : Nat) (rv R : Nat → BitVec 64)
     (M Margs : Mem) : Prop where
   h8 : R 8 = args + BitVec.ofNat 64 (24 * i8)
@@ -472,7 +426,6 @@ structure NpFacts (sret args s r : BitVec 64) (n i8 i9 : Nat) (rv R : Nat → Bi
   ss4 : ldv .ld M (s + 18446744073709551536#64 + 32#64).toNat = rv 20
   hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k
 
-/-- The rest a `native_print` loop carries. -/
 def NpRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64)
     (Margs : Mem) : IProp GF :=
@@ -481,7 +434,7 @@ def NpRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
 
 omit I in
 omit I in
-/-- A newlib stdout spec is a function spec. -/
+
 theorem outSpec_fn {live : Nat → Prop} {Wp : MachWP (GF := GF) (vsaModel live)} {entry : BitVec 64}
     {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need : Nat} {cs : Nat → BitVec 64}
     {o frag : String} :
@@ -492,8 +445,7 @@ theorem outSpec_fn {live : Nat → Prop} {Wp : MachWP (GF := GF) (vsaModel live)
           callFrame s need Newlib.calleeSaved cs)) := .rfl
 
 omit I in
-/-- **A newlib stdout call from a run** (`jal`), against an `IrisHoles.out`
-statement at the run's callee-saved registers. -/
+
 theorem ms_callOut (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
@@ -526,7 +478,6 @@ theorem ms_callOut (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iintro %R' %hk ⟨Hstd, Hcon⟩ Hms Hst
   iapply Hk $$ %R' %hk Hstd Hcon Hms Hst
 
-/-- The frame of `native_print` as a stack region below `s`. -/
 theorem npFrame_join {s : BitVec 64} (hs : 80 + printNeed ≤ s.toNat) :
     stackScratch (GF := GF) (s - 80#64) printNeed ∗
       ownSet (InExt (s.toNat - 80, 80)) byteAny ⊢ stackScratch s nativePrintNeed := by
@@ -538,7 +489,6 @@ theorem npFrame_join {s : BitVec 64} (hs : 80 + printNeed ≤ s.toNat) :
   unfold blockOwn at h
   exact h
 
-/-- And the frame out of the stack below `s`. -/
 theorem npFrame_split {s : BitVec 64} (hs : 80 + printNeed ≤ s.toNat) :
     stackScratch (GF := GF) s nativePrintNeed ⊢
       stackScratch (s - 80#64) printNeed ∗ ownSet (InExt (s.toNat - 80, 80)) byteAny := by
@@ -550,7 +500,6 @@ theorem npFrame_split {s : BitVec 64} (hs : 80 + printNeed ≤ s.toNat) :
   unfold blockOwn at h
   exact h
 
-/-- **`native_print`'s tail**: `value_null`, the epilogue, the return. -/
 theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
     {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
@@ -630,15 +579,12 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; unfold nativePrintNeed printNeed fprintfNeed; omega,
       by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3, c.hs4⟩
 
-/-- The frame of the loop-body run. -/
 def FnpA (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o o' : String) (rv : Nat → BitVec 64)
     (Margs : Mem) (img : Nat → BitVec 8) : IProp GF :=
   iprop(NpRest Wp Φ N sret args s r vs st o rv Margs ∗ consoleOwn o' ∗
     ioRest img)
 
-/-- **An iteration's first half**: the loop head, the copy of argument `i`,
-`value_print`. -/
 theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
     {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
@@ -714,7 +660,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
     simp only [ioW, InExt] at hk
     simp (disch := omega) only [imgM_store_miss]
     exact hio k (by simp only [ioW, InExt]; omega)
-  -- the copy slot out of the frame
+
   have hsl : ∀ k, npF s args n k ↔
       ((npF s args n k ∧ ¬ InExt (s.toNat - 80, 24) k) ∨ InExt (s.toNat - 80, 24) k) := fun k => by
     constructor
@@ -726,7 +672,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
       · left; simp only [InExt] at h ⊢; omega
   ihave Hms := ms_iff hsl $$ Hms
   ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
-  -- its three words are argument `i`'s
+
   have hv0 : imgW (imgM (writeLog (writeLog (writeLog M1 [(s.toNat - 80, 8,
       imgW (imgM Margs) (args.toNat + 24 * i))]) [(s.toNat - 80 + 8, 8,
       imgW (imgM Margs) (args.toNat + 24 * i + 8))]) [(s.toNat - 80 + 16, 8,
@@ -791,7 +737,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   ihave ⟨%M3, Hms, %⟨h3a, h3b, _⟩⟩ := ms_join $$ [Hms HsS]
   · iframe Hms HsS
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
-  -- the frame's saved words and the arguments' bytes survive
+
   have hsv : ∀ o, 24 ≤ o → o + 8 ≤ 80 →
       ldv .ld M3 (s.toNat - 80 + o) = ldv .ld M (s.toNat - 80 + o) := fun o h1 h2 =>
     ldv_agree fun j hj => by
@@ -842,13 +788,11 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   · rw [sw 40 (by omega) (by omega)]; exact f.ss3
   · rw [sw 32 (by omega) (by omega)]; exact f.ss4
 
-/-- The frame of the `fputc` run. -/
 def FnpB (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o o' : String) (rv : Nat → BitVec 64)
     (Margs : Mem) (img : Nat → BitVec 8) : IProp GF :=
   FnpA Wp Φ N sret args s r vs st o o' rv Margs img
 
-/-- The `fputc(' ')` call, at `0x80002f18`, back to the loop head. -/
 theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
     {o o' : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
@@ -905,8 +849,6 @@ theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     simp only [upd, hx1, ite_false]
     rw [k4 x hx hc]; exact f.hk x hx hc hn
 
-/-- **An iteration's second half, more arguments**: `fputc(' ')`, back to the
-loop head. -/
 theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
     {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
@@ -1000,8 +942,6 @@ theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     · rw [sw 32 (by omega) (by omega)]; exact f.ss4
   iframe Hrest Hms Hstd Hcon
 
-/-- **An iteration's second half, last argument**: restore `s0`-`s3`, then the
-tail. -/
 theorem np_B_last (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
     {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
@@ -1053,8 +993,6 @@ theorem np_B_last (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     exact f.hk x hx hc (by simp [h2, h8, h9, h18, h19, h20])
   iframe Hcode Hms Hsl Hv Hstd Hcon Hst Hk
 
-/-- **The loop**, from the head with argument `i` next, by induction on the
-arguments left. -/
 theorem np_loop (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
     {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
@@ -1075,7 +1013,6 @@ theorem np_loop (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     exact np_A Wp c hvp hlen (by omega) f fun R' M' f' =>
       np_B_more Wp c hcl H hlen (by omega) f' fun R'' M'' f'' => ih (i + 1) (by omega) R'' M'' f''
 
-/-- **`native_print`**, given `IrisHoles.out`, for either WP. -/
 theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live) (H : OutHoles)
     (Wp : MachWP (GF := GF) (vsaModel live)) (N : NativeAddrs) (sret args s : BitVec 64)
     (vs : List Value) (st : Store) (o : String) :

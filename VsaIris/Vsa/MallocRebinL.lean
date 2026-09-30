@@ -1,41 +1,21 @@
 import VsaIris.Vsa.MallocRebin
 
-/-!
-# Re-binning a large last remainder
-
-A last remainder of more than 511 bytes that is smaller than the request goes
-to its large bin (`0x80004c70`), which is kept sorted by size:
-
-* `lbin_idx`: the six-way cascade computing `binIndex sz` and the address of
-  the bin's `fd` word;
-* the bin is empty: set its block bit and make the remainder its only member;
-* otherwise walk the bin from its first member while the member is larger,
-  and link the remainder in before the first one that is not.
-
-The heap edit is `PHeapAt.moveBinAt`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- A sign-extended 32-bit sum that fits is the sum. -/
 theorem sx32_add_toNat {x : BitVec 64} {k : Nat} (h : x.toNat + k < 2 ^ 31) :
     (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (x + BitVec.ofNat 64 k))).toNat = x.toNat + k := by
   have hs : (x + BitVec.ofNat 64 k).toNat = x.toNat + k := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat]; omega
   rw [toNat_sx32_small _ (by rw [hs]; omega), hs]
 
-/-- The registers the large-bin cascade leaves at `0x80004c94`: the offset of
-bin `binIndex sz`'s `fd` word from `__malloc_av_` in `a0`, the index in `a2`;
-everything else but `a3` kept. -/
 structure LBinIdx (sz : Nat) (R R' : Nat → BitVec 64) : Prop where
   a0 : (R' 10).toNat = 16 * binIndex sz + 16
   a2 : (R' 12).toNat = binIndex sz
   keep : ∀ x, x ≠ 10 → x ≠ 12 → x ≠ 13 → R' x = R x
 
-/-- The cascade's `fd` offset: `sext32 ((y << 1) + K) << 3`. -/
 theorem cascade_off {x : BitVec 64} {y K : Nat} (hx : x.toNat = y) (h : 2 * y + K < 2 ^ 31) :
     (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (x <<< 1 + BitVec.ofNat 64 K)) <<< 3).toNat =
       (2 * y + K) * 8 := by
@@ -49,22 +29,14 @@ theorem binIndex_large {sz : Nat} (h : 512 ≤ sz) : 57 ≤ binIndex sz ∧ binI
   repeat' split
   all_goals omega
 
-/-- `binIndex` is monotone. -/
 theorem binIndex_mono {a b : Nat} (h : a ≤ b) : binIndex a ≤ binIndex b := by
   unfold binIndex
   repeat' split
   all_goals omega
 
-/-- **Where the block search may start.** Every nonempty bin from `idx` up
-holds a chunk of at least `nb` bytes: either `idx` is above the request's own
-bin (so, by `binIndex_mono`, every chunk from there up is larger), or bin `idx`
-has such a chunk. The search clears the bit of a block it exhausted, which
-keeps `HeapAt.binblocks` only because of this. -/
 def ScanFrom (chunks : List Chunk) (bins : Nat → List Nat) (nb idx : Nat) : Prop :=
   binIndex nb < idx ∨ ∃ x sz, x ∈ bins idx ∧ FreeAt chunks x sz ∧ nb ≤ sz
 
-/-- **The large-bin cascade** (`0x80004c70`): from the chunk size in `t1`,
-`binIndex sz` and its bin's `fd` offset. -/
 theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz : Nat}
     (h6 : (R 6).toNat = sz) (hlo : 512 ≤ sz) (hhi : sz < 2 ^ 31)
     (hk : ∀ R', LBinIdx sz R R' → AW C.live C.S C.Q 0x80004c94#64 R' Mt) :
@@ -77,7 +49,7 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
     rw [BitVec.toNat_ushiftRight, h6, Nat.shiftRight_eq_div_pow]
   refine st_80004c78 O.live (fun h4 => ?_) (fun h4 => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hx] at h4
-  · -- `sz / 512 ≤ 4`: bins 57 to 64
+  ·
     have h4' : sz / 512 ≤ 4 := by simpa using h4
     sx_run [8] O.live at 0x80004c94
     have hy : (R 6 >>> 6).toNat = sz / 64 := by
@@ -88,13 +60,13 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
     · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
-  -- `sz / 512 > 4`
+
   have h4' : ¬ sz / 512 ≤ 4 := by simpa using h4
   refine st_80004c7c O.live ?_
   refine st_80004c80 O.live (fun h20 => ?_) (fun h20 => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hx] at h20
   rotate_left
-  · -- `sz / 512 ≤ 20`: bins 92 to 111
+  ·
     have h20' : sz / 512 ≤ 20 := by sx_norm; omega
     sx_run [8] O.live at 0x80004c94
     have hy : (R 6 >>> 9).toNat = sz / 512 := by
@@ -110,7 +82,7 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
   refine st_80004f20 O.live (fun h84 => ?_) (fun h84 => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hx] at h84
   rotate_left
-  · -- `sz / 512 ≤ 84`: bins 111 to 120
+  ·
     have h84' : sz / 512 ≤ 84 := by sx_norm; omega
     sx_run [8] O.live at 0x80004c94
     have hy : (R 6 >>> 12).toNat = sz / 4096 := by
@@ -126,7 +98,7 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
   refine st_80004fa4 O.live (fun h340 => ?_) (fun h340 => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hx] at h340
   rotate_left
-  · -- `sz / 512 ≤ 340`: bins 120 to 124
+  ·
     have h340' : sz / 512 ≤ 340 := by sx_norm; omega
     sx_run [8] O.live at 0x80004c94
     have hy : (R 6 >>> 15).toNat = sz / 32768 := by
@@ -142,7 +114,7 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
   refine st_80005028 O.live (fun h1364 => ?_) (fun h1364 => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hx] at h1364
   rotate_left
-  · -- `sz / 512 ≤ 1364`: bins 124 to 126
+  ·
     have h1364' : sz / 512 ≤ 1364 := by sx_norm; omega
     sx_run [8] O.live at 0x80004c94
     have hy : (R 6 >>> 18).toNat = sz / 262144 := by
@@ -153,7 +125,7 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
     · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
-  -- the last bin, 126
+
   have h1364' : 1364 < sz / 512 := by sx_norm; omega
   sx_run [8] O.live at 0x80004c94
   have hb : binIndex sz = 126 := by
@@ -164,10 +136,6 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
   · rw [hb]; rfl
   · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
 
-/-- **The heap after a re-binning into bin `j` between `pred` and `succ`.**
-The machine's four link stores (`v`'s `bk` and `fd`, `pred`'s `fd`, `succ`'s
-`bk`) over a memory `M0` that differs from the detached heap `Mt'` at most on
-the bitmap, holding `bb'` with bin `j`'s block bit set. -/
 theorem rebin_at_heap {C : MCtx} {Mt Mt' M0 : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {v sz j pred succ bb bb' : Nat} {pre' post' : List Nat}
     (Hp : MHeap C Mt brkv chunks bins) (D : MDetach C Mt Mt' bins 1 v) (hfree : FreeAt chunks v sz)
@@ -195,7 +163,7 @@ theorem rebin_at_heap {C : MCtx} {Mt Mt' M0 : Mem} {brkv : Nat} {chunks : List C
   have hvmem : v ∈ bins 1 := by rw [D.bin]; exact List.mem_cons_self
   have hvJ : v ∉ bins j := fun hc => by
     have := HH.bin_unique (by omega) hj (by decide) (by unfold numBins; decide) hc hvmem; omega
-  -- the insertion point's nodes
+
   have hpm : pred = binAt j ∨ pred ∈ bins j := by
     have := List.mem_of_getLast? hpred
     rcases List.mem_cons.mp this with h1 | h1
@@ -298,9 +266,6 @@ theorem rebin_at_heap {C : MCtx} {Mt Mt' M0 : Mem} {brkv : Nat} {chunks : List C
         have := hsf (24 + k) (by omega) (by omega)
         rwa [show succ + (24 + k) = succ + 24 + k by omega] at this)
 
-/-- The re-binning continuation: the block search's test, entered with any
-heap at the entry break and chunks, the request's registers, `t4 = bin 1`, and
-the bitmap in `a1`. -/
 abbrev RebinNext (C : MCtx) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
     (nb idx : Nat) : Prop :=
   ∀ R'' Mt'' bins'' bb'', MFrame C R'' Mt'' → MHeap C Mt'' brkv chunks bins'' →
@@ -309,8 +274,6 @@ abbrev RebinNext (C : MCtx) (brkv : Nat) (chunks : List Chunk) (bins : Nat → L
     read64 Mt'' binblocksAddr = some bb'' → (R'' 11).toNat = bb'' →
     AW C.live C.S C.Q 0x80004968#64 R'' Mt''
 
-/-- **Link the remainder in** (`0x80004cc0`): with `pred` in `a0` and `succ`
-in `a3`, the four link stores, then the block search's test. -/
 theorem rebin_link {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' M0 : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     {nb idx v sz j pred succ bb bb' : Nat} {pre' post' : List Nat}
@@ -371,7 +334,7 @@ theorem rebin_link {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' M0 : M
   have hoS := Hp.off_stack (a := succ + 24) (fun k hk => by
     have := hsf (24 + k) (by omega) (by omega); rwa [show succ + (24 + k) = succ + 24 + k by omega] at this)
   unfold mHead at hoV hoV' hoP hoS
-  -- `sd a0,24(a5); sd a3,16(a5)`: `v`'s links
+
   refine st_80004cc0 O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => by
@@ -385,7 +348,7 @@ theorem rebin_link {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' M0 : M
       have := hvf k (by omega); rwa [show v + 16 + k = (R 15 + 16#64).toNat + k by sx_addr] at this)
   sx_norm
   rw [show (R 15 + 16#64).toNat = v + 16 by sx_addr]
-  -- `sd a5,16(a0); sd a5,24(a3)`: `pred`'s `fd`, `succ`'s `bk`
+
   refine st_80004cc8 O.live ?_ ?_ ?_
   · sx_norm; unfold StOK Vsa.Sim.tohostAddr
     rw [show (R 10 + 16#64).toNat = pred + 16 by sx_addr]; omega
@@ -422,9 +385,6 @@ theorem rebin_link {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' M0 : M
     read64_miss _ _ (by omega)]
   rw [← hbbA]; exact hbb0
 
-/-- The state of the large re-binning around its walk: the detached heap, the
-remainder `v` of size `sz` in `a5`, bin `j = binIndex sz`, the bitmap `bb` in
-`a1`, and the request's registers. -/
 structure RebinL (C : MCtx) (Mt Mt' : Mem) (brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) (nb idx v sz j bb : Nat) (R : Nat → BitVec 64) : Prop where
   frame : MFrame C R Mt'
@@ -463,8 +423,6 @@ theorem RebinL.upd {C : MCtx} {Mt Mt' : Mem} {brkv : Nat} {chunks : List Chunk}
   a1 := by rw [h 11 (by decide) (by decide) (by decide) (by decide)]; exact L.a1
   bbr := L.bbr
 
-/-- **The walk's exit** (`0x80004cbc`): `succ` in `a3`; load its `bk`, the
-insertion point's `pred`, and link the remainder in. -/
 theorem rebinL_exit {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz j bb succ : Nat}
     {pre' post' : List Nat} (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R)
@@ -485,7 +443,7 @@ theorem rebinL_exit {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem
     · exact .inl (List.mem_singleton.mp h1)
   obtain ⟨hs16, hsnode⟩ := HH.node (by omega) hj hsm
   have hsf := B.node_foot (by omega) hj hsm
-  -- `bk succ` is `pred`
+
   have hring := (binList_iff_ring.1 (HH.bins_list j (by omega) hj)).1
   have hbkS : bkOf Mt succ = some pred := by
     rcases post' with _ | ⟨y, ys⟩
@@ -533,8 +491,6 @@ theorem rebinL_exit {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem
     L'.regs L'.t4 L'.s0 (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat,
       Nat.mod_eq_of_lt hpl]) (by rw [upd_other _ _ (by decide)]; exact h13) L'.a5 L'.a1 hnext
 
-/-- A free chunk `cx` at `x` on a bin, seen from the detached heap: its place,
-its footprint words (header and links) and its header's read. -/
 structure MemberAt (C : MCtx) (Mt' : Mem) (chunks : List Chunk) (x : Nat) (cx : Chunk) : Prop where
   mem : cx ∈ chunks
   addr : cx.addr = x
@@ -569,9 +525,6 @@ theorem RebinL.member {C : MCtx} {Mt Mt' : Mem} {brkv : Nat} {chunks : List Chun
     rwa [show cx.addr + (8 + k) = cx.addr + 8 + k by omega] at h') (by unfold binAt avAddr; omega)]
   exact hr
 
-/-- One test of the sorted walk (`0x80004cb0`): read member `x`'s size; a
-larger member is passed (`0x80004ca8`), otherwise `x` is the insertion
-point. -/
 theorem rebinL_cmp {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz j bb x : Nat}
     {pre rest : List Nat} (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R)
@@ -610,8 +563,6 @@ theorem rebinL_cmp {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     exact rebinL_exit O L' hj hne (pre' := pre) (post' := x :: rest) hmem rfl
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h13) hnext
 
-/-- The walk's step (`0x80004ca8`): move to member `x`'s successor; the
-header ends the walk with the remainder last in the bin. -/
 theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz j bb x : Nat}
     {pre rest : List Nat} (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R)
@@ -631,7 +582,7 @@ theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
   have hlo := M.lo; have hhi := M.hi; have hmin := M.min
   have htle := HH.top_le; have hbrk := HH.brk_le
   unfold heapEnd at hbrk
-  -- `fd x` is the next node
+
   obtain ⟨pred, hpred⟩ : ∃ p, (binAt j :: pre).getLast? = some p := ⟨_, List.getLast?_cons⟩
   obtain ⟨nx, hnx⟩ : ∃ q, (rest ++ [binAt j]).head? = some q := by
     rcases rest with _ | ⟨z, zs⟩ <;> simp
@@ -655,7 +606,7 @@ theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     (fun y h6 h10 h12 h13 => upd_other _ _ h13)
   have hne : bins j ≠ [] := by rw [hmem]; simp
   rcases rest with _ | ⟨y, rest'⟩
-  · -- the header: exit with the remainder last
+  ·
     simp only [List.nil_append, List.head?_cons, Option.some.injEq] at hnx
     subst hnx
     refine st_80004cac O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
@@ -664,7 +615,7 @@ theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       apply BitVec.eq_of_toNat_eq
       rw [h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnxlt]
-  · -- the next member
+  ·
     simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hnx
     subst hnx
     have hym : y ∈ bins j := by rw [hmem]; simp
@@ -680,10 +631,6 @@ theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
         Nat.mod_eq_of_lt hnxlt]) (by rw [upd_other _ _ (by decide)]; exact h10)
         (by rw [upd_other _ _ (by decide)]; exact h6)
 
-/-- **The sorted walk** (`0x80004cb0`): at member `x` of bin `j`, with the
-members before it passed over. A member larger than the remainder is passed
-(`0x80004ca8`, back here or to the exit at the header); the first one that is
-not is the insertion point. -/
 theorem rebinL_walk {C : MCtx} (O : MOK C) {Mt Mt' : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb idx v sz j bb : Nat} (hj : j < numBins)
     (hnext : RebinNext C brkv chunks bins nb idx) :
@@ -703,8 +650,7 @@ theorem rebinL_walk {C : MCtx} (O : MOK C) {Mt Mt' : Mem} {brkv : Nat} {chunks :
       rebinL_adv O L' hj hmem h13' (h10'.symm ▸ h10) h6' hnext fun y' rest' he R'' L'' h13'' h10'' h6'' => ?_
     obtain ⟨rfl, rfl⟩ := List.cons.inj he
     exact ih (pre ++ [x]) y R'' L'' (by rw [hmem]; simp) h13'' h10'' h6''
-/-- **An empty large bin** (`0x80004e98`): set its block bit and make the
-remainder its only member. -/
+
 theorem rebinL_empty {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz j bb : Nat}
     (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz j bb R) (hj : j < numBins)
@@ -756,9 +702,6 @@ theorem rebinL_empty {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Me
   · exact L.a5
   · exact hor
 
-/-- **The large re-binning** (`0x80004c70`): bin `binIndex sz` by the
-cascade, then an empty bin takes the remainder as its only member and a
-nonempty one is walked for the insertion point. -/
 theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz bb : Nat}
     (L : RebinL C Mt Mt' brkv chunks bins nb idx v sz (binIndex sz) bb R)
@@ -777,7 +720,7 @@ theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
   have L' := L.upd (R' := R') fun x h6 h10 h12 h13 => I.keep x h10 h12 h13
   have h6' : (R' 6).toNat = sz := by rw [I.keep 6 (by decide) (by decide) (by decide)]; exact h6
   have ha6 := L'.regs.a6
-  -- the bin's first member
+
   have hring := (binList_iff_ring.1 (HH.bins_list (binIndex sz) (by omega) hj)).1
   obtain ⟨f, hf⟩ : ∃ f, (bins (binIndex sz) ++ [binAt (binIndex sz)]).head? = some f := by
     rcases bins (binIndex sz) with _ | ⟨z, zs⟩ <;> simp
@@ -807,7 +750,7 @@ theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     (BitVec.ofNat 64 (binAt (binIndex sz))))
     (fun y h6 h10 h12 h13 => by simp only [upd_apply, h10, h13, ite_false])
   refine st_80004ca0 O.live (fun hne => ?_) (fun heq => ?_)
-  · -- nonempty: walk from the first member
+  ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hne
     have hfne : f ≠ binAt (binIndex sz) := fun he => hne (by rw [he])
     obtain ⟨x, rest, hx⟩ : ∃ x rest, bins (binIndex sz) = x :: rest := by
@@ -822,7 +765,7 @@ theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
           rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbl])
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h6')
-  · -- empty
+  ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at heq
     have hemp : bins (binIndex sz) = [] := by
       rcases h : bins (binIndex sz) with _ | ⟨z, zs⟩

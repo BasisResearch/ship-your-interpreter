@@ -1,14 +1,5 @@
 import VsaIris.Vsa.Fprintf.Outer
 
-/-!
-# `fprintf(stdout, fmt, arg)` (lane N5)
-
-`fprintf` (`0x800061c0`) spills its variadic registers (the argument at
-`sp + 32`), loads the reent from `_impure_ptr` (the data view), calls
-`_vfprintf_r(reent, stdout, fmt, sp + 32)` (the hook `hO`, `vfp_outer`), and
-returns its count (`fprintf_wrap`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -19,8 +10,6 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- The bytes `fprintf` changes: its frame, the outer `_vfprintf_r`'s and
-below, `stdout`'s flags, `errno`. -/
 def FpReg (sf : Nat) (a : Nat) : Prop :=
   (sf - 2880 ≤ a ∧ a < sf + 80) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
 

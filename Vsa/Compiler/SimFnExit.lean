@@ -1,13 +1,5 @@
 import Vsa.Compiler.SimFnEntry
 
-/-!
-# Function exit
-
-`fnPost`: the null result for a body that completes normally, then the return
-that restores the caller's return address, frame, stack pointer and depth
-from the function's stack frame.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While LeanRV64DExecutable.Functions
@@ -16,7 +8,6 @@ section
 variable {code : List Ins} (hR : RTLoaded code)
 include hR
 
-/-- From the return (index 2 of `fnPost`). -/
 theorem run_fnRet {fs' sp' d qp : Nat} (hseg : Seg code qp (fnPost fs')) {L : GRegs} {m : Mem}
     {o : Array String} (hsp : Has L spR (BitVec.ofNat 64 sp')) (hdep : Has L depR (BitVec.ofNat 64 (d + 1)))
     (hlo : stackLo ≤ sp') (hhi : sp' + fs' ≤ stackHi) (hal : sp' % 16 = 0) (hfs : fs' ≤ 1936) (hfs0 : 16 ≤ fs')
@@ -39,7 +30,6 @@ theorem run_fnRet {fs' sp' d qp : Nat} (hseg : Seg code qp (fnPost fs')) {L : GR
   exact ⟨hra, reach_here ⟨rfl, rfl, rfl, by reg_simp [], by reg_simp [], by reg_simp [],
     by reg_simp []; exact Keep.refl _ _⟩⟩
 
-/-- From the start of `fnPost`: the null result, then the return. -/
 theorem run_fnNull {fs' sp' d qp : Nat} (hseg : Seg code qp (fnPost fs')) {L : GRegs} {m : Mem}
     {o : Array String} (hsp : Has L spR (BitVec.ofNat 64 sp')) (hdep : Has L depR (BitVec.ofNat 64 (d + 1)))
     (hlo : stackLo ≤ sp') (hhi : sp' + fs' ≤ stackHi) (hal : sp' % 16 = 0) (hfs : fs' ≤ 1936) (hfs0 : 16 ≤ fs')

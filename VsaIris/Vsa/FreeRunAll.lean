@@ -1,33 +1,16 @@
 import VsaIris.Vsa.FreeTop
 
-/-!
-# `_free_r` at the binary, both regimes
-
-`free` (`0x8000479c`) moves the block to `a1`, loads `_impure_ptr` into `a0`
-and jumps to `_free_r`, whose every path `free_body` proves. A free run owns
-its stack scratch, the heap footprint and the block (`freeBytes`); its
-tracking memory `ft0` is the heap witness with the block's and the stack
-window's bytes inserted, so the footprint after the free (which covers the
-block) is present from the start. `freeChgRun_proved` and
-`freeLocalRun_proved` are the counted and uncounted runs `AllocHoles` asked
-for.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The bytes a free call owns at the binary. -/
 abbrev fS (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64) : Nat → Prop :=
   freeBytes vsaLayoutP H q n s allocHeadroom
 
-/-- The tracking memory at a free's entry: the heap witness with the block's
-bytes and the stack window. -/
 abbrev ft0 (m1 : Mem) (q : BitVec 64) (n : Nat) (s : BitVec 64) (mv : Nat → BitVec 8) : Mem :=
   mt0 (stackBase m1 q.toNat n mv) s mv
 
-/-- The footprint without the block is the footprint with it and the block. -/
 theorem foot_block {H : List (Nat × Nat)} {e : Nat × Nat} {a : Nat}
     (h : vsaFoot H a) : vsaFoot (e :: H) a ∨ InExt e a := by
   rcases h with hg | ⟨h1, h2, h3⟩
@@ -39,11 +22,9 @@ theorem foot_block {H : List (Nat × Nat)} {e : Nat × Nat} {a : Nat}
       · exact hin
       · exact h3 e' he
 
-/-- The footprint without the block is owned by the free. -/
 theorem fS_of_foot {H : List (Nat × Nat)} {q : BitVec 64} {n : Nat} {s : BitVec 64} {a : Nat}
     (h : vsaFoot H a) : fS H q n s a := .inr (foot_block h)
 
-/-- The write window of a free context is owned. -/
 theorem fS_of_win {H : List (Nat × Nat)} {q : BitVec 64} {n : Nat} {s : BitVec 64} (hsp : SpOKA s)
     (a : Nat) (ha : MWin H s a) : fS H q n s a := by
   rcases ha with hf | ha
@@ -52,8 +33,6 @@ theorem fS_of_win {H : List (Nat × Nat)} {q : BitVec 64} {n : Nat} {s : BitVec 
     · exact .inl h
     · exact fS_of_foot h
 
-/-- **A run from the symbolic run at entry.** Every byte the free owns reads
-as the image in the tracking memory `ft0`. -/
 theorem faw_run {live : Nat → Prop} {H : List (Nat × Nat)} {q : BitVec 64} {n : Nat}
     {s pc : BitVec 64} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} {m1 : Mem}
@@ -75,7 +54,6 @@ theorem faw_run {live : Nat → Prop} {H : List (Nat × Nat)} {q : BitVec 64} {n
   · rw [him a hh]; rfl
   · exact absurd hx h2
 
-/-- **The heap invariant at a free's entry.** -/
 theorem fHeap_entry {C : MCtx} {m1 : Mem} {q : BitVec 64} {n : Nat} {s : BitVec 64}
     {mv : Nat → BitVec 8} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (hs0 : C.s = s) (hMt : C.Mt0 = ft0 m1 q n s mv) (hsp : SpOKA s)
@@ -122,8 +100,6 @@ theorem fHeap_entry {C : MCtx} {m1 : Mem} {q : BitVec 64} {n : Nat} {s : BitVec 
   · exact Nat.le_trans (Nat.sub_le_sub_left (by decide : mHead ≤ allocHeadroom) _) h1
   · rw [Nat.sub_add_cancel (by unfold allocHeadroom; omega)]; exact h2
 
-/-- **`free`** (`0x8000479c`): `a1 := a0`, `a0 := _impure_ptr`, then
-`_free_r` (`free_body`). -/
 theorem free_entry {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {n brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (hra : R 1 = C.r) (hsp : R 2 = C.s) (ha0 : R 10 = C.n) (h8 : R 8 = C.rv0 8)
@@ -145,19 +121,15 @@ theorem free_entry {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {n brkv : Nat}
   · exact h18
   · exact h19
 
-/-- The context of an uncounted `free` run at the binary. -/
 def fLocCtx (live : Nat → Prop) (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (r s : BitVec 64)
     (saved : List (Nat × BitVec 64)) (rv0 : Nat → BitVec 64) (Mt0 : Mem) (top0 : Nat) : MCtx :=
   ⟨live, fS H q n s, FreeEnd vsaLayoutP H r s saved, H, q, r, s, rv0, Mt0, top0⟩
 
-/-- The context of a counted `free` run at the binary. -/
 def fChgCtx (live : Nat → Prop) (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (r s : BitVec 64)
     (saved : List (Nat × BitVec 64)) (k : Nat) (rv0 : Nat → BitVec 64) (Mt0 : Mem) (top0 : Nat) :
     MCtx :=
   ⟨live, fS H q n s, FreeRoomEnd vsaLayoutP vsaRoomB H r s saved k, H, q, r, s, rv0, Mt0, top0⟩
 
-/-- **The uncounted context's obligations**: a return has the heap in shape
-without the block. -/
 theorem fOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {q : BitVec 64} {n : Nat}
     {r s : BitVec 64} {saved : List (Nat × BitVec 64)} {rv0 : Nat → BitVec 64} {Mt0 : Mem}
     {top0 : Nat} (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hsp : SpOKA s)
@@ -174,8 +146,6 @@ theorem fOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {q : BitVec 64} {n
       (fun a ha => fS_of_foot ha) h.pres fun rv mv hfr _ him =>
         ⟨hfr, hst, Mt, top, brkv, chunks, bins, him, hheap⟩
 
-/-- **The counted context's obligations**: the top no higher keeps the
-credits. -/
 theorem fOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {q : BitVec 64} {n : Nat}
     {r s : BitVec 64} {saved : List (Nat × BitVec 64)} {k : Nat} {rv0 : Nat → BitVec 64} {Mt0 : Mem}
     {top0 : Nat} (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hsp : SpOKA s)
@@ -195,7 +165,6 @@ theorem fOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {q : BitVec 64} {n
         ⟨hfr, ⟨hst, Mt, top, brkv, chunks, bins, him, hheap⟩,
           hst, Mt, top, brkv, chunks, bins, him, hheap, by omega⟩
 
-/-- **Uncounted `free` at the binary** (formerly `IrisHoles.alloc.freeLocalRun`). -/
 theorem freeLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     FreeLocalRun (vsaModel live) vsaLayoutP SpOKA freeEntryBV gpV vsaClob vsaSaved
       allocHeadroom allocText := by
@@ -210,7 +179,6 @@ theorem freeLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
   simp only [fLocCtx] at h
   exact faw_run h he.pc him
 
-/-- **Counted `free` at the binary** (formerly `IrisHoles.alloc.freeChgRun`). -/
 theorem freeChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     FreeRoomRun (vsaModel live) vsaLayoutP vsaRoomB vsaRoomB SpOKA freeEntryBV gpV vsaClob
       vsaSaved allocHeadroom allocText := by

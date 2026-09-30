@@ -20,44 +20,6 @@ import Vsa.Sim.DecodeTable.Batch16Part13
 import Vsa.Sim.DecodeTable.Batch16Part26
 import Vsa.Sim.Code.«__hidden___udivdi3»
 
-/-!
-# Layer 3 — per-site observational step lemmas for `__hidden___udivdi3`
-
-One observational-step (`StepObs`) lemma per instruction of the libgcc unsigned
-64-bit division core `__hidden___udivdi3` (18 instructions at
-`[0x800046ac, 0x800046f4)`), assembled in the `Muldi3Sites` style: decode
-(`DecodeTable`) + `rX`/`wX` read-backs through the prelude frame + the relevant
-`ExecuteAlu`/`ExecuteBranch` character → the abstract `hexec` the generic
-`stepObs_*` wrapper wants.
-
-The routine uses one comparison the shared `ExecuteBranch.lean` does not
-characterize — `bgeu` (unsigned `≥`, `BGEU`) — so we prove its taken/not-taken
-execute characters here (a verbatim clone of the `execute_btype_bge_taken`
-proof, swapping the guard predicate `zopz0zKzJ_s` → `zopz0zKzJ_u` and the op).
-
-The 18 sites and their kinds:
-| pc | word | mnemonic | class |
-|----|------|----------|-------|
-| ac | 00058613 | mv a2,a1 (addi a2,a1,0)       | ALU ITYPE ADDI (rd x12, rs1 x11) |
-| b0 | 00050593 | mv a1,a0 (addi a1,a0,0)       | ALU ITYPE ADDI (rd x11, rs1 x10) |
-| b4 | fff00513 | li a0,-1 (addi a0,x0,-1)      | ALU ITYPE ADDI (rd x10, rs1 x0) |
-| b8 | 02060c63 | beqz a2 (beq a2,x0)           | BRANCH BEQ (rs1 x12, rs2 x0) |
-| bc | 00100693 | li a3,1 (addi a3,x0,1)        | ALU ITYPE ADDI (rd x13, rs1 x0) |
-| c0 | 00b67a63 | bgeu a2,a1                    | BRANCH BGEU (rs1 x12, rs2 x11) |
-| c4 | 00c05863 | blez a2 (bge x0,a2)           | BRANCH BGE (rs1 x0, rs2 x12) |
-| c8 | 00161613 | slli a2,a2,1                  | ALU SHIFTIOP SLLI (rd x12, rs1 x12) |
-| cc | 00169693 | slli a3,a3,1                  | ALU SHIFTIOP SLLI (rd x13, rs1 x13) |
-| d0 | feb66ae3 | bltu a2,a1                    | BRANCH BLTU (rs1 x12, rs2 x11) |
-| d4 | 00000513 | li a0,0 (addi a0,x0,0)        | ALU ITYPE ADDI (rd x10, rs1 x0) |
-| d8 | 00c5e663 | bltu a1,a2                    | BRANCH BLTU (rs1 x11, rs2 x12) |
-| dc | 40c585b3 | sub a1,a1,a2                  | ALU RTYPE SUB (rd x11, rs1 x11, rs2 x12) |
-| e0 | 00d56533 | or a0,a0,a3                   | ALU RTYPE OR (rd x10, rs1 x10, rs2 x13) |
-| e4 | 0016d693 | srli a3,a3,1                  | ALU SHIFTIOP SRLI (rd x13, rs1 x13) |
-| e8 | 00165613 | srli a2,a2,1                  | ALU SHIFTIOP SRLI (rd x12, rs1 x12) |
-| ec | fe0696e3 | bnez a3 (bne a3,x0)           | BRANCH BNE (rs1 x13, rs2 x0) |
-| f0 | 00008067 | ret (jalr x0,ra,0)            | JUMP jr x0 (rs1 x1) |
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -68,17 +30,6 @@ set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
-
-/-! ## BGEU execute character (absent from shared `ExecuteBranch.lean`)
-
-A verbatim clone of `execute_btype_bge_taken`/`_nottaken`, guard predicate
-`zopz0zKzJ_u` (unsigned `≥`), op `BGEU`. -/
-
-/-! BGEU execute characters now live in `Vsa.Sim.StepBranch` (canonical home). -/
-
-/-! ## ALU sites -/
-
-/-! ### 0x800046ac — `mv a2,a1` = `addi a2,a1,0` (rd = x12, rs1 = x11) -/
 
 theorem exec_mv_a2_a1 (σ : MState) (pc : BitVec 64) (v11 : BitVec 64)
     (hx11 : σ.regs.get? Register.x11 = some v11) :
@@ -117,8 +68,6 @@ theorem site_800046ac
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046b0 — `mv a1,a0` = `addi a1,a0,0` (rd = x11, rs1 = x10) -/
-
 theorem exec_mv_a1_a0 (σ : MState) (pc : BitVec 64) (v10 : BitVec 64)
     (hx10 : σ.regs.get? Register.x10 = some v10) :
     (execute (instruction.ITYPE (0x000#12, regidx.Regidx 0x0a#5, regidx.Regidx 0x0b#5, iop.ADDI))).run
@@ -156,8 +105,6 @@ theorem site_800046b0
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046b4 — `li a0,-1` = `addi a0,x0,-1` (rd = x10, rs1 = x0) -/
-
 theorem exec_li_a0_m1 (σ : MState) (pc : BitVec 64) :
     (execute (instruction.ITYPE (0xfff#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, iop.ADDI))).run
         (afterNextPC (afterPrelude σ) pc)
@@ -191,8 +138,6 @@ theorem site_800046b4
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046bc — `li a3,1` = `addi a3,x0,1` (rd = x13, rs1 = x0) -/
-
 theorem exec_li_a3_1 (σ : MState) (pc : BitVec 64) :
     (execute (instruction.ITYPE (0x001#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0d#5, iop.ADDI))).run
         (afterNextPC (afterPrelude σ) pc)
@@ -225,8 +170,6 @@ theorem site_800046bc
     (exec_li_a3_1 σ (0x800046bc#64))
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
-
-/-! ### 0x800046c8 — `slli a2,a2,1` (rd = x12, rs1 = x12) -/
 
 theorem exec_slli_a2 (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hx12 : σ.regs.get? Register.x12 = some v12) :
@@ -268,8 +211,6 @@ theorem site_800046c8
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046cc — `slli a3,a3,1` (rd = x13, rs1 = x13) -/
-
 theorem exec_slli_a3 (σ : MState) (pc : BitVec 64) (v13 : BitVec 64)
     (hx13 : σ.regs.get? Register.x13 = some v13) :
     (execute (instruction.SHIFTIOP (0x01#6, regidx.Regidx 0x0d#5, regidx.Regidx 0x0d#5, sop.SLLI))).run
@@ -310,8 +251,6 @@ theorem site_800046cc
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046d4 — `li a0,0` = `addi a0,x0,0` (rd = x10, rs1 = x0) -/
-
 theorem exec_li_a0_0 (σ : MState) (pc : BitVec 64) :
     (execute (instruction.ITYPE (0x000#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, iop.ADDI))).run
         (afterNextPC (afterPrelude σ) pc)
@@ -344,8 +283,6 @@ theorem site_800046d4
     (exec_li_a0_0 σ (0x800046d4#64))
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
-
-/-! ### 0x800046dc — `sub a1,a1,a2` (rd = x11, rs1 = x11, rs2 = x12) -/
 
 theorem exec_sub_a1 (σ : MState) (pc : BitVec 64) (v11 v12 : BitVec 64)
     (hx11 : σ.regs.get? Register.x11 = some v11)
@@ -387,8 +324,6 @@ theorem site_800046dc
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046e0 — `or a0,a0,a3` (rd = x10, rs1 = x10, rs2 = x13) -/
-
 theorem exec_or_a0 (σ : MState) (pc : BitVec 64) (v10 v13 : BitVec 64)
     (hx10 : σ.regs.get? Register.x10 = some v10)
     (hx13 : σ.regs.get? Register.x13 = some v13) :
@@ -428,8 +363,6 @@ theorem site_800046e0
     (exec_or_a0 σ (0x800046e0#64) v10 v13 hx10 hx13)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
-
-/-! ### 0x800046e4 — `srli a3,a3,1` (rd = x13, rs1 = x13) -/
 
 theorem exec_srli_a3 (σ : MState) (pc : BitVec 64) (v13 : BitVec 64)
     (hx13 : σ.regs.get? Register.x13 = some v13) :
@@ -471,8 +404,6 @@ theorem site_800046e4
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046e8 — `srli a2,a2,1` (rd = x12, rs1 = x12) -/
-
 theorem exec_srli_a2 (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hx12 : σ.regs.get? Register.x12 = some v12) :
     (execute (instruction.SHIFTIOP (0x01#6, regidx.Regidx 0x0c#5, regidx.Regidx 0x0c#5, sop.SRLI))).run
@@ -513,10 +444,6 @@ theorem site_800046e8
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ## Branch sites -/
-
-/-! ### 0x800046b8 — `beqz a2` = `beq a2,x0` (rs1 = x12, rs2 = x0), imm 0x0038 → 0x800046f0 -/
-
 theorem exec_beqz_a2_nottaken (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hx12 : σ.regs.get? Register.x12 = some v12)
     (hv : (v12 == (0#64)) = false) :
@@ -551,8 +478,6 @@ theorem site_800046b8_nottaken
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
     (exec_beqz_a2_nottaken σ (0x800046b8#64) v12 hx12 hv)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
-
-/-! ### 0x800046c0 — `bgeu a2,a1` (rs1 = x12, rs2 = x11), imm 0x0014 → 0x800046d4 -/
 
 theorem exec_bgeu_a2_a1_taken (σ : MState) (pc : BitVec 64) (v12 v11 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -634,8 +559,6 @@ theorem site_800046c0_nottaken
     (exec_bgeu_a2_a1_nottaken σ (0x800046c0#64) v12 v11 hx12 hx11 hv)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046c4 — `blez a2` = `bge x0,a2` (rs1 = x0, rs2 = x12), imm 0x0010 → 0x800046d4 -/
-
 theorem exec_blez_a2_taken (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
     (hx12 : σ.regs.get? Register.x12 = some v12)
@@ -711,8 +634,6 @@ theorem site_800046c4_nottaken
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
     (exec_blez_a2_nottaken σ (0x800046c4#64) v12 hx12 hv)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
-
-/-! ### 0x800046d0 — `bltu a2,a1` (rs1 = x12, rs2 = x11), imm 0x1ff4 → 0x800046c4 (back-edge) -/
 
 theorem exec_bltu_a2_a1_taken (σ : MState) (pc : BitVec 64) (v12 v11 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -794,8 +715,6 @@ theorem site_800046d0_nottaken
     (exec_bltu_a2_a1_nottaken σ (0x800046d0#64) v12 v11 hx12 hx11 hv)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046d8 — `bltu a1,a2` (rs1 = x11, rs2 = x12), imm 0x000c → 0x800046e4 -/
-
 theorem exec_bltu_a1_a2_taken (σ : MState) (pc : BitVec 64) (v11 v12 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
     (hx11 : σ.regs.get? Register.x11 = some v11) (hx12 : σ.regs.get? Register.x12 = some v12)
@@ -876,8 +795,6 @@ theorem site_800046d8_nottaken
     (exec_bltu_a1_a2_nottaken σ (0x800046d8#64) v11 v12 hx11 hx12 hv)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046ec — `bnez a3` = `bne a3,x0` (rs1 = x13, rs2 = x0), imm 0x1fec → 0x800046d8 (back-edge) -/
-
 theorem exec_bnez_a3_taken (σ : MState) (pc : BitVec 64) (v13 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
     (hx13 : σ.regs.get? Register.x13 = some v13)
@@ -954,8 +871,6 @@ theorem site_800046ec_nottaken
     (exec_bnez_a3_nottaken σ (0x800046ec#64) v13 hx13 hv)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
-/-! ### 0x800046f0 — `ret` = `jalr x0,ra,0` (rs1 = x1 = ra) -/
-
 theorem site_800046f0
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vra : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -986,4 +901,3 @@ theorem site_800046f0
     hx1₂ htgt hi
 
 end Vsa.Sim
-

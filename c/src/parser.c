@@ -59,9 +59,6 @@ static Token expect(Parser *p, TokType t, const char *what) {
     return tok;
 }
 
-/* One extra token of lookahead (used to tell `fn name(...)` declarations
- * apart from anonymous `fn (...)` expressions). Cheap: the lexer is just
- * a pair of pointers, so we copy it and rewind. */
 static Token peek2(Parser *p) {
     Lexer saved = p->lx;
     Token t = lexer_next(&saved);
@@ -84,13 +81,11 @@ static Stmt *new_stmt(StmtKind kind, int line) {
     return s;
 }
 
-/* --- expressions ------------------------------------------------------- */
-
 static Expr *expression(Parser *p);
 static Stmt *block(Parser *p);
 
 static char *unescape_string(Parser *p, Token tok) {
-    /* tok covers the quotes; produce contents with escapes resolved */
+
     const char *src = tok.start + 1;
     int n = tok.len - 2;
     char *out = xmalloc((size_t)n + 1);
@@ -118,7 +113,7 @@ static char *unescape_string(Parser *p, Token tok) {
 }
 
 static Expr *fn_expr(Parser *p, char *name, int line) {
-    /* 'fn' already consumed; name is NULL for anonymous functions */
+
     Expr *e = new_expr(EX_FN, line);
     e->as.fn.name = name;
     expect(p, T_LPAREN, "'(' after 'fn'");
@@ -186,7 +181,7 @@ static Expr *primary(Parser *p) {
     default:
         parse_error(p, tok.line, "unexpected %s in expression",
                     token_type_name(tok.type));
-        return NULL; /* unreachable */
+        return NULL;
     }
 }
 
@@ -316,8 +311,6 @@ static Expr *assignment(Parser *p) {
 
 static Expr *expression(Parser *p) { return assignment(p); }
 
-/* --- statements -------------------------------------------------------- */
-
 static Stmt *statement(Parser *p);
 static Stmt *declaration(Parser *p);
 
@@ -342,7 +335,7 @@ static Stmt *block(Parser *p) {
 
 static Stmt *var_decl(Parser *p) {
     int line = p->cur.line;
-    advance(p); /* 'var' */
+    advance(p);
     Token id = expect(p, T_IDENT, "variable name");
     Stmt *s = new_stmt(ST_VAR, line);
     s->as.var_decl.name = copy_range(id.start, id.len);
@@ -353,7 +346,7 @@ static Stmt *var_decl(Parser *p) {
 
 static Stmt *if_stmt(Parser *p) {
     int line = p->cur.line;
-    advance(p); /* 'if' */
+    advance(p);
     expect(p, T_LPAREN, "'(' after 'if'");
     Stmt *s = new_stmt(ST_IF, line);
     s->as.if_stmt.cond = expression(p);
@@ -365,7 +358,7 @@ static Stmt *if_stmt(Parser *p) {
 
 static Stmt *while_stmt(Parser *p) {
     int line = p->cur.line;
-    advance(p); /* 'while' */
+    advance(p);
     expect(p, T_LPAREN, "'(' after 'while'");
     Stmt *s = new_stmt(ST_WHILE, line);
     s->as.while_stmt.cond = expression(p);
@@ -376,7 +369,7 @@ static Stmt *while_stmt(Parser *p) {
 
 static Stmt *for_stmt(Parser *p) {
     int line = p->cur.line;
-    advance(p); /* 'for' */
+    advance(p);
     expect(p, T_LPAREN, "'(' after 'for'");
     Stmt *s = new_stmt(ST_FOR, line);
 
@@ -437,11 +430,9 @@ static Stmt *statement(Parser *p) {
 static Stmt *declaration(Parser *p) {
     if (check(p, T_KW_VAR)) return var_decl(p);
     if (check(p, T_KW_FN) && peek2(p).type == T_IDENT) {
-        /* `fn name(params) { ... }` declares a variable bound to a
-         * function value; anonymous `fn (...) {...}` falls through to the
-         * expression parser. */
+
         int line = p->cur.line;
-        advance(p); /* 'fn' */
+        advance(p);
         Token id = expect(p, T_IDENT, "function name");
         char *name = copy_range(id.start, id.len);
         Stmt *s = new_stmt(ST_VAR, line);

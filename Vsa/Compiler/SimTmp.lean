@@ -1,17 +1,9 @@
 import Vsa.Compiler.SimOp
 
-/-!
-# Temporaries and heap growth
-
-Storing and loading expression temporaries in the stack frame, and the
-invariant across writes to them and across object-heap growth.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- Memory after storing `(t, p)` in temporary `k` of the frame at `sp`. -/
 def tmpW (m : Mem) (sp k : Nat) (t p : BitVec 64) : Mem :=
   applyW (applyW m (sp + 16 + 16 * k, 8, t)) (sp + 16 + 16 * k + 8, 8, p)
 
@@ -38,7 +30,6 @@ theorem InTmp.stored {H : CloMap} {m : Mem} {h sp k : Nat} {v : Value} {t p : Bi
   rw [rdW_tmpW hal (by omega), if_neg (by omega), if_pos rfl, rdW_tmpW hal (by omega), if_pos rfl]
   exact hv.mono hag (Nat.le_refl _)
 
-/-- Stores to temporaries keep the invariant. -/
 theorem MS.stored {code : List Ins} {T : List String} {V : View} {st : St} {d : Nat} {env : Addr}
     {Γ : List (List String)} {sp fs : Nat} {A : AM} (hm : MS code T V st d env Γ sp fs A) {j : Nat}
     (hj : 16 + 16 * (j + 1) ≤ fs) {t p : BitVec 64} {pc : BitVec 64} {L : GRegs} {S : List Nat}
@@ -55,7 +46,6 @@ theorem MS.stored {code : List Ins} {T : List String} {V : View} {st : St} {d : 
   exact ⟨hm.transport (B := ⟨pc, L, tmpW A.mem sp j t p, A.out⟩) hS hk
     (tmpW_outside hb.2.2 (.inl (by omega))) hobj rfl, hobj⟩
 
-/-- Object-heap growth to `h'` with memory kept outside `[h, h')` and the digit buffer. -/
 structure HeapStep (m m' : Mem) (h h' : Nat) : Prop where
   grow : h ≤ h'
   ptr : ObjPtr h'
@@ -80,10 +70,8 @@ theorem HeapStep.stack {m m' : Mem} {h h' : Nat} (hs : HeapStep m m' h h') {lo h
   have := hs.ptr.hi
   exact fun a h1 h2 h3 => hs.frame a h3 (.inr (by omega)) (.inr (by omega))
 
-/-- The view with the object heap at `h'`. -/
 def View.withH (V : View) (h' : Nat) : View := { V with h := h' }
 
-/-- Object-heap growth keeps the invariant. -/
 theorem MS.heap {code : List Ins} {T : List String} {V : View} {st : St} {d : Nat} {env : Addr}
     {Γ : List (List String)} {sp fs : Nat} {A : AM} (hm : MS code T V st d env Γ sp fs A) {h' : Nat}
     {m' : Mem} (hs : HeapStep A.mem m' V.h h') {pc : BitVec 64} {L : GRegs} {S : List Nat}

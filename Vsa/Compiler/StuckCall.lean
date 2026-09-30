@@ -1,16 +1,5 @@
 import Vsa.Compiler.StuckExpr
 
-/-!
-# Failure of calls
-
-A call without a result fails: a value that is neither a closure nor a native
-is dispatched to the error exit, `assert` checks its arity and truthiness, a
-closure's entry checks its arity and the call depth, and a closure body without
-a normal or returning execution either escapes with `break`/`continue` (whose
-exits in a function body are the error exit) or has no execution at all, which
-fails with less fuel after at least one step (`IHq`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -24,8 +13,6 @@ section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
 
-/-- A function's entry with the wrong number of arguments or at the depth cap
-reaches the error exit. -/
 theorem run_entry_bad {q nv d : Nat} {Γc : List (List String)} {cd : ClosureData}
     (hseg : Seg code q (fnCode T Γc cd.params cd.body q))
     (hP : PosOK (q + (fnCode T Γc cd.params cd.body q).length)) (hwf : WfFn T Γc cd.params cd.body) {J : AM}
@@ -72,7 +59,6 @@ theorem run_entry_bad {q nv d : Nat} {Γc : List (List String)} {cd : ClosureDat
 
 variable {n : Nat}
 
-/-- A value that is neither a closure nor a native is dispatched to the error exit. -/
 theorem fNotCallable {st : St} {d : Nat} {fv : Value} {vs : List Value} (h1 : ∀ a, fv ≠ .closure a)
     (h2 : ∀ f, fv ≠ .native f) : CStuck code T n st d fv vs := by
   intro V env Γ sp fs k pos A hm hA hf hvs hmax hseg hP htmp hne
@@ -92,7 +78,6 @@ theorem fNotCallable {st : St} {d : Nat} {fv : Value} {vs : List Value} (h1 : �
   rw [he] at hpc
   exact fail_err hR hpc
 
-/-- `assert` with the wrong arity or a falsy argument reaches the error exit. -/
 theorem fAssert {st : St} {d : Nat} {vs : List Value} : CStuck code T n st d (.native .assert) vs := by
   intro V env Γ sp fs k pos A hm hA hf hvs' hmax hseg hP htmp hne
   have hs := CCSegs.of hseg
@@ -158,7 +143,6 @@ theorem fAssert {st : St} {d : Nat} {vs : List Value} : CStuck code T n st d (.n
   wp_simp [k10, e10]
   exact reach_here (fail_err hR (B := ⟨_, _, _, _⟩) rfl)
 
-/-- A closure call without a result fails. -/
 theorem fClosure {st : St} {d : Nat} {a : Addr} {vs : List Value}
     (IHq : ∀ m < n, ∀ st d env ss, QStuck code T m st d env ss) : CStuck code T n st d (.closure a) vs := by
   intro V env Γ sp fs k pos A hm hA hf hvs hmax hseg hP htmp hne
@@ -183,7 +167,7 @@ theorem fClosure {st : St} {d : Nat} {a : Addr} {vs : List Value}
   subst hpw
   have hqq : PosOK q := posOK_le hc5 (by omega)
   have hdd := hm.stk.depth
-  -- reach the body, or fail
+
   have hr : Reaches code A (fun B => Fail code n B ∨ (vs.length = cd.params.length ∧ d < maxCallDepth) ∧
       ∃ J, Entered code T V st d cd Γc vs sp (frameSize cd.body) q
         (pcOf (ccCL k vs.length pos + 6)) (BitVec.ofNat 64 (V.fa env)) J B) := by
@@ -213,7 +197,7 @@ theorem fClosure {st : St} {d : Nat} {a : Addr} {vs : List Value}
     have := congrArg BitVec.toNat e2
     rw [toNat_ofNat_lt (by omega), toNat_ofNat_lt (by omega)] at this
     omega)
-  -- the body
+
   have hc4' := hc4
   rw [fnCode_eq] at hc4'
   obtain ⟨-, sRest⟩ := hc4'.append

@@ -1,47 +1,27 @@
 import Vsa.Compiler.SetupRun
 import Vsa.Compiler.AbsLift
 
-/-!
-# Correctness of the full compiler
-
-`compileG_correct`: for every supported WHILE program `p` whose big-step
-executions stay within the heap budget, and every machine configuration whose
-memory holds the bytes of `compileG p` at `codeBase` (plus libgcc's
-multiply/divide routines, as in the interpreter image), with the PC at
-`codeBase`, in a good machine state with an empty console, the machine halts
-with exit code `0` and output `out` exactly when `out` is a big-step behaviour of
-`p`, and a diverging machine means `p` has no behaviour.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Halts Diverges output)
 
-/-- The programs the full compiler supports: well-formed against the program's
-string table and global frame, with a small static image. -/
 structure SupportedG (p : Program) : Prop where
   wf : WfSeq (strTab p) [globalNames p] p
   setup : SetupOK p
 
-/-- The heap budget in cost units: the frame region above the global frame
-holds `64 * heapUnits` bytes. -/
 def heapUnits : Nat := 0x3F8000
 
-/-- The context of the top-level statements. -/
 def ctxG (p : Program) : GCtx := ⟨[globalNames p], 0, none, none, none⟩
 
-/-- The compiled top-level statements. -/
 def bodyG (p : Program) : List Ins := gseq (strTab p) (ctxG p) (mainPos + (setupCode p).length) p
 
-/-- The machine code bytes of `compileG p`. -/
 def compileGBytes (p : Program) : List (BitVec 8) := codeBytes (compileG p)
 
 theorem compileG_eq (p : Program) :
     compileG p = [J 0 mainPos] ++ (errCode ++ rtCode) ++ setupCode p ++ bodyG p ++ exitCode 0 := by
   simp only [compileG, bodyG, ctxG, List.append_assoc]
 
-/-- The pieces of `compileG p` in place. -/
 structure GSegs (p : Program) : Prop where
   entry : Seg (compileG p) 0 [J 0 mainPos]
   rt : Seg (compileG p) errPos (errCode ++ rtCode)
@@ -49,7 +29,6 @@ structure GSegs (p : Program) : Prop where
   body : Seg (compileG p) (mainPos + (setupCode p).length) (bodyG p)
   exit : Seg (compileG p) (mainPos + (setupCode p).length + (bodyG p).length) (exitCode 0)
 
-/-- The lengths of the runtime's pieces. -/
 theorem rt_lengths : errCode.length = 13 ∧ (psCode psPos).length = 32 ∧ (itCode itPos).length = 52 ∧
     (cpCode cpPos).length = 8 ∧ (scCode scPos).length = 22 ∧ (trCode trPos).length = 10 ∧
     (nfCode nfPos).length = 27 ∧ (dpCode dpPos).length = 126 ∧ (csCode csPos).length = 83 ∧
@@ -113,7 +92,6 @@ section
 variable {p : Program} (hsup : SupportedG p) (hfit : Fits (compileG p))
 include hsup hfit
 
-/-- The abstract machine reaches the first statement with the invariant. -/
 theorem reach_body (m : Mem) (o : Array String) (ho : String.join o.toList = "") :
     Reaches (compileG p) (A0 m o) fun B => B.pc = pcOf (mainPos + (setupCode p).length) ∧
       MS (compileG p) (strTab p) (view0 p) initSt 0 0 [globalNames p] (stackHi - frameSize p) (frameSize p) B := by
@@ -126,7 +104,6 @@ theorem reach_body (m : Mem) (o : Array String) (ho : String.join o.toList = "")
   obtain ⟨B, r, hB⟩ := run_setup hR p hsup.setup hs.setup (posOK_le hP (by omega)) (L := []) (m := m) (o := o) ho
   exact ⟨B, Star.step hstep r, hB⟩
 
-/-- A big-step behaviour is reached, and the code then exits with `0`. -/
 theorem absG_term (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (m : Mem) (o : Array String)
     (ho : String.join o.toList = "") {out : String} (hb : BigStep p out) :
     Reaches (compileG p) (A0 m o) fun B => astep (compileG p) B = some (.halt 0) ∧
@@ -151,7 +128,6 @@ theorem absG_term (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUni
   obtain ⟨B3, r3, -, hBo, hh⟩ := run_exit hfit (by decide : (0 : Nat) = 0 ∨ 0 = 70) hs.exit hpc2
   exact ⟨B3, r1.trans (r2.trans r3), hh, by rw [hBo]; exact hm2.out⟩
 
-/-- Without a big-step behaviour the code reaches the error exit or runs forever. -/
 theorem absG_stuck (m : Mem) (o : Array String) (ho : String.join o.toList = "")
     (hnb : ¬ ∃ out, BigStep p out) :
     Reaches (compileG p) (A0 m o) (fun B => astep (compileG p) B = some (.halt 70)) ∨
@@ -186,15 +162,6 @@ theorem absG_stuck (m : Mem) (o : Array String) (ho : String.join o.toList = "")
 
 end
 
-/-- **Correctness of the full compiler.** For every supported WHILE program
-`p` whose big-step behaviours have allocation cost at most `heapUnits`
-(`BigStepBudget`; the machine uses at most 64 heap bytes per unit), and every
-machine configuration whose memory holds the bytes of `compileG p` at
-`0x80004800` (below `tohost`), libgcc's multiply and signed divide/remainder
-routines at their addresses in the interpreter image, with the PC at the code,
-in a good machine state with an idle HTIF mailbox and an empty console: the
-machine halts with exit code `0` and output `out` exactly when `out` is a
-big-step behaviour of `p`, and a diverging machine means `p` has none. -/
 theorem compileG_correct (p : Program) (hsup : SupportedG p)
     (hfit : 0x80004800 + 4 * (compileG p).length ≤ 0x8001ad00)
     (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (c : Config)

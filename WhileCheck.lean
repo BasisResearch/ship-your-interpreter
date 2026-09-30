@@ -2,20 +2,6 @@ import Vsa.While.Parse
 import Vsa.While.TypeInfer
 import Vsa.While.Programs
 
-/-!
-# `whilecheck`: type-check WHILE programs
-
-`lake exe whilecheck FILE.wl ...` parses each file and runs the verified type
-checker `whileTyped` (`Vsa/While/TypeInfer.lean`): it accepts exactly the
-programs some typing environment types (`whileTyped_iff`), and prints the
-environment `infer` found, which types the program (`infer_sound`). By
-`type_soundness` an accepted program terminates normally, divides or takes a
-remainder by zero, fails an `assert`, exceeds the call-depth cap, or diverges.
-
-`lake exe whilecheck --selftest DIR` parses `DIR/<name>.wl` for every program
-of `Vsa/While/Programs.lean` and compares the result with the embedding.
--/
-
 open Vsa.While Vsa.While.Types
 
 def checkFile (path : String) : IO Bool := do

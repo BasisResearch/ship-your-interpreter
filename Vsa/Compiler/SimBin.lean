@@ -1,12 +1,5 @@
 import Vsa.Compiler.SimTmp
 
-/-!
-# Forward simulation: binary operators
-
-The left operand's value waits in temporary `k` while the right operand is
-evaluated with temporaries from `k + 1`; the operator's code then combines them.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While

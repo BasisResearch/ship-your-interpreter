@@ -1,19 +1,9 @@
 import Vsa.Compiler.RTCode
 import Vsa.Compiler.PrintInt
 
-/-!
-# Proof support for the runtime
-
-Register frames (`Keep`), aligned doubleword memory (`rdW_upd`), string objects
-(`StrW`), the `wp_simp` normal form for `WP` goals, and entry points into a
-routine's code at an interior label (`Seg.drop`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
-
-/-! ## Segments -/
 
 theorem Seg.drop {code : List Ins} {pos : Nat} {c : List Ins} (h : Seg code pos c) (k : Nat) :
     Seg code (pos + k) (c.drop k) := by
@@ -22,14 +12,12 @@ theorem Seg.drop {code : List Ins} {pos : Nat} {c : List Ins} (h : Seg code pos 
   rw [Nat.add_assoc, h (k + j) (by omega)]
   simp
 
-/-- Run a routine's code from its interior label `k`. -/
 theorem run_at {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat} {c : List Ins}
     (hseg : Seg code b c) (k : Nat) {L : GRegs} {m : Mem} {o : Array String}
     (h : WP code P (b + k) (c.drop k) (fun _ _ _ => False) L m o) :
     Reaches code ⟨pcOf (b + k), L, m, o⟩ P :=
   WP_sound hfit _ _ _ L m o (hseg.drop k) (fun _ _ _ h => h.elim) h
 
-/-- `run_at` with the label written as an absolute index. -/
 theorem run_at' {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat} {c : List Ins}
     (hseg : Seg code b c) (k j : Nat) (hj : b + k = j) {L : GRegs} {m : Mem} {o : Array String}
     (h : WP code P j (c.drop k) (fun _ _ _ => False) L m o) :
@@ -79,7 +67,6 @@ theorem toInt_ofNat_big (n : Nat) (h1 : 2 ^ 63 ≤ n) (h2 : n < 2 ^ 64) :
     (BitVec.ofNat 64 n).toInt = (n : Int) - 2 ^ 64 := by
   rw [BitVec.toInt_eq_toNat_bmod]; simp [Int.bmod]; omega
 
-/-- Run the `n` instructions at label `k` of a routine, then continue with `K`. -/
 theorem run_block {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat} {c : List Ins}
     (hseg : Seg code b c) (k n j : Nat) (hj : b + k = j)
     {KP : GRegs → Mem → Array String → Prop}
@@ -106,7 +93,6 @@ theorem reaches_mono {code : List Ins} {A : AM} {P Q : AM → Prop} (h : Reaches
     (hPQ : ∀ B, P B → Q B) : Reaches code A Q := by
   obtain ⟨B, s, hp⟩ := h; exact ⟨B, s, hPQ B hp⟩
 
-/-- An explicit piece of a routine's code. -/
 theorem seg_at {code : List Ins} {b : Nat} {c : List Ins} (h : Seg code b c) (k : Nat) (l : List Ins)
     (he : (c.drop k).take l.length = l) : Seg code (b + k) l := by
   intro j hj
@@ -117,7 +103,6 @@ theorem seg_at {code : List Ins} {b : Nat} {c : List Ins} (h : Seg code b c) (k 
   rw [this, ← he]
   simp [List.getElem?_take, hj]
 
-/-- Run an explicit piece of a routine's code, then continue with `K`. -/
 theorem run_seg {code : List Ins} {P : AM → Prop} (hfit : Fits code) {b : Nat} {c : List Ins}
     (h : Seg code b c) (k j : Nat) (hj : b + k = j) (l : List Ins)
     (he : (c.drop k).take l.length = l)
@@ -143,8 +128,6 @@ theorem posOK_lt {k : Nat} (h : k < 20000) : PosOK k := by
   have hb : codeBase = 0x80004800 := rfl
   unfold PosOK; omega
 
-/-- A jump to `d`, stated for symbolic positions so that the kernel never
-evaluates the offset `jOff pos d`. -/
 theorem WP_J {code : List Ins} {P : AM → Prop} {pos s d : Nat} {is : List Ins}
     {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
     (he : s = pos) (hs : PosOK pos) (hd : PosOK d) :
@@ -153,7 +136,6 @@ theorem WP_J {code : List Ins} {P : AM → Prop} {pos s d : Nat} {is : List Ins}
   obtain ⟨h1, h2⟩ := jOff_ok hs hd
   simp only [WP, J, reduceIte, h1, h2, true_and]
 
-/-- A call of the routine at `d`. -/
 theorem WP_Call {code : List Ins} {P : AM → Prop} {pos s d : Nat} {is : List Ins}
     {K : GRegs → Mem → Array String → Prop} {L : GRegs} {m : Mem} {o : Array String}
     (he : s = pos) (hs : PosOK pos) (hd : PosOK d) :
@@ -164,7 +146,6 @@ theorem WP_Call {code : List Ins} {P : AM → Prop} {pos s d : Nat} {is : List I
   simp only [WP, Call, reduceIte, h1, h2, true_and, isLib_of_JOK h2, Bool.false_eq_true,
     Nat.one_ne_zero]
 
-/-- A jump `J k t` at `k`. -/
 theorem run_J {code : List Ins} (hfit : Fits code) {k t : Nat} (hk : code[k]? = some (J k t))
     (hs : PosOK k) (ht : PosOK t) {L : GRegs} {m : Mem} {o : Array String} {Q : AM → Prop}
     (h : Reaches code ⟨pcOf t, L, m, o⟩ Q) : Reaches code ⟨pcOf k, L, m, o⟩ Q := by
@@ -175,7 +156,6 @@ theorem run_J {code : List Ins} (hfit : Fits code) {k t : Nat} (hk : code[k]? = 
   rw [htgt] at e
   exact ex_step e h
 
-/-- The console text of an output array. -/
 def ostr (o : Array String) : String := String.join o.toList
 
 theorem ostr_push (o : Array String) (s : String) : ostr (o.push s) = ostr o ++ s := by
@@ -184,9 +164,6 @@ theorem ostr_push (o : Array String) (s : String) : ostr (o.push s) = ostr o ++ 
 theorem toString_char (c : Char) : toString c = String.ofList [c] :=
   String.toList_inj.mp (by rw [String.toList_ofList]; exact String.toList_singleton c)
 
-/-! ## Register frames -/
-
-/-- `L'` agrees with `L` outside the registers `S`. -/
 def Keep (S : List Nat) (L L' : GRegs) : Prop := ∀ r, r ∉ S → lookupG r L' = lookupG r L
 
 theorem Keep.refl (S : List Nat) (L : GRegs) : Keep S L L := fun _ _ => rfl
@@ -317,15 +294,12 @@ theorem has_mem {L : GRegs} {n : Nat} {v : BitVec 64} (h : Has L n v) (hn : n �
   · exact absurd rfl hn
   · exact mem_keysG_of_lookup hl
 
-/-! ## Aligned doublewords -/
-
 theorem rdW_upd {m : Mem} {a b : Nat} {v : BitVec 64} (ha : a % 8 = 0) (hb : b % 8 = 0) :
     rdW (applyW m (a, 8, v)) b = if b = a then v else rdW m b := by
   split
   · next h => subst h; exact rdW_write m b v
   · next h => exact rdW_write_other m b a v (by omega)
 
-/-- `m'` agrees with `m` on the aligned words of `[lo, hi)`. -/
 def Agree (m m' : Mem) (lo hi : Nat) : Prop :=
   ∀ a, lo ≤ a → a + 8 ≤ hi → a % 8 = 0 → rdW m' a = rdW m a
 
@@ -341,7 +315,6 @@ theorem Agree.upd_out {m : Mem} {lo hi a : Nat} {v : BitVec 64} (ha : a % 8 = 0)
     (hout : a + 8 ≤ lo ∨ hi ≤ a) : Agree m (applyW m (a, 8, v)) lo hi := fun b h1 h2 h3 => by
   rw [rdW_upd ha h3, if_neg (by omega)]
 
-/-- Memory after copying the first `k` words from `s` to `d`. -/
 def copyW (m : Mem) (s d : Nat) : Nat → Mem
   | 0 => m
   | k + 1 => applyW (copyW m s d k) (d + 8 * k, 8, rdW m (s + 8 * k))
@@ -369,7 +342,6 @@ theorem ofNat_ne_zero {x : Nat} (h0 : 0 < x) (h : x < 2 ^ 64) : BitVec.ofNat 64 
   rw [toNat_ofNat_lt h] at this
   simp at this; omega
 
-/-- Three-way lexicographic comparison of character lists. -/
 def cmpL : List Char → List Char → Int
   | [], [] => 0
   | [], _ :: _ => -1
@@ -396,7 +368,6 @@ theorem cmpL_drop : ∀ (i : Nat) (xs ys : List Char), xs.take i = ys.take i →
   | i + 1, [], _, _, h1, _ => by simp at h1
   | i + 1, _ :: _, [], _, _, h2 => by simp at h2
 
-/-- Memory after writing tag `6` into the first `k` slots of a frame whose slots start at `a`. -/
 def tagsW (m : Mem) (a : Nat) : Nat → Mem
   | 0 => m
   | k + 1 => applyW (tagsW m a k) (a + 16 * k, 8, 6#64)
@@ -455,9 +426,6 @@ theorem cmpL_spec : ∀ (xs ys : List Char),
           | rel h => exact absurd h (by simp only [char_lt_iff]; omega)
           | cons h => exact h
 
-/-! ## String objects -/
-
-/-- The string object at `p` holds the characters `cs`. -/
 structure StrW (m : Mem) (p : Nat) (cs : List Char) : Prop where
   lo : tohostAddr + 16 ≤ p
   hi : p + 8 + 8 * cs.length ≤ 2 ^ 32
@@ -476,15 +444,12 @@ theorem StrW.transport {m m' : Mem} {p : Nat} {cs : List Char} (h : StrW m p cs)
     rw [hag (p + 8 + 8 * i) (by omega) (by omega) (by have := h.al; omega)]; exact h.chars i hi
   small := h.small
 
-/-! ## Loops -/
-
 theorem loop_run {code : List Ins} {I : Nat → AM → Prop} {Q : AM → Prop}
     (step : ∀ n A, I (n + 1) A → Reaches code A (I n)) (base : ∀ A, I 0 A → Reaches code A Q) :
     ∀ n A, I n A → Reaches code A Q
   | 0, A, h => base A h
   | n + 1, A, h => ex_bind (step n A h) (fun B hB => loop_run step base n B hB)
 
-/-- A loop that may also leave early. -/
 theorem loop_run' {code : List Ins} {I : Nat → AM → Prop} {Q : AM → Prop}
     (step : ∀ n A, I (n + 1) A → Reaches code A (fun B => I n B ∨ Q B))
     (base : ∀ A, I 0 A → Reaches code A Q) :
@@ -492,10 +457,6 @@ theorem loop_run' {code : List Ins} {I : Nat → AM → Prop} {Q : AM → Prop}
   | 0, A, h => base A h
   | n + 1, A, h => ex_bind (step n A h) (fun B hB => hB.elim (loop_run' step base n B) (reach_here))
 
-/-! ## Normal form of `WP` goals -/
-
-/-- Compute a `WP` goal: unfold the instructions, evaluate register reads and
-writes, branch and jump targets, and discharge decidable side conditions. -/
 syntax "wp_simp" ("[" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| wp_simp) => `(tactic| wp_simp [])
@@ -518,7 +479,6 @@ macro_rules
         Br, J, Call, mvi, addi, addiN, ret, mv, a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5,
         t6, s2, s3, s4, s5, s6, s9, s10, s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
 
-/-- Discharge register-file goals (`Has`, `Keep`) through chains of writes. -/
 syntax "reg_simp" ("[" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| reg_simp) => `(tactic| reg_simp [])
@@ -529,14 +489,12 @@ macro_rules
         a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5, t6, s2, s3, s4, s5, s6, s9, s10,
         s11, ra, spR, hpO, envR, hpF, depR, $xs,*])
 
-/-- Close an equation between `BitVec.ofNat 64` words by arithmetic on the naturals. -/
 macro "bv_eq" : tactic => `(tactic| first
   | with_reducible rfl
   | (apply congrArg (BitVec.ofNat 64); omega)
   | (rw [ofNat_add_lit _ _ (by decide)]; apply congrArg (BitVec.ofNat 64); omega)
   | (rw [ofNat_add_neg _ _ (by decide) (by omega)]; apply congrArg (BitVec.ofNat 64); omega))
 
-/-- Lengths of routine code with constants. -/
 macro "len_ok" "[" xs:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic|
   simp (disch := decide) [liN, li_length_big, li_length_small, putcR, libc, List.length_append, $xs,*])
 

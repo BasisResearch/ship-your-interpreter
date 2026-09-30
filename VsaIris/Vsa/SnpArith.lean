@@ -1,24 +1,11 @@
 import VsaIris.Vsa.SnpTac
 import VsaIris.Interp.ProofArith
 
-/-!
-# `__hidden___udivdi3` in a `snprintf` run
-
-`_svfprintf_r`'s decimal loop calls `__umoddi3`/`__hidden___udivdi3` by ten.
-Lane E2 proved the division in the interpreter's run (`ProofArith.udiv_iw`);
-a symbolic run is one table's instance of `SWP`, so the proof is replayed
-here over `SnpW` with the `snprintf` table's step lemmas (`nt_<pc>`, `snp_run`).
-The arithmetic lemmas are E2's (`div_of_inv`, `DivKeep`, VSA's `DivK`).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst
 open Vsa.MemRepr
 
-/-- **The divide loop** (`0x800046d8`, restoring long division), by induction
-on the bit position `j`, in continuation form: at the return the quotient
-and remainder are in `a0`/`a1`. -/
 theorem udiv_loop2N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R0 : Nat → BitVec 64)
@@ -111,8 +98,6 @@ theorem udiv_loop2N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
       · intro z h10 h11 h12 h13
         simp only [upd_apply, h10, h11, h12, h13, ite_false]; exact hkp z h10 h11 h12 h13
 
-/-- **The normalize loop** (`0x800046c4`): the divisor doubles until it
-reaches the dividend or its top bit; strong induction on `n - a2`. -/
 theorem udiv_loop1N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R0 : Nat → BitVec 64)
@@ -178,9 +163,6 @@ theorem udiv_loop1N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     · intro z h10 h11' h12 h13
       simp only [upd_apply, h10, h12, h13, ite_false]; exact hkp z h10 h11' h12 h13
 
-/-- **`__hidden___udivdi3`** (`0x800046ac`) in continuation form: at the
-return (`ret` to `r`), `a0 = n / d`, `a1 = n % d`, and every register but
-`a0`–`a3` as at the entry. -/
 theorem udiv_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R : Nat → BitVec 64)
@@ -215,9 +197,6 @@ theorem udiv_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     · intro z h10' h11' h12 h13
       simp only [upd_apply, h10', h11', h12, h13, ite_false]
 
-/-- **`__umoddi3`** (`0x800046f4`): `udivdi3` through `t0`, then `a0 = a1`;
-at the return (`jr t0` to `r`) `a0 = n % d`, every register but `a0`–`a3`,
-`t0` and `ra` as at the entry. -/
 theorem umod_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R : Nat → BitVec 64)
@@ -243,4 +222,3 @@ theorem umod_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     simp only [upd_apply, h1, h5', ite_false]
 
 end VsaIris.Interp
-

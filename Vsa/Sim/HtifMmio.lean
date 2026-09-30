@@ -1,7 +1,5 @@
 import Vsa.Sim.Htif
 
-/-! # HTIF mailbox MMIO dispatch -/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 
@@ -11,7 +9,6 @@ set_option linter.unusedSimpArgs false
 
 namespace Vsa.Sim
 
-/-- The concrete eight-byte `tohost` window is writable MMIO. -/
 theorem within_mmio_writable_tohost_8
     (σ : SequentialState RegisterType trivialChoiceSource)
     (hbase : σ.regs.get? Register.htif_tohost_base =
@@ -28,7 +25,6 @@ theorem within_mmio_writable_tohost_8
     htif_tohost_size, hbase, tohostAddr]
   simp_all [simp_sail, EStateM.bind, EStateM.pure, EStateM.get, tohostAddr]
 
-/-- An eight-byte write at `tohost` selects `htif_store` exactly. -/
 theorem mmio_write_tohost_8
     (σ : SequentialState RegisterType trivialChoiceSource)
     (data : BitVec 64)

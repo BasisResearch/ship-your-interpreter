@@ -1,14 +1,6 @@
 import Vsa.Elf
 import Vsa.Sim.InitValues
 
-/-! Decode table batch 17 — exit-path extension (generated; regenerate via
-/tmp/gen_batch17.py over experiments/exit_path_words.txt, do not hand-edit).
-One lemma per unique 32-bit instruction word on the error/exit path
-(`main`, `_write`, `__swrite`, `_write_r`, `_lseek_r`, `stdio_exit_handler`,
-`_fwalk_sglue`, `vfprintf`) that the interp_run-rooted reachability sweep
-missed (M3-setjmp-longjmp.md §1.5.1). Uniform template stabilized in
-Vsa/Sim/DecodePilot.lean, identical to Batch01-16. -/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 

@@ -8,10 +8,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Step MState)
 open Vsa.Sim Vsa.MemRepr
 
-/-! ## Code -/
-
-/-- An 8-byte store at `base + off` inside a `size`-byte window satisfies
-its `MemFacts` (the geometry `EnvNewCallerGeom`/`EnvNewFreshGeom` records). -/
 theorem storeFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
     {bs : List (BitVec 8)} (base : BitVec 64) (off size : Nat)
     (hlo : 0x80000000 ≤ base.toNat) (hhi : base.toNat + size ≤ 0x100000000)
@@ -25,15 +21,5 @@ theorem storeFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
   unfold MemFacts
   rw [hk]
   exact ⟨by rw [hea]; omega, by rw [hea]; omega, by rw [hea]; omega, by rw [hea]; omega⟩
-
-/-! ## The prefix: `addi sp,-16; sd s0,0(sp); mv s0,a0; li a0,32; sd ra,8(sp)` -/
-
-/-! ## The success suffix (`envNewSuccessSeg`, reflected in VSA) -/
-
-/-! ## The call site `0x80002a10: jal malloc` -/
-
-/-! ## Pure facts the spec consumes -/
-
-/-! ## The Iris specification -/
 
 end VsaIris.Inst.EnvNew

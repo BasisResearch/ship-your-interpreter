@@ -2,42 +2,6 @@ import Vsa.Elf
 import Vsa.Sim.InitValues
 import Vsa.Sim.StateNF
 
-/-!
-# Layer 0, item 5 — HTIF `htif_store` characterization
-
-Characterizes the two dispatch outcomes of the HTIF console-mailbox store
-`htif_store paddr 8 data` at the `tohost` address (`PLAN-InterpSim.md`
-§Layer 0 item 5; `experiments/M2-htif-path.md`):
-
-- `htif_store_putchar`: an 8-byte store of a term-write command word
-  `0x0101000000000000 ||| zeroExtend c` latches `tohost`, then dispatches the
-  console-`putchar` of byte `c`: it pushes exactly `String.singleton
-  (Char.ofNat c.toNat)` to `sailOutput` and runs `reset_htif`. The register
-  spine is the two phase-A writes followed by `reset_htif`'s three writes.
-- `htif_store_exit`: an 8-byte store of the syscall-exit word `(e <<< 1) ||| 1`
-  (with `e.toNat < 2^47`, so the device byte stays `0`) latches `tohost`, then
-  sets `htif_done := true` and `htif_exit_code := e`, leaving `sailOutput`
-  untouched.
-
-Both are proved at the `htif_store` level — the cleanest reusable interface,
-so the Layer-3 store-instruction lemmas can consume the register/`sailOutput`
-footprint directly (the lift to `checked_mem_write`/`mem_write_value` is left
-as remaining work; see the module footer).
-
-Chain-of-custody of the monad plumbing follows `Vsa/Sim/Hooks.lean`
-(`translateAddr_machine_fetch`): a single big `simp only` peel of the
-`SailME.run`/`EStateM`/`ExceptT` spine, threading the phase-A `writeReg`s
-through the subsequent `readReg`s via the `seval_state` `get?_insert` lemmas
-(the register-key disequalities are `Register` constructor disequalities,
-discharged by `+decide`). `writeReg` and `print_effect` `modify` distinct
-`SequentialState` fields, so their state-updates commute automatically inside
-the peel (no separate commuting lemma is needed — the record-update spine keeps
-them apart). The bit-level command decoding avoids `bv_decide` (forbidden here);
-it routes through the `extract_or_high` helper (byte `c` never reaches bits
-`≥ 8`) plus `decide` on the resulting concrete extractions, and the exit
-`((e<<<1)|1)>>>1 = e` fact through `getLsbD` reasoning under the width bound.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 
@@ -46,10 +10,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-- A width-8 field extracted at offset `off ≥ 8` from `K ||| zeroExtend c`
-(with `c : BitVec 8`) is independent of `c`: the console byte only ever reaches
-bits `[0,8)`, so it drops out of the device/cmd fields (`[56,64)` / `[48,56)`).
-The single load-bearing bit-fact behind the concrete device/cmd decodings. -/
 theorem extract_or_high (K : BitVec 64) (c : BitVec 8) (off : Nat) (hoff : 8 ≤ off) :
     BitVec.extractLsb' off 8 (K ||| BitVec.setWidth 64 c)
       = BitVec.extractLsb' off 8 K := by
@@ -60,22 +20,18 @@ theorem extract_or_high (K : BitVec 64) (c : BitVec 8) (off : Nat) (hoff : 8 ≤
   rw [hcz]
   simp only [Bool.and_false, Bool.or_false]
 
-/-- Device byte of the console-putchar command word is `0x01` regardless of the
-payload byte `c`. -/
 theorem device_putchar (c : BitVec 8) :
     _get_htif_cmd_device (0x0101000000000000#64 ||| BitVec.zeroExtend 64 c) = 0x01#8 := by
   simp only [_get_htif_cmd_device, Sail.BitVec.extractLsb, BitVec.extractLsb,
     BitVec.zeroExtend, extract_or_high _ c 56 (by omega)]
   decide
 
-/-- Command byte of the console-putchar command word is `0x01` (write), for any `c`. -/
 theorem cmd_putchar (c : BitVec 8) :
     _get_htif_cmd_cmd (0x0101000000000000#64 ||| BitVec.zeroExtend 64 c) = 0x01#8 := by
   simp only [_get_htif_cmd_cmd, Sail.BitVec.extractLsb, BitVec.extractLsb,
     BitVec.zeroExtend, extract_or_high _ c 48 (by omega)]
   decide
 
-/-- The low byte of the console-putchar payload is exactly `c`. -/
 theorem payload_byte_putchar (c : BitVec 8) :
     Sail.BitVec.extractLsb
         (_get_htif_cmd_payload (0x0101000000000000#64 ||| BitVec.zeroExtend 64 c)) 7 0 = c := by
@@ -92,9 +48,6 @@ theorem payload_byte_putchar (c : BitVec 8) :
   have hb64 : (i < 64) = True := by simp; omega
   simp only [hk, hi', hb48, hb64, decide_true, Bool.true_and, Bool.false_or]
 
-/-- High bits of an exit code fitting in 47 bits are zero: any bit `k ≥ 47` of
-`e` is `false` when `e.toNat < 2^47`. The bound that keeps the exit command's
-device byte `[63:56]` (and every bit `≥ 47`) at `0`. -/
 theorem e_high_zero (e : BitVec 64) (he : e.toNat < 2 ^ 47) (k : Nat) (hk : 47 ≤ k) :
     e.getLsbD k = false := by
   rw [BitVec.getLsbD]
@@ -102,16 +55,11 @@ theorem e_high_zero (e : BitVec 64) (he : e.toNat < 2 ^ 47) (k : Nat) (hk : 47 �
   have : (2 : Nat) ^ 47 ≤ 2 ^ k := Nat.pow_le_pow_right (by omega) hk
   omega
 
-/-- `Nat.testBit 1 n = false` for `n > 0` (only bit 0 of `1` is set): used to
-kill the `|||1` low-bit contribution above bit 0 in the exit-word decoding. -/
 theorem testBit_one_hi (n : Nat) (hn : 0 < n) : Nat.testBit 1 n = false := by
   rcases Bool.eq_false_or_eq_true (Nat.testBit 1 n) with h | h
   · rw [Nat.testBit_one_eq_true_iff_self_eq_zero] at h; omega
   · exact h
 
-/-- Device byte of the syscall-exit command word `(e <<< 1) ||| 1` is `0x00`
-(syscall-proxy) when `e.toNat < 2^47`: bits `[56,64)` come from `e`'s bits
-`[55,63)`, all zero under the bound; `|||1` only touches bit 0. -/
 theorem device_exit (e : BitVec 64) (he : e.toNat < 2 ^ 47) :
     _get_htif_cmd_device ((e <<< 1) ||| 1#64) = 0x00#8 := by
   apply BitVec.eq_of_getLsbD_eq
@@ -123,8 +71,6 @@ theorem device_exit (e : BitVec 64) (he : e.toNat < 2 ^ 47) :
   rw [h1, testBit_one_hi (56 + i) (by omega), Nat.zero_testBit]
   simp
 
-/-- Bit 0 of the syscall-exit command payload is `1` (the exit-request bit),
-for any `e`: `((e <<< 1) ||| 1)` has bit 0 set by the `|||1`. -/
 theorem payload_bit0_exit (e : BitVec 64) :
     Sail.BitVec.access (_get_htif_cmd_payload ((e <<< 1) ||| 1#64)) 0 = 1#1 := by
   simp only [_get_htif_cmd_payload, Sail.BitVec.extractLsb, BitVec.extractLsb, Sail.BitVec.access]
@@ -137,10 +83,6 @@ theorem payload_bit0_exit (e : BitVec 64) :
     decide
   rw [hbit]; decide
 
-/-- The exit code recovered by `htif_store` is exactly `e`:
-`(zero_extend payload) >>> 1 = e` when `e.toNat < 2^47`, where the payload is
-`(e <<< 1) ||| 1` truncated to 48 bits. The shift drops the injected low bit
-and the bound keeps the whole word inside the 48-bit payload window. -/
 theorem exit_code_eq (e : BitVec 64) (he : e.toNat < 2 ^ 47) :
     (BitVec.zeroExtend 64 (_get_htif_cmd_payload ((e <<< 1) ||| 1#64))) >>> 1 = e := by
   simp only [_get_htif_cmd_payload, Sail.BitVec.extractLsb, BitVec.extractLsb]

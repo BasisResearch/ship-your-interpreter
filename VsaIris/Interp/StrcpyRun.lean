@@ -2,37 +2,16 @@ import VsaIris.Interp.StrlenRun
 import Vsa.Sim.MemcpySpec
 import Vsa.Sim.PinW
 
-/-!
-# `strcpy` as a symbolic run over a persistent string into an owned buffer
-
-The whole of newlib's `strcpy` (`0x80006dc4`) as one `SW` run
-(`StrCode.lean`): the source is the string's bytes `[s, s + len]` (the data
-view, persistent), the destination an owned buffer `[d, d + N)`, `N ≥ len + 1`.
-
-* misaligned (`(d | s) & 7 ≠ 0`): the byte loop copies `len + 1` bytes;
-* aligned: the word loop loads whole words (`sr_havoc`: the last one may
-  reach up to seven bytes past the NUL, nobody's bytes) and stores the words
-  before the NUL's; the byte tail loads up to two bytes ahead of the byte it
-  stores (again possibly past the NUL, again `sr_havoc`) and stores bytes up
-  to the NUL only.
-
-Every store lands in `[d, d + len]`; the run ends with those bytes holding
-the string (`CpyEnd`). Stores need `tohostAddr + 16 ≤ d` (VSA's store facts,
-`BlockMem.MemFacts`).
--/
-
 namespace VsaIris.Interp.StrLeaf
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Inst.Strlen
 open Vsa.Sim Vsa.MemRepr
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `strcpy`'s end: back at `r`, `a0 = d`, and `[d, d + len]` holds the string. -/
 def CpyEnd (r d s : BitVec 64) (len : Nat) (bv : Nat → BitVec 8) (rv : Nat → BitVec 64)
     (mv : Nat → BitVec 8) : Prop :=
   rv 32 = r ∧ rv 1 = r ∧ rv 10 = d ∧ ∀ k, k ≤ len → mv (d.toNat + k) = bv (s.toNat + k)
 
-/-- **The side conditions of a `strcpy` run.** -/
 structure CCtx (live : Nat → Prop) (d s r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8)
     (N : Nat) : Prop where
   src : LCtx live s r len bv
@@ -40,18 +19,14 @@ structure CCtx (live : Nat → Prop) (d s r : BitVec 64) (len : Nat) (bv : Nat �
   dhi : d.toNat + N ≤ 0x100000000
   room : len + 1 ≤ N
 
-/-- `strcpy`'s run from the string `[s, s + len]` into the owned `[d, d + N)`. -/
 abbrev CW (live : Nat → Prop) (d s r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8) (N : Nat) :
     BitVec 64 → (Nat → BitVec 64) → Mem → Prop :=
   SW live (strText s.toNat len bv) (InExt (d.toNat, N)) (CpyEnd r d s len bv)
 
-/-- The destination's first `k` bytes hold the string's. -/
 def Pfx (d s : Nat) (bv : Nat → BitVec 8) (Mt : Mem) (k : Nat) : Prop :=
   ∀ j, j < k → imgM Mt (d + j) = bv (s + j)
 
 variable {live : Nat → Prop} {d s r : BitVec 64} {len : Nat} {bv : Nat → BitVec 8} {N : Nat}
-
-/-! ## Bytes a store leaves -/
 
 theorem imgM_sb1 (Mt : Mem) (a : Nat) (v : BitVec 64) :
     imgM (writeLog Mt [(a, 1, v)]) a = sbData v := by
@@ -79,8 +54,6 @@ theorem Pfx.store1 {Mt : Mem} {k : Nat} (h : Pfx d.toNat s.toNat bv Mt k) {v : B
 theorem Pfx.mono {Mt : Mem} {k k' : Nat} (h : Pfx d.toNat s.toNat bv Mt k) (hk : k' ≤ k) :
     Pfx d.toNat s.toNat bv Mt k' := fun j hj => h j (by omega)
 
-/-! ## The end -/
-
 theorem cpyEnd (c : CCtx live d s r len bv N) {R : Nat → BitVec 64} {Mt : Mem}
     (hR1 : R 1 = r) (h10 : R 10 = d) (hp : Pfx d.toNat s.toNat bv Mt (len + 1)) :
     CW live d s r len bv N r R Mt :=
@@ -88,8 +61,6 @@ theorem cpyEnd (c : CCtx live d s r len bv N) {R : Nat → BitVec 64} {Mt : Mem}
     by rw [hm.regs 10 (by decide) (by decide), h10], fun k hk => by
       have hr := c.room
       rw [hm.img _ ⟨by simp, by simp; omega⟩]; exact hp k (by omega)⟩
-
-/-! ## Arithmetic -/
 
 theorem sext_imm (imm : BitVec 12) (j : Nat) (h : (sign_extend (m := 64) imm : BitVec 64) = BitVec.ofNat 64 j)
     (x : BitVec 64) (k : Nat) :
@@ -121,9 +92,6 @@ theorem CCtx.inS (c : CCtx live d s r len bv N) {k w : Nat} (hk : k + w ≤ N) :
   have := of_mem_accAddrs hb
   exact ⟨by simp; omega, by simp; omega⟩
 
-/-! ## The byte loop `0x80006e7c … 0x80006e94` (misaligned) -/
-
-/-- At the byte-loop head `0x80006e80`, `i` bytes copied. -/
 structure ByteAt (d s r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8) (i : Nat)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   ra : R 1 = r
@@ -201,15 +169,12 @@ theorem sx6 : (sign_extend (m := 64) (0x006#12) : BitVec 64) = BitVec.ofNat 64 6
 theorem sx7 : (sign_extend (m := 64) (0x007#12) : BitVec 64) = BitVec.ofNat 64 7 := by
   apply BitVec.eq_of_toNat_eq; decide
 
-/-! ## The byte tail `0x80006e24 … 0x80006e9c` (aligned) -/
-
 theorem tailRet (c : CCtx live d s r len bv N) {R : Nat → BitVec 64} {Mt : Mem}
     (hra : R 1 = r) (h10 : R 10 = d) (hp : Pfx d.toNat s.toNat bv Mt (len + 1)) :
     CW live d s r len bv N 0x80006e78#64 R Mt := by
   refine sl_80006e78 c.src.code (by rw [hra]; exact c.src.retAlign) ?_
   rw [hra]; exact cpyEnd c hra h10 hp
 
-/-- At the byte tail `0x80006e24`: the word at `s + t` holds the NUL. -/
 structure CTail (d s r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8) (t : Nat)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   ra : R 1 = r
@@ -337,8 +302,6 @@ theorem tailCpy (c : CCtx live d s r len bv N) {t : Nat} {R : Nat → BitVec 64}
     rw [Ne, zext_eq_zero, agree_at hf6 hle6, byte_zero_iff c.src hle6, Classical.not_not] at hz
     exact tailRet c (by (try simp (disch := decide) only [upd_same, upd_other]); exact h.ra) (by (try simp (disch := decide) only [upd_same, upd_other]); exact h.a0) (hp6.mono (by omega))
 
-/-! ## The word loop `0x80006dd0 … 0x80006e20` (aligned) -/
-
 theorem Pfx.store8 {Mt : Mem} {t : Nat} (h : Pfx d.toNat s.toNat bv Mt t) {w : BitVec 64}
     (hw : ∀ i, i < 8 → w.extractLsb' (8 * i) 8 = bv (s.toNat + (t + i))) :
     Pfx d.toNat s.toNat bv (writeLog Mt [(d.toNat + t, 8, w)]) (t + 8) := by
@@ -349,7 +312,6 @@ theorem Pfx.store8 {Mt : Mem} {t : Nat} (h : Pfx d.toNat s.toNat bv Mt t) {w : B
     rw [e, imgM_sd8 _ _ _ _ (by omega), sdData_val_id, hw _ (by omega),
       show t + (j - t) = j by omega]
 
-/-- The bytes of a word loaded before the NUL. -/
 theorem word_bytes {P : BitVec 64} {f : Nat → BitVec 8}
     (hf : ∀ q ∈ strText P.toNat len bv, f q.1 = q.2) {t : Nat} (ht : t + 8 ≤ len) :
     ∀ i, i < 8 → (ldvf .ld f (P.toNat + t)).extractLsb' (8 * i) 8 = bv (P.toNat + (t + i)) := by
@@ -364,8 +326,6 @@ theorem or_aligned {x y : BitVec 64}
     show (7 : Nat) = 2 ^ 3 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod, Nat.or_mod_two_pow] at h2
   exact (Nat.or_eq_zero_iff.mp h2).1
 
-/-- At the word-loop head `0x80006e00`: the word at `s + t` (before the NUL)
-is in `a4`, the stored prefix is `t` bytes. -/
 structure CWord (d s r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8) (t : Nat)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   ra : R 1 = r
@@ -433,13 +393,12 @@ theorem wordCpy (c : CCtx live d s r len bv N) :
       · rw [h.a2]; exact a4_plus8 d t
       · exact Classical.byContradiction fun hc => hne (htest.2 (by omega))
 
-/-- **`strcpy` from its entry.** -/
 theorem strcpyRun (c : CCtx live d s r len bv N) {R : Nat → BitVec 64} {Mt : Mem}
     (h1 : R 1 = r) (h10 : R 10 = d) (h11 : R 11 = s) : CW live d s r len bv N 0x80006dc4#64 R Mt := by
   have hroom := c.room; have hdhi := c.dhi; have hnw := c.src.regions.nowrap
   refine sl_80006dc4 c.src.code (sl_80006dc8 c.src.code (sl_80006dcc c.src.code
     (fun hnz => ?_) (fun hz => ?_)))
-  · -- misaligned: the byte loop
+  ·
     refine sl_80006e7c c.src.code (byteRun c len 0 _ Mt (by omega) ⟨?_, ?_, ?_, ?_, Nat.zero_le _,
       fun j hj => absurd hj (Nat.not_lt_zero _)⟩)
     all_goals try simp (disch := decide) only [upd_same, upd_other]

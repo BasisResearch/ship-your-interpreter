@@ -1,22 +1,10 @@
 import VsaIris.Interp.Repr
 import Vsa.While.Cost
 
-/-!
-# `env_define`'s growth policy against the cost model
-
-`capFor` (`Repr.lean`) and `arrayCostAux` (`Vsa/While/Cost.lean`) follow the
-same fuel recursion over the caps `0, 8, 16, 32, …`. One more binding either
-stays within the cap (no charge) or, at a full frame, moves to the next cap
-and is charged that cap's `arrayReallocCost` (`capFor_succ`). `defineCost`
-of a missing name is then the name copy plus exactly what `env_define`'s
-growth `realloc`s request (`defineCost_miss`).
--/
-
 namespace VsaIris.Interp
 
 open Vsa.While
 
-/-- The cap after `c`: `env.c`'s `cap ? 2 * cap : 8`. -/
 def nextCap (c : Nat) : Nat := if c = 0 then 8 else 2 * c
 
 theorem lt_nextCap (c : Nat) : c < nextCap c := by unfold nextCap; split <;> omega
@@ -29,7 +17,6 @@ theorem arrayCostAux_succ (f cap k : Nat) :
     arrayCostAux (f + 1) cap k =
       if k ≤ cap then 0 else arrayReallocCost (nextCap cap) + arrayCostAux f (nextCap cap) k := rfl
 
-/-- Fuel beyond the cap chain's reach changes nothing. -/
 theorem capAux_fuel : ∀ (f cap k : Nat), k ≤ cap + f →
     capForAux f cap k = capForAux (f + 1) cap k ∧ arrayCostAux f cap k = arrayCostAux (f + 1) cap k
   | 0, cap, k, h => by
@@ -45,8 +32,6 @@ theorem capAux_fuel : ∀ (f cap k : Nat), k ≤ cap + f →
       simp only [hk, ite_false]
       exact ⟨ih.1, by rw [ih.2]⟩
 
-/-- **One more binding**: at a full cap the next cap is reached and charged;
-otherwise nothing changes. -/
 theorem capAux_succ : ∀ (f cap k : Nat), k + 1 ≤ cap + f →
     (capForAux f cap k = k ∧ capForAux f cap (k + 1) = nextCap k ∧
       arrayCostAux f cap (k + 1) = arrayCostAux f cap k + arrayReallocCost (nextCap k)) ∨
@@ -63,7 +48,7 @@ theorem capAux_succ : ∀ (f cap k : Nat), k + 1 ≤ cap + f →
       simp only [hk1, show k ≤ cap by omega, ite_true]
       exact ⟨by omega, trivial, trivial⟩
     · by_cases hk : k ≤ cap
-      · -- `k = cap`: the frame is full
+      ·
         have hkc : k = cap := by omega
         subst hkc
         left
@@ -85,7 +70,6 @@ theorem capAux_succ : ∀ (f cap k : Nat), k + 1 ≤ cap + f →
         · left; exact ⟨h1, h2, by rw [h3]; omega⟩
         · right; exact ⟨h1, h2, by rw [h3]⟩
 
-/-- **The canonical cap of one more binding**, and its cumulative charge. -/
 theorem capFor_succ (n : Nat) :
     (capFor n = n ∧ capFor (n + 1) = nextCap n ∧
       arrayCost (n + 1) = arrayCost n + arrayReallocCost (nextCap n)) ∨
@@ -99,15 +83,12 @@ theorem capFor_succ (n : Nat) :
 theorem arrayReallocCost_pos (c : Nat) (h : 1 ≤ c) : 0 < arrayReallocCost c := by
   unfold arrayReallocCost roundUp16; omega
 
-/-- The charge of one more binding in a frame of `n`, as `defineCost` states it. -/
 def growthCost (n : Nat) : Nat :=
   if n = 0 then arrayReallocCost 8
   else if arrayCostAux (n + 1) 0 (n + 1) ≠ arrayCostAux n 0 n then
     arrayCostAux (n + 1) 0 (n + 1) - arrayCostAux n 0 n
   else 0
 
-/-- **The growth charge is the growth's two `realloc` requests** at a full
-frame, and nothing otherwise. -/
 theorem growthCost_eq (n : Nat) :
     (capFor n = n ∧ capFor (n + 1) = nextCap n ∧ growthCost n = arrayReallocCost (nextCap n)) ∨
     (n < capFor n ∧ capFor (n + 1) = capFor n ∧ growthCost n = 0) := by
@@ -131,7 +112,6 @@ theorem growthCost_eq (n : Nat) :
     unfold arrayCost at h3
     simp [h0, h3]
 
-/-- **`defineCost` of a missing name**: the name copy plus the growth. -/
 theorem defineCost_miss {st : Store} {fa : Addr} {f : Frame} {x : String}
     (hf : st.frames[fa]? = some f) (hm : ¬ f.vars.any (·.1 == x)) :
     defineCost st fa x = nameCopyCost x + growthCost f.vars.length := by
@@ -139,7 +119,6 @@ theorem defineCost_miss {st : Store} {fa : Addr} {f : Frame} {x : String}
   rw [hf]
   simp only [hm, Bool.false_eq_true, ite_false]
 
-/-- `defineCost` of a bound name is zero. -/
 theorem defineCost_hit {st : Store} {fa : Addr} {f : Frame} {x : String}
     (hf : st.frames[fa]? = some f) (hm : f.vars.any (·.1 == x)) : defineCost st fa x = 0 := by
   unfold defineCost

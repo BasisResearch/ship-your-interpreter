@@ -1,23 +1,12 @@
 import VsaIris.Vsa.MallocPaths
 
-/-!
-# `_malloc_r`'s prologue
-
-From the entry to the first join: the frame, the request's chunk size
-(`request2size`), and the dispatch to the small-bin join `j_small`, the
-large-bin index at `0x80004884`, or the error return (`errno := ENOMEM`,
-NULL) for a request no chunk can hold.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The reentrancy structure `_impure_ptr` points at (its first word is `_errno`). -/
 abbrev reentV : BitVec 64 := 0x8001b538#64
 
-/-- `_malloc_r`'s registers at its entry. -/
 structure MEntry (C : MCtx) (R : Nat → BitVec 64) : Prop where
   ra : R 1 = C.r
   sp : R 2 = C.s
@@ -28,12 +17,9 @@ structure MEntry (C : MCtx) (R : Nat → BitVec 64) : Prop where
   s2 : R 18 = C.rv0 18
   s3 : R 19 = C.rv0 19
 
-/-- The `_errno` word is in the footprint. -/
 theorem errno_foot {H : List (Nat × Nat)} : ∀ k, k < 4 → vsaFoot H (0x8001b538 + k) :=
   fun k hk => .inl (.inr (.inl ⟨by omega, by omega⟩))
 
-/-- **The error return** (`0x80004840`): `errno := ENOMEM`, NULL, for a request
-the arena cannot hold. -/
 theorem malloc_errno {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (h8 : R 8 = reentV)
@@ -71,7 +57,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
   sx_run [8] O.live at 0x800047c0
   rw [show (R 2 + 18446744073709551520#64 + 80#64).toNat = C.s.toNat - 96 + 80 by sx_addr,
     show (R 2 + 18446744073709551520#64 + 88#64).toNat = C.s.toNat - 96 + 88 by sx_addr]
-  -- the frame and the heap after the two spills
+
   have Hp1 := (Hp.store_stack (a := C.s.toNat - 96 + 80) (w := 8) (v := R 8) (by unfold mHead; omega)
     (by omega)).store_stack (a := C.s.toNat - 96 + 88) (w := 8) (v := R 1) (by unfold mHead; omega)
     (by omega)
@@ -89,7 +75,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
   have hs8 : R 10 = reentV := E.a0
   refine st_800047c0 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- `n + 23 > 46`
+  ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
     sx_run [4] O.live at 0x80004868
     have hX : C.n.toNat + 23 < 2 ^ 64 := by omega
@@ -105,7 +91,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     refine st_80004868 O.live (fun h1 => ?_) (fun h1 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn, hnb,
         show (2147483648#64).toNat = 2 ^ 31 from rfl] at h1
-    · -- the chunk would not fit in 31 bits
+    ·
       refine malloc_errno O ⟨?_, hS0, hRA, ?_, ?_, ?_⟩ Hp1 ?_ ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · rw [hs2]
@@ -119,9 +105,9 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
       exact Nat.lt_of_lt_of_le hE (Nat.add_le_add htop0 h1)
     refine st_8000486c O.live (fun h2 => ?_) (fun h2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hnb, hn] at h2
-    · -- `nb < n`: impossible without a wrap
+    ·
       omega
-    -- spill `nb`, take the lock, reload it
+
     sx_run [8] O.live at 0x80004880
     rw [show (R 2 + 18446744073709551520#64 + 8#64).toNat = C.s.toNat - 96 + 8 by sx_addr]
     have Hp2 := Hp1.store_stack (a := C.s.toNat - 96 + 8) (w := 8)
@@ -137,7 +123,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     refine st_80004880 O.live (fun h3 => ?_) (fun h3 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hnb',
         show (503#64).toNat = 503 from rfl] at h3
-    · -- a small chunk
+    ·
       sx_run [8] O.live at 0x800047dc
       refine hsm _ _ ((C.n.toNat + 23) / 16 * 16) ⟨?_, hS0', hRA', ?_, ?_, ?_⟩ Hp2 ⟨?_, ?_, ?_⟩ hNb h3 ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -159,7 +145,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
         simp only [Nat.reducePow]
         omega
       · exact hs8
-    · -- a large chunk
+    ·
       refine hlg _ _ ((C.n.toNat + 23) / 16 * 16) ⟨?_, hS0', hRA', ?_, ?_, ?_⟩ Hp2 hNb (by omega)
         (by omega) ?_ ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -169,13 +155,13 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
       · exact h19
       · exact hnb'
       · exact hs8
-  · -- `n + 23 ≤ 46`
+  ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
     have e32 : (0#64 + sign_extend (m := 64) (0x020#12)).toNat = 32 := by decide
     refine st_800047c4 O.live ?_
     refine st_800047c8 O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn] at hc2
-    · -- `n > 32`: `n + 23` wrapped
+    ·
       refine malloc_errno O ⟨?_, hS0, hRA, ?_, ?_, ?_⟩ Hp1 ?_ ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · rw [hs2]
@@ -187,7 +173,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
         unfold Starved physSize heapEnd extendSlack
         unfold heapStart at htop0
         omega
-    · -- `n ≤ 23`: the 32-byte chunk
+    ·
       sx_run [8] O.live at 0x800047dc
       refine hsm _ _ 32 ⟨?_, hS0, hRA, ?_, ?_, ?_⟩ Hp1 ⟨?_, ?_, ?_⟩ ⟨?_⟩ (by decide) ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]

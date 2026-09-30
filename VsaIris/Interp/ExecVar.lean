@@ -2,24 +2,11 @@ import VsaIris.Interp.ExecEnv
 import VsaIris.Interp.LeafArm
 import VsaIris.Interp.ExecOom
 
-/-!
-# `exec_stmt`'s `var` arms: runs, node facts, the shared tail (lane E5)
-
-`0x800040d8`: `ld a2,16(s0)` (the initializer), `beqz`; with an initializer the
-value is evaluated into the frame slot `sp+104` (`jal eval_expr`,
-`0x800040ec`), without one `value_null` fills it (`0x800042fc`..`0x80004304`,
-then `j 0x800040f0`). The shared tail `0x800040f0`: the name (`ld a1,8(s0)`),
-the copy `sp+104 → sp+16`, `env_define(env, name, sp+16)` (`0x80004114`),
-`li a0,0`, the shared exit.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
-/-- The facts of a `var` node: the name (`+8`, a C string) and the initializer
-field (`+16`: an expression, or NULL). -/
 structure VarNode (m : Mem) (P : Nat → Prop) (aS : BitVec 64) (x : String)
     (eo : Option Vsa.While.Expr) (pn pi : Nat) : Prop where
   node : StmtNode m P aS 1 24
@@ -31,7 +18,6 @@ structure VarNode (m : Mem) (P : Nat → Prop) (aS : BitVec 64) (x : String)
   initNat : (BitVec.ofNat 64 pi).toNat = pi
   initNone : eo = none → BitVec.ofNat 64 pi = 0#64
 
-/-- A `var` statement node. -/
 theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     {eo : Option Vsa.While.Expr} (h : StmtReprWithin m P aS.toNat (.varDecl x eo))
     (hg : ∀ k, P k → Interp.ReadOK k) : ∃ pn pi, VarNode m P aS x eo pn pi := by
@@ -114,10 +100,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
 
-/-- **The `var` arms' tail, counted regime, for either WP**: at `0x800040f0`
-with the value `v` in the frame slot `sp+104` (its words `w0 w1 w2`), the copy
-to `sp+16`, `env_define(env, name, sp+16)`, `li a0,0` and the shared exit;
-the world advances to `Store.define`, `defineCost` credits spent. -/
 theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {k : Nat} {st : St} {d env : Nat} {x : String}
     {eo : Option Expr} {v : Value}
@@ -149,7 +131,7 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   ihave #Hstr := strAt_of_cstringWithin hn.nameStr (sharedWin_of_readOK hgeo) $$ Hro
   ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
   · iframe Hcode Hro
-  -- the name, the copy, the arguments
+
   iapply wp_swpF Wp (F := iprop(envDefineSpec Wp N ∗ frameAt env aE.toNat ∗ valOf N v w0 w1 w2 ∗
       strAt pn x ∗ codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
       slot24 aRet.toNat ∗ world N vsaLayoutP vsaRoomB inp (.counted (k + defineCost st.store env x)) st d ∗
@@ -177,7 +159,7 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
     fun b hb => by simp only [InExt] at hb ⊢; rw [g16] at hb; omega
   unfold F'
   iintro ⟨⟨#Hed, #Hfb, #Hv, #Hstr, #Hcode, Hst, Hslot, Hw, HK⟩, Hms⟩
-  -- the value slot lent to env_define
+
   ihave ⟨Hms, Hval⟩ := ms_valCarve N hslotS hs0 hs8 hs16 $$ [Hms]
   · iframe Hms Hv
   ihave ⟨Hw, #Hcx⟩ := world_codeX N vsaLayoutP vsaRoomB inp _ st d $$ Hw
@@ -225,7 +207,7 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   · iframe Hsl Hst
   ihave Hw := (world_heapStore N inp (.counted k) ⟨st.store.define env x v, st.out⟩ d).2 $$ [Hh Hc Hio Hi]
   · iframe Hh Hc Hio Hi
-  -- `li a0,0`, the shared exit
+
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
     (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
       slot24 aRet.toNat ∗
@@ -269,7 +251,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 variable {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
 
 omit I in
-/-- The frame bytes whole again from a lent slot's bytes. -/
+
 theorem ownSet_unslotAny {S : Nat → Prop} {a : Nat} (h : ∀ b, InExt (a, 24) b → S b) :
     ownSet (GF := GF) (fun b => S b ∧ ¬ InExt (a, 24) b) byteAny ∗ slot24 a ⊢ ownSet S byteAny := by
   unfold slot24 blockOwn
@@ -281,9 +263,6 @@ theorem ownSet_unslotAny {S : Nat → Prop} {a : Nat} (h : ∀ b, InExt (a, 24) 
     · exact .inr hs
     · exact .inl ⟨hb, hs⟩⟩) $$ H
 
-/-- **The `var` arms' tail, partial mode**: `varTail` in the uncounted regime;
-out of memory (`env_define`'s array growth), the arm aborts through `CoreOK`
-with its frame (the lent value slot back in it). -/
 theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHoles)
     (hcl : Newlib.CodeLive live) {Core : IProp GF} (hcore : CoreOK N vsaLayoutP vsaRoomB inp Core)
     {Φ : Nat × String → IProp GF} {st : St} {d env : Nat} {x : String}
@@ -319,7 +298,7 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
   ihave #Hstr := strAt_of_cstringWithin hn.nameStr (sharedWin_of_readOK hgeo) $$ Hro
   ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
   · iframe Hcode Hro
-  -- the name, the copy, the arguments
+
   iapply wp_swpF (wpW _) (F := iprop(envDefineSpec (wpW (vsaModel live)) N ∗ Newlib.binImg ∗
       frameAt env aE.toNat ∗ valOf N v w0 w1 w2 ∗
       strAt pn x ∗ codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
@@ -385,7 +364,7 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
   · imodintro; rw [h211, hn.nameNat]; iexact Hstr
   isplit
   rotate_left
-  · -- out of memory: the arm aborts with its frame
+  ·
     iintro ⟨HA, Hval, HS⟩
     ihave HK := and_elim_r $$ HK
     iapply HK
@@ -418,7 +397,7 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     exact hsv2.congrHi (fun y h1 h2' => hag y (by simp only [InExt]; omega)
       (by simp only [InExt]; rw [g16]; omega)) (by omega)
   ihave HK := and_elim_l $$ HK
-  -- `li a0,0`, the shared exit
+
   iapply wp_swpF (wpW _) (text := interpText ++ dataOf ∅ [])
     (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
       slot24 aRet.toNat ∗

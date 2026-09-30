@@ -1,16 +1,6 @@
 import Vsa.Sim.Boot.Store
 import Vsa.Densify
 
-/-!
-# The zero fill of a boot state (REVIEW.md P3, lane B2)
-
-`endToEnd_refinement` takes `Loaded interpRunLayout p (fillZero c)` and
-concludes about `c`. The fill only changes the memory, so the fill of a boot
-configuration is the boot configuration over the filled memory; every byte
-the entry view returns survives the fill; and every stack byte is present in
-it.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr Vsa.Densify
@@ -22,7 +12,6 @@ theorem PartialView.fill {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialV
     PartialView (fillZeroMem m) v :=
   fun k b hk => fillZeroMem_some (h k b hk)
 
-/-- Every stack byte of a filled memory is present. -/
 theorem fillZeroMem_stack (m : Mem) :
     ∀ k, LayoutInstance.stackSL.lo ≤ k → k < LayoutInstance.stackSL.hi →
       ∃ b : BitVec 8, (fillZeroMem m)[k]? = some b := by

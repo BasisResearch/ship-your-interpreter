@@ -1,28 +1,13 @@
 import VsaIris.Vsa.SnpSvf
 
-/-!
-# `_svfprintf_r`'s conversions: `%s`, `%d`, `%lld`
-
-From the conversion start (`0x8000776c`) through the jump table to `PRINT`'s
-entry state `PrintIn` (`SnpSvf.lean`): `%s` through `strlen_nw`, the integer
-conversions through the sign, the digit loop over `umod_nw`/`udiv_nw` and the
-digits' bounds (`DigitsAt`, the form M3's `digits_eq_natToString` takes).
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
 
-/-! ## The conversion dispatch -/
-
-/-- A jump-table load at a literal address: the bytes are the table's. -/
 macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (apply snpRO_mem_img; (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]); decide))
 
-/-- `_svfprintf_r`'s conversion table (`0x8001a0fc`, 91 words, `.rodata`) in
-the run's data view: read like the format, not fetched, so it needs no
-liveness. -/
 structure TabAt (Dt : Mem) (DA : List Nat) : Prop where
   dom : InDA DA 0x8001a0fc 0x8001a268
   img : ∀ a, 0x8001a0fc ≤ a → a < 0x8001a268 → imgM Dt a = snpROImg a
@@ -36,9 +21,6 @@ theorem TabAt.lw {Dt : Mem} {DA : List Nat} (h : TabAt Dt DA) {a : Nat} (h1 : 0x
   simp only [widthOfM] at this
   exact h.img _ (by omega) (by omega)
 
-/-- **The conversion table** (`0x80007798`): the character `c` in `s8` at
-the cursor `x` (`s9`) dispatches through `0x8001a0fc` to `%s`, `%d` or the
-`l` modifier. -/
 theorem svf_disp {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {S : Nat → Prop} (x c : Nat) (tgt : BitVec 64)
     (hc : c = 0x73 ∧ tgt = 0x80007f4c#64 ∨ c = 0x64 ∧ tgt = 0x80008008#64 ∨ c = 0x6c ∧ tgt = 0x80008534#64)
@@ -61,13 +43,9 @@ theorem svf_disp {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
   all_goals first | rfl | (rw [h24]; decide) | skip
 
-/-- The bytes `SvfSt` reads besides the format, return and argument slots:
-`SvfKeep`, the `uio` and the iovec array. -/
 def StKeep (s a : Nat) : Prop :=
   SvfKeep s a ∨ (s - 864 + 224 ≤ a ∧ a < s - 864 + 248) ∨ (s - 864 + 352 ≤ a ∧ a < s - 864 + 480)
 
-/-- **`SvfSt` across a stretch of a conversion**: the kept bytes and fixed
-registers unchanged, new format, return and argument slots. -/
 theorem SvfSt.update {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
     {p ap p' ap' : Nat} {rt rt' : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
     {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
@@ -92,7 +70,6 @@ theorem SvfSt.update {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {M
   simp only [snpIov] at h1 h2
   exact hM a (.inr (.inr ⟨by omega, by omega⟩))
 
-/-- `SvfSt` in a memory agreeing on everything it reads. -/
 theorem SvfSt.agree {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
     {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {L : List (Nat × Nat)}
     {R : Nat → BitVec 64} {Mt Mt' : Mem}
@@ -113,8 +90,6 @@ theorem SvfSt.agree {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt
   simp only [Nat.add_zero] at this
   exact this.trans St.core.fmt
 
-/-- The conversion's state at the table (`0x80007798`): the cursor past the
-`'%'`, no sign, no flags, precision `-1`, width `0`. -/
 structure ConvAt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
     (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat)) (x c : Nat)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
@@ -128,9 +103,6 @@ structure ConvAt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 :
   r26 : R 26 = 90#64
   r22 : R 22 = 0x8001a0fc#64
 
-/-- **A conversion starts** (`0x8000776c`, the `'%'` at `q`): the cursor
-advanced past it, the sign cleared, the specification's defaults, the
-character after the `'%'` loaded. -/
 theorem svf_convStart {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -158,10 +130,6 @@ theorem svf_convStart {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   · svf_mem
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
-/-! ## `%s` -/
-
-/-- **`%s` after `strlen`** (`0x80009e88`): the spilled flags and argument
-cursor reloaded, `size = len`, no sign, precision `0`, `PRINT`. -/
 theorem svf_convS_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {ap c : Nat} {total : List (BitVec 8)}
@@ -203,8 +171,6 @@ theorem svf_convS_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   · svf_mem; exact h167
   · svf_mem
 
-/-- A `%s` argument: a NUL-terminated string in the data view, in RAM off the
-HTIF words with the word loop's eight bytes of slack. -/
 structure DStr (Dt : Mem) (DA : List Nat) (a len : Nat) : Prop where
   dom : InDA DA a (a + len + 1)
   nz : ∀ i, i < len → imgM Dt (a + i) ≠ 0
@@ -222,9 +188,6 @@ theorem DStr.read {Dt : Mem} {DA : List Nat} {a len : Nat} (h : DStr Dt DA a len
   hi := h.hi
   htif := h.htif
 
-/-- **`%s`** (from the table, `0x80007798`): the argument pointer loaded
-from the `va_list`, `strlen` of the string, `PRINT` with the string as the
-body. -/
 theorem svf_convS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {ap c : Nat} {total : List (BitVec 8)}
@@ -280,10 +243,6 @@ theorem svf_convS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   · rw [hkp2 26 (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
-/-! ## `%d` and `%lld` -/
-
-/-- **`ll`** (`0x80008534`, the first `l` at `x - 1`): the second `l` at `x`,
-the `d` at `x + 1`, the quad flag, back to the table. -/
 theorem svf_convLL {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat} (x : Nat)
     (R : Nat → BitVec 64) (Mt : Mem)
@@ -303,13 +262,10 @@ theorem svf_convLL {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
   · decide
   · simp only [h6', h15, h24, h25', ite_false]
 
-/-- The sign byte and magnitude `_svfprintf_r` prints a signed value with. -/
 def vSg (v : BitVec 64) : Nat := if v.toInt < 0 then 45 else 0
 
 def vMag (v : BitVec 64) : Nat := if v.toInt < 0 then (-v).toNat else v.toNat
 
-/-- The integer conversion after its argument (`0x80008100`): the sign byte
-at `sp + 167`, the magnitude `m` in `a4`, precision `-1`, width `0`. -/
 structure IntAt (DA : List Nat) (s dst n : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (p ap : Nat)
     (rt : BitVec 64) (total : List (BitVec 8)) (L : List (Nat × Nat)) (m sg : Nat)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
@@ -354,9 +310,6 @@ theorem vSg01 (v : BitVec 64) : vSg v = 0 ∨ vSg v = 45 := by unfold vSg; split
 
 theorem vMag_lt (v : BitVec 64) : vMag v < 2 ^ 64 := by unfold vMag; split <;> exact BitVec.isLt _
 
-/-- **`%lld`'s argument** (`0x80008008` with the quad flag): the 64-bit value
-`v` loaded from the `va_list`, the cursors stored, the sign byte and
-magnitude. -/
 theorem svf_intQ {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -397,8 +350,6 @@ theorem svf_intQ {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   · exact .inr h6
   · exact h20
 
-/-- **`%d`'s argument** (`0x80008008`, no size flag): the 32-bit value
-sign-extended to `v`, the cursors stored, the sign byte and magnitude. -/
 theorem svf_intD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)}
@@ -436,22 +387,15 @@ theorem svf_intD {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     | (rw [vMag_pos' hc]; simp; done)
     | (rw [vMag_neg' hc]; apply BitVec.eq_of_toNat_eq; simp; done)
 
-/-! ## The digits -/
-
-/-- The digit byte `k` places up. -/
 def digB (m k : Nat) : BitVec 8 := BitVec.ofNat 8 (48 + m / 10 ^ k % 10)
 
-/-- The registers one digit iteration keeps. -/
 def DigKeep (R' R : Nat → BitVec 64) : Prop :=
   ∀ z, z ≠ 1 → z ≠ 5 → z ≠ 8 → z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → z ≠ 15 → z ≠ 22 → z ≠ 23 →
     z ≠ 25 → z ≠ 26 → R' z = R z
 
-/-- The memory after digit `j`'s store. -/
 abbrev digMem (Mt : Mem) (s mag j : Nat) : Mem :=
   writeLog Mt [((BitVec.ofNat 64 (s - 864 + 348 - j - 1)).toNat, 1, BitVec.ofNat 64 (mag / 10 ^ j % 10 + 48))]
 
-/-- **One digit** (`0x8000831c`): `mag / 10^j % 10` stored below the digits so
-far, the quotient by `10`, the loop test on the old value. -/
 theorem svf_digStep {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (mag j : Nat) (R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
@@ -555,9 +499,6 @@ theorem DigKeep.trans {R R' R'' : Nat → BitVec 64} (h1 : DigKeep R' R) (h2 : D
 
 theorem ten_pow_20 : 2 ^ 64 < 10 ^ 20 := by decide
 
-/-- **The digit loop** (`0x8000831c`): the digits of `mag` stored downwards from
-`sp + 348`, `K` of them, low digit first; the exit (`0x80008358`) with the
-digit-count bounds `digits_eq_natToString` takes. -/
 theorem svf_digLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (mag : Nat) (hm : mag < 2 ^ 64) (Rs : Nat → BitVec 64) (Mts : Mem) (SG : SnpGeom s dst n)
@@ -618,9 +559,6 @@ theorem svf_digLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
           unfold digB; congr 1; omega
       · rw [imgM_miss_nat _ _ (by omega) (by omega)]; exact hM a (by omega)
 
-/-- What an integer conversion's digits are: `K` bytes at `sp + 348 - K`, the
-decimal digits of `mag` most significant first, with the bounds that make
-`K` the digit count. -/
 structure DigitsAt (Mt : Mem) (s mag K : Nat) : Prop where
   pos : 1 ≤ K
   le : K ≤ 20
@@ -628,21 +566,18 @@ structure DigitsAt (Mt : Mem) (s mag K : Nat) : Prop where
   hlb : K = 1 ∨ 9 < mag / 10 ^ (K - 2)
   bytes : ∀ i, i < K → imgM Mt (s - 864 + 348 - 1 - i) = digB mag i
 
-/-- The digits' piece. -/
 theorem digSrc {DA : List Nat} {s dst n K : Nat} (SG : SnpGeom s dst n) (hK : K ≤ 20) :
     PieceSrc DA s dst n (s - 864 + 348 - K) K := by
   have := SG.s_lo; have := SG.s_hi; have := SG.d_sep; have := SG.d_lo
   exact ⟨⟨by omega, by omega, by omega, by omega, by simp only [snpFP]; omega, by omega, by omega⟩,
     by omega, .inr ⟨by omega, by omega⟩⟩
 
-/-- The integer conversion's continuation into `PRINT`. -/
 def IntPrintK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (R0 : Nat → BitVec 64)
     (Mt0 : Mem) (p ap c : Nat) (total : List (BitVec 8)) (L : List (Nat × Nat)) (m sg : Nat) : Prop :=
   ∀ R' Mt' K, PrintIn DA s dst n R0 Mt0 p ap c total L (s - 864 + 348 - K) K sg R' Mt' →
     DigitsAt Mt' s m K → SnpW live Dt DA (snpS s dst n) Q 0x8000782c#64 R' Mt'
 
-/-- **One digit** (`0x80008100`, `m ≤ 9`): `'0' + m` at `sp + 347`, `PRINT`. -/
 theorem svf_dig1 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
@@ -712,8 +647,7 @@ theorem svf_dig1 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
     svf_mem
     rw [imgM_sb_ofNat' _ _ _ (by omega) (by omega)]
     unfold digB; congr 1; simp; omega
-/-- The digit loop's spills (`0x800082c8`): `s7`, `s4`, `s0`, `t3`, `t1` and
-the buffer end. -/
+
 structure DigSpill (s : Nat) (Rs : Nat → BitVec 64) (t1 : BitVec 64) (Mt : Mem) : Prop where
   s7 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 48)).toNat = Rs 23
   s4 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 56)).toNat = 18446744073709551615#64
@@ -814,8 +748,6 @@ theorem svf_digExit45 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     have := DG.bytes i hi
     svf_mem; exact this
 
-/-- **The digit loop's exit** (`0x80008358`): the spills reloaded, `size = K`,
-`realsz` with the sign, `PRINT`. -/
 theorem svf_digExit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
@@ -831,8 +763,6 @@ theorem svf_digExit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   · exact svf_digExit0 hlive Rs R Mt SG St t1 ht1 DS hR h26 DG h167 hL hc hsum hk
   · exact svf_digExit45 hlive Rs R Mt SG St t1 ht1 DS hR h26 DG h167 hL hc hsum hk
 
-/-- **Several digits** (`0x80008100`, `m > 9`): the spills, the digit loop, its
-exit, `PRINT`. -/
 theorem svf_digMulti {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
@@ -890,7 +820,6 @@ theorem svf_digMulti {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     rcases hz with rfl | rfl | rfl | rfl | rfl <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · rw [agree .lbu 167 (by simp only [widthOfM]; omega)]; svf_mem; exact IA.sign
 
-/-- **An integer's digits** (`0x80008100`): one digit or the loop, then `PRINT`. -/
 theorem svf_digits {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}

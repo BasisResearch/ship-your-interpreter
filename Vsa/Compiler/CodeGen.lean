@@ -1,30 +1,13 @@
 import Vsa.Compiler.VRepr
 
-/-!
-# The WHILE → RV64 code generator
-
-Every frame of the semantics is a heap object whose slots follow a static
-layout: the names declared in that frame's statements (`frameNames`), with an
-unbound tag until a declaration runs. A variable resolves by walking the
-lexical chain of layouts; an assignment writes the first frame where the name is
-bound. Expression temporaries live in the current stack frame at
-`sp + 16 + 16 k`. A function literal allocates a closure object and jumps over
-its own code; calls pass the closure in `a2`, the arguments' address in `a3`
-and their count in `a4`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While
 
-/-! ## Layouts -/
-
-/-- Append `x` unless present. -/
 def addName (l : List String) (x : String) : List String := if x ∈ l then l else l ++ [x]
 
 def addNames (l : List String) (xs : List String) : List String := xs.foldl addName l
 
-/-- Names a statement declares in the current frame. -/
 def declsS : Stmt → List String
   | .varDecl x _ => [x]
   | .ifStmt _ t none => declsS t
@@ -32,23 +15,17 @@ def declsS : Stmt → List String
   | .whileStmt _ b => declsS b
   | _ => []
 
-/-- The slot layout of a frame running `ss` after binding `pre`. -/
 def frameNames (pre : List String) (ss : List Stmt) : List String :=
   addNames [] (pre ++ ss.flatMap declsS)
 
-/-- The layout of a `for` frame. -/
 def forNames (init : Option Stmt) (b : Stmt) : List String :=
   addNames [] ((match init with | some s => declsS s | none => []) ++ declsS b)
 
-/-- The global layout: the natives, then the program's declarations. -/
 def globalNames (p : Program) : List String := frameNames ["print", "println", "assert"] p
 
-/-- Slot of `x` in a layout. -/
 def slotOf : List String → String → Option Nat
   | [], _ => none
   | y :: l, x => if y = x then some 0 else (slotOf l x).map (· + 1)
-
-/-! ## Static strings -/
 
 mutual
 def strsE : Expr → List String
@@ -83,16 +60,12 @@ def strsSeq : List Stmt → List String
   | s :: ss => strsS s ++ strsSeq ss
 end
 
-/-- The static string table: the runtime's fixed strings, then the program's. -/
 def strTab (p : Program) : List String := addNames fixedStrs (strsSeq p)
 
-/-- Address of a static string. -/
 def strAddr (T : List String) (s : String) : Nat := objBase + strOff T (T.idxOf s)
 
-/-! ## Temporaries -/
-
 mutual
-/-- Temporaries an expression needs above its base. -/
+
 def tE : Expr → Nat
   | .assign _ e => tE e
   | .binary _ l r => max (tE l) (tE r + 1)
@@ -101,7 +74,6 @@ def tE : Expr → Nat
   | .call f args => max (tE f) (max (tArgs 1 args) (args.length + 1))
   | _ => 0
 
-/-- Temporaries arguments need when argument `j` is evaluated at offset `j`. -/
 def tArgs (j : Nat) : List Expr → Nat
   | [] => 0
   | e :: es => max (j + tE e) (tArgs (j + 1) es)
@@ -127,10 +99,7 @@ def tSeq : List Stmt → Nat
   | s :: ss => max (tS s) (tSeq ss)
 end
 
-/-- Stack frame size of a function body or the program. -/
 def frameSize (ss : List Stmt) : Nat := 16 + 16 * tSeq ss
-
-/-! ## Code helpers -/
 
 def storeTmp (k : Nat) : List Ins :=
   [addiN t6 spR (16 + 16 * k), .sd a0 t6, addi t6 t6 8, .sd a1 t6]
@@ -138,16 +107,12 @@ def storeTmp (k : Nat) : List Ins :=
 def loadTmp (k : Nat) : List Ins :=
   [addiN t6 spR (16 + 16 * k), .ld a0 t6, addi t6 t6 8, .ld a1 t6]
 
-/-- Go to the error exit unless `r1 = r2`. -/
 def errUnlessEq (r1 r2 pos : Nat) : List Ins := [Br .eq r1 r2 pos (pos + 2), J (pos + 1) errPos]
 
-/-- Go to `tgt` if `a0 = 0`. -/
 def jmpIfZero (pos tgt : Nat) : List Ins := [Br .ne a0 0 pos (pos + 2), J (pos + 1) tgt]
 
-/-- Go to `tgt` if `a0 ≠ 0`. -/
 def jmpIfNonzero (pos tgt : Nat) : List Ins := [Br .eq a0 0 pos (pos + 2), J (pos + 1) tgt]
 
-/-- Code of a binary operator on `(a0, a1)` and `(a2, a3)`. -/
 def opCode (pos : Nat) : BinOp → List Ins
   | .add => [Call pos addPos]
   | .sub => [Call pos subPos]
@@ -161,31 +126,24 @@ def opCode (pos : Nat) : BinOp → List Ins
   | .eq => [Call pos eqPos]
   | .ne => [Call pos eqPos, mvi t0 1, .sub a1 t0 a1]
 
-/-- Code of one frame of a variable read: if `x` has slot `i` there and is bound,
-load it and go to `fin`. The frame is in `t0`. -/
 def readHere (x : String) (l : List String) (pos fin : Nat) : List Ins :=
   match slotOf l x with
   | some i => [addiN t1 t0 (8 + 16 * i), .ld a0 t1, mvi t3 6, Br .eq a0 t3 (pos + 3) (pos + 7),
       addi t1 t1 8, .ld a1 t1, J (pos + 6) fin]
   | none => []
 
-/-- Code of one frame of an assignment: if `x` has slot `i` there and is bound,
-store `(a0, a1)` and go to `fin`. -/
 def writeHere (x : String) (l : List String) (pos fin : Nat) : List Ins :=
   match slotOf l x with
   | some i => [addiN t1 t0 (8 + 16 * i), .ld t2 t1, mvi t3 6, Br .eq t2 t3 (pos + 3) (pos + 8),
       .sd a0 t1, addi t1 t1 8, .sd a1 t1, J (pos + 7) fin]
   | none => []
 
-/-- Walk the chain of layouts from the frame in `t0`, running `here` on each
-frame and moving to the parent between frames; the error exit if no frame binds `x`. -/
 def walkCode (here : List String → Nat → List Ins) (pos : Nat) : List (List String) → List Ins
   | [] => [J pos errPos]
   | [l] => here l pos ++ [J (pos + (here l pos).length) errPos]
   | l :: l' :: g =>
     here l pos ++ [.ld t0 t0] ++ walkCode here (pos + (here l pos).length + 1) (l' :: g)
 
-/-- Length of a variable read's walk. -/
 def walkLen (hl : List String → Nat) : List (List String) → Nat
   | [] => 1
   | [l] => hl l + 1
@@ -193,21 +151,14 @@ def walkLen (hl : List String → Nat) : List (List String) → Nat
 
 def hereLen (w : Nat) (x : String) (l : List String) : Nat := if (slotOf l x).isSome then w else 0
 
-/-- Read `x` into `(a0, a1)`. -/
 def varCode (x : String) (pos : Nat) (Γ : List (List String)) : List Ins :=
   let fin := pos + 1 + walkLen (hereLen 7 x) Γ
   [mv t0 envR] ++ walkCode (fun l p => readHere x l p fin) (pos + 1) Γ
 
-/-- Write `(a0, a1)` to `x`. -/
 def setCode (x : String) (pos : Nat) (Γ : List (List String)) : List Ins :=
   let fin := pos + 1 + walkLen (hereLen 8 x) Γ
   [mv t0 envR] ++ walkCode (fun l p => writeHere x l p fin) (pos + 1) Γ
 
-/-! ## Compilation -/
-
-/-- Compilation context: the chain of layouts, the number of frames entered since
-the enclosing function or program, and the targets of `break`, `continue` and
-`return` with the frame count at each (`none`: the error exit). -/
 structure GCtx where
   Γ : List (List String)
   blk : Nat
@@ -215,37 +166,29 @@ structure GCtx where
   cont : Option (Nat × Nat)
   ret : Option (Nat × Nat)
 
-/-- Inside a loop with the given `break` and `continue` targets. -/
 def GCtx.loop (C : GCtx) (b c : Nat) : GCtx := { C with brk := some (b, C.blk), cont := some (c, C.blk) }
 
-/-- Inside a new frame with layout `L`. -/
 def GCtx.enter (C : GCtx) (L : List String) : GCtx := { C with Γ := L :: C.Γ, blk := C.blk + 1 }
 
-/-- A `for` initializer: every abrupt status continues at `t`. -/
 def GCtx.swallow (C : GCtx) (t : Nat) : GCtx :=
   { C with brk := some (t, C.blk), cont := some (t, C.blk), ret := some (t, C.blk) }
 
-/-- Leave frames down to count `d` and jump to the target; the error exit without one. -/
 def exitTo (blk pos : Nat) : Option (Nat × Nat) → List Ins
   | none => [J pos errPos]
   | some (tgt, d) => List.replicate (blk - d) (.ld envR envR) ++ [J (pos + (blk - d)) tgt]
 
-/-- Allocate a frame with layout `l` below the current one and enter it. -/
 def enterFrame (l : List String) (pos : Nat) : List Ins :=
   [addiN a5 0 l.length, mv a6 envR, Call (pos + 2) nfPos, mv envR a4]
 
-/-- Store `(a0, a1)` into slot `i` of the current frame. -/
 def storeSlot (i : Nat) : List Ins :=
   [addiN t6 envR (8 + 16 * i), .sd a0 t6, addi t6 t6 8, .sd a1 t6]
 
-/-- Print the `n` arguments from temporary `t` on, separated by spaces. -/
 def printLoopG (pos : Nat) : Nat → Nat → List Ins
   | _, 0 => []
   | t, n + 1 =>
     let c := loadTmp t ++ [Call (pos + 4) dpPos] ++ (if n = 0 then [] else putc ' ')
     c ++ printLoopG (pos + c.length) (t + 1) n
 
-/-- Call the value in temporary `k` on the `m` arguments above it; `fin` follows. -/
 def callCode (k m pos : Nat) : List Ins :=
   let pp := pos + 15
   let assertC : List Ins :=
@@ -269,7 +212,6 @@ def callCode (k m pos : Nat) : List Ins :=
   [mv a2 t1, addiN a3 spR (16 + 16 * (k + 1)), mvi a4 m, addi t3 a2 8, .ld t3 t3,
    Call (cl + 5) (cl + 7), J (cl + 6) fin, .jalr t3]
 
-/-- Copy argument `j` into the slot of its parameter. -/
 def paramCopy (L : List String) (j : Nat) (x : String) : List Ins :=
   [addiN t5 a3 (16 * j), .ld t4 t5, addiN t6 a4 (8 + 16 * (slotOf L x).getD 0), .sd t4 t6,
    addi t5 t5 8, .ld t4 t5, addi t6 t6 8, .sd t4 t6]
@@ -278,25 +220,19 @@ def paramCopies (L : List String) : Nat → List String → List Ins
   | _, [] => []
   | j, x :: xs => paramCopy L j x ++ paramCopies L (j + 1) xs
 
-/-- A function's entry at `pos`: arity and depth checks, stack frame, a fresh frame
-for layout `L` below the closure's frame, and the parameters. -/
 def fnPre (L : List String) (params : List String) (fs pos : Nat) : List Ins :=
   [mvi t0 params.length] ++ errUnlessEq a4 t0 (pos + 1) ++
     [mvi t0 1000, Br .lt depR t0 (pos + 4) (pos + 6), J (pos + 5) errPos,
      addi depR depR 1, addi spR spR (-(fs : Int)), .sd ra spR, addi t6 spR 8, .sd envR t6,
      .ld a6 a2, mvi a5 L.length, Call (pos + 13) nfPos] ++ paramCopies L 0 params ++ [mv envR a4]
 
-/-- A function's end: the null result, then the return restoring the caller's
-frame, stack, and depth. -/
 def fnPost (fs : Nat) : List Ins :=
   [mvi a0 0, mvi a1 0, .ld ra spR, addi t6 spR 8, .ld envR t6, addiN spR spR fs, addi depR depR (-1), ret]
 
-/-- The context of a function body with layout chain `Γ` returning to `epi`. -/
 def fnCtx (Γ : List (List String)) (epi : Nat) : GCtx := ⟨Γ, 0, none, none, some (epi, 0)⟩
 
 mutual
 
-/-- Evaluate `e` into `(a0, a1)` with temporaries from `k`, at instruction `pos`. -/
 def gexpr (T : List String) (Γ : List (List String)) (k pos : Nat) : Expr → List Ins
   | .int n => [mvi a0 2] ++ li a1 (BitVec.ofInt 64 n)
   | .bool b => [mvi a0 1, mvi a1 (if b then 1 else 0)]
@@ -349,14 +285,12 @@ def gexpr (T : List String) (Γ : List (List String)) (k pos : Nat) : Expr → L
     let F := fp ++ gseq T (fnCtx (L :: Γ) (pb + lb + 2)) pb body ++ fnPost fs
     pre ++ [J (pos + 57) (pos + 58 + F.length)] ++ F
 
-/-- Evaluate arguments into temporaries `k`, `k + 1`, …. -/
 def gargs (T : List String) (Γ : List (List String)) (k pos : Nat) : List Expr → List Ins
   | [] => []
   | e :: es =>
     let c := gexpr T Γ k pos e ++ storeTmp k
     c ++ gargs T Γ (k + 1) (pos + c.length) es
 
-/-- Compile a statement at `pos`. -/
 def gstmt (T : List String) (C : GCtx) (pos : Nat) : Stmt → List Ins
   | .expr e => gexpr T C.Γ 0 pos e
   | .varDecl x i =>
@@ -421,7 +355,6 @@ def gstmt (T : List String) (C : GCtx) (pos : Nat) : Stmt → List Ins
   | .brk => exitTo C.blk pos C.brk
   | .cont => exitTo C.blk pos C.cont
 
-/-- Compile a statement list at `pos`. -/
 def gseq (T : List String) (C : GCtx) (pos : Nat) : List Stmt → List Ins
   | [] => []
   | s :: ss =>
@@ -430,27 +363,19 @@ def gseq (T : List String) (C : GCtx) (pos : Nat) : List Stmt → List Ins
 
 end
 
-/-! ## The program -/
-
-/-- Build the string object for `s` at `a`. -/
 def strObjCode (s : String) (a : Nat) : List Ins :=
   liN t0 a ++ liN t1 s.length ++ [.sd t1 t0] ++
     s.toList.flatMap fun c => [addi t0 t0 8, mvi t1 c.toNat, .sd t1 t0]
 
-/-- Build the static string table. -/
 def strTabCode (T : List String) : List Ins :=
   (List.range T.length).flatMap fun i => strObjCode (T.getD i "") (objBase + strOff T i)
 
-/-- Bind native `i` in slot `i` of the global frame. -/
 def natCode (i : Nat) : List Ins := [mvi a0 5, mvi a1 i] ++ storeSlot i
 
-/-- Bind the natives in the global frame. -/
 def nativeCode : List Ins := natCode 0 ++ natCode 1 ++ natCode 2
 
-/-- Where the program starts. -/
 def mainPos : Nat := rtEnd
 
-/-- The machine setup: static strings, registers, the global frame and its natives. -/
 def setupCode (p : Program) : List Ins :=
   let T := strTab p
   let G := globalNames p
@@ -458,7 +383,6 @@ def setupCode (p : Program) : List Ins :=
     liN hpO (objBase + strOff T T.length)
   pre ++ [mvi a5 G.length, mvi a6 0, Call (mainPos + pre.length + 2) nfPos, mv envR a4] ++ nativeCode
 
-/-- **The compiler.** -/
 def compileG (p : Program) : List Ins :=
   let T := strTab p
   let sc := setupCode p

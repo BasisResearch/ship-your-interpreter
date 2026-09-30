@@ -1,21 +1,10 @@
 import Vsa.While.CostEval
 import Vsa.Sim.DlHeap
 
-/-!
-# `capacity` from one evaluator run
-
-`DlHeap.InitialAllocatorAt.capacity` bounds the cost of every terminating
-(`.normal`) cost derivation of the represented program. The cost evaluator
-(`Vsa.While.CostEval`) is complete for the cost relations, so one run that
-finishes decides it: a `done` result fixes the status and the cost of every
-derivation, and a `stuck` result rules every derivation out.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.While Vsa.Sim.DlHeap
 
-/-- The evaluator finished within `fuel`, and a normal result fits below `top`. -/
 def capOk (fuel : Nat) (p : Program) (top : Nat) : Bool :=
   match execSeqEval fuel initSt 0 0 p with
   | .done r => r.status != .normal || decide (2 * r.n + extendSlack ≤ heapEnd - top)

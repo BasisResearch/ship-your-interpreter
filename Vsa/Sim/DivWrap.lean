@@ -5,7 +5,6 @@ open Vsa.Machine Vsa.Logic Vsa.MemRepr
 
 namespace Vsa.Sim
 
-/-- Signed division entry, including the wrapping overflow input. -/
 structure DivWrapPre (g : (R : Register) → Option (RegisterType R))
     (n d r : BitVec 64) (m0 : Mem) (out : Array String) (c : Config) : Prop where
   good : GoodState c.σ
@@ -26,7 +25,6 @@ structure DivWrapPre (g : (R : Register) → Option (RegisterType R))
   aligned : r.toNat % 4 = 0
   frame : ∀ R, NotWrittenD R → c.σ.regs.get? R = g R
 
-/-- The signed quotient as a 64-bit word, with the actual memory and register frame. -/
 structure DivWrapPost (g : (R : Register) → Option (RegisterType R))
     (n d r : BitVec 64) (m0 : Mem) (out : Array String) (c : Config) : Prop where
   good : GoodState c.σ
@@ -37,7 +35,6 @@ structure DivWrapPost (g : (R : Register) → Option (RegisterType R))
   frame : ∀ R, NotWrittenD R → c.σ.regs.get? R = g R
   quotient : c.σ.regs.get? .x10 = some (BitVec.ofInt 64 (n.toInt.tdiv d.toInt))
 
-/-- Convert the existing signed-result contract to its exact word result. -/
 theorem DivWrapPost.of_signed
     {g : (R : Register) → Option (RegisterType R)} {n d r : BitVec 64}
     {m0 : Mem} {out : Array String} {c : Config}
@@ -47,7 +44,6 @@ theorem DivWrapPost.of_signed
     rw [← quotient, BitVec.ofInt_toInt]
   exact ⟨good, mem, output, pc, tick, frame, word.symm ▸ value⟩
 
-/- The selected blocks emitted by gen_fn.py for __divdi3 and __umoddi3. -/
 #derive_case divOverflowBranchSeg chain []
   terminator ⟨0x800046a4#64, 0x06054063#32, 0x63#8, 0x40#8, 0x05#8, 0x06#8,
     .br bop.BLT true, 10, 0, 0x0060#13, 0#21, 0#12⟩
@@ -136,7 +132,6 @@ theorem divOverflowDivisor_run (c : Config) (r w12 w13 vm : BitVec 64)
     (fun _ _ => rfl) (by decide) (by decide)
     (by exact ⟨rfl, congrArg some divOverflowNegOne, rfl, rfl, rfl, trivial⟩)
 
-/-- The overflow path negates both operands and returns the unsigned quotient unchanged. -/
 theorem divdi3_overflow_spec (g : (R : Register) → Option (RegisterType R))
     (r : BitVec 64) (m0 : Mem) (out : Array String) :
     Triple (DivWrapPre g 0x8000000000000000#64 0xffffffffffffffff#64 r m0 out)
@@ -175,7 +170,6 @@ theorem divdi3_overflow_spec (g : (R : Register) → Option (RegisterType R))
   · rw [← divOverflowWord]
     exact quotient
 
-/-- Signed division returns the wrapped quotient for every nonzero divisor. -/
 theorem divdi3_wrap_spec (g : (R : Register) → Option (RegisterType R))
     (n d r : BitVec 64) (m0 : Mem) (out : Array String) :
     Triple (DivWrapPre g n d r m0 out) (DivWrapPost g n d r m0 out) := by

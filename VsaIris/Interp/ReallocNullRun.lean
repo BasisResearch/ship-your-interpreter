@@ -1,23 +1,10 @@
 import VsaIris.Interp.SpecEnv
 
-/-!
-# `realloc(NULL, n)` at the binary, both regimes
-
-`realloc` (`0x8000527c`) moves the pointer to `a1` and the request to `a2`
-and loads `_impure_ptr` into `a0`; `_realloc_r` tests the pointer
-(`0x80005290: beqz a1`), moves the request back to `a1` (`0x80005480`) and
-tail-calls `_malloc_r` (`0x80005484: j`). From there the run is H4's
-`malloc_all`, over the same contexts as `mallocChgRun_proved` and
-`mallocLocalRun_proved`, so the post is `malloc`'s.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris.VsaHeap Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **`realloc(NULL, n)`** (`0x8000527c`): the entry moves, the NULL test
-taken, the request back in `a1`, then `_malloc_r` (`malloc_all`). -/
 theorem reallocNull_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (hra : R 1 = C.r) (hsp : R 2 = C.s) (ha0 : R 10 = 0#64) (ha1 : R 11 = C.n)
@@ -43,7 +30,6 @@ theorem reallocNull_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv :
     sx_norm
     exact ha0
 
-/-- **Counted `realloc(NULL, n)` at the binary** (formerly `IrisHoles.reallocNull.chgRun`). -/
 theorem reallocNullChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     ReallocNullChgRun (vsaModel live) := by
   intro H n s r saved rv mv k c hsv hchg hsp hral hR _ hroom hdisj
@@ -56,7 +42,6 @@ theorem reallocNullChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
   simp only [mChgCtx] at h
   exact aw_run h hR.entry.pc him hdisj
 
-/-- **Uncounted `realloc(NULL, n)` at the binary** (formerly `IrisHoles.reallocNull.localRun`). -/
 theorem reallocNullLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     ReallocNullLocalRun (vsaModel live) := by
   intro H n s r saved rv mv hsv hsp hral hR hshape hdisj

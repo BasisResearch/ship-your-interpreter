@@ -3,27 +3,10 @@ import Vsa.Sim.Boot.Entry
 import Vsa.Sim.Boot.Ast
 import Vsa.Sim.Boot.Capacity
 
-/-!
-# The physical boundary facts from a boot trace
-
-The fields of `InterpRunPhysicalFacts` that are read facts or arithmetic,
-over a byte view of the entry memory. The initial store is checked once over
-the view with `interp_run`'s prologue footprint masked out
-(`prologueMask`), which gives both `store` and `store_survives`.
-
-The boundary is assembled at ANY configuration `⟨σ, tick, steps⟩` whose
-registers satisfy `EntryRegs σ g` (REVIEW2.md P8: `GoodState`, `PC`,
-`htif_payload_writes`, the traced `x1 … x31`), whose console is empty, and
-whose memory the entry view is a partial view of (`readyFacts_at`,
-`loaded_at`); `readyFacts_of`/`loaded_of` are the instances at the witness
-register file `bootState`.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Sim.LayoutInstance
 
-/-- `interpRunWriteFootprint` for `inp = &Interp`, as a `Bool`. -/
 def prologueMask (k : Nat) : Bool :=
   decide (0x87800000 ≤ k ∧ k < 0x88000000) ||
     decide (interpObject + 16 ≤ k ∧ k < interpObject + 128)
@@ -39,8 +22,6 @@ theorem prologueMask_false {k : Nat} (h : prologueMask k = false) :
   rw [hlo, hhi, hi]
   omega
 
-/-- The initial store and its survival through the prologue, from one check
-of the global frame at `e` over the masked view. -/
 theorem store_of_check {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialView m v)
     {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {e : Nat} (he : φf 0 = e)
     (ha : A.contains e 32 ∧ e % 8 = 0)
@@ -56,8 +37,6 @@ theorem store_of_check {m : Mem} {v : Nat → Option (BitVec 8)} (hv : PartialVi
     exact storeRepr_initSt (frameCheck_sound hpv φf φc hf) ha
   exact ⟨hsurv m (fun _ _ => rfl), hsurv⟩
 
-/-- The entry's memory read facts. `stackBytes` is the field REVIEW.md P3
-restates (lane B2). -/
 structure BootMemFacts (m : Mem) (e : Nat) : Prop where
   mainRa : read64 m 0x87fffff8 = some 0x80000038
   text : Code.FixedTextLoaded m
@@ -69,7 +48,6 @@ structure BootMemFacts (m : Mem) (e : Nat) : Prop where
   depth : read32 m (interpObject + 8) = some 0
   stackBytes : ∀ k, stackSL.lo ≤ k → k < stackSL.hi → ∃ b : BitVec 8, m[k]? = some b
 
-/-- The entry's general registers and the statement array they pass. -/
 structure BootRegs (g : Nat → BitVec 64) (stmts count : Nat) : Prop where
   ra : g 1 = 0x800045ec#64
   sp : g 2 = BitVec.ofNat 64 spEntry
@@ -84,7 +62,6 @@ structure BootRegs (g : Nat → BitVec 64) (stmts count : Nat) : Prop where
   stmts_win : 0x8001ad00 + 16 ≤ stmts
   stmts_stack : stmts + 8 * count ≤ 0x87800000 ∨ spEntry ≤ stmts
 
-/-- The native entry addresses (`nm`). -/
 def bootNatives : NativeAddrs := ⟨0x80002ed4, 0x80002f7c, 0x80002df4⟩
 
 theorem bootArena_protected :
@@ -97,9 +74,6 @@ theorem bootArena_protected :
   simp only [bootArena, DlHeap.heapStart, DlHeap.heapEnd] at hin
   omega
 
-/-- **The boundary at any entry configuration**, from the per-trace facts:
-registers `EntryRegs σ g`, no console output, a memory the entry view is a
-partial view of. -/
 theorem readyFacts_at {σ : Vsa.Machine.MState} {v : Nat → Option (BitVec 8)}
     (hv : PartialView σ.mem v) {g : Nat → BitVec 64} (E : EntryRegs σ g)
     (hout : Vsa.Machine.output σ = "") {tick : Nat} (htick : tick < 2) {steps stmts count : Nat}
@@ -184,9 +158,6 @@ theorem readyFacts_at {σ : Vsa.Machine.MState} {v : Nat → Option (BitVec 8)}
       gprs := E.gprs
       s0_impure := by rw [← R.s0]; exact hgpr 7 (by decide) }
 
-/-- **`Loaded` at any entry configuration.** The represented program is the one
-the decoder finds within the shared bytes (`hdec`); its cost and stack need
-are decided (`hcap`, `hfit`). -/
 theorem loaded_at {σ : Vsa.Machine.MState} {v : Nat → Option (BitVec 8)}
     (hv : PartialView σ.mem v) {g : Nat → BitVec 64} (E : EntryRegs σ g)
     (hout : Vsa.Machine.output σ = "") {tick : Nat} (htick : tick < 2) {steps stmts count : Nat}

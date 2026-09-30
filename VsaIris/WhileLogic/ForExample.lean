@@ -1,28 +1,11 @@
 import VsaIris.WhileLogic.WholeProgram
 
-/-!
-# Worked example: a `for` loop
-
-```
-var sum = 0;
-for (var i = 1; i <= 100; i = i + 1) { sum = sum + i; }
-println(sum);
-```
-
-The loop gets a fresh frame `o` holding `i` (`wp_for`); the initializer
-defines `i` there. `ForInv o k` (variant `k = 100 - m`) binds `i = m + 1` in
-`o` and `sum = 0 + … + m` in the global frame. The body's block reaches `i`
-through one parent link and `sum` through two; the step `i = i + 1` runs in
-`o`. `for_spec` proves the program prints `5050`.
--/
-
 namespace Vsa.While.Logic.ForExample
 
 open Iris BI Vsa.While Vsa.While.Logic Vsa.While.Logic.Example Vsa.While.Logic.Whole
 
-/-- The global frame: the natives and `sum`. -/
 def Gs (v : Value) : Frame := ⟨none, natives ++ [("sum", v)]⟩
-/-- The loop's outer frame, holding `i`. -/
+
 def Fo (v : Value) : Frame := ⟨some 0, [("i", v)]⟩
 
 theorem Gs_set (a c : Value) : (Gs a).setVar "sum" c = Gs c := rfl
@@ -39,7 +22,6 @@ def prog : Program := [
   .forStmt (some (.varDecl "i" (some (.int 1)))) (some cond) (some step) body,
   .expr (.call (.var "println") [.var "sum"])]
 
-/-- After `m` iterations of the loop running in frame `o`. -/
 def ForInv (o k : Nat) : vProp :=
   iprop(∃ m : Nat, ⌜m ≤ 100 ∧ k = 100 - m⌝ ∗
     (o ↦f Fo (.int (m + 1 : Nat)) ∗ (0 ↦f Gs (.int (sumTo m)) ∗ outIs "")))
@@ -53,7 +35,7 @@ theorem iter_spec (o m : Nat) (hm : m < 100) (Φ : Status → vProp) (P : vProp)
   iintro ⟨Ho, H0, Hout⟩
   iapply wp_block
   iintro %g Hg
-  -- sum = sum + i
+
   iapply wp_seq_cons
   iapply wp_expr
   iapply wp_assign
@@ -95,7 +77,7 @@ theorem iter_spec (o m : Nat) (hm : m < 100) (Φ : Status → vProp) (P : vProp)
   simp only [seqK, Gs_set, hv]
   iapply wp_seq_nil
   simp only [loopK, stepK]
-  -- the step: i = i + 1
+
   iapply wp_assign
   iapply wp_binary
   iapply wp_var
@@ -165,11 +147,10 @@ theorem loop_step (o : Nat) (Φ : Status → vProp)
     · iexact H0
     · iexact Hout
 
-/-- **The program prints `5050`.** -/
 theorem for_spec : initOwn ⊢ wpSeq 0 0 prog (PostOut (· = "5050\n")) := by
   unfold prog initOwn
   iintro ⟨H0, Hout⟩
-  -- var sum = 0;
+
   iapply wp_seq_cons
   iapply wp_varInit
   iapply wp_int
@@ -180,12 +161,12 @@ theorem for_spec : initOwn ⊢ wpSeq 0 0 prog (PostOut (· = "5050\n")) := by
   have hG : globalFrame.defVar "sum" (.int 0) = Gs (.int (sumTo 0)) := rfl
   rw [hG]
   simp only [seqK]
-  -- the loop
+
   iapply wp_seq_cons
   iapply wp_for
   iintro %o Ho
   simp only [initK]
-  -- var i = 1; in the loop frame
+
   iapply wp_varInit
   iapply wp_int
   iapply wp_def

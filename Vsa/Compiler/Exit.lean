@@ -1,15 +1,6 @@
 import Vsa.Sim.ErrorSim
 import Vsa.Sim.HtifLift
 
-/-!
-# The HTIF exit store at any exit code
-
-`Vsa/Sim/ErrorTail.lean` proves that the `sd …, tohost` of the syscall-exit word
-halts the machine in one `stepOnce`, for the interpreter's error code `70`.
-Compiled programs also exit with code `0`, so the same four lemmas are stated
-here for an arbitrary code `e` below `2^47` (the device byte stays zero).
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -25,12 +16,6 @@ abbrev sigmaExitE (e : BitVec 64) (σ : MState) (pc : BitVec 64) (data : BitVec 
             Register.htif_done true).insert
           Register.htif_exit_code e}
 
-/-- `execute (STORE (imm, rs2, rs1, 8))` at `σ₂ = afterNextPC (afterPrelude σ) pc`
-for the `_exit` `sd a5,tohost` store: the effective address `v1 + sign_extend imm`
-is `tohostAddr`, the store data `vdata` is the syscall-exit word `(e<<<1)|1`, and
-the post-state is `sigmaExitE e σ pc data`.  Assembled from `execute_STORE_char` +
-`vmem_write_addr_w` (w = 8) with `mem_write_value_tohost_exit` as the abstract
-`mem_write_value` post-state. -/
 theorem exec_sd_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
     (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : regidx)
     (v1 vdata data : BitVec 64) (th : BitVec 64)
@@ -46,7 +31,7 @@ theorem exec_sd_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
     (hexit : data = (e <<< 1) ||| 1#64) :
     (execute (instruction.STORE (imm, rs2, rs1, 8))).run (afterNextPC (afterPrelude σ) pc)
       = .ok RETIRE_SUCCESS (sigmaExitE e σ pc data) := by
-  -- σ₂ control-plane read-backs through the prelude / nextPC frame.
+
   have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
       = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
     rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
@@ -69,12 +54,12 @@ theorem exec_sd_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
     rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hpw
   have hth₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost = some th := by
     rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hth
-  -- the bound keeping the exit device byte zero: `e < 2^47`.
+
   have hsmall : e.toNat < 2 ^ 47 := he
-  -- `mem_write_value` at tohost → the HTIF exit transition (post-state = sigmaExitE).
+
   have hmwv := mem_write_value_tohost_exit (afterNextPC (afterPrelude σ) pc) e data
     initMstatus initPmpaddr th hpriv hmstatus (by decide) hpma hcfg hpaddr hbase hpw₂ hth₂ hsmall hexit
-  -- the abstract lower-chain hypotheses for vmem_write_addr_w at a = tohostAddr.
+
   have hatohost : (BitVec.ofNat 64 tohostAddr).toNat = tohostAddr := by
     simp only [tohostAddr]; decide
   have htr := translateAddr_machine_store (afterNextPC (afterPrelude σ) pc)
@@ -84,7 +69,7 @@ theorem exec_sd_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
     (by rw [hatohost]; exact (by decide : (0x80000000 : Nat) ≤ tohostAddr))
     (by rw [hatohost]; exact (by decide : tohostAddr + 8 ≤ 0x100000000))
     (by rw [hatohost]; exact (by decide : tohostAddr % 8 = 0))
-  -- collapse the extract-of-data on the width-8 store word.
+
   have hwval : (BitVec.setWidth (8 * 8)
       (Sail.BitVec.extractLsb data (((8 : Nat) *i 8) -i 1).toNat 0)) = data := by
     apply BitVec.eq_of_toNat_eq
@@ -98,13 +83,13 @@ theorem exec_sd_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
       have h1 : data.toNat % 2 ^ 64 = data.toNat := by omega
       rw [h1]; omega
     exact key ((((8 : Nat) *i 8) -i 1).toNat - 0 + 1) (by decide)
-  -- vmem_write_addr on the tohost address, w = 8, post-state = sigmaExitE.
+
   have hwrite := vmem_write_addr_w (afterNextPC (afterPrelude σ) pc) (sigmaExitE e σ pc data)
     (BitVec.ofNat 64 tohostAddr) 8 data initMstatus (by decide) (by decide)
     (by rw [hatohost]; exact (by decide : tohostAddr % 8 = 0))
     (by rw [hatohost]; exact (by decide : (tohostAddr + (8 - 1)) / 4096 = tohostAddr / 4096))
     hmstatus hpriv (by decide) htr hea hmwv hwval
-  -- `execute_STORE_char`, with `hwrite` at a = v1 + sign_extend imm = tohostAddr.
+
   have hchar := execute_STORE_char imm rs2 rs1 8 v1 vdata (afterNextPC (afterPrelude σ) pc)
     initMstatus (0#64) (sigmaExitE e σ pc data) (by decide)
     hpriv hmstatus (by decide) hseccfg (by decide) hrs2 hrs1
@@ -114,12 +99,6 @@ theorem exec_sd_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
   simp only [execute]
   exact hchar
 
-/-! ## The `try_step`-final state for the exit store
-
-`sigmaExitFinalE e σ pc npc vminstret data` is the skeleton `σ₅` for the exit store:
-`sigmaExitE` (execute post-state) with `PC := npc` and `minstret := vminstret+1`. -/
-
-/-- The `try_step`-final state of the exit `sd a5,tohost` store. -/
 abbrev sigmaExitFinalE (e : BitVec 64) (σ : MState) (pc npc vminstret data : BitVec 64) : MState :=
   {(({(sigmaExitE e σ pc data) with
         regs := (sigmaExitE e σ pc data).regs.insert Register.PC npc}) : MState) with
@@ -127,10 +106,6 @@ abbrev sigmaExitFinalE (e : BitVec 64) (σ : MState) (pc npc vminstret data : Bi
         regs := (sigmaExitE e σ pc data).regs.insert Register.PC npc}) : MState).regs.insert
           Register.minstret (BitVec.addInt vminstret 1))}
 
-/-- **`try_step` on the exit `sd a5,tohost` store.**  The store latches the HTIF
-exit registers (`htif_done := true`, `htif_exit_code := e`) via
-`exec_sd_tohost_exitE`; the `try_step` postlude writes `PC := pc+4` and
-`minstret := vminstret+1`.  Returns `false`. -/
 theorem try_step_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs2 rs1 : regidx)
@@ -191,7 +166,7 @@ theorem try_step_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.elp)
   have hexec := exec_sd_tohost_exitE e he σ pc imm rs2 rs1 v1 vdata data th
     hG hrs1 hrs2 haddr hdataeq hpw hth hexit
-  -- postlude read-backs on σ₃ = sigmaExitE (through the five HTIF inserts).
+
   have hframe : ∀ R : Register,
       (Register.htif_exit_code == R) = false → (Register.htif_done == R) = false →
       (Register.htif_tohost == R) = false → (Register.htif_payload_writes == R) = false →
@@ -234,16 +209,6 @@ theorem try_step_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-! ## The exit-store `stepOnce` halts
-
-`stepOnce i u` on the `_exit` `sd a5,tohost` store: `try_step` performs the store
-(⇒ `false`, HTIF exit latched), then the *same* `stepOnce` re-checks `htif_done`
-(`Elf.lean:86`) — now `true` — and returns `.inl (some e, u+1)`.  This is a
-`Halted` node.  No `tick_clock`. -/
-
-/-- `htif_done` reads `true` on the exit-store post-state (`sigmaExitE`): the store
-latched `htif_done := true`; the `try_step` postlude (`PC`/`minstret`) and the two
-HTIF inserts leave it in place. -/
 theorem htif_done_sigmaExit_finalE (e : BitVec 64) (σ : MState) (pc npc vminstret data : BitVec 64) :
     (sigmaExitFinalE e σ pc npc vminstret data).regs.get? Register.htif_done = some true := by
   show (((((sigmaExitE e σ pc data).regs.insert Register.PC npc).insert
@@ -264,7 +229,6 @@ theorem htif_done_sigmaExit_finalE (e : BitVec 64) (σ : MState) (pc npc vminstr
     dif_neg, reduceCtorEq, not_false_eq_true]
   rw [Std.ExtDHashMap.get?_insert_self]
 
-/-- `htif_exit_code` reads `e` on the exit-store post-state (`sigmaExitE`). -/
 theorem htif_exit_code_sigmaExit_finalE (e : BitVec 64) (σ : MState) (pc npc vminstret data : BitVec 64) :
     (sigmaExitFinalE e σ pc npc vminstret data).regs.get? Register.htif_exit_code = some e := by
   show (((((sigmaExitE e σ pc data).regs.insert Register.PC npc).insert
@@ -282,16 +246,9 @@ theorem htif_exit_code_sigmaExit_finalE (e : BitVec 64) (σ : MState) (pc npc vm
     Register.htif_exit_code e).get? Register.htif_exit_code = _
   rw [Std.ExtDHashMap.get?_insert_self]
 
-/-- `sailOutput` is unchanged by the exit-store `try_step`-final state: the store
-touches only HTIF control registers, the postlude only `PC`/`minstret`; none write
-`sailOutput`. -/
 theorem sailOutput_sigmaExit_finalE (e : BitVec 64) (σ : MState) (pc npc vminstret data : BitVec 64) :
     (sigmaExitFinalE e σ pc npc vminstret data).sailOutput = σ.sailOutput := rfl
 
-/-- **The exit-store `stepOnce` halts (`Elf.lean:86`).**  `stepOnce i u` runs
-`try_step` (performing the store, latching HTIF exit), then re-checks `htif_done`
-— now `true` — and returns `.inl (some e, u+1)`.  So the whole `stepOnce` is a
-single halting node with exit code `e` in the post-state `sigmaExitFinalE`. -/
 theorem stepOnce_tohost_exitE (e : BitVec 64) (he : e.toNat < 2 ^ 47)
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs2 rs1 : regidx)

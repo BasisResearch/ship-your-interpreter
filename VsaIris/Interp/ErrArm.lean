@@ -2,30 +2,12 @@ import VsaIris.Interp.SpecErr
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Interp.ProofValueKindName
 
-/-!
-# `runtime_error` from an `eval_expr` arm (lane E2)
-
-INTERP_DESIGN.md §4.2. An error arm of `eval_expr` ends in `jal runtime_error`
-at `sp = s - 1088` (the arm's frame is spilled). H5's `rtErr_spec` never
-returns; its abort branch hands back `abortRes (s - 1088) rtErrNeed`. Joined
-with the stack the call did not take and the arm's frame bytes, that is
-`abortAt Core s n`, the abort of `evalSpecP_body` at the arm's `s` (the result
-slot is the caller's to add). `ms_rtErrEval` is that step, for any eval arm
-whose stack below its frame fits `runtime_error` (`1088 + rtErrNeed ≤ n`):
-the binary and unary arms (`evalNeed` ≥ `3 * 1088`), and any arm with a child.
-The model is H2's `na_rtErr` (`ProofNativeAssert.lean`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
-/-! ## The messages -/
-
-/-- A `.rodata` C string of `n` characters at `p`, read through any `rd` that
-agrees with the image there: one `decide` each for the bytes and the NUL. -/
 theorem rodata_cstr {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p n : Nat)
     (hb : ∀ i, i < n → rodataDom (p + i) ∧ rodataByte (p + i) ≠ 0)
@@ -37,14 +19,12 @@ theorem rodata_cstr {R : Nat → Prop} {rd : Nat → BitVec 8}
       exact ⟨h1, by simp, by simpa using h2⟩)
     (by simpa using hn)⟩
 
-/-- `rodata_cstr` at a pointer word. -/
 theorem rodata_cstrV {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p : BitVec 64) (n : Nat)
     (hb : ∀ i, i < n → rodataDom (p.toNat + i) ∧ rodataByte (p.toNat + i) ≠ 0)
     (hn : rodataDom (p.toNat + n) ∧ rodataByte (p.toNat + n) = 0) : ∃ t, CStrCov R rd p.toNat t :=
   rodata_cstr hro p.toNat n hb hn
 
-/-- `value_kind_name`'s names are `.rodata` C strings. -/
 theorem kindName_cstr {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (v : Value) :
     ∃ t, CStrCov R rd (kindNamePtr v).toNat t := by
@@ -56,8 +36,6 @@ theorem kindName_cstr {R : Nat → Prop} {rd : Nat → BitVec 8}
   · exact rodata_cstr hro 0x800192f8 8 (by decide) (by decide)
   · exact rodata_cstr hro 0x80019308 15 (by decide) (by decide)
 
-/-- `"operand of '%s' must be an int, got %s"` (`.rodata` `0x800193f0`), the
-type error of `eval_binary`'s `int_operand`: two C string arguments. -/
 theorem operand_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {x1 x2 : BitVec 64}
     (h1 : ∃ t, CStrCov R rd x1.toNat t) (h2 : ∃ t, CStrCov R rd x2.toNat t) :
@@ -74,7 +52,6 @@ theorem operand_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     · exact h2
     · simp only [List.length_cons, List.length_nil] at hi; omega
 
-/-- A `.rodata` message with no conversion: any arguments. -/
 theorem plain_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p : BitVec 64) (n : Nat)
     (hb : ∀ i, i < n → rodataDom (p.toNat + i) ∧ rodataByte (p.toNat + i) ≠ 0)
@@ -88,7 +65,6 @@ theorem plain_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
       exact ⟨h1, by simp, by simpa using h2⟩) (by simpa using hn), hp, by simp,
       fun i hi => absurd hi (Nat.not_lt_zero _)⟩⟩
 
-/-- A message whose format and arguments are all `.rodata`. -/
 theorem readable_rodata_fmt {fmt : BitVec 64} {args : List (BitVec 64)}
     (h : ∀ {R : Nat → Prop} {rd : Nat → BitVec 8}, (∀ a, rodataDom a → R a ∧ rd a = rodataByte a) →
       FmtArgsOK R rd fmt args) :
@@ -100,8 +76,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- The registers at an eval arm's `jal runtime_error`:
-`runtime_error(in, line, fmt, x1, x2)` with `sp = s - 1088`. -/
 structure RtErrEvalAt (R : Nat → BitVec 64) (inp : Nat) (line fmt x1 x2 s : BitVec 64) : Prop where
   h10 : R 10 = BitVec.ofNat 64 inp
   h11 : R 11 = line
@@ -110,8 +84,6 @@ structure RtErrEvalAt (R : Nat → BitVec 64) (inp : Nat) (line fmt x1 x2 s : Bi
   h14 : R 14 = x2
   h2 : R 2 = evalSP s
 
-/-- **A callee's abort below an `eval_expr` arm** (`sp = s - 1088`, the callee
-entered with `need` bytes below `sp`): the arm's own `abortAt Core s n`. -/
 theorem abortAt_of_evalCallee {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {Core : IProp GF} (hC : CoreOK N L Room inp Core) {s : BitVec 64} {n need : Nat}
     (hsg : StackGeom s n) (hn : 1088 + need ≤ n) :
@@ -134,12 +106,6 @@ theorem abortAt_of_evalCallee {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
   · iframe Hst HS
   iframe Hcore Hst
 
-/-- **`runtime_error` from an eval arm, reading owned frame bytes** (`jal` at
-`i`, `sp = s - 1088`): the format's `%s` arguments may also lie in bytes
-`Sown` of the arm's frame (a message buffer), lent to the call as `readable`
-and carved out of the run's bytes. It never returns; on abort, H5's resource
-and the lent bytes (`rtErr_spec` returns them) rejoin the arm's
-`abortAt Core s n`. -/
 theorem ms_rtErrEvalOwn (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N L Room inp live Core)
@@ -221,10 +187,6 @@ theorem ms_rtErrEvalOwn (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
     rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]
     iframe HA Hslack HS
 
-/-- **`runtime_error` from an eval arm** (`jal` at `i`, `sp = s - 1088`): it
-never returns; on abort, H5's resource becomes the arm's `abortAt Core s n`:
-the call's stack, the slack below it and the frame bytes rejoin the stack
-below `s`, and `CoreOK` turns H5's core into `Core`. -/
 theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N L Room inp live Core)
@@ -247,21 +209,15 @@ theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   iframe Hcode HE Hrd Hms Hst Hw Hab
   ipureintro; exact hR
 
-/-- A binary node's budget leaves `runtime_error` room below the arm's frame:
-each child needs at least two frames. -/
 theorem evalNeed_binary_rtErr (op : BinOp) (l r : Expr) (d : Nat) :
     1088 + RtErr.rtErrNeed ≤ evalNeed (.binary op l r) d := by
   have := evalNeed_binary_left op l r d; have := Expr.stackNeed_ge l
   unfold evalNeed stackBudget at *; unfold RtErr.rtErrNeed snprintfNeed evalFrame at *; omega
 
-/-- A 24-byte slot at frame offset `o` of an `eval_expr` arm (`sp + o`). -/
 theorem evalSlotGeom {s : BitVec 64} {n : Nat} (hsg : StackGeom s n) (hn : 1088 ≤ n) {o : Nat}
     (ho : o + 24 ≤ 1088) (ho8 : o % 8 = 0) : SlotGeom (evalSP s + BitVec.ofNat 64 o) :=
   (evalCallGeom (nc := 0) hsg (by omega) ho ho8).slotGeom
 
-/-- **`value_kind_name` from a run** (`jal` at `i`), on the value whose kind
-word the run stored at the slot `p` of its owned bytes: the slot's bytes are
-lent to the call at their tracked image and joined back unchanged. -/
 theorem ms_callKindName (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hvk : ⊢ ∀ p Mt v, valueKindNameSpec (vsaModel live) Wp p Mt v)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code valueKindNamePC)

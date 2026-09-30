@@ -6,36 +6,11 @@ import Vsa.Sim.ChainFactsTac
 import Vsa.Sim.Code.Exit
 import Vsa.Sim.Code._exit
 
-/-!
-# `exit(e)` ends the run with code `e` (H5)
-
-From `exit`'s entry (`0x80004764`) with `a0 = e`, the machine runs `exit`'s
-prologue, its newlib interior (`NewlibHolesAt.exitHandlers`, proved by
-`ExitH.exitHandlers_spec`), `mv a0,s0`,
-`jal _exit`, `_exit`'s `slli/srli/ori/auipc`, and the `tohost` store, which
-halts with code `e` (F2's `Inst.wp_exitW`). The continuation is only the
-postcondition at every output extending the console: this is the last step
-of every run, for either WP. The normal exit (`exit(0)`, `term_sim`), the
-error exit (`exit(70)`, the landing) and the out-of-memory exit (`exit(1)`)
-are all this lemma.
-
-```
-80004764: addi sp,sp,-16; li a1,0; sd s0,0(sp); sd ra,8(sp); mv s0,a0
-80004778: jal __call_exitprocs … 80004784: jalr a5      (newlib: exitHandlers)
-80004788: mv a0,s0
-8000478c: jal _exit
-80000180: slli a4,a0,32; srli a5,a4,31; ori a5,a5,1; auipc a4,0x1b
-80000190: sd a5,-1164(a4)                                (tohost: halt e)
-```
--/
-
 namespace VsaIris.Newlib.Exit
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Sites
-
-/-! ## The three segments -/
 
 #derive_case exitProSeg chain
   [(0x80004764#64, 0xff010113#32),
@@ -56,7 +31,6 @@ abbrev proL (s a1v s0v r e : BitVec 64) : GRegs := [(2, s), (11, a1v), (8, s0v),
 abbrev mvL (a0v e : BitVec 64) : GRegs := [(10, a0v), (8, e)]
 abbrev eL (e a4v a5v : BitVec 64) : GRegs := [(10, e), (14, a4v), (15, a5v)]
 
-/-- `exit`'s code bytes give `Code.ExitLoaded`. -/
 theorem exitLoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
     (h : ∀ p ∈ codeFoot exitCodeBase exitCode, m[p.1]? = some p.2.2) : Code.ExitLoaded m := by
   have h' : ∀ a b, (a, b) ∈ exitCode.zipIdx.map (fun p => (exitCodeBase + p.2, p.1)) →
@@ -81,7 +55,6 @@ theorem exitELoaded_of_code {m : Std.ExtHashMap Nat (BitVec 8)}
   repeat' apply And.intro
   all_goals (apply h'; decide)
 
-/-- The 16-byte frame below `s`, in RAM above the HTIF words. -/
 structure Frame16 (s : BitVec 64) : Prop where
   lo : 0x80000000 ≤ (s - 16#64).toNat
   hi : (s - 16#64).toNat + 16 ≤ 0x100000000
@@ -136,7 +109,6 @@ theorem e_facts {m : Std.ExtHashMap Nat (BitVec 8)} {e a4v a5v : BitVec 64}
   unfold exitESeg ChainFacts
   chain_facts hcode with "Vsa.Sim.Code._exit_at_"
 
-/-- `(e << 32) >> 31 | 1` is the HTIF exit word for `e < 2^31`. -/
 theorem exitWord_of_shifts (e : BitVec 64) (he : e.toNat < 2 ^ 31) :
     shift_bits_right (shift_bits_left e (Sail.BitVec.extractLsb (0x020#6) 5 0))
         (Sail.BitVec.extractLsb (0x01f#6) 5 0) ||| sign_extend (m := 64) (0x001#12) =
@@ -162,19 +134,14 @@ theorem e_pc (e a4v a5v : BitVec 64) :
     evalBlocksPC 0x80000180#64 (SegEvalState.init (eL e a4v a5v) []) exitESeg = 0x80000190#64 :=
   rfl
 
-/-! ## The rule -/
-
-/-- `exit`'s entry. -/
 abbrev exitEntry : BitVec 64 := 0x80004764#64
 
-/-- The stack `exit` needs: its 16-byte frame and the newlib interior's. -/
 def exitNeed : Nat := 16 + exitHandlersNeed
 
 section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- Take one register out of a clobbered list. -/
 theorem clobbered_take {r : Nat} {rs : List Nat} (h : r ∈ rs) :
     clobbered (GF := GF) rs ⊢ (∃ v, r ↦ᵣ v) ∗ clobbered (rs.erase r) := by
   unfold clobbered
@@ -183,7 +150,6 @@ theorem clobbered_take {r : Nat} {rs : List Nat} (h : r ∈ rs) :
   rw [sepL_cons]
   iexact H
 
-/-- Put one register back. -/
 theorem clobbered_put {r : Nat} {rs : List Nat} (h : r ∈ rs) :
     (∃ v, r ↦ᵣ v) ∗ clobbered (GF := GF) (rs.erase r) ⊢ clobbered rs := by
   unfold clobbered
@@ -192,11 +158,6 @@ theorem clobbered_put {r : Nat} {rs : List Nat} (h : r ∈ rs) :
   rw [sepL_cons]
   iexact H
 
-/-- **`exit(e)`**, for either WP. Entered at `0x80004764` with `a0 = e`
-(`e < 2^31`), the callee-saved `s0` and the rest of the ABI frame, newlib's
-data at its boundary state or after a `stderr` write, and the console at
-`o`, the run halts with code `e` and the console at some extension of `o`,
-exactly `o` when newlib's data is at its boundary state (`quiet`). -/
 theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr)
     (live : Nat → Prop) (hlive : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (s r e s0v : BitVec 64) (cs : Nat → BitVec 64) (o : String)
@@ -225,7 +186,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
     Hcon, HΦ⟩
   ihave #Hcode := instrAt_of_binImg exitCode_text $$ Himg
   ihave #HcodeE := instrAt_of_binImg exitCodeE_text $$ Himg
-  -- `exit`'s frame
+
   ihave ⟨Hscr, Hfr⟩ := stackScratch_frame (s := s) (f := 16#64) (n := exitNeed)
     (by unfold exitNeed exitHandlersNeed; omega) (by decide) $$ Hscr
   ihave Hfr := blockOwn_range _ _ $$ Hfr
@@ -234,7 +195,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   have hWmem : ∀ a, (∃ q ∈ Wstk, q.1 = a) ↔ a ∈ List.range' (s - 16#64).toNat 16 := by
     intro a; rw [← hWstk]; simp
   ihave ⟨⟨%a1v, Ha1⟩, Hargs⟩ := clobbered_take (r := 11) (by decide) $$ Hargs
-  -- the prologue
+
   iapply wp_segW live Wp exitProSeg (proL s a1v s0v r e) [] 0x80004764#64
     (codeFoot exitCodeBase exitCode) Wstk 4 (by decide)
     (by change ChainOK _ [2, 11, 8, 1, 10] _; decide) (by change KeysOK [2, 11, 8, 1, 10]; decide)
@@ -258,7 +219,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   unfold VsaIris.sp VsaIris.ra
   iframe Hpc Hsp Ha1 Hs0 Hra Ha0 Hfr Hcode
   iintro Hpc ⟨Hsp, Ha1, Hs0, Hra, Ha0, -⟩ Hfr -
-  -- `exit`'s newlib interior
+
   have hh := H.exitHandlers live Wp (s - 16#64) e r cs o Φ quiet hlive hsp'
   unfold exitHandlersSpec exitHandlersPC exitHandlersEnd callFrame argsAt at hh
   simp only [List.zipIdx_cons, List.zipIdx_nil, sepL_cons, sepL_nil, Nat.add_zero,
@@ -273,7 +234,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   · rw [show exitHandlersNeed = exitNeed - (16#64 : BitVec 64).toNat from rfl]
     iexact Hscr
   iintro Hpc ⟨%rv, Hra⟩ Hs0 Hargs Hstdio - ⟨%o', %hq, Hcon⟩ ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩
-  -- `mv a0,s0`
+
   ihave ⟨⟨%a0v, Ha0⟩, Hargs⟩ := clobbered_take (r := 10) (by decide) $$ Hargs
   iapply wp_segW live Wp exitMvSeg (mvL a0v e) [] 0x80004788#64
     (codeFoot exitCodeBase exitCode) [] 0 (by decide)
@@ -288,7 +249,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   rw [← instrAt_eq]
   iframe Hpc Ha0 Hs0 Hcode
   iintro Hpc ⟨Ha0, Hs0, -⟩ - -
-  -- `jal _exit`
+
   have hjt : TextAt exitJalExitE.pc exitJalExitE.code := by decide
   ihave #Hjal := instrAt_of_binImg hjt $$ Himg
   iapply wp_jalW Wp (JalSite.exec exitJalExitE_cert live (hjt.live hlive))
@@ -300,7 +261,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   rw [show exitJalExitE.tgt = 0x80000180#64 from rfl]
   iintro Hpc -
   iapply Wp.lat_intro
-  -- `_exit`'s word
+
   ihave ⟨⟨%a4v, Ha4⟩, Hargs⟩ := clobbered_take (r := 14) (by decide) $$ Hargs
   ihave ⟨⟨%a5v, Ha5⟩, Hargs⟩ := clobbered_take (r := 15) (by decide) $$ Hargs
   iapply wp_segW live Wp exitESeg (eL e a4v a5v) [] 0x80000180#64
@@ -316,7 +277,7 @@ theorem wp_exitCall {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt Ierr
   rw [← instrAt_eq]
   iframe Hpc Ha0 Ha4 Ha5 HcodeE
   iintro Hpc ⟨Ha0, Ha4, Ha5, -⟩ - -
-  -- the `tohost` store
+
   have hxt : TextAt exitSite.pc exitSite.code := by decide
   ihave #Hx := instrAt_of_binImg hxt $$ Himg
   iapply wp_exitW Wp exitSite exitSite_cert e (by omega) (DFrac.own 1) (DFrac.own 1)

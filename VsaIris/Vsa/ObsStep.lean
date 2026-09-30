@@ -2,23 +2,6 @@ import VsaIris.Vsa.SymRun
 import VsaIris.Vsa.SegRun
 import Vsa.Sim.SnprintfSitesRet5
 
-/-!
-# Indirect calls in symbolic runs
-
-`TKind` has no linking `jalr` (an indirect call). VSA proves one by a step
-observation (`stepObs_jalr`: one `Step` whose post-state reads like
-`sigmaPost_jalr`). `SymObs.lean` does this for `sltu`/`sltiu`; this file does
-it for the indirect call:
-
-* `NStep` / `swp_nstep`: one observed step that writes one GPR and moves the
-  PC anywhere (`SymObs.swp_alu` is the `i + 4` case);
-* `JalrObs` / `nstep_of_jalrObs`: a linking indirect call through a register
-  holding the target (`_svfprintf_r`'s call of the locale's `mbtowc` hook).
-
-A site then only supplies its observation (a generated one-liner over VSA's
-`stepObs_*`), not a copy of the framing argument.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
@@ -48,9 +31,6 @@ theorem pc_of_vsaOk {c : Config} (hok : VsaOk live c) {i : Nat}
   rw [hw] at h ⊢
   exact congrArg some h
 
-/-- One observational step at `i` that writes the GPR `rd := val` and moves
-the PC to `npc` (`AluStep` with any successor PC: `npc = i + 4` for an ALU
-instruction, the target for an indirect call). -/
 def NStep (live : Nat → Prop) (i : Nat) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (rd : Nat) (val npc : BitVec 64) : Prop :=
   ∀ c : Config, VsaOk live c → vsaReg c VsaIris.PC = BitVec.ofNat 64 i →
@@ -61,7 +41,6 @@ def NStep (live : Nat → Prop) (i : Nat) (RR : List (Nat × DFrac × BitVec 64)
       (∀ a, (vsaModel live).mem c' a = (vsaModel live).mem c a) ∧
       (vsaModel live).out c' = (vsaModel live).out c
 
-/-- **An `NStep` as a one-step `RunFact`.** -/
 theorem runFact_of_nstep {i : Nat}
     {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
     {rd : Nat} {old val npc : BitVec 64} (h : NStep live i RR MR rd val npc) :
@@ -88,8 +67,6 @@ theorem runFact_of_nstep {i : Nat}
 variable {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
   {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **One observational step** as one `SWP` step: `rd` takes the value and
-the run continues at `npc`. -/
 theorem swp_nstep {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (i : Nat) (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (rd : Nat) (val npc : BitVec 64) (hexec : NStep live i RR MR rd val npc)
@@ -124,7 +101,6 @@ theorem swp_nstep {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         · exact fun e => hr1 e.symm
     · rw [h4 a ha (fun p hp => by cases hp), hm.img a ha]
 
-/-- The step frame of a linking `jalr` (the twin of `StepFrameOut.of_jal`). -/
 theorem stepFrameOut_of_jalr {σ σ' : MState} {pc vm tgt : BitVec 64}
     {rd : Register} {link : RegisterType rd}
     (hobs : ReadsLikePost σ' (sigmaPost_jalr σ pc vm tgt rd link)) :
@@ -145,8 +121,6 @@ theorem stepFrameOut_of_jalr {σ σ' : MState} {pc vm tgt : BitVec 64}
     exact (hobs.1 R hmc hmt hmip).trans
       (get?_sigmaPost_jalr σ pc vm tgt rd link R hms hpc hrd hnp hmi')
 
-/-- A step observation of a linking indirect call at `i` through the GPR `rs`
-holding `tgt`: `ra := i + 4`, `PC := tgt`. -/
 def JalrObs (i : Nat) (code : List (BitVec 8)) (rs : Nat) (tgt : BitVec 64) : Prop :=
   ∀ (σ : MState) (ti u : Nat) (vm : BitVec 64), GoodState σ →
     σ.regs.get? Register.PC = some (BitVec.ofNat 64 i) →
@@ -157,7 +131,6 @@ def JalrObs (i : Nat) (code : List (BitVec 8)) (rs : Nat) (tgt : BitVec 64) : Pr
       ReadsLikePost σ' (sigmaPost_jalr σ (BitVec.ofNat 64 i) vm tgt Register.x1
         (BitVec.addInt (BitVec.ofNat 64 i) 4))
 
-/-- **A linking indirect call is an `NStep`** writing `ra` and jumping to `tgt`. -/
 theorem nstep_of_jalrObs {i : Nat} {code : List (BitVec 8)} {rs : Nat} {tgt : BitVec 64}
     (hlive : ∀ p ∈ codeFoot i code, live p.1) (hobs : JalrObs i code rs tgt)
     (hrs1 : 1 ≤ rs) (hrs31 : rs ≤ 31) :

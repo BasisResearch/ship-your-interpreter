@@ -1,45 +1,23 @@
 import VsaIris.Vsa.SnpPuts
 
-/-!
-# `snprintf`'s output buffer and `__ssprint_r`
-
-Every frame of a `snprintf` run sits at a fixed offset below the caller's
-`sp = s`: `snprintf` 272 bytes (its string `FILE` at `s - 264`),
-`_svfprintf_r` 592 (the `uio` at `s - 640`, the iovec array at `s - 512`),
-`__ssprint_r` 64, `__ssputs_r` 64.
-
-`BufAt Mt s dst n total`: the run has printed the byte stream `total` so far;
-the buffer holds `total.take (n - 1)` (C99's truncation), the `FILE`'s `_p`
-and `_w` point past it. Every piece `__ssputs_r` copies appends to `total`
-(`ssputs_buf`), whatever is cut.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
 
-/-- `snprintf`'s string `FILE`. -/
 abbrev snpFP (s : Nat) : Nat := s - 264
 
-/-- The bytes of a piece `[b, b + l)` of an image. -/
 def pieceBytes (g : Nat → BitVec 8) (b l : Nat) : List (BitVec 8) :=
   (List.range l).map fun i => g (b + i)
 
 @[simp] theorem pieceBytes_length (g : Nat → BitVec 8) (b l : Nat) : (pieceBytes g b l).length = l := by
   simp [pieceBytes]
 
-/-- The run's output so far: `total`, cut to `n - 1` bytes in `[dst, dst + n)`,
-with the `FILE`'s cursor after it. -/
 structure BufAt (Mt : Mem) (s dst n : Nat) (total : List (BitVec 8)) : Prop where
   pw : ldv .ld Mt (snpFP s) = BitVec.ofNat 64 (dst + min total.length (n - 1))
   ww : ldv .lw Mt (snpFP s + 12) = BitVec.ofNat 64 (n - 1 - min total.length (n - 1))
   fl : ldv .lh Mt (snpFP s + 16) = 0x208#64
   bytes : ∀ i, i < min total.length (n - 1) → imgM Mt (dst + i) = total.getD i 0
 
-/-- The geometry of a `snprintf(dst, n, …)` call at `sp = s`: the stack
-scratch `[s - 1024, s)` in RAM above newlib's static data (`stdioFoot` ends at
-`0x8001c168`; the prologue's locale loads pass the frame's spills), the
-destination window above it too and apart from the stack. -/
 structure SnpGeom (s dst n : Nat) : Prop where
   s_lo : 0x8001c168 + 1024 ≤ s
   s_hi : s ≤ 0x88000000
@@ -50,9 +28,6 @@ structure SnpGeom (s dst n : Nat) : Prop where
   d_hi : dst + n ≤ 0x100000000
   d_sep : dst + n ≤ s - 1024 ∨ s ≤ dst
 
-/-- A piece `[b, b + l)` `__ssputs_r` may copy: RAM off the HTIF words, apart
-from the destination, the `FILE` and the two callee frames below
-`_svfprintf_r`'s. -/
 structure PieceGeom (s dst n b l : Nat) : Prop where
   lo : 0x80000000 ≤ b
   hi : b + l ≤ 0x100000000
@@ -78,8 +53,6 @@ theorem pieceBytes_getD {g : Nat → BitVec 8} {b l j : Nat} (h : j < l) :
     (pieceBytes g b l).getD j 0 = g (b + j) := by
   simp [pieceBytes, List.getD_eq_getElem?_getD, h]
 
-/-- **`__ssputs_r` on the output buffer** (called from `__ssprint_r`, `sp = s -
-928`): the piece `[b, b + l)` appends to the printed stream. -/
 theorem ssputs_buf {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (b l : Nat) (g : Nat → BitVec 8) (total : List (BitVec 8)) (R : Nat → BitVec 64) (Mt : Mem)
@@ -136,29 +109,22 @@ theorem ssputs_buf {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
       rw [show s - 928 - 64 = s - 992 by omega]; exact h3
     exact hrest a e1 e2 e3
 
-/-! ## `__ssprint_r`: the iovec loop -/
-
-/-- `_svfprintf_r`'s `uio` (`iov` pointer, count, `resid`). -/
 abbrev snpU (s : Nat) : Nat := s - 640
-/-- `_svfprintf_r`'s iovec array. -/
+
 abbrev snpIov (s : Nat) : Nat := s - 512
 
-/-- The iovec array holds the pieces `L` (`(base, len)`). -/
 def IovAt (Mt : Mem) (s : Nat) (L : List (Nat × Nat)) : Prop :=
   ∀ j (h : j < L.length), ldv .ld Mt (snpIov s + 16 * j) = BitVec.ofNat 64 L[j].1 ∧
     ldv .ld Mt (snpIov s + 16 * j + 8) = BitVec.ofNat 64 L[j].2
 
-/-- Every piece may be copied and reads `g`. -/
 def PiecesOK (Dt : Mem) (DA : List Nat) (Mt : Mem) (s dst n : Nat) (g : Nat → BitVec 8)
     (L : List (Nat × Nat)) : Prop :=
   ∀ j (h : j < L.length), PieceGeom s dst n L[j].1 L[j].2 ∧ L[j].2 < 2 ^ 31 ∧
     ReadWin Dt DA (snpS s dst n) Mt L[j].1 (L[j].1 + L[j].2) g
 
-/-- The bytes of the pieces, in order. -/
 def catPieces (g : Nat → BitVec 8) (L : List (Nat × Nat)) : List (BitVec 8) :=
   L.flatMap fun p => pieceBytes g p.1 p.2
 
-/-- The pieces' total length (`uio_resid`). -/
 def sumLen (L : List (Nat × Nat)) : Nat := (L.map Prod.snd).sum
 
 theorem catPieces_cons (g : Nat → BitVec 8) (p : Nat × Nat) (L : List (Nat × Nat)) :
@@ -193,15 +159,10 @@ theorem catPieces_take_drop (g : Nat → BitVec 8) (L : List (Nat × Nat)) (i : 
     catPieces g L = catPieces g (L.take i) ++ catPieces g (L.drop i) := by
   rw [← catPieces_append, List.take_append_drop]
 
-/-- What `__ssprint_r` writes: the destination, the `FILE`'s cursor words,
-the `uio`'s count and `resid`, the frames below `_svfprintf_r`'s. -/
 def PrintW (s dst n a : Nat) : Prop :=
   (dst ≤ a ∧ a < dst + n) ∨ (snpFP s ≤ a ∧ a < snpFP s + 16) ∨
     (snpU s + 8 ≤ a ∧ a < snpU s + 24) ∨ (s - 992 ≤ a ∧ a < s - 928)
 
-/-- **`__ssprint_r`'s loop invariant** at the loop head (`0x8000e950`), piece
-`i` next: the buffer holds what the pieces before `i` printed, the count and
-`resid` are the rest's, the registers are the loop's. -/
 structure PrintSt (Dt : Mem) (DA : List Nat) (s dst n : Nat) (g : Nat → BitVec 8)
     (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R : Nat → BitVec 64) (Mt0 Mt : Mem)
     (i : Nat) : Prop where
@@ -221,7 +182,6 @@ structure PrintSt (Dt : Mem) (DA : List Nat) (s dst n : Nat) (g : Nat → BitVec
   keep : ∀ z, (z = 19 ∨ (22 ≤ z ∧ z ≤ 27)) → R z = R0 z
   frame : ∀ a, ¬ PrintW s dst n a → imgM Mt a = imgM Mt0 a
 
-/-- `__ssprint_r`'s loop exit (`0x8000e99c`): every piece printed. -/
 structure PrintEnd (s dst n : Nat) (g : Nat → BitVec 8) (total0 : List (BitVec 8))
     (L : List (Nat × Nat)) (R0 R : Nat → BitVec 64) (Mt0 Mt : Mem) : Prop where
   buf : BufAt Mt s dst n (total0 ++ catPieces g L)
@@ -254,8 +214,6 @@ theorem PiecesOK.transport {Dt : Mem} {DA : List Nat} {Mt Mt' : Mem} {s dst n : 
   obtain ⟨_, _, _, hd, hf, hfr, hu⟩ := PG
   unfold PrintW; simp only [snpFP, snpU] at *; omega
 
-/-- The loop's continuations, as definitions (the side-condition tactics
-rewrite every hypothesis; a definition's arguments are small). -/
 def PrintKL (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (g : Nat → BitVec 8)
     (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 : Nat → BitVec 64) (Mt0 : Mem) (i : Nat) : Prop :=
@@ -268,7 +226,6 @@ def PrintKX (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
   ∀ R' Mt', PrintEnd s dst n g total0 L R0 R' Mt0 Mt' →
     SnpW live Dt DA (snpS s dst n) Q 0x8000e99c#64 R' Mt'
 
-/-- The memory after `__ssprint_r` stores to the `uio`'s count or `resid`. -/
 theorem print_uio_mem {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVec 8}
     {total : List (BitVec 8)} {L : List (Nat × Nat)} {Mt Mt0 : Mem} (a0 w : Nat) (v : BitVec 64)
     (ha : s - 632 ≤ a0) (hw : a0 + w ≤ s - 616)
@@ -299,7 +256,6 @@ theorem print_resid_mem {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → 
   have h := SG.s_lo
   print_uio_mem (s - 624) 8 v (by omega) (by omega) SG hL8 hiov hP hB hfr
 
-/-- The next piece: the loop invariant at `i + 1`. -/
 theorem print_next {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVec 8}
     {total0 : List (BitVec 8)} {L : List (Nat × Nat)} {R0 R' : Nat → BitVec 64} {Mt Mt0 : Mem}
     {i : Nat} (SG : SnpGeom s dst n) (hL8 : L.length ≤ 8) (hi : i < L.length)
@@ -326,8 +282,6 @@ theorem print_next {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVe
     rw [ldv_store_miss .lw _ _ (by simp only [widthOfM]; omega), hcnt]
   · simp only [snpU]; rw [show s - 640 + 16 = s - 624 by omega]; exact ldv_store_hit _ _ _
 
-/-- **After a piece** (`0x8000e980`, `__ssputs_r` returned `0`): `resid -= len`,
-next piece or exit. -/
 theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R : Nat → BitVec 64)
@@ -359,11 +313,11 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     rw [show s - 624 = s - 640 + 16 by omega]; exact hres
   snp_run hlive using [ofNat_add_ofNat, h2, h8, h9, h10, h18, h21, hres', hres2, hrem, eU] at 0x8000e950 0x8000e99c
   all_goals rename_i hb
-  -- `__ssputs_r` never fails on a string `FILE`
+
   case hT.hk.hk.hk.hk.hk.hk.hk.hk.hk.hal | hT.hk.hk.hk.hk.hk.hk.hk.hk.hk.hk =>
     exfalso; rw [h10, h21] at hb; exact absurd hb (by decide)
   all_goals (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hb)
-  · -- next piece
+  ·
     have hpos : 0 < sumLen (L.drop (i + 1)) := by
       rcases Nat.eq_zero_or_pos (sumLen (L.drop (i + 1))) with h0 | h0
       · exact absurd (by rw [h0]) hb
@@ -378,7 +332,7 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     · intro z hz
       simp only [show z ≠ 14 by omega, show z ≠ 8 by omega, show z ≠ 13 by omega, ite_false]
       exact hkp z hz
-  · -- the last piece
+  ·
     have h0 : sumLen (L.drop (i + 1)) = 0 := by
       apply Classical.byContradiction; intro hne
       exact hb (ofNat_ne_of_lt (by omega) (by decide) hne)
@@ -394,8 +348,6 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       simp only [show z ≠ 14 by omega, show z ≠ 8 by omega, show z ≠ 13 by omega, ite_false]
       exact hkp z hz
 
-/-- **A nonempty piece's call** (at `__ssputs_r`'s entry, from `0x8000e97c`):
-`ssputs_buf`, then `ssprint_iterB`. -/
 theorem print_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R : Nat → BitVec 64)
@@ -435,7 +387,6 @@ theorem print_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
     (fun z hz => (hkp' z (by omega) (by omega)).trans (hkp z hz))
     (fun a ha => (hag a (.inl ha)).trans (hfr a ha)) hkL hkX
 
-/-- `print_call` from the loop invariant, after the count store. -/
 theorem print_call0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R R' : Nat → BitVec 64)
@@ -468,7 +419,6 @@ theorem print_call0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   exact print_call hlive g total0 L R0 R' Mt0 _ i SG hL8 hi hiov1 hP1 hB1 hcnt1 hres1 (by omega)
     h1 h2 h8 h9 h11 h12 h13 h18 h20 h21 (fun z hz => (hkp z hz).trans (st.keep z hz)) hfr1 hkL hkX
 
-/-- An empty piece (`0x8000e948`): skipped, the next piece. -/
 theorem print_skip0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R R' : Nat → BitVec 64)
@@ -510,9 +460,6 @@ theorem print_skip0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   · exact h21.trans st.r21
   · intro z hz; rw [if_neg (by omega)]; exact (hkp z hz).trans (st.keep z hz)
 
-/-- **One iteration of `__ssprint_r`'s loop** (`0x8000e950`): the count, the
-piece's length; an empty piece is skipped, a nonempty one copied
-(`print_call`). -/
 theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 R : Nat → BitVec 64)
@@ -555,7 +502,7 @@ theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     exact VsaIris.Interp.sext32_ofNat_eq (by omega)
   snp_run hlive using [ofNat_add_ofNat, h2, h8, h9, h14, h20, h21, hcnt', hcnt2, hb', hl', eC, hcw] at 0x8001438c 0x8000e948
   all_goals rename_i hb
-  · -- an empty piece: skipped
+  ·
     have hl0 : (L[i]'hi).2 = 0 := by
       have := congrArg BitVec.toNat hb; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
         BitVec.toNat_ofNat, BitVec.reduceToNat] at this; omega
@@ -566,7 +513,7 @@ theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       | (intro z hz
          simp only [show z ≠ 13 by omega, show z ≠ 12 by omega, show z ≠ 15 by omega,
            show z ≠ 18 by omega, ite_false])
-  · -- a nonempty piece: `__ssputs_r`
+  ·
     refine print_call0 hlive g total0 L R0 R _ Mt0 Mt i SG hL8 hsum st ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hkL hkX
     all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     all_goals first
@@ -576,7 +523,6 @@ theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
            show z ≠ 12 by omega, show z ≠ 13 by omega, show z ≠ 15 by omega, show z ≠ 18 by omega,
            ite_false])
 
-/-- **`__ssprint_r`'s loop** from any piece to its exit. -/
 theorem ssprint_loop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R0 : Nat → BitVec 64)
@@ -590,10 +536,8 @@ theorem ssprint_loop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     intro i hk R Mt st
     exact ssprint_iterA hlive g total0 L R0 R Mt0 Mt i SG hL8 hsum st (ih (i + 1) (by omega)) hkX
 
-/-- `__ssprint_r`'s writes, its own frame included. -/
 def PrintFrame (s dst n a : Nat) : Prop := PrintW s dst n a ∨ (s - 928 ≤ a ∧ a < s - 864)
 
-/-- What `__ssprint_r` leaves: every piece printed, the `uio` emptied. -/
 structure PrintOut (s dst n : Nat) (g : Nat → BitVec 8) (total0 : List (BitVec 8))
     (L : List (Nat × Nat)) (Mt Mt' : Mem) : Prop where
   buf : BufAt Mt' s dst n (total0 ++ catPieces g L)
@@ -601,14 +545,12 @@ structure PrintOut (s dst n : Nat) (g : Nat → BitVec 8) (total0 : List (BitVec
   res : ldv .ld Mt' (snpU s + 16) = 0#64
   frame : ∀ a, ¬ PrintFrame s dst n a → imgM Mt' a = imgM Mt a
 
-/-- `__ssprint_r`'s continuation. -/
 def PrintK (live : Nat → Prop) (Dt : Mem) (DA : List Nat)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (s dst n : Nat) (g : Nat → BitVec 8)
     (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R : Nat → BitVec 64) (Mt : Mem) : Prop :=
   ∀ R' Mt', R' 10 = 0#64 → R' 2 = R 2 → (∀ z, (z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z) →
     PrintOut s dst n g total0 L Mt Mt' → SnpW live Dt DA (snpS s dst n) Q (R 1) R' Mt'
 
-/-- The spill slots of `__ssprint_r`'s frame hold the caller's registers. -/
 structure PrintSlots (Mt : Mem) (s : Nat) (R : Nat → BitVec 64) : Prop where
   ra : ldv .ld Mt (s - 928 + 56) = R 1
   s0 : ldv .ld Mt (s - 928 + 48) = R 8
@@ -618,8 +560,6 @@ structure PrintSlots (Mt : Mem) (s : Nat) (R : Nat → BitVec 64) : Prop where
   s4 : ldv .ld Mt (s - 928 + 16) = R 20
   s5 : ldv .ld Mt (s - 928 + 8) = R 21
 
-/-- **`__ssprint_r`'s epilogue** (`0x8000e9b0`): `ra`, `s1` reloaded, the `uio`
-emptied, `a0 = 0`, `ret`. -/
 theorem print_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (Rc R : Nat → BitVec 64)
@@ -666,8 +606,6 @@ theorem print_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   · simp only [snpU]
     rw [ldv_store_miss .ld _ _ (by simp only [widthOfM]; omega)]; exact ldv_store_hit _ _ _
 
-/-- **`__ssprint_r`'s loop exit** (`0x8000e99c`): `s0`, `s2`–`s5` reloaded,
-then the epilogue. -/
 theorem print_restore {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (Rc R0 R : Nat → BitVec 64)
@@ -713,8 +651,6 @@ theorem print_restore {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       simp only [h18, h19, h20, h21, show z ≠ 8 by omega, ite_false]
       exact (pe.keep z (.inr (by omega))).trans (hk0 z (by omega) (by omega))
 
-/-- **`__ssprint_r(ptr, fp, uio)`** (`0x8000e908`, `sp = s - 864`, from
-`_svfprintf_r`): every piece of the `uio` appended to the output. -/
 theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     (g : Nat → BitVec 8) (total0 : List (BitVec 8)) (L : List (Nat × Nat)) (R : Nat → BitVec 64)
@@ -740,7 +676,7 @@ theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
   snp_run hlive using [ofNat_add_ofNat, h2, h11, h12, hres', hptr', eS] at 0x8000e950 0x8000e9b0
   all_goals rename_i hb
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hb)
-  · -- nothing to print
+  ·
     have h0 : sumLen L = 0 := by
       have := congrArg BitVec.toNat hb; simp only [BitVec.toNat_ofNat, BitVec.reduceToNat] at this; omega
     have hcat : catPieces g L = [] := catPieces_of_sumLen_zero g L h0
@@ -759,7 +695,7 @@ theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
     all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     intro z hz
     simp only [show z ≠ 9 by omega, show z ≠ 2 by omega, show z ≠ 14 by omega, ite_false]
-  · -- the loop
+  ·
     have hpos : 0 < sumLen L := by
       rcases Nat.eq_zero_or_pos (sumLen L) with h0 | h0
       · exact absurd (by rw [h0]) hb

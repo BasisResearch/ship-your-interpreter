@@ -1,23 +1,10 @@
 import Vsa.Sim.SegEval
 
-/-!
-# `SegEvalSound` — one bridge from reflected paths to `Machine.Steps`
-
-All instruction execution remains in `bblocks_sound_bt`. This theorem merely
-packages its computed result through `SegEvalState`, including the canonical
-single write log supplied by `writeLog_evalBlocks_init`.
-
-Timing witness (2026-08-26): `lake build Vsa.Sim.SegEvalSound` completed the
-touched target in 6.9s.
--/
-
 open LeanRV64DExecutable Vsa
 open Vsa.Machine (MState Config Steps)
 
 namespace Vsa.Sim
 
-/-- Soundness of a reflected multi-block path. One `ChainOK` proof checks the
-whole concrete path. Per-block semantic facts remain explicit hypotheses. -/
 theorem segEval_sound (bs : List BBlock) (σ : MState) (i u : Nat)
     (pc0 vm : BitVec 64) (L : GRegs) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)

@@ -1,21 +1,9 @@
 import Vsa.Compiler.Rel
 
-/-!
-# Expression simulation
-
-`sim_expr`: the code `cexpr Γ k pos e` of a supported expression either runs to
-its end with the value of `e` in `a0` and the store relation re-established for
-the state the (deterministic) semantics reaches, or reaches the runtime-error
-exit while `e` has no evaluation.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-! ## Determinism of the supported expressions -/
-
-/-- Expressions without calls or closures. -/
 def Simple : Expr → Prop
   | .int _ | .bool _ | .var _ => True
   | .assign _ e => Simple e
@@ -58,9 +46,6 @@ theorem EvalE.det : ∀ (e : Expr), Simple e → ∀ {st : St} {d : Nat} {env : 
   | .call _ _, h, _, _, _, _, _, _, _, _, _ => h.elim
   | .fn _ _ _, h, _, _, _, _, _, _, _, _, _ => h.elim
 
-/-! ## Helper fragments -/
-
-/-- The fixed parts of the code image: error exit and print subroutine. -/
 def Layout (code : List Ins) : Prop :=
   Fits code ∧ Seg code errPos errCode ∧ Seg code printPos printCode
 
@@ -91,7 +76,6 @@ theorem run_stA (hfit : Fits code) {pos a rs : Nat} {A : AM} {w : BitVec 64}
   rw [step_sd hfit h2.head rfl (Has.set_self _ _ (by decide) (by decide)) (hw.set_other hrs)
     (by rw [hat]; exact ha), hat]
 
-/-- A jump to the error exit halts with code 70. -/
 theorem run_err (hL : Layout code) {p : Nat} {A : AM}
     (hk : code[p]? = some (.jal 0 (jOff p errPos))) (hA : A.pc = pcOf p) (hp : PosOK p) :
     Reaches code A (fun B => astep code B = some (.halt 70)) := by
@@ -123,9 +107,6 @@ theorem tempAddr_st {k : Nat} (hk : k < 2 ^ 17) : StOK (tempAddr k) := by
 theorem tempAddr_low {k : Nat} (hk : k < 2 ^ 17) : tempAddr k + 8 ≤ varBase := by
   unfold tempAddr tempBase varBase; omega
 
-/-! ## Values as words -/
-
-/-- The machine word representing a value (integers and booleans). -/
 def word : Value → BitVec 64
   | .int n => BitVec.ofInt 64 n
   | .bool b => if b then 1 else 0
@@ -146,18 +127,13 @@ theorem ofInt_inj_range {a b : Int} (ha : InRange a) (hb : InRange b) :
   · intro h; rw [← toInt_ofInt_range ha, ← toInt_ofInt_range hb, h]
   · intro h; rw [h]
 
-/-- An in-range integer value. -/
 abbrev IsInt (v : Value) : Prop := ∃ n, v = .int n ∧ InRange n
 
-/-- A boolean value. -/
 abbrev IsBool (v : Value) : Prop := ∃ b, v = .bool b
-
-/-! ## Branch comparisons -/
 
 section
 variable {code : List Ins}
 
-/-- `s3 := 1; b r1 r2 skip; s3 := 0; a0 := s3`. -/
 theorem run_cmp₀ (hfit : Fits code) {p r1 r2 : Nat} {b : BrOp} {A : AM} {x y : BitVec 64}
     (hseg : Seg code p [.addi s3 0 1, .br b r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3])
     (hA : A.pc = pcOf p) (hp : PosOK (p + 4))
@@ -200,8 +176,6 @@ theorem run_cmp₀ (hfit : Fits code) {p r1 r2 : Nat} {b : BrOp} {A : AM} {x y :
 
 end
 
-/-! ## Operator tails -/
-
 theorem guard_lt₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
     guardB bop.BLT (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a < b) := by
   simp [guardB, zopz0zI_s, toInt_ofInt_range ha, toInt_ofInt_range hb]
@@ -232,7 +206,6 @@ theorem Has.cons_self (L : GRegs) (n : Nat) (v : BitVec 64) (h1 : 1 ≤ n) (h31 
 section
 variable {code : List Ins}
 
-/-- A completed operator tail with result `v`. -/
 structure TailDone (op : BinOp) (a b : Int) (p len : Nat) (A B : AM) (v : Value) : Prop where
   out : B.out = A.out
   sem : ∀ s, binOpSem s op (.int a) (.int b) = some v
@@ -242,7 +215,6 @@ structure TailDone (op : BinOp) (a b : Int) (p len : Nat) (A B : AM) (v : Value)
   arith : ArithOp op → IsInt v
   cmp : CmpOp op → IsBool v
 
-/-- The result of an arithmetic operator tail. -/
 def TailOK (op : BinOp) (a b : Int) (p len : Nat) (A B : AM) : Prop :=
   (∃ v, TailDone op a b p len A B v) ∨
     (astep code B = some (.halt 70) ∧ ∀ s, binOpSem s op (.int a) (.int b) = none)
@@ -296,13 +268,13 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
   · have hna : ¬ CmpOp op := by
       rcases hop with rfl|rfl|rfl|rfl|rfl <;> simp [CmpOp]
     rcases hop with rfl|rfl|rfl|rfl|rfl
-    · -- add
+    ·
       have e := step_add hfit hseg.head hA (by decide) h0 h1
       refine ⟨_, Star.single e, .inl ⟨.int (wrap64 (a + b)), rfl, fun s => rfl, rfl, rfl, ?_,
         fun _ => ⟨_, rfl, InRange.wrap64 _⟩, fun h => absurd h hna⟩⟩
       simp only [word, ofInt_wrap64, BitVec.ofInt_add]
       exact Has.set_self _ _ (by decide) (by decide)
-    · -- sub
+    ·
       have e := step_sub hfit hseg.head hA (by decide) h0 h1
       refine ⟨_, Star.single e, .inl ⟨.int (wrap64 (a - b)), rfl, fun s => rfl, rfl, rfl, ?_,
         fun _ => ⟨_, rfl, InRange.wrap64 _⟩, fun h => absurd h hna⟩⟩
@@ -310,13 +282,13 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
         rw [Int.sub_eq_add_neg, BitVec.ofInt_add, BitVec.ofInt_neg, BitVec.sub_eq_add_neg]
       simp only [word, ofInt_wrap64, this]
       exact Has.set_self (rd := a0) _ _ (by decide) (by decide)
-    · -- mul
+    ·
       obtain ⟨L, hs, hl⟩ := sim_lib (op := .mul) hfit hseg hA hpos (.inl rfl) h0 h1
         (r := BitVec.ofInt 64 a * BitVec.ofInt 64 b) (by simp [libRes])
       refine ⟨_, hs, .inl ⟨.int (wrap64 (a * b)), rfl, fun s => rfl, rfl, rfl, ?_,
         fun _ => ⟨_, rfl, InRange.wrap64 _⟩, fun h => absurd h hna⟩⟩
       simpa only [word, ofInt_wrap64, BitVec.ofInt_mul] using hl
-    · -- div
+    ·
       have hc : cbin p .div = [.br .ne a1 0 (bSkip 1), .jal 0 (jOff (p + 1) errPos)] ++
           libc (p + 2) divPC := rfl
       rw [hc] at hseg hpos ⊢
@@ -350,7 +322,7 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
           fun s => by simp [binOpSem, hb0'], by simp only [List.length_append, hlen]; simp, rfl, ?_,
           fun _ => ⟨_, rfl, InRange.wrap64 _⟩, fun h => absurd h hna⟩⟩
         simpa only [word, ofInt_wrap64] using hl
-    · -- mod
+    ·
       have hc : cbin p .mod = [.br .ne a1 0 (bSkip 1), .jal 0 (jOff (p + 1) errPos)] ++
           libc (p + 2) modPC := rfl
       rw [hc] at hseg hpos ⊢
@@ -426,21 +398,15 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
 
 end
 
-/-! ## The expression simulation -/
-
-/-- Temporaries an expression uses above its base depth. -/
 def tdepth : Expr → Nat
   | .assign _ e => tdepth e
   | .unary _ e => tdepth e
   | .binary _ l r => 1 + max (tdepth l) (tdepth r)
   | _ => 0
 
-/-- The value kind the subset predicate promises. -/
 def ValTy (Γn : NScope) (e : Expr) (v : Value) : Prop :=
   (IntE Γn e → IsInt v) ∧ (BoolE Γn e → IsBool v)
 
-/-- A completed evaluation: `e` evaluates to `v` reaching `st'`, and the code's run ended
-at its exit with the value in `a0` and the store relation re-established. -/
 structure ExprDone (Γ : Scope) (e : Expr) (k pos : Nat) (st : St) (d : Nat) (env : Addr)
     (A B : AM) (v : Value) (st' : St) : Prop where
   eval : EvalE st d env e st' v
@@ -452,7 +418,6 @@ structure ExprDone (Γ : Scope) (e : Expr) (k pos : Nat) (st : St) (d : Nat) (en
   rel : Chain st'.store B.mem env Γ
   temps : ∀ j < k, rdW B.mem (tempAddr j) = rdW A.mem (tempAddr j)
 
-/-- What running an expression's code achieves. -/
 def ExprOK (code : List Ins) (Γ : Scope) (e : Expr) (k pos : Nat) (st : St) (d : Nat) (env : Addr)
     (A B : AM) : Prop :=
   (∃ v st', ExprDone Γ e k pos st d env A B v st') ∨
@@ -528,7 +493,6 @@ theorem sim_var (hL : Layout code) {Γ : Scope} (hsl : ∀ i ∈ Γ.slots, i < 2
   simp only [word, slotV, BitVec.ofInt_toInt]
   exact Has.set_self _ _ (by decide) (by decide)
 
-/-- The simulation property of one expression, for all entry states. -/
 def SimE (code : List Ins) (Γ : Scope) (e : Expr) : Prop :=
   ∀ (k pos : Nat) (st : St) (d : Nat) (env : Addr) (A : AM), CondE Γ.names e →
     k + tdepth e < 2 ^ 17 → Seg code pos (cexpr Γ k pos e) →
@@ -581,7 +545,7 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
     · exact ⟨.inr h1, h2, h3⟩
   simp only [tdepth] at hk
   have hk0 : k < 2 ^ 17 := by omega
-  -- the five parts of the code
+
   let cl := cexpr Γ k pos l
   let stc := liN s2 (tempAddr k) ++ [Ins.sd a0 s2]
   let p1 := pos + cl.length + stc.length
@@ -609,7 +573,7 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
     Seg.pos_eq (by simp only [List.length_append]; rw [lp4, lp1]; omega) hs5
   have hpos4 : PosOK (p4 + (cbin p4 op).length) := by
     unfold PosOK at *; have h4 := lp4; have h1' := lp1; omega
-  -- left operand
+
   obtain ⟨B1, r1, hB1⟩ := ihl k pos st d env A (.inl hE'.2.1) (by omega) hs1
     (by unfold PosOK at *; omega) hA hc
   rcases hB1 with ⟨lv, st1, hevl, htyl, houtl, hB1o, hB1pc, hB1a0, hB1c, hB1t⟩ | ⟨hh, hne⟩
@@ -617,11 +581,11 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
   · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
     cases h with | binary _ _ _ _ _ _ _ _ _ _ _ hl _ _ => exact hne _ _ hl
   obtain ⟨a, rfl, ha⟩ := htyl.1 hE'.2.1
-  -- spill it
+
   have r2 := run_stA hL.1 hs2 hB1pc hB1a0 (by decide) (tempAddr_st hk0)
   have hc2 : Chain st1.store (applyW B1.mem (tempAddr k, 8, word (.int a))) env Γ :=
     hB1c.transport fun i _ => slotV_write_low _ _ _ _ (tempAddr_low hk0)
-  -- right operand
+
   obtain ⟨B3, r3, hB3⟩ := ihr (k + 1) p1 st1 d env
     ⟨pcOf (pos + (cexpr Γ k pos l).length + (liN s2 (tempAddr k)).length + 1),
       gset B1.regs s2 (BitVec.ofNat 64 (tempAddr k)),
@@ -635,7 +599,7 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
     exact hne _ _ hr
   obtain ⟨b, rfl, hb⟩ := htyr.1 hE'.2.2
   rw [← l3] at hB3pc
-  -- reload the left operand
+
   have hmv : astep code B3 = some (.run ⟨pcOf (p1 + cr.length + 1),
       gset B3.regs a1 (BitVec.ofInt 64 b), B3.mem, B3.out⟩) := by
     rw [step_addi hL.1 hs4'.head hB3pc (by decide) hB3a0]
@@ -649,7 +613,7 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
   have hlv : rdW B3.mem (tempAddr k) = BitVec.ofInt 64 a := by
     rw [hB3t k (by omega)]; exact rdW_write _ _ _
   rw [hlv] at r4
-  -- the operator
+
   obtain ⟨B5, r5, hB5⟩ := sim_cbin hL hE'.1 ha hb (A := ⟨pcOf p4, gset (gset (gset B3.regs a1
     (BitVec.ofInt 64 b)) s2 (BitVec.ofNat 64 (tempAddr k))) a0 (BitVec.ofInt 64 a), B3.mem, B3.out⟩)
     hs5' rfl hpos4
@@ -735,7 +699,6 @@ theorem sim_not (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e)
   · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
     cases h with | not _ _ _ _ _ _ he => exact hne _ _ he
 
-/-- **Expression simulation.** -/
 theorem sim_expr (hL : Layout code) {Γ : Scope} (hnd : Γ.slots.Nodup)
     (hsl : ∀ i ∈ Γ.slots, i < 2 ^ 24) : ∀ (e : Expr), Simple e → SimE code Γ e
   | .int _, _ => fun _ _ _ _ _ _ hE _ hseg _ hA hc => sim_int hL hE hseg hA hc

@@ -1,13 +1,5 @@
 import Vsa.Compiler.Run
 
-/-!
-# Code fragments at the abstract level
-
-Runs of the fixed instruction sequences the compiler emits: constant loads
-(`li`), the libgcc call sequence, `putc`, `exit`, and doubleword memory
-read-back after stores.
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa.Sim
@@ -34,7 +26,6 @@ theorem sext12_ofInt (t : Int) (h1 : -2048 ≤ t) (h2 : t < 2048) :
   rw [BitVec.toInt_ofInt]
   apply Int.bmod_eq_of_le <;> simp <;> omega
 
-/-- One `slli 11; ori chunk` stage of `li`. -/
 theorem li_stage (x : BitVec 64) (N s : Nat) (hN : N < 2 ^ 64)
     (hx : x.toNat = N / 2 ^ s / 2 ^ 11) :
     ((x <<< 11) ||| (sign_extend (BitVec.ofNat 12 (N / 2 ^ s % 2048)) : BitVec 64)).toNat
@@ -128,8 +119,6 @@ theorem run_li (hfit : Fits code) {rd : Nat} {n : BitVec 64} (hseg : Seg code po
 
 end
 
-/-! ## Doubleword memory -/
-
 theorem rd8_write (m : Mem) (a : Nat) (v : BitVec 64) :
     rd8 (applyW m (a, 8, v)) a = [v.extractLsb' 0 8, v.extractLsb' 8 8, v.extractLsb' 16 8,
       v.extractLsb' 24 8, v.extractLsb' 32 8, v.extractLsb' 40 8, v.extractLsb' 48 8,
@@ -168,9 +157,6 @@ theorem rdW_write_other (m : Mem) (a b : Nat) (v : BitVec 64) (h : a + 8 ≤ b �
   · simp only [beq_iff_eq]
     repeat (rw [if_neg (by omega)])
 
-/-! ## libgcc calls -/
-
-/-- The result a libgcc routine returns in `a0`. -/
 def libRes (tgt : Nat) (x y : BitVec 64) : Option (BitVec 64) :=
   if tgt = mulPC then some (x * y)
   else if tgt = divPC ∧ y.toInt ≠ 0 then some (BitVec.ofInt 64 (x.toInt.tdiv y.toInt))
@@ -268,8 +254,6 @@ theorem run_libc (hfit : Fits code) {pos tgt : Nat} {A : AM} {x y r : BitVec 64}
   refine Star.step e1 (Star.step e2 (Star.single ?_))
   rw [e3]
   simp only [pcOf_succ]
-
-/-! ## Console and exit -/
 
 theorem tohostW_toNat : tohostW.toNat = tohostAddr := by decide
 

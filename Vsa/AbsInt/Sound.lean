@@ -1,28 +1,11 @@
 import Vsa.AbsInt.SoundLemmas
 
-/-!
-# Soundness of the abstract interpreter for `BigStep`
-
-`exec_sound`: if a statement runs from a store in `γ(σ)` and completes with
-some status, the store is in the abstract state `aexec` computes for that
-status (and a returned value is in the abstract returned value). The proof
-is one application of the nine-way mutual recursor of the semantics;
-expressions, argument lists, loops and sequences carry their own motives.
-Loop motives quantify over every post-fixpoint and every unrolling
-(`LoopOK`). Calls into closures need no motive: the analysis does not look
-inside them.
-
-`analyze_sound` specialises to programs: a `BigStep` run's final store is
-described by the analysis's normal-completion state.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
 
-/-- The loop part of the statement motive. -/
 def WhileM (cfg : Cfg) (as : List Addr) (s₀ : Store) (st : Status) (s₁ : Store) :
     Stmt → Prop
   | .whileStmt c b => LoopOK cfg (whileF (A := A) cfg c b) as s₀ st s₁
@@ -32,51 +15,43 @@ section Motives
 
 variable (A)
 
-/-- Expression motive. -/
 def MEval (st : St) (_ : Nat) (env : Addr) (e : Expr) (st' : St) (v : Value) : Prop :=
   ∀ (as : List Addr) (σ : AState A), as.head? = some env → SGam as st.store σ →
     SGam as st'.store (aeval σ e).st ∧ Gam (aeval σ e).val v
 
-/-- Argument-list motive. -/
 def MArgs (st : St) (_ : Nat) (env : Addr) (es : List Expr) (st' : St)
     (vs : List Value) : Prop :=
   ∀ (as : List Addr) (σ : AState A), as.head? = some env → SGam as st.store σ →
     SGam as st'.store (aevalArgs σ es).1 ∧ Pw Gam (aevalArgs σ es).2.1 vs
 
-/-- Statement motive. -/
 def MExec (cfg : Cfg) (st : St) (_ : Nat) (env : Addr) (s : Stmt) (st' : St)
     (status : Status) : Prop :=
   ∀ (as : List Addr), as.head? = some env →
     (∀ σ : AState A, SGam as st.store σ → SOK as (aexec cfg σ s) status st'.store) ∧
       WhileM (A := A) cfg as st.store status st'.store s
 
-/-- `for` initialiser motive (any completion status continues the loop). -/
 def MInit (cfg : Cfg) (st : St) (_ : Nat) (env : Addr) (init : Option Stmt)
     (st' : St) : Prop :=
   ∀ (as : List Addr) (σ : AState A), as.head? = some env → SGam as st.store σ →
     SGam as st'.store (aexecOpt cfg σ init).any
 
-/-- `for` loop motive. -/
 def MFor (cfg : Cfg) (st : St) (_ : Nat) (env : Addr) (cnd step : Option Expr)
     (b : Stmt) (st' : St) (status : Status) : Prop :=
   ∀ (as : List Addr), as.head? = some env →
     LoopOK cfg (forF (A := A) cfg cnd step b) as st.store status st'.store
 
-/-- `for` condition motive. -/
 def MCond (st : St) (_ : Nat) (env : Addr) (cnd : Option Expr) (st' : St) : Prop :=
   ∀ (as : List Addr) (I : AState A), as.head? = some env → SGam as st.store I →
     SGam as st'.store (match cnd with
       | none => I
       | some c => branch true c (optEval cnd I))
 
-/-- `for` step motive. -/
 def MStep (st : St) (_ : Nat) (env : Addr) (step : Option Expr) (st' : St) : Prop :=
   ∀ (as : List Addr) (I : AState A), as.head? = some env → SGam as st.store I →
     SGam as st'.store (match step with
       | none => I
       | some _ => (optEval step I).st)
 
-/-- Sequence motive. -/
 def MSeq (cfg : Cfg) (st : St) (_ : Nat) (env : Addr) (ss : List Stmt) (st' : St)
     (status : Status) : Prop :=
   ∀ (as : List Addr) (σ : AState A), as.head? = some env → SGam as st.store σ →
@@ -84,14 +59,11 @@ def MSeq (cfg : Cfg) (st : St) (_ : Nat) (env : Addr) (ss : List Stmt) (st' : St
 
 end Motives
 
-/-- Unfold one `aeval` step on a reachable state. -/
 macro "unfold_aeval" h:term : tactic =>
   `(tactic| simp only [aeval, SGam.isBot_false $h, Bool.false_eq_true, ↓reduceIte])
 
 set_option hygiene false in
-/-- One application of a semantics recursor `r` to `h` with the soundness
-motives, followed by the fifty constructor cases. Shared by the nine
-target relations. -/
+
 local macro "absint_rec" r:ident h:term : tactic => `(tactic| (
   refine $r
     (motive_1 := fun st d env e st' v _ => MEval A st d env e st' v)
@@ -352,46 +324,38 @@ local macro "absint_rec" r:ident h:term : tactic => `(tactic| (
     intro st d env s ss st' status _ hne ihs as σ hd hσ
     exact SOK.seq_l _ hne ((ihs as hd).1 σ hσ)))
 
-/-- Soundness for expressions. -/
 theorem eval_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {e : Expr}
     {v : Value} (h : EvalE st d env e st' v) : MEval A st d env e st' v := by
   absint_rec EvalE.rec h
 
-/-- Soundness for argument lists. -/
 theorem args_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {es : List Expr}
     {vs : List Value} (h : EvalArgs st d env es st' vs) : MArgs A st d env es st' vs := by
   absint_rec EvalArgs.rec h
 
-/-- Soundness for statements. -/
 theorem exec_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {s : Stmt}
     {status : Status} (h : ExecS st d env s st' status) :
     MExec A cfg st d env s st' status := by
   absint_rec ExecS.rec h
 
-/-- Soundness for `for` initialisers. -/
 theorem init_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr}
     {init : Option Stmt} (h : ExecInit st d env init st') :
     MInit A cfg st d env init st' := by
   absint_rec ExecInit.rec h
 
-/-- Soundness for `for` loops. -/
 theorem for_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr}
     {cnd step : Option Expr} {b : Stmt} {status : Status}
     (h : ForLoop st d env cnd step b st' status) :
     MFor A cfg st d env cnd step b st' status := by
   absint_rec ForLoop.rec h
 
-/-- Soundness for `for` conditions. -/
 theorem cond_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr}
     {cnd : Option Expr} (h : ForCond st d env cnd st') : MCond A st d env cnd st' := by
   absint_rec ForCond.rec h
 
-/-- Soundness for `for` steps. -/
 theorem step_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr}
     {step : Option Expr} (h : ExecStep st d env step st') : MStep A st d env step st' := by
   absint_rec ExecStep.rec h
 
-/-- Soundness for statement sequences. -/
 theorem seq_sound (cfg : Cfg) {st st' : St} {d : Nat} {env : Addr} {ss : List Stmt}
     {status : Status} (h : ExecSeq st d env ss st' status) :
     MSeq A cfg st d env ss st' status := by

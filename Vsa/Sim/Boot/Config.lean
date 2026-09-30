@@ -1,35 +1,19 @@
 import Vsa.Sim.Boot.Image
 import Vsa.Sim.OutputAliasPhysical
 
-/-!
-# The boot configuration at `interp_run`'s entry
-
-The Sail state the emulator reaches at `interp_run`'s entry, from a boot
-trace: the memory is `bootMem` (loader + store log), the general registers
-are the entry row's (`g n` for `xn`), and the control registers are the
-model's post-setup values (`OutputAliasPhysical.physicalAssignments`, the
-same map the control witness uses; `Vsa/Sim/InitValues.lean`). The counters
-(`minstret`, `mcycle`, `mtime`) are left at the setup value: `Loaded` does
-not constrain them (`GoodState` asks only for presence). Nothing has been
-printed before the entry (`OutRepr`, checked per trace by the generator).
--/
-
 namespace Vsa.Sim.Boot
 
 open LeanRV64DExecutable Sail ConcurrencyInterfaceV1
 open Vsa.Machine Vsa.MemRepr Vsa.Sim.OutputAliasLoaded
 
-/-- The control registers of `physicalAssignments` (every entry before `x1`). -/
 def csrAssignments : List ((r : Register) × RegisterType r) := physicalAssignments.take 32
 
-/-- `x1 … x31` from `g`. -/
 def gprAssignments (g : Nat → BitVec 64) : List ((r : Register) × RegisterType r) :=
   (List.range 31).map fun i => ⟨gprReg (i + 1), gprRT (i + 1) (g (i + 1))⟩
 
 def bootAssignments (g : Nat → BitVec 64) : List ((r : Register) × RegisterType r) :=
   csrAssignments ++ gprAssignments g
 
-/-- The registers, keys only (independent of `g`). -/
 def bootKeys : List Register :=
   csrAssignments.map Sigma.fst ++ (List.range 31).map fun i => gprReg (i + 1)
 
@@ -58,7 +42,6 @@ theorem bootRegs_csr {g : Nat → BitVec 64} {r : Register} {v : RegisterType r}
     (h : ⟨r, v⟩ ∈ csrAssignments) : (bootRegs g).get? r = some v :=
   bootRegs_get (List.mem_append_left _ h)
 
-/-- A control register reads as in `physicalRegs`. -/
 theorem bootRegs_eq_physical {g : Nat → BitVec 64} {r : Register} {v : RegisterType r}
     (h : ⟨r, v⟩ ∈ csrAssignments) : (bootRegs g).get? r = physicalRegs.get? r := by
   rw [bootRegs_csr h]
@@ -66,12 +49,9 @@ theorem bootRegs_eq_physical {g : Nat → BitVec 64} {r : Register} {v : Registe
   simpa [physicalRegs] using (Std.ExtDHashMap.get?_ofList_of_mem
     (k := r) (k' := r) (by simp) (by decide) hm).symm
 
-/-- The Sail state at the entry. -/
 def bootState (m : Mem) (g : Nat → BitVec 64) : MState :=
   ⟨bootRegs g, (), m, (), 0, #[]⟩
 
-/-- The configuration at the entry after `steps` architectural steps; the
-clock counter is `steps % plat_insns_per_tick` (`stepOnce`, two per tick). -/
 def bootConfig (m : Mem) (g : Nat → BitVec 64) (steps : Nat) : Config :=
   ⟨bootState m g, steps % 2, steps⟩
 
@@ -85,7 +65,6 @@ namespace Vsa.Sim.Boot
 open LeanRV64DExecutable Sail ConcurrencyInterfaceV1
 open Vsa.Machine Vsa.MemRepr Vsa.Sim.OutputAliasLoaded
 
-/-- `x(i+1)` reads the trace's value. -/
 theorem bootRegs_gpr (g : Nat → BitVec 64) (i : Nat) (hi : i < 31) :
     (bootRegs g).get? (gprReg (i + 1)) = some (gprRT (i + 1) (g (i + 1))) :=
   bootRegs_get (List.mem_append_right _ (List.mem_map.2 ⟨i, List.mem_range.2 hi, rfl⟩))
@@ -93,14 +72,11 @@ theorem bootRegs_gpr (g : Nat → BitVec 64) (i : Nat) (hi : i < 31) :
 local macro "csr" : tactic =>
   `(tactic| (apply bootRegs_csr; simp [csrAssignments, physicalAssignments]))
 
-/-- A control register reads as in `physicalRegs`. -/
 theorem bootRegs_eq_physical' {g : Nat → BitVec 64} {r : Register}
     (hr : r ∈ csrAssignments.map Sigma.fst) : (bootRegs g).get? r = physicalRegs.get? r := by
   obtain ⟨⟨r', v⟩, hm, rfl⟩ := List.mem_map.1 hr
   exact bootRegs_eq_physical hm
 
-/-- `GoodState` names only control registers, which the boot map shares with
-`physicalRegs`. -/
 theorem bootState_good (m : Mem) (g : Nat → BitVec 64) : GoodState (bootState m g) := by
   have hr : ∀ r, r ∈ csrAssignments.map Sigma.fst →
       (bootState m g).regs.get? r = (physicalState m).regs.get? r :=

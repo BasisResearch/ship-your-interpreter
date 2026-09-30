@@ -1,25 +1,11 @@
 import Vsa.Compiler.Lift
 import Vsa.Compiler.Run
 
-/-!
-# From abstract runs to machine runs
-
-Code-independent glue between the abstract machine and the Sail machine: a run
-of `k` abstract steps is realized by at least `k` machine steps (`run_sim`), so
-an abstract halt is a machine halt and unboundedly long abstract runs are a
-machine divergence. `codeAt_of_codeBytes` reads an instruction list off its
-bytes in memory.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Step Steps StepsN Halted Halts Diverges output)
 
-/-! ## From abstract runs to machine runs -/
-
-/-- `c'` realizes `B` after at least `k` machine steps from `c`, with the code
-and libgcc still in memory. -/
 structure RunSim (code : List Ins) (k : Nat) (c : Config) (B : AM) (c' : Config) : Prop where
   steps : Steps c c'
   count : c.steps + k ≤ c'.steps
@@ -49,7 +35,6 @@ theorem StepsN.truncate' : ∀ {m : Nat} {a b : Config}, StepsN m a b → ∀ n,
 
 theorem Seg.self (code : List Ins) : Seg code 0 code := fun j _ => by simp
 
-
 theorem flatMap4_get {α : Type} (f : Ins → List α) (hf : ∀ i, (f i).length = 4) :
     ∀ (l : List Ins) (k : Nat) (i : Ins), l[k]? = some i → ∀ j < 4,
       (l.flatMap f)[4 * k + j]? = (f i)[j]?
@@ -63,7 +48,6 @@ theorem flatMap4_get {α : Type} (f : Ins → List α) (hf : ∀ i, (f i).length
     rw [show 4 * (k + 1) + j - 4 = 4 * k + j by omega]
     exact flatMap4_get f hf l k i (by simpa using h) j hj
 
-/-- The machine code bytes of an instruction list (little-endian words). -/
 def codeBytes (code : List Ins) : List (BitVec 8) :=
   code.flatMap fun i => [byte i.encode 0, byte i.encode 1, byte i.encode 2, byte i.encode 3]
 
@@ -87,10 +71,7 @@ theorem codeAt_of_codeBytes {code : List Ins} {m : Mem}
   have : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 := by omega
   rcases this with rfl | rfl | rfl | rfl <;> rfl
 
-/-- The initial abstract state: at `codeBase`, no known registers. -/
 def A0 (m : Mem) (o : Array String) : AM := ⟨pcOf 0, [], m, o⟩
-
-/-! ## The machine -/
 
 theorem halts_of_abstract {code : List Ins} (hfit : Fits code) {A B : AM} {c : Config} {e : Nat}
     (hc : Corr c A) (hcode : CodeAt A.mem code) (hlib : LibLoaded A.mem) (r : Star code A B)

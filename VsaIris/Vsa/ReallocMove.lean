@@ -1,25 +1,10 @@
 import VsaIris.Vsa.ReallocCopy
 
-/-!
-# `memmove`'s forward copy
-
-`_realloc_r` calls `memmove(d, s, n)` for payloads over 72 bytes: `n` a
-multiple of 8, both pointers 8-aligned, and the destination not above the
-source or wholly above it. `memmove` then takes its forward path: a 32-byte
-loop (`mm_l32`) and an 8-byte loop (`mm_l8`), each storing the source's words
-in order, so the memory at the return is `copyW m d s (n / 8)`
-(`memmove_fwd`). The lemmas are stated for any `AW` context: the caller
-supplies ownership of both ranges.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- A forward copy of `n` bytes from `s` to `d`: word multiples, 8-aligned
-pointers, the destination not above the source or wholly above it, both
-ranges in RAM above the HTIF words and owned. -/
 structure CPArgs (S : Nat → Prop) (d s n : Nat) : Prop where
   n8 : n % 8 = 0
   d8 : d % 8 = 0
@@ -32,7 +17,6 @@ structure CPArgs (S : Nat → Prop) (d s n : Nat) : Prop where
   sS : ∀ k, k < n → S (s + k)
   dS : ∀ k, k < n → S (d + k)
 
-/-- `memmove(d, s, n)`'s arguments on `_realloc_r`'s forward path. -/
 structure MMArgs (S : Nat → Prop) (d s n : Nat) : Prop extends CPArgs S d s n where
   n32 : 32 ≤ n
 
@@ -60,7 +44,6 @@ theorem MMArgs.ld {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat
 theorem MMArgs.st {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat} (h1 : d ≤ a)
     (h2 : a + 8 ≤ d + n) (h8 : a % 8 = 0) : StOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := A.toCPArgs.st h1 h2 h8
 
-/-- The registers `memmove` keeps. -/
 structure MMKeep (R R' : Nat → BitVec 64) : Prop where
   ra : R' 1 = R 1
   sp : R' 2 = R 2
@@ -78,7 +61,6 @@ theorem MMKeep.of_eq {R R' R'' : Nat → BitVec 64} (h : MMKeep R R') (e1 : R'' 
   ⟨e1.trans h.ra, e2.trans h.sp, e8.trans h.s0, e9.trans h.s1, e10.trans h.a0, e18.trans h.s2,
     e19.trans h.s3⟩
 
-/-- `MMKeep` through a chain of writes to other registers, by `simp`. -/
 macro "mm_keep" h:term : tactic => `(tactic| (refine MMKeep.of_eq $h ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]))
 
@@ -94,7 +76,6 @@ section Loops
 
 variable {live : Nat → Prop} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- One `ld a3,offL(a1); sd a3,offS(a4)` pair of the 32-byte loop, copying word `j`. -/
 theorem mm_pair {pcL pcS pcN : BitVec 64} {offL offS : BitVec 12} {R : Nat → BitVec 64}
     {M0 : Mem} {d s n j : Nat} (A : MMArgs S d s n)
     (stL : ∀ {R : Nat → BitVec 64} {Mt : Mem},
@@ -121,7 +102,6 @@ theorem mm_pair {pcL pcS pcN : BitVec 64} {offL offS : BitVec 12} {R : Nat → B
   rw [hS', upd_same, hL, ← copyW_succ]
   exact hk
 
-/-- `x + imm` for a small positive immediate or a negative one within range. -/
 theorem addr_add {x : BitVec 64} {a : Nat} (hx : x.toNat = a) (c : Nat) (hc : a + c < 2 ^ 64) :
     (x + BitVec.ofNat 64 c).toNat = a + c := by
   rw [BitVec.toNat_add, hx, BitVec.toNat_ofNat]; omega
@@ -133,8 +113,6 @@ theorem addr_sub {x : BitVec 64} {a : Nat} (hx : x.toNat = a) (c : Nat) (hc : c 
   have : a < 2 ^ 64 := by rw [← hx]; exact x.isLt
   · rw [show a + (2 ^ 64 - c) = (a - c) + 2 ^ 64 by omega, Nat.add_mod_right, Nat.mod_eq_of_lt (by omega)]
 
-/-- The rest of a 32-byte round (`0x80006a58`): words `4i+1 … 4i+3` and the
-back edge. -/
 theorem mm_l32_rest {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ allocText, live p.1)
     {R0 : Nat → BitVec 64} (i : Nat) (hi : i < n / 32) (R : Nat → BitVec 64)
     (hK : MMKeep R0 R) (h10 : (R 10).toNat = d) (h11 : (R 11).toNat = s + 32 * i + 32)
@@ -196,7 +174,6 @@ theorem mm_l32_rest {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [h14]; omega)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h16)
 
-/-- `x + (y - z)` with `z ≤ x`, in range. -/
 theorem add_sub_toNat {x y z : BitVec 64} {a b c : Nat} (hx : x.toNat = a) (hy : y.toNat = b)
     (hz : z.toNat = c) (hca : c ≤ a) (hlt : b + (a - c) < 2 ^ 64) :
     (x + (y - z)).toNat = b + (a - c) := by
@@ -205,7 +182,6 @@ theorem add_sub_toNat {x y z : BitVec 64} {a b c : Nat} (hx : x.toNat = a) (hy :
     show a + (2 ^ 64 - c + b) = (b + (a - c)) + 2 ^ 64 by omega, Nat.add_mod_right,
     Nat.mod_eq_of_lt hlt]
 
-/-- **The 32-byte loop** (`0x80006a48`), after `i` of its `n / 32` rounds. -/
 theorem mm_l32 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ allocText, live p.1)
     {R0 : Nat → BitVec 64}
     (hk : ∀ R', MMKeep R0 R' → (R' 12).toNat = n → (R' 15).toNat = n / 32 - 1 → (R' 17).toNat = s →
@@ -220,7 +196,7 @@ theorem mm_l32 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ 
     have hn := A.n32; have hdhi := A.dhi; have hshi := A.shi; have hd8 := A.d8
     have hq : 32 * (n / 32) ≤ n := Nat.mul_div_le n 32
     have hi1 : 32 * i + 32 ≤ n := by omega
-    -- word `4i`
+
     obtain ⟨hl1, hl2⟩ := A.ld (a := s + 8 * (4 * i)) (by omega) (by omega)
     obtain ⟨hs1, hs2⟩ := A.st (a := d + 8 * (4 * i)) (by omega) (by omega) (by omega)
     have e0 : (R 11 + sign_extend (m := 64) (0x000#12)).toNat = s + 8 * (4 * i) := by
@@ -269,8 +245,6 @@ theorem mm_l32 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ 
     · exact h16
     · exact h17
 
-/-- **The 8-byte loop** (`0x80006aac`), after `j` of the `w` words left by
-the 32-byte loop, which ends at `e = s + 32 q + 8 w`. -/
 theorem mm_l8 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ allocText, live p.1)
     {R0 : Nat → BitVec 64} {c w : Nat} (hcw : c + 8 * w ≤ n)
     (hk : ∀ R', MMKeep R0 R' → (R' 12).toNat = n → (R' 11).toNat = s + c + 8 * w →
@@ -361,8 +335,6 @@ theorem shr5_toNat (x : BitVec 64) : (x >>> 5).toNat = x.toNat / 32 := by
 theorem shl5_toNat {x : BitVec 64} (h : x.toNat * 32 < 2 ^ 64) : (x <<< 5).toNat = x.toNat * 32 := by
   rw [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, Nat.mod_eq_of_lt (by simpa using h)]
 
-/-- **Between the loops** (`0x80006a74`): the words the 32-byte loop left,
-by the 8-byte loop, then the return. -/
 theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ allocText, live p.1)
     {R0 : Nat → BitVec 64} (hra : (R0 1).toNat % 4 = 0) (h0 : (R0 10).toNat = d)
     (hk : ∀ R', MMKeep R0 R' → AW live S Q (R0 1) R' (copyW M0 d s (n / 8)))
@@ -375,7 +347,7 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
   have hq1 : 1 ≤ n / 32 := by omega
   have k10 : (R 10).toNat = d := by rw [hK.a0, h0]
   have kra : R 1 = R0 1 := hK.ra
-  -- the return, from any state whose `a2` is zero
+
   have hret : ∀ R' (M : Mem), MMKeep R0 R' → R' 12 = 0#64 → M = copyW M0 d s (n / 8) →
       AW live S Q 0x800069fc#64 R' M := by
     intro R' M hK' h0' hM
@@ -400,7 +372,7 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
       h12, Nat.and_two_pow_sub_one_eq_mod]
   refine st_80006a94 hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- no words left
+  ·
     have h32 : n % 32 = 0 := by rw [← e24, hc]; rfl
     refine st_80006ae4 hlive ?_
     refine st_80006ae8 hlive ?_
@@ -408,7 +380,7 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm
       apply BitVec.eq_of_toNat_eq; rw [e31, h32]; rfl
     · congr 1; omega
-  -- the 8-byte loop over the `n % 32 / 8` words left
+
   have h32 : n % 32 ≠ 0 := fun h => hc (BitVec.eq_of_toNat_eq (by rw [e24, h]; rfl))
   sx_run [5] hlive at 0x80006aac
   have ea3 : ((R 12 &&& 31#64) + 18446744073709551608#64 &&& 18446744073709551608#64).toNat =
@@ -423,7 +395,7 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
   rw [show 4 * (n / 32) = 32 * (n / 32) / 8 + 0 by omega]
   refine mm_l8 A hlive (R0 := R0) (c := 32 * (n / 32)) (w := n % 32 / 8) (by omega) ?_ (by omega)
     (n % 32 / 8) 0 _ (by omega) (by omega) (by mm_keep hK) ?_ ?_ ?_ ?_ ?_
-  · -- after the 8-byte loop
+  ·
     intro R' hK' g12 g11
     sx_run [6] hlive at 0x800069fc
     refine hret _ _ (by mm_keep hK') ?_ ?_
@@ -439,9 +411,6 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
   · rw [e4]
   · rw [hR17]
 
-/-- **`memmove(d, s, n)` forwards** (`0x800069c4`): back at `ra` with the
-callee-saved registers, `a0` and `sp` kept and the source's `n / 8` words at
-the destination. -/
 theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ allocText, live p.1)
     {R : Nat → BitVec 64} (h10 : (R 10).toNat = d) (h11 : (R 11).toNat = s) (h12 : (R 12).toNat = n)
     (hra : (R 1).toNat % 4 = 0)
@@ -449,7 +418,7 @@ theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
     AW live S Q 0x800069c4#64 R M0 := by
   have hn := A.n32; have hn8 := A.n8; have hd8 := A.d8; have hs8 := A.s8; have hov := A.ov
   have hdhi := A.dhi; have hshi := A.shi
-  -- the forward path
+
   have hfwd : ∀ R', MMKeep R R' → R' 10 = R 10 → R' 11 = R 11 → R' 12 = R 12 →
       AW live S Q 0x800069f0#64 R' M0 := by
     intro R' hK g10 g11 g12

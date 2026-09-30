@@ -4,13 +4,10 @@ open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc
 
 namespace Vsa.Sim.RuntimeOwnership
 
-/-- Shared bytes inside the arena occupy live extents, so a fresh allocation
-cannot reclaim them. Shared static bytes outside the arena need no extent. -/
 structure Reserved (A : Arena) (exts : List Extent) (shared : Nat → Prop) : Prop where
   live : ∀ k, shared k → A.lo ≤ k → k < A.hi →
     ∃ e ∈ exts, ExtentByte e k
 
-/-- Assign a newly allocated extent to one runtime role. -/
 def Allocations.insert (alloc : Allocations) (role : Role) (p n : Nat) : Allocations :=
   fun r => if r = role then some (p, n) else alloc r
 
@@ -22,8 +19,6 @@ theorem Allocations.insert_other {alloc : Allocations} {role r : Role} {p n : Na
     (hne : r ≠ role) : alloc.insert role p n r = alloc r := by
   simp only [Allocations.insert, if_neg hne]
 
-/-- Fresh extent geometry extends the role ledger. Allocation success and
-metadata preservation must come from the actual allocator operation. -/
 theorem Ledger.insert {A : Arena} {exts : List Extent} {alloc : Allocations}
     (h : Ledger A exts alloc) {role : Role} {p n : Nat}
     (hpos : 0 < n) (ha : A.contains p n)
@@ -70,8 +65,6 @@ theorem Ledger.insert {A : Arena} {exts : List Extent} {alloc : Allocations}
           simpa only [Allocated, Allocations.insert_other es] using hs
         exact h.separated r s q size b width oldr olds hne
 
-/-- Runtime memory ownership over the allocator's current live extent ledger.
-It contains data and byte geometry only; allocator execution is proved separately. -/
 structure HeapOwned (A : Arena) (exts : List Extent) (m : Mem)
     (phiF phiC : Addr → Nat) (alloc : Allocations)
     (shared readable writes : Nat → Prop) (s : Store) : Prop where

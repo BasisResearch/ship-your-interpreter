@@ -3,31 +3,11 @@ import VsaIris.Vsa.StrlenOwned
 import VsaIris.Interp.SpecStringify
 import VsaIris.Interp.HelperRun
 
-/-!
-# `memcpy` in the Iris logic
-
-newlib's `memcpy` (`0x80006bc8`, `memcpyPC`) is ONE bounded local run
-(`Memcpy.memcpyLocalRun`, over the step table `MemcpySteps.lean`), so each
-spec is one `wp_localRunW` application (`memcpy_wp`), for either WP.
-
-* `memcpy_spec_env`: the read-only source of `memcpySpec` sits in the run's
-  read-only text (`srcText`).
-* `memcpy_spec_owned`: the owned source of `memcpySpecOwned` is promoted
-  from the read-only text to the owned set (`LocalRun.promote`) and handed
-  back unchanged.
-
-Both specs require `htifLo + 16 ≤ dst.toNat`: VSA's store facts (`MemFacts`
-`.sd`/`.sb`) hold only above the HTIF words.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.Newlib VsaIris.MallocFast VsaIris.Sym VsaIris.Memcpy
 
-/-! ## Code and registers -/
-
-/-- `memcpy`'s code is the image's. -/
 theorem memcpyCode_text : TextAt memcpyBase memcpyCode := by decide +kernel
 
 theorem memcpy_live {live : Nat → Prop} (hcl : CodeLive live) : ∀ p ∈ mText, live p.1 := by
@@ -35,8 +15,6 @@ theorem memcpy_live {live : Nat → Prop} (hcl : CodeLive live) : ∀ p ∈ mTex
   obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
   exact hcl _ (memcpyCode_text q hq).1
 
-/-- The registers at the entry: the arguments, `ra`, and the caller-saved
-registers at their values `f`. -/
 def entryRV (r dst src : BitVec 64) (n : Nat) (f : Nat → BitVec 64) : Nat → BitVec 64 := fun k =>
   if k = VsaIris.PC then memcpyPC
   else if k = 1 then r
@@ -58,8 +36,6 @@ theorem entryRV_sepL (r dst src : BitVec 64) (n : Nat) (f : Nat → BitVec 64) :
         (31 : Nat) ↦ᵣ f 31 ∗ emp) :=
   rfl
 
-/-- The registers at the return: the PC, `ra`, `a0`, and the rest clobbered
-(with `t2`, which the run does not touch). -/
 theorem post_regs (rv : Nat → BitVec 64) (v7 : BitVec 64) :
     sepL (GF := GF) Memcpy.mRegs (fun k => k ↦ᵣ rv k) ∗ (7 : Nat) ↦ᵣ v7 ⊢
       VsaIris.PC ↦ᵣ rv VsaIris.PC ∗ (1 : Nat) ↦ᵣ rv 1 ∗ (10 : Nat) ↦ᵣ rv 10 ∗
@@ -73,10 +49,6 @@ theorem post_regs (rv : Nat → BitVec 64) (v7 : BitVec 64) :
 
 variable {live : Nat → Prop}
 
-/-- **`memcpy` at the Iris level**, for either WP, from any bounded local run
-of it over the owned registers `mRegs`: the continuation receives the PC and
-`ra` at the return address, `a0 = dst`, the caller-saved registers clobbered,
-and the owned bytes at values satisfying the run's end condition. -/
 theorem memcpy_wp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {text : List (Nat × BitVec 8)} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {r dst src : BitVec 64} {n : Nat}
@@ -110,7 +82,6 @@ theorem memcpy_wp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave H10 := Strlen.reg_cast e3 $$ H10
   iapply Hk $$ %mv' %⟨rv', hq⟩ Hpc H1 H10 Hcl HS'
 
-/-- The read-only source as the run's text. -/
 theorem roImg_srcText (X n : Nat) (img : Nat → BitVec 8) :
     roImg (GF := GF) (InExt (X, n)) img ⊢ sepL (srcText X n img) (fun p => p.1 ↦ₘ□ p.2) := by
   have h : ∀ l : List (Nat × BitVec 8), (∀ p ∈ l, InExt (X, n) p.1 ∧ p.2 = img p.1) →
@@ -143,7 +114,6 @@ theorem srcText_iff (X n : Nat) (img : Nat → BitVec 8) (a : Nat) :
     obtain ⟨h1, h2, _⟩ := mem_srcText hp
     exact ⟨h1, h2⟩
 
-/-- The run's geometry from the specs' pure precondition. -/
 theorem geo_of_pre {dst src r : BitVec 64} {n : Nat} (hal : r.toNat % 4 = 0)
     (hwd : RamWin dst.toNat n) (hhd : htifLo + 16 ≤ dst.toNat) (hws : RamWin src.toNat n) :
     Geo dst src r n where
@@ -155,7 +125,6 @@ theorem geo_of_pre {dst src r : BitVec 64} {n : Nat} (hal : r.toNat % 4 = 0)
   shtif := hws.htif
   ral := hal
 
-/-- The final destination bytes are the source's. -/
 theorem dst_img {dst r : BitVec 64} {n X : Nat} {img : Nat → BitVec 8} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hq : mQ dst r n X img rv mv) :
     ∀ a, InExt (dst.toNat, n) a → mv a = img (a - dst.toNat + X) := by
@@ -176,8 +145,6 @@ theorem blockOwn_fn (p n : Nat) :
     blockOwn (GF := GF) p n ⊢ ∃ f : Nat → BitVec 8, ownSet (InExt (p, n)) (fun a => a ↦ₘ f a) :=
   ownSet_fn _
 
-/-- **`memcpy` from read-only bytes**, for every code-live `live` and every
-`MachWP`. -/
 theorem memcpy_spec_env (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) : binImg (GF := GF) ⊢ memcpySpec Wp := by
   have hlive := memcpy_live hcl
@@ -218,8 +185,6 @@ theorem memcpy_spec_env (live : Nat → Prop) (hcl : CodeLive live)
   · iexact Hcl
   iapply ownSet_congr (fun a ha => by rw [dst_img hq a ha]) $$ HS'
 
-/-- **`memcpy` from an owned source**, handed back unchanged, for every
-code-live `live` and every `MachWP`. -/
 theorem memcpy_spec_owned (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
     binImg (GF := GF) ⊢ memcpySpecOwned (vsaModel live) Wp := by

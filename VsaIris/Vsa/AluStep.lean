@@ -2,17 +2,6 @@ import VsaIris.Vsa.Console
 import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.SegToTripleFramed
 
-/-!
-# One observed ALU step as a run fact
-
-The segment model (`MKind`) has no `sltiu`; `longjmp`'s `seqz a0,a1` is one.
-VSA proves such a step as an observation `ReadsLikePost σ' (sigmaPost_alu …)`
-(`JmpSites.site_80007074_jmp`). `aluObs_runFact` turns any such observation
-of a write to GPR `rd` into the `RunFact` of `Wp.run`: the PC advances by 4,
-`rd` takes the new value, every other register and all memory are unchanged,
-nothing is printed.
--/
-
 namespace VsaIris.Inst
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -23,8 +12,6 @@ open Vsa.Sim
 theorem gpr_avoids_noise' : ∀ n, n < 32 → 1 ≤ n → ∀ rr ∈ noiseRegs, (rr == gprReg n) = false := by
   decide
 
-/-- **An observed ALU step writing `a0`**, at `i` with the code bytes `code`,
-reading the registers `RR`. -/
 theorem aluA0_runFact (live : Nat → Prop) (i : Nat) (MR : List (Nat × DFrac × BitVec 8))
     (RR : List (Nat × DFrac × BitVec 64)) (old new : BitVec 64)
     (hsite : ∀ c : Config, VsaOk live c →
@@ -88,8 +75,6 @@ section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The rule** for an observed ALU step writing `a0`, for either WP. `MR`
-is the read footprint the observation needs (the code, at least). -/
 theorem wp_aluA0W {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (i : Nat) (MR : List (Nat × DFrac × BitVec 8))
     (RR : List (Nat × DFrac × BitVec 64)) (old new : BitVec 64)

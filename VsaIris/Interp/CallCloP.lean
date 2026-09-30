@@ -1,18 +1,5 @@
 import VsaIris.Interp.CallCloT
 
-/-!
-# The closure call, partial mode (lane E4)
-
-The success path is the Wp-generic layer (`cloBind`, `cloBodyEntry`,
-`cloExitN`, `cloExitR`); this file adds the partial-mode pieces:
-
-* `cloAbort`: an abort at `eval_expr`'s lowered `sp` (`abortRes`, E5's
-  `ms_callEnvNewP`/`ms_callEnvDefineP` out of memory) with the frame's bytes
-  back is the arm's `abortAt Core s n` (`CoreOK`).
-* `cloDefineStepP`: the parameter loop's `env_define`, uncounted, out of
-  memory through the abort handler `Ab` the loop's resources carry.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
@@ -28,7 +15,6 @@ theorem hoff' {s : BitVec 64} (hfg : EvalFrameG s) (c : Nat) (hc : c < 4096 := b
     (s + 18446744073709550528#64 + BitVec.ofNat 64 c).toNat = s.toNat - 1088 + c :=
   evalSP_off' hfg c hc
 
-/-- A frame without a slot, and the slot: the frame. -/
 theorem frame_of_slot {s : BitVec 64} {a : Nat} (ha1 : s.toNat - 1088 ≤ a)
     (ha2 : a + 24 ≤ s.toNat - 1088 + 1088) :
     ownSet (GF := GF) (fun k => InExt (s.toNat - 1088, 1088) k ∧ ¬ InExt (a, 24) k) byteAny ∗
@@ -44,8 +30,6 @@ theorem frame_of_slot {s : BitVec 64} {a : Nat} (ha1 : s.toNat - 1088 ≤ a)
     · exact .inr h'
     · exact .inl ⟨h, h'⟩⟩) $$ H
 
-/-- **An abort at the lowered `sp`** with the frame's bytes back: the arm's
-abort (`CoreOK`). -/
 theorem cloAbort {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
     (hcore : CoreOK N vsaLayoutP vsaRoomB inp Core) {s : BitVec 64} {n : Nat}
     (hfg : EvalFrameG s) (hsg : StackGeom s n) (hn : 1088 ≤ n) :
@@ -64,15 +48,11 @@ theorem cloAbort {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
   iapply evalFrame_join hsg.le hn $$ [Hst HS]
   iframe Hst HS
 
-/-- The parameter loop's resources, partial: the image, the frame's binding,
-the world at the body's depth, and the abort handler `Ab`. -/
 def cloWP (N : NativeAddrs) (inp d : Nat) (out : String) (fa : Nat) (fr : BitVec 64) (Ab : IProp GF)
     (st : Store) (_rest : List (String × Value)) : IProp GF :=
   iprop(□ Newlib.binImg ∗ □ frameAt fa fr.toNat ∗
     world N vsaLayoutP vsaRoomB inp .uncounted ⟨st, out⟩ (d + 1) ∗ Ab)
 
-/-- **`env_define` of one parameter, partial** (`jal env_define` at
-`0x80003310`): out of memory, the handler `Ab` takes the arm's abort. -/
 theorem cloDefineStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp d : Nat} {out : String} {s fr : BitVec 64} {fa n : Nat} {Core : IProp GF}
     {Ab : IProp GF} (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
@@ -117,9 +97,6 @@ theorem cloDefineStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
     iapply hca $$ [HA HS]
     iframe HA HS
 
-/-- **`break`/`continue` escaping a body** (`0x8000337c`, status `1`/`2`),
-for either WP: `--in->call_depth`, then `runtime_error(in, line,
-"'break'/'continue' outside of a loop")`, which aborts. -/
 theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {Core : IProp GF} (hE : ErrEnv N L Room inp live Core) {ρ : Regime} {st : St} {d : Nat}
@@ -208,9 +185,6 @@ theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
   refine ⟨?_, by ix_reg, by ix_reg, by ix_reg, by ix_reg, by ix_reg; exact hat.sp⟩
   first | (ix_reg; done) | (ix_reg; exact hat.s2)
 
-/-- **The depth error** (`0x80003ca4`, `in->call_depth` past the maximum), for
-either WP: the depth word zeroed, `runtime_error(in, line, "stack overflow
-…")`, which aborts. -/
 theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {Core : IProp GF} (hE : ErrEnv N L Room inp live Core) {ρ : Regime} {st : St}
@@ -263,8 +237,6 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   refine ⟨?_, by ix_reg; exact hdp.a1, by ix_reg, by ix_reg, by ix_reg, by ix_reg; exact hdp.sp⟩
   first | (ix_reg; done) | (ix_reg; exact hdp.s2)
 
-/-- The closure call's continuation, partial: the return (with the `Call`
-derivation) and the abort, an additive pair. -/
 def CloKP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (Core : IProp GF) (Φ : Nat × String → IProp GF) (st2 : St) (d : Nat) (ca : Addr) (vs : List Value)
     (rv : Nat → BitVec 64) (s : BitVec 64) (n : Nat) (sret ret : BitVec 64) : IProp GF :=
@@ -272,9 +244,6 @@ def CloKP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPre
       CallExitK live N L Room inp (wpW (vsaModel live)) Φ rv s n sret v .uncounted st' d ret) ∧
     (abortAt Core s n ∗ slot24 sret.toNat -∗ (wpW (vsaModel live)).W Φ))
 
-/-- **The closure call after its head, partial mode** (as `cloCallT`):
-`env_new` and every `env_define` may run out of memory, the body is G's
-`closureSeqP_all`, and a `break`/`continue` escaping it is the escape error. -/
 theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core)
@@ -318,13 +287,13 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     (by omega)
   iintro ⟨#IHs, #HE, #Hcode, #Hro, #Hfe, #Hav, Hms, Hst, Hcl, Hsr, Hk⟩
   ihave #Himg := errCtx_img inp $$ HE
-  -- the depth word back to the world, at `d + 1`
+
   ihave Hms := ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp + 8, 4) b)
     (fun k => by simp only [cloS]; rw [hinpN]) $$ Hms
   ihave ⟨Hms, Hd⟩ := ms_split (S := InExt (s.toNat - 1088, 1088)) (T := InExt (inp + 8, 4))
     (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ Hms
   ihave Hw := Hcl $$ %(d + 1) %(imgM Mt1) Hd %⟨by have := hhd.depth; rwa [hinpN] at this, by omega⟩
-  -- `env_new(cl->env)`, or out of memory
+
   have h2 : R1 2 = s + 18446744073709550528#64 := hhd.sp
   have hspN : EnvSp (R1 2) envNewNeed := by rw [h2]; exact envSp_eval hfg (by decide)
   rw [← h2]
@@ -345,7 +314,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   · rw [hhd.a0]; iexact Hfe
   isplit
   rotate_left
-  · -- out of memory
+  ·
     iintro ⟨HA, HS⟩
     unfold CloKP
     ihave Hk := and_elim_r $$ Hk
@@ -360,7 +329,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   have hsz : st2.store.frames.size = frame := congrArg Prod.snd halloc
   have hst' : (st2.store.allocFrame (some cd.env)).1 = store' := congrArg Prod.fst halloc
   rw [hst', hsz]
-  -- the parameters
+
   have hkp : ∀ y ∈ fRegs, y ∉ 10 :: retClob →
       upd R2 1 (BitVec.ofNat 64 (0x800032bc + 4)) y = R1 y := fun y hy hc => by
     have : y ≠ 1 := fun h => by subst h; simp at hy
@@ -414,7 +383,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   · iframe Hw Hst Hsr Hk
   have hn1088 : 1088 ≤ n := by omega
   isplit
-  · -- a nonempty body: G's loop, then its exits
+  ·
     iintro %R4 %Mt4 %arr %count %⟨hne, hbn, hch, hat⟩ HF Hms Hslot
     icases HF with ⟨Hw, Hst, Hsr, Hk⟩
     have hall : ∀ x ∈ cd.body, execNeed x (d + 1) ≤ n - 1088 ∧ x.bodiesBound perCallBudget = true :=
@@ -471,7 +440,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
         iintro HA
         iapply Hk
         iframe HA Hsr
-    · -- an abort inside the body
+    ·
       iintro ⟨HA, Hsl, HS⟩
       unfold CloKP
       ihave Hk := and_elim_r $$ Hk
@@ -484,7 +453,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       · unfold slot24; rw [h144]; iframe HS Hsl
       iapply evalFrame_join hsg.le hn1088 $$ [Hst HS]
       iframe Hst HS
-  · -- an empty body: the normal end at once
+  ·
     iintro %R4 %Mt4 %⟨hb0, hat⟩ HF Hms Hslot
     icases HF with ⟨Hw, Hst, Hsr, Hk⟩
     have hC : Call st2 d (.closure ca) vs
@@ -497,13 +466,8 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iframe Hcode Hms Hslot Hsr Hw Hst
     iapply Hk $$ %_ %Value.null %hC
 
-/-- The arity message buffer `sp+144` (96 bytes). -/
 abbrev arityBuf (s : BitVec 64) : Nat → Prop := InExt (s.toNat - 1088 + 144, 96)
 
-/-- **The arity error's tail** (`jal snprintf` at `0x80003d84`, the name in
-`a3` a C string readable at `rd`): the message is formatted into the frame's
-buffer `sp+144`, then `runtime_error(in, line, "%s", sp+144)` reads it
-(`ms_rtErrEvalOwn`) and aborts; the buffer rejoins the frame. -/
 theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core) {ρ : Regime} {st : St} {d : Nat}
@@ -526,7 +490,7 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hro0 : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
   iintro ⟨#Hcode, #HE, Hrd, Hms, Hst, Hw, Hab⟩
-  -- the buffer out of the run's bytes
+
   ihave Hms := ms_iff (T := fun k => (InExt (s.toNat - 1088, 1088) k ∧ ¬ arityBuf s k) ∨ arityBuf s k)
     (fun k => by
       constructor
@@ -538,9 +502,9 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
         · simp only [arityBuf, InExt] at h ⊢; omega) $$ Hms
   ihave ⟨Hms, Hbuf⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
   ihave Hbuf := ownSet_forget _ _ $$ Hbuf
-  -- newlib's data out of the world
+
   ihave ⟨Hhs, Hc, Hio, Hi, #Hb⟩ := (world_heapStore N inp ρ st d).1 $$ Hw
-  -- `snprintf(sp+144, 96, fmt, name, paramc, argc)`
+
   have hsp : SpIn (s + 18446744073709550528#64) snprintfNeed := ⟨by rw [hsf]; unfold snprintfNeed Vsa.Sim.tohostAddr; omega,
     by rw [hsf]; omega, by rw [hsf]; omega⟩
   have hf := hE.newlib.at.snprintf (hlc := hlc) (GF := GF) live (wpW (vsaModel live)) (s + 18446744073709550528#64) (s + 18446744073709550528#64 + 144#64)
@@ -595,7 +559,7 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   isplitl [Hbuf]
   · unfold blockOwn; rw [hbuft]; iexact Hbuf
   iintro %R3 %hk3 ⟨Hcb, -, Hio⟩ Hms Hst
-  -- `jal runtime_error(in, line, "%s", sp+144, 0)`
+
   iapply wp_swpF (wpW _) (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ errCtx inp ∗
       cstrBuf (s + 18446744073709550528#64 + 144#64).toNat 96 ∗
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
@@ -652,10 +616,6 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     iapply ownSet_congr (S := arityBuf s) (Φ := fun a => a ↦ₘ bimg a) (Ψ := fun a => a ↦ₘ rd2 a)
       (fun a ha => by simp [rd2, hoff2 a ha]) $$ Hbo
 
-/-- **The arity error** (`0x80003d60`, the argument count and `paramc`
-differ), partial: the name (the `EX_FN` node's, or `"<fn>"`), then the tail
-(`cloArityTail`): `snprintf` into the frame's buffer, `runtime_error`, the
-abort. -/
 theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core) {ρ : Regime} {st : St}
@@ -679,13 +639,13 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
     unfold codeRes; simp [dataOf]
   iintro ⟨#Hcode, #HE, #Hro, Hms, Hcl, Hst, Hab⟩
   ihave #Himg := errCtx_img inp $$ HE
-  -- the depth word back to the world, unchanged
+
   ihave Hms := ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp + 8, 4) b)
     (fun k => by simp only [cloS]; rw [hinpN]) $$ Hms
   ihave ⟨Hms, Hd⟩ := ms_split (S := InExt (s.toNat - 1088, 1088)) (T := InExt (inp + 8, 4))
     (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ Hms
   ihave Hw := Hcl $$ %dep %(imgM Mt1) Hd %⟨by have := har.depth; rwa [hinpN] at this, hdle⟩
-  -- the name
+
   ihave #Hdv := roOwn_data (DA := accAddrs (q.toNat + 8) 8)
     (fun a ha => hfn.view a (by simp only [fnView, List.mem_append, mem_accAddrs_iff] at ha ⊢; omega))
     $$ [Hcode Hro]
@@ -698,7 +658,7 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
   intro F'
   refine CloE_runA (nam := nam) hlive hsf hs hs2 hs3 hfn.lo (by have := hfn.hi; omega)
     (by have := hfn.off; omega) har.s5 har.sp hfn.nam ?_ ?_
-  · -- anonymous: `"<fn>"`
+  ·
     intro _
     apply swp_closeRM
     intro R2 Mt2 hR2 hMt2
@@ -713,7 +673,7 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
       (by rw [hR2]; ix_reg; exact har.s7)
       (fun a ha => ⟨ha, rfl⟩) (anonName_cstr (fun a ha => ⟨ha, rfl⟩))
     iframe Hcode HE Hrd Hms Hst Hw Hab
-  · -- named: the `EX_FN` node's name
+  ·
     intro hnz
     apply swp_closeRM
     intro R2 Mt2 hR2 hMt2
@@ -735,9 +695,6 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
       ⟨_, cstrCov_of_img (fun i hi => .inr (by simp only [InExt]; omega)) hcimg hswin⟩
     iframe Hcode HE Hrd Hms Hst Hw Hab
 
-/-- **The closure call from the kind dispatch, partial mode**: the closure's
-resources, the depth word, `callCloHead`, then its three exits (`cloCallP`,
-the arity error `cloErrArity`, the depth error `cloErrDepth`). -/
 theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
     (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core)
@@ -842,8 +799,6 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     iapply Hk
     iframe HA Hsr
 
-/-- **`CallCloP` proved** (the premise of `caseP_CallArm`), from the helpers'
-specs and `CloSupply`. -/
 theorem callCloP_of (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {inp : Nat}
     {Core : IProp GF} (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core)
     (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p)

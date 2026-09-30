@@ -5,34 +5,6 @@ import Vsa.Sim.EvalIntSim2
 import Vsa.Sim.GeomFacts
 import Vsa.Sim.ObsAvoid
 
-/-!
-# Layer 4 — M4 statement family: `execBlockA`/`execBlockD` + `ExecS.brk`/`ExecS.cont`
-
-The register-only statement cases (`brk`/`cont`) — the statement-side analog of the
-expression-side leaf `int`/`null` cases (`EvalIntSim`/`EvalNullSim`). They validate
-the `exec_stmt` prologue/dispatch/epilogue infrastructure end-to-end: nothing
-recurses, the store and output are UNCHANGED (`st` in = `st` out), and only the
-status register `a0` is set (`1` for `brk`, `2` for `cont`).
-
-This file provides two reusable multipliers, mirroring the expression-side
-`blockA_k`/`blockD_v` (`EvalSimCommon.lean`):
-
-* **`ExecArmEntryK`** + **`execBlockA`** — the shared prologue (`addi sp,-176`, five
-  spills of `s0/s1/s2/s3/ra`, the `mv` moves, `li a6,8`) + jump-table dispatch
-  (`auipc`/`lw`/`bltu`/`lwu`/`slli`/`add`/`lw`/`add`/`jr`), landing at a per-kind arm
-  PC. Parameterized over the dispatched kind `k`, arm PC `armPC`, and the
-  `StmtSlotPinned k armPC` coupling.
-* **`execBlockD`** — the shared epilogue (`ld ra/s0/s1/s2/s3`, `addi sp,176`, `ret`),
-  from a state with `x10 = StatusCode status` already set, producing `ExecExit`.
-  Reused by `brk` directly; `cont` threads the equivalent restore-copy at its own
-  PCs (`li a0,2` interleaved, but the loads never touch `x10`).
-
-`execBrkSim`/`execContSim` compose `execBlockA ≫ (li a0,N) ≫ execBlockD` into
-`Triple (ExecEntry …) (ExecExit … st .brk/.cont …)`.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -49,9 +21,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## Address arithmetic for the 176-byte `exec_stmt` frame + spill windows -/
-
-/-- `addi sp,sp,-176`: `sp + sext 0xf50 = sp - 176`. -/
 theorem sp_sub176 (sp : BitVec 64) :
     (sp + sign_extend (m := 64) (0xf50#12)) = sp - 176#64 := by
   have hs : (sign_extend (m := 64) (0xf50#12) : BitVec 64) = -(176#64) := by
@@ -63,8 +32,6 @@ theorem sp_sub176 (sp : BitVec 64) :
   have h : (176#64 : BitVec 64).toNat = 176 := by decide
   rw [hn, h]; have := sp.isLt; omega
 
-/-- A spill store/load `off(sp')` where `sp' = sp - 176`, `off ∈ {136,144,152,160,168}`
-targets `sp - (176 - off)`. -/
 theorem spill_addr176 (sp : BitVec 64) (off : BitVec 12) (k : Nat)
     (hoff : (sign_extend (m := 64) off : BitVec 64).toNat = 176 - k)
     (hk : k ≤ 176) (hsp : 176 ≤ sp.toNat) :
@@ -73,31 +40,26 @@ theorem spill_addr176 (sp : BitVec 64) (off : BitVec 12) (k : Nat)
   have h : (176#64 : BitVec 64).toNat = 176 := by decide
   rw [h]; have := sp.isLt; omega
 
-/-- ra@168 → sp-8. -/
 theorem es_off168 (sp : BitVec 64) (hsp : 176 ≤ sp.toNat) :
     ((sp - 176#64) + sign_extend (m := 64) (0x0a8#12)).toNat = sp.toNat - 8 :=
   spill_addr176 sp (0x0a8#12) 8 (by decide) (by omega) hsp
-/-- s0@160 → sp-16. -/
+
 theorem es_off160 (sp : BitVec 64) (hsp : 176 ≤ sp.toNat) :
     ((sp - 176#64) + sign_extend (m := 64) (0x0a0#12)).toNat = sp.toNat - 16 :=
   spill_addr176 sp (0x0a0#12) 16 (by decide) (by omega) hsp
-/-- s1@152 → sp-24. -/
+
 theorem es_off152 (sp : BitVec 64) (hsp : 176 ≤ sp.toNat) :
     ((sp - 176#64) + sign_extend (m := 64) (0x098#12)).toNat = sp.toNat - 24 :=
   spill_addr176 sp (0x098#12) 24 (by decide) (by omega) hsp
-/-- s2@144 → sp-32. -/
+
 theorem es_off144 (sp : BitVec 64) (hsp : 176 ≤ sp.toNat) :
     ((sp - 176#64) + sign_extend (m := 64) (0x090#12)).toNat = sp.toNat - 32 :=
   spill_addr176 sp (0x090#12) 32 (by decide) (by omega) hsp
-/-- s3@136 → sp-40. -/
+
 theorem es_off136 (sp : BitVec 64) (hsp : 176 ≤ sp.toNat) :
     ((sp - 176#64) + sign_extend (m := 64) (0x088#12)).toNat = sp.toNat - 40 :=
   spill_addr176 sp (0x088#12) 40 (by decide) (by omega) hsp
 
-/-! ## `Exec_stmtLoaded` survives a stack-window `sd` spill
-
-The code region is `[0x80003fe0, 0x80004308)` (chunks 0..12). A prologue `sd`
-writes an 8-byte window disjoint from that region. -/
 theorem loaded_exec_stmt_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : Nat)
     (d : BitVec (8 * 8)) (hdis : a8 + 8 ≤ 0x80003fe0 ∨ 0x80004308 ≤ a8)
     (h : Exec_stmtLoaded mem) : Exec_stmtLoaded (writeMap8 mem a8 d) := by
@@ -131,17 +93,6 @@ theorem loaded_exec_stmt_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : N
   · simp only [exec_stmtChunk12] at c12 ⊢; repeat' apply And.intro
     all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
 
-/-! ## `ExecArmEntryK` — machine state at a per-kind arm entry (dispatch target)
-
-The case-INDEPENDENT half of the `exec_stmt` prologue + jump-table dispatch. It
-lands at the per-kind arm PC `armPC` (from `StmtSlotPinned k armPC`), with the four
-callee-saved slots spilled, `sp` lowered by 176, the ABI args moved into
-`s0/s1/s2/s3`, and every store/frame/geometry fact carried. `brk`/`cont` instantiate
-`k := 7/8`, `armPC := 0x80004098/0x800040b8`.
-
-`v8/v9/v18/v19` are the ENTRY callee-saved `s0/s1/s2/s3` (spilled before the `mv`
-moves clobber them), i.e. the ghost-frame values `g x8/x9/x18/x19`. `ment` is the
-post-memory (`m0` + five spills). -/
 def ExecArmEntryK
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -150,17 +101,17 @@ def ExecArmEntryK
     (m0 ment : Mem) (c : Config) (liveRA : BitVec 64 := r) : Prop :=
   GoodState c.σ ∧ c.tick < 2 ∧
   c.σ.regs.get? Register.PC = some armPC ∧
-  c.σ.regs.get? Register.x8 = some aStmt ∧            -- s0 = Stmt*  (mv s0,a1)
-  c.σ.regs.get? Register.x9 = some aInterp ∧          -- s1 = interp* (mv s1,a0)
-  c.σ.regs.get? Register.x19 = some aEnv ∧            -- s3 = env     (mv s3,a2)
-  c.σ.regs.get? Register.x18 = some aRet ∧            -- s2 = retslot (mv s2,a3)
-  c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧    -- sp lowered
-  c.σ.regs.get? Register.x1 = some liveRA ∧          -- live ra; outer r remains spilled
+  c.σ.regs.get? Register.x8 = some aStmt ∧
+  c.σ.regs.get? Register.x9 = some aInterp ∧
+  c.σ.regs.get? Register.x19 = some aEnv ∧
+  c.σ.regs.get? Register.x18 = some aRet ∧
+  c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧
+  c.σ.regs.get? Register.x1 = some liveRA ∧
   (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
   c.σ.sailOutput = out0 ∧ String.join out0.toList = st.out ∧
   c.σ.mem = ment ∧ Exec_stmtLoaded ment ∧
   StoreRepr ment N A φf φc st.store ∧
-  -- the five spill slots hold the entry ra/s0/s1/s2/s3
+
   read64 ment (sp.toNat - 8) = some r.toNat ∧
   read64 ment (sp.toNat - 16) = some v8.toNat ∧
   read64 ment (sp.toNat - 24) = some v9.toNat ∧
@@ -169,58 +120,19 @@ def ExecArmEntryK
   g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
   g Register.x18 = some v18 ∧ g Register.x19 = some v19 ∧
   g Register.x2 = some sp ∧
-  -- callee-saved regs not clobbered by the prologue still read `g R`
+
   (∀ R : Register, AbiPreservedNoise R →
     (Register.x8 == R) = false → (Register.x9 == R) = false →
     (Register.x18 == R) = false → (Register.x19 == R) = false →
     (Register.x2 == R) = false → c.σ.regs.get? R = g R) ∧
-  -- memory frame: `ment` differs from `m0` only inside the stack window `[SL.lo, sp)`
+
   (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) ∧
-  -- geometry the epilogue restores need
+
   176 ≤ sp.toNat ∧ sp.toNat ≤ 0x100000000 ∧ 0x80000000 ≤ sp.toNat ∧
   tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧ r.toNat % 4 = 0 ∧
-  -- wave 48c (exec twin of eval `blockA_k`'s `LeafExitPin`): arm-entry PRESENCE
-  -- over the entry `m0` (`ment = m0` + the five prologue spills, all inserts).
-  -- Positional-append per the 47e precedent (`EvalSimCommon.lean:907`); the shared
-  -- ∧-tower is grandfathered, so a named-field conversion would be an ITEM-ZERO
-  -- ~10-file re-thread — out of a bounded gate (debt noted, wave0.md).
+
   MemExtends m0 ment
 
-/-! ## `ExecLeafMemPin` / `ExecExitPinned` — the register-only exec-leaf memory pin
-
-Moved UPSTREAM here (wave 48d, X3-c) so `execBrkSim`/`execContSim` can CONCLUDE the
-pinned exit directly (the presence carried through `execBlockD`'s `Q`).  Formerly
-in `rows/ExecLeafD.lean`, but that file sits downstream of `ExecCaseGeom` (which
-imports this file), so the pin could not be referenced here.  The pinned widener
-`ExecLeafWidenP` + its entry-derivable proof stay in `ExecLeafD.lean` (they need
-`Widen`/`WidenMeta`, not imported here).  Exec twin of `LeafMemPin`
-(`EvalSimCommon.lean`). -/
-
-/-! ## `execBlockD` — the shared `exec_stmt` epilogue (restore + `addi sp,176` + `ret`)
-
-The seven-instruction restore/return run at `0x8000409c`: `ld ra/s0/s1/s2/s3` from
-`sp+{168,160,152,144,136}` (i.e. `sp-{8,16,24,32,40}` of the ENTRY sp), `addi
-sp,sp,176`, `ret`. It never inspects any payload; it only threads the produced
-`status` (via `x10 = StatusCode status`, set by the arm's `li a0,N` BEFORE entry)
-into `ExecExit.a0`, and re-establishes the callee-saved frame from the spill slots.
-
-`PreExecEpilogue` is the machine state at `0x8000409c`. `st'` is the (unchanged)
-post-state; `status` the produced status; `mpre` the current memory (entry `m0`
-plus the five prologue spills, unchanged in the region the epilogue reads). -/
-
-/-! ## `execBlockA` — the prologue + jump-table dispatch (residual)
-
-The shared prologue (`addi sp,-176`; five spills of `s0/s1/s2/s3/ra`; the `mv`
-moves; `li a6,8`) + jump-table dispatch (`auipc`/`lw`/`bltu`/`lwu`/`slli`/`add`/`lw`/
-`add`/`jr`), landing at the per-kind arm PC. It is the statement-side analog of
-`blockA_k` (`EvalIntSim2.lean`) and is stated here as `ExecBlockAGoal` — a named
-residual (documented, like `env_get_found_spec`'s `hreach`). Its ~21-step per-site
-proof (mirroring the fully-proven expression-side `blockA_k`) is the last open piece
-of the brk/cont path; every OTHER part of the path (`execBlockD`, the arm `li a0`,
-the whole compositional glue below) is proven unconditionally.
-
-`ExecBlockAGoal g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet k armPC m0 out0`
-is the Triple `ExecEntry(kind s)  →  ∃ ment v8 v9 v18 v19, ExecArmEntryK … armPC …`. -/
 def ExecBlockAGoal
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -234,7 +146,6 @@ def ExecBlockAGoal
       ExecArmEntryK g N A SL φf φc st armPC sp r aInterp aStmt aEnv aRet
         v8 v9 v18 v19 out0 m0 ment c)
 
-/-! ## `StmtSlotPinned` survives a `writeMap8` disjoint from its four slot bytes. -/
 theorem stmtslot_wm8 (k : Nat) (armPC : BitVec 64) (mem : Mem) (a8 : Nat) (dd : BitVec (8 * 8))
     (hdis : a8 + 8 ≤ stmtJumpTableBase + 4 * k ∨ stmtJumpTableBase + 4 * k + 4 ≤ a8)
     (hh : StmtSlotPinned k armPC mem) : StmtSlotPinned k armPC (writeMap8 mem a8 dd) := by
@@ -245,21 +156,6 @@ theorem stmtslot_wm8 (k : Nat) (armPC : BitVec 64) (mem : Mem) (a8 : Nat) (dd : 
     by rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; exact p2,
     by rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; exact p3, ptgt⟩
 
-/-! ## `execBlockA` — the `exec_stmt` prologue + jump-table dispatch (case-independent)
-
-The statement-side analog of the fully-proven expression-side `blockA_k`
-(`EvalIntSim2.lean`). It runs the 21-instruction prologue (`addi sp,-176`; five
-spills of `s0/s1/s2/s3/ra`; the four `mv` moves `s0:=a1`, `s1:=a0`, `s3:=a2`,
-`s2:=a3`; `li a6,8`) + jump-table dispatch (`auipc/addi a4`, `lw`/`bltu`/`lwu`/
-`slli`/`add`/`lw`/`add`/`jr`), landing at the per-kind arm PC `armPC`.
-
-Parameterized over the dispatched kind `k`, arm PC `armPC`, and the
-`StmtSlotPinned k armPC m0` coupling — so `brk` (`k=7`, `0x80004098`), `cont`
-(`k=8`, `0x800040b8`), and every future statement kind instantiate it. Unlike
-`blockA_k` there is NO sub-callee (`exec_stmt` calls nothing in the prologue) so
-only `Exec_stmtLoaded` is threaded (via `loaded_exec_stmt_writeMap8`), and
-`ExecArmEntryK` carries no `StmtRepr`/callee-loaded facts — a strict
-simplification. Proven UNCONDITIONALLY. -/
 theorem execBlockA
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -270,11 +166,7 @@ theorem execBlockA
     (hkind : read32 m0 aStmt.toNat = some k)
     (hslot : StmtSlotPinned k armPC m0)
     (harmAl : armPC.toNat % 4 = 0)
-    -- GeomFacts retrofit (rule 6): the jump-table slot's stack-disjointness
-    -- residual is supplied as ONE projected record `StackDisjoint …` (the D-atom
-    -- alone — the table is a below-HTIF rodata object, so not a full `ObjGeom`).
-    -- The M6 caller hands this record; `htableStk` below is an O(1) `.disj`
-    -- projection off it, stated over `Nat` endpoints so there is NO pair whnf.
+
     (htableGeom : StackDisjoint (stmtJumpTableBase + 4 * k) 4 SL sp.toNat) :
     ExecBlockAGoal g N A SL φf φc st d env s
       sp r aInterp aStmt aEnv aRet armPC m0 out0 := by
@@ -304,9 +196,7 @@ theorem execBlockA
   have hsp176 : 176 ≤ sp.toNat := by omega
   have hpce : c.σ.regs.get? Register.PC = some (0x80003fe0#64 : BitVec 64) := by rw [hpc]; rfl
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  -- stmt kind read-bytes in m0 survive the four disjoint spills (used at 80004014/8000401c)
-  -- (established after the spills as σ6-side reads; done inline below)
-  -- ============ 0x80003fe0: addi sp,sp,-176 → x2 := sp - 176 ============
+
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
     site_80003fe0_es c.σ c.tick c.steps (0x80003fe0#64) vmi sp hG hpce hmi hspReg hload0 rfl htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
@@ -326,13 +216,13 @@ theorem execBlockA
   have ha3_1 : σ1.regs.get? Register.x13 = some aRet := obs_alu_other' hobs1 Register.x13 (by decide) ha3
   have hra_1 : σ1.regs.get? Register.x1 = some r := obs_alu_other' hobs1 Register.x1 (by decide) hra
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
-  -- spill address helpers (sp-176 window)
+
   have haS0 : ((sp - 176#64) + sign_extend (m := 64) (0x0a0#12)).toNat = sp.toNat - 16 := es_off160 sp hsp176
   have haS1 : ((sp - 176#64) + sign_extend (m := 64) (0x098#12)).toNat = sp.toNat - 24 := es_off152 sp hsp176
   have haS2 : ((sp - 176#64) + sign_extend (m := 64) (0x090#12)).toNat = sp.toNat - 32 := es_off144 sp hsp176
   have haS3 : ((sp - 176#64) + sign_extend (m := 64) (0x088#12)).toNat = sp.toNat - 40 := es_off136 sp hsp176
   have haRa : ((sp - 176#64) + sign_extend (m := 64) (0x0a8#12)).toNat = sp.toNat - 8 := es_off168 sp hsp176
-  -- ============ 0x80003fe4: sd s0,160(sp') → mem[sp-16] := v8 ============
+
   obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
     site_80003fe4_es σ1 i1 (c.steps+1) (0x80003fe4#64) vmi1 (sp-176#64) v8 hG1 hpc1 hmi1 hsp_1 h8_1 (hmem1e ▸ hload0) rfl
       (by rw [haS0]; have := hstkRam.1; omega) (by rw [haS0]; have := hsphi; have := hstkRam.2; omega)
@@ -356,7 +246,7 @@ theorem execBlockA
   have ha3_2 : σ2.regs.get? Register.x13 = some aRet := obs_store_other_val' hobs2 Register.x13 (by decide) ha3_1
   have hra_2 : σ2.regs.get? Register.x1 = some r := obs_store_other_val' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_store_minstret_val hobs2
-  -- ============ 0x80003fe8: sd s1,152(sp') → mem[sp-24] := v9 ============
+
   obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
     site_80003fe8_es σ2 i2 (c.steps+1+1) (0x80003fe8#64) vmi2 (sp-176#64) v9 hG2 hpc2 hmi2 hsp_2 h9_2 hload2 rfl
       (by rw [haS1]; have := hstkRam.1; omega) (by rw [haS1]; have := hsphi; have := hstkRam.2; omega)
@@ -379,7 +269,7 @@ theorem execBlockA
   have ha3_3 : σ3.regs.get? Register.x13 = some aRet := obs_store_other_val' hobs3 Register.x13 (by decide) ha3_2
   have hra_3 : σ3.regs.get? Register.x1 = some r := obs_store_other_val' hobs3 Register.x1 (by decide) hra_2
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret_val hobs3
-  -- ============ 0x80003fec: sd s2,144(sp') → mem[sp-32] := v18 ============
+
   obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
     site_80003fec_es σ3 i3 (c.steps+1+1+1) (0x80003fec#64) vmi3 (sp-176#64) v18 hG3 hpc3 hmi3 hsp_3 h18_3 hload3 rfl
       (by rw [haS2]; have := hstkRam.1; omega) (by rw [haS2]; have := hsphi; have := hstkRam.2; omega)
@@ -401,7 +291,7 @@ theorem execBlockA
   have ha3_4 : σ4.regs.get? Register.x13 = some aRet := obs_store_other_val' hobs4 Register.x13 (by decide) ha3_3
   have hra_4 : σ4.regs.get? Register.x1 = some r := obs_store_other_val' hobs4 Register.x1 (by decide) hra_3
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret_val hobs4
-  -- ============ 0x80003ff0: sd s3,136(sp') → mem[sp-40] := v19 ============
+
   obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
     site_80003ff0_es σ4 i4 (c.steps+1+1+1+1) (0x80003ff0#64) vmi4 (sp-176#64) v19 hG4 hpc4 hmi4 hsp_4 h19_4 hload4 rfl
       (by rw [haS3]; have := hstkRam.1; omega) (by rw [haS3]; have := hsphi; have := hstkRam.2; omega)
@@ -422,7 +312,7 @@ theorem execBlockA
   have ha3_5 : σ5.regs.get? Register.x13 = some aRet := obs_store_other_val' hobs5 Register.x13 (by decide) ha3_4
   have hra_5 : σ5.regs.get? Register.x1 = some r := obs_store_other_val' hobs5 Register.x1 (by decide) hra_4
   obtain ⟨vmi5, hmi5⟩ := obs_store_minstret_val hobs5
-  -- ============ 0x80003ff4: sd ra,168(sp') → mem[sp-8] := r ============
+
   obtain ⟨σ6, i6, hs6, hi6, hG6, hmem6, hobs6⟩ :=
     site_80003ff4_es σ5 i5 (c.steps+1+1+1+1+1) (0x80003ff4#64) vmi5 (sp-176#64) r hG5 hpc5 hmi5 hsp_5 hra_5 hload5 rfl
       (by rw [haRa]; have := hstkRam.1; omega) (by rw [haRa]; have := hsphi; have := hstkRam.2; omega)
@@ -442,7 +332,7 @@ theorem execBlockA
   have ha2_6 : σ6.regs.get? Register.x12 = some aEnv := obs_store_other_val' hobs6 Register.x12 (by decide) ha2_5
   have ha3_6 : σ6.regs.get? Register.x13 = some aRet := obs_store_other_val' hobs6 Register.x13 (by decide) ha3_5
   obtain ⟨vmi6, hmi6⟩ := obs_store_minstret_val hobs6
-  -- σ6.mem agrees with m0 (= c.σ.mem) outside `[SL.lo, sp)` (the five spills all inside)
+
   have hmemframe6 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → σ6.mem[a]? = m0[a]? := by
     intro a ha
     rw [hmem6e, hmem5e, hmem4e, hmem3e, hmem2e]
@@ -451,7 +341,7 @@ theorem execBlockA
         getElem_writeMap8_disjoint _ _ _ _ (by omega),
         getElem_writeMap8_disjoint _ _ _ _ (by omega),
         getElem_writeMap8_disjoint _ _ _ _ (by omega), ← hmem]
-  -- the four stmt-kind bytes at aStmt in σ6.mem (survive the five disjoint spills)
+
   have hkb0' : σ6.mem[aStmt.toNat]? = some hkb0v := by
     rw [hmem6e, hmem5e, hmem4e, hmem3e, hmem2e]
     rw [getElem_writeMap8_disjoint _ _ _ _ (by have := hstmtStk; omega),
@@ -485,7 +375,7 @@ theorem execBlockA
     rw [haddr0]; rcases hstmtWin with h | h
     · exact Or.inl h
     · right; omega
-  -- ============ 0x80003ff8: mv s0,a1 → x8 := aStmt ============
+
   obtain ⟨σ7, i7, hs7, hi7, hG7, hmem7, hobs7⟩ :=
     site_80003ff8_es σ6 i6 (c.steps+1+1+1+1+1+1) (0x80003ff8#64) vmi6 aStmt hG6 hpc6 hmi6 ha1_6 (hmem6e ▸ hload6) rfl hi6
   have hstep7 : Step ⟨σ6, i6, _⟩ ⟨σ7, i7, _⟩ := hs7
@@ -501,7 +391,7 @@ theorem execBlockA
   have ha3_7 : σ7.regs.get? Register.x13 = some aRet := obs_alu_other' hobs7 Register.x13 (by decide) ha3_6
   have hsp_7 : σ7.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs7 Register.x2 (by decide) hsp_6
   obtain ⟨vmi7, hmi7⟩ := obs_alu_minstret hobs7
-  -- ============ 0x80003ffc: mv s1,a0 → x9 := aInterp ============
+
   obtain ⟨σ8, i8, hs8, hi8, hG8, hmem8, hobs8⟩ :=
     site_80003ffc_es σ7 i7 (c.steps+1+1+1+1+1+1+1) (0x80003ffc#64) vmi7 aInterp hG7 hpc7 hmi7 ha0_7 (hmem7e ▸ hload6) rfl hi7
   have hstep8 : Step ⟨σ7, i7, _⟩ ⟨σ8, i8, _⟩ := hs8
@@ -515,7 +405,7 @@ theorem execBlockA
   have ha3_8 : σ8.regs.get? Register.x13 = some aRet := obs_alu_other' hobs8 Register.x13 (by decide) ha3_7
   have hsp_8 : σ8.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs8 Register.x2 (by decide) hsp_7
   obtain ⟨vmi8, hmi8⟩ := obs_alu_minstret hobs8
-  -- ============ 0x80004000: mv s3,a2 → x19 := aEnv ============
+
   obtain ⟨σ9, i9, hs9, hi9, hG9, hmem9, hobs9⟩ :=
     site_80004000_es σ8 i8 (c.steps+1+1+1+1+1+1+1+1) (0x80004000#64) vmi8 aEnv hG8 hpc8 hmi8 ha2_8 (hmem8e ▸ hload6) rfl hi8
   have hstep9 : Step ⟨σ8, i8, _⟩ ⟨σ9, i9, _⟩ := hs9
@@ -529,7 +419,7 @@ theorem execBlockA
   have ha3_9 : σ9.regs.get? Register.x13 = some aRet := obs_alu_other' hobs9 Register.x13 (by decide) ha3_8
   have hsp_9 : σ9.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs9 Register.x2 (by decide) hsp_8
   obtain ⟨vmi9, hmi9⟩ := obs_alu_minstret hobs9
-  -- ============ 0x80004004: mv s2,a3 → x18 := aRet ============
+
   obtain ⟨σ10, i10, hs10, hi10, hG10, hmem10, hobs10⟩ :=
     site_80004004_es σ9 i9 (c.steps+1+1+1+1+1+1+1+1+1) (0x80004004#64) vmi9 aRet hG9 hpc9 hmi9 ha3_9 (hmem9e ▸ hload6) rfl hi9
   have hstep10 : Step ⟨σ9, i9, _⟩ ⟨σ10, i10, _⟩ := hs10
@@ -543,7 +433,7 @@ theorem execBlockA
   have hx19_10 : σ10.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs10 Register.x19 (by decide) hx19_9
   have hsp_10 : σ10.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs10 Register.x2 (by decide) hsp_9
   obtain ⟨vmi10, hmi10⟩ := obs_alu_minstret hobs10
-  -- ============ 0x80004008: li a6,8 → x16 := 8 ============
+
   obtain ⟨σ11, i11, hs11, hi11, hG11, hmem11, hobs11⟩ :=
     site_80004008_es σ10 i10 (c.steps+1+1+1+1+1+1+1+1+1+1) (0x80004008#64) vmi10 hG10 hpc10 hmi10 (hmem10e ▸ hload6) rfl hi10
   have hstep11 : Step ⟨σ10, i10, _⟩ ⟨σ11, i11, _⟩ := hs11
@@ -557,7 +447,7 @@ theorem execBlockA
   have hx18_11 : σ11.regs.get? Register.x18 = some aRet := obs_alu_other' hobs11 Register.x18 (by decide) hx18_10
   have hsp_11 : σ11.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs11 Register.x2 (by decide) hsp_10
   obtain ⟨vmi11, hmi11⟩ := obs_alu_minstret hobs11
-  -- ============ 0x8000400c: auipc a4 → x14 := 0x8001a00c ============
+
   obtain ⟨σ12, i12, hs12, hi12, hG12, hmem12, hobs12⟩ :=
     site_8000400c_es σ11 i11 (c.steps+1+1+1+1+1+1+1+1+1+1+1) (0x8000400c#64) vmi11 hG11 hpc11 hmi11 (hmem11e ▸ hload6) rfl hi11
   have hstep12 : Step ⟨σ11, i11, _⟩ ⟨σ12, i12, _⟩ := hs12
@@ -571,7 +461,7 @@ theorem execBlockA
   have hx16_12 : σ12.regs.get? Register.x16 = some (8#64) := obs_alu_other' hobs12 Register.x16 (by decide) hx16_11
   have hsp_12 : σ12.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs12 Register.x2 (by decide) hsp_11
   obtain ⟨vmi12, hmi12⟩ := obs_alu_minstret hobs12
-  -- ============ 0x80004010: addi a4,a4,-84 → x14 := 0x80019fb8 (table base) ============
+
   obtain ⟨σ13, i13, hs13, hi13, hG13, hmem13, hobs13⟩ :=
     site_80004010_es σ12 i12 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1) (0x80004010#64) vmi12 (0x8001a00c#64) hG12 hpc12 hmi12 hx14_12 (hmem12e ▸ hload6) rfl hi12
   have hstep13 : Step ⟨σ12, i12, _⟩ ⟨σ13, i13, _⟩ := hs13
@@ -585,7 +475,7 @@ theorem execBlockA
   have hx16_13 : σ13.regs.get? Register.x16 = some (8#64) := obs_alu_other' hobs13 Register.x16 (by decide) hx16_12
   have hsp_13 : σ13.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs13 Register.x2 (by decide) hsp_12
   obtain ⟨vmi13, hmi13⟩ := obs_alu_minstret hobs13
-  -- ============ 0x80004014: lw a5,0(s0) → x15 := ofNat k (kind) ============
+
   obtain ⟨σ14, i14, hs14, hi14, hG14, hmem14, hobs14⟩ :=
     site_80004014_es σ13 i13 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x80004014#64) vmi13 aStmt hkb0v hkb1v hkb2v hkb3v
       hG13 hpc13 hmi13 hx8_13 (hmem13e ▸ hload6) rfl
@@ -604,7 +494,7 @@ theorem execBlockA
   have hx8_14 : σ14.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs14 Register.x8 (by decide) hx8_13
   have hsp_14 : σ14.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs14 Register.x2 (by decide) hsp_13
   obtain ⟨vmi14, hmi14⟩ := obs_alu_minstret hobs14
-  -- ============ 0x80004018: bltu a6,a5 NOT taken (8 <u k = false, k ≤ 8) ============
+
   have hbltu : zopz0zI_u (8#64) (BitVec.ofNat 64 k) = false := by
     have hkeq : (BitVec.ofNat 64 k).toNat = k := by
       rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show k < 2^64 by omega)]
@@ -623,7 +513,7 @@ theorem execBlockA
   have hx8_15 : σ15.regs.get? Register.x8 = some aStmt := obs_branch_nottaken_other' hobs15 Register.x8 (by decide) hx8_14
   have hsp_15 : σ15.regs.get? Register.x2 = some (sp-176#64) := obs_branch_nottaken_other' hobs15 Register.x2 (by decide) hsp_14
   obtain ⟨vmi15, hmi15⟩ := obs_branch_nottaken_minstret hobs15
-  -- ============ 0x8000401c: lwu a5,0(s0) → x15 := ofNat k (zero-ext) ============
+
   obtain ⟨σ16, i16, hs16, hi16, hG16, hmem16, hobs16⟩ :=
     site_8000401c_es σ15 i15 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x8000401c#64) vmi15 aStmt hkb0v hkb1v hkb2v hkb3v
       hG15 hpc15 hmi15 hx8_15 (hmem15e ▸ hload6) rfl
@@ -640,7 +530,7 @@ theorem execBlockA
   have hx14_16 : σ16.regs.get? Register.x14 = some (0x80019fb8#64) := obs_alu_other' hobs16 Register.x14 (by decide) hx14_15
   have hsp_16 : σ16.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs16 Register.x2 (by decide) hsp_15
   obtain ⟨vmi16, hmi16⟩ := obs_alu_minstret hobs16
-  -- ============ 0x80004020: slli a5,a5,2 → x15 := ofNat (4*k) ============
+
   obtain ⟨σ17, i17, hs17, hi17, hG17, hmem17, hobs17⟩ :=
     site_80004020_es σ16 i16 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x80004020#64) vmi16 (BitVec.ofNat 64 k) hG16 hpc16 hmi16 hx15_16 (hmem16e ▸ hload6) rfl hi16
   have hstep17 : Step ⟨σ16, i16, _⟩ ⟨σ17, i17, _⟩ := hs17
@@ -664,7 +554,7 @@ theorem execBlockA
   have hx14_17 : σ17.regs.get? Register.x14 = some (0x80019fb8#64) := obs_alu_other' hobs17 Register.x14 (by decide) hx14_16
   have hsp_17 : σ17.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs17 Register.x2 (by decide) hsp_16
   obtain ⟨vmi17, hmi17⟩ := obs_alu_minstret hobs17
-  -- ============ 0x80004024: add a5,a5,a4 → x15 := ofNat (table + 4*k) ============
+
   obtain ⟨σ18, i18, hs18, hi18, hG18, hmem18, hobs18⟩ :=
     site_80004024_es σ17 i17 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x80004024#64) vmi17 (BitVec.ofNat 64 (4 * k)) (0x80019fb8#64) hG17 hpc17 hmi17 hx15_17 hx14_17 (hmem17e ▸ hload6) rfl hi17
   have hstep18 : Step ⟨σ17, i17, _⟩ ⟨σ18, i18, _⟩ := hs18
@@ -687,14 +577,14 @@ theorem execBlockA
   have hx14_18 : σ18.regs.get? Register.x14 = some (0x80019fb8#64) := obs_alu_other' hobs18 Register.x14 (by decide) hx14_17
   have hsp_18 : σ18.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs18 Register.x2 (by decide) hsp_17
   obtain ⟨vmi18, hmi18⟩ := obs_alu_minstret hobs18
-  -- slot bytes at `table + 4k` in σ6.mem (= σ18.mem)
+
   have hslot18 : StmtSlotPinned k armPC σ18.mem := by rw [hmem18e]; exact hslot6
   obtain ⟨sb0, sb1, sb2, sb3, hsb0, hsb1, hsb2, hsb3, hsbtgt⟩ := hslot18.b0
   have hslotBaseNat : (BitVec.ofNat 64 (stmtJumpTableBase + 4 * k)).toNat = stmtJumpTableBase + 4 * k := by
     simp only [BitVec.toNat_ofNat, stmtJumpTableBase]; rw [Nat.mod_eq_of_lt (by omega)]
   have haddrT : ((BitVec.ofNat 64 (stmtJumpTableBase + 4 * k) : BitVec 64) + sign_extend (m := 64) (0x000#12)).toNat
       = stmtJumpTableBase + 4 * k := by rw [sext_zero, BitVec.add_zero]; exact hslotBaseNat
-  -- ============ 0x80004028: lw a5,0(a5) → x15 := sext(slot bytes) ============
+
   obtain ⟨σ19, i19, hs19, hi19, hG19, hmem19, hobs19⟩ :=
     site_80004028_es σ18 i18 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x80004028#64) vmi18 (BitVec.ofNat 64 (stmtJumpTableBase + 4 * k))
       sb0 sb1 sb2 sb3 hG18 hpc18 hmi18 hx15_18 (hmem18e ▸ hload6) rfl
@@ -711,7 +601,7 @@ theorem execBlockA
   have hx14_19 : σ19.regs.get? Register.x14 = some (0x80019fb8#64) := obs_alu_other' hobs19 Register.x14 (by decide) hx14_18
   have hsp_19 : σ19.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs19 Register.x2 (by decide) hsp_18
   obtain ⟨vmi19, hmi19⟩ := obs_alu_minstret hobs19
-  -- ============ 0x8000402c: add a5,a5,a4 → x15 := sext(slot) + table = armPC ============
+
   obtain ⟨σ20, i20, hs20, hi20, hG20, hmem20, hobs20⟩ :=
     site_8000402c_es σ19 i19 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x8000402c#64) vmi19
       (sign_extend (m := 64) ((((sb3.append sb2).append sb1).append sb0) : BitVec (8*4)))
@@ -726,7 +616,7 @@ theorem execBlockA
       simp only [stmtJumpTableBase], hsbtgt] at this
   have hsp_20 : σ20.regs.get? Register.x2 = some (sp-176#64) := obs_alu_other' hobs20 Register.x2 (by decide) hsp_19
   obtain ⟨vmi20, hmi20⟩ := obs_alu_minstret hobs20
-  -- thread the arm-entry registers (x8=aStmt, x9=aInterp, x18=aRet, x19=aEnv, x1=r) through steps 15..20
+
   have hx8_16 : σ16.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs16 Register.x8 (by decide) hx8_15
   have hx8_17 : σ17.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs17 Register.x8 (by decide) hx8_16
   have hx8_18 : σ18.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs18 Register.x8 (by decide) hx8_17
@@ -761,7 +651,7 @@ theorem execBlockA
   have hx19_18 : σ18.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs18 Register.x19 (by decide) hx19_17
   have hx19_19 : σ19.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs19 Register.x19 (by decide) hx19_18
   have hx19_20 : σ20.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs20 Register.x19 (by decide) hx19_19
-  -- ra (x1) unchanged through steps 7..20
+
   have hra_6 : σ6.regs.get? Register.x1 = some r := obs_store_other_val' hobs6 Register.x1 (by decide) hra_5
   have hra_7 : σ7.regs.get? Register.x1 = some r := obs_alu_other' hobs7 Register.x1 (by decide) hra_6
   have hra_8 : σ8.regs.get? Register.x1 = some r := obs_alu_other' hobs8 Register.x1 (by decide) hra_7
@@ -777,7 +667,7 @@ theorem execBlockA
   have hra_18 : σ18.regs.get? Register.x1 = some r := obs_alu_other' hobs18 Register.x1 (by decide) hra_17
   have hra_19 : σ19.regs.get? Register.x1 = some r := obs_alu_other' hobs19 Register.x1 (by decide) hra_18
   have hra_20 : σ20.regs.get? Register.x1 = some r := obs_alu_other' hobs20 Register.x1 (by decide) hra_19
-  -- ============ 0x80004030: jr a5 → PC := armPC ============
+
   have htgtJr : (BitVec.update (armPC + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
     rw [ret_tgt armPC harmAl]; exact harmAl
   obtain ⟨σ21, i21, hs21, hi21, hG21, hmem21, hobs21⟩ :=
@@ -793,7 +683,7 @@ theorem execBlockA
   have hsp_21 : σ21.regs.get? Register.x2 = some (sp-176#64) := obs_jr_other' hobs21 Register.x2 (by decide) hsp_20
   have hra_21 : σ21.regs.get? Register.x1 = some r := obs_jr_other' hobs21 Register.x1 (by decide) hra_20
   obtain ⟨vmi21, hmi21⟩ := obs_jr_minstret hobs21
-  -- output invariance across the 21 prologue+dispatch steps
+
   have hout21 : σ21.sailOutput = out0 := by
     rw [hobs21.out, sailOutput_sigmaPost_jump_x0, hobs20.out, sailOutput_sigmaPost_alu,
       hobs19.out, sailOutput_sigmaPost_alu, hobs18.out, sailOutput_sigmaPost_alu,
@@ -810,10 +700,10 @@ theorem execBlockA
   have houtStr : String.join out0.toList = st.out := by
     have : Vsa.Machine.output c.σ = st.out := hout
     simp only [Vsa.Machine.output] at this; rw [← hout0]; exact this
-  -- StoreRepr survives the five spills: σ6.mem agrees with c.σ.mem outside `[SL.lo,sp)`.
+
   have hstore6 : StoreRepr σ6.mem N A φf φc st.store :=
     hstoreSurv σ6.mem (fun a ha => by rw [hmem, ← hmemframe6 a ha])
-  -- the four spill slots survive in σ6.mem
+
   have hslotRa : read64 σ6.mem (sp.toNat - 8) = some r.toNat := by
     rw [hmem6e, read64_writeMap8, sdData_toNat]
   have hslotS0 : read64 σ6.mem (sp.toNat - 16) = some v8.toNat := by
@@ -834,13 +724,13 @@ theorem execBlockA
   have hslotS3 : read64 σ6.mem (sp.toNat - 40) = some v19.toNat := by
     rw [hmem6e, read64_writeMap8_disjoint_ee _ _ _ _ (by omega),
         hmem5e, read64_writeMap8, sdData_toNat]
-  -- entry ghost frame reads for the spilled callee-saved registers
+
   have hgx8 : g Register.x8 = some v8 := by rw [← hframe Register.x8 (by decide)]; exact h8_0
   have hgx9 : g Register.x9 = some v9 := by rw [← hframe Register.x9 (by decide)]; exact h9_0
   have hgx18 : g Register.x18 = some v18 := by rw [← hframe Register.x18 (by decide)]; exact h18_0
   have hgx19 : g Register.x19 = some v19 := by rw [← hframe Register.x19 (by decide)]; exact h19_0
   have hgx2 : g Register.x2 = some sp := by rw [← hframe Register.x2 (by decide)]; exact hspReg
-  -- blanket frame: callee-saved regs (excl x8/x9/x18/x19/x2) unchanged through 21 steps
+
   have abi_ne' : ∀ {X R : Register}, AbiPreserved X = false → AbiPreserved R = true →
       (X == R) = false := by
     intro X R hX hR
@@ -891,15 +781,13 @@ theorem execBlockA
       σ21.regs.get? R = g R := by
     intro R hR he8 he9 he18 he19 he2
     rw [hframe21 R hR he8 he9 he18 he19 he2]; exact hframe R hR
-  -- wave 48c: arm-entry PRESENCE `MemExtends m0 σ6.mem`. `σ6.mem` is the five
-  -- prologue `writeMap8` spills over `c.σ.mem = m0` (`hmem`); each insert
-  -- preserves presence (`memExtends_writeMap8`), composed by `MemExtends.trans`.
+
   have hMemExt6 : MemExtends m0 σ6.mem := by
     rw [hmem6e, hmem5e, hmem4e, hmem3e, hmem2e, hmem]
     exact (memExtends_writeMap8 m0 _ _).trans
       ((memExtends_writeMap8 _ _ _).trans ((memExtends_writeMap8 _ _ _).trans
         ((memExtends_writeMap8 _ _ _).trans (memExtends_writeMap8 _ _ _))))
-  -- assemble the full 21-step run + ExecArmEntryK
+
   refine ⟨⟨σ21, i21, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, v19,
     hG21, hi21, hpc21, hx8_21, hx9_21, hx19_21, hx18_21, hsp_21, hra_21, ⟨_, hmi21⟩,
     hout21, houtStr, hmem21e, hmem21e ▸ hload6, hmem21e ▸ hstore6,
@@ -913,30 +801,9 @@ theorem execBlockA
       ((Steps.single hstep13).trans ((Steps.single hstep14).trans ((Steps.single hstep15).trans
       ((Steps.single hstep16).trans ((Steps.single hstep17).trans ((Steps.single hstep18).trans
       ((Steps.single hstep19).trans ((Steps.single hstep20).trans (Steps.single hstep21))))))))))))))))))))
-  · have := hsphi; have := hstkRam.2; omega       -- sp ≤ 2^32
-  · have := hstkRam.1; have := hSLlo; omega        -- 2^31 ≤ sp
-  · have := hstkWin; have := hSLlo; rw [htoh]; omega  -- tohost+16+176 ≤ sp
-  · have := hsp16; omega                           -- sp % 8 = 0
-
-/-! ## `execBrkSim` — the `ExecS.brk` simulation Triple
-
-`execBlockA` (prologue+dispatch to `execArmBrk = 0x80004098`) ≫ `li a0,1` (the arm,
-setting `x10 = 1 = StatusCode .brk`) ≫ `execBlockD` (shared epilogue). The block-A
-residual is now discharged internally by `execBlockA`; the only remaining premises
-are the jump-table slot pin (`hslot`, a `.rodata` fact) + its stack-disjointness
-(`htableStk`) — exactly the geometry the expression-side leaves carry as
-`EvalEntry` fields (`int_slot`/`table_stack_disjoint`). `hkind` (`read32 = 7`) is
-derived from `ExecEntry.stmt : StmtRepr … .brk`. -/
-
-/-! ## `execContSim` — the `ExecS.cont` simulation Triple
-
-`execBlockA` (prologue+dispatch to `execArmCont = 0x800040b8`) ≫ the cont
-epilogue-copy: `ld ra/s0/s1/s2/s3` (`0x800040b8..0x800040c8`), `li a0,2`
-(`0x800040cc`, `x10 := 2 = StatusCode .cont`), `addi sp,sp,176`, `ret`. The `li a0`
-sits BETWEEN the restores and `addi` (vs `brk`'s before-the-restores placement), so
-the tail is threaded directly here rather than through `execBlockD`; the loads never
-touch `x10`, so the mechanics are identical. The block-A residual is discharged
-internally by `execBlockA`; only the slot pin (`hslot`) + its stack-disjointness
-(`htableStk`) remain (`hkind`=`read32 = 8` from `ExecEntry.stmt`). -/
+  · have := hsphi; have := hstkRam.2; omega
+  · have := hstkRam.1; have := hSLlo; omega
+  · have := hstkWin; have := hSLlo; rw [htoh]; omega
+  · have := hsp16; omega
 
 end Vsa.Sim

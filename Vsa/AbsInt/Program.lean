@@ -1,22 +1,11 @@
 import Vsa.AbsInt.Sound
 
-/-!
-# Program-level soundness
-
-The analysis of a whole program starts from `initState`, which describes the
-globals frame of `initSt`. `analyze_sound` covers every top-level
-completion; `bigStep_final` states the result for successful runs: every
-global the final store binds has a value in the abstract value the analysis
-computes for it.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
 
-/-- The abstract initial state describes the initial store. -/
 theorem initState_sound : SGam [0] initSt.store (initState (A := A)) := by
   refine ⟨?_, fun b h => (by cases h), trivial⟩
   rw [frameAt_iff]
@@ -38,31 +27,22 @@ theorem initState_sound : SGam [0] initSt.store (initState (A := A)) := by
       · simp only [h1, h2, h3, ↓reduceIte]
         rfl
 
-/-- **Soundness for programs**: every top-level completion of `p` is covered
-by the analysis. -/
 theorem analyze_sound (cfg : Cfg) {p : Program} {st' : St} {status : Status}
     (h : ExecSeq initSt 0 0 p st' status) :
     SOK [0] (analyze (A := A) cfg p) status st'.store :=
   seq_sound cfg h [0] initState rfl initState_sound
 
-/-- The final store of a successful run is described by the analysis's
-normal-completion state. -/
 theorem bigStep_final (cfg : Cfg) {p : Program} {st' : St}
     (h : ExecSeq initSt 0 0 p st' .normal) :
     SGam [0] st'.store (analyze (A := A) cfg p).norm :=
   analyze_sound cfg h
 
-/-- **Values at the end of a run.** For a successful run of `p`, every global
-`x` the final store binds to `v` satisfies `v ∈ γ` of the analysis's value
-for `x`. -/
 theorem bigStep_global (cfg : Cfg) {p : Program} {st' : St}
     (h : ExecSeq initSt 0 0 p st' .normal) {x : String} {v : Value}
     (hx : st'.store.get? 0 x = some v) :
     Gam ((analyze (A := A) cfg p).norm.lookup x).1 v :=
   (SGam.lookup rfl (bigStep_final cfg h)).1 v hx
 
-/-- A global the analysis finds certainly bound is bound in the final store,
-to a value in its abstract value. -/
 theorem bigStep_global_some (cfg : Cfg) {p : Program} {st' : St}
     (h : ExecSeq initSt 0 0 p st' .normal) {x : String} {a : A}
     (hl : (analyze (A := A) cfg p).norm.lookup x = (a, false)) :
@@ -74,8 +54,6 @@ theorem bigStep_global_some (cfg : Cfg) {p : Program} {st' : St}
   | none => cases hs.2 hv
   | some _ => rfl
 
-/-- A program whose normal completion the analysis finds unreachable has no
-`BigStep` behaviour. -/
 theorem no_bigStep_of_bot (cfg : Cfg) {p : Program}
     (hbot : (analyze (A := A) cfg p).norm.isBot = true) (out : String) :
     ¬ BigStep p out := by

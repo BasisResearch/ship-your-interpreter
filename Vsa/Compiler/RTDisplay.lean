@@ -1,18 +1,9 @@
 import Vsa.Compiler.RTItos
 
-/-!
-# `display`: printing a value
-
-`run_dp`: from `dpPos` with a value pair `(a0, a1)`, the routine appends the
-text `DispW` assigns to the pair, writing memory only in the integer scratch
-object and the digit buffer.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The runtime routines and the error exit are at their positions. -/
 structure RTLoaded (code : List Ins) : Prop where
   fits : Fits code
   err : Seg code errPos errCode
@@ -33,15 +24,12 @@ structure RTLoaded (code : List Ins) : Prop where
   cmp : Seg code cmpPos (cmpCode cmpPos)
   eq : Seg code eqPos (eqCode eqPos)
 
-/-- The runtime's fixed strings are in memory. -/
 def FixedOK (m : Mem) : Prop :=
   ∀ i (h : i < fixedStrs.length), StrW m (fixedAddr i) (fixedStrs[i]'h).toList
 
-/-- How a native prints. -/
 def natDisp (p : BitVec 64) : String :=
   if p = 0 then "<native fn print>" else if p = 1 then "<native fn println>" else "<native fn assert>"
 
-/-- What `display` prints for the pair `(t, p)` in memory `m`. -/
 def DispW (m : Mem) (t p : BitVec 64) (cs : List Char) : Prop :=
   if t = 2 then cs = (intToString p.toInt).toList
   else if t = 3 then StrW m p.toNat cs
@@ -51,10 +39,8 @@ def DispW (m : Mem) (t p : BitVec 64) (cs : List Char) : Prop :=
   else if t = 5 then cs = (natDisp p).toList
   else cs = "null".toList
 
-/-- Registers `display` may change. -/
 def dpClob : List Nat := [ra, t0, t1, t2, a0, a1, a2, a3, a6, a7, s2, s3, s4, s5, s6, s9, s10]
 
-/-- Memory `display` may write: the scratch object and the digit buffer. -/
 def DpFrame (m m' : Mem) : Prop :=
   ∀ a, a % 8 = 0 → (a + 8 ≤ scratchStr ∨ scratchStr + 168 ≤ a) →
     (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) → rdW m' a = rdW m a
@@ -65,7 +51,6 @@ section
 variable {code : List Ins} (hR : RTLoaded code)
 include hR
 
-/-- The shared return of `display`. -/
 theorem dp_ret {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}
     (h26 : Has L' s10 r) (hal : r.toNat % 4 = 0) (hk : Keep dpClob L L') :
     Reaches code ⟨pcOf (dpPos + 124), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
@@ -78,7 +63,6 @@ theorem dp_ret {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}
   refine ⟨hal, reach_here ⟨rfl, rfl, rfl, ?_⟩⟩
   reg_simp; exact hk
 
-/-- `printstr` called from `display` at `dpPos + j`, followed by the jump to the return. -/
 theorem dp_ps {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} (j : Nat)
     (hJ : (dpCode dpPos)[j + 1]? = some (J (dpPos + j + 1) (dpPos + 124))) (hj : j + 1 < 126)
     {p : Nat} {cs : List Char} (h11 : Has L' a1 (BitVec.ofNat 64 p)) (hs : StrW m p cs)
@@ -98,7 +82,6 @@ theorem dp_ps {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} (j : N
   rintro B ⟨h1, h2, h3, h4⟩
   exact ⟨h1, h2, by rw [h3]; exact ho, h4⟩
 
-/-- **`display`.** -/
 theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs : List Char}
     (h10 : Has L a0 t) (h11 : Has L a1 p) (hr : Has L ra r) (hal : r.toNat % 4 = 0)
     (hfx : FixedOK m) (hd : DispW m t p cs) :
@@ -114,9 +97,9 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
   simp only [a0, a1, ra] at k10 k11 k1 e10 e11 e1
   have hpn : p = BitVec.ofNat 64 p.toNat := by simp
   have hfs : ∀ i (hi : i < fixedStrs.length), StrW m (fixedAddr i) (fixedStrs[i]'hi).toList := hfx
-  -- registers after the prologue
+
   have hL : ∀ L', Keep dpClob L L' → Has L' s10 r → Has L' a1 p → True := fun _ _ _ _ => trivial
-  -- the prologue dispatch
+
   apply run_seg hR.fits hR.dp 0 dpPos (by simp) ([mv s10 ra,
      mvi t0 2, Br .eq a0 t0 (dpPos + 2) (dpPos + 24),
      mvi t0 3, Br .eq a0 t0 (dpPos + 4) (dpPos + 49),
@@ -130,7 +113,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
     fun L' h v => h.gset (by decide)
   have hK0 : Keep dpClob L (gset L 26 r) := (Keep.refl _ _).gset (by decide)
   split
-  · -- integer
+  ·
     next ht =>
     have hcs : cs = (intToString p.toInt).toList := by
       unfold DispW at hd; rw [if_pos (by rw [ht]; rfl)] at hd; exact hd
@@ -162,7 +145,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
     show (4 : BitVec 64) = 4#64 from rfl, show (1 : BitVec 64) = 1#64 from rfl,
     show (5 : BitVec 64) = 5#64 from rfl, if_neg ht2] at hd'
   split
-  · -- string
+  ·
     next ht3 =>
     rw [if_pos ht3] at hd'
     apply run_seg hR.fits hR.dp 49 (dpPos + 49) rfl [Call (dpPos + 49) psPos] (by decide)
@@ -173,7 +156,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
   · next ht3 =>
   rw [if_neg ht3] at hd'
   split
-  · -- closure
+  ·
     next ht4 =>
     rw [if_pos ht4] at hd'
     obtain ⟨d, hdd, hds, hp1, hp2⟩ := hd'
@@ -189,7 +172,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
   · next ht4 =>
   rw [if_neg ht4] at hd'
   split
-  · -- boolean
+  ·
     next ht1 =>
     rw [if_pos ht1] at hd'
     apply run_seg hR.fits hR.dp 55 (dpPos + 55) rfl
@@ -212,7 +195,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
   · next ht1 =>
   rw [if_neg ht1] at hd'
   split
-  · -- native
+  ·
     next ht5 =>
     rw [if_pos ht5] at hd'
     apply run_seg hR.fits hR.dp 82 (dpPos + 82) rfl
@@ -246,21 +229,17 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
         rw [if_neg hp1] at hd'
         exact reaches_mono (dp_ps hR 96 (by decide) (by decide) (by reg_simp)
           (hd' ▸ hfs 5 (by decide)) (by reg_simp) hal (by reg_simp; exact Keep.refl _ _)) (fun B hB => hpd hB)
-  · -- null
+  ·
     next ht5 =>
     rw [if_neg ht5] at hd'
     exact reaches_mono (dp_ps hR 22 (by decide) (by decide) (by reg_simp)
       (hd' ▸ hfs 0 (by decide)) (by reg_simp) hal (by reg_simp; exact Keep.refl _ _)) (fun B hB => hpd hB)
 
-/-! ## `catstr` -/
-
-/-- A string object for `cs` at `q`, ending below the object pointer `h`. -/
 structure StrBelow (m : Mem) (h q : Nat) (cs : List Char) : Prop where
   str : StrW m q cs
   lo : objBase ≤ q
   hi : q + 8 + 8 * cs.length ≤ h
 
-/-- What `catstr` renders for the pair `(t, p)` in memory `m` with object pointer `h`. -/
 def CatW (m : Mem) (h : Nat) (t p : BitVec 64) (cs : List Char) : Prop :=
   if t = 3 then StrBelow m h p.toNat cs
   else if t = 2 then cs = (intToString p.toInt).toList
@@ -270,11 +249,8 @@ def CatW (m : Mem) (h : Nat) (t p : BitVec 64) (cs : List Char) : Prop :=
   else if t = 5 then cs = "<native fn>".toList
   else cs = "null".toList
 
-/-- Registers `catstr` may change. -/
 def csClob : List Nat := [ra, t0, t1, t2, a0, a1, a2, a3, a6, a7, s4, s5, s6, s9, s11, hpO]
 
-/-- `catstr` returned: `a1` points to the rendering, the object pointer grew by at
-most one integer rendering, and memory changed only there and in the digit buffer. -/
 structure CsRet (m m' : Mem) (h h' q : Nat) (cs : List Char) (L L' : GRegs) : Prop where
   ptr : Has L' a1 (BitVec.ofNat 64 q)
   str : StrBelow m' h' q cs
@@ -286,7 +262,6 @@ structure CsRet (m m' : Mem) (h h' q : Nat) (cs : List Char) (L L' : GRegs) : Pr
     rdW m' a = rdW m a
   keep : Keep csClob L L'
 
-/-- The object heap pointer is in the object region. -/
 structure ObjPtr (h : Nat) : Prop where
   lo : objBase ≤ h
   hi : h ≤ objEnd
@@ -303,7 +278,6 @@ theorem cs_ret {L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}
   wp_simp [k27, e27]
   exact ⟨hal, reach_here ⟨rfl, rfl, rfl, rfl⟩⟩
 
-/-- **`catstr`.** -/
 theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h : Nat}
     {cs : List Char} (h10 : Has L a0 t) (h11 : Has L a1 p) (hr : Has L ra r)
     (h8 : Has L hpO (BitVec.ofNat 64 h)) (hal : r.toNat % 4 = 0) (hh : ObjPtr h)
@@ -332,7 +306,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
         rcases (show i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 by omega) with
           rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;> revert hi <;> decide
       omega⟩
-  -- a rendering already in memory: return it
+
   have hdone : ∀ q L', StrBelow m h q cs → Has L' s11 r → Has L' a1 (BitVec.ofNat 64 q) →
       Has L' hpO (BitVec.ofNat 64 h) → Keep csClob L L' →
       Reaches code ⟨pcOf (csPos + 81), L', m, o⟩ (fun B => B.out = o ∧
@@ -361,7 +335,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
   wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k10, k11, k1, e10, e11, e1]
   split
-  · -- string
+  ·
     next ht3 =>
     rw [if_pos ht3] at hc'
     exact hdone _ _ hc' (by reg_simp) (by reg_simp; rw [← hpn]; exact h11) (by reg_simp; exact h8)
@@ -369,7 +343,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
   · next ht3 =>
   rw [if_neg ht3] at hc'
   split
-  · -- integer
+  ·
     next ht2 =>
     rw [if_pos ht2] at hc'
     apply run_seg hR.fits hR.cs 23 (csPos + 23) rfl
@@ -410,7 +384,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
   · next ht2 =>
   rw [if_neg ht2] at hc'
   split
-  · -- closure
+  ·
     next ht4 =>
     rw [if_pos ht4] at hc'
     obtain ⟨d, hdd, hds, hp1, hp2, -⟩ := hc'
@@ -424,7 +398,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
   · next ht4 =>
   rw [if_neg ht4] at hc'
   split
-  · -- boolean
+  ·
     next ht1 =>
     rw [if_pos ht1] at hc'
     apply run_seg hR.fits hR.cs 44 (csPos + 44) rfl
@@ -447,7 +421,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
   · next ht1 =>
   rw [if_neg ht1] at hc'
   split
-  · -- native
+  ·
     next ht5 =>
     rw [if_pos ht5] at hc'
     apply run_seg hR.fits hR.cs 69 (csPos + 69) rfl
@@ -456,15 +430,12 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
     exact hdone _ _ (hc' ▸ hfs 6 (by decide)) (by reg_simp) (by reg_simp) (by reg_simp; exact h8)
       (by reg_simp; exact Keep.refl _ _)
-  · -- null
+  ·
     next ht5 =>
     rw [if_neg ht5] at hc'
     exact hdone _ _ (hc' ▸ hfs 0 (by decide)) (by reg_simp) (by reg_simp) (by reg_simp; exact h8)
       (by reg_simp; exact Keep.refl _ _)
 
-/-! ## `concat` -/
-
-/-- Memory after `concat` builds the object for `xs ++ ys` at `h`. -/
 def ccMem (m : Mem) (p q h : Nat) (xs ys : List Char) : Mem :=
   copyW (copyW (applyW m (h, 8, BitVec.ofNat 64 (xs.length + ys.length))) (p + 8) (h + 8) xs.length)
     (q + 8) (h + 8 + 8 * xs.length) ys.length
@@ -510,10 +481,8 @@ theorem ccMem_facts {m : Mem} {p q h : Nat} {xs ys : List Char} (hx : StrW m p x
   · intro a ha hout
     rw [R a ha, if_neg (by omega), if_neg (by omega), if_neg (by omega)]
 
-/-- Registers `concat` may change. -/
 def ccClob : List Nat := [ra, t0, t2, t3, t4, t5, t6, a1, a4, a5, a6, a7, s11, hpO]
 
-/-- `concat` returned: a fresh object for `cs` at the old object pointer `h`. -/
 structure CcRet (m m' : Mem) (h : Nat) (cs : List Char) (L L' : GRegs) : Prop where
   ptr : Has L' a1 (BitVec.ofNat 64 h)
   str : StrW m' h cs
@@ -522,7 +491,6 @@ structure CcRet (m m' : Mem) (h : Nat) (cs : List Char) (L L' : GRegs) : Prop wh
   frame : ∀ a, a % 8 = 0 → (a + 8 ≤ h ∨ h + 8 + 8 * cs.length ≤ a) → rdW m' a = rdW m a
   keep : Keep ccClob L L'
 
-/-- **`concat`.** -/
 theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h : Nat}
     {xs ys : List Char} (h11 : Has L a1 (BitVec.ofNat 64 p)) (h13 : Has L a3 (BitVec.ofNat 64 q))
     (hr : Has L ra r) (h8 : Has L hpO (BitVec.ofNat 64 h)) (hal : r.toNat % 4 = 0) (hh : ObjPtr h)

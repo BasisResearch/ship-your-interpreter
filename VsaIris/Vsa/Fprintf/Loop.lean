@@ -1,17 +1,5 @@
 import VsaIris.Vsa.Fprintf.Lld
 
-/-!
-# `_vfprintf_r`'s main loop state (lane N5, shared with N3)
-
-After its `FILE` checks, `_vfprintf_r` (`0x8000a944`) spills the other
-callee-saved registers, sets up the `uio` at `sp + 224` (iov array at
-`sp + 352`, count at `sp + 232`, residual at `sp + 240`) and enters the main
-loop at `0x8000a9b0` with the format pointer in `s8`. `VfpLoop` is the state
-at the loop head: every conversion returns there with the iov array empty
-(its pieces printed). `vfp_head` is `0x8000a944` → `0x8000a9b0`,
-FILE-independent (N3's stderr path and N5's stack `FILE` share it).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -22,8 +10,6 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **The main loop head** `0x8000a9b0` of `_vfprintf_r(reent, f, …)` with
-frame `sp`, format pointer `P`, `cnt` bytes counted, the iov array empty. -/
 structure VfpLoop (R : Nat → BitVec 64) (Mt : Mem) (sp reent f P : BitVec 64) (cnt : Nat) : Prop where
   spR : R 2 = sp
   s1 : R 9 = 0x8001b798#64
@@ -39,8 +25,6 @@ structure VfpLoop (R : Nat → BitVec 64) (Mt : Mem) (sp reent f P : BitVec 64) 
   iovcnt : ldv .lw Mt (sp + 232#64).toNat = 0#64
   resid : ldv .ld Mt (sp + 240#64).toNat = 0#64
 
-/-- The caller's callee-saved registers `C` in `_vfprintf_r`'s frame (the
-epilogue reloads them). -/
 structure VfpSpills (Mt : Mem) (sp : BitVec 64) (C : Nat → BitVec 64) : Prop where
   ra : ldv .ld Mt (sp.toNat + 584) = C 1
   s0 : ldv .ld Mt (sp.toNat + 576) = C 8
@@ -56,17 +40,11 @@ structure VfpSpills (Mt : Mem) (sp : BitVec 64) (C : Nat → BitVec 64) : Prop w
   s10 : ldv .ld Mt (sp + 496#64).toNat = C 26
   s11 : ldv .ld Mt (sp + 488#64).toNat = C 27
 
-/-- The bytes `vfp_head` writes: reent/`FILE`/count at `sp`, the zeroed slots
-`40`, `72`–`96`, `144`, the `uio` at `224`, and the nine spill slots. The
-entry's slots (`ap` at `24`, the decimal point at `56`/`64`, the `mbstate` at
-`200`, `ra`/`s0`/`s4`/`s6`) are outside. -/
 def HeadReg (sp : Nat) (a : Nat) : Prop :=
   (sp ≤ a ∧ a < sp + 24) ∨ (sp + 40 ≤ a ∧ a < sp + 48) ∨ (sp + 72 ≤ a ∧ a < sp + 104) ∨
     (sp + 144 ≤ a ∧ a < sp + 152) ∨ (sp + 224 ≤ a ∧ a < sp + 248) ∨ (sp + 488 ≤ a ∧ a < sp + 528) ∨
     (sp + 536 ≤ a ∧ a < sp + 544) ∨ (sp + 552 ≤ a ∧ a < sp + 576)
 
-/-- The state `vfp_head` hands the loop: `VfpLoop` (reent `s0`, `FILE` `s4`,
-format `s6`), the nine spills, the kept registers, the frame. -/
 structure VfpHeadPost (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : Prop where
   loop : VfpLoop R' Mt' sp (R 8) (R 20) (R 22) 0
   keep : ∀ x ∈ [1, 8, 20, 22, 25, 26, 27], R' x = R x
@@ -112,11 +90,8 @@ structure VfpHeadPost (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64)
     (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
      unfold HeadReg; omega)
 
-/-! **`vfp_headC`**: `_vfprintf_r`'s head, `0x8000a944` → `0x8000a9b0` (post `VfpHeadPost`). -/
 #ix_chain vfp_headC := [vfpHead_1, vfpHead_2, vfpHead_3, vfpHead_4]
 
-/-- **`vfp_head`** (`vfp_headC` with a `gp` premise, which the run does not
-need: `gp` is a read-only register of the step table). -/
 theorem vfp_head {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}

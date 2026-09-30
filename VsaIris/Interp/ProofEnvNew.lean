@@ -3,19 +3,6 @@ import VsaIris.Interp.EnvNewSpans
 import VsaIris.Stack
 import VsaIris.Interp.Bridge
 
-/-!
-# `env_new`, proved over `heapStore` (INTERP_DESIGN.md §9 H1)
-
-`envNew_spec : textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ⊢ envNewSpec Wp N`,
-for every `MachWP` and both allocator regimes. It generalises the pilot
-(`VsaIris/Vsa/EnvNewPilot.lean`: raw `isHeap`, a 32-byte block handed back) to
-the interpreter's store: the fresh block becomes frame `st.frames.size` of
-`storeRepr` (`storeRepr_allocFrame`), charged `envBytes` in the counted regime,
-and malloc's NULL (uncounted only) takes the out-of-memory arm (`oomAt`).
-
-Three spans (`EnvNewSpans.lean`) around one `jal malloc` (`wp_call_malloc`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -27,11 +14,9 @@ section Main
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- The empty frame `env_new` leaves at `p` under `par`: struct only. -/
 def newGeom (p par : Nat) : FrameGeom :=
   ⟨p, 0, 0, 0, par, (p, 32), (0, 0), (0, 0)⟩
 
-/-- A zero word's two halves are zero. -/
 theorem imgLE_halves_zero {img : Nat → BitVec 8} {a : Nat} (h : imgLE img a 8 = 0) :
     imgLE img a 4 = 0 ∧ imgLE img (a + 4) 4 = 0 := by
   have := imgLE_split img a 4 4
@@ -43,7 +28,6 @@ theorem imgLE_halves_zero {img : Nat → BitVec 8} {a : Nat} (h : imgLE img a 8 
     · exact h0
     · have := Nat.mul_le_mul_left (256 ^ 4) h0; omega
 
-/-- The empty frame's layout from the initialized block. -/
 theorem newGeom_layout {img : Nat → BitVec 8} {p par : Nat}
     (hp0 : p ≠ 0) (hpw : 0x80000000 ≤ p ∧ p + 32 ≤ 0x100000000 ∧ htifLo + 16 ≤ p ∧ p % 16 = 0)
     (h0 : imgLE img p 8 = 0) (h8 : imgLE img (p + 8) 8 = 0) (h16 : imgLE img (p + 16) 8 = 0)
@@ -67,7 +51,6 @@ theorem newGeom_layout {img : Nat → BitVec 8} {p par : Nat}
   e_align := by unfold newGeom; have := hpw.2.2.2; simp only []; omega
   cap_canon := rfl
 
-/-- **`env_new`** (`env.c:12`), for every `MachWP`, both regimes. -/
 theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ envText, live p.1)
     (A : AllocSpecs live) (N : NativeAddrs) :
     textOwn envText ∗ textOwn allocText ∗ gp ↦ᵣ□ gpV ⊢ envNewSpec Wp N := by
@@ -84,7 +67,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   have hslo : htifLo + 16 + 16 ≤ s.toNat := by
     have := hsp.lo; unfold htifLo envNewNeed allocHeadroom at this; unfold htifLo; omega
   have hs528 : 528 ≤ s.toNat := by have := hsp.lo; unfold htifLo envNewNeed allocHeadroom at this; omega
-  -- the stack: malloc's scratch and env_new's 16-byte frame
+
   ihave ⟨Hscr, Hfr⟩ := stackScratch_frame (s := s) (f := 16#64) (n := envNewNeed)
     (by unfold envNewNeed allocHeadroom; omega) (by unfold envNewNeed allocHeadroom; decide) $$ Hstk
   have hsf : (s - 16#64).toNat = s.toNat - 16 := toNat_sub_frame (by simp; omega)
@@ -93,7 +76,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   ihave Hfr := ownSet_iff (T := fun a => s.toNat - 16 ≤ a ∧ a < s.toNat) _
     (fun a => by unfold InExt; simp; omega) $$ Hfr
   ihave ⟨%Mt0, -, Hfr⟩ := ownSet_tracked _ _ $$ Hfr
-  -- the register file
+
   have hperm : (([(VsaIris.ra, r), (10, par), (VsaIris.sp, s)] ++ saved).map Prod.fst ++
       retClob).Perm gprs := by
     simp only [List.map_append, List.map_cons, List.map_nil, hsv]; decide
@@ -112,7 +95,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     · iexact Hsv
   have hR : ∀ k v, (k, v) ∈ [(VsaIris.ra, r), (10, par), (VsaIris.sp, s)] ++ saved → R0 k = v :=
     fun k v h => hR0 (k, v) h
-  -- the prologue
+
   unfold envNewPC
   iapply wp_span Wp (new_pro hl (s := s.toNat) (R := R0) (Mt := Mt0)
     hslo hsp.hi hsp.align
@@ -121,7 +104,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       exact congrArg BitVec.toNat h))
   iframe Ht Hgp Hpc HR Hfr
   iintro %pc1 %R1 %Mt1 %⟨rfl, hstk1, h8, h10, hk1⟩ Hpc HR Hfr
-  -- facts for the rest of the run
+
   have hR2 : R1 2 = s - 16#64 := by
     apply BitVec.eq_of_toNat_eq; rw [hstk1.sp, hsf]
   have hparR : R1 8 = par := h8.trans (hR 10 par (List.mem_append_left _ (by simp)))
@@ -136,7 +119,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       · iframe Hs Hpa
       ipureintro; intro pa' hpa'; cases hpa'; exact h) $$ [Hst Hpar]
   · iframe Hst Hpar
-  -- `jal malloc`
+
   rw [← hR2, show envBytes = 32 from rfl]
   iapply wp_call_malloc A Wp (i := 0x80002a10) (R := R1)
     (show JalExec (vsaModel live) 0x80002a10 _ mallocEntryBV from
@@ -156,7 +139,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   iintro %R2 %p %⟨h10', h1', hk2⟩ Hpc HR Hscr Hres
   unfold mallocRes
   icases Hres with (⟨%⟨hp0, hρ⟩, Hh⟩ | ⟨%⟨hfresh, hal⟩, Hh, Hblk⟩)
-  · -- NULL: the out-of-memory arm
+  ·
     subst hρ
     rw [show BitVec.ofNat 64 (0x80002a10 + 4) = 0x80002a14#64 from rfl]
     iapply wp_span Wp (new_null hl (S := fun a => s.toNat - 16 ≤ a ∧ a < s.toNat) (Mt := Mt1)
@@ -194,7 +177,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       iapply ownSet_forget $$ Hfr
     iexists H
     iexact Hh
-  · -- a fresh block: initialize the `Env`, return it
+  ·
     have h32 : (R1 10).toNat = 32 := by rw [h10]; rfl
     rw [h32]
     rw [h32] at hfresh
@@ -206,7 +189,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       have hhi' : p.toNat + 32 ≤ Vsa.Sim.DlHeap.heapEnd := hphi
       unfold Vsa.Sim.DlHeap.heapStart at hlo'; unfold Vsa.Sim.DlHeap.heapEnd at hhi'; unfold htifLo
       omega
-    -- the block beside the frame bytes, at one tracking memory
+
     unfold blockOwn
     ihave ⟨%fb, Hblk⟩ := ownSet_fn _ $$ Hblk
     ihave ⟨⟨Hfr, Hblk⟩, %hdb⟩ := keep_pure (ownSet_disj _ _ (imgM Mt1) fb) $$ [Hfr Hblk]
@@ -238,7 +221,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     iframe Ht Hgp Hpc HR HS
     iintro %pc4 %R4 %Mt4 %⟨hpc4, h10'', h1'', h8'', h2'', hk4, hw0, hw8, hw16, hw24⟩ Hpc HR HS
     rw [hpc4]
-    -- the frame's bytes: the initialized block
+
     ihave ⟨Hfr, Hblk⟩ := ownSet_unglue (fun a => s.toNat - 16 ≤ a ∧ a < s.toNat)
       (fun a => p.toNat ≤ a ∧ a < p.toNat + 32) _ (fun a h1 h2 => by omega) $$ HS
     have hpar8 : R2 8 = par := (hk2 8 (by decide)).trans hparR
@@ -269,7 +252,7 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       · unfold bindings; simp only [List.zipIdx_nil, sepL_nil]; iempintro
       · dsimp only [newGeom]; iexact Hpar
     imodintro
-    -- the return
+
     ihave Kok := and_elim_l $$ HK
     have hperm' : (([(VsaIris.ra, r), (10, p), (VsaIris.sp, s)] ++ saved).map Prod.fst ++
         retClob).Perm gprs := by
@@ -328,4 +311,3 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
 end Main
 
 end VsaIris.Interp
-

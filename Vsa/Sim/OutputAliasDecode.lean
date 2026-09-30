@@ -1,9 +1,5 @@
 import Vsa.Sim.InitValues
 
-/-! Additive decode providers for the explicit output-alias trace.
-ASTs were discovered using the actual decoder; each theorem below is checked
-by the Lean kernel. No global decode table or index is modified. -/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 

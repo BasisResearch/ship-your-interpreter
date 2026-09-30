@@ -3,40 +3,12 @@ import VsaIris.Interp.BinArm
 import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.DivSpec3
 
-/-!
-# libgcc's multiply and divide, inline in a run (lane E2)
-
-`eval_binary`'s `*`, `/`, `%` call libgcc (`__muldi3` `0x80004640`,
-`__divdi3` `0x800046a4`, `__moddi3` `0x80004728`; RV64I has no `M`
-extension here). None touches memory or the stack, so a run FOLLOWS the call
-(`iw_jal`) instead of lending a helper its registers: each routine is one
-lemma in continuation form over the interpreter's symbolic run `IW`, stated
-for any data view, owned bytes and end condition, with the result in `a0` at
-the return address and every register outside the routine's scratch kept.
-`__divdi3` and `__moddi3` overwrite `ra` with their inner call's link, which
-a `helperSpec` (it returns `ra = r`) could not state.
-
-* `mul_iw`: the shift-add loop, invariant `a0 + a2 * a1 = x * y` (VSA's
-  `invmul_bv`), strong induction on the shrinking multiplier (`shr_lt`).
-* `udiv_iw` (`__hidden___udivdi3`): the normalize loop (`udiv_loop1`, strong
-  induction on `n - a2`) and the restoring divide loop (`udiv_loop2`,
-  induction on the bit position, invariant VSA's `DivK`), quotient and
-  remainder as `n / d`, `n % d`.
-* `divdi3_iw`, `moddi3_iw`: the four sign cases, each one `udiv_iw` on the
-  magnitudes; the results are the source's `wrap64 (a.tdiv b)` and
-  `wrap64 (a.tmod b)` (VSA's `res_div_same`/`res_div_mixed`/`res_pos`/
-  `res_neg`; `INT64_MIN / -1` wraps, `wrap64_tdiv_min`).
-
-Loops by fuel induction, not Löb: xv6iris `ProofMemset.v:1-9`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst
 open Vsa.MemRepr
 
-/-- The shift-add step keeps `acc + a2 * a1`. -/
 theorem mul_step (acc a2 a1 : BitVec 64) :
     acc + a2 * a1 = (if a1 &&& 1#64 = 0#64 then acc else acc + a2) + (a2 <<< 1) * (a1 >>> 1) := by
   rw [Vsa.Sim.invmul_bv a2 a1]
@@ -51,10 +23,8 @@ theorem mul_step (acc a2 a1 : BitVec 64) :
       rw [hm] at h3 ⊢; show a1.toNat % 2 = 1; omega
     rw [this]; simp; rw [BitVec.add_assoc, BitVec.add_comm a2]
 
-/-- Registers `__muldi3` keeps: all but `a0`–`a3`. -/
 abbrev MulKeep (R R0 : Nat → BitVec 64) : Prop := ∀ z, z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → R z = R0 z
 
-/-- **The shift-add loop** (`0x80004648`), continuation form. -/
 theorem mul_loop {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (x y r : BitVec 64) (R0 : Nat → BitVec 64)
@@ -102,8 +72,6 @@ theorem mul_loop {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
       rw [← hinv, mul_step (R 10) (R 12) (R 11), hz0]; simp [hb]
     · simp only [upd_apply, h10, h11, h12, h13, ite_false]; exact hkp z h10 h11 h12 h13
 
-/-- **`__muldi3`** (`0x80004640`) in continuation form: the wrapping product
-in `a0` at the return to `r`. -/
 theorem mul_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (x y r : BitVec 64) (R : Nat → BitVec 64)
@@ -117,7 +85,6 @@ theorem mul_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
   · intro z h10' h11' h12 h13
     simp only [upd_apply, h10', h12, ite_false]
 
-/-- Long division's result from its invariant at the last step. -/
 theorem div_of_inv {n d q r : Nat} (hd : 0 < d) (h : n = d * q + r) (hr : r < d) :
     q = n / d ∧ r = n % d := by
   subst h
@@ -125,15 +92,11 @@ theorem div_of_inv {n d q r : Nat} (hd : 0 < d) (h : n = d * q + r) (hr : r < d)
   · rw [Nat.add_comm, Nat.add_mul_div_left _ _ hd, Nat.div_eq_of_lt hr, Nat.zero_add]
   · rw [Nat.add_comm, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hr]
 
-/-- Registers other than the division's scratch `a0`–`a3` keep their values. -/
 abbrev DivKeep (R R0 : Nat → BitVec 64) : Prop := ∀ z, z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → R z = R0 z
 
 theorem shr1_toNat' (x : BitVec 64) : (x >>> 1).toNat = x.toNat / 2 := by
   rw [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow]
 
-/-- **The divide loop** (`0x800046d8`, restoring long division), by induction
-on the bit position `j`, in continuation form: at the return the quotient
-and remainder are in `a0`/`a1`. -/
 theorem udiv_loop2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R0 : Nat → BitVec 64)
@@ -235,8 +198,6 @@ theorem toNat_of_toInt_pos {a : BitVec 64} (h : ¬ a.toInt ≤ 0) : a.toNat < 2 
 theorem shl1_toNat {a : BitVec 64} (h : a.toNat < 2 ^ 63) : (a <<< 1).toNat = 2 * a.toNat := by
   rw [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, Nat.pow_one]; omega
 
-/-- **The normalize loop** (`0x800046c4`): the divisor doubles until it
-reaches the dividend or its top bit; strong induction on `n - a2`. -/
 theorem udiv_loop1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R0 : Nat → BitVec 64)
@@ -302,9 +263,6 @@ theorem udiv_loop1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
     · intro z h10 h11' h12 h13
       simp only [upd_apply, h10, h12, h13, ite_false]; exact hkp z h10 h11' h12 h13
 
-/-- **`__hidden___udivdi3`** (`0x800046ac`) in continuation form: at the
-return (`ret` to `r`), `a0 = n / d`, `a1 = n % d`, and every register but
-`a0`–`a3` as at the entry. -/
 theorem udiv_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (n d r : BitVec 64) (R : Nat → BitVec 64)
@@ -339,7 +297,6 @@ theorem udiv_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     · intro z h10' h11' h12 h13
       simp only [upd_apply, h10', h11', h12, h13, ite_false]
 
-/-- A linking `jal` inside a symbolic run (a call the run follows into). -/
 theorem iw_jal {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
     {Mt : Mem} (i : Nat) (code : List (BitVec 8)) (tgt : BitVec 64)
@@ -355,7 +312,6 @@ theorem toNat_lt_of_toInt_nonneg {x : BitVec 64} (h : 0 ≤ x.toInt) : x.toNat <
 theorem toNat_ge_of_toInt_neg {x : BitVec 64} (h : x.toInt < 0) : 2 ^ 63 ≤ x.toNat := by
   rw [BitVec.toInt_eq_toNat_cond] at h; split at h <;> omega
 
-/-- The wrapped quotient from an exact one. -/
 theorem wrap_of_eq' {q : BitVec 64} {z : Int} (h : q.toInt = z) : q.toInt = Vsa.While.wrap64 z := by
   rw [← h, Vsa.While.wrap64_toInt]
 
@@ -390,7 +346,6 @@ theorem sdiv_mm (x y : BitVec 64) (hx : x.toInt < 0) (hy : y.toInt < 0) :
   · exact wrap_of_eq' (Vsa.Sim.res_div_same x y (0#64 - x) (0#64 - y) hA hB (by omega) (by omega)
       (Vsa.Sim.udiv_lt_of_not_overflow x y _ _ hA hB (by omega) (by omega) hov))
 
-/-- A remainder is in range: `Vsa.While.wrap64` does nothing to it. -/
 theorem smod_pos (x y B : BitVec 64) (hx : 0 ≤ x.toInt) (hB : B.toNat = y.toInt.natAbs) (hy : y.toInt ≠ 0) :
     (x % B).toInt = Vsa.While.wrap64 (x.toInt.tmod y.toInt) :=
   wrap_of_eq' (Vsa.Sim.res_pos x y x B (Vsa.Sim.mag_notop x (toNat_lt_of_toInt_nonneg hx)) hB hx hy)
@@ -399,7 +354,6 @@ theorem smod_neg (x y B : BitVec 64) (hx : x.toInt < 0) (hB : B.toNat = y.toInt.
     (0#64 - (0#64 - x) % B).toInt = Vsa.While.wrap64 (x.toInt.tmod y.toInt) :=
   wrap_of_eq' (Vsa.Sim.res_neg x y (0#64 - x) B (Vsa.Sim.mag_neg_top x (toNat_ge_of_toInt_neg hx)) hB hx hy)
 
-/-- Registers `__divdi3`/`__moddi3` keep: all but `ra`, `t0`, `a0`–`a3`. -/
 abbrev SDivKeep (R R0 : Nat → BitVec 64) : Prop :=
   ∀ z, z ≠ 1 → z ≠ 5 → z ≠ 10 → z ≠ 11 → z ≠ 12 → z ≠ 13 → R z = R0 z
 
@@ -409,8 +363,6 @@ theorem udiv_word {n d q : BitVec 64} (h : q.toNat = n.toNat / d.toNat) : q = n 
 theorem umod_word {n d q : BitVec 64} (h : q.toNat = n.toNat % d.toNat) : q = n % d :=
   BitVec.eq_of_toNat_eq (by rw [h, BitVec.toNat_umod])
 
-/-- **`__divdi3`** (`0x800046a4`) in continuation form: the wrapped quotient
-(`INT64_MIN / -1` included) in `a0` at the return to `r`. -/
 theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (x y r : BitVec 64) (R : Nat → BitVec 64)
@@ -479,8 +431,6 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     rw [udiv_word hq]
     exact sdiv_nn x y (by simpa using hx) (by have := hy0; simp at hyp; omega)
 
-/-- **`__moddi3`** (`0x80004728`) in continuation form: the remainder with
-the dividend's sign (`Int.tmod`) in `a0` at the return to `r`. -/
 theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} (x y r : BitVec 64) (R : Nat → BitVec 64)

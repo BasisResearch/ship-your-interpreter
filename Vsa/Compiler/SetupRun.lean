@@ -1,31 +1,19 @@
 import Vsa.Compiler.SetupStr
 
-/-!
-# The machine setup
-
-`run_setup`: the setup code of a program writes its string table, sets the
-invariant registers, allocates the global frame and binds the three natives in
-it: at the program's first statement the invariant `MS` holds for `initSt` with
-the initial view `view0 p`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- The static facts the setup of `p` needs. -/
 structure SetupOK (p : Program) : Prop where
   lat : ∀ s ∈ strTab p, Latin1 s
   tab : strOff (strTab p) (strTab p).length ≤ 0x100000
   glob : (globalNames p).length ≤ 120
   tmp : tSeq p ≤ 120
 
-/-- The view at the program's first statement. -/
 def view0 (p : Program) : View :=
   ⟨[(frameBase, globalNames p)], [], frameBase + 8 + 16 * (globalNames p).length,
     objBase + strOff (strTab p) (strTab p).length⟩
 
-/-- The store before the global frame. -/
 def store0 : Store := ⟨#[], #[]⟩
 
 theorem addNames_prefix : ∀ (xs l : List String), ∃ r, addNames l xs = l ++ r
@@ -55,7 +43,6 @@ theorem globalNames_eq (p : Program) : ∃ r, globalNames p = ["print", "println
 
 theorem strTab_eq (p : Program) : ∃ r, strTab p = fixedStrs ++ r := addNames_prefix _ _
 
-/-- The object image after the string table. -/
 theorem objImg0 {p : Program} (hok : SetupOK p) {m : Mem}
     (hstr : ∀ i < (strTab p).length, StrW m (objBase + strOff (strTab p) i) ((strTab p).getD i "").toList) :
     ObjImg (strTab p) m (view0 p).h := by
@@ -90,7 +77,6 @@ theorem objImg0 {p : Program} (hok : SetupOK p) {m : Mem}
   · have := strOff_al (strTab p) (strTab p).length
     omega
 
-/-- The setup code in pieces. -/
 theorem setupCode_eq (p : Program) : setupCode p =
     strTabCode (strTab p) ++
       (liN spR (stackHi - frameSize p) ++ [mvi depR 0] ++ liN hpF frameBase ++
@@ -129,7 +115,6 @@ section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
 
-/-- Bind the native `f` to `x`, in slot `i` of the current frame. -/
 theorem run_nat {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List String)} {sp fs pos : Nat} {A : AM}
     (hm : MS code T V st d env Γ sp fs A) (hA : A.pc = pcOf pos) {x : String} {f : NativeFn} {i : Nat}
     (hx : slotOf (Γ.headD []) x = some i) (hfi : natId f = BitVec.ofNat 64 i) (hi : i < 3)
@@ -151,8 +136,6 @@ theorem run_nat {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List Str
   rintro B ⟨hpc, hmB, -⟩
   exact ⟨by rw [hpc], hmB⟩
 
-/-- **The setup**: from the setup code's start with an empty console, the
-program's first statement is reached with the invariant for `initSt`. -/
 theorem run_setup (p : Program) (hok : SetupOK p) (hseg : Seg code mainPos (setupCode p))
     (hP : PosOK (mainPos + (setupCode p).length)) {L : GRegs} {m : Mem} {o : Array String}
     (ho : String.join o.toList = "") :
@@ -180,7 +163,7 @@ theorem run_setup (p : Program) (hok : SetupOK p) (hseg : Seg code mainPos (setu
   rintro ⟨pc1, L1, m1, o1⟩ ⟨hpc1, ho1, -, hstr1, -⟩
   simp only at hpc1 ho1 hstr1; subst hpc1 ho1
   have himg1 := objImg0 hok hstr1
-  -- the registers and the frame call
+
   have e11 : (liN hpF frameBase).length = 11 := rfl
   have e2 : (liN spR (stackHi - frameSize p)).length = (li 2 (BitVec.ofNat 64 (stackHi - frameSize p))).length := rfl
   have e8 : (liN hpO (objBase + strOff (strTab p) (strTab p).length)).length =
@@ -218,7 +201,7 @@ theorem run_setup (p : Program) (hok : SetupOK p) (hseg : Seg code mainPos (setu
   simp only [a4] at k14 e14
   apply run_whole hR.fits s4
   wp_simp [k14, e14]
-  -- the global frame
+
   obtain ⟨hs1, -, -, -, hout1, -⟩ := (storeRel0 (m := m1) (h := (view0 p).h)).alloc_frame (par := none)
     (L := globalNames p) (fun b hb => by cases hb) (by decide) (Nat.le_refl _) (by omega)
     (frameNames_nodup _ _) hG
@@ -245,7 +228,7 @@ theorem run_setup (p : Program) (hok : SetupOK p) (hseg : Seg code mainPos (setu
     hdep := hkeep 24 (by decide) _ (by reg_simp [])
     stk := stackOK0 p hok.tmp
     hfal := by simp only [view0]; omega }
-  -- the natives
+
   refine ex_bind (run_nat hR hms rfl (x := "print") (f := .print) (i := 0) (by rw [hGe]; simp [slotOf]) rfl
     (by decide) s5) ?_
   rintro B4 ⟨hpc4, hm4⟩

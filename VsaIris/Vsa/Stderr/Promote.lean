@@ -1,22 +1,10 @@
 import VsaIris.LocalRunO
 
-/-!
-# Read-only cells of a printing run, owned instead (lane N3)
-
-`LocalRun.promote` (`StrlenOwned.lean`) for printing runs (`LRO`): a run
-that reads the cells `t2` read-only runs with them owned instead, and hands
-them back unchanged (a segment never writes outside its owned set). `fprintf`
-reads `main`'s `err_msg` through its data view (`strlen_sw` measures a
-read-only string) while `main` owns the buffer: `LRO.promote` reconciles the
-two.
--/
-
 namespace VsaIris
 
 variable {M : MachineModel} {ro : List (Nat × BitVec 64)} {t1 t2 : List (Nat × BitVec 8)}
   {rs : List Nat} {S : Nat → Prop}
 
-/-- One segment, with the cells `t2` owned instead of read-only. -/
 theorem SegFromO.promote (hd : ∀ p ∈ t2, ¬ S p.1) {k : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} {P : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (h : SegFromO M ro (t1 ++ t2) rs S k rv mv P) (ht : ∀ p ∈ t2, mv p.1 = p.2) :
@@ -34,7 +22,6 @@ theorem SegFromO.promote (hd : ∀ p ∈ t2, ¬ S p.1) {k : Nat} {rv : Nat → B
   rw [hmem p.1 (hd p hp), hm p.1 (.inr ⟨p, hp, rfl⟩)]
   exact ht p hp
 
-/-- **Promoting read-only cells of a printing run to owned ones.** -/
 theorem LRO.promote {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hd : ∀ p ∈ t2, ¬ S p.1) {t : String} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     (h : LRO M ro (t1 ++ t2) rs S Q t rv mv) (ht : ∀ p ∈ t2, mv p.1 = p.2) :

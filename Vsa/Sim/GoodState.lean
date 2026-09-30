@@ -1,33 +1,6 @@
 import Vsa.Machine
 import Vsa.Sim.InitValues
 
-/-!
-# The `GoodState` invariant (Layer 0, item 1)
-
-Pins every piece of control state the Sail model consults on the hot path,
-at the values that hold for the bare-metal WHILE binary throughout the run
-(`PLAN-InterpSim.md` §Layer 0; values from
-`experiments/M1-init-footprint.md` / `Vsa.Sim.InitValues`):
-
-- M-mode, translation decided Bare by privilege, interrupts globally dead
-  (`mie = 0` — so `dispatchInterrupt = none` regardless of `mip`, which
-  `tick_clock` may set), hart active, HTIF not done, PMP at reset (no
-  entry matches; M-mode default-allows), PMA map at reset (RAM
-  executable), Zicfilp landing pads not expected.
-- Registers the machine itself mutates during a run (`mip`, `mtime`,
-  `minstret`, `minstret_increment`, `nextPC`, GPRs, …) are deliberately
-  NOT pinned here. Control-plane registers that must merely be *present*
-  for `readReg` not to throw, but whose value is irrelevant on the hot
-  path, get `∃`-fields. GPR definedness is per-lemma (each instruction
-  lemma hypothesizes exactly the registers it touches).
-
-Every field is a `σ.regs.get? R = some v` fact, the only interface the
-extensional register map supports (experiment E1g). `GoodState` is
-preserved by every hot-path step because none of the pinned registers is
-written outside trap/CSR paths; each step-characterization lemma
-re-establishes it explicitly.
--/
-
 namespace Vsa.Sim
 
 open LeanRV64DExecutable Sail ConcurrencyInterfaceV1
@@ -59,8 +32,7 @@ structure GoodState (σ : MState) : Prop where
   mcountinhibit : σ.regs.get? Register.mcountinhibit = some (0#32)
   mcyclecfg : σ.regs.get? Register.mcyclecfg = some (0#64)
   minstretcfg : σ.regs.get? Register.minstretcfg = some (0#64)
-  -- present-but-unpinned: written by the machine (tick_clock, postlude)
-  -- or read with an irrelevant value on the hot path.
+
   mip : ∃ v, σ.regs.get? Register.mip = some v
   sig_meip : ∃ v, σ.regs.get? Register.sig_meip = some v
   sig_seip : ∃ v, σ.regs.get? Register.sig_seip = some v

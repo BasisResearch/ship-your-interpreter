@@ -1,30 +1,8 @@
 import Vsa.While.ErrorSem
 
-/-!
-# The three outcomes are mutually exclusive
-
-`trichotomy_unconditional` (`Vsa/While/StmtDispatchClose.lean`) says every
-program terminates (`BigStep`), errors (`BigStepErr`), or diverges
-(`BigStepDiverges`). This file proves that at most one of the three holds:
-
-* `bigStep_not_err` : `BigStep p out → ¬ BigStepErr p`;
-* `bigStep_not_diverges` : `BigStep p out → ¬ BigStepDiverges p`;
-* `err_not_diverges` : `BigStepErr p → ¬ BigStepDiverges p`.
-
-All three rest on **determinism** of the nine big-step relations
-(`EvalE.det` … `ExecSeq.det`, one mutual structural recursion over the first
-derivation, inverting the second). Error exclusion (`EvalE.not_err` …) and
-the fuel bounds (`EvalE.approx_bound` …, `EvalErr.approx_bound` …: a
-configuration that terminates or errors is `Approx n` only for boundedly many
-`n`) are further structural recursions over the finite derivation.
--/
-
--- discipline: allow(R7-conj-tower-def) each `∃ N` is one fuel bound of a named `…Bound` def, not a post tower
 namespace Vsa.While
 
 set_option linter.unusedVariables false
-
-/-! ## 1. Determinism -/
 
 mutual
 
@@ -317,7 +295,6 @@ theorem ForCond.det : ∀ {st d a cnd s1 s2}, ForCond st d a cnd s1 → ForCond 
     | some _ _ _ _ st2 v2 h' ht2 => exact (EvalE.det h h').1
 termination_by structural _ _ _ _ _ _ h1 => h1
 
-/-- A passed `for` condition cannot also evaluate to a falsy value. -/
 theorem ForCond.not_false : ∀ {st d a cnd s1 c s2 v}, ForCond st d a cnd s1 → cnd = some c →
     EvalE st d a c s2 v → v.truthy = false → False
   | _, _, _, _, _, _, _, _, .none .., hc, _, _ => by cases hc
@@ -352,15 +329,7 @@ theorem ExecSeq.det : ∀ {st d a ss s1 t1 s2 t2}, ExecSeq st d a ss s1 t1 →
     | consAbrupt _ _ _ _ _ st2 status2 hs2 hne2 => exact ExecS.det hs hs2
 termination_by structural _ _ _ _ _ _ _ _ h1 => h1
 
-
 end
-
-
-/-! ## 2. A terminating configuration does not error
-
-Recursion over the terminating derivation. Every recursive fact is taken
-(`have n… := ….not_err h`) before the error derivation is inverted, so the
-inversion's index unification never transports a recursive argument. -/
 
 mutual
 
@@ -713,36 +682,27 @@ termination_by structural _ _ _ _ _ _ h1 => h1
 
 end
 
-/-! ## 3. A terminating configuration runs for boundedly many steps
-
-`Approx n` (bounded progress) holds of a terminating configuration only for
-`n` up to a bound read off the derivation: each `…Approx` constructor peels
-one unit of fuel into a sub-derivation, which determinism aligns with the
-terminating one. The optional pieces (`for` initializer, condition, step)
-state the bound before the option is inspected. -/
-
-/-- A fuel bound for an expression. -/
 def EBound (st : St) (d : Nat) (a : Addr) (e : Expr) : Prop :=
   ∃ N, ∀ n, EApprox n st d a e → n ≤ N
-/-- A fuel bound for an argument list. -/
+
 def ArgsBound (st : St) (d : Nat) (a : Addr) (es : List Expr) : Prop :=
   ∃ N, ∀ n, ArgsApprox n st d a es → n ≤ N
-/-- A fuel bound for a call. -/
+
 def CBound (st : St) (d : Nat) (fv : Value) (vs : List Value) : Prop :=
   ∃ N, ∀ n, CApprox n st d fv vs → n ≤ N
-/-- A fuel bound for a statement. -/
+
 def SBound (st : St) (d : Nat) (a : Addr) (s : Stmt) : Prop :=
   ∃ N, ∀ n, SApprox n st d a s → n ≤ N
-/-- A fuel bound for a `for` loop. -/
+
 def FlBound (st : St) (d : Nat) (a : Addr) (cnd step : Option Expr) (b : Stmt) : Prop :=
   ∃ N, ∀ n, FlApprox n st d a cnd step b → n ≤ N
-/-- A fuel bound for a statement sequence. -/
+
 def SeqBound (st : St) (d : Nat) (a : Addr) (ss : List Stmt) : Prop :=
   ∃ N, ∀ n, Approx n st d a ss → n ≤ N
-/-- A fuel bound for an optional statement, uniform in its contents. -/
+
 def OSBound (st : St) (d : Nat) (a : Addr) (o : Option Stmt) : Prop :=
   ∃ N, ∀ s n, o = some s → SApprox n st d a s → n ≤ N
-/-- A fuel bound for an optional expression, uniform in its contents. -/
+
 def OEBound (st : St) (d : Nat) (a : Addr) (o : Option Expr) : Prop :=
   ∃ N, ∀ e n, o = some e → EApprox n st d a e → n ≤ N
 
@@ -1113,14 +1073,6 @@ theorem ExecSeq.bound : ∀ {st d a ss s1 t1}, ExecSeq st d a ss s1 t1 → SeqBo
 termination_by structural _ _ _ _ _ _ h1 => h1
 
 end
-
-/-! ## 4. An erroring configuration runs for boundedly many steps
-
-The same fuel bound over the error derivation: the error leaves admit only
-`Approx 0`, a propagation constructor hands its fuel to the erroring child
-(or to a terminating prefix, bounded by §3), and the terminating prefix is
-aligned by determinism; a prefix `Approx` that runs past an erroring child
-contradicts §2. -/
 
 mutual
 
@@ -1521,11 +1473,6 @@ termination_by structural _ _ _ _ h1 => h1
 
 end
 
-/-! ## 5. The three outcomes are mutually exclusive -/
-
-/-- A program that terminates cleanly does not hit a runtime error: neither an
-error node (determinism against `ExecSeqErr`) nor an abrupt top-level status
-(determinism of the top-level `ExecSeq`). -/
 theorem bigStep_not_err {p : Program} {out : String} (h : BigStep p out) :
     ¬ BigStepErr p := by
   obtain ⟨st', hs, -⟩ := h
@@ -1533,7 +1480,6 @@ theorem bigStep_not_err {p : Program} {out : String} (h : BigStep p out) :
   · exact ExecSeq.not_err hs herr
   · exact hne (ExecSeq.det hs hs').2.symm
 
-/-- A program that terminates cleanly does not run forever. -/
 theorem bigStep_not_diverges {p : Program} {out : String} (h : BigStep p out) :
     ¬ BigStepDiverges p := by
   obtain ⟨st', hs, -⟩ := h
@@ -1542,7 +1488,6 @@ theorem bigStep_not_diverges {p : Program} {out : String} (h : BigStep p out) :
   have := hN (N + 1) (hdiv (N + 1))
   omega
 
-/-- A program that hits a runtime error does not run forever. -/
 theorem err_not_diverges {p : Program} (h : BigStepErr p) : ¬ BigStepDiverges p := by
   intro hdiv
   obtain ⟨N, hN⟩ : SeqBound initSt 0 0 p := by
@@ -1552,15 +1497,12 @@ theorem err_not_diverges {p : Program} (h : BigStepErr p) : ¬ BigStepDiverges p
   have := hN (N + 1) (hdiv (N + 1))
   omega
 
-/-- **Exactly one outcome.** Every program terminates, errors, or diverges
-(`trichotomy_unconditional`), and at most one of the three holds. -/
 structure ExactlyOne (p : Program) : Prop where
   some : (∃ out, BigStep p out) ∨ BigStepErr p ∨ BigStepDiverges p
   term_not_err : (∃ out, BigStep p out) → ¬ BigStepErr p
   term_not_div : (∃ out, BigStep p out) → ¬ BigStepDiverges p
   err_not_div : BigStepErr p → ¬ BigStepDiverges p
 
-/-- A program with no clean behaviour errors or diverges, and not both. -/
 theorem err_or_div_of_not_bigStep {p : Program} (htri : Trichotomy)
     (h : ¬ ∃ out, BigStep p out) : BigStepErr p ∨ BigStepDiverges p :=
   stuck_of_trichotomy htri p h

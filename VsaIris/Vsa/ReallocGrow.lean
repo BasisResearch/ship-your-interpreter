@@ -1,21 +1,10 @@
 import VsaIris.Vsa.ReallocPrevT
 
-/-!
-# `_realloc_r`'s growth dispatch
-
-A chunk too small for the request (`RD`, `0x800052f0`) is dispatched on its
-neighbours: the top after it (`realloc_topgrow`, or with a free predecessor
-`realloc_pvT`), a free successor (`realloc_next`, or with a free predecessor
-`realloc_pvXN`), a free predecessor alone (`realloc_pvX`), and otherwise a
-fresh block (`realloc_mal`).
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `RD` through register writes that keep its registers. -/
 theorem RD.of_regs {C : MCtx} {B : RB} {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {R' : Nat → BitVec 64}
@@ -39,12 +28,9 @@ theorem RD.of_regs {C : MCtx} {B : RB} {R : Nat → BitVec 64} {Mt : Mem} {brkv 
   a4 := by rw [h14]; exact D.a4
   a5 := by rw [h15]; exact D.a5
 
-/-- `RD` through register writes, the kept registers read off `upd`. -/
 macro "rd_regs " D:term : tactic => `(tactic| (refine RD.of_regs $D ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]))
 
-/-- **The predecessor alone** (`0x80005348`): `S + ps` holds the request →
-`realloc_pvX`, else a fresh block. -/
 theorem grow_pvX {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb)
@@ -69,8 +55,6 @@ theorem grow_pvX {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hS)
   · exact realloc_mal O (by rd_regs D)
 
-/-- **The free predecessor** of `X` when its header lacks `PREV_INUSE`: its
-bin place (`FPv`) and its header, whose size bits are `ps`. -/
 theorem grow_prev {C : MCtx} {B : RB} {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ rest : List Chunk}
@@ -89,9 +73,6 @@ theorem grow_prev {C : MCtx} {B : RB} {R : Nat → BitVec 64} {Mt : Mem} {brkv :
   refine ⟨cs₀, P, ps, i, pre, post, predP, succP, hh, rfl, PV, hhr, ?_⟩
   unfold chunkSize at hhs; omega
 
-/-- **Loading the predecessor** (`ld t1,-16(s0)`, `sub t1,a2,t1`,
-`ld a7,8(t1)`, `andi a7,a7,-4`, at each of the dispatch's three sites):
-`t1 := P`, `a7 := ps`, the other registers kept. -/
 theorem prev_load {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb)
@@ -158,15 +139,12 @@ theorem prev_load {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
     rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
       toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hhl, hhs]
 
-/-- `PREV_INUSE` clear in `hdr0` once `andi a3,a3,1` read zero. -/
 theorem prev_bit {x : BitVec 64} {h : Nat} (hx : x.toNat = h)
     (hc : ¬ (x &&& sign_extend (m := 64) (0x001#12) ≠ 0#64)) : h % 2 = 0 := by
   have := congrArg BitVec.toNat (Classical.not_not.mp hc)
   rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = 1#64 from rfl, and1_toNat, hx] at this
   exact this
 
-/-- **The successor in use** (`0x80005464`): with the predecessor free,
-`grow_pvX`; else a fresh block. -/
 theorem grow_used {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ rest : List Chunk}
@@ -182,9 +160,6 @@ theorem grow_used {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
       (rw [hK _ (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
   exact grow_pvX O D' hsp PV h6 h17
 
-/-- **The top after the old chunk** (`0x800054dc`): grow into the top
-(`realloc_topgrow`), or with a free predecessor take it and the top
-(`realloc_pvT`) or it alone (`grow_pvX`); else a fresh block. -/
 theorem grow_top {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ : List Chunk}
@@ -213,7 +188,7 @@ theorem grow_top {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     (fun hc => ?_) (fun hc => ?_)))) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc <;>
     rw [toInt_small e28 (by omega), toInt_small e16 (by omega)] at hc
-  · -- into the top
+  ·
     refine realloc_topgrow O (by rd_regs D) hXt (by omega) ?_
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [e16]; omega
   refine st_800054ec O.live (st_800054f0 O.live (fun _ => realloc_mal O (by rd_regs D)) (fun hc' => ?_))
@@ -245,9 +220,6 @@ theorem grow_top {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [e16']; omega
 
-/-- **A free successor** (`0x80005318`, `a0` its header): absorb it
-(`realloc_next`), or with a free predecessor take both (`realloc_pvXN`) or the
-predecessor alone (`grow_pvX`); else a fresh block. -/
 theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns hn : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ cs₃ : List Chunk}
@@ -271,7 +243,7 @@ theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   refine st_80005318 O.live (st_8000531c O.live (st_80005320 O.live (fun hc => ?_) (fun hc => ?_))) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc <;>
     rw [toInt_small D.a5 (by omega), toInt_small e17 (by omega), Int.ofNat_le] at hc
-  · -- the successor holds the rest
+  ·
     refine realloc_next O (by rd_regs D) hN hc ?_ ?_ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact h16
@@ -300,7 +272,7 @@ theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
         chunks bins X S hdr0 nb := by
       refine RD.of_regs D ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false] <;>
         (rw [hK _ (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-  · -- both neighbours
+  ·
     obtain ⟨iN, preN, postN, pred, succ, FB⟩ := free_bin_at D.heap.heap hN rfl
     refine realloc_pvXN O D' hsp hpf FB hc'' ?_ ?_ ?_ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -310,9 +282,6 @@ theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   · exact grow_pvX O D' hsp PV (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
 
-/-- **The growth dispatch** (`0x800052f0`): read the top pointer and the
-header after `X`; the top (`grow_top`), an in-use successor (`grow_used`) or a
-free one (`grow_free`). -/
 theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
     (D : RD C B R Mt brkv chunks bins X S hdr0 nb) (h13 : (R 13).toNat = hdr0) :
@@ -333,7 +302,7 @@ theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   obtain ⟨⟨hn, hnr, _⟩, hnext⟩ := walk_next_of hw
   simp only at hnr hnext
   have hnl := Vsa.Sim.read64_lt _ _ _ hnr
-  -- the top pointer
+
   have hgT : ∀ k, k < 8 → vsaFoot C.H (0x8001ad20 + k) := fun k hk => .inl (by unfold allocGlobal InRange; omega)
   have eT : ((0x800052f0#64) + (sign_extend (m := 64) ((0x00016#20) +++ (0x000#12))) +
       sign_extend (m := 64) (0xa30#12)).toNat = 0x8001ad20 := by decide
@@ -345,7 +314,7 @@ theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   simp only [upd_apply, Nat.reduceEqDiff, ite_true]
   rw [eT, ldv_at htp _ rfl]
   refine st_800052f8 O.live ?_
-  -- the header after `X`
+
   have hbE : X + S = C.top0 ∨ ∃ c ∈ chunks, c.addr = X + S := by
     rcases hnext with ⟨h1, _⟩ | ⟨d, cs₃, h1, h2⟩
     · exact .inl h1
@@ -365,7 +334,7 @@ theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   have htl : C.top0 < 2 ^ 64 := by omega
   refine st_80005300 O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- the top
+  ·
     have hXt : X + S = C.top0 := by
       have := congrArg BitVec.toNat hc
       rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt htl, e16] at this; omega
@@ -380,7 +349,7 @@ theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     · exfalso
       have := HH.walk.chunk_bounds d (by rw [hsp]; simp)
       omega
-  · -- a chunk after `X`
+  ·
     rcases hnext with ⟨h1, _⟩ | ⟨d, cs₃, rfl, h2⟩
     · exact absurd (by rw [← h1]; exact BitVec.eq_of_toNat_eq (by
         rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), e16])) hc

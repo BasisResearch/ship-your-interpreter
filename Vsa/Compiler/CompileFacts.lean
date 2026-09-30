@@ -2,14 +2,6 @@ import Vsa.Compiler.Compile
 import Vsa.Compiler.Subset
 import Vsa.Compiler.ExprSim
 
-/-!
-# Structural facts about the compiler's output
-
-Temporary depth is bounded by the code length of an expression, and the slot
-counter grows by at most one per emitted instruction; so in fitting code every
-slot and temporary lies in its memory region.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While
@@ -155,7 +147,6 @@ end
 
 mutual
 
-/-- Code length and slot counter do not depend on the loop targets. -/
 theorem cstmt_targets (C : Ctx) (b c : Nat) (pos : Nat) : ∀ (s : Stmt),
     (cstmt ⟨C.Γ, C.next, b, c⟩ pos s).1.length = (cstmt C pos s).1.length ∧
       (cstmt ⟨C.Γ, C.next, b, c⟩ pos s).2 = (cstmt C pos s).2

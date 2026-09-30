@@ -1,17 +1,9 @@
 import Vsa.Compiler.SimNative
 
-/-!
-# The call code
-
-`callCode` in named pieces (`callCode_eq`) and its dispatch on the callee's tag
-and payload (`run_dispatch`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- The `assert` path. -/
 def ccAssert (k m pos : Nat) : List Ins :=
   if m = 1 ∨ m = 2 then
     loadTmp (k + 1) ++ [Call (pos + 15 + 4) trPos] ++ jmpIfZero (pos + 15 + 5) errPos ++ [mvi a0 0, mvi a1 0]
@@ -24,7 +16,6 @@ def ccPlC (k m pos : Nat) : List Ins := printLoopG (ccPL k m pos) (k + 1) m ++ p
 def ccCL (k m pos : Nat) : Nat := ccPL k m pos + (ccPlC k m pos).length + 1
 def ccFin (k m pos : Nat) : Nat := ccCL k m pos + 8
 
-/-- The dispatch on the callee. -/
 def ccHead (k m pos : Nat) : List Ins :=
   [addiN t6 spR (16 + 16 * k), .ld t0 t6, addi t6 t6 8, .ld t1 t6,
    mvi t2 4, Br .ne t0 t2 (pos + 5) (pos + 7), J (pos + 6) (ccCL k m pos),
@@ -32,7 +23,6 @@ def ccHead (k m pos : Nat) : List Ins :=
   [Br .ne t1 0 (pos + 10) (pos + 12), J (pos + 11) (ccPR k m pos),
    mvi t2 1, Br .ne t1 t2 (pos + 13) (pos + 15), J (pos + 14) (ccPL k m pos)]
 
-/-- The closure call. -/
 def ccClo (k m pos : Nat) : List Ins :=
   [mv a2 t1, addiN a3 spR (16 + 16 * (k + 1)), mvi a4 m, addi t3 a2 8, .ld t3 t3,
    Call (ccCL k m pos + 5) (ccCL k m pos + 7), J (ccCL k m pos + 6) (ccFin k m pos), .jalr t3]
@@ -53,7 +43,6 @@ theorem callCode_length (k m pos : Nat) : (callCode k m pos).length = ccFin k m 
     ccPR_eq, ccClo, List.length_cons, List.length_nil]
   omega
 
-/-- The pieces of the call code in place. -/
 structure CCSegs (code : List Ins) (k m pos : Nat) : Prop where
   head : Seg code pos (ccHead k m pos)
   asrt : Seg code (pos + 15) (ccAssert k m pos)
@@ -77,7 +66,6 @@ theorem CCSegs.of {code : List Ins} {k m pos : Nat} (h : Seg code pos (callCode 
   refine ⟨h1, h2, h3.cast ?_, h4.cast ?_, h5.cast ?_, h6.cast ?_, h7.cast ?_, h8.cast ?_⟩ <;>
     simp only [ccCL_eq, ccPL_eq, ccPR_eq] <;> omega
 
-/-- Where the dispatch sends a callee with words `(t, p)`. -/
 def dispTgt (k m pos : Nat) (t p : BitVec 64) : Nat :=
   if t = 4 then ccCL k m pos
   else if t = 5 then (if p = 0 then ccPR k m pos else if p = 1 then ccPL k m pos else pos + 15)

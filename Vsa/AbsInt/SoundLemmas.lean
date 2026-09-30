@@ -1,23 +1,12 @@
 import Vsa.AbsInt.Chain
 import Vsa.AbsInt.Interp
 
-/-!
-# Soundness support: completions, loops and condition filters
-
-`SOK as r status s` says the statement result `r` covers a concrete
-completion with `status` in store `s`. The loop lemmas `LoopOK.exit` and
-`LoopOK.cont` are the two cases of every concrete loop derivation; they
-account for both the unrolled iterations and the checked post-fixpoint of
-`loopAbs`. `branch_sound` is the soundness of condition refinement.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
 variable {A : Type} [AbsDom A]
 
-/-- A statement result covers a concrete completion. -/
 def SOK (as : List Addr) (r : SRes A) : Status → Store → Prop
   | .normal, s => SGam as s r.norm
   | .brk, s => SGam as s r.brk
@@ -94,8 +83,6 @@ theorem SOK.any {as : List Addr} {r : SRes A} {st : Status} {s : Store}
   | cont => exact SGam.join_l _ (SGam.join_r _ h)
   | ret v => exact SGam.join_r _ h.1
 
-/-! ## Loops -/
-
 theorem narrowIter_isPost {F : AState A → AState A} {I : AState A} :
     ∀ {n : Nat} {J : AState A}, isPost F I J = true → isPost F I (narrowIter F I n J) = true
   | 0, _, h => h
@@ -129,15 +116,12 @@ theorem postFix_post {F : AState A → AState A} {n m : Nat} {I : AState A}
   · simp only [isPost, Bool.and_eq_true] at hp
     exact SGam.le hp.2 h
 
-/-- A loop run from `s₀` completing with `st` in `s₁` is covered by every
-post-fixpoint and by every unrolling. -/
 structure LoopOK (cfg : Cfg) (F : AState A → LStep A) (as : List Addr)
     (s₀ : Store) (st : Status) (s₁ : Store) : Prop where
   fix : ∀ J, (∀ s, SGam as s (F J).next → SGam as s J) → SGam as s₀ J →
     SOK as (F J).out st s₁
   unroll : ∀ k I, SGam as s₀ I → SOK as (loopAbs cfg F k I) st s₁
 
-/-- The run leaves the loop in its first iteration. -/
 theorem LoopOK.exit {cfg : Cfg} {F : AState A → LStep A} {as : List Addr}
     {s₀ s₁ : Store} {st : Status}
     (hex : ∀ I, SGam as s₀ I → SOK as (F I).out st s₁) : LoopOK cfg F as s₀ st s₁ where
@@ -151,7 +135,6 @@ theorem LoopOK.exit {cfg : Cfg} {F : AState A → LStep A} {as : List Addr}
       · exact hex I h
       · exact SOK.join_l _ (hex I h)
 
-/-- The run completes an iteration in `s₀'` and continues from there. -/
 theorem LoopOK.cont {cfg : Cfg} {F : AState A → LStep A} {as : List Addr}
     {s₀ s₀' s₁ : Store} {st : Status}
     (hc : ∀ I, SGam as s₀ I → SGam as s₀' (F I).next)
@@ -172,9 +155,6 @@ theorem LoopOK.cont {cfg : Cfg} {F : AState A → LStep A} {as : List Addr}
         · exact ih.fix I (fun _ hs => SGam.le hle hs) (SGam.le hle hn)
       · exact SOK.join_r _ (ih.unroll k _ (hc I h))
 
-/-! ## Pure conditions -/
-
-/-- Pure expressions leave the state unchanged. -/
 theorem isPure_eval {st st' : St} {d : Nat} {env : Addr} {e : Expr} {v : Value}
     (h : EvalE st d env e st' v) : isPure e = true → st' = st := by
   refine EvalE.rec
@@ -211,7 +191,6 @@ theorem pureVal_sound {as : List Addr} {env : Addr} {σ : AState A} {r : Expr}
   · rename_i hget
     exact (SGam.lookup hd hσ).1 _ hget
 
-/-- Soundness of condition refinement. -/
 theorem filterE_sound {as : List Addr} {env : Addr} :
     ∀ (c : Expr) (t : Bool) (σ : AState A) {st st' : St} {d : Nat} {v : Value},
       as.head? = some env → EvalE st d env c st' v → v.truthy = t →
@@ -290,7 +269,6 @@ theorem filterE_sound {as : List Addr} {env : Addr} :
   | .binary _ (.call _ _) _, _, _, _, _, _, _, _, _, _, hσ => hσ
   | .binary _ (.fn _ _ _) _, _, _, _, _, _, _, _, _, _, hσ => hσ
 
-/-- Soundness of the branch states after a condition. -/
 theorem branch_sound {as : List Addr} {env : Addr} {c : Expr} {t : Bool}
     {rc : ERes A} {st st' : St} {d : Nat} {v : Value} (hd : as.head? = some env)
     (hev : EvalE st d env c st' v) (ht : v.truthy = t)

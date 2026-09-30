@@ -2,31 +2,12 @@ import VsaIris.Interp.EnvRun
 import VsaIris.Interp.SpecEnv
 import Vsa.Sim.HelperCall
 
-/-!
-# `env_*` spans at the Iris level
-
-An `env_*` helper is a chain of spans and calls. A span is call-free code
-between two call sites (or the entry and a `ret`); it is proved first-order,
-as `EW live S Q pc R Mt` (`SWP` over `envText`, driven by the generated step
-table and `sx_run`), and entered at the Iris level by ONE rule, `wp_ew`. The
-calls are taken at the Iris level against the callees' specs (`wp_callW`),
-with the register file split around them by `regsOf_extract`.
-
-* `regsOf rs R`: the registers `rs` at the values `R`.
-* `wp_ew`: a span from the PC, the general-purpose registers `gprs` and an
-  owned byte set at a tracking memory's image.
-* `regsOf_extract`: take the registers a call touches out of the file, and put
-  back any values for them.
-* `ownSet_tracked`: any owned image is the image of some tracking memory.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
-/-- The general-purpose registers an `env_*` span owns (`eRegs` without `PC`). -/
 abbrev gprs : List Nat := eRegs.tail
 
 theorem eRegs_eq : eRegs = VsaIris.PC :: gprs := rfl
@@ -37,7 +18,6 @@ section Regs
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The registers `rs` at the values `R`. -/
 def regsOf (rs : List Nat) (R : Nat → BitVec 64) : IProp GF := sepL rs (fun r => r ↦ᵣ R r)
 
 theorem regsOf_congr {rs : List Nat} {R R' : Nat → BitVec 64} (h : ∀ r ∈ rs, R r = R' r) :
@@ -50,7 +30,6 @@ theorem regsOf_congr {rs : List Nat} {R R' : Nat → BitVec 64} (h : ∀ r ∈ r
 theorem regsOf_cons (r : Nat) (rs : List Nat) (R : Nat → BitVec 64) :
     regsOf (GF := GF) (r :: rs) R = iprop(r ↦ᵣ R r ∗ regsOf rs R) := rfl
 
-/-- The registers of an `if`-merged file are the two files' on their parts. -/
 theorem regsOf_merge_eq (rs ks : List Nat) (R R' : Nat → BitVec 64) :
     regsOf (GF := GF) (rs.filter (fun r => decide (r ∈ ks)))
         (fun r => if r ∈ ks then R' r else R r) =
@@ -64,8 +43,6 @@ theorem regsOf_merge_eq (rs ks : List Nat) (R R' : Nat → BitVec 64) :
   · have : r ∉ ks := by simpa using (List.mem_filter.1 hr).2
     simp [this]
 
-/-- **The registers a call touches, out of the file.** `ks` (distinct, inside
-`rs`) come out at their current values; any new values for them go back. -/
 theorem regsOf_extract (rs ks : List Nat) (hnd : rs.Nodup) (hks : ks.Nodup)
     (hsub : ∀ k ∈ ks, k ∈ rs) (R : Nat → BitVec 64) :
     regsOf (GF := GF) rs R ⊢ regsOf ks R ∗
@@ -87,7 +64,6 @@ theorem regsOf_extract (rs ks : List Nat) (hnd : rs.Nodup) (hks : ks.Nodup)
   iframe Hout
   iapply (sepL_perm _ hperm).2 $$ HR'
 
-/-- The clobbered registers as a file at some values. -/
 theorem regsOf_of_clobbered (clob : List Nat) (hnd : clob.Nodup) :
     clobbered (GF := GF) clob ⊢ ∃ f : Nat → BitVec 64, regsOf clob f :=
   clobbered_fn clob hnd
@@ -96,9 +72,6 @@ theorem clobbered_of_regsOf (clob : List Nat) (f : Nat → BitVec 64) :
     regsOf (GF := GF) clob f ⊢ clobbered clob :=
   clobbered_of_fn clob f
 
-/-- **The register file from an ABI entry**: registers at known values
-(`fixed`: the arguments, `ra`, `sp`, the callee-saved ones) and clobbered ones
-make up `rs` at some file `R` agreeing with `fixed`. -/
 theorem regsOf_entry (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : List Nat)
     (hperm : (fixed.map Prod.fst ++ clob).Perm rs) (hnd : rs.Nodup) :
     savedOwn (GF := GF) fixed ∗ clobbered clob ⊢
@@ -133,8 +106,6 @@ theorem regsOf_entry (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : L
   rw [e1, e2]
   iframe Hf Hc
 
-/-- **The register file at an ABI return**: registers at known values and
-the clobbered rest. -/
 theorem regsOf_exit (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : List Nat)
     (hperm : (fixed.map Prod.fst ++ clob).Perm rs) (R : Nat → BitVec 64)
     (hR : ∀ p ∈ fixed, R p.1 = p.2) :
@@ -149,9 +120,6 @@ theorem regsOf_exit (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : Li
 
 end Regs
 
-/-! ## Tracking memories -/
-
-/-- A memory holding `img` at the listed addresses. -/
 def memOf (img : Nat → BitVec 8) : List Nat → Mem
   | [] => ∅
   | a :: l => (memOf img l).insert a (img a)
@@ -178,15 +146,9 @@ theorem memOf_get (img : Nat → BitVec 8) :
     · simp only [beq_iff_eq, hab, ite_false]
       exact memOf_get img l a (by simpa [Ne.symm hab] using h)
 
-/-! ## Load values as image reads
-
-The step table names a load's value `ldv k Mt a`; frames and values are
-stated over images (`imgLE`/`imgW`). -/
-
 theorem bytesAt_wordOf (f : Nat → BitVec 8) (a : Nat) : bytesAt f a 8 = wordOf f a := by
   simp [bytesAt, wordOf, List.range_succ]
 
-/-- A doubleword load reads the image's word. -/
 theorem ldv_ld_img (Mt : Mem) (a : Nat) : ldv .ld Mt a = imgW (imgM Mt) a := by
   have hm : ∀ k, k < 8 → (memOf (imgM Mt) (List.range' a 8))[a + k]? = some (imgM Mt (a + k)) :=
     fun k hk => memOf_get _ _ _ (List.mem_range'.2 ⟨k, hk, by omega⟩)
@@ -196,7 +158,6 @@ theorem ldv_ld_img (Mt : Mem) (a : Nat) : ldv .ld Mt a = imgW (imgM Mt) a := by
   rw [bytesAt_wordOf]
   exact wordOf_value hm hr
 
-/-- A word load of a small nonnegative count. -/
 theorem ldv_lw_img (Mt : Mem) (a k : Nat) (hk : k < 2 ^ 31) (h : imgLE (imgM Mt) a 4 = k) :
     ldv .lw Mt a = BitVec.ofNat 64 k := by
   show bytesVal .lw (bytesAt (imgM Mt) a 4) = _
@@ -211,7 +172,6 @@ section Tracked
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **Any owned image is a tracking memory's image** on the owned set. -/
 theorem ownSet_tracked (S : Nat → Prop) (img : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ img a) ⊢
       ∃ Mt : Mem, ⌜∀ a, S a → imgM Mt a = img a⌝ ∗ ownSet S (fun a => a ↦ₘ imgM Mt a) := by
@@ -231,17 +191,10 @@ theorem ownSet_tracked (S : Nat → Prop) (img : Nat → BitVec 8) :
 
 end Tracked
 
-/-! ## The span rule -/
-
 section Span
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
 
-/-- **One `env_*` span, at the Iris level.** From the PC at `pc`, the
-general-purpose registers at `R`, and the owned bytes `S` at the tracking
-memory's image, a span proved first-order (`EW`) runs to its end condition
-`Q`; the continuation gets the final values. Everything else the caller owns
-is framed by the continuation. -/
 theorem wp_ew (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (h : EW live S Q pc R Mt) :
@@ -271,30 +224,22 @@ theorem wp_ew (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → I
   iapply Hk $$ %rv' %mv' %hQ Hpc [Hrs] HS
   unfold regsOf; iexact Hrs
 
-/-- A span proved first-order with its exits described by `F`: whatever the
-rest of the run `Q` is, it holds from `pc` once it holds from every exit
-`F` admits. `sx_run` proves these (its reached goals are closed by `hk`). -/
 def Span (live : Nat → Prop) (S : Nat → Prop) (pc : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem)
     (F : BitVec 64 → (Nat → BitVec 64) → Mem → Prop) : Prop :=
   ∀ Q, (∀ pc' R' Mt', F pc' R' Mt' → EW live S Q pc' R' Mt') → EW live S Q pc R Mt
 
-/-- Spans compose: continue every exit of the first with a span. -/
 theorem Span.trans {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
     {Mt : Mem} {F F' : BitVec 64 → (Nat → BitVec 64) → Mem → Prop}
     (h : Span live S pc R Mt F) (k : ∀ pc' R' Mt', F pc' R' Mt' → Span live S pc' R' Mt' F') :
     Span live S pc R Mt F' :=
   fun Q hk => h Q fun pc' R' Mt' hF => k pc' R' Mt' hF Q hk
 
-/-- Weaken a span's exits. -/
 theorem Span.mono {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
     {Mt : Mem} {F F' : BitVec 64 → (Nat → BitVec 64) → Mem → Prop}
     (h : Span live S pc R Mt F) (k : ∀ pc' R' Mt', F pc' R' Mt' → F' pc' R' Mt') :
     Span live S pc R Mt F' :=
   fun Q hk => h Q fun pc' R' Mt' hF => hk pc' R' Mt' (k pc' R' Mt' hF)
 
-/-- **A span at the Iris level**, exits described by `F`. The continuation
-gets the exit PC, the registers and the tracking memory at the exit, and
-`F`'s facts about them. -/
 theorem wp_span (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     {F : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} (h : Span live S pc R Mt F) :

@@ -3,32 +3,12 @@ import VsaIris.Vsa.Console
 import VsaIris.Vsa.BinImg
 import VsaIris.Interp.Code
 
-/-!
-# Adequacy's inputs at the boundary (lane A)
-
-INTERP_DESIGN.md §5.2-§5.4. What `vsa_adequacy_exit` / `vsa_adequacyP_nonzero`
-take besides the WP: the `live` set (the fixed binary's `.text` and
-`.rodata`, present by `FixedTextLoaded`/`FixedRodataLoaded`), the global
-invariant `VsaOk` at the loaded configuration, and the register map with its
-agreement. The register map is the entry configuration's `PC` and general
-registers; `sepL_of_regMap` turns adequacy's big-op over it into one
-points-to per register.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode Iris.BI.BigSepM
 open VsaIris VsaIris.Inst VsaIris.Sym
 open Vsa.Sim Vsa.Sim.LayoutInstance
 
-/-! ## The live set -/
-
-/-- The bytes every run fetches or loads without owning them: the binary's
-`.text` and `.rodata` except the embedded script `[0x80018be0, 0x80018da6)`
-(never read; not pinned by `FixedRodataLoaded`), `_impure_ptr` (the helpers'
-code lists `envText` and `allocText` load it) and the stack segment
-(`stringify`'s `strlen` reads its stack buffer through the run's read-only
-text). All are present in the loaded configuration (`topLive_present`). -/
 def topLive (a : Nat) : Prop :=
   (0x80000000 ≤ a ∧ a < 0x8001acf0 ∧ ¬ (0x80018be0 ≤ a ∧ a < 0x80018da6)) ∨
     (0x8001b970 ≤ a ∧ a < 0x8001b978) ∨ (0x87800000 ≤ a ∧ a < 0x88000000)
@@ -47,7 +27,6 @@ theorem topLive_code : Newlib.CodeLive topLive := by
   unfold Newlib.textDom at ha
   exact .inl ⟨ha.1, by omega, by omega⟩
 
-/-- The live bytes are present in a loaded configuration. -/
 theorem topLive_present {m : Vsa.MemRepr.Mem} (ht : Code.FixedTextLoaded m)
     (hr : Code.FixedRodataLoaded m) (hi : Code.ImageStaticsLoaded m)
     (hs : ∀ k, stackSL.lo ≤ k → k < stackSL.hi → ∃ b : BitVec 8, m[k]? = some b) :
@@ -77,10 +56,6 @@ theorem topLive_present {m : Vsa.MemRepr.Mem} (ht : Code.FixedTextLoaded m)
     rw [this]; rfl
   · rw [hr.byteAt (by omega) h2]; rfl
 
-/-! ## The global invariant at the boundary -/
-
-/-- **`VsaOk` at a loaded configuration.** Every general register is present
-by the boundary field `InterpRunReadyFacts.gprs`. -/
 theorem vsaOk_of_ready {c : Vsa.Machine.Config} {stmts count : Nat} {inp : BitVec 64}
     {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {φf φc : Vsa.While.Addr → Nat}
     {aLeft : Nat} (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
@@ -91,9 +66,6 @@ theorem vsaOk_of_ready {c : Vsa.Machine.Config} {stmts count : Nat} {inp : BitVe
   live := topLive_present F.text_image F.rodata_image F.statics F.stack_bytes
   htifIdle := F.htif_payload
 
-/-! ## The register map -/
-
-/-- The finite register map holding `rv` on exactly the registers of `l`. -/
 def regMap (rv : Nat → BitVec 64) : List Nat → NatMap (BitVec 64)
   | [] => ∅
   | r :: rest => PartialMap.insert (regMap rv rest) r (rv r)
@@ -109,7 +81,6 @@ theorem regMap_get? (rv : Nat → BitVec 64) :
     · subst h; simp
     · simp [h, Ne.symm h]
 
-/-- The map agrees with the configuration it is read off. -/
 theorem regAgree_regMap {M : MachineModel} (σ : M.State) (l : List Nat) :
     RegAgree M (regMap (M.reg σ) l) σ := by
   intro k v hk
@@ -118,7 +89,6 @@ theorem regAgree_regMap {M : MachineModel} (σ : M.State) (l : List Nat) :
   · rw [if_pos hm] at hk; exact Option.some.inj hk
   · rw [if_neg hm] at hk; exact absurd hk (by simp)
 
-/-- The registers adequacy hands the client: `PC` and `x1`–`x31`. -/
 def topRegs : List Nat := VsaIris.PC :: List.range' 1 31
 
 theorem topRegs_nodup : topRegs.Nodup := by decide
@@ -127,7 +97,6 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **One points-to per register** out of adequacy's big-op. -/
 theorem sepL_of_regMap (rv : Nat → BitVec 64) :
     ∀ (l : List Nat), l.Nodup →
       ([∗map] k ↦ v ∈ regMap rv l, iprop(k ↦ᵣ v)) ⊢ sepL (GF := GF) l (fun r => r ↦ᵣ rv r)

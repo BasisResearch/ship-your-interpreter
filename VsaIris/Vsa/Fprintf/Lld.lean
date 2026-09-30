@@ -1,16 +1,5 @@
 import VsaIris.Vsa.Fprintf.Digits
 
-/-!
-# `%lld` in `_vfprintf_r` (lane N5)
-
-From the `%` of `"%lld"` (`0x800192c0`): the conversion parse reads `l`, `l`
-(the quad flag), `d` through the jump table at `0x8001a288`, loads the
-`long long` argument from `ap` (advancing it by 8), stores the sign byte
-(`'-'` or 0) at `sp + 167` and leaves the magnitude (the argument or its
-negation, read unsigned) in `s10` at `0x8000b414` (`lld_head`, post
-`LldHead`). `SnprintfSpec.intToString_of_bv` is the same sign split.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio Vsa.While
@@ -19,23 +8,17 @@ open scoped VsaIris.Sym.Stdout
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- The sign of a `long long` argument (top bit set). -/
 abbrev isNeg (v : BitVec 64) : Prop := 2 ^ 63 ≤ v.toNat
 
-/-- The magnitude `_vfprintf_r` formats: the argument, or its negation. -/
 def lldMag (v : BitVec 64) : BitVec 64 := if isNeg v then 0#64 - v else v
 
-/-- The sign byte at `sp + 167`. -/
 def lldSign (v : BitVec 64) : BitVec 8 := if isNeg v then 45#8 else 0#8
 
-/-- The memory after `lld_head`: the sign byte cleared, `ap` advanced, then
-`'-'` for a negative argument. -/
 def lldMt (Mt : Mem) (sp ap v : BitVec 64) : Mem :=
   if isNeg v then writeLog (writeLog (writeLog Mt [((sp + 167#64).toNat, 1, 0#64)])
     [((sp + 24#64).toNat, 8, ap + 8#64)]) [((sp + 167#64).toNat, 1, 45#64)]
   else writeLog (writeLog Mt [((sp + 167#64).toNat, 1, 0#64)]) [((sp + 24#64).toNat, 8, ap + 8#64)]
 
-/-- The format bytes and jump-table words `%lld` reads (data view). -/
 structure LldFmt (Dt : Mem) (DA : List Nat) : Prop where
   fmtDA : Cover (· ∈ DA) 0x800192c1 0x800192c4
   tabDA : Cover (· ∈ DA) 0x8001a288 0x8001a3f4
@@ -45,11 +28,8 @@ structure LldFmt (Dt : Mem) (DA : List Nat) : Prop where
   tabL : ldv .lw Dt 0x8001a3b8 = 18446744073709491228#64
   tabD : ldv .lw Dt 0x8001a398 = 18446744073709489368#64
 
-/-- The registers `lld_head` keeps. -/
 abbrev lldKeep : List Nat := [1, 2, 5, 6, 7, 9, 10, 11, 12, 16, 18, 19, 21, 23, 27, 30, 31]
 
-/-- The state at `0x8000b414`: magnitude in `s10`, precision `-1`, flags
-`0x20`, format pointer past the `d`, sign byte and advanced `ap` stored. -/
 structure LldHead (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp ap v : BitVec 64) : Prop where
   mag : R' 26 = lldMag v
   prec : R' 22 = 18446744073709551615#64
@@ -62,7 +42,7 @@ structure LldHead (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp ap v : BitVec 64
   mem : Mt' = lldMt Mt sp ap v
 
 set_option hygiene false in
-/-- `LldHead` from the flat register facts of a finished run. -/
+
 macro "lld_close " hk:term " : " sg:term : tactic => `(tactic| (
   refine $hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [f26]; unfold lldMag; simp [$sg:term]
@@ -124,12 +104,8 @@ theorem zero_le_toInt_iff (v : BitVec 64) : ((0#64).toInt ≤ v.toInt) = ¬ isNe
     nx_flat
     lld_close hk : hneg
 
-/-! **`lld_head`**: `0x8000a9fc` (the `%` of `"%lld"`) → `0x8000b414`, post `LldHead`. -/
 #ix_chain lld_head := [lldHead_1, lldHead_2, lldHead_3, lldHead_4]
 
-/-! ## The magnitude's digits (`0x8000b414` → `0x8000b444`) -/
-
-/-- `subw` of two addresses a small distance apart. -/
 theorem subw_near {a b : Nat} (ha : a < 2 ^ 64) (hb : b ≤ a) (hab : a - b < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) - BitVec.extractLsb 31 0 (BitVec.ofNat 64 b)) =
       BitVec.ofNat 64 (a - b) := by
@@ -147,17 +123,11 @@ theorem subw_near {a b : Nat} (ha : a < 2 ^ 64) (hb : b ≤ a) (hab : a - b < 2 
   simp only [Bool.false_eq_true, ite_false, Nat.add_zero, BitVec.toNat_setWidth, BitVec.toNat_ofNat]
   omega
 
-/-- The bytes the magnitude step writes: the spill slots `[sp + 32, sp + 128)` and
-the conversion buffer `[sp + 248, sp + 348)`. -/
 def MagReg (sp : Nat) (a : Nat) : Prop :=
   (sp + 32 ≤ a ∧ a < sp + 128) ∨ (sp + 248 ≤ a ∧ a < sp + 348)
 
-/-- The registers the magnitude step keeps. -/
 abbrev magKeep : List Nat := [2, 7, 9, 16, 17, 18, 19, 21, 22, 23, 24, 28, 29, 31]
 
-/-- The state at `0x8000b444`: the digits of `m` end at `sp + 348`, `s9` at
-the first, `a3 = a4` their count, `t5` the sign byte, `t1 = 0`, the slot
-`sp + 32` cleared. -/
 structure LldMag (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp m : BitVec 64) : Prop where
   ptr : R' 25 = BitVec.ofNat 64 (sp.toNat + 348 - (digBytes m.toNat).length)
   a3 : R' 13 = BitVec.ofNat 64 (digBytes m.toNat).length
@@ -173,7 +143,6 @@ structure LldMag (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp m : BitVec 64) : 
 theorem sp_lit {sp : BitVec 64} {k : Nat} (h : sp.toNat + k < 2 ^ 64) :
     (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := toNat_add_lit h
 
-/-- **A magnitude of at most 9**: one digit at `sp + 347`. -/
 theorem lldMag_small (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp m : BitVec 64} {need : Nat}
     (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
@@ -213,7 +182,6 @@ theorem lldMag_small (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
     · rw [e347] at h1 h2; unfold MagReg; omega
     · rw [e32] at h1 h2; unfold MagReg; omega
 
-/-- `sext.w` of a small count. -/
 theorem sextw_ofNat {L : Nat} (h : L < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 L)) = BitVec.ofNat 64 L := by
   have hm : (BitVec.extractLsb 31 0 (BitVec.ofNat 64 L)).msb = false := by
@@ -221,8 +189,6 @@ theorem sextw_ofNat {L : Nat} (h : L < 2 ^ 31) :
   rw [BitVec.signExtend_eq_setWidth_of_msb_false hm]
   apply BitVec.eq_of_toNat_eq; simp; omega
 
-/-- **A magnitude above 9**: the frame spills, the decimal loop
-(`vfp_digits`), the reloads. -/
 theorem lldMag_big (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp m : BitVec 64} {need : Nat}
@@ -286,7 +252,6 @@ theorem lldMag_big (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
       all_goals first | exact Frame.refl _ _ | (intro b h1 h2; rw [eo _ (by omega)] at h1 h2; unfold MagReg; omega)
     all_goals (rw [eo _ (by omega)] at h1 h2; unfold MagReg; omega)
 
-/-- **The magnitude's digits** (`0x8000b414` → `0x8000b444`), post `LldMag`. -/
 theorem lld_mag (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp m : BitVec 64} {need : Nat}

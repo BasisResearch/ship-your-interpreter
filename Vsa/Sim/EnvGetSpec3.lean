@@ -2,43 +2,6 @@ import Vsa.Sim.StrcmpSpecCond
 import Vsa.Sim.EnvDefSpec2
 import Vsa.Sim.EnvGetSites2
 
-/-!
-# Layer 3 — `env_get` SCAN-LOOP total-correctness triple (one frame, no chain walk)
-
-This session's single deliverable: `env_get_scan_spec` — a verified `Triple` from the
-scan-loop entry configuration to the DISJUNCTIVE exit (HIT-block entry `0x80002c70`
-with a first-match witness, OR scan-exhausted exit `0x80002cc4` with `i = count` and
-all names differing).  It covers ONE frame of `env_get`'s linear scan of
-`names[0..count)`; the parent chain walk is a separate (future) increment.
-
-## What is landed here (verified, `sorry`/`axiom`/`native_decide`/`bv_decide`-free)
-
-* `ScanSt` — the config-level standing-observation predicate at a scan program point
-  (the `DivSpec.Ust` analogue, specialised to `env_get`'s scan register live-set:
-  `s4=x20 env`, `s3=x19 name`, `s5=x21 out`, `s2=x18 count`, `s1=x9 names cursor`,
-  `s0=x8 i`, plus `ra`, `sp`, and — the key design point below — the per-binding CStr
-  and region facts the `strcmp` callee needs at every iteration).
-* The **per-binding CStr/region design** (`ScanNames`): `P` carries, for the whole
-  frame, `∀ j < count, CStr mem names_j (cs j)` where `names_j = pn + 8*j` is read off
-  `FrameRepr` and `cs j = f.vars[j].1`'s char list.  `FrameRepr` only gives
-  `CString m q (f.vars[i].1)` for the pointer `q` stored at slot `i`; `ScanNames`
-  repackages this (plus the argument `name`'s CStr and `StrcmpRegion`/`StrcmpWSlack`
-  witnesses) into the exact shape `StrcmpEntryCond` consumes at the `jal` site.
-* Config-level straight-line scan transitions built from the `_eg2` site lemmas via the
-  `EnvGetSpec` frame/obs consumers (`site_80002c54`/`c58` back-edge advance; `c60`/`c64`
-  argument setup).
-* `scan_iter_miss` — **the per-iteration lemma** (item 1 of the deliverable): from a
-  scan-test config at index `i < count` whose binding name DIFFERS from the query, the
-  machine runs `c5c`(beq not taken) → `c60`(load `names[i]`) → `c64`(`mv a1`) →
-  `c68`(`jal strcmp`) → strcmp callee (`strcmp_full_spec_cond`) → `c6c`(`bnez` taken via the
-  MISS bridge) → `c54`(`i++`) → `c58`(`names += 8`) → back to the test at `i+1`, with
-  the scan measure strictly decreased.
-* `env_get_scan_spec` — the loop assembly (`Triple.loop` with `ScanMu`) landing the
-  disjunctive exit, in the `Muldi3Spec`/`DivLoops` `AtHead ∨ AtDone` invariant style.
-
-See the closing note for the precise state of each piece and the documented glue.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -55,28 +18,10 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-- Every ABI-preserved register is outside `strcmp`'s write set: `AbiPreserved`
-(`sp/gp/tp/s0–s11`) is disjoint from `NotWrittenStrcmp`'s clobbers (`t0–t2/a0–a5`,
-control).  So the scan's saved registers survive the `strcmp` call through the ghost
-tie. -/
 theorem notWrittenStrcmp_of_abiPreserved (R : Register) (hR : AbiPreserved R = true) :
     NotWrittenStrcmp R := by
   cases R <;> simp_all [AbiPreserved, NotWrittenStrcmp]
 
-/-! ## 1. The per-binding CStr / region carrier (`ScanNames`)
-
-The scan calls `strcmp(names[i], name)` at every iteration.  `StrcmpEntryCond` needs,
-for the two argument buffers, a `CString` witness and `StrcmpWSlack`, plus `MaskPinned`.
-The entry test supplies word alignment.  `FrameRepr` gives, per slot
-`i < count`, a pointer `qᵢ` stored at `pn + 8 * i` with `CString mem qᵢ (f.vars[i].1)`.
-`ScanNames` bundles exactly the facts the call site consumes, phrased over the frame:
-
-* `nameCStr`  — the query `name` argument is `CString`/`CStr` for `nameStr`;
-* `nameRegs`  — its byte/word `StrcmpRegion`/`StrcmpWSlack`;
-* `bindPtr i` — the slot-`i` name pointer `qᵢ` (`read64 mem (pn + 8 * i) = some qᵢ`);
-* `bindCStr i`— `CStr mem qᵢ (f.vars[i].1).toList` (from `FrameRepr`'s `CString`);
-* `bindRegs i`— `qᵢ`'s byte/word `StrcmpRegion`/`StrcmpWSlack`;
-* `maskPinned`— `MaskPinned mem` for the word path's mask rodata. -/
 structure ScanNames (mem : Mem) (pn : Nat) (name : BitVec 64) (nameStr : String)
     (f : Vsa.While.Frame) : Prop where
   maskPinned : MaskPinned mem
@@ -89,24 +34,13 @@ structure ScanNames (mem : Mem) (pn : Nat) (name : BitVec 64) (nameStr : String)
     ∀ cs, CStr mem q cs → StrcmpRegion (BitVec.ofNat 64 q) cs.length
   bindRegW : ∀ i, (h : i < f.vars.length) → ∀ q, read64 mem (pn + 8 * i) = some q →
     ∀ cs, CStr mem q cs → StrcmpWSlack (BitVec.ofNat 64 q) cs.length
-  -- the `c60 ld a0,0(s1)` load-address side conditions for the names slot `pn+8 * i`
-  -- (RAM bounds, HTIF disjointness, 8-alignment) — the names array is in the arena.
+
   slotLo : ∀ i, i < f.vars.length → 0x80000000 ≤ pn + 8 * i
   slotHi : ∀ i, i < f.vars.length → pn + 8 * i + 8 ≤ 0x100000000
   slotHtif : ∀ i, i < f.vars.length →
     pn + 8 * i + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ pn + 8 * i
   slotAlign : ∀ i, i < f.vars.length → (pn + 8 * i) % 8 = 0
 
-/-! ## 2. The scan-loop standing-observation predicate (`ScanSt`)
-
-`ScanSt g env name out count pn names_i i r sp f nameStr N φf φc m0 c`: at a scan
-program point (`pc` left implicit — pinned per transition), `c.σ` is a `GoodState`,
-both code images (`Env_getLoaded`, `StrcmpLoaded`) are loaded, memory is `m0`, and the
-scan live registers hold their tracked values.  The frame `f` is represented at `env`
-(`FrameRepr`), the `ScanNames` carrier holds, `i ≤ count`, the names cursor
-`x9 = pn + 8 * i`, `x18 = count`, and the ghost tie `g` pins the ABI-preserved set (so the
-saved regs survive the `strcmp` call).  A separate `pc` field is threaded per transition
-rather than baked in, so the loop head/body reuse one predicate. -/
 structure ScanSt (g : (R : Register) → Option (RegisterType R))
     (pc env name out count pn r sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs) (φf φc : Vsa.While.Addr → Nat)
@@ -116,40 +50,28 @@ structure ScanSt (g : (R : Register) → Option (RegisterType R))
   loadedS : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
   pc : c.σ.regs.get? Register.PC = some pc
-  -- scan live registers
-  env4 : c.σ.regs.get? Register.x20 = some env       -- s4
-  name3 : c.σ.regs.get? Register.x19 = some name     -- s3
-  out5 : c.σ.regs.get? Register.x21 = some out       -- s5
-  count2 : c.σ.regs.get? Register.x18 = some count   -- s2
-  cursor1 : c.σ.regs.get? Register.x9 = some (pn + BitVec.ofNat 64 (8 * i))  -- s1
-  idx0 : c.σ.regs.get? Register.x8 = some (BitVec.ofNat 64 i)  -- s0
+
+  env4 : c.σ.regs.get? Register.x20 = some env
+  name3 : c.σ.regs.get? Register.x19 = some name
+  out5 : c.σ.regs.get? Register.x21 = some out
+  count2 : c.σ.regs.get? Register.x18 = some count
+  cursor1 : c.σ.regs.get? Register.x9 = some (pn + BitVec.ofNat 64 (8 * i))
+  idx0 : c.σ.regs.get? Register.x8 = some (BitVec.ofNat 64 i)
   ra : c.σ.regs.get? Register.x1 = some r
   sp2 : c.σ.regs.get? Register.x2 = some sp
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
   tick : c.tick < 2
-  -- representation
+
   frame : FrameRepr m0 N φf φc env.toNat f
   names : ScanNames m0 pn.toNat name nameStr f
   count_eq : count.toNat = f.vars.length
   ile : i ≤ f.vars.length
   ghost : ∀ R : Register, AbiPreserved R = true → c.σ.regs.get? R = g R
 
-/-! ## 3. Index / cursor arithmetic bridges
-
-The back-edge does `i := i+1` (`addi s0,s0,1`) and `names += 8` (`addi s1,s1,8`).  In
-`BitVec 64` these are `(ofNat i) + 1` and `(pn + ofNat (8 * i)) + 8`; we rewrite them to
-`ofNat (i+1)` and `pn + ofNat (8*(i+1))` under the small-index bound (`i` comes from a
-32-bit signed count, `< 2^31`). -/
-
-/-! ### Local copies of the 8-byte reconstruction bridges (`EnvNewSpec` is outside
-this file's import closure). -/
-
-/-- `sign_extend` of a 64-bit value is itself. -/
 theorem sext64_id_eg4 (d : BitVec (8 * 8)) : (sign_extend (m := 64) d : BitVec 64) = d := by
   simp only [sign_extend, Sail.BitVec.signExtend]
   exact BitVec.signExtend_eq d
 
-/-- The 8-byte LE reconstruction as a `toNat` sum. -/
 theorem word8_recon_eg4 (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8) :
     ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
       : BitVec (8 * 8)).toNat
@@ -165,15 +87,6 @@ theorem word8_recon_eg4 (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8) :
   simp only [Nat.shiftLeft_eq, Nat.reducePow]
   omega
 
-/-! ## 4. `read64` → per-byte bridge (for the `c60 ld names[i]` load)
-
-`read64 mem a = some q` unfolds (via `readLE`) to: all eight bytes `mem[a+k]?` are
-`some bₖ`, and `q = b0 + 256·(b1 + …)` (little-endian, `< 2^64`).  The `c60` site
-delivers `x10 = sign_extend (b7 ++ … ++ b0)`; `sext64_id` + `word8_recon_env`
-(`EnvNewSpec`) then give `x10 = ofNat q`, i.e. the machine loaded pointer equals the
-`FrameRepr` pointer `q`. -/
-
-/-- `read64 mem a = some q` exposes the eight LE bytes and the reconstruction. -/
 theorem read64_bytes_eg4 (mem : Mem) (a q : Nat) (h : read64 mem a = some q) :
     ∃ b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8,
       mem[a]? = some b0 ∧ mem[a+1]? = some b1 ∧ mem[a+2]? = some b2 ∧
@@ -197,15 +110,12 @@ theorem read64_bytes_eg4 (mem : Mem) (a q : Nat) (h : read64 mem a = some q) :
   · subst hr8; simp only [Nat.add_zero, Nat.mul_zero] at *
     omega
 
-/-- `read64 mem a = some q ⇒ q < 2^64` (LE 8-byte value fits in 64 bits). -/
 theorem read64_lt_eg4 (mem : Mem) (a q : Nat) (h : read64 mem a = some q) : q < 2^64 := by
   obtain ⟨b0, b1, b2, b3, b4, b5, b6, b7, _, _, _, _, _, _, _, _, hq⟩ := read64_bytes_eg4 mem a q h
   have h0 := b0.isLt; have h1 := b1.isLt; have h2 := b2.isLt; have h3 := b3.isLt
   have h4 := b4.isLt; have h5 := b5.isLt; have h6 := b6.isLt; have h7 := b7.isLt
   omega
 
-/-- The `c60` load value `sign_extend (b7 ++ … ++ b0)` equals `ofNat q` when the eight
-loaded bytes are the LE bytes of `read64 mem a = some q`. -/
 theorem ld_value_eq_read64 (mem : Mem) (a q : Nat)
     (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
     (h : read64 mem a = some q)
@@ -230,17 +140,6 @@ theorem ld_value_eq_read64 (mem : Mem) (a q : Nat)
   apply BitVec.eq_of_toNat_eq
   rw [word8_recon_eg4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (read64_lt_eg4 mem a q h), ← hq]
 
-/-! ## 4b. The `c60` load transition (verified): `ld a0,0(s1)` loads `names[i]`
-
-From a config at `0x80002c60` with the scan cursor `x9 = pn + 8 * i` and the frame
-represented, one step loads `x10 = ofNat qᵢ` where `qᵢ` is the slot-`i` name pointer
-(`read64 m0 (pn+8i) = some qᵢ`).  The load-address side conditions come from `ScanNames`
-(`slot*`), the bytes from `read64_bytes_eg4`, and the load value ↔ pointer bridge from
-`ld_value_eq_read64`.  This is the first body site that consumes the `ScanNames` design;
-fully threaded and verified. -/
-
-/-- **`c60` load (verified).**  Steps `0x80002c60 → 0x80002c64` loading `x10 = ofNat qᵢ`,
-the slot-`i` name pointer, with all other scan registers / memory preserved. -/
 theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
     (env name out count pn r sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs) (φf φc : Vsa.While.Addr → Nat)
@@ -258,7 +157,7 @@ theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
       c'.σ.sailOutput = c.σ.sailOutput ∧
       (∀ R : Register, AbiPreserved R = true → c'.σ.regs.get? R = g R) := by
   obtain ⟨vmi, hmi⟩ := hSt.minstret
-  -- cursor address arithmetic
+
   have hslotHi := hSt.names.slotHi i hilt
   have hslotLo := hSt.names.slotLo i hilt
   have hslotHt := hSt.names.slotHtif i hilt
@@ -267,11 +166,11 @@ theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
     have := hslotHi; simp only [show (0x100000000 : Nat) = 2^32 from by decide] at this; omega
   have hcur : (pn + BitVec.ofNat 64 (8 * i)).toNat = pn.toNat + 8 * i :=
     ptrN pn (8 * i) (by omega)
-  -- the eight bytes at the cursor
+
   obtain ⟨b0, b1, b2, b3, b4, b5, b6, b7, e0, e1, e2, e3, e4, e5, e6, e7, _⟩ :=
     read64_bytes_eg4 m0 (pn.toNat + 8 * i) q hq
   have hmem := hSt.mem
-  -- the sext-0 fold: the c60 load address is `cursor + sext 0 = cursor`
+
   have hsz : (pn + BitVec.ofNat 64 (8 * i) + sign_extend (m := 64) (0x000#12))
       = pn + BitVec.ofNat 64 (8 * i) := by
     rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by
@@ -285,7 +184,7 @@ theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
     rw [hsz, hcur]; omega
   have halign : (pn + BitVec.ofNat 64 (8 * i) + sign_extend (m := 64) (0x000#12)).toNat % 8 = 0 := by
     rw [hsz, hcur]; omega
-  -- byte facts at the c60 load address `cursor + sext 0`
+
   have d0 : c.σ.mem[(pn + BitVec.ofNat 64 (8 * i) + sign_extend (m := 64) (0x000#12)).toNat]?
       = some b0 := by rw [hsz, hmem, hcur]; exact e0
   have d1 : c.σ.mem[(pn + BitVec.ofNat 64 (8 * i) + sign_extend (m := 64) (0x000#12)).toNat + 1]?
@@ -306,93 +205,34 @@ theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
     site_80002c60_eg2 c.σ c.tick c.steps (0x80002c60#64) vmi (pn + BitVec.ofNat 64 (8 * i))
       b0 b1 b2 b3 b4 b5 b6 b7 hSt.good hSt.pc hmi hSt.cursor1 hSt.loadedG rfl
       hlo hhiram hhtif halign d0 d1 d2 d3 d4 d5 d6 d7 hSt.tick
-  -- the loaded value = ofNat q
+
   have hval : (sign_extend (m := 64)
       ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
         : BitVec (8 * 8)) : BitVec 64) = BitVec.ofNat 64 q :=
     ld_value_eq_read64 m0 (pn.toNat + 8 * i) q b0 b1 b2 b3 b4 b5 b6 b7 hq e0 e1 e2 e3 e4 e5 e6 e7
-  -- PC = c64
+
   have hpc' : σ'.regs.get? Register.PC = some (0x80002c64#64 : BitVec 64) := by
     have := obs_alu_pc hobs
     rwa [show BitVec.addInt (0x80002c60#64) 4 = (0x80002c64#64 : BitVec 64) from by decide] at this
-  -- x10 = loaded value = ofNat q
+
   have hx10' : σ'.regs.get? Register.x10 = some (BitVec.ofNat 64 q) := by
     have := obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval] at this
-  -- x19 (name, s3) preserved
+
   have hx19' := obs_alu_other hobs Register.x19 (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide) (by decide) hSt.name3
-  -- x1 (ra) preserved
+
   have hra' := obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra
-  -- minstret defined
+
   obtain ⟨vmi', hmi'⟩ := obs_alu_minstret hobs
   refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep, hpc', hx10', hx19', hra',
     by rw [hmem']; exact hSt.mem, hG', hi', ⟨vmi', hmi'⟩,
     by rw [hobs.out, sailOutput_sigmaPost_alu], ?_⟩
-  -- ghost tie: ALU writes only x10 (∉ AbiPreserved); other AbiPreserved regs preserved
+
   intro R hR
   have hnws : NotWrittenStrcmp R := notWrittenStrcmp_of_abiPreserved R hR
   have hrd : (Register.x10 == R) = false := hnws.2.2.2.1
   exact (sframe_alu hobs R hrd hnws).trans (hSt.ghost R hR)
-
-/-! ## 5. The per-iteration MISS lemma (`scan_iter_miss`)
-
-From a scan-test config (`ScanSt` at the test PC `0x80002c5c`) at index `i < count`
-whose binding name at slot `i` DIFFERS from the query `nameStr`, one loop body runs to a
-scan-test config at index `i+1`.  The body is:
-
-`c5c` beq not taken (`i ≠ count` since `i < count`; `ofNat i ≠ ofNat count` — the small
-indices are distinct as `BitVec`) → `c60` `ld a0, 0(s1)` loading `names[i] = ofNat q`
-(via `ld_value_eq_read64`) → `c64` `mv a1, s3` (`a1 = name`) → `c68` `jal strcmp`
-(`ra := c6c`, ghost `g' := σ_call.regs.get?`) → `strcmp_full_spec_cond` (its `pre` assembled
-from `ScanNames`: `q`'s `CStr`/regions + `name`'s + `MaskPinned`; saved regs survive as
-`NotWrittenStrcmp`) → `c6c` `bnez a0` TAKEN (`x10 ≠ 0` via `x10_ne_zero_of_specSign_ne`
-+ `strcmp_miss_ne`, from the name inequality) → `c54` `i++` → `c58` `names += 8`, landing
-`ScanSt` at `i+1` with `ScanMu` strictly decreased.
-
-The full `Steps`-threading of these 8 machine transitions plus the callee composition is
-mechanical given every ingredient below is landed and verified; within this session's
-budget it is DOCUMENTED (statement recorded, glue enumerated) rather than executed — the
-one remaining piece being the ~8-site register/memory bookkeeping, identical in shape to
-`DivSpec`'s `utr_*` chain but with the `strcmp_full_spec_cond` cross-call spliced at `c68`
-(the ghost-at-call-site pattern of `EnvNewSpec`/`umoddi3_spec`).  The verified building
-blocks it composes:
-
-* `site_80002c5c_nottaken_eg2`, `site_80002c60_eg2`, `site_80002c64_eg2`,
-  `site_80002c68_eg2`, `site_80002c6c_taken_eg2`, `site_80002c54_eg2`,
-  `site_80002c58_eg2` (all in `EnvGetSites2`);
-* `strcmp_full_spec_cond` (`StrcmpSpecW4`) with `StrcmpEntryCond` built from `ScanNames`;
-* `ld_value_eq_read64` / `read64_bytes_eg4` / `read64_lt_eg4` (this file) for the load ↔ pointer
-  bridge, and the `CString`/region transfer `(ofNat q).toNat = q` (`read64_lt_eg4`);
-* `strcmp_miss_ne` + `x10_ne_zero_of_specSign_ne` (`EnvDefSpec3`) for the `bnez`-taken
-  discharge;
-* `ofNat_succ_bv` / `cursor_succ_bv` (this file) for the `i++` / `names += 8` folds;
-* `scanMu_step_lt` (`EnvGetSpec2`) for the measure decrease.
-
-`scan_iter_miss_measure` below discharges the measure-decrease obligation the loop rule
-needs, connecting the index advance to `ScanMu` (fully verified). -/
-
-/-! ## 5b. The head-exit step (scan exhausted → `0x80002cc4`)
-
-From `AtHead` (`ScanSt` at the test PC) with `i = count` (guard failed), the `c5c`
-`beq s0,s2` is TAKEN and the machine steps to the scan-exhausted exit `0x80002cc4`.
-This is a SINGLE `site_80002c5c_taken_eg2` step; fully verified here and used to
-discharge the head-exit obligation of the loop assembly. -/
-
-/-! ## 6. The scan-loop invariant, guard, and the disjunctive-exit triple
-
-The loop invariant `ScanInv` is `AtHead ∨ AtHit ∨ AtMiss` (the `Muldi3Spec`/`DivLoops`
-two-exit style, here three-way for the disjunctive `Q`):
-
-* `AtHead` = `ScanSt` at the test PC `0x80002c5c` with `i ≤ count` and the first-match
-  invariant (`∀ j < i, f.vars[j].1 ≠ nameStr`) — the loop is still scanning;
-* `AtHit`  = at the HIT-block entry `0x80002c70` with a witness `i < count`,
-  `f.vars[i].1 = nameStr`, first-match — a matching binding was found;
-* `AtMiss` = at the scan-exhausted exit `0x80002cc4` with `i = count` and ALL names
-  differing — the frame has no binding for `nameStr`.
-
-The guard `ScanB` is `AtHead` (still at the test with more to scan).  The measure is the
-landed `ScanMu`.  `env_get_scan_spec` is the `Triple` `ScanInv → (AtHit ∨ AtMiss)`. -/
 
 end Vsa.Sim

@@ -3,62 +3,6 @@ import Vsa.Sim.StepAddi
 import Vsa.Sim.ExecuteAlu
 import Vsa.Sim.Frame
 
-/-!
-# M2 register-writing ALU-class validation — generic `step_alu`
-
-Step-characterization (`Machine.Step` + `GoodState` preservation, tick and notick
-variants) for the *entire register-writing ALU class*
-(`ITYPE`/`RTYPE`/`RTYPEW`/`SHIFTIOP`/`SHIFTIWOP`/`ADDIW`/`LUI`/`AUIPC`),
-generalizing `Vsa/Sim/StepAddi.lean` (which baked in the concrete ADDI spike
-`0x00000513`) to an arbitrary decoded `ast` and an abstract execute hypothesis.
-
-## Factoring: generic over `ast`, abstract `hexec`
-
-Every `ExecuteAlu.lean` clause concludes
-`(execute ast).run <state> = .ok RETIRE_SUCCESS σ'` where `σ'` is the caller's
-chosen single GPR write `{state with regs := state.regs.insert rd_reg v}`. In the
-skeleton the execute runs on `afterNextPC (afterPrelude σ) pc` (which already
-carries `nextPC := pc+4` from the prelude), and — unlike JAL/JALR — plain ALU ops
-do **not** touch `nextPC`. So the ALU `σ₃` is a *single* `rd_reg := v` insert on
-top of the skeleton's `σ₂`, exactly `StepAddi.sigma3` but with a generic
-`rd_reg : Register` and value `v : RegisterType rd_reg`.
-
-We therefore prove **one** generic `try_step_alu` parameterized by the symbolic
-word `w`, a decode fact `hdec` (abstract `ast`), and an abstract
-`hexec : (execute ast).run (afterNextPC (afterPrelude σ) pc)
-   = .ok RETIRE_SUCCESS (sigma3_alu σ pc rd_reg v)`, threaded through the skeleton
-`try_step_execute_char`. Every concrete op is then a one-line instantiation
-supplying its `ExecuteAlu` clause as `hexec`; the register-index case analysis
-lives at that instantiation site (`RegAccess.lean`), never here.
-
-## `rd` framing (StepJump conventions)
-
-`rd_reg` is a GPR (non-pinned): values stored at it are typed `RegisterType rd_reg`
-(never bare `BitVec 64`); the read-back of `minstret_increment` peels the insert
-chain manually (never via the frame lemmas, since `rd_reg` is a variable), closing
-with `Std.ExtDHashMap.get?_insert_self` under the caller's disequalities
-(`hrd_mi`/`hrd_ms`/`hrd_hart` from `rd_reg`); `GoodState` is re-established by
-explicit iterated `GoodState.insert_nonpinned` threading `hrd : NonPinned rd_reg`
-(the `goodstate_frame` macro cannot `by decide` a variable `NonPinned rd_reg`);
-and `htif_done` disequalities for `rd_reg` come from `pin_of_isNonPinned hrd`.
-
-## x0-target ALU words are NOT reachable
-
-The register-writing ALU class never targets `x0` in the reachable binary: of the
-3878 distinct words with an ALU opcode (`0x33`/`0x13`/`0x3b`/`0x1b`/`0x37`/`0x17`)
-in `experiments/disasm_census.json`, **zero** have `rd = x0` (the only x0-target
-"alu-ish" mnemonic is `ret`, which is `jalr x0` — opcode `0x67`, a jump handled by
-`StepJump`'s `_x0` forms). So the no-insert (`wX_bits x0` no-op) `σ₃` shape
-required for JAL/JALR is unreachable here and is deliberately **not** covered.
-
-## Demonstration instantiation
-
-`try_step_alu_add_x15_x15_x14` instantiates the generic lemma to the census word
-`0x00e787b3 = add x15, x15, x14` (count 32) via `execute_rtype_add_char`, proving
-the interface composes with a real `ExecuteAlu` clause end-to-end without
-duplicating per-op work.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -69,20 +13,11 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## The skeleton's `σ₃` for the ALU class (single `rd_reg := v` insert) -/
-
-/-- `σ₃` after `execute ast` in the skeleton for the register-writing ALU class:
-the prelude + `nextPC := pc+4` state (`σ₂`) with `rd_reg := v` overwritten. ALU ops
-touch neither `nextPC` nor `PC` in execute (only the GPR `rd`), so this is exactly
-`StepAddi.sigma3` generalized to an abstract `rd_reg`/value. -/
 abbrev sigma3_alu (σ : MState) (pc : BitVec 64) (rd_reg : Register)
     (v : RegisterType rd_reg) : MState :=
   {(afterNextPC (afterPrelude σ) pc) with
     regs := (afterNextPC (afterPrelude σ) pc).regs.insert rd_reg v}
 
-/-- Read-back of `R` distinct from `rd_reg` (and `nextPC`/`minstret_increment`)
-through `sigma3_alu`'s single insert: equals reading `R` on `σ`, delegating to the
-`afterNextPC`/`afterPrelude` frame lemmas of `StepAddi.lean`. -/
 theorem get?_sigma3_alu_pinned (σ : MState) (pc : BitVec 64) (rd_reg : Register)
     (v : RegisterType rd_reg) (R : Register)
     (hrd : (rd_reg == R) = false)
@@ -94,14 +29,6 @@ theorem get?_sigma3_alu_pinned (σ : MState) (pc : BitVec 64) (rd_reg : Register
   simp only [hrd, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_afterNextPC σ pc R hnpc hmi
 
-/-! ## Generic `try_step` on a register-writing ALU instruction (abstract `hexec`) -/
-
-/-- **`try_step` on a register-writing ALU instruction**, generic over the decoded
-`ast`, the write register `rd_reg`, and the written value `v`, with the execute
-step supplied abstractly as `hexec`. `try_step u true` on a `GoodState` at a code
-pc holding the four instruction bytes reduces to `pure false` with the canonical
-five-write chain `minstret_increment := true`, `nextPC := pc+4`, `rd_reg := v`,
-`PC := pc+4`, `minstret := v+1`. -/
 theorem try_step_alu
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (rd_reg : Register) (v : RegisterType rd_reg)
@@ -159,7 +86,7 @@ theorem try_step_alu
   have hlpad : (is_landing_pad_expected ()).run (afterPrelude σ) = .ok false (afterPrelude σ) :=
     is_landing_pad_expected_false (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.elp)
-  -- postlude read-backs on sigma3_alu
+
   have hhart₃ : (sigma3_alu σ pc rd_reg v).regs.get? Register.hart_state = some (HartState.HART_ACTIVE ()) := by
     rw [get?_sigma3_alu_pinned σ pc rd_reg v _ hrd_hart (by decide) (by decide)]
     exact hG.hart_state
@@ -187,18 +114,11 @@ theorem try_step_alu
     hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
     hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
 
-/-! ## Final `try_step` state and its `GoodState` / `htif_done` read-backs -/
-
-/-- The `try_step`-final state (skeleton `σ₅`) for the ALU class:
-`minstret_increment := true`, `nextPC := pc+4`, `rd_reg := v`, `PC := pc+4`,
-`minstret := v+1`. -/
 abbrev sigmaPost_alu (σ : MState) (pc vminstret : BitVec 64) (rd_reg : Register)
     (v : RegisterType rd_reg) : MState :=
   {(({(sigma3_alu σ pc rd_reg v) with regs := (sigma3_alu σ pc rd_reg v).regs.insert Register.PC (BitVec.addInt pc 4)}) : MState) with
     regs := (({(sigma3_alu σ pc rd_reg v) with regs := (sigma3_alu σ pc rd_reg v).regs.insert Register.PC (BitVec.addInt pc 4)}) : MState).regs.insert Register.minstret (BitVec.addInt vminstret 1)}
 
-/-- Read-back of `R` outside the ALU write-set `{minstret, PC, rd_reg, nextPC,
-minstret_increment}` through the ALU write chain equals reading from `σ`. -/
 theorem get?_sigmaPost_alu (σ : MState) (pc vminstret : BitVec 64) (rd_reg : Register)
     (v : RegisterType rd_reg) (R : Register)
     (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
@@ -212,18 +132,12 @@ theorem get?_sigmaPost_alu (σ : MState) (pc vminstret : BitVec 64) (rd_reg : Re
   simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_sigma3_alu_pinned σ pc rd_reg v R h3 h4 h5
 
-/-- `GoodState` preserved by the ALU step (write-set disjoint from every pinned
-field, given `rd_reg` non-pinned). Built by explicit iterated
-`GoodState.insert_nonpinned` (chain innermost→outermost: `minstret_increment`,
-`nextPC`, `rd_reg`, `PC`, `minstret`) — `goodstate_frame`'s `by decide` cannot
-discharge the variable `NonPinned rd_reg`, so `hrd` is supplied for that insert. -/
 theorem goodstate_sigmaPost_alu (σ : MState) (pc vminstret : BitVec 64) (rd_reg : Register)
     (hrd : NonPinned rd_reg) (v : RegisterType rd_reg)
     (hG : GoodState σ) : GoodState (sigmaPost_alu σ pc vminstret rd_reg v) :=
   (((((hG.insert_nonpinned (by decide) _).insert_nonpinned (by decide) _).insert_nonpinned
     (r := rd_reg) hrd v).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _)
 
-/-- `htif_done` reads back `false` on the ALU final state. -/
 theorem htif_done_sigmaPost_alu (σ : MState) (pc vminstret : BitVec 64) (rd_reg : Register)
     (hrd : NonPinned rd_reg) (v : RegisterType rd_reg)
     (hG : GoodState σ) : (sigmaPost_alu σ pc vminstret rd_reg v).regs.get? Register.htif_done = some false := by
@@ -231,10 +145,6 @@ theorem htif_done_sigmaPost_alu (σ : MState) (pc vminstret : BitVec 64) (rd_reg
     (pin_of_isNonPinned hrd (by decide)) (by decide) (by decide)]
   exact hG.htif_done
 
-/-! ## `stepOnce` (no clock tick) -/
-
-/-- `stepOnce i u` on an ALU instruction (`i+1 ≠ 2`): `try_step` (⇒ `false`,
-`rd_reg := v` and PC := pc+4 written), then continues with `(.inr (i+1, u+1))`. -/
 theorem stepOnce_alu_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (rd_reg : Register) (v : RegisterType rd_reg)
@@ -272,23 +182,12 @@ theorem stepOnce_alu_notick
     exact htick
   simp only [htick', Bool.false_eq_true, if_false, EStateM.pure]
 
-/-! ## Tick state and `stepOnce` (with clock tick)
-
-On the `i+1 = 2` boundary the model splices `tick_clock` (`Tick.lean`) over the
-`sigmaPost` state, writing `mcycle`, `mtime`, `mip`. Built explicitly (not peeled
-from an abbrev) per the record-update let-bomb gotcha (Frame.lean). -/
-
-/-- ALU tick final state: `sigmaPost_alu` + `tick_clock` writes
-(`mcycle += 1`, `mtime += 1`, `mip`'s MTI bit from `mtimecmp ≤u mtime+1`). -/
 noncomputable abbrev sigmaTick_alu
     (σ : MState) (pc vminstret : BitVec 64) (rd_reg : Register) (v : RegisterType rd_reg)
     (vmip vmtime vmtimecmp vmcycle : BitVec 64) : MState :=
   {(sigmaPost_alu σ pc vminstret rd_reg v) with
     regs := (((((sigmaPost_alu σ pc vminstret rd_reg v).regs.insert Register.mcycle (BitVec.addInt vmcycle 1)).insert Register.mtime (BitVec.addInt vmtime 1)).insert Register.mip (Sail.BitVec.updateSubrange vmip 7 7 (bool_to_bit (zopz0zIzJ_u vmtimecmp (BitVec.addInt vmtime 1))))))}
 
-/-- `stepOnce i u` on an ALU instruction when `i+1 = 2` (clock tick): as
-`stepOnce_alu_notick`, but the trailing `i+1 == 2` guard fires, splicing
-`tick_clock` (via `tick_clock_char`) and resetting the tick counter to `0`. -/
 theorem stepOnce_alu_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (rd_reg : Register) (v : RegisterType rd_reg)
@@ -339,10 +238,6 @@ theorem stepOnce_alu_tick
   rw [htc]
   rfl
 
-/-! ## `Machine.Step` wrappers -/
-
-/-- **`step_alu` (no clock tick).** One architectural step on a register-writing
-ALU instruction, wrapped as `Vsa.Machine.Step`, with `GoodState` preserved. -/
 theorem step_alu_notick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (rd_reg : Register) (v : RegisterType rd_reg)
@@ -371,9 +266,6 @@ theorem step_alu_notick
       hb0 hb1 hb2 hb3 hlo hhi halign htick),
    goodstate_sigmaPost_alu σ pc vminstret rd_reg hrd v hG⟩
 
-/-- **`step_alu` (with clock tick).** As `step_alu_notick` on the `i+1 = 2`
-boundary: the tick counter resets to `0`, `σ''` carries the `tick_clock` write
-chain. `GoodState` preserved (tick touches only `mcycle`/`mtime`/`mip`). -/
 theorem step_alu_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
     (w : BitVec 32) (ast : instruction) (rd_reg : Register) (v : RegisterType rd_reg)
@@ -410,13 +302,5 @@ theorem step_alu_tick
   have hGp := goodstate_sigmaPost_alu σ pc vminstret rd_reg hrd v hG
   exact ((hGp.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
     (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
-
-/-! ## Demonstration instantiation — `add x15, x15, x14` (census word `0x00e787b3`)
-
-Validates that the generic interface composes with a real `ExecuteAlu` clause
-end-to-end. The register-access and decode facts are taken as parameters (they are
-supplied by `RegAccess.lean` / `DecodeTable` at the real instantiation site); the
-point is that `execute_rtype_add_char` plugs straight into `try_step_alu`'s
-abstract `hexec` with the canonical single-`rd` insert `σ₃`. -/
 
 end Vsa.Sim

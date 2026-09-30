@@ -1,68 +1,17 @@
 import VsaIris.Call
 
-/-!
-# The dlmalloc heap as a separation-logic resource
-
-Port of xv6iris `iris/KallocInv.v` (the logical allocator layer) and
-`iris/SpecKalloc.v` / `iris/SpecKfree.v` (the caller-facing specs), from
-xv6's page free list to newlib's dlmalloc (VSA `Vsa/Sim/DlHeap.lean`).
-
-MachCSL's design, kept:
-* the allocator's protected resource owns its global state *and every byte
-  that is not handed out*: `kmem_res` (KallocInv.v:394) is the free-list head
-  word plus `freelist_chain` over every free page (KallocInv.v:281). Here
-  `isHeap L H` owns the allocator globals plus every arena byte outside the
-  live extents `H`, with a pure shape predicate over the owned bytes (VSA's
-  `HeapAt`, the analogue of `freelist_chain`'s pointer structure);
-* allocation hands out ownership of the block, "a standard CSL encoding of
-  memory allocation" (paper §6.5): `kalloc_post` (KallocInv.v:436) is null
-  or `page_filled r …`; `mallocPost` is null or `blockOwn p n`;
-* freeing takes the block's bytes back at ANY value: `kfree_pre p :=
-  page_valid p ∗ page_own p` (KallocInv.v:444), `page_own` being 4096
-  `byte_any` cells (KallocInv.v:149-159, the A6.87 ruling in the comment
-  there). `freePre p n := blockOwn p n` is the same with `n` bytes;
-* the specs are continuation-style WPs over the loop (SpecKalloc.v:30-56),
-  here `fnSpec`, and unproved callees are parameters of a module type
-  (`Module Type KALLOC`, SpecKalloc.v:52): `DlMallocImpl` below.
-
-What changes, and why (DESIGN.md §"Deviations"):
-* no lock: VSA is sequential, so `isHeap` is an exclusive resource threaded
-  through the interpreter, like MachCSL's boot-mode `kalloc_avail (Some n)`,
-  not `is_lock γ lk "kmem" …`;
-* no page count ghost (`kmem_avail_auth`, KallocInv.v:321): VSA's
-  per-program capacity bound (`InitialAllocatorAt.capacity`) plays that
-  role and stays a pure fact;
-* ownership of a byte SET rather than a fixed-length big-sep: dlmalloc's
-  free bytes are a state-dependent set, not a list of 4096-byte pages.
-
-**How this removes the malloc frame obstruction** (commit eb73d8c,
-`PROOF_CLOSURE_PLAN.md` §2): VSA's `MallocContract` framed malloc by a
-state-independent `privFoot` that had to contain every byte malloc may write
-and avoid every live payload. `isHeap L H` owns `heapFoot L H`, which is
-*relative to the current live extents*: malloc may write any byte it owns,
-and the bytes it owns change as blocks are carved out and returned. The
-caller's bytes survive because the caller owns them and malloc does not:
-that is the frame rule, not a per-contract footprint clause. See
-`eb73d8c_witness` at the bottom for the concrete case.
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 
 open Classical
 
-/-! ## Owning a set of bytes -/
-
 section OwnSet
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- `byte_any` (KallocInv.v:149): the byte is owned, its value is not
-promised. -/
 abbrev byteAny (a : Nat) : IProp GF := iprop(∃ b, a ↦ₘ b)
 
-/-- Ownership of every byte of a (finite) set, each carrying `Φ`. -/
 def ownSet (S : Nat → Prop) (Φ : Nat → IProp GF) : IProp GF :=
   iprop(∃ l : List Nat, ⌜l.Nodup ∧ ∀ a, a ∈ l ↔ S a⌝ ∗ sepL l Φ)
 
@@ -95,7 +44,6 @@ theorem sepL_mono {α} (l : List α) (Φ Ψ : α → IProp GF) (h : ∀ a, Φ a 
   | nil => exact .rfl
   | cons x xs ih => exact sep_mono (h x) ih
 
-/-- Relabel the set. -/
 theorem ownSet_iff {S T : Nat → Prop} (Φ : Nat → IProp GF) (h : ∀ a, S a ↔ T a) :
     ownSet S Φ ⊢ ownSet T Φ := by
   unfold ownSet
@@ -114,8 +62,6 @@ theorem ownSet_mono {S : Nat → Prop} (Φ Ψ : Nat → IProp GF) (h : ∀ a, Φ
   · ipureintro; exact hl
   iapply sepL_mono l Φ Ψ h $$ Hl
 
-/-- **Carving.** Owning `S` is owning its `B` part and the rest. This is the
-set-level content of `kmem_res`'s pop and push (KallocInv.v:403-434). -/
 theorem ownSet_split (S B : Nat → Prop) (Φ : Nat → IProp GF) :
     ownSet S Φ ⊢ ownSet (fun a => S a ∧ B a) Φ ∗ ownSet (fun a => S a ∧ ¬ B a) Φ := by
   unfold ownSet
@@ -133,7 +79,6 @@ theorem ownSet_split (S B : Nat → Prop) (Φ : Nat → IProp GF) :
     refine ⟨hnd.filter _, fun a => ?_⟩
     simp [List.mem_filter, hmem]
 
-/-- Joining two disjoint owned sets. -/
 theorem ownSet_join (S T : Nat → Prop) (Φ : Nat → IProp GF) (hdisj : ∀ a, S a → ¬ T a) :
     ownSet S Φ ∗ ownSet T Φ ⊢ ownSet (fun a => S a ∨ T a) Φ := by
   unfold ownSet
@@ -147,10 +92,6 @@ theorem ownSet_join (S T : Nat → Prop) (Φ : Nat → IProp GF) (hdisj : ∀ a,
   iapply (sepL_append l₁ l₂ Φ).2
   iframe H1 H2
 
-/-- A byte the caller owns is not in any set of bytes someone else owns.
-This single lemma is what VSA derives by hand, per call site, as
-`HeapOwned.ownedOff`/`entryOff` (`Vsa/Sim/AllocOff.lean`) from the ledger
-and `privFoot_disjoint`. -/
 theorem owned_off (a : Nat) (v : BitVec 8) (S : Nat → Prop) :
     (a ↦ₘ v) ⊢@{IProp GF} ownSet S byteAny -∗ ⌜¬ S a⌝ := by
   unfold ownSet
@@ -172,42 +113,26 @@ theorem owned_off (a : Nat) (v : BitVec 8) (S : Nat → Prop) :
 
 end OwnSet
 
-/-! ## The heap resource -/
-
-/-- What VSA's `Vsa/Sim/DlHeap.lean` and `Vsa/Alloc.lean` fix about the
-binary's dlmalloc, abstracted so this file builds without VSA. -/
 structure DlLayout where
-  /-- `AllocGlobalByte` (`Vsa/Alloc.lean:66`): `__malloc_av_`, `brk.0`, … -/
+
   global : Nat → Prop
-  /-- `_end` (`DlHeap.heapStart`). -/
+
   lo : Nat
-  /-- `__heap_end` (`DlHeap.heapEnd`). -/
+
   hi : Nat
-  /-- The globals lie in `.data`/`.bss`, outside the arena
-  (`AllocGlobalByte.bounds`). -/
+
   global_off_arena : ∀ a, global a → a < lo ∨ hi ≤ a
-  /-- `HeapAt` (`DlHeap.lean:95`): the chunk walk, bins and top, read off
-  the bytes the allocator owns, with `H` the live extents. The analogue of
-  `freelist_chain`'s pointer structure (KallocInv.v:281). -/
+
   Shape : (Nat → BitVec 8) → List (Nat × Nat) → Prop
 
-/-- Byte `a` lies in extent `e = (start, len)`. -/
 def InExt (e : Nat × Nat) (a : Nat) : Prop := e.1 ≤ a ∧ a < e.1 + e.2
 
-/-- **The allocator's footprint**, relative to the live extents: its globals
-and every arena byte that is not inside a live block. Chunk headers, footers,
-bin links and the top chunk all live here, wherever the current state puts
-them. -/
 def heapFoot (L : DlLayout) (H : List (Nat × Nat)) (a : Nat) : Prop :=
   L.global a ∨ (L.lo ≤ a ∧ a < L.hi ∧ ∀ e ∈ H, ¬ InExt e a)
 
-/-- A block malloc may return while `H` is live: non-null, in the arena, and
-disjoint from every live extent (VSA `MallocContract.spec`'s success arm:
-`p ≠ 0 ∧ A.contains p n ∧ ∀ e ∈ exts, ExtDisjoint (p, n) e`). -/
 def FreshBlock (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat) : Prop :=
   p ≠ 0 ∧ L.lo ≤ p ∧ p + n ≤ L.hi ∧ ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a
 
-/-- The named fields of `FreshBlock`. -/
 theorem FreshBlock.destruct {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
     (h : FreshBlock L H p n) :
     p ≠ 0 ∧ L.lo ≤ p ∧ p + n ≤ L.hi ∧ ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a := h
@@ -225,21 +150,16 @@ section Heap
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- `kmem_res` (KallocInv.v:394) for dlmalloc: some byte image satisfying
-the heap shape, and ownership of every byte of the footprint at that image. -/
 def isHeap (L : DlLayout) (H : List (Nat × Nat)) : IProp GF :=
   iprop(∃ img : Nat → BitVec 8, ⌜L.Shape img H⌝ ∗
     ownSet (heapFoot L H) (fun a => a ↦ₘ img a))
 
-/-- `page_own` (KallocInv.v:159) for an `n`-byte block. -/
 def blockOwn (p n : Nat) : IProp GF := ownSet (InExt (p, n)) byteAny
 
 theorem ownSet_forget (S : Nat → Prop) (img : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ img a) ⊢ ownSet S byteAny :=
   ownSet_mono _ _ (fun a => by iintro H; iexists img a; iexact H)
 
-/-- **Carve** a fresh block out of the allocator's footprint, for any per-byte
-resource `Φ` (byte ownership at any value, or at the image's values). -/
 theorem heapFoot_carve_gen (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
     (hf : FreshBlock L H p n) (Φ : Nat → IProp GF) :
     ownSet (GF := GF) (heapFoot L H) Φ ⊢
@@ -272,39 +192,20 @@ theorem heapFoot_carve_gen (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
       · unfold InExt at ha; simp at ha; omega
       · unfold InExt at ha; simp at ha; omega
 
-/-! ## The specs (SpecKalloc.v / SpecKfree.v) -/
-
 def gp : Nat := 3
 
-/-- Registers a callee may clobber, owned at any value. MachCSL threads the
-whole register file (`gpr_file`, execution-model.md "Registers & the
-register file") and states callee-saved preservation as
-`⌜callee_saved m mr⌝`; with per-register points-to the callee-saved ones are
-simply not handed over. -/
 def clobbered (rs : List Nat) : IProp GF := sepL rs (fun r => iprop(∃ v, r ↦ᵣ v))
 
-/-- Callee-saved registers the callee uses and restores: handed over at their
-values and handed back at the same values. A callee that spills a register
-(`_malloc_r` runs `sd s0,80(sp); mv s0,a0`) must own it during the call,
-because the state interpretation agrees with the machine at every step. -/
 def savedOwn (saved : List (Nat × BitVec 64)) : IProp GF := sepL saved (fun p => p.1 ↦ᵣ p.2)
 
-/-- The callee's code bytes, persistent (MachCSL's `text_pointsto … □`). A
-closed spec `⊢ fnSpec …` cannot be proved for real code without them: from
-emp, the bytes at the entry are unconstrained. -/
 def textOwn (text : List (Nat × BitVec 8)) : IProp GF := sepL text (fun p => p.1 ↦ₘ□ p.2)
 
 instance (text : List (Nat × BitVec 8)) : Persistent (textOwn (GF := GF) text) := by
   unfold textOwn; infer_instance
 
-/-- The stack bytes below `sp` a callee may use (VSA `StackOK SL sp
-headroom`). An owned resource, handed to the callee and back, instead of the
-"stack window below the entry sp" exception in `MallocContract`'s frame. -/
 def stackScratch (s : BitVec 64) (headroom : Nat) : IProp GF :=
   blockOwn (s.toNat - headroom) headroom
 
-/-- `kalloc_post` (KallocInv.v:436): null with the heap unchanged, or a fresh
-aligned block with its ownership and the extended live list. -/
 def mallocPost (L : DlLayout) (H : List (Nat × Nat)) (n : Nat) (p : BitVec 64) : IProp GF :=
   iprop((⌜p = 0⌝ ∗ isHeap L H) ∨
     (⌜FreshBlock L H p.toNat n ∧ p.toNat % 16 = 0⌝ ∗
@@ -312,12 +213,6 @@ def mallocPost (L : DlLayout) (H : List (Nat × Nat)) (n : Nat) (p : BitVec 64) 
 
 variable {M : MachineModel} (Wp : MachWP (GF := GF) M)
 
-/-- `wp_kalloc_sconf_body` (SpecKalloc.v:30), sequential. The return address
-is 4-aligned: `ret` (`jalr x0, 0(ra)`) clears bit 0, so no implementation
-returns to an odd `r`; every `jal` call site discharges it. `SpOK` is the
-caller's stack-pointer discipline (RAM, alignment, headroom): the callee's
-frame stores need it, so no implementation meets the spec from an arbitrary
-`s`. -/
 def mallocSpec (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (n s : BitVec 64) : IProp GF :=
@@ -327,8 +222,6 @@ def mallocSpec (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64
     (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ mallocPost L H n.toNat p))
 
-/-- `wp_kfree_sconf_body` (SpecKfree.v:30): `kfree_pre p := page_own p`
-(KallocInv.v:444), the block at any contents. -/
 def freeSpec (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64) : IProp GF :=
@@ -340,18 +233,6 @@ def freeSpec (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) 
 
 end Heap
 
-/-- **The allocator as a module parameter**, as MachCSL leaves an unproved
-callee (`Module Type KALLOC`, SpecKalloc.v:52; `LinkKalloc.v` instantiates
-it with `ProofKalloc`). This is VSA's `MallocContract` restated: the one
-assumption about the binary's dlmalloc. It is NOT proved here; discharging
-it is the instruction-level proof of `_malloc_r`/`_free_r` against the Sail
-model (MachCSL's ProofKalloc.v is 834 lines for xv6's much simpler kalloc).
-The difference from `MallocContract` is that this statement can be true of
-dlmalloc; see `eb73d8c_witness`. `text` is the allocator's code (owned
-persistently by the caller's context) and `savedRegs` the callee-saved
-registers it spills and restores. `VsaIris.dlMallocImpl_of_localRuns`
-(`LocalRun.lean`, `MallocRun.lean`) builds this structure from first-order
-facts about the machine's steps. -/
 structure DlMallocImpl (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop)
     (mallocEntry freeEntry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop where
@@ -361,12 +242,5 @@ structure DlMallocImpl (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → P
   free : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (Wp : MachWP (GF := GF) M) H q n s
     (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
     textOwn (GF := GF) text ⊢ freeSpec Wp L SpOK freeEntry gpv clob saved headroom H q n s
-
-/-! ## The eb73d8c witness
-
-`PROOF_CLOSURE_PLAN.md` §2 (commit eb73d8c): on the admitted control heap
-(top chunk at `0x82000200`), `malloc(32)` writes the new top header at
-`0x82000238`, while `malloc(64)` from the same state returns
-`[0x82000210, 0x82000250)`, which contains it. -/
 
 end VsaIris

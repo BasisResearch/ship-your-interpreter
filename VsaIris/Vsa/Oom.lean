@@ -2,47 +2,16 @@ import VsaIris.Vsa.SegRO
 import VsaIris.Interp.Abort
 import VsaIris.Vsa.Stderr.FwriteSpec
 
-/-!
-# The out-of-memory block: `fwrite` then `exit(1)` (H5)
-
-Every inlined `xmalloc` NULL arm of the interpreter is the same nine
-instructions (`env_new`, `env_define`, `stringify`; `eval_expr`'s `fn` arm
-interleaves two spills):
-
-```
-h+0:  ld a5,1120(gp)       _impure_ptr
-h+4:  li a2,14
-h+8:  li a1,1
-h+12: ld a3,24(a5)         _impure_data._stderr
-h+16: auipc a0; addi a0    "out of memory\n" (0x80019040)
-h+24: jal fwrite           IrisHoles.newlib.fwrite
-h+28: li a0,1
-h+32: jal exit
-```
-
-One descriptor `OomSite` (the site's code, reflected segments and `jal`
-sites) with its decided facts `OomSite.OK` gives `wp_oomBlock`: from the
-block's head, with the site's whole stack region, the run reaches `exit`'s
-entry with `a0 = 1` and hands the abort continuation `abortRes s n` (its
-`oomCore` disjunct). Instances are generated (`scripts/gen_h5_sites.py`,
-kind `oom`).
--/
-
 namespace VsaIris.Newlib.Oom
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Sim VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Newlib.Exit VsaIris.Newlib.MainErr
 
-/-- `"out of memory\n"` (`.rodata`). -/
 def oomMsg : BitVec 64 := 0x80019040#64
 
 theorem oomMsg_text : ∀ i, i < 14 → rodataDom (oomMsg.toNat + i) := by decide
 
-/-- An out-of-memory block, as read off the disassembly: `stage`
-instructions before `jal fwrite` (6, or 8 where `eval_expr` interleaves two
-spills), the callee-saved registers they spill (`spills`: register and `sp`
-offset), all inside `[sp, sp + frameTop)`. -/
 structure OomSite where
   head : Nat
   code : List (BitVec 8)
@@ -60,12 +29,9 @@ abbrev oomLr : GRegs := [(3, gpV)]
 abbrev oomLds (simg : Nat → BitVec 8) : List (List (BitVec 8)) :=
   [imgWord simg consoleImpurePtrAddr, imgWord simg stderrPtrAddr]
 
-/-- The staging's written pins: the argument registers, `sp`, the spilled
-callee-saved registers. -/
 abbrev oomLx (S : OomSite) (a5v a2v a1v a3v a0v s' : BitVec 64) (cs : Nat → BitVec 64) : GRegs :=
   oomLw a5v a2v a1v a3v a0v ++ (2, s') :: S.spills.map fun p => (p.1, cs p.1)
 
-/-- The staging's pin keys. -/
 def oomKeys (S : OomSite) : List Nat := [15, 12, 11, 13, 10, 2] ++ S.spills.map Prod.fst ++ [3]
 
 theorem keysG_map (cs : Nat → BitVec 64) :
@@ -81,14 +47,11 @@ theorem keysG_oomLx (S : OomSite) (a5v a2v a1v a3v a0v s' : BitVec 64) (cs : Nat
     keysG (oomLx S a5v a2v a1v a3v a0v s' cs ++ oomLr) = oomKeys S := by
   simp [oomLx, oomKeys, keysG_append, keysG_map, keysG, oomLw, oomLr]
 
-/-- The staging's stack pointer: RAM above the HTIF words, 16-aligned, the
-spill window in RAM. -/
 structure OomSp (S : OomSite) (s' : BitVec 64) : Prop where
   lo : Vsa.Sim.tohostAddr + 16 ≤ s'.toNat
   hi : s'.toNat + S.frameTop ≤ 0x100000000
   align : s'.toNat % 16 = 0
 
-/-- A spill address `sp + off` inside the staging's window. -/
 theorem oomSp_off {S : OomSite} {s' : BitVec 64} (hs : OomSp S s') (off : Nat) (imm : BitVec 12)
     (himm : (sign_extend (m := 64) imm : BitVec 64).toNat = off) (hoff : off + 8 ≤ S.frameTop) :
     ∀ x : BitVec 64, x = s' + sign_extend (m := 64) imm → x.toNat = s'.toNat + off := by
@@ -96,7 +59,6 @@ theorem oomSp_off {S : OomSite} {s' : BitVec 64} (hs : OomSp S s') (off : Nat) (
   have h2 := hs.hi
   rw [hx, addr_off _ _ off himm (by omega)]
 
-/-- The decided facts about an out-of-memory block. -/
 structure OomSite.OK (S : OomSite) : Prop where
   text : TextAt S.head S.code
   stage_pos : 1 ≤ S.stage
@@ -144,15 +106,13 @@ structure OomSite.OK (S : OomSite) : Prop where
   fwPc : S.fw.pc = S.head + 4 * S.stage
   fwTgt : S.fw.tgt = fwriteEntry
   fwText : TextAt S.fw.pc S.fw.code
-  /-- `fwrite` returns to an aligned address. -/
+
   fwAlign : S.fw.pc % 4 = 0
   exCert : S.ex.Cert
   exPc : S.ex.pc = S.head + 4 * S.stage + 8
   exTgt : S.ex.tgt = exitEntry
   exText : TextAt S.ex.pc S.ex.code
 
-/-- The block's stack pointer `s'` inside the site's region `[s - n, s)`,
-with room for `fwrite` below it and the staging's spills above it. -/
 structure OomBlockSp (S : OomSite) (s : BitVec 64) (n : Nat) (s' : BitVec 64) : Prop where
   need : n ≤ s.toNat
   lo : Vsa.Sim.tohostAddr + 16 ≤ s.toNat - n
@@ -160,10 +120,9 @@ structure OomBlockSp (S : OomSite) (s : BitVec 64) (n : Nat) (s' : BitVec 64) : 
   frame : s'.toNat + S.frameTop ≤ s.toNat
   hi : s.toNat ≤ 0x88000000
   align : s'.toNat % 16 = 0
-  /-- `fwrite`'s frame is above newlib's data (the stack segment). -/
+
   data : 0x80100000 ≤ s'.toNat - fwriteNeed
 
-/-- A log inside `[lo, hi)` misses every address outside it. -/
 theorem outL_of_in {lo hi a : Nat} (ha : a < lo ∨ hi ≤ a) :
     ∀ log : List WEntry, (∀ e ∈ log, lo ≤ e.1 ∧ e.1 + e.2.1 ≤ hi) → OutL log a
   | [], _ => trivial
@@ -199,10 +158,6 @@ theorem ownSet_none (Φ : Nat → IProp GF) : ⊢ ownSet (fun _ => False) Φ := 
   · ipureintro; exact ⟨List.nodup_nil, fun a => by simp⟩
   · simp only [sepL_nil]; iempintro
 
-/-- **The out-of-memory block**, for either WP: from the block's head, owning
-every register, the site's region `[s - n, s)` with `sp = s'` inside it, and
-newlib's data, the run reaches `exit(1)`'s entry and the abort continuation
-takes over with `abortRes s n`. -/
 theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (N : Vsa.RuntimeRepr.NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
@@ -220,7 +175,7 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   unfold VsaIris.sp VsaIris.ra VsaIris.gp
   iintro ⟨Hpc, Hra, Hsp, Hargs, Htmp, Hsaved, #Hgp, #Himg, Hscr, Hstd, Herr, Hcon, Hk⟩
   ihave #Hcode := instrAt_of_binImg hS.text $$ Himg
-  -- the stack: `[s-n, s'-768)`, `fwrite`'s scratch, the spill window, the rest
+
   unfold stackScratch
   ihave ⟨Hlo, Hscr⟩ := blockOwn_split (s.toNat - n) n (s'.toNat - 768 - (s.toNat - n))
     (s'.toNat - 768) (n - (s'.toNat - 768 - (s.toNat - n))) (by omega) (by omega) rfl $$ Hscr
@@ -231,12 +186,12 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     (by omega) rfl rfl $$ Hhi
   ihave Hwin := blockOwn_range _ _ $$ Hwin
   ihave ⟨%Wf, %hWf, Hwin⟩ := sepL_byteAny_exists _ $$ Hwin
-  -- the spilled registers out of the callee-saved ones
+
   ihave ⟨Hsp1, Hsaved⟩ := (sepL_filter calleeSaved
     (fun q => decide (q ∈ S.spills.map Prod.fst)) (fun q => q ↦ᵣ cs q)).1 $$ Hsaved
   rw [hS.spillsSaved]
   ihave Hsp1 := (sepL_spills S.spills cs).1 $$ Hsp1
-  -- `_impure_ptr` and `_impure_data._stderr`
+
   ihave ⟨%simg, %⟨hok, himp⟩, Hw, Hrest, #Himp⟩ := stdioAt_open StdioOK StdWin $$ Hstd
   ihave Hw := stdWin_foot simg himp $$ [Hw]
   · iframe Hw Himp
@@ -291,12 +246,12 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   · iframe Hw Hrest Himp
   ihave Hsp1 := sepL_spills_keep S.spills _ cs hkeep $$ Hsp1
   ihave Hwin := blockOwn_of_W Wf s'.toNat S.frameTop _ hWf $$ Hwin
-  -- the callee-saved registers back together
+
   ihave Hsp1 := (sepL_spills S.spills cs).2 $$ Hsp1
   ihave Hsaved := (sepL_filter calleeSaved (fun q => decide (q ∈ S.spills.map Prod.fst))
     (fun q => q ↦ᵣ cs q)).2 $$ [Hsp1 Hsaved]
   · rw [hS.spillsSaved]; iframe Hsp1 Hsaved
-  -- `fwrite(msg, 1, 14, stderr)` below `s'`
+
   have hfw := fwrite_proved live Wp s' oomMsg 14#64 cs rodataDom (fun _ => False) rodataByte o hlive
     ⟨by unfold fwriteNeed tohostAddr; omega, by omega, h6⟩ (by unfold fwriteNeed; omega) (by decide)
     (by decide) (fun i hi => oomMsg_text i hi) (by decide) (by decide) (by unfold tohostAddr; decide)
@@ -334,7 +289,7 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
     isplitr
     · iapply binImg_rodata $$ Himg
     iapply ownSet_none
-  -- `li a0,1; jal exit`
+
   rw [show S.head + 4 * S.stage + 4 = S.head + 4 * S.stage + 4 from rfl]
   unfold callFrame VsaIris.sp readable stackScratch fwriteNeed VsaIris.gp
   iintro Hpc Hra ⟨Hargs, -, Hstd, Herr, ⟨%o', Hcon⟩, ⟨Hsp, Hscr, Hsaved, Htmp, -, -⟩⟩
@@ -356,7 +311,7 @@ theorem wp_oomBlock (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   iframe Hjex Hpc Hra
   iintro Hpc Hra
   iapply Wp.lat_intro
-  -- hand the abort continuation `exit(1)`'s entry
+
   iapply Hk
   unfold abortRes
   iapply abortAt_intro

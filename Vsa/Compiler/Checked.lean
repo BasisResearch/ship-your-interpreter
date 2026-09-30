@@ -2,27 +2,13 @@ import Vsa.Compiler.Check
 import Vsa.AbsInt.CostSound
 import Vsa.While.Validation
 
-/-!
-# The checked compiler
-
-`compileChecked p` returns `compileG p` only when three decidable checks
-pass: `supportedGB` (`SupportedG p`), `fitsB` (the code fits below
-`tohost`), and the cost analysis (`progCost` over `Const × Itv`, default
-`Cfg`) bounds the allocation cost of every run by at most `heapUnits`.
-`progCost_sound` turns the last check into the heap-budget premise of
-`compileG_correct`, so `compileChecked_correct` has no program premise
-besides acceptance.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim Vsa.AbsInt LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config Halts Diverges output)
 
-/-- The allocation-cost bound the checked compiler uses. -/
 def costBound (p : Program) : CB := progCost (A := Const × Itv) {} p
 
-/-- The bound is known and within the heap budget. -/
 def budgetB (p : Program) : Bool :=
   match costBound p with
   | some n => decide (n ≤ heapUnits)
@@ -38,9 +24,6 @@ theorem budgetB_sound {p : Program} (h : budgetB p = true) :
     exact ⟨st', m, hm, hout, Nat.le_trans hle (of_decide_eq_true h)⟩
   · cases h
 
-/-- **The checked compiler**: the code of `compileG p` when `p` is
-supported, its code fits, and its allocation cost is statically bounded
-within the heap budget. -/
 def compileChecked (p : Program) : Option (List Ins) :=
   if supportedGB p && fitsB p && budgetB p then some (compileG p) else none
 
@@ -55,14 +38,6 @@ theorem compileChecked_spec {p : Program} {code : List Ins}
     exact ⟨rfl, hc.1.1, hc.1.2, hc.2⟩
   · cases h
 
-/-- **Correctness of the checked compiler.** For every program `p` it
-accepts, and every machine configuration whose memory holds the bytes of the
-returned code at `0x80004800` (plus libgcc's multiply and signed
-divide/remainder routines at their addresses in the interpreter image), with
-the PC at the code, in a good machine state with an idle HTIF mailbox and an
-empty console: the machine halts with exit code `0` and output `out` exactly
-when `out` is a big-step behaviour of `p`, and a diverging machine means `p`
-has none. -/
 theorem compileChecked_correct (p : Program) (code : List Ins)
     (hc : compileChecked p = some code) (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
@@ -78,22 +53,14 @@ theorem compileChecked_correct (p : Program) (code : List Ins)
   obtain ⟨rfl, hs, hf, hb⟩ := compileChecked_spec hc
   exact checked_correct p hs hf (budgetB_sound hb) c hgood htick hpc hpw hout hcode hlib
 
-/-! ## `whileWl` -/
-
-/-- The analysis bounds every run of the embedded script by 8272 cost units
-(its exact cost is 6992, `whileWl_normalCost`). -/
 theorem whileWl_costBound : costBound Programs.whileWl = some 8272 := by decide +kernel
 
-/-- The checked compiler accepts the embedded script. -/
 theorem whileWl_checked : compileChecked Programs.whileWl = some (compileG Programs.whileWl) := by
   have hs : supportedGB Programs.whileWl = true := by decide +kernel
   have hf : fitsB Programs.whileWl = true := by decide +kernel
   have hb : budgetB Programs.whileWl = true := by decide +kernel
   simp only [compileChecked, hs, hf, hb, Bool.and_self, ↓reduceIte]
 
-/-- **The checked-compiled `whileWl` prints `55 2500 36` and exits 0** on
-every machine configuration that holds its code (and libgcc's routines) at
-the entry. -/
 theorem whileWl_checked_halts (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)

@@ -1,18 +1,9 @@
 import Vsa.Compiler.StmtFrag
 
-/-!
-# Simple statements
-
-Expression statements and `print`/`println` calls: their code either completes
-normally with the unique semantic result, or reaches the runtime-error exit while
-the statement has no execution.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The code of `s` completed with the unique execution `st' t` of `s`. -/
 structure StmtDone (C : Ctx) (pos : Nat) (s : Stmt) (st : St) (d : Nat) (env : Addr) (B : AM)
     (st' : St) (t : Status) : Prop where
   exec : ExecS st d env s st' t
@@ -22,13 +13,10 @@ structure StmtDone (C : Ctx) (pos : Nat) (s : Stmt) (st : St) (d : Nat) (env : A
   parents : SameParents st.store st'.store
   noRet : ∀ v, t ≠ .ret v
 
-/-- The code of `s` reached the runtime-error exit and `s` has no execution. -/
 structure StmtErr (code : List Ins) (s : Stmt) (st : St) (d : Nat) (env : Addr) (B : AM) : Prop where
   halt : astep code B = some (.halt 70)
   noExec : ∀ st' t, ¬ ExecS st d env s st' t
 
-/-- What running a statement's code achieves in one case: the unique execution
-and the relation at the exit it reaches, or the error exit. -/
 def StmtOK (code : List Ins) (C : Ctx) (pos : Nat) (s : Stmt) (st : St) (d : Nat) (env : Addr)
     (B : AM) : Prop :=
   (∃ st' t, StmtDone C pos s st d env B st' t) ∨ StmtErr code s st d env B
@@ -108,15 +96,15 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
   obtain ⟨hs12, hs3⟩ := hseg.append
   obtain ⟨hs1, hs2⟩ := hs12.append
   have hmax : maxArgs = 32 := rfl
-  -- the callee is the native
+
   obtain ⟨q, hq, hqv⟩ := native_entry f hf
   have hget : st.store.get? env f = some q :=
     hsr.1.native _ hsr.1.env_lt (fun fr hfr => hAt.nat fr hfr f (by rcases hf with h | h <;> simp [IsNative, h])) hq
-  -- the arguments
+
   have hend : (cargs C.Γ 0 pos args).2 = pos + (cargs C.Γ 0 pos args).1.length := cargs_end _ _ _ _
   obtain ⟨B1, r1, hB1⟩ := sim_args (d := d) (env := env) hAt.lay hAt.nd hAt.slot_bound args 0 pos st A hargs
     (by omega) hs1 (by rw [hend]; unfold PosOK at *; simp only [List.length_append] at hpos; omega) hA hsr.1
-  -- the result state of the call
+
   let outOf (s : St) (vs : List Value) : St :=
     ⟨s.store, s.out ++ printArgs s.store vs ++ (if f = "println" then "\n" else "")⟩
   have hcall : ∀ (s : St) (vs : List Value), Call s d q vs (outOf s vs) .null := by
@@ -189,9 +177,6 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
 
 end
 
-/-! ## Declarations -/
-
-/-- The scope, slot, and next counter after declaring `x` (as `cseq` computes them). -/
 def declInfo (C : Ctx) (x : String) : Scope × Nat × Nat :=
   match C.Γ with
   | f :: g => match f.lookup x with
@@ -268,8 +253,6 @@ theorem declInfo_names (C : Ctx) (x : String) (hne : C.Γ ≠ []) :
         exact lookup_ne_none_of_mem hy hl
       simp [this]
 
-/-- The code of `var x = e;` completed with its unique execution, leaving the
-scope and layout of the declaration's successor. -/
 structure DeclDone (code : List Ins) (C : Ctx) (pos : Nat) (x : String) (e : Expr) (st : St) (d : Nat)
     (env : Addr) (B : AM) (st1 : St) : Prop where
   exec : ExecS st d env (.varDecl x (some e)) st1 .normal
@@ -279,7 +262,6 @@ structure DeclDone (code : List Ins) (C : Ctx) (pos : Nat) (x : String) (e : Exp
   parents : SameParents st.store st1.store
   next : At code ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ (pos + (declCode C pos x e).length)
 
-/-- Declaring into a nonempty scope keeps its tail. -/
 theorem declInfo_cons {C : Ctx} {f : List (String × Nat)} {g : Scope} (x : String) (hΓ : C.Γ = f :: g) :
     (declInfo C x).1 = (declInfo C x).1.headD [] :: g := by
   obtain ⟨Γ, n, b, c⟩ := C

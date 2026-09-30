@@ -1,18 +1,9 @@
 import Vsa.Compiler.RTLeaf
 
-/-!
-# `itos`: integers to string objects
-
-`run_it`: from `itPos` with `a1 = x` and `a2 = d`, the routine writes the string
-object of `intToString x.toInt` at `d` and returns with `a3` at its end. It
-writes memory only in the object and in the digit buffer at `bufBase`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The absolute last digit of `x` as a word, from the `tmod` word. -/
 theorem digit_word (x : BitVec 64) :
     (if (BitVec.ofInt 64 (x.toInt.tmod 10)).toInt ≥ 0 then BitVec.ofInt 64 (x.toInt.tmod 10)
       else 0 - BitVec.ofInt 64 (x.toInt.tmod 10)) = BitVec.ofNat 64 (x.toInt.natAbs % 10) := by
@@ -39,8 +30,6 @@ theorem intToString_toList (z : Int) : (intToString z).toList =
   rw [intToString_eq, natToString_eq, String.toList_append, foldl_push_toList]
   split <;> simp
 
-/-- Character `q` of the rendering of an integer with digits `ds` (least
-significant first) and sign flag `sg`, as a character code. -/
 def itChar (sg : Nat) (ds : List Nat) (q : Nat) : Nat :=
   if q < sg then 45 else ds[ds.length - 1 - (q - sg)]! + 48
 
@@ -84,10 +73,8 @@ theorem digits_len (x : BitVec 64) : (digitsLE x.toInt.natAbs).length ≤ 19 :=
 theorem intToString_len_le (x : BitVec 64) : (intToString x.toInt).toList.length ≤ 20 := by
   have hl := intToString_length x.toInt; have hK := digits_len x; split at hl <;> omega
 
-/-- Registers the digit loop may change. -/
 def itLoopClob : List Nat := [ra, t0, a0, a1, a2, a3, s4, s5, s6]
 
-/-- Registers `itos` may change. -/
 def itClob : List Nat := [ra, t0, t1, t2, a0, a1, a2, a3, a6, a7, s4, s5, s6, s9]
 
 section
@@ -109,7 +96,7 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
   have e20 := srcVal_of_has h20; have e21 := srcVal_of_has h21; have e22 := srcVal_of_has h22
   simp only [s4, s5, s6] at k20 k21 k22 e20 e21 e22
   have hbn : (BitVec.ofNat 64 (bufBase + 8 * j)).toNat = bufBase + 8 * j := toNat_ofNat_lt (by omega)
-  -- from 23: the digit word is in a0
+
   have h23 : ∀ L'', Keep itLoopClob L' L'' → Has L'' a0 (BitVec.ofNat 64 (x.toInt.natAbs % 10)) →
       Has L'' s4 x → Has L'' s5 (BitVec.ofNat 64 j) → Has L'' s6 (BitVec.ofNat 64 (bufBase + 8 * j)) →
       Reaches code ⟨pcOf (itPos + 23), L'', m', o⟩ (fun B => B.out = o ∧
@@ -145,7 +132,7 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
       refine ⟨?_, ?_, ?_, ?_, by simpa using hq⟩
       all_goals reg_simp
       all_goals first | exact hk | bv_eq
-  -- 16 .. 22: the digit word
+
   have hdw := digit_word x
   apply run_block hfit hseg 16 6 (itPos + 16) rfl
     (KP := fun L3 m3 o3 => m' = m3 ∧ o = o3 ∧ Keep itLoopClob L' L3 ∧
@@ -186,7 +173,6 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
     · reg_simp; exact h21
     · reg_simp; exact h22
 
-/-- The digit loop: the digits of `|x|` (least significant first) are appended to the buffer. -/
 theorem it_digits : ∀ (N : Nat) (x : BitVec 64) (j : Nat) (ds : List Nat) (L' : GRegs) (m' : Mem)
     (o : Array String), x.toInt.natAbs = N →
     Has L' s4 x → Has L' s5 (BitVec.ofNat 64 j) → Has L' s6 (BitVec.ofNat 64 (bufBase + 8 * j)) →
@@ -245,7 +231,6 @@ theorem it_digits : ∀ (N : Nat) (x : BitVec 64) (j : Nat) (ds : List Nat) (L' 
       rw [hframe a ha (by omega), hm1]
       exact rdW_write_other _ _ _ _ (by omega)
 
-/-- The copy loop head of `itos` with `i` buffered digits left. -/
 def ItCopy (L0 : GRegs) (m : Mem) (o : Array String) (d : Nat) (r : BitVec 64) (sg : Nat)
     (ds : List Nat) (i : Nat) (A : AM) : Prop :=
   A.pc = pcOf (itPos + 42) ∧ A.out = o ∧ i ≤ ds.length ∧
@@ -258,7 +243,6 @@ def ItCopy (L0 : GRegs) (m : Mem) (o : Array String) (d : Nat) (r : BitVec 64) (
     (∀ a, a % 8 = 0 → (a + 8 ≤ d ∨ d + 8 + 8 * (sg + ds.length) ≤ a) →
       (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) → rdW A.mem a = rdW m a)
 
-/-- The destination of `itos`: writable, aligned, and apart from the digit buffer. -/
 structure ItDest (d : Nat) : Prop where
   lo : tohostAddr + 16 ≤ d
   hi : d + 168 ≤ 2 ^ 32
@@ -332,7 +316,6 @@ theorem it_copy {L0 : GRegs} {m : Mem} {o : Array String} {d : Nat} {r : BitVec 
     · reg_simp; bv_eq
     · reg_simp; exact hk
 
-/-- **`itos`.** -/
 theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : Nat}
     (h11 : Has L a1 x) (h12 : Has L a2 (BitVec.ofNat 64 d)) (hr : Has L ra r)
     (hal : r.toNat % 4 = 0) (hd : ItDest d) :
@@ -349,7 +332,7 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
   have hK := digits_len x
   have hds := digitsLE_lt x.toInt.natAbs
   have hlen := intToString_length x.toInt
-  -- the final state from the copy loop
+
   have hfin : ∀ (sg : Nat), sg = (if x.toInt < 0 then 1 else 0) → ∀ A,
       ItCopy L m o d r sg (digitsLE x.toInt.natAbs) (digitsLE x.toInt.natAbs).length A →
       Reaches code A (fun B => B.pc = r ∧ B.out = o ∧
@@ -375,7 +358,7 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
       · have := hds (digitsLE x.toInt.natAbs)[(digitsLE x.toInt.natAbs).length - 1 - (q - sg)]!
           (by rw [getElem!_pos _ _ (by omega)]; exact List.getElem_mem (by omega))
         omega
-  -- the header, from 34
+
   have hhead : ∀ L2 m2, Has L2 s5 (BitVec.ofNat 64 (digitsLE x.toInt.natAbs).length) →
       Has L2 s6 (BitVec.ofNat 64 (bufBase + 8 * (digitsLE x.toInt.natAbs).length)) →
       Has L2 a6 x → Has L2 a7 (BitVec.ofNat 64 d) → Has L2 s9 r → Keep itClob L L2 →
@@ -449,7 +432,7 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
       · intro a ha h1 h2
         rw [rdW_upd (by omega) ha, if_neg (by omega), rdW_upd (by omega) ha, if_neg (by omega)]
         exact hfr a ha h2
-  -- prologue and digits
+
   have k11 := has_mem h11 (by decide); have k12 := has_mem h12 (by decide)
   have k1 := has_mem hr (by decide)
   have e11 := srcVal_of_has h11; have e12 := srcVal_of_has h12; have e1 := srcVal_of_has hr

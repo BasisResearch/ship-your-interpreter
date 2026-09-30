@@ -2,36 +2,16 @@ import VsaIris.Vsa.Stderr.FwriteRun
 import VsaIris.Vsa.Stdout.OutSpec
 import VsaIris.Interp.StrIris
 
-/-!
-# `newlib.fwrite`, proved (lane N3)
-
-`fwrite_proved`: `Newlib.fwriteSpec` for every Iris instance and both WPs,
-from `fwriteErr_run` (the whole call as one printing symbolic run) and N1's
-`wp_lroW`:
-
-* the run owns `outS s 768` (newlib's exclusive data, `errno`, the call
-  frame's stack) at one tracking memory agreeing with the `StdioOK` image
-  (`outS_own`), so `ConsoleMt`/`ErrMt` hold of it;
-* its code is `stdioText` (all `.text`, `stdioText_code`, from `binImg`); its
-  data view holds `_impure_ptr` (`impureRO`) and the bytes written out
-  (`readable`'s read-only part), one image `fwImg` (`fwView`);
-* at the return, `FwritePost` makes the data `StdioErrOK` (`fwQ_of`), and
-  `RetOK` gives back `sp`, `ra` and the saved registers (`ret_regs`).
--/
-
 namespace VsaIris.Newlib
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
-/-! ## Code and data view -/
-
 theorem stdioText_all :
     stdioText.all (fun p => decide (textDom p.1) && textByte p.1 == p.2) = true := by
   decide +kernel
 
-/-- `stdioText` is a slice of the image's `.text`. -/
 theorem stdioText_code : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2 := by
   intro p hp
   have h := List.all_eq_true.1 stdioText_all p hp
@@ -41,13 +21,10 @@ theorem stdioText_code : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2
 theorem stdioText_live {live : Nat → Prop} (hcl : CodeLive live) : ∀ p ∈ stdioText, live p.1 :=
   fun p hp => hcl _ (stdioText_code p hp).1
 
-/-- The data view's image: `_impure_ptr`, and the read-only bytes `rd`. -/
 def fwImg (rd : Nat → BitVec 8) (a : Nat) : BitVec 8 := if impureW a then impureByte a else rd a
 
-/-- The data view's addresses: `_impure_ptr`, the `n` bytes at `p`. -/
 abbrev fwDA (p n : Nat) : List Nat := accAddrs 0x8001b970 8 ++ accAddrs p n
 
-/-- The data view. -/
 def fwDt (rd : Nat → BitVec 8) (p n : Nat) : Mem := fillMem (fwImg rd) (fwDA p n)
 
 theorem imgM_fwDt {rd : Nat → BitVec 8} {p n a : Nat} (h : a ∈ fwDA p n) :
@@ -66,7 +43,6 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- `_impure_ptr` and the read-only bytes, as one read-only image. -/
 theorem roImg_fw (Sro : Nat → Prop) (rd : Nat → BitVec 8) :
     impureRO (GF := GF) ∗ roImg Sro rd ⊢ roImg (fun a => impureW a ∨ Sro a) (fwImg rd) := by
   unfold impureRO roImg
@@ -77,7 +53,6 @@ theorem roImg_fw (Sro : Nat → Prop) (rd : Nat → BitVec 8) :
   · unfold fwImg; rw [if_pos hi]; iapply Hi $$ %k %hi
   · unfold fwImg; rw [if_neg hi]; iapply Hr $$ %k %(hk.resolve_left hi)
 
-/-- **The run's read-only cells**: `gp`, the code, the data view. -/
 theorem fwView (Sro : Nat → Prop) (rd : Nat → BitVec 8) (p n : Nat) (hro : ∀ i, i < n → Sro (p + i)) :
     iprop(gp ↦ᵣ□ gpV ∗ binImg ∗ impureRO ∗ roImg Sro rd) ⊢@{IProp GF}
       roOwn roR (stdioText ++ dataOf (fwDt rd p n) (fwDA p n)) := by
@@ -102,10 +77,6 @@ theorem fwView (Sro : Nat → Prop) (rd : Nat → BitVec 8) (p n : Nat) (hro : �
     rw [show p + (a - p) = a by omega] at e
     exact .inr e
 
-/-! ## The footprint -/
-
-/-- **A stderr call's footprint**: the stack below `s`, newlib's exclusive
-data and `errno`, at one tracking memory agreeing with the data's image. -/
 theorem outS_own (s : BitVec 64) (need : Nat) (img : Nat → BitVec 8) (hns : need ≤ s.toNat) :
     iprop(stackScratch s need ∗ ownSet stdioExcl (fun a => a ↦ₘ img a) ∗ errnoOwn) ⊢@{IProp GF}
       ∃ M : Mem, ownSet (outS s need) (fun a => a ↦ₘ imgM M a) ∗
@@ -137,7 +108,6 @@ theorem outS_own (s : BitVec 64) (need : Nat) (img : Nat → BitVec 8) (hns : ne
   · ipureintro
     exact fun a ha => (h2 a (.inl ha)).trans ((h1d a ha).trans (hMd a ha))
 
-/-- **The footprint taken back apart**, at the final image `mv`. -/
 theorem outS_split (s : BitVec 64) (need : Nat) (mv : Nat → BitVec 8)
     (hlo : 0x8001c168 ≤ s.toNat - need) (hns : need ≤ s.toNat) :
     ownSet (GF := GF) (outS s need) (fun a => a ↦ₘ mv a) ⊢
@@ -163,13 +133,8 @@ theorem outS_split (s : BitVec 64) (need : Nat) (mv : Nat → BitVec 8)
 
 end
 
-/-! ## The end state -/
-
-/-- newlib's data at the end: `_impure_ptr` as at the start, every other byte
-the run's. -/
 def fwOut (img mv : Nat → BitVec 8) (a : Nat) : BitVec 8 := if impureW a then img a else mv a
 
-/-- What the run ends in. -/
 def FwQ (o : String) (bs : List (BitVec 8)) (r s : BitVec 64) (cs : Nat → BitVec 64)
     (img : Nat → BitVec 8) (t : String) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop :=
   t = o ++ putcs bs ∧ rv 32 = r ∧ rv 1 = r ∧ rv 2 = s ∧ (∀ x ∈ calleeSaved, rv x = cs x) ∧
@@ -181,7 +146,6 @@ theorem calleeSaved_kept : ∀ x ∈ calleeSaved, x ∈ iRegs ∧ x ≠ 32 ∧ x
 theorem stdioFoot_off {a : Nat} (h : stdioFoot a) : a < 0x8001c168 ∧ ¬ errnoFoot a := by
   unfold stdioFoot InRange at h; unfold errnoFoot InRange; omega
 
-/-- **The run's end is `FwQ`.** -/
 theorem fwQ_of {o : String} {bs : List (BitVec 8)} {r s n : BitVec 64} {cs : Nat → BitVec 64}
     {img : Nat → BitVec 8} {M Mt' : Mem} {rv R' : Nat → BitVec 64} {rv' : Nat → BitVec 64}
     {mv' : Nat → BitVec 8} (hok : StdioOK img) (hM : ∀ a, stdioExcl a → imgM M a = img a)
@@ -217,15 +181,10 @@ theorem fwQ_of {o : String} {bs : List (BitVec 8)} {r s n : BitVec 64} {cs : Nat
   · rw [hcur _ _ (F _ _ (by decide) (by decide))]; exact hp.base
   · rw [hcur _ _ (F _ _ (by decide) (by decide))]; exact hp.lockMode
 
-/-! ## The call -/
-
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`fwrite(ptr, 1, n, stderr)`, proved**: for `0 < n < 2^30` read-only
-bytes in RAM off the tohost cells, the stack (below `s`, above newlib's data),
-newlib's data and `errno`. -/
 theorem fwrite_proved (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live))
     (s ptr n : BitVec 64) (cs : Nat → BitVec 64) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8)
     (o : String) (hcl : CodeLive live) (hsp : SpIn s fwriteNeed)

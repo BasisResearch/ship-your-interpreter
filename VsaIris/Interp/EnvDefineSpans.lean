@@ -1,30 +1,9 @@
 import VsaIris.Interp.EnvScanCore
 
-/-!
-# `env_define`'s spans, first-order
-
-`env_define(env, name, v)` (`0x80002a5c`, `env.c:22`). Registers: `s4` the
-frame, `s2` the name, `s5` the value pointer, `s3` the count, `s6` the names
-array, `s0` the index, `s1` the names cursor. The spans:
-
-* `def_entry` `0x80002a5c` → `0x80002bf4` (empty frame) | `0x80002ab0` (scan);
-* `def_load` `0x80002ab0` → `0x80002ab8` (`jal strcmp`);
-* `def_cmp` `0x80002abc` → `0x80002ab0` (next) | `0x80002b14` (miss) | `0x80002ac0` (hit);
-* `def_write` `0x80002ac0` → `0x80002aec`, the hit: `vals[i] := *v`;
-* `def_epi` `0x80002aec` → return;
-* `def_cap` `0x80002b14` → `0x80002b90` (full: grow) | `0x80002b1c` (append);
-* `def_empty` `0x80002bf4` → `0x80002b98` (first growth, `cap := 8`) | `0x80002b1c`;
-* the growth and append spans around the `realloc`/`strlen`/`malloc`/`memcpy` calls.
-
-The stack frame after the prologue is `DefStack`: `sp = s - 64` and the
-eight spilled words `ra`, `s0-s6`.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris.Sym VsaIris.MallocFast Vsa.MemRepr Vsa.Sim
 
-/-- `env_define`'s stack frame after its prologue (entry `sp = s`). -/
 structure DefStack (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (R : Nat → BitVec 64)
     (Mt : Mem) : Prop where
   sp : (R 2).toNat = s - 64
@@ -37,7 +16,6 @@ structure DefStack (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (R : Nat �
   s5 : ldv .ld Mt (s - 56) = sv 21
   s6 : ldv .ld Mt (s - 64) = sv 22
 
-/-- `DefStack` reads only the stack frame and `sp`. -/
 theorem DefStack.congr {s : Nat} {r : BitVec 64} {sv : Nat → BitVec 64} {R R' : Nat → BitVec 64}
     {Mt Mt' : Mem} (h : DefStack s r sv R Mt) (h2 : R' 2 = R 2)
     (hm : ∀ a, s - 64 ≤ a → a < s → imgM Mt' a = imgM Mt a) (hs : 64 ≤ s) :
@@ -50,7 +28,6 @@ theorem DefStack.congr {s : Nat} {r : BitVec 64} {sv : Nat → BitVec 64} {R R' 
     (c 48 (by omega) (by omega)).trans h.s4, (c 56 (by omega) (by omega)).trans h.s5,
     (c 64 (by omega) (by omega)).trans h.s6⟩
 
-/-- A store into the 64-byte frame at `B` misses every address outside it. -/
 theorem imgM_frame_store {Mt : Mem} {B : BitVec 64} {lo c w a : Nat} (v : BitVec 64)
     (hB : B.toNat = lo) (hlo : lo + 64 < 2 ^ 64) (hc : c + w ≤ 64) (ha : a < lo ∨ lo + 64 ≤ a) :
     imgM (writeLog Mt [((B + BitVec.ofNat 64 c).toNat, w, v)]) a = imgM Mt a := by
@@ -59,14 +36,11 @@ theorem imgM_frame_store {Mt : Mem} {B : BitVec 64} {lo c w a : Nat} (v : BitVec
   have : c % 2 ^ 64 = c := Nat.mod_eq_of_lt (by omega)
   rw [this, Nat.mod_eq_of_lt (by omega)]; omega
 
-/-- `imgM_frame_store` at offset `0`. -/
 theorem imgM_frame_store0 {Mt : Mem} {B : BitVec 64} {lo w a : Nat} (v : BitVec 64)
     (hB : B.toNat = lo) (hw : w ≤ 64) (ha : a < lo ∨ lo + 64 ≤ a) :
     imgM (writeLog Mt [(B.toNat, w, v)]) a = imgM Mt a := by
   apply imgM_store_miss; omega
 
-/-- The prologue `0x80002a5c`: spill `ra`, `s0-s6`, read the count, move the
-arguments into `s4`/`s2`/`s5`. -/
 theorem def_pro {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n : Nat}
     {r : BitVec 64} {sv : Nat → BitVec 64} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlo : htifLo + 16 + 64 ≤ s) (hhi : s ≤ 0x100000000) (hal : s % 16 = 0)
@@ -129,15 +103,12 @@ theorem def_pro {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
     simp (disch := first | decide | omega | exact ha') only [imgM_frame_store _ hBn,
       imgM_frame_store0 _ hBn]
 
-/-- The scan's start in a nonempty frame: `s6 := names`, `s0 := 0`, `s1 := names`. -/
 structure DefHead (G : FrameGeom) (R R' : Nat → BitVec 64) : Prop where
   keep : ∀ k, k ≠ 8 → k ≠ 9 → k ≠ 22 → R' k = R k
   idx : R' 8 = 0#64
   cur : R' 9 = BitVec.ofNat 64 G.pn
   arr : R' 22 = BitVec.ofNat 64 G.pn
 
-/-- The count test `0x80002a90`: an empty frame goes to the growth check,
-a nonempty one to the scan. -/
 theorem def_head {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G n) (he : (R 10).toNat = G.e)
@@ -169,7 +140,6 @@ theorem def_head {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hpn
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hpn
 
-/-- The load of name `i` `0x80002ab0`: `a0 := names[i]`, `a1 := name`. -/
 theorem def_load {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G n) (hi : i < n) (h9 : (R 9).toNat = G.pn + 8 * i) :
@@ -187,8 +157,6 @@ theorem def_load {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out
   · simp
   · simp [upd_apply, h10, h11]
 
-/-- The compare's branch `0x80002abc`: `bnez a0` to the next name (or the
-frame's end), or on to the hit write. -/
 theorem def_cmp {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem} (hi : i < n) (hn : n < 2 ^ 31)
     (h8 : R 8 = BitVec.ofNat 64 i) (h19 : R 19 = BitVec.ofNat 64 n) :
@@ -218,7 +186,6 @@ theorem def_cmp {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
   · intro hc
     exact hk _ _ _ ⟨rfl, .inr (.inr ⟨by simpa using hc, rfl, rfl⟩)⟩
 
-/-- The epilogue's loads read back the spilled words. -/
 theorem DefStack.restore {s : Nat} {r : BitVec 64} {sv : Nat → BitVec 64} {R : Nat → BitVec 64}
     {Mt : Mem} (h : DefStack s r sv R Mt) (hs : 64 ≤ s) (hs' : s ≤ 0x100000000) :
     ldv .ld Mt (R 2 + 56#64).toNat = r ∧ ldv .ld Mt (R 2 + 48#64).toNat = sv 8 ∧
@@ -239,13 +206,11 @@ theorem DefStack.restore {s : Nat} {r : BitVec 64} {sv : Nat → BitVec 64} {R :
   · rw [show (8#64 : BitVec 64) = BitVec.ofNat 64 8 from rfl, e 8 (by omega)]; exact h.s5
   · rw [hsp, show s - 64 = s - 64 from rfl]; exact h.s6
 
-/-- `env_define`'s return: `ra`, `sp` and the callee-saved registers restored. -/
 structure DefRet (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (R' : Nat → BitVec 64) : Prop where
   ra : R' 1 = r
   sp : R' 2 = BitVec.ofNat 64 s
   saved : ∀ k ∈ defineSaved, R' k = sv k
 
-/-- The epilogue `0x80002aec`: restore `ra`, `s0-s6`, pop, return. -/
 theorem def_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s : Nat} {S : Nat → Prop}
     {r : BitVec 64} {sv : Nat → BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (hs : htifLo + 16 + 64 ≤ s) (hs' : s ≤ 0x100000000) (hra : r.toNat % 4 = 0)
@@ -277,7 +242,6 @@ theorem def_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s : Na
     · exact hr21
     · exact hr22
 
-/-- The hit `0x80002ac0`: `vals[i] := *v` (the same code as `set_write`). -/
 theorem def_write {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G n) (hi : i < n)
@@ -318,8 +282,6 @@ theorem def_write {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s ou
   · rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
       imgM_store_miss _ _ (by omega)]
 
-/-- A frame's capacity is below `2^28` (the names array is in the upper half
-of 32-bit RAM). -/
 theorem FrameLayout.cap_lt {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : FrameLayout img G n) : G.cap < 2 ^ 28 := by
   rcases Nat.eq_zero_or_pos G.cap with h0 | hpos
@@ -330,7 +292,6 @@ theorem FrameLayout.cap_lt {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
   unfold htifLo at this
   omega
 
-/-- `slliw` of a small word. -/
 theorem sext_slliw (c : Nat) (h : c < 2 ^ 29) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 c) <<< 1) =
       BitVec.ofNat 64 (2 * c) := by
@@ -342,7 +303,6 @@ theorem sext_slliw (c : Nat) (h : c < 2 ^ 29) :
     simp [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq]
     omega
 
-/-- `addiw _, _, 1` of a small word. -/
 theorem sext_addiw (n : Nat) (h : n + 1 < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 n + 1#64)) =
       BitVec.ofNat 64 (n + 1) := by
@@ -354,23 +314,18 @@ theorem sext_addiw (n : Nat) (h : n + 1 < 2 ^ 31) :
     simp [BitVec.toNat_add]
     omega
 
-/-- `slli _, _, 3` of a small word. -/
 theorem shl3_small (c : Nat) (h : c < 2 ^ 32) :
     BitVec.ofNat 64 c <<< 3 = BitVec.ofNat 64 (8 * c) := by
   apply BitVec.eq_of_toNat_eq
   simp [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq]
   omega
 
-/-- The growth's registers at `0x80002b98`: `a5 = cap'`, `a1 = 8 * cap'`,
-`s6` the old names array. -/
 structure DefGrow (cap' pn : Nat) (R R' : Nat → BitVec 64) : Prop where
   keep : ∀ k, k ≠ 11 → k ≠ 15 → k ≠ 22 → R' k = R k
   cap : R' 15 = BitVec.ofNat 64 cap'
   names : R' 11 = BitVec.ofNat 64 (8 * cap')
   arr : R' 22 = BitVec.ofNat 64 pn
 
-/-- After a miss `0x80002b14`: a full frame grows to `2 * cap`, otherwise the
-binding is appended. -/
 theorem def_cap {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G n) (he : (R 20).toNat = G.e)
@@ -409,7 +364,6 @@ theorem def_cap {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
     refine hk _ _ _ ⟨rfl, .inr ⟨fun h => hc' (by rw [h]), rfl, fun k h15 => ?_⟩⟩
     simp [upd_apply, h15]
 
-/-- An empty frame `0x80002bf4` (`cap = 0`): the first growth, to 8. -/
 theorem def_empty {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G 0) (he : (R 10).toNat = G.e) (h19 : R 19 = 0#64) :
@@ -444,7 +398,6 @@ theorem def_empty {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s ou
       · simp [upd_apply]
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hpn
 
-/-- A word store read back through the image. -/
 theorem imgLE4_store (Mt : Mem) (a : Nat) (v : BitVec 64) :
     imgLE (imgM (writeLog Mt [(a, 4, v)])) a 4 = v.toNat % 2 ^ 32 := by
   simp only [writeLog, List.foldl, applyW, writeMap4, imgM, imgLE, Std.ExtHashMap.getElem?_insert,
@@ -452,14 +405,12 @@ theorem imgLE4_store (Mt : Mem) (a : Nat) (v : BitVec 64) :
   simp [swData, Sail.BitVec.extractLsb, Nat.shiftRight_eq_div_pow]
   omega
 
-/-- The `Env` struct at `e` sits in RAM above the HTIF words, 8-aligned. -/
 structure EnvWin (e : Nat) : Prop where
   lo : 0x80000000 ≤ e
   hi : e + 32 ≤ 0x100000000
   htif : htifLo + 16 ≤ e
   align : e % 8 = 0
 
-/-- A frame's struct window. -/
 theorem FrameLayout.envWin {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : FrameLayout img G n) : EnvWin G.e := by
   have hw := h.win G.sblk (by simp [FrameGeom.blocks])
@@ -467,8 +418,6 @@ theorem FrameLayout.envWin {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
   have := hw.lo; have := hw.hi; have := hw.htif
   exact ⟨by omega, by omega, by omega, h.e_align⟩
 
-/-- The growth's first step `0x80002b98`: `cap := cap'`, `a0 := names`; on to
-`jal realloc`. -/
 theorem def_grow1 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {e : Nat} {R : Nat → BitVec 64} {Mt : Mem}
     (hw : EnvWin e) (he : (R 20).toNat = e) (hS : ∀ a, e ≤ a → a < e + 32 → S a) :
@@ -482,8 +431,6 @@ theorem def_grow1 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : 
   · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
   refine hk _ _ _ ⟨rfl, by rw [h4], by simp [upd_apply], fun k hk => by simp [upd_apply, hk]⟩
 
-/-- The growth's middle `0x80002ba4`: `names := a0`, `a0 := vals`,
-`a1 := 24 * cap'`; on to `jal realloc`. -/
 theorem def_grow2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {e cap pv : Nat} {R : Nat → BitVec 64} {Mt : Mem}
     (hw : EnvWin e) (he : (R 20).toNat = e) (hS : ∀ a, e ≤ a → a < e + 32 → S a)
@@ -513,8 +460,6 @@ theorem def_grow2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : 
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hld]; exact h24
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hld]
 
-/-- The growth's end `0x80002bc0`: `vals := a0`; both arrays non-NULL go on
-to the append, otherwise to the out-of-memory arm. -/
 theorem def_grow3 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {e p1 : Nat} {R : Nat → BitVec 64} {Mt : Mem}
     (hw : EnvWin e) (he : (R 20).toNat = e) (hS : ∀ a, e ≤ a → a < e + 32 → S a)
@@ -552,7 +497,6 @@ theorem def_grow3 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : 
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Classical.not_not] at ha
       exact hk _ _ _ ⟨by rw [h16], fun k hk => by simp [upd_apply, hk], .inr ⟨.inr ha, rfl⟩⟩
 
-/-- The append's start `0x80002b1c`: `a0 := name`; on to `jal strlen`. -/
 theorem def_app1 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {R : Nat → BitVec 64} {Mt : Mem} :
     Span live S 0x80002b1c#64 R Mt
@@ -562,7 +506,6 @@ theorem def_app1 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : N
   sx_run hl at 0x80002b20
   exact hk _ _ _ ⟨rfl, rfl, by simp [upd_apply], fun k hk => by simp [upd_apply, hk]⟩
 
-/-- After `strlen` `0x80002b24`: `s0 := a0 := len + 1`; on to `jal malloc`. -/
 theorem def_app2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {R : Nat → BitVec 64} {Mt : Mem} :
     Span live S 0x80002b24#64 R Mt
@@ -573,8 +516,6 @@ theorem def_app2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : N
   exact hk _ _ _ ⟨rfl, rfl, by simp [upd_apply], by simp [upd_apply],
     fun k h8 h10 => by simp [upd_apply, h8, h10]⟩
 
-/-- After `malloc` `0x80002b30`: `s1 := a0`; NULL goes to the out-of-memory
-arm, otherwise `a2 := len + 1`, `a1 := name` and on to `jal memcpy`. -/
 theorem def_app3 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {R : Nat → BitVec 64} {Mt : Mem} :
     Span live S 0x80002b30#64 R Mt
@@ -593,16 +534,12 @@ theorem def_app3 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : N
     exact hk _ _ _ ⟨rfl, by simp [upd_apply], .inr ⟨hc, rfl, by simp [upd_apply],
       by simp [upd_apply], fun k h9 h11 h12 => by simp [upd_apply, h9, h11, h12]⟩⟩
 
-/-- `n` bytes at `a` a doubleword access may touch: RAM above the HTIF
-words, 8-aligned. -/
 structure WordsWin (a n : Nat) : Prop where
   lo : 0x80000000 ≤ a
   hi : a + n ≤ 0x100000000
   htif : htifLo + 16 ≤ a
   align : a % 8 = 0
 
-/-- What the append's stores leave: `names[n] := np`, `vals[n] := *v`,
-`count := n + 1`, nothing else. -/
 structure AppOut (e n pn pv vp : Nat) (np : BitVec 64) (Mt Mt' : Mem) : Prop where
   name : ldv .ld Mt' (pn + 8 * n) = np
   w0 : ldv .ld Mt' (pv + 24 * n) = ldv .ld Mt vp
@@ -612,8 +549,6 @@ structure AppOut (e n pn pv vp : Nat) (np : BitVec 64) (Mt Mt' : Mem) : Prop whe
   frame : ∀ a, ¬ InExt (pn + 8 * n, 8) a → ¬ InExt (pv + 24 * n, 24) a → ¬ InExt (e, 4) a →
     imgM Mt' a = imgM Mt a
 
-/-- The append's stores `0x80002b44`: the new name pointer and value into
-slot `n`, the count bumped; on to the epilogue. -/
 theorem def_app4 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {e n pn pv vp : Nat} {R : Nat → BitVec 64} {Mt : Mem}
     (hw : EnvWin e) (he : (R 20).toNat = e) (hvp : (R 21).toNat = vp)

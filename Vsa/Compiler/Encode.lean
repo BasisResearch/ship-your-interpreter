@@ -1,33 +1,14 @@
 import Vsa.Sim.BlockTerm
 
-/-!
-# Compiler target instructions: encoding and generic decode facts
-
-The WHILE compiler emits a small RV64I subset (`Ins`). Unlike the interpreter
-proof, whose code is one fixed binary with a decode lemma per concrete word,
-compiled code varies with the source program, so every decode fact here is
-stated for symbolic register fields and immediates.
-
-* `Ins.encode` is the standard RV64I encoding (registers taken mod 32).
-* `decode_*_gen` are Sail `ext_decode` facts for any word whose opcode/funct
-  slices have the stated values; `Ins.toM`/`Ins.toT` package an instruction at
-  a PC as the block layer's `MInstr`/`TInstr`, and `decodeFactM_toM` /
-  `decodeFactT_toT` discharge `DecodeFactM`/`DecodeFactT` for them. The block
-  layer (`block_mem_run`, `term_step_bt`) then supplies the machine step.
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Vsa.Sim
 
-/-- Branch comparisons used by the compiler. -/
 inductive BrOp where
   | eq | ne | lt | ge
   deriving DecidableEq, Repr
 
-/-- The emitted instruction subset. Register fields are GPR indices; memory
-accesses have offset `0`; `br`/`jal` offsets are byte offsets. -/
 inductive Ins where
   | addi (rd rs1 : Nat) (imm : BitVec 12)
   | ori (rd rs1 : Nat) (imm : BitVec 12)
@@ -40,8 +21,6 @@ inductive Ins where
   | jal (rd : Nat) (off : BitVec 21)
   | jalr (rs1 : Nat)
   deriving DecidableEq, Repr
-
-/-! ## Encoding -/
 
 def encI (imm rs1 f3 rd opc : Nat) : BitVec 32 :=
   BitVec.ofNat 32 (imm % 4096 * 2^20 + rs1 % 32 * 2^15 + f3 * 2^12 + rd % 32 * 2^7 + opc)
@@ -67,7 +46,6 @@ def BrOp.f3 : BrOp → Nat
 def BrOp.bop : BrOp → bop
   | .eq => .BEQ | .ne => .BNE | .lt => .BLT | .ge => .BGE
 
-/-- The standard RV64I encoding. -/
 def Ins.encode : Ins → BitVec 32
   | .addi rd rs1 imm => encI imm.toNat rs1 0 rd 0x13
   | .ori rd rs1 imm => encI imm.toNat rs1 6 rd 0x13
@@ -79,8 +57,6 @@ def Ins.encode : Ins → BitVec 32
   | .br op rs1 rs2 off => encB off.toNat rs2 rs1 op.f3
   | .jal rd off => encJ off.toNat rd
   | .jalr rs1 => encI 0 rs1 0 0 0x67
-
-/-! ## Slices of the encodings -/
 
 theorem xl_toNat (w : BitVec 32) (hi lo : Nat) :
     (Sail.BitVec.extractLsb w hi lo).toNat = w.toNat / 2^lo % 2^(hi - lo + 1) := by
@@ -118,7 +94,6 @@ theorem encJ_toNat (imm rd : Nat) :
 
 theorem BrOp.f3_lt (op : BrOp) : op.f3 < 8 := by cases op <;> decide
 
-/-- Reduce a slice equation to arithmetic on the encoding. -/
 theorem xl_eq {w : BitVec 32} {hi lo n : Nat} {x : BitVec n}
     (h : w.toNat / 2^lo % 2^(hi - lo + 1) = x.toNat) (hn : hi - lo + 1 = n) :
     Sail.BitVec.extractLsb w hi lo = hn ▸ x := by
@@ -156,8 +131,6 @@ theorem regidx_at20 (n : Nat) (w : BitVec 32)
     exact h
   rw [this]
 
-/-! ## Generic decode facts -/
-
 theorem regm (x : BitVec 5) : encdec_reg_backwards_matches x = true := by
   simp [encdec_reg_backwards_matches, Functions.base_E_enabled, Functions.not]
 
@@ -174,7 +147,6 @@ theorem pure_bind' {α β : Type} (a : α)
     (f : α → EStateM (Sail.Error Register) (SequentialState RegisterType trivialChoiceSource) β) :
     (EStateM.pure a).bind f = f a := rfl
 
-/-- The three control-register pins every decode fact assumes. -/
 abbrev DecPins (σ : SequentialState RegisterType trivialChoiceSource) : Prop :=
   σ.regs.get? Register.misa = some ((Vsa.Sim.initMisa) : RegisterType Register.misa) ∧
   σ.regs.get? Register.cur_privilege =
@@ -183,9 +155,6 @@ abbrev DecPins (σ : SequentialState RegisterType trivialChoiceSource) : Prop :=
 
 set_option linter.unusedSimpArgs false
 
-/-- Peel `ext_decode` for a symbolic word whose selecting slices are pinned by
-the given equations: every earlier decoder arm fails on the opcode, and the
-target arm's field extraction remains symbolic. -/
 syntax "decode_gen" "[" term,* "]" : tactic
 macro_rules
   | `(tactic| decode_gen [$hs,*]) => `(tactic| (
@@ -271,13 +240,10 @@ theorem decode_jalr_gen (w : BitVec 32) (σ : SSt) (h : DecPins σ)
   obtain ⟨_, h2, h3⟩ := h
   decode_gen [h2, h3, hop, hf3]
 
-/-! ## Block-layer packaging -/
-
 theorem toNat_append' {m n : Nat} (x : BitVec m) (y : BitVec n) :
     (x ++ y).toNat = x.toNat * 2^n + y.toNat := by
   rw [BitVec.toNat_append, ← Nat.shiftLeft_add_eq_or_of_lt y.isLt, Nat.shiftLeft_eq]
 
-/-- Little-endian bytes of a word. -/
 def byte (w : BitVec 32) (k : Nat) : BitVec 8 := w.extractLsb' (8 * k) 8
 
 theorem bytes_word (w : BitVec 32) :
@@ -288,11 +254,9 @@ theorem bytes_word (w : BitVec 32) :
   have := w.isLt
   omega
 
-/-- The branch/jump offset as the decoder reassembles it (bit 0 cleared). -/
 def evenB (off : BitVec 13) : BitVec 13 := BitVec.ofNat 13 (off.toNat / 2 * 2)
 def evenJ (off : BitVec 21) : BitVec 21 := BitVec.ofNat 21 (off.toNat / 2 * 2)
 
-/-- Straight-line instructions, as the block layer's `MInstr` at `pc`. -/
 def Ins.toM (pc : BitVec 64) (i : Ins) : MInstr :=
   let w := i.encode
   let mk (k : MKind) (rd rs1 rs2 : Nat) (imm : BitVec 12) : MInstr :=
@@ -307,8 +271,6 @@ def Ins.toM (pc : BitVec 64) (i : Ins) : MInstr :=
   | .sd rs2 rs1 => mk .sd 0 rs1 rs2 0
   | _ => mk .addi 0 0 0 0
 
-/-- Control transfers without a link register, as the block layer's `TInstr`
-at `pc`; `taken` is the branch polarity. -/
 def Ins.toT (pc : BitVec 64) (taken : Bool) (i : Ins) : TInstr :=
   let w := i.encode
   let mk (k : TKind) (rs1 rs2 : Nat) (i13 : BitVec 13) (i21 : BitVec 21) : TInstr :=
@@ -319,11 +281,9 @@ def Ins.toT (pc : BitVec 64) (taken : Bool) (i : Ins) : TInstr :=
   | .jalr rs1 => mk .jr rs1 0 0 0
   | _ => mk .j 0 0 0 0
 
-/-- The instruction is straight-line (an `MInstr`). -/
 def Ins.IsM : Ins → Prop
   | .addi .. | .ori .. | .slli .. | .add .. | .sub .. | .ld .. | .sd .. => True
   | _ => False
-
 
 theorem decodeFactM_toM (pc : BitVec 64) (i : Ins) (hi : i.IsM) :
     DecodeFactM (i.toM pc) := by
@@ -398,7 +358,6 @@ theorem decodeFactM_toM (pc : BitVec 64) (i : Ins) (hi : i.IsM) :
   | jal => exact hi.elim
   | jalr => exact hi.elim
 
-/-- A field of a word presented as `(high * 2^m + x) * 2^k + low`. -/
 theorem slice_of (q x r k m : Nat) (hr : r < 2^k) (hx : x < 2^m) :
     ((q * 2^m + x) * 2^k + r) / 2^k % 2^m = x := by
   rw [Nat.add_comm _ r, Nat.add_mul_div_right _ _ (Nat.two_pow_pos k), Nat.div_eq_of_lt hr,
@@ -559,7 +518,6 @@ theorem xl_evenJ (off : BitVec 21) (rd : Nat) :
   simp
   omega
 
-/-- The instruction transfers control without writing a link register. -/
 def Ins.IsT : Ins → Prop
   | .br .. | .jalr .. => True
   | .jal rd _ => rd % 32 = 0
@@ -594,7 +552,6 @@ theorem decodeFactT_toT (pc : BitVec 64) (taken : Bool) (i : Ins) (hi : i.IsT) :
     rfl
   | _ => exact hi.elim
 
-/-- Decode of a linking `jal rd, off`. -/
 theorem decode_jal_link (s : SSt) (hp : DecPins s) (rd : Nat) (off : BitVec 21) :
     (ext_decode (Ins.jal rd off).encode).run s
       = .ok (instruction.JAL (evenJ off, gprIdx rd)) s := by
@@ -603,7 +560,6 @@ theorem decode_jal_link (s : SSt) (hp : DecPins s) (rd : Nat) (off : BitVec 21) 
     decode_jal_gen _ s hp (xl_eq (by rw [f1]; rfl) rfl), xl_evenJ off rd,
     regidx_at7 rd _ f2]
 
-/-- Every emitted word has the non-compressed low bits `0b11`. -/
 theorem encode_rvc (i : Ins) :
     Sail.BitVec.extractLsb i.encode 1 0 = (0b11#2 : BitVec 2) := by
   apply BitVec.eq_of_toNat_eq

@@ -1,14 +1,5 @@
 import Vsa.Compiler.StmtCases
 
-/-!
-# A structural bound on the size of compiled code
-
-`compile_length_le`: the code of `compile p` has at most `123 + seqSize p`
-instructions, where `seqSize` depends only on the syntax. Deciding
-`Fits (compile p)` for a concrete program through this bound avoids evaluating
-the compiler in the kernel.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While

@@ -1,29 +1,12 @@
 import Vsa.Compiler.Machine
 
-/-!
-# Lifting abstract steps to the Sail machine
-
-`step_sim`: an abstract step `astep code A = some (.run A')` from a configuration
-realizing `A` is realized by at least one machine step. `halt_sim`: an abstract
-halt is a machine `Halted` with the same exit code and console output.
-`astep_mem_low` says abstract steps never write below `tohostAddr + 16`, so
-`CodeAt`/`LibLoaded` persist (`CodeAt.of_low`, `LibLoaded.of_low`).
-
-Straight-line instructions go through `block_mem_run`, branches and non-linking
-jumps through `term_step_bt`, the linking `jal` through `stepObs_jal`, libgcc
-calls through `muldi3_spec`/`divdi3_wrap_spec`/`moddi3_spec`, and `tohost`
-stores through `stepObs_tohost_putchar`/`stepOnce_tohost_exitE`.
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa Vsa.Sim
 open Vsa.Machine (MState Config Step Steps Halted Halts output)
 
-/-- `c` runs to a configuration realizing `A`. -/
 abbrev ReachCorr (c : Config) (A : AM) : Prop := ∃ c', Steps c c' ∧ Corr c' A
 
-/-- `c` runs, with at least one step, to a configuration realizing `A`. -/
 abbrev StepsCorr (c : Config) (A : AM) : Prop := ∃ c', Steps c c' ∧ c.steps < c'.steps ∧ Corr c' A
 
 theorem applyW8_low (m : Mem) (ea : Nat) (v : BitVec 64) (j : Nat) (hj : j < ea) :
@@ -89,8 +72,6 @@ theorem LibLoaded.of_low {m m' : Mem}
       Code.__moddi3Loaded, Code.__moddi3Chunk0] at h1 h2 h3 h4 h5 ⊢
     simp (disch := (simp only [tohostAddr]; decide)) only [hag]
     assumption
-
-/-! ## Straight-line instructions through `block_mem_run` -/
 
 theorem toM_fields (i : Ins) (hi : i.IsM) (pc : BitVec 64) :
     (i.toM pc).pc = pc ∧ (i.toM pc).word = i.encode ∧ (i.toM pc).b0 = byte i.encode 0 ∧
@@ -158,8 +139,6 @@ theorem sim_M (i : Ins) (hi : i.IsM) {A : AM} {c : Config} (hc : Corr c A)
   · rw [hfr _ (by decide) (fun n _ => gprReg_ne_pw n)]
     exact hc.pw
 
-/-! ## Control transfers through `term_step_bt` -/
-
 theorem toT_fields (i : Ins) (pc : BitVec 64) (tk : Bool) :
     (i.toT pc tk).pc = pc ∧ (i.toT pc tk).word = i.encode ∧ (i.toT pc tk).b0 = byte i.encode 0 ∧
       (i.toT pc tk).b1 = byte i.encode 1 ∧ (i.toT pc tk).b2 = byte i.encode 2 ∧
@@ -194,8 +173,6 @@ theorem sim_T (i : Ins) (hi : i.IsT) (tk : Bool) {A : AM} {c : Config} (hc : Cor
   refine ⟨⟨σ', i', u + 1⟩, .single hs, by simp, ?_⟩
   exact ⟨hG', hi', hpc', hL', hc.keys, hmem'.trans hmem, hout'.trans hc.out,
     (hfr _ (by decide)).trans hc.pw⟩
-
-/-! ## Register-file frames -/
 
 theorem gprGet_congr {σ σ' : MState} :
     ∀ n, 1 ≤ n → n ≤ 31 → σ'.regs.get? (gprReg n) = σ.regs.get? (gprReg n) →
@@ -290,9 +267,6 @@ theorem gholds_eraseAll {σ σ' : MState} {S : List Nat} {L : GRegs}
   rw [h p.1 hk.1 hk.2 hpS]
   exact hL p hpL
 
-/-! ## Linking `jal` -/
-
-/-- Non-GPR registers the steps write are never a `gprReg`. -/
 structure NonGpr (R : Register) : Prop where
   minstret : (Register.minstret == R) = false
   pc : (Register.PC == R) = false
@@ -378,8 +352,6 @@ theorem sim_jal_link (off : BitVec 21) {A : AM} {c : Config} (hc : Corr c A)
       (by decide) (by decide)]
     exact hc.pw
 
-/-! ## libgcc calls -/
-
 theorem nw_gpr (n : Nat) (h1 : 1 ≤ n) (h31 : n ≤ 31) (hn : n ∉ clobbered) :
     NotWrittenD (gprReg n) := by
   simp only [clobbered, List.mem_cons, List.not_mem_nil, or_false, not_or] at hn
@@ -410,7 +382,6 @@ theorem corr_after_lib {c1 c' : Config} {A1 : AM} {r res : BitVec 64} (hc : Corr
       by decide, by decide, by decide, by decide⟩, by decide, by decide⟩]
     exact hc.pw
 
-/-- Register reads available from a `Corr` state. -/
 theorem corr_reg {c : Config} {A : AM} (hc : Corr c A) {n : Nat} {v : BitVec 64}
     (h : lookupG n A.regs = some v) : gprGet c.σ n = some v :=
   gholds_lookup A.regs hc.regs h
@@ -463,11 +434,8 @@ theorem sim_mod {A : AM} {c : Config} (hc : Corr c A) (hpc : A.pc = 0x80004728#6
     rw [← hres, BitVec.ofInt_toInt]
   exact ⟨c', hs, corr_after_lib hc hG ht hmem hout hpc' (hres' ▸ h10) hfr⟩
 
-/-! ## HTIF stores -/
-
 theorem sext12_zero : sign_extend (m := 64) (0#12) = 0#64 := by decide
 
-/-- The facts every tohost `sd rs2, 0(rs1)` step lemma consumes. -/
 theorem sd_tohost_facts {A : AM} {c : Config} (hc : Corr c A) (rs2 rs1 : Nat)
     (h1 : SrcOK rs1 (keysG A.regs)) (h2 : SrcOK rs2 (keysG A.regs))
     (hea : (srcVal rs1 A.regs).toNat = tohostAddr) :
@@ -545,8 +513,6 @@ theorem sim_exit (e : BitVec 64) (he : e.toNat < 2 ^ 47) {A : AM} {c : Config} (
   refine ⟨_, Halted.mk hst, ?_⟩
   simp only [output]
   rw [show σ.sailOutput = A.out from hc.out]
-
-/-! ## Assembly -/
 
 theorem addInt4_toNat (pc : BitVec 64) (h : pc.toNat + 4 < 2 ^ 64) :
     (BitVec.addInt pc 4).toNat = pc.toNat + 4 := by

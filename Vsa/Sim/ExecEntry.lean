@@ -8,114 +8,6 @@ import Vsa.Sim.Code.Exec_stmt
 import Vsa.Sim.Code.Value_truthy
 import Vsa.Sim.InterpEntry
 
-/-!
-# Layer 4 — the `ExecEntry`/`ExecExit` machine-side predicates for `exec_stmt`
-
-Opens the **statement** family of the Layer-4 simulation induction, the analog
-of `Vsa/Sim/InterpEntry.lean` for the *expression* side. Where the expression
-side proves a `Triple (EvalEntry …) (EvalExit … v)` per `EvalE` constructor, the
-statement side proves a `Triple (ExecEntry …) (ExecExit … status)` per `ExecS`
-constructor. The compiled `exec_stmt` is a SEPARATE function from `eval_expr`, so
-it needs its own entry/exit infrastructure (its own prologue, dispatch and
-epilogue).
-
-## The `exec_stmt` ABI (decoded from `while-riscv-htif.elf`, entry `0x80003fe0`)
-
-```
-80003fe0:  addi sp,sp,-176        -- 176-byte stack frame (much smaller than eval_expr's 1088)
-80003fe4:  sd   s0,160(sp)        -- spill callee-saved s0
-80003fe8:  sd   s1,152(sp)        --   … s1
-80003fec:  sd   s2,144(sp)        --   … s2
-80003ff0:  sd   s3,136(sp)        --   … s3
-80003ff4:  sd   ra,168(sp)        --   … ra
-80003ff8:  mv   s0,a1             -- s0 = a1 = Stmt*   (ABI arg 1)
-80003ffc:  mv   s1,a0             -- s1 = a0 = interp* (ABI arg 0)
-80004000:  mv   s3,a2             -- s3 = a2 = env      (ABI arg 2)
-80004004:  mv   s2,a3             -- s2 = a3 = retslot  (ABI arg 3, the *Value out for `ret`)
-80004008:  li   a6,8             -- kind bound (max Stmt tag)
-8000400c:  auipc a4,0x16          -- a4 := jump-table base …
-80004010:  addi  a4,a4,-84       -- … = 0x80019fb8   (CSWTCH.18+0x90)
-80004014:  lw    a5,0(s0)         -- a5 = stmt->kind
-80004018:  bltu  a6,a5,0x80004090 -- kind > 8 → default (return normal=0)
-8000401c:  lwu   a5,0(s0)         -- a5 = kind (zero-extended)
-80004020:  slli  a5,a5,0x2        -- a5 = 4*kind
-80004024:  add   a5,a5,a4         -- a5 = table + 4*kind
-80004028:  lw    a5,0(a5)         -- a5 = (int32) table[kind]     (signed slot)
-8000402c:  add   a5,a5,a4         -- a5 = table + slot  = arm PC
-80004030:  jr    a5               -- dispatch
-```
-
-**Convention**: `exec_stmt(interp*, Stmt*, Env, Value* retslot) → int status`.
-* `a0 (x10)` = `interp*`   (the interpreter context; `s1 := a0`).
-* `a1 (x11)` = `Stmt*`      (the statement node, with `StmtRepr`; `s0 := a1`).
-* `a2 (x12)` = `Env` machine address (`φf` of the spec `env`; `s3 := a2`).
-* `a3 (x13)` = `Value* retslot` — where a `ret v` stores its value (`s2 := a3`).
-* `ra (x1)`  = return address.
-* **return value** `a0 (x10)` = the STATUS CODE (see `StatusCode` below), NOT a
-  pointer. This is the crucial difference from `eval_expr` (which returns the
-  sret pointer). A `ret v` writes `*retslot := v` and returns status 3.
-
-## The statement-kind dispatch (a jump table on the `Stmt` tag)
-
-`exec_stmt` dispatches on `stmt->kind` (`StmtKind` in `ast.h`) through a
-`.rodata` jump table at `0x80019fb8` (`CSWTCH.18+0x90`), 9 signed-32 slots
-(kinds 0..8). The bound check `bltu 8, kind` sends any tag > 8 to the default
-`return 0`. Arm PC = `table + (int32) table[kind]`. Decoded slots (rodata bytes
-`b8a1feff 20a1feff d4a1feff 30a2feff 84a0feff 7ca2feff 68a1feff e0a0feff 00a1feff`):
-
-| kind | `StmtKind` / `Stmt` ctor | arm PC        | maps to `ExecS` ctor(s)               |
-|------|--------------------------|---------------|----------------------------------------|
-| 0    | `expr`                   | `0x80004170`  | `ExecS.expr`                           |
-| 1    | `varDecl`                | `0x800040d8`  | `ExecS.varInit` / `varNull`            |
-| 2    | `block`                  | `0x8000418c`  | `ExecS.block`                          |
-| 3    | `ifStmt`                 | `0x800041e8`  | `ExecS.ifTrue` / `ifFalse` / `ifNone`  |
-| 4    | `whileStmt`              | `0x8000403c`  | `ExecS.whileFalse`/`Break`/`Ret`/`Loop`|
-| 5    | `forStmt`                | `0x80004234`  | `ExecS.forStart`                       |
-| 6    | `ret`                    | `0x80004120`  | `ExecS.ret` / `retNull`                |
-| 7    | `brk`                    | `0x80004098`  | `ExecS.brk`                            |
-| 8    | `cont`                   | `0x800040b8`  | `ExecS.cont`                           |
-
-## The status return encoding (register `a0` at each `ret`)
-
-The spec `Status` (`normal | brk | cont | ret v`) maps to the C `int` status:
-
-| `Status`   | `a0` value | site producing it                                       |
-|------------|-----------|----------------------------------------------------------|
-| `normal`   | `0`       | `0x80004090: li a0,0` → shared epilogue `0x8000409c`     |
-| `brk`      | `1`       | `0x80004098: li a0,1` → falls into shared epilogue       |
-| `cont`     | `2`       | `0x800040cc: li a0,2` (own epilogue copy `0x800040b8`)   |
-| `ret v`    | `3`       | `0x80004164: li a0,3` (own epilogue copy `0x80004150`);  |
-|            |           | before that `*retslot := v` (three `sd` at `s2+{0,8,16}`)|
-
-The three epilogues all restore `ra`/`s0`/`s1`/`s2`/`s3` from `[sp+{168,160,
-152,144,136}]`, `addi sp,sp,176`, `ret` — differing only in the `li a0,N` they
-set. The `brk` arm (`0x80004098`) is the shortest: `li a0,1; <epilogue>`.
-
-## The arm bodies (recursion structure — which callees each arm reaches)
-
-* **`expr` (0x80004170)**: `ld a2,8(s0)` (`stmt->expr`), `addi a0,sp,16`
-  (sret buffer), `mv a1,s1` (interp), `jal eval_expr`; `li a0,0`; `j 0x8000409c`.
-  → one `EvalIH` sub-call, then `normal`.
-* **`varDecl` (0x800040d8)**: if `stmt->init` present: `jal eval_expr` then
-  `jal env_define`; else `jal value_null` then `env_define`. → `normal`.
-* **`ret` (0x80004120)**: if `stmt->expr` present: `jal eval_expr` into a local,
-  copy the 24 bytes to `*s2` (retslot), `li a0,3`, own epilogue; else
-  `jal value_null` then same. → `ret v`.
-* **`block` (0x8000418c)**: `jal env_new` (allocate inner frame), loop over the
-  statement array calling `exec_stmt` recursively (`0x800041c4`), abort on
-  non-normal. → `ExecSeq` in the inner frame.
-* **`ifStmt` (0x800041e8)**: eval cond, `jal value_truthy`; if true re-dispatch
-  the `then` branch by falling back into the dispatch at `0x80004014` with
-  `s0 := stmt->thn`; else `s0 := stmt->els` (or return normal if none).
-* **`whileStmt` (0x8000403c)**: eval cond, `value_truthy`, recurse body, loop.
-* **`forStmt` (0x80004234)**: `jal env_new`, run init, then the cond/body/step
-  loop.
-* **`brk` (0x80004098)** / **`cont` (0x800040b8)**: no callee, just set the
-  status and return.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
--/
-
 namespace Vsa.Sim
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1
@@ -131,23 +23,12 @@ open Vsa.Sim.Code
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
 
-/-- Machine entry PC of `exec_stmt`. -/
 def execStmtEntry : Nat := 0x80003fe0
 
-/-- End of the `exec_stmt` text region (exclusive), from the symbol table
-(`exec_stmt` at `0x80003fe0`, size `808 = 0x328`). -/
 def execStmtEnd : Nat := 0x80004308
 
-/-- The statement-kind jump-table base (`0x80019fb8`, `CSWTCH.18+0x90`). Distinct
-from the expression-side `jumpTableBase` (`0x80019f58`). -/
 def stmtJumpTableBase : Nat := 0x80019fb8
 
-/-! ## `StatusCode` — the spec `Status` ↔ machine `a0` return-code correspondence
-
-`exec_stmt` returns a small `int` in `a0` encoding the abrupt-completion status.
-The `ret v` case additionally writes `v` into the caller-provided `retslot`
-(`a3`), so its correspondence is stated in `ExecExit` (the `retslot` buffer holds
-`ValueRepr v`), not here. -/
 def StatusCode : Status → BitVec 64
   | .normal => 0#64
   | .brk    => 1#64
@@ -159,7 +40,6 @@ def StatusCode : Status → BitVec 64
 @[simp] theorem statusCode_cont : StatusCode .cont = 2#64 := rfl
 @[simp] theorem statusCode_ret (v : Value) : StatusCode (.ret v) = 3#64 := rfl
 
-/-! ## Per-kind arm entry PCs (decoded from the jump table, see the module doc). -/
 def execArmExpr    : BitVec 64 := 0x80004170#64
 def execArmVarDecl : BitVec 64 := 0x800040d8#64
 def execArmBlock   : BitVec 64 := 0x8000418c#64
@@ -170,12 +50,6 @@ def execArmRet     : BitVec 64 := 0x80004120#64
 def execArmBrk     : BitVec 64 := 0x80004098#64
 def execArmCont    : BitVec 64 := 0x800040b8#64
 
-/-! ## The statement-kind jump-table slot pin
-
-Mirrors the expression-side `IntSlotPinned`/`NullSlotPinned`. The dispatch reads
-the four bytes of the `kind`-th slot (`lw a5,0(table + 4*kind)`), a `.rodata`
-word NOT part of `Exec_stmtLoaded`. `StmtSlotPinned k armPC m` pins the four
-bytes of slot `k` and asserts `stmtJumpTableBase + (Int32)slot = armPC`. -/
 structure StmtSlotPinned (k : Nat) (armPC : BitVec 64) (m : Mem) : Prop where
   b0 : ∃ b0 b1 b2 b3 : BitVec 8,
     m[(stmtJumpTableBase + 4 * k + 0 : Nat)]? = some b0 ∧
@@ -185,13 +59,6 @@ structure StmtSlotPinned (k : Nat) (armPC : BitVec 64) (m : Mem) : Prop where
     (BitVec.ofNat 64 stmtJumpTableBase +
       sign_extend (m := 64) (((b3.append b2).append b1).append b0)) = armPC
 
-/-! ## `ExecGround` — the batched exec entry-ground bundle (wave 47h/47i, audit N2/N3/N4/N5)
-
-RELOCATED from `EntryGround.lean` at insertion time (47i): `ExecEntry.ground`
-needs these BELOW the entry structure.  Same names/namespace — zero consumer
-changes.  See `experiments/entry-needs-audit.md` §C for the design. -/
-
-/-- N2 — the stmt jump-table pin bundle (tags 0-8). -/
 structure StmtTablePins (m : Mem) : Prop where
   slot0 : StmtSlotPinned 0 execArmExpr m
   slot1 : StmtSlotPinned 1 execArmVarDecl m
@@ -203,7 +70,6 @@ structure StmtTablePins (m : Mem) : Prop where
   slot7 : StmtSlotPinned 7 execArmBrk m
   slot8 : StmtSlotPinned 8 execArmCont m
 
-/-- One stmt slot's pin survives agreement on its own 4-byte window. -/
 theorem stmtSlotPinned_agree {k : Nat} {armPC : BitVec 64} {m m' : Mem}
     (h : StmtSlotPinned k armPC m)
     (ha : ∀ a, stmtJumpTableBase + 4 * k ≤ a → a < stmtJumpTableBase + 4 * k + 4 →
@@ -216,7 +82,6 @@ theorem stmtSlotPinned_agree {k : Nat} {armPC : BitVec 64} {m m' : Mem}
     (ha _ (by omega) (by omega)).symm.trans h2,
     (ha _ (by omega) (by omega)).symm.trans h3, he⟩⟩
 
-/-- `StmtTablePins` transport: agreement on the whole 36-byte table window. -/
 theorem StmtTablePins.transport {m m' : Mem} (h : StmtTablePins m)
     (ha : ∀ a, stmtJumpTableBase ≤ a → a < stmtJumpTableBase + 36 → m[a]? = m'[a]?) :
     StmtTablePins m' where
@@ -230,14 +95,11 @@ theorem StmtTablePins.transport {m m' : Mem} (h : StmtTablePins m)
   slot7 := stmtSlotPinned_agree h.slot7 (fun a h1 h2 => ha a (by omega) (by omega))
   slot8 := stmtSlotPinned_agree h.slot8 (fun a h1 h2 => ha a (by omega) (by omega))
 
-/-- N3 — the statement-side AST region (result slot = the `retslot` at `aRet`). -/
 structure StmtRegionSpec (m : Mem) (SL : StackLayout) (A : Arena)
     (aRet aStmt : Nat) (s : Vsa.While.Stmt) (lo hi : Nat) : Prop where
   nodes : StmtIn m lo hi aStmt s
   lo_ram : 0x80000000 ≤ lo
-  /-- Eight bytes of slack below the RAM top, matching `AstRegionSpec.hi_ram`:
-  the two region specs are twins and a child expression's region is derived
-  from its statement's, so they must carry the same bound. See the note there. -/
+
   hi_ram : hi + 8 ≤ 0x100000000
   win : tohostAddr + 16 ≤ lo
   stack_disjoint : hi ≤ SL.lo ∨ SL.hi ≤ lo
@@ -261,9 +123,6 @@ theorem StmtRegionSpec.transport {m m' : Mem} {SL : StackLayout} {A : Arena}
   ret_disjoint := h.ret_disjoint
   arena_disjoint := h.arena_disjoint
 
-/-- N5 — the `retslot` is a proper 24-byte `Value` slot: 8-aligned, in RAM above
-HTIF, disjoint from the stack scribble `[SL.lo, sp)`, and INSIDE the whole
-stack region (the caller's local — the exec twin of `NegExtras.sret_inSL`). -/
 structure RetSlotGeom (SL : StackLayout) (sp aRet : BitVec 64) : Prop where
   align : aRet.toNat % 8 = 0
   ram : 0x80000000 ≤ aRet.toNat ∧ aRet.toNat + 24 ≤ 0x100000000
@@ -271,8 +130,6 @@ structure RetSlotGeom (SL : StackLayout) (sp aRet : BitVec 64) : Prop where
   scribble_disjoint : aRet.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aRet.toNat
   inSL : SL.lo ≤ aRet.toNat ∧ aRet.toNat + 24 ≤ SL.hi
 
-/-- **The complete exec entry-ground bundle** (audit classes N2/N3/N4/N5).
-Inserted as `ExecEntry.ground` (47i). -/
 structure ExecGround (m : Mem) (SL : StackLayout) (A : Arena)
     (sp aRet : BitVec 64) (aStmt : Nat) (s : Vsa.While.Stmt) : Prop where
   table : StmtTablePins m
@@ -282,16 +139,13 @@ structure ExecGround (m : Mem) (SL : StackLayout) (A : Arena)
   arena_code : A.hi ≤ execStmtEntry ∨ execStmtEnd ≤ A.lo
   arena_table : A.hi ≤ stmtJumpTableBase ∨ stmtJumpTableBase + 36 ≤ A.lo
   eval_call : EvalCallSupport m SL A sp
-  /-- Sparse memory nevertheless contains every concrete C-stack byte. -/
+
   stack_bytes : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
     ∃ b : BitVec 8, m[k]? = some b
   aret : RetSlotGeom SL sp aRet
   aret_table_disjoint : aRet.toNat + 24 ≤ stmtJumpTableBase ∨
     stmtJumpTableBase + 36 ≤ aRet.toNat
 
-/-- **`ExecGround` survives any memory change confined to the stack scribble
-`[SL.lo, sp)` ∪ the retslot window.**  Self-contained: the table/retslot
-disjointness literals ride in the bundle. -/
 theorem ExecGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
     {sp aRet : BitVec 64} {aStmt : Nat} {s : Vsa.While.Stmt}
     (h : ExecGround m SL A sp aRet aStmt s)
@@ -325,26 +179,6 @@ theorem ExecGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
   aret := h.aret
   aret_table_disjoint := h.aret_table_disjoint
 
-/-! ## `ExecEntry` — the machine precondition at `exec_stmt`'s entry PC
-
-Mirrors `EvalEntry` (`InterpEntry.lean`), adapted for statements:
-* the result is a `Status`, not a `Value` — computed in `ExecExit`;
-* the sret buffer of `eval_expr` is replaced by the `retslot` (`a3`, only
-  written on the `ret` arm);
-* carries `StoreRepr`/`OutRepr` at entry (a statement can mutate the store via
-  `varDecl`/`assign`/`block`, and grow the output via `print`, so both are
-  threaded and re-established at exit with EXTENDED φ-maps);
-* the kind dispatch uses `stmtJumpTableBase` and a `StmtSlotPinned` slot.
-
-Parameters (ghosts, ∀-bound in the simulation lemma):
-* `g` — blanket callee-preserved register ghost frame;
-* `N`/`A`/`SL`/`φf`/`φc` — as on the expression side;
-* `st` — spec pre-state; `d` — call depth; `env` — spec scope `Addr`; `s` — the
-  `Stmt` being executed;
-* `sp`/`r` — entry sp / return address; `aInterp` — `interp*` (`a0`); `aStmt` —
-  `Stmt` node address (`a1`); `aEnv` — scope machine address (`a2`); `aRet` —
-  the `retslot` machine address (`a3`);
-* `m0` — pinned pre-memory. -/
 structure ExecEntry
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
@@ -353,106 +187,78 @@ structure ExecEntry
     (sp r aInterp aStmt aEnv aRet : BitVec 64)
     (m0 : Mem)
     (c : Config) : Prop where
-  /-- Pinned control state. -/
+
   good : GoodState c.σ
-  /-- Tick parity invariant. -/
+
   tick : c.tick < 2
-  /-- PC at `exec_stmt`'s entry. -/
+
   pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 execStmtEntry)
-  /-- ABI arg 0: `interp*`. -/
+
   a0 : c.σ.regs.get? Register.x10 = some aInterp
-  /-- ABI arg 1: the `Stmt` node address. -/
+
   a1 : c.σ.regs.get? Register.x11 = some aStmt
-  /-- ABI arg 2: the scope machine address. -/
+
   a2 : c.σ.regs.get? Register.x12 = some aEnv
-  /-- The scope argument represents the semantic environment index. -/
+
   envPtr : aEnv = BitVec.ofNat 64 (φf env)
-  /-- ABI arg 3: the `retslot` (`*Value` out for `ret`). -/
+
   a3 : c.σ.regs.get? Register.x13 = some aRet
-  /-- Return address. -/
+
   ra : c.σ.regs.get? Register.x1 = some r
-  /-- Return address 4-aligned (for the epilogue `ret`). -/
+
   ra_align : r.toNat % 4 = 0
-  /-- Entry stack pointer. -/
+
   spReg : c.σ.regs.get? Register.x2 = some sp
-  /-- `sp` is a good C stack pointer with 176 + callee headroom. -/
+
   stackOK : StackOK SL sp (176 + 1088)
-  /-- **ITEM ZERO B1 (recursion-sound budget).** `sp` carries enough headroom
-  for THIS statement's structural need plus every remaining call level's budget
-  plus `1088`. Recursion-sound replacement for the constant `stackOK`; a child
-  statement/expression derives its budget from this one (`s.stackNeed` unfolds
-  to `execFrame + child`, `execFrame = 176`). Old `stackOK` recovered via
-  `StackOK.mono` (`s.stackNeed ≥ 176`, so `s.stackNeed + … + 1088 ≥ 176 + 1088`). -/
+
   stackBudget : StackOK SL sp
     (s.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
-  /-- **ITEM ZERO B1.** Every `.fn` literal reachable in `s` fits the per-call
-  budget. -/
+
   stmt_bodies : Stmt.bodiesBound Vsa.While.perCallBudget s = true
-  /-- **ITEM ZERO B1.** Every closure already in the store fits the per-call
-  budget. -/
+
   store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
-  /-- `minstret` present. -/
+
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
-  /-- Machine memory is the pinned `m0`. -/
+
   mem : c.σ.mem = m0
-  /-- `exec_stmt` loaded. -/
+
   code : Exec_stmtLoaded c.σ.mem
-  /-- The `Stmt` node at `aStmt` represents `s`. Its `read32 aStmt = kind`. -/
+
   stmt : StmtRepr c.σ.mem aStmt.toNat s
-  /-- The whole spec store is represented. -/
+
   store : StoreRepr c.σ.mem N A φf φc st.store
-  /-- The semantic environment is in the represented frame-map domain. -/
+
   env_valid : EnvValid st env
-  /-- **`StoreRepr` survives any memory change confined to the FULL stack region
-  `[SL.lo, SL.hi)`.** The represented frames/closures and their strings live in
-  the arena/AST regions, disjoint from the WHOLE C-stack region. (Mirror of
-  `EvalEntry.store_survives`, minus the sret buffer — the brk/cont/dispatch path
-  writes only the stack window.)
-  **WAVE 47e (`EntryStackSurv`) AMENDMENT**: footprint widened from
-  `[SL.lo, sp)` to `[SL.lo, SL.hi)` — the exec→eval bridges construct
-  `EvalEntry` from this field, whose own footprint is now `SL.hi`-wide (verdict:
-  `experiments/fleet/obstructions/B1_reseat_footprint_verdict.lean`).  Old form
-  via `ExecEntry.store_survives_sp`. -/
+
   store_survives : ∀ m' : Mem,
     (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
-  /-- Console output correspondence. -/
+
   out : OutRepr c.σ st
-  /-- The blanket ghost frame. -/
+
   frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
-  /-- The `exec_stmt` code region is disjoint from the stack scribble
-  `[SL.lo, sp)`. -/
+
   code_stack_disjoint : sp.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
-  /-- The stack region is in RAM and above the HTIF window. -/
+
   stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
   stack_win : tohostAddr + 16 ≤ SL.lo
-  /-- **The `Stmt` node is disjoint from the stack region.** The dispatch reads
-  `read32 aStmt` (the kind, `lw`/`lwu a5,0(s0)`); its bytes survive the prologue
-  spills because the AST lives outside `[SL.lo, sp)`. -/
+
   stmt_stack_disjoint : aStmt.toNat + 4 ≤ SL.lo ∨ sp.toNat ≤ aStmt.toNat
-  /-- The statement's dispatch load window lies in RAM. -/
+
   stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 4 ≤ 0x100000000
   stmt_win : aStmt.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat
-  /-- The four callee-saved registers spilled by the prologue (`s0`(x8),
-  `s1`(x9), `s2`(x18), `s3`(x19)) are defined at entry. -/
+
   spill_defined : (∃ v, c.σ.regs.get? Register.x8 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x18 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x19 = some v)
-  /-- Callee-saved temporaries used by recursive `env_set` calls are concrete.
-  They cannot be recovered from `GoodState`. -/
+
   envset_defined : (∃ v, c.σ.regs.get? Register.x20 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x21 = some v)
-  /-- **The batched exec entry-ground bundle** (wave 47i insertion — audit
-  `experiments/entry-needs-audit.md` §C/§D): full stmt jump-table pins +
-  whole-table stack disjointness (N2), the hereditary AST region (N3), arena
-  geometry (N4), retslot geometry (N5).  Children transport it via
-  `ExecGround.survive_stack` + `StmtIn` projection; top-level supply = the M6
-  image (`stmtTablePins_of_bytes`) + the parse-arena Layout fact. -/
+
   ground : ExecGround c.σ.mem SL A sp aRet aStmt.toNat s
 
-/-- **The `sp`-window form of `store_survives`** (the pre-amendment field, ONE
-mono lemma; the exec twin of `EvalEntry.store_survives_sp`). -/
 theorem ExecEntry.store_survives_sp
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
@@ -465,13 +271,5 @@ theorem ExecEntry.store_survives_sp
   fun m' h => hc.store_survives m'
     (fun k hk => h k
       (fun hcon => hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hc.stackOK.2.1⟩))
-
-/-! ## `ExecExit` — the machine postcondition at `exec_stmt`'s return PC
-
-The status code is in `a0`; `sp`/callee-saved restored; store and output
-re-represented for the spec post-state `st'` with extended φ-maps; memory outside
-the arena/stack window framed to `m0`. On the `ret v` arm the `retslot` buffer at
-`aRet` additionally holds `ValueRepr v` (stated as a disjunct keyed on
-`status`). -/
 
 end Vsa.Sim

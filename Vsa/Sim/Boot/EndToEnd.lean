@@ -7,24 +7,10 @@ import Vsa.Sim.Boot.Gen.For
 import Vsa.Sim.Boot.Gen.Scope
 import Vsa.Sim.Boot.Gen.Strings
 
-/-!
-# The final theorem at the binary's real entry states
-
-`endToEnd_refinement` applied to the loader-derived witnesses: the machine
-state the emulator reaches at `interp_run`'s entry (ELF loader memory plus the
-traced store log, `Gen/<Prog>.lean`) halts with exactly the output the source
-semantics derives (`Vsa/While/Validation.lean`), with no hypotheses. The
-witnesses are stated at the state's zero fill (`fillZero`, REVIEW.md P3),
-which is what `endToEnd_refinement` takes; the conclusion is about the real,
-sparse state.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.Machine Vsa.While Vsa.While.Validation
 
-/-- The proof ELF (`c/while-riscv-htif.elf`, embedded `while.wl`), run from its
-real `interp_run` entry state, prints `55 2500 36` and exits 0. -/
 theorem proofElf_halts :
     Halts (bootConfig (bootMem Gen.Proof.script Gen.Proof.log) Gen.Proof.regs
       Gen.Proof.entrySteps) "55\n2500\n36\n" 0 := by

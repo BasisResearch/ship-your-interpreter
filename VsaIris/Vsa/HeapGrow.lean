@@ -1,44 +1,20 @@
 import VsaIris.Vsa.HeapSplit
 
-/-!
-# Growing the top in place
-
-`malloc_extend_top` (`_malloc_r`, `0x80004a48`) asks `sbrk` for more memory.
-From a page-aligned, contiguous break the new memory starts exactly at the old
-break, so the top chunk grows in place (`0x80004f70`): `brk.0` advances, the
-top's header records the larger size, and the statistics words
-(`__malloc_current_mallinfo`, `__malloc_max_sbrked_mem`,
-`__malloc_max_total_mem`) and `errno` change. The walk, the bins and every
-chunk below the top are untouched.
-
-`PHeapAt.topGrow` proves the page-aligned heap at the larger break. The
-post-state's reads are taken abstractly, as `PHeapAt.topSplit` takes them, so
-the caller supplies them from its own store chain.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast
 
-/-- The words an in-place top growth writes: the top's header, `brk.0` with
-the two high-water marks after it, the `mallinfo` arena word, and the two
-error words `sbrk` may set. -/
 def GrowW (top : Nat) (a : Nat) : Prop :=
   (top + 8 ≤ a ∧ a < top + 16) ∨ (brkAddr ≤ a ∧ a < topPadAddr) ∨
     (mallinfoAddr ≤ a ∧ a < mallinfoAddr + 8) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨
     (0x8001b538 ≤ a ∧ a < 0x8001b53c)
 
-/-- An aligned footprint word below the top's header, or a global the growth
-does not write, is kept. -/
 theorem grow_keep {m m' : Mem} {H : List (Nat × Nat)} {top a : Nat}
     (hag : ∀ b, vsaFoot H b → ¬ GrowW top b → m'[b]? = m[b]?)
     (hfoot : ∀ k, k < 8 → vsaFoot H (a + k)) (hw : ∀ k, k < 8 → ¬ GrowW top (a + k)) :
     read64 m' a = read64 m a :=
   read64_keep fun k hk => hag _ (hfoot k hk) (hw k hk)
 
-/-- **The top resized in place.** Another page-aligned break within the arena
-leaving the top its header, with the top's header recording the new size and
-the statistics words present, gives the page-aligned heap at the new break. -/
 theorem PHeapAt.topResize {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {brk' : Nat} (htr : top + 16 ≤ brk') (hend : brk' ≤ heapEnd) (hpage : brk' % 4096 = 0)
@@ -55,7 +31,7 @@ theorem PHeapAt.topResize {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have htle := hH.top_le
   obtain ⟨hal, htop16⟩ := hH.aligned
   unfold heapStart at hlo
-  -- every allocator global the growth does not write is kept
+
   have Kg : ∀ a, (∀ k, k < 8 → allocGlobal (a + k)) → (a + 8 ≤ brkAddr ∨ topPadAddr ≤ a) →
       (a + 8 ≤ mallinfoAddr ∨ mallinfoAddr + 8 ≤ a) → a + 8 ≤ 0x8001ba08 ∨ 0x8001ba0c ≤ a →
       a + 8 ≤ 0x8001b538 ∨ 0x8001b53c ≤ a →
@@ -64,7 +40,7 @@ theorem PHeapAt.topResize {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     unfold heapStart at hs
     exact grow_keep hag (fun k hk => .inl (hg k hk)) fun k hk => by
       unfold GrowW brkAddr topPadAddr mallinfoAddr at *; omega
-  -- every arena word below the top's header is kept
+
   have Ka : ∀ a, (∀ k, k < 8 → vsaFoot H (a + k)) → 0x8001c170 ≤ a → a + 8 ≤ top + 8 →
       read64 m' a = read64 m a := by
     intro a hf h1 h2
@@ -153,7 +129,6 @@ theorem PHeapAt.topResize {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     obtain ⟨c, hc, rfl, hf, _⟩ := hH.bin_free i x h0 h1 hx
     exact ⟨(Kf c hc hf).2.1.symm, (Kf c hc hf).1.symm⟩
 
-/-- **The top grows in place**: `topResize` at a larger break. -/
 theorem PHeapAt.topGrow {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {brk' : Nat} (hle : brkv ≤ brk') (hend : brk' ≤ heapEnd) (hpage : brk' % 4096 = 0)

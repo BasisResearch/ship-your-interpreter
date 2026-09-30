@@ -1,21 +1,9 @@
 import Vsa.AbsInt.Chain
 
-/-!
-# Binding lists without duplicate names
-
-`env_define` appends a name only when the frame does not bind it, and
-`env_set` rewrites values in place, so no frame ever binds a name twice
-(`FramesNoDup`). Execution preserves this (`nodup_exec` and siblings). With
-it, a frame described by an abstract scope has at most as many bindings as
-the scope has names (`vars_length_le`), which bounds the cost of growing
-its binding arrays.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
-/-- No frame binds a name twice. -/
 def FramesNoDup (s : Store) : Prop :=
   ∀ (a : Addr) (f : Frame), s.frames[a]? = some f → (f.vars.map Prod.fst).Nodup
 
@@ -129,11 +117,10 @@ theorem FramesNoDup.allocClosure {s s' : Store} {c : ClosureData} {a : Addr}
   obtain ⟨rfl, rfl⟩ := halloc
   exact h
 
-/-- The preservation motive. -/
 abbrev NDM (st st' : St) : Prop := FramesNoDup st.store → FramesNoDup st'.store
 
 set_option hygiene false in
-/-- One application of a semantics recursor with the preservation motive. -/
+
 local macro "nodup_rec" r:ident h:term : tactic => `(tactic| (
   refine $r
     (motive_1 := fun st _ _ _ st' _ _ => NDM st st')
@@ -180,11 +167,8 @@ theorem nodup_cond {st st' : St} {d : Nat} {env : Addr} {cnd : Option Expr}
 theorem nodup_step {st st' : St} {d : Nat} {env : Addr} {step : Option Expr}
     (h : ExecStep st d env step st') : NDM st st' := by nodup_rec ExecStep.rec h
 
-/-! ## Binding counts from abstract scopes -/
-
 variable {A : Type} [AbsDom A]
 
-/-- A frame described by a scope binds only names of the scope. -/
 theorem vars_length_le {S : Scope A} {vars : List (String × Value)}
     (hS : ScopeOK S vars) (hnd : (vars.map Prod.fst).Nodup) :
     vars.length ≤ (dedup (keys S)).length := by

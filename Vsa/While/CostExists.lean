@@ -1,28 +1,7 @@
 import Vsa.While.Cost
 
-/-!
-# Cost companions: existence and soundness, by name
-
-The total-mode recursor (INTERP_DESIGN.md §4.1, §5.2) indexes every spec by a
-cost derivation (`EvalECost` …). It needs two bridges between the nine
-semantic relations and their cost companions:
-
-* **existence** (`EvalECost.exists` … `ExecSeqCost.exists`, `BigStep.cost`):
-  every semantic derivation has a cost companion, so `term_sim` can start from
-  `BigStep`. These are named projections of `cost_exists_mutual`.
-* **soundness** (`EvalECost.sound` … `ExecSeqCost.sound`): a cost derivation
-  forgets to its semantic one, so a total case lemma holding only `D` can use
-  the semantic invariants (`execSeq_store_mono`, `StoreBodiesBound`
-  preservation, …) stated over `EvalE`/`ExecS`.
-
-Both families are packaged as named-field structures (`CostExists`,
-`CostSound`) and consumed through the per-relation names, never positionally.
--/
-
--- discipline: allow(R7-conj-tower-def) each `∃ n` is one cost output of a named per-relation lemma, not a post tower
 namespace Vsa.While
 
-/-- Every semantic derivation has a cost companion, per relation. -/
 structure CostExists : Prop where
   evalE : ∀ {st d a e st' v}, EvalE st d a e st' v → ∃ n, EvalECost st d a e st' v n
   evalArgs : ∀ {st d a es st' vs}, EvalArgs st d a es st' vs →
@@ -57,15 +36,12 @@ theorem ExecStepCost.exists {st d a step st'} (h : ExecStep st d a step st') :
 theorem ExecSeqCost.exists {st d a ss st' status} (h : ExecSeq st d a ss st' status) :
     ∃ n, ExecSeqCost st d a ss st' status n := costExists.execSeq h
 
-/-- The starting point of `term_sim` (§5.2 steps 1–2): a big-step behaviour
-has a costed whole-program derivation with the same output. -/
 theorem BigStep.cost {p : Program} {out : String} (h : BigStep p out) :
     ∃ st' n, ExecSeqCost initSt 0 0 p st' .normal n ∧ st'.out = out := by
   obtain ⟨st', hseq, hout⟩ := h
   obtain ⟨n, hn⟩ := ExecSeqCost.exists hseq
   exact ⟨st', n, hn, hout⟩
 
-/-- Every cost derivation forgets to its semantic derivation, per relation. -/
 structure CostSound : Prop where
   evalE : ∀ {st d a e st' v n}, EvalECost st d a e st' v n → EvalE st d a e st' v
   evalArgs : ∀ {st d a es st' vs n}, EvalArgsCost st d a es st' vs n → EvalArgs st d a es st' vs
@@ -79,11 +55,6 @@ structure CostSound : Prop where
   execSeq : ∀ {st d a ss st' status n}, ExecSeqCost st d a ss st' status n →
     ExecSeq st d a ss st' status
 
-/-- The cost companions' mutual recursor with the forgetful motives: each
-cost constructor is closed by the semantic constructor of the same name, fed
-the forgotten children. `constructor` takes the first constructor whose
-conclusion unifies, so constructors sharing a conclusion with an earlier one
-(`ifFalse` after `ifTrue`, …) are named explicitly in the fallback. -/
 local macro "cost_sound_rec " r:ident h:ident : tactic => `(tactic| (
   refine $r
     (motive_1 := fun st d a e st' v _ _ => EvalE st d a e st' v)

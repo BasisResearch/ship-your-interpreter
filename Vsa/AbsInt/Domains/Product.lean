@@ -1,33 +1,19 @@
 import Vsa.AbsInt.Domains.Const
 import Vsa.AbsInt.Domains.Interval
 
-/-!
-# Products of domains and their reduction
-
-`A × B` is the domain whose concretisation is the intersection of the two
-components'. A `Reduce A B` instance exchanges information between the
-components after each transfer function; the default instance does
-nothing. `Const × Itv` is reduced: an integer constant pins the interval,
-a singleton interval pins the constant, and a contradiction empties both.
--/
-
 namespace Vsa.AbsInt
 
 open Vsa.While AbsOps AbsDom
 
-/-- A reduction of a product value. -/
 class ReduceOps (A B : Type) where
   reduce : A × B → A × B
 
-/-- A sound reduction of a product value. -/
 class Reduce (A B : Type) [AbsDom A] [AbsDom B] extends ReduceOps A B where
   reduce_sound : ∀ {p : A × B} {v : Value}, Gam p.1 v → Gam p.2 v →
     Gam (reduce p).1 v ∧ Gam (reduce p).2 v
 
-/-- No reduction. -/
 instance (priority := low) ReduceOps.none {A B : Type} : ReduceOps A B := ⟨id⟩
 
-/-- No reduction is sound. -/
 instance (priority := low) Reduce.none {A B : Type} [AbsDom A] [AbsDom B] : Reduce A B :=
   { reduce := id, reduce_sound := fun h1 h2 => ⟨h1, h2⟩ }
 
@@ -35,7 +21,6 @@ section Ops
 
 variable {A B : Type} [AbsOps A] [AbsOps B] [ReduceOps A B]
 
-/-- Pair two component values and reduce. -/
 def pr (a : A) (b : B) : A × B := ReduceOps.reduce (a, b)
 
 instance prodOps : AbsOps (A × B) where
@@ -115,9 +100,6 @@ instance prodDom : AbsDom (A × B) where
 
 end
 
-/-! ## Constants with intervals -/
-
-/-- Decidable interval membership. -/
 def Itv.memB : Itv → Int → Bool
   | .bot, _ => false
   | .range lo hi, n => Itv.loLe lo (some n) && Itv.hiLe (some n) hi
@@ -131,7 +113,6 @@ theorem Itv.memB_of {i : Itv} {n : Int} (h : Itv.Gam i (.int n)) : Itv.memB i n 
     obtain ⟨h1, h2⟩ := h
     cases lo <;> cases hi <;> simp_all [Itv.memB, Itv.loLe, Itv.hiLe, Itv.InLo, Itv.InHi]
 
-/-- Reduce a constant with an interval. -/
 def reduceCI : Const × Itv → Const × Itv
   | (.val (.int n), i) =>
     if Itv.memB i n then (.val (.int n), .range (some n) (some n)) else (.bot, .bot)

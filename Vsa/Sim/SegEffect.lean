@@ -8,33 +8,21 @@ open LeanRV64DExecutable Vsa
 open Vsa.Machine (Config Steps)
 open Vsa.Logic (Triple)
 
-/-- A dependent register map is unchanged on the selected register predicate.
-The codomain remains indexed by the register, matching the machine register
-file rather than erasing values to an untyped word. -/
 structure EffectStable (keep : Register → Prop)
     (left right : (R : Register) → Option (RegisterType R)) : Prop where
   eq : ∀ R, keep R → left R = right R
 
-/-- Opaque transitivity for dependent register maps. -/
 theorem EffectStable.trans
     (h₁ : EffectStable keep left middle)
     (h₂ : EffectStable keep middle right) :
     EffectStable keep left right := by
   exact ⟨fun R hR => (h₁.eq R hR).trans (h₂.eq R hR)⟩
 
-/-! ## Compositional machine frames -/
-
-/-- Observations guaranteed unchanged by a machine run.  The memory field is
-an address predicate, so an exact write footprint `foot` is represented by
-`fun a => ¬ foot a`.  Store/allocation representations remain typed predicates
-and can be carried with `FramedTriple.carry` below. -/
 structure FrameEffect where
   regs : Register → Prop
   mem : Nat → Prop
   output : Prop
 
-/-- `EffectLe weak strong` says that every observation requested by `weak`
-is supplied by `strong`.  It is the order used when forgetting frame facts. -/
 structure EffectLe (weak strong : FrameEffect) : Prop where
   regs : ∀ R, weak.regs R → strong.regs R
   mem : ∀ a, weak.mem a → strong.mem a
@@ -51,21 +39,14 @@ theorem trans (h₁ : EffectLe first middle) (h₂ : EffectLe middle last) :
 
 end EffectLe
 
-/-! ## Finite effect descriptions -/
-
-/-! ## Relation-indexed framed refinements -/
-
 universe u v w
 
-/-- One symbolic register update selected from a reflected segment result. -/
 abbrev GUpdate := Nat × BitVec 64
 
-/-- A finite list of exact projections from a symbolic register result. -/
 def GProjects (out : GRegs) : List GUpdate → Prop
   | [] => True
   | (n, v) :: rest => lookupG n out = some v ∧ GProjects out rest
 
-/-- Selected projections of a held symbolic result are concrete machine pins. -/
 theorem gholds_selected {sigma : Vsa.Machine.MState} {out selected : GRegs}
     (hproj : GProjects out selected) (hregs : GHolds sigma out) :
     GHolds sigma selected := by
@@ -75,8 +56,6 @@ theorem gholds_selected {sigma : Vsa.Machine.MState} {out selected : GRegs}
     obtain ⟨n, v⟩ := update
     exact ⟨gholds_lookup out hregs hproj.1, ih hproj.2⟩
 
-/-- Opaque semantic result for a reflected segment with an exact memory result,
-an exact footprint frame, a register frame, and finitely selected post-registers. -/
 structure SelectedFramedSegResult
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (pc0 : BitVec 64) (foot : Nat → Prop) (keep : Register → Bool)
@@ -94,7 +73,6 @@ structure SelectedFramedSegResult
   selected_regs : GHolds c1.σ selected
   reg_frame : ∀ R, keep R = true → c1.σ.regs.get? R = c0.σ.regs.get? R
 
-/-- A selected segment result also retaining its exact instruction count. -/
 structure CountedSelectedFramedSegResult
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (pc0 : BitVec 64) (foot : Nat → Prop) (keep : Register → Bool)
@@ -102,7 +80,6 @@ structure CountedSelectedFramedSegResult
     SelectedFramedSegResult bs L lds pc0 foot keep selected c0 c1 where
   count : c1.steps = c0.steps + evalBlocksFuel bs
 
-/-- The reflected execution supplies its frame and instruction count together. -/
 theorem segEval_selected_counted
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (pc0 vm : BitVec 64) (foot : Nat → Prop) (keep : Register → Bool)
@@ -142,7 +119,6 @@ theorem segEval_selected_counted
     simpa [c'] using
       frame_of_wrChain_avoids (P := keep) hnoise havoid hframe' R hR
 
-/-- Forget only the count from the same selected reflected execution. -/
 theorem segEval_selected_framed
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (pc0 vm : BitVec 64) (foot : Nat → Prop) (keep : Register → Bool)

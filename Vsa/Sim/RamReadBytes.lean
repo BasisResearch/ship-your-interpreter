@@ -4,12 +4,10 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- A total little-endian byte sequence, including zero-valued absent bytes. -/
 def bytesT (m : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) : (w : Nat) → BitVec (8 * w)
   | 0 => 0
   | w + 1 => ((bytesT m (a + 1) w).append ((m[a]?).getD 0)).cast (by omega)
 
-/-- The selected bit belongs to its containing byte. -/
 theorem getLsbD_bytesT (m : Std.ExtHashMap Nat (BitVec 8)) (w a k : Nat)
     (hk : k < 8 * w) :
     (bytesT m a w).getLsbD k = ((m[a + k / 8]?).getD 0).getLsbD (k % 8) := by
@@ -25,7 +23,6 @@ theorem getLsbD_bytesT (m : Std.ExtHashMap Nat (BitVec 8)) (w a k : Nat)
       have hb : (k - 8) % 8 = k % 8 := by omega
       rw [ha, hb]
 
-/-- Extracting consecutive bytes agrees with a total read at the offset. -/
 theorem bytesT_extract (m : Std.ExtHashMap Nat (BitVec 8)) (a w off d : Nat)
     (hspan : off + d ≤ w) :
     (bytesT m a w).extractLsb' (8 * off) (8 * d) = bytesT m (a + off) d := by
@@ -37,7 +34,6 @@ theorem bytesT_extract (m : Std.ExtHashMap Nat (BitVec 8)) (a w off d : Nat)
   have hb : (8 * off + k) % 8 = k % 8 := by omega
   simp [hk, ha, hb]
 
-/-- The actual Sail byte reader is total and preserves the complete state. -/
 theorem readBytes_total (σ : SequentialState RegisterType trivialChoiceSource) (w a : Nat) :
     (PreSail.readBytes (ue := LeanRV64DExecutable.exception) w a).run σ = .ok (bytesT σ.mem a w, none) σ := by
   induction w generalizing a with
@@ -56,7 +52,6 @@ theorem readBytes_total (σ : SequentialState RegisterType trivialChoiceSource) 
       rw [hr]
       rfl
 
-/-- Width-generic RAM leaf with the model's total byte semantics. -/
 theorem read_ram_total (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) (w : Nat) :
     (Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) w false).run σ =
       .ok (bytesT σ.mem a.toNat w, ()) σ := by

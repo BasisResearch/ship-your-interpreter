@@ -1,25 +1,10 @@
 import VsaIris.Interp.SeqLoop
 
-/-!
-# `seqLoop`, closure-body site (INTERP_DESIGN.md §4.3)
-
-The call arm of `eval_expr` runs a closure's body statements with the loop
-`0x80003354`..`0x80003350`: the head loads the statement pointer from the body
-node (`a6`, spilled at `sp+0`), the `jal exec_stmt` at `0x80003374` lends the
-result slot `sp+144`, then `beqz a0` continues (reload `a6`, `s0 += 1`, `bge`
-leaves) or leaves on an abrupt status. The motives and cases follow the block
-site (`SeqLoop.lean`); the differences are the frame (`eval_expr`'s, the slot
-carved out: `closureS`), the index register (`s0`, callee-saved: `closureKeep`)
-and the two exits (`closureExit`).
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The closure body loop's owned frame bytes: `eval_expr`'s frame without
-the result slot `sp+144`, which the loop lends each statement. -/
 abbrev closureS (s : BitVec 64) : Nat → Prop :=
   fun b => InExt (s.toNat - 1088, 1088) b ∧ ¬ InExt (s.toNat - 1088 + 144, 24) b
 
@@ -53,9 +38,6 @@ abbrev closureS (s : BitVec 64) : Nat → Prop :=
     IW live m (blockView aB.toNat arr.toNat count) (closureS s) Q 0x80003378#64 R Mt
   by ix_run hlive using [h8, h2, h10, hb, hcnt, hsf, closureS] at 0x80003354 0x80003954 0x8000337c
 
-/-- The loop head's registers: the body node (`a6`), the index (`s0`), the
-interpreter (`s2`), the closure scope's frame pointer (`s3`), the lowered
-`sp`. -/
 structure ClosureHead (R : Nat → BitVec 64) (s aB inp aEnv : BitVec 64) (idx : Nat) : Prop where
   sp : R 2 = s + 18446744073709550528#64
   a6 : R 16 = aB
@@ -63,18 +45,14 @@ structure ClosureHead (R : Nat → BitVec 64) (s aB inp aEnv : BitVec 64) (idx :
   s2 : R 18 = inp
   s3 : R 19 = aEnv
 
-/-- `eval_expr`'s entry `sp` with its 1088-byte frame below it. -/
 structure EvalFrameG (s : BitVec 64) : Prop where
   sf : (s + 18446744073709550528#64).toNat = s.toNat - 1088
   lo : 0x87800000 + 1088 ≤ s.toNat
   hi : s.toNat ≤ 0x88000000
   al : s.toNat % 16 = 0
 
-/-- What the closure loop keeps: every callee-saved register but the index `s0`. -/
 abbrev closureKeep : List Nat := [2, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
 
-/-- The loop's exits: the depth decrement on a normal end, the status routing
-otherwise. -/
 def closureExit (status : Status) : BitVec 64 :=
   if status = .normal then 0x80003954#64 else 0x8000337c#64
 
@@ -87,12 +65,6 @@ section Motive
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- **The closure body loop, total mode**: the motive of `ExecSeqCost` at the
-closure-body site of the call arm. As `blockSeqT_body`, over `eval_expr`'s
-frame: the result slot `sp+144` is lent to each statement, the index lives in
-`s0` (so every callee-saved register but `s0` is kept), and the loop leaves at
-the depth decrement `0x80003954` on a normal end or at `0x8000337c` on an
-abrupt status (`closureExit`). -/
 def closureSeqT_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (inp : Nat) (st : St) (d inner : Nat) (ss : List Vsa.While.Stmt) (st' : St) (status : Status)
     (n : Nat) (_D : ExecSeqCost st d inner ss st' status n) : Prop :=
@@ -114,7 +86,6 @@ def closureSeqT_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Roo
         world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)
       ⊢ (twpW (vsaModel live)).W Φ)
 
-/-- **The closure body loop, partial mode** (as `blockSeqP_body`). -/
 def closureSeqP_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
     (inp : Nat) (Core : IProp GF) (d inner : Nat) (ss : List Vsa.While.Stmt) : Prop :=
   ∀ (Φ : Nat × String → IProp GF) (st : St) (idx count : Nat) (aB arr aEnv s : BitVec 64)
@@ -151,8 +122,6 @@ theorem closureSeqP_nil (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (
 
 end Motive
 
-/-! ## The cases -/
-
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_piece closureSeqT_consNormal_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -178,7 +147,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     rw [arr_elem_addr hbn.ahi hidx]; exact ldv_ld_read64 hp
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
-  -- the head run: load the statement, spill the index
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aEnv.toNat ∗
@@ -200,7 +169,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ hinv
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- the statement
+
   ihave H1 := h1
   rw [show k + (n1 + n2) = k + n2 + n1 by omega]
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003374)
@@ -219,7 +188,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   rw [statusRet_normal]
 
 #ix_piece closureSeqT_consNormal_p2 from closureSeqT_consNormal_p1 by
-  -- the status test and the back edge
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aEnv.toNat ∗
@@ -239,7 +208,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   refine ClosureLoop_runB (sc := 0#64) (arr := arr) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo hbn.hi
     hbn.off hidx hbn.small ((hR1 8 (by decide)).trans hbh.s0) ((hR1 2 (by decide)).trans hbh.sp)
     (by ix_reg; exact hst0) (by rw [hMt1]; ix_fwd) hbn.cntw ?_ ?_ ?_
-  · -- the last statement: the loop leaves normally
+  ·
     intro _ hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, idx_succ,
       sext32_ofNat_toInt (show idx + 1 < 2 ^ 31 by have := hbn.small; omega),
@@ -261,7 +230,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       keep_split
       all_goals ix_reg
 
-  · -- more statements: the tail's loop
+  ·
     intro _ hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, idx_succ,
       sext32_ofNat_toInt (show idx + 1 < 2 ^ 31 by have := hbn.small; omega),
@@ -287,7 +256,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
         exact ⟨by ix_reg; exact (hR1 2 (by decide)).trans hbh.sp, by ix_reg,
           by ix_reg; exact idx_succ idx, by ix_reg; exact (hR1 18 (by decide)).trans hbh.s2,
           by ix_reg; exact (hR1 19 (by decide)).trans hbh.s3⟩
-  · -- an abrupt status: not this derivation's
+  ·
     intro hc; exfalso; apply hc; ix_reg; exact hst0
 #ix_chain closureSeqT_consNormal := [closureSeqT_consNormal_p1, closureSeqT_consNormal_p2]
 
@@ -313,7 +282,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     rw [arr_elem_addr hbn.ahi hidx]; exact ldv_ld_read64 hp
   obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
   iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
-  -- the head run: load the statement, spill the index
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aEnv.toNat ∗
@@ -335,7 +304,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ hinv
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
-  -- the statement
+
   ihave H1 := h1
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003374)
     (jalx_80003374 live (fun p hp => hlive _ (interp_code_80003374 p hp)))
@@ -352,7 +321,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
 
 #ix_piece closureSeqT_consAbrupt_p2 from closureSeqT_consAbrupt_p1 by
-  -- the status test: an abrupt status leaves the loop
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aEnv.toNat ∗
@@ -428,7 +397,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ hinv
   unfold F'
   iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, #IH, HK⟩, Hms⟩
-  -- the statement, through the Löb hypothesis
+
   ihave H1 := execSpecsP_at Core st d inner sm $$ IH
   iapply ms_callExecP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003374)
     (jalx_80003374 live (fun p hp => hlive _ (interp_code_80003374 p hp)))
@@ -451,7 +420,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   iintro %R' %st' %status %hE %⟨hkeep, hst0⟩ Hms Hst Hret Hw HK
 
 #ix_piece closureSeqP_cons_p2 from closureSeqP_cons_p1 by
-  -- the status test and the back edge
+
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (wpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aEnv.toNat ∗
@@ -474,7 +443,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   refine ClosureLoop_runB (sc := statusCode status) (arr := arr) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo
     hbn.hi hbn.off hidx hbn.small ((hR1 8 (by decide)).trans hbh.s0) ((hR1 2 (by decide)).trans hbh.sp)
     (by ix_reg; exact hst0) (by rw [hMt1]; ix_fwd) hbn.cntw ?_ ?_ ?_
-  · -- normal, the last statement: the loop leaves normally
+  ·
     intro hc0 hc
     have hn : status = .normal := statusCode_eq_zero (by rw [← hst0]; revert hc0; ix_reg; exact id)
     subst hn
@@ -498,7 +467,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
         %⟨KeepRegs.trans (hR1.sub (by decide)) ?_, by ix_reg; exact hst0, hinv1⟩ HF Hms Hst Hret Hw
       keep_split
       all_goals ix_reg
-  · -- normal, more statements: the tail's loop
+  ·
     intro hc0 hc
     have hn : status = .normal := statusCode_eq_zero (by rw [← hst0]; revert hc0; ix_reg; exact id)
     subst hn
@@ -533,7 +502,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
         exact ⟨by ix_reg; exact (hR1 2 (by decide)).trans hbh.sp, by ix_reg,
           by ix_reg; exact idx_succ idx, by ix_reg; exact (hR1 18 (by decide)).trans hbh.s2,
           by ix_reg; exact (hR1 19 (by decide)).trans hbh.s3⟩
-  · -- an abrupt status leaves the loop
+  ·
     intro hc
     have hne : status ≠ .normal := by
       intro e; apply hc; ix_reg; rw [hst0, e]; rfl
@@ -548,7 +517,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_chain closureSeqP_cons := [closureSeqP_cons_p1, closureSeqP_cons_p2]
 
-/-- **The closure body loop, partial mode, for every statement list.** -/
 theorem closureSeqP_all {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1) (N : NativeAddrs)
     (L : DlLayout) (Room : RoomPred) (inp : Nat) (Core : IProp GF) (d inner : Nat) :

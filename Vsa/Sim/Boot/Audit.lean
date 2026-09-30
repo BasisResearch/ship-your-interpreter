@@ -5,48 +5,20 @@ import Vsa.Sim.Boot.Gen.Functions2
 import Vsa.Sim.Boot.Gen.ErrDivzero
 import Vsa.Sim.Boot.Gen.ErrUndefined
 
-/-!
-# REVIEW2 audit (lane V2): kernel-checked corollaries of `endToEnd_refinement`
-
-Everything here is a *corollary*; nothing is assumed. `scripts/check_final_axioms.sh`
-audits the axioms of every theorem below.
-
-* §1: the theorem with no hypotheses (the former `IrisHoles` was removed once empty).
-* §2: non-trivial conclusions at the real entry states, and the capstones at
-  ANY entry configuration (`*_halts_entry`, REVIEW2.md P8): the state the
-  binary reaches satisfies their three hypotheses — `EntryRegs`, an empty
-  console, the entry view as a partial view of its memory — which
-  `experiments/review-v2/Replay.lean` checks natively.
-* §3: the runtime-error programs have no `BigStep` (the cost evaluator is
-  `stuck`, one kernel `decide`), never halt cleanly, and diverge or exit
-  nonzero.
-* §4: the machine and source notions are the real ones (`rfl` unfoldings).
--/
-
 open Vsa.While Vsa.Machine Vsa.Refine Vsa.Sim.LayoutInstance Vsa.Densify Vsa.Sim.Boot
 
 namespace ReviewV2
-
-/-! ## 1. The theorem is unconditional -/
 
 theorem endToEnd_unconditional :
     ∀ p c, Loaded interpRunLayout p (fillZero c) →
       (∀ out, BigStep p out ↔ Halts c out 0) ∧ (Diverges c → ¬ ∃ out, BigStep p out) :=
   Vsa.Sim.EndToEnd.endToEnd_refinement
 
-/-- The concrete entry configuration of the proof ELF (loader memory + traced stores). -/
 abbrev cProof : Config :=
   bootConfig (bootMem Gen.Proof.script Gen.Proof.log) Gen.Proof.regs Gen.Proof.entrySteps
 
-/-! ## 2. Non-trivial conclusions at the real entry states -/
-
 theorem proofElf_halts_unconditional : Halts cProof "55\n2500\n36\n" 0 := proofElf_halts
 
-/-- **The capstone at any entry configuration** (P8): registers satisfying
-`EntryRegs` (`GoodState`, `PC`, `htif_payload_writes`, the traced `x1 … x31`), an
-empty console, and a memory the entry view is a partial view of — the state
-the binary reaches after `Gen.Proof.entrySteps` steps satisfies all three
-(`Replay.lean`). -/
 theorem proofElf_halts_entry {σ : MState} (E : EntryRegs σ Gen.Proof.regs)
     (hout : output σ = "") (hv : PartialView σ.mem (bootView Gen.Proof.script Gen.Proof.runs))
     {tick : Nat} (htick : tick < 2) (steps : Nat) :
@@ -63,8 +35,6 @@ theorem arithmetic_halts_entry {σ : MState} (E : EntryRegs σ Gen.Arithmetic.re
   ((endToEnd_unconditional _ _ (Gen.Arithmetic.prog_eq ▸ Gen.Arithmetic.loadedEntry_fill E hout hv htick steps)).1 _).mp
     Vsa.While.Validation.arithmetic_valid
 
-/-- `Halts` is not trivially true: the same state does not halt with output `""`,
-nor with exit code 1. -/
 theorem proofElf_not_halts_empty : ¬ Halts cProof "" 0 := by
   intro h
   have := (Halts.deterministic h proofElf_halts_unconditional).1
@@ -75,7 +45,6 @@ theorem proofElf_not_halts_exit1 : ¬ Halts cProof "55\n2500\n36\n" 1 := by
   have := (Halts.deterministic h proofElf_halts_unconditional).2
   omega
 
-/-- `BigStep` is the only behaviour: any clean halt of the proof ELF prints `55 2500 36`. -/
 theorem proofElf_clean_halt_unique (out : String) (h : Halts cProof out 0) : out = "55\n2500\n36\n" :=
   (Halts.deterministic h proofElf_halts_unconditional).1
 
@@ -103,9 +72,6 @@ theorem scope_halts_unconditional :
     Halts (bootConfig (bootMem Gen.Scope.script Gen.Scope.log) Gen.Scope.regs
       Gen.Scope.entrySteps) "2\n3\n1\n20\n14 5\n3\nasserts ok\n" 0 := scope_halts
 
-/-! ## 3. Runtime-error programs: no `BigStep`, no clean halt, not silent -/
-
-/-- `Res.stuck`, as a Bool (for one kernel `decide`). -/
 def isStuck : Res SOut → Bool
   | .stuck => true
   | _ => false
@@ -119,7 +85,6 @@ theorem errDivzero_eval_stuck : isStuck (execSeqEval 1000 initSt 0 0 Gen.ErrDivz
 theorem errUndefined_eval_stuck : isStuck (execSeqEval 1000 initSt 0 0 Gen.ErrUndefined.prog) = true := by
   decide +kernel
 
-/-- The source semantics assigns `err_divzero.wl` no behaviour. -/
 theorem errDivzero_noBigStep : ¬ ∃ out, BigStep Gen.ErrDivzero.prog out := by
   rintro ⟨out, st', hseq, _⟩
   obtain ⟨n, hc⟩ := execSeq_cost_exists hseq
@@ -136,15 +101,12 @@ abbrev cUndef : Config :=
   bootConfig (bootMem Gen.ErrUndefined.script Gen.ErrUndefined.log) Gen.ErrUndefined.regs
     Gen.ErrUndefined.entrySteps
 
-/-- The binary, from the real entry state of `err_divzero.wl`, never halts with exit code 0. -/
 theorem errDivzero_never_clean : ∀ out, ¬ Halts cDiv out 0 := fun out h =>
   errDivzero_noBigStep ⟨out, ((endToEnd_unconditional _ _ Gen.ErrDivzero.loaded).1 out).mpr h⟩
 
 theorem errUndefined_never_clean : ∀ out, ¬ Halts cUndef out 0 := fun out h =>
   errUndefined_noBigStep ⟨out, ((endToEnd_unconditional _ _ Gen.ErrUndefined.loaded).1 out).mpr h⟩
 
-/-- … and, by the stuck simulation, it diverges or halts with a nonzero exit code
-(the emulator: `runtime error [line 1]: division by zero`, exit 70). -/
 theorem errDivzero_stuck : Diverges cDiv ∨ ∃ out e, Halts cDiv out e ∧ e ≠ 0 := by
   rcases VsaIris.Interp.interpSim_iris.stuck_sim _ _ Gen.ErrDivzero.loaded errDivzero_noBigStep
     with h | ⟨out, e, h, he⟩
@@ -163,8 +125,6 @@ theorem errDivzero_never_clean_entry {σ : MState} (E : EntryRegs σ Gen.ErrDivz
     ∀ out, ¬ Halts ⟨σ, tick, steps⟩ out 0 := fun out h =>
   errDivzero_noBigStep ⟨out,
     ((endToEnd_unconditional _ _ (Gen.ErrDivzero.loadedEntry_fill E hout hv htick steps)).1 out).mpr h⟩
-
-/-! ## 4. The machine notions are the real ones (definitional unfoldings, checked by `rfl`) -/
 
 example : Halts = fun (c : Config) (out : String) (e : Nat) =>
     ∃ c' σf, Steps c c' ∧ Halted c' e σf ∧ output σf = out := rfl

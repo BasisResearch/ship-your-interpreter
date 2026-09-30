@@ -3,17 +3,6 @@ import VsaIris.Vsa.Stdout.StdioAfter
 import VsaIris.Interp.NewlibCall
 import VsaIris.Vsa.NewlibOut
 
-/-!
-# From a stdout run to `NewlibOut.outSpec` (lane N1)
-
-`outSpec` is H5's calling convention: argument registers (`argsAt`), the
-call frame (`sp`, the stack below it, the callee-saved registers, the
-temporaries, `gp`, the binary's image), newlib's data and `errno`
-(`stdioW`) and the console. A stdout run (`fputc_run`, …) is a printing
-symbolic run over one register file and the owned bytes `outS s need`. This
-module packages the one into the other.
--/
-
 namespace VsaIris.Sym
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -27,7 +16,6 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 theorem argRegs_nodup (k : Nat) : (argRegs.drop k).Nodup :=
   List.Nodup.sublist (List.drop_sublist _ _) (by decide)
 
-/-- `argsAt` as one register function. -/
 theorem argsAt_fn : ∀ (k : Nat) (ws : List (BitVec 64)), k + ws.length ≤ 8 →
     iprop(sepL (GF := GF) (ws.zipIdx k) (fun p => (10 + p.2) ↦ᵣ p.1) ∗
       clobbered (argRegs.drop (k + ws.length))) ⊢
@@ -76,7 +64,6 @@ theorem argsAt_fn0 (vs : List (BitVec 64)) (hlen : vs.length ≤ 8) :
   simp only [Nat.zero_add, List.drop_zero] at h
   unfold argsAt; exact h
 
-/-- **A call's registers as one register file.** -/
 theorem call_regs (entry r s : BitVec 64) (vs : List (BitVec 64)) (cs : Nat → BitVec 64)
     (hlen : vs.length ≤ 8) :
     iprop(VsaIris.PC ↦ᵣ entry ∗ VsaIris.ra ↦ᵣ r ∗ argsAt (GF := GF) vs ∗ sp ↦ᵣ s ∗
@@ -128,7 +115,6 @@ theorem call_regs (entry r s : BitVec 64) (vs : List (BitVec 64)) (cs : Nat → 
       rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
         simp [rv, argRegs, tmpRegs]
 
-/-- **A returned register file as a call's post registers.** -/
 theorem ret_regs (r s : BitVec 64) (cs rv : Nat → BitVec 64) (h32 : rv 32 = r) (h1 : rv 1 = r)
     (h2 : rv 2 = s) (hcs : ∀ x ∈ Newlib.calleeSaved, rv x = cs x) :
     sepL (GF := GF) iRegs (fun x => x ↦ᵣ rv x) ⊢
@@ -151,9 +137,6 @@ theorem ret_regs (r s : BitVec 64) (cs rv : Nat → BitVec 64) (h32 : rv 32 = r)
 
 end Regs
 
-/-! ## The run's read-only cells and owned bytes -/
-
-/-- Every byte of `stdioText` is the fixed binary's `.text` byte. -/
 theorem stdioText_img :
     stdioText.all (fun p => decide (textDom p.1) && textByte p.1 == p.2) = true := by
   decide +kernel
@@ -177,8 +160,6 @@ section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The read-only cells of a stdout run**: `gp`, the stdio code from the
-binary's image, `_impure_ptr` as the data view. -/
 theorem roOwn_stdio :
     iprop(gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗ impureRO) ⊢@{IProp GF}
       roOwn roR (stdioText ++ dataOf impDt (accAddrs 0x8001b970 8)) := by
@@ -199,8 +180,6 @@ theorem roOwn_stdio :
   iapply roImg_list impureW (imgM impDt) _ (fun a ha => by
     rw [mem_accAddrs_iff] at ha; unfold impureW; omega) $$ Hr
 
-/-- **The owned bytes of a stdout call**, at one tracking memory: newlib's
-exclusive data at its image, `errno` and the stack at any values. -/
 theorem outBytes (img : Nat → BitVec 8) (s : BitVec 64) (need : Nat) (hs : need ≤ s.toNat) :
     iprop(ownSet (GF := GF) stdioExcl (fun a => a ↦ₘ img a) ∗ errnoOwn ∗ stackScratch s need) ⊢
       ∃ Mt : Mem, ownSet (outS s need) (fun a => a ↦ₘ imgM Mt a) ∗
@@ -250,7 +229,6 @@ theorem outBytes (img : Nat → BitVec 8) (s : BitVec 64) (need : Nat) (hs : nee
   rw [hM a (by unfold outS; exact .inl ha)]
   simp [f, ha]
 
-/-- **The owned bytes back** as newlib's data, `errno` and the stack. -/
 theorem outBytes_back (mv : Nat → BitVec 8) (s : BitVec 64) (need : Nat) (hs : need ≤ s.toNat)
     (hs4 : 0x8001c168 ≤ s.toNat - need) :
     ownSet (GF := GF) (outS s need) (fun a => a ↦ₘ mv a) ⊢
@@ -274,7 +252,6 @@ theorem outBytes_back (mv : Nat → BitVec 8) (s : BitVec 64) (need : Nat) (hs :
         unfold stdioExcl stdioFoot InExt Stdio.InRange at *; simp at h; omega⟩, by
         unfold errnoFoot InExt Stdio.InRange at *; simp at h; omega⟩⟩) $$ Hs
 
-/-- A persistent byte is not in an owned list. -/
 theorem sepL_ro_ne (y : Nat) (b : BitVec 8) (f : Nat → BitVec 8) :
     ∀ l : List Nat, sepL (GF := GF) l (fun a => a ↦ₘ f a) ∗ (y ↦ₘ□ b) ⊢ ⌜y ∉ l⌝
   | [] => by iintro _; ipureintro; simp
@@ -289,7 +266,6 @@ theorem sepL_ro_ne (y : Nat) (b : BitVec 8) (f : Nat → BitVec 8) :
     simp only [List.mem_cons, not_or]
     exact ⟨h1, h2⟩
 
-/-- Persistent bytes are off an owned byte set. -/
 theorem ownSet_ro_off (S : Nat → Prop) (f : Nat → BitVec 8) :
     ∀ text : List (Nat × BitVec 8), ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗
       sepL text (fun p => p.1 ↦ₘ□ p.2) ⊢ ⌜∀ p ∈ text, ¬ S p.1⌝
@@ -310,7 +286,6 @@ theorem ownSet_ro_off (S : Nat → Prop) (f : Nat → BitVec 8) :
     · exact fun h => h1 ((hmem _).2 h)
     · exact h2 p hp
 
-/-- The data part of a run's read-only resources. -/
 theorem roOwn_data {ro : List (Nat × BitVec 64)} {T D : List (Nat × BitVec 8)} :
     roOwn (GF := GF) ro (T ++ D) ⊢ sepL D (fun p => p.1 ↦ₘ□ p.2) := by
   unfold roOwn
@@ -320,19 +295,12 @@ theorem roOwn_data {ro : List (Nat × BitVec 64)} {T D : List (Nat × BitVec 8)}
 
 end Own
 
-/-- The end of a stdout call's run: the console grew by `frag`, the PC and
-`ra` are the return address, `sp` and the callee-saved registers are back,
-and newlib's data (with `_impure_ptr`) is in its boundary state again. -/
 def OutEnd (o frag : String) (r s : BitVec 64) (cs : Nat → BitVec 64) :
     String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop :=
   fun t rv mv => t = o ++ frag ∧ rv 32 = r ∧ rv 1 = r ∧ rv 2 = s ∧
     (∀ x ∈ Newlib.calleeSaved, rv x = cs x) ∧
     StdioOK (fun a => if impureW a then impureByte a else mv a)
 
-/-- **The end of a stdout run from its summary.** A callee returning with
-`RetOK`, a memory keeping everything but its stack window, `errno` and
-stdout's pointer/count/flags/buffer byte (`outKeep`), and stdout idle again
-(`_p` at the one-byte buffer, `_w = 0`, the flags), ends in `OutEnd`. -/
 theorem outEnd_of {o frag t : String} {r s a0 : BitVec 64} {cs R R' rv : Nat → BitVec 64}
     {Mt M' : Mem} {img mv : Nat → BitVec 8} {k need : Nat}
     (hok : StdioOK img) (himp : ImpureImg img) (hMt : ∀ a, stdioExcl a → imgM Mt a = img a)
@@ -385,9 +353,6 @@ section Spec
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **A stdout call from its run.** The run, from the call's registers and
-owned bytes (newlib's data at a `StdioOK` image), ends in `OutEnd`; the
-persistent input `Rr` supplies the run's data view and its pure facts. -/
 theorem outSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live))
     {entry : BitVec 64} {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need : Nat}
     {cs : Nat → BitVec 64} {o frag : String} {X : Type} {Dt : X → Mem} {DA : X → List Nat}
@@ -441,7 +406,6 @@ theorem outSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
     iapply ownSet_congr (fun a (ha : stdioExcl a) => by simp [ha.2]) $$ Hx
   · iframe Hsp Hst Hcs Ht Hgp Himg
 
-/-- The interpreter's stack lies above `.bss`. -/
 theorem bss_of_stackGeom {s : BitVec 64} {n need : Nat} (h : StackGeom s n) (hle : need ≤ n) :
     0x8001c168 ≤ s.toNat - need := by
   have h1 := h.le; have h2 := h.lo
@@ -449,8 +413,6 @@ theorem bss_of_stackGeom {s : BitVec 64} {n need : Nat} (h : StackGeom s n) (hle
   simp only at h2
   omega
 
-/-- **`fputc(c, stdout)`** prints the character (`OutHoles.fputc`, with the
-stack above `.bss`). -/
 theorem fputc_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (c : BitVec 8)
     (s : BitVec 64) (cs : Nat → BitVec 64) (o : String) (hcl : CodeLive live)
     (hsp : SpIn s outNeed) (hbss : 0x8001c168 ≤ s.toNat - outNeed) :

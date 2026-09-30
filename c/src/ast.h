@@ -18,9 +18,9 @@ struct Expr {
         int bool_val;
         char *var_name;
         struct { char *name; Expr *value; } assign;
-        struct { int op; Expr *left, *right; } binary;   /* op: TokType */
-        struct { int op; Expr *left, *right; } logical;  /* && || */
-        struct { int op; Expr *operand; } unary;         /* - ! */
+        struct { int op; Expr *left, *right; } binary;
+        struct { int op; Expr *left, *right; } logical;
+        struct { int op; Expr *operand; } unary;
         struct { Expr *callee; Expr **args; int argc; } call;
         struct { char *name; char **params; int paramc; Stmt *body; } fn;
     } as;
@@ -35,8 +35,8 @@ struct Stmt {
     StmtKind kind;
     int line;
     union {
-        Expr *expr;  /* ST_EXPR; ST_RETURN (may be NULL) */
-        struct { char *name; Expr *init; } var_decl;     /* init may be NULL */
+        Expr *expr;
+        struct { char *name; Expr *init; } var_decl;
         struct { Stmt **stmts; int count; } block;
         struct { Expr *cond; Stmt *then_branch; Stmt *else_branch; } if_stmt;
         struct { Expr *cond; Stmt *body; } while_stmt;

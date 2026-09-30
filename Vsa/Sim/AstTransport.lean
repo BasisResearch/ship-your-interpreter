@@ -1,49 +1,5 @@
 import Vsa.Sim.MemRegion
 
-/-!
-# Layer-2 — AST-representation transport under memory agreement
-
-`ExprRepr`/`StmtRepr` (and every relation the mutual block recurses through:
-`ExprArrayRepr`, `ParamsRepr`, `OptStmtRepr`, `OptExprRepr`, `StmtArrayRepr`)
-are conjunctions of byte-level `read32`/`read64`/`CString`/child-`Repr` facts.
-Any memory change that **agrees byte-for-byte on the addresses the derivation
-actually reads** leaves the whole tree intact.
-
-This is the AST analogue of `Vsa/Sim/ReprSurvival.lean`'s `valueRepr_agreeP` /
-`storeRepr_agreeP`: it discharges the recurring `exprRepr_agreeP` /
-`stmtRepr_agreeP` residual that nearly every recursive expression/statement
-case carries (the AST survives the memory writes a sub-call performs, because
-the AST region is disjoint from the runtime write windows).
-
-## The footprint
-
-The footprint of a representation is not a single contiguous window: nested
-sub-`Expr`/`Stmt` nodes and dereferenced `char*` strings live at pointers read
-out of `m`, and may sit anywhere in the loaded image. We therefore define the
-footprint as an inductive membership predicate `ExprFp m a e` (and its six
-siblings), mirroring each constructor's reads exactly:
-
-* the node's own `read32`/`read64` tag/pointer/count windows `[a+off, a+off+k)`;
-* for string-carrying nodes, the dereferenced `char*` byte range
-  `[p, p + s.length]` (through the NUL), where `p = read64 m (a+8)` etc.;
-* recursively, the footprint of every child, rooted at the child pointer the
-  node reads out of `m`.
-
-`AgreeP P m m'` (from `ReprSurvival`) plus `∀ addr, ExprFp m a e addr → P addr`
-then transports `ExprRepr m a e` to `ExprRepr m' a e`.
-
-## How callers consume it
-
-The cases carry agreement over the complement of a contiguous runtime write
-window `W` — `AgreeP (fun a => ¬ (W.lo ≤ a ∧ a < W.hi)) m m'`. When the AST
-region is disjoint from `W` (the AST lives in `.rodata`/heap, the writes land
-on the stack/arena), `∀ addr, ExprFp m a e addr → ¬ (W.lo ≤ addr ∧ addr < W.hi)`
-follows from that disjointness, and the transport lemma delivers the survived
-`ExprRepr`.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
--/
-
 namespace Vsa.Sim
 
 open Vsa.MemRepr
@@ -51,13 +7,6 @@ open Vsa.While
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
-
-/-! ## Footprint membership predicates
-
-For a fixed source memory `m`, `ExprFp m a e addr` says `addr` is one of the
-bytes `ExprRepr m a e`'s derivation reads. Pointer/count values are taken from
-`m` (via the same `read*` the constructor uses), so the footprint is exactly
-the set the representation touches. -/
 
 mutual
 
@@ -127,19 +76,18 @@ end
 
 mutual
 
-/-- `addr` is read by `ExprRepr m a e`. -/
 inductive ExprFp (m : Mem) : Nat → Expr → Nat → Prop where
   | tag {a : Nat} {e : Expr} {k : Nat} : k < 4 → ExprFp m a e (a + k)
-  -- payload / pointer / count windows (offset 8, plus 16/24/32 for children)
+
   | off8 {a : Nat} {e : Expr} {k : Nat} : k < 8 → ExprFp m a e (a + 8 + k)
   | off16 {a : Nat} {e : Expr} {k : Nat} : k < 8 → ExprFp m a e (a + 16 + k)
   | off24 {a : Nat} {e : Expr} {k : Nat} : k < 8 → ExprFp m a e (a + 24 + k)
   | off32 {a : Nat} {e : Expr} {k : Nat} : k < 8 → ExprFp m a e (a + 32 + k)
-  -- string bytes for a `char*` at offset 8 (str/var/assign-name/fn-name)
+
   | str8 {a : Nat} {e : Expr} {s : String} {p k : Nat} :
     ExprStrAt8 e s → read64 m (a + 8) = some p → k ≤ s.length →
     ExprFp m a e (p + k)
-  -- child expr at offset 8 (call fn), 16 (assign/binary/logical/unary l), 24 (binary/logical r)
+
   | child8 {a : Nat} {e ec : Expr} {p addr : Nat} :
     ExprChildAt8 e ec → read64 m (a + 8) = some p →
     ExprFp m p ec addr → ExprFp m a e addr
@@ -149,11 +97,11 @@ inductive ExprFp (m : Mem) : Nat → Expr → Nat → Prop where
   | child24 {a : Nat} {e ec : Expr} {p addr : Nat} :
     ExprChildAt24 e ec → read64 m (a + 24) = some p →
     ExprFp m p ec addr → ExprFp m a e addr
-  -- call arg array at offset 16
+
   | argArr {a : Nat} {e : Expr} {args argc addr : Nat} {es : List Expr} :
     ExprArgsAt16 e es → read64 m (a + 16) = some args →
     ExprArrayFp m args argc es addr → ExprFp m a e addr
-  -- fn params array at offset 16, body block at offset 32
+
   | paramsArr {a : Nat} {e : Expr} {params paramc addr : Nat} {ps : List String} :
     ExprParamsAt16 e ps → read64 m (a + 16) = some params →
     ParamsFp m params paramc ps addr → ExprFp m a e addr
@@ -161,7 +109,6 @@ inductive ExprFp (m : Mem) : Nat → Expr → Nat → Prop where
     ExprBodyAt32 e ss → read64 m (a + 32) = some body →
     StmtFp m body (.block ss) addr → ExprFp m a e addr
 
-/-- `addr` is read by `ExprArrayRepr m a n es`. -/
 inductive ExprArrayFp (m : Mem) : Nat → Nat → List Expr → Nat → Prop where
   | slot {a n : Nat} {e : Expr} {es : List Expr} {k : Nat} : k < 8 →
     ExprArrayFp m a (n + 1) (e :: es) (a + k)
@@ -171,7 +118,6 @@ inductive ExprArrayFp (m : Mem) : Nat → Nat → List Expr → Nat → Prop whe
   | tail {a n addr : Nat} {e : Expr} {es : List Expr} :
     ExprArrayFp m (a + 8) n es addr → ExprArrayFp m a (n + 1) (e :: es) addr
 
-/-- `addr` is read by `ParamsRepr m a n xs`. -/
 inductive ParamsFp (m : Mem) : Nat → Nat → List String → Nat → Prop where
   | slot {a n : Nat} {x : String} {xs : List String} {k : Nat} : k < 8 →
     ParamsFp m a (n + 1) (x :: xs) (a + k)
@@ -181,26 +127,24 @@ inductive ParamsFp (m : Mem) : Nat → Nat → List String → Nat → Prop wher
   | tail {a n addr : Nat} {x : String} {xs : List String} :
     ParamsFp m (a + 8) n xs addr → ParamsFp m a (n + 1) (x :: xs) addr
 
-/-- `addr` is read by `StmtRepr m a s`. -/
 inductive StmtFp (m : Mem) : Nat → Stmt → Nat → Prop where
   | tag {a : Nat} {s : Stmt} {k : Nat} : k < 4 → StmtFp m a s (a + k)
   | off8 {a : Nat} {s : Stmt} {k : Nat} : k < 8 → StmtFp m a s (a + 8 + k)
   | off16 {a : Nat} {s : Stmt} {k : Nat} : k < 8 → StmtFp m a s (a + 16 + k)
   | off24 {a : Nat} {s : Stmt} {k : Nat} : k < 8 → StmtFp m a s (a + 24 + k)
   | off32 {a : Nat} {s : Stmt} {k : Nat} : k < 8 → StmtFp m a s (a + 32 + k)
-  -- name string for a `char*` at offset 8 (var decl)
+
   | str8 {a : Nat} {s : Stmt} {x : String} {p k : Nat} :
     StmtStrAt8 s x → read64 m (a + 8) = some p → k ≤ x.length →
     StmtFp m a s (p + k)
-  -- expr children at offsets 8 (if/while cond, expr stmt), 16 (var-init value)
+
   | expr8 {a : Nat} {s : Stmt} {p addr : Nat} {e : Expr} :
     StmtExprAt8 s e → read64 m (a + 8) = some p →
     ExprFp m p e addr → StmtFp m a s addr
   | expr16 {a : Nat} {s : Stmt} {p addr : Nat} {e : Expr} :
     StmtExprAt16 s e → read64 m (a + 16) = some p →
     ExprFp m p e addr → StmtFp m a s addr
-  -- stmt children at offsets 8 (block array via count@16), 16 (if-then, while body),
-  -- 24 (if-else), 32 (for body)
+
   | stmt16 {a : Nat} {s : Stmt} {p addr : Nat} {t : Stmt} :
     StmtChildAt16 s t → read64 m (a + 16) = some p →
     StmtFp m p t addr → StmtFp m a s addr
@@ -210,11 +154,11 @@ inductive StmtFp (m : Mem) : Nat → Stmt → Nat → Prop where
   | stmt32 {a : Nat} {s : Stmt} {p addr : Nat} {t : Stmt} :
     StmtChildAt32 s t → read64 m (a + 32) = some p →
     StmtFp m p t addr → StmtFp m a s addr
-  -- block: stmt array at offset 8, count at offset 16
+
   | blockArr {a : Nat} {s : Stmt} {stmts count addr : Nat} {ss : List Stmt} :
     StmtBlockAt8 s ss → read64 m (a + 8) = some stmts →
     StmtArrayFp m stmts count ss addr → StmtFp m a s addr
-  -- for-loop optional init (stmt) at offset 8, optional cond/step (expr) at 16/24
+
   | optStmt8 {a : Nat} {s : Stmt} {os : Option Stmt} {addr : Nat} :
     StmtOptStmtAt8 s os → OptStmtFp m (a + 8) os addr → StmtFp m a s addr
   | optExpr16 {a : Nat} {s : Stmt} {oe : Option Expr} {addr : Nat} :
@@ -222,19 +166,16 @@ inductive StmtFp (m : Mem) : Nat → Stmt → Nat → Prop where
   | optExpr24 {a : Nat} {s : Stmt} {oe : Option Expr} {addr : Nat} :
     StmtOptExprAt24 s oe → OptExprFp m (a + 24) oe addr → StmtFp m a s addr
 
-/-- `addr` is read by `OptStmtRepr m a os`. -/
 inductive OptStmtFp (m : Mem) : Nat → Option Stmt → Nat → Prop where
   | ptr {a : Nat} {os : Option Stmt} {k : Nat} : k < 8 → OptStmtFp m a os (a + k)
   | child {a p addr : Nat} {s : Stmt} :
     read64 m a = some p → StmtFp m p s addr → OptStmtFp m a (some s) addr
 
-/-- `addr` is read by `OptExprRepr m a oe`. -/
 inductive OptExprFp (m : Mem) : Nat → Option Expr → Nat → Prop where
   | ptr {a : Nat} {oe : Option Expr} {k : Nat} : k < 8 → OptExprFp m a oe (a + k)
   | child {a p addr : Nat} {e : Expr} :
     read64 m a = some p → ExprFp m p e addr → OptExprFp m a (some e) addr
 
-/-- `addr` is read by `StmtArrayRepr m a n ss`. -/
 inductive StmtArrayFp (m : Mem) : Nat → Nat → List Stmt → Nat → Prop where
   | slot {a n : Nat} {s : Stmt} {ss : List Stmt} {k : Nat} : k < 8 →
     StmtArrayFp m a (n + 1) (s :: ss) (a + k)
@@ -246,8 +187,6 @@ inductive StmtArrayFp (m : Mem) : Nat → Nat → List Stmt → Nat → Prop whe
 
 end
 
-/-! ## The representation footprint is contained in its hereditary region -/
-
 private def R2 (m : Mem) (lo hi : Nat) :
     (a n : Nat) → (es : List Expr) → (addr : Nat) → ExprArrayFp m a n es addr → Prop :=
   fun a _ es addr _ => ExprsIn m lo hi a es → lo ≤ addr ∧ addr < hi
@@ -255,26 +194,10 @@ private def R3 (m : Mem) (lo hi : Nat) :
     (a n : Nat) → (xs : List String) → (addr : Nat) → ParamsFp m a n xs addr → Prop :=
   fun a _ xs addr _ => ParamsIn m lo hi a xs → lo ≤ addr ∧ addr < hi
 
-/-! ## Transport lemmas
-
-The single mutual induction over the `*Repr` derivations. Each motive says:
-"given `AgreeP P m m'` and that `P` covers this node's footprint, the `*Repr`
-transfers to `m'`". The read-window side conditions are discharged by
-`read32_agreeP`/`read64_agreeP`/`cstring_agreeP` on the appropriate footprint
-constructor; child obligations come from the recursor's IHs.
-
-`astTransport_all` bundles all seven motives (one per relation) and is proved by
-a single pass over the shared minor premises; the public single-relation lemmas
-`exprRepr_agreeP` (motive 1) and `stmtRepr_agreeP` (motive 4) are its
-projections. -/
-
 section Transport
 
 variable {P : Nat → Prop} {m m' : Mem}
 
-/-- The seven motives of the mutual recursor, packaged so `ExprRepr.rec` and its
-siblings can share one minor-premise bundle. Each says: *if `P` covers this
-relation's footprint, the relation transfers to `m'`.* -/
 private def M1 (_h : AgreeP P m m') : (a : Nat) → (e : Expr) → ExprRepr m a e → Prop :=
   fun a e _ => (∀ addr, ExprFp m a e addr → P addr) → ExprRepr m' a e
 private def M2 (_h : AgreeP P m m') : (a n : Nat) → (es : List Expr) → ExprArrayRepr m a n es → Prop :=

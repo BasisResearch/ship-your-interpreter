@@ -5,13 +5,10 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- Collapse the unit-valued `assert` prefix of a Sail `do` block in the exception monad.
-Lean 4.34 no longer unfolds this bind through `simp only [EStateM.pure, EStateM.bind]`. -/
 private theorem pure_unit_bindCont {ε σ ε' β : Type}
     (f : Unit → ExceptT ε' (EStateM ε σ) β) :
     (EStateM.pure (Except.ok () : Except ε' Unit)).bind (ExceptT.bindCont f) = f () := rfl
 
-/-- Bare-mode reads ignore the successfully computed page split and permit misalignment. -/
 theorem vmem_read_addr_of_pageSplit
     (σ : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) (parts : Int × Int) (paddr : physaddr) (v : BitVec (8 * w))
@@ -61,7 +58,6 @@ theorem vmem_read_addr_of_pageSplit
   exact congrArg (fun x => EStateM.Result.ok (Result.Ok x) σ)
     (updateSubrange_zeros_load w hwpos v)
 
-/-- Scalar checked reads lifted through the existing translation adapters. -/
 theorem translate_and_read_value_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (a : BitVec 64) (k : Nat) (hk : k ≤ 3)
     (hlo : 0x80000000 ≤ a.toNat) (hhi : a.toNat + 2 ^ k ≤ 0x100000000)
@@ -86,7 +82,6 @@ theorem translate_and_read_value_ram_scalar {σ : Vsa.Machine.MState} (hg : Good
       hg.cur_privilege hg.mstatus hmprv
       (mem_read_data_eight_of_cmr σ a _ initMstatus hg.cur_privilege hg.mstatus hmprv hc)
 
-/-- Virtual-address scalar loads, including page and granule crossings. -/
 theorem vmem_read_addr_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (a : BitVec 64) (k : Nat) (hk : k ≤ 3)
     (hlo : 0x80000000 ≤ a.toNat) (hhi : a.toNat + 2 ^ k ≤ 0x100000000)
@@ -100,7 +95,6 @@ theorem vmem_read_addr_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (split_on_page_boundary_ram σ a (2 ^ k) (Nat.two_pow_pos _) hw (by omega))
     (translate_and_read_value_ram_scalar hg a k hk hlo hhi hhtif)
 
-/-- Resolve the base register and offset, then perform the general scalar load. -/
 theorem vmem_read_ram_scalar {σ : Vsa.Machine.MState} (hg : GoodState σ)
     (rs : regidx) (offset vbase : BitVec 64) (k : Nat) (hk : k ≤ 3)
     (hrs : (rX_bits rs).run σ = .ok vbase σ)

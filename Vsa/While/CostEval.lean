@@ -1,41 +1,8 @@
 import Vsa.While.Cost
 import Vsa.While.Programs
 
-/-!
-# A fuel-bounded evaluator for the cost relations
-
-`Vsa/While/Cost.lean` defines nine mutually inductive cost relations
-(`EvalECost`, …, `ExecSeqCost`). This file gives a fuel-bounded,
-kernel-reducible evaluator mirroring them rule for rule, so that facts about
-the cost of a concrete program (e.g. the capacity premise
-`∀ st' n, ExecSeqCost initSt 0 0 p st' .normal n → 2 * n + 8256 ≤ K`) are
-discharged by kernel computation.
-
-* `Res α` is the three-valued result: `done a`, `stuck` (no rule applies:
-  division by zero, an unbound variable, calling a non-function, an arity
-  mismatch, depth `≥ maxCallDepth`, an escaping `break`, …) and `fuel`.
-* The nine evaluators are the fields of one `Oracle`; `Oracle.next` performs
-  one unfolding of every rule, calling the previous oracle on premises, and
-  `oracle f` iterates it `f` times from the all-`fuel` oracle. Every premise
-  that is a function in the relations (`binOpSem`, `Store.get?`, `set?`,
-  `allocClosure`, `allocFrame`, `define`, `defineCost`, `binOpCost`,
-  `bindParamsCost`, `printArgs`, `Value.truthy`) is called verbatim.
-* `oracle_le`: fuel monotonicity (`done`/`stuck` are stable under more fuel).
-* `evalE_complete` … `execSeq_complete`: every derivation is found at some
-  fuel (mutual structural recursion on the derivation).
-* Consumers: `execSeqCost_eq_of_eval`, `execSeqCost_none_of_stuck`, and the
-  Bool-checked forms `execSeqCost_eq_of_normalCost` /
-  `execSeqCost_capacity_of_normalCost` for `decide +kernel`.
-* Validation: the test programs of `Vsa/While/Programs.lean` evaluated by the
-  kernel (the loop programs take several seconds each: every block iteration
-  allocates a frame, and the kernel reads the frame array as a list).
--/
-
 namespace Vsa.While
 
-/-! ## Three-valued results -/
-
-/-- Result of a fuel-bounded evaluation. -/
 inductive Res (α : Type) where
   | done (a : α)
   | stuck
@@ -44,19 +11,15 @@ inductive Res (α : Type) where
 
 namespace Res
 
-/-- Sequencing: `stuck` and `fuel` propagate. -/
 def bind {α β : Type} : Res α → (α → Res β) → Res β
   | .done a, k => k a
   | .stuck, _ => .stuck
   | .fuel, _ => .fuel
 
-/-- A partial premise function: `none` means no rule applies. -/
 def ofOption {α : Type} : Option α → Res α
   | some a => .done a
   | none => .stuck
 
-/-- Information order: `fuel` is below everything, other results only below
-themselves. -/
 def Le {α : Type} (r r' : Res α) : Prop := r = .fuel ∨ r = r'
 
 theorem Le.refl {α : Type} (r : Res α) : Le r r := Or.inr rfl
@@ -78,7 +41,6 @@ theorem Le.ite {α : Type} {c : Prop} [Decidable c] {a a' b b' : Res α} (ha : L
   · simpa only [h, ↓reduceIte] using ha
   · simpa only [h, ↓reduceIte] using hb
 
-/-- `done` is stable upward. -/
 theorem Le.done_of {α : Type} {r r' : Res α} {a : α} (h : Le r r') (hr : r = .done a) :
     r' = .done a := by
   subst hr
@@ -86,7 +48,6 @@ theorem Le.done_of {α : Type} {r r' : Res α} {a : α} (h : Le r r') (hr : r = 
   · cases h
   · exact h.symm
 
-/-- `stuck` is stable upward. -/
 theorem Le.stuck_of {α : Type} {r r' : Res α} (h : Le r r') (hr : r = .stuck) :
     r' = .stuck := by
   subst hr
@@ -96,7 +57,6 @@ theorem Le.stuck_of {α : Type} {r r' : Res α} (h : Le r r') (hr : r = .stuck) 
 
 end Res
 
-/-- Dispatch on a statement status. -/
 def onStatus {β : Type} (s : Status) (normal brk cont : β) (ret : Value → β) : β :=
   match s with
   | .normal => normal
@@ -114,63 +74,45 @@ theorem Res.Le.onStatus {α : Type} {s : Status} {n n' b b' c c' : Res α}
   | cont => exact hc
   | ret v => exact hr v
 
-/-! ## Result payloads -/
-
-/-- Payload of `EvalECost`/`CallCost`: final state, value, cost. -/
 structure EOut where
   st : St
   v : Value
   n : Nat
 
-/-- Payload of `EvalArgsCost`. -/
 structure AOut where
   st : St
   vs : List Value
   n : Nat
 
-/-- Payload of `ExecSCost`/`ForLoopCost`/`ExecSeqCost`. -/
 structure SOut where
   st : St
   status : Status
   n : Nat
 
-/-- Payload of the `for`-condition evaluator: `ok` is the condition's
-truthiness (`true` for an absent condition). `ForCondCost` corresponds to
-`ok = true`; `ForLoopCost.condFalse` to `ok = false`. -/
 structure COut where
   st : St
   ok : Bool
   n : Nat
 
-/-- Payload of `ExecInitCost`/`ExecStepCost`. -/
 structure UOut where
   st : St
   n : Nat
 
-/-! ## Rule helpers -/
-
-/-- The value a finished closure body returns (`CallCost.closure`'s
-`status = .normal ∧ v = .null ∨ status = .ret v`). -/
 def callResult : Status → Option Value
   | .normal => some .null
   | .ret v => some v
   | .brk => none
   | .cont => none
 
-/-- The asserted value of `CallCost.assertOk` (`vs = [v] ∨ vs = [v, m]`). -/
 def assertArg : List Value → Option Value
   | [v] => some v
   | [v, _] => some v
   | _ => none
 
-/-- The operand of `EvalECost.neg`. -/
 def Value.asInt : Value → Option Int
   | .int n => some n
   | _ => none
 
-/-! ## The oracle: one field per relation -/
-
-/-- One evaluator per cost relation. -/
 structure Oracle where
   e : St → Nat → Addr → Expr → Res EOut
   args : St → Nat → Addr → List Expr → Res AOut
@@ -184,7 +126,6 @@ structure Oracle where
 
 namespace Oracle
 
-/-- `EvalECost` rules, premises answered by `o`. -/
 def stepE (o : Oracle) (st : St) (d : Nat) (env : Addr) : Expr → Res EOut
   | .int n => .done ⟨st, .int n, 0⟩
   | .str s => .done ⟨st, .str s, 0⟩
@@ -216,13 +157,11 @@ def stepE (o : Oracle) (st : St) (d : Nat) (env : Addr) : Expr → Res EOut
       .done ⟨⟨(st.store.allocClosure ⟨env, name, params, body⟩).1, st.out⟩,
         .closure (st.store.allocClosure ⟨env, name, params, body⟩).2, closureBytes⟩
 
-/-- `EvalArgsCost` rules. -/
 def stepArgs (o : Oracle) (st : St) (d : Nat) (env : Addr) : List Expr → Res AOut
   | [] => .done ⟨st, [], 0⟩
   | e :: es => (o.e st d env e).bind fun r => (o.args r.st d env es).bind fun rs =>
       .done ⟨rs.st, r.v :: rs.vs, r.n + rs.n⟩
 
-/-- `CallCost` rules. -/
 def stepCall (o : Oracle) (st : St) (d : Nat) : Value → List Value → Res EOut
   | .closure a, vs => (Res.ofOption st.store.closures[a]?).bind fun cd =>
       if vs.length = cd.params.length ∧ d < maxCallDepth then
@@ -244,7 +183,6 @@ def stepCall (o : Oracle) (st : St) (d : Nat) : Value → List Value → Res EOu
   | .int _, _ => .stuck
   | .str _, _ => .stuck
 
-/-- `ExecSCost` rules. -/
 def stepS (o : Oracle) (st : St) (d : Nat) (env : Addr) : Stmt → Res SOut
   | .expr e => (o.e st d env e).bind fun r => .done ⟨r.st, .normal, r.n⟩
   | .varDecl x (some e) => (o.e st d env e).bind fun r =>
@@ -284,13 +222,10 @@ def stepS (o : Oracle) (st : St) (d : Nat) (env : Addr) : Stmt → Res SOut
   | .brk => .done ⟨st, .brk, 0⟩
   | .cont => .done ⟨st, .cont, 0⟩
 
-/-- `ExecInitCost` rules (the init's status is discarded). -/
 def stepInit (o : Oracle) (st : St) (d : Nat) (env : Addr) : Option Stmt → Res UOut
   | none => .done ⟨st, 0⟩
   | some s => (o.s st d env s).bind fun r => .done ⟨r.st, r.n⟩
 
-/-- `ForLoopCost` rules: the condition flag selects `condFalse`; otherwise
-the body status selects `bodyBreak`/`bodyRet`/`loop`. -/
 def stepLoop (o : Oracle) (st : St) (d : Nat) (env : Addr) (cnd step : Option Expr)
     (b : Stmt) : Res SOut :=
   (o.cond st d env cnd).bind fun rc =>
@@ -307,17 +242,14 @@ def stepLoop (o : Oracle) (st : St) (d : Nat) (env : Addr) (cnd step : Option Ex
           (fun rv => .done ⟨rb.st, .ret rv, rc.n + rb.n⟩)
     else .done ⟨rc.st, .normal, rc.n⟩
 
-/-- The `for` condition with its truthiness (`ForCondCost` / `condFalse`). -/
 def stepCond (o : Oracle) (st : St) (d : Nat) (env : Addr) : Option Expr → Res COut
   | none => .done ⟨st, true, 0⟩
   | some c => (o.e st d env c).bind fun r => .done ⟨r.st, r.v.truthy, r.n⟩
 
-/-- `ExecStepCost` rules. -/
 def stepStep (o : Oracle) (st : St) (d : Nat) (env : Addr) : Option Expr → Res UOut
   | none => .done ⟨st, 0⟩
   | some e => (o.e st d env e).bind fun r => .done ⟨r.st, r.n⟩
 
-/-- `ExecSeqCost` rules. -/
 def stepSeq (o : Oracle) (st : St) (d : Nat) (env : Addr) : List Stmt → Res SOut
   | [] => .done ⟨st, .normal, 0⟩
   | s :: ss => (o.s st d env s).bind fun r1 =>
@@ -325,7 +257,6 @@ def stepSeq (o : Oracle) (st : St) (d : Nat) (env : Addr) : List Stmt → Res SO
         ((o.seq r1.st d env ss).bind fun r2 => .done ⟨r2.st, r2.status, r1.n + r2.n⟩)
         (.done r1) (.done r1) (fun _ => .done r1)
 
-/-- One unfolding of all nine relations. -/
 def next (o : Oracle) : Oracle where
   e := o.stepE
   args := o.stepArgs
@@ -337,7 +268,6 @@ def next (o : Oracle) : Oracle where
   step := o.stepStep
   seq := o.stepSeq
 
-/-- The oracle that has no fuel. -/
 def bot : Oracle where
   e _ _ _ _ := .fuel
   args _ _ _ _ := .fuel
@@ -351,20 +281,14 @@ def bot : Oracle where
 
 end Oracle
 
-/-- The evaluator at fuel `f`: `f` unfoldings of every rule. -/
 def oracle : Nat → Oracle
   | 0 => .bot
   | f + 1 => (oracle f).next
 
 theorem oracle_succ (f : Nat) : oracle (f + 1) = (oracle f).next := rfl
 
-/-! ## The nine evaluators -/
-
 def execSeqEval (f : Nat) : St → Nat → Addr → List Stmt → Res SOut := (oracle f).seq
 
-/-! ## Fuel monotonicity -/
-
-/-- Pointwise information order on oracles. -/
 structure Oracle.Le (o o' : Oracle) : Prop where
   e : ∀ st d env x, Res.Le (o.e st d env x) (o'.e st d env x)
   args : ∀ st d env x, Res.Le (o.args st d env x) (o'.args st d env x)
@@ -377,8 +301,6 @@ structure Oracle.Le (o o' : Oracle) : Prop where
   step : ∀ st d env x, Res.Le (o.step st d env x) (o'.step st d env x)
   seq : ∀ st d env x, Res.Le (o.seq st d env x) (o'.seq st d env x)
 
-/-- Closes `Res.Le (B o) (B o')` for a rule body `B` built from `bind`, `if`,
-`onStatus` and oracle calls, given `o.Le o'` in context. -/
 syntax "res_mono" : tactic
 macro_rules
   | `(tactic| res_mono) => `(tactic| repeat' (first
@@ -397,7 +319,6 @@ macro_rules
       | (apply Oracle.Le.step; assumption)
       | (apply Oracle.Le.seq; assumption)))
 
-/-- One unfolding is monotone in the premise oracle. -/
 theorem Oracle.Le.next {o o' : Oracle} (h : o.Le o') : o.next.Le o'.next where
   e st d env x := by
     show Res.Le (o.stepE st d env x) (o'.stepE st d env x)
@@ -443,21 +364,15 @@ theorem Oracle.Le.bot (o : Oracle) : Oracle.bot.Le o where
   step _ _ _ _ := Res.Le.fuel _
   seq _ _ _ _ := Res.Le.fuel _
 
-/-- **Fuel monotonicity** of all nine evaluators at once. -/
 theorem oracle_le : ∀ {f f' : Nat}, f ≤ f' → (oracle f).Le (oracle f')
   | 0, _, _ => Oracle.Le.bot _
   | _ + 1, 0, h => absurd h (Nat.not_succ_le_zero _)
   | _ + 1, _ + 1, h => (oracle_le (Nat.le_of_succ_le_succ h)).next
 
-/-- Fuel monotonicity of the statement-sequence evaluator: a `stuck` result
-persists at every larger fuel. -/
 theorem execSeqEval_stuck_mono {f f' : Nat} (hf : f ≤ f') {st d env ss}
     (h : execSeqEval f st d env ss = .stuck) : execSeqEval f' st d env ss = .stuck :=
   ((oracle_le hf).seq st d env ss).stuck_of h
 
-/-! ## Completeness -/
-
-/-- `g` eventually (at some fuel) returns `done a`. -/
 def Reaches {α : Type} (g : Nat → Res α) (a : α) : Prop := ∃ f, g f = .done a
 
 section lift
@@ -485,7 +400,6 @@ theorem lift_seq {st d env x a} (hf : f ≤ F) (h : (oracle f).seq st d env x = 
 
 end lift
 
-/-- Unfold one fuel level and the rule bodies, then reduce the binds. -/
 syntax "reach_simp" ("[" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| reach_simp $[[$ls,*]]?) => do
@@ -717,9 +631,6 @@ theorem execSeq_complete {st d env ss st' status n} (h : ExecSeqCost st d env ss
   termination_by structural h
 end
 
-/-! ## Consumers -/
-
-/-- Any derivation from `st` agrees with a `done` result of the evaluator. -/
 theorem execSeqCost_eq_of_eval {f : Nat} {st d env} {p : List Stmt} {r0 : SOut}
     {st' : St} {status : Status} {n : Nat}
     (h : execSeqEval f st d env p = .done r0) (hd : ExecSeqCost st d env p st' status n) :
@@ -730,14 +641,12 @@ theorem execSeqCost_eq_of_eval {f : Nat} {st d env} {p : List Stmt} {r0 : SOut}
   rw [e1] at e0
   exact Res.done.inj e0
 
-/-- Cost projection of `execSeqCost_eq_of_eval`. -/
 theorem execSeqCost_n_eq_of_eval {f : Nat} {st d env} {p : List Stmt} {r0 : SOut}
     {st' : St} {status : Status} {n : Nat}
     (h : execSeqEval f st d env p = .done r0) (hd : ExecSeqCost st d env p st' status n) :
     n = r0.n := by
   rw [← execSeqCost_eq_of_eval h hd]
 
-/-- A `stuck` evaluation rules out every derivation. -/
 theorem execSeqCost_none_of_stuck {f : Nat} {st d env} {p : List Stmt}
     (h : execSeqEval f st d env p = .stuck) (st' : St) (status : Status) (n : Nat) :
     ¬ ExecSeqCost st d env p st' status n := by
@@ -749,7 +658,6 @@ theorem execSeqCost_none_of_stuck {f : Nat} {st d env} {p : List Stmt}
   rw [e1] at e0
   cases e0
 
-/-- The cost of a `done`-and-`normal` result (Bool-checkable by the kernel). -/
 def Res.normalCost? : Res SOut → Option Nat
   | .done r => if r.status = .normal then some r.n else none
   | _ => none
@@ -766,17 +674,10 @@ theorem Res.eq_done_of_normalCost {r : Res SOut} {n0 : Nat} (h : r.normalCost? =
   | stuck => cases h
   | fuel => cases h
 
-/-- Kernel-checkable form: if the evaluator's normal cost is `n0`, every
-normal derivation costs exactly `n0`. -/
 theorem execSeqCost_eq_of_normalCost {f : Nat} {st d env} {p : List Stmt} {n0 : Nat}
     (h : (execSeqEval f st d env p).normalCost? = some n0) {st' : St} {n : Nat}
     (hd : ExecSeqCost st d env p st' .normal n) : n = n0 := by
   obtain ⟨st0, h0⟩ := Res.eq_done_of_normalCost h
   exact execSeqCost_n_eq_of_eval h0 hd
-
-/-! ## Validation on the test programs
-
-Costs computed by the kernel. The printed output of each run agrees with
-`Vsa/While/Validation.lean`. -/
 
 end Vsa.While

@@ -1,12 +1,5 @@
 import Vsa.Compiler.SimAssign
 
-/-!
-# Forward simulation: function literals
-
-A function literal allocates its closure object `[frame][code][print][concat]`
-at the object heap pointer and jumps over its function's code.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -28,8 +21,6 @@ theorem getElem?_last {l : List Nat} {x p b : Nat} (h : (l ++ [x])[b]? = some p)
   simp at h
   exact ⟨rfl, h.symm⟩
 
-/-- **Closure allocation.** An object for the new closure at `h`, below `h'`,
-matches `Store.allocClosure`. -/
 theorem StoreRel.alloc_clo {F : FrMap} {H : CloMap} {s : Store} {m m' : Mem} {hF h h' : Nat}
     (hs : StoreRel F H s m hF h) (hfr : Agree m m' frameBase hF) (hag : ObjAgree m m' h)
     (hh : h + 32 ≤ h') {cd : ClosureData} {d c : Nat} (hobj : CloObj m' h' h cd.name d c) :
@@ -89,7 +80,6 @@ theorem gexpr_fn (T : List String) (Γ : List (List String)) (k pos : Nat) (name
 theorem liN_big {rd n : Nat} (h1 : 2048 ≤ n) (h2 : n < 2 ^ 63) : (li rd (BitVec.ofNat 64 n)).length = 11 :=
   li_length_big (by rw [toInt_ofNat_small n h2]; omega)
 
-/-- Memory after writing a closure object at `h`. -/
 def cloW (m : Mem) (h : Nat) (e c d k : BitVec 64) : Mem :=
   applyW (applyW (applyW (applyW m (h, 8, e)) (h + 8, 8, c)) (h + 16, 8, d)) (h + 24, 8, k)
 
@@ -109,7 +99,6 @@ theorem cloW_obj {m : Mem} {h : Nat} {e c d k : BitVec 64} (hal : h % 8 = 0) : O
 theorem SameShape.allocClosure (s : Store) (cd : ClosureData) : SameShape s (s.allocClosure cd).1 :=
   ⟨rfl, fun _ fr h => ⟨fr, h, rfl⟩⟩
 
-/-- The view after allocating a closure object at `V.h`. -/
 def View.withClo (V : View) : View := { V with H := V.H ++ [V.h], h := V.h + 32 }
 
 theorem CloCode.alloc {code : List Ins} {T : List String} {V : View} {s : Store} {m m' : Mem}

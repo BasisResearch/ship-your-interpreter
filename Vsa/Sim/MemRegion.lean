@@ -1,69 +1,22 @@
 import Vsa.Sim.ReprSurvival
 
-/-!
-# `MemRegion` — the hereditary AST-region invariant (wave 47h, entry audit N3)
-
-The 47g Law-4 verdict (`strpayloadgeom-supplier-verdict`) machine-checked that
-NOTHING on main relates AST-node/string-payload addresses to `SL`/`sp`/`sret`:
-`ExprRepr` is region-free, `StoreRepr` pins frames/closures only, the Layout is
-abstract.  Every `*Extras`/`*Resid` bundle re-states per-node region facts by
-hand (`NegExtras.op_lo/op_hi/op_stk/expr24_stk`, `StrLeafResid`'s payload
-conjuncts, `BinArmExtras`' operand geometry, …) — the audited need class N3
-(`experiments/entry-needs-audit.md`).
-
-This module defines the ONE hereditary predicate those facts project from:
-
-* `ExprIn m lo hi a e` / `StmtIn m lo hi a s` — every node of the tree rooted
-  at machine address `a`, every array cell, and every string payload lies in
-  `[lo, hi)`.  Defined by STRUCTURAL recursion on the AST (the
-  `bodiesBound` recursion shape), with all memory reads CONDITIONAL
-  (`∀ p, read64 m … = some p → …`), so:
-  - child extraction is DIRECT (apply the clause to the `ExprRepr`-witnessed
-    payload read — no read-determinism lemma needed), and
-  - the predicate never asserts reads succeed (`ExprRepr` supplies those).
-* the transport theorems: agreement on `[lo, hi)` carries the whole invariant
-  (`exprIn_agreeP`/`stmtIn_agreeP`).  NOTE the relation to the LANDED
-  `AstTransport.lean`: `ExprFp`/`exprRepr_agreeP` transport the REPRESENTATION
-  along its exact read footprint; `ExprIn` is the transport-closed REGION BOUND
-  an entry can carry.  `NegExtras.expr_survives`-class residuals discharge by
-  chaining them: `ExprIn` bounds the footprint inside `[lo, hi)`
-  (`ExprFp ⊆ [lo,hi)` — the ONE bridging lemma, a bounded follow-up), then
-  `exprRepr_agreeP` transports.
-* the `.str`-root projection feeding `EvalEntryStrAstRegion`
-  (`rows/Field_hStr.lean`) is in `EntryGround.lean` (needs the entry layer).
-
-Region facts are PURE ARITHMETIC (`NodeIn`/`CellIn`/`StrIn` mention no
-memory), so consumers get their disjointness conjuncts by `omega`
-from the bundle bounds; only the tree-walk itself touches `m`.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
--/
-
 open Vsa.MemRepr Vsa.While
 
 namespace Vsa.Sim
 
-/-- A 40-byte AST node slot (`sizeof(Expr) = sizeof(Stmt) = 40`, `ast.h`
-LP64: kind@0, line@4, union@8 with the widest arm `fn`/`for` ending at 40)
-inside `[lo, hi)`. -/
 structure NodeIn (lo hi a : Nat) : Prop where
   lo_le : lo ≤ a
   hi_ge : a + 40 ≤ hi
 
-/-- An 8-byte pointer-array cell inside `[lo, hi)`. -/
 structure CellIn (lo hi a : Nat) : Prop where
   lo_le : lo ≤ a
   hi_ge : a + 8 ≤ hi
 
-/-- A NUL-terminated string payload of `s` at `p` inside `[lo, hi)`:
-nonzero pointer, all `s.length` bytes AND the NUL inside the region. -/
 structure StrIn (lo hi p : Nat) (s : String) : Prop where
   ne_zero : p ≠ 0
   lo_le : lo ≤ p
   hi_ge : p + s.length + 1 ≤ hi
 
-/-- Parameter-name array (`char **`): each cell and each name string in
-region. List-structural; no Expr/Stmt recursion. -/
 def ParamsIn (m : Mem) (lo hi : Nat) : Nat → List String → Prop
   | _, [] => True
   | a, x :: xs =>
@@ -73,9 +26,6 @@ def ParamsIn (m : Mem) (lo hi : Nat) : Nat → List String → Prop
 
 mutual
 
-/-- **Every node reachable from the `Expr` at `a` lives in `[lo, hi)`** —
-node slots, array cells, string payloads, `.fn` bodies included.  Reads are
-conditional; pair with `ExprRepr` for the actual pointer witnesses. -/
 def ExprIn (m : Mem) (lo hi : Nat) : Nat → Expr → Prop
   | a, .int _ => NodeIn lo hi a
   | a, .str s => NodeIn lo hi a ∧
@@ -102,12 +52,10 @@ def ExprIn (m : Mem) (lo hi : Nat) : Nat → Expr → Prop
       (∀ p, read64 m (a + 8) = some p →
         ∀ x, ox = some x → StrIn lo hi p x) ∧
       (∀ q, read64 m (a + 16) = some q → ParamsIn m lo hi q ps) ∧
-      -- the body pointer holds a block node (`StmtRepr m body (.block ss)`):
-      -- its node slot + statement array are in region, hereditarily.
+
       (∀ b, read64 m (a + 32) = some b → NodeIn lo hi b ∧
         (∀ q, read64 m (b + 8) = some q → StmtsIn m lo hi q ss))
 
-/-- `Expr **` argument array: cells + pointed trees in region. -/
 def ExprsIn (m : Mem) (lo hi : Nat) : Nat → List Expr → Prop
   | _, [] => True
   | a, e :: es =>
@@ -115,14 +63,11 @@ def ExprsIn (m : Mem) (lo hi : Nat) : Nat → List Expr → Prop
     (∀ p, read64 m a = some p → ExprIn m lo hi p e) ∧
     ExprsIn m lo hi (a + 8) es
 
-/-- Optional expression stored as a pointer AT `addr` (the `OptExprRepr`
-shape): `some e` ⇒ the pointed tree is in region. -/
 def OptExprIn (m : Mem) (lo hi addr : Nat) : Option Expr → Prop
   | none => CellIn lo hi addr
   | some e => CellIn lo hi addr ∧
       (∀ p, read64 m addr = some p → ExprIn m lo hi p e)
 
-/-- **Every node reachable from the `Stmt` at `a` lives in `[lo, hi)`.** -/
 def StmtIn (m : Mem) (lo hi : Nat) : Nat → Stmt → Prop
   | a, .expr e => NodeIn lo hi a ∧
       (∀ p, read64 m (a + 8) = some p → ExprIn m lo hi p e)
@@ -147,7 +92,6 @@ def StmtIn (m : Mem) (lo hi : Nat) : Nat → Stmt → Prop
   | a, .brk => NodeIn lo hi a
   | a, .cont => NodeIn lo hi a
 
-/-- `Stmt **` array: cells + pointed trees in region. -/
 def StmtsIn (m : Mem) (lo hi : Nat) : Nat → List Stmt → Prop
   | _, [] => True
   | a, s :: ss =>
@@ -155,7 +99,6 @@ def StmtsIn (m : Mem) (lo hi : Nat) : Nat → List Stmt → Prop
     (∀ p, read64 m a = some p → StmtIn m lo hi p s) ∧
     StmtsIn m lo hi (a + 8) ss
 
-/-- Optional statement stored as a pointer AT `addr`. -/
 def OptStmtIn (m : Mem) (lo hi addr : Nat) : Option Stmt → Prop
   | none => CellIn lo hi addr
   | some s => CellIn lo hi addr ∧
@@ -163,13 +106,6 @@ def OptStmtIn (m : Mem) (lo hi addr : Nat) : Option Stmt → Prop
 
 end
 
-/-! ## Transport: agreement on `[lo, hi)` carries the whole invariant
-
-The read pointers in every clause target windows INSIDE `[lo, hi)` (node
-fields by `NodeIn`, cells by `CellIn`), so all reads transfer by
-`read64_agreeP` and the region facts themselves are memory-free. -/
-
-/-- The region footprint as an `AgreeP` predicate. -/
 def regionP (lo hi : Nat) : Nat → Prop := fun a => lo ≤ a ∧ a < hi
 
 theorem read64_region {lo hi : Nat} {m m' : Mem}
@@ -177,7 +113,6 @@ theorem read64_region {lo hi : Nat} {m m' : Mem}
     (hlo : lo ≤ a) (hhi : a + 8 ≤ hi) : read64 m a = read64 m' a :=
   read64_agreeP h (fun k hk => ⟨by omega, by omega⟩)
 
-/-- `ParamsIn` transports along region agreement. -/
 theorem paramsIn_agreeP {lo hi : Nat} {m m' : Mem}
     (h : AgreeP (regionP lo hi) m m') :
     ∀ {a : Nat} {ps : List String}, ParamsIn m lo hi a ps → ParamsIn m' lo hi a ps
@@ -188,8 +123,6 @@ theorem paramsIn_agreeP {lo hi : Nat} {m m' : Mem}
 
 mutual
 
-/-- **`ExprIn` transports along region agreement** (the region-bound twin of
-`AstTransport.exprRepr_agreeP`, which transports the representation itself). -/
 theorem exprIn_agreeP {lo hi : Nat} {m m' : Mem}
     (h : AgreeP (regionP lo hi) m m') :
     ∀ {a : Nat} (e : Expr), ExprIn m lo hi a e → ExprIn m' lo hi a e
@@ -332,14 +265,6 @@ theorem optStmtIn_agreeP {lo hi addr : Nat} {m m' : Mem}
 
 end
 
-/-! ## Root projections (the audited consumers' shapes)
-
-Child projections for the recursive arms (`unary`/`binary`/…) are DIRECT
-applications of the corresponding clause — no lemma needed; stated here only
-for the shapes the landed rows consume. -/
-
-/-- Root node region facts for any expression (all 11 constructors carry a
-leading `NodeIn`). -/
 theorem exprIn_node {m : Mem} {lo hi a : Nat} {e : Expr}
     (h : ExprIn m lo hi a e) : NodeIn lo hi a := by
   cases e with

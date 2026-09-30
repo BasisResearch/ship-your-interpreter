@@ -5,7 +5,6 @@ open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
 namespace Vsa.Sim
 
-/-- A scalar RAM load from known bytes, without data alignment. -/
 theorem exec_lw_ram_bytes (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : MState) (vbase : BitVec 64) (b0 b1 b2 b3 : BitVec 8)
     (hG : GoodState σ)
@@ -26,7 +25,7 @@ theorem exec_lw_ram_bytes (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 
       = .ok RETIRE_SUCCESS σ' := by
   apply exec_lw_ramv σ pc off rs1 rd σ' vbase _ hG hrs1 ?_ hwr hlo hhiram hhtif
   simp only [bytesT4, h0, h1, h2, h3, Option.getD_some]
-/-- A scalar RAM load from known bytes, without data alignment. -/
+
 theorem exec_lwu_ram_bytes (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : MState) (vbase : BitVec 64) (b0 b1 b2 b3 : BitVec 8)
     (hG : GoodState σ)

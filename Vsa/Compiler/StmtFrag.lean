@@ -2,19 +2,10 @@ import Vsa.Compiler.StmtRel
 import Vsa.Compiler.CompileFacts
 import Vsa.Compiler.Fail
 
-/-!
-# Statement-level fragments
-
-The invariants a statement's code runs under (`At`, `SR`), and the control
-fragments the statement compiler emits: jumps, the condition branch, and the
-print-call sequence.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- Static facts about a compilation context at code position `pos`. -/
 structure At (code : List Ins) (C : Ctx) (pos : Nat) : Prop where
   lay : Layout code
   ne : C.Γ ≠ []
@@ -24,11 +15,9 @@ structure At (code : List Ins) (C : Ctx) (pos : Nat) : Prop where
   nextle : C.next ≤ pos
   posok : PosOK pos
 
-/-- The semantic state and the abstract machine state agree. -/
 def SR (Γ : Scope) (env : Addr) (st : St) (A : AM) : Prop :=
   Chain st.store A.mem env Γ ∧ outStr A = st.out
 
-/-- Where a statement's code exits for each completion status. -/
 def exitPos (C : Ctx) (e : Nat) : Status → Nat
   | .normal => e
   | .brk => C.brk
@@ -48,7 +37,6 @@ theorem At.slot_bound {code : List Ins} {C : Ctx} {pos : Nat} (h : At code C pos
   have : codeBase = 0x80004800 := rfl
   omega
 
-/-- A segment of fitting code ends at a valid position. -/
 theorem Seg.end_ok {code : List Ins} {pos : Nat} {s : List Ins} (hfit : Fits code)
     (hs : Seg code pos s) (hne : s ≠ []) : PosOK (pos + s.length) := by
   have hl : pos + s.length ≤ code.length := by
@@ -68,8 +56,6 @@ theorem Seg.end_ok {code : List Ins} {pos : Nat} {s : List Ins} (hfit : Fits cod
 section
 variable {code : List Ins}
 
-
-/-- `bne a0, x0, +8; jal x0, L`: fall into the next code when `a0 ≠ 0`, else jump to `L`. -/
 theorem run_cond₀ (hfit : Fits code) {q L : Nat} {A : AM} {w : BitVec 64}
     (hseg : Seg code q [.br .ne a0 0 (bSkip 1), .jal 0 (jOff (q + 1) L)])
     (hA : A.pc = pcOf q) (hq : PosOK (q + 2)) (hL : PosOK L) (h0 : Has A.regs a0 w) :
@@ -94,7 +80,6 @@ theorem run_cond₀ (hfit : Fits code) {q L : Nat} {A : AM} {w : BitVec 64}
 
 end
 
-/-- Truthiness is `a0 ≠ 0` for the words of integers and booleans. -/
 theorem word_truthy {Γn : NScope} {e : Expr} {v : Value} (he : CondE Γn e) (hv : ValTy Γn e v) :
     (word v = 0) ↔ v.truthy = false := by
   rcases he with hi | hb
@@ -105,8 +90,6 @@ theorem word_truthy {Γn : NScope} {e : Expr} {v : Value} (he : CondE Γn e) (hv
     · intro h; subst h; decide
   · obtain ⟨b, rfl⟩ := hv.2 hb
     cases b <;> decide
-
-/-! ## Call arguments -/
 
 theorem EvalArgs.det : ∀ (args : List Expr), (∀ e ∈ args, Simple e) →
     ∀ {st : St} {d : Nat} {env : Addr} {s1 s2 : St} {v1 v2 : List Value},
@@ -200,7 +183,6 @@ theorem sim_args (hL : Layout code) {Γ : Scope} (hnd : Γ.slots.Nodup)
     · refine ⟨B1, r1, .inr ⟨hh, fun vs st'' h => ?_⟩⟩
       cases h with | cons _ _ _ _ _ _ _ _ _ he _ => exact hne _ _ he
 
-/-- The output of printing a list of integers separated by spaces. -/
 theorem intercalate_cons (a : String) (l : List String) :
     String.intercalate " " (a :: l) = a ++ (if l = [] then "" else " " ++ String.intercalate " " l) := by
   cases l with
@@ -247,12 +229,12 @@ theorem run_printLoop₀ (hL : Layout code) : ∀ (ns : List Int) (k pos : Nat) 
     simp only [List.length_append, List.length_cons, List.length_nil] at hpos hs4 hs3 hs2
     simp only [List.length_cons] at hk
     have hq : PosOK (q + 1) := by unfold PosOK at *; omega
-    -- load the argument
+
     have r1 := run_ldA hL.1 hs1 hA (by decide) (tempAddr_ld (k := k) (by omega))
     have hx : rdW A.mem (tempAddr k) = BitVec.ofInt 64 x := by
       have := hv 0 (by simp); rw [List.getElem_cons_zero, Nat.add_zero] at this; exact this
     rw [hx, show pos + (liN s2 (tempAddr k)).length + 1 = q by omega] at r1
-    -- call print
+
     have hj := pcOf_jump q printPos (by unfold PosOK at *; omega) printPos_ok
     have e2 := step_call hL.1 (Seg.pos_eq (by omega) hs2).head
       (A := ⟨pcOf q, gset (gset A.regs s2

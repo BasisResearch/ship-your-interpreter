@@ -7,22 +7,17 @@ open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc
 
 namespace Vsa.Sim.RuntimeOwnership
 
-/-- Writable ELF sections and the complete runtime stack. Heap writes are
-tracked separately by allocation roles. -/
 def InitialWriteByte (SL : StackLayout) (k : Nat) : Prop :=
   (0x8001ad00 ≤ k ∧ k < 0x8001c168) ∨ (SL.lo ≤ k ∧ k < SL.hi)
 
 def InitialReadableByte (k : Nat) : Prop :=
   0x80000000 ≤ k ∧ k < 0x100000000
 
-/-- One shared domain and one live ledger for the represented program/store. -/
 structure InitialOwnershipData where
   exts : List Extent
   allocations : Allocations
   shared : Nat → Prop
 
-/-- Concrete backing-array alignment and occupied value-word presence.
-Semantic ValueRepr alone does not specify the padding copied by env_get. -/
 structure StoreArraysReady (m : Mem) (phiF : Addr → Nat) (s : Store) : Prop where
   namesAligned : ∀ fa, fa < s.frames.size → ∀ pn,
     read64 m (phiF fa + 8) = some pn → pn % 8 = 0
@@ -32,14 +27,9 @@ structure StoreArraysReady (m : Mem) (phiF : Addr → Nat) (s : Store) : Prop wh
     read64 m (phiF fa + 16) = some pv →
     ∀ i, i < s.frames[fa].vars.length → ValueWordsTotal m (pv + 24 * i)
 
-/-- Frame arrays: the live extents `env_define` passes to `realloc`. -/
 def ReallocExtent (alloc : Allocations) (e : Extent) : Prop :=
   ∃ fa, Allocated alloc (.names fa) e.1 e.2 ∨ Allocated alloc (.values fa) e.1 e.2
 
-/-- Initial ownership. The heap starts at or above the ELF _end symbol and
-ends before the stack. The dlmalloc heap is consistent with the live ledger
-and has room for every terminating derivation of the represented program.
-This does not assert termination or successful execution. -/
 structure InitialOwned (m : Mem) (A : Arena) (SL : StackLayout)
     (phiF phiC : Addr → Nat) (stmts count : Nat) (D : InitialOwnershipData) : Prop where
   heapLower : 0x8001c170 ≤ A.lo
@@ -50,7 +40,7 @@ structure InitialOwned (m : Mem) (A : Arena) (SL : StackLayout)
   program : ∀ p : Program, ProgramRepr m stmts count p →
     ProgramReprWithin m D.shared stmts count p
   allocator : DlHeap.InitialAllocator m D.exts (ReallocExtent D.allocations) stmts count
-  /-- The arena is exactly the range `_sbrk` grows through. -/
+
   arenaHeap : A.lo = DlHeap.heapStart ∧ A.hi = DlHeap.heapEnd
 
 end Vsa.Sim.RuntimeOwnership

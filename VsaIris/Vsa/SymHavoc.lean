@@ -1,16 +1,5 @@
 import VsaIris.Vsa.SymData
 
-/-!
-# Loads of partly known bytes
-
-`swp_havocD` (`SymData.lean`) loads bytes the run knows nothing about. A word
-load past a string's NUL (`strlen`'s word loop on a `strAt` string: the
-string's bytes are persistent data, the at most seven bytes after the NUL
-belong to someone else, `StrWin` only makes them RAM) reads bytes of both
-kinds. `swp_havocP` keeps what is known: the loaded value is that of SOME
-memory image agreeing with the data view and the owned bytes.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
@@ -23,11 +12,6 @@ section SWPD
 variable {live : Nat → Prop} {T D : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
   {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **A load of partly known bytes** (`swp_havocD`, refined). The bytes `A`
-may mix data bytes, owned bytes and bytes the run neither owns nor reads
-persistently (a word load past a string's NUL). The destination receives the
-loaded value of SOME memory image `f` that agrees with the data view and the
-owned bytes; the continuation must hold for each such value. -/
 theorem swp_havocP {pc0 pc1 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (ks : List Nat) (rd : Nat) (A : List Nat)
     (ldsOf : (Nat → BitVec 8) → List (List (BitVec 8))) (k : Nat)

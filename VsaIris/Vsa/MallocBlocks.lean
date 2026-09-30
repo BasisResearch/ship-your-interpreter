@@ -1,32 +1,11 @@
 import VsaIris.Vsa.MallocChain
 import VsaIris.Vsa.HeapClear
 
-/-!
-# `_malloc_r`'s block walk
-
-`0x80004978` searches the bins from the request's index up, a block of four
-bins at a time, for the smallest chunk that fits:
-
-* the bitmap `binblocks` names the blocks that may hold chunks; the walk finds
-  the next set bit (`0x80004978`-`0x800049a0`, and `0x80004e64` onwards);
-* within a block, each bin is scanned from its smallest member through `bk`
-  (`0x800049c8`); a chunk within `MINSIZE` of `nb` is taken whole
-  (`0x800049e8`), a larger one is split with the rest becoming the last
-  remainder (`0x80004d14`);
-* a block found empty has its bit cleared (`0x80004e54`) once the bins below
-  the scan's start are checked empty too (`0x80004e3c`); with no set bit left
-  above, the walk goes to the top (`0x80004a2c`).
-
-The heap edits are `PHeapAt.take` (`take_ret`), `PHeapAt.splitFree` and
-`PHeapAt.clearBlock`.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The nodes around member `x` of bin `k` and their words, named. -/
 structure BinNbrs (C : MCtx) (Mt : Mem) (chunks : List Chunk) (bins : Nat → List Nat)
     (k x sz pred succ : Nat) : Prop where
   pred16 : pred % 16 = 0
@@ -105,9 +84,6 @@ theorem binNbrs {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     HH.bnd_ne_node hk hpn hbn 8 (by omega) (by omega),
     HH.bnd_ne_node hk hsn hbn 16 (by omega) (by omega), sep pred hpm hpx, sep succ hsm hsx⟩
 
-/-- **What the block walk's take owes the caller**: its four stores (the next
-header with `PREV_INUSE`, the successor's `bk`, the predecessor's `fd`, the
-spill), with the stored words named by their values. -/
 theorem bw_take_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb k x sz pred succ hd : Nat} {pre post : List Nat}
     (hsp : MSp C.s) (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb) (hk0 : 0 < k)
@@ -164,9 +140,6 @@ theorem bw_take_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
           rwa [show succ + (24 + k) = succ + 24 + k by omega] at this))
           (frame_store (win_foot hnxf) Hp.frame)))
 
-/-- **What the block walk's split owes the caller**: its ten stores (the
-victim's header, the unlink, bin 1's links, the remainder's links and header,
-its footer, and the spill), with the stored words named by their values. -/
 theorem bw_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb k x sz pred succ : Nat} {pre post : List Nat}
     (hsp : MSp C.s) (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb) (hk1 : 1 < k)
@@ -266,9 +239,6 @@ theorem bw_split_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
               (frame_store hwp (frame_store hws
                 (frame_store (hw _ _ (by omega) (by omega)) Hp.frame)))))))))
 
-/-- The block walk's invariant registers: the heap (with bin 1 empty), the
-request `nb` in `a4`, `__malloc_av_` in `a6`, bin 1's header in `t4`, and the
-reentrancy structure in `s0`. -/
 structure BW (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
     (nb : Nat) (R : Nat → BitVec 64) : Prop where
   frame : MFrame C R Mt
@@ -281,9 +251,6 @@ structure BW (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Na
   t4 : (R 29).toNat = binAt 1
   s0 : R 8 = reentV
 
-/-- **The block walk's take** (`0x800049e8`): member `x` of bin `k` (its
-predecessor in `a3`, its size in `a2`) fits within `MINSIZE`; unlink it, set
-`PREV_INUSE` after it, and return `x + 16`. -/
 theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb k x sz pred : Nat} {pre post : List Nat}
     (W : BW C Mt brkv chunks bins nb R) (hk1 : 1 < k) (hk : k < numBins)
@@ -331,7 +298,7 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
   have hoS := hns (succ + 24) (by have := N.succFoot 24 (by omega) (by omega); simpa using this)
   have hoP := hns (pred + 16) (by have := N.predFoot 16 (by omega) (by omega); simpa using this)
   simp only [Nat.add_zero] at hoN
-  -- `add a2,a5,a2; ld a4,8(a2)`: the next header
+
   refine st_800049e8 O.live ?_
   sx_norm
   have hEn : (R 15 + R 12 + 8#64).toNat = x + sz + 8 := by sx_addr
@@ -340,7 +307,7 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
   · sx_norm; rw [hEn]; exact O.foot_at hnxf _ rfl
   sx_norm
   rw [ldv_at hdr _ hEn]
-  -- `ld a1,16(a5)`: the successor
+
   have hEf : (R 15 + 16#64).toNat = x + 16 := by sx_addr
   refine st_800049f0 O.live ?_ ?_ ?_
   · sx_norm; rw [hEf]; unfold LdOK Vsa.Sim.tohostAddr; omega
@@ -349,13 +316,13 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
   rw [ldv_at hfd _ hEf]
   refine st_800049f4 O.live ?_
   refine st_800049f8 O.live ?_
-  -- `sd a4,8(a2)`: `PREV_INUSE`
+
   refine st_800049fc O.live ?_ ?_ ?_
   · sx_norm; rw [hEn]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEn]; exact O.foot_at hnxf _ rfl
   sx_norm
   rw [hEn]
-  -- `sd a3,24(a1); sd a1,16(a3)`: the unlink
+
   have hEs : (BitVec.ofNat 64 succ + 24#64).toNat = succ + 24 := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsuccl]; simp; omega
   refine st_80004a00 O.live ?_ ?_ ?_
@@ -385,8 +352,6 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   sx_addr
 
-/-- The block walk's split, second half (`0x80004d34`): the remainder's
-links, header and footer, the spill, and the return. -/
 theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb k x sz pred succ : Nat} {pre post : List Nat}
     (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb) (hb1 : bins 1 = [])
@@ -424,7 +389,7 @@ theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brk
   have hs2n : (R 2).toNat = C.s.toNat - 96 := by rw [hs2]; sx_addr
   have hFV := foot_free_span B hfree rfl
   simp only at hFV
-  -- `ori a3,a1,1; add a2,a5,a2; sd t4,24(a4); sd t4,16(a4); sd a3,8(a4)`: the remainder
+
   refine st_80004d34 O.live ?_
   refine st_80004d38 O.live ?_
   refine st_80004d3c O.live ?_ ?_ ?_
@@ -439,7 +404,7 @@ theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brk
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  -- `mv a0,s0; sd a1,0(a2)`: the footer
+
   refine st_80004d48 O.live ?_
   refine st_80004d4c O.live ?_ ?_ ?_
   · sx_norm; sx_addr
@@ -467,10 +432,6 @@ theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brk
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   sx_addr
 
-/-- **The block walk's split** (`0x80004d14`): member `x` of bin `k` (its
-predecessor in `a3`, its size in `a2`, the remainder `sz - nb ≥ MINSIZE` in
-`a1`) is unlinked and split; its first `nb` bytes are returned and the rest
-becomes the last remainder. -/
 theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb k x sz pred : Nat} {pre post : List Nat}
     (W : BW C Mt brkv chunks bins nb R) (hk1 : 1 < k) (hk : k < numBins)
@@ -510,19 +471,19 @@ theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
   have hsuccl := Vsa.Sim.read64_lt _ _ _ hfd
   have hFV := foot_free_span B hfree rfl
   simp only at hFV
-  -- `ld a0,16(a5)`: the successor
+
   have hEf : ((R 15) + sign_extend (m := 64) (0x010#12)).toNat = x + 16 := by sx_addr
   refine st_80004d14 O.live ?_ ?_ ?_
   · rw [hEf]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · rw [hEf]; exact O.foot (fun k hk => hFV _ (by omega) (by omega))
   rw [ldv_at hfd _ hEf]
-  -- `ori a7,a4,1; sd a7,8(a5)`: the victim's header
+
   refine st_80004d18 O.live ?_
   refine st_80004d1c O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  -- `sd a3,24(a0); sd a0,16(a3)`: the unlink
+
   have hEs : (BitVec.ofNat 64 succ + 24#64).toNat = succ + 24 := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsuccl]; simp; omega
   refine st_80004d20 O.live ?_ ?_ ?_
@@ -538,7 +499,7 @@ theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
       have := N.predFoot (16 + k) (by omega) (by omega)
       rwa [show pred + (16 + k) = pred + 16 + k by omega] at this)
   sx_norm
-  -- `add a4,a5,a4; sd a4,40(a6); sd a4,32(a6)`: bin 1's links
+
   refine st_80004d28 O.live ?_
   refine st_80004d2c O.live ?_ ?_ ?_
   · sx_norm; rw [ha6]; decide
@@ -573,7 +534,6 @@ theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11)
 
-/-- The registers a member walk leaves alone agree with the reference `R0`. -/
 abbrev MKeep (R R0 : Nat → BitVec 64) : Prop :=
   ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → x ≠ 15 → R x = R0 x
 
@@ -590,14 +550,9 @@ theorem BW.keep {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins :
    by rw [h 29 (by decide) (by decide) (by decide) (by decide)]; exact W.t4,
    by rw [h 8 (by decide) (by decide) (by decide) (by decide)]; exact W.s0⟩
 
-/-- A bin's members smaller than `nb`. -/
 abbrev AllSmall (chunks : List Chunk) (l : List Nat) (nb : Nat) : Prop :=
   ∀ x ∈ l, ∀ sz, FreeAt chunks x sz → sz < nb
 
-/-- **The member walk** (`0x800049c8`) over bin `k`, from its last member
-backwards: a member at least `nb + MINSIZE` is split, one within `MINSIZE`
-of `nb` taken, a smaller one passed; reaching the header exhausts the bin
-(`0x80004cfc`), all of its members smaller than `nb`. -/
 theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb k : Nat}
     (W : BW C Mt brkv chunks bins nb R0) (hk1 : 1 < k) (hk : k < numBins)
@@ -645,7 +600,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
     obtain ⟨⟨h, hr, hs, _⟩, _⟩ := HH.headers hcy
     simp only at hr hs
     have hhlt := Vsa.Sim.read64_lt _ _ _ hr
-    -- `bk y`: the next node back
+
     obtain ⟨nx, hnx⟩ : ∃ q, (post ++ [binAt k]).head? = some q := by
       rcases post with _ | ⟨z, zs⟩ <;> simp
     have hpred : (binAt k :: rpre.reverse).getLast? = some (rpre.head?.getD (binAt k)) := by
@@ -710,7 +665,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       exact ⟨h13, by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt], hszv⟩
     refine st_800049e0 O.live (fun hgt => ?_) (fun hle => ?_)
-    · -- at least `MINSIZE` over: split
+    ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hgt
       rw [← h31'] at hgt
       have hbig := hcmp.1.1 hgt
@@ -718,7 +673,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
         (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_sub, hszv, h14]; omega)
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hle
       refine st_800049e4 O.live (fun hneg => ?_) (fun hnn => ?_)
-      · -- too small: on to the previous member
+      ·
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hneg
         have hsm' : sz < nb := by
           have := hcmp.2; rw [show ((0#64 : BitVec 64)).toInt = 0 from rfl] at this hneg; omega
@@ -728,13 +683,11 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
             have := HH.chunk_eq hz' hcy rfl; simp at this; exact this
           exact hsm'
         · exact hsm z hz sz' hz'
-      · -- a fit: take
+      ·
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnn
         have hfit : nb ≤ sz := hcmp.2.1 (by rw [show ((0#64 : BitVec 64)).toInt = 0 from rfl] at hnn ⊢; omega)
         exact bw_take O (W.keep hkp') hk1 hk hmem hcy hfit hpred hvals.1 hvals.2.1 hvals.2.2
 
-/-- **An exhausted bin is empty.** From the search's start up, a bin whose
-members are all smaller than `nb` has none (`ScanFrom`). -/
 theorem scanFrom_empty {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb start k : Nat}
     (HH : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) (hsf : ScanFrom chunks bins nb start)

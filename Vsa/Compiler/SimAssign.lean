@@ -1,9 +1,5 @@
 import Vsa.Compiler.SimLogic
 
-/-!
-# Forward simulation: assignment
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While

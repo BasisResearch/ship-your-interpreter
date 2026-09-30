@@ -5,33 +5,12 @@ import Vsa.Sim.MemcpySpec4
 import Vsa.Sim.EqNeReprReadback
 import Vsa.Sim.EvalChildArm
 
-/-!
-# `memcpy`'s symbolic runs
-
-`memcpy` (`0x80006bc8 … 0x80006cf0`) is a leaf that reads a READ-ONLY source
-and writes an owned destination. Its callers own neither `gp` nor newlib's
-data, so the allocator's `SWP` (read-only register `gp`, code `allocText`)
-does not apply. `MW` is `SWP` with no read-only register, the read-only list
-split into memcpy's live code `mText` and the source bytes `srcText` (total
-reads, no liveness: `SymData.swp_segLD`'s split), and the owned registers
-`mRegs`.
-
-* `mw_step`: one reflected segment (`swp_stepD` without `gp`). The step table
-  `MemcpySteps.lean` instantiates it per instruction, over the allocator
-  table's segments `ax_<pc>` (`AllocSteps/Part09.lean`).
-* `mw_alu`: the `sltiu` at `0x80006bd8` (outside `MKind`), VSA's observed
-  site `site_80006bd8` through `aluStep_of_obs`.
-* `mw_done`, `mw_congr`: the end of a run; restating the register file.
--/
-
 namespace VsaIris.Memcpy
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast VsaIris.Sym
 open Vsa.Machine (Config)
 open Iris
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
-
-/-! ## Code -/
 
 abbrev memcpyBase : Nat := 0x80006bc8
 
@@ -71,13 +50,10 @@ def memcpyCodeD : List (BitVec 8) :=
    0xd7#8, 0xfe#8, 0x93#8, 0x85#8, 0x15#8, 0x00#8, 0xe3#8, 0x9a#8, 0x07#8, 0xfc#8, 0x6f#8, 0xf0#8,
    0x1f#8, 0xf0#8]
 
-/-- The 296 code bytes of `memcpy`, in four chunks. -/
 def memcpyCode : List (BitVec 8) := memcpyCodeA ++ memcpyCodeB ++ memcpyCodeC ++ memcpyCodeD
 
-/-- `memcpy`'s code as read-only cells. -/
 abbrev mText : List (Nat × BitVec 8) := Strlen.codeText memcpyBase memcpyCode
 
-/-- VSA's fetch predicate, read off the code cells. -/
 theorem memcpyLoaded_of_text {m : Mem} (h : TextLoaded mText m) : Code.MemcpyLoaded m := by
   have h' : ∀ a b, (a, b) ∈ mText → m[a]? = some b := fun a b hab => h (a, b) hab
   unfold Code.MemcpyLoaded Code.memcpyChunk0 Code.memcpyChunk1 Code.memcpyChunk2
@@ -85,11 +61,8 @@ theorem memcpyLoaded_of_text {m : Mem} (h : TextLoaded mText m) : Code.MemcpyLoa
   repeat' apply And.intro
   all_goals (apply h'; decide)
 
-/-- The owned registers of a `memcpy` run: the PC, `ra`, `a0-a7`, `t0`, `t1`,
-`t3-t6`. -/
 abbrev mRegs : List Nat := [VsaIris.PC, 1, 10, 11, 12, 13, 14, 15, 16, 17, 5, 6, 28, 29, 30, 31]
 
-/-- The read-only source bytes `[X, X + n)` at the image `img`. -/
 def srcText (X n : Nat) (img : Nat → BitVec 8) : List (Nat × BitVec 8) :=
   (List.range n).map fun k => (X + k, img (X + k))
 
@@ -99,7 +72,6 @@ theorem mem_srcText {X n : Nat} {img : Nat → BitVec 8} {p : Nat × BitVec 8}
   have := List.mem_range.mp hk
   exact ⟨by simp, by simp; omega, rfl⟩
 
-/-- A source byte reads its image value. -/
 theorem srcRead {X n : Nat} {img : Nat → BitVec 8} {m : Mem} (hD : DataReads (srcText X n img) m)
     {b : Nat} (hb : X ≤ b ∧ b < X + n) : (m[b]?).getD 0 = img b := by
   have := hD (b, img b) (by
@@ -107,10 +79,6 @@ theorem srcRead {X n : Nat} {img : Nat → BitVec 8} {m : Mem} (hD : DataReads (
     simp only [Prod.mk.injEq]; constructor <;> congr 1 <;> omega)
   exact this
 
-/-! ## The run predicate -/
-
-/-- **`memcpy`'s run at a symbolic state**: one fuel bound under which every
-matching state runs to `Q`, reading the code and the source read-only. -/
 def MW (live : Nat → Prop) (X n : Nat) (img : Nat → BitVec 8) (S : Nat → Prop)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop)
     (pc : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) : Prop :=
@@ -133,7 +101,6 @@ theorem mw_congr {pc : BitVec 64} {R R' : Nat → BitVec 64} {Mt : Mem}
   exact ⟨N, fun rv mv hm => hN rv mv
     ⟨hm.pc, fun r hr hne => (hm.regs r hr hne).trans (hR r hr hne).symm, hm.img⟩⟩
 
-/-- `swp_segLD` with no read-only register, over `mText ++ srcText`. -/
 theorem mw_segL {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (LD W : List Nat) (k : Nat)
@@ -226,7 +193,6 @@ theorem mw_segL {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         unfold imgM
         rw [writeLog_out _ _ _ (hcover a hw)]
 
-/-- **One reflected segment of a `memcpy` run** (`swp_stepD`'s shape, no `gp`). -/
 theorem mw_step {pc0 pc1 : BitVec 64} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (bs : List BBlock) (ks : List Nat) (lds : List (List (BitVec 8)))
     (LD W : List Nat) (k : Nat)
@@ -258,7 +224,6 @@ theorem mw_step {pc0 pc1 : BitVec 64} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     · rw [ite_eq_right_iff.2 (fun h => absurd h hk')]
       exact hRo r hr hne hk'
 
-/-- **An observed ALU step of a `memcpy` run** (`swp_aluRR` without `gp`). -/
 theorem mw_alu {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (i : Nat) (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (rd : Nat) (val : BitVec 64) (hexec : AluStep live i RR MR rd val)
@@ -295,9 +260,6 @@ theorem mw_alu {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
 
 end MW
 
-/-! ## The `sltiu a2,a2,8` at `0x80006bd8` -/
-
-/-- The code bytes as a read footprint. -/
 abbrev mMR : List (Nat × DFrac × BitVec 8) := textMRof mText
 
 theorem mMR_text : ∀ p ∈ mMR, (p.1, p.2.2) ∈ mText := by

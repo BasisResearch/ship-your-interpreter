@@ -1,23 +1,10 @@
 import VsaIris.Vsa.ReallocGrow
 
-/-!
-# `_realloc_r` at the binary, both regimes
-
-`realloc` (`0x8000527c`) moves the block to `a1` and the request to `a2`,
-loads `_impure_ptr` into `a0` and falls into `_realloc_r`: the prologue
-(`realloc_pro`), the in-place decision (`realloc_dec`) and the growth dispatch
-(`realloc_grow`). A realloc run owns what a free of the old block owns
-(`freeBytes`), over the same tracking memory `ft0`. `reallocChgRun_proved` and
-`reallocLocalRun_proved` are the counted and uncounted runs `AllocHoles` asked
-for.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- **`_realloc_r`'s body** (`0x80005290`). -/
 theorem realloc_body {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (E : REntry C B R)
     (Hp : RHeap C B C.Mt0 brkv chunks bins) :
@@ -25,8 +12,6 @@ theorem realloc_body {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   realloc_pro O E Hp fun _ _ _ F Hp' hnb hnb31 h8 h9 h11 h15 =>
     realloc_dec O F Hp' hnb hnb31 h8 h9 h11 h15 fun _ _ _ _ D h13 => realloc_grow O D h13
 
-/-- **`realloc`** (`0x8000527c`): `a5 := a0`, `a0 := _impure_ptr`,
-`a2 := a1`, `a1 := a5`, then `_realloc_r`. -/
 theorem realloc_entry {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat}
     (hra : R 1 = C.r) (hsp : R 2 = C.s) (ha0 : (R 10).toNat = B.p) (ha1 : R 11 = C.n)
@@ -48,11 +33,8 @@ theorem realloc_entry {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} 
   · exact h18
   · exact h19
 
-/-- The old block of a realloc run. -/
 abbrev rB (p : BitVec 64) (nOld : Nat) (old : Nat → BitVec 8) : RB := ⟨p.toNat, nOld, old⟩
 
-/-- **The heap invariant at a realloc's entry**: a free's (`fHeap_entry`),
-with the deeper stack window, the old block's bytes and contents. -/
 theorem rHeap_entry {C : MCtx} {m1 : Mem} {p : BitVec 64} {nOld : Nat} {old : Nat → BitVec 8}
     {s : BitVec 64} {mv : Nat → BitVec 8} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (hs0 : C.s = s) (hMt : C.Mt0 = ft0 m1 p nOld s mv) (hsp : SpOKA s)
@@ -76,21 +58,18 @@ theorem rHeap_entry {C : MCtx} {m1 : Mem} {p : BitVec 64} {nOld : Nat} {old : Na
     rw [stackBase_get, stackBase_get, if_neg fun h => hdisj _ ⟨h.1, by simp only; omega⟩
       (.inr ⟨by simp only; omega, by simp only; omega⟩), if_pos ⟨by omega, by omega⟩, hcp k hk]
 
-/-- The context of an uncounted realloc run at the binary. -/
 def rLocCtx (live : Nat → Prop) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat)
     (old : Nat → BitVec 8) (r s : BitVec 64) (saved : List (Nat × BitVec 64))
     (rv0 : Nat → BitVec 64) (Mt0 : Mem) (top0 : Nat) : MCtx :=
   ⟨live, fS H p nOld s, ReallocEnd vsaLayoutP H p nOld nNew old r s saved, H, BitVec.ofNat 64 nNew, r, s,
     rv0, Mt0, top0⟩
 
-/-- The context of a counted realloc run at the binary. -/
 def rChgCtx (live : Nat → Prop) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat)
     (old : Nat → BitVec 8) (r s : BitVec 64) (saved : List (Nat × BitVec 64)) (k : Nat)
     (rv0 : Nat → BitVec 64) (Mt0 : Mem) (top0 : Nat) : MCtx :=
   ⟨live, fS H p nOld s, ReallocChgEnd vsaLayoutP vsaRoomB H p nOld nNew old r s saved k, H,
     BitVec.ofNat 64 nNew, r, s, rv0, Mt0, top0⟩
 
-/-- A fresh block's first bytes carry the old contents into the image. -/
 theorem copies_of_img {H : List (Nat × Nat)} {Mt : Mem} {mv : Nat → BitVec 8} {q n nOld p : Nat}
     {old : Nat → BitVec 8} {top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (hheap : PHeapAt Mt ((q, n) :: H) top brkv chunks bins) (hst : Starts ((q, n) :: H))
@@ -101,8 +80,6 @@ theorem copies_of_img {H : List (Nat × Nat)} {Mt : Mem} {mv : Nat → BitVec 8}
   rw [hd k hk] at h1
   exact (Option.some.inj h1).symm
 
-/-- **The uncounted context's obligations**: a fresh block with the old
-contents, or NULL with the old block kept. -/
 theorem rOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {p : BitVec 64} {nOld nNew : Nat}
     {old : Nat → BitVec 8} {r s : BitVec 64} {saved : List (Nat × BitVec 64)}
     {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat} (hlive : AllocLive live)
@@ -138,8 +115,6 @@ theorem rOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {p : BitVec 64} {n
         ⟨hst, Mt, top, brkv, chunks, bins, fun a ha => him a (vsaFoot_cons_sub a ha), hheap⟩,
         copies_of_img hheap hst him (Nat.le_refl _) h.data⟩⟩
 
-/-- **The counted context's obligations**: the fresh block's chunk comes out
-of the credits; a counted request never starves. -/
 theorem rOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {p : BitVec 64} {nOld nNew : Nat}
     {old : Nat → BitVec 8} {r s : BitVec 64} {saved : List (Nat × BitVec 64)} {k c : Nat}
     {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat} (hlive : AllocLive live)
@@ -181,7 +156,6 @@ theorem rOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {p : BitVec 64} {n
     unfold Starved extendSlack at *
     omega
 
-/-- **Uncounted `realloc` at the binary** (formerly `IrisHoles.alloc.reallocLocalRun`). -/
 theorem reallocLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     ReallocLocalRun (vsaModel live) vsaLayoutP SpOKA reallocEntryBV gpV vsaClob vsaSaved
       allocHeadroom allocText := by
@@ -196,7 +170,6 @@ theorem reallocLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
   simp only [rLocCtx] at h
   exact faw_run h he.pc him
 
-/-- **Counted `realloc` at the binary** (formerly `IrisHoles.alloc.reallocChgRun`). -/
 theorem reallocChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     ReallocChgRun (vsaModel live) vsaLayoutP vsaRoomB vsaChg SpOKA reallocEntryBV gpV vsaClob
       vsaSaved allocHeadroom allocText := by

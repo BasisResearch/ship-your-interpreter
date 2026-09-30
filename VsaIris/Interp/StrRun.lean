@@ -1,29 +1,6 @@
 import VsaIris.Vsa.SymData
 import VsaIris.Vsa.SymObs
 
-/-!
-# Symbolic runs of the string leaves (`strlen`, `strcpy`)
-
-`SR live T D S Q pc R Mt` is `SWP` (`VsaIris/Vsa/SymRun.lean`) for a leaf
-function that owns NO read-only register: `SWP` pins `gp` read-only
-(`roR`), which `strlenSpec`/`strcpySpec` (`fnSpecW`, no `codeRes`) do not
-hand over, and neither leaf reads `gp`. The read-only list is live code `T`
-followed by persistent data `D` (a C string's bytes, total reads; no
-liveness, `SymData.lean`); the owned registers are `sRegs`.
-
-The word loops of both leaves load whole aligned words, so they read up to
-seven bytes past a string's NUL that nobody hands them. `sr_havoc` is such a
-load: the machine reads whatever the bytes hold, and the continuation holds
-for EVERY byte function `f` that agrees with `D`, with the register taking
-`val f`. The over-read bytes need no ownership and no liveness, only the
-load's RAM/HTIF window (`LdOK`); the bytes the value actually depends on are
-those of `D`. This is `swp_havocD` with the loaded value tied to the data.
-
-`sr_seg` (a reflected segment that reads no memory, writes owned bytes) and
-`sr_alu` (an observed ALU step, `snez`) are `swp_segLD` and `swp_aluRR`
-without the `gp` pin.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
@@ -31,7 +8,6 @@ open Vsa.Machine (Config)
 open Iris
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- The registers a string leaf owns: `PC`, `ra`, `a0`-`a6`. -/
 abbrev sRegs : List Nat := [32, 1, 10, 11, 12, 13, 14, 15, 16]
 
 section SR
@@ -39,8 +15,6 @@ section SR
 variable (live : Nat → Prop) (T D : List (Nat × BitVec 8)) (S : Nat → Prop)
   (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop)
 
-/-- **A string leaf's run at a symbolic state**: one fuel bound under which
-every matching state runs to `Q`, with no read-only register. -/
 def SR (pc : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) : Prop :=
   ∃ n, ∀ rv mv, Matches sRegs S pc R Mt rv mv →
     LocalRun (vsaModel live) [] (T ++ D) sRegs S Q n rv mv
@@ -51,7 +25,6 @@ theorem sr_done {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (h : ∀ rv mv, Matches sRegs S pc R Mt rv mv → Q rv mv) : SR live T D S Q pc R Mt :=
   ⟨0, h⟩
 
-/-- Only the owned registers other than `PC` matter. -/
 theorem sr_congr {pc : BitVec 64} {R R' : Nat → BitVec 64} {Mt : Mem}
     (hR : ∀ r ∈ sRegs, r ≠ VsaIris.PC → R' r = R r) (h : SR live T D S Q pc R' Mt) :
     SR live T D S Q pc R Mt := by
@@ -64,10 +37,6 @@ theorem pinsOf_mem {ks : List Nat} {R : Nat → BitVec 64} {p : Nat × BitVec 64
   obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hp
   exact ⟨hx, by simp [hks x hx]⟩
 
-/-- **One reflected segment that reads no data** (ALU, store, branch, jump,
-`ret`). The pins are the registers `ks` read off `R` (all owned; no `gp`),
-the written owned bytes `W` are read off the tracking memory, and the
-successor is computed from the segment. -/
 theorem sr_seg {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (ks : List Nat) (lds : List (List (BitVec 8)))
     (W : List Nat) (k : Nat)
@@ -142,7 +111,6 @@ theorem sr_seg {pc0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
         unfold imgM
         rw [writeLog_out _ _ _ (hcover a hw)]
 
-/-- **One reflected segment, successor named** (`swp_step` without `gp`). -/
 theorem sr_step {pc0 pc1 : BitVec 64} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
     (bs : List BBlock) (ks : List Nat) (lds : List (List (BitVec 8)))
     (W : List Nat) (k : Nat)
@@ -168,7 +136,6 @@ theorem sr_step {pc0 pc1 : BitVec 64} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
   · rw [if_neg hk']
     exact hRo r hr hne hk'
 
-/-- A fuel bound uniform over the values a predicate admits. -/
 theorem fuel_unif_of {P : Nat → BitVec 64 → Prop} (A : BitVec 64 → Prop)
     (hmono : ∀ n n' v, n ≤ n' → P n v → P n' v)
     (h : ∀ v, A v → ∃ n, P n v) : ∃ n, ∀ v, A v → P n v := by
@@ -179,12 +146,6 @@ theorem fuel_unif_of {P : Nat → BitVec 64 → Prop} (A : BitVec 64 → Prop)
       else ⟨0, fun ha => absurd ha hv⟩)
   exact ⟨n, hn⟩
 
-/-- **A load that may read past the bytes anybody hands over** (`swp_havocD`
-with the value tied to the data). The segment writes no memory and changes
-the owned registers `ks` as the reflection says; the destination `rd` takes
-`val f`, where `f` is the machine's byte image, which agrees with the data
-`D`. The loaded byte lists are a function `ldsOf` of the image on the
-accessed addresses `A`. -/
 theorem sr_havoc {pc0 pc1 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (bs : List BBlock) (ks : List Nat) (rd : Nat) (A : List Nat)
     (ldsOf : (Nat → BitVec 8) → List (List (BitVec 8))) (val : (Nat → BitVec 8) → BitVec 64)
@@ -275,8 +236,6 @@ theorem sr_havoc {pc0 pc1 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
   · obtain ⟨a, _, rfl⟩ := List.mem_map.mp hp
     rfl
 
-/-- **An observed ALU step** (`swp_aluRR` without `gp`): `rd` takes `val`,
-the PC advances by four. -/
 theorem sr_alu {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (i : Nat) (code : List (BitVec 8)) (rd : Nat) (ks : List Nat) (val : BitVec 64)
     (hstep : AluStep live i (ks.map fun k => (k, DFrac.own 1, R k)) (codeFoot i code) rd val)

@@ -1,30 +1,17 @@
 import Vsa.Compiler.ExprSim
 import Vsa.Compiler.PrintInt
 
-/-!
-# Frame parents are stable
-
-Store operations only ever append frames or rewrite a frame's variables, so the
-parent of an existing frame never changes (`SameParents`). A block allocates its
-frame with the enclosing environment as parent; stability lets the block's exit
-recover the enclosing chain (`Chain.tail`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim
 
-/-- `s` has an execution from `st`. -/
 abbrev HasExec (st : St) (d : Nat) (env : Addr) (s : Stmt) : Prop := ∃ st' t, ExecS st d env s st' t
 
-/-- `ss` has an execution from `st`. -/
 abbrev HasSeqExec (st : St) (d : Nat) (env : Addr) (ss : List Stmt) : Prop :=
   ∃ st' t, ExecSeq st d env ss st' t
 
-/-- `s` declares a variable with an initializer (compiled by `cseq`, not `cstmt`). -/
 abbrev IsDecl (s : Stmt) : Prop := ∃ x e, s = .varDecl x (some e)
 
-/-- `s'` extends `s` without changing any existing frame's parent. -/
 def SameParents (s s' : Store) : Prop :=
   s.frames.size ≤ s'.frames.size ∧
     ∀ j, j < s.frames.size → (s'.frames[j]?).map Frame.parent = (s.frames[j]?).map Frame.parent
@@ -88,7 +75,6 @@ theorem EvalE.sameParents : ∀ (e : Expr), Simple e → ∀ {st : St} {d : Nat}
   | .call _ _, h, _, _, _, _, _, _ => h.elim
   | .fn _ _ _, h, _, _, _, _, _, _ => h.elim
 
-/-- A chain whose head frame has parent `p` continues at `p`. -/
 theorem Chain.tail {s : Store} {m : Mem} {e p : Addr} {f : List (String × Nat)} {g : Scope}
     (h : Chain s m e (f :: g)) (hg : g ≠ []) (hp : (s.frames[e]?).map Frame.parent = some (some p)) :
     Chain s m p g := by
@@ -101,7 +87,6 @@ theorem Chain.tail {s : Store} {m : Mem} {e p : Addr} {f : List (String × Nat)}
     rw [hpar] at hp; cases hp
     exact hc
 
-/-- A block's frame keeps its parent. -/
 theorem parent_of_alloc (s : Store) (env : Addr) :
     ((s.allocFrame (some env)).1.frames[(s.allocFrame (some env)).2]?).map Frame.parent
       = some (some env) := by

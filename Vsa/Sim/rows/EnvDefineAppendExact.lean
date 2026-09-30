@@ -10,8 +10,6 @@ open Vsa.Logic (Triple)
 
 namespace Vsa.Sim
 
-/-- Exact post-store readbacks consumed by `frameRepr_append`.  These are
-byte-level facts, not an assumed post-state `FrameRepr`. -/
 structure EnvDefineAppendReadback
     (m : Mem) (N : NativeAddrs) (φf φc : Vsa.While.Addr → Nat)
     (e : Nat) (parent : Option Vsa.While.Addr)

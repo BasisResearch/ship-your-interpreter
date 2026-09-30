@@ -1,35 +1,17 @@
 import VsaIris.Vsa.Fprintf.Flush
 import VsaIris.Vsa.SymCompact
 
-/-!
-# The memory after a loop-bearing call; `__sbprintf`'s `FILE` (lane N5)
-
-A call whose effect depends on its data (`__sfvwrite_r`'s copy/flush loop)
-cannot hand its caller an explicit write log. It hands back the caller's
-memory with its footprint regions replaced by some bytes `g` (`fillR`, N3's
-`SymCompact.lean`), together with named facts about the new contents. Loads
-outside the regions read through to the caller's memory (`nx_mem` below
-peels each region with `ldv_*_fillR_miss`), loads inside meet the facts.
-
-`SbFile M f pend` is `__sbprintf`'s stack `FILE` at `f` (buffer at
-`f + 184`) holding the pending bytes `pend`: the fields `_vfprintf_r`,
-`__sfvwrite_r` and `_fflush_r` load, as load values of `M`.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- Store forwarding through `fillR` regions too (a load off a region reads
-the memory below it). -/
 scoped macro_rules
   | `(tactic| nx_mem) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
       ldv_ld_miss, ldv_lw_miss, ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
       ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss, ldv_ld_fillR_miss, ldv_lw_fillR_miss,
       ldv_lwu_fillR_miss, ldv_lh_fillR_miss, ldv_lhu_fillR_miss, ldv_lbu_fillR_miss])
 
-/-- A load is determined by the bytes it reads. -/
 theorem ldv_agree {k : MKind} {M M' : Mem} {a : Nat}
     (h : ∀ j, j < widthOfM k → imgM M' (a + j) = imgM M (a + j)) : ldv k M' a = ldv k M a := by
   unfold ldv bytesAt
@@ -37,9 +19,6 @@ theorem ldv_agree {k : MKind} {M M' : Mem} {a : Nat}
   refine List.map_congr_left fun j hj => ?_
   exact h j (List.mem_range.mp hj)
 
-/-- The fixed fields of `__sbprintf`'s stack `FILE` at `f`, and the
-boundary data its flushes read: `stdout`'s flags and descriptor (`__swrite`),
-`__sinit` done (`_fflush_r`). -/
 structure SbFixed (M : Mem) (f : BitVec 64) : Prop where
   flags : ldv .lh M (f + 16#64).toNat = 0x2008#64
   flagsU : ldv .lhu M (f + 16#64).toNat = 0x2008#64
@@ -52,17 +31,12 @@ structure SbFixed (M : Mem) (f : BitVec 64) : Prop where
   sfd : ldv .lh M 0x8001bb32 = 1#64
   sinit : ldv .ld M 0x8001b580 = 0x80005d2c#64
 
-/-- **`__sbprintf`'s stack `FILE`** at `f` with `pend` buffered (at most 1023
-bytes: a full buffer is flushed at once). -/
 structure SbFile (M : Mem) (f : BitVec 64) (pend : List (BitVec 8)) : Prop extends SbFixed M f where
   len : pend.length < 1024
   p : ldv .ld M f.toNat = f + BitVec.ofNat 64 (184 + pend.length)
   w : ldv .lw M (f + 12#64).toNat = BitVec.ofNat 64 (1024 - pend.length)
   buf : ∀ i (h : i < pend.length), imgM M ((f + 184#64).toNat + i) = pend[i]
 
-/-! ## Frames -/
-
-/-- `M'` agrees with `M` outside the bytes `Reg`. -/
 def Frame (M' M : Mem) (Reg : Nat → Prop) : Prop := ∀ a, ¬ Reg a → imgM M' a = imgM M a
 
 theorem Frame.refl (M : Mem) (Reg : Nat → Prop) : Frame M M Reg := fun _ _ => rfl
@@ -73,33 +47,26 @@ theorem Frame.trans {M M' M'' : Mem} {Reg : Nat → Prop} (h : Frame M' M Reg) (
 theorem Frame.mono {M M' : Mem} {Reg Reg' : Nat → Prop} (h : Frame M' M Reg) (hR : ∀ a, Reg a → Reg' a) :
     Frame M' M Reg' := fun a ha => h a (fun hr => ha (hR a hr))
 
-/-- A store inside the region. -/
 theorem Frame.store (M : Mem) {Reg : Nat → Prop} {a w : Nat} (v : BitVec 64)
     (h : ∀ b, a ≤ b → b < a + w → Reg b) : Frame (writeLog M [(a, w, v)]) M Reg := by
   intro b hb
   refine imgM_store_miss _ _ ?_
   refine Classical.byContradiction fun hc => hb (h b (by omega) (by omega))
 
-/-- A copy inside the region. -/
 theorem Frame.copied {M' M : Mem} {d src c : Nat} {g : Nat → BitVec 8} {Reg : Nat → Prop}
     (h : Copied M' M d src c g) (hR : ∀ b, d ≤ b → b < d + c → Reg b) : Frame M' M Reg := by
   intro b hb
   refine h.rest b ?_
   refine Classical.byContradiction fun hc => hb (hR b (by omega) (by omega))
 
-/-- A load outside the region reads through a frame. -/
 theorem Frame.ldv {M' M : Mem} {Reg : Nat → Prop} (h : Frame M' M Reg) (k : MKind) {a : Nat}
     (ha : ∀ j, j < widthOfM k → ¬ Reg (a + j)) : ldv k M' a = ldv k M a :=
   ldv_agree fun j hj => h _ (ha j hj)
 
-/-- The bytes `__sfvwrite_r`'s passes change: `_p`, `_w`, the buffer, the
-callee stack below `fp`, `stdout`'s flags, `errno`. -/
 def SfvReg (f fp : Nat) (a : Nat) : Prop :=
   (f ≤ a ∧ a < f + 8) ∨ (f + 12 ≤ a ∧ a < f + 16) ∨ (f + 184 ≤ a ∧ a < f + 1208) ∨
     (fp - 256 ≤ a ∧ a < fp) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
 
-/-- The fixed fields survive a pass (all but `stdout`'s flags lie outside
-`SfvReg`; the flags are rewritten with their value). -/
 theorem SbFixed.transport {M M' : Mem} {f fp : BitVec 64} (h : SbFixed M f)
     (hF : Frame M' M (SfvReg f.toNat fp.toNat)) (hsfl : ldv .lh M' 0x8001bb30 = 0x200a#64)
     (hf1 : 0x8001c168 ≤ f.toNat) (hf2 : f.toNat + 1208 ≤ fp.toNat - 256 ∨ fp.toNat ≤ f.toNat)
@@ -131,7 +98,6 @@ theorem SbFixed.transport {M M' : Mem} {f fp : BitVec 64} (h : SbFixed M f)
     by rw [outA .lh _ (by omega) (.inr ⟨Nat.le_refl _, by simp [widthOfM]⟩)]; exact h.sfd,
     by rw [outA .ld _ (Nat.le_refl _) (.inl (by simp [widthOfM]))]; exact h.sinit⟩
 
-/-- A word load of a small count just stored. -/
 theorem ldv_lw_store_ofNat (M : Mem) (a : Nat) {n : Nat} (hn : n < 2 ^ 31) :
     ldv .lw (writeLog M [(a, 4, BitVec.ofNat 64 n)]) a = BitVec.ofNat 64 n := by
   rw [ldv_lw_hit M _ rfl]
@@ -144,7 +110,6 @@ theorem ldv_lw_store_ofNat (M : Mem) (a : Nat) {n : Nat} (hn : n < 2 ^ 31) :
   simp only [Bool.false_eq_true, ite_false, Nat.add_zero, BitVec.toNat_setWidth, BitVec.toNat_ofNat]
   omega
 
-/-- The bytes a copy of `c` bytes from `src` reads from its window `g`. -/
 def copyBytes (g : Nat → BitVec 8) (src c : Nat) : List (BitVec 8) := (List.range c).map fun i => g (src + i)
 
 @[simp] theorem copyBytes_length (g : Nat → BitVec 8) (src c : Nat) : (copyBytes g src c).length = c := by
@@ -154,13 +119,10 @@ theorem copyBytes_get (g : Nat → BitVec 8) (src c i : Nat) (h : i < (copyBytes
     (copyBytes g src c)[i] = g (src + i) := by
   simp [copyBytes]
 
-/-- The memory after a copy into the buffer and the `_p`/`_w` stores. -/
 abbrev advMt (Mt : Mem) (f : BitVec 64) (k c : Nat) : Mem :=
   writeLog (writeLog Mt [(f.toNat, 8, f + BitVec.ofNat 64 (184 + k + c))])
     [((f + 12#64).toNat, 4, BitVec.ofNat 64 (1024 - k - c))]
 
-/-- **A copy into the buffer**, then `_p`/`_w` advanced: the fixed fields,
-the frame (only `SfvReg` changed), the buffered bytes `pend ++ copied`. -/
 theorem SbFile.advanceCore {Mt0 Mt : Mem} {f fp : BitVec 64} {pend : List (BitVec 8)} {src c : Nat}
     {g : Nat → BitVec 8} (hF0 : SbFile Mt0 f pend)
     (hcp : Copied Mt Mt0 ((f + 184#64).toNat + pend.length) src c g) (hkc : pend.length + c ≤ 1024)
@@ -193,8 +155,6 @@ theorem SbFile.advanceCore {Mt0 Mt : Mem} {f fp : BitVec 64} {pend : List (BitVe
         show (f + 184#64).toNat + i = (f + 184#64).toNat + pend.length + (i - pend.length) by omega]
       exact hcp.done _ (by omega)
 
-/-- **A copy into the buffer** that leaves room: the `FILE` holds
-`pend ++ copied`. -/
 theorem SbFile.advance {Mt0 Mt : Mem} {f fp : BitVec 64} {pend : List (BitVec 8)} {src c : Nat}
     {g : Nat → BitVec 8} (hF0 : SbFile Mt0 f pend)
     (hcp : Copied Mt Mt0 ((f + 184#64).toNat + pend.length) src c g) (hkc : pend.length + c < 1024)
@@ -210,25 +170,17 @@ theorem SbFile.advance {Mt0 Mt : Mem} {f fp : BitVec 64} {pend : List (BitVec 8)
   · simp only [List.length_append, copyBytes_length]
     rw [ldv_lw_store_ofNat _ _ (by omega), Nat.sub_sub]
 
-/-- The bytes `__swrite(stdout, …)` called with `sp = fp` changes: its
-frames below `fp`, `stdout`'s flags, `errno`. -/
 def SwReg (fp : Nat) (a : Nat) : Prop :=
   (fp - 256 ≤ a ∧ a < fp) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
 
-/-- A frame grows by a store inside the region. -/
 theorem Frame.snoc {M M0 : Mem} {Reg : Nat → Prop} {a w : Nat} {v : BitVec 64} (h : Frame M M0 Reg)
     (hr : ∀ b, a ≤ b → b < a + w → Reg b) : Frame (writeLog M [(a, w, v)]) M0 Reg :=
   h.trans (Frame.store M v hr)
 
-/-- Peel a chain of stores inside the region (`SfvReg`), each by `omega` on
-its `Nat` address. -/
 macro "frame_chain" : tactic => `(tactic| (repeat (refine Frame.snoc ?_ ?_)) <;>
   first | exact Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
     BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod] at h1 h2; (try unfold SfvReg); (try unfold SwReg); omega))
 
-/-- **A flushed buffer**: after `_fflush_r` on the stack `FILE` (called with
-`sp = fp`), `_p` is back at the base, `_w` at 1024, nothing buffered, and
-only `SfvReg` changed. -/
 theorem SbFile.flushed {M2 Mt0 : Mem} {f fp ra s0 s1 s2 s3 : BitVec 64}
     (hF : SbFixed M2 f) (hFr : Frame M2 Mt0 (SfvReg f.toNat fp.toNat))
     (hf1 : 0x8001c168 ≤ f.toNat) (hf2 : fp.toNat ≤ f.toNat) (hf3 : f.toNat + 1208 < 2 ^ 32)
@@ -249,8 +201,6 @@ theorem SbFile.flushed {M2 Mt0 : Mem} {f fp ra s0 s1 s2 s3 : BitVec 64}
   · rfl
   · decide
 
-/-- **After `__swrite(stdout, …)`** called with `sp = fp`: the stack `FILE`
-is as it was; only its frame, `stdout`'s flags and `errno` changed. -/
 theorem SbFile.swrote {Mt : Mem} {f fp ra s0 : BitVec 64} {pend : List (BitVec 8)} (hF : SbFile Mt f pend)
     (hf1 : 0x8001c168 ≤ f.toNat) (hf2 : fp.toNat ≤ f.toNat) (hf3 : f.toNat + 1208 < 2 ^ 32)
     (hfp : 0x80100000 ≤ fp.toNat - 256) :
@@ -273,9 +223,6 @@ theorem SbFile.swrote {Mt : Mem} {f fp ra s0 : BitVec 64} {pend : List (BitVec 8
       rw [this]; unfold SwReg; have := hF.len; omega)]
     exact hF.buf i h
 
-/-! ## Pieces as windows -/
-
-/-- A piece's bytes as a byte function from its source address. -/
 def win (bs : List (BitVec 8)) (src : Nat) (a : Nat) : BitVec 8 := bs.getD (a - src) 0
 
 theorem copyBytes_win (bs : List (BitVec 8)) (src c : Nat) (hc : c ≤ bs.length) :
@@ -286,7 +233,6 @@ theorem copyBytes_win (bs : List (BitVec 8)) (src c : Nat) (hc : c ≤ bs.length
   rw [copyBytes_get, List.getElem_take]
   simp [win, List.getD_eq_getElem?_getD, show i < bs.length by omega]
 
-/-- A piece's bytes readable at `M`. -/
 def PieceReads (Dt : Mem) (DA : List Nat) (S : Nat → Prop) (M : Mem) (src : Nat) (bs : List (BitVec 8)) :
     Prop := ∀ i (h : i < bs.length), ReadB Dt DA S M (src + i) bs[i]
 

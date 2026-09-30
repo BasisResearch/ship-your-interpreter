@@ -1,35 +1,12 @@
 import Vsa.While.TypeCheck
 import Vsa.While.Unify
 
-/-!
-# Complete search for a typing environment
-
-`searchProg p` looks for a typing environment by unification over first-order
-terms (`Vsa/While/Unify.lean`). Every program name `x` is a variable
-`.name x`. `+`, the comparisons and calls have several typing rules
-(`binAlts`, `callAlts`): `branch` keeps the rules consistent with the current
-substitution, fails if there are none, commits if there is one, and otherwise
-records the choice as a disjunction over a fresh result variable. `resolve`
-decides the recorded disjunctions at the end, failing as soon as one has no
-consistent rule and branching on one with the fewest. Scoping, loop context and
-the return context are syntactic and are left to the checker.
-
-* `search_complete`: if some `Δ` types `p`, the search succeeds;
-* `search_sound`: if some `Δ` types `p` and the search succeeds with `s`, then
-  `envOfSubst s.σ` types `p`.
-
-`Vsa/While/TypeInfer.lean` combines them with the verified checker.
--/
-
 namespace Vsa.While.Types
 
 open Vsa.While Vsa.While.Unify
 
-/-! ## Types as terms -/
-
 mutual
 
-/-- A type as a term. -/
 def enc : Ty → Tm
   | .int => .leaf 0
   | .bool => .leaf 1
@@ -40,7 +17,6 @@ def enc : Ty → Tm
   | .native .assert => .leaf 6
   | .fn ps r => .node 0 (encL ps) (enc r)
 
-/-- A type list as a term. -/
 def encL : List Ty → Tm
   | [] => .leaf 7
   | t :: ts => .node 1 (enc t) (encL ts)
@@ -49,7 +25,6 @@ end
 
 mutual
 
-/-- A term as a type (`int` for anything else). -/
 def dec : Tm → Ty
   | .leaf 1 => .bool
   | .leaf 2 => .str
@@ -60,19 +35,16 @@ def dec : Tm → Ty
   | .node 0 a r => .fn (decL a) (dec r)
   | _ => .int
 
-/-- A term as a type list. -/
 def decL : Tm → List Ty
   | .node 1 h t => dec h :: decL t
   | _ => []
 
 end
 
-/-- A list of terms as a term. -/
 def tList : List Tm → Tm
   | [] => .leaf 7
   | t :: ts => .node 1 t (tList ts)
 
-/-- The variable of a program name. -/
 def pvar (x : String) : Tm := .var (.name x)
 
 def tINT : Tm := .leaf 0
@@ -80,13 +52,8 @@ def tBOOL : Tm := .leaf 1
 def tSTR : Tm := .leaf 2
 def tNULL : Tm := .leaf 3
 
-/-! ## The search -/
-
-/-- A disjunction of equation systems. -/
 abbrev Disj := List (List (Tm × Tm))
 
-/-- Search state: substitution, next auxiliary variable, and the disjunctions
-still to be decided. -/
 structure SS where
   σ : Subst
   n : Nat
@@ -95,7 +62,6 @@ structure SS where
 def unifyS (s : SS) (E : List (Tm × Tm)) : Option SS :=
   (unifyTop s.σ E).map fun σ => { s with σ := σ }
 
-/-- The first alternative that succeeds. -/
 def firstSome {α β : Type} (f : α → Option β) : List α → Option β
   | [] => none
   | a :: as =>
@@ -103,7 +69,6 @@ def firstSome {α β : Type} (f : α → Option β) : List α → Option β
     | some r => some r
     | none => firstSome f as
 
-/-- The typing rules of an operator: equations and result. -/
 def binAlts : BinOp → Tm → Tm → List (List (Tm × Tm) × Tm)
   | .add, a, b => [([(a, tINT), (b, tINT)], tINT), ([(a, tSTR)], tSTR), ([(b, tSTR)], tSTR)]
   | .sub, a, b => [([(a, tINT), (b, tINT)], tINT)]
@@ -117,18 +82,13 @@ def binAlts : BinOp → Tm → Tm → List (List (Tm × Tm) × Tm)
   | .gt, a, b => [([(a, tINT), (b, tINT)], tBOOL), ([(a, tSTR), (b, tSTR)], tBOOL)]
   | .ge, a, b => [([(a, tINT), (b, tINT)], tBOOL), ([(a, tSTR), (b, tSTR)], tBOOL)]
 
-/-- The typing rules of a call: equations and result. -/
 def callAlts (f : Tm) (ts : List Tm) (r : Tm) : List (List (Tm × Tm) × Tm) :=
   [([(f, .node 0 (tList ts) r)], r), ([(f, .leaf 4)], tNULL), ([(f, .leaf 5)], tNULL)] ++
     (if ts.length = 1 ∨ ts.length = 2 then [([(f, .leaf 6)], tNULL)] else [])
 
-/-- The alternatives consistent with `σ`. -/
 def viable (σ : Subst) (alts : List (List (Tm × Tm) × Tm)) : List (List (Tm × Tm) × Tm) :=
   alts.filter fun a => (unifyTop σ a.1).isSome
 
-/-- Apply one of several typing rules: fail if none is consistent, commit if
-exactly one is, and otherwise record the choice as a disjunction over a fresh
-result variable. -/
 def branch (alts : List (List (Tm × Tm) × Tm)) (s : SS) (k : SS → Tm → Option SS) :
     Option SS :=
   match viable s.σ alts with
@@ -139,7 +99,6 @@ def branch (alts : List (List (Tm × Tm) × Tm)) (s : SS) (k : SS → Tm → Opt
                pend := ((a :: b :: rest).map fun c => (.var (.aux s.n), c.2) :: c.1) :: s.pend }
       (.var (.aux s.n))
 
-/-- A function literal, given the search of its body. -/
 def fnWrap (params : List String) (body : List Stmt)
     (bs : Option Tm → SS → (SS → Option SS) → Option SS) (s : SS)
     (k : SS → Tm → Option SS) : Option SS :=
@@ -192,7 +151,6 @@ def srchS : Stmt → Option Tm → SS → (SS → Option SS) → Option SS
   | .brk, _, s, k => k s
   | .cont, _, s, k => k s
 
-/-- An optional statement (`for` initializer, `else` branch). -/
 def srchInit : Option Stmt → Option Tm → SS → (SS → Option SS) → Option SS
   | none, _, s, k => k s
   | some st, R, s, k => srchS st R s k
@@ -207,14 +165,11 @@ def srchSeq : List Stmt → Option Tm → SS → (SS → Option SS) → Option S
 
 end
 
-/-- The initial state: the builtins bound. -/
 def s₀ : SS :=
   ⟨[(.name "print", .leaf 4), (.name "println", .leaf 5), (.name "assert", .leaf 6)], 0, []⟩
 
-/-- The number of consistent alternatives of a disjunction. -/
 def nViable (σ : Subst) (d : Disj) : Nat := (d.filter fun E => (unifyTop σ E).isSome).length
 
-/-- An element with the least measure. -/
 def pickMin {α : Type} (f : α → Nat) : List α → Option α
   | [] => none
   | a :: as =>
@@ -233,8 +188,6 @@ theorem pickMin_mem {α : Type} {f : α → Nat} : ∀ {l : List α} {a : α}, p
       · cases h; exact List.mem_cons_of_mem _ (pickMin_mem hc)
       · cases h; exact List.mem_cons_self
 
-/-- Decide the recorded disjunctions: fail as soon as one has no consistent
-alternative, otherwise branch on one with the fewest. -/
 def resolve (σ : Subst) (ds : List Disj) : Option Subst :=
   if ds.any fun d => nViable σ d == 0 then none
   else
@@ -250,19 +203,13 @@ decreasing_by
   have := List.length_pos_of_mem hd
   omega
 
-/-- **The search.** -/
 def searchProg (p : Program) : Option SS :=
   srchSeq p none s₀ fun s => (resolve s.σ s.pend).map fun σ => { s with σ := σ, pend := [] }
 
-/-- The typing environment of a solution. -/
 def envOfSubst (σ : Subst) : TyEnv := fun x => dec (canon σ (.name x))
 
-/-! ## Basic facts -/
-
-/-- The typing environment of an assignment. -/
 def Δθ (θ : V → Tm) : TyEnv := fun x => dec (θ (.name x))
 
-/-- The type of a term under an assignment. -/
 def dT (θ : V → Tm) (t : Tm) : Ty := dec (t.bind θ)
 
 mutual
@@ -353,30 +300,20 @@ theorem callAlts_sound {θ : V → Tm} {f r : Tm} {ts : List Tm} {alt : List (Tm
         | [t, u], _ => exact .assert2 _ _
     · cases h
 
-/-! ## Soundness -/
-
-/-- An assignment satisfies every recorded disjunction. -/
 def SatP (θ : V → Tm) (ds : List Disj) : Prop := ∀ d ∈ ds, ∃ E ∈ d, SatE θ E
 
-/-- The search moved from `s` to `s'`, and every solution of `s'` solves `s`
-and satisfies `P`. -/
 structure Step (s s' : SS) (P : (V → Tm) → Prop) : Prop where
   idem : Idem s.σ → Idem s'.σ
   pend : ∀ d ∈ s.pend, d ∈ s'.pend
   sat : ∀ θ, Sat θ s'.σ → SatP θ s'.pend → Sat θ s.σ ∧ P θ
 
-/-- A search from `s` handed `k` the state `s'` and value `a`, and `k`
-returned `res`. -/
 inductive Found {α : Type} (k : SS → α → Option SS) (res s : SS)
     (P : α → (V → Tm) → Prop) : Prop
   | intro (s' : SS) (a : α) (hk : k s' a = some res) (step : Step s s' (P a))
 
-/-- A statement search from `s` handed `k` the state `s'`, and `k` returned
-`res`. -/
 inductive FoundS (k : SS → Option SS) (res s : SS) (P : (V → Tm) → Prop) : Prop
   | intro (s' : SS) (hk : k s' = some res) (step : Step s s' P)
 
-/-- The result `τ` is given by one of the typing rules `alts`. -/
 inductive Applies (θ : V → Tm) (τ : Tm) (alts : List (List (Tm × Tm) × Tm)) : Prop
   | intro (a : List (Tm × Tm) × Tm) (ha : a ∈ alts) (hE : SatE θ a.1)
       (hτ : τ.bind θ = a.2.bind θ)
@@ -425,7 +362,6 @@ theorem branch_sound {alts : List (List (Tm × Tm) × Tm)} {s : SS} {k : SS → 
     exact ⟨c, hc', fun e he => hsat e (List.mem_cons_of_mem _ he),
       hsat _ List.mem_cons_self⟩
 
-/-- The type of a function literal's search result. -/
 inductive FnTyped (θ : V → Tm) (τ : Tm) (params : List String) (body : List Stmt)
     (Sb S'' : List String) : Prop
   | intro (r : Ty) (hτ : dT θ τ = .fn (params.map (Δθ θ)) r)
@@ -686,23 +622,15 @@ theorem soundSeq : (ss : List Stmt) → ∀ {Δ : TyEnv} {S : List String} {R : 
 
 end
 
-/-! ## Completeness -/
-
-/-- The auxiliary variables of a term are below `n`. -/
 def BndT (n : Nat) (t : Tm) : Prop := ∀ m, V.aux m ∈ t.vars → m < n
 
-/-- The auxiliary variables of a substitution are below `n`. -/
 def BndS (n : Nat) (σ : Subst) : Prop := ∀ m, V.aux m ∈ varsS σ → m < n
 
-/-- The assignment gives each program name its `Δ` type. -/
 def Names (Δ : TyEnv) (θ : V → Tm) : Prop := ∀ x, θ (.name x) = enc (Δ x)
 
-/-- The auxiliary variables of the recorded disjunctions are below `n`. -/
 def BndP (n : Nat) (ds : List Disj) : Prop :=
   ∀ d ∈ ds, ∀ E ∈ d, ∀ e ∈ E, BndT n e.1 ∧ BndT n e.2
 
-/-- Search invariant: `θ` solves the state, which is idempotent and uses
-auxiliary variables below its counter. -/
 structure Inv (Δ : TyEnv) (θ : V → Tm) (s : SS) : Prop where
   sat : Sat θ s.σ
   idem : Idem s.σ
@@ -711,7 +639,6 @@ structure Inv (Δ : TyEnv) (θ : V → Tm) (s : SS) : Prop where
   pend : SatP θ s.pend
   bndP : BndP s.n s.pend
 
-/-- Two assignments agree on the auxiliary variables below `n`. -/
 def Agree (θ θ' : V → Tm) (n : Nat) : Prop := ∀ m < n, θ (.aux m) = θ' (.aux m)
 
 theorem Agree.rfl' {θ : V → Tm} {n : Nat} : Agree θ θ n := fun _ _ => rfl
@@ -767,7 +694,6 @@ theorem unifyS_one {Δ : TyEnv} {θ : V → Tm} {s : SS} {a b : Tm} (hI : Inv Δ
       simp only [List.mem_singleton] at he; subst he; exact hab)
     (fun e he => by simp only [List.mem_singleton] at he; subst he; exact ⟨ha, hb⟩)
 
-/-- Set one auxiliary variable. -/
 def upd (θ : V → Tm) (n : Nat) (t : Tm) : V → Tm := fun v => if v = .aux n then t else θ v
 
 theorem upd_self (θ : V → Tm) (n : Nat) (t : Tm) : upd θ n t (.aux n) = t := by simp [upd]
@@ -843,7 +769,6 @@ theorem branch_complete {Δ : TyEnv} {θ : V → Tm} {s : SS} {alts : List (List
       · exact hF.bndP D hD
     · intro m hm; simp [Tm.vars] at hm; show m < s.n + 1; omega
 
-/-- Continuation hypotheses. -/
 def KE (Δ : TyEnv) (θ : V → Tm) (s : SS) (T : Ty) (k : SS → Tm → Option SS) : Prop :=
   ∀ s' τ θ', Inv Δ θ' s' → Agree θ θ' s.n → s.n ≤ s'.n → BndT s'.n τ → τ.bind θ' = enc T →
     k s' τ ≠ none
@@ -855,7 +780,6 @@ def KA (Δ : TyEnv) (θ : V → Tm) (s : SS) (Ts : List Ty) (k : SS → List Tm 
 def KS (Δ : TyEnv) (θ : V → Tm) (s : SS) (k : SS → Option SS) : Prop :=
   ∀ s' θ', Inv Δ θ' s' → Agree θ θ' s.n → s.n ≤ s'.n → k s' ≠ none
 
-/-- The search's return type term matches the typing's return type. -/
 def RelR (θ : V → Tm) (n : Nat) (Rt : Option Tm) (R : Option Ty) : Prop :=
   Rt.map (·.bind θ) = R.map enc ∧ ∀ r, Rt = some r → BndT n r
 
@@ -1002,9 +926,6 @@ theorem fnWrap_complete {Δ : TyEnv} {params : List String} {body : List Stmt} {
       intro x _
       exact hI₃.names x
 
-/-! ### Per-constructor completeness -/
-
-/-- Completeness of the expression search. -/
 abbrev CE (e : Expr) : Prop :=
   ∀ {Δ : TyEnv} {S : List String} {T : Ty}, WtE Δ S e T →
     ∀ (s : SS) (θ : V → Tm) (k : SS → Tm → Option SS), Inv Δ θ s → KE Δ θ s T k →
@@ -1038,7 +959,6 @@ abbrev CQ (ss : List Stmt) : Prop :=
     ∀ (Rt : Option Tm) (s : SS) (θ : V → Tm) (k : SS → Option SS), Inv Δ θ s →
     RelR θ s.n Rt R → KS Δ θ s k → srchSeq ss Rt s k ≠ none
 
-/-- Completeness of the body search of a function literal. -/
 abbrev FnC (e : Expr) : Prop := ∀ n ps b, e = .fn n ps b → CQ b
 
 theorem cE_int : ∀ n, CE (.int n) := by
@@ -1392,8 +1312,6 @@ theorem completeSeq : (ss : List Stmt) → CQ ss
 
 end
 
-/-! ## The program -/
-
 theorem inv_s₀ {Δ : TyEnv} (hB : BuiltinsTyped Δ) :
     Inv Δ (fun v => match v with | .name x => enc (Δ x) | .aux _ => .leaf 0) s₀ := by
   refine ⟨?_, ⟨?_, ?_⟩, ?_, fun _ => rfl, fun _ h => (by cases h), fun _ h => (by cases h)⟩
@@ -1409,8 +1327,6 @@ theorem inv_s₀ {Δ : TyEnv} (hB : BuiltinsTyped Δ) :
     rcases hp with rfl | rfl | rfl <;> simp [Tm.vars] at hw
   · intro m hm
     simp [s₀, varsS, Tm.vars] at hm
-
-/-! ## Deciding the recorded disjunctions -/
 
 theorem pickMin_none {α : Type} {f : α → Nat} : ∀ {l : List α}, pickMin f l = none → l = []
   | [], _ => rfl
@@ -1496,7 +1412,6 @@ termination_by ds.length
 decreasing_by
   rw [List.length_erase_of_mem hd]; have := List.length_pos_of_mem hd; omega
 
-/-- **The search is complete.** -/
 theorem search_complete {Δ : TyEnv} {p : Program} (h : WellTyped Δ p) :
     ∃ s, searchProg p = some s := by
   obtain ⟨S', D⟩ := h.body
@@ -1507,8 +1422,6 @@ theorem search_complete {Δ : TyEnv} {p : Program} (h : WellTyped Δ p) :
       simpa using resolve_complete s'.pend s'.σ θ' hI'.idem hI'.sat hI'.pend)
   exact Option.ne_none_iff_exists'.mp this
 
-/-- **The search is sound** for typable programs: its solution types the
-program. -/
 theorem search_sound {Δ : TyEnv} {p : Program} (h : WellTyped Δ p) {s : SS}
     (hs : searchProg p = some s) : WellTyped (envOfSubst s.σ) p := by
   obtain ⟨S', D⟩ := h.body

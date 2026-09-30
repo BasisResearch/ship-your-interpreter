@@ -4,27 +4,6 @@ import VsaIris.Vsa.AllocSltu
 import Vsa.Sim.Muldi3Spec
 import VsaIris.Vsa.Console
 
-/-!
-# Observed ALU steps in symbolic runs
-
-The reflected block model (`MKind`, `Vsa/Sim/BlockMem.lean`) has no `sltu`
-or `sltiu`, so `snez`/`seqz` have no reflected segment. VSA proves such an
-instruction by observation: `stepObs_alu` gives ONE step that advances the PC
-by four, writes ONE GPR and leaves memory and every other register alone
-(`ReadsLikePost σ' (sigmaPost_alu …)`).
-
-* `aluStep_of_obs`: such an observation, stated at every well-formed state
-  whose source registers and code bytes hold, is H3's `Inst.AluStep` for any
-  destination register (H3's `snezAluStep` and H5's `aluA0_runFact` are the
-  `a0` instances written by hand).
-* `swp_alu`: an `AluStep` as one step of a symbolic run (`SWP`), the
-  `swp_jal` of an ALU instruction outside the block model.
-
-The step-table generators (`scripts/gen_interp_steps.py`) emit, per `sltu`/
-`sltiu` instruction, the observation (`stepObs_alu` + the decode table + the
-`execute_*_char` lemma) and an `itO_<pc>` step lemma over these two.
--/
-
 namespace VsaIris.Sym
 
 open Iris
@@ -41,8 +20,6 @@ theorem gpr_htif : ∀ n, n < 32 → 1 ≤ n → (gprReg n == Register.htif_payl
 theorem gpr_avoids_noiseO' : ∀ n, n < 32 → 1 ≤ n → ∀ rr ∈ noiseRegs, (gprReg n == rr) = false := by
   decide
 
-/-- The destination of an observed ALU step, as a `gprGet` read (cased on the
-index: `RegisterType (gprReg rd)` is `BitVec 64` only per index). -/
 theorem gprGet_obs_rd {σ' σ : MState} {pc vm : BitVec 64} {v : BitVec 64} :
     ∀ rd, 1 ≤ rd → rd ≤ 31 →
       ReadsLikePost σ' (sigmaPost_alu σ pc vm (gprReg rd) (gprRT rd v)) → gprGet σ' rd = some v
@@ -80,9 +57,6 @@ theorem gprGet_obs_rd {σ' σ : MState} {pc vm : BitVec 64} {v : BitVec 64} :
   | 0, h, _, _ => absurd h (by decide)
   | _ + 32, _, h, _ => absurd h (by omega)
 
-/-- **An observed ALU step writing GPR `rd`, as an `AluStep`.** `hsite` is the
-observation at every well-formed state parked at `i` whose source registers
-`RR` (GPRs) and read bytes `MR` hold (the generated per-instruction proof). -/
 theorem aluStep_of_obs {live : Nat → Prop} {i : Nat} {RR : List (Nat × DFrac × BitVec 64)}
     {MR : List (Nat × DFrac × BitVec 8)} {rd : Nat} {val : BitVec 64}
     (hrd1 : 1 ≤ rd) (hrd31 : rd ≤ 31) (hRRk : ∀ q ∈ RR, 1 ≤ q.1 ∧ q.1 ≤ 31)
@@ -150,9 +124,6 @@ theorem aluStep_of_obs {live : Nat → Prop} {i : Nat} {RR : List (Nat × DFrac 
   · show Vsa.Machine.output σ' = Vsa.Machine.output c.σ
     unfold Vsa.Machine.output; rw [hobs.2]
 
-/-- **An observed ALU step in a symbolic run** (`swp_jal`'s twin): the
-destination `rd` takes `val`, the PC advances by four. `ks` are the source
-registers the observation reads, off the symbolic register file `R`. -/
 theorem swp_alu {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Vsa.MemRepr.Mem}

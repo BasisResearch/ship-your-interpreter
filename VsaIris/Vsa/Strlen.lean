@@ -1,18 +1,5 @@
 import VsaIris.Vsa.StrlenSeg
 
-/-!
-# `strlen` as one bounded owned-footprint run
-
-INTERP_DESIGN.md §9, package H3. The whole function — the alignment test, the
-byte-peel loop, the word-at-a-time scan, the seven-way byte tail and the seven
-return arms — is ONE `LocalRun` (`VsaIris/LocalRun.lean`), built segment by
-segment with `strlenStep` (`StrlenSeg.lean`). Nothing here mentions Iris: the
-Iris layer is a single `wp_localRunW` application in `StrlenSpec.lean`.
-
-The zero-byte arithmetic is VSA's, reused by name: `StrlenMagic.detect_all_ones`
-and its two consumers `detect_takenG`/`detect_nottakenG`.
--/
-
 namespace VsaIris.Inst.Strlen
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -24,19 +11,12 @@ section Run
 
 variable {live : Nat → Prop} {P r : BitVec 64} {len : Nat} {bv : Nat → BitVec 8}
 
-/-- The RAM/HTIF geometry of the read region. Same fields as VSA's
-`StrlenReadRegions` (`Vsa/Sim/StrlenReadState.lean`), restated here so that
-this file does not depend on the runtime-ownership layer. -/
 structure ReadRegions (P : BitVec 64) (len : Nat) : Prop where
   lo : 0x80000000 ≤ P.toNat
   hi : P.toNat + len + 8 ≤ 0x100000000
   nowrap : P.toNat + len + 8 < 2 ^ 64
   htif : P.toNat + len + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ P.toNat
 
-/-- **The immutable side conditions of one `strlen` run.** The read region's
-geometry (which already reserves the eight bytes the word loop over-reads),
-the string's bytes, the caller's return alignment, and liveness of everything
-the run reads. -/
 structure Ctx (live : Nat → Prop) (P r : BitVec 64) (len : Nat) (bv : Nat → BitVec 8) :
     Prop where
   regions : ReadRegions P len
@@ -44,14 +24,10 @@ structure Ctx (live : Nat → Prop) (P r : BitVec 64) (len : Nat) (bv : Nat → 
   retAlign : r.toNat % 4 = 0
   codeLive : ∀ q ∈ strlenMR P.toNat len bv, live q.1
 
-/-! ## Byte and word facts -/
-
-/-- A byte of the region, as a total read. -/
 theorem byteVal {m0 : Std.ExtHashMap Nat (BitVec 8)} (hread : Reads P.toNat len bv m0)
     (a : Nat) (ha : a < len + 8) : (m0[P.toNat + a]?).getD 0 = bv (P.toNat + a) := by
   rw [hread.bytes a ha]; rfl
 
-/-- The byte at offset `a ≤ len` is NUL exactly at the terminator. -/
 theorem byteBeq (ctx : Ctx live P r len bv) (a : Nat) (ha : a ≤ len) :
     (bv (P.toNat + a) == 0#8) = decide (a = len) := by
   by_cases he : a = len
@@ -60,7 +36,6 @@ theorem byteBeq (ctx : Ctx live P r len bv) (a : Nat) (ha : a ≤ len) :
     simp only [he, decide_false, beq_eq_false_iff_ne, ne_eq]
     exact hne
 
-/-- The `lbu` of a tail test. -/
 theorem lbuFact (ctx : Ctx live P r len bv) {m0 : Std.ExtHashMap Nat (BitVec 8)}
     (hread : Reads P.toNat len bv m0) (a : Nat) (ha : a < len + 8)
     (L : GRegs) (line : MInstr) (hkind : line.kind = .lbu)
@@ -83,7 +58,6 @@ theorem lbuFact (ctx : Ctx live P r len bv) {m0 : Std.ExtHashMap Nat (BitVec 8)}
     rw [byteVal hread a ha]
     rfl
 
-/-- The address of a tail `lbu a5,-(8-k)(a4)` with `a4 = P + (t+8)`. -/
 theorem tailAddr (ctx : Ctx live P r len bv) (t k : Nat) (hk : k ≤ 8)
     (htk : t + 8 ≤ len + 8) (imm : BitVec 12)
     (himm : (sign_extend (m := 64) imm : BitVec 64) = -(BitVec.ofNat 64 (8 - k))) :
@@ -96,8 +70,6 @@ theorem tailAddr (ctx : Ctx live P r len bv) (t k : Nat) (hk : k ≤ 8)
   rw [hstep]
   exact ptrN P (t + k) (by have := ctx.regions.nowrap; omega)
 
-/-- The value a return arm computes: `a3 - (8-k) = len` when the NUL sits at
-offset `k` of the last word. -/
 theorem armVal (t len k : Nat) (imm : BitVec 12) (hk : k ≤ 8) (hlen : t + k = len)
     (himm : (sign_extend (m := 64) imm : BitVec 64) = -(BitVec.ofNat 64 (8 - k))) :
     BitVec.ofNat 64 (t + 8) + sign_extend (m := 64) imm = BitVec.ofNat 64 len := by
@@ -105,12 +77,6 @@ theorem armVal (t len k : Nat) (imm : BitVec 12) (hk : k ≤ 8) (hlen : t + k = 
   congr 1
   omega
 
-/-! ## The seven return arms
-
-Each is `addi a0,a3,-(8-k); ret` with `a3 = t+8`: one segment, and the run is
-over. -/
-
-/-- **A return arm.** -/
 theorem retArm (ctx : Ctx live P r len bv) {t k : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (seg : List BBlock) (armPC : BitVec 64) (imm : BitVec 12) (n : Nat)
     (hfuel : evalBlocksFuel seg = n + 1)
@@ -136,13 +102,6 @@ theorem retArm (ctx : Ctx live P r len bv) {t k : Nat} {rv : Nat → BitVec 64}
   · rw [hfin 1 (by simp [strlenRegs]), hfin1, hra]
   · rw [hfin 10 (by simp [strlenRegs]), hfin10, ha3, armVal t len k imm hk hlen himm]
 
-/-! ## The byte tail `0x80006d2c … 0x80006d70`
-
-The NUL lies at offset `k` of the word `[t, t+8)`. The tail tests offsets
-`0 … 5` explicitly; offset `6` is tested by the `snez` block, which also
-covers offset `7` without a test. -/
-
-/-- At tail test `k` (`1 ≤ k ≤ 6`): `a3` holds `t+8` and `a4` holds `P+(t+8)`. -/
 structure TailK (P r : BitVec 64) (len t k : Nat) (pc : BitVec 64)
     (rv : Nat → BitVec 64) : Prop where
   pcv : rv VsaIris.PC = pc
@@ -152,7 +111,6 @@ structure TailK (P r : BitVec 64) (len t k : Nat) (pc : BitVec 64)
   lo : t + k ≤ len
   hi : len < t + 8
 
-/-- At the tail entry `0x80006d2c`: `a0` still holds `P`. -/
 structure TailAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Prop where
   pcv : rv VsaIris.PC = 0x80006d2c#64
   ra : rv 1 = r
@@ -161,8 +119,6 @@ structure TailAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Prop
   lo : t ≤ len
   hi : len < t + 8
 
-/-- **One `lbu a5,-(8-k)(a4); beqz a5` tail test.** Both successors are
-supplied; the reflected guard selects one. -/
 theorem tailTest (ctx : Ctx live P r len bv) {t k m : Nat}
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     (segT segF : List BBlock) (nT nF : Nat) (pcK pcT pcF : BitVec 64)
@@ -204,7 +160,6 @@ theorem tailTest (ctx : Ctx live P r len bv) {t k m : Nat}
     exact hcontF he rv' mv' (by rw [hpc', hpcF])
       (fun j hj hj15 => by rw [hfin j hj, hkeepF j hj hj15]) hslack'
 
-/-- The six registers a byte test leaves alone, from six `rfl`s. -/
 theorem keepOf (seg : List BBlock) (lds : List (List (BitVec 8))) (rv : Nat → BitVec 64)
     (h1 : finReg seg (strlenL rv) lds 1 = rv 1)
     (h10 : finReg seg (strlenL rv) lds 10 = rv 10)
@@ -224,13 +179,6 @@ theorem keepOf (seg : List BBlock) (lds : List (List (BitVec 8))) (rv : Nat → 
   · exact h14
   · exact absurd rfl hj15
 
-/-! ### The `snez` at `0x80006d64`
-
-`sltu` is outside `MKind`, so this one instruction is taken from VSA's
-generated observational site (`StrlenSites.site_80006d64`) through
-`Inst.AluStep`. -/
-
-/-- The `snez a0,a5` site as one local-run step. -/
 theorem snezAluStep (ctx : Ctx live P r len bv) (a5 : BitVec 64) :
     AluStep live 0x80006d64 [(15, DFrac.own 1, a5)] (strlenMR P.toNat len bv) 10
       (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) a5))) := by
@@ -296,8 +244,6 @@ theorem snezAluStep (ctx : Ctx live P r len bv) (a5 : BitVec 64) :
     unfold Vsa.Machine.output
     rw [hframe.out]
 
-/-- **Tail offset 6.** The `snez` block returns `t+6` or `t+7` with no further
-test: the byte load, the `snez` site, and the arithmetic return. -/
 theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : TailK P r len t 6 0x80006d60#64 rv) :
@@ -308,7 +254,7 @@ theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     simpa using hb
   have hnw := ctx.regions.nowrap
   have hlo' := ctx.regions.lo
-  -- (1) `lbu a5,-2(a4)`
+
   refine strlenStep 2 strlenX6d60LoadSeg [[bv (P.toNat + (t + 6))]] 0x80006d60#64 0 rfl
     (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
   · intro σ hread
@@ -318,7 +264,7 @@ theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     rw [h.a4]
     exact tailAddr ctx t 6 (by omega) (by have := h.lo; omega) (0xffe#12) (by decide)
   intro rv1 mv1 hpc1 hfin1 hslack1
-  -- (2) the `snez a0,a5` site
+
   have h1ra : rv1 1 = rv 1 := hfin1 1 (by simp [strlenRegs])
   have h1a3 : rv1 13 = rv 13 := hfin1 13 (by simp [strlenRegs])
   have h1a5 : rv1 15 = zero_extend (m := 64) (bv (P.toNat + (t + 6))) :=
@@ -328,7 +274,7 @@ theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     (by simp [strlenRegs]) (by simp [strlenRegs]) hslack1 (by rw [hpc1]; rfl)
     (by rw [h1a5]; exact snezAluStep ctx _) ?_
   intro rv2 mv2 hpc2 ha02 hfin2 hslack2
-  -- (3) `add a0,a0,a3; addi a0,a0,-2; ret`
+
   refine strlenStep 0 strlenX6d68Seg [] 0x80006d68#64 2 rfl (by decide) (by decide) rfl
     ctx.codeLive hslack2 (by rw [hpc2]) ?_ ?_
   · intro σ hread
@@ -350,7 +296,6 @@ theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     exact snez_finalG t 0 len _ (by have := h.lo; omega) (by have := h.hi; omega)
       (by have := h.lo; have := h.hi; omega) hb6
 
-/-- Tail offset 5. -/
 theorem tail5 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : TailK P r len t 5 0x80006d58#64 rv) :
@@ -394,7 +339,6 @@ theorem tail5 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
        by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
        by have := h.lo; omega, h.hi⟩
 
-/-- Tail offset 4. -/
 theorem tail4 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : TailK P r len t 4 0x80006d50#64 rv) :
@@ -438,7 +382,6 @@ theorem tail4 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
        by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
        by have := h.lo; omega, h.hi⟩
 
-/-- Tail offset 3. -/
 theorem tail3 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : TailK P r len t 3 0x80006d48#64 rv) :
@@ -482,7 +425,6 @@ theorem tail3 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
        by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
        by have := h.lo; omega, h.hi⟩
 
-/-- Tail offset 2. -/
 theorem tail2 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : TailK P r len t 2 0x80006d40#64 rv) :
@@ -526,7 +468,6 @@ theorem tail2 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
        by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
        by have := h.lo; omega, h.hi⟩
 
-/-- Tail offset 1. -/
 theorem tail1 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : TailK P r len t 1 0x80006d38#64 rv) :
@@ -570,8 +511,6 @@ theorem tail1 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
        by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
        by have := h.lo; omega, h.hi⟩
 
-/-- **The tail entry `0x80006d2c`.** `sub a3,a4,a0` sets `a3 = t+8`; the first
-byte test then dispatches. -/
 theorem tail0 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : TailAt P r len t rv) :
@@ -625,13 +564,6 @@ theorem tail0 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
        by rw [hfin 14 (by simp [strlenRegs])]; exact h.a4,
        by have := h.lo; omega, h.hi⟩
 
-/-! ## The word scan `0x80006d10 … 0x80006d28`
-
-One iteration is one reflected segment. The branch is decided by VSA's own
-zero-byte arithmetic (`StrlenMagic.detect_all_ones`, through
-`detect_takenG`/`detect_nottakenG`), and the loop is bounded by `len`. -/
-
-/-- The eight bytes of the word at `a`. -/
 def wordBytesAt (bv : Nat → BitVec 8) (a : Nat) : List (BitVec 8) :=
   [bv a, bv (a + 1), bv (a + 2), bv (a + 3), bv (a + 4), bv (a + 5), bv (a + 6), bv (a + 7)]
 
@@ -652,7 +584,6 @@ theorem wordBytes_eq {m0 : Std.ExtHashMap Nat (BitVec 8)} (hread : Reads P.toNat
     byteVal' hread t 3 (by omega), byteVal' hread t 4 (by omega), byteVal' hread t 5 (by omega),
     byteVal' hread t 6 (by omega), byteVal' hread t 7 (by omega)]
 
-/-- The `ld a2,0(a4)` of one word iteration. -/
 theorem ldFact (ctx : Ctx live P r len bv) {m0 : Std.ExtHashMap Nat (BitVec 8)}
     (hread : Reads P.toNat len bv m0) (t : Nat) (ht : t ≤ len)
     (L : GRegs) (line : MInstr) (hkind : line.kind = .ld)
@@ -680,7 +611,6 @@ theorem ldFact (ctx : Ctx live P r len bv) {m0 : Std.ExtHashMap Nat (BitVec 8)}
   · exact byteVal' hread t 6 (by omega)
   · exact byteVal' hread t 7 (by omega)
 
-/-- At the word-loop head `0x80006d10`, `t` bytes scanned. -/
 structure WordAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Prop where
   pcv : rv VsaIris.PC = 0x80006d10#64
   ra : rv 1 = r
@@ -690,7 +620,6 @@ structure WordAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Prop
   a4 : rv 14 = P + BitVec.ofNat 64 t
   tle : t ≤ len
 
-/-- The reflected magic test, at the bytes the run owns. -/
 theorem wordGuard (ctx : Ctx live P r len bv) {σ : MState}
     (hread : Reads P.toNat len bv σ.mem) (t : Nat) (ht : t ≤ len) (tk : Bool)
     (htk : decide (t + 8 ≤ len) = tk) :
@@ -718,8 +647,6 @@ theorem wordGuard (ctx : Ctx live P r len bv) {σ : MState}
       hread.bytes (t + k) (by omega)]
     exact ctx.str.nonzero (t + k) (by omega)
 
-/-- **The word scan.** `n` is the fuel: at most `n` more full words fit before
-the NUL. -/
 theorem wordRun (ctx : Ctx live P r len bv) :
     ∀ (n t : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8), len < t + 8 * n + 8 →
       (∀ a, slackSet P.toNat len a → mv a = bv a) → WordAt P r len t rv →
@@ -792,9 +719,6 @@ theorem wordRun (ctx : Ctx live P r len bv) :
         rw [h.a4]
         exact a4_incrG P t 0
 
-/-! ## The magic setup, the byte peel, and the entry -/
-
-/-- At the magic setup `0x80006cfc`, `t` bytes already scanned. -/
 structure AlignAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Prop where
   pcv : rv VsaIris.PC = 0x80006cfc#64
   ra : rv 1 = r
@@ -802,7 +726,6 @@ structure AlignAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Pro
   a4 : rv 14 = P + BitVec.ofNat 64 t
   tle : t ≤ len
 
-/-- The magic setup runs into the word scan. -/
 theorem alignRun (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
     {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (h : AlignAt P r len t rv) :
@@ -820,13 +743,11 @@ theorem alignRun (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
   · rw [hfin 13 (by simp [strlenRegs])]
     exact magic_build
 
-/-- The peel's `addi a4,a4,1`. -/
 theorem a4_incr1 (x : BitVec 64) (m : Nat) :
     (x + BitVec.ofNat 64 m) + sign_extend (m := 64) (0x001#12) = x + BitVec.ofNat 64 (m + 1) := by
   rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = BitVec.ofNat 64 1 from by
       apply BitVec.eq_of_toNat_eq; decide, BitVec.add_assoc, ← BitVec.ofNat_add]
 
-/-- At the byte-peel head `0x80006d78`, `m` bytes peeled. -/
 structure PeelAt (P r : BitVec 64) (len m : Nat) (rv : Nat → BitVec 64) : Prop where
   pcv : rv VsaIris.PC = 0x80006d78#64
   ra : rv 1 = r
@@ -834,8 +755,6 @@ structure PeelAt (P r : BitVec 64) (len m : Nat) (rv : Nat → BitVec 64) : Prop
   a4 : rv 14 = P + BitVec.ofNat 64 m
   mle : m ≤ len
 
-/-- **The byte peel.** `n` is the number of single-byte steps still needed to
-reach an eight-byte boundary; the loop leaves early if the NUL comes first. -/
 theorem peelRun (ctx : Ctx live P r len bv) :
     ∀ (n m : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8),
       (P.toNat + m + n) % 8 = 0 → 0 < n →
@@ -853,7 +772,7 @@ theorem peelRun (ctx : Ctx live P r len bv) :
       rw [sext0_add, h.a4]
       exact ptrN P m (by have := ctx.regions.nowrap; have := h.mle; omega)
     by_cases he : m = len
-    · -- the NUL is this byte: leave through `0x80006d88`
+    ·
       refine localRun_le (show 2 ≤ 2 * (n + 1) + len + 11 from by omega) ?_
       refine strlenStep (rv := rv) 1 strlenX6d78FSeg [[bv (P.toNat + m)]] 0x80006d78#64 3 rfl
         (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
@@ -892,7 +811,7 @@ theorem peelRun (ctx : Ctx live P r len bv) :
           BitVec.add_neg_eq_sub, ofNat_sub (m + 1) 1 (by omega)]
         congr 1
         all_goals omega
-    · -- a character: one more peel step, then the alignment test
+    ·
       have hmlt : m + 1 ≤ len := by have := h.mle; omega
       refine localRun_le (show 2 * n + len + 13 ≤ 2 * (n + 1) + len + 11 from by omega) ?_
       refine strlenStep (rv := rv) (2 * n + len + 12) strlenX6d78TSeg [[bv (P.toNat + m)]]
@@ -951,17 +870,11 @@ theorem peelRun (ctx : Ctx live P r len bv) :
              by rw [hfin2 10 (by simp [strlenRegs])]; exact ha01,
              by rw [hfin2 14 (by simp [strlenRegs])]; exact ha41, hmlt⟩)
 
-/-! ## The entry `0x80006cf0` and the whole run -/
-
-/-- At the entry `0x80006cf0`: `a0` is the string, `ra` the return address. -/
 structure EntryAt (P r : BitVec 64) (rv : Nat → BitVec 64) : Prop where
   pcv : rv VsaIris.PC = 0x80006cf0#64
   ra : rv 1 = r
   a0 : rv 10 = P
 
-/-- **`strlen` as one bounded owned-footprint run.** From the entry, the run
-reaches the return address with the length in `a0`, `ra` restored and the
-owned slack bytes unchanged, in at most `len + 28` reflected segments. -/
 theorem strlenRun (ctx : Ctx live P r len bv) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a) (h : EntryAt P r rv) :
     SRun live P.toNat len bv r (len + 28) rv mv := by

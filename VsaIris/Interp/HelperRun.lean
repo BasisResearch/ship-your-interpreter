@@ -1,24 +1,6 @@
 import VsaIris.Interp.ITac
 import VsaIris.Interp.Arm
 
-/-!
-# A helper as one symbolic run (lane H2)
-
-A runtime helper stated with `SpecEval.helperSpec` whose body has no calls
-(or tail-calls, see `helper_runK`) is one symbolic run from its entry: the
-owned bytes `S` it is handed, the body's registers, the code. `helper_leaf`
-reduces its spec to
-
-* `hin`: the precondition as the owned bytes at a tracking memory, a kept
-  resource `E`, and pure facts `P` the run uses;
-* `hrun`: the run (`IW`, driven by `ix_run`) from the entry, ending at the
-  return address with the registers outside `clob` kept and a pure end
-  condition `Good`;
-* `hout`: `Good` and the end bytes give the postcondition.
-
-The data view is empty: a leaf's loads read owned bytes or the code's tables.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -30,14 +12,11 @@ section Leaf
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 variable {live : Nat → Prop}
 
-/-- The end condition of a helper's run: back at the return address `r` with
-`ra = r`, the registers outside `clob` kept, and `Good`. -/
 def HelperEnd (r : BitVec 64) (rv : Nat → BitVec 64) (clob : List Nat)
     (Good : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (rv' : Nat → BitVec 64)
     (mv : Nat → BitVec 8) : Prop :=
   rv' 32 = r ∧ rv' 1 = r ∧ (∀ x ∈ fRegs, x ∉ clob → rv' x = rv x) ∧ Good rv' mv
 
-/-- **A helper whose body is one symbolic run**, for either WP. -/
 theorem helper_leaf (Wp : MachWP (GF := GF) (vsaModel live))
     {entry : BitVec 64} {clob : List Nat} {pins : (Nat → BitVec 64) → Prop} {Pre : IProp GF}
     {Post : (Nat → BitVec 64) → IProp GF} (S : Nat → Prop) (E : Mem → IProp GF)
@@ -84,8 +63,6 @@ theorem helper_leaf (Wp : MachWP (GF := GF) (vsaModel live))
   iapply hout Mt rv' mv' hgood $$ [HE HS]
   iframe HE HS
 
-/-- **Closing a helper's run** at its return address: the end condition from
-the symbolic state (every concrete end state matching it satisfies it). -/
 theorem swp_helperEnd {S : Nat → Prop} {r : BitVec 64} {rv R : Nat → BitVec 64} {Mt : Mem}
     {clob : List Nat} {Good : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (h1 : R 1 = r) (hkeep : ∀ x ∈ fRegs, x ∉ clob → R x = rv x)
@@ -100,16 +77,12 @@ theorem swp_helperEnd {S : Nat → Prop} {r : BitVec 64} {rv R : Nat → BitVec 
 
 end Leaf
 
-/-- The register-keep obligation of `swp_helperEnd` for an `upd` chain: every
-body register outside `clob` other than `ra` is untouched. -/
 macro "helper_keep" : tactic =>
   `(tactic| (intro x hx hc
              have h1 : x ≠ 1 := fun e => by subst e; revert hx; decide
              simp only [List.mem_cons, List.not_mem_nil, _root_.or_false, not_or] at hc
              simp only [upd]
              simp_all))
-
-/-! ## Reading stored words back -/
 
 theorem imgLE_store4_hit (Mt : Mem) (a : Nat) (v : BitVec 64) :
     imgLE (imgM (writeLog Mt [(a, 4, v)])) a 4 = v.toNat % 2 ^ 32 := by
@@ -128,7 +101,6 @@ section Vals
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- A slot's bytes and their meaning are a represented value. -/
 theorem valAt_of_img (N : Vsa.RuntimeRepr.NativeAddrs) {a : Nat} {v : Vsa.While.Value}
     {mv : Nat → BitVec 8} :
     valImg (GF := GF) N mv a v ∗ ownSet (InExt (a, 24)) (fun b => b ↦ₘ mv b) ⊢ valAt N a v := by
@@ -138,7 +110,7 @@ theorem valAt_of_img (N : Vsa.RuntimeRepr.NativeAddrs) {a : Nat} {v : Vsa.While.
   iframe Hv HS
 
 omit I in
-/-- A value slot at any contents, at a tracking memory. -/
+
 theorem slot24_tracked (a : Nat) :
     slot24 (GF := GF) a ⊢ ∃ Mt : Mem, ownSet (InExt (a, 24)) (fun b => b ↦ₘ imgM Mt b) := by
   unfold slot24 blockOwn
@@ -146,7 +118,6 @@ theorem slot24_tracked (a : Nat) :
   ihave ⟨%f, H⟩ := ownSet_fn _ $$ H
   iapply ownSet_mem _ f $$ H
 
-/-- A represented value at a tracking memory holding its bytes. -/
 theorem valAt_tracked (N : Vsa.RuntimeRepr.NativeAddrs) (a : Nat) (v : Vsa.While.Value) :
     valAt (GF := GF) N a v ⊢ ∃ Mt : Mem, ownSet (InExt (a, 24)) (fun b => b ↦ₘ imgM Mt b) ∗
       valImg N (imgM Mt) a v := by
@@ -174,8 +145,7 @@ theorem valAt_tracked (N : Vsa.RuntimeRepr.NativeAddrs) (a : Nat) (v : Vsa.While
   iexact Hv
 
 omit I in
-/-- Owned bytes at any image are owned bytes at a tracking memory agreeing
-with it. -/
+
 theorem ownSet_trackedAt (S : Nat → Prop) (f : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ f a) ⊢
       ∃ M : Mem, ownSet S (fun a => a ↦ₘ imgM M a) ∗ ⌜∀ a, S a → imgM M a = f a⌝ := by
@@ -192,8 +162,7 @@ theorem ownSet_trackedAt (S : Nat → Prop) (f : Nat → BitVec 8) :
   · ipureintro; exact fun a ha => hM a ((hmem a).2 ha)
 
 omit I in
-/-- **Two tracked byte sets as one**: owned bytes at two tracking memories are
-owned bytes at one, which agrees with each on its part. -/
+
 theorem ownSet_join_tracked (S T : Nat → Prop) (Ms Mt : Mem) :
     ownSet (GF := GF) S (fun a => a ↦ₘ imgM Ms a) ∗ ownSet T (fun a => a ↦ₘ imgM Mt a) ⊢
       ∃ M : Mem, ownSet (fun a => S a ∨ T a) (fun a => a ↦ₘ imgM M a) ∗
@@ -218,7 +187,7 @@ theorem ownSet_join_tracked (S T : Nat → Prop) (Ms Mt : Mem) :
   · rw [hM a (.inr ha)]; simp [f, show ¬ S a from fun h => hd a h ha]
 
 omit I in
-/-- **A tracked byte set in two parts**, each at the same tracking memory. -/
+
 theorem ownSet_split_tracked (S T : Nat → Prop) (M : Mem) (hd : ∀ a, S a → ¬ T a) :
     ownSet (GF := GF) (fun a => S a ∨ T a) (fun a => a ↦ₘ imgM M a) ⊢
       ownSet S (fun a => a ↦ₘ imgM M a) ∗ ownSet T (fun a => a ↦ₘ imgM M a) := by
@@ -228,8 +197,6 @@ theorem ownSet_split_tracked (S T : Nat → Prop) (M : Mem) (hd : ∀ a, S a →
   · iapply ownSet_iff _ (fun a => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ H1
   · iapply ownSet_iff _ (fun a => ⟨fun h => h.1.resolve_left h.2, fun h => ⟨.inr h, fun h' => hd a h' h⟩⟩) $$ H2
 
-/-- The pure part of a value's meaning (`valOf` without the persistent
-strings and closure fragments): the kind word and the payload's facts. -/
 def ValPure (N : Vsa.RuntimeRepr.NativeAddrs) : Vsa.While.Value → BitVec 64 → BitVec 64 → BitVec 64 → Prop
   | .null, w0, _, _ => w0.toNat % 2 ^ 32 = 0
   | .bool b, w0, w1, _ => w0.toNat % 2 ^ 32 = 1 ∧ w1.toNat % 2 ^ 32 = cond b 1 0
@@ -252,32 +219,27 @@ theorem ValPure.kind {N : Vsa.RuntimeRepr.NativeAddrs} {v : Vsa.While.Value} {w0
     (h : ValPure N v w0 w1 w2) : w0.toNat % 2 ^ 32 = Vsa.RuntimeRepr.kindTag v := by
   cases v <;> simp only [ValPure] at h <;> first | exact h | exact h.1
 
-/-- A signed word load of a slot's kind. -/
 theorem ldv_lw_kind {Mt : Mem} {a k : Nat} (h : (imgW (imgM Mt) a).toNat % 2 ^ 32 = k)
     (hk : k < 2 ^ 31) : ldv .lw Mt a = BitVec.ofNat 64 k :=
   ldvf_lw_imgLE (by rw [← imgW_lo32]; exact h) hk
 
-/-- A doubleword load of a slot's word. -/
 theorem ldv_ld_imgW (Mt : Mem) (a : Nat) : ldv .ld Mt a = imgW (imgM Mt) a := by
   refine BitVec.eq_of_toNat_eq ?_
   rw [show ldv .ld Mt a = ldvf .ld (imgM Mt) a from rfl, ldvf_ld_imgLE rfl, imgW_toNat]
   simp only [BitVec.toNat_ofNat]
   exact Nat.mod_eq_of_lt (by have := imgLE_lt (imgM Mt) a 8; omega)
 
-/-- A string value's payload is its string. -/
 theorem valImg_str {N : Vsa.RuntimeRepr.NativeAddrs} {f : Nat → BitVec 8} {a : Nat} {x : String} :
     valImg (GF := GF) N f a (.str x) ⊢ strAt (imgW f (a + 8)).toNat x := by
   unfold valImg valOf
   iintro ⟨-, #H⟩
   iexact H
 
-/-- A value's meaning depends on its three words only. -/
 theorem valImg_words {N : Vsa.RuntimeRepr.NativeAddrs} {f g : Nat → BitVec 8} {a b : Nat}
     {v : Vsa.While.Value} (h0 : imgW f a = imgW g b) (h8 : imgW f (a + 8) = imgW g (b + 8))
     (h16 : imgW f (a + 16) = imgW g (b + 16)) : valImg (GF := GF) N f a v = valImg N g b v := by
   unfold valImg; rw [h0, h8, h16]
 
-/-- Two images agreeing on a slot give it one meaning. -/
 theorem valImg_agreeOn {N : Vsa.RuntimeRepr.NativeAddrs} {f g : Nat → BitVec 8} {a : Nat}
     {v : Vsa.While.Value} (h : ∀ k, InExt (a, 24) k → f k = g k) :
     valImg (GF := GF) N f a v = valImg N g a v := by

@@ -3,32 +3,12 @@ import VsaIris.Interp.ITacTree
 import VsaIris.Interp.SpecValue
 import VsaIris.Interp.SpecErr
 
-/-!
-# The binary arm's shared facts (lane E2)
-
-INTERP_DESIGN.md §6, §8 (family E2: `eval_expr`'s `EX_BINARY` arm, `eval_binary`
-inlined). What every generated binary row (`scripts/iris_arms/arms.d/e2-binary.tsv`,
-`VsaIris/Interp/Case/Binary*`) uses besides lane G's arm layer (`Arm.lean`):
-
-* **`.rodata` tables deep in `interpRO`.** A jump-table or name-table load's
-  side condition `(b, interpROImg b) ∈ interpRO`, decided in the run, walks the
-  table list; past about 230 bytes the walk exceeds the recursion depth, and
-  near it the run's budget. `Code.lean` proves it once per loaded word
-  (`interpRO_acc*`, generated); `ix_run`'s `sx_side` tries those (`ix_ro`).
-* **The comparison tail** (`0x80003698`–`0x800036c0`, `0x80003ae4`,
-  `0x80003af8`): `cmp = (a > b) - (a < b)` as `subw` of two `slt`s
-  (`cmpRaw`), then one bit per operator; `cmp_*_bit` read each as the source's
-  `decide`.
--/
-
 namespace VsaIris.Sym
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
 open Lean Elab Tactic Meta in
-/-- A table load's membership side condition `∀ b ∈ accAddrs a w, (b,
-interpROImg b) ∈ interpRO` at literal `a`, `w`: the generated
-`interpRO_acc{w}_{a}`. Any other goal fails at once (no reduction). -/
+
 elab "ix_ro" : tactic => do
   let g ← getMainGoal
   let ty ← instantiateMVars (← g.getType)
@@ -46,9 +26,7 @@ macro_rules
   | `(tactic| sx_side) => `(tactic| ix_ro)
 
 open Lean Elab Tactic Meta in
-/-- `C → False` from a hypothesis `¬ C` (or `C = ¬ D` and a hypothesis `D`),
-matched syntactically up to reducible unfolding; fails at once otherwise (no
-decision procedure runs). -/
+
 elab "ix_absurd" : tactic => do
   let g ← getMainGoal
   let (h, g) ← g.intro1
@@ -65,19 +43,14 @@ elab "ix_absurd" : tactic => do
           g.assign (mkApp (mkFVar h) d.toExpr); return
     throwError "ix_absurd: no contradicting hypothesis"
 
-/-- A branch on a value's kind word, decided by the row's kind fact
-(`kL ≠ 2#64`, …) in the context. -/
 macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro h; (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at h); revert h; ix_absurd))
-
-/-! ## The comparison tail -/
 
 theorem sltV_eq (a b : BitVec 64) : sltV a b = if a.toInt < b.toInt then 1#64 else 0#64 := by
   unfold sltV
   by_cases h : a.toInt < b.toInt <;> simp [h, zopz0zI_s, bool_to_bit] <;> rfl
 
-/-- `cmp = (a > b) - (a < b)` as the arm computes it (`slt`, `slt`, `subw`). -/
 abbrev cmpRaw (x y : BitVec 64) : BitVec 64 :=
   BitVec.signExtend 64 (BitVec.extractLsb 31 0 (sltV y x) - BitVec.extractLsb 31 0 (sltV x y))
 
@@ -91,14 +64,12 @@ theorem cmpRaw_cases (x y : BitVec 64) :
   · right; left; refine ⟨h, ?_⟩; simp [h]
   · right; right; refine ⟨h, ?_⟩; simp [h, show ¬ x.toInt < y.toInt by omega]
 
-/-- `<`: `srli a1,a1,63`. -/
 theorem cmp_lt_bit (x y : BitVec 64) : (cmpRaw x y >>> 63 != 0#64) = decide (x.toInt < y.toInt) := by
   rcases cmpRaw_cases x y with ⟨h, e⟩ | ⟨h, e⟩ | ⟨h, e⟩ <;> rw [e]
   · simp [h]
   · simp [h]
   · simp [show ¬ x.toInt < y.toInt by omega]
 
-/-- `<=`: `slti a1,a1,1`. -/
 theorem cmp_le_bit (x y : BitVec 64) :
     (sltiV (cmpRaw x y) 1#64 != 0#64) = decide (x.toInt ≤ y.toInt) := by
   rcases cmpRaw_cases x y with ⟨h, e⟩ | ⟨h, e⟩ | ⟨h, e⟩ <;> rw [e]
@@ -106,7 +77,6 @@ theorem cmp_le_bit (x y : BitVec 64) :
   · simp [show x.toInt ≤ y.toInt by omega]; decide
   · simp [show ¬ x.toInt ≤ y.toInt by omega]; decide
 
-/-- `>`: `sgtz a1,a1`. -/
 theorem cmp_gt_bit (x y : BitVec 64) :
     (sltV 0#64 (cmpRaw x y) != 0#64) = decide (x.toInt > y.toInt) := by
   rcases cmpRaw_cases x y with ⟨h, e⟩ | ⟨h, e⟩ | ⟨h, e⟩ <;> rw [e]
@@ -114,7 +84,6 @@ theorem cmp_gt_bit (x y : BitVec 64) :
   · simp [show ¬ x.toInt > y.toInt by omega]; decide
   · simp [show x.toInt > y.toInt by omega]; decide
 
-/-- `>=`: `not a1,a1; srli a1,a1,63`. -/
 theorem cmp_ge_bit (x y : BitVec 64) :
     ((cmpRaw x y ^^^ 0xffffffffffffffff#64) >>> 63 != 0#64) = decide (x.toInt ≥ y.toInt) := by
   rcases cmpRaw_cases x y with ⟨h, e⟩ | ⟨h, e⟩ | ⟨h, e⟩ <;> rw [e]
@@ -128,25 +97,16 @@ namespace VsaIris.Interp
 
 open Vsa.While
 
-/-- The rows of an operator whose operands must both be ints (`int_operand`
-checks the left operand, then the right). -/
 theorem intRows (lv rv : Value) :
     (∃ a b, lv = .int a ∧ rv = .int b) ∨ valTag lv ≠ 2 ∨ (∃ a, lv = .int a ∧ valTag rv ≠ 2) := by
   cases lv <;> cases rv <;> simp [valTag]
 
-/-- A kind word read back from a value's first word (`lw` of the tag) is not
-the int tag. -/
 theorem kind_ne_int {w : BitVec 64} {v : Value} (h : w.toNat % 2 ^ 32 = valTag v) (hv : valTag v ≠ 2) :
     BitVec.ofNat 64 (w.toNat % 2 ^ 32) ≠ 2#64 := by
   rw [h]; cases v <;> simp [valTag] at hv ⊢ <;> decide
 
 end VsaIris.Interp
 
-/-- A load fact over a run's tracking memory, cheaply: the frame addresses are
-first rewritten to plain sums by the arm's `hoff` (`evalSP_off`), then every
-store is forwarded with `omega` alone on the goal (lane G's `ix_fwd` simps the
-whole context at each store, which a long run's memory equation makes
-expensive). -/
 syntax "e2_fwd " term : tactic
 macro_rules
   | `(tactic| e2_fwd $h) =>
@@ -154,7 +114,6 @@ macro_rules
 
 namespace VsaIris.Interp
 
-/-- A kind tag is small (a signed word load reads it back unchanged). -/
 theorem valTag_lt (v : Vsa.While.Value) : valTag v < 2 ^ 31 := by cases v <;> simp [valTag]
 
 end VsaIris.Interp
@@ -162,8 +121,6 @@ end VsaIris.Interp
 namespace VsaIris.Sym
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
-
-/-! ## The comparison tail on a sign (`strcmp`'s result) -/
 
 theorem toInt_neg_iff' (res : BitVec 64) : res.toInt < 0 ↔ 2 ^ 63 ≤ res.toNat := by
   rw [BitVec.toInt_eq_toNat_cond]; split <;> omega
@@ -209,12 +166,10 @@ namespace VsaIris.Interp
 
 open Vsa.While VsaIris.Sym
 
-/-- `<` on strings from `strcmp`'s sign. -/
 theorem str_lt_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
     (res >>> 63 != 0#64) = decide (x < y) := by
   rw [sign_lt_bit]; exact decide_eq_decide.mpr h.lt
 
-/-- `<=` on strings (`binOpSem`: `a < b || a == b`). -/
 theorem str_le_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
     (sltiV res 1#64 != 0#64) = (decide (x < y) || x == y) := by
   rw [sign_le_bit]
@@ -233,12 +188,10 @@ theorem str_le_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
         exact h2 (BitVec.eq_of_toInt_eq (by simpa using this))
       simp [this, hlt, hne]
 
-/-- `>` on strings (`binOpSem`: `b < a`). -/
 theorem str_gt_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
     (sltV 0#64 res != 0#64) = decide (y < x) := by
   rw [sign_gt_bit]; exact decide_eq_decide.mpr h.gt
 
-/-- `>=` on strings (`binOpSem`: `b < a || a == b`). -/
 theorem str_ge_bit {res : BitVec 64} {x y : String} (h : StrcmpSign res x y) :
     ((res ^^^ 0xffffffffffffffff#64) >>> 63 != 0#64) = (decide (y < x) || x == y) := by
   rw [sign_ge_bit]
@@ -271,16 +224,10 @@ theorem small_ne_three {k : Nat} (hk : k < 2 ^ 31) (hv : k ≠ 3) :
   simp only [BitVec.toNat_ofNat] at e
   omega
 
-/-- A kind word read back from a value's first word is not the string tag,
-in the form the comparison arm tests it (`addi a5,a0,-3; bnez a5`). -/
 theorem kind_ne_str {w : BitVec 64} {v : Value} (h : w.toNat % 2 ^ 32 = valTag v) (hv : valTag v ≠ 3) :
     BitVec.ofNat 64 (w.toNat % 2 ^ 32) + 18446744073709551613#64 ≠ 0#64 := by
   rw [h]; exact small_ne_three (valTag_lt v) hv
 
-/-- The rows of a comparison (`<`, `<=`, `>`, `>=`), in the machine's order of
-tests: two ints; two strings; a non-int left operand with the right one not a
-string; a non-int, non-string left operand with a string right one; an int
-left operand with a non-int, non-string right one; an int and a string. -/
 theorem cmpRows (lv rv : Value) :
     (∃ a b, lv = .int a ∧ rv = .int b) ∨ (∃ x y, lv = .str x ∧ rv = .str y) ∨
     (valTag rv ≠ 3 ∧ valTag lv ≠ 2) ∨ (∃ y, rv = .str y ∧ valTag lv ≠ 2 ∧ valTag lv ≠ 3) ∨
@@ -291,8 +238,6 @@ end VsaIris.Interp
 
 namespace VsaIris.Interp
 
-/-- Machine multiplication of two 64-bit integers is the source's wrapping
-product. -/
 theorem toInt_mul_wrap (x y : BitVec 64) : (x * y).toInt = Vsa.While.wrap64 (x.toInt * y.toInt) := by
   unfold Vsa.While.wrap64; rw [BitVec.toInt_mul, BitVec.toInt_ofInt]
 
@@ -302,8 +247,6 @@ namespace VsaIris.Interp
 
 open Vsa.While
 
-/-- The rows of `/` and `%`: two ints with a nonzero divisor; a zero divisor;
-a non-int left operand; an int beside a non-int right operand. -/
 theorem divRows (lv rv : Value) :
     (∃ a b, lv = .int a ∧ rv = .int b ∧ b ≠ 0) ∨ (∃ a, lv = .int a ∧ rv = .int 0) ∨
     valTag lv ≠ 2 ∨ (∃ a, lv = .int a ∧ valTag rv ≠ 2) := by

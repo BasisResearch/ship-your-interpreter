@@ -1,12 +1,5 @@
 import Vsa.Compiler.SimBlock
 
-/-!
-# Conditions
-
-`run_cond`: a condition's code, `value_truthy`, and the branch on it: the code
-continues after the branch when the value is truthy and at `tgt` otherwise.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While

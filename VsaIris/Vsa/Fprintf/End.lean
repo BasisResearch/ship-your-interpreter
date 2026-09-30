@@ -1,16 +1,5 @@
 import VsaIris.Vsa.Fprintf.SConv
 
-/-!
-# `_vfprintf_r`'s end (lane N5, shared with N3)
-
-At the format's NUL (`0x8000aca8`) `_vfprintf_r` flushes the pending iovs
-through `__sprint_r` if any (`0x8000cf9c`), clears the iov count, releases
-the `FILE`'s lock (`__retarget_lock_release_recursive`, a stub, taken when
-`_flags2 & 1 = 0` and `flags & __SNPT = 0`), checks `__SERR`, and returns
-the count (`vfp_tail`, from `0x8000acbc`). The `FILE`'s flags are a
-parameter: `0x2008` for `__sbprintf`'s stack `FILE`, `0x201a` for `stderr`.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -18,15 +7,12 @@ open scoped VsaIris.Sym.Stdout
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
-/-- The `FILE` fields the end reads: flags `fl` (no `__SNPT`, no
-`__SERR`), `_flags2` clear. -/
 structure EndFile (M : Mem) (f fl : BitVec 64) : Prop where
   flags : ldv .lh M (f + 16#64).toNat = fl
   flags2 : ldv .lw M (f + 176#64).toNat = 0#64
   snpt : fl &&& 512#64 = 0#64
   serr : fl &&& 64#64 = 0#64
 
-/-- The callee-saved registers `_vfprintf_r` restores. -/
 abbrev vfpSaved : List Nat := [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
 
 #ix_piece vfpTail_1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
@@ -66,11 +52,8 @@ abbrev vfpSaved : List Nat := [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
              rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
                first | rfl | assumption)
 
-/-! **`vfp_tail`**: `_vfprintf_r`'s end after the flush, `0x8000acbc` → the caller, returning the count. -/
 #ix_chain vfp_tail := [vfpTail_1, vfpTail_2]
 
-/-- What the end reads back after the final `__sprint_r`: the count, the
-`FILE`'s flags, the spill slots. -/
 structure EndRet (Mt M' : Mem) (sp f : BitVec 64) : Prop where
   count : ldv .ld M' (sp + 16#64).toNat = ldv .ld Mt (sp + 16#64).toNat
   flags : ldv .lh M' (f + 16#64).toNat = ldv .lh Mt (f + 16#64).toNat
@@ -91,7 +74,6 @@ theorem VfpSpills.ofEnd {Mt M' : Mem} {sp f : BitVec 64} {C : Nat → BitVec 64}
     (sp' 504 (by omega) (by omega)).trans h.s9, (sp' 496 (by omega) (by omega)).trans h.s10,
     (sp' 488 (by omega) (by omega)).trans h.s11⟩
 
-/-- **`_vfprintf_r`'s end with nothing pending**: no flush. -/
 theorem vfp_end0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
@@ -115,8 +97,6 @@ theorem vfp_end0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   · rsimp; exact h2
   · rsimp
 
-/-! **`vfp_end1`**: `_vfprintf_r`'s end with pieces pending: the final flush (the hook `hSh`,
-returning to `0x8000cfac`), then `vfp_tail`. -/
 #ix_piece vfp_end1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 8) → Mem → Prop} {t : String} {Mt : Mem}
@@ -157,7 +137,6 @@ returning to `0x8000cfac`), then `vfp_tail`. -/
   · rsimp; exact k2
   · rsimp; exact k20
 
-/-- **`_vfprintf_r`'s end** from the format's NUL (`0x8000aca8`) to the caller. -/
 theorem vfp_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 8) → Mem → Prop} {t : String} {Mt : Mem}

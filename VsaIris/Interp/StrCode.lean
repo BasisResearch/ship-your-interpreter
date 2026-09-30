@@ -2,16 +2,6 @@ import VsaIris.Interp.StrRun
 import VsaIris.Vsa.StrlenOwned
 import Vsa.Sim.Code.Strcpy
 
-/-!
-# The string leaves' code (`strlen`, `strcpy`)
-
-`strlen` (`0x80006cf0`, 212 bytes, H3's `strlenCode`) and `strcpy`
-(`0x80006dc4`, 220 bytes) are contiguous in `.text`. `strCode` is both as one
-read-only list; VSA's fetch predicates `Code.StrlenLoaded`/`StrcpyLoaded`
-(what `chain_facts` consumes) follow from it. `SW` is `SR` at this code. The
-step table over `SW` is `StrSteps.lean` (`scripts/gen_str_steps.py`).
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst.Strlen
@@ -44,17 +34,14 @@ def strcpyCodeD : List (BitVec 8) :=
    0xe3#8, 0x18#8, 0x07#8, 0xfe#8, 0x67#8, 0x80#8, 0x00#8, 0x00#8, 0xa3#8, 0x03#8, 0x06#8, 0x00#8,
    0x67#8, 0x80#8, 0x00#8, 0x00#8]
 
-/-- The 220 code bytes of `strcpy`, in four chunks (as `strlenCode`). -/
 def strcpyCode : List (BitVec 8) :=
   strcpyCodeA ++ strcpyCodeB ++ strcpyCodeC ++ strcpyCodeD
 
 abbrev cpyBase : Nat := 0x80006dc4
 
-/-- The code of both string leaves as one read-only list. -/
 def strCode : List (Nat × BitVec 8) :=
   codeText codeBase strlenCode ++ codeText cpyBase strcpyCode
 
-/-- The string leaves' symbolic run: `SR` at their code. -/
 abbrev SW (live : Nat → Prop) (D : List (Nat × BitVec 8)) (S : Nat → Prop)
     (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) :
     BitVec 64 → (Nat → BitVec 64) → Mem → Prop :=
@@ -82,10 +69,8 @@ theorem strcpyLoaded_of_str {m : Mem} (h : TextLoaded strCode m) : Code.StrcpyLo
     obtain ⟨p, hp, rfl⟩ := List.mem_map.mp hq
     exact h p (List.mem_append_right _ hp)
 
-/-- `strcpy`'s code is the image's. -/
 theorem strcpyCode_text : Newlib.TextAt cpyBase strcpyCode := by decide +kernel
 
-/-- The `snez` of `strlen` (`0x80006d64`) lies in the code. -/
 theorem str_code_80006d64 :
     ∀ p ∈ VsaIris.codeFoot 0x80006d64 [0x33#8, 0x35#8, 0xf0#8, 0x00#8], (p.1, p.2.2) ∈ strCode := by
   intro p hp

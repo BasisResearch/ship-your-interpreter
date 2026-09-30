@@ -1,12 +1,7 @@
 import Vsa.Sim.WriteLogNF
 
-/- Computable byte reads from finite write logs. The initial memory is a
-   function parameter; no initial hash map is constructed or unfolded. -/
-
 namespace Vsa.Sim
 
-/-- A byte supplied by one entry. Unsupported widths supply no byte, exactly
-as `applyW`. Address tests follow the concrete insert order, newest first. -/
 def writeEntryByte (entry : WEntry) (address : Nat) : Option (BitVec 8) :=
   match entry with
   | (base, 1, data) =>
@@ -33,14 +28,12 @@ def writeEntryByte (entry : WEntry) (address : Nat) : Option (BitVec 8) :=
       else none
   | _ => none
 
-/-- One functional update, retaining the prior byte on a miss. -/
 def entryRead (prior : Option (BitVec 8)) (entry : WEntry) (address : Nat) :
     Option (BitVec 8) :=
   match writeEntryByte entry address with
   | some byte => some byte
   | none => prior
 
-/-- Lookup in a newest-first log. A matching entry does not evaluate `initial`. -/
 def logReadNewest (initial : Nat → Option (BitVec 8)) :
     List WEntry → Nat → Option (BitVec 8)
   | [], address => initial address
@@ -49,12 +42,10 @@ def logReadNewest (initial : Nat → Option (BitVec 8)) :
       | some byte => some byte
       | none => logReadNewest initial rest address
 
-/-- `writeLog` uses program order. Reverse once, then stop at the newest match. -/
 def logRead (initial : Nat → Option (BitVec 8)) (log : List WEntry)
     (address : Nat) : Option (BitVec 8) :=
   logReadNewest initial log.reverse address
 
-/-- Exact one-entry byte semantics, including unsupported widths. -/
 theorem applyW_getElem?_entryRead (m : Std.ExtHashMap Nat (BitVec 8))
     (entry : WEntry) (address : Nat) :
     (applyW m entry)[address]? = entryRead (m[address]?) entry address := by
@@ -127,8 +118,6 @@ private theorem logReadNewest_eq_foldr (initial : Nat → Option (BitVec 8))
       cases writeEntryByte entry address <;> simp_all
       all_goals rfl
 
-/-- Byte reads reduce to the finite write log and one abstract initial byte.
-No size or support hypothesis is required for the initial memory. -/
 theorem writeLog_getElem?_logRead (m : Std.ExtHashMap Nat (BitVec 8))
     (log : List WEntry) (address : Nat) :
     (writeLog m log)[address]? = logRead (fun a => m[a]?) log address := by

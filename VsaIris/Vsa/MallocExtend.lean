@@ -2,45 +2,17 @@ import VsaIris.Vsa.MallocTop
 import VsaIris.Vsa.HeapGrow
 import VsaIris.Vsa.Sbrk
 
-/-!
-# `malloc_extend_top`
-
-`0x80004a48` is reached when no bin serves the request and the top chunk is
-smaller than `nb + MINSIZE`. The code asks `_sbrk_r` for `nb + MINSIZE`
-rounded up to a page (`sbReq`), spilling its live registers around the call.
-
-From the page-aligned, contiguous break `PHeapAt` fixes, `sbrk` either fails
-(the arena is exhausted: `Starved`) or returns exactly the old break, and the
-top grows in place (`0x80004f70`). The foreign-`sbrk` paths (a non-contiguous
-break, the fencepost of the old top, the `_free_r` call at `0x80005004`) are
-refuted by `HeapAt.sbrk_base` and the page alignment.
-
-* `ext_call`: the entry through the `_sbrk_r` call (`sbrk_r_run`), to the
-  join `0x80004a8c` with the spills and the call's effects named (`ExtCall`).
-* `ext_grow`: the success arm, through the statistics words and the top's new
-  header (`PHeapAt.topGrow`), into the top split (`top_split`).
-* `ext_null`: the failure arm, through the unlock to the NULL return.
--/
-
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `malloc_extend_top`'s `sbrk` increment: the chunk plus `MINSIZE`, rounded
-up to a page. -/
 def sbReq (nb : Nat) : Nat := (nb + 4127) / 4096 * 4096
 
-/-- The words the `_sbrk_r` call may change outside the stack window:
-`brk.0`, `errno` and the reentrancy structure's `_errno`. -/
 def SbrkG (a : Nat) : Prop :=
   (brkAddr ≤ a ∧ a < brkAddr + 8) ∨ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) ∨
     (0x8001b538 ≤ a ∧ a < 0x8001b53c)
 
-/-- **Back from `_sbrk_r`** (`0x80004a8c`): the frame, the five spills
-(`sbReq nb`, the top's size, `nb`, the top, `__malloc_av_`), the break `brk'`,
-and the memory the heap `Mt`'s everywhere off the stack window and the words
-the call may write. -/
 structure ExtCall (C : MCtx) (Mt : Mem) (nb topsz brk' : Nat) (R : Nat → BitVec 64)
     (M : Mem) : Prop where
   frame : MFrame C R M
@@ -54,7 +26,6 @@ structure ExtCall (C : MCtx) (Mt : Mem) (nb topsz brk' : Nat) (R : Nat → BitVe
   agree : ∀ a : Nat, ¬ (C.s.toNat - mHead ≤ a ∧ a < C.s.toNat) → ¬ SbrkG a → M[a]? = Mt[a]?
   pres : ∀ a : Nat, (Mt[a]?).isSome → (M[a]?).isSome
 
-/-- The spills `malloc_extend_top` leaves around its `_sbrk_r` call. -/
 structure ExtSpills (C : MCtx) (Mt Mp : Mem) (nb topsz : Nat) : Prop where
   sb : read64 Mp (C.s.toNat - 96 + 8) = some (sbReq nb)
   t1 : read64 Mp (C.s.toNat - 96 + 16) = some topsz
@@ -64,7 +35,6 @@ structure ExtSpills (C : MCtx) (Mt Mp : Mem) (nb topsz : Nat) : Prop where
   agree : ∀ a : Nat, ¬ (C.s.toNat - 96 + 8 ≤ a ∧ a < C.s.toNat - 96 + 48) → Mp[a]? = Mt[a]?
   pres : ∀ a : Nat, (Mt[a]?).isSome → (Mp[a]?).isSome
 
-/-- `ExtCall` from the spills and the call's `SbrkPost`. -/
 theorem ExtCall.of_post {C : MCtx} (O : MOK C) {R Rc R' : Nat → BitVec 64} {Mt Mp M : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     {nb topsz brk' : Nat} (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (h8 : R 8 = reentV)
@@ -101,7 +71,6 @@ theorem ExtCall.of_post {C : MCtx} (O : MOK C) {R Rc R' : Nat → BitVec 64} {Mt
     rw [P.agree a (by unfold SbrkW; rw [hs2]; omega), Sp.agree a (by omega)]
   · exact fun a h => P.pres a (Sp.pres a h)
 
-/-- The `_sbrk_r` call itself, from its entry with the spills in place. -/
 theorem ext_sbrk {C : MCtx} (O : MOK C) {R Rc : Nat → BitVec 64} {Mt Mp : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb topsz sb : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (h8 : R 8 = reentV)
@@ -119,8 +88,6 @@ theorem ext_sbrk {C : MCtx} (O : MOK C) {R Rc : Nat → BitVec 64} {Mt Mp : Mem}
     (fun hlt R' M P' h10 => hc1 ▸ hfail hlt R' M
       (ExtCall.of_post O F Hp h8 hc2 hc8 hc9 hc18 hc19 Sp P') h10)
 
-/-- The call's setup: from `0x80004a48` to `_sbrk_r`'s entry, the increment
-formed and the live registers spilled. -/
 theorem ext_setup {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
@@ -190,7 +157,6 @@ theorem ext_setup {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     · exact .inr ⟨by unfold mHead; omega, by omega⟩
     all_goals exact .inl (.inl (by unfold allocGlobal InRange; omega))
 
-/-- The second statistics word (`0x80004bd4`). -/
 theorem ext_stats2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     (hk : ∀ R' M', (∀ x, x ≠ 15 → R' x = R x) →
       (∀ a : Nat, ¬ (0x8001b998 ≤ a ∧ a < 0x8001b9a0) → M'[a]? = M[a]?) →
@@ -204,9 +170,6 @@ theorem ext_stats2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
   refine hk _ _ (fun x hx => upd_other _ _ hx) (fun a ha => ?_) (fun a h => writeLog_present _ _ _ h)
   rw [writeLog_out _ _ _ (by simp only [OutL, and_true]; omega)]
 
-/-- **The statistics words** (`0x80004bc8`): `__malloc_max_sbrked_mem` and
-`__malloc_max_total_mem` rise to the arena size in `a3`. Either word may or
-may not be written; nothing else changes but `a5`. -/
 theorem ext_stats {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     (hms : (read64 M maxSbrkedAddr).isSome)
     (hk : ∀ R' M', (∀ x, x ≠ 15 → R' x = R x) →
@@ -227,8 +190,6 @@ theorem ext_stats {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     · rw [hM a (by omega), writeLog_out _ _ _ (by simp only [OutL, and_true]; omega)]
     · rw [read64_keep fun k hk => hM _ (by omega), read64_store_hit]; rfl
 
-/-- **Into the split** (`0x80004be0`): the grown top, its header in `a2`,
-measured against the request and split (`top_split`). -/
 theorem ext_top {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     {brk' : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}
     (F : MFrame C R M) (Hp : MHeap C M brk' chunks bins) (hnb : NbOK C.n nb) (hnb31 : nb < 2 ^ 31)
@@ -257,10 +218,6 @@ theorem ext_top {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
   · rw [BitVec.toNat_sub, hA, h14]; omega
   · exact h16
 
-/-- **The top grows in place** (`0x80004a8c`, `sbrk` succeeded): reload the
-spills, add the increment to `mallinfo`, check the break is contiguous and
-page-aligned, write the top's new header, update the statistics, and split
-the grown top. -/
 theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}
     (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb) (hnb31 : nb < 2 ^ 31)
@@ -282,12 +239,12 @@ theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
   have hsbl : sbReq nb ≤ nb + 4127 := by unfold sbReq; omega
   have hsbg : nb + 32 ≤ sbReq nb := by unfold sbReq; omega
   have hsb16 : sbReq nb % 4096 = 0 := by unfold sbReq; omega
-  -- reload the spills
+
   rw [← upd_self_eq h10]
   sx_run [8] O.live at 0x80004aa4
   simp (disch := sx_addr) only [ldv_at E.sb, ldv_at E.t1, ldv_at E.a4, ldv_at E.a5, ldv_at E.a6]
   sx_run [8] O.live at 0x80004abc
-  -- words the call left alone read as in the heap `Mt`
+
   have hkeep : ∀ a, (∀ k, k < 8 → vsaFoot C.H (a + k)) → (∀ k, k < 8 → ¬ SbrkG (a + k)) →
       read64 M a = read64 Mt a := fun a hf hg => read64_keep fun k hk =>
     E.agree _ (fun hw => Hp.disj _ hw.1 hw.2 (hf k hk)) (hg k hk)
@@ -325,7 +282,7 @@ theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
   · unfold maxSbrkedAddr at hmsM ⊢
     simp (disch := sx_addr) only [read64_miss]
     exact hmsM
-  -- the frame and the grown heap after the statistics
+
   have hT8 : (BitVec.ofNat 64 C.top0 + 8#64).toNat = C.top0 + 8 := by sx_addr
   rw [hT8] at hM hP
   have hts := HH.top_size
@@ -375,8 +332,6 @@ theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
     rw [hR _ (by decide)] <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals first | sx_addr | (rw [hv]; omega)
 
-/-- **The NULL return after a failed extension** (`0x80004e1c`): unlock and
-return NULL, the heap in shape at the same live blocks. -/
 theorem null_tail {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     {brk' : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (F : MFrame C R M) (Hp : MHeap C M brk' chunks bins) (hst : Starved C.top0 C.n.toNat) :
@@ -389,8 +344,6 @@ theorem null_tail {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     (O.fin_null (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide)
       ⟨_, _, _, _, Hp.heap⟩ Hp.pres Hp.frame hst)
 
-/-- **`sbrk` failed** (`0x80004a8c`, `a0 = -1`): the top still cannot hold the
-request, so unlock and return NULL. The arena is exhausted (`Starved`). -/
 theorem ext_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}
     (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb) (hnb31 : nb < 2 ^ 31)
@@ -410,7 +363,7 @@ theorem ext_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
   unfold heapStart at hstart; unfold heapEnd at hbrkle hlt
   have hsbl : sbReq nb ≤ nb + 4127 := by unfold sbReq; omega
   have hP : nb = physSize C.n.toNat := hnb.eq
-  -- the heap is the entry heap: `sbrk` failed and left the break alone
+
   have Hp' : MHeap C M brkv chunks bins := by
     refine ⟨Hp.heap.transport_read fun a ha => ?_, fun a ha => E.pres a (Hp.pres a ha), Hp.disj,
       fun a ha => ?_, Hp.live⟩
@@ -466,8 +419,6 @@ theorem ext_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
     all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
-/-- **`malloc_extend_top`** (`0x80004a48`): grow the top by `sbrk` and split
-it, or return NULL when the arena is exhausted. -/
 theorem extend_top {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)

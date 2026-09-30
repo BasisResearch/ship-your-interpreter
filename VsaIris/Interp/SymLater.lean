@@ -1,16 +1,5 @@
 import VsaIris.Interp.Arm
 
-/-!
-# A symbolic run that pays a later (lane E5)
-
-The partial WP's Löb hypothesis is `▷`-guarded; a recursive `jal` pays for it
-(`wp_callAbort_later`). `exec_stmt`'s `if` arm re-enters the dispatch INSIDE
-its frame by a jump (`j 0x80004014`, `bnez s0,0x80004014`), so the later is paid
-by the run that reaches the dispatch point: its first segment's step strips
-the `▷` (`wp_localRunW_later`, `wp_swpF_later`). The run must take a step,
-which `RunKne` records: its end state's PC differs from the start's.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -20,8 +9,6 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- **A local run that takes a step pays a later** (partial WP): a `▷ X` in
-the context is available, without the later, to the run's continuation. -/
 theorem wp_localRunW_later {Φ : Nat × String → IProp GF} {X : IProp GF}
     {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)} {rs : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
@@ -54,14 +41,11 @@ theorem wp_localRunW_later {Φ : Nat × String → IProp GF} {X : IProp GF}
 
 variable {live : Nat → Prop}
 
-/-- The post of a run that must leave its start PC `pc0`. -/
 abbrev RunKne (pc0 : BitVec 64) (Wp : MachWP (GF := GF) (vsaModel live))
     (Φ : Nat × String → IProp GF) (F : IProp GF) (S : Nat → Prop) (rv : Nat → BitVec 64)
     (mv : Nat → BitVec 8) : Prop :=
   rv VsaIris.PC ≠ pc0 ∧ RunK Wp Φ F S rv mv
 
-/-- **A symbolic run paying a later**, partial WP (`wp_swpF`'s twin): the
-run's continuation gets `X` without the later, because the run leaves `pc`. -/
 theorem wp_swpF_later {Φ : Nat × String → IProp GF} {F X : IProp GF}
     {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
     {Mt : Mem}
@@ -93,7 +77,6 @@ theorem wp_swpF_later {Φ : Nat × String → IProp GF} {F X : IProp GF}
   iapply hq.2
   iframe HF HX Hregs HS
 
-/-- **The end of a later-paying run**: at an end PC other than the start. -/
 theorem swp_closeF_ne (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc0 pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (hne : pc ≠ pc0) (h : F ∗ ms pc R S Mt ⊢ Wp.W Φ) :
@@ -116,7 +99,6 @@ theorem swp_closeF_ne (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     iexact Hregs
   iapply ownSet_congr (fun a ha => by rw [hm.img a ha]) $$ HS
 
-/-- `swp_closeF_ne` with the end registers and memory named. -/
 theorem swp_closeRM_ne (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc0 pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (hne : pc ≠ pc0)

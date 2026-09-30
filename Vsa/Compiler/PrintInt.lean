@@ -1,23 +1,9 @@
 import Vsa.Compiler.Frag
 
-/-!
-# The integer print subroutine
-
-`run_print`: from `printPos` with `a0 = n` and `ra = r`, the subroutine returns
-to `r` having appended `intToString n.toInt` to the console, writing memory only
-inside the digit buffer `[bufBase, bufBase + 160)`.
-
-Digits are least-significant first (`digitsLE`); `natDigits`/`natToString`
-render them most-significant first (`natDigits_eq`). The digit loop stores
-`|t % 10| + 48` for `t := n, n / 10, …` (C truncating division), which are the
-digits of `|n|`, including `n = INT64_MIN`.
--/
-
 namespace Vsa.Compiler
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa.Sim Vsa.While
 
-/-- Rendered output of an abstract state. -/
 def outStr (A : AM) : String := String.join A.out.toList
 
 theorem outStr_push (A : AM) (pc : BitVec 64) (L : GRegs) (m : Mem) (s : String) :
@@ -28,9 +14,6 @@ theorem join_push (arr : Array String) (s : String) :
     String.join (arr.push s).toList = String.join arr.toList ++ s := by
   simp [String.join_append]
 
-/-! ## Decimal digits -/
-
-/-- Decimal digits, least significant first. -/
 def digitsLE (N : Nat) : List Nat :=
   if N < 10 then [N] else N % 10 :: digitsLE (N / 10)
 termination_by N
@@ -103,8 +86,6 @@ theorem char_digit (d : Nat) (h : d < 10) : Char.ofNat (48 + d) = Nat.digitChar 
     omega
   rcases this with h|h|h|h|h|h|h|h|h|h <;> subst h <;> rfl
 
-/-! ## Words -/
-
 theorem toInt_ofInt_small (z : Int) (h1 : -2 ^ 63 ≤ z) (h2 : z < 2 ^ 63) :
     (BitVec.ofInt 64 z).toInt = z := by
   rw [BitVec.toInt_ofInt]; apply Int.bmod_eq_of_le <;> simp <;> omega
@@ -121,7 +102,6 @@ theorem putcWord_add (c : Nat) (hc : c < 256) :
   have e3 : (72339069014638592 + c % 2 ^ 64) % 2 ^ 64 = 2 ^ 8 * 282574488338432 + c := by omega
   rw [e1, e2, e3, Nat.two_pow_add_eq_or_of_lt (show c < 2 ^ 8 by omega)]
 
-/-- Backward branch by `n` instructions. -/
 theorem pcOf_back (k n : Nat) (hk : PosOK k) (hn : n ≤ k) (hn2 : 4 * n < 2 ^ 12) :
     pcOf k + (sign_extend (evenB (BitVec.ofInt 13 (-4 * (n : Int)))) : BitVec 64) = pcOf (k - n) := by
   have hb : codeBase = 0x80004800 := rfl
@@ -147,9 +127,6 @@ theorem step_br_back {code : List Ins} {k : Nat} {A : AM} (hfit : Fits code) {op
 theorem sext_small (c : Int) (h1 : -2048 ≤ c) (h2 : c < 2048) :
     (sign_extend (BitVec.ofInt 12 c) : BitVec 64) = BitVec.ofInt 64 c := sext12_ofInt c h1 h2
 
-/-! ## Register bookkeeping -/
-
-/-- The register file after a libgcc call returning `r`. -/
 def libRegs (L : GRegs) (r : BitVec 64) : GRegs :=
   (10, r) :: eraseAll clobbered (gset (gset L 12 0) 13 0)
 
@@ -213,8 +190,6 @@ theorem ofNat_sub_sext (a c : Nat) (hc : c ≤ 2048) (hca : c ≤ a) (ha : a < 2
   simp only [BitVec.toNat_ofNat, BitVec.toNat_ofInt]
   omega
 
-/-! ## Layout -/
-
 section
 variable {code : List Ins} (hfit : Fits code) (hseg : Seg code 14 printCode)
 include hfit hseg
@@ -237,14 +212,11 @@ theorem pS {j k len : Nat} {s : List Ins} (hk : 14 + j = k) (h : (printCode.drop
 
 end
 
-/-! ## Forward chaining -/
-
 theorem zopz_ge (v : BitVec 64) : guardB BrOp.ge.bop v 0 = decide (v.toInt ≥ 0) := by
   simp [guardB, BrOp.bop, zopz0zKzJ_s]
 
 theorem guard_ne_zero (v : BitVec 64) : guardB BrOp.ne.bop v 0 = !(v == 0) := rfl
 
-/-- `|t % 10|` as a word, from the `tmod` word and the sign test. -/
 theorem abs_digit (t : Int) :
     (BitVec.ofInt 64 (t.tmod 10)).toInt = t.tmod 10 := by
   have h1 := Int.natAbs_tmod t 10
@@ -307,7 +279,6 @@ section
 variable {code : List Ins} (hfit : Fits code) (hseg : Seg code 14 printCode)
 include hfit hseg
 
-/-- From the sign test at `57`, `a0` becomes `|a0|`. -/
 theorem run_abs {A : AM} {v : BitVec 64} (hA : A.pc = pcOf 57) (h10 : Has A.regs a0 v)
     (hv : -10 < v.toInt ∧ v.toInt < 10) :
     Reaches code A fun B => B.pc = pcOf 59 ∧ B.mem = A.mem ∧ B.out = A.out ∧
@@ -333,7 +304,6 @@ theorem run_abs {A : AM} {v : BitVec 64} (hA : A.pc = pcOf 57) (h10 : Has A.regs
       rw [BitVec.ofInt_neg, BitVec.ofInt_toInt]; simp
     rw [← this]; exact Has.gs_self _ _ _ (by decide)
 
-/-- One digit: `buf[j] := |x % 10| + 48`, `x := x / 10`, and branch back while `x ≠ 0`. -/
 theorem run_digit {A : AM} {x r : BitVec 64} {j : Nat}
     (hA : A.pc = pcOf 52) (h4 : Has A.regs s4 x) (h5 : Has A.regs s5 (BitVec.ofNat 64 j))
     (h6 : Has A.regs s6 (BitVec.ofNat 64 (bufBase + 8 * j))) (h11 : Has A.regs s11 r)
@@ -368,32 +338,32 @@ theorem run_digit {A : AM} {x r : BitVec 64} {j : Nat}
   have g6 := hpres s6 _ (by decide) (by has_tac)
   have g11 := hpres s11 r (by decide) (by has_tac)
   have hdl : x.toInt.natAbs % 10 < 10 := Nat.mod_lt _ (by decide)
-  -- 59: a0 += 48
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 45) (k := 59) rfl rfl) hpc1 (by decide) h10'
     (ofNat_add_sext _ 48 (by decide) (by omega))) ?_
-  -- 60: sd a0, 0(s6)
+
   refine ex_step (step_sd hfit (pI hseg (j := 46) (k := 59 + 1) rfl rfl) rfl
     (a := BitVec.ofNat 64 (bufBase + 8 * j)) (by has_tac) (by has_tac)
     (by rw [BitVec.toNat_ofNat]; unfold StOK; omega)) ?_
-  -- 61: s6 += 8
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 47) (k := 59 + 1 + 1) rfl rfl) rfl (by decide)
     (by has_tac) (ofNat_add_sext _ 8 (by decide) (by omega))) ?_
-  -- 62: s5 += 1
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 48) (k := 59 + 1 + 1 + 1) rfl rfl) rfl (by decide)
     (by has_tac) (ofNat_add_sext _ 1 (by decide) (by omega))) ?_
-  -- 63: mv a0 s4
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 49) (k := 59 + 1 + 1 + 1 + 1) rfl rfl) rfl
     (by decide) (by has_tac) (add_sext_zero x)) ?_
-  -- 64: li a1 10
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 50) (k := 59 + 1 + 1 + 1 + 1 + 1) rfl rfl) rfl
     (by decide) (Has.zero _) (w := 10) (by decide)) ?_
-  -- 65..67: a0 := x / 10
+
   refine ex_trans (run_libc hfit (pS hseg (j := 51) (len := 3) (k := 59 + 1 + 1 + 1 + 1 + 1 + 1)
     rfl rfl) rfl (P _ (by decide)) (.inr (.inl rfl)) (by has_tac) (by has_tac) (libRes_div x)) ?_
-  -- 68: mv s4 a0
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 54) (k := 59 + 1 + 1 + 1 + 1 + 1 + 1 + 3) rfl rfl)
     rfl (by decide) (Has.lib_self _ _) (add_sext_zero _)) ?_
-  -- 69: bne s4, x0, loop
+
   refine ex_step (step_br_back hfit (pI hseg (j := 55) (k := 69)
     (i := .br .ne s4 0 (BitVec.ofInt 13 (-4 * ((17 : Nat) : Int)))) rfl rfl) rfl
     (Has.gs_self _ s4 (BitVec.ofInt 64 (x.toInt.tdiv 10)) (by decide)) (Has.zero _)
@@ -412,7 +382,6 @@ theorem run_digit {A : AM} {x r : BitVec 64} {j : Nat}
     omega
   · simp only [ho1]
 
-/-- Digit loop: from the loop head, store the remaining digits of `|x|` and exit to `70`. -/
 theorem run_digits : ∀ (N : Nat) (x : BitVec 64) (j : Nat) (ds : List Nat) (A : AM) (r : BitVec 64),
     x.toInt.natAbs = N →
     A.pc = pcOf 52 → Has A.regs s4 x → Has A.regs s5 (BitVec.ofNat 64 j) →
@@ -473,7 +442,6 @@ theorem run_digits : ∀ (N : Nat) (x : BitVec 64) (j : Nat) (ds : List Nat) (A 
       rw [hframe a (by omega), hm1]
       exact rdW_write_other _ _ _ _ (by omega)
 
-/-- One output iteration: print `buf[i]` as a digit and branch back while `i ≠ 0`. -/
 theorem run_out1 {A : AM} {i d : Nat} {r : BitVec 64}
     (hA : A.pc = pcOf 70) (h5 : Has A.regs s5 (BitVec.ofNat 64 (i + 1)))
     (h6 : Has A.regs s6 (BitVec.ofNat 64 (bufBase + 8 * (i + 1)))) (h11 : Has A.regs s11 r)
@@ -484,36 +452,36 @@ theorem run_out1 {A : AM} {i d : Nat} {r : BitVec 64}
   have P := fun k (hk : k ≤ 100) => print_posOK hfit hseg hk
   have hb : bufBase = 0x80080000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
-  -- 70: s6 -= 8
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 56) (k := 70) rfl rfl) hA (by decide) h6
     (w := BitVec.ofNat 64 (bufBase + 8 * i))
     (by rw [show (sign_extend (-8 : BitVec 12) : BitVec 64) = BitVec.ofInt 64 (-((8 : Nat) : Int))
           by decide, ofNat_sub_neg _ 8 (by omega) (by omega) (by decide),
           show bufBase + 8 * (i + 1) - 8 = bufBase + 8 * i by omega])) ?_
-  -- 71: ld a0, 0(s6)
+
   refine ex_step (step_ld hfit (pI hseg (j := 57) (k := 70 + 1) rfl rfl) rfl (by decide)
     (by has_tac) (by rw [BitVec.toNat_ofNat]; unfold LdOK; omega)) ?_
-  -- 72..82: li s3 (putcWord 0)
+
   refine ex_trans (run_li hfit (pS hseg (j := 58) (len := 11) (k := 70 + 1 + 1) (s := li s3 (putcWord 0)) rfl rfl) rfl
     (by decide)) ?_
   simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show bufBase + 8 * i < 2 ^ 64 by omega), hcell]
-  -- 83: s3 += a0
+
   refine ex_step (step_add hfit (pI hseg (j := 69) (k := 70 + 1 + 1 + (li s3 (putcWord 0)).length)
     rfl rfl) rfl (by decide) (by has_tac) (by has_tac)) ?_
   rw [putcWord_add _ (by omega)]
-  -- 84..94: li s2 tohost
+
   refine ex_trans (run_li hfit (pS hseg (j := 70) (len := 11)
     (k := 70 + 1 + 1 + (li s3 (putcWord 0)).length + 1) (s := li s2 tohostW) rfl rfl) rfl (by decide)) ?_
-  -- 95: sd s3, 0(s2)  (putchar)
+
   refine ex_step ((step_htif hfit (pI hseg (j := 81) (k := 70 + 1 + 1 + (li s3 (putcWord 0)).length + 1
     + (li s2 tohostW).length) rfl rfl) rfl (by has_tac) (by has_tac) tohostW_toNat).trans
     (htifOut_putc _ _)) ?_
-  -- 96: s5 -= 1
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 82) (k := 96) rfl rfl) (pcOf_succ _) (by decide)
     (by has_tac) (w := BitVec.ofNat 64 i)
     (by rw [show (sign_extend (-1 : BitVec 12) : BitVec 64) = BitVec.ofInt 64 (-((1 : Nat) : Int))
           by decide, ofNat_sub_neg _ 1 (by omega) (by omega) (by decide)]; rfl)) ?_
-  -- 97: bne s5, x0, out
+
   refine ex_step (step_br_back hfit (pI hseg (j := 83) (k := 97)
     (i := .br .ne s5 0 (BitVec.ofInt 13 (-4 * ((27 : Nat) : Int)))) rfl rfl) rfl
     (Has.gs_self _ s5 (BitVec.ofNat 64 i) (by decide)) (Has.zero _)
@@ -535,7 +503,6 @@ theorem run_out1 {A : AM} {i d : Nat} {r : BitVec 64}
     congr 2
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), Nat.add_comm, char_digit d hd]
 
-/-- Output loop: print `buf[i], …, buf[0]` and fall through to `98`. -/
 theorem run_outs : ∀ (i : Nat) (A : AM) (ds : List Nat) (r : BitVec 64),
     A.pc = pcOf 70 → Has A.regs s5 (BitVec.ofNat 64 (i + 1)) →
     Has A.regs s6 (BitVec.ofNat 64 (bufBase + 8 * (i + 1))) → Has A.regs s11 r →
@@ -565,7 +532,6 @@ theorem run_outs : ∀ (i : Nat) (A : AM) (ds : List Nat) (r : BitVec 64),
     rw [ho2, ho, take_succ_rev ds (i + 1) hl, List.foldl_cons, foldl_push _ ("".push _),
       String.append_assoc, toString_eq_push]
 
-/-- Prologue: save `ra`, copy `n`, print `-` if `n < 0`; lands at the buffer setup `40`. -/
 theorem run_prologue {A : AM} {n r : BitVec 64} (hA : A.pc = pcOf 14)
     (ha0 : Has A.regs a0 n) (hra : Has A.regs ra r) :
     Reaches code A fun B => B.pc = pcOf 40 ∧ Has B.regs s4 n ∧ Has B.regs s11 r ∧ B.mem = A.mem ∧
@@ -593,9 +559,6 @@ theorem run_prologue {A : AM} {n r : BitVec 64} (hA : A.pc = pcOf 14)
     rw [if_pos (by omega), outStr_push]
     rfl
 
-/-- **The print subroutine.** From `printPos` with `a0 = n` and `ra = r`, it returns
-to `r` having printed `intToString n.toInt`, and changes memory only inside the
-digit buffer `[bufBase, bufBase + 160)`. -/
 theorem run_print' {A : AM} {n r : BitVec 64} {k : Nat} (hA : A.pc = pcOf 14)
     (ha0 : Has A.regs a0 n) (hra : Has A.regs ra r) (hr : r = pcOf k) (hk : PosOK k) :
     Reaches code A fun B => B.pc = r ∧ outStr B = outStr A ++ intToString n.toInt ∧
@@ -604,13 +567,13 @@ theorem run_print' {A : AM} {n r : BitVec 64} {k : Nat} (hA : A.pc = pcOf 14)
   have hb : bufBase = 0x80080000 := rfl
   obtain ⟨B1, s1, hpc1, h4, h11, hm1, ho1⟩ := run_prologue hfit hseg hA ha0 hra
   refine ex_trans s1 ?_
-  -- 40..50: s6 := bufBase
+
   refine ex_trans (run_li hfit (pS hseg (j := 26) (len := 11) (k := 40)
     (s := li s6 (BitVec.ofNat 64 bufBase)) rfl rfl) hpc1 (by decide)) ?_
-  -- 51: s5 := 0
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 37) (k := 40 + (li s6 (BitVec.ofNat 64 bufBase)).length)
     rfl rfl) rfl (by decide) (Has.zero _) (w := BitVec.ofNat 64 0) (by decide)) ?_
-  -- digit loop
+
   have hN : n.toInt.natAbs ≤ 2 ^ 63 := by
     have hb1 := BitVec.le_toInt n
     have hb2 : n.toInt < 2 ^ (64 - 1) := BitVec.toInt_lt
@@ -631,10 +594,10 @@ theorem run_print' {A : AM} {n r : BitVec 64} {k : Nat} (hA : A.pc = pcOf 14)
           rw [getElem!_pos _ q (by omega)]; exact List.getElem_mem (by omega)),
         hcells q (by omega) (by omega)⟩)) ?_
   rintro B3 ⟨hpc3, h11'', hm3, ho3⟩
-  -- 98: ra := s11
+
   refine ex_step (step_addi_eq hfit (pI hseg (j := 84) (k := 98) rfl rfl) hpc3 (by decide) h11''
     (add_sext_zero r)) ?_
-  -- 99: jalr ra
+
   have hb' : codeBase = 0x80004800 := rfl
   have ht' : tohostAddr = 0x8001ad00 := rfl
   refine ex_step (step_jalr hfit (pI hseg (j := 85) (k := 98 + 1) rfl rfl) rfl
@@ -650,7 +613,6 @@ theorem run_print' {A : AM} {n r : BitVec 64} {k : Nat} (hA : A.pc = pcOf 14)
 
 end
 
-/-- **The print subroutine** at its placement `printPos`. -/
 theorem run_print {code : List Ins} {k : Nat} (hfit : Fits code) (hseg : Seg code printPos printCode)
     {A : AM} {n r : BitVec 64} (hA : A.pc = pcOf printPos)
     (ha0 : Has A.regs a0 n) (hra : Has A.regs ra r) (hr : r = pcOf k) (hk : PosOK k) :

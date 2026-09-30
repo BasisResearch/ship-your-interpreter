@@ -1,14 +1,5 @@
 import VsaIris.Vsa.Fprintf.End
 
-/-!
-# `_vfprintf_r` on `__sbprintf`'s stack `FILE` (lane N5)
-
-The `FILE`-dependent part of `_vfprintf_r`'s prologue on the stack `FILE`
-(`0x8000a8d0` → `0x8000a944`, `vfp_fileSb`): the reent's `__sinit` done,
-the (stub) lock taken, `__SWR` set with a buffer, `__SNBF|__SRW` clear (no
-`__sbprintf` again). The memory is unchanged.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio

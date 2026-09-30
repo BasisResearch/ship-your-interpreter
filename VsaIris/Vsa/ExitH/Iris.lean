@@ -4,32 +4,10 @@ import VsaIris.Vsa.ExitH.RunIdleU
 import VsaIris.Vsa.ExitH.RunWrittenU
 import VsaIris.Vsa.Newlib
 
-/-!
-# `exit`'s newlib interior in the Iris logic (lane N4)
-
-`exitHandlers_spec` proves `Newlib.exitHandlersSpec` (formerly the hole
-`IrisHoles.newlib.exitHandlers`) for every post-write state `Ierr` from which
-the close path runs (`CloseReady`), both WPs. The run is `exitIdle_chain` or
-`exitWritten_chain` (`RunIdle`/`RunWritten`, generated), by `wp_localRunW`:
-
-* registers: the entry values (`exitRv`) over `iRegs`, split as `exit`'s
-  call frame (`iRegs_exit`);
-* bytes: `exitS s`, newlib's exclusive data, `errno` and the 256 bytes of
-  scratch, glued into one owned set at one image (`exitImg`). The scratch is
-  off newlib's data by ownership (`ownSet_disj`), which places it below
-  `__sglue` or above `__bss_end` (`place_of_disj`);
-* facts: `CloseReady`'s canonical memory gives `CloseMt` and `stderr`'s
-  state (`Loads.lean`).
-
-The run prints nothing, in either `stderr` state.
--/
-
 namespace VsaIris.Newlib.ExitH
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Sym VsaIris.MallocFast
-
-/-! ## Pure facts -/
 
 theorem stdioText_img :
     stdioText.all (fun p => decide (textDom p.1) && textByte p.1 == p.2) = true := by
@@ -44,10 +22,6 @@ theorem stdioText_mem : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2 
 theorem stdioText_live {live : Nat → Prop} (h : CodeLive live) : ∀ p ∈ stdioText, live p.1 :=
   fun p hp => h _ (stdioText_mem p hp).1
 
-/-- The scratch window off newlib's exclusive data and `errno` lies below
-`__sglue` or above `__bss_end`: every gap of their union is shorter than 256
-bytes, so a window meeting the range meets a byte of the union (one of the
-chunk ends, or its own top byte). -/
 theorem place_of_disj {s : Nat}
     (hd : ∀ a, s - 256 ≤ a ∧ a < s → ¬ ((stdioFoot a ∧ ¬ impureW a) ∨ errnoFoot a)) :
     s ≤ 0x8001b520 ∨ 0x8001c168 + 256 ≤ s := by
@@ -67,18 +41,14 @@ theorem place_of_disj {s : Nat}
     Decidable.imp_iff_not_or] at h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
   omega
 
-/-- The saved registers `exit`'s interior keeps (`s1`–`s11`). -/
 abbrev savedX : List Nat := [9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
 
 theorem savedX_eq : savedX = calleeSaved.drop 1 := rfl
 
-/-- The end of the run, for the Iris continuation: at `mv a0,s0` with `sp`,
-`s0` and `s1`–`s11` as at the entry. -/
 def ExitQ (s e : BitVec 64) (cs : Nat → BitVec 64) (rv : Nat → BitVec 64) (_ : Nat → BitVec 8) :
     Prop :=
   rv 32 = 0x80004788#64 ∧ rv 2 = s ∧ rv 8 = e ∧ ∀ x ∈ savedX, rv x = cs x
 
-/-- **`exit`'s interior as one symbolic run**, from either `stderr` state. -/
 theorem exit_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {R : Nat → BitVec 64}
     {Mt : Mem} {s e : BitVec 64} {cs : Nat → BitVec 64} {o : Bool} (hs : ExitSp s) (h2 : R 2 = s)
     (h8 : R 8 = e) (h11 : R 11 = 0#64) (hsv : ∀ x ∈ savedX, R x = cs x)
@@ -98,18 +68,14 @@ theorem exit_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {
   · exact exitIdle_chain hlive hs h2 h8 h11 hC hE hk
   · exact exitWritten_chain hlive hs h2 h8 h11 hC hE hk
 
-/-! ## The owned bytes at one image -/
-
 open Classical in
-/-- newlib's data at `img`, `errno` at `fe`, the scratch at `fs`. -/
+
 noncomputable def exitImg (img fe fs : Nat → BitVec 8) (a : Nat) : BitVec 8 :=
   if stdioFoot a then img a else if errnoFoot a then fe a else fs a
 
-/-- The addresses of `exitS s`. -/
 def exitList (s : BitVec 64) : List Nat :=
   dataList ++ List.range' 0x8001ba08 4 ++ List.range' (s.toNat - 256) 256
 
-/-- A tracking memory holding the glued image on `exitList s`. -/
 noncomputable def exitMt (img fe fs : Nat → BitVec 8) (s : BitVec 64) : Mem :=
   fillMem (exitImg img fe fs) (exitList s)
 
@@ -131,10 +97,6 @@ theorem exitMt_stdio {img fe fs : Nat → BitVec 8} {s : BitVec 64} :
   rw [imgM_exitMt (by unfold exitList; simp only [List.mem_append]; exact .inl (.inl (mem_dataList ha)))]
   unfold exitImg; rw [if_pos ha]
 
-/-! ## Registers -/
-
-/-- The register values at the entry: `a0 = s0 = e`, `a1 = 0`, the other
-arguments at `fa`, the temporaries at `ft`, `s1`–`s11` at `cs`. -/
 def exitRv (r s e : BitVec 64) (ft fa cs : Nat → BitVec 64) (k : Nat) : BitVec 64 :=
   if k = 32 then 0x80004778#64 else if k = 1 then r else if k = 2 then s else if k = 8 then e
   else if k = 10 then e else if k = 11 then 0#64 else if k ∈ tmpRegs then ft k
@@ -156,7 +118,6 @@ theorem clobbered_args2 :
       iprop((∃ v, (10 : Nat) ↦ᵣ v) ∗ (∃ v, (11 : Nat) ↦ᵣ v) ∗ clobbered (argRegs.drop 2)) := by
   unfold clobbered argRegs; simp only [sepL_cons, List.drop]; exact .rfl
 
-/-- `iRegs` in `exit`'s call-frame groups. -/
 theorem iRegs_exit (rv : Nat → BitVec 64) :
     sepL (GF := GF) iRegs (fun k => k ↦ᵣ rv k) ⊣⊢
       iprop(VsaIris.PC ↦ᵣ rv 32 ∗ VsaIris.ra ↦ᵣ rv 1 ∗ VsaIris.sp ↦ᵣ rv 2 ∗ (8 : Nat) ↦ᵣ rv 8 ∗
@@ -168,8 +129,6 @@ theorem iRegs_exit (rv : Nat → BitVec 64) :
     (sep_congr_right ?_)))))
   exact (sepL_append _ _ _).trans (sep_congr_right (sepL_append _ _ _))
 
-/-- **`exit`'s newlib interior** (`Newlib.exitHandlersSpec`), for either WP,
-from any post-write state the close path runs from. -/
 theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
     (hI : ∀ img, Ierr img → CloseReady img) (live : Nat → Prop)
     (Wp : MachWP (GF := GF) (vsaModel live)) (s e r : BitVec 64) (cs : Nat → BitVec 64)
@@ -188,7 +147,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
   icases Hstd with ⟨%img, %⟨hP, himp⟩, Hx, #Hro⟩
   ihave ⟨%fe, Herr⟩ := ownSet_fn errnoFoot $$ Herr
   ihave ⟨%fs, Hscr⟩ := ownSet_fn _ $$ Hscr
-  -- the scratch is off newlib's data and `errno`
+
   ihave ⟨⟨Hx, Hscr⟩, %hd1⟩ := keep_pure (ownSet_disj _ _ _ _) $$ [Hx Hscr]
   · iframe Hx Hscr
   ihave ⟨⟨Herr, Hscr⟩, %hd2⟩ := keep_pure (ownSet_disj _ _ _ _) $$ [Herr Hscr]
@@ -200,7 +159,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
       · exact hd1 a hu hw
       · exact hd2 a hu hw
   have hsp : ExitSp s := ⟨by omega, hhi, hal, hplace⟩
-  -- one owned set at one image, on a tracking memory
+
   let Mt := exitMt img fe fs s
   have hwin : ∀ a, InExt (s.toNat - 256, 256) a → ¬ stdioFoot a ∧ ¬ errnoFoot a := by
     intro a ha; unfold InExt at ha; simp only at ha
@@ -231,7 +190,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
   ihave HS := ownSet_iff (T := exitS s) _ (fun a => by
     unfold exitS stdioExcl impureW errnoFoot InRange InExt stdioFoot InRange; simp only
     constructor <;> intro h <;> omega) $$ HS
-  -- the fields the run reads
+
   have hcr : CloseReady img := hP.elim StdioOK.closeReady (fun h => hI _ h.2)
   obtain ⟨_, hcr⟩ := hcr
   obtain ⟨hcc, hst⟩ := hcr (fillMem img dataList)
@@ -239,7 +198,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
   have hC := closeMt_of hcc exitMt_stdio (Mt := Mt)
   have hE : ErrIdleMt Mt ∨ ErrWrittenMt Mt :=
     hst.imp (fun h => errIdleMt_of h exitMt_stdio) (fun h => errWrittenMt_of h exitMt_stdio)
-  -- the registers
+
   ihave ⟨%ft, Htmp⟩ := clobbered_fn tmpRegs (by decide) $$ Htmp
   ihave ⟨%fa, Hargs⟩ := clobbered_fn (argRegs.drop 2) (by decide) $$ Hargs
   let rv := exitRv r s e ft fa cs
@@ -278,7 +237,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
     rw [htmp, hargs, hsv, ← savedX_eq] at *
     iframe Htmp Hargs Hsaved
   iframe HS
-  -- the end: `mv a0,s0`
+
   unfold runKontW
   iintro %rv' %mv' %⟨h32, h2', h8', hsv'⟩ Hregs HS
   ihave ⟨Hpc, Hra, Hsp, Hs0, Ha0, Ha1, Htmp, Hargs, Hsaved⟩ := (iRegs_exit rv').1 $$ Hregs
@@ -288,7 +247,7 @@ theorem exitHandlers_spec {Ierr : (Nat → BitVec 8) → Prop}
   have hsvE : sepL (GF := GF) savedX (fun k => iprop(k ↦ᵣ rv' k)) =
       sepL savedX (fun k => iprop(k ↦ᵣ cs k)) := sepL_congr fun k hk => by rw [hsv' k hk]
   rw [hsvE] at *
-  -- the owned bytes, back in three parts
+
   ihave HS := ownSet_iff (T := fun a => (stdioExcl a ∨ errnoFoot a) ∨ InExt (s.toNat - 256, 256) a)
     _ (fun a => by
       unfold exitS stdioExcl impureW errnoFoot InRange InExt stdioFoot InRange; simp only
@@ -330,10 +289,6 @@ end VsaIris.Newlib.ExitH
 
 namespace VsaIris.Newlib
 
-/-- **The newlib statements from the assumed ones**: `exit`'s interior is
-proved (`ExitH.exitHandlers_spec`) at `StdioErrOK`, a state the close path
-runs from (`StdioErrOK.closeReady`); `fprintf`'s proof (`fprintf_ok`, above
-this file) and `snprintf`'s (`Sym.snprintf_ok`) are passed in. -/
 theorem NewlibCore.full (h : NewlibCore) (hf : FprintfProved) (hs : SnprintfProved) : NewlibHoles :=
   { toNewlibCoreAt := h
     snprintf := hs

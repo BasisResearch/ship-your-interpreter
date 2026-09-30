@@ -1,17 +1,6 @@
 import VsaIris.Vsa.HeapRoom
 import VsaIris.Interp.Repr
 
-/-!
-# Lending `errno` out of the heap resource (lane N1)
-
-Every console write runs `_write_r`, which clears libgloss's `errno`
-(`0x8001ba08`, `Stdio.errnoFoot`). That word is an allocator global
-(`_sbrk_r` clears it too), owned by the heap resource. The allocator's shape
-never reads it (`BlockHeapAt.transport_read`: `vsaRead` excludes it), so the
-heap resource lends it at any value and takes it back at any value
-(`heapRes_errno`). The stdout calls (`NewlibOut.outSpec`) borrow it this way.
--/
-
 namespace VsaIris.ErrnoOwn
 
 open Iris Iris.BI Iris.Std Iris.ProofMode
@@ -23,7 +12,6 @@ theorem errno_global {a : Nat} (h : errnoFoot a) : allocGlobal a := by
 theorem errno_vsaFoot {H : List (Nat × Nat)} {a : Nat} (h : errnoFoot a) : vsaFoot H a :=
   .inl (errno_global h)
 
-/-- A memory with the `errno` bytes of an image. -/
 def setErrno (m : Mem) (img : Nat → BitVec 8) : Mem :=
   (((m.insert 0x8001ba08 (img 0x8001ba08)).insert 0x8001ba09 (img 0x8001ba09)).insert
     0x8001ba0a (img 0x8001ba0a)).insert 0x8001ba0b (img 0x8001ba0b)
@@ -43,7 +31,6 @@ theorem setErrno_get (m : Mem) (img : Nat → BitVec 8) (a : Nat) :
   have hne : ¬ errnoFoot a := by unfold errnoFoot Stdio.InRange; omega
   simp only [h0, h1, h2, h3, ite_false, if_neg hne]
 
-/-- **The heap's facts ignore `errno`.** -/
 theorem pheap_errno {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) (img : Nat → BitVec 8) :
     PHeapAt (setErrno m img) H top brkv chunks bins := by
@@ -78,8 +65,6 @@ section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- Splitting the `errno` bytes out of an owned image and joining them back at
-new values. -/
 theorem ownImg_errno (S : Nat → Prop) (hS : ∀ a, errnoFoot a → S a) (img : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ img a) ⊢ errnoOwn ∗
       (∀ f : Nat → BitVec 8, ownSet errnoFoot (fun a => a ↦ₘ f a) -∗
@@ -105,8 +90,6 @@ theorem ownImg_errno (S : Nat → Prop) (hS : ∀ a, errnoFoot a → S a) (img :
     · exact .inl he
     · exact .inr ⟨h, he⟩
 
-/-- **The heap resource lends `errno`**, at any value, and takes it back at
-any value. -/
 theorem heapRes_errno (ρ : Regime) (H : List (Nat × Nat)) :
     heapRes (GF := GF) vsaLayoutP vsaRoomB ρ H ⊢
       errnoOwn ∗ (errnoOwn -∗ heapRes vsaLayoutP vsaRoomB ρ H) := by
@@ -141,8 +124,6 @@ theorem heapRes_errno (ρ : Regime) (H : List (Nat × Nat)) :
     ipureintro
     exact pShape_errno hs fun a ha => by simp [ha]
 
-/-- A heap resource that lends `errno` (the premise of the printing call
-arms, generic in the layout). -/
 def ErrnoLend (L : DlLayout) (Room : RoomPred) : Prop :=
   ∀ ρ H, heapRes (GF := GF) L Room ρ H ⊢ errnoOwn ∗ (errnoOwn -∗ heapRes L Room ρ H)
 

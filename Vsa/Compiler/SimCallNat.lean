@@ -1,12 +1,5 @@
 import Vsa.Compiler.SimCallCode
 
-/-!
-# Forward simulation: calls of natives
-
-`print`/`println` display their arguments; `assert` checks the truthiness of its
-first argument.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -17,7 +10,6 @@ theorem StackOK.frames {d sp fs : Nat} (h : StackOK d sp fs) : frameBase ≤ sp 
   have hf : frameBase = 0x80100000 := rfl
   omega
 
-/-- A native's return: display output, `null` in `(a0, a1)`. -/
 theorem epost_native {code : List Ins} {T : List String} {V : View} {st : St} {d : Nat} {env : Addr}
     {Γ : List (List String)} {sp fs k : Nat} {A B : AM} (hm : MS code T V st d env Γ sp fs A)
     {S : List Nat} (hS : Scratch S) (hk : Keep S A.regs B.regs) (hd : DpFrame A.mem B.mem) {out' : String}

@@ -1,28 +1,5 @@
 import VsaIris.PartialWP
 
-/-!
-# `MachWP`: the WP interface every block is proved against
-
-INTERP_DESIGN.md §1. A block of machine code (a reflected segment, a helper
-call, a fuel-bounded loop) is proved ONCE, for an abstract `Wp : MachWP M`,
-and serves both directions of the refinement:
-
-* `twpW M` (total, `mTWP`) for `term_sim`;
-* `wpW M` (partial, `mWP`) for `stuck_sim`.
-
-The interface is the lag kernel (`Lag.lean`) at the WP level (`lagRun`), the
-exit rule (`halt`), and update absorption (`fupd`). `lat` is the modality one
-machine step pays for: the identity for `twpW`, `▷` for `wpW`. Block lemmas
-use the later-free rules (`MachWP.run`, `wp_localRunW`); only the mode-specific
-Löb proofs of the three recursive entry points use `MachWP.runL` at `wpW`
-(INTERP_DESIGN.md's `run_later`), where `lat` is definitionally `▷`.
-
-The console rules (F2) are derived, not fields: `MachWP.runOut` (a printing
-run, from `lagRun` at `RunFactO.lagFootPrint`) and `MachWP.haltConsole`
-(halt/console agreement, from `halt`, whose `mstateInterp` carries the console
-authority).
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -31,32 +8,28 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- The WP interface (INTERP_DESIGN.md §1, "The shared interface"). -/
 structure MachWP (M : MachineModel) where
-  /-- The weakest precondition of the rest of the run, with an exit
-  postcondition. -/
+
   W : (Nat × String → IProp GF) → IProp GF
-  /-- The modality one machine step pays for (`id` total, `▷` partial). -/
+
   lat : IProp GF → IProp GF
   lat_intro : ∀ P, P ⊢ lat P
-  /-- The lag kernel: own a run's footprint, and prove the rest of the run from
-  the committed footprint of every possible end state. -/
+
   lagRun : ∀ {Φ : Nat × String → IProp GF} {Fp : IProp GF} {Fp' : M.State → IProp GF}
     {Pre : M.State → Prop} {Post : M.State → M.State → Prop} {K : Nat},
     LagFoot M Fp Fp' Pre Post K →
       Fp ∗ (∀ σ σf, ⌜Post σ σf⌝ -∗ Fp' σf -∗ lat (W Φ)) ⊢ W Φ
-  /-- The exit rule (`wp_exec_halt`). -/
+
   halt : ∀ {Φ : Nat × String → IProp GF},
     (∀ σ, mstateInterp (GF := GF) M σ ={⊤}=∗
         ⌜∃ e out, M.step σ = .halt e out⌝ ∗
         ∀ e out, ⌜M.step σ = .halt e out⌝ ={⊤}=∗ mstateInterp M σ ∗ Φ (e, out))
     ⊢ W Φ
-  /-- Fancy updates (ghost allocation, discarding fractions) are absorbed. -/
+
   fupd : ∀ {Φ : Nat × String → IProp GF}, (|={⊤}=> W Φ) ⊢ W Φ
 
 variable {M : MachineModel}
 
-/-- The total instance. -/
 def twpW (M : MachineModel) : MachWP (GF := GF) M where
   W := mTWP M
   lat P := P
@@ -76,7 +49,6 @@ def twpW (M : MachineModel) : MachWP (GF := GF) M where
   halt := wp_exec_halt
   fupd := fupd_mTWP
 
-/-- The partial instance. -/
 def wpW (M : MachineModel) : MachWP (GF := GF) M where
   W := mWP M
   lat P := iprop(▷ P)
@@ -106,10 +78,6 @@ namespace MachWP
 
 variable (Wp : MachWP (GF := GF) M)
 
-/-- **The segment rule, with the step modality** (`run_later` at `wpW`). A
-`RunFact` run of `n + 1` steps: own its footprint, and prove the rest of the
-run, under `Wp.lat`, from the updated footprint. Everything else the caller
-owns is framed by the wand. -/
 theorem runL {Φ : Nat × String → IProp GF} (n : Nat)
     (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
@@ -121,7 +89,6 @@ theorem runL {Φ : Nat × String → IProp GF} (n : Nat)
   iintro %_ %_ %_ Hf
   iapply Hk $$ Hf
 
-/-- **The segment rule** (`wp_run`), for either WP. -/
 theorem run {Φ : Nat × String → IProp GF} (n : Nat)
     (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
@@ -134,7 +101,6 @@ theorem run {Φ : Nat × String → IProp GF} (n : Nat)
   iapply Wp.lat_intro
   iapply Hk $$ Hf
 
-/-- The one-step rule with the step modality. -/
 theorem local_stepL {Φ : Nat × String → IProp GF}
     (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
     (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
@@ -146,10 +112,6 @@ theorem local_stepL {Φ : Nat × String → IProp GF}
     obtain ⟨σ', hs, hok', hloc, hout⟩ := hexec σ hok hf
     exact ⟨σ', .succ hs (.zero σ'), hok', hloc, hout⟩
 
-/-- **Halt/console agreement**, for either WP. At an exit step, the exit
-value's output is the console cell's contents: `Φ (e, s)` is all the
-postcondition must meet. With adequacy this is `Halts c s e`, `s` read from
-the ghost. -/
 theorem haltConsole {Φ : Nat × String → IProp GF}
     (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8)) (e : Nat)
     (s : String) (hh : HaltFact M RR MR e) :
@@ -181,8 +143,6 @@ theorem haltConsole {Φ : Nat × String → IProp GF}
   ipureintro; exact hok
 
 end MachWP
-
-/-! ## The historical names, at the total instance -/
 
 end
 

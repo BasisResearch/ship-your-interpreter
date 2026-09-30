@@ -1,33 +1,12 @@
 import Vsa.Sim.ValueSites
 import Vsa.Sim.MemLoadTotal
 
-/-!
-# TOTAL `execute (LOAD …)` characterizations (`exec_*_tot`)
-
-The `exec_lw`/`exec_ld`/`exec_lbu_bm`/… family in `ValueSites`/`BlockMem` takes
-per-byte PRESENCE hypotheses (`σ.mem[a+k]? = some bk`).  The Sail model does not
-need them: `readByte a = (m.get? a).getD 0`, so a load reads TOTALLY and an
-unmapped byte reads as `0`.  This file is the presence-free half of that family:
-the loaded value is `bytesT*` — the total read — and there are NO byte
-hypotheses at all.
-
-Every proof here is the same three moves: lift `GoodState` to the site state
-(`SiteGood`, one shared lemma instead of the 20-line block each `exec_*` used to
-repeat), feed the total read chain (`vmem_read_data_*_total`), and close with
-`execute_load_{signed,unsigned}_char`.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
 
 namespace Vsa.Sim
-
-/-! ## `SiteGood` — `GoodState` transported to the site state
-
-The seven register facts every `execute (LOAD …)` characterization needs at
-`afterNextPC (afterPrelude σ) pc`.  Named fields, not a positional ∧-tower. -/
 
 structure SiteGood (σ : MState) (pc : BitVec 64) : Prop where
   priv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
@@ -42,8 +21,6 @@ structure SiteGood (σ : MState) (pc : BitVec 64) : Prop where
   tohost : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
     = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base)
 
-/-- `GoodState` survives the fetch prelude + `nextPC` write, so it supplies
-`SiteGood` at any `pc`. -/
 theorem siteGood_of_good (σ : MState) (pc : BitVec 64) (hG : GoodState σ) : SiteGood σ pc where
   priv := by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
   mstatus := by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
@@ -53,9 +30,6 @@ theorem siteGood_of_good (σ : MState) (pc : BitVec 64) (hG : GoodState σ) : Si
   pmpaddr := by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
   tohost := by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
 
-/-! ## The site-level total reads -/
-
-/-- The width-1 total read at a load site. -/
 theorem siteRead_one_total (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 : regidx)
     (vbase : BitVec 64) (hS : SiteGood σ pc)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
@@ -74,9 +48,6 @@ theorem siteRead_one_total (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1
     hS.priv hS.mstatus (by decide) hS.seccfg hS.pma hS.cfg hS.pmpaddr hS.tohost
     hrs1 hlo hhiram hhtif
 
-/-! ## The presence-free `execute (LOAD …)` characterizations -/
-
-/-- `lbu rd,off(rs1)` — TOTAL.  Width 1 has no alignment side condition. -/
 theorem exec_lbu_tot (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : MState) (vbase : BitVec 64) (hG : GoodState σ)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
@@ -94,17 +65,6 @@ theorem exec_lbu_tot (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : 
     (siteRead_one_total σ pc off rs1 vbase (siteGood_of_good σ pc hG)
       hrs1 hlo hhiram hhtif) hwr
 
-/-! ## Value-parameterized siblings (`exec_*_totv`)
-
-`block_mem_sound` names the loaded value through the block's `lds` list
-(`bytesVal`), not as a literal total read, so it wants the total-read fact as an
-EQUATION rather than as the shape of the conclusion.  These take the value `v`
-plus `hv : <total read> = v`; `exec_*_tot` is the `v := <total read>`, `hv :=
-rfl` instance.  This is the hinge that lets the reflected-execution layer keep
-its `lds` naming while its memory obligations become total-read equalities
-instead of presence claims. -/
-
-/-- `lbu` — TOTAL, value-parameterized. -/
 theorem exec_lbu_totv (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : MState) (vbase : BitVec 64) (v : BitVec 64) (hG : GoodState σ)
     (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)

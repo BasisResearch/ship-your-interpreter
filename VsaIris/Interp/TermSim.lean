@@ -50,27 +50,6 @@ import VsaIris.Interp.LoopArgs
 import VsaIris.Interp.SeqLoopInterp
 import VsaIris.Interp.ExecDisp
 
-/-!
-# `term_sim`'s recursion: every cost derivation meets its total spec (lane A)
-
-INTERP_DESIGN.md §4.1, §5.2. The mutual recursor over the nine cost
-companions (`EvalECost` … `ExecSeqCost`, `Vsa/While/Cost.lean`) with one motive
-per relation, each the landed statement its consumers take:
-
-| relation | motive |
-|---|---|
-| `EvalECost` | `⊢ evalSpecT_body D` |
-| `EvalArgsCost` | E6's `evalArgsT_body` |
-| `CallCost` | the call arm: any callee and argument derivations with their motives give the whole call's `evalSpecT_body` |
-| `ExecSCost` | `⊢ execDispT_body D` (E5), and E6's `whileT_body` for a `while` |
-| `ExecInitCost`, `ForLoopCost`, `ForCondCost`, `ExecStepCost` | E6's motives |
-| `ExecSeqCost` | G's three `seqLoop` sites: block, closure body, `interp_run` |
-
-Each recursor case applies its generated `Case/*T` lemma (or the loop lemma of
-E6/G). The callee specs and the named premises of the cases are one record,
-`TermSupply`, supplied once at the top (`Top.lean`).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -85,10 +64,6 @@ local notation "Mv" live => vsaModel live
 local notation "Lp" => vsaLayoutP
 local notation "Rp" => vsaRoomB
 
-/-- **The callee specs and named premises of the total cases**, at one
-`live`, native table `N` and interpreter object `inp`. Every field is a
-closed statement a helper proof (H1-H4, the string runs) or the boundary
-supplies. -/
 structure TermSupply (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : Prop where
   hlive : ∀ p ∈ interpText, live p.1
   vint : ⊢ ∀ p n, valueIntSpec (GF := GF) (Mv live) N (twpW (Mv live)) p n
@@ -121,8 +96,6 @@ structure TermSupply (live : Nat → Prop) (N : NativeAddrs) (inp : Nat) : Prop 
   strlenHeap : ⊢ ∀ q x ρ H, strlenHeapSpec (GF := GF) (Mv live) (twpW (Mv live)) q x ρ H
   memcpyOwned : ⊢ memcpySpecOwned (GF := GF) (Mv live) (twpW (Mv live))
   strcpyHeap : ⊢ ∀ d q y ρ H, strcpyHeapSpec (GF := GF) (Mv live) (twpW (Mv live)) d q y ρ H
-
-/-! ## The binary arm: one `binOpSem` outcome, one case lemma -/
 
 theorem binOpSem_add_str (s : Store) {lv rv : Value} (h : valTag lv = 3 ∨ valTag rv = 3) :
     binOpSem s .add lv rv = some (.str (lv.catDisplay s ++ rv.catDisplay s)) := by
@@ -211,8 +184,6 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
       obtain rfl := Option.some.inj hsem
       exact caseT_BinaryGeStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
 
-/-! ## The native calls' stack room (Q7's headroom) -/
-
 theorem hroomPrint (f : Expr) (args : List Expr) (d : Nat) :
     nativePrintNeed + 1088 ≤ evalNeed (.call f args) d := by
   have := Expr.stackNeed_ge f
@@ -227,14 +198,10 @@ theorem hroomPrintln (f : Expr) (args : List Expr) (d : Nat) :
     Vsa.Sim.LayoutInstance.helperHeadroom
   simp only [Expr.stackNeed]; unfold evalFrame at *; omega
 
-/-! ## The motives -/
-
 section Motives
 
 variable (live : Nat → Prop) (N : NativeAddrs) (inp : Nat)
 
-/-- `CallCost`'s motive: the call arm, for any callee and argument derivations
-with their motives. -/
 def callT (st : St) (d : Nat) (fv : Value) (vs : List Value) (st' : St) (v : Value) (n : Nat)
     (Dc : CallCost st d fv vs st' v n) : Prop :=
   ∀ {st0 st1 : St} {env : Nat} {f : Expr} {args : List Expr} {nf na : Nat}
@@ -245,13 +212,11 @@ def callT (st : St) (d : Nat) (fv : Value) (vs : List Value) (st' : St) (v : Val
     ⊢ evalSpecT_body (GF := GF) (Mv live) N Lp Rp inp st0 d env (.call f args) st' v (nf + na + n)
       (.call st0 d env f args st1 st st' fv vs v nf na n Df hlen Da Dc)
 
-/-- `ExecSCost`'s motive: E5's dispatch-point spec, and E6's `while` loop. -/
 def execT (st : St) (d env : Nat) (sm : Stmt) (st' : St) (status : Status) (n : Nat)
     (D : ExecSCost st d env sm st' status n) : Prop :=
   (⊢ execDispT_body (GF := GF) (Mv live) N Lp Rp inp st d env sm st' status n D) ∧
     ∀ c b, sm = .whileStmt c b → whileT_body (GF := GF) live N Lp Rp inp st d env c b st' status n
 
-/-- `ExecSeqCost`'s motive: G's three sequence sites. -/
 def seqT (st : St) (d env : Nat) (ss : List Stmt) (st' : St) (status : Status) (n : Nat)
     (D : ExecSeqCost st d env ss st' status n) : Prop :=
   blockSeqT_body (GF := GF) live N Lp Rp inp st d env ss st' status n D ∧
@@ -268,8 +233,7 @@ theorem execSpec_of {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   h.trans (execSpecT_of_disp hlive D)
 
 set_option hygiene false in
-/-- **The recursion** at one relation `R`: the nine motives and the fifty
-cases. -/
+
 local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
   refine $r
     (motive_1 := fun st d env e st' v n D =>
@@ -426,8 +390,6 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
       closureSeqT_consAbrupt (st'' := st') ($S).hlive D1 hne h1,
       interpSeqT_consAbrupt ($S).hlive D1 hne h1 ($S).vnull⟩))
 
-/-- **`term_sim`'s recursion, program form**: a whole-program derivation
-meets `interp_run`'s loop motive. -/
 theorem interpSeqT_all {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     (S : TermSupply (GF := GF) live N inp) {st : St} {d env : Nat} {ss : List Stmt} {st' : St}
     {status : Status} {n : Nat} (D : ExecSeqCost st d env ss st' status n) :

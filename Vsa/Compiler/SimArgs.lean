@@ -1,9 +1,5 @@
 import Vsa.Compiler.SimDefs
 
-/-!
-# Forward simulation: argument lists
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While

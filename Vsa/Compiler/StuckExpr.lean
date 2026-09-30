@@ -1,15 +1,5 @@
 import Vsa.Compiler.StuckDefs
 
-/-!
-# Failure of expressions and argument lists
-
-Each case runs the parts that evaluate with the forward simulation and fails
-at the first part without an evaluation: its own failure (the induction
-hypothesis), or the error exit of the code that checks the failing condition
-(an unbound variable, a non-integer negation, an operator without a result,
-too many arguments).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
@@ -18,7 +8,6 @@ section
 variable {code : List Ins} {T : List String} (hR : RTLoaded code)
 include hR
 
-/-- An operator without a result reaches the error exit. -/
 theorem run_op_none {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Array String} {op : BinOp}
     {l r : Value} {t1 p1 t2 p2 : BitVec 64} {q : Nat} (hops : Operands H m h L l r t1 p1 t2 p2)
     (hseg : Seg code q (opCode q op)) (hq : PosOK (q + (opCode q op).length))

@@ -1,20 +1,5 @@
 import VsaIris.Vsa.Fprintf.Sfv
 
-/-!
-# `_vfprintf_r`'s format scan (lane N5)
-
-`_vfprintf_r`'s main loop (`0x8000a9b8`) reads the format one character at a
-time through the locale's `mbtowc` (`__ascii_mbtowc` in the C locale, one
-byte per call, `__locale_mb_cur_max` = 1). The character goes to the stack
-word `sp + 180`; the loop advances `s9` past every character other than `%`
-and NUL.
-
-`vfp_mb` is one round trip (`0x8000a9b8` → `0x8000a9d8`) for any format byte;
-`vfp_scan` runs the loop over a run of literal bytes. The format bytes are
-data-view bytes (`FmtAt`); the locale's function pointer and `mb_cur_max`
-are owned bytes of newlib's data (`LocMb`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -23,20 +8,17 @@ open scoped VsaIris.Sym.Stdout
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- `snez` of a nonzero word. -/
 theorem snez_one {x : BitVec 64} (h : x ≠ 0#64) :
     LeanRV64DExecutable.zero_extend (m := 64) (LeanRV64DExecutable.Functions.bool_to_bit
       (LeanRV64DExecutable.Functions.zopz0zI_u 0#64 x)) = 1#64 := by
   have hx : 0 < x.toNat := Nat.pos_of_ne_zero fun e => h (BitVec.eq_of_toNat_eq (by simp [e]))
   rw [(ult_iff _ _).2 (by simpa using hx)]; decide
 
-/-- `snez` of zero. -/
 theorem snez_zero :
     LeanRV64DExecutable.zero_extend (m := 64) (LeanRV64DExecutable.Functions.bool_to_bit
       (LeanRV64DExecutable.Functions.zopz0zI_u 0#64 0#64)) = 0#64 := by
   rw [(ult_false_iff _ _).2 (by simp)]; decide
 
-/-- A byte stored as a word and loaded back with `lw`. -/
 theorem lw_zext8 (b : BitVec 8) :
     BitVec.signExtend 64 (BitVec.ofNat 32 ((BitVec.zeroExtend 64 b).toNat % 4294967296)) =
       BitVec.zeroExtend 64 b := by
@@ -53,7 +35,6 @@ theorem zext8_ne {b c : BitVec 8} (h : b ≠ c) : BitVec.zeroExtend 64 b ≠ Bit
     simp only [BitVec.toNat_setWidth, Nat.reducePow] at e' this
     exact BitVec.eq_of_toNat_eq (by omega))
 
-/-- The format's bytes `bs` at `P`: data-view bytes, below `tohost`. -/
 structure FmtAt (Dt : Mem) (DA : List Nat) (P : Nat) (bs : List (BitVec 8)) : Prop where
   lo : 0x80000000 ≤ P
   hi : P + bs.length < 0x8001ad00
@@ -69,12 +50,10 @@ theorem FmtAt.tail {P : Nat} {b : BitVec 8} {bs : List (BitVec 8)} (h : FmtAt Dt
     rw [Nat.add_assoc, Nat.add_comm 1 i]
     exact h.byte (i + 1) (by simp; omega)
 
-/-- The C locale's `mbtowc` and `mb_cur_max` in newlib's data. -/
 structure LocMb (M : Mem) : Prop where
   mbtowc : ldv .ld M 0x8001b880 = 0x80012268#64
   curMax : ldv .lbu M 0x8001b8f8 = 1#64
 
-/-- The stack word `mbtowc` writes. -/
 def MbReg (sp : Nat) (a : Nat) : Prop := sp + 180 ≤ a ∧ a < sp + 184
 
 theorem LocMb.frame {M M' : Mem} {Reg : Nat → Prop} (h : LocMb M) (hF : Frame M' M Reg)
@@ -83,11 +62,8 @@ theorem LocMb.frame {M M' : Mem} {Reg : Nat → Prop} (h : LocMb M) (hF : Frame 
   curMax := by rw [hF.ldv .lbu (fun j hj => by simp only [widthOfM] at hj; rw [show j = 0 by omega]; exact hR')]
                exact h.curMax
 
-/-- The registers one `mbtowc` round trip keeps. -/
 abbrev mbKeep : List Nat := [2, 3, 4, 5, 6, 7, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 
-/-- **One `mbtowc` round trip** (`0x8000a9b8` → `0x8000a9d8`) on the format
-byte `b` at `s9 = P`: `a0` is `b ≠ 0`, the byte is at `sp + 180`. -/
 theorem vfp_mb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp P : BitVec 64} {need : Nat} {b : BitVec 8}
     (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
@@ -124,7 +100,6 @@ theorem vfp_mb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {
   · subst e; rsimp; rw [show BitVec.zeroExtend 64 (0#8) = 0#64 by decide]; exact snez_zero
   · rsimp; exact snez_one fun h => zext8_ne e (h.trans (by decide))
 
-/-- `mbtowc`'s store stays in `MbReg`. -/
 theorem mb_frame (Mt : Mem) (sp : BitVec 64) (v : BitVec 64) (hsp : sp.toNat + 184 < 2 ^ 64) :
     Frame (writeLog Mt [((sp + 180#64).toNat, 4, v)]) Mt (MbReg sp.toNat) :=
   Frame.store Mt v fun b h1 h2 => by
@@ -136,11 +111,8 @@ theorem LocMb.mb {M : Mem} (h : LocMb M) {sp : BitVec 64} (v : BitVec 64) (hsp :
   h.frame (mb_frame M sp v hsp2) (fun a h1 h2 hr => by unfold MbReg at hr; omega)
     (fun hr => by unfold MbReg at hr; omega)
 
-/-- The registers the format scan keeps. -/
 abbrev scanKeep : List Nat := [2, 3, 4, 5, 6, 7, 9, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 29, 30, 31]
 
-/-- **One literal format byte** (neither NUL nor `%`): back at the loop head
-with `s9` one byte on. -/
 theorem vfp_lit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}
     {s sp P : BitVec 64} {need : Nat} {b : BitVec 8}
     (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
@@ -164,9 +136,6 @@ theorem vfp_lit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} 
   · rsimp
   · keep_chain hkeep
 
-/-- **A run of literal format bytes** `bs` (no NUL, no `%`) from the loop
-head: back at the head with `s9` past them, the scan's registers kept, only
-`mbtowc`'s stack word changed. -/
 theorem vfp_scan (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {s sp : BitVec 64} {need : Nat}
     (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
     (hs4 : 0x80100000 ≤ s.toNat - need) (hal : sp.toNat % 16 = 0) :

@@ -1,33 +1,18 @@
 import Vsa.Compiler.RTDisplay
 
-/-!
-# Values as machine words
-
-`VRepr H m h v t p`: the word pair `(t, p)` represents the value `v`, where `H`
-maps semantic closures to their objects, `m` is the memory, and `h` bounds the
-object heap (strings lie below it). `CloOK` says every closure of the store has
-an object with its print and concatenation renderings. From these, `display`
-and `catstr` print and render exactly `Value.display` and `Value.catDisplay`
-(`dispW_of_repr`, `catW_of_repr`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- 64-bit integers. -/
 def I64 (n : Int) : Prop := -2 ^ 63 ≤ n ∧ n < 2 ^ 63
 
-/-- The machine id of a native. -/
 def natId : NativeFn → BitVec 64
   | .print => 0
   | .println => 1
   | .assert => 2
 
-/-- Where the semantic closures' objects are. -/
 abbrev CloMap := List Nat
 
-/-- Word pair `(t, p)` represents `v`. -/
 def VRepr (H : CloMap) (m : Mem) (h : Nat) : Value → BitVec 64 → BitVec 64 → Prop
   | .null, t, p => t = 0 ∧ p = 0
   | .bool b, t, p => t = 1 ∧ p = (if b then 1 else 0)
@@ -36,18 +21,14 @@ def VRepr (H : CloMap) (m : Mem) (h : Nat) : Value → BitVec 64 → BitVec 64 �
   | .closure a, t, p => t = 4 ∧ H[a]? = some p.toNat
   | .native f, t, p => t = 5 ∧ p = natId f
 
-/-- How a closure prints. -/
 def dispName : Option String → String
   | some n => s!"<fn {n}>"
   | none => "<fn>"
 
-/-- How a closure renders when concatenated. -/
 def catName : Option String → String
   | some n => fnCatRender n
   | none => "<fn>"
 
-/-- The object of a closure named `name` at `p`, whose print and concatenation
-renderings are the string objects at `d` and `c` below `h`. -/
 structure CloObj (m : Mem) (h p : Nat) (name : Option String) (d c : Nat) : Prop where
   lo : objBase ≤ p
   hi : p + 32 ≤ h
@@ -57,7 +38,6 @@ structure CloObj (m : Mem) (h p : Nat) (name : Option String) (d c : Nat) : Prop
   cat : rdW m (p + 24) = BitVec.ofNat 64 c
   catStr : StrBelow m h c (catName name).toList
 
-/-- Every closure of the store has its object. -/
 structure CloOK (H : CloMap) (s : Store) (m : Mem) (h : Nat) : Prop where
   len : H.length = s.closures.size
   obj : ∀ (a : Nat) (cd : ClosureData) (p : Nat), s.closures[a]? = some cd → H[a]? = some p →
@@ -117,7 +97,6 @@ theorem catW_of_repr {H : CloMap} {s : Store} {m : Mem} {h : Nat} {v : Value} {t
     | some n => simp only [hn, catName] at this; exact this
   | native f => obtain ⟨rfl, rfl⟩ := hv; cases f <;> simp [CatW, Value.catDisplay]
 
-/-- The value `v` is in `(a0, a1)`. -/
 def InA (H : CloMap) (m : Mem) (h : Nat) (L : GRegs) (v : Value) : Prop :=
   ∃ t p, Has L a0 t ∧ Has L a1 p ∧ VRepr H m h v t p
 
@@ -129,7 +108,6 @@ theorem VRepr.tag_str {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec
     (hv : VRepr H m h v t p) : t = 3 → ∃ s, v = .str s := by
   cases v <;> simp only [VRepr] at hv <;> (obtain ⟨rfl, _⟩ := hv) <;> simp <;> decide
 
-/-- The tag of a value. -/
 def tagOf : Value → BitVec 64
   | .null => 0 | .bool _ => 1 | .int _ => 2 | .str _ => 3 | .closure _ => 4 | .native _ => 5
 
@@ -140,7 +118,6 @@ theorem VRepr.tag {H : CloMap} {m : Mem} {h : Nat} {v : Value} {t p : BitVec 64}
 theorem equal_tag {l r : Value} (h : l.equal r = true) : tagOf l = tagOf r := by
   cases l <;> cases r <;> simp_all [Value.equal, tagOf]
 
-/-- Closure objects are at distinct addresses. -/
 def CloInj (H : CloMap) : Prop := ∀ (a b p : Nat), H[a]? = some p → H[b]? = some p → a = b
 
 theorem ofInt_inj {a b : Int} (ha : I64 a) (hb : I64 b) (h : BitVec.ofInt 64 a = BitVec.ofInt 64 b) :
@@ -151,7 +128,6 @@ theorem ofInt_inj {a b : Int} (ha : I64 a) (hb : I64 b) (h : BitVec.ofInt 64 a =
 theorem natId_inj {f g : NativeFn} (h : natId f = natId g) : f = g := by
   cases f <;> cases g <;> simp_all [natId] <;> revert h <;> decide
 
-/-- For equal tags other than strings, payload equality is value equality. -/
 theorem payload_eq_iff {H : CloMap} {m : Mem} {h : Nat} {l r : Value} {t p1 p2 : BitVec 64}
     (hinj : CloInj H) (hl : VRepr H m h l t p1) (hr : VRepr H m h r t p2) (h3 : t ≠ 3) :
     p1 = p2 ↔ l.equal r = true := by
@@ -178,7 +154,6 @@ theorem payload_eq_iff {H : CloMap} {m : Mem} {h : Nat} {l r : Value} {t p1 p2 :
     · intro e; simp [natId_inj e]
     · intro e; simp at e; rw [e]
 
-/-- `m'` agrees with `m` on the object heap below `h`. -/
 def ObjAgree (m m' : Mem) (h : Nat) : Prop :=
   ∀ a, a % 8 = 0 → objBase ≤ a → a + 8 ≤ h → rdW m' a = rdW m a
 

@@ -1,16 +1,9 @@
 import VsaIris.Interp.EnvGetSpans
 
-/-!
-# `env_get`'s hit arm, first-order
-
-`0x80002c70`: copy `vals[i]` into `out`, `a0 := 1`, then the epilogue.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris.Sym VsaIris.MallocFast Vsa.MemRepr Vsa.Sim
 
-/-- The hit copy `0x80002c70`: `out := vals[i]`, `a0 := 1`. -/
 theorem get_copy {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G n) (hi : i < n)
@@ -52,7 +45,6 @@ theorem get_copy {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out
   · rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
       imgM_store_miss _ _ (by omega)]
 
-/-- The hit: the copy, then the epilogue, returning 1. -/
 theorem get_hit {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
     {r : BitVec 64} {sv : Nat → BitVec 64} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hs : htifLo + 16 + 64 ≤ s) (hs' : s ≤ 0x100000000) (hra : r.toNat % 4 = 0)

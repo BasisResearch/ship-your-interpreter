@@ -1,25 +1,9 @@
 import VsaIris.Interp.EnvScanCore
 
-/-!
-# `env_new`'s spans, first-order
-
-`env_new` (`0x800029fc`, `env.c:12`) is a prologue, `jal malloc`, and a tail
-that either initializes the fresh `Env` and returns or takes the
-out-of-memory arm (`0x80002a38`):
-
-* `new_pro` `0x800029fc` → `0x80002a10` (`jal malloc`): spill `s0`/`ra`,
-  `s0 := par`, `a0 := 32`;
-* `new_ok` `0x80002a14` → return, on a non-NULL block: the `Env` initialized
-  (`count = cap = 0`, `names = vals = NULL`, `parent = par`), `s0`/`ra`
-  restored;
-* `new_null` `0x80002a14` → `0x80002a38` on NULL.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris.Sym VsaIris.MallocFast Vsa.MemRepr Vsa.Sim
 
-/-- `env_new`'s stack frame after its prologue (entry `sp = s`). -/
 structure NewStack (s : Nat) (r s0 : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   sp : (R 2).toNat = s - 16
   ra : ldv .ld Mt (s - 8) = r
@@ -40,7 +24,6 @@ theorem new_pro {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s : Na
   · rw [BitVec.toNat_add, h2]; simp only [BitVec.reduceToNat]; omega
   · simp [upd_apply, h2', h8, h10]
 
-/-- The success tail: initialize the `Env` at `p`, restore, return. -/
 theorem new_ok {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s pn : Nat}
     {r s0 : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (hlo : htifLo + 16 + 16 ≤ s) (hhi : s ≤ 0x100000000) (hra : r.toNat % 4 = 0)
@@ -79,7 +62,6 @@ theorem new_ok {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s pn : 
   · rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega),
       ldv_ld_hit_eq _ _ rfl]
 
-/-- The NULL branch: on to the out-of-memory arm. -/
 theorem new_null {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
     {R : Nat → BitVec 64} {Mt : Mem} (hp0 : R 10 = 0#64) :
     Span live S 0x80002a14#64 R Mt (fun pc' R' Mt' => pc' = 0x80002a38#64 ∧ R' = R ∧ Mt' = Mt) := by

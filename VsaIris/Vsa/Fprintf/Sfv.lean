@@ -1,31 +1,13 @@
 import VsaIris.Vsa.Fprintf.SbFile
 import VsaIris.Vsa.Fprintf.Arith
 
-/-!
-# `__sfvwrite_r` on `__sbprintf`'s stack `FILE` (lane N5)
-
-The fully buffered branch (`flags = 0x2008`: neither `__SNBF` nor `__SLBF`
-nor `__SSTR`). At the loop head `0x8000dfc0` the registers hold the `FILE`
-(`s0`), the next `iov` (`s1`), the current piece's source and length (`s6`,
-`s3`), `_p` (`a5`) and the flags (`a3`). One pass either fetches the next
-`iov` (`s3 = 0`), copies `min(len, _w)` bytes into the buffer (`memmove`,
-then `_fflush_r` when the buffer is full), or, with the buffer empty and
-`len ≥ 1024`, writes `len - len % 1024` bytes straight through `__swrite`.
-The pass ends at `0x8000e258`, which subtracts the bytes from the `uio`'s
-residual and returns to the head, or leaves when it reaches zero.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- Registers the loop never writes (`sp`, `s0`, `s4`, `s5`, `s7`–`s11`). -/
 abbrev sfvKeep : List Nat := [2, 8, 20, 21, 23, 24, 25, 26, 27]
 
-/-- **The loop head's registers**: the next `iov` `nxt`, the current piece
-(`L` bytes left at `src`), `_p`, the flags, and the kept registers as in the
-loop's reference file `Rh` (which holds `FILE`, `uio`, `reent`, `INT_MAX`). -/
 structure SfvRegs (R Rh : Nat → BitVec 64) (nxt L src : Nat) (P : BitVec 64) : Prop where
   nxt : R 9 = BitVec.ofNat 64 nxt
   len : R 19 = BitVec.ofNat 64 L
@@ -34,8 +16,6 @@ structure SfvRegs (R Rh : Nat → BitVec 64) (nxt L src : Nat) (P : BitVec 64) :
   flags : R 13 = 0x2008#64
   keep : ∀ x ∈ sfvKeep, R x = Rh x
 
-/-- The loop's reference registers: `s0 = f`, `s4 = uio`, `s5 = reent`,
-`s8 = INT_MAX`, `sp` below the frame. -/
 structure SfvRef (Rh : Nat → BitVec 64) (f U sp : BitVec 64) : Prop where
   file : Rh 8 = f
   uio : Rh 20 = U
@@ -43,7 +23,6 @@ structure SfvRef (Rh : Nat → BitVec 64) (f U sp : BitVec 64) : Prop where
   imax : Rh 24 = 0x7fffffff#64
   sp : Rh 2 = sp
 
-/-- Register facts of a `SfvRegs`/`SfvRef` pair, as `nx_run` facts. -/
 theorem SfvRegs.k2 {R Rh : Nat → BitVec 64} {nxt L src : Nat} {P : BitVec 64}
     (h : SfvRegs R Rh nxt L src P) {f U sp : BitVec 64} (hr : SfvRef Rh f U sp) :
     R 8 = f ∧ R 20 = U ∧ R 21 = 0x8001b538#64 ∧ R 24 = 0x7fffffff#64 ∧ R 2 = sp :=
@@ -51,7 +30,6 @@ theorem SfvRegs.k2 {R Rh : Nat → BitVec 64} {nxt L src : Nat} {P : BitVec 64}
     (h.keep 21 (by decide)).trans hr.reent, (h.keep 24 (by decide)).trans hr.imax,
     (h.keep 2 (by decide)).trans hr.sp⟩
 
-/-- A kept register set survives an update outside it. -/
 theorem keep_upd {R Rh : Nat → BitVec 64} {xs : List Nat} {k : Nat} {v : BitVec 64} (hk : k ∉ xs)
     (h : ∀ x ∈ xs, R x = Rh x) : ∀ x ∈ xs, upd R k v x = Rh x := by
   intro x hx
@@ -59,15 +37,11 @@ theorem keep_upd {R Rh : Nat → BitVec 64} {xs : List Nat} {k : Nat} {v : BitVe
   rw [upd_other _ _ hne]
   exact h x hx
 
-/-- A kept register set through an `upd` chain outside it. -/
 macro "keep_chain " h:term : tactic => `(tactic| ((repeat (refine keep_upd (by decide) ?_)); exact $h))
 
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- **The pass's tail** (`0x8000e258`): `c` bytes handled; the residual drops
-by `c`; back to the head with `L - c` bytes left at `src + c`, or out at
-`0x8000e334` when the residual reaches zero. -/
 theorem sfv_tail (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R Rh : Nat → BitVec 64} {s sp f U P : BitVec 64} {need nxt c L src resid : Nat}
     (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - need)
@@ -102,8 +76,6 @@ theorem sfv_tail (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     all_goals rsimp
     all_goals first | exact h9 | (rw [ldv_ld_miss _ _ (by nx_addr)]; exact hp)
 
-/-- **The next `iov`** (`s3 = 0` at the head, `0x8000e0ac`): the piece at
-`nxt` becomes current, `nxt` moves on by 16. -/
 theorem sfv_fetch (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R Rh : Nat → BitVec 64} {s f U sp P : BitVec 64} {need nxt src src' L' : Nat}
     (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - need)
@@ -125,8 +97,6 @@ theorem sfv_fetch (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
   all_goals rsimp
   all_goals first | exact hR.p | exact hR.flags
 
-/-- `__sfvwrite_r`'s spills in its frame at `fp` (`sp - 96`): the entry's
-`ra` and the saved registers it restores. -/
 structure SfvSpills (M : Mem) (fp : BitVec 64) (R0 : Nat → BitVec 64) : Prop where
   ra : ldv .ld M (fp + 88#64).toNat = R0 1
   s0 : ldv .ld M (fp + 80#64).toNat = R0 8
@@ -140,7 +110,6 @@ structure SfvSpills (M : Mem) (fp : BitVec 64) (R0 : Nat → BitVec 64) : Prop w
   s8 : ldv .ld M (fp + 16#64).toNat = R0 24
   s9 : ldv .ld M (fp + 8#64).toNat = R0 25
 
-/-- **The exit** (`0x8000e334`, the residual is zero): restore and return 0. -/
 theorem sfv_exit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R R0 : Nat → BitVec 64} {s fp : BitVec 64} {need : Nat}
     (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - need)
@@ -164,9 +133,6 @@ theorem sfv_exit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     | (exfalso; simp at h32; done)
     | (exfalso; simp at h10; done)
 
-/-- **The copy pass, up to `memmove`**: from the head with `L > 0` bytes left
-and room (`k > 0` bytes buffered, or `L < 1024`), `memmove(_p, src, c)` with
-`c = min(L, 1024 - k)`, returning to `0x8000e294`. -/
 theorem sfv_copyA (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R Rh : Nat → BitVec 64} {s f U fp : BitVec 64} {need nxt k L src : Nat}
     (hs3 : s.toNat ≤ 0x88000000) (hs4 : 0x80100000 ≤ s.toNat - need)
@@ -196,7 +162,6 @@ theorem sfv_copyA (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
             by rsimp; exact hR.flags, by keep_chain hR.keep⟩ <;>
         (rsimp; congr 1; omega))
 
-/-- `subw` of two small counts. -/
 theorem subw_ofNat {a b : Nat} (ha : a < 2 ^ 31) (hb : b ≤ a) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) - BitVec.extractLsb 31 0 (BitVec.ofNat 64 b)) =
       BitVec.ofNat 64 (a - b) := by
@@ -214,10 +179,6 @@ theorem subw_ofNat {a b : Nat} (ha : a < 2 ^ 31) (hb : b ≤ a) :
   simp only [Bool.false_eq_true, ite_false, Nat.add_zero, BitVec.toNat_setWidth, BitVec.toNat_ofNat]
   omega
 
-/-- **After `memmove`** (`0x8000e294`): `_p` and `_w` advance by the `c`
-copied bytes; a full buffer is flushed (`_fflush_r`). The pass continues at
-`0x8000e258` with the buffered bytes `pend'` and the printed `out` splitting
-`pend ++ copied`. -/
 theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 : Mem}
     {R Rh : Nat → BitVec 64} {s f U fp : BitVec 64} {need nxt L src c : Nat} {pend : List (BitVec 8)}
     {g : Nat → BitVec 8}
@@ -255,7 +216,7 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
   have esw := subw_ofNat (a := 1024 - pend.length) (b := c) (by omega) (by omega)
   have hf3 : f.toNat + 1208 < 2 ^ 32 := by omega
   nx_run hlive using [h8, h18, hp, hw, esw, BitVec.add_assoc, ofNat_add_ofNat] at 2147541592 2147544524
-  · -- room left: continue at the tail
+  ·
     rename_i hb
     rsimp at hb
     have hlt : pend.length + c < 1024 := by
@@ -266,7 +227,7 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
     rw [show t = t ++ putcs [] by simp]
     refine hk _ _ (pend ++ copyBytes g src c) [] (by simp) (by rsimp; exact h18) (by rsimp; exact h9)
       (by rsimp; exact h19) (by rsimp; exact h22) (by keep_chain hkeep) hF' hFr'
-  · -- the buffer is full: flush it
+  ·
     rename_i hb
     rsimp at hb
     have heq : pend.length + c = 1024 := by
@@ -289,7 +250,7 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
     · intro i hi
       have hi' := hi; simp only [List.length_append, copyBytes_length] at hi'
       exact .inl ⟨Or.inr (Or.inr ⟨by rw [hB]; omega, by rw [hB]; omega⟩), hbuf i hi⟩
-    · -- back from `_fflush_r` (0 returned): the tail
+    ·
       nx_ret hR
       nx_run hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, BitVec.add_assoc] at 2147541592
       obtain ⟨hF'', hFr''⟩ := SbFile.flushed (ra := 0x8000e2bc#64) (s0 := R 8) (s1 := R 9) (s2 := R 18)
@@ -308,7 +269,6 @@ theorem ReadB.byteSrc {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {
   · exact .inr h
   · exact .inl h
 
-/-- The Nat remainder of a `__moddi3` result on nonnegative operands. -/
 theorem moddi3_nat {x : Nat} {v : BitVec 64} (hx : x < 2 ^ 31)
     (h : v.toInt = Vsa.While.wrap64 ((BitVec.ofNat 64 x).toInt.tmod (1024#64 : BitVec 64).toInt)) :
     v = BitVec.ofNat 64 (x % 1024) := by
@@ -322,9 +282,6 @@ theorem moddi3_nat {x : Nat} {v : BitVec 64} (hx : x < 2 ^ 31)
   rw [BitVec.ofInt_natCast] at h
   exact BitVec.eq_of_toInt_eq h
 
-/-- **The direct write** (`0x8000e214` with nothing buffered and `L ≥ 1024`):
-`__moddi3(L, 1024)`, then `__swrite(stdout, src, n)` with `n = L - L % 1024`
-straight from the source, then the tail at `0x8000e258` with `n` bytes done. -/
 theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem}
     {R Rh : Nat → BitVec 64} {s f U fp : BitVec 64} {need nxt L src : Nat} {g : Nat → BitVec 8}

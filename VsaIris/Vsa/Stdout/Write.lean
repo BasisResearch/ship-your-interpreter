@@ -32,34 +32,11 @@ import VsaIris.Vsa.Stdout.Steps.Part41
 import VsaIris.Vsa.Stdout.Steps.Part42
 import VsaIris.Vsa.Stdout.Steps.Part43
 
-/-!
-# `_write`: the console loop (lane N1)
-
-`_write(fd, buf, n)` (`0x8000003c`, libgloss HTIF) ignores `fd` and stores
-each byte of `buf[0, n)` to `tohost` as a putchar command, then returns `n`:
-
-```
-8000003c beqz a2,64        80000050 addi a1,a1,1
-80000040 li   a4,257       80000054 or   a5,a5,a4
-80000044 add  a3,a1,a2     80000058 auipc a6,0x1b
-80000048 slli a4,a4,0x30   8000005c sd   a5,-856(a6)   (tohost: prints)
-8000004c lbu  a5,0(a1)     80000060 bne  a1,a3,4c
-80000064 mv   a0,a2 ; ret
-```
-
-`write_run` is the whole call as a transformer of printing symbolic runs
-(`SWPO`): the console grows by the bytes (`putcs`), `a0 = n`, and only
-`a0`, `a1`, `a3`–`a6` change. A byte is read either from owned bytes (the
-tracking memory: `stdout`'s one-byte buffer, a stack buffer) or from the
-persistent data view (a string argument): `ByteSrc`.
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- What the console prints for a byte sequence. -/
 def putcs (bs : List (BitVec 8)) : String := String.join (bs.map putcStr)
 
 @[simp] theorem putcs_nil : putcs [] = "" := rfl
@@ -71,12 +48,9 @@ theorem putcs_cons (b : BitVec 8) (bs : List (BitVec 8)) :
 theorem putcs_append (xs ys : List (BitVec 8)) : putcs (xs ++ ys) = putcs xs ++ putcs ys := by
   simp [putcs, List.map_append, String.join_append]
 
-/-- Where a loaded byte lives: owned (tracking memory `Mt`) or in the
-persistent data view (`Dt` on `DA`). -/
 def ByteSrc (S : Nat → Prop) (Mt Dt : Mem) (DA : List Nat) (a : Nat) (b : BitVec 8) : Prop :=
   (S a ∧ imgM Mt a = b) ∨ (a ∈ DA ∧ imgM Dt a = b)
 
-/-- A byte source survives a store off the byte. -/
 theorem ByteSrc.store {S : Nat → Prop} {Mt Dt : Mem} {DA : List Nat} {a : Nat} {b : BitVec 8}
     (h : ByteSrc S Mt Dt DA a b) {addr w : Nat} (v : BitVec 64) (hd : a < addr ∨ addr + w ≤ a) :
     ByteSrc S (writeLog Mt [(addr, w, v)]) Dt DA a b := by
@@ -87,11 +61,8 @@ theorem ByteSrc.store {S : Nat → Prop} {Mt Dt : Mem} {DA : List Nat} {a : Nat}
 theorem ldv_lbu (M : Mem) (a : Nat) : ldv .lbu M a = zero_extend (m := 64) (imgM M a) := by
   simp [ldv, bytesAt, bytesVal, widthOfM]
 
-/-- The registers `_write` changes. -/
 abbrev writeClob : List Nat := [10, 11, 13, 14, 15, 16]
 
-/-- The state after `_write` returns: `a0 = n`, back at `ra`, and every
-register outside `writeClob` (and the PC) unchanged. -/
 structure WriteOut (R R' : Nat → BitVec 64) : Prop where
   a0 : R' 10 = R 12
   keep : ∀ x, x ≠ 32 → x ∉ writeClob → R' x = R x
@@ -101,7 +72,6 @@ section Loop
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Mt : Mem}
 
-/-- The putchar word `_write` builds: `0x0101 << 48 | b`. -/
 theorem write_word (b : BitVec 8) :
     zero_extend (m := 64) b ||| shift_bits_left ((0#64) + sign_extend (m := 64) (0x101#12))
       (Sail.BitVec.extractLsb (0x30#6) 5 0) = putcWord b := by
@@ -110,7 +80,6 @@ theorem write_word (b : BitVec 8) :
   rw [e, BitVec.or_comm]
   rfl
 
-/-- The putchar store `sd a5,-856(a6)` inside a `_write` run. -/
 theorem write_putc (hl : ∀ p ∈ stdioText, live p.1) (b : BitVec 8) {t : String}
     {R : Nat → BitVec 64} (h16 : R 16 = 0x8001b058#64) (h15 : R 15 = putcWord b)
     (hk : SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q (t ++ putcStr b) 0x80000060#64 R Mt) :
@@ -119,7 +88,6 @@ theorem write_putc (hl : ∀ p ∈ stdioText, live p.1) (b : BitVec 8) {t : Stri
     (fun p hp => List.mem_append_left _ (stdio_code_8000005c p hp))
     (by decide) (by decide) (by decide) (by decide) (by decide) rfl h16 h15 hk
 
-/-- The shifted putchar command `a4` holds in the loop. -/
 abbrev writeCmd : BitVec 64 :=
   shift_bits_left ((0#64) + sign_extend (m := 64) (0x101#12)) (Sail.BitVec.extractLsb (0x30#6) 5 0)
 
@@ -134,8 +102,6 @@ theorem ofNat_add_sx1 (a : Nat) :
   apply BitVec.eq_of_toNat_eq
   simp [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.add_mod]
 
-/-- One pass of the `_write` loop body from `lbu` to the `bne`: loads `bs[j]`,
-prints it, advances `a1`. -/
 theorem write_iter (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (BitVec 8))
     (hlo : 0x80000000 ≤ buf) (hhi : buf + bs.length ≤ 0x100000000)
     (hht : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)
@@ -178,9 +144,6 @@ theorem putcs_drop (bs : List (BitVec 8)) (j : Nat) (hj : j < bs.length) :
     putcs (bs.drop j) = putcStr bs[j] ++ putcs (bs.drop (j + 1)) := by
   rw [List.drop_eq_getElem_cons hj, putcs_cons]
 
-/-- **The `_write` loop** from `lbu` at `0x8000004c` with `bs[j]` next and
-`k + 1` bytes left: prints `bs[j, n)` and reaches `mv a0,a2` with `a1` at the
-end and only `a1`, `a5`, `a6` changed. -/
 theorem write_loop (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (BitVec 8))
     (hlo : 0x80000000 ≤ buf) (hhi : buf + bs.length ≤ 0x100000000)
     (hht : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)
@@ -227,8 +190,6 @@ theorem write_loop (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (
       rw [toNat_ofNat_lt (by omega), toNat_ofNat_lt (by omega)] at this
       omega
 
-/-- **`_write(fd, buf, n)`** from its entry with `ra = R 1`: prints `bs`
-(`n = |bs|` bytes at `buf`), returns `n`, changes only `writeClob`. -/
 theorem write_run (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (BitVec 8))
     (hlo : 0x80000000 ≤ buf) (hhi : buf + bs.length ≤ 0x100000000)
     (hht : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)
@@ -239,7 +200,7 @@ theorem write_run (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (B
       SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q (t ++ putcs bs) (R 1) R' Mt) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x8000003c#64 R Mt := by
   refine it_8000003c hl (fun h0 => ?_) (fun h0 => ?_)
-  · -- `n = 0`
+  ·
     have hn : bs.length = 0 := by
       have := congrArg BitVec.toNat (h12.symm.trans h0)
       rw [toNat_ofNat_lt (by omega)] at this; simpa using this
@@ -279,13 +240,9 @@ theorem write_run (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (B
           rw [upd_apply, if_neg h10, hkeep x h11x h15 h16]
           simp [upd_apply, h13, h14]
 
-/-- `_write`'s end state as an explicit register file: `a0 = n`, the
-clobbered `a1`, `a3`–`a6` at some values. -/
 abbrev writeRegs (R : Nat → BitVec 64) (v11 v13 v14 v15 v16 : BitVec 64) : Nat → BitVec 64 :=
   upd (upd (upd (upd (upd (upd R 10 (R 12)) 11 v11) 13 v13) 14 v14) 15 v15) 16 v16
 
-/-- **`_write`**, with the end state as an explicit register file (the form
-`ix_run` continues from). -/
 theorem write_run' (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (BitVec 8))
     (hlo : 0x80000000 ≤ buf) (hhi : buf + bs.length ≤ 0x100000000)
     (hht : buf + bs.length ≤ tohostAddr ∨ tohostAddr + 8 ≤ buf)

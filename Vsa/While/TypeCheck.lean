@@ -1,19 +1,9 @@
 import Vsa.While.Types
 
-/-!
-# A verified type checker
-
-`typeCheck Δ p` decides `WellTyped Δ p` (`typeCheck_iff`). The checker follows
-the typing rules syntactically. A function literal's return type is read off
-its first `return` statement (`retTySeq`), or is `null` when its body has
-none; `retTy_sound`/`retTy_found` show this is the only type the rules allow.
--/
-
 namespace Vsa.While.Types
 
 open Vsa.While
 
-/-- Operator result types (`BinTy` as a function). -/
 def binTy : BinOp → Ty → Ty → Option Ty
   | .add, .int, .int => some .int
   | .add, .str, _ => some .str
@@ -34,7 +24,6 @@ def binTy : BinOp → Ty → Ty → Option Ty
   | .ge, .str, .str => some .bool
   | _, _, _ => none
 
-/-- Call result types (`CallTy` as a function). -/
 def callTy : Ty → List Ty → Option Ty
   | .fn ps r, ts => if ps = ts then some r else none
   | .native .print, _ => some .null
@@ -43,24 +32,20 @@ def callTy : Ty → List Ty → Option Ty
   | .native .assert, [_, _] => some .null
   | _, _ => none
 
-/-- First available result. -/
 def orO {α : Type} : Option α → Option α → Option α
   | some a, _ => some a
   | none, b => b
 
-/-- The defined names after a statement. -/
 def declOut (S : List String) : Stmt → List String
   | .varDecl x _ => x :: S
   | _ => S
 
-/-- The defined names after a `for` initializer. -/
 def initOut (S : List String) : Option Stmt → List String
   | some i => declOut S i
   | none => S
 
 mutual
 
-/-- Boolean decision procedure for `MustExit`. -/
 def mustExitB : Stmt → Bool
   | .ret _ => true
   | .brk => true
@@ -69,7 +54,6 @@ def mustExitB : Stmt → Bool
   | .ifStmt _ t (some e) => mustExitB t && mustExitB e
   | _ => false
 
-/-- Boolean decision procedure for `MustExitSeq`. -/
 def mustExitSeqB : List Stmt → Bool
   | [] => false
   | s :: ss => mustExitB s || mustExitSeqB ss
@@ -78,7 +62,6 @@ end
 
 mutual
 
-/-- Expression type, if any. -/
 def checkE (Δ : TyEnv) (S : List String) : Expr → Option Ty
   | .int _ => some .int
   | .str _ => some .str
@@ -113,7 +96,6 @@ def checkE (Δ : TyEnv) (S : List String) : Expr → Option Ty
       some (.fn (params.map Δ) r)
     else none
 
-/-- Argument types, if any. -/
 def checkArgs (Δ : TyEnv) (S : List String) : List Expr → Option (List Ty)
   | [] => some []
   | e :: es =>
@@ -121,7 +103,6 @@ def checkArgs (Δ : TyEnv) (S : List String) : List Expr → Option (List Ty)
     | some t, some ts => some (t :: ts)
     | _, _ => none
 
-/-- Defined names after a statement, if it is well-typed. -/
 def checkS (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) :
     Stmt → Option (List String)
   | .expr e => if (checkE Δ S e).isSome then some S else none
@@ -152,7 +133,6 @@ def checkS (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) :
   | .brk => if L = true then some S else none
   | .cont => if L = true then some S else none
 
-/-- `var x = fn (…) {…}` with `x` bound in the body (`WtS.varRec`). -/
 def checkRec (Δ : TyEnv) (S : List String) (x : String) : Expr → Bool
   | .fn _ params body =>
     match Δ x with
@@ -162,18 +142,15 @@ def checkRec (Δ : TyEnv) (S : List String) (x : String) : Expr → Bool
     | _ => false
   | _ => false
 
-/-- The optional `for` initializer. -/
 def checkInit (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) :
     Option Stmt → Option (List String)
   | none => some S
   | some s => checkS Δ S R L s
 
-/-- An optional expression. -/
 def checkEO (Δ : TyEnv) (S : List String) : Option Expr → Bool
   | none => true
   | some e => (checkE Δ S e).isSome
 
-/-- Defined names after a sequence, if it is well-typed. -/
 def checkSeq (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) :
     List Stmt → Option (List String)
   | [] => some S
@@ -182,8 +159,6 @@ def checkSeq (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) :
     | some S₁ => checkSeq Δ S₁ R L ss
     | none => none
 
-/-- The type of the first `return` in a statement (outside nested function
-literals). -/
 def retTy (Δ : TyEnv) (S : List String) : Stmt → Option Ty
   | .ret (some e) => checkE Δ S e
   | .ret none => some .null
@@ -194,25 +169,20 @@ def retTy (Δ : TyEnv) (S : List String) : Stmt → Option Ty
   | .forStmt init _ _ b => orO (retTyInit Δ S init) (retTy Δ (initOut S init) b)
   | _ => none
 
-/-- The type of the first `return` in a `for` initializer. -/
 def retTyInit (Δ : TyEnv) (S : List String) : Option Stmt → Option Ty
   | some i => retTy Δ S i
   | none => none
 
-/-- The type of the first `return` in a sequence. -/
 def retTySeq (Δ : TyEnv) (S : List String) : List Stmt → Option Ty
   | [] => none
   | s :: ss => orO (retTy Δ S s) (retTySeq Δ (declOut S s) ss)
 
 end
 
-/-- **The type checker.** -/
 def typeCheck (Δ : TyEnv) (p : Program) : Bool :=
   decide (Δ "print" = .native .print) && decide (Δ "println" = .native .println) &&
     decide (Δ "assert" = .native .assert) &&
     (checkSeq Δ builtinNames none false p).isSome
-
-/-! ## Operator and call tables -/
 
 theorem binTy_sound {op : BinOp} {a b t : Ty} (h : binTy op a b = some t) : BinTy op a b t := by
   cases op <;> cases a <;> cases b <;> simp [binTy] at h <;> subst h <;>
@@ -246,8 +216,6 @@ theorem callTy_sound {tf : Ty} {ts : List Ty} {t : Ty} (h : callTy tf ts = some 
 theorem callTy_complete {tf : Ty} {ts : List Ty} {t : Ty} (h : CallTy tf ts t) :
     callTy tf ts = some t := by
   cases h <;> simp [callTy]
-
-/-! ## `MustExit` decisions -/
 
 mutual
 
@@ -288,8 +256,6 @@ theorem mustExitB_complete :
   case ite => intro _ _ _ _ _ ih₁ ih₂; simp [mustExitB, ih₁, ih₂]
   case head => intro _ _ _ ih; simp [mustExitSeqB, ih]
   case tail => intro _ _ _ ih; simp [mustExitSeqB, ih]
-
-/-! ## Soundness -/
 
 section Sound
 
@@ -499,8 +465,6 @@ end
 
 end Sound
 
-/-! ## Completeness -/
-
 section Complete
 
 variable {Δ : TyEnv}
@@ -533,21 +497,18 @@ theorem orO_isSome_right {α : Type} (a : Option α) {b : Option α} (h : b.isSo
   | some _ => rfl
   | none => exact h
 
-/-- What the checker computes for a well-typed statement. -/
 structure StmtCheck (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) (s : Stmt)
     (S' : List String) : Prop where
   check : checkS Δ S R L s = some S'
   ret : ∀ r t, R = some r → retTy Δ S s = some t → t = r
   found : L = false → MustExit s → (retTy Δ S s).isSome = true
 
-/-- What the checker computes for a well-typed sequence. -/
 structure SeqCheck (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) (ss : List Stmt)
     (S' : List String) : Prop where
   check : checkSeq Δ S R L ss = some S'
   ret : ∀ r t, R = some r → retTySeq Δ S ss = some t → t = r
   found : L = false → MustExitSeq ss → (retTySeq Δ S ss).isSome = true
 
-/-- What the checker computes for a well-typed `for` initializer. -/
 structure InitCheck (Δ : TyEnv) (S : List String) (R : Option Ty) (L : Bool) (o : Option Stmt)
     (S' : List String) : Prop where
   check : checkInit Δ S R L o = some S'
@@ -766,7 +727,6 @@ end
 
 end Complete
 
-/-- **The checker decides typing.** -/
 theorem typeCheck_iff {Δ : TyEnv} {p : Program} : typeCheck Δ p = true ↔ WellTyped Δ p := by
   constructor
   · intro h
@@ -777,7 +737,6 @@ theorem typeCheck_iff {Δ : TyEnv} {p : Program} : typeCheck Δ p = true ↔ Wel
   · rintro ⟨hB, S', hp⟩
     simp [typeCheck, hB.print, hB.println, hB.assert, (checkSeq_complete p hp).check]
 
-/-- `WellTyped Δ p` is decidable. -/
 instance (Δ : TyEnv) (p : Program) : Decidable (WellTyped Δ p) :=
   decidable_of_iff _ typeCheck_iff
 

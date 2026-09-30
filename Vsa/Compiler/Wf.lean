@@ -1,20 +1,9 @@
 import Vsa.Compiler.SUpd
 
-/-!
-# Static well-formedness of compiled programs
-
-`WfE T Γ e`/`WfS T Γ s`: the code generator's static assumptions about a
-subterm compiled under the chain of layouts `Γ` with string table `T`: integer
-literals are 64-bit, strings and function names are Latin-1 and in the table,
-declarations name slots of the current layout, scopes have at most 120 slots,
-and function bodies at most 120 temporaries.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While
 
-/-- Every character is a byte. -/
 def Latin1 (s : String) : Prop := ∀ c ∈ s.toList, c.toNat < 256
 
 mutual

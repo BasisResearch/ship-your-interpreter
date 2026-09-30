@@ -1,22 +1,10 @@
 import VsaIris.Interp.CallArm
 
-/-!
-# The call arm's prefix, total mode (lane E4)
-
-Every call row starts the same way: the prologue and kind dispatch, the callee
-into `sp+96`, the count test, the argument loop (E6's `evalArgsT_body`), up
-to the kind dispatch at `0x80003254`. `callPrefixT` runs it and hands its
-continuation the reached state (`CallAt`): the callee's three words with their
-meaning, the arguments' words (`argVals`), the frame's spills, the stack
-below the lowered `sp` and the world after both.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- A load reads only its window. -/
 theorem ldv_eqOn (k : MKind) {Mt Mt' : Mem} {a : Nat}
     (h : ∀ j, j < widthOfM k → imgM Mt (a + j) = imgM Mt' (a + j)) : ldv k Mt a = ldv k Mt' a := by
   unfold ldv bytesAt
@@ -25,18 +13,12 @@ theorem ldv_eqOn (k : MKind) {Mt Mt' : Mem} {a : Nat}
   intro j hj
   exact h j (List.mem_range.1 hj)
 
-/-- A doubleword of the frame outside the argument loop's writes survives it. -/
 theorem ldv_untouched {s : BitVec 64} {Mt Mt' : Mem} (h : Untouched (InExt (s.toNat - 1088, 1088))
     (argsW s) Mt Mt') {o : Nat} (ho : (96 ≤ o ∧ o + 8 ≤ 240) ∨ (1008 ≤ o ∧ o + 8 ≤ 1088)) :
     ldv .ld Mt' (s.toNat - 1088 + o) = ldv .ld Mt (s.toNat - 1088 + o) :=
   ldv_eqOn .ld fun j hj => h _ (by simp only [InExt, widthOfM] at *; omega)
     (by simp only [argsW, argsBase, InExt, widthOfM] at *; omega)
 
-/-- **The state at the kind dispatch** (`0x80003254`) after the prefix: the
-registers (`s0` the node, `s1` the result slot, `s2 = in`, `a5 = argc`, the
-other callee-saved registers the caller's), the callee's words at `sp+96`,
-and the frame's spills (the return address and `s0`-`s2` of the prologue,
-`s7` of the count test). -/
 structure CallAt (R : Nat → BitVec 64) (Mt : Mem) (s aX sret inp ret : BitVec 64)
     (rv : Nat → BitVec 64) (w0 w1 w2 : BitVec 64) (argc : Nat) : Prop where
   sp : R 2 = s + 18446744073709550528#64
@@ -60,8 +42,6 @@ theorem Expr.bodiesBoundList_mem {P : Nat} : ∀ {es : List Expr} {e : Expr},
   | _ :: _, _, h, .tail _ hm => by
     simp only [Expr.bodiesBoundList, Bool.and_eq_true] at h; exact Expr.bodiesBoundList_mem h.2 hm
 
-/-- The prologue's spills an arm without `s3` carries (the return address and
-`s0`-`s2`, `EvalSaved` without `s3`). -/
 structure CallSaved (Mt : Mem) (s ret v8 v9 v18 : BitVec 64) : Prop where
   ra : ldv .ld Mt (s.toNat - 1088 + 1080) = ret
   s0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8
@@ -83,7 +63,6 @@ theorem CallSaved.slotWrite {Mt : Mem} {s ret v8 v9 v18 : BitVec 64}
     CallSaved (slotWrite Mt a w0 w1 w2) s ret v8 v9 v18 :=
   ((h.store w0 (by omega)).store w1 (by omega)).store w2 (by omega)
 
-/-- The lowered `sp`'s stack region. -/
 theorem stackGeom_evalSP {s : BitVec 64} {n : Nat} (hsg : StackGeom s n) (h : 1088 ≤ n)
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088) :
     StackGeom (s + 18446744073709550528#64) (n - 1088) := by
@@ -91,8 +70,6 @@ theorem stackGeom_evalSP {s : BitVec 64} {n : Nat} (hsg : StackGeom s n) (h : 10
   refine ⟨by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega,
     by rw [hsf]; omega⟩
 
-/-- `CallAt` from the state before the argument loop (`Mt2`, the loop's
-entry memory) and the loop's frame fact. -/
 theorem CallAt.of_untouched {R : Nat → BitVec 64} {Mt Mt2 : Mem} {s aX sret inp ret : BitVec 64}
     {rv : Nat → BitVec 64} {w0 w1 w2 : BitVec 64} {argc : Nat}
     (hU : Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt2 Mt)
@@ -117,8 +94,6 @@ open VsaIris.Inst Vsa.RuntimeRepr
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The continuation of the call prefix, total mode: the state at the kind
-dispatch. -/
 def CallK254T (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (Φ : Nat × String → IProp GF) (k : Nat) (st2 : St) (d : Nat) (fv : Value) (vs : List Value)
     (s aX sret ret : BitVec 64) (rv : Nat → BitVec 64) (argc m' : Nat) : IProp GF :=
@@ -181,7 +156,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   rw [hsF, hsf, show (1088#64).toNat = 1088 from rfl]
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
   · iframe Hpc Hra Hregs; unfold blockOwn; iexact HF
-  -- run 1: prologue, kind dispatch, stage the callee
+
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
@@ -204,7 +179,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
     subst hMt1; constructor <;> (ix_fwd using [hoff]; ix_reg)
   unfold F'
   iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hw, Hk⟩, Hms⟩
-  -- the callee
+
   ihave Hf := hf
   rw [show k + (nf + na) = k + na + nf by omega]
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800031bc)
@@ -224,7 +199,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iintro %R1 %w0 %w1 %w2 %hkeep1 #Hv1 Hms Hst Hw
 
 #ix_piece callPrefixT_p2 from callPrefixT_p1 by
-  -- run 2: the count test, spill `s7`, `a6 = 0`, `blez`
+
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
@@ -242,7 +217,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   · ix_keep [hkeep1]
   · rw [show s.toNat - 1088 = (s + 18446744073709550528#64 + 0#64).toNat by rw [BitVec.add_zero, hsf]]
     ix_fwd; rw [BitVec.add_zero, hsf]; exact hA1
-  · -- more than 32 arguments: not this derivation's
+  ·
     intro hc; exfalso
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
     rw [hct] at hc; unfold maxArgs at hlen
@@ -260,7 +235,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   rotate_left
 
 #ix_piece callPrefixT_p3 from callPrefixT_p2 by
-  -- the argument loop
+
   have h00 : ((0#64 : BitVec 64).toInt : Int) = 0 := by decide
   have hne : args ≠ [] := fun h => by subst h; simp at hz
   have hsv2 : CallSaved Mt2 s ret (rv 8) (rv 9) (rv 18) := by
@@ -314,7 +289,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iapply Hk $$ %R' %Mt' %w0 %w1 %w2 %hcall Hv1 Hargs Hms Hst Hw
 
 #ix_piece callPrefixT_p2b from callPrefixT_p2 at 2 by
-  -- no arguments: straight to the dispatch
+
   have h00 : ((0#64 : BitVec 64).toInt : Int) = 0 := by decide
   have hnil : args = [] := List.eq_nil_of_length_eq_zero (by omega)
   subst hnil
@@ -342,11 +317,6 @@ open VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_chain callPrefixT_c := [callPrefixT_p1, callPrefixT_p2, callPrefixT_p3]
 
-/-- **The call prefix, total mode**: from `eval_expr`'s entry on a call node,
-with the callee's spec at its derivation and the argument loop's motive (E6),
-the arm reaches the kind dispatch `0x80003254` (`CallK254T`: `CallAt`, the
-callee's words and meaning, the arguments' words, the stack below the
-lowered `sp`, the world after both). -/
 theorem callPrefixT {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}

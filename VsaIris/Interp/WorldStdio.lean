@@ -3,27 +3,12 @@ import VsaIris.Vsa.Stdio
 import VsaIris.Interp.Bridge
 import VsaIris.Vsa.HeapShape
 
-/-!
-# newlib's runtime data at the boundary (A0)
-
-`Stdio.StdioOK img` asks that every memory holding `img` on `stdioFoot`
-satisfy `ConsoleStream`, `ExitRuntimeData` and the `stderr` pointer. At the
-boundary `img` is the total read `memImg m` of the configuration's memory, so
-each read fact of `m` moves to any such memory (`readLE_of_img`): a successful
-read already proves its bytes present, and nothing else is needed.
-`ConsoleStream.of_agree` does not apply: its footprint `ConsoleFoot` covers
-the whole reentrancy record, including the allocator's `_errno` word, which is
-outside `stdioFoot`.
--/
-
 namespace VsaIris.Interp
 
 open Vsa.MemRepr Vsa.Sim VsaIris.Stdio VsaIris.VsaHeap
 
 set_option autoImplicit false
 
-/-- A successful read moves to any memory holding the image on its bytes
-(`readLE_memImg`, then `Repr.readLE_of_img`). -/
 theorem readLE_img {P : Nat → Prop} {m m' : Mem} (h : ImgOn P (memImg m) m') (n a : Nat)
     {v : Nat}
     (hr : readLE m a n = some v) (hin : ∀ k, k < n → P (a + k)) : readLE m' a n = some v := by
@@ -35,19 +20,15 @@ theorem byte_of_img {P : Nat → Prop} {m m' : Mem} (h : ImgOn P (memImg m) m') 
     (hb : m[a]? = some b) (hin : P a) : m'[a]? = some b := by
   rw [h a hin, memImg_eq hb]
 
-/-- Every byte of a read below lies in `stdioFoot`: the constants are
-concrete, so one `omega` after unfolding. -/
 macro "stdio_in" : tactic =>
   `(tactic| (intro k hk; simp only [stdioFoot, Stdio.InRange, consoleImpurePtrAddr, consoleReent,
       consoleStdout, consoleBuf, exitAtexitAddr, exitAtexitLockAddr, exitStdioHandlerAddr,
       exitGlueAddr, exitStdin, exitStderr, stderrPtrAddr] at *; omega))
 
-/-- A locale read's bytes lie in `stdioFoot`. -/
 macro "stdio_in_locale" : tactic =>
   `(tactic| (intro k hk; simp only [stdioFoot, Stdio.InRange, localeMbtowcAddr, localeMbMaxAddr,
       localeDecPointAddr] at *; omega))
 
-/-- One byte in `stdioFoot`. -/
 macro "stdio_in_one" : tactic =>
   `(tactic| (simp only [stdioFoot, Stdio.InRange, consoleStdout, consoleBuf]; omega))
 
@@ -126,9 +107,6 @@ theorem StderrStream.of_img {m m' : Mem} (h : ImgOn stdioFoot (memImg m) m')
   base := readLE_img h 8 _ hs.base (by stdio_in)
   writer := readLE_img h 8 _ hs.writer (by stdio_in)
 
-/-- **newlib's data at the boundary**: the memory's own image satisfies
-`StdioOK`. The `stderr` pointer is the one fact the boundary does not state
-(INTERP_DESIGN.md Q6); `BootGap.stderr` carries it. -/
 theorem stdioOK_of_mem {o : Bool} {m : Mem} (hc : ConsoleStreamAt o m)
     (he : ExitRuntimeData m) (hs : read64 m stderrPtrAddr = some exitStderr)
     (hl : LocaleData m) (hw : StderrStream m) :

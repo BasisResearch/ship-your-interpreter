@@ -15,8 +15,6 @@ namespace Vsa.Sim
 
 set_option maxHeartbeats 1600000
 
-/-- The scan changes `s0`/`s1` (`x8`/`x9`) deliberately.  Its ABI ghost is
-therefore the caller ghost reseated at the current index and name-slot cursor. -/
 def envDefineScanGhost
     (gm : (R : Register) → Option (RegisterType R))
     (idx cursor : BitVec 64) : (R : Register) → Option (RegisterType R) :=
@@ -35,8 +33,6 @@ def envDefineScanGhost
     envDefineScanGhost gm idx cursor Register.x9 = some cursor := by
   simp [envDefineScanGhost]
 
-/-- Initialization also loads the names-vector base into `s6`/`x22`.  Record
-that deliberate callee-saved reseat before the loop starts. -/
 def envDefineScanBaseGhost
     (gm : (R : Register) → Option (RegisterType R))
     (pn : BitVec 64) : (R : Register) → Option (RegisterType R) :=

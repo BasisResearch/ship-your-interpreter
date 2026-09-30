@@ -1,12 +1,5 @@
 import Vsa.Compiler.SimArgs
 
-/-!
-# Forward simulation: call expressions
-
-The callee value waits in temporary `k`, the arguments go to the temporaries
-above it, and the call code does the rest (`CSpec`).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While

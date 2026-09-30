@@ -5,31 +5,15 @@ import VsaIris.Vsa.Fprintf.SConv
 import VsaIris.Vsa.Fprintf.ScanTo
 import VsaIris.Vsa.Fprintf.Strlen
 
-/-!
-# `fprintf(stderr, "%s\n", p)` from `_vfprintf_r`'s loop head (lane N3)
-
-From `FprLoop`, `_vfprintf_r` scans to the `%` (`vfp_toTerm`) and stages the
-string (`s_stage`, `strlen` through `strlen_sw`), then flushes it
-(`vfp_printH` with `sprintErr_hook`). An empty string skips the flush
-(`s_empty`). It then scans the `"\n"` to the NUL (`vfp_toTerm`), flushes it
-at the end (`vfp_end` with `sprintErr_hook`) and returns into `fprintf`,
-whose epilogue returns to the caller. Between the stages, `FprMid` carries
-`stderr`'s fields, `_vfprintf_r`'s spills, `fprintf`'s saved `ra` and the
-frame. The stages only write `LoopReg` (the loop's stack slots) and the
-flushes (`SprintPost`).
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 open VsaIris.Interp.StrLeaf VsaIris.Inst.Strlen
 
-/-- The loop's stack slots the scans and the staging write. -/
 def LoopReg (sp : Nat) (a : Nat) : Prop :=
   (sp ≤ a ∧ a < sp + 248) ∨ (sp + 352 ≤ a ∧ a < sp + 368)
 
-/-- `stderr`'s fields and the locale as `_vfprintf_r`'s loop reads them. -/
 structure ErrSt (M : Mem) : Prop where
   loc : Fp.LocMb M
   flagsU : ldv .lhu M 0x8001bbe8 = 0x201a#64
@@ -41,16 +25,12 @@ structure ErrSt (M : Mem) : Prop where
   writer : ldv .ld M 0x8001bc18 = 0x8000efd4#64
   flags2 : ldv .lw M 0x8001bc88 = 0#64
 
-/-- The state between the stages: `stderr`, `_vfprintf_r`'s spills of the
-caller's registers `C`, `fprintf`'s saved `ra` (at `sp + 616`), the memory
-changed only in `FprReg s`. -/
 structure FprMid (M Mt : Mem) (s sp ra : BitVec 64) (C : Nat → BitVec 64) : Prop where
   err : ErrSt M
   spills : Fp.VfpSpills M sp C
   fra : ldv .ld M (sp.toNat + 616) = ra
   frame : Fp.Frame M Mt (FprReg s)
 
-/-- The stack geometry of the body: `sp = s - 672`, in RAM, aligned. -/
 structure FprSp (s sp : BitVec 64) : Prop where
   eq : sp.toNat + 672 = s.toNat
   lo : 0x80100000 ≤ s.toNat - 4096
@@ -85,7 +65,6 @@ theorem VfpSpills.frame {M M' : Mem} {sp : BitVec 64} {C : Nat → BitVec 64} {R
     (T' 504 (by omega) (by omega)).trans h.s9, (T' 496 (by omega) (by omega)).trans h.s10,
     (T' 488 (by omega) (by omega)).trans h.s11⟩
 
-/-- **The invariant through a stage** writing only `LoopReg`. -/
 theorem FprMid.step {M M' Mt : Mem} {s sp ra : BitVec 64} {C : Nat → BitVec 64} (h : FprMid M Mt s sp ra C)
     (hS : FprSp s sp) (hF : Fp.Frame M' M (LoopReg sp.toNat)) : FprMid M' Mt s sp ra C := by
   have e := hS.eq; have l := hS.lo; have hi := hS.hi
@@ -95,8 +74,6 @@ theorem FprMid.step {M M' Mt : Mem} {s sp ra : BitVec 64} {C : Nat → BitVec 64
   rw [hF.ldv _ fun j hj hr => by unfold LoopReg at hr; simp only [widthOfM] at hj; omega]
   exact h.fra
 
-/-- **The invariant through a flush**: `SprintPost` rewrites `stderr`'s flags
-with the same value. -/
 theorem FprMid.sprint {M M' Mt : Mem} {s sp ra : BitVec 64} {C : Nat → BitVec 64} (h : FprMid M Mt s sp ra C)
     (hS : FprSp s sp) (hP : SprintPost M M' sp) : FprMid M' Mt s sp ra C := by
   have e := hS.eq; have l := hS.lo; have hi := hS.hi
@@ -135,24 +112,18 @@ theorem FprMid.sprint {M M' Mt : Mem} {s sp ra : BitVec 64} {C : Nat → BitVec 
     simp only [Reg, Stdio.errnoFoot, Stdio.InRange, widthOfM] at hr hj; omega]
   exact h.fra
 
-/-- What the body leaves: the memory changed only in `FprReg s`, `stderr`
-set up. -/
 structure FprPost (Mt Mf : Mem) (s : BitVec 64) : Prop where
   frame : Fp.Frame Mf Mt (FprReg s)
   err : ErrSt Mf
 
-/-- The data view: `_impure_ptr`, then the format and the string. -/
 abbrev fprDA (DA : List Nat) : List Nat := accAddrs 0x8001b970 8 ++ DA
 
-/-- `stderr`'s 184 bytes are in the footprint. -/
 theorem stderr_cover (s : BitVec 64) (need : Nat) :
     Fp.Cover (outS s need) (0x8001bbd8#64).toNat ((0x8001bbd8#64).toNat + 184) := by
   intro b h1 h2
   simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod] at h1 h2
   exact .inl ⟨.inr (.inr (.inr (.inr (.inr ⟨by omega, by omega⟩)))), by unfold impureW; omega⟩
 
-/-- **The end**: the `"\n"` pending at `0x8000aca8`, flushed (`vfp_end` with
-`sprintErr_hook`), `_vfprintf_r`'s return, `fprintf`'s epilogue. -/
 theorem fpr_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt M : Mem} {R R0 : Nat → BitVec 64}
@@ -219,8 +190,6 @@ theorem fpr_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
 theorem scanReg_loopReg {sp a : Nat} (h : Fp.ScanReg sp a) : LoopReg sp a := by
   unfold Fp.ScanReg Fp.MbReg at h; unfold LoopReg; omega
 
-/-- **The `"\n"`**: from the loop head at `fmt + 2`, the scan to the NUL
-(`vfp_toTerm`), then `fpr_end`. -/
 theorem fpr_nl {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt M : Mem} {R R0 : Nat → BitVec 64}
@@ -252,14 +221,10 @@ theorem FprSp.off {s sp : BitVec 64} {a : Nat} (hS : FprSp s sp)
 theorem sReg_loopReg {sp a : Nat} (h : Fp.SReg sp 0 a) : LoopReg sp a := by
   unfold Fp.SReg at h; unfold LoopReg; omega
 
-/-- The string's bytes, read from the data view. -/
 def strBs (Dt : Mem) (p n : Nat) : List (BitVec 8) := (List.range n).map fun i => imgM Dt (p + i)
 
 theorem strBs_length (Dt : Mem) (p n : Nat) : (strBs Dt p n).length = n := by simp [strBs]
 
-/-- The string `p` as `fprintf`'s run reads it: `n` bytes and a NUL in the
-data view (`DA`), in RAM, off `tohost`, the call's stack, newlib's data and
-`errno`. -/
 structure FprStr (live : Nat → Prop) (Dt : Mem) (DA : List Nat) (s p : BitVec 64) (n : Nat) : Prop where
   ctx : LCtx live p 0x8000cfcc#64 n (imgM Dt)
   mem : ∀ i, i ≤ n → p.toNat + i ∈ DA
@@ -270,7 +235,6 @@ structure FprStr (live : Nat → Prop) (Dt : Mem) (DA : List Nat) (s p : BitVec 
   off : ∀ i, i < n → (p.toNat + i < s.toNat - 4096 ∨ s.toNat ≤ p.toNat + i) ∧
     ¬ stdioFoot (p.toNat + i) ∧ (p.toNat + i < 0x8001ba08 ∨ 0x8001ba0c ≤ p.toNat + i)
 
-/-- `strlen`'s code and the string are in the run's view. -/
 theorem FprStr.sub {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {s p : BitVec 64} {n : Nat}
     (h : FprStr live Dt DA s p n) :
     ∀ q ∈ strCode ++ strText p.toNat n (imgM Dt), q ∈ stdioText ++ dataOf Dt (fprDA DA) := by
@@ -283,10 +247,6 @@ theorem FprStr.sub {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {s p : BitVe
     exact List.mem_map_of_mem (f := fun a => (a, imgM Dt a))
       (List.mem_append_right _ (h.mem k (by have := List.mem_range.1 hk; omega)))
 
-/-- **`%s`**: from the loop head at `fmt`, the scan to the `%`
-(`vfp_toTerm`), the string staged (`s_stage`) and flushed (`vfp_printH`
-with `sprintErr_hook`), or nothing for an empty string (`s_empty`), then
-`fpr_nl`. -/
 theorem fpr_s {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt M : Mem} {R R0 : Nat → BitVec 64}
@@ -374,8 +334,6 @@ theorem fpr_s {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     rw [e2, Nat.zero_add, hbl] at hL3
     exact fpr_nl hlive hS hL3 hI3 hF hnlA hnl (by omega) h1 h2 hra hk
 
-/-- **`fprintf(stderr, "%s\n", p)`, the whole run**: `fprintfHead_run` to
-the loop head, then `fpr_s`. -/
 theorem fprintfErr_run {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
     (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {R : Nat → BitVec 64}

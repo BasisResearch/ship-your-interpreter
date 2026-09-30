@@ -1,18 +1,5 @@
 import VsaIris.Vsa.Fprintf.Move
 
-/-!
-# Flushing `__sbprintf`'s stack `FILE` (lane N5)
-
-`__sbprintf` formats into a `FILE` on its own stack frame: flags `0x2008`
-(`__SORD | __SWR`, fully buffered), a 1024-byte buffer, and `stdout`'s
-`_cookie`/`_write` (`__swrite` on `stdout`). `__sfvwrite_r` flushes it when
-the buffer fills, and `__sbprintf` flushes it at the end: `_fflush_r` takes
-the (no-op) lock, `__sflush_r` writes `[_bf._base, _p)` through `__swrite`
-(N1's `swrite_run`, the console loop), and resets `_p` to the base and `_w`
-to `_bf._size` (the fully-buffered branch, `flags & 3 = 0`). N1's
-`sflush_run` is the unbuffered `stdout` branch (`_w := 0`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -71,9 +58,6 @@ open scoped VsaIris.Sym.Stdout
 
 #nx_chain sflushF_chain := [sflushF_A, sflushF_B, sflushF_C, sflushF_D]
 
-/-- The memory after `__sflush_r(reent, f)` on the stack `FILE` returns: its
-five spills, `_p` reset to the base, `_w` to `_bf._size`, and `__swrite`'s
-effect (`swriteMt`). -/
 abbrev sflushFMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   swriteMt (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551600#64).toNat, 8, s0)]) [((sp + 18446744073709551576#64).toNat, 8, s3)])
@@ -81,8 +65,6 @@ abbrev sflushFMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
     [((sp + 18446744073709551592#64).toNat, 8, s1)]) [(f.toNat, 8, B)]) [((f + 12#64).toNat, 4, 1024#64)])
     (sp + 18446744073709551568#64) 0x8000ed0c#64 f
 
-/-- **`__sflush_r(reent, f)`** on `__sbprintf`'s stack `FILE` with `bs` pending:
-prints them through `__swrite` on `stdout`, resets `_p`/`_w`, returns 0. -/
 theorem sflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f B ra s0 s1 s2 s3 : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
@@ -116,16 +98,12 @@ theorem sflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1
   simp only [sflushFMt, nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
-/-- The memory after `__sflush_r(reent, f)` with nothing pending: the spills
-and the reset `_p`/`_w`. -/
 abbrev sflushF0Mt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   writeLog (writeLog (writeLog (writeLog (writeLog (writeLog (writeLog Mt
     [((sp + 18446744073709551600#64).toNat, 8, s0)]) [((sp + 18446744073709551576#64).toNat, 8, s3)])
     [((sp + 18446744073709551608#64).toNat, 8, ra)]) [((sp + 18446744073709551584#64).toNat, 8, s2)])
     [((sp + 18446744073709551592#64).toNat, 8, s1)]) [(f.toNat, 8, B)]) [((f + 12#64).toNat, 4, 1024#64)]
 
-/-- **`__sflush_r(reent, f)`** on the stack `FILE` with nothing pending:
-prints nothing, returns 0. -/
 theorem sflushF_run0 {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f B ra s0 s1 s2 s3 : BitVec 64} {need : Nat}
@@ -145,11 +123,6 @@ theorem sflushF_run0 {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.
     BitVec.reduceOr, BitVec.add_assoc, BitVec.sub_self, BitVec.toInt_zero]
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
-/-! ## `_fflush_r` on the stack `FILE` -/
-
-/-- The common context of an `_fflush_r(reent, f)` call on `__sbprintf`'s
-stack `FILE`: the stack window, the registers, the `FILE`'s fields, and the
-boundary `stdout` fields `__swrite` reads. -/
 structure FfCtx (s sp f B ra : BitVec 64) (need : Nat) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   hs1 : s.toNat - need + 256 ≤ sp.toNat
   hs2 : sp.toNat ≤ s.toNat
@@ -216,7 +189,6 @@ structure FfCtx (s sp f B ra : BitVec 64) (need : Nat) (R : Nat → BitVec 64) (
 
 #nx_chain fflushF_chain := [fflushF_A, fflushF_B, fflushF_C]
 
-/-- The memory after `_fflush_r(reent, f)` on the stack `FILE` returns. -/
 abbrev fflushFMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   writeLog (sflushFMt
     (writeLog (writeLog (writeLog (writeLog Mt [((sp + 18446744073709551608#64).toNat, 8, ra)])
@@ -226,8 +198,6 @@ abbrev fflushFMt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
     (sp + 18446744073709551584#64) f B (2147544592#64) s0 s1 s2 s3)
     [((sp + 18446744073709551584#64).toNat, 8, 0#64)]
 
-/-- **`_fflush_r(reent, f)`** on `__sbprintf`'s stack `FILE` with `bs`
-pending: prints them, returns 0. -/
 theorem fflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f B ra : BitVec 64} {need : Nat} {bs : List (BitVec 8)}
@@ -277,8 +247,6 @@ theorem fflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1
 
 #nx_chain fflushF0_chain := [fflushF0_A, fflushF0_B, fflushF0_C]
 
-/-- The memory after `_fflush_r(reent, f)` on the stack `FILE` with nothing
-pending. -/
 abbrev fflushF0Mt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
   writeLog (sflushF0Mt
     (writeLog (writeLog (writeLog (writeLog Mt [((sp + 18446744073709551608#64).toNat, 8, ra)])
@@ -288,8 +256,6 @@ abbrev fflushF0Mt (Mt : Mem) (sp f B ra s0 s1 s2 s3 : BitVec 64) : Mem :=
     (sp + 18446744073709551584#64) f B (2147544592#64) s0 s1 s2 s3)
     [((sp + 18446744073709551584#64).toNat, 8, 0#64)]
 
-/-- **`_fflush_r(reent, f)`** on the stack `FILE` with nothing pending: prints
-nothing, returns 0. -/
 theorem fflushF_run0 {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
     {R : Nat → BitVec 64} {s sp f B ra : BitVec 64} {need : Nat}

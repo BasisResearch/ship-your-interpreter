@@ -11,11 +11,9 @@ abbrev SplitReadResult (w : Nat) :=
 
 abbrev SplitReadState (n d : Nat) := BitVec (8 * (n : Int) * (d : Int)).toNat × Bool × Nat
 
-/-- Address calculation used by the actual split-read loop. -/
 def ramChunkAddress (a : BitVec 64) (d i : Nat) : physaddr :=
   physaddr.Physaddr (BitVec.addInt a ((i : Int) * (d : Int)))
 
-/-- The actual loop's little-endian insertion operation. -/
 def splitReadInsert (n d i : Nat) (data : BitVec (8 * (n : Int) * (d : Int)).toNat) (v : BitVec (8 * d)) :
     BitVec (8 * (n : Int) * (d : Int)).toNat :=
   let updated : BitVec (8 * n * d) :=
@@ -24,16 +22,13 @@ def splitReadInsert (n d i : Nat) (data : BitVec (8 * (n : Int) * (d : Int)).toN
       ((8 * (i : Int) * (d : Int)).toNat) v
   updated.setWidth (8 * (n : Int) * (d : Int)).toNat
 
-/-- Assembly after the first i chunks, using the same insertion as Sail. -/
 def splitReadAccum (n d : Nat) (values : Nat → BitVec (8 * d)) : Nat → BitVec (8 * (n : Int) * (d : Int)).toNat
   | 0 => 0
   | i + 1 => splitReadInsert n d i (splitReadAccum n d values i) (values i)
 
-/-- Exact loop state after i chunks. The final iteration retains its index. -/
 def splitReadTrace (n d : Nat) (values : Nat → BitVec (8 * d)) (i : Nat) : SplitReadState n d :=
   (splitReadAccum n d values i, decide (n ≤ i), min i (n - 1))
 
-/-- One body of the executable scalar split-read loop. -/
 def splitReadBody (a : BitVec 64) (w n d : Nat) :
     SplitReadState n d → SailME (SplitReadResult w) (SplitReadState n d) :=
   let N : Int := n
@@ -79,7 +74,6 @@ def splitReadBody (a : BitVec 64) (w n d : Nat) :
             (finished, i))
         (pure (data, finished, i))
 
-/-- Read checks and the actual RAM value at one selected chunk. -/
 structure SplitReadChunk (σ : Vsa.Machine.MState) (a : BitVec 64)
     (d i : Nat) (v : BitVec (8 * d)) : Prop where
   pmp : (pmpCheck (ramChunkAddress a d i) d
@@ -88,7 +82,6 @@ structure SplitReadChunk (σ : Vsa.Machine.MState) (a : BitVec 64)
   ram : (Functions.read_ram read_kind.Read_plain (ramChunkAddress a d i)
     d false).run σ = .ok (v, ()) σ
 
-/-- A checked chunk advances the concrete loop trace once. -/
 theorem splitReadBody_trace (σ : Vsa.Machine.MState) (a : BitVec 64) (w n d i : Nat)
     (values : Nat → BitVec (8 * d)) (hi : i < n)
     (hc : SplitReadChunk σ a d i (values i)) :
@@ -127,7 +120,6 @@ theorem splitReadBody_trace (σ : Vsa.Machine.MState) (a : BitVec 64) (w n d i :
     have hm : min (i + 1) (n - 1) = i + 1 := Nat.min_eq_left (by omega)
     simp [hnat, hinc, hbefore, he, hn, hm, splitReadAccum]
 
-/-- Every chunk supplied by the trace is read once, with exact accumulated bytes. -/
 theorem splitReadLoop_trace (σ : Vsa.Machine.MState) (a : BitVec 64) (w n d : Nat)
     (values : Nat → BitVec (8 * d))
     (hc : ∀ i, i < n → SplitReadChunk σ a d i (values i)) :

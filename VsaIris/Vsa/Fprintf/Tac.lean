@@ -1,26 +1,11 @@
 import VsaIris.Vsa.Stdout.Fflush
 import VsaIris.Vsa.SymBridge
 
-/-!
-# Driving `fprintf` runs (lane N5)
-
-`fprintf` on `stdout` runs `_vfprintf_r` twice (on `stdout`, then on
-`__sbprintf`'s stack `FILE`), each a few hundred instructions before its
-first call. `nx_run` (N1's `Stdout/Tac.lean`) accumulates every register
-update in one `upd` chain; past a few dozen updates the normalizer's
-recursion depth runs out and branch conditions stop reducing.
-
-`nx_flat` restarts the register file: a fresh `R'` with one fact per owned
-register, `R' r = v`, `v` the normalized value (`swp_fresh`). The facts are
-locals, which `nx_run`'s normalizer uses (`simp only [*]`).
--/
-
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout
 
-/-- **A fresh register file** equal to the current one. -/
 theorem swp_fresh {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat}
     {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem}
@@ -29,8 +14,7 @@ theorem swp_fresh {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : Li
   h R fun _ => rfl
 
 set_option hygiene false in
-/-- `nx_flat`: the goal's register file as a fresh `R'` with the facts
-`f<r> : R' r = v` for `ra`, `sp`, `t0`–`t6`, `s0`–`s11`, `a0`–`a7`. -/
+
 macro "nx_flat" : tactic => `(tactic| (
   refine swp_fresh fun R' hR' => ?_
   have g1 := hR' 1; have g2 := hR' 2; have g3 := hR' 3; have g4 := hR' 4; have g5 := hR' 5; have g6 := hR' 6; have g7 := hR' 7; have g8 := hR' 8
@@ -50,9 +34,6 @@ macro "nx_flat" : tactic => `(tactic| (
   have f27 := g27; have f28 := g28; have f29 := g29; have f30 := g30; have f31 := g31
   clear g1 g2 g3 g4 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31))
 
-/-- `nf_run [n] h using [facts] at pc…`: `nx_run` with the flat register facts
-`f<r>` (`nx_flat`) and the literal-arithmetic simprocs in the normalizer's list
-(`nx_run`'s normalizer rewrites with its `using` list only). -/
 syntax "nf_run " "[" num "] " term " using " "[" term,* "]" (" at " num+)? : tactic
 set_option hygiene false in
 macro_rules
@@ -69,10 +50,6 @@ end VsaIris.Sym
 
 namespace VsaIris.Sym
 
-/-- `nf_go k [n] h using [facts] at pc…`: `k` rounds of `nx_flat; nf_run [n]` on every
-open run goal at a literal PC that is not a stop: the register file never grows
-past `n` updates (the normalizer's recursion depth bounds the chain it can
-reduce). Side goals and stopped runs are left as they are. -/
 syntax (name := nfGo) "nf_go " num " [" num "] " term " using " "[" term,* "]" (" at " num+)? : tactic
 
 open Lean Elab Tactic Meta in
@@ -102,10 +79,6 @@ end VsaIris.Sym
 
 namespace VsaIris.Sym
 
-/-- Branch conditions over offset addresses (`x + k = y`, `x + k ≠ y`), refuted
-through `toNat` arithmetic before `sx_side`'s last resort `decide` (which
-diverges on a symbolic `BitVec`, and `first`/`try` do not catch its
-recursion-depth exception). -/
 syntax "bv_toNat_contra " ident : tactic
 macro_rules
   | `(tactic| bv_toNat_contra $h) => `(tactic| (
@@ -114,10 +87,7 @@ macro_rules
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod] at hc'
       omega))
 open Lean Elab Tactic Meta in
-/-- `sx_side` on a refuted branch `¬ (x = y)` or `¬ (x ≠ y)`: the `toNat`
-contradiction. The shape is checked syntactically first: unifying the branch
-fact with `_ = _` would unfold an arbitrary condition (`Int.lt` of literal
-words recurses past the depth limit, which `first` does not catch). -/
+
 elab "bv_side_contra" : tactic => do
   let g ← getMainGoal
   let ty ← instantiateMVars (← g.getType)
@@ -138,9 +108,7 @@ scoped macro_rules
 end Stdout
 
 open Lean Elab Tactic Meta in
-/-- `sx_side` on a closed goal (a branch on literal words): `decide`, before
-any rule that searches the context (`assumption` against a literal `Int.lt`
-unfolds past the recursion limit). -/
+
 elab "closed_decide" : tactic => do
   let g ← getMainGoal
   let ty ← instantiateMVars (← g.getType)

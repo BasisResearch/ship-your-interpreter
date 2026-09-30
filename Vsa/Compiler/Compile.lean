@@ -1,19 +1,12 @@
 import Vsa.Compiler.Gen
 import Vsa.While.Semantics
 
-/-!
-# The WHILE → RV64 compiler (integer subset)
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While
 
 def mainPos₀ : Nat := printPos + printCode.length
 
-/-! ## Scopes -/
-
-/-- Names declared so far in each frame, innermost first, with their slots. -/
 abbrev Scope := List (List (String × Nat))
 
 def Scope.resolve : Scope → String → Option Nat
@@ -22,10 +15,6 @@ def Scope.resolve : Scope → String → Option Nat
     | some i => some i
     | none => Scope.resolve g x
 
-/-! ## Expressions -/
-
-/-- Comparison as a branch that fires when the result is true, on operands `a0`
-(left) and `a1` (right). -/
 def cmpBranch : BinOp → Option (BrOp × Nat × Nat)
   | .lt => some (.lt, a0, a1)
   | .le => some (.ge, a1, a0)
@@ -35,7 +24,6 @@ def cmpBranch : BinOp → Option (BrOp × Nat × Nat)
   | .ne => some (.ne, a0, a1)
   | _ => none
 
-/-- `a0 := a0 op a1` for an operator, emitted at instruction `pos`. -/
 def cbin (pos : Nat) : BinOp → List Ins
   | .add => [.add a0 a0 a1]
   | .sub => [.sub a0 a0 a1]
@@ -46,8 +34,6 @@ def cbin (pos : Nat) : BinOp → List Ins
     | some (b, r1, r2) => [.addi s3 0 1, .br b r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3]
     | none => []
 
-/-- Evaluate `e` into `a0`; `k` is the temporary depth, `pos` the position of
-the first emitted instruction. -/
 def cexpr (Γ : Scope) (k pos : Nat) : Expr → List Ins
   | .int n => li a0 (BitVec.ofInt 64 n)
   | .bool b => [.addi a0 0 (if b then 1 else 0)]
@@ -67,17 +53,12 @@ def cexpr (Γ : Scope) (k pos : Nat) : Expr → List Ins
     cexpr Γ k pos e ++ [.addi s3 0 1, .br .eq a0 0 (bSkip 1), .addi s3 0 0, mv a0 s3]
   | _ => []
 
-/-! ## Statements -/
-
-/-- Compilation context: the scope, the next fresh slot, and the break and
-continue targets of the innermost loop. -/
 structure Ctx where
   Γ : Scope
   next : Nat
   brk : Nat
   cont : Nat
 
-/-- Printing code for arguments `k … k+n-1` placed at `pos`. -/
 def printLoop (k pos : Nat) : Nat → List Ins
   | 0 => []
   | n + 1 =>
@@ -86,10 +67,8 @@ def printLoop (k pos : Nat) : Nat → List Ins
     let sep := if n = 0 then [] else putc ' '
     ld ++ [call] ++ sep ++ printLoop (k + 1) (pos + ld.length + 1 + sep.length) n
 
-
 mutual
 
-/-- Compile a statement at `pos`. Returns the code and the next fresh slot. -/
 def cstmt (C : Ctx) (pos : Nat) : Stmt → List Ins × Nat
   | .expr (.call (.var f) args) =>
     let (ev, p) := cargs C.Γ 0 pos args
@@ -124,7 +103,6 @@ def cstmt (C : Ctx) (pos : Nat) : Stmt → List Ins × Nat
   | .cont => ([.jal 0 (jOff pos C.cont)], C.next)
   | _ => ([], C.next)
 
-/-- Compile a statement list; declarations extend the innermost scope. -/
 def cseq (C : Ctx) (pos : Nat) : List Stmt → List Ins × Scope × Nat
   | [] => ([], C.Γ, C.next)
   | .varDecl x (some e) :: ss =>
@@ -142,8 +120,6 @@ def cseq (C : Ctx) (pos : Nat) : List Stmt → List Ins × Scope × Nat
     let (cr, Γ', n') := cseq { C with next := n } (pos + c.length) ss
     (c ++ cr, Γ', n')
 
-/-- Evaluate call arguments into temporaries `k, k+1, …`. Returns the code and
-the position after it. -/
 def cargs (Γ : Scope) (k pos : Nat) : List Expr → List Ins × Nat
   | [] => ([], pos)
   | e :: es =>
@@ -154,7 +130,6 @@ def cargs (Γ : Scope) (k pos : Nat) : List Expr → List Ins × Nat
 
 end
 
-/-- The whole program. -/
 def compile (p : Program) : List Ins :=
   let initΓ : Scope := [[]]
   let (body, _, _) := cseq ⟨initΓ, 0, 0, 0⟩ mainPos₀ p

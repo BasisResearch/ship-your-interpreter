@@ -1,26 +1,9 @@
 import Vsa.Sim.Boot.Store
 import Vsa.MemReprWithin
 
-/-!
-# The represented AST: uniqueness and a covered decoder
-
-* Uniqueness: a memory represents at most one AST at an address
-  (`ExprRepr.unique`, …, `ProgramRepr.unique`). Constructors are told apart by
-  the tag word and by zero/nonzero pointer or word fields; strings by
-  `CString.unique`.
-* Decoder: `decodeExpr v P fuel a`, …, `decodeProgram v P fuel a n` read the
-  nodes through the byte view `v`, check that every read window (every byte of
-  a field, every byte of a string including its NUL) satisfies `P`, and return
-  the AST. `fuel` bounds the recursion depth plus the array lengths along a
-  path and every string's length. Soundness (`decodeProgram_sound`): over a
-  partial view of `m` the decoded program is `ProgramReprWithin m (P · = true)`.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr Vsa.While
-
-/-! ## Uniqueness -/
 
 theorem _root_.Vsa.MemRepr.CStr.unique {m : Mem} {a : Nat} {cs cs' : List Char}
     (h : CStr m a cs) (h' : CStr m a cs') : cs = cs' := by
@@ -52,23 +35,22 @@ theorem logOpTok_inj {o o' : LogOp} : logOpTok o = logOpTok o' ↔ o = o' := by
 theorem unOpTok_inj {o o' : UnOp} : unOpTok o = unOpTok o' ↔ o = o' := by
   cases o <;> cases o' <;> decide
 
-/-- Every expression represented at `a` is `e`. -/
 def UniqE (m : Mem) (a : Nat) (e : Expr) : Prop := ∀ e', ExprRepr m a e' → e' = e
-/-- Every expression array represented at `a` with count `n` is `es`. -/
+
 def UniqEA (m : Mem) (a n : Nat) (es : List Expr) : Prop :=
   ∀ es', ExprArrayRepr m a n es' → es' = es
-/-- Every parameter array represented at `a` with count `n` is `xs`. -/
+
 def UniqP (m : Mem) (a n : Nat) (xs : List String) : Prop :=
   ∀ xs', ParamsRepr m a n xs' → xs' = xs
-/-- Every statement represented at `a` is `s`. -/
+
 def UniqS (m : Mem) (a : Nat) (s : Stmt) : Prop := ∀ s', StmtRepr m a s' → s' = s
-/-- Every optional statement field represented at `a` is `s`. -/
+
 def UniqOS (m : Mem) (a : Nat) (s : Option Stmt) : Prop :=
   ∀ s', OptStmtRepr m a s' → s' = s
-/-- Every optional expression field represented at `a` is `e`. -/
+
 def UniqOE (m : Mem) (a : Nat) (e : Option Expr) : Prop :=
   ∀ e', OptExprRepr m a e' → e' = e
-/-- Every statement array represented at `a` with count `n` is `ss`. -/
+
 def UniqSA (m : Mem) (a n : Nat) (ss : List Stmt) : Prop :=
   ∀ ss', StmtArrayRepr m a n ss' → ss' = ss
 
@@ -87,8 +69,6 @@ theorem UniqOE.use {m : Mem} {a : Nat} {e e' : Option Expr} (h : UniqOE m a e)
 theorem UniqSA.use {m : Mem} {a n : Nat} {ss ss' : List Stmt} (h : UniqSA m a n ss)
     (h' : StmtArrayRepr m a n ss') : ss' = ss := h ss' h'
 
-/-- Close an equation between two decoded children from the child's
-uniqueness hypothesis or C-string uniqueness (either orientation). -/
 macro "uniq_close" : tactic =>
   `(tactic| first
     | rfl
@@ -110,9 +90,6 @@ macro "uniq_close" : tactic =>
     | (apply Eq.symm; apply Stmt.block.inj; apply UniqS.use <;> assumption)
     | (apply CString.unique <;> assumption))
 
-/-- Case step of the uniqueness recursion: the second derivation is either a
-different constructor (its field reads contradict the first) or the same one
-(its fields agree, and so do its children). -/
 macro "uniq_step" : tactic =>
   `(tactic| (
     intro _ h'
@@ -128,7 +105,6 @@ macro "uniq_step" : tactic =>
     all_goals (try subst_vars)
     all_goals (repeat' constructor) <;> uniq_close))
 
-/-- Uniqueness for all seven relations at once (the recursor's conclusion). -/
 structure UniqueAll (m : Mem) : Prop where
   expr : ∀ a e, ExprRepr m a e → UniqE m a e
   exprArray : ∀ a n es, ExprArrayRepr m a n es → UniqEA m a n es
@@ -139,7 +115,7 @@ structure UniqueAll (m : Mem) : Prop where
   stmtArray : ∀ a n ss, StmtArrayRepr m a n ss → UniqSA m a n ss
 
 theorem unique_all {m : Mem} : UniqueAll m := by
-  -- The seven recursors share their 35 minor premises (`?c1 … ?c35`).
+
   refine ⟨@ExprRepr.rec m
       (fun a e _ => UniqE m a e) (fun a n es _ => UniqEA m a n es)
       (fun a n xs _ => UniqP m a n xs) (fun a s _ => UniqS m a s) (fun a s _ => UniqOS m a s)
@@ -189,15 +165,10 @@ theorem _root_.Vsa.MemRepr.StmtArrayRepr.unique {m : Mem} {a n : Nat} {ss ss' : 
     (h : StmtArrayRepr m a n ss) (h' : StmtArrayRepr m a n ss') : ss = ss' :=
   (unique_all.stmtArray _ _ _ h ss' h').symm
 
-/-- A memory represents at most one program at `a` with count `n`. -/
 theorem _root_.Vsa.MemRepr.ProgramRepr.unique {m : Mem} {a n : Nat} {p p' : Program}
     (h : ProgramRepr m a n p) (h' : ProgramRepr m a n p') : p = p' :=
   StmtArrayRepr.unique h.1 h'.1
 
-/-! ## Covered reads through a view -/
-
-/-- Little-endian read of `w` bytes at `a` through `v`, requiring `P` on every
-byte of the window. -/
 def rdc (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (a : Nat) : Nat → Option Nat
   | 0 => some 0
   | w + 1 =>
@@ -207,7 +178,6 @@ def rdc (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (a : Nat) : Nat → O
       | _, _ => none
     else none
 
-/-- A covered read: the memory read and the window's coverage. -/
 structure RdOk (m : Mem) (P : Nat → Prop) (a w x : Nat) : Prop where
   read : readLE m a w = some x
   covers : Covers P a w
@@ -237,8 +207,6 @@ theorem rdc_sound {m : Mem} {v : Nat → Option (BitVec 8)} {P : Nat → Bool}
       · cases h
     · cases h
 
-/-- The NUL-terminated ASCII string at `a` through `v`, within `fuel` bytes,
-requiring `P` on every byte including the NUL. -/
 def cstrc (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (a : Nat) : Nat → Option (List Char)
   | 0 => none
   | fuel + 1 =>
@@ -251,11 +219,9 @@ def cstrc (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (a : Nat) : Nat →
       | none => none
     else none
 
-/-- The covered string at `a` as a `String`. -/
 def strc (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (fuel a : Nat) : Option String :=
   (cstrc v P a fuel).map String.ofList
 
-/-- A covered string: its characters and the coverage of every byte and the NUL. -/
 structure CstrOk (m : Mem) (P : Nat → Prop) (a : Nat) (cs : List Char) : Prop where
   str : CStr m a cs
   covers : ∀ i, i ≤ cs.length → P (a + i)
@@ -310,13 +276,10 @@ theorem strc_sound {m : Mem} {v : Nat → Option (BitVec 8)} {P : Nat → Bool}
     have ht := cstrc_sound hv hc
     exact ⟨⟨cs, ht.str, rfl⟩, fun i hi => ht.covers i (by simpa [String.length_ofList] using hi)⟩
 
-/-! ## Operator tokens -/
-
 def binOps : List BinOp := [.add, .sub, .mul, .div, .mod, .ne, .eq, .lt, .le, .gt, .ge]
 def logOps : List LogOp := [.and, .or]
 def unOps : List UnOp := [.neg, .not]
 
-/-- The operator stored as token `t`. -/
 def binOpOfTok (t : Nat) : Option BinOp := binOps.find? (binOpTok · == t)
 def logOpOfTok (t : Nat) : Option LogOp := logOps.find? (logOpTok · == t)
 def unOpOfTok (t : Nat) : Option UnOp := unOps.find? (unOpTok · == t)
@@ -331,9 +294,6 @@ theorem unOpOfTok_sound {t : Nat} {o : UnOp} (h : unOpOfTok t = some o) :
     unOpTok o = t := by
   simpa using List.find?_some h
 
-/-! ## The decoder -/
-
-/-- `n` parameter names from the `char **` array at `a`. -/
 def decodeParams (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (fuel : Nat) :
     Nat → Nat → Option (List String)
   | _, 0 => some []
@@ -345,7 +305,6 @@ def decodeParams (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (fuel : Nat)
 
 mutual
 
-/-- The expression at `a`. -/
 def decodeExpr (v : Nat → Option (BitVec 8)) (P : Nat → Bool) : Nat → Nat → Option Expr
   | 0, _ => none
   | fuel + 1, a => do
@@ -416,7 +375,6 @@ def decodeExpr (v : Nat → Option (BitVec 8)) (P : Nat → Bool) : Nat → Nat 
       | _ => none
     | _ => none
 
-/-- `n` expressions from the `Expr **` array at `a`. -/
 def decodeExprArray (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
     Nat → Nat → Nat → Option (List Expr)
   | _, _, 0 => some []
@@ -427,7 +385,6 @@ def decodeExprArray (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
     let es ← decodeExprArray v P fuel (a + 8) n
     pure (e :: es)
 
-/-- The statement at `a`. -/
 def decodeStmt (v : Nat → Option (BitVec 8)) (P : Nat → Bool) : Nat → Nat → Option Stmt
   | 0, _ => none
   | fuel + 1, a => do
@@ -483,7 +440,6 @@ def decodeStmt (v : Nat → Option (BitVec 8)) (P : Nat → Bool) : Nat → Nat 
     | 8 => pure .cont
     | _ => none
 
-/-- The optional statement pointer field at `a`. -/
 def decodeOptStmt (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
     Nat → Nat → Option (Option Stmt)
   | 0, _ => none
@@ -492,7 +448,6 @@ def decodeOptStmt (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
     if p = 0 then pure none
     else (decodeStmt v P fuel p).map some
 
-/-- The optional expression pointer field at `a`. -/
 def decodeOptExpr (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
     Nat → Nat → Option (Option Expr)
   | 0, _ => none
@@ -501,7 +456,6 @@ def decodeOptExpr (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
     if p = 0 then pure none
     else (decodeExpr v P fuel p).map some
 
-/-- `n` statements from the `Stmt **` array at `a`. -/
 def decodeStmtArray (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
     Nat → Nat → Nat → Option (List Stmt)
   | _, _, 0 => some []
@@ -514,18 +468,14 @@ def decodeStmtArray (v : Nat → Option (BitVec 8)) (P : Nat → Bool) :
 
 end
 
-/-- The program: `n` statements from the `Stmt **` array at `a`. -/
 def decodeProgram (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (fuel a n : Nat) :
     Option Program :=
   decodeStmtArray v P fuel a n
-
-/-! ## Soundness -/
 
 section Sound
 
 variable {m : Mem} {v : Nat → Option (BitVec 8)} {P : Nat → Bool}
 
-/-- Open the monadic binds of a decoder step hypothesis. -/
 macro "dec_open " h:ident : tactic =>
   `(tactic| try simp only [Option.bind_eq_bind, Option.pure_def, Option.bind_eq_some_iff,
     Option.map_eq_some_iff, Option.some.injEq] at $h:ident)
@@ -542,7 +492,6 @@ theorem decodeParams_sound (hv : PartialView m v) {fuel : Nat} :
     obtain ⟨p, hp, x, hx, xs', hxs, rfl⟩ := h
     exact .cons (rdc_sound hv hp).read (rdc_sound hv hp).covers (strc_sound hv hx) (ih hxs)
 
-/-- Soundness of the six mutually recursive decoders at one fuel. -/
 structure DecodeSound (m : Mem) (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (fuel : Nat) :
     Prop where
   expr : ∀ a e, decodeExpr v P fuel a = some e → ExprReprWithin m (P · = true) a e
@@ -554,8 +503,6 @@ structure DecodeSound (m : Mem) (v : Nat → Option (BitVec 8)) (P : Nat → Boo
   stmtArray : ∀ a n ss, decodeStmtArray v P fuel a n = some ss →
     StmtArrayReprWithin m (P · = true) a n ss
 
-/-- Close a field obligation of a Within constructor from the decoder's
-hypotheses: a covered read, a string, a decoded child, or a side condition. -/
 macro "dec_close " hv:ident ih:ident : tactic =>
   `(tactic| first
     | exact (rdc_sound $hv (by assumption)).read
@@ -728,7 +675,6 @@ theorem decodeSound_succ (hv : PartialView m v) {fuel : Nat} (ih : DecodeSound m
       obtain ⟨p, hp, s, hs, ss', hss, rfl⟩ := h
       apply StmtArrayReprWithin.cons <;> dec_close hv ih
 
-/-- The decoders are sound at every fuel. -/
 theorem decodeSound (hv : PartialView m v) : ∀ fuel, DecodeSound m v P fuel
   | 0 => decodeSound_zero
   | fuel + 1 => decodeSound_succ hv (decodeSound hv fuel)
@@ -743,20 +689,12 @@ theorem StmtArrayReprWithin.count_eq_length {Q : Nat → Prop} {a n : Nat} {ss :
   | nil => cases h; rfl
   | cons s ss ih => cases h with | cons _ _ _ ht => simp [ih ht]
 
-/-- **Decoder soundness**: over a partial view of `m`, a decoded program is
-represented at `a` with count `n`, every read covered by `P`. -/
 theorem decodeProgram_sound (hv : PartialView m v) {fuel a n : Nat} {p : Program}
     (h : decodeProgram v P fuel a n = some p) : ProgramReprWithin m (P · = true) a n p :=
   have hs := decodeStmtArray_sound hv h
   ⟨hs, StmtArrayReprWithin.count_eq_length hs⟩
 
 end Sound
-
-/-! ## Checking a decoded program against an expected one
-
-`Expr`/`Stmt` derive no `DecidableEq` (nested mutual inductives), so the
-kernel check compares with the structural `Bool` equality `stmtsBeq`:
-`decodesTo v P fuel a n p = true` is decided by `decide +kernel`. -/
 
 mutual
 
@@ -809,8 +747,6 @@ def stmtsBeq : List Stmt → List Stmt → Bool
 
 end
 
-/-- Bool equality on operands of `exprBeq`: the nested cases open the `&&`
-chain and the `==` of lawful types. -/
 macro "beq_open " h:ident : tactic =>
   `(tactic| simp only [exprBeq, exprsBeq, optExprBeq, stmtBeq, optStmtBeq, stmtsBeq,
     Bool.and_eq_true, beq_iff_eq, Bool.false_eq_true] at $h:ident)
@@ -950,7 +886,6 @@ theorem stmtsBeq_sound : ∀ {ss ss' : List Stmt}, stmtsBeq ss ss' = true → ss
 
 end
 
-/-- The program decoded at `a` with count `n` is `p` (a kernel-decidable check). -/
 def decodesTo (v : Nat → Option (BitVec 8)) (P : Nat → Bool) (fuel a n : Nat) (p : Program) :
     Bool :=
   match decodeProgram v P fuel a n with
@@ -965,12 +900,9 @@ theorem decodesTo_eq {v : Nat → Option (BitVec 8)} {P : Nat → Bool} {fuel a 
     rw [hq, stmtsBeq_sound h]
   · cases h
 
-/-- A successful check represents `p` at `a` with count `n`, reads covered by `P`. -/
 theorem decodesTo_sound {m : Mem} {v : Nat → Option (BitVec 8)} {P : Nat → Bool}
     (hv : PartialView m v) {fuel a n : Nat} {p : Program} (h : decodesTo v P fuel a n p = true) :
     ProgramReprWithin m (P · = true) a n p :=
   decodeProgram_sound hv (decodesTo_eq h)
-
-/-! ## Regression: one expression statement `print("hi");` -/
 
 end Vsa.Sim.Boot

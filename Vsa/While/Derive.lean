@@ -1,24 +1,6 @@
 import Lean
 import Vsa.While.Semantics
 
-/-!
-# Syntax-directed derivation construction for the big-step semantics
-
-`bigstep_derive` proves goals of the form `BigStep p out` for closed
-programs `p` by *constructing the derivation tree directly*: a meta-level
-recursion over the program syntax that, at each node, computes the relevant
-side conditions by reduction (`whnf`), picks the unique applicable rule, and
-emits the constructor application. There is no proof search and no
-backtracking — the relation is deterministic, so the derivation is uniquely
-determined by the program.
-
-Nothing here evaluates WHILE inside the theory: this is untrusted tactic
-code emitting a certificate; the kernel independently checks the resulting
-derivation of the (purely inductive) big-step relation, re-reducing every
-side condition itself. The only executable semantics in the development
-remains the ELF binary under the RISC-V model.
--/
-
 open Lean Meta Elab Tactic
 
 namespace Vsa.While.DeriveTac
@@ -38,17 +20,13 @@ private def stMk (store out : Lean.Expr) : Lean.Expr :=
 private def mkSome (ty v : Lean.Expr) : Lean.Expr :=
   mkApp2 (mkConst ``Option.some [levelZero]) ty v
 
-/-- Split a (whnf'd) state into store and output components. -/
 private def stParts (st : Lean.Expr) : MetaM (Lean.Expr × Lean.Expr) := do
   match (← whnf st).getAppFnArgs with
   | (``Vsa.While.St.mk, #[s, o]) => pure (s, o)
   | _ => throwError "state not in constructor form: {st}"
 
-/-- Full normalization (states are kept normalized at every node so that
-side-condition reductions stay cheap and terms stay compact). -/
 private def norm (e : Lean.Expr) : MetaM Lean.Expr := Meta.reduce e
 
-/-- Compute a value's truthiness by reduction. -/
 private def truthy (v : Lean.Expr) : MetaM Bool := do
   let t ← whnf (mkApp (mkConst ``Vsa.While.Value.truthy) v)
   match t.getAppFnArgs with
@@ -56,20 +34,16 @@ private def truthy (v : Lean.Expr) : MetaM Bool := do
   | (``Bool.false, _) => pure false
   | _ => throwError "truthiness did not reduce: {t}"
 
-/-- Walk an object-level `List` literal into meta-level elements. -/
 private partial def listElems (l : Lean.Expr) : MetaM (List Lean.Expr) := do
   match (← whnf l).getAppFnArgs with
   | (``List.nil, _) => pure []
   | (``List.cons, #[_, hd, tl]) => return hd :: (← listElems tl)
   | _ => throwError "not a list literal: {l}"
 
-/-- Build an object-level `List Value` from meta-level elements. -/
 private def mkValueList (vs : List Lean.Expr) : Lean.Expr :=
   vs.foldr (fun v acc => mkApp3 (mkConst ``List.cons [levelZero]) valueTy v acc)
     (mkApp (mkConst ``List.nil [levelZero]) valueTy)
 
-/-- Extract a concrete `Nat` from a reduced expression (literal or
-`Nat.zero`/`Nat.succ` constructor form). -/
 private partial def asNat (e : Lean.Expr) : MetaM Nat := do
   let e ← whnf e
   if let some n := e.rawNatLit? then return n
@@ -79,7 +53,6 @@ private partial def asNat (e : Lean.Expr) : MetaM Nat := do
   | (``OfNat.ofNat, #[_, n, _]) => asNat n
   | _ => throwError "not a Nat literal: {e.dbgToString}"
 
-/-- `some x` / `none` scrutinizer. -/
 private def asOption (e : Lean.Expr) : MetaM (Option Lean.Expr) := do
   let e' ← whnf e
   match e'.getAppFnArgs with
@@ -87,7 +60,6 @@ private def asOption (e : Lean.Expr) : MetaM (Option Lean.Expr) := do
   | (``Option.some, #[_, v]) => pure (some v)
   | _ => throwError "not an option literal: {e'}"
 
-/-- Scrutinize a status expression. -/
 private inductive StatusV where
   | normal | brk | cont | ret (v : Lean.Expr)
 
@@ -97,20 +69,13 @@ private def statusExpr : StatusV → Lean.Expr
   | .cont => mkConst ``Vsa.While.Status.cont
   | .ret v => mkApp (mkConst ``Vsa.While.Status.ret) v
 
-/-- Proof of `d < maxCallDepth` for a concrete depth literal `d`. The
-proposition `d < maxCallDepth` is `Decidable`, so `of_decide_eq_true` applied
-to `Eq.refl true` closes it — the kernel reduces `decide (d < 1000)` to `true`
-for literal `d`, and `Eq.refl true : decide (d < 1000) = true` type-checks. -/
 private def mkDepthProof (d : Lean.Expr) : MetaM Lean.Expr := do
   let propTy ← mkAppM ``LT.lt #[d, mkConst ``Vsa.While.maxCallDepth]
   let decInst ← synthInstance (← mkAppM ``Decidable #[propTy])
   let eqTrue ← mkEqRefl (mkConst ``Bool.true)
-  -- `of_decide_eq_true : decide p = true → p`; the kernel reduces
-  -- `decide (d < 1000)` to `true` for literal `d`, so `Eq.refl true` fits.
+
   mkAppOptM ``of_decide_eq_true #[propTy, decInst, eqTrue]
 
-/-- Proof that a concrete argument-list literal fits the interpreter's fixed
-call buffer.  Oversized calls are runtime errors and have no `EvalE` proof. -/
 private def mkArgsProof (args : Lean.Expr) : MetaM Lean.Expr := do
   let elems ← listElems args
   if elems.length > 32 then
@@ -121,7 +86,6 @@ private def mkArgsProof (args : Lean.Expr) : MetaM Lean.Expr := do
   let eqTrue ← mkEqRefl (mkConst ``Bool.true)
   mkAppOptM ``of_decide_eq_true #[propTy, decInst, eqTrue]
 
-/-- Proof of `status = .normal ∨ status = .cont` for a concrete status. -/
 private def normalOrContPrf (s : StatusV) : MetaM Lean.Expr := do
   let sE := statusExpr s
   let a ← mkEq sE normalE
@@ -135,7 +99,6 @@ private def normalOrContPrf (s : StatusV) : MetaM Lean.Expr := do
 
 mutual
 
-/-- Derive `EvalE st d env e ? ?`; returns (proof, state', value). -/
 private partial def dEvalE (st d env e : Lean.Expr) :
     MetaM (Lean.Expr × Lean.Expr × Lean.Expr) := do
   let e ← whnf e
@@ -213,7 +176,7 @@ private partial def dEvalE (st d env e : Lean.Expr) :
       let (p1, st1, v) ← dEvalE st d env e1
       match (← whnf v).getAppFnArgs with
       | (``Vsa.While.Value.int, #[n]) =>
-        -- the rule wraps: the tracked value is `wrap64 (-n)`, normalized
+
         let nn ← norm (mkApp (mkConst ``Vsa.While.wrap64)
           (mkApp (mkConst ``Int.neg) n))
         let prf := mkAppN (mkConst ``Vsa.While.EvalE.neg)
@@ -251,8 +214,6 @@ private partial def dEvalE (st d env e : Lean.Expr) :
     | _ => throwError "allocClosure did not reduce to a pair"
   | _ => throwError "unknown expression head: {e}"
 
-/-- Derive `EvalArgs st d env es ? ?`; returns
-(proof, state', object list of values, meta list of values). -/
 private partial def dEvalArgs (st d env es : Lean.Expr) :
     MetaM (Lean.Expr × Lean.Expr × Lean.Expr × List Lean.Expr) := do
   match (← whnf es).getAppFnArgs with
@@ -268,14 +229,13 @@ private partial def dEvalArgs (st d env es : Lean.Expr) :
     return (prf, st2, vsE', v :: vs)
   | _ => throwError "argument list is not a literal"
 
-/-- Derive `Call st d fv vs ? ?`; returns (proof, state', result value). -/
 private partial def dCall (st d fv vsE : Lean.Expr) :
     MetaM (Lean.Expr × Lean.Expr × Lean.Expr) := do
   let fv ← whnf fv
   match fv.getAppFnArgs with
   | (``Vsa.While.Value.closure, #[a]) =>
     let (store, out) ← stParts st
-    -- look up the closure by walking the (literal) closure array
+
     let closures ← match (← whnf store).getAppFnArgs with
       | (``Vsa.While.Store.mk, #[_, cs]) => pure cs
       | _ => throwError "store not in constructor form"
@@ -295,28 +255,27 @@ private partial def dCall (st d fv vsE : Lean.Expr) :
     let vs ← listElems vsE
     unless vs.length == params.length do
       throwError "arity mismatch: {vs.length} args for {params.length} params"
-    -- the call-depth guard: this closure call needs `d < maxCallDepth`, and
-    -- its body runs one level deeper.
+
     let dN ← asNat d
     unless dN < 1000 do
       throwError "call depth {dN} reached the cap (maxCallDepth = 1000)"
     let depthPrf ← mkDepthProof d
     let dSucc := mkRawNatLit (dN + 1)
-    -- allocate the frame
+
     let w ← whnf (mkApp2 (mkConst ``Vsa.While.Store.allocFrame) store
       (mkSome (mkConst ``Nat) cdEnv))
     let (store1, frame) ← match w.getAppFnArgs with
       | (``Prod.mk, #[_, _, s, f]) => pure (← norm s, ← norm f)
       | _ => throwError "allocFrame did not reduce"
-    -- bind the parameters
+
     let mut storeB := store1
     for (x, v) in params.zip vs do
       storeB ← norm (mkAppN (mkConst ``Vsa.While.Store.define)
         #[storeB, frame, x, v])
-    -- run the body at depth `d + 1`
+
     let (pseq, st', sv) ← dExecSeq (stMk storeB out) dSucc frame body
     let statusE := statusExpr sv
-    -- the status disjunction and result value
+
     let (v, orPrf) ← match sv with
       | .normal =>
         let aTy ← mkAppM ``And #[← mkEq statusE normalE, ← mkEq nullE nullE]
@@ -370,7 +329,6 @@ private partial def dCall (st d fv vsE : Lean.Expr) :
     | _ => throwError "unknown native"
   | _ => throwError "call of a non-function value"
 
-/-- Derive `ExecS st d env s ? ?`; returns (proof, state', status). -/
 private partial def dExecS (st d env s : Lean.Expr) :
     MetaM (Lean.Expr × Lean.Expr × StatusV) := do
   let s ← whnf s
@@ -444,9 +402,7 @@ private partial def dExecS (st d env s : Lean.Expr) :
       | none =>
         pure (mkApp3 (mkConst ``Vsa.While.ExecInit.none) st0 d outer, st0)
       | some is =>
-        -- The C swallows the init's status (`c/src/interp.c:308`), so
-        -- `ExecInit.some` accepts ANY completing status `sv`; a real program's
-        -- init is always `.normal`, but the constructor no longer requires it.
+
         let (ps, st1, sv) ← dExecS st0 d outer is
         pure (mkAppN (mkConst ``Vsa.While.ExecInit.some)
           #[st0, d, outer, is, st1, statusExpr sv, ps], st1)
@@ -473,7 +429,6 @@ private partial def dExecS (st d env s : Lean.Expr) :
     return (mkApp3 (mkConst ``Vsa.While.ExecS.cont) st d env, st, .cont)
   | _ => throwError "unknown statement head: {s}"
 
-/-- Derive a `while` statement (iterating meta-side). -/
 private partial def dWhile (st d env c b : Lean.Expr) :
     MetaM (Lean.Expr × Lean.Expr × StatusV) := do
   let (pc, st1, v) ← dEvalE st d env c
@@ -499,10 +454,9 @@ private partial def dWhile (st d env c b : Lean.Expr) :
           pc, ← mkEqRefl trueE, pb, ← normalOrContPrf bsv, pnext]
       return (prf, st3, sv')
 
-/-- Derive a `for` loop (iterating meta-side). -/
 private partial def dForLoop (st d env cnd step b : Lean.Expr) :
     MetaM (Lean.Expr × Lean.Expr × StatusV) := do
-  -- condition
+
   let condRes ← match ← asOption cnd with
     | none =>
       pure (Sum.inl (mkApp3 (mkConst ``Vsa.While.ForCond.none) st d env, st))
@@ -512,7 +466,7 @@ private partial def dForLoop (st d env cnd step b : Lean.Expr) :
         pure (Sum.inl (mkAppN (mkConst ``Vsa.While.ForCond.some)
           #[st, d, env, c, st1, v, pc, ← mkEqRefl trueE], st1))
       else
-        -- condition failed: ForLoop.condFalse
+
         let prf := mkAppN (mkConst ``Vsa.While.ForLoop.condFalse)
           #[st, d, env, c, step, b, st1, v, pc, ← mkEqRefl falseE]
         pure (Sum.inr (prf, st1))
@@ -543,7 +497,6 @@ private partial def dForLoop (st d env cnd step b : Lean.Expr) :
           statusExpr sv', pcond, pb, ← normalOrContPrf bsv, pstep, pnext]
       return (prf, st4, sv')
 
-/-- Derive `ExecSeq st d env ss ? ?`; returns (proof, state', status). -/
 private partial def dExecSeq (st d env ss : Lean.Expr) :
     MetaM (Lean.Expr × Lean.Expr × StatusV) := do
   match (← whnf ss).getAppFnArgs with
@@ -568,7 +521,6 @@ private partial def dExecSeq (st d env ss : Lean.Expr) :
 
 end
 
-/-- Prove `BigStep p out` by direct syntax-directed derivation construction. -/
 elab "bigstep_derive" : tactic => do
   let g ← getMainGoal
   g.withContext do
@@ -577,15 +529,15 @@ elab "bigstep_derive" : tactic => do
       | (``Vsa.While.BigStep, #[p, out]) => pure (p, out)
       | _ => throwError "goal is not of the form BigStep p out"
     let st0 ← norm (mkConst ``Vsa.While.initSt)
-    -- top-level statements run at call depth 0 in the global frame (address 0)
+
     let (prf, st', sv) ← dExecSeq st0 (mkRawNatLit 0) (mkRawNatLit 0) p
     unless (match sv with | .normal => true | _ => false) do
       throwError "program did not finish normally"
-    -- ⟨st', derivation, output check⟩
+
     let aTy := mkAppN (mkConst ``Vsa.While.ExecSeq)
       #[mkConst ``Vsa.While.initSt, mkRawNatLit 0, mkRawNatLit 0, p, st', normalE]
     let bTy ← mkEq (mkApp (mkConst ``Vsa.While.St.out) st') out
-    -- the claimed output must actually reduce to the target string
+
     let outActual ← norm (mkApp (mkConst ``Vsa.While.St.out) st')
     let outTarget ← norm out
     unless (← isDefEq outActual outTarget) do

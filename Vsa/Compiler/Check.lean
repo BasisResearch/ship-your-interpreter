@@ -1,14 +1,5 @@
 import Vsa.Compiler.CorrectG
 
-/-!
-# Checking the premises of the correctness theorem
-
-`supportedGB` and `fitsB` decide `SupportedG p` and the code-size premise of
-`compileG_correct` (`supportedGB_sound`, `fitsB_sound`); `checked_correct`
-restates the theorem for a program that passes both checks. The executable
-`whilec` refuses programs that fail them.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
@@ -140,7 +131,6 @@ end
 
 end
 
-/-- Decides `SupportedG p`. -/
 def supportedGB (p : Program) : Bool :=
   wfSeqB (strTab p) [globalNames p] p && (strTab p).all latin1B &&
     decide (strOff (strTab p) (strTab p).length ≤ 0x100000) && decide ((globalNames p).length ≤ 120) &&
@@ -151,14 +141,11 @@ theorem supportedGB_sound {p : Program} (h : supportedGB p = true) : SupportedG 
   obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ := h
   exact ⟨wfSeqB_sound p h1, ⟨fun s hs => latin1B_sound (h2 s hs), h3, h4, h5⟩⟩
 
-/-- Decides the code-size premise. -/
 def fitsB (p : Program) : Bool := decide (0x80004800 + 4 * (compileG p).length ≤ 0x8001ad00)
 
 theorem fitsB_sound {p : Program} (h : fitsB p = true) : 0x80004800 + 4 * (compileG p).length ≤ 0x8001ad00 :=
   of_decide_eq_true h
 
-/-- **The guarantee `whilec` gives**: `compileG_correct` for a program that
-passes both checks. -/
 theorem checked_correct (p : Program) (hs : supportedGB p = true) (hf : fitsB p = true)
     (hcap : ∀ out, BigStep p out → BigStepBudget p out heapUnits) (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)

@@ -3,17 +3,6 @@ import Vsa.Compiler.Check
 import Vsa.Compiler.Image
 import Vsa.ElfRun
 
-/-!
-# `whilec`: the verified WHILE compiler as a command-line tool
-
-`whilec prog.wl -o prog.elf` parses `prog.wl` (the interpreter's grammar,
-`Vsa/Compiler/Parse.lean`), checks the premises of `compileG_correct`
-(`supportedGB`, `fitsB`), compiles with `compileG`, and writes an RV64 ELF
-(`buildImage`) that runs bare-metal with HTIF console output, e.g. under
-`spike prog.elf`. `--run` also executes the binary on the Sail RV64 model and
-prints its console output and exit code.
--/
-
 open Vsa Vsa.Compiler
 
 structure Opts where
@@ -37,7 +26,6 @@ def parseArgs : List String → Opts → Except String Opts
     else if o.input.isSome then .error "more than one input file"
     else parseArgs r { o with input := some a }
 
-/-- Why a parsed program is outside the verified fragment, if it is. -/
 def unsupported (p : Vsa.While.Program) : Option String :=
   if !wfSeqB (strTab p) [globalNames p] p then
     some "a scope, parameter list or function body is too large (at most 120 names/temporaries), \
@@ -64,7 +52,7 @@ def main (args : List String) : IO UInt32 := do
   if let some why := unsupported p then
     IO.eprintln s!"{input}: outside the verified fragment: {why}"
     return 1
-  -- `unsupported p = none` is `supportedGB p ∧ fitsB p`, so `checked_correct` applies.
+
   let img ← match buildImage elfBytes p with
     | .ok img => pure img
     | .error e => IO.eprintln s!"whilec: {e}"; return 1

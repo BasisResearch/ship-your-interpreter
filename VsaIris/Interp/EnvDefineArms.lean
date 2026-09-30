@@ -4,25 +4,12 @@ import VsaIris.Interp.DefineCost
 import VsaIris.Stack
 import VsaIris.Interp.ProofEnvSet
 
-/-!
-# `env_define`'s arms, at the Iris level
-
-The constants of one call (`DefCall`), what its entry guarantees
-(`DefCall.OK`), and the additive pair of continuations it ends in (`defK`:
-the return, or the out-of-memory abort). The two sinks every path reaches:
-`def_ret` (the epilogue, then the return) and `def_oom` (the out-of-memory
-arm `0x80002bd0`, parked for the abort).
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.VsaHeap VsaIris.MallocFast VsaIris.Sym
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim
 
-/-- The constants of one `env_define` call: entry `sp`, return address, the
-name and value pointers, the name and value, the callee-saved words, and the
-value slot's bytes at the entry. -/
 structure DefCall where
   s : BitVec 64
   r : BitVec 64
@@ -33,7 +20,6 @@ structure DefCall where
   saved : List (Nat × BitVec 64)
   so : Nat → BitVec 8
 
-/-- What the entry guarantees about a call's constants. -/
 structure DefCall.OK (C : DefCall) : Prop where
   sp : EnvSp C.s envDefineNeed
   slot : SlotWin C.vp.toNat
@@ -48,9 +34,6 @@ theorem DefCall.OK.sepStk {C : DefCall} (h : C.OK) :
     C.vp.toNat + 24 ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ C.vp.toNat := by
   have := h.sep; unfold envDefineNeed at this; omega
 
-/-- The state inside frame `G` (image `img`, `n` bindings) between spans:
-`s2` the name, `s5` the value pointer, `s4` the frame, `s3` the count, `s6`
-the names array. -/
 structure DefFrame (C : DefCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 8)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   stack : DefStack C.s.toNat C.r (pairVal C.saved) R Mt
@@ -65,7 +48,6 @@ structure DefFrame (C : DefCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVec
   sepStk : ∀ a, frameS G a → a < C.s.toNat - 64 ∨ C.s.toNat ≤ a
   slot : ∀ a, C.vp.toNat ≤ a → a < C.vp.toNat + 24 → imgM Mt a = C.so a
 
-/-- The frame state reads only `sp` and `s2-s6`. -/
 theorem DefFrame.regs {C : DefCall} {G : FrameGeom} {n : Nat} {img : Nat → BitVec 8}
     {R R' : Nat → BitVec 64} {Mt : Mem} (h : DefFrame C G n img R Mt) (hs : 64 ≤ C.s.toNat)
     (hk : ∀ k, k = 2 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R' k = R k) :
@@ -78,7 +60,6 @@ theorem DefFrame.regs {C : DefCall} {G : FrameGeom} {n : Nat} {img : Nat → Bit
     cnt := (hk 19 (by omega)).trans h.cnt
     arr := (hk 22 (by omega)).trans h.arr }
 
-/-- `env_define`'s name loop (`0x80002ab0`): the name in `s2`, the count in `s3`. -/
 def defLoop (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanLoop live where
   scan := 0x80002ab0#64
   jal := 0x80002ab8
@@ -94,7 +75,6 @@ def defLoop (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanLoop 
   sLoad := def_load hl
   sCmp := def_cmp hl
 
-/-- `DefFrame` is the name loop's invariant. -/
 theorem defFrame_scanInv {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) (C : DefCall)
     {G : FrameGeom} {n : Nat} {img : Nat → BitVec 8} (hs : 64 ≤ C.s.toNat) :
     ScanInv (defLoop live hl) G n img C.pn (DefFrame C G n img) where
@@ -105,8 +85,6 @@ theorem defFrame_scanInv {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1
     rcases hk' with rfl | rfl | rfl | rfl | rfl | rfl <;>
       exact hk _ (by decide) (by decide) (by decide) (by decide) (by decide)
 
-/-- A frame with room for one more binding (`n < cap`, and `cap` already the
-canonical cap of `n + 1`): `FrameLayout` before the append's count bump. -/
 structure AppLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop where
   e_ne : G.e ≠ 0
   sblk : G.sblk.1 ≤ G.e ∧ G.e + 32 ≤ G.sblk.1 + G.sblk.2
@@ -122,7 +100,6 @@ structure AppLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop wh
   e_align : G.e % 8 = 0
   cap_next : G.cap = capFor (n + 1)
 
-/-- A full-cap-free frame is ready for the append as it is. -/
 theorem FrameLayout.appLayout {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : FrameLayout img G n) (hne : G.cap ≠ n) : AppLayout img G n := by
   have hle := h.count_le
@@ -134,7 +111,6 @@ theorem FrameLayout.appLayout {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
       arrays := h.arrays hpos
       cap_next := h.cap_canon.trans h2.symm }
 
-/-- **After the append's count bump** the layout is a frame's again. -/
 theorem AppLayout.bump {img img' : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : AppLayout img G n) (hcnt : imgLE img' G.e 4 = n + 1)
     (hag : ∀ a, G.e + 4 ≤ a → a < G.e + 32 → img' a = img a) : FrameLayout img' G (n + 1) := by
@@ -152,7 +128,6 @@ theorem AppLayout.bump {img img' : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     arrays := fun _ => h.arrays
     cap_canon := h.cap_next }
 
-/-- Two disjoint nonempty extents are apart. -/
 theorem extDisj_apart {b b' : Nat × Nat} (h : ExtDisj b b') (h1 : 0 < b.2) (h2 : 0 < b'.2) :
     b.1 + b.2 ≤ b'.1 ∨ b'.1 + b'.2 ≤ b.1 :=
   interval_apart h1 h2 fun c hc1 hc2 => by
@@ -160,7 +135,6 @@ theorem extDisj_apart {b b' : Nat × Nat} (h : ExtDisj b b') (h1 : 0 < b.2) (h2 
     · exact absurd ⟨hc1, hc2⟩ (h c hb)
     · unfold InExt at hb; omega
 
-/-- A C string's bytes moved to `p'`. -/
 theorem CStrImg.shift {img : Nat → BitVec 8} {p p' : Nat} {x : String} (h : CStrImg img p x) :
     CStrImg (fun a => img (a - p' + p)) p' x := by
   obtain ⟨h1, h2⟩ := h
@@ -188,7 +162,6 @@ theorem AppLayout.vwin {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : AppLayout img G n) : BlockWin G.vblk :=
   h.win _ (by rw [h.blocks_eq]; simp)
 
-/-- The three blocks of a frame with arrays are pairwise apart. -/
 theorem AppLayout.apart {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : AppLayout img G n) :
     ExtDisj G.sblk G.nblk ∧ ExtDisj G.sblk G.vblk ∧ ExtDisj G.nblk G.vblk := by
@@ -198,7 +171,6 @@ theorem AppLayout.apart {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     forall_eq, List.Pairwise.nil, and_true] at hd
   exact ⟨hd.1.1, hd.1.2, hd.2.1⟩
 
-/-- An image read at a shifted place. -/
 theorem imgLE_shift {img img' : Nat → BitVec 8} {a a' : Nat} :
     ∀ {n : Nat}, (∀ i, i < n → img' (a' + i) = img (a + i)) → imgLE img' a' n = imgLE img a n
   | 0, _ => rfl
@@ -219,13 +191,12 @@ section Bindings
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
 omit I in
-/-- A string's image, its window, and its read-only bytes. -/
+
 theorem strAt_parts {p : Nat} {x : String} :
     strAt (GF := GF) p x ⊢ ∃ img, ⌜CStrImg img p x ∧ StrWin p x.toList.length⌝ ∗
       roImg (InExt (p, x.toList.length + 1)) img := by
   iintro H; unfold strAt; iexact H
 
-/-- A value's meaning at a shifted place. -/
 theorem valImg_shift (N : NativeAddrs) {img img' : Nat → BitVec 8} {a a' : Nat} (v : Value)
     (h : ∀ o, o < 24 → img' (a' + o) = img (a + o)) :
     valImg (GF := GF) N img' a' v = valImg N img a v := by
@@ -237,8 +208,6 @@ theorem valImg_shift (N : NativeAddrs) {img img' : Nat → BitVec 8} {a a' : Nat
   rw [show a' = a' + 0 from rfl, show a = a + 0 from rfl, w 0 (by omega), w 8 (by omega),
     w 16 (by omega)]
 
-/-- **The bindings at relocated arrays**: every name word and value's bytes
-agree. -/
 theorem bindings_move (N : NativeAddrs) {img img' : Nat → BitVec 8} {pn pv pn' pv' : Nat}
     {vars : List (String × Value)}
     (hn : ∀ k, k < vars.length → ∀ o, o < 8 → img' (pn' + 8 * k + o) = img (pn + 8 * k + o))
@@ -260,7 +229,6 @@ theorem bindings_move (N : NativeAddrs) {img img' : Nat → BitVec 8} {pn pv pn'
   rw [imgLE_shift (hn k hk), valImg_shift N _ (hv k hk)]
   iframe Hname Hval
 
-/-- **One more binding** at the end: its name word and value. -/
 theorem bindings_snoc (N : NativeAddrs) (img : Nat → BitVec 8) (pn pv : Nat)
     (vars : List (String × Value)) (x : String) (v : Value) :
     bindings (GF := GF) N img pn pv vars ∗
@@ -281,11 +249,8 @@ section Sinks
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
 
-/-- The registers the abort hands over clobbered: all but `sp`. -/
 abbrev oomRegs : List Nat := VsaIris.ra :: 10 :: retClob ++ defineSaved
 
-/-- **The pair of continuations** an `env_define` path ends in, with the
-final regime `ρ` and store `st'`. -/
 def defK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (C : DefCall) (ρ : Regime) (st' : Store) : IProp GF :=
   iprop((VsaIris.PC ↦ᵣ C.r -∗ VsaIris.ra ↦ᵣ C.r -∗
@@ -299,7 +264,7 @@ theorem toNat_s64 {C : DefCall} (hC : C.OK) : (C.s - 64#64).toNat = C.s.toNat - 
   toNat_sub_frame (by have := hC.s64; simp; omega)
 
 omit I in
-/-- The entry stack as the 64-byte frame and the callees' scratch below it. -/
+
 theorem def_stack_split {C : DefCall} (hC : C.OK) :
     stackScratch (GF := GF) C.s envDefineNeed ⊢
       stackScratch (C.s - 64#64) allocHeadroom ∗ blockOwn (C.s.toNat - 64) 64 := by
@@ -312,7 +277,7 @@ theorem def_stack_split {C : DefCall} (hC : C.OK) :
   iframe H1 H2
 
 omit I in
-/-- The inverse of `def_stack_split`. -/
+
 theorem def_stack_join {C : DefCall} (hC : C.OK) :
     stackScratch (GF := GF) (C.s - 64#64) allocHeadroom ∗ blockOwn (C.s.toNat - 64) 64 ⊢
       stackScratch C.s envDefineNeed := by
@@ -324,7 +289,6 @@ theorem def_stack_join {C : DefCall} (hC : C.OK) :
     show (64#64 : BitVec 64).toNat = 64 from rfl]
   iframe H1 H2
 
-/-- The slot's bytes and the entry meaning give back `valAt`. -/
 theorem def_valAt (N : NativeAddrs) {C : DefCall} {Mt : Mem}
     (hslot : ∀ a, C.vp.toNat ≤ a → a < C.vp.toNat + 24 → imgM Mt a = C.so a) :
     ownSet (GF := GF) (InExt (C.vp.toNat, 24)) (fun a => a ↦ₘ imgM Mt a) ∗
@@ -336,8 +300,6 @@ theorem def_valAt (N : NativeAddrs) {C : DefCall} {Mt : Mem}
   rw [valImg_agree N C.v fun o ho => hslot _ (by omega) (by omega)]
   iexact Hv
 
-/-- **The return**: the epilogue `0x80002aec` from the frame, then the return
-continuation. -/
 theorem def_ret (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hl : ∀ p ∈ envText, live p.1) (N : NativeAddrs) {C : DefCall} (hC : C.OK) {ρ : Regime}
     {st' : Store} {R : Nat → BitVec 64} {Mt : Mem}
@@ -382,7 +344,6 @@ theorem def_ret (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   · iapply def_stack_join hC; iframe Hscr Hstk
   iapply def_valAt N hslot; iframe Hout Hv
 
-/-- **The out-of-memory arm** `0x80002bd0`: parked for the abort, uncounted. -/
 theorem def_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (N : NativeAddrs) {C : DefCall} (hC : C.OK) {ρ : Regime} {st' : Store}
     {R : Nat → BitVec 64} {Mt : Mem} {H : List (Nat × Nat)} (hρ : ρ = .uncounted)
@@ -418,7 +379,6 @@ theorem def_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     iexists H; iexact Hh
   iapply def_valAt N hslot; iframe Hout Hv
 
-/-- A frame's bindings are unique (`StoreInvariant`). -/
 theorem frame_unique {st : Store} {fa : Addr} {f : Frame} (hinv : Vsa.Sim.StoreInvariant st)
     (hf : st.frames[fa]? = some f) : FrameNamesUnique f.vars := by
   have hfalt : fa < st.frames.size := by
@@ -428,7 +388,6 @@ theorem frame_unique {st : Store} {fa : Addr} {f : Frame} (hinv : Vsa.Sim.StoreI
   have hfa : st.frames[fa] = f := by simpa [Array.getElem?_eq_getElem hfalt] using hf
   have := hinv.unique fa hfalt; rwa [hfa] at this
 
-/-- `Store.define` at a bound name replaces its first (only) binding. -/
 theorem define_hit_frames {st : Store} {fa : Addr} {f : Frame} {x : String} {v v0 : Value}
     {j : Nat} (hinv : Vsa.Sim.StoreInvariant st) (hf : st.frames[fa]? = some f)
     (hj : f.vars[j]? = some (x, v0)) :
@@ -442,8 +401,6 @@ theorem define_hit_frames {st : Store} {fa : Addr} {f : Frame} {x : String} {v v
 
 theorem Regime.plus_zero (ρ : Regime) : ρ.plus 0 = ρ := by cases ρ <;> rfl
 
-/-- **The hit** `0x80002ac0`: write `vals[j] := *v`, close the frame at
-`st.define`, return. -/
 theorem def_hit (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hl : ∀ p ∈ envText, live p.1) (N : NativeAddrs) {C : DefCall} (hC : C.OK) {ρ : Regime}
     {st : Store} {fa : Addr} {f : Frame} {G : FrameGeom} {img : Nat → BitVec 8} {j : Nat}
@@ -506,7 +463,6 @@ theorem def_hit (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   iframe Hh Hst
   ipureintro; exact hBH
 
-/-- The callees' `sp` discipline at `env_define`'s frame. -/
 theorem def_spOK {C : DefCall} (hC : C.OK) {R : Nat → BitVec 64}
     (h2 : (R 2).toNat = C.s.toNat - 64) : SpOKA (R 2) := by
   have := hC.sp.lo; have := hC.sp.hi; have := hC.sp.align
@@ -518,8 +474,6 @@ theorem def_sp {C : DefCall} (hC : C.OK) {R : Nat → BitVec 64}
     (h2 : (R 2).toNat = C.s.toNat - 64) : R 2 = C.s - 64#64 :=
   BitVec.eq_of_toNat_eq (by rw [h2, toNat_s64 hC])
 
-/-- The state at the append (`0x80002b1c`): geometry `G'` with room for one
-more binding, whose first `n` slots hold frame `G`'s (image `img`). -/
 structure AppReady (C : DefCall) (G G' : FrameGeom) (n : Nat) (img : Nat → BitVec 8)
     (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   stack : DefStack C.s.toNat C.r (pairVal C.saved) R Mt
@@ -535,9 +489,6 @@ structure AppReady (C : DefCall) (G G' : FrameGeom) (n : Nat) (img : Nat → Bit
   sepStk : ∀ a, frameS G' a → a < C.s.toNat - 64 ∨ C.s.toNat ≤ a
   slot : ∀ a, C.vp.toNat ≤ a → a < C.vp.toNat + 24 → imgM Mt a = C.so a
 
-/-- **The append** `0x80002b1c`: copy the name (`strlen`, `malloc`,
-`memcpy`), store the new binding, bump the count, return; or abort when
-`malloc` returns NULL. -/
 theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     (hl : ∀ p ∈ envText, live p.1) (A : AllocSpecs live) (N : NativeAddrs) {C : DefCall}
     (hC : C.OK) {ρ : Regime} {st : Store} {fa : Addr} {f : Frame} {G G' : FrameGeom}
@@ -561,7 +512,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave ⟨%ximg, %⟨hcs, hsw⟩, #Hro⟩ := strAt_parts $$ Hx
   have hlenx : C.x.length = C.x.toList.length := String.length_toList.symm
   have hxw := hsw.hi
-  -- `a0 := name`, `strlen`
+
   iapply wp_span Wp (def_app1 hl (S := getS C.s.toNat C.vp.toNat G') (R := R) (Mt := Mt))
   iframe Ht Hgp Hpc HR HS
   iintro %pc1 %R1 %Mt1 %⟨rfl, rfl, h10, hk1⟩ Hpc HR HS
@@ -574,7 +525,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   · rw [h10, hR.name]; iexact Hx
   iintro %R2 %⟨hlen, -, hk2⟩ Hpc HR
   rw [show BitVec.ofNat 64 (0x80002b20 + 4) = 0x80002b24#64 from rfl]
-  -- `s0 := a0 := len + 1`, `malloc`
+
   iapply wp_span Wp (def_app2 hl (S := getS C.s.toNat C.vp.toNat G') (R := R2) (Mt := Mt1))
   iframe Ht Hgp Hpc HR HS
   iintro %pc3 %R3 %Mt3 %⟨rfl, rfl, h8, h10', hk3⟩ Hpc HR HS
@@ -601,13 +552,13 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   have e4 : ∀ k, k = 2 ∨ k = 8 ∨ k = 9 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 →
       R4 k = R3 k := fun k hk => hk4 k (by
         rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
-  -- `s1 := a0`; NULL aborts
+
   iapply wp_span Wp (def_app3 hl (S := getS C.s.toNat C.vp.toNat G') (R := R4) (Mt := Mt3))
   iframe Ht Hgp Hpc HR HS
   iintro %pc5 %R5 %Mt5 %⟨rfl, h9, hcase⟩ Hpc HR HS
   unfold mallocRes
   rcases hcase with ⟨hp0, rfl, hk5⟩ | ⟨hp0, rfl, h12, h11, hk5⟩
-  · -- NULL: out of memory
+  ·
     icases Hres with (⟨%⟨-, hρ⟩, Hh⟩ | ⟨%⟨hfr, -⟩, -, -⟩)
     · subst hρ
       ihave ⟨HB, -⟩ := get_split (img := imgM Mt5) hdisj (fun _ _ => rfl) $$ HS
@@ -618,7 +569,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     · exfalso; exact hfr.nonzero (by rw [← h10p, hp0]; rfl)
   icases Hres with (⟨%⟨hp0', -⟩, -⟩ | ⟨%⟨hfr, hal⟩, Hh, Hblk⟩)
   · exfalso; exact hp0 (h10p.trans hp0')
-  -- `memcpy` the name into the fresh block
+
   obtain ⟨-, hplo, hphi, -⟩ := hfr.destruct
   have hplo' : Vsa.Sim.DlHeap.heapStart ≤ p.toNat := hplo
   have hphi' : p.toNat + (C.x.length + 1) ≤ Vsa.Sim.DlHeap.heapEnd := hphi
@@ -652,14 +603,14 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   · rw [hpn11, hlenx]; iexact Hro
   iintro %R6 %⟨h10c, -, hk6⟩ Hpc HR Hcopy
   rw [show BitVec.ofNat 64 (0x80002b40 + 4) = 0x80002b44#64 from rfl, hp10, hpn11]
-  -- the copy is the name, read-only from now on
+
   iapply Wp.fupd
   imod strAt_of_owned (p := p.toNat) (s := C.x) (hcs.shift (p' := p.toNat))
     ⟨by omega, by rw [← hlenx]; omega, by unfold htifLo; omega⟩
     $$ [Hcopy] with #Hnew
   · rw [← hlenx]; iexact Hcopy
   imodintro
-  -- the stores: `names[n] := copy`, `vals[n] := *v`, `count := n + 1`
+
   have e6 : ∀ k, k = 2 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R6 k = R k := fun k hk => by
     have ha : k ∉ VsaIris.ra :: strKs := by
       rcases hk with rfl | rfl | rfl | rfl | rfl | rfl <;> decide
@@ -699,7 +650,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       · left; right; omega))
   iframe Ht Hgp Hpc HR HS
   iintro %pc7 %R7 %Mt7 %⟨rfl, hout, hk7⟩ Hpc HR HS
-  -- the frame after the append
+
   have hoffS : ∀ a, G'.sblk.1 ≤ a → a < G'.sblk.1 + G'.sblk.2 → ¬ InExt (G'.pn + 8 * f.vars.length, 8) a ∧
       ¬ InExt (G'.pv + 24 * f.vars.length, 24) a := fun a h1 h2 => by
     unfold InExt; constructor <;> omega
@@ -751,7 +702,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     rw [hR.par, List.length_append, List.length_singleton]
     iframe HF Hb'' Hp
     ipureintro; exact hlay'
-  -- the return
+
   have hs7 : ∀ a, C.s.toNat - 64 ≤ a → a < C.s.toNat → imgM Mt7 a = imgM Mt5 a := fun a h1 h2 => by
     have hn := hR.sepStk (G'.pn + 8 * f.vars.length) (by
       unfold frameS; right; refine ⟨by omega, .inl ?_⟩; rw [hna]; unfold InExt; simp only; omega)

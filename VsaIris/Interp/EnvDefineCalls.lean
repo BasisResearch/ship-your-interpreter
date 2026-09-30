@@ -2,14 +2,6 @@ import VsaIris.Interp.CallKs
 import VsaIris.Interp.HeapRealloc
 import VsaIris.Interp.EnvCalls
 
-/-!
-# `env_define`'s calls from its spans
-
-`strlen`, `memcpy` and `realloc` (both regimes, live block or NULL), each an
-instance of `wp_call_ks`: the callee's registers are `ra :: Ks`, everything
-else of the span's file comes back unchanged.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -21,7 +13,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
   {live : Nat → Prop}
 
 omit I in
-/-- A register and a file over the rest make up the file with it updated. -/
+
 theorem regsOf_cons_fun (k : Nat) (v : BitVec 64) (rest : List Nat) (hk : k ∉ rest)
     (f : Nat → BitVec 64) :
     k ↦ᵣ v ∗ regsOf (GF := GF) rest f ⊢ regsOf (k :: rest) (fun j => if j = k then v else f j) := by
@@ -43,11 +35,10 @@ theorem regsOf_append_intro (a b : List Nat) (R : Nat → BitVec 64) :
     regsOf (GF := GF) a R ∗ regsOf b R ⊢ regsOf (a ++ b) R := by
   unfold regsOf; exact (sepL_append _ _ _).2
 
-/-- The registers a `strlen`/`memcpy` call takes besides `ra`. -/
 abbrev strKs : List Nat := 10 :: retClob
 
 omit I in
-/-- **`jal strlen` from a span**: `a0` gets the length. -/
+
 theorem wp_call_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code strlenPC)
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {R : Nat → BitVec 64} {x : String} :
@@ -87,8 +78,7 @@ theorem wp_call_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   iapply Hk $$ %R' %⟨(hks 10 (by decide)).trans h10, h1, hkeep⟩ Hpc HR
 
 omit I in
-/-- **`jal memcpy` from a span**: `n` bytes from a read-only source into an
-owned block. -/
+
 theorem wp_call_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code memcpyPC)
     (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {R : Nat → BitVec 64} {n : Nat}
@@ -136,10 +126,8 @@ theorem wp_call_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   iintro %Rc %R' %⟨h1, hks, hkeep⟩ Hpc HR ⟨%h10, Hout⟩
   iapply Hk $$ %R' %⟨(hks 10 (by decide)).trans h10, h1, hkeep⟩ Hpc HR Hout
 
-/-- The registers an allocator call takes besides `ra`. -/
 abbrev allocKs : List Nat := 10 :: VsaIris.sp :: (vsaClob ++ vsaSaved)
 
-/-- The callee-saved words an allocator call hands over and gets back. -/
 abbrev savedOf (R : Nat → BitVec 64) : List (Nat × BitVec 64) := vsaSaved.map fun k => (k, R k)
 
 theorem savedOf_fst (R : Nat → BitVec 64) : (savedOf R).map Prod.fst = vsaSaved := by
@@ -152,9 +140,7 @@ theorem savedOwn_savedOf (R : Nat → BitVec 64) :
   rw [sepL_map]
 
 omit I in
-/-- **An allocator `jal` from a span**: `a0`, `sp`, the clobbered and the
-spilled registers go to the callee (spec `P`/`Q`); the continuation gets the
-result in `a0`, `sp` and `s0-s3` back, `ra` at the return address. -/
+
 theorem wp_call_allocKs (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64} {P Q : BitVec 64 → IProp GF}
     (hexec : JalExec (vsaModel live) i code entry) {R : Nat → BitVec 64} {X : IProp GF}
@@ -241,8 +227,7 @@ theorem wp_call_allocKs (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
   · exact hkeep k hK
 
 omit I in
-/-- **`jal realloc` of a live block from a span**, regime `ρ`, charged `c`
-credits for the new size `nNew` in `a1`. -/
+
 theorem wp_call_realloc (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code reallocEntryBV)
@@ -298,8 +283,7 @@ theorem wp_call_realloc (hlive : AllocLive live)
   iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 
 omit I in
-/-- **`jal realloc` from NULL**, regime `ρ`, charged `c` credits for the
-size in `a1`. -/
+
 theorem wp_call_reallocNull (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code reallocEntryBV)
@@ -350,7 +334,6 @@ theorem wp_call_reallocNull (hlive : AllocLive live)
   iintro %R' %p' %hR' Hpc HR ⟨Hstk, Hres⟩
   iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 
-/-- A `realloc`'s old block: none (`realloc(NULL, _)`) or a live extent. -/
 def obPtr : Option (Nat × Nat) → Nat
   | none => 0
   | some b => b.1
@@ -359,12 +342,10 @@ def obLen : Option (Nat × Nat) → Nat
   | none => 0
   | some b => b.2
 
-/-- The old block's bytes. -/
 def obOwn : Option (Nat × Nat) → (Nat → BitVec 8) → IProp GF
   | none, _ => iprop(emp)
   | some b, old => blockOwnAt b.1 b.2 old
 
-/-- `realloc`'s outcome from an optional old block, in regime `ρ`. -/
 def reallocOptRes (ρ : Regime) (H : List (Nat × Nat)) (ob : Option (Nat × Nat)) (nNew : Nat)
     (old : Nat → BitVec 8) (p' : BitVec 64) : IProp GF :=
   iprop((⌜p' = 0#64 ∧ ρ = .uncounted⌝ ∗ heapRes vsaLayoutP vsaRoomB ρ (ob.toList ++ H) ∗
@@ -375,8 +356,7 @@ def reallocOptRes (ρ : Regime) (H : List (Nat × Nat)) (ob : Option (Nat × Nat
         blockOwnAt p'.toNat nNew v))
 
 omit I in
-/-- **`jal realloc` from an optional old block** (`wp_call_reallocNull` or
-`wp_call_realloc`). -/
+
 theorem wp_call_reallocOpt (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF} {i : Nat}
     {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code reallocEntryBV)

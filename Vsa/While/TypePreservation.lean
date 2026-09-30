@@ -1,23 +1,11 @@
 import Vsa.While.TypeStore
 
-/-!
-# Type preservation for the big-step semantics
-
-For each of the nine big-step relations: started from a typed store (`StoreOK`)
-whose current frame binds the defined-name set, a derivation of a well-typed
-phrase ends in a grown, typed store; an expression's value has its static
-type, a statement's names stay bound and its completion status is permitted
-by its return type and loop flag (`StatusOK`). The proof is one mutual
-structural recursion over the derivation.
--/
-
 namespace Vsa.While.Types
 
 open Vsa.While
 
 variable {Δ : TyEnv}
 
-/-- `MustExit` statements and `MustExitSeq` sequences never complete normally. -/
 theorem mustExit_both :
     (∀ s, MustExit s → ∀ st d env st', ¬ ExecS st d env s st' .normal) ∧
     (∀ ss, MustExitSeq ss → ∀ st d env st', ¬ ExecSeq st d env ss st' .normal) := by
@@ -60,8 +48,6 @@ theorem Ext.lt {s s' : Store} {a : Addr} (hE : Ext s s') (h : a < s.frames.size)
     a < s'.frames.size :=
   Nat.lt_of_lt_of_le h hE.size_le
 
-/-- Operators are total on well-typed operands, up to division by zero, and
-return a value of the operator's result type. -/
 theorem binOp_typed {s : Store} {op : BinOp} {lv rv v : Value} {tl tr t : Ty}
     (hl : ValTy Δ s lv tl) (hr : ValTy Δ s rv tr) (hbt : BinTy op tl tr t)
     (hop : binOpSem s op lv rv = some v) : ValTy Δ s v t := by
@@ -94,7 +80,6 @@ theorem defAll_append {s : Store} {a : Addr} {S₁ S₂ : List String}
   · exact h₁ x h
   · exact h₂ x h
 
-/-- A closure call with typed callee and arguments: the entry state of its body. -/
 theorem call_entry {st : St} {cd : ClosureData} {vs : List Value}
     {store' : Store} {frame : Addr} {S : List String}
     (hS : StoreOK Δ st.store) (halloc : st.store.allocFrame (some cd.env) = (store', frame))
@@ -109,13 +94,10 @@ theorem call_entry {st : St} {cd : ClosureData} {vs : List Value}
   exact ⟨hE1.trans hE2, hS2, hE2.lt hfr,
     defAll_append hD2 ((allocFrame_defAll halloc hdef).ext hE2)⟩
 
-/-! ## The preservation motives -/
-
 section Motives
 
 variable (Δ : TyEnv)
 
-/-- Expression evaluation from a typed configuration. -/
 abbrev PresE (st : St) (_d : Nat) (env : Addr) (e : Expr) (st' : St) (v : Value) : Prop :=
   ∀ S T, StoreOK Δ st.store → env < st.store.frames.size → DefAll st.store env S →
     WtE Δ S e T → Ext st.store st'.store ∧ StoreOK Δ st'.store ∧ ValTy Δ st'.store v T
@@ -159,7 +141,6 @@ abbrev PresSeq (st : St) (_d : Nat) (env : Addr) (ss : List Stmt) (st' : St)
 
 end Motives
 
-/-- Type preservation for each of the nine big-step relations. -/
 structure Preservation (Δ : TyEnv) : Prop where
   evalE : ∀ st d env e st' v, EvalE st d env e st' v → PresE Δ st d env e st' v
   evalArgs : ∀ st d env es st' vs, EvalArgs st d env es st' vs → PresArgs Δ st d env es st' vs
@@ -174,7 +155,6 @@ structure Preservation (Δ : TyEnv) : Prop where
   execSeq : ∀ st d env ss st' status, ExecSeq st d env ss st' status →
     PresSeq Δ st d env ss st' status
 
-/-- **Type preservation**, for all nine big-step relations at once. -/
 theorem preservation (Δ : TyEnv) : Preservation Δ := by
   refine ⟨
     @EvalE.rec (fun st d env e st' v _ => PresE Δ st d env e st' v)
@@ -285,7 +265,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
       ?c1 ?c2 ?c3 ?c4 ?c5 ?c6 ?c7 ?c8 ?c9 ?c10 ?c11 ?c12 ?c13 ?c14 ?c15 ?c16 ?c17 ?c18 ?c19 ?c20
       ?c21 ?c22 ?c23 ?c24 ?c25 ?c26 ?c27 ?c28 ?c29 ?c30 ?c31 ?c32 ?c33 ?c34 ?c35 ?c36 ?c37 ?c38
       ?c39 ?c40 ?c41 ?c42 ?c43 ?c44 ?c45 ?c46 ?c47 ?c48 ?c49 ?c50⟩
-  -- EvalE
+
   case c1 => intro _ _ _ _ _ _ hS _ _ hwt; cases hwt; exact ⟨.refl _, hS, .int _⟩
   case c2 => intro _ _ _ _ _ _ hS _ _ hwt; cases hwt; exact ⟨.refl _, hS, .str _⟩
   case c3 => intro _ _ _ _ _ _ hS _ _ hwt; cases hwt; exact ⟨.refl _, hS, .bool _⟩
@@ -360,7 +340,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
       obtain ⟨hE, hcd⟩ := allocClosure_ext halloc
       exact ⟨hE, allocClosure_storeOK halloc hS,
         .closure a ⟨env, name, params, body⟩ S S' r hcd hb hr (hD.ext hE)⟩
-  -- EvalArgs
+
   case c16 => intro _ _ _ _ _ hS _ _ hwt; cases hwt; exact ⟨.refl _, hS, .nil⟩
   case c17 =>
     intro _ _ _ _ _ _ _ _ _ _ _ ihe ihes S ts hS henv hD hwt
@@ -369,7 +349,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
       obtain ⟨hE₁, hS₁, hv⟩ := ihe _ _ hS henv hD hwe
       obtain ⟨hE₂, hS₂, hvs⟩ := ihes _ _ hS₁ (hE₁.lt henv) (hD.ext hE₁) hwes
       exact ⟨hE₁.trans hE₂, hS₂, .cons _ _ _ _ (hv.ext hE₂) hvs⟩
-  -- Call
+
   case c18 =>
     intro _ _ a cd _ _ _ _ _ _ hcd _ _ halloc hbody hres ihbody tf ts t hS hf hvs hct
     cases hf with
@@ -396,7 +376,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
   case c21 =>
     intro _ _ _ _ _ _ _ tf ts t hS hf _ hct
     cases hf; cases hct <;> exact ⟨.refl _, hS, .null⟩
-  -- ExecS
+
   case c22 =>
     intro _ _ _ _ _ _ _ ihe S R L S' hS henv hD hwt
     cases hwt with
@@ -521,7 +501,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
     cases hwt; exact ⟨.refl _, hS, hD, ⟨.null, rfl, .null⟩⟩
   case c36 => intro _ _ _ S R L S' hS _ hD hwt; cases hwt; exact ⟨.refl _, hS, hD, rfl⟩
   case c37 => intro _ _ _ S R L S' hS _ hD hwt; cases hwt; exact ⟨.refl _, hS, hD, rfl⟩
-  -- ExecInit
+
   case c38 => intro _ _ _ S R L S' hS _ hD hwt; cases hwt; exact ⟨.refl _, hS, hD⟩
   case c39 =>
     intro _ _ _ _ _ _ _ ihs S R L S' hS henv hD hwt
@@ -529,7 +509,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
     | some _ _ _ _ _ hws =>
       obtain ⟨hE, hS₁, hD₁, _⟩ := ihs _ _ _ _ hS henv hD hws
       exact ⟨hE, hS₁, hD₁⟩
-  -- ForLoop
+
   case c40 =>
     intro _ _ _ _ _ _ _ _ _ _ ihc S R L S₂ hS henv hD hwc _ _
     cases hwc with
@@ -556,7 +536,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
     have hE₁₃ := hE₁₂.trans hE₃
     obtain ⟨hE₄, hS₄, hst⟩ := ihloop _ _ _ _ hS₃ (hE₁₃.lt henv) (hD.ext hE₁₃) hwc hws hwb
     exact ⟨hE₁₃.trans hE₄, hS₄, hst⟩
-  -- ForCond
+
   case c44 => intro _ _ _ S hS _ _ _; exact ⟨.refl _, hS⟩
   case c45 =>
     intro _ _ _ _ _ _ _ _ ihc S hS henv hD hwc
@@ -564,7 +544,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
     | some _ _ _ hwe =>
       obtain ⟨hE, hS₁, _⟩ := ihc _ _ hS henv hD hwe
       exact ⟨hE, hS₁⟩
-  -- ExecStep
+
   case c46 => intro _ _ _ S hS _ _ _; exact ⟨.refl _, hS⟩
   case c47 =>
     intro _ _ _ _ _ _ _ ihe S hS henv hD hws
@@ -572,7 +552,7 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
     | some _ _ _ hwe =>
       obtain ⟨hE, hS₁, _⟩ := ihe _ _ hS henv hD hwe
       exact ⟨hE, hS₁⟩
-  -- ExecSeq
+
   case c48 => intro _ _ _ S R L S' hS _ _ hwt; cases hwt; exact ⟨.refl _, hS, trivial⟩
   case c49 =>
     intro _ _ _ _ _ _ _ _ _ _ ihs ihss S R L S' hS henv hD hwt
@@ -587,9 +567,6 @@ theorem preservation (Δ : TyEnv) : Preservation Δ := by
     | cons _ _ _ _ _ S₁ _ hws _ =>
       obtain ⟨hE, hS₁, _, hst⟩ := ihs _ _ _ _ hS henv hD hws
       exact ⟨hE, hS₁, hst⟩
-
-
-/-! ## The initial state and the top level -/
 
 theorem initSt_storeOK {Δ : TyEnv} (hB : BuiltinsTyped Δ) : StoreOK Δ initSt.store := by
   intro a f hf p hp
@@ -612,8 +589,6 @@ theorem initSt_defAll : DefAll initSt.store 0 builtinNames := by
   · exact ⟨.native .println, rfl⟩
   · exact ⟨.native .assert, rfl⟩
 
-/-- **Preservation for programs.** A well-typed program's top-level run keeps
-the store typed and completes with status `normal`. -/
 theorem wellTyped_run {Δ : TyEnv} {p : Program} (hwt : WellTyped Δ p) {st' : St}
     {status : Status} (h : ExecSeq initSt 0 0 p st' status) :
     Ext initSt.store st'.store ∧ StoreOK Δ st'.store ∧ status = .normal := by
@@ -627,7 +602,6 @@ theorem wellTyped_run {Δ : TyEnv} {p : Program} (hwt : WellTyped Δ p) {st' : S
   | cont => cases hst
   | ret v => obtain ⟨_, h, _⟩ := hst; cases h
 
-/-- A well-typed program never completes with an abrupt top-level status. -/
 theorem wellTyped_not_topAbrupt {Δ : TyEnv} {p : Program} (hwt : WellTyped Δ p) :
     ¬ TopAbrupt p := by
   rintro ⟨st', status, hne, h⟩

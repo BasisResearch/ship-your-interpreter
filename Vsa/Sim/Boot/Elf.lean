@@ -1,40 +1,18 @@
 import Vsa.Sim.Boot.Image
 
-/-!
-# `initializeMemory` is the loader memory `loadedMem`
-
-`initializeMemory .B64 elf` (`riscv-lean/lean_emulator/LeanRiscv.lean`)
-inserts each ELFSage piece (interpreted segments, then bits and bobs) byte by
-byte, panicking on an address already written. `ElfLoads elf script` says the
-parsed pieces are `bootPieces` carrying `imageByte script`; then the loader's
-memory is `loadedMem script` (`initializeMemory_eq`), since `bootPieces` are
-pairwise disjoint and the panic branch is never taken.
-
-`ElfLoads` is a statement about the ELFSage parse of a concrete file. The
-kernel does not parse the 138 KB file (see `Vsa.ElfMono`); the native dump
-`scripts/boot_elf_pieces.lean` and `scripts/gen_boot_witness.py corpus`
-compare every script build's pieces with the proof ELF's.
--/
-
 namespace Vsa.Sim.Boot
 
 open Vsa.MemRepr LeanRV64DExecutable
 
-/-- The pieces `initializeMemory` inserts, in order, with their bytes. -/
 def elfPieces (elf : ELF64File) : List (Nat × List UInt8) :=
   elf.interpreted_segments.map (fun p => (p.2.segment_base, p.2.segment_body.data.toList)) ++
     elf.bits_and_bobs.map (fun p => (p.1, p.2.data.toList))
 
-/-- The image's pieces with their bytes. -/
 def imagePieces (script : Nat) : List (Nat × List UInt8) :=
   bootPieces.map fun p => (p.1, (List.range p.2).map fun i => UInt8.ofBitVec (imageByte script (p.1 + i)))
 
-/-- The parsed ELF loads the image of `script`. -/
 def ElfLoads (elf : ELF64File) (script : Nat) : Prop := elfPieces elf = imagePieces script
 
-/-! ## One piece -/
-
-/-- A byte-inserting step that inserts at fresh addresses. -/
 def InsertsFresh (f : Mem → Nat × UInt8 → Mem) : Prop :=
   ∀ mem a b, mem.contains a = false → f mem (a, b) = mem.insert a b.toBitVec
 
@@ -74,18 +52,13 @@ theorem piece_fold {f : Mem → Nat × UInt8 → Mem} (hf : InsertsFresh f) :
       have := hfresh (i + 1) (by simp; omega)
       rwa [show base + (i + 1) = base + 1 + i by omega] at this
 
-/-! ## All pieces -/
-
-/-- Insert each piece's bytes at its base, in order. -/
 def insertPieces (f : Mem → Nat × UInt8 → Mem) (mem : Mem) (ps : List (Nat × List UInt8)) :
     Mem :=
   ps.foldl (fun mem p => ((List.range' p.1 p.2.length).zip p.2).foldl f mem) mem
 
-/-- Two pieces do not overlap. -/
 def PieceDisjoint (a b : Nat × List UInt8) : Prop :=
   a.1 + a.2.length ≤ b.1 ∨ b.1 + b.2.length ≤ a.1
 
-/-- The byte a piece list places at `x` (the first piece holding it). -/
 def pieceByte : List (Nat × List UInt8) → Nat → Option (BitVec 8)
   | [], _ => none
   | p :: ps, x =>
@@ -137,9 +110,6 @@ theorem insertPieces_get {f : Mem → Nat × UInt8 → Mem} (hf : InsertsFresh f
         ← Std.ExtHashMap.contains_eq_isSome_getElem?]
       exact hq'
 
-/-! ## The loader -/
-
-/-- `initializeMemory`'s per-byte step. -/
 def loadStep (mem : Mem) (ab : Nat × UInt8) : Mem :=
   if mem.contains ab.1 then panic s!"Address {ab.1} is already written to!"
   else mem.insert ab.1 ab.2.toBitVec
@@ -148,7 +118,6 @@ theorem loadStep_fresh : InsertsFresh loadStep := by
   intro mem a b h
   simp [loadStep, h]
 
-/-- `initializeMemory` is the piece insertion over `elfPieces`. -/
 theorem initializeMemory_pieces (elf : ELF64File) :
     initializeMemory .B64 elf = insertPieces loadStep ∅ (elfPieces elf) := by
   unfold initializeMemory insertPieces elfPieces loadStep
@@ -183,8 +152,6 @@ private theorem pieceByte_image (byte : Nat → BitVec 8) :
       unfold inPieces
       simp only [hx, false_or]
 
-/-- **The loader's memory.** An ELF whose parse loads the image of `script`
-initialises exactly `loadedMem script`. -/
 theorem initializeMemory_eq {elf : ELF64File} {script : Nat} (h : ElfLoads elf script) :
     initializeMemory .B64 elf = loadedMem script := by
   rw [initializeMemory_pieces, h]

@@ -4,17 +4,14 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
-/-- Logarithm of the largest aligned chunk dividing a scalar access width. -/
 def scalarChunkExp (a : BitVec 64) (k : Nat) : Nat :=
   min (Sail.BitVec.countTrailingZeros a) k
 
-/-- Scalar width encoding has exactly its width exponent in trailing zeros. -/
 theorem scalarWidth_ctz (k : Nat) (hk : k ≤ 3) :
     Sail.BitVec.countTrailingZeros (to_bits (l := 13) (2 ^ k)) = k := by
   have hc : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 := by omega
   rcases hc with rfl | rfl | rfl | rfl <;> decide
 
-/-- Exact executable split plan for every scalar power-of-two width. -/
 theorem split_access_scalar
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (k : Nat) (hk : k ≤ 3) :
@@ -40,7 +37,6 @@ theorem split_access_scalar
     | omega
     | (simp [hex, simp_sail, EStateM.run, pure]; rfl)
 
-/-- Every prefix of the trailing zero bits gives a divisibility fact. -/
 theorem mod_pow_eq_zero_of_le_ctz (a : BitVec 64) (t : Nat)
     (ht : t ≤ Sail.BitVec.countTrailingZeros a) : a.toNat % 2 ^ t = 0 := by
   have hctz : t ≤ a.ctz.toNat := ht
@@ -51,7 +47,6 @@ theorem mod_pow_eq_zero_of_le_ctz (a : BitVec 64) (t : Nat)
   have h := congrArg BitVec.toNat hz
   simpa using h
 
-/-- Size and alignment of the chunk plan returned by the executable. -/
 structure ScalarSplitFacts (a : BitVec 64) (k : Nat) : Prop where
   chunk_pos : 0 < 2 ^ scalarChunkExp a k
   count_pos : 0 < 2 ^ (k - scalarChunkExp a k)
@@ -67,11 +62,9 @@ theorem scalarSplitFacts (a : BitVec 64) (k : Nat) : ScalarSplitFacts a k where
     exact Nat.sub_add_cancel (Nat.min_le_right _ _)
   aligned := mod_pow_eq_zero_of_le_ctz a _ (Nat.min_le_left _ _)
 
-/-- Physical address of a chunk in the increasing-order scalar split. -/
 def scalarChunkAddress (a : BitVec 64) (k i : Nat) : BitVec 64 :=
   a + BitVec.ofNat 64 (i * 2 ^ scalarChunkExp a k)
 
-/-- Each selected chunk stays inside the original RAM window and avoids HTIF. -/
 structure ScalarChunkFacts (a : BitVec 64) (k i : Nat) : Prop where
   address : (scalarChunkAddress a k i).toNat = a.toNat + i * 2 ^ scalarChunkExp a k
   ram_lo : 0x80000000 ≤ (scalarChunkAddress a k i).toNat

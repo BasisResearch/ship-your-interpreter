@@ -1,16 +1,5 @@
 import VsaIris.Vsa.Fprintf.InnerLld
 
-/-!
-# The inner `_vfprintf_r(reent, fake, P, ap)` for `"<lit>%s>"` (lane N5)
-
-`"<fn %s>"` and `"<native fn %s>"`: the literal `lit` before the `%`, the
-string argument `str` (bytes `bs`, read through `strlen`: the hook `hstr`),
-then `">"` and the NUL. The run is `vfp_begin`, the literal run
-(`vfp_toTerm`), `s_stage`, the print of `lit` and `bs` (`vfp_print`), the
-run `">"` (`vfp_toTerm`), and the end with `">"` pending (`vfp_end1`, the
-final flush `sbSprint_hook`).
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -21,7 +10,6 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- A format byte's image. -/
 theorem FmtAt.img {P : Nat} {bs : List (BitVec 8)} (h : FmtAt Dt DA P bs) (i : Nat) (hi : i < bs.length) :
     imgM Dt (P + i) = bs[i] := by
   have e := h.byte i hi
@@ -29,7 +17,6 @@ theorem FmtAt.img {P : Nat} {bs : List (BitVec 8)} (h : FmtAt Dt DA P bs) (i : N
   refine Classical.byContradiction fun hne => zext8_ne hne ?_
   simpa [LeanRV64DExecutable.zero_extend, Sail.BitVec.zeroExtend] using e
 
-/-- The format's literal run as a printable piece. -/
 theorem FmtAt.pieceOK {s : BitVec 64} {need : Nat} {Mt : Mem} {f sp : BitVec 64} {P : Nat}
     {bs : List (BitVec 8)} (h : FmtAt Dt DA P bs) (hsp : P + bs.length ≤ sp.toNat - 384) (hf : sp.toNat ≤ f.toNat) :
     PieceOK Dt DA s need Mt f sp (P, bs) := by

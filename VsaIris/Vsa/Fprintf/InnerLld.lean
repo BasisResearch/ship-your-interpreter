@@ -1,17 +1,6 @@
 import VsaIris.Vsa.Fprintf.Inner
 import VsaIris.Vsa.Stderr.VfpEntry
 
-/-!
-# The inner `_vfprintf_r(reent, fake, "%lld", ap)` (lane N5)
-
-`__sbprintf` calls `_vfprintf_r` on its stack `FILE`. For `"%lld"` the run
-is the entry (N3's `vfpEntry_run`), the stack `FILE`'s prologue
-(`vfp_fileSb`), the head (`vfp_headC`), the empty literal run before the
-`%` (`vfp_toTerm`), the conversion (`vfp_lld`), the empty run before the NUL
-(`vfp_toTerm`), and the end with nothing pending (`vfp_end0`). The bytes
-reach the stack `FILE`'s buffer (`SbFile`); `lldBytes v` is what it prints.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -38,8 +27,6 @@ theorem VfpSpills.frame {Mt M' : Mem} {sp : BitVec 64} {C : Nat → BitVec 64} {
     (l' 504 (by omega) (by omega)).trans h.s9, (l' 496 (by omega) (by omega)).trans h.s10,
     (l' 488 (by omega) (by omega)).trans h.s11⟩
 
-/-- The caller's callee-saved registers in `_vfprintf_r`'s frame, from the
-entry's spills (`VfpEntry`) and the head's (`VfpHeadPost`). -/
 theorem vfpSpills_of {R R1 R2 R3 : Nat → BitVec 64} {Mt Mt1 Mt3 : Mem} {sp : BitVec 64}
     (E : VfpEntry R R1 Mt Mt1 sp) (H : VfpHeadPost R2 R3 Mt1 Mt3 sp)
     (hk : ∀ x ∈ [9, 18, 19, 21, 23, 24, 25, 26, 27], R2 x = R x) (hsp : sp.toNat + 600 < 2 ^ 64) :
@@ -53,15 +40,10 @@ theorem vfpSpills_of {R R1 R2 R3 : Nat → BitVec 64} {Mt Mt1 Mt3 : Mem} {sp : B
     H.s8.trans (hk 24 (by decide)), H.s9.trans (hk 25 (by decide)), H.s10.trans (hk 26 (by decide)),
     H.s11.trans (hk 27 (by decide))⟩
 
-/-- The bytes the inner `_vfprintf_r` changes: its frame and the callee
-frames below it, the stack `FILE`, `stdout`'s flags, `errno`. -/
 def InnerReg (f sp : Nat) (a : Nat) : Prop :=
   (sp - 384 ≤ a ∧ a < sp + 592) ∨ (f ≤ a ∧ a < f + 1208) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32) ∨
     (0x8001ba08 ≤ a ∧ a < 0x8001ba0c)
 
-/-- **The start of `_vfprintf_r(reent, f, P, ap)` on the stack `FILE`**, at the
-loop head: the loop state, the caller's callee-saved registers spilled, the
-memory changed only in the frame, `ap` in its slot. -/
 structure VfpBegin (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp f P : BitVec 64) : Prop where
   loop : VfpLoop R' Mt' sp 0x8001b538#64 f P 0
   spills : VfpSpills Mt' sp R

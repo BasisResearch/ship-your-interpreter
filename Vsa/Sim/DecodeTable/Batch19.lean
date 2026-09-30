@@ -1,8 +1,5 @@
 import Vsa.Sim.InitValues
 
-/-! Decode table batch 19 (lane N5): the `jal` words of `__sbprintf` (`fprintf` on the
-unbuffered `stdout`) that batches 01-18 miss. Batch 18's template. -/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 

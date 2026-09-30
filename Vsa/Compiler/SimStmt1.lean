@@ -1,16 +1,9 @@
 import Vsa.Compiler.SimDecl
 
-/-!
-# Forward simulation: simple statements
-
-Expression statements, declarations, `return`, `break` and `continue`.
--/
-
 namespace Vsa.Compiler
 
 open Vsa.Sim Vsa.While
 
-/-- A statement post from an expression post whose state also completes the statement. -/
 theorem SPost.of_epost {code : List Ins} {T : List String} {V : View} {st : St} {d : Nat} {env : Addr}
     {C : GCtx} {sp fs fin : Nat} {A B : AM} {n n' : Nat} {st' : St} {v : Value} {V' : View}
     (hp : EPost code T V st d env C.Γ sp fs 0 A n st' v V' B) (hpc : B.pc = pcOf fin) (hn : n ≤ n') :

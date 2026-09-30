@@ -1,15 +1,5 @@
 import VsaIris.Vsa.Fprintf.LldEmit
 
-/-!
-# `%lld` from `%` to the loop head (lane N5)
-
-`vfp_lld` composes the parse (`lld_head`), the digits (`lld_mag`), the
-staging (`lld_stage`) and the print (`vfp_print`): from the `%` of `"%lld"`
-to the loop head past the `d`, the argument's decimal rendering (`lldBytes`:
-`'-'` for a negative argument, then the digits of its magnitude) handed to
-the stack `FILE`.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
@@ -20,7 +10,6 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- What `%lld` prints for `v`. -/
 def lldBytes (v : BitVec 64) : List (BitVec 8) :=
   (if isNeg v then [45#8] else []) ++ digBytes (lldMag v).toNat
 
@@ -36,8 +25,6 @@ theorem piecesBytes_lldIovs (sp : Nat) (v : BitVec 64) :
   · have : lldSign v = 0#8 := lldSign_eq_zero.2 h
     simp [this, h]
 
-/-- **`VfpPend` across a register and memory frame** that spares the loop
-registers, reent/`FILE`/count, the `uio` and the pending iovs. -/
 theorem VfpPend.transport {R R' : Nat → BitVec 64} {Mt Mt' : Mem} {sp reent f : BitVec 64} {cnt : Nat}
     {iovs : List (Nat × List (BitVec 8))} {Reg : Nat → Prop} (h : VfpPend R Mt sp reent f cnt iovs)
     (hsp : sp.toNat + 600 < 2 ^ 64) (hn : iovs.length ≤ 8) (hR : ∀ x ∈ [2, 9, 18, 19, 21, 23], R' x = R x) (hM : Frame Mt' Mt Reg)
@@ -70,7 +57,6 @@ theorem VfpPend.transport {R R' : Nat → BitVec 64} {Mt Mt' : Mem} {sp reent f 
     · rw [e1, ld .ld _ (.inr (.inr (by omega))) (by decide), ← e1]; exact a1
     · rw [e2, ld .ld _ (.inr (.inr (by omega))) (by decide), ← e2]; exact a2
 
-/-- The bytes `vfp_lld` changes. -/
 def LldReg (f sp : Nat) (a : Nat) : Prop :=
   (sp + 24 ≤ a ∧ a < sp + 32) ∨ a = sp + 167 ∨ MagReg sp a ∨ StageReg sp a ∨ PrintReg f sp a
 

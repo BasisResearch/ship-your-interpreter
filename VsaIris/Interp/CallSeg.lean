@@ -1,15 +1,5 @@
 import VsaIris.Interp.CallPrefix
 
-/-!
-# The call arm's shared runs as segment lemmas (lane E4)
-
-The two runs of the call prefix, for either WP, each with its end state named
-(CLAUDE.md law 6): `callSegA` (entry to the callee's `jal`, `CallA`) and
-`callSegB` (after the callee to the argument count's three exits, `CallB`).
-The total and partial prefixes (`CallPrefix.lean`, `CallPrefixP.lean`) are
-these two plus the mode's child calls.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
@@ -17,7 +7,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.RuntimeRepr
 
-/-- The state at the callee's `jal` (`0x800031bc`). -/
 structure CallA (R : Nat → BitVec 64) (Mt : Mem) (s aX aF aE sret inp ret : BitVec 64)
     (rv : Nat → BitVec 64) : Prop where
   args : EvalRegs R (s + 18446744073709550528#64 + 96#64) inp aF aE (s + 18446744073709550528#64)
@@ -28,10 +17,6 @@ structure CallA (R : Nat → BitVec 64) (Mt : Mem) (s aX aF aE sret inp ret : Bi
   saved : CallSaved Mt s ret (rv 8) (rv 9) (rv 18)
   env : ldv .ld Mt (s.toNat - 1088) = aE
 
-/-- The state after the count test (`blt`, the `s7` spill, `li a6,0`): the
-callee-saved registers as at the `jal` (so as the callee returned them), `a3`
-the frame pointer, `a5` the count, `a6 = 0`; the memory the callee's plus
-the `s7` spill. -/
 structure CallB (R R1 : Nat → BitVec 64) (Mt Mt1 : Mem) (s aE : BitVec 64) (argc : Nat) : Prop where
   keep : ∀ x ∈ calleeSaved, R x = R1 x
   a3 : R 13 = aE
@@ -44,7 +29,6 @@ section
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 variable {live : Nat → Prop}
 
-/-- **Run 1**, for either WP: prologue, kind dispatch, the callee staged. -/
 theorem callSegA (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {m Mt0 : Mem} {P : Nat → Prop} {rv : Nat → BitVec 64}
     {s aX aF aE sret inp ret : BitVec 64} {argc : Nat}
@@ -84,9 +68,6 @@ theorem callSegA (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   iintro ⟨Hk, Hms⟩
   iapply Hk $$ %R1 %Mt1 %hA Hms
 
-/-- **Run 2**, for either WP: the count test, the `s7` spill, `a6 = 0`, and
-the three exits (the error at `0x80003fb0`, no arguments to `0x80003254`,
-the loop head `0x800031dc`) as an additive triple. -/
 theorem callSegB (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {m Mt1 : Mem} {P : Nat → Prop} {R1 : Nat → BitVec 64}
     {s aX aF aE : BitVec 64} {argc : Nat}
@@ -161,10 +142,6 @@ theorem callSegB (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
     rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg
 
-/-- **The state at the kind dispatch, from the segments' end states**: the
-state at the callee's `jal` (`CallA`), the callee's kept registers and result
-words, the count test (`CallB`), and the argument loop (its kept registers,
-the frame outside its writes). -/
 theorem CallAt.of_seg {R1 R1' R2 R : Nat → BitVec 64} {Mt1 Mt2 Mt : Mem}
     {s aX aF aE sret inp ret w0 w1 w2 : BitVec 64} {rv : Nat → BitVec 64} {argc : Nat}
     (hfg : EvalFrameG s) (hA : CallA R1 Mt1 s aX aF aE sret inp ret rv)
@@ -204,8 +181,6 @@ namespace VsaIris.Interp
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
--- The too-many-arguments error: the line (havoc), `runtime_error(in, line,
--- "too many arguments (max 32)", 0, 0)` staged, `s3`-`s7` spilled.
 #ix_seg Call_runTM {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s : BitVec 64}

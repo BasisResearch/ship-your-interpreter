@@ -2,17 +2,6 @@ import VsaIris.Vsa.Fprintf.Scan
 import VsaIris.Vsa.Fprintf.Arith
 import Vsa.Sim.SnprintfSpec
 
-/-!
-# `_vfprintf_r`'s decimal loop (lane N5)
-
-`%lld` of a magnitude above 9 runs the loop at `0x8000ca80`: `__umoddi3`
-gives the low digit, stored below the write pointer `s11`; `__udivdi3`
-divides by ten; the loop stops once the dividend was at most 9. The digits
-land MSB-first in `[D - L, D)`: `natDigits (n + 1) n`, the digit list of
-`Vsa.While.natToString` (`digBytes`). `natDigits_step` (`SnprintfSpec.lean`)
-is the loop's induction step.
--/
-
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio Vsa.While
@@ -21,10 +10,8 @@ open scoped VsaIris.Sym.Stdout
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-/-- A character's byte. -/
 def chByte (c : Char) : BitVec 8 := BitVec.ofNat 8 c.toNat
 
-/-- The decimal digits of `n`, as bytes. -/
 def digBytes (n : Nat) : List (BitVec 8) := (natDigits (n + 1) n).map chByte
 
 theorem natDigits_len (k : Nat) : ∀ f n, n < 10 ^ (k + 1) → (natDigits f n).length ≤ k + 1 := by
@@ -72,7 +59,6 @@ theorem digBytes_step (n : Nat) (h : 10 ≤ n) :
   simp only [List.map_cons, List.map_nil, chByte, digitChar_eq (n % 10) (by omega),
     chOfNat_toNat _ (by omega : 48 + n % 10 < 55296)]
 
-/-- `addiw a0, a0, 48` of a digit. -/
 theorem digit_word (d : Nat) (h : d < 10) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 d + 48#64)) =
       BitVec.zeroExtend 64 (BitVec.ofNat 8 (48 + d)) := by
@@ -81,16 +67,10 @@ theorem digit_word (d : Nat) (h : d < 10) :
   rw [BitVec.signExtend_eq_setWidth_of_msb_false hm]
   apply BitVec.eq_of_toNat_eq; simp; omega
 
-/-- The registers the decimal loop keeps. -/
 abbrev digKeep : List Nat := [2, 3, 4, 6, 7, 9, 16, 17, 18, 19, 20, 21, 24, 26, 28, 29, 30, 31]
 
-/-- The stack bytes the decimal loop writes below the write pointer `D`,
-inside `_vfprintf_r`'s conversion buffer `[sp + 248, sp + 348)`. -/
 def DigReg (sp D : Nat) (a : Nat) : Prop := sp + 248 ≤ a ∧ a < D
 
-/-- **The decimal loop** (`0x8000ca80`) on the magnitude `n`, write pointer
-`s11 = D`: the digits of `n` in `[D - L, D)`, `s9 = D - L`, back at the join
-`0x8000cab8`. -/
 theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {s sp : BitVec 64} {need : Nat}
     (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)
@@ -153,7 +133,7 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     have := fun x (hx : x ∈ digKeep) => m2 x (List.mem_append_left _ hx)
     keep_chain this
   by_cases h9 : n ≤ 9
-  · -- the dividend was at most 9: the last digit
+  ·
     have hb : ((BitVec.ofNat 64 n).toNat ≤ (9#64).toNat) = True := eq_true (by rw [hnn]; exact h9)
     nx_run hlive using [n2, n20, n22, m25, hq', hb] at 2147535488 2147535544
     have hL := digBytes_small n (by omega)
@@ -166,7 +146,7 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
       rw [hD1n] at e ⊢
       rwa [show n % 10 = n by omega] at e ⊢
 
-  · -- the dividend was above 9: the next digit
+  ·
     have hb : ((BitVec.ofNat 64 n).toNat ≤ (9#64).toNat) = False := eq_false (by rw [hnn]; exact h9)
     nx_run hlive using [n2, n20, n22, m25, hq', hb] at 2147535488 2147535544
     have hn10 : n / 10 < n := by omega

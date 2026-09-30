@@ -2,17 +2,6 @@ import Vsa.Compiler.Correct
 import Vsa.Compiler.CompileSize
 import Vsa.While.Validation
 
-/-!
-# `whileWl`, compiled
-
-The script linked into the interpreter ELF is in the supported subset, its
-compiled code fits below `tohost`, and so any machine configuration holding
-`compile whileWl` prints `55\n2500\n36\n` and exits with `0`
-(`whileWl_compiled_halts`, from `compile_correct` and the validated derivation
-`whileWl_valid`). `experiments/compiler/RunCompiled.lean` runs the same code on
-the executable Sail model (31,720 steps).
--/
-
 namespace Vsa.Compiler
 
 open Vsa.While Vsa.Sim LeanRV64DExecutable
@@ -58,8 +47,6 @@ theorem whileWl_fits : 0x80004800 + 4 * (compile Programs.whileWl).length ≤ 0x
   have hs : seqSize Programs.whileWl ≤ 2000 := by rw [whileWl_eq]; decide
   omega
 
-/-- **The compiled `whileWl` prints `55 2500 36` and exits 0** on every machine
-configuration that holds its code (and libgcc's routines) at the entry. -/
 theorem whileWl_compiled_halts (c : Config)
     (hgood : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some 0x80004800#64)

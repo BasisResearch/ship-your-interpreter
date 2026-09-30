@@ -1,17 +1,6 @@
 import VsaIris.Interp.StrlenRun
 import VsaIris.Interp.StrIris
 
-/-!
-# `strlen` in the Iris logic (lane A)
-
-`strlen_spec_env`: newlib's `strlen` meets `strlenSpec` (`SpecEnv.lean`) for
-every `live` holding the binary's code. The string is `strAt`: persistent
-bytes up to the NUL and the RAM geometry `StrWin` of its eight-byte
-over-read window. The run is `StrlenRun.strlenRunL`: the word loop's loads
-of the bytes past the NUL are `sr_havoc` loads, which need neither ownership
-nor liveness of those bytes.
--/
-
 namespace VsaIris.Interp.StrLeaf
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -22,7 +11,6 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **`strlen` meets `strlenSpec`**, for either WP. -/
 theorem strlen_spec_env (live : Nat → Prop) (hcl : CodeLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) :
     binImg (GF := GF) ⊢ strlenSpec Wp := by

@@ -14,7 +14,7 @@ typedef enum {
 
 typedef struct {
     TokType type;
-    const char *start;  /* points into source; for T_ERROR: static message */
+    const char *start;
     int len;
     int line;
 } Token;

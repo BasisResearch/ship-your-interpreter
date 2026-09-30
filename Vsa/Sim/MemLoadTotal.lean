@@ -1,26 +1,5 @@
 import Vsa.Sim.ExecuteLoad
 
-/-!
-# TOTAL (`getD 0`) `Load Data` chains at widths 1/2/4/8
-
-The Sail model reads memory **totally**: `readByte a = (m.get? a).getD 0`, so an
-unmapped/unwritten address reads as `0` — a load never faults on absence.  The
-presence-hypothesis load chain in `Vsa/Sim/MemLoad.lean` (`σ.mem[a+k]? = some
-bk`) therefore states something STRICTLY STRONGER than the model guarantees, and
-every downstream obligation that demanded presence over unwritten bytes (the
-`frame_pop` class over the callee's own unwritten entry frame) was asking for a
-fact no honest supplier can produce — machine-checked in
-`experiments/fleet/obstructions/FramePopRamTotalityVerdict48j.lean`.
-
-This file is the total half of the load layer.  Since wave 48k the four
-`Load Data` layers in `MemLoad.lean` are factored over the value the layer below
-returns (`checked_mem_read_data_*_of_ram`, `mem_read_data_*_of_cmr`,
-`translate_and_read_value_data_*_of_mr`), so the ONLY genuinely new content here
-is the four `read_ram_*_total` leaves — the byte values are given
-UNCONDITIONALLY as `(σ.mem[a+k]?).getD 0` and the `readByte` leaves land on them
-definitionally.  Everything above is the shared factored proof, instantiated.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -30,45 +9,27 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## The total byte reads
-
-Stated first on the raw byte map (`bytesT*`), then lifted to a state.  `Mem`-level
-is the form every downstream consumer wants: the machine-state versions are
-DEFEQ to it (`(afterNextPC (afterPrelude σ) pc).mem = σ.mem` is `rfl`). -/
-
-/-- The byte at `a`, read totally as `getD 0` (unmapped ⇒ `0`) — exactly what the
-model's `readByte` returns. -/
 abbrev bytesT1 (m : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) : BitVec 8 := (m[a]?).getD 0
 
-/-- The two little-endian bytes at `a + 0..1`, read totally. -/
 abbrev bytesT2 (m : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) : BitVec 16 :=
   ((m[a + 1]?).getD 0).append ((m[a]?).getD 0)
 
-/-- The four little-endian bytes at `a + 0..3`, read totally. -/
 abbrev bytesT4 (m : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) : BitVec 32 :=
   ((((m[a + 3]?).getD 0).append ((m[a + 2]?).getD 0)).append
     ((m[a + 1]?).getD 0)).append ((m[a]?).getD 0)
 
-/-- The eight little-endian bytes at `a + 0..7`, read totally. -/
 abbrev bytesT8 (m : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) : BitVec 64 :=
   ((((((((m[a + 7]?).getD 0).append ((m[a + 6]?).getD 0)).append
     ((m[a + 5]?).getD 0)).append ((m[a + 4]?).getD 0)).append
     ((m[a + 3]?).getD 0)).append ((m[a + 2]?).getD 0)).append
     ((m[a + 1]?).getD 0)).append ((m[a]?).getD 0)
 
-/-- The byte at `a.toNat`, read totally as `getD 0` (unmapped ⇒ `0`). -/
 abbrev ldByteT (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) : BitVec 8 :=
   bytesT1 σ.mem a.toNat
 
-/-- The eight little-endian bytes at `a.toNat + 0..7`, read totally as `getD 0`
-(unmapped ⇒ `0`). This is the value an `ld` produces. -/
 abbrev ldBytesT (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) : BitVec 64 :=
   bytesT8 σ.mem a.toNat
 
-/-! ## The `read_ram` leaves — the ONLY place byte-level information enters -/
-
-/-- `read_ram Read_plain (Physaddr a) 1 false` reads the byte at `a.toNat`
-`getD 0`, unchanged state. -/
 theorem read_ram_one_total (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) :
     (Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) 1 false).run σ
       = .ok (ldByteT σ a, ()) σ := by
@@ -77,8 +38,6 @@ theorem read_ram_one_total (σ : SequentialState RegisterType trivialChoiceSourc
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get, Bool.false_eq_true, ldByteT, bytesT1]
 
-/-- `read_ram Read_plain (Physaddr a) 8 false` reads the eight little-endian
-bytes `getD 0` at `a.toNat + 0..7`, unchanged state. -/
 theorem read_ram_eight_total (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64) :
     (Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) 8 false).run σ
       = .ok (ldBytesT σ a, ()) σ := by
@@ -94,15 +53,6 @@ theorem read_ram_eight_total (σ : SequentialState RegisterType trivialChoiceSou
     get, getThe, MonadStateOf.get, EStateM.get, Bool.false_eq_true,
     e2, e3, e4, e5, e6, e7, ldBytesT, bytesT8]
 
-/-! ## The `Load Data` chain above `read_ram`, instantiated at the total leaf.
-
-Each layer is the SHARED factored proof from `Vsa/Sim/MemLoad.lean`
-(`checked_mem_read_data_*_of_ram` / `mem_read_data_*_of_cmr` /
-`translate_and_read_value_data_*_of_mr`), fed the total `read_ram_*_total`
-leaf.  No byte-presence hypothesis appears anywhere. -/
-
-/-- `checked_mem_read (Load Data) … (Physaddr a) 1 …` reads the 1 byte(s)
-totally (`getD 0`), unchanged. -/
 theorem checked_mem_read_data_one_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
@@ -123,7 +73,6 @@ theorem checked_mem_read_data_one_total
   checked_mem_read_data_one_of_ram σ a _ vpmpaddr hpma hcfg haddr hbase
     hlo hhiram hhtif (read_ram_one_total σ a)
 
-/-- `mem_read (Load Data) … (Physaddr a) 1 …` returns the total read, unchanged. -/
 theorem mem_read_data_one_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vmstatus : RegisterType Register.mstatus)
@@ -149,7 +98,6 @@ theorem mem_read_data_one_total
     (checked_mem_read_data_one_total σ a vpmpaddr hpma hcfg haddr hbase
       hlo hhiram hhtif)
 
-/-- `translate_and_read_value (Virtaddr a) 1 (Load Data) …`, total. -/
 theorem translate_and_read_value_data_one_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vmstatus : RegisterType Register.mstatus)
@@ -175,7 +123,6 @@ theorem translate_and_read_value_data_one_total
     (mem_read_data_one_total σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
       haddr hbase hlo hhiram hhtif)
 
-/-- `vmem_read_addr (Virtaddr a) 1 (Load Data) …`, total. -/
 theorem vmem_read_addr_data_one_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vmstatus : RegisterType Register.mstatus)
@@ -203,9 +150,6 @@ theorem vmem_read_addr_data_one_total
     (translate_and_read_value_data_one_total σ a vmstatus vpmpaddr
       hpriv hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif)
 
-/-- **`vmem_read rs offset 1 (Load Data) …`, TOTAL.**  Resolves `a := v1 +
-offset` and reads the 1 byte(s) there `getD 0` (unmapped ⇒ `0`).  No
-byte-presence hypothesis: this is exactly what the model does. -/
 theorem vmem_read_data_one_total
     (σ : SequentialState RegisterType trivialChoiceSource) (rs : regidx) (offset v1 : BitVec 64)
     (vmstatus : RegisterType Register.mstatus) (vpmpaddr : RegisterType Register.pmpaddr_n)
@@ -231,8 +175,6 @@ theorem vmem_read_data_one_total
     (vmem_read_addr_data_one_total σ (v1 + offset) vmstatus vpmpaddr
       hpriv hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif)
 
-/-- `checked_mem_read (Load Data) … (Physaddr a) 8 …` reads the 8 byte(s)
-totally (`getD 0`), unchanged. -/
 theorem checked_mem_read_data_eight_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
@@ -254,7 +196,6 @@ theorem checked_mem_read_data_eight_total
   checked_mem_read_data_eight_of_ram σ a _ vpmpaddr hpma hcfg haddr hbase
     hlo hhiram hhtif halign (read_ram_eight_total σ a)
 
-/-- `mem_read (Load Data) … (Physaddr a) 8 …` returns the total read, unchanged. -/
 theorem mem_read_data_eight_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vmstatus : RegisterType Register.mstatus)
@@ -281,7 +222,6 @@ theorem mem_read_data_eight_total
     (checked_mem_read_data_eight_total σ a vpmpaddr hpma hcfg haddr hbase
       hlo hhiram hhtif halign)
 
-/-- `translate_and_read_value (Virtaddr a) 8 (Load Data) …`, total. -/
 theorem translate_and_read_value_data_eight_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vmstatus : RegisterType Register.mstatus)
@@ -308,7 +248,6 @@ theorem translate_and_read_value_data_eight_total
     (mem_read_data_eight_total σ a vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
       haddr hbase hlo hhiram hhtif halign)
 
-/-- `vmem_read_addr (Virtaddr a) 8 (Load Data) …`, total. -/
 theorem vmem_read_addr_data_eight_total
     (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
     (vmstatus : RegisterType Register.mstatus)
@@ -337,9 +276,6 @@ theorem vmem_read_addr_data_eight_total
     (translate_and_read_value_data_eight_total σ a vmstatus vpmpaddr
       hpriv hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif halign)
 
-/-- **`vmem_read rs offset 8 (Load Data) …`, TOTAL.**  Resolves `a := v1 +
-offset` and reads the 8 byte(s) there `getD 0` (unmapped ⇒ `0`).  No
-byte-presence hypothesis: this is exactly what the model does. -/
 theorem vmem_read_data_eight_total
     (σ : SequentialState RegisterType trivialChoiceSource) (rs : regidx) (offset v1 : BitVec 64)
     (vmstatus : RegisterType Register.mstatus) (vpmpaddr : RegisterType Register.pmpaddr_n)

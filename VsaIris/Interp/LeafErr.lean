@@ -4,51 +4,20 @@ import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.OomSites
 import VsaIris.Interp.SpecErr
 
-/-!
-# `runtime_error` from an `eval_expr` arm (lane E1)
-
-The partial cases' error arms (`var` of an unbound name, `assign` to one)
-call `runtime_error(in, e->line, fmt, name, 0)` from `eval_expr`'s frame
-(`sp = s - 1088`). `ev_rtErr` is that call against H5's `rtErr_spec`: it
-never returns, and its abort resource becomes the arm's own
-(`abortAt evalCore s n ∗ slot24 sret`) by joining the frame back and widening
-the landing core to the stack segment's (`evalCore`).
-
-What the call needs beyond `evalPre`, named:
-
-* `leafErrCtx inp` (persistent): the binary image (`binImg`: `runtime_error` and
-  `snprintf` run from it) and the `jmp_buf` read-only at an image whose `ra`
-  word is aligned, with `in`'s placement (`ErrCtxOK`). `world` has the
-  `jmp_buf` only existentially and no alignment; the supplier is A
-  (`interp_run`'s `setjmp` wrote it, `TopLanding`), which holds all three at
-  the top, so the partial cases take `leafErrCtx` as a persistent premise beside
-  the Löb hypothesis.
-* `ErrRoom e d`: `runtime_error`'s stack below the arm's frame. It holds at
-  every depth (`errRoom`): the budget's `helperHeadroom` (Q7) pays for it.
-* `evalCore`: the landing core over the stack segment below `interp_run`'s
-  frame (`runSp`), the one `Core` every nested abort widens to
-  (`abortCore_mono`, every site's `StackGeom.top`), so the partial cases with
-  error arms are stated at `Core := evalCore`.
--/
-
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib
 open Vsa.MemRepr Vsa.While Vsa.RuntimeRepr
 
-/-- `in`'s placement and the `jmp_buf`'s return word, as `rtErr_spec` needs them. -/
 structure ErrCtxOK (inp : Nat) (jb : Nat → BitVec 8) : Prop where
   ra : (jbWord inp jb 0).toNat % 4 = 0
   geom : RtErr.InpGeom (BitVec.ofNat 64 inp)
   lt : inp < 2 ^ 64
 
-/-- `runtime_error`'s stack fits below an arm's frame (INTERP_DESIGN.md Q7). -/
 structure ErrRoom (e : Expr) (d : Nat) : Prop where
   room : RtErr.rtErrNeed + evalFrame ≤ evalNeed e d
 
-/-- `runtime_error` fits below every arm's frame at every depth: the budget's
-`helperHeadroom` (Q7, user decision 2026-09-25) pays for it. -/
 theorem errRoom (e : Expr) (d : Nat) : ErrRoom e d :=
   ⟨by
     have := Expr.stackNeed_ge e
@@ -59,14 +28,11 @@ section Res
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 
-/-- The error context the partial cases' error arms need (see the module doc). -/
 def leafErrCtx (inp : Nat) : IProp GF :=
   iprop(binImg ∗ ∃ jb, jmpRO inp jb ∗ ⌜ErrCtxOK inp jb⌝)
 
 instance (inp : Nat) : Persistent (leafErrCtx (GF := GF) inp) := by unfold leafErrCtx; infer_instance
 
-/-- E2's error context (`SpecErr.errCtx`) with `in`'s placement (E2's
-`ErrEnv.inpGeom`/`.inpLt`) is E1's. -/
 theorem leafErrCtx_of_errCtx {inp : Nat} (hg : RtErr.InpGeom (BitVec.ofNat 64 inp))
     (hlt : inp < 2 ^ 64) : errCtx (GF := GF) inp ⊢ leafErrCtx inp := by
   unfold errCtx leafErrCtx
@@ -79,12 +45,8 @@ theorem leafErrCtx_of_errCtx {inp : Nat} (hg : RtErr.InpGeom (BitVec.ofNat 64 in
 
 variable (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
 
-/-- The landing core over the stack segment below `interp_run`'s frame,
-`[0x87800000, runSp)` (the bytes above belong to `interp_run` and `main`). -/
 def evalCore : IProp GF := abortCore N L Room inp runSp (runSp.toNat - 0x87800000)
 
-/-- Every site inside the stack segment at or below `interp_run`'s frame
-widens its core to `evalCore`. -/
 theorem evalCore_of {s : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hlo : 0x87800000 ≤ s.toNat - n)
     (hhi : s.toNat ≤ Vsa.Sim.LayoutInstance.spEntry - Vsa.Sim.LayoutInstance.interpRunFrame) :
     abortCore N L Room inp s n ⊢ evalCore (GF := GF) N L Room inp :=
@@ -92,15 +54,10 @@ theorem evalCore_of {s : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hlo : 0x8780
 
 end Res
 
-/-! ## The error messages -/
-
-/-- `"undefined variable '%s'"` (`.rodata` `0x80019388`). -/
 def varFmtBytes : List (BitVec 8) :=
   [0x75#8, 0x6e#8, 0x64#8, 0x65#8, 0x66#8, 0x69#8, 0x6e#8, 0x65#8, 0x64#8, 0x20#8, 0x76#8, 0x61#8,
     0x72#8, 0x69#8, 0x61#8, 0x62#8, 0x6c#8, 0x65#8, 0x20#8, 0x27#8, 0x25#8, 0x73#8, 0x27#8]
 
-/-- `"cannot assign to undefined variable '%s' (declare it with 'var')"`
-(`.rodata` `0x800193a0`). -/
 def assignFmtBytes : List (BitVec 8) :=
   [0x63#8, 0x61#8, 0x6e#8, 0x6e#8, 0x6f#8, 0x74#8, 0x20#8, 0x61#8, 0x73#8, 0x73#8, 0x69#8, 0x67#8,
     0x6e#8, 0x20#8, 0x74#8, 0x6f#8, 0x20#8, 0x75#8, 0x6e#8, 0x64#8, 0x65#8, 0x66#8, 0x69#8, 0x6e#8,
@@ -109,7 +66,6 @@ def assignFmtBytes : List (BitVec 8) :=
     0x65#8, 0x20#8, 0x69#8, 0x74#8, 0x20#8, 0x77#8, 0x69#8, 0x74#8, 0x68#8, 0x20#8, 0x27#8, 0x76#8,
     0x61#8, 0x72#8, 0x27#8, 0x29#8]
 
-/-- A `.rodata` format with one `%s`, and a C string argument. -/
 theorem fmt1s_ok {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {fmt : BitVec 64} {bs : List (BitVec 8)}
     (hb : ∀ i (h : i < bs.length), rodataDom (fmt.toNat + i) ∧ rodataByte (fmt.toNat + i) = bs[i] ∧
@@ -135,17 +91,11 @@ theorem assignFmt_ok {R : Nat → Prop} {rd : Nat → BitVec 8}
     FmtArgsOK R rd 0x800193a0#64 [x1, x2] :=
   fmt1s_ok hro (bs := assignFmtBytes) (by decide) (by decide) (by decide) hs x2
 
-/-! ## The call -/
-
 section Call
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- **`runtime_error(in, line, fmt, name, 0)` from an `eval_expr` arm** (`jal`
-at `i`, `sp = s - 1088`), `fmt` a `.rodata` message with one `%s` for the
-name `x` at `p`: it never returns; on abort, the arm's frame and the result
-slot rejoin, and the landing core widens to `evalCore`. -/
 theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} (HN : NewlibHoles)
     (hcl : CodeLive live) {i : Nat} {code : List (BitVec 8)}
@@ -248,17 +198,11 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
 
 end Call
 
-/-! ## Out of memory -/
-
 section Oom
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-/-- **An `eval_expr` arm's out-of-memory block** (H5's `wp_oomBlock` at site
-`S`, from its head with `sp = s - 1088`): the arm's frame and the stack below
-it become `exit(1)`'s region; the abort core widens to `evalCore` and the
-result slot is handed back. -/
 theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} (HN : NewlibHoles)
     (hcl : CodeLive live) {S : Oom.OomSite} (hS : S.OK) {s sret : BitVec 64} {n : Nat} {o : String}

@@ -1,13 +1,6 @@
 import Vsa.Sim.HtifMmio
 import Vsa.Sim.MemStore
 
-/-!
-# HTIF mailbox store lift
-
-Lifts the verified `htif_store` result through `checked_mem_write` and
-`mem_write_value`.  The HTIF state transition is not unfolded.
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 
@@ -17,8 +10,6 @@ set_option linter.unusedSimpArgs false
 
 namespace Vsa.Sim
 
-/-- The aligned M-mode checked-write path routes an eight-byte `tohost` write
-to the supplied verified `htif_store` transition. -/
 theorem checked_mem_write_tohost_8
     (σ σ' : SequentialState RegisterType trivialChoiceSource)
     (data : BitVec 64)
@@ -111,7 +102,6 @@ theorem checked_mem_write_tohost_8
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
     beq_self_eq_true, if_true]
 
-/-- `mem_write_value` preserves the same verified HTIF transition. -/
 theorem mem_write_value_tohost_8
     (σ σ' : SequentialState RegisterType trivialChoiceSource)
     (data : BitVec 64)
@@ -149,7 +139,6 @@ theorem mem_write_value_tohost_8
   simp only [EStateM.bind, default_meta]
   rw [hcmw]
 
-/-- Console output survives the whole `mem_write_value` path. -/
 theorem mem_write_value_tohost_putchar
     (σ : SequentialState RegisterType trivialChoiceSource)
     (c : BitVec 8) (data : BitVec 64)
@@ -190,7 +179,6 @@ theorem mem_write_value_tohost_putchar
     hpma hcfg haddr hbase
   exact htif_store_putchar σ c data hbase th hpw hth hdata
 
-/-- Exit state survives the whole `mem_write_value` path. -/
 theorem mem_write_value_tohost_exit
     (σ : SequentialState RegisterType trivialChoiceSource)
     (e data : BitVec 64)

@@ -1,18 +1,10 @@
 import VsaIris.Interp.LoopKit
 
-/-!
-# The `while` loop (lane E6), both modes
-
-INTERP_DESIGN.md §4.3; statements in `SpecLoop.lean` (`whileT_body`,
-`whileP_body`). The loop head is `0x8000403c` inside `exec_stmt`'s frame.
--/
-
 namespace VsaIris.Interp
 
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
-/-- The bytes of a `while` node a run reads: the condition and body pointers. -/
 abbrev whileView (a : Nat) : List Nat := accAddrs (a + 8) 16
 
 #ix_seg WhileLoop_runA {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -49,8 +41,6 @@ abbrev whileView (a : Nat) : List Nat := accAddrs (a + 8) 16
     IW live m [] (execS s) Q 0x80004088#64 R Mt
   by ix_run hlive at 0x8000403c 0x8000409c 0x80004150
 
-/-- What a `while` node gives the runs: the condition and body pointers, its
-placement and its view. -/
 structure WhileNode (m : Mem) (P : Nat → Prop) (aS pC pB : BitVec 64) : Prop where
   cond : ldv .ld m (aS + 8#64).toNat = pC
   body : ldv .ld m (aS + 16#64).toNat = pB
@@ -59,7 +49,6 @@ structure WhileNode (m : Mem) (P : Nat → Prop) (aS pC pB : BitVec 64) : Prop w
   off : aS.toNat + 24 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ aS.toNat
   view : ∀ a ∈ whileView aS.toNat, P a ∧ (m[a]?).isSome
 
-/-- A `while` node's facts, from its representation over a geometric view. -/
 theorem whileNode_of_repr {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {c : Expr} {b : Stmt}
     (h : StmtReprWithin m P aS.toNat (.whileStmt c b)) (hg : ∀ k, P k → ReadOK k) :
     ∃ pc pb : Nat, WhileNode m P aS (BitVec.ofNat 64 pc) (BitVec.ofNat 64 pb) ∧
@@ -87,20 +76,14 @@ theorem whileNode_of_repr {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {c : Exp
       · obtain ⟨j, rfl⟩ : ∃ j, a = aS.toNat + 16 + j := ⟨a - (aS.toNat + 16), by omega⟩
         exact ⟨cb j (by omega), isSome_of_readLE hb (by omega)⟩
 
-/-- Where the `while` loop goes after its body returned `status`: out on
-`break` (shared epilogue, `a0 = 0`) or a returned value (the `ret`
-epilogue), back to the head otherwise. -/
 def whileNext : Status → BitVec 64
   | .brk => 0x8000409c#64
   | .ret _ => 0x80004150#64
   | _ => 0x8000403c#64
 
-/-- `a0` after the status routing: `0` on `break`, the status otherwise. -/
 def whileA0 : Status → BitVec 64
   | .brk => 0#64
   | st => statusCode st
-
-/-! ## The runs' glue, for either WP -/
 
 section Glue
 
@@ -109,8 +92,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 variable {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
 
 omit I in
-/-- **Run A**: from the loop head to the condition's `jal eval_expr`
-(`0x8000404c`), the result slot `sp+80` in `a0`. -/
+
 theorem whileStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {c : Expr} {b : Stmt} {aS aEnv aRet s : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (hh : StmtHead R s aS (BitVec.ofNat 64 inp) aRet aEnv) :
@@ -142,9 +124,6 @@ theorem whileStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
     by ix_reg; exact hh.s3, by ix_reg; exact hh.sp⟩, by keep_upd⟩ [] Hms
   imodintro; rw [hPt]; iapply astEG_of_view hrc hgeo $$ Hro
 
-/-- **Run B and `value_truthy`**: from the condition's return (its three
-words in the slot `sp+80`, meaning `v`), the copy to `sp+16` and the helper;
-the truthiness bit in `a0` at the branch `0x80004070`. -/
 theorem whileCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N Wp p v)
     {Φ : Nat × String → IProp GF} {v : Value} {w0 w1 w2 : BitVec 64} {s : BitVec 64}
@@ -201,7 +180,7 @@ theorem whileCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
       (Untouched.store hfg (o := 32) (by omega) (by omega) _ _)
 
 omit I in
-/-- **Run C, false side**: a false condition leaves normally (`a0 = 0`). -/
+
 theorem whileExitFalse (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {c : Expr} {b : Stmt} {aS s : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (hs0 : R 8 = aS) (h10 : R 10 = 0#64) :
@@ -226,8 +205,7 @@ theorem whileExitFalse (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p �
   iapply Hk $$ Hms
 
 omit I in
-/-- **Run C, true side**: a true condition stages the body's
-`jal exec_stmt` (`0x80004084`) with the arm's own `ret` slot. -/
+
 theorem whileStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {c : Expr} {b : Stmt} {aS aEnv aRet s : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (hh : StmtHead R s aS (BitVec.ofNat 64 inp) aRet aEnv)
@@ -262,8 +240,7 @@ theorem whileStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p �
   imodintro; rw [hPt]; iapply astSG_of_view hrb hgeo $$ Hro
 
 omit I in
-/-- **Run D, the status routing** (`bne a0,1`, `beq a0,3`) after the body
-returned `status` in `a0`. -/
+
 theorem whileRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     {Φ : Nat × String → IProp GF} {status : Status} {s : BitVec 64}
     {R : Nat → BitVec 64} {Mt : Mem} (h10 : R 10 = statusCode status) :
@@ -280,7 +257,7 @@ theorem whileRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
   · iframe Hdv Hms; iexact Hk
   intro F'
   refine WhileLoop_runD (s := s) hlive ?_ ?_ ?_
-  · -- `a0 = 3`: a returned value
+  ·
     intro _ hc3
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc3
     intros
@@ -292,7 +269,7 @@ theorem whileRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
       iintro ⟨Hk, Hms⟩
       iapply Hk $$ %_ %⟨by keep_upd, by ix_reg; exact h10⟩ Hms
     | _ => exfalso; rw [h10] at hc3; simp [statusCode] at hc3
-  · -- `a0 ∈ {0, 2}`: back to the head
+  ·
     intro h1 hc3
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc3 h1
     intros
@@ -305,7 +282,7 @@ theorem whileRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
       iapply Hk $$ %_ %⟨by keep_upd, by ix_reg; exact h10⟩ Hms
     | brk => exfalso; exact h1 h10
     | ret _ => exfalso; exact hc3 h10
-  · -- `a0 = 1`: break
+  ·
     intro h1
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at h1
     intros
@@ -320,17 +297,12 @@ theorem whileRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
 
 end Glue
 
-/-! ## Total mode -/
-
 section Cond
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- **The `while` condition, total mode**: from the loop head, the condition
-into `sp+80` (its derivation `Dc`), the copy to `sp+16`, `value_truthy`; the
-state at the branch `0x80004070` has the truthiness bit in `a0`. -/
 theorem whileCondT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {st : St} {d env : Nat} {c : Expr} {b : Stmt} {st' : St} {v : Value} {nc k : Nat}
     (Dc : EvalECost st d env c st' v nc)
@@ -369,9 +341,6 @@ theorem whileCondT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String 
   iapply Hk $$ %R3 %Mt3 %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3,
     h30, hut⟩ Hms Hst Hw
 
-/-- **The `while` body, total mode**: from the branch `0x80004070` with a true
-condition, the body through `exec_stmt` (its derivation `Db`) and the status
-routing (`bne a0,1`, `beq a0,3`). The frame bytes are unchanged. -/
 theorem whileBodyT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {st : St} {d env : Nat} {c : Expr} {b : Stmt} {st' : St} {status : Status} {nb k : Nat}
     (Db : ExecSCost st d env b st' status nb)
@@ -409,15 +378,12 @@ theorem whileBodyT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String 
 
 end Cond
 
-/-! ## Total mode: one lemma per `ExecSCost` `while` constructor -/
-
 section Total
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- `whileFalse`: the condition is false; the loop leaves normally. -/
 theorem whileT_false (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {c : Expr} {b : Stmt} {st' : St} {v : Value} {nc : Nat}
     (Dc : EvalECost st d env c st' v nc) (hv : v.truthy = false)
@@ -456,8 +422,6 @@ theorem whileT_false (hlive : ∀ p ∈ interpText, live p.1)
   simp only [statusRet_normal]
   iapply Hk $$ %_ %Mt1 %⟨hk1.calleeSaved_upd (by decide) _, by ix_reg; rfl, hut⟩ Hms Hst Hslot Hw
 
-/-- `whileBreak`: the condition holds and the body breaks; the loop leaves
-normally. -/
 theorem whileT_break (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {c : Expr} {b : Stmt} {st' st'' : St} {v : Value} {nc nb : Nat}
     (Dc : EvalECost st d env c st' v nc) (hv : v.truthy = true)
@@ -481,8 +445,6 @@ theorem whileT_break (hlive : ∀ p ∈ interpText, live p.1)
   simp only [whileNext, whileA0, statusRet_normal, statusRet_brk]
   iapply Hk $$ %R2 %Mt1 %⟨KeepRegs.trans hk1 hk2, h20, hut⟩ Hms Hst Hret Hw
 
-/-- `whileRet`: the condition holds and the body returns a value; the loop
-leaves through the `ret` epilogue. -/
 theorem whileT_ret (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {c : Expr} {b : Stmt} {st' st'' : St} {v rv : Value} {nc nb : Nat}
     (Dc : EvalECost st d env c st' v nc) (hv : v.truthy = true)
@@ -506,9 +468,6 @@ theorem whileT_ret (hlive : ∀ p ∈ interpText, live p.1)
   simp only [whileNext, whileA0, statusRet_normal, statusRet_brk]
   iapply Hk $$ %R2 %Mt1 %⟨KeepRegs.trans hk1 hk2, h20, hut⟩ Hms Hst Hret Hw
 
-/-- `whileLoop`: the condition holds, the body completes normally or
-continues, and the loop runs again from the head (the motive of the
-recursive premise, `hr`). -/
 theorem whileT_loop (hlive : ∀ p ∈ interpText, live p.1)
     {st : St} {d env : Nat} {c : Expr} {b : Stmt} {st₁ st₂ st₃ : St} {v : Value}
     {status status' : Status} {nc nb nr : Nat}
@@ -541,17 +500,12 @@ theorem whileT_loop (hlive : ∀ p ∈ interpText, live p.1)
 
 end Total
 
-/-! ## Partial mode: Löb -/
-
 section Partial
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-/-- **The `while` condition, partial mode**: as `whileCondT`, through the Löb
-hypothesis; the condition's `jal` also strips the later of `X`. The
-continuation pair `K ∧ A` is used by both branches and handed on. -/
 theorem whileCondP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
     {Core X K : IProp GF} {st : St} {d env : Nat} {c : Expr} {b : Stmt}
@@ -593,8 +547,6 @@ theorem whileCondP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String 
     %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30, hut⟩
     Hms Hst Hw HX HK
 
-/-- **The `while` body, partial mode**: as `whileBodyT`, through the Löb
-hypothesis for `exec_stmt`. -/
 theorem whileBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
     {Core K : IProp GF} {st : St} {d env : Nat} {c : Expr} {b : Stmt}
     {aS aEnv aRet s : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} {m' : Nat}
@@ -634,7 +586,6 @@ theorem whileBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String 
     %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30⟩
     Hms Hst Hret Hw HK
 
-/-- `whileP_body` as one Iris proposition: the statement Löb is taken over. -/
 abbrev whilePI (Core : IProp GF) (d env : Nat) (c : Expr) (b : Stmt) : IProp GF :=
   iprop(∀ (Φ : Nat × String → IProp GF) (st : St) (aS aEnv aRet s : BitVec 64)
       (R : Nat → BitVec 64) (Mt : Mem) (m' : Nat),
@@ -655,9 +606,6 @@ abbrev whilePI (Core : IProp GF) (d env : Nat) (c : Expr) (b : Stmt) : IProp GF 
           ownSet (execS s) byteAny) -∗ (wpW (vsaModel live)).W Φ))) -∗
     (wpW (vsaModel live)).W Φ)
 
-/-- **The `while` loop, partial mode, by Löb**: one iteration from the head
-(condition, then exit or body), the next iteration through the Löb
-hypothesis, whose later the condition's `jal` pays. -/
 theorem whilePI_loeb (hlive : ∀ p ∈ interpText, live p.1)
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
     (Core : IProp GF) (d env : Nat) (c : Expr) (b : Stmt) :
@@ -692,7 +640,7 @@ theorem whilePI_loeb (hlive : ∀ p ∈ interpText, live p.1)
   ihave ⟨Hslot, HK⟩ := and_elim_l $$ HK
   cases hv : v.truthy with
   | false =>
-    -- the condition is false: leave normally
+
     rw [hv] at h10
     iapply whileExitFalse (wpW _) (b := b) (c := c) hlive ((hk1 8 (by decide)).trans hh.s0)
       (by simpa using h10)
@@ -750,7 +698,6 @@ theorem whilePI_loeb (hlive : ∀ p ∈ interpText, live p.1)
           %⟨KeepRegs.trans (KeepRegs.trans hk1 hk2) hk3, h30, hut1.trans hut3⟩ Hms Hst Hret Hw
       · iapply and_elim_r $$ HK
 
-/-- **The `while` loop, partial mode** (`whileP_body`), for every loop. -/
 theorem whileP_all (hlive : ∀ p ∈ interpText, live p.1)
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p v)
     (Core : IProp GF) (d env : Nat) (c : Expr) (b : Stmt) :

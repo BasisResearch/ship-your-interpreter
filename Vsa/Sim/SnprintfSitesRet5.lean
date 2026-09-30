@@ -65,25 +65,6 @@ import Vsa.Sim.RamReadPins
 import Vsa.Sim.StrlenMagic
 import Vsa.Sim.ValueSites
 
-/-!
-# `SnprintfSitesRet5` — hand-written sites for the flush return path
-
-Two site classes `scripts/gen_sites.py` does not cover (generator gaps, noted
-in the session report):
-
-* **linking `jalr`** (`jalr ra,0(rs1)` — the indirect *call* through the
-  locale's `mbtowc` function pointer at `0x80007740`).  The whole
-  `stepObs_jalr` tick-absorbing wrapper did not exist either (only
-  `stepObs_jr` for `rd = x0` and `stepObs_jal` for direct calls); it is built
-  here from `step_jalr_notick` / `step_jalr_tick` (`StepJump.lean`), together
-  with its `obs_jalr_*` read-back consumers and the `pins_jalr` RegPins
-  transport.
-* **`sltu` / `snez`** (`snez a0,a0` at `0x80012280` in `__ascii_mbtowc`);
-* **`lhu`** (`lhu a5,16(a5)` — the FILE-flags halfword read at `0x800079c0`;
-  the generic `exec_lhu_gen` execute helper is also new) and **`andi`**
-  (`andi a5,a5,64` at `0x800079c4`).
--/
-
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
@@ -94,10 +75,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## `stepObs_jalr` — tick-absorbing observational step for a linking `jalr` -/
-
-/-- GPR/PC read-back through the JALR tick chain drops to `sigmaPost_jalr`
-(mirror of `get?_sigmaTick_jal`). -/
 theorem get?_sigmaTick_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg)
     (vmip vmtime vmtimecmp vmcycle : BitVec 64) (R : Register)
@@ -114,9 +91,6 @@ theorem get?_sigmaTick_jalr (σ : MState) (pc vminstret tgt : BitVec 64)
   rw [Std.ExtDHashMap.get?_insert]
   simp only [hmc, dif_neg, reduceCtorEq, not_false_eq_true]
 
-/-- `jalr` (indirect call, writes `link = pc+4` to `rd_reg`, jumps to the
-bit-0-cleared `rs1 + sext imm`).  Mirror of `stepObs_jal` over
-`step_jalr_notick`/`step_jalr_tick`. -/
 theorem stepObs_jalr
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
     (w : BitVec 32) (imm : BitVec 12) (rs1 rd : regidx) (rd_reg : Register)
@@ -170,8 +144,6 @@ theorem stepObs_jalr
       b0 b1 b2 b3 hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec hrs1 htgt
       hrd_npc hrd_mi hrd_ms hrd_hart hrd hwr htick
     exact ⟨_, i + 1, hstep, by omega, hGt, rfl, ReadsLikePost.rfl _⟩
-
-/-! ## `obs_jalr_*` read-back consumers (mirror of `DivSites2`'s `obs_jal_*`) -/
 
 theorem post_jalr_pc (σ : MState) (pc vminstret tgt : BitVec 64)
     (rd_reg : Register) (link : RegisterType rd_reg) :
@@ -230,9 +202,5 @@ theorem obs_jalr_minstret {σ' σ : MState} {pc vm tgt : BitVec 64}
   show ((((sigma3_jalr σ pc tgt rd_reg link).regs.insert Register.PC tgt).insert
     Register.minstret (BitVec.addInt vm 1))).get? Register.minstret = _
   rw [Std.ExtDHashMap.get?_insert_self]
-
-/-! ## The two hand sites -/
-
-/-! ## `lhu` (2-byte unsigned load) -/
 
 end Vsa.Sim

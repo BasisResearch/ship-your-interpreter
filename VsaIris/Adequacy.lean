@@ -2,46 +2,18 @@ import VsaIris.MachWP
 import Iris.ProgramLogic.TotalAdequacy
 import Iris.ProgramLogic.Adequacy
 
-/-!
-# Adequacy
-
-MachCSL's adequacy (xv6iris `iris/RiscvAdequacy.v`, `riscv_power_adequacy`
-at :1533) concludes a *safety* property from `wp CpuLoop`: every reachable
-state is not stuck and the observation trace satisfies the client's
-predicate. We need VSA's `term_sim` shape instead, `Halts c out 0`
-(`Vsa/Machine.lean:73`), which is a termination statement. It comes from the
-total weakest precondition:
-
-* `twp_total` (iris-lean `TotalAdequacy.lean`) gives strong normalisation of
-  the loop;
-* `twp.to_wp` + `wp_adequacy_gen` give not-stuck and the postcondition at
-  every value reached;
-* the machine is deterministic and has exactly one non-value expression, so
-  the two together say the machine halts, and the exit satisfies `φ`.
-
-The ghost-state setup (allocate the register and memory ghost maps from
-finite maps that agree with the initial state) follows
-`RiscvAdequacy.v:182-196` (`reg_init_map`, `reg_init_map_agree`).
--/
-
 namespace VsaIris
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Language Language.Notation
 
-/-- `Vsa.Machine.Steps` restricted to normal steps. -/
 inductive Reaches (M : MachineModel) : M.State → M.State → Prop where
   | refl (σ : M.State) : Reaches M σ σ
   | step {σ σ' σ'' : M.State} : M.step σ = .next σ' → Reaches M σ' σ'' → Reaches M σ σ''
 
-/-- `Vsa.Machine.Halts` (`Vsa/Machine.lean:73`): the machine runs to a state
-that signals HTIF exit `e` with console output `out`. -/
 def Halts (M : MachineModel) (σ : M.State) (e : Nat) (out : String) : Prop :=
   ∃ σf, Reaches M σ σf ∧ M.step σf = .halt e out
 
-/-- The functors the machine logic needs: invariants and later credits
-(slots 0-3, as in HeapLang's `HeapLangS`) plus the two ghost maps. Having a
-concrete instance is what makes the adequacy theorem non-vacuous. -/
 def MachGF : BundledGFunctors
   | 0 => ⟨InvMapF, by infer_instance⟩
   | 1 => ⟨constOF CoPsetDisjL, by infer_instance⟩
@@ -73,9 +45,6 @@ section Adequacy
 
 variable {GF : BundledGFunctors} [P : MachGpreS GF] {M : MachineModel}
 
-/-- The client's obligation: from ownership of the initial registers `mr`,
-bytes `mm` and the console cell at the initial output `o`, prove the total WP
-of the loop with a pure postcondition. -/
 abbrev AdequacyHyp (GF : BundledGFunctors) [MachGpreS GF] (M : MachineModel)
     (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (o : String)
     (φ : Nat × String → Prop) : Prop :=
@@ -83,9 +52,6 @@ abbrev AdequacyHyp (GF : BundledGFunctors) [MachGpreS GF] (M : MachineModel)
     ⊢ ([∗map] k ↦ v ∈ mr, k ↦ᵣ v) -∗ ([∗map] k ↦ v ∈ mm, k ↦ₘ v) -∗ consoleOwn o -∗
       mTWP (GF := GF) M (fun v => iprop(⌜φ v⌝))
 
-/-- Allocate the two ghost maps, the control map (lag 0) and the console
-cell (at the initial output), and hand the client its initial ownership and
-the CPU token. Shared by the termination and the safety halves. -/
 theorem alloc_mach [InvGS_gen .hasLC GF] (σ : M.State) (mr : NatMap (BitVec 64))
     (mm : NatMap (BitVec 8)) (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) :
     ⊢@{IProp GF} |==> ∃ γr γm γc γo,
@@ -114,7 +80,6 @@ theorem alloc_mach [InvGS_gen .hasLC GF] (σ : M.State) (mr : NatMap (BitVec 64)
   rw [LawfulPartialMap.get?_insert_eq rfl] at hv
   cases hv; rfl
 
-/-- Termination: the loop is strongly normalising. -/
 theorem mach_sn (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
     (H : AdequacyHyp GF M mr mm (M.out σ) φ) :
@@ -134,7 +99,6 @@ theorem mach_sn (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)
   iintro -
   iexact Hw
 
-/-- Safety and the postcondition at every reachable value. -/
 theorem mach_adequate (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
     (H : AdequacyHyp GF M mr mm (M.out σ) φ) :
@@ -152,8 +116,6 @@ theorem mach_adequate (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (Bit
   iapply twp.to_wp
   iexact Hw
 
-/-- From normalisation and safety to halting, using that the loop is the
-only non-value expression and that a loop step is one machine step. -/
 theorem halts_of_sn_adequate (σ0 : M.State) (φ : Nat × String → Prop)
     (had : adequate .NotStuck (MachineModel.Loop M) σ0 (fun v _ => φ v)) :
     ∀ x, Relation.StronglyNormalizing Language.ErasedStep x → ∀ σ,
@@ -185,9 +147,6 @@ theorem halts_of_sn_adequate (σ0 : M.State) (φ : Nat × String → Prop)
         have hφ := had.adequate_result [] σ (e, out) (hreach.tail hstep)
         exact ⟨e, out, ⟨σ, .refl σ, hh⟩, hφ⟩
 
-/-- **Adequacy.** If the client proves the total WP of the loop from the
-initial ownership, the machine halts, and its exit satisfies `φ`. With
-`φ (e, out) := e = 0 ∧ out = o` this is VSA's `Halts c o 0`. -/
 theorem mach_adequacy (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
     (H : AdequacyHyp GF M mr mm (M.out σ) φ) :
@@ -195,20 +154,6 @@ theorem mach_adequacy (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (Bit
   halts_of_sn_adequate σ φ (mach_adequate σ mr mm hr hm hok φ H) _
     (mach_sn σ mr mm hr hm hok φ H) σ rfl .refl
 
-/-! ## Partial adequacy
-
-The safety half (INTERP_DESIGN.md §2, F1). From the partial WP of the loop
-the machine is never stuck and every exit it reaches satisfies `φ`
-(iris-lean `wp_adequacy_gen`, the route of `mach_adequate` without the
-total-to-partial step). Determinism of the loop turns this into a dichotomy:
-either an exit is reachable, and it satisfies `φ`, or every step count is
-realised, i.e. the machine diverges. This is xv6iris's safety reading of
-`wp CpuLoop` (`RiscvAdequacy.v:1533`, `riscv_power_adequacy`) plus the exit
-postcondition. -/
-
-/-- The client's obligation for partial adequacy: the partial WP of the loop
-from the initial ownership, the console cell at the initial output `o`
-included. -/
 abbrev AdequacyHypP (GF : BundledGFunctors) [MachGpreS GF] (M : MachineModel)
     (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (o : String)
     (φ : Nat × String → Prop) : Prop :=
@@ -216,8 +161,6 @@ abbrev AdequacyHypP (GF : BundledGFunctors) [MachGpreS GF] (M : MachineModel)
     ⊢ ([∗map] k ↦ v ∈ mr, k ↦ᵣ v) -∗ ([∗map] k ↦ v ∈ mm, k ↦ₘ v) -∗ consoleOwn o -∗
       mWP (GF := GF) M (fun v => iprop(⌜φ v⌝))
 
-/-- Safety and the postcondition at every reachable value, from the partial
-WP. -/
 theorem mach_adequateP (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
     (H : AdequacyHypP GF M mr mm (M.out σ) φ) :
@@ -234,34 +177,27 @@ theorem mach_adequateP (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (Bi
   · iexact Hσ
   iexact Hw
 
-/-- `Reaches` is the union of the counted runs. -/
 theorem ReachesN.reaches {n : Nat} {a b : M.State} (h : ReachesN M n a b) : Reaches M a b := by
   induction h with
   | zero => exact .refl _
   | succ s _ ih => exact .step s ih
 
-/-- A normal machine step is a thread-pool step of the loop. -/
 theorem erased_next {σ σ' : M.State} (h : M.step σ = .next σ') :
     Language.ErasedStep ([MachineModel.Loop M], σ) ([MachineModel.Loop M], σ') := by
   refine ⟨[], ?_⟩
   simpa using Language.Step.atomic (t₁ := []) (t₂ := []) (MachineModel.primStep_loop_next M h)
 
-/-- An exit step is a thread-pool step of the loop to the exit value. -/
 theorem erased_halt {σ : M.State} {e : Nat} {out : String} (h : M.step σ = .halt e out) :
     Language.ErasedStep ([MachineModel.Loop M], σ) ([⟨.done e out⟩], σ) := by
   refine ⟨[], ?_⟩
   simpa using Language.Step.atomic (t₁ := []) (t₂ := []) (MachineModel.primStep_loop_halt M h)
 
-/-- A counted run of the loop is a thread-pool run. -/
 theorem erased_of_reachesN {n : Nat} {a b : M.State} (h : ReachesN M n a b) :
     ([MachineModel.Loop M], a) -·->ₜₚ* ([MachineModel.Loop M], b) := by
   induction h with
   | zero => exact .refl
   | succ s _ ih => exact .head (erased_next s) ih
 
-/-- From safety to the dichotomy: an adequate loop either reaches an exit,
-which satisfies `φ`, or runs for every step count. Classical, by the
-reachability of an exit. -/
 theorem diverges_or_halts_of_adequate (σ0 : M.State) (φ : Nat × String → Prop)
     (had : adequate .NotStuck (MachineModel.Loop M) σ0 (fun v _ => φ v)) :
     (∀ n, ∃ σ', ReachesN M n σ0 σ') ∨ ∃ e out, Halts M σ0 e out ∧ φ (e, out) := by
@@ -283,9 +219,6 @@ theorem diverges_or_halts_of_adequate (σ0 : M.State) (φ : Nat × String → Pr
         · exact ⟨σs, hn.snoc hs⟩
         · exact (hh ⟨n, e, out, σn, hn, hf⟩).elim
 
-/-- **Partial adequacy.** If the client proves the partial WP of the loop from
-the initial ownership, then the machine diverges or halts with an exit
-satisfying `φ`. -/
 theorem mach_adequacyP (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
     (H : AdequacyHypP GF M mr mm (M.out σ) φ) :
