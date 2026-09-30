@@ -1,10 +1,5 @@
 import Vsa.Sim.JmpSites
-import Vsa.Sim.Code.Runtime_error
 import Vsa.Sim.Code.Interp_run
-import Vsa.Sim.ValueSpec
-import Vsa.Sim.ValueTruthySpec
-import Vsa.Sim.Muldi3Spec
-import Vsa.Triple
 import Vsa.Sim.ObsAvoid
 
 /-!

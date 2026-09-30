@@ -1,11 +1,5 @@
 import Vsa.Sim.rows.ScaffoldRows
-import Vsa.Sim.rows.StmtForInitArmStagePre
 import Vsa.Sim.rows.StmtForLoopSegPreB
-import Vsa.Sim.ExecBlock
-import Vsa.Sim.BridgeSegOut
-import Vsa.Sim.ChainFactsTac
-import Vsa.Sim.ValueTruthySpec
-import Vsa.Sim.BlockTactics2
 
 /-!
 # Concrete `ExecInit.some` prefix

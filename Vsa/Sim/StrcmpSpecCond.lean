@@ -1,4 +1,4 @@
-import Vsa.Sim.StrcmpSpecW4
+import Vsa.Sim.StrcmpSpecW3
 
 /-!
 # `StrcmpSpecCond` — the `strcmp` spec with the word-path alignment derived from the test

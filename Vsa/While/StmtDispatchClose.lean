@@ -1,4 +1,4 @@
-import Vsa.While.StmtDispatch
+import Vsa.While.Trichotomy
 
 /-!
 # `StmtDispatchClose` — closing `htri`'s two final residuals

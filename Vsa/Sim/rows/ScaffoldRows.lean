@@ -1,5 +1,3 @@
-import Vsa.Sim.TermSimAssembly
-import Vsa.Sim.LoopScaffoldClose
 import Vsa.Sim.TermCaseBundle
 
 /-!

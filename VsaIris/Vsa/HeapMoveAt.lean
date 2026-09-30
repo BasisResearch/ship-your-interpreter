@@ -1,4 +1,4 @@
-import VsaIris.Vsa.HeapMove
+import VsaIris.Vsa.HeapTake
 
 /-!
 # Moving a free chunk into a bin at any position

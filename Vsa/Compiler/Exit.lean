@@ -1,4 +1,5 @@
-import Vsa.Sim.ErrorTail
+import Vsa.Sim.ErrorSim
+import Vsa.Sim.HtifLift
 
 /-!
 # The HTIF exit store at any exit code

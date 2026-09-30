@@ -1,4 +1,3 @@
-import Vsa.Sim.DivSpec2
 import Vsa.Sim.DivSites3
 import Vsa.Sim.ObsAvoid
 

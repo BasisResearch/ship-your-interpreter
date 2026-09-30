@@ -1,5 +1,6 @@
 import Vsa.While.Cost
-import Vsa.Sim.rows.StoreReprPhicRebase
+import Vsa.Sim.InterpEntry
+import Vsa.Sim.StoreInvariant
 
 /-!
 # `StoreWF` — `StoreClosuresBounded` as a GLOBAL spec-side store invariant

@@ -1,7 +1,4 @@
-import Vsa.Sim.ValuePayloadCoverage
 import Vsa.Sim.EqNeDispatchSeg
-import Vsa.Sim.ValueSpec
-import Vsa.Sim.ReprCopy
 import Vsa.Sim.EvalNotSim
 
 /-!

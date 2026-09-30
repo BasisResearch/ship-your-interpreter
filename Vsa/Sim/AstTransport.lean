@@ -1,7 +1,4 @@
-import Vsa.MemRepr
 import Vsa.Sim.MemRegion
-import Vsa.Sim.MemRegionStmtFacts
-import Vsa.Sim.ReprSurvival
 
 /-!
 # Layer-2 — AST-representation transport under memory agreement

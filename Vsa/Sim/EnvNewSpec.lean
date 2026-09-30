@@ -1,11 +1,13 @@
-import Vsa.Sim.EnvNewSites
-import Vsa.Sim.ValueSpec
-import Vsa.Sim.Muldi3Spec
-import Vsa.Sim.MemcpySpec
-import Vsa.Alloc
-import Vsa.RuntimeRepr
-import Vsa.Triple
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.DecodeTable.Batch01Part08
+import Vsa.Sim.DecodeTable.Batch02Part21
+import Vsa.Sim.DecodeTable.Batch03Part17
+import Vsa.Sim.DecodeTable.Batch03Part21
+import Vsa.Sim.DecodeTable.Batch05Part10
+import Vsa.Sim.DecodeTable.Batch06Part16
+import Vsa.Sim.DecodeTable.Batch06Part20
+import Vsa.Sim.DecodeTable.Batch12Part19
+import Vsa.Sim.DecodeTable.Batch16Part17
 
 /-!
 # Layer 3 — total-correctness spec for `env_new` (the first malloc-consumer)

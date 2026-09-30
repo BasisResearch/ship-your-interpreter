@@ -1,8 +1,4 @@
-import Vsa.Sim.ExecWhile2
-import Vsa.Sim.InterpEntry
 import Vsa.Sim.TermSimAssembly
-import Vsa.Sim.TripleCat
-import Vsa.Sim.RecursiveStepGeom
 
 namespace Vsa.Sim
 

@@ -1,6 +1,4 @@
-import LeanRiscv
 import Vsa.Sim.InitValues
-import Vsa.Sim.DecodeTable.DecodeCommon
 
 /-! Decode table batch 18 (lane N3): the instruction words of newlib's stderr/stdout write
 path, `_vfprintf_r` and the exit handlers (`scripts/gen_interp_steps.py --target newlib`)

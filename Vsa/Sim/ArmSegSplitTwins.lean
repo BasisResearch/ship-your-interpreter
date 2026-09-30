@@ -1,5 +1,4 @@
 import Vsa.Sim.ArmSegSplitNonEval
-import Vsa.Sim.ArmSegSplitExecEval
 
 /-!
 # `ArmSegSplitTwins` — the bridge twins for the remaining non-eval child fields (Wave 44)

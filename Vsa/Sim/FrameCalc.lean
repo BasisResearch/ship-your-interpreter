@@ -1,7 +1,4 @@
 import Vsa.Sim.SegEvalSound
-import Vsa.Sim.KeepRegs
-import Vsa.Sim.ReprCopy
-import Vsa.Sim.SlotFrame
 
 /-!
 # `FrameCalc` — canonical marshalling and frame calculus

@@ -1,8 +1,7 @@
 import VsaIris.MallocRun
 import VsaIris.Vsa.Instance
 import VsaIris.Vsa.HeapShape
-import Vsa.Alloc
-import Vsa.Sim.AllocReserveTransport
+import Vsa.AllocResource
 
 /-!
 # The Iris allocator spec at the fixed binary

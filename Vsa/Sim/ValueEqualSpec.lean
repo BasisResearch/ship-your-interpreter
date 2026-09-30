@@ -1,7 +1,16 @@
-import Vsa.Sim.ValueEqualSites
-import Vsa.Sim.ValueTruthySpec
 import Vsa.Sim.ChainFrameOut
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.DecodeTable.Batch01Part20
+import Vsa.Sim.DecodeTable.Batch01Part29
+import Vsa.Sim.DecodeTable.Batch01Part32
+import Vsa.Sim.DecodeTable.Batch03Part03
+import Vsa.Sim.DecodeTable.Batch03Part11
+import Vsa.Sim.DecodeTable.Batch03Part21
+import Vsa.Sim.DecodeTable.Batch05Part15
+import Vsa.Sim.DecodeTable.Batch05Part16
+import Vsa.Sim.DecodeTable.Batch07Part06
+import Vsa.Sim.DecodeTable.Batch11Part24
+import Vsa.Sim.DecodeTable.Batch12Part27
 
 /-!
 # Layer 3 — total-correctness spec for `value_equal` (@0x8000285c)

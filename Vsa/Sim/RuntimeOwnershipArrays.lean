@@ -1,7 +1,5 @@
-import Vsa.Sim.RuntimeOwnershipTransport
-import Vsa.Sim.RuntimeOwnershipRealloc
-import Vsa.Sim.RuntimeOwnershipSeparation
-import Vsa.Sim.RuntimeOwnershipCopy
+import Vsa.Sim.EnvDefSpec2
+import Vsa.Sim.RuntimeOwnershipInitial
 
 /-!
 # `RuntimeOwnershipArrays` — one frame's backing arrays replaced

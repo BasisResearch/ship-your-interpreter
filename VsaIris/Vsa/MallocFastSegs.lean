@@ -1,9 +1,6 @@
-import Vsa.Sim.ChainFactsTac
-import Vsa.Sim.DeriveCaseRow
 import VsaIris.Vsa.MallocFastCode
 import VsaIris.Vsa.MallocFastLines
 import Vsa.Sim.ExecRetEpilogue
-import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.DlHeap
 
 /-!

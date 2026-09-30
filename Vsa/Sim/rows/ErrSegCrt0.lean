@@ -1,7 +1,7 @@
-import Vsa.Sim.ExitPath
 import Vsa.Sim.DeriveCase
-import Vsa.Sim.BlockTerm
 import Vsa.Sim.BlockTactics
+import Vsa.Sim.ErrorSim
+import Vsa.Sim.HtifLift
 
 /-!
 # Wave 44 — `Crt0ExitSeg` discharged (the crt0 `j exit` → `_exit` entry span)

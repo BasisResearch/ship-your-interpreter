@@ -1,7 +1,4 @@
-import Vsa.Sim.CallEntry
 import Vsa.Sim.StoreSeg
-import Vsa.Sim.DeriveCallSeg
-import Vsa.Sim.TripleCat
 import Vsa.Sim.TermCaseBundle
 
 /-!

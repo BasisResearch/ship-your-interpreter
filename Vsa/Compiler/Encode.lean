@@ -1,4 +1,3 @@
-import Vsa.Sim.DecodeTable.DecodeCommon
 import Vsa.Sim.BlockTerm
 
 /-!

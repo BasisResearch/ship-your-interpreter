@@ -1,8 +1,5 @@
-import Vsa.Sim.IHClauseGenericAlloc
-import Vsa.Sim.RuntimeOwnershipTransport
 import Vsa.Sim.RuntimeOwnershipArrays
-import Vsa.Sim.AllocClosure
-import Vsa.Sim.EnvDefineClose
+import Vsa.Sim.ExitFootprint
 
 /-!
 # `AllocOff` — owned bytes off the allocator's footprint, once

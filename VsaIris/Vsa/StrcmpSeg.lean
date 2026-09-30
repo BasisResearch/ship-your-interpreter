@@ -1,5 +1,5 @@
-import Vsa.Sim.DeriveCaseRow
-import Vsa.Sim.Code.Strcmp
+import Vsa.Sim.BlockAdapter
+import Vsa.Sim.DeriveCase
 
 /-!
 # Reflected `strcmp` blocks

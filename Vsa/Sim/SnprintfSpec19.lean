@@ -1,9 +1,11 @@
-import Vsa.Sim.SsputsSites
 import Vsa.Sim.SnprintfSpec18
-import Vsa.Sim.EnvDefSpec4
 import Vsa.Sim.EnvNewSpec
-import Vsa.Sim.ValueTruthySpec
-import Vsa.Sim.ObsAvoid
+import Vsa.Sim.DecodeTable.Batch01Part13
+import Vsa.Sim.DecodeTable.Batch01Part14
+import Vsa.Sim.DecodeTable.Batch01Part24
+import Vsa.Sim.DecodeTable.Batch04Part21
+import Vsa.Sim.DecodeTable.Batch08Part01
+import Vsa.Sim.DecodeTable.Batch15Part04
 
 /-!
 # M3 Layer-3 — `SnprintfSpec19` : the `__ssputs_r` fast path (`_sp`), composed with `memmove`

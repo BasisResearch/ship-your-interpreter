@@ -1,5 +1,5 @@
 import Vsa.Sim.ValueSpec
-import Vsa.Sim.ReprCopy
+import Vsa.Sim.ReprSurvival
 
 /-!
 # `value_truthy_spec` — total-correctness spec for `value_truthy`

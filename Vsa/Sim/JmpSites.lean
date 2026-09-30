@@ -1,6 +1,5 @@
 import Vsa.Sim.ValueSites
 import Vsa.Sim.DivSites
-import Vsa.Sim.Code.Setjmp
 import Vsa.Sim.Code.Longjmp
 import Vsa.Sim.DecodeTable.Batch08Part25
 import Vsa.Sim.DecodeTable.Batch08Part17
@@ -25,11 +24,6 @@ import Vsa.Sim.DecodeTable.Batch05Part24
 import Vsa.Sim.DecodeTable.Batch05Part15
 import Vsa.Sim.DecodeTable.Batch03Part28
 import Vsa.Sim.DecodeTable.Batch02Part23
-import Vsa.Sim.DecodeTable.Batch04Part03
-import Vsa.Sim.DecodeTable.Batch03Part20
-import Vsa.Sim.DecodeTable.Batch01Part18
-import Vsa.Sim.DecodeTable.Batch01Part04
-import Vsa.Sim.DecodeTable.Batch01Part01
 
 /-!
 # Layer 3 — per-site observational step lemmas for `setjmp` / `longjmp`

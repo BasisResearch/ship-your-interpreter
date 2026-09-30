@@ -1,5 +1,5 @@
 import Vsa.Sim.EvalSimCommon
-import Vsa.Sim.CoherentReturn
+import Vsa.Sim.StoreInvariant
 
 /-!
 # Layer 4 — M4 RECURSIVE-case common machinery: the IH-application glue

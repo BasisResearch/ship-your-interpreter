@@ -1,6 +1,6 @@
 import Vsa.Sim.StrcmpSpecCond
-import Vsa.Sim.EnvGetSpec2
-import Vsa.Sim.EnvDefSpec3
+import Vsa.Sim.EnvDefSpec2
+import Vsa.Sim.EnvGetSites2
 
 /-!
 # Layer 3 — `env_get` SCAN-LOOP total-correctness triple (one frame, no chain walk)

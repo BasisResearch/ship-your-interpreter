@@ -1,4 +1,15 @@
-import VsaIris.Vsa.AllocSteps
+import VsaIris.Vsa.AllocSteps.Part00
+import VsaIris.Vsa.AllocSteps.Part01
+import VsaIris.Vsa.AllocSteps.Part02
+import VsaIris.Vsa.AllocSteps.Part03
+import VsaIris.Vsa.AllocSteps.Part04
+import VsaIris.Vsa.AllocSteps.Part05
+import VsaIris.Vsa.AllocSteps.Part06
+import VsaIris.Vsa.AllocSteps.Part07
+import VsaIris.Vsa.AllocSteps.Part08
+import VsaIris.Vsa.AllocSteps.Part09
+import VsaIris.Vsa.AllocSteps.Part10
+import VsaIris.Vsa.AllocSteps.Part11
 
 /-!
 # Driving the step table

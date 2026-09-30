@@ -1,5 +1,22 @@
-import VsaIris.Vsa.SnpSteps
 import VsaIris.Interp.ITac
+import VsaIris.Vsa.SnpSteps.Part00
+import VsaIris.Vsa.SnpSteps.Part01
+import VsaIris.Vsa.SnpSteps.Part02
+import VsaIris.Vsa.SnpSteps.Part03
+import VsaIris.Vsa.SnpSteps.Part04
+import VsaIris.Vsa.SnpSteps.Part05
+import VsaIris.Vsa.SnpSteps.Part06
+import VsaIris.Vsa.SnpSteps.Part07
+import VsaIris.Vsa.SnpSteps.Part08
+import VsaIris.Vsa.SnpSteps.Part09
+import VsaIris.Vsa.SnpSteps.Part10
+import VsaIris.Vsa.SnpSteps.Part15
+import VsaIris.Vsa.SnpSteps.Part16
+import VsaIris.Vsa.SnpSteps.Part21
+import VsaIris.Vsa.SnpSteps.Part23
+import VsaIris.Vsa.SnpSteps.Part28
+import VsaIris.Vsa.SnpSteps.Part29
+import VsaIris.Vsa.SnpSteps.Part30
 
 /-!
 # Driving the `snprintf` family's step table

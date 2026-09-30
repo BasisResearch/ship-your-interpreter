@@ -1,24 +1,21 @@
 import Vsa.Sim.ValuePayloadCoverage
-import Vsa.Sim.EvalNegSim
-import Vsa.Sim.EvalNegSim2
-import Vsa.Sim.EvalNegSim3
 import Vsa.Sim.EvalIntSim2
 import Vsa.Sim.PinW
-import Vsa.Sim.NotTailSites
-import Vsa.Sim.LoadSitesTot
-import Vsa.Sim.LoadSitesTotB
-import Vsa.Sim.NegBlockProto
 import Vsa.Sim.BlockTactics2
-import Vsa.Sim.BlockAdapter
-import Vsa.Sim.BlockLogic
-import Vsa.Sim.ValueSpec
-import Vsa.Sim.ValueTruthySpec
-import Vsa.Sim.EvalBoolSim
-import Vsa.Sim.ReprCopy
-import Vsa.Sim.DivSites2
-import Vsa.Sim.ObsAvoid
 import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.ExitFootprint
+import Vsa.Sim.DecodeTable.Batch06Part03
+import Vsa.Sim.DecodeTable.Batch08Part03
+import Vsa.Sim.DecodeTable.Batch08Part11
+import Vsa.Sim.DecodeTable.Batch08Part16
+import Vsa.Sim.DecodeTable.Batch08Part20
+import Vsa.Sim.DecodeTable.Batch08Part28
+import Vsa.Sim.DecodeTable.Batch08Part32
+import Vsa.Sim.DecodeTable.Batch11Part30
+import Vsa.Sim.DecodeTable.Batch13Part24
+import Vsa.Sim.DecodeTable.Batch14Part06
+import Vsa.Sim.DecodeTable.Batch16Part04
+import Vsa.While.Cost
 
 /-!
 # Layer 4 — M4 RECURSIVE case: `evalNotSim` (the `EvalE.not` case)

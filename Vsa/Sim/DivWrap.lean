@@ -1,6 +1,3 @@
-import Vsa.Sim.DivSpec3
-import Vsa.Sim.DeriveCaseRow
-import Vsa.Sim.ChainFactsTac
 import Vsa.Sim.SegEffect
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa

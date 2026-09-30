@@ -1,4 +1,5 @@
-import Vsa.Sim.DeriveCaseRow
+import Vsa.Sim.BlockAdapter
+import Vsa.Sim.DeriveCase
 
 /-!
 # `StepCount` — counted machine-step LOWER BOUNDS for every seg row, for free

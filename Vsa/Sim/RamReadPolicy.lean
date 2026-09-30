@@ -1,6 +1,3 @@
-import Vsa.Sim.Hooks
-import Vsa.Sim.Pmp
-import Vsa.Sim.MemRead
 import Vsa.Sim.Fetch
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa

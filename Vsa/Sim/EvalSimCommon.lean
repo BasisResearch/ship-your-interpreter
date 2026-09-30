@@ -1,7 +1,6 @@
-import Vsa.Sim.EvalIntSim
-import Vsa.Sim.ValueTruthySpec
-import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.EvalExprSites
+import Vsa.Sim.InterpEntry
 
 /-!
 # Layer 4 — shared, case-INDEPENDENT `eval_expr` prologue/epilogue lemmas

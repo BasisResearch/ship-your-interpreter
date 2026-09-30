@@ -1,7 +1,6 @@
-import Vsa.Sim.DeriveCaseRow
 import Vsa.Sim.FrameMeta
 import Vsa.Sim.ChainFactsTac
-import Vsa.Sim.EnvNewSpec
+import Vsa.Sim.BlockAdapter
 
 /-!
 # `BridgeSeg` — the Shape-A `env_define` bridge, factored over the seg machinery

@@ -1,7 +1,6 @@
-import Vsa.Sim.MemcpySpec3
 import Vsa.Sim.MemcpySites4
-import Vsa.Triple
-import Vsa.Sim.ObsAvoid
+import Vsa.Sim.DivSpec
+import Vsa.Sim.MemcpySpec2
 
 /-!
 # Layer 3 — `memcpy` dispatch prologue, no-tail exit, and unified spec

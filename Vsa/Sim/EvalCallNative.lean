@@ -1,7 +1,4 @@
 import Vsa.Sim.CallEntry
-import Vsa.Sim.ValueSpec
-import Vsa.Sim.ValueTruthySpec
-import Vsa.Sim.Code.Native_assert
 
 /-!
 # Layer 4 — M4: the native `Call` constructors (`Call.assertOk` / `print` / `println`)

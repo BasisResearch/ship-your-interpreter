@@ -1,24 +1,7 @@
-import Vsa.Sim.EnvDefCompose
-import Vsa.Sim.EnvDefBridges
-import Vsa.Sim.EnvDefBridges2
-import Vsa.Sim.EnvNewSpec
-import Vsa.Sim.EnvDefSpec4
-import Vsa.Sim.ReallocSpec
-import Vsa.Sim.ValueSpec
-import Vsa.Sim.ValueSites
-import Vsa.Sim.ValueTruthySpec
 import Vsa.Sim.EnvGetSpec3
-import Vsa.Sim.EnvGetSpec6
-import Vsa.Sim.Code.Env_define
-import Vsa.Sim.DecodeTable.Batch03Part11
-import Vsa.Sim.DecodeTable.Batch04Part01
-import Vsa.Sim.DecodeTable.Batch05Part20
-import Vsa.Sim.DecodeTable.Batch02Part27
-import Vsa.Sim.DecodeTable.Batch04Part31
-import Vsa.Sim.DecodeTable.Batch03Part06
-import Vsa.Sim.DecodeTable.Batch12Part29
-import Vsa.Sim.DecodeTable.Batch03Part26
-import Vsa.Sim.DecodeTable.Batch04Part02
+import Vsa.Sim.HeapOwnershipGeometry
+import Vsa.Sim.MemcpySpec4
+import Vsa.Sim.rows.EnvDefineEpilogueCore
 
 /-!
 # `EnvDefBridges3` — the grow-path `bridgeNamesToVals` machine bridge + the

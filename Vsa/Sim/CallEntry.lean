@@ -1,21 +1,9 @@
 import Vsa.Sim.InductionScaffold
 import Vsa.Sim.BlockTerm
 import Vsa.Sim.DecodeTable.Batch08Part19
-import Vsa.Sim.Code.Native_assert
-import Vsa.Sim.Code.Native_print
-import Vsa.Sim.Code.Native_println
-import Vsa.Sim.Code.Value_truthy
-import Vsa.Sim.Code.Value_null
-import Vsa.Sim.Code.Value_int
-import Vsa.Sim.Code.Env_new
-import Vsa.Sim.Code.Env_define
-import Vsa.Sim.Code.Strlen
-import Vsa.Sim.Code.Memcpy
-import Vsa.Sim.ReallocSpec
-import Vsa.Sim.HeapOps
-import Vsa.Sim.CallExternalContracts
 import Vsa.Sim.ConsoleStream
 import Vsa.Sim.rows.StoreWF
+import Vsa.Sim.HeapOwnershipGeometry
 
 /-!
 # Layer 4 — M4: OPENING the `call` subsystem (`EvalE.call`)

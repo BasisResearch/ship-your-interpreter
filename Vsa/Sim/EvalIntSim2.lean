@@ -1,9 +1,5 @@
-import Vsa.Sim.EvalIntSim
 import Vsa.Sim.EvalSimCommon
-import Vsa.Sim.ValueTruthySpec
 import Vsa.Sim.DivSites2
-import Vsa.Sim.DivSpec2
-import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 gate assembly: `EvalIntSimGoal` proof (part 2)

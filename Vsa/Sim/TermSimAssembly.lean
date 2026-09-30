@@ -1,11 +1,5 @@
-import Vsa.Sim.InductionScaffold
-import Vsa.Sim.EvalRecCommon
-import Vsa.Sim.EvalReturn
-import Vsa.Sim.ExecBlock
-import Vsa.Sim.ExecDispatch
 import Vsa.Sim.ExecSeqIndexed
 import Vsa.Sim.CallEntry
-import Vsa.Sim.Code.Interp_run
 
 /-!
 # Layer 4 — the M4 CAPSTONE: the mutual-recursor ASSEMBLY (`term_sim_of_cases`)
