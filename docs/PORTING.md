@@ -113,6 +113,26 @@ lists (`interpDataPCs`, `interpHavocPCs`) with your binary's image, code
 ranges, tracked registers and table variants. The executor and
 `symRun_cont` stay the same.
 
+### Known limits of the executor (from a bake-off on luaV_execute arms)
+
+ship-your-lua measured the executor against its generated segments on held-out
+bytecode arms: CPU tied (4.7–7.0 s per arm), the refactor case shrank (107 → 59
+lines), but held-out arms needed 113–210 hand lines against 54–61 template lines.
+What made the difference:
+
+- No call nodes: a `jal ra` ends a run, so arms that call helpers (CALL, MMBIN,
+  CONCAT) are out of reach.
+- A `jr` with a symbolic target (jump-table dispatch) ends a run.
+- Branches read registers raw; a register known to be a constant from the context
+  does not decide the branch without a hand refutation.
+- The soundness theorem needs `VsaOk` (all general registers present, HTIF idle)
+  as a premise, and memory is total-read (`getD 0`), so a presence-exact frame
+  matches only up to zero fill.
+- `geomOf` sorted with `Array.qsort`, which the kernel rejects; evaluate `Geom`
+  at elaboration time.
+- `sym_run` is tied to the WHILE interpreter's goal form (`IW`); other run
+  predicates need a small front end.
+
 ## 5. Boot witnesses: `boot_witness`
 
 In a namespace that defines `script`, `log` (a `PackedLog`), `gprs`,
