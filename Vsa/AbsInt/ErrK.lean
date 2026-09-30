@@ -1,0 +1,317 @@
+import Vsa.While.ErrorSem
+import Vsa.AbsInt.Domain
+
+namespace Vsa.AbsInt
+
+open Vsa.While
+
+mutual
+
+inductive EvalErrK : Kind → St → Nat → Addr → Expr → Prop where
+  | varUndef (st : St) (d : Nat) (env : Addr) (x : String) :
+    st.store.get? env x = none →
+    EvalErrK .unbound st d env (.var x)
+  | assignE (k : Kind) (st : St) (d : Nat) (env : Addr) (x : String) (e : Expr) :
+    EvalErrK k st d env e →
+    EvalErrK k st d env (.assign x e)
+  | assignUnbound (st : St) (d : Nat) (env : Addr) (x : String) (e : Expr)
+      (st' : St) (v : Value) :
+    EvalE st d env e st' v →
+    st'.store.set? env x v = none →
+    EvalErrK .unbound st d env (.assign x e)
+  | binaryL (k : Kind) (st : St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr) :
+    EvalErrK k st d env l →
+    EvalErrK k st d env (.binary op l r)
+  | binaryR (k : Kind) (st : St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr)
+      (st' : St) (lv : Value) :
+    EvalE st d env l st' lv →
+    EvalErrK k st' d env r →
+    EvalErrK k st d env (.binary op l r)
+  | binaryOp (st : St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr)
+      (st' st'' : St) (lv rv : Value) :
+    EvalE st d env l st' lv →
+    EvalE st' d env r st'' rv →
+    binOpSem st''.store op lv rv = none →
+    EvalErrK (binFailKind op lv rv) st d env (.binary op l r)
+  | orL (k : Kind) (st : St) (d : Nat) (env : Addr) (l r : Expr) :
+    EvalErrK k st d env l →
+    EvalErrK k st d env (.logical .or l r)
+  | orR (k : Kind) (st : St) (d : Nat) (env : Addr) (l r : Expr) (st' : St) (lv : Value) :
+    EvalE st d env l st' lv → lv.truthy = false →
+    EvalErrK k st' d env r →
+    EvalErrK k st d env (.logical .or l r)
+  | andL (k : Kind) (st : St) (d : Nat) (env : Addr) (l r : Expr) :
+    EvalErrK k st d env l →
+    EvalErrK k st d env (.logical .and l r)
+  | andR (k : Kind) (st : St) (d : Nat) (env : Addr) (l r : Expr) (st' : St) (lv : Value) :
+    EvalE st d env l st' lv → lv.truthy = true →
+    EvalErrK k st' d env r →
+    EvalErrK k st d env (.logical .and l r)
+  | unaryE (k : Kind) (st : St) (d : Nat) (env : Addr) (op : UnOp) (e : Expr) :
+    EvalErrK k st d env e →
+    EvalErrK k st d env (.unary op e)
+  | negType (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St) (v : Value) :
+    EvalE st d env e st' v →
+    (∀ n : Int, v ≠ .int n) →
+    EvalErrK .type st d env (.unary .neg e)
+  | callF (k : Kind) (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr) :
+    EvalErrK k st d env f →
+    EvalErrK k st d env (.call f args)
+  | callTooMany (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
+      (st' : St) (fv : Value) :
+    EvalE st d env f st' fv →
+    maxArgs < args.length →
+    EvalErrK .call st d env (.call f args)
+  | callArgs (k : Kind) (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
+      (st' : St) (fv : Value) :
+    EvalE st d env f st' fv →
+    args.length ≤ maxArgs →
+    EvalArgsErrK k st' d env args →
+    EvalErrK k st d env (.call f args)
+  | callC (k : Kind) (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
+      (st' st'' : St) (fv : Value) (vs : List Value) :
+    EvalE st d env f st' fv →
+    args.length ≤ maxArgs →
+    EvalArgs st' d env args st'' vs →
+    CallErrK k st'' d fv vs →
+    EvalErrK k st d env (.call f args)
+
+inductive EvalArgsErrK : Kind → St → Nat → Addr → List Expr → Prop where
+  | head (k : Kind) (st : St) (d : Nat) (env : Addr) (e : Expr) (es : List Expr) :
+    EvalErrK k st d env e →
+    EvalArgsErrK k st d env (e :: es)
+  | tail (k : Kind) (st : St) (d : Nat) (env : Addr) (e : Expr) (es : List Expr)
+      (st' : St) (v : Value) :
+    EvalE st d env e st' v →
+    EvalArgsErrK k st' d env es →
+    EvalArgsErrK k st d env (e :: es)
+
+inductive CallErrK : Kind → St → Nat → Value → List Value → Prop where
+  | notCallable (st : St) (d : Nat) (fv : Value) (vs : List Value) :
+    (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) →
+    CallErrK .call st d fv vs
+  | badClosure (st : St) (d : Nat) (a : Addr) (vs : List Value) :
+    st.store.closures[a]? = none →
+    CallErrK .call st d (.closure a) vs
+  | arity (st : St) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value) :
+    st.store.closures[a]? = some cd →
+    vs.length ≠ cd.params.length →
+    CallErrK .call st d (.closure a) vs
+  | depth (st : St) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value) :
+    st.store.closures[a]? = some cd →
+    vs.length = cd.params.length →
+    ¬ d < maxCallDepth →
+    CallErrK .call st d (.closure a) vs
+  | body (k : Kind) (st : St) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
+      (store' : Store) (frame : Addr) :
+    st.store.closures[a]? = some cd →
+    vs.length = cd.params.length →
+    d < maxCallDepth →
+    st.store.allocFrame (some cd.env) = (store', frame) →
+    ExecSeqErrK k ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store',
+      st.out⟩ (d + 1) frame cd.body →
+    CallErrK k st d (.closure a) vs
+  | escape (st : St) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
+      (store' : Store) (frame : Addr) (st' : St) (status : Status) :
+    st.store.closures[a]? = some cd →
+    vs.length = cd.params.length →
+    d < maxCallDepth →
+    st.store.allocFrame (some cd.env) = (store', frame) →
+    ExecSeq ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store',
+      st.out⟩ (d + 1) frame cd.body st' status →
+    (status = .brk ∨ status = .cont) →
+    CallErrK .call st d (.closure a) vs
+  | assertFail (st : St) (d : Nat) (vs : List Value) (v m : Value) :
+    (vs = [v] ∨ vs = [v, m]) →
+    v.truthy = false →
+    CallErrK .assert st d (.native .assert) vs
+  | assertArity (st : St) (d : Nat) (vs : List Value) :
+    (∀ v, vs ≠ [v]) → (∀ v m, vs ≠ [v, m]) →
+    CallErrK .assert st d (.native .assert) vs
+
+inductive ExecErrK : Kind → St → Nat → Addr → Stmt → Prop where
+  | expr (k : Kind) (st : St) (d : Nat) (env : Addr) (e : Expr) :
+    EvalErrK k st d env e →
+    ExecErrK k st d env (.expr e)
+  | varInit (k : Kind) (st : St) (d : Nat) (env : Addr) (x : String) (e : Expr) :
+    EvalErrK k st d env e →
+    ExecErrK k st d env (.varDecl x (some e))
+  | block (k : Kind) (st : St) (d : Nat) (env : Addr) (ss : List Stmt) (store' : Store)
+      (inner : Addr) :
+    st.store.allocFrame (some env) = (store', inner) →
+    ExecSeqErrK k ⟨store', st.out⟩ d inner ss →
+    ExecErrK k st d env (.block ss)
+  | ifCond (k : Kind) (st : St) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
+      (e : Option Stmt) :
+    EvalErrK k st d env c →
+    ExecErrK k st d env (.ifStmt c t e)
+  | ifThen (k : Kind) (st : St) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
+      (e : Option Stmt) (st' : St) (v : Value) :
+    EvalE st d env c st' v → v.truthy = true →
+    ExecErrK k st' d env t →
+    ExecErrK k st d env (.ifStmt c t e)
+  | ifElse (k : Kind) (st : St) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
+      (st' : St) (v : Value) :
+    EvalE st d env c st' v → v.truthy = false →
+    ExecErrK k st' d env e →
+    ExecErrK k st d env (.ifStmt c t (some e))
+  | whileCond (k : Kind) (st : St) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) :
+    EvalErrK k st d env c →
+    ExecErrK k st d env (.whileStmt c b)
+  | whileBody (k : Kind) (st : St) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+      (st' : St) (v : Value) :
+    EvalE st d env c st' v → v.truthy = true →
+    ExecErrK k st' d env b →
+    ExecErrK k st d env (.whileStmt c b)
+  | whileLoop (k : Kind) (st : St) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+      (st' st'' : St) (v : Value) (status : Status) :
+    EvalE st d env c st' v → v.truthy = true →
+    ExecS st' d env b st'' status →
+    (status = .normal ∨ status = .cont) →
+    ExecErrK k st'' d env (.whileStmt c b) →
+    ExecErrK k st d env (.whileStmt c b)
+  | forInit (k : Kind) (st : St) (d : Nat) (env : Addr) (init : Stmt) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (store' : Store) (outer : Addr) :
+    st.store.allocFrame (some env) = (store', outer) →
+    ExecErrK k ⟨store', st.out⟩ d outer init →
+    ExecErrK k st d env (.forStmt (some init) cnd step b)
+  | forLoop (k : Kind) (st : St) (d : Nat) (env : Addr) (init : Option Stmt)
+      (cnd : Option Expr) (step : Option Expr) (b : Stmt) (store' : Store)
+      (outer : Addr) (st' : St) :
+    st.store.allocFrame (some env) = (store', outer) →
+    ExecInit ⟨store', st.out⟩ d outer init st' →
+    ForLoopErrK k st' d outer cnd step b →
+    ExecErrK k st d env (.forStmt init cnd step b)
+  | ret (k : Kind) (st : St) (d : Nat) (env : Addr) (e : Expr) :
+    EvalErrK k st d env e →
+    ExecErrK k st d env (.ret (some e))
+
+inductive ForLoopErrK : Kind → St → Nat → Addr → Option Expr → Option Expr → Stmt →
+    Prop where
+  | cond (k : Kind) (st : St) (d : Nat) (env : Addr) (c : Expr) (step : Option Expr)
+      (b : Stmt) :
+    EvalErrK k st d env c →
+    ForLoopErrK k st d env (some c) step b
+  | body (k : Kind) (st : St) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (st' : St) :
+    ForCond st d env cnd st' →
+    ExecErrK k st' d env b →
+    ForLoopErrK k st d env cnd step b
+  | step (k : Kind) (st : St) (d : Nat) (env : Addr) (cnd : Option Expr) (e : Expr)
+      (b : Stmt) (st' st'' : St) (status : Status) :
+    ForCond st d env cnd st' →
+    ExecS st' d env b st'' status →
+    (status = .normal ∨ status = .cont) →
+    EvalErrK k st'' d env e →
+    ForLoopErrK k st d env cnd (some e) b
+  | loop (k : Kind) (st : St) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (st' st'' st''' : St) (status : Status) :
+    ForCond st d env cnd st' →
+    ExecS st' d env b st'' status →
+    (status = .normal ∨ status = .cont) →
+    ExecStep st'' d env step st''' →
+    ForLoopErrK k st''' d env cnd step b →
+    ForLoopErrK k st d env cnd step b
+
+inductive ExecSeqErrK : Kind → St → Nat → Addr → List Stmt → Prop where
+  | head (k : Kind) (st : St) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt) :
+    ExecErrK k st d env s →
+    ExecSeqErrK k st d env (s :: ss)
+  | tail (k : Kind) (st : St) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
+      (st' : St) :
+    ExecS st d env s st' .normal →
+    ExecSeqErrK k st' d env ss →
+    ExecSeqErrK k st d env (s :: ss)
+
+end
+
+abbrev HasKind (P : Kind → Prop) : Prop := ∃ k, P k
+
+theorem ExecSeqErr.hasKind {st : St} {d : Nat} {env : Addr} {ss : List Stmt}
+    (h : ExecSeqErr st d env ss) : HasKind fun k => ExecSeqErrK k st d env ss := by
+  refine ExecSeqErr.rec
+    (motive_1 := fun st d env e _ => HasKind fun k => EvalErrK k st d env e)
+    (motive_2 := fun st d env es _ => HasKind fun k => EvalArgsErrK k st d env es)
+    (motive_3 := fun st d fv vs _ => HasKind fun k => CallErrK k st d fv vs)
+    (motive_4 := fun st d env s _ => HasKind fun k => ExecErrK k st d env s)
+    (motive_5 := fun st d env cnd step b _ => HasKind fun k => ForLoopErrK k st d env cnd step b)
+    (motive_6 := fun st d env ss _ => HasKind fun k => ExecSeqErrK k st d env ss)
+    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h
+  · intros; exact ⟨_, by apply EvalErrK.varUndef <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.assignE <;> assumption⟩
+  · intros; exact ⟨_, by apply EvalErrK.assignUnbound <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.binaryL <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.binaryR <;> assumption⟩
+  · intros; exact ⟨_, by apply EvalErrK.binaryOp <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.orL <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.orR <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.andL <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.andR <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.unaryE <;> assumption⟩
+  · intros; exact ⟨_, by apply EvalErrK.negType <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.callF <;> assumption⟩
+  · intros; exact ⟨_, by apply EvalErrK.callTooMany <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.callArgs <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalErrK.callC <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalArgsErrK.head <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply EvalArgsErrK.tail <;> assumption⟩
+  · intros; exact ⟨_, by apply CallErrK.notCallable <;> assumption⟩
+  · intros; exact ⟨_, by apply CallErrK.badClosure <;> assumption⟩
+  · intros; exact ⟨_, by apply CallErrK.arity <;> assumption⟩
+  · intros; exact ⟨_, by apply CallErrK.depth <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply CallErrK.body <;> assumption⟩
+  · intros; exact ⟨_, by apply CallErrK.escape <;> assumption⟩
+  · intros; exact ⟨_, by apply CallErrK.assertFail <;> assumption⟩
+  · intros; exact ⟨_, by apply CallErrK.assertArity <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.expr <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.varInit <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.block <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.ifCond <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.ifThen <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.ifElse <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.whileCond <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.whileBody <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.whileLoop <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.forInit <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.forLoop <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecErrK.ret <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ForLoopErrK.cond <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ForLoopErrK.body <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ForLoopErrK.step <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ForLoopErrK.loop <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecSeqErrK.head <;> assumption⟩
+  · intros; rename_i ih; obtain ⟨k, _⟩ := ih
+    exact ⟨k, by apply ExecSeqErrK.tail <;> assumption⟩
+
+end Vsa.AbsInt
