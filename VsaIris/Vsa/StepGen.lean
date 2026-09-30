@@ -43,10 +43,6 @@ def piecesWord? (ps : List Vsa.Sim.TextPiece) (pc : Nat) : Option Nat := do
   let b3 ← piecesByte? ps (pc + 3)
   return b0.toNat + 256 * b1.toNat + 65536 * b2.toNat + 16777216 * b3.toNat
 
-/-- The word at `pc` in the pieces named `ps`, computed by the compiled image function. -/
-def wordAt? (ps : Name) (pc : Nat) : MetaM (Option Nat) := do
-  let e := mkApp2 (mkConst ``piecesWord?) (mkConst ps) (mkNatLit pc)
-  unsafe evalExpr (Option Nat) (mkApp (mkConst ``Option [0]) (mkConst ``Nat)) e
 
 /-- The `(pc, word)` pairs of the pieces `ps` at the addresses `pcs`. -/
 def piecesWords (ps : List Vsa.Sim.TextPiece) (pcs : List Nat) : List (Nat × Nat) :=
@@ -56,6 +52,17 @@ def piecesWords (ps : List Vsa.Sim.TextPiece) (pcs : List Nat) : List (Nat × Na
 def wordsAt (ps : Name) (pcs : List Nat) : MetaM (List (Nat × Nat)) := do
   let e := mkApp2 (mkConst ``piecesWords) (mkConst ps) (toExpr pcs)
   unsafe evalExpr (List (Nat × Nat)) (toTypeExpr (List (Nat × Nat))) e
+
+initialize wordCache : IO.Ref (Std.HashMap (Name × Nat) (Option Nat)) ← IO.mkRef {}
+
+/-- The word at `pc` in the pieces named `ps`; one evaluation reads the 64 instructions
+    around `pc`. -/
+def wordAt? (ps : Name) (pc : Nat) : MetaM (Option Nat) := do
+  if let some w := (← wordCache.get)[(ps, pc)]? then return w
+  let pcs := (List.range 64).map (pc - pc % 256 + pc % 4 + 4 * ·)
+  let ws ← wordsAt ps pcs
+  wordCache.modify fun c => pcs.foldl (fun c a => c.insert (ps, a) (ws.lookup a)) c
+  return ws.lookup pc
 
 /-! ## Literal syntax -/
 
@@ -955,7 +962,7 @@ def ruleProof? (t : Tbl) (w : Nat) (L : Lem) : MetaM (Option Expr) := do
 
 /-- Elaborate the closed statement `∀ binders, concl` and, unless `val?` supplies the
     proof, the proof of a lemma. -/
-def elabLemCore (L : Lem) (val? : Option Expr) : MetaM (Expr × Expr) := do
+def elabLemCore (L : Lem) (val? : Option Expr) : MetaM (Expr × Expr) := withEnableInfoTree false do
   let tyStx ← parseTerm s!"∀ {L.binders},\n    {L.concl}"
   let (ty, val) ← withLCtx {} {} <|
     withTheReader Core.Context (fun c => { c with currNamespace := `VsaIris.Sym, openDecls := stepOpens }) <|
@@ -1024,6 +1031,35 @@ def resolveFam (fam : String) (pc : Nat) : MetaM (Option (Tbl × String)) := do
     return (← tblOfPc [interpTbl, stdioTbl] pc).map (·, k)
   return none
 
+register_option step.landed : Bool := {
+  defValue := true
+  descr := "drivers and `step%` use the step-table lemma at a `pc` when a table declares it \
+    (false: every step is elaborated from the image, to measure that cost)" }
+
+/-- The table lemma `fam_<pc>`, when a table declares it. -/
+def landed? (fam : String) (pc : Nat) : CoreM (Option Name) := do
+  let nm := (`VsaIris.Sym).str s!"{fam}_{hxw 8 pc}"
+  return if step.landed.get (← getOptions) && (← getEnv).contains nm then some nm else none
+
+/-- The step lemma a driver applies for the family prefix `fam` (`it`, `itD`, …, `nt`,
+    `st`) at `pc`: the table lemma when a table declares it, else the lemma elaborated
+    from the image. `goal?` is the run table of the goal; a family of another run has no
+    candidate. -/
+def driverLemma? (goal? : Option Tbl) (fam : String) (pc : Nat) : MetaM (Option Name) := do
+  if let some nm ← landed? fam pc then return some nm
+  let some (t, k) ← resolveFam fam pc | return none
+  if let some g := goal? then unless g.key == t.key do return none
+  stepLemma t k pc
+
+/-- Whether some family of `fams` has a step at `pc` (nothing is elaborated). -/
+def hasStep (fams : List String) (pc : Nat) : MetaM Bool :=
+  fams.anyM fun fam => do
+    if (← landed? fam pc).isSome then return true
+    let some (t, k) ← resolveFam fam pc | return false
+    if (t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2) || !t.offers k pc then return false
+    let some w ← wordAt? t.pieces pc | return false
+    return (lemAt t k pc w).isSome
+
 syntax (name := stepCore) "step_core% " ident num : term
 
 /-- `step% fam pc`: the step lemma `fam_<pc>` of the landed step tables, elaborated from
@@ -1035,8 +1071,7 @@ macro "step% " f:ident n:num : term => `(step_core% $f $n)
   | `(step_core% $f:ident $n:num) =>
     let fam := f.getId.toString
     let pc := n.getNat
-    let legacy := (`VsaIris.Sym).str s!"{fam}_{hxw 8 pc}"
-    if (← getEnv).contains legacy then return ← Term.elabTerm (mkCIdent legacy) expectedType?
+    if let some nm ← landed? fam pc then return ← Term.elabTerm (mkCIdent nm) expectedType?
     let some (t, k) ← resolveFam fam pc | throwError "step%: no table for {fam} at {pc}"
     let some nm ← stepLemma t k pc | throwError "step%: no {fam} step at 0x{hx pc}"
     Term.elabTerm (mkCIdent nm) expectedType?
@@ -1101,7 +1136,7 @@ elab "#step_table " k:ident rs:(group(num num))* : command => do
       let nm := famName t kind pc (shared.contains pc)
       if (← getEnv).contains (ns.str nm) then continue
       if let some val ← liftTermElabM (ruleProof? t w L) then
-        let (type, value) ← liftTermElabM (withEnableInfoTree false (elabLemCore L (some val)))
+        let (type, value) ← liftTermElabM (elabLemCore L (some val))
         liftCoreM <| addDecl <| .thmDecl { name := ns.str nm, levelParams := [], type, value }
       else
         let src := s!"theorem {nm} {L.binders} :\n    {L.concl} :=\n  {L.proof}"

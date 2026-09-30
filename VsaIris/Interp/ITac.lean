@@ -30,10 +30,6 @@ macro "ix_ro" : tactic => `(tactic| exact interpRO_mem_img (by decide))
 macro_rules
   | `(tactic| sx_side) => `(tactic| ix_ro)
 
-private def hex8 (n : Nat) : String :=
-  let s := String.ofList (Nat.toDigits 16 n)
-  String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s
-
 def ixNormTab (facts : Array Term) (tab : Option (TSyntax `tactic)) : TacticM Syntax := do
   let tab ← match tab with
     | some t => pure t
@@ -80,17 +76,18 @@ def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none)
 
 def ixPre : List String := ["it", "itD", "itT", "itH", "itO", "itS", "itDS", "itTS", "itHS", "itOS"]
 
-def ixCandidates (pc : Nat) (pre : List String := ixPre) :
+/-- The step lemmas of the families `pre` at `pc` for the run of `g`: a table lemma where
+    a table declares it, else the lemma elaborated from the image. -/
+def ixCandidates (g : MVarId) (pc : Nat) (pre : List String := ixPre) :
     TacticM (List Name) := do
-  let env ← getEnv
-  let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
-  return (pre.map mk).filter env.contains
+  let t? ← g.withContext do StepGen.swpTbl? (← g.getType)
+  return (← pre.filterMapM (StepGen.driverLemma? t? · pc)).eraseDups
 
 def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool)
     (side : Option Syntax := none) : TacticM (Option (List MVarId × List MVarId)) := do
   let saved ← saveState
   try
-    let gs ← evalTacticAt (← `(tactic| apply $(mkIdent nm) $(⟨h⟩))) g
+    let gs ← evalTacticAt (← `(tactic| apply $(mkCIdent nm) $(⟨h⟩))) g
     let mut conts : List MVarId := []
     let mut pending : List MVarId := []
     for g in gs do
@@ -109,7 +106,7 @@ def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
     (pre : List String := ixPre) (side : Option Syntax := none) :
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
-  let cands ← ixCandidates pc pre
+  let cands ← ixCandidates g pc pre
   for nm in cands do
     if let some r ← ixApply norm h g nm true side then return some r
   for nm in cands do

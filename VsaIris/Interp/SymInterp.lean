@@ -467,7 +467,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
       for s in Tree.leaves tree do
         let p := s.pc.toNat
         unless (stops.contains p) do
-          unless (← ixCandidates p).isEmpty do
+          if ← StepGen.hasStep ixPre p then
             throwError "sym_run: leaf {p} is not a stop point"
     Γ := geomOf (Tree.obs tree)
     let reads := ownedReadAtoms (Tree.obs tree)
@@ -489,7 +489,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
   for s in Tree.leaves tree do
     let p := s.pc.toNat
     unless stops.contains p do
-      unless (← ixCandidates p).isEmpty do
+      if ← StepGen.hasStep ixPre p then
         throwError "sym_run: leaf {p} is not a stop point"
   dbg "tree"
   let Cs ← Term.exprToSyntax C
