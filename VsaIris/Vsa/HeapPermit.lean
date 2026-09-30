@@ -244,7 +244,7 @@ macro_rules
   | `(tactic| rd_log) => `(tactic| rd_log [])
   | `(tactic| rd_log [$hs,*]) =>
     `(tactic| (simp only [ReadsOK, KeepsOK, and_true]
-               repeat' constructor
+               repeat' refine And.intro ?_ ?_
                all_goals (simp (disch := omega) only [read64_hit_eq, read64_miss]
                           try simp only [$hs,*])))
 
