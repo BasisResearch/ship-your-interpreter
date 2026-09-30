@@ -433,8 +433,8 @@ def main : IO Unit := do
 From `exponentiate` f16fdb8d. Four tasks: move callers onto the generic rules and delete the
 per-kind statements left without users; collapse the block executor's `cases akind`; give
 `MemLoad` and `MemStore` one width layer; remove off-path declarations inside live files.
-Commits: ac12fe86 (tasks 1–3), ecde2758 (task 4), e1e4cf81 (`stepObs_jal` on the rule), plus this
-record. Full `lake build` green after each batch (1,008 jobs).
+Commits: ac12fe86 (tasks 1–3), ecde2758 (task 4), e1e4cf81 (`stepObs_jal` on the rule), 2dfe27e9
+(declarations exponentiate's restored sites use), plus this record. Full `lake build` green after each batch (1,008 jobs).
 
 ### Task 1: callers on the generic rules
 
@@ -456,8 +456,20 @@ Every `rX_bits_xN`/`wX_bits_xN` call outside `VsaIris/Interp` uses `rX_bits_gpr`
 
 Deleted as unused: `try_step_{alu,store,branch_taken,branch_nottaken,jal,jalr,j,jr}`, every
 `stepOnce_K_{tick,notick}`, `step_K_{tick,notick}`, `sigmaTick_K`, `goodstate_sigmaPost_K`,
-`stepObs_{alu,store,branch_taken,branch_nottaken,j,jr}`, 60 of the 62 register instances,
-`get?_sigmaTick_jalr`. The step-chain files fell 1,648 → 349 lines (`StepJump` 703 → 72).
+`stepObs_store`, 49 of the 62 register instances, `get?_sigmaTick_jalr`. The step-chain files
+fell 1,648 → 473 lines (`StepJump` 703 → 72).
+
+`exponentiate` moved after this branch started (69939cfc restores `DivSites*`, `Muldi3Sites`,
+`DivSpec`, `DivLoops` and a larger `ObsAvoid`, ~4,000 lines of per-site proofs used by the
+compiler). Those call `stepObs_{alu,branch_taken,branch_nottaken,j,jr}`,
+`rX_bits_x{1,5,10,11,12,13}`, `wX_bits_x{5,10,11,12,13}`, `obs_store_other_val` and
+`obs_branch_nottaken_other`, so commit 2dfe27e9 keeps them with their original statements (the
+`stepObs_K` bodies are one-line instances of `stepObs_exec`) and puts `ObsAvoid` back at its base
+version so the merge applies cleanly. Checked by compiling exponentiate's versions of the five
+`Code/__*` images, `DivSites`, `Muldi3Sites`, `Muldi3Spec`, `DivSpec`, `DivLoops`, `DivSites2`,
+`DivSites3`, `ObsAvoid` and `DivSpec3` against this branch's oleans (scratch output directory):
+all compile. These sites are the next callers to move; each `stepObs_K … hi` term becomes
+`stepObs_exec _ vm (Fetched.of_bytes …) hexec ⟨reg_reads …⟩ (goodstate) hi` as in `JmpSites`.
 
 Left, with their callers:
 
@@ -549,7 +561,8 @@ Lines (`wc -l`) and user CPU of `lake env lean` at 8 threads, min of 3. The mach
 builds throughout (load 27–29 on 32 cores), so separate before/after runs drift: files that did
 not change were 14% slower in the after run (median) and `VsaIris` files 40–60% slower. Where the
 old file still compiles against the new oleans, the two versions were timed interleaved
-("paired"); the other rows are separate runs.
+("paired"); the other rows are separate runs. CPU was measured at e1e4cf81; 2dfe27e9 then adds
+≈250 lines of one-line instances to `StepObs` and `RegAccess` (line columns are at 2dfe27e9).
 
 | file | lines before | lines after | CPU s |
 |---|---:|---:|---|
@@ -558,8 +571,8 @@ old file still compiles against the new oleans, the two versions were timed inte
 | `StepBranch` | 357 | 96 | 1.96 → 1.21 (paired) |
 | `StepAlu` | 187 | 35 | 1.28 → 0.85 (paired) |
 | `StepStore` | 160 | 33 | 1.52 → 1.21 (paired) |
-| `StepObs` | 241 | 113 | 1.03 → 1.12 (separate) |
-| `RegAccess` | 518 | 188 | 11.36 → 11.52 (paired) |
+| `StepObs` | 241 | 237 | 1.03 → 1.12 (separate; before batch 4's restorations, 113 lines) |
+| `RegAccess` | 518 | 248 | 11.36 → 11.52 (paired; before batch 4, 188 lines) |
 | `MemLoad` | 710 | 196 | 4.47 → 2.67 (paired) |
 | `MemStore` | 1,107 | 685 | 6.34 → 4.99 (paired) |
 | `MemWidth` | 0 | 132 | 1.93 (new) |
@@ -570,17 +583,17 @@ old file still compiles against the new oleans, the two versions were timed inte
 | `MemRegion` | 283 | 109 | 1.88 → 1.24 (paired) |
 | `ValueSpec` | 207 | 174 | 8.05 → 7.09 (paired) |
 
-| measure | before (f16fdb8d) | after (e1e4cf81) |
+| measure | before (f16fdb8d) | after (2dfe27e9) |
 |---|---:|---:|
-| `Vsa/Sim/*.lean` (top level) | 155 files, 22,196 lines | 143 files, 15,915 lines |
+| `Vsa/Sim/*.lean` (top level) | 155 files, 22,196 lines | 143 files, 16,163 lines |
 | `Vsa/Sim/rows` | 193 lines | 62 lines |
-| changed `Vsa/Sim` files (72) | 14,266 lines | 7,985 lines |
-| all project Lean (without `riscv-lean`) | 147,374 lines | 140,891 lines |
+| changed `Vsa/Sim` files (72) | 14,266 lines | 8,233 lines |
+| all project Lean (without `riscv-lean`) | 147,374 lines | 141,139 lines |
 | build jobs | 1,022 | 1,008 |
 | CPU, 41 paired files that survive | 104.2 s | 85.1 s |
 | CPU, 6 deleted modules whose old version compiles | 6.7 s | 0 |
 | CPU, all `Vsa/Sim` top level, separate runs | 221.4 s | 215.4 s (after run at ≈1.14× load) |
-| diff vs `exponentiate` | | 82 files, +707 / −7,190 |
+| diff vs the base f16fdb8d (code only) | | 82 files, +920 / −6,966 |
 
 One named cost: a call site of `stepObs_exec` discharges its four retire reads with `reg_reads`
 where the per-kind lemma had done it once. Measured in isolation, 30 ALU-style retire reads plus
@@ -596,8 +609,9 @@ added (`MemWidth` has no `set_option`).
 
 ### Open next
 
-* The two rewrites above (`CallJalr`, `Lift`) delete `stepObs_jal`, `stepObs_jalr` and the last
-  two register instances.
+* The two rewrites above (`CallJalr`, `Lift`) and the same rewrite in exponentiate's restored
+  `DivSites*`/`Muldi3Sites` (≈130 call sites) delete every remaining `stepObs_K` and register
+  instance.
 * Retire reads as rules instead of `reg_reads`: `RetireReads.prelude hG hmi` for
   `afterNextPC (afterPrelude σ) pc` and `RetireReads.insert` for an insert of a register outside
   the four (one decided `RetireFree r`), so a call site builds its reads as a term. That removes the
