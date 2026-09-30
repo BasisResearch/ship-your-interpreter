@@ -128,10 +128,118 @@ normalisation, footprint side goals and register-field rebuilds (cluster K/T ter
 CPU unchanged. Verdict for SP alone: shrinks the edit-ending proofs, does not bend the
 cluster's cost curve; keep as a small layer under a K/T winner.
 
-### Candidate KT — region-keyed memory (K + T + V1 + V5), worktree syi-expE
+### Candidate KT — region-keyed memory (K + T + V1 + V5), worktree syi-expE, commit 6bc1cfad
 
-(pending)
+Setup: `VsaIris/Vsa/Region.lean`, 389 non-blank lines (≈200 lemmas, 186 tactic): regions `Rgn P base ext`
+minted from the chunk walk (`PHeapAt.chunkK/.freeSpan/.next/.nodeK`), the static table (`globRgn`, `binRgn`)
+and the stack window; laws once: `Rgn.ldOK/.stOK`, `Rgn.offStack`, `frame_log`/`pres_log` over a whole store
+log as a key list; two-level keys via `rgn_key`; drivers `rgn_run`, `rgn_side` (hooked into `sx_side`).
+Integrated in the `st_`/`sx_run` route (the executor's `Geom` cannot separate two heap chunks yet).
+
+| case | proof lines | theorem CPU | module CPU | iterations |
+|---|---|---|---|---:|
+| `free_nt` | 88 → 41 (−53%) | 0.86 → 1.59 s (1.85×) | 50.6 → 50.8 s | 3 |
+| `lr_split_ret` | 78 → 34 (−56%) | 5.85 → 4.73 s (0.81×) | 18.6 → 17.1 s | 7 |
+| `realloc_next` | 115 → 42 (−63%; 108 → 42 without 7 dead lines) | 1.92 → 3.08 s (1.6×) | 7.37 → 8.80 s | 2 |
+
+Net lines: −163 in the three theorems against 389 setup (breaks even after ~5 more paths).
+Findings: the law-level part wins on both measures (`frame_log (by log_in)` replaces the 8-deep
+`frame_store` chain and nine read goals in `lr_split_ret`); the per-access region lookup is a search
+(one `omega` per candidate region; `realloc_next` 29 → 48 `omega` calls), which is the CPU loss;
+post-field assembly and the heap-edit calls did not shrink (clusters S and B). Proposed fix: decide
+region membership by key equality inside the reflective checker (symbolic per-atom extents and a
+disjoint-atom table in `Geom`).
+
+### Reading of the two pilots
+
+| | lines on held-out | CPU on held-out | setup | covers |
+|---|---|---|---:|---|
+| incumbent | 0 | 0 | 0 | — |
+| SP | −29 / −66 / −32% | neutral | 270 | (d) heap edit, partly (c) |
+| KT | −53 / −56 / −63% | +85% / −19% / +60% per theorem (≈ +1 s each) | 389 | (b) (c) (e) |
+
+Neither candidate alone satisfies the rule "cheaper on held-out cases and the refactors shrink" on
+every measure: SP does not bend the curve (most lines are stepping and address work), KT pays its
+line savings with search time. They cover disjoint obligations, and both agents report the same
+residue for the other. No adoption yet.
+
+### Combined candidate KT∘SP (second bake-off iteration)
+
+Build: merge exp-F into exp-E; per-path route = `rgn_run` stepping, `frame_log`/`log_in` frames,
+sections + permits for the heap edit. Fresh held-out cases (not touched by either pilot):
+`free_b2nl` (FreePaths), `mal_merge` (ReallocMal), `pvN_inline` (ReallocPrevN). Same measurements.
+
+Worktree syi-expE, commits 7573a4df (merge of the two pilots into one layer) and 63648c7d.
+3 threads, interleaved, min of 3, quiet machine.
+
+Fresh cases (baseline = the merge commit, no case-specific abstraction allowed):
+
+| case | theorem lines | theorem CPU | module CPU | failed compiles |
+|---|---|---|---|---:|
+| `free_b2nl` | 125 → 80 (−36%) | 2.88 → 2.96 s (1.03×) | 39.2 → 39.6 s | 1 |
+| `mal_merge` | 89 → 50 (−44%) | 1.16 → 1.87 s (1.61×) | 15.3 → 16.3 s | 1 |
+| `pvN_inline` | 168 → 35 (−79%) | 3.59 → 3.39 s (0.94×) | 17.9 → 17.8 s | 2 |
+
+Original three on the combined layer (baseline = pre-pilot):
+
+| case | theorem lines | theorem CPU | module CPU |
+|---|---|---|---|
+| `free_nt` | 88 → 41 (−53%) | 0.79 → 1.46 s (1.85×) | 40.0 → 39.6 s (approximate) |
+| `lr_split_ret` | 78 → 30 (−62%) | 4.90 → 4.50 s (0.92×) | 13.4 → 13.2 s |
+| `realloc_next` | 115 → 40 (−65%) | 1.29 → 2.50 s (1.94×) | 5.39 → 7.48 s |
+
+Setup (non-blank lines): KT 389 + SP 270 = 659 separately; 539 after merging (SP's sections became
+KT's regions); +84 marginal for the fresh cases (negative literal offsets `key_sub`, context-free
+access regions `ARgn`, `rgn_step`, kernel-safe keys, two local lemmas); 623 now. The fresh cases
+removed 217 theorem lines against those 84.
+
+Defects the fresh cases exposed in the layer (all fixed): a kernel hang on negative offsets
+(`BitVec.toNat_add` is an `rfl` lemma, so the kernel unfolded `Nat.mod` on a 2^64-sized literal);
+a failed `omega` under `first … <;>` that was logged but let the macro continue; register-update
+nesting on paths of seven or more instructions.
+
+Residual cost: the per-access region search (one key normalisation plus one `omega` per candidate)
+makes 4–5-instruction paths 1.6–1.9× slower per theorem (+0.7 to +1.2 s); longer paths are neutral
+or faster.
 
 ## 7. Decision
 
-(pending)
+**Adopted for the allocator path cluster: the combined layer** (`VsaIris/Vsa/Region.lean` with
+`VsaIris/Vsa/HeapPermit.lean`): regions minted from the chunk walk, the static table and the stack
+window; `rgn_run`/`rgn_side` for access obligations; `frame_log`/`log_in` for frames over a whole
+store log; heap permits (`split_permit`, `unlink_permit`, `absorb_permit`) for the edit at the end
+of a path.
+
+Measured on six held-out proofs: 663 → 276 theorem lines (−58%), module CPU within ±6% on five
+of six modules (+39% on the smallest, `ReallocNext`), 1–2 failed compiles per fresh case, and the
+marginal setup for three fresh cases was 84 lines. The rule "held-out cases get cheaper and the
+refactors shrink" holds for lines, attempts and refactors; it does not hold for per-theorem CPU on
+short paths, which is recorded as the layer's known cost and is the first target of round 2.
+
+Required route (to be written into CLAUDE.md and the discipline rules when this branch reaches a
+tree that carries them; the gate is PR #12):
+
+| task shape | use |
+|---|---|
+| allocator path: access inside a chunk / bin node / static / stack slot | mint the region once (`PHeapAt.chunkK`, `.freeSpan`, `.nodeK`, `globRgn`, `binRgn`) and step with `rgn_run`; never `rw [hE…]; unfold StOK/LdOK tohostAddr; omega` per access |
+| frame or presence of a post field across the path's stores | `frame_log (by log_in)` / `pres_log`; never a `frame_store` chain |
+| heap invariant after split / unlink / absorb | the permit; never a hand match of nested `writeLog` against `PHeapAt` |
+
+Proposed rule R17 (scope `VsaIris/Vsa/{Malloc,Free,Realloc}*.lean`, new or edited proofs):
+`unfold (StOK|LdOK) .*tohostAddr; omega` or `frame_store \(` more than twice in one proof.
+
+Not adopted: SP alone (does not bend the curve), KT's tactic search as the final form (round 2
+replaces the search by key equality decided inside the reflective checker). Offered, not adopted:
+the language layer `Vsa/Lang` (ship-your-ocaml's own bake-off tied at 2+2 lines; it pays with two
+or more language instances).
+
+Remaining migration: ~143 allocator path proofs (`AW`), then the snprintf/stdout/exit path
+clusters, which need regions for FILE structs and buffers (static table V1) and have no heap edits.
+
+## Round 2 targets (from this round's residue)
+
+1. Region membership by key equality inside `obCheck` (symbolic per-atom extents, disjoint-atom
+   table), so stepping on the reflective executor costs no search.
+2. Callee-saved frames and post-field assembly (cluster B): brackets/catalysts on the executor's
+   forwarded spills.
+3. The name gate misses obligation clusters with distinct names; cluster by conclusion head.

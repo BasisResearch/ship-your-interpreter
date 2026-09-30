@@ -7,6 +7,7 @@ import VsaIris.Interp.EnvRun
 import VsaIris.Vsa.Stdout.NRun
 import VsaIris.Vsa.SnpRunDef
 import Vsa.Sim.DecodeNF
+import VsaIris.Vsa.StepRules
 
 /-!
 # Step lemmas from the code image, on demand
@@ -46,6 +47,15 @@ def piecesWord? (ps : List Vsa.Sim.TextPiece) (pc : Nat) : Option Nat := do
 def wordAt? (ps : Name) (pc : Nat) : MetaM (Option Nat) := do
   let e := mkApp2 (mkConst ``piecesWord?) (mkConst ps) (mkNatLit pc)
   unsafe evalExpr (Option Nat) (mkApp (mkConst ``Option [0]) (mkConst ``Nat)) e
+
+/-- The `(pc, word)` pairs of the pieces `ps` at the addresses `pcs`. -/
+def piecesWords (ps : List Vsa.Sim.TextPiece) (pcs : List Nat) : List (Nat × Nat) :=
+  pcs.filterMap fun pc => (piecesWord? ps pc).map (pc, ·)
+
+/-- `piecesWords` of the pieces named `ps`, in one evaluation. -/
+def wordsAt (ps : Name) (pcs : List Nat) : MetaM (List (Nat × Nat)) := do
+  let e := mkApp2 (mkConst ``piecesWords) (mkConst ps) (toExpr pcs)
+  unsafe evalExpr (List (Nat × Nat)) (toTypeExpr (List (Nat × Nat))) e
 
 /-! ## Literal syntax -/
 
@@ -264,6 +274,8 @@ structure Tbl where
   code : String
   /-- The register list of the run. -/
   regs : String
+  /-- The run's `TblOK` fact, when its steps are instances of the `StepRules`. -/
+  ok : Option Name := none
   /-- The value of `gp`, a read-only constant of every run. -/
   gpv : Nat
   /-- A gp-relative doubleword the text carries as data, and its lemma and bytes. -/
@@ -307,10 +319,18 @@ structure Lem where
   binders : String
   concl : String
   proof : String
+  /-- The step as a rule instance: the `StepRules` rule (a table rule without its `d_`/`a_`
+      prefix, or a full name) and its arguments before the two proofs (check, decode). -/
+  rule : Option (String × Array Expr) := none
 
 section Templates
 
 variable (t : Tbl) (pc w : Nat)
+
+def bv (n v : Nat) : Expr := mkApp2 (mkConst ``BitVec.ofNat) (mkRawNatLit n) (mkRawNatLit v)
+
+/-- The body line of the word at `pc`. -/
+def lineE : Expr := mkApp2 (mkConst ``Vsa.Sim.mkLine) (bv 64 pc) (bv 32 w)
 
 def bytes : List Nat := (List.range 4).map fun i => (w >>> (8 * i)) % 256
 
@@ -436,7 +456,9 @@ def decodeArg (σ : String) (ind : String) : String :=
 /-- `jal` at `pc`: its `JalExec` fact (independent of the run table). -/
 def jalxLem (tgt : Nat) (imm : Int) : Lem :=
   let code := codeLits w
-  { binders := s!"(live : Nat → Prop)\n    (hlive : ∀ p ∈ codeFoot 0x{hx pc} [{code}], live p.1)"
+  { rule := some ("VsaIris.SymExec.jalExec_word",
+      #[mkRawNatLit pc, bv 32 w, bv 21 (modN imm 2097152), bv 64 tgt])
+    binders := s!"(live : Nat → Prop)\n    (hlive : ∀ p ∈ codeFoot 0x{hx pc} [{code}], live p.1)"
     concl := s!"JalExec (vsaModel live) 0x{hx pc} [{code}] 0x{hx tgt}#64"
     proof := "by\n" ++
       "  refine jalExec_of_site live _ _ _ hlive fun c hG hi hpc hb => ?_\n" ++
@@ -533,7 +555,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
                     concl := run (pcL pc)
                     proof := step t pc (single pc w) ks s!"[bytesAt (imgM Mt) {ea} {wd}]"
                       s!"(accAddrs {ea} {wd})" "[]" nilCover s!"exact ⟨{okp}, lpins{sfx}_img hLD⟩"
-                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk"
+                    rule := some (if conc then "loadc" else "load", #[lineE pc w]) }
     let alts := " | ".intercalate (ks.map fun _ => "rfl")
     let havoc (lemma bodyHk : String) : Lem :=
       { binders := H ++ s!"\n    (hea : LdOK {ea} {wd})\n    (hk : {bodyHk})"
@@ -552,7 +575,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
                     concl := run (pcL pc)
                     proof := step t pc (single pc w) ks s!"[bytesAt (imgM Mt) {ea} {wd}]"
                       s!"(accAddrs {ea} {wd})" "[]" nilCover s!"exact ⟨hea, lpins{sfx}_img hLD⟩"
-                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk"
+                    rule := some ("load", #[lineE pc w]) }
     if k == "D" then
       return some { binders := H ++ s!"\n    (hea : LdOK {ea} {wd})\n    (hLDD : ∀ b ∈ accAddrs {ea} {wd}, b ∈ DA)" ++
                       s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} (ldv .{kn} Dt {ea}))"})"
@@ -582,7 +606,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
     let ks := ksOf (srcs ++ [rd])
     return some { binders := H ++ s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} ({v}))"})"
                   concl := run (pcL pc)
-                  proof := step t pc (single pc w) ks "[]" "[]" "[]" nilCover "" "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
+                  proof := step t pc (single pc w) ks "[]" "[]" "[]" nilCover "" "rfl" (hRt t ks) (hRo ks (some rd)) "hk"
+                  rule := some ("alu", #[lineE pc w]) }
   | .load rd rs1 imm kn wd => return ld kind rd rs1 imm kn wd
   | .store rs1 rs2 imm kn wd =>
     if kind != "" then return none
@@ -596,7 +621,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
                     s!"\n    (hk : {runM (nxt pc) s!"(writeLog Mt [({ea}, {wd}, {src t.gpv rs2})])"})"
                   concl := run (pcL pc)
                   proof := step t pc (single pc w) ks "[]" "[]" s!"(accAddrs {ea} {wd})"
-                    "(fun a ha => outL_single _ ha)" s!"exact {okp}" "rfl" (hRt t ks) (hRo ks) "hk" }
+                    "(fun a ha => outL_single _ ha)" s!"exact {okp}" "rfl" (hRt t ks) (hRo ks) "hk"
+                  rule := if conc then none else some ("store", #[lineE pc w]) }
   | .br op rs1 rs2 imm tgt =>
     if kind != "" then return none
     let (cond, gl) := condOf op (src t.gpv rs1) (src t.gpv rs2)
@@ -608,14 +634,17 @@ def lemOf (kind : String) : Option Lem := Id.run do
                   proof := s!"if hc : {cond} then\n    " ++
                     step t pc segT ks "[]" "[]" "[]" nilCover s!"exact ({gl} _ _).2 hc" "rfl" (hRt t ks) (hRo ks) "(hT hc)" ++
                     "\n  else\n    " ++
-                    step t pc segF ks "[]" "[]" "[]" nilCover s!"exact (guard_false ({gl} _ _)).2 hc" "rfl" (hRt t ks) (hRo ks) "(hF hc)" }
+                    step t pc segF ks "[]" "[]" "[]" nilCover s!"exact (guard_false ({gl} _ _)).2 hc" "rfl" (hRt t ks) (hRo ks) "(hF hc)"
+                  rule := some ("br", #[bv 64 pc, bv 32 w, mkConst (`LeanRV64DExecutable.bop ++ Name.mkSimple op),
+                    mkRawNatLit rs1, mkRawNatLit rs2, bv 13 (modN imm 8192)]) }
   | .j imm tgt =>
     if kind != "" then return none
     let gp := if t.flavor == .alloc then some "(fun h => nomatch h)" else none
     return some { binders := H ++ s!"\n    (hk : {run s!"0x{hx tgt}#64"})"
                   concl := run (pcL pc)
                   proof := step t pc (tseg pc w ".j" 0 0 0 imm) [] "[]" "[]" "[]" nilCover "" "rfl"
-                    "(fun _ h => nomatch h)" (hRo []) "hk" gp }
+                    "(fun _ h => nomatch h)" (hRo []) "hk" gp
+                  rule := some ("j", #[bv 64 pc, bv 32 w, bv 21 (modN imm 2097152)]) }
   | .ret | .jr _ =>
     if kind != "" then return none
     let r := match c with
@@ -626,7 +655,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
                   proof := step t pc (tseg pc w ".jr" r 0 0 0) [r] "[]" "[]" "[]" nilCover
                     (s!"show (Sail.BitVec.update (R {r} + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; " ++
                       "rw [ret_tgt _ hal]; exact hal")
-                    "(ret_tgt _ hal)" (hRt t [r]) (hRo [r]) "hk" }
+                    "(ret_tgt _ hal)" (hRt t [r]) (hRo [r]) "hk"
+                  rule := some ("jr", #[bv 64 pc, bv 32 w, mkRawNatLit r]) }
   | .jri r imm =>
     if kind != "" then return none
     let tgt := s!"(Sail.BitVec.update (R {r} + sign_extend (m := 64) (0x{hxw 3 imm}#12)) 0 0#1)"
@@ -733,7 +763,7 @@ def lemOf (kind : String) : Option Lem := Id.run do
           "      simp only [List.mem_cons, List.not_mem_nil, or_false] at hp\n" ++
           "      subst hp; exact ⟨by dsimp only; decide, by dsimp only; decide, rfl⟩)\n" ++
           "    (by decide) (by decide) rfl hk" }
-  | .jal _ tgt =>
+  | .jal imm tgt =>
     let follow := (t.flavor == .stdio ∧ kind == "") ∨ (t.flavor == .snp ∧ kind == "C") ∨
       (t.flavor == .alloc ∧ kind == "")
     if !follow then return none
@@ -744,7 +774,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
       { binders := H ++ s!"\n    (hk : {runR s!"0x{hx tgt}#64" s!"(upd R {ra} (BitVec.ofNat 64 (0x{hx pc} + 4)))"})"
         concl := run (pcL pc)
         proof := s!"swp_jal 0x{hx pc} [{codeLits w}] 0x{hx tgt}#64 {jx}\n" ++
-          s!"    {codeInT t pc} (by decide) (by decide) rfl hk" }
+          s!"    {codeInT t pc} (by decide) (by decide) rfl hk"
+        rule := some ("jal", #[mkRawNatLit pc, bv 32 w, bv 21 (modN imm 2097152), bv 64 tgt]) }
 
 end Templates
 
@@ -760,6 +791,7 @@ def interpTbl : Tbl where
   binders := dBinders
   text := "interpText"
   code := "interp_code"
+  ok := some ``VsaIris.SymExec.interp_tblOK
   regs := "iRegs"
   gpv := gpV
   tableLoads := [0x800031a4, 0x8000354c, 0x80004028, 0x80002880, 0x8000291c, 0x8000308c,
@@ -786,6 +818,7 @@ def stdioTbl : Tbl where
   binders := dBinders
   text := "stdioText"
   code := "stdio_code"
+  ok := some ``VsaIris.SymExec.stdio_tblOK
   regs := "iRegs"
   gpv := gpV
   -- `strcpy` is a code-only leaf (run by its own symbolic run); `_write`'s putchar store
@@ -803,6 +836,7 @@ def snpTbl : Tbl where
   binders := dBinders
   text := "snpText"
   code := "snp_code"
+  ok := some ``VsaIris.SymExec.snp_tblOK
   regs := "nRegs"
   gpv := gpV
   variants := [("D", [0x80005c6c, 0x80007770, 0x800077b4, 0x80008534, 0x80009060, 0x80012274, 0x8001227c]),
@@ -818,6 +852,7 @@ def allocTbl : Tbl where
   binders := aBinders
   text := "allocText"
   code := "alloc_code"
+  ok := some ``VsaIris.SymExec.alloc_tblOK
   regs := "aRegs"
   gpv := gpV
   impure := some (0x8001b970, "alloc_impure", [0x38, 0xb5, 0x01, 0x80, 0, 0, 0, 0])
@@ -830,6 +865,7 @@ def envTbl : Tbl where
   binders := aBinders
   text := "envText"
   code := "env_code"
+  ok := some ``VsaIris.SymExec.env_tblOK
   regs := "eRegs"
   gpv := gpV
 
@@ -904,22 +940,53 @@ private def parseTerm (s : String) : MetaM Syntax := do
   | .ok stx => pure stx
   | .error e => throwError "step lemma: parse error {e}\n{s}"
 
-/-- Elaborate a closed lemma `∀ binders, concl` with the given proof and keep it as an
-    auxiliary theorem. -/
-def elabLem (L : Lem) : MetaM Name := do
+/-- The proof of a rule-instance lemma: the rule at the table fact, the instruction, the
+    Boolean check (`rfl`) and the decode fact of the word (`decRefl`). The kernel identifies
+    its type with the lemma's statement by evaluation; nothing is elaborated. -/
+def ruleProof? (t : Tbl) (w : Nat) (L : Lem) : MetaM (Option Expr) := do
+  let some ok := t.ok | return none
+  let some (rule, args) := L.rule | return none
+  let head ← if rule.contains '.' then pure (.const rule.toName []) else
+    pure <| mkAppN (.const ((`VsaIris.SymExec).str ((if t.hasD then "d_" else "a_") ++ rule)) [])
+      ((← getConstInfo ok).type.getAppArgs.push (.const ok []))
+  return some <| mkAppN head <| args ++
+    #[mkApp2 (.const ``Eq.refl [1]) (.const ``Bool []) (.const ``Bool.true []),
+      mkApp (.const ``VsaIris.SymExec.decRefl []) (bv 32 w)]
+
+/-- Elaborate the closed statement `∀ binders, concl` and, unless `val?` supplies the
+    proof, the proof of a lemma. -/
+def elabLemCore (L : Lem) (val? : Option Expr) : MetaM (Expr × Expr) := do
   let tyStx ← parseTerm s!"∀ {L.binders},\n    {L.concl}"
-  let valStx ← parseTerm s!"fun {L.binders} =>\n  {L.proof}"
   let (ty, val) ← withLCtx {} {} <|
     withTheReader Core.Context (fun c => { c with currNamespace := `VsaIris.Sym, openDecls := stepOpens }) <|
     Term.TermElabM.run' (ctx := { errToSorry := false }) do
       let ty ← Term.elabType tyStx
       Term.synthesizeSyntheticMVarsNoPostponing
       let ty ← instantiateMVars ty
-      let val ← Term.elabTermEnsuringType valStx ty
+      if let some val := val? then return (ty, val)
+      let val ← Term.elabTermEnsuringType (← parseTerm s!"fun {L.binders} =>\n  {L.proof}") ty
       Term.synthesizeSyntheticMVarsNoPostponing
       pure (ty, ← instantiateMVars val)
   if ty.hasMVar || val.hasMVar then throwError "step lemma: unassigned metavariables"
+  return (ty, val)
+
+/-- Elaborate a lemma and keep it as an auxiliary theorem. -/
+def elabLem (t : Tbl) (w : Nat) (L : Lem) : MetaM Name := do
+  let (ty, val) ← elabLemCore L (← ruleProof? t w L)
   mkAuxLemma [] ty val (kind? := `_step)
+
+/-- The lemma of family `kind` for the word `w` at `pc`: a step of table `t`, or one of
+    the table-independent families `jalx`/`jalro`. -/
+def lemAt (t : Tbl) (kind : String) (pc w : Nat) : Option Lem :=
+  if kind == "jalx" then
+    match classify t.flavor t.gpv pc w with
+    | .jal imm tgt => some (jalxLem pc w tgt imm)
+    | _ => none
+  else if kind == "jalro" then
+    match classify t.flavor t.gpv pc w with
+    | .jalrn r => some (jalroLem pc w r)
+    | _ => none
+  else lemOf t pc w kind
 
 /-- The lemma of family `kind` at `pc` for table `t`, or of the table-independent
     families `jalx`/`jalro` (`t` then only supplies the image). -/
@@ -930,18 +997,8 @@ def stepLemma (t : Tbl) (kind : String) (pc : Nat) : MetaM (Option Name) := do
   if t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2 then return none
   unless t.offers kind pc do return none
   let some w ← wordAt? t.pieces pc | return none
-  let L? : Option Lem :=
-    if kind == "jalx" then
-      match classify t.flavor t.gpv pc w with
-      | .jal imm tgt => some (jalxLem pc w tgt imm)
-      | _ => none
-    else if kind == "jalro" then
-      match classify t.flavor t.gpv pc w with
-      | .jalrn r => some (jalroLem pc w r)
-      | _ => none
-    else lemOf t pc w kind
-  let some L := L? | return none
-  let nm ← elabLem L
+  let some L := lemAt t kind pc w | return none
+  let nm ← elabLem t w L
   stepCache.modify (·.insert key nm)
   return some nm
 
@@ -987,9 +1044,10 @@ macro "step% " f:ident n:num : term => `(step_core% $f $n)
 
 /-! ## Step tables
 
-`#step_table tbl lo hi` elaborates, as ordinary theorems, the step lemma of every family
-at every instruction of `tbl`'s code in `[lo, hi)`, under the names the drivers and
-proofs use (`it_<pc>`, `itD_<pc>`, …, `st_<pc>`, `nt_<pc>`, `jalx_<pc>`). -/
+`#step_table tbl lo₁ hi₁ lo₂ hi₂ …` adds, as theorems, the step lemma of every family at
+every instruction of `tbl`'s code in the ranges `[loᵢ, hiᵢ)`, under the names the drivers
+and proofs use (`it_<pc>`, `itD_<pc>`, …, `st_<pc>`, `nt_<pc>`, `jalx_<pc>`). The ranges of
+the landed tables are the addresses some proof steps through (`scripts/step_usage.lean`). -/
 
 /-- The families a table offers, in generation order (calls first: their lemmas are
     used by the call steps). -/
@@ -1002,8 +1060,9 @@ def Tbl.kinds (t : Tbl) : List String :=
   | .memcpy => [""]
   | .str => ["", "H", "O"]
 
-/-- The landed name of family `kind` at `pc` in table `t`. -/
-def famName (t : Tbl) (kind : String) (pc : Nat) : MetaM String := do
+/-- The landed name of family `kind` at `pc` in table `t`; `shared` marks a stdio lemma at
+    a `pc` the interpreter's table also covers. -/
+def famName (t : Tbl) (kind : String) (pc : Nat) (shared : Bool) : String :=
   let base :=
     if kind == "jalx" then (if t.flavor == .snp then "jalxn" else "jalx")
     else if kind == "jalro" then "jalrn"
@@ -1013,46 +1072,41 @@ def famName (t : Tbl) (kind : String) (pc : Nat) : MetaM String := do
       | .memcpy => "mst"
       | .str => "sl"
       | _ => "it") ++ kind
-  -- a stdio lemma at a `pc` the interpreter's table also covers
-  let sfx := if t.flavor == .stdio && (← wordAt? interpTbl.pieces pc).isSome then "S" else ""
-  return s!"{base}{sfx}_{hxw 8 pc}"
+  s!"{base}{if shared then "S" else ""}_{hxw 8 pc}"
 
 def tblByKey? (k : String) : Option Tbl := tables.find? (·.key == k)
 
-/-- The code addresses of `t` in `[lo, hi)`. -/
-def Tbl.pcsIn (t : Tbl) (lo hi : Nat) : MetaM (List Nat) := do
+/-- The code addresses of `t` in the ranges `rs`. -/
+def Tbl.pcsIn (t : Tbl) (rs : List (Nat × Nat)) : MetaM (List Nat) := do
   let ps ← unsafe evalExpr (List Vsa.Sim.TextPiece)
     (mkApp (mkConst ``List [0]) (mkConst ``Vsa.Sim.TextPiece)) (mkConst t.pieces)
-  let rs := ps.flatMap (·.ranges)
-  return rs.flatMap fun r =>
+  return (ps.flatMap (·.ranges)).flatMap fun r =>
     ((List.range ((r.2 - r.1) / 4)).map (r.1 + 4 * ·)).filter fun pc =>
-      lo ≤ pc ∧ pc < hi ∧ pc < 0x80018be0
+      pc < 0x80018be0 ∧ !(t.skip.any fun s => s.1 ≤ pc ∧ pc < s.2) ∧
+        rs.any fun q => q.1 ≤ pc ∧ pc < q.2
 
 open Command in
-elab "#step_table " k:ident lo:num hi:num : command => do
+elab "#step_table " k:ident rs:(group(num num))* : command => do
   let some t := tblByKey? k.getId.toString | throwError "#step_table: no table {k.getId}"
-  let pcs ← liftTermElabM (t.pcsIn lo.getNat hi.getNat)
-  for pc in pcs do
-    if t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2 then continue
-    let some w ← liftTermElabM (wordAt? t.pieces pc) | continue
+  let ranges := rs.toList.map fun r => (r.raw[0].toNat, r.raw[1].toNat)
+  let (words, shared) ← liftTermElabM do
+    let pcs ← t.pcsIn ranges
+    let shared ← if t.flavor == .stdio then wordsAt interpTbl.pieces pcs else pure []
+    return (← wordsAt t.pieces pcs, shared.map (·.1))
+  let ns ← getCurrNamespace
+  for (pc, w) in words do
     for kind in t.kinds do
       unless t.offers kind pc do continue
-      let L? : Option Lem :=
-        if kind == "jalx" then
-          match classify t.flavor t.gpv pc w with
-          | .jal imm tgt => some (jalxLem pc w tgt imm)
-          | _ => none
-        else if kind == "jalro" then
-          match classify t.flavor t.gpv pc w with
-          | .jalrn r => some (jalroLem pc w r)
-          | _ => none
-        else lemOf t pc w kind
-      let some L := L? | continue
-      let nm ← liftTermElabM (famName t kind pc)
-      if (← getEnv).contains ((← getCurrNamespace).str nm) then continue
-      let src := s!"theorem {nm} {L.binders} :\n    {L.concl} :=\n  {L.proof}"
-      match Parser.runParserCategory (← getEnv) `command src with
-      | .ok stx => elabCommand stx
-      | .error e => throwError "#step_table: parse error {e}\n{src}"
+      let some L := lemAt t kind pc w | continue
+      let nm := famName t kind pc (shared.contains pc)
+      if (← getEnv).contains (ns.str nm) then continue
+      if let some val ← liftTermElabM (ruleProof? t w L) then
+        let (type, value) ← liftTermElabM (withEnableInfoTree false (elabLemCore L (some val)))
+        liftCoreM <| addDecl <| .thmDecl { name := ns.str nm, levelParams := [], type, value }
+      else
+        let src := s!"theorem {nm} {L.binders} :\n    {L.concl} :=\n  {L.proof}"
+        match Parser.runParserCategory (← getEnv) `command src with
+        | .ok stx => elabCommand stx
+        | .error e => throwError "#step_table: parse error {e}\n{src}"
 
 end VsaIris.Sym.StepGen

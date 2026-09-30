@@ -1,90 +1,38 @@
-import VsaIris.Vsa.ExitH.Tac
+import VsaIris.Vsa.ExitH.RunHead
 
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 open scoped VsaIris.Sym.Stdout VsaIris.Sym.XH
 
-set_option hygiene false in
+/-! The exit path from the third stream on, stderr never written (flags `0x12`). -/
 
-macro "xh_stepIdle" : tactic => `(tactic| (intros; xh_clean; xh_forget_sp (s.toNat - 256); xh_compactR; nx_run [20] hlive using [h2, h8, h11, hC.atexit, hC.handler, hC.glueNext, hC.glueCount, hC.glueFiles, hC.sinit, hC.in_flagsU, hC.in_flags, hC.in_fd, hC.in_r, hC.in_ur, hC.in_cookie, hC.in_close, hC.in_ub, hC.in_lb, hC.in_lock, hC.in_mode, hC.out_flagsU, hC.out_flags, hC.out_fd, hC.out_base, hC.out_p, hC.out_cookie, hC.out_close, hC.out_ub, hC.out_lb, hC.out_lock, hC.out_mode, hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode, BitVec.add_assoc, BitVec.reduceAnd, BitVec.reduceOr, BitVec.reduceSub, BitVec.reduceMul, BitVec.reduceShiftLeft, BitVec.reduceHShiftLeft, Nat.reducePow, Nat.reduceMod, BitVec.reduceOfNat] at 2147501960))
+#ix_branch exitIdle_01 (hE : ErrIdleMt Mt) from exitHead_15 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
 
-#ix_piece exitIdle_01 {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
+#ix_piece exitIdle_02 from exitIdle_01 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+
+#ix_piece exitIdle_03 from exitIdle_02 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+
+#ix_piece exitIdle_04 from exitIdle_03 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+
+#ix_piece exitIdle_05 from exitIdle_04 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+
+#ix_piece exitIdle_06 from exitIdle_05 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+
+#ix_piece exitIdle_07 from exitIdle_06 by xh_step 20 using [hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode]
+
+#ix_piece exitIdle_end from exitIdle_07 by xh_end
+
+#ix_chain exitIdleTail_chain := [exitIdle_01, exitIdle_02, exitIdle_03, exitIdle_04, exitIdle_05, exitIdle_06, exitIdle_07, exitIdle_end]
+
+theorem exitIdle_chain {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    {s e : BitVec 64} (hs : ExitSp s) (h2 : R 2 = s) (h8 : R 8 = e) (h11 : R 11 = 0#64)
-    (hC : CloseMt 0x200a#64 Mt) (hE : ErrIdleMt Mt)
+    {fl s e : BitVec 64} (hs : ExitSp s) (h2 : R 2 = s) (h8 : R 8 = e) (h11 : R 11 = 0#64)
+    (hF : ConFlags fl) (hC : CloseMt fl Mt) (hE : ErrIdleMt Mt)
     (hk : ∀ R' Mt', ExitEnd R s e R' → NW live ∅ [] (exitS s) Q 0x80004788#64 R' Mt') :
-    NW live ∅ [] (exitS s) Q 0x80004778#64 R Mt
-  by
-    have hs1 := hs.lo; have hs2 := hs.hi; have hs3 := hs.align; have hs4 := hs.place
-    nx_run [20] hlive using [h2, h8, h11, hC.atexit, hC.handler, hC.glueNext, hC.glueCount, hC.glueFiles, hC.sinit, hC.in_flagsU, hC.in_flags, hC.in_fd, hC.in_r, hC.in_ur, hC.in_cookie, hC.in_close, hC.in_ub, hC.in_lb, hC.in_lock, hC.in_mode, hC.out_flagsU, hC.out_flags, hC.out_fd, hC.out_base, hC.out_p, hC.out_cookie, hC.out_close, hC.out_ub, hC.out_lb, hC.out_lock, hC.out_mode, hE.flagsU, hE.flags, hE.fd, hE.r, hE.ur, hE.cookie, hE.close, hE.ub, hE.lb, hE.lock, hE.mode, BitVec.add_assoc, BitVec.reduceAnd, BitVec.reduceOr, BitVec.reduceSub, BitVec.reduceMul, BitVec.reduceShiftLeft, BitVec.reduceHShiftLeft, Nat.reducePow, Nat.reduceMod, BitVec.reduceOfNat] at 2147501960
-
-#ix_piece exitIdle_02 from exitIdle_01 by
-  xh_stepIdle
-
-#ix_piece exitIdle_03 from exitIdle_02 by
-  xh_stepIdle
-
-#ix_piece exitIdle_04 from exitIdle_03 by
-  xh_stepIdle
-
-#ix_piece exitIdle_05 from exitIdle_04 by
-  xh_stepIdle
-
-#ix_piece exitIdle_06 from exitIdle_05 by
-  xh_stepIdle
-
-#ix_piece exitIdle_07 from exitIdle_06 by
-  xh_stepIdle
-
-#ix_piece exitIdle_08 from exitIdle_07 by
-  xh_stepIdle
-
-#ix_piece exitIdle_09 from exitIdle_08 by
-  xh_stepIdle
-
-#ix_piece exitIdle_10 from exitIdle_09 by
-  xh_stepIdle
-
-#ix_piece exitIdle_11 from exitIdle_10 by
-  xh_stepIdle
-
-#ix_piece exitIdle_12 from exitIdle_11 by
-  xh_stepIdle
-
-#ix_piece exitIdle_13 from exitIdle_12 by
-  xh_stepIdle
-
-#ix_piece exitIdle_14 from exitIdle_13 by
-  xh_stepIdle
-
-#ix_piece exitIdle_15 from exitIdle_14 by
-  xh_stepIdle
-
-#ix_piece exitIdle_16 from exitIdle_15 by
-  xh_stepIdle
-
-#ix_piece exitIdle_17 from exitIdle_16 by
-  xh_stepIdle
-
-#ix_piece exitIdle_18 from exitIdle_17 by
-  xh_stepIdle
-
-#ix_piece exitIdle_19 from exitIdle_18 by
-  xh_stepIdle
-
-#ix_piece exitIdle_20 from exitIdle_19 by
-  xh_stepIdle
-
-#ix_piece exitIdle_21 from exitIdle_20 by
-  xh_stepIdle
-
-#ix_piece exitIdle_22 from exitIdle_21 by
-  xh_stepIdle
-
-#ix_piece exitIdle_end from exitIdle_22 by
-  xh_end
-
-#ix_chain exitIdle_chain := [exitIdle_01, exitIdle_02, exitIdle_03, exitIdle_04, exitIdle_05, exitIdle_06, exitIdle_07, exitIdle_08, exitIdle_09, exitIdle_10, exitIdle_11, exitIdle_12, exitIdle_13, exitIdle_14, exitIdle_15, exitIdle_16, exitIdle_17, exitIdle_18, exitIdle_19, exitIdle_20, exitIdle_21, exitIdle_22, exitIdle_end]
+    NW live ∅ [] (exitS s) Q 0x80004778#64 R Mt := by
+  refine exitHead_chain hlive hs h2 h8 h11 hF hC hk ?_
+  intros
+  apply exitIdleTail_chain hlive hs h2 h8 h11 hF hC hk <;> assumption
 
 end VsaIris.Sym
