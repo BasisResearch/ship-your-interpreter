@@ -15,6 +15,115 @@ scoped macro_rules
       ldv_lhu_fillR_miss, ldv_lbu_fillR_miss])
 end XH
 
+/-! ### Register-file compaction by one kernel evaluation -/
+
+/-- An `upd` chain as a list, newest first. -/
+def updL (R : Nat → BitVec 64) : List (Nat × BitVec 64) → Nat → BitVec 64
+  | [] => R
+  | (k, v) :: t => upd (updL R t) k v
+
+/-- Keep the newest update of each register. -/
+def dedupL : List (Nat × BitVec 64) → List Nat → List (Nat × BitVec 64)
+  | [], _ => []
+  | (k, v) :: t, seen => bif seen.contains k then dedupL t seen else (k, v) :: dedupL t (k :: seen)
+
+theorem updL_dedup (R : Nat → BitVec 64) :
+    ∀ (L : List (Nat × BitVec 64)) (seen : List Nat) (r : Nat), r ∉ seen →
+      updL R (dedupL L seen) r = updL R L r
+  | [], _, _, _ => rfl
+  | (k, v) :: t, seen, r, hr => by
+    unfold dedupL
+    cases hc : seen.contains k
+    · simp only [Bool.cond_false, updL, upd]
+      by_cases h : r = k
+      · rw [if_pos h, if_pos h]
+      · rw [if_neg h, if_neg h]
+        exact updL_dedup R t (k :: seen) r (by simp only [List.mem_cons, not_or]; exact ⟨h, hr⟩)
+    · simp only [Bool.cond_true, updL, upd]
+      have hk : k ∈ seen := List.contains_iff_mem.mp hc
+      rw [if_neg (fun h => hr (by rw [h]; exact hk))]
+      exact updL_dedup R t seen r hr
+
+theorem swp_compact {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64} {Mt : Mem}
+    (R : Nat → BitVec 64) (L : List (Nat × BitVec 64))
+    (h : SWP live text rs S Q pc (updL R (dedupL L [])) Mt) : SWP live text rs S Q pc (updL R L) Mt :=
+  swp_congr (fun r _ _ => updL_dedup R L [] r List.not_mem_nil) h
+
+section CompactK
+open Lean Elab Tactic Meta
+
+/-- The chain of an `upd` term, newest first, with literal keys. -/
+partial def xhUpdList (e : Expr) (acc : Array (Nat × Expr)) : MetaM (Expr × Array (Nat × Expr)) := do
+  let e := e.consumeMData
+  if e.isAppOfArity ``upd 3 then
+    let args := e.getAppArgs
+    let kn? ← match args[1]!.nat? with
+      | some n => pure (some n)
+      | none => (evalNat args[1]!).run
+    let some kn := kn? | return (e, acc)
+    xhUpdList args[0]! (acc.push (kn, args[2]!))
+  else return (e, acc)
+
+/-- `xh_compactK`: drop the shadowed register updates. The equality of the two register files is
+`updL_dedup`; the kernel evaluates `dedupL` on the literal keys. -/
+elab "xh_compactK" : tactic => do
+  let g ← getMainGoal
+  g.withContext do
+  let ty ← whnfR (← instantiateMVars (← g.getType))
+  unless ty.getAppFn.isConstOf ``SWP do throwError "xh_compactK: not an SWP goal"
+  let args := ty.getAppArgs
+  let (base, ups) ← xhUpdList args[6]! #[]
+  let pairTy ← mkAppM ``Prod #[mkConst ``Nat, mkApp (mkConst ``BitVec) (mkNatLit 64)]
+  let mut L ← mkAppOptM ``List.nil #[pairTy]
+  let mut R' := base
+  let mut seen : Array Nat := #[]
+  let mut kept : Array (Nat × Expr) := #[]
+  for (k, v) in ups do
+    unless seen.contains k do
+      seen := seen.push k
+      kept := kept.push (k, v)
+  for (k, v) in ups.reverse do
+    L ← mkAppM ``List.cons #[← mkAppM ``Prod.mk #[toExpr k, v], L]
+  for (k, v) in kept.reverse do
+    R' := mkApp3 (mkConst ``upd) R' (toExpr k) v
+  let newTy := mkAppN ty.getAppFn (args.set! 6 R')
+  let m ← mkFreshExprSyntheticOpaqueMVar newTy (← g.getTag)
+  let pf := mkAppN (mkConst ``swp_compact) #[args[0]!, args[1]!, args[2]!, args[3]!, args[4]!, args[5]!, args[7]!, base, L, m]
+  g.assign pf
+  replaceMainGoal [m.mvarId!]
+
+end CompactK
+
+/-! ### One forgotten-stack layer -/
+
+/-- The forgotten bytes of two nested forgets over the same base. -/
+def mergeG (lo n' : Nat) (g' g : Nat → BitVec 8) : Nat → BitVec 8 :=
+  fun a => if a < lo + n' then g' a else g a
+
+theorem fillR_fillR_ge (M : Mem) {lo n n' : Nat} (g g' : Nat → BitVec 8) (h : n ≤ n') :
+    fillR (fillR M lo n g) lo n' g' = fillR M lo n' g' := by
+  apply Std.ExtHashMap.ext_getElem?
+  intro k
+  rw [fillR_get, fillR_get, fillR_get]
+  by_cases h1 : lo ≤ k ∧ k < lo + n'
+  · rw [if_pos h1, if_pos h1]
+  · rw [if_neg h1, if_neg h1, if_neg (show ¬ (lo ≤ k ∧ k < lo + n) by omega)]
+
+theorem fillR_fillR_le (M : Mem) {lo n n' : Nat} (g g' : Nat → BitVec 8) (h : n' ≤ n) :
+    fillR (fillR M lo n g) lo n' g' = fillR M lo n (mergeG lo n' g' g) := by
+  apply Std.ExtHashMap.ext_getElem?
+  intro k
+  rw [fillR_get, fillR_get, fillR_get]
+  by_cases h1 : lo ≤ k ∧ k < lo + n'
+  · rw [if_pos h1, if_pos (show lo ≤ k ∧ k < lo + n by omega)]
+    unfold mergeG; rw [if_pos h1.2]
+  · rw [if_neg h1]
+    by_cases h2 : lo ≤ k ∧ k < lo + n
+    · rw [if_pos h2, if_pos h2]
+      unfold mergeG; rw [if_neg (show ¬ k < lo + n' by omega)]
+    · rw [if_neg h2, if_neg h2]
+
 section Compact
 
 open Lean Elab Tactic Meta
@@ -28,56 +137,22 @@ elab "xh_clean" : tactic => do
   let g' ← g.tryClearMany fs
   replaceMainGoal [g']
 
-partial def xhUpdChain (e : Expr) (seen : List Nat) (acc : Array (Expr × Expr)) :
-    MetaM (Expr × Array (Expr × Expr)) := do
-  let e := e.consumeMData
-  if e.isAppOfArity ``upd 3 then
-    let args := e.getAppArgs
-    let k := args[1]!
-    let kn? ← match k.nat? with
-      | some n => pure (some n)
-      | none => (evalNat k).run
-    let some kn := kn? | return (e, acc)
-    if seen.contains kn then xhUpdChain args[0]! seen acc
-    else xhUpdChain args[0]! (kn :: seen) (acc.push (k, args[2]!))
-  else return (e, acc)
-
-macro "xh_regEq" : tactic => `(tactic| (
-  intro r hr _
-  simp only [iRegs, List.mem_cons, List.not_mem_nil, or_false] at hr
-  rcases hr with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h |
-    h | h | h | h | h | h | h | h | h <;> subst h <;>
-    simp only [upd, Nat.reduceEqDiff, ite_true, ite_false, reduceIte]))
-
-elab "xh_compactR" : tactic => do
-  let g ← getMainGoal
-  let ty ← g.withContext (do whnfR (← instantiateMVars (← g.getType)))
-  unless ty.getAppFn.isConstOf ``SWP do throwError "xh_compactR: not an SWP goal"
-  let R := ty.getAppArgs[6]!
-  let (base, ups) ← g.withContext (xhUpdChain R [] #[])
-  let mut R' := base
-  for (k, v) in ups.reverse do
-    R' := mkAppN (mkConst ``upd) #[R', k, v]
-  let R'stx ← g.withContext (Term.exprToSyntax R')
-  evalTactic (← `(tactic| refine swp_congr (R' := $R'stx) ?_ ?_))
-  evalTactic (← `(tactic| xh_regEq))
-
 syntax "xh_forget " term:max term:max : tactic
 macro_rules
   | `(tactic| xh_forget $lo $n) =>
     `(tactic| (apply swp_forget_region $lo $n <;> intro _ <;>
-      (try simp (disch := nx_addr) only [fillR_writeLog_in, fillR_writeLog_out])))
+      (try simp (disch := nx_addr) only [fillR_writeLog_out, fillR_writeLog_in]) <;>
+      (try simp (disch := nx_addr) only [fillR_fillR_ge, fillR_fillR_le])))
 
 elab "xh_forget_sp " lo:term:max : tactic => do
   let g ← getMainGoal
   let ty ← g.withContext (do whnfR (← instantiateMVars (← g.getType)))
   unless ty.getAppFn.isConstOf ``SWP do throwError "xh_forget_sp: not an SWP goal"
   let R := ty.getAppArgs[6]!
-  let (base, ups) ← g.withContext (xhUpdChain R [] #[])
-  let spv ← match ← g.withContext (ups.findM? fun (k, _) => do
-      return (← (evalNat k).run) == some 2 || k.nat? == some 2) with
-    | some (_, v) => pure v
-    | none => pure (mkApp base (mkNatLit 2))
+  let (base, ups) ← g.withContext (xhUpdList R #[])
+  let spv := match ups.find? (·.1 == 2) with
+    | some (_, v) => v
+    | none => mkApp base (mkNatLit 2)
   let spStx ← g.withContext (Term.exprToSyntax spv)
   evalTactic (← `(tactic| xh_forget $lo (($spStx).toNat - $lo)))
 
@@ -116,8 +191,8 @@ macro "xh_start " n:num " using " "[" fs:term,* "]" : tactic => `(tactic| (
     xh_run $n using [$fs,*]))
 
 set_option hygiene false in
-/-- Later pieces: forget the dead stack below `sp`, compact the register file, then run. -/
-macro "xh_step " n:num " using " "[" fs:term,* "]" : tactic => `(tactic| (intros; xh_clean; xh_forget_sp (s.toNat - 256); xh_compactR; xh_run $n using [$fs,*]))
+/-- Later pieces: forget the dead stack below `sp` (one merged layer), compact the register file, then run. -/
+macro "xh_step " n:num " using " "[" fs:term,* "]" : tactic => `(tactic| (intros; xh_clean; xh_forget_sp (s.toNat - 256); xh_compactK; xh_run $n using [$fs,*]))
 
 section Branch
 
@@ -145,7 +220,7 @@ end Branch
 
 set_option hygiene false in
 
-macro "xh_end" : tactic => `(tactic| (intros; xh_clean; xh_compactR; exact hk _ _ ⟨by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.add_assoc,
+macro "xh_end" : tactic => `(tactic| (intros; xh_clean; xh_compactK; exact hk _ _ ⟨by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.add_assoc,
       BitVec.reduceAdd, BitVec.add_zero, h2, h8],
     by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h2, h8],
     fun x hx => by
