@@ -65,8 +65,6 @@ def copyW (m : Mem) (d s : Nat) : Nat → Mem
   | 0 => m
   | j + 1 => writeLog (copyW m d s j) [(d + 8 * j, 8, ldv .ld (copyW m d s j) (s + 8 * j))]
 
-theorem copyW_zero (m : Mem) (d s : Nat) : copyW m d s 0 = m := rfl
-
 theorem copyW_succ (m : Mem) (d s j : Nat) :
     copyW m d s (j + 1) =
       writeLog (copyW m d s j) [(d + 8 * j, 8, ldv .ld (copyW m d s j) (s + 8 * j))] := rfl

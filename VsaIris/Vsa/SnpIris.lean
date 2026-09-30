@@ -28,7 +28,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib
 open VsaIris.Inst
 
-
 /-! ## The owned bytes -/
 
 /-- The owned byte sets of a `snprintf` call, pairwise disjoint (from their
@@ -232,7 +231,6 @@ theorem snpSpec_of_run {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel l
         (l := Newlib.calleeSaved) (fun z hz => by rw [K.saved z hz, hcs z hz])]
       iexact Hcs
     · iapply clobbered_of_fn _ R' $$ Ht
-
 
 /-- **A `snprintf` call whose run reads owned bytes.** Like `snpSpec_of_run`,
 but the read-only input `Rr` opens to a data view whose addresses `DAro` are

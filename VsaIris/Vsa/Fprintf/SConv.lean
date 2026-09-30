@@ -39,10 +39,6 @@ theorem piecesLen_append (a b : List (Nat × List (BitVec 8))) :
     piecesLen (a ++ b) = piecesLen a + piecesLen b := by
   simp [piecesLen]
 
-theorem piecesBytes_append (a b : List (Nat × List (BitVec 8))) :
-    piecesBytes (a ++ b) = piecesBytes a ++ piecesBytes b := by
-  simp [piecesBytes]
-
 /-- The bytes `s_stage` writes: `ap`, the count, the spill slots, the sign
 byte, the `uio`'s count and residual, the new iov. -/
 def SReg (sp n : Nat) (a : Nat) : Prop :=

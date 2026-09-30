@@ -17,22 +17,6 @@ set_option linter.unusedSimpArgs false
 
 namespace Vsa.Sim.DecodeTable
 
-theorem decode_f8e78ae3
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf8e78ae3#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.BTYPE (0x1f94#13, LeanRV64DExecutable.regidx.Regidx 0x0e#5, LeanRV64DExecutable.regidx.Regidx 0x0f#5, LeanRV64DExecutable.bop.BEQ)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
 theorem decode_f8f51ee3
     (σ : SequentialState RegisterType trivialChoiceSource)
     (_hmisa : σ.regs.get? Register.misa =
@@ -75,22 +59,6 @@ theorem decode_f9010113
       some ((0#64) : RegisterType Register.mseccfg)) :
     (ext_decode 0xf9010113#32).run σ =
       .ok (LeanRV64DExecutable.instruction.ITYPE (0xf90#12, LeanRV64DExecutable.regidx.Regidx 0x02#5, LeanRV64DExecutable.regidx.Regidx 0x02#5, LeanRV64DExecutable.iop.ADDI)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-theorem decode_f90f8f93
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf90f8f93#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.ITYPE (0xf90#12, LeanRV64DExecutable.regidx.Regidx 0x1f#5, LeanRV64DExecutable.regidx.Regidx 0x1f#5, LeanRV64DExecutable.iop.ADDI)) σ := by
   simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
     pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
     currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
@@ -155,102 +123,6 @@ theorem decode_f94f90ef
       some ((0#64) : RegisterType Register.mseccfg)) :
     (ext_decode 0xf94f90ef#32).run σ =
       .ok (LeanRV64DExecutable.instruction.JAL (0x1f9794#21, LeanRV64DExecutable.regidx.Regidx 0x01#5)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-theorem decode_f94ff06f
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf94ff06f#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.JAL (0x1ff794#21, LeanRV64DExecutable.regidx.Regidx 0x00#5)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-theorem decode_f95ff06f
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf95ff06f#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.JAL (0x1fff94#21, LeanRV64DExecutable.regidx.Regidx 0x00#5)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-theorem decode_f98680e7
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf98680e7#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.JALR (0xf98#12, LeanRV64DExecutable.regidx.Regidx 0x0d#5, LeanRV64DExecutable.regidx.Regidx 0x01#5)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-theorem decode_f99ff06f
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf99ff06f#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.JAL (0x1fff98#21, LeanRV64DExecutable.regidx.Regidx 0x00#5)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-theorem decode_f9cfc0ef
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf9cfc0ef#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.JAL (0x1fc79c#21, LeanRV64DExecutable.regidx.Regidx 0x01#5)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-theorem decode_f9df60ef
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xf9df60ef#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.JAL (0x1f6f9c#21, LeanRV64DExecutable.regidx.Regidx 0x01#5)) σ := by
   simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
     pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
     currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,

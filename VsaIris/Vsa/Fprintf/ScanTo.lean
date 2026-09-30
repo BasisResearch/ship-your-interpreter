@@ -44,12 +44,6 @@ structure VfpPend (R : Nat → BitVec 64) (Mt : Mem) (sp reent f : BitVec 64) (c
 def litIov (P : Nat) (bs : List (BitVec 8)) : List (Nat × List (BitVec 8)) :=
   if bs = [] then [] else [(P, bs)]
 
-/-- `addw` of two small counts. -/
-theorem addw_ofNat {a b : Nat} (h : a + b < 2 ^ 31) :
-    BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a + BitVec.ofNat 64 b)) =
-      BitVec.ofNat 64 (a + b) := by
-  rw [ofNat_add_ofNat]; exact sextw_ofNat h
-
 /-- `addw` of two small counts (the halves extracted). -/
 theorem addw_ofNat' {a b : Nat} (h : a + b < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) + BitVec.extractLsb 31 0 (BitVec.ofNat 64 b)) =

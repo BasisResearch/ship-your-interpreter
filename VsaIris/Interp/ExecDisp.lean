@@ -41,7 +41,6 @@ theorem execSP_restore (s : BitVec 64) : execSP s + 176#64 = s := by
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80003fe0#64 R Mt
   by ix_run hlive using [h2, hsf] at 0x80004014
 
-
 /-- The entry `sp` of an `exec_stmt` call with its budget: the frame's
 geometry (`ExecFrameGeom`, the block loop's) and the frame's size. -/
 theorem execFrameGeom_of {s : BitVec 64} {sm : Vsa.While.Stmt} {d : Nat}

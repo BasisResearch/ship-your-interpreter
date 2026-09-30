@@ -53,37 +53,4 @@ structure InitialOwned (m : Mem) (A : Arena) (SL : StackLayout)
   /-- The arena is exactly the range `_sbrk` grows through. -/
   arenaHeap : A.lo = DlHeap.heapStart ∧ A.hi = DlHeap.heapEnd
 
-theorem InitialOwned.ast_owned {m : Mem} {A : Arena} {SL : StackLayout}
-    {phiF phiC : Addr → Nat} {stmts count : Nat} {D : InitialOwnershipData}
-    (h : InitialOwned m A SL phiF phiC stmts count D)
-    (p : Program) (hp : ProgramRepr m stmts count p) :
-    ProgramReprWithin m (fun k => ¬ InitialWriteByte SL k) stmts count p :=
-  (h.program p hp).mono h.heap.immutable.outsideWrites
-
-theorem InitialOwned.ast_readable {m : Mem} {A : Arena} {SL : StackLayout}
-    {phiF phiC : Addr → Nat} {stmts count : Nat} {D : InitialOwnershipData}
-    (h : InitialOwned m A SL phiF phiC stmts count D)
-    (p : Program) (hp : ProgramRepr m stmts count p) :
-    ProgramReprWithin m InitialReadableByte stmts count p :=
-  (h.program p hp).mono h.heap.immutable.readable
-
-/-- Every live extent avoids ELF runtime storage and the stack. This applies
-to immutable allocations as well as mutable allocation roles. -/
-theorem InitialOwned.extent_outsideWrites {m : Mem} {A : Arena} {SL : StackLayout}
-    {phiF phiC : Addr → Nat} {stmts count : Nat} {D : InitialOwnershipData}
-    (h : InitialOwned m A SL phiF phiC stmts count D)
-    {e : Extent} (he : e ∈ D.exts) {k : Nat} (hk : ExtentByte e k) :
-    ¬ InitialWriteByte SL k := by
-  have ha := (h.heap.ledger.arena.1 e he).2
-  have hlo := h.heapLower
-  have hhi := h.heapUpper
-  change A.lo ≤ e.1 ∧ e.1 + e.2 ≤ A.hi at ha
-  unfold ExtentByte at hk
-  intro hw
-  rcases hw with hw | hw <;> omega
-
-#print axioms InitialOwned.ast_owned
-#print axioms InitialOwned.ast_readable
-#print axioms InitialOwned.extent_outsideWrites
-
 end Vsa.Sim.RuntimeOwnership

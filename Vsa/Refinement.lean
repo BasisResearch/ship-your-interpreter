@@ -35,18 +35,6 @@ namespace Vsa.Refine
 
 open Vsa.Machine Vsa.MemRepr Vsa.While
 
-/-- Observable behaviors (CompCert's `program_behavior`, specialized: the
-HTIF console string is the whole observable trace, exit code included). -/
-inductive Behavior where
-  | terminates (out : String) (exit : Nat)
-  | diverges
-  deriving Repr, DecidableEq
-
-/-- Machine behaviors, over the inductive ISA relation. -/
-def MachBehaves (c : Config) : Behavior → Prop
-  | .terminates out e => Halts c out e
-  | .diverges => Diverges c
-
 /-- Program-point facts about the fixed interpreter binary: what it means
 for a configuration to be at `interp_run`'s entry with an AST-array
 argument. Determined by the binary's layout (symbol addresses, ABI); kept
@@ -122,14 +110,5 @@ theorem refinement {L : Layout} (H : InterpSim L) :
   intro p c hL
   refine ⟨fun out => ⟨fun hb => H.term_sim p c out hL hb,
     fun h => halts_bigStep H hL h⟩, fun hd => diverges_no_bigStep H hL hd⟩
-
-/-- Uniqueness of specified behavior, inherited by the source semantics
-from machine determinism through the equivalence — a sanity corollary
-(big-step determinism proven via the machine, CompCert's observation that
-the target's determinism reflects back along an equivalence). -/
-theorem bigStep_deterministic_of_loaded {L : Layout} (H : InterpSim L)
-    {p : Program} {c : Config} (hL : Loaded L p c) {out out' : String}
-    (h : BigStep p out) (h' : BigStep p out') : out = out' :=
-  ((H.term_sim p c out hL h).deterministic (H.term_sim p c out' hL h')).1
 
 end Vsa.Refine

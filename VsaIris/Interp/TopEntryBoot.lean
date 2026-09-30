@@ -182,11 +182,4 @@ theorem interpRun_partial_top (H : NewlibHoles) (hlive : ∀ p ∈ interpText, l
 
 end Runs
 
-#print axioms interpText_img
-#print axioms codeRes_of_boundary
-#print axioms topRegs_carve
-#print axioms topEntry_of_regs
-#print axioms interpRun_total_top
-#print axioms interpRun_partial_top
-
 end VsaIris.Interp

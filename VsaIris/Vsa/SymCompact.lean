@@ -114,27 +114,6 @@ attribute [irreducible] fillR
 
 /-! ## Registers in normal form -/
 
-theorem upd_upd_same (R : Nat → BitVec 64) (k : Nat) (v w : BitVec 64) :
-    upd (upd R k v) k w = upd R k w := by
-  funext r; unfold upd; by_cases h : r = k <;> simp [h]
-
-/-- Updates at distinct registers commute; sorted by decreasing index. -/
-theorem upd_upd_lt (R : Nat → BitVec 64) {k j : Nat} (v w : BitVec 64) (h : k < j) :
-    upd (upd R k v) j w = upd (upd R j w) k v := by
-  funext r; unfold upd
-  by_cases h1 : r = j
-  · subst h1; simp [show r ≠ k by omega]
-  · by_cases h2 : r = k
-    · subst h2; simp [h1]
-    · simp [h1, h2]
-
-theorem upd_upd_ne_same (R : Nat → BitVec 64) {k j : Nat} (u v w : BitVec 64) (h : j ≠ k) :
-    upd (upd (upd R k u) j v) k w = upd (upd R j v) k w := by
-  funext r; unfold upd
-  by_cases h1 : r = k
-  · subst h1; simp
-  · by_cases h2 : r = j <;> simp [h1, h2]
-
 section SWP
 
 variable {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}

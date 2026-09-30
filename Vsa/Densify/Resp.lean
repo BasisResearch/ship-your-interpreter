@@ -30,12 +30,7 @@ open Vsa.Machine (MState)
 def MemEqv (m m' : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
   ∀ a, (m.get? a).getD 0 = (m'.get? a).getD 0
 
-theorem MemEqv.refl (m : Std.ExtHashMap Nat (BitVec 8)) : MemEqv m m := fun _ => rfl
-
 theorem MemEqv.symm {m m'} (h : MemEqv m m') : MemEqv m' m := fun a => (h a).symm
-
-theorem MemEqv.trans {m₁ m₂ m₃} (h : MemEqv m₁ m₂) (h' : MemEqv m₂ m₃) : MemEqv m₁ m₃ :=
-  fun a => (h a).trans (h' a)
 
 theorem MemEqv.insert {m m'} (h : MemEqv m m') (k : Nat) (v : BitVec 8) :
     MemEqv (m.insert k v) (m'.insert k v) := by
@@ -53,14 +48,8 @@ structure SEqv (σ σ' : MState) : Prop where
   cycle : σ.cycleCount = σ'.cycleCount
   out : σ.sailOutput = σ'.sailOutput
 
-theorem SEqv.refl (σ : MState) : SEqv σ σ := ⟨rfl, rfl, MemEqv.refl _, rfl, rfl⟩
-
 theorem SEqv.symm {σ σ'} (h : SEqv σ σ') : SEqv σ' σ :=
   ⟨h.regs.symm, h.choice.symm, h.mem.symm, h.cycle.symm, h.out.symm⟩
-
-theorem SEqv.trans {σ₁ σ₂ σ₃} (h : SEqv σ₁ σ₂) (h' : SEqv σ₂ σ₃) : SEqv σ₁ σ₃ :=
-  ⟨h.regs.trans h'.regs, h.choice.trans h'.choice, h.mem.trans h'.mem, h.cycle.trans h'.cycle,
-    h.out.trans h'.out⟩
 
 /-- Related results: equal values (or errors) and zero-equivalent states. -/
 def REqv {α : Type} : EStateM.Result (Sail.Error exception) MState α →
@@ -280,7 +269,6 @@ theorem RespE.untilFuelM {cond : β → SailME ε Bool} {f : β → SailME ε β
     (hc : ∀ b, RespE (cond b)) (hf : ∀ b, RespE (f b)) : RespE (untilFuelM fuel cond init f) :=
   RespE.untilFuelM_go hc hf fuel init
 
-
 /-! `for i in [lo:hi]i` loops (lean-sail's `IntRange`), generically over a predicate closed under `pure` and
 `bind` (`Resp` and `RespE` both are). -/
 section ForIn
@@ -346,21 +334,6 @@ theorem writeReg_resp (r : Register) (v : RegisterType r) :
   resp_prim
   exact ⟨rfl, ⟨by simp only [h.regs], h.choice, h.mem, h.cycle, h.out⟩⟩
 
-theorem readRegRef_resp (rr : @RegisterRef Register RegisterType α) :
-    Resp (PreSail.readRegRef rr : SailM α) := by
-  unfold PreSail.readRegRef
-  split
-  exact readReg_resp _
-
-theorem writeRegRef_resp (rr : @RegisterRef Register RegisterType α) (a : α) :
-    Resp (PreSail.writeRegRef rr a : SailM Unit) := by
-  unfold PreSail.writeRegRef
-  split
-  exact writeReg_resp _ _
-
-theorem reg_deref_resp (rr : @RegisterRef Register RegisterType α) :
-    Resp (PreSail.reg_deref rr : SailM α) := readRegRef_resp rr
-
 theorem assert_resp (p : Bool) (s : String) : Resp (PreSail.assert p s : SailM Unit) := by
   unfold PreSail.assert
   split
@@ -387,16 +360,6 @@ theorem writeBytes_resp (a : Nat) (v : BitVec (8 * n)) :
     Resp (PreSail.writeBytes a v : SailM Bool) := by
   unfold PreSail.writeBytes
   exact Resp.bind (Resp.forM (fun p : Nat × BitVec 8 => writeByte_resp p.1 p.2) _) fun _ => Resp.pure _
-
-theorem writeByteVec_resp (a : Nat) (v : Vector (BitVec 8) n) :
-    Resp (PreSail.writeByteVec a v : SailM Bool) := by
-  unfold PreSail.writeByteVec
-  exact Resp.bind (Resp.forM (fun p : Nat × BitVec 8 => writeByte_resp p.1 p.2) _) fun _ => Resp.pure _
-
-theorem write_ram_resp (as ds : Nat) (h a : BitVec as) (v : BitVec (8 * ds)) :
-    Resp (PreSail.write_ram as ds h a v : SailM Unit) := by
-  unfold PreSail.write_ram
-  exact Resp.bind (writeBytes_resp _ _) fun _ => Resp.pure _
 
 theorem readByte_resp (a : Nat) : Resp (PreSail.readByte a : SailM (BitVec 8)) := by
   unfold PreSail.readByte
@@ -429,13 +392,6 @@ theorem sail_mem_read_resp [Arch] (req : Mem_read_request n vasize (BitVec pa_si
   unfold PreSail.sail_mem_read
   exact Resp.bind (readBytes_resp _ _) fun _ => Resp.pure _
 
-theorem read_ram_resp (as ds : Nat) (h a : BitVec as) :
-    Resp (PreSail.read_ram as ds h a : SailM (BitVec (8 * ds))) := by
-  unfold PreSail.read_ram
-  refine Resp.bind (readBytes_resp _ _) fun r => ?_
-  try split
-  exact Resp.pure _
-
 theorem sail_barrier_resp (a : α) : Resp (PreSail.sail_barrier a : SailM Unit) := Resp.pure _
 
 theorem cycle_count_resp (u : Unit) : Resp (PreSail.cycle_count u : SailM Unit) := by
@@ -444,26 +400,14 @@ theorem cycle_count_resp (u : Unit) : Resp (PreSail.cycle_count u : SailM Unit) 
   resp_prim
   exact ⟨rfl, ⟨h.regs, h.choice, h.mem, by simp only [h.cycle], h.out⟩⟩
 
-theorem get_cycle_count_resp (u : Unit) : Resp (PreSail.get_cycle_count u : SailM Nat) := by
-  unfold PreSail.get_cycle_count
-  refine ⟨fun σ σ' h => ?_⟩
-  resp_prim
-  exact ⟨h.cycle, h⟩
-
 theorem print_effect_resp (s : String) : Resp (PreSail.print_effect s : SailM Unit) := by
   unfold PreSail.print_effect
   refine ⟨fun σ σ' h => ?_⟩
   resp_prim
   exact ⟨rfl, ⟨h.regs, h.choice, h.mem, h.cycle, by simp only [h.out]⟩⟩
 
-theorem print_int_effect_resp (s : String) (n : Int) : Resp (PreSail.print_int_effect s n : SailM Unit) :=
-  print_effect_resp _
-
 theorem print_bits_effect_resp (s : String) (x : BitVec w) :
     Resp (PreSail.print_bits_effect s x : SailM Unit) := print_effect_resp _
-
-theorem print_endline_effect_resp (s : String) : Resp (PreSail.print_endline_effect s : SailM Unit) :=
-  print_effect_resp _
 
 end PS
 

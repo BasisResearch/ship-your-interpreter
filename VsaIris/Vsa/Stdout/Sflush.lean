@@ -117,5 +117,4 @@ theorem sflush_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1)
   simp only [nx_mt, BitVec.add_assoc, BitVec.reduceAdd] at hk ⊢
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
 
-
 end VsaIris.Sym

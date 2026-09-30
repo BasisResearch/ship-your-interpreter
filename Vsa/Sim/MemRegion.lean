@@ -338,31 +338,6 @@ Child projections for the recursive arms (`unary`/`binary`/…) are DIRECT
 applications of the corresponding clause — no lemma needed; stated here only
 for the shapes the landed rows consume. -/
 
-/-- The `.str`-root payload facts — exactly the `StrPayloadIn` shape of
-`rows/Field_hStr.lean` (its `p + s.length < hi` is implied by `StrIn`'s
-NUL-inclusive bound). -/
-theorem exprIn_str_payload {m : Mem} {lo hi a : Nat} {s : String}
-    (h : ExprIn m lo hi a (.str s)) :
-    ∀ p, read64 m (a + 8) = some p → p ≠ 0 ∧ lo ≤ p ∧ p + s.length < hi := by
-  intro p hp
-  have := h.2 p hp
-  exact ⟨this.ne_zero, this.lo_le, by have := this.hi_ge; omega⟩
-
-/-- The `.var`-root name-string facts (the `VarLeafResid` conjunct-1 shape). -/
-theorem exprIn_var_payload {m : Mem} {lo hi a : Nat} {x : String}
-    (h : ExprIn m lo hi a (.var x)) :
-    ∀ p, read64 m (a + 8) = some p → p ≠ 0 ∧ lo ≤ p ∧ p + x.length < hi := by
-  intro p hp
-  have := h.2 p hp
-  exact ⟨this.ne_zero, this.lo_le, by have := this.hi_ge; omega⟩
-
-/-- The `.unary`-root operand projection (the `NegExtras` operand-geometry
-shape): the operand node is a region-pinned tree. -/
-theorem exprIn_unary_child {m : Mem} {lo hi a : Nat} {op : UnOp} {e : Expr}
-    (h : ExprIn m lo hi a (.unary op e)) :
-    ∀ p, read64 m (a + 16) = some p → ExprIn m lo hi p e :=
-  h.2
-
 /-- Root node region facts for any expression (all 11 constructors carry a
 leading `NodeIn`). -/
 theorem exprIn_node {m : Mem} {lo hi a : Nat} {e : Expr}
@@ -379,19 +354,5 @@ theorem exprIn_node {m : Mem} {lo hi a : Nat} {e : Expr}
   | unary _ _ => exact h.1
   | call _ _ => exact h.1
   | fn _ _ _ => exact h.1
-
-/-- Root node region facts for any statement. -/
-theorem stmtIn_node {m : Mem} {lo hi a : Nat} {s : Stmt}
-    (h : StmtIn m lo hi a s) : NodeIn lo hi a := by
-  cases s with
-  | expr _ => exact h.1
-  | varDecl _ _ => exact h.1
-  | block _ => exact h.1
-  | ifStmt _ _ _ => exact h.1
-  | whileStmt _ _ => exact h.1
-  | forStmt _ _ _ _ => exact h.1
-  | ret _ => exact h.1
-  | brk => exact h
-  | cont => exact h
 
 end Vsa.Sim

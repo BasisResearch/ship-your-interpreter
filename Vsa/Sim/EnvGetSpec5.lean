@@ -86,64 +86,6 @@ namespace Vsa.Sim
 Pure spec-side + `FrameRepr` reasoning: no machine stepping.  This is exactly the
 `Q`-side obligation the `var`-case agent must discharge for the immediate frame. -/
 
-/-- **`Store.get?` on an immediate first-match.** If the store's frame at index
-`fa` is `f`, and `f.vars` has a first-match for `x` at index `i` (all earlier
-names differ, `f.vars[i].1 = x`), then `Store.get? s fa x = some (f.vars[i].2)`.
-`fa < s.frames.size` (the frame is allocated) and there is at least one frame,
-so the lookup gas `s.frames.size ≥ 1` suffices to fetch it. -/
-theorem get?_immediate_hit (s : Store) (fa : Vsa.While.Addr) (x : String) (i : Nat)
-    (hfa : fa < s.frames.size)
-    (hi : i < s.frames[fa].vars.length)
-    (hbelow : ∀ j, (hj : j < i) →
-      ¬ (s.frames[fa].vars[j]'(Nat.lt_trans hj hi)).1 = x)
-    (hhit : (s.frames[fa].vars[i]).1 = x) :
-    s.get? fa x = some (s.frames[fa].vars[i].2) := by
-  -- gas = s.frames.size = (size-1)+1 ≥ 1
-  have hpos : 0 < s.frames.size := Nat.lt_of_le_of_lt (Nat.zero_le _) hfa
-  obtain ⟨g, hg⟩ : ∃ g, s.frames.size = g + 1 := ⟨s.frames.size - 1, by omega⟩
-  unfold Store.get?
-  rw [hg]
-  -- frame fetch
-  have hfr : s.frames[fa]? = some s.frames[fa] := by
-    rw [Array.getElem?_eq_getElem hfa]
-  -- first match value; rewrite the pair to `(x, v)` using `f.vars[i].1 = x`
-  have hfind0 : s.frames[fa].vars.find? (·.1 == x) = some (s.frames[fa].vars[i]) :=
-    lookup_first_match s.frames[fa].vars x i hi hbelow hhit
-  have hpair : s.frames[fa].vars[i] = (x, s.frames[fa].vars[i].2) := by
-    rw [← hhit]
-  have hfind : s.frames[fa].vars.find? (·.1 == x) = some (x, s.frames[fa].vars[i].2) := by
-    rw [hfind0, hpair]
-  exact lookup_hit_at s g fa x s.frames[fa] (s.frames[fa].vars[i].2) hfr hfind
-
-/-- **`ValueRepr` of the found value** at `env->vals + 24*i`.  Straight off
-`FrameRepr`'s slot-`i` conjunct: the value pointer `pv = read64 m (e+16)` and
-`ValueRepr m N φc (pv + 24*i) (f.vars[i].2)`. -/
-theorem frame_slot_valueRepr (m : Mem) (N : NativeAddrs) (φf φc : Vsa.While.Addr → Nat)
-    (e : Nat) (f : Vsa.While.Frame) (i : Nat)
-    (hFR : FrameRepr m N φf φc e f) (hi : i < f.vars.length) :
-    ∃ pv, read64 m (e + 16) = some pv ∧ ValueRepr m N φc (pv + 24 * i) (f.vars[i].2) := by
-  obtain ⟨_hcnt, _hcap, ⟨pn, pv, _hpn, hpv, hslots⟩, _hpar⟩ := hFR
-  exact ⟨pv, hpv, (hslots i hi).2⟩
-
-/-- **The combined immediate-frame FOUND bridge.**  From `StoreRepr` at frame
-`fa` (`φf fa` its machine address) plus a first-match at index `i`, both the spec
-verdict `Store.get? s fa x = some v` and the machine-visible witness
-`ValueRepr m N φc (pv + 24*i) v` (with `pv = env->vals`) hold for the single
-`v := s.frames[fa].vars[i].2`.  This is the `var`-case's `env_get_found` `Q` for
-the immediate frame. -/
-theorem lookup_valueRepr_bridge (m : Mem) (N : NativeAddrs) (A : Arena)
-    (φf φc : Vsa.While.Addr → Nat) (s : Store) (fa : Vsa.While.Addr) (x : String) (i : Nat)
-    (hSR : StoreRepr m N A φf φc s)
-    (hfa : fa < s.frames.size)
-    (hi : i < s.frames[fa].vars.length)
-    (hbelow : ∀ j, (hj : j < i) →
-      ¬ (s.frames[fa].vars[j]'(Nat.lt_trans hj hi)).1 = x)
-    (hhit : (s.frames[fa].vars[i]).1 = x) :
-    ∃ v, s.get? fa x = some v ∧
-      ∃ pv, read64 m (φf fa + 16) = some pv ∧ ValueRepr m N φc (pv + 24 * i) v := by
-  refine ⟨s.frames[fa].vars[i].2, get?_immediate_hit s fa x i hfa hi hbelow hhit, ?_⟩
-  exact frame_slot_valueRepr m N φf φc (φf fa) s.frames[fa] i (hSR.frames fa hfa) hi
-
 /-! ## 2. HIT-tail index-arithmetic stride identity (`24 * i`)
 
 The HIT block computes the byte offset of `values[i]` as `((i<<1)+i)<<3 = 24*i`
@@ -152,45 +94,6 @@ scan index `i < 2^32` (a 32-bit signed count), this equals `ofNat (24*i)` in
 `BitVec 64`, and `pv + 24*i` is the machine address of `values[i]` that the
 `ld a4,0(a5)` / stores then read. -/
 
-/-- `shift_bits_left v (extractLsb sh 5 0)` for a concrete small `sh` is `v <<< sh`. -/
-theorem stride_24 (i : Nat) (h : i < 2^32) :
-    (shift_bits_left
-       ((shift_bits_left (BitVec.ofNat 64 i) (Sail.BitVec.extractLsb (0x01#6) 5 0))
-          + BitVec.ofNat 64 i)
-       (Sail.BitVec.extractLsb (0x03#6) 5 0))
-      = BitVec.ofNat 64 (24 * i) := by
-  simp only [shift_bits_left]
-  apply BitVec.eq_of_toNat_eq
-  have hs1 : (Sail.BitVec.extractLsb (0x01#6) 5 0).toNat = 1 := by decide
-  have hs3 : (Sail.BitVec.extractLsb (0x03#6) 5 0).toNat = 3 := by decide
-  rw [BitVec.shiftLeft_eq', BitVec.shiftLeft_eq']
-  rw [BitVec.toNat_shiftLeft, BitVec.toNat_add, BitVec.toNat_shiftLeft,
-      BitVec.toNat_ofNat, BitVec.toNat_ofNat, hs1, hs3]
-  simp only [Nat.shiftLeft_eq, Nat.pow_one, Nat.reducePow]
-  rw [Nat.mod_eq_of_lt (by omega : i < 2^64)]
-  rw [Nat.mod_eq_of_lt (by omega : i * 2 < 2^64)]
-  rw [Nat.mod_eq_of_lt (by omega : i * 2 + i < 2^64)]
-  rw [Nat.mod_eq_of_lt (by omega : (i * 2 + i) * 8 < 2^64)]
-  rw [Nat.mod_eq_of_lt (by omega : 24 * i < 2^64)]
-  omega
-
-/-- The `slli/add/slli/add` address computation lands `x15 = pv + ofNat (24*i)`,
-i.e. `&values[i]`, when `x8 = ofNat i` (scan index) and `x15 = pv` (`env->vals`)
-and `i < 2^32`.  Pure `BitVec` fact bridging the four ALU sites' composite value
-`pv + (((i<<1)+i)<<3)` to `pv + ofNat (24*i)`. -/
-theorem valsElem_addr (pv : BitVec 64) (i : Nat) (h : i < 2^32) :
-    pv + (shift_bits_left
-       ((shift_bits_left (BitVec.ofNat 64 i) (Sail.BitVec.extractLsb (0x01#6) 5 0))
-          + BitVec.ofNat 64 i)
-       (Sail.BitVec.extractLsb (0x03#6) 5 0))
-      = pv + BitVec.ofNat 64 (24 * i) := by
-  rw [stride_24 i h]
-
 end Vsa.Sim
 
 -- axiom check
-#print axioms Vsa.Sim.lookup_valueRepr_bridge
-#print axioms Vsa.Sim.stride_24
-#print axioms Vsa.Sim.get?_immediate_hit
-#print axioms Vsa.Sim.frame_slot_valueRepr
-#print axioms Vsa.Sim.valsElem_addr

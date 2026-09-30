@@ -144,7 +144,6 @@ theorem BlockHeapAt.transport_read_bb {m m' : Mem} {H : List (Nat × Nat)} {top 
       live := hH.live
       exact := hH.exact }
 
-
 /-- **Clear an empty block's bit.** When every bin of block `b` is empty, a
 bitmap that keeps every other set bit keeps the heap shape. -/
 theorem PHeapAt.clearBlock {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}

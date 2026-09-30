@@ -54,7 +54,6 @@ macro_rules
       t ← `(tactic| ($t; apply swp_forget_reg $k; intro _))
     return t
 
-
 /-! ## Compacting the register file -/
 
 section CompactR

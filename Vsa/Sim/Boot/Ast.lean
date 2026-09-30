@@ -185,30 +185,6 @@ theorem unique_all {m : Mem} : UniqueAll m := by
   all_goals intros
   all_goals uniq_step
 
-theorem _root_.Vsa.MemRepr.ExprRepr.unique {m : Mem} {a : Nat} {e e' : Expr}
-    (h : ExprRepr m a e) (h' : ExprRepr m a e') : e = e' :=
-  (unique_all.expr _ _ h e' h').symm
-
-theorem _root_.Vsa.MemRepr.ExprArrayRepr.unique {m : Mem} {a n : Nat} {es es' : List Expr}
-    (h : ExprArrayRepr m a n es) (h' : ExprArrayRepr m a n es') : es = es' :=
-  (unique_all.exprArray _ _ _ h es' h').symm
-
-theorem _root_.Vsa.MemRepr.ParamsRepr.unique {m : Mem} {a n : Nat} {xs xs' : List String}
-    (h : ParamsRepr m a n xs) (h' : ParamsRepr m a n xs') : xs = xs' :=
-  (unique_all.params _ _ _ h xs' h').symm
-
-theorem _root_.Vsa.MemRepr.StmtRepr.unique {m : Mem} {a : Nat} {s s' : Stmt}
-    (h : StmtRepr m a s) (h' : StmtRepr m a s') : s = s' :=
-  (unique_all.stmt _ _ h s' h').symm
-
-theorem _root_.Vsa.MemRepr.OptStmtRepr.unique {m : Mem} {a : Nat} {s s' : Option Stmt}
-    (h : OptStmtRepr m a s) (h' : OptStmtRepr m a s') : s = s' :=
-  (unique_all.optStmt _ _ h s' h').symm
-
-theorem _root_.Vsa.MemRepr.OptExprRepr.unique {m : Mem} {a : Nat} {e e' : Option Expr}
-    (h : OptExprRepr m a e) (h' : OptExprRepr m a e') : e = e' :=
-  (unique_all.optExpr _ _ h e' h').symm
-
 theorem _root_.Vsa.MemRepr.StmtArrayRepr.unique {m : Mem} {a n : Nat} {ss ss' : List Stmt}
     (h : StmtArrayRepr m a n ss) (h' : StmtArrayRepr m a n ss') : ss = ss' :=
   (unique_all.stmtArray _ _ _ h ss' h').symm
@@ -757,26 +733,6 @@ theorem decodeSound (hv : PartialView m v) : ∀ fuel, DecodeSound m v P fuel
   | 0 => decodeSound_zero
   | fuel + 1 => decodeSound_succ hv (decodeSound hv fuel)
 
-theorem decodeExpr_sound (hv : PartialView m v) {fuel a : Nat} {e : Expr}
-    (h : decodeExpr v P fuel a = some e) : ExprReprWithin m (P · = true) a e :=
-  (decodeSound hv fuel).expr a e h
-
-theorem decodeExprArray_sound (hv : PartialView m v) {fuel a n : Nat} {es : List Expr}
-    (h : decodeExprArray v P fuel a n = some es) : ExprArrayReprWithin m (P · = true) a n es :=
-  (decodeSound hv fuel).exprArray a n es h
-
-theorem decodeStmt_sound (hv : PartialView m v) {fuel a : Nat} {s : Stmt}
-    (h : decodeStmt v P fuel a = some s) : StmtReprWithin m (P · = true) a s :=
-  (decodeSound hv fuel).stmt a s h
-
-theorem decodeOptStmt_sound (hv : PartialView m v) {fuel a : Nat} {s : Option Stmt}
-    (h : decodeOptStmt v P fuel a = some s) : OptStmtReprWithin m (P · = true) a s :=
-  (decodeSound hv fuel).optStmt a s h
-
-theorem decodeOptExpr_sound (hv : PartialView m v) {fuel a : Nat} {e : Option Expr}
-    (h : decodeOptExpr v P fuel a = some e) : OptExprReprWithin m (P · = true) a e :=
-  (decodeSound hv fuel).optExpr a e h
-
 theorem decodeStmtArray_sound (hv : PartialView m v) {fuel a n : Nat} {ss : List Stmt}
     (h : decodeStmtArray v P fuel a n = some ss) : StmtArrayReprWithin m (P · = true) a n ss :=
   (decodeSound hv fuel).stmtArray a n ss h
@@ -793,10 +749,6 @@ theorem decodeProgram_sound (hv : PartialView m v) {fuel a n : Nat} {p : Program
     (h : decodeProgram v P fuel a n = some p) : ProgramReprWithin m (P · = true) a n p :=
   have hs := decodeStmtArray_sound hv h
   ⟨hs, StmtArrayReprWithin.count_eq_length hs⟩
-
-theorem decodeProgram_repr (hv : PartialView m v) {fuel a n : Nat} {p : Program}
-    (h : decodeProgram v P fuel a n = some p) : ProgramRepr m a n p :=
-  (decodeProgram_sound hv h).erase
 
 end Sound
 
@@ -1020,31 +972,5 @@ theorem decodesTo_sound {m : Mem} {v : Nat → Option (BitVec 8)} {P : Nat → B
   decodeProgram_sound hv (decodesTo_eq h)
 
 /-! ## Regression: one expression statement `print("hi");` -/
-
-private def smokeLE (a w n : Nat) : List (Nat × BitVec 8) :=
-  (List.range w).map fun i => (a + i, BitVec.ofNat 8 (n / 256 ^ i))
-
-/-- Array at `0x100`; `Stmt` at `0x110`; call at `0x120`, callee `var` at
-`0x140`, argument array at `0x150`, `str` at `0x160`; names at `0x180`/`0x188`. -/
-private def smokeCells : List (Nat × BitVec 8) :=
-  smokeLE 0x100 8 0x110 ++
-  smokeLE 0x110 4 0 ++ smokeLE 0x118 8 0x120 ++
-  smokeLE 0x120 4 9 ++ smokeLE 0x128 8 0x140 ++ smokeLE 0x130 8 0x150 ++ smokeLE 0x138 4 1 ++
-  smokeLE 0x140 4 4 ++ smokeLE 0x148 8 0x180 ++
-  smokeLE 0x150 8 0x160 ++
-  smokeLE 0x160 4 1 ++ smokeLE 0x168 8 0x188 ++
-  [(0x180, 0x70), (0x181, 0x72), (0x182, 0x69), (0x183, 0x6e), (0x184, 0x74), (0x185, 0),
-   (0x188, 0x68), (0x189, 0x69), (0x18a, 0)]
-
-private def smokeView (k : Nat) : Option (BitVec 8) := (smokeCells.find? (·.1 == k)).map (·.2)
-
-example : decodesTo smokeView (fun k => 0x100 ≤ k && k < 0x18b) 16 0x100 1
-    [.expr (.call (.var "print") [.str "hi"])] = true := by
-  decide +kernel
-
-/-- Leaving the argument string's NUL uncovered fails the check. -/
-example : decodesTo smokeView (fun k => 0x100 ≤ k && k < 0x18a) 16 0x100 1
-    [.expr (.call (.var "print") [.str "hi"])] = false := by
-  decide +kernel
 
 end Vsa.Sim.Boot

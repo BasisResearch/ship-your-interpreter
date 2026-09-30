@@ -28,24 +28,6 @@ open Vsa.Sim
 
 local notation "SpecSt" => Vsa.While.St
 
-
-/-- The per-program/config **divergence correspondence family**: for every loaded
-`(p, c)`, a correspondence `Corr` with its per-step progress residual
-`DivStep Corr` and the entry correspondence `Corr c initSt 0 0 p`.  This is the
-∀-closed form `stuck_sim`'s divergence arm demands. -/
-def DivFamily (L : Layout) : Prop :=
-  ∀ (p : Program) (c : Config), Loaded L p c →
-    ∃ Corr : Config → SpecSt → Nat → Addr → List Stmt → Prop,
-      DivStep Corr ∧ Corr c initSt 0 0 p
-
-/-- The **error arm** as a ∀-closed family: for every loaded `(p, c)`, a program
-that hits a runtime error (`BigStepErr p`) lands in `stuck_sim`'s disjunction at
-`c`.  This is exactly `stuck_of_bigStepErrFull`'s output, quantified over the
-`(p, c)` that `stuck_sim` introduces. -/
-def ErrFamily (L : Layout) : Prop :=
-  ∀ (p : Program) (c : Config), Loaded L p c → BigStepErr p →
-    Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0
-
 /- `ErrFamily` from the 44 per-error-site residuals (the M5 error bundle), each
 ∀-closed over the config `c`.  For each loaded `(p, c)` these are instantiated at
 that `c` and fed to `stuck_of_bigStepErrFull`.  This is where the 44 error-site
@@ -210,13 +192,5 @@ theorem errFamily_of_sites (L : Layout)
     (hForLoop c) (hRet c) (hFlCond c) (hFlBody c) (hFlStep c) (hFlLoop c) (hSeqHead c)
     (hSeqTail c) (hTopAbrupt p c) herr
 -/
-
-/-- Assemble the unchanged public `ErrFamily` from entry-indexed work selected
-for the actual loaded program/config pair. -/
-theorem errFamily_of_sites (L : Layout)
-    (work : ∀ (p : Program) (c : Config), Loaded L p c →
-      ErrorProgramWork p c) : ErrFamily L := by
-  intro p c hLoaded hErr
-  exact stuck_of_bigStepErrFull_work p c (work p c hLoaded) hErr
 
 end Vsa.Sim.InterpSimBundle

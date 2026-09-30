@@ -249,10 +249,6 @@ theorem wrap64_eq_self {z : Int} (h : -2^63 ≤ z ∧ z < 2^63) : wrap64 z = z :
 theorem wrap64_range (z : Int) : -2^63 ≤ wrap64 z ∧ wrap64 z < 2^63 :=
   ⟨BitVec.le_toInt _, BitVec.toInt_lt⟩
 
-/-- Wrapping is idempotent. -/
-theorem wrap64_idem (z : Int) : wrap64 (wrap64 z) = wrap64 z := by
-  unfold wrap64; rw [BitVec.ofInt_toInt]
-
 /-- `wrap64` fixes anything read out of a 64-bit machine word — the
 Sim-side workhorse (machine values are `BitVec 64`, read as `toInt`). -/
 theorem wrap64_toInt (v : BitVec 64) : wrap64 v.toInt = v.toInt := by
@@ -263,19 +259,9 @@ invisible — the other Sim-side workhorse. -/
 theorem ofInt_wrap64 (z : Int) : BitVec.ofInt 64 (wrap64 z) = BitVec.ofInt 64 z :=
   BitVec.ofInt_toInt
 
-/-- **The M4 pilot's overflow gap, closed.** The pilot found `EvalE.neg`
-with unbounded `Int` unsatisfiable against the machine at `n = -2^63`
-(`neg a1,a1` wraps: `-INT64_MIN = INT64_MIN`; see `experiments/pctrace.md`
-and `memory/m4-recursive-cases.md`). With wrapping this is exactly what the
-rule now derives. -/
-theorem wrap64_neg_min : wrap64 (-(-2^63 : Int)) = -2^63 := by decide
-
 /-- libgcc's soft-division overflow case falls out of `wrap64` around the
 true (toward-zero) quotient: `INT64_MIN / -1` wraps to `INT64_MIN`. -/
 theorem wrap64_tdiv_min : wrap64 ((-2^63 : Int).tdiv (-1)) = -2^63 := by decide
-
-/-- …and the corresponding remainder is `0`. -/
-theorem wrap64_tmod_min : wrap64 ((-2^63 : Int).tmod (-1)) = 0 := by decide
 
 /-- Semantics of the arithmetic/comparison operators (`eval_binary`).
 `none` means runtime error. Division truncates toward zero like C

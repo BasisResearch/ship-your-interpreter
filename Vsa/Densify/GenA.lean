@@ -167,11 +167,6 @@ theorem write_kind_of_flags_resp : ∀ (a0 : _) (a1 : _) (a2 : _), Resp (@LeanRV
   unfold LeanRV64DExecutable.Functions.write_kind_of_flags
   resp_auto [internal_error_resp]
 
-theorem to_bits_checked_resp : ∀ (a0 : _) (a1 : _), Resp (@LeanRV64DExecutable.Functions.to_bits_checked a0 a1) := by
-  intro a0 a1
-  unfold LeanRV64DExecutable.Functions.to_bits_checked
-  resp_auto [PS.assert_resp]
-
 theorem within_clint_resp : ∀ (a0 : _) (a1 : _), Resp (@LeanRV64DExecutable.Functions.within_clint a0 a1) := by
   intro a0 a1
   unfold LeanRV64DExecutable.Functions.within_clint

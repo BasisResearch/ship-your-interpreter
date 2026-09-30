@@ -62,9 +62,4 @@ theorem FixedRodataLoaded.byteAt {mem : ExtHashMap Nat (BitVec 8)} (h : FixedRod
   rw [e] at hb
   exact hb
 
-#print axioms FixedBytesLoaded.transport
-#print axioms FixedTextLoaded.transport
-#print axioms FixedRodataLoaded.transport
-#print axioms FixedRodataLoaded.byteAt
-
 end Vsa.Sim.Code

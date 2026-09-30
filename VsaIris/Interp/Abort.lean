@@ -153,20 +153,6 @@ theorem abortCore_mono {sc sp : BitVec 64} {nc np : Nat} (hnp : np ≤ sp.toNat)
     ipureintro
     exact hs.mono hnp hlo hle hsc hhi
 
-/-- **A callee's abort resource widens to its caller's core**: what
-`fnSpecAbort_mono` needs to call a child whose spec carries `abortRes` with
-F3's `wp_callArmAbort` at the caller's `Core := abortCore s n`. -/
-theorem abortRes_widen {sc sp : BitVec 64} {nc np : Nat} (hnp : np ≤ sp.toNat)
-    (hlo : Vsa.Sim.tohostAddr + 16 ≤ sp.toNat - np) (hle : sp.toNat - np ≤ sc.toNat - nc)
-    (hsc : sc.toNat ≤ sp.toNat) (hhi : sp.toNat ≤ 0x88000000) :
-    abortRes N L Room inp sc nc ⊢ abortAt (GF := GF) (abortCore N L Room inp sp np) sc nc := by
-  unfold abortRes
-  iintro H
-  ihave ⟨HC, Hs⟩ := abortAt_elim _ _ _ $$ H
-  ihave HC := abortCore_mono N L Room inp hnp hlo hle hsc hhi $$ HC
-  iapply abortAt_intro
-  iframe HC Hs
-
 /-! ## The continuation -/
 
 omit I in
@@ -282,36 +268,6 @@ theorem wp_abortLanding (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L
   iframe H23 H24 H25 H26 H27
   iintro %o'
   iapply hΦ
-
-/-- **The abort continuation at `interp_run`'s `jal exec_stmt`**, for either
-WP: `interp_run` calls `exec_stmt` with `sp = sM - 176` (its frame below
-`main`'s at `sM`) lending `n` bytes; whatever abort comes back — the
-`longjmp` landing or the out-of-memory `exit(1)` — together with what
-`interp_run`'s own proof keeps (the `jmp_buf` it wrote, its frame, `main`'s
-saved pair) ends the run with a nonzero exit code. With
-`Φ := fun v => ⌜v.1 ≠ 0⌝` and `Inst.vsa_adequacyP_nonzero` this is
-`Halts c out e ∧ e ≠ 0` for every run that aborts. -/
-theorem wp_abort (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
-    (live : Nat → Prop) (hlive : CodeLive live)
-    (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    (hΦ : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) (sM : BitVec 64) (n : Nat)
-    (hn : fprintfNeed - 176 ≤ n) (hns : n ≤ (sM - 176#64).toNat)
-    (jb0 imgI imgT : Nat → BitVec 8) (hT : TopLanding inp sM jb0 imgI imgT) :
-    abortRes N L Room inp (sM - 176#64) n ∗ jmpRO inp jb0 ∗
-      ownImg (InExt ((sM - 176#64).toNat, 176)) imgI ∗ ownImg (InExt (sM.toNat + 752, 16)) imgT ∗
-      gp ↦ᵣ□ gpV ∗ binImg
-    ⊢ Wp.W Φ := by
-  unfold abortRes
-  iintro ⟨HA, #Hjb0, HI, HT, #Hgp, #Himg⟩
-  ihave ⟨HC, Hscr⟩ := abortAt_elim _ _ _ $$ HA
-  unfold abortCore
-  icases HC with (Hl | Ho)
-  · ihave ⟨-, Hscr⟩ := stackScratch_narrow hns hn $$ Hscr
-    iapply wp_abortLanding N L Room inp H hEL live hlive Wp (fun o => hΦ 70 o (by decide)) sM jb0
-      imgI imgT hT
-    iframe Hl Hscr Hjb0 HI HT Hgp Himg
-  · iapply wp_abortOom H live hlive Wp (fun o => hΦ 1 o (by decide)) (sM - 176#64) n
-    iframe Ho Hscr Hgp Himg
 
 end Core
 

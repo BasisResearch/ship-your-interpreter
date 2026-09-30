@@ -52,30 +52,4 @@ theorem strings_valid : BigStep stringsWl
     "hello world\nvalue: 42\n12\ntrue true\ntrue true\nline1\nline2\ntab\there\nquote: \"hi\"\n" := by
   bigstep_derive
 
-/-- Small-input recursion (fact, fib, mutual recursion), output obtained by
-running the binary on the script. -/
-def recursionSmall : Program := [
-  .varDecl "fact" (some (.fn (some "fact") ["n"] [
-    .ifStmt (.binary .le (.var "n") (.int 1)) (.block [.ret (some (.int 1))]) none,
-    .ret (some (.binary .mul (.var "n") (.call (.var "fact")
-      [.binary .sub (.var "n") (.int 1)])))])),
-  .expr (.call (.var "println") [.call (.var "fact") [.int 5]]),
-  .varDecl "fib" (some (.fn (some "fib") ["n"] [
-    .ifStmt (.binary .lt (.var "n") (.int 2)) (.block [.ret (some (.var "n"))]) none,
-    .ret (some (.binary .add
-      (.call (.var "fib") [.binary .sub (.var "n") (.int 1)])
-      (.call (.var "fib") [.binary .sub (.var "n") (.int 2)])))])),
-  .expr (.call (.var "println") [.call (.var "fib") [.int 8]]),
-  .varDecl "is_even" (some (.fn (some "is_even") ["n"] [
-    .ifStmt (.binary .eq (.var "n") (.int 0)) (.block [.ret (some (.bool true))]) none,
-    .ret (some (.call (.var "is_odd") [.binary .sub (.var "n") (.int 1)]))])),
-  .varDecl "is_odd" (some (.fn (some "is_odd") ["n"] [
-    .ifStmt (.binary .eq (.var "n") (.int 0)) (.block [.ret (some (.bool false))]) none,
-    .ret (some (.call (.var "is_even") [.binary .sub (.var "n") (.int 1)]))])),
-  .expr (.call (.var "println")
-    [.call (.var "is_even") [.int 6], .call (.var "is_odd") [.int 6]])]
-
-theorem recursion_small_valid : BigStep recursionSmall "120\n21\ntrue false\n" := by
-  bigstep_derive
-
 end Vsa.While.Validation

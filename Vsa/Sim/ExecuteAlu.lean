@@ -218,17 +218,6 @@ theorem execute_rtype_srl_char (rs2 rs1 rd : regidx) (v1 v2 : BitVec 64)
   simp only [execute, execute_RTYPE, bind, EStateM.bind, pure, EStateM.pure, hrs1, hrs2]
   rw [log2_xlen_sub_one, hwr]
 
-theorem execute_rtype_sra_char (rs2 rs1 rd : regidx) (v1 v2 : BitVec 64)
-    (σ σ' : SequentialState RegisterType trivialChoiceSource)
-    (hrs1 : (rX_bits rs1).run σ = .ok v1 σ)
-    (hrs2 : (rX_bits rs2).run σ = .ok v2 σ)
-    (hwr : (wX_bits rd (shift_bits_right_arith v1 (Sail.BitVec.extractLsb v2 5 0))).run σ = .ok () σ') :
-    (execute (instruction.RTYPE (rs2, rs1, rd, rop.SRA))).run σ
-      = .ok RETIRE_SUCCESS σ' := by
-  simp only [EStateM.run] at hrs1 hrs2 hwr ⊢
-  simp only [execute, execute_RTYPE, bind, EStateM.bind, pure, EStateM.pure, hrs1, hrs2]
-  rw [log2_xlen_sub_one, hwr]
-
 /-! ## RTYPEW: 32-bit register-register, sign-extended.
 ADDW/SUBW/SLLW/SRLW/SRAW. -/
 

@@ -25,10 +25,6 @@ namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast
 
-/-- Two aligned doublewords either coincide or do not overlap. -/
-theorem dw_disjoint {a b : Nat} (ha : a % 8 = 0) (hb : b % 8 = 0) (hne : a ≠ b) :
-    a + 8 ≤ b ∨ b + 8 ≤ a := by omega
-
 /-- A doubleword kept by a memory update: every byte agrees. -/
 theorem read64_keep {m m' : Mem} {a : Nat} (h : ∀ k, k < 8 → m'[a + k]? = m[a + k]?) :
     read64 m' a = read64 m a :=

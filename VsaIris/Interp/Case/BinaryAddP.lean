@@ -354,8 +354,6 @@ open VsaIris.VsaHeap
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep3, hkeep2, hkeep1]
 
-
-
 #ix_piece BinaryAddP_cat1 from BinaryAddP_p2 at 2 by
   -- a string operand: dispatch, the string test, the left operand's copy, to `stringify`
   subst hL hRoom

@@ -14,7 +14,6 @@ open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Inst.Strlen Vsa
 open VsaIris.VsaHeap VsaIris.Interp
 open Vsa.Sim Vsa.Sim.DlHeap Vsa.MemRepr
 
-
 section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -78,7 +77,6 @@ theorem strcpy_spec (live : Nat → Prop) (hcl : CodeLive live)
   refine ⟨fun i hi => ?_, ?_⟩
   · rw [hcp i (by omega)]; exact hstr.1 i hi
   · rw [hcp _ (Nat.le_refl _)]; exact hstr.2
-
 
 variable [I : InterpGS GF]
 
@@ -187,10 +185,7 @@ theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   iframe HQ
   ipureintro; exact hstr
 
-
 end
 
 end VsaIris.Interp.StrLeaf
 
-#print axioms VsaIris.Interp.StrLeaf.strcpy_spec
-#print axioms VsaIris.Interp.StrLeaf.strcpy_heap_spec

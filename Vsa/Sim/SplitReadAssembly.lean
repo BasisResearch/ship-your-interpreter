@@ -99,8 +99,4 @@ theorem splitReadAccum_bytesT (m : Std.ExtHashMap Nat (BitVec 8)) (a n d : Nat)
   have hi : k < 8 * n * d := by simpa [Nat.mul_assoc] using hk
   simp [hk, hi]
 
-#print axioms splitReadAccum_bytesT
-#print axioms splitReadAccum_eq
-#print axioms getLsbD_updateSubrange'
-#print axioms getLsbD_splitReadInsert
 end Vsa.Sim

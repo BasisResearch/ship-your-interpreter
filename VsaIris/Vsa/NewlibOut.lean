@@ -47,8 +47,6 @@ def fputcEntry : BitVec 64 := 0x800062e0#64
 /-- `stdout`'s `FILE` (`__sf[1]`, `Vsa.Sim.consoleStdout`). -/
 def stdoutFile : BitVec 64 := 0x8001bb20#64
 
-theorem stdoutFile_eq : stdoutFile.toNat = Vsa.Sim.consoleStdout := rfl
-
 def outNeed : Nat := 768
 
 /-- `"<fn " ++ name ++ ">"` as `snprintf` leaves it in a 64-byte buffer: at

@@ -40,25 +40,6 @@ theorem dataReads_view {Dt m : Mem} {DA : List Nat} (h : DataReads (dataOf Dt DA
     ∀ a ∈ DA, (m[a]?).getD 0 = imgM Dt a := fun a ha =>
   h (a, imgM Dt a) (List.mem_map_of_mem (f := fun a => (a, imgM Dt a)) ha)
 
-theorem lpins8_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 8, b ∈ DA) : LPins8 m a (bytesAt (imgM Dt) a 8) :=
-  lpins8_img fun b hb => dataReads_view hD b (h b hb)
-
-theorem lpins4_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 4, b ∈ DA) : LPins4 m a (bytesAt (imgM Dt) a 4) :=
-  lpins4_img fun b hb => dataReads_view hD b (h b hb)
-
-theorem lpins2_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 2, b ∈ DA) :
-    (m[a]?).getD 0 = (bytesAt (imgM Dt) a 2).getD 0 0#8 ∧
-      (m[a + 1]?).getD 0 = (bytesAt (imgM Dt) a 2).getD 1 0#8 :=
-  lpins2_img fun b hb => dataReads_view hD b (h b hb)
-
-theorem lpins1_view {m Dt : Mem} {DA : List Nat} {a : Nat} (hD : DataReads (dataOf Dt DA) m)
-    (h : ∀ b ∈ accAddrs a 1, b ∈ DA) :
-    (m[a]?).getD 0 = (bytesAt (imgM Dt) a 1).getD 0 0#8 :=
-  lpins1_img fun b hb => dataReads_view hD b (h b hb)
-
 /-- The value a load of kind `k` reads from a byte function at `a`
 (`ldv` is this at `imgM Mt`). -/
 abbrev ldvf (k : MKind) (f : Nat → BitVec 8) (a : Nat) : BitVec 64 :=
@@ -74,14 +55,6 @@ theorem lpins4_fn {m : Mem} {f : Nat → BitVec 8} {a : Nat}
     (h : ∀ b ∈ accAddrs a 4, (m[b]?).getD 0 = f b) : LPins4 m a (bytesAt f a 4) := by
   have g := fun j (hj : j < 4) => (h _ (mem_accAddrs hj)).trans (bytesAt_getD f a hj).symm
   exact ⟨by simpa using g 0 (by omega), g 1 (by omega), g 2 (by omega), g 3 (by omega)⟩
-
-theorem lpins2_fn {m : Mem} {f : Nat → BitVec 8} {a : Nat}
-    (h : ∀ b ∈ accAddrs a 2, (m[b]?).getD 0 = f b) :
-    (m[a]?).getD 0 = (bytesAt f a 2).getD 0 0#8 ∧
-      (m[a + 1]?).getD 0 = (bytesAt f a 2).getD 1 0#8 := by
-  have h0 := (h _ (mem_accAddrs (j := 0) (by omega))).trans (bytesAt_getD f a (n := 2) (by omega)).symm
-  exact ⟨by simpa using h0,
-    (h _ (mem_accAddrs (j := 1) (by omega))).trans (bytesAt_getD f a (n := 2) (by omega)).symm⟩
 
 theorem lpins1_fn {m : Mem} {f : Nat → BitVec 8} {a : Nat}
     (h : ∀ b ∈ accAddrs a 1, (m[b]?).getD 0 = f b) :

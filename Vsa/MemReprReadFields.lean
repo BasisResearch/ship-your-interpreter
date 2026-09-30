@@ -68,58 +68,7 @@ theorem StmtReprWithin.tagCovers {m : Mem} {P : Nat → Prop} {a : Nat}
     {s : Stmt} (h : StmtReprWithin m P a s) : Covers P a 4 := by
   simpa [ReadField.word32] using h.fieldCovers (.word32 0) (by simp [stmtReadFields])
 
-#print axioms ExprReprWithin.fieldCovers
-#print axioms StmtReprWithin.fieldCovers
-#print axioms ExprReprWithin.tagCovers
-#print axioms StmtReprWithin.tagCovers
-#print axioms OptExprReprWithin.covers
-#print axioms OptStmtReprWithin.covers
-
-/-- A represented expression field fits in the legacy node extent. -/
-theorem exprReadFields.bounded (e : Expr) :
-    ∀ f ∈ exprReadFields e, f.offset + f.width ≤ 40 := by
-  cases e <;> simp [exprReadFields, ReadField.word32, ReadField.word64]
-
-/-- A represented statement field fits in the legacy node extent. -/
-theorem stmtReadFields.bounded (s : Stmt) :
-    ∀ f ∈ stmtReadFields s, f.offset + f.width ≤ 40 := by
-  cases s <;> simp [stmtReadFields, ReadField.word32, ReadField.word64]
-
-/-- Expression child fields used by recursive evaluation. -/
-inductive ExprChild : Expr → Nat → Expr → Prop where
-  | assign (x e) : ExprChild (.assign x e) 16 e
-  | binaryLeft (op l r) : ExprChild (.binary op l r) 16 l
-  | binaryRight (op l r) : ExprChild (.binary op l r) 24 r
-  | logicalLeft (op l r) : ExprChild (.logical op l r) 16 l
-  | logicalRight (op l r) : ExprChild (.logical op l r) 24 r
-  | unary (op e) : ExprChild (.unary op e) 16 e
-  | callee (f es) : ExprChild (.call f es) 8 f
-
 local macro "select_owned_pointer" h:ident : tactic =>
   `(tactic| (cases ($h) <;> simp_all only [Option.some.injEq]))
-
-/-- A recursive expression read selects the same hereditarily covered child. -/
-theorem ExprReprWithin.child {m : Mem} {P : Nat → Prop} {a p off : Nat}
-    {e child : Expr} (h : ExprReprWithin m P a e) (edge : ExprChild e off child)
-    (hp : read64 m (a + off) = Option.some p) : ExprReprWithin m P p child := by
-  cases edge <;> select_owned_pointer h
-
-/-- Optional expression children retain their coverage after pointer selection. -/
-theorem OptExprReprWithin.child {m : Mem} {P : Nat → Prop} {a p : Nat}
-    {e : Expr} (h : OptExprReprWithin m P a (Option.some e))
-    (hp : read64 m a = Option.some p) : ExprReprWithin m P p e := by
-  select_owned_pointer h
-
-/-- Optional statement children retain their coverage after pointer selection. -/
-theorem OptStmtReprWithin.child {m : Mem} {P : Nat → Prop} {a p : Nat}
-    {s : Stmt} (h : OptStmtReprWithin m P a (Option.some s))
-    (hp : read64 m a = Option.some p) : StmtReprWithin m P p s := by
-  select_owned_pointer h
-
-#print axioms exprReadFields.bounded
-#print axioms stmtReadFields.bounded
-#print axioms ExprReprWithin.child
-#print axioms OptExprReprWithin.child
-#print axioms OptStmtReprWithin.child
 
 end Vsa.MemRepr

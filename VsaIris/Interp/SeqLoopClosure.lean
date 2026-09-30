@@ -39,7 +39,6 @@ abbrev closureS (s : BitVec 64) : Nat → Prop :=
     IW live m (blockView aB.toNat arr.toNat count) (closureS s) Q 0x80003354#64 R Mt
   by ix_run hlive using [h16, h8, h2, harr, hel, hsf, closureS] at 0x80003374
 
-
 #ix_seg ClosureLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aB s arr sc : BitVec 64} {idx count : Nat}
@@ -53,7 +52,6 @@ abbrev closureS (s : BitVec 64) : Nat → Prop :=
     (hcnt : ldv .lw m (aB + 16#64).toNat = BitVec.ofNat 64 count) :
     IW live m (blockView aB.toNat arr.toNat count) (closureS s) Q 0x80003378#64 R Mt
   by ix_run hlive using [h8, h2, h10, hb, hcnt, hsf, closureS] at 0x80003354 0x80003954 0x8000337c
-
 
 /-- The loop head's registers: the body node (`a6`), the index (`s0`), the
 interpreter (`s2`), the closure scope's frame pointer (`s3`), the lowered
@@ -293,7 +291,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     intro hc; exfalso; apply hc; ix_reg; exact hst0
 #ix_chain closureSeqT_consNormal := [closureSeqT_consNormal_p1, closureSeqT_consNormal_p2]
 
-
 #ix_piece closureSeqT_consAbrupt_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
@@ -354,7 +351,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   · imodintro; rw [hpt]; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hsp, hbn.geo⟩
   iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
 
-
 #ix_piece closureSeqT_consAbrupt_p2 from closureSeqT_consAbrupt_p1 by
   -- the status test: an abrupt status leaves the loop
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
@@ -388,8 +384,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     iapply Hk $$ %_ %Mt1 %⟨hR1.sub (by decide), by ix_reg; exact hst0, hinv1⟩ HF Hms Hst Hret Hw
 
 #ix_chain closureSeqT_consAbrupt := [closureSeqT_consAbrupt_p1, closureSeqT_consAbrupt_p2]
-
-
 
 #ix_piece closureSeqP_cons_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -553,8 +547,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
     rw [closureExit_abrupt hne]; iexact Hms
 
 #ix_chain closureSeqP_cons := [closureSeqP_cons_p1, closureSeqP_cons_p2]
-
-
 
 /-- **The closure body loop, partial mode, for every statement list.** -/
 theorem closureSeqP_all {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]

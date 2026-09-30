@@ -48,9 +48,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
-open Vsa.Sim.Code (__muldi3Loaded __muldi3_at_80004640 __muldi3_at_80004644
-  __muldi3_at_80004648 __muldi3_at_8000464c __muldi3_at_80004650 __muldi3_at_80004654
-  __muldi3_at_80004658 __muldi3_at_8000465c __muldi3_at_80004660)
+open Vsa.Sim.Code (__muldi3Loaded __muldi3_at_80004640 __muldi3_at_80004644 __muldi3_at_80004648 __muldi3_at_8000464c __muldi3_at_80004650 __muldi3_at_80004654 __muldi3_at_80004658 __muldi3_at_8000465c __muldi3_at_80004660)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
@@ -62,9 +60,6 @@ namespace Vsa.Sim
 `__muldi3` sits at `0x80004640`, well inside RAM and below `tohostAddr`
 (`0x8001ad00`). The fetch-side bounds (`0x80000000 ≤ pc`, `pc+4 ≤ tohostAddr`,
 `pc % 4 = 0`) are decidable at each concrete site pc. -/
-
-/-- The base address of `__muldi3`. -/
-abbrev muldi3Base : Nat := 0x80004640
 
 /-! ## Site 0x80004640 — `mv a2,a0` = `addi a2,a0,0` (rd = x12, rs1 = x10) -/
 

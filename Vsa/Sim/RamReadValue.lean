@@ -52,7 +52,6 @@ theorem exec_ld_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 12
   rw [bytesT_eight_eq]
   exact hv
 
-#print axioms exec_ld_ramv
 /-- `lw` with a named loaded value and unrestricted data alignment. -/
 theorem exec_lw_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : Vsa.Machine.MState) (vbase : BitVec 64) (v : BitVec 64) (hG : GoodState σ)
@@ -72,7 +71,6 @@ theorem exec_lw_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 12
   rw [bytesT_four_eq]
   exact hv
 
-#print axioms exec_lw_ramv
 /-- `lwu` with a named loaded value and unrestricted data alignment. -/
 theorem exec_lwu_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : Vsa.Machine.MState) (vbase : BitVec 64) (v : BitVec 64) (hG : GoodState σ)
@@ -92,7 +90,6 @@ theorem exec_lwu_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 1
   rw [bytesT_four_eq]
   exact hv
 
-#print axioms exec_lwu_ramv
 /-- `lh` with a named loaded value and unrestricted data alignment. -/
 theorem exec_lh_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : Vsa.Machine.MState) (vbase : BitVec 64) (v : BitVec 64) (hG : GoodState σ)
@@ -112,7 +109,6 @@ theorem exec_lh_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 12
   rw [bytesT_two_eq]
   exact hv
 
-#print axioms exec_lh_ramv
 /-- `lhu` with a named loaded value and unrestricted data alignment. -/
 theorem exec_lhu_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
     (σ' : Vsa.Machine.MState) (vbase : BitVec 64) (v : BitVec 64) (hG : GoodState σ)
@@ -132,8 +128,4 @@ theorem exec_lhu_ramv (σ : Vsa.Machine.MState) (pc : BitVec 64) (off : BitVec 1
   rw [bytesT_two_eq]
   exact hv
 
-#print axioms exec_lhu_ramv
-
-#print axioms bytesT_two_eq
-#print axioms exec_load_ramv
 end Vsa.Sim

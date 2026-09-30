@@ -159,7 +159,6 @@ theorem valTag_lt (v : Vsa.While.Value) : valTag v < 2 ^ 31 := by cases v <;> si
 
 end VsaIris.Interp
 
-
 namespace VsaIris.Sym
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail

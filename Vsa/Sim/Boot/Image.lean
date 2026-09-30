@@ -68,11 +68,6 @@ theorem loaderMem_get (pieces : List (Nat × Nat)) (byte : Nat → BitVec 8) (x 
   rw [loaderMem, foldl_insertRange_get]
   simp
 
-/-- `_script_start`: the embedded script blob, 453 bytes padded with newlines,
-then a NUL (which belongs to the fixed image). -/
-def scriptBase : Nat := 0x80018be0
-def scriptLen : Nat := 453
-
 /-- The loaded ELF's bytes with `script` (packed little-endian) in the blob. -/
 def imageByte (script : Nat) (x : Nat) : BitVec 8 :=
   if x < 0x80000000 then bootLowByte x

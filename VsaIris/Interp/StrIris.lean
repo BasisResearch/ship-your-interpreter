@@ -115,8 +115,6 @@ abbrev leafTemps : List Nat := [11, 12, 13, 14, 15, 16]
 abbrev retRest : List Nat := [5, 6, 7, 17, 28, 29, 30, 31]
 
 theorem retClob_perm : VsaIris.Interp.retClob.Perm (leafTemps ++ retRest) := by decide
-theorem argClob12_perm : (12 :: VsaIris.Interp.argClob).Perm ([12, 13, 14, 15, 16] ++ retRest) := by
-  decide
 
 theorem clobbered_split {l a b : List Nat} (h : l.Perm (a ++ b)) :
     clobbered (GF := GF) l ⊣⊢ clobbered a ∗ clobbered b := by

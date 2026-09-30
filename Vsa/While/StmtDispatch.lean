@@ -102,22 +102,7 @@ NO `sorry`/`axiom`/`native_decide`/`bv_decide`.  `#print axioms` ⊆
 
 namespace Vsa.While
 
-open Vsa.Sim.Trichotomy
-
 /-! ## Finding 1 — `hExclude` is unsatisfiable -/
-
-/-- **`hExclude` entails `False`.**  `Spine.base` holds for every program, so
-`hExclude` asserts the root of *every* program neither terminates nor errors — but
-the empty program's root terminates (`ExecSeq.nil`).  Hence no witness for
-`hExclude` can exist; `trichotomy_of_stmtDispatch`/`trichotomy_of_dispatch` can
-never be instantiated.  (Machine-checked; the exact hypothesis type is copied
-from `trichotomy_of_stmtDispatch`.) -/
-theorem hExclude_entails_false
-    (hExclude : ∀ (p : Program) (st : St) (d : Nat) (env : Addr) (ss : List Stmt),
-      Spine p st d env ss →
-      ¬ (∃ st' status, ExecSeq st d env ss st' status) ∧ ¬ ExecSeqErr st d env ss) :
-    False :=
-  (hExclude [] initSt 0 0 [] .base).1 ⟨initSt, .normal, .nil initSt 0 0⟩
 
 /-! ## Findings 2/3 — RESOLVED by the 2026-08-31 amendment
 
@@ -132,40 +117,6 @@ DIVERGES.  (`hExclude_entails_false` above remains valid — the §1–§4 `Spin
 construction is still uninstantiable; the repaired §5 construction in
 `Vsa/While/Trichotomy.lean` no longer uses it.) -/
 
-/-- The canonical diverging program: `while (true) {}` with an empty-block body. -/
-def loopP : Program := [ .whileStmt (.bool true) (.block []) ]
-
-/-- The `while (true) {}` head is still-running for EVERY fuel: each iteration's
-cond (`.bool true`) and body (empty block) complete normally and `whileLoop`
-recurses.  The generalization over `st` is what lets the induction step move
-through the body's `allocFrame` store change. -/
-theorem whileTrue_sapprox :
-    ∀ (n : Nat) (st : St) (d : Nat) (env : Addr),
-      SApprox n st d env (.whileStmt (.bool true) (.block [])) := by
-  intro n
-  induction n with
-  | zero => intro st d env; exact .zero st d env _
-  | succ n ih =>
-    intro st d env
-    exact .whileLoop n st d env (.bool true) (.block []) st
-      ⟨(st.store.allocFrame (some env)).1, st.out⟩ (.bool true) .normal
-      (.bool st d env true) rfl
-      (.block st d env [] (st.store.allocFrame (some env)).1
-        (st.store.allocFrame (some env)).2 ⟨(st.store.allocFrame (some env)).1, st.out⟩
-        .normal rfl (.nil ⟨(st.store.allocFrame (some env)).1, st.out⟩ d
-          (st.store.allocFrame (some env)).2))
-      (Or.inl rfl) (ih ⟨(st.store.allocFrame (some env)).1, st.out⟩ d env)
-
-/-- **`loopP` diverges** — the positive witness that the amended
-`Approx`/`BigStepDiverges` capture within-statement divergence (the exact
-program the pre-amendment falsity proof used). -/
-theorem loopP_diverges : BigStepDiverges loopP := by
-  intro n
-  cases n with
-  | zero => exact .zero initSt 0 0 loopP
-  | succ n =>
-    exact .head n initSt 0 0 _ [] (whileTrue_sapprox n initSt 0 0)
-
 /-! ## The correctly-typed refined atom (for a future amended `BigStepDiverges`)
 
 Once the landed divergence relation is amended to admit within-statement
@@ -173,25 +124,5 @@ divergence (see the module docstring), the honestly-provable per-statement
 dispatch is the *three*-way split below, parameterised over the missing
 statement-level divergence relation `StmtDiverges`.  We state it here — typed and
 named — so the corrected reduction can consume it without re-deriving the shape. -/
-
-/-- **The refined per-statement dispatch atom.**  Every statement, at any config,
-either runs to some status (`ExecS`), errors (`ExecErr`), or diverges in place
-(the supplied statement-level divergence relation `StmtDiverges`).  This is the
-`Classical.em` per statement kind that a *sound-shape* trichotomy reduction needs;
-`StmtDispatch` (the landed two-way residual) is the special case that drops the
-divergence disjunct and is consequently false at diverging loops. -/
-def StmtDispatch3 (StmtDiverges : St → Nat → Addr → Stmt → Prop) : Prop :=
-  ∀ (st : St) (d : Nat) (env : Addr) (s : Stmt),
-    (∃ st' status, ExecS st d env s st' status)
-      ∨ ExecErr st d env s
-      ∨ StmtDiverges st d env s
-
-/-- Sanity: the landed two-way `StmtDispatch` is exactly `StmtDispatch3` with the
-divergence disjunct instantiated to `fun _ _ _ _ => False` — pinpointing the
-missing case that makes the landed residual unprovable. -/
-theorem stmtDispatch_eq_stmtDispatch3_false :
-    StmtDispatch = StmtDispatch3 (fun _ _ _ _ => False) := by
-  unfold StmtDispatch StmtDispatch3
-  simp
 
 end Vsa.While

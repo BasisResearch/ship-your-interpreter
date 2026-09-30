@@ -109,7 +109,6 @@ open Vsa.RuntimeRepr
 open Vsa.MemRepr
 open Vsa.Alloc
 open Vsa.While (Frame Store)
-open Vsa.Sim.Code (Env_defineLoaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
@@ -125,64 +124,10 @@ spec-side content the machine's update path (`0x80002ac0..0x80002ae8`,
 loop and overwrites the 24-byte `Value` at `vals + 24*i`, changing no other slot,
 no name pointer, and not the count. -/
 
-/-- The `map`-with-guard used by `define`'s update branch preserves list length. -/
-theorem define_update_length (vars : List (String × Vsa.While.Value)) (x : String) (v : Vsa.While.Value) :
-    (vars.map fun p => if p.1 == x then (x, v) else p).length = vars.length := by
-  rw [List.length_map]
-
-/-- The update branch rewrites entry `j` to `(x, v)` when `vars[j].1 == x`, and
-leaves it fixed otherwise — the pointwise content of `define`'s in-place update. -/
-theorem define_update_getElem (vars : List (String × Vsa.While.Value)) (x : String) (v : Vsa.While.Value)
-    (j : Nat) (hj : j < vars.length) :
-    (vars.map fun p => if p.1 == x then (x, v) else p)[j]'(by rw [List.length_map]; exact hj)
-      = (if vars[j].1 == x then (x, v) else vars[j]) := by
-  rw [List.getElem_map]
-
-/-- On a name hit, the frame's binding count is unchanged by `define`
-(the machine's update path never touches `env->count`). -/
-theorem define_update_count (f : Vsa.While.Frame) (x : String) (v : Vsa.While.Value)
-    (hhit : f.vars.any (·.1 == x) = true) :
-    (({ f with vars :=
-          if f.vars.any (·.1 == x) then
-            f.vars.map fun p => if p.1 == x then (x, v) else p
-          else f.vars ++ [(x, v)] } : Vsa.While.Frame)).vars.length = f.vars.length := by
-  simp only [hhit, if_true]
-  exact define_update_length f.vars x v
-
 /-! ## Pointer arithmetic for the 24-byte `Value` stride (`vals + 24*i`)
 
 The update path computes `vals + 24*i` by `slli;add;slli;add` (`i*2`, `+i` ⇒
 `i*3`, `<<3` ⇒ `i*24`).  These fold the `BitVec` shift/add chain to `24*i`. -/
-
-/-- `slli` by 1 of a `BitVec` index `i` (value `n < 2^59`) is `2*n`. -/
-theorem slli1_toNat (i : BitVec 64) :
-    (i <<< (1 : Nat)).toNat = i.toNat * 2 % 2^64 := by
-  rw [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, Nat.pow_one]
-
-/-- `slli` by 3 is `8*n`. -/
-theorem slli3_toNat (i : BitVec 64) :
-    (i <<< (3 : Nat)).toNat = i.toNat * 8 % 2^64 := by
-  rw [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, show (2:Nat)^3 = 8 from by decide]
-
-/-- The full stride fold: `((i*2 + i) * 8) = 24*i` (no wrap when `24*i < 2^64`). -/
-theorem stride24 (n : Nat) (h : 24 * n < 2^64) :
-    (n * 2 % 2^64 + n) * 8 % 2^64 = 24 * n := by
-  have h2 : n * 2 % 2^64 = n * 2 := by omega
-  rw [h2]; omega
-
-/-- `slli` at shamt `1` picks the literal shift `1` (the `0x01#6` shamt). -/
-theorem shl1_lit (v : BitVec 64) :
-    shift_bits_left v (Sail.BitVec.extractLsb (0x01#6) 5 0) = v <<< (1 : Nat) := by
-  show v <<< (Sail.BitVec.extractLsb (0x01#6) 5 0) = _
-  rw [show (Sail.BitVec.extractLsb (0x01#6) 5 0 : BitVec 6) = (1#6 : BitVec 6) from rfl]
-  rfl
-
-/-- `slli` at shamt `3` picks the literal shift `3` (the `0x03#6` shamt). -/
-theorem shl3_lit (v : BitVec 64) :
-    shift_bits_left v (Sail.BitVec.extractLsb (0x03#6) 5 0) = v <<< (3 : Nat) := by
-  show v <<< (Sail.BitVec.extractLsb (0x03#6) 5 0) = _
-  rw [show (Sail.BitVec.extractLsb (0x03#6) 5 0 : BitVec 6) = (3#6 : BitVec 6) from rfl]
-  rfl
 
 /-! ## `Env_defineLoaded` transfer through a memory agreeing on the code region
 
@@ -190,31 +135,5 @@ Re-establishes the code predicate after any cross-region call (`strcmp` etc.)
 whose post preserves memory outside its footprint, both disjoint from the
 `env_define` text `[0x80002a5c, 0x80002c10)`.  (Region-generic form; the caller
 supplies the byte-agreement over the code window.) -/
-theorem loaded_envdef_of_agree (mem1 mem2 : Std.ExtHashMap Nat (BitVec 8))
-    (hagree : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → mem2[a]? = mem1[a]?)
-    (h : Env_defineLoaded mem1) : Env_defineLoaded mem2 := by
-  obtain ⟨c0, c1, c2, c3, c4, c5, c6⟩ := h
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simp only [Vsa.Sim.Code.env_defineChunk0] at c0 ⊢
-    repeat' apply And.intro
-    all_goals (rw [hagree _ (by decide) (by decide)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk1] at c1 ⊢
-    repeat' apply And.intro
-    all_goals (rw [hagree _ (by decide) (by decide)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk2] at c2 ⊢
-    repeat' apply And.intro
-    all_goals (rw [hagree _ (by decide) (by decide)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk3] at c3 ⊢
-    repeat' apply And.intro
-    all_goals (rw [hagree _ (by decide) (by decide)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk4] at c4 ⊢
-    repeat' apply And.intro
-    all_goals (rw [hagree _ (by decide) (by decide)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk5] at c5 ⊢
-    repeat' apply And.intro
-    all_goals (rw [hagree _ (by decide) (by decide)]; simp_all only [])
-  · simp only [Vsa.Sim.Code.env_defineChunk6] at c6 ⊢
-    repeat' apply And.intro
-    all_goals (rw [hagree _ (by decide) (by decide)]; simp_all only [])
 
 end Vsa.Sim

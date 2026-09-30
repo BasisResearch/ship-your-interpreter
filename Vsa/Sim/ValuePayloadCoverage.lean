@@ -12,5 +12,4 @@ theorem ValuePayloadCovered.mono {P Q : Nat → Prop} {m : Mem} {a : Nat} {v : V
     | exact True.intro
     | exact fun p hp k hk => hpq _ (h p hp k hk)
 
-#print axioms ValuePayloadCovered.mono
 end Vsa.Sim

@@ -91,8 +91,6 @@ NO `sorry`/`axiom`/`native_decide`/`bv_decide`.  `#print axioms` ⊆
 
 namespace Vsa.While
 
-open Vsa.Sim.Trichotomy
-
 /-! ## The two precisely-named spec-completeness premises
 
 Both name configurations that `StmtDispatchD`/`hroot` cannot dispatch because the
@@ -113,16 +111,6 @@ PROPAGATES via `ExecSeq.consAbrupt`, mirroring `ST_BLOCK`.) -/
 theorem topLevelAbruptErrs (p : Program) (st' : St) (status : Status)
     (hne : status ≠ .normal) (h : ExecSeq initSt 0 0 p st' status) : BigStepErr p :=
   Or.inr ⟨st', status, hne, h⟩
-
-/-- **Hole 2 — a closure value whose address does not resolve is an error (NOW
-PROVABLE).**  `call_value` (`c/src/interp.c:171`) dereferences the closure
-pointer, valid by construction; a `.closure a` with `st.store.closures[a]? =
-none` never arises from `initSt`.  The landed-def amendment added the
-`CallErr.badClosure` leaf (`Vsa/While/ErrorSem.lean`), so the premise is a
-theorem. -/
-theorem danglingClosureErrs (st : St) (d : Nat) (a : Addr) (vs : List Value)
-    (hcl : st.store.closures[a]? = none) : CallErr st d (.closure a) vs :=
-  .badClosure st d a vs hcl
 
 /-! ## The combined fuel-bounded progress bundle
 
@@ -765,10 +753,5 @@ theorem trichotomy_unconditional : Trichotomy := by
 `interpSimClosed_of_families` (`Vsa/Sim/InterpSimFinal.lean`) consumes a
 `htri : Trichotomy` argument by that exact name/type.  `trichotomy_unconditional`
 IS a `Trichotomy`, so it plugs in directly with no residual premises. -/
-
-/-- The `htri` argument for `interpSimClosed_of_families`, ready to plug in
-unconditionally. -/
-theorem htri_unconditional : Trichotomy :=
-  trichotomy_unconditional
 
 end Vsa.While

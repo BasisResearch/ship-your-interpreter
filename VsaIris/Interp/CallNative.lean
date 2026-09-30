@@ -269,7 +269,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
   by ix_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x800039f4
 
-
 -- Run N2: after the native, restore `s7`, the shared epilogue, `ret`.
 #ix_seg CallN_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}

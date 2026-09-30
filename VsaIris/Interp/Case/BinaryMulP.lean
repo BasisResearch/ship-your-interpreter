@@ -357,7 +357,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
        exact hR'k _ (by decide))
 
-
 #ix_piece BinaryMulP_eL1 from BinaryMulP_p2 at 2 by
   -- type error (L): the type error's first run, to `value_kind_name`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

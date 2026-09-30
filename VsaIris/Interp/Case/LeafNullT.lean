@@ -29,7 +29,6 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (leafView aX.toNat 0) (InExt (s.toNat - 1088, 1088)) Q 0x80003164#64 R Mt
   by ix_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x8000342c
 
-
 #ix_seg LeafNullT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s ret v8 v9 v18 : BitVec 64}
@@ -43,7 +42,6 @@ open Vsa.MemRepr Vsa.Sim
     (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18) :
     IW live m (leafView aX.toNat 0) (InExt (s.toNat - 1088, 1088)) Q 0x80003430#64 R Mt
   by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hsf, hal]
-
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr

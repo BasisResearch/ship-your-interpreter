@@ -140,44 +140,6 @@ section Rules
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- `wp_exec_step` (execution-model.md "WP layering"): the caller proves, at
-every state satisfying the state interpretation, that the machine takes a
-normal step, and re-establishes the interpretation plus the rest of the run
-at the successor. The fancy updates let a caller open invariants across the
-step, as MachCSL's `wp_exec_step_fupd` does. -/
-theorem wp_exec_step {Φ : Nat × String → IProp GF} :
-    (∀ σ, mstateInterp (GF := GF) M σ ={⊤}=∗
-        ⌜∃ σ', M.step σ = .next σ'⌝ ∗
-        ∀ σ', ⌜M.step σ = .next σ'⌝ ={⊤}=∗ mstateInterp M σ' ∗ mTWP M Φ)
-    ⊢ mTWP M Φ := by
-  iintro H Htok
-  iapply twp.lift_step (s := Stuckness.NotStuck) rfl
-  iintro %σ₁ %ns %obs %nt Hσ
-  ihave ⟨%c, Hc, %hc, Htok, Hσ⟩ := fullInterp_cpu (M := M) $$ Hσ Htok
-  imod H $$ Hσ with ⟨%⟨σ', hσ'⟩, H⟩
-  iapply fupd_mask_intro Std.LawfulSet.empty_subset
-  iintro Hclose
-  isplitr
-  · ipureintro
-    exact ⟨_, _, _, MachineModel.primStep_loop_next M hσ'⟩
-  iintro %κ %e₂ %σ₂ %eₜ %Hstep
-  imod Hclose with -
-  obtain ⟨hκ, heₜ, (⟨σn, hn, he, hs⟩ | ⟨e, out, hh, _, _⟩)⟩ :=
-    MachineModel.primStep_loop_inv M Hstep
-  · subst hκ heₜ he hs
-    imod H $$ %_ %hn with ⟨Hσ, Hwp⟩
-    imodintro
-    isplitr
-    · ipureintro; rfl
-    isplitl [Hc Hσ]
-    · iapply fullInterp_of_cpu (M := M) c hc $$ [Hc Hσ]
-      iframe Hc Hσ
-    isplitl [Hwp Htok]
-    · iapply Hwp $$ Htok
-    iapply BigSepL.bigSepL_nil.2
-    iempintro
-  · rw [hσ'] at hh; cases hh
-
 /-- The exit rule: when the machine signals HTIF exit, the postcondition
 must hold at the exit value. -/
 theorem wp_exec_halt {Φ : Nat × String → IProp GF} :
@@ -365,42 +327,6 @@ theorem RunFact.lagFoot {n : Nat} {RR : List (Nat × DFrac × BitVec 64)}
   LagFoot.ofRM (foot_lookup (M := M) · · RR MR RW MW) (fun σ hok hf => hexec σ hok hf)
     (fun mr mm _ _ hr hm hp => foot_update (M := M) mr mm RR MR RW MW hr hm hp.1)
     (fun _ _ hp => hp.2)
-
-/-- A printing run is a lagged run over the footprint plus the console cell,
-which the commit advances by what the run printed. -/
-theorem RunFactO.lagFootPrint {n : Nat} {RR : List (Nat × DFrac × BitVec 64)}
-    {MR : List (Nat × DFrac × BitVec 8)} {RW : List (Nat × BitVec 64 × BitVec 64)}
-    {MW : List (Nat × BitVec 8 × BitVec 8)} {o : String}
-    (hexec : RunFactO M n RR MR RW MW (some o)) (s : String) :
-    LagFoot (GF := GF) M iprop(footPre RR MR RW MW ∗ consoleOwn s)
-      (fun _ => iprop(footPost RR MR RW MW ∗ consoleOwn (s ++ o)))
-      (fun σ => FootHolds (M := M) σ RR MR RW MW)
-      (fun σ σf => LocalStep (M := M) σ σf RW MW ∧ OutStep (M := M) σ σf (some o)) n where
-  look mr mm mo := by
-    unfold mauths
-    iintro ⟨⟨Hr, Hm, Ho⟩, Hf, Hs⟩
-    ihave ⟨Hr, Hm, Hf, %h⟩ := foot_lookup (M := M) mr mm RR MR RW MW $$ [Hr Hm Hf]
-    · iframe Hr Hm Hf
-    iframe Hr Hm Ho Hf Hs
-    ipureintro
-    exact fun σ hr hm _ => h σ hr hm
-  run σ hok hf := hexec σ hok hf
-  commit mr mm mo σ σf hr hm ho hp := by
-    unfold mauths consoleOwn
-    iintro ⟨⟨Hr, Hm, Ho⟩, Hf, Hs⟩
-    imod foot_update (M := M) mr mm RR MR RW MW hr hm hp.1 $$ [Hr Hm Hf]
-      with ⟨%mr', %mm', Hr, Hm, Hf, %⟨hr', hm'⟩⟩
-    · iframe Hr Hm Hf
-    ihave %hs := ghost_map_lookup $$ Ho Hs
-    imod ghost_map_update (s ++ o) $$ Ho Hs with ⟨Ho, Hs⟩
-    imodintro
-    iexists mr', mm', _
-    iframe Hr Hm Ho Hf Hs
-    ipureintro
-    refine ⟨hr', hm', fun v hv => ?_⟩
-    rw [LawfulPartialMap.get?_insert_eq rfl] at hv
-    cases hv
-    rw [show M.out σf = M.out σ ++ o from hp.2, ho s hs]
 
 /-- The hypothesis of the halt rule: from every well-formed state holding
 the (read-only) footprint, the machine's next step is the exit with code `e`,

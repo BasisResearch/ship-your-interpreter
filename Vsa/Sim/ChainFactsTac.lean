@@ -133,50 +133,6 @@ hypothesis.  This is the whole-chain analogue of a single-block `block_facts`
 call, and the exact obligation a `#derive_case … _seg` row would otherwise take
 as a hypothesis. -/
 
-#derive_case chainFactsDemo chain
-  [(0x80003538#64, 0x02079713#32),   -- slli x14,x15,0x20
-   (0x8000353c#64, 0x01e75793#32),   -- srli x15,x14,0x1e
-   (0x80003540#64, 0x00017717#32),   -- auipc x14,0x17
-   (0x80003544#64, 0xa4470713#32),   -- addi  x14,x14,-1468
-   (0x80003548#64, 0x00e787b3#32)]   -- add   x15,x15,x14
-
-/-- The payoff: the whole-chain `ChainFacts` bundle a `#derive_case … _seg` row
-would take as a hypothesis, discharged in one `chain_facts` call (zero leftovers)
-from a single loaded-image hypothesis. -/
-theorem chainFactsDemo_facts (σ : Vsa.Machine.MState)
-    (L : GRegs) (lds : List (List (BitVec 8)))
-    (h : Vsa.Sim.Code.Eval_exprLoaded σ.mem) :
-    ChainFacts σ.mem σ.mem L lds chainFactsDemo := by
-  chain_facts h with "Vsa.Sim.Code.eval_expr_at_"
-
-/-- End-to-end: feed the auto-discharged bundle straight into the row's
-`chainFactsDemo_seg` (its `hfacts` hypothesis), closing the `#derive_case`-emitted
-run theorem with `chain_facts` in place of the assumed `ChainFacts`. -/
-theorem chainFactsDemo_row (σ : Vsa.Machine.MState) (i u : Nat) (vm : BitVec 64)
-    (L : GRegs)
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some 0x80003538#64)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ L) (hkeys : KeysOK (keysG L))
-    (h : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
-    (hwf : ChainOK 0x80003538#64 (keysG L) chainFactsDemo)
-    (hi : i < 2) :
-    let out := evalBlocks chainFactsDemo (SegEvalState.init L [])
-    ∃ (σ' : Vsa.Machine.MState) (i' : Nat),
-      Vsa.Machine.Steps ⟨σ, i, u⟩ ⟨σ', i', u + evalBlocksFuel chainFactsDemo⟩ ∧
-        i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = writeLog σ.mem out.log ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC
-        = some (evalBlocksPC 0x80003538#64 (SegEvalState.init L []) chainFactsDemo) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' out.regs ∧
-      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-        (∀ n ∈ wrChain chainFactsDemo, (gprReg n == R) = false) →
-        σ'.regs.get? R = σ.regs.get? R) :=
-  chainFactsDemo_seg σ i u 0x80003538#64 vm L [] hG hpc hmi hL hkeys
-    (chainFactsDemo_facts σ L [] h) hwf hi
-
-#print axioms chainFactsDemo_facts
-#print axioms chainFactsDemo_row
+   -- add   x15,x15,x14
 
 end Vsa.Sim

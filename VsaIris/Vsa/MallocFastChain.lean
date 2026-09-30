@@ -87,10 +87,6 @@ theorem pointwise_congr {f : Mem → Mem} (hf : Pointwise f) {m m' : Mem} {a : N
 def vsaRoomFast (maxReq : Nat) : RoomPred := fun img H k =>
   ∃ m top brkv chunks bins, ImgOn (vsaFoot H) img m ∧ FastAt m H maxReq k top brkv chunks bins
 
-theorem roomLocal_fast (maxReq : Nat) : RoomLocal vsaLayout (vsaRoomFast maxReq) := by
-  rintro H img img' k h ⟨m, top, brkv, chunks, bins, hm, hf⟩
-  exact ⟨m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hf⟩
-
 /-- The caller's stack discipline on the fast path. -/
 structure SpOKFast (headroom : Nat) (s : BitVec 64) : Prop where
   geom : SpGeom s

@@ -268,4 +268,3 @@ end Main
 
 end VsaIris.Interp
 
-#print axioms VsaIris.Interp.envDefine_spec

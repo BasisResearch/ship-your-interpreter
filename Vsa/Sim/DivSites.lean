@@ -62,16 +62,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
-open Vsa.Sim.Code (__hidden___udivdi3Loaded
-  __hidden___udivdi3_at_800046ac __hidden___udivdi3_at_800046b0
-  __hidden___udivdi3_at_800046b4 __hidden___udivdi3_at_800046b8
-  __hidden___udivdi3_at_800046bc __hidden___udivdi3_at_800046c0
-  __hidden___udivdi3_at_800046c4 __hidden___udivdi3_at_800046c8
-  __hidden___udivdi3_at_800046cc __hidden___udivdi3_at_800046d0
-  __hidden___udivdi3_at_800046d4 __hidden___udivdi3_at_800046d8
-  __hidden___udivdi3_at_800046dc __hidden___udivdi3_at_800046e0
-  __hidden___udivdi3_at_800046e4 __hidden___udivdi3_at_800046e8
-  __hidden___udivdi3_at_800046ec __hidden___udivdi3_at_800046f0)
+open Vsa.Sim.Code (__hidden___udivdi3Loaded __hidden___udivdi3_at_800046ac __hidden___udivdi3_at_800046b0 __hidden___udivdi3_at_800046b4 __hidden___udivdi3_at_800046b8 __hidden___udivdi3_at_800046bc __hidden___udivdi3_at_800046c0 __hidden___udivdi3_at_800046c4 __hidden___udivdi3_at_800046c8 __hidden___udivdi3_at_800046cc __hidden___udivdi3_at_800046d0 __hidden___udivdi3_at_800046d4 __hidden___udivdi3_at_800046d8 __hidden___udivdi3_at_800046dc __hidden___udivdi3_at_800046e0 __hidden___udivdi3_at_800046e4 __hidden___udivdi3_at_800046e8 __hidden___udivdi3_at_800046ec __hidden___udivdi3_at_800046f0)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
@@ -526,24 +517,6 @@ theorem site_800046e8
 
 /-! ### 0x800046b8 — `beqz a2` = `beq a2,x0` (rs1 = x12, rs2 = x0), imm 0x0038 → 0x800046f0 -/
 
-theorem exec_beqz_a2_taken (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
-    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
-    (hx12 : σ.regs.get? Register.x12 = some v12)
-    (htgt : (pc + sign_extend (m := 64) (0x0038#13)).toNat % 4 = 0)
-    (hv : (v12 == (0#64)) = true) :
-    (execute (instruction.BTYPE (0x0038#13, regidx.Regidx 0x00#5, regidx.Regidx 0x0c#5, bop.BEQ))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS (sigma3_branch_taken σ pc (0x0038#13)) := by
-  have h12 : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x12 = some v12 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx12
-  have hpc₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.PC = some pc := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hpc
-  have hmisa₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.misa = some initMisa := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.misa
-  exact execute_btype_beq_taken (0x0038#13) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x00#5)
-    v12 (0#64) pc initMisa (afterNextPC (afterPrelude σ) pc)
-    (rX_bits_x12 _ v12 h12) (rX_bits_zero _) hpc₂ hmisa₂ htgt hv
-
 theorem exec_beqz_a2_nottaken (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hx12 : σ.regs.get? Register.x12 = some v12)
     (hv : (v12 == (0#64)) = false) :
@@ -555,29 +528,6 @@ theorem exec_beqz_a2_nottaken (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
   exact execute_btype_beq_nottaken (0x0038#13) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x00#5)
     v12 (0#64) (afterNextPC (afterPrelude σ) pc)
     (rX_bits_x12 _ v12 h12) (rX_bits_zero _) hv
-
-theorem site_800046b8_taken
-    (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v12 : BitVec 64)
-    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
-    (hminstret : σ.regs.get? Register.minstret = some vminstret)
-    (hx12 : σ.regs.get? Register.x12 = some v12)
-    (hmem : __hidden___udivdi3Loaded σ.mem)
-    (hpcv : pc = (0x800046b8#64 : BitVec 64)) (hv : (v12 == (0#64)) = true) (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
-      ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x0038#13)) := by
-  subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046b8 hmem
-  exact stepObs_branch_taken σ i u (0x800046b8#64) vminstret (0x0038#13)
-    (regidx.Regidx 0x0c#5) (regidx.Regidx 0x00#5) bop.BEQ (0x02060c63#32)
-    (0x63#8) (0x0c#8) (0x06#8) (0x02#8)
-    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_02060c63 (afterPrelude σ)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_beqz_a2_taken σ (0x800046b8#64) v12 hG hpc hx12 (by decide) hv)
-    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
 theorem site_800046b8_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v12 : BitVec 64)

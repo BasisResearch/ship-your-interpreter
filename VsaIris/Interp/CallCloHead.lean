@@ -247,7 +247,6 @@ open VsaIris.Inst Vsa.RuntimeRepr
         (by simp only [InExt, argsBase] at ha ⊢; omega)
   iapply Hk $$ %R4 %Mt4 %vl %⟨hpeq, hdok, hhd⟩ Hms
 
-
 #ix_piece callCloHead_p2b from callCloHead_p2 at 2 by
   -- the arity error: the count is not `paramc`
   unfold CloHeadK
@@ -303,7 +302,6 @@ open VsaIris.Inst Vsa.RuntimeRepr
       exact hun a (by simp only [InExt, argsBase] at ha ⊢; omega)
         (by simp only [InExt, argsBase] at ha ⊢; omega) (by simp only [InExt, argsBase] at ha ⊢; omega)
   iapply Hk $$ %R3 %Mt3 %vl %⟨hpne, har⟩ Hms
-
 
 #ix_piece callCloHead_p2c from callCloHead_p2 at 3 by
   -- the depth error: the bumped depth exceeds the maximum
@@ -377,7 +375,6 @@ open VsaIris.Inst Vsa.RuntimeRepr
   iapply Hk $$ %R3 %Mt3 %vl %⟨hgt, hdp⟩ Hms
 
 #ix_chain callCloHead_c := [callCloHead_p1, callCloHead_p2, callCloHead_p3]
-
 
 /-- **The closure call's head**, for either WP: from the kind dispatch on a
 closure, with its resources (`CloFactsE`) and the depth word, the runs read

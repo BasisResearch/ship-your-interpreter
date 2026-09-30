@@ -252,24 +252,8 @@ each bridge is the pairing. `ProgramReprWithin` is what
 `InterpRunReadyFacts.ast_owned` hands A0. -/
 
 omit I in
-theorem astE_of_exprRepr {P : Nat → Prop} {m : Mem} {a : Nat} {e : Expr}
-    (h : ExprReprWithin m P a e) : roOn (GF := GF) P m ⊢ astE a e := by
-  unfold astE
-  iintro H
-  iexists P, m
-  isplitr
-  · ipureintro; exact h
-  iexact H
 
 omit I in
-theorem astS_of_stmtRepr {P : Nat → Prop} {m : Mem} {a : Nat} {st : Stmt}
-    (h : StmtReprWithin m P a st) : roOn (GF := GF) P m ⊢ astS a st := by
-  unfold astS
-  iintro H
-  iexists P, m
-  isplitr
-  · ipureintro; exact h
-  iexact H
 
 omit I in
 theorem astSs_of_stmtArrayRepr {P : Nat → Prop} {m : Mem} {a n : Nat} {ss : List Stmt}
@@ -341,9 +325,6 @@ def PayloadShared (P : Nat → Prop) (m : Mem) (a : Nat) (v : Value) : Prop :=
 /-- The closure address fragment a `.closure` value needs, vacuous otherwise. -/
 def closSupply (φc : Addr → Nat) (v : Value) : IProp GF :=
   iprop(∀ ca, ⌜v = .closure ca⌝ → closAt ca (φc ca))
-
-instance (φc : Addr → Nat) (v : Value) : Persistent (closSupply (GF := GF) φc v) := by
-  unfold closSupply; infer_instance
 
 /-- Every non-closure value supplies its (vacuous) closure fragment. -/
 theorem closSupply_of_ne {φc : Addr → Nat} {v : Value} (h : ∀ ca, v ≠ .closure ca) :
@@ -428,21 +409,6 @@ theorem valImg_congr {N : NativeAddrs} {img : Nat → BitVec 8} {m : Mem} {a : N
   unfold valImg
   rw [e0, e1, e2]
 
-/-- **An exclusively owned value slot** out of `ValueWordRepr` and the owned
-image of the slot. -/
-theorem valAt_of_valueWordRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs} {φc : Addr → Nat}
-    {a : Nat} {v : Value} {img : Nat → BitVec 8} (h : ValueRepr m N φc a v)
-    (hsh : PayloadShared P m a v) (hag : ∀ k, InExt (a, 24) k → img k = memImg m k)
-    (hw : SharedWin P) :
-    roOn (GF := GF) P m ∗ closSupply φc v ∗ ownImg (InExt (a, 24)) img ⊢ valAt N a v := by
-  unfold valAt
-  iintro ⟨#H, #Hc, Hown⟩
-  iexists img
-  iframe Hown
-  rw [valImg_congr (N := N) (v := v) hag]
-  iapply valOf_of_valueRepr h hsh hw $$ [H Hc]
-  iframe H Hc
-
 /-! ## Frames
 
 `FrameRepr` fixes the `Env` struct's reads and the per-index bindings;
@@ -518,9 +484,6 @@ instance (φc : Addr → Nat) (vs : List Value) : Persistent (closSupplyL (GF :=
 /-- The parent frame's address fragment, vacuous at the root. -/
 def parentSupply (o : Option Addr) (par : Nat) : IProp GF :=
   iprop(∀ pa, ⌜o = some pa⌝ → frameAt pa par)
-
-instance (o : Option Addr) (par : Nat) : Persistent (parentSupply (GF := GF) o par) := by
-  unfold parentSupply; infer_instance
 
 theorem parentSupply_none (par : Nat) : ⊢ parentSupply (GF := GF) none par := by
   unfold parentSupply
@@ -698,11 +661,5 @@ theorem frameBody_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
       iapply Hp $$ %pa %rfl
 
 end Bridge
-
-#print axioms roOn_of_ownImg
-#print axioms strAt_of_cstringWithin
-#print axioms astSs_of_programRepr
-#print axioms valAt_of_valueWordRepr
-#print axioms frameBody_of_frameRepr
 
 end VsaIris.Interp

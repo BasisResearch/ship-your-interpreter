@@ -32,26 +32,3 @@ set_option maxHeartbeats 16000000
 set_option maxRecDepth 1000000
 set_option linter.unusedSimpArgs false
 
-namespace Vsa.Sim.DecodeTable
-
-/-- Seed lemma whose proof runs the exact per-word grounding template, thereby
-realizing `currentlyEnabled.match_1.splitter` and `hartSupports.match_1.splitter`
-into this module's olean so importers reuse them for free. (Statement uses a
-real reachable word; kept identical in shape to a generated `decode_*` lemma.) -/
-theorem decodeCommon_splitter_seed
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (_hmisa : σ.regs.get? Register.misa =
-      some ((Vsa.Sim.initMisa) : RegisterType Register.misa))
-    (hpriv : σ.regs.get? Register.cur_privilege =
-      some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hsec : σ.regs.get? Register.mseccfg =
-      some ((0#64) : RegisterType Register.mseccfg)) :
-    (ext_decode 0xfead8fa3#32).run σ =
-      .ok (LeanRV64DExecutable.instruction.STORE (0xfff#12, LeanRV64DExecutable.regidx.Regidx 0x0a#5, LeanRV64DExecutable.regidx.Regidx 0x1b#5, 1)) σ := by
-  simp only [ext_decode, encdec_backwards, EStateM.run, bind, EStateM.bind,
-    pure, EStateM.pure, PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get,
-    currentlyEnabled, hartSupports, get_xLPE, Vsa.Sim.initMisa,
-    _hmisa, hpriv, hsec]
-  rfl
-
-end Vsa.Sim.DecodeTable

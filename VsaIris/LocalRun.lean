@@ -150,12 +150,6 @@ def LocalRun (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat
 
 variable {M : MachineModel}
 
-/-- The continuation of a local run. -/
-abbrev runKont (M : MachineModel) (Φ : Nat × String → IProp GF) (rs : List Nat) (S : Nat → Prop)
-    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : IProp GF :=
-  iprop(∀ rv' mv', ⌜Q rv' mv'⌝ -∗ sepL rs (fun r => r ↦ᵣ rv' r) -∗
-    ownSet S (fun a => a ↦ₘ mv' a) -∗ mTWP M Φ)
-
 /-- The owned footprint of a local run, with the byte set's enumeration. -/
 abbrev runFoot (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) (rs : List Nat)
     (l : List Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : IProp GF :=
@@ -300,16 +294,6 @@ theorem wp_localRunW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF
     iexists l
     iframe Hl
     ipureintro; exact ⟨hnd, hmem⟩
-
-/-- **Owned-footprint run rule** for the total WP. -/
-theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
-    {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
-    ∀ n rv mv, LocalRun M ro text rs S Q n rv mv →
-      roOwn (GF := GF) ro text ∗ sepL rs (fun r => r ↦ᵣ rv r) ∗ ownSet S (fun a => a ↦ₘ mv a) ∗
-        runKont M Φ rs S Q
-      ⊢ mTWP M Φ :=
-  wp_localRunW (twpW M)
 
 /-- **VSA segments are local-run segments.** A `RunFact` (the shape
 `Inst.seg_runFact` produces from `segEval_sound`) whose read-only registers

@@ -198,14 +198,4 @@ theorem divdi3_wrap_spec (g : (R : Register) → Option (RegisterType R))
         pre.scratch13, pre.tick, pre.nonzero, overflow, pre.aligned, pre.frame⟩
     exact ⟨after, run, DivWrapPost.of_signed result⟩
 
-#print axioms DivWrapPost.of_signed
-#print axioms divOverflowWord
-#print axioms divOverflowNegMin
-#print axioms divOverflowNegOne
-#print axioms divOverflowBranch_run
-#print axioms divOverflowDividend_run
-#print axioms divOverflowDivisor_run
-#print axioms divdi3_overflow_spec
-#print axioms divdi3_wrap_spec
-
 end Vsa.Sim

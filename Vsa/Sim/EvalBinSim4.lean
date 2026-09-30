@@ -64,46 +64,5 @@ namespace Vsa.Sim
 
 `.lt` (token 20, index 9) → slot bytes `a4 96 fe ff` @ `opTableBase + 36`,
 target `opTableBase + (Int32)0xfffe96a4 = 0x80003628` (the SHARED comparison arm). -/
-def LtSlotPinned (m : Mem) : Prop :=
-  m[(opTableBase + 36 : Nat)]? = some (0xa4 : BitVec 8) ∧
-  m[(opTableBase + 37 : Nat)]? = some (0x96 : BitVec 8) ∧
-  m[(opTableBase + 38 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(opTableBase + 39 : Nat)]? = some (0xff : BitVec 8)
-
-/-- `.le` (token 21, index 10) → slot bytes @ `opTableBase + 40`. -/
-def LeSlotPinned (m : Mem) : Prop :=
-  m[(opTableBase + 40 : Nat)]? = some (0xa4 : BitVec 8) ∧
-  m[(opTableBase + 41 : Nat)]? = some (0x96 : BitVec 8) ∧
-  m[(opTableBase + 42 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(opTableBase + 43 : Nat)]? = some (0xff : BitVec 8)
-
-/-- `.gt` (token 22, index 11) → slot bytes @ `opTableBase + 44`. -/
-def GtSlotPinned (m : Mem) : Prop :=
-  m[(opTableBase + 44 : Nat)]? = some (0xa4 : BitVec 8) ∧
-  m[(opTableBase + 45 : Nat)]? = some (0x96 : BitVec 8) ∧
-  m[(opTableBase + 46 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(opTableBase + 47 : Nat)]? = some (0xff : BitVec 8)
-
-/-- `LtSlotPinned` survives a `writeMap8` disjoint from `[opTableBase+36, +4)`. -/
-theorem ltSlot_writeMap8 (m : Mem) (a8 : Nat) (d : BitVec (8 * 8))
-    (hdis : a8 + 8 ≤ opTableBase + 36 ∨ opTableBase + 44 ≤ a8) (h : LtSlotPinned m) :
-    LtSlotPinned (writeMap8 m a8 d) := by
-  obtain ⟨p0, p1, p2, p3⟩ := h
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    (rw [getElem_writeMap8_disjoint m a8 _ d (by omega)]; assumption)
-
-theorem leSlot_writeMap8 (m : Mem) (a8 : Nat) (d : BitVec (8 * 8))
-    (hdis : a8 + 8 ≤ opTableBase + 40 ∨ opTableBase + 48 ≤ a8) (h : LeSlotPinned m) :
-    LeSlotPinned (writeMap8 m a8 d) := by
-  obtain ⟨p0, p1, p2, p3⟩ := h
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    (rw [getElem_writeMap8_disjoint m a8 _ d (by omega)]; assumption)
-
-theorem gtSlot_writeMap8 (m : Mem) (a8 : Nat) (d : BitVec (8 * 8))
-    (hdis : a8 + 8 ≤ opTableBase + 44 ∨ opTableBase + 52 ≤ a8) (h : GtSlotPinned m) :
-    GtSlotPinned (writeMap8 m a8 d) := by
-  obtain ⟨p0, p1, p2, p3⟩ := h
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    (rw [getElem_writeMap8_disjoint m a8 _ d (by omega)]; assumption)
 
 end Vsa.Sim

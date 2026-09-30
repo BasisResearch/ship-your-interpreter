@@ -25,7 +25,6 @@ namespace VsaIris.Interp
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.Newlib VsaIris.MallocFast VsaIris.Sym VsaIris.Memcpy
 
-
 /-! ## Code and registers -/
 
 /-- `memcpy`'s code is the image's. -/
@@ -277,8 +276,5 @@ theorem memcpy_spec_owned (live : Nat → Prop) (hcl : CodeLive live)
       rw [hsrc' p hp, (mem_srcText hp).2.2]) $$ HX
 
 end Proofs
-
-#print axioms memcpy_spec_env
-#print axioms memcpy_spec_owned
 
 end VsaIris.Interp

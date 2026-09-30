@@ -319,10 +319,6 @@ theorem htif_exit_code_sigmaExitG_final (σ : MState) (pc npc vminstret data e :
     Register.htif_exit_code e).get? Register.htif_exit_code = _
   rw [Std.ExtDHashMap.get?_insert_self]
 
-/-- `sailOutput` unchanged by the generic exit-store `try_step`-final state. -/
-theorem sailOutput_sigmaExitG_final (σ : MState) (pc npc vminstret data e : BitVec 64) :
-    (sigmaExitFinalG σ pc npc vminstret data e).sailOutput = σ.sailOutput := rfl
-
 /-- `stepOnce_tohost_exit` generic in the exit code `e`: the exit-store `stepOnce`
 halts with code `e.toNat`. -/
 theorem stepOnce_tohost_G
@@ -373,64 +369,6 @@ the store data is `1`, the latched exit code is `0`.  `ExitStorePre0` is the
 exit-0 twin of `ErrorTail.ExitStorePreExit`; `exitStoreHalts0` is the exit-0 twin
 of `exitStoreHalts`. -/
 
-/-- The clean-exit `sd a5,tohost` store-site predicate: everything
-`stepOnce_tohost_G` (at `e = 0`) consumes, plus `output σ = out`.  Differs from
-`ErrorTail.ExitStorePreExit` only in the store data `vdata = (0<<<1)|1` (vs
-`(70<<<1)|1`). -/
-def ExitStorePre0 (out : String) (c : Config) : Prop :=
-  ∃ (pc vminstret : BitVec 64) (w : BitVec 32) (imm : BitVec 12) (rs2 rs1 : regidx)
-    (v1 vdata th : BitVec 64) (b0 b1 b2 b3 : BitVec 8),
-    GoodState c.σ ∧
-    c.σ.regs.get? Register.PC = some pc ∧
-    c.σ.regs.get? Register.minstret = some vminstret ∧
-    (((b3.append b2).append b1).append b0) = w ∧
-    Sail.BitVec.extractLsb (((b3.append b2).append b1).append b0) 1 0 = (0b11#2 : BitVec 2) ∧
-    (ext_decode w).run (afterPrelude c.σ)
-      = .ok (instruction.STORE (imm, rs2, rs1, 8)) (afterPrelude c.σ) ∧
-    (rX_bits rs1).run (afterNextPC (afterPrelude c.σ) pc)
-      = .ok v1 (afterNextPC (afterPrelude c.σ) pc) ∧
-    (rX_bits rs2).run (afterNextPC (afterPrelude c.σ) pc)
-      = .ok vdata (afterNextPC (afterPrelude c.σ) pc) ∧
-    v1 + sign_extend (m := 64) imm = BitVec.ofNat 64 tohostAddr ∧
-    vdata = (0#64 <<< 1) ||| 1#64 ∧
-    c.σ.regs.get? Register.htif_payload_writes = some (0#4) ∧
-    c.σ.regs.get? Register.htif_tohost = some th ∧
-    c.σ.mem[pc.toNat]? = some b0 ∧
-    c.σ.mem[pc.toNat + 1]? = some b1 ∧
-    c.σ.mem[pc.toNat + 2]? = some b2 ∧
-    c.σ.mem[pc.toNat + 3]? = some b3 ∧
-    0x80000000 ≤ pc.toNat ∧
-    pc.toNat + 4 ≤ tohostAddr ∧
-    pc.toNat % 4 = 0 ∧
-    output c.σ = out
-
-/-- **The clean-exit(0) store → HTIF-halt bridge.**  From an `ExitStorePre0 out c`
-configuration (the `_exit` `sd a5,tohost` with `a5 = (0<<<1)|1`), the machine halts
-with exit code **0** printing `out` in a single `stepOnce`.  Exit-0 twin of
-`ErrorTail.exitStoreHalts`; `0 < 2^47` supplies `hsmall`, and the returned code
-`(0#64).toNat = 0` gives exactly `Halted _ 0`. -/
-theorem exitStoreHalts0 (out : String) :
-    ∀ c, ExitStorePre0 out c → ∃ c' σf, Steps c c' ∧ Halted c' 0 σf ∧ output σf = out := by
-  intro c hpre
-  obtain ⟨pc, vminstret, w, imm, rs2, rs1, v1, vdata, th, b0, b1, b2, b3,
-    hG, hpc, hminstret, hword, hnotrvc, hdec, hrs1, hrs2, haddr, hdataeq, hpw, hth,
-    hb0, hb1, hb2, hb3, hlo, hhi, halign, hout⟩ := hpre
-  have hstep := stepOnce_tohost_G c.σ c.tick c.steps pc vminstret w imm rs2 rs1
-    v1 vdata ((0#64 <<< 1) ||| 1#64) (0#64) th b0 b1 b2 b3
-    hG hpc hminstret hword hnotrvc hdec hrs1 hrs2 haddr hdataeq hpw hth (by decide) rfl
-    hb0 hb1 hb2 hb3 hlo hhi halign
-  -- normalize the returned code `(0#64).toNat` to the literal `0`.
-  rw [show BitVec.toNat (0#64 : BitVec 64) = 0 from by decide] at hstep
-  refine ⟨c, sigmaExitFinalG c.σ pc (BitVec.addInt pc 4) vminstret ((0#64 <<< 1) ||| 1#64) (0#64),
-    Steps.refl c, ?_, ?_⟩
-  · have : c = ⟨c.σ, c.tick, c.steps⟩ := rfl
-    rw [this]
-    exact Halted.mk hstep
-  · show output (sigmaExitFinalG c.σ pc (BitVec.addInt pc 4) vminstret _ _) = out
-    unfold output
-    rw [sailOutput_sigmaExitG_final]
-    exact hout
-
 /-! ## §3. The clean-exit tail — MIRROR of `errorTailHalts`
 
 The exit-0 twin of `ErrorTail.ErrorTailChain`: from the `interp_run` NORMAL-return
@@ -441,43 +379,6 @@ sibling), the machine runs the `interp_run`-return / `main` (`li a0,0`; ret) / c
 Held opaque here (the decode span is the exit-0 twin of the exit-70 `ExitPathSeg`
 battery, to be discharged by the same seg machinery), exactly as `ErrorTailChain`
 holds the error span opaque. -/
-
-/-- **The interp_run-normal-return / main / crt0 / exit span**, as a `Triple`
-residual (exit-0 twin of `ErrorTailChain`).  From the clean interp_run-return
-continuation config `ra0` (the statement loop finished `.normal`, `a0 = 0`), the
-machine runs finitely to the clean-exit store site `ExitStorePre0 out`.  The
-`beqz a0`-not-taken (vs the error arm's `bnez a0`) and `main`'s `li a0,0` (vs
-`li a0,70`) are the exit-0 differences; the crt0 `j exit` / `_exit` prologue are
-shared with the error path. -/
-structure ExitTailChain0 (ra0 : BitVec 64) (out : String) : Prop where
-  chain :
-    Triple
-      (fun c => GoodState c.σ ∧ c.tick < 2 ∧
-        c.σ.regs.get? Register.PC = some ra0 ∧
-        c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
-        output c.σ = out)
-      (ExitStorePre0 out)
-
-/-- **The clean-exit tail.**  From the `interp_run` normal-return continuation
-`ra0` (statement loop finished `.normal`, `a0 = 0`, `GoodState`, tick-bounded),
-threading the interp_run-return/main/crt0/exit span (`HT`) and the exit-0 store →
-HTIF-halt bridge (`exitStoreHalts0`), the machine halts with exit code **0**
-printing `out`: `Halts c out 0`.  This is the exit-0 twin of `errorTailHalts`'s
-composition (`ExitStoreHalts` discharged concretely by `exitStoreHalts0`). -/
-theorem cleanExitTail
-    (ra0 : BitVec 64) (out : String)
-    (HT : ExitTailChain0 ra0 out)
-    (c : Config)
-    (hcont : GoodState c.σ ∧ c.tick < 2 ∧
-      c.σ.regs.get? Register.PC = some ra0 ∧
-      c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
-      output c.σ = out) :
-    Halts c out 0 := by
-  -- 1. interp_run-cont / main / crt0 / exit span → the `_exit` store site.
-  obtain ⟨c1, hs1, hpre1⟩ := HT.chain c hcont
-  -- 2. exit store → HTIF halt with code 0.
-  obtain ⟨c2, σf, hs2, hh2, ho2⟩ := exitStoreHalts0 out c1 hpre1
-  exact halts_of_steps_halted (hs1.trans hs2) hh2 ho2
 
 /-! ## §4. The program-entry bridge — `entryHalts`
 
@@ -500,40 +401,5 @@ path carries:
 
 Composing `hPrologue` (→ the `.normal`-return continuation) with `cleanExitTail`
 (→ `Halts c out 0`) discharges `hEntryHalts` verbatim. -/
-
-/-- **`hEntryHalts` discharged** (conditional on the prologue-bridge + tail-span
-residuals).  Exactly the shape `termSimClosed`'s `hEntryHalts` hypothesis demands:
-given `Loaded L p c`, `st'.out = out`, and the whole-program normal `mExecSeq`
-datum, the machine halts cleanly with exit code 0 printing `out`.
-
-The prologue bridge `hPrologue` consumes `Loaded` together with the `mExecSeq`
-simulation Triple (`∀`-closed over the layout ghosts, exactly the `mExecSeq`
-motive shape) and returns the `interp_run` normal-return continuation config
-(`GoodState`, tick-bounded, `PC = ra0`, `a0 = 0`) with `output = out`; the tail
-span `hChain` + `cleanExitTail` carry it to the clean HTIF halt. -/
-theorem entryHalts (L : Layout)
-    (hPrologue :
-      ∀ (p : Program) (c : Config) (out : String) (st' : SpecSt)
-        (t : Vsa.While.ExecSeq initSt 0 0 p st' Vsa.While.Status.normal),
-        Loaded L p c → st'.out = out →
-        Vsa.Sim.TermSimAssembly.mExecSeq initSt 0 0 p st' Vsa.While.Status.normal t →
-        ∃ (ra0 : BitVec 64) (c1 : Config),
-          Steps c c1 ∧ ExitTailChain0 ra0 out ∧
-          (GoodState c1.σ ∧ c1.tick < 2 ∧
-            c1.σ.regs.get? Register.PC = some ra0 ∧
-            c1.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
-            output c1.σ = out)) :
-    ∀ (p : Program) (c : Config) (out : String) (st' : SpecSt)
-      (t : Vsa.While.ExecSeq initSt 0 0 p st' Vsa.While.Status.normal),
-      Loaded L p c → st'.out = out →
-      Vsa.Sim.TermSimAssembly.mExecSeq initSt 0 0 p st' Vsa.While.Status.normal t →
-      Halts c out 0 := by
-  intro p c out st' t hL hout hm
-  obtain ⟨ra0, c1, hs, hChain, hcont⟩ := hPrologue p c out st' t hL hout hm
-  -- the tail from the normal-return continuation lands the clean halt.
-  have htail : Halts c1 out 0 := cleanExitTail ra0 out hChain c1 hcont
-  -- prepend the prologue run `Steps c c1`.
-  obtain ⟨c', σf, hs', hh', ho'⟩ := htail
-  exact halts_of_steps_halted (hs.trans hs') hh' ho'
 
 end Vsa.Sim

@@ -77,22 +77,4 @@ theorem _exit_at_8000018c {mem : ExtHashMap Nat (BitVec 8)}
   have hc := _exit_chunk0 h
   ⟨hc.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
 
-theorem _exit_at_80000190 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : _exitLoaded mem) :
-      mem[(0x80000190 : Nat)]? = some (0x23 : BitVec 8) ∧
-      mem[(0x80000191 : Nat)]? = some (0x3a : BitVec 8) ∧
-      mem[(0x80000192 : Nat)]? = some (0xf7 : BitVec 8) ∧
-      mem[(0x80000193 : Nat)]? = some (0xb6 : BitVec 8) :=
-  have hc := _exit_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
-
-theorem _exit_at_80000194 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : _exitLoaded mem) :
-      mem[(0x80000194 : Nat)]? = some (0x6f : BitVec 8) ∧
-      mem[(0x80000195 : Nat)]? = some (0x00 : BitVec 8) ∧
-      mem[(0x80000196 : Nat)]? = some (0x00 : BitVec 8) ∧
-      mem[(0x80000197 : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := _exit_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2⟩
-
 end Vsa.Sim.Code

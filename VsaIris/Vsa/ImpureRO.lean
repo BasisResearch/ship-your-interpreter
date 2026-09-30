@@ -72,8 +72,6 @@ def impureByte (a : Nat) : BitVec 8 := BitVec.ofNat 8 (consoleReent / 256 ^ (a -
 /-- An image holds `&_impure_data` in `_impure_ptr`. -/
 def ImpureImg (img : Nat → BitVec 8) : Prop := ∀ a, impureW a → img a = impureByte a
 
-theorem impureImg_impureByte : ImpureImg impureByte := fun _ _ => rfl
-
 section Own
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]

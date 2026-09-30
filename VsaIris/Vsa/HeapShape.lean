@@ -331,19 +331,6 @@ theorem BlockHeapAt.transport_read {m m' : Mem} {H : List (Nat × Nat)} {top brk
       live := hH.live
       exact := hH.exact }
 
-/-- **`HeapAt` reads only the allocator's footprint.** Two memories that agree
-on `vsaFoot H` satisfy the same block-heap shape. -/
-theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
-    {chunks : List Chunk} {bins : Nat → List Nat}
-    (h : BlockHeapAt m H top brkv chunks bins) (hag : AgreeP (vsaFoot H) m m') :
-    BlockHeapAt m' H top brkv chunks bins :=
-  h.transport_read fun a ha => hag a ha.1
-
-theorem BlockHeap.transport {m m' : Mem} {H : List (Nat × Nat)} (h : BlockHeap m H)
-    (hag : AgreeP (vsaFoot H) m m') : BlockHeap m' H := by
-  obtain ⟨top, brkv, chunks, bins, h⟩ := h
-  exact ⟨top, brkv, chunks, bins, h.transport hag⟩
-
 /-- Every byte of a live block is an arena byte: the arena is partitioned into
 the live blocks and the allocator's arena bytes. -/
 theorem BlockHeapAt.block_arena {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
@@ -356,15 +343,6 @@ theorem BlockHeapAt.block_arena {m : Mem} {H : List (Nat × Nat)} {top brkv : Na
   have := h.heap.brk_le
   unfold InExt at ha
   omega
-
-/-- The footprint and the live blocks split the allocator's region exactly. -/
-theorem vsaFoot_iff {H : List (Nat × Nat)} {a : Nat} (harena : heapStart ≤ a ∧ a < heapEnd) :
-    vsaFoot H a ↔ ∀ e ∈ H, ¬ InExt e a := by
-  constructor
-  · rintro (hg | ⟨_, _, h⟩)
-    · rcases allocGlobal_off_arena a hg with h | h <;> omega
-    · exact h
-  · intro h; exact .inr ⟨harena.1, harena.2, h⟩
 
 /-! ## The layout -/
 
@@ -385,28 +363,6 @@ def vsaLayout : DlLayout where
   hi := heapEnd
   global_off_arena := allocGlobal_off_arena
   Shape := imgShape
-
-theorem heapFoot_vsaLayout (H : List (Nat × Nat)) : heapFoot vsaLayout H = vsaFoot H := rfl
-
-/-- The owned image has the heap shape exactly when the actual memory does. -/
-theorem imgShape_iff {img : Nat → BitVec 8} {H : List (Nat × Nat)} {m : Mem}
-    (hm : ImgOn (vsaFoot H) img m) : vsaLayout.Shape img H ↔ BlockHeap m H := by
-  constructor
-  · rintro ⟨m0, hm0, hs⟩
-    exact hs.transport fun a ha => (hm0 a ha).trans (hm a ha).symm
-  · exact fun hs => ⟨m, hm, hs⟩
-
-/-- `MemAgree` against a total byte read (`readByte = getD 0`) gives `ImgOn`
-where the bytes are present. -/
-theorem imgOn_of_getD {S : Nat → Prop} {img : Nat → BitVec 8} {m : Mem}
-    (hpres : ∀ a, S a → (m[a]?).isSome) (hval : ∀ a, S a → (m[a]?).getD 0 = img a) :
-    ImgOn S img m := by
-  intro a ha
-  have hp := hpres a ha
-  have hv := hval a ha
-  cases hma : m[a]? with
-  | none => rw [hma] at hp; cases hp
-  | some b => rw [hma] at hv; simp at hv; rw [hv]
 
 /-! ## From VSA's boundary heap to the block view -/
 
@@ -457,15 +413,5 @@ theorem blockHeapAt_of_heapAt {m : Mem} {exts : List (Nat × Nat)}
     unfold InExt at ha ⊢
     simp only at ha ⊢
     omega
-
-/-- VSA's initial allocator (`DlHeap.InitialAllocatorAt`, supplied at the
-boundary by `InitialOwned.allocator`) gives the Iris heap shape at the initial
-memory, with the in-use chunk payloads as the initial live blocks. -/
-theorem blockHeap_of_initial {m : Mem} {exts : List (Nat × Nat)}
-    {reallocs : Nat × Nat → Prop} {stmts count top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat}
-    (h : InitialAllocatorAt m exts reallocs stmts count top brkv chunks bins)
-    (hroom : top + 16 ≤ brkv) : BlockHeap m (inuseBlocks chunks) :=
-  ⟨top, brkv, chunks, bins, (blockHeapAt_of_heapAt h.heap hroom).1⟩
 
 end VsaIris.VsaHeap

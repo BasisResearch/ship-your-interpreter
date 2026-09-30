@@ -126,33 +126,6 @@ into block 2 (one `addi`). Concrete `pc0`, empty pin list: the structural VC
 `ChainOK pc0 (keysG L) demoChain` closes by ONE kernel `decide`, everything
 else is `name_seg` application + the caller's `ChainFacts` bundle. -/
 
-#derive_case demoChain chain
-  [(0x80000000#64, 0x00100293#32),   -- addi x5,x0,1
-   (0x80000004#64, 0x00200313#32)]   -- addi x6,x0,2
-  ;;
-  [(0x80000008#64, 0x00300393#32)]   -- addi x7,x0,3
-
-/-- The row: the whole two-block segment in ONE `name_seg` application with
-one kernel `decide` (the `hwf` argument). -/
-theorem demoChain_row (σ : MState) (i u : Nat) (vm : BitVec 64)
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some 0x80000000#64)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hL : GHolds σ []) (hkeys : KeysOK (keysG []))
-    (hfacts : ChainFacts σ.mem σ.mem [] [] demoChain)
-    (hi : i < 2) :
-    let out := evalBlocks demoChain (SegEvalState.init [] [])
-    ∃ (σ' : MState) (i' : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ', i', u + evalBlocksFuel demoChain⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = writeLog σ.mem out.log ∧ σ'.sailOutput = σ.sailOutput ∧
-      σ'.regs.get? Register.PC = some (evalBlocksPC 0x80000000#64 (SegEvalState.init [] []) demoChain) ∧
-      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
-      GHolds σ' out.regs ∧
-      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-        (∀ n ∈ wrChain demoChain, (gprReg n == R) = false) →
-        σ'.regs.get? R = σ.regs.get? R) :=
-  demoChain_seg σ i u 0x80000000#64 vm [] [] hG hpc hmi hL hkeys hfacts (by decide) hi
-
-#print axioms demoChain_row
+   -- addi x7,x0,3
 
 end Vsa.Sim

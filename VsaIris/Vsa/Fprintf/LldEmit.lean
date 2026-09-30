@@ -131,8 +131,6 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
       (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
        unfold StageReg; omega)
 
-
-
 #ix_piece lldStage_3 from lldStage_1 at 2 by
   have hz : (BitVec.zeroExtend 64 sg = 0#64) = False := eq_false fun h => zext8_ne hs0 (h.trans (by decide))
   have hz' : (BitVec.zeroExtend 64 sg ≠ 0#64) = True := eq_true fun h => by rw [hz] at h; exact h
@@ -193,8 +191,6 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
     all_goals first | exact Frame.refl _ _ |
       (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
        unfold StageReg; omega)
-
-
 
 /-! **`lld_stage`**: `%lld`'s pieces staged, `0x8000b444` → `0x8000b8c4`. -/
 #ix_tree lld_stage := lldStage_1 [lldStage_2 [lldStage_2b [lldStage_2c]], lldStage_3 [lldStage_3b [lldStage_3c]]]

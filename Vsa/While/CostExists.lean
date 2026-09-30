@@ -46,15 +46,10 @@ theorem EvalECost.exists {st d a e st' v} (h : EvalE st d a e st' v) :
     ∃ n, EvalECost st d a e st' v n := costExists.evalE h
 theorem EvalArgsCost.exists {st d a es st' vs} (h : EvalArgs st d a es st' vs) :
     ∃ n, EvalArgsCost st d a es st' vs n := costExists.evalArgs h
-theorem CallCost.exists {st d fv vs st' v} (h : Call st d fv vs st' v) :
-    ∃ n, CallCost st d fv vs st' v n := costExists.call h
 theorem ExecSCost.exists {st d a s st' status} (h : ExecS st d a s st' status) :
     ∃ n, ExecSCost st d a s st' status n := costExists.execS h
 theorem ExecInitCost.exists {st d a init st'} (h : ExecInit st d a init st') :
     ∃ n, ExecInitCost st d a init st' n := costExists.execInit h
-theorem ForLoopCost.exists {st d a cnd step b st' status}
-    (h : ForLoop st d a cnd step b st' status) :
-    ∃ n, ForLoopCost st d a cnd step b st' status n := costExists.forLoop h
 theorem ForCondCost.exists {st d a cnd st'} (h : ForCond st d a cnd st') :
     ∃ n, ForCondCost st d a cnd st' n := costExists.forCond h
 theorem ExecStepCost.exists {st d a step st'} (h : ExecStep st d a step st') :
@@ -118,26 +113,13 @@ theorem costSound : CostSound where
 
 theorem EvalECost.sound {st d a e st' v n} (h : EvalECost st d a e st' v n) :
     EvalE st d a e st' v := costSound.evalE h
-theorem EvalArgsCost.sound {st d a es st' vs n} (h : EvalArgsCost st d a es st' vs n) :
-    EvalArgs st d a es st' vs := costSound.evalArgs h
-theorem CallCost.sound {st d fv vs st' v n} (h : CallCost st d fv vs st' v n) :
-    Call st d fv vs st' v := costSound.call h
 theorem ExecSCost.sound {st d a s st' status n} (h : ExecSCost st d a s st' status n) :
     ExecS st d a s st' status := costSound.execS h
 theorem ExecInitCost.sound {st d a init st' n} (h : ExecInitCost st d a init st' n) :
     ExecInit st d a init st' := costSound.execInit h
-theorem ForLoopCost.sound {st d a cnd step b st' status n}
-    (h : ForLoopCost st d a cnd step b st' status n) :
-    ForLoop st d a cnd step b st' status := costSound.forLoop h
 theorem ForCondCost.sound {st d a cnd st' n} (h : ForCondCost st d a cnd st' n) :
     ForCond st d a cnd st' := costSound.forCond h
 theorem ExecStepCost.sound {st d a step st' n} (h : ExecStepCost st d a step st' n) :
     ExecStep st d a step st' := costSound.execStep h
-theorem ExecSeqCost.sound {st d a ss st' status n} (h : ExecSeqCost st d a ss st' status n) :
-    ExecSeq st d a ss st' status := costSound.execSeq h
-
-#print axioms costExists
-#print axioms BigStep.cost
-#print axioms costSound
 
 end Vsa.While

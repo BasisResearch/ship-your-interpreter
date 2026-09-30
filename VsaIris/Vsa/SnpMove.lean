@@ -73,7 +73,6 @@ theorem ldvf_lbu_readB {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} 
   rw [h.img hD hS]
   rfl
 
-
 /-- A byte store of a zero-extended byte reads back the byte. -/
 theorem sbData_zext (b : BitVec 8) : sbData (BitVec.zeroExtend 64 b) = b := by
   apply BitVec.eq_of_toNat_eq
@@ -127,16 +126,6 @@ theorem Copied.sd {Mt Mt0 : Mem} {d src c : Nat} {g : Nat → BitVec 8} (h : Cop
     by_cases hic : c ≤ i
     · have := imgM_sd_ldvf Mt A B (i - c) g (by omega)
       rwa [show A + (i - c) = d + i by omega, show B + (i - c) = src + i by omega] at this
-    · rw [imgM_store_miss _ _ (by omega)]; exact h.done i (by omega)
-  rest a ha := by rw [imgM_store_miss _ _ (by omega)]; exact h.rest a (by omega)
-
-/-- A copied byte extends a copy by one byte. -/
-theorem Copied.sb {Mt Mt0 : Mem} {d src c : Nat} {g : Nat → BitVec 8} (h : Copied Mt Mt0 d src c g)
-    {A : Nat} (hA : A = d + c) :
-    Copied (writeLog Mt [(A, 1, BitVec.zeroExtend 64 (g (src + c)))]) Mt0 d src (c + 1) g where
-  done i hi := by
-    by_cases hic : i = c
-    · subst hic hA; exact imgM_sb_zext Mt _ _
     · rw [imgM_store_miss _ _ (by omega)]; exact h.done i (by omega)
   rest a ha := by rw [imgM_store_miss _ _ (by omega)]; exact h.rest a (by omega)
 
@@ -353,11 +342,6 @@ theorem mm_loop32 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     · intro heq R' Mt' h11' h14' _ h17' hkp' hcp'
       rw [heq] at h11' h14' hcp'
       exact hk R' Mt' (hkp.trans hkp') h11' h14' (h17'.trans h17) hcp'
-
-theorem ofNat_sub_ofNat (x y : Nat) (hy : y < 2 ^ 64) :
-    BitVec.ofNat 64 x - BitVec.ofNat 64 y = BitVec.ofNat 64 (x + (2 ^ 64 - y)) := by
-  apply BitVec.eq_of_toNat_eq
-  simp only [BitVec.toNat_sub, BitVec.toNat_ofNat]; omega
 
 /-- **One iteration of `memmove`'s 8-byte loop** (`0x80006aac`): `a6 = d - src`,
 the loop ends when `a1` reaches `src + E`. -/

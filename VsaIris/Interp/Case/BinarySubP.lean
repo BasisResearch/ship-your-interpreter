@@ -333,8 +333,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep3, hkeep2, hkeep1]
 
-
-
 #ix_piece BinarySubP_eL1 from BinarySubP_p2 at 2 by
   -- type error (L): the type error's first run, to `value_kind_name`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

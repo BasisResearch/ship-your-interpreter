@@ -191,9 +191,6 @@ theorem binOpCost_concat {st : Store} {lv rv : Value} (h : valTag lv = 3 ∨ val
 def catBufCost (st : Store) (lv rv : Value) : Nat :=
   roundUp16 ((lv.catDisplay st).length + (rv.catDisplay st).length + 1)
 
-theorem concatCost_eq (st : Store) (lv rv : Value) :
-    concatCost st lv rv = stringifyCost st lv + stringifyCost st rv + catBufCost st lv rv := rfl
-
 /-- `stringify`'s request is charged its rendering's `stringifyCost`. -/
 theorem stringifyChg (st : Store) (v : Value) :
     vsaChg ((strRender st v).toList.length + 1) (stringifyCost st v) := by

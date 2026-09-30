@@ -203,18 +203,6 @@ theorem obs_jr_other' {σ' σ : MState} {pc vm tgt : BitVec 64}
   obs_jr_other hobs R hdis.1 hdis.2.1 hdis.2.2.1 hdis.2.2.2.1 hdis.2.2.2.2.1
     hdis.2.2.2.2.2.1 hdis.2.2.2.2.2.2 hσ
 
-/-- Bundled `obs_branch_taken_other` (`ValueTruthySpec`): 7-way ladder → one `∧`-`decide`. -/
-theorem obs_branch_taken_other' {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec 13}
-    (hobs : ReadsLikePost σ' (sigmaPost_branch_taken σ pc vm imm)) (R : Register)
-    {w : RegisterType R}
-    (hdis : (Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
-            (Register.mip == R) = false ∧ (Register.minstret == R) = false ∧
-            (Register.PC == R) = false ∧ (Register.nextPC == R) = false ∧
-            (Register.minstret_increment == R) = false)
-    (hσ : σ.regs.get? R = some w) : σ'.regs.get? R = some w :=
-  obs_branch_taken_other hobs R hdis.1 hdis.2.1 hdis.2.2.1 hdis.2.2.2.1 hdis.2.2.2.2.1
-    hdis.2.2.2.2.2.1 hdis.2.2.2.2.2.2 hσ
-
 /-- Bundled `obs_branch_nottaken_other` (`ValueTruthySpec`): 7-way ladder → one `∧`-`decide`. -/
 theorem obs_branch_nottaken_other' {σ' σ : MState} {pc vm : BitVec 64}
     (hobs : ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vm)) (R : Register)
@@ -234,34 +222,5 @@ theorem obs_branch_nottaken_other' {σ' σ : MState} {pc vm : BitVec 64}
 consumer `DivSpec3` → would cycle), so these two are **restated standalone** — their
 bodies are the bases' bodies verbatim (`hobs.1` read-back + `get?_sigmaPost_store`
 frame), reachable here via `Muldi3Spec → StepObs → StepStore`. -/
-
-/-- Bundled standalone copy of `obs_store_other_sn4`: `R hobs` order, 7-way ladder →
-one `∧`-`decide`. -/
-theorem obs_store_other_sn4' {σ' σ : MState} {pc vm : BitVec 64}
-    {m' : Std.ExtHashMap Nat (BitVec 8)} (R : Register) {w : RegisterType R}
-    (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m'))
-    (hdis : (Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
-            (Register.mip == R) = false ∧ (Register.minstret == R) = false ∧
-            (Register.PC == R) = false ∧ (Register.nextPC == R) = false ∧
-            (Register.minstret_increment == R) = false)
-    (hσ : σ.regs.get? R = some w) : σ'.regs.get? R = some w := by
-  obtain ⟨hmc, hmt, hmi, h1, h2, h4, h5⟩ := hdis
-  rw [hobs.1 R hmc hmt hmi]
-  rw [get?_sigmaPost_store σ pc vm m' R h1 h2 h4 h5]; exact hσ
-
-/-- Bundled standalone copy of `obs_store_other_sn3`: `R hobs` order, 7-way ladder →
-one `∧`-`decide`. Identical to `obs_store_other_sn4'`; a separate name so the rewriter
-maps each base head to its own primed head. -/
-theorem obs_store_other_sn3' {σ' σ : MState} {pc vm : BitVec 64}
-    {m' : Std.ExtHashMap Nat (BitVec 8)} (R : Register) {w : RegisterType R}
-    (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m'))
-    (hdis : (Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
-            (Register.mip == R) = false ∧ (Register.minstret == R) = false ∧
-            (Register.PC == R) = false ∧ (Register.nextPC == R) = false ∧
-            (Register.minstret_increment == R) = false)
-    (hσ : σ.regs.get? R = some w) : σ'.regs.get? R = some w := by
-  obtain ⟨hmc, hmt, hmi, h1, h2, h4, h5⟩ := hdis
-  rw [hobs.1 R hmc hmt hmi]
-  rw [get?_sigmaPost_store σ pc vm m' R h1 h2 h4 h5]; exact hσ
 
 end Vsa.Sim

@@ -69,17 +69,6 @@ namespace Vsa.Sim
 The post-state is the loop's final state `st''` with status `status`, exactly the
 `ExecS.forStart` conclusion; the entry scope is the OUTER `env` (not the child
 scope — the child `outer` is internal to the arm). -/
-def ExecForStartSimGoal
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st st'' : Vsa.While.St) (d : Nat) (env : Addr)
-    (init : Option Stmt) (cnd step : Option Expr) (b : Stmt) (status : Status)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (out0 : Array String) : Prop :=
-  Triple
-    (fun c => ExecEntry g N A SL φf φc st d env (.forStmt init cnd step b)
-        sp r aInterp aStmt aEnv aRet m0 c ∧ c.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-      st'' status sp r aRet m0)
 
 /-! ## `execForStartSim` — `ExecS.forStart`: `hArm (env_new + ExecInit) ≫ execForLoopBody`
 
@@ -90,72 +79,5 @@ outer `ExecEntry (.forStmt …)` at `env` to the ForLoop-head `ExecEntry
 growth, and a re-based memory baseline `m0'`). `execForLoopBody` then runs the
 `ForLoop` from that head to the final `ExecExit`, which `hArm`'s memory framing
 re-bases back to the outer entry. -/
-theorem execForStartSim
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr)
-    (init : Option Stmt) (cnd step : Option Expr) (b : Stmt) (status : Status)
-    (store' : Store) (outer : Addr)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (out0 : Array String)
-    (_hAlloc : st.store.allocFrame (some env) = (store', outer))
-    (_hInit : ExecInit ⟨store', st.out⟩ d outer init st')
-    (hFor : ForLoop st' d outer cnd step b st'' status)
-    -- the `execForLoopBody` per-iteration residual (`ExecForStep`), parametric in
-    -- the intermediate state / maps / statuses / memory (delivered later by the
-    -- mutual-recursor scaffolding + the cond/body/step machine decode):
-    (hstep : ∀ (φf₀ φc₀ : Addr → Nat) (stM stMid stFin : Vsa.While.St)
-        (bodyStatus loopStatus : Status) (m00 : Mem) (out00 : Array String),
-        ExecForStep g N A SL φf₀ φc₀ stM d outer init cnd step b
-          sp r aInterp aStmt aEnv aRet m00 out00 stMid stFin bodyStatus loopStatus)
-    -- the recursive sub-`for` IH (`execForLoopBody`'s `hForIH`, from the mutual
-    -- recursor — only the `ForLoop.loop` case consumes it):
-    (hForIH : ∀ (φf' φc' : Addr → Nat) (stA stB : Vsa.While.St)
-        (status' : Status) (m0' : Mem) (out0' : Array String),
-        ForLoop stA d outer cnd step b stB status' →
-        Triple
-          (fun cfg => ExecEntry g N A SL φf' φc' stA d outer (.forStmt init cnd step b)
-            sp r aInterp aStmt aEnv aRet m0' cfg ∧ cfg.σ.sailOutput = out0')
-          (ExecExit g N A SL φf' φc' stA.store.frames.size stA.store.closures.size
-            stB status' sp r aRet m0'))
-    -- the arm prologue residual: from the outer block `ExecEntry` (at `env`), run
-    -- `execBlockA` (kind 5) ≫ `env_new` (allocating `outer` per `env_new_spec`) ≫
-    -- the optional `ExecInit` (init `ExecIH` via `armExec_rec`) ≫ the fall to the
-    -- cond head, landing at the ForLoop head `ExecEntry (.forStmt …)` in scope
-    -- `outer` over the post-init state `st'`, with extended φ-maps and a re-based
-    -- memory baseline `m0'`. RESIDUAL (env_new/allocFrame linkage + ExecInit).
-    (hArm : ∀ (φf' φc' : Addr → Nat),
-      Triple
-        (fun c => ExecEntry g N A SL φf φc st d env (.forStmt init cnd step b)
-          sp r aInterp aStmt aEnv aRet m0 c ∧ c.σ.sailOutput = out0)
-        (fun c => ∃ m0', PhiExtends φf φf' st'.store.frames.size ∧
-          PhiExtends φc φc' st'.store.closures.size ∧
-          ExecEntry g N A SL φf' φc' st' d outer (.forStmt init cnd step b)
-            sp r aInterp aStmt aEnv aRet m0' c ∧ c.σ.sailOutput = out0))
-    -- the epilogue residual: the ForLoop exit (at child-scope maps `φf'`/`φc'` and
-    -- baseline `m0'`) re-bases back to the outer entry maps `φf`/`φc` / baseline
-    -- `m0` (the frame-alloc/env_new φ-downgrade + memory framing, analog of
-    -- `execBlockSim`'s `hEpi`):
-    (hEpi : ∀ (φf' φc' : Addr → Nat) (m0' : Mem),
-      Triple
-        (ExecExit g N A SL φf' φc' st'.store.frames.size st'.store.closures.size
-          st'' status sp r aRet m0')
-        (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-          st'' status sp r aRet m0)) :
-    ExecForStartSimGoal g N A SL φf φc st st'' d env init cnd step b status
-      sp r aInterp aStmt aEnv aRet m0 out0 := by
-  intro c hpre
-  -- run the arm prologue (env_new + ExecInit) to the ForLoop head at child scope
-  -- `outer`, over the post-init state `st'`, with extended maps `φf`/`φc` (any pair
-  -- accepted by `hArm`; we thread the entry pair).
-  obtain ⟨cH, hstepsH, m0', hpf, hpc, hEntryH, houtH⟩ := hArm φf φc c hpre
-  -- run the ForLoop proper from that head via `execForLoopBody` (unconditional on
-  -- its `hstep`/`hForIH` residuals).
-  have hloopT :=
-    execForLoopBody g N A SL d outer init cnd step b
-      sp r aInterp aStmt aEnv aRet hstep hForIH φf φc st' st'' status m0' out0 hFor
-  obtain ⟨cQ, hstepsQ, hExitQ⟩ := hloopT cH ⟨hEntryH, houtH⟩
-  -- re-base the loop exit back to the outer entry maps / baseline.
-  obtain ⟨cE, hstepsE, hExitE⟩ := hEpi φf φc m0' cQ hExitQ
-  exact ⟨cE, (hstepsH.trans hstepsQ).trans hstepsE, hExitE⟩
 
 end Vsa.Sim

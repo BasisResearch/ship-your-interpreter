@@ -123,11 +123,6 @@ theorem Steps.toN_of_stepsEq {a b : Config} {k : Nat}
   rw [hk] at this
   simpa using this
 
-#print axioms Step.steps_succ
-#print axioms Steps.steps_le
-#print axioms Steps.toN_of_stepsField
-#print axioms Steps.toN_of_stepsEq
-
 end Vsa.Machine
 
 namespace Vsa.Sim
@@ -142,67 +137,12 @@ end `steps` counter is `u + evalBlocksFuel bs`, so `Steps.toN_of_stepsEq` gives 
 the counted twin of `segToTriple`: identical `hwf`/`hpost`, upgraded conclusion
 `TripleN (evalBlocksFuel bs) (SegPre …) Q`. -/
 
-/-- **Counted seg→`TripleN` metatheorem.**  From the same `SegPre`, kernel
-`decide` `hwf`, and outcome-post `hpost` a plain `segToTriple` row supplies, the
-seg run counts `evalBlocksFuel bs` machine steps.  Every `#derive_case` seg row
-becomes a machine-step LOWER BOUND `TripleN (instruction count) …` for free:
-apply this with the row's OWN `hwf`/`hpost`, no re-proof.  Compose down with
-`TripleN.mono` to any smaller bound a consumer wants. -/
-theorem segToTripleN (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (pc0 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (Q : Config → Prop)
-    (hwf : ChainOK pc0 (keysG L) bs)
-    (hpost : ∀ (σ' : MState) (i' u' : Nat),
-      GoodState σ' → i' < 2 →
-      σ'.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log →
-      σ'.regs.get? Register.PC
-        = some (evalBlocksPC pc0 (SegEvalState.init L lds) bs) →
-      (∃ w, σ'.regs.get? Register.minstret = some w) →
-      GHolds σ' (evalBlocks bs (SegEvalState.init L lds)).regs →
-      Q ⟨σ', i', u'⟩) :
-    TripleN (evalBlocksFuel bs) (SegPre bs L lds pc0 m0) Q := by
-  intro c hpre
-  obtain ⟨hG, hmem, hpc, ⟨vm, hmi⟩, hL, hkeys, hfacts, htick⟩ := hpre
-  obtain ⟨σ', i', hs, hi', hG', hmem', hout, hpc', hmi', hregs, _hframe⟩ :=
-    segEval_sound bs c.σ c.tick c.steps pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf htick
-  rw [hmem] at hmem'
-  refine ⟨evalBlocksFuel bs, ⟨σ', i', c.steps + evalBlocksFuel bs⟩, Nat.le_refl _, ?_, ?_⟩
-  · -- The `Steps` chain from `segEval_sound` ends at `steps = c.steps + evalBlocksFuel bs`;
-    -- `toN_of_stepsEq` reads the count off the `steps` field.
-    exact hs.toN_of_stepsEq (by simp)
-  · exact hpost σ' i' (c.steps + evalBlocksFuel bs) hG' hi' hmem' hpc' hmi' hregs
-
-#print axioms segToTripleN
-
 /-! ## §3. Positive-lower-bound corollaries for the divergence seams
 
 `iterFromCountedRun` wants `TripleN 1`; `approxFromCountedRun` wants `TripleN
 (n + 1)`.  Both come from `segToTripleN` via `TripleN.mono` once the fuel bound
 is a `decide`.  These two corollaries package the arithmetic so a seam supplier
 hands only the fuel-bound `decide` (usually `by decide` on a concrete `bs`). -/
-
-/-- A seg row with `≥ 1` instruction is a `TripleN 1` — the `iterFromCountedRun`
-input shape.  Supply `hfuel : 1 ≤ evalBlocksFuel bs` (a `decide` on concrete
-`bs`). -/
-theorem segToTripleN_one (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (pc0 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (Q : Config → Prop)
-    (hfuel : 1 ≤ evalBlocksFuel bs)
-    (hT : TripleN (evalBlocksFuel bs) (SegPre bs L lds pc0 m0) Q) :
-    TripleN 1 (SegPre bs L lds pc0 m0) Q :=
-  TripleN.mono hfuel hT
-
-/-- A seg row with `≥ n+1` instructions is a `TripleN (n+1)` — the
-`approxFromCountedRun` input shape.  Supply `hfuel : n + 1 ≤ evalBlocksFuel
-bs`. -/
-theorem segToTripleN_succ (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (pc0 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (Q : Config → Prop)
-    (n : Nat) (hfuel : n + 1 ≤ evalBlocksFuel bs)
-    (hT : TripleN (evalBlocksFuel bs) (SegPre bs L lds pc0 m0) Q) :
-    TripleN (n + 1) (SegPre bs L lds pc0 m0) Q :=
-  TripleN.mono hfuel hT
-
-#print axioms segToTripleN_one
-#print axioms segToTripleN_succ
 
 /-! ## §4. The `Landed` combinator (task part 3)
 
@@ -214,97 +154,9 @@ builds from a `Triple`'s `Exists` and consumes into a Prop goal
 instances of `Landed` (their `∃ c', Steps c c' ∧ …`), and can migrate onto these
 shared `mk`/`bind`/`weaken` lemmas. -/
 
-/-- **The landing combinator.**  From `c`, a finite run reaches a config
-satisfying `P`.  Carries the reached config as data under the existential; a
-`Triple`'s result IS `Landed` at its pre-config (`Triple.landed`). -/
-def Landed (c : Config) (P : Config → Prop) : Prop :=
-  ∃ c', Steps c c' ∧ P c'
-
 /-- **Counted landing.**  A landing that took at least `n` machine steps. -/
 def LandedN (n : Nat) (c : Config) (P : Config → Prop) : Prop :=
   ∃ (m : Nat) (c' : Config), n ≤ m ∧ StepsN m c c' ∧ P c'
-
-namespace Landed
-
-/-- **`mk`** — a reached config with its run and post IS a `Landed`. -/
-theorem mk {c c' : Config} {P : Config → Prop} (hs : Steps c c') (hp : P c') :
-    Landed c P :=
-  ⟨c', hs, hp⟩
-
-/-- **Zero-step landing** — a config already satisfying `P` has landed. -/
-theorem refl {c : Config} {P : Config → Prop} (hp : P c) : Landed c P :=
-  ⟨c, .refl c, hp⟩
-
-/-- **`weaken`** — a landing under a stronger post weakens to a weaker one. -/
-theorem weaken {c : Config} {P Q : Config → Prop} (h : Landed c P)
-    (hPQ : ∀ c', P c' → Q c') : Landed c Q := by
-  obtain ⟨c', hs, hp⟩ := h
-  exact ⟨c', hs, hPQ c' hp⟩
-
-/-- **`bind`** — land at a `P`-config, then continue landing from there; the
-runs compose by `Steps.trans`.  This is how a call splice / row seam chains two
-landings into one. -/
-theorem bind {c : Config} {P Q : Config → Prop} (h : Landed c P)
-    (k : ∀ c', P c' → Landed c' Q) : Landed c Q := by
-  obtain ⟨c', hs, hp⟩ := h
-  obtain ⟨c'', hs', hq⟩ := k c' hp
-  exact ⟨c'', hs.trans hs', hq⟩
-
-/-- **The `Triple` ⇒ `Landed` bridge.**  `Triple P Q` says every `P`-config
-lands at a `Q`-config; so at any `P`-config `c`, `Landed c Q`.  Marshalling a row
-result into a landing is `id` (the observation's goal: "the `Triple` result IS
-`Landed` at the pre-config"). -/
-theorem of_triple {P Q : Config → Prop} (h : Triple P Q) {c : Config} (hc : P c) :
-    Landed c Q :=
-  h c hc
-
-end Landed
-
-namespace LandedN
-
-/-- **`mk`** — a counted run reaching a `P`-config is a counted landing. -/
-theorem mk {n : Nat} {c c' : Config} {P : Config → Prop}
-    (hm : n ≤ m) (hs : StepsN m c c') (hp : P c') : LandedN n c P :=
-  ⟨m, c', hm, hs, hp⟩
-
-/-- **Forget the count** — a counted landing is a landing. -/
-theorem toLanded {n : Nat} {c : Config} {P : Config → Prop} (h : LandedN n c P) :
-    Landed c P := by
-  obtain ⟨m, c', _, hs, hp⟩ := h
-  exact ⟨c', hs.toSteps, hp⟩
-
-/-- **`weakenCount`** — lower the recorded step bound. -/
-theorem weakenCount {m n : Nat} {c : Config} {P : Config → Prop} (hmn : m ≤ n)
-    (h : LandedN n c P) : LandedN m c P := by
-  obtain ⟨k, c', hk, hs, hp⟩ := h
-  exact ⟨k, c', Nat.le_trans hmn hk, hs, hp⟩
-
-/-- **`weaken`** — weaken the post. -/
-theorem weaken {n : Nat} {c : Config} {P Q : Config → Prop} (h : LandedN n c P)
-    (hPQ : ∀ c', P c' → Q c') : LandedN n c Q := by
-  obtain ⟨m, c', hm, hs, hp⟩ := h
-  exact ⟨m, c', hm, hs, hPQ c' hp⟩
-
-/-- **`bind`** — counted landings compose, adding step counts
-(`StepsN.trans_add`). -/
-theorem bind {m n : Nat} {c : Config} {P Q : Config → Prop} (h : LandedN m c P)
-    (k : ∀ c', P c' → LandedN n c' Q) : LandedN (m + n) c Q := by
-  obtain ⟨m₁, c', hm₁, hs, hp⟩ := h
-  obtain ⟨m₂, c'', hm₂, hs', hq⟩ := k c' hp
-  exact ⟨m₁ + m₂, c'', Nat.add_le_add hm₁ hm₂, hs.trans_add hs', hq⟩
-
-/-- **The `TripleN` ⇒ `LandedN` bridge.**  A counted triple lands `≥ n` steps at
-any pre-config. -/
-theorem of_tripleN {n : Nat} {P Q : Config → Prop} (h : TripleN n P Q)
-    {c : Config} (hc : P c) : LandedN n c Q :=
-  h c hc
-
-end LandedN
-
-#print axioms Landed.bind
-#print axioms Landed.of_triple
-#print axioms LandedN.bind
-#print axioms LandedN.of_tripleN
 
 /-! ## §5. Demonstration on a real seg row (task part 4)
 
@@ -315,29 +167,5 @@ end LandedN
 `evalBlocksFuel demoChain` reduces to the concrete instruction count (3), so the
 row is a `≥ 3` machine-step lower bound; the `_one`/`_succ` corollaries then drop
 it to `TripleN 1` for `iterFromCountedRun` by one `decide`. -/
-
-/-- **Counted demo row.**  Same statement as `demoChainRow` but counted: the
-three-`addi` chain lands in `≥ evalBlocksFuel demoChain` machine steps.  Built by
-`segToTripleN` with the plain row's `hwf`/`hpost` verbatim — the recipe in
-action. -/
-theorem demoChainRowN (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    TripleN (evalBlocksFuel demoChain) (SegPre demoChain [] [] 0x80000000#64 m0)
-      (DemoPost m0) := by
-  apply segToTripleN demoChain [] [] 0x80000000#64 m0 (DemoPost m0) (by decide)
-  intro σ' i' u' hG' _hi' hmem' hpc' _hmi' hregs
-  refine ⟨hG', ?_, ?_, ?_⟩
-  · rw [hmem']; rfl
-  · rw [hpc']; rfl
-  · exact gholds_lookup (v := 3#64) _ hregs (by decide)
-
-/-- The demo chain has `≥ 1` instruction, so it lands at least one machine step —
-the `iterFromCountedRun` input shape, reached by one `decide` on the fuel. -/
-theorem demoChainRow_one (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    TripleN 1 (SegPre demoChain [] [] 0x80000000#64 m0) (DemoPost m0) :=
-  segToTripleN_one demoChain [] [] 0x80000000#64 m0 (DemoPost m0) (by decide)
-    (demoChainRowN m0)
-
-#print axioms demoChainRowN
-#print axioms demoChainRow_one
 
 end Vsa.Sim

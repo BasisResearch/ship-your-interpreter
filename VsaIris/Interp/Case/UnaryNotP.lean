@@ -103,7 +103,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   · imodintro; rw [hCt]; iapply astEG_of_view hrc hgeo $$ Hro
   iintro %R1 %w0 %w1 %w2 %st1 %v %hE %hkeep1 #Hv1 Hms Hst Hw Hslot Hk
 
-
 #ix_piece UnaryNotP_p2 from UnaryNotP_p1 by
   -- run 2: operator test, copy the operand to `sp+64`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

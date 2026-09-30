@@ -153,7 +153,6 @@ theorem genView_read {L : List Nat} {Sown : Nat → Prop} {rd : Nat → BitVec 8
   unfold genImg
   rw [if_pos h]
 
-
 theorem base_byte {a : Nat} (h : a ∈ baseDA) : impureW a ∨ rodataDom a := by
   simp only [baseDA, List.mem_append, mem_accAddrs_iff] at h
   unfold impureW rodataDom
@@ -260,7 +259,6 @@ theorem genData (L : List Nat) (Sro Sown : Nat → Prop) (rd : Nat → BitVec 8)
     fun h => if hl : a ∈ L then .inl ⟨h, hl⟩ else .inr ⟨h, hl⟩⟩) $$ H
 
 end Own
-
 
 /-- A `%s` argument's string, as the run's view reads it. -/
 theorem genDStr {R : Nat → Prop} {rd : Nat → BitVec 8} {fmt : BitVec 64} {args : List (BitVec 64)}

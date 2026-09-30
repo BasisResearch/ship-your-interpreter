@@ -446,7 +446,6 @@ their total): back at `ra` with 0, having printed `out` and buffered `pend'`,
     refine hk R' M' out pend' hrel hret hF' ?_
     exact (hFro.mono fun a h => .inr h).trans (hFr'.mono fun a h => .inl (by rw [hfp] at h; exact h))
 
-
 #nx_chain sfvwrite_chain := [sfvwrite_A, sfvwrite_B]
 
 end VsaIris.Sym.Fp

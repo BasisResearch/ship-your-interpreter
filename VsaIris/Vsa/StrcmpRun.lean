@@ -50,8 +50,6 @@ theorem SWin.ld {a len : Nat} (h : SWin a len) {k w : Nat} (hk : k + w ≤ len +
   · left; omega
   · right; omega
 
-theorem zext_toNat8 (b : BitVec 8) : (zero_extend (m := 64) b).toNat = b.toNat := zext_toNat b
-
 theorem zext_eq_iff (a b : BitVec 8) :
     zero_extend (m := 64) a = zero_extend (m := 64) b ↔ a.toNat = b.toNat := by
   constructor
@@ -698,7 +696,6 @@ theorem WordPair.nul_eq (hx : SBytes ix a cx) (hy : SBytes iy b cy) (h : WordPai
 
 end Word
 
-
 section Loop
 
 variable {live : Nat → Prop} {p q r : BitVec 64} {cx cy : List Char} {ix iy : Nat → BitVec 8}
@@ -763,19 +760,6 @@ theorem grp_guard (ctx : Ctx live p q r cx cy ix iy) {w : Nat} {A B a5 t2 : BitV
   by_cases h : cx.length < w + 8
   · rw [decide_eq_true h, bne_iff_ne, ne_eq, this]; omega
   · rw [decide_eq_false h, bne_eq_false_iff_eq, this]; omega
-
-/-- The `ld` address of a group. -/
-theorem grp_addr (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} (hw : w ≤ cx.length)
-    (imm : BitVec 12)
-    (himm : (p + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm = p + BitVec.ofNat 64 w) :
-    ((p + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm).toNat = p.toNat + w := by
-  rw [himm]; exact ctx.wx.ptr p rfl (by omega)
-
-theorem grp_addrY (ctx : Ctx live p q r cx cy ix iy) {j w : Nat} (hw : w ≤ cy.length)
-    (imm : BitVec 12)
-    (himm : (q + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm = q + BitVec.ofNat 64 w) :
-    ((q + BitVec.ofNat 64 (24 * j)) + sign_extend (m := 64) imm).toNat = q.toNat + w := by
-  rw [himm]; exact ctx.wy.ptr q rfl (by omega)
 
 theorem peekW_x {p q : BitVec 64} {w : Nat} {m : Std.ExtHashMap Nat (BitVec 8)}
     {vals : Nat → BitVec 8} (h : ∀ a ∈ peekW p q w, (m[a]?).getD 0 = vals a) :
@@ -1291,4 +1275,3 @@ end Loop
 
 end VsaIris.Inst.Strcmp
 
-#print axioms VsaIris.Inst.Strcmp.strcmpRun

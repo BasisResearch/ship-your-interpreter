@@ -102,34 +102,6 @@ digit fast path (magnitude `≤ 9`) and the multi-digit loop (emit `n%10`, set
 MSB-first digit list.  The machine's descending-buffer write order (low digit
 written first, into a top-down buffer) reads back as this same MSB-first list. -/
 
-/-- Functional model of the machine's decimal digit loop, MSB-first. -/
-def loopDigits : Nat → Nat → List Char
-  | 0, _ => []
-  | fuel + 1, n =>
-    if n ≤ 9 then [Nat.digitChar n]
-    else loopDigits fuel (n / 10) ++ [Nat.digitChar (n % 10)]
-
-/-- The machine loop's output equals `natDigits` of the magnitude.  Together with
-`natToString`'s definition this closes the digit-string half of the byte-for-byte
-correspondence (§3.2). -/
-theorem loopDigits_eq_natDigits (fuel n : Nat) (h : n + 1 ≤ fuel) :
-    loopDigits fuel n = natDigits fuel n := by
-  induction fuel generalizing n with
-  | zero => omega
-  | succ fuel ih =>
-    unfold loopDigits natDigits
-    by_cases hle : n ≤ 9
-    · simp [hle, show n < 10 by omega]
-    · have hlt : ¬ n < 10 := by omega
-      simp only [hle, hlt, if_false]
-      rw [ih (n / 10) (by omega)]
-
-/-- `loopDigits n n` (fuel = the value, which suffices for `n ≥ 1`) equals the
-`natToString` digit list.  `natToString n = (natDigits (n+1) n).foldl .push ""`. -/
-theorem loopDigits_natToString (n : Nat) :
-    loopDigits (n + 1) n = natDigits (n + 1) n :=
-  loopDigits_eq_natDigits (n + 1) n (Nat.le_refl _)
-
 /-! ## INT64_MIN-safe sign/magnitude bridge
 
 The machine reads the sign bit, stores `'-'` iff negative, then negates

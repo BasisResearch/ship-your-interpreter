@@ -33,7 +33,6 @@ open Vsa.MemRepr Vsa.Sim
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003164#64 R Mt
   by ix_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x800033cc
 
-
 #ix_seg FnLitT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s sret pv aE : BitVec 64}
@@ -44,7 +43,6 @@ open Vsa.MemRepr Vsa.Sim
     (fun b => (InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) ∨ InExt (pv.toNat, 16) b)
     Q 0x800033d0#64 R Mt
   by ix_run hlive using [h2, hA, hsf] at 0x800033d4
-
 
 #ix_seg FnLitT_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -68,7 +66,6 @@ open Vsa.MemRepr Vsa.Sim
     (fun b => (InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) ∨ InExt (pv.toNat, 16) b)
     Q 0x800033d8#64 R Mt
   by ix_run hlive using [h10, h13, h8, h9, h2, hRA, hS0, hS1, hS2, hsf, hal, e8, p8]
-
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap

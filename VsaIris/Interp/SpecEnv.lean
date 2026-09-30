@@ -40,8 +40,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst VsaIris.VsaHeap VsaIris.MallocFast VsaIris.Sym
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
-theorem htifLo_eq : htifLo = Vsa.Sim.tohostAddr := rfl
-
 /-! ## Entries, registers, stack -/
 
 def envNewPC : BitVec 64 := 0x800029fc#64
@@ -317,12 +315,5 @@ def ReallocNullLocalRun (M : MachineModel) : Prop :=
     vsaLayoutP.Shape mv H → (∀ a, stackWin s allocHeadroom a → ¬ heapFoot vsaLayoutP H a) →
     ∃ fuel, LocalRun M [(gp, gpV)] allocText (allocRegs vsaClob vsaSaved)
       (mallocBytes vsaLayoutP H s allocHeadroom) (MallocEnd vsaLayoutP H n r s saved) fuel rv mv
-
-/-- **`realloc(NULL, n)` at the binary** (`reallocNullHoles_proved`). -/
-structure ReallocNullHoles : Prop where
-  /-- Counted: a charged request returns a fresh block. -/
-  chgRun : ∀ live, AllocLive live → ReallocNullChgRun (vsaModel live)
-  /-- Uncounted: NULL with the heap unchanged, or a fresh block. -/
-  localRun : ∀ live, AllocLive live → ReallocNullLocalRun (vsaModel live)
 
 end VsaIris.Interp

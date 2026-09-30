@@ -577,5 +577,4 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
       · simp only [upd_apply, h10', ite_false]
         rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h1, h5', h10', h11', ite_false]
 
-
 end VsaIris.Interp

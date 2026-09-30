@@ -426,15 +426,6 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
       closureSeqT_consAbrupt (st'' := st') ($S).hlive D1 hne h1,
       interpSeqT_consAbrupt ($S).hlive D1 hne h1 ($S).vnull⟩))
 
-/-- **`term_sim`'s recursion, statement form**: every statement derivation
-meets `exec_stmt`'s dispatch-point spec. -/
-theorem execDispT_all {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
-    (S : TermSupply (GF := GF) live N inp) {st : St} {d env : Nat} {sm : Stmt} {st' : St}
-    {status : Status} {n : Nat} (D : ExecSCost st d env sm st' status n) :
-    ⊢ execDispT_body (GF := GF) (Mv live) N Lp Rp inp st d env sm st' status n D := by
-  have h : execT (GF := GF) live N inp st d env sm st' status n D := by term_rec ExecSCost.rec S D
-  exact h.1
-
 /-- **`term_sim`'s recursion, program form**: a whole-program derivation
 meets `interp_run`'s loop motive. -/
 theorem interpSeqT_all {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}

@@ -21,7 +21,6 @@ the frame, `s5` the value slot). This file holds what their spans share:
 
 namespace VsaIris.Interp
 
-
 open VsaIris.Sym VsaIris.MallocFast Vsa.MemRepr Vsa.Sim
 
 /-- The stack frame after `env_get`'s prologue (entry `sp = s`): `sp = s -

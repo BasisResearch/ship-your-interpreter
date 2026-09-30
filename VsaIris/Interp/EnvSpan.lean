@@ -31,8 +31,6 @@ abbrev gprs : List Nat := eRegs.tail
 
 theorem eRegs_eq : eRegs = VsaIris.PC :: gprs := rfl
 
-theorem eRegs_nodup : eRegs.Nodup := by decide
-
 theorem pc_not_gprs : VsaIris.PC ∉ gprs := by decide
 
 section Regs
@@ -293,12 +291,6 @@ theorem Span.mono {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R :
     (h : Span live S pc R Mt F) (k : ∀ pc' R' Mt', F pc' R' Mt' → F' pc' R' Mt') :
     Span live S pc R Mt F' :=
   fun Q hk => h Q fun pc' R' Mt' hF => hk pc' R' Mt' (k pc' R' Mt' hF)
-
-/-- A span with no instructions. -/
-theorem Span.refl {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
-    {Mt : Mem} {F : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} (h : F pc R Mt) :
-    Span live S pc R Mt F :=
-  fun _ hk => hk pc R Mt h
 
 /-- **A span at the Iris level**, exits described by `F`. The continuation
 gets the exit PC, the registers and the tracking memory at the exit, and

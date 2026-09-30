@@ -378,9 +378,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep3, hkeep2, hkeep1]
 
-
-
-
 #ix_piece BinaryGeP_st1 from BinaryGeP_p2 at 2 by
   -- run 3: operator dispatch, the string/string test, to `strcmp`
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

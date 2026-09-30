@@ -139,22 +139,4 @@ theorem pin4_of_writeLog (m : Std.ExtHashMap Nat (BitVec 8)) (log1 log2 : List W
   exact Pin4_frame (fun k hk1 hk2 => writeLog_out _ log2 k (outL_of_range hdis hk1 hk2))
     (Pin4_writeMap4 _ _ _)
 
-/-- The `Pin8` of a width-8 log entry disjoint from every later entry. -/
-theorem pin8_of_writeLog (m : Std.ExtHashMap Nat (BitVec 8)) (log1 log2 : List WEntry)
-    (A : Nat) (dv : BitVec 64) (hdis : OutLRange log2 A 8) :
-    Pin8 (writeLog m (log1 ++ (A, 8, dv) :: log2)) A dv := by
-  rw [writeLog_append]
-  show Pin8 (writeLog (writeMap8 (writeLog m log1) A (sdData_val dv)) log2) A dv
-  exact Pin8_frame (fun k hk1 hk2 => writeLog_out _ log2 k (outL_of_range hdis hk1 hk2))
-    (Pin8_writeMap8 _ _ _)
-
-/-- The `SlotHolds` shape of `pin8_of_writeLog` (a spilling `sd` in the log,
-disjoint from all later entries; `hA` names the slot's effective address). -/
-theorem slotHolds_of_writeLog (m : Std.ExtHashMap Nat (BitVec 8)) (log1 log2 : List WEntry)
-    (base : BitVec 64) (off : Nat) (v : BitVec 64) (A : Nat)
-    (hA : (base + sign_extend (m := 64) (BitVec.ofNat 12 off)).toNat = A)
-    (hdis : OutLRange log2 A 8) :
-    SlotHolds base off v (writeLog m (log1 ++ (A, 8, v) :: log2)) :=
-  slotHolds_of_pin8_rt base off v A _ hA (pin8_of_writeLog m log1 log2 A v hdis)
-
 end Vsa.Sim

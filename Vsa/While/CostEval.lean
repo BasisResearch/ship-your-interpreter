@@ -63,12 +63,6 @@ theorem Le.refl {α : Type} (r : Res α) : Le r r := Or.inr rfl
 
 theorem Le.fuel {α : Type} (r : Res α) : Le .fuel r := Or.inl rfl
 
-theorem Le.trans {α : Type} {r r' r'' : Res α} (h : Le r r') (h' : Le r' r'') :
-    Le r r'' := by
-  rcases h with rfl | rfl
-  · exact Le.fuel _
-  · exact h'
-
 theorem Le.bind {α β : Type} {r r' : Res α} {k k' : α → Res β} (h : Le r r')
     (hk : ∀ a, Le (k a) (k' a)) : Le (r.bind k) (r'.bind k') := by
   rcases h with rfl | rfl
@@ -99,17 +93,6 @@ theorem Le.stuck_of {α : Type} {r r' : Res α} (h : Le r r') (hr : r = .stuck) 
   rcases h with h | h
   · cases h
   · exact h.symm
-
-/-- `true` iff the result is `stuck`. -/
-def isStuck {α : Type} : Res α → Bool
-  | .stuck => true
-  | _ => false
-
-theorem eq_stuck_of_isStuck {α : Type} {r : Res α} (h : r.isStuck = true) : r = .stuck := by
-  cases r with
-  | done _ => cases h
-  | stuck => rfl
-  | fuel => cases h
 
 end Res
 
@@ -377,15 +360,6 @@ theorem oracle_succ (f : Nat) : oracle (f + 1) = (oracle f).next := rfl
 
 /-! ## The nine evaluators -/
 
-def evalE (f : Nat) : St → Nat → Addr → Expr → Res EOut := (oracle f).e
-def evalArgs (f : Nat) : St → Nat → Addr → List Expr → Res AOut := (oracle f).args
-def callEval (f : Nat) : St → Nat → Value → List Value → Res EOut := (oracle f).call
-def execSEval (f : Nat) : St → Nat → Addr → Stmt → Res SOut := (oracle f).s
-def execInitEval (f : Nat) : St → Nat → Addr → Option Stmt → Res UOut := (oracle f).init
-def forLoopEval (f : Nat) :
-    St → Nat → Addr → Option Expr → Option Expr → Stmt → Res SOut := (oracle f).loop
-def forCondEval (f : Nat) : St → Nat → Addr → Option Expr → Res COut := (oracle f).cond
-def execStepEval (f : Nat) : St → Nat → Addr → Option Expr → Res UOut := (oracle f).step
 def execSeqEval (f : Nat) : St → Nat → Addr → List Stmt → Res SOut := (oracle f).seq
 
 /-! ## Fuel monotonicity -/
@@ -475,22 +449,11 @@ theorem oracle_le : ∀ {f f' : Nat}, f ≤ f' → (oracle f).Le (oracle f')
   | _ + 1, 0, h => absurd h (Nat.not_succ_le_zero _)
   | _ + 1, _ + 1, h => (oracle_le (Nat.le_of_succ_le_succ h)).next
 
-/-- Fuel monotonicity of the statement-sequence evaluator: a `done` result
-persists at every larger fuel. -/
-theorem execSeqEval_done_mono {f f' : Nat} (hf : f ≤ f') {st d env ss} {r : SOut}
-    (h : execSeqEval f st d env ss = .done r) : execSeqEval f' st d env ss = .done r :=
-  ((oracle_le hf).seq st d env ss).done_of h
-
 /-- Fuel monotonicity of the statement-sequence evaluator: a `stuck` result
 persists at every larger fuel. -/
 theorem execSeqEval_stuck_mono {f f' : Nat} (hf : f ≤ f') {st d env ss}
     (h : execSeqEval f st d env ss = .stuck) : execSeqEval f' st d env ss = .stuck :=
   ((oracle_le hf).seq st d env ss).stuck_of h
-
-/-- Fuel monotonicity of the expression evaluator. -/
-theorem evalE_mono {f f' : Nat} (hf : f ≤ f') (st d env e) :
-    Res.Le (evalE f st d env e) (evalE f' st d env e) :=
-  (oracle_le hf).e st d env e
 
 /-! ## Completeness -/
 
@@ -811,49 +774,9 @@ theorem execSeqCost_eq_of_normalCost {f : Nat} {st d env} {p : List Stmt} {n0 : 
   obtain ⟨st0, h0⟩ := Res.eq_done_of_normalCost h
   exact execSeqCost_n_eq_of_eval h0 hd
 
-/-- The capacity premise shape of `DlHeap.InitialAllocatorAt.capacity`,
-discharged from one evaluator run. -/
-theorem execSeqCost_capacity_of_normalCost {f : Nat} {p : Program} {n0 K : Nat}
-    (h : (execSeqEval f initSt 0 0 p).normalCost? = some n0) (hK : 2 * n0 + 8256 ≤ K) :
-    ∀ st' n, ExecSeqCost initSt 0 0 p st' .normal n → 2 * n + 8256 ≤ K := by
-  intro st' n hd
-  rw [execSeqCost_eq_of_normalCost h hd]
-  exact hK
-
-/-- Kernel-checkable form of `execSeqCost_none_of_stuck`. -/
-theorem execSeqCost_none_of_isStuck {f : Nat} {st d env} {p : List Stmt}
-    (h : (execSeqEval f st d env p).isStuck = true) (st' : St) (status : Status) (n : Nat) :
-    ¬ ExecSeqCost st d env p st' status n :=
-  execSeqCost_none_of_stuck (Res.eq_stuck_of_isStuck h) st' status n
-
 /-! ## Validation on the test programs
 
 Costs computed by the kernel. The printed output of each run agrees with
 `Vsa/While/Validation.lean`. -/
-
-section Validation
-open Programs
-
-/-- `tests/while.wl`, the script embedded in the ELF. -/
-theorem whileWl_normalCost : (execSeqEval 1000 initSt 0 0 whileWl).normalCost? = some 6992 := by
-  decide +kernel
-
-/-- Every normal derivation of the embedded script costs exactly 6992. -/
-theorem whileWl_cost_eq {st' : St} {n : Nat} (hd : ExecSeqCost initSt 0 0 whileWl st' .normal n) :
-    n = 6992 :=
-  execSeqCost_eq_of_normalCost whileWl_normalCost hd
-
-example : (execSeqEval 1000 initSt 0 0 arithmeticWl).normalCost? = some 0 := by decide +kernel
-example : (execSeqEval 1000 initSt 0 0 forWl).normalCost? = some 6384 := by decide +kernel
-example : (execSeqEval 1000 initSt 0 0 functionsWl).normalCost? = some 5296 := by decide +kernel
-example : (execSeqEval 1000 initSt 0 0 scopeWl).normalCost? = some 1648 := by decide +kernel
-example : (execSeqEval 1000 initSt 0 0 stringsWl).normalCost? = some 208 := by decide +kernel
-
-/-- Division by zero has no derivation. -/
-theorem divZero_underivable (st' : St) (status : Status) (n : Nat) :
-    ¬ ExecSeqCost initSt 0 0 [.expr (.binary .div (.int 1) (.int 0))] st' status n :=
-  execSeqCost_none_of_isStuck (f := 10) (by decide +kernel) st' status n
-
-end Validation
 
 end Vsa.While

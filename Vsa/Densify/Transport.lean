@@ -22,7 +22,6 @@ structure CEqv (c c' : Config) : Prop where
   tick : c.tick = c'.tick
   steps : c.steps = c'.steps
 
-theorem CEqv.refl (c : Config) : CEqv c c := ⟨SEqv.refl _, rfl, rfl⟩
 theorem CEqv.symm {c c'} (h : CEqv c c') : CEqv c' c := ⟨h.σ.symm, h.tick.symm, h.steps.symm⟩
 
 theorem output_of_seqv {σ σ' : MState} (h : SEqv σ σ') : output σ = output σ' := by
@@ -165,31 +164,11 @@ theorem fillZeroMem_ram (m : Std.ExtHashMap Nat (BitVec 8)) {a : Nat} (hlo : ram
     (hhi : a < ramBase + ramSize) : (fillZeroMem m)[a]? = some ((m[a]?).getD 0) := by
   rw [fillZeroMem_get, if_pos ⟨hlo, hhi⟩]
 
-/-- A memory whose RAM bytes are all present is its own fill. -/
-theorem fillZeroMem_eq_of_dense {m : Std.ExtHashMap Nat (BitVec 8)}
-    (h : ∀ a, ramBase ≤ a → a < ramBase + ramSize → (m[a]?).isSome) : fillZeroMem m = m := by
-  apply Std.ExtHashMap.ext_getElem?
-  intro a
-  rw [fillZeroMem_get]
-  split
-  · next ha =>
-    have := h a ha.1 ha.2
-    cases hm : m[a]? with
-    | none => rw [hm] at this; cases this
-    | some b => rfl
-  · rfl
-
 /-- The fill-with-zero configuration. -/
 noncomputable def fillZero (c : Config) : Config :=
   ⟨{ c.σ with mem := fillZeroMem c.σ.mem }, c.tick, c.steps⟩
 
 theorem ceqv_fillZero (c : Config) : CEqv c (fillZero c) :=
   ⟨⟨rfl, rfl, memEqv_fillZeroMem _, rfl, rfl⟩, rfl, rfl⟩
-
-theorem fillZero_eq_of_dense {c : Config}
-    (h : ∀ a, ramBase ≤ a → a < ramBase + ramSize → (c.σ.mem[a]?).isSome) : fillZero c = c := by
-  obtain ⟨σ, i, u⟩ := c
-  show (⟨{ σ with mem := fillZeroMem σ.mem }, i, u⟩ : Config) = ⟨σ, i, u⟩
-  rw [fillZeroMem_eq_of_dense h]
 
 end Vsa.Densify

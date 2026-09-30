@@ -260,5 +260,4 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
 #ix_chain caseT_UnaryNot := [UnaryNotT_p1, UnaryNotT_p2, UnaryNotT_p3, UnaryNotT_p4]
 
-
 end VsaIris.Interp

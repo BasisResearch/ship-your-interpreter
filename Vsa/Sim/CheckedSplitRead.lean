@@ -55,5 +55,4 @@ theorem checked_mem_read_of_split (σ : Vsa.Machine.MState) (a : BitVec 64)
   erw [hloop]
   simp [splitReadTrace, EStateM.pure, default_meta]
 
-#print axioms checked_mem_read_of_split
 end Vsa.Sim

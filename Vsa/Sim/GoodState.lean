@@ -72,9 +72,4 @@ structure GoodState (σ : MState) : Prop where
   nextPC : ∃ v, σ.regs.get? Register.nextPC = some v
   PC : ∃ v, σ.regs.get? Register.PC = some v
 
-/-- The PC of a good state (some value exists by `GoodState.PC`; lemmas
-pin it with an explicit `σ.regs.get? Register.PC = some pc` hypothesis). -/
-abbrev pcOf (σ : MState) (pc : BitVec 64) : Prop :=
-  σ.regs.get? Register.PC = some pc
-
 end Vsa.Sim

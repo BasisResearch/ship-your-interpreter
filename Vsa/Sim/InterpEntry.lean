@@ -135,9 +135,6 @@ Every allocation extends `φf`/`φc`; an exit predicate quantifies `∃ φf' ⊇
 def PhiExtends (φ φ' : Addr → Nat) (n : Nat) : Prop :=
   ∀ a, a < n → φ' a = φ a
 
-theorem PhiExtends.refl (φ : Addr → Nat) (n : Nat) : PhiExtends φ φ n :=
-  fun _ _ => rfl
-
 theorem PhiExtends.trans {φ φ' φ'' : Addr → Nat} {n : Nat}
     (h1 : PhiExtends φ φ' n) (h2 : PhiExtends φ' φ'' n) : PhiExtends φ φ'' n :=
   fun a ha => (h2 a ha).trans (h1 a ha)
@@ -146,15 +143,6 @@ theorem PhiExtends.trans {φ φ' φ'' : Addr → Nat} {n : Nat}
 theorem PhiExtends.mono {φ φ' : Addr → Nat} {n m : Nat} (hnm : n ≤ m)
     (h : PhiExtends φ φ' m) : PhiExtends φ φ' n :=
   fun a ha => h a (Nat.lt_of_lt_of_le ha hnm)
-
-/-- Agreement on the represented frame prefix applies at every valid
-environment index.  This is the only sound way to transport an environment
-pointer through an extension of the frame-address map. -/
-theorem EnvValid.phiExtends {st : Vsa.While.St} {env : Addr}
-    {φ φ' : Addr → Nat} (henv : EnvValid st env)
-    (hφ : PhiExtends φ φ' st.store.frames.size) :
-    φ' env = φ env :=
-  hφ env henv
 
 /-! ## `InterpCodeLoaded` — the reachable-code bundle
 
@@ -227,33 +215,6 @@ def NullSlotPinned (m : Mem) : Prop :=
   m[(jumpTableBase + 14 : Nat)]? = some (0xfe : BitVec 8) ∧
   m[(jumpTableBase + 15 : Nat)]? = some (0xff : BitVec 8)
 
-/-- `Value_nullLoaded` survives an agreement on `value_null`'s code region
-`[0x800027ec, 0x800027f8)` (RELOCATED from `EvalCallNative2`). -/
-theorem loaded_null_agreeP (m m' : Mem)
-    (ha : ∀ a, (0x800027ec ≤ a ∧ a < 0x800027f8) → m[a]? = m'[a]?)
-    (h : Value_nullLoaded m) : Value_nullLoaded m' := by
-  simp only [Value_nullLoaded, Vsa.Sim.Code.value_nullChunk0] at h ⊢
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    (rw [← ha _ (by omega)]; simp_all only [])
-
-/-- `Value_boolLoaded` survives an agreement on `value_bool`'s code region
-`[0x800027f8, 0x8000280c)` (RELOCATED from `EvalNotSim`). -/
-theorem loaded_bool_agreeP (m m' : Mem)
-    (ha : ∀ a, (0x800027f8 ≤ a ∧ a < 0x8000280c) → m[a]? = m'[a]?)
-    (h : Value_boolLoaded m) : Value_boolLoaded m' := by
-  simp only [Value_boolLoaded, Vsa.Sim.Code.value_boolChunk0] at h ⊢
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    (rw [← ha _ (by omega)]; simp_all only [])
-
-/-- `Value_strLoaded` survives an agreement on `value_str`'s code region
-`[0x8000281c, 0x8000282c)`. -/
-theorem loaded_str_agreeP (m m' : Mem)
-    (ha : ∀ a, (0x8000281c ≤ a ∧ a < 0x8000282c) → m[a]? = m'[a]?)
-    (h : Value_strLoaded m) : Value_strLoaded m' := by
-  simp only [Value_strLoaded, Vsa.Sim.Code.value_strChunk0] at h ⊢
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    (rw [← ha _ (by omega)]; simp_all only [])
-
 /-- **`NBSPins` — the null/bool/str callee byte pins** (the `GeomFrom` supplier
 layer's memory half): the three sibling leaf callees' code windows loaded and
 their jump-table slots (tags 1-3) pinned.  Named-field structure (gate shape);
@@ -266,49 +227,6 @@ structure NBSPins (m : Mem) : Prop where
   null_slot : NullSlotPinned m
   bool_slot : BoolSlotPinned m
   str_slot : StrSlotPinned m
-
-/-- `NBSPins` transport: agreement on the value_* text window
-`[0x800027ec, 0x8000282c)` and the tag-1..3 table slots `[0x80019f5c, 0x80019f68)`
-carries every pin. -/
-theorem NBSPins.transport {m m' : Mem} (h : NBSPins m)
-    (htext : ∀ a, (0x800027ec ≤ a ∧ a < 0x8000282c) → m[a]? = m'[a]?)
-    (htable : ∀ a, (0x80019f5c ≤ a ∧ a < 0x80019f68) → m[a]? = m'[a]?) :
-    NBSPins m' where
-  null_code := loaded_null_agreeP m m' (fun a ha => htext a (by omega)) h.null_code
-  bool_code := loaded_bool_agreeP m m' (fun a ha => htext a (by omega)) h.bool_code
-  str_code := loaded_str_agreeP m m' (fun a ha => htext a (by omega)) h.str_code
-  null_slot := by
-    obtain ⟨p0, p1, p2, p3⟩ := h.null_slot
-    exact ⟨(htable _ (by simp only [jumpTableBase]; omega)).symm.trans p0,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p1,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p2,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p3⟩
-  bool_slot := by
-    obtain ⟨p0, p1, p2, p3⟩ := h.bool_slot
-    exact ⟨(htable _ (by simp only [jumpTableBase]; omega)).symm.trans p0,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p1,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p2,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p3⟩
-  str_slot := by
-    obtain ⟨p0, p1, p2, p3⟩ := h.str_slot
-    exact ⟨(htable _ (by simp only [jumpTableBase]; omega)).symm.trans p0,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p1,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p2,
-      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p3⟩
-
-/-- `NBSPins` survives any memory change confined to the stack scribble
-`[SL.lo, sp)`, given the (widened) text/table stack-disjointness the entry
-carries.  The workhorse at every entry→child-entry seam: the pre-call writes
-between two entries are stack-confined. -/
-theorem NBSPins.survive_stack {SL : StackLayout} {sp : BitVec 64} {m m' : Mem}
-    (h : NBSPins m)
-    (hvi : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec)
-    (htb : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
-    (hag : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → m[k]? = m'[k]?) :
-    NBSPins m' :=
-  h.transport
-    (fun a ha => hag a (by rcases hvi with hv | hv <;> omega))
-    (fun a ha => hag a (by rcases htb with ht | ht <;> omega))
 
 /-! ## `KindSlotPinned` — the per-kind jump-table slot pin (dispatch coupling)
 
@@ -348,35 +266,6 @@ structure KindTablePins (m : Mem) : Prop where
   slot9 : KindSlotPinned 9 (0x800031b0#64) m   -- EX_CALL
   slot10 : KindSlotPinned 10 (0x800033c4#64) m -- EX_FN
 
-/-- One slot's pin survives agreement on its own 4-byte window. -/
-theorem kindSlotPinned_agree {k : Nat} {armPC : BitVec 64} {m m' : Mem}
-    (h : KindSlotPinned k armPC m)
-    (ha : ∀ a, jumpTableBase + 4 * k ≤ a → a < jumpTableBase + 4 * k + 4 →
-      m[a]? = m'[a]?) :
-    KindSlotPinned k armPC m' := by
-  obtain ⟨t0, t1, t2, t3, h0, h1, h2, h3, he⟩ := h
-  exact ⟨t0, t1, t2, t3,
-    (ha _ (by omega) (by omega)).symm.trans h0,
-    (ha _ (by omega) (by omega)).symm.trans h1,
-    (ha _ (by omega) (by omega)).symm.trans h2,
-    (ha _ (by omega) (by omega)).symm.trans h3, he⟩
-
-/-- `KindTablePins` transport: agreement on the whole 44-byte table window. -/
-theorem KindTablePins.transport {m m' : Mem} (h : KindTablePins m)
-    (ha : ∀ a, jumpTableBase ≤ a → a < jumpTableBase + 44 → m[a]? = m'[a]?) :
-    KindTablePins m' where
-  slot0 := kindSlotPinned_agree h.slot0 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot1 := kindSlotPinned_agree h.slot1 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot2 := kindSlotPinned_agree h.slot2 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot3 := kindSlotPinned_agree h.slot3 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot4 := kindSlotPinned_agree h.slot4 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot5 := kindSlotPinned_agree h.slot5 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot6 := kindSlotPinned_agree h.slot6 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot7 := kindSlotPinned_agree h.slot7 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot8 := kindSlotPinned_agree h.slot8 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot9 := kindSlotPinned_agree h.slot9 (fun a h1 h2 => ha a (by omega) (by omega))
-  slot10 := kindSlotPinned_agree h.slot10 (fun a h1 h2 => ha a (by omega) (by omega))
-
 /-- N3 — the AST region for the expression tree at `aExpr`: nodes hereditarily
 in `[lo, hi)` (`MemRegion.ExprIn`), region in RAM above HTIF, disjoint from the
 WHOLE stack region, from the result buffer, and from the arena. -/
@@ -402,21 +291,6 @@ structure AstRegionSpec (m : Mem) (SL : StackLayout) (A : Arena)
 structure AstRegionPins (m : Mem) (SL : StackLayout) (A : Arena)
     (sret aExpr : Nat) (e : Vsa.While.Expr) : Prop where
   region : ∃ lo hi, AstRegionSpec m SL A sret aExpr e lo hi
-
-/-- `AstRegionSpec` transports along agreement on `[lo, hi)` (only `nodes`
-touches `m`; `exprIn_agreeP` carries it). -/
-theorem AstRegionSpec.transport {m m' : Mem} {SL : StackLayout} {A : Arena}
-    {sret aExpr : Nat} {e : Vsa.While.Expr} {lo hi : Nat}
-    (h : AstRegionSpec m SL A sret aExpr e lo hi)
-    (ha : ∀ a, lo ≤ a → a < hi → m[a]? = m'[a]?) :
-    AstRegionSpec m' SL A sret aExpr e lo hi where
-  nodes := exprIn_agreeP (fun a hp => ha a hp.1 hp.2) e h.nodes
-  lo_ram := h.lo_ram
-  hi_ram := h.hi_ram
-  win := h.win
-  stack_disjoint := h.stack_disjoint
-  sret_disjoint := h.sret_disjoint
-  arena_disjoint := h.arena_disjoint
 
 /-- Static bytes retained across recursive evaluator calls. -/
 def EvalCallFootprint (k : Nat) : Prop := StaticImageByte k
@@ -457,11 +331,6 @@ theorem EvalCallSupport.arena_vi {m : Mem} {SL : StackLayout} {A : Arena}
     A.hi ≤ 0x800027ec ∨ 0x8000285c ≤ A.lo :=
   h.image.arena_disjoint (by decide) (by decide)
 
-theorem EvalCallSupport.arena_table {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
-    A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo :=
-  h.image.arena_disjoint (by decide) (by decide)
-
 /-- Transport the static support across agreement on its exact byte footprint,
 and optionally lower the caller stack pointer. -/
 theorem EvalCallSupport.transport {m m' : Mem} {SL : StackLayout}
@@ -482,39 +351,6 @@ theorem EvalCallSupport.outsideStack {m : Mem} {SL : StackLayout} {A : Arena}
     {k : Nat} (hk : EvalCallFootprint k) : ¬ (SL.lo ≤ k ∧ k < SL.hi) :=
   h.image.outsideStack hk
 
-/-- Static eval support is outside every allocation-arena write. -/
-theorem EvalCallSupport.outsideArena {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp)
-    {k : Nat} (hk : EvalCallFootprint k) : ¬ (A.lo ≤ k ∧ k < A.hi) :=
-  h.image.outsideArena hk
-
-/-- Preserve the support through the actual frame of stack-confined writes. -/
-theorem EvalCallSupport.transport_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
-    {sp sp' : BitVec 64} (h : EvalCallSupport m SL A sp)
-    (hag : ∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → m'[k]? = m[k]?) :
-    EvalCallSupport m' SL A sp' :=
-  h.transport (fun k hk => hag k (h.outsideStack hk))
-
-/-- The actual recursive exit frame preserves code and table support.
-The result slot and recursive stack window are contained in the whole stack. -/
-theorem EvalCallSupport.transport_frame {m m' : Mem} {SL : StackLayout} {A : Arena}
-    {sp sp' : BitVec 64} {cut ret : Nat} (h : EvalCallSupport m SL A sp)
-    (hcut : cut ≤ SL.hi) (hret : SL.lo ≤ ret ∧ ret + 24 ≤ SL.hi)
-    (hframe : ∀ k, ¬ (SL.lo ≤ k ∧ k < cut) → ¬ (A.lo ≤ k ∧ k < A.hi) →
-      (ret ≤ k ∧ k < ret + 24) ∨ m'[k]? = m[k]?) :
-    EvalCallSupport m' SL A sp' := by
-  apply h.transport
-  intro k hk
-  have hs := h.outsideStack hk
-  rcases hframe k (by omega) (h.outsideArena hk) with hr | he
-  · exact False.elim (hs (by omega))
-  · exact he
-
-#print axioms EvalCallSupport.outsideStack
-#print axioms EvalCallSupport.outsideArena
-#print axioms EvalCallSupport.transport_stack
-#print axioms EvalCallSupport.transport_frame
-
 /-- **The complete eval entry-ground bundle** (audit classes N1/N3/N4/N5).
 Inserted as `EvalEntry.ground` (47i); transported by `survive_stack`; children
 by `ExprIn` projection. -/
@@ -532,45 +368,6 @@ structure EvalGround (m : Mem) (SL : StackLayout) (A : Arena)
   /-- Every concrete stack byte is present, including recursive result slots. -/
   stack_bytes : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
     ∃ b : BitVec 8, m[k]? = some b
-
-/-- **`EvalGround` survives any memory change confined to the stack scribble
-`[SL.lo, sp)` ∪ the sret window** — the standard entry→child-entry write
-footprint.  Needs the entry's whole-table stack disjointness (the 47f
-`table_stack_disjoint` literal) for the table half; the AST region and the
-literals are self-contained. -/
-theorem EvalGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
-    {sp sret : BitVec 64} {aExpr : Nat} {e : Vsa.While.Expr}
-    (h : EvalGround m SL A sp sret aExpr e)
-    (htb : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
-    (hsp : sp.toNat ≤ SL.hi)
-    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
-      ∃ b : BitVec 8, m'[k]? = some b)
-    (hag : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
-      ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → m[k]? = m'[k]?) :
-    EvalGround m' SL A sp sret aExpr e where
-  table := h.table.transport (fun a h1 h2 => by
-    have hj : jumpTableBase = 0x80019f58 := rfl
-    refine hag a (fun hcon => ?_) (fun hcon => ?_)
-    · rcases htb with ht | ht <;> omega
-    · rcases h.sret_table_disjoint with hs | hs <;> omega)
-  eval_call := h.eval_call.transport (fun k hk => by
-    have hs := h.eval_call.outsideStack hk
-    have hr := h.sret_inSL
-    exact (hag k (by omega) (by omega)).symm)
-  ast := ⟨by
-    obtain ⟨lo, hi, spec⟩ := h.ast.region
-    refine ⟨lo, hi, spec.transport (fun a h1 h2 => ?_)⟩
-    refine hag a (fun hcon => ?_) (fun hcon => ?_)
-    · rcases spec.stack_disjoint with hs | hs
-      · omega
-      · have := h.sret_inSL; omega
-    · rcases spec.sret_disjoint with hs | hs <;> omega⟩
-  arena_stack := h.arena_stack
-  arena_code := h.arena_code
-  arena_vi := h.arena_vi
-  sret_inSL := h.sret_inSL
-  sret_table_disjoint := h.sret_table_disjoint
-  stack_bytes := hpop
 
 /-! ## `EvalEntry` — the machine precondition at `eval_expr`'s entry PC
 
@@ -783,62 +580,10 @@ structure EvalEntry
   -- TODO(alloc): an `AInv`/arena-budget field (`MallocContract`) for arms that
   --   allocate (EX_FN closure, EX_CALL frame). `.int` allocates nothing.
 
-/-- **The `sp`-window form of `store_survives`** (the pre-amendment field, ONE
-mono lemma): `[SL.lo, sp) ⊆ [SL.lo, SL.hi)` by `stackOK`, so an agreement
-witness outside the small window a fortiori feeds the widened field.  Use sites
-that thread the survival into an `sp`-window interface (the `blockA_k` pre
-tower and its clones) consume THIS, never re-derive. -/
-theorem EvalEntry.store_survives_sp
-    {g : (R : Register) → Option (RegisterType R)}
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {st : St} {d : Nat} {a : Addr} {e : Expr}
-    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
-    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
-    ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
-        c.σ.mem[k]? = m'[k]?) →
-      StoreRepr m' N A φf φc st.store :=
-  fun m' h => hc.store_survives m'
-    (fun k hk hr => h k
-      (fun hcon => hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hc.stackOK.2.1⟩) hr)
-
 /-! ### Narrow (pre-47f) forms of the widened geometry literals — mono lemmas
 
 Consumers that fed the old int-window literals structurally (`exact
 hc.sret_vicode_disjoint` and friends) switch to these one-token forms. -/
-
-theorem EvalEntry.sret_vicode_disjoint_int
-    {g : (R : Register) → Option (RegisterType R)}
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {st : St} {d : Nat} {a : Addr} {e : Expr}
-    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
-    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
-    sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat := by
-  rcases hc.sret_vicode_disjoint with h | h
-  · exact Or.inl (by omega)
-  · exact Or.inr (by omega)
-
-theorem EvalEntry.vicode_stack_disjoint_int
-    {g : (R : Register) → Option (RegisterType R)}
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {st : St} {d : Nat} {a : Addr} {e : Expr}
-    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
-    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
-    (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c := by
-  rcases hc.vicode_stack_disjoint with h | h
-  · exact Or.inl (by omega)
-  · exact Or.inr (by omega)
-
-theorem EvalEntry.table_stack_disjoint_int
-    {g : (R : Register) → Option (RegisterType R)}
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {st : St} {d : Nat} {a : Addr} {e : Expr}
-    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
-    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
-    (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 := by
-  rcases hc.table_stack_disjoint with h | h
-  · exact Or.inl (by omega)
-  · exact Or.inr (by omega)
 
 /-! ## `EvalExit` — the machine postcondition at the return PC
 

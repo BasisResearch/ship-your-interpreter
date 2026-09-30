@@ -227,8 +227,6 @@ macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk
   all_goals (simp (disch := nx_fdisch) only [imgLE_store_miss, imgLE_fillR_out, imgLE_imgM_store,
     imgLE_store2_hit, imgLE_store4_hit]; try decide)
 
-
-
 -- **`fwrite(ptr, 1, n, stderr)`**, the first write to `stderr` (`n = |bs|`,
 -- `0 < n < 2^30`, the bytes owned or in the data view): prints `bs`, returns
 -- `n`, leaves `stderr` a written unbuffered stream (`FwritePost`).

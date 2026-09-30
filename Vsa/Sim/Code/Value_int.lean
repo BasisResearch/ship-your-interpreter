@@ -30,43 +30,4 @@ def value_intChunk0 (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
 def Value_intLoaded (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
   value_intChunk0 mem
 
-theorem value_int_chunk0 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : Value_intLoaded mem) : value_intChunk0 mem := h
-
-theorem value_int_at_8000280c {mem : ExtHashMap Nat (BitVec 8)}
-    (h : Value_intLoaded mem) :
-      mem[(0x8000280c : Nat)]? = some (0x93 : BitVec 8) ∧
-      mem[(0x8000280d : Nat)]? = some (0x07 : BitVec 8) ∧
-      mem[(0x8000280e : Nat)]? = some (0x20 : BitVec 8) ∧
-      mem[(0x8000280f : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := value_int_chunk0 h
-  ⟨hc.1, hc.2.1, hc.2.2.1, hc.2.2.2.1⟩
-
-theorem value_int_at_80002810 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : Value_intLoaded mem) :
-      mem[(0x80002810 : Nat)]? = some (0x23 : BitVec 8) ∧
-      mem[(0x80002811 : Nat)]? = some (0x34 : BitVec 8) ∧
-      mem[(0x80002812 : Nat)]? = some (0xb5 : BitVec 8) ∧
-      mem[(0x80002813 : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := value_int_chunk0 h
-  ⟨hc.2.2.2.2.1, hc.2.2.2.2.2.1, hc.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.1⟩
-
-theorem value_int_at_80002814 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : Value_intLoaded mem) :
-      mem[(0x80002814 : Nat)]? = some (0x23 : BitVec 8) ∧
-      mem[(0x80002815 : Nat)]? = some (0x20 : BitVec 8) ∧
-      mem[(0x80002816 : Nat)]? = some (0xf5 : BitVec 8) ∧
-      mem[(0x80002817 : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := value_int_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.1⟩
-
-theorem value_int_at_80002818 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : Value_intLoaded mem) :
-      mem[(0x80002818 : Nat)]? = some (0x67 : BitVec 8) ∧
-      mem[(0x80002819 : Nat)]? = some (0x80 : BitVec 8) ∧
-      mem[(0x8000281a : Nat)]? = some (0x00 : BitVec 8) ∧
-      mem[(0x8000281b : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := value_int_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2⟩
-
 end Vsa.Sim.Code

@@ -51,30 +51,6 @@ theorem mod_pow_eq_zero_of_le_ctz (a : BitVec 64) (t : Nat)
   have h := congrArg BitVec.toNat hz
   simpa using h
 
-/-- A first set bit determines the trailing-zero count without evaluating reverse. -/
-theorem countTrailingZeros_eq_of_low_bits {w : Nat} (a : BitVec w) (t : Nat)
-    (hone : a.getLsbD t = true) (hzero : ∀ i, i < t → a.getLsbD i = false) :
-    Sail.BitVec.countTrailingZeros a = t := by
-  have hne : a ≠ 0#w := by
-    intro h
-    simp only [h, BitVec.getLsbD_zero] at hone
-    contradiction
-  have hc := BitVec.getLsbD_true_ctz_of_ne_zero hne
-  have hlo : t ≤ a.ctz.toNat := by
-    by_cases h : a.ctz.toNat < t
-    · have hz := hzero _ h
-      rw [hc] at hz
-      contradiction
-    · omega
-  have hhi : a.ctz.toNat ≤ t := by
-    by_cases h : t < a.ctz.toNat
-    · have hz := BitVec.getLsbD_false_of_lt_ctz h
-      rw [hone] at hz
-      contradiction
-    · omega
-  change a.ctz.toNat = t
-  omega
-
 /-- Size and alignment of the chunk plan returned by the executable. -/
 structure ScalarSplitFacts (a : BitVec 64) (k : Nat) : Prop where
   chunk_pos : 0 < 2 ^ scalarChunkExp a k
@@ -129,12 +105,4 @@ theorem scalarChunkFacts (a : BitVec 64) (k i : Nat)
   · rw [haddr]
     simp [Nat.add_mod, hf.aligned]
 
-#print axioms scalarChunkFacts
-
-#print axioms countTrailingZeros_eq_of_low_bits
-#print axioms mod_pow_eq_zero_of_le_ctz
-#print axioms scalarSplitFacts
-
-#print axioms scalarWidth_ctz
-#print axioms split_access_scalar
 end Vsa.Sim

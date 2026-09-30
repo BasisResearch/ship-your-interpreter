@@ -147,11 +147,6 @@ theorem ownSet_join (S T : Nat → Prop) (Φ : Nat → IProp GF) (hdisj : ∀ a,
   iapply (sepL_append l₁ l₂ Φ).2
   iframe H1 H2
 
-/-- Two exclusively owned bytes are distinct (`ghost_map_elem_ne`). -/
-theorem byteAny_ne (a a' : Nat) : byteAny (GF := GF) a ∗ byteAny a' ⊢ ⌜a ≠ a'⌝ := by
-  iintro ⟨⟨%b, Ha⟩, ⟨%b', Ha'⟩⟩
-  iapply mem_ne a a' _ b b' $$ Ha Ha'
-
 /-- A byte the caller owns is not in any set of bytes someone else owns.
 This single lemma is what VSA derives by hand, per call site, as
 `HeapOwned.ownedOff`/`entryOff` (`Vsa/Sim/AllocOff.lean`) from the ledger
@@ -226,10 +221,6 @@ theorem FreshBlock.lo {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
 theorem FreshBlock.hi {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
     (h : FreshBlock L H p n) : p + n ≤ L.hi := by obtain ⟨_, _, h, _⟩ := h; exact h
 
-theorem FreshBlock.disjoint {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
-    (h : FreshBlock L H p n) : ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a := by
-  obtain ⟨_, _, _, h⟩ := h; exact h
-
 section Heap
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -280,61 +271,6 @@ theorem heapFoot_carve_gen (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
       refine ⟨.inr ⟨?_, ?_, fun e he => hdisj e he a ha⟩, ha⟩
       · unfold InExt at ha; simp at ha; omega
       · unfold InExt at ha; simp at ha; omega
-
-/-- **Carve** a fresh block out of the allocator's footprint: what the malloc
-proof does at its return (KallocInv.v "kalloc's logical core", the pop). -/
-theorem heapFoot_carve (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
-    (hf : FreshBlock L H p n) :
-    ownSet (GF := GF) (heapFoot L H) byteAny ⊢
-      ownSet (heapFoot L ((p, n) :: H)) byteAny ∗ blockOwn p n :=
-  heapFoot_carve_gen L H p n hf byteAny
-
-/-- **Return** a block to the footprint: what the free proof does (the
-push, `kmem_res_push`, KallocInv.v:417). -/
-theorem heapFoot_return (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
-    (hf : FreshBlock L H p n) :
-    ownSet (GF := GF) (heapFoot L ((p, n) :: H)) byteAny ∗ blockOwn p n ⊢
-      ownSet (heapFoot L H) byteAny := by
-  obtain ⟨_, hlo, hhi, hdisj⟩ := hf
-  have hsep : ∀ a, heapFoot L ((p, n) :: H) a → ¬ InExt (p, n) a := by
-    intro a ha hb
-    rcases ha with hg | ⟨_, _, h3⟩
-    · rcases L.global_off_arena a hg with h | h <;> unfold InExt at hb <;> simp at hb <;> omega
-    · exact h3 (p, n) List.mem_cons_self hb
-  unfold blockOwn
-  iintro Hh
-  ihave Hj := ownSet_join (heapFoot L ((p, n) :: H)) (InExt (p, n)) byteAny hsep $$ Hh
-  iapply ownSet_iff byteAny _ $$ Hj
-  intro a
-  unfold heapFoot
-  constructor
-  · rintro ((hg | ⟨h1, h2, h3⟩) | hb)
-    · exact .inl hg
-    · exact .inr ⟨h1, h2, fun e he => h3 e (List.mem_cons_of_mem _ he)⟩
-    · refine .inr ⟨?_, ?_, fun e he => hdisj e he a hb⟩
-      · unfold InExt at hb; simp at hb; omega
-      · unfold InExt at hb; simp at hb; omega
-  · rintro (hg | ⟨h1, h2, h3⟩)
-    · exact .inl (.inl hg)
-    · by_cases hb : InExt (p, n) a
-      · exact .inr hb
-      · refine .inl (.inr ⟨h1, h2, fun e he => ?_⟩)
-        rcases List.mem_cons.mp he with rfl | he
-        · exact hb
-        · exact h3 e he
-
-/-- A byte the caller owns is outside the allocator's footprint. -/
-theorem owned_off_heap (L : DlLayout) (H : List (Nat × Nat)) (a : Nat) (v : BitVec 8) :
-    (a ↦ₘ v) ⊢@{IProp GF} isHeap L H -∗ ⌜¬ heapFoot L H a⌝ := by
-  unfold isHeap
-  iintro Ha ⟨%img, -, Hh⟩
-  ihave Hh := ownSet_forget _ img $$ Hh
-  iapply owned_off a v _ $$ Ha Hh
-
-/-- A byte the caller owns is outside any block handed to someone else. -/
-theorem owned_off_block (p n a : Nat) (v : BitVec 8) :
-    (a ↦ₘ v) ⊢@{IProp GF} blockOwn p n -∗ ⌜¬ InExt (p, n) a⌝ :=
-  owned_off a v _
 
 /-! ## The specs (SpecKalloc.v / SpecKfree.v) -/
 
@@ -426,116 +362,11 @@ structure DlMallocImpl (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → P
     (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
     textOwn (GF := GF) text ⊢ freeSpec Wp L SpOK freeEntry gpv clob saved headroom H q n s
 
-section Client
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
-
-/-- **Calling malloc with an arbitrary frame.** Whatever `R` the caller owns
-(its store, its AST bytes, other live blocks, saved registers) comes back
-unchanged in the continuation. Nothing about `R` appears in malloc's spec:
-this is VSA's `HeapOwned.transport_off`/`.repr_off` and the whole
-`privFoot` clause, as one application of the frame rule. -/
-theorem wp_call_malloc (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {L : DlLayout} {SpOK : BitVec 64 → Prop}
-    {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
-    {text : List (Nat × BitVec 8)}
-    (impl : DlMallocImpl M L SpOK mallocEntry freeEntry gpv clob savedRegs headroom text)
-    {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
-    (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (hsp : SpOK s)
-    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
-    (R : IProp GF) :
-    instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
-      sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
-      isHeap L H ∗ R ∗
-      (∀ p, PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ a0 ↦ᵣ p -∗
-        sp ↦ᵣ s -∗ clobbered clob -∗ savedOwn saved -∗ stackScratch s headroom -∗
-        mallocPost L H n.toNat p -∗ R -∗ Wp.W Φ)
-    ⊢ Wp.W Φ := by
-  have hs := impl.malloc (GF := GF) Wp H n s saved hsaved
-  unfold mallocSpec at hs
-  iintro ⟨#Hi, #Htext, Hpc, Hra, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap, HR, Hk⟩
-  ihave #Hspec := hs $$ Htext
-  iapply wp_callW Wp hexec
-  iframe Hi Hspec Hpc Hra
-  isplitl [Ha0 Hsp Hclob Hsv Hstk Hheap]
-  · iframe Ha0 Hsp Hgp Hclob Hsv Hstk Hheap
-    ipureintro; exact ⟨hsp, hal⟩
-  iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hsv, Hstk, Hpost⟩
-  iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost HR
-
-/-- The caller's byte `a` survives a malloc call *with its value*, and it is
-disjoint from both the returned block and the allocator's new footprint. -/
-theorem wp_call_malloc_keeps (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {L : DlLayout}
-    {SpOK : BitVec 64 → Prop}
-    {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
-    {text : List (Nat × BitVec 8)}
-    (impl : DlMallocImpl M L SpOK mallocEntry freeEntry gpv clob savedRegs headroom text)
-    {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
-    (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (hsp : SpOK s)
-    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
-    (a : Nat) (b : BitVec 8) :
-    instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
-      sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
-      isHeap L H ∗ a ↦ₘ b ∗
-      (∀ p, PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ a0 ↦ᵣ p -∗
-        sp ↦ᵣ s -∗ clobbered clob -∗ savedOwn saved -∗ stackScratch s headroom -∗
-        mallocPost L H n.toNat p -∗ a ↦ₘ b -∗
-        ⌜p ≠ 0 → ¬ InExt (p.toNat, n.toNat) a ∧ ¬ heapFoot L ((p.toNat, n.toNat) :: H) a⌝ -∗
-        Wp.W Φ)
-    ⊢ Wp.W Φ := by
-  iintro ⟨Hi, Htext, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hsv, Hstk, Hheap, Hab, Hk⟩
-  iapply wp_call_malloc Wp impl hexec H v n s saved hsaved hsp hal (a ↦ₘ b)
-  iframe Hi Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap Hab
-  unfold mallocPost
-  iintro %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost Hab
-  icases Hpost with (⟨%hp, Hheap⟩ | ⟨%hf, Hheap, Hblk⟩)
-  · iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk [Hheap] Hab
-    · ileft; iframe Hheap; ipureintro; exact hp
-    ipureintro
-    intro hne; exact absurd hp hne
-  · ihave %hb := owned_off_block p.toNat n.toNat a b $$ Hab Hblk
-    ihave %hh := owned_off_heap L ((p.toNat, n.toNat) :: H) a b $$ Hab Hheap
-    iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk [Hheap Hblk] Hab
-    · iright; iframe Hheap Hblk; ipureintro; exact hf
-    ipureintro
-    intro _; exact ⟨hb, hh⟩
-
-end Client
-
 /-! ## The eb73d8c witness
 
 `PROOF_CLOSURE_PLAN.md` §2 (commit eb73d8c): on the admitted control heap
 (top chunk at `0x82000200`), `malloc(32)` writes the new top header at
 `0x82000238`, while `malloc(64)` from the same state returns
 `[0x82000210, 0x82000250)`, which contains it. -/
-
-/-- No state-independent footprint can frame both calls. This is the
-obstruction to `MallocContract.privFoot`, stated and proved. -/
-theorem no_fixed_privFoot (H0 : List (Nat × Nat)) :
-    ¬ ∃ F : Nat → Prop, F 0x82000238 ∧
-      ∀ H ∈ [H0, (0x82000210, 64) :: H0], ∀ e ∈ H, ∀ a, InExt e a → ¬ F a := by
-  rintro ⟨F, hw, hlive⟩
-  exact hlive ((0x82000210, 64) :: H0) (by simp) (0x82000210, 64) List.mem_cons_self
-    0x82000238 (by unfold InExt; decide) hw
-
-/-- The live-relative footprint handles both: before the call the allocator
-owns `0x82000238` (so `malloc(32)` may write it); `malloc(64)`'s block is
-fresh and contains it; after that call the byte has moved to the caller with
-the block and the allocator no longer owns it. -/
-theorem eb73d8c_witness (L : DlLayout) (hlo : L.lo = 0x8001c170) (hhi : L.hi = 0x87800000)
-    (H0 : List (Nat × Nat)) (hH0 : ∀ e ∈ H0, e.1 + e.2 ≤ 0x82000200) :
-    heapFoot L H0 0x82000238 ∧
-    FreshBlock L H0 0x82000210 64 ∧
-    InExt (0x82000210, 64) 0x82000238 ∧
-    ¬ heapFoot L ((0x82000210, 64) :: H0) 0x82000238 := by
-  refine ⟨.inr ⟨by omega, by omega, fun e he h => ?_⟩, ⟨by decide, by omega, by omega, ?_⟩,
-    by unfold InExt; decide, ?_⟩
-  · have := hH0 e he; unfold InExt at h; omega
-  · intro e he a ha h
-    have := hH0 e he; unfold InExt at ha h; simp at ha; omega
-  · rintro (hg | ⟨_, _, h⟩)
-    · rcases L.global_off_arena _ hg with h | h <;> omega
-    · exact h (0x82000210, 64) List.mem_cons_self (by unfold InExt; decide)
 
 end VsaIris

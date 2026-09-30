@@ -390,30 +390,6 @@ theorem utr_e8_ec (g : (R : Register) → Option (RegisterType R))
 
 /-! ## Branch transitions (all GPRs preserved; only PC moves) -/
 
-/-- `beqz a2` taken (b8 → f0, a2 = 0). -/
-theorem utr_b8_f0 (g : (R : Register) → Option (RegisterType R))
-    (a0 a1 a3 r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
-    (hv : ((0#64) == (0#64)) = true) :
-    Triple (Ust g (0x800046b8#64) a0 a1 (0#64) a3 r m0 o) (Ust g (0x800046f0#64) a0 a1 (0#64) a3 r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_800046b8_taken c.σ c.tick c.steps (0x800046b8#64) vmi (0#64) hSt.good hSt.pc hmi hSt.a2 hSt.loaded rfl hv hSt.tick
-  have hpceq : (0x800046b8#64 : BitVec 64) + sign_extend (m := 64) (0x0038#13) = (0x800046f0#64 : BitVec 64) := by
-    apply BitVec.eq_of_toNat_eq; decide
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut, ?_,
-    obs_btaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_btaken_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_btaken_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_btaken_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_btaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_btaken_minstret hobs, hi',
-    fun R hR => (frame_btaken hobs R hR).trans (hSt.hframe R hR)⟩
-  rw [obs_btaken_pc hobs, hpceq]
-
 /-- `beqz a2` not taken (b8 → bc, a2 ≠ 0). -/
 theorem utr_b8_bc (g : (R : Register) → Option (RegisterType R))
     (a0 a1 a2 a3 r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
@@ -668,40 +644,11 @@ theorem utr_ec_f0 (g : (R : Register) → Option (RegisterType R))
 
 /-! ## `ret` transition (f0 → r): PC → return address; GPRs preserved. -/
 
-theorem utr_f0_ret (g : (R : Register) → Option (RegisterType R))
-    (a0 a1 a2 a3 r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
-    (halign : r.toNat % 4 = 0) :
-    Triple (Ust g (0x800046f0#64) a0 a1 a2 a3 r m0 o)
-           (fun c => GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some r ∧
-             c.σ.regs.get? Register.x10 = some a0 ∧ c.σ.regs.get? Register.x11 = some a1 ∧
-             c.σ.regs.get? Register.x1 = some r ∧ c.tick < 2 ∧
-             (∀ R : Register, NotWritten R → c.σ.regs.get? R = g R)) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
-    rw [ret_tgt r halign]; exact halign
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_800046f0 c.σ c.tick c.steps (0x800046f0#64) vmi r hSt.good hSt.pc hmi hSt.ra hSt.loaded rfl htgt hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.mem, by rw [hobs.out]; exact hSt.sailOut, ?_,
-    obs_jr_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_jr_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_jr_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    hi',
-    fun R hR => (frame_jr hobs R hR).trans (hSt.hframe R hR)⟩
-  rw [obs_jr_pc hobs, ret_tgt r halign]
-
 /-! ## Guard-predicate bridges (BitVec comparisons ⇒ Nat/top-bit facts) -/
 
 theorem bgeu_true (a b : BitVec 64) (h : zopz0zKzJ_u a b = true) : b.toNat ≤ a.toNat := by
   unfold zopz0zKzJ_u at h; simp only [Sail.BitVec.toNatInt] at h
   exact Int.ofNat_le.mp (of_decide_eq_true h)
-
-theorem bgeu_false (a b : BitVec 64) (h : zopz0zKzJ_u a b = false) : a.toNat < b.toNat := by
-  unfold zopz0zKzJ_u at h; simp only [Sail.BitVec.toNatInt] at h
-  have h2 : ¬ (Int.ofNat b.toNat ≤ Int.ofNat a.toNat) := of_decide_eq_false h
-  rw [Int.not_le] at h2; exact Int.ofNat_lt.mp h2
 
 theorem bltu_true (a b : BitVec 64) (h : zopz0zI_u a b = true) : a.toNat < b.toNat := by
   unfold zopz0zI_u at h; simp only [Sail.BitVec.toNatInt] at h
@@ -731,12 +678,6 @@ theorem bltu_cases (a b : BitVec 64) : zopz0zI_u a b = true ∨ zopz0zI_u a b = 
 
 theorem blez_cases (a : BitVec 64) : zopz0zKzJ_s (0#64) a = true ∨ zopz0zKzJ_s (0#64) a = false :=
   Bool.eq_false_or_eq_true (zopz0zKzJ_s (0#64) a)
-
-theorem bne_cases (a : BitVec 64) : (a != (0#64)) = true ∨ (a != (0#64)) = false :=
-  Bool.eq_false_or_eq_true (a != (0#64))
-
-theorem beq_cases (a : BitVec 64) : (a == (0#64)) = true ∨ (a == (0#64)) = false :=
-  Bool.eq_false_or_eq_true (a == (0#64))
 
 /-! ## Shift / top-bit arithmetic facts -/
 

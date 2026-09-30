@@ -38,10 +38,6 @@ theorem EntryRegs.setMem {σ : MState} {g : Nat → BitVec 64} (E : EntryRegs σ
     (m : Vsa.MemRepr.Mem) : EntryRegs { σ with mem := m } g :=
   ⟨E.good.setMem m, E.pc, E.payload, E.gpr⟩
 
-/-- The console output reads only the output field. -/
-theorem output_setMem (σ : MState) (m : Vsa.MemRepr.Mem) :
-    Vsa.Machine.output { σ with mem := m } = Vsa.Machine.output σ := rfl
-
 /-- Every general register is present. -/
 theorem EntryRegs.gprs {σ : MState} {g : Nat → BitVec 64} (E : EntryRegs σ g) :
     ∀ n, 1 ≤ n → n ≤ 31 → (gprGet σ n).isSome := by

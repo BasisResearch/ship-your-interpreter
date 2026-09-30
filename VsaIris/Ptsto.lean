@@ -144,13 +144,6 @@ it is the only way to print (`wp_runOut`, Step.lean), and the halt rule reads
 the exit's output off it (`wp_halt_console`). -/
 def consoleOwn (s : String) : IProp GF := ghost_map_elem G.conName (DFrac.own 1) 0 s
 
-/-- The console cell is exclusive: there is one console. -/
-theorem consoleOwn_excl (s s' : String) : consoleOwn (GF := GF) s ∗ consoleOwn s' ⊢ False := by
-  unfold consoleOwn
-  iintro ⟨H1, H2⟩
-  ihave %h := ghost_map_elem_ne $$ H1 H2
-  exact absurd rfl h
-
 /-- The key-0 control cell at lag `j`. -/
 def ctlAt (j : Nat) : IProp GF := ghost_map_elem G.ctlName (DFrac.own 1) 0 j
 
@@ -180,93 +173,12 @@ section Rules
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
 
-/-- `reg_valid` (RiscvPtsto.v:2909). -/
-theorem reg_valid {σ : M.State} {r : Nat} {dq : DFrac} {v : BitVec 64} :
-    regInterp (GF := GF) M σ ⊢ (r ↦ᵣ{dq} v) -∗ ⌜M.reg σ r = v⌝ := by
-  unfold regInterp regPointsTo
-  iintro ⟨%m, Hm, %Hag⟩ Hr
-  ihave %Hlk := ghost_map_lookup $$ Hm Hr
-  ipureintro
-  exact Hag r v Hlk
-
-theorem mem_valid {σ : M.State} {a : Nat} {dq : DFrac} {b : BitVec 8} :
-    memInterp (GF := GF) M σ ⊢ (a ↦ₘ{dq} b) -∗ ⌜M.mem σ a = b⌝ := by
-  unfold memInterp memPointsTo
-  iintro ⟨%m, Hm, %Hag⟩ Ha
-  ihave %Hlk := ghost_map_lookup $$ Hm Ha
-  ipureintro
-  exact Hag a b Hlk
-
-/-- `reg_update` (RiscvPtsto.v:2919), stated against a successor state whose
-register `r` holds `v'` and which agrees with `σ` on every other register. -/
-theorem reg_update {σ σ' : M.State} {r : Nat} {v v' : BitVec 64}
-    (hr : M.reg σ' r = v') (hframe : ∀ k, k ≠ r → M.reg σ' k = M.reg σ k) :
-    regInterp (GF := GF) M σ ⊢ (r ↦ᵣ v) ==∗ regInterp M σ' ∗ r ↦ᵣ v' := by
-  unfold regInterp regPointsTo
-  iintro ⟨%m, Hm, %Hag⟩ Hr
-  imod ghost_map_update v' $$ Hm Hr with ⟨Hm, Hr⟩
-  imodintro
-  iframe Hr
-  iexists (PartialMap.insert m r v')
-  iframe Hm
-  ipureintro
-  intro k w hk
-  by_cases hkr : r = k
-  · subst hkr
-    rw [LawfulPartialMap.get?_insert_eq rfl] at hk
-    cases hk; exact hr
-  · rw [LawfulPartialMap.get?_insert_ne hkr] at hk
-    rw [hframe k (Ne.symm hkr)]
-    exact Hag k w hk
-
-theorem mem_update {σ σ' : M.State} {a : Nat} {b b' : BitVec 8}
-    (ha : M.mem σ' a = b') (hframe : ∀ k, k ≠ a → M.mem σ' k = M.mem σ k) :
-    memInterp (GF := GF) M σ ⊢ (a ↦ₘ b) ==∗ memInterp M σ' ∗ a ↦ₘ b' := by
-  unfold memInterp memPointsTo
-  iintro ⟨%m, Hm, %Hag⟩ Ha
-  imod ghost_map_update b' $$ Hm Ha with ⟨Hm, Ha⟩
-  imodintro
-  iframe Ha
-  iexists (PartialMap.insert m a b')
-  iframe Hm
-  ipureintro
-  intro k w hk
-  by_cases hka : a = k
-  · subst hka
-    rw [LawfulPartialMap.get?_insert_eq rfl] at hk
-    cases hk; exact ha
-  · rw [LawfulPartialMap.get?_insert_ne hka] at hk
-    rw [hframe k (Ne.symm hka)]
-    exact Hag k w hk
-
 /-- Exclusive byte ownership is disjoint (`ghost_map_elem_ne`). -/
 theorem mem_ne (a a' : Nat) (dq : DFrac) (v w : BitVec 8) :
     ⊢@{IProp GF} (a ↦ₘ v) -∗ (a' ↦ₘ{dq} w) -∗ ⌜a ≠ a'⌝ := by
   unfold memPointsTo
   iintro Ha Ha'
   iapply ghost_map_elem_ne $$ Ha Ha'
-
-/-- A step that touches no owned register re-establishes the register bridge
-unchanged. -/
-theorem regInterp_frame {σ σ' : M.State} (h : ∀ k, M.reg σ' k = M.reg σ k) :
-    regInterp (GF := GF) M σ ⊢ regInterp M σ' := by
-  unfold regInterp
-  iintro ⟨%m, Hm, %Hag⟩
-  iexists m
-  iframe Hm
-  ipureintro
-  intro k v hk
-  rw [h k]; exact Hag k v hk
-
-theorem memInterp_frame {σ σ' : M.State} (h : ∀ k, M.mem σ' k = M.mem σ k) :
-    memInterp (GF := GF) M σ ⊢ memInterp M σ' := by
-  unfold memInterp
-  iintro ⟨%m, Hm, %Hag⟩
-  iexists m
-  iframe Hm
-  ipureintro
-  intro k v hk
-  rw [h k]; exact Hag k v hk
 
 /-- At lag zero the lagging bridges are exactly the client-visible ones. -/
 theorem lagInterp_zero {σ : M.State} : lagInterp (GF := GF) M 0 σ ⊣⊢ mstateInterp M σ := by

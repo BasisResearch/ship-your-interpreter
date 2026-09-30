@@ -114,7 +114,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   icases Hv1 with %⟨hw0, hw1⟩
   have hk0 := ofNat_lo32 hw0
 
-
 #ix_piece UnaryNegP_p2 from UnaryNegP_p1 by
   -- run 2: operator test, int kind test, negation
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]

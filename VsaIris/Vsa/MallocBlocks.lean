@@ -467,7 +467,6 @@ theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brk
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   sx_addr
 
-
 /-- **The block walk's split** (`0x80004d14`): member `x` of bin `k` (its
 predecessor in `a3`, its size in `a2`, the remainder `sz - nb ≥ MINSIZE` in
 `a1`) is unlinked and split; its first `nb` bytes are returned and the rest

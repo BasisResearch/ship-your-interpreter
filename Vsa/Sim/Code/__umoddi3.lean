@@ -69,42 +69,6 @@ def __umoddi3Loaded (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
 theorem __umoddi3_chunk0 {mem : ExtHashMap Nat (BitVec 8)}
     (h : __umoddi3Loaded mem) : __umoddi3Chunk0 mem := h
 
-theorem __umoddi3_at_800046f4 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : __umoddi3Loaded mem) :
-      mem[(0x800046f4 : Nat)]? = some (0x93 : BitVec 8) ∧
-      mem[(0x800046f5 : Nat)]? = some (0x82 : BitVec 8) ∧
-      mem[(0x800046f6 : Nat)]? = some (0x00 : BitVec 8) ∧
-      mem[(0x800046f7 : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := __umoddi3_chunk0 h
-  ⟨hc.1, hc.2.1, hc.2.2.1, hc.2.2.2.1⟩
-
-theorem __umoddi3_at_800046f8 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : __umoddi3Loaded mem) :
-      mem[(0x800046f8 : Nat)]? = some (0xef : BitVec 8) ∧
-      mem[(0x800046f9 : Nat)]? = some (0xf0 : BitVec 8) ∧
-      mem[(0x800046fa : Nat)]? = some (0x5f : BitVec 8) ∧
-      mem[(0x800046fb : Nat)]? = some (0xfb : BitVec 8) :=
-  have hc := __umoddi3_chunk0 h
-  ⟨hc.2.2.2.2.1, hc.2.2.2.2.2.1, hc.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.1⟩
-
-theorem __umoddi3_at_800046fc {mem : ExtHashMap Nat (BitVec 8)}
-    (h : __umoddi3Loaded mem) :
-      mem[(0x800046fc : Nat)]? = some (0x13 : BitVec 8) ∧
-      mem[(0x800046fd : Nat)]? = some (0x85 : BitVec 8) ∧
-      mem[(0x800046fe : Nat)]? = some (0x05 : BitVec 8) ∧
-      mem[(0x800046ff : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := __umoddi3_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.1⟩
-
-theorem __umoddi3_at_80004700 {mem : ExtHashMap Nat (BitVec 8)}
-    (h : __umoddi3Loaded mem) :
-      mem[(0x80004700 : Nat)]? = some (0x67 : BitVec 8) ∧
-      mem[(0x80004701 : Nat)]? = some (0x80 : BitVec 8) ∧
-      mem[(0x80004702 : Nat)]? = some (0x02 : BitVec 8) ∧
-      mem[(0x80004703 : Nat)]? = some (0x00 : BitVec 8) :=
-  have hc := __umoddi3_chunk0 h
-  ⟨hc.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, hc.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
-
 theorem __umoddi3_at_80004704 {mem : ExtHashMap Nat (BitVec 8)}
     (h : __umoddi3Loaded mem) :
       mem[(0x80004704 : Nat)]? = some (0x33 : BitVec 8) ∧

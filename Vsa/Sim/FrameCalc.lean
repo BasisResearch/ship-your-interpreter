@@ -59,15 +59,6 @@ structure FrameCalc (ws : List W) (m0 m : Std.ExtHashMap Nat (BitVec 8)) where
 
 namespace FrameCalc
 
-/-- The empty calculation. -/
-def refl (ws : List W) (m : Std.ExtHashMap Nat (BitVec 8)) : FrameCalc ws m m :=
-  ⟨[], rfl, trivial⟩
-
-/-- Introduce a calculation from a concrete canonical log. -/
-def of_writeLog (ws : List W) (m : Std.ExtHashMap Nat (BitVec 8))
-    (log : List WEntry) (h : LogInW ws log) : FrameCalc ws m (writeLog m log) :=
-  ⟨log, rfl, h⟩
-
 /-- Compose calculations. The output log is syntactically `l1 ++ l2`. -/
 def trans {ws1 ws2 : List W} {m0 m1 m2 : Std.ExtHashMap Nat (BitVec 8)}
     (h1 : FrameCalc ws1 m0 m1) (h2 : FrameCalc ws2 m1 m2) :
@@ -87,38 +78,6 @@ theorem frameOn {ws : List W} {m0 m : Std.ExtHashMap Nat (BitVec 8)}
     (h : FrameCalc ws m0 m) : FrameOn ws m0 m := by
   rw [h.mem_eq]
   exact frameOn_writeLog ws m0 h.log h.writes_inside
-
-theorem pin8 {ws : List W} {m0 m : Std.ExtHashMap Nat (BitVec 8)}
-    {A : Nat} {v : BitVec 64} (h : FrameCalc ws m0 m)
-    (hout : OutWRange ws A 8) (hp : Pin8 m0 A v) : Pin8 m A v :=
-  pin8_of_frameOn h.frameOn hout hp
-
-theorem pin4 {ws : List W} {m0 m : Std.ExtHashMap Nat (BitVec 8)}
-    {A : Nat} {v : BitVec 32} (h : FrameCalc ws m0 m)
-    (hout : OutWRange ws A 4) (hp : Pin4 m0 A v) : Pin4 m A v :=
-  pin4_of_frameOn h.frameOn hout hp
-
-theorem slot {ws : List W} {m0 m : Std.ExtHashMap Nat (BitVec 8)}
-    (h : FrameCalc ws m0 m) (base : BitVec 64) (off : Nat) (v : BitVec 64) (A : Nat)
-    (hA : (base + Functions.sign_extend (m := 64)
-      (BitVec.ofNat 12 off)).toNat = A)
-    (hout : OutWRange ws A 8) (hs : SlotHolds base off v m0) :
-    SlotHolds base off v m :=
-  slotHolds_of_frameOn base off v A hA h.frameOn hout hs
-
-/-- Copy a `ValueRepr` into the sole write window of a frame calculation. -/
-theorem valueRepr_copy {m m' : Mem} {N : NativeAddrs} {phiC : Addr → Nat}
-    {srcAddr dstAddr : Nat} {v : Value}
-    (h : FrameCalc [{ lo := dstAddr, hi := dstAddr + 24 }] m m')
-    (hcopy : ∀ j, j < 24 → m'[dstAddr + j]? = m[srcAddr + j]?)
-    (hdisj : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < dstAddr ∨ dstAddr + 24 ≤ p + k))
-    (hv : ValueRepr m N phiC srcAddr v) : ValueRepr m' N phiC dstAddr v := by
-  refine valueRepr_copy_of_writeWindow hcopy ?_ ?_ hv
-  · intro a ha
-    exact h.frameOn a ⟨ha, trivial⟩
-  · intro p s hp _ k hk
-    exact hdisj p s hp k hk
 
 end FrameCalc
 
@@ -142,19 +101,5 @@ macro "marshal" : tactic =>
     | exact MarshalFacts.pin_values (by assumption)
     | exact MarshalFacts.kept_regs (by assumption)
     | exact FrameCalc.frameOn (by assumption))
-
-section Sanity
-
-example (ws : List W) (m0 m : Std.ExtHashMap Nat (BitVec 8))
-    (sigma0 sigma : MState) (pins : List Pin) (kept : List Register)
-    (h : MarshalFacts ws m0 m sigma0 sigma pins kept) : FrameOn ws m0 m := by
-  marshal
-
-end Sanity
-
-#print axioms FrameCalc.trans
-#print axioms FrameCalc.frameOn
-#print axioms FrameCalc.valueRepr_copy
-#print axioms MarshalFacts.frameOn
 
 end Vsa.Sim

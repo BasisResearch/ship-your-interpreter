@@ -61,20 +61,6 @@ abbrev magic7f : BitVec 64 := 0x7f7f7f7f7f7f7f7f#64
 abbrev strlenWordVal (w : BitVec 64) : BitVec 64 :=
   (((w &&& magic7f) + magic7f) ||| w) ||| magic7f
 
-/-- **Single-byte kernel (over `Fin 256`).** For a byte value `b`, the byte-level
-structure `((b &&& 0x7f) + 0x7f) ||| b ||| 0x7f` equals `0xFF` iff `b ≠ 0`.
-Exhaustive `decide` over the 256 byte values. The 64-bit `strlenWordVal` result
-decomposes into eight independent copies of this (the low 7 bits are forced set
-by `||| 0x7f`; bit 7 is the byte-nonzero discriminant). -/
-theorem byte_all : ∀ b : Fin 256,
-    (((b.val &&& 0x7f) + 0x7f) ||| b.val ||| 0x7f = 0xFF) ↔ b.val ≠ 0 := by
-  decide
-
-/-- `Nat` form of the single-byte kernel. -/
-theorem byte_struct_ff (b : Nat) (hb : b < 256) :
-    (((b &&& 0x7f) + 0x7f) ||| b ||| 0x7f = 0xFF) ↔ b ≠ 0 :=
-  byte_all ⟨b, hb⟩
-
 /-- **Magic mask bit pattern.** `magic7f.getLsbD i = (i % 8 ≠ 7)` for `i < 64`:
 bits `0..6` of every byte are set, bit `7` clear. This is why the final `||| m`
 of `strlenWordVal` forces bits `0..6` of each byte to `true`, leaving bit `7`
@@ -91,20 +77,6 @@ theorem strlenWordVal_bit (w : BitVec 64) (i : Nat) :
     (strlenWordVal w).getLsbD i =
       (((w &&& magic7f) + magic7f).getLsbD i || w.getLsbD i || magic7f.getLsbD i) := by
   simp only [strlenWordVal, BitVec.getLsbD_or]
-
-/-- **Carry-free addition (no overflow).** `((w &&& magic7f) + magic7f).toNat`
-equals the exact `Nat` sum with no mod-2^64 reduction, because
-`(w &&& magic7f).toNat ≤ magic7f.toNat = 0x7f7f7f7f7f7f7f7f` and
-`0x7f7f… + 0x7f7f… = 0xfefe… < 2^64`. This is the fact that makes the byte-wise
-decomposition of `strlenWordVal` sound: the masked operand's high (bit-7) lanes
-are all zero, so no addition carry crosses a byte boundary. -/
-theorem strlenWordVal_add_noCarry (w : BitVec 64) :
-    ((w &&& magic7f) + magic7f).toNat = (w &&& magic7f).toNat + magic7f.toNat := by
-  rw [BitVec.toNat_add]
-  have hm : magic7f.toNat = 0x7f7f7f7f7f7f7f7f := by decide
-  have hle : (w &&& magic7f).toNat ≤ magic7f.toNat := by
-    rw [BitVec.toNat_and, hm]; exact Nat.le_trans Nat.and_le_right (by decide)
-  rw [Nat.mod_eq_of_lt]; rw [hm] at hle ⊢; omega
 
 /-! ## Cross-byte detection (`detect_all_ones`)
 

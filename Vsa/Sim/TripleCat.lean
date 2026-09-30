@@ -73,14 +73,6 @@ theorem dimap {P P' Q Q' : Config → Prop}
     (pre : Ent P' P) (post : Ent Q Q') (t : Triple P Q) : Triple P' Q' :=
   Triple.conseq t pre post
 
-/-- Contravariant-only action (strengthen the precondition). -/
-theorem lmap {P P' Q : Config → Prop} (pre : Ent P' P) (t : Triple P Q) : Triple P' Q :=
-  dimap pre (Ent.refl Q) t
-
-/-- Covariant-only action (weaken the postcondition). -/
-theorem rmap {P Q Q' : Config → Prop} (post : Ent Q Q') (t : Triple P Q) : Triple P Q' :=
-  dimap (Ent.refl P) post t
-
 /-! ## 3. The profunctor / category laws — all `rfl` at `Prop` level (proof irrelevance)
 
 Each is stated as an equation of proofs and closed by `Subsingleton.elim` (the two
@@ -106,19 +98,6 @@ into a single application. -/
     (a : Triple P Q) (b : Triple Q R) (c : Triple R S) :
     (a.seq b).seq c = a.seq (b.seq c) := Subsingleton.elim _ _
 
-/-- dimap–seq interchange: a `dimap` around a `seq` splits into a `lmap` on the left
-factor and an `rmap` on the right (the middle predicate `Q` is untouched).  This is the
-law used to normalise `dimap f g (a ≫ b)`. -/
-@[simp] theorem dimap_seq {P P' Q R R' : Config → Prop}
-    (f : Ent P' P) (g : Ent R R') (a : Triple P Q) (b : Triple Q R) :
-    dimap f g (a.seq b) = (lmap f a).seq (rmap g b) := Subsingleton.elim _ _
-
-/-- `seq` respects `dimap` on the outside factors (a convenience corollary of
-`dimap_seq`, kept as a directional builder). -/
-theorem seq_dimap {P P' Q R R' : Config → Prop}
-    (f : Ent P' P) (g : Ent R R') (a : Triple P Q) (b : Triple Q R) :
-    Triple P' R' := dimap f g (a.seq b)
-
 end Triple
 
 /-! ## 4. `PredIso` — an adapter PAIR collapsed to one iso
@@ -135,95 +114,14 @@ structure PredIso (P Q : Config → Prop) : Prop where
 
 namespace PredIso
 
-/-- The identity iso. -/
-@[refl] theorem refl (P : Config → Prop) : PredIso P P := ⟨Ent.refl P, Ent.refl P⟩
-
-/-- Swap the two directions. -/
-theorem symm {P Q : Config → Prop} (h : PredIso P Q) : PredIso Q P := ⟨h.inv, h.to⟩
-
 /-- Compose two isos. -/
 theorem trans {P Q R : Config → Prop} (h₁ : PredIso P Q) (h₂ : PredIso Q R) :
     PredIso P R := ⟨Ent.trans h₁.to h₂.to, Ent.trans h₂.inv h₁.inv⟩
-
-/-- Transport a triple's PRECONDITION along an iso: `Triple P R → Triple Q R` (uses the
-`inv` direction, since `dimap` is contravariant in the precondition). -/
-theorem transportPre {P Q R : Config → Prop} (h : PredIso P Q)
-    (t : Triple P R) : Triple Q R := Triple.lmap h.inv t
-
-/-- Transport a triple's POSTCONDITION along an iso: `Triple R P → Triple R Q` (uses the
-`to` direction, covariant in the postcondition). -/
-theorem transportPost {P Q R : Config → Prop} (h : PredIso P Q)
-    (t : Triple R P) : Triple R Q := Triple.rmap h.to t
-
-/-- Rewrite a predicate under an iso, as a plain implication (the `to` field, named). -/
-theorem mp {P Q : Config → Prop} (h : PredIso P Q) : ∀ c, P c → Q c := h.to
-
-/-- ... and the reverse. -/
-theorem mpr {P Q : Config → Prop} (h : PredIso P Q) : ∀ c, Q c → P c := h.inv
 
 end PredIso
 
 /-! ## 5. Relation-indexed machine refinements -/
 
 universe u v w
-
-/-- Composition through one explicit source-semantic midpoint.  The midpoint
-is an argument, not an existential hidden in the resulting relation. -/
-def RelVia {α : Sort u} {β : Sort v} {γ : Sort w}
-    (mid : β) (R : α → β → Prop) (S : β → γ → Prop)
-    (a : α) (c : γ) : Prop :=
-  R a mid ∧ S mid c
-
-/-- Evidence that one source-semantic result is implemented by one total
-machine triple.  Both halves are retained: consumers cannot use the machine
-run while silently dropping which source relation/result it refines. -/
-structure RTriple {α : Sort u} {β : Sort v}
-    (R : α → β → Prop) (a : α) (b : β)
-    (P Q : Config → Prop) : Prop where
-  semantic : R a b
-  machine : Triple P Q
-
-namespace RTriple
-
-/-- Package already-proved semantic and machine evidence. -/
-theorem pack {α : Sort u} {β : Sort v} {R : α → β → Prop}
-    {a : α} {b : β} {P Q : Config → Prop}
-    (semantic : R a b) (machine : Triple P Q) :
-    RTriple R a b P Q :=
-  ⟨semantic, machine⟩
-
-/-- Consequence changes only the machine predicates; the source evidence is
-preserved verbatim. -/
-theorem conseq {α : Sort u} {β : Sort v} {R : α → β → Prop}
-    {a : α} {b : β} {P P' Q Q' : Config → Prop}
-    (h : RTriple R a b P Q) (pre : Ent P' P) (post : Ent Q Q') :
-    RTriple R a b P' Q' :=
-  ⟨h.semantic, Triple.dimap pre post h.machine⟩
-
-/-- Compose two refinements through the named semantic midpoint `b`.  The
-machine boundary must be connected by the explicit entailment `Q ⊢ₑ P₂`;
-composition neither identifies nor invents carrier predicates. -/
-theorem seq {α : Sort u} {β : Sort v} {γ : Sort w}
-    {R : α → β → Prop} {S : β → γ → Prop}
-    {a : α} {b : β} {c : γ} {P Q P₂ T : Config → Prop}
-    (h₁ : RTriple R a b P Q) (h₂ : RTriple S b c P₂ T)
-    (seam : Ent Q P₂) :
-    RTriple (RelVia b R S) a c P T :=
-  ⟨⟨h₁.semantic, h₂.semantic⟩,
-    Triple.seq h₁.machine (Triple.lmap seam h₂.machine)⟩
-
-/-- Evidence-level form of `seq`.  This is the ergonomic constructor for
-existing proofs whose semantic derivations and machine triples are already
-separate arguments.  The semantic midpoint and machine seam remain explicit. -/
-theorem seqEvidence {α : Sort u} {β : Sort v} {γ : Sort w}
-    {R : α → β → Prop} {S : β → γ → Prop}
-    {a : α} {b : β} {c : γ} {P Q P₂ T : Config → Prop}
-    (semantic₁ : R a b) (semantic₂ : S b c)
-    (machine₁ : Triple P Q) (machine₂ : Triple P₂ T)
-    (seam : Ent Q P₂) :
-    RTriple (RelVia b R S) a c P T :=
-  seq (pack semantic₁ machine₁) (pack semantic₂ machine₂) seam
-
-end RTriple
 
 end Vsa.Logic

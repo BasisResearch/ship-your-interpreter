@@ -205,19 +205,4 @@ theorem stuckSimClosed (p : Program) (c : Config)
     hno
 -/
 
-/-- Close `stuck_sim` using the indexed error work for this exact machine
-entry.  The public conclusion is unchanged. -/
-theorem stuckSimClosed (p : Program) (c : Config)
-    (htri : Trichotomy)
-    (Corr : Config → SpecSt → Nat → Addr → List Stmt → Prop)
-    (hDivStep : DivStep Corr)
-    (hentry : Corr c initSt 0 0 p)
-    (hErrWork : ErrorProgramWork p c)
-    (hno : ¬ ∃ out, BigStep p out) :
-    Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0 :=
-  stuckSim htri
-    (stuck_of_bigStepErrFull_work p c hErrWork)
-    (fun hdiv => stuck_of_divergenceSim Corr hDivStep hentry hdiv)
-    hno
-
 end Vsa.Sim.StuckSimClose

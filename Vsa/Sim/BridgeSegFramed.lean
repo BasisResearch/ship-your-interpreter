@@ -110,26 +110,6 @@ theorem frame_of_wrChain_avoids {P : Register → Bool} {bs : List BBlock}
 below.  The landed `bridgeOfSeg` path is unchanged; this just exhibits it as the
 `P := AbiPreserved` specialisation of the generic core. -/
 
-/-- The `AbiPreserved` avoid predicate is false on every noise register (one
-`decide`). -/
-theorem abiPreserved_noise : ∀ rr ∈ noiseRegs, AbiPreserved rr = false := by decide
-
-/-- `WrChainAvoids AbiPreserved` IS `FrameMeta.WrChainAvoidAbi` (definitional). -/
-theorem wrChainAvoids_abi_eq (bs : List BBlock) :
-    WrChainAvoids AbiPreserved bs = WrChainAvoidAbi bs := rfl
-
-/-- The generic frame core at `P := AbiPreserved` recovers `abiFrame_of_wrChain`. -/
-theorem frame_of_wrChain_avoids_abi {bs : List BBlock} {σ' σ : MState}
-    (hAvoid : WrChainAvoidAbi bs)
-    (hframe : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-      (∀ n ∈ wrChain bs, (gprReg n == R) = false) →
-      σ'.regs.get? R = σ.regs.get? R) :
-    ∀ R, AbiPreserved R = true → σ'.regs.get? R = σ.regs.get? R :=
-  frame_of_wrChain_avoids abiPreserved_noise hAvoid hframe
-
-#print axioms regAvoids_ne
-#print axioms frame_of_wrChain_avoids
-
 /-! ## §2. `bridgeOfSegFramed` — the ABI-mutating jal-terminated bridge
 
 `BridgeSeg.bridgeOfSeg` requires `WrChainAvoidAbi bs`, so it produces an ABI frame
@@ -146,68 +126,6 @@ tracking" the observation `callclosure-entrybase-abi` asked for, and they come F
 
 The genuinely per-callee jal seam is still the `JalStep` datum; only the frame
 predicate is swapped from `AbiPreserved` (hardcoded) to caller-supplied `P`. -/
-theorem bridgeOfSegFramed (P : Register → Bool)
-    (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (σ : MState) (i u : Nat) (pc0 calleeEntry link vm : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hmem : σ.mem = m0)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : ChainFacts σ.mem σ.mem L lds bs)
-    (hi : i < 2)
-    (hwf : ChainOK pc0 (keysG L) bs)
-    -- the generic frame data (two `decide`s), REPLACING `WrChainAvoidAbi bs`:
-    (hnoiseP : ∀ rr ∈ noiseRegs, P rr = false)
-    (hAvoidP : WrChainAvoids P bs)
-    (hKeysOut : KeysOK (keysG (evalBlocks bs (SegEvalState.init L lds)).regs))
-    (hRaOut : KeysAvoidRa (evalBlocks bs (SegEvalState.init L lds)).regs)
-    -- `P` restricts the callee-saved frame; the jal's OWN frame (in `JalStep`) is
-    -- over `AbiPreserved`, and any well-formed `P` for consumer (a) is a SUBSET of
-    -- `AbiPreserved` (it drops the reseated `s5`/`s7`), so `P → AbiPreserved` — one
-    -- `decide` at the use site.  This lets the jal side reuse `JalStep`'s ABI frame.
-    (hPabi : ∀ R, P R = true → AbiPreserved R = true)
-    (hjal : ∀ (σ' : MState) (i' u' : Nat),
-      GoodState σ' → i' < 2 →
-      σ'.regs.get? Register.PC = some (evalBlocksPC pc0 (SegEvalState.init L lds) bs) →
-      (∃ w, σ'.regs.get? Register.minstret = some w) →
-      σ'.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log →
-      GHolds σ' (evalBlocks bs (SegEvalState.init L lds)).regs →
-      JalStep calleeEntry link σ' i' u') :
-    ∃ (σ2 : MState) (i2 : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel bs + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
-      σ2.regs.get? Register.PC = some calleeEntry ∧
-      σ2.regs.get? Register.x1 = some link ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      -- the whole reseated register bundle, EXPOSED (the deltas the span computes,
-      -- incl. the callee-saved reseats `s5`/`s7`): the "spill tracking", free.
-      GHolds σ2 (evalBlocks bs (SegEvalState.init L lds)).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log ∧
-      -- the P-restricted callee-saved frame across the whole bridge (body ∘ jal):
-      (∀ R, P R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  -- run the seg body (FREE): whole Steps chain, computed end-PC = jalPC, computed
-  -- reseated regs, computed memory, and the RAW wrChain frame clause.
-  obtain ⟨σ', i', hs, hi', hG', hmem', _hout, hpc', hmi', hregs, hframe⟩ :=
-    segEval_sound bs σ i u pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf hi
-  -- the P-frame of the body, FREE (two `decide`s: `hnoiseP`, `hAvoidP`).
-  have hPBody : ∀ R, P R = true → σ'.regs.get? R = σ.regs.get? R :=
-    frame_of_wrChain_avoids hnoiseP hAvoidP hframe
-  rw [hmem] at hmem'
-  -- take the jal step (feeding it the seg-post memory + reseated regs).
-  obtain ⟨σ2, i2, hstep2, hi2, hG2, hmem2, hpc2, hra2, hmi2, hnonra2, habiJal⟩ :=
-    hjal σ' i' (u + evalBlocksFuel bs) hG' hi' hpc' hmi' hmem' hregs
-  refine ⟨σ2, i2, Steps.trans hs (Steps.single hstep2), hi2, hG2, hpc2, hra2, hmi2, ?_, ?_, ?_⟩
-  · exact gholds_of_jal hnonra2 _ hKeysOut hRaOut hregs
-  · rw [hmem2]; exact hmem'
-  · -- P-frame across body ∘ jal.  For `P R = true`: `P R → AbiPreserved R`
-    -- (`hPabi`), so the jal's own `AbiPreserved` frame (`habiJal`) carries R across
-    -- the jal; then the body's P-frame (`hPBody`) carries R back to `σ`.
-    intro R hR
-    exact (habiJal R (hPabi R hR)).trans (hPBody R hR)
-
-#print axioms bridgeOfSegFramed
 
 /-! ## §4. Demo (a) — the closure entryBase callee-saved reseat, via `bridgeOfSegFramed`
 
@@ -228,80 +146,6 @@ concern, orthogonal to the frame issue this file resolves. -/
 
 /-! The `mv s7,a1` reseat block (`0x80003278: addi x23,x11,0`), the callee-saved
 write that defeats `WrChainAvoidAbi`. -/
-#derive_case mvS7Seg chain
-  [(0x80003278#64, 0x00058b93#32)]   -- addi x23,x11,0  (= mv s7,a1)
-
-#print axioms mvS7Seg_seg
-
-/-- The restricted ABI frame predicate: callee-saved EXCEPT the reseated `s7 = x23`.
-`bridgeOfSegFramed`'s frame conclusion holds for exactly these; `s7`'s new value is
-read off the exposed post bundle instead. -/
-def AbiExceptS7 (R : Register) : Bool := AbiPreserved R && !(R == Register.x23)
-
-/-- **The entryBase reseat idiom, bridged with `bridgeOfSegFramed`.**  Entry pin
-`x11 = a1v`; the seg reseats `x23 := a1v` (a callee-saved write).  The combinator
-produces: parked at `env_new` entry, `x1 = link`, the EXPOSED reseated bundle
-`GHolds σ2 out.regs` (carrying the new `s7 = a1v`), and the ABI frame for every
-callee-saved EXCEPT `s7`.  `WrChainAvoidAbi` is NOT required — only `WrChainAvoids
-AbiExceptS7` (which holds: the sole write `x23` fails `AbiExceptS7`).  The env_new
-`JalStep` stays a NAMED per-callee residual (its site lemma is region-specific). -/
-theorem entryBaseReseat_framed
-    (σ : MState) (i u : Nat) (a1v link vm : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some 0x80003278#64)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hmem : σ.mem = m0)
-    (hL : GHolds σ [(11, a1v)])
-    (hfacts : ChainFacts σ.mem σ.mem [(11, a1v)] [] mvS7Seg)
-    (hi : i < 2)
-    (hjal : ∀ (σ' : MState) (i' u' : Nat),
-      GoodState σ' → i' < 2 →
-      σ'.regs.get? Register.PC
-        = some (evalBlocksPC 0x80003278#64 (SegEvalState.init [(11, a1v)] []) mvS7Seg) →
-      (∃ w, σ'.regs.get? Register.minstret = some w) →
-      σ'.mem = writeLog m0 (evalBlocks mvS7Seg (SegEvalState.init [(11, a1v)] [])).log →
-      GHolds σ' (evalBlocks mvS7Seg (SegEvalState.init [(11, a1v)] [])).regs →
-      JalStep 0x800029fc#64 link σ' i' u') :
-    ∃ (σ2 : MState) (i2 : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel mvS7Seg + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
-      σ2.regs.get? Register.PC = some 0x800029fc#64 ∧
-      σ2.regs.get? Register.x1 = some link ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      -- the reseated `s7 = a1v`, read off the EXPOSED post bundle (the delta, free):
-      gprGet σ2 23 = some a1v ∧
-      -- the ABI frame for every callee-saved EXCEPT the reseated `s7`:
-      (∀ R, AbiExceptS7 R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  -- the side-condition decides, named.  `keysG`/`.regs`-keys never inspect the pin
-  -- VALUE `a1v` (only the index), so each goal reduces (`rfl`) to an `a1v`-free
-  -- concrete list, then closes by `decide`.
-  have hkeys : KeysOK (keysG [(11, a1v)]) := by
-    show KeysOK [11]; decide
-  have hwf : ChainOK 0x80003278#64 (keysG [(11, a1v)]) mvS7Seg := by
-    show ChainOK 0x80003278#64 [11] mvS7Seg; decide
-  have hnoiseP : ∀ rr ∈ noiseRegs, AbiExceptS7 rr = false := by decide
-  have hAvoidP : WrChainAvoids AbiExceptS7 mvS7Seg := by decide
-  have hKeysOut : KeysOK (keysG (evalBlocks mvS7Seg (SegEvalState.init [(11, a1v)] [])).regs) := by
-    show KeysOK [23, 11]; decide
-  have hRaOut : KeysAvoidRa (evalBlocks mvS7Seg (SegEvalState.init [(11, a1v)] [])).regs := by
-    show ∀ n ∈ ([23, 11] : List Nat), n ≠ 1; decide
-  -- `AbiExceptS7 R → AbiPreserved R`: the restricted predicate is a subset (Bool `&&`).
-  have hPabi : ∀ R, AbiExceptS7 R = true → AbiPreserved R = true := by
-    intro R hR; unfold AbiExceptS7 at hR; exact (Bool.and_eq_true .. |>.mp hR).1
-  obtain ⟨σ2, i2, hsteps, hi2, hG2, hpc2, hra2, hmi2, hregs2, _hmem2, hframe2⟩ :=
-    bridgeOfSegFramed AbiExceptS7 mvS7Seg [(11, a1v)] [] σ i u
-      0x80003278#64 0x800029fc#64 link vm m0
-      hG hpc hmi hmem hL hkeys hfacts hi hwf
-      hnoiseP hAvoidP hKeysOut hRaOut hPabi hjal
-  refine ⟨σ2, i2, hsteps, hi2, hG2, hpc2, hra2, hmi2, ?_, hframe2⟩
-  -- read the reseated `s7 = a1v` off the exposed post bundle `GHolds σ2 out.regs`.
-  -- `lookupG 23 out.regs = some a1v` holds by `rfl` (the reseat wrote `x23 := a1v`).
-  have hlk : lookupG 23 (evalBlocks mvS7Seg (SegEvalState.init [(11, a1v)] [])).regs
-      = some a1v := by
-    show lookupG 23 [(23, a1v + 0#64), (11, a1v)] = some a1v
-    simp [lookupG, BitVec.add_zero]
-  exact gholds_lookup (v := a1v) _ hregs2 hlk
-
-#print axioms entryBaseReseat_framed
+   -- addi x23,x11,0  (= mv s7,a1)
 
 end Vsa.Sim

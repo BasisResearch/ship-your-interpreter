@@ -67,8 +67,4 @@ theorem read_ram_total (σ : SequentialState RegisterType trivialChoiceSource) (
   erw [hr]
   rfl
 
-#print axioms bytesT_extract
-#print axioms readBytes_total
-#print axioms read_ram_total
-#print axioms getLsbD_bytesT
 end Vsa.Sim

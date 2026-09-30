@@ -33,9 +33,6 @@ structure PVKeep (R R' : Nat → BitVec 64) : Prop where
   s2 : R' 18 = R 18
   s3 : R' 19 = R 19
 
-theorem PVKeep.refl (R : Nat → BitVec 64) : PVKeep R R :=
-  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
-
 /-- `PVKeep` through writes to other registers. -/
 macro "pv_keep" h:term : tactic => `(tactic| (refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;>

@@ -79,7 +79,6 @@ theorem ofNat_toInt_small {a : Nat} (h : a < 2 ^ 31) : (BitVec.ofNat 64 a).toInt
     IW live m (blockView aS.toNat arr.toNat count) (InExt (s.toNat - 176, 176)) Q 0x800041a4#64 R Mt
   by ix_run hlive using [h8, h16, h2, harr, hel, hsf] at 0x800041c4
 
-
 #ix_seg BlockLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aS s arr sc : BitVec 64} {idx count : Nat}
@@ -93,7 +92,6 @@ theorem ofNat_toInt_small {a : Nat} (h : a < 2 ^ 31) : (BitVec.ofNat 64 a).toInt
     (hcnt : ldv .lw m (aS + 16#64).toNat = BitVec.ofNat 64 count) :
     IW live m (blockView aS.toNat arr.toNat count) (InExt (s.toNat - 176, 176)) Q 0x800041c8#64 R Mt
   by ix_run hlive using [h8, h2, h10, hi, hcnt, hsf] at 0x800041a4 0x8000409c
-
 
 /-- A block node over a geometric view: its array pointer and count reads,
 placement, and the represented statement array. -/
@@ -371,7 +369,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
 #ix_chain blockSeqT_consNormal := [blockSeqT_consNormal_p1, blockSeqT_consNormal_p2]
 
-
 #ix_piece blockSeqT_consAbrupt_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
@@ -432,7 +429,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   · imodintro; rw [hpt]; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hsp, hbn.geo⟩
   iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
 
-
 #ix_piece blockSeqT_consAbrupt_p2 from blockSeqT_consAbrupt_p1 by
   -- the status test: an abrupt status leaves the loop
   ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
@@ -467,8 +463,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   · intro hc; exfalso; apply hc; ix_reg; rw [hst0]; exact hsc
 
 #ix_chain blockSeqT_consAbrupt := [blockSeqT_consAbrupt_p1, blockSeqT_consAbrupt_p2]
-
-
 
 #ix_piece blockSeqP_cons_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
     [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -637,7 +631,6 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
       rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg
 
 #ix_chain blockSeqP_cons := [blockSeqP_cons_p1, blockSeqP_cons_p2]
-
 
 /-- **The block loop, partial mode, for every statement list** (structural
 induction; each statement through the Löb hypothesis). -/

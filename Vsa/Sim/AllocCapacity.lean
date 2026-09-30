@@ -21,11 +21,6 @@ open Vsa.RuntimeRepr Vsa.Alloc Vsa.Sim.RuntimeOwnership
 
 /-! ## 1. Physical chunk size -/
 
-theorem physTotal_nil : physTotal [] = 0 := rfl
-
-theorem physTotal_cons (e : Extent) (l : List Extent) :
-    physTotal (e :: l) = physSize e.2 + physTotal l := rfl
-
 /-! ## 2. The capacity theorem -/
 
 /-- Splitting a list by a decidable predicate splits its sum. -/
@@ -97,67 +92,13 @@ private theorem extents_total_aux :
       simp only [List.map_cons, List.sum_cons]
       omega
 
-/-- Pairwise-disjoint live extents fit inside the arena. -/
-theorem extents_total_le {A : Arena} {exts : List Extent} (h : HeapArena A exts) :
-    (exts.map Prod.snd).sum ≤ A.hi - A.lo :=
-  extents_total_aux exts.length exts A.lo A.hi (Nat.le_refl _)
-    (fun e he => (h.1 e he).2) h.2
-
 /-! ## 3. The source resource bound -/
-
-/-- **The source-side resource bound**, as one named record: over every finite
-execution prefix the interpreter's live set stays within a physical budget, and
-every individual request stays within the allocator's static ceiling.  Supplier:
-a source-level accounting of the program's allocation behaviour (environment
-records, their arrays, copied binding names, closure records, string payloads)
-against the arena sized by the linker script. -/
-structure ResourceBound (A : Arena) (maxReq : Nat) (exts : List Extent) : Prop where
-  /-- The live ledger's PHYSICAL cost, header and alignment included, leaves room
-  in the arena for one more request of the static ceiling. -/
-  budget : physTotal exts + physSize maxReq ≤ A.hi - A.lo
-  /-- The ledger is a genuine live set of the arena. -/
-  arena : HeapArena A exts
-
-/-- Logical size never exceeds physical size, extent by extent. -/
-theorem sum_le_physTotal (exts : List Extent) :
-    (exts.map Prod.snd).sum ≤ physTotal exts := by
-  induction exts with
-  | nil => exact Nat.le_refl 0
-  | cons a t ih =>
-    simp only [List.map_cons, List.sum_cons, physTotal_cons]
-    have := physSize_ge a.2
-    omega
-
-/-- **The arena holds enough bytes for the next request.**  From the source
-bound, at least `physSize n` bytes remain beyond everything currently live, for
-any request within the static ceiling. This is a numeric capacity bound.
-Concrete placement and successful allocator execution require separate proofs. -/
-theorem arena_has_room {A : Arena} {maxReq : Nat} {exts : List Extent}
-    (h : ResourceBound A maxReq exts) {n : Nat} (hn : n ≤ maxReq) :
-    (exts.map Prod.snd).sum + physSize n ≤ A.hi - A.lo := by
-  have h1 := sum_le_physTotal exts
-  have h2 := physSize_mono hn
-  have h3 := h.budget
-  omega
 
 /-- A fresh block entering the ledger keeps the physical accounting exact. -/
 theorem physTotal_fresh (p n : Nat) (exts : List Extent) :
     physTotal ((p, n) :: exts) = physSize n + physTotal exts := rfl
 
 /-! ## 4. Carrying the bound along an execution -/
-
-/-- A sublist costs no more physically than the list it came from. -/
-theorem physTotal_le_of_sublist {l₁ l₂ : List Extent} (h : l₁.Sublist l₂) :
-    physTotal l₁ ≤ physTotal l₂ := by
-  induction h with
-  | slnil => exact Nat.le_refl 0
-  | cons a _ ih => simp only [physTotal_cons]; omega
-  | cons_cons a _ ih => simp only [physTotal_cons]; omega
-
-/-- Releasing a block never costs more room. -/
-theorem physTotal_erase_le (e : Extent) (l : List Extent) :
-    physTotal (l.erase e) ≤ physTotal l :=
-  physTotal_le_of_sublist List.erase_sublist
 
 /-- **The allocation step.**  One request within the ceiling consumes exactly one
 unit of the budget, whatever its size. -/
@@ -170,43 +111,5 @@ theorem ResourceBudget.alloc {A : Arena} {maxReq : Nat} {exts : List Extent} {k 
   have hs : (k + 1) * physSize maxReq = k * physSize maxReq + physSize maxReq :=
     Nat.succ_mul k (physSize maxReq)
   omega
-
-/-- **The release step.**  Freeing never spends budget, and may recover some. -/
-theorem ResourceBudget.free {A : Arena} {maxReq : Nat} {exts : List Extent} {k : Nat}
-    (h : ResourceBudget A maxReq exts k) (e : Extent) :
-    ResourceBudget A maxReq (exts.erase e) k := by
-  have := physTotal_erase_le e exts
-  unfold ResourceBudget at h ⊢
-  omega
-
-/-- A budget with room to spare is a bound at the current point. -/
-theorem ResourceBudget.toBound {A : Arena} {maxReq : Nat} {exts : List Extent} {k : Nat}
-    (h : ResourceBudget A maxReq exts (k + 1)) (harena : HeapArena A exts) :
-    ResourceBound A maxReq exts where
-  budget := by
-    unfold ResourceBudget at h
-    have hs : (k + 1) * physSize maxReq = k * physSize maxReq + physSize maxReq :=
-      Nat.succ_mul k (physSize maxReq)
-    omega
-  arena := harena
-
-/-- The budget is monotone in the count, so a coarser source bound still serves. -/
-theorem ResourceBudget.mono {A : Arena} {maxReq : Nat} {exts : List Extent} {j k : Nat}
-    (h : ResourceBudget A maxReq exts k) (hjk : j ≤ k) : ResourceBudget A maxReq exts j := by
-  have hjm : j * physSize maxReq ≤ k * physSize maxReq :=
-    Nat.mul_le_mul_right (physSize maxReq) hjk
-  unfold ResourceBudget at h ⊢
-  omega
-
-#print axioms physSize_32
-#print axioms extents_total_le
-#print axioms sum_le_physTotal
-#print axioms arena_has_room
-#print axioms physTotal_le_of_sublist
-#print axioms physTotal_erase_le
-#print axioms ResourceBudget.alloc
-#print axioms ResourceBudget.free
-#print axioms ResourceBudget.toBound
-#print axioms ResourceBudget.mono
 
 end Vsa.Sim

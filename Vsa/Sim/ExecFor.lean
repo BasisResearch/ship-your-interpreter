@@ -129,32 +129,6 @@ status dispatch and (on loop-back) the `ExecStep`:
 Statement identical to `ExecWhileStep` but over `.forStmt oinit ocond ostep b` at the
 child scope `outer`. `stFin` is the loop's final post-state; the loop-back
 φ-extension is stated over `stFin`'s store sizes so the loop rule composes. -/
-def ExecForStep
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (d : Nat) (outer : Addr)
-    (oinit : Option Stmt) (ocond ostep : Option Expr) (b : Stmt)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (out0 : Array String)
-    (stMid stFin : Vsa.While.St) (bodyStatus loopStatus : Status) : Prop :=
-  Triple
-    (fun cfg => ExecEntry g N A SL φf φc st d outer (.forStmt oinit ocond ostep b)
-      sp r aInterp aStmt aEnv aRet m0 cfg ∧ cfg.σ.sailOutput = out0)
-    (fun cfg =>
-      -- loop-back branch: body normal/cont → step → re-enter the head at `stMid`
-      (((bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-        ∃ (φf' φc' : Addr → Nat),
-          PhiExtends φf φf' stFin.store.frames.size ∧
-          PhiExtends φc φc' stFin.store.closures.size ∧
-          ExecEntry g N A SL φf' φc' stMid d outer (.forStmt oinit ocond ostep b)
-            sp r aInterp aStmt aEnv aRet cfg.σ.mem cfg ∧ cfg.σ.sailOutput = out0 ∧
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-            cfg.σ.mem[a]? = m0[a]?))
-      ) ∨
-      -- exit branch: falsy / brk / ret → land the exit against `m0`
-      (¬ (bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-        ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-          stMid loopStatus sp r aRet m0 cfg))
 
 /-! ## `execForExit` — the three non-recursive `ForLoop` constructors
 
@@ -167,31 +141,6 @@ body statuses are `≠ .normal, .cont`, so the exit disjunct fires; the loop-bac
 disjunct is contradictory for these statuses.
 
 Structurally IDENTICAL to `execWhileExit`. -/
-theorem execForExit
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (d : Nat) (outer : Addr)
-    (oinit : Option Stmt) (ocond ostep : Option Expr) (b : Stmt)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64)
-    (hstep : ∀ (φf φc : Addr → Nat) (st stMid stFin : Vsa.While.St)
-        (bodyStatus loopStatus : Status) (m0 : Mem) (out0 : Array String),
-        ExecForStep g N A SL φf φc st d outer oinit ocond ostep b
-          sp r aInterp aStmt aEnv aRet m0 out0 stMid stFin bodyStatus loopStatus)
-    (φf φc : Addr → Nat) (st st' : Vsa.While.St) (status : Status) (m0 : Mem)
-    (out0 : Array String)
-    -- the loop's SINGLE-ITERATION exit witness: the body (if any) completes with a
-    -- status that is NOT `.normal`/`.cont` (falsy = no body / `.brk` / `.ret v`).
-    (bodyStatus : Status) (hexit : ¬ (bodyStatus = .normal ∨ bodyStatus = .cont)) :
-    Triple
-      (fun cfg => ExecEntry g N A SL φf φc st d outer (.forStmt oinit ocond ostep b)
-        sp r aInterp aStmt aEnv aRet m0 cfg ∧ cfg.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-        st' status sp r aRet m0) := by
-  intro cfg hpre
-  obtain ⟨cE, hs, hpost⟩ := hstep φf φc st st' st' bodyStatus status m0 out0 cfg hpre
-  rcases hpost with ⟨hlb, _⟩ | ⟨_, hE⟩
-  · exact absurd hlb hexit
-  · exact ⟨cE, hs, hE⟩
 
 /-! ## `execForLoopSim` — the recursive `ForLoop` constructor (`ForLoop.loop`)
 
@@ -215,55 +164,6 @@ non-variable index `.forStmt …`).
 
 The exit disjunct of `hstep` is impossible here: `ForLoop.loop` fires precisely when
 the body status is `.normal`/`.cont` (`hloop`). -/
-theorem execForLoopSim
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (φf φc : Addr → Nat)
-    (st stMid stFin : Vsa.While.St) (d : Nat) (outer : Addr)
-    (oinit : Option Stmt) (ocond ostep : Option Expr) (b : Stmt)
-    (bodyStatus status' : Status)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (out0 : Array String)
-    -- store counts only grow: `st.store ≤ stMid.store ≤ stFin.store` (supplied
-    -- from the `ForLoop.loop` sub-derivations at the caller).
-    (hSizeMid : st.store.frames.size ≤ stMid.store.frames.size ∧
-      st.store.closures.size ≤ stMid.store.closures.size)
-    (hSizeFin : st.store.frames.size ≤ stFin.store.frames.size ∧
-      st.store.closures.size ≤ stFin.store.closures.size)
-    -- the loop-back side-condition: the body completed `.normal`/`.cont`.
-    (hloop : bodyStatus = .normal ∨ bodyStatus = .cont)
-    -- ONE machine iteration from `st` (its loop-back branch re-enters at `stMid`).
-    (hstep : ExecForStep g N A SL φf φc st d outer oinit ocond ostep b
-      sp r aInterp aStmt aEnv aRet m0 out0 stMid stFin bodyStatus status')
-    -- the RECURSIVE sub-`for` IH (`ForLoop stMid … st''' status'`), supplied by the
-    -- Layer-4 mutual recursor — quantified over the extended maps and the re-entry
-    -- memory baseline the iteration hands it. NO self-recursion.
-    (hForIH : ∀ (φf' φc' : Addr → Nat) (m0' : Mem),
-      Triple
-        (fun cfg => ExecEntry g N A SL φf' φc' stMid d outer (.forStmt oinit ocond ostep b)
-          sp r aInterp aStmt aEnv aRet m0' cfg ∧ cfg.σ.sailOutput = out0)
-        (ExecExit g N A SL φf' φc' stMid.store.frames.size stMid.store.closures.size
-          stFin status' sp r aRet m0')) :
-    Triple
-      (fun cfg => ExecEntry g N A SL φf φc st d outer (.forStmt oinit ocond ostep b)
-        sp r aInterp aStmt aEnv aRet m0 cfg ∧ cfg.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-        stFin status' sp r aRet m0) := by
-  intro cfg hpre
-  -- one iteration → the loop-back re-entry (extended φ, rebased-to-`m0` memory).
-  obtain ⟨c₁, hs₁, hpost⟩ := hstep cfg hpre
-  rcases hpost with ⟨_, φf', φc', hpf, hpc, hEntry', hout', hmem'⟩ | ⟨hne, _⟩
-  · -- run the REST of the loop from `stMid` via the recursive IH …
-    obtain ⟨c₂, hs₂, hexit⟩ :=
-      hForIH φf' φc' c₁.σ.mem c₁ ⟨hEntry', hout'⟩
-    -- … then re-base its exit to the entry maps `φf`/`φc` and baseline `m0`.
-    refine ⟨c₂, hs₁.trans hs₂, ?_⟩
-    exact execExit_extend g N A SL φf φc φf' φc'
-      st.store.frames.size st.store.closures.size
-      stMid.store.frames.size stMid.store.closures.size
-      stFin status' sp r aRet m0 c₁.σ.mem c₂
-      (PhiExtends.mono hSizeFin.1 hpf) (PhiExtends.mono hSizeFin.2 hpc) hSizeMid hmem' hexit
-  · -- exit disjunct: impossible — the body status is `.normal`/`.cont` (`hloop`).
-    exact absurd hloop hne
 
 /-! ## `execForLoopBody` — the `ForLoop` sub-relation, all four constructors unified
 
@@ -280,71 +180,5 @@ This is the `ForLoop` analog of `execWhileSim`, over the child scope `outer` (th
 (The `cases hFor` binders are ONLY the non-index constructor arguments — the indices
 `st`/`d`/`outer`/`cnd`/`step`/`b`, the result state, and the result status are pinned
 by the goal's index and so are not re-introduced, exactly as for `execWhileSim`.) -/
-theorem execForLoopBody
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (d : Nat) (outer : Addr)
-    (oinit : Option Stmt) (ocond ostep : Option Expr) (b : Stmt)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64)
-    -- one machine iteration, parametric in intermediate state / maps / statuses:
-    (hstep : ∀ (φf φc : Addr → Nat) (st stMid stFin : Vsa.While.St)
-        (bodyStatus loopStatus : Status) (m0 : Mem) (out0 : Array String),
-        ExecForStep g N A SL φf φc st d outer oinit ocond ostep b
-          sp r aInterp aStmt aEnv aRet m0 out0 stMid stFin bodyStatus loopStatus)
-    -- the recursive sub-`for` IH (mutual recursor) — only the `loop` case consumes it.
-    (hForIH : ∀ (φf' φc' : Addr → Nat) (st'' st''' : Vsa.While.St)
-        (status' : Status) (m0' : Mem) (out0' : Array String),
-        ForLoop st'' d outer ocond ostep b st''' status' →
-        Triple
-          (fun cfg => ExecEntry g N A SL φf' φc' st'' d outer (.forStmt oinit ocond ostep b)
-            sp r aInterp aStmt aEnv aRet m0' cfg ∧ cfg.σ.sailOutput = out0')
-          (ExecExit g N A SL φf' φc' st''.store.frames.size st''.store.closures.size
-            st''' status' sp r aRet m0'))
-    (φf φc : Addr → Nat) (st st' : Vsa.While.St) (status : Status) (m0 : Mem)
-    (out0 : Array String)
-    (hFor : ForLoop st d outer ocond ostep b st' status) :
-    Triple
-      (fun cfg => ExecEntry g N A SL φf φc st d outer (.forStmt oinit ocond ostep b)
-        sp r aInterp aStmt aEnv aRet m0 cfg ∧ cfg.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-        st' status sp r aRet m0) := by
-  cases hFor
-  case condFalse c v hEval hfalsy =>
-    -- cond falsy → no body: single-iteration exit (any exit-shaped body status).
-    exact execForExit g N A SL d outer oinit (some c) ostep b
-      sp r aInterp aStmt aEnv aRet hstep φf φc st st' .normal m0 out0
-      .brk (by rintro (h | h) <;> cases h)
-  case bodyBreak stInt hCond hBody =>
-    -- body `.brk` → single-iteration exit (any exit-shaped body status).
-    exact execForExit g N A SL d outer oinit ocond ostep b
-      sp r aInterp aStmt aEnv aRet hstep φf φc st st' .normal m0 out0
-      .brk (by rintro (h | h) <;> cases h)
-  case bodyRet stInt rv hCond hBody =>
-    -- body `.ret rv` → single-iteration exit (any exit-shaped body status).
-    exact execForExit g N A SL d outer oinit ocond ostep b
-      sp r aInterp aStmt aEnv aRet hstep φf φc st st' (.ret rv) m0 out0
-      .brk (by rintro (h | h) <;> cases h)
-  case loop stI1 stI2 stI3 bs hloopcond hCond hStep hBody hRest =>
-    -- recursive: one iteration (loop-back, body status `bs = .normal/.cont`) ≫
-    -- the recursive sub-`for` IH on the strictly-smaller `loop` premise.
-    -- `st ≤ stI3` (cond ≫ body ≫ step) and `st ≤ st'` (≫ the rest).
-    -- Binders: `hloopcond`=ForCond, `hCond`=ExecS body, `hBody`=ExecStep step,
-    -- `hRest`=ForLoop tail.
-    have hmMid : st.store.frames.size ≤ stI3.store.frames.size ∧
-        st.store.closures.size ≤ stI3.store.closures.size :=
-      ⟨Nat.le_trans (Nat.le_trans (forCond_store_mono hCond).1 (execS_store_mono hBody).1)
-          (execStep_store_mono hStep).1,
-       Nat.le_trans (Nat.le_trans (forCond_store_mono hCond).2 (execS_store_mono hBody).2)
-          (execStep_store_mono hStep).2⟩
-    have hmFin : st.store.frames.size ≤ st'.store.frames.size ∧
-        st.store.closures.size ≤ st'.store.closures.size :=
-      ⟨Nat.le_trans hmMid.1 (forLoop_store_mono hRest).1,
-       Nat.le_trans hmMid.2 (forLoop_store_mono hRest).2⟩
-    exact execForLoopSim g N A SL φf φc st stI3 st' d outer oinit ocond ostep b
-      bs status sp r aInterp aStmt aEnv aRet m0 out0
-      hmMid hmFin
-      hloopcond
-      (hstep φf φc st stI3 st' bs status m0 out0)
-      (fun φf' φc' m0' => hForIH φf' φc' stI3 st' status m0' out0 hRest)
 
 end Vsa.Sim

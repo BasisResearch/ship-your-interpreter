@@ -26,10 +26,6 @@ theorem subw_ofNat {w c : Nat} (hcw : c ≤ w) (hw : w < 2 ^ 31) :
     omega]
   exact VsaIris.Interp.sext32_ofNat_eq (by omega)
 
-/-- The callee-saved registers and `sp`. -/
-abbrev SKeep (R' R : Nat → BitVec 64) : Prop :=
-  ∀ z, (z = 2 ∨ z = 8 ∨ z = 9 ∨ (18 ≤ z ∧ z ≤ 27)) → R' z = R z
-
 /-- **`__ssputs_r`'s return** (`0x800143c4`): `_w -= c`, `_p += c`, `a0 = 0`,
 `ra`/`s0`/`s1` reloaded from the frame at `sp`, `ret`. -/
 theorem ssp_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}

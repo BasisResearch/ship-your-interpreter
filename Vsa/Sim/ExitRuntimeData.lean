@@ -83,42 +83,15 @@ def exitRuntimeExtraRegions : List (Nat × Nat) :=
 def ExitRuntimeExtraFoot : Nat → Prop :=
   ExitRegionFoot exitRuntimeExtraRegions
 
-/-- Exact byte support of the existing ConsoleStream record. This is a read
-support, not a claim that printing leaves every byte unchanged. In particular,
-the buffer byte may change while its existence is preserved. -/
-def exitConsoleReadRegions : List (Nat × Nat) :=
-  [(consoleImpurePtrAddr, 8), (consoleReent + 16, 8),
-   (consoleReent + 72, 8), (consoleStdout, 8),
-   (consoleStdout + 8, 4), (consoleStdout + 12, 4),
-   (consoleStdout + 16, 2), (consoleStdout + 18, 2),
-   (consoleStdout + 24, 8), (consoleStdout + 32, 4),
-   (consoleStdout + 40, 4), (consoleStdout + 48, 8),
-   (consoleStdout + 64, 8), (consoleStdout + 160, 8),
-   (consoleStdout + 176, 4), (consoleBuf, 1)]
-
-/-- Support for every memory fact in ExitRuntimeData. -/
-def ExitRuntimeDataFoot : Nat → Prop :=
-  ExitRuntimeExtraFoot
-
-/-- Support for ExitRuntimeData and the separately maintained ConsoleStream. -/
-def ExitRuntimeWithConsoleFoot : Nat → Prop :=
-  ExitRegionFoot (exitRuntimeExtraRegions ++ exitConsoleReadRegions)
-
 /-- Whole fixed .text and .rodata coverage. Values come from separate generated
 image predicates; these extents specify protection, not arbitrary byte data. -/
 def exitFixedImageRegions : List (Nat × Nat) :=
   [(0x80000000, 0x18be0), (0x80018be0, 0x2110)]
 
-def ExitFixedImageFoot : Nat → Prop :=
-  ExitRegionFoot exitFixedImageRegions
-
 /-- Preserve until main reloads its pair at 0x800045f0/0x800045f4. The exit
 routine subsequently reuses this stack space, so protection expires there. -/
 def exitMainSavedRegions : List (Nat × Nat) :=
   [(exitMainSavedS0, 16)]
-
-def ExitMainSavedFoot : Nat → Prop :=
-  ExitRegionFoot exitMainSavedRegions
 
 /-- Extra unchanged bytes needed through the interpreter. ConsoleStream has
 its own invariant: requiring equality of its entire byte support would
@@ -135,12 +108,5 @@ def ExitProtectedFoot : Nat → Prop :=
 the reached main/exit continuation consumes the saved pair and runtime data. -/
 def ProtectedInitialByte : Nat → Prop :=
   ExitProtectedFoot
-
-/-- Concrete geometry only: every protected extent is outside the arena.
-Existing console/stack/allocator geometry obligations remain separate.
-This imposes no allocator implementation, success, or resource bound. -/
-def ExitArenaDisjoint (arena : Arena) : Prop :=
-  ∀ address, ProtectedInitialByte address →
-    ¬ (arena.lo ≤ address ∧ address < arena.hi)
 
 end Vsa.Sim

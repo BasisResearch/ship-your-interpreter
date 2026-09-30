@@ -51,12 +51,6 @@ namespace Vsa.Sim
 
 /-! ## Address arithmetic for the epilogue restores (`(sp-1088)+off` slots) -/
 
-theorem restore_addr (sp : BitVec 64) (off : BitVec 12) (k : Nat)
-    (hoff : (sign_extend (m := 64) off : BitVec 64).toNat = 1088 - k)
-    (hk : k ≤ 1088) (hsp : 1088 ≤ sp.toNat) :
-    ((sp - 1088#64) + sign_extend (m := 64) off).toNat = sp.toNat - k :=
-  spill_addr sp off k hoff hk hsp
-
 /-! ## `PreEpilogue` — the machine state at the shared epilogue `0x800033ec`
 
 After block C: `value_int` has filled the sret buffer with `ValueRepr (.int n)`,
@@ -64,15 +58,5 @@ After block C: `value_int` has filled the sret buffer with `ValueRepr (.int n)`,
 frame). The four spilled callee-saved slots `[sp-8], [sp-16], [sp-24], [sp-32]`
 still hold their entry values (disjoint from the sret write). `eval_expr` loaded.
 Output invariant (`= out0`). -/
-def PreEpilogue
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (n : Int)
-    (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (m0 mpre : Mem) (c : Config) : Prop :=
-  -- The `.int`-specialized instance of the shared, value-agnostic `PreEpilogueV`
-  -- (`EvalSimCommon.lean`): the sret buffer holds `ValueRepr … (.int n)`. The
-  -- null/bool/str/var leaf cases reuse `PreEpilogueV` directly at their own value.
-  PreEpilogueV g N A SL φf φc st (.int n) sp r sret v8 v9 v18 out0 m0 mpre c
 
 end Vsa.Sim

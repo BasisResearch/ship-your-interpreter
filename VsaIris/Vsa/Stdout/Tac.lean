@@ -207,7 +207,6 @@ def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       | cs => stuck := stuck ++ cs
     setGoals (pending ++ stuck)
 
-
 /-- `nx_run [n] h using [facts] at pc…`: `ix_run` over the stdio step table
 with `nxNorm`; a continuation's binders (a callee's havoc values) are all
 introduced. -/
@@ -254,11 +253,6 @@ end Stdout
 
 /-- The caller-saved registers other than `a0` and `ra`. -/
 abbrev callClob : List Nat := [5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
-
-/-- The register file after a call returns `a0`: the caller-saved registers
-(`callClob`) at `v`, everything else as at the call. -/
-abbrev callRet (R v : Nat → BitVec 64) (a0 : BitVec 64) : Nat → BitVec 64 :=
-  upd (updAll R v callClob) 10 a0
 
 /-- A callee returned `a0`: the register file `R'` at its return address
 keeps every register of the call's `R` outside `callClob`, `a0`, the PC. -/
@@ -310,20 +304,6 @@ theorem updAll_apply (R v : Nat → BitVec 64) : ∀ (xs : List Nat) (x : Nat),
     by_cases h : x = y
     · subst h; simp
     · simp [h]
-
-/-- Closing a callee's run: its end register file agrees with `callRet` at
-the values it ends with. -/
-theorem callRet_of {R Rf : Nat → BitVec 64} {a0 : BitVec 64} (h10 : Rf 10 = a0)
-    (hkeep : ∀ x ∈ iRegs, x ≠ 32 → x ≠ 10 → x ∉ callClob → Rf x = R x) :
-    ∀ r ∈ iRegs, r ≠ VsaIris.PC → callRet R Rf a0 r = Rf r := by
-  intro r hr hne
-  simp only [upd_apply, updAll_apply]
-  by_cases e : r = 10
-  · subst e; simp [h10]
-  · rw [if_neg e]
-    by_cases hc : r ∈ callClob
-    · rw [if_pos hc]
-    · rw [if_neg hc, hkeep r hr hne e hc]
 
 /-- A callee summary's side condition at a call site: a register value, a
 load through the run's stores, an address bound, a literal fact. -/
@@ -397,7 +377,6 @@ syntax (name := nxChain) "#nx_chain " ident " := " "[" ident,+ "]" : command
         let val := zeroLevelsN (← instantiateMVars (← mkLambdaFVars (vars ++ exs) body))
         let ty := zeroLevelsN (← instantiateMVars (← mkForallFVars (vars ++ exs) goal))
         addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
-
 
 end NxChain
 

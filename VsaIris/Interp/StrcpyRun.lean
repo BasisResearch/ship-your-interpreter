@@ -68,10 +68,6 @@ theorem imgM_sd8 (Mt : Mem) (a : Nat) (v : BitVec 64) (i : Nat) (hi : i < 8) :
     | omega
     | simp
 
-theorem imgM_sb_zext (Mt : Mem) (a : Nat) (b : BitVec 8) :
-    imgM (writeLog Mt [(a, 1, zero_extend (m := 64) b)]) a = b := by
-  rw [imgM_sb1]; exact sbData_zext b
-
 theorem Pfx.store1 {Mt : Mem} {k : Nat} (h : Pfx d.toNat s.toNat bv Mt k) {v : BitVec 64}
     (hv : sbData v = bv (s.toNat + k)) :
     Pfx d.toNat s.toNat bv (writeLog Mt [(d.toNat + k, 1, v)]) (k + 1) := by
@@ -99,9 +95,6 @@ theorem sext_imm (imm : BitVec 12) (j : Nat) (h : (sign_extend (m := 64) imm : B
     (x : BitVec 64) (k : Nat) :
     (x + BitVec.ofNat 64 k) + sign_extend (m := 64) imm = x + BitVec.ofNat 64 (k + j) := by
   rw [h, BitVec.add_assoc, ← BitVec.ofNat_add]
-
-theorem sext1 : (sign_extend (m := 64) (0x001#12) : BitVec 64) = BitVec.ofNat 64 1 := by
-  apply BitVec.eq_of_toNat_eq; decide
 
 theorem inc_dec (x : BitVec 64) :
     (x + sign_extend (m := 64) (0x001#12)) + sign_extend (m := 64) (0xfff#12) = x := by
@@ -343,8 +336,6 @@ theorem tailCpy (c : CCtx live d s r len bv N) {t : Nat} {R : Nat → BitVec 64}
   · simp (disch := decide) only [upd_same, upd_other] at hz
     rw [Ne, zext_eq_zero, agree_at hf6 hle6, byte_zero_iff c.src hle6, Classical.not_not] at hz
     exact tailRet c (by (try simp (disch := decide) only [upd_same, upd_other]); exact h.ra) (by (try simp (disch := decide) only [upd_same, upd_other]); exact h.a0) (hp6.mono (by omega))
-
-
 
 /-! ## The word loop `0x80006dd0 … 0x80006e20` (aligned) -/
 

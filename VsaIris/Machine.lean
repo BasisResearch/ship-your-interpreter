@@ -134,22 +134,11 @@ def MExpr.toVal : MExpr → Option (Nat × String)
   | .loop => none
   | .done e o => some (e, o)
 
-instance : Iris.ProgramLogic.ToVal MExpr (Nat × String) where
-  toVal := MExpr.toVal
-  ofVal v := .done v.1 v.2
-  coe_of_toVal_eq_some {e v} h := by
-    cases e with
-    | loop => cases h
-    | done e o => cases h; rfl
-  toVal_coe _ := rfl
-
 /-- The language instance (`riscv_lang`, RiscvLang.v:2254). The `State` is an
 `outParam`, so the model is carried in the expression type. -/
 structure MExprOf (M : MachineModel) where
   e : MExpr
   deriving DecidableEq
-
-instance : Inhabited (MExprOf M) := ⟨⟨.loop⟩⟩
 
 instance : Iris.ProgramLogic.ToVal (MExprOf M) (Nat × String) where
   toVal x := x.e.toVal

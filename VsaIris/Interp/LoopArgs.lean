@@ -221,7 +221,6 @@ theorem sext32_ofNat_eq {a : Nat} (h : a < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a)) = BitVec.ofNat 64 a :=
   BitVec.eq_of_toInt_eq (by rw [sext32_ofNat_toInt h, ofNat_toInt_small h])
 
-
 theorem times24 {idx : Nat} (hi : idx < 32) :
     (BitVec.ofNat 64 idx <<< 1 + BitVec.ofNat 64 idx) <<< 3 = BitVec.ofNat 64 (24 * idx) := by
   apply BitVec.eq_of_toNat_eq
@@ -692,6 +691,5 @@ theorem evalArgsP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
       iframe Hargs Hv
 
 end Modes
-
 
 end VsaIris.Interp

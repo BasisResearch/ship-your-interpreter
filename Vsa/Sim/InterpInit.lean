@@ -100,7 +100,6 @@ open Vsa.RuntimeRepr
 open Vsa.MemRepr
 open Vsa.While (initSt Store Frame Value NativeFn Addr Program St)
 open Vsa.Refine (Layout Loaded)
-open Vsa.Sim.Scaffold (SegEntry)
 
 namespace Vsa.Sim
 
@@ -112,40 +111,6 @@ The composition target: `env_new(NULL)` gives the fresh single-global-frame stor
 and the three `env_define`s append `print`/`println`/`assert` (each absent ⇒ append
 path).  This is `initSt.store` by `rfl`. -/
 
-/-- The store `env_new(NULL)` produces: one global frame `⟨none, []⟩`, no closures.
-This is the `env_new` post at `interp_init`'s first call, spec-side. -/
-def initGlobalStore : Store :=
-  { frames := #[⟨none, []⟩], closures := #[] }
-
-/-- After appending `print` (absent ⇒ append path) to the fresh global frame. -/
-def storeAfterPrint : Store :=
-  initGlobalStore.define 0 "print" (.native .print)
-
-/-- After appending `println`. -/
-def storeAfterPrintln : Store :=
-  storeAfterPrint.define 0 "println" (.native .println)
-
-/-- After appending `assert` — the final store `interp_init` establishes. -/
-def storeAfterAssert : Store :=
-  storeAfterPrintln.define 0 "assert" (.native .assert)
-
-/-- **The composed store IS `initSt.store`**, definitionally.  Each `Store.define`
-takes the APPEND branch (`f.vars.any (·.1 == x) = false`: the native name is absent
-from the frame-so-far), so the three appends build exactly
-`⟨none, [("print",…),("println",…),("assert",…)]⟩` in that order — `initSt.store`. -/
-theorem initStore_eq_initSt : storeAfterAssert = initSt.store := by rfl
-
-/-- The first append lands `print` at slot 0 (append, name absent). -/
-theorem storeAfterPrint_eq :
-    storeAfterPrint =
-      { frames := #[⟨none, [("print", .native .print)]⟩], closures := #[] } := by rfl
-
-/-- The second append lands `println` at slot 1 (append, name absent). -/
-theorem storeAfterPrintln_eq :
-    storeAfterPrintln =
-      { frames := #[⟨none, [("print", .native .print),
-          ("println", .native .println)]⟩], closures := #[] } := by rfl
-
 /-! ## §2. The store-carrier seam predicate
 
 `InitSeg store entryPC` is the `Config → Prop` carrier threaded between the
@@ -155,19 +120,6 @@ output (nothing prints in `interp_init`).  It is the store-parametric analogue o
 `SegEntry` restricted to what the composition needs — one named-field structure, no
 ∃/∧ tower.  Each `env_define` splice advances `store` by one `Store.define` and the
 PC past that call's arg-setup + `jal`. -/
-
-/-- **The store-carrier seam** at a straight-line resume PC inside `interp_init`:
-the store-so-far is represented (`StoreRepr`), control is good, tick `< 2`, no output
-yet, and the machine is parked at `pc`.  `N`/`A`/`SL`/`φf`/`φc` are the fixed layout
-ghosts (the natives' addresses, the arena, the stack, the correspondence maps). -/
-structure InitSeg
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (store : Store) (pc : Nat) (c : Config) : Prop where
-  good : GoodState c.σ
-  tick : c.tick < 2
-  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 pc)
-  store : StoreRepr c.σ.mem N A φf φc store
-  out : OutRepr c.σ initSt
 
 /-! ## §3. The composition — `env_new ≫ define(print) ≫ define(println) ≫ define(assert)`
 
@@ -187,33 +139,6 @@ Each stage is a NAMED `Triple` seam (the honest per-call residual):
   `StoreRepr storeAfterAssert = StoreRepr initSt.store`.
 
 The composition is pure `Triple.seq`, threading the four store advances. -/
-
-/-- **The `interp_init` store composition.**  From the four call/epilogue seams —
-`env_new` landing the fresh frame, the three `env_define`s each appending one native
-(absent ⇒ append path, so each advances the store by `Store.define`), and the
-restore+ret epilogue — compose the whole `interp_init` body into a `Triple P Q`.
-This is `env_new ≫ define(print) ≫ define(println) ≫ define(assert) ≫ epilogue`, all
-`Triple.seq`; the store threaded through the `InitSeg` carrier is `initGlobalStore`
-then `+print` then `+println` then `+assert = initSt.store`. -/
-theorem interpInitStore_compose
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {P Q : Config → Prop}
-    (hEnvNew : Triple P (InitSeg N A SL φf φc initGlobalStore 0x80004328))
-    (hDefPrint : Triple
-      (InitSeg N A SL φf φc initGlobalStore 0x80004328)
-      (InitSeg N A SL φf φc storeAfterPrint 0x80004368))
-    (hDefPrintln : Triple
-      (InitSeg N A SL φf φc storeAfterPrint 0x80004368)
-      (InitSeg N A SL φf φc storeAfterPrintln 0x800043a0))
-    (hDefAssert : Triple
-      (InitSeg N A SL φf φc storeAfterPrintln 0x800043a0)
-      (InitSeg N A SL φf φc storeAfterAssert 0x800043d8))
-    (hEpilogue : Triple (InitSeg N A SL φf φc storeAfterAssert 0x800043d8) Q) :
-    Triple P Q :=
-  Triple.seq hEnvNew
-    (Triple.seq hDefPrint
-      (Triple.seq hDefPrintln
-        (Triple.seq hDefAssert hEpilogue)))
 
 /-! ## §4. `InterpInitStoreRepr` closed on the composition + the prologue drive
 
@@ -239,34 +164,6 @@ is precisely `Loaded → ∃ c1 …, Steps ∧ SegEntry@loopHead`, and the store
 is `hRunDrive` — the machine drive from `Loaded` to the loop head, taking the built
 store as data. -/
 
-/-- **`InterpInitStoreRepr` discharged** on the named prologue-drive premise
-`hRunDrive`.  `InterpInitStoreRepr`'s content is exactly the `Loaded → ∃ c1, Steps ∧
-SegEntry … initSt … interpLoopHeadPC` drive; the store it carries (`initSt.store`) is
-the one `interp_init` builds — recorded definitionally by `initStore_eq_initSt` and
-composed by `interpInitStore_compose`.  `hRunDrive` is the honest off-`interp_init`
-machine seam (the `interp_run` prologue: spill `+ setjmp` first-return `+ bnez`
-not-taken `+` loop-setup, over the built store), named per the two-front convergence
-in `EntrySeams`.  Supplying it closes the residual verbatim. -/
-theorem interpInitStoreRepr_of
-    (L : Layout)
-    (hRunDrive : ∀ p, InterpInitStoreRepr L p) :
-    ∀ p, InterpInitStoreRepr L p :=
-  hRunDrive
-
-/-- **The store obligation for the loop-head `SegEntry`.**  `SegEntry`'s `store`
-field at the loop head is `StoreRepr c.σ.mem N A φf φc initSt.store`.  The composition
-(`interpInitStore_compose`) delivers a config whose memory carries `StoreRepr …
-storeAfterAssert`, and `storeAfterAssert = initSt.store` (`initStore_eq_initSt`), so
-the built store discharges `SegEntry.store` at the loop head verbatim — provided the
-prologue drive preserves the represented store from `interp_init`'s ret to the loop
-head.  This factors the store half of the drive out of the machine-steps half. -/
-theorem interpInitSegEntry_store
-    {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat}
-    {c1 : Config}
-    (hBuilt : StoreRepr c1.σ.mem N A φf φc storeAfterAssert) :
-    StoreRepr c1.σ.mem N A φf φc initSt.store := by
-  rw [← initStore_eq_initSt]; exact hBuilt
-
 /-! ### §4a′. The store-consuming drive form
 
 `interpInitStoreRepr_of` above names the whole drive.  The genuine composition —
@@ -279,53 +176,5 @@ has to re-derive the store representation — it takes it as data, exactly the
 convergence point `EntrySeams` describes.  The `SegEntry` is reassembled field-by-
 field from `hDrive`'s non-store fields + the composed store (via
 `interpInitSegEntry_store`). -/
-
-/-- **`InterpInitStoreRepr` closed by CONSUMING the composed store.**  `hDrive`
-supplies, from `Loaded L p c`, the reached config `c1`, the ghosts, the `Steps`, and
-a `SegEntry` at the loop head OVER the COMPOSED store `storeAfterAssert` (the output
-of `interpInitStore_compose`).  Since `storeAfterAssert = initSt.store`
-(`initStore_eq_initSt`), that `SegEntry` IS a `SegEntry` over `initSt.store` — the
-exact witness `InterpInitStoreRepr` demands.  So the drive builds its `SegEntry`
-against the store the composition produced (not a re-derived one); the reindex is by
-`rfl`.  This is the honest, store-consuming form: the composition feeds the drive. -/
-theorem interpInitStoreRepr_of_drive
-    (L : Layout)
-    (hDrive : ∀ (s : Vsa.While.Stmt) (ss : List Vsa.While.Stmt)
-      (c : Config), Loaded L (s :: ss) c →
-      ∃ (c1 : Config)
-        (g : (R : Register) → Option (RegisterType R))
-        (N : NativeAddrs) (A : Arena) (SL : Vsa.Alloc.StackLayout) (φf φc : Addr → Nat)
-        (dLeft aLeft : Nat) (sp aRet : BitVec 64) (m0 : Mem),
-        Steps c c1 ∧
-        -- ITEM ZERO (falsity #12, shape 3): the drive also certifies the
-        -- `interp_run` image in `m0` (the `SeqSpanGround` feed; its
-        -- discharger pins these bytes anyway).
-        Vsa.Sim.Code.Interp_runLoaded m0 ∧
-        g Register.x21 = some (0#64 : BitVec 64) ∧
-        -- the loop-head SegEntry built over the COMPOSED store `storeAfterAssert`:
-        SegEntry g N A SL φf φc { store := storeAfterAssert, out := initSt.out }
-          0 dLeft aLeft interpLoopHeadPC m0 c1 ∧
-        ExecSeqEntryI .interpRun g N A SL φf φc
-          { store := storeAfterAssert, out := initSt.out }
-          0 0 (s :: ss) sp aRet m0 c1) :
-    ∀ s ss, InterpInitStoreRepr L (s :: ss) := by
-  intro s ss c hL
-  obtain ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, sp, aRet, m0,
-      hSteps, hImg, hLatch, hSeg, hEntryI⟩ :=
-    hDrive s ss c hL
-  -- `initSt = { store := storeAfterAssert, out := initSt.out }` by `initStore_eq_initSt`
-  -- (out is "" on both sides), so the SegEntry over the composed store IS the witness.
-  have hst : ({ store := storeAfterAssert, out := initSt.out } : SpecSt) = initSt := by
-    rw [initStore_eq_initSt]
-  refine ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, sp, aRet, m0,
-    hSteps, hImg, hLatch, ?_, ?_⟩
-  · rwa [hst] at hSeg
-  · rwa [hst] at hEntryI
-
-#print axioms initStore_eq_initSt
-#print axioms interpInitStore_compose
-#print axioms interpInitStoreRepr_of
-#print axioms interpInitSegEntry_store
-#print axioms interpInitStoreRepr_of_drive
 
 end Vsa.Sim

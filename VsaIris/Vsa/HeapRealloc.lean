@@ -32,21 +32,6 @@ theorem coal_cut {a b c : Chunk} (ha : a.inuse = true) (hb : b.inuse = true) :
     obtain ⟨hx, h'⟩ := coal_cons_cons.1 h
     exact coal_cons_cons.2 ⟨hx, coal_cut ha hb (cs₁ := y :: cs₁) h'⟩
 
-/-- A live extent sits at the payload start of an in-use chunk, and the chunk
-holding an address inside another chunk's range is that chunk. -/
-theorem exact_in {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (HH : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
-    {e : Nat × Nat} (he : e ∈ H) {X : Chunk} (hX : X ∈ chunks)
-    (h1 : X.addr + 16 ≤ e.1) (h2 : e.1 < X.addr + X.size) :
-    X.inuse = true ∧ X.addr + 16 = e.1 ∧ e.2 + 8 ≤ X.size := by
-  obtain ⟨c, hc, hu, hca, hcn⟩ := HH.exact e he he
-  have hcb := HH.walk.chunk_bounds c hc
-  have hXb := HH.walk.chunk_bounds X hX
-  rcases HH.walk.chunk_sep c hc X hX with rfl | h3 | h3
-  · exact ⟨hu, hca, hcn⟩
-  · omega
-  · omega
-
 /-- **Cut an in-use chunk in two.** The in-use chunk `x` of size `a + b`
 becomes the in-use chunks `x` (size `a`, its `PREV_INUSE` kept) and `x + a`
 (size `b`), which holds the zero-length block `(x + a + 16, 0)` for `free` to

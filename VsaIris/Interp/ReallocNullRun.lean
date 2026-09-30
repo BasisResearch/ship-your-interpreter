@@ -68,9 +68,4 @@ theorem reallocNullLocalRun_proved (live : Nat → Prop) (hl : AllocLive live) :
   simp only [mLocCtx] at h
   exact aw_run h hR.entry.pc him hdisj
 
-/-- **`realloc(NULL, n)` in both regimes**, proved. -/
-theorem reallocNullHoles_proved : ReallocNullHoles where
-  chgRun := reallocNullChgRun_proved
-  localRun := reallocNullLocalRun_proved
-
 end VsaIris.Interp

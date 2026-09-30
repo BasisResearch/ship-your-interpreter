@@ -215,39 +215,6 @@ address, `x5 = r` the wrapper's saved `t0`), with core operands `A = x10`,
 `0 < B`, and `q` 4-aligned, run the core (`udivdi3_spec`, ghost instantiated at
 `cent` so `x5 = r` is recovered by the blanket frame) to its return `q` with
 `x10 = A / B`, `x11 = A % B`, `x5 = r` preserved. -/
-theorem core_call_tail
-    (A B r q : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (cent : Config)
-    (hG : GoodState cent.σ)
-    (hcl : __hidden___udivdi3Loaded cent.σ.mem) (hmem : cent.σ.mem = m0)
-    (hpc : cent.σ.regs.get? Register.PC = some (0x800046ac#64))
-    (hx10 : cent.σ.regs.get? Register.x10 = some A)
-    (hx11 : cent.σ.regs.get? Register.x11 = some B)
-    (hx1 : cent.σ.regs.get? Register.x1 = some q)
-    (hx5 : cent.σ.regs.get? Register.x5 = some r)
-    (hx12 : ∃ v, cent.σ.regs.get? Register.x12 = some v)
-    (hx13 : ∃ v, cent.σ.regs.get? Register.x13 = some v)
-    (hmi : ∃ v, cent.σ.regs.get? Register.minstret = some v)
-    (htick : cent.tick < 2) (hBpos : 0 < B.toNat) (halign : q.toNat % 4 = 0) :
-    ∃ c3 : Config, Steps cent c3 ∧ GoodState c3.σ ∧ c3.σ.mem = m0 ∧
-      c3.σ.regs.get? Register.PC = some q ∧
-      c3.σ.regs.get? Register.x10 = some (A / B) ∧
-      c3.σ.regs.get? Register.x11 = some (A % B) ∧
-      c3.σ.regs.get? Register.x5 = some r ∧ c3.tick < 2 ∧
-      (∃ v, c3.σ.regs.get? Register.minstret = some v) := by
-  obtain ⟨v12, h12⟩ := hx12
-  obtain ⟨v13, h13⟩ := hx13
-  have hcorepre : udivdi3_pre (fun R => cent.σ.regs.get? R) A B q m0 cent.σ.sailOutput cent := by
-    refine ⟨⟨v12, v13, ?_⟩, hBpos, halign⟩
-    exact {
-      good := hG, loaded := hcl, mem := hmem, sailOut := rfl, pc := hpc,
-      a0 := hx10, a1 := hx11, a2 := h12, a3 := h13, ra := hx1, minstret := hmi,
-      tick := htick, hframe := fun R _ => rfl }
-  obtain ⟨c3, hs3, hG3, hmem3, _hout3, hpc3, hq3, hrem3, _hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
-    udivdi3_spec (fun R => cent.σ.regs.get? R) A B q m0 cent.σ.sailOutput cent hcorepre
-  have hx5_3 : c3.σ.regs.get? Register.x5 = some r := by
-    rw [hframe3 Register.x5 (by decide)]; exact hx5
-  obtain ⟨vmi3, hmi3⟩ := hG3.minstret
-  exact ⟨c3, hs3, hG3, hmem3, hpc3, hq3, hrem3, hx5_3, htick3, ⟨vmi3, hmi3⟩⟩
 
 /-- **Framed core-call tail.** Same run as `core_call_tail` but additionally
 exposes the callee-saved frame (`∀ R, NotWritten R → c3.σ.regs = cent.σ.regs`),

@@ -66,12 +66,6 @@ theorem shapeLocal_vsaLayoutP : ShapeLocal vsaLayoutP := by
   rintro H img img' h ⟨hst, m, top, brkv, chunks, bins, hm, hs⟩
   exact ⟨hst, m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hs⟩
 
-/-- The page-aligned shape is the plain shape plus the alignment. -/
-theorem pShape_imgShape {img : Nat → BitVec 8} {H : List (Nat × Nat)} (h : pShape img H) :
-    imgShape img H := by
-  obtain ⟨_, m, top, brkv, chunks, bins, hm, hs⟩ := h
-  exact ⟨m, hm, top, brkv, chunks, bins, hs.heap⟩
-
 /-- **The counted capacity**: `k` credits back `2 k + extendSlack` bytes
 between the top chunk and the heap end. -/
 def vsaRoomB : RoomPred := fun img H k =>
@@ -81,16 +75,6 @@ def vsaRoomB : RoomPred := fun img H k =>
 theorem roomLocal_vsaRoomB : RoomLocal vsaLayoutP vsaRoomB := by
   rintro H img img' k h ⟨hst, m, top, brkv, chunks, bins, hm, hs, hk⟩
   exact ⟨hst, m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hs, hk⟩
-
-theorem roomMono_vsaRoomB : RoomMono vsaRoomB := by
-  rintro img H k j ⟨hst, m, top, brkv, chunks, bins, hm, hs, hk⟩
-  exact ⟨hst, m, top, brkv, chunks, bins, hm, hs, by omega⟩
-
-/-- A heap with capacity has the shape. -/
-theorem vsaRoomB_shape {img : Nat → BitVec 8} {H : List (Nat × Nat)} {k : Nat}
-    (h : vsaRoomB img H k) : vsaLayoutP.Shape img H := by
-  obtain ⟨hst, m, top, brkv, chunks, bins, hm, hs, _⟩ := h
-  exact ⟨hst, m, top, brkv, chunks, bins, hm, hs⟩
 
 /-- **The charge**: a request of `n ≥ 1` bytes costs at least its rounded
 size in credits. -/
@@ -131,22 +115,5 @@ theorem starts_inuseBlocks {m : Mem} {p top : Nat} {cs : List Chunk} (h : ChunkW
     by_cases hu : a.inuse <;> by_cases hv : b.inuse <;> simp [hu, hv] at ha' hb'
     subst ha' hb'; omega
   exact hs.imp (fun h => Nat.ne_of_lt h)
-
-/-- **The counted heap from VSA's boundary allocator.** An `InitialAllocatorAt`
-with a page-aligned break, a 32-bit `binblocks` word and room for the top's
-header gives the counted
-heap over the in-use chunk payloads, with the derivation's cost `n` as the
-credits. -/
-theorem roomB_of_initial {m : Mem} {exts : List (Nat × Nat)} {reallocs : Nat × Nat → Prop}
-    {stmts count top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
-    (h : InitialAllocatorAt m exts reallocs stmts count top brkv chunks bins)
-    (hroom : top + 16 ≤ brkv) (hpage : brkv % 4096 = 0)
-    (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32)
-    {img : Nat → BitVec 8} (him : ImgOn (vsaFoot (inuseBlocks chunks)) img m)
-    {p : Vsa.While.Program} (hp : Vsa.MemRepr.ProgramRepr m stmts count p)
-    {st' : Vsa.While.St} {n : Nat} (hcost : Vsa.While.ExecSeqCost Vsa.While.initSt 0 0 p st' .normal n) :
-    vsaRoomB img (inuseBlocks chunks) n :=
-  ⟨starts_inuseBlocks h.heap.walk, m, top, brkv, chunks, bins, him, ⟨(blockHeapAt_of_heapAt h.heap hroom).1, hpage, hbb⟩,
-    h.capacity p hp st' n hcost⟩
 
 end VsaIris.VsaHeap

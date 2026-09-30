@@ -599,28 +599,4 @@ interpreter's `main` returns `70` on a caught `runtime_error`, and crt0's
 `(70<<<1)|1` to `tohost` (`htif_store_exit`, `Vsa/Sim/Htif.lean`), so `e = 70`.
 This gadget is the target the error path is aimed at. -/
 
-open Vsa.Machine in
-/-- A halt with a nonzero exit code lands in `stuck_sim`'s `∃ out e, Halts c out
-e ∧ e ≠ 0` disjunct.  (The forward error simulation supplies such a halt with
-`e = 70`.) -/
-theorem stuck_of_halts_nonzero {c : Config} {out : String} {e : Nat}
-    (h : Halts c out e) (he : e ≠ 0) :
-    Diverges c ∨ ∃ out' e', Halts c out' e' ∧ e' ≠ 0 :=
-  Or.inr ⟨out, e, h, he⟩
-
-open Vsa.Machine in
-/-- Specialization to the interpreter's runtime-error exit code `70` (`EX_SOFTWARE`
-in `main`'s `fprintf`/`return 70`): reaching this halt discharges `stuck_sim`. -/
-theorem stuck_of_halts_70 {c : Config} {out : String}
-    (h : Halts c out 70) :
-    Diverges c ∨ ∃ out' e', Halts c out' e' ∧ e' ≠ 0 :=
-  stuck_of_halts_nonzero h (by decide)
-
-open Vsa.Machine in
-/-- A diverging machine directly realizes `stuck_sim`'s first disjunct — the
-target of the `Approx`/`BigStepDiverges` simulation. -/
-theorem stuck_of_diverges {c : Config} (h : Diverges c) :
-    Diverges c ∨ ∃ out' e', Halts c out' e' ∧ e' ≠ 0 :=
-  Or.inl h
-
 end Vsa.While

@@ -49,5 +49,4 @@ theorem split_on_page_boundary_ram
       show (2 : Int) ^ (3 : Int) = 8 from by decide,
       bind, EStateM.bind, EStateM.run, pure, EStateM.pure]
 
-#print axioms split_on_page_boundary_ram
 end Vsa.Sim
