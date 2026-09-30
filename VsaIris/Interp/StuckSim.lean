@@ -10,7 +10,7 @@ import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.Case.ExecVarNullP
 import VsaIris.Interp.Case.FnLitP
-import VsaIris.Interp.Case.ExecExprP
+import VsaIris.Interp.ExecExpr
 import VsaIris.Interp.Case.ExecVarInitP
 import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
@@ -172,7 +172,7 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   iintro ⟨#Hctx, #HE, #HX⟩
   have hE := S.errEnv
   cases sm with
-  | expr e => iapply caseP_ExecExpr S.hlive $$ HE
+  | expr e => iapply exprP S.hlive $$ HE
   | varDecl x eo =>
     cases eo with
     | some e => iapply caseP_ExecVarInit S.hlive hE.newlib hE.code hE.core S.envDefine; iframe Hctx HE
