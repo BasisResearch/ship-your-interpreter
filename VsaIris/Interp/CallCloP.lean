@@ -74,7 +74,7 @@ theorem cloDefineStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
   iintro ⟨#Hcode, Hms, ⟨#Himg, #Hfr, Hw, Hab⟩, Hval, #Hstr, Hst, Hk⟩
   ihave #Hed := hed
   iapply ms_callEnvDefineP HN hcl (i := 0x80003310)
-    (jalx_80003310 live (fun p hp => hlive _ (interp_code_80003310 p hp))) interp_code_80003310
+    ((step% jalx 0x80003310) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (st := ⟨st, out⟩) (d := d + 1) (fa := fa) (x := x) (v := v) (R := R) (n := n) hsp hpv
     hn1 (by rw [h2, hsf]; omega) (by rw [h2, hsf]; omega)
     (by rw [h2, hsf]; omega) (by rw [h2, hsf]; omega)
@@ -176,8 +176,8 @@ theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
   ihave Hw := Hcl $$ %d %(imgM Mt4) Hd %⟨hdep4, by omega⟩
   ihave #Himg := errCtx_img inp $$ HE
   ihave #Hrd := readable_rodata $$ Himg
-  iapply ms_rtErrEval Wp hE (jalx_80003ce8 live (fun p hp => hlive _ (interp_code_80003ce8 p hp)))
-    interp_code_80003ce8 (readable_rodata_fmt (fun hro => escape_fmt hro 0#64 0#64)) hsg hn
+  iapply ms_rtErrEval Wp hE ((step% jalx 0x80003ce8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (readable_rodata_fmt (fun hro => escape_fmt hro 0#64 0#64)) hsg hn
     (R := R4) (line := R 23)
   iframe Hcode HE Hrd Hms Hst Hw Hab
   ipureintro
@@ -228,8 +228,8 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   ihave Hw := Hcl $$ %0 %(imgM Mt4) Hd %⟨hdep4, by unfold maxCallDepth; omega⟩
   ihave #Himg := errCtx_img inp $$ HE
   ihave #Hrd := readable_rodata $$ Himg
-  iapply ms_rtErrEval Wp hE (jalx_80003cc4 live (fun p hp => hlive _ (interp_code_80003cc4 p hp)))
-    interp_code_80003cc4 (readable_rodata_fmt (fun hro => depth_fmt hro 0#64 0#64)) hsg hn
+  iapply ms_rtErrEval Wp hE ((step% jalx 0x80003cc4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (readable_rodata_fmt (fun hro => depth_fmt hro 0#64 0#64)) hsg hn
     (R := R4) (line := line)
   iframe Hcode HE Hrd Hms Hst Hw Hab
   ipureintro
@@ -306,7 +306,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     have e : (R1 2).toNat = s.toNat - 1088 := by rw [h2, hsf]
     omega
   iapply ms_callEnvNewP hE.newlib hE.code (i := 0x800032bc)
-    (jalx_800032bc live (fun p hp => hlive _ (interp_code_800032bc p hp))) interp_code_800032bc
+    ((step% jalx 0x800032bc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (st := st2) (d := d + 1) (env := cd.env) (R := R1) (n := n - 1088) hspN
     (by unfold envNewNeed allocHeadroom; omega) (by rw [h2]; exact hle) hlo' hfit hhi'
   iframe Hen Hcode Himg Hms Hst Hw
@@ -519,7 +519,7 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   ihave #Hgp := codeRes_gp $$ Hcode
   have hbuft : (s + 18446744073709550528#64 + 144#64).toNat = s.toNat - 1088 + 144 := h144
   iapply ms_callNewlibA (wpW _) (i := 0x80003d84) (entry := snprintfEntry)
-    (jalx_80003d84 live (fun p hp => hlive _ (interp_code_80003d84 p hp))) interp_code_80003d84
+    ((step% jalx 0x80003d84) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (vs := [s + 18446744073709550528#64 + 144#64, 96#64, 0x800194a8#64, a3, R 14, R 15])
     (P := fun ra0 => iprop(⌜ra0.toNat % 4 = 0⌝ ∗ argsAt ([s + 18446744073709550528#64 + 144#64, 96#64, 0x800194a8#64] ++
         [a3, R 14, R 15]) ∗
@@ -596,8 +596,8 @@ theorem cloArityTail (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hk : ∀ y ∈ [2, 18, 23], R3 y = R y := fun y hy =>
     hk3 y ((by decide : ∀ z ∈ [2, 18, 23], z ∈ fRegs) y hy)
       ((by decide : ∀ z ∈ [2, 18, 23], z ∉ callerSaved) y hy)
-  iapply ms_rtErrEvalOwn (wpW _) hE (jalx_80003da0 live (fun p hp => hlive _ (interp_code_80003da0 p hp)))
-    interp_code_80003da0 (Sown := arityBuf s) (fun a ha => by simp only [arityBuf, InExt] at ha ⊢; omega)
+  iapply ms_rtErrEvalOwn (wpW _) hE ((step% jalx 0x80003da0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (Sown := arityBuf s) (fun a ha => by simp only [arityBuf, InExt] at ha ⊢; omega)
     hfmt hsg hn (R := R4) (line := line)
   iframe Hcode HE Hms Hst Hw Hab
   isplitl []

@@ -1,4 +1,4 @@
-import VsaIris.Vsa.MemcpySteps
+import VsaIris.Vsa.StepTables.Memcpy0
 import VsaIris.Vsa.AllocTac
 
 namespace VsaIris.Memcpy

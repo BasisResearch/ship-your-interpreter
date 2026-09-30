@@ -9,16 +9,6 @@ namespace VsaIris.Sym
 open Iris Iris.BI Iris.Std Iris.ProofMode
 open Vsa.MemRepr Vsa.Sim VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio VsaIris.Newlib
 
-theorem snpText_img :
-    snpText.all (fun p => decide (textDom p.1) && textByte p.1 == p.2) = true := by
-  decide +kernel
-
-theorem snpText_img_mem : ∀ p ∈ snpText, textDom p.1 ∧ textByte p.1 = p.2 := by
-  intro p hp
-  have h := List.all_eq_true.1 snpText_img p hp
-  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-  exact h
-
 theorem snpText_live {live : Nat → Prop} (h : CodeLive live) : ∀ p ∈ snpText, live p.1 :=
   fun p hp => h _ (snpText_img_mem p hp).1
 
@@ -32,8 +22,8 @@ theorem imgM_viewMem {f : Nat → BitVec 8} {DA : List Nat} {a : Nat} (h : a ∈
 
 def snpImg (a : Nat) : BitVec 8 := if impureW a then impureByte a else rodataByte a
 
-theorem rodata_tab : ∀ j, j < 364 → rodataByte (0x8001a0fc + j) = snpROImg (0x8001a0fc + j) := by
-  decide +kernel
+theorem rodata_tab : ∀ j, j < 364 → rodataByte (0x8001a0fc + j) = snpROImg (0x8001a0fc + j) :=
+  fun _ _ => rfl
 
 def baseDA : List Nat := accAddrs 0x80019770 2 ++ accAddrs 0x8001a0fc 364 ++ accAddrs 0x8001b970 8
 

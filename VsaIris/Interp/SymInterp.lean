@@ -4,7 +4,7 @@ import VsaIris.Interp.ITac
 /-!
 # The symbolic route for `IW` runs
 
-* `codeAt_interp`: `interpText` is the binary image over ten address ranges.
+* `codeAt_interp`: `interpText` pins its code and constant-table ranges to the binary image.
 * `geomOf`: the `Geom` a run needs, read off its own obligations (per atom: the offset span,
   the store alignment, the `S`/`DA` cover ranges and the HTIF gap). `geom_auto` then proves it
   from the piece's hypotheses, so no piece writes a `Geom` by hand.
@@ -23,17 +23,12 @@ open LeanRV64DExecutable (bop)
 def binByte (a : Nat) : BitVec 8 :=
   if a < 0x80018be0 then fixedTextByte (a - 0x80000000) else fixedRodataByte (a - 0x80018be0)
 
-/-- `interpText` as ranges of the binary image, in list order. -/
-def interpRanges : List (Nat × Nat) :=
-  [(0x800027ec, 0x800029fc), (0x80002df4, 0x80004308), (0x800043ec, 0x80004588),
-   (0x80004640, 0x80004664), (0x800046a4, 0x80004764), (0x80019f58, 0x80019fdc),
-   (0x80019ef8, 0x80019f28), (0x80019370, 0x8001937c), (0x80019f28, 0x80019f58),
-   (0x80019fe0, 0x80019ff8)]
+/-- The ranges of `interpText` (code, then constant tables). -/
+def interpRanges : List (Nat × Nat) := interpCodeRanges ++ interpRORanges
 
-theorem interpText_eq : interpText = rangeText binByte interpRanges :=
-  eqB_eq (by decide +kernel)
-
-theorem codeAt_interp : CodeAt interpText binByte interpRanges := codeAt_of_eq interpText_eq
+theorem codeAt_interp : CodeAt interpText binByte interpRanges :=
+  codeAt_of_pieces (ps := interpCodePieces) (qs := interpROPieces)
+    (fun _ hm => ⟨TextIn.left hm, TextIn.right hm⟩) (by decide +kernel)
 
 /-- Executor configuration for `IW` runs. -/
 def cfgI (stops : List (BitVec 64)) (dbase : List SE := [])

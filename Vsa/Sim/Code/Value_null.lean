@@ -1,24 +1,8 @@
-import Vsa.Elf
-
-open Std (ExtHashMap)
+import Vsa.Sim.Code.FixedImage
 
 namespace Vsa.Sim.Code
 
-def value_nullChunk0 (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
-  mem[(0x800027ec : Nat)]? = some (0x23 : BitVec 8) ∧
-  mem[(0x800027ed : Nat)]? = some (0x20 : BitVec 8) ∧
-  mem[(0x800027ee : Nat)]? = some (0x05 : BitVec 8) ∧
-  mem[(0x800027ef : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x800027f0 : Nat)]? = some (0x23 : BitVec 8) ∧
-  mem[(0x800027f1 : Nat)]? = some (0x34 : BitVec 8) ∧
-  mem[(0x800027f2 : Nat)]? = some (0x05 : BitVec 8) ∧
-  mem[(0x800027f3 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x800027f4 : Nat)]? = some (0x67 : BitVec 8) ∧
-  mem[(0x800027f5 : Nat)]? = some (0x80 : BitVec 8) ∧
-  mem[(0x800027f6 : Nat)]? = some (0x00 : BitVec 8) ∧
-  mem[(0x800027f7 : Nat)]? = some (0x00 : BitVec 8)
-
-def Value_nullLoaded (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
-  value_nullChunk0 mem
+/-- The code of `value_null` is present as in the fixed image. -/
+abbrev Value_nullLoaded (mem : Std.ExtHashMap Nat (BitVec 8)) : Prop := CodeLoaded 0x800027ec 0x800027f8 mem
 
 end Vsa.Sim.Code

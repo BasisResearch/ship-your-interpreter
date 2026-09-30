@@ -1,4 +1,5 @@
 import VsaIris.Vsa.SymData
+import Vsa.Sim.TextImage
 import Vsa.Sim.DecodeNF
 import Vsa.Sim.BlockDecode
 
@@ -37,33 +38,21 @@ instance (rs : List (Nat × Nat)) (a : Nat) : Decidable (InRanges rs a) := by
 def CodeAt (T : List (Nat × BitVec 8)) (img : Nat → BitVec 8) (rT : List (Nat × Nat)) : Prop :=
   ∀ m : Mem, TextLoaded T m → ∀ a, InRanges rT a → m[a]? = some (img a)
 
-def rangeText (img : Nat → BitVec 8) (rs : List (Nat × Nat)) : List (Nat × BitVec 8) :=
-  rs.flatMap fun r => (List.range (r.2 - r.1)).map fun k => (r.1 + k, img (r.1 + k))
-
-theorem mem_rangeText {img : Nat → BitVec 8} {rs : List (Nat × Nat)} {a : Nat}
-    (h : InRanges rs a) : (a, img a) ∈ rangeText img rs := by
-  obtain ⟨r, hr, h1, h2⟩ := h
-  refine List.mem_flatMap.2 ⟨r, hr, List.mem_map.2 ⟨a - r.1, List.mem_range.2 (by omega), ?_⟩⟩
-  rw [show r.1 + (a - r.1) = a by omega]
-
-theorem codeAt_of_eq {T : List (Nat × BitVec 8)} {img : Nat → BitVec 8} {rT : List (Nat × Nat)}
-    (h : T = rangeText img rT) : CodeAt T img rT := by
-  intro m hm a ha; subst h; exact hm _ (mem_rangeText ha)
-
-/-- Tail-recursive list equality (kernel-friendly on long literal lists). -/
-def eqB : List (Nat × BitVec 8) → List (Nat × BitVec 8) → Bool
-  | [], [] => true
-  | p :: l, q :: l' => (p.1 == q.1 && p.2 == q.2) && eqB l l'
-  | _, _ => false
-
-theorem eqB_eq : ∀ {l l' : List (Nat × BitVec 8)}, eqB l l' = true → l = l'
-  | [], [], _ => rfl
-  | p :: l, q :: l', h => by
-    simp only [eqB, Bool.and_eq_true, beq_iff_eq] at h
-    obtain ⟨⟨h1, h2⟩, h3⟩ := h
-    rw [Prod.ext h1 h2, eqB_eq h3]
-  | [], _ :: _, h => by cases h
-  | _ :: _, [], h => by cases h
+/-- `T` pins the ranges `rT` to `img` when two piece footprints inside `T` claim them
+    (checked range by range by `decide`). -/
+theorem codeAt_of_pieces {T : List (Nat × BitVec 8)} {img : Nat → BitVec 8} {rT : List (Nat × Nat)}
+    {ps qs : List TextPiece}
+    (hT : ∀ m : Mem, TextLoaded T m → TextIn (piecesText ps) m ∧ TextIn (piecesText qs) m)
+    (h : (rT.all fun r => (List.range (r.2 - r.1)).all fun k =>
+      piecesHasB ps (r.1 + k) (img (r.1 + k)) || piecesHasB qs (r.1 + k) (img (r.1 + k))) = true) :
+    CodeAt T img rT := by
+  intro m hm a ha
+  obtain ⟨r, hr, h1, h2⟩ := ha
+  have hk := List.all_eq_true.1 (List.all_eq_true.1 h r hr) (a - r.1) (List.mem_range.2 (by omega))
+  rw [show r.1 + (a - r.1) = a by omega] at hk
+  rcases Bool.or_eq_true_iff.1 hk with hk | hk
+  · exact (hT m hm).1.pin hk
+  · exact (hT m hm).2.pin hk
 
 /-- Little-endian instruction word of the image at `a`. -/
 def wordAt (img : Nat → BitVec 8) (a : Nat) : BitVec 32 :=

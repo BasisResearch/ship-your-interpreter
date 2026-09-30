@@ -1,18 +1,7 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Interp.Steps.Part00
-import VsaIris.Interp.Steps.Part01
-import VsaIris.Interp.Steps.Part02
-import VsaIris.Interp.Steps.Part03
-import VsaIris.Interp.Steps.Part04
-import VsaIris.Interp.Steps.Part05
-import VsaIris.Interp.Steps.Part06
-import VsaIris.Interp.Steps.Part07
-import VsaIris.Interp.Steps.Part08
-import VsaIris.Interp.Steps.Part09
-import VsaIris.Interp.Steps.Part10
-import VsaIris.Interp.Steps.Part11
-import VsaIris.Interp.Steps.Part12
-import VsaIris.Interp.Steps.Part13
+import VsaIris.Vsa.StepTables.Interp0
+import VsaIris.Vsa.StepTables.Interp1
+import VsaIris.Vsa.StepTables.Interp2
 
 namespace VsaIris.Sym
 
@@ -34,6 +23,12 @@ macro_rules
 
 macro_rules
   | `(tactic| sx_side) => `(tactic| decide)
+
+/-- A constant-table access lies in the interpreter's `.rodata` ranges. -/
+macro "ix_ro" : tactic => `(tactic| exact interpRO_mem_img (by decide))
+
+macro_rules
+  | `(tactic| sx_side) => `(tactic| ix_ro)
 
 private def hex8 (n : Nat) : String :=
   let s := String.ofList (Nat.toDigits 16 n)

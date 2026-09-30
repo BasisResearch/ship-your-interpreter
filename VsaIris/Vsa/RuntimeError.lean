@@ -344,27 +344,12 @@ theorem seqz_step (live : Nat → Prop) (hlive : ∀ p ∈ codeFoot ljCodeBase l
   have h11 : c.σ.regs.get? Register.x11 = some 1#64 :=
     gprGet_eq_of_vsaReg hok (n := 11) (by decide) (by decide) (hRR _ List.mem_cons_self)
   have hload : Code.LongjmpLoaded c.σ.mem := by
-    have h := ljCodeLoaded_of (code_present hok _ hMR hlive)
-    obtain ⟨b00, b01, b02, b03⟩ := ljCode_at_8000703c h
-    obtain ⟨b10, b11, b12, b13⟩ := ljCode_at_80007040 h
-    obtain ⟨b20, b21, b22, b23⟩ := ljCode_at_80007044 h
-    obtain ⟨b30, b31, b32, b33⟩ := ljCode_at_80007048 h
-    obtain ⟨b40, b41, b42, b43⟩ := ljCode_at_8000704c h
-    obtain ⟨b50, b51, b52, b53⟩ := ljCode_at_80007050 h
-    obtain ⟨b60, b61, b62, b63⟩ := ljCode_at_80007054 h
-    obtain ⟨b70, b71, b72, b73⟩ := ljCode_at_80007058 h
-    obtain ⟨b80, b81, b82, b83⟩ := ljCode_at_8000705c h
-    obtain ⟨b90, b91, b92, b93⟩ := ljCode_at_80007060 h
-    obtain ⟨b100, b101, b102, b103⟩ := ljCode_at_80007064 h
-    obtain ⟨b110, b111, b112, b113⟩ := ljCode_at_80007068 h
-    obtain ⟨b120, b121, b122, b123⟩ := ljCode_at_8000706c h
-    obtain ⟨b130, b131, b132, b133⟩ := ljCode_at_80007070 h
-    obtain ⟨b140, b141, b142, b143⟩ := ljCode_at_80007074 h
-    obtain ⟨b150, b151, b152, b153⟩ := ljCode_at_80007078 h
-    obtain ⟨b160, b161, b162, b163⟩ := ljCode_at_8000707c h
-    unfold Code.LongjmpLoaded Code.longjmpChunk0 Code.longjmpChunk1
-    repeat' apply And.intro
-    all_goals assumption
+    have h := code_present hok _ hMR hlive
+    exact Vsa.Sim.TextIn.of_list (L := ljCode.zipIdx.map fun q => (ljCodeBase + q.2, q.1))
+      (fun p hp => by
+        obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
+        exact h _ (List.mem_map_of_mem (f := fun q => (ljCodeBase + q.2, Iris.DFrac.discard, q.1)) hq))
+      (by decide +kernel)
   obtain ⟨vm, hmi⟩ := hok.good.minstret
   obtain ⟨σ', i', hs, hi', hG', hmem', hobs⟩ :=
     site_80007074_jmp c.σ c.tick c.steps (0x80007074#64) vm 1#64 hok.good hpc hmi h11 hload rfl

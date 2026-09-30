@@ -51,11 +51,11 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     vsaFoot_cons_sub _ (foot_header Hp.heap.heap (.inr ⟨_, hc, rfl⟩) k hk)
   have hE8 : (R 8 + sign_extend (m := 64) (0xff8#12)).toNat = X + 8 := by
     sx_norm; rw [BitVec.toNat_add, h8, ← hca]; simp; omega
-  refine st_800052e0 O.live (by rw [hE8]; unfold LdOK Vsa.Sim.tohostAddr; omega)
+  refine (step% st 0x800052e0) O.live (by rw [hE8]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [hE8]; exact O.foot hhf) ?_
   rw [hE8, ldv_at hdr _ rfl]
-  refine st_800052e4 O.live ?_
-  refine st_800052e8 O.live ?_
+  refine (step% st 0x800052e4) O.live ?_
+  refine (step% st 0x800052e8) O.live ?_
   have hX : (R 8 + sign_extend (m := 64) (0xff0#12)).toNat = X := by
     sx_norm; rw [BitVec.toNat_add, h8, ← hca]; simp; omega
   have hSv : (BitVec.ofNat 64 hdr0 &&& sign_extend (m := 64) (0xffc#12)).toNat = S := by
@@ -66,7 +66,7 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   have h14 : (BitVec.ofNat 64 hdr0 &&& sign_extend (m := 64) (0xffc#12)).toInt = (S : Int) :=
     toInt_small hSv (by omega)
   have h15' : (R 15).toInt = (nb : Int) := toInt_small h15 (by omega)
-  refine st_800052ec O.live (fun hcmp => ?_) (fun hcmp => ?_) <;>
+  refine (step% st 0x800052ec) O.live (fun hcmp => ?_) (fun hcmp => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h14, h15', Int.ofNat_le] at hcmp
   ·
     obtain ⟨cs₁, cs₂, hsplit⟩ := List.append_of_mem hc

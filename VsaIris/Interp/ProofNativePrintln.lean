@@ -180,7 +180,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       by rw [e48]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, by rw [e48]; omega,
       by rw [e48]; have := c.hs4; omega⟩
   iapply ms_callOut Wp (i := 0x80002fa0)
-    (jalx_80002fa0 live (fun p hp => c.hlive _ (interp_code_80002fa0 p hp))) interp_code_80002fa0
+    ((step% jalx 0x80002fa0) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (R := upd (upd (upd R 15 2147595576#64) 10 10#64) 11 2147597088#64)
     (S := nplF s) (Mt := M1) (n := nativePrintNeed)
     (fun cs => VsaIris.Sym.fputc_out live Wp (10#8) (s + 18446744073709551568#64) cs (o ++ printArgs st vs) hcl
@@ -215,7 +215,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave #Hvn := valueNull_spec c.hlive Wp N sret
   unfold valueNullSpec
   iapply ms_callHelper Wp (i := 0x80002fa8)
-    (jalx_80002fa8 live (fun p hp => c.hlive _ (interp_code_80002fa8 p hp))) interp_code_80002fa8
+    ((step% jalx 0x80002fa8) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (clob := []) (pins := fun rv => rv 10 = sret)
     (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝)) (Post := fun _ => valAt N sret.toNat .null)
     (R := upd (upd R4 1 (BitVec.ofNat 64 (0x80002fa0 + 4))) 10
@@ -350,7 +350,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
     (s + 18446744073709551568#64) vs st o
   unfold nativePrintSpec
   iapply ms_callHelper Wp (i := 0x80002f90)
-    (jalx_80002f90 live (fun p hp => hlive _ (interp_code_80002f90 p hp))) interp_code_80002f90
+    ((step% jalx 0x80002f90) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide)
     (R := upd (upd (upd (upd rv 1 r) 2 (s + 18446744073709551568#64)) 8 (rv 10)) 10
       (s + 18446744073709551568#64)) (clob := callerSaved)

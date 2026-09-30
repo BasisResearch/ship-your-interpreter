@@ -14,7 +14,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
-open Vsa.Sim.Code (MemcpyLoaded memcpy_at_80006bfc memcpy_at_80006c00 memcpy_at_80006c04 memcpy_at_80006c08 memcpy_at_80006c0c memcpy_at_80006c10 memcpy_at_80006c14 memcpy_at_80006c18 memcpy_at_80006c38)
+open Vsa.Sim.Code (MemcpyLoaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000

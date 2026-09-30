@@ -203,7 +203,7 @@ theorem jalrx_800039f4 (live : Nat → Prop)
       (by decide) (by decide) (by decide) (by decide) (by decide)
       (wX_bits_x1 _ (BitVec.addInt (0x800039f4#64) 4)) hi
   rw [htgt] at hobs
-  have h := jalrStep_of_obs hs hi' hG' hmem hobs
+  have h := VsaIris.Inst.jalrStep_of_obs hs hi' hG' hmem hobs
   refine ⟨?_, stepConFrame_of_obs hs hobs ?_ ?_⟩
   · rwa [show BitVec.addInt (0x800039f4#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800039f4 + 4) from by
       apply BitVec.eq_of_toNat_eq; decide] at h

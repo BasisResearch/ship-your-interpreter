@@ -16,8 +16,8 @@ def setSite (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanSite 
   hit := 0x80002d3c#64
   tail := 0x80002d90#64
   epi := 0x80002d6c#64
-  jexec := jalx_80002d34 live fun p hp => hl _ (env_code_80002d34 p hp)
-  jtext := env_code_80002d34
+  jexec := (step% jalx 0x80002d34) live fun p hp => hl _ ((env_code (by decide)) p hp)
+  jtext := (env_code (by decide))
   jal4 := by decide
   nameR := 19
   cntR := 18

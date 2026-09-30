@@ -519,8 +519,8 @@ theorem evalArgsT_cons (hlive : ∀ p ∈ interpText, live p.1)
   iintro %R1 %Mt1 %aA %⟨hregs, hk1, hsp1, hut1, hlo1⟩ #Hae Hms
   ihave He := he
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003220)
-    (jalx_80003220 live (fun p hp => hlive _ (interp_code_80003220 p hp)))
-    interp_code_80003220 (by decide) De (k := k + nes) (hsg.narrow hneed) hneed hsg.le hsl.2 hbb
+    ((step% jalx 0x80003220) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) De (k := k + nes) (hsg.narrow hneed) hneed hsg.le hsl.2 hbb
   iframe He Hcode Hae Hfr Hms Hst Hw
   isplitl []
   · ipureintro
@@ -587,8 +587,8 @@ theorem evalArgsP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
         argVals N (imgM Mt') (argsBase s) 0 (pre ++ vs) -∗
         stackScratch (s + 18446744073709550528#64) m' -∗
         world N L Room inp .uncounted st' d -∗ Out -∗ (wpW (vsaModel live)).W Φ))
-      (jalx_80003220 live (fun p hp => hlive _ (interp_code_80003220 p hp)))
-      interp_code_80003220 (by decide) hOut (hsg.narrow hneed) hneed hsg.le hn0 (by omega)
+      ((step% jalx 0x80003220) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) (by decide) hOut (hsg.narrow hneed) hneed hsg.le hn0 (by omega)
       hsl.2 hbb
     iframe He Hcode Hae Hfr Hms Hst Hw HOut HK
     isplitl []

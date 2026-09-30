@@ -518,7 +518,7 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   ihave #Hvn := hvn
   unfold valueNullSpec
   iapply ms_callHelper Wp (i := 0x80002f64)
-    (jalx_80002f64 live (fun p hp => c.hlive _ (interp_code_80002f64 p hp))) interp_code_80002f64
+    ((step% jalx 0x80002f64) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (clob := []) (pins := fun rv => rv 10 = sret)
     (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝)) (Post := fun _ => valAt N sret.toNat .null)
   isplitl []
@@ -710,7 +710,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   have hslg : SlotGeom (s - 80#64) := ⟨by rw [hst80]; omega,
     by rw [hst80]; unfold Vsa.Sim.tohostAddr; omega, by rw [hst80]; omega⟩
   iapply ms_callHelper Wp (i := 0x80002f44)
-    (jalx_80002f44 live (fun p hp => c.hlive _ (interp_code_80002f44 p hp))) interp_code_80002f44
+    ((step% jalx 0x80002f44) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (clob := callerSaved)
     (pins := fun rv => rv 10 = s - 80#64 ∧ rv 11 = stdoutFile ∧ rv 2 = s - 80#64)
     (Pre := iprop(valAt N (s - 80#64).toNat (vs[i]'(by omega)) ∗ ⌜SlotGeom (s - 80#64)⌝ ∗
@@ -818,7 +818,7 @@ theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold NpRest
   icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
   iapply ms_callOut Wp (i := 0x80002f18)
-    (jalx_80002f18 live (fun p hp => c.hlive _ (interp_code_80002f18 p hp))) interp_code_80002f18
+    ((step% jalx 0x80002f18) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (R := R) (S := npF s args n) (Mt := M) (n := printNeed)
     (fun cs => VsaIris.Sym.fputc_out live Wp (32#8) (s - 80#64) cs o' hcl (spIn_of_stackGeom hsg (by decide))
       (VsaIris.Sym.bss_of_stackGeom hsg (by decide)))

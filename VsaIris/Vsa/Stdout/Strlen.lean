@@ -7,7 +7,9 @@ namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Inst
 
-theorem strCode_sub_stdio : ∀ q ∈ strCode, q ∈ stdioText := by decide +kernel
+theorem strCode_sub_stdio : ∀ q ∈ strCode, q ∈ stdioText := fun p hp =>
+  List.mem_append_left _ (mem_piecesText (List.all_eq_true.1
+    (by decide +kernel : strCode.all (fun p => piecesHasB stdioPieces p.1 p.2) = true) p hp))
 
 abbrev strlenRegs (R : Nat → BitVec 64) (len : Nat) (v11 v12 v13 v14 v15 v16 : BitVec 64) :
     Nat → BitVec 64 :=

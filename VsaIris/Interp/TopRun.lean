@@ -68,11 +68,11 @@ theorem ms_callSetjmp (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive l
     ⊢ Wp.W Φ := by
   unfold ms
   iintro ⟨#Hcode, #Himg, ⟨Hpc, Hra, Hregs, HS⟩, HJ, Hk⟩
-  ihave #Hi := instrAt_of_codeRes interp_code_80004424 $$ Hcode
+  ihave #Hi := instrAt_of_codeRes (interp_code (i := 0x80004424) (code := [0xef#8, 0x20#8, 0x90#8, 0x3d#8]) (by decide)) $$ Hcode
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib R).1 $$ Hregs
   ihave ⟨Ha0, Hargs⟩ := (sepL_args_split R).1 $$ Hargs
   ihave #Hspec := setjmp_spec live hcl Wp jbp (R 2) R img0 hjb
-  iapply wp_callW Wp (jalx_80004424 live (fun p hp => hlive _ (interp_code_80004424 p hp)))
+  iapply wp_callW Wp ((step% jalx 0x80004424) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
   iframe Hi Hspec Hpc Hra
   isplitl [Ha0 Hsp Hcs HJ]
   · rw [h10]

@@ -177,8 +177,8 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   ihave Hst := eSt $$ Hst
   ihave Hval := eVal $$ Hval
   iapply ms_callEnvDefine (N := N) Wp (i := 0x80004114)
-    (jalx_80004114 live (fun p hp => hlive _ (interp_code_80004114 p hp)))
-    interp_code_80004114 (by decide) (k := k) (st := st.store) (fa := env) (x := x) (v := v)
+    ((step% jalx 0x80004114) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (k := k) (st := st.store) (fa := env) (x := x) (v := v)
     (R := R2)
     ⟨by rw [h22, hfg.sf]; have := hfg.lo; unfold htifLo envDefineNeed allocHeadroom; omega,
       by rw [h22, hfg.sf]; have := hfg.hi; omega, by rw [h22, hfg.sf]; have := hfg.al; omega⟩
@@ -343,8 +343,8 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
   ihave Hst := eSt $$ Hst
   ihave Hval := eVal $$ Hval
   iapply ms_callEnvDefineP (N := N) HN hcl (i := 0x80004114)
-    (jalx_80004114 live (fun p hp => hlive _ (interp_code_80004114 p hp)))
-    interp_code_80004114 (by decide) (st := st) (d := d) (fa := env) (x := x) (v := v)
+    ((step% jalx 0x80004114) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (st := st) (d := d) (fa := env) (x := x) (v := v)
     (R := R2) (n := execNeed (.varDecl x eo) d - 176)
     ⟨by rw [h22, hfg.sf]; have := hfg.lo; unfold htifLo envDefineNeed allocHeadroom; omega,
       by rw [h22, hfg.sf]; have := hfg.hi; omega, by rw [h22, hfg.sf]; have := hfg.al; omega⟩

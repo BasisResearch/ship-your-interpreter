@@ -26,7 +26,7 @@ theorem site_80003fe0_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x2
         (v2 + sign_extend (m := 64) (0xf50#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003fe0 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003fe0 0x80003fe1 0x80003fe2 0x80003fe3 (b0 := (0x13 : BitVec 8)) (b1 := (0x01 : BitVec 8)) (b2 := (0x01 : BitVec 8)) (b3 := (0xf5 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80003fe0#64) vminstret (0xf5010113#32)
     (instruction.ITYPE (0xf50#12, regidx.Regidx 0x02#5, regidx.Regidx 0x02#5, iop.ADDI))
     Register.x2 (v2 + sign_extend (m := 64) (0xf50#12))
@@ -64,7 +64,7 @@ theorem site_80003fe4_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_store σ pc vminstret
         (writeMap8 (afterNextPC (afterPrelude σ) (0x80003fe4#64)).mem (v2 + sign_extend (m := 64) (0x0a0#12)).toNat (sdData_val v8))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003fe4 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003fe4 0x80003fe5 0x80003fe6 0x80003fe7 (b0 := (0x23 : BitVec 8)) (b1 := (0x30 : BitVec 8)) (b2 := (0x81 : BitVec 8)) (b3 := (0x0a : BitVec 8)) (by decide)
   exact stepObs_store σ i u (0x80003fe4#64) vminstret (0x0a813023#32)
     (instruction.STORE (0x0a0#12, regidx.Regidx 0x08#5, regidx.Regidx 0x02#5, 8))
     (writeMap8 (afterNextPC (afterPrelude σ) (0x80003fe4#64)).mem (v2 + sign_extend (m := 64) (0x0a0#12)).toNat (sdData_val v8))
@@ -102,7 +102,7 @@ theorem site_80003fe8_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_store σ pc vminstret
         (writeMap8 (afterNextPC (afterPrelude σ) (0x80003fe8#64)).mem (v2 + sign_extend (m := 64) (0x098#12)).toNat (sdData_val v9))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003fe8 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003fe8 0x80003fe9 0x80003fea 0x80003feb (b0 := (0x23 : BitVec 8)) (b1 := (0x3c : BitVec 8)) (b2 := (0x91 : BitVec 8)) (b3 := (0x08 : BitVec 8)) (by decide)
   exact stepObs_store σ i u (0x80003fe8#64) vminstret (0x08913c23#32)
     (instruction.STORE (0x098#12, regidx.Regidx 0x09#5, regidx.Regidx 0x02#5, 8))
     (writeMap8 (afterNextPC (afterPrelude σ) (0x80003fe8#64)).mem (v2 + sign_extend (m := 64) (0x098#12)).toNat (sdData_val v9))
@@ -140,7 +140,7 @@ theorem site_80003fec_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_store σ pc vminstret
         (writeMap8 (afterNextPC (afterPrelude σ) (0x80003fec#64)).mem (v2 + sign_extend (m := 64) (0x090#12)).toNat (sdData_val v18))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003fec hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003fec 0x80003fed 0x80003fee 0x80003fef (b0 := (0x23 : BitVec 8)) (b1 := (0x38 : BitVec 8)) (b2 := (0x21 : BitVec 8)) (b3 := (0x09 : BitVec 8)) (by decide)
   exact stepObs_store σ i u (0x80003fec#64) vminstret (0x09213823#32)
     (instruction.STORE (0x090#12, regidx.Regidx 0x12#5, regidx.Regidx 0x02#5, 8))
     (writeMap8 (afterNextPC (afterPrelude σ) (0x80003fec#64)).mem (v2 + sign_extend (m := 64) (0x090#12)).toNat (sdData_val v18))
@@ -178,7 +178,7 @@ theorem site_80003ff0_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_store σ pc vminstret
         (writeMap8 (afterNextPC (afterPrelude σ) (0x80003ff0#64)).mem (v2 + sign_extend (m := 64) (0x088#12)).toNat (sdData_val v19))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003ff0 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003ff0 0x80003ff1 0x80003ff2 0x80003ff3 (b0 := (0x23 : BitVec 8)) (b1 := (0x34 : BitVec 8)) (b2 := (0x31 : BitVec 8)) (b3 := (0x09 : BitVec 8)) (by decide)
   exact stepObs_store σ i u (0x80003ff0#64) vminstret (0x09313423#32)
     (instruction.STORE (0x088#12, regidx.Regidx 0x13#5, regidx.Regidx 0x02#5, 8))
     (writeMap8 (afterNextPC (afterPrelude σ) (0x80003ff0#64)).mem (v2 + sign_extend (m := 64) (0x088#12)).toNat (sdData_val v19))
@@ -216,7 +216,7 @@ theorem site_80003ff4_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_store σ pc vminstret
         (writeMap8 (afterNextPC (afterPrelude σ) (0x80003ff4#64)).mem (v2 + sign_extend (m := 64) (0x0a8#12)).toNat (sdData_val v1))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003ff4 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003ff4 0x80003ff5 0x80003ff6 0x80003ff7 (b0 := (0x23 : BitVec 8)) (b1 := (0x34 : BitVec 8)) (b2 := (0x11 : BitVec 8)) (b3 := (0x0a : BitVec 8)) (by decide)
   exact stepObs_store σ i u (0x80003ff4#64) vminstret (0x0a113423#32)
     (instruction.STORE (0x0a8#12, regidx.Regidx 0x01#5, regidx.Regidx 0x02#5, 8))
     (writeMap8 (afterNextPC (afterPrelude σ) (0x80003ff4#64)).mem (v2 + sign_extend (m := 64) (0x0a8#12)).toNat (sdData_val v1))
@@ -248,7 +248,7 @@ theorem site_80003ff8_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x8
         (v11 + sign_extend (m := 64) (0x000#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003ff8 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003ff8 0x80003ff9 0x80003ffa 0x80003ffb (b0 := (0x13 : BitVec 8)) (b1 := (0x84 : BitVec 8)) (b2 := (0x05 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80003ff8#64) vminstret (0x00058413#32)
     (instruction.ITYPE (0x000#12, regidx.Regidx 0x0b#5, regidx.Regidx 0x08#5, iop.ADDI))
     Register.x8 (v11 + sign_extend (m := 64) (0x000#12))
@@ -280,7 +280,7 @@ theorem site_80003ffc_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x9
         (v10 + sign_extend (m := 64) (0x000#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80003ffc hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80003ffc 0x80003ffd 0x80003ffe 0x80003fff (b0 := (0x93 : BitVec 8)) (b1 := (0x04 : BitVec 8)) (b2 := (0x05 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80003ffc#64) vminstret (0x00050493#32)
     (instruction.ITYPE (0x000#12, regidx.Regidx 0x0a#5, regidx.Regidx 0x09#5, iop.ADDI))
     Register.x9 (v10 + sign_extend (m := 64) (0x000#12))
@@ -312,7 +312,7 @@ theorem site_80004000_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x19
         (v12 + sign_extend (m := 64) (0x000#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004000 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004000 0x80004001 0x80004002 0x80004003 (b0 := (0x93 : BitVec 8)) (b1 := (0x09 : BitVec 8)) (b2 := (0x06 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004000#64) vminstret (0x00060993#32)
     (instruction.ITYPE (0x000#12, regidx.Regidx 0x0c#5, regidx.Regidx 0x13#5, iop.ADDI))
     Register.x19 (v12 + sign_extend (m := 64) (0x000#12))
@@ -344,7 +344,7 @@ theorem site_80004004_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x18
         (v13 + sign_extend (m := 64) (0x000#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004004 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004004 0x80004005 0x80004006 0x80004007 (b0 := (0x13 : BitVec 8)) (b1 := (0x89 : BitVec 8)) (b2 := (0x06 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004004#64) vminstret (0x00068913#32)
     (instruction.ITYPE (0x000#12, regidx.Regidx 0x0d#5, regidx.Regidx 0x12#5, iop.ADDI))
     Register.x18 (v13 + sign_extend (m := 64) (0x000#12))
@@ -375,7 +375,7 @@ theorem site_80004008_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret :
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x16
         ((0#64) + sign_extend (m := 64) (0x008#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004008 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004008 0x80004009 0x8000400a 0x8000400b (b0 := (0x13 : BitVec 8)) (b1 := (0x08 : BitVec 8)) (b2 := (0x80 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004008#64) vminstret (0x00800813#32)
     (instruction.ITYPE (0x008#12, regidx.Regidx 0x00#5, regidx.Regidx 0x10#5, iop.ADDI))
     Register.x16 ((0#64) + sign_extend (m := 64) (0x008#12))
@@ -406,7 +406,7 @@ theorem site_80004010_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x14
         (v14 + sign_extend (m := 64) (0xfac#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004010 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004010 0x80004011 0x80004012 0x80004013 (b0 := (0x13 : BitVec 8)) (b1 := (0x07 : BitVec 8)) (b2 := (0xc7 : BitVec 8)) (b3 := (0xfa : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004010#64) vminstret (0xfac70713#32)
     (instruction.ITYPE (0xfac#12, regidx.Regidx 0x0e#5, regidx.Regidx 0x0e#5, iop.ADDI))
     Register.x14 (v14 + sign_extend (m := 64) (0xfac#12))
@@ -449,7 +449,7 @@ theorem site_80004014_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
         (sign_extend (m := 64)
           ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004014 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004014 0x80004015 0x80004016 0x80004017 (b0 := (0x83 : BitVec 8)) (b1 := (0x27 : BitVec 8)) (b2 := (0x04 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004014#64) vminstret (0x00042783#32)
     (instruction.LOAD (0x000#12, regidx.Regidx 0x08#5, regidx.Regidx 0x0f#5, false, 4))
     Register.x15 (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))
@@ -483,7 +483,7 @@ theorem site_80004018_nottaken_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vm
       σ'.mem = σ.mem ∧
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004018 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004018 0x80004019 0x8000401a 0x8000401b (b0 := (0x63 : BitVec 8)) (b1 := (0x6c : BitVec 8)) (b2 := (0xf8 : BitVec 8)) (b3 := (0x06 : BitVec 8)) (by decide)
   exact stepObs_branch_nottaken σ i u (0x80004018#64) vminstret (0x0078#13)
     (regidx.Regidx 0x10#5) (regidx.Regidx 0x0f#5) bop.BLTU (0x06f86c63#32)
     (0x63#8) (0x6c#8) (0xf8#8) (0x06#8)
@@ -514,7 +514,7 @@ theorem site_80004024_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       σ'.mem = σ.mem ∧
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x15 (v15 + v14)) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004024 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004024 0x80004025 0x80004026 0x80004027 (b0 := (0xb3 : BitVec 8)) (b1 := (0x87 : BitVec 8)) (b2 := (0xe7 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004024#64) vminstret (0x00e787b3#32)
     (instruction.RTYPE (regidx.Regidx 0x0e#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, rop.ADD))
     Register.x15 (v15 + v14)
@@ -559,7 +559,7 @@ theorem site_80004028_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
         (sign_extend (m := 64)
           ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004028 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004028 0x80004029 0x8000402a 0x8000402b (b0 := (0x83 : BitVec 8)) (b1 := (0xa7 : BitVec 8)) (b2 := (0x07 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004028#64) vminstret (0x0007a783#32)
     (instruction.LOAD (0x000#12, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, false, 4))
     Register.x15 (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))
@@ -592,7 +592,7 @@ theorem site_8000402c_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       σ'.mem = σ.mem ∧
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x15 (v15 + v14)) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_8000402c hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x8000402c 0x8000402d 0x8000402e 0x8000402f (b0 := (0xb3 : BitVec 8)) (b1 := (0x87 : BitVec 8)) (b2 := (0xe7 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x8000402c#64) vminstret (0x00e787b3#32)
     (instruction.RTYPE (regidx.Regidx 0x0e#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, rop.ADD))
     Register.x15 (v15 + v14)
@@ -628,7 +628,7 @@ theorem site_80004030_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       ReadsLikePost σ' (sigmaPost_jump_x0 σ pc vminstret
           (BitVec.update (v15 + sign_extend (m := 64) (0x000#12)) 0 0#1)) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004030 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004030 0x80004031 0x80004032 0x80004033 (b0 := (0x67 : BitVec 8)) (b1 := (0x80 : BitVec 8)) (b2 := (0x07 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_jr σ i u (0x80004030#64) vminstret v15 (0x00078067#32) (0x000#12)
     (regidx.Regidx 0x0f#5) (0x67#8) (0x80#8) (0x07#8) (0x00#8)
     hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
@@ -666,7 +666,7 @@ theorem site_8000400c_es
         (sigmaPost_alu σ pc vminstret Register.x14
           (pc + sign_extend (m := 64) ((0x00016#20) +++ 0x000#12))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_8000400c hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x8000400c 0x8000400d 0x8000400e 0x8000400f (b0 := (0x17 : BitVec 8)) (b1 := (0x67 : BitVec 8)) (b2 := (0x01 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x8000400c#64) vminstret (0x00016717#32)
     (instruction.UTYPE (0x00016#20, regidx.Regidx 0x0e#5, uop.AUIPC))
     Register.x14 ((0x8000400c#64 : BitVec 64) + sign_extend (m := 64) ((0x00016#20) +++ 0x000#12))
@@ -701,7 +701,7 @@ theorem site_8000401c_es
         (sigmaPost_alu σ pc vminstret Register.x15
           (zero_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_8000401c hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x8000401c 0x8000401d 0x8000401e 0x8000401f (b0 := (0x83 : BitVec 8)) (b1 := (0x67 : BitVec 8)) (b2 := (0x04 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   have hx8₂ : (afterNextPC (afterPrelude σ) (0x8000401c#64)).regs.get? Register.x8 = some v8 := by
     rw [get?_afterNextPC σ (0x8000401c#64) _ (by decide) (by decide)]; exact hx8
   exact stepObs_alu σ i u (0x8000401c#64) vminstret (0x00046783#32)
@@ -735,7 +735,7 @@ theorem site_80004020_es
         (sigmaPost_alu σ pc vminstret Register.x15
           (shift_bits_left v15 (Sail.BitVec.extractLsb (0x02#6) 5 0))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.exec_stmt_at_80004020 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80004020 0x80004021 0x80004022 0x80004023 (b0 := (0x93 : BitVec 8)) (b1 := (0x97 : BitVec 8)) (b2 := (0x27 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80004020#64) vminstret (0x00279793#32)
     (instruction.SHIFTIOP (0x02#6, regidx.Regidx 0x0f#5, regidx.Regidx 0x0f#5, sop.SLLI))
     Register.x15 (shift_bits_left v15 (Sail.BitVec.extractLsb (0x02#6) 5 0))

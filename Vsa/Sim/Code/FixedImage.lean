@@ -1,4 +1,5 @@
 import Vsa.Sim.Code.FixedImageData
+import Vsa.Sim.TextImage
 
 open Std (ExtHashMap)
 
@@ -50,5 +51,38 @@ theorem FixedRodataLoaded.byteAt {mem : ExtHashMap Nat (BitVec 8)} (h : FixedRod
   have e : fixedRodataBase + (a - 0x80018be0) = a := by unfold fixedRodataBase; omega
   rw [e] at hb
   exact hb
+
+/-- The fixed text image on `[lo, hi)`. -/
+def fixedCodePieces (lo hi : Nat) : List TextPiece :=
+  [⟨fun a => fixedTextByte (a - fixedTextBase), [(lo, hi)]⟩]
+
+/-- The code of a function at `[lo, hi)` is present, as in the fixed image. -/
+abbrev CodeLoaded (lo hi : Nat) (mem : ExtHashMap Nat (BitVec 8)) : Prop :=
+  TextIn (piecesText (fixedCodePieces lo hi)) mem
+
+theorem CodeLoaded.transport {lo hi : Nat} {mem mem' : ExtHashMap Nat (BitVec 8)}
+    (h : CodeLoaded lo hi mem) (hag : ∀ a, lo ≤ a → a < hi → mem'[a]? = mem[a]?) :
+    CodeLoaded lo hi mem' :=
+  TextIn.transport h fun p hp => by
+    obtain ⟨q, hq, hr, -⟩ := mem_piecesText_iff.1 hp
+    simp only [fixedCodePieces, List.mem_singleton] at hq
+    subst hq
+    obtain ⟨r, hrr, h1, h2⟩ := inRangesB_iff.1 hr
+    simp only [List.mem_singleton] at hrr
+    subst hrr
+    exact hag _ h1 h2
+
+theorem FixedTextLoaded.code {mem : ExtHashMap Nat (BitVec 8)} (h : FixedTextLoaded mem)
+    {lo hi : Nat} (hr : 0x80000000 ≤ lo ∧ hi ≤ 0x80018be0 := by decide) : CodeLoaded lo hi mem := by
+  intro p hp
+  obtain ⟨q, hq, hrq, he⟩ := mem_piecesText_iff.1 hp
+  simp only [fixedCodePieces, List.mem_singleton] at hq
+  subst hq
+  obtain ⟨r, hrr, h1, h2⟩ := inRangesB_iff.1 hrq
+  simp only [List.mem_singleton] at hrr
+  subst hrr
+  have := h (p.1 - fixedTextBase) (by unfold fixedTextBase fixedTextSize at *; simp only at h1 h2; omega)
+  rw [show fixedTextBase + (p.1 - fixedTextBase) = p.1 by unfold fixedTextBase at *; simp only at h1; omega] at this
+  rw [he]; exact this
 
 end Vsa.Sim.Code

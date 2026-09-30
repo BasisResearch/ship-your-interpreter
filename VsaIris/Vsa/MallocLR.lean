@@ -84,17 +84,17 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hfirstlt := Vsa.Sim.read64_lt _ _ _ hfd
   have hEA : ((R 16) + sign_extend (m := 64) (0x020#12)).toNat = binAt 1 + 16 := by
     rw [ha6]; unfold binAt avAddr; rfl
-  refine st_800048ec O.live ?_ ?_ ?_
+  refine (step% st 0x800048ec) O.live ?_ ?_ ?_
   · rw [hEA]; unfold LdOK Vsa.Sim.tohostAddr binAt avAddr; omega
   · rw [hEA]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inl rfl)
   rw [show ldv .ld Mt ((R 16) + sign_extend (m := 64) (0x020#12)).toNat =
     BitVec.ofNat 64 first from bin_link_ld hEA hfd hfirstlt]
-  refine st_800048f0 O.live ?_
-  refine st_800048f4 O.live ?_
+  refine (step% st 0x800048f0) O.live ?_
+  refine (step% st 0x800048f4) O.live ?_
   sx_norm
   have ht4 : (2147593504#64 : BitVec 64) = BitVec.ofNat 64 (binAt 1) := by
     apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_ofNat]; unfold binAt avAddr; decide
-  refine st_800048f8 O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x800048f8) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc ⊢
   ·
     rw [ht4] at hc
@@ -131,14 +131,14 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     have hhfoot := foot_header B (.inr ⟨_, hfree, rfl⟩)
     simp only at hhfoot
 
-    refine st_800048fc O.live ?_ ?_ ?_
+    refine (step% st 0x800048fc) O.live ?_ ?_ ?_
     · sx_norm; unfold LdOK Vsa.Sim.tohostAddr; sx_addr
     · sx_norm; exact O.foot_at hhfoot _ (by sx_addr)
     sx_norm
     rw [ldv_at hhr _ (by sx_addr)]
-    refine st_80004900 O.live ?_
-    refine st_80004904 O.live ?_
-    refine st_80004908 O.live ?_
+    refine (step% st 0x80004900) O.live ?_
+    refine (step% st 0x80004904) O.live ?_
+    refine (step% st 0x80004908) O.live ?_
     sx_norm
     have hszv : ((BitVec.ofNat 64 hh) &&& 18446744073709551612#64).toNat = sz := by
       rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hhlt]
@@ -147,7 +147,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     have hsz62 : sz < 2 ^ 62 := by omega
     have hcmp := lr_cmp (x := (BitVec.ofNat 64 hh) &&& 18446744073709551612#64) (y := R 14)
       hszv ha4 hsz62 hnb62
-    refine st_8000490c O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
+    refine (step% st 0x8000490c) O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc2 ⊢
     ·
       refine hsplit first sz hb hfree (hcmp.1.1 hc2) _
@@ -167,12 +167,12 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         omega
       have hEB : ((R 16) + sign_extend (m := 64) (0x028#12)).toNat = binAt 1 + 24 := by
         rw [ha6]; unfold binAt avAddr; rfl
-      refine st_80004910 O.live ?_ ?_ ?_
+      refine (step% st 0x80004910) O.live ?_ ?_ ?_
       · sx_norm; rw [hEB]; unfold StOK Vsa.Sim.tohostAddr binAt avAddr; omega
       · sx_norm; rw [hEB]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inr rfl)
       sx_norm
       rw [hEB]
-      refine st_80004914 O.live ?_ ?_ ?_
+      refine (step% st 0x80004914) O.live ?_ ?_ ?_
       · sx_norm; rw [hEA]; unfold StOK Vsa.Sim.tohostAddr binAt avAddr; omega
       · sx_norm; rw [hEA]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inl rfl)
       sx_norm
@@ -192,7 +192,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
             writeLog_out _ _ _ (by simp only [OutL]; exact ⟨by omega, trivial⟩)]
         · exact fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))
         · exact fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))
-      refine st_80004918 O.live (fun hc3 => ?_) (fun hc3 => ?_) <;>
+      refine (step% st 0x80004918) O.live (fun hc3 => ?_) (fun hc3 => ?_) <;>
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc3
       ·
         refine hexact first sz hfree (hcmp.2.1 hc3) hlt32 _ _
@@ -254,25 +254,25 @@ theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
   have hES : ((R 2) + sign_extend (m := 64) (0x008#12)).toNat = C.s.toNat - 96 + 8 := by
     rw [hs2]; sx_addr
 
-  refine st_80004d78 O.live ?_
+  refine (step% st 0x80004d78) O.live ?_
   sx_norm
   have hEN : ((R 15) + (R 6) + 8#64).toNat = v + sz + 8 := by sx_addr
 
-  refine st_80004d7c O.live ?_ ?_ ?_
+  refine (step% st 0x80004d7c) O.live ?_ ?_ ?_
   · sx_norm; rw [hEN]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEN]; exact O.foot_at hnx _ rfl
   sx_norm
   rw [ldv_at hdr' _ hEN]
-  refine st_80004d80 O.live ?_
+  refine (step% st 0x80004d80) O.live ?_
 
-  refine st_80004d84 O.live ?_ ?_ ?_
+  refine (step% st 0x80004d84) O.live ?_ ?_ ?_
   · sx_norm; rw [hES]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hES]; exact O.stack (by unfold mHead; omega) (by omega)
   sx_norm
   rw [hES]
-  refine st_80004d88 O.live ?_
+  refine (step% st 0x80004d88) O.live ?_
 
-  refine st_80004d8c O.live ?_ ?_ ?_
+  refine (step% st 0x80004d8c) O.live ?_ ?_ ?_
   · sx_norm; rw [hEN]; unfold StOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEN]; exact O.foot_at hnx _ rfl
   sx_norm

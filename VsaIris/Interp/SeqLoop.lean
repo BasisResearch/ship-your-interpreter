@@ -234,8 +234,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   ihave H1 := h1
   rw [show k + (n1 + n2) = k + n2 + n1 by omega]
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
-    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
-    interp_code_800041c4 (by decide) D1 (k := k + n2) (aS := BitVec.ofNat 64 p) (aE := aInner)
+    ((step% jalx 0x800041c4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) D1 (k := k + n2) (aS := BitVec.ofNat 64 p) (aE := aInner)
     (aRet := aRet) (s := s + 18446744073709551440#64) (m := m')
     (hsg'.narrow hneed) hneed hsg'.le hslg hbb
   iframe H1 Hcode Hfr Hms Hst Hslot Hw
@@ -373,8 +373,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
   ihave H1 := h1
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
-    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
-    interp_code_800041c4 (by decide) D1 (k := k) (aS := BitVec.ofNat 64 p) (aE := aInner)
+    ((step% jalx 0x800041c4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) D1 (k := k) (aS := BitVec.ofNat 64 p) (aE := aInner)
     (aRet := aRet) (s := s + 18446744073709551440#64) (m := m')
     (hsg'.narrow hneed) hneed hsg'.le hslg hbb
   iframe H1 Hcode Hfr Hms Hst Hslot Hw
@@ -467,8 +467,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
   ihave H1 := execSpecsP_at Core st d inner sm $$ IH
   iapply ms_callExecP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
-    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
-    interp_code_800041c4 (by decide) (Core := Core) (st := st) (d := d) (env := inner) (sm := sm)
+    ((step% jalx 0x800041c4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := inner) (sm := sm)
     (aS := BitVec.ofNat 64 p) (aE := aInner) (aRet := aRet) (s := s + 18446744073709551440#64)
     (m := m') (Kret := iprop(∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St) (status : Status),
         ⌜ExecSeq st d inner (sm :: ss) st' status⌝ -∗

@@ -10,8 +10,8 @@ open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 #ix_piece IntOp.mulRun2 from IntOp.mulRun1 by
   ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003870
 #ix_piece IntOp.mulRun3 from IntOp.mulRun2 by
-  refine iw_jal 0x80003870 _ _ (jalx_80003870 live (fun p hp => hlive _ (interp_code_80003870 p hp)))
-    interp_code_80003870 rfl ?_
+  refine iw_jal 0x80003870 _ _ (jalx_80003870 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) rfl ?_
   refine mul_iw hlive u1 w1 0x80003874#64 _ _ (by reg_close) (by reg_close)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Nat.reduceAdd]) (by decide)
     (fun R' hq hkeep => ?_)
