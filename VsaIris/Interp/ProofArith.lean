@@ -36,7 +36,7 @@ theorem mul_loop {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
   refine Nat.strongRecOn n ?_
   intro n ih R hn hinv hkp
   have h1 : R 1 = r := (hkp 1 (by decide) (by decide) (by decide) (by decide)).trans hr
-  apply it_80004648 hlive
+  apply (step% it 0x80004648) hlive
   ix_run hlive at 0x80004648
   all_goals first
     | (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [h1]; exact hal)
@@ -78,8 +78,8 @@ theorem mul_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     (Mt : Mem) (h10 : R 10 = x) (h11 : R 11 = y) (hr : R 1 = r) (hal : r.toNat % 4 = 0)
     (hk : ∀ R', R' 10 = x * y → MulKeep R' R → IW live Dt DA S Q r R' Mt) :
     IW live Dt DA S Q 0x80004640#64 R Mt := by
-  apply it_80004640 hlive
-  apply it_80004644 hlive
+  apply (step% it 0x80004640) hlive
+  apply (step% it 0x80004644) hlive
   refine mul_loop hlive x y r R Mt hal hr hk _ _ rfl ?_ ?_
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [h10, h11]; simp
   · intro z h10' h11' h12 h13
@@ -119,7 +119,7 @@ theorem udiv_loop2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
     have hR1 : R 1 = r := (hkp 1 (by decide) (by decide) (by decide) (by decide)).trans hr
     have h3z : R 13 >>> 1 = 0#64 := by
       apply BitVec.eq_of_toNat_eq; rw [shr1_toNat', hk3]; rfl
-    refine it_800046d8 hlive ?_ ?_
+    refine (step% it 0x800046d8) hlive ?_ ?_
     all_goals (intro hc; ix_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hF.hal => rw [hR1]; exact hal
@@ -158,7 +158,7 @@ theorem udiv_loop2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
       have := congrArg BitVec.toNat h0; rw [h3] at this; simp at this
     have hK' : Vsa.Sim.DivK d (R 12 >>> 1) (R 13 >>> 1) j :=
       ⟨h2, h3, by rw [hpow] at hov; omega⟩
-    refine it_800046d8 hlive ?_ ?_
+    refine (step% it 0x800046d8) hlive ?_ ?_
     all_goals (intro hc; ix_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hT hz =>
@@ -212,7 +212,7 @@ theorem udiv_loop1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
   intro m ih R hm h11 ⟨k, hk2, hk3, hov⟩ hlt hkp
   have hpk : 1 ≤ 2 ^ k := Nat.one_le_two_pow
   have ha2 : d.toNat ≤ (R 12).toNat := by rw [hk2]; exact Nat.le_mul_of_pos_right _ (by omega)
-  refine it_800046c4 hlive ?_ ?_
+  refine (step% it 0x800046c4) hlive ?_ ?_
   all_goals (intro hc; ix_run hlive at 0x800046c4 0x800046d8)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case refine_1 =>
@@ -376,7 +376,7 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hT.hT hx hyp =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000471c _ _ (jalx_8000471c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    refine iw_jal 0x8000471c _ _ ((step% jalx 0x8000471c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (0#64 - x) y 0x80004720#64 _ Mt hy ?_ ?_ ?_ (by decide) (fun R' hq _ hkp => ?_)
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -406,7 +406,7 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
       · rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h10', h11', ite_false]
   case hF.hT hx hyp =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000471c _ _ (jalx_8000471c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    refine iw_jal 0x8000471c _ _ ((step% jalx 0x8000471c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive x (0#64 - y) 0x80004720#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' hq _ hkp => ?_)
     · intro h0; apply hy; have := congrArg (0#64 - ·) h0; simpa using this
@@ -444,7 +444,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hT.hT hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x80004734 _ _ (jalx_80004734 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    refine iw_jal 0x80004734 _ _ ((step% jalx 0x80004734) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (x) (0#64 - y) 0x80004738#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · intro h0; apply hy; have := congrArg (0#64 - ·) h0; simpa using this
@@ -465,7 +465,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
         rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h1, h5', h10', h11', ite_false]
   case hT.hF hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000474c _ _ (jalx_8000474c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    refine iw_jal 0x8000474c _ _ ((step% jalx 0x8000474c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (0#64 - x) (0#64 - y) 0x80004750#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · intro h0; apply hy; have := congrArg (0#64 - ·) h0; simpa using this
@@ -486,7 +486,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
         rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h1, h5', h10', h11', ite_false]
   case hF.hT hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000474c _ _ (jalx_8000474c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    refine iw_jal 0x8000474c _ _ ((step% jalx 0x8000474c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (0#64 - x) (y) 0x80004750#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · exact hy
@@ -507,7 +507,7 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
         rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h1, h5', h10', h11', ite_false]
   case hF.hF hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x80004734 _ _ (jalx_80004734 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    refine iw_jal 0x80004734 _ _ ((step% jalx 0x80004734) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (x) (y) 0x80004738#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · exact hy

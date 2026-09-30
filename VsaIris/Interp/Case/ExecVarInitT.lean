@@ -53,7 +53,7 @@ theorem caseT_ExecVarInit {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
 
   ihave He := he
   iapply ms_callEvalT (N := N) (L := vsaLayoutP) (Room := vsaRoomB) (inp := inp) (i := 0x800040ec)
-    (jalx_800040ec live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800040ec) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) D (k := k + defineCost st'.store env x)
     (slot := execSP s + 104#64) (aC := BitVec.ofNat 64 pi) (aE := aE) (s := execSP s)
     (m := execNeed (.varDecl x (some e)) d - 176) g.child g.fits g.below g.slotGeom hbb

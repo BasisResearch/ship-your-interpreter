@@ -317,7 +317,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hsp1 : SpOKA (R1 2) := def_spOK hC (by rw [hk1 2 (by decide)]; exact h2)
   rw [← def_sp hC (show (R1 2).toNat = C.s.toNat - 64 by rw [hk1 2 (by decide)]; exact h2)]
   iapply wp_call_reallocOpt hlive Wp (i := 0x80002ba0)
-    (jalx_80002ba0 live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide)
+    ((step% jalx 0x80002ba0) live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide)
     ((ρ.plus (nameCopyCost C.x)).plus (24 * nextCap f.vars.length)) (obRest (obOf G.cap G.nblk) H)
     (obOf G.cap G.nblk) (8 * nextCap f.vars.length) (imgM Mt) (8 * nextCap f.vars.length)
     ⟨by omega, by unfold roundUp16; omega⟩ (by omega) hpn
@@ -380,7 +380,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hsp3 : SpOKA (R3 2) := by rw [h32]; exact hsp1
   rw [← h32]
   iapply wp_call_reallocOpt hlive Wp (i := 0x80002bbc)
-    (jalx_80002bbc live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide)
+    ((step% jalx 0x80002bbc) live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide)
     (ρ.plus (nameCopyCost C.x)) (obRest (obOf G.cap G.vblk) Hx)
     (obOf G.cap G.vblk) (24 * nextCap f.vars.length) (imgM Mt) (24 * nextCap f.vars.length)
     ⟨by omega, by unfold roundUp16; omega⟩ (by omega) hpv h11v hsp3 hlen2

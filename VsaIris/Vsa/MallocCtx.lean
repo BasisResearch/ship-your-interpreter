@@ -409,14 +409,14 @@ theorem epi_80004830 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} (
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →
       AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x80004830#64 R Mt :=
-  epi_core O (st_80004830 O.live) (st_80004834 O.live) (st_80004838 O.live) (st_8000483c O.live)
+  epi_core O ((step% st 0x80004830) O.live) ((step% st 0x80004834) O.live) ((step% st 0x80004838) O.live) ((step% st 0x8000483c) O.live)
     F hfin
 
 theorem epi_8000484c {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →
       AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x8000484c#64 R Mt :=
-  epi_core O (st_8000484c O.live) (st_80004850 O.live) (st_80004854 O.live) (st_80004858 O.live)
+  epi_core O ((step% st 0x8000484c) O.live) ((step% st 0x80004850) O.live) ((step% st 0x80004854) O.live) ((step% st 0x80004858) O.live)
     F hfin
 
 def mChgCtx (live : Nat → Prop) (H : List (Nat × Nat)) (n r s : BitVec 64)

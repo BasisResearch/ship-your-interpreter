@@ -58,7 +58,7 @@ theorem caseP_ExecVarNull {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
   ihave Hvn := hvn $$ %(execSP s + 104#64)
   unfold valueNullSpec
   iapply ms_callHelperSlot (wpW _) (i := 0x80004300)
-    (jalx_80004300 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004300) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (a := execSP s + 104#64) (R := R0) (Mt := Mt1)
     (S := InExt (s.toNat - 176, 176)) (v := .null)
     (fun b hb => by simp only [VsaIris.InExt] at hb ⊢; rw [g1] at hb; omega) hslg

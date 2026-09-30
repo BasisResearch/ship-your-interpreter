@@ -74,26 +74,26 @@ theorem j_small {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   obtain ⟨last, hlast⟩ : ∃ l, (binAt (nb / 8) :: bins (nb / 8)).getLast? = some l := ⟨_, List.getLast?_cons⟩
   have hbk := ring_bk_head hring hlast
   have hlastlt := Vsa.Sim.read64_lt _ _ _ hbk
-  refine st_800047dc O.live ?_
-  refine st_800047e0 O.live ?_
-  refine st_800047e4 O.live ?_
+  refine (step% st 0x800047dc) O.live ?_
+  refine (step% st 0x800047e0) O.live ?_
+  refine (step% st 0x800047e4) O.live ?_
   sx_norm
   have hEA : (2147593488#64 + R 13 + sign_extend (m := 64) (0x008#12)).toNat = binAt (nb / 8) + 24 := by
     unfold binAt avAddr; sx_addr
   have hgeo := binAt_geo (nb / 8) (by unfold numBins; omega)
-  refine st_800047e8 O.live ?_ ?_ ?_
+  refine (step% st 0x800047e8) O.live ?_ ?_ ?_
   · sx_norm; rw [hEA]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hEA]; exact O.bin_link (j := nb / 8) (by unfold numBins; omega) (.inr rfl)
   sx_norm
   have hv : ldv .ld Mt (2147593488#64 + R 13 + 8#64).toNat = BitVec.ofNat 64 last :=
     bin_link_ld (by unfold binAt avAddr; sx_addr) hbk hlastlt
   rw [hv]
-  refine st_800047ec O.live ?_
+  refine (step% st 0x800047ec) O.live ?_
   sx_norm
   have hA2 : (2147593488#64 + R 13 + 18446744073709551600#64) = BitVec.ofNat 64 (binAt (nb / 8)) := by
     apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_ofNat]; unfold binAt avAddr; sx_addr
   have hbinlt : binAt (nb / 8) < 2 ^ 64 := by omega
-  refine st_800047f0 O.live (fun heq => ?_) (fun hne => ?_)
+  refine (step% st 0x800047f0) O.live (fun heq => ?_) (fun hne => ?_)
   ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at heq
     rw [hA2] at heq
@@ -105,18 +105,18 @@ theorem j_small {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     have hEA1 : ((2147593488#64 + R 13) + sign_extend (m := 64) (0x018#12)).toNat =
         binAt (nb / 8 + 1) + 24 := by unfold binAt avAddr; sx_addr
     have hbkJlt := Vsa.Sim.read64_lt _ _ _ hbkJ
-    refine st_80004c60 O.live ?_ ?_ ?_
+    refine (step% st 0x80004c60) O.live ?_ ?_ ?_
     · sx_norm; rw [hEA1]; unfold LdOK Vsa.Sim.tohostAddr; omega
     · sx_norm; rw [hEA1]; exact O.bin_link (j := nb / 8 + 1) (by unfold numBins; omega) (.inr rfl)
     sx_norm
     have hv1 : ldv .ld Mt ((2147593488#64 + R 13) + 24#64).toNat = BitVec.ofNat 64 (binAt (nb / 8 + 1)) :=
       bin_link_ld (by unfold binAt avAddr; sx_addr) hbkJ hbkJlt
     rw [hv1]
-    refine st_80004c64 O.live ?_
+    refine (step% st 0x80004c64) O.live ?_
     sx_norm
     have hA3 : 2147593488#64 + R 13 = BitVec.ofNat 64 (binAt (nb / 8 + 1)) := by
       apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_ofNat]; unfold binAt avAddr; sx_addr
-    refine st_80004c68 O.live (fun _ => ?_) (fun hne => absurd hA3 hne)
+    refine (step% st 0x80004c68) O.live (fun _ => ?_) (fun hne => absurd hA3 hne)
     refine hLR _ ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact ha4
     · rw [toNat_sx32_small _ (by sx_addr)]; sx_addr
@@ -164,32 +164,32 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hpredlt := Vsa.Sim.read64_lt _ _ _ hbkv
   have hbinlt := Vsa.Sim.read64_lt _ _ _ hfdv
 
-  refine st_800047f4 O.live ?_ ?_ ?_
+  refine (step% st 0x800047f4) O.live ?_ ?_ ?_
   · sx_addr
   · exact O.foot_at hhv _ (by sx_addr)
   simp (disch := sx_addr) only [ldv_at hvr]
 
   have hbkw : ∀ j, j < 8 → vsaFoot C.H (cv.addr + 24 + j) := fun j hj => by
     have := hlv (8 + j) (by omega); rwa [show cv.addr + 16 + (8 + j) = cv.addr + 24 + j by omega] at this
-  refine st_800047f8 O.live ?_ ?_ ?_
+  refine (step% st 0x800047f8) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot_at hbkw _ (by sx_addr)
   sx_norm
   simp (disch := sx_addr) only [ldv_at (show read64 Mt (cv.addr + 24) = some pred from hbkv)]
 
-  refine st_800047fc O.live ?_ ?_ ?_
+  refine (step% st 0x800047fc) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot_at (fun j hj => hlv j (by omega)) _ (by sx_addr)
   sx_norm
   simp (disch := sx_addr) only [ldv_at (show read64 Mt (cv.addr + 16) = some (binAt (nb / 8)) from hfdv)]
 
-  refine st_80004800 O.live ?_
-  refine st_80004804 O.live ?_
+  refine (step% st 0x80004800) O.live ?_
+  refine (step% st 0x80004804) O.live ?_
   sx_norm
 
   have hnx := foot_header B (HH.end_bnd hcv)
   have hdlt := Vsa.Sim.read64_lt _ _ _ hdr
-  refine st_80004808 O.live ?_ ?_ ?_
+  refine (step% st 0x80004808) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot_at hnx _ (by sx_addr)
   sx_norm
@@ -208,7 +208,7 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       have := HH.walk.chunk_bounds cx hcx; exact .inr ⟨this.1, by omega⟩
   have hgeo := binAt_geo (nb / 8) (by unfold numBins; omega)
 
-  refine st_8000480c O.live ?_ ?_ ?_
+  refine (step% st 0x8000480c) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot_at (fun j hj => by
       have := B.node_foot (x := binAt (nb / 8)) (j := nb / 8) (by omega) (by unfold numBins; omega)
@@ -220,13 +220,13 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
   unfold mHead Vsa.Sim.tohostAddr at hlo
   have hs2 := F.sp
-  refine st_80004810 O.live ?_ ?_ ?_
+  refine (step% st 0x80004810) O.live ?_ ?_ ?_
   · sx_norm; rw [hs2]; sx_addr
   · sx_norm; rw [hs2]; exact O.stack (by unfold mHead; sx_addr) (by sx_addr)
   sx_norm
   rw [hs2, show (C.s + 18446744073709551520#64 + 8#64).toNat = C.s.toNat - 96 + 8 by sx_addr]
 
-  refine st_80004814 O.live ?_ ?_ ?_
+  refine (step% st 0x80004814) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot_at (fun j hj => by
       have := B.node_foot (j := nb / 8) (by omega) (by unfold numBins; omega) hpredm (16 + j)
@@ -235,11 +235,11 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   sx_norm
   rw [show (BitVec.ofNat 64 pred + 16#64).toNat = pred + 16 by sx_addr]
 
-  refine st_80004818 O.live ?_
-  refine st_8000481c O.live ?_
+  refine (step% st 0x80004818) O.live ?_
+  refine (step% st 0x8000481c) O.live ?_
   sx_norm
 
-  refine st_80004820 O.live ?_ ?_ ?_
+  refine (step% st 0x80004820) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot_at hnx _ (by sx_addr)
   sx_norm

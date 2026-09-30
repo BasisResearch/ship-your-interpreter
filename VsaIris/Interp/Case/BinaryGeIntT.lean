@@ -113,7 +113,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hl := hl
   rw [show k + (nl + nr) = k + nr + nl by omega]
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800034f8)
-    (jalx_800034f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800034f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dl (k := k + nr) (slot := s + 18446744073709550528#64 + 120#64)
     (aC := BitVec.ofNat 64 aL) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.binary .ge l r) d - 1088)
@@ -160,7 +160,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave Hr := hr
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)
-    (jalx_80003518 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003518) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dr (k := k) (slot := s + 18446744073709550528#64 + 144#64)
     (aC := BitVec.ofNat 64 aR) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.binary .ge l r) d - 1088)
@@ -208,7 +208,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvi := hvb $$ %sret %((cmpRaw w1 u1 ^^^ 0xffffffffffffffff#64) >>> 63)
   unfold valueBoolSpec
   iapply ms_callHelper (twpW _) (i := 0x800036c8)
-    (jalx_800036c8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800036c8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []

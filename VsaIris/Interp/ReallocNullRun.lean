@@ -12,10 +12,10 @@ theorem reallocNull_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv :
     (Hp : MHeap C C.Mt0 brkv chunks bins) :
     AW C.live C.S C.Q reallocEntryBV R C.Mt0 := by
   rw [show reallocEntryBV = 0x8000527c#64 from rfl]
-  refine st_8000527c O.live (st_80005280 O.live (st_80005284 O.live (st_80005288 O.live
-    (st_8000528c O.live ?_))))
-  refine st_80005290 O.live (fun _ => ?_) (fun hne => absurd ?_ hne)
-  · refine st_80005480 O.live (st_80005484 O.live ?_)
+  refine (step% st 0x8000527c) O.live ((step% st 0x80005280) O.live ((step% st 0x80005284) O.live ((step% st 0x80005288) O.live
+    ((step% st 0x8000528c) O.live ?_))))
+  refine (step% st 0x80005290) O.live (fun _ => ?_) (fun hne => absurd ?_ hne)
+  · refine (step% st 0x80005480) O.live ((step% st 0x80005484) O.live ?_)
     refine malloc_all O ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ Hp <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact hra

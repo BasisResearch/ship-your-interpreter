@@ -131,7 +131,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     %(getSaved.map fun j => (j, R1 j)) %(by simp [getSaved])
   ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
   iapply ms_callEnv3 (twpW _) (i := 0x80003440) (entry := envGetPC) (R := R1)
-    (jalx_80003440 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003440) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
     (φ := EnvSp (R1 2) envGetNeed ∧ SlotWin (R1 12).toNat)
     ⟨⟨(by rw [e2, hsf]; unfold htifLo envGetNeed; unfold Vsa.Sim.tohostAddr at *; omega),
@@ -176,7 +176,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     · iexact Hbw
   intro F'
 
-  refine it_80003444 hlive (fun hc => by
+  refine (step% it 0x80003444) hlive (fun hc => by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc; rw [hres] at hc; exact absurd hc (by decide))
     (fun hnz => ?_)
   refine VarT_run2 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)

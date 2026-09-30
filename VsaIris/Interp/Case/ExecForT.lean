@@ -65,7 +65,7 @@ theorem caseT_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
   rw [← h12]
   ihave Hen := hen
   iapply ms_callEnvNewW (N := N) (twpW _) (i := 0x80004238)
-    (jalx_80004238 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004238) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (k := k + nl + ni) (st := st) (d := d) (env := env) (R := R1)
     ⟨by rw [h12, hfg.sf]; have := hfg.lo; unfold htifLo envNewNeed allocHeadroom; omega,
       by rw [h12, hfg.sf]; have := hfg.hi; omega, by rw [h12, hfg.sf]; have := hfg.al; omega⟩

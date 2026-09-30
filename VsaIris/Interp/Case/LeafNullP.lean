@@ -73,7 +73,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvi := hvi $$ %sret
   unfold valueNullSpec
   iapply ms_callHelper (wpW _) (i := 0x8000342c)
-    (jalx_8000342c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x8000342c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []

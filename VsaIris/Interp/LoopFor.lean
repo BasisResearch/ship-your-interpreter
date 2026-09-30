@@ -354,7 +354,7 @@ theorem forCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ inte
     rw [← ldv_ld_imgW, hMt3]; ix_fwd using [hoff]
   ihave Ht := htr $$ %(s + 18446744073709551440#64 + 16#64) %v
   iapply ms_truthyCall Wp (N := N) (R := R3) (Mt := Mt3) (v := v) (i := 0x800042a0)
-    (jalx_800042a0 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800042a0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (execSlot_in hs16 (by omega)) (by rw [hR3]; ix_reg) hs16.geo
   iframe Ht Hcode Hms
   isplitl []
@@ -591,7 +591,7 @@ theorem forCondEvalT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iintro %R1 %aC %⟨hregs, hk1⟩ #Hac Hms
   ihave Hc := hc
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004280)
-    (jalx_80004280 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004280) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dc (k := k) (hsg.narrow hfit) hfit hsg.le
     (execSlot hfg (o := 104) (by omega) rfl).geo hcb
   iframe Hc Hcode Hac Hfr Hms Hst Hw
@@ -657,7 +657,7 @@ theorem execStepT_some (hlive : ∀ p ∈ interpText, live p.1)
   iintro %R1 %aE %⟨hregs, hk1⟩ #Hae Hms
   ihave He := he
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800042e8)
-    (jalx_800042e8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800042e8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) De (k := k) (hsg.narrow hfit) hfit hsg.le hs16.geo heb
   iframe He Hcode Hae Hfr Hms Hst Hw
   isplitl []
@@ -691,7 +691,7 @@ theorem execInitT_some (hlive : ∀ p ∈ interpText, live p.1)
   iintro %R1 %aI %⟨hregs, hk1, h19⟩ #Hai Hms
   ihave Hi := hi
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004254)
-    (jalx_80004254 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004254) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Di (k := k) (hsg.narrow hfit) hfit hsg.le hslg hib
   iframe Hi Hcode Hai Hfr Hms Hst Hslot Hw
   isplitl []
@@ -729,7 +729,7 @@ theorem forBodyT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   iintro %R1 %aB %⟨hregs, hk1⟩ #Hab Hms
   ihave Hb := hb
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800042b8)
-    (jalx_800042b8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800042b8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Db (k := k) (hsg.narrow hfit) hfit hsg.le hslg hbb
   iframe Hb Hcode Hab Hfr Hms Hst Hslot Hw
   isplitl []
@@ -868,7 +868,7 @@ theorem forCondEvalP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iintro %R1 %aC %⟨hregs, hk1⟩ #Hac Hms
   ihave Hc := evalSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env c $$ HE
   iapply ms_callEvalPx (N := N) (L := L) (Room := Room) (inp := inp) (X := iprop(emp)) (Kret := K)
-    (i := 0x80004280) (jalx_80004280 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (i := 0x80004280) ((step% jalx 0x80004280) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le
     (execSlot hfg (o := 104) (by omega) rfl).geo hcb
   iframe Hc Hcode Hac Hfr Hms Hst Hw HK
@@ -910,7 +910,7 @@ theorem forBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   iintro %R1 %aB %⟨hregs, hk1⟩ #Hab Hms
   ihave Hb := execSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env b $$ HS
   iapply ms_callExecPx (N := N) (L := L) (Room := Room) (inp := inp) (Kret := K) (X := X)
-    (i := 0x800042b8) (jalx_800042b8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (i := 0x800042b8) ((step% jalx 0x800042b8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le hslg hbb
   iframe Hb HX Hcode Hab Hfr Hms Hst Hslot Hw HK
   isplitl []
@@ -956,7 +956,7 @@ theorem forStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iintro %R1 %aE %⟨hregs, hk1⟩ #Hae Hms
     ihave He := evalSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env e $$ HE
     iapply ms_callEvalPx (N := N) (L := L) (Room := Room) (inp := inp) (X := iprop(emp)) (Kret := K)
-      (i := 0x800042e8) (jalx_800042e8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (i := 0x800042e8) ((step% jalx 0x800042e8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le hs16.geo heb
     iframe He Hcode Hae Hfr Hms Hst Hw HK
     isplitl []
@@ -1191,7 +1191,7 @@ theorem execInitP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
         ms 0x8000426c#64 R' (execS s) Mt -∗
         stackScratch (s + 18446744073709551440#64) m' -∗ slot24 aRet.toNat -∗
         world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ))
-      (i := 0x80004254) (jalx_80004254 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (i := 0x80004254) ((step% jalx 0x80004254) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
       (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le hslg hib
     iframe Hi Hcode Hai Hfr Hms Hst Hslot Hw HK
     isplitl []

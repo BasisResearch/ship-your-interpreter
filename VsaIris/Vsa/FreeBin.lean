@@ -237,12 +237,12 @@ theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     exact hfdJ
   have hoflt := Vsa.Sim.read64_lt _ _ _ hfdJ
   rw [← upd_self_eq h17]
-  refine st_800073f0 O.live ?_
-  refine st_800073f4 O.live ?_
-  refine st_800073f8 O.live ?_
-  refine st_800073fc O.live ?_
+  refine (step% st 0x800073f0) O.live ?_
+  refine (step% st 0x800073f4) O.live ?_
+  refine (step% st 0x800073f8) O.live ?_
+  refine (step% st 0x800073fc) O.live ?_
   sx_norm
-  refine st_80007400 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
+  refine (step% st 0x80007400) O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
   sx_norm
   simp (disch := decide) only [ldv_at hbb']
   have hbbv : (BitVec.ofNat 64 bb).toNat = bb := by
@@ -250,17 +250,17 @@ theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
   have hj8 : (R 15 >>> 3).toNat = S / 8 := by
     rw [BitVec.toNat_ushiftRight, h15, Nat.shiftRight_eq_div_pow]
   have hA3 := binfd_toNat hj8 (by omega)
-  refine st_80007404 O.live ?_
-  refine st_80007408 O.live ?_ ?_ ?_
+  refine (step% st 0x80007404) O.live ?_
+  refine (step% st 0x80007408) O.live ?_ ?_ ?_
   · sx_norm; rw [hA3]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · sx_norm; rw [hA3]; exact O.toWOK.bin_link hjn (.inl rfl)
   sx_norm
   rw [hA3, ldv_at hfdJ' _ rfl]
-  refine st_8000740c O.live ?_
-  refine st_80007410 O.live ?_
-  refine st_80007414 O.live ?_
-  refine st_80007418 O.live ?_
-  refine st_8000741c O.live ?_
+  refine (step% st 0x8000740c) O.live ?_
+  refine (step% st 0x80007410) O.live ?_
+  refine (step% st 0x80007414) O.live ?_
+  refine (step% st 0x80007418) O.live ?_
+  refine (step% st 0x8000741c) O.live ?_
   sx_norm
   have hq := sraiw2_toNat hj8 (by omega)
   have hbit := shl_one hq (by omega)
@@ -286,13 +286,13 @@ theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; exact .inr ⟨this.1, by omega⟩
   have hvf : ∀ k, k < 16 → vsaFoot C.H (X + 16 + k) := fun k hk => B.foot_chunk (by omega) (by omega)
 
-  refine st_80007420 O.live ?_ ?_ ?_
+  refine (step% st 0x80007420) O.live ?_ ?_ ?_
   · sx_norm; rw [BitVec.toNat_add, h14]; unfold StOK Vsa.Sim.tohostAddr; simp; omega
   · sx_norm; rw [BitVec.toNat_add, h14]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     rw [Nat.mod_eq_of_lt (by omega)]; exact O.foot (fun k hk => hvf k (by omega))
   sx_norm
   rw [show (R 14 + 16#64).toNat = X + 16 by rw [BitVec.toNat_add, h14]; simp; omega]
-  refine st_80007424 O.live ?_ ?_ ?_
+  refine (step% st 0x80007424) O.live ?_ ?_ ?_
   · sx_norm; rw [BitVec.toNat_add, h14]; unfold StOK Vsa.Sim.tohostAddr; simp; omega
   · sx_norm; rw [BitVec.toNat_add, h14]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     rw [Nat.mod_eq_of_lt (by omega)]
@@ -300,10 +300,10 @@ theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
   sx_norm
   rw [show (R 14 + 24#64).toNat = X + 24 by rw [BitVec.toNat_add, h14]; simp; omega, hA2]
 
-  refine st_80007428 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
+  refine (step% st 0x80007428) O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
   sx_norm
 
-  refine st_8000742c O.live ?_ ?_ ?_
+  refine (step% st 0x8000742c) O.live ?_ ?_ ?_
   · sx_norm; rw [hA3]; unfold StOK Vsa.Sim.tohostAddr; unfold binAt avAddr at hgj ⊢; omega
   · sx_norm; rw [hA3]; exact O.toWOK.bin_link hjn (.inl rfl)
   sx_norm
@@ -312,7 +312,7 @@ theorem fb_small {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hoflt]
     simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     unfold binAt avAddr at holoc; omega
-  refine st_80007430 O.live ?_ ?_ ?_
+  refine (step% st 0x80007430) O.live ?_ ?_ ?_
   · sx_norm; rw [hEo]; unfold StOK Vsa.Sim.tohostAddr; unfold binAt avAddr at holoc; omega
   · sx_norm; rw [hEo]; exact O.foot (fun k hk => by
       have := hof16 (24 + k) (by omega) (by omega)
@@ -433,12 +433,12 @@ theorem fl_link {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mb M2 : Mem}
   have hoS := B.off_stack (a := succ + 24) (fun k hk => by
     have := hsf (24 + k) (by omega) (by omega); rwa [show succ + (24 + k) = succ + 24 + k by omega] at this)
   unfold mHead at hoX hoX' hoP hoS
-  refine st_800074e4 O.live ?_ ?_ ?_
+  refine (step% st 0x800074e4) O.live ?_ ?_ ?_
   · rw [hEx24]; unfold StOK Vsa.Sim.tohostAddr; omega
   · rw [hEx24]; exact O.foot (fun k hk => by
       have := hvf (8 + k) (by omega); rwa [show X + 16 + (8 + k) = X + 24 + k by omega] at this)
   rw [hEx24]
-  refine st_800074e8 O.live ?_ ?_ ?_
+  refine (step% st 0x800074e8) O.live ?_ ?_ ?_
   · rw [hEx16]; unfold StOK Vsa.Sim.tohostAddr; omega
   · rw [hEx16]; exact O.foot (fun k hk => hvf k (by omega))
   rw [hEx16]
@@ -451,18 +451,18 @@ theorem fl_link {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mb M2 : Mem}
       (R 2 + sign_extend (m := 64) (0x018#12)).toNat = BitVec.ofNat 64 C.r.toNat :=
     ldv_at F2.ra _ (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega)
   simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq] at hl16 hl24
-  refine st_800074ec O.live ?_
-  refine st_800074f0 O.live (by sx_side) (by sx_side) ?_
+  refine (step% st 0x800074ec) O.live ?_
+  refine (step% st 0x800074f0) O.live (by sx_side) (by sx_side) ?_
   rw [upd_other _ _ (by decide : (2 : Nat) ≠ 10), hl16]
-  refine st_800074f4 O.live (by sx_side) (by sx_side) ?_
+  refine (step% st 0x800074f4) O.live (by sx_side) (by sx_side) ?_
   rw [upd_other _ _ (by decide : (2 : Nat) ≠ 8), upd_other _ _ (by decide : (2 : Nat) ≠ 10), hl24]
-  refine st_800074f8 O.live ?_ ?_ ?_ <;>
+  refine (step% st 0x800074f8) O.live ?_ ?_ ?_ <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   · rw [hEp]; unfold StOK Vsa.Sim.tohostAddr; rcases hpl with h | h <;> omega
   · rw [hEp]; exact O.foot (fun k hk => by
       have := hpf (16 + k) (by omega) (by omega); rwa [show pred + (16 + k) = pred + 16 + k by omega] at this)
   rw [hEp]
-  refine st_800074fc O.live ?_ ?_ ?_ <;>
+  refine (step% st 0x800074fc) O.live ?_ ?_ ?_ <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   · rw [hEs]; unfold StOK Vsa.Sim.tohostAddr; rcases hsl with h | h <;> omega
   · rw [hEs]; exact O.foot (fun k hk => by

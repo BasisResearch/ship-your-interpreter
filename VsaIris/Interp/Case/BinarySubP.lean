@@ -133,7 +133,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
   ihave Hl := evalSpecsP_at Core st d env l $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800034f8)
-    (jalx_800034f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800034f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := l)
     (slot := s + 18446744073709550528#64 + 120#64) (aC := BitVec.ofNat 64 aL) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.binary .sub l r) d - 1088)
@@ -192,7 +192,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
   ihave Hr := evalSpecsP_at Core st1 d env r $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)
-    (jalx_80003518 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003518) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (Core := Core) (st := st1) (d := d) (env := env) (e := r)
     (slot := s + 18446744073709550528#64 + 144#64) (aC := BitVec.ofNat 64 aR) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.binary .sub l r) d - 1088)
@@ -257,7 +257,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave Hvi := hvi $$ %sret %(w1 - u1)
   unfold valueIntSpec
   iapply ms_callHelper (wpW _) (i := 0x8000391c)
-    (jalx_8000391c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x8000391c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []
@@ -357,7 +357,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   have hw64 : ldv .ld Mt3 (s + 18446744073709550528#64 + 64#64).toNat = w0 := by
     rw [hMt3]; e2_fwd hoff; rw [hMt2]; e2_fwd hoff
   iapply ms_callKindName (wpW _) hvk (i := 0x80003b7c)
-    (jalx_80003b7c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003b7c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (v := lv) hS64
     (evalSlotGeom hsg hneed (o := 64) (by decide) (by decide)) hw64 htl
   iframe Hcode Hms
@@ -392,7 +392,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave #Himg := errCtx_img inp $$ HE
   ihave #Hrd := readable_rodata $$ Himg
   iapply ms_rtErrEval (wpW _) hE (i := 0x80003b9c)
-    (jalx_80003b9c live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003b9c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (Sro := rodataDom) (rd := rodataByte) (fmt := 0x800193f0#64) (x1 := 0x800196e8#64)
     (x2 := kindNamePtr lv)
     (readable_rodata_fmt (fun hro => operand_fmt hro (rodata_cstrV hro 0x800196e8#64 1 (by decide) (by decide))
@@ -449,7 +449,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   have hw64 : ldv .ld Mt3 (s + 18446744073709550528#64 + 64#64).toNat = u0 := by
     rw [hMt3]; e2_fwd hoff
   iapply ms_callKindName (wpW _) hvk (i := 0x80003b7c)
-    (jalx_80003b7c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003b7c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (v := rv') hS64
     (evalSlotGeom hsg hneed (o := 64) (by decide) (by decide)) hw64 htr
   iframe Hcode Hms
@@ -484,7 +484,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave #Himg := errCtx_img inp $$ HE
   ihave #Hrd := readable_rodata $$ Himg
   iapply ms_rtErrEval (wpW _) hE (i := 0x80003b9c)
-    (jalx_80003b9c live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003b9c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (Sro := rodataDom) (rd := rodataByte) (fmt := 0x800193f0#64) (x1 := 0x800196e8#64)
     (x2 := kindNamePtr rv')
     (readable_rodata_fmt (fun hro => operand_fmt hro (rodata_cstrV hro 0x800196e8#64 1 (by decide) (by decide))

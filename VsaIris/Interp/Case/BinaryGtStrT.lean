@@ -124,7 +124,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hl := hl
   rw [show k + (nl + nr) = k + nr + nl by omega]
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800034f8)
-    (jalx_800034f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800034f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dl (k := k + nr) (slot := s + 18446744073709550528#64 + 120#64)
     (aC := BitVec.ofNat 64 aL) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.binary .gt l r) d - 1088)
@@ -173,7 +173,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave Hr := hr
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)
-    (jalx_80003518 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003518) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dr (k := k) (slot := s + 18446744073709550528#64 + 144#64)
     (aC := BitVec.ofNat 64 aR) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.binary .gt l r) d - 1088)
@@ -230,7 +230,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   icases Hv1 with ⟨%hx, #Hx⟩
   icases Hv2 with ⟨%hy, #Hy⟩
   iapply ms_callHelper (twpW _) (i := 0x80003b18)
-    (jalx_80003b18 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003b18) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (clob := callerSaved)
     (pins := fun rv => rv 10 = w1 ∧ rv 11 = u1)
     (Pre := iprop(Newlib.binImg ∗ strAt w1.toNat x ∗ strAt u1.toNat y))
@@ -269,7 +269,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvi := hvb $$ %sret %(sltV 0#64 (R3 10))
   unfold valueBoolSpec
   iapply ms_callHelper (twpW _) (i := 0x80003aec)
-    (jalx_80003aec live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003aec) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []

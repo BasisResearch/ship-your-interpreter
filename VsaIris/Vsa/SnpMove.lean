@@ -151,7 +151,7 @@ theorem mm_byteLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     have hR1 : R 1 = R0 1 := hkp 1 (by decide) (by decide) (by decide) (by decide)
     have hb : ReadB Dt DA (snpS s dst n) Mt (src + j) (sb j) :=
       (hsrc j (by omega)).transport (hout _ (by omega))
-    refine ntP_80006a0c hlive ?_ ?_
+    refine (step% ntP 0x80006a0c) hlive ?_ ?_
     · rw [h11]; sx_addr
     rintro v ⟨f, hfD, hfS, rfl⟩
     have e11 : (R 11 + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0#12)).toNat = src + j := by
@@ -185,7 +185,7 @@ theorem mm_byteLoop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
       have hlen : j + 1 = len := by
         apply Classical.byContradiction; intro hne
         exact hc (by rw [h13]; exact ofNat_ne_of_lt (by omega) (by omega) (by omega))
-      refine nt_80006a20 hlive ?_ ?_
+      refine (step% nt 0x80006a20) hlive ?_ ?_
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [hR1]; exact hal
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [hR1]
         refine hk _ _ ?_ ?_ ?_
@@ -372,7 +372,7 @@ theorem mm_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     subst hk0
     rw [Nat.add_zero] at hck
     subst hck
-    refine nt_80006ae0 hlive ?_ ?_
+    refine (step% nt 0x80006ae0) hlive ?_ ?_
     · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hR1]; exact hal
     · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hR1]
       refine hk _ Mt (hkp.trans fun z _ _ h13 _ _ _ _ _ _ => ?_) hcp

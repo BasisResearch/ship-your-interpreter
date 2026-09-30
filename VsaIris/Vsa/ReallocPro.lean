@@ -22,13 +22,13 @@ theorem realloc_errno {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} 
   unfold mHead at hoff
   have he : ((R 9) + sign_extend (m := 64) (0x000#12)).toNat = 0x8001b538 := by
     rw [h9]; decide
-  refine st_800054b8 O.live ?_
-  refine st_800054bc O.live ?_ ?_ ?_
+  refine (step% st 0x800054b8) O.live ?_
+  refine (step% st 0x800054bc) O.live ?_ ?_ ?_
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; unfold StOK Vsa.Sim.tohostAddr; omega
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; exact O.foot errno_foot
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [he]
-  refine st_800054c0 O.live ?_
+  refine (step% st 0x800054c0) O.live ?_
   have Hp' := Hp.store_errno (v := upd R 15 ((0#64) + sign_extend (m := 64) (0x00c#12)) 15)
   refine repi0 O (((F.store (a := 0x8001b538) (w := 4) (by omega)).of_regs ?_ ?_ ?_))
     fun R' hR h10 => O.null _ _ ⟨hR, ?_, ⟨_, _, _, _, Hp'.heap⟩, Hp'.pres, Hp'.data, hst⟩ <;>
@@ -52,7 +52,7 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
   unfold heapStart at hcb
   simp only at hca hcn
   have hp := E.a1
-  refine st_80005290 O.live (fun h => absurd (congrArg BitVec.toNat h) (by rw [hp]; simp; omega))
+  refine (step% st 0x80005290) O.live (fun h => absurd (congrArg BitVec.toNat h) (by rw [hp]; simp; omega))
     (fun _ => ?_)
   sx_run [40] O.live at 0x800052b4
   rw [show (R 2 + 18446744073709551552#64 + 48#64).toNat = C.s.toNat - 64 + 48 by sx_addr,
@@ -80,7 +80,7 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
     · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact E.s3
   have hsp0 : read64 M1 (C.s.toNat - 64) = some C.n.toNat := by
     rw [← hM1, read64_store_hit, E.a2]
-  refine st_800052b4 O.live (by sx_norm; rw [hs2]; sx_addr) (by sx_norm; rw [hs2]; sx_side) ?_
+  refine (step% st 0x800052b4) O.live (by sx_norm; rw [hs2]; sx_addr) (by sx_norm; rw [hs2]; sx_side) ?_
   sx_norm
   rw [show (R 2 + 18446744073709551552#64).toNat = C.s.toNat - 64 by sx_addr, ldv_ld hsp0]
   try simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq]
@@ -92,12 +92,12 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h18)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h19)
   sx_run [2] O.live at 0x800052c0
-  refine st_800052c0 O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x800052c0) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
     sx_run [3] O.live at 0x800052d8
-    refine st_800052d8 O.live (fun h1 => ?_) (fun h1 => ?_) <;>
+    refine (step% st 0x800052d8) O.live (fun h1 => ?_) (fun h1 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at h1
     ·
       rw [show (32#64).toNat = 32 from rfl] at h1
@@ -106,7 +106,7 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       · exact E.a0
       · unfold physSize heapEnd; omega
-    refine st_800052dc O.live (fun h2 => ?_) (fun _ => ?_) <;>
+    refine (step% st 0x800052dc) O.live (fun h2 => ?_) (fun _ => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *
     · exact absurd h2 (by decide)
     rw [show (32#64).toNat = 32 from rfl] at h1
@@ -123,16 +123,16 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
       · exfalso; have := C.n.isLt; rw [Nat.mod_eq_sub_mod h, Nat.mod_eq_of_lt (by omega)] at hc; omega
     rw [Nat.mod_eq_of_lt hX] at hc
     sx_run [3] O.live at 0x800052d0
-    refine st_800052d0 O.live ?_
+    refine (step% st 0x800052d0) O.live ?_
     sx_run [1] O.live at 0x800052d8
     have hnb : (C.n + 23#64 &&& 18446744073709551600#64).toNat = (C.n.toNat + 23) / 16 * 16 := by
       rw [toNat_and_m16, BitVec.toNat_add, show (23#64).toNat = 23 from rfl, Nat.mod_eq_of_lt hX]
     have hP : physSize C.n.toNat = (C.n.toNat + 23) / 16 * 16 := by
       unfold physSize; omega
-    refine st_800052d8 O.live (fun h1 => ?_) (fun h1 => ?_) <;>
+    refine (step% st 0x800052d8) O.live (fun h1 => ?_) (fun h1 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hnb] at h1
     · omega
-    refine st_800052dc O.live (fun h2 => ?_) (fun h2 => ?_) <;>
+    refine (step% st 0x800052dc) O.live (fun h2 => ?_) (fun h2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq, sltu_xori_eq, hnb,
         Decidable.not_not] at h2 <;> rw [show (2147483648#64 : BitVec 64).toNat = 2 ^ 31 from rfl] at h2
     ·

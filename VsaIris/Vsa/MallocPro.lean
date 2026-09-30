@@ -30,13 +30,13 @@ theorem malloc_errno {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   unfold mHead at hlo hoff; unfold Vsa.Sim.tohostAddr at hlo
   have he : ((R 8) + sign_extend (m := 64) (0x000#12)).toNat = 0x8001b538 := by
     rw [h8]; decide
-  refine st_80004840 O.live ?_
-  refine st_80004844 O.live ?_ ?_ ?_
+  refine (step% st 0x80004840) O.live ?_
+  refine (step% st 0x80004844) O.live ?_ ?_ ?_
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; unfold StOK Vsa.Sim.tohostAddr; omega
   · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; exact O.foot errno_foot
   simp only [upd_apply, Nat.reduceEqDiff, ite_false]
   rw [he]
-  refine st_80004848 O.live ?_
+  refine (step% st 0x80004848) O.live ?_
   have Hp' := Hp.store_errno (v := upd R 15 ((0#64) + sign_extend (m := 64) (0x00c#12)) 15)
   exact epi_8000484c O (((F.store (a := 0x8001b538) (w := 4) (by omega)).upd (k := 15) (by decide)).upd
     (k := 10) (by decide)) (O.fin_null (by simp only [upd_apply, ite_true]; decide)
@@ -73,7 +73,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     rw [BitVec.toNat_add, hn]; rfl
   have htop0 : heapStart ≤ C.top0 := Hp.heap.heap.heap.walk.le
   have hs8 : R 10 = reentV := E.a0
-  refine st_800047c0 O.live (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x800047c0) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
@@ -88,7 +88,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
       unfold physSize
       rw [show C.n.toNat + 8 + 15 = C.n.toNat + 23 by omega, Nat.mul_comm]
       exact Nat.max_eq_right (by omega)
-    refine st_80004868 O.live (fun h1 => ?_) (fun h1 => ?_) <;>
+    refine (step% st 0x80004868) O.live (fun h1 => ?_) (fun h1 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn, hnb,
         show (2147483648#64).toNat = 2 ^ 31 from rfl] at h1
     ·
@@ -103,7 +103,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
       rw [hP]
       have hE : heapEnd < heapStart + 2 ^ 31 := by decide
       exact Nat.lt_of_lt_of_le hE (Nat.add_le_add htop0 h1)
-    refine st_8000486c O.live (fun h2 => ?_) (fun h2 => ?_) <;>
+    refine (step% st 0x8000486c) O.live (fun h2 => ?_) (fun h2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hnb, hn] at h2
     ·
       omega
@@ -120,7 +120,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     have hnb' : (R 11 + 23#64 &&& 18446744073709551600#64).toNat = (C.n.toNat + 23) / 16 * 16 := by
       rw [hn]; exact hnb
     have hNb : NbOK C.n ((C.n.toNat + 23) / 16 * 16) := ⟨hP.symm⟩
-    refine st_80004880 O.live (fun h3 => ?_) (fun h3 => ?_) <;>
+    refine (step% st 0x80004880) O.live (fun h3 => ?_) (fun h3 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hnb',
         show (503#64).toNat = 503 from rfl] at h3
     ·
@@ -158,8 +158,8 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
   ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
     have e32 : (0#64 + sign_extend (m := 64) (0x020#12)).toNat = 32 := by decide
-    refine st_800047c4 O.live ?_
-    refine st_800047c8 O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
+    refine (step% st 0x800047c4) O.live ?_
+    refine (step% st 0x800047c8) O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn] at hc2
     ·
       refine malloc_errno O ⟨?_, hS0, hRA, ?_, ?_, ?_⟩ Hp1 ?_ ?_ <;>

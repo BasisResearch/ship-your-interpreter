@@ -71,7 +71,7 @@ theorem ms_callSetjmp (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive l
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib R).1 $$ Hregs
   ihave ⟨Ha0, Hargs⟩ := (sepL_args_split R).1 $$ Hargs
   ihave #Hspec := setjmp_spec live hcl Wp jbp (R 2) R img0 hjb
-  iapply wp_callW Wp (jalx_80004424 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+  iapply wp_callW Wp ((step% jalx 0x80004424) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
   iframe Hi Hspec Hpc Hra
   isplitl [Ha0 Hsp Hcs HJ]
   · rw [h10]

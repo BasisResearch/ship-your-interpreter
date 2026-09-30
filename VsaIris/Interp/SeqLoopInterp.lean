@@ -223,7 +223,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   ihave Hvn := hvn $$ %(s + 18446744073709551440#64 + 88#64)
   unfold valueNullSpec
   iapply ms_callHelper (twpW _) (i := 0x8000445c)
-    (jalx_8000445c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x8000445c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvn Hcode Hms
   isplitl []
@@ -257,7 +257,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   ihave H1 := h1
   rw [show k + (n1 + n2) = k + n2 + n1 by omega]
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004474)
-    (jalx_80004474 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004474) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) D1 (k := k + n2) (aS := BitVec.ofNat 64 p) (aE := g)
     (aRet := s + 18446744073709551440#64 + 88#64) (s := s + 18446744073709551440#64) (m := m')
     (hsg'.narrow hneed) hneed hsg'.le hslg hbb
@@ -397,7 +397,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   ihave Hvn := hvn $$ %(s + 18446744073709551440#64 + 88#64)
   unfold valueNullSpec
   iapply ms_callHelper (twpW _) (i := 0x8000445c)
-    (jalx_8000445c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x8000445c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvn Hcode Hms
   isplitl []
@@ -430,7 +430,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
   ihave H1 := h1
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004474)
-    (jalx_80004474 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004474) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) D1 (k := k) (aS := BitVec.ofNat 64 p) (aE := g)
     (aRet := s + 18446744073709551440#64 + 88#64) (s := s + 18446744073709551440#64) (m := m')
     (hsg'.narrow hneed) hneed hsg'.le hslg hbb
@@ -565,7 +565,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   ihave Hvn := hvn $$ %(s + 18446744073709551440#64 + 88#64)
   unfold valueNullSpec
   iapply ms_callHelper (wpW _) (i := 0x8000445c)
-    (jalx_8000445c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x8000445c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvn Hcode Hms
   isplitl []
@@ -601,7 +601,7 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   iintro ⟨⟨HF, #Hcode, #Hro, #Hdv, #Hfr, Hst, Hslot, Hw, #IH, HK⟩, Hms⟩
   ihave H1 := execSpecsP_at Core st d genv sm $$ IH
   iapply ms_callExecPM (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004474)
-    (jalx_80004474 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004474) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := genv) (sm := sm)
     (aS := BitVec.ofNat 64 p) (aE := g)
     (aRet := s + 18446744073709551440#64 + 88#64) (s := s + 18446744073709551440#64) (m := m')

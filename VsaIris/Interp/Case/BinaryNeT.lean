@@ -125,7 +125,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hl := hl
   rw [show k + (nl + nr) = k + nr + nl by omega]
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800034f8)
-    (jalx_800034f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800034f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dl (k := k + nr) (slot := s + 18446744073709550528#64 + 120#64)
     (aC := BitVec.ofNat 64 aL) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.binary .ne l r) d - 1088)
@@ -174,7 +174,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave Hr := hr
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)
-    (jalx_80003518 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003518) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dr (k := k) (slot := s + 18446744073709550528#64 + 144#64)
     (aC := BitVec.ofNat 64 aR) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.binary .ne l r) d - 1088)
@@ -253,7 +253,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave ⟨Hslack, Hs16⟩ := stackScratch_narrow (s := s + 18446744073709550528#64)
     (n := evalNeed (.binary .ne l r) d - 1088) (m := 16) (by rw [hsf]; omega) (by omega) $$ Hst
   iapply ms_callValueEqual (twpW _) hve (i := 0x8000376c)
-    (jalx_8000376c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x8000376c) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (sp := s + 18446744073709550528#64) (st := st2.store) (B := B)
     hSa hSb hab
     (evalSlotGeom hsg hneed (o := 64) (by decide) (by decide))
@@ -297,7 +297,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvi := hvb $$ %sret %(if Value.equal lv rv' then 0#64 else 1#64)
   unfold valueBoolSpec
   iapply ms_callHelper (twpW _) (i := 0x80003778)
-    (jalx_80003778 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003778) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []

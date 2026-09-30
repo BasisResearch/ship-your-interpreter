@@ -74,7 +74,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave He := evalSpecsP_at Core st d env e $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800035e8)
-    (jalx_800035e8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800035e8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := e)
     (slot := s + 18446744073709550528#64 + 144#64) (aC := BitVec.ofNat 64 aC) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.unary .neg e) d - 1088)
@@ -133,7 +133,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvi := hvi $$ %sret %(-w1)
   unfold valueIntSpec
   iapply ms_callHelper (wpW _) (i := 0x800039d8)
-    (jalx_800039d8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800039d8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []

@@ -1,18 +1,7 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Interp.Steps.Part00
-import VsaIris.Interp.Steps.Part01
-import VsaIris.Interp.Steps.Part02
-import VsaIris.Interp.Steps.Part03
-import VsaIris.Interp.Steps.Part04
-import VsaIris.Interp.Steps.Part05
-import VsaIris.Interp.Steps.Part06
-import VsaIris.Interp.Steps.Part07
-import VsaIris.Interp.Steps.Part08
-import VsaIris.Interp.Steps.Part09
-import VsaIris.Interp.Steps.Part10
-import VsaIris.Interp.Steps.Part11
-import VsaIris.Interp.Steps.Part12
-import VsaIris.Interp.Steps.Part13
+import VsaIris.Vsa.StepTables.Interp0
+import VsaIris.Vsa.StepTables.Interp1
+import VsaIris.Vsa.StepTables.Interp2
 
 namespace VsaIris.Sym
 

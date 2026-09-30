@@ -139,39 +139,39 @@ theorem lr_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   simp only at hFV
   have hrem : (R 13).toNat = sz - nb := by rw [ha3, BitVec.toNat_sub, ht1, ha4]; omega
 
-  refine st_80004da0 O.live ?_
-  refine st_80004da4 O.live ?_ ?_ ?_
+  refine (step% st 0x80004da0) O.live ?_
+  refine (step% st 0x80004da4) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
 
-  refine st_80004da8 O.live ?_
-  refine st_80004dac O.live ?_ ?_ ?_
+  refine (step% st 0x80004da8) O.live ?_
+  refine (step% st 0x80004dac) O.live ?_ ?_ ?_
   · sx_norm; rw [ha6]; decide
   · sx_norm; rw [ha6]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inr (by rw [hb1]; decide))
   sx_norm
-  refine st_80004db0 O.live ?_ ?_ ?_
+  refine (step% st 0x80004db0) O.live ?_ ?_ ?_
   · sx_norm; rw [ha6]; decide
   · sx_norm; rw [ha6]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inl (by rw [hb1]; decide))
   sx_norm
 
-  refine st_80004db4 O.live ?_
-  refine st_80004db8 O.live ?_
-  refine st_80004dbc O.live ?_ ?_ ?_
+  refine (step% st 0x80004db4) O.live ?_
+  refine (step% st 0x80004db8) O.live ?_
+  refine (step% st 0x80004dbc) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  refine st_80004dc0 O.live ?_ ?_ ?_
+  refine (step% st 0x80004dc0) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
-  refine st_80004dc4 O.live ?_ ?_ ?_
+  refine (step% st 0x80004dc4) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm
 
-  refine st_80004dc8 O.live ?_
-  refine st_80004dcc O.live ?_ ?_ ?_
+  refine (step% st 0x80004dc8) O.live ?_
+  refine (step% st 0x80004dcc) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
   sx_norm

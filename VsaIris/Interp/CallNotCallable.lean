@@ -101,7 +101,7 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   have htag' : (R1 15).toNat % 2 ^ 32 = valTag fv := by
     subst hR1; ix_reg
     rw [ldv_ld_lo32_store4, BitVec.toNat_ofNat]; omega
-  iapply ms_callKindName Wp hvk (jalx_80003dcc live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+  iapply ms_callKindName Wp hvk ((step% jalx 0x80003dcc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (S := InExt (s.toNat - 1088, 1088)) (v := fv)
     (fun k hk => by rw [hoff 64 (by decide)] at hk; simp only [InExt] at hk ⊢; omega)
     (evalSlotGeom hsg (by omega) (by decide) (by decide)) h64 htag'
@@ -124,7 +124,7 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   iintro ⟨⟨#Hcode, #HE, Hst, Hw, Hab⟩, Hms⟩
   ihave #Himg := errCtx_img inp $$ HE
   ihave #Hrd := readable_rodata $$ Himg
-  iapply ms_rtErrEval Wp hE (jalx_80003de8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+  iapply ms_rtErrEval Wp hE ((step% jalx 0x80003de8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide))
     (readable_rodata_fmt (fun hro => notCallable_fmt hro (kindName_cstr hro fv) 0#64)) hsg hn
     (R := R3) (line := vl)

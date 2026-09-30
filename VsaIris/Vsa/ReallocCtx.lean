@@ -200,13 +200,13 @@ theorem repi_core {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
 theorem repi {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → R' 10 = R 13 → AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x8000544c#64 R Mt :=
-  repi_core O (st_8000544c O.live) (st_80005450 O.live) (st_80005454 O.live) (st_80005458 O.live)
-    (st_8000545c O.live) (st_80005460 O.live) F hfin
+  repi_core O ((step% st 0x8000544c) O.live) ((step% st 0x80005450) O.live) ((step% st 0x80005454) O.live) ((step% st 0x80005458) O.live)
+    ((step% st 0x8000545c) O.live) ((step% st 0x80005460) O.live) F hfin
 
 theorem repi0 {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → R' 10 = R 13 → AW C.live C.S C.Q C.r R' Mt) :
     AW C.live C.S C.Q 0x800054c4#64 R Mt :=
-  repi_core O (st_800054c4 O.live) (st_800054c8 O.live) (st_800054cc O.live) (st_800054d0 O.live)
-    (st_800054d4 O.live) (st_800054d8 O.live) F hfin
+  repi_core O ((step% st 0x800054c4) O.live) ((step% st 0x800054c8) O.live) ((step% st 0x800054cc) O.live) ((step% st 0x800054d0) O.live)
+    ((step% st 0x800054d4) O.live) ((step% st 0x800054d8) O.live) F hfin
 
 end VsaIris.VsaHeap

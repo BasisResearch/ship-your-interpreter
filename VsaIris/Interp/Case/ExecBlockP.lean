@@ -67,7 +67,7 @@ theorem caseP_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
     ⟨by rw [h12, hfg.sf]; have := hfg.lo; unfold htifLo envNewNeed allocHeadroom; omega,
       by rw [h12, hfg.sf]; have := hfg.hi; omega, by rw [h12, hfg.sf]; have := hfg.al; omega⟩
   iapply ms_callEnvNewP (N := N) HN hcl (i := 0x80004190)
-    (jalx_80004190 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004190) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (st := st) (d := d) (env := env) (R := R1)
     (n := execNeed (.block ss) d - 176) hsp hbig (by rw [h12]; exact hle')
     (by rw [h12, hfg.sf]; have := hf.stack.lo; simp only [Vsa.Sim.LayoutInstance.stackSL] at this;

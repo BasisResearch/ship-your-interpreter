@@ -84,13 +84,13 @@ theorem vfp_mb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {
     intro a ha; rw [mem_accAddrs_iff] at ha; rw [show a = P.toNat by omega]; exact hPD
   have hkeep : ∀ x ∈ mbKeep, R x = R x := fun _ _ => rfl
   nx_run hlive using [h2, h9, h25, hmx, hmb, BitVec.add_assoc] at 2147558004
-  refine itD_80012274 hlive ?_ ?_ ?_
+  refine (step% itD 0x80012274) hlive ?_ ?_ ?_
   all_goals simp (config := {failIfUnchanged := false}) only [upd_apply, Nat.reduceEqDiff, ite_true,
     ite_false, e0, hfb]
   any_goals exact hea
   any_goals exact hDA
   nx_run hlive using [h2, h9, h25, hmx, hmb, BitVec.add_assoc] at 2147558012
-  refine itD_8001227c hlive ?_ ?_ ?_
+  refine (step% itD 0x8001227c) hlive ?_ ?_ ?_
   all_goals simp (config := {failIfUnchanged := false}) only [upd_apply, Nat.reduceEqDiff, ite_true,
     ite_false, e0, hfb]
   any_goals exact hea

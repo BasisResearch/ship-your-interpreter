@@ -113,7 +113,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.fn nm ps body) d - 1088)
     (m := allocHeadroom) (by rw [hsf]; omega) (by omega) $$ Hst
   iapply ms_callMalloc A (wpW _) (i := 0x800033cc) (R := R1)
-    (jalx_800033cc live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800033cc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) .uncounted H closureBytes
     (by rw [e10]; exact ⟨by decide, by decide⟩)
     (by rw [e2]; exact ⟨by rw [hsf]; unfold allocHeadroom Vsa.Sim.tohostAddr; omega,
@@ -147,7 +147,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
     refine FnLitP_run2o (aX := aX) (s := s) (sret := sret) (aE := aE) hlive hsf hs' hs2 hs3
       (by ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2) hA1 ?_
     intros
-    refine it_800033d4 hlive (fun _ => ?_) (fun hc => absurd (by
+    refine (step% it 0x800033d4) hlive (fun _ => ?_) (fun hc => absurd (by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hp0) hc)
     refine FnLitP_runOom (aX := aX) (s := s) (sret := sret) hlive hsf hs' hs2 hs3
       (by ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2) ?_
@@ -212,7 +212,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   refine FnLitT_run2 (aX := aX) (s := s) (sret := sret) (pv := R2 10) (aE := aE) hlive hsf hs'
     hs2 hs3 (by ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2) hA2 ?_
   intros
-  refine it_800033d4 hlive (fun hc => absurd (by
+  refine (step% it 0x800033d4) hlive (fun hc => absurd (by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc
     exact congrArg BitVec.toNat hc) hpne) (fun hnz => ?_)
   refine FnLitT_run3 (aX := aX) (s := s) (sret := sret) (pv := R2 10) (aE := aE) (ret := ret)

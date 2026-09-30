@@ -381,7 +381,7 @@ theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1
   ihave #Hsc := strcmpSpecV_at (imgW (imgM Ma) (pa.toNat + 8)) (imgW (imgM Mb) (pb.toNat + 8)) x1 x2
     $$ Hcmp
   iapply ms_callHelper Wp (i := 0x800028d4)
-    (jalx_800028d4 live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x800028d4) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (clob := callerSaved)
     (pins := fun rv => rv 10 = imgW (imgM Ma) (pa.toNat + 8) ∧ rv 11 = imgW (imgM Mb) (pb.toNat + 8))
     (Pre := iprop(Newlib.binImg ∗ strAt (imgW (imgM Ma) (pa.toNat + 8)).toNat x1 ∗

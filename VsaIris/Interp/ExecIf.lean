@@ -102,7 +102,7 @@ theorem wp_ifTruthy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   iintro ⟨⟨HF, #Hcode, #Hv, Hvt⟩, Hms⟩
   unfold valueTruthySpec
   iapply ms_callHelperVal Wp (i := 0x80004218)
-    (jalx_80004218 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004218) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (R := R2) (S := InExt (s.toNat - 176, 176)) (Mt := M2)
     (a := execSP s + 16#64) (v := v) (w0 := w0) (w1 := w1) (w2 := w2)
     (Q := fun rv' => iprop(⌜rv' 10 = if v.truthy then 1#64 else 0#64⌝))
@@ -199,7 +199,7 @@ theorem ifPrefixT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
 
   ihave Hc := hc
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041f8)
-    (jalx_800041f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800041f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) Dc (k := k) (slot := execSP s + 56#64)
     (aC := BitVec.ofNat 64 pc) (aE := aE) (s := execSP s)
     (m := execNeed (.ifStmt c t eo) d - 176) g.child g.fits g.below g.slotGeom hbb
@@ -483,7 +483,7 @@ theorem ifPrefixP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
 
   ihave Hc := evalSpecsP_at Core st d env c $$ IH
   iapply ms_callEvalPF (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041f8)
-    (jalx_800041f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x800041f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (slot := execSP s + 56#64)
     (aC := BitVec.ofNat 64 pc) (aE := aE) (s0 := s) (sF := execSP s) (f := 176)
     (m := execNeed (.ifStmt c t eo) d - 176) (n0 := execNeed (.ifStmt c t eo) d)

@@ -112,7 +112,7 @@ macro "svf_keep " h:ident " [" zs:num,* "]" : tactic => do
   have h13 : ((15#64 - 8#64) <<< 2 + 2147511088#64 : BitVec 64) = 0x80006b4c#64 := by decide
   have hjr : Sail.BitVec.update (0x80006b4c#64 + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x00c#12)) 0 0#1 =
       0x80006b58#64 := by decide
-  refine nt_80006b38 hlive ?_ ?_
+  refine (step% nt 0x80006b38) hlive ?_ ?_
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h13, hjr]; decide
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h13, hjr]
   snp_run [9] hlive using [ofNat_add_ofNat, k2, k8, k9, k22]

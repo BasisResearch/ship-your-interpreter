@@ -28,7 +28,7 @@ theorem udiv_loop2N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
     have hR1 : R 1 = r := (hkp 1 (by decide) (by decide) (by decide) (by decide)).trans hr
     have h3z : R 13 >>> 1 = 0#64 := by
       apply BitVec.eq_of_toNat_eq; rw [shr1_toNat', hk3]; rfl
-    refine nt_800046d8 hlive ?_ ?_
+    refine (step% nt 0x800046d8) hlive ?_ ?_
     all_goals (intro hc; snp_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hF.hal => rw [hR1]; exact hal
@@ -67,7 +67,7 @@ theorem udiv_loop2N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
       have := congrArg BitVec.toNat h0; rw [h3] at this; simp at this
     have hK' : Vsa.Sim.DivK d (R 12 >>> 1) (R 13 >>> 1) j :=
       ⟨h2, h3, by rw [hpow] at hov; omega⟩
-    refine nt_800046d8 hlive ?_ ?_
+    refine (step% nt 0x800046d8) hlive ?_ ?_
     all_goals (intro hc; snp_run hlive at 0x800046d8)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
     case refine_1.hT hz =>
@@ -112,7 +112,7 @@ theorem udiv_loop1N {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
   intro m ih R hm h11 ⟨k, hk2, hk3, hov⟩ hlt hkp
   have hpk : 1 ≤ 2 ^ k := Nat.one_le_two_pow
   have ha2 : d.toNat ≤ (R 12).toNat := by rw [hk2]; exact Nat.le_mul_of_pos_right _ (by omega)
-  refine nt_800046c4 hlive ?_ ?_
+  refine (step% nt 0x800046c4) hlive ?_ ?_
   all_goals (intro hc; snp_run hlive at 0x800046c4 0x800046d8)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case refine_1 =>

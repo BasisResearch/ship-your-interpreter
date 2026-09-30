@@ -106,22 +106,22 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
   have hlo' := HH.walk.le; unfold heapStart at hlo'
   sx_run [1] O.live at 0x8000725c
   rw [ldv_at htp 2147593504 (by unfold topAddr avAddr; rfl)]
-  refine st_8000725c O.live ?_
+  refine (step% st 0x8000725c) O.live ?_
   have hYlt : Y < 2 ^ 64 := by omega
   have hEY : (BitVec.ofNat 64 Y + sign_extend (m := 64) (0x008#12)).toNat = Y + 8 := by
     sx_norm; rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hYlt]; simp; omega
   have hYf := fun k hk => foot_header Hp1.heap (.inl rfl) k hk
-  refine st_80007260 O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  refine (step% st 0x80007260) O.live ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · rw [hEY]; unfold LdOK Vsa.Sim.tohostAddr; omega
   · rw [hEY]; exact O.foot hYf
   rw [hEY, ldv_at hth _ rfl]
-  refine st_80007264 O.live ?_
-  refine st_80007268 O.live ?_
-  refine st_8000726c O.live ?_
-  refine st_80007270 O.live ?_
-  refine st_80007274 O.live ?_
-  refine st_80007278 O.live ?_
-  refine st_8000727c O.live ?_
+  refine (step% st 0x80007264) O.live ?_
+  refine (step% st 0x80007268) O.live ?_
+  refine (step% st 0x8000726c) O.live ?_
+  refine (step% st 0x80007270) O.live ?_
+  refine (step% st 0x80007274) O.live ?_
+  refine (step% st 0x80007278) O.live ?_
+  refine (step% st 0x8000727c) O.live ?_
   sx_norm
   have hts : (BitVec.ofNat 64 (brkv - Y + 1) &&& 18446744073709551612#64).toNat = brkv - Y := by
     rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; omega
@@ -157,7 +157,7 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
       simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
     · rw [h18, T.a0]
     · rw [h19]
-  refine st_80007280 O.live (fun hlt => ?_) (fun hge => ?_)
+  refine (step% st 0x80007280) O.live (fun hlt => ?_) (fun hge => ?_)
   ·
     exact hno _ _ (hS _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
@@ -293,9 +293,9 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   unfold heapEnd at hbrkle; unfold heapStart at hY
   have hs2 : (R 2).toNat = C.s.toNat - 80 := by
     rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  refine st_80007284 O.live ?_
-  refine st_80007288 O.live ?_
-  refine st_8000728c O.live ?_
+  refine (step% st 0x80007284) O.live ?_
+  refine (step% st 0x80007288) O.live ?_
+  refine (step% st 0x8000728c) O.live ?_
   simp only [VsaIris.ra]
   have Sc := S.upd (R' := upd (upd (upd R 11 (0#64 + sign_extend (m := 64) (0x000#12))) 10
       (R 18 + sign_extend (m := 64) (0x000#12))) 1 (BitVec.ofNat 64 (0x8000728c + 4)))
@@ -320,13 +320,13 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have htp := H'.top_ptr
   have h19 := S'.s3
   rw [← upd_self_eq h19]
-  refine st_80007290 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
+  refine (step% st 0x80007290) O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
   sx_norm
   simp (disch := decide) only [ldv_at htp]
-  refine st_80007294 O.live ?_
+  refine (step% st 0x80007294) O.live ?_
   have hsum : (BitVec.ofNat 64 Y + R' 9).toNat = brkv := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, S'.s1, Nat.mod_eq_of_lt (by omega)]; omega
-  refine st_80007298 O.live (fun _ => ?_) (fun hne => absurd ?_ hne)
+  refine (step% st 0x80007298) O.live (fun _ => ?_) (fun hne => absurd ?_ hne)
   · refine hk _ _ (S'.upd ?_ ?_ ?_ ?_) ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     all_goals first | exact h19.symm | (rw [h8]; exact hE)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -354,9 +354,9 @@ theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have hle := trimExtra_le (ts := brkv - Y) (by have := HH.top_size; omega) hE4
   have hs2 : (R 2).toNat = C.s.toNat - 80 := by
     rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  refine st_800072c4 O.live ?_
-  refine st_800072c8 O.live ?_
-  refine st_800072cc O.live ?_
+  refine (step% st 0x800072c4) O.live ?_
+  refine (step% st 0x800072c8) O.live ?_
+  refine (step% st 0x800072cc) O.live ?_
   simp only [VsaIris.ra]
   have Sc := S.upd (R' := upd (upd (upd R 11 (0#64 - R 8)) 10 (R 18 + sign_extend (m := 64) (0x000#12))) 1
       (BitVec.ofNat 64 (0x800072cc + 4)))
@@ -460,8 +460,8 @@ theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y 
     rw [hglob _ (fun k hk => by unfold maxSbrkedAddr allocGlobal InRange; omega)
       (by unfold maxSbrkedAddr brkAddr; omega) (by unfold maxSbrkedAddr; omega)
       (by unfold maxSbrkedAddr; omega)]; exact HH.max_sbrked
-  refine st_800072d0 O.live ?_
-  refine st_800072d4 O.live (fun h => absurd h ?_) (fun _ => ?_)
+  refine (step% st 0x800072d0) O.live ?_
+  refine (step% st 0x800072d4) O.live (fun h => absurd h ?_) (fun _ => ?_)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [T.a0]; intro h
     have := congrArg BitVec.toNat h
@@ -472,22 +472,22 @@ theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y 
   rw [← upd_self_eq h19]
   unfold topAddr avAddr at htpM
   unfold mallinfoAddr at hmiM
-  refine st_800072d8 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
+  refine (step% st 0x800072d8) O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
   sx_norm
   simp (disch := decide) only [ldv_at htpM]
-  refine st_800072dc O.live (by sx_norm; sx_side) ?_
+  refine (step% st 0x800072dc) O.live (by sx_norm; sx_side) ?_
   simp (disch := sx_addr) only [ldv_at hmiM]
-  refine st_800072e0 O.live ?_
-  refine st_800072e4 O.live ?_
+  refine (step% st 0x800072e0) O.live ?_
+  refine (step% st 0x800072e4) O.live ?_
   have hhd := foot_header S.heap.heap (.inl rfl)
   have hoffH := off_stack_of S.disj hhd
-  refine st_800072e8 O.live ?_ ?_ ?_
+  refine (step% st 0x800072e8) O.live ?_ ?_ ?_
   · sx_norm; sx_addr
   · sx_norm; exact O.foot_at hhd _ (by sx_addr)
   sx_norm
-  refine st_800072ec O.live ?_
-  refine st_800072f0 O.live ?_
-  refine st_800072f4 O.live ?_ ?_
+  refine (step% st 0x800072ec) O.live ?_
+  refine (step% st 0x800072f0) O.live ?_
+  refine (step% st 0x800072f4) O.live ?_ ?_
   · sx_norm; exact O.foot (a := 0x8001ba18) (w := 8)
       (fun k hk => .inl (by unfold allocGlobal InRange; omega))
   sx_norm

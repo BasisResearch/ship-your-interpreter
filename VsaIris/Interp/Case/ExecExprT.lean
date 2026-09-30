@@ -72,7 +72,7 @@ theorem caseT_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
   ihave He := he
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004180)
-    (jalx_80004180 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004180) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) D (k := k) (slot := execSP s + 16#64)
     (aC := BitVec.ofNat 64 p) (aE := aE) (s := execSP s)
     (m := execNeed (.expr e) d - 176) g.child g.fits g.below g.slotGeom hbb
