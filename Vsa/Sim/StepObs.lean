@@ -102,9 +102,12 @@ theorem stepObs_jal
     ∃ (σ' : MState) (i' : Nat),
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.mem = σ.mem ∧
-      ReadsLikePost σ' (sigmaPost_jal σ pc vminstret imm rd_reg link) := by
-  exact stepObs_retire (try_step_jal σ u pc vminstret w imm rd rd_reg link b0 b1 b2 b3 hG hpc hminstret
-    hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt hrd_npc hrd_mi hrd_ms hrd_hart hwr)
-    hG (goodstate_sigmaPost_jal σ pc vminstret imm rd_reg hrd link hG) hi
+      ReadsLikePost σ' (sigmaPost_jal σ pc vminstret imm rd_reg link) :=
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (execute_jal_char imm rd _ pc _ _ _ (by reg_reads []) (by reg_reads [hpc]) (by reg_reads [hG.misa])
+      htgt hwr)
+    ⟨by reg_reads [hrd_hart, hG.hart_state], by reg_reads [hrd_npc], by reg_reads [hrd_mi],
+     by reg_reads [hrd_ms, hminstret]⟩
+    (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (r := rd_reg) hrd link) hi
 
 end Vsa.Sim

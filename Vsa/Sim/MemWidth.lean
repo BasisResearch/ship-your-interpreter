@@ -14,9 +14,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 
-set_option maxHeartbeats 8000000
-set_option maxRecDepth 1000000
-
 namespace Vsa.Sim
 
 /-- Machine mode with `MPRV = 0`: every data access runs at the current privilege. -/
