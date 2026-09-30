@@ -1,4 +1,4 @@
-import VsaIris.Interp.LeafErr
+import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
@@ -55,62 +55,64 @@ open Vsa.MemRepr Vsa.Sim
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003448#64 R Mt
   by sym_run hlive using [h9, h2, hW0, hW1, hW2, hRA, hS0, hS1, hS2, hsf, hal, e8, e16]
 
-open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
-open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+#ix_seg AssignP_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
+    {aX s sret inp : BitVec 64}
+    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 24 ≤ 0x100000000)
+    (hx3 : aX.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
+    (h8 : R 8 = aX) (h18 : R 18 = inp) (h2 : R 2 = s + 18446744073709550528#64) :
+    IW live m (leafView aX.toNat 16)
+    (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x800034b8#64 R Mt
+  by sym_run hlive using [h8, h18, h2, hsf] at 0x800034e4
 
-#ix_piece AssignT_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
-    {st st' : St} {d env : Nat} {x : String} {e : Expr} {v : Value} {n : Nat} {store'' : Store}
-    (De : EvalECost st d env e st' v n) (hset : st'.store.set? env x v = some store'')
-    (D : EvalECost st d env (.assign x e) ⟨store'', st'.out⟩ v n)
-    (he : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env e st' v n De)
-    (hsetS : ⊢ envSetSpec (GF := GF) (twpW (vsaModel live)) N) :
-    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.assign x e)
-        ⟨store'', st'.out⟩ v n D by
-  unfold evalSpecT_body fnSpecW
-  iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
-  unfold evalPre
-  icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
-  unfold astEG
-  icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
-  obtain ⟨q, qc, hn, hfs, hch, hqc, hrc⟩ := leafNode_assign hrepr hgeo
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
+
+/- The assign arm from its entry, for any `Wp`, given the mode's child call `call` (whose
+continuation `Kc` holds the caller's `K` and the child's value): `env_set`, then the result
+copy and the exit, or the runtime error when the name is unbound. -/
+#ix_piece assignTail_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {ρ ρ' : Regime} {st : St}
+    {d env : Nat} {x : String} {e : Expr} (hsetS : ⊢ envSetSpec (GF := GF) Wp N)
+    {Φ : Nat × String → IProp GF} {P : Nat → Prop} {m : Mem} {aE aX s ret sret : BitVec 64}
+    {rv : Nat → BitVec 64} {Mt : Mem} {K : IProp GF} {Rel : St → Value → Prop}
+    {Kc : St → Value → BitVec 64 → BitVec 64 → BitVec 64 → IProp GF}
+    (ent : EvalEntry s ret sret aE aX (BitVec.ofNat 64 inp) rv (evalNeed (.assign x e) d)
+      (.assign x e) m P)
+    (call : ∀ (qc : Nat) (R : Nat → BitVec 64) (M : Mem), ExprReprWithin m P qc e → qc < 2 ^ 64 →
+      EvalRegs R (evalSP s + 240#64) (BitVec.ofNat 64 inp) (BitVec.ofNat 64 qc) aE (evalSP s) →
+      (∀ R' w0 w1 w2 st' v, Rel st' v → KeepRegs calleeSaved R R' →
+        ArmAt Wp Φ (evalArmF P m env aE (evalSP s) (evalNeed (.assign x e) d - 1088)
+          (slot24 sret.toNat) (world N L Room inp ρ' st' d) (Kc st' v w0 w1 w2))
+          0x8000348c#64 (upd R' 1 0x8000348c#64) (InExt (s.toNat - 1088, 1088))
+          (slotWrite M (evalSP s + 240#64).toNat w0 w1 w2)) →
+      ArmAt Wp Φ (entryF P m env aE s (evalNeed (.assign x e) d) sret (world N L Room inp ρ st d) K)
+        0x80003488#64 R (InExt (s.toNat - 1088, 1088)) M)
+    (hKc : ∀ st' v w0 w1 w2, Kc st' v w0 w1 w2 ⊢ K ∗ □ valOf N v w0 w1 w2)
+    (hexit : ∀ st' v store'', Rel st' v → st'.store.set? env x v = some store'' →
+      ExitK Wp Φ N s ret sret rv (evalNeed (.assign x e) d) v
+        (world N L Room inp ρ' ⟨store'', st'.out⟩ d) K)
+    (habort : ∀ st' v, Rel st' v → st'.store.set? env x v = none →
+      EvalAbort Wp Φ N L Room inp (.assign x e) d s sret K) :
+    ArmAt Wp Φ (entryF P m env aE s (evalNeed (.assign x e) d) sret (world N L Room inp ρ st d) K)
+      evalEntryPC (upd rv 1 ret) (InExt (s.toNat - 1088, 1088)) Mt by
+  obtain ⟨q, qc, hn, hfs, hch, hqc, hrc⟩ := leafNode_assign ent.repr ent.ok
+  have g := ent.geo; have hregs := ent.regs; have hsg := g.sg
   have hqt : (BitVec.ofNat 64 q).toNat = q := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hfs.lt]
-  have hct : (BitVec.ofNat 64 qc).toNat = qc := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqc]
-  have hneed' : 1088 ≤ evalNeed (.assign x e) d := by
-    have := Expr.stackNeed_ge (.assign x e); unfold evalNeed stackBudget; unfold evalFrame at this
-    omega
+  have hneed' := g.need
   have hneed2 : 1088 + envGetNeed ≤ evalNeed (.assign x e) d - 1088 := by
     have := Expr.stackNeed_ge e
     unfold evalNeed stackBudget envGetNeed; simp only [Expr.stackNeed]; unfold evalFrame at this ⊢
     omega
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have gC := evalCallGeom (o := 240) hsg
-    (by have := evalNeed_assign x e d; unfold evalFrame at this; omega) (by decide) (by decide)
-  have hbe : e.bodiesBound perCallBudget = true := by simpa only [Expr.bodiesBound] using hbb
+  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := g.sf
+  have hs' := g.lo; have hs2 := g.hi; have hs3 := g.al; have hs4 := hsg.le; have hal := g.ral
   have hx1 := hn.lo; have hx2 := hn.hi; have hx3 := hn.off
   have hoff := evalSP_off (s := s) hsf (by omega)
-  have hq1 := hslg.al; have hq2 := hslg.lo; have hq3 := hslg.hi
-  ihave ⟨Hst, HF⟩ := stackScratch_frame (f := 1088#64) hsg.le hneed' $$ Hst
-  rw [hsF, hsf, show (1088#64).toNat = 1088 from rfl]
-  ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
-  · iframe Hpc Hra Hregs; unfold blockOwn; iexact HF
-
-  ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF (twpW _) (F := evalArmF P m env aE (s + 18446744073709550528#64)
-      (evalNeed (.assign x e) d - 1088) (slot24 sret.toNat)
-      (world N L Room inp (.counted (k + n)) st d)
-      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) ⟨store'', st'.out⟩ d
-        (.assign x e) v sret s rv -∗ (twpW (vsaModel live)).W Φ))
-  rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact Hk
-  intro F'
+  have hq1 := g.slg.al; have hq2 := g.slg.lo; have hq3 := g.slg.hi
+  refine ArmAt.seg Wp hn.view ?_
   unfold evalEntryPC
   refine AssignT_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
     (by ix_reg; exact hregs.a1) (by ix_reg; exact hregs.a2) (by ix_reg; exact hregs.a3)
@@ -127,37 +129,11 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   have hS21 : ldv .ld Mt1 (s.toNat - 1088 + 1056) = rv 18 := by
     subst hMt1; ix_fwd using [hoff]; ix_reg
   have hA1 : ldv .ld Mt1 (s.toNat - 1088) = aE := by subst hMt1; ix_fwd
-  unfold F' evalArmF
-  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, Hms⟩
+  refine call qc _ Mt1 hrc hqc ⟨by ix_reg, by ix_reg; exact hregs.a1, by ix_reg; exact hch,
+    by ix_reg; exact hregs.a3, by ix_reg⟩ fun R1 w0 w1 w2 st' v hrel hkeep1 => ?_
 
-  ihave Hc := he
-  iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003488)
-    ((step% jalx 0x80003488) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
-    (interp_code (by decide)) (by decide) De (k := k) (slot := s + 18446744073709550528#64 + 240#64)
-    (aC := BitVec.ofNat 64 qc) (aE := aE) (s := s + 18446744073709550528#64)
-    (m := evalNeed (.assign x e) d - 1088)
-    gC.child gC.fits gC.below gC.slotGeom hbe
-  iframe Hc Hcode Hfb Hms Hst Hw
-  isplitl []
-  · ipureintro
-    refine ⟨⟨by ix_reg, by ix_reg; exact hregs.a1, by ix_reg; exact hch,
-      by ix_reg; exact hregs.a3, by ix_reg⟩, fun b hb => ?_⟩
-    have g1 := gC.slot; have g2 := gC.sp; simp only [VsaIris.InExt, evalSP] at hb g1 g2 ⊢; omega
-  isplitl []
-  · imodintro; rw [hct]; iapply astEG_of_view hrc hgeo $$ Hro
-  iintro %R1 %w0 %w1 %w2 %hkeep1 #Hv Hms Hst Hw
-
-#ix_piece AssignT_p2 from AssignT_p1 by
-
-  ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF (twpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
-      (evalNeed (.assign x e) d - 1088) (slot24 sret.toNat)
-      (world N L Room inp (.counted k) st' d)
-      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) ⟨store'', st'.out⟩ d
-        (.assign x e) v sret s rv -∗ (twpW (vsaModel live)).W Φ) ∗ □ valOf N v w0 w1 w2))
-  rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hv; iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
-  intro F'
+#ix_piece assignTail_p2 from assignTail_p1 by
+  refine ArmAt.seg Wp hn.view ?_
   refine AssignT_run2 (aE := aE) (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3
     hx1 hx2 hx3 ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · ix_keep [hkeep1]
@@ -195,12 +171,12 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hy
     rcases hy with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_keep [hkeep1]
   have ho : (R2 12).toNat = s.toNat - 1088 + 64 := by rw [e12]; exact hoff 64 (by decide)
-  unfold F' evalArmF
-  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #Hv⟩, Hms⟩
-
-  ihave ⟨Hms, Hval⟩ := ms_carveVal N (S := InExt (s.toNat - 1088, 1088)) (a := s.toNat - 1088 + 64) (b := s.toNat - 1088 + 64)
-    (img := imgM M2) (v := v) (fun b hb => by simp only [VsaIris.InExt] at hb ⊢; omega)
-    rfl rfl rfl $$ [Hms]
+  unfold evalArmF
+  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, Hms⟩
+  ihave ⟨Hk, #Hv⟩ := hKc st' v w0 w1 w2 $$ Hk
+  ihave ⟨Hms, Hval⟩ := ms_carveVal N (S := InExt (s.toNat - 1088, 1088)) (a := s.toNat - 1088 + 64)
+    (b := s.toNat - 1088 + 64) (img := imgM M2) (v := v)
+    (fun b hb => by simp only [VsaIris.InExt] at hb ⊢; omega) rfl rfl rfl $$ [Hms]
   · iframe Hms
     simp only [valImg, ← ldv_ld_imgW]
     rw [hV0, hV1, hV2]; iexact Hv
@@ -214,8 +190,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   unfold envSetSpec
   ihave #Hg := Hset $$ %st'.store %B %env %x %v %(R2 10) %(R2 11) %(R2 12) %(R2 2)
     %(getSaved.map fun j => (j, R2 j)) %(by simp [getSaved])
-  ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
-  iapply ms_callEnv3 (twpW _) (i := 0x800034b0) (entry := envSetPC) (R := R2)
+  ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK ent.ok) $$ Hro
+  iapply ms_callEnv3 Wp (i := 0x800034b0) (entry := envSetPC) (R := R2)
     ((step% jalx 0x800034b0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
     (φ := EnvSp (R2 2) envGetNeed ∧ SlotWin (R2 12).toNat)
@@ -247,28 +223,60 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
       ldv_ld_agree (M := M2) (fun i hi => hag3 _ (by
       simp only [VsaIris.InExt]; rcases hc with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> omega)
       (by simp only [VsaIris.InExt]; rcases hc with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> omega))]
-
-#ix_piece AssignT_p3 from AssignT_p2 by
-
   unfold setOut
-  rw [hset]
+
+#ix_piece assignTail_p3 from assignTail_p2 by
+  rcases hset : st'.store.set? env x v with _ | store''
+  · icases Hso with ⟨%hres, Hs⟩
+    have A := habort st' v hrel hset
+    obtain ⟨jb, hok⟩ := A.ctx
+    have hK := A.k; unfold AbortK at hK
+    ihave ⟨#HE, Hk⟩ := hK $$ Hk
+    ihave #HL := leafErrCtx_of_errCtx hok.geom hok.lt $$ HE
+    ihave Hw : world N L Room inp ρ' st' d $$ [Hh Hs Hc Hio Hi]
+    · unfold world worldE; iexists H, B; iframe Hh Hs Hc Hio Hi; isplitr
+      · ipureintro; exact hB
+      · iexact Hbw
+    ihave #Hdv := roOwn_data hn.view $$ [$]
+    iapply wp_swpF Wp
+    rotate_left
+    · icombine HL Hcode Hx Hst Hw Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
+    intro F'
+    refine (step% it 0x800034b4) hlive (fun hc => absurd (by
+      simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hres) hc) (fun hz => ?_)
+    refine AssignP_run4 (aX := aX) (s := s) (sret := sret) (inp := BitVec.ofNat 64 inp) hlive hsf
+      hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ ?_
+    · ix_reg; rw [hkeep3 8 (by decide) (by decide)]; subst hR2; ix_reg
+      rw [keep_reg hkeep1 (by decide)]; ix_reg; try exact hregs.a2
+    · ix_reg; rw [hkeep3 18 (by decide) (by decide)]; subst hR2; ix_reg
+      rw [keep_reg hkeep1 (by decide)]; ix_reg; try exact hregs.a1
+    · ix_reg; rw [hkeep3 2 (by decide) (by decide)]; exact e2
+    intros
+    apply swp_closeRM
+    intro R5 Mt5 hR5 hMt5
+    unfold F'
+    iintro ⟨⟨#HL, #Hcode, #Hx, Hst, Hw, Hk⟩, Hms⟩
+    iapply ev_rtErr Wp (N := N) (L := L) (Room := Room) (inp := inp) A.holes A.code
+      ((step% jalx 0x800034e4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) (sret := sret) (s := s) (n := evalNeed (.assign x e) d) (p := q)
+      (x := x) (fun hro hs => assignFmt_ok hro hs 0#64) hfs.lt hsg
+      (by have := A.room.room; unfold evalFrame at this; omega) hdj (R := R5) (M := Mt5)
+      ⟨by subst hR5; ix_reg <;> rfl, by subst hR5; ix_reg <;> rfl, by subst hR5; ix_reg <;> rfl,
+       by subst hR5; ix_reg; exact hfs.ptr, by subst hR5; ix_reg <;> rfl,
+       by subst hR5; ix_reg; rw [hkeep3 2 (by decide) (by decide)]; exact e2⟩
+    iframe HL Hcode Hx Hms Hst Hw Hk
+
+#ix_piece assignTail_p4 from assignTail_p3 by
   icases Hso with ⟨%hres, Hs⟩
-  ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (s + 18446744073709550528#64) (evalNeed (.assign x e) d - 1088) ∗
-      world N L Room inp (.counted k) ⟨store'', st'.out⟩ d ∗ □ valOf N v w0 w1 w2 ∗
-      (PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) ⟨store'', st'.out⟩ d
-        (.assign x e) v sret s rv -∗ (twpW (vsaModel live)).W Φ)))
-  rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hv Hk
-    unfold world worldE
-    iexists H, B
-    iframe Hh Hs Hc Hio Hi
-    isplitr
+  ihave Hw : world N L Room inp ρ' ⟨store'', st'.out⟩ d $$ [Hh Hs Hc Hio Hi]
+  · unfold world worldE; iexists H, B; iframe Hh Hs Hc Hio Hi; isplitr
     · ipureintro; exact hB
     · iexact Hbw
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
+  rotate_left
+  · icombine Hcode Hst Hw Hv Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-
   refine (step% it 0x800034b4) hlive (fun hnz => ?_) (fun hc => absurd (by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hres]; decide) hc)
   refine AssignT_run3 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)
@@ -290,9 +298,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   apply swp_closeM
   intro Mt5 hMt5
   unfold F'
-  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hw, #Hv, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hcode, Hst, Hw, #Hv, Hk⟩, Hms⟩
 
-#ix_piece AssignT_p4 from AssignT_p3 by
+#ix_piece assignTail_p5 from assignTail_p4 by
   have eW0 : imgW (imgM Mt5) sret.toNat = w0 := by
     rw [← ldv_ld_imgW]; subst hMt5; ix_fwd
   have eW1 : imgW (imgM Mt5) (sret.toNat + 8) = w1 := by
@@ -306,17 +314,37 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     iexact Hv
   ihave Hst := evalFrame_join hsg.le hneed' $$ [$]
   ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
-  iapply Hk $$ Hpc Hra
-  unfold evalPost
-  iexists _
-  iframe Hregs Hst Hval Hw
-  ipureintro
+  iapply hexit st' v store'' hrel hset _ ?_
+  rotate_left
+  · iframe Hpc Hra Hregs Hst Hval Hw Hk
   intro y hy
   simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hy
   rcases hy with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep3, hk2]
 
-#ix_chain caseT_Assign := [AssignT_p1, AssignT_p2, AssignT_p3, AssignT_p4]
+#ix_chain assignTail := [assignTail_p1, assignTail_p2, assignTail_p3, assignTail_p4, assignTail_p5]
+
+theorem caseT_Assign {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+    {st st' : St} {d env : Nat} {x : String} {e : Expr} {v : Value} {n : Nat} {store'' : Store}
+    (De : EvalECost st d env e st' v n) (hset : st'.store.set? env x v = some store'')
+    (D : EvalECost st d env (.assign x e) ⟨store'', st'.out⟩ v n)
+    (he : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env e st' v n De)
+    (hsetS : ⊢ envSetSpec (GF := GF) (twpW (vsaModel live)) N) :
+    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.assign x e)
+        ⟨store'', st'.out⟩ v n D :=
+  evalEntryT hlive D fun k Φ sret aE aX s ret rv P m Mt ent => assignTail (twpW _) hlive hsetS ent
+    (ρ' := .counted k) (Rel := fun st1 v1 => st1 = st' ∧ v1 = v)
+    (Kc := fun _ v1 w0 w1 w2 => iprop(evalKT (live := live) N L Room inp k ⟨store'', st'.out⟩ d
+      (.assign x e) v sret s ret rv Φ ∗ □ valOf N v1 w0 w1 w2))
+    (fun _ _ _ hrc hqc hr hk => ArmAt.callEvalT (jal_site% 0x80003488) hlive De he ent.geo
+      (by have := evalNeed_assign x e d; unfold evalFrame at this; omega) (by decide) (by decide)
+      (by simpa only [Expr.bodiesBound] using ent.bb) hrc ent.ok hqc hr
+      fun R' w0 w1 w2 hkeep => hk R' w0 w1 w2 st' v ⟨rfl, rfl⟩ hkeep)
+    (fun _ _ _ _ _ => .rfl)
+    (fun _ _ _ ⟨h1, h2⟩ h => by subst h1 h2; rw [hset] at h; cases h; exact evalKT_exit)
+    (fun _ _ ⟨h1, h2⟩ h => by subst h1 h2; simp [hset] at h)
 
 end VsaIris.Interp

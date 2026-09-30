@@ -133,14 +133,12 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   unfold argsAt callFrame stackScratch exitNeed exitHandlersNeed
   simp only [List.zipIdx_cons, List.zipIdx_nil, sepL_cons, sepL_nil, Nat.add_zero,
     List.length_singleton]
-  iframe Hpc Hra Hs0 Ha0 Hargs Hsp Hscr Hsaved Htmp Hgp Himg Hcon
+  iframe Hpc Hra Hs0 Ha0 Hargs Hsp Hscr Hsaved Htmp Hgp Himg Hcon Hno
   isplitl [Hstd]
   · iapply stdioAt_mono (fun img h => by
       rcases h with h | h
       · exact .inl h
       · exact .inr ⟨by simp, h⟩) $$ Hstd
-  isplitl [Hno]
-  · iexact Hno
   iintro %o' -
   rw [show (1#64 : BitVec 64).toNat = 1 from rfl]
   iapply hΦ

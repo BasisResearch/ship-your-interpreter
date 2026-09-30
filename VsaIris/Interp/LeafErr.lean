@@ -129,10 +129,7 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       by rw [hsf]; omega, by rw [hsf]; omega⟩
   have hinpt : (BitVec.ofNat 64 inp).toNat = inp := by
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hok.lt]
-  ihave ⟨%rd, Hrd, %hrd⟩ := readable_str $$ [Himg Hx]
-  · isplitl
-    · iexact Himg
-    · iexact Hx
+  ihave ⟨%rd, Hrd, %hrd⟩ := readable_str $$ [$]
   have hpt' : (BitVec.ofNat 64 p).toNat = p := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpt]
   have hf : FmtArgsOK (fun a => (rodataDom a ∨ InExt (p, x.toList.length + 1) a) ∨ False) rd fmt
       [BitVec.ofNat 64 p, 0#64] :=

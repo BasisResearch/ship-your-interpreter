@@ -149,12 +149,8 @@ theorem wp_topNormal (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1) 
   ihave ⟨Herr, Hstd, Hno, Hcon, #Himg⟩ := world_exitPartsE N L Room hEL ρ st d $$ Hw
   ihave #Hgp := codeRes_gp $$ Hcode
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(blockOwn (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ Stdio.errnoOwn ∗
-      consoleOwn st.out ∗
-      ownImg (InExt (sTop.toNat + 752, 16)) imgT ∗ Φ (0, st.out) ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg))
   rotate_left
-  · iframe Herr Hstd Hno Hcon HT HΦ Hms Hgp Himg
-    iapply codeRes_text $$ Hcode
+  · icombine Herr Hstd Hno Hcon HT HΦ Hgp Himg as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine TopEpi_run (m := ∅) hlive (by decide) (by decide) (by decide) (by decide) h2 hra ?_
   apply swp_closeRM
@@ -172,7 +168,7 @@ theorem wp_topNormal (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1) 
   ihave Hargs := clobbered_of_fn _ R' $$ Hargs
   rw [e10, e2]
   iapply wp_mainOkTail H live hcl Wp sTop (R' 1) (R' 8) R' st.out imgT mainSp_top hT
-  iframe Hpc Ha0 Hra Hs0 Hsp Hcs Htmp Hgp Himg HT Herr Hstd Hno Hcon HΦ
+  iframe ∗ #
   rw [show List.drop 1 argRegs = [11, 12, 13, 14, 15, 16, 17] from rfl]
   iexact Hargs
 
@@ -197,10 +193,9 @@ theorem wp_topSpill (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   iintro ⟨HF, #Hcode, Hpc, Hra, Hregs, Hfr⟩
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs Hfr]
   · iframe Hpc Hra Hregs; unfold blockOwn; iexact Hfr
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(F ∗ codeRes))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · iframe HF Hms Hcode
-    iapply codeRes_text $$ Hcode
+  · icombine HF Hcode as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine TopProl_run (m := ∅) hlive (by decide) (by decide) (by decide) (by decide)
     (by ix_reg; exact h2) ?_
@@ -325,10 +320,9 @@ theorem wp_topHead (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
       F ∗ codeRes ∗ ms 0x8000448c#64 R' (InExt (sTop.toNat - 176, 176)) Mt ⊢ Wp.W Φ) :
     F ∗ codeRes ∗ ms 0x80004428#64 R (InExt (sTop.toNat - 176, 176)) Mt ⊢ Wp.W Φ := by
   iintro ⟨HF, #Hcode, Hms⟩
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(F ∗ codeRes))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · iframe HF Hms Hcode
-    iapply codeRes_text $$ Hcode
+  · icombine HF Hcode as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine TopHead_run (m := ∅) hlive (by decide) (by decide) (by decide) (by decide) h2 h10 hcnt harr
     (fun h => absurd h10 h) (fun h => absurd h10 h) (fun h => absurd h10 h) ?_ ?_
@@ -462,12 +456,11 @@ theorem world_globals (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : 
     · iexists g
       iframe Hf Hd Hp He
       isplitl []
-      · iexists img; iframe Hg; ipureintro; exact hg
+      · iexists img; iframe Hg %hg
       ipureintro; exact hd
     ipureintro; exact hB
   iexists g, img
-  iframe Hg Hf
-  ipureintro; exact hg
+  iframe Hg Hf %hg
 
 theorem topView {m : Mem} {P : Nat → Prop} {stmts count : Nat} {p : Program} {g : Nat}
     {R0 : Nat → BitVec 64} (hE : TopEntry m P stmts count p g R0) :
@@ -504,12 +497,9 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
       show inpTop = 0x87fffe10 from rfl]; omega) $$ HT
   ihave Hframe := blockOwn_cast (p' := sTop.toNat - 176) (n' := 176) (by decide) (by decide) $$ Hframe
 
-  iapply wp_topSpill hlive Wp (ret := 0x800045ec#64) (F := iprop(binImg ∗
-      worldPre N vsaLayoutP vsaRoomB inpTop ρ initSt 0 ∗ frameAt 0 g ∗ roOn P m ∗
-      blockOwn stackSL.lo (spEntry - interpRunFrame - stackSL.lo) ∗
-      ownImg (InExt (sTop.toNat + 752, 16)) (memImg m))) hE.regs.sp ?_
+  iapply wp_topSpill hlive Wp (ret := 0x800045ec#64) hE.regs.sp ?_
   rotate_left
-  · iframe Himg Hwp Hfr Hro Hfree HT Hcode Hpc Hra Hregs Hframe
+  · icombine Himg Hwp Hfr Hro Hfree HT as HF; iframe HF Hcode Hpc Hra Hregs Hframe
   intro R1 Mt1 h2 h10 h1 hkeep hsp
   iintro ⟨⟨#Himg, Hwp, #Hfr, #Hro, Hfree, HT⟩, #Hcode, Hms⟩
 
@@ -520,13 +510,10 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
   rw [h2] at hjb
 
   iapply wp_topHead hlive Wp (stmts := stmts) (count := count)
-    (R := upd (upd R1 10 0#64) 1 0x80004428#64) (Mt := Mt1) (F := iprop(binImg ∗
-      world N vsaLayoutP vsaRoomB inpTop ρ initSt 0 ∗ frameAt 0 g ∗ roOn P m ∗
-      blockOwn stackSL.lo (spEntry - interpRunFrame - stackSL.lo) ∗
-      ownImg (InExt (sTop.toNat + 752, 16)) (memImg m) ∗ jmpRO inpTop jb)) hc
+    (R := upd (upd R1 10 0#64) 1 0x80004428#64) (Mt := Mt1) hc
     (by ix_reg; exact h2) (by ix_reg) (hsp.cnt.trans hE.regs.a2) (hsp.arr.trans hE.regs.a1) ?_ ?_
   rotate_left 2
-  · iframe Himg Hw Hfr Hro Hfree HT Hjb Hcode Hms
+  · icombine Himg Hw Hfr Hro Hfree HT Hjb as HF; iframe HF Hcode Hms
   ·
     intro h0 R' h2' h21'
     iintro ⟨⟨#Himg, Hw, -, -, -, HT, -⟩, #Hcode, Hms⟩
@@ -541,8 +528,7 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
     ihave ⟨Hms, Hslot⟩ := ms_carveSlot (a := sTop.toNat - 176 + 88)
       (fun b hb => by simp only [InExt] at hb ⊢; omega) $$ Hms
     ihave ⟨Hw, ⟨%g', %img, %hgi, #Hgw, #Hfr'⟩⟩ := world_globals _ _ _ _ _ _ _ $$ Hw
-    ihave %hgg := frameAt_agree 0 g' g $$ [Hfr' Hfr]
-    · iframe Hfr' Hfr
+    ihave %hgg := frameAt_agree 0 g' g $$ [$]
     subst hgg
     ihave #Hin := roOn_globals hE.globals hgi $$ Hgw
     ihave #Hro2 := roOn_or (P := P) (Q := InExt (inpTop, 8)) $$ [$]
@@ -557,15 +543,13 @@ theorem wp_topPrologue (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1
     · rw [show (sFr + 88#64).toNat = sTop.toNat - 176 + 88 from by decide]
       iexact Hslot
     isplitl []
-    · iapply roOwn_data (topView hE) $$ [Hcode Hro2]
-      iframe Hcode Hro2
+    · iapply roOwn_data (topView hE) $$ [$]
     isplitl [Hfree]
     · unfold stackScratch
       iapply blockOwn_cast (by decide) (by decide) $$ Hfree
     iframe HT
     iexists jb
-    iframe Hjb
-    ipureintro; exact hjb
+    iframe Hjb %hjb
 
 end Entry
 
@@ -649,9 +633,7 @@ theorem interpRun_total (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.
     unfold topLoopRes
     iintro ⟨Hms, Hslot, #Hcode, #Himg, #Hro, #Hdv, #Hfr, Hst, Hw, HT, -⟩
     iapply hK
-    iframe HT Hms Hcode Hro Hdv Hfr Hst Hw
-    isplitl [Hslot]
-    · iexact Hslot
+    iframe ∗ #
     iintro %R' %hkeep HT Hms - - Hw
     rw [interpExit_normal]
     have h2 : R' 2 = sFr := (hkeep 2 (by decide)).trans hf.head.sp
@@ -720,7 +702,7 @@ theorem topPre_of_bootRes {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) 
   rw [hi]
   iintro ⟨⟨Hw, #Hfr, -, #Hcode, #Hsh, Hstk, Hcal, -⟩, Hpc, Hra, Hregs, #Hc⟩
   ihave #Himg := binImg_of_roOn b.ready.text_image b.ready.rodata_image $$ Hcode
-  iframe Hw Hfr Hsh Hstk Hcal Hpc Hra Hregs Hc Himg
+  iframe ∗ #
 
 theorem interpRun_total_boot (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live p.1)
     (hcl : CodeLive live) {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)

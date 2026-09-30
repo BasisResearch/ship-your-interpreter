@@ -220,9 +220,7 @@ theorem ArmAt.callTruthy (Wp : MachWP (GF := GF) (vsaModel live)) (J : JalAt val
     ⟨by rw [hoff 64 (by decide)]; have := g.lo; have := g.al; omega,
       by rw [hoff 64 (by decide)]; unfold Vsa.Sim.tohostAddr; have := g.lo; omega,
       by rw [hoff 64 (by decide)]; have := g.hi; omega⟩ h0 h8 h16
-  iframe Hvt Hcode Hv Hms
-  isplitl []
-  · ipureintro; exact h10
+  iframe Hvt Hcode Hv Hms %h10
   iintro %R' %Mt' %⟨hkeep, hbit, hag⟩ Hms
   iapply hk R' Mt' hkeep hbit (fun k h1 h2 h3 => hag k (by simp only [VsaIris.InExt]; omega)
     (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega))

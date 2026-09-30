@@ -202,9 +202,7 @@ theorem astSs_of_stmtArrayRepr {P : Nat → Prop} {m : Mem} {a n : Nat} {ss : Li
   unfold astSs
   iintro H
   iexists P, m
-  isplitr
-  · ipureintro; exact h
-  iexact H
+  iframe H %h
 
 omit I in
 
@@ -219,8 +217,7 @@ theorem wordAt_of_ownImg {a n v : Nat} {img : Nat → BitVec 8} (h : imgLE img a
   unfold wordAt
   iintro H
   iexists img
-  iframe H
-  ipureintro; exact h
+  iframe H %h
 
 omit I in
 
@@ -231,8 +228,7 @@ theorem wordRO_of_ownImg {a n v : Nat} {img : Nat → BitVec 8} (h : imgLE img a
   imodintro
   unfold wordRO
   iexists img
-  iframe H
-  ipureintro; exact h
+  iframe H %h
 
 omit I in
 
@@ -550,8 +546,7 @@ theorem frameBody_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
   · ipureintro; exact frameLayout_of_frameRepr hrep h
   iframe Hown
   isplitl []
-  · iapply bindings_of_frameRepr hrep h hw $$ [H Hc]
-    iframe H Hc
+  · iapply bindings_of_frameRepr hrep h hw $$ [$]
   · cases hpar : f.parent with
     | none =>
       unfold parentAt

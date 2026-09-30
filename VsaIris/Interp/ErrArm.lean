@@ -204,8 +204,7 @@ theorem ms_rtErrEval (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   ihave Hms := ms_iff (T := fun a => InExt (s.toNat - 1088, 1088) a ∧ ¬ False)
     (fun a => ⟨fun h => ⟨h, id⟩, fun h => h.1⟩) $$ Hms
   iapply ms_rtErrEvalOwn Wp hE hexec hcode (Sown := fun _ => False) (fun a h => h.elim) hfmt hsg hn
-  iframe Hcode HE Hrd Hms Hst Hw Hab
-  ipureintro; exact hR
+  iframe Hcode HE Hrd Hms Hst Hw Hab %hR
 
 theorem evalNeed_binary_rtErr (op : BinOp) (l r : Expr) (d : Nat) :
     1088 + RtErr.rtErrNeed ≤ evalNeed (.binary op l r) d := by
@@ -244,9 +243,7 @@ theorem ms_callKindName (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
   ihave Hspec := hvk $$ %p %Mt %v
   unfold valueKindNameSpec
   iapply ms_callHelper Wp hexec hcode hal
-  iframe Hspec Hcode Hms
-  isplitl []
-  · ipureintro; exact h10
+  iframe Hspec Hcode Hms %h10
   isplitl [Hslot]
   · iframe Hslot; ipureintro; exact ⟨hg, by rw [h0]; exact htag⟩
   iintro %R' %hkeep ⟨Hslot, %h10'⟩ Hms

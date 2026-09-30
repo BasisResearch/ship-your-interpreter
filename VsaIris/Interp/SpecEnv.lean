@@ -69,14 +69,10 @@ theorem world_heapStore (N : NativeAddrs) (inp : Nat) (ρ : Regime) (st : St) (d
   · iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
     iframe Hc Hio Hi Hb
     iexists H, B
-    iframe Hh Hs
-    ipureintro; exact hB
+    iframe Hh Hs %hB
   · iintro ⟨⟨%H, %B, Hh, Hs, %hB⟩, Hc, Hio, Hi, #Hb⟩
     iexists H, B
-    iframe Hh Hs Hc Hio Hi
-    isplitr
-    · ipureintro; exact hB
-    · iexact Hb
+    iframe Hh Hs Hc Hio Hi %hB Hb
 
 theorem world_store (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
     (st : St) (d : Nat) :
@@ -88,10 +84,7 @@ theorem world_store (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Na
   iframe Hs
   iintro Hs
   iexists H, B
-  iframe Hh Hs Hc Hio Hi
-  isplitr
-  · ipureintro; exact hB
-  · iexact Hb
+  iframe Hh Hs Hc Hio Hi %hB Hb
 
 def getOut (N : NativeAddrs) (s : Store) (fa : Addr) (x : String) (out res : BitVec 64) :
     IProp GF :=
