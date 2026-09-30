@@ -19,7 +19,7 @@ open Vsa.MemRepr Vsa.Sim
     (hc : ldv .ld m (aS + 8#64).toNat = aC) :
     IW live m (stmtView aS.toNat 32) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hc, hsf] at 0x800041f8
+     sym_run hlive using [h8, h14, h2, hk, hku, hc, hsf] at 0x800041f8
 
 #ix_seg IfArm_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -59,7 +59,7 @@ open Vsa.MemRepr Vsa.Sim
     (h8 : R 8 = aS) (h10 : R 10 = 0#64) (he : ldv .ld m (aS + 24#64).toNat = 0#64) :
     IW live m (stmtView aS.toNat 32) (InExt (s.toNat - 176, 176)) Q 0x8000421c#64 R Mt
   by rw [← upd_eq_self h10]
-     ix_run hlive using [h8, he] at 0x8000409c
+     sym_run hlive using [h8, he] at 0x8000409c
 
 section Middle
 
@@ -103,7 +103,7 @@ theorem wp_ifTruthy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   iintro ⟨⟨HF, #Hcode, #Hv, Hvt⟩, Hms⟩
   unfold valueTruthySpec
   iapply ms_callHelperVal Wp (i := 0x80004218)
-    (jalx_80004218 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80004218) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (R := R2) (S := InExt (s.toNat - 176, 176)) (Mt := M2)
     (a := execSP s + 16#64) (v := v) (w0 := w0) (w1 := w1) (w2 := w2)
     (Q := fun rv' => iprop(⌜rv' 10 = if v.truthy then 1#64 else 0#64⌝))
@@ -203,7 +203,7 @@ theorem ifPrefix (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   unfold F'
   iintro ⟨⟨#Hyp, HF, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
 
-  iapply hcall 0x800041f8 _ (jalx_800041f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+  iapply hcall 0x800041f8 _ ((step% jalx 0x800041f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (slot := execSP s + 56#64) (aC := BitVec.ofNat 64 pc)
     (aE := aE) (sF := execSP s) (f := 176) (m := execNeed (.ifStmt c t eo) d - 176)
     (execSP_eq s).symm g.child g.fits g.below (by omega) hf.stack.le g.slotGeom hbb

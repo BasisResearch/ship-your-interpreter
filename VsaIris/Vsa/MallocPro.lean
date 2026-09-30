@@ -1,4 +1,5 @@
 import VsaIris.Vsa.MallocPaths
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
@@ -25,22 +26,15 @@ theorem malloc_errno {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (h8 : R 8 = reentV)
     (hst : Starved C.top0 C.n.toNat) :
     AW C.live C.S C.Q 0x80004840#64 R Mt := by
-  have hoff := Hp.off_stack_w (by decide) errno_foot
-  have hlo := O.sp.lo
+  have Er := errnoRgn C.H
+  have hoff := Er.offStack Hp.disj (by decide); have hlo := O.sp.lo
   unfold mHead at hlo hoff; unfold Vsa.Sim.tohostAddr at hlo
-  have he : ((R 8) + sign_extend (m := 64) (0x000#12)).toNat = 0x8001b538 := by
-    rw [h8]; decide
-  refine (step% st 0x80004840) O.live ?_
-  refine (step% st 0x80004844) O.live ?_ ?_ ?_
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; unfold StOK Vsa.Sim.tohostAddr; omega
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [he]; exact O.foot errno_foot
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  rw [he]
-  refine (step% st 0x80004848) O.live ?_
-  have Hp' := Hp.store_errno (v := upd R 15 ((0#64) + sign_extend (m := 64) (0x00c#12)) 15)
-  exact epi_8000484c O (((F.store (a := 0x8001b538) (w := 4) (by omega)).upd (k := 15) (by decide)).upd
-    (k := 10) (by decide)) (O.fin_null (by simp only [upd_apply, ite_true]; decide)
-    ⟨_, _, _, _, Hp'.heap⟩ Hp'.pres Hp'.frame hst)
+  have h8n : (R 8).toNat = 0x8001b538 := by rw [h8]; rfl
+  rgn_run O.live at 0x8000484c
+  rw [h8n]
+  have Hp' := Hp.store_errno (v := 12#64)
+  exact epi_8000484c O ((F.store (a := 0x8001b538) (w := 4) (by omega)).of_regs rfl rfl rfl rfl)
+    (O.fin_null rfl ⟨_, _, _, _, Hp'.heap⟩ Hp'.pres Hp'.frame hst)
 
 theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
@@ -61,13 +55,9 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
   have Hp1 := (Hp.store_stack (a := C.s.toNat - 96 + 80) (w := 8) (v := R 8) (by unfold mHead; omega)
     (by omega)).store_stack (a := C.s.toNat - 96 + 88) (w := 8) (v := R 1) (by unfold mHead; omega)
     (by omega)
-  have hS0 : read64 (writeLog (writeLog C.Mt0 [(C.s.toNat - 96 + 80, 8, R 8)])
-      [(C.s.toNat - 96 + 88, 8, R 1)]) (C.s.toNat - 96 + 80) = some (C.rv0 8).toNat := by
-    rw [read64_store_miss _ _ (by omega), read64_store_hit, E.s0]
-  have hRA : read64 (writeLog (writeLog C.Mt0 [(C.s.toNat - 96 + 80, 8, R 8)])
-      [(C.s.toNat - 96 + 88, 8, R 1)]) (C.s.toNat - 96 + 88) = some C.r.toNat := by
-    rw [read64_store_hit, E.ra]
-  have h9 := E.s1; have h18 := E.s2; have h19 := E.s3
+  have F0 : MFrame C (upd R 2 (R 2 + 18446744073709551520#64)) (writeLog (writeLog C.Mt0
+      [(C.s.toNat - 96 + 80, 8, R 8)]) [(C.s.toNat - 96 + 88, 8, R 1)]) :=
+    ⟨by rw [upd_same, hs2], by rd_log [E.s0], by rd_log [E.ra], E.s1, E.s2, E.s3⟩
   have hn := E.a1
   have hN : (R 11 + 23#64).toNat = (C.n.toNat + 23) % 2 ^ 64 := by
     rw [BitVec.toNat_add, hn]; rfl
@@ -92,12 +82,8 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn, hnb,
         show (2147483648#64).toNat = 2 ^ 31 from rfl] at h1
     ·
-      refine malloc_errno O ⟨?_, hS0, hRA, ?_, ?_, ?_⟩ Hp1 ?_ ?_ <;>
+      refine malloc_errno O (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ?_ ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [hs2]
-      · exact h9
-      · exact h18
-      · exact h19
       · exact hs8
       refine Starved.of_lt ?_
       rw [hP]
@@ -112,11 +98,6 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     rw [show (R 2 + 18446744073709551520#64 + 8#64).toNat = C.s.toNat - 96 + 8 by sx_addr]
     have Hp2 := Hp1.store_stack (a := C.s.toNat - 96 + 8) (w := 8)
       (v := R 11 + 23#64 &&& 18446744073709551600#64) (by unfold mHead; omega) (by omega)
-    have hS0' := hS0; have hRA' := hRA
-    rw [← read64_store_miss (a := C.s.toNat - 96 + 80) (b := C.s.toNat - 96 + 8) (w := 8)
-      (v := R 11 + 23#64 &&& 18446744073709551600#64) _ (by omega)] at hS0'
-    rw [← read64_store_miss (a := C.s.toNat - 96 + 88) (b := C.s.toNat - 96 + 8) (w := 8)
-      (v := R 11 + 23#64 &&& 18446744073709551600#64) _ (by omega)] at hRA'
     have hnb' : (R 11 + 23#64 &&& 18446744073709551600#64).toNat = (C.n.toNat + 23) / 16 * 16 := by
       rw [hn]; exact hnb
     have hNb : NbOK C.n ((C.n.toNat + 23) / 16 * 16) := ⟨hP.symm⟩
@@ -125,12 +106,9 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
         show (503#64).toNat = 503 from rfl] at h3
     ·
       sx_run [8] O.live at 0x800047dc
-      refine hsm _ _ ((C.n.toNat + 23) / 16 * 16) ⟨?_, hS0', hRA', ?_, ?_, ?_⟩ Hp2 ⟨?_, ?_, ?_⟩ hNb h3 ?_ <;>
+      refine hsm _ _ ((C.n.toNat + 23) / 16 * 16) ((F0.store (by omega)).of_regs ?_ ?_ ?_ ?_) Hp2
+        ⟨?_, ?_, ?_⟩ hNb h3 ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [hs2]
-      · exact h9
-      · exact h18
-      · exact h19
       · exact hnb'
       · rw [BitVec.toNat_ushiftRight, hnb', Nat.shiftRight_eq_div_pow]
       · have ha7 : ((R 11 + 23#64 &&& 18446744073709551600#64) >>> 3).toNat =
@@ -146,13 +124,9 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
         omega
       · exact hs8
     ·
-      refine hlg _ _ ((C.n.toNat + 23) / 16 * 16) ⟨?_, hS0', hRA', ?_, ?_, ?_⟩ Hp2 hNb (by omega)
-        (by omega) ?_ ?_ <;>
+      refine hlg _ _ ((C.n.toNat + 23) / 16 * 16) ((F0.store (by omega)).of_regs ?_ ?_ ?_ ?_) Hp2
+        hNb (by omega) (by omega) ?_ ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [hs2]
-      · exact h9
-      · exact h18
-      · exact h19
       · exact hnb'
       · exact hs8
   ·
@@ -162,12 +136,8 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     refine (step% st 0x800047c8) O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn] at hc2
     ·
-      refine malloc_errno O ⟨?_, hS0, hRA, ?_, ?_, ?_⟩ Hp1 ?_ ?_ <;>
+      refine malloc_errno O (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ?_ ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [hs2]
-      · exact E.s1
-      · exact E.s2
-      · exact E.s3
       · exact hs8
       · rw [e32] at hc2
         unfold Starved physSize heapEnd extendSlack
@@ -175,12 +145,8 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
         omega
     ·
       sx_run [8] O.live at 0x800047dc
-      refine hsm _ _ 32 ⟨?_, hS0, hRA, ?_, ?_, ?_⟩ Hp1 ⟨?_, ?_, ?_⟩ ⟨?_⟩ (by decide) ?_ <;>
+      refine hsm _ _ 32 (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ⟨?_, ?_, ?_⟩ ⟨?_⟩ (by decide) ?_ <;>
         try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [hs2]
-      · exact E.s1
-      · exact E.s2
-      · exact E.s3
       · rfl
       · rfl
       · rfl

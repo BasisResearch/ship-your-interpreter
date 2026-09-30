@@ -1,6 +1,7 @@
 import VsaIris.Interp.HelperRun
 import VsaIris.Interp.SpecErr
 import VsaIris.Interp.BinArm
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -25,7 +26,7 @@ theorem valueKindName_run (hlive : ∀ p ∈ interpText, live p.1) (p r : BitVec
   cases v <;>
   · have hk := ldv_lw_kind (Mt := Mt) hv (by simp [valTag])
     simp only [valTag] at hk
-    ix_run1 hlive using [h10, hk]
+    sym_run1 hlive using [h10, hk]
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rfl
 

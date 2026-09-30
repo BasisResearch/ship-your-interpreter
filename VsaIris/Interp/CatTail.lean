@@ -2,6 +2,7 @@ import VsaIris.Interp.BinPrelude
 import VsaIris.Interp.ConcatArm
 import VsaIris.Interp.BinArm
 import VsaIris.Interp.ErrArm
+import VsaIris.Interp.SymInterp
 
 /-!
 String concatenation from the binary dispatch point, proved once for the total and partial specs.
@@ -27,7 +28,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hop : ldv .lw m (aX + 8#64).toNat = 11#64)
     (hKL : ldv .ld Mt (s.toNat - 1088) = kL) (hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = kR) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x8000351c#64 R Mt
-  by ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003888
+  by sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003888
 
 #ix_seg CatTail_run3b {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -36,7 +37,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a20#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80003a40
+  by sym_run hlive using [h2, hsf] at 0x80003a40
 
 #ix_seg CatTail_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -45,7 +46,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a44#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80003a68
+  by sym_run hlive using [h2, hsf] at 0x80003a68
 
 #ix_seg CatTail_run5 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -54,7 +55,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a6c#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003a78
+  by sym_run hlive using [h9, hsf] at 0x80003a78
 
 #ix_seg CatTail_run6 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -63,7 +64,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a7c#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003a84
+  by sym_run hlive using [h9, hsf] at 0x80003a84
 
 #ix_seg CatTail_run7 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -72,7 +73,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a88#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003a90
+  by sym_run hlive using [h9, hsf] at 0x80003a90
 
 #ix_seg CatTail_run8 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -81,7 +82,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) (hq : R 10 ≠ 0#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a94#64 R Mt
-  by ix_run hlive using [h2, hq, hsf] at 0x80003aa8
+  by sym_run hlive using [h2, hq, hsf] at 0x80003aa8
 
 #ix_seg CatTail_run9 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -90,7 +91,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003aac#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003ab4
+  by sym_run hlive using [h9, hsf] at 0x80003ab4
 
 #ix_seg CatTail_run10 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -99,7 +100,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003ab8#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003abc
+  by sym_run hlive using [h9, hsf] at 0x80003abc
 
 #ix_seg CatTail_run11 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -108,7 +109,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003ac0#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003ac4
+  by sym_run hlive using [h9, hsf] at 0x80003ac4
 
 #ix_seg CatTail_run12 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -117,7 +118,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003ac8#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003ad0
+  by sym_run hlive using [h9, hsf] at 0x80003ad0
 
 #ix_seg CatTail_run13 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -134,7 +135,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hS4 : ldv .ld Mt (s + 18446744073709550528#64 + 1040#64).toNat = v20)
     (hS5 : ldv .ld Mt (s + 18446744073709550528#64 + 1032#64).toNat = v21) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003ad4#64 R Mt
-  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hS4, hS5, hsf, hal]
+  by sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hS4, hS5, hsf, hal]
 
 #ix_seg CatTail_run8z {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -143,7 +144,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) (hq : R 10 = 0#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a94#64 R Mt
-  by ix_run hlive using [h2, hq, hsf] at 0x80003e28
+  by sym_run hlive using [h2, hq, hsf] at 0x80003e28
 
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
@@ -303,7 +304,7 @@ end
     %st2.store %(stringifyCost st2.store rv' + catBufCost st2.store lv rv') %H
     %(stringifyCost st2.store lv) %st2.out
   iapply ms_callHelperA Wp (i := 0x80003a40)
-    (jalx_80003a40 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a40) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hs1 Hcode Hms
   isplitl []
@@ -387,7 +388,7 @@ end
     %(((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
     %(stringifyCost st2.store rv') %st2.out
   iapply ms_callHelperA Wp (i := 0x80003a68)
-    (jalx_80003a68 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a68) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hs2 Hcode Hms
   isplitl []
@@ -442,7 +443,7 @@ end
   ihave Hsl1 := hsl $$ %(R4 10) %(strRender st2.store lv) %(ρ.plus (catBufCost st2.store lv rv')) %(((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
   iapply ms_callHelper Wp (i := 0x80003a78) (entry := strlenPC)
-    (jalx_80003a78 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a78) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   unfold strlenHeapSpec
   iframe Hsl1 Hcode Hms
@@ -476,7 +477,7 @@ end
   ihave Hsl2 := hsl $$ %(R6 10) %(strRender st2.store rv') %(ρ.plus (catBufCost st2.store lv rv')) %(((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
   iapply ms_callHelper Wp (i := 0x80003a84) (entry := strlenPC)
-    (jalx_80003a84 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003a84) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   unfold strlenHeapSpec
   iframe Hsl2 Hcode Hms
@@ -518,7 +519,7 @@ end
     (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
   iapply ms_callMallocN A Wp (i := 0x80003a90)
-    (jalx_80003a90 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003a90) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H) ((strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) (catBufCost st2.store lv rv')
     (catBufChg st2.store lv rv')
@@ -606,7 +607,7 @@ end
     (by omega) rfl (by omega) $$ Hblk
   ihave ⟨%img1, %hc1, Hx1, Hx0⟩ := strOwn_cut (R4 10).toNat (strRender st2.store lv) $$ Hx
   iapply ms_callMemcpyOwned Wp hmc (i := 0x80003aa8)
-    (jalx_80003aa8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003aa8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (dst := (R12 10)) (src := (R4 10)) (n := (strRender st2.store lv).toList.length) (img := img1)
     ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩ (by unfold htifLo; omega)
     ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩
@@ -654,7 +655,7 @@ end
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H))
   unfold strcpyHeapSpec
   iapply ms_callHelper Wp (i := 0x80003ab4) (entry := strcpyPC)
-    (jalx_80003ab4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003ab4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hsc1 Hcode Hms
   isplitl []
@@ -709,7 +710,7 @@ end
     (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
   iapply ms_callFreeN A Wp (i := 0x80003abc)
-    (jalx_80003abc live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003abc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) :: H) (R4 10) ((strRender st2.store lv).toList.length + 1)
   iframe Hat Hcode Hms Hst Hq1 Hh
   isplitl []
@@ -756,7 +757,7 @@ end
     (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
     (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
   iapply ms_callFreeN A Wp (i := 0x80003ac4)
-    (jalx_80003ac4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
+    ((step% jalx 0x80003ac4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: H) (R6 10) ((strRender st2.store rv').toList.length + 1)
   iframe Hat Hcode Hms Hst Hq2 Hh
   isplitl []
@@ -803,7 +804,7 @@ end
   ihave Hvs := hvs $$ %sret %(R12 10) %((strRender st2.store lv) ++ (strRender st2.store rv'))
   unfold valueStrSpec
   iapply ms_callHelper Wp (i := 0x80003ad0)
-    (jalx_80003ad0 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    ((step% jalx 0x80003ad0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hvs Hcode Hms
   isplitl []

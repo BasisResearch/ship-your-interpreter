@@ -8,10 +8,18 @@ import VsaIris.Interp.ITac
 * `geomOf`: the `Geom` a run needs, read off its own obligations (per atom: the offset span,
   the store alignment, the `S`/`DA` cover ranges and the HTIF gap). `geom_auto` then proves it
   from the piece's hypotheses, so no piece writes a `Geom` by hand.
-* `sym_run`: the `ix_run` surface (`sym_run [n] hlive using [facts] at pcs`). It runs the
-  executor once, closes the checked obligations and the decode facts, prunes branches and
-  normalises continuations exactly as `ix_run` does, and hands back the same leftover goals.
-  Any failure falls back to `ix_run`.
+* `sym_run [n] hlive using [facts] at pcs` runs the executor from the goal's state to the stop
+  points, one segment per undecided branch, closes the checked obligations and the decode
+  facts, prunes infeasible branch sides and normalises the continuations. `sym_run1` stops at
+  the first branch it cannot prune.
+
+The leftover goals are in *step-lemma form*, the form a run that applies the step table's
+lemma of each instruction and normalises after every step would leave; the pieces' statements
+are written against it. A branch premise reads a written register from the fact-rewritten
+register chain of its step; an undecided access check or jump alignment is the side goal of
+that instruction's step lemma (`hea`, `hLDS`, `hLDD`, `hS`, `hal`); a branch side that takes
+no further step keeps its premise unnormalised; case tags are `hk` per load, store and
+indirect jump and `hT`/`hF` per branch.
 -/
 
 namespace VsaIris.SymExec.Interp
@@ -30,23 +38,88 @@ theorem codeAt_interp : CodeAt interpText binByte interpRanges :=
   codeAt_of_pieces (ps := interpCodePieces) (qs := interpROPieces)
     (fun _ hm => ⟨TextIn.left hm, TextIn.right hm⟩) (by decide +kernel)
 
+open Lean Elab Command in
+/-- `#pc_list name := e` defines `name : List (BitVec 64)` as the literal value of `e : List Nat`. -/
+elab "#pc_list " n:ident " := " e:term : command => do
+  let v ← liftTermElabM do
+    let e ← Term.elabTermEnsuringType e (mkApp (mkConst ``List [Level.zero]) (mkConst ``Nat))
+    Term.synthesizeSyntheticMVarsNoPostponing
+    let l ← unsafe Meta.evalExpr (List Nat) (mkApp (mkConst ``List [Level.zero]) (mkConst ``Nat))
+      (← instantiateMVars e)
+    pure (l.map (BitVec.ofNat 64))
+  let name := (← getCurrNamespace) ++ n.getId
+  let ty := mkApp (mkConst ``List [Level.zero]) (mkApp (mkConst ``BitVec) (mkNatLit 64))
+  let val := toExpr v
+  liftCoreM <| addAndCompile
+    (.defnDecl (mkDefinitionValEx name [] ty val .abbrev .safe [name]))
+
+-- The interpreter's loads of bytes it does not own (value quantified), as the step table has
+-- them: the `argc`/count words read through a pointer whose target is not in the frame or view.
+#pc_list interpHavocPCs := (StepGen.interpTbl.variants.lookup "H").getD []
+
+-- The interpreter's loads that read the data view (the AST and the input).
+#pc_list interpDataPCs := (StepGen.interpTbl.variants.lookup "D").getD []
+
+/-- Whether the interpreter's step table has a lemma at `pc` (a step-by-step run steps
+exactly there): an instruction of the table's code, outside its skipped ranges, that one of its
+step families (not the call family) covers. -/
+def interpHasStep (pc : Nat) : Lean.MetaM Bool := do
+  let t := StepGen.interpTbl
+  unless 0x800027ec ≤ pc ∧ pc < 0x80004764 do return false
+  if t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2 then return false
+  let some w ← StepGen.wordAt? t.pieces pc | return false
+  return t.kinds.any fun kind =>
+    kind != "jalx" && t.offers kind pc && (StepGen.lemOf t pc w kind).isSome
+
 /-- Executor configuration for `IW` runs. -/
 def cfgI (stops : List (BitVec 64)) (dbase : List SE := [])
-    (kv : List (MKind × SE × BitVec 64) := []) : Cfg :=
-  ⟨binByte, interpRanges, iRegs, stops, dbase, kv⟩
+    (kv : List (MKind × SE × BitVec 64) := []) (kvM : List (MKind × SE × BitVec 64) := [])
+    (known : List (Nat × BitVec 64) := [])
+    (dpcs : List (BitVec 64) := interpDataPCs) (hv : List (BitVec 64) := interpHavocPCs)
+    (rawpcs : List (BitVec 64) := []) (forkStop : Bool := false) : Cfg :=
+  { img := binByte, rT := interpRanges, rs := iRegs, stops, dbase, kv, kvM, known,
+    hasB := bytesHasB interpCodePieces, dpcs, hv, rawpcs, forkStop }
 
 /-! ## The `Geom` of a run, from its obligations -/
 
 def Tree.obs : Tree → List SOb
   | .leaf s => s.obs
-  | .br _ _ _ _ t f => Tree.obs t ++ Tree.obs f
+  | .br _ _ _ _ o t f => o ++ Tree.obs t ++ Tree.obs f
   | .jr s _ => s.obs
+  | .hv _ t => Tree.obs t
+  | .raw _ _ _ _ t => Tree.obs t
 
-/-- Leaves with a literal continuation pc. -/
-def Tree.leaves : Tree → List SS
-  | .leaf s => [s]
-  | .br _ _ _ _ t f => Tree.leaves t ++ Tree.leaves f
-  | .jr _ _ => []
+/-- The undecided forwarding checks of one node's loads, with the load's pc (`obs` is newest
+first). Checks over a havoc slot are left to the walk, where the slot has its value. -/
+def rawCandsOf (obs : List SOb) : List (BitVec 64 × SOb) :=
+  (obs.reverse.foldl (fun (acc : Option (BitVec 64) × List (BitVec 64 × SOb)) o =>
+    match o, acc.1 with
+    | .decM pc _, _ => (some pc, acc.2)
+    | .disj a _ b _, some pc => if a.noHv && b.noHv then (acc.1, acc.2 ++ [(pc, o)]) else acc
+    | _, _ => acc) (none, [])).2
+
+def Tree.rawCands : Tree → List (BitVec 64 × SOb)
+  | .leaf s => rawCandsOf s.obs
+  | .br _ _ _ _ o t f => rawCandsOf o ++ Tree.rawCands t ++ Tree.rawCands f
+  | .jr s _ => rawCandsOf s.obs
+  | .hv _ t => Tree.rawCands t
+  | .raw _ _ _ _ t => Tree.rawCands t
+
+/-- The state a segment's straight line ends in, when it ends at a leaf (not at a fork or an
+indirect jump). -/
+def Tree.endLeaf? : Tree → Option SS
+  | .leaf s => some s
+  | .br _ op a b _ t f => match a, b with
+    | .c u, .c v => if guardB op u v then Tree.endLeaf? t else Tree.endLeaf? f
+    | _, _ => none
+  | .jr _ _ => none
+  | .hv _ t => Tree.endLeaf? t
+  | .raw _ _ _ _ t => Tree.endLeaf? t
+
+/-- Whether an obligation is the decode fact of a step (one per step). -/
+def isDec : SOb → Bool
+  | .decM .. | .decT .. | .decO .. => true
+  | _ => false
 
 /-- Merge a list of half-open ranges. -/
 def mergeR (rs : List (Nat × Nat)) : List (Nat × Nat) :=
@@ -55,7 +128,8 @@ def mergeR (rs : List (Nat × Nat)) : List (Nat × Nat) :=
     | (l, h) :: t => if r.1 ≤ h then (l, max h r.2) :: t else r :: (l, h) :: t
     | [] => [r]) [] |>.reverse
 
-/-- Kinds of address need: 0 owned read, 1 data-view read, 2 owned write, 3 alignment. -/
+/-- Kinds of address need: 0 owned read, 1 data-view read, 2 owned write, 3 alignment,
+4 havoc read (access check only). -/
 structure Need where
   atom : SE
   offs : List (BitVec 64 × Nat × Nat)
@@ -65,7 +139,7 @@ def needOf (o : SOb) : Option (SE × BitVec 64 × Nat × Nat) :=
   | .ld e w => some ((base e).1, (base e).2, w, 0)
   | .ldD e w => some ((base e).1, (base e).2, w, 1)
   | .st e w => some ((base e).1, (base e).2, w, 2)
-  | .al4 e => some ((base e).1, (base e).2, 0, 3)
+  | .ldH e w => some ((base e).1, (base e).2, w, 4)
   | _ => none
 
 def addNeed (ns : List Need) (o : SOb) : List Need :=
@@ -100,7 +174,9 @@ def factOf (n : Need) : AFact :=
     dc := mergeR ((n.offs.filter (·.2.2 = 1)).map fun e => (rel e.1, rel e.1 + e.2.1)),
     gap := if spans.isEmpty then none else some (omax, 8 - omin), shift := shift }
 
-def geomOf (obs : List SOb) : Geom := ((obs.foldl addNeed []).map factOf).reverse
+def geomOf (obs : List SOb) : Geom :=
+  (((obs.foldl addNeed []).map factOf).filter (·.atom.noHv)).reverse
+
 
 /-- Atoms whose owned reads are needed. -/
 def ownedReadAtoms (obs : List SOb) : List SE :=
@@ -108,7 +184,7 @@ def ownedReadAtoms (obs : List SOb) : List SE :=
     | .ld e _ => if (base e).1 = .c 0 then none else some (base e).1
     | _ => none
 
-/-! ## Branch premises in the landed step-lemma form -/
+/-! ## Branch premises in step-lemma form -/
 
 theorem gF_beq (a b : BitVec 64) : guardB .BEQ a b = false ↔ ¬ (a = b) := guard_false (guard_beq a b)
 theorem gF_bne (a b : BitVec 64) : guardB .BNE a b = false ↔ ¬ (a ≠ b) := guard_false (guard_bne a b)
@@ -125,7 +201,37 @@ theorem gF_bgeu (a b : BitVec 64) : guardB .BGEU a b = false ↔ ¬ (b.toNat ≤
 
 open Lean Meta Elab Tactic
 
-register_option sym_run.trace : Bool := { defValue := false, descr := "report sym_run fallbacks" }
+/-- Denotation normaliser: symbolic values, havoc slots, register and memory folds. -/
+macro "sym_den" : tactic => `(tactic| simp (disch := decide) only [regsDen, memDen, SE.den, aluVal,
+  Env.withH, hset_self, hset_ne, shamtOf, shamt5Of, imm20Of, BitVec.reduceExtractLsb'])
+
+/-- `sx_norm` on the branch premise just introduced, while it is the last hypothesis (a
+step-by-step run normalises it at the next step, before any later premise exists). -/
+macro "sym_hnorm " h:ident : tactic =>
+  `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
+        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
+        Sail.shift_bits_left, Sail.shift_bits_right, Sail.BitVec.extractLsb,
+        BitVec.reduceExtractLsb, BitVec.reduceHShiftLeft, BitVec.reduceHShiftRight,
+        BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
+        BitVec.ushiftRight_eq', BitVec.reduceToNat,
+        BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
+        BitVec.reduceAppend, not_true_eq_false] at $h:ident)
+
+/-- Unfolding `rawR`, as a rewrite with a proof: a definitional change of a branch premise
+leaves the kernel to compare the entry register chain against its unfolding. -/
+theorem rawR_eq (R : Nat → BitVec 64) (i : Nat) : rawR R i = R i := Eq.trans rfl rfl
+
+theorem geom_nil (ρ : Env) (S : Nat → Prop) (DA : List Nat) : Geom.holds ρ S DA [] :=
+  fun _ h => nomatch h
+
+theorem geom_cons {ρ : Env} {S : Nat → Prop} {DA : List Nat} {f : AFact} {Γ : Geom}
+    (h1 : Geom.holds ρ S DA [f]) (h2 : Geom.holds ρ S DA Γ) : Geom.holds ρ S DA (f :: Γ) :=
+  fun g hg => (List.mem_cons.1 hg).elim (fun e => h1 g (e ▸ List.mem_singleton.2 rfl)) (h2 g)
+
+register_option sym_run.trace : Bool := { defValue := false, descr := "report each sym_run and its stages" }
+
+register_option sym_run.maxSegs : Nat :=
+  { defValue := 0, descr := "debugging: stop after this many segments (0 = no limit)" }
 
 syntax "sym_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
@@ -134,7 +240,7 @@ def mkindOf? (n : Name) : Option MKind :=
   else if n == ``MKind.ld then some .ld else if n == ``MKind.lbu then some .lbu
   else if n == ``MKind.lh then some .lh else if n == ``MKind.lhu then some .lhu else none
 
-/-- Replace the last three arguments (pc, registers, memory) of the landed goal head. -/
+/-- Replace the last three arguments (pc, registers, memory) of the goal head. -/
 def withState (ty0 pc R M : Expr) : Expr :=
   let args := ty0.getAppArgs
   mkAppN ty0.getAppFn (args.extract 0 (args.size - 3) ++ #[pc, R, M])
@@ -147,7 +253,7 @@ def headConsts (e : Expr) : Array Name :=
 
 def contNorm (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (gk : MVarId) :
     TacticM MVarId := do
-  let [gk] ← evalTacticAt (← `(tactic| (try simp only [regsDen, memDen, SE.den, aluVal]))) gk
+  let [gk] ← evalTacticAt (← `(tactic| (try sym_den))) gk
     | throwError "sym_run: continuation"
   let kty ← whnfR (← instantiateMVars (← gk.getType))
   let a := kty.getAppArgs
@@ -164,99 +270,227 @@ def contNorm (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (gk : MVarId) :
       catch _ => saved.restore
     pure gk
   let gk ← do
-    let saved ← saveState
-    try
-      match ← evalTacticAt norm gk with
-      | [g'] => pure g'
-      | _ => saved.restore; pure gk
-    catch _ => saved.restore; pure gk
+    -- a step-by-step run normalises after every step, so a value is normalised again whenever a
+    -- later step rewrites inside it: iterate to the fixed point
+    let mut gk := gk
+    for _ in [0:4] do
+      let before ← instantiateMVars (← gk.getType)
+      let saved ← saveState
+      let g' ← try
+          match ← evalTacticAt norm gk with
+          | [g'] => pure g'
+          | _ => saved.restore; pure gk
+        catch _ => saved.restore; pure gk
+      gk := g'
+      if (← instantiateMVars (← gk.getType)) == before then break
+    pure gk
   return gk
 
-def symLeaf (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (go gk : MVarId)
-    (withCont : Bool := true) : TacticM (List MVarId × List MVarId) := do
-  -- obligations
+/-- What the obligation walk needs from the run: the goal head, the normaliser, the facts
+and the register list of a leaf below the node (every earlier register list is a suffix). -/
+structure ObCtx where
+  ty0 : Expr
+  norm : Syntax
+  l0facts : Array Term
+  facts : Array Term
+  regs : List (Nat × SE)
+  /-- forwarding checks already proved for the segment, at the environment `preEnv` -/
+  pre : Array (Expr × Expr) := #[]
+  preEnv : Option Expr := none
+
+/-- The register list of a leaf below the node. -/
+def Tree.anyRegs : Tree → List (Nat × SE)
+  | .leaf s => s.regs
+  | .br _ _ _ _ _ t _ => Tree.anyRegs t
+  | .jr s _ => s.regs
+  | .hv _ t => Tree.anyRegs t
+  | .raw _ _ _ _ t => Tree.anyRegs t
+
+/-- An undecided load/store check, handed back as the side goals the step lemma at that
+pc leaves: `LdOK`/`StOK` of `(R' rs1 + sign_extend imm).toNat` over the register chain `R'` of
+that step, then the cover. Each part that the side tactic proves is closed. -/
+def pendingMem (cx : ObCtx) (ρ S DA : Expr) (ho : MVarId) (o : SOb) (pc : BitVec 64)
+    (w : BitVec 32) (n : Nat) (tag : Name) : TacticM (List MVarId) := ho.withContext do
+  let a := mkLine pc w
+  unless a.rs1 ≠ 0 ∧ a.rs1 ≠ 3 do throwError "sym_run: pending check at a constant base"
+  let snap := cx.regs.drop (cx.regs.length - n)
+  let m ← mkFreshExprMVar (withState cx.ty0 (toExpr pc)
+    (mkApp2 (mkConst ``regsDen) ρ (toExpr snap)) cx.ty0.getAppArgs.back!)
+  let m' ← contNorm cx.ty0 cx.norm cx.l0facts m.mvarId!
+  let R' := (← whnfR (← instantiateMVars (← m'.getType))).getAppArgs[6]!
+  let Rs ← Term.exprToSyntax R'
+  let Ss ← Term.exprToSyntax S
+  let DAs ← Term.exprToSyntax DA
+  let rs1 := Syntax.mkNumLit (toString a.rs1)
+  let imm := Syntax.mkNumLit (toString a.imm.toNat)
+  let wd := Syntax.mkNumLit (toString (widthOfM a.kind))
+  let ea ← `((($Rs $rs1) + LeanRV64DExecutable.Functions.sign_extend (m := 64) (BitVec.ofNat 12 $imm)).toNat)
+  -- the side goals carry the premise names of the step lemma
+  let tys : List (Name × Term) ← match o with
+    | .ld _ _ => pure [(`hea, ← `(LdOK $ea $wd)), (`hLDS, ← `(∀ b ∈ accAddrs $ea $wd, $Ss b))]
+    | .ldD _ _ => pure [(`hea, ← `(LdOK $ea $wd)), (`hLDD, ← `(∀ b ∈ accAddrs $ea $wd, b ∈ $DAs))]
+    | .ldH _ _ => pure [(`hea, ← `(LdOK $ea $wd))]
+    | .st _ _ => pure [(`hea, ← `(StOK $ea $wd)), (`hS, ← `(∀ b ∈ accAddrs $ea $wd, $Ss b))]
+    | _ => throwError "sym_run: undecided obligation"
   let mut pend : List MVarId := []
-  let mut cur := go
-  repeat
-    let t ← instantiateMVars (← cur.getType)
-    let l := t.getAppArgs.back!
-    if l.isAppOf ``List.nil then
-      let [] ← cur.apply (mkConst ``ObsOK_nil) | throwError "sym_run: obs"
-      break
-    let [ho, hr] ← cur.apply (mkConst ``ObsOK_cons) | throwError "sym_run: obs"
-    let [ho] ← evalTacticAt (← `(tactic| simp only [SOb.den])) ho | throwError "sym_run: obs"
-    let hty ← instantiateMVars (← ho.getType)
-    if hty.isAppOfArity ``DecM 1 || hty.isAppOfArity ``DecT 1 then
-      let [] ← evalTacticAt (← `(tactic| sym_dec)) ho | throwError "sym_run: dec"
+  let mut hs : Array Term := #[]
+  for (nm, t) in tys do
+    let ty ← Term.elabType t
+    Term.synthesizeSyntheticMVarsNoPostponing
+    let G ← mkFreshExprMVar (← instantiateMVars ty) (userName := tag ++ nm)
+    unless ← ixTrySide cx.norm G.mvarId! do pend := pend ++ [G.mvarId!]
+    hs := hs.push (← Term.exprToSyntax G)
+  -- both sides in one normal form: the obligation's symbolic address and the chain's register
+  let mut fl : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
+  for f in cx.facts do fl := fl.push (← `(Lean.Parser.Tactic.simpLemma| $f:term))
+  let close (h : Term) : TacticM (TSyntax `tactic) :=
+    if fl.isEmpty then
+      `(tactic| (have hG := $h; (try sym_den); (try sx_norm); first | exact hG | assumption | skip))
     else
-      let isAl4 := (← instantiateMVars (← ho.getType)).isAppOf ``Eq &&
-        ((← instantiateMVars (← ho.getType)).getAppArgs[1]?.map (·.isAppOf ``HMod.hMod)).getD false
+      `(tactic| (have hG := $h; (try sym_den); (try simp only [$fl,*] at hG); (try simp only [$fl,*]); (try sx_norm); (try simp only [$fl,*] at hG); (try simp only [$fl,*]); (try sx_norm); first | exact hG | assumption | skip))
+  let parts ← match hs with
+    | #[_] => pure [ho]
+    | #[_, _] => evalTacticAt (← `(tactic| refine ⟨?_, ?_⟩)) ho
+    | _ => throwError "sym_run: pending"
+  unless parts.length == hs.size do throwError "sym_run: pending"
+  for (g, h) in parts.zip hs.toList do
+    let gs ← evalTacticAt (← close h) g
+    unless gs.isEmpty do
+      if (← getOptions).getBool `sym_run.trace false then
+        for g in gs do IO.eprintln s!"sym_run pending mismatch: {← ppGoal g}"
+      throwError "sym_run: pending check does not match the side goal of the step lemma"
+  return pend
+
+/-- The alignment premise of an indirect jump, as the step lemma states it:
+`(R' r).toNat % 4 = 0` over the register chain of that step. Closed when the side tactic proves
+it, else returned pending. -/
+def pendingAl4 (cx : ObCtx) (ρ : Expr) (ho : MVarId) (pc : BitVec 64) (r n : Nat) (tag : Name) :
+    TacticM (List MVarId) := ho.withContext do
+  let snap := cx.regs.drop (cx.regs.length - n)
+  let m ← mkFreshExprMVar (withState cx.ty0 (toExpr pc)
+    (mkApp2 (mkConst ``regsDen) ρ (toExpr snap)) cx.ty0.getAppArgs.back!)
+  let m' ← contNorm cx.ty0 cx.norm cx.l0facts m.mvarId!
+  let R' := (← whnfR (← instantiateMVars (← m'.getType))).getAppArgs[6]!
+  let Rs ← Term.exprToSyntax R'
+  let rs := Syntax.mkNumLit (toString r)
+  let ty ← Term.elabType (← `((($Rs $rs)).toNat % 4 = 0))
+  Term.synthesizeSyntheticMVarsNoPostponing
+  let G ← mkFreshExprMVar (← instantiateMVars ty) (userName := tag ++ `hal)
+  let pend ← if ← ixTrySide cx.norm G.mvarId! then pure [] else pure [G.mvarId!]
+  let h ← Term.exprToSyntax G
+  let mut fl : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
+  for f in cx.facts do fl := fl.push (← `(Lean.Parser.Tactic.simpLemma| $f:term))
+  let tac ← if fl.isEmpty then
+      `(tactic| (have hG := $h; (try sym_den); (try sx_norm); first | exact hG | assumption | skip))
+    else
+      `(tactic| (have hG := $h; (try sym_den); (try simp only [$fl,*] at hG); (try simp only [$fl,*]); (try sx_norm); (try simp only [$fl,*] at hG); (try simp only [$fl,*]); (try sx_norm); first | exact hG | assumption | skip))
+  let gs ← evalTacticAt tac ho
+  unless gs.isEmpty do
+    if (← getOptions).getBool `sym_run.trace false then
+      for g in gs do IO.eprintln s!"sym_run pending mismatch: {← ppGoal g}"
+    throwError "sym_run: alignment does not match the side goal of the step lemma"
+  return pend
+
+/-- Discharge an `ObsOK` list, oldest obligation first (the order a step-by-step run meets them).
+`nw` counts the register writes before the node; an undecided check is returned pending. -/
+def symObs (cx : ObCtx) (obs : List SOb) (nw : Nat) (tag : Name) (go : MVarId) :
+    TacticM (List MVarId × Nat × Name × Nat) := do
+  let trace := (← getOptions).getBool `sym_run.trace false
+  let t0 ← instantiateMVars (← go.getType)
+  let targs := t0.getAppArgs
+  let (ρ, S, DA) := (targs[0]!, targs[1]!, targs[2]!)
+  -- one goal per obligation, newest first
+  let mut hos : Array MVarId := #[]
+  let mut cur := go
+  for _ in obs do
+    let [ho, hr] ← cur.apply (mkConst ``ObsOK_cons) | throwError "sym_run: obs"
+    hos := hos.push ho
+    cur := hr
+  let [] ← cur.apply (mkConst ``ObsOK_nil) | throwError "sym_run: obs"
+  let mut pend : List MVarId := []
+  let mut nw := nw
+  -- the goal tag of the step-lemma form here: a step whose lemma has side premises (a load,
+  -- a store, an indirect jump) adds `hk`; a fork adds `hT`/`hF` (in `symWalk`)
+  let mut tag := tag
+  let mut tagAt := tag
+  let mut at? : Option (BitVec 64 × BitVec 32 × Nat) := none
+  let mut jr? : Option (BitVec 64 × Nat × Nat) := none
+  let obsA := obs.toArray
+  for k in [0:obsA.size] do
+    let i := obsA.size - 1 - k
+    let some o := obsA[i]? | throwError "sym_run: obs"
+    if o matches .disj .. then
+      if let (some ρ0, some (_, pf)) := (cx.preEnv, cx.pre.find? (·.1 == toExpr o)) then
+        if ρ0 == ρ then
+          if ← isDefEq (← hos[i]!.getType) (← inferType pf) then
+            hos[i]!.assign pf
+            continue
+    let [ho] ← evalTacticAt (← `(tactic| simp only [SOb.den])) hos[i]! | throwError "sym_run: obs"
+    match o with
+    | .decM pc w =>
+      let [] ← evalTacticAt (← `(tactic| sym_dec)) ho | throwError "sym_run: dec"
+      at? := some (pc, w, nw)
+      let k := (mkLine pc w).kind
+      unless isStoreK k do nw := nw + 1
+      tagAt := tag
+      if isStoreK k || isLoadK k then tag := tag ++ `hk
+    | .decT t =>
+      let [] ← evalTacticAt (← `(tactic| sym_dec)) ho | throwError "sym_run: dec"
+      tagAt := tag
+      if t.kind matches .jr then
+        jr? := some (t.pc, t.rs1, nw)
+        tag := tag ++ `hk
+    | .decO .. =>
+      let [] ← evalTacticAt (← `(tactic| sym_dec)) ho | throwError "sym_run: dec"
+      nw := nw + 1
+    | _ =>
       let saved ← saveState
       try
-        let gs ← evalTacticAt (← `(tactic| (simp only [SE.den, aluVal] <;> ($(⟨norm⟩) <;> sx_side)))) ho
+        let gs ← evalTacticAt (← `(tactic| (sym_den <;> ($(⟨cx.norm⟩) <;> sx_side)))) ho
         unless gs.isEmpty do throwError "open"
       catch _ =>
         saved.restore
-        -- an unproved alignment of a return target is a pending side goal, as in `ix_run`;
-        -- any other undecided memory obligation means the landed route used another rule
-        unless isAl4 do
-          if (← getOptions).getBool `sym_run.trace false then
-            IO.eprintln s!"sym_run undecided: {← ppGoal ho}"
+        match o, at? with
+        | .al4 _, _ =>
+          -- the alignment premise of the `jr` step lemma, pending when its side tactic fails
+          let some (pc, r, n) := jr? | throwError "sym_run: alignment"
+          pend := pend ++ (← pendingAl4 cx ρ ho pc r n tagAt)
+        | .disj .., some (pc, _, _) =>
+          -- the normaliser cannot pass this store either: read the load unreduced
+          throwError "sym_run: rawpc {pc.toNat}"
+        | _, none =>
+          if trace then IO.eprintln s!"sym_run undecided: {← ppGoal ho}"
           throwError "sym_run: undecided memory obligation"
-        let [ho'] ← evalTacticAt (← `(tactic| (try simp only [SE.den, aluVal]))) ho
-          | throwError "sym_run: obligation"
-        let ho' ← do
-          let saved ← saveState
+        | _, some (pc, w, n) =>
           try
-            match ← evalTacticAt norm ho' with
-            | [g'] => pure g'
-            | _ => saved.restore; pure ho'
-          catch _ => saved.restore; pure ho'
-        pend := pend ++ [ho']
-    cur := hr
-  if withCont then return (pend, [← contNorm ty0 norm l0facts gk]) else return (pend, [])
+            pend := pend ++ (← pendingMem cx ρ S DA ho o pc w n tagAt)
+          catch e =>
+            if trace then IO.eprintln s!"sym_run undecided: {← ppGoal ho}"
+            throw e
+  return (pend, nw, tag, (obs.filter isDec).length)
 
-/-- A branch that `ix_run1` would leave unexplored: both premises are returned with the
-landed step-lemma premise (`P (R' r₁) (R' r₂) → …`) over the pre-branch register chain. -/
-def branchStuck (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (g : MVarId)
-    (op : bop) (r1 r2 : Nat) (taken : Bool) : TacticM MVarId := do
-  -- g : guardB op (den a) (den b) = taken → Tree.WP … (Tree.leaf t0)
-  let [g1] ← evalTacticAt (← `(tactic| intro hg)) g | throwError "sym_run1: intro"
-  g1.withContext do
-  let hg := (← getLCtx).lastDecl.get!.toExpr
-  let [go, gk] ← g1.apply (mkConst ``Tree.WP_leaf) | throwError "sym_run1: leaf"
-  let (pend, [gk']) ← symLeaf ty0 norm l0facts go gk | throwError "sym_run1: leaf"
-  unless pend.isEmpty do throwError "sym_run1: pending"
-  gk'.withContext do
-  let N ← instantiateMVars (← gk'.getType)
-  let w ← whnfR N
-  let R' := w.getAppArgs[6]!
-  let opnd (r : Nat) : Expr := if r = 0 then toExpr (0 : BitVec 64) else mkApp R' (mkNatLit r)
-  let x := opnd r1
-  let y := opnd r2
-  let lem := match op, taken with
-    | .BEQ, true => ``guard_beq | .BNE, true => ``guard_bne | .BLT, true => ``guard_blt
-    | .BGE, true => ``guard_bge | .BLTU, true => ``guard_bltu | .BGEU, true => ``guard_bgeu
-    | .BEQ, false => ``gF_beq | .BNE, false => ``gF_bne | .BLT, false => ``gF_blt
-    | .BGE, false => ``gF_bge | .BLTU, false => ``gF_bltu | .BGEU, false => ``gF_bgeu
-  let li := mkApp2 (mkConst lem) x y
-  let some (_, P) := (← inferType li).iff? | throwError "sym_run1: guard"
-  let G ← g.withContext do mkFreshExprMVar (← mkArrow P N)
-  let pf ← mkAppM ``Iff.mp #[li, hg]
-  gk'.assign (mkApp G pf)
-  return G.mvarId!
+def symLeaf (cx : ObCtx) (obs : List SOb) (nw : Nat) (tag : Name) (go gk : MVarId)
+    (withCont : Bool := true) : TacticM (List MVarId × List MVarId × Name) := do
+  let (pend, _, tag, _) ← symObs cx obs nw tag go
+  if withCont then
+    let gk ← contNorm cx.ty0 cx.norm cx.l0facts gk
+    gk.setTag tag
+    return (pend, [gk], tag)
+  else return (pend, [], tag)
 
-/-- A branch side that reaches a stop point with no further step: as in `ix_run`, the branch
-premise stays in the step-lemma form over the pre-branch register chain and only the
-continuation is normalised. -/
-def zeroStepChild (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (facts : Array Term)
-    (cg : MVarId) (op : bop) (r1 r2 : Nat) (taken : Bool) : TacticM (List MVarId × MVarId) := do
+/-- A branch side that reaches a stop point with no further step (or a branch `sym_run1` leaves
+unexplored): the branch premise stays in the step-lemma form over the pre-branch register chain and only the continuation is normalised. -/
+def zeroStepChild (cx : ObCtx) (child : SS) (nw : Nat) (tag : Name)
+    (cg : MVarId) (op : bop) (r1 r2 : Nat) (taken : Bool) (introHc : Bool := true) :
+    TacticM (List MVarId × MVarId) := do
+  let (ty0, norm, l0facts, facts) := (cx.ty0, cx.norm, cx.l0facts, cx.facts)
   let outer ← cg.getDecl
   let [cg1] ← evalTacticAt (← `(tactic| intro hc)) cg | throwError "sym_run: intro"
   cg1.withContext do
   let hg := (← getLCtx).lastDecl.get!.toExpr
   let [go, gk] ← cg1.apply (mkConst ``Tree.WP_leaf) | throwError "sym_run: leaf"
-  let (pend, []) ← symLeaf ty0 norm l0facts go gk (withCont := false) | throwError "sym_run: leaf"
+  let (pend, [], _) ← symLeaf cx child.obs nw tag go gk (withCont := false)
+    | throwError "sym_run: leaf"
   -- normalise the continuation in the outer context (without the branch premise)
   let m ← mkFreshExprMVarAt outer.lctx outer.localInstances (← instantiateMVars (← gk.getType))
   let m' ← contNorm ty0 norm l0facts m.mvarId!
@@ -271,7 +505,7 @@ def zeroStepChild (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (facts : A
     | .BGE, false => ``gF_bge | .BLTU, false => ``gF_bltu | .BGEU, false => ``gF_bgeu
   let li := mkApp2 (mkConst lem) (opnd r1) (opnd r2)
   let some (_, P) := (← inferType li).iff? | throwError "sym_run: guard"
-  let G ← mkFreshExprMVarAt outer.lctx outer.localInstances (← mkArrow P N)
+  let G ← mkFreshExprMVarAt outer.lctx outer.localInstances (← mkArrow P N) (userName := tag)
   let H ← withLocalDeclD `x N fun x => do
     m'.assign x
     mkLambdaFVars #[x] (← instantiateMVars m)
@@ -279,90 +513,252 @@ def zeroStepChild (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (facts : A
   let mut lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
   for f in facts do lems := lems.push (← `(Lean.Parser.Tactic.simpLemma| $f:term))
   let hgId := mkIdent (← hg.fvarId!.getUserName)
-  let [] ← evalTacticAt (← `(tactic| simpa only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
+  let [] ← evalTacticAt (← `(tactic| simpa only [rawR_eq, upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
       BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceToNat, Nat.reduceAdd, not_true_eq_false,
       $lems,*] using $hgId)) pfG.mvarId! | throwError "sym_run: branch premise"
   gk.assign (mkApp H (mkApp G pfG))
+  -- `sym_run` introduces the premise of the side it follows; `sym_run1` leaves both sides of a
+  -- branch it stops at as implications
+  if introHc then
+    let [G'] ← evalTacticAt (← `(tactic| intro hc)) G.mvarId! | throwError "sym_run: intro"
+    return (pend, G')
   return (pend, G.mvarId!)
 
-partial def symWalk (ty0 : Expr) (norm : Syntax) (l0facts : Array Term) (facts : Array Term)
-    (explore : Bool) (g : MVarId) : TacticM (Except (List Nat) (List MVarId × List MVarId)) := do
-  let tgt ← instantiateMVars (← g.getType)
-  let tr := tgt.getAppArgs.back!
-  if tr.isAppOf ``Tree.leaf then
+/-- What a segment needs beyond the obligation context. -/
+structure SegCtx where
+  /-- the executor configuration (`cfgI …` with `forkStop`) -/
+  C : Expr
+  /-- proof of `RunCtx live interpText Dt C R Mt` -/
+  hX : Expr
+  fuel : Nat
+  stops : List Nat
+  explore : Bool
+  /-- entry environment, frame predicate and data view of the goal -/
+  env0 : Expr
+  S : Expr
+  DA : Expr
+  proveGeom : MVarId → TacticM Bool
+  dbg : String → TacticM Unit
+  segs : IO.Ref Nat
+  /-- geometry facts already tried at the entry environment, with their proofs -/
+  gcache : IO.Ref (Array (Expr × Option Expr))
+
+mutual
+
+/-- One segment: run the executor from `s` up to the next undecided branch (`forkStop`), close
+the checked obligations, and walk the residual tree. `gk` is the `SWP` goal at `s`. -/
+partial def runSeg (sc : SegCtx) (cx0 : ObCtx) (s : SS) (ρE : Expr) (used nw : Nat) (tag : Name)
+    (gk : MVarId) : TacticM (List MVarId × List MVarId) := gk.withContext do
+  sc.segs.modify (· + 1)
+  let lim := sym_run.maxSegs.get (← getOptions)
+  if lim != 0 && (← sc.segs.get) > lim then return ([], [gk])
+  let fuel := sc.fuel - used
+  let run := mkApp3 (mkConst ``symRun) sc.C (mkNatLit fuel) (toExpr s)
+  let tree ← unsafe evalExpr Tree (mkConst ``Tree) run
+  -- a straight line ends at a stop point, at a fork, out of fuel, or where no step
+  -- lemma applies
+  if let some e := Tree.endLeaf? tree then
+    let p := e.pc.toNat
+    unless sc.stops.contains p || ((Tree.obs tree).filter isDec).length ≥ fuel do
+      if (← interpHasStep p) && inRangesB interpCodeRanges p then
+        throwError "sym_run: leaf {p} is not a stop point"
+  let mut Γ : Geom := []
+  let mut pfs : Array Expr := #[]
+  for f in geomOf (Tree.obs tree) do
+    let fE := toExpr f
+    let pf? ← match (← sc.gcache.get).find? (·.1 == fE) with
+      | some (_, r) => pure r
+      | none =>
+        let gg ← mkFreshExprMVar (← mkAppM ``Geom.holds #[sc.env0, sc.S, sc.DA, toExpr [f]])
+        let r ← if ← sc.proveGeom gg.mvarId! then pure (some (← instantiateMVars gg)) else
+          sc.dbg s!"geometry fact dropped: {← ppGoal gg.mvarId!}"
+          pure none
+        sc.gcache.modify (·.push (fE, r))
+        pure r
+    if let some pf := pf? then
+      Γ := Γ ++ [f]
+      pfs := pfs.push pf
+  let hΓ ← pfs.foldrM (fun pf acc => mkAppM ``geom_cons #[pf, acc])
+    (mkApp3 (mkConst ``geom_nil) sc.env0 sc.S sc.DA)
+  sc.dbg "tree"
+  -- a load whose forwarding through a store stays undecided is rerun unreduced (`rawpc`): find
+  -- it before any other obligation of the segment is worked on
+  let mut pre : Array (Expr × Expr) := #[]
+  for (pc, o) in Tree.rawCands (Tree.prune Γ tree) do
+    let oE := toExpr o
+    if pre.any (·.1 == oE) then continue
+    let g ← mkFreshExprMVar (← mkAppM ``SOb.den #[ρE, sc.S, sc.DA, oE])
+    let ok ← try
+        let [ho] ← evalTacticAt (← `(tactic| simp only [SOb.den])) g.mvarId! | throwError "obs"
+        let gs ← evalTacticAt (← `(tactic| (sym_den <;> ($(⟨cx0.norm⟩) <;> sx_side)))) ho
+        pure gs.isEmpty
+      catch _ => pure false
+    unless ok do throwError "sym_run: rawpc {pc.toNat}"
+    pre := pre.push (oE, ← instantiateMVars g)
+  let hXs ← Term.exprToSyntax sc.hX
+  let Γs ← Term.exprToSyntax (toExpr Γ)
+  let hΓs ← Term.exprToSyntax hΓ
+  let ρs ← Term.exprToSyntax ρE
+  let ss ← Term.exprToSyntax (toExpr s)
+  let fuelS := Syntax.mkNumLit (toString fuel)
+  let [gw] ← evalTacticAt (← `(tactic| refine symRun_cont $hXs $Γs (by decide) $hΓs $fuelS $ρs
+    rfl rfl rfl $ss ?_)) gk | throwError "sym_run: refine"
+  let [gw] ← evalTacticAt (← `(tactic| sym_eval)) gw | throwError "sym_run: eval"
+  sc.dbg "eval"
+  symWalk sc { cx0 with pre, preEnv := some ρE } (Tree.prune Γ tree) used nw tag gw
+
+partial def symWalk (sc : SegCtx) (cx0 : ObCtx) (t : Tree) (used nw : Nat) (tag : Name)
+    (g : MVarId) : TacticM (List MVarId × List MVarId) := do
+  let cx : ObCtx := { cx0 with regs := Tree.anyRegs t }
+  let (norm, facts) := (cx.norm, cx.facts)
+  match t with
+  | .leaf s =>
     let [go, gk] ← g.apply (mkConst ``Tree.WP_leaf) | throwError "sym_run: leaf"
-    return .ok (← symLeaf ty0 norm l0facts go gk)
-  else if tr.isAppOf ``Tree.jr then
+    let (p, st, _) ← symLeaf cx s.obs nw tag go gk
+    return (p, st)
+  | .hv _ t' =>
+    let [g1] ← g.apply (mkConst ``Tree.WP_hv) | throwError "sym_run: hv"
+    let [g2] ← evalTacticAt (← `(tactic| intro _)) g1 | throwError "sym_run: hv intro"
+    symWalk sc cx0 t' used nw tag g2
+  | .raw _ _ _ _ t' =>
+    let [g1] ← g.apply (mkConst ``Tree.WP_raw) | throwError "sym_run: raw"
+    symWalk sc cx0 t' used nw tag g1
+  | .jr s _ =>
     let [go, gk] ← g.apply (mkConst ``Tree.WP_jr) | throwError "sym_run: jr"
-    return .ok (← symLeaf ty0 norm l0facts go gk)
-  else if tr.isAppOf ``Tree.br then
-    let args := tr.getAppArgs
-    let [gt, gf] ← g.apply (mkConst ``Tree.WP_br) | throwError "sym_run: br"
-    let prem := fun (g : MVarId) => do
-      let [g] ← evalTacticAt (← `(tactic| simp only [SE.den, aluVal, guard_beq, guard_bne,
+    let (p, st, _) ← symLeaf cx s.obs nw tag go gk
+    return (p, st)
+  | .br bpc _ ba bb obs tt ff =>
+    let [go, gt, gf] ← g.apply (mkConst ``Tree.WP_br) | throwError "sym_run: br"
+    let (pend0, nw, tag, n) ← symObs cx obs nw tag go
+    let used := used + n
+    -- a fork: the operands do not decide the branch and the executor stopped at both successors
+    let isFork := !(ba matches .c _) || !(bb matches .c _)
+    let tagOf (taken : Bool) : Name := tag ++ (if taken then `hT else `hF)
+    let prem := fun (g : MVarId) => show TacticM (Option MVarId) from do
+      let [g] ← evalTacticAt (← `(tactic| simp (disch := decide) only [regsDen, memDen, SE.den, aluVal, Env.withH,
+        hset_self, hset_ne, shamtOf, shamt5Of, imm20Of, BitVec.reduceExtractLsb', guard_beq, guard_bne,
         guard_blt, guard_bge, guard_bltu, guard_bgeu, gF_beq, gF_bne, gF_blt, gF_bge, gF_bltu,
         gF_bgeu])) g | throwError "sym_run: guard"
-      pure g
+      -- step-lemma form: the premise reads a written register from the fact-rewritten chain and normalise the
+      -- premise at the next step: introduce, normalise, rewrite with the facts, revert
+      let mut fl : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
+      for f in facts do
+        -- only term equations: the chain holds terms, never a proposition to rewrite
+        let isEq ← g.withContext do
+          try
+            let ty ← whnfR (← instantiateMVars (← inferType (← Term.elabTerm f none)))
+            pure ty.isEq
+          catch _ => pure false
+        if isEq then fl := fl.push (← `(Lean.Parser.Tactic.simpLemma| $f:term))
+      let saved ← saveState
+      try
+        let [g1] ← evalTacticAt (← `(tactic| intro hc)) g | throwError "intro"
+        let hcId ← g1.withContext do
+          pure (mkIdent (← (← getLCtx).lastDecl.get!.fvarId.getUserName))
+        let tac ← if fl.isEmpty then
+            `(tactic| ((try simp only [rawR_eq] at $hcId:ident) <;> (try sym_hnorm $hcId)))
+          else `(tactic| ((try sym_hnorm $hcId) <;> (try simp only [$fl,*] at $hcId:ident) <;>
+            (try simp only [rawR_eq] at $hcId:ident) <;> (try sym_hnorm $hcId)))
+        match ← evalTacticAt tac g1 with
+        | [] => pure none  -- the normalised premise is contradictory: this side is closed
+        | [g2] =>
+          let [g3] ← evalTacticAt (← `(tactic| revert $hcId)) g2 | throwError "revert"
+          pure (some g3)
+        | _ => throwError "norm"
+      catch e =>
+        if sym_run.trace.get (← getOptions) then IO.eprintln s!"sym_run prem: {← e.toMessageData.toString}"
+        saved.restore; pure (some g)
     let introHc (g : MVarId) : TacticM MVarId := do
       let [g] ← evalTacticAt (← `(tactic| intro hc)) g | throwError "sym_run: intro"
       pure g
     let gt' ← prem gt
     let gf' ← prem gf
-    let some ⟨_, bpc⟩ ← getBitVecValue? args[0]! | throwError "sym_run: pc"
     let some (bop', br1, br2, bi13) := decB (wordAt binByte bpc.toNat) | throwError "sym_run: decode"
-    let tpc := (bpc + bi13.signExtend 64).toNat
-    let fpc := bpc.toNat + 4
-    let zeroAt (child : Expr) (succ : Nat) : MetaM Bool := do
-      unless child.isAppOf ``Tree.leaf do return false
-      let st := child.appArg!
-      unless st.isAppOf ``SS.mk do return false
-      match ← getBitVecValue? st.getAppArgs[0]! with
-      | some ⟨_, v⟩ => return v.toNat == succ
-      | none => return false
-    let side (g : MVarId) (child : Expr) (succ : Nat) (taken : Bool) :
-        TacticM (Except (List Nat) (List MVarId × List MVarId)) := do
-      if ← zeroAt child succ then
-        let (p, st) ← zeroStepChild ty0 norm l0facts facts g bop' br1 br2 taken
-        return .ok (p, [st])
-      else
-        -- the branch premise in the form `ix_run` reaches after one normalisation step
-        let g ← do
-          let saved ← saveState
-          try
-            match ← evalTacticAt norm g with
-            | [g'] => pure g'
-            | _ => saved.restore; pure g
-          catch _ => saved.restore; pure g
-        symWalk ty0 norm l0facts facts explore (← introHc g)
-    if ← ixTryPrune norm gt' then
-      side gf' args[5]! fpc false
-    else if ← ixTryPrune norm gf' then
-      side gt' args[4]! tpc true
-    else if explore then
-      match ← side gt' args[4]! tpc true with
-      | .error c => return .error c
-      | .ok (p1, s1) =>
-        match ← side gf' args[5]! fpc false with
-        | .error c => return .error c
-        | .ok (p2, s2) => return .ok (p1 ++ p2, s1 ++ s2)
-    else
-      -- `ix_run1` stops at this branch
-      let some ⟨_, pcv⟩ ← getBitVecValue? args[0]! | throwError "sym_run1: pc"
-      let w := wordAt binByte pcv.toNat
-      let some (op, r1, r2, i13) := decB w | throwError "sym_run1: decode"
-      let tpc := (pcv + i13.signExtend 64).toNat
-      let fpc := pcv.toNat + 4
-      unless args[4]!.isAppOf ``Tree.leaf && args[5]!.isAppOf ``Tree.leaf do
-        return .error [tpc, fpc]
-      let st ← branchStuck ty0 norm l0facts gt op r1 r2 true
-      let sf ← branchStuck ty0 norm l0facts gf op r1 r2 false
-      return .ok ([], [st, sf])
-  else throwError "sym_run: unexpected tree"
+    let succOf (taken : Bool) : Nat := if taken then (bpc + bi13.signExtend 64).toNat else bpc.toNat + 4
+    let hnormHc (g : MVarId) : TacticM MVarId := do
+      let hcId ← g.withContext do
+        pure (mkIdent (← (← getLCtx).lastDecl.get!.fvarId.getUserName))
+      let saved ← saveState
+      try
+        match ← evalTacticAt (← `(tactic| sym_hnorm $hcId)) g with
+        | [g'] => pure g'
+        | _ => saved.restore; pure g
+      catch _ => saved.restore; pure g
+    let side (g : MVarId) (child : Tree) (taken : Bool) :
+        TacticM (List MVarId × List MVarId) := do
+      if let .leaf cs := child then
+        -- no step on this side: the premise stays in the step-lemma form
+        if cs.pc.toNat == succOf taken && cs.obs.isEmpty &&
+            (sc.stops.contains cs.pc.toNat || (isFork && used ≥ sc.fuel)) then
+          let (p, st) ← zeroStepChild cx cs nw (tagOf taken) g bop' br1 br2 taken
+          return (p, [st])
+        if isFork then
+          -- continue this side with a new segment from the successor state
+          let ρE := (← instantiateMVars (← g.getType)).bindingBody!.getAppArgs[0]!
+          let g ← hnormHc (← introHc g)
+          let [go, gk] ← g.apply (mkConst ``Tree.WP_leaf) | throwError "sym_run: leaf"
+          let [] ← go.apply (mkConst ``ObsOK_nil) | throwError "sym_run: obs"
+          return ← runSeg sc cx0 cs ρE used nw (tagOf taken) gk
+      -- step-lemma form: the premise is introduced as the step leaves it; later normalisation
+      -- (`at *`) rewrites it, the goal-only fact rewriting does not
+      let g ← hnormHc (← introHc g)
+      symWalk sc cx0 child used nw (tagOf taken) g
+    let (p, st) ← match gt', gf' with
+      | none, none => pure ([], [])
+      | none, some gf' => side gf' ff false
+      | some gt', none => side gt' tt true
+      | some gt', some gf' =>
+        if ← ixTryPrune norm gt' then side gf' ff false
+        else if ← ixTryPrune norm gf' then side gt' tt true
+        else if sc.explore then
+          let (p1, s1) ← side gt' tt true
+          let (p2, s2) ← side gf' ff false
+          pure (p1 ++ p2, s1 ++ s2)
+        else
+          -- `sym_run1` stops at this branch: both premises go back in the step-lemma form
+          match tt, ff with
+          | .leaf ts, .leaf fs =>
+            let (p1, st) ← zeroStepChild cx ts nw (tagOf true) gt' bop' br1 br2 true
+              (introHc := false)
+            let (p2, sf) ← zeroStepChild cx fs nw (tagOf false) gf' bop' br1 br2 false
+              (introHc := false)
+            pure (p1 ++ p2, [st, sf])
+          | _, _ => throwError "sym_run1: branch"
+    return (pend0 ++ p, st)
 
-def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (stops : List Nat) :
-    TacticM (Option (List Nat)) := do
+end
+
+/-- The hypothesis part of the normaliser: `sx_norm`, `ix_tab` and `ix_mem` rewrite
+`at *`, so after the first step every hypothesis in scope (a branch premise introduced by an
+earlier run, say) is in normal form. The goal itself is left alone. -/
+def normHyps (g : MVarId) : TacticM MVarId := do
+  let gs ← getGoals
+  let mut g := g
+  for t in [← `(tactic| sx_norm), ← `(tactic| ix_tab), ← `(tactic| sx_norm), ← `(tactic| ix_mem)] do
+    let some stx ← liftMacroM (Macro.expandMacro? t) | continue
+    let saved ← saveState
+    try
+      setGoals [g]
+      let g' ← g.withContext do
+        let r ← mkSimpContext stx (eraseLocal := false)
+        let fvars ← g.getNondepPropHyps
+        r.dischargeWrapper.with fun discharge? => do
+          let (res, _) ← simpGoal g r.ctx r.simprocs discharge? (simplifyTarget := false)
+            (fvarIdsToSimp := fvars)
+          match res with
+          | some (_, g') => pure g'
+          | none => throwError "closed"
+      g := g'
+    catch _ => saved.restore
+  setGoals gs
+  return g
+
+def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (stops : List Nat)
+    (raws : List Nat := []) : TacticM Unit := do
+  let t0 ← IO.monoMsNow
   let dbg (m : String) : TacticM Unit := do
-    if (← getOptions).getBool `sym_run.trace false then IO.eprintln s!"sym_run stage: {m}"
+    if (← getOptions).getBool `sym_run.trace false then
+      IO.eprintln s!"sym_run stage: {m} @{(← IO.monoMsNow) - t0}ms"
   let norm ← ixNorm facts
   let g ← getMainGoal
   let g ← do
@@ -372,28 +768,54 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
       | [g'] => pure g'
       | _ => saved.restore; pure g
     catch _ => saved.restore; pure g
+  let tag0 ← g.getTag
   g.withContext do
-  let ty0 ← instantiateMVars (← g.getType)
+  let ty0 := (← instantiateMVars (← g.getType)).consumeMData.headBeta
   let w ← whnfR ty0
   let a := w.getAppArgs
   unless w.getAppFn.isConstOf ``SWP && a.size == 8 do throwError "sym_run: goal is not SWP"
   let some ⟨_, pcv⟩ ← getBitVecValue? a[5]! | throwError "sym_run: pc"
+  -- a run that starts at a stop point takes no step and normalises nothing
+  if stops.contains pcv.toNat then
+    replaceMainGoal [g]
+    return
+  let g ← normHyps g
+  g.withContext do
   let R := a[6]!
   -- data view and its bases
   let text ← whnfR a[1]!
   let DA := if text.getAppNumArgs == 6 then (text.getAppArgs[5]!).getAppArgs.back? else none
-  let daF := match DA with
-    | some e => (collectFVars {} e).fvarSet
-    | none => {}
   let Rf := Id.run do
     let mut e := R
     while e.isAppOfArity ``upd 4 || e.isAppOfArity ``upd 3 do e := e.getAppArgs[0]!
     return e
+  -- registers the goal's register function overrides: a fact `Rf i = x` about the base says
+  -- nothing about them
+  let written : List Nat := Id.run do
+    let mut e := R
+    let mut ws : List Nat := []
+    while e.isAppOfArity ``upd 4 || e.isAppOfArity ``upd 3 do
+      if let some k := e.getAppArgs[1]!.nat? then ws := k :: ws
+      e := e.getAppArgs[0]!
+    return ws
   let regOf? (lhs : Expr) : Option Nat :=
-    if lhs.isApp && (lhs.appFn! == R || lhs.appFn! == Rf) then lhs.appArg!.nat? else none
-  let mut dbase : List SE := []
-  let mut L0 : List (Nat × SE) := []
-  let mut L0facts : Array Term := #[]
+    if lhs.isApp && lhs.appFn! == R then lhs.appArg!.nat?
+    else if lhs.isApp && lhs.appFn! == Rf then
+      match lhs.appArg!.nat? with
+      | some i => if written.contains i then none else some i
+      | none => none
+    else none
+  let dbase : List SE := []
+  let mut known : List (Nat × BitVec 64) := []
+  -- literal registers of the goal's own register function (`upd … k lit`, outermost write)
+  let mut rch := R
+  let mut seenK : List Nat := []
+  while rch.isAppOfArity ``upd 4 || rch.isAppOfArity ``upd 3 do
+    if let some k := rch.getAppArgs[1]!.nat? then
+      unless seenK.contains k do
+        seenK := k :: seenK
+        if let some ⟨64, v⟩ ← getBitVecValue? rch.getAppArgs[2]! then known := known ++ [(k, v)]
+    rch := rch.getAppArgs[0]!
   let mut regEqs : Array (Nat × Expr) := #[]
   let mut ldFacts : Array (Expr × Expr) := #[]
   for f in facts do
@@ -403,9 +825,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
       if let some i := regOf? lhs then
         regEqs := regEqs.push (i, rhs)
         if let some ⟨64, v⟩ ← getBitVecValue? rhs then
-          L0 := L0 ++ [(i, .c v)]; L0facts := L0facts.push f
-        let rf := (collectFVars {} rhs).fvarSet
-        if rf.toList.any daF.contains then dbase := dbase ++ [.r i]
+          known := known ++ [(i, v)]
       else if lhs.isAppOfArity ``ldv 3 then
         ldFacts := ldFacts.push (lhs, rhs)
   let Dt : Expr := if text.getAppNumArgs == 6 then
@@ -413,13 +833,22 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
     else mkConst ``Unit.unit
   -- known data-view words: `ldv k Dt ADDR = lit`, ADDR = `x.toNat` or `(x + c).toNat`, `R i = x`
   let mut kv : List (MKind × SE × BitVec 64) := []
+  let mut kvM : List (MKind × SE × BitVec 64) := []
   for (lhs, rhs) in ldFacts do
     let args := lhs.getAppArgs
     let some ⟨64, v⟩ ← getBitVecValue? rhs | continue
-    unless ← isDefEq args[1]! Dt do continue
+    -- a fact about the data view, or about the entry memory
+    let onD ← isDefEq args[1]! Dt
+    let onM := !onD && args[1]! == a[7]!
+    unless onD || onM do continue
     let kE ← whnfR args[0]!
     let some k := kE.constName?.bind mkindOf? | continue
     let ad := args[2]!
+    -- a literal address
+    if let some n := ad.nat? then
+      if onD then kv := kv ++ [(k, .c (BitVec.ofNat 64 n), v)]
+      else kvM := kvM ++ [(k, .c (BitVec.ofNat 64 n), v)]
+      continue
     unless ad.isAppOfArity ``BitVec.toNat 2 do continue
     let x := ad.appArg!
     let (xb, off) ← do
@@ -429,9 +858,12 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
         | _ => pure (x, (0 : BitVec 64))
       else pure (x, (0 : BitVec 64))
     for (i, e) in regEqs do
-      if e == xb then kv := kv ++ [(k, addC (.r i) off, v)]
-  let DAe : Expr := DA.getD (mkApp (mkConst ``List.nil [levelZero]) (mkConst ``Nat))
-  let ρ := mkApp3 (mkConst ``Env.mk) R a[7]! Dt
+      if e == xb then
+        if onD then kv := kv ++ [(k, addC (.r i) off, v)]
+        else kvM := kvM ++ [(k, addC (.r i) off, v)]
+  let DAe : Expr := DA.getD (mkApp (mkConst ``List.nil [Level.zero]) (mkConst ``Nat))
+  let ρ := mkApp4 (mkConst ``Env.mk) R a[7]! Dt
+    (.lam `_ (mkConst ``Nat) (toExpr (0 : BitVec 64)) .default)
   let mut lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
   for f in facts do lems := lems.push (← `(Lean.Parser.Tactic.simpLemma| $f:term))
   for n in headConsts a[3]! ++ (match DA with | some e => headConsts e | none => #[]) do
@@ -451,72 +883,69 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
       saved.restore; return false
     catch _ => saved.restore; return false
   let stopsBV : List (BitVec 64) := stops.map (BitVec.ofNat 64)
-  let s0 : SS := ⟨BitVec.ofNat 64 pcv.toNat, L0, [], []⟩
-  -- choose the data-view bases: an atom whose owned-read cover fails moves to the data view
-  let mut tree : Tree := .leaf s0
-  let mut Γ : Geom := []
-  let mut done := false
-  let mut rounds := 0
-  while !done && rounds < 6 do
-    rounds := rounds + 1
-    let C := mkApp3 (mkConst ``cfgI) (toExpr stopsBV) (toExpr dbase) (toExpr kv)
-    let run := mkApp3 (mkConst ``symRun) C (mkNatLit fuel) (toExpr s0)
-    tree ← unsafe evalExpr Tree (mkConst ``Tree) run
-    if rounds == 1 then
-      -- every literal leaf must be a stop point, or a pc with no landed step lemma
-      for s in Tree.leaves tree do
-        let p := s.pc.toNat
-        unless (stops.contains p) do
-          unless (← ixCandidates p).isEmpty do
-            throwError "sym_run: leaf {p} is not a stop point"
-    Γ := geomOf (Tree.obs tree)
-    let reads := ownedReadAtoms (Tree.obs tree)
-    let mut moved := false
-    let mut kept : Geom := []
-    for f in Γ do
-      let gg ← mkFreshExprMVar (← mkAppM ``Geom.holds #[ρ, a[3]!, DAe, toExpr [f]])
-      if ← proveGeom gg.mvarId! then
-        kept := kept ++ [f]
-      else if reads.contains f.atom && !(dbase.contains f.atom) && DA.isSome then
-        dbase := dbase ++ [f.atom]; moved := true
-      else
-        dbg s!"geometry fact dropped: {← ppGoal gg.mvarId!}"
-    Γ := kept
-    done := !moved
-  unless done do throwError "sym_run: geometry"
-  let C := mkApp3 (mkConst ``cfgI) (toExpr stopsBV) (toExpr dbase) (toExpr kv)
-  -- every literal leaf must be a stop point, or a pc with no landed step lemma
-  for s in Tree.leaves tree do
-    let p := s.pc.toNat
-    unless stops.contains p do
-      unless (← ixCandidates p).isEmpty do
-        throwError "sym_run: leaf {p} is not a stop point"
-  dbg "tree"
-  let Cs ← Term.exprToSyntax C
-  let Γs ← Term.exprToSyntax (toExpr Γ)
-  let fuelS := Syntax.mkNumLit (toString fuel)
-  let L0s ← Term.exprToSyntax (toExpr L0)
-  let gs ← evalTacticAt (← `(tactic| refine symRun_auto $Cs codeAt_interp $(⟨h⟩) (by decide)
-    (by decide) $Γs $fuelS _ _ _ $L0s ?_ ?_ ?_ ?_)) g
-  let [gL, gK, gΓ, gw] := gs | throwError "sym_run: refine"
-  let knownTac ← `(tactic| (simp only [cfgI, List.mem_cons, forall_eq_or_imp, List.not_mem_nil,
+  let s0 : SS := ⟨BitVec.ofNat 64 pcv.toNat, [], [], []⟩
+  let C := mkAppN (mkConst ``cfgI) #[toExpr stopsBV, toExpr dbase, toExpr kv, toExpr kvM,
+    toExpr known, mkConst ``interpDataPCs, mkConst ``interpHavocPCs,
+    toExpr (raws.map (BitVec.ofNat 64)), toExpr true]
+  -- the run-independent premises, once
+  let hX ← mkFreshExprMVar (mkAppN (mkConst ``RunCtx) #[a[0]!, mkConst ``interpText, Dt, C, R, a[7]!])
+  let gs ← evalTacticAt (← `(tactic| refine RunCtx.mk codeAt_interp (fun _ _ hb => interp_code hb)
+    $(⟨h⟩) (by decide) (by decide) (by decide) ?_ ?_ (knownAll_mem ?_))) hX.mvarId!
+  let [gK, gKm, gKn] := gs | throwError "sym_run: refine"
+  dbg "refined"
+  -- facts may be stated on the goal's register function as written (`upd R k v i = x`) or on
+  -- its base (`R i = x`): try the facts alone, then with the update reduced
+  let closers ← `(tactic| (and_intros <;> first | with_reducible rfl | with_reducible assumption))
+  let knownA ← `(tactic| simp only [cfgI, List.mem_cons, forall_eq_or_imp, List.not_mem_nil,
+    false_implies, implies_true, and_true, SE.den, addC, BitVec.add_zero, BitVec.reduceToNat,
+    $lems,*])
+  let knownB ← `(tactic| simp only [cfgI, List.mem_cons, forall_eq_or_imp, List.not_mem_nil,
     false_implies, implies_true, and_true, SE.den, addC, upd_apply, Nat.reduceEqDiff, ite_true,
-    ite_false, BitVec.add_zero, $lems,*, *] <;> and_intros <;> first | rfl | assumption))
-  for gg in [gL, gK] do
+    ite_false, BitVec.add_zero, BitVec.reduceToNat, $lems,*])
+  let tryKnown (tac : Syntax) (gg : MVarId) : TacticM Bool := do
     let saved ← saveState
-    let ok ← try pure (← evalTacticAt knownTac gg).isEmpty catch e => do
-      dbg s!"known values: {← e.toMessageData.toString}"; pure false
-    unless ok do saved.restore; throwError "sym_run: known values"
-  dbg "refine"
-  unless ← proveGeom gΓ do throwError "sym_run: geometry"
-  dbg "geom"
-  let [gw] ← evalTacticAt (← `(tactic| sym_eval)) gw | throwError "sym_run: eval"
-  dbg "eval"
-  match ← symWalk ty0 norm L0facts facts explore gw with
-  | .error cuts => return some cuts
-  | .ok (pend, stuck) =>
-    replaceMainGoal (pend ++ stuck)
-    return none
+    try
+      let gs ← withoutRecover (evalTacticAt tac gg)
+      for g1 in gs do
+        try
+          unless (← withoutRecover (evalTacticAt closers g1)).isEmpty do throwError "open"
+        catch e =>
+          dbg s!"known values, left: {← ppGoal g1}"
+          throw e
+      return true
+    catch e =>
+      dbg s!"known values: {← e.toMessageData.toString}\n{← ppGoal gg}"
+      saved.restore
+      return false
+  for gg in [gK, gKm] do
+    unless ← tryKnown knownA gg do
+      unless ← tryKnown knownB gg do throwError "sym_run: known values"
+  -- known registers: one conjunct each; a literal of the goal's own register function is `rfl`
+  do
+    let gs ← evalTacticAt (← `(tactic| (simp only [cfgI, KnownAll] <;> and_intros))) gKn
+    for g1 in gs do
+      let saved ← saveState
+      let ok ← try
+          pure (← withoutRecover (evalTacticAt (← `(tactic| first
+            | exact True.intro | exact rfl | (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, $lems,*]; done)
+            | assumption)) g1)).isEmpty
+        catch _ => pure false
+      unless ok do
+        dbg s!"known register: {← ppGoal g1}"
+        saved.restore; throwError "sym_run: known values"
+  dbg "known"
+  let cx : ObCtx := { ty0, norm, l0facts := #[], facts, regs := [] }
+  let hXe ← instantiateMVars hX
+  let Se := a[3]!
+  let sc : SegCtx := SegCtx.mk C hXe fuel stops explore ρ Se DAe proveGeom dbg (← IO.mkRef 0) (← IO.mkRef #[])
+  let (pend, stuck) ← runSeg sc cx s0 ρ 0 0 tag0 g
+  dbg "walk"
+  replaceMainGoal (pend ++ stuck)
+
+/-- Source line of the tactic, for the trace. -/
+def refLine : TacticM Nat := do
+  let some p := (← getRef).getPos? | return 0
+  return ((← getFileMap).toPosition p).line
 
 def symRunTac (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num))) :
@@ -524,31 +953,36 @@ def symRunTac (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
   let fuel := (n.map (·.getNat)).getD 400
   let facts : Array Term := match fs with | some fs => fs.getElems | none => #[]
   let stopPCs : List Nat := match stops with | some ss => ss.toList.map (·.getNat) | none => []
-  let saved ← saveState
-  let trace := (← getOptions).getBool `sym_run.trace false
-  tryCatchRuntimeEx
-    (do
-      let mut extra : List Nat := []
-      let mut fin := false
-      let mut rounds := 0
-      while !fin do
-        rounds := rounds + 1
-        if rounds > 8 then throwError "sym_run1: too many cuts"
-        let s1 ← saveState
-        match ← symRunCore explore fuel h facts (stopPCs ++ extra) with
-        | none => fin := true
-        | some cuts => s1.restore; extra := extra ++ cuts
-      if trace then logInfo m!"sym_run: symbolic")
-    (fun e => do
-      let msg ← e.toMessageData.toString
-      saved.restore
-      if trace then logInfo m!"sym_run fallback: {msg}"
-      ixRunCore explore n h fs stops)
+  -- `set_option sym_run.trace true`, or `SYM_TRACE=1` for a whole build
+  let trace := (← getOptions).getBool `sym_run.trace false || (← IO.getEnv "SYM_TRACE").isSome
+  let mut raws : List Nat := []
+  let mut fin := false
+  let mut rounds := 0
+  while !fin do
+    rounds := rounds + 1
+    if rounds > 12 then throwError "sym_run: too many rounds"
+    let s1 ← saveState
+    let r ← try
+        symRunCore explore fuel h facts stopPCs raws
+        pure none
+      catch e =>
+        -- a load whose forwarding is undecided is rerun unreduced
+        let msg ← e.toMessageData.toString
+        match (msg.splitOn "sym_run: rawpc ")[1]? with
+        | some t =>
+          match t.trimAscii.toString.toNat? with
+          | some pc => if raws.contains pc then throw e else pure (some pc)
+          | none => throw e
+        | none => throw e
+    match r with
+    | none => fin := true
+    | some pc => s1.restore; raws := raws ++ [pc]
+  if trace then logInfo m!"sym_run: symbolic @{← refLine}"
 
 syntax "sym_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
 elab_rules : tactic
   | `(tactic| sym_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => symRunTac true n h fs stops
-  | `(tactic| sym_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => ixRunCore false n h fs stops
+  | `(tactic| sym_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => symRunTac false n h fs stops
 
 end VsaIris.SymExec.Interp

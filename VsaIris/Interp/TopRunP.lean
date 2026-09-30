@@ -4,6 +4,7 @@ import VsaIris.Interp.SpecErr
 import VsaIris.Vsa.TopAbrupt
 import VsaIris.Interp.ProofValueCons
 import VsaIris.Interp.LeafErr
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -15,26 +16,26 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (h2 : R 2 = sFr) (hin : ldv .ld Mt (sTop.toNat - 176) = BitVec.ofNat 64 inpTop)
     (hline : LdOK (R 9 + 4#64).toNat 4) :
     IW live m [] (interpS sTop) Q 0x80004540#64 R Mt
-  by ix_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x80004558
+  by sym_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x80004558
 
 #ix_seg TopAbrBrk_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     (h2 : R 2 = sFr) (hin : ldv .ld Mt (sTop.toNat - 176) = BitVec.ofNat 64 inpTop)
     (hline : LdOK (R 9 + 4#64).toNat 4) :
     IW live m [] (interpS sTop) Q 0x80004564#64 R Mt
-  by ix_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x8000457c
+  by sym_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x8000457c
 
 #ix_seg TopTlRet_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     (h2 : R 2 = sFr) (hRA : ldv .ld Mt (sFr + 168#64).toNat = 0x800045ec#64) :
     IW live m [] (interpS sTop) Q 0x8000455c#64 R Mt
-  by ix_run hlive using [h2, hRA, interpS]
+  by sym_run hlive using [h2, hRA, interpS]
 
 #ix_seg TopTlBrk_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     (h2 : R 2 = sFr) (hRA : ldv .ld Mt (sFr + 168#64).toNat = 0x800045ec#64) :
     IW live m [] (interpS sTop) Q 0x80004580#64 R Mt
-  by ix_run hlive using [h2, hRA, interpS]
+  by sym_run hlive using [h2, hRA, interpS]
 
 section Abrupt
 

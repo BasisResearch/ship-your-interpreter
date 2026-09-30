@@ -1,6 +1,7 @@
 import VsaIris.Vsa.MallocTop
 import VsaIris.Vsa.HeapGrow
 import VsaIris.Vsa.Sbrk
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
@@ -131,12 +132,8 @@ theorem ext_setup {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   · rw [ha4]
   · rw [ha5]
   · rw [ha6]; rfl
-  · intro a ha
-    rw [writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
-      simp only [OutL, and_true] <;> sx_addr
-  · intro a h
-    exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
-      (writeLog_present _ _ _ (writeLog_present _ _ _ h))))
+  · wl_win <;> sx_addr
+  · intro a h; simp only [writeLog_nest]; exact writeLog_present _ _ _ h
   · exact hSB
   · unfold sbReq; omega
   · unfold brkAddr
@@ -264,17 +261,10 @@ theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
   unfold topAddr avAddr at htopM
   sx_run [1] O.live
   simp (disch := sx_addr) only [ldv_at htopM]
-  sx_run [2] O.live at 0x80004f84
-  have hhd := foot_header Hp.heap.heap (.inl rfl)
-  have htop16 := HH.aligned.2
-  have hroom0 := Hp.heap.heap.top_room
-  have hoffH := Hp.off_stack hhd
-  unfold mHead at hoffH
-  refine (step% st 0x80004f84) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot_at hhd _ (by sx_addr)
-  sx_norm
-  refine (step% st 0x80004f88) O.live ?_
+  have T : Rgn (vsaFoot C.H) (C.top0 + 8) 8 := ⟨foot_header Hp.heap.heap (.inl rfl)⟩
+  have htop16 := HH.aligned.2; have hroom0 := Hp.heap.heap.top_room
+  have hoffH := T.offStack Hp.disj (by decide); unfold mHead at hoffH
+  sx_run [4] O.live at 0x80004bc8
   have hmsM : (read64 M maxSbrkedAddr).isSome := by
     rw [hglob _ (fun k hk => by unfold maxSbrkedAddr allocGlobal InRange; omega)
       (fun k hk => by unfold maxSbrkedAddr SbrkG brkAddr; omega)]; exact HH.max_sbrked
@@ -323,8 +313,7 @@ theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
     · have hnf : ¬ vsaFoot C.H a := fun h => ha (.inl h)
       have hng : ¬ allocGlobal a := fun h => hnf (.inl h)
       rw [hM' a (fun h => hng (hgw a (.inl h))) (fun h => hng (hgw a (.inr h)))
-        (fun h => hnf (hhd (a - (C.top0 + 8)) (by omega) |> fun h' => by
-          rwa [show C.top0 + 8 + (a - (C.top0 + 8)) = a by omega] at h'))]
+        (fun h => hnf (T.mem h.1 (by omega)))]
       rw [E.agree a (fun hw => ha (.inr hw)) (fun hs => hng (by
         unfold SbrkG brkAddr at hs; unfold allocGlobal InRange; omega))]
       exact Hp.frame a ha
@@ -389,16 +378,10 @@ theorem ext_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
   unfold topAddr avAddr at htp
   sx_run [1] O.live
   simp (disch := sx_addr) only [ldv_at htp]
-  have hhd := foot_header Hp'.heap.heap (.inl rfl)
-  have htop16 := HH.aligned.2
-  have hroom0 := Hp.heap.heap.top_room
-  have hts := HH.top_size
-  refine (step% st 0x80004e04) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot_at hhd _ (by sx_addr)
-  sx_norm
+  have T : Rgn (vsaFoot C.H) (C.top0 + 8) 8 := ⟨foot_header Hp'.heap.heap (.inl rfl)⟩
+  have hroom0 := Hp.heap.heap.top_room; have hts := HH.top_size
+  sx_run [4] O.live at 0x80004e10
   simp (disch := sx_addr) only [ldv_at HH'.top_header]
-  sx_run [3] O.live at 0x80004e10
   have hA : ((BitVec.ofNat 64 (brkv - C.top0 + 1)) &&& 18446744073709551612#64).toNat = brkv - C.top0 := by
     rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; omega
   have hN : (BitVec.ofNat 64 nb).toNat = nb := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]

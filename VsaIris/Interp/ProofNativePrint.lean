@@ -2,6 +2,7 @@ import VsaIris.Interp.ProofValuePrint
 import VsaIris.Interp.ProofValueCons
 import VsaIris.Vsa.StdioRead
 import VsaIris.Vsa.Stdout.OutSpec
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -229,11 +230,11 @@ end Vals
       rw [BitVec.toInt_eq_toNat_cond]; simp; omega
     have h0I : (0#64 : BitVec 64).toInt = 0 := by decide
     unfold nativePrintPC
-    ix_run1 hlive using [h10, h12, h13, h2, hsf, hnI, h0I] at 0x80002f1c
+    sym_run1 hlive using [h10, h12, h13, h2, hsf, hnI, h0I] at 0x80002f1c
     all_goals first
       | (intro hc; exfalso
          simp only [upd_apply, Nat.reduceEqDiff, ite_false, h12, hnI, h0I] at hc; omega)
-      | (intro _; ix_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f1c)
+      | (intro _; sym_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f1c)
 
 #ix_seg np_pro0 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
@@ -247,7 +248,7 @@ end Vals
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
     unfold nativePrintPC
-    ix_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f64
+    sym_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f64
 
 #ix_seg np_body {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -267,7 +268,7 @@ end Vals
   by
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
-    ix_run1 hlive using [h8, h9, h18, h2, hsf, ea, hw0, hw1, hw2, hio1, hio2] at 0x80002f44
+    sym_run1 hlive using [h8, h9, h18, h2, hsf, ea, hw0, hw1, hw2, hio1, hio2] at 0x80002f44
 
 #ix_seg np_more {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -279,10 +280,10 @@ end Vals
     (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
     IW live impMem (accAddrs 0x8001b970 8) (npS s args n) Q 0x80002f48#64 R M
   by
-    ix_run1 hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18
+    sym_run1 hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; exact hne)
-      | (intro _; ix_run1 hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18)
+      | (intro _; sym_run1 hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18)
 
 #ix_seg np_last {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -296,10 +297,10 @@ end Vals
     (hl19 : ldv .ld M (s + 18446744073709551536#64 + 40#64).toNat = v19) :
     IW live ∅ [] (npF s args n) Q 0x80002f48#64 R M
   by
-    ix_run1 hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64
+    sym_run1 hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; done)
-      | (intro _; ix_run1 hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64)
+      | (intro _; sym_run1 hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64)
 
 #ix_seg np_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -311,7 +312,7 @@ end Vals
     (hs4 : ldv .ld M (s + 18446744073709551536#64 + 32#64).toNat = v20) :
     IW live ∅ [] (npF s args n) Q 0x80002f68#64 R M
   by
-    ix_run1 hlive using [h2, hra, hs4, hal]
+    sym_run1 hlive using [h2, hra, hs4, hal]
 
 def npOut (st : Store) (vs : List Value) (i : Nat) : String :=
   if i = 0 then "" else printArgs st (vs.take i) ++ " "
@@ -1058,7 +1059,7 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
     · intro _ _ hc; exfalso; apply hc; simp [upd, h12, h0]
     rw [show npF s args 0 = npF s args vs.length by rw [h0]]
     intros
-    ix_run1 hlive using [h10, h2] at 0x80002f64
+    sym_run1 hlive using [h10, h2] at 0x80002f64
     intros; apply swp_closeF
     dsimp only [F']
     iintro ⟨⟨Hsl, #Hv, Hstd, Hcon, Hst, Hk, #Hcode⟩, Hms⟩

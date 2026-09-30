@@ -1,10 +1,4 @@
 import VsaIris.Interp.ITac
-import VsaIris.Vsa.StepTables.Snp0
-import VsaIris.Vsa.StepTables.Snp1
-import VsaIris.Vsa.StepTables.Snp2
-import VsaIris.Vsa.StepTables.Snp3
-import VsaIris.Vsa.StepTables.Snp4
-import VsaIris.Vsa.StepTables.Snp5
 
 namespace VsaIris.Sym
 

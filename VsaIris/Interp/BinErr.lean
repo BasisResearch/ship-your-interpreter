@@ -1,5 +1,6 @@
 import VsaIris.Interp.BinPrelude
 import VsaIris.Interp.ErrArm
+import VsaIris.Interp.SymInterp
 
 /-!
 The runtime type-error tail shared by every operator arm: the offending value is copied to
@@ -59,7 +60,7 @@ macro "rt_run" : tactic => `(tactic| (
   clear g h2
   simp only [opnSlot, opnConst] at hop
   try subst hop
-  ix_run hlive using [h2', hsf]
+  sym_run hlive using [h2', hsf]
   refine hk _ _ ⟨by ix_reg, by ix_reg, by ix_reg, by ix_reg, by ix_reg⟩))
 
 /-- The operator name at `opn` is a C string in the read-only data. -/
@@ -204,15 +205,15 @@ macro "bin_err_pre " facts:ident pc:num : tactic => `(tactic| (
   have hQ0 : ldv .ld Mt (s + 18446744073709550528#64 + 144#64).toNat = u0 := mid.q0
   clear g hn mid hyp F
   simp only [binOpTok, opnSlot, opnConst, Bool.false_eq_true, ↓reduceIte] at hop hk ⊢
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
 
 set_option hygiene false in
 macro "bin_err_mid " pc:num : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
 
 set_option hygiene false in
 macro "bin_err_post " pc:num : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc
   have hoff := evalSP_off (s := s) hsf (by omega)
   have hL0' : ldv .ld Mt (s.toNat - 1088 + 120) = w0 := by rw [← hoff 120 (by decide)]; exact hL0
   have hQ0' : ldv .ld Mt (s.toNat - 1088 + 144) = u0 := by rw [← hoff 144 (by decide)]; exact hQ0

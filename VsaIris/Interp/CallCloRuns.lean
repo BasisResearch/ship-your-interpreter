@@ -15,7 +15,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (h10 : R 10 = fr) (h2 : R 2 = s + 18446744073709550528#64)
     (hA : ldv .ld Mt (s.toNat - 1088) = BitVec.ofNat 64 argc) :
     IW live m [] (InExt (s.toNat - 1088, 1088)) Q 0x800032c0#64 R Mt
-  by ix_run hlive using [h10, h2, hA, hsf] at 0x800032dc 0x80003328
+  by sym_run hlive using [h10, h2, hA, hsf] at 0x800032dc 0x80003328
 
 #ix_seg CloB_runL {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -47,7 +47,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hO : ldv .ld Mt (s.toNat - 1088) = BitVec.ofNat 64 (8 * j))
     (h1024 : ldv .ld Mt (s + 18446744073709550528#64 + 1024#64).toNat = v22) :
     IW live m [] (InExt (s.toNat - 1088, 1088)) Q 0x80003314#64 R Mt
-  by ix_run hlive using [h2, h22, hO, h1024, hsf] at 0x800032dc 0x80003328
+  by sym_run hlive using [h2, h22, hO, h1024, hsf] at 0x800032dc 0x80003328
 
 #ix_seg CloB_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}

@@ -1,4 +1,5 @@
 import VsaIris.Interp.ExecChild
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -18,13 +19,13 @@ open Vsa.MemRepr Vsa.Sim
     (hc : ldv .ld m (aS + 8#64).toNat = aC) (hc0 : aC ≠ 0#64) :
     IW live m (stmtView aS.toNat 16) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hc, hc0, hsf] at 0x80004180
+     sym_run hlive using [h8, h14, h2, hk, hku, hc, hc0, hsf] at 0x80004180
 
 #ix_seg ExecExpr_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004184#64 R Mt
-  by ix_run hlive at 0x8000409c
+  by sym_run hlive at 0x8000409c
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
@@ -68,7 +69,7 @@ theorem exprCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L :
   unfold F'
   iintro ⟨⟨#Hyp, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
 
-  iapply hcall 0x80004180 _ (jalx_80004180 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+  iapply hcall 0x80004180 _ ((step% jalx 0x80004180) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (slot := execSP s + 16#64) (aC := BitVec.ofNat 64 p)
     (aE := aE) (sF := execSP s) (f := 176) (m := execNeed (.expr e) d - 176)
     (execSP_eq s).symm g.child g.fits g.below (by omega) hf.stack.le g.slotGeom hbb

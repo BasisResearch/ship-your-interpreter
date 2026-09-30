@@ -1,5 +1,4 @@
-import VsaIris.Vsa.StepTables.Alloc0
-import VsaIris.Vsa.StepTables.Alloc1
+import VsaIris.Vsa.StepGen
 
 namespace VsaIris.Sym
 
@@ -121,10 +120,6 @@ def isSWP (ty : Expr) : MetaM Bool := do
   let ty ← whnfR ty
   return ty.consumeMData.getAppFn.isConstOf ``SWP
 
-private def hex8 (n : Nat) : String :=
-  let s := String.ofList (Nat.toDigits 16 n)
-  String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s
-
 private def trySide (g : MVarId) : TacticM Bool := do
   let saved ← saveState
   try
@@ -145,9 +140,9 @@ private def tryPrune (g : MVarId) : TacticM Bool := do
 
 def sxStep (h : Syntax) (g : MVarId) : TacticM (Option (List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
-  let nm := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"st_{hex8 pc}"
-  unless (← getEnv).contains nm do return none
-  let stx ← `(tactic| apply $(mkIdent nm) $(⟨h⟩))
+  let t? ← g.withContext do StepGen.swpTbl? (← g.getType)
+  let some nm ← StepGen.driverLemma? t? "st" pc | return none
+  let stx ← `(tactic| apply $(mkCIdent nm) $(⟨h⟩))
   let gs ← evalTacticAt stx g
   return some gs
 

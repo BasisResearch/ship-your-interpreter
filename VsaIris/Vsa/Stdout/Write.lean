@@ -1,13 +1,4 @@
 import VsaIris.Vsa.SymRunO
-import VsaIris.Vsa.StepTables.Stdio0
-import VsaIris.Vsa.StepTables.Stdio1
-import VsaIris.Vsa.StepTables.Stdio2
-import VsaIris.Vsa.StepTables.Stdio3
-import VsaIris.Vsa.StepTables.Stdio4
-import VsaIris.Vsa.StepTables.Stdio5
-import VsaIris.Vsa.StepTables.Stdio6
-import VsaIris.Vsa.StepTables.Stdio7
-import VsaIris.Vsa.StepTables.Stdio8
 import VsaIris.Interp.ITac
 import VsaIris.Vsa.BvLits
 

@@ -107,15 +107,13 @@ theorem free_entry {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {n brkv : Nat}
     (Hp : FHeap C C.Mt0 C.n.toNat n brkv chunks bins) :
     AW C.live C.S C.Q freeEntryBV R C.Mt0 := by
   rw [show freeEntryBV = 0x8000479c#64 from rfl]
-  refine (step% st 0x8000479c) O.live ?_
-  refine (step% st 0x800047a0) O.live ?_
-  refine (step% st 0x800047a4) O.live ?_
+  rgn_run O.live at 0x80007350
   refine free_body O ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ Hp <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · exact hra
   · exact hsp
   · decide
-  · sx_norm; rw [ha0]
+  · rw [ha0]
   · exact h8
   · exact h9
   · exact h18

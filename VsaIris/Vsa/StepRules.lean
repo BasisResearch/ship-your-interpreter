@@ -9,11 +9,11 @@ import VsaIris.Vsa.SnpRunDef
 # Step rules with the landed continuation shape
 
 One rule per instruction class (ALU line, owned load, store, branch, jump, return), proved
-once from `swpx_line`/`swpx_br`/`swpx_j`/`swpx_jr` for any code image. A step-table lemma
+once from `swpx_line`/`swpx_br`/`swpx_j`/`swpx_jr` for any code image. A step lemma
 at a literal `pc` is the rule applied to the instruction of the image word, one Boolean
 side-condition check and the decode fact of the word; its binders and continuation are the
 rule's, so the kernel identifies the table statement with the rule instance by evaluation.
-`d*` rules are for runs with a data view (`T ++ dataOf Dt DA`), `a*` rules for runs without.
+The `x_*` rules hold for a run over any text `T ++ D`.
 -/
 
 namespace VsaIris.SymExec
@@ -38,11 +38,6 @@ theorem codeAt_of_piece {T : List (Nat × BitVec 8)} {ps : List TextPiece} {img 
   refine (hT m hm).pin (List.any_eq_true.2 ⟨_, hp, ?_⟩)
   simp only [Bool.and_eq_true, beq_self_eq_true, and_true]
   exact inRangesB_iff.2 ha
-
-theorem swp_nilD {live : Nat → Prop} {T : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
-    {Mt : Mem} : SWP live (T ++ dataOf ∅ []) rs S Q pc R Mt ↔ SWP live T rs S Q pc R Mt := by
-  rw [show dataOf ∅ [] = [] from rfl, List.append_nil]
 
 /-! ## Side conditions -/
 
@@ -99,15 +94,20 @@ section rules
 variable {T : List (Nat × BitVec 8)} {rs : List Nat} {ps : List TextPiece}
   {img : Nat → BitVec 8} {rT : List (Nat × Nat)}
 
-/-! ## Runs with a data view -/
+/-! ## Rules
 
-theorem d_alu (C : TblOK T rs ps img rT) (a : MInstr) (hchk : aluChk img rT rs a = true)
-    (hdec : DecM a) {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+Stated for a run over any text `X = T ++ D`: `D` is the data view of the run
+(`dTextOf`), or empty (`aText_eq`). -/
+
+theorem x_alu (C : TblOK T rs ps img rT) (a : MInstr) (hchk : aluChk img rT rs a = true)
+    (hdec : DecM a) {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
     (hlive : ∀ p ∈ T, live p.1)
-    (hk : SWP live (T ++ dataOf Dt DA) rs S Q (BitVec.addInt a.pc 4)
+    (hk : SWP live X rs S Q (BitVec.addInt a.pc 4)
       (upd R a.rd (wvalM a (pinsOf (lineKs a) R) [])) Mt) :
-    SWP live (T ++ dataOf Dt DA) rs S Q a.pc R Mt := by
+    SWP live X rs S Q a.pc R Mt := by
+  subst hX
   simp only [aluChk, Bool.and_eq_true, Bool.not_eq_true'] at hchk
   obtain ⟨⟨hl, hnl⟩, hns⟩ := hchk
   have ok := LineOK.of_chk hl
@@ -120,15 +120,17 @@ theorem d_alu (C : TblOK T rs ps img rT) (a : MInstr) (hchk : aluChk img rT rs a
     exact upd_other _ _ fun e => hnk (e ▸ ok.wr a.rd (by rw [wrChain_nonstore hns]; simp))
   · rw [lineR_nonstore hns, hns]; exact hk
 
-theorem d_load (C : TblOK T rs ps img rT) (a : MInstr) (hchk : loadChk img rT rs a = true)
-    (hdec : DecM a) {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+theorem x_load (C : TblOK T rs ps img rT) (a : MInstr) (hchk : loadChk img rT rs a = true)
+    (hdec : DecM a) {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
     (hlive : ∀ p ∈ T, live p.1)
     (hea : LdOK (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind))
     (hLDS : ∀ b ∈ accAddrs (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind), S b)
-    (hk : SWP live (T ++ dataOf Dt DA) rs S Q (BitVec.addInt a.pc 4)
+    (hk : SWP live X rs S Q (BitVec.addInt a.pc 4)
       (upd R a.rd (ldv a.kind Mt (eaddrM a (pinsOf (lineKs a) R)).toNat)) Mt) :
-    SWP live (T ++ dataOf Dt DA) rs S Q a.pc R Mt := by
+    SWP live X rs S Q a.pc R Mt := by
+  subst hX
   simp only [loadChk, Bool.and_eq_true] at hchk
   obtain ⟨hl, hld⟩ := hchk
   have hns := not_store_of_load hld
@@ -145,15 +147,17 @@ theorem d_load (C : TblOK T rs ps img rT) (a : MInstr) (hchk : loadChk img rT rs
     exact upd_other _ _ fun e => hnk (e ▸ ok.wr a.rd (by rw [wrChain_nonstore hns]; simp))
   · rw [lineR_nonstore hns, hns, wvalM_load hld]; exact hk
 
-theorem d_store (C : TblOK T rs ps img rT) (a : MInstr) (hchk : storeChk img rT rs a = true)
-    (hdec : DecM a) {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+theorem x_store (C : TblOK T rs ps img rT) (a : MInstr) (hchk : storeChk img rT rs a = true)
+    (hdec : DecM a) {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
     (hlive : ∀ p ∈ T, live p.1)
     (hea : stOKk a.kind (eaddrM a (pinsOf (lineKs a) R)).toNat)
     (hS : ∀ b ∈ accAddrs (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind), S b)
-    (hk : SWP live (T ++ dataOf Dt DA) rs S Q (BitVec.addInt a.pc 4) R
+    (hk : SWP live X rs S Q (BitVec.addInt a.pc 4) R
       (writeLog Mt [wentryM a (pinsOf (lineKs a) R)])) :
-    SWP live (T ++ dataOf Dt DA) rs S Q a.pc R Mt := by
+    SWP live X rs S Q a.pc R Mt := by
+  subst hX
   simp only [storeChk, Bool.and_eq_true] at hchk
   obtain ⟨hl, hst⟩ := hchk
   have ok := LineOK.of_chk hl
@@ -166,19 +170,21 @@ theorem d_store (C : TblOK T rs ps img rT) (a : MInstr) (hchk : storeChk img rT 
   · intro x _ _ _; unfold lineR; rw [hst]; rfl
   · unfold lineR; rw [hst]; exact hk
 
-theorem d_br (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (op : bop) (r1 r2 : Nat)
+theorem x_br (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (op : bop) (r1 r2 : Nat)
     (i13 : BitVec 13)
     (hchk : brChk img rT rs (mkT pc w (.br op true) r1 r2 i13 0)
       (mkT pc w (.br op false) r1 r2 i13 0) (nzd [r1, r2]) = true)
     (hdec : DecT (mkT pc w (.br op true) r1 r2 i13 0))
-    {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
     (hlive : ∀ p ∈ T, live p.1)
-    (hT : brCond op (rdR R r1) (rdR R r2) → SWP live (T ++ dataOf Dt DA) rs S Q
+    (hT : brCond op (rdR R r1) (rdR R r2) → SWP live X rs S Q
       (tgtPC0 (mkT pc w (.br op true) r1 r2 i13 0)) R Mt)
-    (hF : ¬ brCond op (rdR R r1) (rdR R r2) → SWP live (T ++ dataOf Dt DA) rs S Q
+    (hF : ¬ brCond op (rdR R r1) (rdR R r2) → SWP live X rs S Q
       (tgtPC0 (mkT pc w (.br op false) r1 r2 i13 0)) R Mt) :
-    SWP live (T ++ dataOf Dt DA) rs S Q pc R Mt := by
+    SWP live X rs S Q pc R Mt := by
+  subst hX
   have ok := BrOK.of_chk hchk
   have h1 : r1 = 0 ∨ r1 ∈ nzd [r1, r2] := mem_nzd (by simp)
   have h2 : r2 = 0 ∨ r2 ∈ nzd [r1, r2] := mem_nzd (by simp)
@@ -193,31 +199,77 @@ theorem d_br (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (op : b
       (nzd [r1, r2]) ok.wff ok.keys hlive ok.pins (fun σ => hdec σ)
       (hg _ ((guard_false (guardB_iff _ _ _)).2 hc)) C.pc ok.regs C.gp (hF hc)
 
-theorem d_j (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (i21 : BitVec 21)
+theorem x_j (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (i21 : BitVec 21)
     (hchk : jChk img rT (mkT pc w .j 0 0 0 i21) = true) (hdec : DecT (mkT pc w .j 0 0 0 i21))
-    {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
     (hlive : ∀ p ∈ T, live p.1)
-    (hk : SWP live (T ++ dataOf Dt DA) rs S Q (tgtPC0 (mkT pc w .j 0 0 0 i21)) R Mt) :
-    SWP live (T ++ dataOf Dt DA) rs S Q pc R Mt := by
+    (hk : SWP live X rs S Q (tgtPC0 (mkT pc w .j 0 0 0 i21)) R Mt) :
+    SWP live X rs S Q pc R Mt := by
+  subst hX
   simp only [jChk, Bool.and_eq_true, decide_eq_true_eq] at hchk
   exact swpx_j img rT C.code (mkT pc w .j 0 0 0 i21) rfl hchk.1 hlive hchk.2 hdec C.pc C.gp hk
 
-theorem d_jr (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (r1 : Nat)
+theorem x_jr (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (r1 : Nat)
     (hchk : jrChk img rT rs (mkT pc w .jr r1 0 0 0) (nzd [r1]) = true)
     (hdec : DecT (mkT pc w .jr r1 0 0 0))
-    {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
     (hlive : ∀ p ∈ T, live p.1)
     (hal : (rdR R r1).toNat % 4 = 0)
-    (hk : SWP live (T ++ dataOf Dt DA) rs S Q (rdR R r1) R Mt) :
-    SWP live (T ++ dataOf Dt DA) rs S Q pc R Mt := by
+    (hk : SWP live X rs S Q (rdR R r1) R Mt) :
+    SWP live X rs S Q pc R Mt := by
+  subst hX
   simp only [jrChk, Bool.and_eq_true, decide_eq_true_eq] at hchk
   obtain ⟨⟨⟨hwf, hkeys⟩, hpins⟩, hregs⟩ := hchk
   have hsv : srcVal r1 (pinsOf (nzd [r1]) R) = rdR R r1 := srcVal_pins (mem_nzd (by simp))
   exact swpx_jr img rT C.code (mkT pc w .jr r1 0 0 0) rfl rfl (nzd [r1]) hwf hkeys hlive hpins
     hdec C.pc hregs C.gp (by show (srcVal r1 _).toNat % 4 = 0; rw [hsv]; exact hal)
     (by show SWP _ _ _ _ _ (srcVal r1 _) _ _; rw [hsv]; exact hk)
+
+/-- A load at a `gp`-relative address: the range condition is part of the check. -/
+theorem x_loadc (C : TblOK T rs ps img rT) (a : MInstr) (hchk : loadcChk img rT rs a = true)
+    (hdec : DecM a) {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
+    (hlive : ∀ p ∈ T, live p.1)
+    (hLDS : ∀ b ∈ accAddrs (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind), S b)
+    (hk : SWP live X rs S Q (BitVec.addInt a.pc 4)
+      (upd R a.rd (ldv a.kind Mt (eaddrM a (pinsOf (lineKs a) R)).toNat)) Mt) :
+    SWP live X rs S Q a.pc R Mt := by
+  simp only [loadcChk, Bool.and_eq_true, decide_eq_true_eq] at hchk
+  obtain ⟨⟨hl, hr⟩, hea⟩ := hchk
+  refine x_load C a hl hdec X D hX hlive ?_ hLDS hk
+  unfold eaddrM
+  rw [srcVal_pins (rs1_mem a), hr]
+  exact hea
+
+/-- A load through the data view of the run. -/
+theorem d_loadD (C : TblOK T rs ps img rT) (a : MInstr) (hchk : loadChk img rT rs a = true)
+    (hdec : DecM a) {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    (hlive : ∀ p ∈ T, live p.1)
+    (hea : LdOK (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind))
+    (hLDD : ∀ b ∈ accAddrs (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind), b ∈ DA)
+    (hk : SWP live (T ++ dataOf Dt DA) rs S Q (BitVec.addInt a.pc 4)
+      (upd R a.rd (ldv a.kind Dt (eaddrM a (pinsOf (lineKs a) R)).toNat)) Mt) :
+    SWP live (T ++ dataOf Dt DA) rs S Q a.pc R Mt := by
+  simp only [loadChk, Bool.and_eq_true] at hchk
+  obtain ⟨hl, hld⟩ := hchk
+  have hns := not_store_of_load hld
+  have ok := LineOK.of_chk hl
+  refine swpx_line img rT C.code a (lineKs a)
+    [bytesAt (imgM Dt) (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind)] [] []
+    ok.wf ok.keys ok.wr ?_ hlive ok.pins hdec
+    (fun m _ hD _ => memFacts_load hld hea fun b hb => dataReads_view hD b (hLDD b hb))
+    C.pc ok.regs ok.nogp C.gp (fun _ h => nomatch h) (fun _ h => nomatch h) ?_ ?_
+  · intro b _; rw [hns]; trivial
+  · intro x _ _ hnk
+    rw [lineR_nonstore hns]
+    exact upd_other _ _ fun e => hnk (e ▸ ok.wr a.rd (by rw [wrChain_nonstore hns]; simp))
+  · rw [lineR_nonstore hns, hns, wvalM_load hld]; exact hk
 
 /-- The bytes of an instruction word, as a call site lists them. -/
 def wbytes (w : BitVec 32) : List (BitVec 8) :=
@@ -267,120 +319,37 @@ theorem jalExec_word (pc : Nat) (w : BitVec 32) (imm : BitVec 21) (tgt : BitVec 
   rwa [hlink] at h
 
 /-- A call `jal ra, tgt` of a run with a data view. -/
-theorem d_jal (C : TblOK T rs ps img rT) (pc : Nat) (w : BitVec 32) (imm : BitVec 21)
+theorem x_jal (C : TblOK T rs ps img rT) (pc : Nat) (w : BitVec 32) (imm : BitVec 21)
     (tgt : BitVec 64)
     (hchk : (jalChk pc w imm tgt && bytesHasB ps pc (wbytes w) && decide (VsaIris.ra ∈ rs)) = true)
     (hdec : ∀ σ, decodeN w σ = .ok (instruction.JAL (imm, regidx.Regidx 0x01#5)) σ)
-    {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
+    {live : Nat → Prop} (X D : List (Nat × BitVec 8)) (hX : X = T ++ D)
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64}
+    {Mt : Mem}
     (hlive : ∀ p ∈ T, live p.1)
-    (hk : SWP live (T ++ dataOf Dt DA) rs S Q tgt
+    (hk : SWP live X rs S Q tgt
       (upd R VsaIris.ra (BitVec.ofNat 64 (pc + 4))) Mt) :
-    SWP live (T ++ dataOf Dt DA) rs S Q (BitVec.ofNat 64 pc) R Mt := by
+    SWP live X rs S Q (BitVec.ofNat 64 pc) R Mt := by
+  subst hX
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hchk
   obtain ⟨⟨hj, hb⟩, hra⟩ := hchk
   exact swp_jal pc (wbytes w) tgt
     (jalExec_word pc w imm tgt hj hdec live fun p hp => hlive _ (C.foot hb p hp))
     (fun p hp => List.mem_append_left _ (C.foot hb p hp)) C.pc hra rfl hk
 
-/-! ## Runs without a data view -/
-
-theorem a_alu (C : TblOK T rs ps img rT) (a : MInstr) (hchk : aluChk img rT rs a = true)
-    (hdec : DecM a) {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hk : SWP live T rs S Q (BitVec.addInt a.pc 4)
-      (upd R a.rd (wvalM a (pinsOf (lineKs a) R) [])) Mt) :
-    SWP live T rs S Q a.pc R Mt :=
-  swp_nilD.1 <| d_alu C a hchk hdec hlive (swp_nilD.2 hk)
-
-theorem a_load (C : TblOK T rs ps img rT) (a : MInstr) (hchk : loadChk img rT rs a = true)
-    (hdec : DecM a) {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hea : LdOK (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind))
-    (hLDS : ∀ b ∈ accAddrs (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind), S b)
-    (hk : SWP live T rs S Q (BitVec.addInt a.pc 4)
-      (upd R a.rd (ldv a.kind Mt (eaddrM a (pinsOf (lineKs a) R)).toNat)) Mt) :
-    SWP live T rs S Q a.pc R Mt :=
-  swp_nilD.1 <| d_load C a hchk hdec hlive hea hLDS (swp_nilD.2 hk)
-
-/-- A load at a `gp`-relative address: the range condition is part of the check. -/
-theorem a_loadc (C : TblOK T rs ps img rT) (a : MInstr) (hchk : loadcChk img rT rs a = true)
-    (hdec : DecM a) {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hLDS : ∀ b ∈ accAddrs (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind), S b)
-    (hk : SWP live T rs S Q (BitVec.addInt a.pc 4)
-      (upd R a.rd (ldv a.kind Mt (eaddrM a (pinsOf (lineKs a) R)).toNat)) Mt) :
-    SWP live T rs S Q a.pc R Mt := by
-  simp only [loadcChk, Bool.and_eq_true, decide_eq_true_eq] at hchk
-  obtain ⟨⟨hl, hr⟩, hea⟩ := hchk
-  refine a_load C a hl hdec hlive ?_ hLDS hk
-  have h1 : a.rs1 = 0 ∨ a.rs1 ∈ lineKs a := rs1_mem a
-  unfold eaddrM
-  rw [srcVal_pins h1, hr]
-  exact hea
-
-theorem a_store (C : TblOK T rs ps img rT) (a : MInstr) (hchk : storeChk img rT rs a = true)
-    (hdec : DecM a) {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hea : stOKk a.kind (eaddrM a (pinsOf (lineKs a) R)).toNat)
-    (hS : ∀ b ∈ accAddrs (eaddrM a (pinsOf (lineKs a) R)).toNat (widthOfM a.kind), S b)
-    (hk : SWP live T rs S Q (BitVec.addInt a.pc 4) R
-      (writeLog Mt [wentryM a (pinsOf (lineKs a) R)])) :
-    SWP live T rs S Q a.pc R Mt :=
-  swp_nilD.1 <| d_store C a hchk hdec hlive hea hS (swp_nilD.2 hk)
-
-theorem a_br (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (op : bop) (r1 r2 : Nat)
-    (i13 : BitVec 13)
-    (hchk : brChk img rT rs (mkT pc w (.br op true) r1 r2 i13 0)
-      (mkT pc w (.br op false) r1 r2 i13 0) (nzd [r1, r2]) = true)
-    (hdec : DecT (mkT pc w (.br op true) r1 r2 i13 0))
-    {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hT : brCond op (rdR R r1) (rdR R r2) → SWP live T rs S Q
-      (tgtPC0 (mkT pc w (.br op true) r1 r2 i13 0)) R Mt)
-    (hF : ¬ brCond op (rdR R r1) (rdR R r2) → SWP live T rs S Q
-      (tgtPC0 (mkT pc w (.br op false) r1 r2 i13 0)) R Mt) :
-    SWP live T rs S Q pc R Mt :=
-  swp_nilD.1 <| d_br C pc w op r1 r2 i13 hchk hdec hlive (fun h => swp_nilD.2 (hT h))
-    (fun h => swp_nilD.2 (hF h))
-
-theorem a_j (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (i21 : BitVec 21)
-    (hchk : jChk img rT (mkT pc w .j 0 0 0 i21) = true) (hdec : DecT (mkT pc w .j 0 0 0 i21))
-    {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hk : SWP live T rs S Q (tgtPC0 (mkT pc w .j 0 0 0 i21)) R Mt) :
-    SWP live T rs S Q pc R Mt :=
-  swp_nilD.1 <| d_j C pc w i21 hchk hdec hlive (swp_nilD.2 hk)
-
-theorem a_jr (C : TblOK T rs ps img rT) (pc : BitVec 64) (w : BitVec 32) (r1 : Nat)
-    (hchk : jrChk img rT rs (mkT pc w .jr r1 0 0 0) (nzd [r1]) = true)
-    (hdec : DecT (mkT pc w .jr r1 0 0 0))
-    {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hal : (rdR R r1).toNat % 4 = 0)
-    (hk : SWP live T rs S Q (rdR R r1) R Mt) :
-    SWP live T rs S Q pc R Mt :=
-  swp_nilD.1 <| d_jr C pc w r1 hchk hdec hlive hal (swp_nilD.2 hk)
-
-theorem a_jal (C : TblOK T rs ps img rT) (pc : Nat) (w : BitVec 32) (imm : BitVec 21)
-    (tgt : BitVec 64)
-    (hchk : (jalChk pc w imm tgt && bytesHasB ps pc (wbytes w) && decide (VsaIris.ra ∈ rs)) = true)
-    (hdec : ∀ σ, decodeN w σ = .ok (instruction.JAL (imm, regidx.Regidx 0x01#5)) σ)
-    {live : Nat → Prop} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {R : Nat → BitVec 64} {Mt : Mem}
-    (hlive : ∀ p ∈ T, live p.1)
-    (hk : SWP live T rs S Q tgt (upd R VsaIris.ra (BitVec.ofNat 64 (pc + 4))) Mt) :
-    SWP live T rs S Q (BitVec.ofNat 64 pc) R Mt :=
-  swp_nilD.1 <| d_jal C pc w imm tgt hchk hdec hlive (swp_nilD.2 hk)
-
 end rules
+
+/-- The text of a run with the data view `dataOf Dt DA`. -/
+abbrev dTextOf (T : List (Nat × BitVec 8)) (Dt : Mem) (DA : List Nat) : List (Nat × BitVec 8) :=
+  T ++ dataOf Dt DA
+
+theorem dText_eq (T : List (Nat × BitVec 8)) (Dt : Mem) (DA : List Nat) :
+    dTextOf T Dt DA = T ++ dataOf Dt DA := rfl
+
+/-- The (empty) data view of a run without one. -/
+abbrev noData : List (Nat × BitVec 8) := []
+
+theorem aText_eq (T : List (Nat × BitVec 8)) : T = T ++ noData := (List.append_nil T).symm
 
 /-- The decode obligation of a literal word, as the kernel checks it (by evaluation). -/
 abbrev decRefl (w : BitVec 32) :

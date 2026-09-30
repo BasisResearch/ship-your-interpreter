@@ -23,7 +23,7 @@ abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) +
     (hflag : ldv .ld Mt (s + 18446744073709551440#64 + 8#64).toNat = 0#64)
     (hel : ldv .ld Dt (arr + BitVec.ofNat 64 (8 * idx)).toNat = pS) :
     IW live Dt (interpView arr.toNat count inp) (interpS s) Q 0x8000448c#64 R Mt
-  by ix_run hlive using [h8, h2, hflag, hel, hsf, interpS] at 0x8000445c
+  by sym_run hlive using [h8, h2, hflag, hel, hsf, interpS] at 0x8000445c
 
 #ix_seg InterpLoop_runH {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
@@ -46,7 +46,7 @@ abbrev interpView (arr count inp : Nat) : List Nat := accAddrs arr (8 * count) +
     (h10 : R 10 = sc) (h19 : R 19 = 3#64) (h20 : R 20 = 1#64)
     (h8 : R 8 = arr + BitVec.ofNat 64 (8 * idx)) (h18 : R 18 = arr + BitVec.ofNat 64 (8 * count)) :
     IW live Dt (interpView arr.toNat count inp) (interpS s) Q 0x80004478#64 R Mt
-  by ix_run hlive using [h10, h19, h20, h8, h18] at 0x8000448c 0x80004514 0x80004540 0x80004564
+  by sym_run hlive using [h10, h19, h20, h8, h18] at 0x8000448c 0x80004514 0x80004540 0x80004564
 
 structure InterpHead (R : Nat → BitVec 64) (s arr : BitVec 64) (idx count : Nat) : Prop where
   sp : R 2 = s + 18446744073709551440#64
