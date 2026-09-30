@@ -26,16 +26,16 @@ theorem CmpOp.strRun4 : ∀ o : CmpOp, o.StrRun4
   | lt => CmpOp.strRun4_lt | le => CmpOp.strRun4_le | gt => CmpOp.strRun4_gt
   | ge => CmpOp.strRun4_ge
 
-theorem CmpOp.errL1 : ∀ o : CmpOp, o.ErrRun true errL1
+theorem CmpOp.errL1 : ∀ o : CmpOp, BinErrRun o.op 0x80003e7c#64 opnSlot o.opn true errL1
   | lt => CmpOp.errL1_lt | le => CmpOp.errL1_le | gt => CmpOp.errL1_gt | ge => CmpOp.errL1_ge
 
-theorem CmpOp.errL2 : ∀ o : CmpOp, o.ErrRun true errL2
+theorem CmpOp.errL2 : ∀ o : CmpOp, BinErrRun o.op 0x80003e7c#64 opnSlot o.opn true errL2
   | lt => CmpOp.errL2_lt | le => CmpOp.errL2_le | gt => CmpOp.errL2_gt | ge => CmpOp.errL2_ge
 
-theorem CmpOp.errR1 : ∀ o : CmpOp, o.ErrRun false errR1
+theorem CmpOp.errR1 : ∀ o : CmpOp, BinErrRun o.op 0x80003e7c#64 opnSlot o.opn false errR1
   | lt => CmpOp.errR1_lt | le => CmpOp.errR1_le | gt => CmpOp.errR1_gt | ge => CmpOp.errR1_ge
 
-theorem CmpOp.errR2 : ∀ o : CmpOp, o.ErrRun false errR2
+theorem CmpOp.errR2 : ∀ o : CmpOp, BinErrRun o.op 0x80003e7c#64 opnSlot o.opn false errR2
   | lt => CmpOp.errR2_lt | le => CmpOp.errR2_le | gt => CmpOp.errR2_gt | ge => CmpOp.errR2_ge
 
 theorem CmpOp.epi : ∀ o : CmpOp, EpiRun (BitVec.ofNat 64 (o.vb.i + 4))
@@ -78,16 +78,6 @@ theorem BinTail.strs {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × Strin
   icases HF with ⟨#Hc, #Hr, #Hf, Hs, Ho, Hw, HK⟩
   iframe Hc Hr Hf Hs Ho Hw HK
   iframe Hx Hy
-
-theorem BinTail.drop {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
-    {N : NativeAddrs} {F : IProp GF} {R : Nat → BitVec 64} {s : BitVec 64} {Mt : Mem}
-    {lv rv' : Value} {w0 w1 w2 u0 u1 u2 : BitVec 64}
-    (h : ArmAt Wp Φ F 0x8000351c#64 R (InExt (s.toNat - 1088, 1088)) Mt) :
-    BinTail Wp Φ N F R s Mt lv rv' w0 w1 w2 u0 u1 u2 := by
-  unfold BinTail
-  iintro ⟨-, HF, Hms⟩
-  iapply h
-  iframe HF Hms
 
 theorem cmpIntTail (o : CmpOp) (Wp : MachWP (GF := GF) (vsaModel live))
     (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs}
@@ -149,28 +139,6 @@ theorem cmpStrTail (o : CmpOp) (Wp : MachWP (GF := GF) (vsaModel live))
   exact ArmAt.finish Wp (ExitK.frame _ hexit) g.sg.le g.need p7.ra
     (p7.keep (fun x hx => (k6'.hi x hx).trans (mid.hi x hx)) mid.sp)
 
-theorem cmpErrTail (o : CmpOp) {left : Bool} {hyp : Value → Value → Prop}
-    (herr : o.ErrRun left hyp) (Wp : MachWP (GF := GF) (vsaModel live))
-    (hlive : ∀ p ∈ interpText, live p.1)
-    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
-    (hE : ErrEnv N L Room inp live Core)
-    (hvk : ⊢ ∀ p Mt v, valueKindNameSpec (vsaModel live) Wp p Mt v)
-    {Φ : Nat × String → IProp GF} {P : Nat → Prop} {m : Mem} {env : Nat}
-    {aE s ret sret aX : BitVec 64} {d : Nat} {l r : Expr} {rv R : Nat → BitVec 64} {Mt : Mem}
-    {ρ : Regime} {st : St} {lv rv' : Value} {w0 w1 w2 u0 u1 u2 : BitVec 64} {K : IProp GF}
-    (g : ArmGeo s ret sret (evalNeed (.binary o.op l r) d)) (hn : BinOpNode m P aX (binOpTok o.op))
-    (mid : BinMid s sret (BitVec.ofNat 64 inp) rv R Mt ret aX lv rv' w0 w1 w2 u0 u1 u2)
-    (h : hyp lv rv')
-    (hab : AbortK Wp Φ inp Core s sret (evalNeed (.binary o.op l r) d) K) :
-    BinTail Wp Φ N (binArmF N P m env aE s (evalNeed (.binary o.op l r) d) sret
-      (world N L Room inp ρ st d) K) R s Mt lv rv' w0 w1 w2 u0 u1 u2 :=
-  BinTail.drop (ArmAt.run Wp hn.view (herr hlive g hn mid h) fun _ _ p =>
-    binErrTail Wp hlive hE hvk (jal_site% 0x80003e7c) (jal_site% 0x80003e98) rt_80003e80
-      o.opnName g (evalNeed_binary_rtErr _ _ _ _) hn.view (v := if left then lv else rv')
-      p.a0 (p.s2.trans mid.r18) (p.sp.trans mid.r2) p.slot
-      (by cases left <;> simp only [ite_true, ite_false, Bool.false_eq_true] <;>
-        first | exact mid.tl | exact mid.tr) p.opn hab)
-
 theorem cmpIntT (o : CmpOp) (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {st st1 st2 : St} {d env : Nat} {l r : Expr} {a b : Int} {nl nr : Nat}
@@ -213,10 +181,14 @@ theorem cmpP (o : CmpOp) {op : BinOp} (hop : o.op = op) (hlive : ∀ p ∈ inter
     · exact cmpIntTail o (wpW _) hlive hvb g hn mid (hexit _ (o.sem_int _ a b))
     · exact cmpStrTail o (wpW _) hlive hsc hvb (world_binImg N L Room inp _ _ d) g hn mid
         (hexit _ (o.sem_str _ x y))
-    · exact cmpErrTail o o.errL1 (wpW _) hlive hE hvk g hn mid ⟨hL, hR3⟩ hab
-    · exact cmpErrTail o o.errL2 (wpW _) hlive hE hvk g hn mid ⟨hL, hL3, rfl⟩ hab
-    · exact cmpErrTail o o.errR1 (wpW _) hlive hE hvk g hn mid ⟨rfl, hR, hR3⟩ hab
-    · exact cmpErrTail o o.errR2 (wpW _) hlive hE hvk g hn mid ⟨rfl, rfl⟩ hab
+    · exact binErrArm (jal_site% 0x80003e7c) (jal_site% 0x80003e98) (o.errL1) rt_80003e80
+        opnSlot_agree o.opnName (wpW _) hlive hE hvk g hn mid ⟨hL, hR3⟩ hab
+    · exact binErrArm (jal_site% 0x80003e7c) (jal_site% 0x80003e98) (o.errL2) rt_80003e80
+        opnSlot_agree o.opnName (wpW _) hlive hE hvk g hn mid ⟨hL, hL3, rfl⟩ hab
+    · exact binErrArm (jal_site% 0x80003e7c) (jal_site% 0x80003e98) (o.errR1) rt_80003e80
+        opnSlot_agree o.opnName (wpW _) hlive hE hvk g hn mid ⟨rfl, hR, hR3⟩ hab
+    · exact binErrArm (jal_site% 0x80003e7c) (jal_site% 0x80003e98) (o.errR2) rt_80003e80
+        opnSlot_agree o.opnName (wpW _) hlive hE hvk g hn mid ⟨rfl, rfl⟩ hab
 
 end
 

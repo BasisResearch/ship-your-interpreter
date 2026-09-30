@@ -235,24 +235,6 @@ theorem epi_800036cc : EpiRun 0x800036cc#64 := by epi_run
 theorem epi_80003b04 : EpiRun 0x80003b04#64 := by epi_run
 theorem epi_80003af0 : EpiRun 0x80003af0#64 := by epi_run
 
-/-- The four type-error paths of a comparison: which operand is named, and the kind
-checks that select the path. -/
-def CmpOp.ErrRun (o : CmpOp) (left : Bool) (hyp : Value → Value → Prop) : Prop :=
-  ∀ {live : Nat → Prop}, (∀ p ∈ interpText, live p.1) →
-  ∀ {m : Mem} {P : Nat → Prop} {aX s ret sret inp : BitVec 64} {rv R : Nat → BitVec 64} {Mt : Mem}
-    {lv rv' : Value} {w0 w1 w2 u0 u1 u2 : BitVec 64} {n : Nat},
-    ArmGeo s ret sret n → BinOpNode m P aX (binOpTok o.op) →
-    BinMid s sret inp rv R Mt ret aX lv rv' w0 w1 w2 u0 u1 u2 → hyp lv rv' →
-    MRun live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) 0x8000351c#64 0x80003e7c#64 R Mt
-      (fun R' Mt' => ErrPost R R' Mt' s (if left then w0 else u0) o.opn)
-
-theorem ofNat_valTag_ne {v : Value} {k : Nat} (h : valTag v ≠ k) (hk : k < 2 ^ 31) :
-    BitVec.ofNat 64 (valTag v) ≠ BitVec.ofNat 64 k := fun e => h (by
-  have := congrArg BitVec.toNat e
-  rw [BitVec.toNat_ofNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by have := valTag_lt v; omega),
-    Nat.mod_eq_of_lt (by omega)] at this
-  exact this)
-
 /-- Left operand neither an integer nor paired with a string. -/
 abbrev errL1 (lv rv' : Value) : Prop := valTag lv ≠ 2 ∧ valTag rv' ≠ 3
 /-- Left operand neither an integer nor a string, right a string. -/
@@ -261,13 +243,6 @@ abbrev errL2 (lv rv' : Value) : Prop := valTag lv ≠ 2 ∧ valTag lv ≠ 3 ∧ 
 abbrev errR1 (lv rv' : Value) : Prop := valTag lv = 2 ∧ valTag rv' ≠ 2 ∧ valTag rv' ≠ 3
 /-- Left an integer, right a string. -/
 abbrev errR2 (lv rv' : Value) : Prop := valTag lv = 2 ∧ valTag rv' = 3
-
-/-- The spilled kinds and the branch facts of a type-error path. -/
-structure ErrFacts (lv rv' : Value) (kl kr : BitVec 64) (A B : Prop) : Prop where
-  kl : BitVec.ofNat 64 (valTag lv) = kl
-  kr : BitVec.ofNat 64 (valTag rv') = kr
-  a : A
-  b : B
 
 theorem errL1_facts {lv rv' : Value} (h : errL1 lv rv') :
     ErrFacts lv rv' (BitVec.ofNat 64 (valTag lv)) (BitVec.ofNat 64 (valTag rv'))
@@ -288,40 +263,7 @@ theorem errR1_facts {lv rv' : Value} (h : errR1 lv rv') :
 theorem errR2_facts {lv rv' : Value} (h : errR2 lv rv') :
     ErrFacts lv rv' 2#64 3#64 True True := ⟨by rw [h.1], by rw [h.2], trivial, trivial⟩
 
-set_option hygiene false in
-macro "cmp_err_pre " facts:ident : tactic => `(tactic| (
-  intro live hlive m P aX s ret sret inp rv R Mt lv rv' w0 w1 w2 u0 u1 u2 n g hn mid hyp Q hk
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := g.sf
-  have hs := g.lo; have hs2 := g.hi; have hs3 := g.al
-  have hx1 := hn.lo; have hx2 := hn.hi; have hx3 := hn.off
-  have hop := hn.op
-  have h8 := mid.r8; have h9 := mid.r9; have h19 := mid.r19
-  have h2 : R 2 = s + 18446744073709550528#64 := mid.r2
-  have F := $facts hyp
-  have hKL := mid.kl.trans F.kl
-  have hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = _ := mid.kr.trans F.kr
-  have hA := F.a
-  have hB := F.b
-  have hL0 : ldv .ld Mt (s + 18446744073709550528#64 + 120#64).toNat = w0 := mid.l0
-  have hQ0 : ldv .ld Mt (s + 18446744073709550528#64 + 144#64).toNat = u0 := mid.q0
-  clear g hn mid hyp F
-  simp only [CmpOp.op, binOpTok, CmpOp.opn, Bool.false_eq_true, ↓reduceIte] at hop hk ⊢
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003628))
-
-set_option hygiene false in
-macro "cmp_err_mid " pc:num : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
-
-set_option hygiene false in
-macro "cmp_err_post" : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003e7c
-  have hoff := evalSP_off (s := s) hsf (by omega)
-  have hL0' : ldv .ld Mt (s.toNat - 1088 + 120) = w0 := by rw [← hoff 120 (by decide)]; exact hL0
-  have hQ0' : ldv .ld Mt (s.toNat - 1088 + 144) = u0 := by rw [← hoff 144 (by decide)]; exact hQ0
-  refine hk _ _ ⟨by ix_reg, by ix_reg, by ix_reg, by e2_fwd hoff <;> simp only [hL0', hQ0'],
-    by e2_fwd hoff⟩))
-
-theorem rt_80003e80 : RtRun 0x80003e80#64 0x80003e98#64 := by rt_run
+theorem rt_80003e80 : RtRun 0x80003e80#64 0x80003e98#64 opnSlot := by rt_run
 
 open Lean in
 def tree3 (a b c d : Ident) : MacroM (TSyntax `command) := do
@@ -333,7 +275,7 @@ set_option hygiene false in
 open Lean in
 /-- `#cmp_runs o vb` proves the reflected segments of comparison operator `o` whose
 `value_bool` call is at `vb`. -/
-macro "#cmp_runs " o:ident vb:num : command => do
+macro "#cmp_runs " o:ident bop:ident vb:num opn:num : command => do
   let nm (s : String) : Ident := mkIdent (Name.mkStr (Name.mkStr .anonymous "CmpOp") s!"{s}_{o.getId}")
   let op : Ident := mkIdent (Name.mkStr (Name.mkStr .anonymous "CmpOp") o.getId.toString)
   let cs : Array (TSyntax `command) := #[
@@ -344,21 +286,25 @@ macro "#cmp_runs " o:ident vb:num : command => do
     ← `(#ix_piece $(nm "strRun32"):ident from $(nm "strRun31"):ident by cmp_str_post),
     ← `(theorem $(nm "strRun3"):ident : CmpOp.StrRun3 $op:ident := $(nm "strRun31") $(nm "strRun32")),
     ← `(theorem $(nm "strRun4"):ident : CmpOp.StrRun4 $op:ident := by cmp_str4 $vb:num),
-    ← `(#ix_seg $(nm "errL11"):ident : CmpOp.ErrRun $op:ident true errL1 by cmp_err_pre errL1_facts),
-    ← `(#ix_piece $(nm "errL12"):ident from $(nm "errL11"):ident by cmp_err_mid 0x80003e9c),
-    ← `(#ix_piece $(nm "errL13"):ident from $(nm "errL12"):ident by cmp_err_post),
+    ← `(#ix_seg $(nm "errL11"):ident : BinErrRun $bop:ident 0x80003e7c#64 opnSlot (BitVec.ofNat 64 $opn:num) true errL1 by
+          bin_err_pre errL1_facts 0x80003628),
+    ← `(#ix_piece $(nm "errL12"):ident from $(nm "errL11"):ident by bin_err_mid 0x80003e9c),
+    ← `(#ix_piece $(nm "errL13"):ident from $(nm "errL12"):ident by bin_err_post 0x80003e7c),
     ← tree3 (nm "errL1") (nm "errL11") (nm "errL12") (nm "errL13"),
-    ← `(#ix_seg $(nm "errL21"):ident : CmpOp.ErrRun $op:ident true errL2 by cmp_err_pre errL2_facts),
-    ← `(#ix_piece $(nm "errL22"):ident from $(nm "errL21"):ident by cmp_err_mid 0x80003e9c),
-    ← `(#ix_piece $(nm "errL23"):ident from $(nm "errL22"):ident by cmp_err_post),
+    ← `(#ix_seg $(nm "errL21"):ident : BinErrRun $bop:ident 0x80003e7c#64 opnSlot (BitVec.ofNat 64 $opn:num) true errL2 by
+          bin_err_pre errL2_facts 0x80003628),
+    ← `(#ix_piece $(nm "errL22"):ident from $(nm "errL21"):ident by bin_err_mid 0x80003e9c),
+    ← `(#ix_piece $(nm "errL23"):ident from $(nm "errL22"):ident by bin_err_post 0x80003e7c),
     ← tree3 (nm "errL2") (nm "errL21") (nm "errL22") (nm "errL23"),
-    ← `(#ix_seg $(nm "errR11"):ident : CmpOp.ErrRun $op:ident false errR1 by cmp_err_pre errR1_facts),
-    ← `(#ix_piece $(nm "errR12"):ident from $(nm "errR11"):ident by cmp_err_mid 0x80003e54),
-    ← `(#ix_piece $(nm "errR13"):ident from $(nm "errR12"):ident by cmp_err_post),
+    ← `(#ix_seg $(nm "errR11"):ident : BinErrRun $bop:ident 0x80003e7c#64 opnSlot (BitVec.ofNat 64 $opn:num) false errR1 by
+          bin_err_pre errR1_facts 0x80003628),
+    ← `(#ix_piece $(nm "errR12"):ident from $(nm "errR11"):ident by bin_err_mid 0x80003e54),
+    ← `(#ix_piece $(nm "errR13"):ident from $(nm "errR12"):ident by bin_err_post 0x80003e7c),
     ← tree3 (nm "errR1") (nm "errR11") (nm "errR12") (nm "errR13"),
-    ← `(#ix_seg $(nm "errR21"):ident : CmpOp.ErrRun $op:ident false errR2 by cmp_err_pre errR2_facts),
-    ← `(#ix_piece $(nm "errR22"):ident from $(nm "errR21"):ident by cmp_err_mid 0x80003e54),
-    ← `(#ix_piece $(nm "errR23"):ident from $(nm "errR22"):ident by cmp_err_post),
+    ← `(#ix_seg $(nm "errR21"):ident : BinErrRun $bop:ident 0x80003e7c#64 opnSlot (BitVec.ofNat 64 $opn:num) false errR2 by
+          bin_err_pre errR2_facts 0x80003628),
+    ← `(#ix_piece $(nm "errR22"):ident from $(nm "errR21"):ident by bin_err_mid 0x80003e54),
+    ← `(#ix_piece $(nm "errR23"):ident from $(nm "errR22"):ident by bin_err_post 0x80003e7c),
     ← tree3 (nm "errR2") (nm "errR21") (nm "errR22") (nm "errR23")]
   return ⟨mkNullNode cs⟩
 

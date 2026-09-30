@@ -5,6 +5,6 @@ namespace VsaIris.Interp
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.Newlib
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
-#cmp_runs le 0x80003b00
+#cmp_runs le BinOp.le 0x80003b00 0x800195d0
 
 end VsaIris.Interp
