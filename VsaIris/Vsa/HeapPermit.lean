@@ -78,12 +78,13 @@ theorem Realises.seq_agree {H : List (Nat × Nat)} {m m1 m2 : Mem} {p q : Permit
     ∀ a, vsaFoot H a → ¬ (p.win a ∨ q.win a) → m2[a]? = m[a]? :=
   fun a ha hw => (h2.agree a ha fun h => hw (.inr h)).trans (h1.agree a ha fun h => hw (.inl h))
 
-/-- Discharge the reads and kept words of a permit over a concrete store log. -/
+/-- Discharge the reads and kept words of a permit over a concrete store log; also closes a
+single `read64 (writeLog …) a = some v` goal of an edit that has no permit. -/
 syntax "rd_log" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules
   | `(tactic| rd_log) => `(tactic| rd_log [])
   | `(tactic| rd_log [$hs,*]) =>
-    `(tactic| (simp only [ReadsOK, KeepsOK, and_true]
+    `(tactic| (try simp only [ReadsOK, KeepsOK, and_true]
                repeat' refine And.intro ?_ ?_
                all_goals (simp (disch := omega) only [read64_hit_eq, read64_miss]
                           try simp only [$hs,*])))
@@ -133,6 +134,23 @@ theorem PHeapAt.unlink_permit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : N
     PHeapAt m' H top brkv (chunks.map (reflag (v + c.size) true)) (updBins bins i (pre ++ post)) :=
   have ⟨r1, r2, r3, _⟩ := hR.reads
   h.unlink hi0 hi hbin hc hcv hpred hsucc r1 r2 r3 hsz hpi hR.agree
+
+/-- Take a binned free chunk whole: the unlink edit, with the chunk's block entering the
+footprint. -/
+theorem PHeapAt.take_permit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
+    {i : Nat} (hi0 : 0 < i) (hi : i < numBins) {pre post : List Nat} {v : Nat}
+    (hbin : bins i = pre ++ v :: post) {c : Chunk} (hc : c ∈ chunks) (hcv : c.addr = v)
+    {n : Nat} (hn : n + 8 ≤ c.size) {pred succ : Nat}
+    (hpred : (binAt i :: pre).getLast? = some pred)
+    (hsucc : (post ++ [binAt i]).head? = some succ) {hd' : Nat}
+    (hsz : ∀ hd, read64 m (v + c.size + 8) = some hd → chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2)
+    (hpi : prevInuse hd' = true)
+    (hR : Realises H m m' (unlinkPermit pred succ (v + c.size) hd')) :
+    PHeapAt m' ((v + 16, n) :: H) top brkv (chunks.map (reflag (v + c.size) true))
+      (updBins bins i (pre ++ post)) :=
+  have ⟨r1, r2, r3, _⟩ := hR.reads
+  h.take hi0 hi hbin hc hcv hn hpred hsucc r1 r2 r3 hsz hpi hR.agree
 
 /-! ### Absorb an in-use neighbour into an in-use chunk (reheader) -/
 

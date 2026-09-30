@@ -1,5 +1,4 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Vsa.StepTables.Env0
 import VsaIris.Interp.Repr
 
 namespace VsaIris.Interp
