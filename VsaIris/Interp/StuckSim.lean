@@ -1,3 +1,4 @@
+import VsaIris.Interp.CmpArm
 import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.BinaryDivP
 import VsaIris.Interp.Case.BinaryAddP
@@ -5,11 +6,9 @@ import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.Case.LeafBoolP
 import VsaIris.Interp.Case.ExecVarNullP
-import VsaIris.Interp.Case.BinaryGtP
 import VsaIris.Interp.Case.BinaryNeP
 import VsaIris.Interp.Case.FnLitP
 import VsaIris.Interp.Case.ExecExprP
-import VsaIris.Interp.Case.BinaryLeP
 import VsaIris.Interp.Case.UnaryNegTypeP
 import VsaIris.Interp.Case.ExecVarInitP
 import VsaIris.Interp.Case.VarP
@@ -27,11 +26,9 @@ import VsaIris.Interp.Case.ExecBrkP
 import VsaIris.Interp.Case.ExecContP
 import VsaIris.Interp.Case.BinaryModP
 import VsaIris.Interp.Case.ExecIfP
-import VsaIris.Interp.Case.BinaryLtP
 import VsaIris.Interp.Case.ExecRetNullP
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntP
-import VsaIris.Interp.Case.BinaryGeP
 import VsaIris.Interp.CallCloP
 import VsaIris.Interp.LoopWhile
 import VsaIris.Interp.LoopFor
@@ -153,10 +150,10 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     | mod => iapply caseP_BinaryMod S.hlive hE S.vint S.vkind; iframe HE Hctx
     | eq => iapply caseP_BinaryEq S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
     | ne => iapply caseP_BinaryNe S.hlive S.vequal S.strcmpV S.vbool S.nativeInj; iframe HE Hctx
-    | lt => iapply caseP_BinaryLt S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
-    | le => iapply caseP_BinaryLe S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
-    | gt => iapply caseP_BinaryGt S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
-    | ge => iapply caseP_BinaryGe S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | lt => iapply cmpP .lt (op := .lt) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | le => iapply cmpP .le (op := .le) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | gt => iapply cmpP .gt (op := .gt) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
+    | ge => iapply cmpP .ge (op := .ge) rfl S.hlive hE S.vbool S.strcmpOrd S.vkind; iframe HE Hctx
   | call f args =>
     iapply caseP_CallArm S.hlive hE S.nativeEntries (dispSupply_of_cloSupply S.cloSupply)
       ErrnoOwn.errnoLend_vsa

@@ -1,3 +1,4 @@
+import VsaIris.Interp.CmpArm
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafIntT
 import VsaIris.Interp.Case.LeafStrT
@@ -13,14 +14,6 @@ import VsaIris.Interp.Case.BinaryModIntT
 import VsaIris.Interp.Case.BinaryConcatT
 import VsaIris.Interp.Case.BinaryEqT
 import VsaIris.Interp.Case.BinaryNeT
-import VsaIris.Interp.Case.BinaryLtIntT
-import VsaIris.Interp.Case.BinaryLeIntT
-import VsaIris.Interp.Case.BinaryGtIntT
-import VsaIris.Interp.Case.BinaryGeIntT
-import VsaIris.Interp.Case.BinaryLtStrT
-import VsaIris.Interp.Case.BinaryLeStrT
-import VsaIris.Interp.Case.BinaryGtStrT
-import VsaIris.Interp.Case.BinaryGeStrT
 import VsaIris.Interp.Case.LogicalAndFalseT
 import VsaIris.Interp.Case.LogicalAndTrueT
 import VsaIris.Interp.Case.LogicalOrFalseT
@@ -155,34 +148,34 @@ theorem binaryT {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLtInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .lt S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLtStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .lt S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
   | le =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLeInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .le S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryLeStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .le S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
   | gt =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGtInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .gt S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGtStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .gt S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
   | ge =>
     cases lv <;> cases rv <;> simp only [binOpSem, reduceCtorEq] at hsem
     case int.int =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGeInt S.hlive Dl Dr _ hl hr S.vbool
+      exact cmpIntT .ge S.hlive Dl Dr _ hl hr S.vbool
     case str.str =>
       obtain rfl := Option.some.inj hsem
-      exact caseT_BinaryGeStr S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
+      exact cmpStrT .ge S.hlive Dl Dr _ hl hr S.strcmpOrd S.vbool
 
 theorem hroomPrint (f : Expr) (args : List Expr) (d : Nat) :
     nativePrintNeed + 1088 ≤ evalNeed (.call f args) d := by
