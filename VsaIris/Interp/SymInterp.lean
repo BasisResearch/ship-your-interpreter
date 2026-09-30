@@ -34,13 +34,13 @@ open Lean Elab Command in
 /-- `#pc_list name := e` defines `name : List (BitVec 64)` as the literal value of `e : List Nat`. -/
 elab "#pc_list " n:ident " := " e:term : command => do
   let v ← liftTermElabM do
-    let e ← Term.elabTermEnsuringType e (mkApp (mkConst ``List [levelZero]) (mkConst ``Nat))
+    let e ← Term.elabTermEnsuringType e (mkApp (mkConst ``List [Level.zero]) (mkConst ``Nat))
     Term.synthesizeSyntheticMVarsNoPostponing
-    let l ← unsafe Meta.evalExpr (List Nat) (mkApp (mkConst ``List [levelZero]) (mkConst ``Nat))
+    let l ← unsafe Meta.evalExpr (List Nat) (mkApp (mkConst ``List [Level.zero]) (mkConst ``Nat))
       (← instantiateMVars e)
     pure (l.map (BitVec.ofNat 64))
   let name := (← getCurrNamespace) ++ n.getId
-  let ty := mkApp (mkConst ``List [levelZero]) (mkApp (mkConst ``BitVec) (mkNatLit 64))
+  let ty := mkApp (mkConst ``List [Level.zero]) (mkApp (mkConst ``BitVec) (mkNatLit 64))
   let val := toExpr v
   liftCoreM <| addAndCompile
     (.defnDecl (mkDefinitionValEx name [] ty val .abbrev .safe [name]))
@@ -51,6 +51,17 @@ elab "#pc_list " n:ident " := " e:term : command => do
 
 -- The interpreter's loads that read the data view (the AST and the input).
 #pc_list interpDataPCs := (StepGen.interpTbl.variants.lookup "D").getD []
+
+/-- Whether the interpreter's step table has a lemma at `pc` (the landed runs step exactly
+there): an instruction of the table's code, outside its skipped ranges, that one of its
+step families (not the call family) covers. -/
+def interpHasStep (pc : Nat) : Lean.MetaM Bool := do
+  let t := StepGen.interpTbl
+  unless 0x800027ec ≤ pc ∧ pc < 0x80004764 do return false
+  if t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2 then return false
+  let some w ← StepGen.wordAt? t.pieces pc | return false
+  return t.kinds.any fun kind =>
+    kind != "jalx" && t.offers kind pc && (StepGen.lemOf t pc w kind).isSome
 
 /-- Executor configuration for `IW` runs. -/
 def cfgI (stops : List (BitVec 64)) (dbase : List SE := [])
@@ -69,6 +80,22 @@ def Tree.obs : Tree → List SOb
   | .jr s _ => s.obs
   | .hv _ t => Tree.obs t
   | .raw _ _ _ _ t => Tree.obs t
+
+/-- The undecided forwarding checks of one node's loads, with the load's pc (`obs` is newest
+first). Checks over a havoc slot are left to the walk, where the slot has its value. -/
+def rawCandsOf (obs : List SOb) : List (BitVec 64 × SOb) :=
+  (obs.reverse.foldl (fun (acc : Option (BitVec 64) × List (BitVec 64 × SOb)) o =>
+    match o, acc.1 with
+    | .decM pc _, _ => (some pc, acc.2)
+    | .disj a _ b _, some pc => if a.noHv && b.noHv then (acc.1, acc.2 ++ [(pc, o)]) else acc
+    | _, _ => acc) (none, [])).2
+
+def Tree.rawCands : Tree → List (BitVec 64 × SOb)
+  | .leaf s => rawCandsOf s.obs
+  | .br _ _ _ _ o t f => rawCandsOf o ++ Tree.rawCands t ++ Tree.rawCands f
+  | .jr s _ => rawCandsOf s.obs
+  | .hv _ t => Tree.rawCands t
+  | .raw _ _ _ _ t => Tree.rawCands t
 
 /-- The state a segment's straight line ends in, when it ends at a leaf (not at a fork or an
 indirect jump). -/
@@ -186,6 +213,13 @@ macro "sym_hnorm " h:ident : tactic =>
 leaves the kernel to compare the entry register chain against its unfolding. -/
 theorem rawR_eq (R : Nat → BitVec 64) (i : Nat) : rawR R i = R i := Eq.trans rfl rfl
 
+theorem geom_nil (ρ : Env) (S : Nat → Prop) (DA : List Nat) : Geom.holds ρ S DA [] :=
+  fun _ h => nomatch h
+
+theorem geom_cons {ρ : Env} {S : Nat → Prop} {DA : List Nat} {f : AFact} {Γ : Geom}
+    (h1 : Geom.holds ρ S DA [f]) (h2 : Geom.holds ρ S DA Γ) : Geom.holds ρ S DA (f :: Γ) :=
+  fun g hg => (List.mem_cons.1 hg).elim (fun e => h1 g (e ▸ List.mem_singleton.2 rfl)) (h2 g)
+
 register_option sym_run.trace : Bool := { defValue := false, descr := "report sym_run fallbacks" }
 
 register_option sym_run.maxSegs : Nat :=
@@ -252,6 +286,9 @@ structure ObCtx where
   l0facts : Array Term
   facts : Array Term
   regs : List (Nat × SE)
+  /-- forwarding checks already proved for the segment, at the environment `preEnv` -/
+  pre : Array (Expr × Expr) := #[]
+  preEnv : Option Expr := none
 
 /-- The register list of a leaf below the node. -/
 def Tree.anyRegs : Tree → List (Nat × SE)
@@ -374,6 +411,12 @@ def symObs (cx : ObCtx) (obs : List SOb) (nw : Nat) (tag : Name) (go : MVarId) :
   for k in [0:obsA.size] do
     let i := obsA.size - 1 - k
     let some o := obsA[i]? | throwError "sym_run: obs"
+    if o matches .disj .. then
+      if let (some ρ0, some (_, pf)) := (cx.preEnv, cx.pre.find? (·.1 == toExpr o)) then
+        if ρ0 == ρ then
+          if ← isDefEq (← hos[i]!.getType) (← inferType pf) then
+            hos[i]!.assign pf
+            continue
     let [ho] ← evalTacticAt (← `(tactic| simp only [SOb.den])) hos[i]! | throwError "sym_run: obs"
     match o with
     | .decM pc w =>
@@ -490,6 +533,8 @@ structure SegCtx where
   proveGeom : MVarId → TacticM Bool
   dbg : String → TacticM Unit
   segs : IO.Ref Nat
+  /-- geometry facts already tried at the entry environment, with their proofs -/
+  gcache : IO.Ref (Array (Expr × Option Expr))
 
 mutual
 
@@ -508,26 +553,52 @@ partial def runSeg (sc : SegCtx) (cx0 : ObCtx) (s : SS) (ρE : Expr) (used nw : 
   if let some e := Tree.endLeaf? tree then
     let p := e.pc.toNat
     unless sc.stops.contains p || ((Tree.obs tree).filter isDec).length ≥ fuel do
-      unless (← ixCandidates p).isEmpty || !inRangesB interpCodeRanges p do
+      if (← interpHasStep p) && inRangesB interpCodeRanges p then
         throwError "sym_run: leaf {p} is not a stop point"
   let mut Γ : Geom := []
+  let mut pfs : Array Expr := #[]
   for f in geomOf (Tree.obs tree) do
-    let gg ← mkFreshExprMVar (← mkAppM ``Geom.holds #[sc.env0, sc.S, sc.DA, toExpr [f]])
-    if ← sc.proveGeom gg.mvarId! then Γ := Γ ++ [f]
-    else sc.dbg s!"geometry fact dropped: {← ppGoal gg.mvarId!}"
+    let fE := toExpr f
+    let pf? ← match (← sc.gcache.get).find? (·.1 == fE) with
+      | some (_, r) => pure r
+      | none =>
+        let gg ← mkFreshExprMVar (← mkAppM ``Geom.holds #[sc.env0, sc.S, sc.DA, toExpr [f]])
+        let r ← if ← sc.proveGeom gg.mvarId! then pure (some (← instantiateMVars gg)) else
+          sc.dbg s!"geometry fact dropped: {← ppGoal gg.mvarId!}"
+          pure none
+        sc.gcache.modify (·.push (fE, r))
+        pure r
+    if let some pf := pf? then
+      Γ := Γ ++ [f]
+      pfs := pfs.push pf
+  let hΓ ← pfs.foldrM (fun pf acc => mkAppM ``geom_cons #[pf, acc])
+    (mkApp3 (mkConst ``geom_nil) sc.env0 sc.S sc.DA)
   sc.dbg "tree"
+  -- a load whose forwarding through a store stays undecided is rerun unreduced (`rawpc`): find
+  -- it before any other obligation of the segment is worked on
+  let mut pre : Array (Expr × Expr) := #[]
+  for (pc, o) in Tree.rawCands (Tree.prune Γ tree) do
+    let oE := toExpr o
+    if pre.any (·.1 == oE) then continue
+    let g ← mkFreshExprMVar (← mkAppM ``SOb.den #[ρE, sc.S, sc.DA, oE])
+    let ok ← try
+        let [ho] ← evalTacticAt (← `(tactic| simp only [SOb.den])) g.mvarId! | throwError "obs"
+        let gs ← evalTacticAt (← `(tactic| (sym_den <;> ($(⟨cx0.norm⟩) <;> sx_side)))) ho
+        pure gs.isEmpty
+      catch _ => pure false
+    unless ok do throwError "sym_run: rawpc {pc.toNat}"
+    pre := pre.push (oE, ← instantiateMVars g)
   let hXs ← Term.exprToSyntax sc.hX
   let Γs ← Term.exprToSyntax (toExpr Γ)
+  let hΓs ← Term.exprToSyntax hΓ
   let ρs ← Term.exprToSyntax ρE
   let ss ← Term.exprToSyntax (toExpr s)
   let fuelS := Syntax.mkNumLit (toString fuel)
-  let gs ← evalTacticAt (← `(tactic| refine symRun_cont $hXs $Γs (by decide) ?_ $fuelS $ρs rfl rfl rfl
-    $ss ?_)) gk
-  let [gΓ, gw] := gs | throwError "sym_run: refine"
-  unless ← sc.proveGeom gΓ do throwError "sym_run: geometry"
+  let [gw] ← evalTacticAt (← `(tactic| refine symRun_cont $hXs $Γs (by decide) $hΓs $fuelS $ρs
+    rfl rfl rfl $ss ?_)) gk | throwError "sym_run: refine"
   let [gw] ← evalTacticAt (← `(tactic| sym_eval)) gw | throwError "sym_run: eval"
   sc.dbg "eval"
-  symWalk sc cx0 (Tree.prune Γ tree) used nw tag gw
+  symWalk sc { cx0 with pre, preEnv := some ρE } (Tree.prune Γ tree) used nw tag gw
 
 partial def symWalk (sc : SegCtx) (cx0 : ObCtx) (t : Tree) (used nw : Nat) (tag : Name)
     (g : MVarId) : TacticM (List MVarId × List MVarId) := do
@@ -557,7 +628,7 @@ partial def symWalk (sc : SegCtx) (cx0 : ObCtx) (t : Tree) (used nw : Nat) (tag 
     let isFork := !(ba matches .c _) || !(bb matches .c _)
     let tagOf (taken : Bool) : Name := tag ++ (if taken then `hT else `hF)
     let prem := fun (g : MVarId) => show TacticM (Option MVarId) from do
-      let [g] ← evalTacticAt (← `(tactic| simp (disch := decide) only [SE.den, aluVal, Env.withH,
+      let [g] ← evalTacticAt (← `(tactic| simp (disch := decide) only [regsDen, memDen, SE.den, aluVal, Env.withH,
         hset_self, hset_ne, shamtOf, shamt5Of, imm20Of, BitVec.reduceExtractLsb', guard_beq, guard_bne,
         guard_blt, guard_bge, guard_bltu, guard_bgeu, gF_beq, gF_bne, gF_blt, gF_bge, gF_bltu,
         gF_bgeu])) g | throwError "sym_run: guard"
@@ -783,7 +854,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
       if e == xb then
         if onD then kv := kv ++ [(k, addC (.r i) off, v)]
         else kvM := kvM ++ [(k, addC (.r i) off, v)]
-  let DAe : Expr := DA.getD (mkApp (mkConst ``List.nil [levelZero]) (mkConst ``Nat))
+  let DAe : Expr := DA.getD (mkApp (mkConst ``List.nil [Level.zero]) (mkConst ``Nat))
   let ρ := mkApp4 (mkConst ``Env.mk) R a[7]! Dt
     (.lam `_ (mkConst ``Nat) (toExpr (0 : BitVec 64)) .default)
   let mut lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
@@ -859,7 +930,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
   let cx : ObCtx := { ty0, norm, l0facts := #[], facts, regs := [] }
   let hXe ← instantiateMVars hX
   let Se := a[3]!
-  let sc : SegCtx := SegCtx.mk C hXe fuel stops explore ρ Se DAe proveGeom dbg (← IO.mkRef 0)
+  let sc : SegCtx := SegCtx.mk C hXe fuel stops explore ρ Se DAe proveGeom dbg (← IO.mkRef 0) (← IO.mkRef #[])
   let (pend, stuck) ← runSeg sc cx s0 ρ 0 0 tag0 g
   dbg "walk"
   replaceMainGoal (pend ++ stuck)
@@ -875,6 +946,10 @@ def symRunTac (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
   let fuel := (n.map (·.getNat)).getD 400
   let facts : Array Term := match fs with | some fs => fs.getElems | none => #[]
   let stopPCs : List Nat := match stops with | some ss => ss.toList.map (·.getNat) | none => []
+  -- `SYM_FORCE_IX=1`: the landed run, for comparing a module's statements and cost
+  if (← IO.getEnv "SYM_FORCE_IX").isSome then
+    ixRunCore explore n h fs stops
+    return
   let saved ← saveState
   -- `set_option sym_run.trace true`, or `SYM_TRACE=1` for a whole build
   let trace := (← getOptions).getBool `sym_run.trace false || (← IO.getEnv "SYM_TRACE").isSome
@@ -910,12 +985,9 @@ def symRunTac (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       ixRunCore explore n h fs stops)
 
 syntax "sym_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
-/-- Symbolic `ix_run1` (development entry point while `sym_run1` still routes to `ix_run1`). -/
-syntax "sym_run1s " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
 elab_rules : tactic
   | `(tactic| sym_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => symRunTac true n h fs stops
   | `(tactic| sym_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => symRunTac false n h fs stops
-  | `(tactic| sym_run1s $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => symRunTac false n h fs stops
 
 end VsaIris.SymExec.Interp
