@@ -176,7 +176,8 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hn8 : C.n.toNat + 8 ≤ cv.size := by have := hnb.fits; omega
   obtain ⟨hfr, hal16⟩ := PHeapAt.take_fresh Hp.heap hcv hcvf hn8
   refine epi_80004830 O ?F (O.fin_take (v := cv.addr) ?a0 ⟨hfr, hal16,
-    ⟨_, brkv, _, updBins bins (nb / 8) (pre ++ []), ?heap, Nat.le_add_right _ _, Hp.live.map_reflag (cv.addr + cv.size)⟩,
+    ⟨_, brkv, _, updBins bins (nb / 8) (pre ++ []), ?heap, Nat.le_add_right _ _,
+      Hp.live.map_reflag (cv.addr + cv.size)⟩,
     pres_store (pres_store (pres_store (pres_store Hp.pres))), ?frame⟩)
   case a0 => rgn_arith
   case F =>

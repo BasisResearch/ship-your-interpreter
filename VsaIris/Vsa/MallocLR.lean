@@ -246,7 +246,8 @@ theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
       (fun h0 h0r => by rw [hdr] at h0r; cases h0r; unfold chunkSize; omega)
       (by unfold prevInuse; simp only [beq_iff_eq]; omega) fun a ha hna => ?_
     unfold TakeW at hna; simp only at hna; have := offStack_pt Hp.disj ha
-    rw [writeLog_out _ [_] _ ⟨by simp only; omega, trivial⟩, writeLog_out _ [_] _ ⟨by simp only; omega, trivial⟩]
+    rw [writeLog_out _ [_] _ ⟨by simp only; omega, trivial⟩,
+      writeLog_out _ [_] _ ⟨by simp only; omega, trivial⟩]
     exact D.agree a ha (by omega)
 
 theorem lr_last {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
