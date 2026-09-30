@@ -41,7 +41,7 @@ open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
   all_goals try ((try nx_norm); nx_mem; simp only [hsinit, hF, hlm, hlock, hBl, hP, hwr, hck, hsfd]; done)
   · intro i hi; have := hbd i hi; nx_addr
   · intro i hi
-    repeat' (first | exact hsrc i hi | refine ByteSrc.store ?_ _ ?_)
+    repeat' (first | refine ByteSrc.store ?_ _ ?_ | exact hsrc i hi)
     all_goals (have := hbd i hi; nx_addr)
 
 #ix_piece fflush_C from fflush_B by

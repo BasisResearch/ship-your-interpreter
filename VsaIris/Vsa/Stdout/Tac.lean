@@ -279,7 +279,13 @@ macro "ret_keep" : tactic => `(tactic| (
   simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp_all [upd_apply]))
+    first
+      | exact absurd rfl h32
+      | exact absurd rfl h10
+      | (simp only [Nat.reduceEqDiff, not_true_eq_false, not_false_eq_true, false_and, and_false,
+          true_and, and_true] at hc; done)
+      | (simp only [upd_apply, updAll, Nat.reduceEqDiff, ite_true, ite_false, *]; done)
+      | simp_all [upd_apply]))
 
 theorem updAll_apply (R v : Nat → BitVec 64) : ∀ (xs : List Nat) (x : Nat),
     updAll R v xs x = if x ∈ xs then v x else R x

@@ -50,7 +50,7 @@ open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
     BitVec.setWidth_eq]; done)
   all_goals try nx_addr
   · intro i hi; have := hbd i hi; nx_addr
-  · repeat' (first | exact hsrc i hi | refine ByteSrc.store ?_ _ ?_)
+  · repeat' (first | refine ByteSrc.store ?_ _ ?_ | exact hsrc i hi)
     all_goals (have := hbd i hi; nx_addr)
   · nx_mem; exact hsfl
   · nx_mem; exact hsfd
@@ -184,7 +184,7 @@ structure FfCtx (s sp f B ra : BitVec 64) (need : Nat) (R : Nat → BitVec 64) (
   all_goals try ((try nx_norm); nx_mem; simp only [C.hF, C.hBl, hP, C.hsz, C.hwr, C.hck, C.hsfl, C.hsfd]; done)
   · intro i hi; have := hbd i hi; have := C.hs1; have := C.hs2; have := C.hf1; nx_addr
   · intro i hi
-    repeat' (first | exact hsrc i hi | refine ByteSrc.store ?_ _ ?_)
+    repeat' (first | refine ByteSrc.store ?_ _ ?_ | exact hsrc i hi)
     all_goals (have := hbd i hi; have := C.hs1; have := C.hs2; have := C.hf1; have := C.hf2; nx_addr)
 
 #ix_piece fflushF_C from fflushF_B by

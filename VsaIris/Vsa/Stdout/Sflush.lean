@@ -60,7 +60,7 @@ variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     BitVec.setWidth_eq]; done)
   all_goals try nx_addr
   · intro i hi; have := hbd i hi; nx_addr
-  · repeat' (first | exact hsrc i hi | refine ByteSrc.store ?_ _ ?_)
+  · repeat' (first | refine ByteSrc.store ?_ _ ?_ | exact hsrc i hi)
     all_goals (have := hbd i hi; nx_addr)
   · nx_mem; exact hsfl
   · nx_mem; exact hsfd

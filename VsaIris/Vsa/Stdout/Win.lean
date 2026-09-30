@@ -14,7 +14,8 @@ the `m` bytes above `sp`, aligned, and placed off the static data window
 * the key check `StackWin.key` / `.key0` puts an access inside the region; access permitted and
   owned are then the region laws `ARgn.ldOK`/`.stOK`/`.acc` (`StackWin.ldOK`, `.stOK`, `.stOKb`,
   `.own` and their offset-0 forms);
-* two stack accesses: `SymExec.sepC_sound`, `sep0L`, `sep0R`; stack against static:
+* two accesses in one window: `SymExec.sepC_sound`, `sep0L`, `sep0R`; in two windows whose
+  separation is in the context: `.sepW`, `.sepW'`; stack against static:
   `.static_stack`, `.stack_static`, `.static_base`, `.base_static`; two literals: `decide`;
 * membership of the forgotten stack `[sp - n, sp + c)`: `.static_out`, `.stack_out`,
   `.stack_in`; of the whole lower window: `.static_outN`, `.stack_inN`.
@@ -164,6 +165,22 @@ theorem stack_inN (hw : StackWin S sp n m) (h : w ≤ 2 ^ 64 - c.toNat ∧ 2 ^ 6
   have h1 := hw.rgn.lo; have := sp.isLt; have := c.isLt
   rw [BitVec.toNat_add]; omega
 
+/-- Accesses in two windows, the first window below the second. -/
+theorem sepW {S' : Nat → Prop} {x y : BitVec 64} {n1 m1 n2 m2 A B : Nat}
+    (h1 : StackWin S x n1 m1) (_h2 : StackWin S' y n2 m2) (hd : x.toNat + m1 ≤ y.toNat - n2)
+    (ka : x.toNat - n1 ≤ A ∧ A + w1 ≤ x.toNat - n1 + (n1 + m1))
+    (kb : y.toNat - n2 ≤ B ∧ B + w2 ≤ y.toNat - n2 + (n2 + m2)) : A + w1 ≤ B ∨ B + w2 ≤ A := by
+  have := h1.rgn.lo
+  exact .inl (by omega)
+
+/-- Accesses in two windows, the second window below the first. -/
+theorem sepW' {S' : Nat → Prop} {x y : BitVec 64} {n1 m1 n2 m2 A B : Nat}
+    (_h1 : StackWin S x n1 m1) (h2 : StackWin S' y n2 m2) (hd : y.toNat + m2 ≤ x.toNat - n1)
+    (ka : x.toNat - n1 ≤ A ∧ A + w1 ≤ x.toNat - n1 + (n1 + m1))
+    (kb : y.toNat - n2 ≤ B ∧ B + w2 ≤ y.toNat - n2 + (n2 + m2)) : A + w1 ≤ B ∨ B + w2 ≤ A := by
+  have := h2.rgn.lo
+  exact .inr (by omega)
+
 end StackWin
 
 /-- `sp` against `sp + c`. -/
@@ -273,6 +290,12 @@ def extLit (loN : Expr) : Option Bool := do
   let N := loN.appArg!
   some (N.nat?.isSome || N.rawNatLit?.isSome)
 
+/-- Two accesses in two windows whose separation is in the context (`nx_win` puts it there). -/
+def twoWin (ka kb : Term) : TacticM (TSyntax `tactic) :=
+  `(tactic| first
+    | exact StackWin.sepW (by assumption) (by assumption) (by assumption) $ka $kb
+    | exact StackWin.sepW' (by assumption) (by assumption) (by assumption) $ka $kb)
+
 /-- Address side conditions by the keys of the addresses: disjointness of two accesses
 (`A + w₁ ≤ B ∨ B + w₂ ≤ A`), outside a forgotten stack region (`A + w ≤ LO ∨ LO + N ≤ A`),
 inside one (`LO ≤ A ∧ A + w ≤ LO + N`). The goal's shape selects the lemma; nothing is tried
@@ -291,22 +314,22 @@ elab "win_key0" : tactic => withMainContext do
         | _, _ => throwError "win_key: key"
       else
         let some kb ← akey? B | throwError "win_key: key"
+        let kOff ← `(StackWin.key (by assumption) (by decide))
+        let kBase ← `(StackWin.key0 (by assumption) (by decide))
         match ka, kb with
         | .lit, .lit => `(tactic| decide)
         | .off x, .off y =>
-          unless x == y do throwError "win_key: two bases"
-          `(tactic| exact VsaIris.SymExec.sepC_sound (by decide))
+          if x == y then `(tactic| exact VsaIris.SymExec.sepC_sound (by decide)) else twoWin kOff kOff
         | .base x, .off y =>
-          unless x == y do throwError "win_key: two bases"
-          `(tactic| exact sep0L (by decide))
+          if x == y then `(tactic| exact sep0L (by decide)) else twoWin kBase kOff
         | .off x, .base y =>
-          unless x == y do throwError "win_key: two bases"
-          `(tactic| exact sep0R (by decide))
+          if x == y then `(tactic| exact sep0R (by decide)) else twoWin kOff kBase
+        | .base x, .base y =>
+          if x == y then throwError "win_key: same address" else twoWin kBase kBase
         | .lit, .off _ => `(tactic| exact StackWin.static_stack (by assumption) (by decide))
         | .off _, .lit => `(tactic| exact StackWin.stack_static (by assumption) (by decide))
         | .lit, .base _ => `(tactic| exact StackWin.static_base (by assumption) (by decide))
         | .base _, .lit => `(tactic| exact StackWin.base_static (by assumption) (by decide))
-        | _, _ => throwError "win_key: key"
     else if let some (p, q) := t.app2? ``And then do
       -- `LO ≤ A ∧ A + w ≤ LO + N`
       unless p.isAppOfArity ``LE.le 4 && isWinLo p.appFn!.appArg! do throwError "win_key: shape"
@@ -364,8 +387,27 @@ elab "nx_win " sp:term:max n:term:max m:term:max : tactic => withMainContext do
     if xs.any fun x => S.containsFVar x.fvarId! then throwError "nx_win: the footprint is bound"
     pure S
   let S ← Term.exprToSyntax Se
-  let hw := mkIdent (if sp.raw.isIdent then Name.mkSimple s!"hw_{sp.raw.getId}" else `hw)
+  let tag := if sp.raw.isIdent then s!"{sp.raw.getId}" else "0"
+  -- the windows already in the context
+  let others ← (← getLCtx).foldlM (init := #[]) fun acc d => do
+    let t ← instantiateMVars d.type
+    if !d.isImplementationDetail && t.isAppOfArity ``StackWin 4 then
+      return acc.push (t.getAppArgs[1]!, t.getAppArgs[2]!, t.getAppArgs[3]!)
+    else return acc
+  let hw := mkIdent (Name.mkSimple s!"hw_{tag}")
   evalTactic (← `(tactic| have $hw : StackWin $S $sp $n $m := StackWin.of_outS (by omega)))
+  -- the separation of the new window from each of them, in the order that holds
+  let mut i := 0
+  for (b', n', m') in others do
+    i := i + 1
+    let hs := mkIdent (Name.mkSimple s!"hsep_{tag}_{i}")
+    let b' ← withMainContext (Term.exprToSyntax b')
+    let n' ← withMainContext (Term.exprToSyntax n')
+    let m' ← withMainContext (Term.exprToSyntax m')
+    evalTactic (← `(tactic| first
+      | have $hs : ($b').toNat + $m' ≤ ($sp).toNat - $n := by omega
+      | have $hs : ($sp).toNat + $m ≤ ($b').toNat - $n' := by omega
+      | skip))
 
 end Dispatch
 
@@ -419,6 +461,13 @@ example : (s + 18446744073709551480#64).toNat + 8 ≤ s.toNat - 768 ∨
 example : s.toNat - 768 ≤ (s + 18446744073709551464#64).toNat ∧
     (s + 18446744073709551464#64).toNat + 8 ≤
       s.toNat - 768 + ((s + 18446744073709551472#64).toNat - (s.toNat - 768)) := by win_key
+
+example (f : BitVec 64) (hf : StackWin (outS s 768) f 0 184) (hd : s.toNat + 0 ≤ f.toNat - 0) :
+    (f + 24#64).toNat + 8 ≤ (s + 18446744073709551584#64).toNat ∨
+      (s + 18446744073709551584#64).toNat + 8 ≤ (f + 24#64).toNat := by win_key
+example (f : BitVec 64) (hf : StackWin (outS s 768) f 0 184) (hd : s.toNat + 0 ≤ f.toNat - 0) :
+    (s + 18446744073709551584#64).toNat + 8 ≤ f.toNat ∨
+      f.toNat + 8 ≤ (s + 18446744073709551584#64).toNat := by win_key
 
 end Checks
 
