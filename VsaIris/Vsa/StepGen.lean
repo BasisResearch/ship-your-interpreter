@@ -326,8 +326,9 @@ structure Lem where
   binders : String
   concl : String
   proof : String
-  /-- The step as a rule instance: the `StepRules` rule (a table rule without its `d_`/`a_`
-      prefix, or a full name) and its arguments before the two proofs (check, decode). -/
+  /-- The step as a rule instance: the `StepRules` rule (an `x_` rule over any text by its
+      suffix, a `d_` rule of the data-view runs, or a full name) and its arguments before
+      the two proofs (check, decode). -/
   rule : Option (String × Array Expr) := none
 
 section Templates
@@ -590,7 +591,8 @@ def lemOf (kind : String) : Option Lem := Id.run do
                     concl := run (pcL pc)
                     proof := step t pc (single pc w) ks s!"[bytesAt (imgM Dt) {ea} {wd}]" "[]" "[]" nilCover
                       s!"exact ⟨hea, lpins{sfx}_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩"
-                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk" }
+                      "rfl" (hRt t ks) (hRo ks (some rd)) "hk"
+                    rule := some ("d_loadD", #[lineE pc w]) }
     if k == "H" then
       return some (havoc "swp_havocD" s!"∀ v, {runR (nxt pc) s!"(upd R {rd} v)"}")
     if k == "P" ∧ t.flavor != .interp then
@@ -947,22 +949,39 @@ private def parseTerm (s : String) : MetaM Syntax := do
   | .ok stx => pure stx
   | .error e => throwError "step lemma: parse error {e}\n{s}"
 
-/-- The proof of a rule-instance lemma: the rule at the table fact, the instruction, the
-    Boolean check (`rfl`) and the decode fact of the word (`decRefl`). The kernel identifies
-    its type with the lemma's statement by evaluation; nothing is elaborated. -/
-def ruleProof? (t : Tbl) (w : Nat) (L : Lem) : MetaM (Option Expr) := do
+/-- The proof of a rule-instance lemma with statement `ty`: the rule at the table fact, the
+    instruction, the Boolean check (`rfl`) and the decode fact of the word (`decRefl`); an
+    `x_` rule then takes the run's text from the leading binders of `ty`. The kernel
+    identifies its type with `ty` by evaluation; nothing is elaborated. -/
+def ruleProof? (t : Tbl) (w : Nat) (L : Lem) (ty : Expr) : MetaM (Option Expr) := do
   let some ok := t.ok | return none
   let some (rule, args) := L.rule | return none
-  let head ← if rule.contains '.' then pure (.const rule.toName []) else
-    pure <| mkAppN (.const ((`VsaIris.SymExec).str ((if t.hasD then "d_" else "a_") ++ rule)) [])
-      ((← getConstInfo ok).type.getAppArgs.push (.const ok []))
-  return some <| mkAppN head <| args ++
-    #[mkApp2 (.const ``Eq.refl [1]) (.const ``Bool []) (.const ``Bool.true []),
-      mkApp (.const ``VsaIris.SymExec.decRefl []) (bv 32 w)]
+  let tbl := (← getConstInfo ok).type.getAppArgs
+  let sx (n : String) : Expr := .const ((`VsaIris.SymExec).str n) []
+  let pfs := #[mkApp2 (.const ``Eq.refl [1]) (.const ``Bool []) (.const ``Bool.true []),
+    mkApp (sx "decRefl") (bv 32 w)]
+  if rule.contains '.' then return some <| mkAppN (.const rule.toName []) (args ++ pfs)
+  let tblArgs := tbl.push (.const ok [])
+  if rule.startsWith "d_" then return some <| mkAppN (sx rule) (tblArgs ++ args ++ pfs)
+  let T := tbl[0]!
+  -- `fun {live} [{Dt} {DA}] => x_rule … live X D hX`
+  let n := if t.hasD then 3 else 1
+  let text : Array Expr := if t.hasD then
+      #[mkApp3 (sx "dTextOf") T (.bvar 1) (.bvar 0), mkApp2 (.const ``VsaIris.Sym.dataOf []) (.bvar 1) (.bvar 0),
+        mkApp3 (sx "dText_eq") T (.bvar 1) (.bvar 0)]
+    else #[T, sx "noData", mkApp (sx "aText_eq") T]
+  let body := mkAppN (sx ("x_" ++ rule)) (tblArgs ++ args ++ pfs ++ #[.bvar (n - 1)] ++ text)
+  let rec wrap (k : Nat) (ty : Expr) : Option Expr :=
+    match k, ty with
+    | 0, _ => some body
+    | k + 1, .forallE x d b bi => (wrap k b).map (.lam x d · bi)
+    | _, _ => none
+  return wrap n ty
 
-/-- Elaborate the closed statement `∀ binders, concl` and, unless `val?` supplies the
-    proof, the proof of a lemma. -/
-def elabLemCore (L : Lem) (val? : Option Expr) : MetaM (Expr × Expr) := withEnableInfoTree false do
+/-- Elaborate the closed statement `∀ binders, concl` of a lemma and, unless `rule?` builds
+    the proof from it, the template proof. -/
+def elabLemCore (L : Lem) (rule? : Expr → MetaM (Option Expr)) : MetaM (Expr × Expr) :=
+    withEnableInfoTree false do
   let tyStx ← parseTerm s!"∀ {L.binders},\n    {L.concl}"
   let (ty, val) ← withLCtx {} {} <|
     withTheReader Core.Context (fun c => { c with currNamespace := `VsaIris.Sym, openDecls := stepOpens }) <|
@@ -970,7 +989,7 @@ def elabLemCore (L : Lem) (val? : Option Expr) : MetaM (Expr × Expr) := withEna
       let ty ← Term.elabType tyStx
       Term.synthesizeSyntheticMVarsNoPostponing
       let ty ← instantiateMVars ty
-      if let some val := val? then return (ty, val)
+      if let some val ← rule? ty then return (ty, val)
       let val ← Term.elabTermEnsuringType (← parseTerm s!"fun {L.binders} =>\n  {L.proof}") ty
       Term.synthesizeSyntheticMVarsNoPostponing
       pure (ty, ← instantiateMVars val)
@@ -979,7 +998,7 @@ def elabLemCore (L : Lem) (val? : Option Expr) : MetaM (Expr × Expr) := withEna
 
 /-- Elaborate a lemma and keep it as an auxiliary theorem. -/
 def elabLem (t : Tbl) (w : Nat) (L : Lem) : MetaM Name := do
-  let (ty, val) ← elabLemCore L (← ruleProof? t w L)
+  let (ty, val) ← elabLemCore L (ruleProof? t w L)
   mkAuxLemma [] ty val (kind? := `_step)
 
 /-- The lemma of family `kind` for the word `w` at `pc`: a step of table `t`, or one of
@@ -1135,8 +1154,8 @@ elab "#step_table " k:ident rs:(group(num num))* : command => do
       let some L := lemAt t kind pc w | continue
       let nm := famName t kind pc (shared.contains pc)
       if (← getEnv).contains (ns.str nm) then continue
-      if let some val ← liftTermElabM (ruleProof? t w L) then
-        let (type, value) ← liftTermElabM (elabLemCore L (some val))
+      if t.ok.isSome && L.rule.isSome then
+        let (type, value) ← liftTermElabM (elabLemCore L (ruleProof? t w L))
         liftCoreM <| addDecl <| .thmDecl { name := ns.str nm, levelParams := [], type, value }
       else
         let src := s!"theorem {nm} {L.binders} :\n    {L.concl} :=\n  {L.proof}"
