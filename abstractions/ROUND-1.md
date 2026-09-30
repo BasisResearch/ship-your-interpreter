@@ -128,7 +128,46 @@ normalisation, footprint side goals and register-field rebuilds (cluster K/T ter
 CPU unchanged. Verdict for SP alone: shrinks the edit-ending proofs, does not bend the
 cluster's cost curve; keep as a small layer under a K/T winner.
 
-### Candidate KT — region-keyed memory (K + T + V1 + V5), worktree syi-expE
+### Candidate KT — region-keyed memory (K + T + V1 + V5), worktree syi-expE, commit 6bc1cfad
+
+Setup: `VsaIris/Vsa/Region.lean`, 389 non-blank lines (≈200 lemmas, 186 tactic): regions `Rgn P base ext`
+minted from the chunk walk (`PHeapAt.chunkK/.freeSpan/.next/.nodeK`), the static table (`globRgn`, `binRgn`)
+and the stack window; laws once: `Rgn.ldOK/.stOK`, `Rgn.offStack`, `frame_log`/`pres_log` over a whole store
+log as a key list; two-level keys via `rgn_key`; drivers `rgn_run`, `rgn_side` (hooked into `sx_side`).
+Integrated in the `st_`/`sx_run` route (the executor's `Geom` cannot separate two heap chunks yet).
+
+| case | proof lines | theorem CPU | module CPU | iterations |
+|---|---|---|---|---:|
+| `free_nt` | 88 → 41 (−53%) | 0.86 → 1.59 s (1.85×) | 50.6 → 50.8 s | 3 |
+| `lr_split_ret` | 78 → 34 (−56%) | 5.85 → 4.73 s (0.81×) | 18.6 → 17.1 s | 7 |
+| `realloc_next` | 115 → 42 (−63%; 108 → 42 without 7 dead lines) | 1.92 → 3.08 s (1.6×) | 7.37 → 8.80 s | 2 |
+
+Net lines: −163 in the three theorems against 389 setup (breaks even after ~5 more paths).
+Findings: the law-level part wins on both measures (`frame_log (by log_in)` replaces the 8-deep
+`frame_store` chain and nine read goals in `lr_split_ret`); the per-access region lookup is a search
+(one `omega` per candidate region; `realloc_next` 29 → 48 `omega` calls), which is the CPU loss;
+post-field assembly and the heap-edit calls did not shrink (clusters S and B). Proposed fix: decide
+region membership by key equality inside the reflective checker (symbolic per-atom extents and a
+disjoint-atom table in `Geom`).
+
+### Reading of the two pilots
+
+| | lines on held-out | CPU on held-out | setup | covers |
+|---|---|---|---:|---|
+| incumbent | 0 | 0 | 0 | — |
+| SP | −29 / −66 / −32% | neutral | 270 | (d) heap edit, partly (c) |
+| KT | −53 / −56 / −63% | +85% / −19% / +60% per theorem (≈ +1 s each) | 389 | (b) (c) (e) |
+
+Neither candidate alone satisfies the rule "cheaper on held-out cases and the refactors shrink" on
+every measure: SP does not bend the curve (most lines are stepping and address work), KT pays its
+line savings with search time. They cover disjoint obligations, and both agents report the same
+residue for the other. No adoption yet.
+
+### Combined candidate KT∘SP (second bake-off iteration)
+
+Build: merge exp-F into exp-E; per-path route = `rgn_run` stepping, `frame_log`/`log_in` frames,
+sections + permits for the heap edit. Fresh held-out cases (not touched by either pilot):
+`free_b2nl` (FreePaths), `mal_merge` (ReallocMal), `pvN_inline` (ReallocPrevN). Same measurements.
 
 (pending)
 
