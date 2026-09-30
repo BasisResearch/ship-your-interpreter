@@ -13,8 +13,7 @@ import VsaIris.Interp.Case.CallPrintT
 import VsaIris.Interp.Case.CallPrintlnT
 import VsaIris.Interp.Case.CallAssertT
 import VsaIris.Interp.ExecExpr
-import VsaIris.Interp.Case.ExecVarInitT
-import VsaIris.Interp.Case.ExecVarNullT
+import VsaIris.Interp.ExecVarDecl
 import VsaIris.Interp.Case.ExecBlockT
 import VsaIris.Interp.Case.ExecIfTrueT
 import VsaIris.Interp.Case.ExecIfFalseT
@@ -291,10 +290,10 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     exact ⟨exprT ($S).hlive De ihe, fun _ _ h => by cases h⟩
   case varInit =>
     intro st d env x e st' v n De ihe
-    exact ⟨caseT_ExecVarInit ($S).hlive De ihe ($S).envDefine, fun _ _ h => by cases h⟩
+    exact ⟨varInitT ($S).hlive De ihe ($S).envDefine, fun _ _ h => by cases h⟩
   case varNull =>
     intro st d env x
-    exact ⟨caseT_ExecVarNull ($S).hlive ($S).vnull ($S).envDefine, fun _ _ h => by cases h⟩
+    exact ⟨varNullT ($S).hlive ($S).vnull ($S).envDefine, fun _ _ h => by cases h⟩
   case block =>
     intro st d env ss store' inner st' status n halloc Dseq ihseq
     exact ⟨caseT_ExecBlock ($S).hlive halloc Dseq ihseq.1 ($S).envNew, fun _ _ h => by cases h⟩

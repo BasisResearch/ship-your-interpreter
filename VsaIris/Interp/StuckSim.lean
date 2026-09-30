@@ -8,10 +8,9 @@ import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.BinaryAddP
 import VsaIris.Interp.Case.ExecBlockP
 import VsaIris.Interp.Case.CallArmP
-import VsaIris.Interp.Case.ExecVarNullP
+import VsaIris.Interp.ExecVarDecl
 import VsaIris.Interp.Case.FnLitP
 import VsaIris.Interp.ExecExpr
-import VsaIris.Interp.Case.ExecVarInitP
 import VsaIris.Interp.Case.VarP
 import VsaIris.Interp.Case.ExecWhileP
 import VsaIris.Interp.Case.ExecForP
@@ -175,8 +174,8 @@ theorem execP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
   | expr e => iapply exprP S.hlive $$ HE
   | varDecl x eo =>
     cases eo with
-    | some e => iapply caseP_ExecVarInit S.hlive hE.newlib hE.code hE.core S.envDefine; iframe Hctx HE
-    | none => iapply caseP_ExecVarNull S.hlive hE.newlib hE.code hE.core S.vnull S.envDefine $$ Hctx
+    | some e => iapply varInitP S.hlive hE.newlib hE.code hE.core S.envDefine; iframe Hctx HE
+    | none => iapply varNullP S.hlive hE.newlib hE.code hE.core S.vnull S.envDefine $$ Hctx
   | block ss => iapply caseP_ExecBlock S.hlive hE.newlib hE.code hE.core S.envNew; iframe Hctx HX
   | ifStmt c t eo => iapply caseP_ExecIf S.hlive S.vtruthy; iframe HE HX
   | whileStmt c b =>
