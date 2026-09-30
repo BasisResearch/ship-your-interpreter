@@ -30,6 +30,12 @@ theorem of_imp {P Q : Config → Prop} (h : ∀ c, P c → Q c) : Triple P Q :=
 
 theorem rfl {P : Config → Prop} : Triple P P := of_imp fun _ h => h
 
+theorem of_step {P Q : Config → Prop}
+    (h : ∀ c, P c → ∃ c', Step c c' ∧ Q c') : Triple P Q := by
+  intro c hc
+  obtain ⟨c', hs, hq⟩ := h c hc
+  exact ⟨c', .single hs, hq⟩
+
 theorem conseq {P P' Q Q' : Config → Prop} (h : Triple P Q)
     (hP : ∀ c, P' c → P c) (hQ : ∀ c, Q c → Q' c) : Triple P' Q' := by
   intro c hc

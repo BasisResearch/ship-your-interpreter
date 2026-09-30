@@ -702,4 +702,7 @@ def StoreLe (a b : Store) : Prop :=
 theorem StoreLe.trans {a b c : Store} : StoreLe a b → StoreLe b c → StoreLe a c :=
   fun h1 h2 => ⟨Nat.le_trans h1.1 h2.1, Nat.le_trans h1.2 h2.2⟩
 
+def BigStepBudget (p : Program) (out : String) (n : Nat) : Prop :=
+  ∃ st' m, ExecSeqCost initSt 0 0 p st' .normal m ∧ st'.out = out ∧ m ≤ n
+
 end Vsa.While

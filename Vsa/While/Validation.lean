@@ -18,6 +18,10 @@ theorem for_valid : BigStep forWl
     "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n5050\n37\n3\n01234\n" := by
   bigstep_derive
 
+theorem functions_valid : BigStep functionsWl
+    "15\n11\n81\n3\n1\ntrue\n<fn make_adder>\n<fn>\n21\n" := by
+  bigstep_derive
+
 theorem scope_valid : BigStep scopeWl "2\n3\n1\n20\n14 5\n3\nasserts ok\n" := by
   bigstep_derive
 
