@@ -1,6 +1,7 @@
 import VsaIris.Interp.ExecArm
 import VsaIris.Interp.SpecLoop
 import VsaIris.Interp.ExecEnv
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -22,7 +23,7 @@ theorem whileNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {c : Vsa.Whil
     (hk : ldv .lw m aS.toNat = 4#64) (hku : ldv .lwu m aS.toNat = 4#64) :
     IW live m (stmtView aS.toNat 4) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, hk, hku] at 0x8000403c
+     sym_run hlive using [h8, h14, hk, hku] at 0x8000403c
 
 section Exit
 
@@ -100,7 +101,7 @@ theorem forNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {i : Option Vsa
     (hk : ldv .lw m aS.toNat = 5#64) (hku : ldv .lwu m aS.toNat = 5#64) :
     IW live m (stmtView aS.toNat 4) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, hk, hku] at 0x80004238
+     sym_run hlive using [h8, h14, hk, hku] at 0x80004238
 
 theorem forFits_of {i : Option Vsa.While.Stmt} {c st : Option Vsa.While.Expr} {b : Vsa.While.Stmt}
     {d : Nat} (hbb : (Vsa.While.Stmt.forStmt i c st b).bodiesBound Vsa.While.perCallBudget = true) :

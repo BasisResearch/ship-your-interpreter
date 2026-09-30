@@ -1,5 +1,6 @@
 import VsaIris.Interp.SpecExecDisp
 import VsaIris.Interp.SeqLoop
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -26,7 +27,7 @@ theorem execSP_restore (s : BitVec 64) : execSP s + 176#64 = s := by
     (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s) :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80003fe0#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80004014
+  by sym_run hlive using [h2, hsf] at 0x80004014
 
 theorem execFrameGeom_of {s : BitVec 64} {sm : Vsa.While.Stmt} {d : Nat}
     (hsg : StackGeom s (execNeed sm d)) : ExecFrameGeom s ∧ 176 ≤ execNeed sm d := by

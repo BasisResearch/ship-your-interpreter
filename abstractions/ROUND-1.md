@@ -236,6 +236,32 @@ or more language instances).
 Remaining migration: ~143 allocator path proofs (`AW`), then the snprintf/stdout/exit path
 clusters, which need regions for FILE structs and buffers (static table V1) and have no heap edits.
 
+## Rollout measurement (after adoption)
+
+The remaining allocator path proofs were migrated file by file (worktree syi-expE, tip 7417503a;
+every statement checked by `type_of%`; full build green):
+
+| | before | after | change |
+|---|---:|---:|---:|
+| 93 migrated `AW` proofs, lines | 8,370 | 5,186 | −38% |
+| 25 migrated supporting lemmas, lines | 1,543 | 916 | −41% |
+| `VsaIris/Vsa` diff (31 files) | | | +1,891 / −5,564 (net −3,673) |
+| layer setup added during rollout | | | +79 |
+| module CPU, 29 changed modules (serial) | 383.4 s | 384.9 s | +0.4% |
+
+The rollout saving (−38%) is below the bake-off's (−58% on six cases): the held-out cases were
+paths with many accesses and a heap edit, where the layer fits best. 50 `AW` units (1,319 lines)
+were left: 26 are pure composition with no machine step, 10 are register arithmetic and branch
+dispatch only, 8 sit upstream of the layer's imports, and the rest are already one `sx_run` or have
+non-frame posts. The census counted these in the cluster because they share the conclusion
+predicate; they do not share the obligations.
+
+What the rollout says the layer still lacks (each wanted by several proofs): permits against a
+base memory other than the invariant's (coalesce, release, moveBinAt, cut, toTop — needs a
+two-sided window agreement); a top-chunk region and top permits; frame structures carried through
+a whole store log; a spill/reload bracket around calls (cluster B); hiding disjunctive hypotheses
+from the region search (the main CPU cost).
+
 ## Round 2 targets (from this round's residue)
 
 1. Region membership by key equality inside `obCheck` (symbolic per-atom extents, disjoint-atom

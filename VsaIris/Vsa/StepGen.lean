@@ -1077,15 +1077,6 @@ def driverLemma? (goal? : Option Tbl) (fam : String) (pc : Nat) : MetaM (Option 
   if let some g := goal? then unless g.key == t.key do return none
   stepLemma t k pc
 
-/-- Whether some family of `fams` has a step at `pc` (nothing is elaborated). -/
-def hasStep (fams : List String) (pc : Nat) : MetaM Bool :=
-  fams.anyM fun fam => do
-    if (← landed? fam pc).isSome then return true
-    let some (t, k) ← resolveFam fam pc | return false
-    if (t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2) || !t.offers k pc then return false
-    let some w ← wordAt? t.pieces pc | return false
-    return (lemAt t k pc w).isSome
-
 syntax (name := stepCore) "step_core% " ident num : term
 
 /-- `step% fam pc`: the step lemma of family `fam` (`it`, `itD`, …, `itS`, `nt…`, `st`,
@@ -1110,12 +1101,15 @@ proofs name each step. `#step_table tbl lo hi` declares, as theorems, the step l
 every family at every instruction of `tbl`'s code in `[lo, hi)` (`mst_<pc>`, `sl_<pc>`,
 `slH_<pc>`, `slO_<pc>`). The other runs have no tables. -/
 
-/-- The families a table offers, in generation order. -/
+/-- The families of a run. -/
 def Tbl.kinds (t : Tbl) : List String :=
   match t.flavor with
+  | .interp => ["jalx", "", "D", "T", "H", "O"]
+  | .stdio => ["jalx", "", "D", "H", "P", "O"]
+  | .snp => ["jalx", "jalro", "", "D", "H", "O", "J", "C", "P"]
+  | .alloc => ["jalx", ""]
   | .memcpy => [""]
   | .str => ["", "H", "O"]
-  | _ => []
 
 /-- The name of family `kind` at `pc` in table `t`. -/
 def famName (t : Tbl) (kind : String) (pc : Nat) : String :=
@@ -1133,6 +1127,8 @@ def Tbl.pcsIn (t : Tbl) (lo hi : Nat) : MetaM (List Nat) := do
 open Command in
 elab "#step_table " k:ident lo:num hi:num : command => do
   let some t := tblByKey? k.getId.toString | throwError "#step_table: no table {k.getId}"
+  unless t.flavor == .memcpy || t.flavor == .str do
+    throwError "#step_table: the steps of this run are elaborated on demand (`step% fam pc`)"
   let words ← liftTermElabM do wordsAt t.pieces (← t.pcsIn lo.getNat hi.getNat)
   for (pc, w) in words do
     for kind in t.kinds do

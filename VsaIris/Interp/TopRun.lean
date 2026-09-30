@@ -32,7 +32,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hcnt : ldv .ld Mt (s + 18446744073709551440#64 + 16#64).toNat = cnt)
     (harr : ldv .ld Mt (s + 18446744073709551440#64 + 24#64).toNat = arr) :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004428#64 R Mt
-  by ix_run hlive using [h2, h10, hcnt, harr, hsf] at 0x8000448c 0x80004514
+  by sym_run hlive using [h2, h10, hcnt, harr, hsf] at 0x8000448c 0x80004514
 
 #ix_seg TopEpi_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}

@@ -1,4 +1,5 @@
 import VsaIris.Interp.Arm3
+import VsaIris.Interp.SymInterp
 
 /-!
 The reflected segments of `&&` and `||`: the shared entry to the left call, per operator the
@@ -93,7 +94,7 @@ theorem logEntry : LogEntryRun := by
   have h2 : upd rv 1 ret 2 = s := by ix_reg; exact hr.sp
   clear g hn
   unfold evalEntryPC
-  ix_run hlive using [h10, h11, h12, h13, h2, hK, hKu, hsf] at 0x80003568
+  sym_run hlive using [h10, h11, h12, h13, h2, hK, hKu, hsf] at 0x80003568
   have hoff := evalSP_off (s := s) hsf (by omega)
   refine hk _ _ ⟨⟨by ix_reg, by ix_reg, by ix_reg, by ix_reg, by ix_reg, fun x hx => ?_,
     ⟨?_, ?_, ?_, ?_⟩, by ix_fwd⟩,
@@ -122,7 +123,7 @@ macro "log_run2 " pc:num : tactic => `(tactic| (
   have hop := hn.op
   simp only [logOpTok, LogOp'.tr] at hop hk ⊢
   clear g hn
-  ix_run hlive using [h8, h2, hop, hsf] at $pc
+  sym_run hlive using [h8, h2, hop, hsf] at $pc
   have hoff := evalSP_off (s := s) hsf (by omega)
   simp only [hoff 120 (by decide), hoff 128 (by decide), hoff 136 (by decide)] at hw0 hw1 hw2
   refine hk _ _ ⟨?_, by ix_reg, by ix_fwdF hoff; exact hw0, by ix_fwdF hoff; exact hw1,
@@ -150,7 +151,7 @@ macro "log_short " pc:num : tactic => `(tactic| (
   simp only [Nat.reduceAdd, ite_true, ite_false, Bool.false_eq_true] at h10 hk ⊢
   clear g
   refine iw_regFact h10 ?_
-  ix_run hlive using [h2, hsf] at $pc
+  sym_run hlive using [h2, hsf] at $pc
   refine hk _ _ ?_
   refine ⟨?_, by ix_reg <;> exact h9, by ix_reg <;> decide⟩
   frame3_close))
@@ -179,7 +180,7 @@ macro "log_long " pc:num : tactic => `(tactic| (
     Bool.false_eq_true] at h10 hk ⊢
   clear g hn
   refine iw_regFact h10 ?_
-  ix_run hlive using [h8, h2, h18, hright, hA, hsf] at $pc
+  sym_run hlive using [h8, h2, h18, hright, hA, hsf] at $pc
   refine hk _ _ ?_
   refine ⟨?_, ⟨by ix_reg, by ix_reg <;> exact h18, by ix_reg, by ix_reg, by ix_reg <;> exact h2⟩⟩
   frame3_close))
@@ -205,7 +206,7 @@ macro "log_run4 " off:num : tactic => `(tactic| (
   dsimp only [LogOp'.rc, LogOp'.rslot] at hu0 hu1 hu2 hk ⊢
   simp only [Nat.reduceAdd] at hk ⊢
   clear g
-  ix_run hlive using [h2, hsf] at 0x800035cc
+  sym_run hlive using [h2, hsf] at 0x800035cc
   have hoff := evalSP_off (s := s) hsf (by omega)
   simp only [hoff $off (by decide)] at hu0 hu1 hu2
   refine hk _ _ ⟨?_, by ix_reg, by ix_fwdF hoff; exact hu0, by ix_fwdF hoff; exact hu1,
@@ -227,7 +228,7 @@ theorem logRun5 : LogRun5 := by
   intro live hlive m DA aX s ret sret inp aE rv R Mt n c g f h10 Q hk
   frame3_facts
   clear g
-  ix_run hlive using [h2, hsf] at 0x800035d8
+  sym_run hlive using [h2, hsf] at 0x800035d8
   refine hk _ _ ?_
   refine ⟨?_, by ix_reg <;> first | rfl | exact h9, by ix_reg <;> first | rfl | exact h10⟩
   frame3_close

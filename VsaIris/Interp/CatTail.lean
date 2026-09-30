@@ -2,6 +2,7 @@ import VsaIris.Interp.BinPrelude
 import VsaIris.Interp.ConcatArm
 import VsaIris.Interp.BinArm
 import VsaIris.Interp.ErrArm
+import VsaIris.Interp.SymInterp
 
 /-!
 String concatenation from the binary dispatch point, proved once for the total and partial specs.
@@ -27,7 +28,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hop : ldv .lw m (aX + 8#64).toNat = 11#64)
     (hKL : ldv .ld Mt (s.toNat - 1088) = kL) (hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = kR) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x8000351c#64 R Mt
-  by ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003888
+  by sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x80003888
 
 #ix_seg CatTail_run3b {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -36,7 +37,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a20#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80003a40
+  by sym_run hlive using [h2, hsf] at 0x80003a40
 
 #ix_seg CatTail_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -45,7 +46,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a44#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80003a68
+  by sym_run hlive using [h2, hsf] at 0x80003a68
 
 #ix_seg CatTail_run5 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -54,7 +55,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a6c#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003a78
+  by sym_run hlive using [h9, hsf] at 0x80003a78
 
 #ix_seg CatTail_run6 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -63,7 +64,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a7c#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003a84
+  by sym_run hlive using [h9, hsf] at 0x80003a84
 
 #ix_seg CatTail_run7 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -72,7 +73,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a88#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003a90
+  by sym_run hlive using [h9, hsf] at 0x80003a90
 
 #ix_seg CatTail_run8 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -81,7 +82,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) (hq : R 10 ≠ 0#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a94#64 R Mt
-  by ix_run hlive using [h2, hq, hsf] at 0x80003aa8
+  by sym_run hlive using [h2, hq, hsf] at 0x80003aa8
 
 #ix_seg CatTail_run9 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -90,7 +91,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003aac#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003ab4
+  by sym_run hlive using [h9, hsf] at 0x80003ab4
 
 #ix_seg CatTail_run10 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -99,7 +100,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003ab8#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003abc
+  by sym_run hlive using [h9, hsf] at 0x80003abc
 
 #ix_seg CatTail_run11 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -108,7 +109,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003ac0#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003ac4
+  by sym_run hlive using [h9, hsf] at 0x80003ac4
 
 #ix_seg CatTail_run12 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -117,7 +118,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h9 : R 9 = sret) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003ac8#64 R Mt
-  by ix_run hlive using [h9, hsf] at 0x80003ad0
+  by sym_run hlive using [h9, hsf] at 0x80003ad0
 
 #ix_seg CatTail_run13 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -134,7 +135,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hS4 : ldv .ld Mt (s + 18446744073709550528#64 + 1040#64).toNat = v20)
     (hS5 : ldv .ld Mt (s + 18446744073709550528#64 + 1032#64).toNat = v21) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003ad4#64 R Mt
-  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hS4, hS5, hsf, hal]
+  by sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hS4, hS5, hsf, hal]
 
 #ix_seg CatTail_run8z {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m : Mem} {DA : List Nat} {Mt : Mem}
@@ -143,7 +144,7 @@ open VsaIris.VsaHeap VsaIris.Newlib
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709550528#64) (hq : R 10 = 0#64) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x80003a94#64 R Mt
-  by ix_run hlive using [h2, hq, hsf] at 0x80003e28
+  by sym_run hlive using [h2, hq, hsf] at 0x80003e28
 
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode

@@ -1,6 +1,7 @@
 import VsaIris.Interp.CatTail
 import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.BinPreludeP
+import VsaIris.Interp.SymInterp
 
 /-!
 `+`: the total concatenation spec and the partial spec (integer sum, concatenation, both type
@@ -59,7 +60,7 @@ macro "add_err_pre " facts:ident pc:num : tactic => `(tactic| (
   generalize BitVec.ofNat 64 (valTag lv) = kL at hKL hA hB
   obtain ⟨hA1, hA2⟩ := hA
   simp only [binOpTok, opnSlot, opnConst, Bool.false_eq_true, ↓reduceIte] at hop hk ⊢
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
 
 #ix_seg AddErrL1 : BinErrRun .add (BitVec.ofNat 64 0x80003d3c) (opnConst (BitVec.ofNat 64 0x800193e8))
     (BitVec.ofNat 64 0x800193e8) true errAddL by

@@ -1,5 +1,6 @@
 import VsaIris.Interp.Arm3
 import VsaIris.Interp.LeafArm
+import VsaIris.Interp.SymInterp
 
 /-!
 The four literal arms (`int`, `str`, `bool`, `null`): per kind the reflected entry to the
@@ -48,7 +49,7 @@ macro "leaf_run " pc:num : tactic => `(tactic| (
   have h2 : upd rv 1 ret 2 = s := by ix_reg; exact hr.sp
   clear g hn
   unfold evalEntryPC
-  ix_run hlive using [h10, h11, h12, h13, h2, hK, hKu, hsf] at $pc
+  sym_run hlive using [h10, h11, h12, h13, h2, hK, hKu, hsf] at $pc
   have hoff := evalSP_off (s := s) hsf (by omega)
   refine hk _ _ ?_
   refine ⟨by ix_reg, by ix_reg; exact hr.a0, by first | exact trivial | ix_reg, by ix_reg,

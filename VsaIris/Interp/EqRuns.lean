@@ -1,4 +1,5 @@
 import VsaIris.Interp.BinErr
+import VsaIris.Interp.SymInterp
 import VsaIris.Interp.BinEq
 
 /-!
@@ -86,11 +87,11 @@ macro "eq_pre " pc:num : tactic => `(tactic| (
   have hQ0 := mid.q0; have hQ1 := mid.q1; have hQ2 := mid.q2
   clear g hn mid
   simp only [EqOp.op, binOpTok, EqOp.ve] at hop hk ⊢
-  ix_run hlive using [h8, h2, h9, h19, hop, hsf] at $pc))
+  sym_run hlive using [h8, h2, h9, h19, hop, hsf] at $pc))
 
 set_option hygiene false in
 macro "eq_post " pc:num : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hsf] at $pc
+  sym_run hlive using [h8, h2, h9, h19, hop, hsf] at $pc
   have hoff := evalSP_off (s := s) hsf (by omega)
   have e : ∀ c, c < 4096 → (s + 18446744073709550528#64 + BitVec.ofNat 64 c).toNat =
     s.toNat - 1088 + c := hoff
@@ -118,7 +119,7 @@ macro "eq_run4 " pc:num : tactic => `(tactic| (
   have hs := g.lo; have hs2 := g.hi; have hs3 := g.al
   clear g
   simp only [EqOp.ve, EqOp.vb] at hk ⊢
-  ix_run hlive using [h9, hsf] at $pc
+  sym_run hlive using [h9, hsf] at $pc
   have hoff := evalSP_off (s := s) hsf (by omega)
   refine hk _ _ ⟨⟨by ix_reg, fun x hx => ?_⟩, by ix_reg, fun c hc => ?_, fun h => ?_⟩
   · simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx

@@ -19,7 +19,7 @@ open Vsa.MemRepr Vsa.Sim
     (hc : ldv .ld m (aS + 8#64).toNat = aC) :
     IW live m (stmtView aS.toNat 32) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hc, hsf] at 0x800041f8
+     sym_run hlive using [h8, h14, h2, hk, hku, hc, hsf] at 0x800041f8
 
 #ix_seg IfArm_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -59,7 +59,7 @@ open Vsa.MemRepr Vsa.Sim
     (h8 : R 8 = aS) (h10 : R 10 = 0#64) (he : ldv .ld m (aS + 24#64).toNat = 0#64) :
     IW live m (stmtView aS.toNat 32) (InExt (s.toNat - 176, 176)) Q 0x8000421c#64 R Mt
   by rw [← upd_eq_self h10]
-     ix_run hlive using [h8, he] at 0x8000409c
+     sym_run hlive using [h8, he] at 0x8000409c
 
 section Middle
 

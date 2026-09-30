@@ -1,5 +1,6 @@
 import VsaIris.Interp.ArmEval
 import VsaIris.Interp.ArmLogical
+import VsaIris.Interp.SymInterp
 
 /-!
 Arms whose prologue saves `ra, s0, s1, s2` (logical, unary): the frame invariant `Frame3`
@@ -139,7 +140,7 @@ macro "epi3_run" : tactic => `(tactic| (
   have hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18 := by
     rw [hoff _ (by decide)]; exact hsv.s2
   clear g h2 hsv hoff
-  ix_run hlive using [h2', hRA, hS0, hS1, hS2, hsf, hal]
+  sym_run hlive using [h2', hRA, hS0, hS1, hS2, hsf, hal]
   refine hk _ _ ⟨by ix_reg, by ix_reg; exact evalSP_restore s, by ix_reg, by ix_reg, by ix_reg,
     by ix_reg, fun x hx => ?_⟩
   simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx

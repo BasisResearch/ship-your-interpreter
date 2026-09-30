@@ -1,5 +1,6 @@
 import VsaIris.Interp.HelperRun
 import VsaIris.Interp.SpecValue
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -26,20 +27,20 @@ theorem valueTruthy_run (hlive : ∀ p ∈ interpText, live p.1) (N : NativeAddr
   cases v with
   | null =>
     have hk := ldv_lw_kind (Mt := Mt) hv (by decide)
-    ix_run1 hlive using [h10, hk]
+    sym_run1 hlive using [h10, hk]
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rw [snez_reg]; rfl
   | bool b =>
     have hk := ldv_lw_kind (Mt := Mt) hv.1 (by decide)
     have hb := ldv_lw_kind (Mt := Mt) (a := (p + 8#64).toNat) (k := cond b 1 0) (by rw [h8]; exact hv.2)
       (by cases b <;> decide)
-    ix_run1 hlive using [h10, hk, hb]
+    sym_run1 hlive using [h10, hk, hb]
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; cases b <;> rfl
   | int n =>
     have hk := ldv_lw_kind (Mt := Mt) hv.1 (by decide)
     have hn := ldv_ld_imgW Mt (p + 8#64).toNat
-    ix_run1 hlive using [h10, hk, hn]
+    sym_run1 hlive using [h10, hk, hn]
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rw [snez_reg, h8]
     have e := hv.2
@@ -49,17 +50,17 @@ theorem valueTruthy_run (hlive : ∀ p ∈ interpText, live p.1) (N : NativeAddr
       simp [Value.truthy, h0, hn0]
   | str x =>
     have hk := ldv_lw_kind (Mt := Mt) hv.1 (by decide)
-    ix_run1 hlive using [h10, hk]
+    sym_run1 hlive using [h10, hk]
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rw [snez_reg]; rfl
   | closure a =>
     have hk := ldv_lw_kind (Mt := Mt) hv.1 (by decide)
-    ix_run1 hlive using [h10, hk]
+    sym_run1 hlive using [h10, hk]
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rw [snez_reg]; rfl
   | native f =>
     have hk := ldv_lw_kind (Mt := Mt) hv.1 (by decide)
-    ix_run1 hlive using [h10, hk]
+    sym_run1 hlive using [h10, hk]
     refine swp_helperEnd (by ix_reg) (by helper_keep) (fun rv' mv hR hmv => ⟨?_, hmv⟩)
     rw [hR 10 (by decide)]; ix_reg; rw [snez_reg]; rfl
 
