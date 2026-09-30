@@ -26,7 +26,7 @@ theorem malloc_errno {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins) (h8 : R 8 = reentV)
     (hst : Starved C.top0 C.n.toNat) :
     AW C.live C.S C.Q 0x80004840#64 R Mt := by
-  have Er : Rgn (vsaFoot C.H) 0x8001b538 4 := ⟨errno_foot⟩
+  have Er := errnoRgn C.H
   have hoff := Er.offStack Hp.disj (by decide); have hlo := O.sp.lo
   unfold mHead at hlo hoff; unfold Vsa.Sim.tohostAddr at hlo
   have h8n : (R 8).toNat = 0x8001b538 := by rw [h8]; rfl

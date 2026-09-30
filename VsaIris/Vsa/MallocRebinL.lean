@@ -137,19 +137,6 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
   · rw [hb]; rfl
   · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
 
-theorem ring_nbrs_MallocRebinL {bins : Nat → List Nat} {j pred succ : Nat} {pre' post' : List Nat}
-    (hpos : bins j = pre' ++ post') (hpred : (binAt j :: pre').getLast? = some pred)
-    (hsucc : (post' ++ [binAt j]).head? = some succ) :
-    (pred = binAt j ∨ pred ∈ bins j) ∧ (succ = binAt j ∨ succ ∈ bins j) := by
-  rw [hpos]
-  refine ⟨?_, ?_⟩
-  · rcases List.mem_cons.mp (List.mem_of_getLast? hpred) with h1 | h1
-    · exact .inl h1
-    · exact .inr (List.mem_append_left _ h1)
-  · rcases List.mem_append.mp (List.mem_of_head? hsucc) with h1 | h1
-    · exact .inr (List.mem_append_right _ h1)
-    · exact .inl (List.mem_singleton.mp h1)
-
 theorem node_loc_MallocRebinL {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (B : BlockHeapAt m H top brkv chunks bins) {j x : Nat} (hj0 : 0 < j)
     (hj : j < numBins) (hx : x = binAt j ∨ x ∈ bins j) :
@@ -182,7 +169,7 @@ theorem rebin_at_heap {C : MCtx} {Mt Mt' M0 : Mem} {brkv : Nat} {chunks : List C
   have hvmem : v ∈ bins 1 := by rw [D.bin]; exact List.mem_cons_self
   have hvJ : v ∉ bins j := fun hc => by
     have := HH.bin_unique (by omega) hj (by decide) (by unfold numBins; decide) hc hvmem; omega
-  obtain ⟨hpm, hsm⟩ := ring_nbrs_MallocRebinL hpos hpred hsucc
+  obtain ⟨hpm, hsm⟩ := ring_nbr_mem hpos hpred hsucc
   have hnv : ∀ x, (x = binAt j ∨ x ∈ bins j) → x ≠ v := by
     rintro x (rfl | h) he
     · unfold binAt avAddr at hgj he; omega
@@ -245,7 +232,7 @@ theorem rebin_link {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' M0 : M
   have B := Hp.heap.heap
   have K := B.chunkK hfree; have FS := B.freeSpan hfree rfl
   open_fields K; simp only at FS K_lo K_hi K_al K_sz32
-  obtain ⟨hpm, hsm⟩ := ring_nbrs_MallocRebinL hpos hpred hsucc
+  obtain ⟨hpm, hsm⟩ := ring_nbr_mem hpos hpred hsucc
   obtain ⟨hp16, hploc, rP⟩ := node_loc_MallocRebinL B (by omega) hj hpm
   obtain ⟨hs16, hsloc, rS⟩ := node_loc_MallocRebinL B (by omega) hj hsm
   have hbbA : binblocksAddr = 2147593496 := rfl
@@ -320,7 +307,7 @@ theorem rebinL_exit {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem
   have hj0 : 1 < j := by have := binIndex_large (sz := sz) (by have := L.large; omega); rw [← L.bin_idx]; omega
   have hbbl := L.heap.heap.bb_lt bb L.bbr
   obtain ⟨pred, hpred⟩ : ∃ p, (binAt j :: pre').getLast? = some p := ⟨_, List.getLast?_cons⟩
-  have hsm := (ring_nbrs_MallocRebinL hpos hpred hsucc).2
+  have hsm := (ring_nbr_mem hpos hpred hsucc).2
   obtain ⟨hs16, hsloc, rS⟩ := node_loc_MallocRebinL B (by omega) hj hsm
   have hbj : binAt j = 2147593488 + 16 * j := rfl
   have hjn : j < 128 := hj

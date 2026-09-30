@@ -135,6 +135,23 @@ theorem PHeapAt.unlink_permit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : N
   have ⟨r1, r2, r3, _⟩ := hR.reads
   h.unlink hi0 hi hbin hc hcv hpred hsucc r1 r2 r3 hsz hpi hR.agree
 
+/-- Take a binned free chunk whole: the unlink edit, with the chunk's block entering the
+footprint. -/
+theorem PHeapAt.take_permit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
+    {i : Nat} (hi0 : 0 < i) (hi : i < numBins) {pre post : List Nat} {v : Nat}
+    (hbin : bins i = pre ++ v :: post) {c : Chunk} (hc : c ∈ chunks) (hcv : c.addr = v)
+    {n : Nat} (hn : n + 8 ≤ c.size) {pred succ : Nat}
+    (hpred : (binAt i :: pre).getLast? = some pred)
+    (hsucc : (post ++ [binAt i]).head? = some succ) {hd' : Nat}
+    (hsz : ∀ hd, read64 m (v + c.size + 8) = some hd → chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2)
+    (hpi : prevInuse hd' = true)
+    (hR : Realises H m m' (unlinkPermit pred succ (v + c.size) hd')) :
+    PHeapAt m' ((v + 16, n) :: H) top brkv (chunks.map (reflag (v + c.size) true))
+      (updBins bins i (pre ++ post)) :=
+  have ⟨r1, r2, r3, _⟩ := hR.reads
+  h.take hi0 hi hbin hc hcv hn hpred hsucc r1 r2 r3 hsz hpi hR.agree
+
 /-! ### Absorb an in-use neighbour into an in-use chunk (reheader) -/
 
 abbrev absorbPermit (x a h' : Nat) : Permit where

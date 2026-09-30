@@ -187,14 +187,12 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     simp only [writeLog_nest, List.cons_append, List.nil_append]
     exact frame_log (by log_in) Hp.frame
   case heap =>
-    suffices hR : Realises C.H Mt _ (unlinkPermit pred (binAt (nb / 8)) (cv.addr + cv.size) (hd + 1)) by
-      exact Hp.heap.take (by omega) hi1 (post := []) hbin hcv rfl hn8 hpred hsucc
-        (hd' := hd + 1) hR.reads.1 hR.reads.2.1 hR.reads.2.2.1
-        (fun h0 h0r => by rw [hdr] at h0r; cases h0r; unfold chunkSize; omega)
-        (by unfold prevInuse; simp only [beq_iff_eq]; omega) hR.agree
-    exact Realises.of_log (by wl_win <;> first
-        | exact .inl (by unfold TakeW; omega)
-        | exact .inr fun hf => by have := offStack_pt Hp.disj hf; omega)
-      (by rd_log [hvB, hvP, hOr]) trivial
+    exact Hp.heap.take_permit (by omega) hi1 (post := []) hbin hcv rfl hn8 hpred hsucc (hd' := hd + 1)
+      (fun h0 h0r => by rw [hdr] at h0r; cases h0r; unfold chunkSize; omega)
+      (by unfold prevInuse; simp only [beq_iff_eq]; omega)
+      (Realises.of_log (by wl_win <;> first
+          | exact .inl (by unfold TakeW; omega)
+          | exact .inr fun hf => by have := offStack_pt Hp.disj hf; omega)
+        (by rd_log [hvB, hvP, hOr]) trivial)
 
 end VsaIris.VsaHeap

@@ -370,19 +370,6 @@ theorem lscan_fin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem} {v : 
   · sx_addr
   · apply BitVec.eq_of_toNat_eq; sx_addr
 
-theorem ring_nodes_MallocLarge {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (B : BlockHeapAt m H top brkv chunks bins) {j x pred succ : Nat}
-    {pre post : List Nat} (hj0 : 0 < j) (hj : j < numBins) (hmem : bins j = pre ++ x :: post)
-    (hpred : (binAt j :: pre).getLast? = some pred) (hsucc : (post ++ [binAt j]).head? = some succ) :
-    NodeK H top chunks pred ∧ NodeK H top chunks succ := by
-  refine ⟨B.nodeK hj0 hj ?_, B.nodeK hj0 hj ?_⟩
-  · rcases List.mem_cons.mp (List.mem_of_getLast? hpred) with h1 | h1
-    · exact .inl h1
-    · exact .inr (by rw [hmem]; exact List.mem_append_left _ h1)
-  · rcases List.mem_append.mp (List.mem_of_head? hsucc) with h1 | h1
-    · exact .inr (by rw [hmem]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
-    · exact .inl (List.mem_singleton.mp h1)
-
 theorem lscan_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb j x sz pred succ hd : Nat} {pre post : List Nat}
     (hsp : MSp C.s) (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb) (hj0 : 0 < j)
@@ -394,7 +381,7 @@ theorem lscan_ret {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     TakeRet C (writeLog (writeLog (writeLog (writeLog Mt [(succ + 24, 8, w1)])
       [(pred + 16, 8, w2)]) [(x + sz + 8, 8, w3)]) [(C.s.toNat - 96 + 8, 8, w4)]) x := by
   have K := Hp.heap.heap.chunkK hfree
-  obtain ⟨Np, Ns⟩ := ring_nodes_MallocLarge Hp.heap.heap hj0 hj hmem hpred hsucc
+  obtain ⟨Np, Ns⟩ := Hp.heap.heap.nbrK hj0 hj hmem hpred hsucc
   open_fields K; open_fields Np; open_fields Ns
   have hlo := hsp.lo
   have oN := K_nhdr.offStack Hp.disj (by decide); have oP := Np_links.offStack Hp.disj (by decide)
@@ -428,7 +415,7 @@ theorem lscan_take {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List
   have hfd := (ring_member hring hpred hsucc).1
   have hsuccl := Vsa.Sim.read64_lt _ _ _ hfd
   have K := Hp.heap.heap.chunkK hfree; have FS := Hp.heap.heap.freeSpan hfree rfl
-  obtain ⟨Np, Ns⟩ := ring_nodes_MallocLarge Hp.heap.heap (by omega) hj hmem hpred hsucc
+  obtain ⟨Np, Ns⟩ := Hp.heap.heap.nbrK (by omega) hj hmem hpred hsucc
   open_fields K; open_fields Np; open_fields Ns; simp only at FS
   obtain ⟨hd, hdr, hdp⟩ := K_nhdrv
   have hdlt := Vsa.Sim.read64_lt _ _ _ hdr

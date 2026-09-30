@@ -17,7 +17,7 @@ theorem realloc_errno {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} 
     (F : RFrame C R Mt) (Hp : RHeap C B Mt brkv chunks bins) (h9 : R 9 = reentV)
     (hst : Starved C.top0 C.n.toNat) :
     AW C.live C.S C.Q 0x800054b8#64 R Mt := by
-  have E : Rgn (vsaFoot C.H) 0x8001b538 4 := ⟨errno_foot⟩
+  have E := errnoRgn C.H
   have h9n : (R 9).toNat = 0x8001b538 := by rw [h9]; rfl
   have hoff := E.offStack Hp.disj (by omega); unfold mHead at hoff
   rgn_run O.live at 0x800054c4
