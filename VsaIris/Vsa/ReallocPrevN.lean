@@ -57,17 +57,17 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
       (R' 14).toNat = d + 8 * j → PVKeep R R' → AW live S Q 0x800056c8#64 R' (copyW M0 d s j) :=
     fun j R' hj g8 g14 K => pvN_tail3 A hlive g8 g14 (by omega) K fun R'' K' => by rw [hj]; exact hk R'' K'
   rgn_step hlive at 0x800056a4
-  refine st_800056a4 hlive (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x800056a4) hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x027#12) : BitVec 64).toNat = 39 from rfl] at hc
   · exact tail 0 _ (by omega) (by rgn_arith) (by rgn_arith) (by pv_keep (PVKeep.refl R))
   rgn_step hlive at 0x800056bc
   cp_norm
-  refine st_800056bc hlive (fun hc' => ?_) (fun hc' => ?_) <;>
+  refine (step% st 0x800056bc) hlive (fun hc' => ?_) (fun hc' => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h12, BitVec.reduceToNat] at hc'
   · rgn_step hlive at 0x80005808
     cp_norm
-    refine st_80005808 hlive (fun hc'' => ?_) (fun hc'' => ?_) <;>
+    refine (step% st 0x80005808) hlive (fun hc'' => ?_) (fun hc'' => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc''
     · have hL72 : L = 72 := by rw [← h12, hc'']; rfl
       rgn_step hlive at 0x800056c8

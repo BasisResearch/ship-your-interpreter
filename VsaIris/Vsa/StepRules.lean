@@ -9,7 +9,7 @@ import VsaIris.Vsa.SnpRunDef
 # Step rules with the landed continuation shape
 
 One rule per instruction class (ALU line, owned load, store, branch, jump, return), proved
-once from `swpx_line`/`swpx_br`/`swpx_j`/`swpx_jr` for any code image. A step-table lemma
+once from `swpx_line`/`swpx_br`/`swpx_j`/`swpx_jr` for any code image. A step lemma
 at a literal `pc` is the rule applied to the instruction of the image word, one Boolean
 side-condition check and the decode fact of the word; its binders and continuation are the
 rule's, so the kernel identifies the table statement with the rule instance by evaluation.

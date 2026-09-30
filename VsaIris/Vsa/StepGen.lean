@@ -12,6 +12,12 @@ import VsaIris.Vsa.StepRules
 /-!
 # Step lemmas from the code image, on demand
 
+**For anyone adding proofs over the interpreter, stdio, snprintf, allocator or environment
+runs:** step lemmas come from the image on demand. The drivers (`ix_run`, `nx_run`,
+`snp_run`, `sym_run`, `sx_run`, `rgn_run`) elaborate the lemma at the goal's `pc`
+themselves. Never add a per-`pc` table or name an `it_`/`st_`/`nt_`/`jalx_` lemma; for a
+direct reference write `step% fam pc` (`step% it 0x80003404`, `step% jalx 0x8000381c`).
+
 A symbolic run (`SWP` over a text) advances one instruction at a time. The step lemma
 for the instruction at a literal `pc` is determined by the four code bytes at `pc` in
 the loaded image, the run predicate (its text, register list and data view) and the
@@ -1022,11 +1028,17 @@ def stepLemma (t : Tbl) (kind : String) (pc : Nat) : MetaM (Option Name) := do
     if (← getEnv).contains nm then return some nm
   if t.skip.any fun r => r.1 ≤ pc ∧ pc < r.2 then return none
   unless t.offers kind pc do return none
-  let some w ← wordAt? t.pieces pc | return none
-  let some L := lemAt t kind pc w | return none
-  let nm ← elabLem t w L
-  stepCache.modify (·.insert key nm)
-  return some nm
+  -- the lemma is a declaration of its own: it is elaborated on its own heartbeat budget,
+  -- and the proof that asked for it is charged nothing
+  let hb ← IO.getNumHeartbeats
+  try
+    withCurrHeartbeats do
+      let some w ← wordAt? t.pieces pc | return none
+      let some L := lemAt t kind pc w | return none
+      let nm ← elabLem t w L
+      stepCache.modify (·.insert key nm)
+      return some nm
+  finally IO.setNumHeartbeats hb
 
 /-- The table whose code contains `pc`, preferring `pref`. -/
 def tblOfPc (pref : List Tbl) (pc : Nat) : MetaM (Option Tbl) := do
@@ -1050,25 +1062,14 @@ def resolveFam (fam : String) (pc : Nat) : MetaM (Option (Tbl × String)) := do
     return (← tblOfPc [interpTbl, stdioTbl] pc).map (·, k)
   return none
 
-register_option step.landed : Bool := {
-  defValue := true
-  descr := "drivers and `step%` use the step-table lemma at a `pc` when a table declares it \
-    (false: every step is elaborated from the image, to measure that cost)" }
-
-/-- The landed lemma `fam_<pc>`: one a step table declares (unless `step.landed` is off)
-    or a hand-written step of that name. -/
+/-- A hand-written step under the name `fam_<pc>` (it takes precedence over the image). -/
 def landed? (fam : String) (pc : Nat) : CoreM (Option Name) := do
   let nm := (`VsaIris.Sym).str s!"{fam}_{hxw 8 pc}"
-  let env ← getEnv
-  unless env.contains nm do return none
-  if step.landed.get (← getOptions) then return some nm
-  let inTable := (env.getModuleIdxFor? nm).any fun i =>
-    (`VsaIris.Vsa.StepTables).isPrefixOf env.header.moduleNames[i.toNat]!
-  return if inTable then none else some nm
+  return if (← getEnv).contains nm then some nm else none
 
 /-- The step lemma a driver applies for the family prefix `fam` (`it`, `itD`, …, `nt`,
-    `st`) at `pc`: the table lemma when a table declares it, else the lemma elaborated
-    from the image. `goal?` is the run table of the goal; a family of another run has no
+    `st`) at `pc`: a hand-written step of that name, else the lemma elaborated from the
+    image. `goal?` is the run table of the goal; a family of another run has no
     candidate. -/
 def driverLemma? (goal? : Option Tbl) (fam : String) (pc : Nat) : MetaM (Option Name) := do
   if let some nm ← landed? fam pc then return some nm
@@ -1087,14 +1088,14 @@ def hasStep (fams : List String) (pc : Nat) : MetaM Bool :=
 
 syntax (name := stepCore) "step_core% " ident num : term
 
-/-- `step% fam pc`: the step lemma `fam_<pc>` of the landed step tables, elaborated from
-    the image at `pc`. -/
+/-- `step% fam pc`: the step lemma of family `fam` (`it`, `itD`, …, `itS`, `nt…`, `st`,
+    `jalx`, `jalxn`, `jalrn`) at `pc`, elaborated from the image. -/
 macro "step% " f:ident n:num : term => `(step_core% $f $n)
 
 @[term_elab stepCore] def elabStepCore : TermElab := fun stx expectedType? => do
   match stx with
   | `(step_core% $f:ident $n:num) =>
-    let fam := f.getId.toString
+    let fam := f.getId.eraseMacroScopes.toString
     let pc := n.getNat
     if let some nm ← landed? fam pc then return ← Term.elabTerm (mkCIdent nm) expectedType?
     let some (t, k) ← resolveFam fam pc | throwError "step%: no table for {fam} at {pc}"
@@ -1104,69 +1105,42 @@ macro "step% " f:ident n:num : term => `(step_core% $f $n)
 
 /-! ## Step tables
 
-`#step_table tbl lo₁ hi₁ lo₂ hi₂ …` adds, as theorems, the step lemma of every family at
-every instruction of `tbl`'s code in the ranges `[loᵢ, hiᵢ)`, under the names the drivers
-and proofs use (`it_<pc>`, `itD_<pc>`, …, `st_<pc>`, `nt_<pc>`, `jalx_<pc>`). The ranges of
-the landed tables are the addresses some proof steps through (`scripts/step_usage.lean`). -/
+`memcpy` and the string leaves run under their own predicates (`MW`, `SR`) and their
+proofs name each step. `#step_table tbl lo hi` declares, as theorems, the step lemma of
+every family at every instruction of `tbl`'s code in `[lo, hi)` (`mst_<pc>`, `sl_<pc>`,
+`slH_<pc>`, `slO_<pc>`). The other runs have no tables. -/
 
-/-- The families a table offers, in generation order (calls first: their lemmas are
-    used by the call steps). -/
+/-- The families a table offers, in generation order. -/
 def Tbl.kinds (t : Tbl) : List String :=
   match t.flavor with
-  | .interp => ["jalx", "", "D", "T", "H", "O"]
-  | .stdio => ["jalx", "", "D", "H", "P", "O"]
-  | .snp => ["jalx", "jalro", "", "D", "H", "O", "J", "C", "P"]
-  | .alloc => ["jalx", ""]
   | .memcpy => [""]
   | .str => ["", "H", "O"]
+  | _ => []
 
-/-- The landed name of family `kind` at `pc` in table `t`; `shared` marks a stdio lemma at
-    a `pc` the interpreter's table also covers. -/
-def famName (t : Tbl) (kind : String) (pc : Nat) (shared : Bool) : String :=
-  let base :=
-    if kind == "jalx" then (if t.flavor == .snp then "jalxn" else "jalx")
-    else if kind == "jalro" then "jalrn"
-    else (match t.flavor with
-      | .snp => "nt"
-      | .alloc => "st"
-      | .memcpy => "mst"
-      | .str => "sl"
-      | _ => "it") ++ kind
-  s!"{base}{if shared then "S" else ""}_{hxw 8 pc}"
+/-- The name of family `kind` at `pc` in table `t`. -/
+def famName (t : Tbl) (kind : String) (pc : Nat) : String :=
+  s!"{if t.flavor == .memcpy then "mst" else "sl"}{kind}_{hxw 8 pc}"
 
 def tblByKey? (k : String) : Option Tbl := tables.find? (·.key == k)
 
-/-- The code addresses of `t` in the ranges `rs`. -/
-def Tbl.pcsIn (t : Tbl) (rs : List (Nat × Nat)) : MetaM (List Nat) := do
+/-- The code addresses of `t` in `[lo, hi)`. -/
+def Tbl.pcsIn (t : Tbl) (lo hi : Nat) : MetaM (List Nat) := do
   let ps ← unsafe evalExpr (List Vsa.Sim.TextPiece)
     (mkApp (mkConst ``List [0]) (mkConst ``Vsa.Sim.TextPiece)) (mkConst t.pieces)
   return (ps.flatMap (·.ranges)).flatMap fun r =>
-    ((List.range ((r.2 - r.1) / 4)).map (r.1 + 4 * ·)).filter fun pc =>
-      pc < 0x80018be0 ∧ !(t.skip.any fun s => s.1 ≤ pc ∧ pc < s.2) ∧
-        rs.any fun q => q.1 ≤ pc ∧ pc < q.2
+    ((List.range ((r.2 - r.1) / 4)).map (r.1 + 4 * ·)).filter fun pc => lo ≤ pc ∧ pc < hi
 
 open Command in
-elab "#step_table " k:ident rs:(group(num num))* : command => do
+elab "#step_table " k:ident lo:num hi:num : command => do
   let some t := tblByKey? k.getId.toString | throwError "#step_table: no table {k.getId}"
-  let ranges := rs.toList.map fun r => (r.raw[0].toNat, r.raw[1].toNat)
-  let (words, shared) ← liftTermElabM do
-    let pcs ← t.pcsIn ranges
-    let shared ← if t.flavor == .stdio then wordsAt interpTbl.pieces pcs else pure []
-    return (← wordsAt t.pieces pcs, shared.map (·.1))
-  let ns ← getCurrNamespace
+  let words ← liftTermElabM do wordsAt t.pieces (← t.pcsIn lo.getNat hi.getNat)
   for (pc, w) in words do
     for kind in t.kinds do
-      unless t.offers kind pc do continue
       let some L := lemAt t kind pc w | continue
-      let nm := famName t kind pc (shared.contains pc)
-      if (← getEnv).contains (ns.str nm) then continue
-      if t.ok.isSome && L.rule.isSome then
-        let (type, value) ← liftTermElabM (elabLemCore L (ruleProof? t w L))
-        liftCoreM <| addDecl <| .thmDecl { name := ns.str nm, levelParams := [], type, value }
-      else
-        let src := s!"theorem {nm} {L.binders} :\n    {L.concl} :=\n  {L.proof}"
-        match Parser.runParserCategory (← getEnv) `command src with
-        | .ok stx => elabCommand stx
-        | .error e => throwError "#step_table: parse error {e}\n{src}"
+      let nm := famName t kind pc
+      let src := s!"theorem {nm} {L.binders} :\n    {L.concl} :=\n  {L.proof}"
+      match Parser.runParserCategory (← getEnv) `command src with
+      | .ok stx => elabCommand stx
+      | .error e => throwError "#step_table: parse error {e}\n{src}"
 
 end VsaIris.Sym.StepGen

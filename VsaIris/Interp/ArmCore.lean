@@ -26,13 +26,11 @@ structure JalAt (entry : BitVec 64) where
   mem : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText
   al : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0
 
-/-- `jal_site% 0xX` builds the `JalAt` of the step-table lemma `jalx_X` and the image
+/-- `jal_site% 0xX` builds the `JalAt` of the call at `X` (`step% jalx X`) and the image
     footprint `interp_code`. -/
-macro "jal_site% " n:num : term => do
-  let h := String.ofList (Nat.toDigits 16 n.getNat)
-  let s := String.ofList (List.replicate (8 - h.length) '0') ++ h
-  let jx := Lean.mkIdent (Lean.Name.mkSimple s!"jalx_{s}")
-  `(({ i := _, code := _, exec := fun live h => $jx live (fun p hp => h _ ((interp_code (by decide)) p hp)),
+macro "jal_site% " n:num : term =>
+  `(({ i := _, code := _,
+       exec := fun live h => (step% jalx $n) live (fun p hp => h _ ((interp_code (by decide)) p hp)),
        mem := interp_code (by decide), al := by decide } : JalAt _))
 
 abbrev hiSaved : List Nat := [20, 21, 22, 23, 24, 25, 26, 27]

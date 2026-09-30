@@ -1,5 +1,4 @@
-import VsaIris.Vsa.StepTables.Alloc0
-import VsaIris.Vsa.StepTables.Alloc1
+import VsaIris.Vsa.StepGen
 
 namespace VsaIris.Sym
 

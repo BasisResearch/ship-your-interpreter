@@ -1287,7 +1287,7 @@ theorem free_b2nl {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
   have F2 := (B.frame.store (a := succP + 24) (w := 8) (v := BitVec.ofNat 64 predP) (by omega)).store
     (a := predP + 16) (w := 8) (v := R 11) (by omega)
   have hA := b2_agree (C := C) (Mt1 := Mt1) (dsz := d.size) (w := w) G hM1 B.hdr hv1 ha1
-  refine st_800073d8 O.live (fun hz => ?_) (fun hnz => ?_)
+  refine (step% st 0x800073d8) O.live (fun hz => ?_) (fun hnz => ?_)
   · have hdf : d.inuse = false := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hz
       have h0 := congrArg BitVec.toNat hz; rw [B.a6] at h0

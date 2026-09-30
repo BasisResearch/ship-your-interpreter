@@ -47,7 +47,7 @@ theorem BinaryAddIntT_run4_sym {live : Nat → Prop} (hlive : ∀ p ∈ interpTe
   simp only [Tree.WP, ObsOK, SOb.den, List.mem_cons, List.not_mem_nil,
     forall_eq_or_imp, false_implies, implies_true, and_true, regsDen, memDen, SE.den, h2,
     hRA, hS0, hS1, hS2, hS3]
-  refine ⟨?_, it_80003404 hlive (by simpa [upd] using hal) hk⟩
+  refine ⟨?_, (step% it 0x80003404) hlive (by simpa [upd] using hal) hk⟩
   and_intros
   sym_dec
 

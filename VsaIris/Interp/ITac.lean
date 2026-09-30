@@ -1,7 +1,4 @@
 import VsaIris.Vsa.AllocTac
-import VsaIris.Vsa.StepTables.Interp0
-import VsaIris.Vsa.StepTables.Interp1
-import VsaIris.Vsa.StepTables.Interp2
 
 namespace VsaIris.Sym
 
@@ -76,8 +73,8 @@ def ixTryPrune (norm : Syntax) (g : MVarId) (side : Option Syntax := none)
 
 def ixPre : List String := ["it", "itD", "itT", "itH", "itO", "itS", "itDS", "itTS", "itHS", "itOS"]
 
-/-- The step lemmas of the families `pre` at `pc` for the run of `g`: a table lemma where
-    a table declares it, else the lemma elaborated from the image. -/
+/-- The step lemmas of the families `pre` at `pc` for the run of `g`: elaborated from the
+    image (a hand-written step of the landed name takes precedence). -/
 def ixCandidates (g : MVarId) (pc : Nat) (pre : List String := ixPre) :
     TacticM (List Name) := do
   let t? ← g.withContext do StepGen.swpTbl? (← g.getType)
