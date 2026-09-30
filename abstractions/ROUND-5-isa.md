@@ -18,8 +18,7 @@ Per-module seconds from the clean build of the tip (`tip-modtimes.txt`), lines f
 declaration data from a meta script over the `VsaBoot` environment (every constant of `Vsa.Sim.*`
 with its kind, source range, conclusion head, and whether it is in the constant closure of the
 roots: `endToEnd_refinement`, `proofElf_halts`, and every declaration of `Vsa.Sim.Boot.Audit`,
-`Vsa.Lang.*`, `VsaIris.Lang.Route`). The script is `Census.lean` / `Reach.lean` (kept outside the
-repo; recipe in §7).
+`Vsa.Lang.*`, `VsaIris.Lang.Route`). The script is in §11.
 
 ### 1a. Reachability (dead weight)
 
@@ -115,3 +114,316 @@ pilot): 2 per stratum. Baseline = proof-body lines of the existing proof (statem
 | fresh `forIn'_const` | S | Pmp | 1 |
 
 Primary baseline total: 226 body lines.
+
+## 4. Blind ontologists
+
+Six agents (five seeded by random 256-character strings, one by a random dictionary sentence) got
+the semantics, the census and the laws, the held-out statements verbatim, and a forbidden list
+(per-register/per-width lemmas, per-kind state abbreviations, `simp only` lists, `cases kind`
+batteries, `ReadsLike`, code generators, SMT, "write a tactic"). Each had to say how every rule is
+decided at a use site and what happens with symbolic data.
+
+| candidate (as proposed) | agents | rules = laws | decided by |
+|---|---:|---|---|
+| A. patch/delta states: every post-state is `apply Δ σ` for a literal list of dependent register updates (+ memory patch) | 6/6 | read-over-write (L-frame), pins conserved by pin-free patches (L-frame) | `decide` on key lists (claimed) |
+| B. retirement certificate / commit protocol: one theorem per step layer quantified over {ast, Δ, npc, exec}, per-kind content as data | 6/6 | L-front, L-step, L-block | syntactic application; `decide` for side conditions |
+| C. width as data: byte codec / split plan with symbolic `w ∈ {1,2,4,8}`, chunk-fold loop invariant | 6/6 | L-width | `omega` for bounds, `rfl` at concrete `w` |
+| D. register representability: hoist the 32-way `match` once (`rX_bits (Regidx i) = if i = 0 then 0 else readReg (xreg i)`) | 5/6 | L-reg | one 32-case split inside one proof |
+| E. family-level `execute` characterisation with symbolic `op` via the normal-form tool | 4/6 | L-exec | rewrite + `rfl` |
+
+Theories cited (distant fields): ARIES redo logs and incremental view maintenance (databases);
+lenses and their put/get laws (bidirectional programming); McCarthy's select/store arrays;
+separation-logic frame rule; Mazurkiewicz traces and independence (concurrency); Darcs patch
+theory; reorder-buffer retirement (Tomasulo; Smith–Pleszkun); two-phase commit; proof-carrying
+code; algebraic effects and handlers; Myreen–Gordon decompilation into logic; Islaris; CompCert
+`Pregmap.gss/gso` and `match_states`; Reynolds–Wadler parametricity; Bird–Meertens list
+homomorphisms; defunctionalisation; representable functors; Noether's theorem and gauge
+invariance (the tick as a gauge on `mcycle/mtime/mip`); the Heisenberg picture.
+
+One-offs kept for variation: register class `cls R` so that `xreg n ≠ R` is decided from the class
+alone; conservation ledger for pins; tick as gauge quotient; Darcs-style commutation of disjoint
+patches.
+
+## 5. Retrieval by law
+
+All five candidates are **known**: read-over-write is McCarthy's array theory and CompCert's map
+lemmas; the commit rule is the per-instruction specification of machine-code Hoare logics
+(Myreen–Gordon 2007; Sail-based proofs, Armstrong et al. POPL 2019; Islaris, PLDI 2022) and the
+reorder-buffer commit of microarchitecture; width genericity is parametricity; the register rule is
+the finite-index representation of a register file. Each is already used at another layer of this
+project: the first-order executor keeps memory as a write log (`writeLog`/`applyW`), the front
+half of the commit rule exists (`try_step_execute_char`, used by every kind but never lifted to
+`stepOnce`/`Step`/`stepObs`), the read side already has a width-generic split plan
+(`SplitReadPlan`, `checked_mem_read_ram_scalar`). Recognition, not invention, is the win.
+
+## 6. Variation (ideonomy: tree-finding, dimension-identification; lattice; source, autonomy, reversibility)
+
+Ordered by generality, the candidates form a lattice: per-kind lemma < per-family certificate <
+certificate over a literal patch Δ < commit over an **abstract** σ3 plus four named reads. The top
+element had been built only at the `try_step` level. Variants kept:
+
+* V3 (meet of A and B, "Δ-free commit"): the commit theorems stated over an abstract σ3 with a
+  `RetireReads` structure; the existing per-kind abbreviations are instances by definitional
+  unfolding; reads are discharged by a decision procedure over the existing `insert` chain — no
+  patch datatype. The cheapest pilot, and it became P1.
+* V1 (source: extracted): σ3 and its reads computed by the normal-form tool from `execute`. Not
+  piloted (L-exec is not a cost centre).
+* V2 (autonomy: kernel): every certificate side condition by one `decide`. Tested inside P2.
+* V4 (siblings): the same commit rule for the HTIF store step and the block terminators.
+
+## 7. Bake-off
+
+Each candidate was built in its own worktree from 4ef8d9a6 (suite committed first; build outputs
+copied, including the path dependency's `riscv-lean/*/.lake`). Times: user CPU of
+`lake env lean -Dbackward.isDefEq.respectTransparency=false` (the lakefile's option; without it
+some pristine files do not compile), min of 3, incumbent and candidates interleaved, load 7–11 on a
+shared 16-core machine.
+
+**Candidates.**
+
+* **P1 = B in the V3 form** (`Retire.lean`, 177 lines with docs): `Fetched`, `RetireReads`,
+  `retirePost`, `tickPost`; `try_step_retire` (front), `stepOnce_retire_{notick,tick}`,
+  `step_retire_{notick,tick}`, `stepObs_retire` (in `StepObs`), `GoodState.retirePost/.tickPost`;
+  decision procedure `reg_reads [facts]` (simp over `get?_insert` with `decide` on key comparisons).
+* **P2 = A + B** (P1's commit layer plus `Patch.lean`, 45 lines): `Patch.apply`, `Patch.Off`,
+  `get?_miss`, `get?_last`; reads by the patch rules.
+* **P3 = C** (in `MemStore`/`MemLoad`, 377 lines of generic lemmas, 72 of them needed for the
+  primary case): `checked_mem_write_w`, `memWriteLE`/`write_ram_w`, `mem_write_value_w`,
+  `mem_write_ea_w`, `vmem_write_addr_ram_w`, and on the read side `checked_mem_read_data_w_of_ram`
+  and its two wrappers.
+* **P4 = D** (in `RegAccess`, ≈40 lines): `gpr_cases n => tac` (splits 1..31, discharges the rest
+  by `omega`), `rX_bits_gpr`, `wX_bits_gpr` proved once; the register-number definitions moved from
+  `BlockPilot` to `RegAccess`.
+
+**Held-out proof-body lines (statement unchanged), failed compiles in brackets.**
+
+| case | incumbent | P1 | P2 | P3 | P4 |
+|---|---:|---:|---:|---:|---:|
+| `try_step_j` | 64 | 3 [1] | 9 [2] | – | – |
+| `stepOnce_j_tick` | 22 | 3 | 3 | – | – |
+| `step_branch_taken_tick` | 7 | 3 | 3 | – | – |
+| `get?_sigmaPost_store` | 6 | 1 | 2 [1] | – | – |
+| `get?_sigma3_alu_pinned` | 4 | 1 | 2 | – | – |
+| `checked_mem_write_1` | 58 | – | – | 2 | – |
+| `checked_mem_read_of_split` | 32 | – | – | no gain | – |
+| `obs_gpr_rd` | 33 | – | – | – | 2 |
+| fresh `stepObs_jal` | 17 | 3 | – | – | – |
+| fresh `stepObs_branch_taken` | 15 | 3 | – | – | – |
+| fresh `vmem_write_addr_4` | 69 | – | – | 2 | – |
+| fresh `vmem_write_addr_1` | 17 | – | – | 2 | – |
+| fresh `rX_bits_x29` | 4 | – | – | – | 1 |
+| fresh `forIn'_const` | 1 | – | – | – | – |
+| setup failed compiles | | 3 | 1 (+P1) | 4 | 7 |
+
+`checked_mem_read_of_split` is already the generic rule (its loop goes through
+`splitReadLoop_trace`); no candidate shortens it. `forIn'_const` is in no candidate's territory.
+
+**Compression of existing siblings (refactor part).** P3: `checked_mem_write_{2,4,8}` 59–65 → 2
+each, `mem_write_ea_*` 44 → 2, `vmem_write_addr_{2,8}` ≈70 → 2, `split_on_page_boundary_store_*`
+21 → 1, `within_mmio_readable_ram_false_*` 26 → 1, `checked_mem_read_data_*_of_ram` 51 → 2;
+MemStore + MemLoad net −556 lines. P4: all 62 register lemmas become one-line instances;
+RegAccess + BlockPilot net −296 lines.
+
+**Time (user s).**
+
+| file | incumbent | P1+P4 | P2 | P3 |
+|---|---:|---:|---:|---:|
+| StepJump | 3.95 | 3.76 | 3.53 | |
+| StepBranch | 2.19 | 2.22 | 2.19 | |
+| StepStore / StepAlu / StepObs | 1.35 / 1.34 / 1.51 | 1.31 / 1.44 / 1.51 | 1.31 / 1.38 / 1.45 | |
+| RegAccess | 57.90 | **8.98** | 60.30 | |
+| BlockPilot | 3.85 | 2.90 | 3.71 | |
+| MemStore / MemLoad | 11.81 / 3.97 | | | **4.74 / 3.13** |
+
+(The census's module-seconds are wall time of a parallel build; `RegAccess` elaborates its 62
+proofs on 8 threads, so 58 s of CPU showed as 5 s of wall.)
+
+**Defects found by the pilots.** (1) Blind agents said patch side conditions are "decided by
+`decide` on key lists"; `decide` refuses any goal with free variables, and the patch's values are
+free, so P2 needs `simp` with `decide` or an anonymous constructor from the hypotheses. (2) The
+dependent register type: `σ.regs.get? (gprReg n) : Option (RegisterType (gprReg n))` does not
+reduce for symbolic `n`, so L-reg is stated through the non-dependent `gprGet`. (3) `iterate n`
+stops silently when its body fails; `gpr_cases` therefore splits first and runs the per-register
+tactic under `all_goals`, which reports the failing register. (4) Case splits leave numerals as
+`0 + 1 + 1`; `gpr_cases` normalises them before the per-register tactic. (5) The width law needs
+the single-page condition as a premise (`w = 3` falsifies deriving it from alignment); instances
+discharge it by `omega`. (6) `MemLoad` and `MemStore` cannot be imported together (both define
+`split_misaligned_aligned_w`), so the read side cannot reuse the store side's lemmas.
+
+**Decision.** P1 beats P2 on its territory (11 vs 19 body lines, 1 vs 3 failed compiles, same
+time): the patch datatype adds only notation over the `insert` chain the per-kind abbreviations
+already are. P3 and P4 win their disjoint clusters outright, including on time (MemStore 2.5×,
+RegAccess 6.4×). The three winners touch disjoint files and share no rule, so the combination was
+merged (0ad6935e, full build green) without a separate iteration; the fresh cases above were each
+run after their candidate's primary cases.
+
+## 8. Rollout
+
+A fan-out over disjoint files (four agents, one worktree and one compiler each, one written brief
+with the model proofs), then a consolidation pass on the layer.
+
+| wave | files | lines before → after | CPU before → after (s) | failed compiles |
+|---|---|---|---|---:|
+| W1a commit rule | StepJump, StepBranch | 1,662 → 1,060 | 5.99 → 4.23 | 0 |
+| W1b commit rule | StepAlu, StepStore, StepObs, HtifStepObs, TermEntry | 2,029 → 1,195 | 7.96 → 6.29 | 4 |
+| W2 register rule | BlockPilot, BlockTerm, BlockMem, SegToTripleFramed, SymObs | 4,119 → 3,905 | 14.98 → 13.8* | 4 |
+| W3 width layer | ExecuteLoad, MemLoadTotal, ExecLoadTotal, ValueSites, RamReadVirtual | 1,161 → 808 | 6.75 → 5.49 | 0 |
+
+\* after consolidation; W2's first version was 0.3–0.8 s slower per file (see below).
+
+Migrated: every `try_step_K`, `stepOnce_K_*`, `step_K_*`, `stepObs_K` of the eight kinds and the
+HTIF putchar step; every per-kind post-state read and good-state lemma (reads by `reg_reads`,
+good states by `GoodState.retirePost`); every 1..31 register battery (`rX_src`, `wX_gpr`,
+`obs_gpr_rd`, `obs_gpr_other`, `obs_gpr_frame_bt`, `obs_gpr_store`, `gprGet_of_frame`,
+`gprGet_obs_rd`); the per-width read chain (`vmem_read_addr_data_ram_w`, `vmem_read_data_ram_w`,
+`exec_store_w`). 29 per-kind helper lemmas and 12 per-width copies became unused and were deleted.
+
+Left, with reasons: `stepOnce_tohost_G` halts (no retire shape); `StepAddi`'s reads cannot import
+`Retire` (cycle Retire → Frame → StepBeq → StepAddi); nine execute-side reads in HtifStepObs stay
+on `rw` because `reg_reads` costs 50–170 ms per call on 6–8 `insert` layers; `read_ram_one_total`
+needs a width-1 `bytesT` conversion that lives in a module `MemLoadTotal` cannot import;
+`checked_mem_write_tohost_8` is MMIO-only; the 37-arm `cases akind` of `block_mem_run` (C-block)
+and the C-exec/C-sys clusters were outside the bake-off.
+
+Defects found by the rollout (fixed in the consolidation commit 832e7baf unless noted):
+1. `gpr_cases` split by iterated `rcases` and normalised numerals with `simp … at *` in every
+   case: 0.3–0.8 s slower per battery file than the hand batteries. Now it substitutes literals
+   from one decided lemma (`gpr_range_fin : ∀ n : Fin 32, 1 ≤ n → n = 1 ∨ … ∨ n = 31`, by `decide`)
+   with `rfl` patterns built outside the quotation's hygiene: parity or faster (BlockTerm 2.38 →
+   2.35, BlockMem 6.43 → 6.37, SymObs 2.02 → 1.42).
+2. Duplicate `rX_bits_x5/x6` (StepBeq) and `rX/wX_bits_x10` (Execute) beside RegAccess's: deleted;
+   both files import RegAccess.
+3. `htif_tohost` is pinned, so `GoodState.insert_nonpinned` does not apply to its write; W1b added
+   a local `GoodState.insert_htif_tohost` (belongs in `Frame.lean`; not moved).
+4. `by decide` side conditions inside a `gpr_cases` body meet unassigned metavariables when the
+   register is fixed only by a later argument; `refine … ?_ … <;> decide` is the working form.
+
+Calibration (E21): held-out bodies fell 194 → 15 lines (−92%, excluding the already-generic
+case); whole files of the migrated clusters fell 36% (C-step 3,973 → 2,527), because the per-kind
+statements, 15–30 lines each, are kept verbatim by the rule that used lemmas keep their
+statements. Removing the per-kind statements themselves (callers instantiate the generic rule)
+is the next step and needs the callers in `VsaIris` to move.
+
+## 9. Measurements (95acd019 → 832e7baf)
+
+| measure | before | after |
+|---|---:|---:|
+| `Vsa/Sim/*.lean` (top level) | 204 files, 28,519 lines | 155 files, 22,196 lines |
+| ISA core (the 56 files of §1b, plus `Retire.lean`) | 15,720 lines | 12,953 + 177 lines |
+| all project Lean (without `riscv-lean`) | 154,067 lines | 147,374 lines |
+| modules in the build | 730 | 667 |
+| module-seconds, clean build (lake wall per module) | 3,283 | 2,974 |
+| of which top-level `Vsa/Sim` | 333 | 232 |
+| of which ISA core | 121 | 106 |
+| diff | | 105 files, +1,724 / −8,158 |
+
+Clean build of the final tip: 1,022 jobs, 9 min 59 s wall, 70 min user, load 12–19. The tip's
+numbers come from `tip-modtimes.txt` (same method, earlier window), so single modules carry ±10%.
+CPU of single-file compiles (min of 3, interleaved, same window): RegAccess 57.9 → 9.4 s, MemStore
+11.8 → 4.7, MemLoad 4.0 → 3.1, StepJump 3.8 → 2.6, StepBranch 2.2 → 1.6, HtifStepObs 2.3 → 1.8.
+One named cost: `RegAccess`'s two generic rules each split 31 cases inside one theorem, which the
+build cannot spread over threads; its wall time rose 5.2 → 6.6 s while its CPU fell 6×.
+
+Axioms: `endToEnd_refinement` and `proofElf_halts` (and every audited theorem in
+`Vsa.Sim.Boot.Audit`) on `[propext, Classical.choice, Quot.sound]`; headline statements untouched
+(no file under `VsaIris/Interp` or `Vsa/Sim/Boot` changed). No `sorry`, `axiom`, `native_decide`,
+`bv_decide`, `ofReduceBool`, `maxHeartbeats` or `maxRecDepth` added (two `set_option` lines removed
+from the emptied `StepBeq`). Every theorem kept in a changed file has its statement unchanged
+(checked by diffing statement text against 95acd019); 40 per-kind/per-width helpers were deleted
+after checking they had no remaining use.
+
+## 10. Decision and adoption
+
+**Adopted** (primary measure met on every held-out case in each territory, fresh cases included;
+time at parity or better except the one named cost above):
+
+1. the **commit rule** over an abstract post-state (`Retire.lean`) with `reg_reads` as the decision
+   procedure for reads through `insert` chains — law L-front + L-step + L-frame (reads);
+2. the **register rule** (`gpr_cases`, `rX_bits_gpr`, `wX_bits_gpr`, `gpr_range_fin`) — law L-reg;
+3. the **width layer** (`checked_mem_write_w`, `memWriteLE`/`write_ram_w`, `mem_write_value_w`,
+   `mem_write_ea_w`, `vmem_write_addr_ram_w`, `checked_mem_read_data_w_of_ram`,
+   `vmem_read_addr_data_ram_w`, `vmem_read_data_ram_w`, `exec_store_w`) — law L-width;
+4. the **dead-weight cut** (§1a).
+
+**Not adopted:** the patch datatype (P2): same commit rule, more lines, more failed compiles.
+
+This branch carries no `CLAUDE.md` or `scripts/` (E16). On merge into the branch that does, add to
+the CLAUDE.md table:
+
+| Task shape | Use (never hand-roll) |
+|---|---|
+| Machine step of a retiring instruction (`try_step`, `stepOnce` tick/no tick, `Step`, observational step) | `try_step_retire (Fetched.of_bytes …) hexec ⟨reg_reads …⟩`, then `stepOnce_retire_*` / `step_retire_*` / `stepObs_retire`, `GoodState.retirePost`/`.tickPost` (`Vsa/Sim/Retire.lean`) — NEVER re-derive the fetch/decode front or the four retire reads per kind |
+| Register read through a chain of `insert`s | `reg_reads [facts]` |
+| Property of all 31 register numbers; `rX_bits`/`wX_bits` at a register number | `gpr_cases n => tac`; `rX_bits_gpr`, `wX_bits_gpr` (`RegAccess`) — NEVER a 31-arm battery or a new per-register lemma |
+| 1/2/4/8-byte load or store through the Sail chain | the `_w` lemmas of `MemStore`/`MemLoad`/`ExecuteLoad`/`ValueSites` — NEVER a per-width copy |
+
+and to `scripts/discipline_rules.tsv` (id, glob, regex, message):
+
+```
+R16	Vsa/Sim/*.lean	fetch_F_Base	a retiring step re-derives the fetch front: use try_step_retire (Retire.lean)
+R17	Vsa/Sim/*.lean	COUNT>8:^  \| [0-9]+, 	a 1..31 register battery: use gpr_cases / rX_bits_gpr / wX_bits_gpr
+R18	Vsa/Sim/*.lean	^theorem [a-z_]+_(one|two|four|eight|1|2|4|8)(_[a-z_]+)?$	a per-width copy: state it for w and instantiate
+```
+
+(`Retire.lean` and `Fetch.lean` are the two allowed users of `fetch_F_Base`.)
+
+## 11. What remains
+
+* The block executor's 37-arm `cases akind` (≈2,000 lines, C-block) is the largest untouched
+  cluster; law L-block with a per-kind table of execute characterisations consuming
+  `stepObs_retire` is its candidate.
+* The per-kind statements of the step chain (15–30 lines each) stay only because callers in
+  `VsaIris` name them; moving the callers to the generic rule removes about half of C-step's
+  remaining lines.
+* 6,188 lines of declarations off the path inside surviving `Vsa/Sim` modules (e.g. `Dispatch`
+  24/411 constants used) were not removed; the reachability script, run per declaration instead of per module, lists them.
+* `GoodState.insert_htif_tohost` belongs in `Frame.lean`; `MemLoad` and `MemStore` should not both
+  define `split_misaligned_aligned_w`, so that the read and write layers can share lemmas; a
+  width-1 `bytesT` conversion would move `read_ram_one_total` onto the generic lemma.
+* C-exec (698 lines) and C-sys (1,674 lines) were not piloted; their per-case cost is already low.
+
+Reachability script (run from the worktree with `lake env lean --run Reach.lean`; writes
+`module<TAB>used<TAB>total` per module):
+
+```lean
+import VsaBoot
+open Lean
+
+partial def closure (env : Environment) (roots : List Name) : NameSet := Id.run do
+  let mut seen : NameSet := {}
+  let mut stack := roots
+  while !stack.isEmpty do
+    match stack with
+    | [] => break
+    | n :: rest =>
+      stack := rest
+      if seen.contains n then continue
+      seen := seen.insert n
+      if let some ci := env.find? n then
+        for m in ci.getUsedConstantsAsSet.toList do
+          if !seen.contains m then stack := m :: stack
+        if let .inductInfo ii := ci then
+          for c in ii.ctors do stack := c :: stack
+  return seen
+
+def main : IO Unit := do
+  initSearchPath (← findSysroot)
+  let env ← importModules #[{module := `VsaBoot}] {} (loadExts := false)
+  let rootMods : List Name := [`Vsa.Sim.Boot.Audit, `Vsa.Lang.Basic, `Vsa.Lang.Runs,
+    `Vsa.Lang.SmallStep, `Vsa.Lang.Densify, `VsaIris.Lang.Route]
+  let mut roots : List Name := [`Vsa.Sim.EndToEnd.endToEnd_refinement, `Vsa.Sim.Boot.proofElf_halts]
+  for (n, _) in env.constants.map₁.toList do
+    if let some idx := env.getModuleIdxFor? n then
+      if rootMods.contains env.header.moduleNames[idx.toNat]! then roots := n :: roots
+  let cl := closure env roots
+  let mods := env.header.moduleNames
+  let mut used : Std.HashMap Nat Nat := {}
+  let mut total : Std.HashMap Nat Nat := {}
+  for (n, _) in env.constants.map₁.toList do
+    if let some idx := env.getModuleIdxFor? n then
+      total := total.insert idx.toNat (total.getD idx.toNat 0 + 1)
+      if cl.contains n then used := used.insert idx.toNat (used.getD idx.toNat 0 + 1)
+  let h ← IO.FS.Handle.mk "reach.tsv" .write
+  for i in [0:mods.size] do
+    h.putStrLn s!"{mods[i]!}\t{used.getD i 0}\t{total.getD i 0}"
+```
