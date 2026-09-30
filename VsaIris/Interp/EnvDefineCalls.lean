@@ -68,10 +68,7 @@ theorem wp_call_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     iexists (fun j => if j = 10 then BitVec.ofNat 64 x.length else f j)
     iframe HR
     ipureintro; simp
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hsp
+  isplitl []; iexact Hi; isplitl []; iexact Hsp
   iframe Hpc HR Hx
   iintro %Rc %R' %⟨h1, hks, hkeep⟩ Hpc HR %h10
   iapply Hk $$ %R' %⟨(hks 10 (by decide)).trans h10, h1, hkeep⟩ Hpc HR
@@ -116,10 +113,7 @@ theorem wp_call_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
     iexists (fun j => if j = 10 then R 10 else f j)
     iframe HR Hout
     ipureintro; simp
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hsp
+  isplitl []; iexact Hi; isplitl []; iexact Hsp
   iframe Hpc HR Hb Hsrc
   iintro %Rc %R' %⟨h1, hks, hkeep⟩ Hpc HR ⟨%h10, Hout⟩
   iapply Hk $$ %R' %⟨(hks 10 (by decide)).trans h10, h1, hkeep⟩ Hpc HR Hout
@@ -203,10 +197,7 @@ theorem wp_call_allocKs (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × St
     have h2 : k ≠ 2 := by simp [vsaSaved] at hk; omega
     have hc : k ∉ vsaClob := by simp [vsaSaved, vsaClob] at hk ⊢; omega
     simp [h10, h2, hc]
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hs
+  isplitl []; iexact Hi; isplitl []; iexact Hs
   iframe Hpc HR HX
   iintro %Rc %R' %⟨h1, hks, hkeep⟩ Hpc HR ⟨%p', %⟨h10, h2, hsv⟩, HY⟩
   iapply Hk $$ %R' %p' %⟨(hks 10 (by decide)).trans h10, h1, fun k hk => ?_⟩ Hpc HR HY
@@ -260,8 +251,7 @@ theorem wp_call_realloc (hlive : AllocLive live)
         reallocRes ρ H (R 10) nOld nNew old p'))
   · iintro ⟨Ha0, Hsp, Hcl, Hsv, #Hgp, Hstk, Hh, Hb⟩
     iframe Ha0 Hsp Hgp Hsv Hstk Hh Hb
-    isplitr
-    · ipureintro; exact ⟨hsp, hi4, hlt⟩
+    isplitr; ipureintro; exact ⟨hsp, hi4, hlt⟩
     unfold clobberedArg
     iexists R
     unfold regsOf
@@ -270,13 +260,8 @@ theorem wp_call_realloc (hlive : AllocLive live)
   · iintro ⟨%p', Ha0, Hsp, Hcl, Hsv, Hstk, Hres⟩
     iexists p'
     iframe Ha0 Hsp Hcl Hsv Hstk Hres
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hs
-  iframe Hpc HR
-  isplitl [Hstk Hh Hb]
-  · iframe Hgp Hstk Hh Hb
+  isplitl []; iexact Hi; isplitl []; iexact Hs
+  iframe Hpc HR Hgp Hstk Hh Hb
   iintro %R' %p' %hR' Hpc HR ⟨Hstk, Hres⟩
   iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 
@@ -312,8 +297,7 @@ theorem wp_call_reallocNull (hlive : AllocLive live)
   · iintro ⟨Ha0, Hsp, Hcl, Hsv, #Hgp, Hstk, Hh⟩
     rw [h10]
     iframe Ha0 Hsp Hgp Hsv Hstk Hh
-    isplitr
-    · ipureintro; exact ⟨hsp, hi4⟩
+    isplitr; ipureintro; exact ⟨hsp, hi4⟩
     unfold clobberedArg
     iexists R
     unfold regsOf
@@ -322,13 +306,8 @@ theorem wp_call_reallocNull (hlive : AllocLive live)
   · iintro ⟨%p', Ha0, Hsp, Hcl, Hsv, Hstk, Hres⟩
     iexists p'
     iframe Ha0 Hsp Hcl Hsv Hstk Hres
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hs
-  iframe Hpc HR
-  isplitl [Hstk Hh]
-  · iframe Hgp Hstk Hh
+  isplitl []; iexact Hi; isplitl []; iexact Hs
+  iframe Hpc HR Hgp Hstk Hh
   iintro %R' %p' %hR' Hpc HR ⟨Hstk, Hres⟩
   iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 
@@ -386,13 +365,11 @@ theorem wp_call_reallocOpt (hlive : AllocLive live)
     icases Hres with (⟨%h, Hh⟩ | ⟨%hf, Hh, Hb⟩)
     · ileft
       iframe Hh
-      isplitl []
-      · ipureintro; exact h
+      isplitl []; ipureintro; exact h
       unfold obOwn; iempintro
     · iright
       iframe Hh
-      isplitl []
-      · ipureintro; exact hf
+      isplitl []; ipureintro; exact hf
       unfold blockOwn
       ihave ⟨%v, Hb⟩ := ownSet_fn _ $$ Hb
       iexists v
@@ -408,8 +385,7 @@ theorem wp_call_reallocOpt (hlive : AllocLive live)
     iframe Hi Hat Hgp Hpc HR Hstk
     rw [hb]
     simp only [Option.toList_some, List.singleton_append]
-    isplitl [Hh]
-    · iexact Hh
+    isplitl [Hh]; iexact Hh
     isplitl [Hob]
     · unfold obOwn; rw [h10]; iexact Hob
     iintro %R' %p' %hR' Hpc HR Hstk Hres

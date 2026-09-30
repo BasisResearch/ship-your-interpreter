@@ -264,16 +264,9 @@ theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
     rw [arr_elem_addr hn.ahi hidx]; exact ldv_ld_read64 hp
   have hoff := evalSP_off' hfg
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (aA : BitVec 64),
-        ⌜EvalRegs R1 (s + 18446744073709550528#64 + 64#64) (BitVec.ofNat 64 inp) aA aE
-            (s + 18446744073709550528#64) ∧ KeepRegs calleeSaved R R1 ∧
-          ArgsSpill Mt1 s aE idx all.length ∧
-          Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt Mt1 ∧
-          ∀ a, argsBase s ≤ a → imgM Mt1 a = imgM Mt a⌝ -∗
-        □ astEG aA.toNat all[idx] -∗ ms 0x80003220#64 R1 (InExt (s.toNat - 1088, 1088)) Mt1 -∗
-        Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hro; iexact Hk
+  · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine ArgsLoop_runA (pA := BitVec.ofNat 64 p) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.lo hn.hi hn.off
     hn.alo hn.ahi hn.aoff hidx hlen hh.s0 hh.a6 hh.sp hn.arrw hel ?_
@@ -377,7 +370,6 @@ theorem argsCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ int
     ⊢ Wp.W Φ := by
   iintro ⟨Hms, #Hcode, Hk⟩
   have hoff := evalSP_off' hfg
-  have hq := hsp1.a0
   have e64 : (s + 18446744073709550528#64 + 64#64).toNat = s.toNat - 1088 + 64 := hoff 64 (by omega)
   have hsl : ldv .ld (slotWrite Mt (s + 18446744073709550528#64 + 64#64).toNat w0 w1 w2)
       (s.toNat - 1088) = ldv .ld Mt (s + 18446744073709550528#64).toNat := by
@@ -395,24 +387,10 @@ theorem argsCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ int
     have := hsp1.ix; simp (disch := decide) only [hoff] at this; exact this
   have henv : ldv .ld Mt (s.toNat - 1088 + 8) = aE := by
     have := hsp1.env; simp (disch := decide) only [hoff] at this; exact this
-  have hq0 : (ldv .ld Mt (s + 18446744073709550528#64).toNat +
-      LeanRV64DExecutable.Functions.sign_extend 3328#12).toNat = argsBase s + 24 * idx := by
-    rw [sign_extend_3328]; exact hsp1.a0
-  have hq8 : (ldv .ld Mt (s + 18446744073709550528#64).toNat +
-      LeanRV64DExecutable.Functions.sign_extend 3336#12).toNat = argsBase s + 24 * idx + 8 := by
-    rw [sign_extend_3336]; exact hsp1.a8
-  have hq16 : (ldv .ld Mt (s + 18446744073709550528#64).toNat +
-      LeanRV64DExecutable.Functions.sign_extend 3344#12).toNat = argsBase s + 24 * idx + 16 := by
-    rw [sign_extend_3344]; exact hsp1.a16
   ihave #Hdv := roOwn_code (m := Mt) $$ Hcode
-  iapply wp_swpF Wp (F := iprop((∀ (R' : Nat → BitVec 64) (Mt' : Mem), ⌜idx + 1 ≠ argc⌝ -∗
-          ⌜ArgsCopied R R' Mt0 Mt' s aE idx argc w0 w1 w2⌝ -∗
-          ms 0x800031dc#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗ Wp.W Φ) ∧
-        (∀ (R' : Nat → BitVec 64) (Mt' : Mem), ⌜idx + 1 = argc⌝ -∗
-          ⌜ArgsCopied R R' Mt0 Mt' s aE idx argc w0 w1 w2⌝ -∗
-          ms 0x80003254#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   refine ArgsLoop_runB (q := argsBase s + 24 * idx) hlive hfg.sf hfg.lo hfg.hi hfg.al hsp hsl
     (by rw [sign_extend_3328]; exact hsp1.a0) (by rw [sign_extend_3336]; exact hsp1.a8)

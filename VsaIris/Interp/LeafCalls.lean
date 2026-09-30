@@ -27,8 +27,7 @@ theorem ms_intro_sret {pc r : BitVec 64} {R : Nat → BitVec 64} {f a : Nat} :
   unfold ms
   rw [regFile_upd_ra]
   simp only [upd_same]
-  iframe Hpc Hra Hregs HS
-  ipureintro; exact hd
+  iframe Hpc Hra Hregs HS %hd
 
 theorem inExt_disj {a n c k : Nat} (hn : 0 < n) (hk : 0 < k)
     (h : ∀ b, InExt (a, n) b → ¬ InExt (c, k) b) : a + n ≤ c ∨ c + k ≤ a := by
@@ -57,8 +56,7 @@ theorem ms_exit_sret (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} 
   ihave ⟨Hms, HA⟩ := ms_split hd $$ Hms
   ihave ⟨Hpc, Hra, Hregs, HF⟩ := ms_exit $$ Hms
   iframe Hpc Hra Hregs HF
-  iapply valAt_of_img N $$ [Hv HA]
-  iframe Hv HA
+  iapply valAt_of_img N $$ [$]
 
 theorem ms_carveSlot {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {a : Nat}
     (h : ∀ b, InExt (a, 24) b → S b) :
@@ -151,8 +149,7 @@ theorem ms_callEnv3 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
     ihave ⟨Hcl, Hsv⟩ := (sepL_append _ _ _).1 $$ Hcs
     unfold savedOwn VsaIris.sp
     iframe H10 H11 H12 H2 HX
-    isplitl []
-    · ipureintro; exact ⟨hi4, hφ⟩
+    isplitl []; ipureintro; exact ⟨hi4, hφ⟩
     isplitl [Hcl]
     · iapply clobbered_of_fn argClob R $$ Hcl
     · rw [VsaIris.sepL_map]; iexact Hsv

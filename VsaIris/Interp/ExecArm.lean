@@ -517,12 +517,8 @@ theorem wp_execEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
   have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   iintro ⟨#Hcode, Hms, Hst, Hret, Hw, HK⟩
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(stackScratch (execSP s) (execNeed sm d - 176) ∗ statusRet N aRet.toNat status ∗
-      world N L Room inp ρ st' d ∗
-      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm status aRet s R0 ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hms Hst Hret Hw HK
-    iapply codeRes_text $$ Hcode
+  · icombine Hst Hret Hw HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine ExecEpi_run (m := ∅) (DA := []) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) hlive
     hfg.sf hfg.lo hfg.hi hfg.al hal h2 ?_ ?_ ?_ ?_ ?_ ?_
@@ -565,12 +561,8 @@ theorem wp_execRetCopy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
   have hag8 : ∀ o, o + 8 ≤ 176 → ∀ j, j < 8 → imgM M2 (s.toNat - 176 + o + j) =
       imgM Mt (s.toNat - 176 + o + j) := fun o ho j hj => hag _ (by simp only [InExt]; omega)
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(stackScratch (execSP s) (execNeed sm d - 176) ∗ world N L Room inp ρ st' d ∗
-      □ valOf N v w0 w1 w2 ∗
-      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm (.ret v) aRet s R0 ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hms Hst Hw Hv HK
-    iapply codeRes_text $$ Hcode
+  · icombine Hst Hw Hv HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine ExecRetCopy_run (m := ∅) (DA := []) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) hlive
     hfg.sf hfg.lo hfg.hi hfg.al hsl.lo hsl.hi hsl.al
@@ -603,8 +595,7 @@ theorem wp_execRetCopy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
   simp only [statusRet] at hfin
   unfold F'
   iintro ⟨⟨Hst, Hw, #Hv, HK⟩, Hms⟩
-  ihave ⟨Hms, Hval⟩ := ms_valOut N hd h0 h8 h16 $$ [Hms]
-  · iframe Hms Hv
+  ihave ⟨Hms, Hval⟩ := ms_valOut N hd h0 h8 h16 $$ [$]
   iapply hfin
   iframe Hms Hst Hw HK Hval
 
@@ -623,12 +614,8 @@ theorem wp_execEpiRet (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
   iintro ⟨#Hcode, Hms, Hst, Hret, Hw, HK⟩
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(stackScratch (execSP s) (execNeed sm d - 176) ∗ statusRet N aRet.toNat (.ret v) ∗
-      world N L Room inp ρ st' d ∗
-      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm (.ret v) aRet s R0 ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hms Hst Hret Hw HK
-    iapply codeRes_text $$ Hcode
+  · icombine Hst Hret Hw HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine ExecEpiRet_run (m := ∅) (DA := []) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) hlive
     hfg.sf hfg.lo hfg.hi hfg.al hal h2 ?_ ?_ ?_ ?_ ?_ ?_
@@ -848,8 +835,7 @@ theorem abortAt_redispatch {Core : IProp GF} {s : BitVec 64} {n n' : Nat} (hn : 
   unfold abortAt
   iintro ⟨Hsl, HC, Hst⟩
   iframe HC
-  iapply stackScratch_widen hn hle $$ [Hsl Hst]
-  iframe Hsl Hst
+  iapply stackScratch_widen hn hle $$ [$]
 
 end Redispatch
 
@@ -904,14 +890,12 @@ theorem execDispKP_redispatch {Φ : Nat × String → IProp GF} {Core : IProp GF
   · iintro %st'' %status %hE'
     ihave HK := and_elim_l $$ HK
     ihave HK := HK $$ %st'' %status %(hE st'' status hE')
-    iapply execDispK_redispatch (wpW _) hsg hle hk $$ [Hsl HK]
-    iframe Hsl HK
+    iapply execDispK_redispatch (wpW _) hsg hle hk $$ [$]
   · iintro ⟨HA, Hslot⟩
     ihave HK := and_elim_r $$ HK
     iapply HK
     iframe Hslot
-    iapply abortAt_redispatch hsg.le hle $$ [Hsl HA]
-    iframe Hsl HA
+    iapply abortAt_redispatch hsg.le hle $$ [$]
 
 end Redispatch2
 

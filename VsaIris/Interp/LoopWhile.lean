@@ -108,12 +108,9 @@ theorem whileStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
   obtain ⟨pc, pb, hn, hrc, -, hpc, -⟩ := whileNode_of_repr hrepr hgeo
   have hPt : (BitVec.ofNat 64 pc).toNat = pc := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpc]
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aC : BitVec 64),
-        ⌜EvalRegs R1 (s + 18446744073709551440#64 + 80#64) (BitVec.ofNat 64 inp) aC aEnv
-            (s + 18446744073709551440#64) ∧ KeepRegs calleeSaved R R1⌝ -∗
-        □ astEG aC.toNat c -∗ ms 0x8000404c#64 R1 (execS s) Mt -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hro; iexact Hk
+  · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine WhileLoop_runA hlive hn.lo hn.hi hn.off hh.s0 hh.sp hn.cond ?_
   intros
@@ -141,12 +138,9 @@ theorem whileCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
   have hs16 := execSlot hfg (o := 16) (by omega) rfl
   have hoff := execSP_off hfg
   ihave #Hdv := roOwn_code (m := Mt) $$ Hcode
-  iapply wp_swpF Wp (F := iprop(codeRes ∗ □ valOf N v w0 w1 w2 ∗ ∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = (if v.truthy then 1#64 else 0#64) ∧
-          Untouched (execS s) (execW s) Mt Mt'⌝ -∗
-        ms 0x80004070#64 R' (execS s) Mt' -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hcode Hv; iexact Hk
+  · icombine Hcode Hv Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine WhileLoop_runB hlive hfg.sf hfg.lo hfg.hi hfg.al hsp ?_
   intros
@@ -191,12 +185,11 @@ theorem whileExitFalse (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p �
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pc, pb, hn, -, -, -, -⟩ := whileNode_of_repr hrepr hgeo
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(ms 0x8000409c#64 (upd R 10 0#64) (execS s) Mt -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   refine WhileLoop_runC (s := s) hlive hn.lo hn.hi hn.off hs0 hn.body ?_ (fun h => absurd h10 h)
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -220,15 +213,11 @@ theorem whileStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p �
   obtain ⟨pc, pb, hn, -, hrb, -, hpb⟩ := whileNode_of_repr hrepr hgeo
   have hPt : (BitVec.ofNat 64 pb).toNat = pb := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpb]
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aB : BitVec 64),
-        ⌜ExecRegs R1 (BitVec.ofNat 64 inp) aB aEnv aRet (s + 18446744073709551440#64) ∧
-          KeepRegs calleeSaved R R1⌝ -∗
-        □ astSG aB.toNat b -∗ ms 0x80004084#64 R1 (execS s) Mt -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hro; iexact Hk
+  · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine WhileLoop_runC (s := s) hlive hn.lo hn.hi hn.off hh.s0 hn.body (fun h => absurd h h10) ?_
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -248,11 +237,9 @@ theorem whileRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
     ⊢ Wp.W Φ := by
   iintro ⟨Hms, #Hcode, Hk⟩
   ihave #Hdv := roOwn_code (m := Mt) $$ Hcode
-  iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64,
-      ⌜KeepRegs calleeSaved R R' ∧ R' 10 = whileA0 status⌝ -∗
-        ms (whileNext status) R' (execS s) Mt -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   refine WhileLoop_runD (s := s) hlive ?_ ?_ ?_
   ·
@@ -398,20 +385,12 @@ theorem whileT_false (hlive : ∀ p ∈ interpText, live p.1)
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pc, pb, hn, -, -, -, -⟩ := whileNode_of_repr hrepr hgeo
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF (twpW _) (F := iprop(stackScratch (s + 18446744073709551440#64) m' ∗
-      slot24 aRet.toNat ∗ world N L Room inp (.counted k) st' d ∗
-      (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode .normal ∧
-          Untouched (execS s) (execW s) Mt Mt'⌝ -∗
-        ms 0x8000409c#64 R' (execS s) Mt' -∗
-        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat .normal -∗
-        world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)))
+  iapply wp_swpF (twpW _)
   rotate_left
-  · iframe Hdv Hms Hst Hslot Hw; iexact Hk
+  · icombine Hst Hslot Hw Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine WhileLoop_runC (s := s) hlive hn.lo hn.hi hn.off ((hk1 8 (by decide)).trans hh.s0) hn.body
     ?_ (fun h => absurd (by simpa using h10) h)
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -631,8 +610,7 @@ theorem whilePI_loeb (hlive : ∀ p ∈ interpText, live p.1)
     · iframe Hslot HK
     · iintro ⟨HA, HO⟩
       ihave HK := and_elim_r $$ HK
-      iapply HK $$ [HA Hslot HO]
-      iframe HA Hslot HO
+      iapply HK $$ [$]
   iintro %R1 %Mt1 %st1 %v %hE1 %⟨hk1, h10, hut1⟩ Hms Hst Hw HX HK
   ihave ⟨Hslot, HK⟩ := and_elim_l $$ HK
   cases hv : v.truthy with

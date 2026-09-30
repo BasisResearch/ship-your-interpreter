@@ -42,18 +42,9 @@ theorem caseP_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
   have halloc : st.store.allocFrame (some env) =
       ((st.store.allocFrame (some env)).1, st.store.frames.size) := rfl
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF (wpW _) (F := iprop(evalSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inp Core ∗
-      execSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inp Core ∗
-      Newlib.binImg ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.forStmt init cnd step b) d - 176) ∗ slot24 aRet.toNat ∗
-      world N vsaLayoutP vsaRoomB inp .uncounted st d ∗
-      ((∀ (st' : St) (status : Status), ⌜ExecS st d env (.forStmt init cnd step b) st' status⌝ -∗
-        execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (wpW (vsaModel live)) Φ .uncounted st' d
-          (.forStmt init cnd step b) status aRet s R ret v8 v9 v18 v19) ∧
-       (iprop(abortAt Core s (execNeed (.forStmt init cnd step b) d) ∗ slot24 aRet.toNat) -∗
-          (wpW (vsaModel live)).W Φ))))
+  iapply wp_swpF (wpW _)
   rotate_left
-  · iframe Hdv Hms IHe IHs Himg Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine IHe IHs Himg Hcode Hro Hfb Hst Hslot Hw HK as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   unfold execDispPC
   refine ForArm_run (s := s) hlive hn.lo hn.hi hn.off hf.regs.s0 hf.regs.a6 hf.regs.a4 hn.kind
@@ -100,18 +91,13 @@ theorem caseP_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
     iapply abortAt_intro
     iframe HC
     rw [h12]
-    iapply execFrame_join hf.stack.le hneed $$ [Hst HS]
-    iframe Hst HS
+    iapply execFrame_join hf.stack.le hneed $$ [$]
   iintro %R2 %hk2 Hst Hw #Hnew Hms
   have eSt' : stackScratch (GF := GF) (R1 2) (execNeed (.forStmt init cnd step b) d - 176) ⊢
       stackScratch (execSP s) (execNeed (.forStmt init cnd step b) d - 176) := by rw [h12]
   ihave Hst := eSt' $$ Hst
   have hk2' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R2 1 (BitVec.ofNat 64 (0x80004238 + 4))) := by
-    intro x hx
-    simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
-    subst hR1
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      (ix_reg; rw [hk2 _ (by decide) (by decide)]; ix_reg)
+    subst hR1; keep_split <;> (ix_reg; rw [hk2 _ (by decide) (by decide)]; ix_reg)
   have hih : InitHead (upd R2 1 (BitVec.ofNat 64 (0x80004238 + 4))) s aS (BitVec.ofNat 64 inp) aRet
       (R2 10) := by
     refine ⟨?_, ?_, ?_, ?_, by ix_reg⟩ <;> (ix_reg; rw [hk2 _ (by decide) (by decide)]; subst hR1; ix_reg)
@@ -136,8 +122,7 @@ theorem caseP_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
     iframe HC
-    iapply execFrame_join hf.stack.le hneed $$ [Hst HS]
-    iframe Hst HS
+    iapply execFrame_join hf.stack.le hneed $$ [$]
   iintro %R3 %st' %hEi %⟨hk3, h319⟩ Hms Hst Hslot Hw
   have hh : StmtHead R3 s aS (BitVec.ofNat 64 inp) aRet (R2 10) :=
     ⟨(hk3 2 (by decide)).trans hih.sp, (hk3 8 (by decide)).trans hih.s0,
@@ -162,7 +147,6 @@ theorem caseP_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
     iframe HC
-    iapply execFrame_join hf.stack.le hneed $$ [Hst HS]
-    iframe Hst HS
+    iapply execFrame_join hf.stack.le hneed $$ [$]
 
 end VsaIris.Interp

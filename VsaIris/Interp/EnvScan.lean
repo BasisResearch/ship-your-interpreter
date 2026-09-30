@@ -118,14 +118,7 @@ theorem wp_call_strcmp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   unfold strcmpSpec
   ihave Hsp := Hs $$ %(R 10) %(R 11) %xi %x
   iapply wp_callW Wp hexec
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hsp
-  isplitl [Hpc]
-  · iexact Hpc
-  isplitl [Hra]
-  · iexact Hra
+  isplitl []; iexact Hi; isplitl []; iexact Hsp; iframe Hpc Hra
   isplitl [Ha0 Ha1 Hcl]
   · iframe Ha0 Ha1 Hcl Hxi Hx
     ipureintro; exact hi4
@@ -143,9 +136,7 @@ theorem wp_call_strcmp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave HR := Hrest $$ %R'' [Hra Ha0 Hcl]
   · rw [regsOf_cons, regsOf_cons, e1, e2, show (11 :: 12 :: argClob) = retClob from rfl,
       regsOf_congr e3]
-    isplitl [Hra]
-    · iexact Hra
-    iframe Ha0 Hcl
+    iframe Hra Ha0 Hcl
   have hpure : ((fun k => if k ∈ strcmpKs then R'' k else R k) 10 = 0#64 ↔ xi = x) ∧
       (fun k => if k ∈ strcmpKs then R'' k else R k) 1 = BitVec.ofNat 64 (i + 4) ∧
       ∀ k, k ∉ strcmpKs → (fun k => if k ∈ strcmpKs then R'' k else R k) k = R k := by
@@ -280,8 +271,7 @@ theorem storeRepr_openRead (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)}
   ihave %hGe := frameAt_agree fa Gm.e e $$ [$]
   iexists s.frames[fa], Gm, img
   iframe Hown Hb Hp
-  isplitr
-  · ipureintro; exact ⟨hf, hGe, hlay, hinv⟩
+  isplitr; ipureintro; exact ⟨hf, hGe, hlay, hinv⟩
   iintro Hown
   rw [hB, hbl]
   iapply Hc $$ %s %(s.frames[fa]) %Gm.blocks
@@ -527,13 +517,9 @@ theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       rw [h10, imgW_toNat]
       exact imgLE_congr fun j hj => hI.img hF _ (frameS_name (hI.lay hF) hi hj)
     iapply wp_call_strcmp Wp Sx.jexec Sx.jal4 (xi := (f.vars[i]).1) (x := x)
-    isplitl []
-    · iapply instrAt_of_text Sx.jtext $$ Ht
+    isplitl []; iapply instrAt_of_text Sx.jtext $$ Ht
     iframe Hcmp Hpc HR
-    isplitl []
-    · rw [hname]; iexact Hname
-    isplitl []
-    · rw [h11, hI.name hF]; iexact Hx
+    isplitl []; rw [hname]; iexact Hname; isplitl []; rw [h11, hI.name hF]; iexact Hx
     iintro %R2 %⟨hres, h1, hk2⟩ Hpc HR
     have k2 : ∀ k, k ∉ strcmpKs → k ≠ 10 → k ≠ 11 → R2 k = R k := fun k hk h10 h11 =>
       (hk2 k hk).trans (hk1 k h10 h11)
@@ -680,10 +666,8 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro %pc1 %R1 %Mt1 %⟨rfl, hk, hcase⟩ Hpc HR HS
   rcases hcase with ⟨hpar, rfl, h20⟩ | ⟨hpar, rfl, h10⟩
   ·
-    ihave HB := get_split hdisj hF.img $$ HS
-    icases HB with ⟨HB, HF⟩
-    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [Hclose HF]
-    · iframe Hclose HF Hb Hp HGe
+    ihave ⟨HB, HF⟩ := get_split hdisj hF.img $$ HS
+    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [$]
     rw [← hB]
     cases hfp : f.parent with
     | none =>
@@ -715,10 +699,8 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iapply wp_span Wp (Sx.sEpi (out := C.out.toNat) (G := Gm) hC.sp.lo hC.sp.hi hC.ra hstk)
     iframe Ht Hgp Hpc HR HS
     iintro %pc2 %R2 %Mt2 %⟨rfl, rfl, hret⟩ Hpc HR HS
-    ihave HB := get_split hdisj hF.img $$ HS
-    icases HB with ⟨HB, HF⟩
-    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [Hclose HF]
-    · iframe Hclose HF Hb Hp HGe
+    ihave ⟨HB, HF⟩ := get_split hdisj hF.img $$ HS
+    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [$]
     rw [← hB]
     cases hfp : f.parent with
     | some pa =>
@@ -871,15 +853,8 @@ theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   · iframe Hcl
     unfold savedOwn
     iapply (sepL_append _ _ _).2
-    isplitr [Hsv]
-    · simp only [sepL_cons, sepL_nil]
-      isplitl [Hra]
-      · iexact Hra
-      iframe Ha0 Ha1 Ha2
-      isplitl [Hsp]
-      · iexact Hsp
-      iempintro
-    · iexact Hsv
+    simp only [sepL_cons, sepL_nil]
+    iframe ∗
   have hR : ∀ k v, (k, v) ∈ [(VsaIris.ra, r), (10, e), (11, pn), (12, out), (VsaIris.sp, s)] ++
       saved → R0 k = v := fun k v h => hR0 (k, v) h
   have hsvR : ∀ k ∈ getSaved, R0 k = pairVal saved k := fun k hk => by

@@ -57,13 +57,9 @@ theorem retNullCore (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (vsaMo
     have := hfg.lo; have := hfg.hi; have := hfg.al
     refine ⟨?_, ?_, ?_⟩ <;> rw [g1] <;> (try unfold Vsa.Sim.tohostAddr) <;> omega
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(codeRes ∗
-      stackScratch (execSP s) (execNeed (.ret none) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp ρ st d ∗
-      execDispK (vsaModel live) N L Room inp Wp Φ ρ st d
-        (.ret none) (.ret .null) aRet s R ret v8 v9 v18 v19))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hcode Hst Hslot Hw; iexact HK
+  · icombine Hcode Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   unfold execDispPC
   refine ExecRetNull_run1 hlive hfg.sf hfg.lo hfg.hi hfg.al hn.lo hn.hi hn.off hf.regs.s0 hf.regs.a6
@@ -94,13 +90,8 @@ theorem retNullCore (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (vsaMo
     have := hfg.lo; rw [hMt1]; ix_esaved hf.saved using hoff
 
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.ret none) d - 176) ∗ slot24 aRet.toNat ∗
-      □ valOf N .null w0 w1 w2 ∗ world N L Room inp ρ st d ∗
-      execDispK (vsaModel live) N L Room inp Wp Φ ρ st d
-        (.ret none) (.ret .null) aRet s R ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hcode Hms Hst Hslot Hv1 Hw HK
-    iapply codeRes_text $$ Hcode
+  · icombine Hcode Hst Hslot Hv1 Hw HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine ExecRetNull_run2 (m := ∅) (s := s) hlive ?_
   intros

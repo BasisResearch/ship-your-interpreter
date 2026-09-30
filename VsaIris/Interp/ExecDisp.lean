@@ -71,10 +71,8 @@ theorem wp_execProl (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs Hfr]
   · iframe Hpc Hra Hregs; unfold blockOwn; iexact Hfr
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(F ∗ codeRes ∗ stackScratch (execSP s) (execNeed sm d - 176)))
   rotate_left
-  · iframe HF Hst Hms Hcode
-    iapply codeRes_text $$ Hcode
+  · icombine HF Hcode Hst as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   unfold execEntryPC
   refine ExecProl_run (m := ∅) hlive hfg.sf hfg.lo hfg.hi hfg.al (by ix_reg; exact hregs.sp) ?_

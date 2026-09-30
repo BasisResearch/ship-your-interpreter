@@ -33,8 +33,7 @@ theorem ms_carveWords (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64}
     unfold valImg; rw [h0, h8, h16]
   rw [e]
   iintro ⟨Hms, #Hv⟩
-  iapply ms_carveVal N (a := p.toNat) (b := p.toNat) (img := imgM Mt) hS rfl rfl rfl $$ [Hms Hv]
-  iframe Hms Hv
+  iapply ms_carveVal N (a := p.toNat) (b := p.toNat) (img := imgM Mt) hS rfl rfl rfl $$ [$]
 
 theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs}
@@ -68,22 +67,12 @@ theorem ms_callValueEqual (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
   unfold valueEqualSpec
   iapply ms_callHelper Wp hexec hcode hal
   iframe Hspec Hcode Hms
-  isplitl []
-  · ipureintro; exact ⟨h10, h11, h2⟩
+  isplitl []; ipureintro; exact ⟨h10, h11, h2⟩
   isplitl [HA HB Hst Hsk]
   · iframe HA HB Hst Hsk Hcmp Hbi; ipureintro; exact ⟨hga, hgb, hni⟩
   iintro %R' %hkeep ⟨HA, HB, Hst, Hsk, %hr⟩ Hms
   ihave ⟨%M1, Hms, %hM1⟩ := ms_uncarveVal N (S := fun k => S k ∧ ¬ InExt (pa.toNat, 24) k)
     (fun k hk => ⟨hSb k hk, fun h => hab k h hk⟩) $$ [$]
-  have hiff : ∀ k, ((S k ∧ ¬ InExt (pa.toNat, 24) k) ∧ ¬ InExt (pb.toNat, 24) k ∨
-      InExt (pb.toNat, 24) k) ↔ (S k ∧ ¬ InExt (pa.toNat, 24) k) := fun k => by
-    constructor
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact ⟨hSb k h, fun h' => hab k h' h⟩
-    · intro h; by_cases h' : InExt (pb.toNat, 24) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
   ihave ⟨%M2, Hms, %hM2⟩ := ms_uncarveVal N hSa $$ [$]
   iapply Hk $$ %R' %M2 %hkeep %hr
     %(fun k hk ha hb => (hM2 k hk ha).trans (hM1 k ⟨hk, ha⟩ hb)) Hms Hst Hsk

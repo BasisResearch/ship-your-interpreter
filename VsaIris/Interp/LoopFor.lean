@@ -183,13 +183,11 @@ theorem forInitNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   obtain ⟨pi, pc, pe, pb, hn, hoi, -, -, -, -, -, -, -⟩ := forNode_of_repr hrepr hgeo
   simp only [OptS] at hoi; subst hoi
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64, ⌜KeepRegs initKeep R R' ∧ R' 19 = aOuter⌝ -∗
-        ms 0x8000426c#64 R' (execS s) Mt -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   refine ForLoop_runInit (s := s) hlive hn.lo hn.hi hn.off hh.s0 hn.init ?_ (fun h => absurd rfl h)
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -212,16 +210,12 @@ theorem forInitStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, ⟨hpi0, hri⟩, -, -, -, hpi, -, -, -⟩ := forNode_of_repr hrepr hgeo
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aI : BitVec 64),
-        ⌜ExecRegs R1 (BitVec.ofNat 64 inp) aI aOuter aRet (s + 18446744073709551440#64) ∧
-          KeepRegs initKeep R R1 ∧ R1 19 = aOuter⌝ -∗
-        □ astSG aI.toNat i -∗ ms 0x80004254#64 R1 (execS s) Mt -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hro; iexact Hk
+  · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine ForLoop_runInit (s := s) hlive hn.lo hn.hi hn.off hh.s0 hn.init
     (fun h => absurd (by simpa [upd_apply] using h) (ofNat_ne_zero hpi hpi0)) ?_
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -240,9 +234,9 @@ theorem forJoin (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ inte
     ⊢ Wp.W Φ := by
   iintro ⟨Hms, #Hcode, Hk⟩
   ihave #Hdv := roOwn_code (m := Mt) $$ Hcode
-  iapply wp_swpF Wp (F := iprop(ms 0x8000426c#64 R (execS s) Mt -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   rcases hj with rfl | rfl
   · refine ForLoop_runInitJoin hlive ?_
@@ -265,14 +259,12 @@ theorem forCondNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   obtain ⟨pi, pc, pe, pb, hn, -, hoc, -, -, -, -, -, -⟩ := forNode_of_repr hrepr hgeo
   simp only [OptE] at hoc; subst hoc
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64, ⌜KeepRegs calleeSaved R R'⌝ -∗
-        ms 0x800042a8#64 R' (execS s) Mt -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   refine ForLoop_runHead (s := s) hlive hn.lo hn.hi hn.off hh.s0 hh.sp hn.cond ?_
     (fun h => absurd rfl h)
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -295,16 +287,12 @@ theorem forCondStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, ⟨hpc0, hrc⟩, -, -, -, hpc, -, -⟩ := forNode_of_repr hrepr hgeo
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aC : BitVec 64),
-        ⌜EvalRegs R1 (s + 18446744073709551440#64 + 104#64) (BitVec.ofNat 64 inp) aC aEnv
-            (s + 18446744073709551440#64) ∧ KeepRegs calleeSaved R R1⌝ -∗
-        □ astEG aC.toNat c -∗ ms 0x80004280#64 R1 (execS s) Mt -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hro; iexact Hk
+  · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine ForLoop_runHead (s := s) hlive hn.lo hn.hi hn.off hh.s0 hh.sp hn.cond
     (fun h => absurd (by simpa using h) (ofNat_ne_zero hpc hpc0)) ?_
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -330,12 +318,9 @@ theorem forCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ inte
   have hs16 := execSlot hfg (o := 16) (by omega) rfl
   have hoff := execSP_off hfg
   ihave #Hdv := roOwn_code (m := Mt) $$ Hcode
-  iapply wp_swpF Wp (F := iprop(codeRes ∗ □ valOf N v w0 w1 w2 ∗ ∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = (if v.truthy then 1#64 else 0#64) ∧
-          Untouched (execS s) (execW s) Mt Mt'⌝ -∗
-        ms 0x800042a4#64 R' (execS s) Mt' -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hcode Hv; iexact Hk
+  · icombine Hcode Hv Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine ForLoop_runCopy hlive hfg.sf hfg.lo hfg.hi hfg.al hsp ?_
   intros
@@ -380,24 +365,22 @@ theorem forBranch (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
   ihave #Hdv := roOwn_code (m := Mt) $$ Hcode
   by_cases h10 : R 10 = 0#64
   · ihave Hk := and_elim_l $$ Hk
-    iapply wp_swpF Wp (F := iprop(⌜R 10 = 0#64⌝ -∗ ms 0x8000409c#64 (upd R 10 0#64) (execS s) Mt -∗ Wp.W Φ))
+    iapply wp_swpF Wp
     rotate_left
-    · iframe Hdv Hms; iexact Hk
+    · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
     intro F'
     refine ForLoop_runBranch hlive ?_ (fun h => absurd h10 h)
-    intro _
     intros
     apply swp_closeF
     unfold F'
     iintro ⟨Hk, Hms⟩
     iapply Hk $$ %h10 Hms
   · ihave Hk := and_elim_r $$ Hk
-    iapply wp_swpF Wp (F := iprop(⌜R 10 ≠ 0#64⌝ -∗ ms 0x800042a8#64 R (execS s) Mt -∗ Wp.W Φ))
+    iapply wp_swpF Wp
     rotate_left
-    · iframe Hdv Hms; iexact Hk
+    · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
     intro F'
     refine ForLoop_runBranch hlive (fun h => absurd h h10) ?_
-    intro _
     intros
     apply swp_closeF
     unfold F'
@@ -420,12 +403,9 @@ theorem forStageBody (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, -, -, hrb, -, -, -, hpb⟩ := forNode_of_repr hrepr hgeo
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aB : BitVec 64),
-        ⌜ExecRegs R1 (BitVec.ofNat 64 inp) aB aEnv aRet (s + 18446744073709551440#64) ∧
-          KeepRegs calleeSaved R R1⌝ -∗
-        □ astSG aB.toNat b -∗ ms 0x800042b8#64 R1 (execS s) Mt -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hro; iexact Hk
+  · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine ForLoop_runBody (s := s) hlive hn.lo hn.hi hn.off hh.s0 hn.body ?_
   intros
@@ -447,11 +427,9 @@ theorem forRoute (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ int
     ⊢ Wp.W Φ := by
   iintro ⟨Hms, #Hcode, Hk⟩
   ihave #Hdv := roOwn_code (m := Mt) $$ Hcode
-  iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64,
-      ⌜KeepRegs calleeSaved R R' ∧ R' 10 = whileA0 status⌝ -∗
-        ms (forNext status) R' (execS s) Mt -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   refine ForLoop_runRoute (s := s) hlive ?_ ?_ ?_
   · intro _ hc3
@@ -504,14 +482,12 @@ theorem forStepNone (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ 
   obtain ⟨pi, pc, pe, pb, hn, -, -, hoe, -, -, -, -, -⟩ := forNode_of_repr hrepr hgeo
   simp only [OptE] at hoe; subst hoe
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(∀ R' : Nat → BitVec 64, ⌜KeepRegs calleeSaved R R'⌝ -∗
-        ms 0x8000426c#64 R' (execS s) Mt -∗ Wp.W Φ))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms; iexact Hk
+  · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
   refine ForLoop_runStep (s := s) hlive hn.lo hn.hi hn.off hh.s0 hh.sp hn.step
     (fun h => absurd rfl h) ?_
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -534,16 +510,12 @@ theorem forStepStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pi, pc, pe, pb, hn, -, -, ⟨hpe0, hre⟩, -, -, -, hpe, -⟩ := forNode_of_repr hrepr hgeo
   ihave #Hdv := roOwn_data hn.view $$ [$]
-  iapply wp_swpF Wp (F := iprop(roOn P m ∗ (∀ (R1 : Nat → BitVec 64) (aE : BitVec 64),
-        ⌜EvalRegs R1 (s + 18446744073709551440#64 + 16#64) (BitVec.ofNat 64 inp) aE aEnv
-            (s + 18446744073709551440#64) ∧ KeepRegs calleeSaved R R1⌝ -∗
-        □ astEG aE.toNat e -∗ ms 0x800042e8#64 R1 (execS s) Mt -∗ Wp.W Φ)))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hro; iexact Hk
+  · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   refine ForLoop_runStep (s := s) hlive hn.lo hn.hi hn.off hh.s0 hh.sp hn.step ?_
     (fun h => absurd (by simpa using h) (ofNat_ne_zero hpe hpe0))
-  intro _
   intros
   apply swp_closeF
   unfold F'
@@ -1084,8 +1056,7 @@ theorem forFromBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
       · iframe HK HX Hret
       · iintro ⟨HA, HO⟩
         ihave HK := forExitK_abort $$ HK
-        iapply HK $$ [HA Hret HO]
-        iframe HA Hret HO
+        iapply HK $$ [$]
     iintro %R3 %Mt3 %st3 %hS3 %⟨hk3, hut3⟩ Hms Hst Hw HK
     ihave ⟨Hslot, HX, HK⟩ := and_elim_l $$ HK
     iapply HX $$ %Φ %st3 %init %aS %aEnv %aRet %s %R3 %Mt3 %m' %⟨hh2.keep hk3, hfg, hsg, hfits, hslg⟩
@@ -1129,8 +1100,7 @@ theorem forLoopPI_loeb (hlive : ∀ p ∈ interpText, live p.1)
       · iframe Hslot HK
       · iintro ⟨HA, HO⟩
         ihave HK := and_elim_r $$ HK
-        iapply HK $$ [HA Hslot HO]
-        iframe HA Hslot HO
+        iapply HK $$ [$]
     iintro %R1 %Mt1 %st1 %v %hE1 %⟨hk1, h10, hut1⟩ Hms Hst Hw HK
     ihave ⟨Hslot, HK⟩ := and_elim_l $$ HK
     iapply forBranch (wpW _) hlive

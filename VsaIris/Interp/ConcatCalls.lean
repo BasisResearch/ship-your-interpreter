@@ -145,14 +145,12 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
     simp only [sepL_cons, sepL_nil]
     iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB, #Hbi'⟩
     iframe H10 H11 Hbk HB Hbi'
-    isplitl []
-    · ipureintro; exact ⟨hal, hd, hh, hs⟩
-    isplitl [H12]
-    · rw [h12]; iexact H12
+    isplitl []; ipureintro; exact ⟨hal, hd, hh, hs⟩
+    isplitl [H12]; rw [h12]; iexact H12
     iapply clobbered_of_fn argClob _
     unfold argClob
     simp only [sepL_cons, sepL_nil]
-    iframe H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
+    iframe ∗
   case hQ =>
     iintro ⟨H10, Hcl, Hd, HB⟩
     ihave ⟨%g, Hcl⟩ := clobbered_fn retClob (by decide) $$ Hcl
@@ -162,21 +160,15 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
     icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
     simp only [ite_true]
     simp (config := { decide := true }) only [ite_false]
-    iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd HB
+    iframe ∗
   iframe Hmcs Hcode Hbi Hms Hblk Hsrc
   iintro %g ⟨%hg10, Hd, HB⟩ Hms
   have hkeep : ∀ x ∈ fRegs, x ∉ callerSaved →
       (fun x => if x ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] then g x
-        else R x) x = R x := by
-    intro x _ hc
-    have hsub : ∀ y ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31], y ∈ callerSaved := by
-      decide
-    have : x ∉ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] := fun h => hc (hsub x h)
-    simp only [this, ite_false]
+        else R x) x = R x := fun x _ hc => if_neg fun h => hc ((show ∀ y ∈ [10, 11, 12, 5, 6,
+      7, 13, 14, 15, 16, 17, 28, 29, 30, 31], y ∈ callerSaved by decide) x h)
   have h10 : (fun x => if x ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] then g x
-      else R x) 10 = R 10 := by
-    simp only [show (10 : Nat) ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] by decide,
-      ite_true]; exact hg10
+      else R x) 10 = R 10 := (if_pos (by decide)).trans hg10
   iapply Hk $$ %_ %hkeep %h10 Hd HB Hms
 
 theorem ms_callMemcpyOwned (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
