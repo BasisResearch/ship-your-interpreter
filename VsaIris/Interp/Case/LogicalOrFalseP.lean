@@ -77,8 +77,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave Hl := evalSpecsP_at Core st d env l $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003568)
-    (jalx_80003568 live (fun p hp => hlive _ (interp_code_80003568 p hp)))
-    interp_code_80003568 (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := l)
+    (jalx_80003568 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := l)
     (slot := s + 18446744073709550528#64 + 120#64) (aC := BitVec.ofNat 64 aL) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.logical .or l r) d - 1088)
     (n0 := evalNeed (.logical .or l r) d) (Out := slot24 sret.toNat)
@@ -131,8 +131,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   have hc16 : ldv .ld Mt2 (s.toNat - 1088 + 80) = w2 := by rw [hMt2]; ix_fwdF hoff
   ihave Hvt := hvt $$ %(s + 18446744073709550528#64 + 64#64) %lv
   iapply ms_callTruthy (wpW _) (i := 0x80003990)
-    (jalx_80003990 live (fun p hp => hlive _ (interp_code_80003990 p hp)))
-    interp_code_80003990 (by decide) (S := InExt (s.toNat - 1088, 1088)) ⟨hoff 64 (by decide), rfl, rfl⟩
+    (jalx_80003990 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (S := InExt (s.toNat - 1088, 1088)) ⟨hoff 64 (by decide), rfl, rfl⟩
     (fun b hb => by rw [hoff 64 (by decide)] at hb; simp only [VsaIris.InExt] at hb ⊢; omega)
     ⟨by rw [hoff 64 (by decide)]; omega, by rw [hoff 64 (by decide)]; unfold Vsa.Sim.tohostAddr; omega,
       by rw [hoff 64 (by decide)]; omega⟩
@@ -184,8 +184,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave Hr := evalSpecsP_at Core st1 d env r $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003a0c)
-    (jalx_80003a0c live (fun p hp => hlive _ (interp_code_80003a0c p hp)))
-    interp_code_80003a0c (by decide) (Core := Core) (st := st1) (d := d) (env := env) (e := r)
+    (jalx_80003a0c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st1) (d := d) (env := env) (e := r)
     (slot := s + 18446744073709550528#64 + 144#64) (aC := BitVec.ofNat 64 aR) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.logical .or l r) d - 1088)
     (n0 := evalNeed (.logical .or l r) d) (Out := slot24 sret.toNat)
@@ -236,8 +236,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   have hd16 : ldv .ld Mt4 (s.toNat - 1088 + 80) = u2 := by rw [hMt4]; ix_fwdF hoff
   ihave Hvt := hvt $$ %(s + 18446744073709550528#64 + 64#64) %rv'
   iapply ms_callTruthy (wpW _) (i := 0x800035cc)
-    (jalx_800035cc live (fun p hp => hlive _ (interp_code_800035cc p hp)))
-    interp_code_800035cc (by decide) (S := InExt (s.toNat - 1088, 1088)) ⟨hoff 64 (by decide), rfl, rfl⟩
+    (jalx_800035cc live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (S := InExt (s.toNat - 1088, 1088)) ⟨hoff 64 (by decide), rfl, rfl⟩
     (fun b hb => by rw [hoff 64 (by decide)] at hb; simp only [VsaIris.InExt] at hb ⊢; omega)
     ⟨by rw [hoff 64 (by decide)]; omega, by rw [hoff 64 (by decide)]; unfold Vsa.Sim.tohostAddr; omega,
       by rw [hoff 64 (by decide)]; omega⟩
@@ -278,8 +278,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvb := hvb $$ %sret %(if rv'.truthy then 1#64 else 0#64)
   unfold valueBoolSpec
   iapply ms_callHelper (wpW _) (i := 0x800035d8)
-    (jalx_800035d8 live (fun p hp => hlive _ (interp_code_800035d8 p hp)))
-    interp_code_800035d8 (by decide)
+    (jalx_800035d8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
   iframe Hvb Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep4, hkeep3, hkeep2, hkeep1], by ix_reg; exact hbit4⟩

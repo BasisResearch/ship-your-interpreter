@@ -68,7 +68,7 @@ theorem cloDefineStepT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
   ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := R 2) hle hn1 $$ Hst
   ihave #Hed := hed
   iapply ms_callEnvDefine (twpW _) (i := 0x80003310)
-    (jalx_80003310 live (fun p hp => hlive _ (interp_code_80003310 p hp))) interp_code_80003310
+    (jalx_80003310 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (k := k + bindParamsCost (st.define fa x v) fa rest + nb) (st := st) (fa := fa)
     (x := x) (v := v) (R := R) hsp hpv
   iframe Hed Hcode Hcx Hms Hst Hstr Hval Hh
@@ -143,7 +143,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := R1 2) (by rw [h2]; exact hle) hnN $$ Hst
   ihave #Hen := hen
   iapply ms_callEnvNewW (twpW _) (i := 0x800032bc)
-    (jalx_800032bc live (fun p hp => hlive _ (interp_code_800032bc p hp))) interp_code_800032bc
+    (jalx_800032bc live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (k := k + bindParamsCost store' frame (cd.params.zip vs) + nb) (st := st2) (d := d + 1)
     (env := cd.env) (R := R1) hspN
   iframe Hen Hcode Hms Hst Hw

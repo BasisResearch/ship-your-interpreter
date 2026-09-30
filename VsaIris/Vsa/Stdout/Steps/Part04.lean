@@ -39,7 +39,7 @@ theorem it_80006fd0 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x80006fd0#64 R Mt :=
   swp_stepD ix_80006fd0 [1] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_80006fd0 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm hD hLD => by unfold ix_80006fd0 ChainFacts; chain_facts hm; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)
@@ -52,7 +52,7 @@ theorem it_80006fd8 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x80006fd8#64 R Mt :=
   swp_stepD ix_80006fd8 [1] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_80006fd8 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm hD hLD => by unfold ix_80006fd8 ChainFacts; chain_facts hm; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)
@@ -65,7 +65,7 @@ theorem it_80006fe0 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x80006fe0#64 R Mt :=
   swp_stepD ix_80006fe0 [1] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_80006fe0 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm hD hLD => by unfold ix_80006fe0 ChainFacts; chain_facts hm; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)
@@ -78,7 +78,7 @@ theorem it_80006ff8 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x80006ff8#64 R Mt :=
   swp_stepD ix_80006ff8 [1] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_80006ff8 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
+    (fun m hm hD hLD => by unfold ix_80006ff8 ChainFacts; chain_facts hm; show (Sail.BitVec.update (R 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0; rw [ret_tgt _ hal]; exact hal)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) (ret_tgt _ hal)
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)
@@ -91,7 +91,7 @@ theorem it_800070a8 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070a8#64 R Mt :=
   swp_stepD ix_800070a8 [2] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_800070a8 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_")
+    (fun m hm hD hLD => by unfold ix_800070a8 ChainFacts; chain_facts hm)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)
@@ -106,7 +106,7 @@ theorem it_800070ac {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070ac#64 R Mt :=
   swp_stepD ix_800070ac [2, 23] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x018#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm hD hLD => by unfold ix_800070ac ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact hea)
+    (fun m hm hD hLD => by unfold ix_800070ac ChainFacts; chain_facts hm; exact hea)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     hS rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -119,7 +119,7 @@ theorem it_800070b0 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070b0#64 R Mt :=
   swp_stepD ix_800070b0 [3, 23] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_800070b0 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_")
+    (fun m hm hD hLD => by unfold ix_800070b0 ChainFacts; chain_facts hm)
     (by decide) (by decide) (fun _ => rfl) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -134,7 +134,7 @@ theorem it_800070b4 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070b4#64 R Mt :=
   swp_stepD ix_800070b4 [2, 22] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x020#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm hD hLD => by unfold ix_800070b4 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact hea)
+    (fun m hm hD hLD => by unfold ix_800070b4 ChainFacts; chain_facts hm; exact hea)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     hS rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -147,7 +147,7 @@ theorem it_800070b8 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070b8#64 R Mt :=
   swp_stepD ix_800070b8 [10, 22] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_800070b8 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_")
+    (fun m hm hD hLD => by unfold ix_800070b8 ChainFacts; chain_facts hm)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -162,7 +162,7 @@ theorem it_800070bc {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070bc#64 R Mt :=
   swp_stepD ix_800070bc [10, 23] [bytesAt (imgM Mt) ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8] (accAddrs ((R 23) + sign_extend (m := 64) (0x000#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_800070bc ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact âŸ¨hea, lpins8_img hLDâŸ©)
+    (fun m hm hD hLD => by unfold ix_800070bc ChainFacts; chain_facts hm; exact âŸ¨hea, lpins8_img hLDâŸ©)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) hLDS
     (fun a h => by cases h) rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -177,7 +177,7 @@ theorem it_800070c0 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070c0#64 R Mt :=
   swp_stepD ix_800070c0 [2, 20] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x030#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm hD hLD => by unfold ix_800070c0 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact hea)
+    (fun m hm hD hLD => by unfold ix_800070c0 ChainFacts; chain_facts hm; exact hea)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     hS rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -190,7 +190,7 @@ theorem it_800070c4 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070c4#64 R Mt :=
   swp_stepD ix_800070c4 [3, 20] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_800070c4 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_")
+    (fun m hm hD hLD => by unfold ix_800070c4 ChainFacts; chain_facts hm)
     (by decide) (by decide) (fun _ => rfl) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -205,7 +205,7 @@ theorem it_800070c8 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070c8#64 R Mt :=
   swp_stepD ix_800070c8 [2, 18] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x040#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm hD hLD => by unfold ix_800070c8 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact hea)
+    (fun m hm hD hLD => by unfold ix_800070c8 ChainFacts; chain_facts hm; exact hea)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     hS rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -220,7 +220,7 @@ theorem it_800070cc {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070cc#64 R Mt :=
   swp_stepD ix_800070cc [2, 24] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x010#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm hD hLD => by unfold ix_800070cc ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact hea)
+    (fun m hm hD hLD => by unfold ix_800070cc ChainFacts; chain_facts hm; exact hea)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     hS rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -235,7 +235,7 @@ theorem it_800070d0 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070d0#64 R Mt :=
   swp_stepD ix_800070d0 [1, 2] [] [] (accAddrs ((R 2) + sign_extend (m := 64) (0x058#12)).toNat 8) 0 rfl (by decide) (by decide) (by decide)
     (fun a ha => outL_single _ ha) hlive
-    (fun m hm hD hLD => by unfold ix_800070d0 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact hea)
+    (fun m hm hD hLD => by unfold ix_800070d0 ChainFacts; chain_facts hm; exact hea)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     hS rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -248,7 +248,7 @@ theorem it_800070d4 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070d4#64 R Mt :=
   swp_stepD ix_800070d4 [11, 24] [] [] [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_800070d4 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_")
+    (fun m hm hD hLD => by unfold ix_800070d4 ChainFacts; chain_facts hm)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
     (fun a h => by cases h) rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -289,8 +289,8 @@ theorem it_800070d8 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     (hlive : âˆ€ p âˆˆ stdioText, live p.1)
     (hk : NW live Dt DA S Q 0x80006fe0#64 (upd R 1 (BitVec.ofNat 64 (0x800070d8 + 4))) Mt) :
     NW live Dt DA S Q 0x800070d8#64 R Mt :=
-  swp_jal 0x800070d8 [0xef#8, 0xf0#8, 0x9f#8, 0xf0#8] 0x80006fe0#64 (jalx_800070d8 live (fun p hp => hlive _ (stdio_code_800070d8 p hp)))
-    (fun p hp => List.mem_append_left _ (stdio_code_800070d8 p hp)) (by decide) (by decide) rfl hk
+  swp_jal 0x800070d8 [0xef#8, 0xf0#8, 0x9f#8, 0xf0#8] 0x80006fe0#64 (jalx_800070d8 live (fun p hp => hlive _ ((stdio_code (by decide)) p hp)))
+    (fun p hp => List.mem_append_left _ ((stdio_code (by decide)) p hp)) (by decide) (by decide) rfl hk
 
 theorem it_800070dc {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†’ Prop}
     {Q : (Nat â†’ BitVec 64) â†’ (Nat â†’ BitVec 8) â†’ Prop} {R : Nat â†’ BitVec 64} {Mt : Mem}
@@ -301,7 +301,7 @@ theorem it_800070dc {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
     NW live Dt DA S Q 0x800070dc#64 R Mt :=
   swp_stepD ix_800070dc [18, 20] [bytesAt (imgM Mt) ((R 20) + sign_extend (m := 64) (0x000#12)).toNat 8] (accAddrs ((R 20) + sign_extend (m := 64) (0x000#12)).toNat 8) [] 0 rfl (by decide) (by decide) (by decide)
     (fun a _ => trivial) hlive
-    (fun m hm hD hLD => by unfold ix_800070dc ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact âŸ¨hea, lpins8_img hLDâŸ©)
+    (fun m hm hD hLD => by unfold ix_800070dc ChainFacts; chain_facts hm; exact âŸ¨hea, lpins8_img hLDâŸ©)
     (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) hLDS
     (fun a h => by cases h) rfl
     (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> first | rfl | exact absurd rfl hg)
@@ -316,7 +316,7 @@ theorem it_800070e0 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
   Â· exact
     swp_stepD ixT_800070e0 [18] [] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm hD hLD => by unfold ixT_800070e0 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact (guard_beq _ _).2 hc)
+      (fun m hm hD hLD => by unfold ixT_800070e0 ChainFacts; chain_facts hm; exact (guard_beq _ _).2 hc)
       (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
       (fun a h => by cases h) rfl
       (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)
@@ -324,7 +324,7 @@ theorem it_800070e0 {live : Nat â†’ Prop} {Dt : Mem} {DA : List Nat} {S : Nat â†
   Â· exact
     swp_stepD ixF_800070e0 [18] [] [] [] 0 rfl (by decide) (by decide) (by decide)
       (fun a _ => trivial) hlive
-      (fun m hm hD hLD => by unfold ixF_800070e0 ChainFacts; chain_facts hm with "VsaIris.Sym.stdio_at_"; exact (guard_false (guard_beq _ _)).2 hc)
+      (fun m hm hD hLD => by unfold ixF_800070e0 ChainFacts; chain_facts hm; exact (guard_false (guard_beq _ _)).2 hc)
       (by decide) (by decide) (fun h => absurd h (by decide)) (by decide) (fun a h => by cases h)
       (fun a h => by cases h) rfl
       (by intro x hx hg; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl <;> first | rfl | exact absurd rfl hg)

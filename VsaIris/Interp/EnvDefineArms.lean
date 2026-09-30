@@ -69,8 +69,8 @@ def defLoop (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanLoop 
   nameR := 18
   cntR := 19
   cntOK := by decide
-  jexec := jalx_80002ab8 live fun p hp => hl _ (env_code_80002ab8 p hp)
-  jtext := env_code_80002ab8
+  jexec := jalx_80002ab8 live fun p hp => hl _ ((env_code (by decide)) p hp)
+  jtext := (env_code (by decide))
   jal4 := by decide
   sLoad := def_load hl
   sCmp := def_cmp hl
@@ -517,9 +517,9 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iframe Ht Hgp Hpc HR HS
   iintro %pc1 %R1 %Mt1 %⟨rfl, rfl, h10, hk1⟩ Hpc HR HS
   iapply wp_call_strlen Wp (i := 0x80002b20)
-    (jalx_80002b20 live fun p hp => hl _ (env_code_80002b20 p hp)) (by decide) (R := R1) (x := C.x)
+    (jalx_80002b20 live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide) (R := R1) (x := C.x)
   isplitl []
-  · iapply instrAt_of_text env_code_80002b20 $$ Ht
+  · iapply instrAt_of_text (env_code (by decide)) $$ Ht
   iframe Hsl Hpc HR
   isplitl []
   · rw [h10, hR.name]; iexact Hx
@@ -542,10 +542,10 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)]
   rw [← def_sp hC h32]
   iapply wp_call_malloc A Wp (i := 0x80002b2c) (R := R3)
-    (jalx_80002b2c live fun p hp => hl _ (env_code_80002b2c p hp)) (by decide) ρ H
+    (jalx_80002b2c live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide) ρ H
     (nameCopyCost C.x) (by rw [hn1]; exact ⟨by omega, Nat.le_refl _⟩) (def_spOK hC h32)
   isplitl []
-  · iapply instrAt_of_text env_code_80002b2c $$ Ht
+  · iapply instrAt_of_text (env_code (by decide)) $$ Ht
   iframe Hat Hgp Hpc HR Hscr Hh
   iintro %R4 %p %⟨h10p, -, hk4⟩ Hpc HR Hscr Hres
   rw [show BitVec.ofNat 64 (0x80002b2c + 4) = 0x80002b30#64 from rfl, hn1]
@@ -589,13 +589,13 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   have hxlo := hsw.lo
   have hxht := hsw.htif
   iapply wp_call_memcpy Wp (i := 0x80002b40)
-    (jalx_80002b40 live fun p hp => hl _ (env_code_80002b40 p hp)) (by decide) (R := R5)
+    (jalx_80002b40 live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide) (R := R5)
     (n := C.x.length + 1) (img := ximg) h12'
     ⟨by rw [hp10]; omega, by rw [hp10]; omega, by rw [hp10]; unfold htifLo; omega⟩
     (by rw [hp10]; unfold htifLo; omega)
     ⟨by rw [hpn11]; omega, by rw [hpn11]; omega, by rw [hpn11]; unfold htifLo at hxht ⊢; omega⟩
   isplitl []
-  · iapply instrAt_of_text env_code_80002b40 $$ Ht
+  · iapply instrAt_of_text (env_code (by decide)) $$ Ht
   iframe Hmc Hpc HR
   isplitl [Hblk]
   · rw [hp10]; iexact Hblk

@@ -84,8 +84,8 @@ theorem write_putc (hl : ∀ p ∈ stdioText, live p.1) (b : BitVec 8) {t : Stri
     {R : Nat → BitVec 64} (h16 : R 16 = 0x8001b058#64) (h15 : R 15 = putcWord b)
     (hk : SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q (t ++ putcStr b) 0x80000060#64 R Mt) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x8000005c#64 R Mt :=
-  swp_putc putcSite putcSite_cert b (fun p hp => hl _ (stdio_code_8000005c p hp))
-    (fun p hp => List.mem_append_left _ (stdio_code_8000005c p hp))
+  swp_putc putcSite putcSite_cert b (fun p hp => hl _ ((stdio_code (by decide)) p hp))
+    (fun p hp => List.mem_append_left _ ((stdio_code (by decide)) p hp))
     (by decide) (by decide) (by decide) (by decide) (by decide) rfl h16 h15 hk
 
 abbrev writeCmd : BitVec 64 :=

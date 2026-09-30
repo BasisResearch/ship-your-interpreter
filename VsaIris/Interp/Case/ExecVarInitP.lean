@@ -58,8 +58,8 @@ theorem caseP_ExecVarInit {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc 
 
   ihave He := evalSpecsP_at Core st d env e $$ IH
   iapply ms_callEvalPF (N := N) (L := vsaLayoutP) (Room := vsaRoomB) (inp := inp) (i := 0x800040ec)
-    (jalx_800040ec live (fun p hp => hlive _ (interp_code_800040ec p hp)))
-    interp_code_800040ec (by decide) (slot := execSP s + 104#64)
+    (jalx_800040ec live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (slot := execSP s + 104#64)
     (aC := BitVec.ofNat 64 pi) (aE := aE) (s0 := s) (sF := execSP s) (f := 176)
     (m := execNeed (.varDecl x (some e)) d - 176) (n0 := execNeed (.varDecl x (some e)) d)
     (Out := slot24 aRet.toNat)

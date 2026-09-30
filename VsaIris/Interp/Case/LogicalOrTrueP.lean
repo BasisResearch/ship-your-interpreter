@@ -41,8 +41,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvb := hvb $$ %sret %(1#64)
   unfold valueBoolSpec
   iapply ms_callHelper (wpW _) (i := 0x800039a4)
-    (jalx_800039a4 live (fun p hp => hlive _ (interp_code_800039a4 p hp)))
-    interp_code_800039a4 (by decide)
+    (jalx_800039a4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
   iframe Hvb Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep2, hkeep1], by ix_reg⟩

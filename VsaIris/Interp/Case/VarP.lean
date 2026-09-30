@@ -113,8 +113,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     %(getSaved.map fun j => (j, R1 j)) %(by simp [getSaved])
   ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
   iapply ms_callEnv3 (wpW _) (i := 0x80003440) (entry := envGetPC) (R := R1)
-    (jalx_80003440 live (fun p hp => hlive _ (interp_code_80003440 p hp)))
-    interp_code_80003440 (by decide)
+    (jalx_80003440 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
     (φ := EnvSp (R1 2) envGetNeed ∧ SlotWin (R1 12).toNat)
     ⟨⟨(by rw [e2, hsf]; unfold htifLo envGetNeed; unfold Vsa.Sim.tohostAddr at *; omega),
        (by rw [e2, hsf]; omega), (by rw [e2, hsf]; omega)⟩,
@@ -174,7 +174,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     unfold F'
     iintro ⟨⟨#HE, #Hcode, #Hx, Hst, Hw, Hk⟩, Hms⟩
     iapply ev_rtErr (wpW _) (N := N) (L := L) (Room := Room) (inp := inp) HN hcl
-      (jalx_80003fac live (fun p hp => hlive _ (interp_code_80003fac p hp))) interp_code_80003fac
+      (jalx_80003fac live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
       (sret := sret) (s := s) (n := evalNeed (.var x) d) (p := q) (x := x)
       (fun hro hs => varFmt_ok hro hs 0#64) hfs.lt hsg
       (by have := hroom.room; unfold evalFrame at this; omega) hdj

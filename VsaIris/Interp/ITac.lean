@@ -35,6 +35,12 @@ macro_rules
 macro_rules
   | `(tactic| sx_side) => `(tactic| decide)
 
+/-- A constant-table access lies in the interpreter's `.rodata` ranges. -/
+macro "ix_ro" : tactic => `(tactic| exact interpRO_mem_img (by decide))
+
+macro_rules
+  | `(tactic| sx_side) => `(tactic| ix_ro)
+
 private def hex8 (n : Nat) : String :=
   let s := String.ofList (Nat.toDigits 16 n)
   String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s

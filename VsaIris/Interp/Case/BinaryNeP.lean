@@ -85,8 +85,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
   ihave Hl := evalSpecsP_at Core st d env l $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800034f8)
-    (jalx_800034f8 live (fun p hp => hlive _ (interp_code_800034f8 p hp)))
-    interp_code_800034f8 (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := l)
+    (jalx_800034f8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := l)
     (slot := s + 18446744073709550528#64 + 120#64) (aC := BitVec.ofNat 64 aL) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.binary .ne l r) d - 1088)
     (n0 := evalNeed (.binary .ne l r) d) (Out := slot24 sret.toNat)
@@ -144,8 +144,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
   ihave Hr := evalSpecsP_at Core st1 d env r $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)
-    (jalx_80003518 live (fun p hp => hlive _ (interp_code_80003518 p hp)))
-    interp_code_80003518 (by decide) (Core := Core) (st := st1) (d := d) (env := env) (e := r)
+    (jalx_80003518 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st1) (d := d) (env := env) (e := r)
     (slot := s + 18446744073709550528#64 + 144#64) (aC := BitVec.ofNat 64 aR) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.binary .ne l r) d - 1088)
     (n0 := evalNeed (.binary .ne l r) d) (Out := slot24 sret.toNat)
@@ -231,8 +231,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave ⟨Hslack, Hs16⟩ := stackScratch_narrow (s := s + 18446744073709550528#64)
     (n := evalNeed (.binary .ne l r) d - 1088) (m := 16) (by rw [hsf]; omega) (by omega) $$ Hst
   iapply ms_callValueEqual (wpW _) hve (i := 0x8000376c)
-    (jalx_8000376c live (fun p hp => hlive _ (interp_code_8000376c p hp)))
-    interp_code_8000376c (by decide) (sp := s + 18446744073709550528#64) (st := st2.store) (B := B)
+    (jalx_8000376c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (sp := s + 18446744073709550528#64) (st := st2.store) (B := B)
     hSa hSb hab
     (evalSlotGeom hsg hneed (o := 64) (by decide) (by decide))
     (evalSlotGeom hsg hneed (o := 32) (by decide) (by decide)) hni ha0 ha8 ha16 hb0 hb8 hb16
@@ -281,8 +281,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
   ihave Hvi := hvb $$ %sret %(if Value.equal lv rv' then 0#64 else 1#64)
   unfold valueBoolSpec
   iapply ms_callHelper (wpW _) (i := 0x80003778)
-    (jalx_80003778 live (fun p hp => hlive _ (interp_code_80003778 p hp)))
-    interp_code_80003778 (by decide)
+    (jalx_80003778 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep4, hkeep2, hkeep1], by ix_reg; rw [hr4]; cases Value.equal lv rv' <;> decide⟩

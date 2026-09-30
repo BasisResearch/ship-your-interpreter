@@ -108,8 +108,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave He := he
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800035e8)
-    (jalx_800035e8 live (fun p hp => hlive _ (interp_code_800035e8 p hp)))
-    interp_code_800035e8 (by decide) De (k := k) (slot := s + 18446744073709550528#64 + 144#64)
+    (jalx_800035e8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) De (k := k) (slot := s + 18446744073709550528#64 + 144#64)
     (aC := BitVec.ofNat 64 aC) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.unary .neg e) d - 1088)
     gC.child gC.fits gC.below gC.slotGeom hbc
@@ -154,8 +154,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvi := hvi $$ %sret %(-w1)
   unfold valueIntSpec
   iapply ms_callHelper (twpW _) (i := 0x800039d8)
-    (jalx_800039d8 live (fun p hp => hlive _ (interp_code_800039d8 p hp)))
-    interp_code_800039d8 (by decide)
+    (jalx_800039d8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep1], by ix_reg; ix_fwd; rw [BitVec.zero_sub]⟩

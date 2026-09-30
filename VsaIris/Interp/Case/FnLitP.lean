@@ -113,8 +113,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.fn nm ps body) d - 1088)
     (m := allocHeadroom) (by rw [hsf]; omega) (by omega) $$ Hst
   iapply ms_callMalloc A (wpW _) (i := 0x800033cc) (R := R1)
-    (jalx_800033cc live (fun p hp => hlive _ (interp_code_800033cc p hp)))
-    interp_code_800033cc (by decide) .uncounted H closureBytes
+    (jalx_800033cc live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) .uncounted H closureBytes
     (by rw [e10]; exact ⟨by decide, by decide⟩)
     (by rw [e2]; exact ⟨by rw [hsf]; unfold allocHeadroom Vsa.Sim.tohostAddr; omega,
       by rw [hsf]; omega, by rw [hsf]; omega⟩)

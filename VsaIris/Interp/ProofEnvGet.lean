@@ -16,8 +16,8 @@ def getSite (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanSite 
   hit := 0x80002c70#64
   tail := 0x80002cc4#64
   epi := 0x80002ca0#64
-  jexec := jalx_80002c68 live fun p hp => hl _ (env_code_80002c68 p hp)
-  jtext := env_code_80002c68
+  jexec := jalx_80002c68 live fun p hp => hl _ ((env_code (by decide)) p hp)
+  jtext := (env_code (by decide))
   jal4 := by decide
   nameR := 19
   cntR := 18

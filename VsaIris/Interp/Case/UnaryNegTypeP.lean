@@ -64,8 +64,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   have hc0 : ldv .ld Mt2 (s + 18446744073709550528#64 + 64#64).toNat = w0 := by
     rw [hMt2, hoff 64 (by decide)]; ix_fwdF hoff
   iapply ms_callKindName (wpW _) hvk (i := 0x80003b7c)
-    (jalx_80003b7c live (fun p hp => hlive _ (interp_code_80003b7c p hp)))
-    interp_code_80003b7c (by decide) (S := InExt (s.toNat - 1088, 1088))
+    (jalx_80003b7c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (S := InExt (s.toNat - 1088, 1088))
     (fun b hb => by rw [hoff 64 (by decide)] at hb; simp only [VsaIris.InExt] at hb ⊢; omega)
     (evalSlotGeom hsg hneed (o := 64) (by decide) (by decide)) hc0 htag
   iframe Hcode Hms
@@ -102,8 +102,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hrd := readable_rodata $$ [HE]
   · unfold errCtx; icases HE with ⟨#Himg, -⟩; iexact Himg
   iapply ms_rtErrEval (wpW _) hErr (i := 0x80003b9c)
-    (jalx_80003b9c live (fun p hp => hlive _ (interp_code_80003b9c p hp)))
-    interp_code_80003b9c (line := line) (x1 := 0x800196e8#64) (x2 := kindNamePtr v) (fmt := 0x800193f0#64)
+    (jalx_80003b9c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (line := line) (x1 := 0x800196e8#64) (x2 := kindNamePtr v) (fmt := 0x800193f0#64)
     (readable_rodata_fmt fun hro => operand_fmt hro (rodata_cstrV hro 0x800196e8#64 1 (by decide) (by decide))
       (kindName_cstr hro v))
     hsg hneedE

@@ -9,24 +9,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
 open Lean Elab Tactic Meta in
 
-elab "ix_ro" : tactic => do
-  let g ← getMainGoal
-  let ty ← instantiateMVars (← g.getType)
-  unless (ty.find? (·.isConstOf ``interpROImg)).isSome do throwError "ix_ro: not a table goal"
-  let some e := ty.find? (fun e => e.isAppOfArity ``accAddrs 2) | throwError "ix_ro: no accAddrs"
-  let some an ← evalNat e.appFn!.appArg! |>.run | throwError "ix_ro: address not a literal"
-  let some wn ← evalNat e.appArg! |>.run | throwError "ix_ro: width not a literal"
-  let hex := String.ofList (Nat.toDigits 16 an)
-  let hex := String.ofList (List.replicate (8 - hex.length) '0') ++ hex
-  let nm := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"interpRO_acc{wn}_{hex}"
-  unless (← getEnv).contains nm do throwError "ix_ro: no lemma {nm}"
-  evalTactic (← `(tactic| exact $(mkIdent nm)))
-
-macro_rules
-  | `(tactic| sx_side) => `(tactic| ix_ro)
-
-open Lean Elab Tactic Meta in
-
 elab "ix_absurd" : tactic => do
   let g ← getMainGoal
   let (h, g) ← g.intro1

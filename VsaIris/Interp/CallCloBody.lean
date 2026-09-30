@@ -73,8 +73,8 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   ihave Hvn := hvn $$ %(s + 18446744073709550528#64 + 144#64)
   unfold valueNullSpec
   iapply ms_callHelperSlot Wp (i := 0x80003328)
-    (jalx_80003328 live (fun p hp => hlive _ (interp_code_80003328 p hp)))
-    interp_code_80003328 (by decide) (a := s + 18446744073709550528#64 + 144#64) (R := R) (Mt := Mt)
+    (jalx_80003328 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (a := s + 18446744073709550528#64 + 144#64) (R := R) (Mt := Mt)
     (S := InExt (s.toNat - 1088, 1088)) (v := .null)
     (fun b hb => by simp only [InExt] at hb ⊢; rw [h144] at hb; omega) hslg
   iframe Hvn Hcode Hms

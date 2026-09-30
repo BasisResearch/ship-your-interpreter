@@ -13,14 +13,11 @@ def topLive (a : Nat) : Prop :=
   (0x80000000 ≤ a ∧ a < 0x8001acf0 ∧ ¬ (0x80018be0 ≤ a ∧ a < 0x80018da6)) ∨
     (0x8001b970 ≤ a ∧ a < 0x8001b978) ∨ (0x87800000 ≤ a ∧ a < 0x88000000)
 
-theorem interpText_all :
-    VsaIris.Sym.interpText.all (fun p => (0x80000000 ≤ p.1 && p.1 < 0x8001acf0 &&
-      !(0x80018be0 ≤ p.1 && p.1 < 0x80018da6))) = true := by decide +kernel
-
 theorem topLive_interp : ∀ p ∈ VsaIris.Sym.interpText, topLive p.1 := by
   intro p hp
-  have h := List.all_eq_true.1 interpText_all p hp
-  refine .inl ⟨?_, ?_, ?_⟩ <;> revert h <;> simp <;> omega
+  rcases VsaIris.Sym.interpText_img_mem p hp with ⟨⟨h1, h2⟩, -⟩ | ⟨⟨h1, h2⟩, -⟩
+  · exact .inl ⟨h1, by omega, by omega⟩
+  · exact .inl ⟨by omega, h2, by omega⟩
 
 theorem topLive_code : Newlib.CodeLive topLive := by
   intro a ha

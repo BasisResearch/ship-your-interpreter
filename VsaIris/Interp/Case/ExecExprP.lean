@@ -53,8 +53,8 @@ theorem caseP_ExecExpr {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
   ihave He := evalSpecsP_at Core st d env e $$ IH
   iapply ms_callEvalPF (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004180)
-    (jalx_80004180 live (fun p hp => hlive _ (interp_code_80004180 p hp)))
-    interp_code_80004180 (by decide) (slot := execSP s + 16#64)
+    (jalx_80004180 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (slot := execSP s + 16#64)
     (aC := BitVec.ofNat 64 p) (aE := aE) (s0 := s) (sF := execSP s) (f := 176)
     (m := execNeed (.expr e) d - 176) (n0 := execNeed (.expr e) d)
     (Out := slot24 aRet.toNat)

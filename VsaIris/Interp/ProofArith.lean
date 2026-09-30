@@ -376,8 +376,8 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hT.hT hx hyp =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000471c _ _ (jalx_8000471c live (fun p hp => hlive _ (interp_code_8000471c p hp)))
-      interp_code_8000471c rfl ?_
+    refine iw_jal 0x8000471c _ _ (jalx_8000471c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (0#64 - x) y 0x80004720#64 _ Mt hy ?_ ?_ ?_ (by decide) (fun R' hq _ hkp => ?_)
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h11
@@ -406,8 +406,8 @@ theorem divdi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
       · rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h10', h11', ite_false]
   case hF.hT hx hyp =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000471c _ _ (jalx_8000471c live (fun p hp => hlive _ (interp_code_8000471c p hp)))
-      interp_code_8000471c rfl ?_
+    refine iw_jal 0x8000471c _ _ (jalx_8000471c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive x (0#64 - y) 0x80004720#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' hq _ hkp => ?_)
     · intro h0; apply hy; have := congrArg (0#64 - ·) h0; simpa using this
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10
@@ -444,8 +444,8 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
   all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at *)
   case hT.hT hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x80004734 _ _ (jalx_80004734 live (fun p hp => hlive _ (interp_code_80004734 p hp)))
-      interp_code_80004734 rfl ?_
+    refine iw_jal 0x80004734 _ _ (jalx_80004734 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (x) (0#64 - y) 0x80004738#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · intro h0; apply hy; have := congrArg (0#64 - ·) h0; simpa using this
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10
@@ -465,8 +465,8 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
         rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h1, h5', h10', h11', ite_false]
   case hT.hF hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000474c _ _ (jalx_8000474c live (fun p hp => hlive _ (interp_code_8000474c p hp)))
-      interp_code_8000474c rfl ?_
+    refine iw_jal 0x8000474c _ _ (jalx_8000474c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (0#64 - x) (0#64 - y) 0x80004750#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · intro h0; apply hy; have := congrArg (0#64 - ·) h0; simpa using this
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -486,8 +486,8 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
         rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h1, h5', h10', h11', ite_false]
   case hF.hT hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x8000474c _ _ (jalx_8000474c live (fun p hp => hlive _ (interp_code_8000474c p hp)))
-      interp_code_8000474c rfl ?_
+    refine iw_jal 0x8000474c _ _ (jalx_8000474c live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (0#64 - x) (y) 0x80004750#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · exact hy
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -507,8 +507,8 @@ theorem moddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
         rw [hkp z h10' h11' h12 h13]; simp only [upd_apply, h1, h5', h10', h11', ite_false]
   case hF.hF hyp hx =>
     rw [h10] at hx; rw [h11] at hyp
-    refine iw_jal 0x80004734 _ _ (jalx_80004734 live (fun p hp => hlive _ (interp_code_80004734 p hp)))
-      interp_code_80004734 rfl ?_
+    refine iw_jal 0x80004734 _ _ (jalx_80004734 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) rfl ?_
     refine udiv_iw hlive (x) (y) 0x80004738#64 _ Mt ?_ ?_ ?_ ?_ (by decide) (fun R' _ hm hkp => ?_)
     · exact hy
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10

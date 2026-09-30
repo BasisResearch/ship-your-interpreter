@@ -101,8 +101,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
   ihave Hc := evalSpecsP_at (evalCore N L Room inp) st d env e $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003488)
-    (jalx_80003488 live (fun p hp => hlive _ (interp_code_80003488 p hp)))
-    interp_code_80003488 (by decide) (Core := evalCore N L Room inp) (st := st) (d := d) (env := env)
+    (jalx_80003488 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := evalCore N L Room inp) (st := st) (d := d) (env := env)
     (e := e) (slot := s + 18446744073709550528#64 + 240#64) (aC := BitVec.ofNat 64 qc) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.assign x e) d - 1088)
     (n0 := evalNeed (.assign x e) d) (Out := slot24 sret.toNat)
@@ -193,8 +193,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     %(getSaved.map fun j => (j, R2 j)) %(by simp [getSaved])
   ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
   iapply ms_callEnv3 (wpW _) (i := 0x800034b0) (entry := envSetPC) (R := R2)
-    (jalx_800034b0 live (fun p hp => hlive _ (interp_code_800034b0 p hp)))
-    interp_code_800034b0 (by decide)
+    (jalx_800034b0 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
     (φ := EnvSp (R2 2) envGetNeed ∧ SlotWin (R2 12).toNat)
     ⟨⟨(by rw [e2, hsf]; unfold htifLo envGetNeed; unfold Vsa.Sim.tohostAddr at *; omega),
        (by rw [e2, hsf]; omega), (by rw [e2, hsf]; omega)⟩,
@@ -268,7 +268,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     unfold F'
     iintro ⟨⟨#HE, #Hcode, #Hx, Hst, Hw, Hk⟩, Hms⟩
     iapply ev_rtErr (wpW _) (N := N) (L := L) (Room := Room) (inp := inp) HN hcl
-      (jalx_800034e4 live (fun p hp => hlive _ (interp_code_800034e4 p hp))) interp_code_800034e4
+      (jalx_800034e4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
       (sret := sret) (s := s) (n := evalNeed (.assign x e) d) (p := q) (x := x)
       (fun hro hs => assignFmt_ok hro hs 0#64) hfs.lt hsg
       (by have := hroom.room; unfold evalFrame at this; omega) hdj

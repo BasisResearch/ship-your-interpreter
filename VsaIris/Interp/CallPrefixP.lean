@@ -118,8 +118,8 @@ end CloP
 
   ihave Hf := evalSpecsP_at Core st d env f $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800031bc)
-    (jalx_800031bc live (fun p hp => hlive _ (interp_code_800031bc p hp)))
-    interp_code_800031bc (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := f)
+    (jalx_800031bc live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := f)
     (slot := s + 18446744073709550528#64 + 96#64) (aC := BitVec.ofNat 64 aF) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.call f args) d - 1088)
     (n0 := evalNeed (.call f args) d) (Out := slot24 sret.toNat) (Kret := Kret) .rfl
@@ -220,8 +220,8 @@ end CloP
   iintro ⟨⟨#HE, #Hcode, Hst, Hw, Hslot, Hk⟩, Hms⟩
   ihave #Himg := errCtx_img inp $$ HE
   ihave #Hrd := readable_rodata $$ Himg
-  iapply ms_rtErrEval (wpW _) hE (jalx_80003fdc live (fun p hp => hlive _ (interp_code_80003fdc p hp)))
-    interp_code_80003fdc (readable_rodata_fmt (fun hro => tooMany_fmt hro 0#64 0#64)) hsg
+  iapply ms_rtErrEval (wpW _) hE (jalx_80003fdc live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (readable_rodata_fmt (fun hro => tooMany_fmt hro 0#64 0#64)) hsg
     (evalNeed_call_rtErr f args d) (R := R3) (line := vl)
   iframe Hcode HE Hrd Hms Hst Hw
   isplitl []

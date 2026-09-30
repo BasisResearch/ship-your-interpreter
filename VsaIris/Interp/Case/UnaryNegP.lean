@@ -74,8 +74,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
   ihave He := evalSpecsP_at Core st d env e $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800035e8)
-    (jalx_800035e8 live (fun p hp => hlive _ (interp_code_800035e8 p hp)))
-    interp_code_800035e8 (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := e)
+    (jalx_800035e8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := e)
     (slot := s + 18446744073709550528#64 + 144#64) (aC := BitVec.ofNat 64 aC) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.unary .neg e) d - 1088)
     (n0 := evalNeed (.unary .neg e) d) (Out := slot24 sret.toNat)
@@ -133,8 +133,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave Hvi := hvi $$ %sret %(-w1)
   unfold valueIntSpec
   iapply ms_callHelper (wpW _) (i := 0x800039d8)
-    (jalx_800039d8 live (fun p hp => hlive _ (interp_code_800039d8 p hp)))
-    interp_code_800039d8 (by decide)
+    (jalx_800039d8 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
   iframe Hvi Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep1], by ix_reg; ix_fwd; rw [BitVec.zero_sub]⟩
