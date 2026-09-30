@@ -112,8 +112,7 @@ theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     have himg : ∀ a, frameS Gm a → imgM Mt4 a = img a := fun a ha =>
       (hco.frame a (hF.sepOut a ha)).trans (hF.img a ha)
     ihave ⟨HB, HF⟩ := get_split hdisj himg $$ HS
-    ihave Hst := storeRepr_closeSame N hf hinv' hlay $$ [Hclose HF]
-    · iframe Hclose HF Hb Hp HGe
+    ihave Hst := storeRepr_closeSame N hf hinv' hlay $$ [$]
     rw [← hB]
     ihave ⟨#Hname, #Hval⟩ := bindings_get N img Gm.pn Gm.pv f.vars hlt $$ Hb
     ihave ⟨Hra, Ha0, Hsp, Hsv, Hcl⟩ := scan_exit_regs hsv hret $$ HR

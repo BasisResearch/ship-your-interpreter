@@ -445,6 +445,21 @@ structure SgCtx (live : Nat → Prop) (p s r : BitVec 64) (rv : Nat → BitVec 6
   hg : SlotGeom p
   hdsp : ∀ k, InExt (s.toNat - 112, 112) k → ¬ InExt (p.toNat, 24) k
 
+/-- Run a segment framing a rest predicate that starts with `codeRes` (`SgRest`, `SgRestB`, `SgRestC`). -/
+theorem sg_run (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {F F0 : IProp GF} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64} {M : Mem}
+    (h : let F' := F; SWP live (interpText ++ dataOf ∅ []) iRegs S (RunK Wp Φ F' S) pc R M)
+    (hF : F = iprop(codeRes ∗ F0) := by rfl) :
+    F ∗ ms pc R S M ⊢ Wp.W Φ := by
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp h
+  subst hF
+  icases Hrest with ⟨#Hcode, Hrest⟩
+  rw [hro]
+  iframe Hcode Hrest Hms
+
 theorem SgCtx.sep {live : Nat → Prop} {p s r : BitVec 64} {rv : Nat → BitVec 64}
     (cx : SgCtx live p s r rv) : p.toNat + 24 ≤ s.toNat - 112 ∨ s.toNat ≤ p.toNat := by
   have hs1 := cx.hs1
@@ -577,14 +592,9 @@ theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     by_cases h : Strlen.ownedStr (s.toNat - 96) x.toList.length k
     · exact hM1b k h
     · exact hM1a k ⟨hk, h⟩
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
-  iapply wp_swpF Wp (S := sgF s p)
-    (R := upd (fun y => if y ∈ [10, 11, 12, 13, 14, 15] then g y else R y) 1
-      (BitVec.ofNat 64 (0x80003048 + 4))) (Mt := M1) (pc := 0x8000304c#64)
-    (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
+  iapply sg_run Wp (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
   rotate_left
-  · rw [hro]; unfold SgRest
+  · unfold SgRest
     iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
   intro F'
   refine sg_len cx.hlive (by ix_reg; exact f.h2) (by omega) hs2 hs3 cx.hg.al
@@ -721,16 +731,7 @@ theorem sg_oomPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms (BitVec.ofNat 64 pc) R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := BitVec.ofNat 64 pc)
-    (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
-  rotate_left
-  · unfold SgRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   rcases hpc with rfl | rfl
   · refine sg_oom cx.hlive h2 (by omega) hs2 hs3 cx.hg.al
@@ -807,17 +808,8 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
   have hlen := f.hlen
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hq0 : q ≠ 0#64 := fun h => f.hfresh.1.nonzero (by rw [h]; rfl)
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := 0x8000305c#64)
-    (F := SgRestB Wp Φ N inp p s r v x ρ H o rv Mp q)
-  rotate_left
-  · unfold SgRestB
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   refine sg_copy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
     (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi (by rw [f.h10]; exact hq0) ?_
@@ -1000,16 +992,7 @@ theorem sg_finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     SgRestC Wp Φ N inp p s r v x ρ H o rv Mp q img ∗ ms pc R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := pc)
-    (F := SgRestC Wp Φ N inp p s r v x ρ H o rv Mp q img)
-  rotate_left
-  · unfold SgRestC
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   rcases hpc with rfl | rfl
   · refine sg_epi cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
@@ -1102,17 +1085,8 @@ theorem sg_nullArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hoff := sg_offs (s := s) (by omega)
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
-    (F := SgRest Wp Φ N inp p s r .null "null" ρ H c o rv Mp)
-  rotate_left
-  · unfold SgRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   refine sg_null cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 cx.hg.al
     (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi hk ?_
@@ -1153,17 +1127,8 @@ theorem sg_natArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hoff := sg_offs (s := s) (by omega)
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
-    (F := SgRest Wp Φ N inp p s r (.native f) "<native fn>" ρ H c o rv Mp)
-  rotate_left
-  · unfold SgRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   refine sg_nat cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 cx.hg.al
     (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi hk ?_
@@ -1217,8 +1182,6 @@ theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       (∃ img, ownImg (InExt (s.toNat - 96, 64)) img ∗ ⌜CStrImg img (s.toNat - 96) x⌝) ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hsl : ∀ k, (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) ↔ sgF s p k := fun k => by
     constructor
     · rintro (⟨h, _⟩ | h)
@@ -1238,13 +1201,9 @@ theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     rw [hoff o (by omega)]
     exact ldv_agree fun j hj => h1a _ ⟨.inl (by simp only [InExt]; omega),
       by simp only [InExt]; omega⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M1) (pc := pc)
-    (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
+  iapply sg_run Wp (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
   rotate_left
-  · unfold SgRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  · iframe Hrest Hms
   intro F'
   have gl : (0x87800000 + 112 ≤ s.toNat) ∧ p.toNat % 8 = 0 ∧ 0x8001ad00 + 16 ≤ p.toNat ∧
       p.toNat + 24 ≤ 0x100000000 :=
@@ -1379,8 +1338,6 @@ theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hoff := sg_offs (s := s) (by omega)
   have hsep := cx.sep
   have hp1 := cx.hg.al; have hp2 := cx.hg.lo; have hp3 := cx.hg.hi
@@ -1412,14 +1369,7 @@ theorem sg_boolArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
          simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
          simp (disch := omega) only [imgM_store_miss]
          exact hslot k (by simp only [InExt]; omega))
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
-    (F := SgRest Wp Φ N inp p s r (.bool b) (if b then "true" else "false") ρ H c o rv Mp)
-  rotate_left
-  · unfold SgRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   refine sg_bool cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 hp1 (by omega) hp3 hk hb ?_ ?_
   · intro _ _ _ _ _ _ hz
@@ -1455,8 +1405,6 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hoff := sg_offs (s := s) (by omega)
   have hsep := cx.sep
   have hp1 := cx.hg.al; have hp2 := cx.hg.lo; have hp3 := cx.hg.hi
@@ -1485,14 +1433,7 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     have := intToString_len_le iw.toInt (by have := BitVec.le_toInt (x := iw); simp at this ⊢; omega)
       (by have := BitVec.toInt_lt (x := iw); simp at this ⊢; omega)
     omega
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
-    (F := SgRest Wp Φ N inp p s r (.int iw.toInt) (intToString iw.toInt) ρ H c o rv Mp)
-  rotate_left
-  · unfold SgRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   refine sg_int cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 hp1 (by omega) hp3 hk hi ?_
   intros; apply swp_closeF
@@ -1627,8 +1568,6 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hoff := sg_offs (s := s) (by omega)
   have hsep := cx.sep
   have hp1 := cx.hg.al; have hp2 := cx.hg.lo; have hp3 := cx.hg.hi
@@ -1647,14 +1586,7 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     rw [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
     simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss]
     exact hsw0
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
-    (F := SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp)
-  rotate_left
-  · unfold SgRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   refine sg_str cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 hp1 (by omega) hp3 hk hsw ?_
   intros; apply swp_closeF
@@ -1710,10 +1642,9 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
   iframe Hsls Hcode Hms Hs
   iintro %g %hg10 Hms
-  iapply wp_swpF Wp (S := sgF s p) (pc := 0x800030f0#64)
-    (F := SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp)
+  iapply sg_run Wp (F := SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp)
   rotate_left
-  · rw [hro]; unfold SgRest
+  · unfold SgRest
     iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
   intro F'
   refine sg_slen cx.hlive (by simp [upd]) (by omega) hs2 hs3 hp1 (by omega) hp3 ?_
@@ -1768,20 +1699,11 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     SgRestB Wp Φ N inp p s r (.str t) t ρ H o rv Mp q ∗ ms 0x800030fc#64 R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hq0 : q ≠ 0#64 := fun h => f.hfresh.1.nonzero (by rw [h]; rfl)
   have hfr := f.hfresh.1
   have hq1 := hfr.lo; have hq2 := hfr.hi
   simp only [vsaLayoutP, Vsa.Sim.DlHeap.heapStart, Vsa.Sim.DlHeap.heapEnd] at hq1 hq2
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := 0x800030fc#64)
-    (F := SgRestB Wp Φ N inp p s r (.str t) t ρ H o rv Mp q)
-  rotate_left
-  · unfold SgRestB
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine sg_run Wp ?_
   intro F'
   refine sg_scopy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
     (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi
@@ -2028,9 +1950,8 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   iintro ⟨#Hview, #Hx, Hrest, Hms⟩
   iapply wp_swpF Wp (text := interpText ++ dataOf Dt (clodA cp q)) (S := sgF s p) (R := R)
     (Mt := M) (pc := 0x8000301c#64)
-    (F := iprop(strAt (BitVec.ofNat 64 nm).toNat x ∗ SgRest Wp Φ N inp p s r v (fnRender x) ρ H c o rv Mp))
   rotate_left
-  · iframe Hview Hx Hrest Hms
+  · icombine Hx Hrest as HF; isplitl []; iexact Hview; iframe HF Hms
   intro F'
   refine sg_cloN cx.hlive f0.h10 f0.h2 (by omega) hs2 hs3 cx.hg.al
     (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi fc.hw8 fc.hc0 fc.hc7

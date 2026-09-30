@@ -60,8 +60,7 @@ theorem helper_leaf (Wp : MachWP (GF := GF) (vsaModel live))
   iframe Hregs
   isplitr
   · ipureintro; exact hkeep
-  iapply hout Mt rv' mv' hgood $$ [HE HS]
-  iframe HE HS
+  iapply hout Mt rv' mv' hgood $$ [$]
 
 theorem swp_helperEnd {S : Nat → Prop} {r : BitVec 64} {rv R : Nat → BitVec 64} {Mt : Mem}
     {clob : List Nat} {Good : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}

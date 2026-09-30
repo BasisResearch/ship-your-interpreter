@@ -395,13 +395,10 @@ theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1
   · iframe Hbi Hxa Hxb
   iintro %R' %hk' %hres Hms
   iapply wp_swpF Wp (S := veqS pa pb s)
-    (F := Fveq Wp Φ N pa pb s r (.str x1) (.str x2) st B rv Ma Mb)
   rotate_left
   · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
       unfold codeRes; simp [dataOf]
-    rw [hro]
-    unfold Fveq
-    iframe Hcode Hwa Hwb Hst Hcmp Hbi Hk Hms
+    rw [hro]; isplitl []; iexact Hcode; icombine Hwa Hwb Hst Hcmp Hbi Hcode Hk as HF; iframe HF Hms
   intro F'
   have hk2 : R' 2 = R1 2 := hk' 2 (by decide) (by decide)
   exact veq_str_run2 Wp c (hk2.trans h2) hres
@@ -491,14 +488,11 @@ theorem valueEqual_spec (hlive : ∀ p ∈ interpText, live p.1)
     (hM1 x (.inr hx)).trans (h1b x hx)
   ihave ⟨Hst, %hclo⟩ := veq_clo_facts N (imgM Ma) (imgM Mb) pa.toNat pb.toNat a b $$ [$]
   iapply wp_swpF Wp (S := veqS pa pb s) (R := upd rv 1 r) (Mt := M) (pc := valueEqualPC)
-    (F := Fveq Wp Φ N pa pb s r a b st B rv Ma Mb)
   rotate_left
   · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
       unfold codeRes; simp [dataOf]
-    rw [hro]
-    unfold ms Fveq
-    rw [regFile_upd_ra]; simp only [upd_same]
-    iframe Hcode Hwa Hwb Hst Hcmp Hbi Hk Hpc Hra Hregs HS
+    rw [hro]; isplitl []; iexact Hcode; unfold ms; rw [regFile_upd_ra]; simp only [upd_same]
+    icombine Hwa Hwb Hst Hcmp Hbi Hcode Hk as HF; iframe HF Hpc Hra Hregs HS
   intro F'
   exact veq_run Wp ⟨hlive, hal, h10, h11, h2, hga, hgb, hsg, hMa, hMb, hdab, hdk⟩ hpa hpb hclo hinj
 

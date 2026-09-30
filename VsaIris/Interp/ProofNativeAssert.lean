@@ -465,6 +465,57 @@ structure NaCtx (live : Nat → Prop) (sret inp args s line r : BitVec 64) (n : 
   hjb : (jbWord inp.toNat jb 0).toNat % 4 = 0
   hdfa : ∀ k, InExt (s.toNat - 80, 80) k → ¬ InExt (args.toNat, 24 * n) k
 
+theorem na_run (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {sret inp args s r : BitVec 64}
+    {vs : List Value} {ρ : Regime} {st : St} {d : Nat} {rv R : Nat → BitVec 64}
+    {jb : Nat → BitVec 8} {M Margs : Mem} {S : Nat → Prop} {pc : BitVec 64}
+    (h : let F' := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs;
+      SWP live (interpText ++ dataOf ∅ []) iRegs S (RunK Wp Φ F' S) pc R M) :
+    NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs ∗ ms pc R S M ⊢ Wp.W Φ := by
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp h
+  unfold NaRest
+  icases Hrest with ⟨#Hcode, Hrest⟩
+  rw [hro]
+  iframe Hcode Hrest Hms
+
+theorem na_roRd {N : NativeAddrs} {img : Nat → BitVec 8} {a : Nat} {vs : List Value}
+    {fmt x1 : BitVec 64} (h : FmtArgsOK (fun a => rodataDom a ∨ False) rodataByte fmt [x1, 0#64]) :
+    binImg (GF := GF) ∗ valsImg N img a vs ⊢ ∃ rd : Nat → BitVec 8,
+      readable rodataDom (fun _ => False) rd ∗ ⌜FmtArgsOK (fun a => rodataDom a ∨ False) rd fmt [x1, 0#64]⌝ := by
+  iintro ⟨#Himg, -⟩
+  iexists rodataByte
+  ihave Hrd := readable_rodata $$ Himg
+  iframe Hrd
+  ipureintro; exact h
+
+/-- The shared runtime-error tail of the bad-arity and falsy-assertion paths. -/
+theorem na_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
+    {i : Nat} {code : List (BitVec 8)} (hexec : JalExec (vsaModel live) i code RtErr.rtErrEntry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    {sret inp args s line r fmt x1 : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
+    {d : Nat} {jb : Nat → BitVec 8} {rv R : Nat → BitVec 64} {M Margs : Mem} {Sro : Nat → Prop}
+    (c : NaCtx live sret inp args s line r n rv jb) (hlen : vs.length = n) (hna : ¬ AssertOk vs)
+    (hrd : binImg (GF := GF) ∗ valsImg N (imgM Margs) args.toNat vs ⊢ ∃ rd : Nat → BitVec 8,
+      readable Sro (fun _ => False) rd ∗ ⌜FmtArgsOK (fun a => Sro a ∨ False) rd fmt [x1, 0#64]⌝)
+    (hR : NaRtErrAt R M Margs inp line fmt x1 s args n) :
+    NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs ∗
+      ms (BitVec.ofNat 64 i) R (npF s args n) M ⊢ Wp.W Φ := by
+  unfold NaRest
+  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
+  ihave ⟨%rd, Hrd, %hfmt⟩ := hrd $$ [Himg Hv]
+  · isplitl
+    · iexact Himg
+    · iexact Hv
+  ihave Hk := and_elim_r $$ Hk
+  ihave Hk := wand_pure_apply hna $$ Hk
+  iapply (na_rtErr Wp HN hcl hexec hcode hfmt c.hinp c.hjb c.hs1 c.hs2 c.hs3 hlen c.hdfa)
+  iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
+  ipureintro; exact hR
+
 theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
     {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
@@ -476,34 +527,17 @@ theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       ms nativeAssertPC (upd rv 1 r) (npF s args n) M ⊢ Wp.W Φ := by
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
   unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hoff : ∀ k, k < 80 → (s + 18446744073709551536#64 + BitVec.ofNat 64 k).toNat =
       s.toNat - 80 + k := by
     intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := npF s args n) (R := upd rv 1 r) (Mt := M) (pc := nativeAssertPC)
-    (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
-  rotate_left
-  · unfold NaRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine na_run Wp ?_
   intro F'
   refine na_bad c.hlive c.h12 c.h2 (by omega) hs2 hs3 hbad c.hn ?_
   intros; apply swp_closeF
-  dsimp only [F']
-  unfold NaRest
-  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
-  ihave #Hrd := readable_rodata $$ Himg
-  ihave Hk := and_elim_r $$ Hk
-  ihave Hk := wand_pure_apply (not_assertOk_len (by rw [hlen]; exact hbad)) $$ Hk
-  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002e90) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
-    (interp_code (by decide)) (naArity_fmt (fun a ha => ⟨.inl ha, rfl⟩) 0#64 0#64) c.hinp c.hjb c.hs1 hs2 hs3
-    hlen c.hdfa)
-  iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
-  ipureintro
-  refine ⟨by ix_reg; exact c.h11, by ix_reg; exact c.h14, by ix_reg, by ix_reg, by ix_reg,
+  refine na_tail Wp HN hcl ((step% jalx 0x80002e90) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) c hlen (not_assertOk_len (by rw [hlen]; exact hbad))
+    (na_roRd (naArity_fmt (fun a ha => ⟨.inl ha, rfl⟩) 0#64 0#64))
+    ⟨by ix_reg; exact c.h11, by ix_reg; exact c.h14, by ix_reg, by ix_reg, by ix_reg,
     by ix_reg, fun k hk => ?_⟩
   have hk' := c.hdfa k
   simp only [InExt] at hk hk'
@@ -542,8 +576,6 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
   unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
   have ha1 := c.ha.al; have ha2 := c.ha.lo; have ha3 := c.ha.hi
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have hoff : ∀ k, k < 80 → (s + 18446744073709551536#64 + BitVec.ofNat 64 k).toNat =
       s.toNat - 80 + k := by
     intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
@@ -574,14 +606,7 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
       imgW (imgM Margs) (args.toNat + o) := fun o ho => by
     rw [ldv_ld_imgW]
     exact imgW_agree fun j hj => hA1 _ (by simp only [InExt]; omega)
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := npF s args n) (R := upd rv 1 r) (Mt := M) (pc := nativeAssertPC)
-    (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
-  rotate_left
-  · unfold NaRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine na_run Wp ?_
   intro F'
   refine na_pro c.hlive c.h12 c.h2 (by omega) hs2 hs3 hok ?_
   intros
@@ -718,14 +743,7 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
   have h10 : R 10 ≠ 0#64 := by rw [f.h10, ht]; decide
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002e48#64)
-    (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
-  rotate_left
-  · unfold NaRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine na_run Wp ?_
   intro F'
   refine na_ok c.hlive f.h2 h10 (by omega) hs2 hs3 ?_
   intros; apply swp_closeF
@@ -751,11 +769,9 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
 
   iapply wp_swpF Wp (S := npF s args n) (R := upd R5 1 (BitVec.ofNat 64 (0x80002e58 + 4)))
     (Mt := M) (pc := 0x80002e5c#64)
-    (F := iprop(codeRes ∗ valAt N sret.toNat .null ∗ valsImg N (imgM Margs) args.toNat vs ∗
-      world N L Room inp.toNat ρ st d ∗ stackScratch (s + 18446744073709551536#64) RtErr.rtErrNeed ∗
-      NaK Wp Φ N L Room sret inp args s r vs ρ st d rv))
   rotate_left
-  · rw [hro]; iframe Hcode Hnull Hv Hw Hst Hk Hms
+  · isplitl []; rw [hro]; iexact Hcode
+    icombine Hcode Hnull Hv Hw Hst Hk as HF; iframe HF Hms
   intro F'
   refine na_epi c.hlive (by ix_reg; rw [k5 2 (by decide)]; ix_reg; exact f.h2) (by omega) hs2 hs3
     c.hal f.sra f.ss0 f.ss1 f.ss2 ?_
@@ -820,33 +836,16 @@ theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       ms 0x80002e48#64 R (npF s args n) M ⊢ Wp.W Φ := by
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
   unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   have h10 : R 10 = 0#64 := by rw [f.h10, ht]; rfl
-  iintro ⟨Hrest, Hms⟩
-  iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002e48#64)
-    (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
-  rotate_left
-  · unfold NaRest
-    icases Hrest with ⟨#Hcode, Hrest⟩
-    rw [hro]
-    iframe Hcode Hrest Hms
+  refine na_run Wp ?_
   intro F'
   refine na_fail1 c.hlive f.h2 h10 (by omega) hs2 hs3 f.sa (f.sc.trans (by rw [hn1])) ?_
   intros; apply swp_closeF
-  dsimp only [F']
-  unfold NaRest
-  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
-  ihave #Hrd := readable_rodata $$ Himg
-  ihave Hk := and_elim_r $$ Hk
-  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
-  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
-    (interp_code (by decide)) (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
-      0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
-  iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
-  ipureintro
-  exact ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
-    by ix_reg; exact f.h2, f.hargs⟩
+  exact na_tail Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) c hlen (not_assertOk_falsy _ ht)
+    (na_roRd (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩)) 0#64))
+    ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
+      by ix_reg; exact f.h2, f.hargs⟩
 
 theorem kind_ne3 {v : Value} (h : Vsa.RuntimeRepr.kindTag v ≠ 3) :
     BitVec.ofNat 64 (Vsa.RuntimeRepr.kindTag v) ≠ 3#64 := by
@@ -890,25 +889,16 @@ theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002e48#64)
     (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
   rotate_left
-  · rw [hro]; unfold NaRest
-    iframe Hcode Himg Hsl Hv Hjb Hw Hst Hk Hms
+  · rw [hro]; unfold NaRest; iframe ∗ #
   intro F'
   refine na_fail2o (n := n) c.hlive f.h2 h10 (by omega) hs2 hs3 (by omega) (by omega) ha1 (by omega) f.sa
     (f.sc.trans (by rw [hn2])) hkw (kind_ne3 hk3) ?_
   intros; apply swp_closeF
-  dsimp only [F']
-  unfold NaRest
-  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
-  ihave #Hrd := readable_rodata $$ Himg
-  ihave Hk := and_elim_r $$ Hk
-  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
-  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
-    (interp_code (by decide)) (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
-      0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
-  iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
-  ipureintro
-  exact ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
-    by ix_reg; exact f.h2, f.hargs⟩
+  exact na_tail Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) c hlen (not_assertOk_falsy _ ht)
+    (na_roRd (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩)) 0#64))
+    ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
+      by ix_reg; exact f.h2, f.hargs⟩
 
 theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} (HN : NewlibHoles) (hcl : CodeLive live)
@@ -945,8 +935,7 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002e48#64)
     (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
   rotate_left
-  · rw [hro]; unfold NaRest
-    iframe Hcode Himg Hsl Hv Hjb Hw Hst Hk Hms
+  · rw [hro]; unfold NaRest; iframe ∗ #
   intro F'
   have hpw : ldv .ld M (args + 32#64).toNat = imgW (imgM Margs) (args.toNat + 24 + 8) := by
     rw [eA 32 (by omega), ldv_ld_imgW]
@@ -954,9 +943,13 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   refine na_fail2s (n := n) c.hlive f.h2 h10 (by omega) hs2 hs3 (by omega) (by omega) ha1 (by omega) f.sa
     (f.sc.trans (by rw [hn2])) (hkw.trans (by rw [hs]; rfl)) hpw ?_
   intros; apply swp_closeF
-  dsimp only [F']
-  unfold NaRest
-  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
+  refine na_tail Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (fmt := 0x80019038#64) (x1 := imgW (imgM Margs) (args.toNat + 24 + 8))
+    (Sro := fun a => rodataDom a ∨ InExt ((imgW (imgM Margs) (args.toNat + 24 + 8)).toNat, t.toList.length + 1) a)
+    c hlen (not_assertOk_falsy _ ht) ?_
+    ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
+      by ix_reg; exact f.h2, f.hargs⟩
+  iintro ⟨#Himg, #Hv⟩
   ihave #Hv1 := valsImg_get N (imgM Margs) vs args.toNat 1 (by omega) $$ Hv
   rw [hs, show args.toNat + 24 * 1 = args.toNat + 24 by omega]
   simp only [valOf]
@@ -965,19 +958,11 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   · isplitl
     · iexact Himg
     · iexact Hs
-  have hfmt : FmtArgsOK (fun a => (rodataDom a ∨
-      InExt ((imgW (imgM Margs) (args.toNat + 24 + 8)).toNat, t.toList.length + 1) a) ∨ False)
-      rd 0x80019038#64 [imgW (imgM Margs) (args.toNat + 24 + 8), 0#64] :=
-    naS_fmt (fun a ha => ⟨Or.inl (Or.inl ha), hrd.1 a ha⟩)
-      ⟨_, cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2.1 hrd.2.2⟩ 0#64
-  ihave Hk := and_elim_r $$ Hk
-  ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
-  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
-    (interp_code (by decide)) hfmt c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
-  iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
+  iexists rd
+  iframe Hrd
   ipureintro
-  exact ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,
-    by ix_reg; exact f.h2, f.hargs⟩
+  exact naS_fmt (fun a ha => ⟨Or.inl (Or.inl ha), hrd.1 a ha⟩)
+    ⟨_, cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2.1 hrd.2.2⟩ 0#64
 
 theorem kindTag_str {v : Value} (h : Vsa.RuntimeRepr.kindTag v = 3) : ∃ t, v = .str t := by
   cases v <;> simp only [Vsa.RuntimeRepr.kindTag] at h <;> first | exact ⟨_, rfl⟩ | omega

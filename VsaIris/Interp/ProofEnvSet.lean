@@ -401,8 +401,7 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     ihave ⟨HB, Hst⟩ := frame_write_close N (st := st) (st' := setStore st fa' x v) (fa := fa') (f := f)
       (img := img) (B₁ := B₁) (B₂ := B₂) (x := x) (v := v) hdisj hF.lay hF.img
       hF.sepOut hF.slot hco hlt (by rw [hvj])
-      ⟨rfl, by rw [setStore_frames_toList hf, hmap], hinv.set? hsome⟩ $$ [HS Hclose]
-    · iframe HS Hb Hp HGe Hclose Hv
+      ⟨rfl, by rw [setStore_frames_toList hf, hmap], hinv.set? hsome⟩ $$ [$]
     rw [← hB]
 
     ihave ⟨Hra, Ha0, Hsp, Hsv, Hcl⟩ := scan_exit_regs hsv hret $$ HR
