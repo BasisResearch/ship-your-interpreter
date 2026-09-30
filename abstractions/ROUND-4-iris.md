@@ -138,3 +138,67 @@ use site; S decides (e) at entry. Gaps and their predictions:
 - rate ×1000 slower (the rule runs once per family, not per call): generate the corollary adapter
   by a command from the spec; not built.
 - F × K: "call = seam lemma + `iframe ∗` for X + auto intro of Y" — the combination iteration.
+
+## 6. Pilot bake-off
+
+Held-out suite (`abstractions/ROUND-4-heldout.json`, commit ff27a765, before any candidate):
+the 256 target units split into three size strata; per stratum two pilot and two fresh cases by
+`random.seed(20260930)`. No unproved cases exist, so every case is a statement-identical re-proof
+(`#check @Name` under `pp.all`, byte-identical output against the base worktree, checked by `cmp`).
+Incumbent = the landed proofs. Candidates in separate worktrees from ff27a765 with the build
+outputs of the base. Lines = non-blank lines of the declaration (census script).
+
+### Candidate A — SEAM (cluster F + M), worktree syi-expR4a, commits 1dd57308, 38bb4084
+
+Family call seams stated as `spec ⊢ codeRes -∗ ms … -∗ K -∗ W`, applied by `iapply ms_callK … $$
+Hspec Hcode Hms` so the spec's P/Q are read off the hypothesis (the older shape with user-written
+X/Y and entailments cannot be applied with implicit P/Q: "istart does not support creating
+mvars"). `ms_callK`/`ms_callWK`/`ms_callLK`, the env/allocator seam `ms_callABIK` (returns a named
+`Merged` keep fact), the newlib seam `ms_callNewlibK` + `newlib_seamP/Q`, the callee-side eval
+seam `evalSpecT_intro` + `EvalEntryT`, `KeepOut C R R'` (reducible abbreviation of the legacy
+shape) with `.get/.trans/.mono/.upd_ra/.regs` by `decide`.
+
+### Candidate B — KEYFRAME (cluster K + X + S), worktree syi-expR4b, commit 0421fd3e
+
+Plain iris-lean `iframe ∗ #` and `$$ [$]` (automatic framing) framed the project's contexts
+correctly and fast in all nine cases, so no keyed instances for exact matches were built. Added:
+scoped erasure `Frame` instances (valAt→slot24/blockOwn, slot24→blockOwn, `ownSet S img`→`ownSet
+S byteAny`, register `sepL`→`clobbered`/`savedOwn`), `regs_forget`, `keep_cut`, `keep_upd_ra`, saved
+contexts (`irest` closes a frame metavariable with the whole remaining context; `irestore`/
+`iresume` rebuild the named hypotheses: the frame argument of `wp_swpF` is never written), and an
+entry window `EnvFit` / `EvalFrameG.slotWin`. Hazard found: an unassigned `?F` in the goal can
+absorb a hypothesis framed to its right (spatial) or anywhere (persistent).
+
+| case | incumbent | A SEAM | A fails | B KEYFRAME | B fails |
+|---|---:|---:|---:|---:|---:|
+| 1 `ms_tailNewlibA` | 33 | 24 | 2 | 31 | 0 |
+| 2 `ms_callOut` | 31 | 27 | 0 | 31 | 0 |
+| 3 `cloDefineStepP` | 43 | 43 | 0 | 36 | 1 |
+| 4 `caseT_CallPrintln` | 47 | 40 | 0 | 46 | 1 |
+| 5 `ms_callEnvDefineP` | 137 | 75 | 1 | 96 | 1 |
+| 6 `cloParamStep` | 242 | 238 | 1 | 219 | 2 |
+| pilots | 533 | 447 (−16%) | 4 | 459 (−14%) | 5 |
+| 7 `ms_callEvalP` (fresh) | 64 | 62 | 0 | 60 | 0 |
+| 8 `cmpStrTail` (fresh) | 38 | 38 | 0 | 33 | 0 |
+| 9 `cloCallT` (fresh) | 158 | 153 | 0 | 139 | 0 |
+| fresh | 260 | 253 (−3%) | 0 | 232 (−11%) | 0 |
+| setup (new non-blank lines) | 0 | 308 (119 statements + 189 proof; +127 moved from Arm/NewlibCall) | | 173 (128 KeyFrame incl. 31 tactic, 33 KeyWin, 12 fresh-case fix) | |
+
+A also re-proved two adapters outside the suite through its newlib seam: `ms_callNewlibA` 41 → 27,
+`ms_callNewlibAbort` 51 → 37. Module CPU: every case within ±10% of the incumbent in interleaved
+min-of-3 runs at load 13–28 (an unchanged module moved 7.3 → 8.6 s, so ±10% is the noise band);
+no change is attributable to either layer.
+
+Defects the fresh cases found: B's `irestore` reused hypothesis identifiers when the same
+persistent hypotheses were still in context (fixed by `freshenHyps`, counted as setup); A none, but
+fresh cases 8 and 9 barely touched A.
+
+Reading. Each candidate wins where the other names its residue. A cuts the family-bridging proofs
+(cases 1, 2, 4, 5: −27% to −45%) and does nothing on arm proofs (3, 6, 8: 0 lines; A's report:
+"removing the two 14-line `wp_swpF` frames needs automatic framing, candidate B's scope"). B cuts
+arm proofs and never-written frames (3, 6, 8, 9) and leaves the explicit P/Q of abstract spec
+predicates (cases 1, 2: "framing cannot pick out the contents of an abstract predicate", A's
+territory). Neither alone beats its setup on nine cases (A: −94 lines for 308; B: −102 for 173),
+and both leave the memory/offset arithmetic of case 6 (~130 lines) untouched. By the rule for
+disjoint winners, one more iteration on the combination, with fresh cases and no new abstraction
+code (below).
