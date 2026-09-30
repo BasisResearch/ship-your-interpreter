@@ -1,4 +1,5 @@
 import VsaIris.Vsa.ReallocMal
+import VsaIris.Vsa.Region
 
 namespace VsaIris.VsaHeap
 
@@ -233,97 +234,23 @@ theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     (hfit : nb ≤ S + ns) (h16 : (R 16).toNat = X + S) (h17 : (R 17).toNat = S + ns) :
     AW C.live C.S C.Q 0x80005400#64 R Mt := by
   have Hp := D.heap
-  have HB := Hp.heap.heap
-  have HH := HB.heap
-  have hXm := D.mem
-  have hXb := HH.walk.chunk_bounds _ hXm; have hNb := HH.walk.chunk_bounds _ hN
-  have hx16 := HH.aligned.1 _ hXm; have hS16 := (walk_sizes HH.walk _ hXm).1
-  have hns16 := (walk_sizes HH.walk _ hN).1
-  have hbrk := HH.brk_le; have htle := HH.top_le; have hroom := HB.top_room
-  simp only at hXb hNb hx16 hS16 hns16
-  unfold heapStart heapEnd at *
-
-  obtain ⟨cs₁, cs₂, hsp⟩ := List.append_of_mem hXm
-  have hw := HH.walk
-  rw [hsp] at hw
-  obtain ⟨_, hnext⟩ := walk_next_of hw
-  obtain ⟨cs₃, rfl⟩ : ∃ cs₃, cs₂ = ⟨X + S, ns, false⟩ :: cs₃ := by
-    rcases hnext with ⟨he, _⟩ | ⟨d, cs₃, h1, h2⟩
-    · simp only at he; omega
-    · have hdm : d ∈ chunks := by rw [hsp, h1]; simp
-      have := HH.chunk_eq hdm hN (by simp only at h2 ⊢; omega)
-      exact ⟨cs₃, by rw [h1, this]⟩
-
+  have Xk := (Hp.heap.chunkK D.mem).lower; have Nk := (Hp.heap.chunkK hN).lower
+  have Nf := (Hp.heap.freeSpan hN rfl).lower
+  open_fields Xk; open_fields Nk; simp only at Nf
+  obtain ⟨cs₁, d, cs₃, hsp, hda⟩ := Hp.heap.next D.mem (by simp only; omega)
+  obtain rfl : d = ⟨X + S, ns, false⟩ :=
+    Hp.heap.heap.heap.chunk_eq (by rw [hsp]; simp) hN (by simp only at hda ⊢; omega)
   obtain ⟨i, pre, post, pred, succ, FB⟩ := free_bin_at Hp.heap hN rfl
   simp only at FB
-  have hpn := FB.pred_node; have hsn := FB.succ_node
-  obtain ⟨hp16, hpnode⟩ := HH.node FB.i0 FB.i1 hpn
-  obtain ⟨hs16, hsnode⟩ := HH.node FB.i0 FB.i1 hsn
-  have hpf := Hp.heap.heap.node_foot FB.i0 FB.i1 hpn
-  have hsf := Hp.heap.heap.node_foot FB.i0 FB.i1 hsn
-  have hbX : X = C.top0 ∨ ∃ c ∈ chunks, c.addr = X := .inr ⟨_, hXm, rfl⟩
-  have hbE : X + S + ns = C.top0 ∨ ∃ c ∈ chunks, c.addr = X + S + ns := by
-    have := HH.end_bnd hN; simpa using this
-  have nX16s := HH.bnd_ne_node FB.i1 hsnode hbX 16 (by omega) (by omega)
-  have nE16s := HH.bnd_ne_node FB.i1 hsnode hbE 16 (by omega) (by omega)
-  have nE8p := HH.bnd_ne_node FB.i1 hpnode hbE 8 (by omega) (by omega)
-  have nE16p := HH.bnd_ne_node FB.i1 hpnode hbE 16 (by omega) (by omega)
-  have hloc : ∀ z, (z = binAt i ∨ ∃ cx ∈ chunks, cx.addr = z ∧ cx.inuse = false ∧ z ∈ bins i) →
-      0x8001ad20 ≤ z ∧ z + 32 ≤ C.top0 := by
-    rintro z (rfl | ⟨cx, hcx, rfl, _, _⟩)
-    · have := binAt_geo i FB.i1; have := HH.walk.le; have := FB.i0
-      unfold binAt avAddr heapStart at *; omega
-    · have := HH.walk.chunk_bounds cx hcx; unfold heapStart at this; omega
-  obtain ⟨hplo, hphi⟩ := hloc _ hpnode
-  obtain ⟨hslo, hshi⟩ := hloc _ hsnode
-  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
-  have hNf := (foot_free HB hN rfl).1
-  simp only at hNf
-  have hfd := FB.fd; have hbk := FB.bk
-  have hpl := Vsa.Sim.read64_lt _ _ _ hbk
-  have hsl := Vsa.Sim.read64_lt _ _ _ hfd
-  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
-  have n24 : (sign_extend (m := 64) (0x018#12) : BitVec 64) = BitVec.ofNat 64 24 := rfl
-  have eB : (R 16 + sign_extend (m := 64) (0x018#12)).toNat = X + S + 24 := by
-    rw [n24, addr_add h16 24 (by omega)]
-  have eF : (R 16 + sign_extend (m := 64) (0x010#12)).toNat = X + S + 16 := by
-    rw [n16, addr_add h16 16 (by omega)]
-  have fB : ∀ k, k < 8 → vsaFoot C.H (X + S + 24 + k) := fun k hk => vsaFoot_cons_sub _ (by
-    have := hNf (8 + k) (by omega); rwa [show X + S + 16 + (8 + k) = X + S + 24 + k by omega] at this)
-  have fF : ∀ k, k < 8 → vsaFoot C.H (X + S + 16 + k) := fun k hk => vsaFoot_cons_sub _ (hNf k (by omega))
-  have fS : ∀ k, k < 8 → vsaFoot C.H (succ + 24 + k) := fun k hk => vsaFoot_cons_sub _ (by
-    have := hsf (24 + k) (by omega) (by omega); rwa [show succ + (24 + k) = succ + 24 + k by omega] at this)
-  have fP : ∀ k, k < 8 → vsaFoot C.H (pred + 16 + k) := fun k hk => vsaFoot_cons_sub _ (by
-    have := hpf (16 + k) (by omega) (by omega); rwa [show pred + (16 + k) = pred + 16 + k by omega] at this)
-  refine st_80005400 O.live (by rw [eB]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by rw [eB]; exact O.foot fB) ?_
-  rw [eB, ldv_at hbk _ rfl]
-  refine st_80005404 O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [eF]; exact O.foot fF) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  rw [eF, ldv_at hfd _ rfl]
-  refine st_80005408 O.live ?_
-  have hvP : (BitVec.ofNat 64 pred).toNat = pred := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl]
-  have hvS : (BitVec.ofNat 64 succ).toNat = succ := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl]
-  have eS : (BitVec.ofNat 64 succ + sign_extend (m := 64) (0x018#12)).toNat = succ + 24 := by
-    rw [n24, addr_add hvS 24 (by omega)]
-  have eP : (BitVec.ofNat 64 pred + sign_extend (m := 64) (0x010#12)).toNat = pred + 16 := by
-    rw [n16, addr_add hvP 16 (by omega)]
-  have oS := off_stack_of D.heap.disj fS
-  have oP := off_stack_of D.heap.disj fP
-  refine st_8000540c O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]
-        unfold StOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eS]; exact O.foot fS) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eS]
-  refine st_80005410 O.live
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]
-        unfold StOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [eP]; exact O.foot fP) ?_
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  rw [eP]
+  have Pk := (Hp.heap.nodeK FB.i0 FB.i1 FB.pred_node).lower
+  have Sk := (Hp.heap.nodeK FB.i0 FB.i1 FB.succ_node).lower
+  open_fields Pk; open_fields Sk
+  have hpl := Vsa.Sim.read64_lt _ _ _ FB.bk; have hsl := Vsa.Sim.read64_lt _ _ _ FB.fd
+  rgn_run O.live at 0x80005408
+  rgn_ld [FB.bk, FB.fd]
+  rgn_run O.live at 0x80005414
+  rw [show (BitVec.ofNat 64 succ + 24#64).toNat = succ + 24 by rgn_arith,
+    show (BitVec.ofNat 64 pred + 16#64).toNat = pred + 16 by rgn_arith]
   obtain ⟨V, hNN, N⟩ := next_absorb O D hsp FB
   have hnbv : C.n.toNat + 8 ≤ nb := by rw [D.nbok.eq]; unfold physSize; omega
   have Hr := N.heap.reblock (c := ⟨X, S + ns, true⟩) (by simp) rfl D.addr (n' := C.n.toNat)
@@ -341,8 +268,7 @@ theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
   · rw [D.s0]
   · exact D.s1
   · exact D.a2
-  · rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl,
-      addr_add h17 0 (by omega)]; rfl
+  · exact h17
   · exact D.a5
 
 end VsaIris.VsaHeap
