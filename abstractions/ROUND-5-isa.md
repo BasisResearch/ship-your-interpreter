@@ -456,7 +456,7 @@ Every `rX_bits_xN`/`wX_bits_xN` call outside `VsaIris/Interp` uses `rX_bits_gpr`
 
 Deleted as unused: `try_step_{alu,store,branch_taken,branch_nottaken,jal,jalr,j,jr}`, every
 `stepOnce_K_{tick,notick}`, `step_K_{tick,notick}`, `sigmaTick_K`, `goodstate_sigmaPost_K`,
-`stepObs_{alu,store,branch_taken,branch_nottaken,j,jr}`, 57 of the 62 register instances,
+`stepObs_{alu,store,branch_taken,branch_nottaken,j,jr}`, 60 of the 62 register instances,
 `get?_sigmaTick_jalr`. The step-chain files fell 1,648 → 349 lines (`StepJump` 703 → 72).
 
 Left, with their callers:
@@ -497,7 +497,7 @@ Left, with their callers:
 ⟨by reg_reads [r4, hG.hart_state], by reg_reads [r1], by reg_reads [r2], by reg_reads [r3, hvm]⟩
 (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned r5 _) hc.tick`, where `hbk'` are
 its four `by rw [hmem]; … hb k …` byte facts. After both rewrites `stepObs_jal`, `stepObs_jalr`,
-`try`-free `StepJump` reads aside, the last three register instances can go.
+`wX_bits_x1` and `rX_bits_x16` have no users.
 
 ### Task 2: `block_mem_run`
 
@@ -597,7 +597,7 @@ added (`MemWidth` has no `set_option`).
 ### Open next
 
 * The two rewrites above (`CallJalr`, `Lift`) delete `stepObs_jal`, `stepObs_jalr` and the last
-  three register instances.
+  two register instances.
 * Retire reads as rules instead of `reg_reads`: `RetireReads.prelude hG hmi` for
   `afterNextPC (afterPrelude σ) pc` and `RetireReads.insert` for an insert of a register outside
   the four (one decided `RetireFree r`), so a call site builds its reads as a term. That removes the
