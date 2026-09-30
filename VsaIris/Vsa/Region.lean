@@ -136,12 +136,21 @@ theorem ARgn.acc {S : Nat → Prop} (r : ARgn S b e) (h : b ≤ a ∧ a + w ≤ 
   have := of_mem_accAddrs hx
   exact r.own.mem (by omega) (by omega)
 
+/-- The allocator's stack window, as an access region. -/
+theorem WOK.stackRgn {C : MCtx} (O : WOK C) : ARgn C.S (C.s.toNat - 256) 256 := by
+  have := O.sp.lo; have := O.sp.hi; unfold mHead Vsa.Sim.tohostAddr at *
+  exact ⟨⟨fun k hk => O.own _ (.inr ⟨by unfold mHead; omega, by omega⟩)⟩, by omega, by omega⟩
+
 end Laws
 
 /-! ## The static table (V1): minted once against the fixed layout. -/
 
 theorem globRgn (H : List (Nat × Nat)) : Rgn (vsaFoot H) 0x8001ad10 0x810 :=
   ⟨fun k hk => .inl (.inl ⟨by omega, by omega⟩)⟩
+
+/-- The `errno` word of the reentrancy structure. -/
+theorem errnoRgn (H : List (Nat × Nat)) : Rgn (vsaFoot H) 0x8001b538 4 :=
+  ⟨fun k hk => .inl (.inr (.inl ⟨by omega, by omega⟩))⟩
 
 /-- The `fd`/`bk` link words of bin `j`'s header. -/
 theorem binRgn (H : List (Nat × Nat)) {j : Nat} (hj : j < numBins) :
@@ -260,6 +269,33 @@ theorem BlockHeapAt.nodeK (B : BlockHeapAt m H top brkv chunks bins) {j x : Nat}
     have := B.node_foot hj0 hj hx (16 + k) (by omega) (by omega)
     rwa [← Nat.add_assoc] at this⟩, fun b hb k hk0 hk => HH.bnd_ne_node hj hnode hb k hk0 hk⟩
 
+/-- The ring neighbours of a position in bin `j`'s list are ring nodes of bin `j`. -/
+theorem ring_nbr_mem {bins : Nat → List Nat} {j pred succ : Nat} {pre post : List Nat}
+    (hpos : bins j = pre ++ post) (hpred : (binAt j :: pre).getLast? = some pred)
+    (hsucc : (post ++ [binAt j]).head? = some succ) :
+    (pred = binAt j ∨ pred ∈ bins j) ∧ (succ = binAt j ∨ succ ∈ bins j) := by
+  rw [hpos]
+  refine ⟨?_, ?_⟩
+  · rcases List.mem_cons.mp (List.mem_of_getLast? hpred) with h1 | h1
+    · exact .inl h1
+    · exact .inr (List.mem_append_left _ h1)
+  · rcases List.mem_append.mp (List.mem_of_head? hsucc) with h1 | h1
+    · exact .inr (List.mem_append_right _ h1)
+    · exact .inl (List.mem_singleton.mp h1)
+
+/-- The ring neighbours of a binned chunk `x`, as node regions. -/
+theorem BlockHeapAt.nbrK (B : BlockHeapAt m H top brkv chunks bins) {j x pred succ : Nat}
+    {pre post : List Nat} (hj0 : 0 < j) (hj : j < numBins) (hmem : bins j = pre ++ x :: post)
+    (hpred : (binAt j :: pre).getLast? = some pred) (hsucc : (post ++ [binAt j]).head? = some succ) :
+    NodeK H top chunks pred ∧ NodeK H top chunks succ := by
+  refine ⟨B.nodeK hj0 hj ?_, B.nodeK hj0 hj ?_⟩
+  · rcases List.mem_cons.mp (List.mem_of_getLast? hpred) with h1 | h1
+    · exact .inl h1
+    · exact .inr (by rw [hmem]; exact List.mem_append_left _ h1)
+  · rcases List.mem_append.mp (List.mem_of_head? hsucc) with h1 | h1
+    · exact .inr (by rw [hmem]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
+    · exact .inl (List.mem_singleton.mp h1)
+
 theorem NodeK.lower {x : Nat × Nat} {z : Nat} (K : NodeK (x :: H) top chunks z) :
     NodeK H top chunks z :=
   { K with links := K.links.lower }
@@ -320,8 +356,8 @@ macro "rgn_arith" : tactic =>
   `(tactic| first
     | omega
     | (simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
-        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        VsaIris.VsaHeap.key_toNat_add,
+        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceAppend,
+        BitVec.reduceSignExtend, VsaIris.VsaHeap.key_toNat_add,
         VsaIris.VsaHeap.key_toNat_ofNat, BitVec.reduceToNat, Nat.reducePow, Nat.reduceMod]
        repeat (first
          | (rw [Nat.mod_eq_of_lt]; rotate_left; omega)
@@ -342,7 +378,7 @@ macro "rgn_key_norm" : tactic =>
   `(tactic| (intro A hA
              (try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
                LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend,
-               BitVec.reduceSignExtend, VsaIris.VsaHeap.key_toNat_add,
+               BitVec.reduceAppend, BitVec.reduceSignExtend, VsaIris.VsaHeap.key_toNat_add,
         VsaIris.VsaHeap.key_toNat_ofNat, BitVec.reduceToNat,
                Nat.reducePow, Nat.reduceMod] at hA)
              (repeat (first
@@ -441,11 +477,9 @@ def rgnTry (g : MVarId) (a : Expr) (rgns : Array RgnHyp) (hint : Option Name)
   let [g'] ← evalTacticAt (← `(tactic| rgn_key_norm)) (← rgnKey g a) | s0.restore; return none
   for (r, t) in cands do
     let s ← saveState
-    try
-      let gs ← evalTacticAt t g'
-      if gs.isEmpty then return some r
-      s.restore
-    catch _ => s.restore
+    let ok ← tryCatchRuntimeEx (do pure (← evalTacticAt t g').isEmpty) (fun _ => pure false)
+    if ok then return some r
+    s.restore
   s0.restore
   return none
 
@@ -502,12 +536,21 @@ def rgnStep (h : Syntax) (stopPCs : List Nat) : TacticM (List MVarId × List MVa
       else
         match ← rgnSide g hint with
         | some r => hint := some r
-        | none => pending := pending ++ [g]
+        | none =>
+          -- a control-transfer side condition (link-register alignment): literal arithmetic
+          let s ← saveState
+          try
+            let gs' ← evalTacticAt (← `(tactic| (simp only [VsaIris.Sym.upd_apply, VsaIris.ra,
+              Nat.reduceEqDiff, ite_true, ite_false, Nat.reduceAdd, BitVec.reduceOfNat,
+              BitVec.reduceToNat, Nat.reduceMod])) ) g
+            unless gs'.isEmpty do s.restore; pending := pending ++ [g]
+          catch _ => s.restore; pending := pending ++ [g]
     match conts with
     | [c] =>
-      -- keep the register file normal: every value is a term over the entry registers
-      match ← evalTacticAt (← `(tactic| try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff,
-          ite_true, ite_false])) c with
+      -- keep the register file normal: every value is a term over the entry registers, and
+      -- the pc after a call or return is a literal
+      match ← evalTacticAt (← `(tactic| try simp only [VsaIris.Sym.upd_apply, VsaIris.ra,
+          Nat.reduceEqDiff, ite_true, ite_false, Nat.reduceAdd, BitVec.reduceOfNat])) c with
       | [c'] => cur := c'
       | cs => return (pending, cs)
     | cs => return (pending, cs)
@@ -516,16 +559,18 @@ def rgnStep (h : Syntax) (stopPCs : List Nat) : TacticM (List MVarId × List MVa
 /-- `rgn_run h at pc…`: step to a listed pc, then normalise the final goal with
 `rgn_norm`. -/
 elab "rgn_run " h:term " at " stops:num+ : tactic => do
+  let rest := (← getGoals).tail
   let (pending, conts) ← rgnStep h (stops.toList.map (·.getNat))
   match conts with
-  | [c] => setGoals (pending ++ (← evalTacticAt (← `(tactic| try rgn_norm)) c))
-  | cs => setGoals (pending ++ cs)
+  | [c] => setGoals (pending ++ (← evalTacticAt (← `(tactic| try rgn_norm)) c) ++ rest)
+  | cs => setGoals (pending ++ cs ++ rest)
 
 /-- `rgn_step h at pc…`: as `rgn_run`, leaving the final goal as the step lemmas
 produce it (for paths with their own memory normal form). -/
 elab "rgn_step " h:term " at " stops:num+ : tactic => do
+  let rest := (← getGoals).tail
   let (pending, conts) ← rgnStep h (stops.toList.map (·.getNat))
-  setGoals (pending ++ conts)
+  setGoals (pending ++ conts ++ rest)
 
 /-- Close one `LogIn (MWin H s)` key `∀ b, a ≤ b → b < a + w → MWin H s b`: from a
 region in context, or the stack window. -/
@@ -541,14 +586,29 @@ elab "rgn_win" : tactic => do
   let mk : RgnHyp → TacticM (Array (TSyntax `tactic)) := fun h => do
     if h.acc then return #[]
     return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.win $(mkIdent h.name) ?_; omega))]
-  match ← rgnTry g a rgns none mk #[stack] with
-  | some _ => setGoals []
+  -- a key over the context's stack pointer is tried against the stack window first; any
+  -- other key against the regions first (a failing stack check is a wasted `omega`)
+  let onStack := (a.find? (·.isConstOf ``MCtx.s)).isSome
+  let rest := (← getGoals).tail
+  let r ← if onStack then rgnTry g a rgns none mk #[stack] else do
+    match ← rgnTry g a rgns none mk #[] with
+    | some r => pure (some r)
+    | none => rgnTry g a #[] none mk #[stack]
+  match r with
+  | some _ => setGoals rest
   | none => throwError "rgn_win: no region contains the key"
 
-/-- `open_fields h` adds every field of the named-field structure `h` as a
+syntax openFieldsSel := " [" ident,* "]"
+
+/-- `open_fields h [f₁, …]` adds only the listed fields (a short proof should not pay for
+unused geometry in every arithmetic query). `open_fields h` adds every field of the named-field structure `h` as a
 hypothesis `h_<field>` (projections of constructor terms reduced), so the
 arithmetic deciders see a minted region's geometry. -/
-elab "open_fields " h:ident : tactic => do
+elab "open_fields " h:ident sel:(openFieldsSel)? : tactic => do
+  let only : Option (Array Name) := sel.map fun s =>
+    match s with
+    | `(openFieldsSel| [$ids,*]) => ids.getElems.map (·.getId)
+    | _ => #[]
   let g ← getMainGoal
   let n ← g.withContext do
     let d ← getLocalDeclFromUserName h.getId
@@ -557,6 +617,7 @@ elab "open_fields " h:ident : tactic => do
     pure n
   let some info := getStructureInfo? (← getEnv) n | throwError "open_fields: not a structure"
   for f in info.fieldNames do
+    if let some fs := only then unless fs.contains f do continue
     let nm := mkIdent (Name.mkSimple s!"{h.getId}_{f}")
     let pj := mkIdent (h.getId ++ f)
     evalTactic (← `(tactic| have $nm := $pj:ident))

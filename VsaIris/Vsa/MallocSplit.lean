@@ -44,77 +44,28 @@ theorem lr_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (V : LRVictim nb sz v R) (hnb : NbOK C.n nb) (hbin : bins 1 = [v]) (hfree : FreeAt chunks v sz)
     (hle : nb + 32 ≤ sz) :
     AW C.live C.S C.Q 0x80004da0#64 R Mt := by
-  have HH := Hp.heap.heap.heap
-  have B := Hp.heap.heap
+  have K := Hp.heap.heap.chunkK hfree; have FS := Hp.heap.heap.freeSpan hfree rfl
+  have Bn := binRgn C.H (j := 1) (by decide)
+  open_fields K; simp only at FS K_lo K_hi K_al K_sz16 K_sz32
   have ha4 := V.a4; have ha5 := V.a5; have ht1 := V.t1; have ha3 := V.a3; have ht4 := V.t4
-  have ha6 := G.a6
-  have hs2 := F.sp
-  have hlo := O.sp.lo; have hhi := O.sp.hi
+  have ha6 : (R 16).toNat = 2147593488 := by rw [G.a6]; rfl
+  have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
   unfold mHead Vsa.Sim.tohostAddr at hlo
-  have hsal := O.sp.align
-  have hs2n : (R 2).toNat = C.s.toNat - 96 := by rw [hs2]; sx_addr
-  have hbnd := HH.walk.chunk_bounds _ hfree
-  have htle := HH.top_le; have hbrk := HH.brk_le
-  obtain ⟨hal0, htop16⟩ := HH.aligned
-  have hv16 := hal0 _ hfree
-  have hsz16 := (walk_sizes HH.walk _ hfree).1
-  simp only at hbnd hv16 hsz16
-  unfold heapStart at hbnd; unfold heapEnd at hbrk
+  have hs2n : (R 2).toNat = C.s.toNat - 96 := by rw [F.sp]; sx_addr
   have hnb16 := hnb.al; have hnb32 := hnb.lo
-  have hb1 : binAt 1 = 2147593504 := by unfold binAt avAddr; rfl
-  have hFV := foot_free_span B hfree rfl
-  simp only at hFV
+  have hb1 : binAt 1 = 2147593504 := rfl
   have hrem : (R 13).toNat = sz - nb := by rw [ha3, BitVec.toNat_sub, ht1, ha4]; omega
-
-  refine (step% st 0x80004da0) O.live ?_
-  refine (step% st 0x80004da4) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
-  sx_norm
-
-  refine (step% st 0x80004da8) O.live ?_
-  refine (step% st 0x80004dac) O.live ?_ ?_ ?_
-  · sx_norm; rw [ha6]; decide
-  · sx_norm; rw [ha6]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inr (by rw [hb1]; decide))
-  sx_norm
-  refine (step% st 0x80004db0) O.live ?_ ?_ ?_
-  · sx_norm; rw [ha6]; decide
-  · sx_norm; rw [ha6]; exact O.bin_link (j := 1) (by unfold numBins; decide) (.inl (by rw [hb1]; decide))
-  sx_norm
-
-  refine (step% st 0x80004db4) O.live ?_
-  refine (step% st 0x80004db8) O.live ?_
-  refine (step% st 0x80004dbc) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
-  sx_norm
-  refine (step% st 0x80004dc0) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
-  sx_norm
-  refine (step% st 0x80004dc4) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
-  sx_norm
-
-  refine (step% st 0x80004dc8) O.live ?_
-  refine (step% st 0x80004dcc) O.live ?_ ?_ ?_
-  · sx_norm; sx_addr
-  · sx_norm; exact O.foot (fun k hk => hFV _ (by sx_addr) (by sx_addr))
-  sx_norm
-  have e1 : (R 15 + 8#64).toNat = v + 8 := by sx_addr
-  have e2 : (R 16 + 40#64).toNat = binAt 1 + 24 := by rw [ha6, hb1]; rfl
-  have e3 : (R 16 + 32#64).toNat = binAt 1 + 16 := by rw [ha6, hb1]; rfl
-  have e4 : (R 15 + R 14 + 24#64).toNat = v + nb + 24 := by sx_addr
-  have e5 : (R 15 + R 14 + 16#64).toNat = v + nb + 16 := by sx_addr
-  have e6 : (R 15 + R 14 + 8#64).toNat = v + nb + 8 := by sx_addr
-  have e7 : (R 15 + R 6).toNat = v + sz := by sx_addr
-  rw [e1, e2, e3, e4, e5, e6, e7]
-  sx_run [8] O.live at 0x8000484c
-  rw [show (R 2 + 8#64).toNat = C.s.toNat - 96 + 8 by sx_addr]
-  have hoff := Hp.off_stack_w (a := v + 8) (w := sz + 8) (by omega)
-    (fun k hk => hFV _ (by omega) (by omega))
-  unfold mHead at hoff
+  have St := O.stackRgn
+  rgn_run O.live at 0x8000484c
+  rw [show (R 15 + 8#64).toNat = v + 8 by rgn_arith,
+    show (R 16 + 40#64).toNat = binAt 1 + 24 by rgn_arith,
+    show (R 16 + 32#64).toNat = binAt 1 + 16 by rgn_arith,
+    show (R 15 + R 14 + 24#64).toNat = v + nb + 24 by rgn_arith,
+    show (R 15 + R 14 + 16#64).toNat = v + nb + 16 by rgn_arith,
+    show (R 15 + R 14 + 8#64).toNat = v + nb + 8 by rgn_arith,
+    show (R 15 + R 6).toNat = v + sz by rgn_arith,
+    show (R 2 + 8#64).toNat = C.s.toNat - 96 + 8 by rgn_arith]
+  have hoff := FS.offStack Hp.disj (by omega); unfold mHead at hoff
   refine epi_8000484c O ?F (O.fin_take (v := v) ?_ (lr_split_ret O.sp Hp hnb hbin hfree hle
     (or1_toNat ha4 (by omega)) (by sx_addr) ht4 (or1_toNat hrem (by omega)) hrem))
   case F =>
