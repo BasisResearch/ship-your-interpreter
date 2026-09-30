@@ -99,13 +99,6 @@ def headZeta (goal : MVarId) : MetaM MVarId := goal.withContext do
     throwError "head_zeta: nothing to reduce")
   goal.replaceTargetDefEq (mkAppN fn (args.set! (args.size - 1) x'))
 
-elab "delta_head_matcher" : tactic => do
-  let g ← deltaHeadMatcher (← getMainGoal); replaceMainGoal [g]
-elab "resp_dite_head" : tactic => do
-  let gs ← respDiteHead (← getMainGoal); replaceMainGoal gs
-elab "head_zeta" : tactic => do
-  let g ← headZeta (← getMainGoal); replaceMainGoal [g]
-
 /-- The lemma proving `Resp (f …)` for a model or lean-sail function, by the
 generator's naming convention (`scripts/gen_resp.py`). -/
 def lemmaFor (env : Environment) (c : Name) : Option Name :=

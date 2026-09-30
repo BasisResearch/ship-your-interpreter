@@ -102,21 +102,6 @@ elab "nx_compactR" : tactic => do
   evalTactic (← `(tactic| refine swp_congr (R' := $R'stx) ?_ ?_))
   evalTactic (← `(tactic| nx_regEq))
 
-/-- `nx_forget_sp lo`: forget the bytes from `lo` up to the current stack
-pointer (dead by the ABI), read off the goal's register file. -/
-elab "nx_forget_sp " lo:term:max : tactic => do
-  let g ← getMainGoal
-  let ty ← g.withContext (do whnfR (← instantiateMVars (← g.getType)))
-  unless ty.getAppFn.isConstOf ``SWP do throwError "nx_forget_sp: not an SWP goal"
-  let R := ty.getAppArgs[6]!
-  let (base, ups) ← g.withContext (updChain R [] #[])
-  let spv ← match ← g.withContext (ups.findM? fun (k, _) => do
-      return (← (evalNat k).run) == some 2 || k.nat? == some 2) with
-    | some (_, v) => pure v
-    | none => pure (mkApp base (mkNatLit 2))
-  let spStx ← g.withContext (Term.exprToSyntax spv)
-  evalTactic (← `(tactic| nx_forget $lo (($spStx).toNat - $lo)))
-
 end CompactR
 
 /-- Store forwarding (lane N1's `nx_mem`) through forgotten regions too. -/

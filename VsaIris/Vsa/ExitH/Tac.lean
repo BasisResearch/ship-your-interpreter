@@ -119,23 +119,3 @@ macro "xh_end" : tactic => `(tactic| (intros; xh_clean; xh_compactR; exact hk _ 
 
 end VsaIris.Sym
 
-namespace VsaIris.Sym
-
-open Lean Meta Elab Command in
-/-- `#xh_pcs p`: the PCs of the symbolic states in a piece's statement, its
-leftovers first (a development aid). -/
-elab "#xh_pcs " n:ident : command => liftTermElabM do
-  let c ← getConstInfo (← realizeGlobalConstNoOverload n)
-  let rec go (e : Expr) (acc : Array Expr) : Array Expr :=
-    match e with
-    | .forallE _ d b _ => go b (go d acc)
-    | _ => if e.getAppFn.isConstOf ``SWP || e.getAppFn.isConstOf ``NW then
-        acc.push (if e.getAppFn.isConstOf ``NW then e.getAppArgs[5]! else e.getAppArgs[6]!) else acc
-  let pcs := go c.type #[]
-  let hex (p : Expr) : String :=
-    match p.getAppArgs.back?.bind (·.nat?) with
-    | some v => "0x" ++ String.ofList (Nat.toDigits 16 v)
-    | none => toString p
-  logInfo m!"{n}: {pcs.toList.map hex}"
-
-end VsaIris.Sym

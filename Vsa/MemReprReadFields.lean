@@ -68,7 +68,4 @@ theorem StmtReprWithin.tagCovers {m : Mem} {P : Nat → Prop} {a : Nat}
     {s : Stmt} (h : StmtReprWithin m P a s) : Covers P a 4 := by
   simpa [ReadField.word32] using h.fieldCovers (.word32 0) (by simp [stmtReadFields])
 
-local macro "select_owned_pointer" h:ident : tactic =>
-  `(tactic| (cases ($h) <;> simp_all only [Option.some.injEq]))
-
 end Vsa.MemRepr

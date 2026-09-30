@@ -43,25 +43,6 @@ theorem ViewOf.read32 {m : Mem} {v : Nat → Option (BitVec 8)} (h : ViewOf m v)
 theorem isSome_exists {α : Type} {o : Option α} (h : o.isSome = true) : ∃ b, o = some b :=
   Option.isSome_iff_exists.mp h
 
-/-- Rewrite every read of `m` in the goal through the view `h : ViewOf m v`
-and decide it in the kernel. Handles `readLE`/`read32`/`read64` equations,
-byte lookups, and presence (`∃ b, … = some b`). -/
-macro "boot_read " h:term : tactic =>
-  `(tactic| first
-    | (apply isSome_exists
-       first
-         | rw [ViewOf.readLE $h]
-         | rw [ViewOf.read64 $h]
-         | rw [ViewOf.read32 $h]
-         | rw [$h:term]
-       decide +kernel)
-    | (first
-         | rw [ViewOf.read64 $h]
-         | rw [ViewOf.read32 $h]
-         | rw [ViewOf.readLE $h]
-         | rw [$h:term]
-       decide +kernel))
-
 /-! ## The boot memory's view -/
 
 theorem bootMem_view {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t) :
@@ -125,12 +106,3 @@ theorem bootView_rodata {script : Nat} {t : RunTree} (ha : t.above 0x8001acf0 = 
 
 end Vsa.Sim.Boot
 
-namespace Vsa.Sim.Boot
-
-/-- Split a structure of read facts and decide each through the view `h`.
-Conjunctions split first, so `boot_read` only sees single reads (a goal
-still mentioning the memory itself must never reach the kernel). -/
-macro "boot_facts " h:term : tactic =>
-  `(tactic| repeat' (first | apply And.intro | boot_read $h | constructor))
-
-end Vsa.Sim.Boot

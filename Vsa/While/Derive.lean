@@ -91,14 +91,6 @@ private def asOption (e : Lean.Expr) : MetaM (Option Lean.Expr) := do
 private inductive StatusV where
   | normal | brk | cont | ret (v : Lean.Expr)
 
-private def asStatus (s : Lean.Expr) : MetaM StatusV := do
-  match (← whnf s).getAppFnArgs with
-  | (``Vsa.While.Status.normal, _) => pure .normal
-  | (``Vsa.While.Status.brk, _) => pure .brk
-  | (``Vsa.While.Status.cont, _) => pure .cont
-  | (``Vsa.While.Status.ret, #[v]) => pure (.ret v)
-  | _ => throwError "status did not reduce: {s}"
-
 private def statusExpr : StatusV → Lean.Expr
   | .normal => normalE
   | .brk => mkConst ``Vsa.While.Status.brk
