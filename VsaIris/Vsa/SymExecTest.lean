@@ -39,9 +39,9 @@ theorem BinaryAddIntT_run4_sym {live : Nat → Prop} (hlive : ∀ p ∈ interpTe
       (upd (upd (upd (upd (upd (upd (upd R 19 v19) 1 ret) 8 v8) 18 v18) 10 (R 9)) 9 v9) 2
         (s + 18446744073709550528#64 + 1088#64)) Mt) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800038d8#64 R Mt := by
-  refine symRun_auto (cfgI [0x80003404#64]) codeAt_interp hlive (by decide) (by decide)
+  refine symRun_auto (cfgI [0x80003404#64]) codeAt_interp (fun _ _ hb => interp_code hb) hlive (by decide) (by decide)
     [{ atom := .r 2, lo := 0x87800000, hi := 0x88000000 - 1088, amod := 16, sc := [(0, 1088)], dc := [] }]
-    9 _ R Mt [] (fun _ h => nomatch h) (fun _ h => nomatch h) ?_ ?_
+    9 _ R Mt [] (fun _ h => nomatch h) (by decide) (fun _ h => nomatch h) (fun _ h => nomatch h) (fun _ h => nomatch h) (by decide) ?_ ?_
   · geom_auto [h2, hsf, InExt]
   sym_eval
   simp only [Tree.WP, ObsOK, SOb.den, List.mem_cons, List.not_mem_nil,
@@ -73,12 +73,12 @@ theorem BinaryAddIntT_run2_sym {live : Nat → Prop} (hlive : ∀ p ∈ interpTe
         (s + 18446744073709550528#64 + 144#64)) 11 inp) 19 w1)
       (writeLog Mt [(s.toNat - 1088, 8, kL)])) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q (2147497212#64) R Mt := by
-  refine symRun_auto (cfgI [0x80003518#64] [.r 8]) codeAt_interp hlive (by decide) (by decide)
+  refine symRun_auto (cfgI [0x80003518#64] [.r 8]) codeAt_interp (fun _ _ hb => interp_code hb) hlive (by decide) (by decide)
     [{ atom := .r 2, lo := 0x87800000, hi := 0x88000000 - 1088, amod := 16, sc := [(0, 1088)],
        dc := [] },
      { atom := .r 8, lo := 0x80000000, hi := 0x100000000 - 32, amod := 1, sc := [],
        dc := [(0, 4), (8, 12), (16, 32)], gap := some (32, 16) }]
-    20 _ R Mt [] (fun _ h => nomatch h) (fun _ h => nomatch h) ?_ ?_
+    20 _ R Mt [] (fun _ h => nomatch h) (by decide) (fun _ h => nomatch h) (fun _ h => nomatch h) (fun _ h => nomatch h) (by decide) ?_ ?_
   · geom_auto [h2, h8, hsf, InExt, binView]
   sym_eval
   simp only [Tree.WP, ObsOK, SOb.den, List.mem_cons, List.not_mem_nil,
@@ -92,19 +92,23 @@ example : type_of% @BinaryAddIntT_run2_sym = type_of% @BinaryAddIntT_run2 := rfl
 
 def leafCount : Tree → Nat
   | .leaf _ => 1
-  | .br _ _ _ _ t f => leafCount t + leafCount f
+  | .br _ _ _ _ _ t f => leafCount t + leafCount f
   | .jr _ _ => 1
+  | .hv _ t => leafCount t
+  | .raw _ _ _ _ t => leafCount t
 
 def obsCount : Tree → Nat
   | .leaf s => s.obs.length
-  | .br _ _ _ _ t f => obsCount t + obsCount f
+  | .br _ _ _ _ o t f => o.length + obsCount t + obsCount f
   | .jr s _ => s.obs.length
+  | .hv _ t => obsCount t
+  | .raw _ _ _ _ t => obsCount t
 
 /-- The loop body at `0x80003224`: 12 instructions with three stores, eight loads (forwarded or
 disjoint by obligation) and the back-edge `bne`, evaluated in the kernel. -/
 theorem loop_tree :
     leafCount (symRun (cfgI [0x800031d8#64]) 13 ⟨0x80003224#64, [], [], []⟩) = 2 ∧
-    obsCount (symRun (cfgI [0x800031d8#64]) 13 ⟨0x80003224#64, [], [], []⟩) = 62 := by
+    obsCount (symRun (cfgI [0x800031d8#64]) 13 ⟨0x80003224#64, [], [], []⟩) = 33 := by
   decide +kernel
 
 end VsaIris.SymExec.Test

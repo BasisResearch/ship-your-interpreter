@@ -52,7 +52,7 @@ theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     (hi : ldv .ld m (aS + 16#64).toNat = aI) (hi0 : aI ≠ 0#64) :
     IW live m (stmtView aS.toNat 24) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hi, hi0, hsf] at 0x800040ec
+     sym_run hlive using [h8, h14, h2, hk, hku, hi, hi0, hsf] at 0x800040ec
 
 #ix_seg VarArm_run1N {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -67,7 +67,7 @@ theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     (hi : ldv .ld m (aS + 16#64).toNat = 0#64) :
     IW live m (stmtView aS.toNat 24) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hi, hsf] at 0x80004300
+     sym_run hlive using [h8, h14, h2, hk, hku, hi, hsf] at 0x80004300
 
 #ix_seg VarArm_runJ {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}

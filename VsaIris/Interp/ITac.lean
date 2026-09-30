@@ -110,10 +110,13 @@ def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
     TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
   let cands ← ixCandidates pc pre
+  -- `IX_TRACE=1` lists the step lemmas a build still uses (one `IXPC <name>` line each)
+  let used (nm : Name) : TacticM Unit := do
+    if (← IO.getEnv "IX_TRACE").isSome then IO.eprintln s!"IXPC {nm}"
   for nm in cands do
-    if let some r ← ixApply norm h g nm true side then return some r
+    if let some r ← ixApply norm h g nm true side then used nm; return some r
   for nm in cands do
-    if let some r ← ixApply norm h g nm false side then return some r
+    if let some r ← ixApply norm h g nm false side then used nm; return some r
   return none
 
 syntax "ix_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic

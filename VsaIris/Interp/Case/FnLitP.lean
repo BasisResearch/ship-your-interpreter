@@ -1,5 +1,6 @@
 import VsaIris.Interp.Case.FnLitT
 import VsaIris.Interp.LeafErr
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -14,7 +15,7 @@ open Vsa.MemRepr Vsa.Sim
     (h2 : R 2 = s + 18446744073709550528#64) (hA : ldv .ld Mt (s.toNat - 1088) = aE) :
     IW live m (leafView aX.toNat 0)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x800033d0#64 R Mt
-  by ix_run hlive using [h2, hA, hsf] at 0x800033d4
+  by sym_run hlive using [h2, hA, hsf] at 0x800033d4
 
 #ix_seg FnLitP_runOom {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -24,7 +25,7 @@ open Vsa.MemRepr Vsa.Sim
     (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m (leafView aX.toNat 0)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003e1c#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80003e28
+  by sym_run hlive using [h2, hsf] at 0x80003e28
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap VsaIris.Newlib

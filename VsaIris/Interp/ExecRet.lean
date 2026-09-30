@@ -1,4 +1,5 @@
 import VsaIris.Interp.ExecChild
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -18,7 +19,7 @@ open Vsa.MemRepr Vsa.Sim
     (hc : ldv .ld m (aS + 8#64).toNat = aC) (hc0 : aC ≠ 0#64) :
     IW live m (stmtView aS.toNat 16) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hc, hc0, hsf] at 0x80004134
+     sym_run hlive using [h8, h14, h2, hk, hku, hc, hc0, hsf] at 0x80004134
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr

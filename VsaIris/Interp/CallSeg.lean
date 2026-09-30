@@ -1,4 +1,5 @@
 import VsaIris.Interp.CallPrefix
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -190,6 +191,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hx3 : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003fb0#64 R Mt
-  by ix_run hlive using [h8, h2, hsf] at 0x80003fdc
+  by sym_run hlive using [h8, h2, hsf] at 0x80003fdc
 
 end VsaIris.Interp

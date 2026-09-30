@@ -1,5 +1,6 @@
 import VsaIris.Interp.BinErr
 import VsaIris.Interp.ProofArith
+import VsaIris.Interp.SymInterp
 
 /-!
 Integer operators `+ - * / %` as one descriptor `IntOpDesc`: each operator's reflected path from
@@ -60,7 +61,7 @@ macro "int_setup" : tactic => `(tactic| (
 set_option hygiene false in
 macro "int_pre " pc:num : tactic => `(tactic| (
   int_setup
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
 
 set_option hygiene false in
 /-- `int_pre` for a divisor known to be non-zero. -/
@@ -68,7 +69,7 @@ macro "int_pre_nz " pc:num : tactic => `(tactic| (
   int_setup
   have hy : u1 ≠ 0#64 := fun h => hpre (by rw [← hu1, h]; rfl)
   have hb : ldv .ld Mt (s + 18446744073709550528#64 + 152#64).toNat ≠ 0#64 := by rw [hU]; exact hy
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at $pc))
 
 set_option hygiene false in
 macro "int_post " wrap:ident : tactic => `(tactic| (
@@ -116,11 +117,11 @@ macro "zero_pre " pc1:num : tactic => `(tactic| (
   have hZ : ldv .ld Mt (s + 18446744073709550528#64 + 152#64).toNat = 0#64 := mid.q1.trans hu
   clear g hn mid
   simp only [binOpTok] at hop
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hZ, hsf] at $pc1))
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hZ, hsf] at $pc1))
 
 set_option hygiene false in
 macro "zero_post " pc2:num : tactic => `(tactic| (
-  ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hZ, hsf] at $pc2
+  sym_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hZ, hsf] at $pc2
   exact hk _ _ ⟨by ix_reg, by ix_reg, by ix_reg, by ix_reg, by ix_reg⟩))
 
 open Lean in

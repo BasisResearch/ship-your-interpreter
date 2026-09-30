@@ -1,4 +1,5 @@
 import VsaIris.Interp.SeqLoop
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -22,7 +23,7 @@ abbrev closureS (s : BitVec 64) : Nat → Prop :=
     (harr : ldv .ld m (aB + 8#64).toNat = arr)
     (hel : ldv .ld m (arr + BitVec.ofNat 64 idx <<< 3).toNat = pS) :
     IW live m (blockView aB.toNat arr.toNat count) (closureS s) Q 0x80003354#64 R Mt
-  by ix_run hlive using [h16, h8, h2, harr, hel, hsf, closureS] at 0x80003374
+  by sym_run hlive using [h16, h8, h2, harr, hel, hsf, closureS] at 0x80003374
 
 #ix_seg ClosureLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -36,7 +37,7 @@ abbrev closureS (s : BitVec 64) : Nat → Prop :=
     (hb : ldv .ld Mt (s.toNat - 1088) = aB)
     (hcnt : ldv .lw m (aB + 16#64).toNat = BitVec.ofNat 64 count) :
     IW live m (blockView aB.toNat arr.toNat count) (closureS s) Q 0x80003378#64 R Mt
-  by ix_run hlive using [h8, h2, h10, hb, hcnt, hsf, closureS] at 0x80003354 0x80003954 0x8000337c
+  by sym_run hlive using [h8, h2, h10, hb, hcnt, hsf, closureS] at 0x80003354 0x80003954 0x8000337c
 
 structure ClosureHead (R : Nat → BitVec 64) (s aB inp aEnv : BitVec 64) (idx : Nat) : Prop where
   sp : R 2 = s + 18446744073709550528#64

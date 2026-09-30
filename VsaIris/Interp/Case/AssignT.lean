@@ -1,4 +1,5 @@
 import VsaIris.Interp.LeafErr
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -15,7 +16,7 @@ open Vsa.MemRepr Vsa.Sim
     (h10 : R 10 = sret) (h11 : R 11 = inp) (h12 : R 12 = aX) (h13 : R 13 = aE) (h2 : R 2 = s)
     (hk : ldv .lw m aX.toNat = 5#64) (hku : ldv .lwu m aX.toNat = 5#64) :
     IW live m (leafView aX.toNat 16) (InExt (s.toNat - 1088, 1088)) Q 0x80003164#64 R Mt
-  by ix_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x80003488
+  by sym_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x80003488
 
 #ix_seg AssignT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -30,7 +31,7 @@ open Vsa.MemRepr Vsa.Sim
     (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 248#64).toNat = w1)
     (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 256#64).toNat = w2) :
     IW live m (leafView aX.toNat 16) (InExt (s.toNat - 1088, 1088)) Q 0x8000348c#64 R Mt
-  by ix_run hlive using [h8, h2, hA, hW0, hW1, hW2, hsf] at 0x800034b0
+  by sym_run hlive using [h8, h2, hA, hW0, hW1, hW2, hsf] at 0x800034b0
 
 #ix_seg AssignT_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -52,7 +53,7 @@ open Vsa.MemRepr Vsa.Sim
     (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18) :
     IW live m (leafView aX.toNat 16)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003448#64 R Mt
-  by ix_run hlive using [h9, h2, hW0, hW1, hW2, hRA, hS0, hS1, hS2, hsf, hal, e8, e16]
+  by sym_run hlive using [h9, h2, hW0, hW1, hW2, hRA, hS0, hS1, hS2, hsf, hal, e8, e16]
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
