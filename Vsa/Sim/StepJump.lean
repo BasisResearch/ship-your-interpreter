@@ -1,4 +1,5 @@
 import Vsa.Sim.Skeleton
+import Vsa.Sim.Retire
 import Vsa.Sim.ExecuteJump
 import Vsa.Sim.Frame
 
@@ -293,70 +294,9 @@ theorem try_step_j
       = .ok false
           {(({(sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)) with regs := (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)).regs.insert Register.PC (pc + sign_extend (m := 64) imm)}) : MState) with
             regs := (({(sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)) with regs := (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)).regs.insert Register.PC (pc + sign_extend (m := 64) imm)}) : MState).regs.insert Register.minstret (BitVec.addInt vminstret 1)} := by
-  obtain ⟨vmip, hmip⟩ := hG.mip
-  obtain ⟨vmeip, hmeip⟩ := hG.sig_meip
-  obtain ⟨vseip, hseip⟩ := hG.sig_seip
-  have hdisp : (dispatchInterrupt Privilege.Machine).run (afterPrelude σ)
-      = .ok none (afterPrelude σ) :=
-    dispatch_none (afterPrelude σ) vmip vmeip vseip _ _
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mie)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hmip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hmeip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hseip)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mideleg)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mstatus)
-  have hfetch : (fetch ()).run (afterPrelude σ)
-      = .ok (FetchResult.F_Base (((b3.append b2).append b1).append b0)) (afterPrelude σ) :=
-    fetch_F_Base (afterPrelude σ) pc b0 b1 b2 b3
-      _ _ _
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hpc)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mstatus)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pma_regions)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pmpcfg_n)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.pmpaddr_n)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.htif_tohost_base)
-      hlo hhi halign
-      (by rw [mem_afterPrelude]; exact hb0) (by rw [mem_afterPrelude]; exact hb1)
-      (by rw [mem_afterPrelude]; exact hb2) (by rw [mem_afterPrelude]; exact hb3)
-      hnotrvc
-  have hdec' : (ext_decode (((b3.append b2).append b1).append b0)).run (afterPrelude σ)
-      = .ok (instruction.JAL (imm, regidx.Regidx 0x00#5)) (afterPrelude σ) := by
-    rw [hword]; exact hdec
-  have hlpad : (is_landing_pad_expected ()).run (afterPrelude σ) = .ok false (afterPrelude σ) :=
-    is_landing_pad_expected_false (afterPrelude σ)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.elp)
-  have hexec : (execute (instruction.JAL (imm, regidx.Regidx 0x00#5))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)) :=
-    execute_jal_x0_char imm (BitVec.addInt pc 4) pc _ (afterNextPC (afterPrelude σ) pc)
-      (by show ((afterPrelude σ).regs.insert Register.nextPC (BitVec.addInt pc 4)).get? Register.nextPC = _
-          rw [Std.ExtDHashMap.get?_insert_self])
-      (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hpc)
-      (by rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.misa)
-      htgt
-  have hhart₃ : (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)).regs.get? Register.hart_state = some (HartState.HART_ACTIVE ()) := by
-    rw [get?_sigma3_jump_x0_pinned σ pc _ _ (by decide) (by decide)]; exact hG.hart_state
-  have hnextPC₃ : (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)).regs.get? Register.nextPC = some (pc + sign_extend (m := 64) imm) := by
-    show ((afterNextPC (afterPrelude σ) pc).regs.insert Register.nextPC _).get? Register.nextPC = _
-    rw [Std.ExtDHashMap.get?_insert_self]
-  have hinc₃ : (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)).regs.get? Register.minstret_increment = some true := by
-    show ((afterNextPC (afterPrelude σ) pc).regs.insert Register.nextPC _).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.nextPC == Register.minstret_increment) = false from by decide, dif_neg, reduceCtorEq, not_false_eq_true]
-    show ((σ.regs.insert Register.minstret_increment true).insert Register.nextPC (BitVec.addInt pc 4)).get? Register.minstret_increment = _
-    rw [Std.ExtDHashMap.get?_insert]
-    simp only [show (Register.nextPC == Register.minstret_increment) = false from by decide, dif_neg, reduceCtorEq, not_false_eq_true]
-    rw [Std.ExtDHashMap.get?_insert_self]
-  have hminstret₃ : (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)).regs.get? Register.minstret = some vminstret := by
-    rw [get?_sigma3_jump_x0_pinned σ pc _ _ (by decide) (by decide)]; exact hminstret
-  exact try_step_execute_char σ u pc (pc + sign_extend (m := 64) imm)
-    (((b3.append b2).append b1).append b0)
-    (instruction.JAL (imm, regidx.Regidx 0x00#5))
-    (sigma3_jump_x0 σ pc (pc + sign_extend (m := 64) imm)) vminstret
-    hG.cur_privilege hG.hart_state hG.mcountinhibit hG.minstretcfg hpc
-    hdisp hfetch hdec' hlpad hexec hhart₃ hnextPC₃ hinc₃ hminstret₃
+  exact try_step_retire (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (execute_jal_x0_char imm _ pc _ _ (by reg_reads []) (by reg_reads [hpc]) (by reg_reads [hG.misa]) htgt)
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
 
 theorem try_step_jr
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
@@ -843,28 +783,9 @@ theorem stepOnce_j_tick
     (htick : i + 1 = 2) :
     (stepOnce i u).run σ
       = .ok (.inr (0, u + 1)) (sigmaTick_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) imm) vmip vmtime vmtimecmp vmcycle) := by
-  have hts := try_step_j σ u pc vminstret w imm b0 b1 b2 b3
-    hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt
-  simp only [EStateM.run] at hts
-  have hGp := goodstate_sigmaPost_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) imm) hG
-  have hhtif := hG.htif_done
-  have hhtif' := htif_done_sigmaPost_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) imm) hG
-  have htc := tick_clock_char (sigmaPost_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) imm)) vmip vmtime vmtimecmp vmcycle
-    hGp.cur_privilege hGp.mcountinhibit hGp.mcyclecfg hGp.menvcfg hGp.misa
-    hmip hmtime hmtimecmp hmcycle hGp.sig_meip hGp.sig_seip
-  simp only [EStateM.run] at htc
-  unfold stepOnce
-  simp only [bind, Bind.bind, EStateM.bind, EStateM.run, pure, EStateM.pure,
-    PreSail.readReg, get, getThe, MonadStateOf.get, EStateM.get, hhtif,
-    Bool.false_eq_true, if_false]
-  rw [hts]
-  simp only [Bool.false_eq_true, if_false, EStateM.pure, EStateM.bind, EStateM.get, hhtif']
-  have htick' : (i + 1 == Int.toNat plat_insns_per_tick) = true := by
-    simp only [plat_insns_per_tick, show Int.toNat 2 = 2 from rfl, beq_iff_eq]
-    exact htick
-  simp only [htick', if_true, EStateM.bind]
-  rw [htc]
-  rfl
+  exact stepOnce_retire_tick (try_step_j σ u pc vminstret w imm b0 b1 b2 b3
+    hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt)
+    hG (goodstate_sigmaPost_jump_x0 σ pc vminstret _ hG) hmip hmtime hmtimecmp hmcycle htick
 
 theorem stepOnce_jr_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)

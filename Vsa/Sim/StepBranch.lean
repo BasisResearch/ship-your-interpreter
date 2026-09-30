@@ -1,4 +1,5 @@
 import Vsa.Sim.Skeleton
+import Vsa.Sim.Retire
 import Vsa.Sim.StepAddi
 import Vsa.Sim.StepBeq
 import Vsa.Sim.ExecuteBranch
@@ -523,13 +524,9 @@ theorem step_branch_taken_tick
     Vsa.Machine.Step ⟨σ, i, u⟩
       ⟨sigmaTick_branch_taken σ pc vminstret imm vmip vmtime vmtimecmp vmcycle, 0, u + 1⟩
     ∧ GoodState (sigmaTick_branch_taken σ pc vminstret imm vmip vmtime vmtimecmp vmcycle) := by
-  refine ⟨Vsa.Machine.Step.mk
-    (stepOnce_branch_taken_tick σ i u pc vminstret imm rs1 rs2 op w b0 b1 b2 b3
-      vmip vmtime vmtimecmp vmcycle hG hpc hminstret hmip hmtime hmtimecmp hmcycle
-      hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign htick), ?_⟩
-  have hGp := goodstate_sigmaPost_branch_taken σ pc vminstret imm hG
-  exact ((hGp.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
-    (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
+  exact step_retire_tick (try_step_branch_taken σ u pc vminstret imm rs1 rs2 op w b0 b1 b2 b3
+    hG hpc hminstret hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign)
+    hG (goodstate_sigmaPost_branch_taken σ pc vminstret imm hG) hmip hmtime hmtimecmp hmcycle htick
 
 theorem step_branch_nottaken_tick
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)

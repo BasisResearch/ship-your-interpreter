@@ -1,4 +1,5 @@
 import Vsa.Sim.Skeleton
+import Vsa.Sim.Retire
 import Vsa.Sim.StepAddi
 import Vsa.Sim.ExecuteAlu
 import Vsa.Sim.Frame
@@ -116,12 +117,7 @@ theorem get?_sigmaPost_store (σ : MState) (pc vminstret : BitVec 64)
     (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
     (h4 : (Register.nextPC == R) = false) (h5 : (Register.minstret_increment == R) = false) :
     (sigmaPost_store σ pc vminstret m').regs.get? R = σ.regs.get? R := by
-  show ((((sigma3_store σ pc m').regs.insert Register.PC (BitVec.addInt pc 4)).insert Register.minstret (BitVec.addInt vminstret 1))).get? R = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [h1, dif_neg, reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [h2, dif_neg, reduceCtorEq, not_false_eq_true]
-  exact get?_sigma3_store_pinned σ pc m' R h4 h5
+  reg_reads [h1, h2, h4, h5]
 
 theorem goodstate_sigmaPost_store (σ : MState) (pc vminstret : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8))

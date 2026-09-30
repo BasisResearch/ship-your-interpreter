@@ -1,4 +1,5 @@
 import Vsa.Sim.Skeleton
+import Vsa.Sim.Retire
 import Vsa.Sim.StepAddi
 import Vsa.Sim.ExecuteAlu
 import Vsa.Sim.Frame
@@ -24,10 +25,7 @@ theorem get?_sigma3_alu_pinned (σ : MState) (pc : BitVec 64) (rd_reg : Register
     (hnpc : (Register.nextPC == R) = false)
     (hmi : (Register.minstret_increment == R) = false) :
     (sigma3_alu σ pc rd_reg v).regs.get? R = σ.regs.get? R := by
-  show ((afterNextPC (afterPrelude σ) pc).regs.insert rd_reg v).get? R = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [hrd, dif_neg, reduceCtorEq, not_false_eq_true]
-  exact get?_afterNextPC σ pc R hnpc hmi
+  reg_reads [hrd, hnpc, hmi]
 
 theorem try_step_alu
     (σ : MState) (u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
