@@ -1,4 +1,5 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.LogArm
 import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.AssignP
@@ -16,9 +17,7 @@ import VsaIris.Interp.Case.ExecWhileP
 import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.ExecForP
 import VsaIris.Interp.Case.UnaryNotP
-import VsaIris.Interp.Case.LogicalAndFalseP
 import VsaIris.Interp.Case.ExecRetP
-import VsaIris.Interp.Case.LogicalOrTrueP
 import VsaIris.Interp.Case.ExecBrkP
 import VsaIris.Interp.Case.ExecContP
 import VsaIris.Interp.Case.ExecIfP
@@ -132,8 +131,8 @@ theorem evalP_cases {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
     | not => iapply caseP_UnaryNot S.hlive S.vtruthy S.vbool $$ HE
   | logical op l r =>
     cases op with
-    | and => iapply caseP_LogicalAnd S.hlive S.vtruthy S.vbool $$ HE
-    | or => iapply caseP_LogicalOr S.hlive S.vtruthy S.vbool $$ HE
+    | and => iapply logP .and S.hlive S.vtruthy S.vbool; iframe HE Hctx
+    | or => iapply logP .or S.hlive S.vtruthy S.vbool; iframe HE Hctx
   | binary op l r =>
     cases op with
     | add =>

@@ -1,4 +1,5 @@
 import VsaIris.Interp.CmpArm
+import VsaIris.Interp.LogArm
 import VsaIris.Interp.EqArm
 import VsaIris.Interp.IntOpArm
 import VsaIris.Interp.Case.LeafNullT
@@ -9,10 +10,6 @@ import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.FnLitT
 import VsaIris.Interp.Case.BinaryConcatT
-import VsaIris.Interp.Case.LogicalAndFalseT
-import VsaIris.Interp.Case.LogicalAndTrueT
-import VsaIris.Interp.Case.LogicalOrFalseT
-import VsaIris.Interp.Case.LogicalOrTrueT
 import VsaIris.Interp.Case.UnaryNegT
 import VsaIris.Interp.Case.UnaryNotT
 import VsaIris.Interp.Case.CallClosureT
@@ -256,16 +253,16 @@ local macro "term_rec " r:ident S:ident h:ident : tactic => `(tactic| (
     intro st d env op l r st' st'' lv rv v nl nr Dl Dr hsem ihl ihr; exact binaryT $S Dl Dr hsem ihl ihr
   case orTrue =>
     intro st d env l r st' lv n Dl ht ihl
-    exact caseT_LogicalOrTrue ($S).hlive Dl ht _ ihl ($S).vtruthy ($S).vbool
+    exact logShortT .or ($S).hlive Dl ht _ ihl ($S).vtruthy ($S).vbool
   case orFalse =>
     intro st d env l r st' st'' lv rv nl nr Dl hf Dr ihl ihr
-    exact caseT_LogicalOrFalse ($S).hlive Dl hf Dr _ ihl ihr ($S).vtruthy ($S).vbool
+    exact logLongT .or ($S).hlive Dl hf Dr _ ihl ihr ($S).vtruthy ($S).vbool
   case andFalse =>
     intro st d env l r st' lv n Dl hf ihl
-    exact caseT_LogicalAndFalse ($S).hlive Dl hf _ ihl ($S).vtruthy ($S).vbool
+    exact logShortT .and ($S).hlive Dl hf _ ihl ($S).vtruthy ($S).vbool
   case andTrue =>
     intro st d env l r st' st'' lv rv nl nr Dl ht Dr ihl ihr
-    exact caseT_LogicalAndTrue ($S).hlive Dl ht Dr _ ihl ihr ($S).vtruthy ($S).vbool
+    exact logLongT .and ($S).hlive Dl ht Dr _ ihl ihr ($S).vtruthy ($S).vbool
   case neg => intro st d env e st' n m De ih; exact caseT_UnaryNeg ($S).hlive De _ ih ($S).vint
   case not => intro st d env e st' v m De ih; exact caseT_UnaryNot ($S).hlive De _ ih ($S).vtruthy ($S).vbool
   case call =>
