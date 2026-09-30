@@ -256,38 +256,6 @@ theorem vmem_read_addr_data_ram_w
         (checked_mem_read_data_w_of_ram σ a w v vpmpaddr hwpos hwle hpma hcfg haddr hbase
           hlo hhiram hhtif halign hram)))
 
-theorem vmem_read_addr_data_eight
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 8 ≤ 0x100000000)
-    (hhtif : a.toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
-    (halign : a.toNat % 8 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1)
-    (h2 : σ.mem[a.toNat + 2]? = some b2) (h3 : σ.mem[a.toNat + 3]? = some b3)
-    (h4 : σ.mem[a.toNat + 4]? = some b4) (h5 : σ.mem[a.toNat + 5]? = some b5)
-    (h6 : σ.mem[a.toNat + 6]? = some b6) (h7 : σ.mem[a.toNat + 7]? = some b7) :
-    (vmem_read_addr (virtaddr.Virtaddr a) 8
-        (MemoryAccessType.Load mem_payload.Data) false false false).run σ
-      = .ok (.Ok (((((((b7.append b6).append b5).append b4).append b3).append
-          b2).append b1).append b0)) σ :=
-  vmem_read_addr_data_ram_w σ a 8 _ vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg haddr hbase
-    (by decide) (by decide) hlo hhiram hhtif halign (by omega)
-    (read_ram_eight σ a b0 b1 b2 b3 b4 b5 b6 b7 h0 h1 h2 h3 h4 h5 h6 h7)
-
 theorem vmem_read_data_w
     (σ : SequentialState RegisterType trivialChoiceSource)
     (rs : regidx) (offset v1 : BitVec 64) (width : Nat) (r : Result (BitVec (8 * width)) ExecutionResult)
@@ -346,38 +314,6 @@ theorem vmem_read_data_ram_w
     (vmem_read_addr_data_ram_w σ (v1 + offset) w v vmstatus vpmpaddr hpriv hmstatus hmprv
       hpma hcfg haddr hbase hwpos hwle hlo hhiram hhtif halign hpage hram)
 
-theorem vmem_read_data_eight
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (rs : regidx) (offset v1 : BitVec 64) (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
-    (vmstatus : RegisterType Register.mstatus) (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hmseccfg : σ.regs.get? Register.mseccfg = some (0#64 : RegisterType Register.mseccfg))
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hrs : (rX_bits rs).run σ = .ok v1 σ)
-    (hlo : 0x80000000 ≤ (v1 + offset).toNat) (hhiram : (v1 + offset).toNat + 8 ≤ 0x100000000)
-    (hhtif : (v1 + offset).toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (v1 + offset).toNat)
-    (halign : (v1 + offset).toNat % 8 = 0)
-    (h0 : σ.mem[(v1 + offset).toNat]? = some b0) (h1 : σ.mem[(v1 + offset).toNat + 1]? = some b1)
-    (h2 : σ.mem[(v1 + offset).toNat + 2]? = some b2) (h3 : σ.mem[(v1 + offset).toNat + 3]? = some b3)
-    (h4 : σ.mem[(v1 + offset).toNat + 4]? = some b4) (h5 : σ.mem[(v1 + offset).toNat + 5]? = some b5)
-    (h6 : σ.mem[(v1 + offset).toNat + 6]? = some b6) (h7 : σ.mem[(v1 + offset).toNat + 7]? = some b7) :
-    (vmem_read rs offset 8 (MemoryAccessType.Load mem_payload.Data) false false false).run σ
-      = .ok (.Ok (((((((b7.append b6).append b5).append b4).append b3).append
-          b2).append b1).append b0)) σ :=
-  vmem_read_data_w σ rs offset v1 8 _ vmstatus hpriv hmstatus hmprv hmseccfg hrs
-    (vmem_read_addr_data_eight σ (v1 + offset) b0 b1 b2 b3 b4 b5 b6 b7 vmstatus vpmpaddr
-      hpriv hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif halign
-      h0 h1 h2 h3 h4 h5 h6 h7)
-
 theorem execute_load_char (imm : BitVec 12) (rs1 rd : regidx) (is_unsigned : Bool)
     (width : Nat) (data : BitVec (8 * width))
     (σ σ' : SequentialState RegisterType trivialChoiceSource)
@@ -394,19 +330,6 @@ theorem execute_load_char (imm : BitVec 12) (rs1 rd : regidx) (is_unsigned : Boo
   unfold execute_LOAD
   simp only [LeanRV64DExecutable.assert, PreSail.assert,
     hwidth, if_true, bind, EStateM.bind, pure, EStateM.pure, hread, hwr]
-
-theorem execute_load_signed_char (imm : BitVec 12) (rs1 rd : regidx)
-    (width : Nat) (data : BitVec (8 * width))
-    (σ σ' : SequentialState RegisterType trivialChoiceSource)
-    (hwidth : (width ≤b Functions.xlen_bytes) = true)
-    (hread : (vmem_read rs1 (sign_extend (m := 64) imm) width
-        (MemoryAccessType.Load mem_payload.Data) false false false).run σ
-      = .ok (.Ok data) σ)
-    (hwr : (wX_bits rd (sign_extend (m := 64) data)).run σ = .ok () σ') :
-    (execute (instruction.LOAD (imm, rs1, rd, false, width))).run σ
-      = .ok RETIRE_SUCCESS σ' :=
-  execute_load_char imm rs1 rd false width data σ σ' hwidth hread
-    (by simpa only [extend_value, Bool.false_eq_true, if_false] using hwr)
 
 theorem execute_load_unsigned_char (imm : BitVec 12) (rs1 rd : regidx)
     (width : Nat) (data : BitVec (8 * width))

@@ -14,14 +14,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-abbrev maskAddr : Nat := 0x8001ac80
-
-def MaskPinned (m0 : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
-  m0[maskAddr]? = some (0x7f#8) ∧ m0[maskAddr + 1]? = some (0x7f#8) ∧
-  m0[maskAddr + 2]? = some (0x7f#8) ∧ m0[maskAddr + 3]? = some (0x7f#8) ∧
-  m0[maskAddr + 4]? = some (0x7f#8) ∧ m0[maskAddr + 5]? = some (0x7f#8) ∧
-  m0[maskAddr + 6]? = some (0x7f#8) ∧ m0[maskAddr + 7]? = some (0x7f#8)
-
 theorem word_ne_byte (wa wb : BitVec 64) (h : wa ≠ wb) :
     ∃ k, k < 8 ∧ wa.extractLsb' (8*k) 8 ≠ wb.extractLsb' (8*k) 8 := by
   apply Decidable.byContradiction

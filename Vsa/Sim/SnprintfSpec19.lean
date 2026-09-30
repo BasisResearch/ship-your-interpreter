@@ -1,6 +1,9 @@
-import Vsa.Sim.SnprintfSpec18
-import Vsa.Sim.EnvNewSpec
+import Vsa.Sim.SnprintfSpec5
 import Vsa.Sim.DecodeNF
+import Vsa.Sim.EnvDefSpec2
+import Vsa.Sim.StrcmpSpecW3
+import Vsa.Sim.ValueEqualSpec2
+import Vsa.Sim.EnvNewSpec
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -55,13 +58,5 @@ theorem Pin4_frame {mem mem' : Std.ExtHashMap Nat (BitVec 8)} {a : Nat} {w : Bit
    (hf (a+1) (by omega) (by omega)).trans h.2.1,
    (hf (a+2) (by omega) (by omega)).trans h.2.2.1,
    (hf (a+3) (by omega) (by omega)).trans h.2.2.2⟩
-
-abbrev NotWrittenSp (R : Register) : Prop :=
-  (Register.x1 == R) = false ∧ (Register.x2 == R) = false ∧
-  (Register.x8 == R) = false ∧ (Register.x9 == R) = false ∧
-  (Register.x10 == R) = false ∧ (Register.x11 == R) = false ∧
-  (Register.x12 == R) = false ∧ (Register.x13 == R) = false ∧
-  (Register.x14 == R) = false ∧ (Register.x15 == R) = false ∧
-  NotWrittenMv R
 
 end Vsa.Sim

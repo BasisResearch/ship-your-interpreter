@@ -171,37 +171,4 @@ theorem sdData_toNat (v : BitVec 64) : (sdData_val v).toNat = v.toNat := by
     intro W hW; rw [BitVec.toNat_ofNat, hW, Nat.mod_eq_of_lt hv]
   exact key _ (by decide)
 
-theorem post_store_pc_val (σ : MState) (pc vminstret : BitVec 64)
-    (m' : Std.ExtHashMap Nat (BitVec 8)) :
-    (sigmaPost_store σ pc vminstret m').regs.get? Register.PC = some (BitVec.addInt pc 4) := by
-  show ((((sigma3_store σ pc m').regs.insert Register.PC (BitVec.addInt pc 4)).insert
-    Register.minstret (BitVec.addInt vminstret 1))).get? Register.PC = _
-  rw [Std.ExtDHashMap.get?_insert]
-  simp only [show (Register.minstret == Register.PC) = false from by decide, dif_neg,
-    reduceCtorEq, not_false_eq_true]
-  rw [Std.ExtDHashMap.get?_insert_self]
-
-theorem obs_store_pc_val {σ' σ : MState} {pc vm : BitVec 64} {m' : Std.ExtHashMap Nat (BitVec 8)}
-    (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m')) :
-    σ'.regs.get? Register.PC = some (BitVec.addInt pc 4) :=
-  readback σ' _ hobs Register.PC (by decide) (by decide) (by decide) (post_store_pc_val σ pc vm m')
-
-theorem obs_store_other_val {σ' σ : MState} {pc vm : BitVec 64} {m' : Std.ExtHashMap Nat (BitVec 8)}
-    (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m')) (R : Register) {w : RegisterType R}
-    (hmc : (Register.mcycle == R) = false) (hmt : (Register.mtime == R) = false)
-    (hmi : (Register.mip == R) = false)
-    (h1 : (Register.minstret == R) = false) (h2 : (Register.PC == R) = false)
-    (h4 : (Register.nextPC == R) = false) (h5 : (Register.minstret_increment == R) = false)
-    (hσ : σ.regs.get? R = some w) : σ'.regs.get? R = some w :=
-  readback σ' _ hobs R hmc hmt hmi ((get?_sigmaPost_store σ pc vm m' R h1 h2 h4 h5).trans hσ)
-
-theorem obs_store_minstret_val {σ' σ : MState} {pc vm : BitVec 64} {m' : Std.ExtHashMap Nat (BitVec 8)}
-    (hobs : ReadsLikePost σ' (sigmaPost_store σ pc vm m')) :
-    ∃ w, σ'.regs.get? Register.minstret = some w := by
-  refine ⟨BitVec.addInt vm 1, readback σ' _ hobs Register.minstret (w := BitVec.addInt vm 1)
-    (by decide) (by decide) (by decide) ?_⟩
-  show ((((sigma3_store σ pc m').regs.insert Register.PC (BitVec.addInt pc 4)).insert
-    Register.minstret (BitVec.addInt vm 1))).get? Register.minstret = _
-  rw [Std.ExtDHashMap.get?_insert_self]
-
 end Vsa.Sim

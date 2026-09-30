@@ -28,7 +28,4 @@ theorem get?_afterNextPC (σ : MState) (pc : BitVec 64) (R : Register)
   simp only [hne1, dif_neg, reduceCtorEq, not_false_eq_true]
   exact get?_afterPrelude σ R hne2
 
-theorem mem_afterNextPC (σ : MState) (pc : BitVec 64) :
-    (afterNextPC (afterPrelude σ) pc).mem = σ.mem := rfl
-
 end Vsa.Sim

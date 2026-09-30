@@ -58,7 +58,6 @@ theorem exec_sh_bm (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : r
       (vbase + sign_extend (m := 64) imm) (shData vdata) initMstatus initPmpaddr
       hS.priv hS.mstatus (by decide) hS.pma hS.cfg hS.pmpaddr hS.tohost hlo hhiram hhiwin halign)
 
-
 abbrev WEntry := Nat × Nat × BitVec 64
 
 def applyW (m : Std.ExtHashMap Nat (BitVec 8)) : WEntry → Std.ExtHashMap Nat (BitVec 8)
@@ -402,9 +401,6 @@ def LPins8 (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) (bs : List (BitVec 8))
   (m[ea + 2]?).getD 0 = bs.getD 2 0#8 ∧ (m[ea + 3]?).getD 0 = bs.getD 3 0#8 ∧
   (m[ea + 4]?).getD 0 = bs.getD 4 0#8 ∧ (m[ea + 5]?).getD 0 = bs.getD 5 0#8 ∧
   (m[ea + 6]?).getD 0 = bs.getD 6 0#8 ∧ (m[ea + 7]?).getD 0 = bs.getD 7 0#8
-
-theorem lpin_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {a : Nat} {b : BitVec 8}
-    (h : m[a]? = some b) : (m[a]?).getD 0 = b := by rw [h]; rfl
 
 theorem bytesT1_of_pin {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {b : BitVec 8}
     (h : (m[ea]?).getD 0 = b) : (bytesT1 m ea : BitVec (8 * 1)) = b := h

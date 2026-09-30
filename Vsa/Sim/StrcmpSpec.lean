@@ -36,33 +36,6 @@ def strcmpSpecSign (csa csb : List Char) : Int :=
 
 def strcmpSign (x : BitVec 64) : Int := if x = 0 then 0 else if x.toInt < 0 then -1 else 1
 
-abbrev NotWrittenStrcmp (R : Register) : Prop :=
-  (Register.x5 == R) = false ∧ (Register.x6 == R) = false ∧
-  (Register.x7 == R) = false ∧ (Register.x10 == R) = false ∧
-  (Register.x11 == R) = false ∧ (Register.x12 == R) = false ∧
-  (Register.x13 == R) = false ∧ (Register.x14 == R) = false ∧
-  (Register.x15 == R) = false ∧ (Register.PC == R) = false ∧
-  (Register.nextPC == R) = false ∧ (Register.minstret == R) = false ∧
-  (Register.minstret_increment == R) = false ∧ (Register.mcycle == R) = false ∧
-  (Register.mtime == R) = false ∧ (Register.mip == R) = false
-
-theorem sframe_alu {σ' σ : MState} {pc vm : BitVec 64} {rd : Register} {v : RegisterType rd}
-    (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm rd v)) (R : Register)
-    (hrd : (rd == R) = false) (hR : NotWrittenStrcmp R) :
-    σ'.regs.get? R = σ.regs.get? R := by
-  obtain ⟨_, _, _, _, _, _, _, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := hR
-  rw [hobs.1 R hmc hmt hmip]
-  exact get?_sigmaPost_alu σ pc vm rd v R hmi hpc hrd hnpc hmii
-
-structure StrcmpRegion (p : BitVec 64) (len : Nat) : Prop where
-  lo : 0x80000000 ≤ p.toNat
-  hi : p.toNat + len + 1 ≤ 0x100000000
-  nowrap : p.toNat + len + 1 < 2^64
-
-  code : p.toNat + len + 1 ≤ 0x80006ea0 ∨ 0x80006fcc ≤ p.toNat
-
-  htif : p.toNat + len + 1 ≤ tohostAddr ∨ tohostAddr + 8 ≤ p.toNat
-
 def BytePrefix (csa csb : List Char) (k : Nat) : Prop :=
   ∀ i, i < k → byteVal csa i = byteVal csb i ∧ byteVal csa i ≠ 0
 

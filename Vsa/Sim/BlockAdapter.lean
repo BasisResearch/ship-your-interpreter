@@ -23,21 +23,4 @@ theorem applyW_getElem_disjoint (m : Std.ExtHashMap Nat (BitVec 8)) (e : WEntry)
   · show (writeMap8 m a (sdData_val d))[k]? = m[k]?
     exact getElem_writeMap8_disjoint m a k (sdData_val d) (by omega)
 
-theorem writeLog_getElem_disjoint (k : Nat) :
-    ∀ (log : List WEntry) (m : Std.ExtHashMap Nat (BitVec 8)),
-      (∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8) →
-      (∀ e ∈ log, k < e.1 ∨ e.1 + e.2.1 ≤ k) →
-      (writeLog m log)[k]? = m[k]? := by
-  intro log
-  induction log with
-  | nil => intro m _ _; rfl
-  | cons e rest ih =>
-    intro m hw hdisj
-    have hstep : writeLog m (e :: rest) = writeLog (applyW m e) rest := by
-      simp only [writeLog, List.foldl_cons]
-    rw [hstep, ih (applyW m e) (fun e' he' => hw e' (List.mem_cons_of_mem _ he'))
-        (fun e' he' => hdisj e' (List.mem_cons_of_mem _ he'))]
-    exact applyW_getElem_disjoint m e k (hw e (List.mem_cons_self ..))
-      (hdisj e (List.mem_cons_self ..))
-
 end Vsa.Sim

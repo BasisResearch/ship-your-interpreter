@@ -15,23 +15,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-abbrev NotWrittenJmp (R : Register) : Prop :=
-  (Register.x1 == R) = false ∧ (Register.x2 == R) = false ∧
-  (Register.x8 == R) = false ∧ (Register.x9 == R) = false ∧
-  (Register.x10 == R) = false ∧
-  (Register.x18 == R) = false ∧ (Register.x19 == R) = false ∧
-  (Register.x20 == R) = false ∧ (Register.x21 == R) = false ∧
-  (Register.x22 == R) = false ∧ (Register.x23 == R) = false ∧
-  (Register.x24 == R) = false ∧ (Register.x25 == R) = false ∧
-  (Register.x26 == R) = false ∧ (Register.x27 == R) = false ∧
-  (Register.PC == R) = false ∧ (Register.nextPC == R) = false ∧
-  (Register.minstret == R) = false ∧ (Register.minstret_increment == R) = false ∧
-  (Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
-  (Register.mip == R) = false
-
-theorem NotWrittenJmp.pc {R : Register} (h : NotWrittenJmp R) : (Register.PC == R) = false :=
-  h.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
-
 structure WinRAM (jb : BitVec 64) : Prop where
   lo : 0x80000000 ≤ jb.toNat
   hi : jb.toNat + 112 ≤ 0x100000000

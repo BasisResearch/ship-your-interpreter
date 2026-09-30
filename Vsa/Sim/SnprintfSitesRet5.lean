@@ -1,7 +1,7 @@
 import Vsa.Sim.RegPins
 import Vsa.Sim.DecodeNF
 import Vsa.Sim.Code.Strcpy
-import Vsa.Sim.RamReadPins
+import Vsa.Sim.RamReadValue
 import Vsa.Sim.StrlenMagic
 import Vsa.Sim.ValueSites
 
