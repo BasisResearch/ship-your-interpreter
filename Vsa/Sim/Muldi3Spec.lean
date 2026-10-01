@@ -1,6 +1,7 @@
 import Vsa.Sim.Muldi3Sites
 import Vsa.Sim.ObsBasics
 import Vsa.Triple
+import Vsa.Sim.SegEffect
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -73,6 +74,39 @@ structure St (g : (R : Register) → Option (RegisterType R))
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
   tick : c.tick < 2
   hframe : ∀ R : Register, NotWrittenM R → c.σ.regs.get? R = g R
+
+def mulRegs (a0 a1 a2 a3 r : BitVec 64) : GRegs :=
+  [(10, a0), (11, a1), (12, a2), (13, a3), (1, r)]
+
+def mulKeep (R : Register) : Bool := decide (NotWrittenM R)
+
+theorem St.held {g : (R : Register) → Option (RegisterType R)} {pc a0 a1 a2 a3 r : BitVec 64}
+    {m0 : Std.ExtHashMap Nat (BitVec 8)} {o : Array String} {c : Config}
+    (h : St g pc a0 a1 a2 a3 r m0 o c) : GHolds c.σ (mulRegs a0 a1 a2 a3 r) :=
+  ⟨h.a0, h.a1, h.a2, h.a3, h.ra, trivial⟩
+
+theorem St.of_seg {g : (R : Register) → Option (RegisterType R)}
+    {pc pc' a0 a1 a2 a3 b0 b1 b2 b3 r : BitVec 64}
+    {m0 : Std.ExtHashMap Nat (BitVec 8)} {o : Array String} {c c' : Config}
+    {bs : List BBlock} {L : GRegs} {lds : List (List (BitVec 8))} {pc0 : BitVec 64}
+    (h : St g pc a0 a1 a2 a3 r m0 o c)
+    (res : SelectedFramedSegResult bs L lds pc0 (fun _ => False) mulKeep
+      (mulRegs b0 b1 b2 b3 r) c c')
+    (hpc : evalBlocksPC pc0 (SegEvalState.init L lds) bs = pc') :
+    St g pc' b0 b1 b2 b3 r m0 o c' := by
+  have hmem : c'.σ.mem = c.σ.mem :=
+    Std.ExtHashMap.ext_getElem? fun k => (res.outside k id).symm
+  obtain ⟨h0, h1, h2, h3, hr, _⟩ := res.selected_regs
+  exact ⟨res.good, hmem ▸ h.loaded, hmem.trans h.mem, res.output.trans h.sailOut,
+    hpc ▸ res.pc, h0, h1, h2, h3, hr, res.minstret, res.tick,
+    fun R hR => (res.reg_frame R (decide_eq_true hR)).trans (h.hframe R hR)⟩
+
+#derive_case mulShlSeg chain [(0x80004658#64, 0x00161613#32)]
+
+#derive_case mulLoopExitSeg chain []
+  terminator ⟨0x8000465c#64, 0xfe0596e3#32, 0xe3#8, 0x96#8, 0x05#8, 0xfe#8,
+    .br bop.BNE false, 11, 0, 0x1fec#13, 0#21, 0#12⟩
+
 
 
 private theorem addi0 (v : BitVec 64) : v + sign_extend (m := 64) (0x000#12) = v := by
@@ -192,24 +226,15 @@ theorem tr_54_58 (g : (R : Register) → Option (RegisterType R))
 theorem tr_58_5c (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a1 a2 a3 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
     Triple (St g (0x80004658#64) a0 a1 a2 a3 r m0 o) (St g (0x8000465c#64) a0 a1 (a2 <<< (1:Nat)) a3 r m0 o) := by
-  apply Triple.of_step
   intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_80004658 c.σ c.tick c.steps (0x80004658#64) vmi a2 hSt.good hSt.pc hmi hSt.a2 hSt.loaded rfl hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_alu_pc hobs,
-    obs_alu_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_alu_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    ?_,
-    obs_alu_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_alu_minstret hobs, hi',
-    fun R hR => (frame_alu_m hobs R hR.x12 hR).trans (hSt.hframe R hR)⟩
-  have hrd := obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  rwa [shl_shamt a2] at hrd
+  obtain ⟨vm, hmi⟩ := hSt.minstret
+  have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] mulShlSeg := by
+    chain_facts hSt.loaded with "Vsa.Sim.Code.__muldi3_at_"
+  obtain ⟨c', res⟩ := segEval_selected_framed mulShlSeg _ [] _ vm (fun _ => False) mulKeep
+    (mulRegs a0 a1 (a2 <<< (1:Nat)) a3 r) c hSt.good hSt.pc hmi hSt.held (by show KeysOK [10, 11, 12, 13, 1]; decide) facts
+    (by show ChainOK _ [10, 11, 12, 13, 1] _; decide) hSt.tick (fun _ _ => rfl) (by decide) (by decide)
+    ⟨rfl, rfl, congrArg some (shl_shamt a2), rfl, rfl, trivial⟩
+  exact ⟨c', res.steps, hSt.of_seg res rfl⟩
 
 
 theorem tr_4c_54 (g : (R : Register) → Option (RegisterType R))
@@ -286,23 +311,17 @@ theorem tr_5c_60 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 a3 a1 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (hne : (a1 != (0#64)) = false) :
     Triple (St g (0x8000465c#64) a0 a1 a2 a3 r m0 o) (St g (0x80004660#64) a0 a1 a2 a3 r m0 o) := by
-  apply Triple.of_step
   intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_8000465c_nottaken c.σ c.tick c.steps (0x8000465c#64) vmi a1
-      hSt.good hSt.pc hmi hSt.a1 hSt.loaded rfl hne hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_bnottaken_pc hobs,
-    obs_bnottaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_bnottaken_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_bnottaken_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_bnottaken_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_bnottaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_bnottaken_minstret hobs, hi',
-    fun R hR => (frame_bnottaken_m hobs R hR).trans (hSt.hframe R hR)⟩
+  obtain ⟨vm, hmi⟩ := hSt.minstret
+  have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] mulLoopExitSeg := by
+    chain_facts hSt.loaded with "Vsa.Sim.Code.__muldi3_at_"
+    exact hne
+  obtain ⟨c', res⟩ := segEval_selected_framed mulLoopExitSeg _ [] _ vm (fun _ => False) mulKeep
+    (mulRegs a0 a1 a2 a3 r) c hSt.good hSt.pc hmi hSt.held
+    (by show KeysOK [10, 11, 12, 13, 1]; decide) facts
+    (by show ChainOK _ [10, 11, 12, 13, 1] _; decide) hSt.tick (fun _ _ => rfl) (by decide)
+    (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+  exact ⟨c', res.steps, hSt.of_seg res rfl⟩
 
 
 theorem tr_60_ret (g : (R : Register) → Option (RegisterType R))

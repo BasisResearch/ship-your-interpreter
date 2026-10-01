@@ -75,6 +75,31 @@ structure Ust (g : (R : Register) → Option (RegisterType R))
   tick : c.tick < 2
   hframe : ∀ R : Register, NotWritten R → c.σ.regs.get? R = g R
 
+theorem Ust.held {g : (R : Register) → Option (RegisterType R)} {pc a0 a1 a2 a3 r : BitVec 64}
+    {m0 : Std.ExtHashMap Nat (BitVec 8)} {o : Array String} {c : Config}
+    (h : Ust g pc a0 a1 a2 a3 r m0 o c) : GHolds c.σ (mulRegs a0 a1 a2 a3 r) :=
+  ⟨h.a0, h.a1, h.a2, h.a3, h.ra, trivial⟩
+
+theorem Ust.of_seg {g : (R : Register) → Option (RegisterType R)}
+    {pc pc' a0 a1 a2 a3 b0 b1 b2 b3 r : BitVec 64}
+    {m0 : Std.ExtHashMap Nat (BitVec 8)} {o : Array String} {c c' : Config}
+    {bs : List BBlock} {L : GRegs} {lds : List (List (BitVec 8))} {pc0 : BitVec 64}
+    (h : Ust g pc a0 a1 a2 a3 r m0 o c)
+    (res : SelectedFramedSegResult bs L lds pc0 (fun _ => False) mulKeep
+      (mulRegs b0 b1 b2 b3 r) c c')
+    (hpc : evalBlocksPC pc0 (SegEvalState.init L lds) bs = pc') :
+    Ust g pc' b0 b1 b2 b3 r m0 o c' := by
+  have hmem : c'.σ.mem = c.σ.mem :=
+    Std.ExtHashMap.ext_getElem? fun k => (res.outside k id).symm
+  obtain ⟨h0, h1, h2, h3, hr, _⟩ := res.selected_regs
+  exact ⟨res.good, hmem ▸ h.loaded, hmem.trans h.mem, res.output.trans h.sailOut,
+    hpc ▸ res.pc, h0, h1, h2, h3, hr, res.minstret, res.tick,
+    fun R hR => (res.reg_frame R (decide_eq_true hR)).trans (h.hframe R hR)⟩
+
+#derive_case udivSkipSeg chain []
+  terminator ⟨0x800046d8#64, 0x00c5e663#32, 0x63#8, 0xe6#8, 0xc5#8, 0x00#8,
+    .br bop.BLTU false, 11, 12, 0x00c#13, 0#21, 0#12⟩
+
 theorem utr_ac_b0 (g : (R : Register) → Option (RegisterType R))
     (a0 a1 a2old a3 r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
     Triple (Ust g (0x800046ac#64) a0 a1 a2old a3 r m0 o) (Ust g (0x800046b0#64) a0 a1 a1 a3 r m0 o) := by
@@ -490,22 +515,17 @@ theorem utr_d8_dc (g : (R : Register) → Option (RegisterType R))
     (a0 a1 a2 a3 r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (hv : zopz0zI_u a1 a2 = false) :
     Triple (Ust g (0x800046d8#64) a0 a1 a2 a3 r m0 o) (Ust g (0x800046dc#64) a0 a1 a2 a3 r m0 o) := by
-  apply Triple.of_step
   intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_800046d8_nottaken c.σ c.tick c.steps (0x800046d8#64) vmi a1 a2 hSt.good hSt.pc hmi hSt.a1 hSt.a2 hSt.loaded rfl hv hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_bnottaken_pc hobs,
-    obs_bnottaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_bnottaken_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_bnottaken_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_bnottaken_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_bnottaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_bnottaken_minstret hobs, hi',
-    fun R hR => (frame_bnottaken hobs R hR).trans (hSt.hframe R hR)⟩
+  obtain ⟨vm, hmi⟩ := hSt.minstret
+  have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] udivSkipSeg := by
+    chain_facts hSt.loaded with "Vsa.Sim.Code.__hidden___udivdi3_at_"
+    exact hv
+  obtain ⟨c', res⟩ := segEval_selected_framed udivSkipSeg _ [] _ vm (fun _ => False) mulKeep
+    (mulRegs a0 a1 a2 a3 r) c hSt.good hSt.pc hmi hSt.held
+    (by show KeysOK [10, 11, 12, 13, 1]; decide) facts
+    (by show ChainOK _ [10, 11, 12, 13, 1] _; decide) hSt.tick (fun _ _ => rfl) (by decide)
+    (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+  exact ⟨c', res.steps, hSt.of_seg res rfl⟩
 
 theorem utr_ec_d8 (g : (R : Register) → Option (RegisterType R))
     (a0 a1 a2 a3 r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
