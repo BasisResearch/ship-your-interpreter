@@ -170,11 +170,8 @@ theorem fl_cmp {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     (BitVec.ofNat 64 h &&& sign_extend (m := 64) (0xffc#12)))
     (fun y h10 h11 h12 h13 => by simp only [upd_apply, h12, ite_false])
   refine (step% st 0x800074dc) O.live (fun hlt => ?_) (fun hge => ?_)
-  · exact hpass _ L' (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h13)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-  · have hne : bins j ≠ [] := by rw [hmem]; simp
-    exact fl_exit O L' hne (pre' := pre) (post' := cx.addr :: rest) hmem rfl
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h13)
+  · exact hpass _ L' (by carry_close [h13]) (by carry_close)
+  · exact fl_exit O L' (by rw [hmem]; simp) (pre' := pre) (post' := cx.addr :: rest) hmem rfl (by carry_close [h13])
 
 theorem fl_adv {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {j x : Nat}
@@ -203,29 +200,24 @@ theorem fl_adv {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
   refine (step% st 0x800074cc) O.live (N_links.ldOK (by rgn_arith)) (O.rgn N_links (by rgn_arith)) ?_
   rgn_ld [hfd']
   have L' := L.upd (R' := upd R 13 (BitVec.ofNat 64 nx)) (fun y h10 h11 h12 h13 => upd_other _ _ h13)
-  have hne : bins j ≠ [] := by rw [hmem]; simp
   rcases rest with _ | ⟨y, rest'⟩
   · simp only [List.nil_append, List.head?_cons, Option.some.injEq] at hnx
     subst hnx
     refine (step% st 0x800074d0) O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
-    · exact fl_exit O L' hne (pre' := pre ++ [x]) (post' := []) (by rw [hmem]; simp) rfl
-        (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnxlt])
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      apply BitVec.eq_of_toNat_eq
-      rw [h11, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnxlt]
+    · exact fl_exit O L' (by rw [hmem]; simp) (pre' := pre ++ [x]) (post' := []) (by rw [hmem]; simp) rfl
+        (by carry_close)
+    · exact BitVec.eq_of_toNat_eq (by carry_close [h11])
   · simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hnx
     subst hnx
     have hym : y ∈ bins j := by rw [hmem]; simp
     obtain ⟨cy, My⟩ := L.bin.member (by omega) hj hym
     have hylo := My.lo
     refine (step% st 0x800074d0) O.live (fun hc => absurd hc ?_) (fun _ => ?_)
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      intro he
+    · intro he
       have := congrArg BitVec.toNat he
-      rw [h11, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnxlt] at this
+      carry_norm [h11] at this
       unfold binAt avAddr at this hgj; omega
-    · exact hloop y rest' rfl _ L' (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat,
-        Nat.mod_eq_of_lt hnxlt]) (by rw [upd_other _ _ (by decide)]; exact h11)
+    · exact hloop y rest' rfl _ L' (by carry_close) (by carry_close [h11])
 
 theorem fl_walk {C : MCtx} (O : FOK C) {Mt M2 : Mem} {X S top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {j : Nat} :
@@ -277,15 +269,12 @@ theorem fl_empty {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
   have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
   have hoB := rG.offStack B.disj (by decide); unfold mHead at hoB
   refine fl_link O ((L.frame.store (by omega)).of_regs ?_ ?_ ?_ ?_) B hj0 hj L.idx
-    (pre' := []) (post' := []) (by rw [hemp]; rfl) rfl rfl ?_ (lor_lt bb _ hbbl (by unfold numBins at hj; omega))
+    (pre' := []) (post' := []) (by rw [hemp]; rfl) rfl rfl (by rw [hbA, read64_store_hit, hor])
+    (lor_lt bb _ hbbl (by unfold numBins at hj; omega))
     (lor_bit_set bb _) (fun bb0 hbb0 k hk => by rw [hbb] at hbb0; cases hbb0; exact lor_bit_keep bb _ k hk)
     (fun w hw => by rw [writeLog_out]; simp only [OutL, and_true]; unfold binblocksAddr avAddr at hw; omega)
     (pres_log _ B.pres) (frame_log (by log_in) B.frame) ?_ ?_ ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [hbA, read64_store_hit, hor]
-  · exact h11
-  · exact h13
-  · exact L.a4
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h11, h13, L.a4, List.getLast_singleton]
 
 structure FIdx (S : Nat) (R R' : Nat → BitVec 64) : Prop where
   a1 : (R' 11).toNat = 16 * binIndex S + 16
@@ -312,10 +301,9 @@ theorem fl_idx {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {S : Na
       rw [BitVec.toNat_ushiftRight, h15, Nat.shiftRight_eq_div_pow]
     have hb : binIndex S = 56 + S / 64 := by
       unfold binIndex; rw [if_neg (by omega), if_pos h4']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h11 h12 h13; simp only [upd_apply, h11, h12, h13, ite_false]
   have h4' : 4 < S / 512 := by sx_norm; omega
   refine (step% st 0x80007584) O.live ?_
   refine (step% st 0x80007588) O.live (fun h20 => ?_) (fun h20 => ?_) <;>
@@ -325,10 +313,9 @@ theorem fl_idx {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {S : Na
     sx_run [8] O.live at 0x800074b8
     have hb : binIndex S = 91 + S / 512 := by
       unfold binIndex; rw [if_neg (by omega), if_neg (by omega), if_pos h20']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [cascade_off hx (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hx]; omega), hx, hb]; omega
-    · intro x h11 h12 h13; simp only [upd_apply, h11, h12, h13, ite_false]
   have h20' : 20 < S / 512 := by sx_norm; omega
   refine (step% st 0x8000758c) O.live ?_
   refine (step% st 0x80007590) O.live (fun h84 => ?_) (fun h84 => ?_) <;>
@@ -341,10 +328,9 @@ theorem fl_idx {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {S : Na
       rw [BitVec.toNat_ushiftRight, h15, Nat.shiftRight_eq_div_pow]
     have hb : binIndex S = 110 + S / 4096 := by
       unfold binIndex; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega), if_pos h84']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h11 h12 h13; simp only [upd_apply, h11, h12, h13, ite_false]
   have h84' : 84 < S / 512 := by sx_norm; omega
   refine (step% st 0x80007608) O.live ?_
   refine (step% st 0x8000760c) O.live (fun h340 => ?_) (fun h340 => ?_) <;>
@@ -357,10 +343,9 @@ theorem fl_idx {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {S : Na
       rw [BitVec.toNat_ushiftRight, h15, Nat.shiftRight_eq_div_pow]
     have hb : binIndex S = 119 + S / 32768 := by
       unfold binIndex; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega), if_pos h340']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h11 h12 h13; simp only [upd_apply, h11, h12, h13, ite_false]
   have h340' : 340 < S / 512 := by sx_norm; omega
   refine (step% st 0x80007628) O.live ?_
   refine (step% st 0x8000762c) O.live (fun h1364 => ?_) (fun h1364 => ?_) <;>
@@ -373,20 +358,18 @@ theorem fl_idx {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {S : Na
       rw [BitVec.toNat_ushiftRight, h15, Nat.shiftRight_eq_div_pow]
     have hb : binIndex S = 124 + S / 262144 := by
       unfold binIndex; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega), if_pos h1364']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h11 h12 h13; simp only [upd_apply, h11, h12, h13, ite_false]
 
   have h1364' : 1364 < S / 512 := by sx_norm; omega
   sx_run [8] O.live at 0x800074b8
   have hb : binIndex S = 126 := by
     unfold binIndex; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega),
       if_neg (by omega), if_neg (by omega)]
-  refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  refine hk _ ⟨?_, ?_, by carry_close⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · rw [hb]; rfl
   · rw [hb]; rfl
-  · intro x h11 h12 h13; simp only [upd_apply, h11, h12, h13, ite_false]
 
 theorem fl_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {j : Nat}
@@ -413,20 +396,16 @@ theorem fl_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
   sx_norm
   have hA1 : (R 17 + R 11 + 18446744073709551600#64).toNat = binAt j := by rgn_arith
   have L' := L.upd (R' := upd (upd (upd R 11 (R 17 + R 11)) 13 (BitVec.ofNat 64 first)) 11
-    (R 17 + R 11 + 18446744073709551600#64)) (fun x h10 h11 h12 h13 => by
-      simp only [upd_apply, h11, h13, ite_false])
+    (R 17 + R 11 + 18446744073709551600#64)) (fun x h10 h11 h12 h13 => by carry_close)
   refine (step% st 0x800074c4) O.live (fun hne => ?_) (fun he => ?_)
   ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hne
     rcases hbj : bins j with _ | ⟨x, rest⟩
     · rw [hbj] at hof; simp at hof; subst hof
-      exact absurd (BitVec.eq_of_toNat_eq (by rw [hA1, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hoflt])) hne
+      exact absurd (BitVec.eq_of_toNat_eq (by carry_close [hA1])) hne
     · rw [hbj] at hof; simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hof
       subst hof
-      exact fl_walk O rest [] x _ L' (by rw [hbj]; rfl)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-            rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hoflt])
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hA1)
+      exact fl_walk O rest [] x _ L' (by rw [hbj]; rfl) (by carry_close) (by carry_close [hA1])
   ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq, Decidable.not_not] at he
     have hfb : first = binAt j := by
@@ -439,11 +418,7 @@ theorem fl_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
         rw [hbj] at hof; simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hof
         exact hneJ x (by rw [hbj]; exact List.mem_cons_self) (hof.trans hfb)
     refine (step% st 0x800074c8) O.live ?_
-    exact fl_empty O L' hemp
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hA1)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-          rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hoflt, hfb])
+    exact fl_empty O L' hemp (by carry_close [h12]) (by carry_close [hA1]) (by carry_close [hfb])
 
 theorem free_bin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat}
@@ -458,23 +433,10 @@ theorem free_bin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
   refine (step% st 0x800073ec) O.live (fun hl => ?_) (fun hs => ?_)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h15] at hl
     have hl' : 511 < S := by first | omega | (sx_norm; done) | (sx_norm; omega)
-    refine fl_idx O (S := S) (by rw [upd_other _ _ (by decide)]; exact h15) (by omega) (by omega)
-      fun R' I => ?_
-    have hk := I.keep
-    have e : ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → R' x = R x := fun x h1 h2 h3 => by
-      rw [hk x h1 h2 h3, upd_other _ _ h3]
-    exact fl_head O ⟨F.of_regs (e 2 (by decide) (by decide) (by decide))
-      (e 9 (by decide) (by decide) (by decide)) (e 18 (by decide) (by decide) (by decide))
-      (e 19 (by decide) (by decide) (by decide)), B, hl', rfl,
-      by rw [e 17 (by decide) (by decide) (by decide)]; exact h17,
-      by rw [e 14 (by decide) (by decide) (by decide)]; exact h14,
-      by rw [e 15 (by decide) (by decide) (by decide)]; exact h15⟩ I.a1 I.a2
+    exact fl_idx O (S := S) h15 (by omega) (by omega) fun R' I => fl_head O
+      (FreeL.upd (R := upd R 13 _) ⟨F.of_regs rfl rfl rfl rfl, B, hl', rfl, h17, h14, h15⟩ fun x _ => I.keep x) I.a1 I.a2
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h15] at hs
-    exact fb_small O (F.of_regs (upd_other _ _ (by decide)) (upd_other _ _ (by decide))
-      (upd_other _ _ (by decide)) (upd_other _ _ (by decide))) B
-      (by first | omega | (sx_norm; done) | (sx_norm; omega))
-      (by rw [upd_other _ _ (by decide)]; exact h17) (by rw [upd_other _ _ (by decide)]; exact h14)
-      (by rw [upd_other _ _ (by decide)]; exact h15)
+    exact fb_small O (F.of_regs rfl rfl rfl rfl) B (by first | omega | (sx_norm; done) | (sx_norm; omega)) h17 h14 h15
 
 theorem free_bin2 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat}
@@ -488,23 +450,10 @@ theorem free_bin2 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
   refine (step% st 0x80007490) O.live ?_
   refine (step% st 0x80007494) O.live (fun hs => ?_) (fun hl => ?_)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h15] at hs
-    exact fb_small O (F.of_regs (upd_other _ _ (by decide)) (upd_other _ _ (by decide))
-      (upd_other _ _ (by decide)) (upd_other _ _ (by decide))) B
-      (by first | omega | (sx_norm; done) | (sx_norm; omega))
-      (by rw [upd_other _ _ (by decide)]; exact h17) (by rw [upd_other _ _ (by decide)]; exact h14)
-      (by rw [upd_other _ _ (by decide)]; exact h15)
+    exact fb_small O (F.of_regs rfl rfl rfl rfl) B (by first | omega | (sx_norm; done) | (sx_norm; omega)) h17 h14 h15
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h15] at hl
     have hl' : 511 < S := by first | omega | (sx_norm; done) | (sx_norm; omega)
-    refine fl_idx O (S := S) (by rw [upd_other _ _ (by decide)]; exact h15) (by omega) (by omega)
-      fun R' I => ?_
-    have hk := I.keep
-    have e : ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → R' x = R x := fun x h1 h2 h3 => by
-      rw [hk x h1 h2 h3, upd_other _ _ h3]
-    exact fl_head O ⟨F.of_regs (e 2 (by decide) (by decide) (by decide))
-      (e 9 (by decide) (by decide) (by decide)) (e 18 (by decide) (by decide) (by decide))
-      (e 19 (by decide) (by decide) (by decide)), B, hl', rfl,
-      by rw [e 17 (by decide) (by decide) (by decide)]; exact h17,
-      by rw [e 14 (by decide) (by decide) (by decide)]; exact h14,
-      by rw [e 15 (by decide) (by decide) (by decide)]; exact h15⟩ I.a1 I.a2
+    exact fl_idx O (S := S) h15 (by omega) (by omega) fun R' I => fl_head O
+      (FreeL.upd (R := upd R 13 _) ⟨F.of_regs rfl rfl rfl rfl, B, hl', rfl, h17, h14, h15⟩ fun x _ => I.keep x) I.a1 I.a2
 
 end VsaIris.VsaHeap
