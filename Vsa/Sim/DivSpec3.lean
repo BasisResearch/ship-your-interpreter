@@ -347,10 +347,6 @@ theorem SelectedFramedSegResult.frameD {bs : List BBlock} {L : GRegs}
     ∀ R : Register, NotWrittenD R → c'.σ.regs.get? R = g R :=
   fun R hR => (res.reg_frame R (decide_eq_true hR)).trans (h R hR)
 
-theorem jr_tgt_ok (r : BitVec 64) (h : r.toNat % 4 = 0) :
-    (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
-  rw [ret_tgt r h]; exact h
-
 theorem core_call_seg {c : Config} {pc vm link A B r w12 w13 : BitVec 64} {imm : BitVec 21}
     {m0 : Std.ExtHashMap Nat (BitVec 8)} {o : Array String}
     (hsite : ∃ (σ' : MState) (i' : Nat), Step ⟨c.σ, c.tick, c.steps⟩ ⟨σ', i', c.steps + 1⟩ ∧
@@ -504,8 +500,8 @@ theorem moddi3_fin_pos (g : (R : Register) → Option (RegisterType R))
   have hwl3 : Vsa.Sim.Code.__moddi3Loaded c3.σ.mem := by rw [hmem3, ← hmem]; exact hwl
   have facts : ChainFacts c3.σ.mem c3.σ.mem [(10, A / B), (11, A % B), (5, r)] []
       moddi3PosTailSeg := by
-    chain_facts hwl3 with "Vsa.Sim.Code.__moddi3_at_"
-    exact jr_tgt_ok r halign
+    chain_facts hwl3
+    exact ret_tgt_aligned r halign
   obtain ⟨c4, res⟩ := segEval_selected_framed moddi3PosTailSeg _ [] 0x80004738#64 vm3
     (fun _ => False) divOverflowKeep [(10, A % B)] c3 hG3 hpc3 hvm3 hL3
     (by show KeysOK [10, 11, 5]; decide) facts (by show ChainOK _ [10, 11, 5] _; decide) hi3
@@ -536,8 +532,8 @@ theorem moddi3_fin_neg (g : (R : Register) → Option (RegisterType R))
   have hwl3 : Vsa.Sim.Code.__moddi3Loaded c3.σ.mem := by rw [hmem3, ← hmem]; exact hwl
   have facts : ChainFacts c3.σ.mem c3.σ.mem [(10, A / B), (11, A % B), (5, r)] []
       moddi3NegTailSeg := by
-    chain_facts hwl3 with "Vsa.Sim.Code.__moddi3_at_"
-    exact jr_tgt_ok r halign
+    chain_facts hwl3
+    exact ret_tgt_aligned r halign
   obtain ⟨c4, res⟩ := segEval_selected_framed moddi3NegTailSeg _ [] 0x80004750#64 vm3
     (fun _ => False) divOverflowKeep [(10, 0#64 - A % B)] c3 hG3 hpc3 hvm3 hL3
     (by show KeysOK [10, 11, 5]; decide) facts (by show ChainOK _ [10, 11, 5] _; decide) hi3
@@ -562,7 +558,7 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
     rcases bgez_cases' n with hnge | hnlt
     · have hntop : n.toNat < 2^63 := bgez_true' n hnge
       have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] moddi3PNSeg := by
-        chain_facts hwl with "Vsa.Sim.Code.__moddi3_at_"
+        chain_facts hwl
         exact hdlt
         exact hnge
       obtain ⟨c1, r1⟩ := segEval_selected_framed moddi3PNSeg _ [] _ vm (fun _ => False)
@@ -578,7 +574,7 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       exact ⟨cf, r1.steps.trans hsf, post⟩
     · have hntop : 2^63 ≤ n.toNat := bgez_false' n hnlt
       have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] moddi3NNSeg := by
-        chain_facts hwl with "Vsa.Sim.Code.__moddi3_at_"
+        chain_facts hwl
         exact hdlt
         exact hnlt
       obtain ⟨c1, r1⟩ := segEval_selected_framed moddi3NNSeg _ [] _ vm (fun _ => False)
@@ -598,7 +594,7 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
     rcases bltz_cases' n with hnlt | hnge
     · have hntop : 2^63 ≤ n.toNat := bltz_true' n hnlt
       have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] moddi3NPSeg := by
-        chain_facts hwl with "Vsa.Sim.Code.__moddi3_at_"
+        chain_facts hwl
         exact hdge
         exact hnlt
       obtain ⟨c1, r1⟩ := segEval_selected_framed moddi3NPSeg _ [] _ vm (fun _ => False)
@@ -614,7 +610,7 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       exact ⟨cf, r1.steps.trans hsf, post⟩
     · have hntop : n.toNat < 2^63 := bltz_false' n hnge
       have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] moddi3PPSeg := by
-        chain_facts hwl with "Vsa.Sim.Code.__moddi3_at_"
+        chain_facts hwl
         exact hdge
         exact hnge
       obtain ⟨c1, r1⟩ := segEval_selected_framed moddi3PPSeg _ [] _ vm (fun _ => False)
@@ -664,8 +660,8 @@ theorem divdi3_mixed_fin (g : (R : Register) → Option (RegisterType R))
   have hul3 : Vsa.Sim.Code.__umoddi3Loaded c3.σ.mem := by rw [hmem3, ← hmem]; exact hul
   have facts : ChainFacts c3.σ.mem c3.σ.mem [(10, A / B), (11, A % B), (5, r)] []
       divdi3NegTailSeg := by
-    chain_facts hul3 with "Vsa.Sim.Code.__umoddi3_at_"
-    exact jr_tgt_ok r halign
+    chain_facts hul3
+    exact ret_tgt_aligned r halign
   obtain ⟨c4, res⟩ := segEval_selected_framed divdi3NegTailSeg _ [] 0x80004720#64 vm3
     (fun _ => False) divOverflowKeep [(10, 0#64 - A / B)] c3 hG3 hpc3 hvm3 hL3
     (by show KeysOK [10, 11, 5]; decide) facts (by show ChainOK _ [10, 11, 5] _; decide) hi3
@@ -716,7 +712,7 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
     have hnneg : n.toInt < 0 := by rw [toInt_of_top n hntop]; have := n.isLt; omega
     have hAmag : ((0#64) - n).toNat = n.toInt.natAbs := mag_neg_top n hntop
     have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] divOverflowBranchSeg := by
-      chain_facts hdl with "Vsa.Sim.Code.__divdi3_at_"
+      chain_facts hdl
       exact hnlt
     obtain ⟨c1, r1⟩ := segEval_selected_framed divOverflowBranchSeg _ [] _ vm (fun _ => False)
       divOverflowKeep (divIn n d r w12 w13) c hG hpc hmi held
@@ -734,7 +730,7 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         · rw [toInt_of_top d (by omega)] at hdpos; have := d.isLt; omega
       have hBmag : d.toNat = d.toInt.natAbs := mag_notop d hdtop
       have f2 : ChainFacts c1.σ.mem c1.σ.mem (divIn n d r w12 w13) [] divdi3NegPosSeg := by
-        chain_facts hul1 with "Vsa.Sim.Code.__umoddi3_at_"
+        chain_facts hul1
         exact hdgt
       obtain ⟨c2, r2⟩ := segEval_selected_framed divdi3NegPosSeg _ [] 0x80004704#64 vm1
         (fun _ => False) divOverflowKeep [(10, 0#64 - n), (11, d), (5, r), (12, w12), (13, w13)]
@@ -758,7 +754,7 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       have hsame : (0 ≤ n.toInt ↔ 0 ≤ d.toInt) :=
         ⟨fun h => absurd h (by omega), fun h => absurd h (by omega)⟩
       have f2 : ChainFacts c1.σ.mem c1.σ.mem (divIn n d r w12 w13) [] divdi3NegNegSeg := by
-        chain_facts hul1 with "Vsa.Sim.Code.__umoddi3_at_"
+        chain_facts hul1
         exact hdle
       obtain ⟨c2, r2⟩ := segEval_selected_framed divdi3NegNegSeg _ [] 0x80004704#64 vm1
         (fun _ => False) divOverflowKeep (divIn (0#64 - n) (0#64 - d) r w12 w13)
@@ -781,7 +777,7 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       have hdneg : d.toInt < 0 := by rw [toInt_of_top d hdtop]; have := d.isLt; omega
       have hBmag : ((0#64) - d).toNat = d.toInt.natAbs := mag_neg_top d hdtop
       have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] divdi3PosNegSeg := by
-        chain_facts hdl with "Vsa.Sim.Code.__divdi3_at_"
+        chain_facts hdl
         exact hnge
         exact hdlt
       obtain ⟨c1, r1⟩ := segEval_selected_framed divdi3PosNegSeg _ [] _ vm (fun _ => False)
@@ -811,7 +807,7 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       have hBmag : d.toNat = d.toInt.natAbs := mag_notop d hdtop
       have hsame : (0 ≤ n.toInt ↔ 0 ≤ d.toInt) := ⟨fun _ => hdInt, fun _ => hnInt⟩
       have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] divdi3PosSeg := by
-        chain_facts hdl with "Vsa.Sim.Code.__divdi3_at_"
+        chain_facts hdl
         exact hnge
         exact hdge
       obtain ⟨c1, r1⟩ := segEval_selected_framed divdi3PosSeg _ [] _ vm (fun _ => False)
