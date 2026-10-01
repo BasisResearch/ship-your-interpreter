@@ -116,8 +116,8 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
       rgn_ld [hbk]
       rgn_run O.live at 0x800049c8
       refine ih (k + 1) _ (by unfold bend; omega) (by omega) (by unfold bend; omega)
-        (hB' _ (by carry_close)) (by carry_norm; rgn_arith) (by carry_close [hk1]) ?_ ?_
-      · carry_norm; rw [getLast_cons_rev] at hl; cases hl; rfl
+        (hB' _ (by carry_close)) (by upd_norm; rgn_arith) (by carry_close [hk1]) ?_ ?_
+      · rw [getLast_cons_rev] at hl; cases hl; upd_norm [toNat_ofNat_lt hbklt]
       · intro j hj1 hj2
         by_cases hjk : j = k
         · subst hjk; exact hemp
@@ -181,7 +181,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
     rw [← upd_self_eq W.a6]
     rgn_run O.live at 0x80004e50
     refine (step% st 0x80004e50) O.live (fun hc => absurd ?_ hc) (fun _ => ?_)
-    · carry_norm; apply BitVec.eq_of_toNat_eq
+    · upd_norm; apply BitVec.eq_of_toNat_eq
       rw [and3_toNat, h17]; simp
     rgn_run O.live at 0x80004e58
     rgn_ld [hbb]
@@ -207,8 +207,8 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
         exact writeLog_out _ _ _ (by simp only [OutL, and_true]; omega)
     refine hnext _ _ (((R 10 ^^^ 18446744073709551615#64) &&& BitVec.ofNat 64 bb).toNat)
       ⟨⟨(W.frame.store (by omega)).of_regs ?_ ?_ ?_ ?_, hMH, W.nbok, W.nb31, W.b1,
-      ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, by unfold numBins at hsn; omega⟩ <;>
-      carry_close [W.a4, W.t4, W.s0, h10, h31, h28, hbbA, read64_store_hit]
+      ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, read64_store_hit _ _ _, hlo, by unfold numBins at hsn; omega⟩ <;>
+      upd_norm [W.a4, W.t4, W.s0, h10, h31, h28]
   | succ n ih =>
     intro i R hn hi1 hi2 W h17 h30 h10 h31 h28 hemp
     have HH := W.heap.heap.heap.heap
@@ -226,7 +226,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
     rgn_run O.live at 0x80004e50
     refine (step% st 0x80004e50) O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
     rotate_left
-    · carry_norm; intro he; apply hi4
+    · upd_norm; intro he; apply hi4
       have := congrArg BitVec.toNat he
       rw [and3_toNat, h17] at this
       simpa using this
@@ -252,7 +252,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
       rgn_ld [hbb]
       rgn_run O.live at 0x80004e64
       refine hnext _ _ bb ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hbb, hlo,
-        by unfold numBins at hsn; omega⟩ <;> carry_close [ha6, h10, h31, h28]
+        by unfold numBins at hsn; omega⟩ <;> upd_norm [ha6, h10, h31, h28, toNat_ofNat_lt (by omega : bb < 2 ^ 64)]
     ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at heq
       have hfb : f = binAt (i - 1) := by
@@ -267,10 +267,10 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
           exact (binList_iff_ring.1 (HH.bins_list (i - 1) (by omega) hi1n)).2 z
             (by rw [h]; exact List.mem_cons_self) hfb
       refine ih (i - 1) _ (by omega) (by omega) (by omega)
-        (W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_) (by carry_norm; exact h17') ?_ ?_ ?_ ?_ (fun j hj1 hj2 => by
+        (W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_) (by upd_norm; exact h17') ?_ ?_ ?_ ?_ (fun j hj1 hj2 => by
           by_cases hj : j = i - 1
           · subst hj; exact hemp1
-          · exact hemp j (by omega) hj2) <;> carry_close [hE30, h10, h31, h28]
+          · exact hemp j (by omega) hj2) <;> upd_norm [hE30, h10, h31, h28]
 
 theorem bit_test {m x : BitVec 64} {c : Nat} (hm : m.toNat = 2 ^ c) :
     m &&& x = 0#64 ↔ x.toNat / 2 ^ c % 2 = 0 := by
@@ -342,14 +342,14 @@ theorem bw_next_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : Li
         refine Nat.lt_of_le_of_ne hct ?_
         intro he; rw [he] at hc1; omega
       refine ih (c + 1) _ (by omega) (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) ?_ ?_ ?_ ?_ <;>
-        carry_close [h10', h31', h15, h28]
+        upd_norm [h10', h31', h15, h28]
     ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
       have hc1 : bb / 2 ^ (c + 1) % 2 = 1 := by
         have := mt hbt.2 hnz; omega
       rgn_step O.live at 0x800049a8
       refine hblk _ (c + 1) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
-        (by carry_norm; sx_norm; exact h31') ?_ ?_ <;> carry_close [h10', h28]
+        (by upd_norm; sx_norm; exact h31') ?_ ?_ <;> upd_norm [h10', h28]
 
 theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb b bb : Nat}
@@ -386,14 +386,14 @@ theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
       have hc1 : bb / 2 ^ (b + 1) % 2 = 1 := by have := mt hbt.2 hnz; omega
       rgn_step O.live at 0x800049a8
       refine hblk _ (b + 1) (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
-        (by carry_norm; sx_norm; exact N.t6) ?_ ?_ <;> carry_close [h10', N.t3]
+        (by upd_norm; sx_norm; exact N.t6) ?_ ?_ <;> upd_norm [h10', N.t3]
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at hz
       have hc1 : bb / 2 ^ (b + 1) % 2 = 0 := hbt.1 hz
       have hbt' : b + 1 < t := by
         refine Nat.lt_of_le_of_ne ht1 ?_
         intro he; rw [← he] at ht3; omega
       refine bw_next_loop O ht3 ht2 hblk _ (b + 1) _ rfl (by omega) hbt'
-        (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) ?_ ?_ ?_ ?_ <;> carry_close [h10', N.t6, N.a5, N.t3]
+        (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) ?_ ?_ ?_ ?_ <;> upd_norm [h10', N.t6, N.a5, N.t3]
 
 theorem bw_block {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
@@ -425,9 +425,9 @@ theorem bw_block {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
       18446744073709551600#64)).toNat = binAt start := by rgn_arith
   refine (step% st 0x800049c4) O.live ?_
   refine bw_bins O hblk _ start _ rfl (Nat.le_refl _) (by unfold bend; omega)
-    ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hsf, hs1, hsn⟩ ?_ (by carry_norm; simp; exact h17)
-    (by carry_norm; rw [getLast_cons_rev] at hl; cases hl; rfl) (fun j h1 h2 => absurd h2 (by omega)) <;>
-    carry_close [h17, h10, hT, h28]
+    ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hsf, hs1, hsn⟩ ?_ (by upd_norm; simp; exact h17)
+    (by rw [getLast_cons_rev] at hl; cases hl; upd_norm [toNat_ofNat_lt hbklt]) (fun j h1 h2 => absurd h2 (by omega)) <;>
+    upd_norm [h17, h10, hT, h28]
 
 theorem bw_scan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
@@ -506,7 +506,7 @@ theorem bw_find_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : Li
         refine Nat.lt_of_le_of_ne (by omega) ?_
         intro he; rw [he] at hc1; omega
       refine ih (c + 1) _ (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) ?_ ?_ ?_ (by omega) <;>
-        carry_close [h10', h17', h11]
+        upd_norm [h10', h17', h11]
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
       exact bw_found O htop (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
         (by carry_close [h17']) (by carry_close [h10', show 4 * (c + 1) / 4 = c + 1 by omega])
@@ -551,8 +551,8 @@ theorem bw_find {C : MCtx} (O : MOK C) :
   rw [h11] at hbt
   refine (step% st 0x80004978) O.live ?_
   refine (step% st 0x8000497c) O.live (fun hnz => ?_) (fun hz => ?_)
-  · exact bw_found O (bwTop O) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by carry_close [h17])
-      (by carry_close [h10]) hsf (by omega) hidx
+  · exact bw_found O (bwTop O) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by upd_norm [h17])
+      (by upd_norm [h10]) hsf (by omega) hidx
   · simp only [upd_apply, ite_true, ne_eq, Decidable.not_not] at hz
     have hc0 := hbt.1 hz
     have hemp : bins idx = [] := by
@@ -604,7 +604,7 @@ theorem bw_find {C : MCtx} (O : MOK C) :
         intro he; rw [← he] at ht3; omega
       refine bw_find_loop O (bwTop O) ht3 ht2 _ (idx / 4 + 1) _ rfl hlt
         (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-        ?_ ?_ ?_ (by omega) <;> carry_close [h10', h17', h11]
+        ?_ ?_ ?_ (by omega) <;> upd_norm [h10', h17', h11]
 
 theorem malloc_all {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}

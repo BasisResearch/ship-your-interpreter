@@ -13,4 +13,11 @@ theorem keep6 {R R' : Nat → BitVec 64} {a b c d e f : Nat}
     (h4 : x ≠ d := by decide) (h5 : x ≠ e := by decide) (h6 : x ≠ f := by decide) : R' x = R x :=
   h x h1 h2 h3 h4 h5 h6
 
+syntax "upd_norm" (" [" Lean.Parser.Tactic.simpLemma,* "]")? (Lean.Parser.Tactic.location)? : tactic
+macro_rules
+  | `(tactic| upd_norm $[$loc]?) => `(tactic| upd_norm [] $[$loc]?)
+  | `(tactic| upd_norm [$ts,*] $[$loc]?) =>
+    `(tactic| simp (config := {failIfUnchanged := false}) only
+      [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false, $ts,*] $[$loc]?)
+
 end VsaIris.VsaHeap
