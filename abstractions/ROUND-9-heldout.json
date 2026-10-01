@@ -1,0 +1,98 @@
+{
+ "seed": 20261009,
+ "commit": "205acaac",
+ "strata": {
+  "H": "theorems concluding PHeapAt with >=60 declaration lines (heap edits)",
+  "S": "AW theorems, measured cost <=30",
+  "M": "AW 31-100",
+  "L": "AW >100"
+ },
+ "sizes": {
+  "H": 13,
+  "S": 41,
+  "M": 52,
+  "L": 62
+ },
+ "draw": {
+  "H": [
+   {
+    "name": "VsaIris.VsaHeap.PHeapAt.toTop",
+    "module": "VsaIris.Vsa.HeapFree",
+    "decl": 150,
+    "excl": 47,
+    "shared": 9.0,
+    "baseline": 206.0,
+    "role": "primary"
+   },
+   {
+    "name": "VsaIris.VsaHeap.PHeapAt.coalPrev",
+    "module": "VsaIris.Vsa.HeapFree",
+    "decl": 94,
+    "excl": 20,
+    "shared": 15.9,
+    "baseline": 129.9,
+    "role": "fresh"
+   }
+  ],
+  "S": [
+   {
+    "name": "VsaIris.VsaHeap.pvN_join",
+    "module": "VsaIris.Vsa.ReallocPrevN",
+    "decl": 14,
+    "excl": 4,
+    "shared": 8.1,
+    "baseline": 26.1,
+    "role": "primary"
+   },
+   {
+    "name": "VsaIris.VsaHeap.bb_top",
+    "module": "VsaIris.Vsa.MallocTop",
+    "decl": 16,
+    "excl": 4,
+    "shared": 2.7,
+    "baseline": 22.7,
+    "role": "fresh"
+   }
+  ],
+  "M": [
+   {
+    "name": "VsaIris.VsaHeap.mal_copy",
+    "module": "VsaIris.Vsa.ReallocMal",
+    "decl": 43,
+    "excl": 17,
+    "shared": 10.1,
+    "baseline": 70.1,
+    "role": "primary"
+   },
+   {
+    "name": "VsaIris.VsaHeap.bw_scan",
+    "module": "VsaIris.Vsa.MallocBlocks2",
+    "decl": 15,
+    "excl": 4,
+    "shared": 11.2,
+    "baseline": 30.2,
+    "role": "fresh"
+   }
+  ],
+  "L": [
+   {
+    "name": "VsaIris.VsaHeap.fl_exit",
+    "module": "VsaIris.Vsa.FreeLarge",
+    "decl": 49,
+    "excl": 54,
+    "shared": 40.9,
+    "baseline": 143.9,
+    "role": "primary"
+   },
+   {
+    "name": "VsaIris.VsaHeap.realloc_grow",
+    "module": "VsaIris.Vsa.ReallocGrow",
+    "decl": 75,
+    "excl": 28,
+    "shared": 16.0,
+    "baseline": 119.0,
+    "role": "fresh"
+   }
+  ]
+ }
+}
