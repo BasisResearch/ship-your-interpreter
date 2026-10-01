@@ -729,6 +729,14 @@ def normHyps (g : MVarId) : TacticM MVarId := do
   let mut g := g
   for t in [← `(tactic| sx_norm), ← `(tactic| ix_tab), ← `(tactic| sx_norm), ← `(tactic| ix_mem)] do
     let some stx ← liftMacroM (Macro.expandMacro? t) | continue
+    -- a guarded `simp_set` stands for `simp only [SET]` with its discharger and location
+    let stx ← if stx.getKind != ``VsaIris.SimpGuard.simpSetTac then pure stx else
+      let id := mkIdent stx[2].getId.eraseMacroScopes
+      match stx[1].isNone, stx[3].isNone with
+      | true, true => `(tactic| simp only [$id:ident])
+      | true, false => `(tactic| simp only [$id:ident] $(⟨stx[3][0]⟩))
+      | false, true => `(tactic| simp $(⟨stx[1][0]⟩):discharger only [$id:ident])
+      | false, false => `(tactic| simp $(⟨stx[1][0]⟩):discharger only [$id:ident] $(⟨stx[3][0]⟩))
     let saved ← saveState
     try
       setGoals [g]

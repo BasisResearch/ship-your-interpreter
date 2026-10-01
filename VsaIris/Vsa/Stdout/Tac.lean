@@ -47,12 +47,13 @@ theorem update_aligned (r : BitVec 64) (h : r.toNat % 4 = 0) : Sail.BitVec.updat
 
 theorem sext_zero32 : BitVec.signExtend 64 (0#32) = 0#64 := by decide
 
+attribute [nx_console_set] ldv_impDt ConsoleMt.sinit ConsoleMt.stdout ConsoleMt.p ConsoleMt.w
+  ConsoleMt.flagsU ConsoleMt.flagsS ConsoleMt.fd ConsoleMt.base ConsoleMt.bsize
+  ConsoleMt.lbf ConsoleMt.cookie ConsoleMt.writer ConsoleMt.lock ConsoleMt.lockMode
+
 syntax "nx_console" : tactic
 macro_rules
-  | `(tactic| nx_console) => `(tactic| simp (disch := assumption) only
-      [ldv_impDt, ConsoleMt.sinit, ConsoleMt.stdout, ConsoleMt.p, ConsoleMt.w,
-       ConsoleMt.flagsU, ConsoleMt.flagsS, ConsoleMt.fd, ConsoleMt.base, ConsoleMt.bsize,
-       ConsoleMt.lbf, ConsoleMt.cookie, ConsoleMt.writer, ConsoleMt.lock, ConsoleMt.lockMode])
+  | `(tactic| nx_console) => `(tactic| simp_set (disch := assumption) nx_console_set)
 
 syntax "nx_norm" (" at " ident)? : tactic
 macro_rules
@@ -87,16 +88,30 @@ elab "nx_one" : tactic => do
 
 end Leftover
 
+attribute [nx_upd_set] updAll
+attribute [nx_toint_set] toInt_ofNat_small BitVec.toInt_zero
+attribute [nx_upal_set] update_aligned
+attribute [nx_subz_set] BitVec.sub_self sext_zero32 BitVec.toInt_zero
+attribute [nx_prune_set] toInt_ofNat_small BitVec.toInt_zero BitVec.sub_self sext_zero32
+
 open Lean Elab Tactic Meta in
 
 def nxNorm (facts : Array Term) : TacticM Syntax := do
   let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
     facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-  `(tactic| ((try nx_tidy) <;> (try simp only [updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
-      (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try simp only [$lems,*]) <;>
-      (try nx_norm) <;> (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero]) <;>
-      (try simp (disch := decide) only [update_aligned]) <;>
-      (try simp only [BitVec.sub_self, sext_zero32, BitVec.toInt_zero])))
+  let tail ← `(tactic| ((try simp_set (disch := omega_dc) nx_toint_set) <;>
+      (try simp_set (disch := decide) nx_upal_set) <;> (try simp_set nx_subz_set)))
+  let again ← `(tactic| ((try simp only [$lems,*]) <;> (try nx_norm) <;> $tail))
+  let tailSeq : TSyntax ``Lean.Parser.Tactic.tacticSeq ← `(Lean.Parser.Tactic.tacticSeq| $tail:tactic)
+  -- the second pass of the facts and `nx_norm` is skipped only when it would meet the goal on
+  -- which the same call just failed (nothing in between made progress)
+  `(tactic| ((try nx_tidy) <;> (try simp_set nx_upd_set at ⊢) <;> (try simp_set nx_mt at ⊢) <;> (try nx_norm) <;>
+      first
+        | (simp only [$lems,*] <;> (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> $again)
+        | (nx_norm <;> (try nx_mem) <;> (try nx_console) <;> $again)
+        | (nx_mem <;> (try nx_console) <;> $again)
+        | (nx_console <;> $again)
+        | $tailSeq))
 
 open Lean Elab Tactic Meta in
 
@@ -106,7 +121,7 @@ def nxTryPrune (facts : Array Term) (norm : Syntax) (g : MVarId) : TacticM Bool 
   let saved ← saveState
   try
     let gs ← evalTacticAt
-      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero, BitVec.sub_self, sext_zero32] at hc); (try (exfalso; revert hc; sx_side))))) g
+      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp_set (disch := omega_dc) nx_prune_set at hc); (try (exfalso; revert hc; sx_side))))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
