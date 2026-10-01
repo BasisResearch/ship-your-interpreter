@@ -1,16 +1,16 @@
 import Lean
 
-namespace VsaIris.OmegaHint
+namespace Vsa.OmegaHint
 open Lean Meta Elab Tactic Omega
 
 register_option vsa.omegaHint : Bool := {
   defValue := true
-  descr := "run omega first on the hypotheses earlier certificates in this declaration used"
+  descr := "omega first tries the hypotheses earlier omega certificates of this declaration used"
 }
 
-register_option vsa.omegaHintStages : Nat := {
-  defValue := 3
-  descr := "1: union of used hypotheses only; 2: last certificate only; 3: last, then union"
+register_option vsa.omegaHintMin : Nat := {
+  defValue := 40
+  descr := "smallest number of hypotheses at which the reduced omega is tried first"
 }
 
 structure Keys where
@@ -32,17 +32,18 @@ structure Info where
   sizes : Array Nat := #[]
   stage : Nat := 0
   failMs : Float := 0
+  okMs : Float := 0
 
 def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) : MetaM Unit := do
   let mut seen := s.seen
   for f in all do
-    seen := { fv := seen.fv.insert f, ty := seen.ty.insert (← instantiateMVars (← f.getType)) }
+    unless seen.fv.contains f do
+      seen := { fv := seen.fv.insert f, ty := seen.ty.insert (← instantiateMVars (← f.getType)) }
   let mut u : Keys := {}
   for a in used do
     if let .fvar f := a then
       if let some ld := (← getLCtx).find? f then
-        if ← isProp ld.type then
-          u := { fv := u.fv.insert f, ty := u.ty.insert (← instantiateMVars ld.type) }
+        u := { fv := u.fv.insert f, ty := u.ty.insert (← instantiateMVars ld.type) }
   let s' : St := { last := u, hot := s.hot.union u, seen := seen }
   stRef.modify fun m => (if m.size > 256 then {} else m).insert d s'
 
@@ -54,7 +55,7 @@ def solve (type : Expr) (hyps : List Expr) (cfg : OmegaConfig) : MetaM Expr := d
 def run (cfg : OmegaConfig) : TacticM Info := do
   let infoRef ← IO.mkRef ({} : Info)
   let d := (← Term.getDeclName?).getD .anonymous
-  let mode := vsa.omegaHintStages.get (← getOptions)
+  let minHyps := vsa.omegaHintMin.get (← getOptions)
   liftMetaFinishingTactic fun g0 => do
     let ctx0 ← g0.withContext getLCtx
     let some g ← g0.falseOrByContra | return ()
@@ -65,20 +66,21 @@ def run (cfg : OmegaConfig) : TacticM Info := do
       let st? := (← stRef.get)[d]?
       let st := st?.getD {}
       let mut cands : Array (Array Expr) := #[]
-      if st?.isSome then
+      if st?.isSome && hyps.size ≥ minHyps then
         let mut s1 : Array Expr := #[]
         let mut s2 : Array Expr := #[]
         for h in hyps do
           let .fvar f := h | s1 := s1.push h; s2 := s2.push h; continue
-          if !ctx0.contains f then s1 := s1.push h; s2 := s2.push h; continue
-          let t ← instantiateMVars (← f.getType)
-          if !st.seen.ty.contains t || !(← isProp t) then
+          if !ctx0.contains f || st.last.fv.contains f then
             s1 := s1.push h; s2 := s2.push h; continue
-          if st.last.fv.contains f || st.last.ty.contains t then s1 := s1.push h
-          if st.hot.fv.contains f || st.hot.ty.contains t then s2 := s2.push h
-        if mode != 1 && s1.size < s2.size then cands := cands.push s1
-        if mode != 2 && s2.size < hyps.size then cands := cands.push s2
-        if mode == 2 && s1.size == s2.size && s1.size < hyps.size then cands := cands.push s1
+          if st.hot.fv.contains f then s2 := s2.push h; continue
+          if st.seen.fv.contains f then continue
+          let t ← instantiateMVars (← f.getType)
+          if !st.seen.ty.contains t || st.last.ty.contains t then
+            s1 := s1.push h; s2 := s2.push h
+          else if st.hot.ty.contains t then s2 := s2.push h
+        if s1.size < s2.size then cands := cands.push s1
+        if s2.size < hyps.size then cands := cands.push s2
       infoRef.set { nAll := hyps.size, sizes := cands.map (·.size) }
       let mut i := 0
       for c in cands do
@@ -87,7 +89,8 @@ def run (cfg : OmegaConfig) : TacticM Info := do
         let t0 ← IO.monoNanosNow
         try
           let e ← solve type c.toList cfg
-          infoRef.modify fun r => { r with stage := i }
+          let t1 ← IO.monoNanosNow
+          infoRef.modify fun r => { r with stage := i, okMs := (t1 - t0).toFloat / 1e6 }
           record d st all e.getAppArgs
           g.assign e
           return
@@ -116,4 +119,4 @@ def evalHint (stx : Syntax) : TacticM Info := do
     throwUnsupportedSyntax
   discard <| evalHint stx
 
-end VsaIris.OmegaHint
+end Vsa.OmegaHint

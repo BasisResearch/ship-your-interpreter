@@ -1,4 +1,5 @@
 import LeanRiscv
+import Vsa.OmegaHint
 
 open LeanRV64DExecutable
 open Register

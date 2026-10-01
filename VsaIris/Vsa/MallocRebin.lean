@@ -1,4 +1,3 @@
-import VsaIris.OmegaHint
 import VsaIris.Vsa.MallocSplit
 import VsaIris.Vsa.HeapMoveAt
 import VsaIris.Vsa.HeapPermit

@@ -1,4 +1,3 @@
-import VsaIris.OmegaHint
 import VsaIris.Interp.IntOpRuns
 
 namespace VsaIris.Interp
