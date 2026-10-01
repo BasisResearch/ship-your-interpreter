@@ -1045,6 +1045,9 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     (fun h0 hr => hpi' h0 (by rw [← hY8]; exact hr))
     (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
 
+local macro "wl_read" : tactic => `(tactic|
+  simp (disch := omega_near) only [read64_store_miss, read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt])
+
 theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {P a b : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂) bins)
@@ -1069,40 +1072,28 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hN16 := hal _ hN; have hX16 := hal _ hX
   simp only at hNb hXb hN16 hX16
   have hbrk := HH.brk_le; have htle := HH.top_le
-  have hlo := HH.walk.le
-  unfold heapStart heapEnd at *
-  obtain ⟨hxh, hxhr, _, hxhl⟩ := walk_header HH.walk _ hX
-  simp only at hxhr
-  rw [hxr] at hxhr
-  obtain rfl : hx = hxh := Option.some.inj hxhr
-
+  unfold heapEnd at hbrk htle
+  obtain ⟨hxh, hxhr, -, hxhl⟩ := walk_header HH.walk _ hX
+  simp only [hxr, Option.some.injEq] at hxhr
+  subst hxhr
   have hpredm : pred = binAt i ∨ pred ∈ bins i := by
-    have := List.mem_of_getLast? hpred
-    rcases List.mem_cons.mp this with h1 | h1
-    · exact .inl h1
-    · exact .inr (by rw [hbin]; exact List.mem_append_left _ h1)
+    have := List.mem_of_getLast? hpred; rw [hbin]
+    simp only [List.mem_cons, List.mem_append] at this ⊢; exact this.imp_right .inl
   have hsuccm : succ = binAt i ∨ succ ∈ bins i := by
-    have := List.mem_of_head? hsucc
-    rcases List.mem_append.mp this with h1 | h1
-    · exact .inr (by rw [hbin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
-    · exact .inl (List.mem_singleton.mp h1)
+    have := List.mem_of_head? hsucc; rw [hbin]
+    simp only [List.mem_cons, List.mem_append, List.not_mem_nil, or_false] at this ⊢
+    exact this.symm.imp_right fun h => .inr (.inr h)
   obtain ⟨hp16, hpnode⟩ := HH.node hi0 hi hpredm
   obtain ⟨hs16, hsnode⟩ := HH.node hi0 hi hsuccm
-  have hXbd : (P + a = top ∨ ∃ c ∈ cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂, c.addr = P + a) :=
-    .inr ⟨_, hX, rfl⟩
-  have hPbd : (P = top ∨ ∃ c ∈ cs₁ ++ ⟨P, a, false⟩ :: ⟨P + a, b, true⟩ :: cs₂, c.addr = P) :=
-    .inr ⟨_, hN, rfl⟩
-  have hsX := HH.bnd_ne_node hi hsnode hXbd 16 (by omega) (by omega)
-  have hsP := HH.bnd_ne_node hi hsnode hPbd 16 (by omega) (by omega)
+  have hsP := HH.bnd_ne_node hi hsnode (.inr ⟨_, hN, rfl⟩) 16 (by omega) (by omega)
+  have hsX := HH.bnd_ne_node hi hsnode (.inr ⟨_, hX, rfl⟩) 16 (by omega) (by omega)
+  simp only at hsP hsX
   have hpl : pred < 2 ^ 64 := by
-    rcases hpnode with rfl | ⟨cx, hcx, rfl, _, _⟩
-    · have := binAt_geo i hi; omega
-    · have := HH.walk.chunk_bounds cx hcx; omega
+    rcases hpnode with rfl | ⟨cx, hcx, rfl, -⟩ <;> first
+      | (have := binAt_geo i hi; omega) | (have := HH.walk.chunk_bounds cx hcx; omega)
   have hsl : succ < 2 ^ 64 := by
-    rcases hsnode with rfl | ⟨cx, hcx, rfl, _, _⟩
-    · have := binAt_geo i hi; omega
-    · have := HH.walk.chunk_bounds cx hcx; omega
-
+    rcases hsnode with rfl | ⟨cx, hcx, rfl, -⟩ <;> first
+      | (have := binAt_geo i hi; omega) | (have := HH.walk.chunk_bounds cx hcx; omega)
   generalize hM1 : writeLog (writeLog (writeLog m [(pred + 16, 8, BitVec.ofNat 64 succ)])
     [(succ + 24, 8, BitVec.ofNat 64 pred)]) [(P + a + 8, 8, BitVec.ofNat 64 (hx ||| 1))] = M1
   have hor1 : (hx ||| 1) = hx / 2 * 2 + 1 := by
@@ -1114,34 +1105,24 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hor1lt : hx ||| 1 < 2 ^ 64 := by rw [hor1]; have := Vsa.Sim.read64_lt _ _ _ hxr; omega
   have H1 := h.take hi0 hi hbin hN rfl (n := 0) (by simp only; omega) hpred hsucc
     (m' := M1) (hd' := hx ||| 1)
-    (by show read64 _ (pred + 16) = _
-        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
-          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl])
-    (by show read64 _ (succ + 24) = _
-        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_hit, BitVec.toNat_ofNat,
-          Nat.mod_eq_of_lt hpl])
-    (by simp only; rw [← hM1, read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hor1lt])
+    (by show read64 _ (pred + 16) = _; rw [← hM1]; wl_read)
+    (by show read64 _ (succ + 24) = _; rw [← hM1]; wl_read)
+    (by simp only; rw [← hM1]; wl_read)
     (fun hd hr => by
-      simp only at hr; rw [hxr] at hr; cases hr
-      unfold chunkSize; rw [hor1]; omega)
+      simp only [hxr, Option.some.injEq] at hr; subst hr; unfold chunkSize; rw [hor1]; omega)
     (by unfold prevInuse; rw [hor1]; simp)
     (fun a' ha' hna => by
       unfold TakeW at hna; simp only at hna
-      rw [← hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
+      rw [← hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega_near)
   have H1' := H1.drop
-  simp only at H1'
   have hends := walk_ends_ne (cs₁ := cs₁) (N := ⟨P, a, false⟩) (cs₂ := ⟨P + a, b, true⟩ :: cs₂) HH.walk
-  simp only at hends
+  simp only at H1' hends
   rw [map_reflag_eq (q := P + a) rfl hends.1 hends.2] at H1'
-
-  have hP8 : read64 M1 (P + 8) = read64 m (P + 8) := by
-    rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
-      read64_store_miss _ _ (by omega)]
+  have hP8 : read64 M1 (P + 8) = read64 m (P + 8) := by rw [← hM1]; wl_read
   have hh'lt : h' < 2 ^ 64 := by unfold chunkSize at hsz'; omega
-  exact H1'.absorb (x := P) (a := a) (b := b) hno (by rw [read64_store_miss _ _ (by omega), read64_store_hit,
-      BitVec.toNat_ofNat, Nat.mod_eq_of_lt hh'lt]) hsz' hlow'
+  exact H1'.absorb (x := P) (a := a) (b := b) hno (by wl_read) hsz' hlow'
     (fun h0 hr => hpi' h0 (by rw [← hP8]; exact hr))
-    (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
+    (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega_near)
 
 end VsaIris.VsaHeap
 
