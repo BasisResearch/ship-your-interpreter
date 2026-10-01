@@ -1,4 +1,5 @@
 import VsaIris.Vsa.Stdout.Win
+import VsaIris.Vsa.Dbm
 
 /-!
 # Carry and address laws over the existing terms
@@ -85,7 +86,7 @@ elab "region_close" : tactic => do
         evalTactic (← `(tactic| unfold $(mkIdent c):ident at $(mkIdent d.userName):ident))
     if let some c ← unfoldHead (← instantiateMVars (← getMainTarget)) then
       evalTactic (← `(tactic| unfold $(mkIdent c):ident))
-    evalTactic (← `(tactic| simp (config := {failIfUnchanged := false}) (disch := omega) only
+    evalTactic (← `(tactic| simp (config := {failIfUnchanged := false}) (disch := omega_dc) only
       [toNat_add_lit] at $locs*  ⊢))
   let mut goals ← getGoals
   for k in [0:fvs.size] do
@@ -97,7 +98,7 @@ elab "region_close" : tactic => do
       | none => next := next ++ [gl]
     goals := next
   setGoals goals
-  evalTactic (← `(tactic| all_goals omega))
+  evalTactic (← `(tactic| all_goals omega_dc))
 
 open Lean Elab Tactic Meta in
 /-- The side conditions of the carry rules, dispatched on their shape. -/
@@ -106,7 +107,7 @@ elab "carry_disch" : tactic => withMainContext do
   let closed := !t.hasFVar && !t.hasMVar
   let tac ← if closed then `(tactic| decide)
     else if t.isAppOf ``Ne || t.isAppOf ``Not then
-      `(tactic| first | exact ne_of_mem_all (by assumption) (by decide) | omega)
+      `(tactic| first | exact ne_of_mem_all (by assumption) (by decide) | omega_dc)
     else if t.isAppOf ``Membership.mem then
       `(tactic| first | exact mem_of_mem_all (by assumption) (by decide) | assumption)
     else if t.isForall then
@@ -114,11 +115,11 @@ elab "carry_disch" : tactic => withMainContext do
         with_unfolding_all intro j hj h
         simp only [widthOfM] at hj
         carry_unfold h
-        simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h
-        omega))
+        simp (config := {failIfUnchanged := false}) (disch := omega_dc) only [toNat_add_lit] at h
+        omega_dc))
     else if t.isAppOf ``LE.le && (t.getArg! 3).isFVar then
-      `(tactic| first | exact Win.le_top (by with_reducible assumption) (by decide) | omega)
-    else `(tactic| first | win_key | omega | (simp only [widthOfM]; omega) | assumption)
+      `(tactic| first | exact Win.le_top (by with_reducible assumption) (by decide) | omega_dc)
+    else `(tactic| first | win_key | omega_dc | (simp only [widthOfM]; omega_dc) | assumption)
   evalTactic tac
 
 open Lean Elab Tactic Meta in
@@ -144,9 +145,9 @@ syntax "carry_close" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 syntax "carry_arith" (Lean.Parser.Tactic.location)? : tactic
 macro_rules
   | `(tactic| carry_arith $[$loc]?) => `(tactic| (
-      simp (config := {failIfUnchanged := false}) (disch := omega) only
+      simp (config := {failIfUnchanged := false}) (disch := omega_dc) only
         [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, BitVec.toNat_ofNat, Nat.zero_mod] $[$loc]?
-      omega))
+      omega_dc))
 
 syntax "carry_finish" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 macro_rules

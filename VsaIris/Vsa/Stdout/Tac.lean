@@ -2,6 +2,7 @@ import VsaIris.Vsa.Stdout.Console
 import VsaIris.Vsa.Stdout.Write
 import VsaIris.Vsa.Stdout.Attr
 import VsaIris.Vsa.BvLits
+import VsaIris.Vsa.Dbm
 
 namespace VsaIris.Sym
 
@@ -110,7 +111,7 @@ def nxNorm (facts : Array Term) : TacticM Syntax := do
     facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
   `(tactic| ((try nx_tidy) <;> (try simp only [updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try simp only [$lems,*]) <;>
-      (try nx_norm) <;> (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero]) <;>
+      (try nx_norm) <;> (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero]) <;>
       (try simp (disch := decide) only [update_aligned]) <;>
       (try simp only [BitVec.sub_self, sext_zero32, BitVec.toInt_zero])))
 
@@ -122,7 +123,7 @@ def nxTryPrune (facts : Array Term) (norm : Syntax) (g : MVarId) : TacticM Bool 
   let saved ← saveState
   try
     let gs ← evalTacticAt
-      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero, BitVec.sub_self, sext_zero32] at hc); (try (exfalso; revert hc; sx_side))))) g
+      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero, BitVec.sub_self, sext_zero32] at hc); (try (exfalso; revert hc; sx_side))))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
@@ -214,7 +215,7 @@ elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
   | `(tactic| nx_runB $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops 55
 
-macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
+macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega_dc) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega_dc))
 
 namespace Stdout
 scoped macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
@@ -222,7 +223,7 @@ end Stdout
 
 syntax "nx_hb " ident : tactic
 macro_rules
-  | `(tactic| nx_hb $h) => `(tactic| simp (disch := omega) only [mem_accAddrs_iff, toNat_add_lit,
+  | `(tactic| nx_hb $h) => `(tactic| simp (disch := omega_dc) only [mem_accAddrs_iff, toNat_add_lit,
       toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod,
       Nat.reduceAdd] at $h:ident)
 

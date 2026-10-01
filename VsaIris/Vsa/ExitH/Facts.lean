@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Tac
 import VsaIris.Vsa.StdioErr
+import VsaIris.Vsa.Dbm
 
 namespace VsaIris.Sym
 
@@ -11,7 +12,7 @@ def exitS (s : BitVec 64) (a : Nat) : Prop :=
 
 namespace XH
 
-scoped macro_rules | `(tactic| nx_addr) => `(tactic| ((try simp only [exitS, stdioFoot, InRange] at ⊢); (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega))
+scoped macro_rules | `(tactic| nx_addr) => `(tactic| ((try simp only [exitS, stdioFoot, InRange] at ⊢); (try simp (disch := omega_dc) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega_dc))
 end XH
 
 structure ExitSp (s : BitVec 64) : Prop where

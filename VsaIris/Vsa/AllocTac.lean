@@ -1,4 +1,5 @@
 import VsaIris.Vsa.StepGen
+import VsaIris.Vsa.Dbm
 
 namespace VsaIris.Sym
 
@@ -54,7 +55,7 @@ macro_rules
 
 syntax "sx_addr" : tactic
 macro_rules
-  | `(tactic| sx_addr) => `(tactic| (sx_pre; sx_lits; sx_bv; sx_lits; sx_bv; first | done | omega))
+  | `(tactic| sx_addr) => `(tactic| (sx_pre; sx_lits; sx_bv; sx_lits; sx_bv; first | done | omega_dc))
 
 macro_rules | `(tactic| sx_side) => `(tactic| sx_addr)
 

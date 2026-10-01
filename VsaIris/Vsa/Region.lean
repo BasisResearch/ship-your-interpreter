@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.RegionCore
+import VsaIris.Vsa.Dbm
 
 /-!
 # Region-keyed memory for allocator path proofs (candidate KT)
@@ -327,16 +328,16 @@ theorem key_sub (a c : Nat) (h : 18446744073709551616 - c ≤ a ∧ a < 18446744
 additions, then `omega` over the facts in context (no hypothesis rewriting). -/
 macro "rgn_arith" : tactic =>
   `(tactic| first
-    | omega
+    | omega_dc
     | (simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
         LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceAppend,
         BitVec.reduceSignExtend, VsaIris.VsaHeap.key_toNat_add,
         VsaIris.VsaHeap.key_toNat_ofNat, BitVec.reduceToNat, Nat.reducePow, Nat.reduceMod]
        repeat (first
-         | (rw [Nat.mod_eq_of_lt]; rotate_left; omega)
-         | (rw [VsaIris.VsaHeap.key_sub]; rotate_left; omega)
+         | (rw [Nat.mod_eq_of_lt]; rotate_left; omega_dc)
+         | (rw [VsaIris.VsaHeap.key_sub]; rotate_left; omega_dc)
          | fail "no wrap-around to remove")
-       first | done | omega)
+       first | done | omega_dc)
     | fail "rgn_arith: address arithmetic failed")
 
 /-- Keying an access: the goal about the address `a` follows from the same goal
@@ -355,8 +356,8 @@ macro "rgn_key_norm" : tactic =>
         VsaIris.VsaHeap.key_toNat_ofNat, BitVec.reduceToNat,
                Nat.reducePow, Nat.reduceMod] at hA)
              (repeat (first
-               | (rw [Nat.mod_eq_of_lt] at hA; rotate_left; omega)
-               | (rw [VsaIris.VsaHeap.key_sub] at hA; rotate_left; omega)
+               | (rw [Nat.mod_eq_of_lt] at hA; rotate_left; omega_dc)
+               | (rw [VsaIris.VsaHeap.key_sub] at hA; rotate_left; omega_dc)
                | fail "no wrap-around to remove"))))
 
 /-- Normalise the goal only (register updates, immediates, loads through stores). -/
@@ -468,14 +469,14 @@ def rgnSide (g : MVarId) (hint : Option Name) : TacticM (Option Name) := do
   let mk : RgnHyp → TacticM (Array (TSyntax `tactic)) := fun h => do
     let r := mkIdent h.name
     if app.isAppOf ``LdOK then
-      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.ldOK $r ?_; omega))]
-      return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.ldOK $r ?_; omega))]
+      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.ldOK $r ?_; omega_dc))]
+      return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.ldOK $r ?_; omega_dc))]
     else if app.isAppOf ``StOK then
-      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.stOK $r ?_; omega))]
-      return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.stOK $r ?_; omega))]
+      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.stOK $r ?_; omega_dc))]
+      return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.stOK $r ?_; omega_dc))]
     else
-      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.acc $r ?_; omega))]
-      oks.mapM fun o => `(tactic| (refine VsaIris.VsaHeap.WOK.rgn $o $r ?_; omega))
+      if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.acc $r ?_; omega_dc))]
+      oks.mapM fun o => `(tactic| (refine VsaIris.VsaHeap.WOK.rgn $o $r ?_; omega_dc))
   rgnTry g app.appFn!.appArg! rgns hint mk #[]
 
 /-- Close an ownership (`∀ x ∈ accAddrs a w, C.S x`), `LdOK` or `StOK` goal
@@ -555,10 +556,10 @@ elab "rgn_win" : tactic => do
   let .forallE _ le _ _ := body | throwError "rgn_win: not a key goal"
   let a := le.appFn!.appArg!
   if a.hasLooseBVars then throwError "rgn_win: not a key goal"
-  let stack ← `(tactic| (refine VsaIris.VsaHeap.win_stack' ?_; omega))
+  let stack ← `(tactic| (refine VsaIris.VsaHeap.win_stack' ?_; omega_dc))
   let mk : RgnHyp → TacticM (Array (TSyntax `tactic)) := fun h => do
     if h.acc then return #[]
-    return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.win $(mkIdent h.name) ?_; omega))]
+    return #[← `(tactic| (refine VsaIris.VsaHeap.Rgn.win $(mkIdent h.name) ?_; omega_dc))]
   -- a key over the context's stack pointer is tried against the stack window first; any
   -- other key against the regions first (a failing stack check is a wasted `omega`)
   let onStack := (a.find? (·.isConstOf ``MCtx.s)).isSome
