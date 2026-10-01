@@ -764,16 +764,8 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   obtain rfl : hdn = hdh := Option.some.inj hdhr
 
   have hvmem : Y + a ∈ bins i := by rw [hbin]; exact List.mem_append_right _ List.mem_cons_self
-  have hpredm : pred = binAt i ∨ pred ∈ bins i := by
-    have := List.mem_of_getLast? hpred
-    rcases List.mem_cons.mp this with h1 | h1
-    · exact .inl h1
-    · exact .inr (by rw [hbin]; exact List.mem_append_left _ h1)
-  have hsuccm : succ = binAt i ∨ succ ∈ bins i := by
-    have := List.mem_of_head? hsucc
-    rcases List.mem_append.mp this with h1 | h1
-    · exact .inr (by rw [hbin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
-    · exact .inl (List.mem_singleton.mp h1)
+  have hpredm := pred_mem (L := bins i) (fun x hx => by rw [hbin]; simp [hx]) hpred
+  have hsuccm := succ_mem (L := bins i) (fun x hx => by rw [hbin]; simp [hx]) hsucc
   obtain ⟨hp16, hpnode⟩ := HH.node hi0 hi hpredm
   obtain ⟨hs16, hsnode⟩ := HH.node hi0 hi hsuccm
   have hnnb : (Y + a + b = top ∨ ∃ c ∈ cs₁ ++ ⟨Y, a, true⟩ :: ⟨Y + a, b, false⟩ :: d :: cs₃,
@@ -805,13 +797,9 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   rw [hda] at hd16
   have H1 := h.take hi0 hi hbin hN rfl (n := 0) (by simp only; omega) hpred hsucc
     (m' := M1) (hd' := hdn ||| 1)
-    (by show read64 _ (pred + 16) = _
-        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
-          read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsl])
-    (by show read64 _ (succ + 24) = _
-        rw [← hM1, read64_store_miss _ _ (by omega), read64_store_hit, BitVec.toNat_ofNat,
-          Nat.mod_eq_of_lt hpl])
-    (by simp only; rw [← hM1, read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hor1lt])
+    (by show read64 _ (pred + 16) = _; rw [← hM1]; wl_rd)
+    (by show read64 _ (succ + 24) = _; rw [← hM1]; wl_rd)
+    (by simp only; rw [← hM1]; wl_rd)
     (fun hd hr => by
       simp only at hr; rw [hdnr] at hr; cases hr
       unfold chunkSize; rw [hor1]; omega)
@@ -833,12 +821,9 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     obtain ⟨c, hc, hu, h1, _⟩ := HH.exact e he he
     have := HH.chunk_eq hc hN (by simp only; omega)
     rw [this] at hu; cases hu
-  have hY8 : read64 M1 (Y + 8) = read64 m (Y + 8) := by
-    rw [← hM1, read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega),
-      read64_store_miss _ _ (by omega)]
+  have hY8 : read64 M1 (Y + 8) = read64 m (Y + 8) := by rw [← hM1]; wl_rd
   have hh'lt : h' < 2 ^ 64 := by unfold chunkSize at hsz'; omega
-  exact H1'.absorb hno (by rw [read64_store_miss _ _ (by omega), read64_store_hit,
-      BitVec.toNat_ofNat, Nat.mod_eq_of_lt hh'lt]) hsz' hlow'
+  exact H1'.absorb hno (by wl_rd) hsz' hlow'
     (fun h0 hr => hpi' h0 (by rw [← hY8]; exact hr))
     (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
 
