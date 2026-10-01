@@ -175,3 +175,39 @@ All candidates are **known**:
 * K: modifies clauses / effect systems; in this project `carry_close` (round 8), 0 uses here.
 * X: Boogie's expose/pack, DPO rewriting; the edit lemmas already compose partly.
 * W: wrapped intervals; `rgn_arith`/`key_sub` handle negative offsets today.
+
+## 6. Variation
+
+The ideonomy draw was tree-finding and negation, organised as a periodic grid, with the prompts
+complexity, size and connectivity. The grid's rows are how much new vocabulary a candidate adds: 0 is
+existing terms only, 1 is lemmas or tactics over existing terms, 2 is a new predicate, 3 is a new
+datatype with a bridge, 4 is reflection. Its columns are the granularity the rule acts at: one side
+goal, one edit or path, one field group or record, the whole invariant.
+
+```
+            | side goal                 | edit / path                 | field group / record          | whole invariant
+------------+---------------------------+-----------------------------+-------------------------------+------------------------
+0 existing  | omega over local facts    | carry_close reach (0 uses)  | transport_read (full agree)   | -
+1 lemmas    | packaged geometry facts   | transport_except over       | field-group keep lemmas       | -
+            | closed by lemma, win_key  | HeapAt fields (P2a)         | (globals / rings / prefix)    |
+2 predicate | Apart atom (o5)           | Keeps K R R' (K, empty)     | invariant with holes (X)      | -
+3 datatype  | -                         | patch category (X)          | record footprints (K)         | views + bridge (F, P1)
+4 reflection| DBM / zone checker (D,P3) | -                           | -                             | reflective views (none)
+```
+
+Tree-finding moved F up one level: "a field's read set" sits below "a field group's read set". The
+groups (globals, bin rings, walk prefix, top) are siblings at the level where the edits differ. That
+gives the empty cell at row 1: keep lemmas per group over existing fields, with no view datatype.
+Negation of "omega decides the side goal" gave three cells: decide it by `decide` on literal keys
+(`win_key`, exists elsewhere), by a reflective checker (D), or by never putting the facts in the
+context and applying the packaged region fact (row 1). Negating "the proof states every field" gave
+the holes/excuse-set row, which no pilot takes (no held-out case composes edits except fresh
+`coalPrev`).
+
+Pilots (worktrees from f83224e1):
+
+* P1 (row 3, 6/6, 4/6 first): footprinted views of the invariant with one `transport_except` rule.
+* P2 (the meet, rows 0–1): except-window transport as lemmas over the existing `HeapAt` fields;
+  `carry_close`/`region_close` made to reach the path cases; a local decision for side goals over
+  existing terms.
+* P3 (row 4, 6/6, 2/6 first): a reflective difference-constraint checker for address side goals.
