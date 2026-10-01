@@ -262,3 +262,32 @@ Reading: the candidates act on different calls (PA region membership, PB failing
 written and driver omega in large contexts, PD tactic-issued omega), each names the others' territory
 as its residue, and their setups do not conflict (merged with two trivial conflicts). Per the skill,
 the next iteration is the combination, with no new abstraction code, measured on the whole scope.
+
+## 8. The combination (no new abstraction code), measured on the whole scope
+
+`exp-R10-C` = exp-R10 + PD + PA + PB + PC (merges 3a104cae, 35d22927, cd2b2621, 5a7bcd1c; two
+conflicts, both trivial: PA's key route kept with PD's `omega_dc` in the fallback candidates; two
+import lines in AllocTac). Full `lake build` (all default targets): 1,557 jobs, 0 errors, 0 `sorry`.
+
+All 627 modules of the scope, single-file one-thread user CPU, pre-round base (e0981ae6, the clean-built
+tree) and the combination interleaved per file, 16 shards in parallel, min of 2 (load 20–60;
+`~/syi-r10/scope/`):
+
+| | base | combination | change |
+|---|---:|---:|---:|
+| all 627 modules | 4,290.4 | 3,764.0 | **−12.3%** |
+| VsaIris/Vsa (225) | 2,394.7 | 2,008.5 | −16.1% |
+| VsaIris/Interp (190) | 1,308.8 | 1,169.6 | −10.6% |
+| Vsa/Sim (212) | 586.9 | 585.9 | −0.2% |
+| primary held-out (6) | 65.49 | 50.23 | −23.3% |
+| fresh held-out (6), the forecast | 88.87 | 74.58 | −16.1% |
+
+Largest gains: SnpSvf 89.4 → 62.8, Stdout/Fwrite 70.9 → 44.3, Interp/ProofStringify 83.8 → 58.6,
+SnpStrlen 57.5 → 42.7, Stdout/Fputs 43.1 → 29.5, MallocBlocks 48.0 → 36.0, FreePaths 71.9 → 59.7,
+ReallocPrevN 30.6 → 21.1, Stderr/VfpEntry 19.3 → 11.4. Over the per-file bound (+10% and +0.2 s): 8
+files — Interp/LogRuns 17.9 → 20.5 (+15%), the layer files Region 4.3 → 6.0 and RegionCore 1.1 → 1.4,
+Vsa/Sim/CheckedBoundary 6.1 → 6.7, Interp/SpecLoop, StrIris, IntOpRuns and Vsa/Sim/ExecLoadTotal
+(+0.2–0.3 s each). These went to the rollout agents.
+
+The fresh set forecast −16% and the scope came in at −12% (the held-out draw over-represents the
+families the layers target; Vsa/Sim, a third of the modules, has few tactic-issued calls).
