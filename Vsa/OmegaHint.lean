@@ -1,4 +1,5 @@
 import Lean
+import VsaIris.Vsa.Dbm
 
 namespace Vsa.OmegaHint
 open Lean Meta Elab Tactic Omega
@@ -11,6 +12,16 @@ register_option vsa.omegaHint : Bool := {
 register_option vsa.omegaHintMin : Nat := {
   defValue := 40
   descr := "smallest number of hypotheses at which the reduced omega is tried first"
+}
+
+register_option vsa.omegaDbmMin : Nat := {
+  defValue := 40
+  descr := "smallest number of hypotheses at which omega first tries the difference-constraint checker dbm"
+}
+
+register_option vsa.omegaDbmRecord : Nat := {
+  defValue := 1
+  descr := "hint state after a dbm close: 0 keep, 1 merge used hypotheses, 2 replace, 3 mark seen only"
 }
 
 structure Keys where
@@ -33,8 +44,9 @@ structure Info where
   stage : Nat := 0
   failMs : Float := 0
   okMs : Float := 0
+  dbmMs : Float := 0
 
-def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) : MetaM Unit := do
+def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) (mode : Nat := 2) : MetaM Unit := do
   let mut seen := s.seen
   for f in all do
     unless seen.fv.contains f do
@@ -44,7 +56,10 @@ def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) : MetaM 
     if let .fvar f := a then
       if let some ld := (← getLCtx).find? f then
         u := { fv := u.fv.insert f, ty := u.ty.insert (← instantiateMVars ld.type) }
-  let s' : St := { last := u, hot := s.hot.union u, seen := seen }
+  let s' : St := match mode with
+    | 1 => { last := s.last.union u, hot := s.hot.union u, seen := seen }
+    | 3 => { s with seen := seen }
+    | _ => { last := u, hot := s.hot.union u, seen := seen }
   stRef.modify fun m => (if m.size > 256 then {} else m).insert d s'
 
 def solve (type : Expr) (hyps : List Expr) (cfg : OmegaConfig) : MetaM Expr := do
@@ -104,6 +119,18 @@ def run (cfg : OmegaConfig) : TacticM Info := do
       g.assign e
   infoRef.get
 
+def dbmStage (d : Name) (g : MVarId) : MetaM Bool := g.withContext do
+  let type ← instantiateMVars (← g.getType)
+  let g' ← mkFreshExprSyntheticOpaqueMVar type
+  if ← VsaIris.Dbm.dbmClose g'.mvarId! then
+    let e ← mkAuxTheorem type (← instantiateMVars g') (zetaDelta := true)
+    let all := (← getLocalHyps).filterMap fun e => if let .fvar f := e then some f else none
+    let mode := vsa.omegaDbmRecord.get (← getOptions)
+    if mode != 0 then record d (((← stRef.get)[d]?).getD {}) all e.getAppArgs mode
+    g.assign e
+    return true
+  return false
+
 def evalHint (stx : Syntax) : TacticM Info := do
   if !vsa.omegaHint.get (← getOptions) then evalOmega stx; return {}
   match stx with
@@ -111,7 +138,19 @@ def evalHint (stx : Syntax) : TacticM Info := do
     recordExtraModUse (isMeta := false) `Init.Omega
     (do Meta.withReducibleAndInstances (evalAssumption tk); return {}) <|> do
       let cfg ← elabOmegaConfig cfg
-      run cfg
+      let g ← getMainGoal
+      let n ← g.withContext do return (← getLocalHyps).size
+      let mut dms : Float := 0
+      if n ≥ vsa.omegaDbmMin.get (← getOptions) then
+        let t0 ← IO.monoNanosNow
+        let ok ← dbmStage ((← Term.getDeclName?).getD .anonymous) g
+        let t1 ← IO.monoNanosNow
+        dms := (t1 - t0).toFloat / 1e6
+        if ok then
+          replaceMainGoal []
+          return { nAll := n, stage := 7, dbmMs := dms }
+      let r ← run cfg
+      return { r with dbmMs := dms }
   | _ => throwUnsupportedSyntax
 
 @[no_fallback, tactic Lean.Parser.Tactic.omega] def evalOmegaHint : Tactic := fun stx => do
