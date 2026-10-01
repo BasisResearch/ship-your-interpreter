@@ -1,4 +1,5 @@
 import VsaIris.Vsa.ReallocPrevT
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -298,10 +299,7 @@ theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     · have hth := HH.top_header
       rw [← hXt, hnr] at hth
       cases hth
-      refine grow_top O (by rd_regs D) hsp hXt ?_ ?_ <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · exact h13
-      · rw [hv10, hXt]
+      refine grow_top O (by rd_regs D) hsp hXt ?_ ?_ <;> carry_close [h13, hv10, hXt]
     · exfalso
       have := HH.walk.chunk_bounds d (by rw [hsp]; simp)
       omega
@@ -327,16 +325,13 @@ theorem realloc_grow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     refine (step% st 0x80005314) O.live (fun hu => ?_) (fun hu => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hu
     · exact grow_used O (by rd_regs D) (rest := ⟨X + S, ns, b⟩ :: cs₃) (by rw [hsp]; try simp)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h13)
+        (by carry_close [h13])
     · have hb : b = false := by
         have := prev_bit (x := BitVec.ofNat 64 hnn) (h := hnn)
           (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hnnr)]) hu
         unfold prevInuse at hnnp; rw [← hnnp]; simp [this]
       subst hb
       refine grow_free O (by rd_regs D) (cs₁ := cs₁) (cs₃ := cs₃) (by rw [hsp]; try simp) ?_ ?_ hds ?_ <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · exact h13
-      · exact hv10
-      · exact e16
+        carry_close [h13, hv10, e16]
 
 end VsaIris.VsaHeap
