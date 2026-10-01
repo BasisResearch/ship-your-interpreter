@@ -39,11 +39,7 @@ theorem svf_disp {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   rcases hc with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
   all_goals snp_runF hlive using [ofNat_add_ofNat, h22, h24, h25, h26, sext_zero, BitVec.add_zero,
     BitVec.reduceToNat, ts, td, tl] at 0x80007f4c 0x80008008 0x80008534 0x800077f8
-  all_goals refine hk _ ?_ ?_ ?_
-  all_goals (try intro z h14 h15 h24' h25')
-  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h14, h15, h24', h25'])
-  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-  all_goals first | rfl | (rw [h24]; decide) | skip
+  all_goals refine hk _ ?_ ?_ ?_ <;> carry_close [h24]
 
 def StKeep (s a : Nat) : Prop :=
   SvfKeep s a ∨ (s - 864 + 224 ≤ a ∧ a < s - 864 + 248) ∨ (s - 864 + 352 ≤ a ∧ a < s - 864 + 480)
@@ -124,16 +120,9 @@ theorem svf_convStart {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   have h2 := St.core.r2
   have hbq := lbu_img_ofNat Dt (q + 1) (by omega)
   snp_runF hlive using [ofNat_add_ofNat, h2, h22, hbq] at 0x80007798
-  refine hk _ _ ⟨St.update SG ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · intro a ha; unfold StKeep SvfKeep at ha; svf_mem
-  · svf_mem
-  · svf_mem; exact St.core.ret
-  · svf_mem; exact St.core.ap
-  · svf_mem
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  refine hk _ _ ⟨St.update SG ?_ ?_ (fun a ha => by unfold StKeep SvfKeep at ha; svf_mem) ?_ ?_ ?_, ?_, ?_, ?_,
+    ?_, ?_, ?_, ?_, ?_⟩
+  all_goals carry_close [St.core.ret, St.core.ap]
 
 theorem svf_convS_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -160,22 +149,9 @@ theorem svf_convS_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   have hng : ¬ (BitVec.ofNat 64 len).toInt < (0#64).toInt := by
     rw [toInt_ofNat_small (by omega)]; simp
   snp_runF hlive using [ofNat_add_ofNat, h2, h10, h167, h56, h48, h32, h24, hsx, hng] at 0x8000782c
-  refine hk _ _ ⟨St.update SG ?_ ?_ ?_ ?_ ?_ ?_, hL, ?_, ?_, ?_, ?_, .inl rfl, ?_, ?_, ?_, .inl ?_, ?_,
-    ?_, hsrc, hc, hsum⟩
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · intro a ha; unfold StKeep SvfKeep at ha; svf_mem
-  · svf_mem; exact St.core.fmt
-  · svf_mem; exact St.core.ret
-  · svf_mem
-  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, sgN, ite_true, Nat.add_zero])
-  · decide
-  · decide
-  · decide
-  · exact h26
-  · svf_mem; exact h167
-  · svf_mem
+  refine hk _ _ ⟨St.update SG ?_ ?_ (fun a ha => by unfold StKeep SvfKeep at ha; svf_mem) ?_ ?_ ?_, hL, ?_, ?_, ?_,
+    ?_, .inl rfl, ?_, ?_, ?_, .inl ?_, ?_, ?_, hsrc, hc, hsum⟩
+  all_goals carry_close [St.core.fmt, St.core.ret, h26, h167, show sgN 0 = 0 from rfl]
 
 structure DStr (Dt : Mem) (DA : List Nat) (a len : Nat) : Prop where
   dom : InDA DA a (a + len + 1)
@@ -226,29 +202,11 @@ theorem svf_convS {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     have := congrArg BitVec.toNat h; simp only [BitVec.toNat_ofNat] at this; omega)
   have hz16 : (0#64 &&& 16#64 : BitVec 64) = 0#64 := by decide
   snp_runF hlive using [ofNat_add_ofNat, h2, h6, h20, h24, h25, h27, hapf, hap, ha0', hz16] at 0x80006cf0
-  refine strlen_nw hlive (hstr.read _ _) _ ?_ ?_ fun R2 h10 hkp2 => ?_
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
+  refine strlen_nw hlive (hstr.read _ _) _ (by carry_close) (by carry_close) fun R2 h10 hkp2 => ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  have hR : SvfRegs R2 R := by
-    intro z hz
-    rw [hkp2 z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
-    rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> exact hk1 _ (by omega)
-  refine svf_convS_ret hlive q a len R2 _ SG (St.update SG hR ?_ ?_ ?_ ?_ ?_) hL ?_ ?_ ?_ ?_ h10 ?_ hsrc
-    hc hsum hk
-  · rw [hkp2 23 (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hk1 23 (by omega)
-  · intro a ha; unfold StKeep SvfKeep at ha; svf_mem
-  · svf_mem
-  · svf_mem; exact St.core.ret
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · rw [hkp2 26 (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  refine svf_convS_ret hlive q a len R2 _ SG (St.update SG ?_ ?_ (fun a ha => by unfold StKeep SvfKeep at ha; svf_mem)
+    ?_ ?_ ?_) hL ?_ ?_ ?_ ?_ h10 ?_ hsrc hc hsum hk
+  all_goals carry_close [SLKeep.get hkp2, hk1, St.core.ret]
 
 theorem svf_convLL {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat} (x : Nat)
@@ -264,10 +222,7 @@ theorem svf_convLL {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
   have hb1 := lbu_img_ofNat Dt (x + 1) (by omega)
   rw [hl] at hb0
   snp_runF hlive using [ofNat_add_ofNat, h25, h6, hb0, hb1] at 0x80007798
-  refine hk _ ?_ ?_ ?_ fun z h6' h15 h24 h25' => ?_
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · decide
-  · simp only [h6', h15, h24, h25', ite_false]
+  refine hk _ ?_ ?_ ?_ ?_ <;> carry_close
 
 def vSg (v : BitVec 64) : Nat := if v.toInt < 0 then 45 else 0
 
@@ -668,100 +623,6 @@ structure DigSpill (s : Nat) (Rs : Nat → BitVec 64) (t1 : BitVec 64) (Mt : Mem
   t1 : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 40)).toNat = t1
   e : ldv .ld Mt (BitVec.ofNat 64 (s - 864 + 112)).toNat = BitVec.ofNat 64 (s - 864 + 348)
 
-theorem svf_digExit0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
-    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
-    {L : List (Nat × Nat)} {m K : Nat} (Rs R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
-    (St : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L Rs Mt) (t1 : BitVec 64)
-    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : ∀ z, z = 2 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → R z = Rs z)
-    (h26 : R 26 = BitVec.ofNat 64 (s - 864 + 348 - K)) (DG : DigitsAt Mt s m K)
-    (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 0)
-    (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
-    (hk : IntPrintK live Dt DA Q s dst n R0 Mt0 p ap c total L m 0) :
-    SnpW live Dt DA (snpS s dst n) Q 0x80008358#64 R Mt := by
-  have hK1 := DG.pos
-  have hK := DG.le
-  have hs1 := SG.s_lo
-  have hw_s := SG.win
-  have hs2 := SG.s_hi
-  have h2 : R 2 = BitVec.ofNat 64 (s - 864) := (hR 2 (by omega)).trans St.core.r2
-  have hsub : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 (s - 864 + 348)) -
-      BitVec.extractLsb 31 0 (BitVec.ofNat 64 (s - 864 + 348 - K))) = BitVec.ofNat 64 K := by
-    rw [subw_ofNat' (by omega) (by omega) (by omega)]; congr 1; omega
-  have hsa := SG.s_al
-  have hsx := VsaIris.Interp.sext32_ofNat_eq (a := K) (by omega)
-  have h167' : ldv .lbu (writeLog (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 104)).toNat, 8, R 20)])
-      [((BitVec.ofNat 64 (s - 864 + 40)).toNat, 8, R 23)]) (BitVec.ofNat 64 (s - 864 + 167)).toNat =
-      BitVec.ofNat 64 0 := by svf_mem; exact h167
-  have hsx1 := VsaIris.Interp.sext32_ofNat_eq (a := K + 1) (by omega)
-  snp_runF hlive using [ofNat_add_ofNat, h2, h26, DS.s7, DS.s4, DS.s0, DS.t3, DS.t1, DS.e, h167', hsub, hsx, hsx1] at 0x8000782c
-  all_goals refine hk _ _ K ⟨St.update SG ?_ ?_ ?_ ?_ ?_ ?_, hL, ?_, ?_, ?_, ?_, by decide, ?_, ?_, ?_,
-    .inr ?_, ?_, ?_, digSrc SG DG.le, by omega, by omega⟩ ⟨DG.pos, DG.le, DG.hub, DG.hlb, ?_⟩
-  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> exact hR _ (by omega)))
-  all_goals (try (intro a ha; unfold StKeep SvfKeep at ha; svf_mem))
-  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-  · svf_mem; exact St.core.fmt
-  · svf_mem; exact St.core.ret
-  · svf_mem; exact St.core.ap
-  · rcases ht1 with h | h <;> rw [h] <;> decide
-  · rcases ht1 with h | h <;> rw [h] <;> decide
-  · rcases ht1 with h | h <;> rw [h] <;> decide
-  · simp [sgN]
-  · exact h26
-  · svf_mem; exact h167
-  · svf_mem
-  · intro i hi
-    have := DG.bytes i hi
-    svf_mem; exact this
-
-theorem svf_digExit45 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
-    {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
-    {L : List (Nat × Nat)} {m K : Nat} (Rs R : Nat → BitVec 64) (Mt : Mem) (SG : SnpGeom s dst n)
-    (St : SvfSt DA s dst n R0 Mt0 p ap (BitVec.ofNat 64 c) total L Rs Mt) (t1 : BitVec 64)
-    (ht1 : t1 = 0#64 ∨ t1 = 32#64) (DS : DigSpill s Rs t1 Mt) (hR : ∀ z, z = 2 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → R z = Rs z)
-    (h26 : R 26 = BitVec.ofNat 64 (s - 864 + 348 - K)) (DG : DigitsAt Mt s m K)
-    (h167 : ldv .lbu Mt (BitVec.ofNat 64 (s - 864 + 167)).toNat = BitVec.ofNat 64 45)
-    (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
-    (hk : IntPrintK live Dt DA Q s dst n R0 Mt0 p ap c total L m 45) :
-    SnpW live Dt DA (snpS s dst n) Q 0x80008358#64 R Mt := by
-  have hK1 := DG.pos
-  have hK := DG.le
-  have hs1 := SG.s_lo
-  have hw_s := SG.win
-  have hs2 := SG.s_hi
-  have h2 : R 2 = BitVec.ofNat 64 (s - 864) := (hR 2 (by omega)).trans St.core.r2
-  have hsub : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 (s - 864 + 348)) -
-      BitVec.extractLsb 31 0 (BitVec.ofNat 64 (s - 864 + 348 - K))) = BitVec.ofNat 64 K := by
-    rw [subw_ofNat' (by omega) (by omega) (by omega)]; congr 1; omega
-  have hsa := SG.s_al
-  have hsx := VsaIris.Interp.sext32_ofNat_eq (a := K) (by omega)
-  have h167' : ldv .lbu (writeLog (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 104)).toNat, 8, R 20)])
-      [((BitVec.ofNat 64 (s - 864 + 40)).toNat, 8, R 23)]) (BitVec.ofNat 64 (s - 864 + 167)).toNat =
-      BitVec.ofNat 64 45 := by svf_mem; exact h167
-  have hsx1 := VsaIris.Interp.sext32_ofNat_eq (a := K + 1) (by omega)
-  snp_runF hlive using [ofNat_add_ofNat, h2, h26, DS.s7, DS.s4, DS.s0, DS.t3, DS.t1, DS.e, h167', hsub, hsx, hsx1] at 0x8000782c
-  all_goals refine hk _ _ K ⟨St.update SG ?_ ?_ ?_ ?_ ?_ ?_, hL, ?_, ?_, ?_, ?_, by decide, ?_, ?_, ?_,
-    .inr ?_, ?_, ?_, digSrc SG DG.le, by omega, by omega⟩ ⟨DG.pos, DG.le, DG.hub, DG.hlb, ?_⟩
-  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> exact hR _ (by omega)))
-  all_goals (try (intro a ha; unfold StKeep SvfKeep at ha; svf_mem))
-  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-  · svf_mem; exact St.core.fmt
-  · svf_mem; exact St.core.ret
-  · svf_mem; exact St.core.ap
-  · rcases ht1 with h | h <;> rw [h] <;> decide
-  · rcases ht1 with h | h <;> rw [h] <;> decide
-  · rcases ht1 with h | h <;> rw [h] <;> decide
-  · simp [sgN]
-  · exact h26
-  · svf_mem; exact h167
-  · svf_mem
-  · intro i hi
-    have := DG.bytes i hi
-    svf_mem; exact this
-
 theorem svf_digExit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
     {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap c : Nat} {total : List (BitVec 8)}
@@ -773,9 +634,32 @@ theorem svf_digExit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (hL : L.length ≤ 1) (hc : c + 20 + 1 < 2 ^ 31) (hsum : sumLen L + 20 + 1 < 2 ^ 31)
     (hk : IntPrintK live Dt DA Q s dst n R0 Mt0 p ap c total L m sg) :
     SnpW live Dt DA (snpS s dst n) Q 0x80008358#64 R Mt := by
+  have hK1 := DG.pos
+  have hK := DG.le
+  have hs1 := SG.s_lo
+  have hw_s := SG.win
+  have hs2 := SG.s_hi
+  have h2 : R 2 = BitVec.ofNat 64 (s - 864) := (hR 2 (by omega)).trans St.core.r2
+  have hsub : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 (s - 864 + 348)) -
+      BitVec.extractLsb 31 0 (BitVec.ofNat 64 (s - 864 + 348 - K))) = BitVec.ofNat 64 K := by
+    rw [subw_ofNat' (by omega) (by omega) (by omega)]; congr 1; omega
+  have hsa := SG.s_al
+  have hsx := VsaIris.Interp.sext32_ofNat_eq (a := K) (by omega)
+  have h167' : ldv .lbu (writeLog (writeLog Mt [((BitVec.ofNat 64 (s - 864 + 104)).toNat, 8, R 20)])
+      [((BitVec.ofNat 64 (s - 864 + 40)).toNat, 8, R 23)]) (BitVec.ofNat 64 (s - 864 + 167)).toNat =
+      BitVec.ofNat 64 sg := by carry_close [h167]
+  have hsx1 := VsaIris.Interp.sext32_ofNat_eq (a := K + 1) (by omega)
+  have h132 : t1 &&& 132#64 = 0#64 := by rcases ht1 with h | h <;> rw [h] <;> decide
+  have h256 : t1 &&& 256#64 = 0#64 := by rcases ht1 with h | h <;> rw [h] <;> decide
+  have h4 : t1 &&& 4#64 = 0#64 := by rcases ht1 with h | h <;> rw [h] <;> decide
   rcases hsg with rfl | rfl
-  · exact svf_digExit0 hlive Rs R Mt SG St t1 ht1 DS hR h26 DG h167 hL hc hsum hk
-  · exact svf_digExit45 hlive Rs R Mt SG St t1 ht1 DS hR h26 DG h167 hL hc hsum hk
+  all_goals snp_runF hlive using [ofNat_add_ofNat, h2, h26, DS.s7, DS.s4, DS.s0, DS.t3, DS.t1, DS.e, h167', hsub, hsx,
+    hsx1] at 0x8000782c
+  all_goals refine hk _ _ K ⟨St.update SG (fun z hz => by rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
+    carry_close [hR]) ?_ (fun a ha => by unfold StKeep SvfKeep at ha; svf_mem) ?_ ?_ ?_, hL, ?_, ?_, ?_, ?_,
+    by decide, ?_, ?_, ?_, .inr ?_, ?_, ?_, digSrc SG DG.le, by omega, by omega⟩ ⟨DG.pos, DG.le, DG.hub, DG.hlb, ?_⟩
+  all_goals carry_close [St.core.fmt, St.core.ret, St.core.ap, h132, h256, h4, h26, h167, DG.bytes,
+    show sgN 0 = 0 from rfl, show sgN 45 = 1 from rfl]
 
 theorem svf_digMulti {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}

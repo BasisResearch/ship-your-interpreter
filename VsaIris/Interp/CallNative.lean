@@ -115,8 +115,7 @@ theorem ms_uncarveVals (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64
   unfold blockOwn
   ihave ⟨%f, Hb⟩ := ownSet_fn _ $$ Hb
   ihave ⟨%Ms, Hb⟩ := ownSet_mem _ f $$ Hb
-  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms Hb]
-  · iframe Hms Hb
+  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [$]
   iexists M'
   isplitl
   · iapply ms_iff' hsl $$ Hms
@@ -144,15 +143,12 @@ theorem dispResL_of_argVals (N : NativeAddrs) (hd : DispSupply (GF := GF) N) (s 
       | closure ca =>
         unfold valImg valOf
         iintro ⟨Hs, ⟨-, #Hc⟩⟩
-        iapply (hd s B ca _) $$ [Hs Hc]
-        iframe Hs Hc
+        iapply (hd s B ca _) $$ [$]
       | _ =>
         iintro ⟨Hs, -⟩
         iframe Hs
-        unfold dispRes; iempintro) $$ [Hs Hv]
-    · iframe Hs Hv
-    ihave ⟨Hs, #Hds⟩ := dispResL_of_argVals N hd s B img base vs (i + 1) $$ [Hs Hvs]
-    · iframe Hs Hvs
+        unfold dispRes; iempintro) $$ [$]
+    ihave ⟨Hs, #Hds⟩ := dispResL_of_argVals N hd s B img base vs (i + 1) $$ [$]
     iframe Hs Hd
     unfold dispResL at *
     iexact Hds

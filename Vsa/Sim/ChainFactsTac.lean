@@ -38,6 +38,7 @@ partial def cfTextCands (h T : Expr) : MetaM (Array Expr) := do
 /-- Candidates from the hypothesis term: its type is `TextLoaded T m`, `TextIn T m`, or the
     unfolded `∀ p ∈ T, m[p.1]? = some p.2`. -/
 def cfHypCands (h : Expr) : MetaM (Array Expr) := do
+  if let some e ← observing? (mkAppM ``TextIn.of_loaded #[h]) then return #[e]
   let rec go (ty : Expr) (fuel : Nat) : MetaM (Array Expr) := do
     let ty := (← whnfCore (← instantiateMVars ty)).consumeMData
     if ty.getAppNumArgs == 2 then
@@ -53,6 +54,23 @@ private def cfBvLitNat? (e : Expr) : MetaM (Option Nat) := do
   match ← getBitVecValue? e with
   | some ⟨_, v⟩ => return some v.toNat
   | none => return none
+
+/-- Byte facts `m[addr]? = some b` at literal addresses reachable from `h` by splitting
+    conjunctions and unfolding definitions (the generated `__xLoaded` shape). -/
+partial def cfByteFacts (h : Expr) (fuel : Nat := 8) : MetaM (Array (Nat × Expr)) := do
+  let ty := (← whnfCore (← instantiateMVars (← inferType h))).consumeMData
+  if ty.isAppOfArity ``And 2 then
+    return (← cfByteFacts (← mkAppM ``And.left #[h]) fuel) ++
+      (← cfByteFacts (← mkAppM ``And.right #[h]) fuel)
+  if ty.isAppOfArity ``Eq 3 then
+    let lhs := ty.getArg! 1
+    if lhs.isAppOf ``GetElem?.getElem? && lhs.getAppNumArgs ≥ 2 then
+      if let some n := (← instantiateMVars lhs.appArg!).rawNatLit? <|> (lhs.appArg!).nat? then
+        return #[(n, h)]
+    return #[]
+  match fuel, ← unfoldDefinition? ty with
+  | fuel + 1, some ty' => cfByteFacts (← mkExpectedTypeHint h ty') fuel
+  | _, _ => return #[]
 
 private def cfHexName (n : Nat) : String :=
   let s := (Nat.toDigits 16 n).asString
@@ -94,22 +112,40 @@ private def cfCloseDecode (g : MVarId) (ty : Expr) : TacticM Unit := do
   let stx ← `(fun s h1 h2 h3 => Vsa.Sim.decodeW s h1 h2 h3)
   g.assign (← g.withContext (Term.elabTermEnsuringType stx ty))
 
+/-- Close a byte-pin leaf from collected literal byte facts. -/
+private def cfClosePinsFacts (facts : Std.HashMap Nat Expr) (g : MVarId) (ty : Expr) :
+    TacticM Bool := do
+  if facts.isEmpty then return false
+  let some a ← cfLastArg? ty | return false
+  let some fE := cfStructField? a 0 | return false
+  let some pc ← cfBvLitNat? fE | return false
+  let some p0 := facts[pc]? | return false
+  let some p1 := facts[pc + 1]? | return false
+  let some p2 := facts[pc + 2]? | return false
+  let some p3 := facts[pc + 3]? | return false
+  g.withContext do
+    let e ← mkAppM ``And.intro #[p0, ← mkAppM ``And.intro #[p1, ← mkAppM ``And.intro #[p2, p3]]]
+    if ← isDefEq (← inferType e) ty then g.assign e; return true
+    return false
+
 private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId)
-    (hs : Array Expr := #[]) : TacticM (List MVarId) := do
+    (hs : Array Expr := #[]) (facts : Std.HashMap Nat Expr := {}) : TacticM (List MVarId) := do
   let pinName (pc : Nat) : String := prefixStr ++ cfHexName pc
   let ty := (← instantiateMVars (← g.getType)).consumeMData
   match ty.getAppFn.constName? with
   | some ``And =>
       let gs ← g.apply (← mkConstWithFreshMVarLevels ``And.intro)
       let mut acc : List MVarId := []
-      for g' in gs do acc := acc ++ (← cfSolve h prefixStr g' hs)
+      for g' in gs do acc := acc ++ (← cfSolve h prefixStr g' hs facts)
       return acc
   | some ``BytePinsM =>
       if ← cfClosePinsGeneric hs ``bytePinsM_of_text g then return []
+      if ← cfClosePinsFacts facts g ty then return []
       cfCloseLeaf h g ty pinName 0 true; return []
   | some ``DecodeFactM => cfCloseDecode g ty; return []
   | some ``BytePinsT =>
       if ← cfClosePinsGeneric hs ``bytePinsT_of_text g then return []
+      if ← cfClosePinsFacts facts g ty then return []
       cfCloseLeaf h g ty pinName 0 true; return []
   | some ``DecodeFactT => cfCloseDecode g ty; return []
   | some ``True => g.assign (mkConst ``True.intro); return []
@@ -117,7 +153,7 @@ private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId)
   | some ``TermPins | some ``TermFactsO =>
 
       let g' ← g.change (← g.withContext (whnf ty))
-      cfSolve h prefixStr g' hs
+      cfSolve h prefixStr g' hs facts
   | _ =>
 
       if ← g.withContext (isDefEq ty (mkConst ``True)) then
@@ -131,9 +167,14 @@ private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId)
     when `h` carries no piece footprint. -/
 def chainFactsCore (h : Term) (pstr : String) : TacticM Unit := do
   let g ← getMainGoal
-  let hs ← g.withContext do
-    try cfHypCands (← Term.elabTerm h none) catch _ => pure #[]
-  let leftovers ← cfSolve h pstr g hs
+  let (hs, facts) ← g.withContext do
+    let he ← try some <$> Term.elabTerm h none catch _ => pure none
+    let some he := he | pure (#[], {})
+    let hs ← try cfHypCands he catch _ => pure #[]
+    if !hs.isEmpty then return (hs, {})
+    let fs ← try cfByteFacts he catch _ => pure #[]
+    pure (hs, Std.HashMap.ofList fs.toList)
+  let leftovers ← cfSolve h pstr g hs facts
   setGoals leftovers
 
 /-- `chain_facts h` closes the code leaves of a `ChainFacts` goal: byte pins from the piece

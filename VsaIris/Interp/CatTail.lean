@@ -150,6 +150,13 @@ open VsaIris.VsaHeap VsaIris.Newlib
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
+theorem cat_sn {s : BitVec 64} (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
+    (hs : 0x87800000 + 1088 ≤ s.toNat) : stringifyNeed ≤ (s + 18446744073709550528#64).toNat := by
+  rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega
+
+theorem cat_as : allocHeadroom ≤ stringifyNeed := by
+  unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega
+
 theorem Regime.plus_add' (ρ : Regime) (a b : Nat) : (ρ.plus a).plus b = ρ.plus (a + b) := by
   cases ρ <;> simp [Regime.plus, Nat.add_assoc]
 
@@ -237,17 +244,11 @@ end
   have hq1 : ldv .ld Mt (s.toNat - 1088 + 152) = u1 := by rw [← hoff 152 (by decide)]; exact mid.q1
   have hq2 : ldv .ld Mt (s.toNat - 1088 + 160) = u2 := by rw [← hoff 160 (by decide)]; exact mid.q2
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
-      (evalNeed (.binary .add l r) d - 1088) (slot24 sret.toNat)
-      (world N vsaLayoutP vsaRoomB inp (ρ.plus (concatCost st2.store lv rv')) st2 d)
-      K ∗
-      □ valOf N lv w0 w1 w2 ∗ □ valOf N rv' u0 u1 u2 ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms; isplitr [Hv1 Hv2]
-    · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
-    · iframe Hv1 Hbin Hat; iexact Hv2
+  · icombine Hcode Hro Hfb Hst Hslot Hw Hk as HA; icombine HA Hv1 Hv2 Hbin Hat as HF
+    isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run3 (aX := aX) (s := s) (sret := sret) (w1 := w1)
     (kL := BitVec.ofNat 64 (w0.toNat % 2 ^ 32)) (kR := BitVec.ofNat 64 (u0.toNat % 2 ^ 32))
@@ -276,20 +277,17 @@ end
     rw [hMt3]; e2_fwd hoff; cat_mem
   have ha16 : ldv .ld Mt3 ((s + 18446744073709550528#64 + 64#64).toNat + 16) = w2 := by
     rw [hMt3]; e2_fwd hoff; cat_mem
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #Hv1, #Hv2, #Hbin, #Hat⟩, Hms⟩
 
   unfold world worldE
   icases Hw with ⟨%H, %B, Hh, Hsto, Hcon, Hio, Hctx, %hB, #Hbw⟩
-  ihave ⟨Hsto, #Hd1⟩ := dispRes_of_valOf hd st2.store B lv w0 w1 w2 $$ [Hsto Hv1]
-  · iframe Hsto Hv1
-  ihave ⟨Hsto, #Hd2⟩ := dispRes_of_valOf hd st2.store B rv' u0 u1 u2 $$ [Hsto Hv2]
-  · iframe Hsto Hv2
+  ihave ⟨Hsto, #Hd1⟩ := dispRes_of_valOf hd st2.store B lv w0 w1 w2 $$ [$]
+  ihave ⟨Hsto, #Hd2⟩ := dispRes_of_valOf hd st2.store B rv' u0 u1 u2 $$ [$]
   have hS64 : ∀ k, InExt ((s + 18446744073709550528#64 + 64#64).toNat, 24) k →
       InExt (s.toNat - 1088, 1088) k := by
     intro k hk; rw [hoff 64 (by decide)] at hk; simp only [VsaIris.InExt] at hk ⊢; omega
-  ihave ⟨Hms, HA⟩ := ms_carveWords N hS64 ha0 ha8 ha16 $$ [Hms Hv1]
-  · iframe Hms Hv1
+  ihave ⟨Hms, HA⟩ := ms_carveWords N hS64 ha0 ha8 ha16 $$ [$]
 
   have hne := evalNeed_binary_rtErr .add l r d
   unfold Newlib.RtErr.rtErrNeed Newlib.snprintfNeed at hne
@@ -307,8 +305,7 @@ end
     ((step% jalx 0x80003a40) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hs1 Hcode Hms
-  isplitl []
-  · ipureintro; exact ⟨by ix_reg, by ix_reg; cat_keep []⟩
+  isplitl []; ipureintro; exact ⟨by ix_reg, by ix_reg; cat_keep []⟩
   isplitl [HA Hh Hio Hcon Hst]
   · unfold stringifyPre stackAt; simp only [Regime.plus_add']
     iframe HA Hd1 Hbin Hh Hio Hcon Hst
@@ -326,30 +323,18 @@ end
   iintro %R4 %hkeep4 Hpost Hms
   unfold stringifyPost stackAt
   icases Hpost with ⟨HA, Hx, %hf1, Hh, Hio, Hcon, Hst, -⟩
-  ihave ⟨%M4, Hms, %hM4⟩ := ms_uncarveVal N hS64 $$ [Hms HA]
-  · iframe Hms HA
+  ihave ⟨%M4, Hms, %hM4⟩ := ms_uncarveVal N hS64 $$ [$]
   have hcs4 : CatSaved M4 s ret rv := hcs3.agree fun k h1 h2 =>
     hM4 k (by simp only [VsaIris.InExt]; omega)
       (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega)
 
 #ix_piece catTail_p4 from catTail_p1 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
-      stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB (ρ.plus (stringifyCost st2.store rv' +
-          catBufCost st2.store lv rv')) (((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H) ∗
-        storeRepr N st2.store B ∗ consoleOwn st2.out ∗ Stdio.stdioOwn ∗
-        interpCtxE inp d (errAny inp) ∗ strOwn (R4 10).toNat (strRender st2.store lv) ∗
-        blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗
-      □ valOf N rv' u0 u1 u2 ∗ □ dispRes st2.store rv' ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms; isplitr [Hv2 Hd2]
-    · iframe Hcode Hro Hfb Hst Hslot Hh Hsto Hcon Hio Hctx Hx Hslack; iexact Hk
-    · iframe Hv2 Hbin Hat; iexact Hd2
+  · icombine Hh Hsto Hcon Hio Hctx Hx Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hv2 Hd2 Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run4 (s := s) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep4]
@@ -370,14 +355,13 @@ end
     rw [hMt5]; e2_fwd hoff; rw [ldv_agree (fun j hj => hM4 _ (by simp only [VsaIris.InExt]; omega)
       (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega))]
     rw [hMt3]; e2_fwd hoff; cat_mem
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hsto, Hcon, Hio, Hctx, Hx, Hslack⟩, Hk⟩, #Hv2,
     #Hd2, #Hbin, #Hat⟩, Hms⟩
   have hS64 : ∀ k, InExt ((s + 18446744073709550528#64 + 64#64).toNat, 24) k →
       InExt (s.toNat - 1088, 1088) k := by
     intro k hk; rw [hoff 64 (by decide)] at hk; simp only [VsaIris.InExt] at hk ⊢; omega
-  ihave ⟨Hms, HA⟩ := ms_carveWords N hS64 hb0 hb8 hb16 $$ [Hms Hv2]
-  · iframe Hms Hv2
+  ihave ⟨Hms, HA⟩ := ms_carveWords N hS64 hb0 hb8 hb16 $$ [$]
 
   have gS := evalCallGeom (nc := stringifyNeed) (o := 64) hsg
     (by have := evalNeed_binary_rtErr .add l r d
@@ -391,8 +375,7 @@ end
     ((step% jalx 0x80003a68) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide)
   iframe Hs2 Hcode Hms
-  isplitl []
-  · ipureintro; exact ⟨by ix_reg, by ix_reg; cat_keep [hkeep4]⟩
+  isplitl []; ipureintro; exact ⟨by ix_reg, by ix_reg; cat_keep [hkeep4]⟩
   isplitl [HA Hh Hio Hcon Hst]
   · unfold stringifyPre stackAt; simp only [Regime.plus_add']
     rw [show catBufCost st2.store lv rv' + stringifyCost st2.store rv' =
@@ -412,25 +395,20 @@ end
   iintro %R6 %hkeep6 Hpost Hms
   unfold stringifyPost stackAt
   icases Hpost with ⟨HA, Hy, %hf2, Hh, Hio, Hcon, Hst, -⟩
-  ihave ⟨%M6, Hms, %hM6⟩ := ms_uncarveVal N hS64 $$ [Hms HA]
-  · iframe Hms HA
+  ihave ⟨%M6, Hms, %hM6⟩ := ms_uncarveVal N hS64 $$ [$]
   have hcs6 : CatSaved M6 s ret rv := hcs5.agree fun k h1 h2 =>
     hM6 k (by simp only [VsaIris.InExt]; omega)
       (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega)
 
 #ix_piece catTail_p5 from catTail_p4 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB (ρ.plus (catBufCost st2.store lv rv')) (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
-          ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H) ∗
-        catRest N inp d st2 H B ∗ strOwn (R4 10).toNat (strRender st2.store lv) ∗ strOwn (R6 10).toNat (strRender st2.store rv') ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  ihave Hrest : catRest N inp d st2 H B $$ [Hsto Hcon Hio Hctx]
+  · unfold catRest; iframe ∗ # %hB
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF catRest; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hsto Hcon Hio Hctx Hx Hy Hslack Hk
-    iframe Hbin Hat; ipureintro; exact hB
+  · icombine Hh Hrest Hx Hy Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run5 (s := s) (sret := sret) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep6, hkeep4]
@@ -438,7 +416,7 @@ end
   apply swp_closeM
   intro Mt7 hMt7
   have hcs7 : CatSaved Mt7 s ret rv := hcs6.eq hMt7
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hrest, Hx, Hy, Hslack⟩, Hk⟩, #Hbin, #Hat⟩, Hms⟩
   ihave Hsl1 := hsl $$ %(R4 10) %(strRender st2.store lv) %(ρ.plus (catBufCost st2.store lv rv')) %(((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
@@ -455,16 +433,11 @@ end
 
 #ix_piece catTail_p6 from catTail_p5 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB (ρ.plus (catBufCost st2.store lv rv')) (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
-          ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H) ∗
-        catRest N inp d st2 H B ∗ strOwn (R4 10).toNat (strRender st2.store lv) ∗ strOwn (R6 10).toNat (strRender st2.store rv') ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hrest Hx Hy Hslack Hk Hbin Hat
+  · icombine Hh Hrest Hx Hy Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run6 (s := s) (sret := sret) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep8, hkeep6, hkeep4]
@@ -472,7 +445,7 @@ end
   apply swp_closeM
   intro Mt9 hMt9
   have hcs9 : CatSaved Mt9 s ret rv := hcs7.eq hMt9
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hrest, Hx, Hy, Hslack⟩, Hk⟩, #Hbin, #Hat⟩, Hms⟩
   ihave Hsl2 := hsl $$ %(R6 10) %(strRender st2.store rv') %(ρ.plus (catBufCost st2.store lv rv')) %(((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)
@@ -489,16 +462,11 @@ end
 
 #ix_piece catTail_p7 from catTail_p6 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB (ρ.plus (catBufCost st2.store lv rv')) (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
-          ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H) ∗
-        catRest N inp d st2 H B ∗ strOwn (R4 10).toNat (strRender st2.store lv) ∗ strOwn (R6 10).toNat (strRender st2.store rv') ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hrest Hx Hy Hslack Hk Hbin Hat
+  · icombine Hh Hrest Hx Hy Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run7 (s := s) (sret := sret) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep10, hkeep8, hkeep6, hkeep4]
@@ -506,7 +474,7 @@ end
   apply swp_closeM
   intro Mt11 hMt11
   have hcs11 : CatSaved Mt11 s ret rv := hcs9.eq hMt11
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hrest, Hx, Hy, Hslack⟩, Hk⟩, #Hbin, #Hat⟩, Hms⟩
   have ha1 := fresh_arena hf1.1
   have ha2 := fresh_arena hf2.1
@@ -515,9 +483,7 @@ end
   have hN : (R10 18 + R10 10 + 1#64).toNat = (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1 := by
     rw [h18, hlb, ← String.length_toList, ← String.length_toList]
     simp only [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.reducePow]; omega
-  ihave ⟨Hslack2, Hst⟩ := stackScratch_narrow (s := (s + 18446744073709550528#64)) (n := stringifyNeed) (m := allocHeadroom)
-    (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
-    (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
+  ihave ⟨Hslack2, Hst⟩ := stackScratch_narrow (cat_sn hsf hs') cat_as $$ Hst
   iapply ms_callMallocN A Wp (i := 0x80003a90)
     ((step% jalx 0x80003a90) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
@@ -529,13 +495,9 @@ end
     refine ⟨by ix_reg; exact hN, by ix_reg; cat_keep [hkeep10, hkeep8, hkeep6, hkeep4], ?_⟩
     exact ⟨by rw [hsf]; unfold Vsa.Sim.tohostAddr allocHeadroom; omega, by rw [hsf]; omega,
       by rw [hsf]; omega⟩
-  isplitl [Hh]
-  · iexact Hh
+  isplitl [Hh]; iexact Hh
   iintro %R12 %hkeep12 Hst Hres Hms
-  ihave Hst := stackScratch_widen (s := (s + 18446744073709550528#64)) (n := stringifyNeed) (m := allocHeadroom)
-    (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
-    (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ [Hslack2 Hst]
-  · iframe Hslack2 Hst
+  ihave Hst := stackScratch_widen (cat_sn hsf hs') cat_as $$ [$]
   unfold mallocRes
   icases Hres with (⟨%⟨hq0, hρ⟩, Hh0⟩ | ⟨%hf3, Hh, Hblk⟩)
   · obtain ⟨Core, hE, hab⟩ := hoom hρ
@@ -543,29 +505,24 @@ end
     subst hρ
     ihave ⟨#HE, Hk⟩ := hab $$ Hk
     ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hh0
-    ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-    · iframe Hcode Hro
-    iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-        iprop(Stdio.errnoOwn ∗ catRest N inp d st2 H B ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-        iprop(abortAt Core s (evalNeed (.binary .add l r) d) ∗ slot24 sret.toNat -∗ Wp.W Φ) ∗
-        binImg))
+    ihave #Hdv := roOwn_data hn.view $$ [$]
+    iapply wp_swpF Wp
     rotate_left
-    · unfold evalArmF; iframe Hdv Hms Hbin; iframe Hcode Hro Hfb Hst Hslot Herr Hrest Hslack Hk
+    · icombine Herr Hrest Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+      icombine HA Hbin as HF; isplitl []; iexact Hdv; iframe HF Hms
     intro F'
     refine CatTail_run8z (s := s) hlive hsf hs' hs2 hs3 ?_ ?_ ?_
     · ix_reg; cat_keep [hkeep12, hkeep10, hkeep8, hkeep6, hkeep4]
     · ix_reg; exact hq0
     intros
     apply swp_closeF
-    unfold F' evalArmF
+    unfold F'
     iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Herr, Hrest, Hslack⟩, Hk⟩, #Hbin⟩, Hms⟩
     unfold catRest
     icases Hrest with ⟨-, Hcon, Hio, -, -⟩
     ihave Hst := stackScratch_widen (s := (s + 18446744073709550528#64)) (n := evalNeed (.binary .add l r) d - 1088)
       (m := stringifyNeed) (by rw [hsf]; omega) (by unfold stringifyNeed Newlib.snprintfNeed; omega)
-      $$ [Hslack Hst]
-    · iframe Hslack Hst
+      $$ [$]
     iapply ms_evalOom Wp hE hsg (by unfold fwriteNeed; omega)
     iframe Hcode Hbin Hms Hst Hio Herr Hcon
     isplitl []
@@ -576,17 +533,11 @@ end
 
 #ix_piece catTail_p8 from catTail_p7 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) ::
-          (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
-          ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)) ∗ blockOwn (R12 10).toNat ((strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) ∗
-        catRest N inp d st2 H B ∗ strOwn (R4 10).toNat (strRender st2.store lv) ∗ strOwn (R6 10).toNat (strRender st2.store rv') ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hblk Hrest Hx Hy Hslack Hk Hbin Hat
+  · icombine Hh Hblk Hrest Hx Hy Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run8 (s := s) hlive hsf hs' hs2 hs3 ?_ ?_ ?_
   · ix_reg; cat_keep [hkeep12, hkeep10, hkeep8, hkeep6, hkeep4]
@@ -598,7 +549,7 @@ end
     ⟨by rw [hMt13]; ix_saved hcs11.saved using hoff, by rw [hMt13]; e2_fwd hoff; exact hcs11.s5⟩
   have hs4 : ldv .ld Mt13 (s.toNat - 1088 + 1040) = rv 20 := by
     rw [hMt13]; e2_fwd hoff; cat_keep [hkeep12, hkeep10, hkeep8, hkeep6, hkeep4]
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hblk, Hrest, Hx, Hy, Hslack⟩, Hk⟩, #Hbin, #Hat⟩, Hms⟩
   have ha1 := fresh_arena hf1.1
   have ha2 := fresh_arena hf2.1
@@ -620,20 +571,11 @@ end
 #ix_piece catTail_p9 from catTail_p8 by
 
   iintro %R14 %hkeep14 %h14 Hd Hx1 Hms
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) ::
-          (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
-          ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)) ∗ blockOwn ((R12 10).toNat + (strRender st2.store lv).toList.length) ((strRender st2.store rv').toList.length + 1) ∗
-        ownImg (InExt ((R12 10).toNat, (strRender st2.store lv).toList.length)) (fun a => img1 (a - (R12 10).toNat + (R4 10).toNat)) ∗
-        ownImg (InExt ((R4 10).toNat, (strRender st2.store lv).toList.length)) img1 ∗ ownImg (InExt ((R4 10).toNat + (strRender st2.store lv).toList.length, 1)) img1 ∗
-        catRest N inp d st2 H B ∗ strOwn (R6 10).toNat (strRender st2.store rv') ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF
-    iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hb2 Hd Hx1 Hx0 Hrest Hy Hslack Hk Hbin Hat
+  · icombine Hh Hb2 Hd Hx1 Hx0 Hrest Hy Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run9 (s := s) (sret := sret) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep14, hkeep12, hkeep10, hkeep8, hkeep6, hkeep4]
@@ -642,7 +584,7 @@ end
   intro Mt15 hMt15
   have hcs15 : CatSaved Mt15 s ret rv := hcs13.eq hMt15
   have hs4' : ldv .ld Mt15 (s.toNat - 1088 + 1040) = rv 20 := by rw [hMt15]; exact hs4
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hb2, Hd, Hx1, Hx0, Hrest, Hy, Hslack⟩, Hk⟩, #Hbin,
     #Hat⟩, Hms⟩
   have ha1 := fresh_arena hf1.1
@@ -675,19 +617,11 @@ end
 
 #ix_piece catTail_p10 from catTail_p9 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) ::
-          (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
-          ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)) ∗ strOwn (R12 10).toNat ((strRender st2.store lv) ++ (strRender st2.store rv')) ∗
-        ownImg (InExt ((R4 10).toNat, (strRender st2.store lv).toList.length)) img1 ∗ ownImg (InExt ((R4 10).toNat + (strRender st2.store lv).toList.length, 1)) img1 ∗
-        catRest N inp d st2 H B ∗ strOwn (R6 10).toNat (strRender st2.store rv') ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF
-    iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hs Hx1 Hx0 Hrest Hy Hslack Hk Hbin Hat
+  · icombine Hh Hs Hx1 Hx0 Hrest Hy Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run10 (s := s) (sret := sret) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep16, hkeep14, hkeep12, hkeep10, hkeep8, hkeep6, hkeep4]
@@ -696,19 +630,16 @@ end
   intro Mt17 hMt17
   have hcs17 : CatSaved Mt17 s ret rv := hcs15.eq hMt17
   have hs4 : ldv .ld Mt17 (s.toNat - 1088 + 1040) = rv 20 := by rw [hMt17]; exact hs4'
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hs, Hx1, Hx0, Hrest, Hy, Hslack⟩, Hk⟩, #Hbin,
     #Hat⟩, Hms⟩
-  ihave Hq1 := blockOwn_of_cut (R4 10).toNat (strRender st2.store lv).toList.length img1 img1 $$ [Hx1 Hx0]
-  · iframe Hx1 Hx0
+  ihave Hq1 := blockOwn_of_cut (R4 10).toNat (strRender st2.store lv).toList.length img1 img1 $$ [$]
   ihave Hh := heapRes_congr (H := (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) ::
           (((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ::
           ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: H)))
     (H' := ((R4 10).toNat, (strRender st2.store lv).toList.length + 1) :: ((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) :: H)
     (List.perm_middle (l₁ := [((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1), ((R6 10).toNat, (strRender st2.store rv').toList.length + 1)])) $$ Hh
-  ihave ⟨Hslack2, Hst⟩ := stackScratch_narrow (s := (s + 18446744073709550528#64)) (n := stringifyNeed) (m := allocHeadroom)
-    (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
-    (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
+  ihave ⟨Hslack2, Hst⟩ := stackScratch_narrow (cat_sn hsf hs') cat_as $$ Hst
   iapply ms_callFreeN A Wp (i := 0x80003abc)
     ((step% jalx 0x80003abc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) :: H) (R4 10) ((strRender st2.store lv).toList.length + 1)
@@ -720,23 +651,15 @@ end
     exact ⟨by rw [hsf]; unfold Vsa.Sim.tohostAddr allocHeadroom; omega, by rw [hsf]; omega,
       by rw [hsf]; omega⟩
   iintro %R17 %hkeep17 Hst Hh Hms
-  ihave Hst := stackScratch_widen (s := (s + 18446744073709550528#64)) (n := stringifyNeed) (m := allocHeadroom)
-    (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
-    (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ [Hslack2 Hst]
-  · iframe Hslack2 Hst
+  ihave Hst := stackScratch_widen (cat_sn hsf hs') cat_as $$ [$]
 
 #ix_piece catTail_p11 from catTail_p10 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB ρ
-          (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) :: H) ∗
-        strOwn (R12 10).toNat ((strRender st2.store lv) ++ (strRender st2.store rv')) ∗ catRest N inp d st2 H B ∗ strOwn (R6 10).toNat (strRender st2.store rv') ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hs Hrest Hy Hslack Hk Hbin Hat
+  · icombine Hh Hs Hrest Hy Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run11 (s := s) (sret := sret) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep17, hkeep16, hkeep14, hkeep12, hkeep10, hkeep8, hkeep6, hkeep4]
@@ -745,17 +668,14 @@ end
   intro Mt19 hMt19
   have hcs19 : CatSaved Mt19 s ret rv := hcs17.eq hMt19
   have hs4' : ldv .ld Mt19 (s.toNat - 1088 + 1040) = rv 20 := by rw [hMt19]; exact hs4
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hs, Hrest, Hy, Hslack⟩, Hk⟩, #Hbin, #Hat⟩, Hms⟩
   ihave ⟨%img3, %-, Hy1, Hy0⟩ := strOwn_cut (R6 10).toNat (strRender st2.store rv') $$ Hy
-  ihave Hq2 := blockOwn_of_cut (R6 10).toNat (strRender st2.store rv').toList.length img3 img3 $$ [Hy1 Hy0]
-  · iframe Hy1 Hy0
+  ihave Hq2 := blockOwn_of_cut (R6 10).toNat (strRender st2.store rv').toList.length img3 img3 $$ [$]
   ihave Hh := heapRes_congr (H := ((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) :: H)
     (H' := ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) :: ((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: H)
     (List.Perm.swap ((R6 10).toNat, (strRender st2.store rv').toList.length + 1) ((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) H) $$ Hh
-  ihave ⟨Hslack2, Hst⟩ := stackScratch_narrow (s := (s + 18446744073709550528#64)) (n := stringifyNeed) (m := allocHeadroom)
-    (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
-    (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ Hst
+  ihave ⟨Hslack2, Hst⟩ := stackScratch_narrow (cat_sn hsf hs') cat_as $$ Hst
   iapply ms_callFreeN A Wp (i := 0x80003ac4)
     ((step% jalx 0x80003ac4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: H) (R6 10) ((strRender st2.store rv').toList.length + 1)
@@ -767,22 +687,15 @@ end
     exact ⟨by rw [hsf]; unfold Vsa.Sim.tohostAddr allocHeadroom; omega, by rw [hsf]; omega,
       by rw [hsf]; omega⟩
   iintro %R18 %hkeep18 Hst Hh Hms
-  ihave Hst := stackScratch_widen (s := (s + 18446744073709550528#64)) (n := stringifyNeed) (m := allocHeadroom)
-    (by rw [hsf]; unfold stringifyNeed Newlib.snprintfNeed; omega)
-    (by unfold stringifyNeed allocHeadroom Newlib.snprintfNeed; omega) $$ [Hslack2 Hst]
-  · iframe Hslack2 Hst
+  ihave Hst := stackScratch_widen (cat_sn hsf hs') cat_as $$ [$]
 
 #ix_piece catTail_p12 from catTail_p11 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed (slot24 sret.toNat)
-      iprop(heapRes vsaLayoutP vsaRoomB ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: H) ∗
-        strOwn (R12 10).toNat ((strRender st2.store lv) ++ (strRender st2.store rv')) ∗ catRest N inp d st2 H B ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K ∗ binImg ∗ textOwn allocText))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hh Hs Hrest Hslack Hk Hbin Hat
+  · icombine Hh Hs Hrest Hslack as HW; icombine Hcode Hro Hfb Hst Hslot HW Hk as HA
+    icombine HA Hbin Hat as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run12 (s := s) (sret := sret) hlive hsf hs' hs2 hs3 ?_ ?_
   · cat_keep [hkeep18, hkeep17, hkeep16, hkeep14, hkeep12, hkeep10, hkeep8, hkeep6, hkeep4]
@@ -791,7 +704,7 @@ end
   intro Mt21 hMt21
   have hcs21 : CatSaved Mt21 s ret rv := hcs19.eq hMt21
   have hs4 : ldv .ld Mt21 (s.toNat - 1088 + 1040) = rv 20 := by rw [hMt21]; exact hs4'
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, ⟨Hh, Hs, Hrest, Hslack⟩, Hk⟩, #Hbin, #Hat⟩, Hms⟩
   have hlen : ((strRender st2.store lv) ++ (strRender st2.store rv')).toList.length = (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length := by
     rw [String.toList_append, List.length_append]
@@ -818,16 +731,11 @@ end
 
 #ix_piece catTail_p13 from catTail_p12 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := evalArmF P m env aE (s + 18446744073709550528#64) stringifyNeed
-      (valAt N sret.toNat (.str ((strRender st2.store lv) ++ (strRender st2.store rv'))))
-      iprop(heapRes vsaLayoutP vsaRoomB ρ (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: H) ∗
-        catRest N inp d st2 H B ∗ blockOwn ((s + 18446744073709550528#64).toNat - (evalNeed (.binary .add l r) d - 1088))
-          (evalNeed (.binary .add l r) d - 1088 - stringifyNeed))
-      K)
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hval Hh Hrest Hslack Hk
+  · icombine Hh Hrest Hslack as HW; icombine Hcode Hro Hfb Hst Hval HW Hk as HF
+    isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CatTail_run13 (aX := aX) (s := s) (ret := ret) (v8 := rv 8) (v9 := rv 9)
     (v18 := rv 18) (v19 := rv 19) (v20 := rv 20) (v21 := rv 21) hlive hsf hs' hs2 hs3 hal ?_ ?_ ?_ ?_ ?_
@@ -842,21 +750,18 @@ end
   · rw [hoff _ (by decide)]; exact hcs21.s5
   intros
   apply swp_closeF
-  unfold F' evalArmF
+  unfold F'
   iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hval, ⟨Hh, Hrest, Hslack⟩, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave Hst := stackScratch_widen (s := (s + 18446744073709550528#64)) (n := evalNeed (.binary .add l r) d - 1088)
     (m := stringifyNeed) (by rw [hsf]; omega)
     (by have := evalNeed_binary_rtErr .add l r d
         unfold Newlib.RtErr.rtErrNeed Newlib.snprintfNeed at this
-        unfold stringifyNeed Newlib.snprintfNeed; omega) $$ [Hslack Hst]
-  · iframe Hslack Hst
-  ihave Hst := evalFrame_join hsg.le hneed $$ [Hst HS]
-  · iframe Hst HS
+        unfold stringifyNeed Newlib.snprintfNeed; omega) $$ [$]
+  ihave Hst := evalFrame_join hsg.le hneed $$ [$]
   ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
   ihave Hw := world_of_catRest N inp d st2 ρ (H' := (((R12 10).toNat, (strRender st2.store lv).toList.length + (strRender st2.store rv').toList.length + 1) :: H))
-    (fun b hb => List.mem_cons_of_mem _ hb) $$ [Hh Hrest]
-  · iframe Hh Hrest
+    (fun b hb => List.mem_cons_of_mem _ hb) $$ [$]
   rw [strRender_eq, strRender_eq] at *
   iapply hexit.pure
   iframe Hpc Hra Hregs Hst Hval Hw Hk

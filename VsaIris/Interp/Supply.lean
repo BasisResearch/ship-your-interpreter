@@ -95,13 +95,11 @@ theorem envNew_closed (henv : ∀ p ∈ envText, live p.1) (A : AllocSpecs live)
   · iintro ⟨#Hx, #Hg⟩
     ihave #Ht := codeX_envText $$ Hx
     ihave #Ha := codeX_allocText $$ Hx
-    ihave #H := h $$ [Ht Ha Hg]
-    · iframe Ht Ha Hg
+    ihave #H := h $$ [$]
     iapply H $$ %ρ %st %po %par %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, Hsp, #Hg, #Hx, Hrest⟩
-    iframe Hx Hg H10 Hsp Hrest
-    ipureintro; exact hp
+    iframe ∗ # %hp
 
 theorem envDefine_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     (halloc : AllocLive live) (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) :
@@ -118,13 +116,11 @@ theorem envDefine_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p
     ihave #Hcmp := strcmp_spec_env live hcl Wp $$ Hb
     ihave #Hsl := StrLeaf.strlen_spec_env live hcl Wp $$ Hb
     ihave #Hmc := memcpy_spec_env live hcl Wp $$ Hb
-    ihave #H := h $$ [Ht Ha Hg Hcmp Hsl Hmc]
-    · iframe Ht Ha Hg Hcmp Hsl Hmc
+    ihave #H := h $$ [$]
     iapply H $$ %ρ %st %fa %x %v %e %pn %pv %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, H11, H12, Hsp, #Hg, #Hx, Hrest⟩
-    iframe Hx Hg H10 H11 H12 Hsp Hrest
-    ipureintro; exact hp
+    iframe ∗ # %hp
 
 theorem envGet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) : ⊢ envGetSpec (GF := GF) Wp N := by
@@ -137,13 +133,11 @@ theorem envGet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     ihave #Ht := codeX_envText $$ Hx
     ihave #Hcmp := strcmp_spec_env live hcl Wp $$ [Hx]
     · iapply codeX_binImg $$ Hx
-    ihave #H := h $$ [Ht Hg Hcmp]
-    · iframe Ht Hg Hcmp
+    ihave #H := h $$ [$]
     iapply H $$ %st %B %fa %x %e %pn %out %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, H11, H12, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hs, Hout, Hst, #Hg, #Hx⟩
-    iframe Hx Hg H10 H11 H12 Hsp Hcl Hsv Hstk Hfa Hs Hout Hst
-    ipureintro; exact hp
+    iframe ∗ # %hp
 
 theorem envSet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     (Wp : MachWP (GF := GF) (Mv live)) (N : NativeAddrs) : ⊢ envSetSpec (GF := GF) Wp N := by
@@ -156,13 +150,11 @@ theorem envSet_closed (hcl : CodeLive live) (henv : ∀ p ∈ envText, live p.1)
     ihave #Ht := codeX_envText $$ Hx
     ihave #Hcmp := strcmp_spec_env live hcl Wp $$ [Hx]
     · iapply codeX_binImg $$ Hx
-    ihave #H := h $$ [Ht Hg Hcmp]
-    · iframe Ht Hg Hcmp
+    ihave #H := h $$ [$]
     iapply H $$ %st %B %fa %x %v %e %pn %pv %s %saved %hsv
   · intro r
     iintro ⟨%hp, H10, H11, H12, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hs, Hval, Hst, #Hg, #Hx⟩
-    iframe Hx Hg H10 H11 H12 Hsp Hcl Hsv Hstk Hfa Hs Hval Hst
-    ipureintro; exact hp
+    iframe ∗ # %hp
 
 theorem strlenHeap_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv live)) :
     ⊢ ∀ q x ρ H, strlenHeapSpec (GF := GF) (Mv live) Wp q x ρ H := by
@@ -194,8 +186,7 @@ theorem memcpyOwned_closed (hcl : CodeLive live) (Wp : MachWP (GF := GF) (Mv liv
     iapply H $$ %dst %src %n %img
   · intro r
     iintro ⟨%hp, H10, H11, H12, Hcl, Hd, Hs, #Hb⟩
-    iframe Hb H10 H11 H12 Hcl Hd Hs
-    ipureintro; exact hp
+    iframe Hb H10 H11 H12 Hcl Hd Hs %hp
 
 theorem stringify_spec_img (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
     (hstk : StackLive live) (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles)
@@ -217,8 +208,7 @@ theorem stringifyT_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
   iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %hp, #Hcode, HPre⟩ Hk
   unfold stringifyPre
   icases HPre with ⟨Hv, %hg, #Hd, #Hb, Hh, Hstd, Hcon, Hst⟩
-  ihave ⟨Hstd, #Hat⟩ := stdioAt_codeX _ $$ [Hstd]
-  · iframe Hstd Hb
+  ihave ⟨Hstd, #Hat⟩ := stdioAt_codeX _ $$ [$]
   ihave #Hat := codeX_allocText $$ Hat
   have hS := stringify_spec_img hlive hcl hstk A HN Hout Wp N 0 p s v st (.counted k) H c o
   unfold stringifySpec fnSpecAbort at hS
@@ -233,13 +223,10 @@ theorem stringifyT_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
   · iintro Hpc Hra ⟨%rv', %q, Hregs, %hk, %hq, Hv, Hs, %hf, Hh, Hstd, Hcon, Hst⟩
     iapply Hk $$ Hpc Hra
     iexists rv'
-    iframe Hregs
-    isplitr
-    · ipureintro; exact hk
+    iframe Hregs %hk
     unfold stringifyPost
     rw [hq]
-    iframe Hv Hs Hh Hstd Hcon Hst
-    ipureintro; exact hf
+    iframe Hv Hs Hh Hstd Hcon Hst %hf
   · iintro ⟨%hρ, -⟩
     cases hρ
 
@@ -255,8 +242,7 @@ theorem stringifyP_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
   iintro %r %Φ Hpc Hra ⟨%hal, Hregs, %hp, #Hcode, HPre⟩ Hk
   unfold stringifyPre
   icases HPre with ⟨Hv, %hg, #Hd, #Hb, Hh, Hstd, Hcon, Hst⟩
-  ihave ⟨Hstd, #Hat⟩ := stdioAt_codeX _ $$ [Hstd]
-  · iframe Hstd Hb
+  ihave ⟨Hstd, #Hat⟩ := stdioAt_codeX _ $$ [$]
   ihave #Hat := codeX_allocText $$ Hat
   have hS := stringify_spec_img hlive hcl hstk A HN Hout Wp N inp p s v st ρ H c o
   unfold stringifySpec fnSpecAbort at hS
@@ -272,13 +258,10 @@ theorem stringifyP_closed (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLi
     ihave Hk := and_elim_l $$ Hk
     iapply Hk $$ Hpc Hra
     iexists rv'
-    iframe Hregs
-    isplitr
-    · ipureintro; exact hk
+    iframe Hregs %hk
     unfold stringifyPost
     rw [hq]
-    iframe Hv Hs Hh Hstd Hcon Hst
-    ipureintro; exact hf
+    iframe Hv Hs Hh Hstd Hcon Hst %hf
   · iintro ⟨-, HA⟩
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ HA

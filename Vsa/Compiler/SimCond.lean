@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimBlock
+import Vsa.Compiler.R6Expr
 
 namespace Vsa.Compiler
 
@@ -17,34 +18,18 @@ theorem run_cond {st : St} {d : Nat} {env : Addr} {c : Expr} {st1 : St} {v : Val
     Reaches code A (fun B => (B.pc = pcOf errPos ∧ ¬ Room V n) ∨
       ∃ V1, SPost code T V st d env C sp fs (if v.truthy then pos + (gexpr T C.Γ 0 pos c).length + 3 else tgt)
         A n st1 .normal V1 B) := by
-  obtain ⟨s12, s3⟩ := hseg.append
-  obtain ⟨s1, s2⟩ := s12.append
-  simp only [List.length_append, List.length_singleton] at s3
-  refine hE.bind hm hA hwf s1 (posOK_le hP (by omega)) (by omega) (fun B h1 h2 => .inl ⟨h1, h2⟩)
-    fun V1 B hpc hp => ?_
-  obtain ⟨t, p, h10, h11, hv⟩ := hp.val
-  obtain ⟨pc1, L1, m1, o1⟩ := B
-  simp only at hpc h10 h11 hv; subst hpc
-  have hq1 : PosOK (pos + (gexpr T C.Γ 0 pos c).length + 1) := posOK_le hP (by omega)
-  apply run_whole hR.fits s2
-  wp_simp [hq1]
-  refine ex_bind (run_tr hR.fits hR.tr (L := gset L1 1 (pcOf (pos + (gexpr T C.Γ 0 pos c).length + 1)))
-    (m := m1) (o := o1) (by reg_simp []; exact h10) (by reg_simp []; exact h11) (by reg_simp [])
-    (pcOf_aligned hq1)) ?_
-  rintro ⟨pc2, L2, m2, o2⟩ ⟨hpc2, hm2, ho2, g10, hk2⟩
-  simp only at hpc2 hm2 ho2 g10 hk2; subst hpc2 hm2 ho2
-  rw [trW_repr hv] at g10
-  have k10 := has_mem g10 (by decide); have e10 := srcVal_of_has g10
-  simp only [a0] at k10 e10
-  have hk : Keep [1, t0, a0] L1 L2 := (Keep.gset (Keep.refl _ L1) (by decide)).trans (hk2.mono (by decide))
-  have hmC := fun pc' => hp.ms.transport (B := ⟨pc', L2, m2, o2⟩) (S := [1, t0, a0]) (by decide) hk
-    (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
+  rw [List.append_assoc, List.singleton_append] at hseg
+  obtain ⟨s1, s23⟩ := seg_app_iff.mp hseg
+  have s3 := (seg_app_iff (a := [_])).mp s23 |>.2
+  refine hE.bindTr hR hm hA hwf s1 s23 (by simpa [jmpIfZero] using hP) (by omega) (Within.refl V 0) (by omega)
+    fun V1 B L2 hp hk g10 => ?_
   apply run_jumps hR.fits s3
   cases hvt : v.truthy
-  · wp_simp [jmpIfZero, k10, e10, htgt, hvt]
-    exact reach_here (.inr ⟨V1, ⟨by simp, hmC _⟩, hp.grow, hp.within, hp.stack, hp.obj⟩)
-  · wp_simp [jmpIfZero, k10, e10, hP, hvt]
-    exact reach_here (.inr ⟨V1, ⟨by simp, hmC _⟩, hp.grow, hp.within, hp.stack, hp.obj⟩)
+  · wp_simp [jmpIfZero, g10.wp, htgt, hvt]
+    exact reach_here (.inr ⟨V1, ⟨by simp, hp.ms.keep hk⟩, hp.grow, hp.within, hp.stack, hp.obj⟩)
+  · wp_simp [jmpIfZero, g10.wp, hP, hvt]
+    exact reach_here (.inr ⟨V1, ⟨by simp, hp.ms.keep hk⟩, hp.grow, hp.within, hp.stack, hp.obj⟩)
+
 
 end
 

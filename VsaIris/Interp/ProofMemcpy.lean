@@ -75,8 +75,7 @@ theorem memcpy_wp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold runKontW
   iintro %rv' %mv' %hq Hregs HS'
   obtain ⟨e1, e2, e3⟩ := hQ rv' mv' hq
-  ihave ⟨Hpc, H1, H10, Hcl⟩ := post_regs rv' (f 7) $$ [Hregs H7]
-  · iframe Hregs H7
+  ihave ⟨Hpc, H1, H10, Hcl⟩ := post_regs rv' (f 7) $$ [$]
   ihave Hpc := Strlen.reg_cast e1 $$ Hpc
   ihave H1 := Strlen.reg_cast e2 $$ H1
   ihave H10 := Strlen.reg_cast e3 $$ H10
@@ -201,10 +200,8 @@ theorem memcpy_spec_owned (live : Nat → Prop) (hcl : CodeLive live)
   have Gm := geo_of_pre hal hwd hhd hws
   ihave ⟨%f, Hcl⟩ := clobbered_fn argClob (by decide) $$ Hcl
   ihave ⟨%fd, Hdst⟩ := blockOwn_fn _ _ $$ Hdst
-  ihave %hd := ownSet_disj _ _ fd img $$ [Hdst Hsrc]
-  · iframe Hdst Hsrc
-  ihave HU := ownSet_glue _ _ fd img hd $$ [Hdst Hsrc]
-  · iframe Hdst Hsrc
+  ihave %hd := ownSet_disj _ _ fd img $$ [$]
+  ihave HU := ownSet_glue _ _ fd img hd $$ [$]
   ihave ⟨%Mt, HU, %hMt⟩ := ownSet_trackedAt _ _ $$ HU
   have hd' : ∀ p ∈ srcText src.toNat n img, ¬ InExt (dst.toNat, n) p.1 := fun p hp h =>
     hd _ h ((srcText_iff src.toNat n img p.1).2 ⟨p, hp, rfl⟩)

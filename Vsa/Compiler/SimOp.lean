@@ -136,10 +136,8 @@ theorem run_op {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Arr
     refine ex_bind (run_eq hR (hops.gset1 _) hinj (by reg_simp []) hal1) ?_
     rintro ⟨pc, L2, m2, o2⟩ ⟨hpc, ho, hm, g10, g11, hk⟩
     simp only at hpc ho hm g10 g11 hk; subst hpc ho hm
-    have k11 := has_mem g11 (by decide); have e11 := srcVal_of_has g11
-    simp only [a1] at k11 e11
     apply run_from hR.fits hseg 1 _ (by rfl) (by simp [opCode])
-    wp_simp [opCode, k11, e11]
+    wp_simp [opCode, g11.wp]
     simp only [binOpSem] at hbin; cases hbin
     refine reach_here ⟨rfl, .inr ⟨by simp [opCode], h, opRet_same hR (S := t0 :: a1 :: eqClob) (r := pcOf (q + 1)) (by decide)
       (by decide) h8 hh ⟨1, 1#64 - (if l.equal r = true then 1 else 0), by reg_simp []; exact g10,

@@ -42,8 +42,7 @@ theorem ms_callRegsAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × S
   isplit
   · iintro Hpc Hra HQ
     ihave ⟨%f, HL, HY⟩ := hQ $$ HQ
-    ihave Hregs := regFile_uncut hp R f $$ [HL HK]
-    · iframe HL HK
+    ihave Hregs := regFile_uncut hp R f $$ [$]
     ihave Hk := and_elim_l $$ Hk
     iapply Hk $$ %f HY
     rw [regFile_upd_ra]
@@ -74,8 +73,7 @@ theorem oom_regs (R : Nat → BitVec 64) :
         simp only [g, hx, ite_true]
   rw [eC] at *
   rw [eK] at *
-  ihave H := (sepL_append _ _ _).2 $$ [Hc HK]
-  · iframe Hc HK
+  ihave H := (sepL_append _ _ _).2 $$ [$]
   have hp : (envOomRegs ++ [23, 24, 25, 26, 27]).Perm
       (1 :: (Newlib.argRegs ++ (Newlib.tmpRegs ++ Newlib.calleeSaved))) := by decide
   ihave H := (sepL_perm _ hp).1 $$ H
@@ -119,27 +117,62 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     ∃ H B, heapRes vsaLayoutP vsaRoomB .uncounted H ∗ storeRepr N st.store B ∗ ⌜∀ b ∈ B, b ∈ H⌝
     by unfold heapStore; exact .rfl) $$ Hh
   ihave ⟨⟨Hs, -⟩, %hne⟩ := keep_pure (storeRepr_frameAt_ne (N := N) (s := st.store) (B := B)
-    (fa := env) (e := (R 10).toNat)) $$ [Hs]
-  · iframe Hs Hfr
+    (fa := env) (e := (R 10).toNat)) $$ [$]
   ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := R 2) hn2 hn $$ Hst
   ihave #Hspec := Hen $$ %.uncounted %st.store %(some env) %(R 10) %(R 2)
     %(newSaved.map fun k => (k, R k)) %(by simp [newSaved])
   iapply (ms_callRegsAbort (wpW _) hexec hcode (L := envNewL) (K := [23, 24, 25, 26, 27])
     (by decide)
-    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp (R 2) envNewNeed⌝ ∗ (10 : Nat) ↦ᵣ R 10 ∗
-      sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗ codeX ∗ clobbered retClob ∗ savedOwn (newSaved.map fun k => (k, R k)) ∗
-      stackScratch (R 2) envNewNeed ∗ parentAt (some env) (R 10).toNat ∗
-      heapStore N (Regime.uncounted.plus envBytes) st.store))
-    (Q := fun _ => iprop(∃ e : BitVec 64, (10 : Nat) ↦ᵣ e ∗ sp ↦ᵣ R 2 ∗ clobbered retClob ∗
-      savedOwn (newSaved.map fun k => (k, R k)) ∗ stackScratch (R 2) envNewNeed ∗
-      heapStore N .uncounted (st.store.allocFrame (some env)).1 ∗
-      frameAt st.store.frames.size e.toNat))
     (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ codeX ∗ stackScratch (R 2) envNewNeed ∗
       parentAt (some env) (R 10).toNat ∗ heapStore N .uncounted st.store))
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ newSaved, f k = R k⌝ ∗
       stackScratch (R 2) envNewNeed ∗ heapStore N .uncounted (st.store.allocFrame (some env)).1 ∗
       frameAt st.store.frames.size (f 10).toNat))
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
+  rotate_left 2
+  iframe Hspec Hcode Hms Hgp Hcx Hst
+  isplitl [Hhr Hs]
+  · isplitl []
+    · simp only [parentAt]; iframe Hfr; ipureintro; exact hne
+    unfold heapStore; iexists H, B; iframe Hhr Hs; ipureintro; exact hB
+  isplit
+  · iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hh, #Hnew⟩ Hms
+    ihave Hk := and_elim_l $$ Hk
+    have hkeep : ∀ x ∈ fRegs, x ∉ (10 :: retClob) →
+        (fun x => if x ∈ envNewL then f x else R x) x = R x := by
+      intro x hx hc
+      by_cases hL : x ∈ envNewL
+      · simp only [hL, ite_true]
+        by_cases h2 : x = 2
+        · subst h2; exact hf2
+        · have hs : x ∈ newSaved :=
+            (show ∀ y ∈ envNewL, y ∉ (10 :: retClob) → y ≠ 2 → y ∈ newSaved by decide) x hL hc h2
+          exact hfs x hs
+      · simp [hL]
+    have e10 : (fun x => if x ∈ envNewL then f x else R x) 10 = f 10 := by
+      simp only [show (10 : Nat) ∈ envNewL from by decide, ite_true]
+    rw [← e10] at *
+    ihave Hst := stackScratch_widen hn2 hn $$ [$]
+    ihave Hw := (world_heapStore N inp _ ⟨(st.store.allocFrame (some env)).1, st.out⟩ d).2 $$ [$]
+    iapply Hk $$ %(fun x => if x ∈ envNewL then f x else R x) %hkeep Hst Hw Hnew Hms
+  · iintro ⟨-, HA⟩ HK HS
+    unfold oomAt
+    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩
+    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
+    ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [$]
+    ihave Hst := stackScratch_widen hn2 hn $$ [$]
+    ihave Hk := and_elim_r $$ Hk
+    have e16 : (R 2 - 16#64).toNat = (R 2).toNat - 16 := toNat_sub_frame (by
+      simp only [BitVec.toNat_ofNat]; have := hsp.lo; unfold htifLo envNewNeed at this; omega)
+    iapply Newlib.Oom.wp_oomBlock HN live hcl (wpW _) N vsaLayoutP vsaRoomB inp
+      Newlib.OomSites.oom80002a38 Newlib.OomSites.oom80002a38_ok (R 2) (R 2 - 16#64) r n
+      ⟨hn2, by unfold Vsa.Sim.tohostAddr; omega, by rw [e16]; omega,
+        by rw [e16]; show (R 2).toNat - 16 + 0 ≤ (R 2).toNat; omega,
+        hhi, by rw [e16]; have := hsp.align; omega, by rw [e16]; unfold Newlib.fwriteNeed at hfit ⊢; omega⟩ cs st.out
+    rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002a38.head = 0x80002a38#64 from rfl]
+    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Herr Hc
+    iintro HA
+    iapply Hk $$ [$]
   case hP =>
     simp only [envNewL, sepL_cons]
     iintro ⟨⟨H10, H2, Hcs⟩, #Hgp', #Hcx', Hst, #Hpar', Hh⟩
@@ -180,56 +213,6 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     refine ⟨trivial, fun k hk => ?_⟩
     obtain ⟨h10, h2⟩ := (show ∀ y ∈ newSaved, y ≠ 10 ∧ y ≠ 2 by decide) k hk
     simp [h10, h2, hk]
-  iframe Hspec Hcode Hms Hgp Hcx Hst
-  isplitl [Hhr Hs]
-  · isplitl []
-    · simp only [parentAt]; iframe Hfr; ipureintro; exact hne
-    unfold heapStore; iexists H, B; iframe Hhr Hs; ipureintro; exact hB
-  isplit
-  ·
-    iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hh, #Hnew⟩ Hms
-    ihave Hk := and_elim_l $$ Hk
-    have hkeep : ∀ x ∈ fRegs, x ∉ (10 :: retClob) →
-        (fun x => if x ∈ envNewL then f x else R x) x = R x := by
-      intro x hx hc
-      by_cases hL : x ∈ envNewL
-      · simp only [hL, ite_true]
-        by_cases h2 : x = 2
-        · subst h2; exact hf2
-        · have hs : x ∈ newSaved :=
-            (show ∀ y ∈ envNewL, y ∉ (10 :: retClob) → y ≠ 2 → y ∈ newSaved by decide) x hL hc h2
-          exact hfs x hs
-      · simp [hL]
-    have e10 : (fun x => if x ∈ envNewL then f x else R x) 10 = f 10 := by
-      simp only [show (10 : Nat) ∈ envNewL from by decide, ite_true]
-    rw [← e10] at *
-    ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
-    · iframe Hsl Hst
-    iapply Hk $$ %(fun x => if x ∈ envNewL then f x else R x) %hkeep Hst [Hh Hc Hio Hi] Hnew Hms
-    iapply (world_heapStore N inp _ _ d).2
-    iframe Hh Hc Hio Hi
-  ·
-    iintro ⟨-, HA⟩ HK HS
-    unfold oomAt
-    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩
-    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
-    ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [Hcl HK]
-    · iframe Hcl HK
-    ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
-    · iframe Hsl Hst
-    ihave Hk := and_elim_r $$ Hk
-    have e16 : (R 2 - 16#64).toNat = (R 2).toNat - 16 := toNat_sub_frame (by
-      simp only [BitVec.toNat_ofNat]; have := hsp.lo; unfold htifLo envNewNeed at this; omega)
-    iapply Newlib.Oom.wp_oomBlock HN live hcl (wpW _) N vsaLayoutP vsaRoomB inp
-      Newlib.OomSites.oom80002a38 Newlib.OomSites.oom80002a38_ok (R 2) (R 2 - 16#64) r n
-      ⟨hn2, by unfold Vsa.Sim.tohostAddr; omega, by rw [e16]; omega,
-        by rw [e16]; show (R 2).toNat - 16 + 0 ≤ (R 2).toNat; omega,
-        hhi, by rw [e16]; have := hsp.align; omega, by rw [e16]; unfold Newlib.fwriteNeed at hfit ⊢; omega⟩ cs st.out
-    rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002a38.head = 0x80002a38#64 from rfl]
-    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Herr Hc
-    iintro HA
-    iapply Hk
-    iframe HA HS
 
 theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
@@ -262,20 +245,49 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     %(defineSaved.map fun k => (k, R k)) %(by simp [defineSaved])
   iapply (ms_callRegsAbort (wpW _) hexec hcode (L := envDefineL) (K := [23, 24, 25, 26, 27])
     (by decide)
-    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp (R 2) envDefineNeed ∧ SlotWin (R 12).toNat⌝ ∗
-      (10 : Nat) ↦ᵣ R 10 ∗ (11 : Nat) ↦ᵣ R 11 ∗ (12 : Nat) ↦ᵣ R 12 ∗ sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗
-      codeX ∗ clobbered argClob ∗ savedOwn (defineSaved.map fun k => (k, R k)) ∗
-      stackScratch (R 2) envDefineNeed ∗ frameAt fa (R 10).toNat ∗ strAt (R 11).toNat x ∗
-      valAt N (R 12).toNat v ∗ heapStore N (Regime.uncounted.plus (defineCost st.store fa x)) st.store))
-    (Q := fun _ => iprop(sp ↦ᵣ R 2 ∗ clobbered (10 :: retClob) ∗
-      savedOwn (defineSaved.map fun k => (k, R k)) ∗ stackScratch (R 2) envDefineNeed ∗
-      valAt N (R 12).toNat v ∗ heapStore N .uncounted (st.store.define fa x v)))
-    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ codeX ∗ stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
-      heapStore N .uncounted st.store ∗ frameAt fa (R 10).toNat ∗ strAt (R 11).toNat x))
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ defineSaved, f k = R k⌝ ∗
       stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
       heapStore N .uncounted (st.store.define fa x v)))
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
+  rotate_left 2
+  icombine Hgp Hcx Hst Hval Hh Hfr Hstr as HX; iframe HX Hspec Hcode Hms
+  isplit
+  · iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hval, Hh⟩ Hms
+    ihave Hk := and_elim_l $$ Hk
+    have hkeep : ∀ y ∈ fRegs, y ∉ (10 :: retClob) →
+        (fun y => if y ∈ envDefineL then f y else R y) y = R y := by
+      intro y hy hc
+      by_cases hL : y ∈ envDefineL
+      · simp only [hL, ite_true]
+        by_cases h2 : y = 2
+        · subst h2; exact hf2
+        · have hs : y ∈ defineSaved :=
+            (show ∀ z ∈ envDefineL, z ∉ (10 :: retClob) → z ≠ 2 → z ∈ defineSaved by decide) y hL hc h2
+          exact hfs y hs
+      · simp [hL]
+    ihave Hst := stackScratch_widen hn2 hn $$ [$]
+    ihave Hw := (world_heapStore N inp _ ⟨st.store.define fa x v, st.out⟩ d).2 $$ [$]
+    iapply Hk $$ %(fun y => if y ∈ envDefineL then f y else R y) %hkeep Hst Hval Hw Hms
+  · iintro ⟨-, HA, Hval⟩ HK HS
+    unfold oomAt
+    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩
+    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
+    rw [show VsaIris.ra :: 10 :: retClob ++ defineSaved = envOomRegs from rfl]
+    ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [$]
+    ihave Hst := stackScratch_widen hn2 hn $$ [$]
+    ihave Hk := and_elim_r $$ Hk
+    have e64 : (R 2 - 64#64).toNat = (R 2).toNat - 64 := toNat_sub_frame (by
+      simp only [BitVec.toNat_ofNat]; have := hsp.lo; unfold htifLo envDefineNeed at this; omega)
+    iapply Newlib.Oom.wp_oomBlock HN live hcl (wpW _) N vsaLayoutP vsaRoomB inp
+      Newlib.OomSites.oom80002bd0 Newlib.OomSites.oom80002bd0_ok (R 2) (R 2 - 64#64) r n
+      ⟨hn2, by unfold Vsa.Sim.tohostAddr; omega, by rw [e64]; omega,
+        by rw [e64]; show (R 2).toNat - 64 + 0 ≤ (R 2).toNat; omega,
+        hhi, by rw [e64]; have := hsp.align; omega, by rw [e64]; unfold Newlib.fwriteNeed at hfit ⊢; omega⟩
+      cs st.out
+    rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002bd0.head = 0x80002bd0#64 from rfl]
+    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Herr Hc
+    iintro HA
+    iapply Hk $$ [$]
   case hP =>
     simp only [envDefineL, sepL_cons]
     iintro ⟨⟨H10, H11, H12, H2, Hcs⟩, #Hgp', #Hcx', Hst, Hval, Hh, #Hfr, #Hstr⟩
@@ -323,51 +335,6 @@ theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
     refine ⟨trivial, fun k hk => ?_⟩
     have h2 := (show ∀ y ∈ defineSaved, y ≠ 2 by decide) k hk
     simp [h2, hk]
-  iframe Hspec Hcode Hms Hgp Hcx Hst Hval Hh Hfr Hstr
-  isplit
-  ·
-    iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hval, Hh⟩ Hms
-    ihave Hk := and_elim_l $$ Hk
-    have hkeep : ∀ y ∈ fRegs, y ∉ (10 :: retClob) →
-        (fun y => if y ∈ envDefineL then f y else R y) y = R y := by
-      intro y hy hc
-      by_cases hL : y ∈ envDefineL
-      · simp only [hL, ite_true]
-        by_cases h2 : y = 2
-        · subst h2; exact hf2
-        · have hs : y ∈ defineSaved :=
-            (show ∀ z ∈ envDefineL, z ∉ (10 :: retClob) → z ≠ 2 → z ∈ defineSaved by decide) y hL hc h2
-          exact hfs y hs
-      · simp [hL]
-    ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
-    · iframe Hsl Hst
-    iapply Hk $$ %(fun y => if y ∈ envDefineL then f y else R y) %hkeep Hst Hval [Hh Hc Hio Hi] Hms
-    iapply (world_heapStore N inp _ _ d).2
-    iframe Hh Hc Hio Hi
-  ·
-    iintro ⟨-, HA, Hval⟩ HK HS
-    unfold oomAt
-    icases HA with ⟨Hpc, Hsp, Hcl, Hst, %Hp, Hheap⟩
-    ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
-    rw [show VsaIris.ra :: 10 :: retClob ++ defineSaved = envOomRegs from rfl]
-    ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [Hcl HK]
-    · iframe Hcl HK
-    ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
-    · iframe Hsl Hst
-    ihave Hk := and_elim_r $$ Hk
-    have e64 : (R 2 - 64#64).toNat = (R 2).toNat - 64 := toNat_sub_frame (by
-      simp only [BitVec.toNat_ofNat]; have := hsp.lo; unfold htifLo envDefineNeed at this; omega)
-    iapply Newlib.Oom.wp_oomBlock HN live hcl (wpW _) N vsaLayoutP vsaRoomB inp
-      Newlib.OomSites.oom80002bd0 Newlib.OomSites.oom80002bd0_ok (R 2) (R 2 - 64#64) r n
-      ⟨hn2, by unfold Vsa.Sim.tohostAddr; omega, by rw [e64]; omega,
-        by rw [e64]; show (R 2).toNat - 64 + 0 ≤ (R 2).toNat; omega,
-        hhi, by rw [e64]; have := hsp.align; omega, by rw [e64]; unfold Newlib.fwriteNeed at hfit ⊢; omega⟩
-      cs st.out
-    rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002bd0.head = 0x80002bd0#64 from rfl]
-    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Herr Hc
-    iintro HA
-    iapply Hk
-    iframe HA Hval HS
 
 end
 

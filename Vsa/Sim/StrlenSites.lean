@@ -29,8 +29,8 @@ theorem exec_snez_a0_a5 (σ : MState) (pc : BitVec 64) (v15 : BitVec 64)
   exact execute_rtype_sltu_char (regidx.Regidx 0x0f#5) (regidx.Regidx 0x00#5) (regidx.Regidx 0x0a#5)
     (0#64) v15 (afterNextPC (afterPrelude σ) pc)
     (sigma3_alu σ pc Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15))))
-    (rX_bits_zero _) (rX_bits_x15 _ v15 hx15₂)
-    (wX_bits_x10 _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15))))
+    (rX_bits_zero _) (rX_bits_gpr _ 15 (by decide) (by decide) v15 hx15₂)
+    (wX_bits_gpr _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15))) 10 (by decide) (by decide))
 
 theorem snez_a0_a5_word :
     (((0x00#8).append (0xf0#8)).append (0x35#8)).append (0x33#8) = (0x00f03533#32 : BitVec 32) := by
@@ -55,17 +55,15 @@ theorem site_80006d64
           (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15)))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80006d64 0x80006d65 0x80006d66 0x80006d67 (b0 := (0x33 : BitVec 8)) (b1 := (0x35 : BitVec 8)) (b2 := (0xf0 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
-  exact stepObs_alu σ i u (0x80006d64#64) vminstret (0x00f03533#32)
-    (instruction.RTYPE (regidx.Regidx 0x0f#5, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, rop.SLTU))
-    Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) v15)))
-    (0x33#8) (0x35#8) (0xf0#8) (0x00#8)
-    hG hpc hminstret snez_a0_a5_word snez_a0_a5_notrvc
-    (Vsa.Sim.decodeW (w := 0x00f03533#32) (afterPrelude σ)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+  exact stepObs_exec _ vminstret
+    (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
+      snez_a0_a5_notrvc snez_a0_a5_word
+      (Vsa.Sim.decodeW (w := 0x00f03533#32) (afterPrelude σ)
+        (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+        (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+        (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg)))
     (exec_snez_a0_a5 σ (0x80006d64#64) v15 hx15)
-    (by decide) (by decide) (by decide) (by decide) (by decide)
-    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi
 
 end Vsa.Sim

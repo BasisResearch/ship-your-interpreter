@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimInv
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -129,12 +130,10 @@ theorem sVar (st : St) (d : Nat) (env : Addr) (x : String) (v : Value) (hget : s
   rw [hlen] at hP ⊢
   have he := hm.henv
   rw [View.fa_eq hFa] at he
-  have k9 := has_mem he (by decide); have e9 := srcVal_of_has he
-  simp only [envR] at k9 e9
   simp only [gexpr, varCode] at hseg
   obtain ⟨s1, s2⟩ := hseg.append
   apply run_whole hR.fits s1
-  wp_simp [k9, e9]
+  wp_simp [he.wp]
   refine reaches_mono (walk_read hR.fits hm.rel x (pos + 1 + walkLen (hereLen 7 x) Γ)
     (by rw [Nat.add_assoc]; exact hP) hm.chn
     (pos + 1) f _ o hFa s2 (by reg_simp [])) ?_

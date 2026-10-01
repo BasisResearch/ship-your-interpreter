@@ -50,8 +50,7 @@ theorem exprCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L :
     (by decide) (by decide)
   have g1 : (execSP s + 16#64).toNat = s.toNat - 176 + 16 := g.slot
   have hbb : e.bodiesBound perCallBudget = true := hf.bodies
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
   iapply wp_swpF Wp (F := iprop(□ Hyp ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.expr e) d - 176) ∗ slot24 aRet.toNat ∗
       world N L Room inp ρin st d ∗
@@ -92,13 +91,8 @@ theorem exprCore (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {L :
     have := hfg.lo; rw [hMt1]; ix_esaved hf.saved using hoff
 
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.expr e) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp ρout st' d ∗
-      execDispK (vsaModel live) N L Room inp Wp Φ ρout st' d
-        (.expr e) (.normal) aRet s R ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hcode Hms Hst Hslot Hw HK
-    iapply codeRes_text $$ Hcode
+  · icombine Hcode Hst Hslot Hw HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine ExecExpr_run2 (m := ∅) (s := s) hlive ?_
   intros

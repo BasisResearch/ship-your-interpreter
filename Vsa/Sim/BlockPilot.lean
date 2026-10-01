@@ -12,7 +12,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-
 abbrev GRegs := List (Nat × BitVec 64)
 
 def keysG : GRegs → List Nat
@@ -28,9 +27,6 @@ def eraseG (n : Nat) : GRegs → GRegs
   | (m, v) :: L => if m = n then eraseG n L else (m, v) :: eraseG n L
 
 abbrev KeysOK (d : List Nat) : Prop := ∀ n ∈ d, 1 ≤ n ∧ n ≤ 31
-
-
-
 
 def GHolds (σ : MState) : GRegs → Prop
   | [] => True
@@ -180,53 +176,7 @@ theorem srcPin_srcVal (σ : MState) (L : GRegs) :
     rw [hv]
     exact gholds_lookup L hL hv
 
-inductive AKind where
-  | addi : AKind
-  | add  : AKind
-deriving DecidableEq
-
-structure AInstr where
-  pc   : BitVec 64
-  word : BitVec 32
-  b0   : BitVec 8
-  b1   : BitVec 8
-  b2   : BitVec 8
-  b3   : BitVec 8
-  kind : AKind
-  rd   : Nat
-  rs1  : Nat
-  rs2  : Nat
-  imm  : BitVec 12
-
-def endPC (pc0 : BitVec 64) : List AInstr → BitVec 64
-  | [] => pc0
-  | a :: r => endPC (BitVec.addInt a.pc 4) r
-
 abbrev SrcOK (n : Nat) (dom : List Nat) : Prop :=
   n ≤ 31 ∧ (n = 0 ∨ n ∈ dom)
-
-abbrev InstrOK (pc0 : BitVec 64) (dom : List Nat) (a : AInstr) : Prop :=
-  a.pc.toNat = pc0.toNat ∧
-  (((a.b3.append a.b2).append a.b1).append a.b0).toNat = a.word.toNat ∧
-  (Sail.BitVec.extractLsb (((a.b3.append a.b2).append a.b1).append a.b0) 1 0).toNat
-    = (0b11#2 : BitVec 2).toNat ∧
-  0x80000000 ≤ a.pc.toNat ∧
-  a.pc.toNat + 4 ≤ tohostAddr ∧
-  a.pc.toNat % 4 = 0 ∧
-  1 ≤ a.rd ∧ a.rd ≤ 31 ∧
-  SrcOK a.rs1 dom ∧
-  (¬ a.kind = AKind.add ∨ SrcOK a.rs2 dom)
-
-def BlockOK (pc0 : BitVec 64) (dom : List Nat) : List AInstr → Prop
-  | [] => True
-  | a :: r => InstrOK pc0 dom a ∧ BlockOK (BitVec.addInt a.pc 4) (a.rd :: dom) r
-
-instance instDecBlockOK (pc0 : BitVec 64) (dom : List Nat) :
-    (is : List AInstr) → Decidable (BlockOK pc0 dom is)
-  | [] => isTrue trivial
-  | a :: r =>
-    have : Decidable (BlockOK (BitVec.addInt a.pc 4) (a.rd :: dom) r) :=
-      instDecBlockOK _ _ r
-    inferInstanceAs (Decidable (_ ∧ _))
 
 end Vsa.Sim

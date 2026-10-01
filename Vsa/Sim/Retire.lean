@@ -149,6 +149,37 @@ theorem GoodState.tickPost {s : MState} (hGs : GoodState s) (vmip vmtime vmtimec
   ((hGs.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
     (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
 
+/-- The prelude writes (`minstret_increment`, `nextPC`) keep the pins. -/
+theorem GoodState.prelude {σ : MState} (hG : GoodState σ) (pc : BitVec 64) :
+    GoodState (afterNextPC (afterPrelude σ) pc) :=
+  (hG.insert_nonpinned (r := Register.minstret_increment) (by decide) _).insert_nonpinned
+    (r := Register.nextPC) (by decide) _
+
+/-- The retire reads of the prelude state: `nextPC = pc + 4`, `minstret` as before. -/
+theorem RetireReads.prelude {σ : MState} {vm : BitVec 64} (hG : GoodState σ)
+    (hvm : σ.regs.get? Register.minstret = some vm) (pc : BitVec 64) :
+    RetireReads (afterNextPC (afterPrelude σ) pc) (BitVec.addInt pc 4) vm :=
+  ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hvm]⟩
+
+/-- A write to a register `try_step` does not read keeps the retire reads. -/
+theorem RetireReads.write {s : MState} {npc vm : BitVec 64} (R : RetireReads s npc vm)
+    {r : Register} (v : RegisterType r)
+    (hr : (r == Register.hart_state || r == Register.nextPC || r == Register.minstret_increment ||
+      r == Register.minstret) = false := by decide) :
+    RetireReads {s with regs := s.regs.insert r v} npc vm := by
+  simp only [Bool.or_eq_false_iff] at hr
+  obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := hr
+  exact ⟨(get?_insert_pinned s.regs r v _ h1).trans R.hart,
+    (get?_insert_pinned s.regs r v _ h2).trans R.nextPC,
+    (get?_insert_pinned s.regs r v _ h3).trans R.inc,
+    (get?_insert_pinned s.regs r v _ h4).trans R.minstret⟩
+
+/-- A jump (a write of `nextPC`) sets the retire target. -/
+theorem RetireReads.jump {s : MState} {npc vm : BitVec 64} (R : RetireReads s npc vm)
+    (t : BitVec 64) :
+    RetireReads {s with regs := s.regs.insert Register.nextPC t} t vm :=
+  ⟨by reg_reads [R.hart], by reg_reads [], by reg_reads [R.inc], by reg_reads [R.minstret]⟩
+
 theorem GoodState.retirePost {σ3 : MState} (hG : GoodState σ3) (npc vm : BitVec 64) :
     GoodState (retirePost σ3 npc vm) :=
   (hG.insert_nonpinned (r := Register.PC) (by decide) _).insert_nonpinned

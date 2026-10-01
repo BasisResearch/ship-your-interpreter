@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimSeq
+import Vsa.Compiler.R6Keys
 
 namespace Vsa.Compiler
 
@@ -58,16 +59,13 @@ theorem run_enterFrame {T : List String} {V : View} {st : St} {d : Nat} {env : A
       (B.pc = pcOf (pos + 4) ∧ Entered' code T V st d env Γ sp fs L A B)) := by
   obtain ⟨pc0, L0, m, o⟩ := A
   simp only at hA; subst hA
-  have k9 := has_mem hm.henv (by decide); have e9 := srcVal_of_has hm.henv
-  simp only [envR] at k9 e9
   have hLl : L.length < 2048 := by omega
   have hp3 : PosOK (pos + 3) := posOK_le hP (by omega)
   apply run_jumps hR.fits hseg
-  wp_simp [enterFrame, k9, e9, hp3]
+  wp_simp [enterFrame, hm.henv.wp, hp3]
   have hlo := hm.rel.lo
   have htopF := hm.rel.top
-  have hfe : frameEnd = 0x90000000 := rfl
-  have hfb : frameBase = 0x80100000 := rfl
+  obtain ⟨hfb, hfe, -⟩ := frame_consts
   have hfal := hm.hfal
   refine ex_bind (run_nf hR.fits hR.nf (n := L.length) (by reg_simp []) (by reg_simp []; rfl)
     (by reg_simp []; exact hm.hf) (by reg_simp []) (pcOf_aligned hp3) ⟨hlo, hfal, htopF⟩ (by omega)) ?_
@@ -80,10 +78,8 @@ theorem run_enterFrame {T : List String} {V : View} {st : St} {d : Nat} {env : A
   have henvlt : env < st.store.frames.size := (Array.getElem?_eq_some_iff.mp hfr0).1
   obtain ⟨hs3, hg3, -, hF3, hout3, -⟩ := hm.rel.alloc_frame (par := some env) (L := L)
     (fun b hb => by cases hb; exact henvlt) hfal hlo hroomF hnd hL
-  have k14 := has_mem g14 (by decide); have e14 := srcVal_of_has g14
-  simp only [a4] at k14 e14
   apply run_whole hR.fits (hseg.drop 3 |>.cast rfl)
-  wp_simp [enterFrame, k14, e14]
+  wp_simp [enterFrame, g14.wp]
   have hobj3 := hout3.obj (h := V.h) hroomF
   have hlen' : st.store.frames.size = V.F.length := hm.rel.len.symm
   have hfaE : (V.enter L).fa st.store.frames.size = V.hF := View.fa_eq (V := V.enter L) hF3
@@ -112,41 +108,12 @@ theorem run_leave {T : List String} {V : View} {st : St} {d : Nat} {env inner : 
       B.out = A.out) := by
   obtain ⟨pc0, L0, m, o⟩ := A
   simp only at hA; subst hA
-  have hb : frameBase = 0x80100000 := rfl
-  have he : frameEnd = 0x90000000 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  obtain ⟨f, hF⟩ := hm.chn.head'
-  have hfa := hm.rel.frame inner fr f L hfr hF
-  obtain ⟨h1, h2, h3, h4⟩ := hm.rel.region inner f L hF
-  have htop := hm.rel.top
-  unfold frSize at h2
-  have he9 := hm.henv
-  rw [View.fa_eq hF] at he9
-  have k9 := has_mem he9 (by decide); have e9 := srcVal_of_has he9
-  simp only [envR] at k9 e9
-  have n0 : (BitVec.ofNat 64 f).toNat = f := toNat_ofNat_lt (by omega)
+  obtain ⟨f, P⟩ := hm.popScope hfr hpar
   apply run_whole hR.fits hseg
-  wp_simp [k9, e9, n0]
-  refine ⟨by unfold LdOK; omega, reach_here ⟨by simp, ?_, rfl, rfl⟩⟩
-  have hc' : ChainL V.F st.store env Γ := by
-    cases hm.chn with
-    | top _ hp' _ => rw [hfr] at *; simp_all
-    | cons hfr' hpar' hF' hc =>
-      rw [hfr] at hfr'; cases hfr'; rw [hpar] at hpar'; cases hpar'; exact hc
-  have hw : rdW m f = BitVec.ofNat 64 (V.fa env) := by rw [hfa.parent, parAddr_eq_parOf, hpar]; rfl
-  exact {
-    rel := hm.rel
-    img := hm.img
-    clo := hm.clo
-    chn := hc'
-    out := hm.out
-    ho := by reg_simp []; exact hm.ho
-    hf := by reg_simp []; exact hm.hf
-    henv := by reg_simp []; exact hw
-    hsp := by reg_simp []; exact hm.hsp
-    hdep := by reg_simp []; exact hm.hdep
-    stk := hm.stk
-    hfal := hm.hfal }
+  wp_simp [hm.keys.row.wp, P.fa, P.nat]
+  refine ⟨P.ld, reach_here ⟨by simp, ?_, rfl, rfl⟩⟩
+  rw [P.word]
+  exact hm.reseat rfl rfl P.chn (hm.keys.setEnv _)
 
 theorem sBlock {T : List String} {st : St} {d : Nat} {env : Addr} {ss : List Stmt} {store' : Store}
     {inner : Addr} {st' : St} {status : Status} {n : Nat}
@@ -160,17 +127,17 @@ theorem sBlock {T : List String} {st : St} {d : Nat} {env : Addr} {ss : List Stm
     have : inner = (st.store.allocFrame (some env)).2 := by rw [halloc]
     rw [this]; rfl
   subst hst' hin
-  simp only [gstmt] at hseg hP ⊢
-  obtain ⟨s12, s3⟩ := hseg.append
-  obtain ⟨s1, s2⟩ := s12.append
   have e4 : (enterFrame (frameNames [] ss) pos).length = 4 := rfl
-  simp only [List.length_append, e4, List.length_singleton] at hP s2 s3 ⊢
-  refine ex_bind (run_enterFrame hR hm hA hL (frameNames_nodup _ _) s1 (posOK_le hP (by omega))) ?_
+  have h := And.intro hseg hP
+  simp only [gstmt, List.append_assoc, ↓segP_app, e4, List.length_cons, List.length_nil, Nat.zero_add] at h
+  obtain ⟨⟨s1, p1⟩, ⟨s2, p2⟩, s3, -⟩ := h
+  simp only [gstmt, List.length_append, e4, List.length_singleton]
+  refine ex_bind (run_enterFrame hR hm hA hL (frameNames_nodup _ _) s1 p1) ?_
   rintro B (⟨h1, h2⟩ | ⟨hpcB, hE⟩)
   · refine reach_here (.inl ⟨h1, fun hr => ?_⟩)
     have h1 := hr.1; have he : envBytes = 32 := rfl; omega
   refine ex_bind (hQ _ (C.enter (frameNames [] ss)) sp fs _ B hE.ms hpcB hwss (hctx.enter _) s2
-    (posOK_le hP (by omega)) (by simpa [tS] using htmp)) ?_
+    p2 (by simpa [tS] using htmp)) ?_
   rintro B' (⟨h1, h2⟩ | ⟨Ve, hp⟩)
   · refine reach_here (.inl ⟨h1, fun hr => h2 ⟨?_, ?_⟩⟩)
     · have h1 := hr.1; have he : envBytes = 32 := rfl; simp only [View.enter]; omega
@@ -188,7 +155,7 @@ theorem sBlock {T : List String} {st : St} {d : Nat} {env : Addr} {ss : List Stm
   by_cases ht : status = .normal
   · subst ht
     obtain ⟨hpc', hm'⟩ := hp.out
-    refine reaches_mono (run_leave hR hm' hpc' hfrI hparI' (s3.cast (by rw [← Nat.add_assoc]))) ?_
+    refine reaches_mono (run_leave hR hm' hpc' hfrI hparI' s3) ?_
     rintro B'' ⟨g1, g2, g3, g4⟩
     refine .inr ⟨Ve, ⟨by rw [g1]; congr 1 <;> omega, g2⟩, hgrow, hwith, by rw [g3]; exact hstk,
       by rw [g3]; exact hobj⟩

@@ -157,15 +157,10 @@ open VsaIris.Inst Vsa.RuntimeRepr
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
   · iframe Hpc Hra Hregs; unfold blockOwn; iexact HF
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
-      world N L Room inp (.counted (k + (nf + na))) st d ∗
-      CallK254T live N L Room inp Φ k st2 d fv vs s aX sret ret rv args.length
-        (evalNeed (.call f args) d - 1088)))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF (twpW _)
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hw; iexact Hk
+  · icombine Hcode Hro Hfb Hst Hw Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   unfold evalEntryPC
   refine Call_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
@@ -200,15 +195,10 @@ open VsaIris.Inst Vsa.RuntimeRepr
 
 #ix_piece callPrefixT_p2 from callPrefixT_p1 by
 
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
-      world N L Room inp (.counted (k + na)) st1 d ∗ □ valOf N fv w0 w1 w2 ∗
-      CallK254T live N L Room inp Φ k st2 d fv vs s aX sret ret rv args.length
-        (evalNeed (.call f args) d - 1088)))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF (twpW _)
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hw Hv1; iexact Hk
+  · icombine Hcode Hro Hfb Hst Hw Hv1 Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   have hsmall := hn.small
   have hct : (BitVec.ofNat 64 args.length).toInt = args.length := ofNat_toInt_small hsmall

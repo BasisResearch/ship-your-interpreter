@@ -3,6 +3,7 @@ import VsaIris.Vsa.Stdout.StrOut
 import VsaIris.Vsa.InterpImg
 import Vsa.Sim.SnprintfSpec39
 import VsaIris.Vsa.Stderr.FprintfSpec
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -345,19 +346,9 @@ theorem fprintf_out (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live
       · rw [Nat.sub_sub] at q1; exact o1 ⟨q1, by omega⟩
       · exact o4 ⟨by omega, by omega⟩
       · exact o2 q⟩
-    have hnF : ∀ a w, 0x8001bb20 ≤ a → a + w ≤ 0x8001bb30 → ∀ j, j < w → ¬ FpReg (s.toNat - 80) (a + j) :=
-      fun a w ha hw j hj h => by
-        unfold FpReg at h
-        rcases h with ⟨q1, q2⟩ | q | q
-        · rw [Nat.sub_sub] at q1; omega
-        · omega
-        · omega
     refine outEnd_of (k := 2960) hok himp hMt hr h1 h2 hcs hs5 hK ?_ ?_ (ldv_lhu_of_lh (by decide) hfl) (by rw [h1] at hm; exact hm)
       (by rw [hb])
-    · rw [hF.ldv .ld fun j hj => hnF 0x8001bb20 8 (by decide) (by decide) j (by simpa [widthOfM] using hj)]
-      exact hcm.p
-    · rw [hF.ldv .lw fun j hj => hnF 0x8001bb2c 4 (by decide) (by decide) j (by simpa [widthOfM] using hj)]
-      exact hcm.w
+    all_goals carry_close [hF.ldv, hcm.p, hcm.w]
   cases hPf with
   | lld hf hfr =>
     subst hf

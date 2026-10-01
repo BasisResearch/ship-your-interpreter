@@ -1,7 +1,8 @@
 import Vsa.Sim.Code.Exec_stmt
 import Vsa.Sim.BridgeSeg
 import Vsa.MemReprReadFields
-import Vsa.Sim.MemRegionWithin
+import Vsa.MemReprWithin
+import Vsa.Sim.MemRegion
 import Vsa.Sim.PinW
 import Vsa.Sim.Code.Strcmp
 import Vsa.Sim.StepCount
@@ -17,8 +18,6 @@ open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic (Triple)
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 open Vsa.Sim.Code
-
-local notation "SpecSt" => Vsa.While.St
 
 theorem sext32_of_lt (b0 b1 b2 b3 : BitVec 8) (k : Nat) (hk : k < 2 ^ 31)
     (hrec : b0.toNat + 256 * (b1.toNat + 256 * (b2.toNat + 256 * b3.toNat)) = k) :

@@ -126,9 +126,7 @@ theorem binErrTail (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
       (Sro := rodataDom) (rd := rodataByte) (fmt := 0x800193f0#64) (x1 := opn)
       (x2 := kindNamePtr v)
       (readable_rodata_fmt (fun hro => operand_fmt hro (hopn hro) (kindName_cstr hro v))) g.sg hn
-    iframe Hcode HE Hrd Hms Hst Hw
-    isplitl []
-    · ipureintro; exact hR
+    iframe Hcode HE Hrd Hms Hst Hw %hR
     iintro HA
     iapply Hab
     iframe HA Hslot
@@ -138,9 +136,7 @@ theorem binErrTail (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
   · unfold evalArmF; icases HF with ⟨#Hc, -⟩; iexact Hc
   iapply ms_callKindName Wp hvk (KN.exec live hlive) KN.mem KN.al (v := v) hS64
     (evalSlotGeom g.sg g.need (o := 64) (by decide) (by decide)) hw htag
-  iframe Hcode Hms
-  isplitl []
-  · ipureintro; exact h10
+  iframe Hcode Hms %h10
   iintro %R4 %M4 %hkeep4 %hk4 %hag4 Hms
   iapply fin R4 M4 hkeep4 hk4 (hsrc hag4 hop)
   iframe HF Hms
@@ -316,9 +312,7 @@ theorem binZeroArm {op : BinOp} {fmt : BitVec 64} (RT : JalAt RtErr.rtErrEntry)
   ihave #Hrd := readable_rodata $$ Himg
   iapply ms_rtErrEval Wp hE (RT.exec live hlive) RT.mem (Sro := rodataDom) (rd := rodataByte)
     hfmt g.sg (evalNeed_binary_rtErr _ _ _ _)
-  iframe Hcode HE Hrd Hms Hst Hw
-  isplitl []
-  · ipureintro; exact hR
+  iframe Hcode HE Hrd Hms Hst Hw %hR
   iintro HA
   iapply Hab
   iframe HA Hslot

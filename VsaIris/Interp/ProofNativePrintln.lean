@@ -149,8 +149,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
     rw [BitVec.toNat_add]; simp; omega
 
-  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
-  · iframe Hms Hstd
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [$]
   have hio1 := ldv_impMem
   have hio2 : ldv .ld M1 0x8001b548 = 0x8001bb20#64 := by
     rw [ldv_ld_imgW]; unfold imgW
@@ -202,15 +201,14 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have k4 := fun x (hx : x ∈ fRegs) (hc : x ∉ callerSaved) => hk4 x hx hc
 
   iapply wp_swpF Wp (S := nplF s) (R := upd R4 1 (BitVec.ofNat 64 (0x80002fa0 + 4))) (Mt := M1)
-    (pc := 0x80002fa4#64) (F := iprop(codeRes ∗ stdioW ∗ consoleOwn (o ++ printArgs st vs ++ "\n") ∗
-      FnplR Wp Φ N sret args s r vs st o rv))
+    (pc := 0x80002fa4#64)
   rotate_left
-  · rw [hro]; unfold FnplR; iframe Hcode Hstd Hcon Hsl Hnull Hvs Hst Hk Hms
+  · isplitl []; rw [hro]; iexact Hcode
+    icombine Hcode Hstd Hcon Hsl Hnull Hvs Hst Hk as HF; iframe HF Hms
   intro F'
   refine npl_null c.hlive ?_
   intros; apply swp_closeF
   dsimp only [F']
-  unfold FnplR
   iintro ⟨⟨#Hcode, Hstd, Hcon, Hsl, Hnull, Hvs, Hst, Hk⟩, Hms⟩
 
   ihave #Hvn := valueNull_spec c.hlive Wp N sret
@@ -234,11 +232,9 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
 
   iapply wp_swpF Wp (S := nplF s) (pc := 0x80002fac#64) (R := upd R5 1 (BitVec.ofNat 64 (0x80002fa8 + 4)))
     (Mt := M1)
-    (F := iprop(codeRes ∗ valAt N (s + 18446744073709551568#64).toNat .null ∗ valAt N sret.toNat .null ∗
-      valsAt N args.toNat vs ∗ stdioW ∗ consoleOwn (o ++ printArgs st vs ++ "\n") ∗
-      stackScratch (s + 18446744073709551568#64) nativePrintNeed ∗ NplK Wp Φ N sret args s r vs st o rv))
   rotate_left
-  · rw [hro]; iframe Hcode Hnull Hnull2 Hvs Hstd Hcon Hst Hk Hms
+  · isplitl []; rw [hro]; iexact Hcode
+    icombine Hnull Hnull2 Hvs Hstd Hcon Hst Hk as HF; iframe HF Hms
   intro F'
   have sw : ∀ o, 24 ≤ o → o + 8 ≤ 48 →
       ldv .ld M1 (s + 18446744073709551568#64 + BitVec.ofNat 64 o).toNat =
@@ -255,12 +251,11 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (by omega) hs2 hs3 c.hal hra1 hs01 ?_
   intros; apply swp_closeF
   dsimp only [F']
-  iintro ⟨⟨-, Hnull, Hnull2, Hvs, Hstd, Hcon, Hst, Hk⟩, Hms⟩
+  iintro ⟨⟨Hnull, Hnull2, Hvs, Hstd, Hcon, Hst, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
   ihave Hslot := valAt_slot $$ Hnull
   ihave Hst := nplFrame_join (s := s) (by unfold nativePrintNeed printNeed fprintfNeed; omega)
-    $$ [Hst Hslot HS]
-  · iframe Hst Hslot HS
+    $$ [$]
   ihave Hra := ptsto_eq (show _ = r by ix_reg) $$ Hra
   iapply Hk $$ Hpc Hra
   iexists _
@@ -331,15 +326,12 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
     rw [BitVec.toNat_add]; simp; omega
   ihave ⟨Hst, Hslot, HF⟩ := nplFrame_split (s := s)
     (by unfold nativePrintNeed printNeed fprintfNeed; omega) $$ Hst
-  ihave ⟨%M, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
-  · iframe Hpc Hra Hregs HF
+  ihave ⟨%M, Hms⟩ := ms_intro $$ [$]
 
   iapply wp_swpF Wp (S := nplF s) (R := upd rv 1 r) (Mt := M) (pc := nativePrintlnPC)
-    (F := iprop(codeRes ∗ dispResL st vs ∗ binImg ∗ slot24 sret.toNat ∗ slot24 (s + 18446744073709551568#64).toNat ∗
-      valsAt N args.toNat vs ∗ stdioW ∗ consoleOwn o ∗
-      stackScratch (s + 18446744073709551568#64) nativePrintNeed ∗ NplK Wp Φ N sret args s r vs st o rv))
   rotate_left
-  · rw [hro]; iframe Hcode Hd Himg Hsl Hslot Hvs Hstd Hcon Hst Hk Hms
+  · isplitl []; rw [hro]; iexact Hcode
+    icombine Hcode Hd Himg Hsl Hslot Hvs Hstd Hcon Hst Hk as HF; iframe HF Hms
   intro F'
   refine npl_pro hlive h2 (by omega) (by omega) hs4 ?_
   intros; apply swp_closeF

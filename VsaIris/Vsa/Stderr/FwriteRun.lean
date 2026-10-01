@@ -2,6 +2,7 @@ import VsaIris.Vsa.Stderr.SwsetupErr
 import VsaIris.Vsa.Stderr.Mem
 import VsaIris.Vsa.SymCompactTac
 import VsaIris.Vsa.Stderr.ErrOK
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -78,14 +79,8 @@ macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
     (hs1 := ?hs1) (hs2 := ?hs2) (hal := ?hal) (hra := ?hra)
     (h10 := ?h10) (h11 := ?h11) (hsinit := ?hsinit) (hflU := ?hflU) (hflS := ?hflS) (hfd := ?hfd)
     (hbase := ?hbase) (hk := fun R' hR => ?_)
-  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h2, BitVec.add_assoc,
-    BitVec.reduceAdd]; done))
   case hs1 | hs2 | hal => nx_fdisch
-  case hra => decide
-  case hsinit => nx_mem; exact hC.sinit
-  case hflU | hflS => nx_mem; decide
-  case hfd => nx_mem; exact hE.fd
-  case hbase => nx_mem; exact hE.base
+  all_goals try carry_close [h2, hC.sinit, hE.fd, hE.base]
 
 #ix_piece fwriteErr_08 from fwriteErr_07 by
   nx_ret hR
@@ -117,9 +112,7 @@ macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
   all_goals try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.ofNat_toNat,
     BitVec.setWidth_eq, h1, h2, h10, h11, h12, h13, hbn, rk1, rk2, rk8, rk9, rk18, rk19, rk20, rk21,
     rk22, rk23, rk24, rk25, rk26, rk27]; done)
-  case refine_1 => nx_addr
-  case refine_2 => nx_addr
-  case refine_3 => nx_addr
+  case refine_1 | refine_2 | refine_3 => nx_addr
   case refine_6 =>
     intro i hi
     obtain ⟨h1', h2', h3'⟩ := hbd i hi
@@ -129,11 +122,8 @@ macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
     repeat (refine ByteSrc.store ?_ _ ?_)
     exact hsrc i hi
     all_goals (obtain ⟨h1', h2', h3'⟩ := hbd i hi; simp only [stdioFoot, InRange] at h2'; nx_addr)
-  case refine_10 =>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [sext_extract32_small (by omega), hbn]
-  case refine_12 => nx_mem; decide
-  case refine_13 => nx_mem; exact hE.fd
+  case refine_10 => carry_close [sext_extract32_small, ← hbn]
+  case refine_12 | refine_13 => carry_close [hE.fd]
 
 set_option hygiene false in
 

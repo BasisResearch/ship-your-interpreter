@@ -101,6 +101,41 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {inp : Nat}
 
+/-- The shared `var` epilogue after `env_define` returns (total and partial). -/
+theorem varEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
+    {Φ : Nat × String → IProp GF} {ρ : Regime} {st : St} {d : Nat} {x : String}
+    {eo : Option Expr} {aRet s ret v8 v9 v18 v19 : BitVec 64} {R0 R3 : Nat → BitVec 64} {M3 : Mem}
+    (hsg : StackGeom s (execNeed (.varDecl x eo) d)) (hal : ret.toNat % 4 = 0)
+    (h2 : R3 2 = execSP s)
+    (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R0 (upd R3 1 (BitVec.ofNat 64 (0x80004114 + 4))))
+    (hsv : ExecSaved M3 s ret v8 v9 v18 v19) :
+    codeRes ∗ ms (BitVec.ofNat 64 (0x80004114 + 4)) (upd R3 1 (BitVec.ofNat 64 (0x80004114 + 4)))
+      (InExt (s.toNat - 176, 176)) M3 ∗
+      stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗ slot24 aRet.toNat ∗
+      world N vsaLayoutP vsaRoomB inp ρ st d ∗
+      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp Wp Φ ρ st d (.varDecl x eo) .normal aRet
+        s R0 ret v8 v9 v18 v19 ⊢ Wp.W Φ := by
+  iintro ⟨#Hcode, Hms, Hst, Hslot, Hw, HK⟩
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
+  rotate_left
+  · icombine Hcode Hst Hslot Hw HK as HF; isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
+  intro F'
+  refine VarArm_run3 (m := ∅) (s := s) hlive ?_
+  intros
+  apply swp_closeRM
+  intro R4 M4 hR4 hM4
+  have hepi := wp_execEpi (N := N) (L := vsaLayoutP) (Room := vsaRoomB) (inp := inp) hlive Wp
+    (Φ := Φ) (ρ := ρ) (st' := st) (d := d) (sm := .varDecl x eo) (status := .normal) (aRet := aRet)
+    (s := s) (ret := ret) (v8 := v8) (v9 := v9) (v18 := v18) (v19 := v19) (R0 := R0) (R := R4)
+    (Mt := M4) hsg hal (by subst hR4; ix_reg; exact h2) (by subst hR4; ix_reg; rfl)
+    (by rw [hM4]; exact hsv)
+    (by subst hR4; repeat (first | exact hk | refine KeepRegs.upd ?_ (by decide) _))
+  simp only [statusRet] at hepi
+  unfold F'
+  iintro ⟨⟨#Hcode, Hst, Hslot, Hw, HK⟩, Hms⟩
+  iapply hepi
+  iframe Hcode Hms Hst Hslot Hw HK
+
 theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {k : Nat} {st : St} {d env : Nat} {x : String}
     {eo : Option Expr} {v : Value}
@@ -130,16 +165,11 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
     rw [hfg.sf]; have := hsg.le; omega
   iintro ⟨#Hed, #Hcode, #Hro, #Hfb, #Hv, Hms, Hst, Hslot, Hw, HK⟩
   ihave #Hstr := strAt_of_cstringWithin hn.nameStr (sharedWin_of_readOK hgeo) $$ Hro
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
 
-  iapply wp_swpF Wp (F := iprop(envDefineSpec Wp N ∗ frameAt env aE.toNat ∗ valOf N v w0 w1 w2 ∗
-      strAt pn x ∗ codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗ world N vsaLayoutP vsaRoomB inp (.counted (k + defineCost st.store env x)) st d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp Wp Φ (.counted k)
-        ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19))
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hed Hfb Hv Hstr Hcode Hst Hslot Hw HK
+  · icombine Hed Hfb Hv Hstr Hcode Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine VarArm_run2 (pn := BitVec.ofNat 64 pn) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.node.lo
     hn.node.hi hn.node.off h8 h2 hn.name ?_
@@ -161,8 +191,7 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   unfold F'
   iintro ⟨⟨#Hed, #Hfb, #Hv, #Hstr, #Hcode, Hst, Hslot, Hw, HK⟩, Hms⟩
 
-  ihave ⟨Hms, Hval⟩ := ms_valCarve N hslotS hs0 hs8 hs16 $$ [Hms]
-  · iframe Hms Hv
+  ihave ⟨Hms, Hval⟩ := ms_valCarve N hslotS hs0 hs8 hs16 $$ [$]
   ihave ⟨Hw, #Hcx⟩ := world_codeX N vsaLayoutP vsaRoomB inp _ st d $$ Hw
   ihave ⟨Hh, Hc, Hio, Hi⟩ := (world_heapStore N inp (.counted (k + defineCost st.store env x)) st d).1 $$ Hw
   have h22 : R2 2 = execSP s := by subst hR2; ix_reg; exact h2
@@ -170,12 +199,8 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   have h211 : R2 11 = BitVec.ofNat 64 pn := by subst hR2; ix_reg
   have hr12 : R2 12 = execSP s + 16#64 := by subst hR2; ix_reg; try rw [h2]
   ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := execSP s) hle' hbig $$ Hst
-  have eSt : stackScratch (GF := GF) (execSP s) envDefineNeed ⊢ stackScratch (R2 2) envDefineNeed := by
-    rw [h22]
-  have eVal : valAt (GF := GF) N (execSP s + 16#64).toNat v ⊢ valAt N (R2 12).toNat v := by
-    rw [hr12]
-  ihave Hst := eSt $$ Hst
-  ihave Hval := eVal $$ Hval
+  ieval (simp only [← h22]) at Hst
+  ieval (simp only [← hr12]) at Hval
   iapply ms_callEnvDefine (N := N) Wp (i := 0x80004114)
     ((step% jalx 0x80004114) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (k := k) (st := st.store) (fa := env) (x := x) (v := v)
@@ -192,53 +217,21 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   isplitl []
   · imodintro; rw [h211, hn.nameNat]; iexact Hstr
   iintro %R3 %hk3 Hst Hval Hh Hms
-  have eSt' : stackScratch (GF := GF) (R2 2) envDefineNeed ⊢ stackScratch (execSP s) envDefineNeed := by
-    rw [h22]
-  have eVal' : valAt (GF := GF) N (R2 12).toNat v ⊢ valAt N (execSP s + 16#64).toNat v := by
-    rw [hr12]
-  ihave Hst := eSt' $$ Hst
-  ihave Hval := eVal' $$ Hval
-  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [Hms Hval]
-  · iframe Hms Hval
+  ieval (simp only [h22, hr12]) at Hst Hval
+  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [$]
   have hsv3 : ExecSaved M3 s ret v8 v9 v18 v19 := by
     have := hfg.lo
     exact hsv2.congrHi (fun y h1 h2' => hag y (by simp only [InExt]; omega)
       (by simp only [InExt]; rw [g16]; omega)) (by omega)
-  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [Hsl Hst]
-  · iframe Hsl Hst
-  ihave Hw := (world_heapStore N inp (.counted k) ⟨st.store.define env x v, st.out⟩ d).2 $$ [Hh Hc Hio Hi]
-  · iframe Hh Hc Hio Hi
+  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [$]
+  ihave Hw := (world_heapStore N inp (.counted k) ⟨st.store.define env x v, st.out⟩ d).2 $$ [$]
 
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗
-      world N vsaLayoutP vsaRoomB inp (.counted k) ⟨st.store.define env x v, st.out⟩ d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp Wp Φ (.counted k)
-        ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19))
-  rotate_left
-  · iframe Hms Hcode Hst Hslot Hw HK
-    iapply codeRes_text $$ Hcode
-  intro F'
-  refine VarArm_run3 (m := ∅) (s := s) hlive ?_
-  intros
-  apply swp_closeRM
-  intro R4 M4 hR4 hM4
   have hk3' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R3 1 (BitVec.ofNat 64 (0x80004114 + 4))) := by
     intro y hy
     simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hy
     rcases hy with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
       (ix_reg; rw [hk3 _ (by decide) (by decide)]; subst hR2; ix_reg)
-  have hepi := wp_execEpi (N := N) (L := vsaLayoutP) (Room := vsaRoomB) (inp := inp) hlive Wp
-    (Φ := Φ) (ρ := .counted k) (st' := ⟨st.store.define env x v, st.out⟩) (d := d)
-    (sm := .varDecl x eo) (status := .normal) (aRet := aRet) (s := s) (ret := ret) (v8 := v8)
-    (v9 := v9) (v18 := v18) (v19 := v19) (R0 := R0) (R := R4) (Mt := M4) hsg hal
-    (by subst hR4; ix_reg; rw [hk3 2 (by decide) (by decide)]; exact h22) (by subst hR4; ix_reg; rfl)
-    (by rw [hM4]; exact hsv3)
-    (KeepRegs.trans hk (by subst hR4; repeat (first | exact hk3' | refine KeepRegs.upd ?_ (by decide) _)))
-  simp only [statusRet] at hepi
-  unfold F'
-  iintro ⟨⟨#Hcode, Hst, Hslot, Hw, HK⟩, Hms⟩
-  iapply hepi
+  iapply varEpi hlive Wp hsg hal (by rw [hk3 2 (by decide) (by decide)]; exact h22) (hk.trans hk3') hsv3
   iframe Hcode Hms Hst Hslot Hw HK
 
 end Tail
@@ -257,8 +250,7 @@ theorem ownSet_unslotAny {S : Nat → Prop} {a : Nat} (h : ∀ b, InExt (a, 24) 
     ownSet (GF := GF) (fun b => S b ∧ ¬ InExt (a, 24) b) byteAny ∗ slot24 a ⊢ ownSet S byteAny := by
   unfold slot24 blockOwn
   iintro ⟨H1, H2⟩
-  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [H1 H2]
-  · iframe H1 H2
+  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [$]
   iapply ownSet_iff _ (fun b => ⟨fun hb => hb.elim (·.1) (h b), fun hb => by
     by_cases hs : InExt (a, 24) b
     · exact .inr hs
@@ -297,19 +289,11 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     rw [hfg.sf]; have := hsg.le; omega
   iintro ⟨#Hed, #Hcode, #Himg, #Hro, #Hfb, #Hv, Hms, Hst, Hslot, Hw, HK⟩
   ihave #Hstr := strAt_of_cstringWithin hn.nameStr (sharedWin_of_readOK hgeo) $$ Hro
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
 
-  iapply wp_swpF (wpW _) (F := iprop(envDefineSpec (wpW (vsaModel live)) N ∗ Newlib.binImg ∗
-      frameAt env aE.toNat ∗ valOf N v w0 w1 w2 ∗
-      strAt pn x ∗ codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗ world N vsaLayoutP vsaRoomB inp .uncounted st d ∗
-      (execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (wpW (vsaModel live)) Φ .uncounted
-          ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19 ∧
-        (iprop(abortAt Core s (execNeed (.varDecl x eo) d) ∗ slot24 aRet.toNat) -∗
-          (wpW (vsaModel live)).W Φ))))
+  iapply wp_swpF (wpW _)
   rotate_left
-  · iframe Hdv Hms Hed Himg Hfb Hv Hstr Hcode Hst Hslot Hw HK
+  · icombine Hed Himg Hfb Hv Hstr Hcode Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine VarArm_run2 (pn := BitVec.ofNat 64 pn) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.node.lo
     hn.node.hi hn.node.off h8 h2 hn.name ?_
@@ -330,18 +314,13 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     fun b hb => by simp only [InExt] at hb ⊢; rw [g16] at hb; omega
   unfold F'
   iintro ⟨⟨#Hed, #Himg, #Hfb, #Hv, #Hstr, #Hcode, Hst, Hslot, Hw, HK⟩, Hms⟩
-  ihave ⟨Hms, Hval⟩ := ms_valCarve N hslotS hs0 hs8 hs16 $$ [Hms]
-  · iframe Hms Hv
+  ihave ⟨Hms, Hval⟩ := ms_valCarve N hslotS hs0 hs8 hs16 $$ [$]
   have h22 : R2 2 = execSP s := by subst hR2; ix_reg; exact h2
   have h210 : R2 10 = aE := by subst hR2; ix_reg; exact h19
   have h211 : R2 11 = BitVec.ofNat 64 pn := by subst hR2; ix_reg
   have hr12 : R2 12 = execSP s + 16#64 := by subst hR2; ix_reg; try rw [h2]
-  have eSt : stackScratch (GF := GF) (execSP s) (execNeed (.varDecl x eo) d - 176) ⊢
-      stackScratch (R2 2) (execNeed (.varDecl x eo) d - 176) := by rw [h22]
-  have eVal : valAt (GF := GF) N (execSP s + 16#64).toNat v ⊢ valAt N (R2 12).toNat v := by
-    rw [hr12]
-  ihave Hst := eSt $$ Hst
-  ihave Hval := eVal $$ Hval
+  ieval (simp only [← h22]) at Hst
+  ieval (simp only [← hr12]) at Hval
   iapply ms_callEnvDefineP (N := N) HN hcl (i := 0x80004114)
     ((step% jalx 0x80004114) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
     (interp_code (by decide)) (by decide) (st := st) (d := d) (fa := env) (x := x) (v := v)
@@ -379,56 +358,25 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
     iframe HC
     ihave Hval := valAt_slot $$ Hval
     rw [hr12] at *
-    ihave HS := ownSet_unslotAny hslotS $$ [HS Hval]
-    · iframe HS Hval
+    ihave HS := ownSet_unslotAny hslotS $$ [$]
     rw [h22]
     iapply execFrame_join hsg.le hneed $$ [Hst HS]
     iframe Hst HS
   iintro %R3 %hk3 Hst Hval Hw Hms
-  have eSt' : stackScratch (GF := GF) (R2 2) (execNeed (.varDecl x eo) d - 176) ⊢
-      stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) := by rw [h22]
-  have eVal' : valAt (GF := GF) N (R2 12).toNat v ⊢ valAt N (execSP s + 16#64).toNat v := by
-    rw [hr12]
-  ihave Hst := eSt' $$ Hst
-  ihave Hval := eVal' $$ Hval
-  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [Hms Hval]
-  · iframe Hms Hval
+  ieval (simp only [h22, hr12]) at Hst Hval
+  ihave ⟨%M3, Hms, %hag⟩ := ms_valUncarve N hslotS $$ [$]
   have hsv3 : ExecSaved M3 s ret v8 v9 v18 v19 := by
     have := hfg.lo
     exact hsv2.congrHi (fun y h1 h2' => hag y (by simp only [InExt]; omega)
       (by simp only [InExt]; rw [g16]; omega)) (by omega)
   ihave HK := and_elim_l $$ HK
 
-  iapply wp_swpF (wpW _) (text := interpText ++ dataOf ∅ [])
-    (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.varDecl x eo) d - 176) ∗
-      slot24 aRet.toNat ∗
-      world N vsaLayoutP vsaRoomB inp .uncounted ⟨st.store.define env x v, st.out⟩ d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (wpW (vsaModel live)) Φ .uncounted
-        ⟨st.store.define env x v, st.out⟩ d (.varDecl x eo) .normal aRet s R0 ret v8 v9 v18 v19))
-  rotate_left
-  · iframe Hms Hcode Hst Hslot Hw HK
-    iapply codeRes_text $$ Hcode
-  intro F'
-  refine VarArm_run3 (m := ∅) (s := s) hlive ?_
-  intros
-  apply swp_closeRM
-  intro R4 M4 hR4 hM4
   have hk3' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R3 1 (BitVec.ofNat 64 (0x80004114 + 4))) := by
     intro y hy
     simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hy
     rcases hy with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
       (ix_reg; rw [hk3 _ (by decide) (by decide)]; subst hR2; ix_reg)
-  have hepi := wp_execEpi (N := N) (L := vsaLayoutP) (Room := vsaRoomB) (inp := inp) hlive (wpW _)
-    (Φ := Φ) (ρ := .uncounted) (st' := ⟨st.store.define env x v, st.out⟩) (d := d)
-    (sm := .varDecl x eo) (status := .normal) (aRet := aRet) (s := s) (ret := ret) (v8 := v8)
-    (v9 := v9) (v18 := v18) (v19 := v19) (R0 := R0) (R := R4) (Mt := M4) hsg hal
-    (by subst hR4; ix_reg; rw [hk3 2 (by decide) (by decide)]; exact h22) (by subst hR4; ix_reg; rfl)
-    (by rw [hM4]; exact hsv3)
-    (KeepRegs.trans hk (by subst hR4; repeat (first | exact hk3' | refine KeepRegs.upd ?_ (by decide) _)))
-  simp only [statusRet] at hepi
-  unfold F'
-  iintro ⟨⟨#Hcode, Hst, Hslot, Hw, HK⟩, Hms⟩
-  iapply hepi
+  iapply varEpi hlive (wpW _) hsg hal (by rw [hk3 2 (by decide) (by decide)]; exact h22) (hk.trans hk3') hsv3
   iframe Hcode Hms Hst Hslot Hw HK
 
 end TailP

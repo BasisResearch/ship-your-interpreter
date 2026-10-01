@@ -27,8 +27,6 @@ def evalBlocksPC (pc : BitVec 64) (s : SegEvalState) (bs : List BBlock) : BitVec
 
 def evalBlocksFuel (bs : List BBlock) : Nat := chainLen bs
 
-@[simp] theorem evalBlocks_nil (s : SegEvalState) : evalBlocks [] s = s := rfl
-
 @[simp] theorem evalBlocks_cons (b : BBlock) (bs : List BBlock) (s : SegEvalState) :
     evalBlocks (b :: bs) s = evalBlocks bs (evalBlock s b) := rfl
 
@@ -53,9 +51,5 @@ theorem writeLog_evalBlocks_init (bs : List BBlock) (m : Std.ExtHashMap Nat (Bit
       memChain bs m regs loads := by
   simpa only [SegEvalState.init, writeLog, List.foldl_nil] using
     writeLog_evalBlocks bs (SegEvalState.init regs loads) m
-
-@[simp] theorem evalBlocks_init_regs_nil (regs : GRegs)
-    (loads : List (List (BitVec 8))) :
-    (evalBlocks [] (SegEvalState.init regs loads)).regs = regs := rfl
 
 end Vsa.Sim

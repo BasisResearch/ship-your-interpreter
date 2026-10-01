@@ -22,8 +22,7 @@ theorem strOwn_cut (q : Nat) (x : String) :
   iexists img
   ihave ⟨H1, H2⟩ := ownImg_ext_split q (x.toList.length + 1) x.toList.length _ 1 img (by omega)
     rfl (by omega) $$ H
-  iframe H1 H2
-  ipureintro; exact h
+  iframe H1 H2 %h
 
 omit I in
 
@@ -113,8 +112,7 @@ theorem dispRes_of_valOf {N : NativeAddrs} (hd : CatDispSupply (GF := GF) N) (st
   | closure ca =>
     unfold valOf
     iintro ⟨Hs, #⟨-, Hc⟩⟩
-    iapply (hd st B ca _) $$ [Hs Hc]
-    iframe Hs Hc
+    iapply (hd st B ca _) $$ [$]
   | _ =>
     iintro ⟨Hs, -⟩
     iframe Hs
@@ -207,10 +205,8 @@ theorem world_of_catRest (N : NativeAddrs) (inp d : Nat) (st : St) (ρ : Regime)
   unfold catRest world worldE
   iintro ⟨Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
   iexists H', B
-  iframe Hh Hs Hc Hio Hi
-  isplitr
-  · ipureintro; exact fun b hb => hH b (hB b hb)
-  · iexact Hb
+  iframe Hh Hs Hc Hio Hi Hb
+  ipureintro; exact fun b hb => hH b (hB b hb)
 
 end World
 

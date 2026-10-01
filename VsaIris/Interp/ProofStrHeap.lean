@@ -146,8 +146,7 @@ theorem strlen_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   ihave ⟨H10, H11, H1216⟩ := fLeaf_split rv $$ Hl
   ihave Hpc := (pc_reg _).1 $$ Hpc
   ihave Hra := (ra_reg _).1 $$ Hra
-  ihave Hsr := sRegs_in strlenPC r (rv 10) (rv 11) rv $$ [Hpc Hra H10 H11 H1216]
-  · iframe Hpc Hra H10 H11 H1216
+  ihave Hsr := sRegs_in strlenPC r (rv 10) (rv 11) rv $$ [$]
   ihave Hb := ownSet_iff _ (fun a => (strText_iff q.toNat x.toList.length img a).symm) $$ Hb
   iapply wp_localRunW Wp n _ img hrun
   isplitr [Hsr Hb Hk Ho Hh]
@@ -160,8 +159,7 @@ theorem strlen_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   unfold runKontW
   iintro %rv' %mv' %⟨⟨h32, h1, h10'⟩, hT⟩ Hsr HS
   ihave ⟨Hpc, Hra, Ha0, Ht⟩ := sRegs_out rv' $$ Hsr
-  ihave Hf := regFile_after rv rv' $$ [Ha0 Ht Ho]
-  · iframe Ha0 Ht Ho
+  ihave Hf := regFile_after rv rv' $$ [$]
   ihave Hpc := reg_eq h32 $$ Hpc
   ihave Hra := reg_eq h1 $$ Hra
   ihave Hpc := (pc_reg _).2 $$ Hpc

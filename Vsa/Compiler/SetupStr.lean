@@ -1,4 +1,5 @@
 import Vsa.Compiler.StuckAll
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -58,8 +59,6 @@ theorem run_chars {a : Nat} (ha : a % 8 = 0) (hlo : tohostAddr + 16 ≤ a) :
     simp only [List.flatMap_cons] at hseg
     obtain ⟨s1, s2⟩ := hseg.append
     simp only [List.length_cons, List.length_nil] at s2 hb hP
-    have k8 := has_mem h8 (by decide); have e8 := srcVal_of_has h8
-    simp only [t0] at k8 e8
     have n1 : (BitVec.ofNat 64 (a + 8 * j) + BitVec.signExtend 64 (BitVec.ofInt 12 8)) =
         BitVec.ofNat 64 (a + 8 * (j + 1)) := by
       apply BitVec.eq_of_toNat_eq
@@ -71,7 +70,7 @@ theorem run_chars {a : Nat} (ha : a % 8 = 0) (hlo : tohostAddr + 16 ≤ a) :
     have t2 : a + 8 * j + 8 ≠ tohostAddr := by omega
     have hq : PosOK (q + 3) := posOK_le hP (by omega)
     apply run_whole hfit s1
-    wp_simp [k8, e8, n1, n2, o2, t2, BitVec.ofInt_natCast]
+    wp_simp [h8.wp, n1, n2, o2, t2, BitVec.ofInt_natCast]
     refine reaches_mono (run_chars ha hlo cs (j + 1) (q + 3) _ _ o (fun c' h => hs c' (by simp [h]))
       (by omega) s2 (by rw [show q + (0 + 1 + 1 + 1) + 3 * cs.length = q + 3 * (cs.length + 1) by omega]; exact hP)
       ?_) ?_
@@ -103,21 +102,18 @@ theorem run_strObj {s : String} {a q : Nat} (ha : a % 8 = 0) (hlo : tohostAddr +
     induction s.toList with
     | nil => rfl
     | cons c cs ih => simp only [List.flatMap_cons, List.length_append, ih, List.length_cons, List.length_nil]; omega
-  unfold strObjCode at hseg hP ⊢
-  obtain ⟨s12, s3⟩ := hseg.append
-  simp only [List.length_append, hlen] at hP s3 ⊢
+  have h := And.intro hseg hP
+  unfold strObjCode at h ⊢
+  rw [segP_app] at h
+  obtain ⟨⟨s12, -⟩, s3, p3⟩ := h
+  simp only [liN, List.append_assoc, List.length_append, List.length_singleton, hlen] at s3 p3 ⊢
   have n0 : (BitVec.ofNat 64 a).toNat = a := toNat_ofNat_lt (by omega)
   have o0 : StOK a := by unfold StOK; omega
   have t0' : a ≠ tohostAddr := by omega
-  have e1 : (liN t0 a).length = (li 5 (BitVec.ofNat 64 a)).length := rfl
-  have e2 : (liN t1 s.length).length = (li 6 (BitVec.ofNat 64 s.length)).length := rfl
-  simp only [List.length_singleton] at s3 hP ⊢
-  have s3' := s3.cast (pos' := q + ((li 5 (BitVec.ofNat 64 a)).length + ((li 6 (BitVec.ofNat 64 s.length)).length
-    + 1))) (by omega)
   apply run_whole hfit s12
   wp_simp [liN, n0, o0, t0']
   refine reaches_mono (run_chars hfit ha hlo s.toList 0 _ _ _ o hs (by simp only [String.length_toList]; omega)
-    s3' (by rw [String.length_toList]; exact posOK_le hP (by omega)) ?_) ?_
+    s3 (by rwa [← String.length_toList] at p3) ?_) ?_
   · rw [show a + 8 * 0 = a by omega]; reg_simp []
   rintro B ⟨hpc, ho, hk, hch, hfr⟩
   refine ⟨by rw [hpc, String.length_toList]; congr 1; omega, ho, ?_, ?_, ?_⟩

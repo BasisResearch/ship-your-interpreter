@@ -1,4 +1,5 @@
 import Vsa.Compiler.RTItos
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -55,13 +56,10 @@ theorem dp_ret {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}
     (h26 : Has L' s10 r) (hal : r.toNat % 4 = 0) (hk : Keep dpClob L L') :
     Reaches code ⟨pcOf (dpPos + 124), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
       Keep dpClob L B.regs) := by
-  have k26 := has_mem h26 (by decide); have e26 := srcVal_of_has h26
-  simp only [s10] at k26 e26
   apply run_seg hR.fits hR.dp 124 (dpPos + 124) rfl [mv ra s10, ret] (by decide)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [k26, e26]
-  refine ⟨hal, reach_here ⟨rfl, rfl, rfl, ?_⟩⟩
-  reg_simp; exact hk
+  wp_simp [h26.wp]
+  exact ⟨hal, reach_here ⟨rfl, rfl, rfl, by reg_simp; exact hk⟩⟩
 
 theorem dp_ps {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} (j : Nat)
     (hJ : (dpCode dpPos)[j + 1]? = some (J (dpPos + j + 1) (dpPos + 124))) (hj : j + 1 < 126)
@@ -69,8 +67,7 @@ theorem dp_ps {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} (j : N
     (h26 : Has L' s10 r) (hal : r.toNat % 4 = 0) (hk : Keep dpClob L L') :
     Reaches code ⟨pcOf psPos, gset L' 1 (pcOf (dpPos + j + 1)), m, o⟩ (fun B => B.pc = r ∧
       B.mem = m ∧ ostr B.out = ostr o ++ String.ofList cs ∧ Keep dpClob L B.regs) := by
-  have hpos : PosOK (dpPos + j + 1) :=
-    posOK_lt (by simp only [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]; omega)
+  have hpos : PosOK (dpPos + j + 1) := posOK_lt (by simp only [rt_pos]; omega)
   refine ex_bind (run_ps hR.fits hR.ps (h11.set_other (by decide)) (Has.set_self _ _ (by decide) (by decide))
     (pcOf_aligned hpos) hs) ?_
   rintro B ⟨hpc, hm, ho, hkb⟩
@@ -91,10 +88,6 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
       Keep dpClob L B.regs → B.pc = r ∧ DpFrame m B.mem ∧
       ostr B.out = ostr o ++ String.ofList cs ∧ Keep dpClob L B.regs :=
     fun ⟨h1, h2, h3, h4⟩ => ⟨h1, by rw [h2]; intro _ _ _ _; rfl, h3, h4⟩
-  have k10 := has_mem h10 (by decide); have k11 := has_mem h11 (by decide)
-  have k1 := has_mem hr (by decide)
-  have e10 := srcVal_of_has h10; have e11 := srcVal_of_has h11; have e1 := srcVal_of_has hr
-  simp only [a0, a1, ra] at k10 k11 k1 e10 e11 e1
   have hpn : p = BitVec.ofNat 64 p.toNat := by simp
   have hfs : ∀ i (hi : i < fixedStrs.length), StrW m (fixedAddr i) (fixedStrs[i]'hi).toList := hfx
 
@@ -108,7 +101,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
      mvi t0 5, Br .eq a0 t0 (dpPos + 10) (dpPos + 82)] ++
     liN a1 (fixedAddr 0) ++ [Call (dpPos + 22) psPos]) (by decide)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k10, k11, k1, e10, e11, e1]
+  wp_simp [rt_pos, h10.wp, h11.wp, hr.wp]
   have hK : ∀ L', Keep dpClob L L' → ∀ v, Keep dpClob L (gset L' 5 v) :=
     fun L' h v => h.gset (by decide)
   have hK0 : Keep dpClob L (gset L 26 r) := (Keep.refl _ _).gset (by decide)
@@ -120,7 +113,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
     apply run_seg hR.fits hR.dp 24 (dpPos + 24) rfl
       (liN a2 scratchStr ++ [Call (dpPos + 35) itPos]) (by decide)
       (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+    wp_simp [rt_pos]
     refine ex_bind (run_it hR.fits hR.it (by reg_simp; exact h11) (by reg_simp)
       (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) ItDest_scratch) ?_
     rintro B ⟨hpc, ho, hstr, h13, hk, hfr⟩
@@ -131,7 +124,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
     apply run_seg hR.fits hR.dp 36 (dpPos + 36) rfl
       (liN a1 scratchStr ++ [Call (dpPos + 47) psPos]) (by decide)
       (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+    wp_simp [rt_pos]
     refine reaches_mono (dp_ps hR 47 (by decide) (by decide) (Has.set_self _ _ (by decide) (by decide))
       (hcs ▸ hstr) (g26.set_other (by decide)) hal ((hk2.gset (by decide)))) ?_
     rintro B ⟨h1, h2, h3, h4⟩
@@ -150,7 +143,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
     rw [if_pos ht3] at hd'
     apply run_seg hR.fits hR.dp 49 (dpPos + 49) rfl [Call (dpPos + 49) psPos] (by decide)
       (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+    wp_simp [rt_pos]
     exact reaches_mono (dp_ps hR 49 (by decide) (by decide) (by reg_simp; rw [← hpn]; exact h11) hd'
       (by reg_simp) hal (by reg_simp; exact Keep.refl _ _)) (fun B hB => hpd hB)
   · next ht3 =>
@@ -164,7 +157,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
       rw [BitVec.toNat_add]; simp; omega
     apply run_seg hR.fits hR.dp 51 (dpPos + 51) rfl [addi a1 a1 16, .ld a1 a1, Call (dpPos + 53) psPos]
       (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, hp16, hdd, k11, e11]
+    wp_simp [rt_pos, hp16, hdd, h11.wp]
     have ht : tohostAddr = 0x8001ad00 := rfl
     refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ?_⟩
     exact reaches_mono (dp_ps hR 53 (by decide) (by decide) (by reg_simp) hds
@@ -178,14 +171,14 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
     apply run_seg hR.fits hR.dp 55 (dpPos + 55) rfl
       ([Br .eq a1 0 (dpPos + 55) (dpPos + 69)] ++ liN a1 (fixedAddr 1) ++ [Call (dpPos + 67) psPos])
       (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, e11]
+    wp_simp [rt_pos, h11.wp]
     split
     · next hp0 =>
       rw [if_pos hp0] at hd'
       apply run_seg hR.fits hR.dp 69 (dpPos + 69) rfl
         (liN a1 (fixedAddr 2) ++ [Call (dpPos + 80) psPos]) (by decide)
         (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-      wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+      wp_simp [rt_pos]
       exact reaches_mono (dp_ps hR 80 (by decide) (by decide) (by reg_simp)
         (hd' ▸ hfs 2 (by decide)) (by reg_simp) hal (by reg_simp; exact Keep.refl _ _)) (fun B hB => hpd hB)
     · next hp0 =>
@@ -202,7 +195,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
       ([Br .eq a1 0 (dpPos + 82) (dpPos + 98), mvi t0 1, Br .eq a1 t0 (dpPos + 84) (dpPos + 111)] ++
         liN a1 (fixedAddr 5) ++ [Call (dpPos + 96) psPos])
       (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, e11]
+    wp_simp [rt_pos, h11.wp]
     unfold natDisp at hd'
     simp only [show (1 : BitVec 64) = 1#64 from rfl] at hd'
     split
@@ -211,7 +204,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
       apply run_seg hR.fits hR.dp 98 (dpPos + 98) rfl
         (liN a1 (fixedAddr 3) ++ [Call (dpPos + 109) psPos]) (by decide)
         (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-      wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+      wp_simp [rt_pos]
       exact reaches_mono (dp_ps hR 109 (by decide) (by decide) (by reg_simp)
         (hd' ▸ hfs 3 (by decide)) (by reg_simp) hal (by reg_simp; exact Keep.refl _ _)) (fun B hB => hpd hB)
     · next hp0 =>
@@ -222,7 +215,7 @@ theorem run_dp {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {cs 
         apply run_seg hR.fits hR.dp 111 (dpPos + 111) rfl
           (liN a1 (fixedAddr 4) ++ [Call (dpPos + 122) psPos]) (by decide)
           (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-        wp_simp [dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+        wp_simp [rt_pos]
         exact reaches_mono (dp_ps hR 122 (by decide) (by decide) (by reg_simp)
           (hd' ▸ hfs 4 (by decide)) (by reg_simp) hal (by reg_simp; exact Keep.refl _ _)) (fun B hB => hpd hB)
       · next hp1 =>
@@ -271,11 +264,9 @@ theorem cs_ret {L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}
     (h27 : Has L' s11 r) (hal : r.toNat % 4 = 0) :
     Reaches code ⟨pcOf (csPos + 81), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
       B.regs = gset L' ra r) := by
-  have k27 := has_mem h27 (by decide); have e27 := srcVal_of_has h27
-  simp only [s11] at k27 e27
   apply run_seg hR.fits hR.cs 81 (csPos + 81) rfl [mv ra s11, ret] (by decide)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [k27, e27]
+  wp_simp [h27.wp]
   exact ⟨hal, reach_here ⟨rfl, rfl, rfl, rfl⟩⟩
 
 theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h : Nat}
@@ -285,16 +276,9 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     Reaches code ⟨pcOf csPos, L, m, o⟩ (fun B => B.out = o ∧
       ((B.pc = r ∧ ∃ h' q, CsRet m B.mem h h' q cs L B.regs) ∨
         (B.pc = pcOf errPos ∧ objEnd < h + 168))) := by
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  have hob : objBase = 0x90000000 := rfl
-  have hoe : objEnd = 0xE0000000 := rfl
+  obtain ⟨hob, hoe, ht⟩ := obj_consts
   have hbb : bufBase = 0x80080000 := rfl
   obtain ⟨hh1, hh2, hh3⟩ := hh
-  have k10 := has_mem h10 (by decide); have k11 := has_mem h11 (by decide)
-  have k1 := has_mem hr (by decide); have k8 := has_mem h8 (by decide)
-  have e10 := srcVal_of_has h10; have e11 := srcVal_of_has h11; have e1 := srcVal_of_has hr
-  have e8 := srcVal_of_has h8
-  simp only [a0, a1, ra, hpO] at k10 k11 k1 k8 e10 e11 e1 e8
   have hpn : p = BitVec.ofNat 64 p.toNat := by simp
   have hfs : ∀ i (hi : i < fixedStrs.length), StrBelow m h (fixedAddr i) (fixedStrs[i]'hi).toList :=
     fun i hi => ⟨hfx i hi, by
@@ -333,7 +317,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
      mvi t0 5, Br .eq a0 t0 (csPos + 10) (csPos + 69)] ++
     liN a1 (fixedAddr 0) ++ [J (csPos + 22) (csPos + 81)]) (by decide)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k10, k11, k1, e10, e11, e1]
+  wp_simp [rt_pos, h10.wp, h11.wp, hr.wp]
   split
   ·
     next ht3 =>
@@ -349,7 +333,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     apply run_seg hR.fits hR.cs 23 (csPos + 23) rfl
       ([addi t1 hpO 168] ++ liN t2 objEnd ++ [Br .lt t2 t1 (csPos + 35) errPos, mv a2 hpO,
         Call (csPos + 37) itPos]) (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k8, e8]
+    wp_simp [rt_pos, h8.wp]
     split
     · next hov => exact reach_here ⟨rfl, .inr ⟨rfl, by omega⟩⟩
     · next hov =>
@@ -362,12 +346,9 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
       rw [← hc'] at hstr h13
       have g8 : Has L2 hpO (BitVec.ofNat 64 h) := hk.has (by decide) (by reg_simp; exact h8)
       have g27 : Has L2 s11 r := hk.has (by decide) (by reg_simp)
-      have k8' := has_mem g8 (by decide); have e8' := srcVal_of_has g8
-      have k13 := has_mem h13 (by decide); have e13 := srcVal_of_has h13
-      simp only [hpO, a3] at k8' e8' k13 e13
       apply run_seg hR.fits hR.cs 38 (csPos + 38) rfl [mv a1 hpO, mv hpO a3, J (csPos + 40) (csPos + 81)]
         (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-      wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k8', e8', k13, e13]
+      wp_simp [rt_pos, g8.wp, h13.wp]
       have hlen := intToString_length p.toInt
       have hK := digits_len p
       rw [← hc'] at hlen
@@ -391,7 +372,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     have hp24 : (p + 24#64).toNat = p.toNat + 24 := by rw [BitVec.toNat_add]; simp; omega
     apply run_seg hR.fits hR.cs 41 (csPos + 41) rfl [addi a1 a1 24, .ld a1 a1, J (csPos + 43) (csPos + 81)]
       (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, hp24, hdd, k11, e11]
+    wp_simp [rt_pos, hp24, hdd, h11.wp]
     refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ?_⟩
     exact hdone _ _ hds (by reg_simp) (by reg_simp) (by reg_simp; exact h8)
       (by reg_simp; exact Keep.refl _ _)
@@ -404,14 +385,14 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     apply run_seg hR.fits hR.cs 44 (csPos + 44) rfl
       ([Br .eq a1 0 (csPos + 44) (csPos + 57)] ++ liN a1 (fixedAddr 1) ++ [J (csPos + 56) (csPos + 81)])
       (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, e11]
+    wp_simp [rt_pos, h11.wp]
     split
     · next hp0 =>
       rw [if_pos hp0] at hc'
       apply run_seg hR.fits hR.cs 57 (csPos + 57) rfl
         (liN a1 (fixedAddr 2) ++ [J (csPos + 68) (csPos + 81)]) (by decide)
         (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-      wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+      wp_simp [rt_pos]
       exact hdone _ _ (hc' ▸ hfs 2 (by decide)) (by reg_simp) (by reg_simp) (by reg_simp; exact h8)
         (by reg_simp; exact Keep.refl _ _)
     · next hp0 =>
@@ -427,7 +408,7 @@ theorem run_cs {L : GRegs} {m : Mem} {o : Array String} {t p r : BitVec 64} {h :
     apply run_seg hR.fits hR.cs 69 (csPos + 69) rfl
       (liN a1 (fixedAddr 6) ++ [J (csPos + 80) (csPos + 81)]) (by decide)
       (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-    wp_simp [csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos]
+    wp_simp [rt_pos]
     exact hdone _ _ (hc' ▸ hfs 6 (by decide)) (by reg_simp) (by reg_simp) (by reg_simp; exact h8)
       (by reg_simp; exact Keep.refl _ _)
   ·
@@ -498,27 +479,13 @@ theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h :
     Reaches code ⟨pcOf ccPos, L, m, o⟩ (fun B => B.out = o ∧
       ((B.pc = r ∧ CcRet m B.mem h (xs ++ ys) L B.regs) ∨
         (B.pc = pcOf errPos ∧ objEnd < h + 8 + 8 * (xs.length + ys.length)))) := by
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  have hob : objBase = 0x90000000 := rfl
-  have hoe : objEnd = 0xE0000000 := rfl
+  obtain ⟨hob, hoe, ht⟩ := obj_consts
   obtain ⟨hh1, hh2, hh3⟩ := hh
   obtain ⟨hxs, -, hxb⟩ := hx; obtain ⟨hys, -, hyb⟩ := hy
   have := hxs.lo; have := hxs.al; have := hys.lo; have := hys.al
-  have k11 := has_mem h11 (by decide); have k13 := has_mem h13 (by decide)
-  have k1 := has_mem hr (by decide); have k8 := has_mem h8 (by decide)
-  have e11 := srcVal_of_has h11; have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hr
-  have e8 := srcVal_of_has h8
-  simp only [a1, a3, ra, hpO] at k11 k13 k1 k8 e11 e13 e1 e8
-  have hpn : (BitVec.ofNat 64 p).toNat = p := toNat_ofNat_lt (by omega)
-  have hqn : (BitVec.ofNat 64 q).toNat = q := toNat_ofNat_lt (by omega)
-  have hhn : (BitVec.ofNat 64 h).toNat = h := toNat_ofNat_lt (by omega)
-  apply run_seg hR.fits hR.cc 0 ccPos (by simp)
-    ([mv s11 ra, .ld t3 a1, .ld t4 a3, .add t5 t3 t4, .slli t6 t5 3, addi t6 t6 8, .add t6 hpO t6] ++
-      liN t2 objEnd ++ [Br .lt t2 t6 (ccPos + 18) errPos, mv a4 hpO, .sd t5 a4, addi a5 a4 8,
-        addi a6 a1 8, mv a7 t3, Call (ccPos + 24) cpPos]) (by decide)
-    (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, k13, k1, k8, e11, e13,
-    e1, e8, hpn, hqn, hhn, hxs.len, hys.len, show h ≠ tohostAddr by omega]
+  apply run_at' hR.fits hR.cc 0 ccPos rfl
+  wp_simp [rt_pos, ccCode, h11.wp, h13.wp, hr.wp, h8.wp, toNat_ofNat_lt, hxs.len, hys.len,
+    show h ≠ tohostAddr by omega]
   refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ⟨by omega, by omega, .inr (by omega)⟩, ?_⟩
   split
   · next hov => exact reach_here ⟨rfl, .inr ⟨rfl, by omega⟩⟩
@@ -528,36 +495,22 @@ theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h :
     ⟨by omega, by omega, .inr (by omega), by omega, by omega, by omega, by omega, .inr (by omega)⟩
   refine ex_bind (run_cp hR.fits hR.cp (by reg_simp) (by reg_simp) (by reg_simp)
     (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) hcp1) ?_
-  rintro B ⟨hpc, hm, ho, h15, h16, hk⟩
-  obtain ⟨pc, L2, m2, o2⟩ := B
-  simp only at hpc hm ho h15 h16 hk; subst hpc hm ho
+  rintro ⟨pc, L2, m2, o2⟩ ⟨rfl, rfl, rfl, h15, h16, hk⟩
   have g13 : Has L2 a3 (BitVec.ofNat 64 q) := hk.has (by decide) (by reg_simp; exact h13)
   have g29 : Has L2 t4 (BitVec.ofNat 64 ys.length) := hk.has (by decide) (by reg_simp)
   have g14 : Has L2 a4 (BitVec.ofNat 64 h) := hk.has (by decide) (by reg_simp)
   have g27 : Has L2 s11 r := hk.has (by decide) (by reg_simp)
-  have g8 : Has L2 hpO (BitVec.ofNat 64 h) := hk.has (by decide) (by reg_simp; exact h8)
-  have k13' := has_mem g13 (by decide); have e13' := srcVal_of_has g13
-  have k29 := has_mem g29 (by decide); have e29 := srcVal_of_has g29
-  simp only [a3, t4] at k13' e13' k29 e29
-  apply run_seg hR.fits hR.cc 25 (ccPos + 25) rfl [addi a6 a3 8, mv a7 t4, Call (ccPos + 27) cpPos]
-    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k13', e13', k29, e29]
+  apply run_at' hR.fits hR.cc 25 (ccPos + 25) rfl
+  wp_simp [rt_pos, ccCode, g13.wp, g29.wp]
   have hcp2 : CopyOK (q + 8) (h + 8 + 8 * xs.length) ys.length :=
     ⟨by omega, by omega, .inr (by omega), by omega, by omega, by omega, by omega, .inr (by omega)⟩
   refine ex_bind (run_cp hR.fits hR.cp (by reg_simp) (by reg_simp; exact h15) (by reg_simp)
     (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) hcp2) ?_
-  rintro B ⟨hpc, hm, ho, h15', h16', hk'⟩
-  obtain ⟨pc, L3, m3, o3⟩ := B
-  simp only at hpc hm ho h15' h16' hk'; subst hpc hm ho
+  rintro ⟨pc, L3, m3, o3⟩ ⟨rfl, rfl, rfl, h15', h16', hk'⟩
   have g14' : Has L3 a4 (BitVec.ofNat 64 h) := hk'.has (by decide) (by reg_simp; exact g14)
   have g27' : Has L3 s11 r := hk'.has (by decide) (by reg_simp; exact g27)
-  have k15 := has_mem h15' (by decide); have e15 := srcVal_of_has h15'
-  have k14 := has_mem g14' (by decide); have e14 := srcVal_of_has g14'
-  have k27 := has_mem g27' (by decide); have e27 := srcVal_of_has g27'
-  simp only [a5, a4, s11] at k15 e15 k14 e14 k27 e27
-  apply run_seg hR.fits hR.cc 28 (ccPos + 28) rfl [mv hpO a5, mv a1 a4, mv ra s11, ret]
-    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k15, e15, k14, e14, k27, e27]
+  apply run_at' hR.fits hR.cc 28 (ccPos + 28) rfl
+  wp_simp [rt_pos, ccCode, h15'.wp, g14'.wp, g27'.wp]
   obtain ⟨hstr, hfr⟩ := ccMem_facts hR hxs hys hxb hyb hh3 (by omega) (by omega)
   refine ⟨hal, reach_here ⟨rfl, .inl ⟨rfl, ?_, hstr, ?_, by simp; omega, fun a ha h1 => ?_, ?_⟩⟩⟩
   · reg_simp

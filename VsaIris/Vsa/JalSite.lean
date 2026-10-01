@@ -51,19 +51,21 @@ theorem exec {S : JalSite} (hS : S.Cert) (live : Nat → Prop)
       c.σ.mem[(BitVec.ofNat 64 S.pc).toNat + k]? = some b := fun k b hm => by
     rw [e]; exact hb _ hm
   obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=
-    stepObs_jal c.σ c.tick c.steps (BitVec.ofNat 64 S.pc) vm S.w S.imm
-      (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (BitVec.ofNat 64 S.pc) 4)
-      S.b0 S.b1 S.b2 S.b3 hG hpc hmi
-      (hb' 0 S.b0 (by simp [codeFoot])) (hb' 1 S.b1 (by simp [codeFoot]))
-      (hb' 2 S.b2 (by simp [codeFoot])) (hb' 3 S.b3 (by simp [codeFoot]))
-      (by rw [e]; exact hS.lo) (by rw [e]; exact hS.hi) (by rw [e]; exact hS.align)
-      hS.notrvc hS.word
-      (hS.dec _ (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
-      (by rw [hS.tgt]; exact hS.tgt_align)
-      (by decide) (by decide) (by decide) (by decide) (by decide)
-      (wX_bits_x1 _ (BitVec.addInt (BitVec.ofNat 64 S.pc) 4)) hi
+    stepObs_exec (u := c.steps) (BitVec.ofNat 64 S.pc + sign_extend (m := 64) S.imm) vm
+      (Fetched.of_bytes hG hpc
+        (hb' 0 S.b0 (by simp [codeFoot])) (hb' 1 S.b1 (by simp [codeFoot]))
+        (hb' 2 S.b2 (by simp [codeFoot])) (hb' 3 S.b3 (by simp [codeFoot]))
+        (by rw [e]; exact hS.lo) (by rw [e]; exact hS.hi) (by rw [e]; exact hS.align)
+        hS.notrvc hS.word
+        (hS.dec _ (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg)))
+      (execute_jal_char S.imm (regidx.Regidx 0x01#5) _ (BitVec.ofNat 64 S.pc) _ _ _
+        (by reg_reads []) (by reg_reads [hpc]) (by reg_reads [hG.misa])
+        (by rw [hS.tgt]; exact hS.tgt_align)
+        (wX_bits_gpr _ (BitVec.addInt (BitVec.ofNat 64 S.pc) 4) 1 (by decide) (by decide)))
+      ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩
+      (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _) hi
   have h := jalStep_of_obs (calleeEntry := S.tgt) hs hi' hG' hmem hobs hS.tgt
   refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [addInt_ofNat_four] at h

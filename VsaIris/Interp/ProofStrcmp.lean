@@ -210,8 +210,7 @@ theorem strcmp_spec_ord (live : Nat → Prop) (hcl : CodeLive live)
   iapply Hk $$ Hpc Hra
   iexists (fun k => if k ∈ cregs then rv' k else rv k)
   isplitl [Hc Ho]
-  · iapply regFile_uncut fRegs_perm_c rv rv' $$ [Hc Ho]
-    iframe Hc Ho
+  · iapply regFile_uncut fRegs_perm_c rv rv' $$ [$]
   isplitr
   · ipureintro
     intro k _ hc

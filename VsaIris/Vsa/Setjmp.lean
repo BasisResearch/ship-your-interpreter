@@ -78,7 +78,7 @@ theorem sj_facts {m : Std.ExtHashMap Nat (BitVec 8)} {jbp r s : BitVec 64} {cs :
   have h1 := hg.lo; have h2 := hg.hi; have h3 := hg.align
   unfold tohostAddr at h1
   unfold setjmpSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.setjmpCode_at_"
+  chain_facts hcode
   · exact sdFact (ea := jbp.toNat + 0) rfl (jb_off8 jbp hg 0 (0x000#12) (by decide) (by omega) _ rfl)
       (by omega) (by omega) (by unfold tohostAddr; omega) (by omega)
   · exact sdFact (ea := jbp.toNat + 8) rfl (jb_off8 jbp hg 8 (0x008#12) (by decide) (by omega) _ rfl)

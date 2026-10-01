@@ -152,8 +152,7 @@ theorem ArmAt.callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × S
   iintro ⟨HF, Hms⟩
   unfold evalArmF
   icases HF with ⟨#Hcode, #Hro, #Hfb, Hst, Ho, Hw, HK⟩
-  ihave ⟨HPre, Hw, HK⟩ := hpre $$ [Ho Hw HK]
-  · iframe Ho Hw HK
+  ihave ⟨HPre, Hw, HK⟩ := hpre $$ [$]
   ihave Hsp := hspec
   iapply ms_callHelper Wp (J.exec live hlive) J.mem J.al
   iframe Hsp Hcode Hms HPre
@@ -183,8 +182,7 @@ theorem ArmAt.callHelperPure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat 
   iintro ⟨HF, Hms⟩
   unfold evalArmF
   icases HF with ⟨#Hcode, #Hro, #Hfb, Hst, Ho, Hw, HK⟩
-  ihave ⟨Hw, HK, HPre⟩ := hpre $$ [Hw HK]
-  · iframe Hw HK
+  ihave ⟨Hw, HK, HPre⟩ := hpre $$ [$]
   ihave Hsp := hspec
   iapply ms_callHelper Wp (J.exec live hlive) J.mem J.al
   iframe Hsp Hcode Hms HPre
@@ -249,8 +247,7 @@ theorem ArmAt.finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   unfold ArmAt evalArmF
   iintro ⟨⟨-, -, -, Hst, Hval, Hw, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave Hst := evalFrame_join hn hneed $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hn hneed $$ [$]
   ihave Hra := ptsto_eq h1 $$ Hra
   iapply hexit R' hkeep
   iframe Hpc Hra Hregs Hst Hval Hw Hk

@@ -60,8 +60,7 @@ theorem helper_leaf (Wp : MachWP (GF := GF) (vsaModel live))
   iframe Hregs
   isplitr
   · ipureintro; exact hkeep
-  iapply hout Mt rv' mv' hgood $$ [HE HS]
-  iframe HE HS
+  iapply hout Mt rv' mv' hgood $$ [$]
 
 theorem swp_helperEnd {S : Nat → Prop} {r : BitVec 64} {rv R : Nat → BitVec 64} {Mt : Mem}
     {clob : List Nat} {Good : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -170,14 +169,12 @@ theorem ownSet_join_tracked (S T : Nat → Prop) (Ms Mt : Mem) :
           ∀ a, S a → ¬ T a⌝ := by
   classical
   iintro ⟨HS, HT⟩
-  ihave %hd := ownSet_disj S T _ _ $$ [HS HT]
-  · iframe HS HT
+  ihave %hd := ownSet_disj S T _ _ $$ [$]
   let f : Nat → BitVec 8 := fun a => if S a then imgM Ms a else imgM Mt a
   ihave HS := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ f a)) (fun a ha => by simp [f, ha]) $$ HS
   ihave HT := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ f a))
     (fun a ha => by simp [f, show ¬ S a from fun h => hd a h ha]) $$ HT
-  ihave H := ownSet_join S T _ hd $$ [HS HT]
-  · iframe HS HT
+  ihave H := ownSet_join S T _ hd $$ [$]
   ihave ⟨%M, H, %hM⟩ := ownSet_trackedAt _ f $$ H
   iexists M
   iframe H

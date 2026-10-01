@@ -55,8 +55,7 @@ theorem ms_callRegs (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
     iframe HL HX
   iintro Hpc Hra HQ
   ihave ⟨%f, HL, HY⟩ := hQ $$ HQ
-  ihave Hregs := regFile_uncut hp R f $$ [HL HK]
-  · iframe HL HK
+  ihave Hregs := regFile_uncut hp R f $$ [$]
   iapply Hk $$ %f HY
   rw [regFile_upd_ra]
   simp only [upd_same]

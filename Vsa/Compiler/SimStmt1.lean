@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimDecl
+import Vsa.Compiler.R6Expr
 
 namespace Vsa.Compiler
 
@@ -39,12 +40,10 @@ theorem sCont (st : St) (d : Nat) (env : Addr) : SSpec code T st d env .cont st 
 theorem sRet {st : St} {d : Nat} {env : Addr} {e : Expr} {st' : St} {v : Value} {n : Nat}
     (hE : ESpec code T st d env e st' v n) : SSpec code T st d env (.ret (some e)) st' (.ret v) n := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp
-  simp only [gstmt] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  simp only [List.length_append] at hP
-  refine hE.bind hm hA hwf s1 (posOK_le hP (by omega)) (by simpa [tS] using htmp)
+  obtain ⟨⟨s1, p1⟩, s2, p2⟩ := segP_app.mp ⟨hseg, hP⟩
+  refine hE.bind hm hA hwf s1 p1 (by simpa [tS] using htmp)
     (fun B h1 h2 => .inl ⟨h1, h2⟩) fun V1 B hpc hp => ?_
-  refine reaches_mono (run_exitTo hR hp.ms hpc hctx hctx.ret s2 (by rw [← Nat.add_assoc] at hP; exact hP)) ?_
+  refine reaches_mono (run_exitTo hR hp.ms hpc hctx hctx.ret s2 p2) ?_
   rintro B' ⟨hx, hmB, hoB, hk⟩
   obtain ⟨t, p, h10, h11, hv⟩ := hp.val
   refine .inr ⟨V1, ⟨hx, t, p, hk.has (by decide) h10, hk.has (by decide) h11, by rw [hmB]; exact hv⟩,
@@ -59,9 +58,8 @@ theorem sRetNull (st : St) (d : Nat) (env : Addr) : SSpec code T st d env (.ret 
   simp only at hA; subst hA
   apply run_whole hR.fits s1
   wp_simp []
-  have hm' := hm.transport (B := ⟨pcOf (pos + 2), gset (gset L 10 0) 11 0, m, o⟩) (S := [a0, a1]) (by decide)
-    (by reg_simp []; exact Keep.refl _ _) (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
-  refine reaches_mono (run_exitTo hR hm' rfl hctx hctx.ret s2 (by rw [← Nat.add_assoc] at hP; exact hP)) ?_
+  refine reaches_mono (run_exitTo hR (hm.keep (S := [a0, a1]) (by reg_simp []; exact Keep.refl _ _)) rfl hctx
+    hctx.ret s2 (by rw [← Nat.add_assoc] at hP; exact hP)) ?_
   rintro B' ⟨hx, hmB, hoB, hk⟩
   refine .inr ⟨V, ⟨hx, 0, 0, hk.has (by decide) (by reg_simp []), hk.has (by decide) (by reg_simp []), rfl, rfl⟩,
     VGrow.refl _ _, Within.refl _ _, by rw [hmB]; exact StackKeep.refl _ _ _ _, by rw [hmB]; exact ObjAgree.refl _ _⟩
@@ -77,10 +75,8 @@ theorem sVarNull (st : St) (d : Nat) (env : Addr) (x : String) :
   simp only at hA; subst hA
   apply run_whole hR.fits s1
   wp_simp []
-  have hm' := hm.transport (B := ⟨pcOf (pos + 2), gset (gset L 10 0) 11 0, m, o⟩) (S := [a0, a1]) (by decide)
-    (by reg_simp []; exact Keep.refl _ _) (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
-  refine reaches_mono (run_storeSlot hR hm' rfl hwf.1 (s2.cast (by omega)) (by reg_simp []) (by reg_simp [])
-    (v := .null) ⟨rfl, rfl⟩) ?_
+  refine reaches_mono (run_storeSlot hR (hm.keep (S := [a0, a1]) (by reg_simp []; exact Keep.refl _ _)) rfl hwf.1
+    (s2.cast (by omega)) (by reg_simp []) (by reg_simp []) (v := .null) ⟨rfl, rfl⟩) ?_
   rintro B ⟨hpc, hmB, hoB, hout, hk, hsh⟩
   have hb := hm.stk.bounds
   refine .inr ⟨V, ⟨by rw [hpc]; congr 1 <;> simp [storeSlot] <;> omega, hmB⟩, ⟨Grows.of_shape hsh, List.prefix_refl _,
@@ -92,10 +88,9 @@ theorem sVarInit {st : St} {d : Nat} {env : Addr} {x : String} {e : Expr} {st' :
     SSpec code T st d env (.varDecl x (some e)) ⟨st'.store.define env x v, st'.out⟩ .normal
       (n + defineCost st'.store env x) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp
-  simp only [gstmt] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  simp only [List.length_append] at hP s2
-  refine hE.bind hm hA hwf.2 s1 (posOK_le hP (by omega)) (by simpa [tS] using htmp)
+  simp only [gstmt] at ⊢
+  obtain ⟨⟨s1, p1⟩, s2, -⟩ := segP_app.mp ⟨hseg, hP⟩
+  refine hE.bind hm hA hwf.2 s1 p1 (by simpa [tS] using htmp)
     (fun B h1 h2 => .inl ⟨h1, Room.not_mono h2 (by omega)⟩) fun V1 B hpc hp => ?_
   obtain ⟨t, p, h10, h11, hv⟩ := hp.val
   refine reaches_mono (run_storeSlot hR hp.ms hpc hwf.1 s2 h10 h11 hv) ?_

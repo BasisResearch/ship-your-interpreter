@@ -301,14 +301,17 @@ theorem sim_jal_link (off : BitVec 21) {A : AM} {c : Config} (hc : Corr c A)
     ⟨by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa,
      by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege,
      by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg⟩ 1 off
-  obtain ⟨r1, r2, r3, r4, r5⟩ := gpr_rd_ok 1 (by omega) (by omega)
+  obtain ⟨-, -, -, -, r5⟩ := gpr_rd_ok 1 (by omega) (by omega)
   obtain ⟨σ', i', hs, hi', hG', hmem', hobs⟩ :=
-    stepObs_jal σ t u A.pc vm (Ins.jal 1 off).encode (evenJ off) (gprIdx 1) Register.x1
-      (BitVec.addInt A.pc 4) _ _ _ _ hG hc.pc hvm
-      (by rw [hmem]; simpa using hb 0 (by omega)) (by rw [hmem]; exact hb 1 (by omega))
-      (by rw [hmem]; exact hb 2 (by omega)) (by rw [hmem]; exact hb 3 (by omega))
-      hlo hhi hal (by rw [bytes_word, encode_rvc]) (bytes_word _) hdec htgt r1 r2 r3 r4 r5
-      (wX_bits_x1 _ _) hc.tick
+    stepObs_exec (u := u) (A.pc + sign_extend (m := 64) (evenJ off)) vm
+      (Fetched.of_bytes hG hc.pc (by rw [hmem]; simpa using hb 0 (by omega))
+        (by rw [hmem]; exact hb 1 (by omega)) (by rw [hmem]; exact hb 2 (by omega))
+        (by rw [hmem]; exact hb 3 (by omega)) hlo hhi hal (by rw [bytes_word, encode_rvc])
+        (bytes_word _) hdec)
+      (execute_jal_char (evenJ off) (gprIdx 1) _ A.pc _ _ _ (by reg_reads []) (by reg_reads [hc.pc])
+        (by reg_reads [hG.misa]) htgt (wX_bits_gpr _ _ 1 (by decide) (by decide)))
+      (((RetireReads.prelude hG hvm _).jump _).write _)
+      (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned r5 _) hc.tick
   have hrd : ∀ R : Register, (Register.minstret == R) = false → (Register.PC == R) = false →
       (Register.x1 == R) = false → (Register.nextPC == R) = false →
       (Register.minstret_increment == R) = false → (Register.mcycle == R) = false →
@@ -339,7 +342,7 @@ theorem sim_jal_link (off : BitVec 21) {A : AM} {c : Config} (hc : Corr c A)
         reduceCtorEq, not_false_eq_true]
       show (((afterNextPC (afterPrelude σ) A.pc).regs.insert Register.nextPC _).insert
         Register.x1 _).get? Register.x1 = _
-      rw [Std.ExtDHashMap.get?_insert_self]
+      rw [Std.ExtDHashMap.get?_insert_self]; rfl
     · exact gholds_eraseAll (S := [1]) hc.keys hc.regs fun n h1 h31 hn =>
         gprGet_congr n h1 h31 (hrd _ (nonGpr n).minstret (nonGpr n).pc
           (gprReg_ne_x1 n (by omega) h1 (by simpa using hn)) (nonGpr n).nextPC

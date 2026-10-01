@@ -110,8 +110,7 @@ end CloP
   rw [hsF, hsf, show (1088#64).toNat = 1088 from rfl]
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
   · iframe Hpc Hra Hregs; unfold blockOwn; iexact HF
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply callSegA hlive (wpW _) hregs hn hfg
   iframe Hdv Hms
   iintro %R1 %Mt1 %⟨hA, hra1⟩ Hms
@@ -143,8 +142,7 @@ end CloP
       (s.toNat - 1088) = aE := by
     rw [show s.toNat - 1088 = (s + 18446744073709550528#64 + 0#64).toNat by rw [BitVec.add_zero, hsf]]
     ix_fwd; rw [BitVec.add_zero, hsf]; exact hA.env
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply callSegB hlive (wpW _) hn hfg h8 h2 henv
   iframe Hdv Hms
   isplit
@@ -202,15 +200,10 @@ end CloP
   have h18' : R2 18 = BitVec.ofNat 64 inp := by
     rw [hR2 18 (by decide) (by decide)]; ix_reg; rw [hkeep1 18 (by decide)]; exact hA.s2
   have hs'' := hs'
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (wpW _) (F := iprop(errCtx inp ∗ codeRes ∗
-      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
-      world N L Room inp .uncounted st1 d ∗ slot24 sret.toNat ∗
-      (Kret ∧ (iprop(abortAt Core s (evalNeed (.call f args) d) ∗ slot24 sret.toNat) -∗
-        (wpW (vsaModel live)).W Φ))))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF (wpW _)
   rotate_left
-  · iframe Hdv Hms HE Hcode Hst Hw Hslot; iexact Hk
+  · icombine HE Hcode Hst Hw Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine Call_runTM hlive hsf hs'' hs2 hs3 hn.lo hn.hi hn.off h8' h2' ?_
   intro vl

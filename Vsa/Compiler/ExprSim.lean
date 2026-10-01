@@ -1,4 +1,5 @@
 import Vsa.Compiler.Rel
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -519,10 +520,8 @@ theorem sim_assign (hL : Layout code) {Γ : Scope} (hnd : Γ.slots.Nodup)
   have hcx : cexpr Γ k pos (.assign x e) = cexpr Γ k pos e ++ (liN s2 (varAddr i) ++ [.sd a0 s2]) := by
     simp [cexpr, hi]
   rw [hcx] at hseg hpos
-  obtain ⟨hs1, hs2⟩ := hseg.append
-  simp only [List.length_append] at hpos
-  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A (.inl hE'.2) (by simpa [tdepth] using hk) hs1
-    (by unfold PosOK at *; omega) hA hc
+  obtain ⟨⟨hs1, p1⟩, hs2, -⟩ := segP_app.mp ⟨hseg, hpos⟩
+  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A (.inl hE'.2) (by simpa [tdepth] using hk) hs1 p1 hA hc
   rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
   · obtain ⟨n, rfl, hn⟩ := hty.1 hE'.2
     have r2 := run_stA hL.1 hs2 hBpc hB0 (by decide) (varAddr_st hil)
@@ -560,22 +559,13 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
   have lst : stc.length = (liN s2 (tempAddr k)).length + 1 := by simp [stc]
   have lld : ldc.length = (liN s2 (tempAddr k)).length + 2 := by simp [ldc]
   rw [hcx] at hseg hpos
-  simp only [List.length_append] at hpos
-  obtain ⟨hs1234, hs5⟩ := hseg.append
-  obtain ⟨hs123, hs4⟩ := hs1234.append
-  obtain ⟨hs12, hs3⟩ := hs123.append
-  obtain ⟨hs1, hs2⟩ := hs12.append
-  have hs3' : Seg code p1 cr :=
-    Seg.pos_eq (by simp only [List.length_append]; rw [lp1]; omega) hs3
-  have hs4' : Seg code (p1 + cr.length) ldc :=
-    Seg.pos_eq (by simp only [List.length_append]; rw [lp1]; omega) hs4
-  have hs5' : Seg code p4 (cbin p4 op) :=
-    Seg.pos_eq (by simp only [List.length_append]; rw [lp4, lp1]; omega) hs5
-  have hpos4 : PosOK (p4 + (cbin p4 op).length) := by
-    unfold PosOK at *; have h4 := lp4; have h1' := lp1; omega
+  have h := And.intro hseg hpos
+  simp only [List.append_assoc] at h
+  simp only [↓segP_app] at h
+  obtain ⟨⟨hs1, p1'⟩, ⟨hs2, -⟩, ⟨hs3', p3⟩, ⟨hs4, -⟩, hs5', hpos4⟩ := h
+  have hs4' : Seg code (p1 + cr.length) ldc := hs4
 
-  obtain ⟨B1, r1, hB1⟩ := ihl k pos st d env A (.inl hE'.2.1) (by omega) hs1
-    (by unfold PosOK at *; omega) hA hc
+  obtain ⟨B1, r1, hB1⟩ := ihl k pos st d env A (.inl hE'.2.1) (by omega) hs1 p1' hA hc
   rcases hB1 with ⟨lv, st1, hevl, htyl, houtl, hB1o, hB1pc, hB1a0, hB1c, hB1t⟩ | ⟨hh, hne⟩
   rotate_left
   · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
@@ -590,7 +580,7 @@ theorem sim_binary (hL : Layout code) {Γ : Scope} {op : BinOp} {l r : Expr}
     ⟨pcOf (pos + (cexpr Γ k pos l).length + (liN s2 (tempAddr k)).length + 1),
       gset B1.regs s2 (BitVec.ofNat 64 (tempAddr k)),
       applyW B1.mem (tempAddr k, 8, word (.int a)), B1.out⟩ (.inl hE'.2.2) (by omega) hs3'
-    (by rw [← l3]; unfold PosOK at *; omega) (by simp only [lp1, lst, l1]; congr 1) hc2
+    p3 (by simp only [lp1, lst, l1]; congr 1) hc2
   rcases hB3 with ⟨rv, st3, hevr, htyr, houtr, hB3o, hB3pc, hB3a0, hB3c, hB3t⟩ | ⟨hh, hne⟩
   rotate_left
   · refine ⟨B3, r1.trans (r2.trans r3), .inr ⟨hh, fun v st' h => ?_⟩⟩
@@ -649,10 +639,8 @@ theorem sim_neg (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e)
     · exact h.elim
   have hcx : cexpr Γ k pos (.unary .neg e) = cexpr Γ k pos e ++ [.sub a0 0 a0] := rfl
   rw [hcx] at hseg hpos
-  obtain ⟨hs1, hs2⟩ := hseg.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hpos
-  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A (.inl hE') (by simpa [tdepth] using hk) hs1
-    (by unfold PosOK at *; omega) hA hc
+  obtain ⟨⟨hs1, p1⟩, hs2, -⟩ := segP_app.mp ⟨hseg, hpos⟩
+  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A (.inl hE') (by simpa [tdepth] using hk) hs1 p1 hA hc
   rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
   · obtain ⟨n, rfl, hn⟩ := hty.1 hE'
     have e1 := step_sub hL.1 hs2.head hBpc (by decide) (Has.zero _) hB0
@@ -674,13 +662,10 @@ theorem sim_not (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e)
   have hcx : cexpr Γ k pos (.unary .not e) = cexpr Γ k pos e ++
       [.addi s3 0 1, .br .eq a0 0 (bSkip 1), .addi s3 0 0, mv a0 s3] := rfl
   rw [hcx] at hseg hpos
-  obtain ⟨hs1, hs2⟩ := hseg.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hpos
-  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A hE' (by simpa [tdepth] using hk) hs1
-    (by unfold PosOK at *; omega) hA hc
+  obtain ⟨⟨hs1, p1⟩, hs2, p2⟩ := segP_app.mp ⟨hseg, hpos⟩
+  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A hE' (by simpa [tdepth] using hk) hs1 p1 hA hc
   rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
-  · obtain ⟨L, r2, hL0⟩ := run_cmp₀ hL.1 hs2 hBpc (by unfold PosOK at *; omega) hB0 (Has.zero _)
-      (by decide) (by decide)
+  · obtain ⟨L, r2, hL0⟩ := run_cmp₀ hL.1 hs2 hBpc p2 hB0 (Has.zero _) (by decide) (by decide)
     have hg : guardB BrOp.eq.bop (word v) 0 = !v.truthy := by
       rcases hE' with hi | hb
       · obtain ⟨n, rfl, hn⟩ := hty.1 hi

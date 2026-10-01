@@ -87,22 +87,11 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
 #ix_piece lldStage_2c from lldStage_2b by
   have hI : lldIovs sp.toNat sg ds = [(sp.toNat + 348 - ds.length, ds)] := by simp [lldIovs, hs0]
   have hC : cnt + lldCnt sg ds = ds.length + cnt := by simp [lldCnt, hs0]; omega
-  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ ?_
+  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?arr⟩ ?_ ?fr
   all_goals simp (config := {failIfUnchanged := false}) only [hI, hC, List.length_singleton, piecesLen,
     List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-  · rsimp; exact f2.trans h2
-  · rsimp; exact f9.trans hP.s1
-  · rsimp; exact f18.trans hP.s2
-  · rsimp; exact f19.trans hP.s3
-  · rsimp; exact f21.trans h21
-  · rsimp; first | rfl | (rw [f23]; rfl) | rw [f23]
-  · nx_mem; exact hP.reent
-  · nx_mem; exact hP.file
-  · nx_mem; exact hawA
-  · nx_mem; exact hP.base
-  · nx_mem; rfl
-  · nx_mem
-  · intro j hj
+  case arr =>
+    intro j hj
     obtain rfl : j = 0 := by simp at hj; omega
     simp only [Nat.mul_zero, Nat.add_zero, List.getElem_cons_zero, List.length_singleton]
     refine ⟨?_, ?_⟩
@@ -110,11 +99,10 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
       nx_mem
     · rw [show (BitVec.ofNat 64 (sp.toNat + 352 + 8)).toNat = (sp + 360#64).toNat by rw [eo 360 (by omega)]; simp; omega]
       nx_mem
-  · intro x hx; simp only [List.mem_singleton] at hx; subst hx; rsimp; exact f24
-  · repeat (refine Frame.snoc ?_ ?_)
-    all_goals first | exact Frame.refl _ _ |
-      (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
-       unfold StageReg; omega)
+  case fr => repeat (refine Frame.snoc ?_ ?_)
+             all_goals first | exact Frame.refl _ _ | region_close
+  all_goals carry_close [f2, h2, f9, hP.s1, f18, hP.s2, f19, hP.s3, f21, h21, f23, f24, hP.reent, hP.file,
+    hawA, hP.base]
 
 #ix_piece lldStage_3 from lldStage_1 at 2 by
   have hz : (BitVec.zeroExtend 64 sg = 0#64) = False := eq_false fun h => zext8_ne hs0 (h.trans (by decide))
@@ -141,22 +129,11 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
   have hI : lldIovs sp.toNat sg ds = [(sp.toNat + 167, [sg]), (sp.toNat + 348 - ds.length, ds)] := by
     simp [lldIovs, hs0]
   have hC : cnt + lldCnt sg ds = ds.length + 1 + cnt := by simp [lldCnt, hs0]; omega
-  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ ?_
+  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?arr⟩ ?_ ?fr
   all_goals simp (config := {failIfUnchanged := false}) only [hI, hC, List.length_cons, List.length_nil, piecesLen,
     List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero, List.length_singleton]
-  · rsimp; exact f2.trans h2
-  · rsimp; exact f9.trans hP.s1
-  · rsimp; exact f18.trans hP.s2
-  · rsimp; exact f19.trans hP.s3
-  · rsimp; exact f21.trans h21
-  · rsimp
-  · nx_mem; exact hP.reent
-  · nx_mem; exact hP.file
-  · nx_mem; exact hawB
-  · nx_mem; exact hP.base
-  · nx_mem; rfl
-  · nx_mem; rw [Nat.add_comm]
-  · intro j hj
+  case arr =>
+    intro j hj
     simp only [List.length_cons, List.length_nil] at hj
     rcases (show j = 0 ∨ j = 1 by omega) with rfl | rfl
     · simp only [Nat.mul_zero, Nat.add_zero, List.getElem_cons_zero, List.length_singleton]
@@ -171,11 +148,10 @@ def StageReg (sp : Nat) (a : Nat) : Prop :=
         nx_mem
       · rw [show (BitVec.ofNat 64 (sp.toNat + 352 + 16 + 8)).toNat = (sp + 376#64).toNat by rw [eo 376 (by omega)]; simp; omega]
         nx_mem
-  · intro x hx; simp only [List.mem_singleton] at hx; subst hx; rsimp; exact f24
-  · repeat (refine Frame.snoc ?_ ?_)
-    all_goals first | exact Frame.refl _ _ |
-      (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
-       unfold StageReg; omega)
+  case fr => repeat (refine Frame.snoc ?_ ?_)
+             all_goals first | exact Frame.refl _ _ | region_close
+  all_goals carry_close [f2, h2, f9, hP.s1, f18, hP.s2, f19, hP.s3, f21, h21, f23, f24, hP.reent, hP.file,
+    hawB, hP.base, Nat.zero_add, Nat.add_comm 1 ds.length]
 
 #ix_tree lld_stage := lldStage_1 [lldStage_2 [lldStage_2b [lldStage_2c]], lldStage_3 [lldStage_3b [lldStage_3c]]]
 

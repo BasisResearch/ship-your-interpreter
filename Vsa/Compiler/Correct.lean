@@ -1,5 +1,6 @@
 import Vsa.Compiler.StmtS
 import Vsa.Compiler.AbsLift
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -20,10 +21,7 @@ theorem compile_segs (p : Program) :
       Seg (compile p) (mainPos₀ + (body p).length) (exitCode 0) := by
   have h := Seg.self (compile p)
   rw [compile_eq] at h
-  obtain ⟨h1234, h5⟩ := h.append
-  obtain ⟨h123, h4⟩ := h1234.append
-  obtain ⟨h12, h3⟩ := h123.append
-  obtain ⟨h1, h2⟩ := h12.append
+  obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ := by simpa only [seg_app_iff] using h
   refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> rw [compile_eq]
   · exact h1
   · exact h2

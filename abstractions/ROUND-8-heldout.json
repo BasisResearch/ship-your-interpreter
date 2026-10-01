@@ -1,0 +1,96 @@
+{
+ "round": 8,
+ "drawn": "2026-10-01, before any candidate was built",
+ "seed": "random.Random(20261001): sample(C,4), sample(R-S,2), sample(R-M,2), sample(R-L,2); first two C and the first of each R stratum primary, the rest fresh",
+ "measure": "statement-identical re-proof; cost = non-blank lines of the case's declarations + the declarations it alone uses (dominated; other cases' roots excluded) + shared target helpers divided by the number of run units that reach them (meas.py over a constant dump of the branch) + failed compiles; new generic lemmas counted as setup",
+ "populations": {
+  "C": "entry runs of functions whose code is also proved in another file or host: memmove_nw, memmove_run, strlen_nw, udiv_nw+umod_nw, swriteErr_run, fwriteErr_run, sflushF_run+sflushF_run0+fflushF_run+fflushF_run0, sfvwrite_chain, sprintErr_run, vfpEntry_run",
+  "R-S": "other run units (SnpW/SWPO/NW theorems, #ix/#nx chains and segs) of cost <= 30: lld_head, lld_mag, moddi3_sw, sbprintf_tail, sprintErr0_run, svf_convLL, svf_digExit, svf_digits, svf_entry, svf_head, svf_lit, svf_printSign, udiv_sw, vfp_end0, vfp_fileSb, vfp_head, vfp_lit",
+  "R-M": "cost 31-100: fpr_nl, fprintfErr_run, fprintf_lld, fprintf_s, fprintf_sb, fprintf_via, fprintf_wrap, lldMag_small, print_call, print_call0, print_epi, print_restore, print_skip0, s_empty, sbSprint_hook, snp_epi, snp_pro, snprintf_nw, sprintErr_hook, ssp_B, ssp_call, ssp_ret, ssprint_iterA, ssputs_buf, ssputs_nw, strlen_sw, svfPro, svfPro2, svf_back, svf_body_tail, svf_convS, svf_convS_ret, svf_convStart, svf_dig1, svf_digExit0, svf_digExit45, svf_digLoop, svf_digMulti, svf_digStep, svf_disp, svf_epi, svf_intD, svf_intQ, svf_iterD, svf_iterEnd, svf_iterS, svf_lit0, svf_lit1P, svf_lit1Z, svf_litBody, svf_mbtowc, svf_print, svf_printBody, svf_printSign0, svf_printSign45, svf_scan, svf_scan_br, svf_sign45_tail, swsetupErr_run, umoddi3_sw, vfpErr_run, vfp_begin, vfp_end, vfp_headC, vfp_mb, vfp_print, vfp_printH, vfp_scan, vfp_tail",
+  "R-L": "cost > 100: fpr_end, fpr_s, fprintfHead_run, lldMag_big, lld_stage, s_stage, sbprintf_run, sprint_run, ssprint_iterB, ssprint_nw, svf_end, svf_flush, svf_fmt, svf_intTail, svf_iterLLD, vfpInnerLld, vfpInnerS, vfp_digits, vfp_lld, vfp_outer, vfp_toTerm"
+ },
+ "primary": [
+  {
+   "case": "udiv_nw+umod_nw",
+   "stratum": "C",
+   "decl": 56,
+   "excl": 155,
+   "shared": 0.2,
+   "baseline": 211
+  },
+  {
+   "case": "fwriteErr_run",
+   "stratum": "C",
+   "decl": 1,
+   "excl": 133,
+   "shared": 17.8,
+   "baseline": 152
+  },
+  {
+   "case": "vfp_lit",
+   "stratum": "R-S",
+   "decl": 22,
+   "excl": 0,
+   "shared": 7.6,
+   "baseline": 30
+  },
+  {
+   "case": "snp_epi",
+   "stratum": "R-M",
+   "decl": 48,
+   "excl": 1,
+   "shared": 6.9,
+   "baseline": 56
+  },
+  {
+   "case": "sbprintf_run",
+   "stratum": "R-L",
+   "decl": 1,
+   "excl": 114,
+   "shared": 55.8,
+   "baseline": 171
+  }
+ ],
+ "fresh": [
+  {
+   "case": "sprintErr_run",
+   "stratum": "C",
+   "decl": 2,
+   "excl": 75,
+   "shared": 8.0,
+   "baseline": 85
+  },
+  {
+   "case": "sflushF_run+sflushF_run0+fflushF_run+fflushF_run0",
+   "stratum": "C",
+   "decl": 86,
+   "excl": 134,
+   "shared": 19.8,
+   "baseline": 240
+  },
+  {
+   "case": "udiv_sw",
+   "stratum": "R-S",
+   "decl": 11,
+   "excl": 0,
+   "shared": 2.0,
+   "baseline": 13
+  },
+  {
+   "case": "ssp_B",
+   "stratum": "R-M",
+   "decl": 44,
+   "excl": 0,
+   "shared": 2.4,
+   "baseline": 46
+  },
+  {
+   "case": "fprintfHead_run",
+   "stratum": "R-L",
+   "decl": 1,
+   "excl": 124,
+   "shared": 41.8,
+   "baseline": 167
+  }
+ ]
+}

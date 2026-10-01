@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Sfv
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -124,7 +125,9 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
   | zero => intro _ _ _ _ _ _ _ _ h; omega
   | succ n ih =>
     intro done pend bs src nxt rest R M hμ hrel hpos hsmall hR hF hFr hres hiov hnxt hsrc hsok' hrest
-    have hfsz : f.toNat + 1208 < 2 ^ 32 := by have := G.hf2; have := G.hs3; omega
+    have := G.hU2; have := G.hs3; have := G.hfU; have := G.hU1; have := G.hf1; have := G.hs1; have := G.hs4
+    have := G.hf2; have := G.hs2
+    have hfsz : f.toNat + 1208 < 2 ^ 32 := by omega
 
     have tailK : ∀ (c : Nat) (R3 : Nat → BitVec 64) (M3 : Mem) (pend' out : List (BitVec 8)),
         0 < c → c ≤ bs.length → pend ++ bs.take c = out ++ pend' →
@@ -136,15 +139,9 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
       intro c R3 M3 pend' out hc0 hcL hsplit h18 h9 h19 h22 hkeep hF3 hFr3
       have hsok := hsok' (by omega)
       have hres3 : ldv .ld M3 (U + 16#64).toNat = BitVec.ofNat 64 (bs.length + piecesLen rest) := by
-        rw [hFr3.ldv .ld (fun j hj hr => by
-          simp only [widthOfM] at hj
-          have e : (U + 16#64).toNat = U.toNat + 16 := by
-            rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; have := G.hU2; have := G.hs3; omega
-          rw [e] at hr; unfold SfvReg at hr; have := G.hfU; have := G.hU1; have := G.hf1; have := G.hs1
-          have := G.hs4; omega)]
-        exact hres
+        carry_close [hFr3.ldv, hres]
       have hU16 : (U + 16#64).toNat = U.toNat + 16 := by
-        rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; have := G.hU2; have := G.hs3; omega
+        rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
 
       have hFr4 : Frame (writeLog M3 [((U + 16#64).toNat, 8, BitVec.ofNat 64 (bs.length + piecesLen rest - c))])
           Mb (LoopReg f.toNat fp.toNat U.toNat) :=
@@ -153,10 +150,10 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
           f pend' :=
         hF3.frame_out (Frame.store M3 _ (Reg := fun b => U.toNat + 16 ≤ b ∧ b < U.toNat + 24)
           fun b h1 h2 => by omega) (by omega) fun b hb => by
-            have := G.hfU; have := G.hU1; have := G.hs1; have := G.hs4; omega
+            omega
       rw [String.append_assoc, ← putcs_append]
       refine sfv_tail (P := ldv .ld M3 f.toNat) (resid := bs.length + piecesLen rest) hlive G.hs3 G.hs4
-        (by have := G.hU1; have := G.hs1; omega) G.hU2 G.hUa (by have := G.hf1; have := G.hs1; omega) G.hf2
+        (by omega) G.hU2 G.hUa (by omega) G.hf2
         G.hfU (by omega) (by omega) hcL (by omega) (by have := hsok.hi; omega) hRh h9 h19 h22 hkeep h18 hres3
         hF3.flags rfl (fun hne R' hR' => ?_) (fun heq R' hkeep' => ?_)
       ·
@@ -172,11 +169,11 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         · simp; omega
         · rw [ldv_store_hit]; congr 1; simp; omega
       ·
-        refine sfv_exit hlive G.hs3 G.hs4 (by have := G.hs1; omega) G.hs2 G.hfpa
+        refine sfv_exit hlive G.hs3 G.hs4 (by omega) G.hs2 G.hfpa
           ((hkeep' 2 (by decide)).trans hRh.sp) h0 hra ((hkeep' 26 (by decide)).trans h26)
-          ((hkeep' 27 (by decide)).trans h27) (hsp.frame_out hFr4 (by have := G.hs2; have := G.hs3; omega)
+          ((hkeep' 27 (by decide)).trans h27) (hsp.frame_out hFr4 (by omega)
             fun b hb => by
-              unfold LoopReg SfvReg at hb; have := G.hf1; have := G.hU1; have := G.hs1; have := G.hs4; omega)
+              unfold LoopReg SfvReg at hb; omega)
           (fun R'' hret => hk R'' _ (done ++ out) pend' ?_ hret hF4 hFr4)
         have hbc : bs.length = c := by have := hcL; have := piecesLen_eq rest; omega
         have hpr : piecesBytes rest = [] := by
@@ -226,8 +223,8 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         subst hp0
         have hsrcM : PieceReads Dt DA (outS s need) M src bs :=
           hsrc.transport fun i hi => hFr _ (hsok.out i hi)
-        refine sfv_direct hlive hlive' hsub G.hs1 (by have := G.hs2; omega) G.hs3 G.hs4 G.hfpa
-          (by have := G.hf1; omega) G.hf2 G.hfa hL1 (by omega) hsok.lo hsok.hi
+        refine sfv_direct hlive hlive' hsub G.hs1 (by omega) G.hs3 G.hs4 G.hfpa
+          (by omega) G.hf2 G.hfa hL1 (by omega) hsok.lo hsok.hi
           (by have := hsok.htif; unfold tohostAddr; omega)
           (fun i hi => by have := hsok.out i hi; unfold LoopReg SfvReg at this; omega)
           hsrcM.readWin hRh (by simpa using hR) hF (fun R' M' h18 h9 h19 h22 hkeep hF' hFr' => ?_)
@@ -241,16 +238,16 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         have hsrcM : PieceReads Dt DA (outS s need) M src bs :=
           hsrc.transport fun i hi => hFr _ (hsok.out i hi)
         have hc0 : 0 < min bs.length (1024 - pend.length) := by omega
-        refine sfv_copyA hlive G.hs3 G.hs4 (by have := G.hf1; have := G.hs1; omega) G.hf2 G.hfa hF.len hL0
+        refine sfv_copyA hlive G.hs3 G.hs4 (by omega) G.hf2 G.hfa hF.len hL0
           (by omega) hroom hRh hR hF.w hF.base hF.size (fun R1 h10 h11 h12 h18 h1 hR1 => ?_)
         have hd : BitVec.ofNat 64 ((f + 184#64).toNat + pend.length) = f + BitVec.ofNat 64 (184 + pend.length) := by
           rw [hB, add_ofNat_eq, Nat.add_assoc]
         refine memmove_run hlive ((f + 184#64).toNat + pend.length) src (min bs.length (1024 - pend.length))
           (win bs src) R1 M ⟨?_, ?_, ?_, hsok.lo, ?_, ?_, ?_⟩ ?_ (by rw [h10, hd]) h11 h12 (by rw [h1]; decide)
           (fun R2 M2 hmm hcp => ?_)
-        · rw [hB]; have := G.hf1; have := G.hs1; have := G.hs4; omega
-        · rw [hB]; have := G.hs3; omega
-        · intro b h1 h2; rw [hB] at h1 h2; have := G.hf2; have := G.hf1; have := G.hs1; unfold outS; omega
+        · rw [hB]; omega
+        · rw [hB]; omega
+        · intro b h1 h2; rw [hB] at h1 h2; unfold outS; omega
         · have := hsok.hi; omega
         · have := hsok.htif; omega
         · have h0 := hsok.out 0 hL0
@@ -260,22 +257,11 @@ theorem sfv_loop (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ int
         rw [h1]
         have hmk : ∀ z, z ≠ 11 → z ≠ 12 → z ≠ 13 → z ≠ 14 → z ≠ 15 → z ≠ 16 → z ≠ 17 → z ≠ 6 → z ≠ 28 →
             R2 z = R1 z := hmm
-        refine sfv_copyB hlive G.hs1 (by have := G.hs2; omega) G.hs3 G.hs4 G.hfpa (by have := G.hf1; omega)
-          G.hf2 G.hfa hc0 (by omega) hRh ?_ (by rw [hmk 9 (by decide) (by decide) (by decide) (by decide)
-            (by decide) (by decide) (by decide) (by decide) (by decide)]; exact hR1.nxt)
-          (by rw [hmk 19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-            (by decide) (by decide)]; exact hR1.len)
-          (by rw [hmk 22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-            (by decide) (by decide)]; exact hR1.src)
-          (by rw [hmk 18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-            (by decide) (by decide)]; exact h18) hF hcp
+        refine sfv_copyB hlive G.hs1 (by omega) G.hs3 G.hs4 G.hfpa (by omega)
+          G.hf2 G.hfa hc0 (by omega) hRh ?_ (by carry_close [hmk, hR1.nxt]) (by carry_close [hmk, hR1.len])
+          (by carry_close [hmk, hR1.src]) (by carry_close [hmk, h18]) hF hcp
           (fun R3 M3 pend' out hsplit h18' h9' h19' h22' hkeep' hF3 hFr3 => ?_)
-        · intro x hx
-          rw [hmk x (by simp [sfvKeep] at hx; omega) (by simp [sfvKeep] at hx; omega)
-            (by simp [sfvKeep] at hx; omega) (by simp [sfvKeep] at hx; omega) (by simp [sfvKeep] at hx; omega)
-            (by simp [sfvKeep] at hx; omega) (by simp [sfvKeep] at hx; omega) (by simp [sfvKeep] at hx; omega)
-            (by simp [sfvKeep] at hx; omega)]
-          exact hR1.keep x hx
+        · carry_close [hmk, hR1.keep]
         rw [copyBytes_win _ _ _ (by omega)] at hsplit
         exact tailK _ R3 M3 pend' out hc0 (by omega) hsplit h18' h9' h19' h22' hkeep' hF3 hFr3
 

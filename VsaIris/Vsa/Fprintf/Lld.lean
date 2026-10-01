@@ -45,19 +45,10 @@ structure LldHead (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp ap v : BitVec 64
 set_option hygiene false in
 
 macro "lld_close " hk:term " : " sg:term : tactic => `(tactic| (
-  refine $hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine $hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?mem⟩
+  case mem => unfold lldMt; simp [$sg:term]
   · rw [f26]; unfold lldMag; simp [$sg:term]
-  · exact f22
-  · exact f24
-  · exact f8
-  · exact f20
-  · exact f28
-  · exact f29
-  · intro x hx
-    simp only [lldKeep, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-      rfl | rfl | rfl <;> assumption
-  · unfold lldMt; simp [$sg:term]))
+  all_goals carry_close))
 
 theorem zero_le_toInt_iff (v : BitVec 64) : ((0#64).toInt ≤ v.toInt) = ¬ isNeg v := by
   apply propext
@@ -164,13 +155,8 @@ theorem lldMag_small (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
   have e347 : (sp + 347#64).toNat = sp.toNat + 347 := sp_lit (by omega)
   have e32 : (sp + 32#64).toNat = sp.toNat + 32 := sp_lit (by omega)
   refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  all_goals try carry_close [hLl]
   · rsimp; rw [hLl]; apply BitVec.eq_of_toNat_eq; rw [e347, BitVec.toNat_ofNat]; omega
-  · rsimp; rw [hLl]
-  · rsimp; rw [hLl]
-  · rsimp
-  · rsimp
-  · have := fun x (_ : x ∈ magKeep) => (rfl : R x = R x)
-    keep_chain this
   · intro i hi
     rw [hLl] at hi
     obtain rfl : i = 0 := by omega
@@ -178,10 +164,7 @@ theorem lldMag_small (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
     rw [imgM_store_miss _ _ (by rw [e32, hLl]; omega), show sp.toNat + 348 - (digBytes m.toNat).length + 0
       = (sp + 347#64).toNat by rw [e347, hLl]; omega]
     exact imgM_sb_zext _ _ _
-  · exact ldv_store_hit _ _ _
-  · refine ((Frame.refl _ _).snoc fun b h1 h2 => ?_).snoc fun b h1 h2 => ?_
-    · rw [e347] at h1 h2; unfold MagReg; omega
-    · rw [e32] at h1 h2; unfold MagReg; omega
+  · refine ((Frame.refl _ _).snoc ?_).snoc ?_ <;> region_close
 
 theorem sextw_ofNat {L : Nat} (h : L < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 L)) = BitVec.ofNat 64 L := by
@@ -233,25 +216,15 @@ theorem lldMag_big (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     eq_true (by rw [hLt, show (18446744073709551615#64).toInt = -1 by decide]; omega)
   nx_run hlive using [k2, e25, l120, l112, l40, l48, l104, l32, l167, hsw, hbl1] at 2147529796
   refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rsimp; exact e25
-  · rsimp
-  · rsimp; exact sextw_ofNat (by omega)
-  · rsimp
-  · rsimp
-  · intro x hx
-    simp only [magKeep, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
-      first | exact h22.symm | exact h29.symm | exact h28.symm | rfl | (rw [hk1 _ (by decide)]; rsimp)
+  all_goals try carry_close [e25, hk1, h22, h28, h29, sextw_ofNat (L := (digBytes m.toNat).length) (by omega)]
   · intro i hi
-    rw [imgM_store_miss _ _ (by rw [eo 32 (by omega)]; omega), imgM_store_miss _ _ (by rw [eo 40 (by omega)]; omega),
-      imgM_store_miss _ _ (by rw [eo 96 (by omega)]; omega)]
+    rw [imgM_store_miss _ _ (by rw [sp_lit (by omega)]; omega), imgM_store_miss _ _ (by rw [sp_lit (by omega)]; omega),
+      imgM_store_miss _ _ (by rw [sp_lit (by omega)]; omega)]
     exact hd i hi
-  · exact ldv_store_hit _ _ _
-  · refine ((Frame.trans ?_ (hF1.mono fun a h => by unfold DigReg at h; unfold MagReg; omega)).snoc
-      fun b h1 h2 => ?_).snoc (fun b h1 h2 => ?_) |>.snoc fun b h1 h2 => ?_
+  · refine ((Frame.trans ?_ (hF1.mono ?_)).snoc ?_).snoc ?_ |>.snoc ?_
     · repeat (refine Frame.snoc ?_ ?_)
-      all_goals first | exact Frame.refl _ _ | (intro b h1 h2; rw [eo _ (by omega)] at h1 h2; unfold MagReg; omega)
-    all_goals (rw [eo _ (by omega)] at h1 h2; unfold MagReg; omega)
+      all_goals first | exact Frame.refl _ _ | region_close
+    all_goals region_close
 
 theorem lld_mag (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ interpText, live p.1)
     (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA) {t : String} {Mt : Mem} {R : Nat → BitVec 64}

@@ -118,14 +118,7 @@ theorem wp_call_strcmp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   unfold strcmpSpec
   ihave Hsp := Hs $$ %(R 10) %(R 11) %xi %x
   iapply wp_callW Wp hexec
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hsp
-  isplitl [Hpc]
-  · iexact Hpc
-  isplitl [Hra]
-  · iexact Hra
+  isplitl []; iexact Hi; isplitl []; iexact Hsp; iframe Hpc Hra
   isplitl [Ha0 Ha1 Hcl]
   · iframe Ha0 Ha1 Hcl Hxi Hx
     ipureintro; exact hi4
@@ -143,9 +136,7 @@ theorem wp_call_strcmp (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave HR := Hrest $$ %R'' [Hra Ha0 Hcl]
   · rw [regsOf_cons, regsOf_cons, e1, e2, show (11 :: 12 :: argClob) = retClob from rfl,
       regsOf_congr e3]
-    isplitl [Hra]
-    · iexact Hra
-    iframe Ha0 Hcl
+    iframe Hra Ha0 Hcl
   have hpure : ((fun k => if k ∈ strcmpKs then R'' k else R k) 10 = 0#64 ↔ xi = x) ∧
       (fun k => if k ∈ strcmpKs then R'' k else R k) 1 = BitVec.ofNat 64 (i + 4) ∧
       ∀ k, k ∉ strcmpKs → (fun k => if k ∈ strcmpKs then R'' k else R k) k = R k := by
@@ -272,18 +263,15 @@ theorem storeRepr_openRead (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)}
   iintro ⟨Hs, #He⟩
   ihave ⟨Hs, %hinv⟩ := keep_pure (storeRepr_pure N s B) $$ Hs
   ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_frameAt N (s := s) (B := B) (fa := fa) (e := e))
-    $$ [Hs He]
-  · iframe Hs He
+    $$ [$]
   have hf : s.frames[fa]? = some s.frames[fa] := Array.getElem?_eq_getElem hlt
   ihave ⟨%bl, %B₁, %B₂, %hB, Hf, Hc⟩ := storeRepr_open N hf $$ Hs
   unfold frameOwn frameBody
   icases Hf with ⟨%Gm, %hbl, #HGe, %img, %hlay, Hown, #Hb, #Hp⟩
-  ihave %hGe := frameAt_agree fa Gm.e e $$ [HGe He]
-  · iframe HGe He
+  ihave %hGe := frameAt_agree fa Gm.e e $$ [$]
   iexists s.frames[fa], Gm, img
   iframe Hown Hb Hp
-  isplitr
-  · ipureintro; exact ⟨hf, hGe, hlay, hinv⟩
+  isplitr; ipureintro; exact ⟨hf, hGe, hlay, hinv⟩
   iintro Hown
   rw [hB, hbl]
   iapply Hc $$ %s %(s.frames[fa]) %Gm.blocks
@@ -305,10 +293,8 @@ theorem get_join (s out : Nat) (Gm : FrameGeom) (Mt : Mem) (img : Nat → BitVec
         ownSet (getS s out Gm) (fun a => a ↦ₘ imgM Mt' a) := by
   iintro ⟨HB, HF⟩
   ihave ⟨⟨HB, HF⟩, %hd⟩ := keep_pure (ownSet_disj (baseS s out) (BlocksCover Gm.blocks) (imgM Mt) img)
-    $$ [HB HF]
-  · iframe HB HF
-  ihave H := ownSet_glue _ _ (imgM Mt) img hd $$ [HB HF]
-  · iframe HB HF
+    $$ [$]
+  ihave H := ownSet_glue _ _ (imgM Mt) img hd $$ [$]
   ihave H := ownSet_iff (T := getS s out Gm) _ (fun a => by
     unfold getS; rw [frameS_iff]) $$ H
   ihave ⟨%Mt', %hag, H⟩ := ownSet_tracked _ _ $$ H
@@ -430,14 +416,12 @@ theorem storeRepr_openAt (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {
   iintro ⟨Hs, #He⟩
   ihave ⟨Hs, %hinv⟩ := keep_pure (storeRepr_pure N s B) $$ Hs
   ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_frameAt N (s := s) (B := B) (fa := fa) (e := e))
-    $$ [Hs He]
-  · iframe Hs He
+    $$ [$]
   have hf : s.frames[fa]? = some s.frames[fa] := Array.getElem?_eq_getElem hlt
   ihave ⟨%bl, %B₁, %B₂, %hB, Hf, Hc⟩ := storeRepr_open N hf $$ Hs
   unfold frameOwn frameBody
   icases Hf with ⟨%Gm, %hbl, #HGe, %img, %hlay, Hown, #Hb, #Hp⟩
-  ihave %hGe := frameAt_agree fa Gm.e e $$ [HGe He]
-  · iframe HGe He
+  ihave %hGe := frameAt_agree fa Gm.e e $$ [$]
   iexists s.frames[fa], Gm, img, B₁, B₂
   iframe Hown Hb Hp HGe Hc
   ipureintro; exact ⟨hf, hGe, hlay, hinv, hbl ▸ hB⟩
@@ -533,13 +517,9 @@ theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       rw [h10, imgW_toNat]
       exact imgLE_congr fun j hj => hI.img hF _ (frameS_name (hI.lay hF) hi hj)
     iapply wp_call_strcmp Wp Sx.jexec Sx.jal4 (xi := (f.vars[i]).1) (x := x)
-    isplitl []
-    · iapply instrAt_of_text Sx.jtext $$ Ht
+    isplitl []; iapply instrAt_of_text Sx.jtext $$ Ht
     iframe Hcmp Hpc HR
-    isplitl []
-    · rw [hname]; iexact Hname
-    isplitl []
-    · rw [h11, hI.name hF]; iexact Hx
+    isplitl []; rw [hname]; iexact Hname; isplitl []; rw [h11, hI.name hF]; iexact Hx
     iintro %R2 %⟨hres, h1, hk2⟩ Hpc HR
     have k2 : ∀ k, k ∉ strcmpKs → k ≠ 10 → k ≠ 11 → R2 k = R k := fun k hk h10 h11 =>
       (hk2 k hk).trans (hk1 k h10 h11)
@@ -591,8 +571,7 @@ theorem storeRepr_frameInfo (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢
       storeRepr N s B ∗ ⌜e ≠ 0 ∧ fa < s.frames.size ∧ Vsa.Sim.StoreInvariant s⌝ := by
   iintro ⟨Hs, #He⟩
-  ihave ⟨%f, %Gm, %img, %⟨hf, hGe, hlay, hinv⟩, Hown, -, -, Hclose⟩ := storeRepr_openRead N $$ [Hs He]
-  · iframe Hs He
+  ihave ⟨%f, %Gm, %img, %⟨hf, hGe, hlay, hinv⟩, Hown, -, -, Hclose⟩ := storeRepr_openRead N $$ [$]
   ihave Hs := Hclose $$ Hown
   iframe Hs
   ipureintro
@@ -687,10 +666,8 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro %pc1 %R1 %Mt1 %⟨rfl, hk, hcase⟩ Hpc HR HS
   rcases hcase with ⟨hpar, rfl, h20⟩ | ⟨hpar, rfl, h10⟩
   ·
-    ihave HB := get_split hdisj hF.img $$ HS
-    icases HB with ⟨HB, HF⟩
-    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [Hclose HF]
-    · iframe Hclose HF Hb Hp HGe
+    ihave ⟨HB, HF⟩ := get_split hdisj hF.img $$ HS
+    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [$]
     rw [← hB]
     cases hfp : f.parent with
     | none =>
@@ -722,10 +699,8 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iapply wp_span Wp (Sx.sEpi (out := C.out.toNat) (G := Gm) hC.sp.lo hC.sp.hi hC.ra hstk)
     iframe Ht Hgp Hpc HR HS
     iintro %pc2 %R2 %Mt2 %⟨rfl, rfl, hret⟩ Hpc HR HS
-    ihave HB := get_split hdisj hF.img $$ HS
-    icases HB with ⟨HB, HF⟩
-    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [Hclose HF]
-    · iframe Hclose HF Hb Hp HGe
+    ihave ⟨HB, HF⟩ := get_split hdisj hF.img $$ HS
+    ihave Hst := storeRepr_closeSame N hf hinv hlay $$ [$]
     rw [← hB]
     cases hfp : f.parent with
     | some pa =>
@@ -750,10 +725,8 @@ theorem scan_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   have hs64 : 64 ≤ C.s.toNat := by have := hC.sp.lo; unfold htifLo at this; omega
   iintro ⟨#Ht, #Hgp, #Hcmp, #Hx, #Hfa, Hpc, HR, HS, Hst, HK⟩
   ihave ⟨%f, %Gm, %img, %B₁, %B₂, %⟨hf, hGe, hlay, hinv, hB⟩, Hown, #Hb, #Hp, #HGe, Hclose⟩ :=
-    storeRepr_openAt N $$ [Hst Hfa]
-  · iframe Hst Hfa
-  ihave ⟨%Mt1, %⟨hbase, himg, hdisj⟩, HS⟩ := get_join _ _ Gm Mt img $$ [HS Hown]
-  · iframe HS Hown
+    storeRepr_openAt N $$ [$]
+  ihave ⟨%Mt1, %⟨hbase, himg, hdisj⟩, HS⟩ := get_join _ _ Gm Mt img $$ [$]
   have hF : InFrame C Gm f.vars.length img R Mt1 :=
     { stack := hhead.stack.congr rfl rfl (fun a h1 h2 => hbase a (.inl ⟨h1, h2⟩)) hs64
       name := hhead.name
@@ -858,21 +831,18 @@ theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
         scanHitK Sx Wp Φ N ⟨s, r, pn, out, x, saved, fo⟩ st B fa)
     ⊢ Wp.W Φ := by
   iintro ⟨#Ht, #Hgp, #Hcmp, Hpc, Hra, Ha0, Ha1, Ha2, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hx, Hout, Hst, HK⟩
-  ihave ⟨Hst, %⟨hene, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [Hst Hfa]
-  · iframe Hst Hfa
+  ihave ⟨Hst, %⟨hene, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [$]
   have hs64 : 64 ≤ s.toNat := by have := hsp.lo; unfold htifLo envGetNeed at this; omega
   unfold stackScratch
   ihave ⟨%fs, Hstk⟩ := blockOwn_img _ _ $$ Hstk
-  ihave ⟨⟨Hstk, Hout⟩, %hdo⟩ := keep_pure (ownSet_disj _ _ fs fo) $$ [Hstk Hout]
-  · iframe Hstk Hout
+  ihave ⟨⟨Hstk, Hout⟩, %hdo⟩ := keep_pure (ownSet_disj _ _ fs fo) $$ [$]
   have hsep : out.toNat + 24 ≤ s.toNat - 64 ∨ s.toNat ≤ out.toNat := by
     have := interval_apart (a := out.toNat) (n := 24) (b := s.toNat - envGetNeed)
       (m := envGetNeed) (by omega) (by unfold envGetNeed; omega) fun c h1 h2 => by
         have := hdo c ⟨h1, h2⟩
         unfold InExt at this; omega
     unfold envGetNeed at this; omega
-  ihave HB := ownSet_glue _ _ fs fo hdo $$ [Hstk Hout]
-  · iframe Hstk Hout
+  ihave HB := ownSet_glue _ _ fs fo hdo $$ [$]
   ihave HB := ownSet_iff (T := baseS s.toNat out.toNat) _ (fun a => by
     unfold baseS InExt envGetNeed; omega) $$ HB
   ihave ⟨%Mt0, %hag, HB⟩ := ownSet_tracked _ _ $$ HB
@@ -883,15 +853,8 @@ theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   · iframe Hcl
     unfold savedOwn
     iapply (sepL_append _ _ _).2
-    isplitr [Hsv]
-    · simp only [sepL_cons, sepL_nil]
-      isplitl [Hra]
-      · iexact Hra
-      iframe Ha0 Ha1 Ha2
-      isplitl [Hsp]
-      · iexact Hsp
-      iempintro
-    · iexact Hsv
+    simp only [sepL_cons, sepL_nil]
+    iframe ∗
   have hR : ∀ k v, (k, v) ∈ [(VsaIris.ra, r), (10, e), (11, pn), (12, out), (VsaIris.sp, s)] ++
       saved → R0 k = v := fun k v h => hR0 (k, v) h
   have hsvR : ∀ k ∈ getSaved, R0 k = pairVal saved k := fun k hk => by

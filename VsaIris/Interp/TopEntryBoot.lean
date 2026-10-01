@@ -114,8 +114,7 @@ theorem topEntry_of_regs {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) (
   iintro ⟨Hb, Hr⟩
   ihave ⟨Hb, #Himg⟩ := bootRes_binImg b ρ $$ Hb
   ihave ⟨Hpc, Hra, Hgp, Htp, Hf⟩ := topRegs_carve b.ready $$ Hr
-  imod codeRes_of_boundary $$ [Hgp] with #Hc
-  · iframe Hgp Himg
+  imod codeRes_of_boundary $$ [$] with #Hc
   imodintro
   iframe Hb Hpc Hra Hf Hc Htp
 

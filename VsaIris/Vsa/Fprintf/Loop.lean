@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Lld
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -77,19 +78,11 @@ structure VfpHeadPost (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64)
 
 #ix_piece vfpHead_3 from vfpHead_2 by
   refine hk _ _ ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  all_goals (try rsimp)
-  all_goals try (first | exact f2.trans h2 | exact f21 | exact f23 | exact f22)
-  all_goals try (nx_mem; done)
-  all_goals try (nx_mem; rfl)
-  · intro x hx
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;> assumption
+  all_goals try carry_close [f2, f21, f22, f23, h2]
 
 #ix_piece vfpHead_4 from vfpHead_3 by
   repeat (refine Frame.snoc ?_ ?_)
-  all_goals first | exact Frame.refl _ _ |
-    (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
-     unfold HeadReg; omega)
+  all_goals first | exact Frame.refl _ _ | region_close
 
 #ix_chain vfp_headC := [vfpHead_1, vfpHead_2, vfpHead_3, vfpHead_4]
 

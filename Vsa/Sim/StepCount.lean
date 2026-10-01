@@ -1,5 +1,7 @@
 import Vsa.Sim.BlockAdapter
 import Vsa.Sim.DeriveCase
+import Vsa.Sim.SnprintfSpec19
+import Vsa.Sim.StepFrameOut
 
 open LeanRV64DExecutable Vsa
 open Vsa.Machine (MState Config Step Steps StepsN)

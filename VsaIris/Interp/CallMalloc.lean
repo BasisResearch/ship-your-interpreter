@@ -14,6 +14,73 @@ variable {live : Nat → Prop}
 
 abbrev mallocL : List Nat := 10 :: 2 :: (vsaClob ++ vsaSaved)
 
+/-- The allocator ABI before a `malloc`/`free` call: the cut-out registers and `gp` give the
+callee's argument, stack pointer, clobbered and saved registers, beside any resource `E`. -/
+theorem allocRegs_pre {R : Nat → BitVec 64} {r : BitVec 64} {E : IProp GF} (hsp : SpOKA (R 2))
+    (hr : r.toNat % 4 = 0) :
+    iprop(sepL mallocL (fun x => x ↦ᵣ R x) ∗ gp ↦ᵣ□ Newlib.gpV ∗ E) ⊢
+      iprop(⌜SpOKA (R 2) ∧ r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ R 10 ∗ sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗
+        clobbered vsaClob ∗ savedOwn (vsaSaved.map fun k => (k, R k)) ∗ E) := by
+  simp only [mallocL, sepL_cons]
+  iintro ⟨⟨H10, H2, Hcs⟩, #Hgp', HE⟩
+  ihave ⟨Hcl, Hsv⟩ := (sepL_append _ _ _).1 $$ Hcs
+  unfold VsaIris.a0 VsaIris.sp savedOwn
+  rw [show Newlib.gpV = MallocFast.gpV from rfl]
+  iframe H10 H2 Hgp' HE
+  isplitl []
+  · ipureintro; exact ⟨hsp, hr⟩
+  isplitl [Hcl]
+  · iapply clobbered_of_fn vsaClob R $$ Hcl
+  · rw [VsaIris.sepL_map]; iexact Hsv
+
+/-- **Register restore** after a `malloc`/`free` return: the result `q`, the stack pointer, the
+clobbered and the saved registers are the callee's `mallocL` registers `f`, with `f 2`, the saved
+registers and `f 10 = q` known, beside the post resource `E q`. -/
+theorem allocRegs_post {R : Nat → BitVec 64} (q : BitVec 64) (E : BitVec 64 → IProp GF) :
+    ⊢ a0 ↦ᵣ q -∗ sp ↦ᵣ R 2 -∗ clobbered vsaClob -∗ savedOwn (vsaSaved.map fun k => (k, R k)) -∗
+      E q -∗ ∃ f : Nat → BitVec 64, sepL mallocL (fun x => x ↦ᵣ f x) ∗
+        (⌜f 2 = R 2 ∧ ∀ k ∈ vsaSaved, f k = R k⌝ ∗ E (f 10)) := by
+  unfold VsaIris.a0 VsaIris.sp savedOwn
+  iintro H10 H2 Hcl Hsv HE
+  ihave ⟨%g, Hcl⟩ := clobbered_fn vsaClob (by decide) $$ Hcl
+  iexists (fun y => if y = 10 then q else if y = 2 then R 2 else if y ∈ vsaSaved then R y else g y)
+  simp only [mallocL, sepL_cons]
+  rw [VsaIris.sepL_map] at *
+  have eCl : sepL (GF := GF) vsaClob (fun y => y ↦ᵣ (if y = 10 then q else if y = 2 then R 2
+      else if y ∈ vsaSaved then R y else g y)) = sepL vsaClob (fun y => y ↦ᵣ g y) :=
+    sepL_congr fun y hy => by
+      obtain ⟨h10, h2, hs⟩ := (show ∀ y ∈ vsaClob, y ≠ 10 ∧ y ≠ 2 ∧ y ∉ vsaSaved by decide) y hy
+      simp [h10, h2, hs]
+  have eSv : sepL (GF := GF) vsaSaved (fun y => y ↦ᵣ (if y = 10 then q else if y = 2 then R 2
+      else if y ∈ vsaSaved then R y else g y)) = sepL vsaSaved (fun y => y ↦ᵣ R y) :=
+    sepL_congr fun y hy => by
+      obtain ⟨h10, h2⟩ := (show ∀ y ∈ vsaSaved, y ≠ 10 ∧ y ≠ 2 by decide) y hy
+      simp [h10, h2, hy]
+  simp only [ite_true, show (2 : Nat) ≠ 10 from by decide, ite_false]
+  isplitl [H10 H2 Hcl Hsv]
+  · iframe H10 H2
+    iapply (sepL_append _ _ _).2
+    rw [eCl, eSv]
+    iframe Hcl Hsv
+  iframe HE
+  ipureintro
+  refine ⟨trivial, fun k hk => ?_⟩
+  obtain ⟨h10, h2⟩ := (show ∀ y ∈ vsaSaved, y ≠ 10 ∧ y ≠ 2 by decide) k hk
+  simp [h10, h2, hk]
+
+/-- The registers `ms_callRegs` hands back after a `malloc`/`free` call keep every callee-saved
+register. -/
+theorem allocRegs_keep {R f : Nat → BitVec 64} (hf2 : f 2 = R 2)
+    (hfs : ∀ k ∈ vsaSaved, f k = R k) :
+    ∀ x ∈ fRegs, x ∉ callerSaved → (fun x => if x ∈ mallocL then f x else R x) x = R x := by
+  intro x _ hc
+  by_cases hL : x ∈ mallocL
+  · simp only [hL, ite_true]
+    by_cases h2 : x = 2
+    · subst h2; exact hf2
+    · exact hfs x ((show ∀ y ∈ mallocL, y ∉ callerSaved → y ≠ 2 → y ∈ vsaSaved by decide) x hL hc h2)
+  · simp [hL]
+
 theorem ms_callMalloc (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
     (hexec : JalExec (vsaModel live) i code mallocEntryBV)
@@ -44,63 +111,17 @@ theorem ms_callMalloc (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel li
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ vsaSaved, f k = R k⌝ ∗
       stackScratch (R 2) allocHeadroom ∗ mallocRes ρ H (R 10).toNat (f 10)))
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
-  case hP =>
-    simp only [mallocL, sepL_cons]
-    iintro ⟨⟨H10, H2, Hcs⟩, #Hgp', Hst, Hh⟩
-    ihave ⟨Hcl, Hsv⟩ := (sepL_append _ _ _).1 $$ Hcs
-    unfold VsaIris.a0 VsaIris.sp savedOwn
-    rw [show Newlib.gpV = MallocFast.gpV from rfl]
-    iframe H10 H2 Hgp' Hst Hh
-    isplitl []
-    · ipureintro; exact ⟨hsp, hi4⟩
-    isplitl [Hcl]
-    · iapply clobbered_of_fn vsaClob R $$ Hcl
-    · rw [VsaIris.sepL_map]; iexact Hsv
+  case hP => exact allocRegs_pre hsp hi4
   case hQ =>
-    unfold VsaIris.a0 VsaIris.sp savedOwn
-    iintro ⟨%q, H10, H2, Hcl, Hsv, Hst, Hres⟩
-    ihave ⟨%g, Hcl⟩ := clobbered_fn vsaClob (by decide) $$ Hcl
-    iexists (fun y => if y = 10 then q else if y = 2 then R 2 else if y ∈ vsaSaved then R y else g y)
-    simp only [mallocL, sepL_cons]
-    rw [VsaIris.sepL_map] at *
-    have eCl : sepL (GF := GF) vsaClob (fun y => y ↦ᵣ (if y = 10 then q else if y = 2 then R 2
-        else if y ∈ vsaSaved then R y else g y)) = sepL vsaClob (fun y => y ↦ᵣ g y) :=
-      sepL_congr fun y hy => by
-        obtain ⟨h10, h2, hs⟩ := (show ∀ y ∈ vsaClob, y ≠ 10 ∧ y ≠ 2 ∧ y ∉ vsaSaved by decide) y hy
-        simp [h10, h2, hs]
-    have eSv : sepL (GF := GF) vsaSaved (fun y => y ↦ᵣ (if y = 10 then q else if y = 2 then R 2
-        else if y ∈ vsaSaved then R y else g y)) = sepL vsaSaved (fun y => y ↦ᵣ R y) :=
-      sepL_congr fun y hy => by
-        obtain ⟨h10, h2⟩ := (show ∀ y ∈ vsaSaved, y ≠ 10 ∧ y ≠ 2 by decide) y hy
-        simp [h10, h2, hy]
-    simp only [ite_true, show (2 : Nat) ≠ 10 from by decide, ite_false]
-    isplitl [H10 H2 Hcl Hsv]
-    · iframe H10 H2
-      iapply (sepL_append _ _ _).2
-      rw [eCl, eSv]
-      iframe Hcl Hsv
-    iframe Hst Hres
-    ipureintro
-    refine ⟨trivial, fun k hk => ?_⟩
-    obtain ⟨h10, h2⟩ := (show ∀ y ∈ vsaSaved, y ≠ 10 ∧ y ≠ 2 by decide) k hk
-    simp [h10, h2, hk]
+    iintro ⟨%q, H10, H2, Hcl, Hsv, HE⟩
+    iapply allocRegs_post q (fun q => iprop(stackScratch (R 2) allocHeadroom ∗
+      mallocRes ρ H (R 10).toNat q)) $$ H10 H2 Hcl Hsv HE
   iframe Hspec Hcode Hms Hgp Hst Hh
   iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hres⟩ Hms
-  have hkeep : ∀ x ∈ fRegs, x ∉ callerSaved →
-      (fun x => if x ∈ mallocL then f x else R x) x = R x := by
-    intro x hx hc
-    by_cases hL : x ∈ mallocL
-    · simp only [hL, ite_true]
-      by_cases h2 : x = 2
-      · subst h2; exact hf2
-      · have hs : x ∈ vsaSaved :=
-          (show ∀ y ∈ mallocL, y ∉ callerSaved → y ≠ 2 → y ∈ vsaSaved by decide) x hL hc h2
-        exact hfs x hs
-    · simp [hL]
   have e10 : (fun x => if x ∈ mallocL then f x else R x) 10 = f 10 := by
     simp only [show (10 : Nat) ∈ mallocL from by decide, ite_true]
   rw [← e10] at *
-  iapply Hk $$ %(fun x => if x ∈ mallocL then f x else R x) %hkeep Hst Hres Hms
+  iapply Hk $$ %(fun x => if x ∈ mallocL then f x else R x) %(allocRegs_keep hf2 hfs) Hst Hres Hms
 
 end
 
