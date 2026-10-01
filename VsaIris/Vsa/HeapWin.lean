@@ -30,7 +30,7 @@ macro_rules
   | `(tactic| win_g) => `(tactic| (
       intro k hk
       simp only [allocGlobal, volGlobal, InRange, sbrkBaseAddr, brkAddr, topPadAddr, maxSbrkedAddr,
-        mallinfoAddr, binblocksAddr, topAddr, avAddr, binAt, numBins] at *
+        mallinfoAddr, binblocksAddr, topAddr, avAddr, binAt] at hk ⊢
       omega))
 
 theorem _root_.Vsa.Sim.DlHeap.HeapAt.keep_stable {R : Nat × Nat → Prop}
@@ -42,10 +42,10 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.keep_stable {R : Nat × Nat → Prop}
       read64 m' (binAt i + 16) = read64 m (binAt i + 16) ∧
       read64 m' (binAt i + 24) = read64 m (binAt i + 24) := by
   have K := win_glob hag hV
-  refine ⟨?_, ?_, K _ (by win_g) (by win_g), fun i h0 h1 => ⟨K _ (by win_g) (by win_g),
-    K _ (by win_g) (by win_g)⟩⟩
+  refine ⟨?_, ?_, K _ (by win_g) (by win_g), fun i h0 h1 => ?_⟩
   · rw [K _ (by win_g) (by win_g)]; exact h.sbrk_base
   · rw [K _ (by win_g) (by win_g)]; exact h.top_pad
+  · unfold numBins at h1; exact ⟨K _ (by win_g) (by win_g), K _ (by win_g) (by win_g)⟩
 
 theorem _root_.Vsa.Sim.DlHeap.HeapAt.keep_globals {R : Nat × Nat → Prop} (h : HeapAt m H R top brkv chunks bins)
     (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?)
