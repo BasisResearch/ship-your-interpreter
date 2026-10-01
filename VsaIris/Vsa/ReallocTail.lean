@@ -15,10 +15,8 @@ theorem rtail_fin {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
     (hdata : ∀ k, k < B.nOld → Mt[p + k]? = some (B.old (B.p + k))) :
     AW C.live C.S C.Q 0x80005440#64 R Mt := by
   rgn_run O.live at 0x8000544c
-  refine repi O (F.of_regs ?_ ?_ ?_) fun R' hR h10 => O.ok R' Mt ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  have hp : (R' 10).toNat = p := by
-    rw [h10]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hs0
+  refine repi O (F.of_regs ?_ ?_ ?_) fun R' hR h10 => O.ok R' Mt ?_ <;> try carry_close
+  have hp : (R' 10).toNat = p := by rw [h10]; carry_close [hs0]
   refine ⟨hR, ?_, ?_, ⟨top, brkv, chunks, bins, ?_, htop⟩, hpres, ?_⟩ <;> rw [hp]
   · exact hheap.fresh_of_block hst
   · exact hp16
@@ -173,10 +171,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     have hsp := T.frame.sp
     refine rcall_free O (link := 0x800054b4#64) (by decide) (fun a ha => vsaFoot_cons_sub a ha) ?_ ?_ ?_ ?_
       HC hst' (fun a ha => hpres3 a (vsaFoot_cons_sub a ha)) T.disjD
-      (fun R' Mt' h1 h2 h8 h9 h18 h19 hheap hpres hframe => ?_) <;>
-      try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact hsp
-    · exact T.s1
+      (fun R' Mt' h1 h2 h8 h9 h18 h19 hheap hpres hframe => ?_) <;> try carry_close [hsp, T.s1]
     · rgn_arith
     obtain ⟨top', brkv', chunks', bins', H', htop'⟩ := hheap
     have hs64 := sp64_toNat O.spA
@@ -247,8 +242,7 @@ theorem realloc_tail {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     rw [← hM2]
     exact (T.frame.store (a := X + 8) (w := 8) (by omega)).store (a := X + S + 8) (w := 8) (by omega)
   refine rtail_fin O (F2.of_regs ?_ ?_ ?_) ?_ (by omega) H2 T.starts T.top_le (fun a ha => ?_)
-    (fun k hk => ?_) <;> try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact T.s0
+    (fun k hk => ?_) <;> try carry_close [T.s0]
   · rw [← hM2]; exact pres_log _ (pres_log _ T.pres) a ha
   · rw [hout _ (by omega) (by have := T.old_le; omega)]; exact T.data k hk
 

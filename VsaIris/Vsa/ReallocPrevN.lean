@@ -1,4 +1,5 @@
 import VsaIris.Vsa.ReallocPrev
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -79,12 +80,9 @@ theorem pvN_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : M
       ldv .ld (copyW m d s (n / 8)) a = ldv .ld m a :=
     fun m a h1 h2 => ldv_congr fun k hk => copyW_out (by omega)
   rgn_run O.live at 0x800069c4
-  refine memmove_fwd A O.live ?_ ?_ ?_ ?_ fun R' hK => ?_ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact h16
-  · exact h8
-  · exact h12
-  · decide
+  refine memmove_fwd A O.live (by carry_close [h16]) (by carry_close [h8]) (by carry_close [h12])
+    (by carry_close) fun R' hK => ?_
+  carry_norm
   have hR2 : R' 2 = R 2 := hK.sp
   have hs2' : (R' 2).toNat = C.s.toNat - 64 := hR2 ▸ hs2
   rgn_run O.live at 0x800056e0
@@ -94,14 +92,10 @@ theorem pvN_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : M
     rw [← hW, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
       simp only [OutL, and_true] <;> omega
   refine hk _ _ ((F.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_) (fun a ha => ?_) ?_ ?_ ?_ ?_ ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hR2
-  · exact hK.s2
-  · exact hK.s3
+    try carry_close [hR2, hK.s2, hK.s3, hK.s1]
   · rw [copyW_out (by omega), hWo a (by omega)]
   · exact copyW_agreeOn (Pr := fun a => a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) hWo
       (fun i hi => by omega) a ha
-  · exact hK.s1
 
 theorem pvN_join {C : MCtx} {B : RB} (O : ROK C B) {Mt W : Mem} {brkv : Nat}
     {cs₀ rest : List Chunk} {bins : Nat → List Nat} {P ps S' L hdr0 hxv hn nb i : Nat}
@@ -115,8 +109,7 @@ theorem pvN_join {C : MCtx} {B : RB} (O : ROK C B) {Mt W : Mem} {brkv : Nat}
     (h13 : (R' 13).toNat = ps + S') (h15 : (R' 15).toNat = nb) :
     AW C.live C.S C.Q 0x800056e0#64 R' Mc := by
   rgn_run O.live at 0x80005414
-  refine pvG_rt O I (F.of_regs ?_ ?_ ?_) hMc ?_ ?_ ?_ ?_ ?_ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> assumption
+  refine pvG_rt O I (F.of_regs ?_ ?_ ?_) hMc ?_ ?_ ?_ ?_ ?_ <;> carry_close
 
 theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns : Nat}
@@ -220,13 +213,7 @@ theorem realloc_pvXN {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
     show (BitVec.ofNat 64 pred + 16#64).toNat = pred + 16 by rgn_arith]
   obtain ⟨V, hNN, N⟩ := next_absorb O D hsp FB
   refine pvXN_P O D hsp hpf N hfit (D.frame.of_regs ?_ ?_ ?_) ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact h6
-  · exact D.s0
-  · exact D.s1
-  · rgn_arith
-  · exact h13
-  · exact D.a5
-  · rfl
+    try carry_close [h6, D.s0, D.s1, h13, D.a5]
+  rgn_arith
 
 end VsaIris.VsaHeap

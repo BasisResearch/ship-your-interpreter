@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 
@@ -87,9 +88,8 @@ theorem j_small {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     have hA3 : 2147593488#64 + R 13 = BitVec.ofNat 64 (binAt (nb / 8 + 1)) := by
       apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_ofNat]; unfold binAt avAddr; sx_addr
     refine (step% st 0x80004c68) O.live (fun _ => ?_) (fun hne => absurd hA3 hne)
-    refine hLR _ ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact ha4
-    · rw [toNat_sx32_small _ (by sx_addr)]; sx_addr
+    refine hLR _ ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ ?_ <;> reg_try [ha4]
+    rw [toNat_sx32_small _ (by sx_addr)]; sx_addr
   ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hne
     rw [hA2] at hne
@@ -100,10 +100,8 @@ theorem j_small {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       · simp at hys; exact absurd hys.1.symm hlne
       · simp only [List.cons_append, List.cons.injEq] at hys
         exact ⟨ys', hys.2⟩
-    refine htake pre last hpre _ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hlastlt]
-    · unfold binAt avAddr; sx_addr
+    refine htake pre last hpre _ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;> reg_try []
+    unfold binAt avAddr; sx_addr
 
 theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}

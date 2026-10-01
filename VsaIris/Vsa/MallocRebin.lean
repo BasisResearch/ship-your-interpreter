@@ -1,6 +1,7 @@
 import VsaIris.Vsa.MallocSplit
 import VsaIris.Vsa.HeapMoveAt
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 
@@ -135,14 +136,7 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
   ·
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hl
     refine hlarge (by rw [ht1] at hl; exact hl) _ bb (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_
-      hbb ?_ <;> try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact ha4
-    · exact ha7
-    · exact ha5
-    · exact ht1
-    · exact V.t4
-    · exact h8
-    · exact hbbv
+      hbb ?_ <;> reg_close [ha4, ha7, ha5, ht1, V.t4, h8, hbbv]
   ·
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hs
     rw [ht1] at hs
@@ -188,13 +182,7 @@ theorem rebin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
         by_cases hkj : k = sz / 8
         · subst hkj; rw [updBins_same]; exact List.mem_cons_of_mem _ hy
         · rw [updBins_other _ _ hkj, updBins_other _ _ hk]; exact hy)
-      ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ <;>
-      try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact ha4
-    · exact ha7
-    · exact V.t4
-    · exact h8
-    · rd_log [hor]
-    · exact hor
+      ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ <;> reg_try [ha4, ha7, V.t4, h8, hor]
+    rd_log [hor]
 
 end VsaIris.VsaHeap

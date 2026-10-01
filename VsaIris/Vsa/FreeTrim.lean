@@ -1,5 +1,6 @@
 import VsaIris.Vsa.FreePaths
 import VsaIris.Vsa.Sbrk
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 
@@ -116,10 +117,8 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
     · rd_log [F.s1]
     · rd_log [F.s2]
     · rd_log [F.s3]
-    all_goals (subst hR'; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    · rw [F.sp, BitVec.add_assoc]; rfl
-    · exact T.a0
-    · exact hts
+    all_goals (subst hR'; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, F.sp, BitVec.add_assoc,
+      BitVec.reduceAdd, T.a0, hts])
   refine (step% st 0x80007280) O.live (fun _ => hno _ _ hS) (fun hge => ?_)
   subst hR'
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hge
@@ -245,10 +244,8 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   refine sbrk_r_gen O.live (Sc.sbrkPre O (nbrk := brkv) (hRc ▸ rfl) hal (by subst hRc; rgn_arith))
     (fun hle R' M' P h10 => ?_) (fun hlt => absurd hlt (by unfold heapEnd; omega))
   have hr := P.regs
-  have S' := Sc.sbrk (hRc ▸ hs2) (by omega) P (hr 2 (by decide) (by decide) (by decide))
-    (hr 18 (by decide) (by decide) (by decide)) (hr 19 (by decide) (by decide) (by decide))
-    (hr 9 (by decide) (by decide) (by decide))
-  have h8 : R' 8 = R 8 := (hr 8 (by decide) (by decide) (by decide)).trans (hRc ▸ rfl)
+  have S' := Sc.sbrk (hRc ▸ hs2) (by omega) P (keep3 hr 2) (keep3 hr 18) (keep3 hr 19) (keep3 hr 9)
+  have h8 : R' 8 = R 8 := (keep3 hr 8).trans (hRc ▸ rfl)
   have htp := S'.heap.heap.heap.top_ptr; unfold topAddr avAddr at htp
   have h19 : (R' 19).toNat = 2147593488 := by rw [S'.s3]; rfl
   have rG := globRgn C.H
@@ -258,8 +255,7 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have hsum : (BitVec.ofNat 64 Y + R' 9).toNat = brkv := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, S'.s1, Nat.mod_eq_of_lt (by omega)]; omega
   refine (step% st 0x80007298) O.live (fun _ => ?_) (fun hne => absurd ?_ hne)
-  · refine hk _ _ (S'.upd ?_ ?_ ?_ ?_) ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-    rw [h8]; exact hE
+  · refine hk _ _ (S'.upd ?_ ?_ ?_ ?_) ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false, h8, hE]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [h10]; apply BitVec.eq_of_toNat_eq; rw [hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
 
@@ -298,10 +294,8 @@ theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have hr := P.regs
   have h1 : Rc 1 = 0x800072d0#64 := hRc ▸ rfl
   rw [h1]
-  refine hk R' M' ⟨Sc.upd (hr 2 (by decide) (by decide) (by decide)) (hr 18 (by decide) (by decide) (by decide))
-    (hr 19 (by decide) (by decide) (by decide)) (hr 9 (by decide) (by decide) (by decide)),
-    by rw [hr 8 (by decide) (by decide) (by decide), ← hRc]; exact hE, hE4, P.brk,
-    fun a ha => P.agree a (by rw [show (Rc 2).toNat = C.s.toNat - 80 from hRc ▸ hs2]; exact ha), P.pres, h10⟩
+  refine hk R' M' ⟨Sc.upd (keep3 hr 2) (keep3 hr 18) (keep3 hr 19) (keep3 hr 9), by rw [keep3 hr 8, ← hRc]; exact hE,
+    hE4, P.brk, fun a ha => P.agree a (by rw [show (Rc 2).toNat = C.s.toNat - 80 from hRc ▸ hs2]; exact ha), P.pres, h10⟩
 
 structure TrimOut (C : MCtx) (R : Nat → BitVec 64) (M : Mem) : Prop where
   done : FDone C M

@@ -29,15 +29,7 @@ def exitJalExitE : JalSite where
   imm := 0x1fb9f4#21
   tgt := 0x80000180#64
 
-theorem exitJalExitE_cert : exitJalExitE.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x9f5fb0ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem exitJalExitE_cert : exitJalExitE.Cert := jal_cert
 
 end VsaIris.Newlib.Sites
 
@@ -100,15 +92,7 @@ def mainJalFprintf : JalSite where
   imm := 0x1bac#21
   tgt := 0x800061c0#64
 
-theorem mainJalFprintf_cert : mainJalFprintf.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x3ad010ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem mainJalFprintf_cert : mainJalFprintf.Cert := jal_cert
 
 abbrev rtErrCodeBase : Nat := 0x80002da8
 def rtErrCode : List (BitVec 8) :=
@@ -150,15 +134,7 @@ def rtJalSnprintf1 : JalSite where
   imm := 0x2e7c#21
   tgt := 0x80005c44#64
 
-theorem rtJalSnprintf1_cert : rtJalSnprintf1.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x67d020ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem rtJalSnprintf1_cert : rtJalSnprintf1.Cert := jal_cert
 
 def rtJalSnprintf2 : JalSite where
   pc := 0x80002de4
@@ -170,15 +146,7 @@ def rtJalSnprintf2 : JalSite where
   imm := 0x2e60#21
   tgt := 0x80005c44#64
 
-theorem rtJalSnprintf2_cert : rtJalSnprintf2.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x661020ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem rtJalSnprintf2_cert : rtJalSnprintf2.Cert := jal_cert
 
 def rtJalLongjmp : JalSite where
   pc := 0x80002df0
@@ -190,15 +158,7 @@ def rtJalLongjmp : JalSite where
   imm := 0x424c#21
   tgt := 0x8000703c#64
 
-theorem rtJalLongjmp_cert : rtJalLongjmp.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x24c040ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem rtJalLongjmp_cert : rtJalLongjmp.Cert := jal_cert
 
 abbrev setjmpCodeBase : Nat := 0x80006ffc
 def setjmpCode : List (BitVec 8) :=
@@ -225,15 +185,7 @@ def topJalRet : JalSite where
   imm := 0x16ec#21
   tgt := 0x80005c44#64
 
-theorem topJalRet_cert : topJalRet.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x6ec010ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem topJalRet_cert : topJalRet.Cert := jal_cert
 
 def topJalBrk : JalSite where
   pc := 0x8000457c
@@ -245,14 +197,6 @@ def topJalBrk : JalSite where
   imm := 0x16c8#21
   tgt := 0x80005c44#64
 
-theorem topJalBrk_cert : topJalBrk.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x6c8010ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem topJalBrk_cert : topJalBrk.Cert := jal_cert
 
 end VsaIris.Newlib.Sites

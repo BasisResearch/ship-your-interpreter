@@ -180,8 +180,7 @@ theorem repi_core {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   refine st2 (by rw [upd_other _ _ (by decide), e48]; unfold LdOK Vsa.Sim.tohostAddr; omega)
     (by rw [upd_other _ _ (by decide), e48]; exact O.stack (by unfold mHead; omega) (by omega)) ?_
   refine st3 (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [e40]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [e40]
-        exact O.stack (by unfold mHead; omega) (by omega)) ?_
+    (by carry_norm [e40]; exact O.stack (by unfold mHead; omega) (by omega)) ?_
   refine st4 ?_
   refine st5 ?_
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -190,12 +189,8 @@ theorem repi_core {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   have hs64 : R 2 + sign_extend (m := 64) (0x040#12) = C.s := by
     apply BitVec.eq_of_toNat_eq; rw [hs2]; sx_addr
-  refine hfin _ ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hs64
-  · exact F.s2
-  · exact F.s3
-  · sx_norm
+  refine hfin _ ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ <;> try carry_close [hs64, F.s2, F.s3]
+  sx_norm
 
 theorem repi {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → R' 10 = R 13 → AW C.live C.S C.Q C.r R' Mt) :

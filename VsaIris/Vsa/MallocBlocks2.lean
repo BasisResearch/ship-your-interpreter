@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocBlocks
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 
@@ -34,19 +35,13 @@ theorem BWBlock.keep {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     (B : BWBlock C Mt brkv chunks bins nb start R)
     (h : ∀ x, x ≠ 6 → x ≠ 11 → x ≠ 12 → x ≠ 13 → x ≠ 15 → x ≠ 31 → R' x = R x) :
     BWBlock C Mt brkv chunks bins nb start R' where
-  bw := ⟨B.bw.frame.of_regs (h 2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide))
-      (h 9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide))
-      (h 18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide))
-      (h 19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)),
-    B.bw.heap, B.bw.nbok, B.bw.nb31, B.bw.b1,
-    by rw [h 14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.bw.a4,
-    by rw [h 16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.bw.a6,
-    by rw [h 29 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.bw.t4,
-    by rw [h 8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.bw.s0⟩
-  a7 := by rw [h 17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.a7
-  a0 := by rw [h 10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.a0
-  t5 := by rw [h 30 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.t5
-  t3 := by rw [h 28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; exact B.t3
+  bw := ⟨B.bw.frame.of_regs (keep6 h 2) (keep6 h 9) (keep6 h 18) (keep6 h 19),
+    B.bw.heap, B.bw.nbok, B.bw.nb31, B.bw.b1, by rw [keep6 h 14]; exact B.bw.a4,
+    by rw [keep6 h 16]; exact B.bw.a6, by rw [keep6 h 29]; exact B.bw.t4, by rw [keep6 h 8]; exact B.bw.s0⟩
+  a7 := by rw [keep6 h 17]; exact B.a7
+  a0 := by rw [keep6 h 10]; exact B.a0
+  t5 := by rw [keep6 h 30]; exact B.t5
+  t3 := by rw [keep6 h 28]; exact B.t3
   sf := B.sf
   s1 := B.s1
   sn := B.sn
@@ -81,8 +76,8 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
       (fun _ _ _ _ _ => rfl) h13
     intro R' hsm hkp h13'
     have hemp : bins k = [] := scanFrom_empty HH B.sf B.s1 hsk hkn hsm
-    have hk31 : (R' 31).toNat = k := by rw [hkp 31 (by decide) (by decide) (by decide) (by decide)]; exact h31
-    have hk6 : (R' 6).toNat = binAt k := by rw [hkp 6 (by decide) (by decide) (by decide) (by decide)]; exact h6
+    have hk31 : (R' 31).toNat = k := by rw [keep4 hkp 31]; exact h31
+    have hk6 : (R' 6).toNat = binAt k := by rw [keep4 hkp 6]; exact h6
     have hgk := binAt_geo k hkn
     rgn_step O.live at 0x80004d08
     sx_norm
@@ -99,9 +94,7 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
       have hz' := congrArg BitVec.toNat hz
       rw [show (3#64 : BitVec 64) = (3#64 : BitVec 64) from rfl, and3_toNat, hk1] at hz'
       simp at hz'
-      refine hblk _ (hB' _ fun x h6 h11 h12 h13 h15 h31 => by
-        simp only [upd_apply, h6, h15, h31, ite_false]) (by
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [hk1]; omega) ?_
+      refine hblk _ (hB' _ (by carry_close)) (by carry_close [hk1]) ?_
       intro j hj1 hj2
       by_cases hjk : j = k
       · subst hjk; exact hemp
@@ -123,13 +116,8 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
       rgn_ld [hbk]
       rgn_run O.live at 0x800049c8
       refine ih (k + 1) _ (by unfold bend; omega) (by omega) (by unfold bend; omega)
-        (hB' _ fun x h6 h11 h12 h13 h15 h31 => by
-          simp only [upd_apply, h6, h13, h15, h31, ite_false]) ?_ ?_ ?_ ?_ <;>
-        try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rgn_arith
-      · exact hk1
-      · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt]
-        rw [getLast_cons_rev] at hl; cases hl; rfl
+        (hB' _ (by carry_close)) (by upd_norm; rgn_arith) (by carry_close [hk1]) ?_ ?_
+      · rw [getLast_cons_rev] at hl; cases hl; upd_norm [toNat_ofNat_lt hbklt]
       · intro j hj1 hj2
         by_cases hjk : j = k
         · subst hjk; exact hemp
@@ -193,8 +181,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
     rw [← upd_self_eq W.a6]
     rgn_run O.live at 0x80004e50
     refine (step% st 0x80004e50) O.live (fun hc => absurd ?_ hc) (fun _ => ?_)
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      apply BitVec.eq_of_toNat_eq
+    · upd_norm; apply BitVec.eq_of_toNat_eq
       rw [and3_toNat, h17]; simp
     rgn_run O.live at 0x80004e58
     rgn_ld [hbb]
@@ -220,16 +207,8 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
         exact writeLog_out _ _ _ (by simp only [OutL, and_true]; omega)
     refine hnext _ _ (((R 10 ^^^ 18446744073709551615#64) &&& BitVec.ofNat 64 bb).toNat)
       ⟨⟨(W.frame.store (by omega)).of_regs ?_ ?_ ?_ ?_, hMH, W.nbok, W.nb31, W.b1,
-      ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, by unfold numBins at hsn; omega⟩ <;>
-      try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact W.a4
-    · exact W.t4
-    · exact W.s0
-    · exact h10
-    · exact h31
-    · exact h28
-    · exact read64_store_hit _ _ _
-    · exact hlo
+      ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, read64_store_hit _ _ _, hlo, by unfold numBins at hsn; omega⟩ <;>
+      upd_norm [W.a4, W.t4, W.s0, h10, h31, h28]
   | succ n ih =>
     intro i R hn hi1 hi2 W h17 h30 h10 h31 h28 hemp
     have HH := W.heap.heap.heap.heap
@@ -247,8 +226,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
     rgn_run O.live at 0x80004e50
     refine (step% st 0x80004e50) O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
     rotate_left
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      intro he; apply hi4
+    · upd_norm; intro he; apply hi4
       have := congrArg BitVec.toNat he
       rw [and3_toNat, h17] at this
       simpa using this
@@ -274,12 +252,7 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
       rgn_ld [hbb]
       rgn_run O.live at 0x80004e64
       refine hnext _ _ bb ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hbb, hlo,
-        by unfold numBins at hsn; omega⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · exact ha6.symm
-      · exact h10
-      · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-      · exact h31
-      · exact h28
+        by unfold numBins at hsn; omega⟩ <;> upd_norm [ha6, h10, h31, h28, toNat_ofNat_lt (by omega : bb < 2 ^ 64)]
     ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at heq
       have hfb : f = binAt (i - 1) := by
@@ -294,17 +267,10 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
           exact (binList_iff_ring.1 (HH.bins_list (i - 1) (by omega) hi1n)).2 z
             (by rw [h]; exact List.mem_cons_self) hfb
       refine ih (i - 1) _ (by omega) (by omega) (by omega)
-        (W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_) ?_ ?_ ?_ ?_ ?_ ?_ <;>
-        try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · exact h17'
-      · exact hE30
-      · exact h10
-      · unfold bend; exact h31
-      · exact h28
-      · intro j hj1 hj2
-        by_cases hj : j = i - 1
-        · subst hj; exact hemp1
-        · exact hemp j (by omega) hj2
+        (W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_) (by upd_norm; exact h17') ?_ ?_ ?_ ?_ (fun j hj1 hj2 => by
+          by_cases hj : j = i - 1
+          · subst hj; exact hemp1
+          · exact hemp j (by omega) hj2) <;> upd_norm [hE30, h10, h31, h28]
 
 theorem bit_test {m x : BitVec 64} {c : Nat} (hm : m.toNat = 2 ^ c) :
     m &&& x = 0#64 ↔ x.toNat / 2 ^ c % 2 = 0 := by
@@ -375,20 +341,15 @@ theorem bw_next_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : Li
       have hct' : c + 1 < t := by
         refine Nat.lt_of_le_of_ne hct ?_
         intro he; rw [he] at hc1; omega
-      exact ih (c + 1) _ (by omega) (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h31')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h28)
+      refine ih (c + 1) _ (by omega) (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) ?_ ?_ ?_ ?_ <;>
+        upd_norm [h10', h31', h15, h28]
     ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
       have hc1 : bb / 2 ^ (c + 1) % 2 = 1 := by
         have := mt hbt.2 hnz; omega
       rgn_step O.live at 0x800049a8
-      exact hblk _ (c + 1) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm; exact h31')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h28)
+      refine hblk _ (c + 1) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
+        (by upd_norm; sx_norm; exact h31') ?_ ?_ <;> upd_norm [h10', h28]
 
 theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb b bb : Nat}
@@ -424,21 +385,15 @@ theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
       have hc1 : bb / 2 ^ (b + 1) % 2 = 1 := by have := mt hbt.2 hnz; omega
       rgn_step O.live at 0x800049a8
-      exact hblk _ (b + 1) (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm; exact N.t6)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t3)
+      refine hblk _ (b + 1) (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
+        (by upd_norm; sx_norm; exact N.t6) ?_ ?_ <;> upd_norm [h10', N.t3]
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at hz
       have hc1 : bb / 2 ^ (b + 1) % 2 = 0 := hbt.1 hz
       have hbt' : b + 1 < t := by
         refine Nat.lt_of_le_of_ne ht1 ?_
         intro he; rw [← he] at ht3; omega
-      exact bw_next_loop O ht3 ht2 hblk _ (b + 1) _ rfl (by omega) hbt'
-        (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t6)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a5)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t3)
+      refine bw_next_loop O ht3 ht2 hblk _ (b + 1) _ rfl (by omega) hbt'
+        (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) ?_ ?_ ?_ ?_ <;> upd_norm [h10', N.t6, N.a5, N.t3]
 
 theorem bw_block {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
@@ -470,17 +425,9 @@ theorem bw_block {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
       18446744073709551600#64)).toNat = binAt start := by rgn_arith
   refine (step% st 0x800049c4) O.live ?_
   refine bw_bins O hblk _ start _ rfl (Nat.le_refl _) (by unfold bend; omega)
-    ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hsf, hs1, hsn⟩ ?_ ?_ ?_
-    (fun j h1 h2 => absurd h2 (by omega)) <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact h17
-  · exact h10
-  · exact hT
-  · exact h28
-  · exact hT
-  · simp; exact h17
-  · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt]
-    rw [getLast_cons_rev] at hl; cases hl; rfl
+    ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hsf, hs1, hsn⟩ ?_ (by upd_norm; simp; exact h17)
+    (by rw [getLast_cons_rev] at hl; cases hl; upd_norm [toNat_ofNat_lt hbklt]) (fun j h1 h2 => absurd h2 (by omega)) <;>
+    upd_norm [h17, h10, hT, h28]
 
 theorem bw_scan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
@@ -558,15 +505,11 @@ theorem bw_find_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : Li
       have hct' : c + 1 < t := by
         refine Nat.lt_of_le_of_ne (by omega) ?_
         intro he; rw [he] at hc1; omega
-      exact ih (c + 1) _ (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11) (by omega)
+      refine ih (c + 1) _ (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) ?_ ?_ ?_ (by omega) <;>
+        upd_norm [h10', h17', h11]
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
       exact bw_found O htop (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-            rw [h10', show 4 * (c + 1) / 4 = c + 1 by omega])
+        (by carry_close [h17']) (by carry_close [h10', show 4 * (c + 1) / 4 = c + 1 by omega])
         (.inl (by omega)) (by omega) (by unfold numBins; omega)
 
 theorem binIndex_ge4 {nb : Nat} (h : 32 ≤ nb) : 4 ≤ binIndex nb := by
@@ -608,9 +551,8 @@ theorem bw_find {C : MCtx} (O : MOK C) :
   rw [h11] at hbt
   refine (step% st 0x80004978) O.live ?_
   refine (step% st 0x8000497c) O.live (fun hnz => ?_) (fun hz => ?_)
-  · exact bw_found O (bwTop O) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h10) hsf (by omega) hidx
+  · exact bw_found O (bwTop O) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by upd_norm [h17])
+      (by upd_norm [h10]) hsf (by omega) hidx
   · simp only [upd_apply, ite_true, ne_eq, Decidable.not_not] at hz
     have hc0 := hbt.1 hz
     have hemp : bins idx = [] := by
@@ -651,9 +593,7 @@ theorem bw_find {C : MCtx} (O : MOK C) :
           (Nat.pow_le_pow_right (by omega) (by omega)))
         omega
       exact bw_found O (bwTop O) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-            rw [h10', show 4 * (idx / 4 + 1) / 4 = idx / 4 + 1 by omega])
+        (by carry_close [h17']) (by carry_close [h10', show 4 * (idx / 4 + 1) / 4 = idx / 4 + 1 by omega])
         (.inl (by omega)) (by omega) (by unfold numBins; omega)
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq,
         Decidable.not_not] at hz
@@ -662,11 +602,9 @@ theorem bw_find {C : MCtx} (O : MOK C) :
       have hlt : idx / 4 + 1 < t := by
         refine Nat.lt_of_le_of_ne ht1 ?_
         intro he; rw [← he] at ht3; omega
-      exact bw_find_loop O (bwTop O) ht3 ht2 _ (idx / 4 + 1) _ rfl hlt
+      refine bw_find_loop O (bwTop O) ht3 ht2 _ (idx / 4 + 1) _ rfl hlt
         (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11) (by omega)
+        ?_ ?_ ?_ (by omega) <;> upd_norm [h10', h17', h11]
 
 theorem malloc_all {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}

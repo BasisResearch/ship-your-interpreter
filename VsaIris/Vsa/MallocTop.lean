@@ -1,6 +1,7 @@
 import VsaIris.Vsa.MallocLR
 import VsaIris.Vsa.HeapSplit
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 
@@ -78,8 +79,7 @@ theorem top_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       by omega, Hp.live.mono fun c hc _ => List.mem_append_left _ hc⟩, ?_, ?_⟩)
   case F =>
     refine MFrame.of_regs ((((F.store (by omega)).store (by omega)).store
-      (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+      (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;> reg_close []
   case A =>
     refine (by wl_win <;> first
       | exact .inl (by unfold SplitW; omega)
@@ -121,14 +121,7 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   ·
     rw [htsizev, ha4] at hc
     refine hext (by omega) _ (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_⟩ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact ha4
-    · exact ha7
-    · exact ha6
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-    · exact htsizev
-    · exact ha4
-    · exact h8
+      reg_close [ha4, ha7, ha6, htsizev, h8]
   · rw [htsizev, ha4] at hc
     have hsub : ((BitVec.ofNat 64 (brkv - C.top0 + 1) &&& 18446744073709551612#64) - R 14).toInt
         = ((brkv - C.top0 - nb : Nat) : Int) := sub_toInt htsizev ha4 (by omega) (by omega)
@@ -143,21 +136,10 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
           = brkv - C.top0 - nb := by
         rw [BitVec.toNat_sub, htsizev, ha4]; omega
       refine top_split O (F.of_regs ?_ ?_ ?_ ?_) Hp ⟨?_, ?_, ?_, ?_⟩ hnb (by omega) <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-      · exact ha4
-      · exact hdt
-      · exact ha6
+        reg_close [ha4, hdt, ha6]
     ·
       refine hext (by omega) _ (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_⟩ ?_ <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · exact ha4
-      · exact ha7
-      · exact ha6
-      · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-      · exact htsizev
-      · exact ha4
-      · exact h8
+        reg_close [ha4, ha7, ha6, htsizev, h8]
 
 theorem sraiw2_toNat {x : BitVec 64} {i : Nat} (hx : x.toNat = i) (hi : i < 2 ^ 31) :
     (BitVec.signExtend 64
@@ -235,13 +217,8 @@ theorem bb_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   rgn_step O.live at 0x80004968
   rgn_ld [hbb]
   refine bb_entry O (F.upd (by decide)) Hp ⟨?_, ?_, ?_⟩ ?_ hidx hbb ?_ ?_ htop (hblocks bb hbb) <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact ha4
-  · exact ha7
-  · exact ha6
-  · exact h8
-  · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hbb)]
-  · exact h29
+    reg_close [ha4, ha7, ha6, h8, h29,
+      by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hbb)]]
 
 theorem bb_top {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}

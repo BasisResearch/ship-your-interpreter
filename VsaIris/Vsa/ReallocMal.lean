@@ -1,5 +1,6 @@
 import VsaIris.Vsa.ReallocMove
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -100,8 +101,8 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     rgn_run O.live at 0x800069c4
     rw [hs2]
     refine memmove_fwd AM O.live (by rgn_arith) (by rgn_arith) (by rgn_arith)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide) fun R' hK => ?_
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      (by carry_close) fun R' hK => ?_
+    carry_norm
     have hslot : read64 (copyW (writeLog Mt [(C.s.toNat - 64, 8, R 10)]) d s ((S - 8) / 8))
         (C.s.toNat - 64) = some (R 10).toNat := by
       rw [read64_keep (m := writeLog Mt [(C.s.toNat - 64, 8, R 10)]) fun k hk => copyW_out (by omega),
@@ -110,10 +111,8 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     rgn_run O.live at 0x800053c0
     rgn_ld [hslot]
     refine hk _ _ hK.sp hK.s0 hK.s1 ?_ hK.s2 hK.s3 fun a ha => copyW_agree (fun a ha => ?_) (by omega) a ha
-    · simp only [upd_apply, ite_true]
-      rw [h13]; exact BitVec.eq_of_toNat_eq (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R 10).isLt])
-    · have ho : OutL [(C.s.toNat - 64, 8, R 10)] a := ⟨by simp only; omega, trivial⟩
-      rw [writeLog_out _ _ _ ho]
+    · carry_close [h13, BitVec.ofNat_toNat, BitVec.setWidth_eq]
+    · exact writeLog_out _ _ _ ⟨by simp only; omega, trivial⟩
   ·
     have hLs : S - 8 = 24 ∨ S - 8 = 40 ∨ S - 8 = 56 ∨ S - 8 = 72 := by omega
     exact mal_inline A O.live hLs (by rgn_arith) (by rgn_arith) (by rgn_arith) (by rgn_arith)
@@ -172,11 +171,7 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
       (vsaFoot_cons_sub a (vsaFoot_perm mem_swap ha.1))))).symm
   refine rcall_free O (link := 0x800053d0#64) (by decide) (fun a ha => vsaFoot_cons_sub a ha) ?_ ?_ ?_ ?_
     H2 hst.swap (fun a ha => by rw [← hM2]; exact writeLog_present _ _ _ (hpres a (vsaFoot_cons_sub a ha)))
-    hdisjD (fun R' Mt' g1 g2 g8 g9 g18 g19 hfh hfp hfr => ?_) <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hsp
-  · first | exact h9 | (rw [h9]; rfl)
-  · rgn_arith
+    hdisjD (fun R' Mt' g1 g2 g8 g9 g18 g19 hfh hfp hfr => ?_) <;> try carry_close [hsp, h9]
   obtain ⟨top', brkv', chunks', bins', H3, htop'⟩ := hfh
   have hkeep : ∀ a, ((C.s.toNat - 64 ≤ a ∧ a < C.s.toNat) ∨ ¬ vsaFoot ((p', C.n.toNat) :: C.H) a ∧
       vsaFoot C.H a) → Mt'[a]? = M2[a]? := by
@@ -206,11 +201,8 @@ theorem mal_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mc :
     unfold Starts at *
     simp only [List.map_cons, List.nodup_cons, List.mem_cons, not_or] at *
     exact ⟨hst.1.2, hst.2.2⟩
-  refine repi3 O (F'.of_regs ?_ ?_ ?_) fun R'' hR h10 => O.ok R'' Mt' ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  have hp : (R'' 10).toNat = p' := by
-    rw [h10]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R 13).isLt, h13]
+  refine repi3 O (F'.of_regs ?_ ?_ ?_) fun R'' hR h10 => O.ok R'' Mt' ?_ <;> try carry_close
+  have hp : (R'' 10).toNat = p' := by rw [h10]; carry_close [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R 13).isLt, h13]
   refine ⟨hR, ?_, ?_, ⟨top', brkv', chunks', bins', ?_, by omega⟩, fun a ha => ?_, fun k hk => ?_⟩ <;>
     try rw [hp]
   · exact H3.fresh_of_block hst'
@@ -304,12 +296,7 @@ theorem mal_merge {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
           show X + (S + ns) + 8 = X + S + ns + 8 by omega]; exact hnr⟩,
       fun w _ hw _ => (writeLog_out _ [_] _ ⟨by simp only; omega, trivial⟩).symm, M.pres, M.disj,
       M.disjD, by rw [M.addr]; exact M.data, by have := M.grow; omega, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [M.s0]
-  · exact M.s1
-  · exact h12
-  · rw [BitVec.toNat_add, h14, hns, Nat.mod_eq_of_lt (by omega)]
-  · exact h15
+    carry_close [M.s0, M.s1, h12, BitVec.toNat_add, h14, hns, h15]
 
 theorem mal_null {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     (F : RFrame C R Mt) (h10 : R 10 = 0#64)
@@ -406,8 +393,7 @@ theorem mal_ok {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : M
       sS := fun k hk => O.own _ (.inl (rS.byte k hk)),
       dS := fun k hk => O.own _ (.inl (rD.byte k (by omega))) }
   refine mal_copy O A (by omega) Xk_sz16 (by omega) (by omega) (by rgn_arith) (by rgn_arith) (by rgn_arith)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hsp)
+    (by carry_close) (by carry_close [hsp])
     fun R' Mc g2 g8 g9 g13 g18 g19 hMc => ?_
   have hL8 : 8 * ((S - 8) / 8) = S - 8 := by omega
   have hMcF : ∀ a, vsaFoot C.H a → Mc[a]? = (copyW Mt p' (X + 16) ((S - 8) / 8))[a]? := fun a ha =>
@@ -534,13 +520,9 @@ theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     Hp.heap (fun a ha => Hp.pres a (vsaFoot_cons_sub a ha)) D.heap.disjD
     (fun R' Mt' g1 g2 g8 g9 g18 g19 hfr hal' hheap' hpres'' hframe' => ?_)
     (fun R' Mt' g1 g2 g8 g9 g18 g19 h10 hheap' hpres'' hframe' hst => ?_) <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hsp
-  · first | exact D.s1 | (rw [D.s1]; rfl)
-  · exact D.a1
-  ·
-    obtain ⟨top', brkv', chunks', bins', H', htop', hkeep⟩ := hheap'
-    simp only [upd_apply, Nat.reduceEqDiff, ite_false] at g2 g8 g9 g18 g19
+    try carry_close [hsp, D.s1, D.a1]
+  · obtain ⟨top', brkv', chunks', bins', H', htop', hkeep⟩ := hheap'
+    carry_norm at g2 g8 g9 g18 g19
     have F' := hF R' Mt' g2 g18 g19 hframe'
     have hkX : (⟨X, S, true⟩ : Chunk) ∈ chunks' := by
       have := hkeep (B.p, B.nOld) List.mem_cons_self hdr0 hX8
@@ -556,8 +538,7 @@ theorem realloc_mal {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
         read64_store_hit, D.a4]
     · rw [g8, D.s0]
     · rw [g9, D.s1]
-  ·
-    simp only [upd_apply, Nat.reduceEqDiff, ite_false] at g2 g8 g9 g18 g19
+  · carry_norm at g2 g8 g9 g18 g19
     exact mal_null O (hF R' Mt' g2 g18 g19 hframe') h10 hheap' (hpres' Mt' hframe' hpres'')
       (hdata' Mt' hframe') hst
 

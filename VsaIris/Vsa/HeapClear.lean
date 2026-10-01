@@ -26,33 +26,20 @@ theorem BlockHeapAt.transport_read_bb {m m' : Mem} {H : List (Nat × Nat)} {top 
   have hH := h.heap
   have hlo : heapStart ≤ top := hH.walk.le
   have hcb := hH.walk.chunk_bounds
-  have G : ∀ a lo hi, InRange lo hi a → (lo = 0x8001ad10 ∧ hi = 0x8001b520 ∨
-      lo = 0x8001b960 ∧ hi = 0x8001b970 ∨ lo = 0x8001b990 ∧ hi = 0x8001b9b0 ∨
-      lo = 0x8001ba18 ∧ hi = 0x8001ba68) → allocGlobal a := by
-    intro a lo hi hr hlh
-    unfold allocGlobal
-    rcases hlh with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-    · exact .inl hr
-    · exact .inr (.inr (.inl hr))
-    · exact .inr (.inr (.inr (.inl hr)))
-    · exact .inr (.inr (.inr (.inr (.inr hr))))
   have gAv : ∀ a, 0x8001ad10 ≤ a → a + 8 ≤ 0x8001b520 →
       (a + 8 ≤ binblocksAddr ∨ binblocksAddr + 8 ≤ a) → read64 m a = read64 m' a :=
-    fun a h1 h2 h3 => rd hag (gr fun k hk =>
-      G _ _ _ ⟨by omega, by omega⟩ (.inl ⟨rfl, rfl⟩)) (.inl (by omega)) h3
+    fun a h1 h2 h3 => rd hag (gr fun k hk => .inl ⟨by omega, by omega⟩) (.inl (by omega)) h3
   have gSbrk : read64 m sbrkBaseAddr = read64 m' sbrkBaseAddr :=
-    rd hag (gr fun k hk =>
-      G _ _ _ ⟨by unfold sbrkBaseAddr; omega, by unfold sbrkBaseAddr; omega⟩
-        (.inr (.inl ⟨rfl, rfl⟩))) (.inr (.inl (by unfold sbrkBaseAddr; omega)))
+    rd hag (gr fun k hk => .inr (.inr (.inl ⟨by unfold sbrkBaseAddr; omega,
+      by unfold sbrkBaseAddr; omega⟩))) (.inr (.inl (by unfold sbrkBaseAddr; omega)))
       (by unfold sbrkBaseAddr binblocksAddr avAddr; omega)
   have gBrk : ∀ a, 0x8001b990 ≤ a → a + 8 ≤ 0x8001b9b0 → read64 m a = read64 m' a :=
-    fun a h1 h2 => rd hag (gr fun k hk =>
-      G _ _ _ ⟨by omega, by omega⟩ (.inr (.inr (.inl ⟨rfl, rfl⟩)))) (.inr (.inl (by omega)))
+    fun a h1 h2 => rd hag (gr fun k hk => .inr (.inr (.inr (.inl ⟨by omega, by omega⟩))))
+      (.inr (.inl (by omega)))
       (by unfold binblocksAddr avAddr; omega)
   have gMi : read64 m mallinfoAddr = read64 m' mallinfoAddr :=
-    rd hag (gr fun k hk =>
-      G _ _ _ ⟨by unfold mallinfoAddr; omega, by unfold mallinfoAddr; omega⟩
-        (.inr (.inr (.inr ⟨rfl, rfl⟩)))) (.inr (.inr (by unfold mallinfoAddr; omega)))
+    rd hag (gr fun k hk => .inr (.inr (.inr (.inr (.inr ⟨by unfold mallinfoAddr; omega,
+      by unfold mallinfoAddr; omega⟩))))) (.inr (.inr (by unfold mallinfoAddr; omega)))
       (by unfold mallinfoAddr binblocksAddr avAddr; omega)
   have gTop : read64 m topAddr = read64 m' topAddr :=
     gAv _ (by unfold topAddr avAddr; omega) (by unfold topAddr avAddr; omega)

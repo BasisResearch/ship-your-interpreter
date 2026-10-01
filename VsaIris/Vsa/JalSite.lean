@@ -36,6 +36,11 @@ structure Cert (S : JalSite) : Prop where
   hi : S.pc + 4 ≤ tohostAddr
   align : S.pc % 4 = 0
 
+macro "jal_cert" : term => `(
+  { word := (by decide), notrvc := (by decide), dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW σ h1 h2 h3,
+    tgt := (by decide), tgt_align := (by decide), lo := (by decide), hi := (by decide),
+    align := (by decide) })
+
 theorem pc_toNat {S : JalSite} (hS : S.Cert) : (BitVec.ofNat 64 S.pc).toNat = S.pc := by
   have := hS.hi
   simp only [BitVec.toNat_ofNat]

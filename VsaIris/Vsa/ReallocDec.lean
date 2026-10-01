@@ -73,15 +73,7 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     · exact hX
     · exact hSv
     · exact h15
-  ·
-    refine hk _ X S hdr0 ⟨F.of_regs ?_ ?_ ?_, Hp, hnb, hnb31, hc, hca, hdr, hsz, hlow, by omega,
-      ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · rw [h8, hca]
-    · exact h9
-    · exact h11
-    · exact hX
-    · exact hSv
-    · exact h15
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdrlt]
+  · refine hk _ X S hdr0 ⟨F.of_regs ?_ ?_ ?_, Hp, hnb, hnb31, hc, hca, hdr, hsz, hlow, by omega,
+      ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ <;> carry_close [h8, hca, h9, h11, hX, hSv, h15]
 
 end VsaIris.VsaHeap

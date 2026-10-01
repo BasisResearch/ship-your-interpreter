@@ -1,5 +1,6 @@
 import VsaIris.Vsa.FreeCtx
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -111,17 +112,8 @@ theorem free_pro {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {q n brkv : Nat}
   subst hcu
   refine hk _ Mt1 cx csz hdr0 nh ⟨⟨?_, hS0, hRA, ?_, ?_, ?_⟩, Hp1, ⟨hc, hca, hdr0r, hdr0s, hdr0l, nhr⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [hs2]
-  · exact E.s1
-  · exact E.s2
-  · exact E.s3
-  · exact E.a0
-  · exact hq
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hs2, E.s1, E.s2, E.s3, E.a0, hq, hx, hsz, hnx]
   · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-  · exact hx
-  · exact hsz
-  · exact hnx
   · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hdr0r)]
   · rw [BitVec.toNat_and, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hdr0r),
       show (1#64 : BitVec 64).toNat = 2 ^ 1 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod]
@@ -147,11 +139,6 @@ theorem free_epi {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} (F : 
   all_goals rgn_ld [F.s0, F.ra]
   all_goals simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq]
   · exact O.ral
-  refine O.ok _ Mt ⟨⟨?_, ?_, ?_, ?_, ?_, ?_⟩, hheap, hpres, hframe⟩ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [F.sp, BitVec.add_assoc]; exact BitVec.add_zero _
-  · exact F.s1
-  · exact F.s2
-  · exact F.s3
+  refine O.ok _ Mt ⟨⟨?_, ?_, ?_, ?_, ?_, ?_⟩, hheap, hpres, hframe⟩ <;> carry_close [F.sp, F.s1, F.s2, F.s3]
 
 end VsaIris.VsaHeap

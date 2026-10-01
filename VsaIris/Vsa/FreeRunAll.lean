@@ -109,15 +109,8 @@ theorem free_entry {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {n brkv : Nat}
   rw [show freeEntryBV = 0x8000479c#64 from rfl]
   rgn_run O.live at 0x80007350
   refine free_body O ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ Hp <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hra
-  · exact hsp
-  · decide
-  · rw [ha0]
-  · exact h8
-  · exact h9
-  · exact h18
-  · exact h19
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hra, hsp, ha0, h8, h9, h18, h19]
+  decide
 
 def fLocCtx (live : Nat → Prop) (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (r s : BitVec 64)
     (saved : List (Nat × BitVec 64)) (rv0 : Nat → BitVec 64) (Mt0 : Mem) (top0 : Nat) : MCtx :=

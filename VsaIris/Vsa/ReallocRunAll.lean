@@ -22,16 +22,7 @@ theorem realloc_entry {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} 
   refine (step% st 0x8000527c) O.live ((step% st 0x80005280) O.live ((step% st 0x80005284) O.live ((step% st 0x80005288) O.live
     ((step% st 0x8000528c) O.live ?_))))
   refine realloc_body O ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ Hp <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hra
-  · exact hsp
-  · decide
-  · sx_norm; exact ha0
-  · sx_norm; exact ha1
-  · exact h8
-  · exact h9
-  · exact h18
-  · exact h19
+    carry_close [hra, hsp, ha0, ha1, h8, h9, h18, h19, sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend]
 
 abbrev rB (p : BitVec 64) (nOld : Nat) (old : Nat → BitVec 8) : RB := ⟨p.toNat, nOld, old⟩
 

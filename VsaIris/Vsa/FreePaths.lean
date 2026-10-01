@@ -62,16 +62,8 @@ theorem free_nt {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n b
     fun e he heq => hst.1 (List.mem_map.2 ⟨e, he, by rw [heq, K.addr]⟩), hst.2, hda, K.hdr, K.hsz,
     K.hlow, hda ▸ hnnr, hnnf, pres_log _ Hp.pres, Hp.disj, frame_log (by log_in) Hp.frame,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact D.s0
-  · exact D.a7
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, D.s0, D.a7, ha2, ha3, hdhs, D.a4, D.a5, D.a0, D.t1]
   · rw [D.a1, ← K.addr]
-  · exact ha2
-  · rw [ha3, hdhs]
-  · exact D.a4
-  · exact D.a5
-  · exact D.a0
-  · exact D.t1
   · rw [ldv_at hnnr _ (by rgn_arith), BitVec.toNat_and, BitVec.toNat_ofNat,
       Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hnnr),
       show (1#64 : BitVec 64).toNat = 2 ^ 1 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod]
@@ -161,10 +153,7 @@ theorem free_b1a {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {
     · rw [← hMp, writeLog_nest]; exact frame_log (L := [_, _]) (by log_in) N.frameM
   refine free_bin2 O (hMp ▸ ((N.frame.store (a := x + 8) (w := 8) (by omega)).store (a := x + sz)
     (w := 8) (by omega)).of_regs ?_ ?_ ?_ ?_) B ?_ ?_ ?_ <;>
-    (try simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-  · exact N.a7
-  · exact N.a4
-  · exact N.a5
+    simp only [upd_apply, Nat.reduceEqDiff, ite_false, N.a7, N.a4, N.a5]
 
 /-- The `fd`/`bk` link words of a bin-ring node, from its foot fact. -/
 theorem linkRgn_FreePaths {H : List (Nat × Nat)} {z : Nat}
@@ -1042,16 +1031,13 @@ theorem free_b2nl {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
       by simp only [writeLog_nest, List.cons_append, List.nil_append]
          exact frame_log (by log_in) B.frameM⟩,
       F2.of_regs ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-      (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+      (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, B.a7, ha4, B.a0])
     · rw [rd_miss (by omega), read64_store_hit] at hr
       cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
     · rw [show p + (psz + sz) + 8 = p + psz + sz + 8 by omega, rd_miss (by omega), rd_miss (by omega),
         hM1, read64_store_hit, B.wv]
-    · exact B.a7
-    · exact ha4
     · rw [BitVec.toNat_add, ha5, ha3]; unfold heapEnd at *; omega
     · rw [ha2]; omega
-    · exact B.a0
   · have hdin : d.inuse = true := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hnz
       have hh : hnn % 2 ≠ 0 := fun h0 => hnz (BitVec.eq_of_toNat_eq (by rw [B.a6, h0]; rfl))
@@ -1065,13 +1051,9 @@ theorem free_b2nl {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
       have h2' : (sz + psz ||| 1) % 2 = 1 := Nat.or_mod_two_eq_one.2 (.inr rfl)
       have := Nat.div_add_mod (sz + psz ||| 1) 2
       simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-    exact free_bin O ((F2.store (by omega)).store (by omega) |>.of_regs
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]))
-      (b2_fbin B hdin hv1 ha1 hv3 (by rw [ha5]; omega))
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact B.a7)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact ha4)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [ha5]; omega)
+    exact free_bin O ((F2.store (by omega)).store (by omega) |>.of_regs rfl rfl rfl rfl)
+      (b2_fbin B hdin hv1 ha1 hv3 (by rw [ha5]; omega)) B.a7 ha4
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, ha5]; omega)
 
 theorem FB2.lr_links {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
     {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64} {p psz : Nat}

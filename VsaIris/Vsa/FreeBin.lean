@@ -272,12 +272,6 @@ theorem fl_link {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mb M2 : Mem}
     (fun w h1 h2 => (hW w (by omega)).trans (hMb w (by unfold binblocksAddr avAddr; omega)))
     (pres_log _ (pres_log _ (pres_log _ (pres_log _ hMbp))))
     (by simp only [writeLog_nest, List.cons_append, List.nil_append]; exact frame_log (by log_in) hMbf)
-  refine O.ok _ _ ⟨⟨?_, ?_, ?_, ?_, ?_, ?_⟩, D.heap, D.pres, D.frame⟩ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [F.sp]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add]
-    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
-  · exact F.s1
-  · exact F.s2
-  · exact F.s3
+  refine O.ok _ _ ⟨⟨?_, ?_, ?_, ?_, ?_, ?_⟩, D.heap, D.pres, D.frame⟩ <;> carry_close [F.sp, F.s1, F.s2, F.s3]
 
 end VsaIris.VsaHeap

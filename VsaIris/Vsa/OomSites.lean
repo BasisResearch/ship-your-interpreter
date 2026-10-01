@@ -33,15 +33,7 @@ def oom80002a38Fw : JalSite where
   imm := 0x2810#21
   tgt := 0x80005260#64
 
-theorem oom80002a38Fw_cert : oom80002a38Fw.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x011020ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80002a38Fw_cert : oom80002a38Fw.Cert := jal_cert
 
 def oom80002a38Ex : JalSite where
   pc := 0x80002a58
@@ -53,15 +45,7 @@ def oom80002a38Ex : JalSite where
   imm := 0x1d0c#21
   tgt := 0x80004764#64
 
-theorem oom80002a38Ex_cert : oom80002a38Ex.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x50d010ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80002a38Ex_cert : oom80002a38Ex.Cert := jal_cert
 
 def oom80002a38 : OomSite where
   head := 0x80002a38
@@ -163,15 +147,7 @@ def oom80002bd0Fw : JalSite where
   imm := 0x2678#21
   tgt := 0x80005260#64
 
-theorem oom80002bd0Fw_cert : oom80002bd0Fw.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x678020ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80002bd0Fw_cert : oom80002bd0Fw.Cert := jal_cert
 
 def oom80002bd0Ex : JalSite where
   pc := 0x80002bf0
@@ -183,15 +159,7 @@ def oom80002bd0Ex : JalSite where
   imm := 0x1b74#21
   tgt := 0x80004764#64
 
-theorem oom80002bd0Ex_cert : oom80002bd0Ex.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x375010ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80002bd0Ex_cert : oom80002bd0Ex.Cert := jal_cert
 
 def oom80002bd0 : OomSite where
   head := 0x80002bd0
@@ -293,15 +261,7 @@ def oom80003140Fw : JalSite where
   imm := 0x2108#21
   tgt := 0x80005260#64
 
-theorem oom80003140Fw_cert : oom80003140Fw.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x108020ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80003140Fw_cert : oom80003140Fw.Cert := jal_cert
 
 def oom80003140Ex : JalSite where
   pc := 0x80003160
@@ -313,15 +273,7 @@ def oom80003140Ex : JalSite where
   imm := 0x1604#21
   tgt := 0x80004764#64
 
-theorem oom80003140Ex_cert : oom80003140Ex.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x604010ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80003140Ex_cert : oom80003140Ex.Cert := jal_cert
 
 def oom80003140 : OomSite where
   head := 0x80003140
@@ -423,15 +375,7 @@ def oom80003e28Fw : JalSite where
   imm := 0x1418#21
   tgt := 0x80005260#64
 
-theorem oom80003e28Fw_cert : oom80003e28Fw.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x418010ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80003e28Fw_cert : oom80003e28Fw.Cert := jal_cert
 
 def oom80003e28Ex : JalSite where
   pc := 0x80003e50
@@ -443,15 +387,7 @@ def oom80003e28Ex : JalSite where
   imm := 0x914#21
   tgt := 0x80004764#64
 
-theorem oom80003e28Ex_cert : oom80003e28Ex.Cert where
-  word := by decide
-  notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x115000ef#32) σ h1 h2 h3
-  tgt := by decide
-  tgt_align := by decide
-  lo := by decide
-  hi := by decide
-  align := by decide
+theorem oom80003e28Ex_cert : oom80003e28Ex.Cert := jal_cert
 
 def oom80003e28 : OomSite where
   head := 0x80003e28

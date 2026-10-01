@@ -1,6 +1,7 @@
 import VsaIris.Vsa.MallocChain
 import VsaIris.Vsa.HeapClear
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -214,9 +215,8 @@ theorem bw_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
     hfree hle hpred hsucc hdr hOr h13 (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsuccl])))
   case F =>
     refine MFrame.of_regs ((((W.frame.store (by omega)).store (by omega)).store (by omega)).store
-      (by omega)) ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  sx_addr
+      (by omega)) ?_ ?_ ?_ ?_ <;> carry_close
+  carry_close [hs2n]
 
 theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb k x sz pred succ : Nat} {pre post : List Nat}
@@ -251,9 +251,8 @@ theorem bw_split2 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brk
     hmem hfree hle hpred hsucc hh hp hs h14 ht4 (or1_toNat h11 (by omega)) h11))
   case F =>
     refine MFrame.of_regs (((((F1.store (by omega)).store (by omega)).store (by omega)).store
-      (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  sx_addr
+      (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;> carry_close
+  carry_close [hs2n]
 
 theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} {nb k x sz pred : Nat} {pre post : List Nat}
@@ -291,19 +290,11 @@ theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
     show (R 16 + 32#64).toNat = binAt 1 + 16 by rgn_arith]
   have oV := FS.offStack W.heap.disj (by omega); have oP := rP.offStack W.heap.disj (by decide)
   have oS := rS.offStack W.heap.disj (by decide); unfold mHead at oV oP oS
-  exact bw_split2 O W.heap W.nbok W.b1 (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact ht4)
-    hk1 hk hmem hfree hle hpred hsucc rfl
+  refine bw_split2 O W.heap W.nbok W.b1 ?_ hk1 hk hmem hfree hle hpred hsucc rfl
     ((((((W.frame.store (by omega)).store (by omega)).store (by omega)).store
-      (by omega)).store (by omega)).of_regs
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]))
-    (or1_toNat ha4 (by omega)) h13 (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsuccl])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15)
-    (by simp only [upd_apply, ite_true]; sx_addr)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11)
+      (by omega)).store (by omega)).of_regs ?_ ?_ ?_ ?_)
+    (or1_toNat ha4 (by omega)) h13 (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hsuccl]) ?_
+    (by carry_norm; sx_addr) ?_ ?_ <;> carry_close [ht4, h15, h12, h11]
 
 abbrev MKeep (R R0 : Nat → BitVec 64) : Prop :=
   ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → x ≠ 15 → R x = R0 x
@@ -311,15 +302,9 @@ abbrev MKeep (R R0 : Nat → BitVec 64) : Prop :=
 theorem BW.keep {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     {nb : Nat} {R R0 : Nat → BitVec 64} (W : BW C Mt brkv chunks bins nb R0) (h : MKeep R R0) :
     BW C Mt brkv chunks bins nb R :=
-  ⟨W.frame.of_regs (h 2 (by decide) (by decide) (by decide) (by decide))
-    (h 9 (by decide) (by decide) (by decide) (by decide))
-    (h 18 (by decide) (by decide) (by decide) (by decide))
-    (h 19 (by decide) (by decide) (by decide) (by decide)),
-   W.heap, W.nbok, W.nb31, W.b1,
-   by rw [h 14 (by decide) (by decide) (by decide) (by decide)]; exact W.a4,
-   by rw [h 16 (by decide) (by decide) (by decide) (by decide)]; exact W.a6,
-   by rw [h 29 (by decide) (by decide) (by decide) (by decide)]; exact W.t4,
-   by rw [h 8 (by decide) (by decide) (by decide) (by decide)]; exact W.s0⟩
+  ⟨W.frame.of_regs (keep4 h 2) (keep4 h 9) (keep4 h 18) (keep4 h 19), W.heap, W.nbok, W.nb31, W.b1,
+   by rw [keep4 h 14]; exact W.a4, by rw [keep4 h 16]; exact W.a6, by rw [keep4 h 29]; exact W.t4,
+   by rw [keep4 h 8]; exact W.s0⟩
 
 abbrev AllSmall (chunks : List Chunk) (l : List Nat) (nb : Nat) : Prop :=
   ∀ x ∈ l, ∀ sz, FreeAt chunks x sz → sz < nb
@@ -347,7 +332,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
     simp only [List.head?_nil, Option.getD_none] at h13
     refine (step% st 0x800049c8) O.live (fun _ => hex R (hmem ▸ hsm) hkp h13) (fun hne => absurd ?_ hne)
     apply BitVec.eq_of_toNat_eq
-    rw [hkp 6 (by decide) (by decide) (by decide) (by decide), h6, h13]
+    rw [keep4 hkp 6, h6, h13]
   | cons y rpre ih =>
     intro post R hmem hsm hkp h13
     simp only [List.head?_cons, Option.getD_some] at h13
@@ -373,7 +358,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
     rw [hmem] at hr2
     have hbk := (ring_member hr2 hpred hnx).2
     have hbklt := Vsa.Sim.read64_lt _ _ _ hbk
-    have h6' : (R 6).toNat = binAt k := by rw [hkp 6 (by decide) (by decide) (by decide) (by decide)]; exact h6
+    have h6' : (R 6).toNat = binAt k := by rw [keep4 hkp 6]; exact h6
     refine (step% st 0x800049c8) O.live (fun he => absurd he ?_) (fun _ => ?_)
     · intro he; apply hyne
       have := congrArg BitVec.toNat he; rw [h6', h13] at this; exact this.symm
@@ -385,7 +370,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
       have W' := W.keep hkp'
       have hcmp := lr_cmp v12 W'.a4 (by omega) (by have := W.nb31; omega)
       have h31 : (R' 28).toInt = (31#64).toInt := by
-        rw [hkp' 28 (by decide) (by decide) (by decide) (by decide)]; exact toInt_small h28 (by decide)
+        rw [keep4 hkp' 28]; exact toInt_small h28 (by decide)
       rw [← v11] at hcmp
       refine (step% st 0x800049e0) O.live (fun hgt => ?_) (fun hle => ?_)
       · rw [h31] at hgt
