@@ -467,7 +467,7 @@ elab "win_key" : tactic => do
     if isWinRefuted e then throw e
     s.restore
     withoutRecover
-      (evalTactic (← `(tactic| (simp only [BitVec.add_assoc, BitVec.reduceAdd] at ⊢; win_key0))))
+      (evalTactic (← `(tactic| (simp_set win_add_set at ⊢; win_key0))))
 
 /-- Access permitted / access owned, by the key of the address. `stat` closes the ownership of a
 static access in the footprint at hand. -/
@@ -563,7 +563,7 @@ end Dispatch
 /-- Step side goals (access permitted, access owned) by key. No arithmetic fallback. -/
 macro "win_side" : tactic => `(tactic| first
   | win_acc
-  | (simp only [BitVec.add_assoc, BitVec.reduceAdd] at ⊢; win_acc))
+  | (simp_set win_add_set at ⊢; win_acc))
 
 namespace Win
 
