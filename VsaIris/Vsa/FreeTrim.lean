@@ -116,10 +116,8 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
     · rd_log [F.s1]
     · rd_log [F.s2]
     · rd_log [F.s3]
-    all_goals (subst hR'; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    · rw [F.sp, BitVec.add_assoc]; rfl
-    · exact T.a0
-    · exact hts
+    all_goals (subst hR'; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, F.sp, BitVec.add_assoc,
+      BitVec.reduceAdd, T.a0, hts])
   refine (step% st 0x80007280) O.live (fun _ => hno _ _ hS) (fun hge => ?_)
   subst hR'
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hge
@@ -258,8 +256,7 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have hsum : (BitVec.ofNat 64 Y + R' 9).toNat = brkv := by
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, S'.s1, Nat.mod_eq_of_lt (by omega)]; omega
   refine (step% st 0x80007298) O.live (fun _ => ?_) (fun hne => absurd ?_ hne)
-  · refine hk _ _ (S'.upd ?_ ?_ ?_ ?_) ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-    rw [h8]; exact hE
+  · refine hk _ _ (S'.upd ?_ ?_ ?_ ?_) ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false, h8, hE]
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [h10]; apply BitVec.eq_of_toNat_eq; rw [hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
 

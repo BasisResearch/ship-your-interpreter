@@ -64,10 +64,7 @@ theorem top_tail {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt V : Mem} {br
   rgn_ld [hpad]
   refine trim_run O ⟨F'.of_regs ?_ ?_ ?_ ?_, H', hle, hpres, T.disj, hframe, ?_, ?_, ?_, ?_⟩
     (fun R' M' F h8 D => (step% st 0x80007578) O.live (free_epi O F D.heap D.pres D.frame)) <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact T.s0
-  · rfl
-  · exact T.s0
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, T.s0, BitVec.toNat_zero]
 
 structure PvGeo (C : MCtx) (p psz sz predP succP : Nat) : Prop where
   p16 : p % 16 = 0
@@ -197,11 +194,8 @@ theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n 
       omega
     refine top_tail O (V := Mt) (cs := cs₁) (sz := sz) ⟨D.frame.of_regs ?_ ?_ ?_ ?_, Hd, hno,
       fun h0 hr => by rw [K.hdr] at hr; cases hr; exact hodd, fun _ _ _ => rfl, Hp.pres, Hp.disj,
-      Hp.frame, ?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact D.s0
-    · exact D.a7
-    · exact ha4
-    · exact hsum
+      Hp.frame, ?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, D.s0, D.a7, ha4,
+        hsum]
 
   have hpf : hdr0 % 2 = 0 := by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false, ne_eq, Decidable.not_not] at h0
@@ -255,12 +249,9 @@ theorem free_top {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {q n 
     ⟨(D.frame.store (by omega)).store (by omega) |>.of_regs ?_ ?_ ?_ ?_, HP, hnoP, fun h0 hr => ?_,
     pv_agree G K.hdr hv1 hv2, pres_log _ (pres_log _ Hp.pres), Hp.disj,
     by rw [writeLog_nest]; exact frame_log (L := [_, _]) (by log_in) Hp.frame, ?_, ?_, ?_, ?_⟩ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, D.s0, D.a7, hEp]
   · rw [rd_miss (by omega), read64_store_hit] at hr
     cases hr; simp only [BitVec.toNat_ofNat, Nat.reducePow]; omega
-  · exact D.s0
-  · exact D.a7
-  · exact hEp
   · clear o1 o2 G_sP G_sX G_pP G_pX
     rw [BitVec.toNat_add, hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpsl]; omega
 
