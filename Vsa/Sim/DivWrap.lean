@@ -45,10 +45,6 @@ theorem DivWrapPost.of_signed
     rw [← quotient, BitVec.ofInt_toInt]
   exact ⟨good, mem, output, pc, tick, frame, word.symm ▸ value⟩
 
-#derive_case divOverflowBranchSeg chain []
-  terminator ⟨0x800046a4#64, 0x06054063#32, 0x63#8, 0x40#8, 0x05#8, 0x06#8,
-    .br bop.BLT true, 10, 0, 0x0060#13, 0#21, 0#12⟩
-
 #derive_case divOverflowDividendSeg chain
   [(0x80004704#64, 0x40a00533#32)]
     terminator ⟨0x80004708#64, 0x00b04863#32, 0x63#8, 0x48#8, 0xb0#8, 0x00#8,
@@ -58,8 +54,6 @@ theorem DivWrapPost.of_signed
   [(0x8000470c#64, 0x40b005b3#32)]
     terminator ⟨0x80004710#64, 0xf9dff06f#32, 0x6f#8, 0xf0#8, 0xdf#8, 0xf9#8,
       .j, 0, 0, 0#13, 0x1fff9c#21, 0#12⟩
-
-def divOverflowKeep (R : Register) : Bool := decide (NotWrittenD R)
 
 theorem divOverflowWord :
     (0x8000000000000000#64 / 1#64 : BitVec 64) =

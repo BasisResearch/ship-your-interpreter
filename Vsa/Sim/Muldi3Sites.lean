@@ -170,38 +170,6 @@ theorem site_80004654
     ((RetireReads.prelude hG hminstret _).write _)
     ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
-theorem exec_slli_a2_a2 (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
-    (hx12 : σ.regs.get? Register.x12 = some v12) :
-    (execute (instruction.SHIFTIOP (0x01#6, regidx.Regidx 0x0c#5, regidx.Regidx 0x0c#5, sop.SLLI))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS
-          (sigma3_alu σ pc Register.x12 (shift_bits_left v12 (Sail.BitVec.extractLsb (0x01#6) 5 0))) := by
-  have hx12₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x12 = some v12 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx12
-  exact execute_shiftiop_slli_char (0x01#6) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0c#5) v12
-    (afterNextPC (afterPrelude σ) pc)
-    (sigma3_alu σ pc Register.x12 (shift_bits_left v12 (Sail.BitVec.extractLsb (0x01#6) 5 0)))
-    (rX_bits_gpr _ 12 (by decide) (by decide) v12 hx12₂)
-    (wX_bits_gpr _ (shift_bits_left v12 (Sail.BitVec.extractLsb (0x01#6) 5 0)) 12 (by decide) (by decide))
-
-theorem site_80004658
-    (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v12 : BitVec 64)
-    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
-    (hminstret : σ.regs.get? Register.minstret = some vminstret)
-    (hx12 : σ.regs.get? Register.x12 = some v12)
-    (hmem : __muldi3Loaded σ.mem)
-    (hpcv : pc = (0x80004658#64 : BitVec 64)) (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
-      ReadsLikePost σ'
-        (sigmaPost_alu σ pc vminstret Register.x12 (shift_bits_left v12 (Sail.BitVec.extractLsb (0x01#6) 5 0))) := by
-  subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := __muldi3_at_80004658 hmem
-  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00161613#32) hG hpc hb0 hb1 hb2 hb3)
-    (exec_slli_a2_a2 σ (0x80004658#64) v12 hx12)
-    ((RetireReads.prelude hG hminstret _).write _)
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
-
 theorem exec_beqz_a3_taken (σ : MState) (pc : BitVec 64) (v13 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
     (hx13 : σ.regs.get? Register.x13 = some v13)
@@ -284,18 +252,6 @@ theorem exec_bnez_a1_taken (σ : MState) (pc : BitVec 64) (v11 : BitVec 64)
     v11 (0#64) pc initMisa (afterNextPC (afterPrelude σ) pc)
     (rX_bits_gpr _ 11 (by decide) (by decide) v11 hx11₂) (rX_bits_zero _) hpc₂ hmisa₂ htgt hv
 
-theorem exec_bnez_a1_nottaken (σ : MState) (pc : BitVec 64) (v11 : BitVec 64)
-    (hx11 : σ.regs.get? Register.x11 = some v11)
-    (hv : (v11 != (0#64)) = false) :
-    (execute (instruction.BTYPE (0x1fec#13, regidx.Regidx 0x00#5, regidx.Regidx 0x0b#5, bop.BNE))).run
-        (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS (sigma3_branch_nottaken σ pc) := by
-  have hx11₂ : (afterNextPC (afterPrelude σ) pc).regs.get? Register.x11 = some v11 := by
-    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hx11
-  exact execute_btype_bne_nottaken (0x1fec#13) (regidx.Regidx 0x0b#5) (regidx.Regidx 0x00#5)
-    v11 (0#64) (afterNextPC (afterPrelude σ) pc)
-    (rX_bits_gpr _ 11 (by decide) (by decide) v11 hx11₂) (rX_bits_zero _) hv
-
 theorem site_8000465c_taken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v11 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -312,23 +268,6 @@ theorem site_8000465c_taken
     (exec_bnez_a1_taken σ (0x8000465c#64) v11 hG hpc hx11 (by decide) hv)
     ((RetireReads.prelude hG hminstret _).jump _)
     ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
-
-theorem site_8000465c_nottaken
-    (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v11 : BitVec 64)
-    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
-    (hminstret : σ.regs.get? Register.minstret = some vminstret)
-    (hx11 : σ.regs.get? Register.x11 = some v11)
-    (hmem : __muldi3Loaded σ.mem)
-    (hpcv : pc = (0x8000465c#64 : BitVec 64)) (hv : (v11 != (0#64)) = false) (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
-      ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
-  subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := __muldi3_at_8000465c hmem
-  exact (stepObs_exec _ vminstret (Fetched.of_word (0xfe0596e3#32) hG hpc hb0 hb1 hb2 hb3)
-    (exec_bnez_a1_nottaken σ (0x8000465c#64) v11 hx11 hv)
-    (RetireReads.prelude hG hminstret _)
-    (hG.prelude _) hi :)
 
 theorem site_80004660
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vra : BitVec 64)

@@ -75,6 +75,12 @@ structure St (g : (R : Register) → Option (RegisterType R))
   tick : c.tick < 2
   hframe : ∀ R : Register, NotWrittenM R → c.σ.regs.get? R = g R
 
+theorem SelectedFramedSegResult.mem_eq {bs : List BBlock} {L : GRegs}
+    {lds : List (List (BitVec 8))} {pc0 : BitVec 64} {keep : Register → Bool} {sel : GRegs}
+    {c c' : Config} (res : SelectedFramedSegResult bs L lds pc0 (fun _ => False) keep sel c c') :
+    c'.σ.mem = c.σ.mem :=
+  Std.ExtHashMap.ext_getElem? fun k => (res.outside k id).symm
+
 def mulRegs (a0 a1 a2 a3 r : BitVec 64) : GRegs :=
   [(10, a0), (11, a1), (12, a2), (13, a3), (1, r)]
 
@@ -94,8 +100,7 @@ theorem St.of_seg {g : (R : Register) → Option (RegisterType R)}
       (mulRegs b0 b1 b2 b3 r) c c')
     (hpc : evalBlocksPC pc0 (SegEvalState.init L lds) bs = pc') :
     St g pc' b0 b1 b2 b3 r m0 o c' := by
-  have hmem : c'.σ.mem = c.σ.mem :=
-    Std.ExtHashMap.ext_getElem? fun k => (res.outside k id).symm
+  have hmem := res.mem_eq
   obtain ⟨h0, h1, h2, h3, hr, _⟩ := res.selected_regs
   exact ⟨res.good, hmem ▸ h.loaded, hmem.trans h.mem, res.output.trans h.sailOut,
     hpc ▸ res.pc, h0, h1, h2, h3, hr, res.minstret, res.tick,

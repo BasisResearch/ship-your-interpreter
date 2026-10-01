@@ -89,8 +89,7 @@ theorem Ust.of_seg {g : (R : Register) → Option (RegisterType R)}
       (mulRegs b0 b1 b2 b3 r) c c')
     (hpc : evalBlocksPC pc0 (SegEvalState.init L lds) bs = pc') :
     Ust g pc' b0 b1 b2 b3 r m0 o c' := by
-  have hmem : c'.σ.mem = c.σ.mem :=
-    Std.ExtHashMap.ext_getElem? fun k => (res.outside k id).symm
+  have hmem := res.mem_eq
   obtain ⟨h0, h1, h2, h3, hr, _⟩ := res.selected_regs
   exact ⟨res.good, hmem ▸ h.loaded, hmem.trans h.mem, res.output.trans h.sailOut,
     hpc ▸ res.pc, h0, h1, h2, h3, hr, res.minstret, res.tick,
