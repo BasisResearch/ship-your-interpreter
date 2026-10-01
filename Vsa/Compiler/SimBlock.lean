@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimSeq
+import Vsa.Compiler.R6Keys
 
 namespace Vsa.Compiler
 
@@ -112,41 +113,12 @@ theorem run_leave {T : List String} {V : View} {st : St} {d : Nat} {env inner : 
       B.out = A.out) := by
   obtain ⟨pc0, L0, m, o⟩ := A
   simp only at hA; subst hA
-  have hb : frameBase = 0x80100000 := rfl
-  have he : frameEnd = 0x90000000 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  obtain ⟨f, hF⟩ := hm.chn.head'
-  have hfa := hm.rel.frame inner fr f L hfr hF
-  obtain ⟨h1, h2, h3, h4⟩ := hm.rel.region inner f L hF
-  have htop := hm.rel.top
-  unfold frSize at h2
-  have he9 := hm.henv
-  rw [View.fa_eq hF] at he9
-  have k9 := has_mem he9 (by decide); have e9 := srcVal_of_has he9
-  simp only [envR] at k9 e9
-  have n0 : (BitVec.ofNat 64 f).toNat = f := toNat_ofNat_lt (by omega)
+  obtain ⟨f, P⟩ := hm.popScope hfr hpar
   apply run_whole hR.fits hseg
-  wp_simp [k9, e9, n0]
-  refine ⟨by unfold LdOK; omega, reach_here ⟨by simp, ?_, rfl, rfl⟩⟩
-  have hc' : ChainL V.F st.store env Γ := by
-    cases hm.chn with
-    | top _ hp' _ => rw [hfr] at *; simp_all
-    | cons hfr' hpar' hF' hc =>
-      rw [hfr] at hfr'; cases hfr'; rw [hpar] at hpar'; cases hpar'; exact hc
-  have hw : rdW m f = BitVec.ofNat 64 (V.fa env) := by rw [hfa.parent, parAddr_eq_parOf, hpar]; rfl
-  exact {
-    rel := hm.rel
-    img := hm.img
-    clo := hm.clo
-    chn := hc'
-    out := hm.out
-    ho := by reg_simp []; exact hm.ho
-    hf := by reg_simp []; exact hm.hf
-    henv := by reg_simp []; exact hw
-    hsp := by reg_simp []; exact hm.hsp
-    hdep := by reg_simp []; exact hm.hdep
-    stk := hm.stk
-    hfal := hm.hfal }
+  wp_simp [hm.keys.row.wp, P.fa, P.nat]
+  refine ⟨P.ld, reach_here ⟨by simp, ?_, rfl, rfl⟩⟩
+  rw [P.word]
+  exact hm.reseat rfl rfl P.chn (hm.keys.setEnv _)
 
 theorem sBlock {T : List String} {st : St} {d : Nat} {env : Addr} {ss : List Stmt} {store' : Store}
     {inner : Addr} {st' : St} {status : Status} {n : Nat}

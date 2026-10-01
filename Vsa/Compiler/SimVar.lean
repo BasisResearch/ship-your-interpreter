@@ -1,4 +1,5 @@
 import Vsa.Compiler.SUpd
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -101,20 +102,13 @@ theorem walk_read {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (h
   induction hc with
   | @top a fr f0 Lf hfr hpar hF0 =>
     intro pos f L o hFa hseg h5
-    simp only [List.headD_cons] at hFa
-    have hff : f0 = f := by rw [hF0] at hFa; cases hFa; rfl
-    subst hff
-    have hfa := hs.frame a fr f0 Lf hfr hF0
+    cases hF0.symm.trans hFa
     obtain ⟨hf1, hf2, -, hf4⟩ := frame_bounds hs hF0
     rw [lookup_step hfr]
     simp only [walkCode] at hseg
-    have hP := seg_end_posOK hfit hseg (by simp)
-    simp only [List.length_append, List.length_cons, List.length_nil] at hP
-    obtain ⟨s1, s2⟩ := hseg.append
-    refine ex_bind (read_here hfit hfa hf1 hf2 hf4 x fin hfin s1 (by omega) h5) ?_
-    rintro B ⟨hm, ho, hk, hB⟩
-    obtain ⟨pc, L', m', o'⟩ := B
-    simp only at hm ho hk hB; subst hm ho
+    obtain ⟨⟨s1, p1⟩, s2, -⟩ := segP_app.mp ⟨hseg, seg_end_posOK hfit hseg (by simp)⟩
+    refine ex_bind (read_here hfit (hs.frame a fr f0 Lf hfr hF0) hf1 hf2 hf4 x fin hfin s1 p1 h5) ?_
+    rintro ⟨pc, L', m', o'⟩ ⟨rfl, rfl, hk, hB⟩
     cases hl : lookupVar fr x with
     | some v => simp only [hl] at hB ⊢; exact reach_here ⟨rfl, rfl, hk, hB⟩
     | none =>
@@ -125,44 +119,31 @@ theorem walk_read {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (h
       exact reach_here ⟨rfl, rfl, hk, rfl⟩
   | @cons a b fr f0 Lf L' g hfr hpar hF0 hcb ih =>
     intro pos f L o hFa hseg h5
-    have hb : frameBase = 0x80100000 := rfl
-    have he : frameEnd = 0x90000000 := rfl
-    have ht : tohostAddr = 0x8001ad00 := rfl
-    simp only [List.headD_cons] at hFa
-    have hff : f0 = f := by rw [hF0] at hFa; cases hFa; rfl
-    subst hff
+    obtain ⟨hb, he, ht⟩ := frame_consts
+    cases hF0.symm.trans hFa
     have hfa := hs.frame a fr f0 Lf hfr hF0
     obtain ⟨hf1, hf2, -, hf4⟩ := frame_bounds hs hF0
     obtain ⟨fb, hFb⟩ := hcb.head
     obtain ⟨hb1, hb2, -, -⟩ := frame_bounds hs hFb
-    have hba : b < a := hs.parents a fr b hfr hpar
-    have hpa : parAddr F fr = fb := by simp only [parAddr, hpar, hFb, Option.map_some, Option.getD_some]
-    have hrd : rdW m f0 = BitVec.ofNat 64 fb := by rw [hfa.parent, hpa]
+    have hrd : rdW m f0 = BitVec.ofNat 64 fb := by
+      rw [hfa.parent]; simp only [parAddr, hpar, hFb, Option.map_some, Option.getD_some]
     rw [lookup_step hfr]
-    simp only [walkCode] at hseg
-    obtain ⟨s12, s3⟩ := hseg.append
-    obtain ⟨s1, s2⟩ := s12.append
-    rw [List.length_append, List.length_singleton, ← Nat.add_assoc] at s3
-    have hP := seg_end_posOK hfit s2 (by simp)
-    simp only [List.length_cons, List.length_nil] at hP
-    refine ex_bind (read_here hfit hfa hf1 hf2 hf4 x fin hfin s1 (by unfold PosOK at hP ⊢; omega) h5) ?_
-    rintro B ⟨hm, ho, hk, hB⟩
-    obtain ⟨pc, L1, m', o'⟩ := B
-    simp only at hm ho hk hB; subst hm ho
+    simp only [walkCode, List.append_assoc] at hseg
+    have h := And.intro hseg (seg_end_posOK hfit hseg (by simp))
+    simp only [↓segP_app, List.length_cons, List.length_nil, Nat.zero_add] at h
+    obtain ⟨⟨s1, p1⟩, ⟨s2, -⟩, s3, -⟩ := h
+    refine ex_bind (read_here hfit hfa hf1 hf2 hf4 x fin hfin s1 p1 h5) ?_
+    rintro ⟨pc, L1, m', o'⟩ ⟨rfl, rfl, hk, hB⟩
     cases hl : lookupVar fr x with
     | some v => simp only [hl] at hB ⊢; exact reach_here ⟨rfl, rfl, hk, hB⟩
     | none =>
       simp only [hl, hpar] at hB ⊢
-      rw [hB.1, lookup_gas hs.parents x b a hba]
-      have ha := has_mem hB.2 (by decide); have ea := srcVal_of_has hB.2
-      simp only [t0] at ha ea
-      have hfn : (BitVec.ofNat 64 f0).toNat = f0 := toNat_ofNat_lt (by omega)
+      rw [hB.1, lookup_gas hs.parents x b a (hs.parents a fr b hfr hpar)]
       refine WP_sound hfit _ _ (fun L2 m2 o2 => Reaches code ⟨pcOf (pos + (readHere x Lf pos fin).length + 1),
         L2, m2, o2⟩ _) L1 _ _ s2 (fun L2 m2 o2 h => by simpa using h) ?_
-      wp_simp [ha, ea, hfn, hrd]
-      refine ⟨by unfold LdOK; omega, ?_⟩
-      refine reaches_mono (ih _ fb (gset L1 5 (BitVec.ofNat 64 fb)) _ (by simpa using hFb) s3
-        (by reg_simp [])) ?_
+      wp_simp [hB.2.wp, toNat_ofNat_lt, hrd]
+      refine ⟨by unfold LdOK; omega, reaches_mono (ih _ fb _ _ (by simpa using hFb) s3
+        (Has.set_self _ _ (by decide) (by decide))) ?_⟩
       rintro B ⟨hm, ho, hk', hB'⟩
       exact ⟨hm, ho, hk.trans ((Keep.gset (Keep.refl _ L1) (by decide : 5 ∈ walkClob)).trans hk'), hB'⟩
 

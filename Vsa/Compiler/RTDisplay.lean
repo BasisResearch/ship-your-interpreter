@@ -1,4 +1,5 @@
 import Vsa.Compiler.RTItos
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -55,13 +56,10 @@ theorem dp_ret {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}
     (h26 : Has L' s10 r) (hal : r.toNat % 4 = 0) (hk : Keep dpClob L L') :
     Reaches code ⟨pcOf (dpPos + 124), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
       Keep dpClob L B.regs) := by
-  have k26 := has_mem h26 (by decide); have e26 := srcVal_of_has h26
-  simp only [s10] at k26 e26
   apply run_seg hR.fits hR.dp 124 (dpPos + 124) rfl [mv ra s10, ret] (by decide)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [k26, e26]
-  refine ⟨hal, reach_here ⟨rfl, rfl, rfl, ?_⟩⟩
-  reg_simp; exact hk
+  wp_simp [h26.wp]
+  exact ⟨hal, reach_here ⟨rfl, rfl, rfl, by reg_simp; exact hk⟩⟩
 
 theorem dp_ps {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} (j : Nat)
     (hJ : (dpCode dpPos)[j + 1]? = some (J (dpPos + j + 1) (dpPos + 124))) (hj : j + 1 < 126)
@@ -498,27 +496,13 @@ theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h :
     Reaches code ⟨pcOf ccPos, L, m, o⟩ (fun B => B.out = o ∧
       ((B.pc = r ∧ CcRet m B.mem h (xs ++ ys) L B.regs) ∨
         (B.pc = pcOf errPos ∧ objEnd < h + 8 + 8 * (xs.length + ys.length)))) := by
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  have hob : objBase = 0x90000000 := rfl
-  have hoe : objEnd = 0xE0000000 := rfl
+  obtain ⟨hob, hoe, ht⟩ := obj_consts
   obtain ⟨hh1, hh2, hh3⟩ := hh
   obtain ⟨hxs, -, hxb⟩ := hx; obtain ⟨hys, -, hyb⟩ := hy
   have := hxs.lo; have := hxs.al; have := hys.lo; have := hys.al
-  have k11 := has_mem h11 (by decide); have k13 := has_mem h13 (by decide)
-  have k1 := has_mem hr (by decide); have k8 := has_mem h8 (by decide)
-  have e11 := srcVal_of_has h11; have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hr
-  have e8 := srcVal_of_has h8
-  simp only [a1, a3, ra, hpO] at k11 k13 k1 k8 e11 e13 e1 e8
-  have hpn : (BitVec.ofNat 64 p).toNat = p := toNat_ofNat_lt (by omega)
-  have hqn : (BitVec.ofNat 64 q).toNat = q := toNat_ofNat_lt (by omega)
-  have hhn : (BitVec.ofNat 64 h).toNat = h := toNat_ofNat_lt (by omega)
-  apply run_seg hR.fits hR.cc 0 ccPos (by simp)
-    ([mv s11 ra, .ld t3 a1, .ld t4 a3, .add t5 t3 t4, .slli t6 t5 3, addi t6 t6 8, .add t6 hpO t6] ++
-      liN t2 objEnd ++ [Br .lt t2 t6 (ccPos + 18) errPos, mv a4 hpO, .sd t5 a4, addi a5 a4 8,
-        addi a6 a1 8, mv a7 t3, Call (ccPos + 24) cpPos]) (by decide)
-    (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k11, k13, k1, k8, e11, e13,
-    e1, e8, hpn, hqn, hhn, hxs.len, hys.len, show h ≠ tohostAddr by omega]
+  apply run_at' hR.fits hR.cc 0 ccPos rfl
+  wp_simp [rt_pos, ccCode, h11.wp, h13.wp, hr.wp, h8.wp, toNat_ofNat_lt, hxs.len, hys.len,
+    show h ≠ tohostAddr by omega]
   refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ⟨by omega, by omega, .inr (by omega)⟩, ?_⟩
   split
   · next hov => exact reach_here ⟨rfl, .inr ⟨rfl, by omega⟩⟩
@@ -528,36 +512,22 @@ theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h :
     ⟨by omega, by omega, .inr (by omega), by omega, by omega, by omega, by omega, .inr (by omega)⟩
   refine ex_bind (run_cp hR.fits hR.cp (by reg_simp) (by reg_simp) (by reg_simp)
     (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) hcp1) ?_
-  rintro B ⟨hpc, hm, ho, h15, h16, hk⟩
-  obtain ⟨pc, L2, m2, o2⟩ := B
-  simp only at hpc hm ho h15 h16 hk; subst hpc hm ho
+  rintro ⟨pc, L2, m2, o2⟩ ⟨rfl, rfl, rfl, h15, h16, hk⟩
   have g13 : Has L2 a3 (BitVec.ofNat 64 q) := hk.has (by decide) (by reg_simp; exact h13)
   have g29 : Has L2 t4 (BitVec.ofNat 64 ys.length) := hk.has (by decide) (by reg_simp)
   have g14 : Has L2 a4 (BitVec.ofNat 64 h) := hk.has (by decide) (by reg_simp)
   have g27 : Has L2 s11 r := hk.has (by decide) (by reg_simp)
-  have g8 : Has L2 hpO (BitVec.ofNat 64 h) := hk.has (by decide) (by reg_simp; exact h8)
-  have k13' := has_mem g13 (by decide); have e13' := srcVal_of_has g13
-  have k29 := has_mem g29 (by decide); have e29 := srcVal_of_has g29
-  simp only [a3, t4] at k13' e13' k29 e29
-  apply run_seg hR.fits hR.cc 25 (ccPos + 25) rfl [addi a6 a3 8, mv a7 t4, Call (ccPos + 27) cpPos]
-    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k13', e13', k29, e29]
+  apply run_at' hR.fits hR.cc 25 (ccPos + 25) rfl
+  wp_simp [rt_pos, ccCode, g13.wp, g29.wp]
   have hcp2 : CopyOK (q + 8) (h + 8 + 8 * xs.length) ys.length :=
     ⟨by omega, by omega, .inr (by omega), by omega, by omega, by omega, by omega, .inr (by omega)⟩
   refine ex_bind (run_cp hR.fits hR.cp (by reg_simp) (by reg_simp; exact h15) (by reg_simp)
     (Has.set_self _ _ (by decide) (by decide)) (pcOf_aligned (posOK_lt (by decide))) hcp2) ?_
-  rintro B ⟨hpc, hm, ho, h15', h16', hk'⟩
-  obtain ⟨pc, L3, m3, o3⟩ := B
-  simp only at hpc hm ho h15' h16' hk'; subst hpc hm ho
+  rintro ⟨pc, L3, m3, o3⟩ ⟨rfl, rfl, rfl, h15', h16', hk'⟩
   have g14' : Has L3 a4 (BitVec.ofNat 64 h) := hk'.has (by decide) (by reg_simp; exact g14)
   have g27' : Has L3 s11 r := hk'.has (by decide) (by reg_simp; exact g27)
-  have k15 := has_mem h15' (by decide); have e15 := srcVal_of_has h15'
-  have k14 := has_mem g14' (by decide); have e14 := srcVal_of_has g14'
-  have k27 := has_mem g27' (by decide); have e27 := srcVal_of_has g27'
-  simp only [a5, a4, s11] at k15 e15 k14 e14 k27 e27
-  apply run_seg hR.fits hR.cc 28 (ccPos + 28) rfl [mv hpO a5, mv a1 a4, mv ra s11, ret]
-    (by decide) (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k15, e15, k14, e14, k27, e27]
+  apply run_at' hR.fits hR.cc 28 (ccPos + 28) rfl
+  wp_simp [rt_pos, ccCode, h15'.wp, g14'.wp, g27'.wp]
   obtain ⟨hstr, hfr⟩ := ccMem_facts hR hxs hys hxb hyb hh3 (by omega) (by omega)
   refine ⟨hal, reach_here ⟨rfl, .inl ⟨rfl, ?_, hstr, ?_, by simp; omega, fun a ha h1 => ?_, ?_⟩⟩⟩
   · reg_simp
