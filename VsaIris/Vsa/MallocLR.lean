@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocPro
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.MallocGlue2
 
 namespace VsaIris.VsaHeap
 
@@ -103,12 +104,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
           Nat.mod_eq_of_lt (by omega)] at he
         exact hnev first (by rw [h1]; exact List.mem_cons_self) he
     refine hscan hb _ (((F.upd (by decide)).upd (by decide)).upd (by decide)) ⟨?_, ?_, ?_⟩ ?_ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact ha4
-    · exact ha7
-    · exact G.a6
-    · unfold binAt avAddr; rfl
-    · exact h8
+      reg_close [ha4, ha7, G.a6, h8]
   ·
     rw [ht4] at hc
     have hb : bins 1 = [first] := by
@@ -136,15 +132,7 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     ·
       refine hsplit first sz hb hfree (hcmp.1.1 hc2) _
         (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_, ?_⟩ ?_ <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · exact ha4
-      · exact ha7
-      · exact G.a6
-      · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-      · exact hszv
-      · exact ha4
-      · unfold binAt avAddr; rfl
-      · exact h8
+        reg_close [ha4, ha7, G.a6, hszv, h8]
     ·
       have hlt32 : sz < nb + 32 := by
         have := hcmp.1
@@ -167,24 +155,12 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         refine hexact first sz hfree (hcmp.2.1 hc3) hlt32 _ _
           (((F.of_regs ?_ ?_ ?_ ?_).store (by omega)).store (by omega)) hD
           ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
-          simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-        · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-        · exact hszv
-        · exact ha4
-        · exact hwv
+          reg_close [hszv, ha4, hwv]
       ·
         refine hrebin first sz hfree (by have := hcmp.2; omega) _ _
           (((F.of_regs ?_ ?_ ?_ ?_).store (by omega)).store (by omega)) hD
           ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_, ?_⟩ ?_ <;>
-          simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-        · exact ha4
-        · exact ha7
-        · exact G.a6
-        · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-        · exact hszv
-        · exact ha4
-        · exact hwv
-        · exact h8
+          reg_close [ha4, ha7, G.a6, hszv, hwv, h8]
 
 theorem MDetach.read {C : MCtx} {Mt Mt' : Mem} {bins : Nat → List Nat} {i v : Nat}
     (D : MDetach C Mt Mt' bins i v) {a : Nat} (hf : ∀ k, k < 8 → vsaFoot C.H (a + k))

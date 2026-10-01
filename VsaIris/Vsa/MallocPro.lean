@@ -1,6 +1,6 @@
 import VsaIris.Vsa.MallocPaths
 import VsaIris.Vsa.HeapPermit
-import VsaIris.Vsa.Carry
+import VsaIris.Vsa.MallocGlue2
 
 namespace VsaIris.VsaHeap
 
@@ -81,7 +81,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn, hnb,
         show (2147483648#64).toNat = 2 ^ 31 from rfl] at h1
     ·
-      refine malloc_errno O (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ?_ ?_ <;> try carry_close [hs8]
+      refine malloc_errno O (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ?_ ?_ <;> try reg_close [hs8]
       refine Starved.of_lt ?_
       rw [hP]
       have hE : heapEnd < heapStart + 2 ^ 31 := by decide
@@ -104,9 +104,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     ·
       sx_run [8] O.live at 0x800047dc
       refine hsm _ _ ((C.n.toNat + 23) / 16 * 16) ((F0.store (by omega)).of_regs ?_ ?_ ?_ ?_) Hp2
-        ⟨?_, ?_, ?_⟩ hNb h3 ?_ <;>
-        try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · exact hnb'
+        ⟨?_, ?_, ?_⟩ hNb h3 ?_ <;> reg_try [hnb', hs8]
       · rw [BitVec.toNat_ushiftRight, hnb', Nat.shiftRight_eq_div_pow]
       · have ha7 : ((R 11 + 23#64 &&& 18446744073709551600#64) >>> 3).toNat =
             (C.n.toNat + 23) / 16 * 16 / 8 := by
@@ -119,10 +117,9 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
         rw [BitVec.toNat_shiftLeft, toNat_sx32_small _ (by rw [hy]; omega), hy, Nat.shiftLeft_eq]
         simp only [Nat.reducePow]
         omega
-      · exact hs8
     ·
       refine hlg _ _ ((C.n.toNat + 23) / 16 * 16) ((F0.store (by omega)).of_regs ?_ ?_ ?_ ?_) Hp2
-        hNb (by omega) (by omega) ?_ ?_ <;> carry_close [hnb', hs8]
+        hNb (by omega) (by omega) ?_ ?_ <;> reg_close [hnb', hs8]
   ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
     have e32 : (0#64 + sign_extend (m := 64) (0x020#12)).toNat = 32 := by decide
@@ -130,7 +127,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     refine (step% st 0x800047c8) O.live (fun hc2 => ?_) (fun hc2 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hn] at hc2
     ·
-      refine malloc_errno O (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ?_ ?_ <;> try carry_close [hs8]
+      refine malloc_errno O (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ?_ ?_ <;> try reg_close [hs8]
       · rw [e32] at hc2
         unfold Starved physSize heapEnd extendSlack
         unfold heapStart at htop0
@@ -138,7 +135,7 @@ theorem malloc_pro {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     ·
       sx_run [8] O.live at 0x800047dc
       refine hsm _ _ 32 (F0.of_regs ?_ ?_ ?_ ?_) Hp1 ⟨?_, ?_, ?_⟩ ⟨?_⟩ (by decide) ?_ <;>
-        try carry_close [hs8]
+        try reg_close [hs8]
       · have e32' : (0#64 + sign_extend (m := 64) (0x020#12)).toNat = 32 := by decide
         try simp only [e32'] at hc2
         unfold physSize
