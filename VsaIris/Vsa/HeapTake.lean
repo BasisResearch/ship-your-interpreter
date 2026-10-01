@@ -59,13 +59,6 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.boundary_out (h : HeapAt m H (fun e => e �
     · exact .inr h1
     · have := (h.walk.chunk_bounds c hc).2.2; exact .inl (by omega)
 
-theorem _root_.Vsa.Sim.DlHeap.HeapAt.bin_unique (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {j j' q : Nat}
-    (hj0 : 0 < j) (hj : j < numBins) (hj0' : 0 < j') (hj' : j' < numBins)
-    (hq : q ∈ bins j) (hq' : q ∈ bins j') : j = j' := by
-  obtain ⟨c, hc, rfl, hf⟩ := h.member hj0 hj hq
-  obtain ⟨k, _, _, _, huniq⟩ := h.free_binned c hc hf
-  exact (huniq j hj0 hj hq).trans (huniq j' hj0' hj' hq').symm
-
 theorem _root_.Vsa.Sim.DlHeap.HeapAt.end_bnd (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
     {c : Chunk} (hc : c ∈ chunks) :
     c.addr + c.size = top ∨ ∃ d ∈ chunks, d.addr = c.addr + c.size := by
@@ -269,19 +262,6 @@ theorem PHeapAt.take {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chun
     · have := binAt_geo j hj; unfold heapStart at hnxlo; omega
     · rcases HH.boundary_out hc (.inr ⟨cx, hcx, rfl⟩) with h1 | h1 <;> omega
 
-  have nodes_ne : ∀ j j' x y, 0 < j → j < numBins → 0 < j' → j' < numBins → j ≠ j' →
-      (x = binAt j ∨ x ∈ bins j) → (y = binAt j' ∨ y ∈ bins j') → x ≠ y := by
-    intro j j' x y hj0 hj hj0' hj' hne hx hy hxy
-    subst hxy
-    rcases hx with rfl | hx <;> rcases hy with hy | hy
-    · unfold binAt at hy; omega
-    · obtain ⟨cx, hcx, hcxa, _⟩ := HH.member hj0' hj' hy
-      have := (HH.walk.chunk_bounds cx hcx).1
-      have := binAt_geo j hj; unfold heapStart at *; omega
-    · obtain ⟨cx, hcx, hcxa, _⟩ := HH.member hj0 hj hx
-      have := (HH.walk.chunk_bounds cx hcx).1
-      have := binAt_geo j' hj'; unfold heapStart at *; omega
-    · exact hne (HH.bin_unique hj0 hj hj0' hj' hx hy)
   have hdisj : ∀ a ∈ pre, ∀ b ∈ post, a ≠ b := fun a ha b hb =>
     (List.nodup_append.mp hnd).2.2 a ha b (List.mem_cons_of_mem _ hb)
   have hvpre : c.addr ∉ pre := fun hm => (List.nodup_append.mp hnd).2.2 c.addr hm c.addr List.mem_cons_self rfl
@@ -364,8 +344,8 @@ theorem PHeapAt.take {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chun
     · subst hji; rw [updBins_same]; exact ring_i
     · rw [updBins_other _ _ hji]
       exact binList_keep (HH.bins_list j hj0 hj)
-        (fun a ha => fdkeep j a hj0 hj ha (nodes_ne j i a pred hj0 hj hi0 hi hji ha hpredm))
-        (fun b hb => bkkeep j b hj0 hj hb (nodes_ne j i b succ hj0 hj hi0 hi hji hb hsuccm))
+        (fun a ha => fdkeep j a hj0 hj ha (HH.nodes_ne hj0 hj hi0 hi hji ha hpredm))
+        (fun b hb => bkkeep j b hj0 hj hb (HH.nodes_ne hj0 hj hi0 hi hji hb hsuccm))
   ·
     intro j
     by_cases hji : j = i

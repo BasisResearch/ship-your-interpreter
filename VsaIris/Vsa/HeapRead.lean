@@ -34,6 +34,32 @@ theorem BlockHeapAt.node_foot (B : BlockHeapAt m H top brkv chunks bins)
     have := (foot_free B hcx hf).1 (k - 16) (by omega)
     rwa [show cx.addr + 16 + (k - 16) = cx.addr + k by omega] at this
 
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.bin_unique (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {j j' q : Nat}
+    (hj0 : 0 < j) (hj : j < numBins) (hj0' : 0 < j') (hj' : j' < numBins)
+    (hq : q ∈ bins j) (hq' : q ∈ bins j') : j = j' := by
+  obtain ⟨c, hc, rfl, hf⟩ := h.member hj0 hj hq
+  obtain ⟨k, _, _, _, huniq⟩ := h.free_binned c hc hf
+  exact (huniq j hj0 hj hq).trans (huniq j' hj0' hj' hq').symm
+
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.node_loc (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
+    {i x : Nat} (hi0 : 0 < i) (hi : i < numBins) (hx : x = binAt i ∨ x ∈ bins i) :
+    x = binAt i ∨ heapStart ≤ x ∧ x + 32 ≤ top := by
+  rcases hx with h1 | hx
+  · exact .inl h1
+  · obtain ⟨c, hc, rfl, -⟩ := h.member hi0 hi hx
+    have := h.walk.chunk_bounds c hc; exact .inr ⟨this.1, by omega⟩
+
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.nodes_ne (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
+    {j j' x y : Nat} (hj0 : 0 < j) (hj : j < numBins) (hj0' : 0 < j') (hj' : j' < numBins)
+    (hne : j ≠ j') (hx : x = binAt j ∨ x ∈ bins j) (hy : y = binAt j' ∨ y ∈ bins j') : x ≠ y := by
+  rintro rfl
+  have := binAt_geo j hj; have := binAt_geo j' hj'
+  rcases hx with rfl | hx <;> rcases hy with hy | hy
+  · unfold binAt at hy; omega
+  · rcases h.node_loc hj0' hj' (.inr hy) with h1 | h1 <;> unfold heapStart binAt avAddr at * <;> omega
+  · rcases h.node_loc hj0 hj (.inr hx) with h1 | h1 <;> unfold heapStart binAt avAddr at * <;> omega
+  · exact hne (h.bin_unique hj0 hj hj0' hj' hx hy)
+
 theorem rd_keep (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?) {a : Nat}
     (hf : ∀ k, k < 8 → vsaFoot H (a + k)) (hu : ∀ w, U w → w < a ∨ a + 8 ≤ w) :
     read64 m' a = read64 m a :=
