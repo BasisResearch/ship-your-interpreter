@@ -1,0 +1,178 @@
+{
+ "seed": 20261001,
+ "population": "on-path theorems of Vsa/Compiler with conclusion Reaches/ESpec/SSpec/CSpec/TSpec/EStuck/SStuck/CStuck/SimE/FLSpec/SeqSpec/ASpec/QSpec/SFail/SeqFail/FLStuck/Sims/Star, >= 8 lines (167): S <= 25 (73), M 26-60 (51), L > 60 (43)",
+ "draw": "random.Random(20261001): sample(L,5), sample(M,5), sample(S,4); first 3/3/2 primary, rest fresh",
+ "baseline_primary_body": 339,
+ "cases": [
+  {
+   "file": "Vsa/Compiler/RTDisplay.lean",
+   "name": "run_cc",
+   "stratum": "L",
+   "set": "primary",
+   "lines": [
+    494,
+    569
+   ],
+   "statement": "theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h : Nat}\n    {xs ys : List Char} (h11 : Has L a1 (BitVec.ofNat 64 p)) (h13 : Has L a3 (BitVec.ofNat 64 q))\n    (hr : Has L ra r) (h8 : Has L hpO (BitVec.ofNat 64 h)) (hal : r.toNat % 4 = 0) (hh : ObjPtr h)\n    (hx : StrBelow m h p xs) (hy : StrBelow m h q ys) :\n    Reaches code ⟨pcOf ccPos, L, m, o⟩ (fun B => B.out = o ∧\n      ((B.pc = r ∧ CcRet m B.mem h (xs ++ ys) L B.regs) ∨\n        (B.pc = pcOf errPos ∧ objEnd < h + 8 + 8 * (xs.length + ys.length)))) := by",
+   "body_lines": 69
+  },
+  {
+   "file": "Vsa/Compiler/SimVar.lean",
+   "name": "walk_read",
+   "stratum": "L",
+   "set": "primary",
+   "lines": [
+    91,
+    167
+   ],
+   "statement": "theorem walk_read {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (hs : StoreRel F H s m hF h)\n    (x : String) (fin : Nat) (hfin : PosOK fin) :\n    ∀ {a : Addr} {Γ : List (List String)}, ChainL F s a Γ → ∀ (pos f : Nat) (L : GRegs)\n      (o : Array String), F[a]? = some (f, Γ.headD []) →\n      Seg code pos (walkCode (fun l p => readHere x l p fin) pos Γ) → Has L t0 (BitVec.ofNat 64 f) →\n      Reaches code ⟨pcOf pos, L, m, o⟩ (fun B => B.mem = m ∧ B.out = o ∧ Keep walkClob L B.regs ∧\n        match s.lookup (a + 1) a x with\n        | some v => B.pc = pcOf fin ∧ InA H m h B.regs v\n        | none => B.pc = pcOf errPos) := by",
+   "body_lines": 68
+  },
+  {
+   "file": "Vsa/Compiler/SimLogic.lean",
+   "name": "sLogFull",
+   "stratum": "L",
+   "set": "primary",
+   "lines": [
+    71,
+    136
+   ],
+   "statement": "theorem sLogFull {op : LogOp} {st : St} {d : Nat} {env : Addr} {l r : Expr} {st1 st2 : St}\n    {lv rv : Value} {nl nr : Nat} (hEl : ESpec code T st d env l st1 lv nl) (ht : lv.truthy = !logShort op)\n    (hEr : ESpec code T st1 d env r st2 rv nr) :\n    ESpec code T st d env (.logical op l r) st2 (.bool rv.truthy) (nl + nr) := by",
+   "body_lines": 62
+  },
+  {
+   "file": "Vsa/Compiler/SimBlock.lean",
+   "name": "run_leave",
+   "stratum": "M",
+   "set": "primary",
+   "lines": [
+    107,
+    149
+   ],
+   "statement": "theorem run_leave {T : List String} {V : View} {st : St} {d : Nat} {env inner : Addr} {Γ : List (List String)}\n    {L : List String} {sp fs pos : Nat} {A : AM} (hm : MS code T V st d inner (L :: Γ) sp fs A)\n    (hA : A.pc = pcOf pos) {fr : Frame} (hfr : st.store.frames[inner]? = some fr) (hpar : fr.parent = some env)\n    (hseg : Seg code pos [.ld envR envR]) :\n    Reaches code A (fun B => B.pc = pcOf (pos + 1) ∧ MS code T V st d env Γ sp fs B ∧ B.mem = A.mem ∧\n      B.out = A.out) := by",
+   "body_lines": 37
+  },
+  {
+   "file": "Vsa/Compiler/StuckStmt.lean",
+   "name": "fIfSome",
+   "stratum": "M",
+   "set": "primary",
+   "lines": [
+    83,
+    117
+   ],
+   "statement": "theorem fIfSome {c : Expr} {t e : Stmt} (ihc : ∀ st, EStuck code T n st d env c)\n    (iht : ∀ st, SStuck code T n st d env t) (ihe : ∀ st, SStuck code T n st d env e) :\n    SStuck code T n st d env (.ifStmt c t (some e)) := by",
+   "body_lines": 32
+  },
+  {
+   "file": "Vsa/Compiler/StmtS.lean",
+   "name": "fIfSome₀",
+   "stratum": "M",
+   "set": "primary",
+   "lines": [
+    76,
+    107
+   ],
+   "statement": "theorem fIfSome₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 : Stmt}\n    (ih1 : ∀ st', SFail code n st' d env s1) (ih2 : ∀ st', SFail code n st' d env s2) :\n    SFail code n st d env (.ifStmt c s1 (some s2)) := by",
+   "body_lines": 29
+  },
+  {
+   "file": "Vsa/Compiler/StmtT.lean",
+   "name": "stmtT",
+   "stratum": "S",
+   "set": "primary",
+   "lines": [
+    314,
+    337
+   ],
+   "statement": "theorem stmtT {code : List Ins} : ∀ {st : St} {d : Nat} {env : Addr} {s : Stmt} {st' : St} {t : Status},\n    ExecS st d env s st' t → TSpec code st d env s st' t",
+   "body_lines": 22
+  },
+  {
+   "file": "Vsa/Compiler/StmtS.lean",
+   "name": "fCons₀",
+   "stratum": "S",
+   "set": "primary",
+   "lines": [
+    207,
+    229
+   ],
+   "statement": "theorem fCons₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List Stmt}\n    (hd : ∀ x e, s ≠ .varDecl x (some e)) (ihs : ∀ st', SFail code n st' d env s)\n    (ihss : ∀ st', SeqFail code n st' d env ss) : SeqFail code n st d env (s :: ss) := by",
+   "body_lines": 20
+  },
+  {
+   "file": "Vsa/Compiler/RTOps.lean",
+   "name": "run_add",
+   "stratum": "L",
+   "set": "fresh",
+   "lines": [
+    795,
+    872
+   ],
+   "statement": "theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Array String}\n    {l r : Value} {t1 p1 t2 p2 rr : BitVec 64} (hops : Operands H m h L l r t1 p1 t2 p2)\n    (h8 : Has L hpO (BitVec.ofNat 64 h)) (hra : Has L ra rr) (hal : rr.toNat % 4 = 0)\n    (hh : ObjPtr h) (hfx : FixedOK m) (hfb : fixedAddr 7 + 40 ≤ h) (hc : CloOK H s m h) :\n    Reaches code ⟨pcOf addPos, L, m, o⟩ (fun B => B.out = o ∧\n      match binOpSem s .add l r with",
+   "body_lines": 71
+  },
+  {
+   "file": "Vsa/Compiler/SimAll.lean",
+   "name": "sim_all",
+   "stratum": "L",
+   "set": "fresh",
+   "lines": [
+    22,
+    189
+   ],
+   "statement": "theorem sim_all : Sims code T := by",
+   "body_lines": 167
+  },
+  {
+   "file": "Vsa/Compiler/ExprSim.lean",
+   "name": "sim_not",
+   "stratum": "M",
+   "set": "fresh",
+   "lines": [
+    667,
+    700
+   ],
+   "statement": "theorem sim_not (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e) :\n    SimE code Γ (.unary .not e) := by",
+   "body_lines": 32
+  },
+  {
+   "file": "Vsa/Compiler/SimCallE.lean",
+   "name": "sCall",
+   "stratum": "M",
+   "set": "fresh",
+   "lines": [
+    26,
+    76
+   ],
+   "statement": "theorem sCall {st : St} {d : Nat} {env : Addr} {f : Expr} {args : List Expr} {st1 st2 st3 : St}\n    {fv : Value} {vs : List Value} {v : Value} {nf na nc : Nat} (hE : ESpec code T st d env f st1 fv nf)\n    (hmax : args.length ≤ maxArgs) (hA : ASpec code T st1 d env args st2 vs na) (hvl : vs.length = args.length)\n    (hC : CSpec code T st2 d fv vs st3 v nc) :\n    ESpec code T st d env (.call f args) st3 v (nf + na + nc) := by",
+   "body_lines": 46
+  },
+  {
+   "file": "Vsa/Compiler/StuckStmt.lean",
+   "name": "fBlockS",
+   "stratum": "S",
+   "set": "fresh",
+   "lines": [
+    37,
+    52
+   ],
+   "statement": "theorem fBlockS {ss : List Stmt} (ih : ∀ st env, QStuck code T n st d env ss) :\n    SStuck code T n st d env (.block ss) := by",
+   "body_lines": 14
+  },
+  {
+   "file": "Vsa/Compiler/RTDisplay.lean",
+   "name": "dp_ret",
+   "stratum": "S",
+   "set": "fresh",
+   "lines": [
+    54,
+    64
+   ],
+   "statement": "theorem dp_ret {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}\n    (h26 : Has L' s10 r) (hal : r.toNat % 4 = 0) (hk : Keep dpClob L L') :\n    Reaches code ⟨pcOf (dpPos + 124), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧\n      Keep dpClob L B.regs) := by",
+   "body_lines": 7
+  }
+ ],
+ "baseline_fresh_body": 337,
+ "measure": "primary: proof-body lines (non-blank, statement excluded) of statement-identical re-proofs + failed compiles; setup lines separate; secondary: user-CPU seconds of touched modules (single-file compile with the lakefile option, min of 3)"
+}
