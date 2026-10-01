@@ -431,8 +431,7 @@ theorem udivdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : B
     obtain ⟨vm, hmi⟩ := hSt.minstret
     have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] udivRetSeg := by
       chain_facts hSt.loaded
-      exact (by rw [ret_tgt r halign]; exact halign :
-        (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0)
+      exact ret_tgt_aligned r halign
     obtain ⟨c', res⟩ := segEval_selected_framed udivRetSeg _ [] _ vm (fun _ => False) mulKeep
       (mulRegs a0 a1 a2 a3 r) c hSt.good hSt.pc hmi hSt.held
       (by show KeysOK [10, 11, 12, 13, 1]; decide) facts

@@ -1,4 +1,4 @@
-import Vsa.Sim.Muldi3Sites
+import Vsa.Sim.Code.«__muldi3»
 import Vsa.Sim.ObsBasics
 import Vsa.Triple
 import Vsa.Sim.SegEffect
@@ -23,40 +23,6 @@ abbrev NotWrittenM (R : Register) : Prop :=
   (Register.minstret == R) = false ∧ (Register.minstret_increment == R) = false ∧
   (Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
   (Register.mip == R) = false
-
-theorem NotWrittenM.x10 {R : Register} (h : NotWrittenM R) : (Register.x10 == R) = false := h.1
-theorem NotWrittenM.x11 {R : Register} (h : NotWrittenM R) : (Register.x11 == R) = false := h.2.1
-theorem NotWrittenM.x12 {R : Register} (h : NotWrittenM R) : (Register.x12 == R) = false := h.2.2.1
-theorem NotWrittenM.x13 {R : Register} (h : NotWrittenM R) : (Register.x13 == R) = false := h.2.2.2.1
-
-theorem frame_alu_m {σ' σ : MState} {pc vm : BitVec 64} {rd : Register} {v : RegisterType rd}
-    (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm rd v)) (R : Register)
-    (hrd : (rd == R) = false) (hR : NotWrittenM R) :
-    σ'.regs.get? R = σ.regs.get? R := by
-  obtain ⟨_, _, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := hR
-  rw [hobs.1 R hmc hmt hmip]
-  exact get?_sigmaPost_alu σ pc vm rd v R hmi hpc hrd hnpc hmii
-
-theorem frame_btaken_m {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec 13}
-    (hobs : ReadsLikePost σ' (sigmaPost_branch_taken σ pc vm imm)) (R : Register)
-    (hR : NotWrittenM R) : σ'.regs.get? R = σ.regs.get? R := by
-  obtain ⟨_, _, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := hR
-  rw [hobs.1 R hmc hmt hmip]
-  exact get?_sigmaPost_branch_taken σ pc vm imm R hmi hpc hnpc hmii
-
-theorem frame_bnottaken_m {σ' σ : MState} {pc vm : BitVec 64}
-    (hobs : ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vm)) (R : Register)
-    (hR : NotWrittenM R) : σ'.regs.get? R = σ.regs.get? R := by
-  obtain ⟨_, _, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := hR
-  rw [hobs.1 R hmc hmt hmip]
-  exact get?_sigmaPost_branch_nottaken σ pc vm R hmi hpc hnpc hmii
-
-theorem frame_jr_m {σ' σ : MState} {pc vm tgt : BitVec 64}
-    (hobs : ReadsLikePost σ' (sigmaPost_jump_x0 σ pc vm tgt)) (R : Register)
-    (hR : NotWrittenM R) : σ'.regs.get? R = σ.regs.get? R := by
-  obtain ⟨_, _, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := hR
-  rw [hobs.1 R hmc hmt hmip]
-  exact get?_sigmaPost_jump_x0 σ pc vm tgt R hmi hpc hnpc hmii
 
 structure St (g : (R : Register) → Option (RegisterType R))
     (pc a0 a1 a2 a3 r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
@@ -114,6 +80,40 @@ theorem St.of_seg {g : (R : Register) → Option (RegisterType R)}
 
 
 
+theorem St.seg {g : (R : Register) → Option (RegisterType R)}
+    {pc pc' a0 a1 a2 a3 b0 b1 b2 b3 r : BitVec 64}
+    {m0 : Std.ExtHashMap Nat (BitVec 8)} {o : Array String} {c : Config} (bs : List BBlock)
+    (h : St g pc a0 a1 a2 a3 r m0 o c)
+    (facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] bs)
+    (hwf : ChainOK pc [10, 11, 12, 13, 1] bs)
+    (hfoot : ∀ k : Nat, ¬ False → c.σ.mem[k]? = (writeLog c.σ.mem
+      (evalBlocks bs (SegEvalState.init (mulRegs a0 a1 a2 a3 r) [])).log)[k]?)
+    (havoid : WrChainAvoids mulKeep bs)
+    (hproj : GProjects (evalBlocks bs (SegEvalState.init (mulRegs a0 a1 a2 a3 r) [])).regs
+      (mulRegs b0 b1 b2 b3 r))
+    (hpc : evalBlocksPC pc (SegEvalState.init (mulRegs a0 a1 a2 a3 r) []) bs = pc') :
+    ∃ c', Steps c c' ∧ St g pc' b0 b1 b2 b3 r m0 o c' := by
+  obtain ⟨vm, hmi⟩ := h.minstret
+  obtain ⟨c', res⟩ := segEval_selected_framed bs _ [] pc vm (fun _ => False) mulKeep _ c h.good
+    h.pc hmi h.held (by show KeysOK [10, 11, 12, 13, 1]; decide) facts hwf h.tick hfoot
+    (by decide) havoid hproj
+  exact ⟨c', res.steps, h.of_seg res hpc⟩
+
+#derive_case mulMvSeg chain [(0x80004640#64, 0x00050613#32)]
+#derive_case mulLiSeg chain [(0x80004644#64, 0x00000513#32)]
+#derive_case mulAndiSeg chain [(0x80004648#64, 0x0015f693#32)]
+#derive_case mulAddSeg chain [(0x80004650#64, 0x00c50533#32)]
+#derive_case mulSrliSeg chain [(0x80004654#64, 0x0015d593#32)]
+#derive_case mulOddFallSeg chain []
+  terminator ⟨0x8000464c#64, 0x00068463#32, 0x63#8, 0x84#8, 0x06#8, 0x00#8,
+    .br bop.BEQ false, 13, 0, 0x0008#13, 0#21, 0#12⟩
+#derive_case mulLoopBackSeg chain []
+  terminator ⟨0x8000465c#64, 0xfe0596e3#32, 0xe3#8, 0x96#8, 0x05#8, 0xfe#8,
+    .br bop.BNE true, 11, 0, 0x1fec#13, 0#21, 0#12⟩
+#derive_case mulRetSeg chain []
+  terminator ⟨0x80004660#64, 0x00008067#32, 0x67#8, 0x80#8, 0x00#8, 0x00#8,
+    .jr, 1, 0, 0#13, 0#21, 0#12⟩
+
 private theorem addi0 (v : BitVec 64) : v + sign_extend (m := 64) (0x000#12) = v := by
   rw [sext_zero]; exact BitVec.add_zero v
 
@@ -122,111 +122,33 @@ private theorem andi1 (v : BitVec 64) : v &&& sign_extend (m := 64) (0x001#12) =
 
 theorem tr_40_44 (g : (R : Register) → Option (RegisterType R))
     (x y r a2old a3old : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
-    Triple (St g (0x80004640#64) x y a2old a3old r m0 o) (St g (0x80004644#64) x y x a3old r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_80004640 c.σ c.tick c.steps (0x80004640#64) vmi x hSt.good hSt.pc hmi hSt.a0 hSt.loaded rfl hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_alu_pc hobs,
-    obs_alu_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_alu_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    ?_,
-    obs_alu_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_alu_minstret hobs, hi',
-    fun R hR => (frame_alu_m hobs R hR.x12 hR).trans (hSt.hframe R hR)⟩
-
-  have hrd := obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  rwa [addi0 x] at hrd
+    Triple (St g (0x80004640#64) x y a2old a3old r m0 o) (St g (0x80004644#64) x y x a3old r m0 o) :=
+  fun _ hSt => hSt.seg mulMvSeg (by chain_facts hSt.loaded) (by decide) (fun _ _ => rfl) (by decide)
+    ⟨rfl, rfl, congrArg some (addi0 x), rfl, rfl, trivial⟩ rfl
 
 theorem tr_44_48 (g : (R : Register) → Option (RegisterType R))
     (x y r a2 a3old : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
-    Triple (St g (0x80004644#64) x y a2 a3old r m0 o) (St g (0x80004648#64) (0#64) y a2 a3old r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_80004644 c.σ c.tick c.steps (0x80004644#64) vmi hSt.good hSt.pc hmi hSt.loaded rfl hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_alu_pc hobs, ?_,
-    obs_alu_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_alu_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_alu_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_alu_minstret hobs, hi',
-    fun R hR => (frame_alu_m hobs R hR.x10 hR).trans (hSt.hframe R hR)⟩
-  have hrd := obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  rwa [addi0 (0#64)] at hrd
+    Triple (St g (0x80004644#64) x y a2 a3old r m0 o) (St g (0x80004648#64) (0#64) y a2 a3old r m0 o) :=
+  fun _ hSt => hSt.seg mulLiSeg (by chain_facts hSt.loaded) (by decide) (fun _ _ => rfl) (by decide)
+    ⟨congrArg some (addi0 0#64), rfl, rfl, rfl, rfl, trivial⟩ rfl
 
 theorem tr_48_4c (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 a3old : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
-    Triple (St g (0x80004648#64) a0 y a2 a3old r m0 o) (St g (0x8000464c#64) a0 y a2 (y &&& 1#64) r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_80004648 c.σ c.tick c.steps (0x80004648#64) vmi y hSt.good hSt.pc hmi hSt.a1 hSt.loaded rfl hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_alu_pc hobs,
-    obs_alu_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_alu_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_alu_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    ?_,
-    obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_alu_minstret hobs, hi',
-    fun R hR => (frame_alu_m hobs R hR.x13 hR).trans (hSt.hframe R hR)⟩
-  have hrd := obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  rwa [andi1 y] at hrd
+    Triple (St g (0x80004648#64) a0 y a2 a3old r m0 o) (St g (0x8000464c#64) a0 y a2 (y &&& 1#64) r m0 o) :=
+  fun _ hSt => hSt.seg mulAndiSeg (by chain_facts hSt.loaded) (by decide) (fun _ _ => rfl) (by decide)
+    ⟨rfl, rfl, rfl, congrArg some (andi1 y), rfl, trivial⟩ rfl
 
 theorem tr_50_54 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 a3 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
-    Triple (St g (0x80004650#64) a0 y a2 a3 r m0 o) (St g (0x80004654#64) (a0 + a2) y a2 a3 r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_80004650 c.σ c.tick c.steps (0x80004650#64) vmi a0 a2 hSt.good hSt.pc hmi hSt.a0 hSt.a2 hSt.loaded rfl hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_alu_pc hobs,
-    obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide),
-    obs_alu_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_alu_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_alu_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_alu_minstret hobs, hi',
-    fun R hR => (frame_alu_m hobs R hR.x10 hR).trans (hSt.hframe R hR)⟩
+    Triple (St g (0x80004650#64) a0 y a2 a3 r m0 o) (St g (0x80004654#64) (a0 + a2) y a2 a3 r m0 o) :=
+  fun _ hSt => hSt.seg mulAddSeg (by chain_facts hSt.loaded) (by decide) (fun _ _ => rfl) (by decide)
+    ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩ rfl
 
 theorem tr_54_58 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a1 a2 a3 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
-    Triple (St g (0x80004654#64) a0 a1 a2 a3 r m0 o) (St g (0x80004658#64) a0 (a1 >>> (1:Nat)) a2 a3 r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_80004654 c.σ c.tick c.steps (0x80004654#64) vmi a1 hSt.good hSt.pc hmi hSt.a1 hSt.loaded rfl hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_alu_pc hobs,
-    obs_alu_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    ?_,
-    obs_alu_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_alu_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_alu_minstret hobs, hi',
-    fun R hR => (frame_alu_m hobs R hR.x11 hR).trans (hSt.hframe R hR)⟩
-  have hrd := obs_alu_rd hobs (by decide) (by decide) (by decide) (by decide) (by decide)
-  rwa [shr_shamt a1] at hrd
+    Triple (St g (0x80004654#64) a0 a1 a2 a3 r m0 o) (St g (0x80004658#64) a0 (a1 >>> (1:Nat)) a2 a3 r m0 o) :=
+  fun _ hSt => hSt.seg mulSrliSeg (by chain_facts hSt.loaded) (by decide) (fun _ _ => rfl) (by decide)
+    ⟨rfl, congrArg some (shr_shamt a1), rfl, rfl, rfl, trivial⟩ rfl
 
 theorem tr_58_5c (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a1 a2 a3 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
@@ -234,13 +156,12 @@ theorem tr_58_5c (g : (R : Register) → Option (RegisterType R))
   intro c hSt
   obtain ⟨vm, hmi⟩ := hSt.minstret
   have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] mulShlSeg := by
-    chain_facts hSt.loaded with "Vsa.Sim.Code.__muldi3_at_"
+    chain_facts hSt.loaded
   obtain ⟨c', res⟩ := segEval_selected_framed mulShlSeg _ [] _ vm (fun _ => False) mulKeep
     (mulRegs a0 a1 (a2 <<< (1:Nat)) a3 r) c hSt.good hSt.pc hmi hSt.held (by show KeysOK [10, 11, 12, 13, 1]; decide) facts
     (by show ChainOK _ [10, 11, 12, 13, 1] _; decide) hSt.tick (fun _ _ => rfl) (by decide) (by decide)
     ⟨rfl, rfl, congrArg some (shl_shamt a2), rfl, rfl, trivial⟩
   exact ⟨c', res.steps, hSt.of_seg res rfl⟩
-
 
 #derive_case mulOddSkipSeg chain []
   terminator ⟨0x8000464c#64, 0x00068463#32, 0x63#8, 0x84#8, 0x06#8, 0x00#8,
@@ -262,51 +183,20 @@ theorem tr_4c_54 (g : (R : Register) → Option (RegisterType R))
     (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
   exact ⟨c', res.steps, hSt.of_seg res rfl⟩
 
+
 theorem tr_4c_50 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (hodd : ((y &&& 1#64) == (0#64)) = false) :
-    Triple (St g (0x8000464c#64) a0 y a2 (y &&& 1#64) r m0 o) (St g (0x80004650#64) a0 y a2 (y &&& 1#64) r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_8000464c_nottaken c.σ c.tick c.steps (0x8000464c#64) vmi (y &&& 1#64)
-      hSt.good hSt.pc hmi hSt.a3 hSt.loaded rfl hodd hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut,
-    obs_bnottaken_pc hobs,
-    obs_bnottaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_bnottaken_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_bnottaken_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_bnottaken_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_bnottaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_bnottaken_minstret hobs, hi',
-    fun R hR => (frame_bnottaken_m hobs R hR).trans (hSt.hframe R hR)⟩
+    Triple (St g (0x8000464c#64) a0 y a2 (y &&& 1#64) r m0 o) (St g (0x80004650#64) a0 y a2 (y &&& 1#64) r m0 o) :=
+  fun _ hSt => hSt.seg mulOddFallSeg (by chain_facts hSt.loaded; exact hodd) (by decide)
+    (fun _ _ => rfl) (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩ rfl
 
 theorem tr_5c_48 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 a3 a1 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (hne : (a1 != (0#64)) = true) :
-    Triple (St g (0x8000465c#64) a0 a1 a2 a3 r m0 o) (St g (0x80004648#64) a0 a1 a2 a3 r m0 o) := by
-  apply Triple.of_step
-  intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_8000465c_taken c.σ c.tick c.steps (0x8000465c#64) vmi a1
-      hSt.good hSt.pc hmi hSt.a1 hSt.loaded rfl hne hSt.tick
-  have hpceq : (0x8000465c#64 : BitVec 64) + sign_extend (m := 64) (0x1fec#13) = (0x80004648#64 : BitVec 64) := by
-    apply BitVec.eq_of_toNat_eq; decide
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut, ?_,
-    obs_btaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_btaken_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_btaken_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_btaken_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_btaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_btaken_minstret hobs, hi',
-    fun R hR => (frame_btaken_m hobs R hR).trans (hSt.hframe R hR)⟩
-  rw [obs_btaken_pc hobs, hpceq]
+    Triple (St g (0x8000465c#64) a0 a1 a2 a3 r m0 o) (St g (0x80004648#64) a0 a1 a2 a3 r m0 o) :=
+  fun _ hSt => hSt.seg mulLoopBackSeg (by chain_facts hSt.loaded; exact hne) (by decide)
+    (fun _ _ => rfl) (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩ rfl
 
 theorem tr_5c_60 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 a3 a1 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
@@ -315,7 +205,7 @@ theorem tr_5c_60 (g : (R : Register) → Option (RegisterType R))
   intro c hSt
   obtain ⟨vm, hmi⟩ := hSt.minstret
   have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] mulLoopExitSeg := by
-    chain_facts hSt.loaded with "Vsa.Sim.Code.__muldi3_at_"
+    chain_facts hSt.loaded
     exact hne
   obtain ⟨c', res⟩ := segEval_selected_framed mulLoopExitSeg _ [] _ vm (fun _ => False) mulKeep
     (mulRegs a0 a1 a2 a3 r) c hSt.good hSt.pc hmi hSt.held
@@ -334,24 +224,12 @@ theorem tr_60_ret (g : (R : Register) → Option (RegisterType R))
              c.σ.regs.get? Register.x10 = some a0 ∧ c.σ.regs.get? Register.x11 = some a1 ∧
              c.σ.regs.get? Register.x12 = some a2 ∧ c.σ.regs.get? Register.x1 = some r ∧
              c.tick < 2 ∧ (∀ R : Register, NotWrittenM R → c.σ.regs.get? R = g R)) := by
-  apply Triple.of_step
   intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
-    rw [ret_tgt r halign]; exact halign
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_80004660 c.σ c.tick c.steps (0x80004660#64) vmi r
-      hSt.good hSt.pc hmi hSt.ra hSt.loaded rfl htgt hSt.tick
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut, ?_,
-    obs_jr_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_jr_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_jr_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_jr_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    hi',
-    fun R hR => (frame_jr_m hobs R hR).trans (hSt.hframe R hR)⟩
-  rw [obs_jr_pc hobs, ret_tgt r halign]
+  obtain ⟨c', hs, h'⟩ := hSt.seg (b0 := a0) (b1 := a1) (b2 := a2) (b3 := a3) mulRetSeg
+    (by chain_facts hSt.loaded; exact ret_tgt_aligned r halign) (by decide) (fun _ _ => rfl)
+    (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩ rfl
+  exact ⟨c', hs, h'.good, h'.mem, h'.sailOut, h'.pc.trans (congrArg some (ret_tgt r halign)),
+    h'.a0, h'.a1, h'.a2, h'.ra, h'.tick, h'.hframe⟩
 
 def AtHead (g : (R : Register) → Option (RegisterType R)) (x y r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
   ∃ a0 a1 a2 a3, St g (0x80004648#64) a0 a1 a2 a3 r m0 o c ∧ a0 + a2 * a1 = x * y

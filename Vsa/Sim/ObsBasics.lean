@@ -277,4 +277,8 @@ theorem ret_tgt (r : BitVec 64) (halign : r.toNat % 4 = 0) :
   rw [hmv, Nat.and_comm]
   exact and_clear_bit0 r.toNat r.isLt (by omega)
 
+theorem ret_tgt_aligned (r : BitVec 64) (h : r.toNat % 4 = 0) :
+    (Sail.BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
+  rw [ret_tgt r h]; exact h
+
 end Vsa.Sim
