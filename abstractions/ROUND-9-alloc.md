@@ -317,3 +317,106 @@ Reasons, by the measures fixed in §0:
   file CPU unchanged, because the `omega` calls that cost the time are inside `rgn_run`/`rgn_side` and
   the edit lemmas; 569 setup lines.
 * `omega_near`: see above.
+
+## 9. Rollout
+
+On `exp-R9-C` (from exp-R9 + the P2 branch + the consolidation 923a8ac1): six agents worked on
+disjoint files in one shared worktree, with one build lock, path-scoped commits and a per-file +10%
+CPU bound. Merged into `exp-R9` as ea063bd8. Brief: `~/syi-r9/rollout-brief.md`.
+
+| agent | files | non-blank lines | CPU (single file) | what did the work |
+|---|---|---|---|---|
+| A1 heap top family (owned HeapWin) | HeapRealloc, HeapGrow, HeapSplit, HeapWin | 976 → 714 | HeapRealloc 6.17 → 3.86, HeapGrow 1.75 → 1.15, HeapSplit 2.61 → 1.36 | setTop 179 → 91, cut 211 → 145, topResize 111 → 54, topSplit 158 → 82; HeapWin gained `volGlobal`, `keep_stable` (edits that change brk), `keep_freeV`, `free_mid`, `HeapAt.free_to`, `win_g` |
+| A2 heap bins family | HeapFree, HeapMoveAt, HeapTake, HeapCarve, HeapClear + new HeapRead | 2,911 → 2,457 (incl. HeapRead 209) | HeapFree 18.5 → 14.3, HeapMoveAt 5.3 → 3.0, HeapTake 10.2 → 9.4 | take 385 → 240, moveBinAt 426 → 227, release 537 → 389, absorb 201 → 152, carve 314 → 264, splitFree 192 → 176, coalNext 125 → 110. The relinking counterparts of the pilot's lemmas, below HeapTake: `keep_scal`, `keep_fd`/`keep_bk`, `binList_keep`/`_remove`/`_insert`, `nodes_ne`, `node_loc`, `pred_mem`/`succ_mem`, `seg_pairs`, `wl_rd` |
+| A3 free paths | Free* | 3,213 → 3,111 | each ≤ +7.5% (FreeLarge) | readbacks folded into one fact `simp`; `carry_close` where it also removes a `toNat_ofNat` step; `keep3` |
+| A4 malloc blocks | MallocBlocks, MallocBlocks2, MallocExtend, MallocLarge, MallocSplit | 2,037 → 1,907 | each ≤ +4.6% | `refine … <;> upd_norm [facts]`, `carry_close` where normalising is not enough, `keep4`/`keep6` |
+| A5 malloc rest | MallocRebin(L), MallocPaths, MallocTop, MallocLR, MallocPro, MallocCtx, MallocRunAll, … | 2,385 → 2,262 | each ≤ +3% (Sbrk reverted at +11–14%) | `reg_close`/`reg_try` (simp + reducible `exact` over the facts), `carry_close` in MallocRebinL |
+| A6 realloc paths | Realloc* | 3,665 → 3,598 | each ≤ +5.3% | `carry_close`/`carry_norm` only; ReallocMove reverted (kernel deep recursion with `BitVec.toNat_add` among the facts) |
+
+Consolidation (coordinator): the three glue modules the path agents created independently (FreeGlue,
+MallocGlue, MallocGlue2) were merged into `RegKeep.lean` (48 lines: `keep3/4/6`, `upd_norm`,
+`reg_close`/`reg_try`); the gate's one target cluster (`oom cert`, 8 JalSite certificates of 9 lines)
+became `:= jal_cert` with one 4-line term macro in JalSite.lean (also the 7 in H5Sites), CPU neutral.
+
+The rollout went further than the fresh forecast on the heap cluster. The forecast said both heap
+layers stop at edits that relink bins; the agent that owned the heap layer and the one migrating the
+relinking edits wrote the relinking counterparts (bin-list keep/insert/remove under window agreement)
+during the rollout, and all 13 edits were migrated. The path cluster matched its forecast (−2% to −9%
+per file): the path proofs were already short after round 1, and `carry_close` costs 100–150 ms per
+call against ≈ 10 ms for a fact `simp`, so most path agents used the cheaper form.
+
+Layer defects found (next round's input):
+
+1. `carry_close` is 10× slower than `simp only [upd_apply, …, facts]` per site and runs its closer
+   twice before failing; `try carry_close` on a goal it cannot close is a CPU trap. It respells
+   `s − K + k` off the stack (breaks later `rw`), matches facts syntactically (`Sail.BitVec.extractLsb`
+   vs `BitVec.extractLsb`), does not see `List.getLast` (needs `List.getLast_singleton`), and a fact
+   that rewrites a register breaks the normalised copy of another fact.
+2. `omega` produced an ill-typed proof ("Application type mismatch … coeffs") instead of failing when
+   the context held `q = top ∨ ∃ c ∈ chunks, c.addr = q` together with `%`/`/` atoms (twice; worked
+   around by clearing the existential or using `node_loc`).
+3. Facts passed as `by tac` inside a try/catch search: a failing `tac` logs an error and elaborates to
+   `sorry`, so `exact` "succeeds" (`reg_close` compares error counts; `carry_close` is probably exposed).
+4. `keep_globals`/`keep_free` hard-code the topAddr word; a version parameterised by the written global
+   words would cover HeapClear's window too. The walk has no field-group lemma (still `ChunkWalk.extend`).
+5. With an implicit register file in an anonymous constructor, `rfl` readbacks assign the wrong one.
+6. The shared worktree broke repeatedly: uncommitted edits to shared modules failed other agents'
+   builds and deleted oleans; three agents moved to private worktrees at the shared HEAD.
+
+## 10. Measurements (451c6b8b → hand-off)
+
+| measure | before | after |
+|---|---:|---:|
+| target modules, non-blank lines (72 → 75 modules, incl. 3 new layer modules, 400 lines) | 18,449 | 17,040 (−7.6%) |
+| of which the heap-edit files (Heap* except HeapWin/HeapRead/HeapPermit) | 4,554 | 3,473 (−24%) |
+| `git diff --shortstat 451c6b8b` over Vsa/ and VsaIris/ | | +1,053 / −2,437 |
+| 13 heap edits, declaration lines (script population H) | 3,083 | 2,067 (−33%) |
+| 155 path theorems, declaration lines (71 changed) | 6,846 | 6,381 (−6.8%) |
+| held-out primary, declaration lines (toTop, pvN_join, mal_copy, fl_exit) | 256 | 165 |
+| held-out fresh, declaration lines (coalPrev, bb_top, bw_scan, realloc_grow) | 200 | 175 |
+
+Single-file user CPU (`LEAN_NUM_THREADS=1`, copies outside the repo, base and after interleaved per
+file, min of 2, load 7–14; `~/syi-r9/time/fin_*`): **500.0 → 492.9 s (−1.4%)**, the three new layer
+modules included (3.5 s). Heap files 59.0 → 49.4 s (−16%: HeapFree 20.0 → 14.8, HeapMoveAt 5.5 → 3.4,
+HeapRealloc 5.7 → 4.1, HeapSplit 2.8 → 1.4, HeapGrow 1.7 → 1.2); FreePaths 50.2 → 48.4. Every
+file within +10% except MallocRunAll (0.89 → 1.02 s); its old source measures 0.84 → 0.92 s on the new
+tree too, so the +0.08–0.13 s is import loading, not the migrated unit. The relative bound is
+meaningless below ~2 s; ReallocMal (+4.8%), ReallocTail (+5.3%), ReallocCtx (+5.3%) are the largest real
+increases.
+
+Full `lake build` (all default targets, executables included) is green at ea063bd8: 1,552 jobs, 0
+errors. Axioms check (the 14-line file): 12 theorems `[propext, Classical.choice, Quot.sound]`, the two
+WhileLogic adequacy theorems `[propext, Quot.sound]`. No `sorry`, `axiom`, `native_decide`,
+`bv_decide`, `ofReduceBool`, `maxHeartbeats` or `maxRecDepth` added (diff scan).
+
+Statement check (type hash of every constant of the `Vsa*` modules, base = the cut commit 205acaac's
+build, joined by name, auxiliary constants excluded): **0 changed types**, 2 gone (`grow_keep`,
+`split_keep`, local helpers used only in their files), 56 new, 5 moved module unchanged in type
+(`read64_keep`, `binAt_geo`, `BlockHeapAt.node_foot`, `HeapAt.member`, `HeapAt.bin_unique`, from
+HeapTake to HeapRead). The reachability cut (205acaac) removed 30 dead declarations; none had an
+outside user. None of the 197 target constants used outside the target changed or disappeared.
+
+Gate re-run (`--root`, no baseline): 12 → 12 firing clusters. The one target cluster, `oom cert`, is
+now 8 one-line units (9 → 1 lines each): flat at the floor, which the one-third rule cannot register
+(E45); record it in the baseline as an automation floor. The other eleven are outside this target.
+
+Calibration: primary −33% (P2), fresh −7.6% (layer-attributable −2%), rollout −7.6% of target lines
+(−24% of the heap files, −2% to −9% of the path files) and −1.4% CPU. The fresh set predicted the
+path cluster and under-predicted the heap cluster, because the heap rollout widened the layer's
+precondition (E54, E55).
+
+## 11. Where the cost is now, and round-10 targets
+
+* **Time is in the tactics' own `omega` calls.** 8,344 executed `omega` calls over 1 ms against 3,484
+  written: the step and region tactics (`rgn_run`/`rgn_side`/`sx_side`/`rgn_arith`, `<;> omega`) issue
+  most of them, and `omega` is ~half the target's CPU. Case-level vocabulary did not move it (P3's
+  checker halves the per-goal cost but only for the goals a proof writes). Target: the region search
+  inside `rgn_run`/`rgn_side` decides membership with `omega` per candidate region (round 1's named
+  cost); replace that decision (keys by `decide`, or P3's certificate checker inside the tactic).
+* **Path glue** is near its floor for this encoding: `carry_close` loses to a fact `simp`; the residue
+  is register restore over long `upd` chains with symbolic registers (Sbrk), bin-ring arguments, and
+  the step/branch skeleton.
+* **Heap**: the walk has no frame lemma (truncate/extend still by `ChunkWalk.extend`); `live`/`exact`
+  are re-proved per edit; HeapClear's window fits neither global lemma.
+* **Composition edits** (splitFree, coalNext, coalPrev) remain glue over `take`/`absorb` with
+  read-after-write chains (`wl_rd` helps).
