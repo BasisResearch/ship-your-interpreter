@@ -52,7 +52,7 @@ theorem land1_facts {m : Std.ExtHashMap Nat (BitVec 8)} {v sI a5v s5v : BitVec 6
     (hpin : ∀ k, sI.toNat ≤ k → k < sI.toNat + 176 → (m[k]?).getD 0 = imgI k) :
     ChainFacts m m (l1L v sI a5v s5v) [imgWord imgI sI.toNat] land1Seg := by
   unfold land1Seg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.interpLandCode_at_"
+  chain_facts hcode
   · show (v != 0#64) = true
     simpa using hv
   · exact frameLd (off := 0) rfl rfl (by decide) (by decide) hg hpin
@@ -77,7 +77,7 @@ theorem land2_facts {m : Std.ExtHashMap Nat (BitVec 8)} {inp : BitVec 64}
     ChainFacts m m [(15, inp)] [] land2Seg := by
   obtain ⟨h1, h2, h3, h4⟩ := hinp
   unfold land2Seg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.interpLandCode_at_"
+  chain_facts hcode
   exact swFact rfl (addr_off inp _ 8 (by decide) (by omega)) (by omega) (by omega) (by omega)
     (by omega)
 
@@ -104,7 +104,7 @@ theorem land3_facts {m : Std.ExtHashMap Nat (BitVec 8)}
     (hpin : ∀ k, sI.toNat ≤ k → k < sI.toNat + 176 → (m[k]?).getD 0 = imgI k) :
     ChainFacts m m (l3L sI rv s0v s1v s2v s3v s4v s6v a0v) (l3Lds sI imgI) land3Seg := by
   unfold land3Seg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.interpLandCode_at_"
+  chain_facts hcode
   · exact frameLd (off := 168) rfl rfl (by decide) (by decide) hg hpin
   · exact frameLd (off := 160) rfl rfl (by decide) (by decide) hg hpin
   · exact frameLd (off := 152) rfl rfl (by decide) (by decide) hg hpin

@@ -19,55 +19,6 @@ theorem oom80002a38CodeLoaded_of {m : Std.ExtHashMap Nat (BitVec 8)}
     (h : ∀ p ∈ codeFoot 0x80002a38 oom80002a38Code, m[p.1]? = some p.2.2) : oom80002a38CodeLoaded m :=
   fun k hk => loaded_of_foot h k (by rw [oom80002a38Code_len]; exact hk)
 
-theorem oom80002a38Code_at_80002a38 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002a38CodeLoaded m) :
-    m[(0x80002a38 : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x80002a39 : Nat)]? = some (0xb7 : BitVec 8) ∧
-    m[(0x80002a3a : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80002a3b : Nat)]? = some (0x46 : BitVec 8) :=
-  ⟨h 0 (by decide), h 1 (by decide), h 2 (by decide), h 3 (by decide)⟩
-
-theorem oom80002a38Code_at_80002a3c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002a38CodeLoaded m) :
-    m[(0x80002a3c : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80002a3d : Nat)]? = some (0x06 : BitVec 8) ∧
-    m[(0x80002a3e : Nat)]? = some (0xe0 : BitVec 8) ∧
-    m[(0x80002a3f : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 4 (by decide), h 5 (by decide), h 6 (by decide), h 7 (by decide)⟩
-
-theorem oom80002a38Code_at_80002a40 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002a38CodeLoaded m) :
-    m[(0x80002a40 : Nat)]? = some (0x93 : BitVec 8) ∧
-    m[(0x80002a41 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80002a42 : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x80002a43 : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 8 (by decide), h 9 (by decide), h 10 (by decide), h 11 (by decide)⟩
-
-theorem oom80002a38Code_at_80002a44 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002a38CodeLoaded m) :
-    m[(0x80002a44 : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x80002a45 : Nat)]? = some (0xb6 : BitVec 8) ∧
-    m[(0x80002a46 : Nat)]? = some (0x87 : BitVec 8) ∧
-    m[(0x80002a47 : Nat)]? = some (0x01 : BitVec 8) :=
-  ⟨h 12 (by decide), h 13 (by decide), h 14 (by decide), h 15 (by decide)⟩
-
-theorem oom80002a38Code_at_80002a48 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002a38CodeLoaded m) :
-    m[(0x80002a48 : Nat)]? = some (0x17 : BitVec 8) ∧
-    m[(0x80002a49 : Nat)]? = some (0x65 : BitVec 8) ∧
-    m[(0x80002a4a : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80002a4b : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 16 (by decide), h 17 (by decide), h 18 (by decide), h 19 (by decide)⟩
-
-theorem oom80002a38Code_at_80002a4c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002a38CodeLoaded m) :
-    m[(0x80002a4c : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80002a4d : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80002a4e : Nat)]? = some (0x85 : BitVec 8) ∧
-    m[(0x80002a4f : Nat)]? = some (0x5f : BitVec 8) :=
-  ⟨h 20 (by decide), h 21 (by decide), h 22 (by decide), h 23 (by decide)⟩
-
-theorem oom80002a38Code_at_80002a54 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002a38CodeLoaded m) :
-    m[(0x80002a54 : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80002a55 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80002a56 : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x80002a57 : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 28 (by decide), h 29 (by decide), h 30 (by decide), h 31 (by decide)⟩
-
 #derive_case oom80002a38Seg chain [(0x80002a38#64, 0x4601b783#32), (0x80002a3c#64, 0x00e00613#32), (0x80002a40#64, 0x00100593#32), (0x80002a44#64, 0x0187b683#32), (0x80002a48#64, 0x00016517#32), (0x80002a4c#64, 0x5f850513#32)]
 
 #derive_case oom80002a38Li chain [(0x80002a54#64, 0x00100513#32)]
@@ -138,7 +89,7 @@ theorem oom80002a38_ok : oom80002a38.OK where
     simp only [oom80002a38] at h2
     change ChainFacts m m _ _ oom80002a38Seg
     unfold oom80002a38Seg ChainFacts
-    chain_facts (oom80002a38CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80002a38Code_at_"
+    chain_facts (oom80002a38CodeLoaded_of hcode)
     · have e : ∀ x : BitVec 64, x = gpV + sign_extend (m := 64) (0x460#12) →
           x.toNat = consoleImpurePtrAddr := by
         intro x hx; rw [hx]; decide
@@ -171,7 +122,7 @@ theorem oom80002a38_ok : oom80002a38.OK where
   liFacts m a0v hcode := by
     change ChainFacts m m _ _ oom80002a38Li
     unfold oom80002a38Li ChainFacts
-    chain_facts (oom80002a38CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80002a38Code_at_"
+    chain_facts (oom80002a38CodeLoaded_of hcode)
   liPc _ := rfl
   liFin _ := by show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide
   fwCert := oom80002a38Fw_cert
@@ -197,55 +148,6 @@ theorem oom80002bd0Code_len : oom80002bd0Code.length = 36 := by decide
 theorem oom80002bd0CodeLoaded_of {m : Std.ExtHashMap Nat (BitVec 8)}
     (h : ∀ p ∈ codeFoot 0x80002bd0 oom80002bd0Code, m[p.1]? = some p.2.2) : oom80002bd0CodeLoaded m :=
   fun k hk => loaded_of_foot h k (by rw [oom80002bd0Code_len]; exact hk)
-
-theorem oom80002bd0Code_at_80002bd0 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002bd0CodeLoaded m) :
-    m[(0x80002bd0 : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x80002bd1 : Nat)]? = some (0xb7 : BitVec 8) ∧
-    m[(0x80002bd2 : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80002bd3 : Nat)]? = some (0x46 : BitVec 8) :=
-  ⟨h 0 (by decide), h 1 (by decide), h 2 (by decide), h 3 (by decide)⟩
-
-theorem oom80002bd0Code_at_80002bd4 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002bd0CodeLoaded m) :
-    m[(0x80002bd4 : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80002bd5 : Nat)]? = some (0x06 : BitVec 8) ∧
-    m[(0x80002bd6 : Nat)]? = some (0xe0 : BitVec 8) ∧
-    m[(0x80002bd7 : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 4 (by decide), h 5 (by decide), h 6 (by decide), h 7 (by decide)⟩
-
-theorem oom80002bd0Code_at_80002bd8 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002bd0CodeLoaded m) :
-    m[(0x80002bd8 : Nat)]? = some (0x93 : BitVec 8) ∧
-    m[(0x80002bd9 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80002bda : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x80002bdb : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 8 (by decide), h 9 (by decide), h 10 (by decide), h 11 (by decide)⟩
-
-theorem oom80002bd0Code_at_80002bdc {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002bd0CodeLoaded m) :
-    m[(0x80002bdc : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x80002bdd : Nat)]? = some (0xb6 : BitVec 8) ∧
-    m[(0x80002bde : Nat)]? = some (0x87 : BitVec 8) ∧
-    m[(0x80002bdf : Nat)]? = some (0x01 : BitVec 8) :=
-  ⟨h 12 (by decide), h 13 (by decide), h 14 (by decide), h 15 (by decide)⟩
-
-theorem oom80002bd0Code_at_80002be0 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002bd0CodeLoaded m) :
-    m[(0x80002be0 : Nat)]? = some (0x17 : BitVec 8) ∧
-    m[(0x80002be1 : Nat)]? = some (0x65 : BitVec 8) ∧
-    m[(0x80002be2 : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80002be3 : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 16 (by decide), h 17 (by decide), h 18 (by decide), h 19 (by decide)⟩
-
-theorem oom80002bd0Code_at_80002be4 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002bd0CodeLoaded m) :
-    m[(0x80002be4 : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80002be5 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80002be6 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80002be7 : Nat)]? = some (0x46 : BitVec 8) :=
-  ⟨h 20 (by decide), h 21 (by decide), h 22 (by decide), h 23 (by decide)⟩
-
-theorem oom80002bd0Code_at_80002bec {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80002bd0CodeLoaded m) :
-    m[(0x80002bec : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80002bed : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80002bee : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x80002bef : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 28 (by decide), h 29 (by decide), h 30 (by decide), h 31 (by decide)⟩
 
 #derive_case oom80002bd0Seg chain [(0x80002bd0#64, 0x4601b783#32), (0x80002bd4#64, 0x00e00613#32), (0x80002bd8#64, 0x00100593#32), (0x80002bdc#64, 0x0187b683#32), (0x80002be0#64, 0x00016517#32), (0x80002be4#64, 0x46050513#32)]
 
@@ -317,7 +219,7 @@ theorem oom80002bd0_ok : oom80002bd0.OK where
     simp only [oom80002bd0] at h2
     change ChainFacts m m _ _ oom80002bd0Seg
     unfold oom80002bd0Seg ChainFacts
-    chain_facts (oom80002bd0CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80002bd0Code_at_"
+    chain_facts (oom80002bd0CodeLoaded_of hcode)
     · have e : ∀ x : BitVec 64, x = gpV + sign_extend (m := 64) (0x460#12) →
           x.toNat = consoleImpurePtrAddr := by
         intro x hx; rw [hx]; decide
@@ -350,7 +252,7 @@ theorem oom80002bd0_ok : oom80002bd0.OK where
   liFacts m a0v hcode := by
     change ChainFacts m m _ _ oom80002bd0Li
     unfold oom80002bd0Li ChainFacts
-    chain_facts (oom80002bd0CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80002bd0Code_at_"
+    chain_facts (oom80002bd0CodeLoaded_of hcode)
   liPc _ := rfl
   liFin _ := by show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide
   fwCert := oom80002bd0Fw_cert
@@ -376,55 +278,6 @@ theorem oom80003140Code_len : oom80003140Code.length = 36 := by decide
 theorem oom80003140CodeLoaded_of {m : Std.ExtHashMap Nat (BitVec 8)}
     (h : ∀ p ∈ codeFoot 0x80003140 oom80003140Code, m[p.1]? = some p.2.2) : oom80003140CodeLoaded m :=
   fun k hk => loaded_of_foot h k (by rw [oom80003140Code_len]; exact hk)
-
-theorem oom80003140Code_at_80003140 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003140CodeLoaded m) :
-    m[(0x80003140 : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x80003141 : Nat)]? = some (0xb7 : BitVec 8) ∧
-    m[(0x80003142 : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80003143 : Nat)]? = some (0x46 : BitVec 8) :=
-  ⟨h 0 (by decide), h 1 (by decide), h 2 (by decide), h 3 (by decide)⟩
-
-theorem oom80003140Code_at_80003144 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003140CodeLoaded m) :
-    m[(0x80003144 : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80003145 : Nat)]? = some (0x06 : BitVec 8) ∧
-    m[(0x80003146 : Nat)]? = some (0xe0 : BitVec 8) ∧
-    m[(0x80003147 : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 4 (by decide), h 5 (by decide), h 6 (by decide), h 7 (by decide)⟩
-
-theorem oom80003140Code_at_80003148 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003140CodeLoaded m) :
-    m[(0x80003148 : Nat)]? = some (0x93 : BitVec 8) ∧
-    m[(0x80003149 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x8000314a : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x8000314b : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 8 (by decide), h 9 (by decide), h 10 (by decide), h 11 (by decide)⟩
-
-theorem oom80003140Code_at_8000314c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003140CodeLoaded m) :
-    m[(0x8000314c : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x8000314d : Nat)]? = some (0xb6 : BitVec 8) ∧
-    m[(0x8000314e : Nat)]? = some (0x87 : BitVec 8) ∧
-    m[(0x8000314f : Nat)]? = some (0x01 : BitVec 8) :=
-  ⟨h 12 (by decide), h 13 (by decide), h 14 (by decide), h 15 (by decide)⟩
-
-theorem oom80003140Code_at_80003150 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003140CodeLoaded m) :
-    m[(0x80003150 : Nat)]? = some (0x17 : BitVec 8) ∧
-    m[(0x80003151 : Nat)]? = some (0x65 : BitVec 8) ∧
-    m[(0x80003152 : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80003153 : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 16 (by decide), h 17 (by decide), h 18 (by decide), h 19 (by decide)⟩
-
-theorem oom80003140Code_at_80003154 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003140CodeLoaded m) :
-    m[(0x80003154 : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80003155 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80003156 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80003157 : Nat)]? = some (0xef : BitVec 8) :=
-  ⟨h 20 (by decide), h 21 (by decide), h 22 (by decide), h 23 (by decide)⟩
-
-theorem oom80003140Code_at_8000315c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003140CodeLoaded m) :
-    m[(0x8000315c : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x8000315d : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x8000315e : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x8000315f : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 28 (by decide), h 29 (by decide), h 30 (by decide), h 31 (by decide)⟩
 
 #derive_case oom80003140Seg chain [(0x80003140#64, 0x4601b783#32), (0x80003144#64, 0x00e00613#32), (0x80003148#64, 0x00100593#32), (0x8000314c#64, 0x0187b683#32), (0x80003150#64, 0x00016517#32), (0x80003154#64, 0xef050513#32)]
 
@@ -496,7 +349,7 @@ theorem oom80003140_ok : oom80003140.OK where
     simp only [oom80003140] at h2
     change ChainFacts m m _ _ oom80003140Seg
     unfold oom80003140Seg ChainFacts
-    chain_facts (oom80003140CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80003140Code_at_"
+    chain_facts (oom80003140CodeLoaded_of hcode)
     · have e : ∀ x : BitVec 64, x = gpV + sign_extend (m := 64) (0x460#12) →
           x.toNat = consoleImpurePtrAddr := by
         intro x hx; rw [hx]; decide
@@ -529,7 +382,7 @@ theorem oom80003140_ok : oom80003140.OK where
   liFacts m a0v hcode := by
     change ChainFacts m m _ _ oom80003140Li
     unfold oom80003140Li ChainFacts
-    chain_facts (oom80003140CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80003140Code_at_"
+    chain_facts (oom80003140CodeLoaded_of hcode)
   liPc _ := rfl
   liFin _ := by show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide
   fwCert := oom80003140Fw_cert
@@ -555,69 +408,6 @@ theorem oom80003e28Code_len : oom80003e28Code.length = 44 := by decide
 theorem oom80003e28CodeLoaded_of {m : Std.ExtHashMap Nat (BitVec 8)}
     (h : ∀ p ∈ codeFoot 0x80003e28 oom80003e28Code, m[p.1]? = some p.2.2) : oom80003e28CodeLoaded m :=
   fun k hk => loaded_of_foot h k (by rw [oom80003e28Code_len]; exact hk)
-
-theorem oom80003e28Code_at_80003e28 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e28 : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x80003e29 : Nat)]? = some (0xb7 : BitVec 8) ∧
-    m[(0x80003e2a : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80003e2b : Nat)]? = some (0x46 : BitVec 8) :=
-  ⟨h 0 (by decide), h 1 (by decide), h 2 (by decide), h 3 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e2c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e2c : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80003e2d : Nat)]? = some (0x06 : BitVec 8) ∧
-    m[(0x80003e2e : Nat)]? = some (0xe0 : BitVec 8) ∧
-    m[(0x80003e2f : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 4 (by decide), h 5 (by decide), h 6 (by decide), h 7 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e30 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e30 : Nat)]? = some (0x93 : BitVec 8) ∧
-    m[(0x80003e31 : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80003e32 : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x80003e33 : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 8 (by decide), h 9 (by decide), h 10 (by decide), h 11 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e34 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e34 : Nat)]? = some (0x83 : BitVec 8) ∧
-    m[(0x80003e35 : Nat)]? = some (0xb6 : BitVec 8) ∧
-    m[(0x80003e36 : Nat)]? = some (0x87 : BitVec 8) ∧
-    m[(0x80003e37 : Nat)]? = some (0x01 : BitVec 8) :=
-  ⟨h 12 (by decide), h 13 (by decide), h 14 (by decide), h 15 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e38 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e38 : Nat)]? = some (0x17 : BitVec 8) ∧
-    m[(0x80003e39 : Nat)]? = some (0x55 : BitVec 8) ∧
-    m[(0x80003e3a : Nat)]? = some (0x01 : BitVec 8) ∧
-    m[(0x80003e3b : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 16 (by decide), h 17 (by decide), h 18 (by decide), h 19 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e3c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e3c : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80003e3d : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80003e3e : Nat)]? = some (0x85 : BitVec 8) ∧
-    m[(0x80003e3f : Nat)]? = some (0x20 : BitVec 8) :=
-  ⟨h 20 (by decide), h 21 (by decide), h 22 (by decide), h 23 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e40 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e40 : Nat)]? = some (0x23 : BitVec 8) ∧
-    m[(0x80003e41 : Nat)]? = some (0x30 : BitVec 8) ∧
-    m[(0x80003e42 : Nat)]? = some (0x61 : BitVec 8) ∧
-    m[(0x80003e43 : Nat)]? = some (0x41 : BitVec 8) :=
-  ⟨h 24 (by decide), h 25 (by decide), h 26 (by decide), h 27 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e44 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e44 : Nat)]? = some (0x23 : BitVec 8) ∧
-    m[(0x80003e45 : Nat)]? = some (0x3c : BitVec 8) ∧
-    m[(0x80003e46 : Nat)]? = some (0x71 : BitVec 8) ∧
-    m[(0x80003e47 : Nat)]? = some (0x3f : BitVec 8) :=
-  ⟨h 28 (by decide), h 29 (by decide), h 30 (by decide), h 31 (by decide)⟩
-
-theorem oom80003e28Code_at_80003e4c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
-    m[(0x80003e4c : Nat)]? = some (0x13 : BitVec 8) ∧
-    m[(0x80003e4d : Nat)]? = some (0x05 : BitVec 8) ∧
-    m[(0x80003e4e : Nat)]? = some (0x10 : BitVec 8) ∧
-    m[(0x80003e4f : Nat)]? = some (0x00 : BitVec 8) :=
-  ⟨h 36 (by decide), h 37 (by decide), h 38 (by decide), h 39 (by decide)⟩
 
 #derive_case oom80003e28Seg chain [(0x80003e28#64, 0x4601b783#32), (0x80003e2c#64, 0x00e00613#32), (0x80003e30#64, 0x00100593#32), (0x80003e34#64, 0x0187b683#32), (0x80003e38#64, 0x00015517#32), (0x80003e3c#64, 0x20850513#32), (0x80003e40#64, 0x41613023#32), (0x80003e44#64, 0x3f713c23#32)]
 
@@ -700,7 +490,7 @@ theorem oom80003e28_ok : oom80003e28.OK where
     simp only [oom80003e28] at h2
     change ChainFacts m m _ _ oom80003e28Seg
     unfold oom80003e28Seg ChainFacts
-    chain_facts (oom80003e28CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80003e28Code_at_"
+    chain_facts (oom80003e28CodeLoaded_of hcode)
     · have e : ∀ x : BitVec 64, x = gpV + sign_extend (m := 64) (0x460#12) →
           x.toNat = consoleImpurePtrAddr := by
         intro x hx; rw [hx]; decide
@@ -739,7 +529,7 @@ theorem oom80003e28_ok : oom80003e28.OK where
   liFacts m a0v hcode := by
     change ChainFacts m m _ _ oom80003e28Li
     unfold oom80003e28Li ChainFacts
-    chain_facts (oom80003e28CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80003e28Code_at_"
+    chain_facts (oom80003e28CodeLoaded_of hcode)
   liPc _ := rfl
   liFin _ := by show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide
   fwCert := oom80003e28Fw_cert

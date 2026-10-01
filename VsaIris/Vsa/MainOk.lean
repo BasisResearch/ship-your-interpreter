@@ -23,7 +23,7 @@ theorem ok_facts {m : Std.ExtHashMap Nat (BitVec 8)} {rv s0v sM : BitVec 64}
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
   unfold fprintfNeed at h1
   unfold mainOkSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
+  chain_facts hcode
   ·
     rfl
   ·
