@@ -1,3 +1,4 @@
+import VsaIris.OmegaHint
 import VsaIris.Vsa.Stderr.StrCodeStdio
 import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Vsa.Stderr.Mt

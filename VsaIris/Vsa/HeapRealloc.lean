@@ -1,3 +1,4 @@
+import VsaIris.OmegaHint
 import VsaIris.Vsa.HeapFree
 
 namespace VsaIris.VsaHeap

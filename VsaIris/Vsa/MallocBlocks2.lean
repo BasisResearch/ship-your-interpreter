@@ -1,3 +1,4 @@
+import VsaIris.OmegaHint
 import VsaIris.Vsa.MallocBlocks
 import VsaIris.Vsa.HeapPermit
 import VsaIris.Vsa.RegKeep
