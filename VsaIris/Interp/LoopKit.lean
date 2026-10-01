@@ -94,12 +94,6 @@ theorem astSG_of_view {m : Mem} {P : Nat → Prop} {a : Nat} {sm : Stmt}
 
 end Shared
 
-theorem KeepRegs.calleeSaved_upd {R R' : Nat → BitVec 64} (h : KeepRegs calleeSaved R R')
-    {x : Nat} (hx : x ∉ calleeSaved) (w : BitVec 64) : KeepRegs calleeSaved R (upd R' x w) :=
-  fun y hy => by
-    have hne : y ≠ x := fun e => hx (e ▸ hy)
-    rw [upd_apply, ite_eq_right_iff.mpr (fun h => absurd h hne)]; exact h y hy
-
 theorem StmtHead.keep {R R' : Nat → BitVec 64} {s aS inp aRet aEnv : BitVec 64}
     (h : StmtHead R s aS inp aRet aEnv) (hk : KeepRegs calleeSaved R R') :
     StmtHead R' s aS inp aRet aEnv :=
@@ -109,17 +103,11 @@ theorem StmtHead.keep {R R' : Nat → BitVec 64} {s aS inp aRet aEnv : BitVec 64
 
 theorem KeepRegs.refl' (ks : List Nat) (R : Nat → BitVec 64) : KeepRegs ks R R := fun _ _ => rfl
 
-theorem KeepRegs.upd_right {ks : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R')
-    {x : Nat} (hx : x ∉ ks) (w : BitVec 64) : KeepRegs ks R (upd R' x w) :=
-  fun y hy => by
-    have hne : y ≠ x := fun e => hx (e ▸ hy)
-    rw [upd_apply, ite_eq_right_iff.mpr (fun h => absurd h hne)]; exact h y hy
-
 theorem KeepRegs.of_helper {clob : List Nat} {R R' : Nat → BitVec 64}
     (h : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) (hc : ∀ x ∈ calleeSaved, x ∈ fRegs ∧ x ∉ clob) :
     KeepRegs calleeSaved R R' := fun x hx => h x (hc x hx).1 (hc x hx).2
 
-macro "keep_upd" : tactic => `(tactic| ((repeat (apply KeepRegs.upd_right _ (by decide))); exact KeepRegs.refl' _ _))
+macro "keep_upd" : tactic => `(tactic| ((repeat (apply KeepRegs.upd _ (by decide))); exact KeepRegs.refl' _ _))
 
 theorem Untouched.store' {S W : Nat → Prop} (M : Mem) {b w : Nat} (v : BitVec 64)
     (h : ∀ a, b ≤ a → a < b + w → W a) : Untouched S W M (writeLog M [(b, w, v)]) :=

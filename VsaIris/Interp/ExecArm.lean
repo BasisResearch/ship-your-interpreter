@@ -485,11 +485,6 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
 
-theorem KeepRegs.upd {l : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs l R R') {k : Nat}
-    (hk : k ∉ l) (v : BitVec 64) : KeepRegs l R (Sym.upd R' k v) := fun x hx => by
-  have hne : x ≠ k := fun e => hk (e ▸ hx)
-  rw [upd_other _ _ hne]; exact h x hx
-
 theorem execRet_mk {R0 R' : Nat → BitVec 64} {s v8 v9 v18 v19 : BitVec 64} {status : Status}
     (h2 : R' 2 = s) (h8 : R' 8 = v8) (h9 : R' 9 = v9) (h18 : R' 18 = v18) (h19 : R' 19 = v19)
     (hi : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R0 R') (h10 : R' 10 = statusCode status) :

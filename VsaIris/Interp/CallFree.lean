@@ -67,60 +67,14 @@ theorem ms_callFree (A : AllocSpecs live) (Wp : MachWP (GF := GF) (vsaModel live
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ vsaSaved, f k = R k⌝ ∗
       stackScratch (R 2) allocHeadroom ∗ heapRes vsaLayoutP vsaRoomB ρ H))
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
-  case hP =>
-    simp only [freeL, mallocL, sepL_cons]
-    iintro ⟨⟨H10, H2, Hcs⟩, #Hgp', Hst, Hh, Hb⟩
-    ihave ⟨Hcl, Hsv⟩ := (sepL_append _ _ _).1 $$ Hcs
-    unfold VsaIris.a0 VsaIris.sp savedOwn
-    rw [show Newlib.gpV = MallocFast.gpV from rfl]
-    iframe H10 H2 Hgp' Hst Hh Hb
-    isplitl []
-    · ipureintro; exact ⟨hsp, hi4⟩
-    isplitl [Hcl]
-    · iapply clobbered_of_fn vsaClob R $$ Hcl
-    · rw [VsaIris.sepL_map]; iexact Hsv
+  case hP => exact allocRegs_pre hsp hi4
   case hQ =>
-    unfold VsaIris.a0 VsaIris.sp savedOwn
-    iintro ⟨H2, ⟨%q, H10⟩, Hcl, Hsv, Hst, Hres⟩
-    ihave ⟨%g, Hcl⟩ := clobbered_fn vsaClob (by decide) $$ Hcl
-    iexists (fun y => if y = 10 then q else if y = 2 then R 2 else if y ∈ vsaSaved then R y else g y)
-    simp only [freeL, mallocL, sepL_cons]
-    rw [VsaIris.sepL_map] at *
-    have eCl : sepL (GF := GF) vsaClob (fun y => y ↦ᵣ (if y = 10 then q else if y = 2 then R 2
-        else if y ∈ vsaSaved then R y else g y)) = sepL vsaClob (fun y => y ↦ᵣ g y) :=
-      sepL_congr fun y hy => by
-        obtain ⟨h10, h2, hs⟩ := (show ∀ y ∈ vsaClob, y ≠ 10 ∧ y ≠ 2 ∧ y ∉ vsaSaved by decide) y hy
-        simp [h10, h2, hs]
-    have eSv : sepL (GF := GF) vsaSaved (fun y => y ↦ᵣ (if y = 10 then q else if y = 2 then R 2
-        else if y ∈ vsaSaved then R y else g y)) = sepL vsaSaved (fun y => y ↦ᵣ R y) :=
-      sepL_congr fun y hy => by
-        obtain ⟨h10, h2⟩ := (show ∀ y ∈ vsaSaved, y ≠ 10 ∧ y ≠ 2 by decide) y hy
-        simp [h10, h2, hy]
-    simp only [ite_true, show (2 : Nat) ≠ 10 from by decide, ite_false]
-    isplitl [H10 H2 Hcl Hsv]
-    · iframe H10 H2
-      iapply (sepL_append _ _ _).2
-      rw [eCl, eSv]
-      iframe Hcl Hsv
-    iframe Hst Hres
-    ipureintro
-    refine ⟨trivial, fun k hk => ?_⟩
-    obtain ⟨h10, h2⟩ := (show ∀ y ∈ vsaSaved, y ≠ 10 ∧ y ≠ 2 by decide) k hk
-    simp [h10, h2, hk]
+    iintro ⟨H2, ⟨%q, H10⟩, Hcl, Hsv, HE⟩
+    iapply allocRegs_post q (fun _ => iprop(stackScratch (R 2) allocHeadroom ∗
+      heapRes vsaLayoutP vsaRoomB ρ H)) $$ H10 H2 Hcl Hsv HE
   iframe Hspec Hcode Hms Hgp Hst Hh Hb
   iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hres⟩ Hms
-  have hkeep : ∀ x ∈ fRegs, x ∉ callerSaved →
-      (fun x => if x ∈ freeL then f x else R x) x = R x := by
-    intro x hx hc
-    by_cases hL : x ∈ freeL
-    · simp only [hL, ite_true]
-      by_cases h2 : x = 2
-      · subst h2; exact hf2
-      · have hs : x ∈ vsaSaved :=
-          (show ∀ y ∈ freeL, y ∉ callerSaved → y ≠ 2 → y ∈ vsaSaved by decide) x hL hc h2
-        exact hfs x hs
-    · simp [hL]
-  iapply Hk $$ %(fun x => if x ∈ freeL then f x else R x) %hkeep Hst Hres Hms
+  iapply Hk $$ %(fun x => if x ∈ freeL then f x else R x) %(allocRegs_keep hf2 hfs) Hst Hres Hms
 
 end
 

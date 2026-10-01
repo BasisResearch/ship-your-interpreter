@@ -343,7 +343,7 @@ theorem forCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ inte
   · imodintro; unfold valImg; rw [e0, e8, e16]; iexact Hv
   iintro %R4 %Mt4 %⟨hkeep4, htr4, hag4⟩ Hms
   iapply Hk $$ %_ %Mt4 %⟨?_, by ix_reg; exact htr4, ?_⟩ Hms
-  · refine KeepRegs.upd_right (KeepRegs.trans ?_ (KeepRegs.of_helper hkeep4 (by decide))) (by decide) _
+  · refine KeepRegs.upd (KeepRegs.trans ?_ (KeepRegs.of_helper hkeep4 (by decide))) (by decide) _
     rw [hR3]; keep_upd
   · refine Untouched.trans (Untouched.slotWrite hs104 (by omega) (by omega) Mt w0 w1 w2) ?_
     refine Untouched.trans ?_
@@ -568,7 +568,7 @@ theorem forCondEvalT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     (by ix_reg; rw [keep_reg hk2 (by decide)]; exact hregs.sp)
   iframe Hms Hcode Hv
   iintro %R3 %Mt3 %⟨hk3, h30, hut⟩ Hms
-  iapply Hk $$ %R3 %Mt3 %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3,
+  iapply Hk $$ %R3 %Mt3 %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.upd (by decide) _)) hk3,
     h30, hut⟩ Hms Hst Hw
 
 theorem forCondT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d env : Nat) :
@@ -632,7 +632,7 @@ theorem execStepT_some (hlive : ∀ p ∈ interpText, live p.1)
   iapply forJoin (twpW _) hlive (.inr rfl)
   iframe Hms Hcode
   iintro Hms
-  iapply Hk $$ %_ %_ %⟨KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _),
+  iapply Hk $$ %_ %_ %⟨KeepRegs.trans hk1 (hk2.upd (by decide) _),
     Untouched.slotWrite hs16 (Nat.le_refl _) (by omega) Mt w0 w1 w2⟩ Hms Hst Hw
 
 theorem execInitT_none (hlive : ∀ p ∈ interpText, live p.1) (st : St) (d outer : Nat) :
@@ -668,7 +668,7 @@ theorem execInitT_some (hlive : ∀ p ∈ interpText, live p.1)
   iframe Hms Hcode
   iintro Hms
   have hk2c : KeepRegs calleeSaved R1 (upd R2 1 (BitVec.ofNat 64 (0x80004254 + 4))) :=
-    hk2.calleeSaved_upd (by decide) _
+    hk2.upd (by decide) _
   iapply Hk $$ %_ %⟨KeepRegs.trans hk1 (KeepRegs.sub hk2c (by decide)),
     (hk2c 19 (by decide)).trans h19⟩ Hms Hst Hslot Hw
 
@@ -705,7 +705,7 @@ theorem forBodyT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     (by ix_reg; exact h20)
   iframe Hms Hcode
   iintro %R3 %⟨hk3, h30⟩ Hms
-  iapply Hk $$ %R3 %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3,
+  iapply Hk $$ %R3 %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.upd (by decide) _)) hk3,
     h30⟩ Hms Hst Hret Hw
 
 theorem forLoopT_condFalse (hlive : ∀ p ∈ interpText, live p.1)
@@ -726,7 +726,7 @@ theorem forLoopT_condFalse (hlive : ∀ p ∈ interpText, live p.1)
   iframe Hms Hcode
   isplit
   · iintro %_ Hms
-    iapply Hk $$ %_ %Mt1 %⟨hk1.calleeSaved_upd (by decide) _, by ix_reg; rfl, hut⟩ Hms Hst Hslot Hw
+    iapply Hk $$ %_ %Mt1 %⟨hk1.upd (by decide) _, by ix_reg; rfl, hut⟩ Hms Hst Hslot Hw
   · iintro %h Hms; exfalso; exact h (by simpa using h10)
 
 theorem forLoopT_bodyBreak (hlive : ∀ p ∈ interpText, live p.1)
@@ -848,7 +848,7 @@ theorem forCondEvalP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iframe Hms Hcode Hv
   iintro %R3 %Mt3 %⟨hk3, h30, hut⟩ Hms
   iapply Hk $$ %R3 %Mt3 %st' %v %hE
-    %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30, hut⟩
+    %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.upd (by decide) _)) hk3, h30, hut⟩
     Hms Hst Hw HK
 
 theorem forBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
@@ -887,7 +887,7 @@ theorem forBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   iframe Hms Hcode
   iintro %R3 %⟨hk3, h30⟩ Hms
   iapply Hk $$ %R3 %st' %status %hE
-    %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _)) hk3, h30⟩
+    %⟨KeepRegs.trans (KeepRegs.trans hk1 (hk2.upd (by decide) _)) hk3, h30⟩
     Hms Hst Hret Hw HX HK
 
 theorem forStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
@@ -934,7 +934,7 @@ theorem forStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iframe Hms Hcode
     iintro Hms
     iapply Hk $$ %_ %_ %st' %(ExecStep.some _ _ _ _ _ _ hE)
-      %⟨KeepRegs.trans hk1 (hk2.calleeSaved_upd (by decide) _),
+      %⟨KeepRegs.trans hk1 (hk2.upd (by decide) _),
         Untouched.slotWrite hs16 (Nat.le_refl _) (by omega) Mt w0 w1 w2⟩ Hms Hst Hw HK
 
 abbrev forLoopPI (Core : IProp GF) (d env : Nat) (cnd step : Option Expr) (b : Stmt) :
@@ -1113,7 +1113,7 @@ theorem forLoopPI_loeb (hlive : ∀ p ∈ interpText, live p.1)
         ihave HK := forExitK_ret $$ HK
         rw [← loopExit_normal, ← statusRet_normal (GF := GF) N]
         iapply HK $$ %_ %Mt1 %st1 %.normal %(ForLoop.condFalse _ _ _ _ _ _ _ _ hE1 hv)
-          %⟨hk1.calleeSaved_upd (by decide) _, by ix_reg; rfl, hut1⟩ Hms Hst Hslot Hw
+          %⟨hk1.upd (by decide) _, by ix_reg; rfl, hut1⟩ Hms Hst Hslot Hw
     · iintro %h0 Hms
       cases hv : v.truthy with
       | false => exfalso; rw [hv] at h10; exact h0 (by simpa using h10)
@@ -1167,7 +1167,7 @@ theorem execInitP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
     iframe Hms Hcode
     iintro Hms
     have hk2c : KeepRegs calleeSaved R1 (upd R2 1 (BitVec.ofNat 64 (0x80004254 + 4))) :=
-      hk2.calleeSaved_upd (by decide) _
+      hk2.upd (by decide) _
     iapply HK $$ %_ %st' %(ExecInit.some _ _ _ _ _ _ hE)
       %⟨KeepRegs.trans hk1 (KeepRegs.sub hk2c (by decide)), (hk2c 19 (by decide)).trans h19⟩
       Hms Hst Hslot Hw
