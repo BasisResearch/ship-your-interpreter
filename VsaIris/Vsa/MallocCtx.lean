@@ -305,14 +305,8 @@ theorem epi_core {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     ldv_ld (by rw [upd_other _ _ (by decide), show (R 2 + sign_extend (m := 64) (0x050#12)).toNat =
       C.s.toNat - 96 + 80 by rw [hs2]; sx_addr]; exact F.s0)
   refine st4 (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [hr]; exact O.ral) ?_
-  have hpc : (upd (upd (upd R 1 (ldv .ld Mt (R 2 + sign_extend (m := 64) (0x058#12)).toNat)) 8
-      (ldv .ld Mt ((upd R 1 (ldv .ld Mt (R 2 + sign_extend (m := 64) (0x058#12)).toNat)) 2 +
-        sign_extend (m := 64) (0x050#12)).toNat)) 2
-      ((upd (upd R 1 (ldv .ld Mt (R 2 + sign_extend (m := 64) (0x058#12)).toNat)) 8
-        (ldv .ld Mt ((upd R 1 (ldv .ld Mt (R 2 + sign_extend (m := 64) (0x058#12)).toNat)) 2 +
-          sign_extend (m := 64) (0x050#12)).toNat)) 2 + sign_extend (m := 64) (0x060#12))) 1 = C.r := by
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr
-  rw [hpc]
+  rw [show ∀ (R0 : Nat → BitVec 64) a b c, upd (upd (upd R0 1 a) 8 b) 2 c 1 = a from fun _ _ _ _ => rfl,
+    hr]
   have hs96 : R 2 + sign_extend (m := 64) (0x060#12) = C.s := by
     apply BitVec.eq_of_toNat_eq; rw [hs2]; sx_addr
   refine hfin _ ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ (fun x h1 h2 h8 => ?_) <;>
