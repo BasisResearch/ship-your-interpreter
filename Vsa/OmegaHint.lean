@@ -19,6 +19,11 @@ register_option vsa.omegaDbmMin : Nat := {
   descr := "smallest number of hypotheses at which omega first tries the difference-constraint checker dbm"
 }
 
+register_option vsa.omegaDbmRecord : Nat := {
+  defValue := 1
+  descr := "hint state after a dbm close: 0 keep, 1 merge used hypotheses, 2 replace, 3 mark seen only"
+}
+
 structure Keys where
   fv : Std.HashSet FVarId := {}
   ty : Std.HashSet Expr := {}
@@ -41,7 +46,7 @@ structure Info where
   okMs : Float := 0
   dbmMs : Float := 0
 
-def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) : MetaM Unit := do
+def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) (mode : Nat := 2) : MetaM Unit := do
   let mut seen := s.seen
   for f in all do
     unless seen.fv.contains f do
@@ -51,7 +56,10 @@ def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) : MetaM 
     if let .fvar f := a then
       if let some ld := (← getLCtx).find? f then
         u := { fv := u.fv.insert f, ty := u.ty.insert (← instantiateMVars ld.type) }
-  let s' : St := { last := u, hot := s.hot.union u, seen := seen }
+  let s' : St := match mode with
+    | 1 => { last := s.last.union u, hot := s.hot.union u, seen := seen }
+    | 3 => { s with seen := seen }
+    | _ => { last := u, hot := s.hot.union u, seen := seen }
   stRef.modify fun m => (if m.size > 256 then {} else m).insert d s'
 
 def solve (type : Expr) (hyps : List Expr) (cfg : OmegaConfig) : MetaM Expr := do
@@ -111,11 +119,15 @@ def run (cfg : OmegaConfig) : TacticM Info := do
       g.assign e
   infoRef.get
 
-def dbmStage (g : MVarId) : MetaM Bool := g.withContext do
+def dbmStage (d : Name) (g : MVarId) : MetaM Bool := g.withContext do
   let type ← instantiateMVars (← g.getType)
   let g' ← mkFreshExprSyntheticOpaqueMVar type
   if ← VsaIris.Dbm.dbmClose g'.mvarId! then
-    g.assign (← mkAuxTheorem type (← instantiateMVars g') (zetaDelta := true))
+    let e ← mkAuxTheorem type (← instantiateMVars g') (zetaDelta := true)
+    let all := (← getLocalHyps).filterMap fun e => if let .fvar f := e then some f else none
+    let mode := vsa.omegaDbmRecord.get (← getOptions)
+    if mode != 0 then record d (((← stRef.get)[d]?).getD {}) all e.getAppArgs mode
+    g.assign e
     return true
   return false
 
@@ -131,7 +143,7 @@ def evalHint (stx : Syntax) : TacticM Info := do
       let mut dms : Float := 0
       if n ≥ vsa.omegaDbmMin.get (← getOptions) then
         let t0 ← IO.monoNanosNow
-        let ok ← dbmStage g
+        let ok ← dbmStage ((← Term.getDeclName?).getD .anonymous) g
         let t1 ← IO.monoNanosNow
         dms := (t1 - t0).toFloat / 1e6
         if ok then
