@@ -546,13 +546,19 @@ partial def xrunGoal (fuel : Nat) (h : Syntax) (facts : Array Term) (stops : Lis
     match ← StepGen.swpTbl? (← whnfR (← instantiateMVars (← g.getType))) with
     | some t => pure t.key
     | none => pure ""
-  let F := if facts.isEmpty then "skip" else
-    "simp only [" ++ ", ".intercalate (facts.toList.map fun f => (f.raw.reprint.getD "").trimAscii.toString) ++ "]"
+  let F := if facts.isEmpty then "skip" else "simp only [xrunFactsHere]"
+  let factSimpStx ← `(tactic| simp only [$lems,*])
   let base ← match normOverride with
     | some n => pure n
     | none =>
       match Parser.runParserCategory (← getEnv) `tactic (normStr key F) with
-      | .ok stx => pure stx
+      | .ok stx =>
+        if facts.isEmpty then pure stx else
+        stx.replaceM fun t => do
+          if t.getKind == ``Lean.Parser.Tactic.simp &&
+              (t.find? fun u => u.isIdent && u.getId == `xrunFactsHere).isSome then
+            return some factSimpStx.raw
+          return none
       | .error _ =>
         if lems.isEmpty then
           `(tactic| ((try sx_norm) <;> (try sx_norm) <;> (try ix_mem)))
