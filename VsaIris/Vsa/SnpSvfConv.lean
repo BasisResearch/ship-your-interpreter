@@ -5,6 +5,10 @@ namespace VsaIris.Sym
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
 open scoped VsaIris.Sym.Win
 
+/-- Here the store-miss side goals are rarely difference constraints: plain `omega`. -/
+macro_rules
+  | `(tactic| svf_mem) => `(tactic| (simp (disch := (first | win_key | omega | (simp only [widthOfM]; omega))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4, ldv_lbu_sb0]))
+
 macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (apply snpRO_mem_img; (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]); decide))
