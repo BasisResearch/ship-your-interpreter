@@ -3,6 +3,7 @@ import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Vsa.Stderr.Mt
 import VsaIris.Vsa.SymCompactTac
 import VsaIris.Interp.SymFront
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -86,24 +87,14 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
   have hsp : (R 2 - 592#64).toNat = (R 2).toNat - 592 := toNat_sub_lit (by decide) (by omega)
   refine hk _ _ ⟨?gsp, ?gs0, ?gs4, ?gs6, ?gkeep, ?gframe, ?gra, ?gs0v, ?gs4v, ?gs6v, ?gap, ?gdec,
     ?gdecLen, ?gmbs⟩
-  case gsp | gs0 | gs4 | gs6 =>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h10, h11, h12, e592]
-  case gkeep =>
-    intro x hx
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  case gframe =>
-    intro a ha
-    rw [hsp] at ha
-    simp (disch := nx_fdisch) only [imgM_store_miss]
+  case gsp | gs0 | gs4 | gs6 | gkeep => carry_close [h10, h11, h12, e592]
   case gmbs =>
     rw [hsp]
     apply ldv_ld_of_imgLE
     simp only [imgLE, Nat.add_assoc, Nat.reduceAdd]
     simp (disch := nx_fdisch) only [imgM_store_miss, imgM_store1_eq]
     simp
-  all_goals (rw [hsp]; simp (disch := nx_fdisch) only [ldv_ld_hit_eq, ldv_ld_miss, hdec, h1, h13])
+  all_goals carry_close [hsp, hdec, h1, h13, toNat_add_neg, Nat.reducePow]
 
 #ix_chain vfpEntry_run := [vfpEntry_01, vfpEntry_02, vfpEntry_03, vfpEntry_04]
 

@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stderr.VfpEntry
 import VsaIris.Vsa.Stderr.SwsetupErr
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -46,22 +47,12 @@ macro "vfperr_step" : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsi
     (hDt := hDt) (ra := 0x8000abd8#64) (sp := sp) (hs1 := hs1) (h1 := ?h1) (h2 := ?h2) (hs2 := ?hs2)
     (hal := hal) (hra := by decide) (h10 := ?h10) (h11 := ?h11) (hsinit := ?hsinit) (hflU := ?hflU)
     (hflS := ?hflS) (hfd := ?hfd) (hbase := ?hbase) (hk := fun R' hR => ?_)
-  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h2]; done))
-  case hs2 => omega
-  case hsinit => nx_mem; exact hsinit
-  case hflU | hflS => nx_mem; decide
-  case hfd => nx_mem; exact hfd
-  case hbase => nx_mem; exact hbase
+  all_goals try carry_close [h2, hsinit, hfd, hbase]
   nx_ret hR
   nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, rk20, rk21, rk22, rk23, rk24, rk25, rk26,
     rk27, h2, h8, h20, BitVec.add_assoc, BitVec.zero_add] at 0x8000a944
-  refine hk _ ⟨?_, ?_, ?_, ?_, fun x hx => ?_⟩
-  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, rk2, rk8, rk20, rk22,
-    h2, h8, h20]; done))
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, rk9, rk18, rk19, rk21, rk23, rk24,
-      rk25, rk26, rk27]
+  refine hk _ ⟨?_, ?_, ?_, ?_, ?_⟩ <;> carry_close [rk2, rk8, rk20, rk22, h2, h8, h20, rk9, rk18, rk19, rk21,
+    rk23, rk24, rk25, rk26, rk27]
 
 #ix_chain vfpErr_run := [vfpErr_01, vfpErr_02]
 

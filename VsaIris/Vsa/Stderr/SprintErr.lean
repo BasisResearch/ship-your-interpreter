@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stderr.FwriteRun
 import VsaIris.Vsa.Fprintf.Tac
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -74,8 +75,7 @@ macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
     (hb1 := hp1) (hb2 := hp2) (hb3 := hp3) (hs1 := ?hs1) (hs2 := ?hs2) (hal := ?hal) (h1 := ?h1)
     (hra := by decide) (h8 := ?h8) (hbd := ?hbd) (hsrc := fun i hi => .inr ?_) (h11 := ?h11)
     (h12 := ?h12) (h13 := ?h13) (h2 := ?h2) (hfl := ?hfl) (hfd := ?hfd) (hk := fun R' hR => ?_)
-  all_goals try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, BitVec.ofNat_toNat,
-    BitVec.setWidth_eq, h1, h2, h10, h11, h12, BitVec.add_assoc, BitVec.reduceAdd]; done)
+  all_goals try carry_close [h1, h2, h10, h11, h12, hfl, hfd, BitVec.ofNat_toNat, BitVec.setWidth_eq]
   case hs1 | hs2 | hal => nx_fdisch
   case hbd =>
     intro i hi
@@ -86,8 +86,6 @@ macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
   case h13 =>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [sext_extract32_small (by simp only [BitVec.toNat_ofNat]; omega)]
-  case hfl => nx_mem; exact hfl
-  case hfd => nx_mem; exact hfd
   · exact ⟨List.mem_append_right _ (hpsrc i hi).1, (hpsrc i hi).2⟩
   nx_ret hR
   sprint_mid
