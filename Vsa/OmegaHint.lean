@@ -114,7 +114,7 @@ def evalHint (stx : Syntax) : TacticM Info := do
       run cfg
   | _ => throwUnsupportedSyntax
 
-@[tactic Lean.Parser.Tactic.omega] def evalOmegaHint : Tactic := fun stx => do
+@[no_fallback, tactic Lean.Parser.Tactic.omega] def evalOmegaHint : Tactic := fun stx => do
   if !vsa.omegaHint.get (← getOptions) || debug.terminalTacticsAsSorry.get (← getOptions) then
     throwUnsupportedSyntax
   discard <| evalHint stx
