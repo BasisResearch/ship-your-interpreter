@@ -1,5 +1,6 @@
 import VsaIris.Vsa.HeapTake
 import VsaIris.Vsa.MallocFastHeap
+import VsaIris.Vsa.HeapWin
 
 namespace VsaIris.VsaHeap
 
@@ -8,16 +9,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.MallocFast
 def SplitW (top nb : Nat) (a : Nat) : Prop :=
   (top + 8 ≤ a ∧ a < top + 16) ∨ (topAddr ≤ a ∧ a < topAddr + 8) ∨
     (top + nb + 8 ≤ a ∧ a < top + nb + 16)
-
-theorem split_keep {m m' : Mem} {H : List (Nat × Nat)} {top nb a : Nat}
-    (hag : ∀ b, vsaFoot H b → ¬ SplitW top nb b → m'[b]? = m[b]?)
-    (hfoot : ∀ k, k < 8 → vsaFoot H (a + k)) (ha : a % 8 = 0) (ht : top % 8 = 0)
-    (hnb : nb % 8 = 0) (h1 : a ≠ top + 8) (h2 : a ≠ topAddr) (h3 : a ≠ top + nb + 8) :
-    read64 m' a = read64 m a := by
-  refine read64_keep fun k hk => hag _ (hfoot k hk) ?_
-  unfold topAddr avAddr at h2
-  unfold SplitW topAddr avAddr
-  omega
 
 theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
@@ -34,57 +25,15 @@ theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hcb := hH.walk.chunk_bounds
   have hbrk := hH.brk_le
   obtain ⟨hal, htop16⟩ := hH.aligned
-  have hnew : (⟨top, nb, true⟩ : Chunk) ∈ chunks ++ [⟨top, nb, true⟩] :=
-    List.mem_append_right _ List.mem_cons_self
-
-  have Kg : ∀ a, ∀ _ : ∀ k, k < 8 → allocGlobal (a + k), a % 8 = 0 → a ≠ topAddr →
-      a + 8 ≤ heapStart → read64 m' a = read64 m a := by
-    intro a hg ha hne hs
-    unfold heapStart at hs hlo
-    exact split_keep hag (fun k hk => .inl (hg k hk)) ha (by omega) (by omega)
-      (by omega) hne (by omega)
-  have Kc : ∀ c ∈ chunks, read64 m' (c.addr + 8) = read64 m (c.addr + 8) := by
-    intro c hc
-    have hb := hcb c hc
-    have := hal c hc
-    unfold heapStart at hlo hb
-    exact split_keep hag (foot_header B (.inr ⟨c, hc, rfl⟩)) (by omega) (by omega)
-      (by omega) (by omega) (by unfold topAddr avAddr; omega) (by omega)
-  have Kf : ∀ c ∈ chunks, c.inuse = false →
-      read64 m' (c.addr + 16) = read64 m (c.addr + 16) ∧
-      read64 m' (c.addr + 24) = read64 m (c.addr + 24) ∧
-      read64 m' (c.addr + c.size) = read64 m (c.addr + c.size) := by
-    intro c hc hf
-    obtain ⟨hl, hft⟩ := foot_free B hc hf
-    have hb := hcb c hc
-    have hca := hal c hc
-    have hsz := (walk_sizes hH.walk c hc).1
-    unfold heapStart at hlo hb
-    refine ⟨split_keep hag (fun k hk => hl k (by omega)) (by omega) (by omega) (by omega)
-        (by omega) (by unfold topAddr avAddr; omega) (by omega),
-      split_keep hag (fun k hk => ?_) (by omega) (by omega) (by omega)
-        (by omega) (by unfold topAddr avAddr; omega) (by omega),
-      split_keep hag hft (by omega) (by omega) (by omega)
-        (by omega) (by unfold topAddr avAddr; omega) (by omega)⟩
-    have := hl (k + 8) (by omega)
-    rwa [show c.addr + 16 + (k + 8) = c.addr + 24 + k by omega] at this
-  have Kbin : ∀ i, 0 < i → i < numBins →
-      read64 m' (binAt i + 16) = read64 m (binAt i + 16) ∧
-      read64 m' (binAt i + 24) = read64 m (binAt i + 24) := by
-    intro i h0 h1
-    have hg := binAt_geo i h1
-    have hgl : ∀ x, binAt i ≤ x → x + 8 ≤ binAt i + 32 → ∀ k, k < 8 → allocGlobal (x + k) :=
-      fun x h2 h3 k hk => .inl ⟨by omega, by omega⟩
-    exact ⟨Kg _ (hgl _ (by omega) (by omega)) (by omega)
-        (by unfold topAddr binAt avAddr; omega) (by unfold heapStart; omega),
-      Kg _ (hgl _ (by omega) (by omega)) (by omega)
-        (by unfold topAddr binAt avAddr; omega) (by unfold heapStart; omega)⟩
-  have Kbb : read64 m' binblocksAddr = read64 m binblocksAddr :=
-    Kg _ (fun k hk => .inl ⟨by unfold binblocksAddr avAddr; omega,
-      by unfold binblocksAddr avAddr; omega⟩) (by unfold binblocksAddr avAddr; omega)
-      (by unfold topAddr binblocksAddr avAddr; omega)
-      (by unfold binblocksAddr avAddr heapStart; omega)
-
+  unfold heapStart at hlo
+  have hG : ∀ w, allocGlobal w → SplitW top nb w → topAddr ≤ w ∧ w < topAddr + 8 := by
+    intro w hg hu; unfold allocGlobal InRange at hg; unfold SplitW at hu; omega
+  obtain ⟨gS, gB, gP, gM, gI, gBb, -⟩ := hH.keep_globals hag hG
+  obtain ⟨kBins, kFoot⟩ := B.keep_free hag hG fun c hc _ w hw => by
+    have := hcb c hc; unfold SplitW topAddr avAddr at hw; unfold heapStart at this; omega
+  have Kc : ∀ c ∈ chunks, read64 m' (c.addr + 8) = read64 m (c.addr + 8) := fun c hc =>
+    B.keep_hdr hag (.inr ⟨c, hc, rfl⟩) fun w hw => by
+      have := hcb c hc; unfold SplitW topAddr avAddr at hw; unfold heapStart at this; omega
   have hcs : chunkSize (nb + 1) = nb := by unfold chunkSize; omega
   have hpi : prevInuse (brkv - top - nb + 1) = true := by
     unfold prevInuse; rw [beq_iff_eq]; omega
@@ -106,39 +55,20 @@ theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact hc
     · simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
       subst hc; cases hf
-  refine ⟨⟨{ sbrk_base := ?_, brk := ?_, brk_le := hbrk, top_ptr := htopw
+  have hnew : (⟨top, nb, true⟩ : Chunk) ∈ chunks ++ [⟨top, nb, true⟩] :=
+    List.mem_append_right _ List.mem_cons_self
+  obtain ⟨fB, fF⟩ := hH.free_to (fun c hc _ => List.mem_append_left _ hc) hinuse
+  refine ⟨⟨{ sbrk_base := gS, brk := gB, brk_le := hbrk, top_ptr := htopw
              top_le := by omega, top_size := by omega
              top_header := by
                rw [show brkv - (top + nb) + 1 = brkv - top - nb + 1 by omega]; exact hrem
-             top_pad := ?_, max_sbrked := ?_, mallinfo := ?_, first_prev := ?_
-             walk := hwalk, coalesced := ?_, footer := ?_
-             bins_list := ?_, bins_nodup := hH.bins_nodup
-             bin_free := ?_, free_binned := ?_, remainder := hH.remainder
-             binblocks_present := by rw [Kbb]; exact hH.binblocks_present
-             binblocks := fun bb hbb => hH.binblocks bb (by rw [← Kbb]; exact hbb)
-             live := ?_, exact := ?_ }, by omega⟩, hpage,
-    fun bb hbb => hbbl bb (by rw [← Kbb]; exact hbb)⟩
-  · rw [Kg _ (fun k hk => .inr (.inr (.inl ⟨by unfold sbrkBaseAddr; omega,
-      by unfold sbrkBaseAddr; omega⟩))) (by unfold sbrkBaseAddr; omega)
-      (by unfold topAddr avAddr sbrkBaseAddr; omega) (by unfold sbrkBaseAddr heapStart; omega)]
-    exact hH.sbrk_base
-  · rw [Kg _ (fun k hk => .inr (.inr (.inr (.inl ⟨by unfold brkAddr; omega,
-      by unfold brkAddr; omega⟩)))) (by unfold brkAddr; omega)
-      (by unfold topAddr avAddr brkAddr; omega) (by unfold brkAddr heapStart; omega)]
-    exact hH.brk
-  · rw [Kg _ (fun k hk => .inr (.inr (.inr (.inl ⟨by unfold topPadAddr; omega,
-      by unfold topPadAddr; omega⟩)))) (by unfold topPadAddr; omega)
-      (by unfold topAddr avAddr topPadAddr; omega) (by unfold topPadAddr heapStart; omega)]
-    exact hH.top_pad
-  · rw [Kg _ (fun k hk => .inr (.inr (.inr (.inl ⟨by unfold maxSbrkedAddr; omega,
-      by unfold maxSbrkedAddr; omega⟩)))) (by unfold maxSbrkedAddr; omega)
-      (by unfold topAddr avAddr maxSbrkedAddr; omega)
-      (by unfold maxSbrkedAddr heapStart; omega)]
-    exact hH.max_sbrked
-  · rw [Kg _ (fun k hk => .inr (.inr (.inr (.inr (.inr ⟨by unfold mallinfoAddr; omega,
-      by unfold mallinfoAddr; omega⟩))))) (by unfold mallinfoAddr; omega)
-      (by unfold topAddr avAddr mallinfoAddr; omega) (by unfold mallinfoAddr heapStart; omega)]
-    exact hH.mallinfo
+             top_pad := gP, max_sbrked := gM, mallinfo := gI, first_prev := ?_
+             walk := hwalk, coalesced := ?_, footer := fun c hc hf => kFoot c (hinuse c hc hf) hf
+             bins_list := kBins, bins_nodup := hH.bins_nodup
+             bin_free := fB, free_binned := fF, remainder := hH.remainder
+             binblocks_present := gBb ▸ hH.binblocks_present
+             binblocks := fun bb hbb => hH.binblocks bb (gBb ▸ hbb)
+             live := ?_, exact := ?_ }, by omega⟩, hpage, fun bb hbb => hbbl bb (gBb ▸ hbb)⟩
   · rcases hH.walk.head_or_top with he | ⟨c, hc, hca⟩
     · rw [show heapStart = top from he, hvic]
       simp only [Option.any, beq_iff_eq]; omega
@@ -152,23 +82,6 @@ theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · refine .inr ?_
       rw [List.getElem_append_right (by omega)]
       simp
-  · intro c hc hf
-    have hcm := hinuse c hc hf
-    obtain ⟨_, _, hft⟩ := Kf c hcm hf
-    rw [hft]; exact hH.footer c hcm hf
-  · intro i h0 h1
-    obtain ⟨first, hfirst, hchain⟩ := hH.bins_list i h0 h1
-    refine ⟨first, by rw [(Kbin i h0 h1).1]; exact hfirst,
-      hchain.transport_links (Kbin i h0 h1).2.symm ?_⟩
-    intro x hx
-    obtain ⟨c, hc, rfl, hf, _⟩ := hH.bin_free i x h0 h1 hx
-    exact ⟨(Kf c hc hf).2.1.symm, (Kf c hc hf).1.symm⟩
-  · intro i q h0 h1 hq
-    obtain ⟨c, hc, h2, h3, h4⟩ := hH.bin_free i q h0 h1 hq
-    exact ⟨c, List.mem_append_left _ hc, h2, h3, h4⟩
-  · intro c hc hf
-    obtain ⟨i, h0, h1, h2, h3⟩ := hH.free_binned c (hinuse c hc hf) hf
-    exact ⟨i, h0, h1, h2, h3⟩
   · intro e he
     rcases List.mem_cons.mp he with rfl | he
     · exact ⟨⟨top, nb, true⟩, hnew, rfl, by simp, by simp; omega⟩

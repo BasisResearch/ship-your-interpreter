@@ -14,12 +14,38 @@ theorem win_read64 (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?) {a :
     read64 m' a = read64 m a :=
   read64_keep fun k hk => hag _ (hf k hk) (hu k hk)
 
-private theorem win_glob (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?)
-    (hG : ∀ w, allocGlobal w → U w → topAddr ≤ w ∧ w < topAddr + 8) (a : Nat)
-    (hg : ∀ k, k < 8 → allocGlobal (a + k)) (ht : a + 8 ≤ topAddr ∨ topAddr + 8 ≤ a) :
+def volGlobal (w : Nat) : Prop :=
+  (topAddr ≤ w ∧ w < topAddr + 8) ∨ (brkAddr ≤ w ∧ w < topPadAddr) ∨
+    (mallinfoAddr ≤ w ∧ w < mallinfoAddr + 8) ∨ (0x8001ba08 ≤ w ∧ w < 0x8001ba0c) ∨
+    (0x8001b538 ≤ w ∧ w < 0x8001b53c)
+
+theorem win_glob (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?)
+    (hV : ∀ w, allocGlobal w → U w → volGlobal w) (a : Nat)
+    (hg : ∀ k, k < 8 → allocGlobal (a + k)) (ht : ∀ k, k < 8 → ¬ volGlobal (a + k)) :
     read64 m' a = read64 m a :=
-  win_read64 hag (fun k hk => .inl (hg k hk)) fun k hk hu => by
-    have := hG _ (hg k hk) hu; omega
+  win_read64 hag (fun k hk => .inl (hg k hk)) fun k hk hu => ht k hk (hV _ (hg k hk) hu)
+
+syntax "win_g" : tactic
+macro_rules
+  | `(tactic| win_g) => `(tactic| (
+      intro k hk
+      simp only [allocGlobal, volGlobal, InRange, sbrkBaseAddr, brkAddr, topPadAddr, maxSbrkedAddr,
+        mallinfoAddr, binblocksAddr, topAddr, avAddr, binAt, numBins] at *
+      omega))
+
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.keep_stable {R : Nat × Nat → Prop}
+    (h : HeapAt m H R top brkv chunks bins) (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?)
+    (hV : ∀ w, allocGlobal w → U w → volGlobal w) :
+    read64 m' sbrkBaseAddr = some heapStart ∧ read64 m' topPadAddr = some 0 ∧
+    read64 m' binblocksAddr = read64 m binblocksAddr ∧
+    ∀ i, 0 < i → i < numBins →
+      read64 m' (binAt i + 16) = read64 m (binAt i + 16) ∧
+      read64 m' (binAt i + 24) = read64 m (binAt i + 24) := by
+  have K := win_glob hag hV
+  refine ⟨?_, ?_, K _ (by win_g) (by win_g), fun i h0 h1 => ⟨K _ (by win_g) (by win_g),
+    K _ (by win_g) (by win_g)⟩⟩
+  · rw [K _ (by win_g) (by win_g)]; exact h.sbrk_base
+  · rw [K _ (by win_g) (by win_g)]; exact h.top_pad
 
 theorem _root_.Vsa.Sim.DlHeap.HeapAt.keep_globals {R : Nat × Nat → Prop} (h : HeapAt m H R top brkv chunks bins)
     (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?)
@@ -30,24 +56,15 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.keep_globals {R : Nat × Nat → Prop} (h :
     ∀ i, 0 < i → i < numBins →
       read64 m' (binAt i + 16) = read64 m (binAt i + 16) ∧
       read64 m' (binAt i + 24) = read64 m (binAt i + 24) := by
-  have K := win_glob hag hG
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, fun i h0 h1 => ⟨?_, ?_⟩⟩
-  · rw [K _ (fun k hk => .inr (.inr (.inl ⟨by unfold sbrkBaseAddr; omega, by unfold sbrkBaseAddr; omega⟩)))
-      (by unfold sbrkBaseAddr topAddr avAddr; omega)]; exact h.sbrk_base
-  · rw [K _ (fun k hk => .inr (.inr (.inr (.inl ⟨by unfold brkAddr; omega, by unfold brkAddr; omega⟩))))
-      (by unfold brkAddr topAddr avAddr; omega)]; exact h.brk
-  · rw [K _ (fun k hk => .inr (.inr (.inr (.inl ⟨by unfold topPadAddr; omega, by unfold topPadAddr; omega⟩))))
-      (by unfold topPadAddr topAddr avAddr; omega)]; exact h.top_pad
-  · rw [K _ (fun k hk => .inr (.inr (.inr (.inl ⟨by unfold maxSbrkedAddr; omega,
-      by unfold maxSbrkedAddr; omega⟩)))) (by unfold maxSbrkedAddr topAddr avAddr; omega)]; exact h.max_sbrked
-  · rw [K _ (fun k hk => .inr (.inr (.inr (.inr (.inr ⟨by unfold mallinfoAddr; omega,
-      by unfold mallinfoAddr; omega⟩))))) (by unfold mallinfoAddr topAddr avAddr; omega)]; exact h.mallinfo
-  · exact K _ (fun k hk => .inl ⟨by unfold binblocksAddr avAddr; omega, by unfold binblocksAddr avAddr; omega⟩)
-      (by unfold binblocksAddr topAddr avAddr; omega)
-  · exact K _ (fun k hk => .inl ⟨by unfold binAt avAddr; omega, by unfold binAt avAddr; unfold numBins at h1; omega⟩)
-      (by unfold binAt topAddr avAddr; omega)
-  · exact K _ (fun k hk => .inl ⟨by unfold binAt avAddr; omega, by unfold binAt avAddr; unfold numBins at h1; omega⟩)
-      (by unfold binAt topAddr avAddr; omega)
+  have hV : ∀ w, allocGlobal w → U w → volGlobal w := fun w g u => .inl (hG w g u)
+  have K : ∀ a, (∀ k, k < 8 → allocGlobal (a + k)) → a + 8 ≤ topAddr ∨ topAddr + 8 ≤ a →
+      read64 m' a = read64 m a := fun a hg ht =>
+    win_read64 hag (fun k hk => .inl (hg k hk)) fun k hk hu => by have := hG _ (hg k hk) hu; omega
+  obtain ⟨gS, gP, gB, gL⟩ := h.keep_stable hag hV
+  refine ⟨gS, ?_, gP, ?_, ?_, gB, gL⟩
+  · rw [K _ (by win_g) (by unfold brkAddr topAddr avAddr; omega)]; exact h.brk
+  · rw [K _ (by win_g) (by unfold maxSbrkedAddr topAddr avAddr; omega)]; exact h.max_sbrked
+  · rw [K _ (by win_g) (by unfold mallinfoAddr topAddr avAddr; omega)]; exact h.mallinfo
 
 theorem BlockHeapAt.keep_hdr (B : BlockHeapAt m H top brkv chunks bins)
     (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?) {q : Nat}
@@ -55,15 +72,15 @@ theorem BlockHeapAt.keep_hdr (B : BlockHeapAt m H top brkv chunks bins)
     read64 m' (q + 8) = read64 m (q + 8) :=
   win_read64 hag (foot_header B hq) fun k hk h => by have := hu _ h; omega
 
-theorem BlockHeapAt.keep_free (B : BlockHeapAt m H top brkv chunks bins)
+theorem BlockHeapAt.keep_freeV (B : BlockHeapAt m H top brkv chunks bins)
     (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?)
-    (hG : ∀ w, allocGlobal w → U w → topAddr ≤ w ∧ w < topAddr + 8)
+    (hV : ∀ w, allocGlobal w → U w → volGlobal w)
     (hF : ∀ c ∈ chunks, c.inuse = false → ∀ w, U w →
       (w < c.addr + 16 ∨ c.addr + 32 ≤ w) ∧ (w < c.addr + c.size ∨ c.addr + c.size + 8 ≤ w)) :
     (∀ i, 0 < i → i < numBins → BinList m' i (bins i)) ∧
     ∀ c ∈ chunks, c.inuse = false → read64 m' (c.addr + c.size) = some c.size := by
   have HH := B.heap
-  have G := (HH.keep_globals hag hG).2.2.2.2.2.2
+  have G := (HH.keep_stable hag hV).2.2.2
   have hl : ∀ c ∈ chunks, c.inuse = false →
       read64 m' (c.addr + 16) = read64 m (c.addr + 16) ∧
       read64 m' (c.addr + 24) = read64 m (c.addr + 24) ∧
@@ -84,6 +101,15 @@ theorem BlockHeapAt.keep_free (B : BlockHeapAt m H top brkv chunks bins)
   intro x hx
   obtain ⟨c, hc, rfl, hf, _⟩ := HH.bin_free i x h0 h1 hx
   exact ⟨(hl c hc hf).2.1.symm, (hl c hc hf).1.symm⟩
+
+theorem BlockHeapAt.keep_free (B : BlockHeapAt m H top brkv chunks bins)
+    (hag : ∀ w, vsaFoot H w → ¬ U w → m'[w]? = m[w]?)
+    (hG : ∀ w, allocGlobal w → U w → topAddr ≤ w ∧ w < topAddr + 8)
+    (hF : ∀ c ∈ chunks, c.inuse = false → ∀ w, U w →
+      (w < c.addr + 16 ∨ c.addr + 32 ≤ w) ∧ (w < c.addr + c.size ∨ c.addr + c.size + 8 ≤ w)) :
+    (∀ i, 0 < i → i < numBins → BinList m' i (bins i)) ∧
+    ∀ c ∈ chunks, c.inuse = false → read64 m' (c.addr + c.size) = some c.size :=
+  B.keep_freeV hag (fun w g u => .inl (hG w g u)) hF
 
 theorem _root_.Vsa.Sim.DlHeap.HeapAt.drop_inuse {cs₁ cs₂ : List Chunk} {x a : Nat}
     (h : HeapAt m H (fun e => e ∈ H) top brkv (cs₁ ++ ⟨x, a, true⟩ :: cs₂) bins)
@@ -111,6 +137,24 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.drop_inuse {cs₁ cs₂ : List Chunk} {x a 
     · exact ⟨c, h4, h1, h2, h3⟩
   · obtain ⟨c, hc, hu, h1, h2⟩ := hE e he
     exact ⟨c, hc, hu, by omega, by omega⟩
+
+theorem free_mid {cs₁ xs ys cs₂ : List Chunk} {c : Chunk} (hc : c ∈ cs₁ ++ (xs ++ cs₂))
+    (hf : c.inuse = false) (hx : ∀ d ∈ xs, d.inuse = true) : c ∈ cs₁ ++ (ys ++ cs₂) := by
+  simp only [List.mem_append] at hc ⊢
+  rcases hc with h | h | h
+  · exact .inl h
+  · rw [hx c h] at hf; cases hf
+  · exact .inr (.inr h)
+
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.free_to {R : Nat × Nat → Prop} {cs : List Chunk}
+    (h : HeapAt m H R top brkv chunks bins) (h1 : ∀ c ∈ chunks, c.inuse = false → c ∈ cs)
+    (h2 : ∀ c ∈ cs, c.inuse = false → c ∈ chunks) :
+    (∀ i q, 0 < i → i < numBins → q ∈ bins i →
+      ∃ c ∈ cs, c.addr = q ∧ c.inuse = false ∧ (1 < i → binIndex c.size = i)) ∧
+    (∀ c ∈ cs, c.inuse = false → ∃ i, 0 < i ∧ i < numBins ∧ c.addr ∈ bins i ∧
+      ∀ j, 0 < j → j < numBins → c.addr ∈ bins j → j = i) :=
+  ⟨fun i q h0 hi hq => let ⟨c, hc, ha, hf, hb⟩ := h.bin_free i q h0 hi hq; ⟨c, h1 c hc hf, ha, hf, hb⟩,
+    fun c hc hf => h.free_binned c (h2 c hc hf) hf⟩
 
 end Win
 

@@ -61,11 +61,11 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       (w + 8 ≤ x + a + 8 ∨ x + a + 16 ≤ w) → read64 m' w = read64 m w := by
     intro w hf h1 h2
     exact read64_keep fun k hk => hag _ (hf k hk) (by omega) (by omega)
-  have Kg : ∀ w, (∀ k, k < 8 → allocGlobal (w + k)) → read64 m' w = read64 m w := by
-    intro w hg
-    have := hg 0 (by omega); have := hg 7 (by omega)
-    unfold allocGlobal InRange at *
-    exact keep w (fun k hk => .inl (hg k hk)) (.inl (by omega)) (.inl (by omega))
+  have hag' : ∀ w, vsaFoot H w → ¬ (x + 8 ≤ w ∧ w < x + 16 ∨ x + a + 8 ≤ w ∧ w < x + a + 16) →
+      m'[w]? = m[w]? := fun w hf hu => hag w hf (fun h => hu (.inl h)) (fun h => hu (.inr h))
+  have hG : ∀ w, allocGlobal w → (x + 8 ≤ w ∧ w < x + 16 ∨ x + a + 8 ≤ w ∧ w < x + a + 16) →
+      topAddr ≤ w ∧ w < topAddr + 8 := by
+    intro w hg hu; unfold allocGlobal InRange at hg; omega
 
   have W3 : ChunkWalk m' (x + a + b) top cs₂ := by
     have R := HX.rest
@@ -110,9 +110,6 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hmemL : ∀ c, c ∈ cs₁ ++ ⟨x, a + b, true⟩ :: cs₂ ↔
       c ∈ cs₁ ∨ c = ⟨x, a + b, true⟩ ∨ c ∈ cs₂ := by
     intro c; simp only [List.mem_append, List.mem_cons]
-  have hmemL' : ∀ c, c ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ ↔
-      c ∈ cs₁ ∨ c = ⟨x, a, true⟩ ∨ c = ⟨x + a, b, true⟩ ∨ c ∈ cs₂ := by
-    intro c; simp only [List.mem_append, List.mem_cons]
   have hfree_loc : ∀ c ∈ cs₁ ++ ⟨x, a + b, true⟩ :: cs₂, c.inuse = false →
       (c ∈ cs₁ ∧ c.addr + c.size ≤ x) ∨ (c ∈ cs₂ ∧ x + a + b ≤ c.addr) := by
     intro c hc hf
@@ -121,38 +118,16 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · cases hf
     · exact .inr ⟨h1, (hW3b c h1).1⟩
   have hfree_new : ∀ c ∈ cs₁ ++ ⟨x, a + b, true⟩ :: cs₂, c.inuse = false →
-      c ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ := by
-    intro c hc hf
-    rcases hfree_loc c hc hf with ⟨h1, _⟩ | ⟨h1, _⟩ <;> simp [h1]
+      c ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ := fun c hc hf =>
+    free_mid (xs := [_]) (ys := [_, _]) hc hf (by simp)
   have hfree_old : ∀ c ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂, c.inuse = false →
-      c ∈ cs₁ ++ ⟨x, a + b, true⟩ :: cs₂ := by
-    intro c hc hf
-    rcases (hmemL' c).1 hc with h1 | rfl | rfl | h1
-    · simp [h1]
-    · cases hf
-    · cases hf
-    · simp [h1]
-
-  have Klink : ∀ j y, 0 < j → j < numBins → (y = binAt j ∨ y ∈ bins j) →
-      fdOf m' y = fdOf m y ∧ bkOf m' y = bkOf m y := by
-    intro j y hj0 hj hy
-    have hgj := binAt_geo j hj
-    rcases hy with rfl | hy
-    · exact ⟨Kg _ fun k hk => .inl ⟨by omega, by omega⟩, Kg _ fun k hk => .inl ⟨by omega, by omega⟩⟩
-    · obtain ⟨c, hc, rfl, hf⟩ := HH.member hj0 hj hy
-      have hff := (foot_free B hc hf).1
-      have hloc := hfree_loc c hc hf
-      have hcs := (HH.walk.chunk_bounds c hc).2.2
-      refine ⟨keep _ (fun k hk => hff k (by omega)) ?_ ?_,
-        keep _ (fun k hk => by have := hff (8 + k) (by omega); rwa [show c.addr + 16 + (8 + k) =
-          c.addr + 24 + k by omega] at this) ?_ ?_⟩ <;>
-        rcases hloc with ⟨_, h2⟩ | ⟨_, h2⟩ <;> omega
-  have kBb : read64 m' binblocksAddr = read64 m binblocksAddr :=
-    Kg _ fun k hk => .inl ⟨by unfold binblocksAddr avAddr; omega, by unfold binblocksAddr avAddr; omega⟩
-  have kTop : read64 m' topAddr = read64 m topAddr :=
-    Kg _ fun k hk => .inl ⟨by unfold topAddr avAddr; omega, by unfold topAddr avAddr; omega⟩
-  have gHi : ∀ w, 0x8001b990 ≤ w → w + 8 ≤ 0x8001b9b0 → ∀ k, k < 8 → allocGlobal (w + k) :=
-    fun w h1 h2 k hk => .inr (.inr (.inr (.inl ⟨by omega, by omega⟩)))
+      c ∈ cs₁ ++ ⟨x, a + b, true⟩ :: cs₂ := fun c hc hf =>
+    free_mid (xs := [_, _]) (ys := [_]) hc hf (by simp)
+  obtain ⟨gS, gB, gP, gM, gI, gBb, -⟩ := HH.keep_globals hag' hG
+  obtain ⟨kBins, kFoot⟩ := B.keep_free hag' hG fun c hc hf w _ => by
+    have := (HH.walk.chunk_bounds c hc).2.2
+    rcases hfree_loc c hc hf with ⟨_, h2⟩ | ⟨_, h2⟩ <;> omega
+  obtain ⟨fB, fF⟩ := HH.free_to hfree_new hfree_old
   have hXm : (⟨x, a, true⟩ : Chunk) ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ := by simp
   have hYm : (⟨x + a, b, true⟩ : Chunk) ∈ cs₁ ++ ⟨x, a, true⟩ :: ⟨x + a, b, true⟩ :: cs₂ := by simp
 
@@ -164,30 +139,20 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     · exact ⟨c, by simp [h3], hu, h1, h2⟩
     · exact ⟨_, hXm, rfl, h1, hfit e he h1.symm⟩
     · exact ⟨c, by simp [h3], hu, h1, h2⟩
-  refine ⟨⟨{ sbrk_base := ?_, brk := ?_, brk_le := HH.brk_le, top_ptr := kTop.trans HH.top_ptr
+  refine ⟨⟨{ sbrk_base := gS, brk := gB, brk_le := HH.brk_le
+             top_ptr := (keep _ (fun k hk => .inl (by unfold allocGlobal InRange topAddr avAddr; omega))
+               (.inl (by unfold topAddr avAddr; omega)) (.inl (by unfold topAddr avAddr; omega))).trans HH.top_ptr
              top_le := HH.top_le, top_size := HH.top_size, top_header := ?_
-             top_pad := ?_, max_sbrked := ?_, mallinfo := ?_, first_prev := ?_
-             walk := hwalk, coalesced := coal_cut rfl rfl HH.coalesced, footer := ?_
-             bins_list := ?_, bins_nodup := HH.bins_nodup
-             bin_free := ?_, free_binned := ?_, remainder := HH.remainder
-             binblocks_present := by rw [kBb]; exact HH.binblocks_present
-             binblocks := fun bb hbb => HH.binblocks bb (by rw [← kBb]; exact hbb)
-             live := ?_, exact := ?_ }, B.top_room⟩, hpage,
-    fun bb hbb => hbbl bb (by rw [← kBb]; exact hbb)⟩
-  · rw [Kg _ (fun k hk => .inr (.inr (.inl ⟨by unfold sbrkBaseAddr; omega,
-      by unfold sbrkBaseAddr; omega⟩)))]
-    exact HH.sbrk_base
-  · rw [Kg _ (gHi _ (by unfold brkAddr; omega) (by unfold brkAddr; omega))]
-    exact HH.brk
+             top_pad := gP, max_sbrked := gM, mallinfo := gI, first_prev := ?_
+             walk := hwalk, coalesced := coal_cut rfl rfl HH.coalesced
+             footer := fun c hc hf => kFoot c (hfree_old c hc hf) hf
+             bins_list := kBins, bins_nodup := HH.bins_nodup
+             bin_free := fB, free_binned := fF, remainder := HH.remainder
+             binblocks_present := gBb ▸ HH.binblocks_present
+             binblocks := fun bb hbb => HH.binblocks bb (gBb ▸ hbb)
+             live := ?_, exact := ?_ }, B.top_room⟩, hpage, fun bb hbb => hbbl bb (gBb ▸ hbb)⟩
   · rw [keep _ (foot_header B (.inl rfl)) (.inr (by omega)) (.inr (by omega))]
     exact HH.top_header
-  · rw [Kg _ (gHi _ (by unfold topPadAddr; omega) (by unfold topPadAddr; omega))]
-    exact HH.top_pad
-  · rw [Kg _ (gHi _ (by unfold maxSbrkedAddr; omega) (by unfold maxSbrkedAddr; omega))]
-    exact HH.max_sbrked
-  · rw [Kg _ (fun k hk => .inr (.inr (.inr (.inr (.inr ⟨by unfold mallinfoAddr; omega,
-      by unfold mallinfoAddr; omega⟩)))))]
-    exact HH.mallinfo
   · rcases W1.head_or_top with he | ⟨c, hc, hca⟩
     · have hfp := HH.first_prev
       obtain ⟨hh, hhr, _, _⟩ := HX.hdr
@@ -201,34 +166,6 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       rw [← hca, keep _ (foot_header B (.inr ⟨c, by simp [hc], rfl⟩)) (.inl (by omega))
         (.inl (by omega)), hca]
       exact HH.first_prev
-  · intro c hc hf
-    have hcL := hfree_old c hc hf
-    have hloc := hfree_loc c hcL hf
-    rw [keep _ (foot_free B hcL hf).2 (by rcases hloc with ⟨_, h2⟩ | ⟨_, h2⟩ <;> omega)
-      (by rcases hloc with ⟨_, h2⟩ | ⟨_, h2⟩ <;> omega)]
-    exact HH.footer c hcL hf
-  · intro j hj0 hj
-    rw [binList_iff_ring]
-    have hold := binList_iff_ring.1 (HH.bins_list j hj0 hj)
-    refine ⟨?_, hold.2⟩
-    have hr := hold.1
-    unfold Ring at hr ⊢
-    refine hr.transport fun a' b' hab => ?_
-    have ⟨ha, hb⟩ := pair_mem hab
-    have hnode : ∀ y ∈ binAt j :: bins j ++ [binAt j], y = binAt j ∨ y ∈ bins j := by
-      intro y hy
-      simp only [List.cons_append, List.mem_cons, List.mem_append, List.not_mem_nil,
-        or_false] at hy
-      rcases hy with h1 | h1 | h1
-      · exact .inl h1
-      · exact .inr h1
-      · exact .inl h1
-    exact ⟨(Klink j a' hj0 hj (hnode a' ha)).1, (Klink j b' hj0 hj (hnode b' hb)).2⟩
-  · intro j q hj0 hj hq
-    obtain ⟨c, hc, h1, h2, h3⟩ := HH.bin_free j q hj0 hj hq
-    exact ⟨c, hfree_new c hc h2, h1, h2, h3⟩
-  · intro c hc hf
-    exact HH.free_binned c (hfree_old c hc hf) hf
   · intro e he
     rcases List.mem_cons.mp he with rfl | he
     · exact ⟨_, hYm, rfl, by simp only; omega, by simp only; omega⟩
@@ -285,12 +222,11 @@ theorem PHeapAt.setTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have HH := B.heap
   obtain ⟨hal, htop16⟩ := HH.aligned
   have hlo := HH.walk.le
-  have hcb := HH.walk.chunk_bounds
   have hbrk := HH.brk_le
   have htle := HH.top_le
   have htsz := HH.top_size
   have hX : (⟨x, a, true⟩ : Chunk) ∈ cs₁ ++ [⟨x, a, true⟩] := by simp
-  have hXb := hcb _ hX
+  have hXb := HH.walk.chunk_bounds _ hX
   have hx16 : x % 16 = 0 := hal _ hX
   simp only at hXb hx16
   unfold heapStart at hlo hXb
@@ -302,17 +238,22 @@ theorem PHeapAt.setTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hxa : x + a = top := by have := HX.rest; cases this; rfl
   subst hxa
   have hW1b := W1.chunk_bounds
-  have keep : ∀ w, (∀ k, k < 8 → vsaFoot H (w + k)) → (w + 8 ≤ x + 8 ∨ x + 16 ≤ w) →
-      (w + 8 ≤ topAddr ∨ topAddr + 8 ≤ w) → (w + 8 ≤ x + a' + 8 ∨ x + a' + 16 ≤ w) →
-      read64 m' w = read64 m w := by
-    intro w hf h1 h2 h3
-    exact read64_keep fun k hk => hag _ (hf k hk) (by omega) (by omega) (by omega)
-  have Kg : ∀ w, (∀ k, k < 8 → allocGlobal (w + k)) → (w + 8 ≤ topAddr ∨ topAddr + 8 ≤ w) →
-      read64 m' w = read64 m w := by
-    intro w hg ht
-    have := hg 0 (by omega); have := hg 7 (by omega)
-    unfold allocGlobal InRange at *
-    exact keep w (fun k hk => .inl (hg k hk)) (.inl (by omega)) ht (.inl (by omega))
+  have hag' : ∀ w, vsaFoot H w → ¬ (x + 8 ≤ w ∧ w < x + 16 ∨ topAddr ≤ w ∧ w < topAddr + 8 ∨
+      x + a' + 8 ≤ w ∧ w < x + a' + 16) → m'[w]? = m[w]? := fun w hf hu =>
+    hag w hf (fun h => hu (.inl h)) (fun h => hu (.inr (.inl h))) (fun h => hu (.inr (.inr h)))
+  have hG : ∀ w, allocGlobal w → (x + 8 ≤ w ∧ w < x + 16 ∨ topAddr ≤ w ∧ w < topAddr + 8 ∨
+      x + a' + 8 ≤ w ∧ w < x + a' + 16) → topAddr ≤ w ∧ w < topAddr + 8 := by
+    intro w hg hu; unfold allocGlobal InRange at hg; omega
+  have hfo : ∀ c ∈ cs₁ ++ [⟨x, a', true⟩], c.inuse = false → c ∈ cs₁ ++ [⟨x, a, true⟩] :=
+    fun c hc hf => free_mid (xs := [_]) (ys := [_]) (cs₂ := []) hc hf (by simp)
+  obtain ⟨gS, gB, gP, gM, gI, gBb, -⟩ := HH.keep_globals hag' hG
+  obtain ⟨kBins, kFoot⟩ := B.keep_free hag' hG fun c hc hf w _ => by
+    have := hW1b c (by simpa using free_mid (xs := [_]) (ys := []) (cs₂ := []) hc hf (by simp))
+    unfold topAddr avAddr heapStart at *; omega
+  have kH : ∀ c ∈ cs₁, read64 m' (c.addr + 8) = read64 m (c.addr + 8) := fun c hc =>
+    B.keep_hdr hag' (.inr ⟨c, by simp [hc], rfl⟩) fun w _ => by
+      have := hW1b c hc; unfold topAddr avAddr heapStart at *; omega
+  obtain ⟨fB, fF⟩ := HH.free_to (fun c hc hf => free_mid (xs := [_]) (ys := [_]) (cs₂ := []) hc hf (by simp)) hfo
   have hthp : prevInuse (brkv - (x + a') + 1) = true := by
     unfold prevInuse; rw [beq_iff_eq]; omega
   have WX : ChunkWalk m' x (x + a') [⟨x, a', true⟩] := by
@@ -320,80 +261,21 @@ theorem PHeapAt.setTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       (by rw [hsz]; omega) (by rw [hsz]; omega) (by rw [hsz]; exact hth)
       (by rw [hsz]; exact ChunkWalk.top)
     rwa [hsz, hthp] at w
-  have hwalk : ChunkWalk m' heapStart (x + a') (cs₁ ++ [⟨x, a', true⟩]) :=
-    W1.extend (fun c hc => keep _ (foot_header B (.inr ⟨c, by simp [hc], rfl⟩))
-        (by have := hW1b c hc; exact .inl (by omega))
-        (by have := hW1b c hc; unfold topAddr avAddr; unfold heapStart at this; omega)
-        (by have := hW1b c hc; exact .inl (by omega)))
-      (fun h1 hh1 => ⟨h', hhdr, hpi h1 hh1⟩) WX
   have hmemL : ∀ c, c ∈ cs₁ ++ [⟨x, a, true⟩] ↔ c ∈ cs₁ ∨ c = ⟨x, a, true⟩ := by
     intro c; simp only [List.mem_append, List.mem_singleton]
-  have hmemL' : ∀ c, c ∈ cs₁ ++ [⟨x, a', true⟩] ↔ c ∈ cs₁ ∨ c = ⟨x, a', true⟩ := by
-    intro c; simp only [List.mem_append, List.mem_singleton]
-  have hfree_in : ∀ c ∈ cs₁ ++ [⟨x, a, true⟩], c.inuse = false → c ∈ cs₁ := by
-    intro c hc hf
-    rcases (hmemL c).1 hc with h1 | rfl
-    · exact h1
-    · cases hf
-  have hfree_in' : ∀ c ∈ cs₁ ++ [⟨x, a', true⟩], c.inuse = false → c ∈ cs₁ := by
-    intro c hc hf
-    rcases (hmemL' c).1 hc with h1 | rfl
-    · exact h1
-    · cases hf
-  have hin_old : ∀ c ∈ cs₁, c ∈ cs₁ ++ [⟨x, a, true⟩] := fun c hc => by simp [hc]
   have hin_new : ∀ c ∈ cs₁, c ∈ cs₁ ++ [⟨x, a', true⟩] := fun c hc => by simp [hc]
-  have Klink : ∀ j y, 0 < j → j < numBins → (y = binAt j ∨ y ∈ bins j) →
-      fdOf m' y = fdOf m y ∧ bkOf m' y = bkOf m y := by
-    intro j y hj0 hj hy
-    have hgj := binAt_geo j hj
-    rcases hy with rfl | hy
-    · exact ⟨Kg _ (fun k hk => .inl ⟨by omega, by omega⟩)
-          (by unfold topAddr binAt avAddr; unfold binAt avAddr at hgj; omega),
-        Kg _ (fun k hk => .inl ⟨by omega, by omega⟩)
-          (by unfold topAddr binAt avAddr; unfold binAt avAddr at hgj; omega)⟩
-    · obtain ⟨c, hc, rfl, hf⟩ := HH.member hj0 hj hy
-      have hff := (foot_free B hc hf).1
-      have hc1 := hfree_in c hc hf
-      have := hW1b c hc1
-      unfold heapStart at this
-      refine ⟨keep _ (fun k hk => hff k (by omega)) (.inl (by omega))
-          (by unfold topAddr avAddr; omega) (.inl (by omega)),
-        keep _ (fun k hk => by have := hff (8 + k) (by omega); rwa [show c.addr + 16 + (8 + k) =
-          c.addr + 24 + k by omega] at this) (.inl (by omega)) (by unfold topAddr avAddr; omega)
-          (.inl (by omega))⟩
-  have gAv : ∀ w, 0x8001ad10 ≤ w → w + 8 ≤ 0x8001b520 → ∀ k, k < 8 → allocGlobal (w + k) :=
-    fun w h1 h2 k hk => .inl ⟨by omega, by omega⟩
-  have gHi : ∀ w, 0x8001b990 ≤ w → w + 8 ≤ 0x8001b9b0 → ∀ k, k < 8 → allocGlobal (w + k) :=
-    fun w h1 h2 k hk => .inr (.inr (.inr (.inl ⟨by omega, by omega⟩)))
-  have kBb : read64 m' binblocksAddr = read64 m binblocksAddr :=
-    Kg _ (gAv _ (by unfold binblocksAddr avAddr; omega) (by unfold binblocksAddr avAddr; omega))
-      (by unfold binblocksAddr topAddr avAddr; omega)
   have hXm : (⟨x, a', true⟩ : Chunk) ∈ cs₁ ++ [⟨x, a', true⟩] := by simp
-  refine ⟨⟨{ sbrk_base := ?_, brk := ?_, brk_le := HH.brk_le, top_ptr := htp
+  refine ⟨⟨{ sbrk_base := gS, brk := gB, brk_le := HH.brk_le, top_ptr := htp
              top_le := by omega, top_size := by omega, top_header := hth
-             top_pad := ?_, max_sbrked := ?_, mallinfo := ?_, first_prev := ?_
-             walk := hwalk, coalesced := coal_swap (c := ⟨x, a, true⟩) (c' := ⟨x, a', true⟩) rfl (cs₂ := []) (HH.coalesced : Coal (cs₁ ++ [⟨x, a, true⟩])), footer := ?_
-             bins_list := ?_, bins_nodup := HH.bins_nodup
-             bin_free := ?_, free_binned := ?_, remainder := HH.remainder
-             binblocks_present := by rw [kBb]; exact HH.binblocks_present
-             binblocks := fun bb hbb => HH.binblocks bb (by rw [← kBb]; exact hbb)
-             live := ?_, exact := ?_ }, by omega⟩, hpage,
-    fun bb hbb => hbbl bb (by rw [← kBb]; exact hbb)⟩
-  · rw [Kg _ (fun k hk => .inr (.inr (.inl ⟨by unfold sbrkBaseAddr; omega,
-      by unfold sbrkBaseAddr; omega⟩))) (by unfold sbrkBaseAddr topAddr avAddr; omega)]
-    exact HH.sbrk_base
-  · rw [Kg _ (gHi _ (by unfold brkAddr; omega) (by unfold brkAddr; omega))
-      (by unfold brkAddr topAddr avAddr; omega)]
-    exact HH.brk
-  · rw [Kg _ (gHi _ (by unfold topPadAddr; omega) (by unfold topPadAddr; omega))
-      (by unfold topPadAddr topAddr avAddr; omega)]
-    exact HH.top_pad
-  · rw [Kg _ (gHi _ (by unfold maxSbrkedAddr; omega) (by unfold maxSbrkedAddr; omega))
-      (by unfold maxSbrkedAddr topAddr avAddr; omega)]
-    exact HH.max_sbrked
-  · rw [Kg _ (fun k hk => .inr (.inr (.inr (.inr (.inr ⟨by unfold mallinfoAddr; omega,
-      by unfold mallinfoAddr; omega⟩))))) (by unfold mallinfoAddr topAddr avAddr; omega)]
-    exact HH.mallinfo
+             top_pad := gP, max_sbrked := gM, mallinfo := gI, first_prev := ?_
+             walk := W1.extend kH (fun h1 hh1 => ⟨h', hhdr, hpi h1 hh1⟩) WX
+             coalesced := coal_swap (c := ⟨x, a, true⟩) (c' := ⟨x, a', true⟩) rfl (cs₂ := []) (HH.coalesced : Coal (cs₁ ++ [⟨x, a, true⟩]))
+             footer := fun c hc hf => kFoot c (hfo c hc hf) hf
+             bins_list := kBins, bins_nodup := HH.bins_nodup
+             bin_free := fB, free_binned := fF, remainder := HH.remainder
+             binblocks_present := gBb ▸ HH.binblocks_present
+             binblocks := fun bb hbb => HH.binblocks bb (gBb ▸ hbb)
+             live := ?_, exact := ?_ }, by omega⟩, hpage, fun bb hbb => hbbl bb (gBb ▸ hbb)⟩
   · rcases W1.head_or_top with he | ⟨c, hc, hca⟩
     · have hfp := HH.first_prev
       obtain ⟨hh, hhr, _, _⟩ := HX.hdr
@@ -403,40 +285,7 @@ theorem PHeapAt.setTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       have := hpi hh hhr
       simp only [Option.any] at hfp ⊢
       exact this ▸ hfp
-    · have := hW1b c hc
-      rw [← hca, keep _ (foot_header B (.inr ⟨c, by simp [hc], rfl⟩)) (.inl (by omega))
-        (by unfold topAddr avAddr; unfold heapStart at this; omega) (.inl (by omega)), hca]
-      exact HH.first_prev
-  · intro c hc hf
-    have hc1 := hfree_in' c hc hf
-    have hcL := hin_old c hc1
-    have := hW1b c hc1
-    unfold heapStart at this
-    rw [keep _ (foot_free B hcL hf).2 (.inl (by omega)) (by unfold topAddr avAddr; omega)
-      (.inl (by omega))]
-    exact HH.footer c hcL hf
-  · intro j hj0 hj
-    rw [binList_iff_ring]
-    have hold := binList_iff_ring.1 (HH.bins_list j hj0 hj)
-    refine ⟨?_, hold.2⟩
-    have hr := hold.1
-    unfold Ring at hr ⊢
-    refine hr.transport fun a' b' hab => ?_
-    have ⟨ha, hb⟩ := pair_mem hab
-    have hnode : ∀ y ∈ binAt j :: bins j ++ [binAt j], y = binAt j ∨ y ∈ bins j := by
-      intro y hy
-      simp only [List.cons_append, List.mem_cons, List.mem_append, List.not_mem_nil,
-        or_false] at hy
-      rcases hy with h1 | h1 | h1
-      · exact .inl h1
-      · exact .inr h1
-      · exact .inl h1
-    exact ⟨(Klink j a' hj0 hj (hnode a' ha)).1, (Klink j b' hj0 hj (hnode b' hb)).2⟩
-  · intro j q hj0 hj hq
-    obtain ⟨c, hc, h1, h2, h3⟩ := HH.bin_free j q hj0 hj hq
-    exact ⟨c, hin_new c (hfree_in c hc h2), h1, h2, h3⟩
-  · intro c hc hf
-    exact HH.free_binned c (hin_old c (hfree_in' c hc hf)) hf
+    · rw [← hca, kH c hc, hca]; exact HH.first_prev
   · intro e he
     obtain ⟨c, hc, hu, h1, h2⟩ := HH.live e he
     rcases (hmemL c).1 hc with h3 | rfl
