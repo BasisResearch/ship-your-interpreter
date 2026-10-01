@@ -224,4 +224,11 @@ theorem binList_insert {m m' : Mem} {i v pred succ : Nat} {L pre post : List Nat
     · exact hv
     · exact hold.2 x (List.mem_append_right _ hx)
 
+syntax "wl_rd" (Lean.Parser.Tactic.location)? : tactic
+
+macro_rules
+  | `(tactic| wl_rd $[$loc]?) => `(tactic|
+    simp (disch := omega) only [VsaIris.Sym.read64_store_miss, VsaIris.Sym.read64_store_hit,
+      BitVec.toNat_ofNat, Nat.mod_eq_of_lt] $[$loc]?)
+
 end VsaIris.VsaHeap
