@@ -29,9 +29,7 @@ theorem run_up {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (hs :
   | 0, _, _, _, _, pos, L, o, _, h9 => reach_here ⟨by simp, rfl, rfl, Keep.refl _ _, h9⟩
   | i + 1, _, _, .top _ _ _, hi, _, _, _, _, _ => by simp at hi
   | i + 1, a, _, .cons (b := b) (fr := fr) (f := f) (L := La) hfr hpar hF hc, hi, pos, L, o, hseg, h9 => by
-    have hb : frameBase = 0x80100000 := rfl
-    have he : frameEnd = 0x90000000 := rfl
-    have ht : tohostAddr = 0x8001ad00 := rfl
+    obtain ⟨hb, he, ht⟩ := frame_consts
     obtain ⟨h1, h2, h3, h4⟩ := hs.region a f La hF
     have htop := hs.top
     unfold frSize at h2
@@ -40,13 +38,11 @@ theorem run_up {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (hs :
     have hpa : parOf F (some a) = f := by simp [parOf, hF]
     have hpb : parAddr F fr = parOf F (some b) := by rw [parAddr_eq_parOf, hpar]
     rw [hpa] at h9
-    have k9 := has_mem h9 (by decide); have e9 := srcVal_of_has h9
-    simp only [envR] at k9 e9
     have n0 : (BitVec.ofNat 64 f).toNat = f := toNat_ofNat_lt (by omega)
     simp only [List.replicate_succ] at hseg
     obtain ⟨s1, s2⟩ := (show Seg code pos ([Ins.ld envR envR] ++ List.replicate i (.ld envR envR)) from hseg).append
     apply run_whole hR.fits s1
-    wp_simp [k9, e9, n0]
+    wp_simp [h9.wp, n0]
     refine ⟨by unfold LdOK; omega, ?_⟩
     rw [hfa.parent, hpb]
     refine reaches_mono (run_up hs i hc (by simp at hi ⊢; omega) (pos + 1) _ o s2 (by reg_simp [])) ?_
@@ -73,28 +69,14 @@ theorem run_exitTo {T : List String} {V : View} {st : St} {d : Nat} {env : Addr}
     obtain ⟨hdt, hpp⟩ := ht p dt rfl
     have hblk := hC.blk
     simp only [exitTo] at hseg hP
-    obtain ⟨s1, s2⟩ := hseg.append
-    simp only [List.length_append, List.length_replicate, List.length_singleton] at s2 hP
+    obtain ⟨⟨s1, hpj⟩, s2, -⟩ := segP_app.mp ⟨hseg, hP⟩
+    simp only [List.length_replicate] at s2 hpj
     refine ex_bind (run_up hR hm.rel (C.blk - dt) hm.chn (by omega) pos L o s1 hm.henv) ?_
     rintro ⟨pc1, L1, m1, o1⟩ ⟨hpc1, hm1, ho1, hk1, h9⟩
     simp only at hpc1 hm1 ho1 hk1 h9; subst hpc1 hm1 ho1
-    have hpj : PosOK (pos + (C.blk - dt)) := posOK_le hP (by omega)
     apply run_jumps hR.fits s2
     wp_simp [hpj, hpp]
-    refine reach_here ⟨⟨rfl, ?_⟩, rfl, rfl, hk1⟩
-    exact {
-      rel := hm.rel
-      img := hm.img
-      clo := hm.clo
-      chn := hm.chn.up _ (by omega)
-      out := hm.out
-      ho := hk1.has (by decide) hm.ho
-      hf := hk1.has (by decide) hm.hf
-      henv := h9
-      hsp := hk1.has (by decide) hm.hsp
-      hdep := hk1.has (by decide) hm.hdep
-      stk := hm.stk
-      hfal := hm.hfal }
+    exact reach_here ⟨⟨rfl, hm.reenv (hm.chn.up _ (by omega)) hk1 h9 rfl rfl⟩, rfl, rfl, hk1⟩
 
 end
 

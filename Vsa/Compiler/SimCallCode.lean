@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimNative
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -54,15 +55,8 @@ structure CCSegs (code : List Ins) (k m pos : Nat) : Prop where
   clo : Seg code (ccCL k m pos) (ccClo k m pos)
 
 theorem CCSegs.of {code : List Ins} {k m pos : Nat} (h : Seg code pos (callCode k m pos)) : CCSegs code k m pos := by
-  rw [callCode_eq] at h
-  obtain ⟨h, h8⟩ := h.append
-  obtain ⟨h, h7⟩ := h.append
-  obtain ⟨h, h6⟩ := h.append
-  obtain ⟨h, h5⟩ := h.append
-  obtain ⟨h, h4⟩ := h.append
-  obtain ⟨h, h3⟩ := h.append
-  obtain ⟨h1, h2⟩ := h.append
-  simp only [List.length_append, ccHead_length, List.length_singleton] at h2 h3 h4 h5 h6 h7 h8
+  simp only [callCode_eq, seg_app_iff, List.length_append, ccHead_length, List.length_singleton] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩ := h
   refine ⟨h1, h2, h3.cast ?_, h4.cast ?_, h5.cast ?_, h6.cast ?_, h7.cast ?_, h8.cast ?_⟩ <;>
     simp only [ccCL_eq, ccPL_eq, ccPR_eq] <;> omega
 
@@ -95,8 +89,6 @@ theorem run_dispatch {k m pos sp d fs : Nat} (hs : CCSegs code k m pos)
   have hH : stackHi = 0x100000000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
   have hM : maxFS = 2048 := rfl
-  have k2 := has_mem hsp (by decide); have e2 := srcVal_of_has hsp
-  simp only [spR] at k2 e2
   have hn1 : (BitVec.ofNat 64 (sp + 16 + 16 * k)).toNat = sp + 16 + 16 * k := toNat_ofNat_lt (by omega)
   have hn2 : (BitVec.ofNat 64 (sp + 16 + 16 * k + 8)).toNat = sp + 16 + 16 * k + 8 :=
     toNat_ofNat_lt (by omega)
@@ -106,7 +98,7 @@ theorem run_dispatch {k m pos sp d fs : Nat} (hs : CCSegs code k m pos)
   have hseg := hs.head
   simp only [ccHead, errUnlessEq, List.cons_append, List.nil_append] at hseg
   apply run_jumps hR.fits hseg
-  wp_simp [k2, e2, hn1, hn2, e1, ht0, ht1]
+  wp_simp [hsp.wp, hn1, hn2, e1, ht0, ht1]
   refine ⟨by unfold LdOK; omega, by unfold LdOK; omega, ?_⟩
   have g6 : ∀ L', Keep [5, 6, 7, 31] (gset (gset (gset (gset (gset L 31 (BitVec.ofNat 64 (sp + 16 + 16 * k))) 5 tw)
       31 (BitVec.ofNat 64 (sp + 16 + 16 * k + 8))) 6 pw) 7 4#64) L' → Keep [5, 6, 7, 31] L L' := fun L' h =>

@@ -1,4 +1,5 @@
 import Vsa.Compiler.SetupStr
+import Vsa.Compiler.R6Expr
 
 namespace Vsa.Compiler
 
@@ -47,8 +48,7 @@ theorem objImg0 {p : Program} (hok : SetupOK p) {m : Mem}
     (hstr : ∀ i < (strTab p).length, StrW m (objBase + strOff (strTab p) i) ((strTab p).getD i "").toList) :
     ObjImg (strTab p) m (view0 p).h := by
   obtain ⟨r, hr⟩ := strTab_eq p
-  have hob : objBase = 0x90000000 := rfl
-  have hoe : objEnd = 0xE0000000 := rfl
+  obtain ⟨hob, hoe, -⟩ := obj_consts
   have hlen : fixedStrs.length ≤ (strTab p).length := by rw [hr]; simp
   have hf8 : fixedStrs.length = 8 := rfl
   have htab := hok.tab
@@ -129,10 +129,8 @@ theorem run_nat {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List Str
   have s2' : Seg code (pos + 2) (storeSlot ((slotOf (Γ.headD []) x).getD 0)) := by rw [hx]; exact s2
   apply run_whole hR.fits s1
   wp_simp [BitVec.ofInt_natCast]
-  have hmq := hm.transport (B := ⟨pcOf (pos + 2), gset (gset L 10 5#64) 11 (BitVec.ofNat 64 i), m, o⟩)
-    (S := [a0, a1]) (by decide) (by reg_simp []; exact Keep.refl _ _) (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
-  refine reaches_mono (run_storeSlot hR hmq rfl hxm s2' (v := .native f) (t := 5#64) (p := BitVec.ofNat 64 i)
-    (by reg_simp []) (by reg_simp []) ⟨rfl, hfi.symm⟩) ?_
+  refine reaches_mono (run_storeSlot hR (hm.keep (S := [a0, a1]) (by reg_simp []; exact Keep.refl _ _)) rfl hxm s2'
+    (v := .native f) (t := 5#64) (p := BitVec.ofNat 64 i) (by reg_simp []) (by reg_simp []) ⟨rfl, hfi.symm⟩) ?_
   rintro B ⟨hpc, hmB, -⟩
   exact ⟨by rw [hpc], hmB⟩
 
@@ -141,13 +139,10 @@ theorem run_setup (p : Program) (hok : SetupOK p) (hseg : Seg code mainPos (setu
     (ho : String.join o.toList = "") :
     Reaches code ⟨pcOf mainPos, L, m, o⟩ (fun B => B.pc = pcOf (mainPos + (setupCode p).length) ∧
       MS code (strTab p) (view0 p) initSt 0 0 [globalNames p] (stackHi - frameSize p) (frameSize p) B) := by
-  have hob : objBase = 0x90000000 := rfl
-  have hoe : objEnd = 0xE0000000 := rfl
-  have hfb : frameBase = 0x80100000 := rfl
-  have hfe : frameEnd = 0x90000000 := rfl
+  obtain ⟨hob, hoe, -⟩ := obj_consts
+  obtain ⟨hfb, hfe, ht⟩ := frame_consts
   have hsH : stackHi = 0x100000000 := rfl
   have hsL : stackLo = 0xE0000000 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
   have hG := hok.glob
   have htab := hok.tab
   have htmp := hok.tmp
@@ -179,14 +174,9 @@ theorem run_setup (p : Program) (hok : SetupOK p) (hseg : Seg code mainPos (setu
   simp only [List.length_cons, List.length_nil, List.length_append] at hP s3 ⊢
   have hQ1 : PosOK (Q + 1) := posOK_le hP (by omega)
   have hcall : PosOK Q := posOK_le hQ1 (by omega)
-  obtain ⟨s4, s7⟩ := s3.append
-  obtain ⟨s4, s6⟩ := s4.append
-  obtain ⟨s4, s5⟩ := s4.append
-  simp only [List.length_append, List.length_singleton] at s5 s6 s7
-  have s4 := s4.cast (pos' := Q + 1) (by omega)
-  have s5 := s5.cast (pos' := Q + 1 + 1) (by omega)
-  have s6 := s6.cast (pos' := Q + 1 + 1 + 6) (by omega)
-  have s7 := s7.cast (pos' := Q + 1 + 1 + 6 + 6) (by omega)
+  rw [hlen] at s3
+  simp only [List.append_assoc, seg_app_iff, en0, en1, List.length_cons, List.length_nil, Nat.zero_add] at s3
+  obtain ⟨s4, s5, s6, s7⟩ := s3
   apply run_jumps hR.fits s2
   wp_simp [liN, BitVec.ofInt_natCast, hcall]
   rw [hQ]
@@ -197,10 +187,8 @@ theorem run_setup (p : Program) (hok : SetupOK p) (hseg : Seg code mainPos (setu
   rotate_left
   · omega
   simp only at hpc2 hm2 ho2 g14 g23 hk2; subst hpc2
-  have k14 := has_mem g14 (by decide); have e14 := srcVal_of_has g14
-  simp only [a4] at k14 e14
   apply run_whole hR.fits s4
-  wp_simp [k14, e14]
+  wp_simp [g14.wp]
 
   obtain ⟨hs1, -, -, -, hout1, -⟩ := (storeRel0 (m := m1) (h := (view0 p).h)).alloc_frame (par := none)
     (L := globalNames p) (fun b hb => by cases hb) (by decide) (Nat.le_refl _) (by omega)

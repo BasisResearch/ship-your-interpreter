@@ -1,5 +1,6 @@
 import Vsa.Compiler.SimFnExit
 import Vsa.Compiler.GenLen
+import Vsa.Compiler.R6Expr
 
 namespace Vsa.Compiler
 
@@ -55,16 +56,13 @@ theorem run_cloJump {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List
   simp only [ccClo] at hcl
   have hfinL : ccCL k nv pos + 8 ≤ pos + (callCode k nv pos).length := by
     rw [hfin]; simp only [ccFin]; omega
-  have k6 := has_mem g6 (by decide); have e6 := srcVal_of_has g6
-  have k2 := has_mem (hk1.has (by decide) hm.hsp) (by decide); have e2 := srcVal_of_has (hk1.has (by decide) hm.hsp)
-  simp only [t1, spR] at k6 e6 k2 e2
   have hb := hm.stk.bounds
   have hfs := hm.stk.fsz
   have hL : stackLo = 0xE0000000 := rfl
   have hH : stackHi = 0x100000000 := rfl
   have ht' : tohostAddr = 0x8001ad00 := rfl
   apply run_jumps hR.fits hcl
-  wp_simp [k6, e6, k2, e2, hn8, hl8, hq, BitVec.ofInt_natCast]
+  wp_simp [g6.wp, (hk1.has (by decide) hm.hsp).wp, hn8, hl8, hq, BitVec.ofInt_natCast]
   apply run_jumps hR.fits ((hcl.drop 7).cast (pos' := ccCL k nv pos + 7) rfl)
   wp_simp [pcOf_aligned hqq]
   refine reach_here ⟨rfl, rfl, rfl, by reg_simp []; exact hk1.mono (by decide), by reg_simp [] <;> rfl,
@@ -88,9 +86,7 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
   obtain ⟨q, Γc, hc1, hc2, hc3, hc4, hc5, hc6⟩ := hm.clo a cd pw.toNat hcd hpa
   obtain ⟨dA, cA, hco⟩ := hm.rel.clo.obj a cd pw.toNat hcd hpa
   have hco1 := hco.lo; have hco2 := hco.hi; have hco3 := hco.al; have hptr := hm.img.ptr.hi
-  have hob : objBase = 0x90000000 := rfl
-  have hoe : objEnd = 0xE0000000 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
+  obtain ⟨hob, hoe, ht⟩ := obj_consts
   have hpw : pw = BitVec.ofNat 64 pw.toNat := by simp
   generalize hP' : pw.toNat = P at hpw hpa hc1 hc2 hco hco1 hco2 hco3
   subst hpw
@@ -111,34 +107,28 @@ theorem cClosure {st : St} {d : Nat} {a : Addr} {cd : ClosureData} {vs : List Va
   obtain ⟨hpcJ, hmJ, hoJ, hkJ, g1, g12, g13, g14⟩ := hJ
   simp only at hpcJ hmJ hoJ hkJ g1 g12 g13 g14; subst mJ oJ
 
-  have hmq := hm.transport (B := ⟨pcJ, LJ, m0, o0⟩) (S := [a2, a3, a4, t3, ra, t0, t1, t2, t6]) (by decide) hkJ
-    (Agree.refl _ _ _) (ObjAgree.refl _ _) rfl
+  have hmq := hm.keep hkJ (pc := pcJ)
   refine ex_bind (run_entry hR (k := k) hmq hcd hpa hc1 hc3 hc4 hc5 hc6 hlen hd hpcJ g1 g12 g13 g14 hvs htmp
     hmax) ?_
   rintro E (⟨h1, h2⟩ | hE)
   · refine reach_here (.inl ⟨h1, fun hr => ?_⟩)
     have := hr.1; have hLl := hc6.2.1; unfold envBytes at hn; omega
 
-  have hc4' := hc4
-  rw [fnCode_eq] at hc4'
-  obtain ⟨sPre, sRest⟩ := hc4'.append
-  obtain ⟨sBody, sPost⟩ := sRest.append
-  simp only [List.length_append, fnHead_length, paramCopies_length, List.length_singleton] at sRest sBody sPost
-  have hpb : q + (14 + 8 * cd.params.length + 1) = fnBody cd.params q := by simp [fnBody]; omega
-  rw [hpb] at sBody sPost
+  have h := And.intro hc4 hc5
+  rw [fnCode_eq, List.append_assoc, List.append_assoc] at h
+  simp only [↓segP_app, fnPost, fnHead_length, paramCopies_length, List.length_cons,
+    List.length_nil, Nat.zero_add, Nat.reduceAdd] at h
+  obtain ⟨-, -, -, ⟨sBody, pB⟩, sPost, pPost⟩ := h
+  rw [show q + 14 + 8 * cd.params.length + 1 = fnBody cd.params q from rfl] at sBody pB sPost pPost
   have hSh : (fnCtx (frameNames cd.params cd.body :: Γc) (fnBody cd.params q +
       (gseq T (fnCtx (frameNames cd.params cd.body :: Γc) 0) (fnBody cd.params q) cd.body).length + 2)).Sh
       (fnCtx (frameNames cd.params cd.body :: Γc) 0) := ⟨rfl, rfl, rfl, rfl, rfl⟩
   have hlb := gseq_len T hSh (fnBody cd.params q) cd.body
-  rw [hlb] at sPost
-  have hPend : PosOK (fnBody cd.params q + (gseq T (fnCtx (frameNames cd.params cd.body :: Γc) 0)
-      (fnBody cd.params q) cd.body).length + 8) := posOK_le hc5 (by
-    rw [fnCode_eq]; simp only [List.length_append, fnHead_length, paramCopies_length, List.length_singleton,
-      fnPost, List.length_cons, List.length_nil, hlb]; simp [fnBody]; omega)
-  have hctx := fnCtx_ok (frameNames cd.params cd.body) Γc (posOK_le hPend (by omega) : PosOK (fnBody cd.params q +
+  rw [hlb] at sPost pPost
+  have hctx := fnCtx_ok (frameNames cd.params cd.body) Γc (posOK_le pPost (by omega) : PosOK (fnBody cd.params q +
     (gseq T (fnCtx (frameNames cd.params cd.body :: Γc) 0) (fnBody cd.params q) cd.body).length + 2))
   refine ex_bind (hB _ _ (sp - frameSize cd.body) (frameSize cd.body) _ E hE.ms hE.pc hc6.2.2.2 hctx sBody
-    (by rw [hlb]; exact posOK_le hPend (by omega)) (by simp [frameSize])) ?_
+    pB (by simp [frameSize])) ?_
   rintro B (⟨h1, h2⟩ | ⟨Ve, hpost⟩)
   · refine reach_here (.inl ⟨h1, fun hr => h2 ⟨?_, ?_⟩⟩)
     · have := hr.1; have hLl := hc6.2.1; simp only [View.enter]; unfold envBytes at hn; omega

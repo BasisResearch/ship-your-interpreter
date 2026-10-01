@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimOp
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -105,15 +106,11 @@ theorem run_storeTmp {q k sp d fs : Nat} (hseg : Seg code q (storeTmp k)) {L : G
   have hh : stackHi = 0x100000000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
   have hM : maxFS = 2048 := rfl
-  have k2 := has_mem hsp (by decide); have e2 := srcVal_of_has hsp
-  have k10 := has_mem h10 (by decide); have e10 := srcVal_of_has h10
-  have k11 := has_mem h11 (by decide); have e11 := srcVal_of_has h11
-  simp only [spR, a0, a1] at k2 e2 k10 e10 k11 e11
   have hn1 : (BitVec.ofNat 64 (sp + (16 + 16 * k))).toNat = sp + (16 + 16 * k) := toNat_ofNat_lt (by omega)
   have hn2 : (BitVec.ofNat 64 (sp + (16 + 16 * k) + 8)).toNat = sp + (16 + 16 * k) + 8 :=
     toNat_ofNat_lt (by omega)
   apply run_whole hfit hseg
-  wp_simp [storeTmp, k2, e2, k10, e10, k11, e11, hn1, hn2]
+  wp_simp [storeTmp, hsp.wp, h10.wp, h11.wp, hn1, hn2]
   rw [if_neg (by omega), if_neg (by omega)]
   refine ⟨by unfold StOK; omega, by unfold StOK; omega, ?_⟩
   have e1 : sp + (16 + 16 * k) = sp + 16 + 16 * k := by omega
@@ -132,13 +129,11 @@ theorem run_loadTmp {q k sp d fs : Nat} (hseg : Seg code q (loadTmp k)) {L : GRe
   have hh : stackHi = 0x100000000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
   have hM : maxFS = 2048 := rfl
-  have k2 := has_mem hsp (by decide); have e2 := srcVal_of_has hsp
-  simp only [spR] at k2 e2
   have hn1 : (BitVec.ofNat 64 (sp + (16 + 16 * k))).toNat = sp + (16 + 16 * k) := toNat_ofNat_lt (by omega)
   have hn2 : (BitVec.ofNat 64 (sp + (16 + 16 * k) + 8)).toNat = sp + (16 + 16 * k) + 8 :=
     toNat_ofNat_lt (by omega)
   apply run_whole hfit hseg
-  wp_simp [loadTmp, k2, e2, hn1, hn2]
+  wp_simp [loadTmp, hsp.wp, hn1, hn2]
   refine ⟨by unfold LdOK; omega, by unfold LdOK; omega, ?_⟩
   have e1 : sp + (16 + 16 * k) = sp + 16 + 16 * k := by omega
   simp only [e1]

@@ -220,15 +220,14 @@ theorem run_printLoop₀ (hL : Layout code) : ∀ (ns : List Int) (k pos : Nat) 
         printLoop (k + 1) (pos + (liN s2 (tempAddr k) ++ [Ins.ld a0 s2]).length + 1 +
           (if xs.length = 0 then [] else putc ' ').length) xs.length := rfl
     rw [hpl] at hseg hpos
-    generalize hqd : pos + (liN s2 (tempAddr k) ++ [Ins.ld a0 s2]).length = q at hseg hpos
-    generalize hsp : (if xs.length = 0 then [] else putc ' ') = sep at hseg hpos
-    have hq0 : q = pos + ((liN s2 (tempAddr k)).length + 1) := by rw [← hqd]; simp
-    obtain ⟨hs123, hs4⟩ := hseg.append
-    obtain ⟨hs12, hs3⟩ := hs123.append
-    obtain ⟨hs1, hs2⟩ := hs12.append
-    simp only [List.length_append, List.length_cons, List.length_nil] at hpos hs4 hs3 hs2
+    obtain ⟨h123, hs4, p4⟩ := segP_app.mp ⟨hseg, hpos⟩
+    obtain ⟨h12, hs3, -⟩ := segP_app.mp h123
+    obtain ⟨⟨hs1, -⟩, hs2, hq⟩ := segP_app.mp h12
+    simp only [List.length_append, List.length_singleton, ← Nat.add_assoc] at hs2 hs3 hs4 p4 hq
+    generalize hqd : pos + (liN s2 (tempAddr k)).length + 1 = q at hs2 hs3 hs4 p4 hq
+    generalize hsp : (if xs.length = 0 then [] else putc ' ') = sep at hs3 hs4 p4
+    have hq0 : q = pos + ((liN s2 (tempAddr k)).length + 1) := by omega
     simp only [List.length_cons] at hk
-    have hq : PosOK (q + 1) := by unfold PosOK at *; omega
 
     have r1 := run_ldA hL.1 hs1 hA (by decide) (tempAddr_ld (k := k) (by omega))
     have hx : rdW A.mem (tempAddr k) = BitVec.ofInt 64 x := by
@@ -236,7 +235,7 @@ theorem run_printLoop₀ (hL : Layout code) : ∀ (ns : List Int) (k pos : Nat) 
     rw [hx, show pos + (liN s2 (tempAddr k)).length + 1 = q by omega] at r1
 
     have hj := pcOf_jump q printPos (by unfold PosOK at *; omega) printPos_ok
-    have e2 := step_call hL.1 (Seg.pos_eq (by omega) hs2).head
+    have e2 := step_call hL.1 hs2.head
       (A := ⟨pcOf q, gset (gset A.regs s2
       (BitVec.ofNat 64 (tempAddr k))) a0 (BitVec.ofInt 64 x), A.mem, A.out⟩) rfl
       (by rw [hj, printPos_toNat]; decide)
@@ -262,18 +261,14 @@ theorem run_printLoop₀ (hL : Layout code) : ∀ (ns : List Int) (k pos : Nat) 
     · have hsep : sep = putc ' ' := by
         rw [← hsp, if_neg (by simpa using hxs)]
       subst hsep
-      obtain ⟨L3, r3⟩ := run_putc hL.1 (by decide) (Seg.pos_eq (by omega) hs3) hB2pc
+      obtain ⟨L3, r3⟩ := run_putc hL.1 (by decide) hs3 hB2pc
       have hv' : ∀ j (hj : j < xs.length), rdW B2.mem (tempAddr (k + 1 + j)) = BitVec.ofInt 64 xs[j] := by
         intro j hj
         rw [htemp, show k + 1 + j = k + (j + 1) by omega, hv (j + 1) (by simp; omega)]
         simp
       obtain ⟨B4, r4, hB4pc, hB4o, hB4m⟩ := run_printLoop₀ hL xs (k + 1) (q + 1 + (putc ' ').length)
         ⟨pcOf (q + 1 + (putc ' ').length), L3, B2.mem, B2.out.push (toString ' ')⟩ hv'
-        (fun y hy => hr y (List.mem_cons_of_mem _ hy)) (by omega) (Seg.pos_eq (by omega) hs4)
-        (Seg.end_ok hL.1 (Seg.pos_eq (by omega) hs4) (by
-          cases xs with
-          | nil => exact absurd rfl hxs
-          | cons y ys => simp [printLoop])) rfl
+        (fun y hy => hr y (List.mem_cons_of_mem _ hy)) (by omega) hs4 p4 rfl
       refine ⟨B4, run12.trans (r3.trans r4), ?_, ?_, ?_⟩
       · rw [hB4pc]; congr 1
         rw [hpl, hsp]

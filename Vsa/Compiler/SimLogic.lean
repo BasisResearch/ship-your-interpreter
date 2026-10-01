@@ -29,44 +29,22 @@ theorem sLogShort {op : LogOp} {st : St} {d : Nat} {env : Addr} {l r : Expr} {st
     {n : Nat} (hE : ESpec code T st d env l st1 lv n) (ht : lv.truthy = logShort op) :
     ESpec code T st d env (.logical op l r) st1 (.bool (logShort op)) n := by
   intro V Γ sp fs k pos A hm hA hwf hseg hP htmp
-  obtain ⟨hwl, -⟩ := hwf
   simp only [tE] at htmp
   cases op
   all_goals
-    simp only [gexpr, jmpIfNonzero, jmpIfZero, List.append_assoc] at hseg hP ⊢
-    obtain ⟨s1, s2⟩ := hseg.append
-    obtain ⟨s2, s3⟩ := s2.append
-    obtain ⟨s3, s4⟩ := s3.append
-    obtain ⟨s4, s5⟩ := s4.append
-    obtain ⟨s5, s6⟩ := s5.append
-    simp only [List.length_append, List.length_cons, List.length_nil, Nat.zero_add] at hP s3 s4 s5 s6 ⊢
-    obtain ⟨X, hX⟩ : ∃ X, pos + (gexpr T Γ k pos l).length + 3 +
-        (gexpr T Γ k (pos + (gexpr T Γ k pos l).length + 3) r).length = X := ⟨_, rfl⟩
-    have s6 := s6.cast (pos' := X + 4) (by omega)
-    refine hE.bind hm hA hwl s1 (posOK_le hP (by omega)) (by omega)
-      (fun B h1 h2 => .inl ⟨h1, h2⟩) fun V1 B1 hpc1 hp1 => ?_
-    obtain ⟨t1, q1, h10, h11, hv1⟩ := hp1.val
-    obtain ⟨pc1, L1, m1, o1⟩ := B1
-    simp only at hpc1 h10 h11 hv1; subst hpc1
-    have hq1 : PosOK (pos + (gexpr T Γ k pos l).length + 1) := posOK_le hP (by omega)
-    apply run_whole hR.fits s2
-    wp_simp [hq1]
-    refine ex_bind (run_tr hR.fits hR.tr (L := gset L1 1 (pcOf (pos + (gexpr T Γ k pos l).length + 1)))
-      (m := m1) (o := o1) (by reg_simp []; exact h10) (by reg_simp []; exact h11) (by reg_simp [])
-      (pcOf_aligned hq1)) ?_
-    rintro ⟨pc2, L2, m2, o2⟩ ⟨hpc2, hm2, ho2, g10, hk2⟩
-    simp only at hpc2 hm2 ho2 g10 hk2; subst hpc2 hm2 ho2
-    rw [trW_repr hv1, ht] at g10
-    have k10 := has_mem g10 (by decide); have e10 := srcVal_of_has g10
-    simp only [a0] at k10 e10
+    have h := And.intro hseg hP
+    simp only [gexpr, jmpIfNonzero, jmpIfZero, List.append_assoc, ↓segP_app, List.length_cons, List.length_nil,
+      Nat.zero_add, Nat.reduceAdd] at h ⊢
+    obtain ⟨⟨s1, -⟩, ⟨s2, p2⟩, ⟨s3, -⟩, -, -, s6, p6⟩ := h
+    refine hE.bindTr hR hm hA hwf.1 s1 s2 p2 (by omega) (Within.refl V 0) (by omega)
+      fun V1 B1 L2 hp1 hk2 g10 => ?_
     apply run_jumps hR.fits s3
-    wp_simp [logShort, k10, e10]
-    rw [hX]
+    wp_simp [logShort, ht, g10.wp]
     apply run_whole hR.fits s6
     wp_simp []
     refine reach_here (.inr ⟨?_, V1, hp1.regs (S := [1, t0, a0, a1]) (by decide) ?_ ?_ (Nat.le_refl _)⟩)
     · show pcOf _ = pcOf _; congr 1 <;> omega
-    · reg_simp []; exact (Keep.gset (Keep.refl _ L1) (by decide)).trans (hk2.mono (by decide))
+    · reg_simp []; exact hk2.mono (by decide)
     · exact ⟨_, _, by reg_simp [], by reg_simp [] <;> rfl, rfl, rfl⟩
 
 theorem sLogFull {op : LogOp} {st : St} {d : Nat} {env : Addr} {l r : Expr} {st1 st2 : St}

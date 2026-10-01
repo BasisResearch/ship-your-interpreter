@@ -44,11 +44,7 @@ theorem read_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : Na
       match lookupVar fr x with
       | some v => B.pc = pcOf fin ∧ InA H m h B.regs v
       | none => B.pc = pcOf (pos + (readHere x l pos fin).length) ∧ Has B.regs t0 (BitVec.ofNat 64 f)) := by
-  have hb : frameBase = 0x80100000 := rfl
-  have he : frameEnd = 0x90000000 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  have k5 := has_mem h5 (by decide); have e5 := srcVal_of_has h5
-  simp only [t0] at k5 e5
+  obtain ⟨hb, he, ht⟩ := frame_consts
   cases hsl : slotOf l x with
   | none =>
     have hn := lookupVar_none_of_not_mem hfa (slotOf_none hsl)
@@ -64,7 +60,7 @@ theorem read_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : Na
     have hfn' : (BitVec.ofNat 64 (f + (8 + 16 * i) + 8)).toNat = f + (8 + 16 * i) + 8 :=
       toNat_ofNat_lt (by omega)
     apply run_jumps hfit hseg
-    wp_simp [k5, e5, hfn, hfn']
+    wp_simp [h5.wp, hfn, hfn']
     have e1 : f + (8 + 16 * i) = f + 8 + 16 * i := by omega
     have e2 : f + 8 + 16 * i + 8 = f + 16 + 16 * i := by omega
     rw [e1, e2]
@@ -161,13 +157,7 @@ theorem write_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : N
           B.mem = applyW (applyW m (f + 8 + 16 * i, 8, t)) (f + 8 + 16 * i + 8, 8, p)
       | none => B.pc = pcOf (pos + (writeHere x l pos fin).length) ∧ B.mem = m ∧
           Has B.regs t0 (BitVec.ofNat 64 f)) := by
-  have hb : frameBase = 0x80100000 := rfl
-  have he : frameEnd = 0x90000000 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  have k5 := has_mem h5 (by decide); have e5 := srcVal_of_has h5
-  have k10 := has_mem h10 (by decide); have e10 := srcVal_of_has h10
-  have k11 := has_mem h11 (by decide); have e11 := srcVal_of_has h11
-  simp only [t0, a0, a1] at k5 e5 k10 e10 k11 e11
+  obtain ⟨hb, he, ht⟩ := frame_consts
   cases hsl : slotOf l x with
   | none =>
     have hn := lookupVar_none_of_not_mem hfa (slotOf_none hsl)
@@ -183,7 +173,7 @@ theorem write_here {H : CloMap} {m : Mem} {h f : Nat} {l : List String} {par : N
     have hfn' : (BitVec.ofNat 64 (f + (8 + 16 * i) + 8)).toNat = f + (8 + 16 * i) + 8 :=
       toNat_ofNat_lt (by omega)
     apply run_jumps hfit hseg
-    wp_simp [k5, e5, k10, e10, k11, e11, hfn, hfn']
+    wp_simp [h5.wp, h10.wp, h11.wp, hfn, hfn']
     have e1 : f + (8 + 16 * i) = f + 8 + 16 * i := by omega
     rw [e1]
     refine ⟨by unfold LdOK; omega, ?_⟩
@@ -228,10 +218,8 @@ theorem walk_write {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (
     obtain ⟨hf1, hf2, hf3, hf4⟩ := frame_bounds hs hF0
     rw [set_step hfr]
     simp only [walkCode] at hseg
-    have hP := seg_end_posOK hfit hseg (by simp)
-    simp only [List.length_append, List.length_cons, List.length_nil] at hP
-    obtain ⟨s1, s2⟩ := hseg.append
-    refine ex_bind (write_here hfit hfa hf1 hf2 hf4 hf3 x fin hfin s1 (by omega) h5 h10 h11) ?_
+    obtain ⟨⟨s1, p1⟩, s2, -⟩ := segP_app.mp ⟨hseg, seg_end_posOK hfit hseg (by simp)⟩
+    refine ex_bind (write_here hfit hfa hf1 hf2 hf4 hf3 x fin hfin s1 p1 h5 h10 h11) ?_
     rintro B ⟨ho, hk, hB⟩
     obtain ⟨pc, L', m', o'⟩ := B
     simp only at ho hk hB; subst ho
@@ -252,9 +240,7 @@ theorem walk_write {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (
       exact reach_here ⟨rfl, hk, by simp⟩
   | @cons a b fr f0 Lf L' g hfr hpar hF0 hcb ih =>
     intro pos f L o hFa hseg h5 h10 h11
-    have hb : frameBase = 0x80100000 := rfl
-    have he : frameEnd = 0x90000000 := rfl
-    have ht : tohostAddr = 0x8001ad00 := rfl
+    obtain ⟨hb, he, ht⟩ := frame_consts
     simp only [List.headD_cons] at hFa
     have hff : f0 = f := by rw [hF0] at hFa; cases hFa; rfl
     subst hff
@@ -266,14 +252,11 @@ theorem walk_write {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (
     have hpa : parAddr F fr = fb := by simp only [parAddr, hpar, hFb, Option.map_some, Option.getD_some]
     have hrd : rdW m f0 = BitVec.ofNat 64 fb := by rw [hfa.parent, hpa]
     rw [set_step hfr]
-    simp only [walkCode] at hseg
-    obtain ⟨s12, s3⟩ := hseg.append
-    obtain ⟨s1, s2⟩ := s12.append
-    rw [List.length_append, List.length_singleton, ← Nat.add_assoc] at s3
-    have hP := seg_end_posOK hfit s2 (by simp)
-    simp only [List.length_cons, List.length_nil] at hP
-    refine ex_bind (write_here hfit hfa hf1 hf2 hf4 hf3 x fin hfin s1 (by unfold PosOK at hP ⊢; omega)
-      h5 h10 h11) ?_
+    simp only [walkCode, List.append_assoc] at hseg
+    have h := And.intro hseg (seg_end_posOK hfit hseg (by simp))
+    simp only [↓segP_app, List.length_cons, List.length_nil, Nat.zero_add] at h
+    obtain ⟨⟨s1, p1⟩, ⟨s2, -⟩, s3, -⟩ := h
+    refine ex_bind (write_here hfit hfa hf1 hf2 hf4 hf3 x fin hfin s1 p1 h5 h10 h11) ?_
     rintro B ⟨ho, hk, hB⟩
     obtain ⟨pc, L1, m', o'⟩ := B
     simp only at ho hk hB; subst ho
@@ -289,12 +272,10 @@ theorem walk_write {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (
       obtain ⟨hpc, hm, h5'⟩ := hB
       subst hm
       rw [hpc, set_gas hs.parents x v b a hba]
-      have ha := has_mem h5' (by decide); have ea := srcVal_of_has h5'
-      simp only [t0] at ha ea
       have hfn : (BitVec.ofNat 64 f0).toNat = f0 := toNat_ofNat_lt (by omega)
       refine WP_sound hfit _ _ (fun L2 m2 o2 => Reaches code ⟨pcOf (pos + (writeHere x Lf pos fin).length + 1),
         L2, m2, o2⟩ _) L1 _ _ s2 (fun L2 m2 o2 h => by simpa using h) ?_
-      wp_simp [ha, ea, hfn, hrd]
+      wp_simp [h5'.wp, hfn, hrd]
       refine ⟨by unfold LdOK; omega, ?_⟩
       refine reaches_mono (ih _ fb (gset L1 5 (BitVec.ofNat 64 fb)) _ (by simpa using hFb) s3
         (by reg_simp []) (by reg_simp []; exact hk.has (by decide) h10)

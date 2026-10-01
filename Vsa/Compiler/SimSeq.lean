@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimStmt1
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -34,16 +35,15 @@ theorem qConsNormal {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List Stmt}
     {n1 n2 : Nat} (hS : SSpec code T st d env s st1 .normal n1) (hQ : QSpec code T st1 d env ss st2 t n2) :
     QSpec code T st d env (s :: ss) st2 t (n1 + n2) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp
-  simp only [gseq] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  simp only [List.length_append] at hP
+  have h := And.intro hseg hP
+  simp only [gseq, ↓segP_app] at h ⊢
+  obtain ⟨⟨s1, p1⟩, s2, p2⟩ := h
   simp only [tSeq] at htmp
-  refine ex_bind (hS V C sp fs pos A hm hA hwf.1 hctx s1 (posOK_le hP (by omega)) (by omega)) ?_
+  refine ex_bind (hS V C sp fs pos A hm hA hwf.1 hctx s1 p1 (by omega)) ?_
   rintro B (⟨h1, h2⟩ | ⟨V1, hp1⟩)
   · exact reach_here (.inl ⟨h1, Room.not_mono h2 (by omega)⟩)
   obtain ⟨hpc1, hm1⟩ := hp1.out
-  refine reaches_mono (hQ V1 C sp fs _ B hm1 hpc1 hwf.2 hctx s2 (by rw [← Nat.add_assoc] at hP; exact hP)
-    (by omega)) ?_
+  refine reaches_mono (hQ V1 C sp fs _ B hm1 hpc1 hwf.2 hctx s2 p2 (by omega)) ?_
   rintro C' (⟨h1, h2⟩ | ⟨V2, hp2⟩)
   · exact .inl ⟨h1, Room.not_within h2 hp1.within (by omega)⟩
   · exact .inr ⟨V2, by rw [List.length_append, ← Nat.add_assoc]; exact hp1.seq hp2 rfl⟩
@@ -52,11 +52,11 @@ theorem qConsAbrupt {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List Stmt}
     {n : Nat} (hS : SSpec code T st d env s st1 t n) (ht : t ≠ .normal) :
     QSpec code T st d env (s :: ss) st1 t n := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp
-  simp only [gseq] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  simp only [List.length_append] at hP
+  have h := And.intro hseg hP
+  simp only [gseq, ↓segP_app] at h ⊢
+  obtain ⟨⟨s1, p1⟩, -⟩ := h
   simp only [tSeq] at htmp
-  refine reaches_mono (hS V C sp fs pos A hm hA hwf.1 hctx s1 (posOK_le hP (by omega)) (by omega)) ?_
+  refine reaches_mono (hS V C sp fs pos A hm hA hwf.1 hctx s1 p1 (by omega)) ?_
   rintro B (⟨h1, h2⟩ | ⟨V1, hp1⟩)
   · exact .inl ⟨h1, h2⟩
   · exact .inr ⟨V1, ⟨hp1.out.fin ht, hp1.grow, hp1.within, hp1.stack, hp1.obj⟩⟩

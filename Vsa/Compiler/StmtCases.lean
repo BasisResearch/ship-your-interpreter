@@ -1,4 +1,5 @@
 import Vsa.Compiler.StmtFrag
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -93,8 +94,8 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
         (if f = "println" then putc '\n' else []), C.next) := rfl
   rw [hce] at hseg hpos
   dsimp only at hseg hpos
-  obtain ⟨hs12, hs3⟩ := hseg.append
-  obtain ⟨hs1, hs2⟩ := hs12.append
+  obtain ⟨⟨hs12, p12⟩, hs3, -⟩ := segP_app.mp ⟨hseg, hpos⟩
+  obtain ⟨⟨hs1, p1⟩, hs2, p2⟩ := segP_app.mp ⟨hs12, p12⟩
   have hmax : maxArgs = 32 := rfl
 
   obtain ⟨q, hq, hqv⟩ := native_entry f hf
@@ -103,7 +104,7 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
 
   have hend : (cargs C.Γ 0 pos args).2 = pos + (cargs C.Γ 0 pos args).1.length := cargs_end _ _ _ _
   obtain ⟨B1, r1, hB1⟩ := sim_args (d := d) (env := env) hAt.lay hAt.nd hAt.slot_bound args 0 pos st A hargs
-    (by omega) hs1 (by rw [hend]; unfold PosOK at *; simp only [List.length_append] at hpos; omega) hA hsr.1
+    (by omega) hs1 (by rw [hend]; exact p1) hA hsr.1
 
   let outOf (s : St) (vs : List Value) : St :=
     ⟨s.store, s.out ++ printArgs s.store vs ++ (if f = "println" then "\n" else "")⟩
@@ -133,14 +134,13 @@ theorem sim_printStmt {C : Ctx} {pos : Nat} {f : String} {args : List Expr} {st 
   have hvl := EvalArgs.length_eq hevs
   obtain ⟨ns, rfl, hns⟩ := vals_ints vs hvs
   simp only [List.length_map] at hB1t hvl
-  rw [← hvl] at hs2 hpos hs3 hce
-  simp only [List.length_append] at hpos
+  rw [← hvl] at hs2 p2 hs3 hce
   have hs2' : Seg code (cargs C.Γ 0 pos args).2 (printLoop 0 (cargs C.Γ 0 pos args).2 ns.length) :=
     Seg.pos_eq hend.symm hs2
   have hpl := printLoop_length 0 (cargs C.Γ 0 pos args).2 (pos + (cargs C.Γ 0 pos args).1.length) ns.length
   obtain ⟨B2, r2, hB2pc, hB2o, hB2m⟩ := run_printLoop₀ hAt.lay ns 0 _ B1
     (fun j hj => by simpa [word] using hB1t j hj) hns (by have := hvl; rw [hmax] at hlen; omega)
-    hs2' (by unfold PosOK at *; have := hend; have := hpl; omega) hB1pc
+    hs2' (by rwa [hend] at p2 ⊢) hB1pc
   have hc2 : Chain st''.store B2.mem env C.Γ := hB1c.transport fun i hi => by
     unfold slotV
     rw [hB2m _ (.inr (by
@@ -278,13 +278,11 @@ theorem sim_decl {C : Ctx} {pos : Nat} {x : String} {e : Expr} {st : St} {d : Na
       (∃ st1, DeclDone code C pos x e st d env B st1) ∨ StmtErr code (.varDecl x (some e)) st d env B := by
   have hs := IntE.simple he
   have hend := Seg.end_ok hAt.fits hseg (by simp [declCode])
-  unfold declCode at hseg hend
+  unfold declCode at hseg
   rw [List.append_assoc] at hseg
-  obtain ⟨hs1, hs2⟩ := hseg.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hend
+  obtain ⟨⟨hs1, p1⟩, hs2, -⟩ := segP_app.mp ⟨hseg, by rwa [declCode, List.append_assoc] at hend⟩
   obtain ⟨B1, r1, hB1⟩ := sim_expr hAt.lay hAt.nd hAt.slot_bound e hs 0 pos st d env A (.inl he)
-    (by have := tdepth_le C.Γ e 0 pos hs; have := hend.small; omega) hs1
-    (by unfold PosOK at *; omega) hA hsr.1
+    (by have := tdepth_le C.Γ e 0 pos hs; have := p1.small; omega) hs1 p1 hA hsr.1
   rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, -⟩ | ⟨hh, hne⟩
   rotate_left
   · refine ⟨B1, r1, .inr ⟨hh, fun st'' t h => ?_⟩⟩
@@ -326,9 +324,7 @@ theorem sim_decl {C : Ctx} {pos : Nat} {x : String} {e : Expr} {st : St} {d : Na
     have hnat0 := hAt.nat
     have hnd0 := hAt.nd
     rw [hΓ] at hlt hnat0 hnd0
-    have hpos' : PosOK (pos + (declCode C pos x e).length) := by
-      unfold PosOK; simp only [declCode, List.length_append, List.length_cons, List.length_nil]; omega
-    refine ⟨hAt.lay, ?_, ?_, ?_, ?_, ?_, hpos'⟩ <;>
+    refine ⟨hAt.lay, ?_, ?_, ?_, ?_, ?_, hend⟩ <;>
       rcases hdi with ⟨i, hl, hdi⟩ | ⟨hl, hdi⟩ <;> simp only [hdi]
     · rw [hΓ]; simp
     · simp

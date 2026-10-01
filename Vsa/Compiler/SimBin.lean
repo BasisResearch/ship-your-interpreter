@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimTmp
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -31,22 +32,13 @@ theorem sBinary {st : St} {d : Nat} {env : Addr} {op : BinOp} {l r : Expr} {st1 
   have htr : 16 + 16 * ((k + 1) + tE r) ≤ fs := by omega
   have htk : 16 + 16 * (k + 1) ≤ fs := by omega
   have hal := hm.stk.al
-  have e4 : (storeTmp k).length = 4 := by simp [storeTmp]
-  have e4' : (loadTmp k).length = 4 := by simp [loadTmp]
-  simp only [gexpr, List.append_assoc] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  obtain ⟨s2, s3⟩ := s2.append
-  obtain ⟨s3, s4⟩ := s3.append
-  obtain ⟨s4, s5⟩ := s4.append
-  obtain ⟨s5, s6⟩ := s5.append
-  simp only [List.length_append, List.length_cons, List.length_nil, e4, e4', Nat.zero_add,
-    Nat.reduceAdd] at hP s3 s4 s5 s6 ⊢
-  obtain ⟨X, hX⟩ : ∃ X, pos + (gexpr T Γ k pos l).length + 4 +
-      (gexpr T Γ (k + 1) (pos + (gexpr T Γ k pos l).length + 4) r).length = X := ⟨_, rfl⟩
-  rw [hX] at s4 s5 s6 hP
-  try rw [hX]
-  have s6 := s6.cast (pos' := X + 6) (by omega)
-  refine hEl.bind hm hA hwl s1 (posOK_le hP (by omega)) htl
+  have h := And.intro hseg hP
+  simp only [gexpr, storeTmp, loadTmp, List.append_assoc, ↓segP_app, List.length_cons, List.length_nil,
+    Nat.zero_add, Nat.reduceAdd] at h
+  simp only [gexpr, storeTmp, loadTmp, List.length_append, List.length_cons, List.length_nil, Nat.zero_add,
+    Nat.reduceAdd]
+  obtain ⟨⟨s1, p1⟩, ⟨s2, -⟩, ⟨s3, p3⟩, ⟨s4, -⟩, ⟨s5, -⟩, s6, p6⟩ := h
+  refine hEl.bind hm hA hwl s1 p1 htl
     (fun B h1 h2 => .inl ⟨h1, Room.not_mono h2 (by omega)⟩) fun V1 B1 hpc1 hp1 => ?_
   obtain ⟨t1, q1, h10, h11, hv1⟩ := hp1.val
   obtain ⟨pc1, L1, m1, o1⟩ := B1
@@ -55,23 +47,18 @@ theorem sBinary {st : St} {d : Nat} {env : Addr} {op : BinOp} {l r : Expr} {st1 
   obtain ⟨hmC, hoC⟩ := hp1.ms.stored (pc := pcOf (pos + (gexpr T Γ k pos l).length + 4)) htk
     (S := [t6]) (by decide) hk2 (t := t1) (p := q1)
   have hlt := InTmp.stored hv1 hal hoC
-  refine hEr.bind hmC rfl hwr s3 (posOK_le hP (by omega)) htr
+  refine hEr.bind hmC rfl hwr s3 p3 htr
     (fun B h1 h2 => .inl ⟨h1, Room.not_within h2 hp1.within (by omega)⟩) fun V2 D hpc2 hp2 => ?_
   obtain ⟨t2, q2, g10, g11, hv2⟩ := hp2.val
   obtain ⟨pcD, LD, mD, oD⟩ := D
   simp only at hpc2 g10 g11 hv2; subst hpc2
-  rw [hX]
   have hlt2 := hlt.grow hp2.grow.hpre hp2.obj hp2.grow.le hp2.stack (by omega) (by omega)
-  have k10 := has_mem g10 (by decide); have e10 := srcVal_of_has g10
-  have k11 := has_mem g11 (by decide); have e11 := srcVal_of_has g11
-  simp only [a0, a1] at k10 e10 k11 e11
   apply run_whole hR.fits s4
-  wp_simp [k10, e10, k11, e11]
+  wp_simp [g10.wp, g11.wp]
   refine run_loadTmp hR.fits s5 (by reg_simp []; exact hp2.ms.hsp) hp2.ms.stk htk fun L3 hk3 g10' g11' => ?_
   have hops : Operands V2.H mD V2.h L3 lv rv (rdW mD (sp + 16 + 16 * k)) (rdW mD (sp + 16 + 16 * k + 8)) t2 q2 :=
     ⟨g10', g11', hk3.has (by decide) (by reg_simp []), hk3.has (by decide) (by reg_simp []), hlt2, hv2⟩
-  refine reaches_pc (q' := X + 6) (by omega) ?_
-  refine ex_bind (run_op hR (s := st2.store) hops s6 (posOK_le hP (by omega)) hbin
+  refine ex_bind (run_op hR (s := st2.store) hops s6 p6 hbin
     (hk3.has (by decide) (by reg_simp []; exact hp2.ms.ho)) hp2.ms.img.ptr hp2.ms.img.fixed
     hp2.ms.img.fixedHi hp2.ms.rel.clo hp2.ms.rel.inj) ?_
   rintro ⟨pcE, LE, mE, oE⟩ ⟨hoE, hE⟩
@@ -86,7 +73,7 @@ theorem sBinary {st : St} {d : Nat} {env : Addr} {op : BinOp} {l r : Expr} {st1 
       ⟨ret.grow, hp2.ms.img.ptr.of_le ret.grow ret.room ret.al, ret.frame⟩
     obtain ⟨hb1, hb2, hb3⟩ := hm.stk.bounds
     have hl : stackLo = objEnd := rfl
-    refine reach_here (.inr ⟨by show pcE = _; rw [hpcE]; congr 1; omega, V2.withH h', ?_⟩)
+    refine reach_here (.inr ⟨by show pcE = _; rw [hpcE]; simp only [Nat.add_assoc, Nat.reduceAdd], V2.withH h', ?_⟩)
     exact {
       ms := hp2.ms.heap (pc := pcE) hstep (S := addClob) (by decide) hkE ret.hp
       val := ret.val

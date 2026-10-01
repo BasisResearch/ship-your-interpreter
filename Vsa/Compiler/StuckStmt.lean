@@ -20,19 +20,15 @@ omit hR in
 theorem fVarInit {x : String} {e : Expr} (ih : EStuck code T n st d env e) :
     SStuck code T n st d env (.varDecl x (some e)) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp hne
-  simp only [gstmt] at hseg hP
-  obtain ⟨s1, -⟩ := hseg.append
-  simp only [List.length_append] at hP
-  exact ih V C.Γ sp fs 0 pos A hm hA hwf.2 s1 (posOK_le hP (by omega)) (by simpa [tS] using htmp)
+  obtain ⟨⟨s1, p1⟩, -⟩ := segP_app.mp ⟨hseg, hP⟩
+  exact ih V C.Γ sp fs 0 pos A hm hA hwf.2 s1 p1 (by simpa [tS] using htmp)
     (fun ⟨st', v, D⟩ => hne ⟨_, _, .varInit _ _ _ _ _ _ _ D⟩)
 
 omit hR in
 theorem fRet {e : Expr} (ih : EStuck code T n st d env e) : SStuck code T n st d env (.ret (some e)) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp hne
-  simp only [gstmt] at hseg hP
-  obtain ⟨s1, -⟩ := hseg.append
-  simp only [List.length_append] at hP
-  exact ih V C.Γ sp fs 0 pos A hm hA hwf s1 (posOK_le hP (by omega)) (by simpa [tS] using htmp)
+  obtain ⟨⟨s1, p1⟩, -⟩ := segP_app.mp ⟨hseg, hP⟩
+  exact ih V C.Γ sp fs 0 pos A hm hA hwf s1 p1 (by simpa [tS] using htmp)
     (fun ⟨st', v, D⟩ => hne ⟨_, _, .ret _ _ _ _ _ _ D⟩)
 
 theorem fBlockS {ss : List Stmt} (ih : ∀ st env, QStuck code T n st d env ss) :
@@ -52,31 +48,17 @@ theorem fBlockS {ss : List Stmt} (ih : ∀ st env, QStuck code T n st d env ss) 
 theorem fIfNone {c : Expr} {t : Stmt} (ihc : ∀ st, EStuck code T n st d env c)
     (iht : ∀ st, SStuck code T n st d env t) : SStuck code T n st d env (.ifStmt c t none) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp hne
-  obtain ⟨hwc, hwt, -⟩ := hwf
   simp only [tS] at htmp
-  simp only [gstmt] at hseg hP
-  obtain ⟨h5, -⟩ := hseg.append
-  obtain ⟨h4, -⟩ := h5.append
-  obtain ⟨hcond, sct⟩ := h4.append
-  simp only [List.length_append, List.length_singleton, jmpIfZero, List.length_cons, List.length_nil] at sct hP
-  have sct := sct.cast (pos' := pos + (gexpr T C.Γ 0 pos c).length + 3) (by omega)
-  by_cases hec : HasE st d env c
-  rotate_left
-  · obtain ⟨s12, -⟩ := hcond.append
-    obtain ⟨s1, -⟩ := s12.append
-    exact ihc st V C.Γ sp fs 0 pos A hm hA hwc s1 (posOK_le hP (by omega)) (by omega) hec
-  obtain ⟨st1, v, Dc⟩ := hec
-  obtain ⟨nc, hE⟩ := spec_e hR (T := T) Dc
+  have h := And.intro hseg hP
+  simp only [gstmt, jmpIfZero, List.append_nil, List.append_assoc, ↓segP_app, List.length_cons, List.length_nil,
+    Nat.zero_add, Nat.reduceAdd] at h
+  obtain ⟨⟨s1, -⟩, ⟨s2, -⟩, ⟨s3, p3⟩, ⟨s4, p4⟩, -, p5⟩ := h
+  refine EStuck.cond hR (ihc st) hm hA hwf.1 s1 s2 s3 p3 p5 (by omega) fun st1 v V1 B Dc hm1 hpc => ?_
   cases hvt : v.truthy
   · exact absurd ⟨st1, .normal, .ifNone _ _ _ _ _ _ _ Dc hvt⟩ hne
-  apply Fail.of_reaches
-  refine ex_bind (run_cond hR hE hm hA hwc hcond (posOK_le hP (by omega)) (posOK_le hP (by omega)) (by omega)) ?_
-  rintro B (⟨h1, -⟩ | ⟨V1, hp1⟩)
-  · exact reach_here (fail_err hR h1)
-  rw [hvt, if_pos rfl] at hp1
-  obtain ⟨hpc1, hm1⟩ := hp1.out
-  exact reach_here (iht st1 V1 C sp fs _ B hm1 hpc1 hwt hctx sct (posOK_le hP (by omega)) (by omega)
-    (fun ⟨st2, t2, D⟩ => hne ⟨st2, t2, .ifTrue _ _ _ _ _ _ _ _ _ _ Dc hvt D⟩))
+  simp only [hvt, Bool.cond_true] at hpc
+  exact iht st1 V1 C sp fs _ B hm1 hpc hwf.2.1 hctx s4 p4 (by omega)
+    (fun ⟨st2, t2, D⟩ => hne ⟨st2, t2, .ifTrue _ _ _ _ _ _ _ _ _ _ Dc hvt D⟩)
 
 theorem fIfSome {c : Expr} {t e : Stmt} (ihc : ∀ st, EStuck code T n st d env c)
     (iht : ∀ st, SStuck code T n st d env t) (ihe : ∀ st, SStuck code T n st d env e) :
@@ -295,13 +277,11 @@ theorem fCons {s : Stmt} {ss : List Stmt} (ihs : ∀ st, SStuck code T n st d en
     (ihss : ∀ st, QStuck code T n st d env ss) : QStuck code T n st d env (s :: ss) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp hne
   obtain ⟨hws, hwss⟩ := hwf
-  simp only [gseq] at hseg hP
-  obtain ⟨s1, s2⟩ := hseg.append
-  simp only [List.length_append] at hP
+  obtain ⟨⟨s1, p1⟩, s2, p2⟩ := segP_app.mp ⟨hseg, hP⟩
   simp only [tSeq] at htmp
   by_cases hes : HasS st d env s
   rotate_left
-  · exact ihs st V C sp fs pos A hm hA hws hctx s1 (posOK_le hP (by omega)) (by omega) hes
+  · exact ihs st V C sp fs pos A hm hA hws hctx s1 p1 (by omega) hes
   obtain ⟨st1, t, Ds⟩ := hes
   by_cases ht : t = .normal
   rotate_left
@@ -309,12 +289,12 @@ theorem fCons {s : Stmt} {ss : List Stmt} (ihs : ∀ st, SStuck code T n st d en
   subst ht
   obtain ⟨ns, hS⟩ := spec_s hR (T := T) Ds
   apply Fail.of_reaches
-  refine ex_bind (hS V C sp fs pos A hm hA hws hctx s1 (posOK_le hP (by omega)) (by omega)) ?_
+  refine ex_bind (hS V C sp fs pos A hm hA hws hctx s1 p1 (by omega)) ?_
   rintro B (⟨h1, -⟩ | ⟨V1, hp⟩)
   · exact reach_here (fail_err hR h1)
   obtain ⟨hpc, hm1⟩ := hp.out
-  exact reach_here (ihss st1 V1 C sp fs _ B hm1 hpc hwss hctx s2 (by rw [← Nat.add_assoc] at hP; exact hP)
-    (by omega) (fun ⟨st', t', D⟩ => hne ⟨st', t', .consNormal _ _ _ _ _ _ _ _ Ds D⟩))
+  exact reach_here (ihss st1 V1 C sp fs _ B hm1 hpc hwss hctx s2 p2 (by omega)
+    (fun ⟨st', t', D⟩ => hne ⟨st', t', .consNormal _ _ _ _ _ _ _ _ Ds D⟩))
 
 end
 

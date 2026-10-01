@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimExit
+import Vsa.Compiler.R6Keys
 
 namespace Vsa.Compiler
 
@@ -21,9 +22,7 @@ theorem run_storeSlot {T : List String} {V : View} {st : St} {d : Nat} {env : Ad
       SameShape st.store (st.store.define env x v)) := by
   obtain ⟨pc0, L, m, o⟩ := A
   simp only at hA h10 h11 hv; subst hA
-  have hb : frameBase = 0x80100000 := rfl
-  have he : frameEnd = 0x90000000 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
+  obtain ⟨hb, he, ht⟩ := frame_consts
   obtain ⟨f, hFa⟩ := hm.chn.head'
   obtain ⟨fr, hfr⟩ := hm.chn.frame
   obtain ⟨i, hsl⟩ : ∃ i, slotOf (Γ.headD []) x = some i := by
@@ -34,20 +33,13 @@ theorem run_storeSlot {T : List String} {V : View} {st : St} {d : Nat} {env : Ad
   obtain ⟨hf1, hf2, hf3, hf4⟩ := hm.rel.region env f _ hFa
   have htop := hm.rel.top
   unfold frSize at hf2
-  have he9 := hm.henv
-  rw [View.fa_eq hFa] at he9
-  have k9 := has_mem he9 (by decide); have e9 := srcVal_of_has he9
-  have k10 := has_mem h10 (by decide); have e10 := srcVal_of_has h10
-  have k11 := has_mem h11 (by decide); have e11 := srcVal_of_has h11
-  simp only [envR, a0, a1] at k9 e9 k10 e10 k11 e11
-  have n1 : (BitVec.ofNat 64 (f + (8 + 16 * i))).toNat = f + (8 + 16 * i) := toNat_ofNat_lt (by omega)
-  have n2 : (BitVec.ofNat 64 (f + (8 + 16 * i) + 8)).toNat = f + (8 + 16 * i) + 8 := toNat_ofNat_lt (by omega)
   have t1 : f + (8 + 16 * i) ≠ tohostAddr := by omega
   have t2 : f + (8 + 16 * i) + 8 ≠ tohostAddr := by omega
   have o1 : StOK (f + (8 + 16 * i)) := by unfold StOK; omega
   have o2 : StOK (f + (8 + 16 * i) + 8) := by unfold StOK; omega
   apply run_whole hR.fits hseg
-  wp_simp [storeSlot, hsl, Option.getD_some, k9, e9, k10, e10, k11, e11, n1, n2, t1, t2, o1, o2]
+  wp_simp [storeSlot, hsl, Option.getD_some, hm.keys.row.wp, View.fa_eq hFa, h10.wp, h11.wp, toNat_ofNat_lt,
+    t1, t2, o1, o2]
   have ea : f + (8 + 16 * i) = f + 8 + 16 * i := by omega
   rw [ea]
   have hs1 := hm.rel.write_slot hfr hFa hsl hv (defFrame x v) binds_define

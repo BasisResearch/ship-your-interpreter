@@ -1,4 +1,5 @@
 import Vsa.Compiler.StmtShape
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -93,6 +94,12 @@ theorem tBlock {st : St} {d : Nat} {env : Addr} {ss : List Stmt} {store' : Store
 theorem At.mono {C : Ctx} {pos pos' : Nat} (h : At code C pos) (hle : pos ≤ pos') (hp : PosOK pos') :
     At code C pos' := ⟨h.lay, h.ne, h.nd, h.lt, h.nat, Nat.le_trans h.nextle hle, hp⟩
 
+private theorem At.afterT {C : Ctx} {pos : Nat} (hAt : At code C pos) {p : Nat} (s : Stmt) (hp : pos ≤ p) {q : Nat}
+    (hq : p + (cstmt C p s).1.length ≤ q) (hq' : PosOK q) : At code ⟨C.Γ, (cstmt C p s).2, C.brk, C.cont⟩ q :=
+  have hn := cstmt_next C p s
+  ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi) hn.1, hAt.nat,
+    by show (cstmt C p s).2 ≤ q; have := hAt.nextle; omega, hq'⟩
+
 theorem condT {C : Ctx} {pos L : Nat} {c : Expr} {st st1 : St} {d : Nat} {env : Addr} {v : Value}
     {A : AM} (hAt : At code C pos) (hc : CondE C.Γ.names c)
     (hseg : Seg code pos (cexpr C.Γ 0 pos c ++ [.br .ne a0 0 (bSkip 1),
@@ -113,17 +120,16 @@ theorem tIfNone {st st1 st2 : St} {d : Nat} {env : Addr} {c : Expr} {s : Stmt} {
   intro C loop pos A hAt hs hseg hpos hloop hA hsr
   obtain ⟨hc, hst⟩ := hs
   rw [cstmt_ifNone] at hseg hpos ⊢
-  dsimp only at hseg hpos ⊢
-  simp only [List.length_append, List.length_cons, List.length_nil] at hpos ⊢
-  obtain ⟨hs12, hs3⟩ := hseg.append
-  obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condT hAt hc hs12 (by unfold PosOK at *; omega) hA hsr hev
+  have h := And.intro hseg hpos
+  simp only [List.append_assoc] at h
+  simp only [↓segP_app, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd] at h
+  obtain ⟨⟨g1, -⟩, ⟨g2, p2⟩, g3, p3⟩ := h
+  simp only [List.length_append, List.length_cons, List.length_nil]
+  obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condT hAt hc (seg_app_iff.mpr ⟨g1, g2⟩) p3 hA hsr hev
   rcases hbr with ⟨ht, ih⟩ | ⟨hf, rfl, rfl⟩
   · rw [if_pos ht] at hpc1
-    have hpos1 := Seg.end_ok hAt.fits hs12 (by simp)
-    simp only [List.length_append, List.length_cons, List.length_nil] at hpos1
-    obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret, hnorm⟩ := ih C loop _ B1
-      (hAt.mono (by omega) (by simpa [Nat.add_assoc] using hpos1)) hst
-      (Seg.pos_eq (by simp; omega) hs3) (by unfold PosOK at *; omega) hloop hpc1 hsr1
+    obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret, hnorm⟩ := ih C loop _ B1 (hAt.mono (by omega) p2) hst g3 p3 hloop
+      hpc1 hsr1
     refine ⟨B2, r1.trans r2, ?_, hsr2, hsp1.trans hsp2, hret, hnorm⟩
     rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega
   · rw [if_neg (by simp [hf])] at hpc1
@@ -141,29 +147,23 @@ theorem tIfSome {st st1 st2 : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 : Stm
   generalize hct : cstmt C (pos + (cexpr C.Γ 0 pos c).length + 2) s1 = ct at hseg hpos ⊢
   generalize hce : cstmt ⟨C.Γ, ct.2, C.brk, C.cont⟩ (pos + (cexpr C.Γ 0 pos c).length + 2 +
     ct.1.length + 1) s2 = ce at hseg hpos ⊢
-  simp only [List.length_append, List.length_cons, List.length_nil] at hpos ⊢
-  obtain ⟨hs1234, hs5⟩ := hseg.append
-  obtain ⟨hs123, hs4⟩ := hs1234.append
-  obtain ⟨hs12, hs3⟩ := hs123.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hs5 hs4 hs3
-  have hpe : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 + ct.1.length + 1) := by unfold PosOK at *; omega
-  have hpend : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 + ct.1.length + 1 + ce.1.length) := by
-    unfold PosOK at *; omega
-  obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condT hAt hc hs12 hpe hA hsr hev
+  have h := And.intro hseg hpos
+  simp only [List.append_assoc] at h
+  simp only [↓segP_app, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd] at h
+  obtain ⟨⟨g1, -⟩, ⟨g2, p2⟩, ⟨g3, p3⟩, ⟨g4, hpe⟩, g5, hpend⟩ := h
+  simp only [List.length_append, List.length_cons, List.length_nil]
+  obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condT hAt hc (seg_app_iff.mpr ⟨g1, g2⟩) hpe hA hsr hev
   have hend : pos + ((cexpr C.Γ 0 pos c).length + (0 + 1 + 1) + ct.1.length + (0 + 1) + ce.1.length)
       = pos + (cexpr C.Γ 0 pos c).length + 2 + ct.1.length + 1 + ce.1.length := by omega
   rcases hbr with ⟨ht, ih⟩ | ⟨hf, ih⟩
   · rw [if_pos ht] at hpc1
-    obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret, hnorm⟩ := ih C loop _ B1
-      (hAt.mono (by omega) (by unfold PosOK at *; omega)) hst1
-      (by rw [hct]; exact Seg.pos_eq (by omega) hs3) (by rw [hct]; unfold PosOK at *; omega)
-      hloop hpc1 hsr1
+    obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret, hnorm⟩ := ih C loop _ B1 (hAt.mono (by omega) p2) hst1
+      (by rw [hct]; exact g3) (by rw [hct]; exact p3) hloop hpc1 hsr1
     rw [hct] at hpc2
     cases t with
     | normal =>
       simp only [exitPos] at hpc2
-      have e3 := step_jump hAt.fits (Seg.pos_eq (pos' := pos + (cexpr C.Γ 0 pos c).length + 2 + ct.1.length)
-        (by omega) hs4).head hpc2 (by unfold PosOK at *; omega) hpend
+      have e3 := step_jump hAt.fits g4.head hpc2 p3 hpend
       refine ⟨⟨pcOf (pos + (cexpr C.Γ 0 pos c).length + 2 + ct.1.length + 1 + ce.1.length), B2.regs,
         B2.mem, B2.out⟩, r1.trans (r2.trans (Star.single ?_)), by simp only [exitPos]; rw [hend], ?_,
         hsp1.trans hsp2, hret, hnorm⟩
@@ -171,13 +171,10 @@ theorem tIfSome {st st1 st2 : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 : Stm
       · exact hsr2
     | _ => exact ⟨B2, r1.trans r2, hpc2, hsr2, hsp1.trans hsp2, hret, hnorm⟩
   · rw [if_neg (by simp [hf])] at hpc1
-    have hle := (cstmt_next C (pos + (cexpr C.Γ 0 pos c).length + 2) s1).2
-    rw [hct] at hle
     obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret, hnorm⟩ := ih ⟨C.Γ, ct.2, C.brk, C.cont⟩ loop _ B1
-      ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi)
-        (by have := (cstmt_next C (pos + (cexpr C.Γ 0 pos c).length + 2) s1).1; rw [hct] at this; exact this),
-        hAt.nat, by show ct.2 ≤ _; have := hAt.nextle; omega, hpe⟩ hst2
-      (by rw [hce]; exact Seg.pos_eq (by omega) hs5) (by rw [hce]; exact hpend) hloop hpc1 hsr1
+      (by have := hAt.afterT (p := pos + (cexpr C.Γ 0 pos c).length + 2) s1 (by omega) (Nat.le_succ _)
+            (by rw [hct]; exact hpe); rwa [hct] at this) hst2
+      (by rw [hce]; exact g5) (by rw [hce]; exact hpend) hloop hpc1 hsr1
     rw [hce] at hpc2
     refine ⟨B2, r1.trans r2, ?_, hsr2, hsp1.trans hsp2, hret, hnorm⟩
     rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega
@@ -206,22 +203,22 @@ theorem tWhile {st st1 st' : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt} {v
   generalize hbl : (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length = blen
     at hseg hpos ⊢ ht1 ht2 hcb
   have hlen : cb.1.length = blen := by rw [ht2.1, ← ht1.1]
-  simp only [List.length_append, List.length_cons, List.length_nil] at hpos ⊢
-  obtain ⟨hs123, hs4⟩ := hseg.append
-  obtain ⟨hs12, hs3⟩ := hs123.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hs4 hs3
-  have hpe : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 + blen + 1) := by unfold PosOK at *; omega
+  have h := And.intro hseg hpos
+  simp only [List.append_assoc] at h
+  simp only [↓segP_app, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd] at h
+  obtain ⟨⟨g1, -⟩, ⟨g2, hbpos⟩, ⟨g3, p3⟩, g4, p4⟩ := h
+  simp only [List.length_append, List.length_cons, List.length_nil]
+  have hpe : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 + blen + 1) := hlen ▸ p4
   have hend : pos + ((cexpr C.Γ 0 pos c).length + (0 + 1 + 1) + cb.1.length + (0 + 1)) =
       pos + (cexpr C.Γ 0 pos c).length + 2 + blen + 1 := by omega
-  obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condT hAt hc hs12 hpe hA hsr hev
+  obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condT hAt hc (seg_app_iff.mpr ⟨g1, g2⟩) hpe hA hsr hev
   rcases hcase with ⟨hf, rfl, rfl⟩ | ⟨ht, st2, tb, ihb, hk⟩
   · rw [if_neg (by simp [hf])] at hpc1
     exact ⟨B1, r1, by rw [hpc1]; simp only [exitPos]; rw [hend], hsr1, hsp1, by simp, fun _ => rfl⟩
   rw [if_pos ht] at hpc1
-  have hbpos : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2) := by unfold PosOK at *; omega
   obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret2, -⟩ := ihb ⟨C.Γ, C.next, pos + (cexpr C.Γ 0 pos c).length + 2 + blen + 1, pos⟩ true _ B1
     ⟨hAt.lay, hAt.ne, hAt.nd, hAt.lt, hAt.nat, by have := hAt.nextle; simp only; omega, hbpos⟩
-    hsb (by rw [hcb]; exact Seg.pos_eq (by omega) hs3) (by rw [hcb]; unfold PosOK at *; omega)
+    hsb (by rw [hcb]; exact g3) (by rw [hcb]; exact p3)
     (fun _ => ⟨hpe, hAt.posok⟩) hpc1 hsr1
   rw [hcb] at hpc2
   rcases hk with ⟨rfl, rfl, rfl⟩ | ⟨rv, rfl⟩ | ⟨htb, ihw⟩
@@ -232,9 +229,7 @@ theorem tWhile {st st1 st' : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt} {v
     have hback : Reaches code B2 fun B3 => B3.pc = pcOf pos ∧ B3.mem = B2.mem ∧ B3.out = B2.out := by
       rcases htb with rfl | rfl
       · simp only [exitPos] at hpc2
-        refine ⟨_, Star.single (step_jump hAt.fits (Seg.pos_eq (pos' := pos + (cexpr C.Γ 0 pos c).length
-          + 2 + cb.1.length) (by omega) hs4).head hpc2 (by unfold PosOK at *; omega) hAt.posok),
-          rfl, rfl, rfl⟩
+        exact ⟨_, Star.single (step_jump hAt.fits g4.head hpc2 p3 hAt.posok), rfl, rfl, rfl⟩
       · exact ⟨B2, Star.refl _ _, hpc2, rfl, rfl⟩
     obtain ⟨B3, r3, hpc3, hm3, ho3⟩ := hback
     obtain ⟨B4, r4, hpc4, hsr4, hsp4, hret4, hnorm4⟩ := ihw C loop pos B3 hAt hs0 hseg0 hpos0 hloop hpc3
@@ -268,18 +263,17 @@ theorem sConsDecl {st st1 st' : St} {d : Nat} {env : Addr} {x : String} {e : Exp
   obtain ⟨hnat, he, hss⟩ := hs
   rw [cseq_decl] at hseg hpos ⊢
   dsimp only at hseg hpos ⊢
-  obtain ⟨hs1, hs2⟩ := hseg.append
+  obtain ⟨⟨hs1, -⟩, hs2, hp2⟩ := segP_app.mp ⟨hseg, hpos⟩
   obtain ⟨B1, r1, hB1⟩ := sim_decl (d := d) hAt hnat he hs1 hA hsr
   rcases hB1 with ⟨st1', hD', huniq, hpc1, hsr1, hsp1, hAt1⟩ | ⟨_, hne⟩
   rotate_left
   · exact absurd D (hne _ _)
   obtain ⟨rfl, -⟩ := huniq _ _ D
   have hf1 := declInfo_cons x hΓ
-  simp only [List.length_append] at hpos ⊢
+  simp only [List.length_append]
   obtain ⟨B2, r2, hpc2, hout2, hsp2, hret2, hnorm2, f', hc2, hΓ2⟩ :=
     ih ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ loop _ B1 _ g hf1 hAt1
-      (by rw [declInfo_names C x hAt.ne]; exact hss) hs2 (by rw [← Nat.add_assoc] at hpos; exact hpos)
-      hloop hpc1 hsr1
+      (by rw [declInfo_names C x hAt.ne]; exact hss) hs2 hp2 hloop hpc1 hsr1
   refine ⟨B2, r1.trans r2, by rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega,
     hout2, hsp1.trans hsp2, hret2, hnorm2, f', hc2, hΓ2⟩
 
@@ -291,17 +285,13 @@ theorem sConsStmt {st st1 st' : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List
   obtain ⟨hs1, hss⟩ := SupSeq_other hd hs
   rw [cseq_other C pos s ss hd] at hseg hpos ⊢
   dsimp only at hseg hpos ⊢
-  obtain ⟨hsg1, hsg2⟩ := hseg.append
-  simp only [List.length_append] at hpos ⊢
-  have hp1 : PosOK (pos + (cstmt C pos s).1.length) := by unfold PosOK at *; omega
+  obtain ⟨⟨hsg1, hp1⟩, hsg2, hp2⟩ := segP_app.mp ⟨hseg, hpos⟩
+  simp only [List.length_append]
   obtain ⟨B1, r1, hpc1, hsr1, hsp1, hret1, hnorm1⟩ := h1 C loop pos A hAt hs1 hsg1 hp1 hloop hA hsr
   rcases hk with ⟨rfl, ih⟩ | ⟨hne, rfl, rfl⟩
-  · have hn := cstmt_next C pos s
-    obtain ⟨B2, r2, hpc2, hout2, hsp2, hret2, hnorm2, f', hc2, hΓ2⟩ :=
-      ih ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ loop _ B1 f g hΓ
-        ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi) hn.1, hAt.nat,
-          by show (cstmt C pos s).2 ≤ _; have := hAt.nextle; omega, hp1⟩
-        hss hsg2 (by rw [← Nat.add_assoc] at hpos; exact hpos) hloop hpc1 hsr1
+  · obtain ⟨B2, r2, hpc2, hout2, hsp2, hret2, hnorm2, f', hc2, hΓ2⟩ :=
+      ih ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ loop _ B1 f g hΓ (hAt.afterT s (Nat.le_refl _) (Nat.le_refl _) hp1)
+        hss hsg2 hp2 hloop hpc1 hsr1
     refine ⟨B2, r1.trans r2, by rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega,
       hout2, hsp1.trans hsp2, hret2, hnorm2, f', hc2, hΓ2⟩
   · refine ⟨B1, r1, by rw [hpc1, exitPos_abrupt C _ _ hne], hsr1.2, hsp1, hret1, hnorm1, f,

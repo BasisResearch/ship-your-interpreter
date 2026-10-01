@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimCallNat
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -65,11 +66,9 @@ theorem run_params {F : FrMap} {H : CloMap} {hF h : Nat} {c : Addr} {fa : Nat} {
     | nil => simp at hl
     | cons v vs =>
     simp only [List.length_cons] at hl hj htop
-    have hb : frameBase = 0x80100000 := rfl
-    have he : frameEnd = 0x90000000 := rfl
+    obtain ⟨hb, he, ht⟩ := frame_consts
     have hL : stackLo = 0xE0000000 := rfl
     have hH : stackHi = 0x100000000 := rfl
-    have ht : tohostAddr = 0x8001ad00 := rfl
     obtain ⟨i, hsl⟩ : ∃ i, slotOf Lay x = some i := by
       cases h' : slotOf Lay x with
       | none => exact absurd (hx x (by simp)) (slotOf_none h')
@@ -78,13 +77,8 @@ theorem run_params {F : FrMap} {H : CloMap} {hF h : Nat} {c : Addr} {fa : Nat} {
     obtain ⟨hf1, hf2, hf3, hf4⟩ := hs.region c fa Lay hFc
     have htop' := hs.top
     unfold frSize at hf2
-    simp only [paramCopies] at hseg
-    obtain ⟨s1, s2⟩ := hseg.append
-    have e8 : (paramCopy Lay j x).length = 8 := rfl
-    simp only [e8] at s2
-    have k13 := has_mem h13 (by decide); have e13 := srcVal_of_has h13
-    have k14 := has_mem h14 (by decide); have e14 := srcVal_of_has h14
-    simp only [a3, a4] at k13 e13 k14 e14
+    simp only [paramCopies, paramCopy, seg_app_iff, List.length_cons, List.length_nil] at hseg
+    obtain ⟨s1, s2⟩ := hseg
     have hv0 := hv 0 (by simp)
     simp only [List.getElem_cons_zero, Nat.add_zero] at hv0
     have n1 : (BitVec.ofNat 64 (argp + 16 * j)).toNat = argp + 16 * j := toNat_ofNat_lt (by omega)
@@ -99,7 +93,7 @@ theorem run_params {F : FrMap} {H : CloMap} {hF h : Nat} {c : Addr} {fa : Nat} {
     have l1 : LdOK (argp + 16 * j) := by unfold LdOK; omega
     have l2 : LdOK (argp + 16 * j + 8) := by unfold LdOK; omega
     apply run_whole hR.fits s1
-    wp_simp [paramCopy, hsl, Option.getD_some, k13, e13, k14, e14, n1, n2, n3, n4, t1, t2, o1, o2, l1, l2]
+    wp_simp [hsl, Option.getD_some, h13.wp, h14.wp, n1, n2, n3, n4, t1, t2, o1, o2, l1, l2]
     have r2 : rdW (applyW m (fa + (8 + 16 * i), 8, rdW m (argp + 16 * j))) (argp + 16 * j + 8) =
         rdW m (argp + 16 * j + 8) := by rw [rdW_upd (by omega) (by omega), if_neg (by omega)]
     have ea : fa + (8 + 16 * i) = fa + 8 + 16 * i := by omega

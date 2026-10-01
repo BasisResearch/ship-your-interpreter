@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimCallE
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -73,13 +74,11 @@ theorem run_printLoop {H : CloMap} {s : Store} {m0 : Mem} {h sp d fs : Nat} (hst
     have hb := hst.bounds
     simp only [List.length_cons] at htmp
     obtain ⟨hv0, hvs⟩ := hv.tail
-    simp only [List.length_cons, printLoopG] at hseg hP ⊢
-    obtain ⟨s1, s4⟩ := hseg.append
-    obtain ⟨s1, s3⟩ := s1.append
-    obtain ⟨s1, s2⟩ := s1.append
-    have e4 : (loadTmp t).length = 4 := by simp [loadTmp]
-    simp only [List.length_append, e4, List.length_singleton] at s2 s3 s4 hP ⊢
-    have hq : PosOK (pos + 4 + 1) := posOK_le hP (by omega)
+    have h := And.intro hseg hP
+    simp only [List.length_cons, printLoopG, loadTmp, List.append_assoc] at h
+    simp only [↓segP_app, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd] at h
+    obtain ⟨⟨s1, -⟩, ⟨s2, hq⟩, ⟨s3, -⟩, s4, hP⟩ := h
+    simp only [List.length_cons, printLoopG, List.length_append, loadTmp, List.length_nil] at s4 hP ⊢
     refine run_loadTmp hR.fits s1 hsp hst (by omega) fun L1 hk1 g10 g11 => ?_
     apply run_whole hR.fits s2
     wp_simp [hq]

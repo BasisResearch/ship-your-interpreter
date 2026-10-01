@@ -44,40 +44,19 @@ theorem rtCode_length : rtCode.length = 509 := by
 theorem gsegs (p : Program) : GSegs p := by
   have h := Seg.self (compileG p)
   rw [compileG_eq] at h
-  obtain ⟨h1234, h5⟩ := h.append
-  obtain ⟨h123, h4⟩ := h1234.append
-  obtain ⟨h12, h3⟩ := h123.append
-  obtain ⟨h1, h2⟩ := h12.append
-  have hm : mainPos = 523 := rfl
-  simp only [List.length_append, List.length_singleton, rt_lengths.1, rtCode_length] at h3 h4 h5
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> rw [compileG_eq]
+  simp only [seg_app_iff, List.length_append, List.length_singleton, rt_lengths.1, rtCode_length, Nat.zero_add,
+    Nat.reduceAdd] at h
+  obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ := h
+  refine ⟨?_, ?_, h3, h4, h5⟩ <;> rw [compileG_eq]
   · exact h1
-  · exact h2
-  · exact h3.cast (by omega)
-  · exact h4.cast (by omega)
-  · exact h5.cast (by omega)
+  · exact seg_app_iff.mpr h2
 
 theorem RTLoaded.of {code : List Ins} (hfit : Fits code) (h : Seg code errPos (errCode ++ rtCode)) :
     RTLoaded code := by
-  obtain ⟨l1, l2, l3, l4, l5, l6, l7, l8, l9, l10, l11, l12, l13, l14, l15, l16, l17⟩ := rt_lengths
-  obtain ⟨he, h⟩ := h.append
-  simp only [rtCode, List.append_assoc] at h
-  obtain ⟨h1, h⟩ := h.append
-  obtain ⟨h2, h⟩ := h.append
-  obtain ⟨h3, h⟩ := h.append
-  obtain ⟨h4, h⟩ := h.append
-  obtain ⟨h5, h⟩ := h.append
-  obtain ⟨h6, h⟩ := h.append
-  obtain ⟨h7, h⟩ := h.append
-  obtain ⟨h8, h⟩ := h.append
-  obtain ⟨h9, h⟩ := h.append
-  obtain ⟨h10, h⟩ := h.append
-  obtain ⟨h11, h⟩ := h.append
-  obtain ⟨h12, h⟩ := h.append
-  obtain ⟨h13, h⟩ := h.append
-  obtain ⟨h14, h⟩ := h.append
-  obtain ⟨h15, h16⟩ := h.append
-  simp only [l1, l2, l3, l4, l5, l6, l7, l8, l9, l10, l11, l12, l13, l14, l15, l16, l17] at *
+  obtain ⟨l1, l2, l3, l4, l5, l6, l7, l8, l9, l10, l11, l12, l13, l14, l15, l16, -⟩ := rt_lengths
+  simp only [rtCode, List.append_assoc, seg_app_iff, l1, l2, l3, l4, l5, l6, l7, l8, l9, l10, l11, l12, l13, l14,
+    l15, l16] at h
+  obtain ⟨he, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16⟩ := h
   exact ⟨hfit, he, h1.cast rfl, h2.cast rfl, h3.cast rfl, h4.cast rfl, h5.cast rfl, h6.cast rfl, h7.cast rfl,
     h8.cast rfl, h9.cast rfl, h10.cast rfl, h11.cast rfl, h12.cast rfl, h13.cast rfl, h14.cast rfl, h15.cast rfl,
     h16.cast rfl⟩

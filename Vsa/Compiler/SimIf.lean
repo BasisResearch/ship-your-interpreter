@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimCond
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -33,6 +34,19 @@ theorem SPost.jump {V : View} {st : St} {d : Nat} {env : Addr} {C : GCtx} {sp fs
     exact reach_here ⟨⟨rfl, hm.setpc _⟩, hp.grow, hp.within, hp.stack, hp.obj⟩
   · exact reach_here ⟨hp.out.fin ht, hp.grow, hp.within, hp.stack, hp.obj⟩
 
+private theorem run_cond_split {st : St} {d : Nat} {env : Addr} {c : Expr} {st1 : St} {v : Value} {n : Nat}
+    (hE : ESpec code T st d env c st1 v n) {V : View} {C : GCtx} {sp fs pos tgt : Nat} {A : AM}
+    (hm : MS code T V st d env C.Γ sp fs A) (hA : A.pc = pcOf pos) (hwf : WfE T C.Γ c)
+    (s1 : Seg code pos (gexpr T C.Γ 0 pos c))
+    (s2 : Seg code (pos + (gexpr T C.Γ 0 pos c).length) [Call (pos + (gexpr T C.Γ 0 pos c).length) trPos])
+    (s3 : Seg code (pos + (gexpr T C.Γ 0 pos c).length + 1)
+      (jmpIfZero (pos + (gexpr T C.Γ 0 pos c).length + 1) tgt))
+    (hP : PosOK (pos + (gexpr T C.Γ 0 pos c).length + 3)) (htgt : PosOK tgt) (htmp : 16 + 16 * tE c ≤ fs) :
+    Reaches code A (fun B => (B.pc = pcOf errPos ∧ ¬ Room V n) ∨
+      ∃ V1, SPost code T V st d env C sp fs (if v.truthy then pos + (gexpr T C.Γ 0 pos c).length + 3 else tgt)
+        A n st1 .normal V1 B) :=
+  run_cond hR hE hm hA hwf (seg_app_iff.mpr ⟨seg_app_iff.mpr ⟨s1, s2⟩, s3.cast (by simp; omega)⟩) hP htgt htmp
+
 theorem sIfTrue {st : St} {d : Nat} {env : Addr} {c : Expr} {t : Stmt} {e : Option Stmt} {st1 st2 : St}
     {v : Value} {status : Status} {nc nt : Nat} (hE : ESpec code T st d env c st1 v nc) (htr : v.truthy = true)
     (hS : SSpec code T st1 d env t st2 status nt) : SSpec code T st d env (.ifStmt c t e) st2 status (nc + nt) := by
@@ -42,23 +56,20 @@ theorem sIfTrue {st : St} {d : Nat} {env : Addr} {c : Expr} {t : Stmt} {e : Opti
     cases e <;> simp only [tS] at htmp <;> omega
   cases e
   all_goals
-    simp only [gstmt] at hseg hP ⊢
-    obtain ⟨h5, sce⟩ := hseg.append
-    obtain ⟨h4, sJ⟩ := h5.append
-    obtain ⟨hcond, sct⟩ := h4.append
-    simp only [List.length_append, List.length_singleton, jmpIfZero, List.length_cons, List.length_nil] at sct sJ sce hP ⊢
-    have sct := sct.cast (pos' := pos + (gexpr T C.Γ 0 pos c).length + 3) (by omega)
-    have sJ := sJ.cast (pos' := pos + (gexpr T C.Γ 0 pos c).length + 3 + (gstmt T C (pos + (gexpr T C.Γ 0 pos c).length
-      + 3) t).length) (by omega)
-    refine ex_bind (run_cond hR hE hm hA hwc hcond (posOK_le hP (by omega)) (posOK_le hP (by omega)) htl.1) ?_
+    have h := And.intro hseg hP
+    simp only [gstmt, jmpIfZero, List.append_assoc, ↓segP_app, List.length_cons, List.length_nil, Nat.zero_add,
+      Nat.reduceAdd] at h
+    simp only [gstmt, jmpIfZero, List.length_append, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd]
+    obtain ⟨⟨s1, -⟩, ⟨s2, -⟩, ⟨s3, p3⟩, ⟨sct, p4⟩, ⟨sJ, pJ⟩, -, p6⟩ := h
+    refine ex_bind (run_cond_split hR hE hm hA hwc s1 s2 s3 p3 pJ htl.1) ?_
     rintro B (⟨h1, h2⟩ | ⟨V1, hp1⟩)
     · exact reach_here (.inl ⟨h1, Room.not_mono h2 (by omega)⟩)
     rw [htr, if_pos rfl] at hp1
     obtain ⟨hpc1, hm1⟩ := hp1.out
-    refine ex_bind (hS V1 C sp fs _ B hm1 hpc1 hwt hctx sct (posOK_le hP (by omega)) htl.2) ?_
+    refine ex_bind (hS V1 C sp fs _ B hm1 hpc1 hwt hctx sct p4 htl.2) ?_
     rintro B' (⟨h1, h2⟩ | ⟨V2, hp2⟩)
     · exact reach_here (.inl ⟨h1, Room.not_within h2 hp1.within (by omega)⟩)
-    refine reaches_mono (SPost.jump hR (hp1.seq hp2 rfl) sJ (posOK_le hP (by omega)) (posOK_le hP (by omega))) ?_
+    refine reaches_mono (SPost.jump hR (hp1.seq hp2 rfl) sJ p4 p6) ?_
     intro B'' hB''
     exact .inr ⟨V2, hB''.cast (by omega)⟩
 
@@ -69,20 +80,18 @@ theorem sIfFalse {st : St} {d : Nat} {env : Addr} {c : Expr} {t e : Stmt} {st1 s
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp
   obtain ⟨hwc, hwt, hwe⟩ := hwf
   simp only [tS] at htmp
-  simp only [gstmt] at hseg hP ⊢
-  obtain ⟨h5, sce⟩ := hseg.append
-  obtain ⟨h4, sJ⟩ := h5.append
-  obtain ⟨hcond, sct⟩ := h4.append
-  simp only [List.length_append, List.length_singleton, jmpIfZero, List.length_cons, List.length_nil] at sct sJ sce hP ⊢
-  have sce := sce.cast (pos' := pos + (gexpr T C.Γ 0 pos c).length + 3 + (gstmt T C (pos + (gexpr T C.Γ 0 pos c).length
-    + 3) t).length + 1) (by omega)
-  refine ex_bind (run_cond hR hE hm hA hwc hcond (posOK_le hP (by omega)) (posOK_le hP (by omega)) (by omega)) ?_
+  have h := And.intro hseg hP
+  simp only [gstmt, jmpIfZero, List.append_assoc, ↓segP_app, List.length_cons, List.length_nil, Nat.zero_add,
+    Nat.reduceAdd] at h
+  simp only [gstmt, jmpIfZero, List.length_append, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd]
+  obtain ⟨⟨s1, -⟩, ⟨s2, -⟩, ⟨s3, p3⟩, -, ⟨-, pJ⟩, sce, p6⟩ := h
+  refine ex_bind (run_cond_split hR hE hm hA hwc s1 s2 s3 p3 pJ (by omega)) ?_
   rintro B (⟨h1, h2⟩ | ⟨V1, hp1⟩)
   · exact reach_here (.inl ⟨h1, Room.not_mono h2 (by omega)⟩)
   rw [hfa] at hp1
   simp only [Bool.false_eq_true, if_false] at hp1
   obtain ⟨hpc1, hm1⟩ := hp1.out
-  refine reaches_mono (hS V1 C sp fs _ B hm1 hpc1 hwe hctx sce (posOK_le hP (by omega)) (by omega)) ?_
+  refine reaches_mono (hS V1 C sp fs _ B hm1 hpc1 hwe hctx sce p6 (by omega)) ?_
   rintro B' (⟨h1, h2⟩ | ⟨V2, hp2⟩)
   · exact .inl ⟨h1, Room.not_within h2 hp1.within (by omega)⟩
   · exact .inr ⟨V2, (hp1.seq hp2 rfl).cast (by omega)⟩
