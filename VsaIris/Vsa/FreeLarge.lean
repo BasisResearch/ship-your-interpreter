@@ -1,5 +1,7 @@
 import VsaIris.Vsa.FreeBin
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.Carry
+import VsaIris.Vsa.R9Path
 
 namespace VsaIris.VsaHeap
 
@@ -113,8 +115,8 @@ theorem fl_exit {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     rcases List.mem_append.mp this with h1 | h1
     · exact .inr (by rw [hpos]; exact List.mem_append_right _ h1)
     · exact .inl (List.mem_singleton.mp h1)
-  have Ns := BB.nodeK (by omega) hj hsm; open_fields Ns
-  have hring := (binList_iff_ring.1 (HH.bins_list j (by omega) hj)).1
+  have Ns := BB.nodeK (by omega_near) hj hsm; open_fields Ns
+  have hring := (binList_iff_ring.1 (HH.bins_list j (by omega_near) hj)).1
   have hbkS : bkOf M2 succ = some pred := by
     rcases post' with _ | ⟨y, ys⟩
     · simp only [List.nil_append, List.head?_cons, Option.some.injEq] at hsucc
@@ -127,25 +129,26 @@ theorem fl_exit {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
       obtain ⟨q, hq⟩ : ∃ q, (ys ++ [binAt j]).head? = some q := by
         rcases ys with _ | ⟨z, zs⟩ <;> simp
       exact (ring_member hring hpred hq).2
-  have hbkS' : read64 Mt (succ + 24) = some pred := by
-    rw [B.node_read (by omega) hj hsm (.inr rfl)]; exact hbkS
   have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
+  have hbkS' : read64 Mt (succ + 24) = some pred := by
+    have hb := Ns_bnd _ (HH.end_bnd hX) (X + S - succ)
+    simp only at hb
+    rw [B.read (Ns_links.word (by omega_near) (by omega_near)) (by omega_near)]; exact hbkS
   have K := BB.chunkK hX; have K_lo := K.lo; have K_room := K.room; have K_brk := K.brk
   simp only at K_lo
-  refine (step% st 0x800074e0) O.live (Ns_links.ldOK (by rgn_arith)) (O.rgn Ns_links (by rgn_arith)) ?_
+  refine (step% st 0x800074e0) O.live (Ns_links.ldOK (by rgn_arith_near)) (O.rgn Ns_links (by rgn_arith_near)) ?_
   rgn_ld [hbkS']
   have hpl := Vsa.Sim.read64_lt _ _ _ hbkS'
   obtain ⟨bb, hbb⟩ : ∃ bb, read64 M2 binblocksAddr = some bb :=
     Option.isSome_iff_exists.1 HH.binblocks_present
   have hbA : binblocksAddr = 2147593496 := rfl
   have hbb' : read64 Mt binblocksAddr = some bb := by
-    rw [B.read ((globRgn C.H).word (by omega) (by omega)) (by omega)]; exact hbb
+    rw [B.read ((globRgn C.H).word (by omega_near) (by omega_near)) (by omega_near)]; exact hbb
   have L' := L.upd (R' := upd R 11 (BitVec.ofNat 64 pred)) (fun x h10 h11 h12 h13 => upd_other _ _ h11)
   exact fl_link O L'.frame B hj0 hj L.idx hpos hpred hsucc hbb' (B.heap.bb_lt bb hbb)
     (HH.binblocks bb hbb j hj0 hj hne) (fun bb0 hbb0 k h => by rw [hbb] at hbb0; cases hbb0; exact h)
     (fun _ _ => rfl) B.pres B.frame
-    (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl])
-    (by rw [upd_other _ _ (by decide)]; exact h13) L'.a4
+    (by carry_close) (by carry_close) L'.a4
 
 theorem fl_cmp {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
     {X S top brkv : Nat} {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {j x : Nat}

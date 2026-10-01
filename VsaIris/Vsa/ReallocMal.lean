@@ -1,5 +1,7 @@
 import VsaIris.Vsa.ReallocMove
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.Carry
+import VsaIris.Vsa.R9Path
 
 namespace VsaIris.VsaHeap
 
@@ -91,32 +93,30 @@ theorem mal_copy {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
   unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
   have St := O.toWOK.stackRgn
   have hs2 : (R 2).toNat = C.s.toNat - 64 := by rw [hsp]; exact hs64
-  have hL : ((R 14) + sign_extend (m := 64) (0xff8#12)).toNat = S - 8 := by rgn_arith
+  have hL : ((R 14) + sign_extend (m := 64) (0xff8#12)).toNat = S - 8 := by rgn_arith_near
   rgn_step O.live at 0x80005394
   refine (step% st 0x80005394) O.live (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hL] at hc <;>
     rw [show (0#64 + sign_extend (m := 64) (0x048#12) : BitVec 64).toNat = 72 from rfl] at hc
-  · have AM : MMArgs C.S d s (S - 8) := { A with n32 := by omega }
+  · have AM : MMArgs C.S d s (S - 8) := { A with n32 := by omega_near }
     rgn_run O.live at 0x800069c4
     rw [hs2]
-    refine memmove_fwd AM O.live (by rgn_arith) (by rgn_arith) (by rgn_arith)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide) fun R' hK => ?_
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine memmove_fwd AM O.live (by rgn_arith_near) (by rgn_arith_near) (by rgn_arith_near)
+      (by carry_close) fun R' hK => ?_
+    carry_norm
     have hslot : read64 (copyW (writeLog Mt [(C.s.toNat - 64, 8, R 10)]) d s ((S - 8) / 8))
         (C.s.toNat - 64) = some (R 10).toNat := by
-      rw [read64_keep (m := writeLog Mt [(C.s.toNat - 64, 8, R 10)]) fun k hk => copyW_out (by omega),
+      rw [read64_keep (m := writeLog Mt [(C.s.toNat - 64, 8, R 10)]) fun k hk => copyW_out (by omega_near),
         read64_store_hit]
-    have h2' : (R' 2).toNat = C.s.toNat - 64 := by rw [hK.sp]; rgn_arith
+    have h2' : (R' 2).toNat = C.s.toNat - 64 := by rw [hK.sp]; rgn_arith_near
     rgn_run O.live at 0x800053c0
     rgn_ld [hslot]
-    refine hk _ _ hK.sp hK.s0 hK.s1 ?_ hK.s2 hK.s3 fun a ha => copyW_agree (fun a ha => ?_) (by omega) a ha
-    · simp only [upd_apply, ite_true]
-      rw [h13]; exact BitVec.eq_of_toNat_eq (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (R 10).isLt])
-    · have ho : OutL [(C.s.toNat - 64, 8, R 10)] a := ⟨by simp only; omega, trivial⟩
-      rw [writeLog_out _ _ _ ho]
+    refine hk _ _ hK.sp hK.s0 hK.s1 ?_ hK.s2 hK.s3 fun a ha => copyW_agree (fun a ha => ?_) (by omega_near) a ha
+    · carry_close [h13, BitVec.ofNat_toNat, BitVec.setWidth_eq]
+    · exact writeLog_out _ _ _ ⟨by simp only; omega_near, trivial⟩
   ·
-    have hLs : S - 8 = 24 ∨ S - 8 = 40 ∨ S - 8 = 56 ∨ S - 8 = 72 := by omega
-    exact mal_inline A O.live hLs (by rgn_arith) (by rgn_arith) (by rgn_arith) (by rgn_arith)
+    have hLs : S - 8 = 24 ∨ S - 8 = 40 ∨ S - 8 = 56 ∨ S - 8 = 72 := by omega_near
+    exact mal_inline A O.live hLs (by rgn_arith_near) (by rgn_arith_near) (by rgn_arith_near) (by rgn_arith_near)
       fun R' g2 g8 g9 g13 g18 g19 => hk R' _ g2 g8 g9 g13 g18 g19 fun _ _ => rfl
 
 theorem repi3 {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem} (F : RFrame C R Mt)
