@@ -65,6 +65,10 @@ structure JbAt (jbp : BitVec 64) : Prop where
   hi : jbp.toNat + 112 ≤ 0x100000000
   align : jbp.toNat % 8 = 0
 
+theorem jb_lt {jbp : BitVec 64} (hg : JbAt jbp) (k : Nat) (hk : k < 112) : jbp.toNat + k < 2 ^ 64 := by
+  have h2 := hg.hi
+  omega
+
 theorem jb_off8 (jbp : BitVec 64) (hg : JbAt jbp) (off : Nat) (imm : BitVec 12)
     (himm : (sign_extend (m := 64) imm : BitVec 64).toNat = off) (hoff : off < 112) :
     ∀ x : BitVec 64, x = jbp + sign_extend (m := 64) imm → x.toNat = jbp.toNat + off := by
@@ -153,33 +157,33 @@ theorem sj_read (jbp r s : BitVec 64) (cs : Nat → BitVec 64) (hg : JbAt jbp)
       (jbp.toNat + 8 * k) = some (sjVal r s cs k).toNat := by
   have h2 := hg.hi
   have e0 : (jbp + sign_extend (m := 64) (0x000#12)).toNat = jbp.toNat + 0 :=
-    addr_off _ _ 0 (by decide) (by omega)
+    addr_off _ _ 0 (by decide) (jb_lt hg _ (by decide))
   have e1 : (jbp + sign_extend (m := 64) (0x008#12)).toNat = jbp.toNat + 8 :=
-    addr_off _ _ 8 (by decide) (by omega)
+    addr_off _ _ 8 (by decide) (jb_lt hg _ (by decide))
   have e2 : (jbp + sign_extend (m := 64) (0x010#12)).toNat = jbp.toNat + 16 :=
-    addr_off _ _ 16 (by decide) (by omega)
+    addr_off _ _ 16 (by decide) (jb_lt hg _ (by decide))
   have e3 : (jbp + sign_extend (m := 64) (0x018#12)).toNat = jbp.toNat + 24 :=
-    addr_off _ _ 24 (by decide) (by omega)
+    addr_off _ _ 24 (by decide) (jb_lt hg _ (by decide))
   have e4 : (jbp + sign_extend (m := 64) (0x020#12)).toNat = jbp.toNat + 32 :=
-    addr_off _ _ 32 (by decide) (by omega)
+    addr_off _ _ 32 (by decide) (jb_lt hg _ (by decide))
   have e5 : (jbp + sign_extend (m := 64) (0x028#12)).toNat = jbp.toNat + 40 :=
-    addr_off _ _ 40 (by decide) (by omega)
+    addr_off _ _ 40 (by decide) (jb_lt hg _ (by decide))
   have e6 : (jbp + sign_extend (m := 64) (0x030#12)).toNat = jbp.toNat + 48 :=
-    addr_off _ _ 48 (by decide) (by omega)
+    addr_off _ _ 48 (by decide) (jb_lt hg _ (by decide))
   have e7 : (jbp + sign_extend (m := 64) (0x038#12)).toNat = jbp.toNat + 56 :=
-    addr_off _ _ 56 (by decide) (by omega)
+    addr_off _ _ 56 (by decide) (jb_lt hg _ (by decide))
   have e8 : (jbp + sign_extend (m := 64) (0x040#12)).toNat = jbp.toNat + 64 :=
-    addr_off _ _ 64 (by decide) (by omega)
+    addr_off _ _ 64 (by decide) (jb_lt hg _ (by decide))
   have e9 : (jbp + sign_extend (m := 64) (0x048#12)).toNat = jbp.toNat + 72 :=
-    addr_off _ _ 72 (by decide) (by omega)
+    addr_off _ _ 72 (by decide) (jb_lt hg _ (by decide))
   have e10 : (jbp + sign_extend (m := 64) (0x050#12)).toNat = jbp.toNat + 80 :=
-    addr_off _ _ 80 (by decide) (by omega)
+    addr_off _ _ 80 (by decide) (jb_lt hg _ (by decide))
   have e11 : (jbp + sign_extend (m := 64) (0x058#12)).toNat = jbp.toNat + 88 :=
-    addr_off _ _ 88 (by decide) (by omega)
+    addr_off _ _ 88 (by decide) (jb_lt hg _ (by decide))
   have e12 : (jbp + sign_extend (m := 64) (0x060#12)).toNat = jbp.toNat + 96 :=
-    addr_off _ _ 96 (by decide) (by omega)
+    addr_off _ _ 96 (by decide) (jb_lt hg _ (by decide))
   have e13 : (jbp + sign_extend (m := 64) (0x068#12)).toNat = jbp.toNat + 104 :=
-    addr_off _ _ 104 (by decide) (by omega)
+    addr_off _ _ 104 (by decide) (jb_lt hg _ (by decide))
   intro k hk
   rw [sj_log, e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13]
   apply read64_writeLog_sd
@@ -221,33 +225,33 @@ theorem sj_logN (jbp r s : BitVec 64) (cs : Nat → BitVec 64) (hg : JbAt jbp) :
        (jbp.toNat + 104, 8, s)] := by
   have h2 := hg.hi
   have e0 : (jbp + sign_extend (m := 64) (0x000#12)).toNat = jbp.toNat + 0 :=
-    addr_off _ _ 0 (by decide) (by omega)
+    addr_off _ _ 0 (by decide) (jb_lt hg _ (by decide))
   have e1 : (jbp + sign_extend (m := 64) (0x008#12)).toNat = jbp.toNat + 8 :=
-    addr_off _ _ 8 (by decide) (by omega)
+    addr_off _ _ 8 (by decide) (jb_lt hg _ (by decide))
   have e2 : (jbp + sign_extend (m := 64) (0x010#12)).toNat = jbp.toNat + 16 :=
-    addr_off _ _ 16 (by decide) (by omega)
+    addr_off _ _ 16 (by decide) (jb_lt hg _ (by decide))
   have e3 : (jbp + sign_extend (m := 64) (0x018#12)).toNat = jbp.toNat + 24 :=
-    addr_off _ _ 24 (by decide) (by omega)
+    addr_off _ _ 24 (by decide) (jb_lt hg _ (by decide))
   have e4 : (jbp + sign_extend (m := 64) (0x020#12)).toNat = jbp.toNat + 32 :=
-    addr_off _ _ 32 (by decide) (by omega)
+    addr_off _ _ 32 (by decide) (jb_lt hg _ (by decide))
   have e5 : (jbp + sign_extend (m := 64) (0x028#12)).toNat = jbp.toNat + 40 :=
-    addr_off _ _ 40 (by decide) (by omega)
+    addr_off _ _ 40 (by decide) (jb_lt hg _ (by decide))
   have e6 : (jbp + sign_extend (m := 64) (0x030#12)).toNat = jbp.toNat + 48 :=
-    addr_off _ _ 48 (by decide) (by omega)
+    addr_off _ _ 48 (by decide) (jb_lt hg _ (by decide))
   have e7 : (jbp + sign_extend (m := 64) (0x038#12)).toNat = jbp.toNat + 56 :=
-    addr_off _ _ 56 (by decide) (by omega)
+    addr_off _ _ 56 (by decide) (jb_lt hg _ (by decide))
   have e8 : (jbp + sign_extend (m := 64) (0x040#12)).toNat = jbp.toNat + 64 :=
-    addr_off _ _ 64 (by decide) (by omega)
+    addr_off _ _ 64 (by decide) (jb_lt hg _ (by decide))
   have e9 : (jbp + sign_extend (m := 64) (0x048#12)).toNat = jbp.toNat + 72 :=
-    addr_off _ _ 72 (by decide) (by omega)
+    addr_off _ _ 72 (by decide) (jb_lt hg _ (by decide))
   have e10 : (jbp + sign_extend (m := 64) (0x050#12)).toNat = jbp.toNat + 80 :=
-    addr_off _ _ 80 (by decide) (by omega)
+    addr_off _ _ 80 (by decide) (jb_lt hg _ (by decide))
   have e11 : (jbp + sign_extend (m := 64) (0x058#12)).toNat = jbp.toNat + 88 :=
-    addr_off _ _ 88 (by decide) (by omega)
+    addr_off _ _ 88 (by decide) (jb_lt hg _ (by decide))
   have e12 : (jbp + sign_extend (m := 64) (0x060#12)).toNat = jbp.toNat + 96 :=
-    addr_off _ _ 96 (by decide) (by omega)
+    addr_off _ _ 96 (by decide) (jb_lt hg _ (by decide))
   have e13 : (jbp + sign_extend (m := 64) (0x068#12)).toNat = jbp.toNat + 104 :=
-    addr_off _ _ 104 (by decide) (by omega)
+    addr_off _ _ 104 (by decide) (jb_lt hg _ (by decide))
   rw [sj_log, e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13]
 
 section Wp

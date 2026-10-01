@@ -1,4 +1,5 @@
 import Lean
+import VsaIris.Vsa.Dbm
 
 namespace Vsa.OmegaHint
 open Lean Meta Elab Tactic Omega
@@ -11,6 +12,11 @@ register_option vsa.omegaHint : Bool := {
 register_option vsa.omegaHintMin : Nat := {
   defValue := 40
   descr := "smallest number of hypotheses at which the reduced omega is tried first"
+}
+
+register_option vsa.omegaDbmMin : Nat := {
+  defValue := 40
+  descr := "smallest number of hypotheses at which omega first tries the difference-constraint checker dbm"
 }
 
 structure Keys where
@@ -33,6 +39,7 @@ structure Info where
   stage : Nat := 0
   failMs : Float := 0
   okMs : Float := 0
+  dbmMs : Float := 0
 
 def record (d : Name) (s : St) (all : Array FVarId) (used : Array Expr) : MetaM Unit := do
   let mut seen := s.seen
@@ -104,6 +111,14 @@ def run (cfg : OmegaConfig) : TacticM Info := do
       g.assign e
   infoRef.get
 
+def dbmStage (g : MVarId) : MetaM Bool := g.withContext do
+  let type ← instantiateMVars (← g.getType)
+  let g' ← mkFreshExprSyntheticOpaqueMVar type
+  if ← VsaIris.Dbm.dbmClose g'.mvarId! then
+    g.assign (← mkAuxTheorem type (← instantiateMVars g') (zetaDelta := true))
+    return true
+  return false
+
 def evalHint (stx : Syntax) : TacticM Info := do
   if !vsa.omegaHint.get (← getOptions) then evalOmega stx; return {}
   match stx with
@@ -111,7 +126,19 @@ def evalHint (stx : Syntax) : TacticM Info := do
     recordExtraModUse (isMeta := false) `Init.Omega
     (do Meta.withReducibleAndInstances (evalAssumption tk); return {}) <|> do
       let cfg ← elabOmegaConfig cfg
-      run cfg
+      let g ← getMainGoal
+      let n ← g.withContext do return (← getLocalHyps).size
+      let mut dms : Float := 0
+      if n ≥ vsa.omegaDbmMin.get (← getOptions) then
+        let t0 ← IO.monoNanosNow
+        let ok ← dbmStage g
+        let t1 ← IO.monoNanosNow
+        dms := (t1 - t0).toFloat / 1e6
+        if ok then
+          replaceMainGoal []
+          return { nAll := n, stage := 7, dbmMs := dms }
+      let r ← run cfg
+      return { r with dbmMs := dms }
   | _ => throwUnsupportedSyntax
 
 @[no_fallback, tactic Lean.Parser.Tactic.omega] def evalOmegaHint : Tactic := fun stx => do
