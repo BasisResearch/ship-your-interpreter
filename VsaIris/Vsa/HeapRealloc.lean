@@ -71,16 +71,12 @@ theorem PHeapAt.cut {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     have R := HX.rest
     simp only at R
     rw [show x + (a + b) = x + a + b by omega] at R
-    refine R.transport_headers fun q hq => (keep _ ?_ ?_ ?_).symm
-    · rcases hq with rfl | ⟨c, hc, rfl⟩
-      · exact foot_header B (.inl rfl)
-      · exact foot_header B (.inr ⟨c, by simp [hc], rfl⟩)
-    · rcases hq with rfl | ⟨c, hc, rfl⟩
-      · exact .inr (by omega)
-      · have := hW3b c hc; exact .inr (by omega)
-    · rcases hq with rfl | ⟨c, hc, rfl⟩
-      · exact .inr (by omega)
-      · have := hW3b c hc; exact .inr (by omega)
+    refine R.transport_headers fun q hq => (B.keep_hdr hag' ?_ fun w _ => ?_).symm <;>
+      rcases hq with rfl | ⟨c, hc, rfl⟩
+    · exact .inl rfl
+    · exact .inr ⟨c, by simp [hc], rfl⟩
+    · omega
+    · have := hW3b c hc; omega
   have hnxf : ∀ k, k < 8 → vsaFoot H (x + a + b + 8 + k) := by
     have hq : x + a + b = top ∨ ∃ c ∈ cs₁ ++ ⟨x, a + b, true⟩ :: cs₂, c.addr = x + a + b := by
       have R := HX.rest
