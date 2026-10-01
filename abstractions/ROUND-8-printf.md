@@ -356,8 +356,8 @@ Layer defects found (next round's input):
 | population units of the census (C + R, script) | 10,612 | 9,330 (−12%) |
 | clone: memmove (2 hosts) | 1,227 lines, 51 s | 692 lines, 31 s |
 | clone: udiv/umod (snprintf + interpreter + stdio hosts) | SnpArith 224 + ProofArith 501 lines | 3-line instances + ArithRun 214; ProofArith 308 |
-| held-out primary (5 cases) | 683 | 450 |
-| held-out fresh (5 cases) | 551 | 422 |
+| held-out primary (5 cases) | 683 | 436 |
+| held-out fresh (5 cases) | 551 | 418 |
 
 Single-file CPU: see §10a (timing table appended at the end of the run; method as §1b).
 
