@@ -436,9 +436,9 @@ index: a deletion staged by the rollout agent landed in the coordinator's pins c
 | of which newlib sites (2) | 1,554 | 805 |
 | of which fast-path allocator (7 → 3) | 3,617 | 137 |
 | repository diff (`Vsa`, `VsaIris`) | | 46 files, +1,139 −8,544 |
-| per-pc `exec_*`/`site*_*` lemmas | 101 | 3 (jal sites) |
-| named per-address pins | 201 | 3 |
-| `chain_facts … with "prefix"` uses | 21 | 0 |
+| per-pc `exec_*`/`site*_*` lemmas (libgcc) | 110 | 3 (jal sites) |
+| named per-address pins (48 generated libgcc + 105 newlib) | 153 | 3 |
+| `chain_facts … with "prefix"` uses | 34 | 0 |
 | target-module user-CPU, single-file, min of 2, interleaved (load 7–9) | 236.2 s | 26.8 s |
 | of which live (without the allocator files) | 33.2 s | 25.0 s (−25%) |
 | largest module changes | | MallocFastSegs 180.9 → 0.6, H5Sites 4.53 → 1.55, DivSites3 2.09 → 0.76, DivSites + Muldi3Sites 3.51 → 0 |
