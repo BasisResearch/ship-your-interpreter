@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocRebin
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -57,10 +58,9 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
       rw [BitVec.toNat_ushiftRight, h6, Nat.shiftRight_eq_div_pow]
     have hb : binIndex sz = 56 + sz / 64 := by
       unfold binIndex; rw [if_neg (by omega), if_pos h4']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> carry_norm
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
 
   have h4' : ¬ sz / 512 ≤ 4 := by simpa using h4
   refine (step% st 0x80004c7c) O.live ?_
@@ -74,10 +74,9 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
       rw [BitVec.toNat_ushiftRight, h6, Nat.shiftRight_eq_div_pow]
     have hb : binIndex sz = 91 + sz / 512 := by
       unfold binIndex; rw [if_neg (by omega), if_neg h4', if_pos h20']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> carry_norm
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
   have h20' : 20 < sz / 512 := by sx_norm; omega
   refine (step% st 0x80004f1c) O.live ?_
   refine (step% st 0x80004f20) O.live (fun h84 => ?_) (fun h84 => ?_) <;>
@@ -90,10 +89,9 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
       rw [BitVec.toNat_ushiftRight, h6, Nat.shiftRight_eq_div_pow]
     have hb : binIndex sz = 110 + sz / 4096 := by
       unfold binIndex; rw [if_neg (by omega), if_neg h4', if_neg (by omega), if_pos h84']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> carry_norm
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
   have h84' : 84 < sz / 512 := by sx_norm; omega
   refine (step% st 0x80004fa0) O.live ?_
   refine (step% st 0x80004fa4) O.live (fun h340 => ?_) (fun h340 => ?_) <;>
@@ -106,10 +104,9 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
       rw [BitVec.toNat_ushiftRight, h6, Nat.shiftRight_eq_div_pow]
     have hb : binIndex sz = 119 + sz / 32768 := by
       unfold binIndex; rw [if_neg (by omega), if_neg h4', if_neg (by omega), if_neg (by omega), if_pos h340']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> carry_norm
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
   have h340' : 340 < sz / 512 := by sx_norm; omega
   refine (step% st 0x80005024) O.live ?_
   refine (step% st 0x80005028) O.live (fun h1364 => ?_) (fun h1364 => ?_) <;>
@@ -122,20 +119,16 @@ theorem lbin_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {sz :
       rw [BitVec.toNat_ushiftRight, h6, Nat.shiftRight_eq_div_pow]
     have hb : binIndex sz = 124 + sz / 262144 := by
       unfold binIndex; rw [if_neg (by omega), if_neg h4', if_neg (by omega), if_neg (by omega), if_neg (by omega), if_pos h1364']
-    refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, by carry_close⟩ <;> carry_norm
     · rw [cascade_off hy (by omega), hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
 
   have h1364' : 1364 < sz / 512 := by sx_norm; omega
   sx_run [8] O.live at 0x80004c94
   have hb : binIndex sz = 126 := by
     unfold binIndex; rw [if_neg (by omega), if_neg h4', if_neg (by omega), if_neg (by omega),
       if_neg (by omega), if_neg (by omega)]
-  refine hk _ ⟨?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [hb]; rfl
-  · rw [hb]; rfl
-  · intro x h10 h12 h13; simp only [upd_apply, h10, h12, h13, ite_false]
+  refine hk _ ⟨?_, ?_, ?_⟩ <;> carry_close [hb]
 
 theorem node_loc_MallocRebinL {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (B : BlockHeapAt m H top brkv chunks bins) {j x : Nat} (hj0 : 0 < j)
@@ -335,8 +328,7 @@ theorem rebinL_exit {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem
       unfold binblocksAddr avAddr; omega, by unfold binblocksAddr avAddr; omega⟩))
       (by unfold binblocksAddr binAt avAddr; omega)]; exact L.bbr) hbbl
     (HH.binblocks bb L.bbr j hj0 hj hne) (fun k h => h)
-    L'.regs L'.t4 L'.s0 (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat,
-      Nat.mod_eq_of_lt hpl]) (by rw [upd_other _ _ (by decide)]; exact h13) L'.a5 L'.a1 hnext
+    L'.regs L'.t4 L'.s0 (by carry_close) (by carry_close [h13]) L'.a5 L'.a1 hnext
 
 structure MemberAt (C : MCtx) (Mt' : Mem) (chunks : List Chunk) (x : Nat) (cx : Chunk) : Prop where
   mem : cx ∈ chunks
@@ -399,12 +391,9 @@ theorem rebinL_cmp {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     (BitVec.ofNat 64 h &&& sign_extend (m := 64) (0xffc#12)))
     (fun y h6 h10 h12 h13 => by simp only [upd_apply, h12, ite_false])
   refine (step% st 0x80004cb8) O.live (fun hlt => ?_) (fun hge => ?_)
-  · exact hpass _ L' (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h13)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6)
+  · exact hpass _ L' (by carry_close [h13]) (by carry_close) (by carry_close [h6])
   · have hne : bins j ≠ [] := by rw [hmem]; simp
-    exact rebinL_exit O L' hj hne (pre' := pre) (post' := x :: rest) hmem rfl
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h13) hnext
+    exact rebinL_exit O L' hj hne (pre' := pre) (post' := x :: rest) hmem rfl (by carry_close [h13]) hnext
 
 theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz j bb x : Nat}
@@ -448,10 +437,8 @@ theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     subst hnx
     refine (step% st 0x80004cac) O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
     · exact rebinL_exit O L' hj hne (pre' := pre ++ [x]) (post' := []) (by rw [hmem]; simp) rfl
-        (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnxlt]) hnext
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      apply BitVec.eq_of_toNat_eq
-      rw [h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnxlt]
+        (by carry_close) hnext
+    · apply BitVec.eq_of_toNat_eq; carry_close [h10]
   ·
     simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hnx
     subst hnx
@@ -464,9 +451,7 @@ theorem rebinL_adv {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
       have := congrArg BitVec.toNat he
       rw [h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnxlt] at this
       unfold binAt avAddr at this hgj; omega
-    · exact hloop y rest' rfl _ L' (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat,
-        Nat.mod_eq_of_lt hnxlt]) (by rw [upd_other _ _ (by decide)]; exact h10)
-        (by rw [upd_other _ _ (by decide)]; exact h6)
+    · exact hloop y rest' rfl _ L' (by carry_close) (by carry_close [h10]) (by carry_close [h6])
 
 theorem rebinL_walk {C : MCtx} (O : MOK C) {Mt Mt' : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb idx v sz j bb : Nat} (hj : j < numBins)
@@ -516,16 +501,7 @@ theorem rebinL_empty {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Me
     (fun a h => writeLog_present _ _ _ h) (read64_store_hit _ _ _ |>.trans (by rw [hor]))
     (lor_lt bb _ hbbl (by unfold numBins at hj; omega)) (lor_bit_set bb _)
     (fun k hk => lor_bit_keep bb _ k hk) ⟨?_, ?_, ?_⟩ ?_ ?_ ?_ ?_ ?_ ?_ hnext <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact L.regs.a4
-  · exact L.regs.a7
-  · exact ha6
-  · exact L.t4
-  · exact L.s0
-  · exact h10
-  · exact h13
-  · exact L.a5
-  · exact hor
+    carry_close [L.regs.a4, L.regs.a7, ha6, L.t4, L.s0, h10, h13, L.a5, hor, List.getLast_singleton]
 
 theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx v sz bb : Nat}
@@ -573,12 +549,8 @@ theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
       · exact ⟨z, zs, rfl⟩
     rw [hx] at hf; simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hf
     subst hf
-    exact rebinL_walk O hj hnext rest [] _ _ L'' (by rw [hx]; rfl)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-          rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hflt])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-          rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbl])
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h6')
+    exact rebinL_walk O hj hnext rest [] _ _ L'' (by rw [hx]; rfl) (by carry_close) (by carry_close)
+      (by carry_close [h6'])
   ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at heq
     have hemp : bins (binIndex sz) = [] := by
@@ -598,10 +570,6 @@ theorem rebinL {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     have hfb : f = binAt (binIndex sz) := by
       rw [hemp] at hf; simpa using hf.symm
     refine (step% st 0x80004ca4) O.live ?_
-    refine rebinL_empty O L'' hj hemp ?_ ?_ ?_ hnext <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact I.a2
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbl]
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hflt, hfb]
+    refine rebinL_empty O L'' hj hemp ?_ ?_ ?_ hnext <;> carry_close [I.a2, hfb]
 
 end VsaIris.VsaHeap
