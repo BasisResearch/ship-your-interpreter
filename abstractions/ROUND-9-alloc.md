@@ -211,3 +211,109 @@ Pilots (worktrees from f83224e1):
   `carry_close`/`region_close` made to reach the path cases; a local decision for side goals over
   existing terms.
 * P3 (row 4, 6/6, 2/6 first): a reflective difference-constraint checker for address side goals.
+
+## 7. Bake-off (primary cases; one measurement script on every branch)
+
+Pilot branches start from f83224e1: P1 `exp-R9-P1` 9e887bb0, P2 `exp-R9-P2` 5ea57596, P3 `exp-R9-P3`
+4487f40d. Case cost by `~/syi-r9/meas/meas.py`; failed compiles of the case's module in brackets.
+
+| case | incumbent | P1 views | P2 meet | P3 DBM checker |
+|---|---:|---:|---:|---:|
+| `PHeapAt.toTop` | 206.0 | **67.4** [3] | 81.2 [0] | 199.0 [0] |
+| `pvN_join` | 26.1 | 26.1 (no lever) | 25.1 [0] | 26.1 (no side goals) |
+| `mal_copy` | 70.1 | 70.1 (no lever) | 68.1 [0] | 70.0 [6] |
+| `fl_exit` | 143.9 | 143.9 (no lever) | **123.2** [2] | 142.9 [1] |
+| total | 446.1 | 307.5 (−31%) | **297.7 (−33%)** | 437.9 (−2%) |
+| setup lines | — | 189 (R9Views) | 201 (R9Frame 105, R9Omega 70, R9Path 26) | 569 (R9Dbm) |
+
+Single-file user CPU, min of 3, interleaved (`~/syi-r9/time/bake.sh`; load 11–14 on 32 cores):
+
+| module | incumbent | P1 | P2 | P3 |
+|---|---:|---:|---:|---:|
+| HeapFree | 19.22 | 18.11 | 18.12 | 19.21 |
+| ReallocPrevN | 20.72 | 20.43 | 21.14 | 20.56 |
+| ReallocMal | 20.65 | 19.48 | 19.72 | 20.15 |
+| FreeLarge | 6.03 | 5.92 | 5.96 | 5.88 |
+| four touched modules | 66.62 | 63.94 (−4.0%) | 64.94 (−2.5%) | 65.80 (−1.2%) |
+| layer modules | — | 1.42 | 2.22 | 2.82 |
+
+Each pilot's findings:
+
+- **P1 (views).** `VGlob`/`VTop`/`VWalk`/`VFree`/`VExt` with read sets stated as predicates, frame and
+  carry lemmas, a bridge `pheap_iff_views`, and `PHeapAt.transport_except`. toTop 150 → 58
+  declaration lines. Limits: the rule needs `bins` and `brkv` unchanged and the same free chunks; the
+  walk view is all or nothing (an edit to one header rebuilds the walk by hand); bin heads are one band.
+  Nothing for the path cases.
+- **P2 (meet).** The same carry as field-group lemmas over the existing `HeapAt` fields (`keep_globals`,
+  `keep_hdr`, `keep_free`, `drop_inuse`, window agreement as an arbitrary predicate), no datatype:
+  toTop 150 → 62. `carry_close` reached the three path cases for 1–2 lines each (they were already
+  tight). fl_exit's 20 lines came from packaged geometry: `NodeK` plus one new fact (`NodeK.end_sep`)
+  replaced a chain of three helpers. `omega_near` (local-context `omega` with fallback) saved kernel
+  time inside toTop (0.54 → 0.17 s for the declaration, most of it from the lemma split) and nothing
+  at file level.
+- **P3 (DBM).** A reflective difference-constraint checker with negative-cycle certificates found by
+  Bellman–Ford in the tactic and re-walked by the kernel, a `wrap` term for 2^64 offsets, clause
+  selection for disjunctive facts, fallback to `omega` over the collected facts. Per goal it halves
+  kernel time on disjunctive goals (≈ 10 vs 21 ms) and cuts tactic time 5× (≈ 1 vs 6 ms); toTop's
+  declaration 2,885 → 2,555 ms. Lines did not fall (47 of 51 `omega` calls in toTop became `dbm`, same
+  line count), the stack facts stay because `rgn_run`/`rgn_side` call `omega` internally (Region.lean),
+  and file CPU did not move. 8 failed layer compiles (kernel deep recursion unfolding BitVec atoms
+  until atoms and hypotheses were abstracted; CNF blow-up on a four-way disjunction).
+
+The time law did not produce a time win at file level for any pilot. The census was right that
+`omega` is about half the CPU, but most of those calls are made inside the step and region tactics and
+in the edit lemmas' internal arguments, not in the side goals a held-out case writes; replacing the
+written ones changes a file by 1–5%.
+
+## 7b. Fresh cases (the forecast, E33)
+
+H (fresh `PHeapAt.coalPrev`) ran on P1 and P2 (the two heap contenders); the path cases on P2 only
+(P3 failed the primary measure on lines, −2%, with 569 setup lines, and did not win time).
+
+| case | incumbent | P1 | P2 | what did the work |
+|---|---:|---:|---:|---|
+| `PHeapAt.coalPrev` | 129.9 | 119.2 [3] | 112.9 [5] (incl. a 2-line local macro) | **neither layer applies**: coalPrev composes `take` and `absorb`, which rebuild the invariant themselves. P1's saving is an existing helper (`PHeapAt.unlink`), P2's is cleanup plus a local read-after-write macro |
+| `bb_top` | 22.7 | — | 22.7 | term-mode composition, no lever |
+| `bw_scan` | 30.2 | — | 30.2 | composition; `omega_near` tried, no change |
+| `realloc_grow` | 119.0 | — | 113.0 [0] | `carry_close` (3 readback blocks); +3.9% CPU, in bound; `omega_near` cost +0.6 s (fallbacks on `False` goals) and was reverted |
+| total | 301.8 | | 278.8 (−7.6%) | layer-attributable: −6 (2%) |
+
+Of the 13 heap edits, 10 rebuild `HeapAt` directly (2,940 lines) and 3 compose other edits (splitFree,
+coalNext, coalPrev). The draw put a rebuild edit in the primary set and a composition in the fresh one.
+Among the rebuilders, release, take, absorb, carve and moveBinAt relink bins, which both heap layers
+exclude (`transport_except` and `keep_free` need the free chunks and bins unchanged); the top family
+(toTop, setTop, topResize, topSplit, cut) is where either layer applies in full.
+
+## 8. Decision
+
+**Adopted: C = P2 without `omega_near`**, consolidated in 923a8ac1 on `exp-R9-C`:
+
+* `VsaIris/Vsa/HeapWin.lean` (was R9Frame, 105 lines): the heap frame law as field-group lemmas
+  over the existing `HeapAt` fields;
+* round 8's `carry_close` made to reach the allocator (an import; no Carry change);
+* `NodeK.end_sep` (moved into Region.lean, 8 lines): packaged geometry instead of preludes;
+* `omega_near` and `rgn_arith_near` dropped (no file-level gain, fallback penalty on `False` goals and
+  long fact chains; the fl_exit/HeapFree/ReallocMal call sites went back to `omega`/`rgn_arith`, full
+  build green).
+
+Reasons, by the measures fixed in §0:
+
+* **Primary**: P2 297.7 vs P1 307.5 (P1 wins the heap case by 14 lines, P2 the path cases by 23);
+  P3 437.9.
+* **Lowest total on the heap cluster** (setup + primary + fresh, layer lines only): P1 189 + 67.4 +
+  129.9 = 386; P2's heap part 105 + 81.2 + 129.9 = 316. P1's 14-line per-case advantage pays back its
+  84 extra setup lines after six more top-family edits; four remain (setTop, topResize, topSplit, cut).
+  The meet won on setup for the fifth round in a row (E25, E32, E41, E47).
+* **Time**: no pilot cut touched-module CPU by 15%; all were within the bound. The tie-break did not
+  apply.
+* **Forecast**: fresh −7.6%, of which 2% is the layer. The adopted route is a modest one; the round's
+  main yield is the measurement of where the cost is (§7, §10).
+
+**Not adopted.**
+* P1 views (6/6, 4/6 first): the better heap rule per case, but a datatype and bridge whose rule only
+  fires when bins and free chunks are unchanged; on the remaining top-family edits it does not repay
+  its setup against the meet.
+* P3 DBM checker (6/6): halves per-goal kernel time on disjunctive goals but leaves the lines and the
+  file CPU unchanged, because the `omega` calls that cost the time are inside `rgn_run`/`rgn_side` and
+  the edit lemmas; 569 setup lines.
+* `omega_near`: see above.
