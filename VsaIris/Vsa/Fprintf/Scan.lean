@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Sfv
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -127,15 +128,10 @@ theorem vfp_lit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} 
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b8#64 R Mt := by
   nx_win sp 1024 592; refine vfp_mb hlive hs1 hs2 hs3 hs4 hal h2 h9 h25 hP1 hP2 hPD hfb hL fun R1 _ h10 hk1 => ?_
   have e10 := h10 hb0
-  have k2 : R1 2 = sp := (hk1 2 (by decide)).trans h2
-  have k19 : R1 19 = 37#64 := (hk1 19 (by decide)).trans h19
-  have k25 : R1 25 = P := (hk1 25 (by decide)).trans h25
   have hz37 : BitVec.zeroExtend 64 b ≠ 37#64 := fun h => zext8_ne hb37 (h.trans (by decide))
-  have hkeep : ∀ x ∈ scanKeep, R1 x = R x := fun x hx => hk1 x (by simp only [scanKeep, mbKeep, List.mem_cons, List.not_mem_nil, or_false] at hx ⊢; omega)
-  nx_run hlive using [k2, k19, k25, e10, lw_zext8, hz37, BitVec.add_assoc] at 2147527096
-  refine hk _ ?_ ?_
-  · rsimp
-  · keep_chain hkeep
+  nx_run hlive using [keep_eq hk1 h2, keep_eq hk1 h19, keep_eq hk1 h25, e10, lw_zext8, hz37, BitVec.add_assoc]
+    at 2147527096
+  refine hk _ ?_ ?_ <;> carry_close [hk1]
 
 theorem vfp_scan (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {s sp : BitVec 64} {need : Nat}
     (hs1 : s.toNat - need + 1024 ≤ sp.toNat) (hs2 : sp.toNat + 592 ≤ s.toNat) (hs3 : s.toNat ≤ 0x88000000)

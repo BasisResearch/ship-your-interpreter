@@ -1,4 +1,5 @@
 import VsaIris.Vsa.SnpSvfLoop
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -42,29 +43,16 @@ theorem snp_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   have hd1 := SG.d_lo
   have hd2 := SG.d_hi
   have hdsep := SG.d_sep
-  have hpw := hB.pw
   have hng : ¬ (BitVec.ofNat 64 total.length).toInt < (18446744073709551615#64).toInt := by
     rw [toInt_ofNat_small (by omega)]; simp
   have hn0' : BitVec.ofNat 64 n ≠ 0#64 := fun h => by
     have := congrArg BitVec.toNat h; simp only [BitVec.toNat_ofNat] at this; omega
   have hpw' : ldv .ld Mt (BitVec.ofNat 64 (s - 272 + 8)).toNat =
-      BitVec.ofNat 64 (dst + min total.length (n - 1)) := by
-    rw [toNat_ofNat_lt (by omega), show s - 272 + 8 = snpFP s by simp only [snpFP]; omega]; exact hpw
+      BitVec.ofNat 64 (dst + min total.length (n - 1)) := by carry_close [hB.pw]
   snp_runF [20] hlive using [ofNat_add_ofNat, h2, h8, h10, hng, hn0', hpw', hra, hS0, hS1]
   have hmin : min total.length (n - 1) < n := by omega
   refine hk _ _ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [show s - 272 + 272 = s by omega]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · intro z h1 h2
-    simp only [upd_apply, show z ≠ 1 by omega, show z ≠ 2 by omega, show z ≠ 8 by omega,
-      show z ≠ 9 by omega, show z ≠ 15 by omega, ite_false]
-  · intro i hi
-    rw [imgM_miss_nat _ _ (by omega) (by omega)]; exact hB.bytes i hi
-  · rw [imgM_sb_ofNat' _ _ _ (by omega) (by decide)]
-  · intro a ha
-    rw [imgM_miss_nat _ _ (by omega) (by omega)]
+  all_goals carry_close [hB.bytes]
 
 theorem snez_pos {x : Nat} (h0 : 0 < x) (h : x < 2 ^ 64) :
     LeanRV64DExecutable.zero_extend (m := 64) (LeanRV64DExecutable.Functions.bool_to_bit
