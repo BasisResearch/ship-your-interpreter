@@ -242,29 +242,25 @@ theorem tr_58_5c (g : (R : Register) → Option (RegisterType R))
   exact ⟨c', res.steps, hSt.of_seg res rfl⟩
 
 
+#derive_case mulOddSkipSeg chain []
+  terminator ⟨0x8000464c#64, 0x00068463#32, 0x63#8, 0x84#8, 0x06#8, 0x00#8,
+    .br bop.BEQ true, 13, 0, 0x0008#13, 0#21, 0#12⟩
+
 theorem tr_4c_54 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (hodd : ((y &&& 1#64) == (0#64)) = true) :
     Triple (St g (0x8000464c#64) a0 y a2 (y &&& 1#64) r m0 o) (St g (0x80004654#64) a0 y a2 (y &&& 1#64) r m0 o) := by
-  apply Triple.of_step
   intro c hSt
-  obtain ⟨vmi, hmi⟩ := hSt.minstret
-  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    site_8000464c_taken c.σ c.tick c.steps (0x8000464c#64) vmi (y &&& 1#64)
-      hSt.good hSt.pc hmi hSt.a3 hSt.loaded rfl hodd hSt.tick
-  have hpceq : (0x8000464c#64 : BitVec 64) + sign_extend (m := 64) (0x0008#13) = (0x80004654#64 : BitVec 64) := by
-    apply BitVec.eq_of_toNat_eq; decide
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-    hG', by rw [hmem']; exact hSt.loaded, by rw [hmem']; exact hSt.mem,
-    by rw [hobs.out]; exact hSt.sailOut, ?_,
-    obs_btaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-    obs_btaken_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-    obs_btaken_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2,
-    obs_btaken_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3,
-    obs_btaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-    obs_btaken_minstret hobs, hi',
-    fun R hR => (frame_btaken_m hobs R hR).trans (hSt.hframe R hR)⟩
-  rw [obs_btaken_pc hobs, hpceq]
+  obtain ⟨vm, hmi⟩ := hSt.minstret
+  have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 y a2 (y &&& 1#64) r) [] mulOddSkipSeg := by
+    chain_facts hSt.loaded
+    exact hodd
+  obtain ⟨c', res⟩ := segEval_selected_framed mulOddSkipSeg _ [] _ vm (fun _ => False) mulKeep
+    (mulRegs a0 y a2 (y &&& 1#64) r) c hSt.good hSt.pc hmi hSt.held
+    (by show KeysOK [10, 11, 12, 13, 1]; decide) facts
+    (by show ChainOK _ [10, 11, 12, 13, 1] _; decide) hSt.tick (fun _ _ => rfl) (by decide)
+    (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+  exact ⟨c', res.steps, hSt.of_seg res rfl⟩
 
 theorem tr_4c_50 (g : (R : Register) → Option (RegisterType R))
     (x y r a0 a2 : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
