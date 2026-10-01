@@ -137,7 +137,7 @@ macro_rules
       (try simp only [slotWrite]);
       (try simp (disch := decide) only [($hoff:term)]);
       (try simp only [Nat.add_assoc, Nat.reduceAdd]);
-      simp (disch := first | omega | sx_addr) only [ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss,
+      simp (disch := first | omega_dc | sx_addr) only [ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss,
         ldv_lw_store8]))
 
 section Truthy

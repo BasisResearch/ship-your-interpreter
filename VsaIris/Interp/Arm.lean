@@ -462,7 +462,7 @@ theorem ofNat_lo32 {w : BitVec 64} {k : Nat} (h : w.toNat % 2 ^ 32 = k) :
 
 syntax "ix_fwd" (" using " "[" term,* "]")? : tactic
 macro_rules
-  | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | sx_addr) only [slotWrite, ldv_store_hit,
+  | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | dbm | sx_addr) only [slotWrite, ldv_store_hit,
       ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss, ldv_lw_store8])
   | `(tactic| ix_fwd using [$hs,*]) => do
     let lems ← hs.getElems.mapM fun h => `(Lean.Parser.Tactic.simpLemma| $h:term)

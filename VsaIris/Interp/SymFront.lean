@@ -457,7 +457,10 @@ def readFacts (R Mt Dt : Expr) (facts : Array Term) :
 whose imports declare the table's tactics. `F` is the fact rewrite. -/
 def normStr (key F : String) : String :=
   match key with
-  | "stdio" => s!"((try nx_tidy) <;> (try simp only [VsaIris.Sym.updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try {F}) <;> (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try {F}) <;> (try nx_norm) <;> (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero]) <;> (try simp (disch := decide) only [VsaIris.Sym.update_aligned]) <;> (try simp only [BitVec.sub_self, VsaIris.Sym.sext_zero32, BitVec.toInt_zero]))"
+  | "stdio" =>
+    let tail := "((try simp_set (disch := omega_dc) nx_toint_set) <;> (try simp_set (disch := decide) nx_upal_set) <;> (try simp_set nx_subz_set))"
+    let again := s!"((try {F}) <;> (try nx_norm) <;> {tail})"
+    s!"((try nx_tidy) <;> (try simp_set nx_upd_set at ⊢) <;> (try simp_set nx_mt at ⊢) <;> (try nx_norm) <;> first | (({F}) <;> (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> {again}) | (nx_norm <;> (try nx_mem) <;> (try nx_console) <;> {again}) | (nx_mem <;> (try nx_console) <;> {again}) | (nx_console <;> {again}) | {tail})"
   | "snp" => s!"((try sx_norm) <;> (try {F}) <;> (try ((try nx_tab) <;> (try ix_mem) <;> (try {F}))) <;> (try sx_norm) <;> (try ix_mem))"
   | "interp" => s!"((try sx_norm) <;> (try {F}) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem))"
   | _ => s!"((try sx_norm) <;> (try {F}) <;> (try sx_mem) <;> (try sx_norm) <;> (try {F}))"
