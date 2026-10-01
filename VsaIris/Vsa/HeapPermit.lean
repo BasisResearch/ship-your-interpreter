@@ -1,5 +1,6 @@
 import VsaIris.Vsa.HeapFree
-import VsaIris.Vsa.Region
+import VsaIris.Vsa.RegionTac
+import VsaIris.Vsa.Dbm
 
 /-!
 # Heap surgery permits
@@ -80,7 +81,7 @@ macro_rules
   | `(tactic| rd_log [$hs,*]) =>
     `(tactic| (try simp only [ReadsOK, KeepsOK, and_true]
                repeat' refine And.intro ?_ ?_
-               all_goals (simp (disch := omega) only [read64_hit_eq, read64_miss]
+               all_goals (simp (disch := key_or omega_dc) only [read64_hit_eq, read64_miss]
                           try simp only [$hs,*])))
 
 /-! ### Split a free chunk (bin-1 remainder) -/

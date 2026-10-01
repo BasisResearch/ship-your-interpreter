@@ -176,9 +176,10 @@ theorem ldv_lw_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 4 ≤ b �
     ldv .lw (writeLog Mt [(b, w, v)]) a = ldv .lw Mt a :=
   ldv_store_miss .lw Mt v h
 
+attribute [ix_mem2_set] ldv_store_hit ldv_ld_hit_eq ldv_ld_miss ldv_lw_miss ldv_lw_store8
+
 macro_rules
-  | `(tactic| ix_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
-      ldv_ld_miss, ldv_lw_miss, ldv_lw_store8] at *)
+  | `(tactic| ix_mem) => `(tactic| simp_set (disch := sx_addr) ix_mem2_set at *)
 
 section Res
 
@@ -451,7 +452,7 @@ theorem valOf_tag [InterpGS GF] (N : NativeAddrs) (v : Value) (w0 w1 w2 : BitVec
 
 end AstRes
 
-macro "ix_reg" : tactic => `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+macro "ix_reg" : tactic => `(tactic| simp only [ix_reg_set])
 
 theorem keep_reg {ks : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R') {x : Nat}
     (hx : x ∈ ks) : R' x = R x := h x hx
@@ -461,7 +462,7 @@ theorem ofNat_lo32 {w : BitVec 64} {k : Nat} (h : w.toNat % 2 ^ 32 = k) :
 
 syntax "ix_fwd" (" using " "[" term,* "]")? : tactic
 macro_rules
-  | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | sx_addr) only [slotWrite, ldv_store_hit,
+  | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | dbm | sx_addr) only [slotWrite, ldv_store_hit,
       ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss, ldv_lw_store8])
   | `(tactic| ix_fwd using [$hs,*]) => do
     let lems ← hs.getElems.mapM fun h => `(Lean.Parser.Tactic.simpLemma| $h:term)

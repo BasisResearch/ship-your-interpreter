@@ -208,14 +208,7 @@ macro "sym_den" : tactic => `(tactic| simp (disch := decide) only [regsDen, memD
 /-- `sx_norm` on the branch premise just introduced, while it is the last hypothesis (a
 step-by-step run normalises it at the next step, before any later premise exists). -/
 macro "sym_hnorm " h:ident : tactic =>
-  `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
-        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        Sail.shift_bits_left, Sail.shift_bits_right, Sail.BitVec.extractLsb,
-        BitVec.reduceExtractLsb, BitVec.reduceHShiftLeft, BitVec.reduceHShiftRight,
-        BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
-        BitVec.ushiftRight_eq', BitVec.reduceToNat,
-        BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend, not_true_eq_false] at $h:ident)
+  `(tactic| simp_set sx_norm_set at $h:ident)
 
 /-- Unfolding `rawR`, as a rewrite with a proof: a definitional change of a branch premise
 leaves the kernel to compare the entry register chain against its unfolding. -/
@@ -736,6 +729,14 @@ def normHyps (g : MVarId) : TacticM MVarId := do
   let mut g := g
   for t in [← `(tactic| sx_norm), ← `(tactic| ix_tab), ← `(tactic| sx_norm), ← `(tactic| ix_mem)] do
     let some stx ← liftMacroM (Macro.expandMacro? t) | continue
+    -- a guarded `simp_set` stands for `simp only [SET]` with its discharger and location
+    let stx ← if stx.getKind != ``VsaIris.SimpGuard.simpSetTac then pure stx else
+      let id := mkIdent stx[2].getId.eraseMacroScopes
+      match stx[1].isNone, stx[3].isNone with
+      | true, true => `(tactic| simp only [$id:ident])
+      | true, false => `(tactic| simp only [$id:ident] $(⟨stx[3][0]⟩))
+      | false, true => `(tactic| simp $(⟨stx[1][0]⟩):discharger only [$id:ident])
+      | false, false => `(tactic| simp $(⟨stx[1][0]⟩):discharger only [$id:ident] $(⟨stx[3][0]⟩))
     let saved ← saveState
     try
       setGoals [g]

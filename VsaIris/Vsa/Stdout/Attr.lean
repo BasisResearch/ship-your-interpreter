@@ -1,3 +1,9 @@
 import Lean
 
 register_simp_attr nx_mt
+register_simp_attr nx_upd_set
+register_simp_attr nx_console_set
+register_simp_attr nx_toint_set
+register_simp_attr nx_upal_set
+register_simp_attr nx_subz_set
+register_simp_attr nx_prune_set

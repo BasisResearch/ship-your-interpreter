@@ -20,6 +20,9 @@ theorem read64_of_present {m : Mem} {a : Nat} (h : ∀ k, k < 8 → (m[a + k]?).
     Option.bind_eq_bind, Option.bind_some, Option.pure_def]
   exact ⟨_, rfl⟩
 
+private theorem lane_inj_r4 {x y r s : Nat} (hx : x < 256) (hy : y < 256) (h : x + 256 * r = y + 256 * s) :
+    x = y ∧ r = s := by omega
+
 theorem bytes_of_read64_eq2 {m m' : Mem} {a b v : Nat} (h : read64 m a = some v)
     (h' : read64 m' b = some v) : ∀ k, k < 8 → m'[b + k]? = m[a + k]? := by
   obtain ⟨b0, b1, b2, b3, b4, b5, b6, b7, e0, e1, e2, e3, e4, e5, e6, e7, hv⟩ := read64_bytes m a v h
@@ -28,14 +31,22 @@ theorem bytes_of_read64_eq2 {m m' : Mem} {a b v : Nat} (h : read64 m a = some v)
   have l4 := b4.isLt; have l5 := b5.isLt; have l6 := b6.isLt; have l7 := b7.isLt
   have k0 := c0.isLt; have k1 := c1.isLt; have k2 := c2.isLt; have k3 := c3.isLt
   have k4 := c4.isLt; have k5 := c5.isLt; have k6 := c6.isLt; have k7 := c7.isLt
-  have q0 : c0 = b0 := BitVec.eq_of_toNat_eq (by omega)
-  have q1 : c1 = b1 := BitVec.eq_of_toNat_eq (by omega)
-  have q2 : c2 = b2 := BitVec.eq_of_toNat_eq (by omega)
-  have q3 : c3 = b3 := BitVec.eq_of_toNat_eq (by omega)
-  have q4 : c4 = b4 := BitVec.eq_of_toNat_eq (by omega)
-  have q5 : c5 = b5 := BitVec.eq_of_toNat_eq (by omega)
-  have q6 : c6 = b6 := BitVec.eq_of_toNat_eq (by omega)
-  have q7 : c7 = b7 := BitVec.eq_of_toNat_eq (by omega)
+  have E := hv.trans hv'.symm
+  obtain ⟨r0, E⟩ := lane_inj_r4 l0 k0 E
+  obtain ⟨r1, E⟩ := lane_inj_r4 l1 k1 E
+  obtain ⟨r2, E⟩ := lane_inj_r4 l2 k2 E
+  obtain ⟨r3, E⟩ := lane_inj_r4 l3 k3 E
+  obtain ⟨r4, E⟩ := lane_inj_r4 l4 k4 E
+  obtain ⟨r5, E⟩ := lane_inj_r4 l5 k5 E
+  obtain ⟨r6, E⟩ := lane_inj_r4 l6 k6 E
+  have q0 : c0 = b0 := BitVec.eq_of_toNat_eq r0.symm
+  have q1 : c1 = b1 := BitVec.eq_of_toNat_eq r1.symm
+  have q2 : c2 = b2 := BitVec.eq_of_toNat_eq r2.symm
+  have q3 : c3 = b3 := BitVec.eq_of_toNat_eq r3.symm
+  have q4 : c4 = b4 := BitVec.eq_of_toNat_eq r4.symm
+  have q5 : c5 = b5 := BitVec.eq_of_toNat_eq r5.symm
+  have q6 : c6 = b6 := BitVec.eq_of_toNat_eq r6.symm
+  have q7 : c7 = b7 := BitVec.eq_of_toNat_eq E.symm
   intro k hk
   rcases k with _ | _ | _ | _ | _ | _ | _ | _ | k
   · simpa [e0, f0] using congrArg some q0
@@ -46,7 +57,7 @@ theorem bytes_of_read64_eq2 {m m' : Mem} {a b v : Nat} (h : read64 m a = some v)
   · rw [e5, f5, q5]
   · rw [e6, f6, q6]
   · rw [e7, f7, q7]
-  · omega
+  · exact absurd hk (Nat.not_lt.mpr (Nat.le_add_left 8 k))
 
 def copyW (m : Mem) (d s : Nat) : Nat → Mem
   | 0 => m

@@ -1,0 +1,17 @@
+import Lean
+
+register_simp_attr sx_norm_set
+register_simp_attr nx_norm_set
+register_simp_attr nx_normh_set
+register_simp_attr ix_reg_set
+register_simp_attr sx_lits_set
+register_simp_attr sx_pre_set
+register_simp_attr win_add_set
+register_simp_attr img_load_set
+register_simp_attr ix_mem_set
+register_simp_attr ix_mem2_set
+register_simp_attr sx_mem_set
+register_simp_attr nx_mem_set
+register_simp_attr nx_outs_set
+register_simp_attr nx_mlog_set
+register_simp_attr nx_subneg_set

@@ -56,6 +56,6 @@ theorem interpText_img_mem :
     exact ⟨inRangesB_within (hi := 0x8001acf0) (by decide) ha, rfl⟩
 
 /-- Constant-table loads at literal addresses evaluate to literals. -/
-macro "ix_tab" : tactic => `(tactic| simp only [VsaIris.Sym.imgLoad] at *)
+macro "ix_tab" : tactic => `(tactic| simp_set img_load_set at *)
 
 end VsaIris.Sym

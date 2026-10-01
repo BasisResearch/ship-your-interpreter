@@ -3,6 +3,7 @@ import VsaIris.Vsa.SymCompact
 import VsaIris.Vsa.SymExec
 import VsaIris.Vsa.RegionCore
 import VsaIris.Vsa.Stdout.WinRefute
+import VsaIris.Vsa.Dbm
 
 /-!
 # Windows: address keys for the newlib runs
@@ -467,7 +468,7 @@ elab "win_key" : tactic => do
     if isWinRefuted e then throw e
     s.restore
     withoutRecover
-      (evalTactic (← `(tactic| (simp only [BitVec.add_assoc, BitVec.reduceAdd] at ⊢; win_key0))))
+      (evalTactic (← `(tactic| (simp_set win_add_set at ⊢; win_key0))))
 
 /-- Access permitted / access owned, by the key of the address. `stat` closes the ownership of a
 static access in the footprint at hand. -/
@@ -533,8 +534,8 @@ def winSeps (tag : String) (T n m : Term) (others : Array (Expr × Expr × Expr)
     let n' ← withMainContext (Term.exprToSyntax n')
     let m' ← withMainContext (Term.exprToSyntax m')
     evalTactic (← `(tactic| first
-      | have $hs : $b' + $m' ≤ $T - $n := by omega
-      | have $hs : $T + $m ≤ $b' - $n' := by omega
+      | have $hs : $b' + $m' ≤ $T - $n := by omega_dc
+      | have $hs : $T + $m ≤ $b' - $n' := by omega_dc
       | skip))
 
 /-- The footprint of the `SWP` under the binders of the goal. -/
@@ -555,7 +556,7 @@ elab "nx_win " sp:term:max n:term:max m:term:max : tactic => do
   let tag := if sp.raw.isIdent then s!"{sp.raw.getId}" else "0"
   let others ← ctxWins
   let hw := mkIdent (Name.mkSimple s!"hw_{tag}")
-  evalTactic (← `(tactic| have $hw : StackWin $S $sp $n $m := StackWin.of_outS (by omega)))
+  evalTactic (← `(tactic| have $hw : StackWin $S $sp $n $m := StackWin.of_outS (by omega_dc)))
   winSeps tag (← `(($sp).toNat)) n m others
 
 end Dispatch
@@ -563,7 +564,7 @@ end Dispatch
 /-- Step side goals (access permitted, access owned) by key. No arithmetic fallback. -/
 macro "win_side" : tactic => `(tactic| first
   | win_acc
-  | (simp only [BitVec.add_assoc, BitVec.reduceAdd] at ⊢; win_acc))
+  | (simp_set win_add_set at ⊢; win_acc))
 
 namespace Win
 

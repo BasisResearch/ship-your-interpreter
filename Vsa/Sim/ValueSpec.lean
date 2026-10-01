@@ -46,6 +46,12 @@ theorem getElem_writeMap4_3 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d :
   simp only [writeMap4]
   rw [getElem_insert_self]
 
+theorem byte_lane (n m m' : Nat) (h : m * 256 = m') : n / m % 256 + 256 * (n / m') = n / m := by
+  subst h; rw [← Nat.div_div_eq_div_mul]; exact Nat.mod_add_div _ _
+
+theorem byte_top (n m k : Nat) (h : n < k) (hk : k = m * 256) : n / m % 256 = n / m :=
+  Nat.mod_eq_of_lt (Nat.div_lt_of_lt_mul (hk ▸ h))
+
 theorem read32_writeMap4 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d : BitVec (8 * 4)) :
     read32 (writeMap4 mem a d) a = some d.toNat := by
   have e0 := getElem_writeMap4_0 mem a d
@@ -56,7 +62,8 @@ theorem read32_writeMap4 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d : Bi
   simp only [BitVec.extractLsb', BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow,
     Option.some.injEq, Nat.reducePow, Nat.pow_zero, Nat.div_one]
   have hd : d.toNat < 2 ^ 32 := by have := d.isLt; simpa using this
-  omega
+  rw [Nat.mul_zero, Nat.add_zero, byte_top _ 16777216 _ hd rfl,
+    byte_lane _ 65536 16777216 rfl, byte_lane _ 256 65536 rfl, Nat.mod_add_div]
 
 theorem getElem_writeMap8_0 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d : BitVec (8 * 8)) :
     (writeMap8 mem a d)[a]? = some (d.extractLsb' 0 8) := by
@@ -126,7 +133,10 @@ theorem read64_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat) (d : Bi
   simp only [BitVec.extractLsb', BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow,
     Option.some.injEq, Nat.reducePow, Nat.pow_zero, Nat.div_one]
   have hd : d.toNat < 2 ^ 64 := by have := d.isLt; simpa using this
-  omega
+  rw [Nat.mul_zero, Nat.add_zero, byte_top _ 72057594037927936 _ hd rfl,
+    byte_lane _ 281474976710656 72057594037927936 rfl, byte_lane _ 1099511627776 281474976710656 rfl,
+    byte_lane _ 4294967296 1099511627776 rfl, byte_lane _ 16777216 4294967296 rfl,
+    byte_lane _ 65536 16777216 rfl, byte_lane _ 256 65536 rfl, Nat.mod_add_div]
 
 theorem getElem_writeMap8_disjoint (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 k : Nat)
     (d : BitVec (8 * 8)) (hk : k < a8 ∨ a8 + 8 ≤ k) :

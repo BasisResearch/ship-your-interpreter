@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocGen
 import VsaIris.Vsa.RegKeep
+import VsaIris.Vsa.Dbm
 
 namespace VsaIris.VsaHeap
 
@@ -158,7 +159,7 @@ macro_rules
   | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.stack ‹VsaIris.VsaHeap.MOK _› ?_ ?_ <;> ((try unfold VsaIris.VsaHeap.mHead) ; sx_addr)))
 
 macro_rules
-  | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.foot ‹VsaIris.VsaHeap.MOK _› (fun k hk => Or.inl ?_); unfold VsaIris.VsaHeap.allocGlobal VsaIris.VsaHeap.InRange; omega))
+  | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.foot ‹VsaIris.VsaHeap.MOK _› (fun k hk => Or.inl ?_); unfold VsaIris.VsaHeap.allocGlobal VsaIris.VsaHeap.InRange; omega_dc))
 
 
 theorem glob_off_of {H : List (Nat × Nat)} {s : BitVec 64}
