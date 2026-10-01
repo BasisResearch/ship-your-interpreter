@@ -279,3 +279,259 @@ P3's three-line bodies are real but move the layout into one lemma per construct
 which no other case reuses; counted where the cost lands (skill step 1), P3 is more expensive than
 the incumbent on its own cases. `stmtT` (a term-mode dispatch of one-line arms) is untouched by
 every candidate.
+
+**Time** (user-CPU, `LEAN_NUM_THREADS=1`, min of 3, all five variants interleaved per file in one
+window, load 13.3–16.3 on 32 cores; files a pilot did not touch are its copy of the base file):
+
+| module | incumbent | P1 | P2 | P3 | P4 |
+|---|---:|---:|---:|---:|---:|
+| RTDisplay | 11.93 | (12.68) | 13.79 | (12.47) | 13.74 |
+| SimVar | 4.00 | (3.92) | 3.74 | (4.00) | 3.80 |
+| SimLogic | 7.80 | 4.87 | (7.65) | (7.64) | 4.61 |
+| SimBlock | 1.91 | (1.90) | 1.72 | (1.95) | 1.86 |
+| StuckStmt | 3.15 | 3.13 | (3.11) | 2.87 | 2.97 |
+| StmtS | 1.85 | 1.73 | (1.88) | 1.52 | 1.68 |
+| sum | 30.64 | 28.23 | 31.89 | 30.45 | 28.66 |
+
+Untouched copies vary by up to 6% (RTDisplay 11.93–12.68), the noise floor of this window. The new
+layer modules each cost about the import floor (0.4–1.4 s). The one real regression is RTDisplay
+(+15% under P2 and P4: register rows and `Has.wp` autoParams run `simp`/`decide` inside `wp_simp`);
+SimLogic is 40% faster under both P1 and P4 (one generic truthiness bind replaces two inline runs).
+
+**Fresh cases on the combination** (P4 + P2's key-register fiber, branch `exp-R6-C`; the six fresh
+cases, run after the pilots; no new abstraction code allowed beyond fixes, which count as setup):
+
+| case | incumbent | combination | failed compiles | note |
+|---|---:|---:|---:|---|
+| `run_add` | 71 | 57 | 1 | `Has.wp` ×5, `rt_pos` |
+| `sim_all` | 167 | 167 | 0 | recursor wiring of 51 case lemmas into 9 mutual recursors; no rule applies |
+| `sim_not` | 32 | 29 | 0 | `segP_app` on the older compiler |
+| `sCall` | 46 | 40 | 0 | `segP_app` replaces the split/naming/cast block |
+| `fBlockS` | 14 | 11 | 0 | `segP_app` |
+| `dp_ret` | 7 | 4 | 1 | `Has.wp` |
+| total | 337 | 308 (−8.6%) | 2 | 170 → 141 (−17%) without `sim_all` |
+
+Layer change during the fresh run: +1 line net 0 (a `reg_def` simp set). Defects the fresh cases
+found (E15): `Has.wp`'s autoParam elaborated register names at the use site, so a local variable
+named `t1` captured the register name and the facts silently stopped firing (fixed by the
+`reg_def` attribute); `run_at'` with whole-routine unfolding hits `maxRecDepth` on a 126-instruction
+routine (left: explicit `run_seg` lists remain for large routines); `↓segP_app` cannot share a
+`simp` call with `List.length_append`; helper lists must be unfolded in the same `simp`. (The
+combination's first commit eefcbc32 did not parse — a staging slip by the coordinator, caught by
+the fresh agent and fixed in 2b7affe8.) Module CPU: SimCallE 5.62 → 2.96, ExprSim 6.66 → 6.00,
+RTOps 13.97 → 14.24, RTDisplay 12.04 → 12.96, StuckStmt unchanged.
+
+The calibration gap between the primary set (−43%) and the fresh set (−8.6%, −17% without the
+skeleton) has one cause: the primary set held `sLogFull`, whose truthiness-call pattern P4's
+`ESpec.bindTr` packages exactly (62 → 22), and three failure duals whose child calls the stuck
+binds absorb; the fresh set held a recursion skeleton and runtime routines whose residue is
+per-routine register bookkeeping after calls.
+
+## 8. Decision
+
+**Adopted: the combination** — P4's rules over existing terms (layout iff `segP_app`, `Has.wp`,
+`MS.keep`/`MS.reenv`, `ESpec.bindTr`, `EStuck.cond`, `Fail.cond`/`TSpec.fail`/`At.after`, the
+`rt_pos`/`reg_def` simp sets) plus P2's key-register fiber (`Keys`, `MS.reseat`, `MS.popScope`,
+register rows `Models`). Reasons, by the measures fixed in §0:
+
+* Primary: on all eight cases P4 needs 184 lines + 9 failed compiles against the incumbent's 338
+  (−43%); it beats every new-vocabulary candidate on that candidate's own territory (P1 133 vs 86,
+  P2 118 vs 107, P3 92 vs 40). P2's fiber wins one case (`run_leave` 8 vs 15) and is kept.
+* Setup 161 + 147 lines; fresh cases cost no new layer code.
+* Secondary: touched modules within noise in sum (30.64 → 28.66 s for P4); RTDisplay +15% is
+  recorded as the layer's named cost (rows and autoParams run `simp` inside `wp_simp`).
+
+Not adopted: P1's `Run`/`Evo` monad and `Placed` type (the defeq midpoints satisfy the unifier but
+not `omega`/`simp` dischargers, so the new types added lines back: 10 failed compiles on
+`sLogFull`); P3's blame arms (bodies of 3–4 lines, but the layout moves into one lemma per
+construct and compiler, which nothing else reuses); the region half of P2 (no case contains a
+memory agreement it could discharge; the existing region keys live in `VsaIris`, unreachable from
+`Vsa/Compiler`).
+
+As in round 5 (E25), the winner is the meet: the laws stated over the project's existing terms,
+with no new datatype.
+
+Route (this branch has no CLAUDE.md or discipline script; per E16 the rule text is recorded here
+for the branch that carries them):
+
+| task shape (Vsa/Compiler) | use |
+|---|---|
+| child `Seg`/`PosOK` premises of a generated construct | `segP_app` (`R6Layout`), never `hseg.append` + `.cast (by omega)` + `posOK_le` |
+| a `Has` fact feeding `wp_simp` | `h.wp` (`R6Reg`), never `have k := has_mem h …; have e := srcVal_of_has h` |
+| `MS` after a register-only step | `MS.keep` / `MS.reenv` / `MS.reseat` (`R6Expr`, `R6Keys`), never a 12-field rebuild |
+| child expression then the truthiness call | `ESpec.bindTr` |
+| stuck condition / old-compiler failure binds | `EStuck.cond`, `Fail.cond`, `TSpec.fail` |
+
+Discipline rules (TSV lines for `scripts/discipline_rules.tsv`; after the rollout the first has
+no remaining hits; the second has eight, in SimIf (3, the private `run_cond` adapter and two
+goal-side `SPost.cast`), SimWhile (3, packaged layout), SimFn and SimStmt1 (1 each), to be listed in
+`scripts/discipline_grandfather.txt`):
+
+```
+R16	Vsa/Compiler/**/*.lean	have [A-Za-z0-9_']+ := has_mem	register facts into wp_simp go through Has.wp (R6Reg), not has_mem/srcVal_of_has
+R17	Vsa/Compiler/**/*.lean	\.cast \(by omega\)	child layout premises come from segP_app/seg_app_iff (R6Layout)
+```
+
+## 9. Rollout
+
+Pre-rollout snapshot 632cc95a (`exp-R6-C` merged). Six agents, disjoint file groups balanced by
+cluster lines (≈1,290 each), one shared worktree, a written brief (the layer's idioms as in §8, the model diffs of the 14 held-out re-proofs, the import positions),
+single-file compiles only, the coordinator's full build at the end; they could not edit the layer
+and reported needed helpers instead. Commit 5921f423 (40 files, +501 −1,017), consolidation
+d935339d (`At.after` moved beside `At` in `StmtFrag`, removing the layer copy and one private
+duplicate). Full `lake build` (1,549 jobs, all default targets including executables) green after
+each.
+
+Migrated per group (body lines before → after, a selection; full lists in the agents' notes):
+RTOps `run_sub` 31→24, `run_mul` 35→27, `run_div`/`run_mod` 42→33, `cmp_sel` 119→108, `run_cmp`
+112→99, `run_eq` 115→101, `add_cat` 84→72; RTLeaf `run_sc` 120→106, `run_nf` 60→46, `run_ps`
+64→54; RTItos `it_step` 81→70, `run_it` 127→119; SimFnEntry `run_entry` 176→162; SimCond
+`run_cond` 28→11; SimLogic `sLogShort` 40→18; StuckExpr `fLogical` 62→41, `fBinary` 63→49; SimExit
+`run_exitTo` 35→21 (`MS.reenv` replaces a 12-line rebuild); StuckStmt `fIfNone` 26→12; StmtS
+`fIfNone₀` 17→10; SimBin `sBinary` 73→59; CorrectG `RTLoaded.of` 22→7; SimCallCode `CCSegs.of`
+11→4; StmtT `tIfSome` 47→38.
+
+Members left, by reason (109 of 207 cluster members unchanged):
+
+* no obligation the layer discharges: recursion skeletons and dispatch tables (`sim_all`,
+  `noE`/`noA`, `stmtT`/`seqT`, `StuckAll`), one-line wrappers, source-side lemmas;
+* import position: `Run`, `Frag`, `WP`, `RTBase`, `PrintInt` sit below every layer module
+  (`R6Layout` imports `Run`, `R6Reg` imports `RTBase`), and `SimUnary`/`SimWhile`/`SimFor` sit below
+  `R6Expr`/`R6Stuck` although `sNot` has exactly `ESpec.bindTr`'s shape;
+* memory-changing `MS` rebuilds (`run_storeSlot`, `run_enterFrame`, `MS.stored`, `MS.heap`):
+  `MS.keep`/`MS.reseat` are same-memory rules;
+* packaged layouts (`while_segs`, `ForSegs`, `hok.segs`) whose `posOK_le` uses derive from the
+  construct's end, not from an append split;
+* migrated with no gain and reverted (`sIfNone`, `run_strTab`).
+
+Layer defects and gaps the rollout found (the next round's input, E22):
+
+1. `↓segP_app` is a pre-order rewrite: on an already left-nested append (after `generalize`,
+   `dsimp`, or an equation lemma such as `fnCode_eq`) a `List.append_assoc` in the same `simp`
+   call does not re-associate first, the split lands at the wrong association, and an `rcases -`
+   on a PosOK component fails with "dependent elimination failed". A separate re-association
+   step is required (found by three groups).
+2. `↓segP_app` splits every `++`; prefixes that must stay whole for `run_whole` need
+   `segP_app.mp` once or `rw [segP_app]` (an outer-split form is missing).
+3. Goal-side positions are not normalised: the generator writes `x+3`, the split produces
+   `x+1+2`, and `omega` treats `opCode (x+2+4)` and `opCode (x+6)` as different atoms; fixed per
+   use by `simp only [Nat.add_assoc, Nat.reduceAdd]` or by naming the position.
+4. `ESpec.bindTr`'s post is fixed to `errPos ∨ R`; failure-side callers wrap it in
+   `reaches_mono … fail_err` (a `Fail` variant would save 1–2 lines per use).
+5. `frame_consts`/`obj_consts` omit `codeBase`, `stackLo`, `stackHi`, `maxFS`, `bufBase`,
+   `maxCallDepth` (still `have … := rfl` in eight theorems).
+6. No split-segment `run_cond` (one private adapter in SimIf).
+7. `run_at'` with whole-routine unfolding hits `maxRecDepth` on a 126-instruction routine.
+
+## 10. Measurements (fc553c2e → d935339d)
+
+| measure | before | after |
+|---|---:|---:|
+| `Vsa/Compiler` lines (incl. 316 non-blank layer lines) | 19,478 | 19,164 |
+| theorem declaration lines (excluding the layer) | 14,866 | 14,121 (−745) |
+| cluster members changed | — | 98 of 207 (+8 outside the cluster heads) |
+| declaration lines of the 106 changed theorems | 5,718 | 4,968 (−13%) |
+| cluster declaration lines (195 matched by name) | 7,705 | 6,997 (−9.2%) |
+| `has_mem`/`srcVal_of_has` uses | 184/186 | 1/3 (both definitions; one equality use) |
+| `.append` / `posOK_le` / `.cast (by omega)` uses | 268 / 175 / 13 | 130 / 93 / 8 |
+| module user-CPU, single-file, base and new interleaved, min of 2 (load 10.6–20.3) | 344.8 s | 341.2 s (332.3 s without the 9 layer modules, 8.9 s ≈ import floor) |
+| largest module changes | | SimLogic 8.48→4.01, StuckExpr 8.37→4.86, SimCallE 5.94→3.02; RTDisplay 13.46→14.55 |
+
+Statement check: a meta script over both environments (every non-internal constant of
+`Vsa.Compiler.*`, type hashed) finds 0 changed types; the only missing names are compiler-generated
+`match_` auxiliaries, the added ones the layer, `At.after`, and auxiliaries. `compileG_correct`,
+`compileChecked_correct`, `compile_correct`: [propext, Classical.choice, Quot.sound]; the 14-line
+axioms file unchanged (WhileLogic adequacy [propext, Quot.sound]). No `sorry`, `axiom`,
+`native_decide`, `bv_decide`, `ofReduceBool`, `maxHeartbeats` or `maxRecDepth` in `Vsa/Compiler`.
+
+Calibration: held-out primary −43%, fresh −8.6% (−17% without the skeleton), rollout −9.2% of
+cluster lines and −13% on the members it touched. The primary draw over-represented the two
+patterns the layer packages best (the truthiness-call bind and the stuck-condition bind); about
+half the cluster contains none of the obligations the laws discharge (E21).
+
+## 11. What remains
+
+* The cost that is left is not in the five laws. It is (a) per-routine register bookkeeping after
+  runtime calls (`have g := hk.has (by decide) (by reg_simp; exact …)`, 452 `reg_simp` uses
+  remain), (b) the positional 8–10-premise applications of child specs and the hand-built source
+  derivations in failure cases (`fun ⟨st', t, D⟩ => hne ⟨…⟩`), and (c) memory-changing `MS`
+  rebuilds. P3's blame layer addressed (b) for failure cases but put the layout into one lemma
+  per construct; the next round should state child descriptors over `segP_app` so the layout part
+  is shared, and add a memory-changing reseat (`MS.reseat` with a heap/frame step).
+* Layer defects 1–7 of §9.
+* Encode (41 s, symbolic-field decode) and the kernel-evaluation example modules (38 s) are the
+  time targets; neither is a proof-vocabulary problem.
+* 534 lines of off-path declarations (§1a) remain.
+* The census script (`decls.tsv`: constant closure and conclusion heads) and the statement-hash
+  script are in §12.
+
+## 12. Scripts
+
+Census (run with `lake env lean Census.lean` from the worktree; writes
+`module, name, kind, start, end, on-path, conclusion head`):
+
+```lean
+import Vsa
+import WhileC
+open Lean Meta
+
+partial def closure (env : Environment) (roots : List Name) : NameSet := Id.run do
+  let mut seen : NameSet := {}
+  let mut stack := roots
+  while !stack.isEmpty do
+    match stack with
+    | [] => break
+    | n :: rest =>
+      stack := rest
+      if seen.contains n then continue
+      seen := seen.insert n
+      if let some ci := env.find? n then
+        for m in ci.getUsedConstantsAsSet.toList do
+          if !seen.contains m then stack := m :: stack
+        if let .inductInfo ii := ci then
+          for c in ii.ctors do stack := c :: stack
+  return seen
+
+def headOf (e : Expr) : String :=
+  let rec strip : Expr → Expr
+    | .forallE _ _ b _ => strip b
+    | .mdata _ b => strip b
+    | e => e
+  let b := strip e
+  let nm := match b.getAppFn with | .const n _ => n.toString | _ => "?"
+  if nm == "Eq" || nm == "Iff" then
+    let args := b.getAppArgs
+    let lhs := if nm == "Eq" then args[1]! else args[0]!
+    nm ++ ":" ++ (match lhs.getAppFn with | .const n _ => n.toString | _ => "?")
+  else nm
+
+def run (env : Environment) : IO Unit := do
+  let mods := env.header.moduleNames
+  let isComp (i : Nat) : Bool := (mods[i]!.toString).startsWith "Vsa.Compiler."
+  let mut roots : List Name := [`Vsa.Compiler.compileG_correct, `Vsa.Compiler.compileChecked_correct,
+     `Vsa.Compiler.compile_correct]
+  for (n, ci) in env.constants.map₁.toList do
+    if let some idx := env.getModuleIdxFor? n then
+      let mn := mods[idx.toNat]!.toString
+      if mn == "WhileC" || mn == "Vsa.Compiler.CompiledG" || mn == "Vsa.Compiler.WhileWl" then
+        roots := n :: roots
+      else if !isComp idx.toNat then
+        for m in ci.getUsedConstantsAsSet.toList do
+          if let some j := env.getModuleIdxFor? m then
+            if isComp j.toNat then roots := n :: roots
+  let cl := closure env roots
+  let h ← IO.FS.Handle.mk "decls.tsv" .write
+  for (n, ci) in env.constants.map₁.toList do
+    if let some idx := env.getModuleIdxFor? n then
+      if isComp idx.toNat && !n.isInternal then
+        let kind := match ci with
+          | .thmInfo _ => "thm" | .defnInfo _ => "def" | .inductInfo _ => "ind" | _ => "other"
+        let rng := match declRangeExt.find? env n with
+          | some r => s!"{r.range.pos.line}\t{r.range.endPos.line}" | none => "0\t0"
+        h.putStrLn s!"{mods[idx.toNat]!}\t{n}\t{kind}\t{rng}\t{cl.contains n}\t{headOf ci.type}"
+
+#eval show Elab.Command.CommandElabM Unit from do run (← getEnv)
+```
+
+Statement check: the same skeleton printing `module, name, kind, hash ci.type, range` for every
+non-internal `Vsa.Compiler.*` constant, run in both environments and joined by name.
