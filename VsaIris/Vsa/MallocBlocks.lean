@@ -299,16 +299,12 @@ theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
 abbrev MKeep (R R0 : Nat → BitVec 64) : Prop :=
   ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → x ≠ 15 → R x = R0 x
 
-theorem MKeep.r {R R0 : Nat → BitVec 64} (h : MKeep R R0) (x : Nat) (h1 : x ≠ 11 := by decide)
-    (h2 : x ≠ 12 := by decide) (h3 : x ≠ 13 := by decide) (h4 : x ≠ 15 := by decide) : R x = R0 x :=
-  h x h1 h2 h3 h4
-
 theorem BW.keep {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     {nb : Nat} {R R0 : Nat → BitVec 64} (W : BW C Mt brkv chunks bins nb R0) (h : MKeep R R0) :
     BW C Mt brkv chunks bins nb R :=
-  ⟨W.frame.of_regs (h.r 2) (h.r 9) (h.r 18) (h.r 19), W.heap, W.nbok, W.nb31, W.b1,
-   by rw [h.r 14]; exact W.a4, by rw [h.r 16]; exact W.a6, by rw [h.r 29]; exact W.t4,
-   by rw [h.r 8]; exact W.s0⟩
+  ⟨W.frame.of_regs (keep4 h 2) (keep4 h 9) (keep4 h 18) (keep4 h 19), W.heap, W.nbok, W.nb31, W.b1,
+   by rw [keep4 h 14]; exact W.a4, by rw [keep4 h 16]; exact W.a6, by rw [keep4 h 29]; exact W.t4,
+   by rw [keep4 h 8]; exact W.s0⟩
 
 abbrev AllSmall (chunks : List Chunk) (l : List Nat) (nb : Nat) : Prop :=
   ∀ x ∈ l, ∀ sz, FreeAt chunks x sz → sz < nb
@@ -336,7 +332,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
     simp only [List.head?_nil, Option.getD_none] at h13
     refine (step% st 0x800049c8) O.live (fun _ => hex R (hmem ▸ hsm) hkp h13) (fun hne => absurd ?_ hne)
     apply BitVec.eq_of_toNat_eq
-    rw [hkp.r 6, h6, h13]
+    rw [keep4 hkp 6, h6, h13]
   | cons y rpre ih =>
     intro post R hmem hsm hkp h13
     simp only [List.head?_cons, Option.getD_some] at h13
@@ -362,7 +358,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
     rw [hmem] at hr2
     have hbk := (ring_member hr2 hpred hnx).2
     have hbklt := Vsa.Sim.read64_lt _ _ _ hbk
-    have h6' : (R 6).toNat = binAt k := by rw [hkp.r 6]; exact h6
+    have h6' : (R 6).toNat = binAt k := by rw [keep4 hkp 6]; exact h6
     refine (step% st 0x800049c8) O.live (fun he => absurd he ?_) (fun _ => ?_)
     · intro he; apply hyne
       have := congrArg BitVec.toNat he; rw [h6', h13] at this; exact this.symm
@@ -374,7 +370,7 @@ theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {br
       have W' := W.keep hkp'
       have hcmp := lr_cmp v12 W'.a4 (by omega) (by have := W.nb31; omega)
       have h31 : (R' 28).toInt = (31#64).toInt := by
-        rw [hkp'.r 28]; exact toInt_small h28 (by decide)
+        rw [keep4 hkp' 28]; exact toInt_small h28 (by decide)
       rw [← v11] at hcmp
       refine (step% st 0x800049e0) O.live (fun hgt => ?_) (fun hle => ?_)
       · rw [h31] at hgt

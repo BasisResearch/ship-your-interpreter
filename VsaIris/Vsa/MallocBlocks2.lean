@@ -76,8 +76,8 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
       (fun _ _ _ _ _ => rfl) h13
     intro R' hsm hkp h13'
     have hemp : bins k = [] := scanFrom_empty HH B.sf B.s1 hsk hkn hsm
-    have hk31 : (R' 31).toNat = k := by rw [hkp.r 31]; exact h31
-    have hk6 : (R' 6).toNat = binAt k := by rw [hkp.r 6]; exact h6
+    have hk31 : (R' 31).toNat = k := by rw [keep4 hkp 31]; exact h31
+    have hk6 : (R' 6).toNat = binAt k := by rw [keep4 hkp 6]; exact h6
     have hgk := binAt_geo k hkn
     rgn_step O.live at 0x80004d08
     sx_norm

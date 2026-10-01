@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocRebinL
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.MallocGlue
 
 namespace VsaIris.VsaHeap
 
@@ -51,11 +52,10 @@ theorem lscan_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {nb 
         unfold binIndex; simp only [show ¬ nb / 512 = 0 by omega, show ¬ nb / 512 ≤ 4 by omega, h20', if_false, if_true]
       have h7 := sx32_add_toNat (x := R 14 >>> 9) (k := 92) (by rw [hy]; omega)
       rw [hy] at h7
-      refine hk _ ⟨?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      refine hk _ ⟨?_, ?_, ?_, by carry_close⟩ <;> carry_norm
       · rw [BitVec.toNat_shiftLeft, slliw1_toNat (by rw [h7]; omega), h7, Nat.shiftLeft_eq, hb]; omega
       · rw [h7, hb]; omega
       · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-      · intro x h10 h13 h15 h17 h28; simp only [upd_apply, h10, h13, h15, h17, h28, ite_false]
     have h20' : 20 < nb / 512 := by sx_norm; omega
     refine (step% st 0x80004cdc) O.live ?_
     refine (step% st 0x80004ce0) O.live (fun h84 => ?_) (fun h84 => ?_) <;>
@@ -70,11 +70,10 @@ theorem lscan_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {nb 
         unfold binIndex; simp only [show ¬ nb / 512 = 0 by omega, show ¬ nb / 512 ≤ 4 by omega, show ¬ nb / 512 ≤ 20 by omega, h84', if_false, if_true]
       have h7 := sx32_add_toNat (x := R 14 >>> 12) (k := 111) (by rw [hy]; omega)
       rw [hy] at h7
-      refine hk _ ⟨?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      refine hk _ ⟨?_, ?_, ?_, by carry_close⟩ <;> carry_norm
       · rw [BitVec.toNat_shiftLeft, slliw1_toNat (by rw [h7]; omega), h7, Nat.shiftLeft_eq, hb]; omega
       · rw [h7, hb]; omega
       · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-      · intro x h10 h13 h15 h17 h28; simp only [upd_apply, h10, h13, h15, h17, h28, ite_false]
     have h84' : 84 < nb / 512 := by sx_norm; omega
     refine (step% st 0x80004f3c) O.live ?_
     refine (step% st 0x80004f40) O.live (fun h340 => ?_) (fun h340 => ?_) <;>
@@ -89,11 +88,10 @@ theorem lscan_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {nb 
         unfold binIndex; simp only [show ¬ nb / 512 = 0 by omega, show ¬ nb / 512 ≤ 4 by omega, show ¬ nb / 512 ≤ 20 by omega, show ¬ nb / 512 ≤ 84 by omega, h340', if_false, if_true]
       have h7 := sx32_add_toNat (x := R 14 >>> 15) (k := 120) (by rw [hy]; omega)
       rw [hy] at h7
-      refine hk _ ⟨?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      refine hk _ ⟨?_, ?_, ?_, by carry_close⟩ <;> carry_norm
       · rw [BitVec.toNat_shiftLeft, slliw1_toNat (by rw [h7]; omega), h7, Nat.shiftLeft_eq, hb]; omega
       · rw [h7, hb]; omega
       · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-      · intro x h10 h13 h15 h17 h28; simp only [upd_apply, h10, h13, h15, h17, h28, ite_false]
     have h340' : 340 < nb / 512 := by sx_norm; omega
     refine (step% st 0x80004fc0) O.live ?_
     refine (step% st 0x80004fc4) O.live (fun h1364 => ?_) (fun h1364 => ?_) <;>
@@ -108,11 +106,10 @@ theorem lscan_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {nb 
         unfold binIndex; simp only [show ¬ nb / 512 = 0 by omega, show ¬ nb / 512 ≤ 4 by omega, show ¬ nb / 512 ≤ 20 by omega, show ¬ nb / 512 ≤ 84 by omega, show ¬ nb / 512 ≤ 340 by omega, h1364', if_false, if_true]
       have h7 := sx32_add_toNat (x := R 14 >>> 18) (k := 125) (by rw [hy]; omega)
       rw [hy] at h7
-      refine hk _ ⟨?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      refine hk _ ⟨?_, ?_, ?_, by carry_close⟩ <;> carry_norm
       · rw [BitVec.toNat_shiftLeft, slliw1_toNat (by rw [h7]; omega), h7, Nat.shiftLeft_eq, hb]; omega
       · rw [h7, hb]; omega
       · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-      · intro x h10 h13 h15 h17 h28; simp only [upd_apply, h10, h13, h15, h17, h28, ite_false]
 
     have h1364' : 1364 < nb / 512 := by sx_norm; omega
     sx_run [8] O.live at 0x800048a8
@@ -120,11 +117,7 @@ theorem lscan_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {nb 
       unfold binIndex; simp only [show ¬ nb / 512 = 0 by omega, show ¬ nb / 512 ≤ 4 by omega,
         show ¬ nb / 512 ≤ 20 by omega, show ¬ nb / 512 ≤ 84 by omega,
         show ¬ nb / 512 ≤ 340 by omega, show ¬ nb / 512 ≤ 1364 by omega, if_false]
-    refine hk _ ⟨?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · rw [hb]; rfl
-    · rw [hb]; rfl
-    · rw [hb]; rfl
-    · intro x h10 h13 h15 h17 h28; simp only [upd_apply, h10, h13, h15, h17, h28, ite_false]
+    refine hk _ ⟨?_, ?_, ?_, by carry_close⟩ <;> carry_close [hb]
   ·
     have h4' : nb / 512 ≤ 4 := by sx_norm; omega
     sx_run [8] O.live at 0x800048a8
@@ -134,11 +127,10 @@ theorem lscan_idx {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {nb 
       unfold binIndex; simp only [show ¬ nb / 512 = 0 by omega, h4', if_false, if_true]
     have h7 := sx32_add_toNat (x := R 14 >>> 6) (k := 57) (by rw [hy]; omega)
     rw [hy] at h7
-    refine hk _ ⟨?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hk _ ⟨?_, ?_, ?_, by carry_close⟩ <;> carry_norm
     · rw [BitVec.toNat_shiftLeft, slliw1_toNat (by rw [h7]; omega), h7, Nat.shiftLeft_eq, hb]; omega
     · rw [h7, hb]; omega
     · rw [sx32_add_toNat (by rw [hy]; omega), hy, hb]; omega
-    · intro x h10 h13 h15 h17 h28; simp only [upd_apply, h10, h13, h15, h17, h28, ite_false]
 
 structure LScan (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
     (nb j : Nat) (R : Nat → BitVec 64) : Prop where
@@ -159,22 +151,19 @@ structure LScan (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins :
 theorem LScan.upd {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     {nb j : Nat} {R R' : Nat → BitVec 64} (L : LScan C Mt brkv chunks bins nb j R)
     (h : ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → x ≠ 15 → R' x = R x) : LScan C Mt brkv chunks bins nb j R' where
-  frame := L.frame.of_regs (h 2 (by decide) (by decide) (by decide) (by decide))
-    (h 9 (by decide) (by decide) (by decide) (by decide))
-    (h 18 (by decide) (by decide) (by decide) (by decide))
-    (h 19 (by decide) (by decide) (by decide) (by decide))
+  frame := L.frame.of_regs (keep4 h 2) (keep4 h 9) (keep4 h 18) (keep4 h 19)
   heap := L.heap
   nbok := L.nbok
   large := L.large
   nb31 := L.nb31
   bin_idx := L.bin_idx
-  a4 := by rw [h 14 (by decide) (by decide) (by decide) (by decide)]; exact L.a4
-  a6 := by rw [h 16 (by decide) (by decide) (by decide) (by decide)]; exact L.a6
-  a7 := by rw [h 17 (by decide) (by decide) (by decide) (by decide)]; exact L.a7
-  t3 := by rw [h 28 (by decide) (by decide) (by decide) (by decide)]; exact L.t3
-  a0 := by rw [h 10 (by decide) (by decide) (by decide) (by decide)]; exact L.a0
-  t1 := by rw [h 6 (by decide) (by decide) (by decide) (by decide)]; exact L.t1
-  s0 := by rw [h 8 (by decide) (by decide) (by decide) (by decide)]; exact L.s0
+  a4 := by rw [keep4 h 14]; exact L.a4
+  a6 := by rw [keep4 h 16]; exact L.a6
+  a7 := by rw [keep4 h 17]; exact L.a7
+  t3 := by rw [keep4 h 28]; exact L.t3
+  a0 := by rw [keep4 h 10]; exact L.a0
+  t1 := by rw [keep4 h 6]; exact L.t1
+  s0 := by rw [keep4 h 8]; exact L.s0
 
 abbrev LScanLR (C : MCtx) (Mt : Mem) (chunks : List Chunk) (bins : Nat → List Nat)
     (nb : Nat) : Prop :=
@@ -245,10 +234,7 @@ theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {br
     ·
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hge
       have hle' : nb ≤ sz := hcmp.2.1 hge
-      exact htake _ pre post cxa sz pred L' hmem hcx hle' hlt32 hpred
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15)
-        (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt])
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hszv)
+      refine htake _ pre post cxa sz pred L' hmem hcx hle' hlt32 hpred ?_ ?_ ?_ <;> carry_close [h15, hszv]
     ·
       rcases List.eq_nil_or_concat pre with rfl | ⟨pre', y, rfl⟩
       · simp only [List.getLast?_singleton, Option.some.injEq] at hpred
@@ -275,23 +261,15 @@ theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {br
           rw [L.a0, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt] at this
           exact this
         refine (step% st 0x800048d4) O.live ?_
-        exact hprev pre' pred (by simp) _ (L'.upd fun z h11 h12 h13 h15 => by
-          simp only [upd_apply, h15, ite_false]) (by
-            simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-            sx_norm
-            rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt])
+        exact hprev pre' pred (by simp) _ (L'.upd (by carry_close)) (by carry_norm; sx_norm; carry_close)
   ·
     refine (step% st 0x800048e8) O.live ?_
     have hgt := hcmp.1.1 (by
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hgt
       rw [h31']; omega)
     refine hlr _ j hj hj0 (.inr ⟨cxa, sz, hx, hcx, by omega⟩)
-      (L.frame.of_regs rfl rfl rfl rfl) ⟨?_, ?_, ?_⟩ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact L.a4
-    · sx_norm; exact L.t3
-    · exact L.a6
-    · exact L.s0
+      (L.frame.of_regs rfl rfl rfl rfl) ⟨?_, by carry_norm; sx_norm; exact L.t3, ?_⟩ ?_ <;>
+      carry_close [L.a4, L.a6, L.s0]
 
 theorem lscan_walk {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} {nb j : Nat} (hj : j < numBins) (hlr : LScanLR C Mt chunks bins nb)
@@ -471,15 +449,7 @@ theorem lscan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : 
   refine (step% st 0x800048bc) O.live (fun heq => ?_) (fun hne => ?_)
   ·
     refine hlr _ (binIndex nb + 1) (by unfold numBins; omega) (by omega) (.inl (by omega))
-      (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact hk2
-    · exact hk9
-    · exact hk18
-    · exact hk19
-    · rw [hk14]; exact h14
-    · exact I.a7
-    · rw [hk8]; exact h8
+      (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ?_ <;> carry_close [hk2, hk9, hk18, hk19, hk14, h14, I.a7, hk8, h8]
   ·
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hne
     have hlne : l ≠ binAt (binIndex nb) := fun he => hne (by rw [he])
@@ -491,19 +461,8 @@ theorem lscan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : 
         exact ⟨ys', hys.2⟩
     refine (step% st 0x800048c0) O.live ?_
     refine (step% st 0x800048c4) O.live ?_
-    refine lscan_walk O hj hlr (lscan_take O hj) pre.reverse l [] _ ⟨?_, Hp, hnb, h503, hnb31, rfl,
-      ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ (by rw [hpre, List.reverse_reverse]) ?_ <;>
-      try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact F.of_regs (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hk2)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hk9)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hk18)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hk19)
-    · rw [hk14]; exact h14
-    · exact I.a7
-    · exact I.t3
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbl]
-    · rfl
-    · rw [hk8]; exact h8
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt]
+    refine lscan_walk O hj hlr (lscan_take O hj) pre.reverse l [] _ ⟨F.of_regs ?_ ?_ ?_ ?_, Hp, hnb, h503,
+      hnb31, rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ (by rw [hpre, List.reverse_reverse]) ?_ <;>
+      carry_close [hk2, hk9, hk18, hk19, hk14, h14, I.a7, I.t3, hk8, h8]
 
 end VsaIris.VsaHeap
