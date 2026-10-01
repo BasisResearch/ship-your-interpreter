@@ -452,7 +452,7 @@ theorem valOf_tag [InterpGS GF] (N : NativeAddrs) (v : Value) (w0 w1 w2 : BitVec
 
 end AstRes
 
-macro "ix_reg" : tactic => `(tactic| simp_set ix_reg_set)
+macro "ix_reg" : tactic => `(tactic| simp only [ix_reg_set])
 
 theorem keep_reg {ks : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R') {x : Nat}
     (hx : x ∈ ks) : R' x = R x := h x hx
