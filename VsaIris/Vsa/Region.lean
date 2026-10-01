@@ -106,6 +106,44 @@ theorem WOK.stackRgn {C : MCtx} (O : WOK C) : ARgn C.S (C.s.toNat - 256) 256 := 
 
 end Laws
 
+/-! Key laws (see `RegionCore`): the region is picked by atom match and the membership
+check is a closed boolean on literal offsets. -/
+
+section KeyLaws
+
+variable {H : List (Nat × Nat)} {b e t c0 c L A m : Nat}
+
+theorem Rgn.lt_k (r : Rgn (vsaFoot H) b e) (hb : b = t + c0) (he : L ≤ e) (c w : Nat)
+    (h : (Nat.ble c0 c && Nat.ble (c + w) (c0 + L) && Nat.blt 0 w) = true) :
+    t + c < 18446744073709551616 := by
+  have h := key_chk h; subst hb
+  have := vsaFoot_range (r.mem (a := t + c) (by omega) (by omega)); omega
+
+theorem Rgn.ldOK_k (r : Rgn (vsaFoot H) b e) (hb : b = t + c0) (he : L ≤ e) (hA : t + c = A)
+    (w : Nat) (h : (Nat.ble c0 c && Nat.ble (c + w) (c0 + L) && Nat.blt 0 w) = true) :
+    LdOK A w := by
+  have h := key_chk h; subst hb hA; exact r.ldOK (by omega)
+
+theorem Rgn.stOK_k (r : Rgn (vsaFoot H) b e) (hb : b = t + c0) (he : L ≤ e) (hA : t + c = A)
+    (w : Nat) (h : (Nat.ble c0 c && Nat.ble (c + w) (c0 + L) && Nat.blt 0 w) = true)
+    (hal : t % m = 0) (ha : (m % w == 0 && c % w == 0) = true) : StOK A w := by
+  have h2 := key_al hal ha
+  have h := key_chk h; subst hb hA; exact r.stOK ⟨by omega, by omega, by omega, h2⟩
+
+theorem WOK.rgn_k {C : MCtx} (O : WOK C) (r : Rgn (vsaFoot C.H) b e) (hb : b = t + c0)
+    (he : L ≤ e) (hA : t + c = A) (w : Nat)
+    (h : (Nat.ble c0 c && Nat.ble (c + w) (c0 + L) && Nat.blt 0 w) = true) :
+    ∀ x ∈ accAddrs A w, C.S x := by
+  have h := key_chk h; subst hb hA; exact O.rgn r ⟨by omega, by omega⟩
+
+theorem Rgn.win_k {s : BitVec 64} (r : Rgn (vsaFoot H) b e) (hb : b = t + c0) (he : L ≤ e)
+    (hA : t + c = A) (w : Nat)
+    (h : (Nat.ble c0 c && Nat.ble (c + w) (c0 + L) && Nat.blt 0 w) = true) :
+    ∀ x, A ≤ x → x < A + w → MWin H s x := by
+  have h := key_chk h; subst hb hA; exact r.win ⟨by omega, by omega⟩
+
+end KeyLaws
+
 /-! ## The static table (V1): minted once against the fixed layout. -/
 
 theorem globRgn (H : List (Nat × Nat)) : Rgn (vsaFoot H) 0x8001ad10 0x810 :=
@@ -428,6 +466,152 @@ def rgnKey (g : MVarId) (a : Expr) : MetaM MVarId := g.withContext do
   g.assign (mkApp3 (mkConst ``key_gen) a (mkLambda `A .default nat abst) m)
   return m.mvarId!
 
+/-- Normalise a freshly introduced key equation `hA : a = A` (register updates, register
+additions, literal offsets) without removing wrap-around: the key route removes it from the
+bound the chosen region gives. -/
+macro "rgn_key_simp" : tactic =>
+  `(tactic| (intro A hA
+             (try simp only [VsaIris.Sym.upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
+               LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend,
+               BitVec.reduceAppend, BitVec.reduceSignExtend, VsaIris.VsaHeap.key_toNat_add,
+               VsaIris.VsaHeap.key_toNat_ofNat, BitVec.reduceToNat,
+               Nat.reducePow, Nat.reduceMod] at hA)))
+
+def natRefl (n : Nat) : Expr := mkApp2 (mkConst ``Eq.refl [Level.one]) (mkConst ``Nat) (mkNatLit n)
+def trueRefl : Expr := mkApp2 (mkConst ``Eq.refl [Level.one]) (mkConst ``Bool) (mkConst ``Bool.true)
+def isZeroLit (e : Expr) : Bool := e.nat? == some 0
+
+/-- The context facts the key route reads syntactically: atom rewrites `x.toNat = r`,
+literal floors `L ≤ s` and alignments `t % m = 0`. -/
+structure KeyFacts where
+  eqs : Array (Expr × Expr × Expr) := #[]
+  floors : Array (Expr × Nat × Expr) := #[]
+  aligns : Array (Expr × Nat × Expr) := #[]
+
+def keyFacts : MetaM KeyFacts := do
+  let mut kf : KeyFacts := {}
+  for d in (← getLCtx) do
+    if d.isImplementationDetail then continue
+    let ty ← instantiateMVars d.type
+    if let some (α, l, r) := ty.eq? then
+      if l.isAppOfArity ``BitVec.toNat 2 ||
+          (α.isConstOf ``Nat && l.isApp && l.nat?.isNone && r.isAppOfArity ``HAdd.hAdd 6 &&
+            r.appArg!.nat?.isSome) then
+        kf := { kf with eqs := kf.eqs.push (l, r, d.toExpr) }
+      else if l.isAppOfArity ``HMod.hMod 6 && isZeroLit r then
+        if let some m := l.appArg!.nat? then
+          kf := { kf with aligns := kf.aligns.push (l.appFn!.appArg!, m, d.toExpr) }
+    else if ty.isAppOfArity ``LE.le 4 then
+      if let some n := ty.appFn!.appArg!.nat? then
+        kf := { kf with floors := kf.floors.push (ty.appArg!, n, d.toExpr) }
+  return kf
+
+/-- `e = t + c` with `t` an atom (or the literal `0`) and `c` a literal, atoms rewritten by
+the context's `x.toNat = r` facts. A wrap-around `y % 2^64` (when `mods`) is transparent; with
+`bnd = some (t, c, hlt)` its removal is proved from `hlt : t + c < 2^64` (pass 2), without it the
+proof is a placeholder (pass 1, which only computes the form). -/
+partial def linNF (kf : KeyFacts) (fuel : Nat) (bnd : Option (Expr × Nat × Expr)) (mods : Bool)
+    (e : Expr) : MetaM (Option (Expr × Nat × Expr)) := do
+  if let some n := e.nat? then return some (mkNatLit 0, n, mkApp (mkConst ``lin_lit) e)
+  if e.isAppOfArity ``HAdd.hAdd 6 && (e.getArg! 0).isConstOf ``Nat then
+    let x := e.getArg! 4; let y := e.getArg! 5
+    let some (tx, cx, px) ← linNF kf fuel bnd mods x | return none
+    let some (ty, cy, py) ← linNF kf fuel bnd mods y | return none
+    let args (t : Expr) (p q : Expr) :=
+      #[x, y, t, mkNatLit cx, mkNatLit cy, mkNatLit (cx + cy), p, q, natRefl (cx + cy)]
+    if isZeroLit ty then return some (tx, cx + cy, mkAppN (mkConst ``lin_addL) (args tx px py))
+    if isZeroLit tx then return some (ty, cx + cy, mkAppN (mkConst ``lin_addR) (args ty px py))
+    return some (e, 0, mkApp (mkConst ``lin_atom) e)
+  if mods && e.isAppOfArity ``HMod.hMod 6 && (e.getArg! 0).isConstOf ``Nat &&
+      e.appArg!.nat? == some 18446744073709551616 then
+    let y := e.appFn!.appArg!
+    let some (ty, cy, py) ← linNF kf fuel bnd mods y | return none
+    match bnd with
+    | none => return some (ty, cy, mkConst ``True)
+    | some (t, c, hlt) =>
+      if isZeroLit ty then
+        unless cy < 18446744073709551616 do return none
+        return some (ty, cy, mkAppN (mkConst ``lin_mod0) #[y, mkNatLit cy, e.appArg!, py, trueRefl])
+      unless ty == t && cy ≤ c do return none
+      return some (ty, cy,
+        mkAppN (mkConst ``lin_mod) #[y, t, mkNatLit cy, mkNatLit c, e.appArg!, py, hlt, trueRefl])
+  if fuel > 0 then
+    if let some (_, r, h) := kf.eqs.find? (·.1 == e) then
+      let some (t, c, p) ← linNF kf (fuel - 1) bnd mods r | return none
+      return some (t, c, mkAppN (mkConst ``lin_trans) #[e, r, t, mkNatLit c, h, p])
+  return some (e, 0, mkApp (mkConst ``lin_atom) e)
+
+inductive KeyKind | ld | st | acc (oks : Array Syntax.Term) | win (s : Expr)
+
+/-- The key route (no candidate trying): key the access, normalise the key to `t + c`, pick a
+region whose base normalises to `t + c0` and whose literal check holds, and close the goal
+by that region's key law (a closed boolean check on literals). `none` (state restored) when
+no key form applies. -/
+def rgnKeyed (g : MVarId) (a : Expr) (rgns : Array RgnHyp) (kind : KeyKind) :
+    TacticM (Option Name) := do
+  let s0 ← saveState
+  let [g'] ← evalTacticAt (← `(tactic| rgn_key_simp)) (← rgnKey g a) | s0.restore; return none
+  let r? ← tryCatchRuntimeEx (g'.withContext do
+    let some hAd := (← getLCtx).lastDecl | return none
+    let some (_, lhs, Ae) := (← instantiateMVars hAd.type).eq? | return none
+    let kf ← keyFacts
+    let some (t, c, _) ← linNF kf 3 none true lhs | return none
+    let tgt ← instantiateMVars (← g'.getType)
+    let wE? : Option Expr := match kind with
+      | .win _ => match tgt with
+        | .forallE _ _ (.forallE _ _ (.forallE _ lt _ _) _) _ => some lt.appArg!.appArg!
+        | _ => none
+      | _ => (tgt.find? fun e => e.isAppOfArity ``accAddrs 2 || e.isAppOfArity ``LdOK 2 ||
+          e.isAppOfArity ``StOK 2).map (·.appArg!)
+    let some w := wE?.bind (·.nat?) | return none
+    for r in rgns do
+      if (kind matches .win _) && r.acc then continue
+      let some (tb, c0, hb) ← linNF kf 3 none false r.base | continue
+      unless tb == t do continue
+      let some (L, he) ← (do
+          if let some L := r.ext.nat? then return some (L, mkApp (mkConst ``ext_lit) r.ext)
+          let some (s, k, pe) ← linNF kf 3 none false r.ext | return none
+          let some (_, L0, hs) := kf.floors.find? (·.1 == s) | return none
+          return some (L0 + k, mkAppN (mkConst ``ext_le)
+            #[r.ext, s, mkNatLit k, mkNatLit L0, mkNatLit (L0 + k), pe, hs, natRefl (L0 + k)]) :
+          MetaM (Option (Nat × Expr)))
+        | continue
+      unless c0 ≤ c && c + w ≤ c0 + L && 0 < w do continue
+      let rv := mkFVar (← getLocalDeclFromUserName r.name).fvarId
+      let pre := if r.acc then ``ARgn else ``Rgn
+      let hlt ← mkAppM (pre ++ `lt_k) #[rv, hb, he, mkNatLit c, mkNatLit w, trueRefl]
+      let some (_, _, px) ← linNF kf 3 (some (t, c, hlt)) true lhs | continue
+      let hA := mkAppN (mkConst ``lin_key) #[lhs, t, mkNatLit c, Ae, px, hAd.toExpr]
+      let pf? : Option Expr ← match kind with
+        | .ld => some <$> mkAppM (pre ++ `ldOK_k) #[rv, hb, he, hA, mkNatLit w, trueRefl]
+        | .st => do
+          let al? : Option (Nat × Expr) :=
+            if w == 1 then some (1, mkApp (mkConst ``Nat.mod_one) t)
+            else if isZeroLit t then some (w, mkApp (mkConst ``Nat.zero_mod) (mkNatLit w))
+            else (kf.aligns.find? fun (x, m, _) => x == t && m % w == 0).map fun (_, m, h) => (m, h)
+          let some (m, hal) := al? | pure none
+          if m % w != 0 || c % w != 0 then pure none else
+          some <$> mkAppM (pre ++ `stOK_k) #[rv, hb, he, hA, mkNatLit w, trueRefl, hal, trueRefl]
+        | .acc oks =>
+          if r.acc then some <$> mkAppM ``ARgn.acc_k #[rv, hb, he, hA, mkNatLit w, trueRefl] else do
+            let mut res := none
+            for o in oks do
+              let some oe ← (try some <$> Term.withoutErrToSorry (Tactic.elabTerm o none)
+                catch _ => pure none) | continue
+              if let some p ← (try some <$> mkAppM ``WOK.rgn_k #[oe, rv, hb, he, hA, mkNatLit w,
+                  trueRefl] catch _ => pure none) then
+                res := some p; break
+            pure res
+        | .win s => some <$> mkAppOptM ``Rgn.win_k #[none, none, none, none, none, none, none, none, s,
+            rv, hb, he, hA, mkNatLit w, trueRefl]
+      let some pf := pf? | continue
+      if ← isDefEq (← inferType pf) tgt then
+        g'.assign pf
+        return some r.name
+    return none) (fun _ => pure none)
+  if r?.isNone then s0.restore
+  return r?
+
 /-- Key the access `a` of goal `g`, rank the regions (the hinted one first, then
 by atoms shared with the key, symbolic extents before literal ones), and try each
 region's candidate tactics. Returns the region that closed the goal. -/
@@ -476,6 +660,9 @@ def rgnSide (g : MVarId) (hint : Option Name) : TacticM (Option Name) := do
     else
       if h.acc then return #[← `(tactic| (refine VsaIris.VsaHeap.ARgn.acc $r ?_; omega))]
       oks.mapM fun o => `(tactic| (refine VsaIris.VsaHeap.WOK.rgn $o $r ?_; omega))
+  let kind : KeyKind :=
+    if app.isAppOf ``LdOK then .ld else if app.isAppOf ``StOK then .st else .acc oks
+  if let some r ← rgnKeyed g app.appFn!.appArg! rgns kind then return some r
   rgnTry g app.appFn!.appArg! rgns hint mk #[]
 
 /-- Close an ownership (`∀ x ∈ accAddrs a w, C.S x`), `LdOK` or `StOK` goal
@@ -564,6 +751,10 @@ elab "rgn_win" : tactic => do
   let onStack := (a.find? (·.isConstOf ``MCtx.s)).isSome
   let rest := (← getGoals).tail
   let r ← if onStack then rgnTry g a rgns none mk #[stack] else do
+    let k ← match (tgt.find? (·.isAppOfArity ``MWin 3)).map (·.getArg! 1) with
+      | some s => rgnKeyed g a rgns (.win s)
+      | none => pure none
+    if k.isSome then pure k else
     match ← rgnTry g a rgns none mk #[] with
     | some r => pure (some r)
     | none => rgnTry g a #[] none mk #[stack]
