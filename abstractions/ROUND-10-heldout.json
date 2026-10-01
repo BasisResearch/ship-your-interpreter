@@ -1,0 +1,37 @@
+{
+ "R": {
+  "primary": [
+   "VsaIris/Vsa/MallocRebin.lean",
+   "VsaIris/Vsa/MallocBlocks2.lean"
+  ],
+  "fresh": [
+   "VsaIris/Vsa/ReallocTail.lean",
+   "VsaIris/Vsa/FreeLarge.lean"
+  ],
+  "population": 23
+ },
+ "T": {
+  "primary": [
+   "VsaIris/Vsa/Stderr/VfpEntry.lean",
+   "VsaIris/Interp/IntRunAdd.lean"
+  ],
+  "fresh": [
+   "VsaIris/Interp/ProofNativePrint.lean",
+   "VsaIris/Interp/SeqLoopInterp.lean"
+  ],
+  "population": 104
+ },
+ "W": {
+  "primary": [
+   "VsaIris/Vsa/HeapMoveAt.lean",
+   "VsaIris/Vsa/HeapRealloc.lean"
+  ],
+  "fresh": [
+   "VsaIris/Vsa/HeapCarve.lean",
+   "VsaIris/Vsa/Strlen.lean"
+  ],
+  "population": 22
+ },
+ "seed": 20261010,
+ "rule": "strata by census family of tactic-issued decision time per module (R region tactics >= T step drivers; T step drivers; W written omega > R+T), user>=5s census; random.Random(seed).sample(sorted(stratum),4): first two primary, last two fresh"
+}
