@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Sbprintf
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -129,23 +130,9 @@ local macro "vfp_tail" : tactic => `(tactic| (
         have l544 := (hlo 544 (by omega) (by omega)).trans E.s4v
         have l528 := (hlo 528 (by omega) (by omega)).trans E.s6v
         nx_run hlive using [e2, e10, l584, l576, l544, l528, BitVec.add_assoc]
-        have hst : Frame (writeLog M2 [((sp + 16#64).toNat, 8, BitVec.ofNat 64 N)]) M2
-            (fun a => sp.toNat + 16 ≤ a ∧ a < sp.toNat + 24) :=
-          Frame.store M2 _ fun b h1 h2 => by rw [eo 16 (by omega)] at h1 h2; exact ⟨h1, h2⟩
-        refine hk _ _ (by rsimp) (by rsimp; exact h2w.down.symm) (by rsimp) (fun x hx => ?_) ?_ ?_
-        · simp only [vfpSaved, List.mem_cons, List.not_mem_nil, or_false] at hx
-          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
-            (rw [ek _ (by decide)]; rsimp; first | rfl | (simp only [f9, f18, f19, f21, f23, f24, f25, f26, f27]; exact E.keep _ (by decide)))
-
-        · refine ((hFrO.mono fun a h => ?_).trans (hfr2.mono fun a h => ?_)).trans (hst.mono fun a h => ?_)
-          · unfold OuterReg; omega
-          · unfold OuterReg; unfold SbpReg at h
-            rcases h with ⟨h1, h2⟩ | h | h
-            · exact .inl ⟨by rw [Nat.sub_sub] at h1; exact h1, by omega⟩
-            · exact .inr (.inl h)
-            · exact .inr (.inr h)
-          · unfold OuterReg; omega
-        · rw [ldv_lh_miss _ _ (.inl (by rw [eo 16 (by omega)]; omega))]; exact hfl2))
+        refine hk _ _ ?_ ?_ ?_ ?_ (((hFrO.mono ?_).trans (hfr2.mono ?_)).trans (Frame.store M2 _ ?_)) ?_
+        all_goals first | region_close | carry_close [h2w.down, ek, f9, f18, f19, f21, f23, f24, f25, f26, f27,
+          E.keep, hfl2]))
 
 #ix_piece vfp_outer_2 from vfp_outer_1 at 1 by vfp_tail
 

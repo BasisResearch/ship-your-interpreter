@@ -84,7 +84,6 @@ theorem vfp_mb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {
   have hea : LdOK P.toNat 1 := by unfold LdOK tohostAddr; omega
   have hDA : ∀ a ∈ accAddrs P.toNat 1, a ∈ DA := by
     intro a ha; rw [mem_accAddrs_iff] at ha; rw [show a = P.toNat by omega]; exact hPD
-  have hkeep : ∀ x ∈ mbKeep, R x = R x := fun _ _ => rfl
   nx_run hlive using [h2, h9, h25, hmx, hmb, BitVec.add_assoc] at 2147558004
   refine (step% itD 0x80012274) hlive ?_ ?_ ?_
   all_goals simp (config := {failIfUnchanged := false}) only [upd_apply, Nat.reduceEqDiff, ite_true,
@@ -98,7 +97,7 @@ theorem vfp_mb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem} {
   any_goals exact hea
   any_goals exact hDA
   nx_run hlive using [h2, h9, h25, hmx, hmb, BitVec.add_assoc] at 2147527128
-  refine hk _ (fun e => ?_) (fun e => ?_) (by keep_chain hkeep)
+  refine hk _ (fun e => ?_) (fun e => ?_) (by carry_close)
   · subst e; rsimp; rw [show BitVec.zeroExtend 64 (0#8) = 0#64 by decide]; exact snez_zero
   · rsimp; exact snez_one fun h => zext8_ne e (h.trans (by decide))
 
@@ -156,8 +155,7 @@ theorem vfp_scan (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {s sp : Bi
       fun R1 h25' hk1 => ?_
     have hsp : 0x80100000 ≤ sp.toNat := by omega
     refine vfp_scan hlive hs1 hs2 hs3 hs4 hal bs (P + 1#64) R1 _ (by rw [eP]; exact hF.tail)
-      (fun c hc => hbs c (List.mem_cons_of_mem _ hc)) ((hk1 2 (by decide)).trans h2)
-      ((hk1 9 (by decide)).trans h9) ((hk1 19 (by decide)).trans h19) h25'
+      (fun c hc => hbs c (List.mem_cons_of_mem _ hc)) (keep_eq hk1 h2) (keep_eq hk1 h9) (keep_eq hk1 h19) h25'
       (hL.mb _ hsp (by omega)) fun R' Mt' e25 hk' hL' hfr => ?_
     refine hk R' Mt' ?_ (fun x hx => (hk' x hx).trans (hk1 x hx)) hL'
       ((mb_frame Mt sp _ (by omega)).trans hfr)

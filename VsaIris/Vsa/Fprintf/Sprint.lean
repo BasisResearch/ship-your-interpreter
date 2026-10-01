@@ -93,18 +93,7 @@ theorem sprint_run (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
       ((Frame.refl _ _).snoc fun b h1 h2 => by rw [hU16] at h1 h2; omega).snoc fun b h1 h2 => by
         rw [hU8] at h1 h2; omega
     refine hk _ _ out pend' hrel ?_ (hF'.frame_out hFs (by omega) fun b hb => by omega) ?_ ?_
-    · refine retOK_of (by rsimp; exact rk10) ?_
-      intro x hx h32 h10' hc
-      simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
-      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-        rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      all_goals first
-        | (exfalso; simp at hc; done)
-        | (exfalso; simp at h32; done)
-        | (exfalso; simp at h10'; done)
-        | (rsimp; done)
-        | (rsimp; exact h2.symm)
-        | (rsimp; simp only [rk8, rk9, rk18, rk19, rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27] <;> rsimp)
+    · exact retOK_of (by rsimp; exact rk10) (by ret_keep)
     · refine (hFro.mono fun a h => .inr (.inl h)).trans ((hFr'.mono fun a h => .inl (by rw [hsp] at h; exact h)).trans
         (hFs.mono fun a h => by
           unfold SprintReg SfvCallReg LoopReg; omega))
