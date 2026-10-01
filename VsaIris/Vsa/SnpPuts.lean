@@ -1,6 +1,7 @@
 import VsaIris.Vsa.SnpMove
 import VsaIris.Interp.LoopArgs
 import Vsa.Sim.PinW
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -143,23 +144,16 @@ theorem ssp_B {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : 
         (writeLog (writeLog Mt' [(fp + 12, 4, BitVec.ofNat 64 (w - min len w))])
           [(fp, 8, BitVec.ofNat 64 (p + min len w))])) :
     SnpW live Dt DA (snpS s dst n) Q 0x800143a0#64 R Mt := by
-  have n11 : (R 11).toNat = fp := by rw [h11]; simp only [BitVec.toNat_ofNat]; omega
   have n13 : (R 13).toNat = len := by rw [h13]; simp only [BitVec.toNat_ofNat]; omega
   have n9 : (R 9).toNat = w := by rw [h9]; simp only [BitVec.toNat_ofNat]; omega
-  have hpp' : ldv .ld Mt (BitVec.ofNat 64 fp).toNat = BitVec.ofNat 64 p := by
-    rw [toNat_ofNat_lt (by omega)]; exact hpp
-  have hfl' : ldv .lh Mt (BitVec.ofNat 64 (fp + 16)).toNat = 0x208#64 := by
-    rw [toNat_ofNat_lt (by omega)]; exact hfl
+  have hpp' : ldv .ld Mt (BitVec.ofNat 64 fp).toNat = BitVec.ofNat 64 p := by carry_close [hpp]
+  have hfl' : ldv .lh Mt (BitVec.ofNat 64 (fp + 16)).toNat = 0x208#64 := by carry_close [hfl]
   snp_run hlive using [ofNat_add_ofNat, h2, h9, h11, h12, h13, hpp', hfl'] at 0x800143b8
-  all_goals rename_i hb
   all_goals (
     refine ssp_call hlive sp fp p src (min len w) w g ra s0 s1 _ Mt hsp1 hsp2 hsp8 hs hs1 hfp1 hfp2
       hfp8 hfps G hpf hps ?_ ?_ ?_ ?_ ?_ (Nat.min_le_right _ _) hw31 hw hpp hra hs0 hs1' hal hwin
-      (fun R' Mt' h10' h2' h8' h9' hkp hcp => hk R' Mt' h10' h2' h8' h9' (fun z hz1 hz2 =>
-        (hkp z hz1 hz2).trans (by simp only [upd_apply, show z ≠ 9 by omega, show z ≠ 10 by omega,
-          show z ≠ 14 by omega, show z ≠ 15 by omega, show z ≠ 8 by omega, show z ≠ 1 by omega,
-          show z ≠ 11 by omega, show z ≠ 12 by omega, show z ≠ 2 by omega, show z ≠ 17 by omega,
-          show z ≠ 13 by omega, show z ≠ 16 by omega, show z ≠ 5 by omega, ite_false])) hcp)
+      (fun R' Mt' h10' h2' h8' h9' hkp hcp => hk R' Mt' h10' h2' h8' h9'
+        (fun z hz1 hz2 => (hkp z hz1 hz2).trans (by carry_close)) hcp)
     all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
     all_goals first
       | exact h2

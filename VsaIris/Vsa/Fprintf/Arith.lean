@@ -35,11 +35,9 @@ theorem udiv_sw (hlive : ∀ p ∈ interpText, live p.1) (hsub : ∀ p ∈ inter
     (hk : ∀ R', (R' 10).toNat = n.toNat / d.toNat → (R' 11).toNat = n.toNat % d.toNat →
       DivKeep R' R → SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t r R' Mt) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x800046ac#64 R Mt :=
-  swpo_bridge (C := fun pc' R' Mt' => pc' = r ∧ Mt' = Mt ∧ (R' 10).toNat = n.toNat / d.toNat ∧
-      (R' 11).toNat = n.toNat % d.toNat ∧ DivKeep R' R)
-    (interpText_sub hsub)
-    (fun _ hk' => udiv_iw hlive n d r R Mt hd h10 h11 hr hal fun R' h1 h2 h3 => hk' r R' Mt ⟨rfl, rfl, h1, h2, h3⟩)
-    (fun pc' R' Mt' ⟨e1, e2, h1, h2, h3⟩ => by subst e1 e2; exact hk R' h1 h2 h3)
+  swp_host_out (fun p hp => List.mem_append_right _ (hsub p (arith_interp p hp)))
+    (udivH (fun p hp => hlive _ (arith_interp p hp)) n d r R Mt hd h10 h11 hr hal
+      fun R' h1 h2 h3 => swp_host_in (hk R' h1 h2 h3))
 
 theorem umoddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Dt : Mem} {DA : List Nat} {S : Nat → Prop}
