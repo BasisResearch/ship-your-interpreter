@@ -47,19 +47,10 @@ theorem umoddi3_iw {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1
     (Mt : Mem) (hd : d ≠ 0#64) (h10 : R 10 = n) (h11 : R 11 = d) (hr : R 1 = r)
     (hal : r.toNat % 4 = 0)
     (hk : ∀ R', (R' 10).toNat = n.toNat % d.toNat → SDivKeep R' R → IW live Dt DA S Q r R' Mt) :
-    IW live Dt DA S Q 0x800046f4#64 R Mt := by
-  refine (step% it 0x800046f4) hlive ?_
-  refine iw_jal 0x800046f8 _ _ ((step% jalx 0x800046f8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
-    (interp_code (by decide)) rfl ?_
-  refine udiv_iw hlive n d 0x800046fc#64 _ Mt hd (by rsimp; exact h10) (by rsimp; exact h11) (by rsimp)
-    (by decide) (fun R' _ hm hkp => ?_)
-  have h5 : R' 5 = r := by
-    rw [hkp 5 (by decide) (by decide) (by decide) (by decide)]; rsimp; rw [sx0, BitVec.add_zero]; exact hr
-  refine (step% it 0x800046fc) hlive ((step% it 0x80004700) hlive (by rsimp; rw [h5]; exact hal) ?_)
-  rsimp; rw [h5]
-  refine hk _ (by rsimp; rw [sx0, BitVec.add_zero]; exact hm) (fun z h1 h5' h10' h11' h12 h13 => ?_)
-  rsimp; simp only [h10', ite_false]
-  rw [hkp z h10' h11' h12 h13]; rsimp; simp only [h1, h5', ite_false]
+    IW live Dt DA S Q 0x800046f4#64 R Mt :=
+  swp_host_out (fun p hp => List.mem_append_left _ (arith_interp p hp))
+    (umodH (fun p hp => hlive _ (arith_interp p hp)) n d r R Mt hd h10 h11 hr hal
+      fun R' h1 h2 => swp_host_in (hk R' h1 h2))
 
 theorem umoddi3_sw (hlive : ∀ p ∈ interpText, live p.1) (hsub : ∀ p ∈ interpText, p ∈ dataOf Dt DA)
     (n d r : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) (hd : d ≠ 0#64) (h10 : R 10 = n)
