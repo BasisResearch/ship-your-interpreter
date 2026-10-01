@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.InnerS
+import VsaIris.Interp.SymFront
 
 namespace VsaIris.Sym.Fp
 
@@ -69,7 +70,7 @@ theorem sbprintf_tail {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
       R' 8 = C 8 → R' 9 = C 9 → R' 18 = C 18 → (∀ x ∈ [19, 20, 21, 22, 23, 24, 25, 26, 27], R' x = R x) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R' M) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000de80#64 R M := by
-  nx_win sp 2048 0; nx_run hlive using [h2, h10, h9, hfl, hs_ra, hs_s0, hs_s1, hs_s2, BitVec.add_assoc]
+  nx_win sp 2048 0; xrun hlive using [h2, h10, h9, hfl, hs_ra, hs_s0, hs_s1, hs_s2, BitVec.add_assoc]
   refine hk _ (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) fun x hx => ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp
@@ -178,7 +179,7 @@ local macro "sb_finish" : tactic => `(tactic| (
   have k18 : R1 18 = 0x8001b538#64 := by rw [ekeep 18 (by decide)]; rsimp; exact f18
   have hNt : ((0#64).toInt ≤ (BitVec.ofNat 64 N).toInt) = True :=
     eq_true (by rw [toInt_ofNat_small (by omega), toInt_ofNat_small (by omega)]; omega)
-  nx_run hlive using [e2, e1, e10, k18, hNt, BitVec.add_assoc] at 2147544524
+  xrun hlive using [e2, e1, e10, k18, hNt, BitVec.add_assoc] at 2147544524
   have ef24 : (sp + 24#64).toNat = sp.toNat + 24 := eo 24 (by omega)
   have hB0 : sp + 24#64 + 184#64 ≠ 0#64 := fun h => by
     have := congrArg BitVec.toNat h; rw [toNat_add_lit (by rw [ef24]; omega), ef24] at this; simp at this

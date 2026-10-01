@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.ScanTo
+import VsaIris.Interp.SymFront
 
 namespace VsaIris.Sym.Fp
 
@@ -46,7 +47,7 @@ theorem vfp_printH (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b8c4#64 R Mt := by
   nx_win sp 1024 592; have h2 := hP.spR
   have hre := hP.reent; have hfi := hP.file
-  nx_run hlive using [h2, hre, hfi] at 2147543244
+  xrun hlive using [h2, hre, hfi] at 2147543244
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk =>
     sp_lit (by omega)
   refine hS _ (by rsimp; exact h2) (by rsimp) (by rsimp) (by rsimp) (by rsimp)
@@ -56,7 +57,7 @@ theorem vfp_printH (hlive : ∀ p ∈ stdioText, live p.1) {Post : List (BitVec 
   have l32 : ldv .ld M' (sp + 32#64).toNat = 0#64 := H.z32.trans hz32
   have k2 : R' 2 = sp := by rw [rk2]; exact h2
   rsimp
-  nx_run hlive using [k2, rk10, l32, BitVec.add_assoc] at 2147527088
+  xrun hlive using [k2, rk10, l32, BitVec.add_assoc] at 2147527088
   refine hk _ _ out hpost ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rsimp; exact k2
   · rsimp; rw [rk9]; exact hP.s1

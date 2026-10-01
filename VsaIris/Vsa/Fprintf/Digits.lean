@@ -2,6 +2,7 @@ import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Scan
 import VsaIris.Vsa.Fprintf.Arith
 import Vsa.Sim.SnprintfSpec
+import VsaIris.Interp.SymFront
 
 namespace VsaIris.Sym.Fp
 
@@ -89,7 +90,7 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   | ind n ih =>
   intro D R Mt hn hD1 hD2 h2 h20 h22 h27 hk
   have hL1 := digBytes_pos n
-  nx_run hlive using [h2, h22, h27, h20] at 2147501812
+  xrun hlive using [h2, h22, h27, h20] at 2147501812
   refine umoddi3_sw hlive' hsub (BitVec.ofNat 64 n) 10#64 0x8000ca8c#64 _ Mt (by decide) (by rsimp)
     (by rsimp) (by rsimp) (by decide) fun R1 hm hk1 => ?_
   have hm' : R1 10 = BitVec.ofNat 64 (n % 10) := BitVec.eq_of_toNat_eq (by rw [hm]; simp; omega)
@@ -107,7 +108,7 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     rw [toNat_add_neg (k := 18446744073709551615) (by omega) (by rw [hDn]; omega), hDn,
       BitVec.toNat_ofNat]
     have := sp.isLt; omega
-  nx_run hlive using [k2, k20, k22, k27, hm', eD, digit_word (n % 10) (Nat.mod_lt _ (by decide))]
+  xrun hlive using [k2, k20, k22, k27, hm', eD, digit_word (n % 10) (Nat.mod_lt _ (by decide))]
     at 2147501740
   refine udiv_sw hlive' hsub (BitVec.ofNat 64 n) 10#64 0x8000ca6c#64 _ _ (by decide) (by rsimp)
     (by rsimp) (by rsimp) (by decide) fun R2 hq _ hk2 => ?_
@@ -136,7 +137,7 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   by_cases h9 : n ≤ 9
   ·
     have hb : ((BitVec.ofNat 64 n).toNat ≤ (9#64).toNat) = True := eq_true (by rw [hnn]; exact h9)
-    nx_run hlive using [n2, n20, n22, m25, hq', hb] at 2147535488 2147535544
+    xrun hlive using [n2, n20, n22, m25, hq', hb] at 2147535488 2147535544
     have hL := digBytes_small n (by omega)
     refine hk _ _ ?_ hkp hFr fun i hi => ?_
     · rsimp; rw [hL, List.length_singleton]; exact m25
@@ -149,7 +150,7 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
 
   ·
     have hb : ((BitVec.ofNat 64 n).toNat ≤ (9#64).toNat) = False := eq_false (by rw [hnn]; exact h9)
-    nx_run hlive using [n2, n20, n22, m25, hq', hb] at 2147535488 2147535544
+    xrun hlive using [n2, n20, n22, m25, hq', hb] at 2147535488 2147535544
     have hn10 : n / 10 < n := by omega
     have hL := digBytes_step n (by omega)
     have hLl : (digBytes n).length = (digBytes (n / 10)).length + 1 := by rw [hL]; simp

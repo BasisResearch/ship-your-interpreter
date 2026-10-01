@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Outer
+import VsaIris.Interp.SymFront
 
 namespace VsaIris.Sym.Fp
 
@@ -32,7 +33,7 @@ theorem fprintf_wrap (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800061c0#64 R Mt := by
   nx_win sf 1024 80; have e : sf + 80#64 + 18446744073709551536#64 = sf := by rw [BitVec.add_assoc]; simp
   have eo : ∀ k : Nat, k ≤ 100 → (sf + BitVec.ofNat 64 k).toNat = sf.toNat + k := fun k hk => sp_lit (by omega)
-  nx_run hlive using [h2, e, himp, BitVec.add_assoc] at 2147526788
+  xrun hlive using [h2, e, himp, BitVec.add_assoc] at 2147526788
   refine hO _ _ (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) ?_ (by nx_mem)
     fun R1 M1 e10 e2 e1 ek hfr1 hfl1 => ?_
   · repeat (refine Frame.snoc ?_ ?_)
@@ -48,7 +49,7 @@ theorem fprintf_wrap (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
   have l24 : ldv .ld M1 (sf + 24#64).toNat = R 1 := by
     rw [hfr1.ldv .ld hn]
     nx_mem
-  nx_run hlive using [e2, e10, l24, BitVec.add_assoc]
+  xrun hlive using [e2, e10, l24, BitVec.add_assoc]
   refine hk _ _ (retOK_of (by rsimp; exact e10) fun x hx h32 h10 hc => ?_) ?_ ?hfl
   · simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
     rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |

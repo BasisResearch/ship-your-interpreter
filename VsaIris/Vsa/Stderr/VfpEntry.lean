@@ -2,6 +2,7 @@ import VsaIris.Vsa.Stderr.StrCodeStdio
 import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Vsa.Stderr.Mt
 import VsaIris.Vsa.SymCompactTac
+import VsaIris.Interp.SymFront
 
 namespace VsaIris.Sym
 
@@ -58,7 +59,7 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
     (hk : ∀ R' Mt', VfpEntry R R' Mt Mt' (R 2 - 592#64) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a8d0#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt by
-  nx_run [30] hlive using [h1, h10, h11, h12, h13, hdec] at 0x80006cf0
+  xrun [30] hlive using [h1, h10, h11, h12, h13, hdec] at 0x80006cf0
   refine Fp.strlen_sw (dot_lctx (fun p hp => hlive _ (strCode_stdio p hp)) hdv.1 hdv.2)
     (fun p hp => ?_) (by nx_norm) (by nx_norm) (fun v => ?_)
   · rcases List.mem_append.1 hp with h | h
@@ -71,7 +72,7 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
       rcases (show k = 0 ∨ k = 1 by omega) with rfl | rfl
       · exact hdA.1
       · exact hdA.2
-  nx_run [14] hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
+  xrun [14] hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
 
 #ix_piece vfpEntry_02 from vfpEntry_01 by
   nx_runB hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
