@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Inner
 import VsaIris.Vsa.Stderr.VfpEntry
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -76,12 +77,8 @@ theorem vfp_begin (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
   have e20 : R2 20 = f := (k2 20 (by decide)).trans (E.s4.trans h11)
   have e22 : R2 22 = P := (k2 22 (by decide)).trans (E.s6.trans h12)
   have HL := H.loop; rw [e8, e20, e22] at HL
-  refine hk R3 Mt3 ⟨HL, vfpSpills_of E H (fun x hx => by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      exact (k2 _ (by decide)).trans (E.keep _ (by decide))) (by omega),
-    hFrE.trans (H.frame.mono fun a h => by unfold HeadReg at h; omega),
-    (H.frame.ldv .ld fun j hj h => by simp only [widthOfM] at hj; unfold HeadReg at h; omega).trans E.ap⟩
+  refine hk R3 Mt3 ⟨HL, vfpSpills_of E H (by carry_close [k2, E.keep]) (by omega),
+    hFrE.trans (H.frame.mono (by region_close)), by carry_close [H.frame.ldv, E.ap]⟩
 
 theorem lldCnt_eq (v : BitVec 64) :
     lldCnt (lldSign v) (digBytes (lldMag v).toNat) = (lldBytes v).length := by

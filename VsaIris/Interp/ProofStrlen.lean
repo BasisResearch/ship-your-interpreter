@@ -52,8 +52,7 @@ theorem strlen_spec_env (live : Nat → Prop) (hcl : CodeLive live)
   iintro %rv' %mv' %⟨h32, h1, h10⟩ Hregs -
   ihave ⟨Hpc, Hra, Ha0, Ht⟩ := sRegs_out rv' $$ Hregs
   ihave Ht := clobbered_of_fn leafTemps rv' $$ Ht
-  ihave Hcl := (clobbered_split retClob_perm).2 $$ [Ht Hrest]
-  · iframe Ht Hrest
+  ihave Hcl := (clobbered_split retClob_perm).2 $$ [$]
   ihave Hpc := reg_eq h32 $$ Hpc
   ihave Hra := reg_eq h1 $$ Hra
   ihave Ha0 := reg_eq (b := BitVec.ofNat 64 x.length) (h10.trans rfl) $$ Ha0

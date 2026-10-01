@@ -36,16 +36,6 @@ def EnvValid (st : Vsa.While.St) (env : Addr) : Prop :=
 
 namespace EnvValid
 
-theorem mono {st st' : Vsa.While.St} {env : Addr}
-    (h : EnvValid st env)
-    (hframes : st.store.frames.size ≤ st'.store.frames.size) :
-    EnvValid st' env :=
-  Nat.lt_of_lt_of_le h hframes
-
-theorem init : EnvValid Vsa.While.initSt 0 := by
-  unfold EnvValid
-  decide
-
 end EnvValid
 
 abbrev AbiPreservedNoise (R : Register) : Prop :=
@@ -57,14 +47,6 @@ abbrev AbiPreservedNoise (R : Register) : Prop :=
 
 def PhiExtends (φ φ' : Addr → Nat) (n : Nat) : Prop :=
   ∀ a, a < n → φ' a = φ a
-
-theorem PhiExtends.trans {φ φ' φ'' : Addr → Nat} {n : Nat}
-    (h1 : PhiExtends φ φ' n) (h2 : PhiExtends φ' φ'' n) : PhiExtends φ φ'' n :=
-  fun a ha => (h2 a ha).trans (h1 a ha)
-
-theorem PhiExtends.mono {φ φ' : Addr → Nat} {n m : Nat} (hnm : n ≤ m)
-    (h : PhiExtends φ φ' m) : PhiExtends φ φ' n :=
-  fun a ha => h a (Nat.lt_of_lt_of_le ha hnm)
 
 def InterpCodeLoaded (m : Mem) : Prop :=
   Eval_exprLoaded m
@@ -149,48 +131,6 @@ structure EvalCallSupport (m : Mem) (SL : StackLayout) (A : Arena)
     (∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) →
       InterpCodeLoaded m' ∧ Value_intLoaded m' ∧ Value_truthyLoaded m' ∧
       IntSlotPinned m' ∧ NBSPins m' ∧ KindTablePins m'
-
-theorem EvalCallSupport.table_stack {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
-    jumpTableBase + 44 ≤ SL.lo ∨ SL.hi ≤ jumpTableBase :=
-  (h.image.stack_disjoint (by decide) (by decide)).symm
-
-theorem EvalCallSupport.code_stack {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
-    SL.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo :=
-  h.image.stack_disjoint (by decide) (by decide)
-
-theorem EvalCallSupport.vi_stack {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
-    (0x8000285c : Nat) ≤ SL.lo ∨ SL.hi ≤ 0x800027ec :=
-  (h.image.stack_disjoint (by decide) (by decide)).symm
-
-theorem EvalCallSupport.arena_code {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
-    A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo :=
-  h.image.arena_disjoint (by decide) (by decide)
-
-theorem EvalCallSupport.arena_vi {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
-    A.hi ≤ 0x800027ec ∨ 0x8000285c ≤ A.lo :=
-  h.image.arena_disjoint (by decide) (by decide)
-
-theorem EvalCallSupport.transport {m m' : Mem} {SL : StackLayout}
-    {A : Arena} {sp sp' : BitVec 64}
-    (h : EvalCallSupport m SL A sp)
-    (hag : ∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) :
-    EvalCallSupport m' SL A sp' where
-  image := h.image.transport hag
-  pins := by
-    intro m'' hm''
-    apply h.pins
-    intro k hk
-    exact (hm'' k hk).trans (hag k hk)
-
-theorem EvalCallSupport.outsideStack {m : Mem} {SL : StackLayout} {A : Arena}
-    {sp : BitVec 64} (h : EvalCallSupport m SL A sp)
-    {k : Nat} (hk : EvalCallFootprint k) : ¬ (SL.lo ≤ k ∧ k < SL.hi) :=
-  h.image.outsideStack hk
 
 structure EvalGround (m : Mem) (SL : StackLayout) (A : Arena)
     (sp sret : BitVec 64) (aExpr : Nat) (e : Vsa.While.Expr) : Prop where

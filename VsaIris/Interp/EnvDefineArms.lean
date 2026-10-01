@@ -369,8 +369,7 @@ theorem def_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   unfold defK
   ihave Kab := and_elim_r $$ HK
   iapply Kab
-  isplitl []
-  · ipureintro; exact hρ
+  isplitl []; ipureintro; exact hρ
   isplitl [Hpc Hsp Hcl Hscr Hstk Hh]
   · unfold oomAt
     iframe Hpc Hsp Hcl
@@ -446,8 +445,7 @@ theorem def_hit (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   ihave ⟨HB, Hst⟩ := frame_write_close N (st := st) (st' := st.define fa C.x C.v) (fa := fa)
     (f := f) (img := img) (B₁ := B₁) (B₂ := B₂) (x := C.x) (v := C.v) hdisj hF.lay hF.img
     hF.sepOut hF.slot hco hlt (by rw [hvj])
-    ⟨rfl, define_hit_frames hinv hf hj, hinv.define st fa C.x C.v⟩ $$ [HS Hclose]
-  · iframe HS Hb Hp HGe Hclose Hv
+    ⟨rfl, define_hit_frames hinv hf hj, hinv.define st fa C.x C.v⟩ $$ [$]
   have hstk1 : DefStack C.s.toNat C.r (pairVal C.saved) R1 Mt1 :=
     hF.stack.congr (hk1 2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide))
       (fun a h1 h2 => hco.frame a (by
@@ -518,11 +516,9 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iintro %pc1 %R1 %Mt1 %⟨rfl, rfl, h10, hk1⟩ Hpc HR HS
   iapply wp_call_strlen Wp (i := 0x80002b20)
     ((step% jalx 0x80002b20) live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide) (R := R1) (x := C.x)
-  isplitl []
-  · iapply instrAt_of_text (env_code (by decide)) $$ Ht
+  isplitl []; iapply instrAt_of_text (env_code (by decide)) $$ Ht
   iframe Hsl Hpc HR
-  isplitl []
-  · rw [h10, hR.name]; iexact Hx
+  isplitl []; rw [h10, hR.name]; iexact Hx
   iintro %R2 %⟨hlen, -, hk2⟩ Hpc HR
   rw [show BitVec.ofNat 64 (0x80002b20 + 4) = 0x80002b24#64 from rfl]
 
@@ -544,8 +540,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   iapply wp_call_malloc A Wp (i := 0x80002b2c) (R := R3)
     ((step% jalx 0x80002b2c) live fun p hp => hl _ ((env_code (by decide)) p hp)) (by decide) ρ H
     (nameCopyCost C.x) (by rw [hn1]; exact ⟨by omega, Nat.le_refl _⟩) (def_spOK hC h32)
-  isplitl []
-  · iapply instrAt_of_text (env_code (by decide)) $$ Ht
+  isplitl []; iapply instrAt_of_text (env_code (by decide)) $$ Ht
   iframe Hat Hgp Hpc HR Hscr Hh
   iintro %R4 %p %⟨h10p, -, hk4⟩ Hpc HR Hscr Hres
   rw [show BitVec.ofNat 64 (0x80002b2c + 4) = 0x80002b30#64 from rfl, hn1]
@@ -575,9 +570,7 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   have hphi' : p.toNat + (C.x.length + 1) ≤ Vsa.Sim.DlHeap.heapEnd := hphi
   unfold Vsa.Sim.DlHeap.heapStart at hplo'; unfold Vsa.Sim.DlHeap.heapEnd at hphi'
   have e5 : ∀ k, k = 2 ∨ k = 8 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R5 k = R4 k :=
-    fun k hk => hk5 k (by rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
-      (by rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
-      (by rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
+    fun k hk => by rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> exact hk5 _ (by decide) (by decide) (by decide)
   have hp10 : (R5 10).toNat = p.toNat := by
     rw [hk5 10 (by decide) (by decide) (by decide), h10p]
   have hpn11 : R5 11 = C.pn := by rw [h11, e4 18 (by omega), e2 18 (by omega), hR.name]
@@ -594,13 +587,9 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     ⟨by rw [hp10]; omega, by rw [hp10]; omega, by rw [hp10]; unfold htifLo; omega⟩
     (by rw [hp10]; unfold htifLo; omega)
     ⟨by rw [hpn11]; omega, by rw [hpn11]; omega, by rw [hpn11]; unfold htifLo at hxht ⊢; omega⟩
-  isplitl []
-  · iapply instrAt_of_text (env_code (by decide)) $$ Ht
+  isplitl []; iapply instrAt_of_text (env_code (by decide)) $$ Ht
   iframe Hmc Hpc HR
-  isplitl [Hblk]
-  · rw [hp10]; iexact Hblk
-  isplitl []
-  · rw [hpn11, hlenx]; iexact Hro
+  isplitl [Hblk]; rw [hp10]; iexact Hblk; isplitl []; rw [hpn11, hlenx]; iexact Hro
   iintro %R6 %⟨h10c, -, hk6⟩ Hpc HR Hcopy
   rw [show BitVec.ofNat 64 (0x80002b40 + 4) = 0x80002b44#64 from rfl, hp10, hpn11]
 
@@ -703,33 +692,23 @@ theorem def_append (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     iframe HF Hb'' Hp
     ipureintro; exact hlay'
 
+  have hfr : ∀ {P : Nat → Prop}, (∀ a, frameS G' a → P a) →
+      P (G'.pn + 8 * f.vars.length) ∧ P (G'.pn + 8 * f.vars.length + 7) ∧
+      P (G'.pv + 24 * f.vars.length) ∧ P (G'.pv + 24 * f.vars.length + 23) ∧ P G'.e ∧
+      P (G'.e + 3) := fun h => by
+    refine ⟨h _ ?_, h _ ?_, h _ ?_, h _ ?_, h _ ?_, h _ ?_⟩ <;> unfold frameS <;> first
+      | (left; unfold InExt; omega)
+      | (right; refine ⟨by omega, .inl ?_⟩; rw [hna]; unfold InExt; simp only; omega)
+      | (right; refine ⟨by omega, .inr ?_⟩; rw [hva]; unfold InExt; simp only; omega)
   have hs7 : ∀ a, C.s.toNat - 64 ≤ a → a < C.s.toNat → imgM Mt7 a = imgM Mt5 a := fun a h1 h2 => by
-    have hn := hR.sepStk (G'.pn + 8 * f.vars.length) (by
-      unfold frameS; right; refine ⟨by omega, .inl ?_⟩; rw [hna]; unfold InExt; simp only; omega)
-    have hv := hR.sepStk (G'.pv + 24 * f.vars.length) (by
-      unfold frameS; right; refine ⟨by omega, .inr ?_⟩; rw [hva]; unfold InExt; simp only; omega)
-    have he := hR.sepStk G'.e (by unfold frameS InExt; left; omega)
-    have hn' := hR.sepStk (G'.pn + 8 * f.vars.length + 7) (by
-      unfold frameS; right; refine ⟨by omega, .inl ?_⟩; rw [hna]; unfold InExt; simp only; omega)
-    have hv' := hR.sepStk (G'.pv + 24 * f.vars.length + 23) (by
-      unfold frameS; right; refine ⟨by omega, .inr ?_⟩; rw [hva]; unfold InExt; simp only; omega)
-    have he' := hR.sepStk (G'.e + 3) (by unfold frameS InExt; left; omega)
+    obtain ⟨hn, hn', hv, hv', he, he'⟩ := hfr hR.sepStk
     exact hout.frame a (by unfold InExt; omega) (by unfold InExt; omega) (by unfold InExt; omega)
   have hstk7 : DefStack C.s.toNat C.r (pairVal C.saved) R7 Mt7 :=
     hR.stack.congr (by
       rw [hk7 2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
         (by decide), e6 2 (by omega)]) (fun a h1 h2 => hs7 a h1 h2) hs64
   have hslot7 : ∀ a, C.vp.toNat ≤ a → a < C.vp.toNat + 24 → imgM Mt7 a = C.so a := fun a h1 h2 => by
-    have hn := hR.sepOut (G'.pn + 8 * f.vars.length) (by
-      unfold frameS; right; refine ⟨by omega, .inl ?_⟩; rw [hna]; unfold InExt; simp only; omega)
-    have hv := hR.sepOut (G'.pv + 24 * f.vars.length) (by
-      unfold frameS; right; refine ⟨by omega, .inr ?_⟩; rw [hva]; unfold InExt; simp only; omega)
-    have he := hR.sepOut G'.e (by unfold frameS InExt; left; omega)
-    have hn' := hR.sepOut (G'.pn + 8 * f.vars.length + 7) (by
-      unfold frameS; right; refine ⟨by omega, .inl ?_⟩; rw [hna]; unfold InExt; simp only; omega)
-    have hv' := hR.sepOut (G'.pv + 24 * f.vars.length + 23) (by
-      unfold frameS; right; refine ⟨by omega, .inr ?_⟩; rw [hva]; unfold InExt; simp only; omega)
-    have he' := hR.sepOut (G'.e + 3) (by unfold frameS InExt; left; omega)
+    obtain ⟨hn, hn', hv, hv', he, he'⟩ := hfr hR.sepOut
     rw [hout.frame a (by unfold InExt; omega) (by unfold InExt; omega) (by unfold InExt; omega)]
     exact hslot5 a h1 h2
   rw [def_sp hC h32]

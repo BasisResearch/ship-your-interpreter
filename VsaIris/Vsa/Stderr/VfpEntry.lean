@@ -2,6 +2,8 @@ import VsaIris.Vsa.Stderr.StrCodeStdio
 import VsaIris.Vsa.Fprintf.Tac
 import VsaIris.Vsa.Stderr.Mt
 import VsaIris.Vsa.SymCompactTac
+import VsaIris.Interp.SymFront
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -58,7 +60,7 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
     (hk : ∀ R' Mt', VfpEntry R R' Mt Mt' (R 2 - 592#64) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a8d0#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt by
-  nx_run [30] hlive using [h1, h10, h11, h12, h13, hdec] at 0x80006cf0
+  xrun [30] hlive using [h1, h10, h11, h12, h13, hdec] at 0x80006cf0
   refine Fp.strlen_sw (dot_lctx (fun p hp => hlive _ (strCode_stdio p hp)) hdv.1 hdv.2)
     (fun p hp => ?_) (by nx_norm) (by nx_norm) (fun v => ?_)
   · rcases List.mem_append.1 hp with h | h
@@ -71,7 +73,7 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
       rcases (show k = 0 ∨ k = 1 by omega) with rfl | rfl
       · exact hdA.1
       · exact hdA.2
-  nx_run [14] hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
+  xrun [14] hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
 
 #ix_piece vfpEntry_02 from vfpEntry_01 by
   nx_runB hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
@@ -85,24 +87,14 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
   have hsp : (R 2 - 592#64).toNat = (R 2).toNat - 592 := toNat_sub_lit (by decide) (by omega)
   refine hk _ _ ⟨?gsp, ?gs0, ?gs4, ?gs6, ?gkeep, ?gframe, ?gra, ?gs0v, ?gs4v, ?gs6v, ?gap, ?gdec,
     ?gdecLen, ?gmbs⟩
-  case gsp | gs0 | gs4 | gs6 =>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h10, h11, h12, e592]
-  case gkeep =>
-    intro x hx
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  case gframe =>
-    intro a ha
-    rw [hsp] at ha
-    simp (disch := nx_fdisch) only [imgM_store_miss]
+  case gsp | gs0 | gs4 | gs6 | gkeep => carry_close [h10, h11, h12, e592]
   case gmbs =>
     rw [hsp]
     apply ldv_ld_of_imgLE
     simp only [imgLE, Nat.add_assoc, Nat.reduceAdd]
     simp (disch := nx_fdisch) only [imgM_store_miss, imgM_store1_eq]
     simp
-  all_goals (rw [hsp]; simp (disch := nx_fdisch) only [ldv_ld_hit_eq, ldv_ld_miss, hdec, h1, h13])
+  all_goals carry_close [hsp, hdec, h1, h13, toNat_add_neg, Nat.reducePow]
 
 #ix_chain vfpEntry_run := [vfpEntry_01, vfpEntry_02, vfpEntry_03, vfpEntry_04]
 

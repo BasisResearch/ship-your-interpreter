@@ -24,6 +24,11 @@ def regFile (rv : Nat → BitVec 64) : IProp GF := sepL fRegs (fun r => r ↦ᵣ
 
 def KeepRegs (keep : List Nat) (rv rv' : Nat → BitVec 64) : Prop := ∀ x ∈ keep, rv' x = rv x
 
+theorem KeepRegs.upd {l : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs l R R') {k : Nat}
+    (hk : k ∉ l) (v : BitVec 64) : KeepRegs l R (upd R' k v) := fun x hx => by
+  have hne : x ≠ k := fun e => hk (e ▸ hx)
+  rw [upd_other _ _ hne]; exact h x hx
+
 def codeRes : IProp GF := roOwn roR interpText
 
 instance : Persistent (codeRes (GF := GF)) := by unfold codeRes; infer_instance

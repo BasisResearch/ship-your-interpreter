@@ -75,8 +75,7 @@ theorem cloDefineStepT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Str
   isplitl []
   · rw [h10]; iexact Hfr
   iintro %R' %hk Hst Hval Hh Hms
-  ihave Hst := stackScratch_widen (s := R 2) hle hn1 $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen (s := R 2) hle hn1 $$ [$]
   iapply Hk $$ %R' %hk Hst Hval [Hh Hc Hio Hi] Hms
   iframe Hfr
   iapply (world_heapStore N inp _ ⟨st.define fa x v, out⟩ (d + 1)).2
@@ -150,8 +149,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   isplitl []
   · rw [hhd.a0]; iexact Hfe
   iintro %R2 %hk2 Hst Hw #Hnew Hms
-  ihave Hst := stackScratch_widen (s := R1 2) (by rw [h2]; exact hle) hnN $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen (s := R1 2) (by rw [h2]; exact hle) hnN $$ [$]
   rw [hst', hsz, h2]
 
   have hkp : ∀ y ∈ fRegs, y ∉ 10 :: retClob →
@@ -198,8 +196,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
         world N vsaLayoutP vsaRoomB inp (.counted k) st' d -∗ PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗
         (twpW (vsaModel live)).W Φ)))
   iframe Hcode Hro Hms
-  isplitl [Hw Hst Hsr Hk]
-  · iframe Hw Hst Hsr Hk
+  iframe Hw Hst Hsr Hk
   isplit
   ·
     iintro %R4 %Mt4 %arr %count %⟨hne, hbn, hch, hat⟩ HF Hms Hslot
@@ -219,21 +216,18 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       hne List.drop_zero.symm hbn hch hfg
       (hsg.lowerE (by have := hn1; omega) hsf) hall (cloSlotGeom hfg) hat.spills hinv
     iframe Hms Hcode Hro Hnew2 Hst Hslot Hw
-    isplitl [Hsr Hk]
-    · iframe Hsr Hk
+    iframe Hsr Hk
     iintro %R5 %Mt5 %⟨hk5, h10, hinv5⟩ ⟨Hsr, Hk⟩ Hms Hst Hret Hw
     have hat5 := hat.of_keep hk5 hinv5
     rcases hst with ⟨rfl, rfl⟩ | rfl
     · rw [closureExit_normal]
       simp only [statusRet]
       iapply cloExitN hlive (twpW _) hvn hfg hsg (by have := hn1; omega) hal hsp hinpG hinpL hinpA hslg hat5
-      iframe Hcode Hms Hret Hsr Hw Hst
-      iexact Hk
+      iframe ∗ #
     · rw [closureExit_abrupt (by simp)]
       simp only [statusRet]
       iapply cloExitR hlive (twpW _) hfg hsg (by have := hn1; omega) hal hsp hinpG hinpL hinpA hslg hat5 h10
-      iframe Hcode Hms Hret Hsr Hw Hst
-      iexact Hk
+      iframe ∗ #
   ·
     iintro %R4 %Mt4 %⟨hb0, hat⟩ HF Hms Hslot
     obtain ⟨rfl, rfl, rfl⟩ := execSeqCost_nil_inv (hb0 ▸ Dseq)
@@ -241,8 +235,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     · icases HF with ⟨Hw, Hst, Hsr, Hk⟩
       rw [Nat.add_zero]
       iapply cloExitN hlive (twpW _) hvn hfg hsg (by have := hn1; omega) hal hsp hinpG hinpL hinpA hslg hat
-      iframe Hcode Hms Hslot Hsr Hw Hst
-      iexact Hk
+      iframe ∗ #
     · cases hr
 
 theorem ms_disj {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {Mt : Mem}
@@ -251,8 +244,7 @@ theorem ms_disj {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
       ms pc R S Mt ∗ ownSet T (fun a => a ↦ₘ g a) ∗ ⌜∀ a, S a → ¬ T a⌝ := by
   unfold ms
   iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, HT⟩
-  ihave ⟨⟨HS, HT⟩, %hd⟩ := keep_pure (ownSet_disj S T (imgM Mt) g) $$ [HS HT]
-  · iframe HS HT
+  ihave ⟨⟨HS, HT⟩, %hd⟩ := keep_pure (ownSet_disj S T (imgM Mt) g) $$ [$]
   iframe Hpc Hra Hregs HS HT
   ipureintro; exact hd
 
@@ -301,8 +293,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   unfold valOf
   icases Hv with ⟨%⟨hk4, hw1⟩, #Hca⟩
   ihave ⟨%B, Hs, Hcw⟩ := world_store N vsaLayoutP vsaRoomB inp _ st2 d $$ Hw
-  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [Hs Hca]
-  · iframe Hs Hca
+  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [$]
   ihave ⟨Hs, %hbod⟩ := keep_pure (storeRepr_bodies N st2.store B) $$ Hs
   ihave Hw := Hcw $$ Hs
   unfold CloRes
@@ -315,8 +306,8 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     (.counted (k + (envBytes + bindParamsCost store' frame (cd'.params.zip vs) + nb))) st2 d
   rw [show inp + interpDepthOff = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]; rfl] at hwd
   ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
-  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [Hms Hd]
-  · iframe Hms Hd
+  ieval (rewrite [hinpN]) at Hcl
+  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [$]
   have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
     refine Classical.byContradiction fun hc => ?_
     exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)
@@ -342,13 +333,8 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
       (fun x hx => by have := execNeed_callBody (f := f) (args := args) hd hbb1 hx; unfold evalFrame at this; omega)
       hal hsp hinpG hinpL hinpA hslg hi3 (by rw [← hlen] at hfn; exact hlen ▸ hfn)
       (by rw [hprt]; exact hps) (by rw [hbdt]; exact hbody) hcf.geo hcf.win hargc hhd
-    iframe Hcode Hro Hav Hms Hst Hsr
-    isplitl []
-    · rw [het]; iexact Hfe
-    isplitl [Hcl]
-    · rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
-      iexact Hcl
-    iexact Hk
+    iframe Hcode Hro Hav Hms Hst Hsr Hcl Hk
+    rw [het]; iexact Hfe
   isplit
   · iintro %R1 %Mt1 %line %⟨hne, -⟩
     exact absurd hlen.symm (by rw [← hlen] at hne; exact fun h => hne (by rw [hlen]))

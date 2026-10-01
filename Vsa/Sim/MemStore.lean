@@ -1,5 +1,6 @@
 import Vsa.Sim.Hooks
 import Vsa.Sim.Pmp
+import Vsa.Sim.MemWidth
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -9,117 +10,6 @@ set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
-
-theorem effectivePrivilege_store
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (m : BitVec 64) (p : Privilege)
-    (hmprv : _get_Mstatus_MPRV m = 0#1) :
-    (effectivePrivilege (MemoryAccessType.Store mem_payload.Data) m p).run σ
-      = .ok p σ := by
-  simp only [effectivePrivilege, bne, hmprv]
-  have hc : (MemoryAccessType.Store mem_payload.Data ==
-      (MemoryAccessType.InstructionFetch () : MemoryAccessType mem_payload)) = false := by
-    decide
-  simp [simp_sail, EStateM.run, pure, EStateM.pure, hc]
-
-theorem split_misaligned_aligned_w
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (w : Nat) (e : Nat) (s : Splittability)
-    (ha : Int.tmod (BitVec.toNatInt a) w = 0) :
-    (split_misaligned (physaddr.Physaddr a) w e s).run σ
-      = .ok (1, w) σ := by
-  simp only [split_misaligned]
-  split
-  · simp [simp_sail, EStateM.run, pure, EStateM.pure]
-  · rename_i hneg
-    exfalso
-    apply hneg
-    simp only [Bool.or_eq_true, beq_iff_eq]
-    refine Or.inr (Or.inl ?_)
-    exact_mod_cast ha
-
-open MemoryRegionType AtomicSupport Reservability misaligned_exception in
-
-theorem pmaCheck_ram_write
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (w : Nat) (wbv : BitVec 64)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hwpos : 0 < w) (hwle : w ≤ 8)
-    (hwbv : (to_bits w : BitVec 64) = wbv)
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhi : a.toNat + w ≤ 0x100000000)
-    (halign : Int.tmod (BitVec.toNatInt a) w = 0) :
-    (pmaCheck (physaddr.Physaddr a) w (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false).run σ
-      = .ok (.Ok { splittable := Splittability.CannotSplit, granule_size_exp := 0 }) σ := by
-  have hmatch : matching_pma_region_bits_range initPmaRegions
-      (zero_extend (bits_of_physaddr (physaddr.Physaddr a))) wbv
-      = some ({ base := 0x80000000#64
-                size := 0x80000000#64
-                attributes := { mem_type := MainMemory
-                                cacheable := true
-                                coherent := true
-                                executable := true
-                                readable := true
-                                writable := true
-                                read_idempotent := true
-                                write_idempotent := true
-                                misaligned_exceptions := { load_store := none
-                                                           vector := none
-                                                           amo := AccessFault }
-                                atomic_support := AMOCASQ
-                                reservability := RsrvEventual
-                                supports_cbo_zero := true
-                                supports_pte_read := true
-                                supports_pte_write := true
-                                misaligned_atomicity_granule_size_exp := 4
-                                vector_misaligned_atomicity_granule_size_exp := 4 }
-                include_in_device_tree := true } : PMA_Region) := by
-    have hz : (zero_extend (bits_of_physaddr (physaddr.Physaddr a)) : BitVec 64) = a :=
-      BitVec.setWidth_eq a
-    have hwn : wbv.toNat = w := by
-      rw [← hwbv]
-      simp only [to_bits, get_slice_int, BitVec.extractLsb', Nat.zero_add,
-        BitVec.toNat_ofInt, Nat.shiftRight_zero]
-      have hmod : ((w : Int) % ((2 ^ (64 + 1) : Nat) : Int)) = (w : Int) := by
-        rw [Int.emod_eq_of_lt (by exact_mod_cast Nat.zero_le w)]
-        have : (w : Int) < ((2 ^ (64 + 1) : Nat) : Int) := by
-          have : w < 2 ^ (64 + 1) := by omega
-          exact_mod_cast this
-        exact this
-      rw [hmod, Int.toNat_natCast, BitVec.toNat_ofNat,
-        Nat.mod_eq_of_lt (by omega)]
-    rw [hz]
-    simp only [initPmaRegions, matching_pma_region_bits_range, range_subset,
-      zopz0zIzJ_u, BitVec.toNatInt]
-    rw [if_neg, if_neg, if_pos]
-    · simp only [Bool.and_eq_true, decide_eq_true_eq]
-      refine ⟨?_, ?_, ?_⟩ <;> · apply Int.ofNat_le.mpr <;> bv_omega
-    · simp only [Bool.and_eq_true, decide_eq_true_eq]
-      rintro ⟨h1, _⟩; have := Int.ofNat_le.mp h1; bv_omega
-    · simp only [Bool.and_eq_true, decide_eq_true_eq]
-      rintro ⟨h1, _⟩; have := Int.ofNat_le.mp h1; bv_omega
-  unfold pmaCheck
-  simp only [LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
-    Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-    bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
-    ExceptT.lift, ExceptT.bindCont, Functor.map, EStateM.map,
-    EStateM.run, EStateM.bind, LeanRV64DExecutable.readReg,
-    Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hpma]
-  simp only [matching_pma_region, hwbv, pure, EStateM.pure, hmatch, override_PMA,
-    Functions.not, LeanRV64DExecutable.assert, PreSail.assert,
-    mag_pma_check, is_mag_applicable_access, is_aligned_paddr,
-    BitVec.toNatInt, ExceptT.pure, ExceptT.bindCont, ExceptT.mk,
-    EStateM.map, EStateM.bind, bind, Bind.bind,
-    Bool.not_false, Bool.not_true, Bool.false_eq_true,
-    if_false, if_true]
-  rw [if_pos]
-  · rfl
-  · simp only [Bool.or_eq_true, beq_iff_eq]
-    exact Or.inl (by exact_mod_cast halign)
 
 theorem within_mmio_writable_ram_false
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -219,13 +109,6 @@ theorem ofInt_zero_gen' (n : Nat) : (BitVec.ofInt n 0) = 0#n := by
 theorem addInt_zero_pa' (a : physaddrbits) : BitVec.addInt a (0 : Int) = a := by
   simp only [BitVec.addInt, ofInt_zero_gen', BitVec.add_zero]
 
-theorem tmod_toNatInt_of_mod (a : BitVec 64) (w : Nat) (h : a.toNat % w = 0) :
-    Int.tmod (BitVec.toNatInt a) w = 0 := by
-  simp only [BitVec.toNatInt]
-  have : ((Int.ofNat a.toNat).tmod (Int.ofNat w)) = Int.ofNat (a.toNat % w) :=
-    (Int.ofNat_tmod _ _).symm
-  rw [show (w : Int) = Int.ofNat w from rfl, this, h]; rfl
-
 theorem setWidth_extractLsb_full (w : Nat) (hw : 0 < w) (data : BitVec (8 * w))
     (hi lo : Nat) (hhi : hi = 8 * w - 1) (hlo : lo = 0) :
     BitVec.setWidth (8 * w) (Sail.BitVec.extractLsb data hi lo) = data := by
@@ -260,7 +143,7 @@ theorem checked_mem_write_w
         page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
       = .ok (.Ok true) σ' := by
   have htmod := tmod_toNatInt_of_mod a w halign
-  have hpmaC := pmaCheck_ram_write σ a w _ hpma hwpos hwle rfl hlo hhiram htmod
+  have hpmaC := pmaCheck_ram σ a w _ (Or.inr rfl) hpma hlo hhiram htmod
   have hpmp := pmp_allows σ (physaddr.Physaddr a) w
     (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
   have hmmio := within_mmio_writable_ram_false σ a w hbase hwle hlo hhiwin
@@ -294,108 +177,6 @@ theorem checked_mem_write_w
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont, Bool.true_and,
     beq_self_eq_true, if_true]
 
-theorem checked_mem_write_8
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 8))
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 8 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 8 = 0) :
-    (checked_mem_write (physaddr.Physaddr a) 8 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)).insert
-              (a.toNat + 4) (data.extractLsb' 32 8)).insert
-              (a.toNat + 5) (data.extractLsb' 40 8)).insert
-              (a.toNat + 6) (data.extractLsb' 48 8)).insert
-              (a.toNat + 7) (data.extractLsb' 56 8)) } :=
-  checked_mem_write_w σ _ a 8 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
-    hlo hhiram hhiwin halign (write_ram_8 σ a data)
-
-theorem checked_mem_write_4
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 4))
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 4 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 4 = 0) :
-    (checked_mem_write (physaddr.Physaddr a) 4 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)) } :=
-  checked_mem_write_w σ _ a 4 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
-    hlo hhiram hhiwin halign (write_ram_4 σ a data)
-
-theorem checked_mem_write_2
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 2))
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 2 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 2 = 0) :
-    (checked_mem_write (physaddr.Physaddr a) 2 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)) } :=
-  checked_mem_write_w σ _ a 2 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
-    hlo hhiram hhiwin halign (write_ram_2 σ a data)
-
-theorem checked_mem_write_1
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 1))
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 1 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat) :
-    (checked_mem_write (physaddr.Physaddr a) 1 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA Privilege.Machine () false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := σ.mem.insert a.toNat data } :=
-  checked_mem_write_w σ _ a 1 data vpmpaddr (by decide) (by decide) hpma hcfg haddr hbase
-    hlo hhiram hhiwin (Nat.mod_one _) (write_ram_1 σ a data)
-
 theorem mem_write_value_w
     (σ σ' : SequentialState RegisterType trivialChoiceSource)
     (a : BitVec 64) (w : Nat) (data : BitVec (8 * w))
@@ -425,7 +206,8 @@ theorem mem_write_value_w
       = .ok (.Ok true) σ' := by
   have hcmw := checked_mem_write_w σ σ' a w data vpmpaddr hwpos hwle hpma hcfg haddr hbase
     hlo hhiram hhiwin halign hram
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Store mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   simp only [EStateM.run] at hcmw hep
   unfold mem_write_value mem_write_value_meta mem_write_value_priv_meta
   simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
@@ -434,127 +216,6 @@ theorem mem_write_value_w
   rw [hep]
   simp only [default_meta]
   rw [hcmw]
-
-theorem mem_write_value_8
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 8))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 8 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 8 = 0) :
-    (mem_write_value (physaddr.Physaddr a) 8 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)).insert
-              (a.toNat + 4) (data.extractLsb' 32 8)).insert
-              (a.toNat + 5) (data.extractLsb' 40 8)).insert
-              (a.toNat + 6) (data.extractLsb' 48 8)).insert
-              (a.toNat + 7) (data.extractLsb' 56 8)) } :=
-  mem_write_value_w σ _ a 8 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
-    hpma hcfg haddr hbase hlo hhiram hhiwin halign (write_ram_8 σ a data)
-
-theorem mem_write_value_4
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 4))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 4 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 4 = 0) :
-    (mem_write_value (physaddr.Physaddr a) 4 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)).insert
-              (a.toNat + 2) (data.extractLsb' 16 8)).insert
-              (a.toNat + 3) (data.extractLsb' 24 8)) } :=
-  mem_write_value_w σ _ a 4 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
-    hpma hcfg haddr hbase hlo hhiram hhiwin halign (write_ram_4 σ a data)
-
-theorem mem_write_value_2
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 2))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 2 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat)
-    (halign : a.toNat % 2 = 0) :
-    (mem_write_value (physaddr.Physaddr a) 2 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok true)
-          { σ with mem := ((σ.mem.insert a.toNat (data.extractLsb' 0 8)).insert
-              (a.toNat + 1) (data.extractLsb' 8 8)) } :=
-  mem_write_value_w σ _ a 2 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
-    hpma hcfg haddr hbase hlo hhiram hhiwin halign (write_ram_2 σ a data)
-
-theorem mem_write_value_1
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (data : BitVec (8 * 1))
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hbase : σ.regs.get? Register.htif_tohost_base
-      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 1 ≤ 0x100000000)
-    (hhiwin : tohostAddr + 16 ≤ a.toNat) :
-    (mem_write_value (physaddr.Physaddr a) 1 data
-        (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok true) { σ with mem := σ.mem.insert a.toNat data } :=
-  mem_write_value_w σ _ a 1 data vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv
-    hpma hcfg haddr hbase hlo hhiram hhiwin (Nat.mod_one _) (write_ram_1 σ a data)
 
 theorem mem_write_ea_w
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -578,10 +239,11 @@ theorem mem_write_ea_w
         page_based_mem_type.PBMT_PMA false false false).run σ
       = .ok (.Ok ()) σ := by
   have htmod := tmod_toNatInt_of_mod a w halign
-  have hpmaC := pmaCheck_ram_write σ a w _ hpma hwpos hwle rfl hlo hhiram htmod
+  have hpmaC := pmaCheck_ram σ a w _ (Or.inr rfl) hpma hlo hhiram htmod
   have hpmp := pmp_allows σ (physaddr.Physaddr a) w
     (MemoryAccessType.Store mem_payload.Data) vpmpaddr hcfg haddr
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Store mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   have hsplit := split_misaligned_aligned_w σ a w 0 Splittability.CannotSplit htmod
   simp only [EStateM.run] at hpmaC hpmp hep hsplit
   unfold mem_write_ea
@@ -638,74 +300,6 @@ theorem mem_write_ea_8
       = .ok (.Ok ()) σ :=
   mem_write_ea_w σ a 8 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
     haddr hlo hhiram halign
-
-theorem mem_write_ea_4
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64)
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 4 ≤ 0x100000000)
-    (halign : a.toNat % 4 = 0) :
-    (mem_write_ea (physaddr.Physaddr a) 4 (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok ()) σ :=
-  mem_write_ea_w σ a 4 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
-    haddr hlo hhiram halign
-
-theorem mem_write_ea_2
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64)
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 2 ≤ 0x100000000)
-    (halign : a.toNat % 2 = 0) :
-    (mem_write_ea (physaddr.Physaddr a) 2 (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok ()) σ :=
-  mem_write_ea_w σ a 2 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
-    haddr hlo hhiram halign
-
-theorem mem_write_ea_1
-    (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64)
-    (vmstatus : RegisterType Register.mstatus)
-    (vpmpaddr : RegisterType Register.pmpaddr_n)
-    (hpriv : σ.regs.get? Register.cur_privilege
-      = some (Privilege.Machine : RegisterType Register.cur_privilege))
-    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
-    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
-    (hpma : σ.regs.get? Register.pma_regions
-      = some (initPmaRegions : RegisterType Register.pma_regions))
-    (hcfg : σ.regs.get? Register.pmpcfg_n
-      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
-    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
-    (hlo : 0x80000000 ≤ a.toNat)
-    (hhiram : a.toNat + 1 ≤ 0x100000000) :
-    (mem_write_ea (physaddr.Physaddr a) 1 (MemoryAccessType.Store mem_payload.Data)
-        page_based_mem_type.PBMT_PMA false false false).run σ
-      = .ok (.Ok ()) σ :=
-  mem_write_ea_w σ a 1 vmstatus vpmpaddr (by decide) (by decide) hpriv hmstatus hmprv hpma hcfg
-    haddr hlo hhiram (Nat.mod_one _)
 
 theorem translateAddr_machine_store
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -781,7 +375,8 @@ theorem transform_effective_address_store
     (transform_effective_address (virtaddr.Virtaddr a)
         (MemoryAccessType.Store mem_payload.Data)).run σ
       = .ok (virtaddr.Virtaddr (zero_extend (m := 64) a)) σ := by
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Store mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   have hpml := get_pmlen_store_machine σ vmstatus vmseccfg hmstatus hseccfg hpmm
   have htm := translationMode_machine σ
   simp only [EStateM.run] at hep hpml htm
@@ -887,7 +482,8 @@ theorem vmem_write_addr_w
       (Int.ofNat_tmod _ _).symm
     rw [show (w : Int) = Int.ofNat w from rfl, this, halign]; rfl
   have hsplit := split_on_page_boundary_store_w σ a w hwpos hwle hpage
-  have hep := effectivePrivilege_store σ vmstatus Privilege.Machine hmprv
+  have hep := effectivePrivilege_machine σ (MemoryAccessType.Store mem_payload.Data) vmstatus
+    Privilege.Machine (by decide) hmprv
   have htm := translationMode_machine σ
   have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
   simp only [EStateM.run] at hsplit hep htm htr hea hmwv
@@ -971,24 +567,6 @@ theorem vmem_write_addr_ram_w
     (mem_write_value_w σ σ' a w data vmstatus vpmpaddr hwpos hwle hpriv hmstatus hmprv hpma
       hcfg haddr hbase hlo hhiram hhiwin halign hram)
     (setWidth_extractLsb_full w hwpos data _ _ (by omega) rfl)
-
-theorem split_on_page_boundary_store_8
-    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
-    (halign : a.toNat % 8 = 0) :
-    (split_on_page_boundary a 8).run σ = .ok (((8 : Nat) : Int), 0) σ :=
-  split_on_page_boundary_store_w σ a 8 (by decide) (by decide) (by omega)
-
-theorem split_on_page_boundary_store_4
-    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
-    (halign : a.toNat % 4 = 0) :
-    (split_on_page_boundary a 4).run σ = .ok (((4 : Nat) : Int), 0) σ :=
-  split_on_page_boundary_store_w σ a 4 (by decide) (by decide) (by omega)
-
-theorem split_on_page_boundary_store_2
-    (σ : SequentialState RegisterType trivialChoiceSource) (a : BitVec 64)
-    (halign : a.toNat % 2 = 0) :
-    (split_on_page_boundary a 2).run σ = .ok (((2 : Nat) : Int), 0) σ :=
-  split_on_page_boundary_store_w σ a 2 (by decide) (by decide) (by omega)
 
 theorem vmem_write_addr_8
     (σ : SequentialState RegisterType trivialChoiceSource)

@@ -19,9 +19,7 @@ instance {M : MachineModel} (Wp : MachWP (GF := GF) M) : Persistent (envDefineSp
 theorem storeRepr_frameAt_ne {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢ ⌜e ≠ 0⌝ := by
   iintro ⟨Hs, #He⟩
-  ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_frameAt N (s := s) (B := B) (fa := fa) (e := e))
-    $$ [Hs]
-  · iframe Hs He
+  ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_frameAt N (s := s) (B := B) (fa := fa) (e := e)) $$ [$]
   unfold storeRepr
   icases Hs with ⟨%mf, %mc, %Bs, -, -, %hp, Hfr, -⟩
   have hf : s.frames.toList[fa]? = some s.frames[fa] := by
@@ -30,8 +28,7 @@ theorem storeRepr_frameAt_ne {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
   unfold frameOwn frameBody
   icases Hfa with ⟨%Gm, -, #He', %img, %hlay, -⟩
   simp only [Nat.zero_add] at *
-  ihave %heq := frameAt_agree fa e Gm.e $$ [He He']
-  · iframe He He'
+  ihave %heq := frameAt_agree fa e Gm.e $$ [$]
   ipureintro
   rw [heq]; exact hlay.e_ne
 
@@ -76,19 +73,28 @@ theorem ms_callEnvNew (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   ihave #Hspec := fnSpecW_of_abort_false Wp _ _ _ _ (by
     iintro ⟨%h, -⟩; cases h) $$ Hspec
   iapply (ms_callRegs Wp hexec hcode (L := envNewL) (K := [23, 24, 25, 26, 27]) (by decide)
-    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp (R 2) envNewNeed⌝ ∗ (10 : Nat) ↦ᵣ R 10 ∗
-      sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗ codeX ∗ clobbered retClob ∗ savedOwn (newSaved.map fun k => (k, R k)) ∗
-      stackScratch (R 2) envNewNeed ∗ parentAt po (R 10).toNat ∗
-      heapStore N ((Regime.counted k).plus envBytes) st))
-    (Q := fun _ => iprop(∃ e : BitVec 64, (10 : Nat) ↦ᵣ e ∗ sp ↦ᵣ R 2 ∗ clobbered retClob ∗
-      savedOwn (newSaved.map fun k => (k, R k)) ∗ stackScratch (R 2) envNewNeed ∗
-      heapStore N (.counted k) (st.allocFrame po).1 ∗ frameAt st.frames.size e.toNat))
-    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ codeX ∗ stackScratch (R 2) envNewNeed ∗ parentAt po (R 10).toNat ∗
-      heapStore N (.counted (k + envBytes)) st))
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ newSaved, f k = R k⌝ ∗
       stackScratch (R 2) envNewNeed ∗ heapStore N (.counted k) (st.allocFrame po).1 ∗
       frameAt st.frames.size (f 10).toNat))
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
+  rotate_left 2
+  icombine Hgp Hcx Hst Hpar Hh as HX; iframe HX Hspec Hcode Hms
+  iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hh, #Hfr⟩ Hms
+  have hkeep : ∀ x ∈ fRegs, x ∉ (10 :: retClob) →
+      (fun x => if x ∈ envNewL then f x else R x) x = R x := by
+    intro x hx hc
+    by_cases hL : x ∈ envNewL
+    · simp only [hL, ite_true]
+      by_cases h2 : x = 2
+      · subst h2; exact hf2
+      · have hs : x ∈ newSaved :=
+          (show ∀ y ∈ envNewL, y ∉ (10 :: retClob) → y ≠ 2 → y ∈ newSaved by decide) x hL hc h2
+        exact hfs x hs
+    · simp [hL]
+  have e10 : (fun x => if x ∈ envNewL then f x else R x) 10 = f 10 := by
+    simp only [show (10 : Nat) ∈ envNewL from by decide, ite_true]
+  rw [← e10] at *
+  iapply Hk $$ %(fun x => if x ∈ envNewL then f x else R x) %hkeep Hst Hh Hfr Hms
   case hP =>
     simp only [envNewL, sepL_cons]
     iintro ⟨⟨H10, H2, Hcs⟩, #Hgp', #Hcx', Hst, #Hpar', Hh⟩
@@ -129,23 +135,6 @@ theorem ms_callEnvNew (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     refine ⟨trivial, fun k hk => ?_⟩
     obtain ⟨h10, h2⟩ := (show ∀ y ∈ newSaved, y ≠ 10 ∧ y ≠ 2 by decide) k hk
     simp [h10, h2, hk]
-  iframe Hspec Hcode Hms Hgp Hcx Hst Hpar Hh
-  iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hh, #Hfr⟩ Hms
-  have hkeep : ∀ x ∈ fRegs, x ∉ (10 :: retClob) →
-      (fun x => if x ∈ envNewL then f x else R x) x = R x := by
-    intro x hx hc
-    by_cases hL : x ∈ envNewL
-    · simp only [hL, ite_true]
-      by_cases h2 : x = 2
-      · subst h2; exact hf2
-      · have hs : x ∈ newSaved :=
-          (show ∀ y ∈ envNewL, y ∉ (10 :: retClob) → y ≠ 2 → y ∈ newSaved by decide) x hL hc h2
-        exact hfs x hs
-    · simp [hL]
-  have e10 : (fun x => if x ∈ envNewL then f x else R x) 10 = f 10 := by
-    simp only [show (10 : Nat) ∈ envNewL from by decide, ite_true]
-  rw [← e10] at *
-  iapply Hk $$ %(fun x => if x ∈ envNewL then f x else R x) %hkeep Hst Hh Hfr Hms
 
 theorem ms_callEnvNewW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {i : Nat} {code : List (BitVec 8)}
@@ -169,8 +158,7 @@ theorem ms_callEnvNewW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   unfold heapStore
   icases Hh with ⟨%H, %B, Hhr, Hs, %hB⟩
   ihave ⟨⟨Hs, -⟩, %hne⟩ := keep_pure (storeRepr_frameAt_ne (N := N) (s := st.store) (B := B)
-    (fa := env) (e := (R 10).toNat)) $$ [Hs]
-  · iframe Hs Hfr
+    (fa := env) (e := (R 10).toNat)) $$ [$]
   iapply ms_callEnvNew Wp hexec hcode hi4 (k := k) (st := st.store) (po := some env) hsp
   iframe Hen Hcode Hcx Hms Hst
   isplitl []
@@ -178,9 +166,8 @@ theorem ms_callEnvNewW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   isplitl [Hhr Hs]
   · unfold heapStore; iexists H, B; iframe Hhr Hs; ipureintro; exact hB
   iintro %R' %hk Hst Hh #Hnew Hms
-  iapply Hk $$ %R' %hk Hst [Hh Hc Hio Hi] Hnew Hms
-  iapply (world_heapStore N inp _ _ d).2
-  iframe Hh Hc Hio Hi
+  ihave Hw := (world_heapStore N inp _ ⟨(st.store.allocFrame (some env)).1, st.out⟩ d).2 $$ [$]
+  iapply Hk $$ %R' %hk Hst Hw Hnew Hms
 
 abbrev envDefineL : List Nat := 10 :: 11 :: 12 :: 2 :: (argClob ++ defineSaved)
 
@@ -207,21 +194,25 @@ theorem ms_callEnvDefine (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × S
   ihave #Hspec := fnSpecW_of_abort_false Wp _ _ _ _ (by
     iintro ⟨%h, -⟩; cases h) $$ Hspec
   iapply (ms_callRegs Wp hexec hcode (L := envDefineL) (K := [23, 24, 25, 26, 27]) (by decide)
-    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp (R 2) envDefineNeed ∧ SlotWin (R 12).toNat⌝ ∗
-      (10 : Nat) ↦ᵣ R 10 ∗ (11 : Nat) ↦ᵣ R 11 ∗ (12 : Nat) ↦ᵣ R 12 ∗ sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗
-      codeX ∗ clobbered argClob ∗ savedOwn (defineSaved.map fun k => (k, R k)) ∗
-      stackScratch (R 2) envDefineNeed ∗ frameAt fa (R 10).toNat ∗ strAt (R 11).toNat x ∗
-      valAt N (R 12).toNat v ∗ heapStore N ((Regime.counted k).plus (defineCost st fa x)) st))
-    (Q := fun _ => iprop(sp ↦ᵣ R 2 ∗ clobbered (10 :: retClob) ∗
-      savedOwn (defineSaved.map fun k => (k, R k)) ∗ stackScratch (R 2) envDefineNeed ∗
-      valAt N (R 12).toNat v ∗ heapStore N (.counted k) (st.define fa x v)))
-    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ codeX ∗ stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
-      heapStore N (.counted (k + defineCost st fa x)) st ∗ frameAt fa (R 10).toNat ∗
-      strAt (R 11).toNat x))
     (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ defineSaved, f k = R k⌝ ∗
       stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
       heapStore N (.counted k) (st.define fa x v)))
     (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
+  rotate_left 2
+  icombine Hgp Hcx Hst Hval Hh Hfr Hstr as HX; iframe HX Hspec Hcode Hms
+  iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hval, Hh⟩ Hms
+  have hkeep : ∀ y ∈ fRegs, y ∉ (10 :: retClob) →
+      (fun y => if y ∈ envDefineL then f y else R y) y = R y := by
+    intro y hy hc
+    by_cases hL : y ∈ envDefineL
+    · simp only [hL, ite_true]
+      by_cases h2 : y = 2
+      · subst h2; exact hf2
+      · have hs : y ∈ defineSaved :=
+          (show ∀ z ∈ envDefineL, z ∉ (10 :: retClob) → z ≠ 2 → z ∈ defineSaved by decide) y hL hc h2
+        exact hfs y hs
+    · simp [hL]
+  iapply Hk $$ %(fun y => if y ∈ envDefineL then f y else R y) %hkeep Hst Hval Hh Hms
   case hP =>
     simp only [envDefineL, sepL_cons]
     iintro ⟨⟨H10, H11, H12, H2, Hcs⟩, #Hgp', #Hcx', Hst, Hval, Hh, #Hfr, #Hstr⟩
@@ -269,20 +260,6 @@ theorem ms_callEnvDefine (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × S
     refine ⟨trivial, fun k hk => ?_⟩
     have h2 := (show ∀ y ∈ defineSaved, y ≠ 2 by decide) k hk
     simp [h2, hk]
-  iframe Hspec Hcode Hcx Hms Hgp Hst Hval Hh Hfr Hstr
-  iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hval, Hh⟩ Hms
-  have hkeep : ∀ y ∈ fRegs, y ∉ (10 :: retClob) →
-      (fun y => if y ∈ envDefineL then f y else R y) y = R y := by
-    intro y hy hc
-    by_cases hL : y ∈ envDefineL
-    · simp only [hL, ite_true]
-      by_cases h2 : y = 2
-      · subst h2; exact hf2
-      · have hs : y ∈ defineSaved :=
-          (show ∀ z ∈ envDefineL, z ∉ (10 :: retClob) → z ≠ 2 → z ∈ defineSaved by decide) y hL hc h2
-        exact hfs y hs
-    · simp [hL]
-  iapply Hk $$ %(fun y => if y ∈ envDefineL then f y else R y) %hkeep Hst Hval Hh Hms
 
 end
 

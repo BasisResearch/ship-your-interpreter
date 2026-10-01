@@ -63,13 +63,10 @@ def LldReg (f sp : Nat) (a : Nat) : Prop :=
 
 theorem lldMt_frame (Mt : Mem) {sp : BitVec 64} (ap v : BitVec 64) (hsp : sp.toNat + 200 < 2 ^ 64) :
     Frame (lldMt Mt sp ap v) Mt (fun a => (sp.toNat + 24 ≤ a ∧ a < sp.toNat + 32) ∨ a = sp.toNat + 167) := by
-  have e24 : (sp + 24#64).toNat = sp.toNat + 24 := sp_lit (by omega)
-  have e167 : (sp + 167#64).toNat = sp.toNat + 167 := sp_lit (by omega)
   unfold lldMt
   split
-  · refine (((Frame.refl _ _).snoc ?_).snoc ?_).snoc ?_ <;> intro b h1 h2 <;>
-      simp only [e24, e167] at h1 h2 <;> omega
-  · refine ((Frame.refl _ _).snoc ?_).snoc ?_ <;> intro b h1 h2 <;> simp only [e24, e167] at h1 h2 <;> omega
+  · refine (((Frame.refl _ _).snoc ?_).snoc ?_).snoc ?_ <;> region_close
+  · refine ((Frame.refl _ _).snoc ?_).snoc ?_ <;> region_close
 
 theorem lldMt_sign (Mt : Mem) {sp : BitVec 64} (ap v : BitVec 64) (hsp : sp.toNat + 200 < 2 ^ 64) :
     ldv .lbu (lldMt Mt sp ap v) (sp + 167#64).toNat = BitVec.zeroExtend 64 (lldSign v) := by
@@ -106,25 +103,18 @@ theorem vfp_lld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ inte
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000a9b0#64 R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9fc#64 R Mt := by
   nx_win sp 1024 592; refine lld_head hlive hs1 hs2 hs3 hs4 hal hap1 hap2 hapa hP.spR h25 hFm hap hv fun R1 Mt1 H1 => ?_
-  have k12 : R1 2 = sp := (H1.keep 2 (by decide)).trans hP.spR
+  have k12 : R1 2 = sp := by carry_close [H1.keep, hP.spR]
   refine lld_mag hlive hlive' hsub hs1 hs2 hs3 hs4 hal k12 H1.mag H1.prec H1.t3 H1.t4 fun R2 Mt2 H2 => ?_
   have hm1 := H1.mem; subst hm1
   have hsp : sp.toNat + 600 < 2 ^ 64 := by omega
-  have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk =>
-    sp_lit (by omega)
   have hMF : Frame Mt2 Mt (fun a => ((sp.toNat + 24 ≤ a ∧ a < sp.toNat + 32) ∨ a = sp.toNat + 167) ∨
       MagReg sp.toNat a) :=
     ((lldMt_frame Mt ap v (by omega)).mono fun a h => .inl h).trans (H2.frame.mono fun a h => .inr h)
-  have kR2 : ∀ x ∈ [2, 9, 18, 19, 21, 23], R2 x = R x := fun x hx => by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      exact (H2.keep _ (by decide)).trans (H1.keep _ (by decide))
+  have kR2 : ∀ x ∈ [2, 9, 18, 19, 21, 23], R2 x = R x := by carry_close [H2.keep, H1.keep]
   have P2 : VfpPend R2 Mt2 sp 0x8001b538#64 f cnt [] := hP.transport hsp (by simp) kR2 hMF
     (fun a h => by unfold MagReg at h; simp only [List.length_nil, Nat.mul_zero, Nat.add_zero]; omega)
   have hsg2 : ldv .lbu Mt2 (sp + 167#64).toNat = BitVec.zeroExtend 64 (lldSign v) := by
-    rw [H2.frame.ldv .lbu (fun j hj h => by
-      simp only [widthOfM] at hj; rw [eo 167 (by omega)] at h; unfold MagReg at h; omega)]
-    exact lldMt_sign Mt ap v (by omega)
+    carry_close [H2.frame.ldv, lldMt_sign Mt ap v (sp := sp) (by omega)]
   have hL1 := digBytes_pos (lldMag v).toNat
   have hL2 := digBytes_len (lldMag v).toNat (lldMag v).isLt
   refine lld_stage (ds := digBytes (lldMag v).toNat) (sg := lldSign v) hlive hs1 hs2 hs3 hs4 hal hL1 hL2 hcnt P2
@@ -140,10 +130,7 @@ theorem vfp_lld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ inte
     (hMF.mono fun a h => .inl h).trans (hF3.mono fun a h => .inr h)
   have hSb3 : SbFile Mt3 f pend0 := hF.frame_out hMF3 (by omega) fun b hb => by
     unfold MagReg StageReg at hb; omega
-  have hz32 : ldv .ld Mt3 (sp + 32#64).toNat = 0#64 := by
-    rw [hF3.ldv .ld (fun j hj h => by
-      simp only [widthOfM] at hj; rw [eo 32 (by omega)] at h; unfold StageReg at h; omega)]
-    exact H2.zero32
+  have hz32 : ldv .ld Mt3 (sp + 32#64).toNat = 0#64 := by carry_close [hF3.ldv, H2.zero32]
   have hsrcs : ∀ p ∈ lldIovs sp.toNat (lldSign v) (digBytes (lldMag v).toNat), PieceOK Dt DA s need Mt3 f sp p := by
     intro p hp
     have hnS : ∀ a, sp.toNat ≤ a → a < sp.toNat + 348 → (a < sp.toNat + 232 ∨ sp.toNat + 248 ≤ a) →
@@ -174,11 +161,6 @@ theorem vfp_lld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ inte
     fun R4 M4 out pend' hrel HL hSb' hfr4 => ?_
   rw [piecesBytes_lldIovs] at hrel
   refine hk R4 M4 out pend' hrel HL hSb' ((hMF3.mono fun a h => ?_).trans (hfr4.mono fun a h => .inr (.inr (.inr (.inr h)))))
-  unfold LldReg
-  rcases h with ((h | h) | h) | h
-  · exact .inl h
-  · exact .inr (.inl h)
-  · exact .inr (.inr (.inl h))
-  · exact .inr (.inr (.inr (.inl h)))
+  unfold LldReg; rcases h with ((h | h) | h) | h <;> simp only [h, true_or, or_true, and_self]
 
 end VsaIris.Sym.Fp

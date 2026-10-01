@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimCallCode
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -98,11 +99,9 @@ theorem cPrintln (st : St) (d : Nat) (vs : List Value) :
   simp only [dispTgt, show (5 : BitVec 64) ≠ 4 by decide, show (1 : BitVec 64) ≠ 0 by decide, if_false,
     if_true] at *
   have hpl := hs.pl
-  simp only [ccPlC] at hpl
-  obtain ⟨sl, sz⟩ := hpl.append
-  obtain ⟨sl, sn⟩ := sl.append
   have hlp : (putc '\n').length = 23 := by decide
-  simp only [List.length_append, hlp] at sz
+  simp only [ccPlC, List.append_assoc, seg_app_iff, hlp] at hpl
+  obtain ⟨sl, sn, sz⟩ := hpl
   have hpos : ccPL k vs.length pos + (printLoopG (ccPL k vs.length pos) (k + 1) vs.length).length + 25 + 1 ≤
       ccFin k vs.length pos := by
     simp only [ccFin, ccCL_eq, ccPlC_length, printLoopG_len]; omega
@@ -112,8 +111,7 @@ theorem cPrintln (st : St) (d : Nat) (vs : List Value) :
   simp only at hpc2 ho2 hd2 hk2; subst hpc2
   apply run_whole hR.fits sn
   wp_simp [putc]
-  apply run_whole hR.fits (sz.cast (pos' := ccPL k vs.length pos + (printLoopG (ccPL k vs.length pos) (k + 1)
-    vs.length).length + 23) (by omega))
+  apply run_whole hR.fits sz
   wp_simp []
   have hj := hs.plJ.cast (pos' := ccPL k vs.length pos + (printLoopG (ccPL k vs.length pos) (k + 1)
     vs.length).length + 23 + 2) (by simp only [ccCL_eq, ccPlC_length, printLoopG_len]; omega)
@@ -159,18 +157,15 @@ theorem cAssert (st : St) (d : Nat) (vs : List Value) (v w : Value) (hvs : vs = 
   have ha := hs.asrt
   have ea : ccAssert k vs.length pos = loadTmp (k + 1) ++ [Call (pos + 15 + 4) trPos] ++
       jmpIfZero (pos + 15 + 5) errPos ++ [mvi a0 0, mvi a1 0] := by simp [ccAssert, hm12]
-  rw [ea] at ha
-  obtain ⟨s1, s4⟩ := ha.append
-  obtain ⟨s1, s3⟩ := s1.append
-  obtain ⟨s1, s2⟩ := s1.append
   have e4 : (loadTmp (k + 1)).length = 4 := by simp [loadTmp]
-  simp only [List.length_append, e4, List.length_singleton, jmpIfZero, List.length_cons, List.length_nil] at s2 s3 s4
+  simp only [ea, jmpIfZero, List.append_assoc, seg_app_iff, e4, List.length_cons, List.length_nil] at ha
+  obtain ⟨s1, s2, s3, s4⟩ := ha
   have hPR : ccPR k vs.length pos = pos + 15 + 9 + 1 := by simp only [ccPR_eq, ea]; simp [loadTmp, jmpIfZero]
   have hpos : ccPR k vs.length pos ≤ ccFin k vs.length pos := by
     simp only [ccFin, ccCL_eq, ccPL_eq]; omega
   have hq : PosOK (pos + 15 + 4 + 1) := posOK_le hP (by omega)
   refine run_loadTmp hR.fits s1 (hk1.has (by decide) hm.hsp) hm.stk (by omega) fun L2 hk2 g10 g11 => ?_
-  apply run_whole hR.fits (s2.cast (pos' := pos + 15 + 4) (by omega))
+  apply run_whole hR.fits s2
   wp_simp [hq]
   refine ex_bind (run_tr hR.fits hR.tr (L := gset L2 1 (pcOf (pos + 15 + 4 + 1))) (m := m1) (o := o1)
     (by reg_simp []; exact g10) (by reg_simp []; exact g11) (by reg_simp []) (pcOf_aligned hq)) ?_
@@ -178,11 +173,9 @@ theorem cAssert (st : St) (d : Nat) (vs : List Value) (v w : Value) (hvs : vs = 
   simp only at hpc3 hm3 ho3 g10' hk3; subst hpc3 hm3 ho3
   have hv0' : VRepr V.H m3 V.h v (rdW m3 (sp + 16 + 16 * (k + 1))) (rdW m3 (sp + 16 + 16 * (k + 1) + 8)) := hv0
   rw [trW_repr hv0', ht] at g10'
-  have k10 := has_mem g10' (by decide); have e10 := srcVal_of_has g10'
-  simp only [a0] at k10 e10
-  apply run_jumps hR.fits (s3.cast (pos' := pos + 15 + 5) (by omega))
-  wp_simp [k10, e10]
-  apply run_whole hR.fits (s4.cast (pos' := pos + 15 + 5 + 2) (by omega))
+  apply run_jumps hR.fits s3
+  wp_simp [g10'.wp]
+  apply run_whole hR.fits s4
   wp_simp []
   have hj := hs.asrtJ.cast (pos' := pos + 15 + 5 + 2 + 2) (by omega)
   have hF : PosOK (ccFin k vs.length pos) := posOK_le hP (by omega)

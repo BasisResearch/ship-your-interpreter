@@ -23,7 +23,7 @@ theorem ok_facts {m : Std.ExtHashMap Nat (BitVec 8)} {rv s0v sM : BitVec 64}
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
   unfold fprintfNeed at h1
   unfold mainOkSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
+  chain_facts hcode
   ·
     rfl
   ·
@@ -67,7 +67,7 @@ theorem ok_fin (rv s0v sM : BitVec 64) {imgT : Nat → BitVec 8}
 theorem crt0_facts0 {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : crt0JCodeLoaded m) :
     ChainFacts m m [(10, (0#64 : BitVec 64))] [] crt0JSeg := by
   unfold crt0JSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.crt0JCode_at_"
+  chain_facts hcode
 
 theorem crt0_pc0 :
     evalBlocksPC 0x80000038#64 (SegEvalState.init [(10, (0#64 : BitVec 64))] []) crt0JSeg =

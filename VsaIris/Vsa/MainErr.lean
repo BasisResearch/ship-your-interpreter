@@ -43,7 +43,7 @@ theorem a_facts {m : Std.ExtHashMap Nat (BitVec 8)} {v a5v a2v a1v sM : BitVec 6
       (stderrPtrAddr ≤ k ∧ k < stderrPtrAddr + 8) → (m[k]?).getD 0 = simg k) :
     ChainFacts m m (aL v a5v a2v a1v 0x8001b970#64 sM) (aLds simg) mainErrASeg := by
   unfold mainErrASeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
+  chain_facts hcode
   ·
     show (v != 0#64) = true
     simpa using hv
@@ -99,7 +99,7 @@ theorem b_facts {m : Std.ExtHashMap Nat (BitVec 8)} {a0v rv s0v sM : BitVec 64}
   have h1 := hsM.lo; have h2 := hsM.hi; have h3 := hsM.align
   unfold fprintfNeed at h1
   unfold mainErrBSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.mainErrCode_at_"
+  chain_facts hcode
   ·
     have e : ∀ x : BitVec 64, x = sM + sign_extend (m := 64) (0x2f8#12) →
         x.toNat = sM.toNat + 760 := by
@@ -142,7 +142,7 @@ theorem b_fin (a0v rv s0v sM : BitVec 64) {imgT : Nat → BitVec 8}
 theorem crt0_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : crt0JCodeLoaded m) :
     ChainFacts m m [(10, (70#64 : BitVec 64))] [] crt0JSeg := by
   unfold crt0JSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.crt0JCode_at_"
+  chain_facts hcode
 
 theorem crt0_pc :
     evalBlocksPC 0x80000038#64 (SegEvalState.init [(10, (70#64 : BitVec 64))] []) crt0JSeg =

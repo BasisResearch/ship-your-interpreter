@@ -1,4 +1,5 @@
 import VsaIris.Vsa.Fprintf.Top
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -66,15 +67,8 @@ theorem fprintf_sb (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     h10'' h11'' rfl rfl hSo1 (fun R2 Mt2 a2 a10 a11 a12 a13 a1 hsbf hfr2 hk2 => ?_)
     fun R' M' e10 e2 e1 ek hfr hl => ?_
   · have hfrA : Frame Mt2 Mt (fun a => (s.toNat - 1936 ≤ a ∧ a < s.toNat) ∨ (0x8001bb30 ≤ a ∧ a < 0x8001bb32)) := by
-      refine ((hfr0.mono fun a h => ?_).trans (hfr1.mono fun a h => ?_)).trans (hfr2.mono fun a h => ?_)
-      · rw [e80] at h
-        exact .inl ⟨Nat.le_trans (Nat.sub_le_sub_left (by decide) _) h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
-      · rw [e672] at h
-        rcases h with h | h
-        · exact .inl ⟨Nat.le_trans (Nat.sub_le_sub_left (by decide) _) h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
-        · exact .inr h
-      · rw [e1936] at h
-        exact .inl ⟨h.1, Nat.lt_of_lt_of_le h.2 (by omega)⟩
+      refine ((hfr0.mono ?_).trans (hfr1.mono ?_)).trans (hfr2.mono ?_) <;>
+        simp only [e80, e672, e1936] <;> region_close
     have hA : ldv .ld Mt2 (s - 80#64 + 32#64).toNat = R 12 := by
       rw [hfr2.ldv .ld fun j hj h => by simp only [widthOfM] at hj; rw [e1936, e48] at h; omega,
         hl1 _ _ (by rw [e48]; omega) (by decide)]

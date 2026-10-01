@@ -375,26 +375,38 @@ def udivdi3_post (g : (R : Register) → Option (RegisterType R)) (n d r : BitVe
   (∀ R : Register, NotWritten R → c.σ.regs.get? R = g R) ∧
   (∃ v, c.σ.regs.get? Register.x12 = some v) ∧ (∃ v, c.σ.regs.get? Register.x13 = some v)
 
+#derive_case udivEntrySeg chain
+  [(0x800046ac#64, 0x00058613#32), (0x800046b0#64, 0x00050593#32), (0x800046b4#64, 0xfff00513#32)]
+    terminator ⟨0x800046b8#64, 0x02060c63#32, 0x63#8, 0x0c#8, 0x06#8, 0x02#8,
+      .br bop.BEQ false, 12, 0, 0x0038#13, 0#21, 0#12⟩ ;;
+  [(0x800046bc#64, 0x00100693#32)]
+
+#derive_case udivRetSeg chain []
+  terminator ⟨0x800046f0#64, 0x00008067#32, 0x67#8, 0x80#8, 0x00#8, 0x00#8,
+    .jr, 1, 0, 0#13, 0#21, 0#12⟩
+
 theorem udivdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
     Triple (udivdi3_pre g n d r m0 o) (udivdi3_post g n d r m0 o) := by
-
   have hpre : Triple (udivdi3_pre g n d r m0 o)
       (fun c => Ust g (0x800046c0#64) neg1c n d (1#64) r m0 o c ∧ 0 < d.toNat ∧ r.toNat % 4 = 0) := by
     intro c hc
-    obtain ⟨⟨a2old, a3old, hEntry⟩, hd, halign⟩ := hc
-    obtain ⟨c1, hs1, hSt1⟩ := utr_ac_b0 g n d a2old a3old r m0 o c hEntry
-    obtain ⟨c2, hs2, hSt2⟩ := utr_b0_b4 g n d d a3old r m0 o c1 hSt1
-    obtain ⟨c3, hs3, hSt3⟩ := utr_b4_b8 g n n d a3old r m0 o c2 hSt2
-
+    obtain ⟨⟨a2old, a3old, hSt⟩, hd, halign⟩ := hc
+    obtain ⟨vm, hmi⟩ := hSt.minstret
     have hbeq : (d == (0#64)) = false := by
       have hne : d ≠ 0#64 := by intro h; rw [h] at hd; simp at hd
       simpa using hne
-    obtain ⟨c4, hs4, hSt4⟩ := utr_b8_bc g neg1c n d a3old r m0 o hbeq c3 hSt3
-    obtain ⟨c5, hs5, hSt5⟩ := utr_bc_c0 g neg1c n d a3old r m0 o c4 hSt4
-
-    rw [one_c] at hSt5
-    exact ⟨c5, hs1.trans (hs2.trans (hs3.trans (hs4.trans hs5))), hSt5, hd, halign⟩
-
+    have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs n d a2old a3old r) [] udivEntrySeg := by
+      chain_facts hSt.loaded
+      show (d + sign_extend (m := 64) (0x000#12) == 0#64) = false
+      rw [sext_zero, BitVec.add_zero]; exact hbeq
+    obtain ⟨c', res⟩ := segEval_selected_framed udivEntrySeg _ [] _ vm (fun _ => False) mulKeep
+      (mulRegs neg1c n d (1#64) r) c hSt.good hSt.pc hmi hSt.held
+      (by show KeysOK [10, 11, 12, 13, 1]; decide) facts
+      (by show ChainOK _ [10, 11, 12, 13, 1] _; decide) hSt.tick (fun _ _ => rfl) (by decide)
+      (by decide) ⟨rfl, congrArg some (show n + sign_extend (m := 64) (0x000#12) = n by
+        rw [sext_zero]; exact BitVec.add_zero n), congrArg some (show d + sign_extend (m := 64) (0x000#12) = d by
+        rw [sext_zero]; exact BitVec.add_zero d), congrArg some one_c, rfl, trivial⟩
+    exact ⟨c', res.steps, hSt.of_seg res rfl, hd, halign⟩
   have hnorm : Triple (fun c => Ust g (0x800046c0#64) neg1c n d (1#64) r m0 o c ∧ 0 < d.toNat ∧ r.toNat % 4 = 0)
       (fun c => AtDoneN g d n neg1c r m0 o c ∧ 0 < d.toNat ∧ r.toNat % 4 = 0) := by
     intro c hc
@@ -402,43 +414,35 @@ theorem udivdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : B
     obtain ⟨c1, hs1, hI⟩ := entry_c0 g d n neg1c r m0 o hd d.isLt c hSt
     obtain ⟨c2, hs2, hDone⟩ := norm_loop_to_done g d n neg1c r m0 o hd c1 hI
     exact ⟨c2, hs1.trans hs2, hDone, hd, halign⟩
-
   have hdiv : Triple (fun c => AtDoneN g d n neg1c r m0 o c ∧ 0 < d.toNat ∧ r.toNat % 4 = 0)
       (fun c => AtDoneD g d n r m0 o c ∧ r.toNat % 4 = 0) := by
     intro c hc
     obtain ⟨⟨a2, a3, hSt, ⟨K, hk2, hk3, hkbnd⟩, hn2a2⟩, hd, halign⟩ := hc
-
     obtain ⟨c1, hs1, hSt1⟩ := utr_d4_d8 g neg1c n a2 a3 r m0 o c hSt
-
     have hHead : AtHeadD g d n r m0 o c1 := by
       refine ⟨0#64, n, a2, a3, hSt1, K, ⟨hk2, hk3, hkbnd⟩, ?_, ?_, hn2a2⟩
       · simp
       · simp
     obtain ⟨c2, hs2, hDone⟩ := div_loop_to_done g d n r m0 o hd c1 (Or.inl hHead)
     exact ⟨c2, hs1.trans hs2, hDone, halign⟩
-
   have hret : Triple (fun c => AtDoneD g d n r m0 o c ∧ r.toNat % 4 = 0) (udivdi3_post g n d r m0 o) := by
-
-    apply Triple.of_step
     intro c hc
     obtain ⟨⟨a0, a1, a2, a3, hSt, hq, hr⟩, halign⟩ := hc
-    obtain ⟨vmi, hmi⟩ := hSt.minstret
-    have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
-      rw [ret_tgt r halign]; exact halign
-    obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-      site_800046f0 c.σ c.tick c.steps (0x800046f0#64) vmi r hSt.good hSt.pc hmi hSt.ra hSt.loaded rfl htgt hSt.tick
-
+    obtain ⟨vm, hmi⟩ := hSt.minstret
+    have facts : ChainFacts c.σ.mem c.σ.mem (mulRegs a0 a1 a2 a3 r) [] udivRetSeg := by
+      chain_facts hSt.loaded
+      exact ret_tgt_aligned r halign
+    obtain ⟨c', res⟩ := segEval_selected_framed udivRetSeg _ [] _ vm (fun _ => False) mulKeep
+      (mulRegs a0 a1 a2 a3 r) c hSt.good hSt.pc hmi hSt.held
+      (by show KeysOK [10, 11, 12, 13, 1]; decide) facts
+      (by show ChainOK _ [10, 11, 12, 13, 1] _; decide) hSt.tick (fun _ _ => rfl) (by decide)
+      (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
     have ha0eq : a0 = n / d := by apply BitVec.eq_of_toNat_eq; rw [hq, BitVec.toNat_udiv]
     have ha1eq : a1 = n % d := by apply BitVec.eq_of_toNat_eq; rw [hr, BitVec.toNat_umod]
-    refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
-      hG', by rw [hmem']; exact hSt.mem, by rw [hobs.out]; exact hSt.sailOut, by rw [obs_jr_pc hobs, ret_tgt r halign],
-      ha0eq ▸ obs_jr_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a0,
-      ha1eq ▸ obs_jr_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a1,
-      obs_jr_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.ra,
-      hi',
-      fun R hR => (frame_jr hobs R hR).trans (hSt.hframe R hR),
-      ⟨a2, obs_jr_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a2⟩,
-      ⟨a3, obs_jr_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hSt.a3⟩⟩
+    obtain ⟨h0, h1, h2, h3, hra, _⟩ := res.selected_regs
+    exact ⟨c', res.steps, res.good, res.mem_eq.trans hSt.mem, res.output.trans hSt.sailOut,
+      res.pc.trans (congrArg some (ret_tgt r halign)), ha0eq ▸ h0, ha1eq ▸ h1, hra, res.tick,
+      fun R hR => (res.reg_frame R (decide_eq_true hR)).trans (hSt.hframe R hR), ⟨a2, h2⟩, ⟨a3, h3⟩⟩
   exact (((hpre.seq hnorm).seq hdiv).seq hret)
 
 end Vsa.Sim

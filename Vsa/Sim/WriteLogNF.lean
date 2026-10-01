@@ -2,7 +2,8 @@ import Vsa.Sim.BlockMem
 import Vsa.Sim.FrameOn
 import Vsa.Sim.DecodeNF
 import Vsa.Sim.SnprintfSitesRet5
-import Vsa.Sim.SnprintfSpec20
+import Vsa.Sim.RamReadValue
+import Vsa.Sim.MemWriteBasics
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 
@@ -66,18 +67,6 @@ theorem writeLog_out (m : Std.ExtHashMap Nat (BitVec 8)) (log : List WEntry) (a 
     simp only [OutL] at h
     show (writeLog (applyW m (A, w, dv)) log)[a]? = m[a]?
     rw [ih _ h.2, applyW_out m A w dv a h.1]
-
-theorem frameOn_writeLog (ws : List W) (m : Std.ExtHashMap Nat (BitVec 8))
-    (log : List WEntry) (h : LogInW ws log) : FrameOn ws m (writeLog m log) := by
-  induction log generalizing m with
-  | nil => exact frameOn_refl ws m
-  | cons e log ih =>
-    obtain ⟨A, w, dv⟩ := e
-    simp only [LogInW] at h
-    intro a ha
-    show (writeLog (applyW m (A, w, dv)) log)[a]? = m[a]?
-    rw [ih _ h.2 a ha]
-    exact applyW_out m A w dv a (outW_disjoint_inside ha h.1)
 
 theorem pin1_of_writeLog (m : Std.ExtHashMap Nat (BitVec 8)) (log1 log2 : List WEntry)
     (A : Nat) (dv : BitVec 64) (hdis : OutL log2 A) :

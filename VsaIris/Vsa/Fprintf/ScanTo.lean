@@ -2,6 +2,7 @@ import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Loop
 import VsaIris.Vsa.Fprintf.Sprint
 import VsaIris.Interp.ITacTree
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -67,30 +68,12 @@ local macro "scan_tail" : tactic => `(tactic| (
         nx_run hlive using [r2, r19, r24, r23, r25, e10, l240, l232, l16, l240', l232', lw_zext8, hce', BitVec.sub_self, BitVec.add_assoc] at 2147527164 2147527848
         have hfr2 : Frame (writeLog Mt1 [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 c)]) Mt (ScanReg sp.toNat) :=
           (hfr1.mono fun a h => .inl h).snoc fun b h1 h2 => by rw [eo 180 (by omega)] at h1 h2; unfold ScanReg MbReg; omega
-        have hld : ∀ (kd : MKind) (a : Nat), (∀ j, j < widthOfM kd → ¬ ScanReg sp.toNat (a + j)) →
-            ldv kd (writeLog Mt1 [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 c)]) a = ldv kd Mt a :=
-          fun kd a ha => hfr2.ldv kd ha
         refine hk _ _ ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, hfr2⟩ (by rsimp)
         all_goals simp (config := {failIfUnchanged := false}) only [litIov, if_pos, List.length_nil,
           Nat.add_zero, Nat.mul_zero, piecesLen, List.map_nil, List.sum_nil]
-        · rsimp; exact r2
-        · rsimp; exact (kk 9 (by decide)).trans hL.s1
-        · rsimp; exact (kk 18 (by decide)).trans hL.s2
-        · rsimp; exact r19
-        · rsimp; exact (kk 21 (by decide)).trans hL.s5
-        · rsimp; exact r23
-        · rw [hld .ld _ (fun j hj h => by simp only [widthOfM] at hj; unfold ScanReg MbReg at h; omega)]; exact hL.reent
-        · rw [hld .ld _ (fun j hj h => by simp only [widthOfM] at hj; rw [eo 8 (by omega)] at h; unfold ScanReg MbReg at h; omega)]
-          exact hL.file
-        · exact l16
-        · rw [hld .ld _ (fun j hj h => by simp only [widthOfM] at hj; rw [eo 224 (by omega)] at h; unfold ScanReg MbReg at h; omega)]
-          exact hL.base
-        · exact l232
-        · exact l240
-        · intro j hj; simp at hj
-        · rsimp; rw [r25]; simp
-        · rsimp; exact r24
-        · exact hloc1.mb _ (by omega) (by omega)
+        all_goals try carry_close [r2, r19, r23, r24, r25, kk, hL.s1, hL.s2, hL.s5, hfr1.ldv, hL.reent, hL.file,
+          hL.base, l16, l232, l240]
+        all_goals first | (intro j hj; simp at hj) | exact hloc1.mb _ (by omega) (by omega)
       · have hn : bs.length = bs'.length + 1 := by rw [hbsn]; rfl
         have hsw := subw_add_ofNat (n := bs.length) (by omega) P
         have hz1 : (BitVec.ofNat 64 bs.length = 0#64) = False := eq_false fun h => by
@@ -111,32 +94,11 @@ local macro "scan_tail" : tactic => `(tactic| (
         refine hk _ _ ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, hfr2⟩ (by rsimp)
         all_goals simp (config := {failIfUnchanged := false}) only [hlit, List.length_singleton, piecesLen,
           List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-        · rsimp; exact r2
-        · rsimp; exact (kk 9 (by decide)).trans hL.s1
-        · rsimp; exact (kk 18 (by decide)).trans hL.s2
-        · rsimp; exact r19
-        · rsimp; exact (kk 21 (by decide)).trans hL.s5
-        · rsimp
-        · rw [hfr2.ldv .ld (fun j hj h => by simp only [widthOfM] at hj; unfold ScanReg MbReg at h; omega)]; exact hL.reent
-        · rw [hfr2.ldv .ld (fun j hj h => by simp only [widthOfM] at hj; rw [eo 8 (by omega)] at h; unfold ScanReg MbReg at h; omega)]
-          exact hL.file
-        · exact ldv_store_hit _ _ _
-        · rw [hfr2.ldv .ld (fun j hj h => by simp only [widthOfM] at hj; rw [eo 224 (by omega)] at h; unfold ScanReg MbReg at h; omega)]
-          exact hL.base
-        · nx_mem
-          decide
-        · nx_mem
+        all_goals try carry_close [r2, r19, r23, r24, r25, kk, hL.s1, hL.s2, hL.s5, hfr1.ldv, hL.reent, hL.file,
+          hL.base]
         · intro j hj
           obtain rfl : j = 0 := by simp at hj; omega
-          constructor
-          · simp only [Nat.mul_zero, Nat.add_zero, List.getElem_cons_zero, BitVec.ofNat_toNat, BitVec.setWidth_eq]
-            rw [show (BitVec.ofNat 64 (sp.toNat + 352)).toNat = (sp + 352#64).toNat by rw [eo 352 (by omega)]; simp; omega]
-            nx_mem
-          · simp only [Nat.mul_zero, Nat.add_zero, List.getElem_cons_zero]
-            rw [show (BitVec.ofNat 64 (sp.toNat + 352 + 8)).toNat = (sp + 360#64).toNat by rw [eo 360 (by omega)]; simp; omega]
-            nx_mem
-        · rsimp; exact r25
-        · rsimp; exact r24
+          constructor <;> carry_close [eo, Nat.mul_zero, List.getElem_cons_zero, BitVec.ofNat_toNat, BitVec.setWidth_eq]
         · exact hloc.frame hfr2 (fun a h1 h2 h => by unfold ScanReg MbReg at h; omega) (fun h => by unfold ScanReg MbReg at h; omega)))
 
 #ix_piece vfpToTerm_1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
@@ -164,39 +126,26 @@ local macro "scan_tail" : tactic => `(tactic| (
   have hcb := hF.byte bs.length (by simp)
   simp only [List.getElem_append_right (Nat.le_refl _), Nat.sub_self, List.getElem_cons_zero] at hcb
   have hcm := hF.mem bs.length (by simp)
-  have k2 : R1 2 = sp := by rw [hk1 2 (by decide)]; rsimp; exact h2
-  have k9 : R1 9 = 0x8001b798#64 := by rw [hk1 9 (by decide)]; rsimp; exact hL.s1
-  refine vfp_mb hlive hs1 hs2 hs3 hs4 hal k2 k9 e25 (by rw [ePn]; omega) (by rw [ePn]; omega)
+  refine vfp_mb hlive hs1 hs2 hs3 hs4 hal (by carry_close [hk1, h2]) (by carry_close [hk1, hL.s1]) e25 (by rw [ePn]; omega) (by rw [ePn]; omega)
     (by rw [ePn]; exact hcm) (by rw [ePn]; exact hcb) hloc1 fun R2 h0 h10 hk2 => ?_
-  have kk : ∀ x ∈ [2, 9, 18, 19, 21, 23, 24], R2 x = R x := fun x hx => by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rw [hk2 x (by simp only [mbKeep, List.mem_cons, List.not_mem_nil, or_false]; omega),
-      hk1 x (by simp only [scanKeep, List.mem_cons, List.not_mem_nil, or_false]; omega)]
-    rsimp; rw [if_neg (by omega), if_neg (by omega)]
+  have kk : ∀ x ∈ [2, 9, 18, 19, 21, 23, 24], R2 x = R x := by carry_close [hk2, hk1]
   have r2 : R2 2 = sp := (kk 2 (by decide)).trans h2
   have r19 : R2 19 = 37#64 := (kk 19 (by decide)).trans hL.s3
   have r24 : R2 24 = P := (kk 24 (by decide)).trans h24
   have r23 : R2 23 = sp + 352#64 := (kk 23 (by decide)).trans hL.s7
-  have r25 : R2 25 = P + BitVec.ofNat 64 bs.length := by
-    rw [hk2 25 (by decide)]; exact e25
+  have r25 : R2 25 = P + BitVec.ofNat 64 bs.length := by carry_close [hk2, e25]
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk =>
     sp_lit (by omega)
-  have hM : ∀ (kd : MKind) (k : Nat), (k + widthOfM kd ≤ 180 ∨ 184 ≤ k) → k ≤ 400 →
-      ldv kd (writeLog Mt1 [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 c)]) (sp + BitVec.ofNat 64 k).toNat =
-        ldv kd Mt (sp + BitVec.ofNat 64 k).toNat := fun kd k hk hk4 => by
-    rw [(Frame.store Mt1 (Reg := MbReg sp.toNat) _ fun b h1 h2 => by rw [eo 180 (by omega)] at h1 h2; unfold MbReg; omega).ldv kd
-      (fun j hj h => by unfold MbReg at h; rw [eo k (by omega)] at h; omega)]
-    exact hfr1.ldv kd (fun j hj h => by unfold MbReg at h; rw [eo k (by omega)] at h; omega)
-  have l240 := hM .ld 240 (by simp [widthOfM]) (by omega); rw [hL.resid] at l240
-  have l232 := hM .lw 232 (by simp [widthOfM]) (by omega); rw [hL.iovcnt] at l232
-  have l16 := hM .ld 16 (by simp [widthOfM]) (by omega); rw [hL.count] at l16
-  have l16' : ldv .ld Mt1 (sp + 16#64).toNat = BitVec.ofNat 64 cnt := by
-    rw [hfr1.ldv .ld (fun j hj h => by simp only [widthOfM] at hj; unfold MbReg at h; rw [eo 16 (by omega)] at h; omega)]; exact hL.count
+  have l240 : ldv .ld (writeLog Mt1 [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 c)]) (sp + 240#64).toNat = 0#64 := by
+    carry_close [hfr1.ldv, hL.resid]
+  have l232 : ldv .lw (writeLog Mt1 [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 c)]) (sp + 232#64).toNat = 0#64 := by
+    carry_close [hfr1.ldv, hL.iovcnt]
+  have l16 : ldv .ld (writeLog Mt1 [((sp + 180#64).toNat, 4, BitVec.zeroExtend 64 c)]) (sp + 16#64).toNat =
+      BitVec.ofNat 64 cnt := by carry_close [hfr1.ldv, hL.count]
+  have l16' : ldv .ld Mt1 (sp + 16#64).toNat = BitVec.ofNat 64 cnt := by carry_close [hfr1.ldv, hL.count]
   have haw := addw_ofNat' (a := cnt) (b := bs.length) hcnt
-  have l240' : ldv .ld Mt1 (sp + 240#64).toNat = 0#64 := by
-    rw [hfr1.ldv .ld (fun j hj h => by simp only [widthOfM] at hj; unfold MbReg at h; rw [eo 240 (by omega)] at h; omega)]; exact hL.resid
-  have l232' : ldv .lw Mt1 (sp + 232#64).toNat = 0#64 := by
-    rw [hfr1.ldv .lw (fun j hj h => by simp only [widthOfM] at hj; unfold MbReg at h; rw [eo 232 (by omega)] at h; omega)]; exact hL.iovcnt
+  have l240' : ldv .ld Mt1 (sp + 240#64).toNat = 0#64 := by carry_close [hfr1.ldv, hL.resid]
+  have l232' : ldv .lw Mt1 (sp + 232#64).toNat = 0#64 := by carry_close [hfr1.ldv, hL.iovcnt]
   have hce : (BitVec.zeroExtend 64 c = 37#64) = (c = 37#8) := by
     apply propext; constructor
     · intro h; apply BitVec.eq_of_toNat_eq; have := congrArg BitVec.toNat h; simp at this; have := c.isLt; simp; omega

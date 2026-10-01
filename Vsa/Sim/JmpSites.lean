@@ -30,8 +30,8 @@ theorem exec_seqz_jmp (σ : MState) (pc : BitVec 64) (v11 : BitVec 64)
     (afterNextPC (afterPrelude σ) pc)
     (sigma3_alu σ pc Register.x10
       (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12))))))
-    (rX_bits_x11 _ v11 hx11₂)
-    (wX_bits_x10 _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12))))))
+    (rX_bits_gpr _ 11 (by decide) (by decide) v11 hx11₂)
+    (wX_bits_gpr _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12))))) 10 (by decide) (by decide))
 
 theorem site_80007074_jmp
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v11 : BitVec 64)
@@ -47,17 +47,15 @@ theorem site_80007074_jmp
           (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12)))))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80007074 0x80007075 0x80007076 0x80007077 (b0 := (0x13 : BitVec 8)) (b1 := (0xb5 : BitVec 8)) (b2 := (0x15 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
-  exact stepObs_alu σ i u (0x80007074#64) vminstret (0x0015b513#32)
-    (instruction.ITYPE (0x001#12, regidx.Regidx 0x0b#5, regidx.Regidx 0x0a#5, iop.SLTIU))
-    Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12)))))
-    (0x13#8) (0xb5#8) (0x15#8) (0x00#8)
-    hG hpc hminstret w_0015b513_jmp nr_0015b513_jmp
-    (Vsa.Sim.decodeW (w := 0x0015b513#32) (afterPrelude σ)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
-      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+  exact stepObs_exec _ vminstret
+    (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
+      nr_0015b513_jmp w_0015b513_jmp
+      (Vsa.Sim.decodeW (w := 0x0015b513#32) (afterPrelude σ)
+        (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+        (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+        (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg)))
     (exec_seqz_jmp σ (0x80007074#64) v11 hx11)
-    (by decide) (by decide) (by decide) (by decide) (by decide)
-    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi
 
 end Vsa.Sim

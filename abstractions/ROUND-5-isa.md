@@ -427,3 +427,266 @@ def main : IO Unit := do
   for i in [0:mods.size] do
     h.putStrLn s!"{mods[i]!}\t{used.getD i 0}\t{total.getD i 0}"
 ```
+
+## 12. Follow-up after rollout (branch `exp-M2`, 2026-09-30)
+
+From `exponentiate` f16fdb8d. Four tasks: move callers onto the generic rules and delete the
+per-kind statements left without users; collapse the block executor's `cases akind`; give
+`MemLoad` and `MemStore` one width layer; remove off-path declarations inside live files.
+Commits: ac12fe86 (tasks 1–3), ecde2758 (task 4), e1e4cf81 (`stepObs_jal` on the rule), 2dfe27e9
+(declarations exponentiate's restored sites use), plus this record. Full `lake build` green after each batch (1,008 jobs).
+
+### Task 1: callers on the generic rules
+
+One observational commit rule was missing: `stepObs_retire` needs a `try_step` fact, so every
+caller went through a per-kind `stepObs_K`. Added `stepObs_exec npc vm (F : Fetched σ pc ast)
+hexec (R : RetireReads σ3 npc vm) (hG3 : GoodState σ3) hi` (`StepObs`) and
+`GoodState.prelude` (`Retire`: the two prelude inserts keep the pins). A call site now reads
+`stepObs_exec npc vm (Fetched.of_bytes …) (execute_K_char …) ⟨reg_reads …⟩
+((hG.prelude _).insert_nonpinned …) hi`; its `ReadsLikePost σ' (retirePost σ3 npc vm)` is
+definitionally the old `sigmaPost_K` form, so consumers (`jalStep_of_obs`, `StepFrameOut.of_alu`,
+`aluStep_of_obs`, …) take it unchanged.
+
+Moved: `BlockTerm.term_step_bt` (branch taken/not taken, `j`, `jr`), the Jmp/Memcpy4/Strlen sites,
+`stepObs_jalr` (statement kept, body one line), `stepObs_jal` (same), `JalSite.exec`,
+`AllocSltu`, `SymObsStep`, and the `StepGen` templates (ALU observation, `jalr`, `jalr ra`).
+`jalExec_word`, `MallocFastJal` and the generated `jal` lemma now instantiate `JalSite.exec`
+with a decided `Cert` instead of repeating the step (four copies of the same 15-line block before).
+Every `rX_bits_xN`/`wX_bits_xN` call outside `VsaIris/Interp` uses `rX_bits_gpr`/`wX_bits_gpr`.
+
+Deleted as unused: `try_step_{alu,store,branch_taken,branch_nottaken,jal,jalr,j,jr}`, every
+`stepOnce_K_{tick,notick}`, `step_K_{tick,notick}`, `sigmaTick_K`, `goodstate_sigmaPost_K`,
+`stepObs_store`, 49 of the 62 register instances, `get?_sigmaTick_jalr`. The step-chain files
+fell 1,648 → 473 lines (`StepJump` 703 → 72).
+
+`exponentiate` moved after this branch started (69939cfc restores `DivSites*`, `Muldi3Sites`,
+`DivSpec`, `DivLoops` and a larger `ObsAvoid`, ~4,000 lines of per-site proofs used by the
+compiler). Those call `stepObs_{alu,branch_taken,branch_nottaken,j,jr}`,
+`rX_bits_x{1,5,10,11,12,13}`, `wX_bits_x{5,10,11,12,13}`, `obs_store_other_val` and
+`obs_branch_nottaken_other`, so commit 2dfe27e9 keeps them with their original statements (the
+`stepObs_K` bodies are one-line instances of `stepObs_exec`) and puts `ObsAvoid` back at its base
+version so the merge applies cleanly. Checked by compiling exponentiate's versions of the five
+`Code/__*` images, `DivSites`, `Muldi3Sites`, `Muldi3Spec`, `DivSpec`, `DivLoops`, `DivSites2`,
+`DivSites3`, `ObsAvoid` and `DivSpec3` against this branch's oleans (scratch output directory):
+all compile. These sites are the next callers to move; each `stepObs_K … hi` term becomes
+`stepObs_exec _ vm (Fetched.of_bytes …) hexec ⟨reg_reads …⟩ (goodstate) hi` as in `JmpSites`.
+
+Left, with their callers:
+
+| declaration | caller | rewrite |
+|---|---|---|
+| `stepObs_jalr`, `rX_bits_x16`, `wX_bits_x1` | `VsaIris/Interp/CallJalr.lean` 191–204 | below; checked by compiling a copy of the file against this branch |
+| `stepObs_jal`, `wX_bits_x1`, `get?_sigmaPost_jal`, `sailOutput_sigmaPost_jal` | `Vsa/Compiler/Lift.lean` 306–311 (pr13 tool; not on this branch) | same shape as `JalSite.exec`; not compiled here |
+| `stepObs_tohost_putchar`, `stepOnce_tohost_G` | `Console`, `Vsa/Compiler/Lift` | HTIF steps have no retire shape (halt, pinned `htif_tohost`) |
+| `sigma3_K`, `sigmaPost_K`, `get?_sigmaPost_K` | statements of `ObsStep`, `SymJalr`, `Tools`, `AluStep`, `SymObs`, `StepFrameOut` | kept: they name states in live statements |
+
+`CallJalr` rewrite (replaces the `stepObs_jalr … hi` term of the `obtain`):
+
+```lean
+    stepObs_exec (u := c.steps) (Sail.BitVec.update (tgt + sign_extend (m := 64) (0x000#12)) 0 0#1) vm
+      (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
+        (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
+        (Vsa.Sim.decodeW (w := 0x000800e7#32) (afterPrelude c.σ)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg)))
+      (execute_jalr_char (0x000#12) (regidx.Regidx 0x10#5) (regidx.Regidx 0x01#5) _ tgt _ _
+        (by reg_reads [hG.misa]) (by reg_reads [hG.cur_privilege]) (by reg_reads [hG.mseccfg])
+        (by reg_reads [])
+        (rX_bits_gpr _ 16 (by decide) (by decide) tgt
+          (by show (afterNextPC (afterPrelude c.σ) (0x800039f4#64)).regs.get? Register.x16 = _
+              rw [get?_afterNextPC c.σ (0x800039f4#64) _ (by decide) (by decide)]; exact hrs))
+        (by rw [htgt]; exact hal)
+        (wX_bits_gpr _ (BitVec.addInt (0x800039f4#64) 4) 1 (by decide) (by decide)))
+      ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩
+      (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _) hi
+```
+
+`Lift` rewrite (unchecked): `stepObs_exec (u := u) (A.pc + sign_extend (m := 64) (evenJ off)) vm
+(Fetched.of_bytes hG hc.pc hb0' hb1' hb2' hb3' hlo hhi hal (by rw [bytes_word, encode_rvc])
+(bytes_word _) hdec) (execute_jal_char (evenJ off) (gprIdx 1) _ A.pc _ _ _ (by reg_reads [])
+(by reg_reads [hc.pc]) (by reg_reads [hG.misa]) htgt (wX_bits_gpr _ _ 1 (by decide) (by decide)))
+⟨by reg_reads [r4, hG.hart_state], by reg_reads [r1], by reg_reads [r2], by reg_reads [r3, hvm]⟩
+(((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned r5 _) hc.tick`, where `hbk'` are
+its four `by rw [hmem]; … hb k …` byte facts. After both rewrites `stepObs_jal`, `stepObs_jalr`,
+`wX_bits_x1` and `rX_bits_x16` have no users.
+
+### Task 2: `block_mem_run`
+
+The 37-arm `cases akind` (≈2,000 lines) became two families on the commit rule, split by
+`isStoreM : MKind → Bool`: one fetch front (`Fetched.of_bytes`), one commit and one IH application
+per family. The per-kind content is two tables: `exec_reg_kind` (33 kinds, one `execute_*_char`
+or `exec_*_ramv`/`_totv` application of about two lines each, producing
+`sigma3_alu … (gprRT a.rd (wvalM a L bs))`) and `exec_store_kind` (4 kinds, producing
+`sigma3_store σ a.pc (applyW σ.mem (wentryM a L))` and the unchanged bytes below `tohostAddr`).
+Family bookkeeping (`stepGM_reg`, `wlogM_store`, …) is proved by `cases k <;> first | rfl | cases h`.
+`block_mem_run` and every declaration of `BlockMem` named elsewhere keep their statements;
+`exec_sb_bm`/`exec_sh_bm` became three-line instances of `exec_store_w`. 2,664 → 894 lines,
+6.21 → 4.12 s (same oleans, interleaved).
+
+### Task 3: one width layer
+
+`MemWidth` (132 lines, imported by both) holds `effectivePrivilege_machine` (any access other
+than instruction fetch; replaces `effectivePrivilege_data`/`_store`), `tmod_toNatInt_of_mod`,
+`to_bits_ofNat`, the single `split_misaligned_aligned_w`, and `pmaCheck_ram` for
+`acc = Load Data ∨ acc = Store Data` (replaces `pmaCheck_ram_read`/`_write`, which were the same
+60-line proof). `MemLoad` + `MemStore`: 1,817 → 881 lines (with task 4's per-width copies);
+4.47 → 2.67 s and 6.34 → 4.99 s interleaved, `MemWidth` 1.9 s.
+
+### Task 4: off-path declarations
+
+Per-declaration reachability (the §11 script, extended to write, for every ranged constant, its
+owner declaration, source range, liveness and direct users). Roots: `endToEnd_refinement`,
+`proofElf_halts`, all of `Vsa.Sim.Boot.Audit`, `Vsa.Lang.*`, `VsaIris.Lang.Route`; every
+declaration of `BlockTerm`, `DivSpec3`, `HtifLift`, `HtifStepObs`, `Muldi3Spec`, `StepCount`
+(imported by the tools in main); and every `Vsa/Sim` declaration named in the sources pr13 adds
+(`Vsa/Compiler`, `Vsa/AbsInt`, `VsaIris/WhileLogic`, `Vsa/While`, …; read with `git show pr13:…`,
+matched by unique short name or by qualified suffix). Scope: `Vsa/Sim/*.lean` and `Vsa/Sim/rows`
+(not `Boot`, not the generated `Code`). A block (maximal declaration range, including a
+structure's fields) is removed when no constant in it is live, every direct user is itself
+removed (fixpoint), no remaining source text names it outside comments (simp lists, tactic
+arguments, tools), and it defines no syntax, macro or elaborator. 4,598 lines left 68 files; 15
+modules were emptied and deleted, their importers taking their imports. The build was green on
+the first try; a second round finds nothing more.
+
+Defects found: (1) emptying a `mutual … end` block leaves a parse error; the pass now drops empty
+`mutual` blocks. (2) A textual check on short names alone keeps whole modules alive through
+common field names (`transport`, `mono`, `ra`); names shared by several declarations are matched
+by their qualified suffix, and a structure's fields count as the structure. (3) `local macro` is
+not caught by the syntax guard; the only instance was used only by a dead theorem in the same file.
+
+### Measurements
+
+Lines (`wc -l`) and user CPU of `lake env lean` at 8 threads, min of 3. The machine ran two other
+builds throughout (load 27–29 on 32 cores), so separate before/after runs drift: files that did
+not change were 14% slower in the after run (median) and `VsaIris` files 40–60% slower. Where the
+old file still compiles against the new oleans, the two versions were timed interleaved
+("paired"); the other rows are separate runs. CPU was measured at e1e4cf81; 2dfe27e9 then adds
+≈250 lines of one-line instances to `StepObs` and `RegAccess` (line columns are at 2dfe27e9).
+
+| file | lines before | lines after | CPU s |
+|---|---:|---:|---|
+| `BlockMem` | 2,664 | 894 | 6.21 → 4.12 (paired, same oleans) |
+| `StepJump` | 703 | 72 | 3.54 → 1.41 (paired) |
+| `StepBranch` | 357 | 96 | 1.96 → 1.21 (paired) |
+| `StepAlu` | 187 | 35 | 1.28 → 0.85 (paired) |
+| `StepStore` | 160 | 33 | 1.52 → 1.21 (paired) |
+| `StepObs` | 241 | 237 | 1.03 → 1.12 (separate; before batch 4's restorations, 113 lines) |
+| `RegAccess` | 518 | 248 | 11.36 → 11.52 (paired; before batch 4, 188 lines) |
+| `MemLoad` | 710 | 196 | 4.47 → 2.67 (paired) |
+| `MemStore` | 1,107 | 685 | 6.34 → 4.99 (paired) |
+| `MemWidth` | 0 | 132 | 1.93 (new) |
+| `ExecuteLoad` | 422 | 347 | 2.02 → 2.34 (separate) |
+| `BlockTerm` | 870 | 880 | 2.33 → 3.41 (separate) |
+| `SnprintfSitesRet5` | 146 | 116 | 0.88 → 1.36 (separate) |
+| `OutputAliasPhysical` | 463 | 278 | 22.48 → 11.09 (paired) |
+| `MemRegion` | 283 | 109 | 1.88 → 1.24 (paired) |
+| `ValueSpec` | 207 | 174 | 8.05 → 7.09 (paired) |
+
+| measure | before (f16fdb8d) | after (2dfe27e9) |
+|---|---:|---:|
+| `Vsa/Sim/*.lean` (top level) | 155 files, 22,196 lines | 143 files, 16,163 lines |
+| `Vsa/Sim/rows` | 193 lines | 62 lines |
+| changed `Vsa/Sim` files (72) | 14,266 lines | 8,233 lines |
+| all project Lean (without `riscv-lean`) | 147,374 lines | 141,139 lines |
+| build jobs | 1,022 | 1,008 |
+| CPU, 41 paired files that survive | 104.2 s | 85.1 s |
+| CPU, 6 deleted modules whose old version compiles | 6.7 s | 0 |
+| CPU, all `Vsa/Sim` top level, separate runs | 221.4 s | 215.4 s (after run at ≈1.14× load) |
+| diff vs the base f16fdb8d (Lean only) | | 81 files, +731 / −6,966 |
+
+One named cost: a call site of `stepObs_exec` discharges its four retire reads with `reg_reads`
+where the per-kind lemma had done it once. Measured in isolation, 30 ALU-style retire reads plus
+their `GoodState` terms cost 2.7 s single-threaded (≈90 ms each). `BlockTerm` (four arms) and
+`SnprintfSitesRet5` carry it; the generated `jalr` and observed-ALU step lemmas carry it per
+site. The generator-driven `VsaIris` modules slowed by the same factor as `VsaIris` modules the
+change does not touch, so the aggregate effect is within the noise of this machine.
+
+Axioms of `endToEnd_refinement`, `proofElf_halts`, `block_mem_run`, `stepObs_exec`, `pmaCheck_ram`:
+[propext, Classical.choice, Quot.sound]. No file under `Vsa/Sim/Boot` or `VsaIris/Interp` changed.
+No `sorry`, `axiom`, `native_decide`, `bv_decide`, `ofReduceBool`, `maxHeartbeats` or `maxRecDepth`
+added (`MemWidth` has no `set_option`).
+
+### Open next
+
+* The two rewrites above (`CallJalr`, `Lift`) and the same rewrite in exponentiate's restored
+  `DivSites*`/`Muldi3Sites` (≈130 call sites) delete every remaining `stepObs_K` and register
+  instance.
+* Retire reads as rules instead of `reg_reads`: `RetireReads.prelude hG hmi` for
+  `afterNextPC (afterPrelude σ) pc` and `RetireReads.insert` for an insert of a register outside
+  the four (one decided `RetireFree r`), so a call site builds its reads as a term. That removes the
+  per-site cost above and shortens every `stepObs_exec` call by a line.
+* The CLAUDE.md row proposed in §10 for machine steps should name `stepObs_exec` as the
+  observational entry point.
+
+## 13. Residual callers retired (branch `exp-C3`, 2026-10-01)
+
+From `exponentiate-next` 915b83df. Commits 6a86639e (callers on the generic rules), 1289f236
+(ROUND-4 M1 leftovers), 5dc9c88f (retire-read combinators; site CPU back to baseline). Full
+`lake build` green (1,527 jobs); the 14 headline/tool theorems keep their axiom sets (the two
+`WhileLogic` adequacy theorems [propext, Quot.sound], the rest [propext, Classical.choice,
+Quot.sound]). No theorem statement used by the tools changed; `Vsa/Compiler/Lift` changed only
+inside the `sim_jal_link` proof.
+
+**Callers moved.** Every site of `DivSites`, `DivSites2`, `DivSites3`, `Muldi3Sites` (63 steps),
+`CallJalr` and `Lift` now reads
+
+```lean
+exact (stepObs_exec _ vm (Fetched.of_word (0x…#32) hG hpc hb0 hb1 hb2 hb3) hexec
+  ((RetireReads.prelude hG hvm _).write _) ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
+```
+
+Two generic pieces carry it. `Fetched.of_word w` (`StepObs`) is `Fetched.of_bytes` plus
+`decodeW`: range, alignment, compressed-bit and word facts are `by decide` auto-parameters and
+the decode is `by rfl` along `decodeN`. `RetireReads.prelude`/`.write`/`.jump` (`Retire`) are
+the read-side twin of `GoodState.prelude`/`.insert_nonpinned`: the prelude state retires to
+`pc + 4`, a write to a register `try_step` does not read keeps the reads (side condition by
+`decide`), and a `nextPC` write sets the target. Kinds compose as chains: ALU `.write`, taken
+branch and `j`/`jr` `.jump`, not-taken branch the bare prelude, `jal`/`jalr` `.jump` then
+`.write`. Register reads and writes are `rX_bits_gpr`/`wX_bits_gpr`. The 18 named
+`*_word`/`*_notrvc` lemmas of `Muldi3Sites` became the auto-parameters.
+
+Deleted, now without users: `stepObs_{alu,branch_taken,branch_nottaken,jr,j,jal}` (`StepObs`
+216 → 80 lines), `stepObs_jalr` (`SnprintfSitesRet5`), and the 13 remaining register instances
+`rX_bits_x{1,5,10,11,12,13,16}`, `wX_bits_x{1,5,10,11,12,13}`. `sigma3_K`/`sigmaPost_K` and the
+`sailOutput_sigmaPost_K`/`get?_sigmaPost_K` lemmas stay: they name states in live statements
+(`DivSpec3`, `StepFrameOut`, `Lift`).
+
+**Elaboration cost of the commit rule at a concrete site.** Written as `exact stepObs_exec _ …`,
+each site spent about 130 ms unifying the result type `ReadsLikePost σ' (retirePost σ3 ?npc vm)`
+against the goal's `sigmaPost_K …` before the arguments fixed `?npc`; the first version of this
+round made the four site modules 3.4× slower (7.7 → 26.5 s). Elaborating the term without the
+expected type, `exact (… :)`, lets the reads fix `?npc` first and the final check compares
+closed terms (6 ms per site). The `reg_reads` tuples (four `simp` calls per site, ≈1 s per
+module) became the combinators above. The site modules are back to 7.66 → 7.67 s.
+
+**M1 leftovers (ROUND-4 "Migration after the decision").**
+
+* `allocRegs_pre`, `allocRegs_post`, `allocRegs_keep` (`CallMalloc`) are the register
+  marshalling of a `malloc`/`free` call around `ms_callRegs`: the cut-out `mallocL` registers to
+  the allocator ABI, the return's `a0`/`sp`/clobbered/saved registers back to one register
+  function `f` with `f 2`, the saved registers and `f 10 = q` known, and the callee-saved keep.
+  `ms_callMalloc` and `ms_callFree` keep their statements; `CallFree` 118 → 72 lines.
+* `ResultCopy_run` (`Case/VarT`, view `DA` abstract) is the copy-and-epilogue segment at
+  `0x80003448`; it replaces `VarT_run2` and `AssignT_run3`, which differed only in the AST view.
+* `KeepRegs.upd` (moved to `SpecEval`, beside `KeepRegs`) replaces `KeepRegs.upd_right`
+  (LoopKit), ExecArm's copy and a third duplicate, `KeepRegs.calleeSaved_upd` (LoopKit, 19 uses
+  in LoopArgs/LoopFor/LoopWhile). `keep_upd` uses it.
+
+**Measurement.** Non-blank lines. CPU is user seconds of `lake env lean -j 8`, 8 threads, min of
+3 interleaved runs on copies outside the worktree, before compiled against oleans rebuilt from
+915b83df. Files of the `Vsa` library need `-Dbackward.isDefEq.respectTransparency=false` (the
+`lakefile.toml` option for that library) when compiled this way, or `Lift` fails.
+
+| | lines before | after | CPU before | after |
+|---|---:|---:|---:|---:|
+| task 1: `StepObs`, `RegAccess`, `Retire`, `SnprintfSitesRet5`, `CallJalr`, `Lift` | 1,744 | 1,534 | 20.64 s | 18.61 s |
+| task 1: `DivSites`, `DivSites2`, `DivSites3`, `Muldi3Sites` | 2,246 | 1,784 | 7.66 s | 7.67 s |
+| task 2: `CallMalloc`, `CallFree` | 217 | 189 | 2.46 s | 2.47 s |
+| task 2: `Case/VarT`, `Case/AssignT` | 596 | 575 | 30.93 s | 29.77 s |
+| task 2: `SpecEval`, `ExecArm`, `LoopKit`, `LoopArgs`, `LoopFor`, `LoopWhile` | 3,535 | 3,525 | 49.90 s | 50.31 s |
+| total (20 files) | 8,338 | 7,607 (−731) | 111.59 s | 108.83 s |
+| `git diff --shortstat 915b83df` (code) | | | | 20 files, +445 / −1,210 |
+
+Per file, `StepObs` 2.65 → 0.87 s and `AssignT` 15.76 → 13.95 s; `VarT` 15.17 → 15.82 s now
+holds the shared segment; no other file moves by more than 0.4 s.

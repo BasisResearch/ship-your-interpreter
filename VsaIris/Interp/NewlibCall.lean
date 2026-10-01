@@ -144,10 +144,8 @@ theorem ms_tailNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave ⟨Hargs, HY, Hcf⟩ := hQ (R 1) $$ HQ
   unfold callFrame
   icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
-  ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
-  · iframe Hslack Hst
-  ihave Hregs := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
-  · iframe Hargs Htmp Hsp Hcs
+  ihave Hst := stackScratch_widen hn hneed $$ [$]
+  ihave Hregs := regFile_after R s hs $$ [$]
   iapply Hk $$ Hpc Hra Hregs HY HS Hst
 
 theorem ms_callNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -185,10 +183,8 @@ theorem ms_callNewlibA (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave ⟨Hargs, HY, Hcf⟩ := hQ _ $$ HQ
   unfold callFrame
   icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
-  ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
-  · iframe Hslack Hst
-  ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
-  · iframe Hargs Htmp Hsp Hcs
+  ihave Hst := stackScratch_widen hn hneed $$ [$]
+  ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [$]
   iapply Hk $$ %R' %hk HY [Hpc Hra Hregs HS] Hst
   rw [regFile_upd_ra]
   simp only [upd_same]
@@ -231,10 +227,8 @@ theorem ms_callNewlibAbort (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat ×
     ihave ⟨Hargs, HY, Hcf⟩ := hQ _ $$ HQ
     unfold callFrame
     icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
-    ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
-    · iframe Hargs Htmp Hsp Hcs
+    ihave Hst := stackScratch_widen hn hneed $$ [$]
+    ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [$]
     iapply Hk $$ %R' %hk HY [Hpc Hra Hregs HS] Hst
     rw [regFile_upd_ra]
     simp only [upd_same]
@@ -259,11 +253,9 @@ theorem ms_join {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
           ∀ a, S a → ¬ T a⌝ := by
   unfold ms
   iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, HT⟩
-  ihave ⟨%M, H, %h⟩ := ownSet_join_tracked S T M1 M2 $$ [HS HT]
-  · iframe HS HT
+  ihave ⟨%M, H, %h⟩ := ownSet_join_tracked S T M1 M2 $$ [$]
   iexists M
-  iframe Hpc Hra Hregs H
-  ipureintro; exact h
+  iframe Hpc Hra Hregs H %h
 
 theorem strAt_rodata {p : Nat} {x : String}
     (hdom : ∀ i, i < x.toList.length + 1 → rodataDom (p + i)) (hc : CStrImg rodataByte p x)
@@ -272,8 +264,7 @@ theorem strAt_rodata {p : Nat} {x : String}
   unfold binImg strAt
   iintro ⟨-, #H⟩
   iexists rodataByte
-  isplitr
-  · ipureintro; exact ⟨hc, hw⟩
+  isplitr; ipureintro; exact ⟨hc, hw⟩
   unfold roImg
   imodintro
   iintro %k %hk
@@ -300,22 +291,20 @@ theorem ms_iff {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M 
   iframe Hpc Hra Hregs
   iapply ownSet_iff _ h $$ HS
 
+theorem carve_iff {S : Nat → Prop} {a : Nat} (hS : ∀ k, InExt (a, 24) k → S k) (k : Nat) :
+    S k ↔ ((S k ∧ ¬ InExt (a, 24) k) ∨ InExt (a, 24) k) := by
+  by_cases h' : InExt (a, 24) k
+  · exact ⟨fun _ => .inr h', fun _ => hS k h'⟩
+  · exact ⟨fun h => .inl ⟨h, h'⟩, fun h => h.elim And.left (absurd · h')⟩
+
 theorem ms_carveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
     {M : Mem} {a b : Nat} {img : Nat → BitVec 8} {v : Value} (hS : ∀ k, InExt (a, 24) k → S k)
     (h0 : imgW (imgM M) a = imgW img b) (h8 : imgW (imgM M) (a + 8) = imgW img (b + 8))
     (h16 : imgW (imgM M) (a + 16) = imgW img (b + 16)) :
     ms (GF := GF) pc R S M ∗ valImg N img b v ⊢
       ms pc R (fun k => S k ∧ ¬ InExt (a, 24) k) M ∗ valAt N a v := by
-  have hsl : ∀ k, S k ↔ ((S k ∧ ¬ InExt (a, 24) k) ∨ InExt (a, 24) k) := fun k => by
-    constructor
-    · intro h; by_cases h' : InExt (a, 24) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact hS k h
   iintro ⟨Hms, #Hv⟩
-  ihave Hms := ms_iff hsl $$ Hms
+  ihave Hms := ms_iff (carve_iff hS) $$ Hms
   ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
   iframe Hms
   rw [← valImg_words (GF := GF) (N := N) (v := v) h0 h8 h16]
@@ -326,21 +315,12 @@ theorem ms_uncarveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64}
     {M : Mem} {a : Nat} {v : Value} (hS : ∀ k, InExt (a, 24) k → S k) :
     ms (GF := GF) pc R (fun k => S k ∧ ¬ InExt (a, 24) k) M ∗ valAt N a v ⊢
       ∃ M', ms pc R S M' ∗ ⌜∀ k, S k → ¬ InExt (a, 24) k → imgM M' k = imgM M k⌝ := by
-  have hsl : ∀ k, ((S k ∧ ¬ InExt (a, 24) k) ∨ InExt (a, 24) k) ↔ S k := fun k => by
-    constructor
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact hS k h
-    · intro h; by_cases h' : InExt (a, 24) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
   iintro ⟨Hms, Hval⟩
   ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
+  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [$]
   iexists M'
   isplitl
-  · iapply ms_iff hsl $$ Hms
+  · iapply ms_iff (fun k => (carve_iff hS k).symm) $$ Hms
   · ipureintro; exact fun k hk hn => h1 k ⟨hk, hn⟩
 
 end Carve

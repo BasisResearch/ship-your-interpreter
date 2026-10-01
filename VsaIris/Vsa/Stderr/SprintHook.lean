@@ -2,6 +2,7 @@ import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stderr.SprintErr
 import VsaIris.Vsa.Fprintf.Print
 import VsaIris.Vsa.Fprintf.End
+import VsaIris.Interp.SymFront
 
 namespace VsaIris.Sym
 
@@ -22,7 +23,7 @@ open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
       (outS s need) Q t ra R' Mt') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000e8cc#64 R Mt by
-  nx_win sp 256 0; nx_run hlive using [h1, h2, h12, hres, BitVec.add_assoc, BitVec.reduceAdd]
+  nx_win sp 256 0; xrun hlive using [h1, h2, h12, hres, BitVec.add_assoc, BitVec.reduceAdd]
   refine hfin _ _ (retOK_of ?_ ?_) ⟨fun a ha1 ha2 ha3 ha4 => ?_, ?_, ?_, ?_, ?_⟩
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · ret_keep

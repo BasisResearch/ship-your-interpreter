@@ -70,16 +70,18 @@ theorem aluStep_site (val : BitVec 64) (ast : instruction)
     obtain ⟨hb0, hb1, hb2, hb3⟩ := site_bytes i b0 b1 b2 b3 hMR
     obtain ⟨g1, g2, g3, g4, g5⟩ := gpr_rd_ok rd (by omega) hrd1
     obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=
-      stepObs_alu c.σ c.tick c.steps (BitVec.ofNat 64 i) vm w ast (gprReg rd) (gprRT rd val)
-        b0 b1 b2 b3 hG hpc hmi hword hrvc
-        (Vsa.Sim.decodeW (afterPrelude c.σ)
-          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
-          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
-          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg) (hdec _))
-        (hexec c.σ hRR) g1 g2 g3 g4 g5
-        (by rw [hi64]; exact hb0) (by rw [hi64]; exact hb1) (by rw [hi64]; exact hb2)
-        (by rw [hi64]; exact hb3) (by rw [hi64]; exact hlo) (by rw [hi64]; exact hhi)
-        (by rw [hi64]; exact hal) hi
+      stepObs_exec (u := c.steps) (BitVec.addInt (BitVec.ofNat 64 i) 4) vm
+        (Fetched.of_bytes hG hpc
+          (by rw [hi64]; exact hb0) (by rw [hi64]; exact hb1) (by rw [hi64]; exact hb2)
+          (by rw [hi64]; exact hb3) (by rw [hi64]; exact hlo) (by rw [hi64]; exact hhi)
+          (by rw [hi64]; exact hal) hrvc hword
+          (Vsa.Sim.decodeW (afterPrelude c.σ)
+            (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
+            (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
+            (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg) (hdec _)))
+        (hexec c.σ hRR)
+        ⟨by reg_reads [g4, hG.hart_state], by reg_reads [g1], by reg_reads [g2], by reg_reads [g3, hmi]⟩
+        ((hG.prelude _).insert_nonpinned g5 _) hi
     exact ⟨σ', i', vm, hs, hi', hG', hmem, hobs⟩
 
 /-- `sltu rd, rs1, rs2`. -/

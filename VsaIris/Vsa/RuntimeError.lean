@@ -84,7 +84,7 @@ theorem a_facts {m : Std.ExtHashMap Nat (BitVec 8)} {s s0v s1v inp line r : BitV
   have h1 := hg.lo; have h2 := hg.hi; have h3 := hg.align
   unfold tohostAddr at h1
   unfold rtASeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.rtErrCode_at_"
+  chain_facts hcode
   · exact sdFact (ea := s.toNat - 224 + 208) rfl
       (sp_off s hg 208 (0x0d0#12) (by decide) (by omega) _ rfl)
       (by omega) (by omega) (by unfold tohostAddr; omega) (by omega)
@@ -127,7 +127,7 @@ theorem b_facts {m : Std.ExtHashMap Nat (BitVec 8)} {a1v a4v s' a3v line a0v inp
     (hcode : rtErrCodeLoaded m) :
     ChainFacts m m (bL a1v a4v s' a3v line a0v inp a2v) [] rtBSeg := by
   unfold rtBSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.rtErrCode_at_"
+  chain_facts hcode
 
 theorem b_pc (a1v a4v s' a3v line a0v inp a2v : BitVec 64) :
     evalBlocksPC 0x80002dcc#64 (SegEvalState.init (bL a1v a4v s' a3v line a0v inp a2v) [])
@@ -158,7 +158,7 @@ abbrev cL (a0v inp a1v : BitVec 64) : GRegs := [(10, a0v), (8, inp), (11, a1v)]
 theorem c_facts {m : Std.ExtHashMap Nat (BitVec 8)} {a0v inp a1v : BitVec 64}
     (hcode : rtErrCodeLoaded m) : ChainFacts m m (cL a0v inp a1v) [] rtCSeg := by
   unfold rtCSeg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.rtErrCode_at_"
+  chain_facts hcode
 
 theorem c_pc (a0v inp a1v : BitVec 64) :
     evalBlocksPC 0x80002de8#64 (SegEvalState.init (cL a0v inp a1v) []) rtCSeg = 0x80002df0#64 :=
@@ -193,7 +193,7 @@ theorem lj1_facts {m : Std.ExtHashMap Nat (BitVec 8)} {jbp v1 v8 v9 v18 v19 v20 
   have h1 := hg.lo; have h2 := hg.hi
   unfold tohostAddr at h1
   unfold lj1Seg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.ljCode_at_"
+  chain_facts hcode
   · exact ldFact (img := jb) rfl (jb_off jbp hg 0 (BitVec.ofNat 12 0) (by decide) (by omega) _ rfl)
       (by omega) (by omega) (.inr (by unfold tohostAddr; omega)) (fun k hk => hpin _ (by omega) (by omega))
   · exact ldFact (img := jb) rfl (jb_off jbp hg 8 (BitVec.ofNat 12 8) (by decide) (by omega) _ rfl)
@@ -304,7 +304,7 @@ theorem lj2_facts {m : Std.ExtHashMap Nat (BitVec 8)} {rv : BitVec 64}
     (hcode : ljCodeLoaded m) (hal : rv.toNat % 4 = 0) :
     ChainFacts m m [(10, 0#64), (11, 1#64), (1, rv)] [] lj2Seg := by
   unfold lj2Seg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.ljCode_at_"
+  chain_facts hcode
   have e : ∀ x : BitVec 64, x = rv →
       (BitVec.update (x + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
     intro x hx; rw [hx, ret_tgt rv hal]; exact hal

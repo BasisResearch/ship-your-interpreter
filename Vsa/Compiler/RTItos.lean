@@ -1,4 +1,5 @@
 import Vsa.Compiler.RTLeaf
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -91,10 +92,6 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
       B.pc = (if BitVec.ofInt 64 (x.toInt.tdiv 10) = 0 then pcOf (itPos + 34) else pcOf (itPos + 16))) := by
   have hb : bufBase = 0x80080000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
-  have k20 := has_mem h20 (by decide); have k21 := has_mem h21 (by decide)
-  have k22 := has_mem h22 (by decide)
-  have e20 := srcVal_of_has h20; have e21 := srcVal_of_has h21; have e22 := srcVal_of_has h22
-  simp only [s4, s5, s6] at k20 k21 k22 e20 e21 e22
   have hbn : (BitVec.ofNat 64 (bufBase + 8 * j)).toNat = bufBase + 8 * j := toNat_ofNat_lt (by omega)
 
   have h23 : ∀ L'', Keep itLoopClob L' L'' → Has L'' a0 (BitVec.ofNat 64 (x.toInt.natAbs % 10)) →
@@ -105,11 +102,6 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
         Has B.regs s6 (BitVec.ofNat 64 (bufBase + 8 * (j + 1))) ∧ Keep itLoopClob L' B.regs ∧
         B.pc = (if BitVec.ofInt 64 (x.toInt.tdiv 10) = 0 then pcOf (itPos + 34) else pcOf (itPos + 16))) := by
     intro L'' hk h10 g20 g21 g22
-    have k20 := has_mem g20 (by decide); have k21 := has_mem g21 (by decide)
-    have k22 := has_mem g22 (by decide); have k10 := has_mem h10 (by decide)
-    have e20 := srcVal_of_has g20; have e21 := srcVal_of_has g21; have e22 := srcVal_of_has g22
-    have e10 := srcVal_of_has h10
-    simp only [s4, s5, s6, a0] at k20 k21 k22 k10 e20 e21 e22 e10
     have hd10 : x.toInt.natAbs % 10 < 10 := Nat.mod_lt _ (by decide)
     apply run_block hfit hseg 23 11 (itPos + 23) rfl
       (KP := fun L3 m3 o3 => o3 = o ∧
@@ -121,7 +113,7 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
         by rw [if_pos g7]⟩)
       (by len_ok [itCode])
     have hne : bufBase + 8 * j ≠ tohostAddr := by omega
-    wp_simp [itCode, itPos, psPos, k20, k21, k22, k10, e20, e21, e22, e10, hbn, hne]
+    wp_simp [itCode, itPos, psPos, g20.wp, g21.wp, g22.wp, h10.wp, hbn, hne]
     refine ⟨⟨by omega, by omega, by omega, by omega⟩, ?_⟩
     split
     · next hq =>
@@ -140,15 +132,13 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
       Has L3 s4 x ∧ Has L3 s5 (BitVec.ofNat 64 j) ∧ Has L3 s6 (BitVec.ofNat 64 (bufBase + 8 * j)))
     (fun L3 m3 o3 ⟨g1, g2, g3, g4, g5, g6, g7, g8⟩ => by
       subst g1 g2
-      have k10 := has_mem g4 (by decide); have e10 := srcVal_of_has g4
-      simp only [a0] at k10 e10
       apply run_block hfit hseg 22 1 (itPos + 16 + 6) rfl
         (KP := fun L4 m4 o4 => m' = m4 ∧ o = o4 ∧ Keep itLoopClob L' L4 ∧
           Has L4 a0 (BitVec.ofNat 64 (x.toInt.natAbs % 10)) ∧
           Has L4 s4 x ∧ Has L4 s5 (BitVec.ofNat 64 j) ∧ Has L4 s6 (BitVec.ofNat 64 (bufBase + 8 * j)))
         (fun L4 m4 o4 ⟨f1, f2, f3, f4, f5, f6, f7⟩ => by subst f1 f2; exact h23 L4 f3 f4 f5 f6 f7)
         (by len_ok [itCode])
-      wp_simp [itCode, itPos, psPos, k10, e10]
+      wp_simp [itCode, itPos, psPos, g4.wp]
       refine ⟨?_, ?_, ?_, ?_, ?_⟩
       · reg_simp; exact g3
       · reg_simp; rw [if_neg (by omega)] at hdw; exact hdw
@@ -156,7 +146,7 @@ theorem it_step {L' : GRegs} {m' : Mem} {o : Array String} {x : BitVec 64} {j : 
       · reg_simp; exact g7
       · reg_simp; exact g8)
     (by len_ok [itCode])
-  wp_simp [itCode, itPos, psPos, k20, e20]
+  wp_simp [itCode, itPos, psPos, h20.wp]
   split
   · next hge =>
     refine h23 _ ?_ ?_ ?_ ?_ ?_
@@ -265,10 +255,6 @@ theorem it_copy {L0 : GRegs} {m : Mem} {o : Array String} {d : Nat} {r : BitVec 
   · obtain ⟨hpc, ho, hi, h21, h22, h6, h25, hk, hbuf, hlen, hstr, hfr⟩ := hA
     obtain ⟨pc, L', m', o'⟩ := A
     simp only at hpc ho h21 h22 h6 h25 hk hbuf hlen hstr hfr; subst hpc ho
-    have k21 := has_mem h21 (by decide); have k22 := has_mem h22 (by decide)
-    have k6 := has_mem h6 (by decide)
-    have e21 := srcVal_of_has h21; have e22 := srcVal_of_has h22; have e6 := srcVal_of_has h6
-    simp only [s5, s6, t1] at k21 k22 k6 e21 e22 e6
     have hj0 : BitVec.ofNat 64 (i + 1) ≠ 0 := ofNat_ne_zero (by omega) (by omega)
     have hbn : (BitVec.ofNat 64 (bufBase + 8 * (i + 1) - 8)).toNat = bufBase + 8 * i := by
       rw [toNat_ofNat_lt (by omega)]; omega
@@ -277,7 +263,7 @@ theorem it_copy {L0 : GRegs} {m : Mem} {o : Array String} {d : Nat} {r : BitVec 
     have hc := hbuf i (by omega)
     have hne : d + 8 + 8 * (sg + ds.length - (i + 1)) ≠ tohostAddr := by omega
     apply run_at' hfit hseg 42 (itPos + 42) rfl
-    wp_simp [itCode, itPos, psPos, k21, k22, k6, e21, e22, e6, hj0, hbn, htn, hc, hne]
+    wp_simp [itCode, itPos, psPos, h21.wp, h22.wp, h6.wp, hj0, hbn, htn, hc, hne]
     refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ⟨by omega, by omega, by omega, by omega⟩,
       reach_here ⟨rfl, rfl, by omega, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
     · reg_simp; try bv_eq
@@ -304,14 +290,10 @@ theorem it_copy {L0 : GRegs} {m : Mem} {o : Array String} {d : Nat} {r : BitVec 
   · obtain ⟨hpc, ho, hi, h21, h22, h6, h25, hk, hbuf, hlen, hstr, hfr⟩ := hA
     obtain ⟨pc, L', m', o'⟩ := A
     simp only at hpc ho h21 h22 h6 h25 hk hbuf hlen hstr hfr; subst hpc ho
-    have k21 := has_mem h21 (by decide); have k6 := has_mem h6 (by decide)
-    have k25 := has_mem h25 (by decide)
-    have e21 := srcVal_of_has h21; have e6 := srcVal_of_has h6; have e25 := srcVal_of_has h25
-    simp only [s5, t1, s9] at k21 k6 k25 e21 e6 e25
     apply run_at' hfit hseg 42 (itPos + 42) rfl
-    wp_simp [itCode, itPos, psPos, k21, e21]
+    wp_simp [itCode, itPos, psPos, h21.wp]
     apply run_at' hfit hseg 49 (itPos + 49) rfl
-    wp_simp [itCode, itPos, psPos, k6, e6, k25, e25]
+    wp_simp [itCode, itPos, psPos, h6.wp, h25.wp]
     refine ⟨hal, reach_here ⟨rfl, rfl, ?_, ?_, hlen, fun q hq => hstr q (by omega), hfr⟩⟩
     · reg_simp; bv_eq
     · reg_simp; exact hk
@@ -373,10 +355,6 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
         (a + 8 ≤ bufBase ∨ bufBase + 160 ≤ a) →
           rdW B.mem a = rdW m a)) := by
     intro L2 m2 h21 h22 h16 h17 h25 hk hcells hfr
-    have k21 := has_mem h21 (by decide); have k16 := has_mem h16 (by decide)
-    have k17 := has_mem h17 (by decide)
-    have e21 := srcVal_of_has h21; have e16 := srcVal_of_has h16; have e17 := srcVal_of_has h17
-    simp only [s5, a6, a7] at k21 k16 k17 e21 e16 e17
     have hdn : (BitVec.ofNat 64 d).toNat = d := toNat_ofNat_lt (by omega)
     have hdn8 : (BitVec.ofNat 64 (d + 8)).toNat = d + 8 := toNat_ofNat_lt (by omega)
     have hne : d ≠ tohostAddr := by omega
@@ -385,7 +363,7 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
       (KP := fun L3 m3 o3 => ItCopy L m o d r (if x.toInt < 0 then 1 else 0)
         (digitsLE x.toInt.natAbs) (digitsLE x.toInt.natAbs).length ⟨pcOf (itPos + 42), L3, m3, o3⟩)
       (fun L3 m3 o3 h => hfin _ rfl _ h) (by len_ok [itCode])
-    wp_simp [itCode, itPos, psPos, k21, k16, k17, e21, e16, e17, hdn, hdn8, hne, hne8]
+    wp_simp [itCode, itPos, psPos, h21.wp, h16.wp, h17.wp, hdn, hdn8, hne, hne8]
     split
     · next hx =>
       have hx' : ¬ x.toInt < 0 := by simpa using hx
@@ -393,7 +371,7 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
         (KP := fun L3 m3 o3 => ItCopy L m o d r (if x.toInt < 0 then 1 else 0)
           (digitsLE x.toInt.natAbs) (digitsLE x.toInt.natAbs).length ⟨pcOf (itPos + 42), L3, m3, o3⟩)
         (fun L3 m3 o3 h => hfin _ rfl _ h) (by len_ok [itCode])
-      wp_simp [itCode, itPos, psPos, k21, k16, k17, e21, e16, e17, hdn, hdn8, hne, hne8]
+      wp_simp [itCode, itPos, psPos, h21.wp, h16.wp, h17.wp, hdn, hdn8, hne, hne8]
       simp only [if_neg hx']
       refine ⟨⟨by omega, by omega, by omega, by omega⟩, rfl, rfl, Nat.le_refl _, ?_, ?_, ?_, ?_, ?_,
         ?_, ?_, ?_, ?_⟩
@@ -433,10 +411,6 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
         rw [rdW_upd (by omega) ha, if_neg (by omega), rdW_upd (by omega) ha, if_neg (by omega)]
         exact hfr a ha h2
 
-  have k11 := has_mem h11 (by decide); have k12 := has_mem h12 (by decide)
-  have k1 := has_mem hr (by decide)
-  have e11 := srcVal_of_has h11; have e12 := srcVal_of_has h12; have e1 := srcVal_of_has hr
-  simp only [a1, a2, ra] at k11 k12 k1 e11 e12 e1
   apply run_block hfit hseg 0 16 itPos rfl
     (KP := fun L1 m1 o1 => m = m1 ∧ o = o1 ∧ Has L1 s4 x ∧ Has L1 s5 (BitVec.ofNat 64 0) ∧
       Has L1 s6 (BitVec.ofNat 64 (bufBase + 8 * 0)) ∧ Has L1 a6 x ∧ Has L1 a7 (BitVec.ofNat 64 d) ∧
@@ -452,7 +426,7 @@ theorem run_it {L : GRegs} {m : Mem} {o : Array String} {x r : BitVec 64} {d : N
         (gk.trans (hk2.mono (by decide))) (fun q hq => by simpa using hcells q (by omega) (by simpa using hq))
         (fun a ha hout => hfr a ha (by omega)))
     (by len_ok [itCode])
-  wp_simp [itCode, itPos, psPos, k11, k12, k1, e11, e12, e1]
+  wp_simp [itCode, itPos, psPos, h11.wp, h12.wp, hr.wp]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   all_goals reg_simp
   all_goals first | exact Keep.refl _ _ | bv_eq | rfl

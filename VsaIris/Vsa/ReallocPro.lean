@@ -1,5 +1,6 @@
 import VsaIris.Vsa.ReallocCtx
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Interp.SymFront
 
 namespace VsaIris.VsaHeap
 
@@ -20,7 +21,7 @@ theorem realloc_errno {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} 
   have E := errnoRgn C.H
   have h9n : (R 9).toNat = 0x8001b538 := by rw [h9]; rfl
   have hoff := E.offStack Hp.disj (by omega); unfold mHead at hoff
-  rgn_run O.live at 0x800054c4
+  xrun O.live at 0x800054c4
   rw [h9n]
   have Hp' := Hp.store_errno (v := 12#64)
   refine repi0 O ((F.store (a := 0x8001b538) (w := 4) (by omega)).of_regs ?_ ?_ ?_)
@@ -48,7 +49,7 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
   refine (step% st 0x80005290) O.live (fun h => absurd (congrArg BitVec.toNat h) (by rw [hp]; simp; omega))
     (fun _ => ?_)
   have Sk := O.toWOK.stackRgn
-  rgn_run O.live at 0x800052c0
+  xrun O.live at 0x800052c0
   rw [show (R 2 + 18446744073709551552#64 + 48#64).toNat = C.s.toNat - 64 + 48 by rgn_arith,
     show (R 2 + 18446744073709551552#64 + 40#64).toNat = C.s.toNat - 64 + 40 by rgn_arith,
     show (R 2 + 18446744073709551552#64 + 56#64).toNat = C.s.toNat - 64 + 56 by rgn_arith,
@@ -71,7 +72,7 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     rw [hN, show (46#64).toNat = 46 from rfl] at hc
-    sx_run [3] O.live at 0x800052d8
+    xrun [3] O.live at 0x800052d8
     refine (step% st 0x800052d8) O.live (fun h1 => ?_) (fun h1 => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at h1
     ·
@@ -97,9 +98,9 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
       · exact h
       · exfalso; have := C.n.isLt; rw [Nat.mod_eq_sub_mod h, Nat.mod_eq_of_lt (by omega)] at hc; omega
     rw [Nat.mod_eq_of_lt hX] at hc
-    sx_run [3] O.live at 0x800052d0
+    xrun [3] O.live at 0x800052d0
     refine (step% st 0x800052d0) O.live ?_
-    sx_run [1] O.live at 0x800052d8
+    xrun [1] O.live at 0x800052d8
     have hnb : (C.n + 23#64 &&& 18446744073709551600#64).toNat = (C.n.toNat + 23) / 16 * 16 := by
       rw [toNat_and_m16, BitVec.toNat_add, show (23#64).toNat = 23 from rfl, Nat.mod_eq_of_lt hX]
     have hP : physSize C.n.toNat = (C.n.toNat + 23) / 16 * 16 := by

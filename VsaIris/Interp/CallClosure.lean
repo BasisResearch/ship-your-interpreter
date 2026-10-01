@@ -38,8 +38,7 @@ theorem dispSupply_of_cloSupply {N : NativeAddrs} (h : CloSupply (GF := GF) N) :
     DispSupply (GF := GF) N := by
   intro s B ca p
   iintro ⟨Hs, #Hc⟩
-  ihave ⟨Hs, #Hr⟩ := h s B ca p $$ [Hs Hc]
-  · iframe Hs Hc
+  ihave ⟨Hs, #Hr⟩ := h s B ca p $$ [$]
   iframe Hs
   unfold CloRes
   icases Hr with ⟨%cd, %q, %e, %img, %P, %m, %hf, #Himg, #Hro, -⟩
@@ -53,8 +52,7 @@ theorem cloSupply {N : NativeAddrs} : CloSupply (GF := GF) N := by
   intro s B ca p
   iintro ⟨Hs, #Hat⟩
   ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_closAt (GF := GF) N (s := s) (B := B)
-    (ca := ca) (p := p)) $$ [Hs Hat]
-  · iframe Hs Hat
+    (ca := ca) (p := p)) $$ [$]
   obtain ⟨cd, hcd⟩ : ∃ cd, s.closures[ca]? = some cd :=
     ⟨s.closures[ca], Array.getElem?_eq_getElem hlt⟩
   have h' : s.closures.toList[ca]? = some cd := by rw [Array.getElem?_toList]; exact hcd
@@ -69,8 +67,7 @@ theorem cloSupply {N : NativeAddrs} : CloSupply (GF := GF) N := by
     ipureintro; exact hpure
   unfold closOwn CloRes astEG
   icases Ho with ⟨%p', %q, %e, %img, #Hat', %hobj, #Hro, ⟨%P, %m, %⟨hrepr, hgeo⟩, #HroP⟩, #Henv⟩
-  ihave %hpp := closAt_agree ca p p' $$ [Hat Hat']
-  · iframe Hat Hat'
+  ihave %hpp := closAt_agree ca p p' $$ [$]
   subst hpp
   iexists cd, q, e, img, P, m
   iframe Hro HroP Henv
@@ -140,9 +137,7 @@ theorem world_depth (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Na
       iframe Hd
       ipureintro; exact hd'
     · ipureintro; exact hdle'
-  · isplitr
-    · ipureintro; exact hB
-    · iexact Hb
+  · iframe Hb; ipureintro; exact hB
 
 end World
 

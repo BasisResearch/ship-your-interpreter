@@ -38,8 +38,7 @@ theorem strcpy_spec (live : Nat → Prop) (hcl : CodeLive live)
   have hrun := strcpyRun (Mt := Mt) c (R := entryRv VsaIris.Interp.strcpyPC r dst src f) rfl rfl rfl
   ihave Hpc := (pc_reg _).1 $$ Hpc
   ihave Hra := (ra_reg _).1 $$ Hra
-  ihave Hregs := sRegs_in VsaIris.Interp.strcpyPC r dst src f $$ [Hpc Hra Ha0 Ha1 Ht]
-  · iframe Hpc Hra Ha0 Ha1 Ht
+  ihave Hregs := sRegs_in VsaIris.Interp.strcpyPC r dst src f $$ [$]
   iapply wp_sw Wp hrun _ rfl (fun _ _ _ => rfl)
   isplitr [Hregs Hb Hk Hrest]
   · unfold roOwn
@@ -53,8 +52,7 @@ theorem strcpy_spec (live : Nat → Prop) (hcl : CodeLive live)
   iintro %rv' %mv' %⟨h32, h1, h10, hcp⟩ Hregs HB
   ihave ⟨Hpc, Hra, Ha0, Ht⟩ := sRegs_out rv' $$ Hregs
   ihave Ht := clobbered_of_fn leafTemps rv' $$ Ht
-  ihave Hcl := (clobbered_split retClob_perm).2 $$ [Ht Hrest]
-  · iframe Ht Hrest
+  ihave Hcl := (clobbered_split retClob_perm).2 $$ [$]
   ihave Hpc := reg_eq h32 $$ Hpc
   ihave Hra := reg_eq h1 $$ Hra
   ihave Ha0 := reg_eq h10 $$ Ha0
@@ -93,8 +91,7 @@ theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   ihave ⟨%g, Hb⟩ := ownSet_fn (InExt (d.toNat, y.toList.length + 1)) $$ Hb
   ihave ⟨%Mt, Hb, %_⟩ := VsaIris.Interp.ownSet_trackedAt _ g $$ Hb
   ihave %hdisj := ownSet_disj (InExt (q.toNat, y.toList.length + 1))
-    (InExt (d.toNat, y.toList.length + 1)) img (imgM Mt) $$ [Hs Hb]
-  · iframe Hs Hb
+    (InExt (d.toNat, y.toList.length + 1)) img (imgM Mt) $$ [$]
   have c : CCtx live d q r y.toList.length img (y.toList.length + 1) :=
     ⟨⟨regions_of_heap hshape hhs, strBytes_of_img hstr, hal, strCode_live hcl⟩, hd, hram.hi,
       Nat.le_refl _⟩
@@ -116,14 +113,12 @@ theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   ihave ⟨H10, H11, H1216⟩ := fLeaf_split rv $$ Hl
   ihave Hpc := (pc_reg _).1 $$ Hpc
   ihave Hra := (ra_reg _).1 $$ Hra
-  ihave Hsr := sRegs_in VsaIris.Interp.strcpyPC r (rv 10) (rv 11) rv $$ [Hpc Hra H10 H11 H1216]
-  · iframe Hpc Hra H10 H11 H1216
+  ihave Hsr := sRegs_in VsaIris.Interp.strcpyPC r (rv 10) (rv 11) rv $$ [$]
   ihave Hb := Strlen.ownSet_congr (g := fun a => iprop(a ↦ₘ mv a)) (fun a ha => by
     rw [hmvS a ha]) $$ Hb
   ihave Hs := Strlen.ownSet_congr (g := fun a => iprop(a ↦ₘ mv a)) (fun a ha => by
     rw [hmvT a ha]) $$ Hs
-  ihave Hall := ownSet_join _ _ _ (fun a h1 h2 => hdisj a h2 h1) $$ [Hb Hs]
-  · iframe Hb Hs
+  ihave Hall := ownSet_join _ _ _ (fun a h1 h2 => hdisj a h2 h1) $$ [$]
   ihave Hall := ownSet_iff _ (S := fun a => InExt (d.toNat, y.toList.length + 1) a ∨
       InExt (q.toNat, y.toList.length + 1) a)
     (T := fun a => InExt (d.toNat, y.toList.length + 1) a ∨
@@ -141,8 +136,7 @@ theorem strcpy_heap_spec (live : Nat → Prop) (hcl : CodeLive live)
   unfold runKontW
   iintro %rv' %mv' %⟨⟨h32, h1, h10', hcp⟩, hT⟩ Hsr HS
   ihave ⟨Hpc, Hra, Ha0, Ht⟩ := sRegs_out rv' $$ Hsr
-  ihave Hf := regFile_after rv rv' $$ [Ha0 Ht Ho]
-  · iframe Ha0 Ht Ho
+  ihave Hf := regFile_after rv rv' $$ [$]
   ihave Hpc := reg_eq h32 $$ Hpc
   ihave Hra := reg_eq h1 $$ Hra
   ihave Hpc := (pc_reg _).2 $$ Hpc

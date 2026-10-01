@@ -14,10 +14,6 @@ def FrameOK (ks : List Nat) (bs : List BBlock) : Prop :=
   (∀ m ∈ wrChain bs, (gprReg m == Register.htif_payload_writes) = false ∧
     (gprReg m == Register.htif_tohost) = false)
 
-instance instDecFrameOK (ks : List Nat) (bs : List BBlock) :
-    Decidable (FrameOK ks bs) :=
-  inferInstanceAs (Decidable (_ ∧ _))
-
 theorem gprGet_of_frame {σ' σ : MState} {wrs : List Nat} (n : Nat)
     (h1 : 1 ≤ n) (h31 : n ≤ 31)
     (hnoise : ∀ rr ∈ noiseRegs, (rr == gprReg n) = false)

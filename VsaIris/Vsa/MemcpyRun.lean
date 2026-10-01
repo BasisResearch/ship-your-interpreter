@@ -6,7 +6,8 @@ import Vsa.Sim.Code.Exec_stmt
 import Vsa.Sim.Code.Interp_run
 import Vsa.Sim.AstTransport
 import Vsa.MemReprReadFields
-import Vsa.Sim.MemRegionWithin
+import Vsa.MemReprWithin
+import Vsa.Sim.MemRegion
 
 namespace VsaIris.Memcpy
 

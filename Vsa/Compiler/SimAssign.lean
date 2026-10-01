@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimLogic
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -35,14 +36,14 @@ theorem sAssign {st : St} {d : Nat} {env : Addr} {x : String} {e : Expr} {st' : 
     ESpec code T st d env (.assign x e) ⟨store'', st'.out⟩ v n := by
   intro V Γ sp fs k pos A hm hA hwf hseg hP htmp
   simp only [tE] at htmp
-  simp only [gexpr, setCode] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  obtain ⟨s2, s3⟩ := s2.append
   have hwl : (walkCode (fun l p => writeHere x l p (pos + (gexpr T Γ k pos e).length + 1 +
       walkLen (hereLen 8 x) Γ)) (pos + (gexpr T Γ k pos e).length + 1) Γ).length = walkLen (hereLen 8 x) Γ :=
     walkCode_length x _ 8 writeHere (fun l p => writeHere_length x l p _) Γ _
-  simp only [List.length_append, List.length_singleton, hwl] at hP s3 ⊢
-  refine hE.bind hm hA hwf s1 (posOK_le hP (by omega)) htmp
+  have h := And.intro hseg hP
+  simp only [gexpr, setCode, ↓segP_app, List.length_cons, List.length_nil, Nat.zero_add] at h
+  obtain ⟨⟨s1, p1⟩, ⟨s2, -⟩, s3, p3⟩ := h
+  simp only [gexpr, setCode, List.length_append, List.length_singleton, hwl] at p3 ⊢
+  refine hE.bind hm hA hwf s1 p1 htmp
     (fun B h1 h2 => .inl ⟨h1, h2⟩) fun V1 B hpc hp => ?_
   obtain ⟨t, p, h10, h11, hv⟩ := hp.val
   obtain ⟨pc1, L1, m1, o1⟩ := B
@@ -51,13 +52,9 @@ theorem sAssign {st : St} {d : Nat} {env : Addr} {x : String} {e : Expr} {st' : 
   obtain ⟨f, hFa⟩ := hms.chn.head'
   obtain ⟨fr, hfr⟩ := hms.chn.frame
   have hlt : env < st'.store.frames.size := (Array.getElem?_eq_some_iff.mp hfr).1
-  have he := hms.henv
-  rw [View.fa_eq hFa] at he
-  have k9 := has_mem he (by decide); have e9 := srcVal_of_has he
-  simp only [envR] at k9 e9
   apply run_whole hR.fits s2
-  wp_simp [k9, e9]
-  refine reaches_mono (walk_write hR.fits hms.rel x _ (posOK_le hP (by omega)) hv hms.chn
+  wp_simp [hms.henv.wp, View.fa_eq hFa]
+  refine reaches_mono (walk_write hR.fits hms.rel x _ p3 hv hms.chn
     _ f _ o1 hFa s3 (by reg_simp []) (by reg_simp []; exact h10) (by reg_simp []; exact h11)) ?_
   rintro ⟨pc2, L2, m2, o2⟩ ⟨ho2, hk2, hB⟩
   simp only at ho2 hk2 hB; subst ho2

@@ -63,8 +63,8 @@ theorem exec_sltu_a4_a5_a4 (σ : MState) (pc : BitVec 64) (v14 v15 : BitVec 64)
   exact execute_rtype_sltu_char (regidx.Regidx 0x0e#5) (regidx.Regidx 0x0f#5) (regidx.Regidx 0x0e#5)
     v15 v14 (afterNextPC (afterPrelude σ) pc)
     (sigma3_alu σ pc Register.x14 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14))))
-    (rX_bits_x15 _ v15 h15) (rX_bits_x14 _ v14 h14)
-    (wX_bits_x14 _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14))))
+    (rX_bits_gpr _ 15 (by decide) (by decide) v15 h15) (rX_bits_gpr _ 14 (by decide) (by decide) v14 h14)
+    (wX_bits_gpr _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14))) 14 (by decide) (by decide))
 
 theorem sltu_word :
     (((0x00#8).append (0xe7#8)).append (0xb7#8)).append (0x33#8) = (0x00e7b733#32 : BitVec 32) := by
@@ -100,18 +100,16 @@ theorem sltuAluStep {live : Nat → Prop} (hlive : ∀ p ∈ allocText, live p.1
     gprGet_eq_of_vsaReg hok (by omega) (by omega) (hRR _ (.tail _ List.mem_cons_self))
   obtain ⟨vm, hvm⟩ := hok.good.minstret
   obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
-    stepObs_alu c.σ c.tick c.steps (0x800052d0#64) vm (0x00e7b733#32)
-      (instruction.RTYPE (regidx.Regidx 0x0e#5, regidx.Regidx 0x0f#5, regidx.Regidx 0x0e#5, rop.SLTU))
-      Register.x14 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14)))
-      (0x33#8) (0xb7#8) (0xe7#8) (0x00#8)
-      hok.good hpcσ hvm sltu_word sltu_notrvc
-      (Vsa.Sim.decodeW (w := 0x00e7b733#32) (afterPrelude c.σ)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.misa)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.cur_privilege)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.mseccfg))
+    stepObs_exec (u := c.steps) (BitVec.addInt (0x800052d0#64) 4) vm
+      (Fetched.of_bytes hok.good hpcσ hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
+        sltu_notrvc sltu_word
+        (Vsa.Sim.decodeW (w := 0x00e7b733#32) (afterPrelude c.σ)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.misa)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.cur_privilege)
+          (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.mseccfg)))
       (exec_sltu_a4_a5_a4 c.σ (0x800052d0#64) v14 v15 ha4 ha5)
-      (by decide) (by decide) (by decide) (by decide) (by decide)
-      hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hok.tick
+      ⟨by reg_reads [hok.good.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hvm]⟩
+      ((hok.good.prelude _).insert_nonpinned (by decide) _) hok.tick
   have hframe := StepFrameOut.of_alu hobs
   have hnoise : ∀ n, n < 32 → 1 ≤ n → ∀ R ∈ noiseRegs, (R == gprReg n) = false := by decide
   have hgprFrame : ∀ n, 1 ≤ n → n ≤ 31 → n ≠ 14 → gprGet σ' n = gprGet c.σ n := by

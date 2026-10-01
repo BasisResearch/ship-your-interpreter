@@ -104,8 +104,7 @@ theorem valsAt_tracked (N : NativeAddrs) :
     ihave ⟨H1, H2⟩ := (valsAt_cons N a v vs).1 $$ H
     ihave ⟨%M1, HA, #Hv⟩ := valAt_tracked N a v $$ H1
     ihave ⟨%M2, HB, #Hvs⟩ := valsAt_tracked N vs (a + 24) $$ H2
-    ihave ⟨%M, H, %⟨hA, hB, _⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [HA HB]
-    · iframe HA HB
+    ihave ⟨%M, H, %⟨hA, hB, _⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [$]
     have e := valImg_agreeOn (GF := GF) (N := N) (v := v) (a := a) (fun k hk => (hA k hk).symm)
     ihave #Hvs' := valsImg_agree N vs (a + 24) (fun k hk => (hB k hk).symm) $$ Hvs
     iexists M
@@ -190,8 +189,7 @@ theorem ms_ioOpen {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop} {M
   ihave ⟨%img, %⟨hok, -⟩, H1, H2, #Hr⟩ := stdioAt_open StdioOK ioW $$ Hio
   ihave H1 := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨ioW_stdio h, h⟩⟩) $$ H1
   ihave ⟨%Mi, H1, %hMi⟩ := ownSet_trackedAt _ img $$ H1
-  ihave ⟨%M', Hms, %⟨h1, h2, h3⟩⟩ := ms_join $$ [Hms H1]
-  · iframe Hms H1
+  ihave ⟨%M', Hms, %⟨h1, h2, h3⟩⟩ := ms_join $$ [$]
   iexists img, M'
   unfold ioRest
   iframe Hms H2 Hr Herr
@@ -386,13 +384,6 @@ abbrev NpK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
       (valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioW ∗
         consoleOwn (o ++ printArgs st vs) ∗ stackAt s nativePrintNeed)) -∗ Wp.W Φ)
 
-def FnpE (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
-    (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64)
-    (Margs : Mem) : IProp GF :=
-  iprop(valsImg N (imgM Margs) args.toNat vs ∗ valAt N sret.toNat .null ∗ stdioW ∗
-    consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
-    NpK Wp Φ N sret args s r vs st o rv)
-
 structure NpCtx (live : Nat → Prop) (sret args s r : BitVec 64) (n : Nat) (rv : Nat → BitVec 64) :
     Prop where
   hlive : ∀ p ∈ interpText, live p.1
@@ -531,27 +522,24 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   · iframe Hsl; ipureintro; exact c.hg
   iintro %R' %hk' Hnull Hms
   have hR' : ∀ x ∈ fRegs, R' x = R x := fun x hx => hk' x hx (by simp)
-  iapply wp_swpF Wp (S := npF s args n) (F := FnpE Wp Φ N sret args s r vs st o rv Margs)
+  iapply wp_swpF Wp (S := npF s args n)
   rotate_left
   · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
       unfold codeRes; simp [dataOf]
-    rw [hro]
-    unfold FnpE
-    iframe Hcode Hv Hnull Hstd Hcon Hst Hk Hms
+    isplitl []; rw [hro]; iexact Hcode
+    icombine Hv Hnull Hstd Hcon Hst Hk as HF; iframe HF Hms
   intro F'
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
   unfold nativePrintNeed printNeed fprintfNeed at hs1
   refine np_epi c.hlive (by ix_reg; rw [hR' 2 (by decide), hR2]) (by omega) hs2 hs3 c.hal hra hs4 ?_
   intros; apply swp_closeF
   dsimp only [F']
-  unfold FnpE
   iintro ⟨⟨#Hv, Hnull, Hstd, Hcon, Hst, Hk⟩, Hms⟩
   unfold ms
   icases Hms with ⟨Hpc, Hra, Hregs, HS⟩
   ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M hdfa $$ HS
   ihave HF := ownSet_forget _ _ $$ HF
-  ihave Hst := npFrame_join (s := s) (by unfold printNeed fprintfNeed; omega) $$ [Hst HF]
-  · iframe Hst HF
+  ihave Hst := npFrame_join (s := s) (by unfold printNeed fprintfNeed; omega) $$ [$]
   subst hlen
   ihave #Hv' := valsImg_agree N vs args.toNat (fun k hk => (hargs k hk).symm) $$ Hv
   ihave Hvs := valsAt_of_tracked N M vs args.toNat $$ [HA Hv']
@@ -586,6 +574,25 @@ def FnpA (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp 
   iprop(NpRest Wp Φ N sret args s r vs st o rv Margs ∗ consoleOwn o' ∗
     ioRest img)
 
+theorem np_runIO (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
+    {o o' : String} {rv : Nat → BitVec 64} {Margs : Mem} {img : Nat → BitVec 8} {pc : BitVec 64}
+    {R : Nat → BitVec 64} {M : Mem}
+    (h : let F' := FnpA Wp Φ N sret args s r vs st o o' rv Margs img;
+      SWP live (interpText ++ dataOf impMem (accAddrs 0x8001b970 8)) iRegs (npS s args n)
+        (RunK Wp Φ F' (npS s args n)) pc R M) :
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ consoleOwn o' ∗ ioRest img ∗
+      ms pc R (npS s args n) M ⊢ Wp.W Φ := by
+  iintro ⟨Hrest, Hcon, Hio, Hms⟩
+  iapply wp_swpF Wp h
+  unfold NpRest ioRest
+  icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
+  icases Hio with ⟨Hio, #Hr, Herr⟩
+  isplitl []
+  · iapply codeRes_imp; iframe Hcode Hr
+  unfold FnpA NpRest ioRest
+  iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hr Herr Hms
+
 theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
     {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
@@ -598,8 +605,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
     NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i) ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
-  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
-  · iframe Hms Hstd
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [$]
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
   unfold nativePrintNeed printNeed fprintfNeed at hs1
   have ha1 := c.ha.al; have ha2 := c.ha.lo; have ha3 := c.ha.hi
@@ -627,17 +633,9 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
     rw [ldv_ld_imgW]; unfold imgW
     rw [imgLE_congr (img' := img) (fun j hj => hio _ (by simp [ioW, InExt]; omega))]
     exact StdioOK.stdout hok
-  iapply wp_swpF Wp (S := npS s args n) (R := R) (Mt := M1) (pc := 0x80002f1c#64)
-    (text := interpText ++ dataOf impMem (accAddrs 0x8001b970 8))
-    (F := FnpA Wp Φ N sret args s r vs st o (o ++ npOut st vs i) rv Margs img)
+  iapply np_runIO Wp
   rotate_left
-  · unfold NpRest ioRest
-    icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
-    icases Hio with ⟨Hio, #Hr, Herr⟩
-    isplitl []
-    · iapply codeRes_imp; iframe Hcode Hr
-    unfold FnpA NpRest ioRest
-    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hr Herr Hms
+  · iframe Hrest Hcon Hio Hms
   intro F'
   refine np_body c.hlive f.h8 f.h9 f.h18 f.h2 (by omega) hs2 hs3 ha1 ha2 ha3 hi ea hw0 hw1 hw2 hio1
     hio2 ?_
@@ -697,8 +695,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   ihave #Hvi := valsImg_get N (imgM Margs) vs args.toNat i (by omega) $$ Hv
   rw [← valImg_words (GF := GF) hv0 hv8 hv16] at *
   have hst80 : (s - 80#64).toNat = s.toNat - 80 := by rw [hsm, hsf]
-  ihave Hval := valAt_of_img N $$ [Hvi Hslot]
-  · iframe Hvi Hslot
+  ihave Hval := valAt_of_img N $$ [$]
   ihave #Hdi := (show dispResL (GF := GF) st vs ⊢ dispRes st (vs[i]'(by omega)) from by
     unfold dispResL
     exact sepL_elem_persist (dispRes st) (List.getElem_mem (show i < vs.length by omega))) $$ Hd
@@ -735,8 +732,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   iintro %R2 %hk2 ⟨Hval, Hstd, Hcon, ⟨Hst, -⟩⟩ Hms
   rw [hst80]
   ihave ⟨%Ms, HsS, #Hw⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M3, Hms, %⟨h3a, h3b, _⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
+  ihave ⟨%M3, Hms, %⟨h3a, h3b, _⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
 
   have hsv : ∀ o, 24 ≤ o → o + 8 ≤ 80 →
@@ -788,11 +784,6 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   · rw [sw 48 (by omega) (by omega)]; exact f.ss2
   · rw [sw 40 (by omega) (by omega)]; exact f.ss3
   · rw [sw 32 (by omega) (by omega)]; exact f.ss4
-
-def FnpB (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
-    (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o o' : String) (rv : Nat → BitVec 64)
-    (Margs : Mem) (img : Nat → BitVec 8) : IProp GF :=
-  FnpA Wp Φ N sret args s r vs st o o' rv Margs img
 
 theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
@@ -861,8 +852,7 @@ theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioW ∗
       consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ := by
   iintro ⟨Hrest, Hms, Hstd, Hcon⟩
-  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
-  · iframe Hms Hstd
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [$]
   have hio1 := ldv_impMem
   have hio2 : ldv .ld M1 0x8001b548 = 0x8001bb20#64 := by
     rw [ldv_ld_imgW]; unfold imgW
@@ -873,23 +863,14 @@ theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     rw [BitVec.toNat_ofNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega),
       Nat.mod_eq_of_lt (by omega)] at h1
     omega
-  iapply wp_swpF Wp (S := npS s args n) (R := R) (Mt := M1) (pc := 0x80002f48#64)
-    (text := interpText ++ dataOf impMem (accAddrs 0x8001b970 8))
-    (F := FnpB Wp Φ N sret args s r vs st o (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st)
-      rv Margs img)
+  iapply np_runIO Wp
   rotate_left
-  · unfold NpRest ioRest
-    icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
-    icases Hio with ⟨Hio, #Hr, Herr⟩
-    isplitl []
-    · iapply codeRes_imp; iframe Hcode Hr
-    unfold FnpB FnpA NpRest ioRest
-    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hr Herr Hms
+  · iframe Hrest Hcon Hio Hms
   intro F'
   refine np_more c.hlive f.h8 f.h9 f.h18 f.h19 hne hio1 hio2 ?_
   intros; apply swp_closeF
   dsimp only [F']
-  unfold FnpB FnpA
+  unfold FnpA
   iintro ⟨⟨Hrest, Hcon, Hio⟩, Hms⟩
   ihave ⟨Hms, Hstd⟩ := ms_ioClose hok hd $$ [Hms Hio]
   · iframe Hms Hio
@@ -958,14 +939,11 @@ theorem np_B_last (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
   rw [String.append_assoc, npOut_last st vs i (by omega)]
   iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002f48#64)
-    (F := iprop(slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ stdioW ∗
-      consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
-      NpK Wp Φ N sret args s r vs st o rv ∗ codeRes))
   rotate_left
   · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
       unfold codeRes; simp [dataOf]
-    rw [hro]
-    iframe Hcode Hsl Hv Hstd Hcon Hst Hk Hms
+    isplitl []; rw [hro]; iexact Hcode
+    icombine Hsl Hv Hstd Hcon Hst Hk Hcode as HF; iframe HF Hms
   intro F'
   refine np_last c.hlive (f.h9.trans (by rw [hi])) f.h19 f.h2 (by omega) hs2 hs3 f.ss0 f.ss1 f.ss2
     f.ss3 ?_
@@ -1028,8 +1006,7 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
   ihave ⟨Hst, HF⟩ := npFrame_split (s := s) (by unfold printNeed fprintfNeed; omega) $$ Hst
   ihave ⟨%f, HF⟩ := ownSet_fn _ $$ HF
   ihave ⟨%Mf, HF⟩ := ownSet_mem _ f $$ HF
-  ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [HF HA]
-  · iframe HF HA
+  ihave ⟨%M, HM, %⟨-, hMa, hdfa⟩⟩ := ownSet_join_tracked _ _ Mf Margs $$ [$]
   have c : NpCtx live sret args s r vs.length rv :=
     ⟨hlive, hal, h10, h12, h13, h2, by unfold nativePrintNeed printNeed fprintfNeed; omega, by omega,
       hs4, hsg.top, hg, ha, hn, hdfa⟩
@@ -1047,12 +1024,9 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
       rw [List.length_eq_zero_iff.1 h0]; simp [printArgs]
     ihave Hcon := (show consoleOwn (GF := GF) o ⊢ consoleOwn (o ++ printArgs st vs) by rw [e]) $$ Hcon
     iapply wp_swpF Wp (S := npF s args vs.length) (R := upd rv 1 r) (Mt := M) (pc := nativePrintPC)
-      (F := iprop(slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ stdioW ∗
-        consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
-        NpK Wp Φ N sret args s r vs st o rv ∗ codeRes))
     rotate_left
-    · rw [hro, hms]
-      iframe Hcode Hsl Hv Hstd Hcon Hst Hk Hpc Hra Hregs HM
+    · rw [hms]; isplitl []; rw [hro]; iexact Hcode
+      icombine Hsl Hv Hstd Hcon Hst Hk Hcode as HF; iframe HF Hpc Hra Hregs HM
     intro F'
     refine np_pro0 hlive h10 h12 h13 h2 (by omega) (by omega) hs4 h0 ?_ ?_
     rotate_left

@@ -113,25 +113,84 @@ lists (`interpDataPCs`, `interpHavocPCs`) with your binary's image, code
 ranges, tracked registers and table variants. The executor and
 `symRun_cont` stay the same.
 
-### Known limits of the executor (from a bake-off on luaV_execute arms)
+### The extended executor and `xrun`
 
-ship-your-lua measured the executor against its generated segments on held-out
-bytecode arms: CPU tied (4.7–7.0 s per arm), the refactor case shrank (107 → 59
-lines), but held-out arms needed 113–210 hand lines against 54–61 template lines.
-What made the difference:
+`symRunX C sub n s pf` (`VsaIris/Vsa/SymExecX.lean`) runs the executor above with five
+additions. `symRunX_swp` proves it sound once against `SWP`; `symRunX_cont` is the segment form
+(the `RunCtx` of `symRun_cont`, plus true path facts `PFOK ρ pf`).
 
-- No call nodes: a `jal ra` ends a run, so arms that call helpers (CALL, MMBIN,
-  CONCAT) are out of reach.
-- A `jr` with a symbolic target (jump-table dispatch) ends a run.
-- Branches read registers raw; a register known to be a constant from the context
-  does not decide the branch without a hand refutation.
-- The soundness theorem needs `VsaOk` (all general registers present, HTIF idle)
-  as a premise, and memory is total-read (`getD 0`), so a presence-exact frame
-  matches only up to zero fill.
-- `geomOf` sorted with `Array.qsort`, which the kernel rejects; evaluate `Geom`
-  at elaboration time.
-- `sym_run` is tied to the WHILE interpreter's goal form (`IW`); other run
-  predicates need a small front end.
+- **Path facts** `PF` (`x = c`, `x ≠ c`, `x <u n`, `n ≤u x`). A fork records the facts of each
+  outcome on its side (`brFacts`); a bound on an `lw` word also bounds its `lwu` reload
+  (`lwFacts`). With `sub = true` (`set_option xrun.subst true`) an `x = c` fact rewrites `x`
+  to `c` in the registers and stores of that side (`applyFacts`).
+- **Branch decisions** (`brDecide`): constants, the known entry registers `Cfg.known` (also for
+  a register the run has not written), the path facts and the syntactic equality of the
+  operands decide a branch; the tree keeps only the side taken (`XTree.brD`).
+- **Jump tables** (`splitStep`): a load whose address is constant inside the code ranges for
+  every value `j < n` of an atom with a fact `x <u n` (`n ≤ 64`) splits the run over the values
+  (`XTree.sel`); each side reads its entry from the image and the following `jr` has a
+  constant target.
+- **Width-exact forwarding** (`subHit`, `fwdV`): a load inside the newest overlapping store of
+  the same base reads that store's bytes, for every width (`lhu` of `sh`, `lw` of `sw`, `lbu`
+  of `sb`, a 16-bit field of an `sd`). A constant store gives a constant; a symbolic one a
+  named slot (`XTree.fwd`).
+- **Calls** `jal ra, f`: the run continues into the callee with `ra` set (`XTree.jal`, by
+  `jalExec_word`).
+
+`xrun [fuel] hlive using [facts] calls [summaries] at pcs` (`VsaIris/Interp/SymFront.lean`)
+runs `symRunX` on a goal `SWP live text rs S Q pc R Mt` under any abbreviation (`IW`, `NW`,
+`SnpW`, `AW`, `EW`, `SWPO`). The run table of the text (`StepGen.swpTbl?`) supplies the image,
+the code ranges, the tracked registers, the load kinds (`D`, `H`; `P` stops the run) and the
+`TblOK` fact for `RunCtx`; a text without a data view runs as one with the empty view
+(`swp_noData`/`swp_ofNoData`). Each reached state comes back in the goal's own head, normalised
+by the table's step driver normaliser (parsed in the caller's environment).
+
+- The interval facts of the obligation checker are proved per address atom with three or more
+  accesses (`xrun.geomMin`): bounds and alignment by arithmetic, each covered range by the side
+  tactic in the shape of an access's cover goal (`afact_intro`, `scList`, `addOff`).
+- At an instruction the executor does not step (an indirect call `jalr ra`, a console
+  store), the table's step lemma is applied and the run goes on.
+- `calls [t₁, …]`: each `tᵢ` is a summary whose conclusion is a run at a literal entry (for
+  instance `swrite_run … hlive`, `sfvwrite_run (sp := …) … hlive`). The entry stops the run;
+  the summary is applied there, its premises are closed by the normaliser, `rfl`, an
+  assumption or the side tactic, or left as goals; its continuation is introduced and the run
+  goes on with every introduced equation and every `@[xrun_post]` instance added to the facts
+  (`Stdout/XPost.lean`: the `RetOK` result and kept registers).
+- Leftover goals: the reached states, the obligations the checker and the side tactic leave,
+  and the summary premises the closers leave. `XRUN_TRACE=1` reports segments, facts,
+  summaries and step lemmas.
+
+`VsaIris/Interp/SymFrontTest.lean` checks the jump-table split (the `eval` dispatch with an
+unknown tag reaches its seven targets), the known-tag case (one target) and the width-exact
+forwarding (`_fputc_r`'s orientation block decided through `sh`/`lhu`).
+
+### Known limits of the executor
+
+ship-your-lua's bake-off on `luaV_execute` arms (CPU tied, held-out arms 113–210 hand lines
+against 54–61 template lines) named six limits; their state after `symRunX`/`xrun`:
+
+- **Calls.** `jal ra` steps into the callee; a summary applies at its entry and the run goes on
+  past it (`calls`). The summary is applied as a theorem at the tactic level: the continuation
+  is a new run from fresh registers and memory, with the summary's return facts as hypotheses,
+  not a generation-indexed memory inside one kernel evaluation. One declaration pays every
+  segment from its own heartbeat budget, so a long chain of pieces (`#ix_piece`) does not always
+  fit in one declaration (a merged `__sfvwrite_r` run exceeds the budget).
+- **`jr` dispatch.** Resolved when the index has a path-fact bound and the table lies in the
+  code ranges (the interpreter's `interpRanges`). The stdio and snprintf texts carry no
+  `.rodata`, so their switch tables still end a run at the `jr`. An indirect call `jalr ra`
+  is stepped by the table's step lemma, not by the executor.
+- **Branches.** Decided by constants, known entry registers, path facts and syntactic
+  equality; signed comparisons are decided only between constants.
+- **Totality.** Unchanged: the soundness theorems need `VsaOk`, and memory is total-read.
+- **`Geom`.** `geomOf` is evaluated at elaboration time; its facts are proved per atom with
+  three or more accesses. A definitional `x + 0 ≡ x` with `x` a `toNat` of a sum with a large
+  literal sends the kernel into deep recursion; `addOff` keeps such conversions out of the
+  cover goals. Constant addresses (the `FILE` fields) have no fact (`findF` reserves the constant
+  atom), so each access's cover goes to the side tactic.
+- **Front end.** `xrun` takes any run predicate with a run table. On runs of one to three
+  instructions it costs more than the step drivers (context, facts and kernel evaluation are
+  per run); on longer runs it is at parity, because the side conditions, not the stepping,
+  dominate both.
 
 ## 5. Boot witnesses: `boot_witness`
 

@@ -198,11 +198,6 @@ section Transport
 
 variable {P : Nat → Prop} {m m' : Mem}
 
-private def M1 (_h : AgreeP P m m') : (a : Nat) → (e : Expr) → ExprRepr m a e → Prop :=
-  fun a e _ => (∀ addr, ExprFp m a e addr → P addr) → ExprRepr m' a e
-private def M2 (_h : AgreeP P m m') : (a n : Nat) → (es : List Expr) → ExprArrayRepr m a n es → Prop :=
-  fun a n es _ => (∀ addr, ExprArrayFp m a n es addr → P addr) → ExprArrayRepr m' a n es
-
 end Transport
 
 end Vsa.Sim

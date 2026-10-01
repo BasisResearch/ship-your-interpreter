@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimFnEntry
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -18,15 +19,10 @@ theorem run_fnRet {fs' sp' d qp : Nat} (hseg : Seg code qp (fnPost fs')) {L : GR
   have hL : stackLo = 0xE0000000 := rfl
   have hH : stackHi = 0x100000000 := rfl
   have ht : tohostAddr = 0x8001ad00 := rfl
-  have k2 := has_mem hsp (by decide); have e2 := srcVal_of_has hsp
-  have k24 := has_mem hdep (by decide); have e24 := srcVal_of_has hdep
-  simp only [spR, depR] at k2 e2 k24 e24
-  have n0 : (BitVec.ofNat 64 sp').toNat = sp' := toNat_ofNat_lt (by omega)
-  have n8 : (BitVec.ofNat 64 (sp' + 8)).toNat = sp' + 8 := toNat_ofNat_lt (by omega)
   have l0 : LdOK sp' := by unfold LdOK; omega
   have l8 : LdOK (sp' + 8) := by unfold LdOK; omega
   apply run_jumps hR.fits ((hseg.drop 2).cast (pos' := qp + 2) rfl)
-  wp_simp [fnPost, k2, e2, k24, e24, n0, n8, l0, l8]
+  wp_simp [fnPost, hsp.wp, hdep.wp, toNat_ofNat_lt, l0, l8]
   exact ⟨hra, reach_here ⟨rfl, rfl, rfl, by reg_simp [], by reg_simp [], by reg_simp [],
     by reg_simp []; exact Keep.refl _ _⟩⟩
 

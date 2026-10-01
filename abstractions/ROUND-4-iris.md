@@ -237,3 +237,187 @@ memory/offset arithmetic residue (`cloParamStep` ~130 lines and similar) to ROUN
 keys, which Interp does not use yet; (3) no new proof-mode layer.
 
 Branches exp-R4a, exp-R4b, exp-R4c are kept unmerged for reference.
+
+## Migration after the decision (branch exp-M1, from f16fdb8d)
+
+Task: route the bypassing units of `VsaIris/Interp` through layers that already exist (the arm
+layer `ArmCore`/`ArmEval`/`ExecChild`, iris-lean's built-in framing, ROUND-3's `Win` keys),
+delete what that makes dead, and measure. No new layer, tactic or macro was added; local lemmas
+inside one file were allowed when they remove duplication.
+
+**What was used.**
+
+* `wp_swpF` frames are no longer written. The frame metavariable is closed with the hypotheses
+  the continuation destructures:
+  `icombine Ha Hb … as HF; isplitl []; iexact Hdv; iframe HF Hms`. `icombine` builds the
+  right-nested `Ha ∗ Hb ∗ …`, so the continuation's `iintro ⟨⟨#Ha, #Hb, …⟩, Hms⟩` is unchanged.
+  This replaced 4 to 12 lines of `(F := iprop(…))` at about 140 sites. It also replaced the
+  explicit `P`/`Q`/`X` of `ms_callRegs` uses in ExecEnv/ExecOom (`rotate_left 2`, prove the main
+  goal first, `P`/`Q` read off the spec).
+* `$$ [$]` instead of `$$ [H…]` + `· iframe H…`: 333 sites by script, compiled file by file;
+  about 30 more by hand.
+* `iframe ∗ #` and `iframe … %h` (pure pins) for closing lists. `ieval (simp only [h]) at H`
+  replaced `have e : A ⊢ B := by rw [h]` + `ihave`.
+* `keep_split <;> ix_keep` (existing, Arm.lean) replaced 13-way `rcases hy with rfl | …`
+  register-keep enumerations (SeqLoop, ExecFor).
+* The var, assign and fn-literal arms (`Case/{Var,Assign,FnLit}{T,P}`, the last expression
+  arms that unfolded `evalSpec{T,P}_body` by hand) were re-seated on `evalEntryT`/`evalEntryP`.
+  Each arm now has one Wp-generic tail (`varArmTail`, `assignTail`, `fnLitTail`; `#ix_piece`
+  chains) that exits through `ExitK` (`evalKT_exit`, `evalKP_exit`) or the new local record
+  `EvalAbort`. The T and P theorems are one-line instances: 1,686 → 978 lines, 74.3 → 47.6 s for
+  the six modules.
+* Local frame runners for named frames: `sg_run` (12 sites in ProofStringify), `na_run` and
+  `na_tail` (the shared `na_rtErr` tail of the falsy asserts), `np_runIO`; `varEpi` (ExecVar),
+  `cat_sn`/`cat_as` (CatTail), `carve_iff` (NewlibCall).
+* Deleted as dead: `ms_intro_sret` (LeafCalls), `FnpE`, `FnpB` (ProofNativePrint).
+
+**What did not apply** (each was tried):
+
+* `Win` keys in `cloParamStep`: the offset obligations there are one-token `omega` side goals
+  of `ldv_store_miss`/`imgM_store_miss` (`a + 8 ≤ b ∨ b + w ≤ a`). A `Win.sep`/`.pos_eq` use
+  needs explicit position equations and is longer. No other Interp site had a battery that the
+  keys would shorten. ROUND-4 attributed about 130 lines of `cloParamStep` to offset arithmetic;
+  most of those lines are memory read-back through stores, not window membership.
+* `ArmAt.run`/`.callHelper` in CatTail: its frames carry `□ valOf`, `dispRes`, `binImg` and
+  `textOwn allocText` beyond `evalArmF`. Its runs end in `swp_closeM`, not an `MRun`, and its
+  helpers are `helperSpecA`/`memcpySpecOwned`, not `helperSpec`. The var/assign arms copy the
+  result into the sret slot inside the reflected epilogue, so they exit by hand through `ExitK`
+  rather than `ArmAt.finish`.
+* `ChildCall` for the loop arms: their abort resource is
+  `abortAt Core (s-176) m' ∗ ownSet (execS s) byteAny` plus the `▷ X` Löb resource, not
+  `abortAt Core s0 n0 ∗ Out`. The T/P loop pairs differ only in the child call, and their shared
+  glue is already Wp-generic.
+* `icombine` drops `□`. Frames holding `□ Hyp` of an abstract `IProp`, or `□ astSG` (no
+  `Persistent` instance), were left as written: `ifPrefix`, `varInitCore`, `varNullCore`,
+  `execSpec{T,P}_of_disp`.
+* `iframe ∗ #` fails, rather than skips, when a spatial hypothesis cannot be framed.
+  `ieval (rw [h])` fails because `rw` closes ieval's goal; use `simp only`.
+* Reverted for time: ProofValueEqual, where `$$ [$]` on `ownSet_join_tracked _ _ Ma Mb` was 25%
+  slower; CallSeg, where single-item frames were 12% slower. Bullet merges that only joined
+  lines were reverted in four files; a few remain inside other edits (EnvDefineCalls, CallKs).
+
+**Measurement.** Lines are non-blank. CPU is user seconds of `lake env lean`, 8 threads, min of
+3 interleaved runs (9 for six files flagged by the first pass); before and after both compiled
+from copies outside the worktree. The same file compiled inside the worktree measured 20% slower
+in one test, so in-tree against out-of-tree timings are not comparable. Statements: a dump of
+`Expr.hash` of every declaration type in `VsaIris.Interp.*`, before and after, is identical for
+every surviving name, including the moved run segments. The replaced pieces, the three deleted
+helpers and the new local lemmas are the only differences. Full `lake build` green (1,022 jobs).
+`endToEnd_refinement` and `proofElf_halts` depend on [propext, Classical.choice, Quot.sound].
+No sorry, axiom, native_decide, bv_decide, ofReduceBool, maxHeartbeats or maxRecDepth was added.
+The new tails needed `#ix_piece` splits to stay inside the default heartbeat budget.
+
+| | before | after | change |
+|---|---:|---:|---:|
+| changed modules (95; table below) | 33,753 lines, 566.0 s | 31,641 lines, 530.5 s | −2,112 lines (−6.3%), −6.3% CPU |
+| ROUND-4 cluster (WP, spec bodies, `ArmAt`, `BinTail` heads) | 17,862 | 16,662 | −1,200 (−6.7%) |
+| `#ix_piece` units | 2,726 | 2,059 | −667 |
+| all of `VsaIris/Interp` (census) | 42,430 | 40,311 | −2,119 (−5.0%) |
+| `git diff --shortstat f16fdb8d` | | | 95 files, +1,523 / −3,663 |
+
+No module is more than 10% slower. Unchanged modules are not listed. The six `Case/{Var,Assign,FnLit}` rows are
+measured as a group (the work moved from the P files into the T files).
+
+Not done, and left for a later round: one register-restore lemma shared by `ms_callMalloc` and
+`ms_callFree` (about 30 lines; it crosses files); one copy-and-epilogue segment shared by
+`VarT_run2` and `AssignT_run3`, which differ only in the view width; the duplicate keep lemmas
+`KeepRegs.upd_right` (LoopKit) and `KeepRegs.upd` (ExecArm).
+
+| file | lines before | after | Δ | CPU before (s) | after (s) | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| Abort.lean | 209 | 205 | -4 | 1.91 | 1.89 | -1% |
+| Arm.lean | 824 | 813 | -11 | 5.48 | 5.42 | -1% |
+| Arm3.lean | 209 | 207 | -2 | 1.72 | 1.67 | -3% |
+| ArmCore.lean | 227 | 224 | -3 | 1.67 | 1.67 | +0% |
+| ArmLogical.lean | 228 | 223 | -5 | 1.99 | 1.96 | -2% |
+| BinEq.lean | 88 | 73 | -15 | 1.14 | 1.13 | -1% |
+| BinErr.lean | 293 | 287 | -6 | 1.73 | 1.79 | +3% |
+| Bridge.lean | 498 | 493 | -5 | 2.88 | 3.11 | +8% |
+| CallCloBind.lean | 522 | 481 | -41 | 7.51 | 7.33 | -2% |
+| CallCloBody.lean | 167 | 149 | -18 | 1.91 | 1.75 | -8% |
+| CallCloExit.lean | 321 | 285 | -36 | 4.46 | 3.82 | -14% |
+| CallCloHead.lean | 367 | 356 | -11 | 11.24 | 10.93 | -3% |
+| CallCloP.lean | 809 | 777 | -32 | 8.97 | 9.04 | +1% |
+| CallCloT.lean | 336 | 322 | -14 | 5.62 | 5.78 | +3% |
+| CallClosure.lean | 358 | 353 | -5 | 7.46 | 6.84 | -8% |
+| CallErr.lean | 90 | 83 | -7 | 1.85 | 1.93 | +4% |
+| CallJalr.lean | 286 | 280 | -6 | 2.82 | 2.72 | -4% |
+| CallKs.lean | 55 | 48 | -7 | 1.57 | 1.49 | -5% |
+| CallNative.lean | 223 | 219 | -4 | 3.28 | 3.33 | +2% |
+| CallNativeOut.lean | 239 | 227 | -12 | 3.12 | 3.08 | -1% |
+| CallNativeSeg.lean | 327 | 312 | -15 | 3.45 | 3.40 | -1% |
+| CallNotCallable.lean | 131 | 126 | -5 | 4.15 | 4.05 | -2% |
+| CallPrefix.lean | 310 | 300 | -10 | 12.16 | 11.80 | -3% |
+| CallPrefixP.lean | 236 | 229 | -7 | 2.60 | 2.62 | +1% |
+| CallRegs.lean | 57 | 56 | -1 | 1.27 | 1.24 | -2% |
+| Case/AssignP.lean | 346 | 30 | -316 | 12.37 | 0.94 | -92% |
+| Case/AssignT.lean | 311 | 335 | +24 | 14.91 | 15.89 | +7% |
+| Case/CallArmP.lean | 142 | 135 | -7 | 1.95 | 1.95 | +0% |
+| Case/CallAssertT.lean | 50 | 49 | -1 | 1.24 | 1.25 | +1% |
+| Case/CallClosureT.lean | 56 | 55 | -1 | 1.25 | 1.23 | -2% |
+| Case/CallPrintT.lean | 54 | 51 | -3 | 1.21 | 1.26 | +4% |
+| Case/CallPrintlnT.lean | 54 | 51 | -3 | 1.41 | 1.53 | +9% |
+| Case/ExecBlockP.lean | 210 | 177 | -33 | 2.68 | 2.40 | -10% |
+| Case/ExecBlockT.lean | 165 | 146 | -19 | 2.08 | 2.18 | +5% |
+| Case/ExecForP.lean | 163 | 146 | -17 | 2.26 | 2.25 | -0% |
+| Case/ExecForT.lean | 108 | 98 | -10 | 1.84 | 1.84 | +0% |
+| Case/ExecWhileP.lean | 72 | 62 | -10 | 1.45 | 1.42 | -2% |
+| Case/ExecWhileT.lean | 54 | 49 | -5 | 1.30 | 1.28 | -2% |
+| Case/FnLitP.lean | 290 | 20 | -270 | 8.42 | 0.93 | -89% |
+| Case/FnLitT.lean | 265 | 312 | +47 | 13.33 | 13.77 | +3% |
+| Case/VarP.lean | 258 | 20 | -238 | 10.72 | 0.88 | -92% |
+| Case/VarT.lean | 216 | 261 | +45 | 14.52 | 15.19 | +5% |
+| CatTail.lean | 823 | 726 | -97 | 21.60 | 18.99 | -12% |
+| ConcatArm.lean | 185 | 181 | -4 | 2.48 | 2.36 | -5% |
+| ConcatCalls.lean | 227 | 217 | -10 | 1.97 | 2.01 | +2% |
+| EnvDefineArms.lean | 686 | 665 | -21 | 11.44 | 11.43 | -0% |
+| EnvDefineCalls.lean | 395 | 369 | -26 | 2.59 | 2.60 | +0% |
+| EnvDefineGrow.lean | 618 | 612 | -6 | 7.01 | 7.10 | +1% |
+| EnvScan.lean | 840 | 803 | -37 | 5.21 | 5.22 | +0% |
+| EnvScanCore.lean | 118 | 114 | -4 | 1.41 | 1.35 | -4% |
+| EqArm.lean | 157 | 156 | -1 | 1.54 | 1.53 | -1% |
+| ErrArm.lean | 246 | 240 | -6 | 2.23 | 2.21 | -1% |
+| ExecArm.lean | 835 | 807 | -28 | 10.83 | 11.02 | +2% |
+| ExecDisp.lean | 222 | 220 | -2 | 4.69 | 4.81 | +3% |
+| ExecEnv.lean | 274 | 251 | -23 | 2.10 | 1.99 | -5% |
+| ExecExpr.lean | 124 | 118 | -6 | 2.33 | 2.28 | -2% |
+| ExecIf.lean | 607 | 575 | -32 | 8.54 | 8.73 | +2% |
+| ExecJump.lean | 139 | 136 | -3 | 4.66 | 4.69 | +1% |
+| ExecOom.lean | 361 | 328 | -33 | 2.94 | 2.91 | -1% |
+| ExecRet.lean | 106 | 105 | -1 | 3.01 | 2.98 | -1% |
+| ExecRetNull.lean | 126 | 116 | -10 | 2.86 | 2.82 | -1% |
+| ExecVar.lean | 409 | 356 | -53 | 9.33 | 9.02 | -3% |
+| ExecVarDecl.lean | 315 | 313 | -2 | 4.22 | 4.25 | +1% |
+| HelperRun.lean | 219 | 216 | -3 | 1.58 | 1.63 | +3% |
+| LeafCalls.lean | 217 | 195 | -22 | 2.16 | 1.98 | -8% |
+| LeafErr.lean | 216 | 210 | -6 | 3.41 | 3.43 | +1% |
+| LoopArgs.lean | 600 | 577 | -23 | 14.99 | 13.88 | -7% |
+| LoopFor.lean | 1140 | 1103 | -37 | 15.11 | 14.55 | -4% |
+| LoopKit.lean | 279 | 271 | -8 | 2.13 | 2.17 | +2% |
+| LoopWhile.lean | 669 | 643 | -26 | 10.28 | 9.79 | -5% |
+| NewlibCall.lean | 321 | 300 | -21 | 2.13 | 2.08 | -2% |
+| ProofEnvDefine.lean | 233 | 230 | -3 | 2.75 | 2.80 | +2% |
+| ProofEnvGet.lean | 140 | 138 | -2 | 1.55 | 1.67 | +8% |
+| ProofEnvNew.lean | 295 | 291 | -4 | 2.67 | 2.65 | -1% |
+| ProofEnvSet.lean | 398 | 396 | -2 | 2.73 | 2.71 | -1% |
+| ProofMemcpy.lean | 222 | 219 | -3 | 1.91 | 1.86 | -3% |
+| ProofNativeAssert.lean | 982 | 960 | -22 | 23.29 | 22.85 | -2% |
+| ProofNativePrint.lean | 1066 | 1041 | -25 | 25.30 | 25.28 | -0% |
+| ProofNativePrintln.lean | 375 | 367 | -8 | 6.67 | 6.53 | -2% |
+| ProofStrHeap.lean | 167 | 165 | -2 | 1.52 | 1.49 | -2% |
+| ProofStrcmp.lean | 277 | 276 | -1 | 2.31 | 2.24 | -3% |
+| ProofStrcpyH.lean | 172 | 166 | -6 | 1.51 | 1.41 | -7% |
+| ProofStringify.lean | 2273 | 2183 | -90 | 62.46 | 62.18 | -0% |
+| ProofStrlen.lean | 60 | 59 | -1 | 1.03 | 1.12 | +9% |
+| ProofValuePrint.lean | 576 | 569 | -7 | 17.15 | 17.95 | +5% |
+| SeqLoop.lean | 555 | 486 | -69 | 8.00 | 7.54 | -6% |
+| SeqLoopClosure.lean | 491 | 437 | -54 | 7.12 | 6.48 | -9% |
+| SeqLoopInterp.lean | 736 | 649 | -87 | 8.52 | 8.00 | -6% |
+| SpecEnv.lean | 186 | 179 | -7 | 1.47 | 1.44 | -2% |
+| Store.lean | 489 | 483 | -6 | 3.23 | 3.25 | +1% |
+| Supply.lean | 362 | 345 | -17 | 2.73 | 2.63 | -4% |
+| TopEntryBoot.lean | 122 | 121 | -1 | 1.19 | 1.28 | +8% |
+| TopRun.lean | 658 | 639 | -19 | 8.75 | 8.77 | +0% |
+| TopRunP.lean | 391 | 369 | -22 | 9.59 | 9.51 | -1% |
+| World.lean | 829 | 825 | -4 | 2.89 | 3.05 | +6% |
+| **total (95 files)** | **33753** | **31641** | **-2112** | **566.0** | **530.5** | **-6.3%** |

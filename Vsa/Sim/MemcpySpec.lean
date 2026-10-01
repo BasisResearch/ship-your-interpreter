@@ -1,6 +1,6 @@
 import Vsa.Sim.MemcpySites
-import Vsa.Sim.Muldi3Spec
 import Vsa.Triple
+import Vsa.Sim.ObsBasics
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -27,16 +27,6 @@ theorem sbData_zext (b : BitVec 8) :
     have h2 : (b : BitVec 8).toNat % 2^64 = (b : BitVec 8).toNat := Nat.mod_eq_of_lt (by omega)
     rw [h2, Nat.mod_eq_of_lt hlt]
   exact key _ (by decide)
-
-abbrev NotWrittenB (R : Register) : Prop :=
-  (Register.x11 == R) = false ∧ (Register.x14 == R) = false ∧
-  (Register.x15 == R) = false ∧
-  (Register.PC == R) = false ∧ (Register.nextPC == R) = false ∧
-  (Register.minstret == R) = false ∧ (Register.minstret_increment == R) = false ∧
-  (Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
-  (Register.mip == R) = false
-
-theorem NotWrittenB.x11 {R : Register} (h : NotWrittenB R) : (Register.x11 == R) = false := h.1
 
 theorem post_store_pc (σ : MState) (pc vminstret : BitVec 64)
     (m' : Std.ExtHashMap Nat (BitVec 8)) :
@@ -69,13 +59,5 @@ theorem obs_store_minstret {σ' σ : MState} {pc vm : BitVec 64} {m' : Std.ExtHa
   show ((((sigma3_store σ pc m').regs.insert Register.PC (BitVec.addInt pc 4)).insert
     Register.minstret (BitVec.addInt vm 1))).get? Register.minstret = _
   rw [Std.ExtDHashMap.get?_insert_self]
-
-def memcpy_bytepath_post (g : (R : Register) → Option (RegisterType R)) (r dst : BitVec 64) (n : Nat)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.regs.get? Register.PC = some r ∧
-  c.σ.regs.get? Register.x10 = some dst ∧ c.σ.regs.get? Register.x1 = some r ∧
-  (∀ k, k < n → c.σ.mem[(dst.toNat + k)]? = some (bs k)) ∧
-  (∀ a, (a < dst.toNat ∨ dst.toNat + n ≤ a) → c.σ.mem[a]? = m0[a]?) ∧
-  c.tick < 2 ∧ (∀ R : Register, NotWrittenB R → c.σ.regs.get? R = g R)
 
 end Vsa.Sim

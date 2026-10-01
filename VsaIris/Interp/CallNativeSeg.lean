@@ -73,14 +73,10 @@ theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP 
   have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
     rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   have hoff := evalSP_off (s := s) hsf (by omega)
-  ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(argVals N (imgM Mt) (argsBase s) 0 vs ∗
-      (∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (line : BitVec 64),
-        ⌜NatAt R1 Mt1 Mt s sret (BitVec.ofNat 64 inp) entry line vs.length R⌝ -∗
-        ms 0x800039f4#64 R1 (natS s vs.length) Mt1 -∗ valsAt N (argsBase s) vs -∗ Wp.W Φ)))
+  ihave #Hdv := roOwn_data hnd.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hav; iexact Hk
+  · icombine Hav Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hnd.lo hnd.hi hnd.off
     hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
@@ -106,8 +102,7 @@ theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP 
     simp only [InExt, argsBase, Nat.mul_zero, Nat.add_zero] at ha
     exact (hmiss a (by omega)).symm
   ihave #Hav1 := argVals_agree N (argsBase s) vs 0 hag $$ Hav
-  ihave ⟨Hms, Hvals⟩ := ms_carveVals N hreg $$ [Hms Hav1]
-  · iframe Hms Hav1
+  ihave ⟨Hms, Hvals⟩ := ms_carveVals N hreg $$ [$]
   have hnat : NatAt R1 Mt1 Mt s sret (BitVec.ofNat 64 inp) entry vl vs.length R := by
     subst hR1
     refine ⟨by ix_reg; exact hw2', by ix_reg; exact hcall.s1, by ix_reg; exact hcall.s2,
@@ -144,8 +139,7 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   have hreg : ∀ a, InExt (argsBase s, 24 * vs.length) a → InExt (s.toNat - 1088, 1088) a := by
     intro a ha; simp only [InExt, argsBase] at ha ⊢; omega
   iintro ⟨#Hcode, Hms, Hvals, Hst, Hk⟩
-  ihave ⟨%Mt3, Hms, %hag3⟩ := ms_uncarveVals N hreg $$ [Hms Hvals]
-  · iframe Hms Hvals
+  ihave ⟨%Mt3, Hms, %hag3⟩ := ms_uncarveVals N hreg $$ [$]
   have hfr : ∀ o, 1008 ≤ o → o + 8 ≤ 1088 →
       ldv .ld Mt3 (s.toNat - 1088 + o) = ldv .ld Mt (s.toNat - 1088 + o) := by
     intro o h1 h2
@@ -163,12 +157,9 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
         y ∈ [8, 9, 18, 19, 20, 21, 22, 24, 25, 26, 27]) x hx),
       hcall.keep x ((by decide : ∀ y ∈ [19, 20, 21, 22, 24, 25, 26, 27],
         y ∈ [19, 20, 21, 22, 23, 24, 25, 26, 27]) x hx)]
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      (∀ rv' : Nat → BitVec 64, ⌜KeepRegs calleeSaved rv rv'⌝ -∗ regFile rv' -∗
-        stackScratch s n -∗ PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hms Hst; iexact Hk
+  · rw [hro]; icombine Hst Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CallN_run2 (m := ∅) (DA := []) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18)
     (v23 := rv 23) hlive hsf hs' hs2 hs3 hal h2' ?_ ?_ ?_ ?_ ?_ ?_
@@ -181,8 +172,7 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   unfold F'
   iintro ⟨⟨Hst, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave Hst := evalFrame_join hsg.le hn $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hsg.le hn $$ [$]
   ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
   iapply Hk $$ %_ %?_ Hregs Hst Hpc Hra
   keep_split
@@ -200,8 +190,7 @@ theorem natS_join (N : NativeAddrs) {s : BitVec 64} {vs : List Value} {M : Mem}
   simp only [Nat.mul_zero, Nat.add_zero]
   unfold blockOwn
   ihave HS := ownSet_forget _ _ $$ HS
-  ihave H := ownSet_join _ _ _ (fun a (h1 : natS s vs.length a) h2 => h1.2 h2) $$ [HS Hb]
-  · iframe HS Hb
+  ihave H := ownSet_join _ _ _ (fun a (h1 : natS s vs.length a) h2 => h1.2 h2) $$ [$]
   iapply ownSet_iff _ (fun a => ⟨fun h => h.elim (·.1) (fun h => by
     simp only [InExt, argsBase] at h ⊢; omega), fun h => by
     by_cases h' : InExt (argsBase s, 24 * vs.length) a
@@ -315,8 +304,7 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
   isplit
   ·
     iintro %R2 ⟨%hk2, %hok, Hnull, Hvals, Hw, ⟨Hst, -⟩⟩ Hms
-    ihave Hst := stackScratch_widen (m := nativeAssertNeed) hms' hna' $$ [Hslack Hst]
-    · iframe Hslack Hst
+    ihave Hst := stackScratch_widen (m := nativeAssertNeed) hms' hna' $$ [$]
     iapply callNativeEpi hlive Wp hsg hn hal hsp hlen hcall hnat hk2
     iframe Hcode Hms Hvals Hst
     iintro %rv' %hkeep Hregs Hst Hpc Hra
@@ -326,12 +314,9 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
     iintro ⟨%hno, Hab, Hslot, Hvals⟩ HS
     unfold abortRes abortAt
     icases Hab with ⟨Hcore, Hst⟩
-    ihave Hst := stackScratch_widen (m := nativeAssertNeed) hms' hna' $$ [Hslack Hst]
-    · iframe Hslack Hst
-    ihave HF := natS_join N (s := s) (M := Mt1) hlen (by omega) $$ [HS Hvals]
-    · iframe HS Hvals
-    ihave Hst := evalFrame_join hsg.le hn $$ [Hst HF]
-    · iframe Hst HF
+    ihave Hst := stackScratch_widen (m := nativeAssertNeed) hms' hna' $$ [$]
+    ihave HF := natS_join N (s := s) (M := Mt1) hlen (by omega) $$ [$]
+    ihave Hst := evalFrame_join hsg.le hn $$ [$]
     ihave Hk := and_elim_r $$ Hk
     iapply Hk $$ %hno Hcore Hst Hslot
 

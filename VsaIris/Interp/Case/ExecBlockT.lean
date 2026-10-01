@@ -34,15 +34,10 @@ theorem caseT_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
     have := Stmt.stackNeed_ge (.block ss); unfold execNeed stackBudget evalFrame envNewNeed allocHeadroom
     unfold execFrame at this; omega
   rw [show k + (envBytes + n) = k + n + envBytes by omega]
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.block ss) d - 176) ∗ slot24 aRet.toNat ∗
-      world N vsaLayoutP vsaRoomB inp (.counted (k + n + envBytes)) st d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (twpW (vsaModel live)) Φ (.counted k) st' d
-        (.block ss) status aRet s R ret v8 v9 v18 v19))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF (twpW _)
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine Hcode Hro Hfb Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   unfold execDispPC
   refine BlockArm_run1 (s := s) hlive hn.lo hn.hi hn.off hf.regs.s0 hf.regs.a6 hf.regs.a4 hn.kind
@@ -71,8 +66,7 @@ theorem caseT_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
   iintro %R2 %hk2 Hst Hw #Hnew Hms
   rw [hst', hsz]
   rw [h12]
-  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [$]
   have hk2' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R2 1 (BitVec.ofNat 64 (0x80004190 + 4))) := by
     intro x hx
     simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
@@ -92,14 +86,8 @@ theorem caseT_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
     cases Dseq
     simp only [Nat.add_zero]
     iapply wp_swpF (twpW _) (text := interpText ++ dataOf m (stmtView aS.toNat 20))
-      (F := iprop(codeRes ∗ stackScratch (execSP s) (execNeed (.block []) d - 176) ∗
-        slot24 aRet.toNat ∗ world N vsaLayoutP vsaRoomB inp (.counted k) ⟨store', st.out⟩ d ∗
-        execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (twpW (vsaModel live)) Φ (.counted k)
-          ⟨store', st.out⟩ d (.block []) .normal aRet s R ret v8 v9 v18 v19))
     rotate_left
-    · iframe Hms Hcode Hst Hslot Hw HK
-      iapply roOwn_data hn.view $$ [Hcode Hro]
-      iframe Hcode Hro
+    · icombine Hcode Hst Hslot Hw HK as HF; isplitl []; iapply roOwn_data hn.view $$ [$]; iframe HF Hms
     intro F'
     refine BlockArm_runE (s := s) hlive hn.lo hn.hi hn.off h28 hcnt ?_
     intros
@@ -120,15 +108,8 @@ theorem caseT_ExecBlock {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
     have hbn := hbn hpos
     have hne : ss ≠ [] := fun h => by subst h; simp at hlen; omega
     iapply wp_swpF (twpW _) (text := interpText ++ dataOf m (stmtView aS.toNat 20))
-      (F := iprop(codeRes ∗ roOn P m ∗ frameAt inner (R2 10).toNat ∗
-        stackScratch (execSP s) (execNeed (.block ss) d - 176) ∗
-        slot24 aRet.toNat ∗ world N vsaLayoutP vsaRoomB inp (.counted (k + n)) ⟨store', st.out⟩ d ∗
-        execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (twpW (vsaModel live)) Φ (.counted k)
-          st' d (.block ss) status aRet s R ret v8 v9 v18 v19))
     rotate_left
-    · iframe Hms Hcode Hro Hnew Hst Hslot Hw HK
-      iapply roOwn_data hn.view $$ [Hcode Hro]
-      iframe Hcode Hro
+    · icombine Hcode Hro Hnew Hst Hslot Hw HK as HF; isplitl []; iapply roOwn_data hn.view $$ [$]; iframe HF Hms
     intro F'
     refine BlockArm_runL (s := s) (count := count) hlive hn.lo hn.hi hn.off h28 hcnt ?_ ?_
     · intro hc

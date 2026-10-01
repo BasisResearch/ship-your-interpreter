@@ -129,10 +129,7 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       by rw [hsf]; omega, by rw [hsf]; omega⟩
   have hinpt : (BitVec.ofNat 64 inp).toNat = inp := by
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hok.lt]
-  ihave ⟨%rd, Hrd, %hrd⟩ := readable_str $$ [Himg Hx]
-  · isplitl
-    · iexact Himg
-    · iexact Hx
+  ihave ⟨%rd, Hrd, %hrd⟩ := readable_str $$ [$]
   have hpt' : (BitVec.ofNat 64 p).toNat = p := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpt]
   have hf : FmtArgsOK (fun a => (rodataDom a ∨ InExt (p, x.toList.length + 1) a) ∨ False) rd fmt
       [BitVec.ofNat 64 p, 0#64] :=
@@ -184,13 +181,11 @@ theorem ev_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       (by rw [hsf]; unfold RtErr.rtErrNeed snprintfNeed; omega) (by have := hsf; have := hsg.top; omega)
       $$ Hcore
     ihave Hst := stackScratch_widen (m := RtErr.rtErrNeed) hn1088
-      (by unfold RtErr.rtErrNeed snprintfNeed; omega) $$ [Hslack Hst]
-    · iframe Hslack Hst
+      (by unfold RtErr.rtErrNeed snprintfNeed; omega) $$ [$]
     ihave ⟨HF, HA⟩ := ownSet_split_tracked _ _ M hdj $$ HS
     ihave HF := ownSet_forget _ _ $$ HF
     ihave HA := ownSet_forget _ _ $$ HA
-    ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [Hst HF]
-    · iframe Hst HF
+    ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [$]
     iapply Hab
     iframe Hcore Hst
     unfold slot24 blockOwn
@@ -223,8 +218,7 @@ theorem ev_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   unfold fwriteNeed at hfit
   ihave ⟨Hpc, Hra, Hregs, HS, Hsl⟩ := ms_exit_sretAny hdj $$ Hms
-  ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join (s := s) (n := n) hs1 (by omega) $$ [$]
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
   ihave Htmp := clobbered_of_fn _ _ $$ Htmp
   ihave Hargs := clobbered_of_fn _ _ $$ Hargs

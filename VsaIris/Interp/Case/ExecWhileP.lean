@@ -25,19 +25,10 @@ theorem caseP_ExecWhile {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   have hn := whileNode_of hrepr hgeo
   obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (wpW _) (F := iprop(evalSpecsP (vsaModel live) N L Room inp Core ∗
-      execSpecsP (vsaModel live) N L Room inp Core ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.whileStmt c b) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp .uncounted st d ∗
-      ((∀ (st' : St) (status : Status), ⌜ExecS st d env (.whileStmt c b) st' status⌝ -∗
-        execDispK (vsaModel live) N L Room inp (wpW (vsaModel live)) Φ .uncounted st' d
-          (.whileStmt c b) status aRet s R ret v8 v9 v18 v19) ∧
-       (iprop(abortAt Core s (execNeed (.whileStmt c b) d) ∗ slot24 aRet.toNat) -∗
-          (wpW (vsaModel live)).W Φ))))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF (wpW _)
   rotate_left
-  · iframe Hdv Hms IHe IHs Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine IHe IHs Hcode Hro Hfb Hst Hslot Hw HK as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   unfold execDispPC
   refine WhileArm_run (s := s) hlive hn.lo hn.hi hn.off hf.regs.s0 hf.regs.a6 hf.regs.a4 hn.kind
@@ -70,7 +61,6 @@ theorem caseP_ExecWhile {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF
     unfold abortAt
     icases HA with ⟨HC, Hst⟩
     iframe HC
-    iapply execFrame_join hf.stack.le hneed $$ [Hst HS]
-    iframe Hst HS
+    iapply execFrame_join hf.stack.le hneed $$ [$]
 
 end VsaIris.Interp

@@ -188,20 +188,18 @@ theorem jalrx_800039f4 (live : Nat → Prop)
   have htgt : BitVec.update (tgt + sign_extend (m := 64) (0x000#12)) 0 0#1 = tgt :=
     jalr_native_target tgt hal
   obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=
-    stepObs_jalr c.σ c.tick c.steps (0x800039f4#64) vm tgt (0x000800e7#32) (0x000#12)
-      (regidx.Regidx 0x10#5) (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x800039f4#64) 4)
-      (0xe7#8) (0x00#8) (0x08#8) (0x00#8)
-      hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
-      (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-      (Vsa.Sim.decodeW (w := 0x000800e7#32) (afterPrelude c.σ)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
-      (rX_bits_x16 _ tgt
-        (by rw [get?_afterNextPC c.σ (0x800039f4#64) _ (by decide) (by decide)]; exact hrs))
-      (by rw [htgt]; exact hal)
-      (by decide) (by decide) (by decide) (by decide) (by decide)
-      (wX_bits_x1 _ (BitVec.addInt (0x800039f4#64) 4)) hi
+    stepObs_exec (u := c.steps) (Sail.BitVec.update (tgt + sign_extend (m := 64) (0x000#12)) 0 0#1) vm
+      (Fetched.of_word (0x000800e7#32) hG hpc hb0 hb1 hb2 hb3)
+      (execute_jalr_char (0x000#12) (regidx.Regidx 0x10#5) (regidx.Regidx 0x01#5) _ tgt _ _
+        (by reg_reads [hG.misa]) (by reg_reads [hG.cur_privilege]) (by reg_reads [hG.mseccfg])
+        (by reg_reads [])
+        (rX_bits_gpr _ 16 (by decide) (by decide) tgt
+          (by show (afterNextPC (afterPrelude c.σ) (0x800039f4#64)).regs.get? Register.x16 = _
+              rw [get?_afterNextPC c.σ (0x800039f4#64) _ (by decide) (by decide)]; exact hrs))
+        (by rw [htgt]; exact hal)
+        (wX_bits_gpr _ (BitVec.addInt (0x800039f4#64) 4) 1 (by decide) (by decide)))
+      (((RetireReads.prelude hG hmi _).jump _).write _)
+      (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _) hi
   rw [htgt] at hobs
   have h := VsaIris.Inst.jalrStep_of_obs hs hi' hG' hmem hobs
   refine ⟨?_, stepConFrame_of_obs hs hobs ?_ ?_⟩
@@ -255,13 +253,10 @@ theorem ms_callHelperR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Str
   ihave Hspec := Hspec $$ %R
   ihave ⟨H16, HK⟩ := (regFile_a6 R).1 $$ Hregs
   iapply wp_callRW Wp hexec (X := iprop(sepL fRegsNo16 (fun x => x ↦ᵣ R x) ∗ Pre))
-  iframe Hi Hspec Hpc Hra H16
-  isplitl [HK HPre]
-  · iframe HK HPre
+  iframe Hi Hspec Hpc Hra H16 HK HPre
   isplitl []
   · iintro H16 ⟨HK, HPre⟩
-    ihave Hregs := (regFile_a6 R).2 $$ [H16 HK]
-    · iframe H16 HK
+    ihave Hregs := (regFile_a6 R).2 $$ [$]
     iframe Hregs HPre Hcode
     ipureintro; exact ⟨hal, hpins⟩
   iintro Hpc Hra Hpost
@@ -290,13 +285,10 @@ theorem ms_callAbortR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
   ihave ⟨H16, HK⟩ := (regFile_a6 R).1 $$ Hregs
   iapply wp_callAbortR Wp hexec (X := iprop(sepL fRegsNo16 (fun x => x ↦ᵣ R x) ∗ Pre))
-  iframe Hi Hspec Hpc Hra H16
-  isplitl [HK HPre]
-  · iframe HK HPre
+  iframe Hi Hspec Hpc Hra H16 HK HPre
   isplitl []
   · iintro H16 ⟨HK, HPre⟩
-    ihave Hregs := (regFile_a6 R).2 $$ [H16 HK]
-    · iframe H16 HK
+    ihave Hregs := (regFile_a6 R).2 $$ [$]
     iapply hP
     iframe Hregs HPre Hcode
   isplit

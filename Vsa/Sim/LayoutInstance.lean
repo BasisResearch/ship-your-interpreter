@@ -11,7 +11,7 @@ import Vsa.Sim.Code.ImageStatics
 import Vsa.Sim.DecodeNF
 import Vsa.Sim.EnvDefSpec2
 import Vsa.Sim.SnprintfSpec5
-import Vsa.Sim.StrcmpSpecCond
+import Vsa.Sim.StrcmpSpecW3
 import Vsa.Sim.ValueEqualSpec2
 
 open Vsa Vsa.Alloc Vsa.Sim

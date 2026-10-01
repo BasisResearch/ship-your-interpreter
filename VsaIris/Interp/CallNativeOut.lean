@@ -135,15 +135,10 @@ end Defs
     rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   have hoff := evalSP_off (s := s) hsf (by omega)
   have hx1 := hnd.lo; have hx2 := hnd.hi; have hx3 := hnd.off
-  ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(NatOutSpecs live N Wp entry need out ∗ codeRes ∗ roOn P m ∗
-      argVals N (imgM Mt) (argsBase s) 0 vs ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ world N L Room inp ρ st2 d ∗
-      slot24 sret.toNat ∗
-      CallExitK live N L Room inp Wp Φ rv s n sret .null ρ ⟨st2.store, out st2.store vs st2.out⟩ d ret))
+  ihave #Hdv := roOwn_data hnd.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hspec Hcode Hro Hav Hst Hw Hslot; iexact Hk
+  · icombine Hspec Hcode Hro Hav Hst Hw Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 hcall.s0
     hcall.sp ?_ ?_ ?_ ?_ ?_
@@ -171,8 +166,7 @@ end Defs
       imgM_store_miss _ _ (by rw [hoff 128 (by decide)]; omega),
       imgM_store_miss _ _ (by rw [hoff 120 (by decide)]; omega)]
   ihave #Hav1 := argVals_agree N (argsBase s) vs 0 hag $$ Hav
-  ihave ⟨Hms, Hvals⟩ := ms_carveVals N hreg $$ [Hms Hav1]
-  · iframe Hms Hav1
+  ihave ⟨Hms, Hvals⟩ := ms_carveVals N hreg $$ [$]
   ihave ⟨Hcon, Hio, #Hbin, %B, Hstore, Hclose⟩ := world_out N L Room inp ρ st2 d hEL $$ Hw
   ihave ⟨Hstore, #Hdisp⟩ := dispResL_of_argVals N hd st2.store B (imgM Mt1) (argsBase s) vs 0 $$
     [Hstore Hav1]
@@ -211,10 +205,8 @@ end Defs
 
   ihave Hw := Hclose $$ %(out st2.store vs st2.out) Hcon Hio Hstore
   rw [hbase]
-  ihave ⟨%Mt3, Hms, %hag3⟩ := ms_uncarveVals N hreg $$ [Hms Hvals]
-  · iframe Hms Hvals
-  ihave Hst := stackScratch_widen (m := need) hms' (by omega) $$ [Hslack Hst]
-  · iframe Hslack Hst
+  ihave ⟨%Mt3, Hms, %hag3⟩ := ms_uncarveVals N hreg $$ [$]
+  ihave Hst := stackScratch_widen (m := need) hms' (by omega) $$ [$]
   have hfr : ∀ o, (1008 ≤ o ∧ o + 8 ≤ 1088) →
       ldv .ld Mt3 (s.toNat - 1088 + o) = ldv .ld Mt (s.toNat - 1088 + o) := by
     intro o ho
@@ -227,13 +219,10 @@ end Defs
         imgM_store_miss _ _ (by rw [hoff 128 (by decide)]; omega),
         imgM_store_miss _ _ (by rw [hoff 120 (by decide)]; omega)])]
   have hkR : ∀ x ∈ fRegs, x ∉ callerSaved → R2 x = R1 x := hkeep2
-  ihave #Hdv := roOwn_data (DA := []) (fun a h => by simp at h) $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      valAt N sret.toNat .null ∗ world N L Room inp ρ ⟨st2.store, out st2.store vs st2.out⟩ d ∗
-      CallExitK live N L Room inp Wp Φ rv s n sret .null ρ ⟨st2.store, out st2.store vs st2.out⟩ d ret))
+  ihave #Hdv := roOwn_data (DA := []) (fun a h => by simp at h) $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hst Hnull Hw Hk
+  · icombine Hst Hnull Hw Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   have h2' : upd R2 1 (BitVec.ofNat 64 (0x800039f4 + 4)) 2 = s + 18446744073709550528#64 := by
     ix_reg; rw [hkR 2 (by decide) (by decide)]; subst hR1; ix_reg; exact hcall.sp
@@ -248,8 +237,7 @@ end Defs
   unfold F'
   iintro ⟨⟨Hst, Hnull, Hw, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave Hst := evalFrame_join hsg.le hn $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hsg.le hn $$ [$]
   ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
   unfold CallExitK
   iapply Hk $$ %_ %?_ Hregs Hst Hnull Hw Hpc Hra

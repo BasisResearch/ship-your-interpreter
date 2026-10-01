@@ -113,12 +113,9 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
   ihave ⟨Herr, Hstd, Herrno, Hcon, #Himg⟩ := world_exitPartsE N L Room hEL ρ st d $$ Hw
   ihave #Hgp := codeRes_gp $$ Hcode
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(slot24 (sFr + 88#64).toNat ∗ stackScratch sFr (sFr.toNat - stackSL.lo) ∗
-      blockOwn (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ Stdio.errnoOwn ∗ consoleOwn st.out ∗
-      ownImg (InExt (sTop.toNat + 752, 16)) imgT ∗ codeRes ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg))
   rotate_left
-  · iframe Hslot Hst Herr Hstd Herrno Hcon HT Hms Hcode Hgp Himg
-    iapply codeRes_text $$ Hcode
+  · icombine Hslot Hst Herr Hstd Herrno Hcon HT Hcode Hgp Himg as HF
+    isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine hS.stage h2 hf.inp (ldOK_of_readOK hs1) ?_
   intro R1 e2 e10 e11 e12 _
@@ -164,8 +161,7 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
       rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt h3]; omega)
     (fun _ hr => by
       iintro ⟨Ha, ⟨Hb, Hr, Hs⟩, Hc⟩
-      isplitr
-      · ipureintro; exact hr
+      iframe %hr
       simp only [List.cons_append, List.nil_append]
       rw [topErr_toNat, show (256#64 : BitVec 64).toNat = 256 from rfl]
       iframe Ha Hb Hr Hs Hc)
@@ -184,12 +180,9 @@ theorem wp_topAbrupt (H : NewlibHoles) (hcl : CodeLive live)
   have e2' : upd R2 1 (BitVec.ofNat 64 (T.jal.pc + 4)) 2 = sFr := by
     rw [upd_other _ _ (by decide), hk2 2 (by decide) (by decide), e2]
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(slot24 (sFr + 88#64).toNat ∗ stackScratch sFr (sFr.toNat - stackSL.lo) ∗
-      cstrBuf (sTop.toNat + 496) 256 ∗ Stdio.stdioOwn ∗ Stdio.errnoOwn ∗ consoleOwn st.out ∗
-      ownImg (InExt (sTop.toNat + 752, 16)) imgT ∗ gp ↦ᵣ□ Newlib.gpV ∗ binImg))
   rotate_left
-  · iframe Hslot Hst Herr Hstd Herrno Hcon HT Hms Hgp Himg
-    iapply codeRes_text $$ Hcode
+  · icombine Hslot Hst Herr Hstd Herrno Hcon HT Hgp Himg as HF
+    isplitl []; iapply codeRes_text $$ Hcode; iframe HF Hms
   intro F'
   refine hS.tail e2' hf.ra ?_
   intro R3 f10 f1 f2 f8
@@ -311,16 +304,14 @@ theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := 
   iintro ⟨HA, Hslot, HS, #Hjb, HT, #Hgp, #Himg⟩
   ihave ⟨HC, Hst⟩ := abortAt_elim _ _ _ $$ HA
   ihave HC := hcore $$ HC
-  ihave HA := abortAt_intro _ _ _ $$ [HC Hst]
-  · iframe HC Hst
+  ihave HA := abortAt_intro _ _ _ $$ [$]
   unfold slot24 blockOwn
   ihave ⟨%f, Hslot⟩ := ownSet_fn _ $$ Hslot
   ihave HI := ownSet_glue (interpS sTop) (InExt ((sFr + 88#64).toNat, 24)) (imgM Mt) f
     (fun a h1 h2 => by
       simp only [interpS, InExt, show (sFr + 88#64).toNat = sTop.toNat - 176 + 88 from by decide]
         at h1 h2
-      omega) $$ [HS Hslot]
-  · iframe HS Hslot
+      omega) $$ [$]
   ihave HI := ownSet_iff (T := InExt ((sTop - 176#64).toNat, 176)) _ (fun a => by
     simp only [interpS, InExt, show (sFr + 88#64).toNat = sTop.toNat - 176 + 88 from by decide,
       show (sTop - 176#64).toNat = sTop.toNat - 176 from by decide]
@@ -330,17 +321,7 @@ theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := 
     (by decide) jb (glue (interpS sTop) (imgM Mt) f) imgT (topLanding_of hf hjb hT)
   unfold abortRes
   rw [show (sTop - 176#64).toNat - stackSL.lo = sTop.toNat - 176 - stackSL.lo from by decide] at *
-  isplitl [HA]
-  · iexact HA
-  isplitr
-  · iexact Hjb
-  isplitl [HI]
-  · iexact HI
-  isplitl [HT]
-  · iexact HT
-  isplitr
-  · iexact Hgp
-  · iexact Himg
+  iframe HA Hjb HI HT Hgp Himg
 
 end Abort
 
@@ -398,14 +379,11 @@ theorem interpRun_partial (H : NewlibHoles) (hlive : ∀ p ∈ interpText, live 
     rw [stmts_toNat hE, g_toNat hE] at hK
     unfold topLoopRes
     iintro ⟨Hms, Hslot, #Hcode, #Himg, #Hro, #Hdv, #Hfr, Hst, Hw, HT, ⟨%jb, %hjb, #Hjb⟩⟩
-    ihave #Hctx := errCtx_of_jb hjb $$ [Himg Hjb]
-    · iframe Himg Hjb
+    ihave #Hctx := errCtx_of_jb hjb $$ [$]
     ihave #Hspec := hspecs $$ Hctx
     ihave #Hgp := codeRes_gp $$ Hcode
     iapply hK
-    iframe Hms Hcode Hro Hdv Hfr Hst Hw Hspec
-    isplitl [Hslot]
-    · iexact Hslot
+    iframe Hms Hcode Hro Hdv Hfr Hst Hw Hspec Hslot
     isplit
     ·
       iintro %R' %st' %status %hE' %⟨hkeep, hs1⟩ - Hms Hst Hret Hw

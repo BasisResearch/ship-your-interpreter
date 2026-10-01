@@ -40,15 +40,10 @@ theorem caseT_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
   have hle' : execNeed (.forStmt init cnd step b) d - 176 ≤ (execSP s).toNat := by
     rw [hfg.sf]; have := hf.stack.le; omega
   rw [show k + (envBytes + ni + nl) = k + nl + ni + envBytes by omega]
-  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.forStmt init cnd step b) d - 176) ∗ slot24 aRet.toNat ∗
-      world N vsaLayoutP vsaRoomB inp (.counted (k + nl + ni + envBytes)) st d ∗
-      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (twpW (vsaModel live)) Φ (.counted k) st'' d
-        (.forStmt init cnd step b) status aRet s R ret v8 v9 v18 v19))
+  ihave #Hdv := roOwn_data hn.view $$ [$]
+  iapply wp_swpF (twpW _)
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine Hcode Hro Hfb Hst Hslot Hw HK as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
   unfold execDispPC
   refine ForArm_run (s := s) hlive hn.lo hn.hi hn.off hf.regs.s0 hf.regs.a6 hf.regs.a4 hn.kind
@@ -75,14 +70,9 @@ theorem caseT_ExecFor {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] 
   iintro %R2 %hk2 Hst Hw #Hnew Hms
   rw [hst', hsz]
   rw [h12]
-  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [Hsl Hst]
-  · iframe Hsl Hst
+  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [$]
   have hk2' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R2 1 (BitVec.ofNat 64 (0x80004238 + 4))) := by
-    intro x hx
-    simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
-    subst hR1
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      (ix_reg; rw [hk2 _ (by decide) (by decide)]; ix_reg)
+    subst hR1; keep_split <;> (ix_reg; rw [hk2 _ (by decide) (by decide)]; ix_reg)
   have hih : InitHead (upd R2 1 (BitVec.ofNat 64 (0x80004238 + 4))) s aS (BitVec.ofNat 64 inp) aRet
       (R2 10) := by
     refine ⟨?_, ?_, ?_, ?_, by ix_reg⟩ <;> (ix_reg; rw [hk2 _ (by decide) (by decide)]; subst hR1; ix_reg)

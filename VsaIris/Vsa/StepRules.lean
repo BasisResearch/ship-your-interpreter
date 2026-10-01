@@ -1,4 +1,5 @@
 import VsaIris.Vsa.SymExec
+import VsaIris.Vsa.JalSite
 import VsaIris.Interp.IRun
 import VsaIris.Vsa.AllocRun
 import VsaIris.Interp.EnvRun
@@ -293,30 +294,10 @@ theorem jalExec_word (pc : Nat) (w : BitVec 32) (imm : BitVec 21) (tgt : BitVec 
     (live : Nat → Prop) (hlive : ∀ p ∈ codeFoot pc (wbytes w), live p.1) :
     JalExec (vsaModel live) pc (wbytes w) tgt := by
   simp only [jalChk, Bool.and_eq_true, decide_eq_true_eq] at hchk
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hlt, hlo⟩, hhi⟩, hal⟩, hrvc⟩, hword⟩, htgt⟩, htal⟩, hlink⟩ := hchk
-  have hpn : (BitVec.ofNat 64 pc).toNat = pc := by
-    rw [BitVec.toNat_ofNat]; exact Nat.mod_eq_of_lt hlt
-  refine jalExec_of_site live _ _ _ hlive fun c hG hi hpc hb => ?_
-  obtain ⟨vm, hmi⟩ := hG.minstret
-  have hb0 := hb (pc + 0, .discard, w.extractLsb' 0 8) (by simp [codeFoot, wbytes])
-  have hb1 := hb (pc + 1, .discard, w.extractLsb' 8 8) (by simp [codeFoot, wbytes])
-  have hb2 := hb (pc + 2, .discard, w.extractLsb' 16 8) (by simp [codeFoot, wbytes])
-  have hb3 := hb (pc + 3, .discard, w.extractLsb' 24 8) (by simp [codeFoot, wbytes])
-  obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=
-    stepObs_jal c.σ c.tick c.steps (BitVec.ofNat 64 pc) vm w imm
-      (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (BitVec.ofNat 64 pc) 4)
-      _ _ _ _ hG hpc hmi (by rw [hpn]; exact hb0) (by rw [hpn]; exact hb1)
-      (by rw [hpn]; exact hb2) (by rw [hpn]; exact hb3)
-      (by rw [hpn]; exact hlo) (by rw [hpn]; exact hhi) (by rw [hpn]; exact hal) hrvc hword
-      (Vsa.Sim.decodeW (afterPrelude c.σ)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
-        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg) (hdec _))
-      (by rw [htgt]; exact htal) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (wX_bits_x1 _ (BitVec.addInt (BitVec.ofNat 64 pc) 4)) hi
-  have h := jalStep_of_obs (calleeEntry := tgt) hs hi' hG' hmem hobs htgt
-  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
-  rwa [hlink] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨_, hlo⟩, hhi⟩, hal⟩, hrvc⟩, hword⟩, htgt⟩, htal⟩, _⟩ := hchk
+  exact JalSite.exec (S := ⟨pc, _, _, _, _, w, imm, tgt⟩)
+    ⟨hword, hrvc, fun σ h1 h2 h3 => Vsa.Sim.decodeW σ h1 h2 h3 (hdec σ), htgt, htal, hlo, hhi, hal⟩
+    live hlive
 
 /-- A call `jal ra, tgt` of a run with a data view. -/
 theorem x_jal (C : TblOK T rs ps img rT) (pc : Nat) (w : BitVec 32) (imm : BitVec 21)

@@ -26,14 +26,7 @@ theorem wp_call_ks (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   rw [regsOf_cons]
   icases Hks with ⟨Hra, HKs⟩
   iapply wp_callW Wp hexec
-  isplitl []
-  · iexact Hi
-  isplitl []
-  · iexact Hs
-  isplitl [Hpc]
-  · iexact Hpc
-  isplitl [Hra]
-  · iexact Hra
+  iframe Hi Hs Hpc Hra
   isplitl [HKs HA]
   · iapply hpre; iframe HKs HA
   iintro Hpc Hra HQ

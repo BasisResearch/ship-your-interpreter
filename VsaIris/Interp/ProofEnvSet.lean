@@ -314,8 +314,7 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   unfold fnSpecW
   imodintro
   iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp, hslot⟩, Ha0, Ha1, Ha2, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hx, Hval, Hst, -, -⟩ Hk
-  ihave ⟨Hst, %⟨-, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [Hst Hfa]
-  · iframe Hst Hfa
+  ihave ⟨Hst, %⟨-, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [$]
   have hs64 : 64 ≤ s.toNat := by have := hsp.lo; unfold htifLo envGetNeed at this; omega
   have hset : ∀ a, ChainFrom st x fa a → st.set? fa x v = setAt st a x v := fun a h =>
     (set?_eq_setAt hinv.parents hfalt x v).trans (h.setAt hinv.parents)
@@ -402,8 +401,7 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
     ihave ⟨HB, Hst⟩ := frame_write_close N (st := st) (st' := setStore st fa' x v) (fa := fa') (f := f)
       (img := img) (B₁ := B₁) (B₂ := B₂) (x := x) (v := v) hdisj hF.lay hF.img
       hF.sepOut hF.slot hco hlt (by rw [hvj])
-      ⟨rfl, by rw [setStore_frames_toList hf, hmap], hinv.set? hsome⟩ $$ [HS Hclose]
-    · iframe HS Hb Hp HGe Hclose Hv
+      ⟨rfl, by rw [setStore_frames_toList hf, hmap], hinv.set? hsome⟩ $$ [$]
     rw [← hB]
 
     ihave ⟨Hra, Ha0, Hsp, Hsv, Hcl⟩ := scan_exit_regs hsv hret $$ HR

@@ -102,14 +102,10 @@ theorem GetStack.restore {s : Nat} {r : BitVec 64} {sv : Nat → BitVec 64} {R :
   have e : ∀ c : Nat, c < 64 → (R 2 + BitVec.ofNat 64 c).toNat = s - (64 - c) := fun c hc => by
     rw [BitVec.toNat_add, hsp, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega),
       Nat.mod_eq_of_lt (by omega)]; omega
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [show (56#64 : BitVec 64) = BitVec.ofNat 64 56 from rfl, e 56 (by omega)]; exact h.ra
-  · rw [show (48#64 : BitVec 64) = BitVec.ofNat 64 48 from rfl, e 48 (by omega)]; exact h.s0
-  · rw [show (40#64 : BitVec 64) = BitVec.ofNat 64 40 from rfl, e 40 (by omega)]; exact h.s1
-  · rw [show (32#64 : BitVec 64) = BitVec.ofNat 64 32 from rfl, e 32 (by omega)]; exact h.s2
-  · rw [show (24#64 : BitVec 64) = BitVec.ofNat 64 24 from rfl, e 24 (by omega)]; exact h.s3
-  · rw [show (16#64 : BitVec 64) = BitVec.ofNat 64 16 from rfl, e 16 (by omega)]; exact h.s4
-  · rw [show (8#64 : BitVec 64) = BitVec.ofNat 64 8 from rfl, e 8 (by omega)]; exact h.s5
+  exact ⟨by rw [e 56 (by omega)]; exact h.ra, by rw [e 48 (by omega)]; exact h.s0,
+    by rw [e 40 (by omega)]; exact h.s1, by rw [e 32 (by omega)]; exact h.s2,
+    by rw [e 24 (by omega)]; exact h.s3, by rw [e 16 (by omega)]; exact h.s4,
+    by rw [e 8 (by omega)]; exact h.s5⟩
 
 theorem slot24_index (i : Nat) :
     (BitVec.ofNat 64 i <<< 1 + BitVec.ofNat 64 i) <<< 3 = BitVec.ofNat 64 (24 * i) := by

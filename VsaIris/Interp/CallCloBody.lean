@@ -114,41 +114,29 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
       · exact hqv a ha
       · refine hsn.view a ?_
         simp only [stmtView, List.mem_append, mem_accAddrs_iff] at ha ⊢
-        omega) $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(F ∗ slot24 (s + 18446744073709550528#64 + 144#64).toNat ∗
-      ((∀ (R' : Nat → BitVec 64) (Mt' : Mem) (arr : BitVec 64) (count : Nat),
-          ⌜body ≠ [] ∧ BlockNode m P bod arr count body ∧ ClosureHead R' s bod inp fr 0 ∧
-            CloAt R' Mt' s inp sret ret rv⌝ -∗ F -∗
-          ms 0x80003354#64 R' (closureS s) Mt' -∗ slot24 (s + 18446744073709550528#64 + 144#64).toNat -∗
-          Wp.W Φ) ∧
-        (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-          ⌜body = [] ∧ CloAt R' Mt' s inp sret ret rv⌝ -∗ F -∗
-          ms 0x80003954#64 R' (closureS s) Mt' -∗ slot24 (s + 18446744073709550528#64 + 144#64).toNat -∗
-          Wp.W Φ))))
+        omega) $$ [$]
+  have hsmall : count < 2 ^ 31 := by
+    rcases Nat.eq_zero_or_pos count with h | h
+    · omega
+    · exact (hbn h).small
+  have hat2 := ((hat.upd (x := 16) (by decide) bod).upd (x := 8) (by decide) 0#64).upd (x := 15)
+    (by decide) (BitVec.ofNat 64 count)
+  ieval (unfold slot24 blockOwn) at Hk
+  iapply wp_swpF Wp
   rotate_left
-  · unfold slot24 blockOwn
-    iframe Hdv Hms HF Hslot; iexact Hk
+  · icombine HF Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CloB_runB (count := count) hlive hq1 hq2 hq3 hsn.lo hsn.hi hsn.off
-    (by rcases Nat.eq_zero_or_pos count with h | h
-        · omega
-        · exact (hbn h).small)
+    hsmall
     ((hk2 21 (by decide)).trans hpd.s5) hbod hcnt ?_ ?_
   ·
     intro hgt
     apply swp_closeRM
     intro R2 Mt2 hR2 hMt2
     subst hR2 hMt2
-    have hsmall : count < 2 ^ 31 := by
-      rcases Nat.eq_zero_or_pos count with h | h
-      · omega
-      · exact (hbn h).small
     have hpos : 0 < count := by
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hgt
       rw [ofNat_toInt_small hsmall] at hgt; simp at hgt; omega
-    have hat2 := ((hat.upd (x := 16) (by decide) bod).upd (x := 8) (by decide) 0#64).upd (x := 15)
-      (by decide) (BitVec.ofNat 64 count)
     have hch : ClosureHead (upd (upd (upd (upd R1 1 (BitVec.ofNat 64 (0x80003328 + 4))) 16 bod) 8 0#64) 15
         (BitVec.ofNat 64 count)) s bod inp fr 0 :=
       ⟨hat2.sp, by ix_reg, by ix_reg <;> rfl, hat2.s2, by ix_reg; exact (hk2 19 (by decide)).trans hpd.s3⟩
@@ -162,15 +150,9 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
     apply swp_closeRM
     intro R2 Mt2 hR2 hMt2
     subst hR2 hMt2
-    have hsmall : count < 2 ^ 31 := by
-      rcases Nat.eq_zero_or_pos count with h | h
-      · omega
-      · exact (hbn h).small
     have h0 : count = 0 := by
       try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hle
       rw [ofNat_toInt_small hsmall] at hle; simp at hle; omega
-    have hat2 := ((hat.upd (x := 16) (by decide) bod).upd (x := 8) (by decide) 0#64).upd (x := 15)
-      (by decide) (BitVec.ofNat 64 count)
     unfold F'
     iintro ⟨⟨HF, Hslot, Hk⟩, Hms⟩
     ihave Hk := and_elim_r $$ Hk

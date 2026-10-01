@@ -50,8 +50,7 @@ theorem vp_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   simp only [sepL_cons, sepL_nil]
   iintro ⟨⟨#Hv, #Hd, #HE, #Himg, Hstd, Hcon, Hst, ⟨⟨#Hgp, -⟩, -⟩, Hk⟩, Hms⟩
   ihave #Hsp := hspec
-  ihave #HX := hX $$ [Hv Hd HE Himg]
-  · iframe Hv Hd HE Himg
+  ihave #HX := hX $$ [$]
   iapply ms_tailNewlibA Wp hlen hvs hs hsg.le hneed (by rw [h1]; exact hal) hP hQ
   iframe Hsp Hms Hst Himg
   isplitl [Hstd Hcon]
@@ -406,8 +405,7 @@ theorem roImg_roOn_agree {S P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem}
   unfold roImg roOn
   ihave #Ha := H1 $$ %a %hs
   ihave #Hb := H2 $$ %a %b %hp %hm
-  iapply memRO_agree a (img a) b $$ [Ha Hb]
-  iframe Ha Hb
+  iapply memRO_agree a (img a) b $$ [$]
 
 omit I in
 
@@ -419,8 +417,7 @@ theorem roOwn_clod {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {cp q :
           ∀ k, q + 8 ≤ k → k < q + 16 → m[k]? = some (imgM Dt k)⌝ := by
   classical
   iintro ⟨#Hc, #H1, #H2⟩
-  ihave %hag := roImg_roOn_agree $$ [H1 H2]
-  · iframe H1 H2
+  ihave %hag := roImg_roOn_agree $$ [$]
   let f : Nat → BitVec 8 := fun k => if cp ≤ k ∧ k < cp + 16 then img k else (m[k]?).getD 0
   obtain ⟨Dt, hDt⟩ := exists_mem_img f (clodA cp q)
   have hc : ∀ k, cp ≤ k → k < cp + 8 → imgM Dt k = img k := fun k h1 h2 => by
@@ -529,16 +526,14 @@ theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hd2 := dispRes_clos $$ Hd
   icases Hd2 with ⟨%cd, %cp, %q, %img, %P, %m, %⟨hcd, hqimg, hcR, hrep, hPR, hPW⟩, #Hca, #Hro, #Hon⟩
   ihave #Hca' := valImg_clos $$ Hw
-  ihave %hcp := closAt_agree ca cp (imgW (imgM Ma) (p.toNat + 8)).toNat $$ [Hca Hca']
-  · iframe Hca Hca'
+  ihave %hcp := closAt_agree ca cp (imgW (imgM Ma) (p.toNat + 8)).toNat $$ [$]
   obtain ⟨w, hrw, hcov, hname⟩ := fnName_facts hrep
   have hP : ∀ k, q + 8 ≤ k → k < q + 16 → P k ∧ (m[k]?).isSome := fun k h1 h2 => by
     refine ⟨by have := hcov (k - (q + 8)) (by omega); rwa [show q + 8 + (k - (q + 8)) = k by omega] at this, ?_⟩
     have := read64_bytes_present hrw (k - (q + 8)) (by omega)
     rw [show q + 8 + (k - (q + 8)) = k by omega] at this
     rw [this]; rfl
-  ihave ⟨%Dt, #Hview, %⟨hc, hn⟩⟩ := roOwn_clod hP $$ [Hcode Hro Hon]
-  · iframe Hcode Hro Hon
+  ihave ⟨%Dt, #Hview, %⟨hc, hn⟩⟩ := roOwn_clod hP $$ [$]
   have f : CloFacts Ma Ma Dt p cp q w := {
     hk := ldv_lw_kind hp.kind (by decide)
     hku := ldv_lwu_kind hp.kind
@@ -573,10 +568,8 @@ theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   · ihave #Hx := strAt_of_cstringWithin hcs hPW $$ Hon
     iapply wp_swpF Wp (text := interpText ++ dataOf Dt (clodA cp q)) (S := InExt (p.toNat, 24))
       (R := upd rv 1 r) (Mt := Ma) (pc := valuePrintPC)
-      (F := Fvp Wp Φ N p s r (.closure ca) st o rv Ma (strAt w x))
     rotate_left
-    · unfold Fvp
-      iframe Hview Hw Hd Hx Himg Hstd Hcon Hst Hcode Hk Hms
+    · icombine Hw Hd Hx Himg Hstd Hcon Hst Hcode Hk as HF; isplitl []; iexact Hview; iframe HF Hms
     intro F'
     exact vp_clo_named Wp H c f hnz (read64_lt hrw) .rfl (by rw [hdisp, hnx])
 

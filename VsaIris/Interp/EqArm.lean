@@ -90,8 +90,7 @@ theorem ArmAt.callEqual (Wp : MachWP (GF := GF) (vsaModel live)) (J : JalAt valu
   iintro %R4 %M4 %hkeep4 %hr4 %hag4 Hms Hsto ⟨Hs16, -⟩
   ihave Hw := Hwk $$ Hsto
   ihave Hst := stackScratch_widen (s := evalSP s) (n := n - 1088) (m := 16)
-    (by rw [hsf]; have := g.sg.le; omega) (by omega) $$ [Hslack Hs16]
-  · iframe Hslack Hs16
+    (by rw [hsf]; have := g.sg.le; omega) (by omega) $$ [$]
   iapply hk R4 M4 hkeep4 hr4 (fun k h1 h2 => hag4 k (by simp only [VsaIris.InExt]; omega)
     (by rw [hoff 64 (by decide)]; simp only [VsaIris.InExt]; omega)
     (by rw [hoff 32 (by decide)]; simp only [VsaIris.InExt]; omega))

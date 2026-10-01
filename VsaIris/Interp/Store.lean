@@ -313,13 +313,11 @@ theorem roImg_ownImg_off {S T : Nat → Prop} {img img' : Nat → BitVec 8} {a :
       rw [sepL_cons]
       rcases List.mem_cons.mp h with rfl | h
       · iintro ⟨Ha, Hy, -⟩
-        ihave %hne := memRO_excl_ne a a (img a) (img' a) $$ [Ha Hy]
-        · iframe Ha Hy
+        ihave %hne := memRO_excl_ne a a (img a) (img' a) $$ [$]
         ipureintro; exact hne rfl
       · iintro ⟨Ha, -, Hys⟩
         iapply ih h $$ [Ha Hys]
-        iframe Ha Hys) l hal $$ [Ha Hl]
-  · iframe Ha Hl
+        iframe Ha Hys) l hal $$ [$]
   ipureintro; exact hn
 
 theorem closuresOwn_fresh {p : Nat} {img : Nat → BitVec 8} {mc : NatMap Nat} :
@@ -331,12 +329,10 @@ theorem closuresOwn_fresh {p : Nat} {img : Nat → BitVec 8} {mc : NatMap Nat} :
   | i, cd :: cs => by
     rw [closuresOwn_cons]
     iintro ⟨⟨#Hcd, #Hcs⟩, Hmc, Hown⟩
-    ihave %hcs := closuresOwn_fresh (i + 1) cs $$ [Hcs Hmc Hown]
-    · iframe Hcs Hmc Hown
+    ihave %hcs := closuresOwn_fresh (i + 1) cs $$ [$]
     unfold closOwn
     icases Hcd with ⟨%p', %q', %e', %img', #Hat, %-, #Hro, -⟩
-    ihave %hoff := roImg_ownImg_off (S := InExt (p', 16)) (a := p') (by unfold InExt; simp) $$ [Hro Hown]
-    · iframe Hro Hown
+    ihave %hoff := roImg_ownImg_off (S := InExt (p', 16)) (a := p') (by unfold InExt; simp) $$ [$]
     unfold closAt
     ihave %hlk := ghost_map_lookup $$ Hmc Hat
     ipureintro
@@ -450,8 +446,7 @@ theorem ownImg_join (S T : Nat → Prop) (f g : Nat → BitVec 8) :
     ownImg (GF := GF) S f ∗ ownImg T g ⊢
       ∃ h, ownImg (fun a => S a ∨ T a) h ∗ ⌜∀ a, S a → ¬ T a⌝ := by
   iintro ⟨HS, HT⟩
-  ihave ⟨⟨HS, HT⟩, %hd⟩ := keep_pure (ownSet_disj S T f g) $$ [HS HT]
-  · iframe HS HT
+  ihave ⟨⟨HS, HT⟩, %hd⟩ := keep_pure (ownSet_disj S T f g) $$ [$]
   classical
   iexists (fun a => if S a then f a else g a)
   isplitl [HS HT]
@@ -506,8 +501,7 @@ theorem framesOwn_cover :
     iintro ⟨Hf, Hr⟩
     ihave ⟨%img1, H1, %hp1⟩ := frameOwn_cover N i f bl $$ Hf
     ihave ⟨%img2, H2, %hp2⟩ := framesOwn_cover (i + 1) fs Bs $$ Hr
-    ihave ⟨%img, H, %hd⟩ := ownImg_join _ _ img1 img2 $$ [H1 H2]
-    · iframe H1 H2
+    ihave ⟨%img, H, %hd⟩ := ownImg_join _ _ img1 img2 $$ [$]
     iexists img
     isplitl [H]
     · iapply ownSet_iff _ (fun a => by rw [List.flatten_cons, blocksCover_append]) $$ H

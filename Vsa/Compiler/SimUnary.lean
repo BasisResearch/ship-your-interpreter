@@ -45,21 +45,18 @@ theorem sNeg {st : St} {d : Nat} {env : Addr} {e : Expr} {st' : St} {n : Int} {m
     ESpec code T st d env (.unary .neg e) st' (.int (wrap64 (-n))) m := by
   intro V Γ sp fs k pos A hm hA hwf hseg hP htmp
   simp only [gexpr, errUnlessEq, List.append_assoc] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hP ⊢
-  refine hE.bind hm hA hwf s1 (posOK_le hP (by omega)) (by simpa [tE] using htmp)
+  obtain ⟨⟨s1, p1⟩, s2, p2⟩ := segP_app.mp ⟨hseg, hP⟩
+  simp only [List.length_append, List.length_cons, List.length_nil] at p2 ⊢
+  refine hE.bind hm hA hwf s1 p1 (by simpa [tE] using htmp)
     (fun B h1 h2 => .inl ⟨h1, h2⟩) fun V1 B hpc hp => ?_
   obtain ⟨t, p, h10, h11, hv⟩ := hp.val
   obtain ⟨rfl, rfl, hI⟩ := hv
   obtain ⟨pc, L, mm, o⟩ := B
   simp only at hpc h10 h11; subst hpc
-  have k10 := has_mem h10 (by decide); have e10 := srcVal_of_has h10
-  have k11 := has_mem h11 (by decide); have e11 := srcVal_of_has h11
-  simp only [a0, a1] at k10 e10 k11 e11
   apply run_whole hR.fits s2
-  wp_simp [k10, e10, k11, e11]
+  wp_simp [h10.wp, h11.wp]
   apply run_from hR.fits s2 3 _ (by omega) (by simp)
-  wp_simp [k10, e10, k11, e11]
+  wp_simp [h10.wp, h11.wp]
   refine reach_here (.inr ⟨by first | rfl | (congr 1; omega), V1, ?_⟩)
   refine hp.regs (S := [t0, a1]) (by decide) ?_ ?_ (Nat.le_refl _)
   · reg_simp []; exact Keep.refl _ _
@@ -71,14 +68,14 @@ theorem sNot {st : St} {d : Nat} {env : Addr} {e : Expr} {st' : St} {v : Value} 
     ESpec code T st d env (.unary .not e) st' (.bool (!v.truthy)) m := by
   intro V Γ sp fs k pos A hm hA hwf hseg hP htmp
   simp only [gexpr, List.append_assoc] at hseg hP ⊢
-  obtain ⟨s1, s2⟩ := hseg.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hP ⊢
-  refine hE.bind hm hA hwf s1 (posOK_le hP (by omega)) (by simpa [tE] using htmp)
+  obtain ⟨⟨s1, p1⟩, s2, p2⟩ := segP_app.mp ⟨hseg, hP⟩
+  simp only [List.length_append, List.length_cons, List.length_nil] at p2 ⊢
+  refine hE.bind hm hA hwf s1 p1 (by simpa [tE] using htmp)
     (fun B h1 h2 => .inl ⟨h1, h2⟩) fun V1 B hpc hp => ?_
   obtain ⟨t, p, h10, h11, hv⟩ := hp.val
   obtain ⟨pc, L, mm, o⟩ := B
   simp only at hpc h10 h11; subst hpc
-  have hq : PosOK (pos + (gexpr T Γ k pos e).length + 1) := posOK_le hP (by omega)
+  have hq : PosOK (pos + (gexpr T Γ k pos e).length + 1) := by omega
   apply run_whole hR.fits s2
   wp_simp [hq]
   refine ex_bind (run_tr hR.fits hR.tr (L := gset L 1 (pcOf (pos + (gexpr T Γ k pos e).length + 1)))
@@ -86,10 +83,8 @@ theorem sNot {st : St} {d : Nat} {env : Addr} {e : Expr} {st' : St} {v : Value} 
     (pcOf_aligned hq)) ?_
   rintro ⟨pc2, L2, m2, o2⟩ ⟨hpc2, hm2, ho2, h10', hk2⟩
   simp only at hpc2 hm2 ho2 h10' hk2; subst hpc2 hm2 ho2
-  have k10 := has_mem h10' (by decide); have e10 := srcVal_of_has h10'
-  simp only [a0] at k10 e10
   apply run_from hR.fits s2 1 _ (by omega) (by simp)
-  wp_simp [k10, e10]
+  wp_simp [h10'.wp]
   refine reach_here (.inr ⟨by first | rfl | (congr 1; omega), V1, ?_⟩)
   refine hp.regs (S := [1, t0, a0, a1]) (by decide) ?_ ?_ (Nat.le_refl _)
   · have := (Keep.gset (Keep.refl [1, t0, a0, a1] L) (v := pcOf (pos + (gexpr T Γ k pos e).length + 1))

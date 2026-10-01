@@ -193,15 +193,10 @@ theorem ms_callValRef (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     rw [← ldv_ld_imgW, ← ldv_ld_imgW, ← ldv_ld_imgW, h0, h8, h16]
     iexact Hv
   iapply ms_callHelper Wp hexec hcode hal
-  iframe Hspec Hcode Hms
-  isplitl []
-  · ipureintro; exact h10
-  isplitl [Hval]
-  · iframe Hval; ipureintro; exact hg
+  iframe Hspec Hcode Hms %h10 Hval %hg
   iintro %R' %hkeep ⟨Hval, %hres⟩ Hms
   ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M', Hms, %⟨hM1, -, -⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
+  ihave ⟨%M', Hms, %⟨hM1, -, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_congrSet (fun k => (hsl k).symm) $$ Hms
   iapply Hk $$ %R' %M' %⟨hkeep, hres, fun k hk hn => hM1 k ⟨hk, hn⟩⟩ Hms
 

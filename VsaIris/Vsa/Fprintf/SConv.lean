@@ -34,20 +34,17 @@ def SReg (sp n : Nat) (a : Nat) : Prop :=
 set_option hygiene false in
 
 local macro "s_close" : tactic => `(tactic| (
-  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ ?_ ?_ ?_
-  · rsimp; exact f2.trans h2
-  · rsimp; exact f9.trans hP.s1
-  · rsimp; exact f18.trans hP.s2
-  · rsimp; exact f19.trans hP.s3
-  · rsimp; exact f21.trans h21
-  · rsimp; rw [List.length_append, List.length_singleton]; first | exact f23 | skip
-  · nx_mem; exact hP.reent
-  · nx_mem; exact hP.file
-  · nx_mem; first | (rw [Nat.add_comm]; done) | simp [hL0]
-  · nx_mem; exact hP.base
-  · nx_mem; rw [lw_ofNat (by omega)]; simp
-  · nx_mem; rw [piecesLen_append]; first | (simp [piecesLen]; done) | simp [piecesLen, hL0]
-  · intro j hj
+  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?s7, ?re, ?fi, ?cnt, ?ba, ?ic, ?rs, ?arr⟩ ?_ ?m1 ?m2 ?fr
+  case re => nx_mem; exact hP.reent
+  case fi => nx_mem; exact hP.file
+  case ba => nx_mem; exact hP.base
+  case m1 | m2 => nx_mem
+  case s7 => rsimp; rw [List.length_append, List.length_singleton]; first | exact f23 | skip
+  case cnt => nx_mem; first | (rw [Nat.add_comm]; done) | simp [hL0]
+  case ic => nx_mem; rw [lw_ofNat (by omega)]; simp
+  case rs => nx_mem; rw [piecesLen_append]; first | (simp [piecesLen]; done) | simp [piecesLen, hL0]
+  case arr =>
+    intro j hj
     simp only [List.length_append, List.length_singleton] at hj
     by_cases hjn : j < iovs.length
     · rw [List.getElem_append_left hjn]
@@ -66,13 +63,12 @@ local macro "s_close" : tactic => `(tactic| (
           rw [toNat_add_lit (by simp; omega)]; simp; omega]
         nx_mem
         try simp [hL0]
-  · rsimp; exact f24
-  · nx_mem
-  · nx_mem
-  · repeat (refine Frame.snoc ?_ ?_)
+  case fr =>
+    repeat (refine Frame.snoc ?_ ?_)
     all_goals first | exact Frame.refl _ _ |
       (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit,
-        BitVec.toNat_ofNat] at h1 h2; unfold SReg; omega)))
+        BitVec.toNat_ofNat] at h1 h2; unfold SReg; omega)
+  all_goals carry_close [f2, h2, f9, hP.s1, f18, hP.s2, f19, hP.s3, f21, h21, f24]))
 
 #ix_piece sStage_1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}

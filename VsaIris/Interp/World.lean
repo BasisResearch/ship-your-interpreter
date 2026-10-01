@@ -909,8 +909,7 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
   imod roOn_of_ownImg (m := c.σ.mem) (fun k v _ hv => memImg_eq hv) $$ Hro with #Hro
   ihave #Hsh := roOn_mono (Q := RoByte b.D.shared) (P := b.D.shared) (m := c.σ.mem)
     (fun k h => Or.inl h) $$ Hro
-  ihave Hempty := storeRepr_empty (N := b.N) $$ [Hf Hc]
-  · iframe Hf Hc
+  ihave Hempty := storeRepr_empty (N := b.N) $$ [$]
   ihave Hbody := frameBody_of_frameRepr hrd (b.frameBridge hG) gap.sharedWin $$ [Hst]
   · iframe Hsh Hst
     isplitl []
@@ -918,10 +917,8 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
     · rw [show frame0.parent = none from rfl, hG.par]
       iapply parentSupply_none
   imod storeRepr_allocFrame (N := b.N) (s := ⟨#[], #[]⟩) (B := []) (s' := initSt.store)
-    (f := frame0) (Gm := G) (by rfl) (by rfl) Vsa.Sim.storeInvariant_initSt $$ [Hempty Hbody] with ⟨Hs, #He⟩
-  · iframe Hempty Hbody
-  imod interpCtxPre_of_bytes hg hd $$ [Hint He] with Hi
-  · iframe Hint He
+    (f := frame0) (Gm := G) (by rfl) (by rfl) Vsa.Sim.storeInvariant_initSt $$ [$] with ⟨Hs, #He⟩
+  imod interpCtxPre_of_bytes hg hd $$ [$] with Hi
   imodintro
   iframe He Hsta Hcal
   isplitl [Hh Hs Hcon Hstd Hi]
@@ -960,8 +957,7 @@ theorem world_of_boundary (b : Boot c p) (ρ : Regime) (hρ : RegimeOK b.top ρ)
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γf, Hf⟩
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γc, Hc⟩
   iexists γf, γc
-  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b ρ hρ) $$ [Hf Hc Hm Hcon]
-  iframe Hf Hc Hm Hcon
+  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b ρ hρ) $$ [$]
 
 end Assembly
 

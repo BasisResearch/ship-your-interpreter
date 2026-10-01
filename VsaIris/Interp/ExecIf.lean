@@ -87,11 +87,8 @@ theorem wp_ifTruthy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
     refine ⟨?_, ?_, ?_⟩ <;> rw [g16] <;> (try unfold Vsa.Sim.tohostAddr) <;> omega
   iintro ⟨HF, #Hcode, Hms, #Hv, Hvt⟩
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
-    (F := iprop(F ∗ codeRes ∗ □ valOf N v w0 w1 w2 ∗
-      valueTruthySpec (vsaModel live) N Wp (execSP s + 16#64) v))
   rotate_left
-  · iframe HF Hcode Hv Hvt Hms
-    iapply codeRes_text $$ Hcode
+  · icombine HF Hcode Hv Hvt as HF'; isplitl []; iapply codeRes_text $$ Hcode; iframe HF' Hms
   intro F'
   refine IfArm_run2 (m := ∅) hlive hfg.sf hfg.lo hfg.hi hfg.al h2 ?_
   intros
@@ -184,8 +181,7 @@ theorem ifPrefix (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   have hbb : c.bodiesBound perCallBudget = true := by
     have := hf.bodies; cases eo <;> simp only [Stmt.bodiesBound, Bool.and_eq_true] at this <;>
       first | exact this.1 | exact this.1.1
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
   iapply wp_swpF Wp (F := iprop(□ Hyp ∗ F ∗ codeRes ∗
       roOn P m ∗ frameAt env aE.toNat ∗
       stackScratch (execSP s) (execNeed (.ifStmt c t eo) d - 176) ∗ slot24 aRet.toNat ∗
@@ -320,15 +316,10 @@ theorem ifRouteThenT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hle : execNeed t d ≤ execNeed (.ifStmt c t eo) d := by
     have := execNeed_if_then c t eo d; unfold execFrame at this; omega
   iintro ⟨HK, #Hcode, #Hro, #Hfb, Hms, Hst, Hslot, Hw⟩
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.ifStmt c t eo) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp (.counted (k + nt)) st' d ∗
-      execDispK (vsaModel live) N L Room inp (twpW (vsaModel live)) Φ (.counted k) st'' d
-        (.ifStmt c t eo) status aRet s R ret v8 v9 v18 v19))
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
+  iapply wp_swpF (twpW _)
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine Hcode Hro Hfb Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine IfArm_runT (aT := BitVec.ofNat 64 pt) hlive hn.node.lo hn.node.hi hn.node.off
     ((hr.keep 8 (by decide)).trans hf.regs.s0) (by rw [hr.a0, hv]; rfl) hn.thn ?_
@@ -374,15 +365,10 @@ theorem ifRouteElseT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   have hle : execNeed e d ≤ execNeed (.ifStmt c t (some e)) d := by
     have := execNeed_if_else c t e d; unfold execFrame at this; omega
   iintro ⟨HK, #Hcode, #Hro, #Hfb, Hms, Hst, Hslot, Hw⟩
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.ifStmt c t (some e)) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp (.counted (k + ne)) st' d ∗
-      execDispK (vsaModel live) N L Room inp (twpW (vsaModel live)) Φ (.counted k) st'' d
-        (.ifStmt c t (some e)) status aRet s R ret v8 v9 v18 v19))
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
+  iapply wp_swpF (twpW _)
   rotate_left
-  · iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine Hcode Hro Hfb Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine IfArm_runF (aE := BitVec.ofNat 64 pe) hlive hn.node.lo hn.node.hi hn.node.off
     ((hr.keep 8 (by decide)).trans hf.regs.s0) (by rw [hr.a0, hv]; rfl) hn.els hne ?_
@@ -424,15 +410,10 @@ theorem ifRouteNone (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
       world N L Room inp ρ st' d ⊢ Wp.W Φ := by
   obtain ⟨pc, pt, pe, hn⟩ := hr.node
   iintro ⟨HK, #Hcode, #Hro, #Hfb, Hms, Hst, Hslot, Hw⟩
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(codeRes ∗
-      stackScratch (execSP s) (execNeed (.ifStmt c t none) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp ρ st' d ∗
-      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d (.ifStmt c t none) .normal aRet s R ret
-        v8 v9 v18 v19))
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hcode Hst Hslot Hw HK
+  · icombine Hcode Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine IfArm_runN hlive hn.node.lo hn.node.hi hn.node.off
     ((hr.keep 8 (by decide)).trans hf.regs.s0) (by rw [hr.a0, hv]; rfl)
@@ -522,8 +503,7 @@ theorem ifBranchP {Φ : Nat × String → IProp GF} {Core : IProp GF}
   obtain ⟨hfg, h176⟩ := execFrameGeom_of hf.stack
   iintro ⟨Hspec, Hms, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw, HK⟩
   ihave ⟨Hsl, Hst⟩ := stack_redispatch hsg hle h176 hfg.sf $$ Hst
-  ihave HK := execDispKP_redispatch hsg hle hk hE $$ [Hsl HK]
-  · iframe Hsl HK
+  ihave HK := execDispKP_redispatch hsg hle hk hE $$ [$]
   iapply execDispP_apply (N := N) (L := L) (Room := Room) (inp := inp) Φ aS' aE aRet s R4 M4 ret
     v8 v9 v18 v19
   iframe Hspec HK
@@ -550,16 +530,10 @@ theorem ifRouteThenP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     have := execNeed_if_then c t eo d; unfold execFrame at this; omega
   iintro ⟨#IH, #Hcode, #Hro, #Hfb, Hms, Hst, Hslot, Hw, HK⟩
   ihave HX := execDispsP_at Core st' d env t $$ IH
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
   iapply wp_swpF_later (X := execDispP_body (vsaModel live) N L Room inp Core st' d env t)
-    (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.ifStmt c t eo) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp .uncounted st' d ∗
-      IfKP (live := live) (N := N) (L := L) (Room := Room) (inp := inp) Φ Core st d env
-        (.ifStmt c t eo) aRet s R ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hdv Hms HX Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine Hcode Hro Hfb Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF HX Hms
   intro F'
   refine IfArm_runT (aT := BitVec.ofNat 64 pt) hlive hn.node.lo hn.node.hi hn.node.off
     ((hr.keep 8 (by decide)).trans hf.regs.s0) (by rw [hr.a0, hv]; rfl) hn.thn ?_
@@ -605,16 +579,10 @@ theorem ifRouteElseP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     have := execNeed_if_else c t e d; unfold execFrame at this; omega
   iintro ⟨#IH, #Hcode, #Hro, #Hfb, Hms, Hst, Hslot, Hw, HK⟩
   ihave HX := execDispsP_at Core st' d env e $$ IH
-  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
-  · iframe Hcode Hro
+  ihave #Hdv := roOwn_data hn.node.view $$ [$]
   iapply wp_swpF_later (X := execDispP_body (vsaModel live) N L Room inp Core st' d env e)
-    (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
-      stackScratch (execSP s) (execNeed (.ifStmt c t (some e)) d - 176) ∗ slot24 aRet.toNat ∗
-      world N L Room inp .uncounted st' d ∗
-      IfKP (live := live) (N := N) (L := L) (Room := Room) (inp := inp) Φ Core st d env
-        (.ifStmt c t (some e)) aRet s R ret v8 v9 v18 v19))
   rotate_left
-  · iframe Hdv Hms HX Hcode Hro Hfb Hst Hslot Hw HK
+  · icombine Hcode Hro Hfb Hst Hslot Hw HK as HF; isplitl []; iexact Hdv; iframe HF HX Hms
   intro F'
   refine IfArm_runF (aE := BitVec.ofNat 64 pe) hlive hn.node.lo hn.node.hi hn.node.off
     ((hr.keep 8 (by decide)).trans hf.regs.s0) (by rw [hr.a0, hv]; rfl) hn.els hne ?_

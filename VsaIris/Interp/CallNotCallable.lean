@@ -78,13 +78,10 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨aF, hnd, -, -⟩ := callNode_of_repr hrepr hgeo
   ihave %htag := valOf_tag N fv w0 w1 w2 $$ Hv
-  ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(codeRes ∗ errCtx inp ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      world N L Room inp ρ st2 d ∗ (abortAt Core s n -∗ Wp.W Φ)))
+  ihave #Hdv := roOwn_data hnd.view $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hcode HE Hst Hw; iexact Hab
+  · icombine Hcode HE Hst Hw Hab as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallX_run1 (k := valTag fv) (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3
     hnd.lo hnd.hi hnd.off hcall.s0 hcall.sp ?_ ?_ ?_ ?_ hk5 hk4 ?_
@@ -112,11 +109,9 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   iintro %R2 %M2 %hk2 %h10 %_ Hms
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ errCtx inp ∗
-      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
-      world N L Room inp ρ st2 d ∗ (abortAt Core s n -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hms HE Hst Hw; iexact Hab
+  · rw [hro]; icombine Hcode HE Hst Hw Hab as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CallX_run2 (m := ∅) (DA := []) hlive ?_
   apply swp_closeRM

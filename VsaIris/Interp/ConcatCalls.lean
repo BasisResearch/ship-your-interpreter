@@ -66,8 +66,7 @@ theorem abortAt_of_stringify {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} 
   have hsf : (evalSP s).toNat = s.toNat - 1088 := by
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   iintro ⟨HA, Hslot, HS, Hslack⟩
-  ihave HS := ownSet_unslot hp $$ [HS Hslot]
-  · iframe HS Hslot
+  ihave HS := ownSet_unslot hp $$ [$]
   iapply abortAt_of_evalCallee hC hsg hn
   rw [hsf, show s.toNat - 1088 - (n - 1088) = s.toNat - n by omega]
   iframe HA Hslack HS
@@ -87,8 +86,7 @@ theorem ms_evalOom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     rw [← evalSP_eq]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   iintro ⟨%h2, #Hcode, #Himg, Hms, Hst, Hstd, Herr, Hcon, Hk⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
-  ihave Hst := evalFrame_join hs4 (by omega) $$ [Hst HS]
-  · iframe Hst HS
+  ihave Hst := evalFrame_join hs4 (by omega) $$ [$]
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
   ihave Htmp := clobbered_of_fn _ _ $$ Htmp
   ihave Hargs := clobbered_of_fn _ _ $$ Hargs
@@ -147,14 +145,12 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
     simp only [sepL_cons, sepL_nil]
     iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB, #Hbi'⟩
     iframe H10 H11 Hbk HB Hbi'
-    isplitl []
-    · ipureintro; exact ⟨hal, hd, hh, hs⟩
-    isplitl [H12]
-    · rw [h12]; iexact H12
+    isplitl []; ipureintro; exact ⟨hal, hd, hh, hs⟩
+    isplitl [H12]; rw [h12]; iexact H12
     iapply clobbered_of_fn argClob _
     unfold argClob
     simp only [sepL_cons, sepL_nil]
-    iframe H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
+    iframe ∗
   case hQ =>
     iintro ⟨H10, Hcl, Hd, HB⟩
     ihave ⟨%g, Hcl⟩ := clobbered_fn retClob (by decide) $$ Hcl
@@ -164,21 +160,15 @@ theorem ms_callMemcpyOwnedR (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat �
     icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
     simp only [ite_true]
     simp (config := { decide := true }) only [ite_false]
-    iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd HB
+    iframe ∗
   iframe Hmcs Hcode Hbi Hms Hblk Hsrc
   iintro %g ⟨%hg10, Hd, HB⟩ Hms
   have hkeep : ∀ x ∈ fRegs, x ∉ callerSaved →
       (fun x => if x ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] then g x
-        else R x) x = R x := by
-    intro x _ hc
-    have hsub : ∀ y ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31], y ∈ callerSaved := by
-      decide
-    have : x ∉ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] := fun h => hc (hsub x h)
-    simp only [this, ite_false]
+        else R x) x = R x := fun x _ hc => if_neg fun h => hc ((show ∀ y ∈ [10, 11, 12, 5, 6,
+      7, 13, 14, 15, 16, 17, 28, 29, 30, 31], y ∈ callerSaved by decide) x h)
   have h10 : (fun x => if x ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] then g x
-      else R x) 10 = R 10 := by
-    simp only [show (10 : Nat) ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] by decide,
-      ite_true]; exact hg10
+      else R x) 10 = R 10 := (if_pos (by decide)).trans hg10
   iapply Hk $$ %_ %hkeep %h10 Hd HB Hms
 
 theorem ms_callMemcpyOwned (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}

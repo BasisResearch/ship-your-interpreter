@@ -22,8 +22,7 @@ theorem roImg_agree {S : Nat → Prop} {f g : Nat → BitVec 8} :
   iintro %k %hk
   ihave Hfk := Hf $$ %k %hk
   ihave Hgk := Hg $$ %k %hk
-  ihave %h := memRO_agree k (f k) (g k) $$ [Hfk Hgk]
-  · iframe Hfk Hgk
+  ihave %h := memRO_agree k (f k) (g k) $$ [$]
   ipureintro
   exact h
 
@@ -134,14 +133,12 @@ theorem wp_abortOom (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLive li
   unfold argsAt callFrame stackScratch exitNeed exitHandlersNeed
   simp only [List.zipIdx_cons, List.zipIdx_nil, sepL_cons, sepL_nil, Nat.add_zero,
     List.length_singleton]
-  iframe Hpc Hra Hs0 Ha0 Hargs Hsp Hscr Hsaved Htmp Hgp Himg Hcon
+  iframe Hpc Hra Hs0 Ha0 Hargs Hsp Hscr Hsaved Htmp Hgp Himg Hcon Hno
   isplitl [Hstd]
   · iapply stdioAt_mono (fun img h => by
       rcases h with h | h
       · exact .inl h
       · exact .inr ⟨by simp, h⟩) $$ Hstd
-  isplitl [Hno]
-  · iexact Hno
   iintro %o' -
   rw [show (1#64 : BitVec 64).toNat = 1 from rfl]
   iapply hΦ
@@ -172,8 +169,7 @@ theorem wp_abortLanding (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L
     ⟨Hpc, Hra, Hsp, Ha0, Hsaved, Hargs, Htmp⟩⟩, Hscr, #Hjb0, HI, HT, #Hgp, #Himg⟩
 
   ihave ⟨Herrno, -⟩ := hEL _ _ $$ Hheap
-  ihave %hag := jmpRO_agree inp jb jb0 $$ [Hjb Hjb0]
-  · iframe Hjb Hjb0
+  ihave %hag := jmpRO_agree inp jb jb0 $$ [$]
   have hw : ∀ i, i ≤ 13 → jbWord inp jb i = jbWord inp jb0 i := fun i hi => jbWord_congr hag hi
   rw [hw 0 (by omega), hT.ra, hw 13 (by omega), hT.sp]
   unfold jbSaved

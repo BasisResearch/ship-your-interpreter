@@ -1,4 +1,5 @@
 import Vsa.Compiler.SimParams
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -167,30 +168,19 @@ theorem run_entry {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List S
     have : maxFS ≤ (maxCallDepth - d) * maxFS := Nat.le_mul_of_pos_left _ (by omega)
     omega
   have hspfs : frameSize cd.body ≤ sp := by omega
-  have hfb : fnBody cd.params q = q + 14 + 8 * cd.params.length + 1 := rfl
-  have hPb : PosOK (fnBody cd.params q) := posOK_le hP (by
-    rw [fnCode_eq]; simp only [List.length_append, fnHead_length, paramCopies_length, List.length_singleton]
-    omega)
-  rw [fnCode_eq] at hseg
-  obtain ⟨sPre, sBody⟩ := hseg.append
-  obtain ⟨sPre, sMv⟩ := sPre.append
-  obtain ⟨sH, sPc⟩ := sPre.append
-  simp only [fnHead_length, List.length_append, paramCopies_length] at sPc sMv
+  have h := And.intro hseg hP
+  rw [fnCode_eq] at h
+  simp only [↓segP_app] at h
+  simp only [fnHead_length, List.length_append, paramCopies_length, ← Nat.add_assoc] at h
+  obtain ⟨⟨⟨⟨sH, hq14⟩, sPc, -⟩, sMv, -⟩, -⟩ := h
   obtain ⟨pc0, L0, m0, o0⟩ := A
   simp only at hA; subst hA
-  have k1 := has_mem h1 (by decide); have e1 := srcVal_of_has h1
-  have k12 := has_mem h12 (by decide); have e12 := srcVal_of_has h12
-  have k14 := has_mem h14 (by decide); have e14 := srcVal_of_has h14
-  have k2 := has_mem hm.hsp (by decide); have e2 := srcVal_of_has hm.hsp
-  have k9 := has_mem hm.henv (by decide); have e9 := srcVal_of_has hm.henv
-  have k24 := has_mem hm.hdep (by decide); have e24 := srcVal_of_has hm.hdep
-  simp only [ra, a2, a4, spR, envR, depR] at k1 e1 k12 e12 k14 e14 k2 e2 k9 e9 k24 e24
   apply run_jumps hR.fits sH
-  wp_simp [fnHead, errUnlessEq, k14, e14, BitVec.ofInt_natCast, hlen]
+  wp_simp [fnHead, errUnlessEq, h14.wp, BitVec.ofInt_natCast, hlen]
   rw [show q + 1 + 2 = q + 3 from rfl]
   have hd' : d < 1000 := hd
   apply run_jumps hR.fits (sH.drop 3)
-  wp_simp [fnHead, errUnlessEq, k24, e24, toInt_ofNat_small d (by omega), hd']
+  wp_simp [fnHead, errUnlessEq, hm.hdep.wp, toInt_ofNat_small d (by omega), hd']
   rw [show q + 4 + 2 = q + 6 from rfl]
   have hsp' : sp - frameSize cd.body + frameSize cd.body = sp := by omega
   have n1 : (BitVec.ofNat 64 (sp - frameSize cd.body)).toNat = sp - frameSize cd.body := toNat_ofNat_lt (by omega)
@@ -214,10 +204,9 @@ theorem run_entry {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List S
   rw [if_pos (by omega)]
   have hsub : 18446744073709551616 - (18446744073709551616 - frameSize cd.body) = frameSize cd.body := by omega
   apply run_jumps hR.fits s6
-  wp_simp [fnHead, errUnlessEq, k1, e1, k2, e2, k9, e9, k12, e12, k24, e24, hsub, BitVec.ofInt_natCast,
+  wp_simp [fnHead, errUnlessEq, h1.wp, hm.hsp.wp, hm.henv.wp, h12.wp, hm.hdep.wp, hsub, BitVec.ofInt_natCast,
     sext_negN (frameSize cd.body) (by omega) (by omega), n1, n2, n3, t1, t2, o1, o2, l3, hrp]
 
-  have hq14 : PosOK (q + 14) := posOK_le hPb (by omega)
   have hlo := hm.rel.lo
   have htopF := hm.rel.top
   have hfe : frameEnd = 0x90000000 := rfl
@@ -274,10 +263,8 @@ theorem run_entry {V : View} {st : St} {d : Nat} {env : Addr} {Γ : List (List S
   rintro ⟨pc4, L4, m4, o4⟩ ⟨hpc4, ho4, hk4, pp⟩
   simp only at hpc4 ho4 hk4 pp; subst hpc4 ho4
   have g14' := hk4.has (by decide) g14
-  have k14' := has_mem g14' (by decide); have e14' := srcVal_of_has g14'
-  simp only [a4] at k14' e14'
-  apply run_whole hR.fits (sMv.cast (pos' := q + 14 + 8 * cd.params.length) (by omega))
-  wp_simp [k14', e14']
+  apply run_whole hR.fits sMv
+  wp_simp [g14'.wp]
 
   have hdd : (maxCallDepth - (d + 1)) * maxFS + maxFS = (maxCallDepth - d) * maxFS := by
     rw [← Nat.succ_mul]; congr 1; omega

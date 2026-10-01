@@ -173,21 +173,10 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
       · exact hqv a ha
       · obtain ⟨h1, h2⟩ := mem_accAddrs_iff.1 ha
         obtain ⟨k, rfl⟩ : ∃ k, a = prm.toNat + 8 * j + k := ⟨a - (prm.toNat + 8 * j), by omega⟩
-        exact hpv k (by omega)) $$ [Hcode Hro]
-  · iframe Hcode Hro
-  iapply wp_swpF Wp (F := iprop(codeRes ∗ □ valImg N (imgM Mt0) (argsBase s + 24 * j) v ∗
-      □ strAt pj x ∗ W st ((x, v) :: rest) ∗
-      stackScratch (s + 18446744073709550528#64) n ∗
-      ((∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-          ⌜j + 1 < argc ∧ CloPL R' Mt' Mt0 s inp sret ret fr q line rv argc (j + 1)⌝ -∗
-          ms 0x800032dc#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗ W (st.define fa x v) rest -∗
-          stackScratch (s + 18446744073709550528#64) n -∗ Wp.W Φ) ∧
-        (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-          ⌜j + 1 = argc ∧ CloPD R' Mt' s inp sret ret fr q line rv⌝ -∗
-          ms 0x80003328#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗ W (st.define fa x v) rest -∗
-          stackScratch (s + 18446744073709550528#64) n -∗ Wp.W Φ))))
+        exact hpv k (by omega)) $$ [$]
+  iapply wp_swpF Wp
   rotate_left
-  · iframe Hdv Hms Hcode Hv Hstr HW Hst; iexact Hk
+  · icombine Hcode Hv Hstr HW Hst Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CloB_runL (pa := R 8) (off := BitVec.ofNat 64 (8 * j)) (qa := s.toNat - 1088 + 240 + 24 * j)
     (qp := prm.toNat + 8 * j) hlive hsf hs hs2 hs3 hq1 hq2 hq3 g0.lo (by have := g7.hi; omega)
@@ -234,26 +223,22 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   ihave ⟨Hms, Hval⟩ := ms_carveVal N (S := InExt (s.toNat - 1088, 1088)) (a := s.toNat - 1088 + 64)
     (b := argsBase s + 24 * j)
     (img := imgM Mt0) (v := v) (fun k hk => by simp only [InExt] at hk ⊢; omega)
-    hw0 hw1 hw2 $$ [Hms Hv]
-  · iframe Hms Hv
+    hw0 hw1 hw2 $$ [$]
   have h2' : R1 2 = s + 18446744073709550528#64 := by rw [hR1]; ix_reg; exact hcl.sp
   have h10' : R1 10 = fr := by rw [hR1]; ix_reg; exact hcl.s3
   have h12' : (R1 12).toNat = s.toNat - 1088 + 64 := by rw [hR1]; ix_reg; exact hoff 64 (by decide)
   have hpjl : pj < 2 ^ 64 := by have := readLE_lt hpj; simpa using this
   have h11' : (R1 11).toNat = pj := by
     rw [hR1]; ix_reg; rw [ldv_ld_read64 hpj, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpjl]
-  ihave Hval := (show valAt (GF := GF) N (s.toNat - 1088 + 64) v ⊢ valAt N (R1 12).toNat v by
-    rw [h12']) $$ Hval
-  ihave #Hstr' := (show strAt (GF := GF) pj x ⊢ strAt (R1 11).toNat x by rw [h11']) $$ Hstr
+  ieval (rewrite [← h12']) at Hval
+  ieval (rewrite [← h11']) at Hstr
 
   iapply hdef R1 Mt1 st x v rest h2' h10' h12'
-  iframe Hcode Hms HW Hval Hstr' Hst
+  iframe Hcode Hms HW Hval Hstr Hst
   iintro %R' %hk Hst Hval HW Hms
-  ihave Hval := (show valAt (GF := GF) N (R1 12).toNat v ⊢ valAt N (s.toNat - 1088 + 64) v by
-    rw [h12']) $$ Hval
+  ieval (rewrite [h12']) at Hval
   ihave ⟨%M2, Hms, %hM2⟩ := ms_uncarveVal N (S := InExt (s.toNat - 1088, 1088))
-    (a := s.toNat - 1088 + 64) (fun k hk => by simp only [InExt] at hk ⊢; omega) $$ [Hms Hval]
-  · iframe Hms Hval
+    (a := s.toNat - 1088 + 64) (fun k hk => by simp only [InExt] at hk ⊢; omega) $$ [$]
   have hag : ∀ k, InExt (s.toNat - 1088, 1088) k → ¬ InExt (s.toNat - 1088 + 64, 24) k →
       (k < s.toNat - 1088 ∨ s.toNat - 1088 + 8 ≤ k) → imgM M2 k = imgM Mt k := fun k h1 h2 h3 =>
     (hM2 k h1 h2).trans (hout k (by simp only [InExt] at h2; omega) h3)
@@ -277,18 +262,9 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
 
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(W (st.define fa x v) rest ∗
-      stackScratch (s + 18446744073709550528#64) n ∗
-      ((∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-          ⌜j + 1 < argc ∧ CloPL R' Mt' Mt0 s inp sret ret fr q line rv argc (j + 1)⌝ -∗
-          ms 0x800032dc#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗ W (st.define fa x v) rest -∗
-          stackScratch (s + 18446744073709550528#64) n -∗ Wp.W Φ) ∧
-        (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
-          ⌜j + 1 = argc ∧ CloPD R' Mt' s inp sret ret fr q line rv⌝ -∗
-          ms 0x80003328#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗ W (st.define fa x v) rest -∗
-          stackScratch (s + 18446744073709550528#64) n -∗ Wp.W Φ))))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hms HW Hst; iexact Hk
+  · rw [hro]; icombine HW Hst Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   have hkeep1 : ∀ y ∈ [9, 18, 19, 20, 21, 23, 24, 25, 26, 27], R' y = R y := fun y hy => by
     rw [hk y ((by decide : ∀ z ∈ [9, 18, 19, 20, 21, 23, 24, 25, 26, 27], z ∈ fRegs) y hy)
@@ -317,11 +293,8 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
         rw [hk 8 (by decide) (by decide), hR1]; ix_reg
         rw [BitVec.toNat_add, hs0]; simp only [BitVec.toNat_ofNat]; omega
       · ix_reg; rw [ofNat_add8]; congr 1
-      · ix_reg; rw [hkeep1 9 (by decide)]; exact hcl.s1
-      · ix_reg; rw [hkeep1 18 (by decide)]; exact hcl.s2
-      · ix_reg; rw [hkeep1 19 (by decide)]; exact hcl.s3
-      · ix_reg; rw [hkeep1 21 (by decide)]; exact hcl.s5
-      · ix_reg; rw [hkeep1 23 (by decide)]; exact hcl.s7
+      all_goals try (ix_reg; rw [hkeep1 _ (by decide)]
+                     first | exact hcl.s1 | exact hcl.s2 | exact hcl.s3 | exact hcl.s5 | exact hcl.s7)
       · intro y hy
         simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hy
         rcases hy with rfl | rfl | rfl | rfl | rfl <;>
@@ -353,17 +326,12 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
         (BitVec.ofNat 64 (8 * j))) 15 (BitVec.ofNat 64 (8 * j) + 8#64)) 22 (rv 22)) 10
         (s + 18446744073709550528#64 + 144#64)) M2 s inp sret ret fr q line rv := by
       refine ⟨by ix_reg; exact h2R, by ix_reg, ?_, ?_, ?_, ?_, ?_, ?_, hsp'⟩
-      · ix_reg; rw [hkeep1 9 (by decide)]; exact hcl.s1
-      · ix_reg; rw [hkeep1 18 (by decide)]; exact hcl.s2
-      · ix_reg; rw [hkeep1 19 (by decide)]; exact hcl.s3
-      · ix_reg; rw [hkeep1 21 (by decide)]; exact hcl.s5
-      · ix_reg; rw [hkeep1 23 (by decide)]; exact hcl.s7
+      all_goals try (ix_reg; rw [hkeep1 _ (by decide)]
+                     first | exact hcl.s1 | exact hcl.s2 | exact hcl.s3 | exact hcl.s5 | exact hcl.s7)
       · intro y hy
         simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hy
-        rcases hy with rfl | rfl | rfl | rfl | rfl | rfl
-        · ix_reg; rw [hkeep1 _ (by decide)]; exact hcl.keep _ (by decide)
-        · ix_reg
-        all_goals (ix_reg; rw [hkeep1 _ (by decide)]; exact hcl.keep _ (by decide))
+        rcases hy with rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg <;>
+          (rw [hkeep1 _ (by decide)]; exact hcl.keep _ (by decide))
     unfold F'
     iintro ⟨⟨HW, Hst, Hk⟩, Hms⟩
     ihave Hk := and_elim_r $$ Hk
@@ -444,8 +412,7 @@ theorem cloParamLoop (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
       isplit
       · iintro %R' %Mt' %⟨hlt, hcl'⟩ Hms HW Hst
         iapply ih (j + 1) (by omega) hlt R' Mt' _ hcl'
-        iframe Hcode Hro Hav Hms HW Hst
-        iexact Hk
+        iframe ∗ #
       · iintro %R' %Mt' %⟨heq, _⟩
         exact absurd heq hlast
 
@@ -475,15 +442,9 @@ theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
   iintro ⟨#Hcode, #Hro, #Hav, Hms, HW, Hst, Hk⟩
-  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ roOn P m ∗
-      argVals N (imgM Mt0) (argsBase s) 0 vs ∗ W st (ps.zip vs) ∗
-      stackScratch (s + 18446744073709550528#64) n ∗
-      (∀ (R' : Nat → BitVec 64) (Mt' : Mem), ⌜CloPD R' Mt' s inp sret ret fr q line rv⌝ -∗
-        ms 0x80003328#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗
-        W ((ps.zip vs).foldl (fun t p => t.define fa p.1 p.2) st) [] -∗
-        stackScratch (s + 18446744073709550528#64) n -∗ Wp.W Φ)))
+  iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; iframe Hcode Hro Hav Hms HW Hst; iexact Hk
+  · rw [hro]; icombine Hcode Hro Hav HW Hst Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   have htoI : (BitVec.ofNat 64 argc).toInt = argc := ofNat_toInt_small (by omega)
   refine CloB_run0 (m := ∅) hlive hsf hs hs2 hs3 hen.a0 hen.sp hen.argcm ?_ ?_
@@ -505,8 +466,7 @@ theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
       rcases hy with rfl | rfl | rfl | rfl | rfl | rfl <;> (ix_reg; exact hen.keep _ (by decide))
     unfold F'
     iintro ⟨⟨#Hcode, #Hro, #Hav, HW, Hst, Hk⟩, Hms⟩
-    ihave HW := (show W st (ps.zip vs) ⊢ W ((ps.zip vs).foldl (fun t p => t.define fa p.1 p.2) st) []
-      by rw [hz]; exact .rfl) $$ HW
+    ieval (simp only [hz, List.foldl_nil]) at HW Hk
     iapply Hk $$ %_ %Mt %hpd Hms HW Hst
   ·
     intro hgt
@@ -540,8 +500,7 @@ theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
     unfold F'
     iintro ⟨⟨#Hcode, #Hro, #Hav, HW, Hst, Hk⟩, Hms⟩
     iapply hl
-    iframe Hcode Hro Hav Hms HW Hst
-    iexact Hk
+    iframe ∗ #
 
 end Loop
 

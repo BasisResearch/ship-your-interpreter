@@ -42,8 +42,7 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
   ihave ⟨%H, %B, Hh, Hst, %hBH⟩ := heapStore_parts N _ st $$ Hhs
   ihave ⟨Hst, %hBd⟩ := keep_pure (storeRepr_blocks_disjoint N) $$ Hst
   ihave ⟨%f, %Gm, %img, %B₁, %B₂, %⟨hf, hGe, hlay, hinv, hB⟩, Hown, #Hb, #Hp, #HGe, Hclose⟩ :=
-    storeRepr_openAt N $$ [Hst Hfa]
-  · iframe Hst Hfa
+    storeRepr_openAt N $$ [$]
   subst hB
 
   ihave ⟨%fo, Hout, #Hv⟩ := valAt_parts N _ v $$ Hval
@@ -66,13 +65,11 @@ theorem envDefine_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ 
   ihave ⟨%fs, Hfr⟩ := blockOwn_img _ _ $$ Hfr
   have hsep64 : pv.toNat + 24 ≤ s.toNat - 64 ∨ s.toNat ≤ pv.toNat := hC.sepStk
   ihave HBa := ownSet_glue (InExt (s.toNat - 64, 64)) (InExt (pv.toNat, 24)) fs fo
-    (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ [Hfr Hout]
-  · iframe Hfr Hout
+    (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ [$]
   ihave HBa := ownSet_iff (T := baseS s.toNat pv.toNat) _ (fun a => by
     unfold baseS InExt; omega) $$ HBa
   ihave ⟨%Mt0, %hag0, HBa⟩ := ownSet_tracked _ _ $$ HBa
-  ihave ⟨%Mt1, %⟨hbase1, himg1, hdisj⟩, HS⟩ := get_join _ _ Gm Mt0 img $$ [HBa Hown]
-  · iframe HBa Hown
+  ihave ⟨%Mt1, %⟨hbase1, himg1, hdisj⟩, HS⟩ := get_join _ _ Gm Mt0 img $$ [$]
   have hslot1 : ∀ a, pv.toNat ≤ a → a < pv.toNat + 24 → imgM Mt1 a = fo a := fun a h1 h2 => by
     rw [hbase1 a (.inr ⟨h1, h2⟩), hag0 a (by unfold baseS; omega)]
     have : ¬ InExt (s.toNat - 64, 64) a := by unfold InExt; omega

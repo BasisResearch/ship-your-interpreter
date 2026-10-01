@@ -139,10 +139,8 @@ theorem sFn {st : St} {d : Nat} {env : Addr} {name : Option String} {params : Li
   obtain ⟨s1, s1b⟩ := s1.append
   have hsd := hm.img.strs _ hd
   have hsc := hm.img.strs _ hc
-  have hob : objBase = 0x90000000 := rfl
-  have hoe : objEnd = 0xE0000000 := rfl
+  obtain ⟨hob, hoe, ht⟩ := obj_consts
   have hcb : codeBase = 0x80004800 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
   have hp := hm.img.ptr
   have := hsd.lo; have := hsd.hi; have := hsc.lo; have := hsc.hi; have := hp.lo; have := hp.hi; have := hp.al
   have hl0 : ∀ rd, (liN rd objEnd).length = 11 := fun rd => liN_big (by decide) (by decide)
@@ -152,13 +150,10 @@ theorem sFn {st : St} {d : Nat} {env : Addr} {name : Option String} {params : Li
   have hl3 : ∀ rd, (liN rd (strAddr T (catName name))).length = 11 := fun rd => liN_big (by omega) (by omega)
   simp only [List.length_append, List.length_cons, List.length_nil, hl0, hl1, hl2, hl3] at hP ⊢
   have hpc : PosOK (pos + 58) := posOK_le hP (by omega)
-  have k8 := has_mem hm.ho (by decide); have e8 := srcVal_of_has hm.ho
-  have k9 := has_mem hm.henv (by decide); have e9 := srcVal_of_has hm.henv
-  simp only [hpO, envR] at k8 e8 k9 e9
   obtain ⟨pc0, L, m, o⟩ := A
   simp only at hA; subst hA
   apply run_whole hR.fits s1
-  wp_simp [liN, k8, e8, k9, e9, liN_big (n := codeBase + 4 * (pos + 58)) (by unfold PosOK at hpc; omega)
+  wp_simp [liN, hm.ho.wp, hm.henv.wp, liN_big (n := codeBase + 4 * (pos + 58)) (by unfold PosOK at hpc; omega)
     (by unfold PosOK at hpc; omega), liN_big (n := strAddr T (dispName name)) (by omega) (by omega),
     liN_big (n := strAddr T (catName name)) (by omega) (by omega)]
   have hn0 : (BitVec.ofNat 64 V.h).toNat = V.h := toNat_ofNat_lt (by omega)
@@ -177,7 +172,7 @@ theorem sFn {st : St} {d : Nat} {env : Addr} {name : Option String} {params : Li
     have o16 : StOK (V.h + 16) := by unfold StOK; omega
     have o24 : StOK (V.h + 24) := by unfold StOK; omega
     apply run_whole hR.fits s1b
-    wp_simp [liN, k8, e8, k9, e9, hn0, hn8, hn16, hn24, t0', t8, t16, t24, o0, o8, o16, o24, liN_big (n := codeBase + 4 * (pos + 58))
+    wp_simp [liN, hm.ho.wp, hm.henv.wp, hn0, hn8, hn16, hn24, t0', t8, t16, t24, o0, o8, o16, o24, liN_big (n := codeBase + 4 * (pos + 58))
       (by unfold PosOK at hpc; omega) (by unfold PosOK at hpc; omega),
       liN_big (n := strAddr T (dispName name)) (by omega) (by omega),
       liN_big (n := strAddr T (catName name)) (by omega) (by omega)]

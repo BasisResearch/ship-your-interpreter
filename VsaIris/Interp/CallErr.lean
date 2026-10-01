@@ -6,21 +6,31 @@ namespace VsaIris.Interp
 open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
 open Vsa.MemRepr Vsa.Sim Vsa.While
 
+theorem rodata_fmtS {R : Nat → Prop} {rd : Nat → BitVec 8}
+    (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p n : Nat) (convs : List Conv)
+    (hb : ∀ i, i < n → rodataDom (p + i) ∧ rodataByte (p + i) ≠ 0)
+    (hn : rodataDom (p + n) ∧ rodataByte (p + n) = 0)
+    (hp : parseFmt ((List.range n).map (fun i => rodataByte (p + i))) = some convs)
+    (hp64 : p < 2 ^ 64) {args : List (BitVec 64)} (hlen : convs.length ≤ args.length)
+    (hs : ∀ i (h : i < convs.length), convs[i] = .str →
+      ∃ t, CStrCov R rd (args[i]'(Nat.lt_of_lt_of_le h hlen)).toNat t) :
+    FmtArgsOK R rd (BitVec.ofNat 64 p) args := by
+  have e : (BitVec.ofNat 64 p).toNat = p := Nat.mod_eq_of_lt hp64
+  refine ⟨(List.range n).map (fun i => rodataByte (p + i)), convs, ⟨?_, hp, hlen, hs⟩⟩
+  rw [e]
+  refine cstrCov_rodata hro (fun i h => ?_) (by simpa using hn)
+  simp only [List.length_map, List.length_range] at h
+  obtain ⟨h1, h2⟩ := hb i h
+  exact ⟨h1, by simp, by simpa using h2⟩
+
 theorem rodata_fmt0 {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p n : Nat)
     (hb : ∀ i, i < n → rodataDom (p + i) ∧ rodataByte (p + i) ≠ 0)
     (hn : rodataDom (p + n) ∧ rodataByte (p + n) = 0)
     (hp : parseFmt ((List.range n).map (fun i => rodataByte (p + i))) = some [])
     (hp64 : p < 2 ^ 64) (x1 x2 : BitVec 64) :
-    FmtArgsOK R rd (BitVec.ofNat 64 p) [x1, x2] := by
-  have e : (BitVec.ofNat 64 p).toNat = p := Nat.mod_eq_of_lt hp64
-  refine ⟨(List.range n).map (fun i => rodataByte (p + i)), [], ⟨?_, hp, by simp,
-    fun i hi => absurd hi (Nat.not_lt_zero _)⟩⟩
-  rw [e]
-  refine cstrCov_rodata hro (fun i h => ?_) (by simpa using hn)
-  simp only [List.length_map, List.length_range] at h
-  obtain ⟨h1, h2⟩ := hb i h
-  exact ⟨h1, by simp, by simpa using h2⟩
+    FmtArgsOK R rd (BitVec.ofNat 64 p) [x1, x2] :=
+  rodata_fmtS hro p n [] hb hn hp hp64 (by simp) (fun _ h => absurd h (Nat.not_lt_zero _))
 
 theorem tooMany_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (x1 x2 : BitVec 64) :
@@ -51,23 +61,6 @@ theorem notCallable_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     have : i = 0 := by simpa using hi
     subst this
     exact hs
-
-theorem rodata_fmtS {R : Nat → Prop} {rd : Nat → BitVec 8}
-    (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) (p n : Nat) (convs : List Conv)
-    (hb : ∀ i, i < n → rodataDom (p + i) ∧ rodataByte (p + i) ≠ 0)
-    (hn : rodataDom (p + n) ∧ rodataByte (p + n) = 0)
-    (hp : parseFmt ((List.range n).map (fun i => rodataByte (p + i))) = some convs)
-    (hp64 : p < 2 ^ 64) {args : List (BitVec 64)} (hlen : convs.length ≤ args.length)
-    (hs : ∀ i (h : i < convs.length), convs[i] = .str →
-      ∃ t, CStrCov R rd (args[i]'(Nat.lt_of_lt_of_le h hlen)).toNat t) :
-    FmtArgsOK R rd (BitVec.ofNat 64 p) args := by
-  have e : (BitVec.ofNat 64 p).toNat = p := Nat.mod_eq_of_lt hp64
-  refine ⟨(List.range n).map (fun i => rodataByte (p + i)), convs, ⟨?_, hp, hlen, hs⟩⟩
-  rw [e]
-  refine cstrCov_rodata hro (fun i h => ?_) (by simpa using hn)
-  simp only [List.length_map, List.length_range] at h
-  obtain ⟨h1, h2⟩ := hb i h
-  exact ⟨h1, by simp, by simpa using h2⟩
 
 theorem arity_fmt {R : Nat → Prop} {rd : Nat → BitVec 8}
     (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {x1 : BitVec 64}

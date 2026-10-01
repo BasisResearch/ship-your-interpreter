@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.SConv
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -52,27 +53,11 @@ local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
     BitVec.add_zero, BitVec.sub_self] at 2147527088
 
 #ix_piece sEmpty_6 from sEmpty_5 by
-  have hs9 := hP.s1; have hs18 := hP.s2; have hs19 := hP.s3
-  rsimp
-  simp (config := {failIfUnchanged := false}) only [*] at ⊢
   refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ ?_ ?_ ?_
-  · rsimp; exact f2.trans h2
-  · rsimp; exact f9.trans hs9
-  · rsimp; exact f18.trans hs18
-  · rsimp; exact f19.trans hs19
-  · rsimp; exact f21.trans h21
-  · rsimp
-  · rsimp; exact f24
-  · nx_mem; exact hP.reent
-  · nx_mem; exact hP.file
-  · nx_mem
-  · nx_mem; exact hP.base
-  · nx_mem; rfl
-  · nx_mem
-  · nx_mem
-  · nx_mem
-  · repeat (refine Frame.snoc ?_ ?_)
-    all_goals first | exact Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit, BitVec.toNat_ofNat] at h1 h2; unfold SReg; omega)
+  all_goals try carry_close [f2.trans h2, f9.trans hP.s1, f18.trans hP.s2, f19.trans hP.s3, f21.trans h21, f24,
+    hP.reent, hP.file, hP.base]
+  repeat (refine Frame.snoc ?_ ?_)
+  all_goals first | exact Frame.refl _ _ | region_close
 
 #ix_chain s_empty := [sEmpty_1, sEmpty_2, sEmpty_3, sEmpty_4, sEmpty_5, sEmpty_6]
 
