@@ -21,10 +21,7 @@ theorem svf_head {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   have h2 := A.core.r2
   have hf := A.core.fmt
   snp_runF hlive using [h2, hf, sext_zero, BitVec.add_zero] at 0x80007724
-  refine hk _ (A.scratch SG ?_ ?_ fun _ _ => rfl) ?_
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  refine hk _ (A.scratch SG ?_ ?_ fun _ _ => rfl) ?_ <;> carry_close
 
 structure DataOff (Dt : Mem) (DA : List Nat) (s dst n : Nat) : Prop where
   ram : ∀ a ∈ DA, 0x80000000 ≤ a ∧ a + 8 ≤ 0x100000000
