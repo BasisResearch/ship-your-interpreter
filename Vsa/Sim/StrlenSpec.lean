@@ -1,10 +1,10 @@
 import Vsa.Sim.StrlenSites
 import Vsa.Sim.StrlenMagic
-import Vsa.Sim.Muldi3Spec
 import Vsa.MemRepr
 import Vsa.Triple
 import Vsa.Sim.ObsAvoid
 import Vsa.Alloc
+import Vsa.Sim.ObsBasics
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

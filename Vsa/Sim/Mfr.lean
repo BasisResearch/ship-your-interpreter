@@ -1,6 +1,6 @@
 import Vsa.Sim.MfrAttr
-import Vsa.Sim.SnprintfSpec5
 import Vsa.Sim.CodeRangeInsert
+import Vsa.Sim.MemWriteBasics
 
 open LeanRV64DExecutable Vsa
 

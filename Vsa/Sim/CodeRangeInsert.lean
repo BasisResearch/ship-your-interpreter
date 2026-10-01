@@ -1,4 +1,4 @@
-import Vsa.Sim.SnprintfSpec5
+import Vsa.Sim.MemWriteBasics
 
 open LeanRV64DExecutable Vsa
 

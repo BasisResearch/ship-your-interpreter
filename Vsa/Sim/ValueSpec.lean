@@ -1,8 +1,8 @@
 import Vsa.Sim.ValueSites
-import Vsa.Sim.Muldi3Spec
 import Vsa.RuntimeRepr
 import Vsa.MemRepr
 import Vsa.Triple
+import Vsa.Sim.ObsBasics
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

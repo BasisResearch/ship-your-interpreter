@@ -1,8 +1,8 @@
-import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.StepJump
 import Vsa.Sim.MemcpySpec
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.ValueTruthySpec
+import Vsa.Sim.ObsBasics
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

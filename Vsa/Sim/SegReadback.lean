@@ -7,7 +7,6 @@ import Vsa.Sim.MemRegion
 import Vsa.Sim.EvalSimCommon
 import Vsa.Sim.ExecEntry
 import Vsa.Sim.DecodeNF
-import Vsa.Sim.DivLoops
 import Vsa.Sim.ExitFootprint
 import Vsa.Sim.JmpSpec
 import Vsa.Sim.BlockMem

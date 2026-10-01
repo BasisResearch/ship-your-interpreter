@@ -1,5 +1,6 @@
 import Vsa.Sim.BlockTactics2
 import Vsa.Sim.ChainFactsTac
+import Vsa.Sim.EnvNewSpec
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Register

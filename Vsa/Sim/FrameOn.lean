@@ -1,4 +1,3 @@
-import Vsa.Sim.SnprintfSpec19
 import Vsa.Sim.Mfr
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa

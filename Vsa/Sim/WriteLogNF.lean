@@ -2,8 +2,8 @@ import Vsa.Sim.BlockMem
 import Vsa.Sim.FrameOn
 import Vsa.Sim.DecodeNF
 import Vsa.Sim.SnprintfSitesRet5
-import Vsa.Sim.SnprintfSpec19
 import Vsa.Sim.RamReadValue
+import Vsa.Sim.MemWriteBasics
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 

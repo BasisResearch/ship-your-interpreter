@@ -1,6 +1,6 @@
 import Vsa.Sim.MemcpySites
-import Vsa.Sim.Muldi3Spec
 import Vsa.Triple
+import Vsa.Sim.ObsBasics
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

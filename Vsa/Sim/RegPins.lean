@@ -1,6 +1,5 @@
 import Vsa.Sim.MemcpySpec
 import Vsa.Sim.DecodeNF
-import Vsa.Sim.DivLoops
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Sail.ConcurrencyInterfaceV1.PreSail
