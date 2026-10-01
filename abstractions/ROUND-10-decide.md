@@ -185,3 +185,80 @@ Pilots (worktrees from 2e29cd47, each its own tree, E56):
   context; fallback full.
 * PD (reflection, round 9's P3 measured inside the tactics): the DBM checker as first pass in the
   region / `sx_addr` / `nx_addr` dischargers.
+
+## 7. Bake-off (one timing script for all contenders, `~/syi-r10/bake/bake.sh`)
+
+Pilot branches from 2e29cd47: PA `exp-R10-PA` f8a366fe, PB `exp-R10-PB` f8a450aa, PC `exp-R10-PC`
+1ad83a55, PD `exp-R10-PD` 1f885b76. Each pilot built every importer of what it changed (PA the 58
+allocator modules; PB, PC, PD all of `VsaIris`, PC also `Vsa`): 0 errors, 0 `sorry`. No statement
+or proof file changed in any pilot; all four change tactics only.
+
+Single-file user CPU, s, min of 5 rounds; per file the five contenders run back to back (base first),
+three rounds in parallel, then two more; load 18–90 on 32 cores (the machine is shared with other
+projects' builds).
+
+| module | base | PA keys | PB guards | PC hint front end | PD checker first |
+|---|---:|---:|---:|---:|---:|
+| MallocRebin (R) | 10.29 | **8.51** | 10.01 | 8.76 | 8.95 |
+| MallocBlocks2 (R) | 10.57 | 10.22 | 10.23 | 9.76 | **9.56** |
+| Stderr/VfpEntry (T) | 13.56 | 13.52 | 13.80 | 13.42 | **7.91** |
+| Interp/IntRunAdd (T) | 7.20 | 7.15 | **6.42** | 7.10 | 7.14 |
+| HeapMoveAt (W) | 3.00 | 3.14 | 3.09 | **2.89** | 3.04 |
+| HeapRealloc (W) | 4.01 | 4.02 | 3.95 | **3.49** | 4.03 |
+| **primary total** | 48.63 | 46.56 (−4.3%) | 47.50 (−2.3%) | 45.42 (−6.6%) | **40.63 (−16.5%)** |
+| fresh: ReallocTail | 8.93 | 8.85 | 9.72 | 7.87 | 9.24 |
+| fresh: FreeLarge | 6.86 | 6.66 | 6.42 | 6.50 | 6.44 |
+| fresh: Interp/ProofNativePrint | 25.54 | 28.98 | 24.30 | 28.54 | 27.33 |
+| fresh: Interp/SeqLoopInterp | 8.16 | 8.30 | 7.71 | 8.67 | 8.75 |
+| fresh: HeapCarve | 8.77 | 8.19 | 8.50 | 7.22 | 8.65 |
+| fresh: Strlen | 9.32 | 9.59 | 9.32 | 9.57 | 9.56 |
+| fresh total | 67.58 | 70.57 | 65.97 | 68.37 | 69.97 |
+| fresh without ProofNativePrint | 42.04 | 41.59 (−1.1%) | 41.67 (−0.9%) | **39.83 (−5.3%)** | 42.64 (+1.4%) |
+| setup (+/− lines) | | +253 | +350 / −58 | +123 | +741 / −42 |
+
+ProofNativePrint is noise-dominated: base ranged 25.5–30.3 s over the five rounds, and PA, whose
+change cannot reach that file (it uses `sym_run1`, and `rgnSide` returns at once without regions),
+measured 29.0–31.7. The fresh total is therefore reported with and without it.
+
+What each pilot found (census before/after on its modules, per-call costs measured inside the tactic):
+
+- **PA (keys, the meet).** `rgnKeyed` normalises the keyed address and the region bases to atom +
+  literal (atoms rewritten through `x.toNat = r` facts; `lin_mod` removes an inner `% 2^64` from the
+  key's bound), picks the region by atom and closes membership by one lemma whose check is a closed
+  `Nat.ble … = true` (`Eq.refl true`); symbolic extents use a literal floor fact, `StOK` alignment a
+  `v % 16 = 0` fact. Region `omega` in the R modules 82 calls / 7.4 s → 33 / 3.3 s; 18 of 26 region
+  obligations close by key, 8 fall back (negative offsets, an index-scaled static-table key, a
+  two-atom sum). Per call: key route ≈ 27 ms (mostly the key simp), failed key attempt +28 ms, the old
+  path ≈ 260 ms per obligation.
+- **PB (guards).** `simp_set [(disch := t)] SET [at loc]` over 12 registered simp sets, with an exact
+  guard (skip only if no subterm of the target or of the non-dependent Prop hypotheses can change:
+  matched theorems/simprocs are tried, simp's own beta/let/proj/matcher reductions count;
+  `SIMPSET_CHECK=1` re-runs every skipped call and warns on progress — 0 misses over all of
+  `VsaIris`). Failing simp in IntRunAdd 161 calls / 0.70 s → 46 / 0.03 s, VfpEntry 0.78 → 0.30 s.
+  Guard 0.6–1.2 ms per call. The registered sets saved almost nothing (`ix_reg` 0.50 → 0.51 s): the
+  list-elaboration cost measured on trivial goals is small against the traversal on real goals. Shape
+  dispatch was analysed and not built: alternatives that cannot match already fail in microseconds;
+  the expensive failures are prune attempts whose outcome depends on hypotheses, not shape.
+- **PC (hint front end).** A project-wide elaborator for the `omega` syntax (`Vsa/OmegaHint.lean`,
+  imported by `Vsa/Elf.lean`, reaching 615 of the 627 modules), `@[no_fallback]`: per declaration it
+  remembers the hypotheses earlier certificates used and, in contexts of ≥ 40 hypotheses, runs omega
+  first on the last certificate's hypotheses (+ unseen ones), then on the union, then the full context.
+  11.5% fallbacks; reduced runs 11–40 ms against 20–160 ms. Two census corrections: the oracle of §1b
+  overstated the ceiling (the rerun hit `mkAuxTheorem`'s cache and skipped the kernel check; restoring
+  state first gives tactic −27–49%, VfpEntry −11%), and a user elaborator that throws makes
+  `evalTactic` run the builtin as well, so the census spy paid every failing call twice (needs
+  `@[no_fallback]`; the recorded per-call times are right, the census CPU totals include the doubles).
+- **PD (reflective checker first).** `VsaIris/Vsa/Dbm.lean` (615 lines, imports only Lean): round 9's
+  checker with the omega fallback removed, a re-solve over only the facts the certificate uses (kernel
+  re-walks 5–15 facts; disjunctive goals 80–118 → 6–30 ms kernel), search caps (96 cycle searches, ≤ 12
+  disjunctive facts, ≤ 40 atoms); `omega_dc := first | dbm | omega` in 45 tactic dischargers of 12
+  tactic files (carry, nx_fdisch, nx_win, nx_addr/nx_hb, sx_addr, rgn_*, rd_log, xrun, ExitH, int_post).
+  On the six modules the checker closes 565 of 941 tactic-issued calls (60%) at 1.7 ms tactic + 6.5 ms
+  kernel against 18.7 + 10.2 ms for omega on the same calls; a failed attempt costs 1.4 ms. It also
+  closes 39% of written calls (not applied). On small isolated 2^64 goals it is slower than omega
+  (13–17 vs 9–12 ms): it pays only in large contexts. `carry_close`'s omega calls 267 → 17.
+
+Reading: the candidates act on different calls (PA region membership, PB failing normalisation, PC
+written and driver omega in large contexts, PD tactic-issued omega), each names the others' territory
+as its residue, and their setups do not conflict (merged with two trivial conflicts). Per the skill,
+the next iteration is the combination, with no new abstraction code, measured on the whole scope.
