@@ -618,3 +618,75 @@ added (`MemWidth` has no `set_option`).
   per-site cost above and shortens every `stepObs_exec` call by a line.
 * The CLAUDE.md row proposed in §10 for machine steps should name `stepObs_exec` as the
   observational entry point.
+
+## 13. Residual callers retired (branch `exp-C3`, 2026-10-01)
+
+From `exponentiate-next` 915b83df. Commits 6a86639e (callers on the generic rules), 1289f236
+(ROUND-4 M1 leftovers), 5dc9c88f (retire-read combinators; site CPU back to baseline). Full
+`lake build` green (1,527 jobs); the 14 headline/tool theorems keep their axiom sets (the two
+`WhileLogic` adequacy theorems [propext, Quot.sound], the rest [propext, Classical.choice,
+Quot.sound]). No theorem statement used by the tools changed; `Vsa/Compiler/Lift` changed only
+inside the `sim_jal_link` proof.
+
+**Callers moved.** Every site of `DivSites`, `DivSites2`, `DivSites3`, `Muldi3Sites` (63 steps),
+`CallJalr` and `Lift` now reads
+
+```lean
+exact (stepObs_exec _ vm (Fetched.of_word (0x…#32) hG hpc hb0 hb1 hb2 hb3) hexec
+  ((RetireReads.prelude hG hvm _).write _) ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
+```
+
+Two generic pieces carry it. `Fetched.of_word w` (`StepObs`) is `Fetched.of_bytes` plus
+`decodeW`: range, alignment, compressed-bit and word facts are `by decide` auto-parameters and
+the decode is `by rfl` along `decodeN`. `RetireReads.prelude`/`.write`/`.jump` (`Retire`) are
+the read-side twin of `GoodState.prelude`/`.insert_nonpinned`: the prelude state retires to
+`pc + 4`, a write to a register `try_step` does not read keeps the reads (side condition by
+`decide`), and a `nextPC` write sets the target. Kinds compose as chains: ALU `.write`, taken
+branch and `j`/`jr` `.jump`, not-taken branch the bare prelude, `jal`/`jalr` `.jump` then
+`.write`. Register reads and writes are `rX_bits_gpr`/`wX_bits_gpr`. The 18 named
+`*_word`/`*_notrvc` lemmas of `Muldi3Sites` became the auto-parameters.
+
+Deleted, now without users: `stepObs_{alu,branch_taken,branch_nottaken,jr,j,jal}` (`StepObs`
+216 → 80 lines), `stepObs_jalr` (`SnprintfSitesRet5`), and the 13 remaining register instances
+`rX_bits_x{1,5,10,11,12,13,16}`, `wX_bits_x{1,5,10,11,12,13}`. `sigma3_K`/`sigmaPost_K` and the
+`sailOutput_sigmaPost_K`/`get?_sigmaPost_K` lemmas stay: they name states in live statements
+(`DivSpec3`, `StepFrameOut`, `Lift`).
+
+**Elaboration cost of the commit rule at a concrete site.** Written as `exact stepObs_exec _ …`,
+each site spent about 130 ms unifying the result type `ReadsLikePost σ' (retirePost σ3 ?npc vm)`
+against the goal's `sigmaPost_K …` before the arguments fixed `?npc`; the first version of this
+round made the four site modules 3.4× slower (7.7 → 26.5 s). Elaborating the term without the
+expected type, `exact (… :)`, lets the reads fix `?npc` first and the final check compares
+closed terms (6 ms per site). The `reg_reads` tuples (four `simp` calls per site, ≈1 s per
+module) became the combinators above. The site modules are back to 7.66 → 7.67 s.
+
+**M1 leftovers (ROUND-4 "Migration after the decision").**
+
+* `allocRegs_pre`, `allocRegs_post`, `allocRegs_keep` (`CallMalloc`) are the register
+  marshalling of a `malloc`/`free` call around `ms_callRegs`: the cut-out `mallocL` registers to
+  the allocator ABI, the return's `a0`/`sp`/clobbered/saved registers back to one register
+  function `f` with `f 2`, the saved registers and `f 10 = q` known, and the callee-saved keep.
+  `ms_callMalloc` and `ms_callFree` keep their statements; `CallFree` 118 → 72 lines.
+* `ResultCopy_run` (`Case/VarT`, view `DA` abstract) is the copy-and-epilogue segment at
+  `0x80003448`; it replaces `VarT_run2` and `AssignT_run3`, which differed only in the AST view.
+* `KeepRegs.upd` (moved to `SpecEval`, beside `KeepRegs`) replaces `KeepRegs.upd_right`
+  (LoopKit), ExecArm's copy and a third duplicate, `KeepRegs.calleeSaved_upd` (LoopKit, 19 uses
+  in LoopArgs/LoopFor/LoopWhile). `keep_upd` uses it.
+
+**Measurement.** Non-blank lines. CPU is user seconds of `lake env lean -j 8`, 8 threads, min of
+3 interleaved runs on copies outside the worktree, before compiled against oleans rebuilt from
+915b83df. Files of the `Vsa` library need `-Dbackward.isDefEq.respectTransparency=false` (the
+`lakefile.toml` option for that library) when compiled this way, or `Lift` fails.
+
+| | lines before | after | CPU before | after |
+|---|---:|---:|---:|---:|
+| task 1: `StepObs`, `RegAccess`, `Retire`, `SnprintfSitesRet5`, `CallJalr`, `Lift` | 1,744 | 1,534 | 20.64 s | 18.61 s |
+| task 1: `DivSites`, `DivSites2`, `DivSites3`, `Muldi3Sites` | 2,246 | 1,784 | 7.66 s | 7.67 s |
+| task 2: `CallMalloc`, `CallFree` | 217 | 189 | 2.46 s | 2.47 s |
+| task 2: `Case/VarT`, `Case/AssignT` | 596 | 575 | 30.93 s | 29.77 s |
+| task 2: `SpecEval`, `ExecArm`, `LoopKit`, `LoopArgs`, `LoopFor`, `LoopWhile` | 3,535 | 3,525 | 49.90 s | 50.31 s |
+| total (20 files) | 8,338 | 7,607 (−731) | 111.59 s | 108.83 s |
+| `git diff --shortstat 915b83df` (code) | | | | 20 files, +445 / −1,210 |
+
+Per file, `StepObs` 2.65 → 0.87 s and `AssignT` 15.76 → 13.95 s; `VarT` 15.17 → 15.82 s now
+holds the shared segment; no other file moves by more than 0.4 s.
