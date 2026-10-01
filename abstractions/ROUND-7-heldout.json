@@ -1,0 +1,26 @@
+{
+  "round": 7,
+  "drawn": "2026-10-01, before any candidate was built",
+  "seed": "random.Random(20261001): sample(L,3), sample(S,5), sample(P,3); first 2/3/2 primary, rest fresh",
+  "measure": "statement-identical re-proof; cost = declaration lines of the case + its apportioned per-pc helper lemmas (exec_/site_/pins, shared helpers divided by number of users, E34) + failed compiles",
+  "populations": {
+    "L": "libgcc run units with per-pc helpers (Triple/Steps conclusions): udivdi3_spec divdi3_mixed_tail divdi3_spec moddi3_spec moddi3_tail",
+    "S": "libgcc single-instruction transfer units: 22 utr_* (DivSpec) + 11 tr_* (Muldi3Spec)",
+    "P": "code lists whose consumers close byte pins through per-address named pins (chain_facts ... with \"prefix\"): mainErrCode rtErrCode ljCode setjmpCode interpLandCode crt0JCode oom80002a38Code oom80002bd0Code oom80003140Code oom80003e28Code"
+  },
+  "primary": [
+    {"case": "divdi3_spec", "stratum": "L", "file": "Vsa/Sim/DivSpec3.lean", "body": 439, "helpers": 379, "baseline": 818},
+    {"case": "moddi3_spec", "stratum": "L", "file": "Vsa/Sim/DivSpec3.lean", "body": 435, "helpers": 352, "baseline": 787},
+    {"case": "utr_d8_dc", "stratum": "S", "file": "Vsa/Sim/DivSpec.lean", "body": 20, "helpers": 33, "baseline": 53},
+    {"case": "tr_58_5c", "stratum": "S", "file": "Vsa/Sim/Muldi3Spec.lean", "body": 21, "helpers": 38, "baseline": 59},
+    {"case": "tr_5c_60", "stratum": "S", "file": "Vsa/Sim/Muldi3Spec.lean", "body": 21, "helpers": 31, "baseline": 52},
+    {"case": "ljCode", "stratum": "P", "file": "VsaIris/Vsa/H5Sites.lean + RuntimeError.lean", "body": 2, "helpers": 102, "baseline": 104},
+    {"case": "crt0JCode", "stratum": "P", "file": "VsaIris/Vsa/H5Sites.lean + MainErr.lean + MainOk.lean", "body": 2, "helpers": 6, "baseline": 8}
+  ],
+  "fresh": [
+    {"case": "udivdi3_spec", "stratum": "L", "file": "Vsa/Sim/DivLoops.lean", "body": 65, "helpers": 33, "baseline": 98},
+    {"case": "utr_b0_b4", "stratum": "S", "file": "Vsa/Sim/DivSpec.lean", "body": 21, "helpers": 36, "baseline": 57},
+    {"case": "tr_4c_54", "stratum": "S", "file": "Vsa/Sim/Muldi3Spec.lean", "body": 23, "helpers": 37, "baseline": 60},
+    {"case": "setjmpCode", "stratum": "P", "file": "VsaIris/Vsa/H5Sites.lean + Setjmp.lean", "body": 1, "helpers": 96, "baseline": 97}
+  ]
+}
