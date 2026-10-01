@@ -121,39 +121,4 @@ theorem exec_sd_val (σ : MState) (pc : BitVec 64) (imm : BitVec 12) (rs2 rs1 : 
       (vbase + sign_extend (m := 64) imm) (sdData_val vdata) initMstatus initPmpaddr
       hS.priv hS.mstatus (by decide) hS.pma hS.cfg hS.pmpaddr hS.tohost hlo hhiram hhiwin halign)
 
-theorem exec_ld (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
-    (σ' : MState) (vbase : BitVec 64) (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
-    (hG : GoodState σ)
-    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
-      = .ok vbase (afterNextPC (afterPrelude σ) pc))
-    (hwr : (wX_bits rd (sign_extend (m := 64)
-        ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
-          : BitVec (8 * 8)))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok () σ')
-    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 8 ≤ 0x100000000)
-    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 8 ≤ tohostAddr
-      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
-    (halign : (vbase + sign_extend (m := 64) off).toNat % 8 = 0)
-    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0)
-    (h1 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 1]? = some b1)
-    (h2 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 2]? = some b2)
-    (h3 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 3]? = some b3)
-    (h4 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 4]? = some b4)
-    (h5 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 5]? = some b5)
-    (h6 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 6]? = some b6)
-    (h7 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 7]? = some b7) :
-    (execute (instruction.LOAD (off, rs1, rd, false, 8))).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS σ' :=
-  have hS := siteGood_of_good σ pc hG
-  execute_load_signed_char off rs1 rd 8 _ (afterNextPC (afterPrelude σ) pc) σ' (by decide)
-    (vmem_read_data_eight (afterNextPC (afterPrelude σ) pc) rs1
-      (sign_extend (m := 64) off) vbase b0 b1 b2 b3 b4 b5 b6 b7 initMstatus initPmpaddr
-      hS.priv hS.mstatus (by decide) hS.seccfg hS.pma hS.cfg hS.pmpaddr hS.tohost
-      hrs1 hlo hhiram hhtif halign
-      (by rw [mem_afterNextPC]; exact h0) (by rw [mem_afterNextPC]; exact h1)
-      (by rw [mem_afterNextPC]; exact h2) (by rw [mem_afterNextPC]; exact h3)
-      (by rw [mem_afterNextPC]; exact h4) (by rw [mem_afterNextPC]; exact h5)
-      (by rw [mem_afterNextPC]; exact h6) (by rw [mem_afterNextPC]; exact h7)) hwr
-
 end Vsa.Sim

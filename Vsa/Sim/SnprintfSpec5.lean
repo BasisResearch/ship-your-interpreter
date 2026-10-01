@@ -15,8 +15,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-def entryTop (vsp : BitVec 64) : BitVec 64 := vsp + sign_extend (m := 64) (0x15c#12)
-
 theorem getElem?_writeMap8_out (mem : Std.ExtHashMap Nat (BitVec 8)) (k : Nat)
     (d : BitVec (8 * 8)) (a : Nat) (ha : a < k ∨ k + 8 ≤ a) :
     (writeMap8 mem k d)[a]? = mem[a]? := by

@@ -301,9 +301,10 @@ theorem term_step_bt (t : TInstr) (σ : MState) (i u : Nat) (vm : BitVec 64)
       have hexec := exec_btype_taken_bt σ tpc ti13 (gprIdx trs1) (gprIdx trs2) op
         (srcVal trs1 L) (srcVal trs2 L) hG hpc hrx1 hrx2 htgt htf
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
-        stepObs_branch_taken σ i u tpc vm ti13 (gprIdx trs1) (gprIdx trs2) op tword
-          tb0 tb1 tb2 tb3 hG hpc hmi hword hnotrvc hdec' hexec
-          hb0 hb1 hb2 hb3 hlo hhi halign hi
+        stepObs_exec (u := u) (tpc + sign_extend (m := 64) ti13) vm
+          (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec') hexec
+          ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩
+          ((hG.prelude _).insert_nonpinned (by decide) _) hi
       exact ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1.2, pc_btaken_bt hobs1, mi_btaken_bt hobs1,
         gholds_frame_bt (fun R hn => frame_term_btaken_bt hobs1 R hn) L hkeys hL,
         fun R hn => frame_term_btaken_bt hobs1 R hn⟩
@@ -311,9 +312,10 @@ theorem term_step_bt (t : TInstr) (σ : MState) (i u : Nat) (vm : BitVec 64)
       have hexec := exec_btype_nottaken_bt σ tpc ti13 (gprIdx trs1) (gprIdx trs2) op
         (srcVal trs1 L) (srcVal trs2 L) hrx1 hrx2 htf
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
-        stepObs_branch_nottaken σ i u tpc vm ti13 (gprIdx trs1) (gprIdx trs2) op tword
-          tb0 tb1 tb2 tb3 hG hpc hmi hword hnotrvc hdec' hexec
-          hb0 hb1 hb2 hb3 hlo hhi halign hi
+        stepObs_exec (u := u) (BitVec.addInt tpc 4) vm
+          (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec') hexec
+          ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩
+          (hG.prelude _) hi
       exact ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1.2, pc_bnottaken_bt hobs1,
         mi_bnottaken_bt hobs1,
         gholds_frame_bt (fun R hn => frame_term_bnottaken_bt hobs1 R hn) L hkeys hL,
@@ -321,8 +323,12 @@ theorem term_step_bt (t : TInstr) (σ : MState) (i u : Nat) (vm : BitVec 64)
   | j =>
     have htgt : (tpc + sign_extend (m := 64) ti21).toNat % 4 = 0 := hkok
     obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
-      stepObs_j σ i u tpc vm tword ti21 tb0 tb1 tb2 tb3
-        hG hpc hmi hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec' htgt hi
+      stepObs_exec (u := u) (tpc + sign_extend (m := 64) ti21) vm
+        (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec')
+        (execute_jal_x0_char ti21 _ tpc _ _ (by reg_reads []) (by reg_reads [hpc])
+          (by reg_reads [hG.misa]) htgt)
+        ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩
+        ((hG.prelude _).insert_nonpinned (by decide) _) hi
     exact ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1.2, pc_jx0_bt hobs1, mi_jx0_bt hobs1,
       gholds_frame_bt (fun R hn => frame_term_jx0_bt hobs1 R hn) L hkeys hL,
       fun R hn => frame_term_jx0_bt hobs1 R hn⟩
@@ -334,8 +340,12 @@ theorem term_step_bt (t : TInstr) (σ : MState) (i u : Nat) (vm : BitVec 64)
     have htgt : (BitVec.update (srcVal trs1 L + sign_extend (m := 64) ti12) 0 0#1).toNat % 4
         = 0 := htf
     obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
-      stepObs_jr σ i u tpc vm (srcVal trs1 L) tword ti12 (gprIdx trs1) tb0 tb1 tb2 tb3
-        hG hpc hmi hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec' hrx1 htgt hi
+      stepObs_exec (u := u) (BitVec.update (srcVal trs1 L + sign_extend (m := 64) ti12) 0 0#1) vm
+        (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec')
+        (execute_jalr_x0_char ti12 (gprIdx trs1) _ (srcVal trs1 L) _ (by reg_reads [hG.misa])
+          (by reg_reads [hG.cur_privilege]) (by reg_reads [hG.mseccfg]) (by reg_reads []) hrx1 htgt)
+        ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩
+        ((hG.prelude _).insert_nonpinned (by decide) _) hi
     exact ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1.2, pc_jx0_bt hobs1, mi_jx0_bt hobs1,
       gholds_frame_bt (fun R hn => frame_term_jx0_bt hobs1 R hn) L hkeys hL,
       fun R hn => frame_term_jx0_bt hobs1 R hn⟩

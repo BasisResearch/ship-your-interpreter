@@ -149,6 +149,12 @@ theorem GoodState.tickPost {s : MState} (hGs : GoodState s) (vmip vmtime vmtimec
   ((hGs.insert_nonpinned (r := Register.mcycle) (by decide) _).insert_nonpinned
     (r := Register.mtime) (by decide) _).insert_nonpinned (r := Register.mip) (by decide) _
 
+/-- The prelude writes (`minstret_increment`, `nextPC`) keep the pins. -/
+theorem GoodState.prelude {σ : MState} (hG : GoodState σ) (pc : BitVec 64) :
+    GoodState (afterNextPC (afterPrelude σ) pc) :=
+  (hG.insert_nonpinned (r := Register.minstret_increment) (by decide) _).insert_nonpinned
+    (r := Register.nextPC) (by decide) _
+
 theorem GoodState.retirePost {σ3 : MState} (hG : GoodState σ3) (npc vm : BitVec 64) :
     GoodState (retirePost σ3 npc vm) :=
   (hG.insert_nonpinned (r := Register.PC) (by decide) _).insert_nonpinned

@@ -42,14 +42,8 @@ run: while
 run-riscv: while-riscv.elf
 	$(QEMU) $(QEMU_FLAGS) -semihosting-config $(SEMIHOST_ARGS) -kernel $<
 
-test: while
-	./tests/run_tests.sh host
-
-test-riscv: while-riscv.elf
-	./tests/run_tests.sh riscv
-
 clean:
 	rm -f while while-riscv.elf while-riscv-htif.elf
 	rm -rf while.dSYM
 
-.PHONY: all riscv riscv-htif run run-riscv test test-riscv clean
+.PHONY: all riscv riscv-htif run run-riscv clean

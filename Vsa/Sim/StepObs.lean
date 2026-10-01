@@ -38,6 +38,17 @@ theorem stepObs_retire {σ s : MState} {i u : Nat}
   · obtain ⟨hstep, hGt⟩ := step_retire_notick hts hG hGs htick
     exact ⟨_, i + 1, hstep, by omega, hGt, rfl, ReadsLikePost.rfl _⟩
 
+/-- **Commit (observational step from the fetched word).** Any retiring instruction: the
+fetched word, its `execute` fact, the four retire reads and the pins of the post-execute state. -/
+theorem stepObs_exec {σ σ3 : MState} {i u : Nat} {pc : BitVec 64} (npc vm : BitVec 64)
+    {ast : instruction} (F : Fetched σ pc ast)
+    (hexec : (execute ast).run (afterNextPC (afterPrelude σ) pc) = .ok RETIRE_SUCCESS σ3)
+    (R : RetireReads σ3 npc vm) (hG3 : GoodState σ3) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ3.mem ∧ ReadsLikePost σ' (retirePost σ3 npc vm) :=
+  stepObs_retire (try_step_retire F hexec R) F.good (hG3.retirePost npc vm) hi
+
 theorem ReadsLikePost.out {σ' spost : MState} (h : ReadsLikePost σ' spost) :
     σ'.sailOutput = spost.sailOutput := h.2
 
@@ -86,9 +97,10 @@ theorem stepObs_alu
     ∃ (σ' : MState) (i' : Nat),
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.mem = σ.mem ∧ ReadsLikePost σ' (sigmaPost_alu σ pc vminstret rd_reg v) :=
-  stepObs_retire (try_step_alu σ u pc vminstret w ast rd_reg v b0 b1 b2 b3
-    hG hpc hminstret hword hnotrvc hdec hexec hrd_npc hrd_mi hrd_ms hrd_hart hb0 hb1 hb2 hb3 hlo hhi halign)
-    hG (goodstate_sigmaPost_alu σ pc vminstret rd_reg hrd v hG) hi
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec) hexec
+    ⟨by reg_reads [hrd_hart, hG.hart_state], by reg_reads [hrd_npc], by reg_reads [hrd_mi],
+     by reg_reads [hrd_ms, hminstret]⟩
+    ((hG.prelude _).insert_nonpinned hrd v) hi
 
 theorem stepObs_branch_taken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -108,10 +120,10 @@ theorem stepObs_branch_taken
     (hi : i < 2) :
     ∃ (σ' : MState) (i' : Nat),
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = σ.mem ∧ ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret imm) := by
-  exact stepObs_retire (try_step_branch_taken σ u pc vminstret imm rs1 rs2 op w b0 b1 b2 b3
-    hG hpc hminstret hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign)
-    hG (goodstate_sigmaPost_branch_taken σ pc vminstret imm hG) hi
+      σ'.mem = σ.mem ∧ ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret imm) :=
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec) hexec
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi
 
 theorem stepObs_branch_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -132,9 +144,9 @@ theorem stepObs_branch_nottaken
     ∃ (σ' : MState) (i' : Nat),
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.mem = σ.mem ∧ ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) :=
-  stepObs_retire (try_step_branch_nottaken σ u pc vminstret imm rs1 rs2 op w b0 b1 b2 b3
-    hG hpc hminstret hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign)
-    hG (goodstate_sigmaPost_branch_nottaken σ pc vminstret hG) hi
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec) hexec
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
+    (hG.prelude _) hi
 
 theorem stepObs_jr
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vrs1 : BitVec 64)
@@ -157,9 +169,11 @@ theorem stepObs_jr
       σ'.mem = σ.mem ∧
       ReadsLikePost σ'
         (sigmaPost_jump_x0 σ pc vminstret (BitVec.update (vrs1 + sign_extend (m := 64) imm) 0 0#1)) :=
-  stepObs_retire (try_step_jr σ u pc vminstret vrs1 w imm rs1 b0 b1 b2 b3
-    hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec hrs1 htgt)
-    hG (goodstate_sigmaPost_jump_x0 σ pc vminstret _ hG) hi
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (execute_jalr_x0_char imm rs1 _ vrs1 _ (by reg_reads [hG.misa]) (by reg_reads [hG.cur_privilege])
+      (by reg_reads [hG.mseccfg]) (by reg_reads []) hrs1 htgt)
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi
 
 theorem stepObs_j
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -179,9 +193,10 @@ theorem stepObs_j
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.mem = σ.mem ∧
       ReadsLikePost σ' (sigmaPost_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) imm)) :=
-  stepObs_retire (try_step_j σ u pc vminstret w imm b0 b1 b2 b3
-    hG hpc hminstret hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt)
-    hG (goodstate_sigmaPost_jump_x0 σ pc vminstret _ hG) hi
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (execute_jal_x0_char imm _ pc _ _ (by reg_reads []) (by reg_reads [hpc]) (by reg_reads [hG.misa]) htgt)
+    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi
 
 theorem stepObs_jal
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -211,31 +226,12 @@ theorem stepObs_jal
     ∃ (σ' : MState) (i' : Nat),
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.mem = σ.mem ∧
-      ReadsLikePost σ' (sigmaPost_jal σ pc vminstret imm rd_reg link) := by
-  exact stepObs_retire (try_step_jal σ u pc vminstret w imm rd rd_reg link b0 b1 b2 b3 hG hpc hminstret
-    hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec htgt hrd_npc hrd_mi hrd_ms hrd_hart hwr)
-    hG (goodstate_sigmaPost_jal σ pc vminstret imm rd_reg hrd link hG) hi
-
-theorem stepObs_store
-    (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
-    (w : BitVec 32) (ast : instruction) (m' : Std.ExtHashMap Nat (BitVec 8))
-    (b0 b1 b2 b3 : BitVec 8)
-    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
-    (hminstret : σ.regs.get? Register.minstret = some vminstret)
-    (hword : (((b3.append b2).append b1).append b0) = w)
-    (hnotrvc : Sail.BitVec.extractLsb (((b3.append b2).append b1).append b0) 1 0 = (0b11#2 : BitVec 2))
-    (hdec : (ext_decode w).run (afterPrelude σ) = .ok ast (afterPrelude σ))
-    (hexec : (execute ast).run (afterNextPC (afterPrelude σ) pc)
-      = .ok RETIRE_SUCCESS (sigma3_store σ pc m'))
-    (hb0 : σ.mem[pc.toNat]? = some b0) (hb1 : σ.mem[pc.toNat + 1]? = some b1)
-    (hb2 : σ.mem[pc.toNat + 2]? = some b2) (hb3 : σ.mem[pc.toNat + 3]? = some b3)
-    (hlo : 0x80000000 ≤ pc.toNat) (hhi : pc.toNat + 4 ≤ tohostAddr) (halign : pc.toNat % 4 = 0)
-    (hi : i < 2) :
-    ∃ (σ' : MState) (i' : Nat),
-      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.mem = m' ∧ ReadsLikePost σ' (sigmaPost_store σ pc vminstret m') :=
-  stepObs_retire (try_step_store σ u pc vminstret w ast m' b0 b1 b2 b3
-    hG hpc hminstret hword hnotrvc hdec hexec hb0 hb1 hb2 hb3 hlo hhi halign)
-    hG (goodstate_sigmaPost_store σ pc vminstret m' hG) hi
+      ReadsLikePost σ' (sigmaPost_jal σ pc vminstret imm rd_reg link) :=
+  stepObs_exec _ vminstret (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 hlo hhi halign hnotrvc hword hdec)
+    (execute_jal_char imm rd _ pc _ _ _ (by reg_reads []) (by reg_reads [hpc]) (by reg_reads [hG.misa])
+      htgt hwr)
+    ⟨by reg_reads [hrd_hart, hG.hart_state], by reg_reads [hrd_npc], by reg_reads [hrd_mi],
+     by reg_reads [hrd_ms, hminstret]⟩
+    (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (r := rd_reg) hrd link) hi
 
 end Vsa.Sim

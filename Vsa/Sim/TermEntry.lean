@@ -26,8 +26,6 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-local notation "SpecSt" => Vsa.While.St
-
 abbrev sigmaExitG (σ : MState) (pc : BitVec 64) (data e : BitVec 64) : MState :=
   {(afterNextPC (afterPrelude σ) pc) with
     regs := (((((afterNextPC (afterPrelude σ) pc).regs.insert Register.htif_cmd_write 1#1).insert

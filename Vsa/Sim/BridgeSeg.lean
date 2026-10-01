@@ -25,24 +25,6 @@ def JalStep (calleeEntry link : BitVec 64) (σp : MState) (ip up : Nat) : Prop :
 
     (∀ R, AbiPreserved R = true → σ2.regs.get? R = σp.regs.get? R)
 
-def KeysAvoidRa (L : GRegs) : Prop := ∀ n ∈ keysG L, n ≠ 1
-
-theorem gholds_of_jal {σp σ2 : MState}
-    (hnonRa : ∀ (n : Nat), 1 ≤ n → n ≤ 31 → n ≠ 1 →
-      ∀ (w : BitVec 64), gprGet σp n = some w → gprGet σ2 n = some w) :
-    ∀ (L : GRegs), KeysOK (keysG L) → KeysAvoidRa L → GHolds σp L → GHolds σ2 L := by
-  intro L
-  induction L with
-  | nil => intro _ _ _; exact trivial
-  | cons p L ih =>
-    obtain ⟨n, w⟩ := p
-    intro hK hRa hL
-    have hn := hK n (List.mem_cons_self ..)
-    have hne : n ≠ 1 := hRa n (List.mem_cons_self ..)
-    exact ⟨hnonRa n hn.1 hn.2 hne w hL.1,
-      ih (fun k hk => hK k (List.mem_cons_of_mem _ hk))
-        (fun k hk => hRa k (List.mem_cons_of_mem _ hk)) hL.2⟩
-
 theorem jalStep_of_obs {σp σ2 : MState} {ip up i2 : Nat}
     {jalPC vm : BitVec 64} {imm : BitVec 21} {calleeEntry link : BitVec 64}
     (hstep : Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩) (hi2 : i2 < 2) (hG2 : GoodState σ2)

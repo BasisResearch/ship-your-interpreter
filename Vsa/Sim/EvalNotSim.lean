@@ -4,7 +4,8 @@ import Vsa.Sim.PinW
 import Vsa.Sim.BlockTactics2
 import Vsa.Sim.AstTransport
 import Vsa.MemReprReadFields
-import Vsa.Sim.MemRegionWithin
+import Vsa.MemReprWithin
+import Vsa.Sim.MemRegion
 import Vsa.Sim.Code.Exec_stmt
 import Vsa.Sim.StoreInvariant
 import Vsa.While.Cost

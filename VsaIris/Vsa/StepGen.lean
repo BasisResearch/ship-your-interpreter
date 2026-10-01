@@ -474,25 +474,10 @@ def jalxLem (tgt : Nat) (imm : Int) : Lem :=
       #[mkRawNatLit pc, bv 32 w, bv 21 (modN imm 2097152), bv 64 tgt])
     binders := s!"(live : Nat → Prop)\n    (hlive : ∀ p ∈ codeFoot 0x{hx pc} [{code}], live p.1)"
     concl := s!"JalExec (vsaModel live) 0x{hx pc} [{code}] 0x{hx tgt}#64"
-    proof := "by\n" ++
-      "  refine jalExec_of_site live _ _ _ hlive fun c hG hi hpc hb => ?_\n" ++
-      "  obtain ⟨vm, hmi⟩ := hG.minstret\n" ++
-      hbLines pc w "hb" "  " ++ "\n" ++
-      "  obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=\n" ++
-      s!"    stepObs_jal c.σ c.tick c.steps (0x{hx pc}#64) vm (0x{hxw 8 w}#32) (0x{hxw 6 (modN imm 2097152)}#21)\n" ++
-      s!"      (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x{hx pc}#64) 4)\n" ++
-      s!"      {byteArgs w}\n" ++
-      "      hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)\n" ++
-      "      (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
-      s!"      {decodeArg w "c.σ" "      "}\n" ++
-      "      (by decide)\n" ++
-      "      (by decide) (by decide) (by decide) (by decide) (by decide)\n" ++
-      s!"      (wX_bits_x1 _ (BitVec.addInt (0x{hx pc}#64) 4)) hi\n" ++
-      s!"  have h := jalStep_of_obs (calleeEntry := 0x{hx tgt}#64) hs hi' hG' hmem hobs\n" ++
-      "    (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
-      "  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩\n" ++
-      s!"  rwa [show BitVec.addInt (0x{hx pc}#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x{hx pc} + 4) from by\n" ++
-      "    apply BitVec.eq_of_toNat_eq; decide] at h" }
+    proof :=
+      s!"JalSite.exec (S := ⟨0x{hx pc}, {code}, 0x{hxw 8 w}#32, 0x{hxw 6 (modN imm 2097152)}#21, 0x{hx tgt}#64⟩)\n" ++
+      s!"    ⟨by decide, by decide, fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x{hxw 8 w}#32) σ h1 h2 h3,\n" ++
+      "     by decide, by decide, by decide, by decide, by decide⟩ live hlive" }
 
 /-- `jalr ra,0(r)` at `pc`: its `JalrObs` fact. -/
 def jalroLem (r : Nat) : Lem :=
@@ -502,16 +487,17 @@ def jalroLem (r : Nat) : Lem :=
     proof := "by\n" ++
       "  intro σ ti u vm hG hpc hmi hrs hb hti\n" ++
       hbLines pc w "hb" "  " ++ "\n" ++
-      s!"  have h := stepObs_jalr σ ti u (0x{hx pc}#64) vm tgt (0x{hxw 8 w}#32) (0x000#12)\n" ++
-      s!"    (regidx.Regidx 0x{hxw 2 r}#5) (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x{hx pc}#64) 4)\n" ++
-      s!"    {byteArgs w}\n" ++
-      "    hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)\n" ++
-      "    (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
-      s!"    {decodeArg w "σ" "    "}\n" ++
-      s!"    (rX_bits_x{r} _ tgt (by rw [get?_afterNextPC σ (0x{hx pc}#64) _ (by decide) (by decide)]; exact hrs))\n" ++
-      "    (by rw [ret_tgt _ hal]; exact hal)\n" ++
-      "    (by decide) (by decide) (by decide) (by decide) (by decide)\n" ++
-      s!"    (wX_bits_x1 _ (BitVec.addInt (0x{hx pc}#64) 4)) hti\n" ++
+      "  have h := stepObs_exec (u := u) (Sail.BitVec.update (tgt + sign_extend (m := 64) (0x000#12)) 0 0#1) vm\n" ++
+      "    (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)\n" ++
+      "      (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
+      s!"      {decodeArg w "σ" "      "})\n" ++
+      s!"    (execute_jalr_char (0x000#12) (regidx.Regidx 0x{hxw 2 r}#5) (regidx.Regidx 0x01#5) _ tgt _ _\n" ++
+      "      (by reg_reads [hG.misa]) (by reg_reads [hG.cur_privilege]) (by reg_reads [hG.mseccfg]) (by reg_reads [])\n" ++
+      s!"      (rX_bits_gpr _ {r} (by decide) (by decide) tgt (by show (afterNextPC (afterPrelude σ) (0x{hx pc}#64)).regs.get? Register.x{r} = _; rw [get?_afterNextPC σ (0x{hx pc}#64) _ (by decide) (by decide)]; exact hrs))\n" ++
+      "      (by rw [ret_tgt _ hal]; exact hal)\n" ++
+      s!"      (wX_bits_gpr _ (BitVec.addInt (0x{hx pc}#64) 4) 1 (by decide) (by decide)))\n" ++
+      "    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩\n" ++
+      "    (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _) hti\n" ++
       "  rw [ret_tgt _ hal] at h\n" ++
       "  exact h" }
 
@@ -682,7 +668,7 @@ def lemOf (kind : String) : Option Lem := Id.run do
   | .obs sltu rd rs1 rs2 imm =>
     if kind != "O" then return none
     let A := src t.gpv rs1
-    let (val, srcs, ast, ex) :=
+    let (val, srcs, _, ex) :=
       if sltu then
         let B := src t.gpv rs2
         let val := s!"zero_extend (m := 64) (bool_to_bit (zopz0zI_u {A} {B}))"
@@ -692,7 +678,7 @@ def lemOf (kind : String) : Option Lem := Id.run do
             s!"execute_rtype_sltu_char (regidx.Regidx 0x{hxw 2 rs2}#5) (regidx.Regidx 0x{hxw 2 rs1}#5) " ++
             s!"(regidx.Regidx 0x{hxw 2 rd}#5) {A} {B} {npc ""} {post ""}\n" ++
             s!"        ({rx (toString rs1)})\n        ({rx (toString rs2)})\n" ++
-            s!"        (wX_bits_x{rd} _ ({val}))")
+            s!"        (wX_bits_gpr _ ({val}) {rd} (by decide) (by decide))")
       else
         let val := s!"zero_extend (m := 64) (bool_to_bit (zopz0zI_u {A} (sign_extend (m := 64) (0x{hxw 3 imm}#12))))"
         (val, [rs1],
@@ -701,13 +687,13 @@ def lemOf (kind : String) : Option Lem := Id.run do
             s!"execute_itype_sltiu_char (0x{hxw 3 imm}#12) (regidx.Regidx 0x{hxw 2 rs1}#5) " ++
             s!"(regidx.Regidx 0x{hxw 2 rd}#5) {A} {npc ""} {post ""}\n" ++
             s!"        ({rx (toString rs1)})\n" ++
-            s!"        (wX_bits_x{rd} _ ({val}))")
+            s!"        (wX_bits_gpr _ ({val}) {rd} (by decide) (by decide))")
     let ks := ksOf srcs
     let npc := fun (_ : String) => s!"(afterNextPC (afterPrelude c.σ) (0x{hx pc}#64))"
     let post := fun (_ : String) => s!"(sigma3_alu c.σ (0x{hx pc}#64) Register.x{rd} ({val}))"
     let rx := fun (r : String) =>
       if r == "0" then "rX_bits_zero _" else
-      s!"rX_bits_x{r} _ (R {r}) (by rw [get?_afterNextPC c.σ (0x{hx pc}#64) _ (by decide) (by decide)]; " ++
+      s!"rX_bits_gpr _ {r} (by decide) (by decide) (R {r}) (by show (afterNextPC (afterPrelude c.σ) (0x{hx pc}#64)).regs.get? Register.x{r} = _; rw [get?_afterNextPC c.σ (0x{hx pc}#64) _ (by decide) (by decide)]; " ++
         s!"exact hRR ({r}, Iris.DFrac.own 1, R {r}) (by simp))"
     return some
       { binders := H ++ s!"\n    (hk : {runR (nxt pc) s!"(upd R {rd} ({val}))"})"
@@ -722,15 +708,13 @@ def lemOf (kind : String) : Option Lem := Id.run do
           "      obtain ⟨vm, hmi⟩ := hG.minstret\n" ++
           hbLines pc w "hMR" "      " ++ "\n" ++
           "      obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=\n" ++
-          s!"        stepObs_alu c.σ c.tick c.steps (0x{hx pc}#64) vm (0x{hxw 8 w}#32)\n" ++
-          s!"          ({ast})\n" ++
-          s!"          Register.x{rd} ({val})\n" ++
-          s!"          {byteArgs w}\n" ++
-          "          hG hpc hmi (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
-          s!"          {decodeArg w "c.σ" "          "}\n" ++
+          s!"        stepObs_exec (u := c.steps) (BitVec.addInt (0x{hx pc}#64) 4) vm\n" ++
+          "          (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)\n" ++
+          "            (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
+          s!"            {decodeArg w "c.σ" "            "})\n" ++
           s!"          ({ex npc post rx})\n" ++
-          "          (by decide) (by decide) (by decide) (by decide) (by decide)\n" ++
-          "          hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi\n" ++
+          "          ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩\n" ++
+          "          ((hG.prelude _).insert_nonpinned (by decide) _) hi\n" ++
           "      exact ⟨σ', i', vm, hs, hi', hG', hmem, hobs⟩))\n" ++
           s!"    {codeInT t pc}" ++
           (if t.flavor == .str then " (by decide) (by decide) rfl hk" else
@@ -751,15 +735,17 @@ def lemOf (kind : String) : Option Lem := Id.run do
           "      obtain ⟨vm, hmi⟩ := hG.minstret\n" ++
           hbLines pc w "hMR" "      " ++ "\n" ++
           "      obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=\n" ++
-          s!"        stepObs_jalr c.σ c.tick c.steps (0x{hx pc}#64) vm (R {rs1}) (0x{hxw 8 w}#32) (0x{hxw 3 imm}#12)\n" ++
-          s!"          (regidx.Regidx 0x{hxw 2 rs1}#5) (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x{hx pc}#64) 4)\n" ++
-          s!"          {byteArgs w}\n" ++
-          "          hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)\n" ++
-          "          (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
-          s!"          {decodeArg w "c.σ" "          "}\n" ++
-          s!"          (rX_bits_x{rs1} _ (R {rs1}) (by rw [get?_afterNextPC c.σ (0x{hx pc}#64) _ (by decide) (by decide)]; exact hRR ({rs1}, Iris.DFrac.own 1, R {rs1}) (by simp)))\n" ++
-          "          hal (by decide) (by decide) (by decide) (by decide) (by decide)\n" ++
-          s!"          (wX_bits_x1 _ (BitVec.addInt (0x{hx pc}#64) 4)) hi\n" ++
+          s!"        stepObs_exec (u := c.steps) {tgt} vm\n" ++
+          "          (Fetched.of_bytes hG hpc hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)\n" ++
+          "            (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)\n" ++
+          s!"            {decodeArg w "c.σ" "            "})\n" ++
+          s!"          (execute_jalr_char (0x{hxw 3 imm}#12) (regidx.Regidx 0x{hxw 2 rs1}#5) (regidx.Regidx 0x01#5) _ (R {rs1}) _ _\n" ++
+          "            (by reg_reads [hG.misa]) (by reg_reads [hG.cur_privilege]) (by reg_reads [hG.mseccfg]) (by reg_reads [])\n" ++
+          s!"            (rX_bits_gpr _ {rs1} (by decide) (by decide) (R {rs1}) (by show (afterNextPC (afterPrelude c.σ) (0x{hx pc}#64)).regs.get? Register.x{rs1} = _; rw [get?_afterNextPC c.σ (0x{hx pc}#64) _ (by decide) (by decide)]; exact hRR ({rs1}, Iris.DFrac.own 1, R {rs1}) (by simp)))\n" ++
+          "            hal\n" ++
+          s!"            (wX_bits_gpr _ (BitVec.addInt (0x{hx pc}#64) 4) 1 (by decide) (by decide)))\n" ++
+          "          ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩\n" ++
+          "          (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _) hi\n" ++
           "      refine ⟨σ', i', vm, hs, hi', hG', hmem, ?_⟩\n" ++
           s!"      rwa [show BitVec.addInt (0x{hx pc}#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x{hx pc} + 4) from by\n" ++
           "        apply BitVec.eq_of_toNat_eq; decide] at hobs))\n" ++

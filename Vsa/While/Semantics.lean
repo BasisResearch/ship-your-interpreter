@@ -149,8 +149,17 @@ def Value.catDisplay (s : Store) : Value → String
 
 def wrap64 (z : Int) : Int := (BitVec.ofInt 64 z).toInt
 
+theorem wrap64_eq_self {z : Int} (h : -2^63 ≤ z ∧ z < 2^63) : wrap64 z = z :=
+  BitVec.toInt_ofInt_eq_self (by decide) h.1 h.2
+
+theorem wrap64_range (z : Int) : -2^63 ≤ wrap64 z ∧ wrap64 z < 2^63 :=
+  ⟨BitVec.le_toInt _, BitVec.toInt_lt⟩
+
 theorem wrap64_toInt (v : BitVec 64) : wrap64 v.toInt = v.toInt := by
   unfold wrap64; rw [BitVec.ofInt_toInt]
+
+theorem ofInt_wrap64 (z : Int) : BitVec.ofInt 64 (wrap64 z) = BitVec.ofInt 64 z :=
+  BitVec.ofInt_toInt
 
 theorem wrap64_tdiv_min : wrap64 ((-2^63 : Int).tdiv (-1)) = -2^63 := by decide
 

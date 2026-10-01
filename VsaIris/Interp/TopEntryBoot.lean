@@ -135,7 +135,7 @@ theorem interpRun_partial_top (H : NewlibHoles) (hlive : ∀ p ∈ interpText, l
       execSpecsP (vsaModel live) b.N VsaHeap.vsaLayoutP VsaHeap.vsaRoomB inpTop
         (evalCore b.N VsaHeap.vsaLayoutP VsaHeap.vsaRoomB inpTop))
     (hΦ0 : ∀ st', ExecSeq initSt 0 0 p st' .normal → ⊢ Φ (0, st'.out))
-    (hΦe : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) :
+    (hΦe : ∀ e o, AbortCode e → ⊢ Φ (e, o)) :
     bootRes b .uncounted ∗ sepL topRegs (fun r => r ↦ᵣ vsaReg c r) ⊢@{IProp GF}
       |==> (wpW (GF := GF) (vsaModel live)).W Φ :=
   (topEntry_of_regs b _).trans (bupd_mono (sep_elim_left.trans

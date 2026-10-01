@@ -15,16 +15,6 @@ structure StepFrameOut (W : List Register) (σ σ' : MState) : Prop where
 
 namespace StepFrameOut
 
-theorem trans {W₁ W₂ : List Register} {σ σ' σ'' : MState}
-    (h1 : StepFrameOut W₁ σ σ') (h2 : StepFrameOut W₂ σ' σ'') :
-    StepFrameOut (W₁ ++ W₂) σ σ'' where
-  out := h2.out.trans h1.out
-  frame := by
-    intro R hR
-    have hR1 : ∀ r ∈ W₁, (r == R) = false := fun r hr => hR r (List.mem_append_left _ hr)
-    have hR2 : ∀ r ∈ W₂, (r == R) = false := fun r hr => hR r (List.mem_append_right _ hr)
-    exact (h2.frame R hR2).trans (h1.frame R hR1)
-
 theorem of_alu {σ σ' : MState} {pc vm : BitVec 64} {rd : Register} {v : RegisterType rd}
     (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm rd v)) :
     StepFrameOut (rd :: noiseRegs) σ σ' where

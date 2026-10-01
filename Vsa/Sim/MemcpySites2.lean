@@ -14,7 +14,4 @@ namespace Vsa.Sim
 abbrev ldData8 (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8) : BitVec (8 * 8) :=
   ((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0
 
-abbrev sdData8 (vdata : BitVec 64) : BitVec (8 * 8) :=
-  Sail.BitVec.extractLsb vdata ((8 *i 8) -i 1) 0
-
 end Vsa.Sim
