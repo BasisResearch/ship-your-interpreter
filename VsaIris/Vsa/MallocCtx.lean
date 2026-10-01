@@ -1,4 +1,5 @@
 import VsaIris.Vsa.MallocGen
+import VsaIris.Vsa.MallocGlue2
 
 namespace VsaIris.VsaHeap
 
@@ -315,14 +316,9 @@ theorem epi_core {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have hs96 : R 2 + sign_extend (m := 64) (0x060#12) = C.s := by
     apply BitVec.eq_of_toNat_eq; rw [hs2]; sx_addr
   refine hfin _ ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ (fun x h1 h2 h8 => ?_) <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hr
-  · exact hs96
+    reg_try [hr, hs96, F.s1, F.s2, F.s3]
   · exact hs0
-  · exact F.s1
-  · exact F.s2
-  · exact F.s3
-  · simp only [h1, h2, h8, ite_false]
+  simp only [h1, h2, h8, ite_false]
 
 theorem MOK.fin_ok {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (hfresh : FreshAt C.H (R 10).toNat C.n.toNat) (hal : (R 10).toNat % 16 = 0)

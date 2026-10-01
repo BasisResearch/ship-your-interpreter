@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocBlocks2
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.MallocGlue2
 
 namespace VsaIris.VsaHeap
 
@@ -35,16 +36,8 @@ theorem malloc_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv : Nat}
     AW C.live C.S C.Q mallocEntryBV R C.Mt0 := by
   rw [show mallocEntryBV = 0x80004790#64 from rfl]
   rgn_step O.live at 0x800047a8
-  refine malloc_all O ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ Hp <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hra
-  · exact hsp
-  · decide
-  · sx_norm; exact ha0
-  · exact h8
-  · exact h9
-  · exact h18
-  · exact h19
+  refine malloc_all O ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ Hp <;> reg_try [hra, hsp, h8, h9, h18, h19]
+  sx_norm; exact ha0
 
 theorem mallocChgRun_proved (live : Nat → Prop) (hl : AllocLive live) :
     MallocChgRun (vsaModel live) vsaLayoutP vsaRoomB vsaChg SpOKA mallocEntryBV gpV vsaClob
