@@ -41,10 +41,10 @@ theorem site_800046ac
         (sigmaPost_alu σ pc vminstret Register.x12 (v11 + sign_extend (m := 64) (0x000#12))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046ac hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00058613#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00058613#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_mv_a2_a1 σ (0x800046ac#64) v11 hx11)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_mv_a1_a0 (σ : MState) (pc : BitVec 64) (v10 : BitVec 64)
     (hx10 : σ.regs.get? Register.x10 = some v10) :
@@ -71,10 +71,10 @@ theorem site_800046b0
         (sigmaPost_alu σ pc vminstret Register.x11 (v10 + sign_extend (m := 64) (0x000#12))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046b0 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00050593#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00050593#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_mv_a1_a0 σ (0x800046b0#64) v10 hx10)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_li_a0_m1 (σ : MState) (pc : BitVec 64) :
     (execute (instruction.ITYPE (0xfff#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, iop.ADDI))).run
@@ -97,10 +97,10 @@ theorem site_800046b4
         (sigmaPost_alu σ pc vminstret Register.x10 ((0#64) + sign_extend (m := 64) (0xfff#12))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046b4 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0xfff00513#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0xfff00513#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_li_a0_m1 σ (0x800046b4#64))
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_li_a3_1 (σ : MState) (pc : BitVec 64) :
     (execute (instruction.ITYPE (0x001#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0d#5, iop.ADDI))).run
@@ -123,10 +123,10 @@ theorem site_800046bc
         (sigmaPost_alu σ pc vminstret Register.x13 ((0#64) + sign_extend (m := 64) (0x001#12))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046bc hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00100693#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00100693#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_li_a3_1 σ (0x800046bc#64))
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_slli_a2 (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hx12 : σ.regs.get? Register.x12 = some v12) :
@@ -155,10 +155,10 @@ theorem site_800046c8
         (sigmaPost_alu σ pc vminstret Register.x12 (shift_bits_left v12 (Sail.BitVec.extractLsb (0x01#6) 5 0))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046c8 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00161613#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00161613#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_slli_a2 σ (0x800046c8#64) v12 hx12)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_slli_a3 (σ : MState) (pc : BitVec 64) (v13 : BitVec 64)
     (hx13 : σ.regs.get? Register.x13 = some v13) :
@@ -187,10 +187,10 @@ theorem site_800046cc
         (sigmaPost_alu σ pc vminstret Register.x13 (shift_bits_left v13 (Sail.BitVec.extractLsb (0x01#6) 5 0))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046cc hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00169693#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00169693#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_slli_a3 σ (0x800046cc#64) v13 hx13)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_li_a0_0 (σ : MState) (pc : BitVec 64) :
     (execute (instruction.ITYPE (0x000#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, iop.ADDI))).run
@@ -213,10 +213,10 @@ theorem site_800046d4
         (sigmaPost_alu σ pc vminstret Register.x10 ((0#64) + sign_extend (m := 64) (0x000#12))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046d4 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00000513#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00000513#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_li_a0_0 σ (0x800046d4#64))
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_sub_a1 (σ : MState) (pc : BitVec 64) (v11 v12 : BitVec 64)
     (hx11 : σ.regs.get? Register.x11 = some v11)
@@ -246,10 +246,10 @@ theorem site_800046dc
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x11 (v11 - v12)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046dc hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x40c585b3#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x40c585b3#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_sub_a1 σ (0x800046dc#64) v11 v12 hx11 hx12)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_or_a0 (σ : MState) (pc : BitVec 64) (v10 v13 : BitVec 64)
     (hx10 : σ.regs.get? Register.x10 = some v10)
@@ -279,10 +279,10 @@ theorem site_800046e0
       ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x10 (v10 ||| v13)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046e0 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00d56533#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00d56533#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_or_a0 σ (0x800046e0#64) v10 v13 hx10 hx13)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_srli_a3 (σ : MState) (pc : BitVec 64) (v13 : BitVec 64)
     (hx13 : σ.regs.get? Register.x13 = some v13) :
@@ -311,10 +311,10 @@ theorem site_800046e4
         (sigmaPost_alu σ pc vminstret Register.x13 (shift_bits_right v13 (Sail.BitVec.extractLsb (0x01#6) 5 0))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046e4 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x0016d693#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x0016d693#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_srli_a3 σ (0x800046e4#64) v13 hx13)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_srli_a2 (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hx12 : σ.regs.get? Register.x12 = some v12) :
@@ -343,10 +343,10 @@ theorem site_800046e8
         (sigmaPost_alu σ pc vminstret Register.x12 (shift_bits_right v12 (Sail.BitVec.extractLsb (0x01#6) 5 0))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046e8 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00165613#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00165613#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_srli_a2 σ (0x800046e8#64) v12 hx12)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).write _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem exec_beqz_a2_nottaken (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hx12 : σ.regs.get? Register.x12 = some v12)
@@ -372,10 +372,10 @@ theorem site_800046b8_nottaken
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046b8 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x02060c63#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x02060c63#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_beqz_a2_nottaken σ (0x800046b8#64) v12 hx12 hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    (hG.prelude _) hi
+    (RetireReads.prelude hG hminstret _)
+    (hG.prelude _) hi :)
 
 theorem exec_bgeu_a2_a1_taken (σ : MState) (pc : BitVec 64) (v12 v11 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -423,10 +423,10 @@ theorem site_800046c0_taken
       ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x0014#13)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046c0 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00b67a63#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00b67a63#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bgeu_a2_a1_taken σ (0x800046c0#64) v12 v11 hG hpc hx12 hx11 (by decide) hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem site_800046c0_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v12 v11 : BitVec 64)
@@ -440,10 +440,10 @@ theorem site_800046c0_nottaken
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046c0 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00b67a63#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00b67a63#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bgeu_a2_a1_nottaken σ (0x800046c0#64) v12 v11 hx12 hx11 hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    (hG.prelude _) hi
+    (RetireReads.prelude hG hminstret _)
+    (hG.prelude _) hi :)
 
 theorem exec_blez_a2_taken (σ : MState) (pc : BitVec 64) (v12 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -487,10 +487,10 @@ theorem site_800046c4_taken
       ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x0010#13)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046c4 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00c05863#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00c05863#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_blez_a2_taken σ (0x800046c4#64) v12 hG hpc hx12 (by decide) hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem site_800046c4_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v12 : BitVec 64)
@@ -504,10 +504,10 @@ theorem site_800046c4_nottaken
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046c4 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00c05863#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00c05863#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_blez_a2_nottaken σ (0x800046c4#64) v12 hx12 hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    (hG.prelude _) hi
+    (RetireReads.prelude hG hminstret _)
+    (hG.prelude _) hi :)
 
 theorem exec_bltu_a2_a1_taken (σ : MState) (pc : BitVec 64) (v12 v11 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -555,10 +555,10 @@ theorem site_800046d0_taken
       ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x1ff4#13)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046d0 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0xfeb66ae3#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0xfeb66ae3#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bltu_a2_a1_taken σ (0x800046d0#64) v12 v11 hG hpc hx12 hx11 (by decide) hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem site_800046d0_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v12 v11 : BitVec 64)
@@ -572,10 +572,10 @@ theorem site_800046d0_nottaken
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046d0 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0xfeb66ae3#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0xfeb66ae3#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bltu_a2_a1_nottaken σ (0x800046d0#64) v12 v11 hx12 hx11 hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    (hG.prelude _) hi
+    (RetireReads.prelude hG hminstret _)
+    (hG.prelude _) hi :)
 
 theorem exec_bltu_a1_a2_taken (σ : MState) (pc : BitVec 64) (v11 v12 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -623,10 +623,10 @@ theorem site_800046d8_taken
       ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x000c#13)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046d8 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00c5e663#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00c5e663#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bltu_a1_a2_taken σ (0x800046d8#64) v11 v12 hG hpc hx11 hx12 (by decide) hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem site_800046d8_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v11 v12 : BitVec 64)
@@ -640,10 +640,10 @@ theorem site_800046d8_nottaken
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046d8 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00c5e663#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00c5e663#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bltu_a1_a2_nottaken σ (0x800046d8#64) v11 v12 hx11 hx12 hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    (hG.prelude _) hi
+    (RetireReads.prelude hG hminstret _)
+    (hG.prelude _) hi :)
 
 theorem exec_bnez_a3_taken (σ : MState) (pc : BitVec 64) (v13 : BitVec 64)
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
@@ -687,10 +687,10 @@ theorem site_800046ec_taken
       ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x1fec#13)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046ec hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0xfe0696e3#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0xfe0696e3#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bnez_a3_taken σ (0x800046ec#64) v13 hG hpc hx13 (by decide) hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem site_800046ec_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v13 : BitVec 64)
@@ -704,10 +704,10 @@ theorem site_800046ec_nottaken
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := __hidden___udivdi3_at_800046ec hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0xfe0696e3#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0xfe0696e3#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bnez_a3_nottaken σ (0x800046ec#64) v13 hx13 hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    (hG.prelude _) hi
+    (RetireReads.prelude hG hminstret _)
+    (hG.prelude _) hi :)
 
 theorem site_800046f0
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret vra : BitVec 64)
@@ -728,10 +728,10 @@ theorem site_800046f0
       = .ok vra (afterNextPC (afterPrelude σ) (0x800046f0#64)) := by
     apply rX_bits_gpr _ 1 (by decide) (by decide); simp only [gprGet]
     rw [get?_afterNextPC σ (0x800046f0#64) _ (by decide) (by decide)]; exact hx1
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x00008067#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x00008067#32) hG hpc hb0 hb1 hb2 hb3)
     (execute_jalr_x0_char (0x000#12) (regidx.Regidx 0x01#5) _ vra _ (by reg_reads [hG.misa])
       (by reg_reads [hG.cur_privilege]) (by reg_reads [hG.mseccfg]) (by reg_reads []) hx1₂ htgt)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 end Vsa.Sim

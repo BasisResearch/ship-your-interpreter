@@ -301,7 +301,7 @@ theorem sim_jal_link (off : BitVec 21) {A : AM} {c : Config} (hc : Corr c A)
     ⟨by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa,
      by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege,
      by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg⟩ 1 off
-  obtain ⟨r1, r2, r3, r4, r5⟩ := gpr_rd_ok 1 (by omega) (by omega)
+  obtain ⟨-, -, -, -, r5⟩ := gpr_rd_ok 1 (by omega) (by omega)
   obtain ⟨σ', i', hs, hi', hG', hmem', hobs⟩ :=
     stepObs_exec (u := u) (A.pc + sign_extend (m := 64) (evenJ off)) vm
       (Fetched.of_bytes hG hc.pc (by rw [hmem]; simpa using hb 0 (by omega))
@@ -310,7 +310,7 @@ theorem sim_jal_link (off : BitVec 21) {A : AM} {c : Config} (hc : Corr c A)
         (bytes_word _) hdec)
       (execute_jal_char (evenJ off) (gprIdx 1) _ A.pc _ _ _ (by reg_reads []) (by reg_reads [hc.pc])
         (by reg_reads [hG.misa]) htgt (wX_bits_gpr _ _ 1 (by decide) (by decide)))
-      ⟨by reg_reads [r4, hG.hart_state], by reg_reads [r1], by reg_reads [r2], by reg_reads [r3, hvm]⟩
+      (((RetireReads.prelude hG hvm _).jump _).write _)
       (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned r5 _) hc.tick
   have hrd : ∀ R : Register, (Register.minstret == R) = false → (Register.PC == R) = false →
       (Register.x1 == R) = false → (Register.nextPC == R) = false →

@@ -163,10 +163,10 @@ theorem site2_800046a4_taken
       ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x0060#13)) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.__divdi3_at_800046a4 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x06054063#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x06054063#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bltz_a0_taken σ (0x800046a4#64) v10 hG hpc hx10 (by decide) hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 theorem site2_800046a4_nottaken
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v10 : BitVec 64)
@@ -180,10 +180,10 @@ theorem site2_800046a4_nottaken
       ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.__divdi3_at_800046a4 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0x06054063#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0x06054063#32) hG hpc hb0 hb1 hb2 hb3)
     (exec_bltz_a0_nottaken σ (0x800046a4#64) v10 hx10 hv)
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    (hG.prelude _) hi
+    (RetireReads.prelude hG hminstret _)
+    (hG.prelude _) hi :)
 
 theorem site2_80004710
     (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
@@ -197,10 +197,10 @@ theorem site2_80004710
         (sigmaPost_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) (0x1fff9c#21))) := by
   subst hpcv
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.__umoddi3_at_80004710 hmem
-  exact stepObs_exec _ vminstret (Fetched.of_word (0xf9dff06f#32) hG hpc hb0 hb1 hb2 hb3)
+  exact (stepObs_exec _ vminstret (Fetched.of_word (0xf9dff06f#32) hG hpc hb0 hb1 hb2 hb3)
     (execute_jal_x0_char (0x1fff9c#21) _ (0x80004710#64) _ _ (by reg_reads []) (by reg_reads [hpc])
       (by reg_reads [hG.misa]) (by decide))
-    ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hminstret]⟩
-    ((hG.prelude _).insert_nonpinned (by decide) _) hi
+    ((RetireReads.prelude hG hminstret _).jump _)
+    ((hG.prelude _).insert_nonpinned (by decide) _) hi :)
 
 end Vsa.Sim

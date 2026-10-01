@@ -198,7 +198,7 @@ theorem jalrx_800039f4 (live : Nat → Prop)
               rw [get?_afterNextPC c.σ (0x800039f4#64) _ (by decide) (by decide)]; exact hrs))
         (by rw [htgt]; exact hal)
         (wX_bits_gpr _ (BitVec.addInt (0x800039f4#64) 4) 1 (by decide) (by decide)))
-      ⟨by reg_reads [hG.hart_state], by reg_reads [], by reg_reads [], by reg_reads [hmi]⟩
+      (((RetireReads.prelude hG hmi _).jump _).write _)
       (((hG.prelude _).insert_nonpinned (by decide) _).insert_nonpinned (by decide) _) hi
   rw [htgt] at hobs
   have h := VsaIris.Inst.jalrStep_of_obs hs hi' hG' hmem hobs
