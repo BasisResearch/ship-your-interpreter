@@ -22,9 +22,9 @@ open Vsa.MemRepr Vsa.Sim
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003164#64 R Mt
   by sym_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x80003440
 
-#ix_seg VarT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+#ix_seg ResultCopy_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s sret ret v8 v9 v18 w0 w1 w2 : BitVec 64}
+    {DA : List Nat} {s sret ret v8 v9 v18 w0 w1 w2 : BitVec 64}
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (hal : ret.toNat % 4 = 0)
@@ -40,7 +40,7 @@ open Vsa.MemRepr Vsa.Sim
     (hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8)
     (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
     (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18) :
-    IW live m (leafView aX.toNat 8)
+    IW live m DA
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003448#64 R Mt
   by sym_run hlive using [h9, h2, hW0, hW1, hW2, hRA, hS0, hS1, hS2, hsf, hal, e8, e16]
 
@@ -220,7 +220,7 @@ the runtime error when the name is unbound. -/
   refine (step% it 0x80003444) hlive (fun hc => by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc; rw [hres] at hc; exact absurd hc (by decide))
     (fun hnz => ?_)
-  refine VarT_run2 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)
+  refine ResultCopy_run (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)
     (v18 := rv 18) (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hal hq1 hq2 hq3
     (inExt_disj (by decide) (by decide) hdj) (toNat_add_field (by omega) (by decide))
     (toNat_add_field (by omega) (by decide)) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_

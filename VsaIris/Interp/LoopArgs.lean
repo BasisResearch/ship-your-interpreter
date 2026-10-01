@@ -505,7 +505,7 @@ theorem evalArgsT_cons (hlive : ∀ p ∈ interpText, live p.1)
     refine ⟨hregs, fun b hb => ?_⟩
     rw [hsl.1] at hb; simp only [InExt] at hb ⊢; have := hfg.lo; omega
   iintro %R2 %w0 %w1 %w2 %hk2 #Hv Hms Hst Hw
-  have hk2' := hk2.calleeSaved_upd (x := 1) (by decide) (BitVec.ofNat 64 (0x80003220 + 4))
+  have hk2' := hk2.upd (k := 1) (by decide) (BitVec.ofNat 64 (0x80003220 + 4))
   iapply argsCopy (twpW _) (R := upd R2 1 (BitVec.ofNat 64 (0x80003220 + 4))) (Mt0 := Mt) hlive hfg
     (by ix_reg; rw [keep_reg hk2 (by decide)]; exact hregs.sp) hsp1 hut1
     (fun a h1 _ => hlo1 a h1) hl hlen
@@ -574,7 +574,7 @@ theorem evalArgsP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
       refine ⟨hregs, fun b hb => ?_⟩
       rw [hsl.1] at hb; simp only [InExt] at hb ⊢; have := hfg.lo; omega
     iintro %R2 %w0 %w1 %w2 %st1 %v %hE %hk2 #Hv Hms Hst Hw HOut HK
-    have hk2' := hk2.calleeSaved_upd (x := 1) (by decide) (BitVec.ofNat 64 (0x80003220 + 4))
+    have hk2' := hk2.upd (k := 1) (by decide) (BitVec.ofNat 64 (0x80003220 + 4))
     have hkR : KeepRegs calleeSaved R (upd R2 1 (BitVec.ofNat 64 (0x80003220 + 4))) :=
       KeepRegs.trans hk1 hk2'
     iapply argsCopy (wpW _) (R := upd R2 1 (BitVec.ofNat 64 (0x80003220 + 4))) (Mt0 := Mt) hlive hfg

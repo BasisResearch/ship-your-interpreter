@@ -33,28 +33,6 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (leafView aX.toNat 16) (InExt (s.toNat - 1088, 1088)) Q 0x8000348c#64 R Mt
   by sym_run hlive using [h8, h2, hA, hW0, hW1, hW2, hsf] at 0x800034b0
 
-#ix_seg AssignT_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s sret ret v8 v9 v18 w0 w1 w2 : BitVec 64}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hal : ret.toNat % 4 = 0)
-    (hq1 : sret.toNat % 8 = 0) (hq2 : tohostAddr + 16 ≤ sret.toNat)
-    (hq3 : sret.toNat + 24 ≤ 0x100000000)
-    (hdj : s.toNat - 1088 + 1088 ≤ sret.toNat ∨ sret.toNat + 24 ≤ s.toNat - 1088)
-    (e8 : (sret + 8#64).toNat = sret.toNat + 8) (e16 : (sret + 16#64).toNat = sret.toNat + 16)
-    (h9 : R 9 = sret) (h2 : R 2 = s + 18446744073709550528#64)
-    (hW0 : ldv .ld Mt (s + 18446744073709550528#64 + 240#64).toNat = w0)
-    (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 248#64).toNat = w1)
-    (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 256#64).toNat = w2)
-    (hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret)
-    (hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8)
-    (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
-    (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18) :
-    IW live m (leafView aX.toNat 16)
-    (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003448#64 R Mt
-  by sym_run hlive using [h9, h2, hW0, hW1, hW2, hRA, hS0, hS1, hS2, hsf, hal, e8, e16]
-
 #ix_seg AssignP_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s sret inp : BitVec 64}
@@ -279,7 +257,7 @@ copy and the exit, or the runtime error when the name is unbound. -/
   intro F'
   refine (step% it 0x800034b4) hlive (fun hnz => ?_) (fun hc => absurd (by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hres]; decide) hc)
-  refine AssignT_run3 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)
+  refine ResultCopy_run (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)
     (v18 := rv 18) (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hal hq1 hq2 hq3
     (inExt_disj (by decide) (by decide) hdj) (toNat_add_field (by omega) (by decide))
     (toNat_add_field (by omega) (by decide)) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
