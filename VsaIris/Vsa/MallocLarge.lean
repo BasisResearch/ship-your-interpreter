@@ -243,9 +243,7 @@ theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {br
         refine (step% st 0x800048d0) O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
         · refine hlr _ (j + 1) (by unfold numBins; omega) (by omega)
             (.inl (by rw [L.bin_idx]; omega)) L'.frame ⟨L'.a4, L'.a7, L'.a6⟩ L'.s0
-        · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-          apply BitVec.eq_of_toNat_eq
-          rw [L.a0, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]
+        · exact BitVec.eq_of_toNat_eq (by carry_close [L.a0])
       · have hy : pred = y := by
           have e : (binAt j :: pre'.concat y).getLast? = some y := by
             rw [List.concat_eq_append, ← List.cons_append, List.getLast?_concat]
@@ -256,11 +254,9 @@ theorem lscan_step {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {br
           have := (binList_iff_ring.1 (HH.bins_list j (by omega) hj)).2 pred hym
           exact fun he => this he.symm
         refine (step% st 0x800048d0) O.live (fun hc => absurd hc ?_) (fun _ => ?_)
-        · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-          intro he; apply hylo
+        · intro he; apply hylo
           have := congrArg BitVec.toNat he
-          rw [L.a0, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt] at this
-          exact this
+          carry_norm [L.a0] at this; exact this
         refine (step% st 0x800048d4) O.live ?_
         exact hprev pre' pred (by simp) _ (L'.upd (by carry_close)) (by carry_norm; sx_norm; carry_close)
   ·
