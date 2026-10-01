@@ -38,19 +38,16 @@ theorem fRet {e : Expr} (ih : EStuck code T n st d env e) : SStuck code T n st d
 theorem fBlockS {ss : List Stmt} (ih : ∀ st env, QStuck code T n st d env ss) :
     SStuck code T n st d env (.block ss) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp hne
-  obtain ⟨hL, hwss⟩ := hwf
-  simp only [gstmt] at hseg hP
-  obtain ⟨s12, -⟩ := hseg.append
-  obtain ⟨s1, s2⟩ := s12.append
-  have e4 : (enterFrame (frameNames [] ss) pos).length = 4 := rfl
-  simp only [List.length_append, e4, List.length_singleton] at hP s2
+  have h := And.intro hseg hP
+  simp only [gstmt, enterFrame, List.append_assoc, ↓segP_app, List.length_cons, List.length_nil, Nat.zero_add,
+    Nat.reduceAdd] at h
+  obtain ⟨⟨s1, p1⟩, ⟨s2, p2⟩, -⟩ := h
   apply Fail.of_reaches
-  refine ex_bind (run_enterFrame hR hm hA hL (frameNames_nodup _ _) s1 (posOK_le hP (by omega))) ?_
+  refine ex_bind (run_enterFrame hR hm hA hwf.1 (frameNames_nodup _ _) s1 p1) ?_
   rintro B (⟨h1, -⟩ | ⟨hpcB, hE⟩)
   · exact reach_here (fail_err hR h1)
-  exact reach_here (ih _ _ _ (C.enter (frameNames [] ss)) sp fs _ B hE.ms hpcB hwss (hctx.enter _) s2
-    (posOK_le hP (by omega)) (by simpa [tS] using htmp)
-    (fun ⟨st', t, D⟩ => hne ⟨st', t, .block _ _ _ _ _ _ _ _ rfl D⟩))
+  exact reach_here (ih _ _ _ (C.enter (frameNames [] ss)) sp fs _ B hE.ms hpcB hwf.2 (hctx.enter _) s2 p2
+    (by simpa [tS] using htmp) (fun ⟨st', t, D⟩ => hne ⟨st', t, .block _ _ _ _ _ _ _ _ rfl D⟩))
 
 theorem fIfNone {c : Expr} {t : Stmt} (ihc : ∀ st, EStuck code T n st d env c)
     (iht : ∀ st, SStuck code T n st d env t) : SStuck code T n st d env (.ifStmt c t none) := by

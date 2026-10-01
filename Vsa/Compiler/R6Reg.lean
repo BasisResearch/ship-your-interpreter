@@ -5,9 +5,10 @@ namespace Vsa.Compiler
 
 open Vsa.Sim
 
+attribute [reg_def] a0 a1 a2 a3 a4 a5 a6 a7 t0 t1 t2 t3 t4 t5 t6 s2 s3 s4 s5 s6 s9 s10 s11 ra spR hpO envR hpF depR
+
 theorem Has.wp {L : GRegs} {n : Nat} {v : BitVec 64} (h : Has L n v) {k : Nat}
-    (hk : n = k := by (try simp only [a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4, t5, t6, s2, s3, s4,
-      s5, s6, s9, s10, s11, ra, spR, hpO, envR, hpF, depR]); rfl)
+    (hk : n = k := by (try simp only [reg_def]); rfl)
     (hn : k ≠ 0 := by decide) : k ∈ keysG L ∧ srcVal k L = v := by
   subst hk; exact ⟨has_mem h hn, srcVal_of_has h⟩
 

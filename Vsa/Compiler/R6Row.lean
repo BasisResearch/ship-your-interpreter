@@ -66,7 +66,5 @@ theorem Models.wp {L : GRegs} {ks : List Nat} {vs : List (BitVec 64)} (hm : Mode
       (∀ n k ks' (v : BitVec 64) vs', rowVal n (k :: ks') (v :: vs') = if n = k then v else rowVal n ks' vs') :=
   ⟨fun _ hn h0 => has_mem (hm.get hn hl) h0, fun _ hn => srcVal_of_has (hm.get hn hl), fun _ _ _ _ _ => rfl⟩
 
-/-- One-register row kit. -/
-
 
 end Vsa.Compiler

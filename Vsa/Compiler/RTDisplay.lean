@@ -56,13 +56,10 @@ theorem dp_ret {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64}
     (h26 : Has L' s10 r) (hal : r.toNat % 4 = 0) (hk : Keep dpClob L L') :
     Reaches code ⟨pcOf (dpPos + 124), L', m, o⟩ (fun B => B.pc = r ∧ B.mem = m ∧ B.out = o ∧
       Keep dpClob L B.regs) := by
-  have k26 := has_mem h26 (by decide); have e26 := srcVal_of_has h26
-  simp only [s10] at k26 e26
   apply run_seg hR.fits hR.dp 124 (dpPos + 124) rfl [mv ra s10, ret] (by decide)
     (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [k26, e26]
-  refine ⟨hal, reach_here ⟨rfl, rfl, rfl, ?_⟩⟩
-  reg_simp; exact hk
+  wp_simp [h26.wp]
+  exact ⟨hal, reach_here ⟨rfl, rfl, rfl, by reg_simp; exact hk⟩⟩
 
 theorem dp_ps {L L' : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} (j : Nat)
     (hJ : (dpCode dpPos)[j + 1]? = some (J (dpPos + j + 1) (dpPos + 124))) (hj : j + 1 < 126)

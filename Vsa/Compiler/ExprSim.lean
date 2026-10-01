@@ -1,4 +1,5 @@
 import Vsa.Compiler.Rel
+import Vsa.Compiler.R6Layout
 
 namespace Vsa.Compiler
 
@@ -674,13 +675,10 @@ theorem sim_not (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e)
   have hcx : cexpr Γ k pos (.unary .not e) = cexpr Γ k pos e ++
       [.addi s3 0 1, .br .eq a0 0 (bSkip 1), .addi s3 0 0, mv a0 s3] := rfl
   rw [hcx] at hseg hpos
-  obtain ⟨hs1, hs2⟩ := hseg.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hpos
-  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A hE' (by simpa [tdepth] using hk) hs1
-    (by unfold PosOK at *; omega) hA hc
+  obtain ⟨⟨hs1, p1⟩, hs2, p2⟩ := segP_app.mp ⟨hseg, hpos⟩
+  obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A hE' (by simpa [tdepth] using hk) hs1 p1 hA hc
   rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
-  · obtain ⟨L, r2, hL0⟩ := run_cmp₀ hL.1 hs2 hBpc (by unfold PosOK at *; omega) hB0 (Has.zero _)
-      (by decide) (by decide)
+  · obtain ⟨L, r2, hL0⟩ := run_cmp₀ hL.1 hs2 hBpc p2 hB0 (Has.zero _) (by decide) (by decide)
     have hg : guardB BrOp.eq.bop (word v) 0 = !v.truthy := by
       rcases hE' with hi | hb
       · obtain ⟨n, rfl, hn⟩ := hty.1 hi

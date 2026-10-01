@@ -1,4 +1,5 @@
 import Vsa.Compiler.VRepr
+import Vsa.Compiler.R6Reg
 
 namespace Vsa.Compiler
 
@@ -804,19 +805,8 @@ theorem run_add {H : CloMap} {s : Store} {m : Mem} {h : Nat} {L : GRegs} {o : Ar
   have hops' := hops
   obtain ⟨h10, h11, h12, h13, vl, vr⟩ := hops
   have := hh.lo; have := hh.hi; have := hh.al
-  have k10 := has_mem h10 (by decide); have k11 := has_mem h11 (by decide)
-  have k12 := has_mem h12 (by decide); have k13 := has_mem h13 (by decide)
-  have k1 := has_mem hra (by decide)
-  have e10 := srcVal_of_has h10; have e11 := srcVal_of_has h11; have e12 := srcVal_of_has h12
-  have e13 := srcVal_of_has h13; have e1 := srcVal_of_has hra
-  simp only [a0, a1, a2, a3, ra] at k10 k11 k12 k13 k1 e10 e11 e12 e13 e1
-  apply run_seg hR.fits hR.add 0 addPos (by simp) [mv s10 ra,
-    mvi t0 3, Br .eq a0 t0 (addPos + 2) (addPos + 9), Br .eq a2 t0 (addPos + 3) (addPos + 9),
-    mvi t0 2, Br .ne a0 t0 (addPos + 5) errPos, Br .ne a2 t0 (addPos + 6) errPos,
-    .add a1 a1 a3, J (addPos + 8) (addPos + 21)] (by decide)
-    (KP := fun _ _ _ => False) (fun _ _ _ h => h.elim)
-  wp_simp [addPos, ccPos, csPos, dpPos, nfPos, trPos, scPos, cpPos, itPos, psPos, k10, k11, k12, k13, k1,
-    e10, e11, e12, e13, e1]
+  apply run_at' hR.fits hR.add 0 addPos rfl
+  wp_simp [rt_pos, addCode, h10.wp, h11.wp, h12.wp, h13.wp, hra.wp]
 
   have hcat : (IsStrV l ∨ IsStrV r) → ∀ L', Keep addClob L L' →
       Has L' a0 t1 → Has L' a1 p1 → Has L' a2 t2 → Has L' a3 p2 → Has L' hpO (BitVec.ofNat 64 h) →
