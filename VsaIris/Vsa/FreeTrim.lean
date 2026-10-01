@@ -1,5 +1,6 @@
 import VsaIris.Vsa.FreePaths
 import VsaIris.Vsa.Sbrk
+import VsaIris.Vsa.FreeGlue
 
 namespace VsaIris.VsaHeap
 
@@ -243,10 +244,8 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   refine sbrk_r_gen O.live (Sc.sbrkPre O (nbrk := brkv) (hRc ▸ rfl) hal (by subst hRc; rgn_arith))
     (fun hle R' M' P h10 => ?_) (fun hlt => absurd hlt (by unfold heapEnd; omega))
   have hr := P.regs
-  have S' := Sc.sbrk (hRc ▸ hs2) (by omega) P (hr 2 (by decide) (by decide) (by decide))
-    (hr 18 (by decide) (by decide) (by decide)) (hr 19 (by decide) (by decide) (by decide))
-    (hr 9 (by decide) (by decide) (by decide))
-  have h8 : R' 8 = R 8 := (hr 8 (by decide) (by decide) (by decide)).trans (hRc ▸ rfl)
+  have S' := Sc.sbrk (hRc ▸ hs2) (by omega) P (keep3 hr 2) (keep3 hr 18) (keep3 hr 19) (keep3 hr 9)
+  have h8 : R' 8 = R 8 := (keep3 hr 8).trans (hRc ▸ rfl)
   have htp := S'.heap.heap.heap.top_ptr; unfold topAddr avAddr at htp
   have h19 : (R' 19).toNat = 2147593488 := by rw [S'.s3]; rfl
   have rG := globRgn C.H
@@ -295,10 +294,8 @@ theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   have hr := P.regs
   have h1 : Rc 1 = 0x800072d0#64 := hRc ▸ rfl
   rw [h1]
-  refine hk R' M' ⟨Sc.upd (hr 2 (by decide) (by decide) (by decide)) (hr 18 (by decide) (by decide) (by decide))
-    (hr 19 (by decide) (by decide) (by decide)) (hr 9 (by decide) (by decide) (by decide)),
-    by rw [hr 8 (by decide) (by decide) (by decide), ← hRc]; exact hE, hE4, P.brk,
-    fun a ha => P.agree a (by rw [show (Rc 2).toNat = C.s.toNat - 80 from hRc ▸ hs2]; exact ha), P.pres, h10⟩
+  refine hk R' M' ⟨Sc.upd (keep3 hr 2) (keep3 hr 18) (keep3 hr 19) (keep3 hr 9), by rw [keep3 hr 8, ← hRc]; exact hE,
+    hE4, P.brk, fun a ha => P.agree a (by rw [show (Rc 2).toNat = C.s.toNat - 80 from hRc ▸ hs2]; exact ha), P.pres, h10⟩
 
 structure TrimOut (C : MCtx) (R : Nat → BitVec 64) (M : Mem) : Prop where
   done : FDone C M

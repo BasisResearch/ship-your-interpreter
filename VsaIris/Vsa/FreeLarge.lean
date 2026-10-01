@@ -22,16 +22,13 @@ theorem FreeL.upd {C : MCtx} {R : Nat → BitVec 64} {Mt M2 : Mem} {X S top brkv
     (L : FreeL C R Mt M2 X S top brkv cs₁ cs₂ bins j) {R' : Nat → BitVec 64}
     (h : ∀ x, x ≠ 10 → x ≠ 11 → x ≠ 12 → x ≠ 13 → R' x = R x) :
     FreeL C R' Mt M2 X S top brkv cs₁ cs₂ bins j where
-  frame := L.frame.of_regs (h 2 (by decide) (by decide) (by decide) (by decide))
-    (h 9 (by decide) (by decide) (by decide) (by decide))
-    (h 18 (by decide) (by decide) (by decide) (by decide))
-    (h 19 (by decide) (by decide) (by decide) (by decide))
+  frame := L.frame.of_regs (keep4 h 2) (keep4 h 9) (keep4 h 18) (keep4 h 19)
   bin := L.bin
   large := L.large
   idx := L.idx
-  a7 := by rw [h 17 (by decide) (by decide) (by decide) (by decide)]; exact L.a7
-  a4 := by rw [h 14 (by decide) (by decide) (by decide) (by decide)]; exact L.a4
-  a5 := by rw [h 15 (by decide) (by decide) (by decide) (by decide)]; exact L.a5
+  a7 := (keep4 h 17).trans L.a7
+  a4 := by rw [keep4 h 14]; exact L.a4
+  a5 := by rw [keep4 h 15]; exact L.a5
 
 theorem FreeL.j_range {C : MCtx} {R : Nat → BitVec 64} {Mt M2 : Mem} {X S top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {j : Nat}
