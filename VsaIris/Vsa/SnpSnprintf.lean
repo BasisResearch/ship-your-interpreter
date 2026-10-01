@@ -108,36 +108,17 @@ theorem snp_pro {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   have hsz := snez_pos hn0 (by omega)
   have hsw := subw_ofNat' (w := n) (c := 1) (by omega) (by omega) (by omega)
   snp_runF hlive using [ofNat_add_ofNat, h2, h10, h11, hx, hbl, eS, hsz, hsw] at 0x80007654
-  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_⟩
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [show s - 272 + 8 = s - 264 by omega]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [show s - 272 + 232 = s - 40 by omega]
-  · intro z h1 h2
-    simp only [upd_apply, show z ≠ 1 by omega, show z ≠ 2 by omega, show z ≠ 6 by omega,
-      show z ≠ 8 by omega, show z ≠ 9 by omega, show z ≠ 10 by omega, show z ≠ 11 by omega,
-      show z ≠ 13 by omega, show z ≠ 14 by omega, show z ≠ 15 by omega, show z ≠ 16 by omega, ite_false]
-  · rw [show snpFP s = (BitVec.ofNat 64 (s - 272 + 8)).toNat by rw [toNat_ofNat_lt (by omega)]; simp only [snpFP]; omega]
-    svf_mem; simp
-  · rw [show snpFP s + 12 = (BitVec.ofNat 64 (s - 272 + 20)).toNat by rw [toNat_ofNat_lt (by omega)]; simp only [snpFP]; omega]
-    svf_mem; simp
-  · rw [show snpFP s + 16 = (BitVec.ofNat 64 (s - 272 + 24)).toNat by rw [toNat_ofNat_lt (by omega)]; simp only [snpFP]; omega]
-    svf_mem
-    exact lh_flags _ _
-  · intro i hi; simp at hi
-  · intro i hi
+  refine hk _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ⟨by simp only [snpFP]; carry_close [List.length_nil, Nat.zero_min], ?_,
+    by simp only [snpFP]; carry_close [lh_flags], fun i hi => by simp at hi⟩, fun i hi => ?_, ?_, ?_, ?_,
+    fun a ha => by svf_mem⟩
+  case refine_9 =>
+    rw [show s - 40 + 8 * i = s - 272 + (232 + 8 * i) by omega]
     obtain rfl | rfl | rfl | rfl | rfl : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 := by omega
-    · rw [show s - 40 + 8 * 0 = s - 272 + 232 by omega]; svf_mem
-    · rw [show s - 40 + 8 * 1 = s - 272 + 240 by omega]; svf_mem
-    · rw [show s - 40 + 8 * 2 = s - 272 + 248 by omega]; svf_mem
-    · rw [show s - 40 + 8 * 3 = s - 272 + 256 by omega]; svf_mem
-    · rw [show s - 40 + 8 * 4 = s - 272 + 264 by omega]; svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · intro a ha; svf_mem
+    all_goals svf_mem
+  case refine_8 =>
+    rw [show snpFP s + 12 = (BitVec.ofNat 64 (s - 272 + 20)).toNat by rw [toNat_ofNat_lt (by omega)]; simp only [snpFP]; omega]
+    svf_mem; simp
+  all_goals carry_close
 
 theorem snprintf_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}

@@ -284,9 +284,7 @@ theorem print_next {Dt : Mem} {DA : List Nat} {s dst n : Nat} {g : Nat → BitVe
     apply Classical.byContradiction; intro hge
     rw [List.drop_of_length_le (by omega)] at hpos; simp [sumLen] at hpos
   refine ⟨hi1, hiov', hP', hB', ?_, ?_, hpos, h2, h8, h9, h14, h20, h21, hkp, hfr'⟩
-  · simp only [snpU] at hcnt ⊢
-    rw [ldv_store_miss .lw _ _ (by simp only [widthOfM]; omega), hcnt]
-  · simp only [snpU]; rw [show s - 640 + 16 = s - 624 by omega]; exact ldv_store_hit _ _ _
+  all_goals simp only [snpU] at hcnt ⊢; carry_close [hcnt]
 
 theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -329,15 +327,7 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       · exact absurd (by rw [h0]) hb
       · exact h0
     refine hkL _ _ (print_next SG hL8 hi hiov hP hB hcnt hfr hpos ?_ ?_ ?_ ?_ ?_ ?_ ?_)
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact h2
-    · simp only [snpIov]; rw [show s - 512 + 16 * i + 16 = s - 512 + 16 * (i + 1) by omega]
-    · exact h9
-    · exact h20
-    · exact h21
-    · intro z hz
-      simp only [show z ≠ 14 by omega, show z ≠ 8 by omega, show z ≠ 13 by omega, ite_false]
-      exact hkp z hz
+    all_goals carry_close [h2, h9, h20, h21, hkp, show s - 512 + 16 * i + 16 = s - 512 + 16 * (i + 1) by omega]
   ·
     have h0 : sumLen (L.drop (i + 1)) = 0 := by
       apply Classical.byContradiction; intro hne
@@ -347,12 +337,7 @@ theorem ssprint_iterB {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
     obtain ⟨-, -, hB', hfr'⟩ := print_resid_mem (BitVec.ofNat 64 (sumLen (L.drop (i + 1)))) SG hL8
       hiov hP hB hfr
     refine hkX _ _ ⟨by rw [hcat]; exact hB', ?_, ?_, ?_, hfr'⟩
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact h2
-    · exact h9
-    · intro z hz
-      simp only [show z ≠ 14 by omega, show z ≠ 8 by omega, show z ≠ 13 by omega, ite_false]
-      exact hkp z hz
+    all_goals carry_close [h2, h9, hkp]
 
 theorem print_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -418,10 +403,10 @@ theorem print_call0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
     (by omega) (by omega) SG hL8 st.iov st.pieces st.buf st.frame
   have hcnt1 : ldv .lw (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) (snpU s + 8) =
       BitVec.ofNat 64 (L.length - (i + 1)) := by
-    simp only [snpU]; rw [show s - 640 + 8 = s - 632 by omega]; exact ldv_lw_store4 _ _ _ (by omega)
+    simp only [snpU]; carry_close [ldv_lw_store4 _ _ _ (by omega : L.length - (i + 1) < 2 ^ 31)]
   have hres1 : ldv .ld (writeLog Mt [(s - 632, 4, BitVec.ofNat 64 (L.length - (i + 1)))]) (snpU s + 16) =
       BitVec.ofNat 64 (sumLen (L.drop i)) := by
-    rw [ldv_store_miss .ld _ _ (by simp only [widthOfM, snpU]; omega)]; exact st.res
+    have := st.res; simp only [snpU] at this ⊢; carry_close [this]
   exact print_call hlive g total0 L R0 R' Mt0 _ i SG hL8 hi hiov1 hP1 hB1 hcnt1 hres1 (by omega)
     h1 h2 h8 h9 h11 h12 h13 h18 h20 h21 (fun z hz => (hkp z hz).trans (st.keep z hz)) hfr1 hkL hkX
 
@@ -513,21 +498,10 @@ theorem ssprint_iterA {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       have := congrArg BitVec.toNat hb; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
         BitVec.toNat_ofNat, BitVec.reduceToNat] at this; omega
     refine print_skip0 hlive g total0 L R0 R _ Mt0 Mt i SG hL8 hsum st hl0 ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hkL
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    all_goals first
-      | rfl | exact st.r14
-      | (intro z hz
-         simp only [show z ≠ 13 by omega, show z ≠ 12 by omega, show z ≠ 15 by omega,
-           show z ≠ 18 by omega, ite_false])
+    all_goals carry_close [st.r14]
   ·
     refine print_call0 hlive g total0 L R0 R _ Mt0 Mt i SG hL8 hsum st ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hkL hkX
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    all_goals first
-      | exact st.r2 | exact st.r8 | exact st.r9 | exact st.r20 | exact st.r21
-      | (intro z hz
-         simp only [show z ≠ 1 by omega, show z ≠ 10 by omega, show z ≠ 11 by omega,
-           show z ≠ 12 by omega, show z ≠ 13 by omega, show z ≠ 15 by omega, show z ≠ 18 by omega,
-           ite_false])
+    all_goals carry_close [st.r2, st.r8, st.r9, st.r20, st.r21]
 
 theorem ssprint_loop {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -597,20 +571,11 @@ theorem print_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   have hag2 : ∀ a, (a < s - 632 ∨ s - 616 ≤ a) →
       imgM (writeLog (writeLog Mt [(s - 640 + 16, 8, 0#64)]) [(s - 640 + 8, 4, 0#64)]) a = imgM Mt a :=
     fun a ha => by rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega)]
-  refine hk _ _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [show s - 928 + 64 = s - 864 by omega]) ?_
-    (hB.transport (fun a ha => hag2 a (by simp only [snpFP] at ha; omega)) hn0) ?_ ?_
+  refine hk _ _ ?_ ?_ ?_ (hB.transport (fun a ha => hag2 a (by simp only [snpFP] at ha; omega)) hn0) ?_ ?_
     (fun a ha => (hag2 a (by unfold PrintW snpU at ha; omega)).trans (hfr a ha))
-  · intro z hz
-    rcases hz with rfl | rfl | hz
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hkp 8 (.inl rfl)
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · simp only [upd_apply, show z ≠ 2 by omega, show z ≠ 9 by omega, show z ≠ 10 by omega,
-        show z ≠ 1 by omega, ite_false]
-      exact hkp z (.inr hz)
-  · simp only [snpU]; exact ldv_lw_zero_eq _ rfl
-  · simp only [snpU]
-    rw [ldv_store_miss .ld _ _ (by simp only [widthOfM]; omega)]; exact ldv_store_hit _ _ _
+  case' refine_3 => intro z hz; rcases hz with rfl | rfl | hz
+  all_goals (try simp only [snpU])
+  all_goals carry_close [hkp, ldv_lw_zero_eq _ rfl]
 
 theorem print_restore {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -640,22 +605,11 @@ theorem print_restore {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
   have h2 := pe.r2
   snp_run hlive using [ofNat_add_ofNat, h2, f48, f32, f24, f16, f8] at 0x8000e9b0
   refine print_epi hlive g total0 L Rc _ Mc Mt SG pe.buf pe.frame hsl.ra hsl.s1 ?_ ?_ ?_ hal hk
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact h2
-  · exact pe.r9
-  · intro z hz
-    rcases hz with rfl | hz
-    · simp
-    · by_cases h18 : z = 18
-      · subst h18; simp
-      by_cases h19 : z = 19
-      · subst h19; simp
-      by_cases h20 : z = 20
-      · subst h20; simp
-      by_cases h21 : z = 21
-      · subst h21; simp
-      simp only [h18, h19, h20, h21, show z ≠ 8 by omega, ite_false]
-      exact (pe.keep z (.inr (by omega))).trans (hk0 z (by omega) (by omega))
+  case' refine_3 =>
+    intro z hz
+    obtain rfl | rfl | rfl | rfl | rfl | hz : z = 8 ∨ z = 18 ∨ z = 19 ∨ z = 20 ∨ z = 21 ∨ (22 ≤ z ∧ z ≤ 27) := by
+      omega
+  all_goals carry_close [h2, pe.r9, pe.keep, hk0]
 
 theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -696,11 +650,7 @@ theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
           (hag a (by unfold PrintFrame at ha; omega))⟩)
     · rw [hcat, List.append_nil]
       exact hB.transport (fun a ha => hag a (by simp only [snpFP] at ha; omega)) hn0
-    · exact ldv_store_hit _ _ _
-    · rw [ldv_store_miss .ld _ _ (by simp only [widthOfM]; omega)]; exact ldv_store_hit _ _ _
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    intro z hz
-    simp only [show z ≠ 9 by omega, show z ≠ 2 by omega, show z ≠ 14 by omega, ite_false]
+    all_goals carry_close
   ·
     have hpos : 0 < sumLen L := by
       rcases Nat.eq_zero_or_pos (sumLen L) with h0 | h0
@@ -730,9 +680,7 @@ theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
         (fun R'' Mt'' h10' h2' hkp' hB' hcnt' hres' hfr' => hk R'' Mt'' h10' (h2'.trans h2.symm) hkp'
           ⟨hB', hcnt', hres', fun a ha => (hfr' a (fun h => ha (.inl h))).trans
             (hagr a (by unfold PrintFrame at ha; omega))⟩)
-      intro z h1 h2
-      simp only [upd_apply, show z ≠ 21 by omega, show z ≠ 20 by omega, show z ≠ 19 by omega,
-        show z ≠ 8 by omega, show z ≠ 9 by omega, show z ≠ 2 by omega, show z ≠ 14 by omega, ite_false]
+      carry_close
     · simp only [snpU]; rw [ldv_agree .lw (fun i hi => hagr _ (by simp only [widthOfM] at hi; omega))]
       simpa using hcnt
     · simp only [snpU]; rw [ldv_agree .ld (fun i hi => hagr _ (by simp only [widthOfM] at hi; omega))]

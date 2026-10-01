@@ -35,24 +35,14 @@ theorem ssp_ret {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     SnpW live Dt DA (snpS s dst n) Q 0x800143c4#64 R Mt := by
   have n2 : (R 2).toNat = sp := by rw [h2]; simp only [BitVec.toNat_ofNat]; omega
   have n8 : (R 8).toNat = fp := by rw [h8]; simp only [BitVec.toNat_ofNat]; omega
-  have hw' : ldv .lw Mt (BitVec.ofNat 64 (fp + 12)).toNat = BitVec.ofNat 64 w := by
-    rw [toNat_ofNat_lt (by omega)]; exact hw
-  have hpp' : ldv .ld Mt (BitVec.ofNat 64 fp).toNat = BitVec.ofNat 64 p := by
-    rw [toNat_ofNat_lt (by omega)]; exact hpp
-  have hra' : ldv .ld Mt (BitVec.ofNat 64 (sp + 56)).toNat = ra := by
-    rw [toNat_ofNat_lt (by omega)]; exact hra
-  have hs0' : ldv .ld Mt (BitVec.ofNat 64 (sp + 48)).toNat = s0 := by
-    rw [toNat_ofNat_lt (by omega)]; exact hs0
-  have hs1'' : ldv .ld Mt (BitVec.ofNat 64 (sp + 40)).toNat = s1 := by
-    rw [toNat_ofNat_lt (by omega)]; exact hs1'
+  have hw' : ldv .lw Mt (BitVec.ofNat 64 (fp + 12)).toNat = BitVec.ofNat 64 w := by carry_close [hw]
+  have hpp' : ldv .ld Mt (BitVec.ofNat 64 fp).toNat = BitVec.ofNat 64 p := by carry_close [hpp]
+  have hra' : ldv .ld Mt (BitVec.ofNat 64 (sp + 56)).toNat = ra := by carry_close [hra]
+  have hs0' : ldv .ld Mt (BitVec.ofNat 64 (sp + 48)).toNat = s0 := by carry_close [hs0]
+  have hs1'' : ldv .ld Mt (BitVec.ofNat 64 (sp + 40)).toNat = s1 := by carry_close [hs1']
   snp_run hlive using [ofNat_add_ofNat, h2, h8, h9, hw', hpp', subw_ofNat hcw hw31, hra', hs0', hs1'']
   rw [toNat_ofNat_lt (x := fp + 12) (by omega), toNat_ofNat_lt (x := fp) (by omega)]
-  refine hk _ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]) ?_
-  intro z h1 h2 h8 h9 h10 h14 h15 _
-  simp only [upd_apply, h1, h2, h8, h9, h10, h14, h15, ite_false]
+  refine hk _ ?_ ?_ ?_ ?_ ?_ <;> carry_close
 
 theorem ldv_agree {Mt Mt' : Mem} (k : MKind) {a : Nat}
     (h : ∀ i, i < widthOfM k → imgM Mt' (a + i) = imgM Mt (a + i)) : ldv k Mt' a = ldv k Mt a := by
@@ -83,29 +73,19 @@ theorem ssp_call {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   have G' := G
   obtain ⟨hd1, ⟨hdd1, hdd2⟩, hdn, hsl, hsh, hsh', hdisj⟩ := G'
   snp_run hlive using [h15, h9] at 0x800069c4
-  refine memmove_nw hlive p src c g _ Mt G ?_ ?_ ?_ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide) hwin
-    (fun R' Mt' hF hcp => ?_)
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · have hag : ∀ a w', (a + w' ≤ p ∨ p + c ≤ a) → ∀ i, i < w' → imgM Mt' (a + i) = imgM Mt (a + i) :=
-      fun a w' ha i hi => hcp.rest _ (by omega)
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    have k2 := hF 2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-    have k8 := hF 8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-    have k9 := hF 9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at k2 k8 k9
-    refine ssp_ret hlive sp fp p c w ra s0 s1 R' Mt' hsp1 hsp2 hsp8 hs hs1 hfp1 hfp2 hfp8 hfps
-      (k2.trans h2) (k8.trans h8) (k9.trans h9) hcw hw31 (by omega)
-      ((ldv_agree .lw (hag (fp + 12) 4 (by omega))).trans hw)
-      ((ldv_agree .ld (hag fp 8 (by omega))).trans hpp)
-      ((ldv_agree .ld (hag (sp + 56) 8 (by omega))).trans hra)
-      ((ldv_agree .ld (hag (sp + 48) 8 (by omega))).trans hs0)
-      ((ldv_agree .ld (hag (sp + 40) 8 (by omega))).trans hs1') hal
-      (fun R'' h10' h2' h8' h9' hkp => hk R'' Mt' h10' h2' h8' h9' (fun z hz1 hz2 => ?_) hcp)
-    rw [hkp z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega),
-      hF z (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
-    simp only [upd_apply, show z ≠ 11 by omega, show z ≠ 12 by omega, show z ≠ 1 by omega, ite_false]
+  refine memmove_nw hlive p src c g _ Mt G ?_ ?_ ?_ ?_ hwin (fun R' Mt' hF hcp => ?_)
+  any_goals carry_close [h10]
+  have hag : ∀ a w', (a + w' ≤ p ∨ p + c ≤ a) → ∀ i, i < w' → imgM Mt' (a + i) = imgM Mt (a + i) :=
+    fun a w' ha i hi => hcp.rest _ (by omega)
+  refine ssp_ret hlive sp fp p c w ra s0 s1 R' Mt' hsp1 hsp2 hsp8 hs hs1 hfp1 hfp2 hfp8 hfps
+    ?_ ?_ ?_ hcw hw31 (by omega)
+    ((ldv_agree .lw (hag (fp + 12) 4 (by omega))).trans hw)
+    ((ldv_agree .ld (hag fp 8 (by omega))).trans hpp)
+    ((ldv_agree .ld (hag (sp + 56) 8 (by omega))).trans hra)
+    ((ldv_agree .ld (hag (sp + 48) 8 (by omega))).trans hs0)
+    ((ldv_agree .ld (hag (sp + 40) 8 (by omega))).trans hs1') hal
+    (fun R'' h10' h2' h8' h9' hkp => hk R'' Mt' h10' h2' h8' h9' (fun z hz1 hz2 => by carry_close [hkp, hF]) hcp)
+  all_goals carry_close [hF, h2, h8, h9]
 
 theorem ldv_lw_store4 (M : Mem) (a k : Nat) (hk : k < 2 ^ 31) :
     ldv .lw (writeLog M [(a, 4, BitVec.ofNat 64 k)]) a = BitVec.ofNat 64 k := by
@@ -188,8 +168,7 @@ theorem ssputs_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     SnpW live Dt DA (snpS s dst n) Q 0x8001438c#64 R Mt := by
   have n2 : (R 2).toNat = sp := by rw [h2]; simp only [BitVec.toNat_ofNat]; omega
   have n11 : (R 11).toNat = fp := by rw [h11]; simp only [BitVec.toNat_ofNat]; omega
-  have hw' : ldv .lw Mt (BitVec.ofNat 64 (fp + 12)).toNat = BitVec.ofNat 64 w := by
-    rw [toNat_ofNat_lt (by omega)]; exact hw
+  have hw' : ldv .lw Mt (BitVec.ofNat 64 (fp + 12)).toNat = BitVec.ofNat 64 w := by carry_close [hw]
   snp_run hlive using [ofNat_add_ofNat, h2, h11, hw'] at 0x800143a0
 
   have e40 : (BitVec.ofNat 64 (sp + 18446744073709551552 + 40)).toNat = sp - 64 + 40 := by
@@ -214,23 +193,9 @@ theorem ssputs_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     ((ldv_agree .ld (hag fp 8 (by omega))).trans hpp)
     ((ldv_agree .lh (hag (fp + 16) 2 (by omega))).trans hfl) hra1 hs01 hs11 hal
     (hwin.transport fun a h1 h2 => hM1 a (by omega)) (fun R' Mt' h10' h2' h8' h9' hkp hcp => ?_)
-  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-  · apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
-  · exact h11
-  · exact h12
-  · exact h13
-  · refine hk R' _ h10' (h2'.trans (by rw [h2]; apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega)) h8' h9' (fun z hz1 hz2 => ?_) ⟨?_, ?_, ?_, ?_⟩
-    · rw [hkp z hz1 hz2]
-      simp only [upd_apply, show z ≠ 9 by omega, show z ≠ 8 by omega, show z ≠ 1 by omega,
-        show z ≠ 2 by omega, ite_false]
-    · intro i hi
-      rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega)]
-      exact hcp.done i hi
-    · exact ldv_store_hit _ _ _
-    · rw [ldv_store_miss .lw _ _ (by simp only [widthOfM]; omega)]
-      exact ldv_lw_store4 _ _ _ (by omega)
-    · intro a h1 h2 h3
-      rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega), hcp.rest a (by omega)]
-      exact hM1 a (by omega)
+  · apply BitVec.eq_of_toNat_eq; carry_close
+  all_goals try carry_close [h11, h12, h13]
+  refine hk R' _ h10' (h2'.trans (by rw [h2]; apply BitVec.eq_of_toNat_eq; carry_close)) h8' h9' (fun z hz1 hz2 => ?_) ⟨?_, ?_, ?_, ?_⟩
+  all_goals carry_close [hkp, hcp.done, hcp.rest, hM1, ldv_lw_store4 _ _ _ (by omega : w - min len w < 2 ^ 31)]
 
 end VsaIris.Sym
