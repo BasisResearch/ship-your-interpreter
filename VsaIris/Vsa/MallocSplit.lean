@@ -1,6 +1,7 @@
 import VsaIris.Vsa.MallocExtend
 import VsaIris.Vsa.HeapCarve
 import VsaIris.Vsa.HeapPermit
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -71,9 +72,7 @@ theorem lr_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   case F =>
     refine MFrame.of_regs ((((((((F.store (by omega)).store (by unfold binAt avAddr; omega)).store
       (by unfold binAt avAddr; omega)).store (by omega)).store (by omega)).store (by omega)).store
-      (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  sx_addr
+      (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;> carry_close
+  carry_close [hs2n]
 
 end VsaIris.VsaHeap
