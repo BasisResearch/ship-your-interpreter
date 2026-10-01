@@ -263,6 +263,16 @@ theorem NodeK.lower {x : Nat × Nat} {z : Nat} (K : NodeK (x :: H) top chunks z)
     NodeK H top chunks z :=
   { K with links := K.links.lower }
 
+open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap in
+theorem NodeK.end_sep {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {x : Nat} (N : NodeK H top chunks x)
+    (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {a s : Nat} {u : Bool}
+    (hc : (⟨a, s, u⟩ : Chunk) ∈ chunks) : a + s ≤ x ∨ x + 32 ≤ a + s := by
+  have hb := N.bnd _ (h.end_bnd hc) (a + s - x)
+  simp only at hb
+  omega
+
+
 /-- An 8-byte heap word is off the allocator's stack frame. -/
 theorem off_stack_of {C : MCtx} {a : Nat}
     (hd : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a)

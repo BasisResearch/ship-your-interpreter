@@ -1,8 +1,7 @@
 import VsaIris.Vsa.HeapCarve
 import VsaIris.Vsa.HeapMoveAt
 import Vsa.Sim.WriteLogRead
-import VsaIris.Vsa.R9Frame
-import VsaIris.Vsa.R9Omega
+import VsaIris.Vsa.HeapWin
 
 namespace VsaIris.VsaHeap
 
@@ -288,7 +287,7 @@ theorem PHeapAt.toTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       m'[w]? = m[w]? := fun w hf hu => hag w hf (fun h => hu (.inl h)) (fun h => hu (.inr h))
   have hG : ∀ w, allocGlobal w → (x + 8 ≤ w ∧ w < x + 16 ∨ topAddr ≤ w ∧ w < topAddr + 8) →
       topAddr ≤ w ∧ w < topAddr + 8 := by
-    intro w hg hu; unfold allocGlobal InRange at hg; omega_near
+    intro w hg hu; unfold allocGlobal InRange at hg; omega
   have hfree_in : ∀ c ∈ cs₁ ++ [⟨x, a, true⟩], c.inuse = false → c ∈ cs₁ := fun c hc hf => by
     rcases List.mem_append.1 hc with h1 | h1
     · exact h1
@@ -297,27 +296,27 @@ theorem PHeapAt.toTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   simp only [List.append_nil] at dB dF dL dE
   obtain ⟨gS, gB, gP, gM, gI, gBb, -⟩ := HH.keep_globals hag' hG
   obtain ⟨kBins, kFoot⟩ := B.keep_free hag' hG fun c hc hf w _ => by
-    have := hW1b c (hfree_in c hc hf); unfold topAddr avAddr heapStart at *; omega_near
+    have := hW1b c (hfree_in c hc hf); unfold topAddr avAddr heapStart at *; omega
   have kH : ∀ c ∈ cs₁, read64 m' (c.addr + 8) = read64 m (c.addr + 8) := fun c hc =>
     B.keep_hdr hag' (.inr ⟨c, by simp [hc], rfl⟩) fun w _ => by
-      have := hW1b c hc; unfold topAddr avAddr heapStart at *; omega_near
+      have := hW1b c hc; unfold topAddr avAddr heapStart at *; omega
   have hwalk : ChunkWalk m' heapStart x cs₁ := by
     have w := W1.extend kH (fun h1 hh1 => ⟨brkv - x + 1, hhdr, by
         have := hprev h1 hh1
-        unfold prevInuse; rw [show (brkv - x + 1) % 2 = 1 by omega_near, this]⟩)
+        unfold prevInuse; rw [show (brkv - x + 1) % 2 = 1 by omega, this]⟩)
       (ChunkWalk.top (m := m') (p := x))
     rwa [List.append_nil] at w
   refine ⟨⟨{ sbrk_base := gS, brk := gB, brk_le := HH.brk_le, top_ptr := htp
-             top_le := by omega_near, top_size := by omega_near, top_header := hhdr
+             top_le := by omega, top_size := by omega, top_header := hhdr
              top_pad := gP, max_sbrked := gM, mallinfo := gI, first_prev := ?_
              walk := hwalk, coalesced := coal_of_append HH.coalesced
              footer := fun c hc hf => kFoot c (List.mem_append_left _ hc) hf
              bins_list := kBins, bins_nodup := HH.bins_nodup, bin_free := dB, free_binned := dF
              remainder := HH.remainder, binblocks_present := gBb ▸ HH.binblocks_present
              binblocks := fun bb hbb => HH.binblocks bb (gBb ▸ hbb)
-             live := dL, exact := dE }, by omega_near⟩, hpage, fun bb hbb => hbbl bb (gBb ▸ hbb)⟩
+             live := dL, exact := dE }, by omega⟩, hpage, fun bb hbb => hbbl bb (gBb ▸ hbb)⟩
   rcases W1.head_or_top with he | ⟨c, hc, hca⟩
-  · rw [he, hhdr]; simp only [Option.any, beq_iff_eq]; omega_near
+  · rw [he, hhdr]; simp only [Option.any, beq_iff_eq]; omega
   · rw [← hca, kH c hc, hca]; exact HH.first_prev
 
 theorem coal_release {X X' : Chunk} :
@@ -1046,7 +1045,7 @@ theorem PHeapAt.coalNext {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
 
 local macro "wl_read" : tactic => `(tactic|
-  simp (disch := omega_near) only [read64_store_miss, read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt])
+  simp (disch := omega) only [read64_store_miss, read64_store_hit, BitVec.toNat_ofNat, Nat.mod_eq_of_lt])
 
 theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {cs₁ cs₂ : List Chunk} {bins : Nat → List Nat} {P a b : Nat}
@@ -1113,7 +1112,7 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     (by unfold prevInuse; rw [hor1]; simp)
     (fun a' ha' hna => by
       unfold TakeW at hna; simp only at hna
-      rw [← hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega_near)
+      rw [← hM1, writeLog_out, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
   have H1' := H1.drop
   have hends := walk_ends_ne (cs₁ := cs₁) (N := ⟨P, a, false⟩) (cs₂ := ⟨P + a, b, true⟩ :: cs₂) HH.walk
   simp only at H1' hends
@@ -1122,7 +1121,7 @@ theorem PHeapAt.coalPrev {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hh'lt : h' < 2 ^ 64 := by unfold chunkSize at hsz'; omega
   exact H1'.absorb (x := P) (a := a) (b := b) hno (by wl_read) hsz' hlow'
     (fun h0 hr => hpi' h0 (by rw [← hP8]; exact hr))
-    (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega_near)
+    (fun w hw1 h1 h2 => by rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega)
 
 end VsaIris.VsaHeap
 
