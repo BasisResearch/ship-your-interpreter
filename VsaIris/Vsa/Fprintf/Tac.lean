@@ -83,7 +83,7 @@ syntax "bv_toNat_contra " ident : tactic
 macro_rules
   | `(tactic| bv_toNat_contra $h) => `(tactic| (
       have hc' := congrArg BitVec.toNat $h
-      simp (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
+      simp (disch := omega_dcn) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod] at hc'
       omega))
 open Lean Elab Tactic Meta in

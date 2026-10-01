@@ -179,7 +179,7 @@ theorem Frame.snoc {M M0 : Mem} {Reg : Nat → Prop} {a w : Nat} {v : BitVec 64}
   h.trans (Frame.store M v hr)
 
 macro "frame_chain" : tactic => `(tactic| (repeat (refine Frame.snoc ?_ ?_)) <;>
-  first | exact Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
+  first | exact Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega_dcn) only [BitVec.add_assoc, BitVec.reduceAdd, toNat_add_lit, toNat_add_neg,
     BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod] at h1 h2; (try unfold SfvReg); (try unfold SwReg); omega))
 
 theorem SbFile.flushed {M2 Mt0 : Mem} {f fp ra s0 s1 s2 s3 : BitVec 64}

@@ -50,7 +50,7 @@ macro "fputs_D_tac" : tactic => `(tactic| (
       hb1 hb2 hb3 hbo hsrc (fun R' M' hR hK hF hFu => ?_)
     all_goals try (nx_norm; done)
     all_goals try nx_addr
-    all_goals try ((try nx_norm); (try simp only [BitVec.add_assoc, BitVec.reduceAdd]); nx_mem; (try nx_console); (try nx_norm); (try simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq]); done)))
+    all_goals try ((try nx_norm); (try simp_set win_add_set); nx_mem; (try nx_console); (try nx_norm); (try simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq]); done)))
 
 set_option hygiene false in
 

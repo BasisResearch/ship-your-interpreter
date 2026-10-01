@@ -47,12 +47,19 @@ theorem update_aligned (r : BitVec 64) (h : r.toNat % 4 = 0) : Sail.BitVec.updat
 
 theorem sext_zero32 : BitVec.signExtend 64 (0#32) = 0#64 := by decide
 
+attribute [nx_console_set] ldv_impDt ConsoleMt.sinit ConsoleMt.stdout ConsoleMt.p ConsoleMt.w
+  ConsoleMt.flagsU ConsoleMt.flagsS ConsoleMt.fd ConsoleMt.base ConsoleMt.bsize
+  ConsoleMt.lbf ConsoleMt.cookie ConsoleMt.writer ConsoleMt.lock ConsoleMt.lockMode
+attribute [nx_upd_set] updAll
+attribute [nx_toint_set] toInt_ofNat_small BitVec.toInt_zero
+attribute [nx_align_set] update_aligned
+attribute [nx_subz_set] BitVec.sub_self sext_zero32 BitVec.toInt_zero
+attribute [nx_prune_set] toInt_ofNat_small BitVec.toInt_zero BitVec.sub_self sext_zero32
+attribute [nx_outs_set] outS stdioFoot InRange impureW
+
 syntax "nx_console" : tactic
 macro_rules
-  | `(tactic| nx_console) => `(tactic| simp (disch := assumption) only
-      [ldv_impDt, ConsoleMt.sinit, ConsoleMt.stdout, ConsoleMt.p, ConsoleMt.w,
-       ConsoleMt.flagsU, ConsoleMt.flagsS, ConsoleMt.fd, ConsoleMt.base, ConsoleMt.bsize,
-       ConsoleMt.lbf, ConsoleMt.cookie, ConsoleMt.writer, ConsoleMt.lock, ConsoleMt.lockMode])
+  | `(tactic| nx_console) => `(tactic| simp_set (disch := assumption) nx_console_set)
 
 syntax "nx_norm" (" at " ident)? : tactic
 macro_rules
@@ -92,11 +99,11 @@ open Lean Elab Tactic Meta in
 def nxNorm (facts : Array Term) : TacticM Syntax := do
   let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
     facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-  `(tactic| ((try nx_tidy) <;> (try simp only [updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
+  `(tactic| ((try nx_tidy) <;> (try simp_set nx_upd_set at ⊢) <;> (try simp_set nx_mt at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try simp only [$lems,*]) <;>
-      (try nx_norm) <;> (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero]) <;>
-      (try simp (disch := decide) only [update_aligned]) <;>
-      (try simp only [BitVec.sub_self, sext_zero32, BitVec.toInt_zero])))
+      (try nx_norm) <;> (try simp_set (disch := omega_dc) nx_toint_set) <;>
+      (try simp_set (disch := decide) nx_align_set) <;>
+      (try simp_set nx_subz_set)))
 
 open Lean Elab Tactic Meta in
 
@@ -106,7 +113,7 @@ def nxTryPrune (facts : Array Term) (norm : Syntax) (g : MVarId) : TacticM Bool 
   let saved ← saveState
   try
     let gs ← evalTacticAt
-      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero, BitVec.sub_self, sext_zero32] at hc); (try (exfalso; revert hc; sx_side))))) g
+      (← `(tactic| (intro hc; (try nx_norm at hc); (try simp only [$lems,*] at hc); (try nx_norm at hc); (try simp_set (disch := omega_dc) nx_prune_set at hc); (try (exfalso; revert hc; sx_side))))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
@@ -198,7 +205,7 @@ elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
   | `(tactic| nx_runB $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops 55
 
-macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega_dc) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega_dc))
+macro_rules | `(tactic| nx_addr) => `(tactic| (simp_set nx_outs_set at ⊢; (try simp (disch := omega_dcn) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega_dc))
 
 namespace Stdout
 scoped macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
@@ -206,7 +213,7 @@ end Stdout
 
 syntax "nx_hb " ident : tactic
 macro_rules
-  | `(tactic| nx_hb $h) => `(tactic| simp (disch := omega_dc) only [mem_accAddrs_iff, toNat_add_lit,
+  | `(tactic| nx_hb $h) => `(tactic| simp (disch := omega_dcn) only [mem_accAddrs_iff, toNat_add_lit,
       toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod,
       Nat.reduceAdd] at $h:ident)
 

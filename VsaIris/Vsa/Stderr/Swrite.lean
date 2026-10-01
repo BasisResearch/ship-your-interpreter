@@ -14,8 +14,8 @@ scoped macro_rules
   | `(tactic| sx_side) => `(tactic| (
       intro b hb
       (try nx_hb hb)
-      simp only [outS, impureW, stdioFoot, InRange] at ⊢
-      (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow,
+      simp_set nx_outs_set at ⊢
+      (try simp (disch := omega_dcn) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow,
         Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
       omega))
 end Stdout

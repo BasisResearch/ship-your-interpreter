@@ -112,7 +112,7 @@ theorem toNat_add_neg {x : BitVec 64} {k : Nat} (hk : k < 2 ^ 64) (h : 2 ^ 64 �
 
 syntax "nx_addr" : tactic
 macro_rules
-  | `(tactic| nx_addr) => `(tactic| ((try simp (disch := omega_dc) only [mem_accAddrs_iff, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat,
+  | `(tactic| nx_addr) => `(tactic| ((try simp (disch := omega_dcn) only [mem_accAddrs_iff, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat,
       Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd, and_true, true_and]); first | done | omega_dc))
 
 structure MemKeep (M M' : Mem) (P : Nat → Prop) : Prop where
@@ -153,11 +153,13 @@ theorem imgM_store_restore (M : Mem) {b w : Nat} (v : BitVec 64) (hw : w = 1 ∨
   have e := imgLE_inj (hst.trans hv.symm) (a - b) (by omega)
   rwa [show b + (a - b) = a by omega] at e
 
+attribute [nx_mlog_set] ldv_store_hit ldv_ld_hit_eq
+  ldv_ld_miss ldv_lw_miss ldv_lw_store8 ldv_lw_hit ldv_lh_hit ldv_lhu_hit ldv_lbu_hit
+  ldv_lh_miss ldv_lhu_miss ldv_lbu_miss ldv_lwu_miss
+
 syntax "nx_mem_log" : tactic
 macro_rules
-  | `(tactic| nx_mem_log) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
-      ldv_ld_miss, ldv_lw_miss, ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
-      ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss])
+  | `(tactic| nx_mem_log) => `(tactic| simp_set (disch := nx_addr) nx_mlog_set)
 
 syntax "nx_mem_keep" : tactic
 
