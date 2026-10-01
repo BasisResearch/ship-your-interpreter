@@ -256,15 +256,136 @@ Each pilot's findings:
 - **PC.** L-host is fully confirmed on udiv/umod. A host-generic core is proved once over the minimal text (ArithRun.lean, 214 lines) and replaces the SnpArith and ProofArith copies; the instances are 3 lines each.
   - L-param merges `__swrite` only. The stdout and stderr fwrite paths diverge at the `_bf._base`/cantwrite test, not at `__SNBF`: both FILEs have `__SNBF`.
 
-## 8. Status at hand-off (decision pending fresh cases)
+## 7b. Fresh cases (on C = P2 + PC, no layer code allowed; the forecast, E33)
 
-- **Top candidates.**
-  - R stratum: P2 (the meet; −32% primary, setup 167, +7.6% time, within the bound).
-  - Clone stratum: PC (L-host; −64% on udiv/umod, −22% time).
-  - They cover disjoint strata, so the combination C = P2 + PC is on `exp-R8-C`: 24bb93d6, full `lake build` green with 1548 jobs.
-- **Fresh cases are running on C** and have not been measured: `sprintErr_run`, the Flush group, `udiv_sw`, `ssp_B`, `fprintfHead_run`.
-- **Not done:** the adoption decision, the rollout, the gate re-run and the statement and axiom checks on C.
-- **Hypotheses.**
-  - (a) False at the instruction level. The real clones are same-code-other-host (L-host), and there L-host pays.
-  - (b) Blocked by the frozen `SnprintfProved`.
-  - (c) Partly true: the executor crosses some boundaries, but saves 3% of lines.
+| case | stratum | incumbent | C | failed compiles | CPU of the file |
+|---|---|---:|---:|---:|---|
+| `sprintErr_run` | C | 85 | 85 (not merged: stderr walks the unbuffered arm of `__sfvwrite_r` inline; the stack FILE goes through the general loop, so the paths differ, not a constant tested in one run) | 3 | unchanged |
+| Flush group | C | 240 | 156 (`sflushP`: one `__sflush_r` run parametric in FILE/flags/`_w`; the only differing branch, `andi a4,a4,3` at 0x8000ecc8, joins at once. The fflush merge came to 146 lines against 142 and was reverted) | 10 | Sflush + Flush 42.5 → 46.7 s |
+| `udiv_sw` | R-S | 13 | 11 (script: 50, because it now shares the host-generic core; declaration 11 → 9) | 0 | 0.89 → 0.86 |
+| `ssp_B` | R-M | 46 | 39 | 2 | 19.8 → 19.6 |
+| `fprintfHead_run` | R-L | 167 | 131 (after the rollout's CPU fix: 122 file lines against 164) | ≈ 12 | 18.5 → 24.1, brought back to 18.8 in the rollout |
+
+Fresh: 551 → 422 lines (−23%), against the primary −32% (R) and −36% (C). Per stratum the fresh set
+predicted the rollout better (below). The time cost seen here, up to +30% on one file, is why every rollout
+file had a ≤ 10% CPU bound.
+
+## 8. Decision
+
+**Adopted: C = P2 + PC.** For the run glue, the laws are rules over the existing terms (`Carry.lean`:
+`carry_close`, `region_close`, `carry_arith`, `keep_eq`). For the clones they are host-generic cores
+(`HostRun.lean`: `HostW`, `swp_host_in`/`swp_host_out`, `#host_steps`, `host_run`) and FILE-parametric
+runs (`swriteP`, `sflushP`). Reasons, by the measures fixed in §0:
+
+* **Primary.** R 302 → 205 (−32%) against P1 260 and P3 292. C 381 → 245 (−36%).
+* **Fresh.** −23%.
+* **Setup.**
+  * Generic: 167 (Carry) + 89 (HostRun) + 18 (`#host_stepsD`, added in the rollout; see defects) = 274 lines.
+  * Moved run code: ArithRun 214 and MoveRun 591. These replace 2–3 copies each.
+* **Time.** R +7.6% on the primary files, within the bound. C −22%.
+* **Named cost.** `carry_close` is ≈ 0.08–0.1 s per goal slower than a plain `simp only [upd_apply …]` on
+  long update chains, and very slow when given long fact lists or facts stated at non-normal addresses.
+  Large rebuilds therefore stayed hand-written where they broke the bound.
+
+**Not adopted.**
+* P1 (the 6/6 ledger). Adapters are needed both ways (executors read raw hypotheses; statements are
+  frozen), store coverage is decided by per-store search, and it failed the time bound.
+* P3. It crossed 6 boundaries but saved 3% of lines. Its front-end fix of a silent `xrun` defect was landed
+  separately (5cbf44d0: facts introduced by a `calls` continuation were dropped, because the fact rewrite
+  was spliced in as source text, which such facts lack).
+* (a) L-reloc. False on the binary.
+* (b) L-fmt. Blocked by the frozen statement.
+
+Route (no CLAUDE.md or discipline script on this branch; per E16 the rule text is recorded here):
+
+| task shape | use |
+|---|---|
+| record fields / readbacks after a run in the printf family | `carry_close [facts]` (+ `region_close`, `carry_arith`); keep a hand proof only where it is shorter or `carry_close` costs > 10% of the file |
+| a callee proved in another host | one host-generic run over its minimal text (`HostW`, `#host_steps`/`#host_stepsD`, `host_run`) and 3-line instances; never a per-host re-proof |
+| the same code for two FILEs | one run parametric in the FILE constants, branch facts in the executor's normal form, `simp only` only |
+
+```
+R20	VsaIris/Vsa/{Snp*,Fprintf/*,Stderr/*}.lean	refine hk _ _ ⟨\?_, \?_, \?_	record rebuilds after a run go through carry_close (ROUND-8)
+```
+
+## 9. Rollout
+
+On `exp-R8-C`: six agents worked on disjoint files in one shared worktree, with one build lock and
+path-scoped commits (E43). A per-file CPU bound applied. Merged into `exp-R8` as 3ff92dc2.
+
+| agent | files | lines (non-blank) | CPU | notes |
+|---|---|---|---|---|
+| R1 strlen | SnpStrlen | 307 → 307 | — | blocked: StrlenRun's core does not keep x16 (the frozen `SLKeep` needs it); its text includes strcpy bytes outside `snpText`; strings may sit in the heap, not in text. `LocalRun.embed` cannot carry a run that reads a heap buffer as text |
+| R2 memmove | SnpMove + Fprintf/Move → MoveRun | 1,227 → 692 | 51.1 → 31.1 s | one host-generic core; both frozen entries are 3-line instances. Needed `#host_stepsD` (18 lines): `#host_steps` cannot generate data-reading load kinds (they name `dataOf Dt DA`) |
+| R3 svf | SnpSvf, SnpSvfConv, SnpSvfLoop | 2,483 → 2,223 | +7.9%, +7.7%, +1% | L-split: `svf_digExit0/45` merged (107 → 44 lines); `svfPro2_p3`, `svf_dig1`, `svf_digStep`, `svf_intD/Q` migrated then reverted (+3–6 s each) |
+| R4 Snp print | SnpPrint, SnpPuts, SnpSnprintf | 1,168 → 1,062 | +4.3%, +1.2%, +3.1% | single readbacks do not pay; whole record rebuilds do |
+| R5 Fprintf | 19 files | 4,051 → 3,773 | each ≤ +8%; SfvLoop 21.0 → 15.5 | Print, `vfpSpills_of`, `SbFixed.transport` reverted for CPU; nested/abstract/lambda regions block `region_close` |
+| R6 Stderr | 7 files | FprintfHead 164 → 122; SEmpty 68 → 53; VfpEntry 99 → 90; VfpErr 58 → 49; FwriteRun 171 → 161 | each ≤ +5.5% | FprintfHead back to +0.8% |
+
+Members left on the old encoding, by reason:
+
+* **Record rebuilds that would cost > 10% of their file:** `svfPro2_p3` (the gate's `svf Pro` last
+  quarter), `svf_dig1`, Print's `vfp_printH`.
+* **Regions `carry_close` cannot unfold:** abstract `Reg` parameters, regions nested in other definitions,
+  lambda regions, offsets `sp.toNat + c + 16n`.
+* **Strlen:** see R1.
+* **sprint:** different callee paths.
+* **The fwrite chain:** its stderr and stdout paths diverge at the `_bf._base` test; the stdout prefix
+  is already shared by a macro, and the stderr prefix sits in the frozen head piece.
+
+Layer defects found (next round's input):
+
+1. `carry_close` passes an `abbrev`/`def` goal to its fact check but does not introduce through it.
+2. A definition name in the fact list throws an uncaught "not a proposition".
+3. `maxRecDepth` on long `writeLog` chains escapes `try`.
+4. `ldv_lw_hit` pre-empts `ldv_lw_store4`.
+5. Negative offsets `(x + 2^64 − k).toNat` are not normalised.
+6. `region_close` does not close `¬ Reg a`.
+7. `#host_steps` registers global `ht_<pc>` names and cannot handle data-reading loads (worked around by `#host_stepsD`).
+8. The executor's branch pruning depends on `sx_side` rules being imported.
+9. With symbolic FILE constants, the full simp set and kernel defeq blow up.
+
+## 10. Measurements (a5156edb → hand-off)
+
+| measure | before | after |
+|---|---:|---:|
+| target files, non-blank lines (69 → 69 files) | 13,882 | 11,652 |
+| new layer modules (Carry, HostRun; ArithRun and MoveRun hold moved run code) | 0 | 1,079 |
+| other touched modules (ProofArith, Stdout/Swrite + Sflush, SymFront) | 1,387 | 1,274 |
+| total of the above | 15,269 | 14,005 (−1,264, −8.3%) |
+| population units of the census (C + R, script) | 10,612 | 9,330 (−12%) |
+| clone: memmove (2 hosts) | 1,227 lines, 51 s | 692 lines, 31 s |
+| clone: udiv/umod (snprintf + interpreter + stdio hosts) | SnpArith 224 + ProofArith 501 lines | 3-line instances + ArithRun 214; ProofArith 308 |
+| held-out primary (5 cases) | 683 | 450 |
+| held-out fresh (5 cases) | 551 | 422 |
+
+Single-file CPU: see §10a (timing table appended at the end of the run; method as §1b).
+
+Full `lake build` (all default targets, executables included) is green at 3ff92dc2: 1,549 jobs,
+0 errors.
+
+The axioms check (the 14-line file) gives every theorem `[propext, Classical.choice, Quot.sound]`; the two
+WhileLogic adequacy theorems give `[propext, Quot.sound]`. No `sorry`, `axiom`, `native_decide`,
+`bv_decide`, `ofReduceBool`, `maxHeartbeats` or `maxRecDepth` was added (diff scan).
+
+Statement check: a type hash of every constant of the `Vsa*` modules, in both environments, joined by name.
+
+* 29 non-auxiliary types changed. All of them are chain pieces (`sbprintf_2…4b`, `fprintfHead_02/03`,
+  `vfpTail_1/2`, `vfpToTerm_1…3`), memmove sub-runs moved into the host-generic core, or `Svf*` lemmas
+  whose `SvfRegs` became a term macro. None of them is used outside the files changed this round.
+* 61 names are gone (dead copies, old pieces, the twins `svf_digExit0/45`) and 189 are new.
+* None of the 19 externally used target constants changed or disappeared. The headline theorems are
+  unchanged.
+
+Gate re-run (`--root`, no baseline): 12 → 12 firing clusters.
+* `svf Pro`: 104 → 83 lines, but its last quarter is `svfPro2_p3`, kept for CPU.
+* `sprint Err`: 96 → 93 lines; its two long pieces are argument glue around different callee paths.
+* The other ten lie outside this target.
+* `fwrite Err` (122 lines, falling) and `Stage` are falling.
+
+Calibration:
+* Primary R −32%, C −36%.
+* Fresh −23%.
+* Rollout: −16% of target lines (−8.3% net of the new layer and moved code), population −12%.
+* The time bound capped the R rollout, and the rollout found 9 layer defects.
+* The fresh set again predicted the rollout better than the primary set did (E33).
