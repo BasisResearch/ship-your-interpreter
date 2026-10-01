@@ -48,6 +48,6 @@ theorem snpText_img_mem : ∀ p ∈ snpText, textDom p.1 ∧ textByte p.1 = p.2 
   exact ⟨inRangesB_within (hi := 0x80018be0) (by decide) ha, rfl⟩
 
 /-- Conversion-table loads at literal addresses evaluate to literals. -/
-macro "nx_tab" : tactic => `(tactic| simp only [VsaIris.Sym.imgLoad] at *)
+macro "nx_tab" : tactic => `(tactic| simp_set img_load_set at *)
 
 end VsaIris.Sym

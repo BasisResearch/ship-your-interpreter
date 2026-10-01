@@ -56,25 +56,8 @@ macro_rules
 
 syntax "nx_norm" (" at " ident)? : tactic
 macro_rules
-  | `(tactic| nx_norm at $h:ident) =>
-    `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
-        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        Sail.shift_bits_left, Sail.shift_bits_right, Sail.BitVec.extractLsb,
-        BitVec.reduceExtractLsb, BitVec.reduceHShiftLeft, BitVec.reduceHShiftRight,
-        BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
-        BitVec.ushiftRight_eq', BitVec.reduceToNat,
-        BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend, not_true_eq_false, BitVec.reduceAnd, BitVec.reduceOr] at $h:ident)
-  | `(tactic| nx_norm) =>
-    `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
-        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        Sail.shift_bits_left, Sail.shift_bits_right, Sail.BitVec.extractLsb,
-        BitVec.reduceExtractLsb, BitVec.reduceHShiftLeft, BitVec.reduceHShiftRight,
-        BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
-        BitVec.ushiftRight_eq', BitVec.reduceToNat,
-        BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend, not_true_eq_false, Nat.reducePow, Nat.reduceMod, BitVec.reduceAnd,
-        BitVec.reduceOr])
+  | `(tactic| nx_norm at $h:ident) => `(tactic| simp_set nx_normh_set at $h:ident)
+  | `(tactic| nx_norm) => `(tactic| simp_set nx_norm_set)
 
 /-- Hook run before each normalisation of `nx_run`; `skip` by default. `open scoped Win` makes it
 compact the register file. -/

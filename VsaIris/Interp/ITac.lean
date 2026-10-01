@@ -16,7 +16,7 @@ macro_rules
 syntax "ix_mem" : tactic
 macro_rules
   | `(tactic| ix_mem) =>
-    `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss] at *)
+    `(tactic| simp_set (disch := sx_addr) ix_mem_set at *)
 
 macro_rules
   | `(tactic| sx_side) => `(tactic| decide)

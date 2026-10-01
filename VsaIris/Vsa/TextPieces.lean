@@ -1,6 +1,7 @@
 import VsaIris.Vsa.SymData
 import VsaIris.Vsa.BinDom
 import Vsa.Sim.TextImage
+import VsaIris.Vsa.SimpGuard
 
 /-!
 # Machine-layer glue for piece footprints
@@ -65,5 +66,7 @@ simproc_decl imgLoad (bytesVal _ (bytesAt _ _ _)) := fun e => do
   let lit := toExpr (BitVec.ofNat 64 v)
   let pf ← mkExpectedTypeHint (← mkEqRefl e) (← mkEq e lit)
   return .done { expr := lit, proof? := some pf }
+
+attribute [img_load_set] imgLoad
 
 end VsaIris.Sym

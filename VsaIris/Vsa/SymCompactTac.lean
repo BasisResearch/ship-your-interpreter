@@ -56,11 +56,13 @@ macro_rules
       t ← `(tactic| ($t; apply swp_forget_reg $k; intro _))
     return t
 
+attribute [nx_mem_set] ldv_store_hit ldv_ld_hit_eq
+      ldv_ld_miss VsaIris.Interp.ldv_lw_miss VsaIris.Interp.ldv_lw_store8 ldv_lw_hit ldv_lh_hit ldv_lhu_hit ldv_lbu_hit
+      ldv_lh_miss ldv_lhu_miss ldv_lbu_miss ldv_lwu_miss ldv_ld_fillR_miss ldv_lw_fillR_miss
+      ldv_lwu_fillR_miss ldv_lh_fillR_miss ldv_lhu_fillR_miss ldv_lbu_fillR_miss
+
 macro_rules
-  | `(tactic| nx_mem) => `(tactic| simp (disch := nx_addr) only [ldv_store_hit, ldv_ld_hit_eq,
-      ldv_ld_miss, VsaIris.Interp.ldv_lw_miss, VsaIris.Interp.ldv_lw_store8, ldv_lw_hit, ldv_lh_hit, ldv_lhu_hit, ldv_lbu_hit,
-      ldv_lh_miss, ldv_lhu_miss, ldv_lbu_miss, ldv_lwu_miss, ldv_ld_fillR_miss, ldv_lw_fillR_miss,
-      ldv_lwu_fillR_miss, ldv_lh_fillR_miss, ldv_lhu_fillR_miss, ldv_lbu_fillR_miss])
+  | `(tactic| nx_mem) => `(tactic| simp_set (disch := nx_addr) nx_mem_set)
 
 open Lean Elab Tactic Meta in
 

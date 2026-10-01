@@ -1,5 +1,6 @@
 import VsaIris.Vsa.StepGen
 import VsaIris.Vsa.Dbm
+import VsaIris.Vsa.SimpGuard
 
 namespace VsaIris.Sym
 
@@ -22,26 +23,55 @@ theorem toNat_and_m2 (x : BitVec 64) : (x &&& 18446744073709551614#64).toNat = x
   rw [show (18446744073709551614#64 : BitVec 64) = BitVec.allOnes 64 <<< 1 by decide,
     VsaIris.MallocFast.and_high_toNat x 1 (by decide)]
 
+attribute [sx_norm_set] upd_apply Nat.reduceEqDiff ite_true ite_false reduceIte
+  LeanRV64DExecutable.Functions.sign_extend Sail.BitVec.signExtend BitVec.reduceSignExtend
+  Sail.shift_bits_left Sail.shift_bits_right Sail.BitVec.extractLsb
+  BitVec.reduceExtractLsb BitVec.reduceHShiftLeft BitVec.reduceHShiftRight
+  BitVec.reduceShiftLeft BitVec.reduceUShiftRight BitVec.shiftLeft_eq'
+  BitVec.ushiftRight_eq' BitVec.reduceToNat
+  BitVec.add_zero BitVec.reduceAdd BitVec.reduceOfNat VsaIris.ra Nat.reduceAdd
+  BitVec.reduceAppend not_true_eq_false
+
+attribute [nx_norm_set] upd_apply Nat.reduceEqDiff ite_true ite_false reduceIte
+  LeanRV64DExecutable.Functions.sign_extend Sail.BitVec.signExtend BitVec.reduceSignExtend
+  Sail.shift_bits_left Sail.shift_bits_right Sail.BitVec.extractLsb
+  BitVec.reduceExtractLsb BitVec.reduceHShiftLeft BitVec.reduceHShiftRight
+  BitVec.reduceShiftLeft BitVec.reduceUShiftRight BitVec.shiftLeft_eq'
+  BitVec.ushiftRight_eq' BitVec.reduceToNat
+  BitVec.add_zero BitVec.reduceAdd BitVec.reduceOfNat VsaIris.ra Nat.reduceAdd
+  BitVec.reduceAppend not_true_eq_false Nat.reducePow Nat.reduceMod BitVec.reduceAnd
+  BitVec.reduceOr
+
+attribute [nx_normh_set] upd_apply Nat.reduceEqDiff ite_true ite_false reduceIte
+  LeanRV64DExecutable.Functions.sign_extend Sail.BitVec.signExtend BitVec.reduceSignExtend
+  Sail.shift_bits_left Sail.shift_bits_right Sail.BitVec.extractLsb
+  BitVec.reduceExtractLsb BitVec.reduceHShiftLeft BitVec.reduceHShiftRight
+  BitVec.reduceShiftLeft BitVec.reduceUShiftRight BitVec.shiftLeft_eq'
+  BitVec.ushiftRight_eq' BitVec.reduceToNat
+  BitVec.add_zero BitVec.reduceAdd BitVec.reduceOfNat VsaIris.ra Nat.reduceAdd
+  BitVec.reduceAppend not_true_eq_false BitVec.reduceAnd BitVec.reduceOr
+
+attribute [ix_reg_set] upd_apply Nat.reduceEqDiff ite_true ite_false
+
+attribute [win_add_set] BitVec.add_assoc BitVec.reduceAdd
+
+attribute [sx_pre_set] upd_apply Nat.reduceEqDiff ite_true ite_false reduceIte
+  LeanRV64DExecutable.Functions.sign_extend Sail.BitVec.signExtend BitVec.reduceSignExtend
+  BitVec.add_zero LdOK StOK StOKb Vsa.Sim.tohostAddr Vsa.Sim.DlHeap.heapStart
+  Vsa.Sim.DlHeap.heapEnd Vsa.Sim.DlHeap.binAt Vsa.Sim.DlHeap.avAddr
+  Vsa.Sim.DlHeap.chunkSize and_true true_and
+
+attribute [sx_lits_set] BitVec.reduceToNat Nat.reducePow
+  toNat_and_m16 toNat_and_m4 toNat_and_m2 BitVec.toNat_shiftLeft BitVec.toNat_ushiftRight
+  Nat.shiftLeft_eq Nat.shiftRight_eq_div_pow BitVec.toNat_ofNat
+
 syntax "sx_norm" : tactic
 macro_rules
-  | `(tactic| sx_norm) =>
-    `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
-        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        Sail.shift_bits_left, Sail.shift_bits_right, Sail.BitVec.extractLsb,
-        BitVec.reduceExtractLsb, BitVec.reduceHShiftLeft, BitVec.reduceHShiftRight,
-        BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
-        BitVec.ushiftRight_eq', BitVec.reduceToNat,
-        BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend, not_true_eq_false] at *)
+  | `(tactic| sx_norm) => `(tactic| simp_set sx_norm_set at *)
 
 syntax "sx_pre" : tactic
 macro_rules
-  | `(tactic| sx_pre) =>
-    `(tactic| try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
-        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        BitVec.add_zero, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, Vsa.Sim.DlHeap.heapStart,
-        Vsa.Sim.DlHeap.heapEnd, Vsa.Sim.DlHeap.binAt, Vsa.Sim.DlHeap.avAddr,
-        Vsa.Sim.DlHeap.chunkSize, and_true, true_and] at *)
+  | `(tactic| sx_pre) => `(tactic| try simp_set sx_pre_set at *)
 
 syntax "sx_bv" : tactic
 macro_rules
@@ -49,9 +79,7 @@ macro_rules
 
 syntax "sx_lits" : tactic
 macro_rules
-  | `(tactic| sx_lits) => `(tactic| try simp only [BitVec.reduceToNat, Nat.reducePow,
-      toNat_and_m16, toNat_and_m4, toNat_and_m2, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight,
-      Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow, BitVec.toNat_ofNat] at *)
+  | `(tactic| sx_lits) => `(tactic| try simp_set sx_lits_set at *)
 
 syntax "sx_addr" : tactic
 macro_rules
@@ -103,9 +131,13 @@ theorem read64_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a 
     Vsa.MemRepr.read64 (Vsa.Sim.writeLog Mt [(b, w, v)]) a = Vsa.MemRepr.read64 Mt a :=
   read64_store_miss Mt v h
 
+attribute [sx_mem_set] ldv_store_hit ldv_ld_hit_eq ldv_ld_miss ldv_lw_miss ldv_lw_zero_eq
+
+attribute [ix_mem_set] ldv_store_hit ldv_ld_hit_eq ldv_ld_miss
+
 syntax "sx_mem" : tactic
 macro_rules
-  | `(tactic| sx_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss, ldv_lw_zero_eq] at *)
+  | `(tactic| sx_mem) => `(tactic| simp_set (disch := sx_addr) sx_mem_set at *)
 
 def swpPC? (ty : Expr) : MetaM (Option Nat) := do
   let ty ← whnfR ty

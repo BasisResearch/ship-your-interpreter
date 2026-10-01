@@ -208,14 +208,7 @@ macro "sym_den" : tactic => `(tactic| simp (disch := decide) only [regsDen, memD
 /-- `sx_norm` on the branch premise just introduced, while it is the last hypothesis (a
 step-by-step run normalises it at the next step, before any later premise exists). -/
 macro "sym_hnorm " h:ident : tactic =>
-  `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
-        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        Sail.shift_bits_left, Sail.shift_bits_right, Sail.BitVec.extractLsb,
-        BitVec.reduceExtractLsb, BitVec.reduceHShiftLeft, BitVec.reduceHShiftRight,
-        BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
-        BitVec.ushiftRight_eq', BitVec.reduceToNat,
-        BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend, not_true_eq_false] at $h:ident)
+  `(tactic| simp_set sx_norm_set at $h:ident)
 
 /-- Unfolding `rawR`, as a rewrite with a proof: a definitional change of a branch premise
 leaves the kernel to compare the entry register chain against its unfolding. -/
