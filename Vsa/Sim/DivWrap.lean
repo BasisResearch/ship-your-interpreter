@@ -82,7 +82,7 @@ theorem divOverflowBranch_run (c : Config) (r w12 w13 vm : BitVec 64)
       0x800046a4#64 (fun _ => False) divOverflowKeep (divOverflowInput r w12 w13) c after := by
   have facts : ChainFacts c.σ.mem c.σ.mem (divOverflowInput r w12 w13) []
       divOverflowBranchSeg := by
-    chain_facts loaded with "Vsa.Sim.Code.__divdi3_at_"
+    chain_facts loaded
     change guardB bop.BLT 0x8000000000000000#64 0#64 = true
     decide
   exact segEval_selected_framed divOverflowBranchSeg (divOverflowInput r w12 w13) []
@@ -100,7 +100,7 @@ theorem divOverflowDividend_run (c : Config) (r w12 w13 vm : BitVec 64)
       0x80004704#64 (fun _ => False) divOverflowKeep (divOverflowInput r w12 w13) c after := by
   have facts : ChainFacts c.σ.mem c.σ.mem (divOverflowInput r w12 w13) []
       divOverflowDividendSeg := by
-    chain_facts loaded with "Vsa.Sim.Code.__umoddi3_at_"
+    chain_facts loaded
     change guardB bop.BLT 0#64 0xffffffffffffffff#64 = false
     decide
   exact segEval_selected_framed divOverflowDividendSeg (divOverflowInput r w12 w13) []
@@ -119,7 +119,7 @@ theorem divOverflowDivisor_run (c : Config) (r w12 w13 vm : BitVec 64)
       0x8000470c#64 (fun _ => False) divOverflowKeep (divOverflowMagnitudes r w12 w13) c after := by
   have facts : ChainFacts c.σ.mem c.σ.mem (divOverflowInput r w12 w13) []
       divOverflowDivisorSeg := by
-    chain_facts loaded with "Vsa.Sim.Code.__umoddi3_at_"
+    chain_facts loaded
   exact segEval_selected_framed divOverflowDivisorSeg (divOverflowInput r w12 w13) []
     0x8000470c#64 vm (fun _ => False) divOverflowKeep (divOverflowMagnitudes r w12 w13) c
     good pc mi held (by show KeysOK [10, 11, 1, 12, 13]; decide) facts

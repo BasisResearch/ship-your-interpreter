@@ -193,7 +193,7 @@ theorem lj1_facts {m : Std.ExtHashMap Nat (BitVec 8)} {jbp v1 v8 v9 v18 v19 v20 
   have h1 := hg.lo; have h2 := hg.hi
   unfold tohostAddr at h1
   unfold lj1Seg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.ljCode_at_"
+  chain_facts hcode
   · exact ldFact (img := jb) rfl (jb_off jbp hg 0 (BitVec.ofNat 12 0) (by decide) (by omega) _ rfl)
       (by omega) (by omega) (.inr (by unfold tohostAddr; omega)) (fun k hk => hpin _ (by omega) (by omega))
   · exact ldFact (img := jb) rfl (jb_off jbp hg 8 (BitVec.ofNat 12 8) (by decide) (by omega) _ rfl)
@@ -304,7 +304,7 @@ theorem lj2_facts {m : Std.ExtHashMap Nat (BitVec 8)} {rv : BitVec 64}
     (hcode : ljCodeLoaded m) (hal : rv.toNat % 4 = 0) :
     ChainFacts m m [(10, 0#64), (11, 1#64), (1, rv)] [] lj2Seg := by
   unfold lj2Seg ChainFacts
-  chain_facts hcode with "VsaIris.Newlib.Sites.ljCode_at_"
+  chain_facts hcode
   have e : ∀ x : BitVec 64, x = rv →
       (BitVec.update (x + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
     intro x hx; rw [hx, ret_tgt rv hal]; exact hal

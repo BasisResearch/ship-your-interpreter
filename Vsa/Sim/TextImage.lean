@@ -156,6 +156,22 @@ theorem TextIn.of_list {ps : List TextPiece} {L : List (Nat × BitVec 8)} (hL : 
   rw [he]
   exact hL _ this
 
+/-- A code list `C` loaded at `B` (the `xCodeLoaded` shape) is the piece footprint of the byte
+    function `a ↦ C[a - B]` on `[B, B + n)`. -/
+theorem TextIn.of_loaded {n B : Nat} {C : List (BitVec 8)}
+    (h : ∀ k, k < n → m[B + k]? = some (C.getD k 0)) :
+    TextIn (piecesText [⟨fun a => C.getD (a - B) 0, [(B, B + n)]⟩]) m := by
+  intro p hp
+  obtain ⟨q, hq, hr, he⟩ := mem_piecesText_iff.1 hp
+  simp only [List.mem_singleton] at hq
+  subst hq
+  obtain ⟨r, hrr, h1, h2⟩ := inRangesB_iff.1 hr
+  simp only [List.mem_singleton] at hrr
+  subst hrr
+  have := h (p.1 - B) (by simp at h1 h2; omega)
+  rw [show B + (p.1 - B) = p.1 by simp at h1; omega] at this
+  rw [he]; exact this
+
 end Loaded
 
 /-- The little-endian bytes of the literal `v` at `[base, base + n)`; the byte function of
