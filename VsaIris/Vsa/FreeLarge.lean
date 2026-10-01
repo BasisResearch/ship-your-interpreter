@@ -131,9 +131,8 @@ theorem fl_exit {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt M2 : Mem}
       exact (ring_member hring hpred hq).2
   have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
   have hbkS' : read64 Mt (succ + 24) = some pred := by
-    have hb := Ns_bnd _ (HH.end_bnd hX) (X + S - succ)
-    simp only at hb
-    rw [B.read (Ns_links.word (by omega_near) (by omega_near)) (by omega_near)]; exact hbkS
+    rw [B.read (Ns_links.word (by omega_near) (by omega_near)) (by have := Ns.end_sep HH hX; omega_near)]
+    exact hbkS
   have K := BB.chunkK hX; have K_lo := K.lo; have K_room := K.room; have K_brk := K.brk
   simp only at K_lo
   refine (step% st 0x800074e0) O.live (Ns_links.ldOK (by rgn_arith_near)) (O.rgn Ns_links (by rgn_arith_near)) ?_

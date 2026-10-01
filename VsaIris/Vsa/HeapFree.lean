@@ -289,12 +289,12 @@ theorem PHeapAt.toTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have hG : ∀ w, allocGlobal w → (x + 8 ≤ w ∧ w < x + 16 ∨ topAddr ≤ w ∧ w < topAddr + 8) →
       topAddr ≤ w ∧ w < topAddr + 8 := by
     intro w hg hu; unfold allocGlobal InRange at hg; omega_near
-  have hin : ∀ c, c ∈ cs₁ ++ [⟨x, a, true⟩] ↔ c ∈ cs₁ ∨ c = ⟨x, a, true⟩ := by simp
-  have hfree_in : ∀ c ∈ cs₁ ++ [⟨x, a, true⟩], c.inuse = false → c ∈ cs₁ := by
-    intro c hc hf
-    rcases (hin c).1 hc with h1 | rfl
+  have hfree_in : ∀ c ∈ cs₁ ++ [⟨x, a, true⟩], c.inuse = false → c ∈ cs₁ := fun c hc hf => by
+    rcases List.mem_append.1 hc with h1 | h1
     · exact h1
-    · cases hf
+    · rw [List.mem_singleton.1 h1] at hf; cases hf
+  obtain ⟨dB, dF, dL, dE⟩ := HH.drop_inuse (cs₂ := []) hno
+  simp only [List.append_nil] at dB dF dL dE
   obtain ⟨gS, gB, gP, gM, gI, gBb, -⟩ := HH.keep_globals hag' hG
   obtain ⟨kBins, kFoot⟩ := B.keep_free hag' hG fun c hc hf w _ => by
     have := hW1b c (hfree_in c hc hf); unfold topAddr avAddr heapStart at *; omega_near
@@ -311,29 +311,14 @@ theorem PHeapAt.toTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
              top_le := by omega_near, top_size := by omega_near, top_header := hhdr
              top_pad := gP, max_sbrked := gM, mallinfo := gI, first_prev := ?_
              walk := hwalk, coalesced := coal_of_append HH.coalesced
-             footer := fun c hc hf => kFoot c ((hin c).2 (.inl hc)) hf
-             bins_list := kBins, bins_nodup := HH.bins_nodup
-             bin_free := fun j q hj0 hj hq => by
-               obtain ⟨c, hc, h1, h2, h3⟩ := HH.bin_free j q hj0 hj hq
-               exact ⟨c, hfree_in c hc h2, h1, h2, h3⟩
-             free_binned := fun c hc hf => HH.free_binned c ((hin c).2 (.inl hc)) hf
-             remainder := HH.remainder
-             binblocks_present := gBb ▸ HH.binblocks_present
+             footer := fun c hc hf => kFoot c (List.mem_append_left _ hc) hf
+             bins_list := kBins, bins_nodup := HH.bins_nodup, bin_free := dB, free_binned := dF
+             remainder := HH.remainder, binblocks_present := gBb ▸ HH.binblocks_present
              binblocks := fun bb hbb => HH.binblocks bb (gBb ▸ hbb)
-             live := ?_, exact := ?_ }, by omega_near⟩, hpage, fun bb hbb => hbbl bb (gBb ▸ hbb)⟩
-  · rcases W1.head_or_top with he | ⟨c, hc, hca⟩
-    · rw [he, hhdr]; simp only [Option.any, beq_iff_eq]; omega_near
-    · rw [← hca, kH c hc, hca]; exact HH.first_prev
-  · intro e he
-    obtain ⟨c, hc, hu, h1, h2⟩ := HH.exact e he he
-    rcases (hin c).1 hc with h3 | rfl
-    · exact ⟨c, h3, hu, by omega_near, by omega_near⟩
-    · exact absurd h1.symm (hno e he)
-  · intro e he hr
-    obtain ⟨c, hc, hu, h1, h2⟩ := HH.exact e he hr
-    rcases (hin c).1 hc with h3 | rfl
-    · exact ⟨c, h3, hu, h1, h2⟩
-    · exact absurd h1.symm (hno e he)
+             live := dL, exact := dE }, by omega_near⟩, hpage, fun bb hbb => hbbl bb (gBb ▸ hbb)⟩
+  rcases W1.head_or_top with he | ⟨c, hc, hca⟩
+  · rw [he, hhdr]; simp only [Option.any, beq_iff_eq]; omega_near
+  · rw [← hca, kH c hc, hca]; exact HH.first_prev
 
 theorem coal_release {X X' : Chunk} :
     ∀ {cs₁ cs₂ : List Chunk}, Coal (cs₁ ++ X :: cs₂) → (∀ c ∈ cs₁.getLast?, c.inuse = true) →

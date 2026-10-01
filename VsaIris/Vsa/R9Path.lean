@@ -18,4 +18,13 @@ macro "rgn_arith_near" : tactic =>
     | omega
     | fail "rgn_arith_near: address arithmetic failed")
 
+open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap in
+theorem NodeK.end_sep {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {x : Nat} (N : NodeK H top chunks x)
+    (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {a s : Nat} {u : Bool}
+    (hc : (⟨a, s, u⟩ : Chunk) ∈ chunks) : a + s ≤ x ∨ x + 32 ≤ a + s := by
+  have hb := N.bnd _ (h.end_bnd hc) (a + s - x)
+  simp only at hb
+  omega
+
 end VsaIris.VsaHeap

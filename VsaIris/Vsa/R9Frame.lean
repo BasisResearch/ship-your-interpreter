@@ -85,6 +85,33 @@ theorem BlockHeapAt.keep_free (B : BlockHeapAt m H top brkv chunks bins)
   obtain ⟨c, hc, rfl, hf, _⟩ := HH.bin_free i x h0 h1 hx
   exact ⟨(hl c hc hf).2.1.symm, (hl c hc hf).1.symm⟩
 
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.drop_inuse {cs₁ cs₂ : List Chunk} {x a : Nat}
+    (h : HeapAt m H (fun e => e ∈ H) top brkv (cs₁ ++ ⟨x, a, true⟩ :: cs₂) bins)
+    (hno : ∀ e ∈ H, e.1 ≠ x + 16) :
+    (∀ i q, 0 < i → i < numBins → q ∈ bins i →
+      ∃ c ∈ cs₁ ++ cs₂, c.addr = q ∧ c.inuse = false ∧ (1 < i → binIndex c.size = i)) ∧
+    (∀ c ∈ cs₁ ++ cs₂, c.inuse = false → ∃ i, 0 < i ∧ i < numBins ∧ c.addr ∈ bins i ∧
+      ∀ j, 0 < j → j < numBins → c.addr ∈ bins j → j = i) ∧
+    (∀ e ∈ H, ∃ c ∈ cs₁ ++ cs₂, c.inuse = true ∧
+      c.addr + 16 ≤ e.1 ∧ e.1 + e.2 ≤ c.addr + c.size + 8) ∧
+    (∀ e ∈ H, e ∈ H → ∃ c ∈ cs₁ ++ cs₂, c.inuse = true ∧ c.addr + 16 = e.1 ∧ e.2 + 8 ≤ c.size) := by
+  have hin : ∀ c, c ∈ cs₁ ++ ⟨x, a, true⟩ :: cs₂ ↔ c = ⟨x, a, true⟩ ∨ c ∈ cs₁ ++ cs₂ := by
+    intro c; simp only [List.mem_append, List.mem_cons]; exact or_left_comm
+  have hE : ∀ e ∈ H, ∃ c ∈ cs₁ ++ cs₂, c.inuse = true ∧ c.addr + 16 = e.1 ∧ e.2 + 8 ≤ c.size := by
+    intro e he
+    obtain ⟨c, hc, hu, h1, h2⟩ := h.exact e he he
+    rcases (hin c).1 hc with rfl | h3
+    · exact absurd h1.symm (hno e he)
+    · exact ⟨c, h3, hu, h1, h2⟩
+  refine ⟨fun i q h0 h1 hq => ?_, fun c hc hf => h.free_binned c ((hin c).2 (.inr hc)) hf,
+    fun e he => ?_, fun e he _ => hE e he⟩
+  · obtain ⟨c, hc, h1, h2, h3⟩ := h.bin_free i q h0 h1 hq
+    rcases (hin c).1 hc with rfl | h4
+    · cases h2
+    · exact ⟨c, h4, h1, h2, h3⟩
+  · obtain ⟨c, hc, hu, h1, h2⟩ := hE e he
+    exact ⟨c, hc, hu, by omega, by omega⟩
+
 end Win
 
 end VsaIris.VsaHeap
