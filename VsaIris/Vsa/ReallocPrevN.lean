@@ -1,4 +1,5 @@
 import VsaIris.Vsa.ReallocPrev
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.VsaHeap
 
@@ -115,8 +116,7 @@ theorem pvN_join {C : MCtx} {B : RB} (O : ROK C B) {Mt W : Mem} {brkv : Nat}
     (h13 : (R' 13).toNat = ps + S') (h15 : (R' 15).toNat = nb) :
     AW C.live C.S C.Q 0x800056e0#64 R' Mc := by
   rgn_run O.live at 0x80005414
-  refine pvG_rt O I (F.of_regs ?_ ?_ ?_) hMc ?_ ?_ ?_ ?_ ?_ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> assumption
+  refine pvG_rt O I (F.of_regs ?_ ?_ ?_) hMc ?_ ?_ ?_ ?_ ?_ <;> carry_close
 
 theorem pvXN_P {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns : Nat}
