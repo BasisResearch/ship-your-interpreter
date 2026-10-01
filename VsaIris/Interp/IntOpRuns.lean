@@ -1,6 +1,7 @@
 import VsaIris.Interp.BinErr
 import VsaIris.Interp.ProofArith
 import VsaIris.Interp.SymInterp
+import VsaIris.Vsa.Dbm
 
 /-!
 Integer operators `+ - * / %` as one descriptor `IntOpDesc`: each operator's reflected path from
@@ -73,7 +74,7 @@ macro "int_pre_nz " pc:num : tactic => `(tactic| (
 
 set_option hygiene false in
 macro "int_post " wrap:ident : tactic => `(tactic| (
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hoff := evalSP_off (s := s) hsf (by omega_dc)
   refine hk _ _ ⟨⟨by ix_reg, fun x hx => ?_⟩, by ix_reg, by ix_reg; rw [hU, $wrap:ident, hw1, hu1],
     fun h => ?_⟩
   · simp only [hiSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx

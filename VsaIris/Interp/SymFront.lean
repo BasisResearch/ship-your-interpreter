@@ -1,6 +1,7 @@
 import VsaIris.Vsa.SymExecX
 import VsaIris.Interp.SymInterp
 import VsaIris.Interp.XrunAttr
+import VsaIris.Vsa.Dbm
 
 /-!
 # `xrun`: the extended executor for every run predicate
@@ -456,7 +457,7 @@ def readFacts (R Mt Dt : Expr) (facts : Array Term) :
 whose imports declare the table's tactics. `F` is the fact rewrite. -/
 def normStr (key F : String) : String :=
   match key with
-  | "stdio" => s!"((try nx_tidy) <;> (try simp only [VsaIris.Sym.updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try {F}) <;> (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try {F}) <;> (try nx_norm) <;> (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero]) <;> (try simp (disch := decide) only [VsaIris.Sym.update_aligned]) <;> (try simp only [BitVec.sub_self, VsaIris.Sym.sext_zero32, BitVec.toInt_zero]))"
+  | "stdio" => s!"((try nx_tidy) <;> (try simp only [VsaIris.Sym.updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try {F}) <;> (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try {F}) <;> (try nx_norm) <;> (try simp (disch := omega_dc) only [toInt_ofNat_small, BitVec.toInt_zero]) <;> (try simp (disch := decide) only [VsaIris.Sym.update_aligned]) <;> (try simp only [BitVec.sub_self, VsaIris.Sym.sext_zero32, BitVec.toInt_zero]))"
   | "snp" => s!"((try sx_norm) <;> (try {F}) <;> (try ((try nx_tab) <;> (try ix_mem) <;> (try {F}))) <;> (try sx_norm) <;> (try ix_mem))"
   | "interp" => s!"((try sx_norm) <;> (try {F}) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem))"
   | _ => s!"((try sx_norm) <;> (try {F}) <;> (try sx_mem) <;> (try sx_norm) <;> (try {F}))"
@@ -664,14 +665,14 @@ partial def xrunGoal (fuel : Nat) (h : Syntax) (facts : Array Term) (stops : Lis
     Option.some.injEq, forall_eq', List.mem_append, mem_accAddrs_iff', Nat.mod_one, forall_const,
     BitVec.add_zero, upd_apply, Nat.reduceEqDiff, ite_true, ite_false, $glems,*] <;> and_intros <;>
     (try intros) <;> first | exact True.intro |
-      (have _htoh : tohostAddr = 0x8001ad00 := rfl; omega)))
+      (have _htoh : tohostAddr = 0x8001ad00 := rfl; omega_dc)))
   let geomOn := (← getOptions).getBool `xrun.geom true
   -- one interval fact per address atom: its bounds and alignment by arithmetic, each covered
   -- range by the side tactic (the shape of an access's cover goal); no rewriting under the frame
   -- predicate
   let factSimp ← if lems.isEmpty then `(tactic| skip) else `(tactic| simp only [$lems,*])
   let arithTac ← `(tactic| ((try $factSimp:tactic) <;>
-      first | (have _htoh : tohostAddr = 0x8001ad00 := rfl; omega) | sx_addr))
+      first | (have _htoh : tohostAddr = 0x8001ad00 := rfl; omega_dc) | sx_addr))
   let coverTac ← `(tactic| ((try $factSimp:tactic) <;> sx_side))
   let closeWith (tac : Syntax) (g : MVarId) : TacticM Bool := do
     let s1 ← saveState

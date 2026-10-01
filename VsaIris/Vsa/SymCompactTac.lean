@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.SymCompact
+import VsaIris.Vsa.Dbm
 
 namespace VsaIris.Sym
 
@@ -13,9 +14,9 @@ syntax "nx_fdisch" : tactic
 macro_rules
   | `(tactic| nx_fdisch) => `(tactic| (
       (try simp only [BitVec.sub_eq_add_neg, BitVec.reduceNeg, BitVec.add_assoc, BitVec.reduceAdd])
-      (try simp (disch := omega) only [toNat_add_lit, toNat_add_neg, toNat_sub_lit,
+      (try simp (disch := omega_dc) only [toNat_add_lit, toNat_add_neg, toNat_sub_lit,
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
-      omega))
+      omega_dc))
 
 macro_rules | `(tactic| nx_addr) => `(tactic| nx_fdisch)
 
