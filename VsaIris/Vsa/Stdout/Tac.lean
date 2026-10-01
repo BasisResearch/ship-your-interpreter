@@ -50,6 +50,7 @@ theorem sext_zero32 : BitVec.signExtend 64 (0#32) = 0#64 := by decide
 attribute [nx_console_set] ldv_impDt ConsoleMt.sinit ConsoleMt.stdout ConsoleMt.p ConsoleMt.w
   ConsoleMt.flagsU ConsoleMt.flagsS ConsoleMt.fd ConsoleMt.base ConsoleMt.bsize
   ConsoleMt.lbf ConsoleMt.cookie ConsoleMt.writer ConsoleMt.lock ConsoleMt.lockMode
+attribute [nx_outs_set] outS stdioFoot InRange impureW
 
 syntax "nx_console" : tactic
 macro_rules
@@ -213,7 +214,7 @@ elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
   | `(tactic| nx_runB $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops 55
 
-macro_rules | `(tactic| nx_addr) => `(tactic| (simp only [outS, stdioFoot, InRange, impureW] at ⊢; (try simp (disch := omega_dc) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega_dc))
+macro_rules | `(tactic| nx_addr) => `(tactic| (simp_set nx_outs_set at ⊢; (try simp (disch := omega_dcn) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega_dc))
 
 namespace Stdout
 scoped macro_rules | `(tactic| sx_side) => `(tactic| nx_addr)
@@ -221,7 +222,7 @@ end Stdout
 
 syntax "nx_hb " ident : tactic
 macro_rules
-  | `(tactic| nx_hb $h) => `(tactic| simp (disch := omega_dc) only [mem_accAddrs_iff, toNat_add_lit,
+  | `(tactic| nx_hb $h) => `(tactic| simp (disch := omega_dcn) only [mem_accAddrs_iff, toNat_add_lit,
       toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod,
       Nat.reduceAdd] at $h:ident)
 

@@ -61,7 +61,7 @@ theorem ldv_lbu_sb0 (Mt : Mem) (a : Nat) : ldv .lbu (writeLog Mt [(a, 1, 0#64)])
   simpa using this
 
 macro "svf_mem" : tactic =>
-  `(tactic| (simp (disch := (first | win_key | omega | (simp only [widthOfM]; omega))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4, ldv_lbu_sb0]))
+  `(tactic| (simp (disch := (first | win_key | omega_dc | (simp only [widthOfM]; omega_dc))) only [ldv_miss_nat, imgM_miss_nat, ldv_store_hit, ldv_lw_zero_eq, ldv_lw_store4, ldv_lbu_sb0]))
 
 structure SvfPro (s : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (R : Nat → BitVec 64) (Mt : Mem) :
     Prop where

@@ -684,4 +684,24 @@ elab "dbm" : tactic => do
 /-- `omega` with the difference-constraint checker as first pass. -/
 macro "omega_dc" : tactic => `(tactic| first | dbm | omega)
 
+/-- Fails on `x.toNat + k < 2 ^ 64` with a literal `k ≥ 2 ^ 63` (the no-wrap side goal of
+`toNat_add_lit` at a negative offset, which holds only for `x.toNat < 2 ^ 64 - k`). -/
+elab "dc_nowrap_neg" : tactic => withMainContext do
+  let t ← instantiateMVars (← getMainTarget)
+  if let (``LT.lt, #[ty, _, l, r]) := t.getAppFnArgs then
+    if ty.isConstOf ``Nat then
+      if let (``HAdd.hAdd, #[_, _, _, _, a, k]) := l.getAppFnArgs then
+        if a.isAppOf ``BitVec.toNat then
+          if let some k ← natLit? k then
+            if let some r ← natLit? r then
+              if r == 18446744073709551616 && 9223372036854775808 ≤ k then
+                throwError "dc_nowrap_neg: negative offset"
+            else if let (``HPow.hPow, #[_, _, _, _, b, e]) := r.getAppFnArgs then
+              if (← natLit? b) == some 2 && (← natLit? e) == some 64 && 9223372036854775808 ≤ k then
+                throwError "dc_nowrap_neg: negative offset"
+
+/-- `omega_dc` for the side goals of the `toNat_add_lit`/`toNat_add_neg` rewrites: skips the
+no-wrap goal of a negative offset (there `toNat_add_neg` applies). -/
+macro "omega_dcn" : tactic => `(tactic| (dc_nowrap_neg; first | dbm | omega))
+
 end VsaIris.Dbm

@@ -13,10 +13,12 @@ theorem toNat_sub_lit {x : BitVec 64} {k : Nat} (hk : k < 2 ^ 64) (h : k ≤ x.t
 syntax "nx_fdisch" : tactic
 macro_rules
   | `(tactic| nx_fdisch) => `(tactic| (
-      (try simp only [BitVec.sub_eq_add_neg, BitVec.reduceNeg, BitVec.add_assoc, BitVec.reduceAdd])
-      (try simp (disch := omega_dc) only [toNat_add_lit, toNat_add_neg, toNat_sub_lit,
+      (try simp_set nx_subneg_set)
+      (try simp (disch := omega_dcn) only [toNat_add_lit, toNat_add_neg, toNat_sub_lit,
         BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd])
       omega_dc))
+
+attribute [nx_subneg_set] BitVec.sub_eq_add_neg BitVec.reduceNeg BitVec.add_assoc BitVec.reduceAdd
 
 macro_rules | `(tactic| nx_addr) => `(tactic| nx_fdisch)
 

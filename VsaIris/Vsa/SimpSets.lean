@@ -12,3 +12,6 @@ register_simp_attr ix_mem_set
 register_simp_attr ix_mem2_set
 register_simp_attr sx_mem_set
 register_simp_attr nx_mem_set
+register_simp_attr nx_outs_set
+register_simp_attr nx_mlog_set
+register_simp_attr nx_subneg_set
