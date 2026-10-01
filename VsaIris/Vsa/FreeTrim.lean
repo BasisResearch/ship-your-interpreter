@@ -1,6 +1,6 @@
 import VsaIris.Vsa.FreePaths
 import VsaIris.Vsa.Sbrk
-import VsaIris.Vsa.FreeGlue
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 

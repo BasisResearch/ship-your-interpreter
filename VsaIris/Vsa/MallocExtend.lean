@@ -2,7 +2,7 @@ import VsaIris.Vsa.MallocTop
 import VsaIris.Vsa.HeapGrow
 import VsaIris.Vsa.Sbrk
 import VsaIris.Vsa.HeapPermit
-import VsaIris.Vsa.MallocGlue
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 

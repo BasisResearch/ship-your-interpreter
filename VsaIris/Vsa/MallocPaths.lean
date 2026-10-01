@@ -1,6 +1,6 @@
 import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.HeapPermit
-import VsaIris.Vsa.MallocGlue2
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 

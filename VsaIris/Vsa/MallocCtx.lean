@@ -1,5 +1,5 @@
 import VsaIris.Vsa.MallocGen
-import VsaIris.Vsa.MallocGlue2
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 

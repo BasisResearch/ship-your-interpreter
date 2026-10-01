@@ -1,7 +1,7 @@
 import VsaIris.Vsa.MallocSplit
 import VsaIris.Vsa.HeapMoveAt
 import VsaIris.Vsa.HeapPermit
-import VsaIris.Vsa.MallocGlue2
+import VsaIris.Vsa.RegKeep
 
 namespace VsaIris.VsaHeap
 
