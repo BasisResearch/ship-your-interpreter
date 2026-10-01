@@ -328,7 +328,7 @@ CPU bound. Merged into `exp-R9` as ea063bd8. Brief: `~/syi-r9/rollout-brief.md`.
 |---|---|---|---|---|
 | A1 heap top family (owned HeapWin) | HeapRealloc, HeapGrow, HeapSplit, HeapWin | 976 → 714 | HeapRealloc 6.17 → 3.86, HeapGrow 1.75 → 1.15, HeapSplit 2.61 → 1.36 | setTop 179 → 91, cut 211 → 145, topResize 111 → 54, topSplit 158 → 82; HeapWin gained `volGlobal`, `keep_stable` (edits that change brk), `keep_freeV`, `free_mid`, `HeapAt.free_to`, `win_g` |
 | A2 heap bins family | HeapFree, HeapMoveAt, HeapTake, HeapCarve, HeapClear + new HeapRead | 2,911 → 2,457 (incl. HeapRead 209) | HeapFree 18.5 → 14.3, HeapMoveAt 5.3 → 3.0, HeapTake 10.2 → 9.4 | take 385 → 240, moveBinAt 426 → 227, release 537 → 389, absorb 201 → 152, carve 314 → 264, splitFree 192 → 176, coalNext 125 → 110. The relinking counterparts of the pilot's lemmas, below HeapTake: `keep_scal`, `keep_fd`/`keep_bk`, `binList_keep`/`_remove`/`_insert`, `nodes_ne`, `node_loc`, `pred_mem`/`succ_mem`, `seg_pairs`, `wl_rd` |
-| A3 free paths | Free* | 3,213 → 3,111 | each ≤ +7.5% (FreeLarge) | readbacks folded into one fact `simp`; `carry_close` where it also removes a `toNat_ofNat` step; `keep3` |
+| A3 free paths | Free* | 3,223 → 3,116 (incl. 5 lines of glue) | each ≤ +7.5% (FreeLarge) | readbacks folded into one fact `simp`; `carry_close` where it also removes a `toNat_ofNat` step; `keep3` |
 | A4 malloc blocks | MallocBlocks, MallocBlocks2, MallocExtend, MallocLarge, MallocSplit | 2,037 → 1,907 | each ≤ +4.6% | `refine … <;> upd_norm [facts]`, `carry_close` where normalising is not enough, `keep4`/`keep6` |
 | A5 malloc rest | MallocRebin(L), MallocPaths, MallocTop, MallocLR, MallocPro, MallocCtx, MallocRunAll, … | 2,385 → 2,262 | each ≤ +3% (Sbrk reverted at +11–14%) | `reg_close`/`reg_try` (simp + reducible `exact` over the facts), `carry_close` in MallocRebinL |
 | A6 realloc paths | Realloc* | 3,665 → 3,598 | each ≤ +5.3% | `carry_close`/`carry_norm` only; ReallocMove reverted (kernel deep recursion with `BitVec.toNat_add` among the facts) |
@@ -377,7 +377,7 @@ Layer defects found (next round's input):
 
 Single-file user CPU (`LEAN_NUM_THREADS=1`, copies outside the repo, base and after interleaved per
 file, min of 2, load 7–14; `~/syi-r9/time/fin_*`): **500.0 → 492.9 s (−1.4%)**, the three new layer
-modules included (3.5 s). Heap files 59.0 → 49.4 s (−16%: HeapFree 20.0 → 14.8, HeapMoveAt 5.5 → 3.4,
+modules included (3.5 s). Heap* files 59.0 → 46.8 s (−21%; 49.4 with HeapWin and HeapRead: HeapFree 20.0 → 14.8, HeapMoveAt 5.5 → 3.4,
 HeapRealloc 5.7 → 4.1, HeapSplit 2.8 → 1.4, HeapGrow 1.7 → 1.2); FreePaths 50.2 → 48.4. Every
 file within +10% except MallocRunAll (0.89 → 1.02 s); its old source measures 0.84 → 0.92 s on the new
 tree too, so the +0.08–0.13 s is import loading, not the migrated unit. The relative bound is
