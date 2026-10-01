@@ -91,10 +91,8 @@ theorem realloc_topgrow {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64
     rw [← hM3]
     exact ((D.frame.store (a := 0x8001ad20) (w := 8) (by omega)).store (a := X + nb + 8) (w := 8)
       (by omega)).store (a := X + 8) (w := 8) (by omega)
-  refine repi O (F3.of_regs ?_ ?_ ?_) fun R' hR h10 => O.ok R' M3 ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  have hp : (R' 10).toNat = X + 16 := by
-    rw [h10]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hs0
+  refine repi O (F3.of_regs ?_ ?_ ?_) fun R' hR h10 => O.ok R' M3 ?_ <;> try carry_close
+  have hp : (R' 10).toNat = X + 16 := by rw [h10]; carry_close [hs0]
   refine ⟨hR, ?_, ?_, ⟨X + nb, C.top0 + ts, cs₁ ++ [⟨X, nb, true⟩], bins, ?_, ?_⟩, fun a ha => ?_,
     fun k hk => ?_⟩ <;> try rw [hp]
   · exact Hr.fresh_of_block hst

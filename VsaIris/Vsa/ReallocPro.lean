@@ -117,9 +117,6 @@ theorem realloc_pro {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64}
       · exact E.a0
       · rw [hP]; unfold heapEnd heapStart at *; omega
     refine hk _ _ ((C.n.toNat + 23) / 16 * 16) (F2 _ ?_ ?_ ?_) Hp1 ⟨hP.symm⟩ h2 ?_ ?_ ?_ ?_ <;>
-      try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact hp
-    · exact E.a0
-    · exact hnb
+      carry_close [hp, E.a0, hnb]
 
 end VsaIris.VsaHeap

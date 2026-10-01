@@ -383,8 +383,7 @@ theorem pvX_join {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     (h17 : (R' 17).toNat = ps + S) (h15 : (R' 15).toNat = nb) :
     AW C.live C.S C.Q 0x80005648#64 R' Mc := by
   rgn_run O.live at 0x80005414
-  refine pvX_rt O D hsp PV hfit (F.of_regs ?_ ?_ ?_) hMc ?_ ?_ ?_ ?_ ?_ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;> assumption
+  refine pvX_rt O D hsp PV hfit (F.of_regs ?_ ?_ ?_) hMc ?_ ?_ ?_ ?_ ?_ <;> carry_close
 
 theorem pv_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : Mem} {d s n : Nat}
     (A : MMArgs C.S d s n) (F : RFrame C R M1)
@@ -407,12 +406,9 @@ theorem pv_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : Me
       ldv .ld (copyW m d s (n / 8)) a = ldv .ld m a :=
     fun m a h1 h2 => ldv_congr fun k hk => copyW_out (by omega)
   rgn_run O.live at 0x800069c4
-  refine memmove_fwd A O.live ?_ ?_ ?_ ?_ fun R' hK => ?_ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact h13
-  · exact h8
-  · exact h12
-  · decide
+  refine memmove_fwd A O.live (by carry_close [h13]) (by carry_close [h8]) (by carry_close [h12])
+    (by carry_close) fun R' hK => ?_
+  carry_norm
   have hR2 : R' 2 = R 2 := hK.sp
   have hs2' : (R' 2).toNat = C.s.toNat - 64 := hR2 ▸ hs2
   rgn_run O.live at 0x80005648
@@ -422,14 +418,10 @@ theorem pv_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : Me
     rw [← hW, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
       simp only [OutL, and_true] <;> omega
   refine hk _ _ ((F.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_) (fun a ha => ?_) ?_ ?_ ?_ ?_ ?_ <;>
-    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · exact hR2
-  · exact hK.s2
-  · exact hK.s3
+    try carry_close [hR2, hK.s2, hK.s3, hK.s1]
   · rw [copyW_out (by omega), hWo a (by omega)]
   · exact copyW_agreeOn (Pr := fun a => a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) hWo
       (fun i hi => by omega) a ha
-  · exact hK.s1
 
 theorem pv_span {C : MCtx} {B : RB} {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}

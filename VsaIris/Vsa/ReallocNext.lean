@@ -210,12 +210,6 @@ theorem realloc_next {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {
         by rw [show X + (S + ns) + 8 = X + S + ns + 8 by omega]; exact N.nW⟩,
       fun w _ hw hw' => N.agree w hw (by omega), N.pres, Hp.disj, Hp.disjD,
       fun k hk => by rw [show X + 16 + k = B.p + k by have := D.addr; omega]; exact N.data k hk,
-      by have := Hp.grow; omega, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [D.s0]
-  · exact D.s1
-  · exact D.a2
-  · exact h17
-  · exact D.a5
+      by have := Hp.grow; omega, ?_, ?_, ?_, ?_, ?_⟩ <;> carry_close [D.s0, D.s1, D.a2, h17, D.a5]
 
 end VsaIris.VsaHeap

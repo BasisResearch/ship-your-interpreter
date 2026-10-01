@@ -170,9 +170,7 @@ theorem grow_top {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
     (fun hc => ?_) (fun hc => ?_)))) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc <;>
     rw [toInt_small e28 (by omega), toInt_small e16 (by omega)] at hc
-  ·
-    refine realloc_topgrow O (by rd_regs D) hXt (by omega) ?_
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [e16]; omega
+  · exact realloc_topgrow O (by rd_regs D) hXt (by omega) (by carry_close [e16])
   refine (step% st 0x800054ec) O.live ((step% st 0x800054f0) O.live (fun _ => realloc_mal O (by rd_regs D)) (fun hc' => ?_))
   simp only [upd_apply, Nat.reduceEqDiff, ite_true] at hc'
   obtain ⟨cs₀, P, ps, i, pre, post, predP, succP, hh, rfl, PV, hhr, hhs⟩ :=
@@ -196,11 +194,8 @@ theorem grow_top {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt :
         chunks bins X S hdr0 nb := by
       refine RD.of_regs D ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false] <;>
         (rw [hK _ (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-  · exact grow_pvX O D' (rest := []) hsp PV (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
-  · refine realloc_pvT O D' hsp PV hXt (by omega) ?_ ?_
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [e16']; omega
+  · exact grow_pvX O D' (rest := []) hsp PV (by carry_close [h6]) (by carry_close [h17])
+  · exact realloc_pvT O D' hsp PV hXt (by omega) (by carry_close [h6]) (by carry_close [e16'])
 
 theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb ns hn : Nat}
@@ -225,11 +220,7 @@ theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
   refine (step% st 0x80005318) O.live ((step% st 0x8000531c) O.live ((step% st 0x80005320) O.live (fun hc => ?_) (fun hc => ?_))) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc <;>
     rw [toInt_small D.a5 (by omega), toInt_small e17 (by omega), Int.ofNat_le] at hc
-  ·
-    refine realloc_next O (by rd_regs D) hN hc ?_ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact h16
-    · exact e17
+  · exact realloc_next O (by rd_regs D) hN hc (by carry_close [h16]) (by carry_close [e17])
   refine (step% st 0x80005324) O.live ((step% st 0x80005328) O.live (fun _ => realloc_mal O (by rd_regs D)) (fun hc' => ?_))
   simp only [upd_apply, Nat.reduceEqDiff, ite_true] at hc'
   have hpf := prev_bit h13 hc'
@@ -254,13 +245,8 @@ theorem grow_free {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
         chunks bins X S hdr0 nb := by
       refine RD.of_regs D ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false] <;>
         (rw [hK _ (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
-  ·
-    obtain ⟨iN, preN, postN, pred, succ, FB⟩ := free_bin_at D.heap.heap hN rfl
-    refine realloc_pvXN O D' hsp hpf FB hc'' ?_ ?_ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact h6
-    · exact e13
-    · rw [k16, h16]
+  · obtain ⟨iN, preN, postN, pred, succ, FB⟩ := free_bin_at D.heap.heap hN rfl
+    exact realloc_pvXN O D' hsp hpf FB hc'' (by carry_close [h6]) (by carry_close [e13]) (by carry_close [k16, h16])
   · exact grow_pvX O D' hsp PV (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
 
